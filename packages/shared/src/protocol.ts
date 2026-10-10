@@ -1,0 +1,110 @@
+// Messages between client and world-server (Colyseus room "space").
+
+export const ROOM_NAME = "space";
+export const TICK_HZ = 20;
+export const HEARING_HZ = 4;
+
+export type Status = "online" | "away" | "dnd";
+export const ANIM = { idle: 0, walk: 1, sit: 2 } as const;
+export type Anim = (typeof ANIM)[keyof typeof ANIM];
+
+export const EMOTES = ["wave", "heart", "laugh", "clap", "fire", "question", "coffee", "tape"] as const;
+export type Emote = (typeof EMOTES)[number];
+
+export type ChatScope = "nearby" | "area" | "space";
+
+export interface JoinOptions {
+  spaceId: number;
+  token: string;
+}
+
+// client → server
+export interface ClientMessages {
+  pos: { x: number; y: number; d: number; a: number; seq: number };
+  emote: { e: Emote };
+  chat: { text: string; scope: ChatScope };
+  status: { status: Status };
+  media: { mic: boolean; cam: boolean; screen: boolean; tracks?: string[] };
+  speaking: { on: boolean };
+  knock: { area: string };
+  admit: { userId: number; area: string };
+  follow: { userId: number | null };
+  teleport: { to: "desk" | "spawn" | { userId: number } | { x: number; y: number } };
+  "obj:put": {
+    id?: string;
+    kind: string;
+    x: number;
+    y: number;
+    rot: number;
+    refId?: number | null;
+    props?: Record<string, unknown>;
+  };
+  "obj:remove": { id: string };
+  "build:template": { template: string };
+  "mod:mute": { userId: number; muted: boolean };
+  "mod:kick": { userId: number };
+  "mod:lock": { area: string; locked: boolean };
+  // map editing (builders)
+  "map:paint": { cells: { x: number; y: number; ch: string }[] };
+  "map:resize": { width: number; height: number };
+  "map:new": { width: number; height: number };
+  "map:spawn": { x: number; y: number };
+  "map:room": {
+    name: string;
+    kind: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    ownerId: number | null;
+    ownerName: string | null;
+    walls: boolean;
+    floor?: string;
+  };
+  "map:room:update": { key: string; name?: string; kind?: string; ownerId?: number | null; ownerName?: string | null };
+  "map:room:remove": { key: string };
+  "desk:assign": { id: string; ownerId: number | null; ownerName: string | null };
+  // doors: anyone opens/closes; the room's owner (or a builder) locks
+  "door:set": { id: string; state: "open" | "closed" | "locked" };
+  "radio:set": { playing: boolean; station?: number };
+  "standup:start": Record<string, never>;
+  "standup:next": Record<string, never>;
+  "standup:stop": Record<string, never>;
+  "poker:open": { cardId: number; boardId: number; title: string };
+  "poker:close": Record<string, never>;
+  "wb:get": { objectId: string };
+  "wb:op": { objectId: string; op: WbOp };
+  "arcade:score": { score: number };
+  "vortex:poke": Record<string, never>;
+}
+
+// server → client
+export interface ServerMessages {
+  snap: { x: number; y: number };
+  // whom I may listen to (session ids) and who may listen to me (user ids)
+  hear: { ids: string[]; heardBy: string[] };
+  chat: { id: string; from: string; fromName: string; text: string; scope: ChatScope; at: number };
+  knock: { from: string; fromName: string; area: string };
+  admitted: { area: string };
+  toast: { text: string; tone?: "info" | "warn" | "vortex" };
+  "wb:scene": { objectId: string; items: WbItem[] };
+  "wb:op": { objectId: string; op: WbOp; by: string };
+  "arcade:scores": { scores: { name: string; score: number }[] };
+  "vortex:say": { text: string; to?: string; mood?: string };
+  kicked: { reason: string };
+}
+
+// Whiteboard: coordinates in a 1000 × 600 board space.
+export type WbItem =
+  | { id: string; k: "stroke"; c: string; w: number; p: number[] }
+  | { id: string; k: "note"; c: string; x: number; y: number; text: string }
+  | { id: string; k: "text"; c: string; x: number; y: number; text: string };
+export type WbOp = { t: "add"; item: WbItem } | { t: "del"; id: string } | { t: "clear" };
+export const WB_W = 1000;
+export const WB_H = 600;
+export const WB_MAX_ITEMS = 1500;
+export const WB_MAX_POINTS = 600;
+
+export const MAX_CHAT = 500;
+export const STATION_COUNT = 3;
+export const LIVEKIT_IDENTITY = (userId: number | string) => String(userId);

@@ -1,0 +1,92 @@
+# Yutopia for local dev: LiveKit + world-server + client, one command.
+#   docker compose -f docker/compose.yaml up -d      (or: pnpm up)
+# Joins Yondra's `sail` network so the world-server reaches Laravel at
+# http://laravel.test — start Yondra's stack first.
+name: yutopia
+
+x-node: &node
+  image: node:24-alpine
+  working_dir: /app
+  restart: unless-stopped
+  env_file: ../.env
+  networks: [sail]
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.7
+    container_name: yutopia-livekit
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+      - ./livekit.keys.yaml:/etc/livekit.keys.yaml:ro
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    networks: [sail]
+
+  world:
+    <<: *node
+    container_name: yutopia-world
+    command:
+      - sh
+      - -c
+      - corepack enable && corepack prepare pnpm@12.6.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @yutopia/world-server dev
+    environment:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      YONDRA_API_INTERNAL: http://laravel.test
+      LIVEKIT_HTTP_URL: http://livekit:7880
+    volumes:
+      - ..:/app
+      # Linux node_modules live in volumes so they never clash with the host's (macOS) ones
+      - world_nm:/app/node_modules
+      - world_nm_shared:/app/packages/shared/node_modules
+      - world_nm_world:/app/apps/world-server/node_modules
+      - world_nm_client:/app/apps/client/node_modules
+    ports:
+      - "2567:2567"
+    depends_on: [livekit]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:2567/health"]
+      interval: 15s
+      timeout: 3s
+      start_period: 120s
+
+  client:
+    <<: *node
+    container_name: yutopia-client
+    command:
+      - sh
+      - -c
+      - corepack enable && corepack prepare pnpm@12.6.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @yutopia/client exec next dev -p 3100 -H 0.0.0.0
+    environment:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      # own build folder, so it never fights a `next dev` running on the host
+      NEXT_DIST_DIR: .next-docker
+      # file changes from macOS reach the container reliably
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ..:/app
+      - client_nm:/app/node_modules
+      - client_nm_shared:/app/packages/shared/node_modules
+      - client_nm_world:/app/apps/world-server/node_modules
+      - client_nm_client:/app/apps/client/node_modules
+    ports:
+      - "3100:3100"
+    depends_on: [world]
+
+volumes:
+  world_nm:
+  world_nm_shared:
+  world_nm_world:
+  world_nm_client:
+  client_nm:
+  client_nm_shared:
+  client_nm_world:
+  client_nm_client:
+
+networks:
+  sail:
+    name: yondra_sail
+    external: true

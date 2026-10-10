@@ -1,0 +1,17 @@
+# LiveKit SFU for Yutopia (local dev). Keys come from livekit.keys.yaml (gitignored),
+# generated together with the YUTOPIA_* secrets in Yondra's backend .env.
+port: 7880
+bind_addresses: [""]
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+  # Docker Desktop: advertise the host loopback so browsers on this machine connect.
+  node_ip: 127.0.0.1
+key_file: /etc/livekit.keys.yaml
+room:
+  empty_timeout: 300
+  departure_timeout: 20
+logging:
+  level: info

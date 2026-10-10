@@ -1,0 +1,32 @@
+{
+  "name": "@yutopia/client",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack -p 3100",
+    "build": "next build --turbopack",
+    "start": "next start -p 3100",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@yutopia/shared": "workspace:*",
+    "colyseus.js": "0.16.22",
+    "laravel-echo": "^2.3.4",
+    "livekit-client": "2.22.3",
+    "next": "15.5.7",
+    "pixi.js": "^8.13.0",
+    "pusher-js": "^8.5.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5.9.2"
+  }
+}

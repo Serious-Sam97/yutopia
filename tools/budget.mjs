@@ -1,0 +1,34 @@
+// Bundle budget: gzip size of the JS the world page (/s/[spaceId]) loads, from
+// the production build's manifest. Run after:
+//   NEXT_DIST_DIR=.next-prod pnpm --filter @yutopia/client build
+import { readdirSync, readFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
+
+const BUDGETS = { "/s/[spaceId]/page": 520, "/page": 260, "/login/page": 160 }; // KB gzip
+const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
+const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
+let failed = false;
+for (const [page, budget] of Object.entries(BUDGETS)) {
+  const files = (manifest.pages[page] ?? []).filter((f) => f.endsWith(".js"));
+  const kb = files.reduce((n, f) => n + gzipSync(readFileSync(dist + f)).length, 0) / 1024;
+  const ok = kb <= budget;
+  failed ||= !ok;
+  console.log(
+    `[budget] ${ok ? "ok  " : "OVER"} ${page.padEnd(22)} ${kb.toFixed(1)} KB gzip (budget ${budget} KB, ${files.length} files)`,
+  );
+}
+// Lazy chunks (not in the page's files): found by a marker string in their code.
+const LAZY = { "yutopia-item-art": 40 }; // KB gzip
+const chunks = `${dist}static/chunks/`;
+for (const [marker, budget] of Object.entries(LAZY)) {
+  const files = readdirSync(chunks).filter(
+    (f) => f.endsWith(".js") && readFileSync(chunks + f, "utf8").includes(marker),
+  );
+  const kb = files.reduce((n, f) => n + gzipSync(readFileSync(chunks + f)).length, 0) / 1024;
+  const ok = files.length > 0 && kb <= budget;
+  failed ||= !ok;
+  console.log(
+    `[budget] ${ok ? "ok  " : "OVER"} ${`lazy: ${marker}`.padEnd(22)} ${kb.toFixed(1)} KB gzip (budget ${budget} KB, ${files.length} files)`,
+  );
+}
+if (failed) process.exit(1);

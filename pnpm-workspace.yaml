@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+  sharp: true
+
+overrides:
+  "@types/earcut": "3.0.0"

@@ -1,0 +1,59 @@
+import { createHmac } from "node:crypto";
+import type { Layout, WorldObjectDef } from "@yutopia/shared";
+import { config } from "./config.ts";
+import { metrics } from "./metrics.ts";
+
+// Signed calls to Yondra's /api/internal/yutopia/* (see YutopiaInternalController).
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const raw = body === undefined ? "" : JSON.stringify(body);
+  const ts = Math.floor(Date.now() / 1000).toString();
+  const sig = createHmac("sha256", config.internalSecret()).update(`${ts}.${raw}`).digest("hex");
+  const res = await fetch(`${config.yondraApi}/api/internal/yutopia${path}`, {
+    method,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Yutopia-Timestamp": ts,
+      "X-Yutopia-Signature": sig,
+    },
+    body: raw || undefined,
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) metrics.inc("yondra_errors_total");
+  if (!res.ok) throw new Error(`Yondra ${method} ${path} → ${res.status} ${(await res.text()).slice(0, 200)}`);
+  return (await res.json()) as T;
+}
+
+export interface SpaceInfo {
+  id: number;
+  name: string;
+  mapKey: string;
+  projectId: number | null;
+  seeded: boolean;
+  objects: WorldObjectDef[];
+  layout?: unknown;
+}
+
+export interface PresenceEntry {
+  user_id: number;
+  name: string;
+  area: string | null;
+  area_name: string | null;
+  status: string;
+}
+
+export const yondra = {
+  space: (id: number) => call<SpaceInfo>("GET", `/spaces/${id}`),
+  seed: (id: number, objects: WorldObjectDef[]) =>
+    call<{ objects: WorldObjectDef[] }>("POST", `/spaces/${id}/seed`, { objects }),
+  putObject: (id: number, o: WorldObjectDef) => call<{ object: WorldObjectDef }>("PUT", `/spaces/${id}/objects`, o),
+  deleteObject: (id: number, uid: string) => call("DELETE", `/spaces/${id}/objects/${encodeURIComponent(uid)}`),
+  desk: (id: number, userId: number, desks: string[]) =>
+    call<{ desk: string | null }>("POST", `/spaces/${id}/desk`, { user_id: userId, desks }),
+  putLayout: (id: number, layout: Layout) => call("PUT", `/spaces/${id}/layout`, layout),
+  presence: (id: number, people: PresenceEntry[]) => call("POST", `/spaces/${id}/presence`, { people }),
+  vortexLine: (id: number, context: { event: string; user_id: number | null }) =>
+    call<{ line: string | null; mood?: string; personal: boolean }>("POST", `/spaces/${id}/vortex`, context),
+  grantFragment: (id: number, fragment: string, userIds: number[]) =>
+    call<{ granted: number[] }>("POST", `/spaces/${id}/fragment`, { fragment, user_ids: userIds }),
+};

@@ -1,0 +1,14 @@
+node_modules
+.next
+dist
+.env
+.env.local
+test-results
+playwright-report
+*.log
+.DS_Store
+docker/livekit.keys.yaml
+.next-prod
+docker/prod/.env
+docker/prod/livekit.keys.yaml
+.next-docker

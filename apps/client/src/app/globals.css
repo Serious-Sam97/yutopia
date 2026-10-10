@@ -1,0 +1,217 @@
+@import "tailwindcss";
+
+/* Yutopia — warm 80s hi-fi. Walnut cabinets, cream faceplates, amber VFD. */
+:root {
+  --walnut: #5b3a26;
+  --walnut-dark: #3e2718;
+  --walnut-deep: #2a1b11;
+  --teak: #8a5a36;
+  --cream: #efe4cc;
+  --cream-dim: #d9cba9;
+  --paper: #f7f0de;
+  --amber: #ffa630;
+  --vfd: #ffb35c;
+  --rust: #b5562f;
+  --olive: #6e7b3a;
+  --ink: #2a2420;
+  --graphite: #2b2a26;
+  --muted: #a39d8c;
+  --bg: #17110d;
+  --panel: #241912;
+  --panel-2: #2f2118;
+  --edge: #4a3527;
+  --focus: #ffb35c;
+  --font-lcd: var(--font-vt323), "VT323", ui-monospace, monospace;
+  --font-mono: var(--font-share-tech), "Share Tech Mono", ui-monospace, monospace;
+  --font-body: var(--font-inter), Inter, ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--cream);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--amber);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.lcd {
+  font-family: var(--font-lcd);
+  letter-spacing: 0.04em;
+  color: var(--vfd);
+  text-shadow: 0 0 6px rgba(255, 166, 48, 0.45);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* walnut cabinet with a cream faceplate */
+.cabinet {
+  background: linear-gradient(180deg, #3b281b 0%, #2a1c13 100%);
+  border: 1px solid #5a412f;
+  border-radius: 14px;
+  box-shadow:
+    0 1px 0 rgba(255, 220, 170, 0.08) inset,
+    0 18px 50px rgba(0, 0, 0, 0.55),
+    0 2px 0 #1a110b;
+}
+
+.faceplate {
+  background: linear-gradient(180deg, #f3e9d3, #e3d6b8);
+  color: var(--ink);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 0 #fff8 inset,
+    0 -1px 0 #0002 inset;
+}
+
+.vfd-window {
+  background: radial-gradient(120% 140% at 50% 0%, #2a2016 0%, #120d09 70%);
+  border: 1px solid #000;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+/* chunky deck buttons */
+.deck-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 0.8rem;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #e9dec4, #cdbf9f);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  box-shadow:
+    0 3px 0 #8f8166,
+    0 4px 8px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 80ms ease,
+    box-shadow 80ms ease,
+    background 120ms ease;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+.deck-btn:hover {
+  background: linear-gradient(180deg, #f3ead4, #d8caa9);
+}
+.deck-btn:active,
+.deck-btn[aria-pressed="true"] {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 #8f8166,
+    0 2px 4px rgba(0, 0, 0, 0.45);
+}
+.deck-btn[aria-pressed="true"] {
+  background: linear-gradient(180deg, #ffbe6a, #e8952d);
+}
+.deck-btn.danger[aria-pressed="false"] {
+  background: linear-gradient(180deg, #c9694a, #9e4a2e);
+  color: var(--cream);
+  box-shadow:
+    0 3px 0 #5e2a18,
+    0 4px 8px rgba(0, 0, 0, 0.45);
+}
+.deck-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.deck-btn .led {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #4a3a2a;
+}
+.deck-btn[aria-pressed="true"] .led {
+  background: #ff5a2a;
+  box-shadow: 0 0 6px #ff7a3a;
+}
+
+.ghost-btn {
+  border-radius: 8px;
+  padding: 0.35rem 0.7rem;
+  color: var(--cream);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--edge);
+  background: rgba(255, 255, 255, 0.03);
+}
+.ghost-btn:hover {
+  background: rgba(255, 179, 92, 0.12);
+  border-color: #7a5636;
+}
+
+.field {
+  width: 100%;
+  border-radius: 8px;
+  background: #140e0a;
+  border: 1px solid var(--edge);
+  color: var(--cream);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.95rem;
+}
+.field:focus {
+  border-color: var(--amber);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 166, 48, 0.2);
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #6b4a33 transparent;
+}
+
+.tape-stripes {
+  background: linear-gradient(180deg, var(--rust) 0 25%, #e8a33d 25% 50%, var(--olive) 50% 75%, var(--cream) 75% 100%);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+  .deck-btn {
+    transition: none;
+  }
+}

@@ -1,0 +1,52 @@
+# Production: client + world-server + LiveKit behind Caddy (automatic TLS).
+# Yondra (Laravel + Reverb) runs separately; see docs/DEPLOY.md.
+name: yutopia-prod
+
+services:
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    environment:
+      YUTOPIA_DOMAIN: ${YUTOPIA_DOMAIN}
+      WORLD_DOMAIN: ${WORLD_DOMAIN}
+      LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN}
+
+  client:
+    build:
+      context: ../..
+      dockerfile: apps/client/Dockerfile
+      args:
+        NEXT_PUBLIC_API: ${YONDRA_API_URL}
+        NEXT_PUBLIC_YONDRA_APP: ${YONDRA_APP_URL}
+        NEXT_PUBLIC_REVERB_APP_KEY: ${REVERB_APP_KEY}
+        NEXT_PUBLIC_REVERB_HOST: ${REVERB_HOST}
+    restart: unless-stopped
+
+  world:
+    build:
+      context: ../..
+      dockerfile: apps/world-server/Dockerfile
+    restart: unless-stopped
+    environment:
+      YUTOPIA_WORLD_SECRET: ${YUTOPIA_WORLD_SECRET}
+      YUTOPIA_INTERNAL_SECRET: ${YUTOPIA_INTERNAL_SECRET}
+      YONDRA_API_INTERNAL: ${YONDRA_API_INTERNAL}
+      LIVEKIT_HTTP_URL: http://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+
+  livekit:
+    image: livekit/livekit-server:v1.13.7
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    network_mode: host # WebRTC needs the host's UDP ports and public IP
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+      - ./livekit.keys.yaml:/etc/livekit.keys.yaml:ro
+
+volumes:
+  caddy_data:

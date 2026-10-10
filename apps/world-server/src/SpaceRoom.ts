@@ -1,0 +1,727 @@
+import { type AuthContext, type Client, Room } from "@colyseus/core";
+import {
+  ANIM,
+  areaAt,
+  avatarFromSeed,
+  CATALOG,
+  type ChatScope,
+  type ClientMessages,
+  canPlace,
+  dirFromDelta,
+  doorRot,
+  EMOTES,
+  entry,
+  findPath,
+  Grid,
+  getMap,
+  HEAR_RADIUS,
+  HEARING_HZ,
+  hearingGain,
+  isKind,
+  isLegalMove,
+  layoutFromMap,
+  MAX_CHAT,
+  type MapDef,
+  mapFromLayout,
+  replacedByTemplate,
+  type ServerMessages,
+  type Status,
+  TEMPLATES,
+  TICK_HZ,
+  validLayout,
+  type WorldObjectDef,
+} from "@yutopia/shared";
+import { verifyWorldToken, type WorldClaims } from "./auth.ts";
+import { config } from "./config.ts";
+import { type Feature, installFeatures } from "./features/index.ts";
+import { removeParticipant, setCanPublish } from "./livekit.ts";
+import { metrics } from "./metrics.ts";
+import { Player, SpaceState, WorldObject } from "./schema.ts";
+import { type PresenceEntry, yondra } from "./yondra.ts";
+
+interface ClientData {
+  claims: WorldClaims;
+  lastPosAt: number;
+  chatBucket: number;
+  chatRefillAt: number;
+  hears: Set<string>; // sids this client can hear
+  heardByKey: string; // last "heard by" list sent, to skip no-op updates
+  kicked?: boolean; // replaced by a newer tab
+}
+
+export type SpaceClient = Client<ClientData, WorldClaims>;
+
+const STATUSES: Status[] = ["online", "away", "dnd"];
+
+export class SpaceRoom extends Room<SpaceState> {
+  maxClients = 120;
+  // Reconnects (network blips, laptop sleep) keep your avatar for this long.
+  static RECONNECT_SECONDS = 20;
+
+  map!: MapDef;
+  grid!: Grid;
+  spaceId = 0;
+  livekitRoom = "";
+  private features: Feature[] = [];
+  private presenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private removedUntil = new Map<number, number>();
+  private lastPresence = "";
+
+  send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {
+    client.send(type, msg);
+  }
+
+  broadcastMsg<K extends keyof ServerMessages>(type: K, msg: ServerMessages[K], except?: Client): void {
+    this.broadcast(type, msg, except ? { except } : undefined);
+  }
+
+  on<K extends keyof ClientMessages>(type: K, fn: (client: SpaceClient, msg: ClientMessages[K]) => void): void {
+    this.onMessage(type, (client: SpaceClient, msg: unknown) => {
+      if (!msg || typeof msg !== "object") return;
+      metrics.inc("messages_total");
+      try {
+        fn(client, msg as ClientMessages[K]);
+      } catch (e) {
+        metrics.inc("message_errors_total");
+        console.warn(`[space ${this.spaceId}] ${String(type)} failed:`, (e as Error).message);
+      }
+    });
+  }
+
+  async onCreate(options: { spaceId: number }) {
+    this.spaceId = Number(options.spaceId);
+    this.livekitRoom = `space-${this.spaceId}`;
+    this.setState(new SpaceState());
+    this.state.spaceId = this.spaceId;
+    this.autoDispose = true;
+
+    const info = config.offline ? null : await yondra.space(this.spaceId);
+    const base = getMap(info?.mapKey ?? "studio");
+    this.map = info?.layout && validLayout(info.layout) ? mapFromLayout(base.key, base.name, info.layout) : base;
+    this.state.mapKey = this.map.key;
+    this.syncMapState();
+    this.state.name = info?.name ?? "Offline studio";
+    this.state.projectId = info?.projectId ?? 0;
+    let objects: WorldObjectDef[] = info?.objects ?? this.map.objects;
+    if (info && !info.seeded) objects = (await yondra.seed(this.spaceId, this.map.objects)).objects;
+    for (const o of objects) this.state.objects.set(o.id, toSchema(o));
+    this.rebuildGrid();
+
+    this.registerMessages();
+    this.features = installFeatures(this);
+
+    this.setPatchRate(1000 / TICK_HZ);
+    let last = Date.now();
+    this.setSimulationInterval(() => {
+      const now = Date.now();
+      const dt = (now - last) / 1000;
+      last = now;
+      for (const f of this.features) f.tick?.(dt, now);
+      for (const p of this.state.players.values()) if (p.emote && now - p.emoteAt > 3500) p.emote = "";
+      metrics.tick(Date.now() - now);
+    }, 1000 / TICK_HZ);
+    this.clock.setInterval(() => this.hearingPass(), 1000 / HEARING_HZ);
+    this.clock.setInterval(() => this.pushPresence(true), 60_000);
+  }
+
+  async onAuth(
+    _client: Client,
+    options: { token?: string; spaceId?: number },
+    _ctx: AuthContext,
+  ): Promise<WorldClaims> {
+    const claims = await this.claimsFor(options);
+    if ((this.removedUntil.get(claims.userId) ?? 0) > Date.now()) throw new Error("Removed by an owner for a while");
+    return claims;
+  }
+
+  private async claimsFor(options: { token?: string; spaceId?: number }): Promise<WorldClaims> {
+    const token = String(options?.token ?? "");
+    if (config.offline && token.startsWith("dev:")) {
+      // offline tests only: a real (non-bot) person without Laravel
+      const [, id, name, roles] = token.split(":");
+      return {
+        userId: Number(id),
+        name: name || `Dev ${id}`,
+        avatar: avatarFromSeed(Number(id)),
+        spaceId: this.spaceId,
+        projectId: null,
+        roles: (roles || "member").split(","),
+      };
+    }
+    if (config.allowBots && token.startsWith("bot:")) {
+      const [, id, name] = token.split(":");
+      return {
+        userId: Number(id),
+        name: name || `Bot ${id}`,
+        avatar: avatarFromSeed(Number(id)),
+        spaceId: this.spaceId,
+        projectId: null,
+        roles: ["member", "bot"],
+      };
+    }
+    const claims = await verifyWorldToken(token);
+    if (claims.spaceId !== this.spaceId) throw new Error("Token is for another space");
+    return claims;
+  }
+
+  async onJoin(client: SpaceClient, _options: unknown, claims: WorldClaims) {
+    // One avatar per person: a second tab takes over from the first.
+    for (const other of this.clients) {
+      if (other !== client && other.auth?.userId === claims.userId) {
+        if (other.userData) (other.userData as ClientData).kicked = true;
+        this.send(other, "kicked", { reason: "Opened in another tab" });
+        other.leave(4001);
+      }
+    }
+    client.userData = {
+      claims,
+      lastPosAt: Date.now(),
+      chatBucket: 5,
+      chatRefillAt: Date.now(),
+      hears: new Set(),
+      heardByKey: "",
+    };
+    const p = new Player();
+    p.sid = client.sessionId;
+    p.uid = claims.userId;
+    p.name = claims.name;
+    p.avatar = JSON.stringify(claims.avatar);
+    p.builder = claims.roles.includes("builder");
+    p.bot = claims.roles.includes("bot");
+
+    let at: { x: number; y: number } = this.map.spawn;
+    if (!p.bot && !config.offline) {
+      const seats = [...this.state.objects.values()].filter((o) => entry(o.kind).seat && safeJson(o.props).desk);
+      // a seat assigned to you wins; otherwise any seat nobody owns
+      const owned = seats.find((o) => safeJson(o.props).ownerId === claims.userId);
+      const free = seats.filter((o) => safeJson(o.props).ownerId == null).map((o) => o.id);
+      const desk = owned
+        ? { desk: owned.id }
+        : await yondra.desk(this.spaceId, claims.userId, free).catch(() => ({ desk: null }));
+      const seat = desk.desk ? this.state.objects.get(desk.desk) : undefined;
+      if (seat) {
+        p.desk = seat.id;
+        at = { x: seat.x + 0.5, y: seat.y + 0.5 };
+        p.a = ANIM.sit;
+        p.d = seatFacing(seat.rot);
+      }
+    }
+    const open = this.grid.fits(at.x, at.y) ? at : (this.grid.nearestOpen(at.x, at.y) ?? this.map.spawn);
+    p.x = open.x;
+    p.y = open.y;
+    p.area = areaAt(this.map, p.x, p.y)?.key ?? "";
+    this.state.players.set(client.sessionId, p);
+    metrics.inc("joins_total");
+    for (const f of this.features) f.join?.(client, p);
+    this.pushPresence();
+  }
+
+  async onLeave(client: SpaceClient, consented: boolean) {
+    const p = this.state.players.get(client.sessionId);
+    const replaced =
+      client.userData?.kicked || this.clients.some((c) => c !== client && c.auth?.userId === client.auth?.userId);
+    if (p && !consented && !replaced) {
+      p.status = "away";
+      try {
+        await this.allowReconnection(client, SpaceRoom.RECONNECT_SECONDS);
+        p.status = "online";
+        return;
+      } catch {
+        // timed out — fall through and remove
+      }
+    }
+    if (p) for (const f of this.features) f.leave?.(client, p);
+    this.state.players.delete(client.sessionId);
+    // Only drop the LiveKit identity if this person has no other live session.
+    const stillHere = [...this.state.players.values()].some((q) => q.uid === p?.uid);
+    if (p && !p.bot && !stillHere) void removeParticipant(this.livekitRoom, String(p.uid));
+    this.cleanBooths();
+    this.pushPresence();
+  }
+
+  async onDispose() {
+    if (this.presenceTimer) clearTimeout(this.presenceTimer);
+    if (!config.offline) await yondra.presence(this.spaceId, []).catch(() => {});
+    for (const f of this.features) f.dispose?.();
+  }
+
+  // ── messages ───────────────────────────────────────────────────────────────
+  private registerMessages() {
+    this.on("pos", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || !Number.isFinite(m.x) || !Number.isFinite(m.y)) return;
+      const now = Date.now();
+      const dt = (now - data(client).lastPosAt) / 1000;
+      data(client).lastPosAt = now;
+      const to = { x: m.x, y: m.y };
+      if (!isLegalMove(this.gridFor(p.uid), p, to, dt)) {
+        this.send(client, "snap", { x: p.x, y: p.y });
+        return;
+      }
+      const nextArea = areaAt(this.map, to.x, to.y);
+      if (nextArea && nextArea.key !== p.area && !this.mayEnter(p, nextArea.key)) {
+        this.send(client, "snap", { x: p.x, y: p.y });
+        this.knock(client, p, nextArea.key);
+        return;
+      }
+      p.x = to.x;
+      p.y = to.y;
+      p.d = (Math.max(0, Math.min(7, m.d | 0)) as number) ?? 0;
+      p.a = m.a === ANIM.walk || m.a === ANIM.sit ? m.a : ANIM.idle;
+      const area = nextArea?.key ?? "";
+      if (area !== p.area) {
+        const prev = p.area;
+        p.area = area;
+        for (const f of this.features) f.areaChange?.(client, p, prev, area);
+        this.cleanBooths();
+        this.pushPresence();
+      }
+    });
+
+    this.on("emote", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || !EMOTES.includes(m.e)) return;
+      p.emote = m.e;
+      p.emoteAt = Date.now();
+    });
+
+    this.on("chat", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      const text = String(m.text ?? "")
+        .trim()
+        .slice(0, MAX_CHAT);
+      if (!p || !text || !this.takeChatToken(client)) return;
+      const scope: ChatScope = m.scope === "area" || m.scope === "space" ? m.scope : "nearby";
+      const msg = {
+        id: `${Date.now()}-${client.sessionId}`,
+        from: client.sessionId,
+        fromName: p.name,
+        text,
+        scope,
+        at: Date.now(),
+      };
+      for (const c of this.clients) {
+        const q = this.state.players.get(c.sessionId);
+        if (!q) continue;
+        const reach =
+          scope === "space" ||
+          c === client ||
+          (scope === "area" && q.area === p.area) ||
+          (scope === "nearby" && (hearingGain(this.map, q, p) > 0 || Math.hypot(q.x - p.x, q.y - p.y) <= HEAR_RADIUS));
+        if (reach) this.send(c, "chat", msg);
+      }
+      for (const f of this.features) f.chat?.(client, p, text, scope);
+    });
+
+    this.on("status", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || !STATUSES.includes(m.status)) return;
+      p.status = m.status;
+      this.pushPresence();
+    });
+
+    this.on("media", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      p.mic = !!m.mic && !p.muted;
+      p.cam = !!m.cam;
+      p.screen = !!m.screen;
+    });
+
+    this.on("speaking", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (p) p.speaking = !!m.on && p.mic;
+    });
+
+    this.on("knock", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (p && typeof m.area === "string") this.knock(client, p, m.area);
+    });
+
+    this.on("admit", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || p.area !== m.area) return;
+      this.state.boothGuests.set(`${m.area}:${m.userId}`, "1");
+      const guest = this.clients.find((c) => c.auth?.userId === m.userId);
+      if (guest) this.send(guest, "admitted", { area: m.area });
+    });
+
+    this.on("teleport", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p) return;
+      let target: { x: number; y: number } | null = null;
+      if (m.to === "spawn") target = this.map.spawn;
+      else if (m.to === "desk") {
+        const seat = p.desk ? this.state.objects.get(p.desk) : undefined;
+        target = seat ? { x: seat.x + 0.5, y: seat.y + 0.5 } : null;
+      } else if (typeof m.to === "object" && m.to && "userId" in m.to) {
+        const userId = m.to.userId;
+        const other = [...this.state.players.values()].find((q) => q.uid === userId);
+        if (other) target = this.grid.nearestOpen(other.x + 1, other.y + 1) ?? { x: other.x, y: other.y };
+      }
+      if (!target) return;
+      // never into a room you can't walk into (locked doors, sealed rooms)
+      const mine = this.gridFor(p.uid);
+      const landing = mine.fits(target.x, target.y) ? target : mine.nearestOpen(target.x, target.y);
+      if (!landing || (!findPath(mine, p, landing)?.length && Math.hypot(landing.x - p.x, landing.y - p.y) > 0.5)) {
+        this.send(client, "toast", { text: "Can't get there — the door is locked.", tone: "warn" });
+        return;
+      }
+      target = landing;
+      const area = areaAt(this.map, target.x, target.y);
+      if (area && !this.mayEnter(p, area.key)) {
+        // Land at the door instead and knock.
+        this.knock(client, p, area.key);
+        return;
+      }
+      const spot = this.grid.fits(target.x, target.y) ? target : this.grid.nearestOpen(target.x, target.y);
+      if (!spot) return;
+      const seat = this.grid.seatAt(spot.x, spot.y);
+      p.x = spot.x;
+      p.y = spot.y;
+      p.a = seat ? ANIM.sit : ANIM.idle;
+      if (seat) p.d = seatFacing(seat.rot);
+      p.area = area?.key ?? "";
+      this.send(client, "snap", { x: p.x, y: p.y });
+      this.pushPresence();
+    });
+
+    this.on("obj:put", (client, m) => void this.putObject(client, m));
+    this.on("obj:remove", (client, m) => void this.removeObject(client, m.id));
+    this.on("build:template", (client, m) => void this.applyTemplate(client, String(m.template)));
+
+    // ── moderation (project owners) ──
+    const owner = (client: SpaceClient) => this.state.players.get(client.sessionId)?.builder === true;
+    const byUid = (uid: number) => [...this.state.players.values()].find((q) => q.uid === uid);
+    this.on("mod:mute", (client, m) => {
+      const target = byUid(Number(m.userId));
+      if (!owner(client) || !target || target.bot) return;
+      target.muted = !!m.muted;
+      if (target.muted) target.mic = false;
+      void setCanPublish(this.livekitRoom, String(target.uid), !target.muted);
+      const c = this.clients.getById(target.sid);
+      if (c)
+        this.send(c, "toast", {
+          text: target.muted ? "An owner muted you in this space." : "You can talk again.",
+          tone: "warn",
+        });
+    });
+    this.on("mod:kick", (client, m) => {
+      const target = byUid(Number(m.userId));
+      const me = this.state.players.get(client.sessionId);
+      if (!owner(client) || !target || target.uid === me?.uid) return;
+      this.removedUntil.set(target.uid, Date.now() + 10 * 60_000);
+      const c = this.clients.getById(target.sid) as SpaceClient | undefined;
+      if (c) {
+        if (c.userData) c.userData.kicked = true;
+        this.send(c, "kicked", { reason: "removed" });
+        c.leave(4002);
+      }
+      void removeParticipant(this.livekitRoom, String(target.uid));
+    });
+    this.on("mod:lock", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      const area = this.map.areas.find((a) => a.key === m.area);
+      if (!owner(client) || !p || !area || area.kind === "open" || area.kind === "stage") return;
+      if (m.locked) this.state.locks.set(area.key, p.name);
+      else this.state.locks.delete(area.key);
+    });
+  }
+
+  // ── booths ────────────────────────────────────────────────────────────────
+  mayEnter(p: Player, areaKey: string): boolean {
+    const area = this.map.areas.find((a) => a.key === areaKey);
+    // booths, and rooms an owner locked: knock to get in
+    if (area?.kind !== "booth" && !this.state.locks.has(areaKey)) return true;
+    const inside = [...this.state.players.values()].filter((q) => q !== p && q.area === areaKey && !q.bot);
+    return inside.length === 0 || this.state.boothGuests.has(`${areaKey}:${p.uid}`);
+  }
+
+  private knock(client: SpaceClient, p: Player, areaKey: string) {
+    const area = this.map.areas.find((a) => a.key === areaKey);
+    if (!area) return;
+    const lastKey = `knock:${areaKey}`;
+    const ud = client.userData as ClientData & Record<string, number>;
+    if (Date.now() - (ud[lastKey] ?? 0) < 4000) return;
+    ud[lastKey] = Date.now();
+    for (const c of this.clients) {
+      const q = this.state.players.get(c.sessionId);
+      if (q && q.area === areaKey) this.send(c, "knock", { from: client.sessionId, fromName: p.name, area: areaKey });
+    }
+    this.send(client, "toast", { text: `Knocked on ${area.name}. Waiting for someone to let you in…` });
+  }
+
+  private cleanBooths() {
+    for (const key of [...this.state.locks.keys()]) {
+      if (![...this.state.players.values()].some((q) => q.area === key)) this.state.locks.delete(key);
+    }
+    for (const key of [...this.state.boothGuests.keys()]) {
+      const area = key.split(":")[0];
+      const someone = [...this.state.players.values()].some((q) => q.area === area);
+      if (!someone) this.state.boothGuests.delete(key);
+    }
+  }
+
+  // ── hearing ────────────────────────────────────────────────────────────────
+  // Hearing isn't symmetric (the stage reaches everyone), so each client gets
+  // both lists: whom to subscribe to, and whom its own tracks are allowed for.
+  // LiveKit enforces the second one at the SFU (publisher track permissions).
+  private hearingPass() {
+    const players = [...this.state.players.entries()];
+    const heardBy = new Map<string, Set<string>>(); // speaker sid → listener uids
+    const next = new Map<string, Set<string>>();
+    for (const client of this.clients) {
+      const ud = client.userData as ClientData | undefined;
+      const me = this.state.players.get(client.sessionId);
+      if (!ud || !me || me.bot) continue;
+      const hears = new Set<string>();
+      const ear = { x: me.x, y: me.y, dnd: me.status === "dnd" };
+      for (const [sid, other] of players) {
+        if (sid === client.sessionId || other.bot) continue;
+        const g = hearingGain(
+          this.map,
+          ear,
+          { x: other.x, y: other.y, dnd: other.status === "dnd" },
+          ud.hears.has(sid),
+        );
+        if (g > 0) {
+          hears.add(sid);
+          if (!heardBy.has(sid)) heardBy.set(sid, new Set());
+          heardBy.get(sid)?.add(String(me.uid));
+        }
+      }
+      next.set(client.sessionId, hears);
+    }
+    for (const client of this.clients) {
+      const ud = client.userData as ClientData | undefined;
+      const hears = next.get(client.sessionId);
+      if (!ud || !hears) continue;
+      const by = [...(heardBy.get(client.sessionId) ?? [])].sort();
+      const byKey = by.join(",");
+      if (!sameSet(hears, ud.hears) || byKey !== ud.heardByKey) {
+        ud.hears = hears;
+        ud.heardByKey = byKey;
+        this.send(client, "hear", { ids: [...hears], heardBy: by });
+      }
+    }
+  }
+
+  // ── presence → Yondra ───────────────────────────────────────────────────────
+  pushPresence(force = false) {
+    if (config.offline) return;
+    if (this.presenceTimer) clearTimeout(this.presenceTimer);
+    this.presenceTimer = setTimeout(() => {
+      const people: PresenceEntry[] = [...this.state.players.values()]
+        .filter((p) => !p.bot)
+        .map((p) => {
+          const area = this.map.areas.find((a) => a.key === p.area);
+          // Booths and focus mode stay discreet in Yondra.
+          const discreet = area?.kind === "booth" || p.status === "dnd";
+          return {
+            user_id: p.uid,
+            name: p.name,
+            area: discreet ? null : p.area || null,
+            area_name: discreet ? null : (area?.name ?? null),
+            status: p.status,
+          };
+        });
+      const key = JSON.stringify(people);
+      if (!force && key === this.lastPresence) return;
+      this.lastPresence = key;
+      yondra.presence(this.spaceId, people).catch((e) => console.warn("[presence]", e.message));
+    }, 500);
+  }
+
+  // ── build mode ──────────────────────────────────────────────────────────────
+  // ── the map ─────────────────────────────────────────────────────────────────
+  private personalGrids = new Map<number, Grid>();
+  private layoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Each person's walk grid: locked doors are walls unless it's their room.
+  gridFor(uid: number): Grid {
+    let g = this.personalGrids.get(uid);
+    if (!g) {
+      g = Grid.from(this.map, [...this.state.objects.values()].map(fromSchema), { uid });
+      this.personalGrids.set(uid, g);
+    }
+    return g;
+  }
+
+  syncMapState() {
+    const m = this.map;
+    this.state.width = m.width;
+    this.state.height = m.height;
+    this.state.tiles.clear();
+    for (const row of m.tiles) this.state.tiles.push(row);
+    this.state.areas = JSON.stringify(m.areas);
+    this.state.spawnX = m.spawn.x;
+    this.state.spawnY = m.spawn.y;
+    this.state.mapVersion += 1;
+  }
+
+  // Apply a new map: state, grids, and (debounced) storage in Yondra.
+  commitMap(next: MapDef) {
+    this.map = next;
+    this.syncMapState();
+    this.rebuildGrid();
+    for (const c of this.clients) {
+      const p = this.state.players.get(c.sessionId);
+      if (p) p.area = areaAt(this.map, p.x, p.y)?.key ?? "";
+    }
+    if (config.offline) return;
+    if (this.layoutTimer) clearTimeout(this.layoutTimer);
+    this.layoutTimer = setTimeout(() => {
+      yondra
+        .putLayout(this.spaceId, layoutFromMap(this.map))
+        .catch((e) => console.warn("[layout] save failed", e.message));
+    }, 1200);
+  }
+
+  rebuildGrid() {
+    this.personalGrids.clear();
+    this.grid = Grid.from(this.map, [...this.state.objects.values()].map(fromSchema));
+  }
+
+  private async putObject(client: SpaceClient, m: ClientMessages["obj:put"]) {
+    const p = this.state.players.get(client.sessionId);
+    if (!p?.builder || !isKind(m.kind) || !CATALOG[m.kind as keyof typeof CATALOG]) return;
+    const e = entry(m.kind);
+    if (!e.buildable) return;
+    const rot = ((m.rot | 0) + 4) % 4;
+    const x = m.x | 0;
+    const y = m.y | 0;
+    const id = typeof m.id === "string" && m.id ? m.id.slice(0, 64) : `b-${m.kind}-${Date.now().toString(36)}`;
+    const existing = this.state.objects.get(id);
+    if (existing && existing.kind !== m.kind) return;
+    const others = [...this.state.objects.values()].filter((o) => o.id !== id).map(fromSchema);
+    const def: WorldObjectDef = {
+      id,
+      kind: m.kind,
+      x,
+      y,
+      rot,
+      refId: m.refId ?? existing?.refId ?? null,
+      props: m.props ?? safeJson(existing?.props ?? "{}"),
+    };
+    if (def.kind === "door") {
+      // doors orient themselves along the wall and start open
+      const r = doorRot(this.map, x, y);
+      if (r === null) {
+        this.send(client, "toast", { text: "Doors go in a one-tile gap between two walls.", tone: "warn" });
+        return;
+      }
+      def.rot = r;
+      def.props = { state: "open", ...(def.props ?? {}) };
+    }
+    if (!this.placementOk(def, others)) {
+      this.send(client, "toast", { text: "That doesn't fit there.", tone: "warn" });
+      return;
+    }
+    const saved = config.offline ? def : (await yondra.putObject(this.spaceId, def)).object;
+    this.state.objects.set(id, toSchema(saved));
+    this.rebuildGrid();
+  }
+
+  private async removeObject(client: SpaceClient, id: string) {
+    const p = this.state.players.get(client.sessionId);
+    const o = this.state.objects.get(id);
+    if (!p?.builder || !o || !entry(o.kind).buildable) return;
+    if (!config.offline) await yondra.deleteObject(this.spaceId, id);
+    this.state.objects.delete(id);
+    this.rebuildGrid();
+  }
+
+  placementOk(o: WorldObjectDef, others: WorldObjectDef[]): boolean {
+    return canPlace(this.map, others, o, [...this.state.players.values()]);
+  }
+
+  // Swap a room's furniture for a template (owners only). Persisted object by object.
+  private async applyTemplate(client: SpaceClient, key: string) {
+    const p = this.state.players.get(client.sessionId);
+    const t = TEMPLATES.find((x) => x.key === key);
+    if (!p?.builder || !t) return;
+    const inArea = (o: { x: number; y: number }) => areaAt(this.map, o.x + 0.5, o.y + 0.5)?.key === t.area;
+    const remove = [...this.state.objects.values()].filter((o) => replacedByTemplate(o.kind) && inArea(o));
+    const keep = [...this.state.objects.values()].filter((o) => !remove.includes(o)).map(fromSchema);
+    const bodies = [...this.state.players.values()].filter((q) => areaAt(this.map, q.x, q.y)?.key === t.area);
+    if (bodies.some((b) => !this.grid.fits(b.x, b.y))) return;
+    const add: WorldObjectDef[] = [];
+    for (const o of t.objects) {
+      if (!canPlace(this.map, [...keep, ...add], o, bodies)) {
+        this.send(client, "toast", {
+          text: "Someone's standing where the new furniture goes. Try again in a sec.",
+          tone: "warn",
+        });
+        return;
+      }
+      add.push(o);
+    }
+    for (const o of remove) {
+      this.state.objects.delete(o.id);
+      if (!config.offline) await yondra.deleteObject(this.spaceId, o.id).catch(() => {});
+    }
+    for (const o of add) {
+      const saved = config.offline ? o : (await yondra.putObject(this.spaceId, o).catch(() => ({ object: o }))).object;
+      this.state.objects.set(saved.id, toSchema(saved));
+    }
+    this.rebuildGrid();
+    this.broadcastMsg("toast", { text: `${p.name} switched the room to "${t.name}".` });
+  }
+
+  private takeChatToken(client: SpaceClient): boolean {
+    const ud = data(client);
+    const now = Date.now();
+    ud.chatBucket = Math.min(5, ud.chatBucket + (now - ud.chatRefillAt) / 2000);
+    ud.chatRefillAt = now;
+    if (ud.chatBucket < 1) return false;
+    ud.chatBucket -= 1;
+    return true;
+  }
+
+  facing(from: { x: number; y: number }, to: { x: number; y: number }) {
+    return dirFromDelta(to.x - from.x, to.y - from.y);
+  }
+}
+
+export function toSchema(o: WorldObjectDef): WorldObject {
+  const w = new WorldObject();
+  w.id = o.id;
+  w.kind = o.kind;
+  w.x = o.x;
+  w.y = o.y;
+  w.rot = o.rot ?? 0;
+  w.refId = o.refId ?? 0;
+  w.props = JSON.stringify(o.props ?? {});
+  return w;
+}
+
+export function fromSchema(o: WorldObject): WorldObjectDef {
+  return { id: o.id, kind: o.kind, x: o.x, y: o.y, rot: o.rot, refId: o.refId || null, props: safeJson(o.props) };
+}
+
+export function safeJson(s: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(s);
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+// Seat rotation → which way you face when sitting (towards the desk/table).
+export function seatFacing(rot: number): number {
+  // rot 0 faces +y (screen down-left = SW), 1 faces +x (SE), 2 faces -y (NE), 3 faces -x (NW)
+  return [1, 7, 5, 3][rot % 4];
+}
+
+// Messages only arrive after onJoin has filled userData.
+export function data(client: SpaceClient): ClientData {
+  if (!client.userData) throw new Error("client not joined");
+  return client.userData;
+}
+
+function sameSet(a: Set<string>, b: Set<string>) {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}

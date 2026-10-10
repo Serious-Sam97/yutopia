@@ -1,0 +1,27 @@
+{
+  "name": "yutopia",
+  "private": true,
+  "scripts": {
+    "dev:client": "pnpm --filter @yutopia/client dev",
+    "dev:server": "pnpm --filter @yutopia/world-server dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "biome check apps packages tools",
+    "bots": "tsx tools/bots.mts",
+    "budget": "node tools/budget.mjs",
+    "contrast": "node tools/contrast.mjs",
+    "perf": "pnpm --filter @yutopia/world-server perf",
+    "docker:up": "docker compose -f docker/compose.yaml up -d",
+    "docker:down": "docker compose -f docker/compose.yaml down",
+    "docker:logs": "docker compose -f docker/compose.yaml logs -f --tail=50",
+    "sync:vortex": "node tools/sync-vortex-art.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.0",
+    "@yutopia/shared": "workspace:*",
+    "colyseus.js": "0.16.22",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.2"
+  }
+}
