@@ -1,8 +1,12 @@
 import {
   addRoom,
+  applyEdges,
   applyPaint,
   blankMap,
+  doorCentre,
   doorRoom,
+  edgeBlocker,
+  Grid,
   isFloor,
   MAP_MAX,
   MAP_MIN,
@@ -11,7 +15,10 @@ import {
   ROOM_KINDS,
   resizeMap,
   roomKey,
+  setRoomWalls,
   tileAt,
+  WALL_MATS,
+  type WallMat,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { config } from "../config.ts";
@@ -19,7 +26,7 @@ import { fromSchema, type SpaceClient, type SpaceRoom, safeJson, toSchema } from
 import { yondra } from "../yondra.ts";
 import { registerFeature } from "./index.ts";
 
-// Builders edit the map itself: paint walls/floors, draw rooms (with an owner),
+// Builders edit the map itself: paint floors (tiles) and walls (tile edges), draw rooms (with an owner),
 // resize or start blank, move the arrival point, assign desks. Doors: anyone
 // opens/closes; the room's owner (or a builder) locks. The shared rules
 // (packages/shared/src/map-edit.ts) decide what's allowed.
@@ -37,16 +44,21 @@ registerFeature((room: SpaceRoom) => {
     room.state.objects.delete(id);
     if (!config.offline) await yondra.deleteObject(room.spaceId, id).catch(() => {});
   };
-  // People standing somewhere that's no longer floor go back to the arrival point.
+  // People standing somewhere that's no longer floor (or now inside a wall)
+  // step to the nearest open spot, or go back to the arrival point.
   const rescue = (map: MapDef) => {
+    const g = Grid.from(map, objects());
     for (const c of room.clients) {
       const p = room.state.players.get(c.sessionId);
-      if (!p || isFloor(tileAt(map, Math.floor(p.x), Math.floor(p.y)))) continue;
-      p.x = map.spawn.x;
-      p.y = map.spawn.y;
+      if (!p || (isFloor(tileAt(map, Math.floor(p.x), Math.floor(p.y))) && g.fits(p.x, p.y))) continue;
+      const to = g.nearestOpen(p.x, p.y, 2) ?? map.spawn;
+      p.x = to.x;
+      p.y = to.y;
       room.send(c, "snap", { x: p.x, y: p.y });
     }
   };
+  const mat = (m: unknown): WallMat | undefined =>
+    typeof m === "string" && Object.hasOwn(WALL_MATS, m) ? (m as WallMat) : undefined;
 
   room.on("map:paint", (client, m) => {
     if (!builder(client) || !Array.isArray(m.cells)) return;
@@ -62,8 +74,44 @@ registerFeature((room: SpaceRoom) => {
       if (why) reason ??= why;
       else ok.push({ x, y, ch });
     }
-    if (ok.length) room.commitMap(applyPaint(room.map, ok));
+    if (ok.length) {
+      room.commitMap(applyPaint(room.map, ok));
+      rescue(room.map);
+    }
     if (reason) warn(client, `Skipped a tile: ${reason}.`);
+  });
+
+  room.on("map:walls", (client, m) => {
+    if (!builder(client) || !Array.isArray(m.edges)) return;
+    const objs = objects();
+    const ok: { x: number; y: number; dir: "h" | "v"; ch: string }[] = [];
+    let reason: string | null = null;
+    let next = room.map;
+    for (const e of m.edges.slice(0, 600)) {
+      const edge = {
+        x: Math.floor(Number(e?.x)),
+        y: Math.floor(Number(e?.y)),
+        dir: e?.dir === "v" ? ("v" as const) : ("h" as const),
+        ch: String(e?.ch ?? ""),
+      };
+      const why = edgeBlocker(next, objs, edge, edge.ch);
+      if (why) reason ??= why;
+      else {
+        ok.push(edge);
+        next = applyEdges(next, [edge]); // windows check the walls painted just before
+      }
+    }
+    if (ok.length) {
+      room.commitMap(next);
+      rescue(room.map);
+    }
+    if (reason) warn(client, `Skipped a wall: ${reason}.`);
+  });
+
+  room.on("map:room:walls", (client, m) => {
+    const w = mat(m.wall);
+    if (!builder(client) || !w) return;
+    room.commitMap(setRoomWalls(room.map, String(m.key), w));
   });
 
   room.on("map:resize", (client, m) => {
@@ -123,9 +171,11 @@ registerFeature((room: SpaceRoom) => {
       ownerName: ownerId ? String(m.ownerName ?? "").slice(0, 120) || null : null,
       walls: !!m.walls,
       floor: typeof m.floor === "string" ? m.floor : undefined,
+      wall: mat(m.wall),
     });
     if (typeof res === "string") return warn(client, `Couldn't make the room: ${res}.`);
     room.commitMap(res.map);
+    rescue(room.map);
     if (res.door)
       void save({
         id: `door-${key}`,
@@ -192,7 +242,8 @@ registerFeature((room: SpaceRoom) => {
     const current = String(def.props?.state ?? "open");
     const area = doorRoom(room.map, def);
     const owner = area?.ownerId ?? null;
-    const near = Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5)) <= 2.5;
+    const c = doorCentre(def);
+    const near = Math.hypot(p.x - c.x, p.y - c.y) <= 2.5;
     const mayLock = p.uid === owner || p.builder;
     if (m.state === "locked" || current === "locked") {
       if (!mayLock)

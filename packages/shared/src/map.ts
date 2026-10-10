@@ -1,4 +1,9 @@
-import type { WorldObjectDef } from "./catalog.ts";
+import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+
+// How many tiles of wall a wall item covers (0 = not a wall item).
+export function entryWallItem(kind: string): number {
+  return entry(kind).wall ? footprint(kind, 0).w : 0;
+}
 
 // Floors. Anything not listed (wall/void) is not walkable.
 export const FLOORS = {
@@ -34,8 +39,7 @@ export const EDGE_CHARS = [NO_WALL, ...Object.keys(WALL_MATS), "P", "W", "F", "B
 export const isWallEdge = (ch: string | undefined): boolean => !!ch && ch !== NO_WALL;
 export const isWindow = (ch: string | undefined): boolean => !!ch && "PWFBK".includes(ch) && ch.length === 1;
 // what you can't see (or light can't go) through: full opaque walls
-export const blocksLight = (ch: string | undefined): boolean =>
-  isWallEdge(ch) && ch !== "g" && ch !== HALF_WALL;
+export const blocksLight = (ch: string | undefined): boolean => isWallEdge(ch) && ch !== "g" && ch !== HALF_WALL;
 // a wall things can hang on (boards, posters): opaque, full height, no window
 export const holdsItems = (ch: string | undefined): boolean => blocksLight(ch) && !isWindow(ch);
 export const wallMat = (ch: string): WallMat => (ch === HALF_WALL ? "p" : (ch.toLowerCase() as WallMat));

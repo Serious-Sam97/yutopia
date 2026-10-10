@@ -1,6 +1,17 @@
-import { entry, footprint, isFloor, type MapDef, tileAt, type WorldObjectDef } from "@yutopia/shared";
+import {
+  entry,
+  footprint,
+  HALF_WALL,
+  hWall,
+  isFloor,
+  isWallEdge,
+  type MapDef,
+  tileAt,
+  vWall,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 import { Graphics, type GraphicsContext } from "pixi.js";
-import { piece, STUB_H, WALL_H } from "./furniture";
+import { piece, WALL_H } from "./furniture";
 import { type Box, type Clip, diamond, drawBox, P, rotateBoxes } from "./iso";
 import type { Group, ItemArt } from "./items/kit";
 
@@ -16,7 +27,7 @@ export function loadItemArt(): Promise<unknown> {
   return loadingItems;
 }
 
-import { C, hash2, mix, shade } from "./palette";
+import { C, hash2, mix } from "./palette";
 
 // One drawable slice of the world, sorted by `key` against avatars (x + y).
 export interface Part {
@@ -28,6 +39,10 @@ export interface Part {
   wx: number; // world tile of the slice (for cut-away tests)
   wy: number;
   objectId?: string;
+  // the wall edge this part is (or hangs on): it fades with that wall when the
+  // wall stands between you and the camera ("wall-down")
+  edge?: { dir: "h" | "v"; x: number; y: number; high: boolean };
+  at?: [number, number]; // where its light is sampled (world tiles)
   // the illustrated drawing of this slice (null while the item has none):
   // `ox/oy` = this part's origin relative to the object's origin, px
   art?: { key: string; get: () => ItemArt | null; ox: number; oy: number };
@@ -189,98 +204,145 @@ export function drawFlat(g: Graphics, o: WorldObjectDef) {
   }
 }
 
-// ── walls ──────────────────────────────────────────────────────────────────
+// ── walls (map v2: on tile edges) ──────────────────────────────────────────
+// Each wall edge is four slices along its length (so people on either side of a
+// thin wall sort right against it) × a low part (skirting, always there) and a
+// high part (fades for "wall-down"); posts fill the joints. Sort keys: the
+// slice's centre (x + y), like everything else.
+const WT = 0.1; // half thickness
+const LOW = 14;
+const HALF = 34;
+
+// Box art for a wall slice, until the drawings load.
+function wallBoxes(dir: "h" | "v", ch: string, high: boolean): Box[] {
+  const top = ch === HALF_WALL ? HALF : WALL_H;
+  const along = (z: number, h: number, color: number, t?: number): Box =>
+    dir === "h"
+      ? { x: 0, y: -WT, w: 1, d: 2 * WT, z, h, color, top: t, outline: false }
+      : { x: -WT, y: 0, w: 2 * WT, d: 1, z, h, color, top: t, outline: false };
+  if (!high) return [along(0, LOW, C.walnut)];
+  return [along(LOW, 30 - LOW, C.walnut), along(30, top - 33, C.cream), along(top - 3, 3, C.walnutDark, C.walnut)];
+}
+
 export function wallParts(map: MapDef): Part[] {
   const parts: Part[] = [];
-  const floor = (x: number, y: number) => isFloor(tileAt(map, x, y));
-  for (let y = 0; y < map.height; y++) {
+  const m = items && !boxOnly ? items : null;
+  const add = (dir: "h" | "v", x: number, y: number, ch: string) => {
+    for (let q = 0; q < 4; q++)
+      for (const high of [false, true]) {
+        const clip: Clip =
+          dir === "h" ? { x0: q / 4, x1: (q + 1) / 4, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: q / 4, y1: (q + 1) / 4 };
+        const ctx = cached(`wall|${dir}|${ch}|${q}|${high}`, (g) => {
+          for (const b of wallBoxes(dir, ch, high)) drawBox(g, b, clip);
+        });
+        const [sx, sy] = P(x, y);
+        const c = (q + 0.5) / 4;
+        const key = (dir === "h" ? x + c + y : x + y + c) + (high ? 0.0001 : 0);
+        const part = high ? "high" : "low";
+        const akey = m?.wallKey(dir, ch, q, part, artRes);
+        parts.push({
+          ctx,
+          x: sx,
+          y: sy,
+          key,
+          wx: x,
+          wy: y,
+          edge: { dir, x, y, high },
+          // lit from the floor in front of its face (or behind, on the outside)
+          at:
+            dir === "h"
+              ? [x + c, isFloor(tileAt(map, x, y)) ? y + 0.15 : y - 0.15]
+              : [isFloor(tileAt(map, x, y)) ? x + 0.15 : x - 0.15, y + c],
+          art:
+            m && akey
+              ? { key: akey, get: memo(akey, () => m.wallArt(dir, ch, q, part, artRes)), ox: 0, oy: 0 }
+              : undefined,
+        });
+      }
+  };
+  for (let y = 0; y <= map.height; y++)
     for (let x = 0; x < map.width; x++) {
-      if (tileAt(map, x, y) !== "#") continue;
-      const faceS = floor(x, y + 1);
-      const faceE = floor(x + 1, y);
-      const tall = faceS || faceE || (floor(x + 1, y + 1) && !floor(x - 1, y) && !floor(x, y - 1));
-      const key = `wall|${tall ? 1 : 0}|${faceS ? 1 : 0}|${faceE ? 1 : 0}|${(x * 7 + y * 3) % 5}`;
-      const ctx = cached(key, (g) => {
-        if (!tall) {
-          drawBox(g, { x: 0, y: 0, w: 1, d: 1, z: 0, h: STUB_H, color: C.walnut, top: C.walnutLight });
-          return;
-        }
-        const panel = 30;
-        const sFace = faceS ? C.walnut : C.walnutDark;
-        const eFace = faceE ? shade(C.walnut, 0.85) : C.walnutDark;
-        drawBox(g, {
-          x: 0,
-          y: 0,
-          w: 1,
-          d: 1,
-          z: 0,
-          h: panel,
-          color: C.walnut,
-          faces: { s: sFace, e: eFace },
-          outline: false,
-        });
-        drawBox(g, {
-          x: 0,
-          y: 0,
-          w: 1,
-          d: 1,
-          z: panel,
-          h: WALL_H - panel,
-          color: C.cream,
-          faces: { s: faceS ? C.cream : C.creamDark, e: faceE ? shade(C.cream, 0.88) : C.creamDark },
-          outline: false,
-        });
-        // dado rail + pinstripes
-        if (faceS) {
-          drawBox(g, { x: 0, y: 0.98, w: 1, d: 0.04, z: panel - 1, h: 3, color: C.walnutDark, outline: false });
-          for (const sx of [0.25, 0.75])
-            drawBox(g, {
-              x: sx,
-              y: 0.995,
-              w: 0.015,
-              d: 0.01,
-              z: panel + 4,
-              h: WALL_H - panel - 10,
-              color: C.creamDark,
-              outline: false,
-            });
-        }
-        if (faceE) {
-          drawBox(g, { x: 0.98, y: 0, w: 0.04, d: 1, z: panel - 1, h: 3, color: C.walnutDark, outline: false });
-          for (const sy of [0.25, 0.75])
-            drawBox(g, {
-              x: 0.995,
-              y: sy,
-              w: 0.01,
-              d: 0.015,
-              z: panel + 4,
-              h: WALL_H - panel - 10,
-              color: shade(C.creamDark, 0.9),
-              outline: false,
-            });
-        }
-        drawBox(g, { x: -0.02, y: -0.02, w: 1.04, d: 1.04, z: WALL_H, h: 3, color: C.walnutDark, top: C.walnut });
-      });
-      const [sx, sy] = P(x, y);
-      parts.push({ ctx, x: sx, y: sy, key: x + y + 1 - 0.02, tall, wx: x, wy: y });
+      const ch = hWall(map, x, y);
+      if (isWallEdge(ch)) add("h", x, y, ch);
     }
-  }
+  for (let y = 0; y < map.height; y++)
+    for (let x = 0; x <= map.width; x++) {
+      const ch = vWall(map, x, y);
+      if (isWallEdge(ch)) add("v", x, y, ch);
+    }
+  // posts at every corner a wall touches
+  for (let Y = 0; Y <= map.height; Y++)
+    for (let X = 0; X <= map.width; X++) {
+      const touching = [hWall(map, X - 1, Y), hWall(map, X, Y), vWall(map, X, Y - 1), vWall(map, X, Y)].filter(
+        isWallEdge,
+      );
+      if (!touching.length) continue;
+      const height = touching.every((c) => c === HALF_WALL) ? HALF : WALL_H;
+      for (const high of [false, true]) {
+        const ctx = cached(`post|${height}|${high}`, (g) => {
+          const b = (z: number, h: number, color: number, top?: number): Box => ({
+            x: -WT,
+            y: -WT,
+            w: 2 * WT,
+            d: 2 * WT,
+            z,
+            h,
+            color,
+            top,
+            outline: false,
+          });
+          if (!high) drawBox(g, b(0, LOW, C.walnut));
+          else {
+            drawBox(g, b(LOW, 30 - LOW, C.walnut));
+            drawBox(g, b(30, height - 33, C.cream));
+            drawBox(g, b(height - 3, 3, C.walnutDark, C.walnut));
+          }
+        });
+        const [sx, sy] = P(X, Y);
+        const part = high ? "high" : "low";
+        const akey = m ? `post|${height}|${part}|${artRes}` : undefined;
+        // the post fades with the wall it belongs to most (h first)
+        const dir = isWallEdge(hWall(map, X, Y)) || isWallEdge(hWall(map, X - 1, Y)) ? "h" : "v";
+        parts.push({
+          ctx,
+          x: sx,
+          y: sy,
+          key: X + Y + (high ? 0.0001 : 0),
+          wx: X,
+          wy: Y,
+          edge: {
+            dir,
+            x: dir === "h" ? Math.max(0, X - (isWallEdge(hWall(map, X, Y)) ? 0 : 1)) : X,
+            y: dir === "v" ? Math.max(0, Y - (isWallEdge(vWall(map, X, Y)) ? 0 : 1)) : Y,
+            high,
+          },
+          at: [X + 0.15, Y + 0.15],
+          art:
+            m && akey ? { key: akey, get: memo(akey, () => m.postArt(height, part, artRes)), ox: 0, oy: 0 } : undefined,
+        });
+      }
+    }
   return parts;
 }
 
 // ── furniture ──────────────────────────────────────────────────────────────
+// Long things are cut per tile along their length; things on a wall are cut in
+// quarters like the wall itself, so they sort against people the same way.
+const WALL_FACE = 0.1; // wall items hang on the face of the thin wall
+
 export function objectParts(o: WorldObjectDef): Part[] {
   const e = entry(o.kind);
-  if (piece(o.kind, o.props ?? {}, o.id).flat) return [];
-  // doors along y use the mirrored turn so their panel faces the camera (+x side)
-  const rot = e.wall ? 0 : o.kind === "door" && (o.rot ?? 0) % 2 === 1 ? 3 : (o.rot ?? 0);
-  const { w, h } = footprint(o.kind, rot);
+  if (o.kind === "door") return doorParts(o);
   const p = piece(o.kind, o.props ?? {}, o.id);
-  const boxes = rotateBoxes(p.boxes, e.w, e.h, rot);
-  // Slice along the long axis so every slice is at most 1 tile longer than wide.
+  if (p.flat) return [];
+  const rot = e.wall ? 0 : (o.rot ?? 0);
+  const { w, h } = footprint(o.kind, rot);
+  let boxes = rotateBoxes(p.boxes, e.w, e.h, rot);
+  if (e.wall) boxes = boxes.map((b) => ({ ...b, y: b.y + WALL_FACE }));
   const slices: Clip[] = [];
-  if (w - h >= 2) for (let i = 0; i < w; i++) slices.push({ x0: i, x1: i + 1, y0: -1, y1: h + 1 });
-  else if (h - w >= 2) for (let i = 0; i < h; i++) slices.push({ x0: -1, x1: w + 1, y0: i, y1: i + 1 });
+  if (e.wall) for (let i = 0; i < w * 4; i++) slices.push({ x0: i / 4, x1: (i + 1) / 4, y0: -1, y1: h + 1 });
+  else if (w > h) for (let i = 0; i < w; i++) slices.push({ x0: i, x1: i + 1, y0: -1, y1: h + 1 });
+  else if (h > w) for (let i = 0; i < h; i++) slices.push({ x0: -1, x1: w + 1, y0: i, y1: i + 1 });
   else slices.push({ x0: -1, x1: w + 1, y0: -1, y1: h + 1 });
   const out: Part[] = [];
   const propsKey = JSON.stringify(o.props ?? {});
@@ -289,18 +351,17 @@ export function objectParts(o: WorldObjectDef): Part[] {
     for (const [bias, list] of groups) {
       const cx = Math.max(0, clip.x0);
       const cy = Math.max(0, clip.y0);
-      const key = `${o.kind}|${rot}|${i}|${bias}|${o.id.startsWith("b-") ? "" : o.id}|${propsKey}`;
-      const ctx = cached(key, (g) => {
+      const ckey = `${o.kind}|${rot}|${i}|${bias}|${o.id.startsWith("b-") ? "" : o.id}|${propsKey}`;
+      const ctx = cached(ckey, (g) => {
         const [ox, oy] = P(cx, cy);
         for (const b of list) drawBox(g, b, slices.length > 1 ? clip : null, ox, oy);
         // organic extras (leaves, poles) — only 1×1 pieces have them, so no offset
         if (p.custom && i === 0 && bias <= 0) p.custom(g);
       });
-      const sw = slices.length > 1 ? Math.min(1, w) : w;
+      const sw = e.wall ? 0.25 : slices.length > 1 ? Math.min(1, w) : w;
       const sh = slices.length > 1 ? Math.min(1, h) : h;
       const wx = o.x + cx;
       const wy = o.y + cy;
-      const centerKey = wx + Math.min(sw, w - cx) / 2 + wy + Math.min(sh, h - cy) / 2;
       const [sx, sy] = P(wx, wy);
       let art: Part["art"];
       if (illustrated(o.kind)) {
@@ -312,10 +373,90 @@ export function objectParts(o: WorldObjectDef): Part[] {
         const [ox, oy] = P(cx, cy);
         art = { key: akey, get: memo(akey, () => m.itemArt(ref, clipped, group, artRes)), ox, oy };
       }
-      // wall items sort per tile, just in front of the wall tile behind them
-      out.push({ ctx, x: sx, y: sy, key: (e.wall ? wx + o.y + 0.02 : centerKey) + bias, wx, wy, objectId: o.id, art });
+      // wall items: just in front of the wall slice behind them, fading with that wall
+      const key = e.wall
+        ? wx + sw / 2 + o.y + 0.01
+        : wx + Math.min(sw, w - cx) / 2 + wy + Math.min(sh, h - cy) / 2 + bias;
+      out.push({
+        ctx,
+        x: sx,
+        y: sy,
+        key,
+        wx,
+        wy,
+        objectId: o.id,
+        art,
+        edge: e.wall ? { dir: "h", x: Math.floor(wx), y: o.y, high: true } : undefined,
+        at: e.wall ? [wx + sw / 2, o.y + 0.25] : [wx + Math.min(sw, w - cx) / 2, wy + Math.min(sh, h - cy) / 2],
+      });
     }
   });
+  return out;
+}
+
+// A door on an edge: four slices in the wall line (frame, lintel, a shut
+// leaf) sorted like the wall, and an open leaf sorted in its own tile.
+function doorParts(o: WorldObjectDef): Part[] {
+  const odd = (o.rot ?? 0) % 2 === 1;
+  const rot = odd ? 3 : 0; // west edges: the leaf faces +x
+  const dir = odd ? "v" : "h";
+  const st = String(o.props?.state ?? "open");
+  const shut = (st === "closed" || st === "locked") && !o.props?.passing;
+  const frame: Box[] = [
+    { x: 0, y: -WT, w: 0.08, d: 2 * WT, z: 0, h: 72, color: C.walnut, outline: false },
+    { x: 0.92, y: -WT, w: 0.08, d: 2 * WT, z: 0, h: 72, color: C.walnut, outline: false },
+    { x: 0, y: -WT, w: 1, d: 2 * WT, z: 72, h: 12, color: C.cream, outline: false },
+    { x: -0.01, y: -WT, w: 1.02, d: 2 * WT, z: 81, h: 3, color: C.walnutDark, top: C.walnut, outline: false },
+  ];
+  if (shut) frame.push({ x: 0.08, y: -0.04, w: 0.84, d: 0.08, z: 0, h: 72, color: C.walnut, outline: false });
+  const leaf: Box[] = shut ? [] : [{ x: 0.08, y: WT, w: 0.07, d: 0.8, z: 0, h: 72, color: C.walnut, outline: false }];
+  const out: Part[] = [];
+  const m = illustrated("door") ? (items as ItemsModule) : null;
+  const [sx, sy] = P(o.x, o.y);
+  const state = shut ? st : "open";
+  for (let q = 0; q < 4; q++) {
+    const clip: Clip = odd
+      ? { x0: -1, x1: 1, y0: q / 4, y1: (q + 1) / 4 }
+      : { x0: q / 4, x1: (q + 1) / 4, y0: -1, y1: 1 };
+    const ctx = cached(`door|${dir}|${state}|${q}`, (g) => {
+      for (const b of rotateBoxes(frame, 1, 1, rot)) drawBox(g, b, clip);
+    });
+    const ref = { kind: "door", id: o.id, rot, props: { ...(o.props ?? {}), _part: "edge" } };
+    const akey = m?.itemKey(ref, `q${q}`, "all", artRes);
+    const c = (q + 0.5) / 4;
+    out.push({
+      ctx,
+      x: sx,
+      y: sy,
+      key: (odd ? o.x + o.y + c : o.x + c + o.y) + 0.005,
+      wx: o.x,
+      wy: o.y,
+      objectId: o.id,
+      edge: { dir, x: o.x, y: o.y, high: true },
+      at: odd ? [o.x + 0.15, o.y + c] : [o.x + c, o.y + 0.15],
+      art:
+        m && akey ? { key: akey, get: memo(akey, () => m.itemArt(ref, clip, "all", artRes)), ox: 0, oy: 0 } : undefined,
+    });
+  }
+  if (!shut) {
+    const ctx = cached(`door|${dir}|leaf`, (g) => {
+      for (const b of rotateBoxes(leaf, 1, 1, rot)) drawBox(g, b, null);
+    });
+    const ref = { kind: "door", id: o.id, rot, props: { ...(o.props ?? {}), _part: "leaf" } };
+    const akey = m?.itemKey(ref, "leaf", "all", artRes);
+    out.push({
+      ctx,
+      x: sx,
+      y: sy,
+      key: o.x + 0.5 + o.y + 0.5,
+      wx: o.x,
+      wy: o.y,
+      objectId: o.id,
+      at: [o.x + 0.5, o.y + 0.5],
+      art:
+        m && akey ? { key: akey, get: memo(akey, () => m.itemArt(ref, null, "all", artRes)), ox: 0, oy: 0 } : undefined,
+    });
+  }
   return out;
 }
 

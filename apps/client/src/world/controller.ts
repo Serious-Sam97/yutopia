@@ -7,8 +7,12 @@ import {
   type ClientMessages,
   canPlace,
   dirFromDelta,
-  doorRot,
+  doorCentre,
+  doorEdge,
+  type Edge,
   EMOTES,
+  edgeAt,
+  edgeBlocker,
   entry,
   FLOORS,
   findPath,
@@ -16,8 +20,10 @@ import {
   Grid,
   getMap,
   hearingGain,
+  isWallEdge,
   type MapDef,
   moveStep,
+  nearestEdge,
   type Point,
   parseAvatar,
   ROOM_NAME,
@@ -145,7 +151,12 @@ export class WorldController {
       },
       onObjectClick: (id) => {
         const o = this.engine?.getObject(id);
-        if (hud.get().build.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
+        const b = hud.get().build;
+        // the door brush removes a door you click on
+        if (b.on && b.tool === "walls" && b.brush === "door" && o?.kind === "door")
+          return this.send("obj:remove", { id: o.id });
+        if (b.on && o && b.tool === "walls") return; // walls/floors paint by dragging
+        if (b.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
         this.activateObject(id, true);
       },
       onHoverObject: () => {},
@@ -936,6 +947,16 @@ export class WorldController {
 
   buildHover(x: number, y: number) {
     if (!hud.get().build.on || !this.engine) return;
+    const bb = hud.get().build;
+    if (bb.tool === "walls" && (bb.brush.startsWith("w:") || bb.brush === "door")) {
+      const e = nearestEdge(x, y);
+      if (this.hoverEdge && e.x === this.hoverEdge.x && e.y === this.hoverEdge.y && e.dir === this.hoverEdge.dir)
+        return;
+      this.hoverEdge = e;
+      if (this.painting) this.paintEdge(e);
+      this.refreshGhost();
+      return;
+    }
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     if (tx === this.hoverTile.x && ty === this.hoverTile.y) return;
@@ -952,9 +973,26 @@ export class WorldController {
   private paintTimer: ReturnType<typeof setTimeout> | null = null;
   private dragFrom: { x: number; y: number } | null = null;
 
+  private hoverEdge: Edge | null = null;
+  private edgeQueue = new Map<string, Edge & { ch: string }>();
+
+  // What a wall brush puts on an edge: a material, a window in the wall that's
+  // there (plaster if none), or no wall.
+  private edgeChar(e: Edge): string {
+    const brush = hud.get().build.brush;
+    if (brush !== "w:window") return brush.slice(2);
+    const cur = edgeAt(this.map, e);
+    return isWallEdge(cur) && /^[pwfbk]$/.test(cur) ? cur.toUpperCase() : "P";
+  }
+
+  private paintEdge(e: Edge) {
+    this.edgeQueue.set(`${e.dir}${e.x},${e.y}`, { ...e, ch: this.edgeChar(e) });
+    if (!this.paintTimer) this.paintTimer = setTimeout(() => this.flushPaint(), 80);
+  }
+
   private paintAt(tx: number, ty: number) {
     const b = hud.get().build;
-    if (b.brush === "door") return;
+    if (b.brush === "door" || b.brush.startsWith("w:")) return;
     this.paintQueue.set(`${tx},${ty}`, { x: tx, y: ty, ch: b.brush });
     if (!this.paintTimer) this.paintTimer = setTimeout(() => this.flushPaint(), 80);
   }
@@ -962,6 +1000,10 @@ export class WorldController {
   private flushPaint() {
     if (this.paintTimer) clearTimeout(this.paintTimer);
     this.paintTimer = null;
+    if (this.edgeQueue.size) {
+      this.send("map:walls", { edges: [...this.edgeQueue.values()] });
+      this.edgeQueue.clear();
+    }
     if (!this.paintQueue.size) return;
     this.send("map:paint", { cells: [...this.paintQueue.values()] });
     this.paintQueue.clear();
@@ -977,7 +1019,10 @@ export class WorldController {
     if (!b.on) return;
     const tx = Math.floor(x);
     const ty = Math.floor(y);
-    if (b.tool === "walls" && b.brush !== "door") {
+    if (b.tool === "walls" && b.brush.startsWith("w:")) {
+      this.painting = true;
+      this.paintEdge(nearestEdge(x, y));
+    } else if (b.tool === "walls" && b.brush !== "door") {
       this.painting = true;
       this.paintAt(tx, ty);
     } else if (b.tool === "rooms") {
@@ -1010,20 +1055,25 @@ export class WorldController {
     const bt = hud.get().build;
     if (!bt.on) return engine.setGhost(null, false);
     if (bt.tool === "walls") {
-      if (bt.brush === "door") {
-        const rot = doorRot(this.map, this.hoverTile.x, this.hoverTile.y) ?? 0;
+      const e = this.hoverEdge;
+      if (bt.brush === "door" && e) {
+        engine.setEdgeGhost(null, false);
         const d = {
           id: "ghost-door",
           kind: "door",
-          x: this.hoverTile.x,
-          y: this.hoverTile.y,
-          rot,
+          x: e.x,
+          y: e.y,
+          rot: e.dir === "h" ? 0 : 1,
           props: { state: "closed" },
         };
         return engine.setGhost(d, canPlace(this.map, engine.allObjects(), d));
       }
-      return engine.setGhost(null, false);
+      engine.setGhost(null, false);
+      if (bt.brush.startsWith("w:") && e)
+        return engine.setEdgeGhost(e, edgeBlocker(this.map, engine.allObjects(), e, this.edgeChar(e)) === null);
+      return engine.setEdgeGhost(null, false);
     }
+    engine.setEdgeGhost(null, false);
     if (bt.tool !== "furniture") return engine.setGhost(null, false);
     const def = this.ghostDef(this.hoverTile.x, this.hoverTile.y);
     const others = engine.allObjects().filter((o) => o.id !== def.id);
@@ -1040,9 +1090,15 @@ export class WorldController {
     }
     if (b.tool === "walls") {
       if (b.brush === "door") {
-        const hit = this.engine?.objectAtTile(Math.floor(x), Math.floor(y));
-        if (hit?.kind === "door") this.send("obj:remove", { id: hit.id });
-        else this.send("obj:put", { kind: "door", x: Math.floor(x), y: Math.floor(y), rot: 0 });
+        // a door on the edge you clicked next to (click a door to remove it)
+        const e = nearestEdge(x, y);
+        const hit = this.engine?.allObjects().find((o) => {
+          if (o.kind !== "door") return false;
+          const d = doorEdge(o);
+          return d.dir === e.dir && d.x === e.x && d.y === e.y;
+        });
+        if (hit) this.send("obj:remove", { id: hit.id });
+        else this.send("obj:put", { kind: "door", x: e.x, y: e.y, rot: e.dir === "h" ? 0 : 1 });
       }
       return;
     }
@@ -1113,6 +1169,8 @@ export class WorldController {
       width: st.width,
       height: st.height,
       tiles: [...st.tiles],
+      hWalls: [...(st.hWalls ?? [])],
+      vWalls: [...(st.vWalls ?? [])],
       areas,
       spawn: { x: st.spawnX, y: st.spawnY },
       objects: [],
@@ -1147,7 +1205,12 @@ export class WorldController {
         continue;
       }
       if (o.kind !== "door") continue;
-      const on = (x: number, y: number) => Math.floor(x) === o.x && Math.floor(y) === o.y;
+      // someone in the doorway: close to the middle of the door's edge
+      const c = doorCentre(o);
+      const on = (x: number, y: number) =>
+        (o.rot ?? 0) % 2 === 0
+          ? Math.abs(x - c.x) < 0.5 && Math.abs(y - c.y) < 0.55
+          : Math.abs(y - c.y) < 0.5 && Math.abs(x - c.x) < 0.55;
       let occupied = on(this.me.x, this.me.y);
       room.state.players.forEach((p: S, sid: string) => {
         if (sid !== room.sessionId && on(p.x, p.y)) occupied = true;

@@ -7,8 +7,10 @@ import {
   type ChatScope,
   type ClientMessages,
   canPlace,
+  convertV1,
   dirFromDelta,
-  doorRot,
+  doorEdge,
+  doorFits,
   EMOTES,
   entry,
   findPath,
@@ -19,6 +21,7 @@ import {
   hearingGain,
   isKind,
   isLegalMove,
+  isV2,
   layoutFromMap,
   MAX_CHAT,
   type MapDef,
@@ -26,6 +29,7 @@ import {
   replacedByTemplate,
   type ServerMessages,
   type Status,
+  studioV1,
   TEMPLATES,
   TICK_HZ,
   validLayout,
@@ -97,15 +101,38 @@ export class SpaceRoom extends Room<SpaceState> {
 
     const info = config.offline ? null : await yondra.space(this.spaceId);
     const base = getMap(info?.mapKey ?? "studio");
-    this.map = info?.layout && validLayout(info.layout) ? mapFromLayout(base.key, base.name, info.layout) : base;
+    const layout = info?.layout && validLayout(info.layout) ? info.layout : null;
+    let objects: WorldObjectDef[] = info?.objects ?? base.objects;
+    if (layout && isV2(layout)) this.map = mapFromLayout(base.key, base.name, layout);
+    else if (layout) {
+      // saved before map v2 (walls were tiles): convert, boards and doors included
+      const v1 = { ...mapFromLayout(base.key, base.name, layout), tiles: [...layout.tiles], hWalls: [], vWalls: [] };
+      const c = convertV1(v1, objects);
+      this.map = c.map;
+      objects = c.objects;
+      this.migrated = c.changed;
+    } else {
+      this.map = base;
+      // the built-in Studio, seeded before map v2: move its boards and doors too
+      if (info?.seeded) {
+        const c = convertV1(studioV1, objects);
+        objects = c.objects;
+        this.migrated = c.changed;
+      }
+    }
+    if (this.migrated) console.log(`[map v2] space ${this.spaceId}: converted (${this.migrated.length} objects moved)`);
     this.state.mapKey = this.map.key;
     this.syncMapState();
     this.state.name = info?.name ?? "Offline studio";
     this.state.projectId = info?.projectId ?? 0;
-    let objects: WorldObjectDef[] = info?.objects ?? this.map.objects;
-    if (info && !info.seeded) objects = (await yondra.seed(this.spaceId, this.map.objects)).objects;
+    if (info && !info.seeded) {
+      objects = (await yondra.seed(this.spaceId, this.map.objects)).objects;
+      // a fresh space starts on map v2: store its layout so it's never taken for an old one
+      if (!layout) void yondra.putLayout(this.spaceId, layoutFromMap(this.map)).catch(() => {});
+    }
     for (const o of objects) this.state.objects.set(o.id, toSchema(o));
     this.rebuildGrid();
+    if (this.migrated && config.saveMigrations) this.saveMigration();
 
     this.registerMessages();
     this.features = installFeatures(this);
@@ -547,12 +574,32 @@ export class SpaceRoom extends Room<SpaceState> {
     return g;
   }
 
+  // Objects moved by a v1 → v2 conversion that isn't in Yondra yet.
+  private migrated: WorldObjectDef[] | null = null;
+
+  // Write a conversion back: the v2 layout and the boards/doors it moved.
+  private saveMigration() {
+    const moved = this.migrated;
+    this.migrated = null;
+    if (config.offline || !moved) return;
+    void yondra
+      .putLayout(this.spaceId, layoutFromMap(this.map))
+      .catch((e) => console.warn("[map v2] layout", e.message));
+    for (const o of moved)
+      void yondra.putObject(this.spaceId, o).catch((e) => console.warn("[map v2] object", e.message));
+    console.log(`[map v2] space ${this.spaceId}: saved`);
+  }
+
   syncMapState() {
     const m = this.map;
     this.state.width = m.width;
     this.state.height = m.height;
     this.state.tiles.clear();
     for (const row of m.tiles) this.state.tiles.push(row);
+    this.state.hWalls.clear();
+    for (const row of m.hWalls) this.state.hWalls.push(row);
+    this.state.vWalls.clear();
+    for (const row of m.vWalls) this.state.vWalls.push(row);
     this.state.areas = JSON.stringify(m.areas);
     this.state.spawnX = m.spawn.x;
     this.state.spawnY = m.spawn.y;
@@ -569,6 +616,8 @@ export class SpaceRoom extends Room<SpaceState> {
       if (p) p.area = areaAt(this.map, p.x, p.y)?.key ?? "";
     }
     if (config.offline) return;
+    // the first edit of a converted map saves the whole conversion with it
+    if (this.migrated) this.saveMigration();
     if (this.layoutTimer) clearTimeout(this.layoutTimer);
     this.layoutTimer = setTimeout(() => {
       yondra
@@ -604,13 +653,12 @@ export class SpaceRoom extends Room<SpaceState> {
       props: m.props ?? safeJson(existing?.props ?? "{}"),
     };
     if (def.kind === "door") {
-      // doors orient themselves along the wall and start open
-      const r = doorRot(this.map, x, y);
-      if (r === null) {
-        this.send(client, "toast", { text: "Doors go in a one-tile gap between two walls.", tone: "warn" });
+      // doors sit on an edge (rot even: north edge of x, y; odd: west edge) and start open
+      def.rot = rot % 2;
+      if (!doorFits(this.map, doorEdge(def))) {
+        this.send(client, "toast", { text: "Doors go in a gap in a wall line.", tone: "warn" });
         return;
       }
-      def.rot = r;
       def.props = { state: "open", ...(def.props ?? {}) };
     }
     if (!this.placementOk(def, others)) {

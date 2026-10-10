@@ -147,8 +147,10 @@ registerFeature((room: SpaceRoom) => {
       return;
     }
     mode = "wander";
-    go(POIS[Math.floor(Math.random() * POIS.length)]);
-    until = now + 40_000;
+    // somewhere he isn't already (an empty path would leave him standing for 40 s)
+    const away = POIS.filter((p) => Math.hypot(p.x - npc.x, p.y - npc.y) > 2).sort(() => Math.random() - 0.5);
+    if (!away.some((p) => go(p))) mode = "idle";
+    until = now + (mode === "wander" ? 40_000 : 3000);
   };
 
   return {
@@ -186,7 +188,22 @@ registerFeature((room: SpaceRoom) => {
           until = now + 2000;
         } else {
           const d = Math.hypot(t.x - npc.x, t.y - npc.y);
-          if (d > 2.4 && !path.length) go({ x: t.x + 1.2, y: t.y + 1.2 });
+          // catch up: a spot next to them he may walk to (not a private room,
+          // not behind a wall); none → give up and do something else
+          if (d > 2.4 && !path.length) {
+            const spots = [
+              [1.2, 1.2],
+              [-1.2, 1.2],
+              [1.2, -1.2],
+              [-1.2, -1.2],
+              [0, 1.4],
+              [1.4, 0],
+            ];
+            if (!spots.some(([ox, oy]) => go({ x: t.x + ox, y: t.y + oy }))) {
+              mode = "idle";
+              until = now + 1500;
+            }
+          }
           if (d <= 2.6 && now - (lastGreet.get(t.uid) ?? 0) > GREET_COOLDOWN) {
             lastGreet.set(t.uid, now);
             const c = clientOf(t);

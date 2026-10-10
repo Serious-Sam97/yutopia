@@ -1,4 +1,14 @@
-import { entry, footprint, isFloor, type MapDef, tileAt, type WorldObjectDef } from "@yutopia/shared";
+import {
+  entry,
+  footprint,
+  hWall,
+  isFloor,
+  isWallEdge,
+  type MapDef,
+  tileAt,
+  vWall,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 
 // Floors, baked: each material is a seamless top-down texture (4×4 tiles,
 // generated once), filled into the floor in plan space through an isometric
@@ -286,7 +296,8 @@ export function materialCanvas(ch: string, s: number): HTMLCanvasElement | null 
 
 // ── ambient occlusion ──────────────────────────────────────────────────────
 const AO_PX = 8; // per tile
-// Darkness from walls (strong, wide) and solid furniture (soft, close), in plan
+// Darkness from walls (thin walls on edges, and anything that isn't floor: strong,
+// wide) and solid furniture (soft, close), in plan
 // space, one byte of alpha per AO pixel.
 export function aoCanvas(map: MapDef, objects: WorldObjectDef[]): HTMLCanvasElement {
   const W = map.width;
@@ -329,6 +340,21 @@ export function aoCanvas(map: MapDef, objects: WorldObjectDef[]): HTMLCanvasElem
             if (nx < 0 || ny < 0 || nx >= W || ny >= H || !occ[ny * W + nx]) continue;
             const ddx = Math.max(nx - x, 0, x - (nx + 1));
             const ddy = Math.max(ny - y, 0, y - (ny + 1));
+            lit *= 1 - 0.95 * fall(Math.hypot(ddx, ddy), RW);
+          }
+        // thin walls on edges nearby (0.2 thick)
+        for (let Y = ty - 1; Y <= ty + 2; Y++)
+          for (let X = tx - 1; X <= tx + 1; X++) {
+            if (!isWallEdge(hWall(map, X, Y))) continue;
+            const ddx = Math.max(X - x, 0, x - (X + 1));
+            const ddy = Math.max(Math.abs(y - Y) - 0.1, 0);
+            lit *= 1 - 0.95 * fall(Math.hypot(ddx, ddy), RW);
+          }
+        for (let X = tx - 1; X <= tx + 2; X++)
+          for (let Y = ty - 1; Y <= ty + 1; Y++) {
+            if (!isWallEdge(vWall(map, X, Y))) continue;
+            const ddx = Math.max(Math.abs(x - X) - 0.1, 0);
+            const ddy = Math.max(Y - y, 0, y - (Y + 1));
             lit *= 1 - 0.95 * fall(Math.hypot(ddx, ddy), RW);
           }
         for (const b of near[ty * W + tx]) {
@@ -389,9 +415,9 @@ export class FloorBake {
       }
     for (const o of objects) {
       if (o.kind !== "door") continue;
-      // under the leaf: along x at rot 0, along y otherwise (see door.ts)
-      if ((o.rot ?? 0) % 2 === 0) this.sills.push([o.x + 0.05, o.y + 0.8, 0.9, 0.2]);
-      else this.sills.push([o.x + 0.8, o.y + 0.05, 0.2, 0.9]);
+      // across the door's edge: the north edge of its tile, or the west one
+      if ((o.rot ?? 0) % 2 === 0) this.sills.push([o.x + 0.05, o.y - 0.1, 0.9, 0.2]);
+      else this.sills.push([o.x - 0.1, o.y + 0.05, 0.2, 0.9]);
     }
     const st = map.areas.find((a) => a.kind === "stage");
     if (st) this.stage = [st.x, st.y + st.h - 0.04, st.w, 0.08];

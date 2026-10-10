@@ -33,6 +33,7 @@ import {
 import { avatarContext, viewFor, WALK_FRAMES } from "./art/avatar";
 import { type Daylight, daylight, hourForNight } from "./art/daylight";
 import { FloorBake, floorRes } from "./art/floors";
+import { WALL_H } from "./art/furniture";
 import type { ItemArt } from "./art/items/kit";
 import { affectsLight, PX as LIGHT_PX, LightMap } from "./art/light";
 import { C } from "./art/palette";
@@ -120,6 +121,7 @@ interface PartView {
   sprite?: Sprite; // the illustrated drawing
   at?: [number, number]; // where its light is sampled (world tiles)
   bloom?: Sprite; // a copy of the emissive layer in the bloom pass
+  edge?: Part["edge"]; // the wall it is (or hangs on), for wall-down
   art?: boolean; // has an illustrated drawing
   ready?: boolean; // …and it's showing
   onReady?: () => void;
@@ -159,7 +161,7 @@ function lightKey(o: WorldObjectDef | undefined): string {
   return `${shut}|${o.props?.on}`;
 }
 
-function isFloorAt(map: MapDef, x: number, y: number): boolean {
+function _isFloorAt(map: MapDef, x: number, y: number): boolean {
   return isFloor(tileAt(map, x, y));
 }
 
@@ -228,7 +230,7 @@ export class WorldEngine {
   private highlightG = new Graphics();
   private markerG = new Graphics();
   private ghostLayer = new Container();
-  private walls: { sprite: Graphics; part: Part }[] = [];
+  private walls: PartView[] = [];
   private objectViews = new Map<string, ObjectView>();
   private avatars = new Map<string, AvatarView>();
   private boardContent = new Map<string, BoardContent>();
@@ -305,7 +307,9 @@ export class WorldEngine {
     this.drawStatic();
     // illustrated items replace the box art as soon as their drawings load
     loadItemArt().then(() => {
-      if (!this.destroyed) for (const v of [...this.objectViews.values()]) this.upsertObject(v.def, false);
+      if (this.destroyed) return;
+      for (const v of [...this.objectViews.values()]) this.upsertObject(v.def, false);
+      this.drawStatic(); // walls too
     });
 
     // input
@@ -342,15 +346,8 @@ export class WorldEngine {
     this.floorLayer.clear();
     drawFloors(this.floorLayer, this.map);
     this.bakeFloors(true);
-    for (const w of this.walls) w.sprite.destroy();
-    this.walls = [];
-    for (const part of wallParts(this.map)) {
-      const g = new Graphics(part.ctx);
-      g.position.set(part.x, part.y);
-      g.zIndex = part.key;
-      this.sortLayer.addChild(g);
-      this.walls.push({ sprite: g, part });
-    }
+    for (const w of this.walls) this.unmountPart(w);
+    this.walls = wallParts(this.map).map((part) => this.mountPart(part, this.sortLayer));
     this.bakeLight(true);
     this.applyLight();
     this.drawLabels();
@@ -407,6 +404,31 @@ export class WorldEngine {
       if (typeof name !== "string" || !name) continue;
       plate(name.split(" ")[0], v.def.x + 0.5, v.def.y + 0.5, 46, false);
     }
+  }
+
+  // A wall brush over an edge: a see-through wall where it would go.
+  private edgeG = new Graphics();
+  setEdgeGhost(e: { x: number; y: number; dir: "h" | "v" } | null, ok: boolean) {
+    if (!this.edgeG.parent) this.world.addChild(this.edgeG);
+    this.edgeG.clear();
+    if (!e) return;
+    const t = 0.1;
+    const [a0, a1, b0, b1] = e.dir === "h" ? [e.x, e.x + 1, e.y - t, e.y + t] : [e.x - t, e.x + t, e.y, e.y + 1];
+    const at = (x: number, y: number, z = 0) => {
+      const p = toScreen(x, y);
+      return [p.x, p.y - z];
+    };
+    const col = ok ? C.olive : C.rust;
+    // footprint on the floor + the face that would stand up
+    this.edgeG.poly([...at(a0, b0), ...at(a1, b0), ...at(a1, b1), ...at(a0, b1)]).fill({ color: col, alpha: 0.6 });
+    const face =
+      e.dir === "h"
+        ? [...at(a0, b1), ...at(a1, b1), ...at(a1, b1, WALL_H), ...at(a0, b1, WALL_H)]
+        : [...at(a1, b0), ...at(a1, b1), ...at(a1, b1, WALL_H), ...at(a1, b0, WALL_H)];
+    this.edgeG
+      .poly(face)
+      .fill({ color: col, alpha: 0.22 })
+      .stroke({ width: 1.5, color: ok ? C.vfd : C.rust, alpha: 0.9 });
   }
 
   // Room drafts in build mode.
@@ -575,7 +597,7 @@ export class WorldEngine {
     const box = new Graphics(p.ctx);
     root.addChild(box);
     parent.addChild(root);
-    const view: PartView = { root, release: [], emit: null, box, at: [p.wx + 0.5, p.wy + 0.5] };
+    const view: PartView = { root, release: [], emit: null, box, at: p.at ?? [p.wx + 0.5, p.wy + 0.5], edge: p.edge };
     const pa = p.art;
     const art = pa?.get();
     if (!pa || !art) return view;
@@ -1178,19 +1200,26 @@ export class WorldEngine {
     }
   }
 
-  // Tall walls between you and the camera turn see-through.
+  // Wall-down: the upper part of walls standing between you and the camera
+  // (south / east of you, close by) fades to its skirting, like The Sims; so do
+  // the boards on them and the doors in them.
   private updateWalls(local: AvatarView | undefined) {
     const px = local?.state.x ?? -99;
     const py = local?.state.y ?? -99;
-    const lp = toScreen(px, py);
-    for (const { sprite, part } of this.walls) {
-      if (!part.tall) continue;
-      const behind =
-        part.key > px + py && part.wx + part.wy - (px + py) < 4.5 && part.wx >= px - 1.5 && part.wy >= py - 1.5;
-      const near = Math.abs(part.x - lp.x) < 70;
-      const target = behind && near ? 0.28 : 1;
-      sprite.alpha += (target - sprite.alpha) * 0.2;
-    }
+    const k = this.reducedMotion ? 1 : 0.2;
+    const fade = (v: PartView) => {
+      const e = v.edge;
+      if (!e?.high) return;
+      const down =
+        e.dir === "h"
+          ? e.y > py && e.y - py < 5 && Math.abs(e.x + 0.5 - px) < 4.5
+          : e.x > px && e.x - px < 5 && Math.abs(e.y + 0.5 - py) < 4.5;
+      const target = down ? 0.06 : 1;
+      if (Math.abs(v.root.alpha - target) > 0.005) v.root.alpha += (target - v.root.alpha) * k;
+      else v.root.alpha = target;
+    };
+    for (const w of this.walls) fade(w);
+    for (const v of this.objectViews.values()) for (const p of v.parts) fade(p);
   }
 
   // ── lighting ─────────────────────────────────────────────────────────────
@@ -1280,27 +1309,12 @@ export class WorldEngine {
         new Matrix(TILE_W / 2 / LIGHT_PX, TILE_H / 2 / LIGHT_PX, -TILE_W / 2 / LIGHT_PX, TILE_H / 2 / LIGHT_PX, 0, 0),
       );
     }
-    // walls take the light of the floor in front of them, averaged along the
-    // wall so neighbouring wall tiles don't step from lit to dark
-    for (const { sprite, part } of this.walls) {
-      const south = isFloorAt(this.map, part.wx, part.wy + 1);
-      const east = !south && isFloorAt(this.map, part.wx + 1, part.wy);
-      if (!lit || (!south && !east)) {
-        sprite.tint = lit ? this.tintAt(part.wx + 0.5, part.wy + 0.5) : 0xffffff;
-        continue;
-      }
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      for (const k of [-1.2, -0.6, 0, 0.6, 1.2]) {
-        const t = south
-          ? this.tintAt(part.wx + 0.5 + k, part.wy + 1.15)
-          : this.tintAt(part.wx + 1.15, part.wy + 0.5 + k);
-        r += (t >> 16) & 255;
-        g += (t >> 8) & 255;
-        b += t & 255;
-      }
-      sprite.tint = (Math.round(r / 5) << 16) | (Math.round(g / 5) << 8) | Math.round(b / 5);
+    // walls take the light of the floor in front of their face (per slice, so
+    // the light runs smoothly along them)
+    for (const w of this.walls) {
+      const t = w.at ? this.tintAt(w.at[0], w.at[1]) : 0xffffff;
+      if (w.sprite) w.sprite.tint = t;
+      if (w.box) w.box.tint = t;
     }
     for (const v of this.objectViews.values()) {
       this.tintObject(v);

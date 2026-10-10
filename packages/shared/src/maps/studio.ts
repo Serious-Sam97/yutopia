@@ -1,5 +1,6 @@
 import type { WorldObjectDef } from "../catalog.ts";
-import { type AreaDef, MapBuilder, type MapDef } from "../map.ts";
+import { convertV1 } from "../convert.ts";
+import { type AreaDef, entryWallItem, hWall, MapBuilder, type MapDef, setEdge, vWall, type WallMat } from "../map.ts";
 
 // "The Studio Building" — a 1984 recording studio that's a bit too big inside.
 // Rooms are written as wall-inclusive rectangles; see docs/plan/04-world-and-art.md.
@@ -181,13 +182,49 @@ for (let x = 42; x <= 44; x++) add(`rack-b-${x}`, "server_rack", x, 25);
 for (let x = 44; x <= 46; x++) add(`rack-c-${x}`, "server_rack", x, 28);
 add("vortex-terminal", "crt_terminal", 46, 31);
 
-export const studio: MapDef = {
+// The Studio as it was first written: walls as tiles (map v1). Spaces seeded
+// before map v2 are converted from it (convert.ts).
+export const studioV1: MapDef = {
   key: "studio",
   name: "The Studio Building",
   width: 48,
   height: 36,
   tiles,
+  hWalls: [],
+  vWalls: [],
   spawn: { x: 6.5, y: 28.5 },
   areas,
   objects,
 };
+
+// Wall materials per room.
+const MATS: Record<string, WallMat> = {
+  "war-room": "k",
+  lounge: "b",
+  "live-room": "w",
+  "server-room": "w",
+  "booth-1": "f",
+  "booth-2": "f",
+  "booth-3": "f",
+};
+
+function withWindows(m: MapDef): MapDef {
+  // windows in the outer back walls (north and west), every few tiles, never
+  // where something hangs on the wall
+  const hung = new Set<string>();
+  for (const o of m.objects)
+    if (entryWallItem(o.kind)) for (let i = 0; i < entryWallItem(o.kind); i++) hung.add(`${o.x + i},${o.y}`);
+  for (let x = 1; x < m.width - 1; x++) {
+    const ch = hWall(m, x, 0);
+    if (ch !== "." && x % 4 === 2 && !hung.has(`${x},0`)) setEdge(m, { x, y: 0, dir: "h" }, ch.toUpperCase());
+  }
+  for (let y = 1; y < m.height - 1; y++) {
+    const ch = vWall(m, 0, y);
+    if (ch !== "." && y % 4 === 2) setEdge(m, { x: 0, y, dir: "v" }, ch.toUpperCase());
+  }
+  return m;
+}
+
+export const studio: MapDef = withWindows(
+  convertV1(studioV1, studioV1.objects, (a) => (a ? (MATS[a.key] ?? (a.kind === "booth" ? "f" : "p")) : "p")).map,
+);

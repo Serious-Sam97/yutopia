@@ -91,7 +91,7 @@ export interface HudState {
     kind: string;
     rot: number;
     holding: string | null;
-    brush: string; // a tile char, or "door"
+    brush: string; // "w:" + an edge char (walls), a floor char (tiles), or "door"
     roomDraft: { x: number; y: number; w: number; h: number } | null;
     deskDraft: string | null;
     pickSpawn: boolean;
@@ -144,7 +144,7 @@ const initial: HudState = {
     kind: "plant",
     rot: 0,
     holding: null,
-    brush: "#",
+    brush: "w:p",
     roomDraft: null,
     deskDraft: null,
     pickSpawn: false,

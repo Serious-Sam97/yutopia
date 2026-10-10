@@ -12,6 +12,7 @@ import { sofa } from "./sofa";
 import { coffeeTable, meetingTable, reception } from "./tables";
 import { arcade, coffeeMachine, crtTerminal, serverRack } from "./tech";
 import { acousticPanel, noticeBoard, poster, screenWall, whiteboard } from "./wall";
+import { post, type WallPart, wall } from "./walls";
 
 type Props = Record<string, unknown>;
 
@@ -56,7 +57,8 @@ const GENS: Record<string, ItemGen> = {
     variants: 1,
     key: (p) => {
       const st = String(p.state ?? "open");
-      return (st === "closed" || st === "locked") && !p.passing ? st : "open";
+      const shut = (st === "closed" || st === "locked") && !p.passing ? st : "open";
+      return `${shut}|${p._part ?? "edge"}|${p.glass ? "g" : ""}`;
     },
   },
   rug: { draw: rug, variants: 1 },
@@ -89,10 +91,21 @@ export function itemKey(o: ItemRef, slice: string, group: Group, res: number): s
   return `it|${o.kind}|${o.rot}|${slice}|${group}|${variantOf(o.kind, o.id)}|${g.key?.(o.props ?? {}) ?? ""}|${res}`;
 }
 
+// Wall items hang on the face of the thin wall along their tile's north edge.
+export const WALL_FACE = 0.1;
+
 function sketch(o: ItemRef, clip: Clip | null, group: Group): Sketch {
   const g = GENS[o.kind];
   const e = entry(o.kind);
-  const s = new Sketch({ rot: o.rot, w: e.w, h: e.h, clip, group, seed: (variantOf(o.kind, o.id) + 0.5) / g.variants });
+  const s = new Sketch({
+    rot: o.rot,
+    w: e.w,
+    h: e.h,
+    clip,
+    group,
+    seed: (variantOf(o.kind, o.id) + 0.5) / g.variants,
+    offset: e.wall ? [0, WALL_FACE] : undefined,
+  });
   g.draw(s, o.props ?? {});
   return s;
 }
@@ -108,4 +121,23 @@ export function itemShadow(o: ItemRef): ItemArt | null {
 // Flat items live on the floor layer (no depth slices).
 export function isFlatArt(kind: string): boolean {
   return kind === "rug" || kind === "standup_mat";
+}
+
+// ── walls (map v2) ───────────────────────────────────────────────────────────
+// One quarter `q` (0..3) of a wall on an edge, low or high part. Edge-local:
+// "h" runs along x from (0, 0), "v" along y.
+export function wallKey(dir: "h" | "v", ch: string, q: number, part: WallPart, res: number): string {
+  return `wl|${dir}|${ch}|${q}|${part}|${res}`;
+}
+export function wallArt(dir: "h" | "v", ch: string, q: number, part: WallPart, res: number): ItemArt | null {
+  const clip =
+    dir === "h" ? { x0: q / 4, x1: (q + 1) / 4, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: q / 4, y1: (q + 1) / 4 };
+  const s = new Sketch({ w: 1, h: 1, clip, seed: 0.37 });
+  wall(s, dir, ch, part);
+  return s.finish(res);
+}
+export function postArt(height: number, part: WallPart, res: number): ItemArt | null {
+  const s = new Sketch({ w: 1, h: 1 });
+  post(s, height, part);
+  return s.finish(res);
 }

@@ -53,7 +53,7 @@ class Heap {
   }
 }
 
-// A* over tiles (8-way, no corner cutting), then string-pulled into as few
+// A* over tiles (8-way, no corner cutting, never across a wall edge), then string-pulled into as few
 // straight segments as the body can actually walk. Returns waypoints after `from`.
 export function findPath(grid: Grid, from: Point, to: Point, maxNodes = 6000): Point[] | null {
   const W = grid.width;
@@ -96,8 +96,7 @@ export function findPath(grid: Grid, from: Point, to: Point, maxNodes = 6000): P
     for (const [dx, dy, cost] of NEIGH) {
       const nx = cx + dx;
       const ny = cy + dy;
-      if (!grid.ok(nx, ny)) continue;
-      if (dx !== 0 && dy !== 0 && (!grid.ok(cx + dx, cy) || !grid.ok(cx, cy + dy))) continue;
+      if (!grid.step(cx, cy, nx, ny)) continue;
       const n = ny * W + nx;
       const ng = g[cur] + cost;
       if (ng < g[n]) {

@@ -19,4 +19,8 @@ export const config = {
   offline: process.env.YUTOPIA_OFFLINE === "1",
   // Dev only: accept "bot:<id>:<name>" tokens next to real people (perf swarm).
   allowBots: process.env.YUTOPIA_OFFLINE === "1" || process.env.YUTOPIA_ALLOW_BOTS === "1",
+  // Map v2 (walls on edges): spaces saved as v1 are converted when they load.
+  // With this on, the conversion is written back to Yondra right away (layout +
+  // moved boards/doors); otherwise only when a builder edits the map.
+  saveMigrations: process.env.YUTOPIA_MAP_V2_SAVE === "1",
 };

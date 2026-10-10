@@ -80,6 +80,9 @@ export class SpaceState extends Schema {
   @type("uint16") width = 0;
   @type("uint16") height = 0;
   @type(["string"]) tiles = new ArraySchema<string>();
+  // walls on tile edges (map v2): north edges per row, west edges per row
+  @type(["string"]) hWalls = new ArraySchema<string>();
+  @type(["string"]) vWalls = new ArraySchema<string>();
   @type("string") areas = "[]";
   @type("float32") spawnX = 0;
   @type("float32") spawnY = 0;

@@ -1,19 +1,19 @@
 import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
-import { doorRot, Grid } from "./grid.ts";
+import { doorEdge, doorFits, Grid } from "./grid.ts";
 import type { Point } from "./iso.ts";
-import type { MapDef } from "./map.ts";
+import { holdsItems, hWall, type MapDef, wallBetween } from "./map.ts";
 
 // One placement rule for client (ghost preview) and server (authority).
 export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDef, bodies: Point[] = []): boolean {
   const e = entry(o.kind);
   if (o.kind === "door") {
-    // a door fills a one-tile gap between two walls, and nothing else can share it
-    if (doorRot(map, o.x, o.y) === null) return false;
-    if (bodies.some((b) => Math.floor(b.x) === o.x && Math.floor(b.y) === o.y)) return false;
+    // a door fills a gap in a wall line (an edge), one door per edge
+    const e = doorEdge(o);
+    if (!doorFits(map, e)) return false;
     return !others.some((x) => {
-      if (x.id === o.id || entry(x.kind).wall || x.kind === "rug" || x.kind === "standup_mat") return false;
-      const f = footprint(x.kind, x.rot ?? 0);
-      return o.x >= x.x && o.x < x.x + f.w && o.y >= x.y && o.y < x.y + f.h;
+      if (x.id === o.id || x.kind !== "door") return false;
+      const d = doorEdge(x);
+      return d.dir === e.dir && d.x === e.x && d.y === e.y;
     });
   }
   const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
@@ -28,8 +28,8 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
       const ty = o.y + dy;
       if (!floor.ok(tx, ty)) return false;
       if (e.wall) {
-        // hangs on a back wall: needs wall behind, and no other wall item there
-        if (floor.ok(tx, ty - 1)) return false;
+        // hangs on the wall along the tile's north edge, no other wall item there
+        if (!holdsItems(hWall(map, tx, ty))) return false;
         const clash = others.some(
           (x) => x.id !== o.id && entry(x.kind).wall && tx >= x.x && tx < x.x + footprint(x.kind, 0).w && ty === x.y,
         );
@@ -37,6 +37,9 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
         continue;
       }
       if (e.solid && !base.ok(tx, ty)) return false;
+      // never straddling a wall
+      if (dx > 0 && wallBetween(map, tx - 1, ty, tx, ty) !== ".") return false;
+      if (dy > 0 && wallBetween(map, tx, ty - 1, tx, ty) !== ".") return false;
       if (!e.solid && !e.seat) continue;
       // seats and solids can't share a tile with another seat
       if (base.seats.has(base.idx(tx, ty))) return false;

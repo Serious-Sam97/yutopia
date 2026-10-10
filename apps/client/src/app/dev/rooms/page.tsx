@@ -1,6 +1,6 @@
 "use client";
 
-import type { MapDef, WorldObjectDef } from "@yutopia/shared";
+import { emptyEdges, type MapDef, setEdge, type WorldObjectDef } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FloorBake } from "@/world/art/floors";
@@ -32,46 +32,48 @@ const HW = 32;
 const HH = 16;
 const NIGHT = "rgb(163,156,177)";
 
+// row 0 and column 0 are outside; thin walls run along y = 1 and x = 1, with a
+// doorway at x = 3
 function testRoom(ch: string): { map: MapDef; objects: WorldObjectDef[] } {
   const nb = NEXT[ch];
-  const tiles = [`###${ch}###`];
-  for (let y = 1; y < H; y++) tiles.push(`#${ch.repeat(4)}${nb.repeat(2)}`);
+  const tiles = [" ".repeat(W)];
+  for (let y = 1; y < H; y++) tiles.push(` ${ch.repeat(4)}${nb.repeat(2)}`);
   const map: MapDef = {
     key: "t",
     name: "t",
     width: W,
     height: H,
     tiles,
-    spawn: { x: 2, y: 2 },
+    ...emptyEdges(W, H),
+    spawn: { x: 2.5, y: 2.5 },
     areas: [],
     objects: [],
   };
+  for (let x = 1; x < W; x++) if (x !== 3) setEdge(map, { x, y: 1, dir: "h" }, "p");
+  for (let y = 1; y < H; y++) setEdge(map, { x: 1, y, dir: "v" }, "p");
   const objects: WorldObjectDef[] = [
-    { id: "door", kind: "door", x: 3, y: 0, rot: 0, props: { state: "closed" } },
-    { id: "desk", kind: "desk", x: 1, y: 3, rot: 0 },
-    { id: "plant", kind: "plant", x: 4, y: 1, rot: 0 },
+    { id: "door", kind: "door", x: 3, y: 1, rot: 0, props: { state: "closed" } },
+    { id: "desk", kind: "desk", x: 2, y: 3, rot: 0 },
+    { id: "plant", kind: "plant", x: 5, y: 2, rot: 0 },
   ];
-  if (ch === "~") map.areas.push({ key: "s", name: "Stage", kind: "stage", x: 1, y: 1, w: 5, h: 3 });
+  if (ch === "~") map.areas.push({ key: "s", name: "Stage", kind: "stage", x: 2, y: 2, w: 5, h: 3 });
   return { map, objects };
 }
 
 const P = (x: number, y: number, z = 0) => [(x - y) * HW, (x + y) * HH - z] as const;
 const pts = (p: (readonly [number, number])[]) => p.map(([x, y]) => `${x},${y}`).join(" ");
 
-// back walls (row 0 and column 0) + footprints of the furniture, flat-shaded, for context
+// the thin back walls (along y = 1 and x = 1) + footprints of the furniture, for context
 function overlay(): string {
   let g = "";
-  const wall = (x: number, y: number) => {
-    const box = (z0: number, z1: number, top: string, left: string, right: string) =>
-      `<polygon points="${pts([P(x, y + 1, z0), P(x + 1, y + 1, z0), P(x + 1, y + 1, z1), P(x, y + 1, z1)])}" fill="${left}"/><polygon points="${pts([P(x + 1, y + 1, z0), P(x + 1, y, z0), P(x + 1, y, z1), P(x + 1, y + 1, z1)])}" fill="${right}"/><polygon points="${pts([P(x, y, z1), P(x + 1, y, z1), P(x + 1, y + 1, z1), P(x, y + 1, z1)])}" fill="${top}"/>`;
-    g += box(0, 30, "#5b3a26", "#5b3a26", "#4d311f") + box(30, 50, "#efe4cc", "#efe4cc", "#d2c8b4");
-  };
-  for (let x = 0; x < W; x++) if (x !== 3) wall(x, 0);
-  for (let y = 1; y < H; y++) wall(0, y);
-  // where the furniture stands (outline only, so the AO shows)
+  const t = 0.1;
+  const box = (x0: number, x1: number, y0: number, y1: number, z1: number) =>
+    `<polygon points="${pts([P(x0, y1, 0), P(x1, y1, 0), P(x1, y1, z1), P(x0, y1, z1)])}" fill="#efe4cc"/><polygon points="${pts([P(x1, y1, 0), P(x1, y0, 0), P(x1, y0, z1), P(x1, y1, z1)])}" fill="#d2c8b4"/><polygon points="${pts([P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)])}" fill="#3e2718"/>`;
+  for (let x = 1; x < W; x++) if (x !== 3) g += box(x, x + 1, 1 - t, 1 + t, 50);
+  for (let y = 1; y < H; y++) g += box(1 - t, 1 + t, y, y + 1, 50);
   for (const [x, y, w, h] of [
-    [1, 3, 2, 1],
-    [4, 1, 1, 1],
+    [2, 3, 2, 1],
+    [5, 2, 1, 1],
   ])
     g += `<polygon points="${pts([P(x, y, 0), P(x + w, y, 0), P(x + w, y + h, 0), P(x, y + h, 0)])}" fill="none" stroke="#ffb35c" stroke-dasharray="3 3" stroke-width="1"/>`;
   return g;
@@ -83,7 +85,7 @@ function oldFloor(ch: string): string {
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
       const c = map.tiles[y][x];
-      if (c === "#") continue;
+      if (c === " ") continue;
       g += `<polygon points="${pts([P(x, y), P(x + 1, y), P(x + 1, y + 1), P(x, y + 1)])}" fill="${OLD[c]}" stroke="rgba(0,0,0,.25)" stroke-width=".6"/>`;
     }
   return g;

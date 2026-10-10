@@ -1,4 +1,15 @@
-import { CATALOG, entry, isFloor, type MapDef, tileAt, type WorldObjectDef } from "@yutopia/shared";
+import {
+  blocksLight,
+  CATALOG,
+  doorEdge,
+  entry,
+  hWall,
+  isFloor,
+  type MapDef,
+  tileAt,
+  vWall,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 import type { RGB } from "./daylight";
 
 // Baked light: every light source is ray-marched across the tile grid (walls
@@ -106,7 +117,9 @@ export class LightMap {
   readonly w: number; // samples
   readonly h: number;
   readonly light: Float32Array; // r, g, b per sample (lights only, no ambient)
-  private block: Uint8Array; // per tile: 1 = blocks light
+  private block: Uint8Array; // per tile: 1 = blocks light (no floor)
+  private hBlk: Uint8Array; // walls on north edges that block light (glass and half walls don't)
+  private vBlk: Uint8Array; // … on west edges
 
   constructor(
     readonly map: MapDef,
@@ -119,10 +132,19 @@ export class LightMap {
     this.light = new Float32Array(this.w * this.h * 3);
     this.block = new Uint8Array(W * H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(tileAt(map, x, y))) this.block[y * W + x] = 1;
+    this.hBlk = new Uint8Array((H + 1) * W);
+    this.vBlk = new Uint8Array(H * (W + 1));
+    for (let y = 0; y <= H; y++)
+      for (let x = 0; x < W; x++) if (blocksLight(hWall(map, x, y))) this.hBlk[y * W + x] = 1;
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x <= W; x++) if (blocksLight(vWall(map, x, y))) this.vBlk[y * (W + 1) + x] = 1;
     for (const o of objects) {
       if (o.kind !== "door") continue;
       const st = String(o.props?.state ?? "open");
-      if ((st === "closed" || st === "locked") && !o.props?.passing) this.block[o.y * W + o.x] = 1;
+      if (!((st === "closed" || st === "locked") && !o.props?.passing)) continue;
+      const e = doorEdge(o);
+      if (e.dir === "h") this.hBlk[e.y * W + e.x] = 1;
+      else this.vBlk[e.y * (W + 1) + e.x] = 1;
     }
     for (const s of lightSources(objects)) this.add(s);
   }
@@ -134,17 +156,38 @@ export class LightMap {
     return this.block[ty * this.map.width + tx] === 1;
   }
 
+  // A wall on the edge between two neighbouring tiles (diagonal steps: both ways round must be shut).
+  private wallBetween(ax: number, ay: number, bx: number, by: number): boolean {
+    const W = this.map.width;
+    const h = (x: number, y: number) => this.hBlk[y * W + x] === 1;
+    const v = (x: number, y: number) => this.vBlk[y * (W + 1) + x] === 1;
+    const step = (x0: number, y0: number, x1: number, y1: number) =>
+      x1 > x0 ? v(x1, y0) : x1 < x0 ? v(x0, y0) : y1 > y0 ? h(x0, y1) : y1 < y0 ? h(x0, y0) : false;
+    if (ax === bx || ay === by) return step(ax, ay, bx, by);
+    return (step(ax, ay, bx, ay) || step(bx, ay, bx, by)) && (step(ax, ay, ax, by) || step(ax, by, bx, by));
+  }
+
   // Is the straight line from the light to (x, y) clear of walls?
   private visible(s: LightSource, x: number, y: number): boolean {
     const dx = x - s.x;
     const dy = y - s.y;
     const d = Math.hypot(dx, dy);
-    const steps = Math.ceil(d * 4);
-    // skip the end points: the light's own tile, and the sample's tile (walls
-    // themselves get the light of the floor in front of them)
-    for (let i = 1; i < steps; i++) {
+    const steps = Math.max(1, Math.ceil(d * 6));
+    let tx = Math.floor(s.x);
+    let ty = Math.floor(s.y);
+    for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      if (this.blocked(s.x + dx * t, s.y + dy * t)) return false;
+      const px = s.x + dx * t;
+      const py = s.y + dy * t;
+      const nx = Math.floor(px);
+      const ny = Math.floor(py);
+      if (nx !== tx || ny !== ty) {
+        if (this.wallBetween(tx, ty, nx, ny)) return false;
+        // no floor in between (outside the building): blocked, except the end point
+        if (i < steps && this.blocked(px, py)) return false;
+        tx = nx;
+        ty = ny;
+      }
     }
     return true;
   }

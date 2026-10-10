@@ -76,6 +76,8 @@ function liveGrid(p: Person) {
     width: st.width,
     height: st.height,
     tiles: [...st.tiles],
+    hWalls: [...st.hWalls],
+    vWalls: [...st.vWalls],
     areas: JSON.parse(st.areas),
     spawn: { x: st.spawnX, y: st.spawnY },
   };
@@ -193,8 +195,9 @@ test("only builders can move furniture, and only where it fits", async () => {
   member.room.send("obj:put", { id: plant, kind: "plant", x: 10, y: 3, rot: 0 });
   await sleep(200);
   assert.equal(member.room.state.objects.get(plant).x, before.x);
-  builder.room.send("obj:put", { id: plant, kind: "plant", x: 0, y: 3, rot: 0 }); // into a wall
+  builder.room.send("obj:put", { id: "b-desk", kind: "desk", x: 28, y: 9, rot: 0 }); // across a wall
   await waitFor(() => (builder.msgs.toast?.length ?? 0) > 0);
+  assert.ok(!member.room.state.objects.get("b-desk"));
   builder.room.send("obj:put", { id: plant, kind: "plant", x: 10, y: 3, rot: 0 });
   await waitFor(() => member.room.state.objects.get(plant).x === 10);
   builder.room.send("obj:remove", { id: plant });
@@ -328,29 +331,35 @@ test("moderation: owners mute, lock rooms and remove people; members can't", asy
   await assert.rejects(() => person(26, s));
 });
 
-test("map editing: builders paint walls, nobody gets walled in, members can't", async () => {
+test("map editing: builders paint floors and walls on edges, nobody gets walled in, members can't", async () => {
   const s = ++space;
   const member = await person(27, s);
   const owner = await person(28, s, "member,builder");
   const tiles = () => [...member.room.state.tiles] as string[];
-  member.room.send("map:paint", { cells: [{ x: 10, y: 3, ch: "#" }] });
+  const hw = () => [...member.room.state.hWalls] as string[];
+  const vw = () => [...member.room.state.vWalls] as string[];
+  member.room.send("map:walls", { edges: [{ x: 10, y: 3, dir: "h", ch: "p" }] });
+  member.room.send("map:paint", { cells: [{ x: 11, y: 3, ch: "," }] });
   await sleep(250);
-  assert.equal(tiles()[3][10], ".", "members can't paint");
-  owner.room.send("map:paint", {
-    cells: [
-      { x: 10, y: 3, ch: "#" },
-      { x: 11, y: 3, ch: "," },
-      { x: 3, y: 6, ch: "#" },
+  assert.equal(hw()[3][10], ".", "members can't build walls");
+  assert.equal(tiles()[3][11], ".", "…or paint floors");
+  owner.room.send("map:paint", { cells: [{ x: 11, y: 3, ch: "," }] });
+  owner.room.send("map:walls", {
+    edges: [
+      { x: 10, y: 3, dir: "h", ch: "b" },
+      { x: 4, y: 6, dir: "v", ch: "p" }, // through a desk
     ],
   });
-  await waitFor(() => tiles()[3][10] === "#" && tiles()[3][11] === ",");
-  assert.equal(tiles()[6][3], ".", "not over the desk");
+  await waitFor(() => hw()[3][10] === "b" && tiles()[3][11] === ",");
+  assert.equal(vw()[6][4], ".", "not through the desk");
   await waitFor(() => (owner.msgs.toast?.length ?? 0) > 0);
-  // standing people can't be walled in
-  const at = me(member);
-  owner.room.send("map:paint", { cells: [{ x: Math.floor(at.x), y: Math.floor(at.y), ch: "#" }] });
-  await sleep(250);
-  assert.notEqual(tiles()[Math.floor(at.y)][Math.floor(at.x)], "#");
+  // a wall built right through someone moves them aside
+  await walk(member, { x: 10.5, y: 6.2 });
+  assert.ok(Math.abs(me(member).y - 6.2) < 0.05, "standing just past the y = 6 line");
+  const snaps = member.msgs.snap?.length ?? 0;
+  owner.room.send("map:walls", { edges: [{ x: 10, y: 6, dir: "h", ch: "p" }] });
+  await waitFor(() => (member.msgs.snap?.length ?? 0) > snaps);
+  await waitFor(() => Math.abs(me(member).y - 6) >= 0.32); // off the wall
 });
 
 test("rooms + doors: an owned room with walls, locked so only its owner gets in or out", async () => {
@@ -391,12 +400,13 @@ test("rooms + doors: an owned room with walls, locked so only its owner gets in 
   // a tampered client pushing raw moves into the doorway gets snapped back
   await walk(bia, { x: 6.5, y: 9.5 });
   const snaps = bia.msgs.snap?.length ?? 0;
-  for (let i = 1; i <= 6; i++) {
+  // (the door is a thin edge at y = 8: push well across it)
+  for (let i = 1; i <= 9; i++) {
     bia.room.send("pos", { x: 6.5, y: 9.5 - i * 0.2, d: 4, a: 1, seq: 9000 + i });
     await sleep(55);
   }
   await waitFor(() => (bia.msgs.snap?.length ?? 0) > snaps);
-  assert.ok(me(bia).y > 8.7, "the server keeps the doorway shut");
+  assert.ok(me(bia).y > 8.1, "the server keeps the doorway shut");
   bia.room.send("teleport", { to: { userId: 30 } });
   await sleep(300);
   assert.ok(me(bia).y > 8, "no teleporting in");

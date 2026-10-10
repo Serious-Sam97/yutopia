@@ -31,17 +31,72 @@ const GROUPS: { name: string; kinds: (keyof typeof CATALOG)[] }[] = [
   },
 ];
 
-const BRUSHES: { ch: string; label: string; swatch: string }[] = [
-  { ch: "#", label: "Wall", swatch: "linear-gradient(#efe4cc 55%, #5b3a26 55%)" },
-  { ch: "door", label: "Door", swatch: "linear-gradient(90deg,#3e2718 12%,#5b3a26 12% 88%,#3e2718 88%)" },
-  { ch: ".", label: "Wood", swatch: "#8f6038" },
-  { ch: ",", label: "Carpet", swatch: "#6b6a3a" },
-  { ch: "_", label: "Tile", swatch: "repeating-conic-gradient(#e6dcc4 0 25%,#cfc3a5 0 50%) 0 0/12px 12px" },
-  { ch: ":", label: "Felt", swatch: "#7a3b2e" },
-  { ch: "~", label: "Stage", swatch: "#2f2620" },
-  { ch: "x", label: "Grate", swatch: "repeating-linear-gradient(90deg,#4a4740 0 3px,#2a2824 3px 4px)" },
-  { ch: " ", label: "Erase", swatch: "repeating-linear-gradient(45deg,#17110d 0 4px,#2a1c13 4px 8px)" },
+// Walls paint tile edges ("w:" + an edge char); floors paint tiles.
+const BRUSHES: { ch: string; label: string; swatch: string; group: "walls" | "floors" }[] = [
+  { ch: "w:p", label: "Plaster", swatch: "linear-gradient(#efe4cc 55%, #5b3a26 55%)", group: "walls" },
+  {
+    ch: "w:w",
+    label: "Walnut",
+    swatch: "repeating-linear-gradient(90deg,#5b3a26 0 9px,#3e2718 9px 10px)",
+    group: "walls",
+  },
+  {
+    ch: "w:f",
+    label: "Foam",
+    swatch: "repeating-conic-gradient(#9e4a36 0 25%,#7d3a2c 0 50%) 0 0/10px 10px",
+    group: "walls",
+  },
+  { ch: "w:b", label: "Brick", swatch: "repeating-linear-gradient(#9a4a30 0 6px,#d9cba9 6px 7px)", group: "walls" },
+  { ch: "w:k", label: "Cork", swatch: "#c49a6c", group: "walls" },
+  { ch: "w:g", label: "Glass", swatch: "linear-gradient(90deg,#5b3a26 8%,#3a4a4a 8% 92%,#5b3a26 92%)", group: "walls" },
+  {
+    ch: "w:h",
+    label: "Half wall",
+    swatch: "linear-gradient(transparent 50%, #efe4cc 50% 75%, #5b3a26 75%)",
+    group: "walls",
+  },
+  {
+    ch: "w:window",
+    label: "Window",
+    swatch: "linear-gradient(#efe4cc 25%, #9fb6c8 25% 70%, #efe4cc 70% 80%, #5b3a26 80%)",
+    group: "walls",
+  },
+  {
+    ch: "door",
+    label: "Door",
+    swatch: "linear-gradient(90deg,#3e2718 12%,#5b3a26 12% 88%,#3e2718 88%)",
+    group: "walls",
+  },
+  {
+    ch: "w:.",
+    label: "No wall",
+    swatch: "repeating-linear-gradient(45deg,#17110d 0 4px,#2a1c13 4px 8px)",
+    group: "walls",
+  },
+  { ch: ".", label: "Wood", swatch: "#8f6038", group: "floors" },
+  { ch: ",", label: "Carpet", swatch: "#6b6a3a", group: "floors" },
+  {
+    ch: "_",
+    label: "Tile",
+    swatch: "repeating-conic-gradient(#e6dcc4 0 25%,#cfc3a5 0 50%) 0 0/12px 12px",
+    group: "floors",
+  },
+  { ch: ":", label: "Felt", swatch: "#7a3b2e", group: "floors" },
+  { ch: "~", label: "Stage", swatch: "#2f2620", group: "floors" },
+  {
+    ch: "x",
+    label: "Grate",
+    swatch: "repeating-linear-gradient(90deg,#4a4740 0 3px,#2a2824 3px 4px)",
+    group: "floors",
+  },
+  {
+    ch: " ",
+    label: "No floor",
+    swatch: "repeating-linear-gradient(45deg,#17110d 0 4px,#2a1c13 4px 8px)",
+    group: "floors",
+  },
 ];
+export const WALL_MATERIALS = BRUSHES.filter((b) => b.group === "walls" && /^w:[pwfbkg]$/.test(b.ch));
 
 const TOOLS: { key: BuildTool; label: string }[] = [
   { key: "furniture", label: "🪑 Furniture" },
@@ -54,7 +109,7 @@ const TOOLS: { key: BuildTool; label: string }[] = [
 const HELP: Record<BuildTool, string> = {
   furniture: "Pick an item, click to place · R rotates · click an item to pick it up · Del removes · Esc exits",
   walls:
-    "Pick a brush and drag to paint walls or floors. Door: click a one-tile gap between two walls (click a door to remove it).",
+    "Walls go on the lines between tiles: pick a wall and drag along them. Floors: pick one and drag over tiles. Windows go in outer walls. Door: click a gap in a wall line (click a door to remove it).",
   rooms: "Drag a rectangle on the floor to make a room. Give it a name and an owner — owners can lock its doors.",
   desks: "Click a seat to give it to someone. They always land there, and their name shows on it.",
   map: "Choose the studio's size, or start from a blank floor.",
@@ -199,30 +254,33 @@ export function BuildBar() {
             </>
           )}
 
-          {b.tool === "walls" && (
-            <fieldset className="grid grid-cols-3 gap-1.5">
-              <legend className="sr-only">Brush</legend>
-              {BRUSHES.map((br) => (
-                <button
-                  key={br.ch}
-                  type="button"
-                  aria-pressed={b.brush === br.ch}
-                  className="rounded-lg p-1.5 flex flex-col items-center gap-1"
-                  style={{
-                    background: b.brush === br.ch ? "rgba(255,166,48,0.18)" : "#120d09",
-                    border: `1px solid ${b.brush === br.ch ? "var(--amber)" : "var(--edge)"}`,
-                  }}
-                  onClick={() => set({ brush: br.ch })}
-                >
-                  <span
-                    className="block w-full h-7 rounded"
-                    style={{ background: br.swatch, border: "1px solid #0006" }}
-                  />
-                  <span className="mono text-[10px] uppercase">{br.label}</span>
-                </button>
-              ))}
-            </fieldset>
-          )}
+          {b.tool === "walls" &&
+            (["walls", "floors"] as const).map((group) => (
+              <fieldset key={group} className="grid grid-cols-3 gap-1.5">
+                <legend className="mono text-[10px] uppercase mb-1 col-span-3" style={{ color: "var(--muted)" }}>
+                  {group === "walls" ? "Walls · drag along the lines between tiles" : "Floors · drag over tiles"}
+                </legend>
+                {BRUSHES.filter((br) => br.group === group).map((br) => (
+                  <button
+                    key={br.ch}
+                    type="button"
+                    aria-pressed={b.brush === br.ch}
+                    className="rounded-lg p-1.5 flex flex-col items-center gap-1"
+                    style={{
+                      background: b.brush === br.ch ? "rgba(255,166,48,0.18)" : "#120d09",
+                      border: `1px solid ${b.brush === br.ch ? "var(--amber)" : "var(--edge)"}`,
+                    }}
+                    onClick={() => set({ brush: br.ch })}
+                  >
+                    <span
+                      className="block w-full h-7 rounded"
+                      style={{ background: br.swatch, border: "1px solid #0006" }}
+                    />
+                    <span className="mono text-[10px] uppercase">{br.label}</span>
+                  </button>
+                ))}
+              </fieldset>
+            ))}
 
           {b.tool === "rooms" && (
             <div className="space-y-2">
@@ -285,6 +343,27 @@ function RoomRow({
           </option>
         ))}
       </select>
+      <label className="flex items-center gap-2 text-xs">
+        <span className="mono uppercase" style={{ color: "var(--cream-dim)" }}>
+          Walls
+        </span>
+        <select
+          className="field"
+          aria-label={`Walls of ${room.name}`}
+          defaultValue=""
+          onChange={(e) => {
+            if (e.target.value) w?.send("map:room:walls", { key: room.key, wall: e.target.value });
+            e.target.value = "";
+          }}
+        >
+          <option value="">Repaint…</option>
+          {WALL_MATERIALS.map((b) => (
+            <option key={b.ch} value={b.ch.slice(2)}>
+              {b.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <button
         type="button"
         className="ghost-btn w-full"
@@ -306,6 +385,7 @@ function RoomDialog({ draft, members }: { draft: { x: number; y: number; w: numb
   const [owner, setOwner] = useState<number | null>(null);
   const [walls, setWalls] = useState(true);
   const [floor, setFloor] = useState(",");
+  const [wall, setWall] = useState("");
   const close = () => {
     w?.clearRoomGhost();
     hud.set((s) => ({ build: { ...s.build, roomDraft: null } }));
@@ -325,6 +405,7 @@ function RoomDialog({ draft, members }: { draft: { x: number; y: number; w: numb
             ownerName: members.find((m) => m.id === owner)?.name ?? null,
             walls,
             floor,
+            ...(wall ? { wall } : {}),
           });
           close();
         }}
@@ -392,12 +473,27 @@ function RoomDialog({ draft, members }: { draft: { x: number; y: number; w: numb
             className="h-5 w-5 accent-[#ffa630]"
           />
         </label>
+        {walls && (
+          <label className="block">
+            <span className="mono text-xs uppercase" style={{ color: "var(--cream-dim)" }}>
+              Walls
+            </span>
+            <select className="field mt-1" value={wall} onChange={(e) => setWall(e.target.value)}>
+              <option value="">{kind === "booth" ? "Foam (booth)" : "Plaster"}</option>
+              {WALL_MATERIALS.map((b) => (
+                <option key={b.ch} value={b.ch.slice(2)}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="block">
           <span className="mono text-xs uppercase" style={{ color: "var(--cream-dim)" }}>
             Floor
           </span>
           <select className="field mt-1" value={floor} onChange={(e) => setFloor(e.target.value)}>
-            {BRUSHES.filter((b) => b.ch !== "#" && b.ch !== " " && b.ch !== "door").map((b) => (
+            {BRUSHES.filter((b) => b.group === "floors" && b.ch !== " ").map((b) => (
               <option key={b.ch} value={b.ch}>
                 {b.label}
               </option>

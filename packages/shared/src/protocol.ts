@@ -45,7 +45,8 @@ export interface ClientMessages {
   "mod:kick": { userId: number };
   "mod:lock": { area: string; locked: boolean };
   // map editing (builders)
-  "map:paint": { cells: { x: number; y: number; ch: string }[] };
+  "map:paint": { cells: { x: number; y: number; ch: string }[] }; // floors (tiles)
+  "map:walls": { edges: { x: number; y: number; dir: "h" | "v"; ch: string }[] }; // walls (tile edges)
   "map:resize": { width: number; height: number };
   "map:new": { width: number; height: number };
   "map:spawn": { x: number; y: number };
@@ -60,7 +61,9 @@ export interface ClientMessages {
     ownerName: string | null;
     walls: boolean;
     floor?: string;
+    wall?: string; // wall material (p, w, f, b, k, g)
   };
+  "map:room:walls": { key: string; wall: string }; // repaint a room's walls
   "map:room:update": { key: string; name?: string; kind?: string; ownerId?: number | null; ownerName?: string | null };
   "map:room:remove": { key: string };
   "desk:assign": { id: string; ownerId: number | null; ownerName: string | null };

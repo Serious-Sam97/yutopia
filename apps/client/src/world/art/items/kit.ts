@@ -141,7 +141,22 @@ export class Sketch {
   private maxX = -1e9;
   private maxY = -1e9;
 
-  constructor(o: { rot?: number; w: number; h: number; clip?: Clip | null; group?: Group; seed?: number }) {
+  private ox: number;
+  private oy: number;
+
+  // `offset`: shifts the whole drawing in local tiles before turning it (wall
+  // items sit on the face of a thin wall, a little in front of their tile edge)
+  constructor(o: {
+    rot?: number;
+    w: number;
+    h: number;
+    clip?: Clip | null;
+    group?: Group;
+    seed?: number;
+    offset?: [number, number];
+  }) {
+    this.ox = o.offset?.[0] ?? 0;
+    this.oy = o.offset?.[1] ?? 0;
     this.rot = (o.rot ?? 0) & 3;
     this.W = o.w;
     this.H = o.h;
@@ -152,8 +167,8 @@ export class Sketch {
 
   // rot 0 local → rotated local (same turn as `rotateBoxes`: 90° clockwise steps)
   rp(x: number, y: number): Pt {
-    let X = x;
-    let Y = y;
+    let X = x + this.ox;
+    let Y = y + this.oy;
     let H = this.H;
     let W = this.W;
     for (let i = 0; i < this.rot; i++) {

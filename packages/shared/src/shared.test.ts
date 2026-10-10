@@ -4,7 +4,7 @@ import { entry, footprint } from "./catalog.ts";
 import { Grid, isLegalMove, moveStep } from "./grid.ts";
 import { hearingGain, stereoPan } from "./hearing.ts";
 import { dirFromDelta, screenInputToWorld, toScreen, toWorld } from "./iso.ts";
-import { areaAt, isFloor, tileAt } from "./map.ts";
+import { areaAt, holdsItems, hWall, isFloor, tileAt } from "./map.ts";
 import { studio } from "./maps/studio.ts";
 import { findPath } from "./path.ts";
 
@@ -44,7 +44,7 @@ test("studio map is rectangular and every object sits on floor without overlaps"
         const x = o.x + dx;
         const y = o.y + dy;
         assert.ok(isFloor(tileAt(studio, x, y)), `${o.id} off-floor at ${x},${y}`);
-        if (e.wall) assert.ok(!isFloor(tileAt(studio, x, y - 1)), `${o.id} needs a wall behind ${x},${y}`);
+        if (e.wall) assert.ok(holdsItems(hWall(studio, x, y)), `${o.id} needs a wall behind ${x},${y}`);
         if (e.solid && !e.wall) {
           const k = `${x},${y}`;
           assert.ok(!solid.has(k), `${o.id} overlaps ${solid.get(k)} at ${k}`);
@@ -69,7 +69,7 @@ test("every walkable tile and every area is reachable from spawn", () => {
     ]) {
       const nx = x + dx;
       const ny = y + dy;
-      if (g.ok(nx, ny) && !seen[g.idx(nx, ny)]) {
+      if (g.step(x, y, nx, ny) && !seen[g.idx(nx, ny)]) {
         seen[g.idx(nx, ny)] = 1;
         q.push([nx, ny]);
       }
@@ -97,9 +97,9 @@ test("paths never cross walls or furniture", () => {
 
 test("movement slides along walls and server rejects teleports through them", () => {
   const g = Grid.from(studio, studio.objects);
-  const start = { x: 1.5, y: 23.5 };
-  const p = moveStep(g, start, { x: -1, y: 0 }, 4, 1);
-  assert.ok(p.x >= 1.2 && g.fits(p.x, p.y));
+  let p = { x: 1.5, y: 23.5 };
+  for (let i = 0; i < 30; i++) p = moveStep(g, p, { x: -1, y: 0 }, 4, 0.05);
+  assert.ok(p.x >= 0.3 && p.x <= 0.55 && g.fits(p.x, p.y), `stops at the thin wall: ${p.x}`);
   assert.ok(isLegalMove(g, { x: 6.5, y: 28.5 }, { x: 6.7, y: 28.5 }, 0.05));
   assert.ok(!isLegalMove(g, { x: 6.5, y: 28.5 }, { x: 16.5, y: 28.5 }, 0.05), "too far");
   assert.ok(!isLegalMove(g, { x: 12.5, y: 25.5 }, { x: 14.5, y: 25.5 }, 0.5), "through the lobby wall");
@@ -151,9 +151,12 @@ test("templates fit their room without overlaps", async () => {
 
 test("placement: no furniture in walls, wall items need a wall", async () => {
   const { canPlace } = await import("./build.ts");
-  assert.ok(!canPlace(studio, studio.objects, { id: "p", kind: "plant", x: 0, y: 3 }));
+  assert.ok(canPlace(studio, studio.objects, { id: "p", kind: "plant", x: 0, y: 3 }), "old wall tiles are floor now");
   assert.ok(canPlace(studio, studio.objects, { id: "p", kind: "plant", x: 10, y: 3 }));
-  assert.ok(!canPlace(studio, studio.objects, { id: "w", kind: "whiteboard", x: 10, y: 3 }));
+  assert.ok(!canPlace(studio, studio.objects, { id: "s", kind: "desk", x: 28, y: 9, rot: 0 }), "never across a wall");
+  assert.ok(!canPlace(studio, studio.objects, { id: "w", kind: "whiteboard", x: 10, y: 3 }), "no wall behind");
+  assert.ok(canPlace(studio, studio.objects, { id: "w", kind: "whiteboard", x: 11, y: 0 }), "on the north wall");
+  assert.ok(!canPlace(studio, studio.objects, { id: "w", kind: "poster", x: 6, y: 0 }), "not on a window");
   assert.ok(!canPlace(studio, studio.objects, { id: "d", kind: "desk", x: 3, y: 6 }), "overlaps a desk");
   assert.ok(
     !canPlace(studio, studio.objects, { id: "p", kind: "plant", x: 10, y: 3 }, [{ x: 10.5, y: 3.5 }]),
