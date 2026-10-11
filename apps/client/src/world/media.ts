@@ -51,7 +51,7 @@ export class Media {
     });
   }
 
-  async connect(url: string, token: string) {
+  async connect(url: string, token: string, iceServers: RTCIceServer[] = []) {
     const ctx = mixer.ensure();
     const room = new Room({
       adaptiveStream: true,
@@ -90,7 +90,11 @@ export class Media {
       })
       .on(RoomEvent.Disconnected, () => this.ev.onState({ ready: false, offline: true }));
     try {
-      await room.connect(url, token, { autoSubscribe: false });
+      await room.connect(url, token, {
+        autoSubscribe: false,
+        // Ours replace LiveKit's own ICE servers, so only pass them when we have some.
+        ...(iceServers.length ? { rtcConfig: { iceServers } } : {}),
+      });
       this.ev.onState({ ready: true, offline: false });
       this.report();
       this.applySubscriptions();

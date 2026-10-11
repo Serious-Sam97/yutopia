@@ -191,7 +191,7 @@ export class WorldController {
       }, 100),
     );
 
-    void this.media.connect(s.livekitUrl, s.livekitToken);
+    void this.media.connect(s.livekitUrl, s.livekitToken, s.iceServers);
     void this.loadBoards();
     void this.loadStatus();
     this.timers.push(setInterval(() => void this.loadStatus(), 60_000));

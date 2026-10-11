@@ -71,6 +71,7 @@ export interface Session {
   worldToken: string;
   livekitUrl: string;
   livekitToken: string;
+  iceServers?: RTCIceServer[]; // Cloudflare TURN relay; empty = connect directly
   expiresIn: number;
 }
 
