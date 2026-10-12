@@ -2,7 +2,7 @@
 
 import type { AvatarLayers, Emote } from "@yutopia/shared";
 import { ImageSource, Texture } from "pixi.js";
-import { avatarSvg, type View } from "./avatar-svg";
+import { avatarSvg, type Rim, type View } from "./avatar-svg";
 import { emoteSvg } from "./emotes";
 import { type VortexMood, vortexSvg } from "./vortex/vortexArt";
 
@@ -50,10 +50,17 @@ function get(key: string, make: () => string): Texture | null {
 }
 
 // Passing frames (0, 2) share a drawing; 1 and 3 are the strides.
-export function avatarTexture(a: AvatarLayers, view: View, frame: number, sitting: boolean): Texture | null {
+// The rim light follows the hour: warm and sky blue by day, neon at night.
+export function avatarTexture(
+  a: AvatarLayers,
+  view: View,
+  frame: number,
+  sitting: boolean,
+  rim: Rim = "day",
+): Texture | null {
   const f = sitting ? 0 : frame % 2 === 0 ? 0 : frame % 4;
-  const key = `p|${a.body}|${a.skin}|${a.hair}|${a.hairColor}|${a.top}|${a.topColor}|${a.bottom}|${a.bottomColor}|${a.accessory}|${a.accessoryColor}|${view}|${f}|${sitting ? 1 : 0}`;
-  return get(key, () => avatarSvg(a, view, f, sitting, 2));
+  const key = `p|${a.body}|${a.skin}|${a.hair}|${a.hairColor}|${a.top}|${a.topColor}|${a.bottom}|${a.bottomColor}|${a.accessory}|${a.accessoryColor}|${a.style}|${view}|${f}|${sitting ? 1 : 0}|${rim}`;
+  return get(key, () => avatarSvg(a, view, f, sitting, 2, rim));
 }
 
 // Vortex exactly as Yondra draws him (vortexSvg), one texture per mood.

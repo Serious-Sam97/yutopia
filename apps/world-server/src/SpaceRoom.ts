@@ -27,6 +27,7 @@ import {
   MAX_CHAT,
   type MapDef,
   mapFromLayout,
+  parseAvatar,
   replacedByTemplate,
   type ServerMessages,
   type Status,
@@ -50,6 +51,7 @@ interface ClientData {
   lastPosAt: number;
   chatBucket: number;
   chatRefillAt: number;
+  avatarAt?: number; // last look change (rate limit)
   hears: Set<string>; // sids this client can hear
   heardByKey: string; // last "heard by" list sent, to skip no-op updates
   kicked?: boolean; // replaced by a newer tab
@@ -317,6 +319,16 @@ export class SpaceRoom extends Room<SpaceState> {
       if (!p || !EMOTES.includes(m.e)) return;
       p.emote = m.e;
       p.emoteAt = Date.now();
+    });
+
+    // a new look, saved in Yondra by the editor: validated, at most every 2 s
+    this.on("avatar", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      const ud = data(client);
+      const now = Date.now();
+      if (!p || now - (ud.avatarAt ?? 0) < 2000) return;
+      ud.avatarAt = now;
+      p.avatar = JSON.stringify(parseAvatar(m?.avatar));
     });
 
     this.on("chat", (client, m) => {

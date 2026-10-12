@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { LangSwitch } from "@/components/LangSwitch";
 import { useTr } from "@/lib/i18n";
 import { type Prefs, setPrefs, usePrefs } from "@/lib/prefs";
+import { hud } from "@/world/store";
 import { useWorld } from "./ctx";
 import { Panel } from "./Panel";
 
@@ -85,6 +86,9 @@ export function SettingsPanel() {
   return (
     <Panel title={t("settings")}>
       <div className="space-y-5">
+        <button type="button" className="deck-btn w-full" onClick={() => hud.set({ panel: { kind: "avatar" } })}>
+          {t("editLook")}
+        </button>
         <section className="space-y-2">
           <h3 className="mono text-xs uppercase tracking-widest" style={{ color: "var(--vfd)" }}>
             {t("mixer")}

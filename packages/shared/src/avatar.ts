@@ -2,6 +2,8 @@
 // drawn procedurally by the client, so new options are code, not art files.
 
 export const AVATAR_OPTIONS = {
+  // how the person is drawn: City-pop 80s anime or Ligne claire (clean line, flat colour)
+  style: ["citypop", "ligne"],
   body: ["regular", "broad", "slim"],
   hair: ["short", "long", "curly", "bun", "afro", "bob", "mohawk", "bald"],
   top: ["tee", "hoodie", "shirt", "jacket", "sweater", "dress"],
@@ -38,6 +40,7 @@ export interface AvatarLayers {
   bottomColor: string;
   accessory: string;
   accessoryColor: string;
+  style: string;
 }
 
 export const DEFAULT_AVATAR: AvatarLayers = {
@@ -51,6 +54,7 @@ export const DEFAULT_AVATAR: AvatarLayers = {
   bottomColor: "#3d4a5c",
   accessory: "none",
   accessoryColor: "#e8a33d",
+  style: "citypop",
 };
 
 export function parseAvatar(raw: unknown): AvatarLayers {
@@ -64,8 +68,13 @@ export function parseAvatar(raw: unknown): AvatarLayers {
   }
   const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
   const out = { ...DEFAULT_AVATAR };
+  // same rules as Yondra's validation: colours are #rrggbb, options are plain slugs
+  // (these values end up inside the SVG the client draws)
   for (const k of Object.keys(DEFAULT_AVATAR) as (keyof AvatarLayers)[]) {
-    if (typeof o[k] === "string" && (o[k] as string).length <= 24) out[k] = o[k] as string;
+    const v = o[k];
+    if (typeof v !== "string") continue;
+    const color = k === "skin" || k.endsWith("Color");
+    if (color ? /^#[0-9a-f]{6}$/i.test(v) : /^[a-z0-9_-]{1,24}$/i.test(v)) out[k] = v;
   }
   return out;
 }
@@ -88,5 +97,6 @@ export function avatarFromSeed(seed: number): AvatarLayers {
     bottomColor: pick(CLOTH_COLORS),
     accessory: pick(AVATAR_OPTIONS.accessory),
     accessoryColor: pick(CLOTH_COLORS),
+    style: pick(AVATAR_OPTIONS.style),
   };
 }

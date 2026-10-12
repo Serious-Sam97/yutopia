@@ -1388,13 +1388,13 @@ export class WorldEngine {
     }
     const { view, mirror } = viewFor(s.d);
     const breathe = walking || this.reducedMotion ? 1 : 1 + Math.sin(this.time * 2.2 + p.x) * 0.012;
-    const lift = sitting ? -9 : 0;
-    const tex = avatarTexture(s.avatar, view, v.frame, sitting);
+    const lift = sitting ? 12 : 0; // the drawing sits its hips on the seat
+    const tex = avatarTexture(s.avatar, view, v.frame, sitting, this.night > 0.5 ? "night" : "day");
     if (tex) {
       v.sprite.texture = tex;
       v.sprite.visible = true;
       v.body.visible = false;
-      const k = 0.37; // 128×200 texture → ~47×74 px
+      const k = 0.5; // 128×200 texture → 64×100 px: City-pop people stand ~92 px tall
       v.sprite.scale.set((mirror ? -1 : 1) * k, k * breathe);
       v.sprite.position.set(0, lift + 2);
     } else {
@@ -1406,7 +1406,7 @@ export class WorldEngine {
       }
       v.body.visible = true;
       v.sprite.visible = false;
-      v.body.scale.set(mirror ? -1 : 1, breathe);
+      v.body.scale.set((mirror ? -1 : 1) * 1.35, 1.35 * breathe); // same size as the drawing it stands in for
       v.body.position.set(0, lift);
     }
     v.root.position.set(p.x, p.y);
@@ -1432,12 +1432,12 @@ export class WorldEngine {
       v.emote.width = EMOTE_PX;
       v.emote.height = EMOTE_PX;
       v.emote.visible = true;
-      v.emote.position.set(0, -105 + lift + (this.reducedMotion ? 0 : Math.sin(this.time * 6) * 2));
+      v.emote.position.set(0, -126 + lift + (this.reducedMotion ? 0 : Math.sin(this.time * 6) * 2));
     } else v.emote.visible = false;
 
     // name tag + bubble (overlay, scale-compensated so text stays crisp)
     const inv = 1 / Math.max(0.7, this.zoom * 0.85);
-    v.tag.position.set(p.x, p.y - 84 + lift);
+    v.tag.position.set(p.x, p.y - 106 + lift);
     v.tag.scale.set(inv);
     v.tag.zIndex = v.local ? 1e6 : p.y;
     v.dot.clear();
@@ -1445,7 +1445,7 @@ export class WorldEngine {
     v.dot.circle(0, 0, 3.2).fill(dotColor);
     if (!s.mic && !s.npc && !s.bot) v.dot.moveTo(-3, -3).lineTo(3, 3).stroke({ width: 1.4, color: C.cream });
     if (v.bubble.visible) {
-      v.bubble.position.set(p.x, p.y - 98 + lift);
+      v.bubble.position.set(p.x, p.y - 120 + lift);
       v.bubble.scale.set(inv);
       v.bubble.zIndex = 2e6;
       if (now > v.bubbleUntil) v.bubble.visible = false;
@@ -1688,7 +1688,8 @@ export class WorldEngine {
     let bestKey = -1;
     for (const [id, v] of this.avatars) {
       const p = toScreen(v.state.x, v.state.y);
-      if (gx > p.x - 14 && gx < p.x + 14 && gy > p.y - 62 && gy < p.y + 4) {
+      // the person's body: ~92 px tall since the City-pop redraw
+      if (gx > p.x - 16 && gx < p.x + 16 && gy > p.y - 92 && gy < p.y + 4) {
         const k = v.state.x + v.state.y;
         if (k > bestKey) {
           bestKey = k;
@@ -1736,7 +1737,8 @@ export class WorldEngine {
     const gy = (e.global.y - this.world.position.y) / this.zoom;
     const w = toWorld(gx, gy);
     const av = this.passAvatars ? null : this.pickAvatar(gx, gy);
-    if (av && av !== this.localId) return this.events.onAvatarClick?.(av);
+    // clicking yourself is handled too (it opens your look)
+    if (av) return this.events.onAvatarClick?.(av);
     const obj = this.pickObject(w.x, w.y, gx, gy);
     if (obj) return this.events.onObjectClick?.(obj);
     this.events.onTileClick?.(w.x, w.y);
@@ -1751,7 +1753,7 @@ export class WorldEngine {
     this.events.onPointerWorld?.(w.x, w.y);
     const id = this.pickObject(w.x, w.y, gx, gy);
     const av = this.pickAvatar(gx, gy);
-    this.app.canvas.style.cursor = id || (av && av !== this.localId) ? "pointer" : "default";
+    this.app.canvas.style.cursor = id || av ? "pointer" : "default";
     if (id !== this.hoverId) {
       this.hoverId = id;
       this.events.onHoverObject?.(id);

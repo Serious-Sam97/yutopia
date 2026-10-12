@@ -88,6 +88,22 @@ test("chat reaches people nearby and is rate-limited", async () => {
   assert.equal(got.length, 5, "burst of 5 then throttled");
 });
 
+test("a new look reaches everyone, validated", async () => {
+  const [a, b] = rooms;
+  const look = { ...JSON.parse(me(a).avatar || "{}"), hair: "afro", style: "ligne", topColor: "#123456" };
+  a.send("avatar", { avatar: look });
+  await waitFor(() => JSON.parse(b.state.players.get(a.sessionId)?.avatar ?? "{}").topColor === "#123456");
+  const seen = JSON.parse(b.state.players.get(a.sessionId)?.avatar ?? "{}");
+  assert.equal(seen.hair, "afro");
+  assert.equal(seen.style, "ligne");
+  assert.equal(seen.topColor, "#123456");
+  // bad values fall back to defaults (and the 2 s limit drops spam)
+  await sleep(2100);
+  a.send("avatar", { avatar: { ...look, topColor: '"/><script>', hair: "x y" } });
+  await waitFor(() => JSON.parse(me(a).avatar).hair !== "afro");
+  assert.match(JSON.parse(me(a).avatar).topColor, /^#[0-9a-f]{6}$/i);
+});
+
 test("emotes show and expire on the player", async () => {
   const a = rooms[0];
   a.send("emote", { e: "wave" });

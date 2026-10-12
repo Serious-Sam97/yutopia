@@ -52,6 +52,7 @@ export type PanelKind =
   | "terminal"
   | "coffee"
   | "settings"
+  | "avatar"
   | null;
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";

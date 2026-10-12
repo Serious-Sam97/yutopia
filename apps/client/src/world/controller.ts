@@ -155,6 +155,8 @@ export class WorldController {
       onTileClick: (x, y) => (hud.get().build.on ? this.buildClick(x, y) : this.walkTo({ x, y })),
       onAvatarClick: (sid) => {
         if (sid.startsWith("npc:")) return this.send("vortex:poke", {});
+        // click yourself to change your look; anyone else to see who they are
+        if (sid === this.room?.sessionId) return hud.set({ panel: { kind: "avatar" } });
         const p = this.room?.state.players.get(sid);
         if (p && !p.bot) hud.set({ inspect: p.uid });
       },

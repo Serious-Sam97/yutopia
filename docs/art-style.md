@@ -1,10 +1,30 @@
 # Yutopia art style — environment
 
-**"Illustrated 1984 studio, golden-hour warm."** Items, walls and floors are drawn by
-the same hand as the people (`apps/client/src/world/art/avatar-svg.ts`): clean warm-ink
+**"Illustrated 1984 studio, golden-hour warm."** Items, walls and floors: clean warm-ink
 outlines, three-tone shading lit from the upper-left, gentle gradients, and small details
 that reward zooming in. Review sheets: `/dev/items` (items), `/dev/sheet` (people), both
 dev-only. Reference shots: `design/screens/visual/`.
+
+## People — City-pop 80s anime (default) or Ligne claire
+
+Each person picks their style in the avatar editor (`AvatarLayers.style`: `citypop` |
+`ligne`; Yondra validates it, older avatars default to `citypop`). **Ligne claire** draws
+the same figure and poses with one even black line (`#151515`), flat colours, dot eyes,
+thin brows and a nose hook — no shade shapes, hair gradient or rim light. Review it with
+`/dev/sheet?style=ligne`; `/dev/shots?crowd=N` alternates the two styles.
+
+### City-pop
+
+`apps/client/src/world/art/avatar-svg.ts`. About 5½ heads tall, drawn on a 120×180 board
+(feet on y = 168) and fitted into the engine's 64×100 texture box (shown at 0.5 →
+~92 px tall at zoom 1). Flat fills with **hard violet shade shapes** on the right side
+(`shade()` mixes towards `#2a1a5e`), gradient hair with a highlight band, big glossy
+eyes, thin plum ink (`#2a1430`). A **rim light** runs down the edges: warm + sky blue by
+day, neon pink + cyan at night (`Rim`, picked by the engine from the hour). Five drawn
+views (S, SW, W, NW, N; the rest mirror), every hair style has a real back and side —
+never a bare scalp. Seated poses put the hips on the seat (engine `lift` 12); from
+behind, the chair's backrest (the `bias` part) sorts in front, so only head and
+shoulders show. Frame 0 is both "standing" and the walk's passing frame.
 
 ## Rules every item follows
 

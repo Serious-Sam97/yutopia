@@ -1,5 +1,7 @@
 // Messages between client and world-server (Colyseus room "space").
 
+import type { AvatarLayers } from "./avatar";
+
 export const ROOM_NAME = "space";
 export const TICK_HZ = 20;
 export const HEARING_HZ = 4;
@@ -22,6 +24,7 @@ export interface JoinOptions {
 export interface ClientMessages {
   pos: { x: number; y: number; d: number; a: number; seq: number };
   emote: { e: Emote };
+  avatar: { avatar: AvatarLayers }; // after saving it in Yondra: everyone sees the new look now
   chat: { text: string; scope: ChatScope };
   "chat:react": { id: string; e: Emote }; // toggles my reaction on a message I received
   status: { status: Status };

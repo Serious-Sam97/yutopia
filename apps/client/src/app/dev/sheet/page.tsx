@@ -2,6 +2,7 @@
 
 import { type AvatarLayers, avatarFromSeed, DEFAULT_AVATAR } from "@yutopia/shared";
 import { notFound } from "next/navigation";
+import { useEffect, useState } from "react";
 import { avatarSvg, type View } from "@/world/art/avatar-svg";
 import { vortexSvg } from "@/world/art/vortex/vortexArt";
 
@@ -17,7 +18,8 @@ const VIEWS: [View, boolean][] = [
   ["SW", true],
 ];
 
-const CAST: AvatarLayers[] = [
+// ?style=ligne draws the whole cast in Ligne claire (default: City-pop)
+const CAST: Omit<AvatarLayers, "style">[] = [
   DEFAULT_AVATAR,
   {
     body: "slim",
@@ -99,13 +101,17 @@ const src = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURICompon
 export default function Sheet() {
   // review tool only: not served in production builds
   if (process.env.NODE_ENV === "production") notFound();
-  const q = typeof window !== "undefined" ? new URLSearchParams(location.search) : new URLSearchParams();
+  // read after mount: the server render has no URL, and hydration would keep its defaults
+  const [q, setQ] = useState(() => new URLSearchParams());
+  useEffect(() => setQ(new URLSearchParams(location.search)), []);
   const z = Number(q.get("z") ?? 1);
   const only = q.get("n") ? Number(q.get("n")) : CAST.length;
+  const style = q.get("style") ?? "citypop";
+  const cast: AvatarLayers[] = CAST.slice(0, only).map((c) => ({ ...c, style }));
   return (
     <main style={{ background: "#2a1c13", minHeight: "100%", overflow: "auto", padding: 16, height: "100vh" }}>
       <h1 className="lcd text-2xl mb-2">YUTOPIA · CHARACTER SHEET</h1>
-      {CAST.slice(0, only).map((a) => (
+      {cast.map((a) => (
         <div
           key={`${a.hair}-${a.top}-${a.skin}`}
           style={{

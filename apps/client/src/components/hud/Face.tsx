@@ -9,7 +9,7 @@ const cache = new Map<string, string>();
 function portrait(seed: string): string {
   let url = cache.get(seed);
   if (!url) {
-    const svg = avatarSvg(parseAvatar(seed), "S", 0, false, 1).replace('viewBox="0 0 64 100"', 'viewBox="16 8 32 32"');
+    const svg = avatarSvg(parseAvatar(seed), "S", 0, false, 1).replace('viewBox="0 0 64 100"', 'viewBox="20 5 24 24"');
     url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     cache.set(seed, url);
   }
