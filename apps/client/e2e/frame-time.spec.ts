@@ -35,6 +35,14 @@ test("frame time over the Tracking Room", async ({ page }) => {
         const r = e.app.renderer;
         const render = r.render.bind(r);
         const t: number[] = [];
+        // and the world's own work per frame (avatars, walls, life, light)
+        const logic: number[] = [];
+        const update = e.update.bind(e);
+        e.update = (dt: number) => {
+          const t0 = performance.now();
+          update(dt);
+          logic.push(performance.now() - t0);
+        };
         r.render = (...a: unknown[]) => {
           const t0 = performance.now();
           render(...a);
@@ -43,8 +51,18 @@ test("frame time over the Tracking Room", async ({ page }) => {
         };
         setTimeout(() => {
           r.render = render;
+          e.update = update;
           t.sort((a, b) => a - b);
-          done({ median: t[Math.floor(t.length / 2)], p95: t[Math.floor(t.length * 0.95)], stats: e.stats() });
+          logic.sort((a, b) => a - b);
+          done({
+            median: t[Math.floor(t.length / 2)],
+            p95: t[Math.floor(t.length * 0.95)],
+            stats: {
+              logicMedian: logic[Math.floor(logic.length / 2)],
+              logicP95: logic[Math.floor(logic.length * 0.95)],
+              ...e.stats(),
+            },
+          });
         }, 8000);
       }),
   );

@@ -7,7 +7,9 @@ import {
   doorRoom,
   edgeBlocker,
   Grid,
+  isDressing,
   isFloor,
+  isTheme,
   MAP_MAX,
   MAP_MIN,
   type MapDef,
@@ -141,6 +143,11 @@ registerFeature((room: SpaceRoom) => {
     room.broadcastMsg("toast", { text: `A blank ${w}×${h} studio. Time to build.` });
   });
 
+  room.on("map:theme", (client, m) => {
+    if (!builder(client) || !isTheme(m.theme)) return;
+    room.commitMap({ ...room.map, theme: m.theme });
+  });
+
   room.on("map:spawn", (client, m) => {
     if (!builder(client)) return;
     const x = Math.floor(Number(m.x));
@@ -194,6 +201,7 @@ registerFeature((room: SpaceRoom) => {
       const next = { ...a };
       if (typeof m.name === "string" && m.name.trim()) next.name = m.name.trim().slice(0, 40);
       if (ROOM_KINDS.includes(m.kind as never)) next.kind = m.kind as (typeof ROOM_KINDS)[number];
+      if (m.dressing !== undefined) next.dressing = isDressing(m.dressing) ? m.dressing : null;
       if (m.ownerId !== undefined) {
         next.ownerId = Number.isInteger(m.ownerId) && (m.ownerId as number) > 0 ? (m.ownerId as number) : null;
         next.ownerName = next.ownerId ? String(m.ownerName ?? "").slice(0, 120) || null : null;
@@ -232,6 +240,16 @@ registerFeature((room: SpaceRoom) => {
       delete props.ownerName;
     }
     void save({ ...def, props });
+  });
+
+  // lamps click on and off for whoever stands next to them
+  room.on("lamp:set", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const o = room.state.objects.get(String(m.id));
+    if (!p || !o || o.kind !== "lamp") return;
+    if (Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5)) > 2.5) return;
+    const def = fromSchema(o);
+    void save({ ...def, props: { ...(def.props ?? {}), on: !!m.on } });
   });
 
   room.on("door:set", (client, m) => {

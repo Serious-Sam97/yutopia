@@ -30,6 +30,7 @@ import {
   TextStyle,
   Texture,
 } from "pixi.js";
+import type { Quality } from "@/lib/prefs";
 import { avatarContext, viewFor, WALK_FRAMES } from "./art/avatar";
 import { type Daylight, daylight, hourForNight } from "./art/daylight";
 import { FloorBake, floorRes } from "./art/floors";
@@ -40,6 +41,7 @@ import { C } from "./art/palette";
 import {
   drawFlat,
   drawFloors,
+  dressParts,
   itemArtLoaded,
   loadItemArt,
   objectFlat,
@@ -49,8 +51,11 @@ import {
   setArtRes,
   wallParts,
 } from "./art/scene";
-import { acquireItem, avatarTexture, itemTextureStats, vortexTexture } from "./art/textures";
+import { acquireItem, avatarTexture, itemsPending, itemTextureStats, vortexTexture } from "./art/textures";
+import type { ThemeView } from "./art/themes";
 import type { VortexMood } from "./art/vortex/vortexArt";
+import type { Life, Swayable } from "./life";
+import type { Post } from "./post";
 
 const VORTEX_MOODS = new Set([
   "smug",
@@ -122,6 +127,9 @@ interface PartView {
   at?: [number, number]; // where its light is sampled (world tiles)
   bloom?: Sprite; // a copy of the emissive layer in the bloom pass
   edge?: Part["edge"]; // the wall it is (or hangs on), for wall-down
+  high?: Container; // walls: the upper layer, faded on its own
+  highBox?: Graphics;
+  highSprite?: Sprite;
   art?: boolean; // has an illustrated drawing
   ready?: boolean; // …and it's showing
   onReady?: () => void;
@@ -161,7 +169,7 @@ function lightKey(o: WorldObjectDef | undefined): string {
   return `${shut}|${o.props?.on}`;
 }
 
-function _isFloorAt(map: MapDef, x: number, y: number): boolean {
+function isFloorAt(map: MapDef, x: number, y: number): boolean {
   return isFloor(tileAt(map, x, y));
 }
 
@@ -217,11 +225,18 @@ export class WorldEngine {
   app!: Application;
   map: MapDef;
   private world = new Container();
+  // what surrounds the studio (the space's theme): a backdrop + the building below the floor
+  private theme: ThemeView | null = null;
+  private themeKey = "";
+  private backdropLayer = new Container();
+  private shellBody = new Graphics();
+  private shellLights = new Graphics();
   private floorLayer = new Graphics(); // quick floor, until the bake is in
   private floorArt = new Container(); // baked floor chunks
   private flatLayer = new Graphics();
   private flatArtLayer = new Container();
   private shadowLayer = new Container();
+  private lifeFront = new Container();
   private sortLayer = new Container();
   private darkLayer = new Graphics();
   private floorLight = new Sprite(); // ambient + baked light, multiplied onto the floor
@@ -231,6 +246,11 @@ export class WorldEngine {
   private markerG = new Graphics();
   private ghostLayer = new Container();
   private walls: PartView[] = [];
+  private dress: PartView[] = []; // the rooms' clutter
+  private bumps: { parts: PartView[]; t: number; len: number; amp: number }[] = [];
+  private life: Life | null = null; // ambient motion
+  private post: Post | null = null; // High: warm grade, vignette, film grain
+  private dressDue = 0;
   private objectViews = new Map<string, ObjectView>();
   private avatars = new Map<string, AvatarView>();
   private boardContent = new Map<string, BoardContent>();
@@ -242,7 +262,7 @@ export class WorldEngine {
   private camFocus = { x: 0, y: 0 };
   private marker: { x: number; y: number; t: number } | null = null;
   private highlightId: string | null = null;
-  private quality: "high" | "low" = "high";
+  private quality: Quality = "high";
   private reducedMotion = false;
   private night = 0;
   private time = 0;
@@ -253,7 +273,7 @@ export class WorldEngine {
     this.map = map;
   }
 
-  async init(host: HTMLElement, opts: { quality: "high" | "low"; reducedMotion: boolean }) {
+  async init(host: HTMLElement, opts: { quality: Quality; reducedMotion: boolean }) {
     this.quality = opts.quality;
     this.reducedMotion = opts.reducedMotion;
     setArtRes(this.artRes());
@@ -263,7 +283,10 @@ export class WorldEngine {
       background: 0x17110d,
       antialias: true,
       autoDensity: true,
-      resolution: Math.min(window.devicePixelRatio || 1, opts.quality === "high" ? 2 : 1),
+      resolution: Math.min(
+        window.devicePixelRatio || 1,
+        opts.quality === "high" ? 2 : opts.quality === "medium" ? 1.5 : 1,
+      ),
       preference: "webgl",
     });
     if (this.destroyed) {
@@ -278,6 +301,8 @@ export class WorldEngine {
     this.sortLayer.sortableChildren = true;
     this.overlay.sortableChildren = true;
     this.world.addChild(
+      this.shellBody,
+      this.shellLights,
       this.floorLayer,
       this.floorArt,
       this.flatLayer,
@@ -287,18 +312,29 @@ export class WorldEngine {
       this.highlightG,
       this.markerG,
       this.sortLayer,
+      this.lifeFront,
       this.ghostLayer,
       this.darkLayer,
       this.bloomLayer,
       this.overlay,
     );
-    app.stage.addChild(this.world);
+    app.stage.addChild(this.backdropLayer, this.world);
+    // the finish (High) and ambient life load in their own chunk, after the world is up
+    void Promise.all([import("./post"), import("./life")]).then(([{ Post }, { Life }]) => {
+      if (this.destroyed) return;
+      this.post = new Post(app.stage);
+      this.life = new Life(this.sortLayer, this.shadowLayer);
+      this.lifeFront.addChild(this.life.front);
+      this.applyPost();
+      this.rebuildDressing(true); // gives life its scene
+    });
     this.darkLayer.blendMode = "multiply";
     this.floorLight.blendMode = "multiply";
     this.floorLight.visible = false;
     this.bloomLayer.blendMode = "add";
-    const blur = new BlurFilter({ strength: 7, quality: 3 });
-    blur.resolution = 0.5;
+    const blur = new BlurFilter({ strength: 7, quality: 2 });
+    // a quarter-resolution blur is plenty for a glow, and it's cheap
+    blur.resolution = 0.25;
     // a filtered container is composited with the filter's blend mode: add, so
     // the black (occluding) parts of the emissive layer add nothing
     blur.blendMode = "add";
@@ -345,10 +381,12 @@ export class WorldEngine {
   private drawStatic() {
     this.floorLayer.clear();
     drawFloors(this.floorLayer, this.map);
+    this.applyTheme();
     this.bakeFloors(true);
     for (const w of this.walls) this.unmountPart(w);
     this.walls = wallParts(this.map).map((part) => this.mountPart(part, this.sortLayer));
     this.bakeLight(true);
+    this.rebuildDressing(true);
     this.applyLight();
     this.drawLabels();
   }
@@ -508,7 +546,14 @@ export class WorldEngine {
     if (o.props?.ownerName || o.kind === "chair" || o.kind === "armchair" || o.kind === "door") this.labelsDirty = true;
     this.objectViews.set(o.id, view);
     const moved = !old || old.def.x !== o.x || old.def.y !== o.y || old.def.rot !== o.rot;
+    // feedback: a door swings as it opens or shuts, a chair wobbles as someone sits or stands
+    if (old && !moved && this.animated()) {
+      const swung = o.kind === "door" && lightKey(old.def) !== lightKey(o);
+      const sat = (o.kind === "chair" || o.kind === "armchair") && !!old.def.props?.occupied !== !!o.props?.occupied;
+      if (swung || sat) this.bumps.push({ parts, t: 0, len: swung ? 0.28 : 0.45, amp: swung ? 0.22 : 0.07 });
+    }
     if (affectsFloor(o) && moved) this.bakeFloors();
+    if (moved) this.rebuildDressing();
     if (affectsLight(o) && (moved || lightKey(old?.def) !== lightKey(o))) this.bakeLight();
     this.tintObject(view);
     if (o.kind === "board_wall" || o.kind === "screen_wall") this.drawDisplay(o.id);
@@ -523,6 +568,7 @@ export class WorldEngine {
     const v = this.objectViews.get(id);
     if (!v) return;
     if (affectsFloor(v.def)) this.bakeFloors();
+    this.rebuildDressing();
     if (affectsLight(v.def)) this.bakeLight();
     this.dropView(v);
     this.objectViews.delete(id);
@@ -536,6 +582,133 @@ export class WorldEngine {
     if (v.shadow) this.unmountPart(v.shadow);
     if (v.flat) this.unmountPart(v.flat);
     this.clearDisplays(v);
+  }
+
+  // Low: people are the only thing that moves; reduced motion: nothing extra.
+  private animated(): boolean {
+    return this.quality !== "low" && !this.reducedMotion;
+  }
+
+  private applyPost() {
+    this.post?.setEnabled(this.quality === "high");
+  }
+
+  // Everything drawn and baked: drawings decoded, floor + light + dressing
+  // built, the theme in (screenshot tests wait for this).
+  settled(): boolean {
+    return (
+      !!itemArtLoaded() &&
+      itemsPending() === 0 &&
+      !this.floorJob &&
+      !this.floorDue &&
+      !this.lightDue &&
+      !this.dressDue &&
+      !!this.theme &&
+      !!this.post &&
+      !!this.life &&
+      this.themeKey.startsWith(this.map.theme ?? "clouds")
+    );
+  }
+
+  // Rough GPU texture memory: item drawings, the baked floor, the light map.
+  textureMB(): number {
+    let bytes = itemTextureStats().mb * 1048576;
+    for (const c of this.floorArt.children as Sprite[]) {
+      const src = c.texture?.source;
+      if (src) bytes += src.pixelWidth * src.pixelHeight * 4 * 1.33;
+    }
+    if (this.lightCanvas) bytes += this.lightCanvas.width * this.lightCanvas.height * 4;
+    return Math.round(bytes / 1048576);
+  }
+
+  getQuality(): Quality {
+    return this.quality;
+  }
+
+  // ── dressing ─────────────────────────────────────────────────────────────
+  private rebuildDressing(now = false) {
+    this.dressDue = now ? performance.now() : performance.now() + 250;
+  }
+
+  private stepDressing() {
+    if (!this.dressDue || performance.now() < this.dressDue) return;
+    this.dressDue = 0;
+    for (const v of this.dress) this.unmountPart(v);
+    this.dress = [];
+    for (const { part, item, shadow } of dressParts(this.map, this.allObjects())) {
+      this.dress.push(this.mountPart(part, this.sortLayer));
+      const pseudo = { id: item.id, kind: "dress", x: item.x - 0.5, y: item.y - 0.5 } as WorldObjectDef;
+      const sh = this.mountFloorArt(pseudo, shadow, this.shadowLayer);
+      if (sh) this.dress.push(sh);
+    }
+    for (const v of this.dress) {
+      const t = v.at ? this.tintAt(v.at[0], v.at[1]) : 0xffffff;
+      if (v.sprite) v.sprite.tint = t;
+    }
+    // ambient life follows the same scene
+    const sways: Swayable[] = [];
+    for (const v of this.objectViews.values())
+      if (v.def.kind === "plant" && v.parts[0])
+        sways.push({ root: v.parts[0].root, x: v.def.x + 0.5, y: v.def.y + 0.5, kick: 0 });
+    const items = dressParts(this.map, this.allObjects());
+    let k = 0;
+    for (const v of this.dress) {
+      const it = items[k];
+      if (v.sprite && it?.item.kind === "plant") sways.push({ root: v.root, x: it.item.x, y: it.item.y, kick: 0 });
+      if (v.sprite) k++;
+    }
+    this.life?.setScene(this.map, this.allObjects(), sways);
+  }
+
+  private updateLife(dt: number) {
+    const life = this.life;
+    if (!life) return;
+    life.enabled = this.quality !== "low" && !this.reducedMotion;
+    const emits: { sprite: Container; base: number; kind: string; seed: number }[] = [];
+    const base = Math.min(0.75, this.night * 0.85);
+    if (life.enabled)
+      for (const v of this.objectViews.values()) {
+        const kind = v.def.kind;
+        if (kind !== "desk" && kind !== "crt_terminal" && kind !== "arcade") continue;
+        for (const p of v.parts)
+          if (p.emit?.visible) emits.push({ sprite: p.emit, base, kind, seed: v.def.x * 0.13 + v.def.y * 0.71 });
+      }
+    const people: { x: number; y: number }[] = [];
+    for (const a of this.avatars.values()) people.push({ x: a.state.x, y: a.state.y });
+    let radio = false;
+    for (const v of this.objectViews.values()) if (v.def.kind === "radio" && v.def.props?.on) radio = true;
+    life.update({ dt, time: this.time, people, radio, night: this.night, emits });
+  }
+
+  // ── the theme around the studio ──────────────────────────────────────────
+  // Themes load in their own chunk; the shell is drawn once the theme is in.
+  private applyTheme() {
+    const key = `${this.map.theme ?? "clouds"}|${this.quality}`;
+    if (key === this.themeKey) {
+      this.theme?.drawShell(
+        this.shellBody,
+        this.shellLights,
+        (x, y) => isFloorAt(this.map, x, y),
+        this.map.width,
+        this.map.height,
+      );
+      return;
+    }
+    this.themeKey = key;
+    import("./art/themes").then(({ makeTheme }) => {
+      if (this.destroyed || this.themeKey !== key) return;
+      this.theme?.destroy();
+      this.theme = makeTheme(this.map.theme ?? "clouds", this.animated(), this.quality);
+      this.backdropLayer.addChild(this.theme.root);
+      this.theme.setDay(this.day);
+      this.theme.drawShell(
+        this.shellBody,
+        this.shellLights,
+        (x, y) => isFloorAt(this.map, x, y),
+        this.map.width,
+        this.map.height,
+      );
+    });
   }
 
   // ── baked floors ───────────────────────────────────────────────────────────
@@ -553,7 +726,7 @@ export class WorldEngine {
       this.floorDue = 0;
       for (const sp of this.floorJob?.sprites ?? []) sp.destroy(true);
       const t = performance.now();
-      const bake = new FloorBake(this.map, this.allObjects(), floorRes(this.map, this.quality === "high"));
+      const bake = new FloorBake(this.map, this.allObjects(), floorRes(this.map, this.quality));
       this.floorStats = {
         setupMs: performance.now() - t,
         maxChunkMs: 0,
@@ -585,7 +758,7 @@ export class WorldEngine {
 
   private artRes() {
     const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
-    return this.quality === "high" ? (dpr >= 2 ? 2.5 : 2) : 1.25;
+    return this.quality === "high" ? (dpr >= 2 ? 2.5 : 2) : this.quality === "medium" ? 1.5 : 1.25;
   }
 
   // Box art right away; the illustrated drawing replaces it once decoded.
@@ -598,6 +771,7 @@ export class WorldEngine {
     root.addChild(box);
     parent.addChild(root);
     const view: PartView = { root, release: [], emit: null, box, at: p.at ?? [p.wx + 0.5, p.wy + 0.5], edge: p.edge };
+    if (p.high) this.mountHigh(view, p.high, this.artRes());
     const pa = p.art;
     const art = pa?.get();
     if (!pa || !art) return view;
@@ -613,6 +787,8 @@ export class WorldEngine {
     place(sprite);
     root.addChild(sprite);
     view.sprite = sprite;
+    // a wall's upper layer always draws over its lower one
+    if (view.high) root.addChild(view.high);
     view.release.push(
       acquireItem(
         pa.key,
@@ -705,6 +881,37 @@ export class WorldEngine {
     return view;
   }
 
+  // A wall's upper layer: its own box art + drawing, in a child that fades.
+  private mountHigh(view: PartView, h: NonNullable<Part["high"]>, res: number) {
+    const hc = new Container();
+    const box = new Graphics(h.ctx);
+    hc.addChild(box);
+    view.root.addChild(hc);
+    view.high = hc;
+    view.highBox = box;
+    const pa = h.art;
+    const art = pa?.get();
+    if (!pa || !art) return;
+    const sprite = new Sprite();
+    sprite.visible = false;
+    sprite.position.set(art.x - pa.ox, art.y - pa.oy);
+    sprite.scale.set(1 / res);
+    hc.addChild(sprite);
+    view.highSprite = sprite;
+    view.release.push(
+      acquireItem(
+        pa.key,
+        () => art.svg,
+        (t) => {
+          sprite.texture = t;
+          sprite.scale.set(art.w / t.width, art.h / t.height);
+          sprite.visible = true;
+          box.visible = false;
+        },
+      ),
+    );
+  }
+
   // The emissive layer again, in the blurred bloom pass (High only).
   private bloomTwin(emit: Sprite, root: Container): Sprite {
     const b = new Sprite(emit.texture);
@@ -726,7 +933,7 @@ export class WorldEngine {
   private lightEmit(v: PartView) {
     const s = v.emit;
     if (!s) return;
-    const on = this.quality === "high" && this.night > 0.02 && s.texture !== Texture.EMPTY;
+    const on = this.quality !== "low" && this.night > 0.02 && s.texture !== Texture.EMPTY;
     s.visible = on;
     s.alpha = Math.min(0.75, this.night * 0.85);
     if (v.bloom) {
@@ -846,11 +1053,13 @@ export class WorldEngine {
   ) {
     const o = v.def;
     const S = 36;
-    const origin = toScreen(o.x + ox, o.y + oy);
+    // on the face of the thin wall (WALL_FACE in front of the tile edge)
+    const origin = toScreen(o.x + ox, o.y + oy + 0.1);
     const tiles = footprint(o.kind, 0).w;
-    for (let k = 0; k < tiles; k++) {
-      const u0 = Math.max(0, (k - ox) * S);
-      const u1 = Math.min(pw, (k + 1 - ox) * S);
+    // a quarter of a tile per slice, like the wall and the board it's on
+    for (let k = 0; k < tiles * 4; k++) {
+      const u0 = Math.max(0, (k / 4 - ox) * S);
+      const u1 = Math.min(pw, ((k + 1) / 4 - ox) * S);
       if (u1 <= u0) continue;
       const wrap = new Container();
       wrap.setFromMatrix(new Matrix(TILE_W / 2 / S, TILE_H / 2 / S, 0, 1, origin.x, origin.y - zTop));
@@ -858,7 +1067,7 @@ export class WorldEngine {
       const mask = new Graphics().rect(u0, -2, u1 - u0, ph + 4).fill(0xffffff);
       wrap.addChild(content, mask);
       content.mask = mask;
-      wrap.zIndex = o.x + k + o.y + 0.03;
+      wrap.zIndex = o.x + (k + 0.5) / 4 + o.y + 0.02;
       this.sortLayer.addChild(wrap);
       v.displays.push(wrap);
     }
@@ -1061,9 +1270,20 @@ export class WorldEngine {
     const W = this.app.renderer.width / this.app.renderer.resolution;
     const H = this.app.renderer.height / this.app.renderer.resolution;
     this.world.scale.set(this.zoom);
+    this.theme?.update(dt, W, H, this.cam.x, this.cam.y, this.zoom);
+    this.post?.update(W, H, dt > 0 && !this.reducedMotion); // grain only moves while time does
     this.world.position.set(Math.round(W / 2 - this.cam.x * this.zoom), Math.round(H / 2 - this.cam.y * this.zoom));
 
     this.stepFloorBake();
+    this.stepDressing();
+
+    this.updateLife(dt);
+    for (const b of this.bumps) {
+      b.t += dt;
+      const k = Math.max(0, 1 - b.t / b.len);
+      for (const p of b.parts) if (!p.root.destroyed) p.root.skew.x = Math.sin(b.t * 28) * b.amp * k * k;
+    }
+    this.bumps = this.bumps.filter((b) => b.t < b.len);
     this.stepLight();
     if (this.labelsDirty) {
       this.labelsDirty = false;
@@ -1200,26 +1420,34 @@ export class WorldEngine {
     }
   }
 
-  // Wall-down: the upper part of walls standing between you and the camera
-  // (south / east of you, close by) fades to its skirting, like The Sims; so do
+  // Wall-down: the upper part of walls standing between the camera and what
+  // it looks at (south / east of the view's focus) fades to its skirting, like The Sims; so do
   // the boards on them and the doors in them.
-  private updateWalls(local: AvatarView | undefined) {
-    const px = local?.state.x ?? -99;
-    const py = local?.state.y ?? -99;
+  private updateWalls(_local: AvatarView | undefined) {
+    // around what you're looking at: the camera's focus (you, when it follows you)
+    const focus = toWorld(this.camFocus.x, this.camFocus.y + 30);
+    const px = focus.x;
+    const py = focus.y;
     const k = this.reducedMotion ? 1 : 0.2;
     const fade = (v: PartView) => {
       const e = v.edge;
       if (!e?.high) return;
+      const node = v.high ?? v.root;
       const down =
         e.dir === "h"
-          ? e.y > py && e.y - py < 5 && Math.abs(e.x + 0.5 - px) < 4.5
-          : e.x > px && e.x - px < 5 && Math.abs(e.y + 0.5 - py) < 4.5;
+          ? e.y > py && e.y - py < 9 && Math.abs(e.x + 0.5 - px) < 8
+          : e.x > px && e.x - px < 9 && Math.abs(e.y + 0.5 - py) < 8;
       const target = down ? 0.06 : 1;
-      if (Math.abs(v.root.alpha - target) > 0.005) v.root.alpha += (target - v.root.alpha) * k;
-      else v.root.alpha = target;
+      if (Math.abs(node.alpha - target) > 0.005) node.alpha += (target - node.alpha) * k;
+      else node.alpha = target;
     };
     for (const w of this.walls) fade(w);
-    for (const v of this.objectViews.values()) for (const p of v.parts) fade(p);
+    for (const d of this.dress) fade(d);
+    for (const v of this.objectViews.values()) {
+      for (const p of v.parts) fade(p);
+      // live displays (boards, screens, whiteboards) go with the wall they're on
+      if (v.displays.length && v.parts[0]) for (const d of v.displays) d.alpha = v.parts[0].root.alpha;
+    }
   }
 
   // ── lighting ─────────────────────────────────────────────────────────────
@@ -1249,7 +1477,7 @@ export class WorldEngine {
     this.setClock(hourForNight(level));
   }
 
-  setQuality(q: "high" | "low", reducedMotion: boolean) {
+  setQuality(q: Quality, reducedMotion: boolean) {
     const changed = q !== this.quality;
     this.quality = q;
     this.reducedMotion = reducedMotion;
@@ -1258,6 +1486,8 @@ export class WorldEngine {
       setArtRes(this.artRes());
       for (const v of [...this.objectViews.values()]) this.upsertObject(v.def, false);
       this.bakeFloors(true);
+      this.applyTheme();
+      this.rebuildDressing(true);
     }
     this.applyLight();
   }
@@ -1277,11 +1507,13 @@ export class WorldEngine {
   }
 
   private lit(): boolean {
-    return this.quality === "high" && !!this.lightMap;
+    return this.quality !== "low" && !!this.lightMap;
   }
 
+  // The light at a point (baked: lamps, windows). On Low everything is white
+  // here and one flat multiply layer over the scene sets the hour instead.
   private tintAt(x: number, y: number): number {
-    return this.lit() ? (this.lightMap as LightMap).tintAt(x, y, this.day.ambient) : 0xffffff;
+    return this.lit() ? (this.lightMap as LightMap).tintAt(x, y, this.day.ambient, this.day.window) : 0xffffff;
   }
 
   private tintObject(v: ObjectView) {
@@ -1300,7 +1532,11 @@ export class WorldEngine {
     if (lit) {
       const lm = this.lightMap as LightMap;
       const fresh = !this.lightCanvas || this.lightCanvas.width !== lm.w || this.lightCanvas.height !== lm.h;
-      this.lightCanvas = lm.composite(this.day.ambient, fresh ? undefined : (this.lightCanvas ?? undefined));
+      this.lightCanvas = lm.composite(
+        this.day.ambient,
+        this.day.window,
+        fresh ? undefined : (this.lightCanvas ?? undefined),
+      );
       if (fresh || this.floorLight.texture === Texture.EMPTY) {
         this.floorLight.texture?.destroy(true);
         this.floorLight.texture = Texture.from(this.lightCanvas, true);
@@ -1311,10 +1547,10 @@ export class WorldEngine {
     }
     // walls take the light of the floor in front of their face (per slice, so
     // the light runs smoothly along them)
+    for (const d of this.dress) if (d.sprite && d.at) d.sprite.tint = this.tintAt(d.at[0], d.at[1]);
     for (const w of this.walls) {
       const t = w.at ? this.tintAt(w.at[0], w.at[1]) : 0xffffff;
-      if (w.sprite) w.sprite.tint = t;
-      if (w.box) w.box.tint = t;
+      for (const n of [w.sprite, w.box, w.highSprite, w.highBox]) if (n) n.tint = t;
     }
     for (const v of this.objectViews.values()) {
       this.tintObject(v);
@@ -1322,9 +1558,24 @@ export class WorldEngine {
       if (v.flat) this.lightEmit(v.flat);
     }
     this.bloomLayer.visible = this.quality === "high" && this.night > 0.02 && !this.reducedMotion;
-    // Low quality: the old flat dimming, nothing baked
+    // the sky outside: clouds drift unless motion is reduced
+    this.theme?.setAnimate(this.animated());
+    this.applyPost();
+    this.theme?.setDay(this.day);
+    const a = this.day.ambient;
+    this.shellBody.tint = (Math.round(a[0] * 255) << 16) | (Math.round(a[1] * 255) << 8) | Math.round(a[2] * 255);
+    this.shellLights.alpha = Math.min(1, this.day.night * 1.1);
+    this.shellLights.visible = this.day.night > 0.05;
+    // Low: nothing baked — one multiply layer in the hour's ambient colour over everything
     this.darkLayer.clear();
-    this.darkLayer.visible = false;
+    this.darkLayer.visible = !lit;
+    if (!lit) {
+      const a = this.day.ambient;
+      const w = (this.map.width + this.map.height) * (TILE_W / 2);
+      this.darkLayer
+        .rect(-w, -WALL_H - 200, w * 2, w + 400)
+        .fill((Math.round(a[0] * 255) << 16) | (Math.round(a[1] * 255) << 8) | Math.round(a[2] * 255));
+    }
   }
 
   // ── markers / highlight ──────────────────────────────────────────────────

@@ -20,6 +20,7 @@ import {
   Grid,
   getMap,
   hearingGain,
+  isTheme,
   isWallEdge,
   type MapDef,
   moveStep,
@@ -41,7 +42,7 @@ import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
 import { disconnectEcho, getEcho } from "@/lib/echo";
 import { tr } from "@/lib/i18n";
-import { prefs, subscribePrefs } from "@/lib/prefs";
+import { deviceQuality, prefs, type Quality, resolveQuality, subscribePrefs } from "@/lib/prefs";
 import { mixer } from "./audio";
 import { type AvatarState, WorldEngine } from "./engine";
 import { Media } from "./media";
@@ -140,7 +141,8 @@ export class WorldController {
 
     const engine = new WorldEngine(this.map);
     this.engine = engine;
-    await engine.init(this.host, { quality: prefs().quality, reducedMotion: prefs().reducedMotion });
+    this.autoTier = deviceQuality();
+    await engine.init(this.host, { quality: this.qualityNow(), reducedMotion: prefs().reducedMotion });
     if (this.stopped) return engine.destroy();
     engine.events = {
       onTileClick: (x, y) => (hud.get().build.on ? this.buildClick(x, y) : this.walkTo({ x, y })),
@@ -153,7 +155,7 @@ export class WorldController {
         const o = this.engine?.getObject(id);
         const b = hud.get().build;
         // the door brush removes a door you click on
-        if (b.on && b.tool === "walls" && b.brush === "door" && o?.kind === "door")
+        if (b.on && b.tool === "walls" && b.brush.startsWith("door") && o?.kind === "door")
           return this.send("obj:remove", { id: o.id });
         if (b.on && o && b.tool === "walls") return; // walls/floors paint by dragging
         if (b.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
@@ -164,7 +166,9 @@ export class WorldController {
       onPointerDown: (x, y) => this.buildDown(x, y),
       onPointerUp: (x, y) => this.buildUp(x, y),
     };
-    this.offPrefs = subscribePrefs(() => this.engine?.setQuality(prefs().quality, prefs().reducedMotion));
+    this.offPrefs = subscribePrefs(() => this.engine?.setQuality(this.qualityNow(), prefs().reducedMotion));
+    // Auto quality: step down a tier when this device can't keep up
+    this.timers.push(setInterval(() => this.watchFrameRate(), 1000));
     this.updateNight();
 
     await this.join();
@@ -686,6 +690,11 @@ export class WorldController {
       toast(tr("coffeeMade"));
       return;
     }
+    if (e.interact === "lamp") {
+      mixer.blip("click");
+      this.send("lamp:set", { id, on: o.props?.on === false });
+      return;
+    }
     if (e.interact === "terminal") this.send("vortex:poke", {});
     this.onOpenPanel(e.interact, id);
   }
@@ -948,8 +957,8 @@ export class WorldController {
   buildHover(x: number, y: number) {
     if (!hud.get().build.on || !this.engine) return;
     const bb = hud.get().build;
-    if (bb.tool === "walls" && (bb.brush.startsWith("w:") || bb.brush === "door")) {
-      const e = nearestEdge(x, y);
+    if (bb.tool === "walls" && (bb.brush.startsWith("w:") || bb.brush.startsWith("door"))) {
+      const e = this.edgeAtPointer(x, y);
       if (this.hoverEdge && e.x === this.hoverEdge.x && e.y === this.hoverEdge.y && e.dir === this.hoverEdge.dir)
         return;
       this.hoverEdge = e;
@@ -974,6 +983,15 @@ export class WorldController {
   private dragFrom: { x: number; y: number } | null = null;
 
   private hoverEdge: Edge | null = null;
+  private dragDir: "h" | "v" | null = null; // a wall drag stays on one line direction
+
+  // The edge under the pointer; while dragging a wall, along the drag's direction
+  // only (so passing over a corner never paints a stray wall across the line).
+  private edgeAtPointer(x: number, y: number): Edge {
+    if (this.painting && this.dragDir === "v") return { x: Math.round(x), y: Math.floor(y), dir: "v" };
+    if (this.painting && this.dragDir === "h") return { x: Math.floor(x), y: Math.round(y), dir: "h" };
+    return nearestEdge(x, y);
+  }
   private edgeQueue = new Map<string, Edge & { ch: string }>();
 
   // What a wall brush puts on an edge: a material, a window in the wall that's
@@ -992,7 +1010,7 @@ export class WorldController {
 
   private paintAt(tx: number, ty: number) {
     const b = hud.get().build;
-    if (b.brush === "door" || b.brush.startsWith("w:")) return;
+    if (b.brush.startsWith("door") || b.brush.startsWith("w:")) return;
     this.paintQueue.set(`${tx},${ty}`, { x: tx, y: ty, ch: b.brush });
     if (!this.paintTimer) this.paintTimer = setTimeout(() => this.flushPaint(), 80);
   }
@@ -1020,9 +1038,11 @@ export class WorldController {
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     if (b.tool === "walls" && b.brush.startsWith("w:")) {
+      const e = nearestEdge(x, y);
       this.painting = true;
-      this.paintEdge(nearestEdge(x, y));
-    } else if (b.tool === "walls" && b.brush !== "door") {
+      this.dragDir = e.dir;
+      this.paintEdge(e);
+    } else if (b.tool === "walls" && !b.brush.startsWith("door")) {
       this.painting = true;
       this.paintAt(tx, ty);
     } else if (b.tool === "rooms") {
@@ -1035,6 +1055,7 @@ export class WorldController {
     const b = hud.get().build;
     if (this.painting) {
       this.painting = false;
+      this.dragDir = null;
       this.flushPaint();
     }
     if (b.tool === "rooms" && this.dragFrom) {
@@ -1056,7 +1077,7 @@ export class WorldController {
     if (!bt.on) return engine.setGhost(null, false);
     if (bt.tool === "walls") {
       const e = this.hoverEdge;
-      if (bt.brush === "door" && e) {
+      if (bt.brush.startsWith("door") && e) {
         engine.setEdgeGhost(null, false);
         const d = {
           id: "ghost-door",
@@ -1064,7 +1085,7 @@ export class WorldController {
           x: e.x,
           y: e.y,
           rot: e.dir === "h" ? 0 : 1,
-          props: { state: "closed" },
+          props: { state: "closed", glass: bt.brush === "door:glass" },
         };
         return engine.setGhost(d, canPlace(this.map, engine.allObjects(), d));
       }
@@ -1089,7 +1110,7 @@ export class WorldController {
       return;
     }
     if (b.tool === "walls") {
-      if (b.brush === "door") {
+      if (b.brush.startsWith("door")) {
         // a door on the edge you clicked next to (click a door to remove it)
         const e = nearestEdge(x, y);
         const hit = this.engine?.allObjects().find((o) => {
@@ -1098,7 +1119,14 @@ export class WorldController {
           return d.dir === e.dir && d.x === e.x && d.y === e.y;
         });
         if (hit) this.send("obj:remove", { id: hit.id });
-        else this.send("obj:put", { kind: "door", x: e.x, y: e.y, rot: e.dir === "h" ? 0 : 1 });
+        else
+          this.send("obj:put", {
+            kind: "door",
+            x: e.x,
+            y: e.y,
+            rot: e.dir === "h" ? 0 : 1,
+            ...(b.brush === "door:glass" ? { props: { glass: true } } : {}),
+          });
       }
       return;
     }
@@ -1169,6 +1197,7 @@ export class WorldController {
       width: st.width,
       height: st.height,
       tiles: [...st.tiles],
+      theme: isTheme(st.theme) ? st.theme : "clouds",
       hWalls: [...(st.hWalls ?? [])],
       vWalls: [...(st.vWalls ?? [])],
       areas,
@@ -1223,6 +1252,26 @@ export class WorldController {
         engine.upsertObject({ ...o, props: { ...(o.props ?? {}), passing: occupied } });
       }
     }
+  }
+
+  // ── quality ──────────────────────────────────────────────────────────────
+  private autoTier: Quality = "high";
+  private slowFor = 0;
+  private startedAt = Date.now();
+
+  qualityNow(): Quality {
+    return prefs().quality === "auto" ? this.autoTier : resolveQuality(prefs().quality);
+  }
+
+  private watchFrameRate() {
+    const e = this.engine;
+    if (!e || prefs().quality !== "auto" || Date.now() - this.startedAt < 8000 || document.hidden) return;
+    const fps = e.stats().fps;
+    this.slowFor = fps > 0 && fps < 40 ? this.slowFor + 1 : 0;
+    if (this.slowFor < 6 || this.autoTier === "low") return;
+    this.slowFor = 0;
+    this.autoTier = this.autoTier === "high" ? "medium" : "low";
+    e.setQuality(this.autoTier, prefs().reducedMotion);
   }
 
   meTile() {

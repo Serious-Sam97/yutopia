@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 
 // Per-device preferences. Browser storage only (and safe when it's blocked).
 export interface Prefs {
-  quality: "high" | "low";
+  quality: QualityPref;
   reducedMotion: boolean;
   spatial: boolean;
   noiseSuppression: boolean;
@@ -15,9 +15,29 @@ export interface Prefs {
   seenIntro: boolean;
 }
 
+export type Quality = "high" | "medium" | "low";
+export type QualityPref = Quality | "auto";
+
+// Auto: a tier for this device (the world steps down one more if it can't keep up).
+export function deviceQuality(): Quality {
+  if (typeof navigator === "undefined") return "high";
+  const n = navigator as Navigator & { deviceMemory?: number };
+  const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+  const small = typeof window !== "undefined" && Math.min(window.innerWidth, window.innerHeight) < 600;
+  const cores = n.hardwareConcurrency ?? 4;
+  const mem = n.deviceMemory ?? 8;
+  if ((touch && small) || cores <= 2 || mem <= 2) return "low";
+  if (touch || cores <= 4 || mem <= 4) return "medium";
+  return "high";
+}
+
+export function resolveQuality(q: QualityPref): Quality {
+  return q === "auto" ? deviceQuality() : q;
+}
+
 const KEY = "yutopia:prefs";
 const DEFAULTS: Prefs = {
-  quality: "high",
+  quality: "auto",
   reducedMotion: false,
   spatial: true,
   noiseSuppression: true,
@@ -36,6 +56,7 @@ export function prefs(): Prefs {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
     cache = { ...DEFAULTS, ...raw, vol: { ...DEFAULTS.vol, ...(raw?.vol ?? {}) } };
+    if (cache && !["auto", "high", "medium", "low"].includes(cache.quality)) cache.quality = "auto";
     if (
       cache &&
       typeof window !== "undefined" &&

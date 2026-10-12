@@ -5,6 +5,7 @@ import {
   entry,
   hWall,
   isFloor,
+  isWindow,
   type MapDef,
   tileAt,
   vWall,
@@ -117,6 +118,9 @@ export class LightMap {
   readonly w: number; // samples
   readonly h: number;
   readonly light: Float32Array; // r, g, b per sample (lights only, no ambient)
+  // daylight through windows, as a single strength per sample: coloured by the
+  // hour (sun / moon) when composited, so the time of day never needs a re-bake
+  readonly win: Float32Array;
   private block: Uint8Array; // per tile: 1 = blocks light (no floor)
   private hBlk: Uint8Array; // walls on north edges that block light (glass and half walls don't)
   private vBlk: Uint8Array; // … on west edges
@@ -130,6 +134,7 @@ export class LightMap {
     this.w = W * PX;
     this.h = H * PX;
     this.light = new Float32Array(this.w * this.h * 3);
+    this.win = new Float32Array(this.w * this.h);
     this.block = new Uint8Array(W * H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(tileAt(map, x, y))) this.block[y * W + x] = 1;
     this.hBlk = new Uint8Array((H + 1) * W);
@@ -147,6 +152,20 @@ export class LightMap {
       else this.vBlk[e.y * (W + 1) + e.x] = 1;
     }
     for (const s of lightSources(objects)) this.add(s);
+    // windows: a soft pool of light just inside each pane
+    const floor = (x: number, y: number) => isFloor(tileAt(map, x, y));
+    for (let y = 0; y <= H; y++)
+      for (let x = 0; x < W; x++)
+        if (isWindow(hWall(map, x, y))) {
+          const inY = floor(x, y) ? y + 0.45 : y - 0.45;
+          this.add({ x: x + 0.5, y: inY, color: 0xffffff, radius: 4.2, intensity: 0.9 }, this.win);
+        }
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x <= W; x++)
+        if (isWindow(vWall(map, x, y))) {
+          const inX = floor(x, y) ? x + 0.45 : x - 0.45;
+          this.add({ x: inX, y: y + 0.5, color: 0xffffff, radius: 4.2, intensity: 0.9 }, this.win);
+        }
   }
 
   private blocked(x: number, y: number): boolean {
@@ -192,7 +211,7 @@ export class LightMap {
     return true;
   }
 
-  private add(s: LightSource) {
+  private add(s: LightSource, into?: Float32Array) {
     const [r, g, b] = rgbOf(s.color);
     const R = s.radius;
     const x0 = Math.max(0, Math.floor((s.x - R) * PX));
@@ -207,6 +226,10 @@ export class LightMap {
         if (d >= R) continue;
         if (!this.visible(s, x, y)) continue;
         const f = (1 - (d / R) ** 2) ** 2 * s.intensity;
+        if (into) {
+          into[py * this.w + px] += f;
+          continue;
+        }
         const i = (py * this.w + px) * 3;
         this.light[i] += r * f;
         this.light[i + 1] += g * f;
@@ -215,17 +238,19 @@ export class LightMap {
   }
 
   // ambient + light, clamped to 1, as a canvas (plan space, PX per tile)
-  composite(ambient: RGB, into?: HTMLCanvasElement): HTMLCanvasElement {
+  composite(ambient: RGB, win: RGB, into?: HTMLCanvasElement): HTMLCanvasElement {
     const c = into ?? document.createElement("canvas");
     c.width = this.w;
     c.height = this.h;
     const g = c.getContext("2d") as CanvasRenderingContext2D;
     const img = g.createImageData(this.w, this.h);
     const L = this.light;
-    for (let i = 0, j = 0; i < L.length; i += 3, j += 4) {
-      img.data[j] = Math.min(255, (ambient[0] + L[i]) * 255);
-      img.data[j + 1] = Math.min(255, (ambient[1] + L[i + 1]) * 255);
-      img.data[j + 2] = Math.min(255, (ambient[2] + L[i + 2]) * 255);
+    const Wn = this.win;
+    for (let i = 0, j = 0, k = 0; i < L.length; i += 3, j += 4, k++) {
+      const w = Math.min(1, Wn[k]);
+      img.data[j] = Math.min(255, (ambient[0] + L[i] + win[0] * w) * 255);
+      img.data[j + 1] = Math.min(255, (ambient[1] + L[i + 1] + win[1] * w) * 255);
+      img.data[j + 2] = Math.min(255, (ambient[2] + L[i + 2] + win[2] * w) * 255);
       img.data[j + 3] = 255;
     }
     g.putImageData(img, 0, 0);
@@ -233,7 +258,7 @@ export class LightMap {
   }
 
   // Light at a world point (bilinear), ambient included, as a 0xRRGGBB tint.
-  tintAt(x: number, y: number, ambient: RGB): number {
+  tintAt(x: number, y: number, ambient: RGB, win: RGB = [0, 0, 0]): number {
     const fx = Math.max(0, Math.min(this.w - 1.001, x * PX - 0.5));
     const fy = Math.max(0, Math.min(this.h - 1.001, y * PX - 0.5));
     const ix = Math.floor(fx);
@@ -242,6 +267,15 @@ export class LightMap {
     const ty = fy - iy;
     const L = this.light;
     const at = (xx: number, yy: number, k: number) => L[(yy * this.w + xx) * 3 + k];
+    const Wn = this.win;
+    const wat = (xx: number, yy: number) => Wn[yy * this.w + xx];
+    const w = Math.min(
+      1,
+      wat(ix, iy) * (1 - tx) * (1 - ty) +
+        wat(ix + 1, iy) * tx * (1 - ty) +
+        wat(ix, iy + 1) * (1 - tx) * ty +
+        wat(ix + 1, iy + 1) * tx * ty,
+    );
     let out = 0;
     for (let k = 0; k < 3; k++) {
       const v =
@@ -249,7 +283,7 @@ export class LightMap {
         at(ix + 1, iy, k) * tx * (1 - ty) +
         at(ix, iy + 1, k) * (1 - tx) * ty +
         at(ix + 1, iy + 1, k) * tx * ty;
-      out = (out << 8) | Math.round(Math.min(1, ambient[k] + v) * 255);
+      out = (out << 8) | Math.round(Math.min(1, ambient[k] + v + win[k] * w) * 255);
     }
     return out;
   }

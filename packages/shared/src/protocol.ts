@@ -48,6 +48,7 @@ export interface ClientMessages {
   "map:paint": { cells: { x: number; y: number; ch: string }[] }; // floors (tiles)
   "map:walls": { edges: { x: number; y: number; dir: "h" | "v"; ch: string }[] }; // walls (tile edges)
   "map:resize": { width: number; height: number };
+  "map:theme": { theme: string }; // clouds | city | snow
   "map:new": { width: number; height: number };
   "map:spawn": { x: number; y: number };
   "map:room": {
@@ -64,11 +65,19 @@ export interface ClientMessages {
     wall?: string; // wall material (p, w, f, b, k, g)
   };
   "map:room:walls": { key: string; wall: string }; // repaint a room's walls
-  "map:room:update": { key: string; name?: string; kind?: string; ownerId?: number | null; ownerName?: string | null };
+  "map:room:update": {
+    key: string;
+    name?: string;
+    kind?: string;
+    ownerId?: number | null;
+    ownerName?: string | null;
+    dressing?: string | null; // tidy | lived | busy | null (bare)
+  };
   "map:room:remove": { key: string };
   "desk:assign": { id: string; ownerId: number | null; ownerName: string | null };
   // doors: anyone opens/closes; the room's owner (or a builder) locks
   "door:set": { id: string; state: "open" | "closed" | "locked" };
+  "lamp:set": { id: string; on: boolean }; // anyone standing near it
   "radio:set": { playing: boolean; station?: number };
   "standup:start": Record<string, never>;
   "standup:next": Record<string, never>;

@@ -1,4 +1,4 @@
-import { type Mat, type Sketch, sh, type V3 } from "./kit";
+import { type Mat, mixc, type Sketch, sh, type V3 } from "./kit";
 import { K, M } from "./pal";
 
 // Thin walls on tile edges (map v2), drawn like the items: ink outlines, light
@@ -22,7 +22,17 @@ const CAP: Mat = { c: K.walnutDark, top: "#5a3a26" };
 
 interface Run {
   // the wall in edge-local coords: along u (0..1), across v (−T..T), z up
-  box: (u0: number, u1: number, z0: number, z1: number, mat: Mat, d?: (f: Face2) => void, line?: number) => void;
+  box: (
+    u0: number,
+    u1: number,
+    z0: number,
+    z1: number,
+    mat: Mat,
+    d?: (f: Face2) => void,
+    line?: number,
+    depth?: number,
+    op?: number,
+  ) => void;
 }
 // draws on the visible face: rectangle u0..u1 × z0..z1, slightly in front
 type Face2 = {
@@ -38,17 +48,23 @@ type Face2 = {
 };
 
 // An edge-local drawer: walls along x ("h") or along y ("v").
-function runFor(s: Sketch, dir: "h" | "v"): Run {
+// `capFrom`: boxes ending below it have another band on top (their top is hidden).
+function runFor(s: Sketch, dir: "h" | "v", capFrom = WALL_Z - 3): Run {
   return {
-    box(u0, u1, z0, z1, mat, d, line) {
+    box(a0, a1, z0, z1, mat, d, line, depth = 2 * T, op) {
+      // full-length boxes run half a tile past the edge and are cut by the
+      // slice, so straight walls join with no seam; ends get a post
+      const full = a0 === 0 && a1 === 1;
+      const u0 = full ? -0.5 : a0;
+      const u1 = full ? 1.5 : a1;
       const spec =
         dir === "h"
-          ? { x: u0, y: -T, w: u1 - u0, d: 2 * T, z: z0, h: z1 - z0 }
-          : { x: -T, y: u0, w: 2 * T, d: u1 - u0, z: z0, h: z1 - z0 };
-      s.box({ ...spec, mat, line: line ?? 1.1 }, (draw) => {
+          ? { x: u0, y: -depth / 2, w: u1 - u0, d: depth, z: z0, h: z1 - z0 }
+          : { x: -depth / 2, y: u0, w: depth, d: u1 - u0, z: z0, h: z1 - z0 };
+      s.box({ ...spec, mat, line: line ?? 1.1, op, capped: z1 < capFrom }, (draw) => {
         if (!d) return;
         const f = dir === "h" ? "s" : "e";
-        const plane = T + 0.002;
+        const plane = depth / 2 + 0.002;
         const P = (u: number, z: number): V3 => (dir === "h" ? [u, plane, z] : [plane, u, z]);
         d({
           rect: (a0, a1, b0, b1, fill, o) => draw.poly(f, [P(a0, b1), P(a1, b1), P(a1, b0), P(a0, b0)], fill, o),
@@ -68,8 +84,8 @@ const span = (a0: number, a1: number, b0: number, b1: number): [number, number] 
 // Draw one wall edge: `ch` its char, `part` low or high. (Clipping to a slice
 // is the sketch's clip.)
 export function wall(s: Sketch, dir: "h" | "v", ch: string, part: WallPart) {
-  const r = runFor(s, dir);
   const half = ch === "h";
+  const r = runFor(s, dir, (half ? HALF_Z : WALL_Z) - 3);
   const mat = half ? "p" : ch.toLowerCase();
   const window = !half && ch !== mat; // upper case
   const top = half ? HALF_Z : WALL_Z;
@@ -132,7 +148,14 @@ function paintMaterial(r: Run, mat: string, z0: number, z1: number, top: number,
           for (let u = row % 2 ? 0.125 : 0; u < 1; u += 0.25) {
             if (u > 0) f.line(u, lo, u, hi, "#d9cba9", 0.6, 0.55);
             const tone = ((Math.floor(u * 8) * 7 + row * 13 + Math.floor(seed * 10)) % 5) / 5;
-            f.rect(u + 0.01, Math.min(1, u + 0.24), lo + 0.5, hi - 0.5, sh("#9a4a30", 0.92 + tone * 0.16), { op: 0.6 });
+            // opaque (pre-blended): see-through patches would double up where slices overlap
+            f.rect(
+              u + 0.01,
+              Math.min(1, u + 0.24),
+              lo + 0.5,
+              hi - 0.5,
+              mixc("#9a4a30", sh("#9a4a30", 0.92 + tone * 0.16), 0.6),
+            );
           }
         }
       });
@@ -193,27 +216,85 @@ function paintMaterial(r: Run, mat: string, z0: number, z1: number, top: number,
   }
 }
 
-// The window: a walnut frame, a sill, glazing bars. The glass is left clear
-// (you see the outside behind the wall), with a faint reflection.
+// The window: a walnut frame and sill, thin glazing bars, a pale pane with a
+// reflection (the outside shows through it).
 function windowFrame(r: Run) {
-  r.box(0, 0.08, WIN0, WIN1, M.walnut, undefined, 0.9);
-  r.box(0.92, 1, WIN0, WIN1, M.walnut, undefined, 0.9);
+  r.box(0, 0.06, WIN0, WIN1, M.walnut, undefined, 0.9);
+  r.box(0.94, 1, WIN0, WIN1, M.walnut, undefined, 0.9);
   r.box(0, 1, WIN1 - 3, WIN1, M.walnut, undefined, 0.9);
-  r.box(0.04, 0.96, WIN0 - 2, WIN0, { c: K.cream, top: "#f6eedb" }, undefined, 0.9); // sill
-  r.box(0.47, 0.53, WIN0, WIN1 - 3, M.walnut, undefined, 0.7); // mullion
-  r.box(0.08, 0.92, 51, 53, M.walnut, undefined, 0.7); // transom
+  r.box(0.02, 0.98, WIN0 - 2, WIN0, { c: K.cream, top: "#f6eedb" }, undefined, 0.9); // sill
+  // the glass, in the middle of the wall, with thin bars on it
+  r.box(
+    0.06,
+    0.94,
+    WIN0,
+    WIN1 - 3,
+    { c: "#a9c2d0", top: "#a9c2d0", left: "#a9c2d0", right: "#8ea7b5", flat: true },
+    (f) => {
+      f.rect(0.1, 0.36, WIN1 - 8, WIN1 - 3, "#ffffff", { op: 0.35 });
+      f.rect(0.1, 0.2, WIN0 + 6, WIN1 - 8, "#ffffff", { op: 0.18 });
+      f.line(0.5, WIN0, 0.5, WIN1 - 3, K.walnut, 1.6);
+      f.line(0.06, 52, 0.94, 52, K.walnut, 1.4);
+    },
+    0.5,
+    0.02,
+    0.32,
+  );
 }
 
-// A post where walls meet (or end): fills the joint.
-export function post(s: Sketch, height: number, part: WallPart) {
+// A post where walls turn, meet or end: fills the joint, in the material of a
+// wall it joins (its skirting and cap like every wall's).
+export function post(s: Sketch, height: number, part: WallPart, ch: string) {
   const [z0, z1] = part === "low" ? [0, LOW_Z] : [LOW_Z, height];
   const box = (a: number, b: number, mat: Mat) => {
     const lo = Math.max(z0, a);
     const hi = Math.min(z1, b);
     if (hi > lo) s.box({ x: -T, y: -T, w: 2 * T, d: 2 * T, z: lo, h: hi - lo, mat, line: 1 });
   };
+  const m = ch === "h" ? "p" : ch.toLowerCase();
   box(0, 5, { c: K.walnutDark, top: "#5a3a26" });
-  box(5, Math.min(29, height - 3), M.walnut);
-  box(29, height - 3, { c: K.cream, top: "#f6eedb", left: "#ece0c4", right: "#d6c9aa" });
+  if (m === "p") {
+    box(5, Math.min(29, height - 3), M.walnut);
+    box(29, height - 3, { c: K.cream, top: "#f6eedb", left: "#ece0c4", right: "#d6c9aa" });
+  } else if (m === "k") {
+    box(5, Math.min(28, height - 3), M.walnut);
+    box(28, height - 3, { c: "#c49a6c", top: "#d2aa7c" });
+  } else {
+    const body: Record<string, Mat> = {
+      w: M.walnut,
+      f: { c: K.rustDark, top: "#9a4636" },
+      b: { c: "#9a4a30", top: "#a8573a" },
+      g: M.walnut,
+    };
+    box(5, height - 3, body[m] ?? M.walnut);
+  }
   box(height - 3, height, CAP);
+}
+
+// A free-standing plaster column with a walnut base and capital, as tall as the
+// walls. Story (seeded): a flyer pinned to it.
+export function column(s: Sketch) {
+  s.cyl({ x: 0.5, y: 0.5, z: 0, r: 0.3, h: 5, mat: M.walnutDark });
+  s.cyl({ x: 0.5, y: 0.5, z: 5, r: 0.26, r2: 0.24, h: 2, mat: M.walnut, line: 0.9 });
+  s.cyl(
+    { x: 0.5, y: 0.5, z: 7, r: 0.22, h: 70, mat: { c: K.cream, top: "#f6eedb", left: "#f3e9d3", right: "#cdbf9f" } },
+    (d) => {
+      // fluting
+      for (let i = 0; i < 5; i++) {
+        const a = -0.6 + i * 0.5;
+        const [x0, y0] = d.m(0.5 + Math.cos(a) * 0.15, 0.5 + Math.sin(a) * 0.15, 10);
+        const [, y1] = d.m(0.5 + Math.cos(a) * 0.15, 0.5 + Math.sin(a) * 0.15, 74);
+        d.raw(`<path d="M${x0} ${y0}L${x0} ${y1}" stroke="#c9b991" stroke-width=".7" opacity=".7"/>`);
+      }
+      if (Math.floor(s.seed * 2) === 1) {
+        const [fx, fy] = d.m(0.62, 0.68, 46);
+        d.raw(
+          `<path d="M${fx - 4} ${fy - 5}l8 -1l.6 10l-8 1z" fill="${K.amberSoft}" stroke="#a8721f" stroke-width=".4"/><circle cx="${fx}" cy="${fy - 5}" r=".9" fill="${K.red}"/><path d="M${fx - 2.5} ${fy - 1}h5M${fx - 2.5} ${fy + 1.4}h4" stroke="#6b4a20" stroke-width=".5"/>`,
+        );
+      }
+    },
+  );
+  s.cyl({ x: 0.5, y: 0.5, z: 77, r: 0.26, r2: 0.3, h: 4, mat: M.walnut, line: 0.9 });
+  s.cyl({ x: 0.5, y: 0.5, z: 81, r: 0.3, h: 3, mat: CAP });
+  s.shadowDot(0.5, 0.5, 0.32, 0.42);
 }

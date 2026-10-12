@@ -519,6 +519,14 @@ export function piece(kind: string, props: Props, id = ""): Piece {
       }
       return { boxes };
     }
+    case "column":
+      return {
+        boxes: [
+          { x: 0.18, y: 0.18, w: 0.64, d: 0.64, z: 0, h: 6, color: C.walnut },
+          { x: 0.26, y: 0.26, w: 0.48, d: 0.48, z: 6, h: 72, color: C.cream },
+          { x: 0.18, y: 0.18, w: 0.64, d: 0.64, z: 78, h: 6, color: C.walnutDark, top: C.walnut },
+        ],
+      };
     default:
       return { boxes: [{ x: 0.2, y: 0.2, w: 0.6, d: 0.6, z: 0, h: 16, color: C.rust }] };
   }

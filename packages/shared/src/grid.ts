@@ -1,4 +1,5 @@
 import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import { dressItems } from "./dressing.ts";
 import type { Point } from "./iso.ts";
 import { type AreaDef, type Edge, hWall, isFloor, isWallEdge, type MapDef, NO_WALL, tileAt, vWall } from "./map.ts";
 
@@ -24,8 +25,16 @@ export class Grid {
 
   // `as` = whose grid: locked doors are walls for everyone but their room's
   // owner. Without it (shared paths, previews) locked doors block everyone.
-  static from(map: MapDef, objects: Iterable<WorldObjectDef>, as?: { uid: number | null }): Grid {
+  // `dressing: false` leaves the rooms' clutter out (placement checks: furniture wins).
+  static from(
+    map: MapDef,
+    objects: Iterable<WorldObjectDef>,
+    as?: { uid: number | null },
+    opts: { dressing?: boolean } = {},
+  ): Grid {
     const g = new Grid(map.width, map.height);
+    const list = [...objects];
+    objects = list;
     const W = map.width;
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x < W; x++) g.walk[y * W + x] = isFloor(tileAt(map, x, y)) ? 1 : 0;
@@ -46,6 +55,8 @@ export class Grid {
       if (!e.solid || e.wall) continue;
       for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) g.block(o.x + dx, o.y + dy);
     }
+    if (opts.dressing !== false)
+      for (const d of dressItems(map, list)) if (d.solid && d.tile) g.block(d.tile[0], d.tile[1]);
     return g;
   }
 

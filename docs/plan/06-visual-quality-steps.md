@@ -46,30 +46,30 @@ the clock · full ambient life with High/Medium/Low tiers · image-first per ste
 - [x] Gate: Tracking Room at day / dusk / night → approval.
 
 ## V5 · Thin walls on tile edges (biggest change)
-- [ ] Shared map format v2: `hWalls` / `vWalls` edge grids + floor tiles; converter from tile walls (`packages/shared`), with tests (every existing map converts; reachability, doors, rooms preserved).
-- [ ] Grid / pathfinding / `isLegalMove` / hearing (rooms) / doors (doors sit on an edge) / build mode (paint edges) / layouts in Laravel (`yutopia_spaces.layout` v2 + migration of saved layouts).
-- [ ] Rendering: wall panels with thickness ~0.2, caps, skirting, cornice; **wall-down** view (walls in front of the camera drop to skirting height when you're behind them).
-- [ ] Wall materials per room (walnut panel, plaster + dado, acoustic foam, brick, cork, smoked glass) chosen in build mode.
-- [ ] Windows (outer walls), columns, half-walls, glass doors.
-- [ ] All world-server room tests + e2e updated and green.
-- [ ] Gate: converted Studio + Lab, build mode on edges → approval.
+- [x] Shared map format v2: `hWalls` / `vWalls` edge grids + floor tiles; converter from tile walls (`packages/shared`), with tests (every existing map converts; reachability, doors, rooms preserved).
+- [x] Grid / pathfinding / `isLegalMove` / hearing (rooms) / doors (doors sit on an edge) / build mode (paint edges) / layouts in Laravel (`yutopia_spaces.layout` v2 + migration of saved layouts).
+- [x] Rendering: wall panels with thickness ~0.2, caps, skirting, cornice; **wall-down** view (walls in front of the camera drop to skirting height when you're behind them).
+- [x] Wall materials per room (walnut panel, plaster + dado, acoustic foam, brick, cork, smoked glass) chosen in build mode.
+- [x] Windows (outer walls), columns, half-walls, glass doors.
+- [x] All world-server room tests + e2e updated and green.
+- [x] Gate: converted Studio + Lab, build mode on edges → approval.
 
 ## V6 · The outside
-- [ ] Building shell around the map (outer wall depth, roof edge) instead of the void.
-- [ ] 80s city backdrop seen through windows and around the building: skyline layers (parallax), lit windows that change at night, sky gradient + sun/moon + slow clouds following the local clock. Warm palette, no neon.
-- [ ] Window light ties into V4.
-- [ ] Gate: same view at 4 times of day → approval.
+- [x] Building shell around the map (outer wall depth, roof edge) instead of the void.
+- [x] 80s city backdrop seen through windows and around the building: skyline layers (parallax), lit windows that change at night, sky gradient + sun/moon + slow clouds following the local clock. Warm palette, no neon.
+- [x] Window light ties into V4.
+- [x] Gate: same view at 4 times of day → approval.
 
 ## V7 · Lived-in rooms + life
-- [ ] Dressing presets (clutter generator): papers, mugs, cables, tape stacks, vinyl, 5 plant kinds, framed posters — placed on free surfaces by rules; build mode can add/remove/apply a preset per room.
-- [ ] Ambient animation: monitors show the board's colours + flicker, reels spin on the mixing desk, VU meters follow the radio, coffee steam, plants sway when passed, server LEDs, dust motes in window light, ceiling-fan shadow. All off under reduced motion.
-- [ ] Interaction feedback: chair turns on sit, doors swing, lamps click.
-- [ ] Perf: ≥ 60 fps target with 50 people + full dressing on a real GPU; logic ≤ 4 ms/frame.
-- [ ] Gate: a dressed room, day + night → approval.
+- [x] Dressing presets (clutter generator): papers, mugs, cables, tape stacks, vinyl, 5 plant kinds, framed posters — placed on free surfaces by rules; build mode can add/remove/apply a preset per room.
+- [x] Ambient animation: monitors show the board's colours + flicker, reels spin on the mixing desk, VU meters follow the radio, coffee steam, plants sway when passed, server LEDs, dust motes in window light, ceiling-fan shadow. All off under reduced motion.
+- [x] Interaction feedback: chair turns on sit, doors swing, lamps click.
+- [x] Perf: ≥ 60 fps target with 50 people + full dressing on a real GPU; logic ≤ 4 ms/frame.
+- [x] Gate: a dressed room, day + night → approval.
 
 ## V8 · Finish + regression
-- [ ] Quality tiers: High (light maps, bloom, vignette, grain, warm LUT, all animation) · Medium (light maps, animation, no post) · Low (flat light, people only animated). Settings panel + auto-pick by device.
-- [ ] Screenshot regression in CI: fixed camera shots per room, day + night, pixel-diff threshold.
-- [ ] Budgets: texture memory, bundle, frame time — enforced.
-- [ ] `docs/plan/PROGRESS.md` updated; screenshots in `design/screens/`.
-- [ ] Gate: final tour shots → approval.
+- [x] Quality tiers: High (light maps, bloom, vignette, grain, warm LUT, all animation) · Medium (light maps, animation, no post) · Low (flat light, people only animated). Settings panel + auto-pick by device.
+- [x] Screenshot regression in CI: fixed camera shots per room, day + night, pixel-diff threshold.
+- [x] Budgets: texture memory, bundle, frame time — enforced.
+- [x] `docs/plan/PROGRESS.md` updated; screenshots in `design/screens/`.
+- [x] Gate: final tour shots → approval.

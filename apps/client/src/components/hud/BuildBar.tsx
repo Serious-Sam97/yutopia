@@ -12,7 +12,7 @@ const GROUPS: { name: string; kinds: (keyof typeof CATALOG)[] }[] = [
     name: "Work",
     kinds: ["desk", "chair", "meeting_table", "whiteboard", "board_wall", "screen_wall", "notice_board"],
   },
-  { name: "Comfy", kinds: ["sofa", "armchair", "bench", "coffee_table", "rug", "lamp", "plant"] },
+  { name: "Comfy", kinds: ["sofa", "armchair", "bench", "coffee_table", "rug", "lamp", "plant", "column"] },
   {
     name: "Studio",
     kinds: [
@@ -65,6 +65,12 @@ const BRUSHES: { ch: string; label: string; swatch: string; group: "walls" | "fl
     ch: "door",
     label: "Door",
     swatch: "linear-gradient(90deg,#3e2718 12%,#5b3a26 12% 88%,#3e2718 88%)",
+    group: "walls",
+  },
+  {
+    ch: "door:glass",
+    label: "Glass door",
+    swatch: "linear-gradient(90deg,#3e2718 12%,#3a4a4a 12% 88%,#3e2718 88%)",
     group: "walls",
   },
   {
@@ -310,7 +316,14 @@ function RoomRow({
   room,
   members,
 }: {
-  room: { key: string; name: string; kind: string; ownerId?: number | null; ownerName?: string | null };
+  room: {
+    key: string;
+    name: string;
+    kind: string;
+    ownerId?: number | null;
+    ownerName?: string | null;
+    dressing?: string | null;
+  };
   members: Member[];
 }) {
   const w = useWorld();
@@ -343,6 +356,22 @@ function RoomRow({
           </option>
         ))}
       </select>
+      <label className="flex items-center gap-2 text-xs">
+        <span className="mono uppercase" style={{ color: "var(--cream-dim)" }}>
+          Dressing
+        </span>
+        <select
+          className="field"
+          aria-label={`Dressing of ${room.name}`}
+          value={room.dressing ?? ""}
+          onChange={(e) => w?.send("map:room:update", { key: room.key, dressing: e.target.value || null })}
+        >
+          <option value="">Bare</option>
+          <option value="tidy">Tidy</option>
+          <option value="lived">Lived in</option>
+          <option value="busy">Busy</option>
+        </select>
+      </label>
       <label className="flex items-center gap-2 text-xs">
         <span className="mono uppercase" style={{ color: "var(--cream-dim)" }}>
           Walls
@@ -597,14 +626,59 @@ function DeskDialog({ seatId, members }: { seatId: string; members: Member[] }) 
   );
 }
 
+const THEME_CHOICES = [
+  {
+    key: "clouds",
+    label: "Clouds",
+    swatch:
+      "radial-gradient(circle at 30% 60%,#fff 0 18%,transparent 19%),radial-gradient(circle at 70% 45%,#fff 0 14%,transparent 15%),linear-gradient(#3d8fd6,#b4e0f8)",
+  },
+  {
+    key: "city",
+    label: "City",
+    swatch:
+      "linear-gradient(transparent 55%,#5f5666 55%),linear-gradient(90deg,transparent 10%,#8d8496 10% 22%,transparent 22% 40%,#8d8496 40% 52%,transparent 52%),linear-gradient(#6a7ca8,#ffb35c)",
+  },
+  {
+    key: "snow",
+    label: "Snow",
+    swatch:
+      "linear-gradient(transparent 58%,#f3f5f7 58%),linear-gradient(transparent 46%,#5f6a78 46% 58%,transparent 58%),linear-gradient(#aeb8c4,#e3e7ea)",
+  },
+] as const;
+
 function MapTools() {
   const w = useWorld();
   useHud((s) => s.mapVersion);
   const cur = { width: w?.map.width ?? 48, height: w?.map.height ?? 36 };
   const [size, setSize] = useState(cur);
   const b = useHud((s) => s.build);
+  const theme = w?.map.theme ?? "clouds";
   return (
     <div className="space-y-3">
+      <fieldset>
+        <legend className="mono text-[10px] uppercase mb-1" style={{ color: "var(--muted)" }}>
+          Around the studio
+        </legend>
+        <div className="grid grid-cols-3 gap-1.5">
+          {THEME_CHOICES.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className="rounded-lg p-1.5 flex flex-col items-center gap-1"
+              aria-pressed={theme === t.key}
+              style={{
+                background: theme === t.key ? "rgba(255,166,48,0.18)" : "#120d09",
+                border: `1px solid ${theme === t.key ? "var(--amber)" : "var(--edge)"}`,
+              }}
+              onClick={() => w?.send("map:theme", { theme: t.key })}
+            >
+              <span className="block w-full h-9 rounded" style={{ background: t.swatch, border: "1px solid #0006" }} />
+              <span className="mono text-[10px] uppercase">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </fieldset>
       <p className="lcd text-2xl">
         NOW {cur.width}×{cur.height}
       </p>

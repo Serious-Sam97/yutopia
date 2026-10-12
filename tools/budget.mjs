@@ -18,7 +18,7 @@ for (const [page, budget] of Object.entries(BUDGETS)) {
   );
 }
 // Lazy chunks (not in the page's files): found by a marker string in their code.
-const LAZY = { "yutopia-item-art": 40 }; // KB gzip
+const LAZY = { "yutopia-item-art": 40, "yutopia-themes": 30 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {
   const files = readdirSync(chunks).filter(

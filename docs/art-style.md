@@ -46,3 +46,34 @@ dev-only. Reference shots: `design/screens/visual/`.
 3. Emissive only amber/red/phosphor, marked `glow`.
 4. Long items: nothing organic crossing a tile boundary.
 5. Screenshot it in a room (`YUTOPIA_SHOTS=<dir> npx playwright test room-shots`).
+
+## Quality tiers (Settings → Quality)
+
+| | High | Medium | Low |
+|---|---|---|---|
+| Baked light (lamps, screens, windows) + emissive glow | ✓ | ✓ | flat light |
+| Bloom, vignette, film grain, warm grade | ✓ | — | — |
+| Ambient life (flicker, reels, steam, sway, motes, fans), drifting skies | ✓ | ✓ | people only |
+| Texture scale / screen resolution cap | 2–2.5× / 2× | 1.5× / 1.5× | 1.25× / 1× |
+| Snowflakes (Snow theme) | 260 | 160 | 70 |
+
+**Auto** (the default) picks a tier from the device (touch + small screen, cores, memory), then steps down one tier
+when the frame rate stays under 40 fps for 6 s. Reduced motion turns every extra motion off on any tier.
+
+## Screenshot regression + budgets
+
+`/dev/shots` renders the Studio offline from the built-in map (no server, no people, fixed hour and camera, the
+clock frozen, nothing random). `apps/client/visual/shots.spec.ts` compares every room (day + night), each theme
+(noon + night) and the Medium/Low tiers against baselines (per-pixel threshold 0.08, at most 0.2 % of pixels), then
+enforces the budgets with 50 people on High: texture memory ≤ 192 MB, world logic ≤ 4 ms per frame, render
+≤ 16.7 ms at night with bloom on a real GPU (CI's software GPU: ≤ 25 ms by day — off-screen passes cost ~40 ms there
+whatever their size, so the bloom isn't measured there).
+
+```bash
+pnpm visual                      # against the dev client on :3100
+pnpm visual --update-snapshots   # accept intended changes (look at the diffs first)
+VISUAL_SERVE=1 pnpm visual       # starts its own dev server on :3101 (what CI does)
+```
+
+Baselines are per platform (`visual/__screenshots__/*-darwin.png` locally, `*-linux.png` in CI). The CI `visual`
+job writes missing Linux baselines and uploads them as the `visual-baselines-linux` artifact — commit them once.

@@ -30,7 +30,13 @@ export async function spaceId(tok: string, name = "Yutopia Demo"): Promise<numbe
 }
 
 export async function enter(page: Page, tok: string, space: number) {
-  await page.addInitScript((t) => localStorage.setItem("yutopia:token", t), tok);
+  await page.addInitScript((t) => {
+    localStorage.setItem("yutopia:token", t);
+    // a fixed tier: Auto would step down mid-test in a headless browser (software GPU)
+    const k = "yutopia:prefs";
+    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+    localStorage.setItem(k, JSON.stringify({ ...p, quality: p.quality && p.quality !== "auto" ? p.quality : "high" }));
+  }, tok);
   await page.goto(`/s/${space}`);
   await page.waitForFunction(
     () => (window as unknown as { __hud?: { get(): { phase: string } } }).__hud?.get().phase === "ready",

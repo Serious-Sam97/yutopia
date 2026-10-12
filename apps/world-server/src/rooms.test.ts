@@ -436,3 +436,18 @@ test("desks for a person, and resizing the map", async () => {
   const left = [...owner.room.state.objects.values()].every((o: { x: number; y: number }) => o.x < 20 && o.y < 16);
   assert.ok(left, "furniture outside the new size is removed");
 });
+
+test("the theme around the studio: builders pick it, members can't", async () => {
+  const s = ++space;
+  const member = await person(34, s);
+  const owner = await person(35, s, "member,builder");
+  assert.equal(member.room.state.theme, "clouds");
+  member.room.send("map:theme", { theme: "snow" });
+  await sleep(250);
+  assert.equal(member.room.state.theme, "clouds", "members can't");
+  owner.room.send("map:theme", { theme: "lava" });
+  await sleep(250);
+  assert.equal(member.room.state.theme, "clouds", "only known themes");
+  owner.room.send("map:theme", { theme: "snow" });
+  await waitFor(() => member.room.state.theme === "snow");
+});

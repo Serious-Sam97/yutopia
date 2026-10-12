@@ -71,7 +71,14 @@ export interface AreaDef {
   // Rooms can belong to someone: they can lock its doors (only they get in/out).
   ownerId?: number | null;
   ownerName?: string | null;
+  // clutter preset (dressing.ts): tidy | lived | busy; none when absent
+  dressing?: "tidy" | "lived" | "busy" | null;
 }
+
+// What surrounds the studio (chosen per space in build mode).
+export const THEMES = ["clouds", "city", "snow"] as const;
+export type Theme = (typeof THEMES)[number];
+export const isTheme = (t: unknown): t is Theme => typeof t === "string" && (THEMES as readonly string[]).includes(t);
 
 export interface MapDef {
   key: string;
@@ -84,6 +91,7 @@ export interface MapDef {
   spawn: { x: number; y: number };
   areas: AreaDef[];
   objects: WorldObjectDef[];
+  theme?: Theme; // default "clouds"
 }
 
 // The wall on the north edge of (x, y) / the west edge of (x, y).

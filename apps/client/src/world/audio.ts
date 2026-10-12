@@ -59,7 +59,7 @@ class Mixer {
   }
 
   // Tiny synthesized UI sounds (no asset files): knock, pop, tape-stop.
-  blip(kind: "knock" | "pop" | "join" | "leave" | "tape") {
+  blip(kind: "knock" | "pop" | "join" | "leave" | "tape" | "click") {
     if (!this.ctx || this.ctx.state !== "running") return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
@@ -92,6 +92,15 @@ class Mixer {
           o2.start(t + 0.18);
           o2.stop(t + 0.32);
         }
+        break;
+      case "click":
+        // a lamp's pull chain: a short dry tick
+        o.type = "square";
+        o.frequency.setValueAtTime(2400, t);
+        o.frequency.exponentialRampToValueAtTime(900, t + 0.02);
+        env(0.001, 0.03, 0.08);
+        o.start(t);
+        o.stop(t + 0.05);
         break;
       case "pop":
         o.type = "sine";

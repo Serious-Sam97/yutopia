@@ -108,17 +108,25 @@ export function SettingsPanel() {
           <h3 className="mono text-xs uppercase tracking-widest" style={{ color: "var(--vfd)" }}>
             {t("quality")}
           </h3>
-          <div className="flex gap-2">
-            {(["high", "low"] as const).map((q) => (
+          <div className="grid grid-cols-2 gap-2">
+            {(["auto", "high", "medium", "low"] as const).map((q) => (
               <button
                 key={q}
                 type="button"
-                className="deck-btn flex-1"
+                className="deck-btn"
                 aria-pressed={p.quality === q}
                 onClick={() => setPrefs({ quality: q })}
-                style={{ height: 36 }}
+                style={{ height: 40, fontSize: 10 }}
               >
-                {q === "high" ? t("qualityHigh") : t("qualityLow")}
+                {t(
+                  q === "auto"
+                    ? "qualityAuto"
+                    : q === "high"
+                      ? "qualityHigh"
+                      : q === "medium"
+                        ? "qualityMedium"
+                        : "qualityLow",
+                )}
               </button>
             ))}
           </div>
