@@ -49,6 +49,8 @@ async function person(id: number, spaceId: number, roles = "member"): Promise<Pe
     "wb:scene",
     "wb:op",
     "arcade:scores",
+    "build:history",
+    "chat:react",
   ])
     room.onMessage(t, (m) => {
       if (!p.msgs[t]) p.msgs[t] = [];
@@ -360,6 +362,56 @@ test("map editing: builders paint floors and walls on edges, nobody gets walled 
   owner.room.send("map:walls", { edges: [{ x: 10, y: 6, dir: "h", ch: "p" }] });
   await waitFor(() => (member.msgs.snap?.length ?? 0) > snaps);
   await waitFor(() => Math.abs(me(member).y - 6) >= 0.32); // off the wall
+});
+
+test("chat reactions: only people who got the message react, and they all see the count", async () => {
+  const s = ++space;
+  const ana = await person(50, s);
+  const bia = await person(51, s);
+  ana.room.send("chat", { text: "standup in 5", scope: "space" });
+  await waitFor(() => (bia.msgs.chat?.length ?? 0) > 0);
+  const id = (bia.msgs.chat?.[0] as { id: string }).id;
+  const late = await person(52, s); // joined after: never got it
+  late.room.send("chat:react", { id, e: "heart" });
+  bia.room.send("chat:react", { id, e: "heart" });
+  await waitFor(() => (ana.msgs["chat:react"]?.length ?? 0) > 0);
+  const last = (p: Person) => p.msgs["chat:react"]?.at(-1) as { id: string; reactions: Record<string, number[]> };
+  assert.deepEqual(last(ana).reactions, { heart: [51] });
+  assert.equal(late.msgs["chat:react"], undefined, "not in the audience");
+  bia.room.send("chat:react", { id, e: "heart" }); // toggles off
+  await waitFor(() => ana.msgs["chat:react"]?.length === 2);
+  assert.deepEqual(last(ana).reactions, {});
+});
+
+test("build undo/redo: per person, a drag is one step, others' later edits are kept", async () => {
+  const s = ++space;
+  const ana = await person(40, s, "member,builder");
+  const bia = await person(41, s, "member,builder");
+  const tiles = () => [...ana.room.state.tiles] as string[];
+  const orig = tiles()[3][10];
+  const hist = (p: Person) => p.msgs["build:history"]?.at(-1) as { undo: number; redo: number } | undefined;
+  // a drag arrives as several batches: one step
+  ana.room.send("map:paint", { cells: [{ x: 10, y: 3, ch: "," }] });
+  await sleep(100);
+  ana.room.send("map:paint", { cells: [{ x: 11, y: 3, ch: "," }] });
+  ana.room.send("obj:put", { id: "u-plant", kind: "plant", x: 12, y: 3, rot: 0 });
+  await waitFor(() => hist(ana)?.undo === 1, 4000);
+  // Bia repaints one of Ana's tiles
+  bia.room.send("map:paint", { cells: [{ x: 11, y: 3, ch: "_" }] });
+  await waitFor(() => hist(bia)?.undo === 1, 4000);
+  assert.equal(hist(ana)?.undo, 1, "Bia's edit isn't on Ana's stack");
+  ana.room.send("build:undo", {});
+  await waitFor(() => tiles()[3][10] === orig);
+  assert.equal(tiles()[3][11], "_", "Bia's tile stays");
+  assert.equal(ana.room.state.objects.get("u-plant"), undefined, "the plant is gone");
+  await waitFor(() => hist(ana)?.redo === 1 && hist(ana)?.undo === 0);
+  ana.room.send("build:redo", {});
+  await waitFor(() => tiles()[3][10] === "," && !!ana.room.state.objects.get("u-plant"));
+  // members can't undo anything
+  const member = await person(42, s);
+  member.room.send("build:undo", {});
+  await sleep(200);
+  assert.equal(tiles()[3][10], ",");
 });
 
 test("rooms + doors: an owned room with walls, locked so only its owner gets in or out", async () => {

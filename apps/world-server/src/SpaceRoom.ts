@@ -19,6 +19,7 @@ import {
   HEAR_RADIUS,
   HEARING_HZ,
   hearingGain,
+  isFloor,
   isKind,
   isLegalMove,
   isV2,
@@ -32,6 +33,7 @@ import {
   studioV1,
   TEMPLATES,
   TICK_HZ,
+  tileAt,
   validLayout,
   type WorldObjectDef,
 } from "@yutopia/shared";
@@ -70,6 +72,10 @@ export class SpaceRoom extends Room<SpaceState> {
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   private removedUntil = new Map<number, number>();
   private lastPresence = "";
+  // recent chat messages: who received each one and its reactions
+  private chatLog = new Map<string, { audience: Set<string>; reactions: Map<string, Set<number>> }>();
+  // features that watch every message before it's handled (build history)
+  readonly messageTaps: ((client: SpaceClient, type: string) => void)[] = [];
 
   send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {
     client.send(type, msg);
@@ -84,6 +90,7 @@ export class SpaceRoom extends Room<SpaceState> {
       if (!msg || typeof msg !== "object") return;
       metrics.inc("messages_total");
       try {
+        for (const tap of this.messageTaps) tap(client, type as string);
         fn(client, msg as ClientMessages[K]);
       } catch (e) {
         metrics.inc("message_errors_total");
@@ -327,6 +334,7 @@ export class SpaceRoom extends Room<SpaceState> {
         scope,
         at: Date.now(),
       };
+      const audience = new Set<string>();
       for (const c of this.clients) {
         const q = this.state.players.get(c.sessionId);
         if (!q) continue;
@@ -335,9 +343,30 @@ export class SpaceRoom extends Room<SpaceState> {
           c === client ||
           (scope === "area" && q.area === p.area) ||
           (scope === "nearby" && (hearingGain(this.map, q, p) > 0 || Math.hypot(q.x - p.x, q.y - p.y) <= HEAR_RADIUS));
-        if (reach) this.send(c, "chat", msg);
+        if (reach) {
+          this.send(c, "chat", msg);
+          audience.add(c.sessionId);
+        }
       }
+      // remembered so reactions go back to the same people
+      this.chatLog.set(msg.id, { audience, reactions: new Map() });
+      if (this.chatLog.size > 200) this.chatLog.delete(this.chatLog.keys().next().value as string);
       for (const f of this.features) f.chat?.(client, p, text, scope);
+    });
+
+    this.on("chat:react", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      const entry = this.chatLog.get(String(m.id));
+      if (!p || !entry || !entry.audience.has(client.sessionId) || !EMOTES.includes(m.e)) return;
+      const who = entry.reactions.get(m.e) ?? new Set<number>();
+      if (who.has(p.uid)) who.delete(p.uid);
+      else who.add(p.uid);
+      entry.reactions.set(m.e, who);
+      const reactions = Object.fromEntries(
+        [...entry.reactions].filter(([, s]) => s.size > 0).map(([e, s]) => [e, [...s]]),
+      ) as ServerMessages["chat:react"]["reactions"];
+      for (const c of this.clients)
+        if (entry.audience.has(c.sessionId)) this.send(c, "chat:react", { id: m.id, reactions });
     });
 
     this.on("status", (client, m) => {
@@ -385,6 +414,12 @@ export class SpaceRoom extends Room<SpaceState> {
         const userId = m.to.userId;
         const other = [...this.state.players.values()].find((q) => q.uid === userId);
         if (other) target = this.grid.nearestOpen(other.x + 1, other.y + 1) ?? { x: other.x, y: other.y };
+      } else if (typeof m.to === "object" && m.to && "x" in m.to && p.builder) {
+        // a spot on the map ("Go there" in build mode)
+        const x = Number(m.to.x);
+        const y = Number(m.to.y);
+        if (Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0 && x < this.map.width && y < this.map.height)
+          target = { x, y };
       }
       if (!target) return;
       // never into a room you can't walk into (locked doors, sealed rooms)
@@ -623,8 +658,30 @@ export class SpaceRoom extends Room<SpaceState> {
     this.layoutTimer = setTimeout(() => {
       yondra
         .putLayout(this.spaceId, layoutFromMap(this.map))
-        .catch((e) => console.warn("[layout] save failed", e.message));
+        .then(() => this.toBuilders("build:saved", { ok: true, at: Date.now() }))
+        .catch((e) => {
+          console.warn("[layout] save failed", e.message);
+          this.toBuilders("build:saved", { ok: false, at: Date.now() });
+        });
     }, 1200);
+  }
+
+  toBuilders<K extends keyof ServerMessages>(type: K, msg: ServerMessages[K]) {
+    for (const c of this.clients) if (this.state.players.get(c.sessionId)?.builder) this.send(c, type, msg);
+  }
+
+  // People standing somewhere that's no longer floor (or now inside a wall or
+  // furniture) step to the nearest open spot, or go back to the arrival point.
+  rescue() {
+    const g = Grid.from(this.map, [...this.state.objects.values()].map(fromSchema));
+    for (const c of this.clients) {
+      const p = this.state.players.get(c.sessionId);
+      if (!p || (isFloor(tileAt(this.map, Math.floor(p.x), Math.floor(p.y))) && g.fits(p.x, p.y))) continue;
+      const to = g.nearestOpen(p.x, p.y, 2) ?? this.map.spawn;
+      p.x = to.x;
+      p.y = to.y;
+      this.send(c, "snap", { x: p.x, y: p.y });
+    }
   }
 
   rebuildGrid() {

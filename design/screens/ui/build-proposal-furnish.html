@@ -1,0 +1,222 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2a1a12;--cream:#efe4cc;--cream-dim:#cbbd9c;--vfd:#ffb35c;--amber:#ffa630;--rust:#b5562f;--olive:#8aa04a;--muted:#a39d8c}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;font-family:Inter,sans-serif;color:var(--cream);position:relative;background:url(world-desk.png) center/cover}
+.dim{position:absolute;inset:0;background:linear-gradient(90deg,rgba(18,12,8,.35),rgba(18,12,8,0) 45%)}
+.lcd{font-family:VT323,monospace;color:var(--vfd);text-shadow:0 0 6px rgba(255,166,48,.45);letter-spacing:.04em}
+.shell{background:linear-gradient(180deg,rgba(52,35,24,.94),rgba(34,23,16,.96));border:1px solid rgba(120,86,58,.7);border-radius:14px;box-shadow:0 1px 0 rgba(255,220,170,.10) inset,0 14px 40px rgba(0,0,0,.45)}
+.vfd{background:radial-gradient(120% 140% at 50% 0%,#2a2016,#120d09 70%);border:1px solid #000;border-radius:8px;box-shadow:inset 0 2px 8px rgba(0,0,0,.8)}
+svg.i{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.mono{font-family:'Share Tech Mono',monospace;text-transform:uppercase;letter-spacing:.08em}
+
+/* top strip in build mode */
+.top{position:absolute;top:14px;left:14px;right:14px;height:52px;display:flex;align-items:center;gap:10px;padding:0 8px 0 12px;border-color:rgba(255,166,48,.55)}
+.hazard{position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:0 0 14px 14px;background:repeating-linear-gradient(135deg,#ffa630 0 10px,#2a1a12 10px 20px);opacity:.8}
+.tape{width:8px;height:26px;border-radius:3px;background:linear-gradient(180deg,#b5562f 0 25%,#e8a33d 25% 50%,#6e7b3a 50% 75%,#efe4cc 75%)}
+.brand{font-family:VT323;font-size:24px;color:var(--vfd);letter-spacing:.06em}
+.sep{width:1px;height:26px;background:rgba(120,86,58,.7)}
+.where{display:flex;align-items:center;gap:10px;padding:6px 12px}
+.rec{width:9px;height:9px;border-radius:50%;background:#ff5a2a;box-shadow:0 0 8px #ff7a3a}
+.where .lcd{font-size:22px;line-height:1}
+.where .sub{font-family:'Share Tech Mono';font-size:12px;color:var(--cream-dim)}
+.spacer{flex:1}
+.ghost{height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:9px;border:1px solid rgba(120,86,58,.8);background:rgba(255,255,255,.03);font-family:'Share Tech Mono';font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--cream)}
+.ghost svg.i{width:15px;height:15px}
+.ghost.dis{opacity:.4}
+.saved{font-family:'Share Tech Mono';font-size:12px;color:var(--cream-dim);display:flex;align-items:center;gap:6px;margin:0 6px}
+.saved i{width:7px;height:7px;border-radius:50%;background:var(--olive)}
+.done{height:38px;display:inline-flex;align-items:center;gap:8px;padding:0 16px;border-radius:10px;background:linear-gradient(180deg,#ffc274,#e8952d);color:var(--ink);box-shadow:0 3px 0 #9a5c17,0 4px 8px rgba(0,0,0,.4);font-family:'Share Tech Mono';font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+
+/* tool rail */
+.rail{position:absolute;top:78px;bottom:16px;left:14px;width:76px;padding:8px 6px;display:flex;flex-direction:column;gap:4px}
+.tool{height:62px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--cream-dim);font-family:'Share Tech Mono';font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.tool svg.i{width:22px;height:22px}
+.tool.a{background:linear-gradient(180deg,#ffc274,#e8952d);color:var(--ink);box-shadow:0 2px 0 #9a5c17}
+
+/* catalog */
+.cat{position:absolute;top:78px;left:100px;bottom:16px;width:352px;display:flex;flex-direction:column;overflow:hidden}
+.cat h2{display:flex;align-items:baseline;justify-content:space-between;padding:12px 14px 8px}
+.cat h2 .lcd{font-size:24px}
+.cat h2 span.n{font-family:'Share Tech Mono';font-size:11px;color:var(--muted)}
+.search{margin:0 12px;height:38px;border-radius:9px;background:#140e0a;border:1px solid rgba(120,86,58,.8);display:flex;align-items:center;gap:8px;padding:0 10px;color:#8d826c;font-size:13px}
+.search svg.i{width:16px;height:16px}
+.search .kc{margin-left:auto}
+.chips{display:flex;gap:5px;padding:10px 12px 6px;flex-wrap:wrap}
+.chip{font-family:'Share Tech Mono';font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:999px;color:var(--cream-dim);border:1px solid rgba(120,86,58,.7)}
+.chip.a{background:var(--vfd);color:var(--ink);border-color:var(--vfd)}
+.list{flex:1;overflow:hidden;padding:4px 12px 0;position:relative}
+.list:after{content:"";position:absolute;left:0;right:0;bottom:0;height:60px;background:linear-gradient(transparent,rgba(34,23,16,.98))}
+.grp{font-family:'Share Tech Mono';font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--vfd);margin:8px 2px 6px;display:flex;align-items:center;gap:8px}
+.grp:after{content:"";flex:1;height:1px;background:rgba(120,86,58,.6)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.card{height:112px;border-radius:10px;position:relative;overflow:hidden;
+ background:radial-gradient(90% 70% at 50% 62%,#4a3324 0%,#2a1c13 70%);border:1px solid rgba(120,86,58,.55)}
+.card .th{position:absolute;left:8px;right:8px;top:8px;height:68px;display:flex;align-items:center;justify-content:center}
+.card .th img{max-width:100%;max-height:100%;filter:drop-shadow(0 4px 4px rgba(0,0,0,.35))}
+.card .nm{position:absolute;left:8px;right:8px;bottom:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11.5px;font-weight:500;color:var(--cream)}
+.card .fp{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.35);padding:1px 5px;border-radius:4px;font-family:'Share Tech Mono';font-size:10px;color:var(--muted)}
+.card.sel{border:2px solid var(--vfd);box-shadow:0 0 0 3px rgba(255,166,48,.18),inset 0 0 20px rgba(255,166,48,.15)}
+.card.sel:before{content:"PLACING";position:absolute;top:6px;left:6px;font-family:'Share Tech Mono';font-size:9px;letter-spacing:.08em;background:var(--vfd);color:var(--ink);padding:1px 5px;border-radius:4px;z-index:1}
+.card .new{position:absolute;top:6px;right:6px;font-family:'Share Tech Mono';font-size:9px;color:var(--ink);background:var(--olive);padding:1px 5px;border-radius:4px}
+
+/* hold bar */
+.hold{position:absolute;bottom:16px;left:851px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:8px 8px 8px 8px}
+.held{white-space:nowrap;display:flex;align-items:center;gap:10px;padding:0 12px 0 4px}
+.held .pic{width:58px;height:46px;border-radius:8px;background:radial-gradient(90% 70% at 50% 62%,#4a3324,#2a1c13 70%);display:flex;align-items:center;justify-content:center;border:1px solid rgba(120,86,58,.6)}
+.held .pic img{max-width:50px;max-height:40px}
+.held b{display:block;font-family:VT323;font-size:22px;color:var(--vfd);line-height:1;letter-spacing:.04em}
+.held small{font-family:'Share Tech Mono';font-size:11px;color:var(--olive);letter-spacing:.05em}
+.k{height:46px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 12px;
+ background:linear-gradient(180deg,#ece2c9,#cfc1a1);box-shadow:0 3px 0 #8f8166,0 4px 8px rgba(0,0,0,.4);font-family:'Share Tech Mono';font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink)}
+.k.red{background:linear-gradient(180deg,#c9694a,#9e4a2e);color:var(--cream);box-shadow:0 3px 0 #5e2a18,0 4px 8px rgba(0,0,0,.4)}
+.kc{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:4px;background:rgba(42,26,18,.15);border:1px solid rgba(42,26,18,.35);font:10px 'Share Tech Mono';color:inherit}
+.red .kc{border-color:rgba(239,228,204,.4);background:rgba(0,0,0,.15)}
+.search .kc{border-color:rgba(203,189,156,.35);color:var(--muted)}
+.gap{width:1px;height:30px;background:rgba(120,86,58,.8);margin:0 2px}
+.esc{font-family:'Share Tech Mono';font-size:11px;color:var(--muted);padding:0 8px;display:flex;gap:6px;align-items:center}
+.esc .kc{border-color:rgba(203,189,156,.35)}
+
+/* world ghost */
+.ghostitem{position:absolute;opacity:.92;filter:drop-shadow(0 0 6px rgba(138,160,74,.55))}
+.wtag{position:absolute;transform:translateX(-50%);padding:4px 9px;border-radius:999px;background:rgba(30,20,14,.88);font:12px 'Share Tech Mono';color:var(--cream);display:flex;gap:6px;align-items:center;white-space:nowrap}
+.wtag i{width:7px;height:7px;border-radius:50%;background:var(--olive)}
+.sel-ring{position:absolute}
+
+/* minimap (build mode: bottom-right) */
+.mini{position:absolute;right:14px;bottom:16px;width:176px;height:130px;padding:8px}
+.mini .map{width:100%;height:100%;border-radius:7px;overflow:hidden;background:#1a120c}
+
+.callout{position:absolute;font:600 12px Inter;color:#1b120c;background:#ffd36e;padding:4px 9px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.4);white-space:nowrap}
+.callout b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#1b120c;color:#ffd36e;font-size:11px;margin-right:6px}
+</style></head><body>
+<div class="dim"></div>
+
+<svg width="0" height="0" style="position:absolute">
+ <symbol id="chair" viewBox="0 0 24 24"><path d="M7 3.5h10v8H7zM5.5 11.5h13v3h-13zM7 14.5V21M17 14.5V21"/></symbol>
+ <symbol id="wall" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19"/></symbol>
+ <symbol id="room" viewBox="0 0 24 24"><path d="M4 20V4h16v16zM4 12h7M14 12h6M11 4v5M11 15v5"/></symbol>
+ <symbol id="tag" viewBox="0 0 24 24"><path d="M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9z"/><circle cx="8.5" cy="8.5" r="1.6"/></symbol>
+ <symbol id="map" viewBox="0 0 24 24"><path d="M3.5 6.5l5.5-2.5 6 2.5 5.5-2.5v13.5L15 20l-6-2.5-5.5 2.5zM9 4v13.5M15 6.5V20"/></symbol>
+ <symbol id="undo" viewBox="0 0 24 24"><path d="M9 7L4.5 11.5 9 16M5 11.5h9.5a5 5 0 0 1 0 10H12"/></symbol>
+ <symbol id="redo" viewBox="0 0 24 24"><path d="M15 7l4.5 4.5L15 16M19 11.5H9.5a5 5 0 0 0 0 10H12"/></symbol>
+ <symbol id="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+ <symbol id="search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></symbol>
+ <symbol id="rot" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15"/></symbol>
+ <symbol id="dup" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></symbol>
+ <symbol id="bin" viewBox="0 0 24 24"><path d="M4.5 6.5h15M9.5 6.5V4h5v2.5M6.5 6.5l1 13.5h9l1-13.5M10 10v6.5M14 10v6.5"/></symbol>
+</svg>
+
+<!-- world: ghost desk with a footprint, on open floor -->
+<svg class="sel-ring" style="left:0;top:0" width="1440" height="900">
+  <!-- 2×1 footprint at tile zoom 1.1: x-step (35,17.5) y-step (-35,17.5) -->
+  <polygon points="760,388 830,423 795,440.5 725,405.5" fill="rgba(138,160,74,.30)" stroke="#a9c25a" stroke-width="2" stroke-dasharray="6 4"/>
+  <!-- the snap grid near the cursor -->
+  <g stroke="rgba(239,228,204,.18)" stroke-width="1" fill="none">
+    <path d="M690,353 L865,440.5 M655,370.5 L830,458 M725,335.5 L900,423 M620,388 L795,475.5"/>
+    <path d="M690,353 L620,388 M725,370.5 L655,405.5 M760,388 L690,423 M795,405.5 L725,440.5 M830,423 L760,458 M865,440.5 L795,475.5"/>
+  </g>
+</svg>
+<img class="ghostitem" src="items/desk.png" style="left:calc(760px - 74.8px);top:calc(388px - 123.2px);width:184.8px">
+<div class="wtag" style="left:778px;top:470px"><i></i>Fits · click to place</div>
+
+<!-- TOP: build mode strip -->
+<header class="top shell">
+  <div class="hazard"></div>
+  <div class="tape"></div><span class="brand">YUTOPIA</span>
+  <div class="sep"></div>
+  <div class="where vfd"><span class="rec"></span><span class="lcd">BUILD MODE</span><span class="sub">Yutopia Demo · Tracking Room</span></div>
+  <div class="spacer"></div>
+  <span class="ghost"><svg class="i"><use href="#undo"/></svg>Undo</span>
+  <span class="ghost dis"><svg class="i"><use href="#redo"/></svg>Redo</span>
+  <span class="saved"><i></i>Saved to Yondra · just now</span>
+  <span class="done"><svg class="i" style="width:16px;height:16px"><use href="#check"/></svg>Done</span>
+</header>
+
+<!-- TOOL RAIL -->
+<nav class="rail shell">
+  <div class="tool a"><svg class="i"><use href="#chair"/></svg>Furnish</div>
+  <div class="tool"><svg class="i"><use href="#wall"/></svg>Walls</div>
+  <div class="tool"><svg class="i"><use href="#room"/></svg>Rooms</div>
+  <div class="tool"><svg class="i"><use href="#tag"/></svg>Desks</div>
+  <div class="tool"><svg class="i"><use href="#map"/></svg>Map</div><div style="flex:1"></div><div class="tool" style="height:44px"><span style="font:16px Share Tech Mono">?</span>Keys</div>
+</nav>
+
+<!-- CATALOG -->
+<section class="cat shell">
+  <h2><span class="lcd">FURNITURE</span><span class="n">27 ITEMS</span></h2>
+  <div class="search"><svg class="i"><use href="#search"/></svg>Search furniture…<span class="kc">/</span></div>
+  <div class="chips"><span class="chip a">All</span><span class="chip">Work</span><span class="chip">Comfy</span><span class="chip">Studio</span><span class="chip">Layouts</span></div>
+  <div class="list">
+    <div class="grp">Work</div>
+    <div class="grid">
+      <div class="card sel"><div class="th"><img data-trim src="items/desk.png"></div><span class="nm">Desk</span><span class="fp">2×1</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/chair.png"></div><span class="nm">Chair</span><span class="fp">1×1</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/meeting_table.png"></div><span class="nm">Meeting table</span><span class="fp">6×2</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/whiteboard.png"></div><span class="nm">Whiteboard</span><span class="fp">wall 2</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/board_wall.png"></div><span class="nm">Board wall</span><span class="fp">wall 3</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/screen_wall.png"></div><span class="nm">Big screen</span><span class="fp">wall 4</span></div>
+    </div>
+    <div class="grp">Comfy</div>
+    <div class="grid">
+      <div class="card"><div class="th"><img data-trim src="items/sofa.png"></div><span class="nm">Sofa</span><span class="fp">3×1</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/armchair.png"></div><span class="nm">Armchair</span><span class="fp">1×1</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/lamp.png"></div><span class="nm">Floor lamp</span><span class="fp">1×1</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/plant.png"></div><span class="nm">Plant</span><span class="fp">5 kinds</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/coffee_table.png"></div><span class="nm">Coffee table</span><span class="fp">2×1</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/rug.png"></div><span class="nm">Rug</span><span class="fp">4×3</span></div>
+    </div>
+    <div class="grp">Studio</div>
+    <div class="grid">
+      <div class="card"><div class="th"><img data-trim src="items/arcade.png"></div><span class="nm">Arcade</span><span class="fp">1×1</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/radio.png"></div><span class="nm">Lo-fi radio</span><span class="fp">1×1</span></div>
+      <div class="card"><div class="th"><img data-trim src="items/coffee_machine.png"></div><span class="nm">Coffee</span><span class="fp">1×1</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- HOLD BAR: what you're holding + the actions for it -->
+<div class="hold shell">
+  <div class="held"><div class="pic"><img data-trim src="items/desk.png"></div><div><b>DESK</b><small>● FITS · 2×1 · FACING SE</small></div></div>
+  <span class="gap"></span>
+  <span class="k"><svg class="i"><use href="#rot"/></svg>Rotate<span class="kc">R</span></span>
+  <span class="k"><svg class="i"><use href="#dup"/></svg><span class="kc">D</span></span>
+  <span class="k red"><svg class="i"><use href="#bin"/></svg><span class="kc">Del</span></span>
+  <span class="gap"></span>
+  <span class="esc"><span class="kc">Esc</span>drop</span>
+</div>
+
+<div class="mini shell"><div class="map">
+  <svg viewBox="0 0 160 114" width="100%" height="100%">
+    <rect x="4" y="4" width="96" height="58" rx="2" fill="#7a5233"/><rect x="104" y="4" width="52" height="40" rx="2" fill="#5d6a2f"/>
+    <rect x="4" y="66" width="40" height="44" rx="2" fill="#5d6a2f"/><rect x="48" y="66" width="56" height="44" rx="2" fill="#4a3324"/>
+    <rect x="108" y="48" width="48" height="62" rx="2" fill="#7b3424"/>
+    <rect x="2.5" y="2.5" width="99" height="61" rx="3" fill="none" stroke="#ffb35c" stroke-width="1.5"/>
+    <rect x="56" y="26" width="8" height="4" fill="#a9c25a"/>
+  </svg></div></div>
+
+<div class="callout" style="left:470px;top:84px"><b>1</b>Build mode owns the top bar: undo, saved state, Done</div>
+<div class="callout" style="left:462px;top:228px"><b>2</b>← Tools as a rail (catalog changes per tool)</div>
+<div class="callout" style="left:468px;top:300px"><b>3</b>Real item art, footprint, search, categories</div>
+<div class="callout" style="left:860px;top:350px"><b>4</b>Ghost + footprint: green fits, red blocked</div>
+<div class="callout" style="left:560px;top:760px"><b>5</b>One bar for what you're holding — replaces the help text</div>
+
+<script>
+// trim transparent padding off each thumbnail
+document.querySelectorAll("img[data-trim]").forEach((img) => {
+  const run = () => {
+    const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+    for (let y = 0; y < c.height; y++) for (let X = 0; X < c.width; X++) if (d[(y * c.width + X) * 4 + 3] > 40) { if (X < x0) x0 = X; if (X > x1) x1 = X; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+    o.getContext("2d").drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+    img.removeAttribute("data-trim"); img.src = o.toDataURL();
+  };
+  img.complete ? run() : img.addEventListener("load", run, { once: true });
+});
+</script>
+</body></html>

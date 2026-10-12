@@ -1,5 +1,6 @@
 "use client";
 
+import type { Emote } from "@yutopia/shared";
 import { useRef, useSyncExternalStore } from "react";
 import type { BoardSummary, MemberStatus } from "@/lib/api";
 
@@ -10,6 +11,7 @@ export interface Person {
   sid: string;
   uid: number;
   name: string;
+  avatar: string; // the avatar seed (parseAvatar)
   area: string;
   areaName: string;
   status: string;
@@ -33,7 +35,10 @@ export interface ChatMsg {
   at: number;
   mine: boolean;
   vortex?: boolean;
+  reactions?: Partial<Record<Emote, number[]>>; // emote → who reacted (user ids)
 }
+
+export type SideTab = "chat" | "people" | "room";
 
 export type PanelKind =
   | "board"
@@ -50,6 +55,7 @@ export type PanelKind =
   | null;
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
+export type PaintMode = "line" | "box" | "fill" | "erase";
 
 export interface HudState {
   phase: "loading" | "connecting" | "ready" | "reconnecting" | "failed" | "kicked" | "removed";
@@ -61,9 +67,9 @@ export interface HudState {
   me: Person | null;
   people: Person[];
   chat: ChatMsg[];
-  chatOpen: boolean;
+  side: SideTab | null; // the right-hand panel and its tab
   chatUnread: number;
-  peopleOpen: boolean;
+  heardBy: number[]; // user ids who can hear me right now
   prompt: { objectId: string; kind: string; label: string } | null;
   panel: { kind: PanelKind; objectId?: string };
   knocks: { from: string; fromName: string; area: string; at: number }[];
@@ -92,11 +98,18 @@ export interface HudState {
     rot: number;
     holding: string | null;
     brush: string; // "w:" + an edge char (walls), a floor char (tiles), or "door"
+    paintMode: PaintMode;
+    props: Record<string, unknown> | null; // what new furniture copies (C)
+    fits: boolean; // the ghost under the pointer fits
     roomDraft: { x: number; y: number; w: number; h: number } | null;
     deskDraft: string | null;
     pickSpawn: boolean;
+    history: { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
+    // the last change: still on its way (saving) or what Yondra said
+    save: { state: "idle" | "saving" | "saved" | "failed"; at: number };
   };
   mapVersion: number;
+  objectsVersion: number; // bumps when furniture arrives, moves or goes
   following: number | null;
   inspect: number | null;
   locks: Record<string, string>;
@@ -114,9 +127,9 @@ const initial: HudState = {
   me: null,
   people: [],
   chat: [],
-  chatOpen: false,
+  side: null,
   chatUnread: 0,
-  peopleOpen: false,
+  heardBy: [],
   prompt: null,
   panel: { kind: null },
   knocks: [],
@@ -145,11 +158,17 @@ const initial: HudState = {
     rot: 0,
     holding: null,
     brush: "w:p",
+    paintMode: "line",
+    props: null,
+    fits: true,
     roomDraft: null,
     deskDraft: null,
     pickSpawn: false,
+    history: { undo: 0, redo: 0, undoLabel: null, redoLabel: null },
+    save: { state: "idle", at: 0 },
   },
   mapVersion: 0,
+  objectsVersion: 0,
   following: null,
   inspect: null,
   locks: {},

@@ -1,0 +1,258 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="emotes.js"></script>
+<style>
+:root{--ink:#2a1a12;--cream:#efe4cc;--dim:#cbbd9c;--vfd:#ffb35c;--amber:#ffa630;--rust:#b5562f;--olive:#8aa04a;--muted:#a39d8c;--edge:rgba(120,86,58,.75)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;font-family:Inter,sans-serif;color:var(--cream);position:relative;background:url(world-desk.png) center/cover}
+.lcd{font-family:VT323,monospace;color:var(--vfd);text-shadow:0 0 6px rgba(255,166,48,.45);letter-spacing:.04em}
+.mono{font-family:'Share Tech Mono',monospace;text-transform:uppercase;letter-spacing:.08em}
+.shell{background:linear-gradient(180deg,rgba(52,35,24,.93),rgba(34,23,16,.95));border:1px solid var(--edge);border-radius:14px;box-shadow:0 1px 0 rgba(255,220,170,.10) inset,0 14px 40px rgba(0,0,0,.45);backdrop-filter:blur(6px)}
+.vfd{background:radial-gradient(120% 140% at 50% 0%,#2a2016,#120d09 70%);border:1px solid #000;border-radius:8px;box-shadow:inset 0 2px 8px rgba(0,0,0,.8)}
+svg.i{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.face{width:30px;height:30px;border-radius:50%;border:2px solid #2a1c13;display:grid;place-items:center;font:600 11px Inter;color:#2a1a12;position:relative;flex:none}
+.face i{position:absolute;right:-2px;bottom:-2px;width:10px;height:10px;border-radius:50%;border:2px solid #2a1c13}
+.sep{width:1px;height:26px;background:var(--edge);flex:none}
+.ghost{height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:9px;border:1px solid var(--edge);background:rgba(255,255,255,.03);font:12px 'Share Tech Mono';letter-spacing:.07em;text-transform:uppercase;color:var(--cream)}
+.ghost svg.i{width:15px;height:15px}
+.kc{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:5px;background:#e3d6b8;color:var(--ink);font:11px 'Share Tech Mono';box-shadow:0 2px 0 #8f8166}
+
+/* top-left: where you are + what's on */
+.where{position:absolute;top:14px;left:14px;height:54px;display:flex;align-items:center;gap:10px;padding:0 8px 0 12px}
+.tape{width:7px;height:24px;border-radius:2px;background:linear-gradient(180deg,#b5562f 0 25%,#e8a33d 25% 50%,#6e7b3a 50% 75%,#efe4cc 75%)}
+.brand{font:24px VT323;color:var(--vfd);letter-spacing:.06em}
+.room{display:flex;flex-direction:column;justify-content:center;padding:4px 12px;height:40px}
+.room b{font:22px/1 VT323;color:var(--vfd);font-weight:400;letter-spacing:.04em;text-shadow:0 0 6px rgba(255,166,48,.45)}
+.room span{font:11px 'Share Tech Mono';color:var(--dim)}
+.now{display:flex;align-items:center;gap:10px;padding:4px 12px;height:40px}
+.now .clock{font:24px/1 VT323;color:var(--vfd);text-shadow:0 0 6px rgba(255,166,48,.45)}
+.now .radio{display:flex;flex-direction:column;font:11px 'Share Tech Mono';color:var(--dim);line-height:1.25}
+.now .radio em{font-style:normal;color:var(--cream)}
+.eq{display:flex;gap:2px;align-items:flex-end;height:16px}
+.eq i{width:3px;background:var(--vfd);border-radius:1px;box-shadow:0 0 4px rgba(255,166,48,.6)}
+
+/* top-right: presence + exits */
+.pres{position:absolute;top:14px;right:14px;height:54px;display:flex;align-items:center;gap:10px;padding:0 8px 0 12px}
+.faces{display:flex}.faces .face{margin-left:-8px}.faces .face:first-child{margin-left:0}
+.count{font:12px 'Share Tech Mono';color:var(--dim)}
+.sig{display:flex;gap:2px;align-items:flex-end;height:14px}
+.sig span{width:4px;background:var(--olive);border-radius:1px}
+
+/* right: one panel, tabs */
+.side{position:absolute;right:14px;top:80px;width:372px;display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid rgba(120,86,58,.5)}
+.tab{flex:1;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:6px;font:12px 'Share Tech Mono';letter-spacing:.07em;text-transform:uppercase;color:var(--dim)}
+.tab svg.i{width:16px;height:16px}
+.tab.a{background:rgba(255,179,92,.14);color:var(--vfd);box-shadow:inset 0 0 0 1px rgba(255,179,92,.35)}
+.tab .n{font:600 10px Inter;background:var(--rust);color:var(--cream);border-radius:8px;padding:1px 6px}
+.tab .x{margin-left:auto}
+.earshot{margin:10px 12px 0;padding:8px 10px;border-radius:10px;background:#1a120c;border:1px solid rgba(120,86,58,.5);display:flex;align-items:center;gap:10px}
+.earshot .faces .face{width:24px;height:24px;font-size:9px}
+.earshot p{font-size:12px;color:var(--dim);line-height:1.3}
+.earshot p b{color:var(--cream);font-weight:500}
+.scope{display:flex;gap:5px;padding:10px 12px 2px}
+.chip{font:11px 'Share Tech Mono';letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;color:var(--dim);border:1px solid var(--edge)}
+.chip.a{background:var(--vfd);color:var(--ink);border-color:var(--vfd)}
+.msgs{padding:10px 12px;display:flex;flex-direction:column;gap:12px}
+.day{font:10.5px 'Share Tech Mono';color:var(--muted);text-align:center;letter-spacing:.06em}
+.m{display:flex;gap:10px}
+.m .who{font-size:12px;font-weight:600}.m .who span{font-weight:400;color:var(--muted);margin-left:6px;font-size:11px}
+.m p{font-size:13px;line-height:1.4;color:#e6dbc2;margin-top:2px}
+.m .react{display:inline-flex;align-items:center;gap:3px;margin-top:5px;padding:1px 7px 1px 2px;border-radius:999px;background:#2a1c13;border:1px solid var(--edge);font:11px 'Share Tech Mono';color:var(--dim)}
+.m .react img{width:20px;height:20px}
+.m.me{flex-direction:row-reverse;text-align:right}
+.m.me p{background:rgba(255,179,92,.12);border:1px solid rgba(255,179,92,.3);padding:6px 10px;border-radius:10px 2px 10px 10px;display:inline-block;text-align:left}
+.compose{margin:2px 12px 12px;border-radius:12px;background:#140e0a;border:1px solid var(--amber);box-shadow:0 0 0 3px rgba(255,166,48,.14)}
+.compose .in{display:flex;align-items:center;gap:8px;padding:9px 8px 9px 12px;font-size:13px;color:#8d826c}
+.compose .in span{flex:1}
+.send{width:34px;height:34px;border-radius:9px;background:linear-gradient(180deg,#ffc274,#e8952d);display:grid;place-items:center;color:var(--ink);box-shadow:0 2px 0 #9a5c17}
+.send svg.i{width:16px;height:16px}
+.quick{display:flex;gap:4px;padding:0 8px 8px;border-top:1px solid rgba(120,86,58,.35);padding-top:7px;align-items:center}
+.quick img{width:30px;height:30px;padding:2px;border-radius:7px}
+.quick small{margin-left:auto;font:10.5px 'Share Tech Mono';color:var(--muted);padding-right:4px}
+
+/* bottom-left: minimap with labels + zoom */
+.mini{position:absolute;left:14px;bottom:16px;width:204px;padding:8px}
+.mini .map{position:relative;height:136px;border-radius:8px;overflow:hidden;background:#1a120c}
+.mini .foot{display:flex;align-items:center;justify-content:space-between;padding:7px 2px 0}
+.mini .foot b{font:16px/1 VT323;color:var(--vfd);font-weight:400;letter-spacing:.05em}
+.zoom{display:flex;gap:4px}
+.zoom span{width:24px;height:24px;border-radius:6px;border:1px solid var(--edge);display:grid;place-items:center;font:14px 'Share Tech Mono';color:var(--dim)}
+
+/* bottom-center: dock */
+.dock{position:absolute;bottom:16px;left:calc(232px + (1440px - 232px - 386px)/2);transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:8px}
+.k{height:50px;min-width:50px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 12px;position:relative;
+ background:linear-gradient(180deg,#ece2c9,#cfc1a1);box-shadow:0 3px 0 #8f8166,0 4px 8px rgba(0,0,0,.4);font:12px 'Share Tech Mono';letter-spacing:.07em;text-transform:uppercase;color:var(--ink)}
+.k.on{background:linear-gradient(180deg,#ffc274,#e8952d);transform:translateY(2px);box-shadow:0 1px 0 #9a5c17,0 2px 4px rgba(0,0,0,.4)}
+.k.off{background:linear-gradient(180deg,#c9694a,#9e4a2e);color:var(--cream);box-shadow:0 3px 0 #5e2a18,0 4px 8px rgba(0,0,0,.4)}
+.k img{width:30px;height:30px}
+.meter{display:flex;gap:2px;align-items:flex-end;height:18px}
+.meter span{width:3px;border-radius:1px;background:#6b3b10}.meter span.l{background:#3d2208}
+.badge{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;border-radius:10px;background:var(--rust);color:var(--cream);font:600 11px Inter;display:grid;place-items:center;border:2px solid #2a1c13}
+.gap{width:1px;height:32px;background:var(--edge);margin:0 3px}
+.status{height:50px;border-radius:12px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;background:rgba(0,0,0,.25);border:1px solid var(--edge);font:12px 'Share Tech Mono';letter-spacing:.07em;text-transform:uppercase}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--olive);box-shadow:0 0 6px rgba(138,160,74,.8)}
+
+/* hint above dock */
+.tip{position:absolute;bottom:90px;left:calc(232px + (1440px - 232px - 386px)/2);transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:999px;font-size:13px;white-space:nowrap}
+.tip .pic{width:36px;height:36px;border-radius:50%;background:radial-gradient(#4a3324,#241912);display:grid;place-items:center;border:1px solid var(--edge)}
+.tip .pic img{height:30px}
+.tip small{font:11px 'Share Tech Mono';color:var(--muted);letter-spacing:.05em}
+
+/* world bits */
+.tag{position:absolute;transform:translateX(-50%);display:flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:rgba(30,20,14,.85);font:13px 'Share Tech Mono';color:var(--cream);white-space:nowrap}
+.tag i{width:7px;height:7px;border-radius:50%}
+.wemote{position:absolute;width:34px;transform:translateX(-50%)}
+.ring{position:absolute;border:2px dashed rgba(255,179,92,.45);border-radius:50%;transform:translate(-50%,-50%) scaleY(.5);pointer-events:none}
+
+.callout{position:absolute;font:600 12px Inter;color:#1b120c;background:#ffd36e;padding:4px 9px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.4);white-space:nowrap;z-index:5}
+.callout b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#1b120c;color:#ffd36e;font-size:11px;margin-right:6px}
+</style></head><body>
+
+<svg width="0" height="0" style="position:absolute">
+ <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
+ <symbol id="cam" viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 10.5l5-3v9l-5-3M3 3l18 18"/></symbol>
+ <symbol id="scr" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 13V7.5M9.5 10l2.5-2.5 2.5 2.5M8 20h8M12 16v4"/></symbol>
+ <symbol id="chat" viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z"/><path d="M8 9h8M8 12h5"/></symbol>
+ <symbol id="ppl" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M15.5 14.2c2.6-.3 4.5 1.3 5 4.3"/></symbol>
+ <symbol id="build" viewBox="0 0 24 24"><path d="M14 4.5l5.5 5.5-2 2L12 6.5zM12.8 7.3L4 16.1V20h3.9l8.8-8.8"/></symbol>
+ <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/><circle cx="12" cy="12" r="6.2"/></symbol>
+ <symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></symbol>
+ <symbol id="door" viewBox="0 0 24 24"><path d="M14 4H6v16h8M10 12h10M17 9l3 3-3 3"/></symbol>
+ <symbol id="send" viewBox="0 0 24 24"><path d="M4 12l16-7-6 15-2.5-6z"/></symbol>
+ <symbol id="room" viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/></symbol>
+ <symbol id="chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></symbol>
+ <symbol id="close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+ <symbol id="ear" viewBox="0 0 24 24"><path d="M7 9a5 5 0 0 1 10 0c0 3-3 4-3.5 6.5S12 20 10 20s-3-1.5-3-3M10 9a2 2 0 0 1 4 0"/></symbol>
+</svg>
+
+<!-- people in the world, with your earshot ring -->
+<div class="ring" style="left:560px;top:404px;width:420px;height:420px"></div>
+<div class="tag" style="left:560px;top:332px"><i style="background:#8aa04a"></i>Ana Demo</div>
+<img class="wemote" data-e="wave" style="left:420px;top:150px">
+<div class="tag" style="left:420px;top:190px"><i style="background:#8aa04a"></i>Bia</div>
+<div class="tag" style="left:690px;top:262px"><i style="background:#8aa04a"></i>Caio</div>
+<div class="tag" style="left:330px;top:620px"><i style="background:#a39d8c"></i>Luiza · away</div>
+
+<!-- 1 · top-left: where you are, and what's on -->
+<header class="where shell">
+  <div class="tape"></div><span class="brand">YUTOPIA</span>
+  <div class="sep"></div>
+  <div class="room vfd"><b>YUTOPIA DEMO</b><span>▸ Tracking Room · 3 here</span></div>
+  <div class="now vfd">
+    <span class="clock">14:05</span>
+    <span class="sep" style="height:22px;background:#3a2a1c"></span>
+    <span class="eq"><i style="height:6px"></i><i style="height:13px"></i><i style="height:9px"></i><i style="height:15px"></i></span>
+    <span class="radio"><em>Lo-fi radio</em>on in the Lounge</span>
+  </div>
+</header>
+
+<!-- 2 · top-right: who's in, connection, exits -->
+<header class="pres shell">
+  <div class="faces">
+    <div class="face" style="background:#e8b07c">AD<i style="background:#8aa04a"></i></div>
+    <div class="face" style="background:#9fc0d8">BD<i style="background:#8aa04a"></i></div>
+    <div class="face" style="background:#d6c9a6">CA<i style="background:#8aa04a"></i></div>
+    <div class="face" style="background:#c99ad1">LU<i style="background:#a39d8c"></i></div>
+  </div>
+  <span class="count">4 online</span>
+  <div class="sep"></div>
+  <div class="sig"><span style="height:5px"></span><span style="height:9px"></span><span style="height:14px"></span></div>
+  <span class="ghost"><svg class="i"><use href="#ext"/></svg>Yondra</span>
+  <span class="ghost" style="border-color:#7a3a22;color:#f0b49a"><svg class="i"><use href="#door"/></svg>Leave</span>
+</header>
+
+<!-- 3 · right: one panel — Chat / People / Room -->
+<aside class="side shell">
+  <div class="tabs">
+    <div class="tab a"><svg class="i"><use href="#chat"/></svg>Chat</div>
+    <div class="tab"><svg class="i"><use href="#ppl"/></svg>People</div>
+    <div class="tab"><svg class="i"><use href="#room"/></svg>Room</div>
+    <div class="tab" style="flex:0 0 34px"><svg class="i"><use href="#close"/></svg></div>
+  </div>
+  <div class="earshot">
+    <svg class="i" style="width:18px;height:18px;color:var(--vfd)"><use href="#ear"/></svg>
+    <div class="faces"><div class="face" style="background:#9fc0d8">BD</div><div class="face" style="background:#d6c9a6">CA</div></div>
+    <p><b>Bia and Caio</b> can hear you.<br>Walk closer to talk to more people.</p>
+  </div>
+  <div class="scope"><span class="chip a">Nearby</span><span class="chip">This room</span><span class="chip">Everyone</span></div>
+  <div class="msgs">
+    <div class="day">— TODAY —</div>
+    <div class="m"><div class="face" style="background:#9fc0d8">BD</div><div><div class="who">Bia Demo<span>14:02</span></div><p>Board walls PR is up — anyone free before standup?</p><span class="react"><img data-e="heart">2</span></div></div>
+    <div class="m"><div class="face" style="background:#d6c9a6">CA</div><div><div class="who">Caio<span>14:03</span></div><p>On it after coffee</p></div></div>
+    <div class="m me"><div><p>I'll pair — war room in 5?</p></div></div>
+  </div>
+  <div class="compose">
+    <div class="in"><span>Say something to Bia and Caio…</span><div class="send"><svg class="i"><use href="#send"/></svg></div></div>
+    <div class="quick"><img data-e="wave"><img data-e="heart"><img data-e="laugh"><img data-e="clap"><img data-e="fire"><img data-e="coffee"><small>1–8</small></div>
+  </div>
+</aside>
+
+<!-- 4 · bottom-left: minimap that knows rooms -->
+<div class="mini shell">
+  <div class="map">
+    <svg viewBox="0 0 188 136" width="100%" height="100%">
+      <g font-family="Share Tech Mono" font-size="8" fill="#efe4cc" opacity=".75">
+      <rect x="4" y="4" width="112" height="70" rx="2" fill="#7a5233"/>
+      <rect x="120" y="4" width="64" height="46" rx="2" fill="#5d6a2f"/>
+      <rect x="4" y="78" width="48" height="54" rx="2" fill="#5d6a2f"/>
+      <rect x="56" y="78" width="66" height="54" rx="2" fill="#4a3324"/>
+      <rect x="126" y="54" width="58" height="78" rx="2" fill="#7b3424"/>
+      <text x="9" y="14">TRACKING</text><text x="124" y="14">WAR ROOM</text><text x="8" y="88">LOBBY</text><text x="60" y="88">LIVE</text><text x="130" y="64">BOOTHS</text>
+      </g>
+      <rect x="2.5" y="2.5" width="115" height="73" rx="3" fill="none" stroke="#ffb35c" stroke-width="1.5"/>
+      <circle cx="62" cy="40" r="15" fill="#ffb35c" opacity=".15"/>
+      <circle cx="62" cy="40" r="4" fill="#ff5a2a" stroke="#1a120c" stroke-width="1.5"/>
+      <circle cx="44" cy="24" r="2.6" fill="#ffb35c"/><circle cx="80" cy="32" r="2.6" fill="#ffb35c"/>
+      <circle cx="150" cy="26" r="2.6" fill="#efe4cc"/><circle cx="30" cy="104" r="2.6" fill="#a39d8c"/>
+    </svg>
+  </div>
+  <div class="foot"><b>TRACKING ROOM</b><span class="zoom"><span>−</span><span>+</span></span></div>
+</div>
+
+<!-- 5 · hint with the item's picture -->
+<div class="tip shell"><span class="pic"><img data-trim src="items/lamp.png"></span><span class="kc">X</span>Turn on the floor lamp<small>· click it works too</small></div>
+
+<!-- 6 · dock: drawn icons, grouped, live mic -->
+<nav class="dock shell">
+  <span class="k on"><svg class="i"><use href="#mic"/></svg><span class="meter"><span style="height:5px"></span><span style="height:11px"></span><span style="height:16px"></span><span class="l" style="height:9px"></span><span class="l" style="height:6px"></span></span></span>
+  <span class="k off"><svg class="i"><use href="#cam"/></svg></span>
+  <span class="k"><svg class="i"><use href="#scr"/></svg></span>
+  <span class="gap"></span>
+  <span class="k"><img data-e="laugh"></span>
+  <span class="k on"><svg class="i"><use href="#chat"/></svg><span class="badge">2</span></span>
+  <span class="k"><svg class="i"><use href="#ppl"/></svg></span>
+  <span class="gap"></span>
+  <span class="status"><span class="dot"></span>Available<svg class="i" style="width:14px;height:14px"><use href="#chev"/></svg></span>
+  <span class="gap"></span>
+  <span class="k"><svg class="i"><use href="#build"/></svg></span>
+  <span class="k"><svg class="i"><use href="#gear"/></svg></span>
+</nav>
+
+<div class="callout" style="left:440px;top:76px"><b>1</b>Where you are + what's on (clock, radio)</div>
+<div class="callout" style="left:1040px;top:72px"><b>2</b>Who's in at a glance</div>
+<div class="callout" style="left:790px;top:180px"><b>3</b>Who can hear you</div>
+<div class="callout" style="left:770px;top:604px"><b>4</b>Quick emotes in the chat</div>
+<div class="callout" style="left:232px;top:708px"><b>5</b>Map knows the rooms</div>
+<div class="callout" style="left:342px;top:368px"><b>6</b>Earshot ring around you</div>
+<div class="callout" style="left:470px;top:742px"><b>7</b>Hint shows the thing</div>
+<div class="callout" style="left:300px;top:800px"><b>8</b>Drawn dock</div>
+
+<script>
+document.querySelectorAll("img[data-trim]").forEach((img) => {
+  const run = () => {
+    const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+    for (let y = 0; y < c.height; y++) for (let X = 0; X < c.width; X++) if (d[(y * c.width + X) * 4 + 3] > 40) { x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+    o.getContext("2d").drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+    img.removeAttribute("data-trim"); img.src = o.toDataURL();
+  };
+  img.complete ? run() : img.addEventListener("load", run, { once: true });
+});
+document.querySelectorAll("img[data-e]").forEach((i) => (i.src = window.EMOTE[i.dataset.e]));
+</script>
+</body></html>

@@ -38,7 +38,7 @@ test("an owner builds the room with the mouse, and it persists", async ({ page }
   await W(page);
   await page.evaluate(() => {
     const h = (window as any).__hud;
-    h.set({ build: { on: true, kind: "plant", rot: 0, holding: null } });
+    h.set({ build: { ...h.get().build, on: true, kind: "plant", rot: 0, holding: null } });
   });
   await expect(page.getByRole("region", { name: /build mode/i })).toBeVisible();
 
@@ -60,7 +60,8 @@ test("an owner builds the room with the mouse, and it persists", async ({ page }
 
   // walls are off limits
   await page.evaluate(() => {
-    (window as any).__hud.set({ build: { on: true, kind: "plant", rot: 0, holding: null } });
+    const h = (window as any).__hud;
+    h.set({ build: { ...h.get().build, on: true, kind: "plant", rot: 0, holding: null } });
   });
   await clickTile(page, 0, 10);
   await expect.poll(() => objectsAt(page, 0, 10)).toEqual([]);

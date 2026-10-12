@@ -1,6 +1,8 @@
 import {
   type AvatarLayers,
   depthOf,
+  EMOTES,
+  type Emote,
   entry,
   footprint,
   isFloor,
@@ -51,7 +53,14 @@ import {
   setArtRes,
   wallParts,
 } from "./art/scene";
-import { acquireItem, avatarTexture, itemsPending, itemTextureStats, vortexTexture } from "./art/textures";
+import {
+  acquireItem,
+  avatarTexture,
+  emoteTexture,
+  itemsPending,
+  itemTextureStats,
+  vortexTexture,
+} from "./art/textures";
 import type { ThemeView } from "./art/themes";
 import type { VortexMood } from "./art/vortex/vortexArt";
 import type { Life, Swayable } from "./life";
@@ -104,7 +113,7 @@ interface AvatarView {
   tagText: Text;
   tagBg: Graphics;
   dot: Graphics;
-  emote: Text;
+  emote: Sprite;
   bubble: Container;
   bubbleText: Text;
   bubbleBg: Graphics;
@@ -150,16 +159,9 @@ export interface BoardContent {
   sections: { name: string; count: number }[];
 }
 
-const EMOJI: Record<string, string> = {
-  wave: "👋",
-  heart: "❤️",
-  laugh: "😂",
-  clap: "👏",
-  fire: "🔥",
-  question: "❓",
-  coffee: "☕",
-  tape: "📼",
-};
+// emote art in world px (the bubble's tail points at the head)
+const EMOTE_PX = 34;
+const isEmote = (e: string): e is Emote => (EMOTES as readonly string[]).includes(e);
 
 // What about an object changes the light map (doors: shut or not; lamps, radio: on).
 function lightKey(o: WorldObjectDef | undefined): string {
@@ -244,6 +246,9 @@ export class WorldEngine {
   private overlay = new Container();
   private highlightG = new Graphics();
   private markerG = new Graphics();
+  // how far my voice carries (tiles; 0 = hidden): a dashed ring on the floor
+  earshot = 0;
+  private earshotG = new Graphics();
   private ghostLayer = new Container();
   private walls: PartView[] = [];
   private dress: PartView[] = []; // the rooms' clutter
@@ -311,6 +316,7 @@ export class WorldEngine {
       this.floorLight,
       this.highlightG,
       this.markerG,
+      this.earshotG,
       this.sortLayer,
       this.lifeFront,
       this.ghostLayer,
@@ -1159,7 +1165,7 @@ export class WorldEngine {
       const sprite = new Sprite();
       sprite.anchor.set(0.5, 0.96);
       sprite.visible = false;
-      const emote = new Text({ text: "", style: { fontSize: 22 } });
+      const emote = new Sprite();
       emote.anchor.set(0.5, 1);
       emote.visible = false;
       root.addChild(shadow, ring, body, sprite, emote);
@@ -1252,6 +1258,28 @@ export class WorldEngine {
     v.dot.position.set(-w / 2 + 8, 0);
   }
 
+  // A circle of `earshot` tiles around me, as the iso camera sees it (an
+  // ellipse), dashed and turning slowly.
+  private drawEarshot(local: AvatarView | undefined) {
+    const g = this.earshotG;
+    g.clear();
+    if (!this.earshot || !local) return;
+    const c = toScreen(local.state.x, local.state.y);
+    const rx = this.earshot * (TILE_W / 2) * Math.SQRT2;
+    const ry = this.earshot * (TILE_H / 2) * Math.SQRT2;
+    const N = 44;
+    const phase = this.reducedMotion ? 0 : this.time * 0.08;
+    for (let i = 0; i < N; i++) {
+      const a0 = ((i + phase) / N) * Math.PI * 2;
+      const a1 = ((i + 0.55 + phase) / N) * Math.PI * 2;
+      g.moveTo(c.x + Math.cos(a0) * rx, c.y + Math.sin(a0) * ry).lineTo(
+        c.x + Math.cos(a1) * rx,
+        c.y + Math.sin(a1) * ry,
+      );
+    }
+    g.stroke({ width: 2, color: C.vfd, alpha: 0.38 });
+  }
+
   // ── frame ────────────────────────────────────────────────────────────────
   update(dt: number) {
     if (!this.app) return;
@@ -1267,6 +1295,7 @@ export class WorldEngine {
     this.cam.x += (this.camFocus.x - this.cam.x) * k;
     this.cam.y += (this.camFocus.y - this.cam.y) * k;
     this.zoom += (this.targetZoom - this.zoom) * (this.reducedMotion ? 1 : 1 - Math.exp(-dt * 10));
+    this.drawEarshot(local);
     const W = this.app.renderer.width / this.app.renderer.resolution;
     const H = this.app.renderer.height / this.app.renderer.resolution;
     this.world.scale.set(this.zoom);
@@ -1397,10 +1426,13 @@ export class WorldEngine {
     }
 
     // emote
-    if (s.emote && EMOJI[s.emote]) {
-      v.emote.text = EMOJI[s.emote];
+    const emoteTex = s.emote && isEmote(s.emote) ? emoteTexture(s.emote) : null;
+    if (emoteTex) {
+      v.emote.texture = emoteTex;
+      v.emote.width = EMOTE_PX;
+      v.emote.height = EMOTE_PX;
       v.emote.visible = true;
-      v.emote.position.set(0, -80 + lift + (this.reducedMotion ? 0 : Math.sin(this.time * 6) * 2));
+      v.emote.position.set(0, -105 + lift + (this.reducedMotion ? 0 : Math.sin(this.time * 6) * 2));
     } else v.emote.visible = false;
 
     // name tag + bubble (overlay, scale-compensated so text stays crisp)
@@ -1696,11 +1728,14 @@ export class WorldEngine {
     return best;
   }
 
+  // Build mode: taps go through people (and Vortex) to the floor and furniture.
+  passAvatars = false;
+
   private handleTap(e: FederatedPointerEvent) {
     const gx = (e.global.x - this.world.position.x) / this.zoom;
     const gy = (e.global.y - this.world.position.y) / this.zoom;
     const w = toWorld(gx, gy);
-    const av = this.pickAvatar(gx, gy);
+    const av = this.passAvatars ? null : this.pickAvatar(gx, gy);
     if (av && av !== this.localId) return this.events.onAvatarClick?.(av);
     const obj = this.pickObject(w.x, w.y, gx, gy);
     if (obj) return this.events.onObjectClick?.(obj);

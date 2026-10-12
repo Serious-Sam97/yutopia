@@ -1,97 +1,190 @@
 "use client";
 
+import { areaAt } from "@yutopia/shared";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Brand } from "@/components/Brand";
 import { YONDRA_APP } from "@/lib/api";
 import { useTr } from "@/lib/i18n";
-import { useHud } from "@/world/store";
+import { STATIONS } from "@/world/sound";
+import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
+import { Face } from "./Face";
+import { Icon } from "./icons";
 
+const LOCKABLE = ["war-room", "booth-1", "booth-2", "booth-3", "standup", "server-room"];
+
+// Top left: where you are (studio, room, who's here) and what's on (the
+// studio's clock, the radio). Top right: who's in, the connection, the exits.
 export function TopBar() {
+  return (
+    <>
+      <WhereBar />
+      <PresenceBar />
+    </>
+  );
+}
+
+function WhereBar() {
   const t = useTr();
   const spaceName = useHud((s) => s.spaceName);
-  const area = useHud((s) => s.me?.areaName ?? "");
-  const count = useHud((s) => s.people.filter((p) => !p.bot).length + (s.me ? 1 : 0));
+  const area = useHud((s) => s.me?.area ?? "");
+  const areaName = useHud((s) => s.me?.areaName ?? "");
+  const here = useHud((s) => (s.me ? 1 : 0) + s.people.filter((p) => !p.bot && p.area === area && area).length);
+  return (
+    <header className="pointer-events-auto cabinet absolute top-3 left-3 h-[54px] flex items-center gap-2.5 pl-3 pr-2 max-w-[calc(100vw-196px)] sm:max-w-[calc(100vw-480px)]">
+      <Link href="/" aria-label={t("back")} className="shrink-0">
+        <Brand small compact />
+      </Link>
+      <span className="hidden sm:block w-px h-6 shrink-0" style={{ background: "var(--edge)" }} aria-hidden />
+      <div className="vfd-window px-3 h-10 flex flex-col justify-center min-w-0">
+        <p className="lcd text-[22px] leading-none truncate">{spaceName.toUpperCase() || "…"}</p>
+        <p className="mono text-[11px] leading-tight truncate" style={{ color: "var(--cream-dim)" }} aria-live="polite">
+          ▸ {areaName || "—"}
+          {area && ` · ${t("hereCount").replace("{n}", String(here))}`}
+        </p>
+      </div>
+      <NowOn />
+    </header>
+  );
+}
+
+// The clock, and the radio while it plays (and where).
+function NowOn() {
+  const t = useTr();
+  const w = useWorld();
+  const radio = useHud((s) => s.radio);
+  useHud((s) => s.objectsVersion);
+  // set after mount: the server's clock isn't the visitor's (hydration)
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const box = w?.engine?.allObjects().find((o) => o.kind === "radio");
+  const room = box && w ? areaAt(w.map, box.x + 0.5, box.y + 0.5)?.name : null;
+  return (
+    <div className="vfd-window hidden md:flex items-center gap-2.5 px-3 h-10 shrink-0">
+      <span className="lcd text-2xl leading-none">
+        {now ? now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--"}
+      </span>
+      {radio.playing && (
+        <>
+          <span className="w-px h-5" style={{ background: "#3a2a1c" }} aria-hidden />
+          <span className="eq" aria-hidden>
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="mono text-[11px] leading-tight whitespace-nowrap" style={{ color: "var(--cream-dim)" }}>
+            <span className="block" style={{ color: "var(--cream)" }}>
+              {STATIONS[radio.station % STATIONS.length]?.name ?? t("radio")}
+            </span>
+            {room ? t("radioIn").replace("{room}", room) : t("radio")}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function PresenceBar() {
+  const t = useTr();
+  const w = useWorld();
+  const me = useHud((s) => s.me);
+  const people = useHud((s) => s.people.filter((p) => !p.bot));
   const projectId = useHud((s) => s.projectId);
-  const fps = useHud((s) => s.fps);
   const quality = useHud((s) => (s.media.offline ? "lost" : s.media.quality));
   const areaKey = useHud((s) => s.me?.area ?? "");
   const lockedBy = useHud((s) => s.locks[s.me?.area ?? ""]);
   const canBuild = useHud((s) => s.canBuild);
-  const w = useWorld();
-  const lockable =
-    canBuild && ["war-room", "booth-1", "booth-2", "booth-3", "standup", "server-room"].includes(areaKey);
+  const lockable = canBuild && LOCKABLE.includes(areaKey);
+  const everyone = me ? [me, ...people] : people;
+  const shown = everyone.slice(0, 4);
+  const bars = quality === "excellent" ? 3 : quality === "good" ? 2 : quality === "poor" ? 1 : 0;
+  const barColor = quality === "poor" ? "var(--amber)" : quality === "lost" ? "var(--rust)" : "#8aa04a";
 
   return (
-    <header className="pointer-events-auto absolute top-3 left-3 right-3 flex items-start justify-between gap-3">
-      <div className="cabinet px-3 py-2 flex items-center gap-3 min-w-0">
-        <Link href="/" aria-label={t("back")} className="shrink-0">
-          <Brand small compact />
-        </Link>
-        <div className="vfd-window px-3 py-1 min-w-0">
-          <p className="lcd text-xl leading-none truncate">{spaceName.toUpperCase() || "…"}</p>
-          <p
-            className="mono text-[11px] leading-tight truncate"
-            style={{ color: "var(--cream-dim)" }}
-            aria-live="polite"
+    <header className="pointer-events-auto cabinet absolute top-3 right-3 h-[54px] flex items-center gap-2 sm:gap-2.5 pl-3 pr-2">
+      <button
+        type="button"
+        className="hidden sm:flex items-center"
+        onClick={() => hud.set({ side: "people" })}
+        aria-label={t("people")}
+        title={everyone.map((p) => p.name).join(", ")}
+      >
+        {shown.map((p, i) => (
+          <span key={p.sid} style={{ marginLeft: i ? -8 : 0, zIndex: 10 - i }} className="relative">
+            <Face avatar={p.avatar} name={p.name} status={p.status} size={30} />
+          </span>
+        ))}
+        {everyone.length > shown.length && (
+          <span
+            className="relative -ml-2 w-[30px] h-[30px] rounded-full grid place-items-center mono text-[10px]"
+            style={{ background: "#3b281b", border: "2px solid #2a1c13", color: "var(--cream-dim)" }}
           >
-            {area || "—"}
-          </p>
-        </div>
-      </div>
-      <div className="cabinet px-2 py-2 flex items-center gap-2">
-        {lockable && (
-          <button
-            type="button"
-            className="ghost-btn"
-            onClick={() => w?.send("mod:lock", { area: areaKey, locked: !lockedBy })}
-          >
-            {lockedBy ? `🔓 ${t("unlockRoom")}` : `🔒 ${t("lockRoom")}`}
-          </button>
+            +{everyone.length - shown.length}
+          </span>
         )}
-        <span
-          className="mono text-xs"
-          title={`voice: ${quality}`}
-          role="img"
-          aria-label={`voice connection ${quality}`}
-          style={{
-            color:
-              quality === "excellent" || quality === "good"
-                ? "#8aa04a"
-                : quality === "poor"
-                  ? "var(--amber)"
-                  : quality === "lost"
-                    ? "var(--rust)"
-                    : "var(--muted)",
-          }}
+      </button>
+      <span className="mono text-xs whitespace-nowrap" style={{ color: "var(--cream-dim)" }}>
+        <span className="sm:hidden" style={{ color: "#8aa04a" }}>
+          ●{" "}
+        </span>
+        {everyone.length} {t("online")}
+      </span>
+      <span className="w-px h-6" style={{ background: "var(--edge)" }} aria-hidden />
+      <span
+        className="flex items-end gap-[2px] h-[14px]"
+        role="img"
+        aria-label={`${t("connection")}: ${quality}`}
+        title={`${t("connection")}: ${quality}`}
+      >
+        {quality === "lost" ? (
+          <Icon name="close" size={14} className="text-[var(--rust)]" />
+        ) : (
+          [5, 9, 14].map((h, i) => (
+            <span
+              key={h}
+              className="w-1 rounded-[1px]"
+              style={{ height: h, background: i < bars ? barColor : "#4a3527" }}
+            />
+          ))
+        )}
+      </span>
+      {lockable && (
+        <button
+          type="button"
+          className="ghost-btn flex items-center gap-1.5 h-[34px]"
+          onClick={() => w?.send("mod:lock", { area: areaKey, locked: !lockedBy })}
+          aria-label={lockedBy ? t("unlockRoom") : t("lockRoom")}
         >
-          {quality === "excellent"
-            ? "▂▄▆"
-            : quality === "good"
-              ? "▂▄_"
-              : quality === "poor"
-                ? "▂__"
-                : quality === "lost"
-                  ? "✕"
-                  : "···"}
-        </span>
-        <span className="mono text-xs px-1 whitespace-nowrap" style={{ color: "var(--vfd)" }} title={`${fps} fps`}>
-          ● {count} {t("online")}
-        </span>
-        {projectId && (
-          <a
-            className="ghost-btn hidden sm:inline-block"
-            href={`${YONDRA_APP}/projects/${projectId}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {t("openInYondra")} ↗
-          </a>
-        )}
-        <Link href="/" className="ghost-btn">
-          {t("leave")}
-        </Link>
-      </div>
+          <Icon name={lockedBy ? "unlock" : "lock"} size={15} />
+          <span className="hidden lg:inline">{lockedBy ? t("unlockRoom") : t("lockRoom")}</span>
+        </button>
+      )}
+      {projectId && (
+        <a
+          className="ghost-btn hidden md:flex items-center gap-1.5 h-[34px]"
+          href={`${YONDRA_APP}/projects/${projectId}`}
+          target="_blank"
+          rel="noreferrer"
+          title={t("openInYondra")}
+        >
+          <Icon name="external" size={15} />
+          Yondra
+        </a>
+      )}
+      <Link
+        href="/"
+        className="ghost-btn flex items-center gap-1.5 h-[34px]"
+        style={{ borderColor: "#7a3a22", color: "#f0b49a" }}
+      >
+        <Icon name="leave" size={15} />
+        <span className="hidden sm:inline">{t("leave")}</span>
+      </Link>
     </header>
   );
 }

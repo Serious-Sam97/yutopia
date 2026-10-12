@@ -64,7 +64,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
     (window as any).__hud.set({ build: { ...(window as any).__hud.get().build, on: true, tool: "map" } }),
   );
   await ana.getByRole("button", { name: /^S\s*32×24$/ }).click();
-  await ana.getByRole("button", { name: "Start blank" }).click();
+  await ana.getByRole("button", { name: /Start from a blank/ }).click();
   await expect.poll(() => st(ana, () => (window as any).__yutopia.room.state.width)).toBe(32);
   // stand near where we'll build so it's on screen (no walking in build mode)
   const build = (on: boolean, tool = "rooms") =>
@@ -100,7 +100,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   expect(across).toBe(".".repeat(18));
 
   // 2 · a desk for Ana inside her room
-  await ana.getByRole("tab", { name: /Furniture/ }).click();
+  await ana.getByRole("tab", { name: /Furnish/ }).click();
   await ana.getByRole("button", { name: "Desk", exact: true }).click();
   await clickTile(ana, 5, 5);
   await ana.getByRole("button", { name: "Chair", exact: true }).click();

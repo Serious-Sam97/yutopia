@@ -154,3 +154,39 @@ Maps are now **per-space data** (`yutopia_spaces.layout`, null = the built-in St
 
 ## Visual quality — done (V1–V8, 2026-10-10 → 2026-10-12)
 Every item, wall, floor, light, outside theme and bit of life is illustrated in the people's hand; quality is tiered and guarded by screenshot regression + budgets in CI. Before/after of every room, day + night: `design/screens/visual/compare/` (from `before/` and `after/`). Style guide: `docs/art-style.md`. Open: commit the first CI run's Linux baselines; the team's two-week real use (Fita 8) still stands.
+
+## UI — build mode redesign ✅ (2026-10-12)
+Approved mockups: `design/screens/ui/build-proposal-furnish.png`, `build-proposal-tools.png` (HUD proposal: `hud-proposal-desktop.png`, not built yet).
+- **Layout** (`apps/client/src/components/hud/build/`, lazy-loaded): build mode takes over the screen — its own top bar (BUILD MODE, mic, Undo/Redo, save state, Done), a tool rail (Furnish · Walls · Rooms · Desks · Map · Keys), the tool's panel, and a bottom action bar (what you hold: fits/blocked, size, facing, Rotate R, Copy C, Delete Del, Esc/✕). The normal top bar, dock, people, chat and prompt hide while building. Phone: rail on top, panel as a bottom sheet. Icons: `components/hud/icons.tsx`.
+- **Furnish:** catalog cards with the real item art (`build/thumbs.tsx`, from the lazy item chunk), footprint, search (`/`), category chips, layouts (templates) as cards.
+- **Walls & floors:** drawn wall/floor swatches; paint modes **Line / Box / Fill room / Erase** (box = floors fill / walls outline; fill = flood floor up to walls and doors, or repaint the room's walls; erase = walls or floors by the picked brush).
+- **Rooms:** every area as a card (kind, size, doors, owner, lock), one open at a time: owner, dressing, wall colours, **Go there**, remove.
+- **Desks:** seats/assigned/free counters, who sits where, people without a desk — **drag a person onto a seat**.
+- **Map:** drawn theme pictures, sizes drawn to scale, arrival point, start blank under Danger.
+- **Undo/redo** (Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z): per person on the server (`world-server/src/features/history.ts`, shared `history.ts`). A step = the studio's diff once that person pauses 600 ms (a drag is one step), 50 deep; undo only reverts what nobody changed since (tiles/edges cell by cell, rooms room by room, objects by id). Messages `build:undo`/`build:redo` → `build:history`; layout saves report `build:saved` (top bar "Saved to Yondra").
+- **Fixed on the way:** taps in build mode went to Vortex/people standing on the tile (now pass through); `teleport {x,y}` was declared but not handled (now builders only).
+- **Checked:** lint, types, tests (shared 23 · world-server 24), e2e build/map-edit/build-tools(new)/world/mobile 7/7, budget (world 507.7 KB).
+
+## UI — illustrated emotes ✅ (2026-10-12)
+The 8 emotes (wave, heart, laugh, clap, fire, question, coffee, tape) are drawn in the house style instead of system emoji: a cream speech-bubble token with ink outline and upper-left light, art in the studio palette (`apps/client/src/world/art/emotes.ts`). Same drawing over heads (texture at 2×, shown 34 px, above the name tag) and in the dock's emote menu, the dock's emote key and the person card's wave. Sheet: `design/screens/ui/emotes-sheet.png`. Checked: types, lint, e2e world + mobile.
+
+## UI — minimap no longer covers the chat ✅ (2026-10-12)
+The minimap publishes its height as `--minimap-h` (0 when hidden); the chat sits above it (`max(6rem, minimap + 24px)`, height capped to the window), so its input and send button are never under the map. The minimap shows from `lg` (1024 px) up — between 768 and ~960 px it ran into the centred dock. Build mode's bottom bar follows the same breakpoint.
+
+## UI — main HUD v2 ✅ (2026-10-12)
+Built from `design/screens/ui/hud-proposal-v2.png`; shots of the result: `design/screens/ui/hud-v2-*.png`.
+1. **Where you are + what's on** (`TopBar.tsx` → WhereBar): studio, room, "N here"; a VFD clock (client-side after mount — no hydration mismatch); while the radio plays, an animated EQ, the station and the room it's in.
+2. **Who's in** (PresenceBar): portraits of whoever's online (`Face.tsx` crops the person's own avatar drawing, status dot), count, signal bars, lock/unlock (owners, lockable rooms), Yondra, Leave.
+3. **One side panel** (`SidePanel.tsx`, lazy): Chat · People · Room tabs (`hud.side` replaces `chatOpen`/`peopleOpen`); grows with content and stays above the dock.
+   - **Who can hear you:** from the server's `hear.heardBy` (`hud.heardBy`), with faces; stage/private-room wording; the composer says "Say something to Bia…".
+   - **Reactions:** `chat:react` — the server remembers the last 200 messages' audiences, toggles per user, sends counts to that audience only (test in `rooms.test.ts`). Hover a message to react; chips show counts, yours highlighted.
+   - **Quick emotes** under the composer (the drawn set, 1–8).
+   - **People:** portraits with speaking ring, "hears you", mic/cam/screen icons, Yondra work, Go to / Follow, My desk.
+   - **Room:** name and what kind of room (how sound works there), lock state, owner, who's here, and the things in it (item pictures) — click walks there and uses it.
+4. **Minimap** (bottom left; bottom right while building): floors, walls, room labels where they fit, your room outlined, people (amber = you hear them), Vortex, you; room name below, ± zoom the world camera; ≥ 1024 px.
+5. **Earshot ring:** a slowly turning dashed ring on the floor at the hearing radius while your mic is on in open rooms (not private rooms/stage, not in Focus).
+6. **Hint** shows the thing's picture, the key (X) or "tap to use" on touch.
+7. **Dock:** drawn icons, mic with a live level meter (`Media.micLevel`, analyser on the published track), crossed camera when off, status as a menu, emote key = the laugh emote; on phones the dividers, People and Build hide (People is a tab of the panel).
+- **CSS:** component classes now live in `@layer components`, so Tailwind display utilities (`hidden sm:inline-flex`…) win — this fixed the screen-share button showing on phones.
+- **Checked:** lint, types, tests (shared 23 · world-server 25), e2e hud (new) + world + mobile + build + build-tools + map-edit, budget (world 514.1 KB ≤ 520, side panel and build mode lazy). Under a full back-to-back e2e run, map-edit can hit its 90 s timeout (passes alone in ~40 s).
+- **Found, not fixed (separate task):** Yondra trims request strings, so layouts with VOID tiles at a row's edge fail to save (422 "every row must be width long").

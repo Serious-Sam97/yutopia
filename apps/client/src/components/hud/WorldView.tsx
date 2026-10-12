@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getToken } from "@/lib/api";
@@ -7,22 +8,27 @@ import { mixer } from "@/world/audio";
 import { WorldController } from "@/world/controller";
 import { radio, sound } from "@/world/sound";
 import { hud, useHud } from "@/world/store";
-import { BuildBar } from "./BuildBar";
-import { ChatPanel } from "./ChatPanel";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
 import { ConnectionOverlay, Knocks, Minimap, Prompt, Toasts, VideoBubbles } from "./Overlays";
 import { PanelHost } from "./PanelHost";
-import { PeoplePanel } from "./PeoplePanel";
 import { PersonCard } from "./PersonCard";
 import { Rituals } from "./Rituals";
 import { TopBar } from "./TopBar";
+
+// project owners only: loaded the first time someone builds
+const BuildMode = dynamic(() => import("./build/BuildMode").then((m) => m.BuildMode), { ssr: false });
+// chat · people · room: loaded the first time the panel opens
+const SidePanel = dynamic(() => import("./SidePanel").then((m) => m.SidePanel), { ssr: false });
 
 export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null }) {
   const router = useRouter();
   const host = useRef<HTMLDivElement>(null);
   const [ctrl, setCtrl] = useState<WorldController | null>(null);
   const phase = useHud((s) => s.phase);
+  // build mode takes over the screen (its own top bar, panels and bottom bar)
+  const building = useHud((s) => s.build.on && s.canBuild);
+  const side = useHud((s) => s.side);
 
   useEffect(() => {
     if (!getToken()) {
@@ -54,17 +60,16 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
         <div ref={host} className="absolute inset-0" />
         <VideoBubbles />
         <div className="pointer-events-none absolute inset-0">
-          <TopBar />
-          <Rituals />
-          <PeoplePanel />
-          <ChatPanel />
+          {!building && <TopBar />}
+          {!building && <Rituals />}
+          {!building && side && <SidePanel />}
           <PersonCard />
           <Knocks />
           <Toasts />
-          <Prompt />
-          <BuildBar />
+          {!building && <Prompt />}
+          {building && <BuildMode />}
           <Minimap />
-          <Dock />
+          {!building && <Dock />}
           <PanelHost />
         </div>
         <ConnectionOverlay />

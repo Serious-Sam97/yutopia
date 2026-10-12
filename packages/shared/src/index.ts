@@ -5,6 +5,7 @@ export * from "./convert.ts";
 export * from "./dressing.ts";
 export * from "./grid.ts";
 export * from "./hearing.ts";
+export * from "./history.ts";
 export * from "./iso.ts";
 export * from "./map.ts";
 export * from "./map-edit.ts";

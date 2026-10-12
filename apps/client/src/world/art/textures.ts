@@ -1,8 +1,9 @@
 "use client";
 
-import type { AvatarLayers } from "@yutopia/shared";
+import type { AvatarLayers, Emote } from "@yutopia/shared";
 import { ImageSource, Texture } from "pixi.js";
 import { avatarSvg, type View } from "./avatar-svg";
+import { emoteSvg } from "./emotes";
 import { type VortexMood, vortexSvg } from "./vortex/vortexArt";
 
 // SVG art → GPU textures, drawn lazily and kept in a small LRU (each person
@@ -58,6 +59,11 @@ export function avatarTexture(a: AvatarLayers, view: View, frame: number, sittin
 // Vortex exactly as Yondra draws him (vortexSvg), one texture per mood.
 export function vortexTexture(mood: VortexMood): Texture | null {
   return get(`vx|${mood}`, () => vortexSvg(mood, `y${mood}`).replace("<svg ", '<svg width="240" height="225" '));
+}
+
+// Emotes over heads: drawn at 2× the size they're shown.
+export function emoteTexture(e: Emote): Texture | null {
+  return get(`em|${e}`, () => emoteSvg(e, 128));
 }
 
 // ── items ──────────────────────────────────────────────────────────────────

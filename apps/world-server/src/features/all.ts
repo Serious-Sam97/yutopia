@@ -5,3 +5,4 @@ import "./standup.ts";
 import "./whiteboard.ts";
 import "./vortex.ts";
 import "./mapedit.ts";
+import "./history.ts";

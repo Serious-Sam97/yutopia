@@ -23,6 +23,7 @@ export interface ClientMessages {
   pos: { x: number; y: number; d: number; a: number; seq: number };
   emote: { e: Emote };
   chat: { text: string; scope: ChatScope };
+  "chat:react": { id: string; e: Emote }; // toggles my reaction on a message I received
   status: { status: Status };
   media: { mic: boolean; cam: boolean; screen: boolean; tracks?: string[] };
   speaking: { on: boolean };
@@ -41,6 +42,8 @@ export interface ClientMessages {
   };
   "obj:remove": { id: string };
   "build:template": { template: string };
+  "build:undo": Record<string, never>; // your own last build step (history.ts)
+  "build:redo": Record<string, never>;
   "mod:mute": { userId: number; muted: boolean };
   "mod:kick": { userId: number };
   "mod:lock": { area: string; locked: boolean };
@@ -104,6 +107,11 @@ export interface ServerMessages {
   "arcade:scores": { scores: { name: string; score: number }[] };
   "vortex:say": { text: string; to?: string; mood?: string };
   kicked: { reason: string };
+  // builders: what Undo/Redo would do, and whether the last change reached Yondra
+  "build:history": { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
+  "build:saved": { ok: boolean; at: number };
+  // a message's reactions: emote → the user ids who reacted (to whoever received it)
+  "chat:react": { id: string; reactions: Partial<Record<Emote, number[]>> };
 }
 
 // Whiteboard: coordinates in a 1000 × 600 board space.

@@ -1,0 +1,195 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2a1a12;--cream:#efe4cc;--cream-dim:#cbbd9c;--vfd:#ffb35c;--amber:#ffa630;--rust:#b5562f;--olive:#8aa04a;--edge:#5a412f;--muted:#a39d8c}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1440px;height:900px;overflow:hidden;font-family:Inter,sans-serif;color:var(--cream);position:relative;
+ background:url(world-desk.png) center/cover}
+.lcd{font-family:VT323,monospace;color:var(--vfd);text-shadow:0 0 6px rgba(255,166,48,.45);letter-spacing:.04em}
+.mono{font-family:'Share Tech Mono',monospace;text-transform:uppercase;letter-spacing:.08em}
+/* one material: smoked walnut glass */
+.shell{background:linear-gradient(180deg,rgba(52,35,24,.92),rgba(34,23,16,.94));border:1px solid rgba(120,86,58,.7);
+ border-radius:14px;box-shadow:0 1px 0 rgba(255,220,170,.10) inset,0 14px 40px rgba(0,0,0,.45);backdrop-filter:blur(6px)}
+.vfd{background:radial-gradient(120% 140% at 50% 0%,#2a2016,#120d09 70%);border:1px solid #000;border-radius:8px;box-shadow:inset 0 2px 8px rgba(0,0,0,.8)}
+svg.i{width:22px;height:22px;stroke:var(--ink);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.c svg.i{stroke:var(--cream)}
+
+/* top strip */
+.top{position:absolute;top:14px;left:14px;right:14px;height:52px;display:flex;align-items:center;gap:10px;padding:0 8px 0 12px}
+.tape{width:8px;height:26px;border-radius:3px;background:linear-gradient(180deg,#b5562f 0 25%,#e8a33d 25% 50%,#6e7b3a 50% 75%,#efe4cc 75%)}
+.brand{font-family:VT323;font-size:24px;color:var(--vfd);letter-spacing:.06em}
+.sep{width:1px;height:26px;background:rgba(120,86,58,.7)}
+.where{display:flex;align-items:baseline;gap:10px;padding:5px 12px}
+.where .lcd{font-size:22px;line-height:1}
+.where .room{font-family:'Share Tech Mono';font-size:12px;color:var(--cream-dim)}
+.where .room b{color:var(--vfd);font-weight:400}
+.spacer{flex:1}
+.faces{display:flex;align-items:center}
+.face{width:30px;height:30px;border-radius:50%;border:2px solid #2a1c13;margin-left:-8px;display:grid;place-items:center;font:600 11px Inter;color:#2a1a12;position:relative}
+.face i{position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;border:2px solid #2a1c13}
+.count{font-family:'Share Tech Mono';font-size:12px;color:var(--cream-dim);margin-left:8px}
+.sig{display:flex;gap:2px;align-items:flex-end;height:14px;margin:0 6px}
+.sig span{width:4px;background:var(--olive);border-radius:1px}
+.ghost{height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:9px;border:1px solid rgba(120,86,58,.8);
+ background:rgba(255,255,255,.03);font-family:'Share Tech Mono';font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--cream)}
+.ghost svg.i{width:15px;height:15px;stroke:var(--cream)}
+.ghost.leave{border-color:#7a3a22;color:#f0b49a}
+
+/* dock */
+.dock{position:absolute;bottom:16px;left:540px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:8px}
+.k{height:48px;min-width:48px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 12px;position:relative;
+ background:linear-gradient(180deg,#ece2c9,#cfc1a1);box-shadow:0 3px 0 #8f8166,0 4px 8px rgba(0,0,0,.4);
+ font-family:'Share Tech Mono';font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink)}
+.k.on{background:linear-gradient(180deg,#ffc274,#e8952d);transform:translateY(2px);box-shadow:0 1px 0 #9a5c17,0 2px 4px rgba(0,0,0,.4)}
+.k.off{background:linear-gradient(180deg,#c9694a,#9e4a2e);color:var(--cream);box-shadow:0 3px 0 #5e2a18,0 4px 8px rgba(0,0,0,.4)}
+.k.off svg.i{stroke:var(--cream)}
+.meter{display:flex;gap:2px;align-items:flex-end;height:18px}
+.meter span{width:3px;border-radius:1px;background:#6b3b10}
+.meter span.l{background:#3d2208}
+.badge{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;border-radius:10px;background:var(--rust);color:var(--cream);font:600 11px Inter;display:grid;place-items:center;border:2px solid #2a1c13}
+.gap{width:1px;height:30px;background:rgba(120,86,58,.8);margin:0 4px}
+.status{height:48px;border-radius:11px;display:inline-flex;align-items:center;gap:8px;padding:0 12px;background:rgba(0,0,0,.25);border:1px solid rgba(120,86,58,.8);font-family:'Share Tech Mono';font-size:12px;letter-spacing:.07em;text-transform:uppercase}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--olive);box-shadow:0 0 6px rgba(138,160,74,.8)}
+.keycap{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:4px;background:#e3d6b8;color:var(--ink);font:11px 'Share Tech Mono';box-shadow:0 2px 0 #8f8166}
+.tip{position:absolute;left:540px;transform:translateX(-50%);bottom:84px;display:flex;align-items:center;gap:10px;padding:7px 14px 7px 8px;border-radius:999px;font-size:13px}
+
+/* side drawer */
+.drawer{position:absolute;top:78px;right:14px;bottom:16px;width:360px;display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;gap:4px;padding:8px;border-bottom:1px solid rgba(120,86,58,.5)}
+.tab{flex:1;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:6px;font-family:'Share Tech Mono';font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--cream-dim)}
+.tab svg.i{width:16px;height:16px;stroke:currentColor}
+.tab.a{background:rgba(255,179,92,.14);color:var(--vfd);box-shadow:inset 0 0 0 1px rgba(255,179,92,.35)}
+.tab .n{font:600 10px Inter;background:var(--rust);color:var(--cream);border-radius:8px;padding:1px 6px}
+.scope{display:flex;gap:4px;padding:10px 12px 4px}
+.chip{font-family:'Share Tech Mono';font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;color:var(--cream-dim);border:1px solid rgba(120,86,58,.7)}
+.chip.a{background:var(--vfd);color:var(--ink);border-color:var(--vfd)}
+.msgs{flex:1;padding:8px 12px;display:flex;flex-direction:column;gap:12px;justify-content:flex-end}
+.m{display:flex;gap:10px}
+.m .face{margin:0;flex:none;width:28px;height:28px}
+.m .who{font-size:12px;font-weight:600;color:var(--cream)}
+.m .who span{font-weight:400;color:var(--muted);margin-left:6px;font-size:11px}
+.m p{font-size:13px;line-height:1.4;color:#e6dbc2;margin-top:2px}
+.sys{font-family:'Share Tech Mono';font-size:11px;color:var(--muted);text-align:center;letter-spacing:.05em}
+.compose{margin:8px 12px 12px;display:flex;gap:6px;align-items:center;padding:6px 6px 6px 12px;border-radius:10px;background:#140e0a;border:1px solid var(--amber);box-shadow:0 0 0 3px rgba(255,166,48,.15)}
+.compose span{flex:1;font-size:13px;color:#8d826c}
+.send{width:34px;height:34px;border-radius:8px;background:linear-gradient(180deg,#ffc274,#e8952d);display:grid;place-items:center}
+.send svg.i{width:16px;height:16px}
+
+/* minimap — moves left, out of the drawer's way */
+.mini{position:absolute;left:14px;bottom:16px;width:176px;height:130px;padding:8px}
+.mini .map{position:relative;width:100%;height:100%;border-radius:7px;overflow:hidden;background:#1a120c}
+.mini .lbl{position:absolute;top:-1px;left:10px;transform:translateY(-100%);}
+
+/* world labels (people in the scene) */
+.tag{position:absolute;transform:translateX(-50%);display:flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;background:rgba(30,20,14,.82);font:13px 'Share Tech Mono';color:var(--cream)}
+.tag i{width:7px;height:7px;border-radius:50%}
+.bub{position:absolute;width:118px;height:84px;border-radius:12px;border:2px solid var(--vfd);box-shadow:0 0 0 3px rgba(0,0,0,.35),0 8px 20px rgba(0,0,0,.45);overflow:hidden;
+ background:radial-gradient(60% 70% at 50% 40%,#8a6a4f,#3b281b)}
+.bub .head{position:absolute;left:50%;top:18px;width:36px;height:36px;margin-left:-18px;border-radius:50%;background:#c58b62}
+.bub .body{position:absolute;left:50%;bottom:-20px;width:76px;height:44px;margin-left:-38px;border-radius:40px 40px 0 0;background:#556b8a}
+.bub .nm{position:absolute;left:6px;bottom:5px;font:11px 'Share Tech Mono';color:var(--cream);background:rgba(0,0,0,.5);padding:1px 5px;border-radius:4px}
+.callout{position:absolute;font:600 12px Inter;color:#1b120c;background:#ffd36e;padding:4px 9px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.callout b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#1b120c;color:#ffd36e;font-size:11px;margin-right:6px}
+</style></head><body>
+
+<!-- SVG icon set: one hand, ink strokes -->
+<svg width="0" height="0" style="position:absolute">
+ <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
+ <symbol id="cam" viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="M16 10.5l5-3v9l-5-3"/><circle cx="7" cy="10" r=".6"/></symbol>
+ <symbol id="scr" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 13V7.5M9.5 10l2.5-2.5 2.5 2.5M8 20h8M12 16v4"/></symbol>
+ <symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14c1.8 2.2 5.2 2.2 7 0"/><path d="M9 9.5v1M15 9.5v1"/></symbol>
+ <symbol id="chat" viewBox="0 0 24 24"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4h0A2.5 2.5 0 0 1 4 13.5z"/><path d="M8 9h8M8 12h5"/></symbol>
+ <symbol id="ppl" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M15.5 14.2c2.6-.3 4.5 1.3 5 4.3"/></symbol>
+ <symbol id="build" viewBox="0 0 24 24"><path d="M14 4.5l5.5 5.5-2 2L12 6.5zM12.8 7.3L4 16.1V20h3.9l8.8-8.8"/></symbol>
+ <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/><circle cx="12" cy="12" r="6.2"/></symbol>
+ <symbol id="ext" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></symbol>
+ <symbol id="door" viewBox="0 0 24 24"><path d="M14 4H6v16h8M10 12h10M17 9l3 3-3 3"/></symbol>
+ <symbol id="send" viewBox="0 0 24 24"><path d="M4 12l16-7-6 15-2.5-6z"/></symbol>
+ <symbol id="room" viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11M9 20v-6h6v6"/></symbol>
+ <symbol id="chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></symbol>
+</svg>
+
+<!-- people in the world -->
+<div class="tag" style="left:552px;top:236px"><i style="background:#8aa04a"></i>Ana Demo</div>
+<div class="tag" style="left:356px;top:150px"><i style="background:#b5562f"></i>Bia · focus</div>
+<div class="bub" style="left:820px;top:196px"><div class="head"></div><div class="body"></div><span class="nm">Caio</span></div>
+
+<!-- TOP STRIP: one bar, identity left / presence + exits right -->
+<header class="top shell">
+  <div class="tape"></div><span class="brand">YUTOPIA</span>
+  <div class="sep"></div>
+  <div class="where vfd"><span class="lcd">YUTOPIA DEMO</span><span class="room">▸ <b>Tracking Room</b> · 3 here</span></div>
+  <div class="spacer"></div>
+  <div class="faces">
+    <div class="face" style="background:#e8b07c">AD<i style="background:#8aa04a"></i></div>
+    <div class="face" style="background:#9fc0d8">BD<i style="background:#b5562f"></i></div>
+    <div class="face" style="background:#d6c9a6">CA<i style="background:#8aa04a"></i></div>
+    <div class="face" style="background:#c99ad1">LU<i style="background:#a39d8c"></i></div>
+    <span class="count">4 online</span>
+  </div>
+  <div class="sep"></div>
+  <div class="sig" title="voice: excellent"><span style="height:5px"></span><span style="height:9px"></span><span style="height:14px"></span></div>
+  <span class="ghost"><svg class="i"><use href="#ext"/></svg>Yondra</span>
+  <span class="ghost leave"><svg class="i" style="stroke:#f0b49a"><use href="#door"/></svg>Leave</span>
+</header>
+
+<!-- SIDE DRAWER: people / chat / room as tabs of one panel -->
+<aside class="drawer shell">
+  <div class="tabs">
+    <div class="tab a"><svg class="i"><use href="#chat"/></svg>Chat</div>
+    <div class="tab"><svg class="i"><use href="#ppl"/></svg>People <span style="color:var(--muted)">4</span></div>
+    <div class="tab"><svg class="i"><use href="#room"/></svg>Room</div>
+  </div>
+  <div class="scope"><span class="chip a">Nearby</span><span class="chip">This room</span><span class="chip">Everyone</span></div>
+  <div class="msgs">
+    <div class="sys">— Caio walked into Tracking Room —</div>
+    <div class="m"><div class="face" style="background:#9fc0d8">BD</div><div><div class="who">Bia Demo<span>14:02</span></div><p>Board walls PR is up — anyone free to look before standup?</p></div></div>
+    <div class="m"><div class="face" style="background:#d6c9a6">CA</div><div><div class="who">Caio<span>14:03</span></div><p>On it. Grabbing a coffee first ☕</p></div></div>
+    <div class="m"><div class="face" style="background:#e8b07c">AD</div><div><div class="who">Ana Demo<span>14:04</span></div><p>I'll pair — meet at the war room in 5?</p></div></div>
+  </div>
+  <div class="compose"><span>Say something to people nearby…</span><div class="send"><svg class="i"><use href="#send"/></svg></div></div>
+</aside>
+
+<!-- MINIMAP: bottom-left, never under a panel -->
+<div class="mini shell">
+  <div class="map">
+    <svg viewBox="0 0 160 114" width="100%" height="100%">
+      <rect x="4" y="4" width="96" height="58" rx="2" fill="#7a5233"/>
+      <rect x="104" y="4" width="52" height="40" rx="2" fill="#5d6a2f"/>
+      <rect x="4" y="66" width="40" height="44" rx="2" fill="#5d6a2f"/>
+      <rect x="48" y="66" width="56" height="44" rx="2" fill="#4a3324"/>
+      <rect x="108" y="48" width="48" height="62" rx="2" fill="#7b3424"/>
+      <rect x="2.5" y="2.5" width="99" height="61" rx="3" fill="none" stroke="#ffb35c" stroke-width="1.5"/>
+      <circle cx="58" cy="30" r="3.5" fill="#ffb35c" stroke="#1a120c" stroke-width="1.5"/>
+      <circle cx="38" cy="16" r="2.5" fill="#efe4cc"/><circle cx="80" cy="24" r="2.5" fill="#efe4cc"/><circle cx="130" cy="24" r="2.5" fill="#efe4cc"/>
+    </svg>
+  </div>
+</div>
+
+<!-- context hint: one line, key cap, sits above the dock -->
+<div class="tip shell"><span class="keycap">X</span>Turn on the floor lamp</div>
+
+<!-- DOCK: grouped like a deck — media | social | me | tools -->
+<nav class="dock shell">
+  <span class="k on"><svg class="i"><use href="#mic"/></svg><span class="meter"><span style="height:5px"></span><span style="height:11px"></span><span style="height:16px"></span><span class="l" style="height:9px"></span><span class="l" style="height:6px"></span></span></span>
+  <span class="k off" style="padding:0 10px"><svg class="i"><use href="#cam"/></svg></span>
+  <span class="k"><svg class="i"><use href="#scr"/></svg></span>
+  <span class="gap"></span>
+  <span class="k"><svg class="i"><use href="#smile"/></svg></span>
+  <span class="k on"><svg class="i"><use href="#chat"/></svg><span class="badge">2</span></span>
+  <span class="k"><svg class="i"><use href="#ppl"/></svg></span>
+  <span class="gap"></span>
+  <span class="status c"><span class="dot"></span>Available<svg class="i" style="width:14px;height:14px"><use href="#chev"/></svg></span>
+  <span class="gap"></span>
+  <span class="k"><svg class="i"><use href="#build"/></svg></span>
+  <span class="k"><svg class="i"><use href="#gear"/></svg></span>
+</nav>
+
+<!-- annotations -->
+<div class="callout" style="left:500px;top:74px"><b>1</b>One top strip: where you are + who's online</div>
+<div class="callout" style="left:1000px;top:244px"><b>2</b>People · Chat · Room as tabs of one drawer</div>
+<div class="callout" style="left:24px;top:722px"><b>3</b>Minimap moves left, never covered</div>
+<div class="callout" style="left:286px;top:738px"><b>4</b>Drawn icons, grouped deck, live mic meter</div>
+<div class="callout" style="left:760px;top:738px"><b>5</b>Status is a menu</div>
+</body></html>

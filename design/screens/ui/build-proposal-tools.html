@@ -1,0 +1,176 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#2a1a12;--cream:#efe4cc;--cream-dim:#cbbd9c;--vfd:#ffb35c;--amber:#ffa630;--rust:#b5562f;--olive:#8aa04a;--muted:#a39d8c;--line:rgba(120,86,58,.6)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1480px;height:900px;overflow:hidden;font-family:Inter,sans-serif;color:var(--cream);
+ background:radial-gradient(80% 60% at 50% 0%,#3a2719,#17110d 70%);padding:22px 20px}
+h1{font:28px VT323;color:var(--vfd);letter-spacing:.06em;text-shadow:0 0 6px rgba(255,166,48,.45);margin:0 4px 14px;display:flex;align-items:baseline;gap:14px}
+h1 small{font:12px 'Share Tech Mono';color:var(--muted);letter-spacing:.08em;text-transform:uppercase;text-shadow:none}
+.row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;height:800px}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cap{font:12px 'Share Tech Mono';letter-spacing:.1em;text-transform:uppercase;color:var(--cream-dim);display:flex;align-items:center;gap:8px;margin-left:4px}
+.cap b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#ffd36e;color:#1b120c;font:600 11px Inter}
+.shell{flex:1;background:linear-gradient(180deg,rgba(52,35,24,.96),rgba(34,23,16,.98));border:1px solid rgba(120,86,58,.7);border-radius:14px;box-shadow:0 1px 0 rgba(255,220,170,.10) inset,0 14px 40px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden}
+.hd{display:flex;align-items:baseline;justify-content:space-between;padding:12px 14px 4px}
+.hd .t{font:24px VT323;color:var(--vfd);letter-spacing:.04em;text-shadow:0 0 6px rgba(255,166,48,.45)}
+.hd .n{font:11px 'Share Tech Mono';color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.body{padding:6px 12px 12px;display:flex;flex-direction:column;gap:10px;flex:1;overflow:hidden}
+.grp{font:11px 'Share Tech Mono';letter-spacing:.12em;text-transform:uppercase;color:var(--vfd);display:flex;align-items:center;gap:8px;margin-top:2px}
+.grp:after{content:"";flex:1;height:1px;background:var(--line)}
+.hint{font-size:12px;color:var(--muted);line-height:1.4}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.sw{border-radius:9px;padding:6px 4px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;background:#1a120c;border:1px solid var(--line)}
+.sw span{font:10px 'Share Tech Mono';text-transform:uppercase;letter-spacing:.05em;color:var(--cream-dim)}
+.sw.a{border:2px solid var(--vfd);background:rgba(255,166,48,.10)}
+.sw.a span{color:var(--vfd)}
+.seg{display:flex;background:#140e0a;border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+.seg span{flex:1;text-align:center;font:11px 'Share Tech Mono';text-transform:uppercase;letter-spacing:.06em;color:var(--cream-dim);padding:6px 0;border-radius:6px}
+.seg span.a{background:var(--vfd);color:var(--ink)}
+.btn{height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(180deg,#ece2c9,#cfc1a1);box-shadow:0 3px 0 #8f8166;color:var(--ink);font:12px 'Share Tech Mono';text-transform:uppercase;letter-spacing:.07em}
+.btn.amber{background:linear-gradient(180deg,#ffc274,#e8952d);box-shadow:0 3px 0 #9a5c17}
+.btn.out{background:transparent;box-shadow:none;border:1px solid var(--line);color:var(--cream)}
+.btn.danger{background:transparent;box-shadow:none;border:1px dashed #9e4a2e;color:#e79a7c}
+.face{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font:600 10px Inter;color:#2a1a12;flex:none;border:2px solid #2a1c13}
+.room{border-radius:10px;background:#1a120c;border:1px solid var(--line);padding:9px 10px;display:flex;flex-direction:column;gap:8px}
+.room.a{border-color:var(--vfd);box-shadow:0 0 0 3px rgba(255,166,48,.12)}
+.room .top{display:flex;align-items:center;gap:8px}
+.room .col8{width:10px;height:28px;border-radius:3px}
+.room .nm{font:20px VT323;color:var(--vfd);letter-spacing:.04em;line-height:1}
+.room .meta{font:10.5px 'Share Tech Mono';color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.room .lk{margin-left:auto;font:11px 'Share Tech Mono';padding:3px 7px;border-radius:6px;border:1px solid var(--line);color:var(--cream-dim);display:flex;gap:4px;align-items:center}
+.kv{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--cream-dim)}
+.kv label{font:10px 'Share Tech Mono';text-transform:uppercase;letter-spacing:.08em;width:58px;color:var(--muted)}
+.pill{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;border-radius:999px;background:#2a1c13;border:1px solid var(--line);font-size:12px}
+.dots{display:flex;gap:4px}
+.dots i{width:16px;height:16px;border-radius:4px;border:1px solid #0008}
+.dots i.a{outline:2px solid var(--vfd);outline-offset:1px}
+.stat{display:flex;gap:8px}
+.stat div{flex:1;border-radius:9px;background:#140e0a;border:1px solid #000;box-shadow:inset 0 2px 6px rgba(0,0,0,.7);padding:8px 10px}
+.stat b{display:block;font:28px VT323;color:var(--vfd);line-height:1;text-shadow:0 0 6px rgba(255,166,48,.4)}
+.stat span{font:10px 'Share Tech Mono';color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.desk{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:9px;background:#1a120c;border:1px solid var(--line)}
+.desk .who{font-size:13px;font-weight:500}
+.desk .where{font:10.5px 'Share Tech Mono';color:var(--muted);text-transform:uppercase}
+.desk .x{margin-left:auto;font:10px 'Share Tech Mono';text-transform:uppercase;color:var(--cream-dim);border:1px solid var(--line);border-radius:6px;padding:3px 7px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.drag{display:flex;align-items:center;gap:6px;padding:3px 9px 3px 3px;border-radius:999px;background:#2a1c13;border:1px dashed rgba(255,179,92,.5);font-size:12px}
+.theme{border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#1a120c}
+.theme .sky{height:62px;position:relative}
+.theme span{display:block;text-align:center;font:10px 'Share Tech Mono';text-transform:uppercase;letter-spacing:.06em;color:var(--cream-dim);padding:5px 0}
+.theme.a{border:2px solid var(--vfd)}
+.theme.a span{color:var(--vfd)}
+.sizes{position:relative;height:178px;border-radius:10px;background:#140e0a;border:1px solid #000;box-shadow:inset 0 2px 6px rgba(0,0,0,.7)}
+.sizes i{position:absolute;left:12px;bottom:12px;border:1px dashed rgba(203,189,156,.35);border-radius:3px}
+.sizes i.cur{border:2px solid var(--vfd);background:rgba(255,166,48,.10)}
+.sizes i b{position:absolute;right:4px;top:2px;font:400 10px 'Share Tech Mono';color:var(--muted)}
+.sizes i.cur b{color:var(--vfd)}
+.num{display:flex;gap:8px}
+.num div{flex:1;height:38px;border-radius:9px;background:#140e0a;border:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 10px;font:20px VT323;color:var(--cream)}
+.num div small{font:10px 'Share Tech Mono';color:var(--muted);text-transform:uppercase}
+</style></head><body>
+<h1>BUILD MODE · THE OTHER TOOLS <small>same rail + panel, contents per tool</small></h1>
+<div class="row">
+
+<!-- WALLS & FLOORS -->
+<div class="col"><div class="cap"><b>1</b>Walls &amp; floors — drawn swatches</div>
+<section class="shell"><div class="hd"><span class="t">WALLS &amp; FLOORS</span><span class="n">drag to paint</span></div>
+<div class="body">
+  <div class="seg"><span class="a">Line</span><span>Box</span><span>Fill room</span><span>Erase</span></div>
+  <div class="grp">Walls</div>
+  <div class="g3" id="walls"></div>
+  <div class="grp">Openings</div>
+  <div class="g3" id="opens"></div>
+  <div class="grp">Floors</div>
+  <div class="g4" id="floors"></div>
+  <p class="hint">Walls run on the lines between tiles. Windows only go in outer walls.</p>
+</div></section></div>
+
+<!-- ROOMS -->
+<div class="col"><div class="cap"><b>2</b>Rooms — cards, one open at a time</div>
+<section class="shell"><div class="hd"><span class="t">ROOMS</span><span class="n">7 rooms</span></div>
+<div class="body">
+  <div class="btn amber">＋ Draw a room</div>
+  <div class="room a">
+    <div class="top"><i class="col8" style="background:#7a5233"></i><div><div class="nm">WAR ROOM</div><div class="meta">Meeting · 8×6 · 2 doors</div></div><span class="lk">🔒 Locked</span></div>
+    <div class="kv"><label>Owner</label><span class="pill"><span class="face" style="background:#e8b07c;width:20px;height:20px;border-width:1px">AD</span>Ana Demo ▾</span></div>
+    <div class="kv"><label>Dressing</label><div class="seg" style="flex:1"><span>Bare</span><span>Tidy</span><span class="a">Lived</span><span>Busy</span></div></div>
+    <div class="kv"><label>Walls</label><div class="dots"><i style="background:#efe4cc"></i><i class="a" style="background:#5b3a26"></i><i style="background:#9e4a36"></i><i style="background:#9a4a30"></i><i style="background:#c49a6c"></i><i style="background:#3a4a4a"></i></div></div>
+    <div style="display:flex;gap:6px"><div class="btn out" style="flex:1;height:32px">Go there</div><div class="btn danger" style="flex:1;height:32px">Remove</div></div>
+  </div>
+  <div class="room"><div class="top"><i class="col8" style="background:#7b3424"></i><div><div class="nm">BOOTH 1</div><div class="meta">Booth · 3×3 · Bia Demo</div></div><span class="lk">Open</span></div></div>
+  <div class="room"><div class="top"><i class="col8" style="background:#7b3424"></i><div><div class="nm">BOOTH 2</div><div class="meta">Booth · 3×3 · no owner</div></div><span class="lk">Open</span></div></div>
+  <div class="room"><div class="top"><i class="col8" style="background:#5d6a2f"></i><div><div class="nm">LOUNGE</div><div class="meta">Social · 10×8 · no owner</div></div><span class="lk">Open</span></div></div>
+  <div class="room"><div class="top"><i class="col8" style="background:#4a3324"></i><div><div class="nm">STAGE</div><div class="meta">Stage · 12×6 · no owner</div></div><span class="lk">Open</span></div></div>
+</div></section></div>
+
+<!-- DESKS -->
+<div class="col"><div class="cap"><b>3</b>Desks — who sits where, at a glance</div>
+<section class="shell"><div class="hd"><span class="t">DESKS</span><span class="n">click a seat in the world</span></div>
+<div class="body">
+  <div class="stat"><div><b>24</b><span>Seats</span></div><div><b>3</b><span>Assigned</span></div><div><b>21</b><span>Free</span></div></div>
+  <div class="grp">Assigned</div>
+  <div class="desk"><span class="face" style="background:#e8b07c">AD</span><div><div class="who">Ana Demo</div><div class="where">Pod A · seat 2</div></div><span class="x">Free</span></div>
+  <div class="desk"><span class="face" style="background:#9fc0d8">BD</span><div><div class="who">Bia Demo</div><div class="where">Pod A · seat 3</div></div><span class="x">Free</span></div>
+  <div class="desk"><span class="face" style="background:#d6c9a6">CA</span><div><div class="who">Caio</div><div class="where">Pod C · seat 1</div></div><span class="x">Free</span></div>
+  <div class="grp">No desk yet</div>
+  <div class="chips">
+    <span class="drag"><span class="face" style="background:#c99ad1;width:20px;height:20px;border-width:1px">LU</span>Luiza</span>
+    <span class="drag"><span class="face" style="background:#a9c25a;width:20px;height:20px;border-width:1px">MR</span>Marco</span>
+    <span class="drag"><span class="face" style="background:#f0b49a;width:20px;height:20px;border-width:1px">TH</span>Thaís</span>
+  </div>
+  <p class="hint">Drag a person onto a seat, or click a seat to pick someone. They always arrive there, and their name shows on the desk.</p>
+  <div style="flex:1"></div>
+  
+</div></section></div>
+
+<!-- MAP -->
+<div class="col"><div class="cap"><b>4</b>Map — see the size, not just numbers</div>
+<section class="shell"><div class="hd"><span class="t">MAP</span><span class="n">now 48×36</span></div>
+<div class="body">
+  <div class="grp">Around the studio</div>
+  <div class="g3">
+    <div class="theme a"><div class="sky" style="background:linear-gradient(#8fb3cf,#e8d9b8)"><svg width="100%" height="62" viewBox="0 0 100 62"><ellipse cx="30" cy="22" rx="16" ry="6" fill="#fff8"/><ellipse cx="70" cy="34" rx="20" ry="7" fill="#fff9"/></svg></div><span>Clouds</span></div>
+    <div class="theme"><div class="sky" style="background:linear-gradient(#2a2f4a,#7a5a6a)"><svg width="100%" height="62" viewBox="0 0 100 62"><path d="M0 62V40h10v-14h12v20h8V30h14v32zM52 62V24h10v10h10V18h12v44z" fill="#1a1622"/><g fill="#ffb35c"><rect x="14" y="30" width="2" height="2"/><rect x="36" y="36" width="2" height="2"/><rect x="76" y="24" width="2" height="2"/><rect x="56" y="30" width="2" height="2"/></g></svg></div><span>City</span></div>
+    <div class="theme"><div class="sky" style="background:linear-gradient(#c9d6df,#f4f1ea)"><svg width="100%" height="62" viewBox="0 0 100 62"><path d="M0 62L22 30l14 16 20-28 22 30 22-14v28z" fill="#fff"/><g fill="#fff"><circle cx="12" cy="10" r="1.3"/><circle cx="44" cy="8" r="1.3"/><circle cx="80" cy="14" r="1.3"/><circle cx="64" cy="22" r="1.3"/></g></svg></div><span>Snow</span></div>
+  </div>
+  <div class="grp">Size</div>
+  <div class="sizes">
+    <i style="width:290px;height:154px"><b>XXL 96×72</b></i>
+    <i style="width:240px;height:128px"><b>XL 80×60</b></i>
+    <i style="width:192px;height:102px"><b>L 64×48</b></i>
+    <i class="cur" style="width:144px;height:77px"><b>M 48×36 · now</b></i>
+    <i style="width:96px;height:51px"><b>S</b></i>
+  </div>
+  <div class="num"><div><small>Width</small>48</div><div><small>Height</small>36</div></div>
+  <div class="btn">Resize to 48×36</div>
+  <div class="btn out">📍 Set the arrival point</div>
+  <div style="flex:1"></div>
+  <div class="grp" style="color:#e79a7c">Danger</div>
+  <div class="btn danger">Start from a blank floor…</div>
+</div></section></div>
+</div>
+
+<script>
+// iso wall chip: a short wall seen from the room's camera
+const wall = (face, cap = "#3e2718", extra = "") => `<svg width="72" height="46" viewBox="0 0 72 46"><polygon points="6,34 6,12 46,2 46,24" fill="${face}" stroke="#2a1a12" stroke-width="1.2"/><polygon points="46,24 46,2 66,12 66,34" fill="${face}" style="filter:brightness(.72)" stroke="#2a1a12" stroke-width="1.2"/><polygon points="6,12 46,2 50,4 10,14" fill="${cap}"/>${extra}<polygon points="6,34 46,24 66,34 26,44" fill="rgba(0,0,0,.25)"/></svg>`;
+const pat = (id, body) => `<defs><pattern id="${id}" width="8" height="6" patternUnits="userSpaceOnUse">${body}</pattern></defs>`;
+const W = [
+  ["Plaster", wall("#efe4cc")], ["Walnut", wall("#6b4430")], ["Foam", wall("#9e4a36")],
+  ["Brick", wall("#9a4a30", "#3e2718")], ["Cork", wall("#c49a6c")], ["Glass", wall("rgba(120,160,170,.55)")],
+];
+const O = [
+  ["Half wall", `<svg width="72" height="46" viewBox="0 0 72 46"><polygon points="6,34 6,24 46,14 46,24" fill="#efe4cc" stroke="#2a1a12" stroke-width="1.2"/><polygon points="46,24 46,14 66,24 66,34" fill="#b8ad95" stroke="#2a1a12" stroke-width="1.2"/></svg>`],
+  ["Window", wall("#efe4cc", "#3e2718", `<polygon points="14,26 14,14 38,8 38,20" fill="#9fb6c8" stroke="#5b3a26" stroke-width="2"/>`)],
+  ["Door", wall("#efe4cc", "#3e2718", `<polygon points="20,32 20,13 32,10 32,29" fill="#5b3a26" stroke="#2a1a12" stroke-width="1.2"/><circle cx="29.5" cy="21" r="1" fill="#c39a4a"/>`)],
+];
+const F = [["Wood", "#8f6038"], ["Carpet", "#6b6a3a"], ["Tile", "#e6dcc4"], ["Felt", "#7a3b2e"], ["Stage", "#2f2620"], ["Grate", "#4a4740"], ["None", "#17110d"]];
+const tile = (c) => `<svg width="56" height="30" viewBox="0 0 56 30"><polygon points="28,2 54,15 28,28 2,15" fill="${c}" stroke="#2a1a12" stroke-width="1.2"/><polygon points="28,2 54,15 28,28 2,15" fill="url(#g)" opacity=".25"/></svg>`;
+const sw = (n, svg, a) => `<div class="sw${a ? " a" : ""}">${svg}<span>${n}</span></div>`;
+document.getElementById("walls").innerHTML = W.map(([n, s], i) => sw(n, s, i === 1)).join("");
+document.getElementById("opens").innerHTML = O.map(([n, s]) => sw(n, s)).join("");
+document.getElementById("floors").innerHTML = F.slice(0, 4).map(([n, c]) => sw(n, tile(c))).join("") + F.slice(4).map(([n, c]) => sw(n, tile(c))).join("");
+</script>
+</body></html>

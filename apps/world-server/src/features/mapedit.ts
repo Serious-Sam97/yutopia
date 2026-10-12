@@ -6,13 +6,10 @@ import {
   doorCentre,
   doorRoom,
   edgeBlocker,
-  Grid,
   isDressing,
-  isFloor,
   isTheme,
   MAP_MAX,
   MAP_MIN,
-  type MapDef,
   paintBlocker,
   ROOM_KINDS,
   resizeMap,
@@ -46,19 +43,6 @@ registerFeature((room: SpaceRoom) => {
     room.state.objects.delete(id);
     if (!config.offline) await yondra.deleteObject(room.spaceId, id).catch(() => {});
   };
-  // People standing somewhere that's no longer floor (or now inside a wall)
-  // step to the nearest open spot, or go back to the arrival point.
-  const rescue = (map: MapDef) => {
-    const g = Grid.from(map, objects());
-    for (const c of room.clients) {
-      const p = room.state.players.get(c.sessionId);
-      if (!p || (isFloor(tileAt(map, Math.floor(p.x), Math.floor(p.y))) && g.fits(p.x, p.y))) continue;
-      const to = g.nearestOpen(p.x, p.y, 2) ?? map.spawn;
-      p.x = to.x;
-      p.y = to.y;
-      room.send(c, "snap", { x: p.x, y: p.y });
-    }
-  };
   const mat = (m: unknown): WallMat | undefined =>
     typeof m === "string" && Object.hasOwn(WALL_MATS, m) ? (m as WallMat) : undefined;
 
@@ -78,7 +62,7 @@ registerFeature((room: SpaceRoom) => {
     }
     if (ok.length) {
       room.commitMap(applyPaint(room.map, ok));
-      rescue(room.map);
+      room.rescue();
     }
     if (reason) warn(client, `Skipped a tile: ${reason}.`);
   });
@@ -105,7 +89,7 @@ registerFeature((room: SpaceRoom) => {
     }
     if (ok.length) {
       room.commitMap(next);
-      rescue(room.map);
+      room.rescue();
     }
     if (reason) warn(client, `Skipped a wall: ${reason}.`);
   });
@@ -121,7 +105,7 @@ registerFeature((room: SpaceRoom) => {
     const next = resizeMap(room.map, Number(m.width), Number(m.height));
     for (const o of objects()) if (o.x >= next.width || o.y >= next.height) void drop(o.id);
     room.commitMap(next);
-    rescue(next);
+    room.rescue();
     room.broadcastMsg("toast", { text: `The studio is now ${next.width}×${next.height}.` });
   });
 
@@ -182,7 +166,7 @@ registerFeature((room: SpaceRoom) => {
     });
     if (typeof res === "string") return warn(client, `Couldn't make the room: ${res}.`);
     room.commitMap(res.map);
-    rescue(room.map);
+    room.rescue();
     if (res.door)
       void save({
         id: `door-${key}`,

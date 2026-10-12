@@ -1,0 +1,62 @@
+// Interface icons, one hand: round ink strokes on a 24-unit grid, coloured by
+// `currentColor` so they sit on cream keys and walnut panels alike.
+const PATHS = {
+  chair: "M7 3.5h10v8H7zM5.5 11.5h13v3h-13zM7 14.5V21M17 14.5V21",
+  wall: "M3 5h18v14H3zM3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19",
+  room: "M4 20V4h16v16zM4 12h7M14 12h6M11 4v5M11 15v5",
+  tag: "M3.5 12.5V4.5a1 1 0 0 1 1-1h8l8 8-9 9zM8.5 6.9a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 1 0 0-3.2",
+  map: "M3.5 6.5 9 4l6 2.5L20.5 4v13.5L15 20l-6-2.5L3.5 20zM9 4v13.5M15 6.5V20",
+  undo: "M9 7 4.5 11.5 9 16M5 11.5h9.5a5 5 0 0 1 0 10H12",
+  redo: "M15 7l4.5 4.5L15 16M19 11.5H9.5a5 5 0 0 0 0 10H12",
+  check: "M5 12.5l4.5 4.5L19 7.5",
+  search: "M10.5 4.5a6 6 0 1 0 0 12 6 6 0 1 0 0-12M15 15l5 5",
+  rotate: "M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15",
+  copy: "M8 8h12v12H8zM16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8",
+  bin: "M4.5 6.5h15M9.5 6.5V4h5v2.5M6.5 6.5l1 13.5h9l1-13.5M10 10v6.5M14 10v6.5",
+  mic: "M9 3h6v11H9zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7",
+  micOff: "M9 3h6v11H9zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7M4 4l16 16",
+  plus: "M12 5v14M5 12h14",
+  pin: "M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11zM12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5",
+  lock: "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3",
+  unlock: "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 6.8-1.2",
+  walk: "M13 4.5a1.5 1.5 0 1 0 0 .01M10 21l2-6 3 3v3M8 12l3-4 3 2 3 1M11 8l1 7",
+  chev: "M7 10l5 5 5-5",
+  close: "M6 6l12 12M18 6 6 18",
+  cam: "M3 7h13v10H3zM16 10.5l5-3v9l-5-3",
+  camOff: "M3 7h13v10H3zM16 10.5l5-3v9l-5-3M3 3l18 18",
+  screen: "M3 4h18v12H3zM12 13V7.5M9.5 10l2.5-2.5 2.5 2.5M8 20h8M12 16v4",
+  chat: "M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5zM8 9h8M8 12h5",
+  people:
+    "M9 5.3a3.2 3.2 0 1 0 0 6.4 3.2 3.2 0 1 0 0-6.4M3.5 19c.6-3.3 2.8-5 5.5-5s4.9 1.7 5.5 5M16.5 7a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5M15.5 14.2c2.6-.3 4.5 1.3 5 4.3",
+  home: "M4 20V9l8-5 8 5v11M9 20v-6h6v6",
+  hammer: "M14 4.5l5.5 5.5-2 2L12 6.5zM12.8 7.3 4 16.1V20h3.9l8.8-8.8",
+  gear: "M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7M12 5.8a6.2 6.2 0 1 0 0 12.4 6.2 6.2 0 1 0 0-12.4",
+  external: "M14 4h6v6M20 4l-9 9M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10",
+  leave: "M14 4H6v16h8M10 12h10M17 9l3 3-3 3",
+  send: "M4 12l16-7-6 15-2.5-6z",
+  ear: "M7 9a5 5 0 0 1 10 0c0 3-3 4-3.5 6.5S12 20 10 20s-3-1.5-3-3M10 9a2 2 0 0 1 4 0",
+  desk: "M3 10h18M5 10v9M19 10v9M7 10V6h6v4",
+  follow: "M5 12h12M13 7l5 5-5 5",
+  smile: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 1 0 0-17M8.5 14c1.8 2.2 5.2 2.2 7 0M9 9.5v1M15 9.5v1",
+} as const;
+
+export type IconName = keyof typeof PATHS;
+
+export function Icon({ name, size = 20, className }: { name: IconName; size?: number; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      <path d={PATHS[name]} />
+    </svg>
+  );
+}

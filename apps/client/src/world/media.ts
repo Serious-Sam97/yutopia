@@ -195,6 +195,26 @@ export class Media {
     }
   }
 
+  // My mic's level, 0…1 (the dock's meter): an analyser on the published track.
+  private meter: { id: string; an: AnalyserNode; buf: Uint8Array<ArrayBuffer> } | null = null;
+  micLevel(): number {
+    const pub = this.room?.localParticipant.getTrackPublication(Track.Source.Microphone);
+    const mst = pub && !pub.isMuted ? pub.track?.mediaStreamTrack : undefined;
+    const ctx = mixer.ctx;
+    if (!mst || !ctx || mst.readyState !== "live") return 0;
+    if (this.meter?.id !== mst.id) {
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      ctx.createMediaStreamSource(new MediaStream([mst])).connect(an);
+      this.meter = { id: mst.id, an, buf: new Uint8Array(an.fftSize) };
+    }
+    const { an, buf } = this.meter;
+    an.getByteTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) sum += ((v - 128) / 128) ** 2;
+    return Math.min(1, Math.sqrt(sum / buf.length) * 4);
+  }
+
   async setMic(on: boolean): Promise<string | null> {
     if (!this.room) return "offline";
     try {

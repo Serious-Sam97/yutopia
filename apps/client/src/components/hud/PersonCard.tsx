@@ -3,6 +3,7 @@
 import { parseAvatar } from "@yutopia/shared";
 import { AvatarCanvas } from "@/components/AvatarCanvas";
 import { useTr } from "@/lib/i18n";
+import { emoteUrl } from "@/world/art/emotes";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
 
@@ -90,7 +91,8 @@ export function PersonCard() {
           {following === uid ? t("unfollow") : t("follow")}
         </button>
         <button type="button" className="deck-btn" style={{ height: 36 }} onClick={() => w?.emote(0)} title="wave">
-          👋
+          {/* biome-ignore lint/performance/noImgElement: inline SVG data URL */}
+          <img alt="" src={emoteUrl("wave")} className="w-6 h-6" draggable={false} />
         </button>
       </div>
       {canModerate && (

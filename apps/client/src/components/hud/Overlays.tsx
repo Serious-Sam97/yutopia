@@ -2,30 +2,42 @@
 
 import { useEffect, useRef } from "react";
 import { useTr } from "@/lib/i18n";
-import { hud, useHud } from "@/world/store";
+import { useHud } from "@/world/store";
+import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
 
+// What's in reach: the thing's picture, its name, and how to use it.
 export function Prompt() {
   const t = useTr();
   const w = useWorld();
   const prompt = useHud((s) => s.prompt);
   const panel = useHud((s) => s.panel.kind);
   const building = useHud((s) => s.build.on);
+  const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
   if (!prompt || panel || building) return null;
+  const o = w?.engine?.getObject(prompt.objectId);
+  const opens = prompt.kind === "board" || prompt.kind === "notice" || prompt.kind === "screen";
   return (
     <button
       type="button"
       onClick={() => w?.interact()}
-      className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-24 cabinet px-3 py-2 flex items-center gap-2 rise"
+      className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[88px] cabinet rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 rise max-w-[calc(100vw-24px)]"
     >
-      <kbd className="deck-btn" style={{ height: 28, minWidth: 28, padding: "0 6px" }}>
-        X
-      </kbd>
-      <span className="mono text-sm">
-        {prompt.label} —{" "}
-        {prompt.kind === "board" || prompt.kind === "notice" || prompt.kind === "screen"
-          ? t("pressToOpen")
-          : t("pressToUse")}
+      <span
+        className="w-9 h-9 rounded-full grid place-items-center shrink-0 p-1"
+        style={{ background: "radial-gradient(#4a3324,#241912)", border: "1px solid var(--edge)" }}
+        aria-hidden
+      >
+        {o && <ItemThumb kind={o.kind} props={o.props} />}
+      </span>
+      {!touch && (
+        <kbd className="keycap" style={{ color: "var(--cream)", opacity: 1, height: 20, minWidth: 20, fontSize: 11 }}>
+          X
+        </kbd>
+      )}
+      <span className="text-sm truncate">{prompt.label}</span>
+      <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+        · {touch ? t("tapToUse") : opens ? t("pressToOpen") : t("pressToUse")}
       </span>
     </button>
   );
@@ -208,6 +220,9 @@ export function ConnectionOverlay() {
   );
 }
 
+// The studio from above: rooms labelled, the one you're in outlined, people as
+// dots (amber: you can hear them), you in red. Click to walk there; ± zooms the
+// world camera. Bottom left (bottom right while building: the catalog is left).
 export function Minimap() {
   const t = useTr();
   const w = useWorld();
@@ -217,13 +232,14 @@ export function Minimap() {
   const vortex = useHud((s) => s.vortex);
   const phase = useHud((s) => s.phase);
   const mapVersion = useHud((s) => s.mapVersion);
+  const building = useHud((s) => s.build.on);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: phase/mapVersion re-draw when the world is ready or the map changes
   useEffect(() => {
     const c = canvas.current;
     const map = w?.map;
     if (!c || !map) return;
-    const S = 3;
+    const S = 6; // canvas px per tile (drawn at 2× for crisp labels)
     c.width = map.width * S;
     c.height = map.height * S;
     const x = c.getContext("2d") as CanvasRenderingContext2D;
@@ -231,58 +247,119 @@ export function Minimap() {
     for (let yy = 0; yy < map.height; yy++)
       for (let xx = 0; xx < map.width; xx++) {
         const ch = map.tiles[yy][xx];
+        if (ch === " ") continue;
         x.fillStyle =
-          ch === "#"
-            ? "#7a5236"
-            : ch === " "
-              ? "transparent"
-              : ch === "~"
-                ? "#3c3129"
-                : ch === ":"
-                  ? "#7a3b2e"
-                  : ch === ","
-                    ? "#6b6a3a"
-                    : ch === "x"
-                      ? "#4a4740"
-                      : "#c9b28a";
+          ch === "~"
+            ? "#3c3129"
+            : ch === ":"
+              ? "#7a3b2e"
+              : ch === ","
+                ? "#6b6a3a"
+                : ch === "x"
+                  ? "#4a4740"
+                  : ch === "_"
+                    ? "#b9ad92"
+                    : "#a07a52";
         x.fillRect(xx * S, yy * S, S, S);
       }
+    // walls
+    x.fillStyle = "#2a1c13";
+    for (let yy = 0; yy <= map.height; yy++)
+      for (let xx = 0; xx < map.width; xx++)
+        if ((map.hWalls[yy]?.[xx] ?? ".") !== ".") x.fillRect(xx * S, yy * S - 1, S, 2);
+    for (let yy = 0; yy < map.height; yy++)
+      for (let xx = 0; xx <= map.width; xx++)
+        if ((map.vWalls[yy]?.[xx] ?? ".") !== ".") x.fillRect(xx * S - 1, yy * S, 2, S);
+    // room labels, where they fit
+    x.font = "600 13px 'Share Tech Mono', ui-monospace, monospace";
+    x.textBaseline = "top";
+    for (const a of map.areas) {
+      if ((a.priority ?? 0) > 1) continue;
+      const label = a.name.toUpperCase();
+      if (x.measureText(label).width > a.w * S - 8 || a.h * S < 22) continue;
+      x.fillStyle = "rgba(26,18,12,.55)";
+      x.fillRect(a.x * S + 3, a.y * S + 3, x.measureText(label).width + 6, 16);
+      x.fillStyle = "#efe4cc";
+      x.fillText(label, a.x * S + 6, a.y * S + 5);
+    }
+    // the room you're in
+    const mine = map.areas.find((a) => a.key === me?.area);
+    if (mine) {
+      x.strokeStyle = "#ffb35c";
+      x.lineWidth = 3;
+      x.strokeRect(mine.x * S + 1.5, mine.y * S + 1.5, mine.w * S - 3, mine.h * S - 3);
+    }
     for (const p of people) {
-      x.fillStyle = p.hearing ? "#ffa630" : "#efe4cc";
-      x.fillRect(p.x * S - 2, p.y * S - 2, 4, 4);
+      x.fillStyle = p.bot ? "#a39d8c" : p.hearing ? "#ffa630" : "#efe4cc";
+      x.beginPath();
+      x.arc(p.x * S, p.y * S, 4, 0, Math.PI * 2);
+      x.fill();
     }
     if (vortex) {
-      x.fillStyle = "#c4402b";
-      x.fillRect(vortex.x * S - 2, vortex.y * S - 2, 4, 4);
+      x.fillStyle = "#ff2d95";
+      x.beginPath();
+      x.arc(vortex.x * S, vortex.y * S, 4, 0, Math.PI * 2);
+      x.fill();
     }
     if (me) {
-      x.fillStyle = "#ff5a2a";
+      x.fillStyle = "rgba(255,90,42,.25)";
       x.beginPath();
-      x.arc(me.x * S, me.y * S, 3.5, 0, Math.PI * 2);
+      x.arc(me.x * S, me.y * S, 14, 0, Math.PI * 2);
       x.fill();
+      x.fillStyle = "#ff5a2a";
+      x.strokeStyle = "#1a120c";
+      x.lineWidth = 2;
+      x.beginPath();
+      x.arc(me.x * S, me.y * S, 6, 0, Math.PI * 2);
+      x.fill();
+      x.stroke();
     }
   }, [w, people, me, vortex, phase, mapVersion]);
 
+  const zoom = (f: number) => w?.engine?.setZoom((w.engine?.getZoom() ?? 1) * f);
   return (
-    <button
-      type="button"
-      className="pointer-events-auto absolute right-3 bottom-3 cabinet p-1.5 hidden md:block"
-      aria-label={t("minimap")}
-      onClick={(e) => {
-        const r = (e.currentTarget.firstChild as HTMLCanvasElement).getBoundingClientRect();
-        const map = w?.map;
-        if (!map) return;
-        const tx = ((e.clientX - r.left) / r.width) * map.width;
-        const ty = ((e.clientY - r.top) / r.height) * map.height;
-        w?.walkTo({ x: tx, y: ty });
-        hud.set({});
-      }}
+    <div
+      className={`pointer-events-auto absolute bottom-3 cabinet p-2 hidden lg:block w-[208px] ${building ? "right-3" : "left-3"}`}
     >
-      <canvas
-        ref={canvas}
-        style={{ width: 144, maxHeight: 144, objectFit: "contain", imageRendering: "pixelated" }}
-        className="rounded-md block"
-      />
-    </button>
+      <button
+        type="button"
+        className="block w-full rounded-lg overflow-hidden"
+        style={{ background: "#1a120c" }}
+        aria-label={t("minimap")}
+        onClick={(e) => {
+          const r = (e.currentTarget.firstChild as HTMLCanvasElement).getBoundingClientRect();
+          const map = w?.map;
+          if (!map) return;
+          const tx = ((e.clientX - r.left) / r.width) * map.width;
+          const ty = ((e.clientY - r.top) / r.height) * map.height;
+          w?.walkTo({ x: tx, y: ty });
+        }}
+      >
+        <canvas ref={canvas} className="block w-full max-h-[150px] object-contain" />
+      </button>
+      <div className="flex items-center justify-between gap-2 pt-1.5 px-0.5">
+        <span className="lcd text-base leading-none truncate">{(me?.areaName || t("hallway")).toUpperCase()}</span>
+        <span className="flex gap-1 shrink-0">
+          {(
+            [
+              ["−", 1 / 1.15, "minimapZoomOut"],
+              ["+", 1.15, "minimapZoomIn"],
+            ] as const
+          ).map(([l, f, k]) => (
+            <button
+              key={l}
+              type="button"
+              className="w-6 h-6 rounded-md grid place-items-center mono text-sm hover:bg-white/5"
+              style={{ border: "1px solid var(--edge)", color: "var(--cream-dim)" }}
+              onClick={() => zoom(f)}
+              aria-label={t(k)}
+              title={t(k)}
+            >
+              {l}
+            </button>
+          ))}
+        </span>
+      </div>
+    </div>
   );
 }
