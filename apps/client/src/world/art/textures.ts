@@ -59,8 +59,12 @@ export function avatarTexture(
   rim: Rim = "day",
 ): Texture | null {
   const f = sitting ? 0 : frame % 2 === 0 ? 0 : frame % 4;
-  const key = `p|${a.body}|${a.skin}|${a.hair}|${a.hairColor}|${a.top}|${a.topColor}|${a.bottom}|${a.bottomColor}|${a.accessory}|${a.accessoryColor}|${a.style}|${view}|${f}|${sitting ? 1 : 0}|${rim}`;
-  return get(key, () => avatarSvg(a, view, f, sitting, 2, rim));
+  const base = `p|${a.body}|${a.skin}|${a.hair}|${a.hairColor}|${a.top}|${a.topColor}|${a.bottom}|${a.bottomColor}|${a.accessory}|${a.accessoryColor}|${a.style}|${a.gender}|${view}`;
+  const tex = get(`${base}|${f}|${sitting ? 1 : 0}|${rim}`, () => avatarSvg(a, view, f, sitting, 2, rim));
+  // a facing's walk frames load together, so a step never waits for its drawing
+  if (!sitting)
+    for (const w of [0, 1, 3]) if (w !== f) get(`${base}|${w}|0|${rim}`, () => avatarSvg(a, view, w, false, 2, rim));
+  return tex;
 }
 
 // Vortex exactly as Yondra draws him (vortexSvg), one texture per mood.

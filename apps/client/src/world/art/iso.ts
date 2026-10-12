@@ -22,6 +22,12 @@ export interface Box {
   bias?: number; // depth nudge for parts that must draw in front/behind a sitter
 }
 
+// The world is drawn this much larger than the people standing in it: the camera
+// zooms in by WORLD_SCALE and people (+ Vortex) are scaled by PERSON, so a person
+// keeps the same size on screen while rooms and furniture get roomier around them.
+export const WORLD_SCALE = 1.3;
+export const PERSON = 1 / WORLD_SCALE;
+
 const HW = TILE_W / 2;
 const HH = TILE_H / 2;
 

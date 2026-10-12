@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useTr } from "@/lib/i18n";
+import { PERSON } from "@/world/art/iso";
 import { useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
@@ -122,7 +123,7 @@ export function VideoBubbles() {
         for (const node of Array.from(el.children) as HTMLElement[]) {
           const x = Number(node.dataset.x);
           const y = Number(node.dataset.y);
-          const p = w.engine.worldToClient(x, y, 116);
+          const p = w.engine.worldToClient(x, y, 116 * PERSON);
           node.style.transform = `translate(${Math.round(p.x - 60)}px, ${Math.round(p.y - 90)}px)`;
         }
       }

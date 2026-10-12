@@ -18,8 +18,9 @@ const VIEWS: [View, boolean][] = [
   ["SW", true],
 ];
 
-// ?style=ligne draws the whole cast in Ligne claire (default: City-pop)
-const CAST: Omit<AvatarLayers, "style">[] = [
+// ?style=ligne draws the whole cast in Ligne claire (default: City-pop);
+// ?gender=feminine|masculine|neutral sets everyone (default: rows cycle through them)
+const CAST: Omit<AvatarLayers, "style" | "gender">[] = [
   DEFAULT_AVATAR,
   {
     body: "slim",
@@ -107,7 +108,12 @@ export default function Sheet() {
   const z = Number(q.get("z") ?? 1);
   const only = q.get("n") ? Number(q.get("n")) : CAST.length;
   const style = q.get("style") ?? "citypop";
-  const cast: AvatarLayers[] = CAST.slice(0, only).map((c) => ({ ...c, style }));
+  const genders = ["feminine", "masculine", "neutral"];
+  const cast: AvatarLayers[] = CAST.slice(0, only).map((c, i) => ({
+    ...c,
+    style,
+    gender: q.get("gender") ?? genders[i % 3],
+  }));
   return (
     <main style={{ background: "#2a1c13", minHeight: "100%", overflow: "auto", padding: 16, height: "100vh" }}>
       <h1 className="lcd text-2xl mb-2">YUTOPIA · CHARACTER SHEET</h1>

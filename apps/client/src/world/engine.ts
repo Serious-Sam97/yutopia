@@ -37,6 +37,7 @@ import { avatarContext, viewFor, WALK_FRAMES } from "./art/avatar";
 import { type Daylight, daylight, hourForNight } from "./art/daylight";
 import { FloorBake, floorRes } from "./art/floors";
 import { WALL_H } from "./art/furniture";
+import { PERSON, WORLD_SCALE } from "./art/iso";
 import type { ItemArt } from "./art/items/kit";
 import { affectsLight, PX as LIGHT_PX, LightMap } from "./art/light";
 import { C } from "./art/palette";
@@ -122,6 +123,7 @@ interface AvatarView {
   walkT: number;
   frame: number;
   avatarKey: string;
+  drawnFor: string; // whose look the sprite's current drawing is (avatar JSON)
   local: boolean;
 }
 
@@ -261,8 +263,8 @@ export class WorldEngine {
   private boardContent = new Map<string, BoardContent>();
   private screenVideo = new Map<string, HTMLVideoElement>();
   localId: string | null = null;
-  zoom = 1.25;
-  private targetZoom = 1.25;
+  zoom = 1.25 * WORLD_SCALE;
+  private targetZoom = 1.25 * WORLD_SCALE;
   private cam = { x: 0, y: 0 };
   private camFocus = { x: 0, y: 0 };
   private marker: { x: number; y: number; t: number } | null = null;
@@ -732,7 +734,7 @@ export class WorldEngine {
       this.floorDue = 0;
       for (const sp of this.floorJob?.sprites ?? []) sp.destroy(true);
       const t = performance.now();
-      const bake = new FloorBake(this.map, this.allObjects(), floorRes(this.map, this.quality));
+      const bake = new FloorBake(this.map, this.allObjects(), floorRes(this.map, this.quality, WORLD_SCALE));
       this.floorStats = {
         setupMs: performance.now() - t,
         maxChunkMs: 0,
@@ -764,7 +766,8 @@ export class WorldEngine {
 
   private artRes() {
     const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
-    return this.quality === "high" ? (dpr >= 2 ? 2.5 : 2) : this.quality === "medium" ? 1.5 : 1.25;
+    // the camera sits WORLD_SCALE closer, so the art is drawn that much finer
+    return (this.quality === "high" ? (dpr >= 2 ? 2.5 : 2) : this.quality === "medium" ? 1.5 : 1.25) * WORLD_SCALE;
   }
 
   // Box art right away; the illustrated drawing replaces it once decoded.
@@ -1169,6 +1172,7 @@ export class WorldEngine {
       emote.anchor.set(0.5, 1);
       emote.visible = false;
       root.addChild(shadow, ring, body, sprite, emote);
+      root.scale.set(PERSON); // people (and Vortex) are drawn smaller than the world
       this.sortLayer.addChild(root);
 
       const tag = new Container();
@@ -1201,6 +1205,7 @@ export class WorldEngine {
         walkT: 0,
         frame: 0,
         avatarKey: "",
+        drawnFor: "",
         local,
       };
       this.avatars.set(id, v);
@@ -1362,11 +1367,11 @@ export class WorldEngine {
     v.ring.clear();
     v.emote.visible = false;
     const inv = 1 / Math.max(0.7, this.zoom * 0.85);
-    v.tag.position.set(p.x, p.y - 66 + bob);
+    v.tag.position.set(p.x, p.y + (-66 + bob) * PERSON);
     v.tag.scale.set(inv);
     v.dot.clear().circle(0, 0, 3.2).fill(0xff2d95);
     if (v.bubble.visible) {
-      v.bubble.position.set(p.x, p.y - 80 + bob);
+      v.bubble.position.set(p.x, p.y + (-80 + bob) * PERSON);
       v.bubble.scale.set(inv);
       v.bubble.zIndex = 2e6;
       if (now > v.bubbleUntil) v.bubble.visible = false;
@@ -1390,8 +1395,15 @@ export class WorldEngine {
     const breathe = walking || this.reducedMotion ? 1 : 1 + Math.sin(this.time * 2.2 + p.x) * 0.012;
     const lift = sitting ? 12 : 0; // the drawing sits its hips on the seat
     const tex = avatarTexture(s.avatar, view, v.frame, sitting, this.night > 0.5 ? "night" : "day");
-    if (tex) {
-      v.sprite.texture = tex;
+    const look = JSON.stringify(s.avatar);
+    // a frame still decoding: keep this person's last drawing up rather than
+    // flashing the placeholder (it's only for the very first frames of a look)
+    const keep = !tex && v.drawnFor === look && v.sprite.texture !== Texture.EMPTY && !v.sprite.texture.destroyed;
+    if (tex || keep) {
+      if (tex) {
+        v.sprite.texture = tex;
+        v.drawnFor = look;
+      }
       v.sprite.visible = true;
       v.body.visible = false;
       const k = 0.5; // 128×200 texture → 64×100 px: City-pop people stand ~92 px tall
@@ -1437,7 +1449,7 @@ export class WorldEngine {
 
     // name tag + bubble (overlay, scale-compensated so text stays crisp)
     const inv = 1 / Math.max(0.7, this.zoom * 0.85);
-    v.tag.position.set(p.x, p.y - 106 + lift);
+    v.tag.position.set(p.x, p.y + (-106 + lift) * PERSON);
     v.tag.scale.set(inv);
     v.tag.zIndex = v.local ? 1e6 : p.y;
     v.dot.clear();
@@ -1445,7 +1457,7 @@ export class WorldEngine {
     v.dot.circle(0, 0, 3.2).fill(dotColor);
     if (!s.mic && !s.npc && !s.bot) v.dot.moveTo(-3, -3).lineTo(3, 3).stroke({ width: 1.4, color: C.cream });
     if (v.bubble.visible) {
-      v.bubble.position.set(p.x, p.y - 120 + lift);
+      v.bubble.position.set(p.x, p.y + (-120 + lift) * PERSON);
       v.bubble.scale.set(inv);
       v.bubble.zIndex = 2e6;
       if (now > v.bubbleUntil) v.bubble.visible = false;
@@ -1689,7 +1701,7 @@ export class WorldEngine {
     for (const [id, v] of this.avatars) {
       const p = toScreen(v.state.x, v.state.y);
       // the person's body: ~92 px tall since the City-pop redraw
-      if (gx > p.x - 16 && gx < p.x + 16 && gy > p.y - 92 && gy < p.y + 4) {
+      if (gx > p.x - 16 * PERSON && gx < p.x + 16 * PERSON && gy > p.y - 92 * PERSON && gy < p.y + 4) {
         const k = v.state.x + v.state.y;
         if (k > bestKey) {
           bestKey = k;
@@ -1796,7 +1808,7 @@ export class WorldEngine {
   }
 
   setZoom(z: number) {
-    this.targetZoom = Math.max(0.55, Math.min(2.4, z));
+    this.targetZoom = Math.max(0.55 * WORLD_SCALE, Math.min(2.4 * WORLD_SCALE, z));
   }
 
   getZoom() {

@@ -4,6 +4,8 @@
 export const AVATAR_OPTIONS = {
   // how the person is drawn: City-pop 80s anime or Ligne claire (clean line, flat colour)
   style: ["citypop", "ligne"],
+  // shapes the body and face only (shoulders, waist, jaw, lashes); neutral = the original figure
+  gender: ["neutral", "feminine", "masculine"],
   body: ["regular", "broad", "slim"],
   hair: ["short", "long", "curly", "bun", "afro", "bob", "mohawk", "bald"],
   top: ["tee", "hoodie", "shirt", "jacket", "sweater", "dress"],
@@ -41,6 +43,7 @@ export interface AvatarLayers {
   accessory: string;
   accessoryColor: string;
   style: string;
+  gender: string;
 }
 
 export const DEFAULT_AVATAR: AvatarLayers = {
@@ -55,6 +58,7 @@ export const DEFAULT_AVATAR: AvatarLayers = {
   accessory: "none",
   accessoryColor: "#e8a33d",
   style: "citypop",
+  gender: "neutral",
 };
 
 export function parseAvatar(raw: unknown): AvatarLayers {
@@ -98,5 +102,6 @@ export function avatarFromSeed(seed: number): AvatarLayers {
     accessory: pick(AVATAR_OPTIONS.accessory),
     accessoryColor: pick(CLOTH_COLORS),
     style: pick(AVATAR_OPTIONS.style),
+    gender: pick(AVATAR_OPTIONS.gender),
   };
 }

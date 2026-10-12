@@ -112,6 +112,9 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
   const inner = lum(top) > 0.62 ? "#2a2a3a" : "#f4ece0";
   const bw = ({ slim: 0.9, regular: 1, broad: 1.12 } as Record<string, number>)[a.body] ?? 1;
   const skirtish = a.bottom === "skirt" || dress;
+  // gender shapes the body and face only — hair, clothes and size stay free
+  const fem = a.gender === "feminine";
+  const masc = a.gender === "masculine";
   const shorts = a.bottom === "shorts" && !dress;
   const legBare = skirtish; // tights are just skin here
   const H = ligne ? hair : `url(#${id}h)`;
@@ -150,13 +153,15 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
       lower += leg(st ? -ang : -4, false) + leg(st ? ang : 4, true);
     }
     const jacket = a.top === "jacket";
-    let torso = fill(
-      jacket
-        ? "M47.5 60 Q52 54.5 61 54.5 Q70 55 72.5 60 L72 104 Q60 108 47.5 104Z"
-        : "M49 60 Q53 55 61 55 Q69 55.5 71 60 L72 104 Q60 108.5 48 104Z",
-      top,
-    );
-    torso += flat("M63 55.2 Q69 55.6 71.5 60 L72 104 Q67 106 63 106.6Z", tS);
+    const sideTorso = fem
+      ? "M49 60 Q53 55 61 55 Q69 55.5 71 60 Q72.5 73 69.5 84 Q72.5 94 72 104 Q60 108.5 48 104 Q48.5 94 50 84 Q47.5 72 49 60Z"
+      : masc
+        ? "M47.5 59.5 Q52 54.2 61 54.2 Q70.5 54.6 73 59.5 L72.5 104 Q60 108.5 47.5 104Z"
+        : jacket
+          ? "M47.5 60 Q52 54.5 61 54.5 Q70 55 72.5 60 L72 104 Q60 108 47.5 104Z"
+          : "M49 60 Q53 55 61 55 Q69 55.5 71 60 L72 104 Q60 108.5 48 104Z";
+    let torso = `<clipPath id="${id}s"><path d="${sideTorso}"/></clipPath>${fill(sideTorso, top)}`;
+    torso += `<g clip-path="url(#${id}s)">${flat("M63 54 Q70 54.6 73 60 L73 104 Q67 106 63 106.6Z", tS)}</g>`;
     if (jacket)
       torso +=
         fill("M50 58.5 L55 58 L54 75 L50.3 70Z", inner, 0.8) +
@@ -192,7 +197,8 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
       S += `<rect x="64" y="${sit ? 92 : 94}" width="7" height="9" rx="1.4" fill="${acc}" ${O(0.9)}/><path d="M67 ${sit ? 92 : 94} Q71 70 64.5 40" stroke="${ink}" stroke-width=".8" fill="none"/>`;
     // neck + head (profile)
     S +=
-      fill("M57.5 45 L57.5 57 Q61 59 64.5 57 L64.5 45Z", skin) + flat("M57.5 47 L64.5 47 L64.5 52 Q61 53 57.5 50Z", sS);
+      fill(masc ? "M57 45 L57 57 Q61 59.4 65.2 57 L65.2 45Z" : "M57.5 45 L57.5 57 Q61 59 64.5 57 L64.5 45Z", skin) +
+      flat("M57.5 47 L64.5 47 L64.5 52 Q61 53 57.5 50Z", sS);
     S += fill(
       "M50.5 32 Q50.5 21 61 21 Q72 21 72 33 Q72 44 65 48.5 Q61 50.5 57.5 48.5 L55.5 46 Q52.5 46 52.6 43.6 L52 41.6 Q50.4 41 51 39.6 L51.4 38.4 Q48.4 37.6 50.5 32Z",
       skin,
@@ -205,7 +211,8 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
       S += `<path d="M52.6 44.6 Q53.8 45.2 55 44.8" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
     } else {
       S += `<path d="M51.6 34.4 Q54 32.8 56.4 34.8" stroke="${ink}" stroke-width="1.7" fill="none" stroke-linecap="round"/><ellipse cx="54.2" cy="37.8" rx="1.6" ry="3.2" fill="${eye}"/><ellipse cx="54.2" cy="39.2" rx="1.1" ry="1.4" fill="${mix(eye, "#ffc0e0", 0.55)}"/><ellipse cx="54" cy="37" rx=".8" ry="1.4" fill="#1a0a20"/><circle cx="54.7" cy="36.4" r=".75" fill="#fff"/>`;
-      S += `<path d="M51.5 31 L56 30.2" stroke="${hS}" stroke-width="1" stroke-linecap="round"/>`;
+      S += `<path d="M51.5 31 L56 30.2" stroke="${hS}" stroke-width="${masc ? 1.8 : 1}" stroke-linecap="round"/>`;
+      if (fem) S += `<path d="M51.6 34.4 l-1.6 -1.1" stroke="${ink}" stroke-width="1.2" stroke-linecap="round"/>`;
       S += `<path d="M52.4 44.4 Q53.8 45.8 55 44.8" stroke="#b03050" stroke-width="1" fill="none" stroke-linecap="round"/>`;
       S += `<path d="M55.5 41 l2.4 -.9 M56.5 42 l2.4 -.9" stroke="#ff8aa0" stroke-width=".6"/>`;
     }
@@ -285,7 +292,10 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
   // arms + torso
   const jacket = a.top === "jacket";
   const short = a.top === "tee" || dress;
-  const swing = (side: -1 | 1) => (st ? `transform="rotate(${side * st * 5} ${side < 0 ? 46 : 74} 62)"` : "");
+  // shoulders: narrower (feminine) or broader (masculine) — arms follow
+  const ax = fem ? (jacket ? 0.8 : 1.3) : masc ? (jacket ? -1 : -1.7) : 0;
+  const swing = (side: -1 | 1) =>
+    `transform="translate(${-side * ax} 0)${st ? ` rotate(${side * st * 5} ${side < 0 ? 46 : 74} 62)` : ""}"`;
   const armL = jacket
     ? "M41 60 Q35 68 36 90 L36 104 Q39 107 42 105 L45 88 Q47 76 49 70Z"
     : "M45 61 Q38 70 37 90 L36 104 Q39 107 42 105 L45 88 Q47 76 49 70Z";
@@ -295,16 +305,26 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
   const sleeveL = "M45 61 Q39 67 38.5 78 L46.5 79.5 Q47.5 72 49 70Z";
   const sleeveR = "M75 61 Q81 67 81.5 78 L73.5 79.5 Q72.5 72 71 70Z";
   const torso = jacket
-    ? "M41 60 Q50 55 60 55 Q70 55 79 60 L78 104 Q60 108 42 104Z"
+    ? fem
+      ? "M42 60 Q50 55 60 55 Q70 55 78 60 Q78.5 74 74.5 84 Q77.5 94 78 104 Q60 108 42 104 Q42.5 94 45.5 84 Q41.5 74 42 60Z"
+      : masc
+        ? "M39.5 59.5 Q50 54.5 60 54.5 Q70 54.5 80.5 59.5 L79 104 Q60 108 41 104Z"
+        : "M41 60 Q50 55 60 55 Q70 55 79 60 L78 104 Q60 108 42 104Z"
     : dress
-      ? "M45 60 Q50 55 60 55 Q70 55 75 60 L76 100 Q60 103 44 100Z"
-      : "M44 60 Q50 55 60 55 Q70 55 76 60 L79 104 Q60 109 41 104Z";
+      ? fem
+        ? "M45.5 60 Q51 55.5 60 55.5 Q69 55.5 74.5 60 Q76 72 72.5 84 L76 100 Q60 103 44 100 L47.5 84 Q44 72 45.5 60Z"
+        : "M45 60 Q50 55 60 55 Q70 55 75 60 L76 100 Q60 103 44 100Z"
+      : fem
+        ? "M45.5 60 Q51 55.5 60 55.5 Q69 55.5 74.5 60 Q76 71 73 82 Q77 92 79 104 Q60 109 41 104 Q43 92 47 82 Q44 71 45.5 60Z"
+        : masc
+          ? "M42.5 59.5 Q49.5 54.5 60 54.5 Q70.5 54.5 77.5 59.5 L78 104 Q60 108 42 104Z"
+          : "M44 60 Q50 55 60 55 Q70 55 76 60 L79 104 Q60 109 41 104Z";
   let T = "";
   // left arm (behind the torso's edge); seated from behind: elbows out, forearms to the desk
   if (backSit) T += fill("M45 61 Q39 68 40 82 Q43 87 47.5 83 L50 70Z", top);
   else T += `<g ${swing(-1)}>${fill(armL, short ? skin : top)}${short ? fill(sleeveL, top) : ""}</g>`;
   if (a.top === "hoodie" && !back) T += fill("M47 58 Q60 47 73 58 Q66 64 60 64 Q54 64 47 58Z", tS);
-  T += fill(torso, top);
+  T += `<clipPath id="${id}t"><path d="${torso}"/></clipPath>${fill(torso, top)}<g clip-path="url(#${id}t)">`;
   T += flat(
     jacket
       ? "M66 56 Q73 57 79 60 L78 104 Q72 106 64 107 Q70 86 66 56Z"
@@ -362,8 +382,23 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
         T += fill("M41 100 Q60 105 79 100 L79 104 Q60 109 41 104Z", top, 0.8);
     }
   }
+  T += "</g>"; // shade and details stay inside the torso's outline
   // cool rim on the torso's lit edge, under the right arm
-  if (!backSit) T += rim(jacket ? "M78.6 62 L77.8 100" : "M76.2 62 L78.6 100", R2);
+  if (!backSit)
+    T += rim(
+      fem
+        ? jacket
+          ? "M77.6 62 Q78.2 74 74.3 84 Q77.2 93 77.6 100"
+          : "M74.3 62 Q75.8 71 72.8 82 Q76.4 92 78.4 100"
+        : masc
+          ? jacket
+            ? "M80 62 L78.8 100"
+            : "M77.2 62 L77.8 100"
+          : jacket
+            ? "M78.6 62 L77.8 100"
+            : "M76.2 62 L78.6 100",
+      R2,
+    );
   // right arm
   if (backSit)
     T +=
@@ -392,9 +427,23 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
   F += widen(L + T);
 
   // neck + head
-  F += fill("M56 45 L56 57 Q60 59 64 57 L64 45Z", skin) + flat("M56 47 L64 47 L64 51 Q60 53 56 50Z", sS);
+  F +=
+    fill(
+      masc
+        ? "M55 45 L55 57 Q60 59.6 65 57 L65 45Z"
+        : fem
+          ? "M56.6 45 L56.6 57 Q60 58.6 63.4 57 L63.4 45Z"
+          : "M56 45 L56 57 Q60 59 64 57 L64 45Z",
+      skin,
+    ) + flat("M56 47 L64 47 L64 51 Q60 53 56 50Z", sS);
   if (!back && !jacket && a.top !== "shirt") F += `<path d="M53 56 Q60 61 67 56" fill="none" ${O()}/>`;
-  let Hd = fill("M48 34 Q48 21 60 21 Q72 21 72 34 Q72 45 63 49 Q60 50.5 57 49 Q48 45 48 34Z", skin);
+  // a squarer jaw for masculine faces
+  let Hd = fill(
+    masc
+      ? "M48 34 Q48 21 60 21 Q72 21 72 34 Q72 44.5 66.5 48.6 Q60 51.6 53.5 48.6 Q48 44.5 48 34Z"
+      : "M48 34 Q48 21 60 21 Q72 21 72 34 Q72 45 63 49 Q60 50.5 57 49 Q48 45 48 34Z",
+    skin,
+  );
   if (!back) Hd += flat("M67 26 Q72 30 72 35 Q72 45 63 49 Q68 40 67 26Z", sS, 0.9);
   if (!back && a.hair !== "long" && a.hair !== "bob" && a.hair !== "curly")
     Hd += `<ellipse cx="${tq ? 69.5 : 47.6}" cy="37.5" rx="1.9" ry="2.8" fill="${skin}" ${O(0.8)}/>${tq ? "" : `<ellipse cx="72.4" cy="37.5" rx="1.9" ry="2.8" fill="${skin}" ${O(0.8)}/>`}`;
@@ -407,26 +456,31 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
           ? ""
           : `<ellipse cx="49.6" cy="37.5" rx="1.9" ry="2.8" fill="${skin}" ${O(0.8)}/>`);
   } else {
-    const eyeAt = (cx: number, far: boolean) => {
+    const eyeAt = (cx: number, far: boolean, outer: -1 | 1) => {
       const k = far ? 0.72 : 1;
-      return `<path d="M${cx - 3.5 * k} 35.5 Q${cx} 32.5 ${cx + 3.5 * k} 34.6" stroke="${ink}" stroke-width="1.8" fill="none" stroke-linecap="round"/><ellipse cx="${cx}" cy="38" rx="${2.3 * k}" ry="3.4" fill="${eye}"/><ellipse cx="${cx}" cy="39.4" rx="${1.5 * k}" ry="1.6" fill="${mix(eye, "#ffc0e0", 0.55)}"/><ellipse cx="${cx}" cy="37.2" rx="${1.1 * k}" ry="1.5" fill="#1a0a20"/><circle cx="${cx + 0.8}" cy="36.5" r=".9" fill="#fff"/>`;
+      const lash = fem
+        ? `<path d="M${outer < 0 ? cx - 3.5 * k : cx + 3.5 * k} ${outer < 0 ? 35.5 : 34.6} l${outer * 1.9 * k} -1.5" stroke="${ink}" stroke-width="1.3" stroke-linecap="round"/>`
+        : "";
+      return `${lash}<path d="M${cx - 3.5 * k} 35.5 Q${cx} 32.5 ${cx + 3.5 * k} 34.6" stroke="${ink}" stroke-width="1.8" fill="none" stroke-linecap="round"/><ellipse cx="${cx}" cy="38" rx="${2.3 * k}" ry="${masc ? 3 : 3.4}" fill="${eye}"/><ellipse cx="${cx}" cy="39.4" rx="${1.5 * k}" ry="1.6" fill="${mix(eye, "#ffc0e0", 0.55)}"/><ellipse cx="${cx}" cy="37.2" rx="${1.1 * k}" ry="1.5" fill="#1a0a20"/><circle cx="${cx + 0.8}" cy="36.5" r=".9" fill="#fff"/>`;
     };
     if (ligne) {
       // Ligne claire: dot eyes, thin brows, a nose hook, a line for a mouth
       const k = tq ? 0.8 : 1;
       Hd += `<circle cx="${55.5 + fx}" cy="37.6" r="${1.35 * k}" fill="${ink}"/><circle cx="${64.5 + fx}" cy="37.6" r="1.35" fill="${ink}"/>`;
-      Hd += `<path d="M${53 + fx} 33.4 Q${55.5 + fx} 32.4 ${58 + fx} 33.3 M${62 + fx} 33.3 Q${64.5 + fx} 32.4 ${67 + fx} 33.4" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+      Hd += `<path d="M${53 + fx} 33.4 Q${55.5 + fx} 32.4 ${58 + fx} 33.3 M${62 + fx} 33.3 Q${64.5 + fx} 32.4 ${67 + fx} 33.4" stroke="${ink}" stroke-width="${masc ? 1.6 : 0.9}" fill="none" stroke-linecap="round"/>`;
+      if (fem)
+        Hd += `<path d="M${54.1 + fx} 36.6 l-1.3 -1 M${65.9 + fx} 36.6 l1.3 -1" stroke="${ink}" stroke-width=".8" stroke-linecap="round"/>`;
       Hd += tq
         ? `<path d="M58.4 38.6 Q56.4 41.6 58.4 42.2" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`
         : `<path d="M60.5 38.5 Q62.2 41.5 60 42" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
       Hd += `<path d="M${57.5 + fx} 45 Q${60 + fx} 46.2 ${62.5 + fx} 45" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
     } else {
-      Hd += eyeAt(55 + fx, tq) + eyeAt(65 + fx, false);
-      Hd += `<path d="M${52.5 + fx} 31 L${57.5 + fx} 30.2 M${62.5 + fx} 30.2 L${67.5 + fx} 31" stroke="${hS}" stroke-width="1" stroke-linecap="round"/>`;
+      Hd += eyeAt(55 + fx, tq, -1) + eyeAt(65 + fx, false, 1);
+      Hd += `<path d="M${52.5 + fx} 31 L${57.5 + fx} 30.2 M${62.5 + fx} 30.2 L${67.5 + fx} 31" stroke="${hS}" stroke-width="${masc ? 1.8 : 1}" stroke-linecap="round"/>`;
       Hd += tq
         ? `<path d="M58.6 39.5 L56.6 42.4 L58.4 42.6" stroke="${sS}" stroke-width=".9" fill="none"/>`
         : `<path d="M60.3 40.5 L59.6 42.6 L60.6 42.6" stroke="${sS}" stroke-width=".8" fill="none"/>`;
-      Hd += `<path d="M${57.5 + fx} 44.8 Q${60 + fx} 46.8 ${62.5 + fx} 44.8" stroke="#b03050" stroke-width="1.1" fill="none" stroke-linecap="round"/>`;
+      Hd += `<path d="M${57.5 + fx} 44.8 Q${60 + fx} 46.8 ${62.5 + fx} 44.8" stroke="${fem ? "#c8305a" : "#b03050"}" stroke-width="${fem ? 1.5 : 1.1}" fill="none" stroke-linecap="round"/>`;
       Hd += `<path d="M${51 + fx} 41.5 l2.5 -1 M${52 + fx} 42.5 l2.5 -1 M${65.5 + fx} 40.5 l2.5 1 M${66.5 + fx} 41.5 l2.5 1" stroke="#ff8aa0" stroke-width=".6"/>`;
     }
     Hd += hairFront(a.hair, view, H, hH, hair, fill);
@@ -438,8 +492,8 @@ function figure(a: AvatarLayers, view: View, frame: number, sit: boolean, id: st
   // rim light (scene-coloured)
   if (!backSit) {
     F += widen(
-      (sit ? "" : rim("M83.6 90 L84.4 103", R2)) +
-        rim(jacket ? "M40.6 63 Q35.6 70 36.5 88" : "M44.5 61 Q38.5 70 37.6 88", R1) +
+      `<g transform="translate(${-ax} 0)">${sit ? "" : rim("M83.6 90 L84.4 103", R2)}</g>` +
+        `<g transform="translate(${ax} 0)">${rim(jacket ? "M40.6 63 Q35.6 70 36.5 88" : "M44.5 61 Q38.5 70 37.6 88", R1)}</g>` +
         (sit || skirtish ? "" : rim(`M72.6 104.5 L71 ${158 + dyR}`, R2)),
     );
   }

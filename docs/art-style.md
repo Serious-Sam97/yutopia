@@ -17,7 +17,10 @@ thin brows and a nose hook — no shade shapes, hair gradient or rim light. Revi
 
 `apps/client/src/world/art/avatar-svg.ts`. About 5½ heads tall, drawn on a 120×180 board
 (feet on y = 168) and fitted into the engine's 64×100 texture box (shown at 0.5 →
-~92 px tall at zoom 1). Flat fills with **hard violet shade shapes** on the right side
+~92 px tall). The world is drawn `WORLD_SCALE` (1.3, `world/art/iso.ts`) larger than
+the people in it: the camera zooms in by that much and each person's container is
+scaled by `PERSON` (1 / 1.3), so people keep their size on screen while rooms and
+furniture read at believable proportions; item and floor art are drawn that much finer. Flat fills with **hard violet shade shapes** on the right side
 (`shade()` mixes towards `#2a1a5e`), gradient hair with a highlight band, big glossy
 eyes, thin plum ink (`#2a1430`). A **rim light** runs down the edges: warm + sky blue by
 day, neon pink + cyan at night (`Rim`, picked by the engine from the hour). Five drawn

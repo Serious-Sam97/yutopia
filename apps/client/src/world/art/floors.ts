@@ -491,7 +491,7 @@ export class FloorBake {
 }
 
 // Resolution for the floor bake: crisp, but never more than ~12 M pixels.
-export function floorRes(map: MapDef, quality: "high" | "medium" | "low"): number {
+export function floorRes(map: MapDef, quality: "high" | "medium" | "low", zoomScale = 1): number {
   const px = (map.width + map.height) * HW * (map.width + map.height) * HH;
-  return Math.min(quality === "high" ? 1.5 : quality === "medium" ? 1.2 : 1, Math.sqrt(12e6 / px));
+  return Math.min((quality === "high" ? 1.5 : quality === "medium" ? 1.2 : 1) * zoomScale, Math.sqrt(12e6 / px));
 }

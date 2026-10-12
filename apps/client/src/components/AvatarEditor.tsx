@@ -15,6 +15,7 @@ import { type Key, useTr } from "@/lib/i18n";
 type ShapeKey = keyof typeof AVATAR_OPTIONS;
 const ROWS: { shape?: ShapeKey; color?: keyof AvatarLayers; palette?: string[]; label: Key }[] = [
   { shape: "style", label: "style" },
+  { shape: "gender", label: "gender" },
   { shape: "body", label: "body" },
   { color: "skin", palette: SKIN_TONES, label: "skin" },
   { shape: "hair", label: "hair" },
@@ -112,7 +113,7 @@ export function AvatarEditor({
                   className="deck-btn"
                   style={{ height: 36, fontSize: 11 }}
                 >
-                  {row.shape === "style" ? t(`style_${opt}` as Key) : opt}
+                  {row.shape === "style" || row.shape === "gender" ? t(`${row.shape}_${opt}` as Key) : opt}
                 </button>
               ))}
             {row.color &&
