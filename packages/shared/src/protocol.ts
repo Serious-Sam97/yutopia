@@ -24,6 +24,13 @@ export interface JoinOptions {
 export interface ClientMessages {
   pos: { x: number; y: number; d: number; a: number; seq: number };
   emote: { e: Emote };
+  // take something to carry from a thing that hands it out (a mug from the coffee machine)
+  "item:take": { id: string };
+  "item:drop": Record<string, never>;
+  // what I'm busy with (using the arcade, playing the piano…), "" when done: others see it
+  use: { what: string };
+  // a note on the piano I'm at (n: semitones from middle C)
+  "piano:note": { id: string; n: number };
   avatar: { avatar: AvatarLayers }; // after saving it in Yondra: everyone sees the new look now
   chat: { text: string; scope: ChatScope };
   "chat:react": { id: string; e: Emote }; // toggles my reaction on a message I received
@@ -44,6 +51,16 @@ export interface ClientMessages {
     props?: Record<string, unknown>;
   };
   "obj:remove": { id: string };
+  // several at once, all or nothing: moves of existing ids, or new copies (no id)
+  "obj:batch": {
+    items: { id?: string; kind: string; x: number; y: number; rot: number; props?: Record<string, unknown> }[];
+  };
+  "obj:removeMany": { ids: string[] };
+  // what I have in my hand right now (others can't grab it); [] puts it all down
+  "obj:hold": { ids: string[] };
+  // a generated dressing piece becomes a real object (id takenId(piece)) / goes away
+  "dress:take": { id: string };
+  "dress:hide": { id: string };
   "build:template": { template: string };
   "build:undo": Record<string, never>; // your own last build step (history.ts)
   "build:redo": Record<string, never>;
@@ -115,7 +132,14 @@ export interface ServerMessages {
   "build:saved": { ok: boolean; at: number };
   // a message's reactions: emote → the user ids who reacted (to whoever received it)
   "chat:react": { id: string; reactions: Partial<Record<Emote, number[]>> };
+  // someone played a note (where they are, so it sounds from there)
+  "piano:note": { sid: string; x: number; y: number; n: number };
 }
+
+// Things you can be busy with (shown on the body: hands on the controls…).
+export const USES = ["coffee", "water", "vending", "arcade", "piano", "whiteboard"] as const;
+export type Use = (typeof USES)[number];
+export const PIANO_RANGE = [-12, 24] as const; // semitones from middle C
 
 // Whiteboard: coordinates in a 1000 × 600 board space.
 export type WbItem =

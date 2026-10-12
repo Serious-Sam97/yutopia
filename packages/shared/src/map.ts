@@ -73,6 +73,8 @@ export interface AreaDef {
   ownerName?: string | null;
   // clutter preset (dressing.ts): tidy | lived | busy; none when absent
   dressing?: "tidy" | "lived" | "busy" | null;
+  // generated pieces someone took (turned into real objects) or removed
+  dressOff?: string[];
 }
 
 // What surrounds the studio (chosen per space in build mode).

@@ -1,26 +1,12 @@
 import type { AvatarLayers } from "@yutopia/shared";
 import { GraphicsContext } from "pixi.js";
 import { C, hex, shade } from "./palette";
+import type { View } from "./views";
 
 // Procedural chibi avatars. Five drawn views (S, SW, W, NW, N); the other three
 // facings are mirrors. Origin (0,0) is between the feet; up is negative y.
 
-type View = "S" | "SW" | "W" | "NW" | "N";
-const VIEW_FOR_DIR: [View, boolean][] = [
-  ["S", false],
-  ["SW", false],
-  ["W", false],
-  ["NW", false],
-  ["N", false],
-  ["NW", true],
-  ["W", true],
-  ["SW", true],
-];
-
-export function viewFor(dir: number): { view: View; mirror: boolean } {
-  const [view, mirror] = VIEW_FOR_DIR[((dir % 8) + 8) % 8];
-  return { view, mirror };
-}
+export { viewFor } from "./views";
 
 export const WALK_FRAMES = 4;
 const cache = new Map<string, GraphicsContext>();

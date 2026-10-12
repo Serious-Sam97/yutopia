@@ -7,10 +7,15 @@ export const AVATAR_OPTIONS = {
   // shapes the body and face only (shoulders, waist, jaw, lashes); neutral = the original figure
   gender: ["neutral", "feminine", "masculine"],
   body: ["regular", "broad", "slim"],
-  hair: ["short", "long", "curly", "bun", "afro", "bob", "mohawk", "bald"],
-  top: ["tee", "hoodie", "shirt", "jacket", "sweater", "dress"],
-  bottom: ["jeans", "trousers", "shorts", "skirt"],
-  accessory: ["none", "headphones", "glasses", "cap", "beanie", "walkman"],
+  hair: ["short", "long", "curly", "bun", "afro", "bob", "mohawk", "bald", "ponytail", "buzz"],
+  top: ["tee", "hoodie", "shirt", "jacket", "sweater", "dress", "polo", "turtleneck", "blazer", "cardigan", "tank"],
+  bottom: ["jeans", "trousers", "shorts", "skirt", "cargo", "longskirt", "joggers"],
+  // on the head
+  accessory: ["none", "headphones", "cap", "beanie", "beret", "bucket", "bandana", "headband"],
+  eyewear: ["none", "glasses", "round", "sunglasses"],
+  // one more thing: round the neck, on the ears, the wrist, the back…
+  extra: ["none", "walkman", "scarf", "earrings", "necklace", "backpack", "watch"],
+  shoes: ["sneakers", "hightops", "boots", "loafers", "sandals"],
 } as const;
 
 export const SKIN_TONES = ["#f3d2b3", "#e4b48e", "#c68a5e", "#a8693f", "#7c4a2b", "#4f2e1c"];
@@ -44,6 +49,12 @@ export interface AvatarLayers {
   accessoryColor: string;
   style: string;
   gender: string;
+  eyewear: string;
+  eyewearColor: string;
+  extra: string;
+  extraColor: string;
+  shoes: string;
+  shoesColor: string;
 }
 
 export const DEFAULT_AVATAR: AvatarLayers = {
@@ -59,6 +70,12 @@ export const DEFAULT_AVATAR: AvatarLayers = {
   accessoryColor: "#e8a33d",
   style: "citypop",
   gender: "neutral",
+  eyewear: "none",
+  eyewearColor: "#2a2420",
+  extra: "none",
+  extraColor: "#e8a33d",
+  shoes: "sneakers",
+  shoesColor: "#efe4cc",
 };
 
 export function parseAvatar(raw: unknown): AvatarLayers {
@@ -79,6 +96,21 @@ export function parseAvatar(raw: unknown): AvatarLayers {
     if (typeof v !== "string") continue;
     const color = k === "skin" || k.endsWith("Color");
     if (color ? /^#[0-9a-f]{6}$/i.test(v) : /^[a-z0-9_-]{1,24}$/i.test(v)) out[k] = v;
+  }
+  // looks saved before glasses and the walkman had slots of their own
+  // (Yondra fills missing slots with their defaults, so an empty slot is "none")
+  if (out.accessory === "glasses") {
+    if (out.eyewear === "none") {
+      out.eyewear = "glasses";
+      out.eyewearColor = out.accessoryColor;
+    }
+    out.accessory = "none";
+  } else if (out.accessory === "walkman") {
+    if (out.extra === "none") {
+      out.extra = "walkman";
+      out.extraColor = out.accessoryColor;
+    }
+    out.accessory = "none";
   }
   return out;
 }
@@ -103,5 +135,12 @@ export function avatarFromSeed(seed: number): AvatarLayers {
     accessoryColor: pick(CLOTH_COLORS),
     style: pick(AVATAR_OPTIONS.style),
     gender: pick(AVATAR_OPTIONS.gender),
+    // (picked after the rest: bots keep the looks they had)
+    eyewear: pick(["none", "none", ...AVATAR_OPTIONS.eyewear]),
+    eyewearColor: pick(["#2a2420", "#5b3a26", "#b5562f", "#3d4a5c"]),
+    extra: pick(["none", "none", ...AVATAR_OPTIONS.extra]),
+    extraColor: pick(CLOTH_COLORS),
+    shoes: pick(AVATAR_OPTIONS.shoes),
+    shoesColor: pick(["#efe4cc", "#2a2420", "#5b3a26", "#b5562f", "#efe4cc"]),
   };
 }

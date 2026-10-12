@@ -7,7 +7,9 @@ import {
   type ChatScope,
   type ClientMessages,
   canPlace,
+  carried,
   convertV1,
+  DECOR,
   dirFromDelta,
   doorEdge,
   doorFits,
@@ -19,6 +21,7 @@ import {
   HEAR_RADIUS,
   HEARING_HZ,
   hearingGain,
+  hostOf,
   isFloor,
   isKind,
   isLegalMove,
@@ -30,11 +33,14 @@ import {
   parseAvatar,
   replacedByTemplate,
   type ServerMessages,
+  SPLIT_KINDS,
   type Status,
+  splitAll,
   studioV1,
   TEMPLATES,
   TICK_HZ,
   tileAt,
+  topCell,
   validLayout,
   type WorldObjectDef,
 } from "@yutopia/shared";
@@ -138,6 +144,14 @@ export class SpaceRoom extends Room<SpaceState> {
       objects = (await yondra.seed(this.spaceId, this.map.objects)).objects;
       // a fresh space starts on map v2: store its layout so it's never taken for an old one
       if (!layout) void yondra.putLayout(this.spaceId, layoutFromMap(this.map)).catch(() => {});
+    }
+    // furniture from before bare desks: what was drawn on it becomes real
+    // things, once, stored before anyone can move them
+    const bare = splitAll(objects);
+    objects = bare.objects;
+    if (bare.changed.length) {
+      console.log(`[bare] space ${this.spaceId}: ${bare.changed.length} things set out on their own`);
+      if (!config.offline) await saveAll(bare.changed, (o) => yondra.putObject(this.spaceId, o));
     }
     for (const o of objects) this.state.objects.set(o.id, toSchema(o));
     this.rebuildGrid();
@@ -713,6 +727,10 @@ export class SpaceRoom extends Room<SpaceState> {
     const existing = this.state.objects.get(id);
     if (existing && existing.kind !== m.kind) return;
     const others = [...this.state.objects.values()].filter((o) => o.id !== id).map(fromSchema);
+    if (this.heldByOther(id, p.uid)) {
+      this.send(client, "toast", { text: `${this.holderName(id)} is moving that.`, tone: "warn" });
+      return;
+    }
     const def: WorldObjectDef = {
       id,
       kind: m.kind,
@@ -720,7 +738,7 @@ export class SpaceRoom extends Room<SpaceState> {
       y,
       rot,
       refId: m.refId ?? existing?.refId ?? null,
-      props: m.props ?? safeJson(existing?.props ?? "{}"),
+      props: cleanProps(m.kind, m.props ?? safeJson(existing?.props ?? "{}"), others, x, y, rot),
     };
     if (def.kind === "door") {
       // doors sit on an edge (rot even: north edge of x, y; odd: west edge) and start open
@@ -735,17 +753,48 @@ export class SpaceRoom extends Room<SpaceState> {
       this.send(client, "toast", { text: "That doesn't fit there.", tone: "warn" });
       return;
     }
+    const before = existing ? fromSchema(existing) : null;
     const saved = config.offline ? def : (await yondra.putObject(this.spaceId, def)).object;
     this.state.objects.set(id, toSchema(saved));
+    if (before) await this.carryTabletops(before, saved);
+    this.state.holds.delete(id);
     this.rebuildGrid();
+  }
+
+  // Mugs and papers on a desk go where the desk goes.
+  async carryTabletops(before: WorldObjectDef, after: WorldObjectDef, skip: Set<string> = new Set()) {
+    const all = [...this.state.objects.values()].map(fromSchema);
+    for (const t of carried(before, after, all)) {
+      if (skip.has(t.id)) continue;
+      this.state.objects.set(t.id, toSchema(t));
+      if (!config.offline) await yondra.putObject(this.spaceId, t).catch(() => {});
+    }
+  }
+
+  // ── holding (build mode): one builder's hand at a time ──
+  heldByOther(id: string, uid: number): boolean {
+    const h = this.state.holds.get(id);
+    return !!h && Number(h.split("|")[0]) !== uid;
+  }
+  holderName(id: string): string {
+    return this.state.holds.get(id)?.split("|").slice(1).join("|") || "Someone";
   }
 
   private async removeObject(client: SpaceClient, id: string) {
     const p = this.state.players.get(client.sessionId);
     const o = this.state.objects.get(id);
     if (!p?.builder || !o || !entry(o.kind).buildable) return;
-    if (!config.offline) await yondra.deleteObject(this.spaceId, id);
-    this.state.objects.delete(id);
+    if (this.heldByOther(id, p.uid)) {
+      this.send(client, "toast", { text: `${this.holderName(id)} is moving that.`, tone: "warn" });
+      return;
+    }
+    // what sits on it goes with it
+    const riders = surfaceRiders(fromSchema(o), [...this.state.objects.values()].map(fromSchema));
+    for (const rid of [id, ...riders]) {
+      if (!config.offline) await yondra.deleteObject(this.spaceId, rid);
+      this.state.objects.delete(rid);
+      this.state.holds.delete(rid);
+    }
     this.rebuildGrid();
   }
 
@@ -811,6 +860,56 @@ export function toSchema(o: WorldObjectDef): WorldObject {
   w.refId = o.refId ?? 0;
   w.props = JSON.stringify(o.props ?? {});
   return w;
+}
+
+// Tabletops sitting on a thing with a surface.
+export function surfaceRiders(host: WorldObjectDef, all: WorldObjectDef[]): string[] {
+  return carried(host, host, all).map((t) => t.id);
+}
+
+// Props from a client, made safe: a valid look (variant), decor that is what it
+// says, things on a surface in a real cell at their surface's height, and
+// furniture placed now is bare (never split again); the rest passes as before.
+export function cleanProps(
+  kind: string,
+  props: Record<string, unknown>,
+  others: WorldObjectDef[],
+  x: number,
+  y: number,
+  rot = 0,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...props };
+  const n = entry(kind).variants ?? 1;
+  if (
+    out.variant !== undefined &&
+    !(Number.isInteger(out.variant) && (out.variant as number) >= 0 && (out.variant as number) < n)
+  )
+    delete out.variant;
+  if (kind === "decor" || kind === "tabletop" || kind === "frame") {
+    const allowed = DECOR[kind] as readonly string[];
+    if (!allowed.includes(String(out.d))) out.d = allowed[0];
+    const seed = Number(out.seed);
+    out.seed = Number.isFinite(seed) && seed >= 0 && seed < 1 ? seed : 0.5;
+  }
+  // a fabric / paint colour: a hex, on things that take one
+  if (
+    out.color !== undefined &&
+    !(entry(kind).paint && typeof out.color === "string" && /^#[0-9a-f]{6}$/i.test(out.color))
+  )
+    delete out.color;
+  if (entry(kind).onSurface) {
+    const def: WorldObjectDef = { id: "", kind, x, y, rot, props: out };
+    out.c = topCell(def);
+    out.z = entry(hostOf(others, def)?.kind ?? "").surface ?? 0;
+  }
+  if ((SPLIT_KINDS as readonly string[]).includes(kind)) out.split = 1;
+  return out;
+}
+
+// Store many objects, a few at a time (a failed one is logged, not fatal).
+async function saveAll(list: WorldObjectDef[], put: (o: WorldObjectDef) => Promise<unknown>) {
+  for (let i = 0; i < list.length; i += 8)
+    await Promise.all(list.slice(i, i + 8).map((o) => put(o).catch((e) => console.warn("[bare]", o.id, e.message))));
 }
 
 export function fromSchema(o: WorldObject): WorldObjectDef {

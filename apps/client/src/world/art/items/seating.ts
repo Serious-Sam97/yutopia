@@ -1,13 +1,15 @@
+import { paintOf } from "./home";
 import { type Mat, type Sketch, sh } from "./kit";
 import { K, M } from "./pal";
-
-const OLIVE: Mat = { c: K.olive, top: "#86944e" };
-const OLIVE_DARK: Mat = { c: "#5d6930", top: "#717f3c" };
 
 // 70s olive lounge chair, back on −y (the "bias" part, sorted around a sitter).
 // props.occupied: the cushion sinks and the back leans a touch. Story: a
 // crocheted doily on the back, or a newspaper on the arm.
+// (props.color: the upholstery, olive unless painted)
 export function armchair(s: Sketch, props: Record<string, unknown>) {
+  const FAB = paintOf(props, K.olive);
+  const OLIVE: Mat = { c: FAB, top: sh(FAB, 1.14) };
+  const OLIVE_DARK: Mat = { c: sh(FAB, 0.8), top: sh(FAB, 0.92) };
   const v = Math.floor(s.seed * 2);
   const sit = props.occupied ? 1.6 : 0;
   for (const [x, y] of [
@@ -19,7 +21,7 @@ export function armchair(s: Sketch, props: Record<string, unknown>) {
     s.cyl({ x, y, z: 0, r: 0.03, h: 3, mat: M.walnutDark, line: 0.5 });
   s.box({ x: 0.08, y: 0.12, w: 0.84, d: 0.8, z: 3, h: 7, mat: OLIVE_DARK, puff: 1 });
   s.box({ x: 0.22, y: 0.3, w: 0.56, d: 0.6, z: 10, h: 5 - sit, mat: OLIVE, puff: 1.8 }, (d) => {
-    d.line("t", [0.26, 0.86, 15 - sit], [0.74, 0.86, 15 - sit], sh(K.olive, 0.75), 0.5, 0.7);
+    d.line("t", [0.26, 0.86, 15 - sit], [0.74, 0.86, 15 - sit], sh(FAB, 0.75), 0.5, 0.7);
   });
   for (const ax of [0.08, 0.78]) s.box({ x: ax, y: 0.3, w: 0.14, d: 0.62, z: 10, h: 9, mat: OLIVE_DARK, puff: 1.6 });
   s.box(
@@ -32,7 +34,7 @@ export function armchair(s: Sketch, props: Record<string, unknown>) {
             (() => {
               const [px, py] = d.m(x, 0.3 - sit * 0.012, z);
               return d.vis("s")
-                ? `<circle cx="${px}" cy="${py}" r=".9" fill="${sh(K.olive, 0.6)}"/><circle cx="${px - 0.3}" cy="${py - 0.3}" r=".35" fill="${sh(K.olive, 1.3)}"/>`
+                ? `<circle cx="${px}" cy="${py}" r=".9" fill="${sh(FAB, 0.6)}"/><circle cx="${px - 0.3}" cy="${py - 0.3}" r=".35" fill="${sh(FAB, 1.3)}"/>`
                 : "";
             })(),
           );

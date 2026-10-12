@@ -21,6 +21,9 @@ export class Player extends Schema {
   @type("boolean") builder = false;
   @type("boolean") bot = false;
   @type("boolean") muted = false; // by an owner: LiveKit publish permission revoked
+  @type("string") held = ""; // what they carry (shared/held.ts), "" for nothing
+  @type("float64") heldAt = 0; // when they took it (server ms): its sips follow from this
+  @type("string") busy = ""; // using something (shared USES): the body shows it
 }
 
 export class WorldObject extends Schema {
@@ -96,4 +99,5 @@ export class SpaceState extends Schema {
   @type(Poker) poker = new Poker();
   @type({ map: "string" }) boothGuests = new MapSchema<string>();
   @type({ map: "string" }) locks = new MapSchema<string>(); // area → who locked it
+  @type({ map: "string" }) holds = new MapSchema<string>(); // object id → "uid|name" of the builder holding it
 }

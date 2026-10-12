@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useTr } from "@/lib/i18n";
+import { HELD, heldState, isHeld } from "@yutopia/shared";
+import { useEffect, useRef, useState } from "react";
+import { type Key, useTr } from "@/lib/i18n";
+import { HELD_BOX, heldSvg, MUG_COLORS } from "@/world/art/held";
 import { PERSON } from "@/world/art/iso";
+import { svgDoc } from "@/world/art/svgdoc";
 import { useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
@@ -41,6 +44,64 @@ export function Prompt() {
         · {touch ? t("tapToUse") : opens ? t("pressToOpen") : t("pressToUse")}
       </span>
     </button>
+  );
+}
+
+// What I carry (a mug from the coffee machine): its picture, how much is
+// left, and a button to put it down.
+export function HeldChip() {
+  const t = useTr();
+  const w = useWorld();
+  const held = useHud((s) => s.held);
+  const me = useHud((s) => s.me);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!held) return;
+    const i = setInterval(() => tick((n) => n + 1), 500);
+    return () => clearInterval(i);
+  }, [held]);
+  if (!held || !isHeld(held.kind)) return null;
+  const st = heldState(held.kind, Date.now() - held.at);
+  const level = Math.round(st.level * 4);
+  // the same mug the world draws in my hand
+  let h = 2166136261;
+  for (const ch of me?.name ?? "") h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  const color = MUG_COLORS[Math.floor(((h >>> 0) / 4294967296) * MUG_COLORS.length)];
+  const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgDoc(heldSvg(held.kind, color, level), HELD_BOX, 3))}`;
+  const label: Key = held.kind === "cup" ? "heldCup" : held.kind === "soda" ? "heldSoda" : "heldMug";
+  return (
+    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[136px] cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise">
+      <span
+        className="w-8 h-8 rounded-full grid place-items-center shrink-0"
+        style={{ background: "radial-gradient(#4a3324,#241912)", border: "1px solid var(--edge)" }}
+        aria-hidden
+      >
+        {/* biome-ignore lint/performance/noImgElement: generated SVG data URI */}
+        <img src={src} alt="" width={22} height={25} />
+      </span>
+      <span className="text-sm">{t(label)}</span>
+      <span className="flex gap-[3px]" role="img" aria-label={`${level}/4`}>
+        {[0, 1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className="w-[7px] h-3 rounded-[2px]"
+            style={{
+              background: i < level ? "var(--vfd)" : "#3a2c1f",
+              boxShadow: i < level ? "0 0 6px rgba(255,179,92,.5)" : "none",
+            }}
+          />
+        ))}
+      </span>
+      {level === 0 && (
+        <span className="mono text-[11px]" style={{ color: "var(--muted)" }}>
+          {t("heldEmpty")}
+        </span>
+      )}
+      <button type="button" className="deck-btn" style={{ height: 28, fontSize: 12 }} onClick={() => w?.putDown()}>
+        {t("heldPutDown")}
+      </button>
+      <span className="sr-only">{HELD[held.kind].label}</span>
+    </div>
   );
 }
 

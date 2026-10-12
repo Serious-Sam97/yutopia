@@ -1,3 +1,4 @@
+import { paintOf } from "./home";
 import { INK, type Mat, type Sketch, sh } from "./kit";
 import { K, M } from "./pal";
 
@@ -5,11 +6,12 @@ import { K, M } from "./pal";
 // three seat + three back cushions (one per tile, so depth slices cut between
 // cushions). Story detail (seeded): a throw pillow, a cassette left on a
 // cushion, or a knitted blanket over an arm.
-const CORD: Mat = { c: K.rust, top: "#c76b41" };
-const CORD_DARK: Mat = { c: "#9a4630", top: "#b25a3c" };
-
-export function sofa(s: Sketch) {
+// (props.color: the fabric, rust corduroy unless painted)
+export function sofa(s: Sketch, props: Record<string, unknown> = {}) {
   const v = Math.floor(s.seed * 3);
+  const FAB = paintOf(props, K.rust);
+  const CORD: Mat = { c: FAB, top: sh(FAB, 1.14) };
+  const CORD_DARK: Mat = { c: sh(FAB, 0.8), top: sh(FAB, 0.92) };
 
   // plinth + legs
   for (const [x, y] of [
@@ -26,7 +28,7 @@ export function sofa(s: Sketch) {
   s.box({ x: 0.04, y: 0.1, w: 2.92, d: 0.1, z: 12, h: 18, mat: CORD_DARK, puff: 1 });
   for (const ax of [0.04, 2.74])
     s.box({ x: ax, y: 0.14, w: 0.22, d: 0.78, z: 12, h: 11, mat: CORD_DARK, puff: 2.2 }, (d) => {
-      d.line("s", [ax + 0.04, 0.92, 21], [ax + 0.18, 0.92, 21], sh("#9a4630", 0.75), 0.6, 0.8);
+      d.line("s", [ax + 0.04, 0.92, 21], [ax + 0.18, 0.92, 21], sh(FAB, 0.6), 0.6, 0.8);
     });
 
   // cushions, one per tile
@@ -39,13 +41,13 @@ export function sofa(s: Sketch) {
     s.box({ x: x0 + 0.01, y: 0.18, w: x1 - x0 - 0.02, d: 0.22, z: 12, h: 21, mat: CORD, puff: 2.6 }, (d) => {
       for (let i = 1; i < 7; i++) {
         const x = x0 + ((x1 - x0) * i) / 7;
-        d.line("s", [x, 0.4, 31], [x, 0.4, 14], sh(K.rust, 0.86), 0.45, 0.6);
+        d.line("s", [x, 0.4, 31], [x, 0.4, 14], sh(FAB, 0.86), 0.45, 0.6);
       }
     });
     s.box({ x: x0 + 0.01, y: 0.4, w: x1 - x0 - 0.02, d: 0.52, z: 12, h: 5.5, mat: CORD, puff: 2 }, (d) => {
       for (let i = 1; i < 7; i++) {
         const x = x0 + ((x1 - x0) * i) / 7;
-        d.line("s", [x, 0.92, 16.5], [x, 0.92, 13], sh(K.rust, 0.86), 0.45, 0.6);
+        d.line("s", [x, 0.92, 16.5], [x, 0.92, 13], sh(FAB, 0.86), 0.45, 0.6);
       }
     });
   }

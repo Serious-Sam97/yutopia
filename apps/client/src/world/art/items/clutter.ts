@@ -117,6 +117,128 @@ function vinyl(s: Sketch, z: number, seed: number) {
   );
 }
 
+// ── on desks: the workstation, one piece at a time ──────────────────────────
+// A beige CRT facing −y (the sitter), green phosphor text; sometimes a sticky
+// note on the bezel.
+function monitor(s: Sketch, z: number, seed: number) {
+  const mx = 0.28;
+  const F = 0.3; // the glass's plane
+  s.box({ x: mx + 0.1, y: 0.4, w: 0.24, d: 0.22, z, h: 2, mat: M.puttyDark, line: 0.8 });
+  // tube housing behind the bezel
+  s.box({ x: mx + 0.06, y: 0.48, w: 0.32, d: 0.22, z: z + 4, h: 14, mat: M.puttyDark, puff: 1 }, (d) => {
+    for (let i = 0; i < 4; i++)
+      d.line("t", [mx + 0.1 + i * 0.06, 0.53, z + 18], [mx + 0.1 + i * 0.06, 0.66, z + 18], "#8e8263", 0.7);
+  });
+  const R = mx + 0.44; // left edge as seen from the front
+  s.box({ x: mx, y: F, w: 0.44, d: 0.18, z: z + 2, h: 19, mat: M.putty }, (d) => {
+    d.poly("n", fr("n", F, mx + 0.04, mx + 0.4, z + 5.5, z + 19.5), "#a89a76");
+    d.poly("n", fr("n", F, mx + 0.06, mx + 0.38, z + 6.5, z + 18.5), K.screen, { stroke: "#3a3428", sw: 0.6 });
+    for (let r = 0; r < 4; r++) {
+      const len = 0.08 + ((r * 7 + Math.floor(seed * 10)) % 5) * 0.04;
+      const zz = z + 16.5 - r * 2.5;
+      d.poly("n", fr("n", F, R - 0.09 - len, R - 0.09, zz - 0.9, zz), K.phosphor, { glow: true });
+    }
+    d.poly("n", fr("n", F, R - 0.13, R - 0.09, z + 7.2, z + 8.3), K.phosphorHi, { glow: true }); // cursor
+    d.poly("n", fr("n", F, mx + 0.03, mx + 0.06, z + 3.4, z + 4.6), K.amber, { glow: true }); // power LED
+    d.poly("n", fr("n", F, R - 0.16, R - 0.05, z + 3.5, z + 4.5), "#8e8263");
+    if (seed > 0.5)
+      d.poly(
+        "n",
+        [
+          [mx + 0.14, F, z + 20.5],
+          [mx - 0.01, F, z + 19.6],
+          [mx - 0.01, F, z + 14],
+          [mx + 0.13, F, z + 14.8],
+        ],
+        K.amberSoft,
+        { stroke: "#b07a22", sw: 0.4 },
+      );
+    for (let i = 0; i < 3; i++)
+      d.line("s", [mx + 0.1, 0.48, z + 8 + i * 3.5], [mx + 0.34, 0.48, z + 8 + i * 3.5], "#a49470", 0.8);
+  });
+}
+
+// A putty keyboard, three rows of keys (the long one's the space bar).
+function keyboard(s: Sketch, z: number) {
+  const kx = 0.28;
+  const ky = 0.415;
+  s.box({ x: kx, y: ky, w: 0.44, d: 0.17, z, h: 1.8, mat: M.putty, line: 0.8 }, (d) => {
+    for (let r = 0; r < 3; r++) {
+      const y = ky + 0.03 + r * 0.045;
+      for (let k = 0; k < 9; k++) {
+        const x = kx + 0.03 + k * 0.045;
+        d.poly("t", tr(z + 1.8, x, y, x + 0.034, y + 0.032), r === 2 && k > 2 && k < 7 ? "#c8bb98" : "#e9dfc4", {
+          stroke: "#a69772",
+          sw: 0.25,
+        });
+      }
+    }
+  });
+}
+
+// A little desk lamp: a round base, a bent arm, an amber shade with a glow.
+function desklamp(s: Sketch, z: number, seed: number) {
+  const c = pick([K.rust, K.olive, K.graphite, K.cream], seed);
+  s.cyl({ x: CX, y: CY, z, r: 0.07, h: 1.6, mat: { c } });
+  s.shape({ x: CX - 0.1, y: CY - 0.1, w: 0.2, d: 0.2, z: z + 1.6, h: 16 }, (d) => {
+    const [x0, y0] = d.m(CX, CY, z + 1.6);
+    const [x1, y1] = d.m(CX - 0.04, CY + 0.02, z + 11);
+    const [x2, y2] = d.m(CX + 0.05, CY + 0.06, z + 15);
+    const arm = `M${x0} ${y0}L${x1} ${y1}L${x2} ${y2}`;
+    d.raw(
+      `<path d="${arm}" stroke="${INK}" stroke-width="2" fill="none" stroke-linejoin="round"/><path d="${arm}" stroke="${K.aluminium}" stroke-width=".9" fill="none" stroke-linejoin="round"/>`,
+    );
+  });
+  s.cyl({ x: CX + 0.06, y: CY + 0.07, z: z + 10, r: 0.03, r2: 0.075, h: 5, mat: { c } }, (d) =>
+    d.poly("t", te(z + 10, CX + 0.06, CY + 0.07, 0.06), K.vfd, { glow: true }),
+  );
+}
+
+// The War Room's conference phone: a graphite starfish with a keypad.
+function phone(s: Sketch, z: number) {
+  s.box({ x: 0.29, y: 0.32, w: 0.42, d: 0.36, z, h: 3, mat: M.graphite, puff: 0.6, line: 0.9 }, (d) => {
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 3; c++) d.poly("t", te(z + 3, 0.39 + c * 0.1, 0.42 + r * 0.08, 0.025, 8), K.cream);
+    d.poly("t", tr(z + 3, 0.61, 0.4, 0.67, 0.6), K.red, { glow: true });
+  });
+}
+
+// A deck of planning-poker cards.
+function cards(s: Sketch, z: number) {
+  s.box({ x: 0.42, y: 0.4, w: 0.16, d: 0.2, z, h: 2.4, mat: { c: K.cream, top: K.paper }, line: 0.7 }, (d) => {
+    d.poly("t", tr(z + 2.4, 0.45, 0.44, 0.55, 0.56), "none", { stroke: K.rust, sw: 0.6 });
+  });
+}
+
+// A brass desk bell on a walnut foot.
+function bell(s: Sketch, z: number) {
+  s.cyl({ x: CX, y: CY, z, r: 0.07, h: 1, mat: M.walnutDark, line: 0.6 });
+  s.cyl({ x: CX, y: CY, z: z + 1, r: 0.06, r2: 0.025, h: 4, mat: M.brass, line: 0.6 });
+}
+
+// An open guest book with a ribbon.
+function book(s: Sketch, z: number, seed: number) {
+  const cover = pick([K.rust, K.olive, K.slate], seed);
+  s.box({ x: 0.27, y: 0.37, w: 0.46, d: 0.26, z, h: 0.6, mat: { c: cover }, line: 0.6, bevel: false });
+  s.box(
+    { x: 0.28, y: 0.38, w: 0.44, d: 0.24, z: z + 0.6, h: 0.8, mat: { c: K.paper, top: K.paper }, line: 0.6 },
+    (d) => {
+      d.line("t", [0.5, 0.38, z + 1.4], [0.5, 0.62, z + 1.4], sh(cover, 0.8), 0.6);
+      for (let i = 0; i < 3; i++)
+        d.line("t", [0.32, 0.44 + i * 0.06, z + 1.4], [0.46, 0.44 + i * 0.06, z + 1.4], "#8a7a5a", 0.4);
+    },
+  );
+}
+
+// A framed photo standing up, facing the room (+y).
+function photo(s: Sketch, z: number, seed: number) {
+  const pic = pick([K.sage, "#9fc2d8", "#e4b48e"], seed);
+  s.box({ x: 0.39, y: 0.47, w: 0.22, d: 0.05, z, h: 10, mat: M.walnutDark, line: 0.8 }, (d) => {
+    d.poly("s", fr("s", 0.52, 0.42, 0.58, z + 1.5, z + 8.5), pic);
+    d.poly("s", fr("s", 0.52, 0.46, 0.54, z + 1.5, z + 5), K.amberSoft);
+  });
+}
+
 // A framed picture on the wall face: a landscape, stripes or a photo.
 function frame(s: Sketch, seed: number) {
   const Y = 0.1;
@@ -210,6 +332,22 @@ export function dressing(s: Sketch, kind: DressKind, z: number, seed: number) {
       return succulent(s, z, seed);
     case "vinyl":
       return vinyl(s, z, seed);
+    case "monitor":
+      return monitor(s, z, seed);
+    case "keyboard":
+      return keyboard(s, z);
+    case "desklamp":
+      return desklamp(s, z, seed);
+    case "phone":
+      return phone(s, z);
+    case "cards":
+      return cards(s, z);
+    case "bell":
+      return bell(s, z);
+    case "book":
+      return book(s, z, seed);
+    case "photo":
+      return photo(s, z, seed);
     case "frame":
       return frame(s, seed);
     case "plant":

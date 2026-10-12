@@ -169,6 +169,10 @@ function mergeAreas(cur: AreaDef[], from: AreaDef[], to: AreaDef[]): AreaDef[] {
 export const STEP_LABELS: Record<string, string> = {
   "obj:put": "placed furniture",
   "obj:remove": "removed furniture",
+  "obj:batch": "moved furniture",
+  "obj:removeMany": "removed furniture",
+  "dress:take": "moved decor",
+  "dress:hide": "removed decor",
   "build:template": "switched a layout",
   "map:paint": "painted floors",
   "map:walls": "painted walls",

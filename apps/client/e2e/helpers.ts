@@ -1,5 +1,24 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, type Page, request } from "@playwright/test";
+import { test as base, expect, type Page, request } from "@playwright/test";
+
+// `test` for specs that open extra people (browser.newContext): whatever
+// contexts a test opened are closed when it ends — live worlds left behind
+// keep rendering and slow every test after them.
+export const test = base.extend<{ closeExtraContexts: undefined }>({
+  closeExtraContexts: [
+    async ({ browser }, use) => {
+      const before = new Set(browser.contexts());
+      await use(undefined);
+      await Promise.all(
+        browser
+          .contexts()
+          .filter((c) => !before.has(c))
+          .map((c) => c.close().catch(() => {})),
+      );
+    },
+    { auto: true },
+  ],
+});
 
 export const API = process.env.YUTOPIA_E2E_API ?? "http://localhost";
 // Demo accounts from Yondra's YutopiaDemoSeeder (local dev only).

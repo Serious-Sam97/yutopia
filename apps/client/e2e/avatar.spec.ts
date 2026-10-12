@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, request, test } from "@playwright/test";
-import { ANA, API, BIA, enter, spaceId, token } from "./helpers";
+import { expect, request } from "@playwright/test";
+import { ANA, API, BIA, enter, spaceId, test, token } from "./helpers";
 
 // Changing your look without leaving the studio: Settings → Change my look,
 // pick Ligne claire, save — it's kept in Yondra and Bia sees it right away.

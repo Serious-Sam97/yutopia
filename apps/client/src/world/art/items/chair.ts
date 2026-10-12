@@ -1,3 +1,4 @@
+import { paintOf } from "./home";
 import { fr, INK, type Sketch, sh } from "./kit";
 import { K, M } from "./pal";
 
@@ -9,6 +10,9 @@ import { K, M } from "./pal";
 export function chair(s: Sketch, props: Record<string, unknown>) {
   const v = Math.floor(s.seed * 4);
   const sit = props.occupied ? 1 : 0;
+  // (props.color: the cushions, rust unless painted)
+  const FAB = paintOf(props, K.rust);
+  const CUSH = { c: FAB, top: sh(FAB, 1.14) };
 
   // five-star base
   s.shape(
@@ -36,17 +40,17 @@ export function chair(s: Sketch, props: Record<string, unknown>) {
   s.box({ x: 0.36, y: 0.34, w: 0.28, d: 0.3, z: 9.5, h: 1.5, mat: M.graphite, line: 0.7 });
 
   // seat cushion
-  s.box({ x: 0.19, y: 0.24, w: 0.62, d: 0.58, z: 11, h: 4.5 - sit, mat: M.rust, puff: 1.4 }, (d) => {
-    d.line("t", [0.24, 0.76, 15.5 - sit], [0.76, 0.76, 15.5 - sit], sh(K.rust, 0.8), 0.5, 0.7); // piping
+  s.box({ x: 0.19, y: 0.24, w: 0.62, d: 0.58, z: 11, h: 4.5 - sit, mat: CUSH, puff: 1.4 }, (d) => {
+    d.line("t", [0.24, 0.76, 15.5 - sit], [0.76, 0.76, 15.5 - sit], sh(FAB, 0.8), 0.5, 0.7); // piping
   });
 
   // backrest spine + backrest (bias: sorts around the sitter)
   s.box({ x: 0.45, y: 0.15, w: 0.1, d: 0.08, z: 9.5, h: 10, mat: M.graphite, bias: true, line: 0.8 });
   s.box(
-    { x: 0.18, y: 0.1 - sit * 0.04, w: 0.64, d: 0.12, z: 17 - sit, h: 20, mat: M.rust, puff: 1.8, bias: true },
+    { x: 0.18, y: 0.1 - sit * 0.04, w: 0.64, d: 0.12, z: 17 - sit, h: 20, mat: CUSH, puff: 1.8, bias: true },
     (d) => {
       // channel stitching on the front (faces the sitter)
-      for (const z of [23.5, 30]) d.line("s", [0.22, 0.22, z], [0.78, 0.22, z], sh(K.rust, 0.72), 0.6, 0.8);
+      for (const z of [23.5, 30]) d.line("s", [0.22, 0.22, z], [0.78, 0.22, z], sh(FAB, 0.72), 0.6, 0.8);
       if (v === 1) {
         // tape patch on the back
         d.poly("n", fr("n", 0.1, 0.56, 0.7, 26, 31), "#e4d7b6", { stroke: "#b3a37c", sw: 0.4 });

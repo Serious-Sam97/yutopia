@@ -51,6 +51,7 @@ export type PanelKind =
   | "notice"
   | "terminal"
   | "coffee"
+  | "piano"
   | "settings"
   | "avatar"
   | null;
@@ -72,6 +73,7 @@ export interface HudState {
   chatUnread: number;
   heardBy: number[]; // user ids who can hear me right now
   prompt: { objectId: string; kind: string; label: string } | null;
+  held: { kind: string; at: number } | null; // what I carry (a mug…) and since when (server ms)
   panel: { kind: PanelKind; objectId?: string };
   knocks: { from: string; fromName: string; area: string; at: number }[];
   toasts: { id: number; text: string; tone: "info" | "warn" | "vortex" }[];
@@ -95,9 +97,16 @@ export interface HudState {
   build: {
     on: boolean;
     tool: BuildTool;
-    kind: string;
+    kind: string; // the catalog item to place (mode "place")
     rot: number;
-    holding: string | null;
+    // furniture: the Sims hand (pick up / move), placing from the catalog, or
+    // the eyedropper (click something to place copies of it)
+    mode: "hand" | "place" | "eyedrop";
+    held: string[]; // placed things in your hand right now
+    carrying: number; // everything in your hand (new copies too)
+    selected: string[];
+    // the thing under the pointer (its name, and who's holding it), for the tag
+    hover: { label: string; by: string | null } | null;
     brush: string; // "w:" + an edge char (walls), a floor char (tiles), or "door"
     paintMode: PaintMode;
     props: Record<string, unknown> | null; // what new furniture copies (C)
@@ -132,6 +141,7 @@ const initial: HudState = {
   chatUnread: 0,
   heardBy: [],
   prompt: null,
+  held: null,
   panel: { kind: null },
   knocks: [],
   toasts: [],
@@ -157,7 +167,11 @@ const initial: HudState = {
     tool: "furniture",
     kind: "plant",
     rot: 0,
-    holding: null,
+    mode: "hand",
+    held: [],
+    carrying: 0,
+    selected: [],
+    hover: null,
     brush: "w:p",
     paintMode: "line",
     props: null,

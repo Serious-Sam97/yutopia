@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, test } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, token, walkTo } from "./helpers";
+import { expect } from "@playwright/test";
+import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
 
 // The main HUD (proposal v2): top bars, the side panel (chat · people · room)
 // with who can hear you, reactions and quick emotes, the status menu, the minimap.

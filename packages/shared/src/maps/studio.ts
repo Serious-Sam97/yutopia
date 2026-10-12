@@ -156,6 +156,13 @@ add("lounge-armchair", "armchair", 19, 28, 3);
 add("lounge-shelf", "tape_shelf", 14, 24, 3);
 add("lounge-coffee", "coffee_machine", 14, 22);
 add("lounge-lamp", "lamp", 20, 33);
+// things to use: a vending machine by the arcades, a water cooler, the piano,
+// a record player on its own little table by the radio
+add("lounge-vending", "vending", 23, 21);
+add("lounge-water", "water_cooler", 15, 21);
+add("lounge-piano", "piano", 17, 21);
+add("lounge-tt-stand", "side_table", 22, 24);
+add("lounge-turntable", "turntable", 22, 24, 0, { c: [1, 1], z: 14 });
 for (const [i, [x, y]] of [
   [24, 21],
   [24, 34],

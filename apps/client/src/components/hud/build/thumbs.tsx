@@ -10,7 +10,8 @@ const cache = new Map<string, string | null>();
 
 function make(m: Items, kind: string, props?: Record<string, unknown>): string | null {
   if (!m.hasItemArt(kind)) return null;
-  const art = m.itemArt({ kind, id: "catalog", rot: 0, props }, null, "all", 2);
+  // a picture: things drawn live in the world (the clock's hands) are drawn in
+  const art = m.itemArt({ kind, id: "catalog", rot: 0, props: { ...props, _thumb: true } }, null, "all", 2);
   return art ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(art.svg)}` : null;
 }
 
@@ -51,8 +52,16 @@ export function ItemThumb({
         aria-hidden
       />
     );
+  // things for desks are small next to a sofa: shown filling the card instead
+  const small = kind === "tabletop";
   return (
     // biome-ignore lint/performance/noImgElement: inline SVG data URL
-    <img alt="" src={src} className={`max-w-full max-h-full object-contain ${className ?? ""}`} draggable={false} />
+    <img
+      alt=""
+      src={src}
+      className={`max-w-full max-h-full object-contain ${className ?? ""}`}
+      style={small ? { width: "64%", height: "64%" } : undefined}
+      draggable={false}
+    />
   );
 }

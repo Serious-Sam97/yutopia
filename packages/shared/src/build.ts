@@ -2,6 +2,7 @@ import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
 import { doorEdge, doorFits, Grid } from "./grid.ts";
 import type { Point } from "./iso.ts";
 import { holdsItems, hWall, type MapDef, wallBetween } from "./map.ts";
+import { fitsOnSurface, splitAll } from "./tops.ts";
 
 // One placement rule for client (ghost preview) and server (authority).
 export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDef, bodies: Point[] = []): boolean {
@@ -16,6 +17,8 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
       return d.dir === e.dir && d.x === e.x && d.y === e.y;
     });
   }
+  // tabletops: all of them on one surface's top, clear of the rest there
+  if (e.onSurface) return fitsOnSurface(others, o);
   const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
   const floor = Grid.from(map, [], undefined, { dressing: false });
   const base = Grid.from(
@@ -58,7 +61,18 @@ export interface Template {
   objects: WorldObjectDef[];
 }
 
-const KINDS_REPLACED = ["desk", "chair", "plant", "lamp", "sofa", "armchair", "coffee_table", "rug", "tape_shelf"];
+const KINDS_REPLACED = [
+  "desk",
+  "chair",
+  "plant",
+  "lamp",
+  "sofa",
+  "armchair",
+  "coffee_table",
+  "rug",
+  "tape_shelf",
+  "tabletop", // what stood on the old desks goes with them
+];
 export function replacedByTemplate(kind: string): boolean {
   return KINDS_REPLACED.includes(kind);
 }
@@ -107,8 +121,9 @@ function library(): WorldObjectDef[] {
   return out;
 }
 
+// (desks come set up: monitors, keyboards, a mug — each its own thing)
 export const TEMPLATES: Template[] = [
-  { key: "pods", name: "Desk pods", area: "tracking", objects: pods() },
-  { key: "rows", name: "Studio rows", area: "tracking", objects: rows() },
-  { key: "library", name: "Tape library", area: "tracking", objects: library() },
+  { key: "pods", name: "Desk pods", area: "tracking", objects: splitAll(pods()).objects },
+  { key: "rows", name: "Studio rows", area: "tracking", objects: splitAll(rows()).objects },
+  { key: "library", name: "Tape library", area: "tracking", objects: splitAll(library()).objects },
 ];

@@ -2,11 +2,42 @@ import { CLOTH_COLORS } from "@yutopia/shared";
 import { fe, fr, INK, rnd, type Sketch, sh, te, tr } from "./kit";
 import { K, M } from "./pal";
 
-// Lo-fi radio: an aluminium receiver + speakers on a little walnut stand.
-// props.on: the tuning VFD and the LED light up. Story: a cassette sticking
-// out of the deck.
+// Lo-fi radio: an aluminium receiver with two speakers, drawn standing on z 0
+// (it goes on a desk, a table or its side table). props.on: the tuning VFD and
+// the LED light up. Story: a cassette sticking out of the deck.
 export function radio(s: Sketch, props: Record<string, unknown>) {
   const on = !!props.on;
+  s.box({ x: 0.12, y: 0.3, w: 0.76, d: 0.4, z: 0, h: 15, mat: M.aluminium }, (d) => {
+    // speaker grilles
+    for (const u of [0.25, 0.75]) {
+      d.poly("s", fe("s", 0.7, u, 7, 0.1, 5.2), K.graphite, { stroke: INK, sw: 0.6 });
+      d.poly("s", fe("s", 0.7, u, 7, 0.04, 2), "#4a463e");
+    }
+    // tuning window + LED + dials
+    d.poly("s", fr("s", 0.7, 0.4, 0.6, 10, 13.5), on ? K.amber : "#3a2c1f", { glow: on, stroke: INK, sw: 0.4 });
+    if (on)
+      for (let i = 0; i < 4; i++)
+        d.poly("s", fr("s", 0.7, 0.42 + i * 0.045, 0.45 + i * 0.045, 10.6, 12.8), K.vfd, { glow: true });
+    d.poly("s", fe("s", 0.7, 0.45, 4, 0.025, 1.1, 10), on ? K.red : "#5a2a22", { glow: on });
+    d.poly("s", fe("s", 0.7, 0.55, 4, 0.035, 1.6, 10), K.graphite);
+    // cassette deck slot with a tape poking out (story)
+    d.poly("t", tr(15, 0.36, 0.42, 0.64, 0.56), K.graphite);
+    d.poly("e", fr("e", 0.88, 0.36, 0.64, 4, 12), sh(K.aluminium, 0.8), { stroke: INK, sw: 0.4 });
+  });
+  s.box({ x: 0.4, y: 0.44, w: 0.2, d: 0.06, z: 15, h: 4, mat: { c: K.cream }, line: 0.6 }, (d) => {
+    d.poly("s", fr("s", 0.5, 0.43, 0.57, 16, 18.5), K.rust);
+  });
+  // antenna
+  s.shape({ x: 0.16, y: 0.36, w: 0.04, d: 0.04, z: 15, h: 18 }, (d) => {
+    const a = d.m(0.18, 0.38, 15);
+    d.raw(
+      `<path d="M${a[0]} ${a[1]} L${a[0] - 9} ${a[1] - 16}" stroke="${INK}" stroke-width="1.8" stroke-linecap="round"/><path d="M${a[0]} ${a[1]} L${a[0] - 9} ${a[1] - 16}" stroke="${K.aluminium}" stroke-width=".8" stroke-linecap="round"/><circle cx="${a[0] - 9}" cy="${a[1] - 16}" r="1.1" fill="${K.aluminium}" stroke="${INK}" stroke-width=".5"/>`,
+    );
+  });
+}
+
+// A little walnut side table on four legs (the radio's old stand).
+export function sideTable(s: Sketch) {
   for (const [x, y] of [
     [0.24, 0.24],
     [0.76, 0.24],
@@ -15,33 +46,6 @@ export function radio(s: Sketch, props: Record<string, unknown>) {
   ])
     s.cyl({ x, y, z: 0, r: 0.025, r2: 0.035, h: 11, mat: M.walnutDark, line: 0.5 });
   s.box({ x: 0.18, y: 0.18, w: 0.64, d: 0.64, z: 11, h: 3, mat: M.walnut });
-  s.box({ x: 0.12, y: 0.3, w: 0.76, d: 0.4, z: 14, h: 15, mat: M.aluminium }, (d) => {
-    // speaker grilles
-    for (const u of [0.25, 0.75]) {
-      d.poly("s", fe("s", 0.7, u, 21, 0.1, 5.2), K.graphite, { stroke: INK, sw: 0.6 });
-      d.poly("s", fe("s", 0.7, u, 21, 0.04, 2), "#4a463e");
-    }
-    // tuning window + LED + dials
-    d.poly("s", fr("s", 0.7, 0.4, 0.6, 24, 27.5), on ? K.amber : "#3a2c1f", { glow: on, stroke: INK, sw: 0.4 });
-    if (on)
-      for (let i = 0; i < 4; i++)
-        d.poly("s", fr("s", 0.7, 0.42 + i * 0.045, 0.45 + i * 0.045, 24.6, 26.8), K.vfd, { glow: true });
-    d.poly("s", fe("s", 0.7, 0.45, 18, 0.025, 1.1, 10), on ? K.red : "#5a2a22", { glow: on });
-    d.poly("s", fe("s", 0.7, 0.55, 18, 0.035, 1.6, 10), K.graphite);
-    // cassette deck slot with a tape poking out (story)
-    d.poly("t", tr(29, 0.36, 0.42, 0.64, 0.56), K.graphite);
-    d.poly("e", fr("e", 0.88, 0.36, 0.64, 18, 26), sh(K.aluminium, 0.8), { stroke: INK, sw: 0.4 });
-  });
-  s.box({ x: 0.4, y: 0.44, w: 0.2, d: 0.06, z: 29, h: 4, mat: { c: K.cream }, line: 0.6 }, (d) => {
-    d.poly("s", fr("s", 0.5, 0.43, 0.57, 30, 32.5), K.rust);
-  });
-  // antenna
-  s.shape({ x: 0.16, y: 0.36, w: 0.04, d: 0.04, z: 29, h: 18 }, (d) => {
-    const a = d.m(0.18, 0.38, 29);
-    d.raw(
-      `<path d="M${a[0]} ${a[1]} L${a[0] - 9} ${a[1] - 16}" stroke="${INK}" stroke-width="1.8" stroke-linecap="round"/><path d="M${a[0]} ${a[1]} L${a[0] - 9} ${a[1] - 16}" stroke="${K.aluminium}" stroke-width=".8" stroke-linecap="round"/><circle cx="${a[0] - 9}" cy="${a[1] - 16}" r="1.1" fill="${K.aluminium}" stroke="${INK}" stroke-width=".5"/>`,
-    );
-  });
   for (const [x, y] of [
     [0.24, 0.24],
     [0.76, 0.24],
@@ -53,7 +57,7 @@ export function radio(s: Sketch, props: Record<string, unknown>) {
 }
 
 // 2×1 walnut shelf full of cassettes (spines in the cloth palette, seeded).
-// Story: a framed photo and a vinyl leaning on top.
+// Its top takes tabletops (a photo, a record…).
 export function tapeShelf(s: Sketch) {
   s.box({ x: 0, y: 0.2, w: 2, d: 0.6, z: 0, h: 46, mat: M.walnut }, (d) => {
     // open front: dark inside, three shelves of cassettes
@@ -72,16 +76,6 @@ export function tapeShelf(s: Sketch) {
         i++;
       }
     }
-  });
-  // photo frame on top
-  s.box({ x: 0.3, y: 0.42, w: 0.3, d: 0.05, z: 46, h: 11, mat: M.walnutDark, line: 0.8 }, (d) => {
-    d.poly("s", fr("s", 0.47, 0.34, 0.56, 48, 55), K.sage);
-    d.poly("s", fr("s", 0.47, 0.38, 0.52, 48, 52), K.amberSoft);
-  });
-  // vinyl sleeve leaning against the wall
-  s.box({ x: 1.2, y: 0.24, w: 0.56, d: 0.04, z: 46, h: 16, mat: { c: K.rust }, line: 0.8 }, (d) => {
-    d.poly("s", fe("s", 0.28, 1.48, 54, 0.16, 5.5), K.graphite);
-    d.poly("s", fe("s", 0.28, 1.48, 54, 0.05, 1.8), K.amberSoft);
   });
   s.shadow(0, 0.2, 2, 0.6, 0.4, 0.3);
 }

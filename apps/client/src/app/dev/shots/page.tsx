@@ -1,6 +1,6 @@
 "use client";
 
-import { isTheme, studio } from "@yutopia/shared";
+import { DEFAULT_AVATAR, isTheme, splitAll, studio } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef } from "react";
 import type { Quality } from "@/lib/prefs";
@@ -31,7 +31,8 @@ export default function Shots() {
       await document.fonts.ready;
       await engine.init(host.current, { quality, reducedMotion: false });
       if (stop) return engine.destroy();
-      engine.setObjects(studio.objects);
+      // as a room loads it: furniture from before bare desks set out as real things
+      engine.setObjects(splitAll(studio.objects).objects);
       engine.setClock(Number(q.get("hour") ?? 12));
       engine.pinCamera({ x: Number(q.get("x") ?? 24), y: Number(q.get("y") ?? 18), zoom: Number(q.get("zoom") ?? 1) });
       // a crowd (budgets): people standing around the open floor, seeded
@@ -42,6 +43,7 @@ export default function Shots() {
         engine.upsertAvatar(`p${i}`, {
           name: `Person ${i + 1}`,
           avatar: {
+            ...DEFAULT_AVATAR,
             body: ["regular", "slim", "broad"][i % 3],
             skin: ["#e4b48e", "#a8693f", "#f3d2b3", "#7c4a2b"][i % 4],
             hair: ["short", "long", "curly", "bun", "afro"][i % 5],

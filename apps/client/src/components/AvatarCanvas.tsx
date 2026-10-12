@@ -2,7 +2,8 @@
 
 import type { AvatarLayers } from "@yutopia/shared";
 import { useEffect, useMemo, useState } from "react";
-import { avatarSvg, type View } from "@/world/art/avatar-svg";
+import type { View } from "@/world/art/avatar-svg";
+import { usePeople } from "./usePeople";
 
 // Turntable preview of an avatar (lobby, editor, person card): the same vector
 // drawing the world uses, as a plain image — no canvas needed.
@@ -33,16 +34,20 @@ export function AvatarCanvas({
     if (!spin && !walk) return;
     const reduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reduced) return;
-    const i = setInterval(() => setTick((t) => t + 1), walk ? 130 : 1200);
+    const i = setInterval(() => setTick((t) => t + 1), walk ? 70 : 1200);
     return () => clearInterval(i);
   }, [spin, walk]);
 
-  const dir = spin ? (walk ? Math.floor(tick / 9) : tick) % 8 : 0;
-  const frame = walk ? tick % 4 : 0;
+  // walking: the rig's walk, 8 steps a cycle (1–8; 0 is standing still)
+  const dir = spin ? (walk ? Math.floor(tick / 16) : tick) % 8 : 0;
+  const frame = walk ? 1 + (tick % 8) : 0;
   const [view, mirror] = TURN[dir];
+  // the drawing loads with the people chunk (only the stand shows until then)
+  const P = usePeople();
   const src = useMemo(
-    () => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(avatarSvg(avatar, view, frame, false, 2))}`,
-    [avatar, view, frame],
+    () =>
+      P ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(P.avatarSvg(avatar, view, frame, false, 2))}` : "",
+    [P, avatar, view, frame],
   );
   const h = size;
   const w = (size * 64) / 100;
@@ -69,15 +74,19 @@ export function AvatarCanvas({
           boxShadow: "0 0 0 2px rgba(255,166,48,.55)",
         }}
       />
-      {/* biome-ignore lint/performance/noImgElement: generated SVG data URI, nothing for next/image to optimise */}
-      <img
-        src={src}
-        alt=""
-        width={w * 0.94}
-        height={h * 0.94}
-        style={{ position: "relative", transform: mirror ? "scaleX(-1)" : undefined, imageRendering: "auto" }}
-        draggable={false}
-      />
+      {src ? (
+        // biome-ignore lint/performance/noImgElement: generated SVG data URI, nothing for next/image to optimise
+        <img
+          src={src}
+          alt=""
+          width={w * 0.94}
+          height={h * 0.94}
+          style={{ position: "relative", transform: mirror ? "scaleX(-1)" : undefined, imageRendering: "auto" }}
+          draggable={false}
+        />
+      ) : (
+        <span style={{ width: w * 0.94, height: h * 0.94 }} />
+      )}
     </div>
   );
 }

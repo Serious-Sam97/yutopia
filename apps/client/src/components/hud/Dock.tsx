@@ -187,7 +187,7 @@ export function Dock() {
           <button
             type="button"
             className="deck-btn hidden sm:inline-flex"
-            onClick={() => hud.set((s) => ({ build: { ...s.build, on: true, holding: null } }))}
+            onClick={() => hud.set((s) => ({ build: { ...s.build, on: true, mode: "hand" } }))}
             title={t("build")}
             aria-label={t("build")}
           >

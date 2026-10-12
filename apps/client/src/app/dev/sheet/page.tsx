@@ -2,8 +2,10 @@
 
 import { type AvatarLayers, avatarFromSeed, DEFAULT_AVATAR } from "@yutopia/shared";
 import { notFound } from "next/navigation";
-import { useEffect, useState } from "react";
-import { avatarSvg, type View } from "@/world/art/avatar-svg";
+import { useEffect, useRef, useState } from "react";
+import { Motion, walkPose } from "@/world/art/avatar-motion";
+import { composeSvg } from "@/world/art/avatar-rig";
+import { avatarRig, avatarSvg, type View } from "@/world/art/avatar-svg";
 import { vortexSvg } from "@/world/art/vortex/vortexArt";
 
 // Dev-only turnaround sheet for the character art (image-first review).
@@ -20,9 +22,11 @@ const VIEWS: [View, boolean][] = [
 
 // ?style=ligne draws the whole cast in Ligne claire (default: City-pop);
 // ?gender=feminine|masculine|neutral sets everyone (default: rows cycle through them)
+const BASE = (({ style: _s, gender: _g, ...rest }) => rest)(DEFAULT_AVATAR);
 const CAST: Omit<AvatarLayers, "style" | "gender">[] = [
-  DEFAULT_AVATAR,
+  BASE,
   {
+    ...BASE,
     body: "slim",
     skin: "#f3d2b3",
     hair: "long",
@@ -33,71 +37,182 @@ const CAST: Omit<AvatarLayers, "style" | "gender">[] = [
     bottomColor: "#3d4a5c",
     accessory: "headphones",
     accessoryColor: "#e8a33d",
+    shoes: "boots",
+    shoesColor: "#5b3a26",
   },
   {
+    ...BASE,
     body: "broad",
     skin: "#7c4a2b",
     hair: "afro",
     hairColor: "#1c1410",
-    top: "jacket",
-    topColor: "#5b3a26",
-    bottom: "jeans",
-    bottomColor: "#3d4a5c",
-    accessory: "glasses",
-    accessoryColor: "#2a2420",
-  },
-  {
-    body: "regular",
-    skin: "#e4b48e",
-    hair: "bun",
-    hairColor: "#3b2a20",
-    top: "hoodie",
-    topColor: "#8a3b2e",
+    top: "blazer",
+    topColor: "#3d4a5c",
     bottom: "trousers",
     bottomColor: "#2a2420",
-    accessory: "walkman",
-    accessoryColor: "#e8a33d",
+    accessory: "none",
+    eyewear: "round",
+    eyewearColor: "#c9b28a",
+    shoes: "loafers",
+    shoesColor: "#5b3a26",
   },
   {
-    body: "regular",
+    ...BASE,
+    skin: "#e4b48e",
+    hair: "ponytail",
+    hairColor: "#3b2a20",
+    top: "turtleneck",
+    topColor: "#8a3b2e",
+    bottom: "longskirt",
+    bottomColor: "#c9b28a",
+    accessory: "beret",
+    accessoryColor: "#2a2420",
+    extra: "earrings",
+    extraColor: "#e8a33d",
+    shoes: "boots",
+    shoesColor: "#2a2420",
+  },
+  {
+    ...BASE,
     skin: "#a8693f",
-    hair: "curly",
-    hairColor: "#6b4128",
-    top: "shirt",
-    topColor: "#c9b28a",
-    bottom: "shorts",
-    bottomColor: "#4f6b5a",
-    accessory: "cap",
+    hair: "buzz",
+    hairColor: "#1c1410",
+    top: "tank",
+    topColor: "#efe4cc",
+    bottom: "cargo",
+    bottomColor: "#6e7b3a",
+    accessory: "bandana",
     accessoryColor: "#b5562f",
+    eyewear: "sunglasses",
+    extra: "watch",
+    extraColor: "#c9b28a",
+    shoes: "hightops",
+    shoesColor: "#b5562f",
   },
   {
+    ...BASE,
     body: "slim",
     skin: "#c68a5e",
     hair: "bob",
     hairColor: "#1c1410",
-    top: "dress",
+    top: "cardigan",
     topColor: "#7a5c8a",
-    bottom: "jeans",
+    bottom: "joggers",
     bottomColor: "#3d4a5c",
-    accessory: "beanie",
+    accessory: "bucket",
     accessoryColor: "#e8a33d",
+    extra: "scarf",
+    extraColor: "#b5562f",
+    shoes: "sneakers",
   },
   {
+    ...BASE,
     body: "broad",
     skin: "#4f2e1c",
     hair: "mohawk",
     hairColor: "#c4402b",
-    top: "tee",
-    topColor: "#efe4cc",
-    bottom: "trousers",
+    top: "polo",
+    topColor: "#4f6b5a",
+    bottom: "shorts",
     bottomColor: "#5b3a26",
-    accessory: "none",
-    accessoryColor: "#e8a33d",
+    accessory: "headband",
+    accessoryColor: "#efe4cc",
+    extra: "backpack",
+    extraColor: "#d97a4a",
+    shoes: "sandals",
+    shoesColor: "#5b3a26",
+  },
+  {
+    ...BASE,
+    hair: "curly",
+    hairColor: "#6b4128",
+    top: "shirt",
+    topColor: "#c9b28a",
+    bottom: "jeans",
+    accessory: "cap",
+    accessoryColor: "#b5562f",
+    eyewear: "glasses",
+    eyewearColor: "#2a2420",
+    extra: "necklace",
+    extraColor: "#e8a33d",
   },
   avatarFromSeed(1234),
 ];
 
 const src = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+
+// ?rig=1: the people rig live — the same motion the world plays (walk in each
+// view, standing, talking, seated and typing, every emote).
+type Clip = {
+  label: string;
+  view: View;
+  mirror?: boolean;
+  sit?: boolean;
+  walk?: boolean;
+  typing?: boolean;
+  talk?: boolean;
+  emote?: string;
+};
+const CLIPS: Clip[] = [
+  { label: "walk S", view: "S", walk: true },
+  { label: "walk SW", view: "SW", walk: true },
+  { label: "walk W", view: "W", walk: true },
+  { label: "walk NW", view: "NW", walk: true },
+  { label: "walk N", view: "N", walk: true },
+  { label: "idle", view: "S" },
+  { label: "idle W", view: "W" },
+  { label: "talk", view: "SW", talk: true },
+  { label: "sit", view: "S", sit: true },
+  { label: "type S", view: "S", sit: true, typing: true },
+  { label: "type N", view: "N", sit: true, typing: true },
+  { label: "type W", view: "W", sit: true, typing: true },
+  ...["wave", "clap", "laugh", "heart", "question", "fire", "coffee", "tape"].map((e) => ({
+    label: e,
+    view: "S" as View,
+    emote: e,
+  })),
+  { label: "wave W", view: "W", emote: "wave" },
+];
+
+function RigClip({ a, clip, z }: { a: AvatarLayers; clip: Clip; z: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const motion = new Motion(0.37);
+    const rig = avatarRig(a, clip.view, !!clip.sit);
+    let last = performance.now();
+    let t0 = last;
+    let raf = 0;
+    const tick = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      // emotes replay every 4 s
+      if (clip.emote && now - t0 > 4000) t0 = now;
+      const pose = motion.update(rig, dt, {
+        dist: clip.walk ? 4.2 * dt : 0,
+        walking: !!clip.walk,
+        speed: 4.2,
+        typing: !!clip.typing,
+        speaking: !!clip.talk,
+        emote: clip.emote && now - t0 < 3200 ? clip.emote : "",
+        reduced: false,
+      });
+      const shadow = `<ellipse cx="60" cy="${clip.sit ? (rig.side ? 134 : 131) : 168}" rx="${rig.side ? 16 : 20}" ry="4" fill="#000" opacity=".35"/>`;
+      if (ref.current)
+        ref.current.innerHTML = `<svg viewBox="0 -4 120 184" width="${84 * z}" height="${128 * z}" style="transform:${clip.mirror ? "scaleX(-1)" : "none"}">${shadow}<g transform="translate(60 0) scale(${rig.squash} 1) translate(-60 0)">${composeSvg(rig, pose)}</g></svg>`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [a, clip, z]);
+  return (
+    <figure style={{ margin: 0, textAlign: "center" }}>
+      <div ref={ref} />
+      <figcaption className="mono" style={{ color: "#c9b28a", fontSize: 10 }}>
+        {clip.label}
+      </figcaption>
+    </figure>
+  );
+}
 
 export default function Sheet() {
   // review tool only: not served in production builds
@@ -114,6 +229,59 @@ export default function Sheet() {
     style,
     gender: q.get("gender") ?? genders[i % 3],
   }));
+  if (q.get("frames")) {
+    // the walk cycle as a contact strip: 8 phases per view
+    const views: View[] = ["S", "SW", "W", "NW", "N"];
+    return (
+      <main style={{ background: "#2a1c13", minHeight: "100%", overflow: "auto", padding: 16, height: "100vh" }}>
+        {cast.slice(0, Number(q.get("n") ?? 1)).map((a) =>
+          views.map((v) => {
+            const rig = avatarRig(a, v, false);
+            return (
+              <div key={`${a.hair}-${v}`} style={{ display: "flex", gap: 0, background: "#3b281b", marginBottom: 4 }}>
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((f) => (
+                  // biome-ignore lint/performance/noImgElement: dev sheet
+                  <img
+                    key={f}
+                    alt=""
+                    width={60 * z}
+                    height={90 * z}
+                    src={src(
+                      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="20 0 80 180"><g transform="translate(60 0) scale(${rig.squash} 1) translate(-60 0)">${composeSvg(rig, walkPose(rig, f / 8, 1))}</g><path d="M20 168 H100" stroke="#000" opacity=".3"/></svg>`,
+                    )}
+                  />
+                ))}
+              </div>
+            );
+          }),
+        )}
+      </main>
+    );
+  }
+  if (q.get("rig"))
+    return (
+      <main style={{ background: "#2a1c13", minHeight: "100%", overflow: "auto", padding: 16, height: "100vh" }}>
+        <h1 className="lcd text-2xl mb-2">YUTOPIA · PEOPLE RIG</h1>
+        {cast.slice(0, Number(q.get("n") ?? 3)).map((a) => (
+          <div
+            key={`${a.hair}-${a.top}-${a.skin}`}
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 4,
+              marginBottom: 8,
+              background: "#3b281b",
+              borderRadius: 8,
+              padding: 6,
+            }}
+          >
+            {CLIPS.map((c) => (
+              <RigClip key={c.label} a={a} clip={c} z={z} />
+            ))}
+          </div>
+        ))}
+      </main>
+    );
   return (
     <main style={{ background: "#2a1c13", minHeight: "100%", overflow: "auto", padding: 16, height: "100vh" }}>
       <h1 className="lcd text-2xl mb-2">YUTOPIA · CHARACTER SHEET</h1>

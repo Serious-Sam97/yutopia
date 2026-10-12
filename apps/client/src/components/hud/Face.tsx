@@ -2,14 +2,19 @@
 
 import { parseAvatar } from "@yutopia/shared";
 import { useMemo } from "react";
-import { avatarSvg } from "@/world/art/avatar-svg";
+import { usePeople } from "../usePeople";
+
+type People = NonNullable<ReturnType<typeof usePeople>>;
 
 // A person's portrait: the head of their own avatar drawing, facing you.
 const cache = new Map<string, string>();
-function portrait(seed: string): string {
+function portrait(P: People, seed: string): string {
   let url = cache.get(seed);
   if (!url) {
-    const svg = avatarSvg(parseAvatar(seed), "S", 0, false, 1).replace('viewBox="0 0 64 100"', 'viewBox="20 5 24 24"');
+    const svg = P.avatarSvg(parseAvatar(seed), "S", 0, false, 1).replace(
+      'viewBox="0 0 64 100"',
+      'viewBox="20 5 24 24"',
+    );
     url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     cache.set(seed, url);
   }
@@ -31,7 +36,9 @@ export function Face({
   status?: string;
   ring?: string; // e.g. the speaking glow
 }) {
-  const src = useMemo(() => portrait(avatar), [avatar]);
+  // (the drawing loads with the people chunk; a plain disc until then)
+  const P = usePeople();
+  const src = useMemo(() => (P ? portrait(P, avatar) : ""), [P, avatar]);
   return (
     <span
       className="relative inline-block shrink-0 rounded-full"
@@ -44,8 +51,10 @@ export function Face({
       }}
       title={name}
     >
-      {/* biome-ignore lint/performance/noImgElement: inline SVG data URL */}
-      <img alt="" src={src} className="w-full h-full rounded-full" draggable={false} />
+      {src && (
+        // biome-ignore lint/performance/noImgElement: inline SVG data URL
+        <img alt="" src={src} className="w-full h-full rounded-full" draggable={false} />
+      )}
       {status && (
         <i
           className="absolute -right-0.5 -bottom-0.5 rounded-full"

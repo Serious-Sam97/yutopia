@@ -9,11 +9,12 @@ import {
   isWallEdge,
   type MapDef,
   tileAt,
+  topCentre,
   vWall,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { Graphics, type GraphicsContext } from "pixi.js";
-import { piece, WALL_H } from "./furniture";
+import { type Piece, piece, WALL_H } from "./furniture";
 import { type Box, type Clip, diamond, drawBox, P, rotateBoxes } from "./iso";
 import type { Group, ItemArt } from "./items/kit";
 
@@ -94,7 +95,8 @@ export function setArtRes(r: number) {
 
 // The soft contact shadow under an illustrated item (floor layer).
 export function objectShadow(o: WorldObjectDef): { key: string; get: () => ItemArt | null } | null {
-  if (!illustrated(o.kind)) return null;
+  // things on a surface cast on the surface (in their drawing), not the floor
+  if (!illustrated(o.kind) || entry(o.kind).onSurface) return null;
   const rot = entry(o.kind).wall ? 0 : (o.rot ?? 0);
   const m = items as ItemsModule;
   const ref = { kind: o.kind, id: o.id, rot, props: o.props };
@@ -356,7 +358,6 @@ export function dressParts(
   const m = items && !boxOnly ? items : null;
   if (!m) return [];
   const empty = cached("dress|empty", () => {});
-  const byId = new Map(objects.map((o) => [o.id, o]));
   const out: { part: Part; item: DressItem; shadow: { key: string; get: () => ItemArt | null } | null }[] = [];
   for (const d of dressItems(map, objects)) {
     const wall = d.kind === "frame";
@@ -364,20 +365,7 @@ export function dressParts(
     const ox = d.x - 0.5;
     const oy = wall ? d.y : d.y - 0.5;
     const [sx, sy] = P(ox, oy);
-    let key: number;
-    if (wall) key = d.x + d.y + 0.01;
-    else if (d.host) {
-      // just above the slice of the table it sits on
-      const o = byId.get(d.host);
-      const { w, h } = o ? footprint(o.kind, o.rot ?? 0) : { w: 1, h: 1 };
-      const tx = Math.floor(d.x);
-      const ty = Math.floor(d.y);
-      if (!o) key = tx + ty + 1;
-      else if (w > h) key = tx + 0.5 + o.y + h / 2;
-      else if (h > w) key = o.x + w / 2 + ty + 0.5;
-      else key = o.x + w / 2 + o.y + h / 2;
-      key += 0.03;
-    } else key = d.x + d.y;
+    const key = wall ? d.x + d.y + 0.01 : d.x + d.y;
     const akey = m.dressKey(d.kind, d.z, d.seed, artRes);
     const skey = `${akey}|sh`;
     out.push({
@@ -404,11 +392,13 @@ export function dressParts(
 // quarters like the wall itself, so they sort against people the same way.
 const WALL_FACE = 0.1; // wall items hang on the face of the thin wall
 
-export function objectParts(o: WorldObjectDef): Part[] {
+// `host`: what it stands on, for things on a surface.
+export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
   const e = entry(o.kind);
   if (o.kind === "door") return doorParts(o);
   const p = piece(o.kind, o.props ?? {}, o.id);
   if (p.flat) return [];
+  if (e.onSurface) return topParts(o, p, host);
   const rot = e.wall ? 0 : (o.rot ?? 0);
   const { w, h } = footprint(o.kind, rot);
   let boxes = rotateBoxes(p.boxes, e.w, e.h, rot);
@@ -466,6 +456,54 @@ export function objectParts(o: WorldObjectDef): Part[] {
     }
   });
   return out;
+}
+
+// Something on a surface: drawn around the middle of a tile at z 0, then moved
+// to its spot on the top and raised to it, and sorted just above the slice of
+// the surface under it (so a mug on the back of a meeting table isn't hidden).
+function topParts(o: WorldObjectDef, p: Piece, host?: WorldObjectDef): Part[] {
+  const rot = o.rot ?? 0;
+  const c = topCentre(o);
+  const z = Number(o.props?.z) || 0;
+  const boxes = rotateBoxes(p.boxes, 1, 1, rot);
+  const ctx = cached(`${o.kind}|${rot}|top|${JSON.stringify(o.props ?? {})}`, (g) => {
+    for (const b of boxes) drawBox(g, b);
+  });
+  const [sx, sy] = P(c.x - 0.5, c.y - 0.5);
+  let art: Part["art"];
+  if (illustrated(o.kind)) {
+    const m = items as ItemsModule;
+    const ref = { kind: o.kind, id: o.id, rot, props: o.props };
+    const akey = m.itemKey(ref, "", "all", artRes);
+    art = { key: akey, get: memo(akey, () => m.itemArt(ref, null, "all", artRes)), ox: 0, oy: 0 };
+  }
+  return [
+    {
+      ctx,
+      x: sx,
+      y: sy - z,
+      key: topKey(c, host),
+      wx: Math.floor(c.x),
+      wy: Math.floor(c.y),
+      objectId: o.id,
+      art,
+      at: [c.x, c.y],
+    },
+  ];
+}
+
+// The sort key of the host's slice under a point (as objectParts slices it), a
+// hair above it; back to front among things on the same top.
+function topKey(c: { x: number; y: number }, host?: WorldObjectDef): number {
+  if (!host) return c.x + c.y + 0.03;
+  const { w, h } = footprint(host.kind, host.rot ?? 0);
+  const tx = Math.floor(c.x);
+  const ty = Math.floor(c.y);
+  let key: number;
+  if (w > h) key = tx + 0.5 + host.y + Math.min(1, h) / 2;
+  else if (h > w) key = host.x + Math.min(1, w) / 2 + ty + 0.5;
+  else key = host.x + w / 2 + host.y + h / 2;
+  return key + 0.03 + ((c.x % 1) + (c.y % 1)) * 0.005;
 }
 
 // A door on an edge: four slices in the wall line (frame, lintel, a shut

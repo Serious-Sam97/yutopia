@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, test } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, token, walkTo } from "./helpers";
+import { expect } from "@playwright/test";
+import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
 
 const SHOTS = "../../design/screens";
 

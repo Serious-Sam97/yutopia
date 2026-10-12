@@ -5,11 +5,19 @@ import {
   type Emote,
   entry,
   footprint,
+  type HeldKind,
+  heldState,
+  hostOf,
   isFloor,
+  isHeld,
   type MapDef,
+  Q,
+  surfaceAt,
   TILE_H,
   TILE_W,
   tileAt,
+  topCentre,
+  topRect,
   toScreen,
   toWorld,
   WB_H,
@@ -33,10 +41,18 @@ import {
   Texture,
 } from "pixi.js";
 import type { Quality } from "@/lib/prefs";
-import { avatarContext, viewFor, WALK_FRAMES } from "./art/avatar";
+import { avatarContext, viewFor } from "./art/avatar";
+import type { Motion } from "./art/avatar-motion";
+import type { Aff, PartName, Pose } from "./art/avatar-rig";
+import type { AvatarRig } from "./art/avatar-svg";
+import { loadPeople, people } from "./art/people-load";
+
+type People = NonNullable<ReturnType<typeof people>>;
+
 import { type Daylight, daylight, hourForNight } from "./art/daylight";
 import { FloorBake, floorRes } from "./art/floors";
 import { WALL_H } from "./art/furniture";
+import { HELD_BOX, MUG_COLORS } from "./art/held";
 import { PERSON, WORLD_SCALE } from "./art/iso";
 import type { ItemArt } from "./art/items/kit";
 import { affectsLight, PX as LIGHT_PX, LightMap } from "./art/light";
@@ -58,8 +74,11 @@ import {
   acquireItem,
   avatarTexture,
   emoteTexture,
+  heldTexture,
   itemsPending,
   itemTextureStats,
+  RIG_PX,
+  rigPartTexture,
   vortexTexture,
 } from "./art/textures";
 import type { ThemeView } from "./art/themes";
@@ -99,6 +118,9 @@ export interface AvatarState {
   mic: boolean;
   bot?: boolean;
   npc?: boolean;
+  held?: string; // what they carry (shared/held.ts)
+  heldAt?: number; // when they took it (server ms)
+  busy?: string; // what they're using (shared USES)
 }
 
 interface AvatarView {
@@ -120,11 +142,25 @@ interface AvatarView {
   bubbleBg: Graphics;
   bubbleUntil: number;
   state: AvatarState;
-  walkT: number;
-  frame: number;
+  rig?: RigView; // the rig being drawn
+  rigNext?: RigView; // a new view / look while its parts decode
+  motion?: Motion;
+  last?: { x: number; y: number };
+  shownDir?: number; // the facing drawn (turns one step at a time)
+  turnAt?: number;
   avatarKey: string;
   drawnFor: string; // whose look the sprite's current drawing is (avatar JSON)
   local: boolean;
+}
+
+// A person drawn as a rig: one sprite per part, posed every frame.
+interface RigView {
+  key: string;
+  def: AvatarRig;
+  root: Container;
+  sprites: Map<PartName, Sprite>;
+  held?: Sprite; // what's in the right hand
+  steam?: Graphics; // …and the steam off it
 }
 
 // A drawn slice of an object: the quick box art first, the illustrated sprite
@@ -144,6 +180,7 @@ interface PartView {
   art?: boolean; // has an illustrated drawing
   ready?: boolean; // …and it's showing
   onReady?: () => void;
+  piece?: { id: string; kind: string }; // dressing: the generated piece it draws
 }
 
 interface ObjectView {
@@ -154,6 +191,7 @@ interface ObjectView {
   flat: PartView | null; // rugs / rings on the floor layer
   flatReady: boolean;
   dropped: boolean;
+  hands?: Graphics; // a wall clock's hands, drawn live
 }
 
 export interface BoardContent {
@@ -163,6 +201,14 @@ export interface BoardContent {
 
 // emote art in world px (the bubble's tail points at the head)
 const EMOTE_PX = 34;
+const RIG_M = new Matrix(); // scratch for posing rig parts
+
+// A steady 0..1 from a string (who someone is → their own rhythm of blinks).
+function seedOf(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return (h >>> 0) / 4294967296;
+}
 const isEmote = (e: string): e is Emote => (EMOTES as readonly string[]).includes(e);
 
 // What about an object changes the light map (doors: shut or not; lamps, radio: on).
@@ -223,6 +269,18 @@ export interface EngineEvents {
   onPointerWorld?: (x: number, y: number) => void;
   onPointerDown?: (x: number, y: number) => void;
   onPointerUp?: (x: number, y: number) => void;
+  // build mode: return true to use the wheel (rotate what you hold) instead of zooming
+  onWheel?: (deltaY: number) => boolean;
+}
+
+// What build mode can pick under the pointer: a placed object, or a generated
+// piece of a room's clutter.
+export type Pick = { id: string; dress: false } | { id: string; dress: true; kind: string };
+export interface Outline {
+  id: string;
+  dress?: boolean;
+  color: number;
+  fill?: number; // alpha of the inside
 }
 
 export class WorldEngine {
@@ -312,6 +370,7 @@ export class WorldEngine {
       this.shellLights,
       this.floorLayer,
       this.floorArt,
+      this.gridG,
       this.flatLayer,
       this.flatArtLayer,
       this.shadowLayer,
@@ -321,10 +380,13 @@ export class WorldEngine {
       this.earshotG,
       this.sortLayer,
       this.lifeFront,
+      this.ghostFloorG,
       this.ghostLayer,
       this.darkLayer,
       this.bloomLayer,
       this.overlay,
+      this.outlineG,
+      this.fxG,
     );
     app.stage.addChild(this.backdropLayer, this.world);
     // the finish (High) and ambient life load in their own chunk, after the world is up
@@ -350,6 +412,8 @@ export class WorldEngine {
 
     this.drawStatic();
     // illustrated items replace the box art as soon as their drawings load
+    // the people's drawing loads alongside (a quick figure until it's here)
+    void loadPeople();
     loadItemArt().then(() => {
       if (this.destroyed) return;
       for (const v of [...this.objectViews.values()]) this.upsertObject(v.def, false);
@@ -408,6 +472,7 @@ export class WorldEngine {
   }
 
   private eventWorld(e: FederatedPointerEvent) {
+    this.pointerAt = { gx: e.global.x, gy: e.global.y };
     return toWorld((e.global.x - this.world.position.x) / this.zoom, (e.global.y - this.world.position.y) / this.zoom);
   }
 
@@ -507,17 +572,21 @@ export class WorldEngine {
   setObjects(objects: WorldObjectDef[]) {
     for (const id of [...this.objectViews.keys()]) this.removeObject(id);
     this.flatLayer.clear();
-    for (const o of objects) this.upsertObject(o, false);
+    // surfaces before what stands on them (it sorts against its host)
+    const order = [...objects].sort((a, b) => Number(!!entry(a.kind).onSurface) - Number(!!entry(b.kind).onSurface));
+    for (const o of order) this.upsertObject(o, false);
     this.redrawFlat();
   }
 
   upsertObject(o: WorldObjectDef, redrawFlat = true) {
+    this.workCache.clear();
     // A changed object (door swinging, someone sitting) keeps its old drawing
     // until the new one has decoded, so it never flashes back to box art.
     const old = this.objectViews.get(o.id);
     const swap = !!old && old.parts.some((p) => p.ready);
     if (old) this.objectViews.delete(o.id);
-    const parts = objectParts(o).map((p) => this.mountPart(p, this.sortLayer, 1, swap));
+    const host = entry(o.kind).onSurface ? hostOf(this.allObjects(), o) : undefined;
+    const parts = objectParts(o, host).map((p) => this.mountPart(p, this.sortLayer, 1, swap));
     const pending = parts.filter((p) => p.art && !p.ready);
     const done = () => {
       if (old) this.dropView(old);
@@ -553,11 +622,15 @@ export class WorldEngine {
     });
     if (o.props?.ownerName || o.kind === "chair" || o.kind === "armchair" || o.kind === "door") this.labelsDirty = true;
     this.objectViews.set(o.id, view);
+    this.hulls.delete(o.id);
+    if (this.hidden.has(o.id)) this.showView(view, false);
     const moved = !old || old.def.x !== o.x || old.def.y !== o.y || old.def.rot !== o.rot;
     // feedback: a door swings as it opens or shuts, a chair wobbles as someone sits or stands
     if (old && !moved && this.animated()) {
       const swung = o.kind === "door" && lightKey(old.def) !== lightKey(o);
-      const sat = (o.kind === "chair" || o.kind === "armchair") && !!old.def.props?.occupied !== !!o.props?.occupied;
+      const sat =
+        (o.kind === "chair" || o.kind === "armchair" || o.kind === "beanbag") &&
+        !!old.def.props?.occupied !== !!o.props?.occupied;
       if (swung || sat) this.bumps.push({ parts, t: 0, len: swung ? 0.28 : 0.45, amp: swung ? 0.22 : 0.07 });
     }
     if (affectsFloor(o) && moved) this.bakeFloors();
@@ -565,6 +638,11 @@ export class WorldEngine {
     if (affectsLight(o) && (moved || lightKey(old?.def) !== lightKey(o))) this.bakeLight();
     this.tintObject(view);
     if (o.kind === "board_wall" || o.kind === "screen_wall") this.drawDisplay(o.id);
+    if (o.kind === "clock") {
+      view.hands = new Graphics();
+      view.hands.zIndex = o.x + 0.75 + o.y + 0.02;
+      this.sortLayer.addChild(view.hands);
+    }
     if (o.kind === "whiteboard") {
       const scene = o.props?.scene;
       this.drawWhiteboard(o.id, this.wbLive.get(o.id) ?? (Array.isArray(scene) ? (scene as WbItem[]) : []));
@@ -573,6 +651,7 @@ export class WorldEngine {
   }
 
   removeObject(id: string, redrawFlat = true) {
+    this.workCache.clear();
     const v = this.objectViews.get(id);
     if (!v) return;
     if (affectsFloor(v.def)) this.bakeFloors();
@@ -580,6 +659,7 @@ export class WorldEngine {
     if (affectsLight(v.def)) this.bakeLight();
     this.dropView(v);
     this.objectViews.delete(id);
+    this.hulls.delete(id);
     if (redrawFlat) this.redrawFlat();
   }
 
@@ -590,6 +670,7 @@ export class WorldEngine {
     if (v.shadow) this.unmountPart(v.shadow);
     if (v.flat) this.unmountPart(v.flat);
     this.clearDisplays(v);
+    v.hands?.destroy();
   }
 
   // Low: people are the only thing that moves; reduced motion: nothing extra.
@@ -644,7 +725,10 @@ export class WorldEngine {
     for (const v of this.dress) this.unmountPart(v);
     this.dress = [];
     for (const { part, item, shadow } of dressParts(this.map, this.allObjects())) {
-      this.dress.push(this.mountPart(part, this.sortLayer));
+      const pv = this.mountPart(part, this.sortLayer);
+      pv.piece = { id: item.id, kind: item.kind };
+      pv.root.visible = !this.hidden.has(item.id);
+      this.dress.push(pv);
       const pseudo = { id: item.id, kind: "dress", x: item.x - 0.5, y: item.y - 0.5 } as WorldObjectDef;
       const sh = this.mountFloorArt(pseudo, shadow, this.shadowLayer);
       if (sh) this.dress.push(sh);
@@ -958,7 +1042,8 @@ export class WorldEngine {
   private redrawFlat() {
     this.flatLayer.clear();
     for (const v of this.objectViews.values())
-      if ((v.def.kind === "rug" || v.def.kind === "standup_mat") && !v.flatReady) drawFlat(this.flatLayer, v.def);
+      if ((v.def.kind === "rug" || v.def.kind === "standup_mat") && !v.flatReady && !this.hidden.has(v.def.id))
+        drawFlat(this.flatLayer, v.def);
   }
 
   // Any object covering a tile (build mode picks non-interactive things too).
@@ -1202,8 +1287,6 @@ export class WorldEngine {
         bubbleBg,
         bubbleUntil: 0,
         state: s,
-        walkT: 0,
-        frame: 0,
         avatarKey: "",
         drawnFor: "",
         local,
@@ -1235,6 +1318,15 @@ export class WorldEngine {
 
   hasAvatar(id: string) {
     return this.avatars.has(id);
+  }
+
+  // How someone is drawn right now (tests, debugging): the facing shown, the
+  // view and whether it's mirrored, and whether the posed rig is up.
+  avatarShown(id: string): { dir: number; view: string; mirror: boolean; rigged: boolean; walking: boolean } | null {
+    const v = this.avatars.get(id);
+    if (!v || v.shownDir === undefined) return null;
+    const { view, mirror } = viewFor(v.shownDir);
+    return { dir: v.shownDir, view, mirror, rigged: !!v.rig?.root.visible, walking: v.state.a === 1 };
   }
 
   say(id: string, text: string, ms = 6000) {
@@ -1325,8 +1417,10 @@ export class WorldEngine {
     }
     for (const v of this.avatars.values()) this.updateAvatar(v, dt, now);
     this.updateWalls(local);
+    this.drawClocks();
     this.drawMarker(dt);
     this.drawHighlight();
+    this.drawBuild(dt);
   }
 
   // Vortex, drawn by Yondra's own vortexSvg: same body, rim, swirl, eyes, arms.
@@ -1384,42 +1478,50 @@ export class WorldEngine {
     const p = toScreen(s.x, s.y);
     const sitting = s.a === 2;
     const walking = s.a === 1;
-    if (walking) {
-      v.walkT += dt * 9;
-      v.frame = Math.floor(v.walkT) % WALK_FRAMES;
-    } else {
-      v.walkT = 0;
-      v.frame = 0;
+    // turning goes through the facings in between (S → SW → W), never a snap
+    if (v.shownDir === undefined || s.npc) v.shownDir = s.d;
+    if (v.shownDir !== s.d && now > (v.turnAt ?? 0)) {
+      const diff = ((((s.d - v.shownDir + 12) % 8) + 8) % 8) - 4;
+      v.shownDir = (v.shownDir + (diff > 0 ? 1 : -1) + 8) % 8;
+      v.turnAt = now + 38;
     }
-    const { view, mirror } = viewFor(s.d);
-    const breathe = walking || this.reducedMotion ? 1 : 1 + Math.sin(this.time * 2.2 + p.x) * 0.012;
+    const { view, mirror } = viewFor(v.shownDir);
     const lift = sitting ? 12 : 0; // the drawing sits its hips on the seat
-    const tex = avatarTexture(s.avatar, view, v.frame, sitting, this.night > 0.5 ? "night" : "day");
+    const rim = this.night > 0.5 ? "night" : "day";
     const look = JSON.stringify(s.avatar);
-    // a frame still decoding: keep this person's last drawing up rather than
-    // flashing the placeholder (it's only for the very first frames of a look)
-    const keep = !tex && v.drawnFor === look && v.sprite.texture !== Texture.EMPTY && !v.sprite.texture.destroyed;
-    if (tex || keep) {
-      if (tex) {
-        v.sprite.texture = tex;
-        v.drawnFor = look;
-      }
-      v.sprite.visible = true;
-      v.body.visible = false;
-      const k = 0.5; // 128×200 texture → 64×100 px: City-pop people stand ~92 px tall
-      v.sprite.scale.set((mirror ? -1 : 1) * k, k * breathe);
-      v.sprite.position.set(0, lift + 2);
-    } else {
-      // first frames while the drawing decodes: the quick procedural figure
-      const key = `${view}|${v.frame}|${sitting}|${JSON.stringify(s.avatar)}`;
-      if (key !== v.avatarKey) {
-        v.body.context = avatarContext(s.avatar, view, v.frame, sitting);
-        v.avatarKey = key;
-      }
-      v.body.visible = true;
+    // the distance covered this frame: the walk cycle follows it
+    let dist = v.last ? Math.hypot(s.x - v.last.x, s.y - v.last.y) : 0;
+    if (dist > 1.5) dist = 0; // a jump (sitting down, a teleport), not a step
+    v.last = { x: s.x, y: s.y };
+    const rigged = this.drawRig(v, view, mirror, sitting, rim, look, dt, dist, walking, lift);
+    if (rigged) {
       v.sprite.visible = false;
-      v.body.scale.set((mirror ? -1 : 1) * 1.35, 1.35 * breathe); // same size as the drawing it stands in for
-      v.body.position.set(0, lift);
+      v.body.visible = false;
+    } else {
+      // the rig's parts are still decoding: the whole drawing, or the quick figure
+      v.sprite.visible = false;
+      const tex = avatarTexture(s.avatar, view, 0, sitting, rim);
+      const keep = !tex && v.drawnFor === look && v.sprite.texture !== Texture.EMPTY && !v.sprite.texture.destroyed;
+      if (tex || keep) {
+        if (tex) {
+          v.sprite.texture = tex;
+          v.drawnFor = look;
+        }
+        v.sprite.visible = true;
+        v.body.visible = false;
+        const k = 0.5; // 128×200 texture → 64×100 px: City-pop people stand ~92 px tall
+        v.sprite.scale.set((mirror ? -1 : 1) * k, k);
+        v.sprite.position.set(0, lift + 2);
+      } else {
+        const key = `${view}|${sitting}|${look}`;
+        if (key !== v.avatarKey) {
+          v.body.context = avatarContext(s.avatar, view, 0, sitting);
+          v.avatarKey = key;
+        }
+        v.body.visible = true;
+        v.body.scale.set((mirror ? -1 : 1) * 1.35, 1.35); // same size as the drawing it stands in for
+        v.body.position.set(0, lift);
+      }
     }
     v.root.position.set(p.x, p.y);
     v.root.zIndex = depthOf(s.x, s.y) + (sitting ? 0 : 0.01);
@@ -1427,6 +1529,7 @@ export class WorldEngine {
     const tint = this.tintAt(s.x, s.y);
     v.sprite.tint = tint;
     v.body.tint = tint;
+    if (v.rig) for (const sp of v.rig.sprites.values()) sp.tint = tint;
     v.root.alpha = s.status === "away" ? 0.55 : 1;
     v.shadow.visible = !sitting;
 
@@ -1464,12 +1567,235 @@ export class WorldEngine {
     }
   }
 
+  // A person as a rig: the parts for this look, view and seat (a new view
+  // waits for its parts to decode while the last one keeps moving), posed by
+  // their Motion. False while nothing's ready to draw.
+  private drawRig(
+    v: AvatarView,
+    view: ReturnType<typeof viewFor>["view"],
+    mirror: boolean,
+    sitting: boolean,
+    rim: "day" | "night",
+    look: string,
+    dt: number,
+    dist: number,
+    walking: boolean,
+    lift: number,
+  ): boolean {
+    const P = people();
+    if (!P) return false; // the people chunk is still loading: the quick figure
+    const s = v.state;
+    const key = `${look}|${view}|${sitting ? 1 : 0}|${rim}`;
+    let want = v.rig?.key === key ? v.rig : v.rigNext?.key === key ? v.rigNext : undefined;
+    if (!want) {
+      if (v.rigNext) this.dropRig(v.rigNext);
+      want = this.makeRig(v, key, P.avatarRig(s.avatar, view, sitting, rim));
+      v.rigNext = want;
+    }
+    if (want !== v.rig && this.rigReady(want)) {
+      if (v.rig) this.dropRig(v.rig);
+      v.rig = want;
+      v.rigNext = undefined;
+    }
+    const r = v.rig;
+    v.motion ??= new P.Motion(seedOf(s.name + (v.local ? "me" : "")));
+    const held = isHeld(s.held) && s.heldAt ? { kind: s.held, since: Date.now() - s.heldAt } : null;
+    const pose = v.motion.update(r?.def ?? want.def, dt, {
+      held,
+      busy: s.busy ?? "",
+      dist,
+      walking,
+      speed: dt > 0 ? dist / dt : 0,
+      typing: sitting && this.atWork(s.x, s.y),
+      speaking: s.speaking,
+      emote: s.emote,
+      reduced: this.reducedMotion,
+    });
+    if (!r) return false;
+    const def = r.def;
+    const b = P.bones(def, pose);
+    P.drawOrder(def, pose).forEach((part, i) => {
+      const sp = r.sprites.get(part.name);
+      if (!sp) return;
+      sp.zIndex = i;
+      const head = part.name === "head";
+      const face = head && !def.back ? pose.face : undefined;
+      const tex = head
+        ? (rigPartTexture(r.key, part, face, face ? def.heads[face] : def.heads.open) ??
+          rigPartTexture(r.key, part, def.back ? undefined : "open", def.heads.open))
+        : rigPartTexture(r.key, part);
+      if (tex) sp.texture = tex;
+      sp.visible = !!tex;
+      // the part's box, at RIG_PX texture px per board unit, moved by its bone
+      const m: Aff = P.mul(b[part.name], [1 / RIG_PX, 0, 0, 1 / RIG_PX, part.box[0], part.box[1]]);
+      sp.setFromMatrix(RIG_M.set(m[0], m[1], m[2], m[3], m[4], m[5]));
+    });
+    this.drawHeld(P, r, s, pose, b, held);
+    r.root.visible = true;
+    r.root.pivot.set(60, 168);
+    r.root.scale.set((mirror ? -1 : 1) * P.FIT * def.squash, P.FIT);
+    r.root.position.set(0, lift + 2 + (sitting ? P.SIT_DROP * P.FIT : 0));
+    return true;
+  }
+
+  // The thing in the right hand: at the hand, upright (tipped towards the mouth
+  // while sipping), in front of the body (behind it, seen from the back), with
+  // a little steam while it's hot.
+  private drawHeld(
+    P: People,
+    r: RigView,
+    s: AvatarState,
+    _pose: Pose,
+    b: Record<PartName, Aff>,
+    held: { kind: HeldKind; since: number } | null,
+  ) {
+    if (!held) {
+      if (r.held) r.held.visible = false;
+      r.steam?.clear();
+      return;
+    }
+    const st = heldState(held.kind, held.since);
+    const color = MUG_COLORS[Math.floor(seedOf(s.name) * MUG_COLORS.length)];
+    const tex = heldTexture(held.kind, color, Math.round(st.level * 4));
+    if (!r.held || !r.steam) {
+      r.held = new Sprite();
+      r.steam = new Graphics();
+      r.root.addChild(r.held, r.steam);
+    }
+    const sp = r.held;
+    if (tex) sp.texture = tex;
+    sp.visible = !!tex;
+    const def = r.def;
+    const hand = P.apply(b.armRf, def.joints.hand);
+    const up = P.sipEnv(st.sip);
+    const tip = (def.side ? -38 : -22) * up;
+    const k = 1 / RIG_PX;
+    const rad = (tip * Math.PI) / 180;
+    const c = Math.cos(rad);
+    const sn = Math.sin(rad);
+    // the grip (0, 0) of the drawing at the hand; its box, scaled to board units
+    const m: Aff = [c * k, sn * k, -sn * k, c * k, 0, 0];
+    const at = P.apply(m, [HELD_BOX[0] * RIG_PX, HELD_BOX[1] * RIG_PX]);
+    sp.setFromMatrix(RIG_M.set(m[0], m[1], m[2], m[3], hand[0] + at[0], hand[1] + at[1]));
+    const armZ = r.sprites.get("armRf")?.zIndex ?? 50;
+    const torsoZ = r.sprites.get("torso")?.zIndex ?? 40;
+    sp.zIndex = def.back ? torsoZ - 0.5 : armZ + 0.5;
+    sp.tint = r.sprites.get("torso")?.tint ?? 0xffffff;
+    // steam: two wisps rising off a hot mug (not mid-sip, not from behind)
+    const g = r.steam;
+    g.clear();
+    g.zIndex = sp.zIndex + 0.1;
+    if (st.level > 0.4 && up === 0 && !def.back && !this.reducedMotion) {
+      const t = this.time;
+      for (let i = 0; i < 2; i++) {
+        const ph = (t * 0.7 + i * 0.5) % 1;
+        const x0 = hand[0] - 2.5 + i * 2;
+        const y0 = hand[1] - 12 - ph * 9;
+        const sway = Math.sin(t * 3 + i * 2) * 1.6;
+        g.moveTo(x0, y0)
+          .quadraticCurveTo(x0 + sway, y0 - 3, x0 - sway * 0.5, y0 - 6)
+          .stroke({ width: 1.1, color: 0xffffff, alpha: 0.42 * (1 - ph) });
+      }
+    }
+  }
+
+  private makeRig(v: AvatarView, key: string, def: AvatarRig): RigView {
+    const root = new Container();
+    root.sortableChildren = true;
+    root.visible = false;
+    const sprites = new Map<PartName, Sprite>();
+    for (const p of def.parts) {
+      const sp = new Sprite();
+      sp.visible = false;
+      root.addChild(sp);
+      sprites.set(p.name, sp);
+    }
+    v.root.addChildAt(root, v.root.getChildIndex(v.sprite));
+    return { key, def, root, sprites };
+  }
+
+  // all of a rig's parts decoded (and the faces it blinks and talks with asked for)
+  private rigReady(r: RigView): boolean {
+    let ok = true;
+    for (const p of r.def.parts) {
+      if (p.name === "head") {
+        if (!rigPartTexture(r.key, p, r.def.back ? undefined : "open", r.def.heads.open)) ok = false;
+        if (!r.def.back) {
+          rigPartTexture(r.key, p, "blink", r.def.heads.blink);
+          rigPartTexture(r.key, p, "talk", r.def.heads.talk);
+        }
+      } else if (!rigPartTexture(r.key, p)) ok = false;
+    }
+    return ok;
+  }
+
+  private dropRig(r: RigView) {
+    r.root.destroy({ children: true }); // the textures belong to the cache
+  }
+
+  // Seated at a desk with a keyboard or a screen in reach: typing.
+  private workCache = new Map<string, boolean>();
+  private atWork(x: number, y: number): boolean {
+    const k = `${Math.floor(x)},${Math.floor(y)}`;
+    let w = this.workCache.get(k);
+    if (w === undefined) {
+      const objs = [...this.objectViews.values()].map((o) => o.def);
+      const seat = objs.find(
+        (o) => entry(o.kind).seat && o.x === Math.floor(x) && o.y === Math.floor(y) && o.props?.desk,
+      );
+      w =
+        !!seat &&
+        objs.some((o) => {
+          if (o.kind !== "tabletop" || (o.props?.d !== "keyboard" && o.props?.d !== "monitor")) return false;
+          const c = topCentre(o);
+          return Math.hypot(c.x - x, c.y - y) < 1.7;
+        });
+      this.workCache.set(k, w);
+    }
+    return w;
+  }
+
+  // Wall clocks tell the time where you are: hour, minute and a red second
+  // hand on the face's plane (the face is drawn by the clock's art at z 52).
+  private drawClocks() {
+    const now = new Date();
+    const sec = now.getSeconds() + (this.reducedMotion ? 0 : now.getMilliseconds() / 1000);
+    const min = now.getMinutes() + sec / 60;
+    const hr = (now.getHours() % 12) + min / 60;
+    for (const v of this.objectViews.values()) {
+      const g = v.hands;
+      if (!g) continue;
+      const part = v.parts[0];
+      g.visible = !!part?.root.visible;
+      g.alpha = part?.high?.alpha ?? part?.root.alpha ?? 1;
+      g.clear();
+      if (!g.visible) continue;
+      const o = v.def;
+      const c = toScreen(o.x + 0.5, o.y + 0.134);
+      const cy = c.y - 52;
+      const ex = TILE_W / 2;
+      const ey = TILE_H / 2;
+      const hand = (turns: number, l: number, w: number, color: number) => {
+        const a = turns * Math.PI * 2;
+        const u = Math.sin(a) * 0.15 * l;
+        const z = Math.cos(a) * 6.5 * l;
+        g.moveTo(c.x, cy)
+          .lineTo(c.x + u * ex, cy + u * ey - z)
+          .stroke({ width: w, color, cap: "round" });
+      };
+      hand(hr / 12, 0.55, 1.5, 0x2a1430);
+      hand(min / 60, 0.82, 1, 0x2a1430);
+      hand(sec / 60, 0.86, 0.5, 0xc4402b);
+    }
+  }
+
   // Wall-down: the upper part of walls standing between the camera and what
   // it looks at (south / east of the view's focus) fades to its skirting, like The Sims; so do
   // the boards on them and the doors in them.
   private updateWalls(_local: AvatarView | undefined) {
-    // around what you're looking at: the camera's focus (you, when it follows you)
-    const focus = toWorld(this.camFocus.x, this.camFocus.y + 30);
+    // around what you're looking at: the camera's focus (you, when it follows
+    // you), or in build mode what you're carrying / pointing at
+    const focus = this.focusAt ?? toWorld(this.camFocus.x, this.camFocus.y + 30);
     const px = focus.x;
     const py = focus.y;
     const k = this.reducedMotion ? 1 : 0.2;
@@ -1665,21 +1991,275 @@ export class WorldEngine {
       .stroke({ width: 2, color: C.amber, alpha: a });
   }
 
-  // ── build-mode ghost ──────────────────────────────────────────────────────
+  // ── build mode ────────────────────────────────────────────────────────────
+  // Sims-style: pick what you see (an item's drawn shape, not the floor under
+  // it), outlines for hover and selection, held items lifted off the floor
+  // with their footprint in green/red below, the originals hidden while held,
+  // a floor grid, and dust puffs when things land or go.
+  private gridG = new Graphics();
+  private ghostFloorG = new Graphics();
+  private outlineG = new Graphics();
+  private fxG = new Graphics();
   private ghostParts: PartView[] = [];
+  private ghostItems: { def: WorldObjectDef; ok: boolean; root: Container }[] = [];
+  private ghostLift = 0;
+  private outlines: Outline[] = [];
+  private hidden = new Set<string>();
+  private hulls = new Map<string, { hull: number[]; at: number }>();
+  private fx: { x: number; y: number; vx: number; vy: number; t: number; life: number; r: number; c: number }[] = [];
+  pointerAt = { gx: 0, gy: 0 };
+  // build mode: walls lower around this spot (world tiles) instead of the camera's focus
+  focusAt: { x: number; y: number } | null = null;
+
+  // One held thing (kept for the walls tool's door brush).
   setGhost(o: WorldObjectDef | null, valid: boolean) {
+    this.setGhosts(o ? [{ def: o, ok: valid }] : [], 0);
+  }
+
+  // What you're holding: one or many, lifted `lift` px with a gentle bob.
+  setGhosts(items: { def: WorldObjectDef; ok: boolean }[], lift: number) {
     for (const pv of this.ghostParts) this.unmountPart(pv);
     this.ghostParts = [];
-    for (const c of this.ghostLayer.removeChildren()) c.destroy();
-    if (!o) return;
-    const g = new Graphics();
-    const { w, h } = footprint(o.kind, o.rot ?? 0);
-    const pts = [toScreen(o.x, o.y), toScreen(o.x + w, o.y), toScreen(o.x + w, o.y + h), toScreen(o.x, o.y + h)];
-    g.poly(pts.flatMap((p) => [p.x, p.y]))
-      .fill({ color: valid ? C.olive : C.rust, alpha: 0.35 })
-      .stroke({ width: 2, color: valid ? C.vfd : C.rust });
-    this.ghostLayer.addChild(g);
-    for (const p of objectParts(o)) this.ghostParts.push(this.mountPart(p, this.ghostLayer, 0.6));
+    for (const c of this.ghostLayer.removeChildren()) c.destroy({ children: true });
+    this.ghostItems = [];
+    this.ghostLift = lift;
+    for (const it of items) {
+      const root = new Container();
+      this.ghostLayer.addChild(root);
+      for (const p of objectParts(it.def)) this.ghostParts.push(this.mountPart(p, root, it.ok ? 0.94 : 0.6));
+      this.ghostItems.push({ ...it, root });
+    }
+    this.drawGhostFloor();
+  }
+
+  private drawGhostFloor() {
+    const g = this.ghostFloorG.clear();
+    for (const { def: o, ok } of this.ghostItems) {
+      const e = entry(o.kind);
+      if (e.onSurface) {
+        // its cells on the top it would stand on
+        this.cellsOnTop(g, o, ok);
+        continue;
+      }
+      const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
+      const d = e.wall ? 0.25 : h;
+      const pts = [toScreen(o.x, o.y), toScreen(o.x + w, o.y), toScreen(o.x + w, o.y + d), toScreen(o.x, o.y + d)];
+      g.poly(pts.flatMap((p) => [p.x, p.y]))
+        .fill({ color: ok ? C.olive : C.rust, alpha: 0.38 })
+        .stroke({ width: 2, color: ok ? C.vfd : C.rust, alpha: 0.95 });
+      if (this.ghostLift > 0 && !e.wall) {
+        // the shadow of something held above the floor
+        const c = toScreen(o.x + w / 2, o.y + h / 2);
+        g.ellipse(c.x, c.y, 14 * Math.max(w, h), 7 * Math.max(w, h)).fill({ color: 0x000000, alpha: 0.22 });
+      }
+    }
+  }
+
+  // A thing on a surface: its spot (the quarter-tile cells it takes) drawn on
+  // the top, with the grid of the rest of that top faintly around it.
+  private cellsOnTop(g: Graphics, o: WorldObjectDef, ok: boolean) {
+    const z = Number(o.props?.z) || 0;
+    const quad = (x0: number, y0: number, x1: number, y1: number) =>
+      [toScreen(x0, y0), toScreen(x1, y0), toScreen(x1, y1), toScreen(x0, y1)].flatMap((p) => [p.x, p.y - z]);
+    const host = hostOf(this.allObjects(), o) ?? surfaceAt(this.allObjects(), Math.floor(o.x), Math.floor(o.y));
+    // (not a desk that's in hand itself: its grid would show where it was)
+    if (host && z > 0 && !this.hidden.has(host.id)) {
+      const { w, h } = footprint(host.kind, host.rot ?? 0);
+      for (let qy = 0; qy < h * Q; qy++)
+        for (let qx = 0; qx < w * Q; qx++) {
+          const x = host.x + qx / Q;
+          const y = host.y + qy / Q;
+          g.poly(quad(x + 0.025, y + 0.025, x + 1 / Q - 0.025, y + 1 / Q - 0.025))
+            .fill({ color: 0xfff0d0, alpha: 0.13 })
+            .stroke({ width: 0.75, color: 0xfff0d0, alpha: 0.35 });
+        }
+    }
+    const r = topRect(o);
+    g.poly(quad(r.x / Q, r.y / Q, (r.x + r.w) / Q, (r.y + r.h) / Q))
+      .fill({ color: ok ? C.olive : C.rust, alpha: 0.45 })
+      .stroke({ width: 1.5, color: ok ? C.vfd : C.rust, alpha: 0.95 });
+  }
+
+  // Hide placed things while they're in your hand (or being moved).
+  setHidden(ids: Iterable<string>) {
+    const next = new Set(ids);
+    for (const id of this.hidden) if (!next.has(id)) this.showOne(id, true);
+    for (const id of next) if (!this.hidden.has(id)) this.showOne(id, false);
+    this.hidden = next;
+    this.redrawFlat();
+  }
+  private showOne(id: string, on: boolean) {
+    const v = this.objectViews.get(id);
+    if (v) this.showView(v, on);
+    for (const d of this.dress) if (d.piece?.id === id) d.root.visible = on;
+  }
+  private showView(v: ObjectView, on: boolean) {
+    for (const p of v.parts) p.root.visible = on;
+    if (v.shadow) v.shadow.root.visible = on;
+    if (v.flat) v.flat.root.visible = on;
+    for (const d of v.displays) d.visible = on;
+  }
+
+  setOutlines(list: Outline[]) {
+    this.outlines = list;
+  }
+
+  setBuildGrid(on: boolean) {
+    const g = this.gridG.clear();
+    if (!on) return;
+    for (let y = 0; y < this.map.height; y++)
+      for (let x = 0; x < this.map.width; x++) {
+        if (!isFloor(tileAt(this.map, x, y))) continue;
+        const a = toScreen(x, y);
+        const b = toScreen(x + 1, y);
+        const c = toScreen(x + 1, y + 1);
+        const d = toScreen(x, y + 1);
+        g.moveTo(a.x, a.y).lineTo(b.x, b.y).lineTo(c.x, c.y).lineTo(d.x, d.y).closePath();
+      }
+    g.stroke({ width: 1, color: 0xfff0d0, alpha: 0.12 });
+  }
+
+  // Dust when something lands, a poof when it goes (world tiles).
+  puff(x: number, y: number, kind: "drop" | "poof" = "drop") {
+    if (!this.animated()) return;
+    const c = toScreen(x, y);
+    const n = kind === "poof" ? 18 : 10;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
+      const sp = (kind === "poof" ? 38 : 26) * (0.6 + Math.random() * 0.6);
+      this.fx.push({
+        x: c.x,
+        y: c.y - (kind === "poof" ? 18 : 2),
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp * 0.5 - (kind === "poof" ? 18 : 4),
+        t: 0,
+        life: kind === "poof" ? 0.55 : 0.4,
+        r: kind === "poof" ? 4 + Math.random() * 3 : 2.5 + Math.random() * 2,
+        c: kind === "poof" ? 0xf1e4cf : 0xd9c6a4,
+      });
+    }
+  }
+
+  private drawBuild(dt: number) {
+    // held items bob a little above the floor
+    if (this.ghostItems.length) {
+      const bob = this.ghostLift > 0 && !this.reducedMotion ? Math.sin(this.time * 4) * 2 : 0;
+      for (const it of this.ghostItems) it.root.y = -this.ghostLift + bob;
+    }
+    const g = this.outlineG.clear();
+    for (const o of this.outlines) {
+      const hull = o.dress ? this.dressHull(o.id) : this.hullOf(o.id);
+      if (!hull) continue;
+      g.poly(hull)
+        .fill({ color: o.color, alpha: o.fill ?? 0.08 })
+        .stroke({ width: 2, color: o.color, alpha: 0.95 });
+    }
+    const f = this.fxG.clear();
+    if (!this.fx.length) return;
+    for (const p of this.fx) {
+      p.t += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 30 * dt;
+      const k = 1 - p.t / p.life;
+      if (k > 0) f.circle(p.x, p.y, p.r * (1.3 - k * 0.3)).fill({ color: p.c, alpha: 0.55 * k });
+    }
+    this.fx = this.fx.filter((p) => p.t < p.life);
+  }
+
+  // An object's silhouette on screen: its footprint on the floor, raised to the
+  // top of its drawing, as one convex shape (world px). Cached briefly.
+  private hullOf(id: string): number[] | null {
+    const v = this.objectViews.get(id);
+    if (!v) return null;
+    const c = this.hulls.get(id);
+    if (c && performance.now() - c.at < 500) return c.hull;
+    const o = v.def;
+    const e = entry(o.kind);
+    const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
+    const d = e.wall ? 0.12 : h;
+    // things on a surface stand on their cells, raised to the top
+    const r = e.onSurface ? topRect(o) : null;
+    const lift = r ? Number(o.props?.z) || 0 : 0;
+    const base = (
+      r
+        ? [
+            toScreen(r.x / Q, r.y / Q),
+            toScreen((r.x + r.w) / Q, r.y / Q),
+            toScreen((r.x + r.w) / Q, (r.y + r.h) / Q),
+            toScreen(r.x / Q, (r.y + r.h) / Q),
+          ]
+        : [toScreen(o.x, o.y), toScreen(o.x + w, o.y), toScreen(o.x + w, o.y + d), toScreen(o.x, o.y + d)]
+    ).map((p) => ({ x: p.x, y: p.y - lift }));
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const p of v.parts) {
+      const b = p.root.getLocalBounds();
+      if (!Number.isFinite(b.minY) || b.maxY <= b.minY) continue;
+      top = Math.min(top, p.root.y + b.minY);
+      bottom = Math.max(bottom, p.root.y + b.maxY);
+    }
+    const ground = Math.min(...base.map((p) => p.y));
+    const groundLow = Math.max(...base.map((p) => p.y));
+    const zTop = Number.isFinite(top) ? Math.max(e.wall ? 10 : 3, ground - top) : 18;
+    // wall items hang above the floor: start at the bottom of their drawing
+    const zLow = e.wall && Number.isFinite(bottom) ? Math.max(0, groundLow - bottom) : 0;
+    const pts: { x: number; y: number }[] = [];
+    for (const p of base) pts.push({ x: p.x, y: p.y - zLow }, { x: p.x, y: p.y - zTop });
+    const hull = convexHull(pts).flatMap((p) => [p.x, p.y]);
+    this.hulls.set(id, { hull, at: performance.now() });
+    return hull;
+  }
+
+  private dressHull(id: string): number[] | null {
+    const pv = this.dress.find((d) => d.piece?.id === id);
+    if (!pv) return null;
+    const b = pv.root.getLocalBounds();
+    if (!Number.isFinite(b.minX)) return null;
+    // the drawing's box, trimmed of its transparent margin
+    const ix = (b.maxX - b.minX) * 0.18;
+    const iy = (b.maxY - b.minY) * 0.12;
+    const x0 = pv.root.x + b.minX + ix;
+    const x1 = pv.root.x + b.maxX - ix;
+    const y0 = pv.root.y + b.minY + iy;
+    const y1 = pv.root.y + b.maxY - iy;
+    return [x0, y0, x1, y0, x1, y1, x0, y1];
+  }
+
+  // Build mode's pick at the pointer: the front-most drawn thing (rugs last),
+  // or a piece of clutter. `filter` skips objects (held ones, say).
+  pickAt(gx = this.pointerAt.gx, gy = this.pointerAt.gy, filter?: (o: WorldObjectDef) => boolean): Pick | null {
+    const px = (gx - this.world.position.x) / this.zoom;
+    const py = (gy - this.world.position.y) / this.zoom;
+    let best: Pick | null = null;
+    let bestKey = Number.NEGATIVE_INFINITY;
+    for (const [id, v] of this.objectViews) {
+      const o = v.def;
+      const e = entry(o.kind);
+      if (!e.buildable || this.hidden.has(id) || (filter && !filter(o))) continue;
+      const hull = this.hullOf(id);
+      if (!hull || !inConvex(hull, px, py)) continue;
+      const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
+      const flat = o.kind === "rug" || o.kind === "standup_mat";
+      // small things on a surface win over the surface (and what's behind it)
+      const top = e.onSurface ? topCentre(o) : null;
+      const key = top ? 500 + top.x + top.y : (flat ? -1000 : 0) + o.x + o.y + (w + h) / 2;
+      if (key > bestKey) {
+        bestKey = key;
+        best = { id, dress: false };
+      }
+    }
+    for (const d of this.dress) {
+      if (!d.piece || !d.root.visible) continue;
+      const hull = this.dressHull(d.piece.id);
+      if (!hull || !inConvex(hull, px, py)) continue;
+      const key = (d.at ? d.at[0] + d.at[1] : 0) + 0.7;
+      if (key > bestKey) {
+        bestKey = key;
+        best = { id: d.piece.id, dress: true, kind: d.piece.kind };
+      }
+    }
+    return best;
   }
 
   // ── input ────────────────────────────────────────────────────────────────
@@ -1759,6 +2339,7 @@ export class WorldEngine {
   private hoverId: string | null = null;
   private labelsDirty = false;
   private handleHover(e: FederatedPointerEvent) {
+    this.pointerAt = { gx: e.global.x, gy: e.global.y };
     const gx = (e.global.x - this.world.position.x) / this.zoom;
     const gy = (e.global.y - this.world.position.y) / this.zoom;
     const w = toWorld(gx, gy);
@@ -1774,6 +2355,7 @@ export class WorldEngine {
 
   private onWheel = (e: WheelEvent) => {
     e.preventDefault();
+    if (this.events.onWheel?.(e.deltaY)) return;
     this.setZoom(this.targetZoom * (e.deltaY > 0 ? 0.9 : 1.1));
   };
 
@@ -1837,4 +2419,41 @@ export class WorldEngine {
     this.app.canvas.removeEventListener("pointercancel", this.onTouchEnd);
     this.app.destroy(true, { children: true });
   }
+}
+
+// Convex hull (monotone chain), clockwise on screen.
+function convexHull(pts: { x: number; y: number }[]): { x: number; y: number }[] {
+  const p = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (p.length < 3) return p;
+  const cross = (o: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: typeof p = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  const upper: typeof p = [];
+  for (const q of [...p].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+// Is (x, y) inside a convex polygon given as flat [x0, y0, x1, y1, …]?
+function inConvex(poly: number[], x: number, y: number): boolean {
+  let sign = 0;
+  const n = poly.length / 2;
+  for (let i = 0; i < n; i++) {
+    const ax = poly[i * 2];
+    const ay = poly[i * 2 + 1];
+    const bx = poly[((i + 1) % n) * 2];
+    const by = poly[((i + 1) % n) * 2 + 1];
+    const c = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+    if (c === 0) continue;
+    const s = Math.sign(c);
+    if (sign === 0) sign = s;
+    else if (s !== sign) return false;
+  }
+  return true;
 }

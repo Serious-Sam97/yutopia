@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, type Page, test } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, token, walkTo } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
 
 const SHOTS = "../../design/screens";
 
@@ -101,8 +101,10 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
 
   // 2 · a desk for Ana inside her room
   await ana.getByRole("tab", { name: /Furnish/ }).click();
+  await ana.getByRole("tab", { name: "Desks & tables", exact: true }).click();
   await ana.getByRole("button", { name: "Desk", exact: true }).click();
   await clickTile(ana, 5, 5);
+  await ana.getByRole("tab", { name: "Seating" }).click();
   await ana.getByRole("button", { name: "Chair", exact: true }).click();
   await clickTile(ana, 5, 4);
   await expect
@@ -113,7 +115,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
       ),
     )
     .toBe(1);
-  await ana.getByRole("tab", { name: /Desks/ }).click();
+  await ana.getByRole("tab", { name: "Desks", exact: true }).click();
   await clickTile(ana, 5, 4);
   await ana.getByLabel("Whose desk is this?").selectOption({ label: "Ana Demo" });
   await ana.getByRole("button", { name: "Save" }).click();

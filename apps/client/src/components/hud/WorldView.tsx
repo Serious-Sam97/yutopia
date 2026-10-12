@@ -10,7 +10,7 @@ import { radio, sound } from "@/world/sound";
 import { hud, useHud } from "@/world/store";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
-import { ConnectionOverlay, Knocks, Minimap, Prompt, Toasts, VideoBubbles } from "./Overlays";
+import { ConnectionOverlay, HeldChip, Knocks, Minimap, Prompt, Toasts, VideoBubbles } from "./Overlays";
 import { PanelHost } from "./PanelHost";
 import { PersonCard } from "./PersonCard";
 import { Rituals } from "./Rituals";
@@ -67,6 +67,7 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
           <Knocks />
           <Toasts />
           {!building && <Prompt />}
+          {!building && <HeldChip />}
           {building && <BuildMode />}
           <Minimap />
           {!building && <Dock />}

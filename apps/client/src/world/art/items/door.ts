@@ -1,4 +1,5 @@
-import { fe, fr, type Mat, type Sketch, sh, te, tr } from "./kit";
+import { paintOf } from "./home";
+import { fe, fr, type Mat, rnd, type Sketch, sh, te, tr } from "./kit";
 import { K, M } from "./pal";
 
 // A door on a tile edge (map v2): rot 0 = the north edge of its tile, in a
@@ -73,14 +74,19 @@ export function door(s: Sketch, props: Record<string, unknown>) {
 
 // 4×3 rug: olive border, rust field, an amber medallion, cream fringe on the
 // short ends. Flat (floor layer).
-export function rug(s: Sketch) {
+export function rug(s: Sketch, props: Record<string, unknown> = {}) {
+  const v = Math.floor(s.seed * 3);
+  // (props.color: the field, rust unless painted)
+  const field = paintOf(props, K.rust);
+  if (v === 1) return kilim(s, field);
+  if (v === 2) return shag(s, field);
   s.box(
     { x: 0, y: 0, w: 4, d: 3, z: 0, h: 0.8, mat: { c: K.olive, top: "#74823f", flat: true }, line: 0.9, bevel: false },
     (d) => {
       const Z = 0.8;
-      d.poly("t", tr(Z, 0.2, 0.2, 3.8, 2.8), K.rust);
+      d.poly("t", tr(Z, 0.2, 0.2, 3.8, 2.8), field);
       d.poly("t", tr(Z, 0.28, 0.28, 3.72, 2.72), "none", { stroke: K.amberSoft, sw: 0.8 });
-      d.poly("t", tr(Z, 0.42, 0.42, 3.58, 2.58), "#a34d2b");
+      d.poly("t", tr(Z, 0.42, 0.42, 3.58, 2.58), sh(field, 0.9));
       // medallion: nested diamonds
       for (const [r, c] of [
         [1.1, K.amberSoft],
@@ -111,6 +117,58 @@ export function rug(s: Sketch) {
         const y = 0.1 + i * 0.12;
         d.line("t", [0, y, 0.4], [-0.12, y, 0.2], K.cream, 0.8);
         d.line("t", [4, y, 0.4], [4.12, y, 0.2], K.cream, 0.8);
+      }
+    },
+  );
+}
+
+// A flat-woven kilim: bands of colour across it, zigzags between.
+function kilim(s: Sketch, field: string) {
+  const bands = [field, K.cream, K.amberSoft, K.slate, K.cream, field, K.olive, K.cream, field];
+  s.box(
+    { x: 0, y: 0, w: 4, d: 3, z: 0, h: 0.6, mat: { c: field, top: field, flat: true }, line: 0.9, bevel: false },
+    (d) => {
+      const Z = 0.6;
+      bands.forEach((c, i) => {
+        const y0 = (i / bands.length) * 3;
+        d.poly("t", tr(Z, 0.1, y0, 3.9, y0 + 3 / bands.length), c);
+      });
+      for (let i = 1; i < bands.length; i += 2) {
+        const y = (i / bands.length) * 3 + 3 / bands.length / 2;
+        for (let k = 0; k < 13; k++) {
+          const x = 0.2 + k * 0.28;
+          d.line("t", [x, y - 0.08, Z + 0.01], [x + 0.14, y + 0.08, Z + 0.01], sh(field, 0.7), 0.7);
+          d.line("t", [x + 0.14, y + 0.08, Z + 0.01], [x + 0.28, y - 0.08, Z + 0.01], sh(field, 0.7), 0.7);
+        }
+      }
+      for (let i = 0; i < 24; i++) {
+        const y = 0.1 + i * 0.12;
+        d.line("t", [0, y, 0.3], [-0.12, y, 0.1], K.cream, 0.8);
+        d.line("t", [4, y, 0.3], [4.12, y, 0.1], K.cream, 0.8);
+      }
+    },
+  );
+}
+
+// A deep shag in one colour, its pile catching the light.
+function shag(s: Sketch, field: string) {
+  s.box(
+    {
+      x: 0.1,
+      y: 0.1,
+      w: 3.8,
+      d: 2.8,
+      z: 0,
+      h: 1.4,
+      mat: { c: sh(field, 0.85), top: field, flat: true },
+      line: 0.9,
+      bevel: false,
+    },
+    (d) => {
+      for (let i = 0; i < 160; i++) {
+        const x = 0.2 + rnd(i, 1) * 3.6;
+        const y = 0.2 + rnd(i, 2) * 2.6;
+        d.line("t", [x, y, 1.42], [x + 0.05, y - 0.04, 1.42], rnd(i, 3) > 0.5 ? sh(field, 1.2) : sh(field, 0.8), 0.7);
       }
     },
   );

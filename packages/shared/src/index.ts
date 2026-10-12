@@ -5,12 +5,14 @@ export * from "./convert.ts";
 export * from "./dressing.ts";
 export * from "./grid.ts";
 export * from "./hearing.ts";
+export * from "./held.ts";
 export * from "./history.ts";
 export * from "./iso.ts";
 export * from "./map.ts";
 export * from "./map-edit.ts";
 export * from "./path.ts";
 export * from "./protocol.ts";
+export * from "./tops.ts";
 
 import type { MapDef } from "./map.ts";
 import { studio, studioV1 } from "./maps/studio.ts";

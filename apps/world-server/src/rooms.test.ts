@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { findPath, Grid, ROOM_NAME, studio } from "@yutopia/shared";
+import { dressItems, findPath, Grid, getMap, ROOM_NAME, studio, takenId } from "@yutopia/shared";
 import { Client, type Room } from "colyseus.js";
 
 process.env.YUTOPIA_OFFLINE = "1";
@@ -51,6 +51,7 @@ async function person(id: number, spaceId: number, roles = "member"): Promise<Pe
     "arcade:scores",
     "build:history",
     "chat:react",
+    "piano:note",
   ])
     room.onMessage(t, (m) => {
       if (!p.msgs[t]) p.msgs[t] = [];
@@ -247,6 +248,56 @@ test("radio: one shared station with a start time", async () => {
   assert.ok(Math.abs(b.room.state.radio.startedAt - Date.now()) < 2000);
   b.room.send("radio:set", { playing: false });
   await waitFor(() => a.room.state.radio.playing === false);
+});
+
+test("coffee: a mug from the machine when you're next to it, for everyone to see; put it down", async () => {
+  const s = ++space;
+  const a = await person(19, s);
+  const b = await person(20, s);
+  const machine = [...a.room.state.objects.values()].find((o) => o.kind === "coffee_machine");
+  assert.ok(machine, "the studio has a coffee machine");
+  // too far: nothing
+  a.room.send("item:take", { id: machine.id });
+  await sleep(300);
+  assert.equal(me(a)?.held, "");
+  await walk(a, { x: machine.x + 0.5, y: machine.y + 1.5 });
+  a.room.send("item:take", { id: machine.id });
+  await waitFor(() => b.room.state.players.get(a.room.sessionId)?.held === "mug");
+  assert.ok(Math.abs((me(a)?.heldAt ?? 0) - Date.now()) < 2000);
+  // only things that hand something out
+  const desk = [...a.room.state.objects.values()].find((o) => o.kind === "desk");
+  a.room.send("item:take", { id: desk?.id ?? "" });
+  await sleep(200);
+  assert.equal(me(a)?.held, "mug");
+  a.room.send("item:drop", {});
+  await waitFor(() => b.room.state.players.get(a.room.sessionId)?.held === "");
+});
+
+test("using things shows; the piano is heard from whoever's at it", async () => {
+  const s = ++space;
+  const a = await person(21, s, "member,builder");
+  const b = await person(22, s);
+  // what I'm busy with: only things you can use
+  a.room.send("use", { what: "arcade" });
+  await waitFor(() => b.room.state.players.get(a.room.sessionId)?.busy === "arcade");
+  a.room.send("use", { what: "<hack>" });
+  await waitFor(() => b.room.state.players.get(a.room.sessionId)?.busy === "");
+  // a piano right where Ana is
+  const at = me(a);
+  const px = Math.floor(at?.x ?? 0);
+  const py = Math.floor(at?.y ?? 0) - 2;
+  a.room.send("obj:put", { id: "t-piano", kind: "piano", x: px, y: py, rot: 0 });
+  await waitFor(() => !!a.room.state.objects.get("t-piano"));
+  a.room.send("piano:note", { id: "t-piano", n: 4 });
+  await waitFor(() => (b.msgs["piano:note"]?.length ?? 0) === 1);
+  assert.equal((b.msgs["piano:note"][0] as { n: number }).n, 4);
+  assert.equal(a.msgs["piano:note"]?.length ?? 0, 0, "not echoed to the player");
+  // out of range notes, and pianos you're not at, are dropped
+  a.room.send("piano:note", { id: "t-piano", n: 99 });
+  b.room.send("piano:note", { id: "t-piano", n: 2 });
+  await sleep(300);
+  assert.equal(b.msgs["piano:note"].length, 1);
+  a.room.send("obj:remove", { id: "t-piano" });
 });
 
 test("whiteboard: ops are cleaned, broadcast and kept", async () => {
@@ -502,4 +553,150 @@ test("the theme around the studio: builders pick it, members can't", async () =>
   assert.equal(member.room.state.theme, "clouds", "only known themes");
   owner.room.send("map:theme", { theme: "snow" });
   await waitFor(() => member.room.state.theme === "snow");
+});
+
+test("build hand: one builder holds a thing at a time; group moves are all or nothing", async () => {
+  const s = ++space;
+  const ana = await person(50, s, "member,builder");
+  const bia = await person(51, s, "member,builder");
+  const obj = (id: string) => ana.room.state.objects.get(id);
+  ana.room.send("obj:put", { id: "h-plant", kind: "plant", x: 10, y: 3, rot: 0 });
+  await waitFor(() => !!obj("h-plant"));
+  // Ana picks it up: Bia can't move it, and is told who has it
+  ana.room.send("obj:hold", { ids: ["h-plant"] });
+  await waitFor(() => !!ana.room.state.holds.get("h-plant"));
+  bia.room.send("obj:put", { id: "h-plant", kind: "plant", x: 12, y: 3, rot: 0 });
+  await waitFor(() =>
+    (bia.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("P50 is moving")),
+  );
+  assert.equal(obj("h-plant")?.x, 10, "still where Ana's hand left it");
+  // Ana puts it down: the hold is gone, and Bia may move it again
+  ana.room.send("obj:put", { id: "h-plant", kind: "plant", x: 11, y: 3, rot: 0 });
+  await waitFor(() => obj("h-plant")?.x === 11 && !ana.room.state.holds.get("h-plant"));
+  // a group that doesn't all fit changes nothing
+  ana.room.send("obj:batch", {
+    items: [
+      { id: "h-plant", kind: "plant", x: 13, y: 3, rot: 0 },
+      { kind: "plant", x: 900, y: 900, rot: 0 }, // off the map: no
+    ],
+  });
+  await sleep(300);
+  assert.equal(obj("h-plant")?.x, 11, "nothing moved");
+  // …one that does, moves and adds together
+  const before = ana.room.state.objects.size;
+  ana.room.send("obj:batch", {
+    items: [
+      { id: "h-plant", kind: "plant", x: 13, y: 3, rot: 0 },
+      { kind: "plant", x: 14, y: 3, rot: 0 },
+    ],
+  });
+  await waitFor(() => obj("h-plant")?.x === 13 && ana.room.state.objects.size === before + 1);
+  const copy = [...ana.room.state.objects.values()].find((o) => o.kind === "plant" && o.x === 14 && o.y === 3);
+  assert.ok(copy, "the copy is there");
+  // remove several at once
+  ana.room.send("obj:removeMany", { ids: ["h-plant", copy.id] });
+  await waitFor(() => !obj("h-plant") && !obj(copy.id));
+  // a hand lets go when its builder leaves
+  bia.room.send("obj:put", { id: "h-lamp", kind: "lamp", x: 12, y: 3, rot: 0 });
+  await waitFor(() => !!obj("h-lamp"));
+  bia.room.send("obj:hold", { ids: ["h-lamp"] });
+  await waitFor(() => !!ana.room.state.holds.get("h-lamp"));
+  await bia.room.leave(true);
+  await waitFor(() => !ana.room.state.holds.get("h-lamp"));
+});
+
+test("tabletops sit on surfaces and ride along; looks are checked; clutter becomes real", async () => {
+  const s = ++space;
+  const ana = await person(52, s, "member,builder");
+  const st = ana.room.state;
+  const obj = (id: string) => st.objects.get(id);
+  ana.room.send("obj:put", { id: "t-desk", kind: "desk", x: 10, y: 3, rot: 0 });
+  await waitFor(() => !!obj("t-desk"));
+  // a mug on the desk's right half: at the desk's height
+  ana.room.send("obj:put", { id: "t-mug", kind: "tabletop", x: 11, y: 3, rot: 0, props: { d: "mug", seed: 0.3 } });
+  await waitFor(() => !!obj("t-mug"));
+  assert.equal(JSON.parse(obj("t-mug")?.props ?? "{}").z, 25);
+  // more than one per tile: a second mug in the next quarter, but not on the first
+  ana.room.send("obj:put", { id: "t-mug2", kind: "tabletop", x: 11, y: 3, rot: 0, props: { d: "mug", c: [2, 1] } });
+  await waitFor(() => !!obj("t-mug2"));
+  ana.room.send("obj:put", { id: "t-mug3", kind: "tabletop", x: 11, y: 3, rot: 0, props: { d: "mug", c: [1, 1] } });
+  await sleep(300);
+  assert.equal(obj("t-mug3"), undefined);
+  ana.room.send("obj:remove", { id: "t-mug2" });
+  await waitFor(() => !obj("t-mug2"));
+  // a desk placed now is bare for good (never furnished on the next load)
+  assert.equal(JSON.parse(obj("t-desk")?.props ?? "{}").split, 1);
+  // the room's own desks came set up: monitors and keyboards are real things
+  const tops = [...st.objects.values()].filter((o) => o.kind === "tabletop");
+  assert.ok(
+    tops.some((o) => JSON.parse(o.props).d === "monitor"),
+    "monitors on the studio's desks",
+  );
+  assert.ok(
+    [...st.objects.values()].some((o) => o.kind === "side_table"),
+    "the radio's stand",
+  );
+  // not on the floor
+  ana.room.send("obj:put", { id: "t-floor", kind: "tabletop", x: 13, y: 3, rot: 0, props: { d: "mug" } });
+  await sleep(300);
+  assert.equal(obj("t-floor"), undefined);
+  // the desk moves (and turns): the mug keeps its spot on it
+  ana.room.send("obj:put", { id: "t-desk", kind: "desk", x: 12, y: 3, rot: 0 });
+  await waitFor(() => obj("t-mug")?.x === 13 && obj("t-mug")?.y === 3);
+  ana.room.send("obj:put", { id: "t-desk", kind: "desk", x: 12, y: 3, rot: 2 });
+  await waitFor(() => obj("t-mug")?.x === 12, 3000);
+  // the desk goes: so does what's on it
+  ana.room.send("obj:remove", { id: "t-desk" });
+  await waitFor(() => !obj("t-desk") && !obj("t-mug"));
+  // looks: a real variant stays, a made-up one is dropped
+  ana.room.send("obj:put", { id: "t-chair", kind: "chair", x: 10, y: 3, rot: 0, props: { variant: 2 } });
+  await waitFor(() => !!obj("t-chair"));
+  assert.equal(JSON.parse(obj("t-chair")?.props ?? "{}").variant, 2);
+  ana.room.send("obj:put", { id: "t-chair", kind: "chair", x: 10, y: 3, rot: 0, props: { variant: 9 } });
+  await waitFor(() => JSON.parse(obj("t-chair")?.props ?? "{}").variant === undefined);
+  // a colour: kept on things that take one (a valid hex), dropped otherwise
+  ana.room.send("obj:put", { id: "t-chair", kind: "chair", x: 10, y: 3, rot: 0, props: { color: "#3d4a5c" } });
+  await waitFor(() => JSON.parse(obj("t-chair")?.props ?? "{}").color === "#3d4a5c");
+  ana.room.send("obj:put", { id: "t-chair", kind: "chair", x: 10, y: 3, rot: 0, props: { color: "red" } });
+  await waitFor(() => JSON.parse(obj("t-chair")?.props ?? "{}").color === undefined);
+  ana.room.send("obj:put", { id: "t-plant", kind: "plant", x: 12, y: 3, rot: 0, props: { color: "#3d4a5c" } });
+  await waitFor(() => !!obj("t-plant"));
+  assert.equal(JSON.parse(obj("t-plant")?.props ?? "{}").color, undefined, "plants aren't painted");
+  ana.room.send("obj:remove", { id: "t-plant" });
+  // generated clutter: taking a piece hides it and puts a real one in its place
+  const map = () => ({
+    ...getMap(st.mapKey),
+    width: st.width,
+    height: st.height,
+    tiles: [...st.tiles],
+    hWalls: [...st.hWalls],
+    vWalls: [...st.vWalls],
+    areas: JSON.parse(st.areas),
+    spawn: { x: st.spawnX, y: st.spawnY },
+  });
+  const objects = () =>
+    [...st.objects.values()].map((o) => ({
+      id: o.id,
+      kind: o.kind,
+      x: o.x,
+      y: o.y,
+      rot: o.rot,
+      props: JSON.parse(o.props),
+    }));
+  const piece = dressItems(map(), objects()).find((d) => d.kind !== "frame");
+  assert.ok(piece, "the studio has floor clutter");
+  ana.room.send("dress:take", { id: piece.id });
+  await waitFor(() => !!obj(takenId(piece.id)));
+  const real = obj(takenId(piece.id));
+  assert.equal(real?.kind, "decor");
+  assert.equal(JSON.parse(real?.props ?? "{}").d, piece.kind);
+  assert.ok(!dressItems(map(), objects()).some((d) => d.id === piece.id), "the generated one is gone");
+  // members can't take clutter
+  const bea = await person(53, s);
+  const other = dressItems(map(), objects()).find((d) => d.kind !== "frame");
+  if (other) {
+    bea.room.send("dress:take", { id: other.id });
+    await sleep(300);
+    assert.equal(obj(takenId(other.id)), undefined);
+  }
 });

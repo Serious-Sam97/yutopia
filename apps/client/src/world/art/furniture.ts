@@ -49,15 +49,6 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           leg(1.86, 0.12, 20),
           leg(1.86, 0.8, 20),
           { x: 0, y: 0.05, w: 2, d: 0.9, z: 20, h: 4, color: C.teak, top: 0xa06c43 },
-          // keyboards on the sitter side (-y)
-          { x: 0.3, y: 0.14, w: 0.42, d: 0.16, z: 24, h: 1.5, color: C.cream, outline: false },
-          { x: 1.28, y: 0.14, w: 0.42, d: 0.16, z: 24, h: 1.5, color: C.cream, outline: false },
-          // monitors facing the sitter
-          { x: 0.46, y: 0.72, w: 0.08, d: 0.06, z: 24, h: 6, color: C.graphite, outline: false },
-          { x: 0.2, y: 0.66, w: 0.6, d: 0.08, z: 30, h: 22, color: C.graphite, faces: { n: C.phosphor } },
-          { x: 1.46, y: 0.72, w: 0.08, d: 0.06, z: 24, h: 6, color: C.graphite, outline: false },
-          { x: 1.2, y: 0.66, w: 0.6, d: 0.08, z: 30, h: 22, color: C.graphite, faces: { n: C.phosphor } },
-          { x: 0.86, y: 0.3, w: 0.14, d: 0.14, z: 24, h: 7, color: C.cream, top: C.ink, outline: false }, // mug
         ],
       };
     case "chair":
@@ -134,8 +125,6 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           leg(1.82, 0.15, 10),
           leg(1.82, 0.77, 10),
           { x: 0.04, y: 0.1, w: 1.92, d: 0.8, z: 10, h: 3, color: C.teak, top: 0xa06c43 },
-          { x: 0.3, y: 0.3, w: 0.5, d: 0.36, z: 13, h: 1, color: C.cream, outline: false },
-          { x: 1.2, y: 0.4, w: 0.16, d: 0.16, z: 13, h: 6, color: C.rust, outline: false },
         ],
       };
     case "plant":
@@ -197,17 +186,37 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           { x: 0.5, y: 0.86, w: 0.05, d: 0.05, z: 26, h: 3, color: C.amber, outline: false },
         ],
       };
+    // (things on surfaces are drawn around the middle of a tile, standing on
+    // z 0; they're raised to their surface and shifted to their spot)
     case "radio":
       return {
         boxes: [
-          { x: 0.2, y: 0.2, w: 0.6, d: 0.6, z: 0, h: 14, color: C.walnut },
-          { x: 0.12, y: 0.3, w: 0.76, d: 0.4, z: 14, h: 15, color: C.aluminium },
-          { x: 0.18, y: 0.7, w: 0.2, d: 0.02, z: 16, h: 10, color: C.graphite, outline: false },
-          { x: 0.62, y: 0.7, w: 0.2, d: 0.02, z: 16, h: 10, color: C.graphite, outline: false },
-          { x: 0.42, y: 0.7, w: 0.16, d: 0.02, z: 22, h: 4, color: C.amber, ...screen(C.amber), outline: false },
-          { x: 0.2, y: 0.42, w: 0.02, d: 0.02, z: 29, h: 12, color: C.alumDark, outline: false },
+          { x: 0.12, y: 0.3, w: 0.76, d: 0.4, z: 0, h: 15, color: C.aluminium },
+          { x: 0.18, y: 0.7, w: 0.2, d: 0.02, z: 2, h: 10, color: C.graphite, outline: false },
+          { x: 0.62, y: 0.7, w: 0.2, d: 0.02, z: 2, h: 10, color: C.graphite, outline: false },
+          { x: 0.42, y: 0.7, w: 0.16, d: 0.02, z: 8, h: 4, color: C.amber, ...screen(C.amber), outline: false },
+          { x: 0.2, y: 0.42, w: 0.02, d: 0.02, z: 15, h: 12, color: C.alumDark, outline: false },
         ],
       };
+    case "side_table":
+      return {
+        boxes: [
+          leg(0.22, 0.22, 11),
+          leg(0.7, 0.22, 11),
+          leg(0.22, 0.7, 11),
+          leg(0.7, 0.7, 11),
+          { x: 0.18, y: 0.18, w: 0.64, d: 0.64, z: 11, h: 3, color: C.walnut },
+        ],
+      };
+    case "cupboard":
+      return {
+        boxes: [
+          { x: 0.08, y: 0.14, w: 0.84, d: 0.72, z: 0, h: 24, color: C.cream, faces: { s: C.creamDark } },
+          { x: 0.04, y: 0.1, w: 0.92, d: 0.8, z: 24, h: 2, color: C.walnut },
+        ],
+      };
+    case "tabletop":
+      return { boxes: [{ x: 0.4, y: 0.4, w: 0.2, d: 0.2, z: 0, h: 5, color: C.cream, outline: false }] };
     case "tape_shelf": {
       const seed = hashId(id);
       const boxes: Box[] = [{ x: 0, y: 0.2, w: 2, d: 0.6, z: 0, h: 46, color: C.walnut }];
@@ -227,10 +236,9 @@ export function piece(kind: string, props: Props, id = ""): Piece {
     case "coffee_machine":
       return {
         boxes: [
-          { x: 0.08, y: 0.14, w: 0.84, d: 0.72, z: 0, h: 24, color: C.cream, faces: { s: C.creamDark } },
-          { x: 0.26, y: 0.3, w: 0.48, d: 0.4, z: 24, h: 20, color: C.graphite },
-          { x: 0.36, y: 0.7, w: 0.1, d: 0.02, z: 38, h: 3, color: C.amber, ...screen(C.amber), outline: false },
-          { x: 0.42, y: 0.58, w: 0.14, d: 0.14, z: 24, h: 6, color: C.paper, top: C.walnutDark, outline: false },
+          { x: 0.22, y: 0.24, w: 0.56, d: 0.44, z: 0, h: 20, color: C.aluminium },
+          { x: 0.36, y: 0.68, w: 0.1, d: 0.02, z: 14, h: 3, color: C.amber, ...screen(C.amber), outline: false },
+          { x: 0.44, y: 0.68, w: 0.12, d: 0.12, z: 0, h: 5, color: C.paper, top: C.walnutDark, outline: false },
         ],
       };
     case "reception":
@@ -241,8 +249,6 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           { x: 0.02, y: 0.92, w: 2.96, d: 0.02, z: 10, h: 3, color: C.amberSoft, outline: false },
           { x: 0.02, y: 0.92, w: 2.96, d: 0.02, z: 14, h: 3, color: C.olive, outline: false },
           { x: -0.04, y: 0.16, w: 3.08, d: 0.82, z: 26, h: 3, color: C.cream },
-          { x: 1.1, y: 0.3, w: 0.6, d: 0.08, z: 29, h: 18, color: C.graphite, faces: { n: C.phosphor } },
-          { x: 2.3, y: 0.5, w: 0.14, d: 0.14, z: 29, h: 4, color: C.amber, outline: false },
         ],
       };
     case "mic_stand":
@@ -487,6 +493,42 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           });
       return { boxes };
     }
+    // (quick stand-ins while the drawings load)
+    case "bookcase":
+      return { boxes: [{ x: 0.04, y: 0.22, w: 1.92, d: 0.58, z: 0, h: 62, color: C.walnut }] };
+    case "partition":
+      return { boxes: [{ x: 0.06, y: 0.46, w: 1.88, d: 0.08, z: 2.5, h: 42, color: C.olive }] };
+    case "counter":
+      return {
+        boxes: [
+          { x: 0.02, y: 0.1, w: 1.96, d: 0.8, z: 0, h: 24, color: C.cream },
+          { x: 0, y: 0.06, w: 2, d: 0.88, z: 24, h: 2, color: C.alumDark },
+        ],
+      };
+    case "beanbag":
+      return { boxes: [{ x: 0.14, y: 0.14, w: 0.72, d: 0.72, z: 0, h: 13, color: C.rust }] };
+    case "water_cooler":
+      return {
+        boxes: [
+          { x: 0.26, y: 0.28, w: 0.48, d: 0.44, z: 0, h: 30, color: C.cream },
+          { x: 0.32, y: 0.32, w: 0.36, d: 0.36, z: 30, h: 20, color: 0x8fc0ea },
+        ],
+      };
+    case "vending":
+      return { boxes: [{ x: 0.1, y: 0.16, w: 0.8, d: 0.7, z: 0, h: 62, color: C.slate }] };
+    case "piano":
+      return {
+        boxes: [
+          { x: 0.06, y: 0.08, w: 1.88, d: 0.5, z: 0, h: 44, color: C.walnut },
+          { x: 0.06, y: 0.58, w: 1.88, d: 0.26, z: 14, h: 6, color: C.walnut },
+        ],
+      };
+    case "turntable":
+      return { boxes: [{ x: 0.14, y: 0.18, w: 0.72, d: 0.64, z: 0, h: 5, color: C.walnut }] };
+    case "clock":
+      return { boxes: [{ x: 0.32, y: -0.03, w: 0.36, d: 0.06, z: 44, h: 16, color: C.cream }] };
+    case "neon":
+      return { boxes: [{ x: 0.2, y: -0.025, w: 1.6, d: 0.05, z: 36, h: 28, color: C.ink }] };
     case "poster": {
       const art = String(props.art ?? "tape");
       const boxes: Box[] = [{ x: 0.12, y: -0.03, w: 0.76, d: 0.06, z: 30, h: 36, color: C.ink }];

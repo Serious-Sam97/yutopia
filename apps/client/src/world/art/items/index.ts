@@ -1,18 +1,20 @@
 import type { DressKind } from "@yutopia/shared";
-import { entry } from "@yutopia/shared";
+import { entry, variantOf as lookOf } from "@yutopia/shared";
 import { boardWall } from "./board";
 import { chair } from "./chair";
 import { dressing } from "./clutter";
 import { desk } from "./desk";
 import { door, rug, standupMat } from "./door";
+import { beanbag, bookcase, clock, counter, neon, partition } from "./home";
 import { type Clip, type Group, type ItemArt, Sketch, seedOf } from "./kit";
 import { lamp } from "./lamp";
-import { micStand, mixingDesk, radio, speakerCab, tapeShelf } from "./music";
+import { micStand, mixingDesk, radio, sideTable, speakerCab, tapeShelf } from "./music";
 import { PLANT_VARIANTS, plant } from "./plant";
+import { piano, turntable, vending, waterCooler } from "./play";
 import { armchair, bench } from "./seating";
 import { sofa } from "./sofa";
 import { coffeeTable, meetingTable, reception } from "./tables";
-import { arcade, coffeeMachine, crtTerminal, serverRack } from "./tech";
+import { arcade, coffeeMachine, crtTerminal, cupboard, serverRack } from "./tech";
 import { acousticPanel, noticeBoard, poster, screenWall, whiteboard } from "./wall";
 import { column, post, type WallPart, wall } from "./walls";
 
@@ -31,11 +33,24 @@ interface ItemGen {
 }
 
 const occupied = (p: Props) => (p.occupied ? "sit" : "");
+// fabric / paint (props.color)
+const painted = (p: Props) => (typeof p.color === "string" ? p.color : "");
+const sitPaint = (p: Props) => `${occupied(p)}|${painted(p)}`;
 
 const GENS: Record<string, ItemGen> = {
   desk: { draw: desk, variants: 4 },
-  chair: { draw: chair, variants: 4, key: occupied },
-  armchair: { draw: armchair, variants: 2, key: occupied },
+  chair: { draw: chair, variants: 4, key: sitPaint },
+  armchair: { draw: armchair, variants: 2, key: sitPaint },
+  beanbag: { draw: beanbag, variants: 1, key: sitPaint },
+  bookcase: { draw: bookcase, variants: 3 },
+  partition: { draw: partition, variants: 3, key: painted },
+  counter: { draw: counter, variants: 2, key: painted },
+  clock: { draw: clock, variants: 1, key: (p) => (p._thumb ? "t" : "") },
+  neon: { draw: neon, variants: 3 },
+  water_cooler: { draw: waterCooler, variants: 1 },
+  vending: { draw: vending, variants: 2 },
+  piano: { draw: piano, variants: 2 },
+  turntable: { draw: turntable, variants: 1, key: (p) => (p.on ? "on" : "off") },
   bench: { draw: bench, variants: 1 },
   meeting_table: { draw: meetingTable, variants: 1 },
   coffee_table: { draw: coffeeTable, variants: 1 },
@@ -49,6 +64,8 @@ const GENS: Record<string, ItemGen> = {
   server_rack: { draw: serverRack, variants: 3 },
   crt_terminal: { draw: crtTerminal, variants: 1 },
   coffee_machine: { draw: coffeeMachine, variants: 1 },
+  side_table: { draw: sideTable, variants: 1 },
+  cupboard: { draw: cupboard, variants: 1 },
   screen_wall: { draw: screenWall, variants: 1 },
   whiteboard: { draw: whiteboard, variants: 1 },
   notice_board: { draw: noticeBoard, variants: 3 },
@@ -63,22 +80,41 @@ const GENS: Record<string, ItemGen> = {
       return `${shut}|${p._part ?? "edge"}|${p.glass ? "g" : ""}`;
     },
   },
-  rug: { draw: rug, variants: 1 },
+  rug: { draw: rug, variants: 3, key: painted },
   standup_mat: { draw: standupMat, variants: 1 },
   column: { draw: column, variants: 2 },
-  sofa: { draw: sofa, variants: 3 },
-  lamp: { draw: lamp, variants: 1, key: (p) => (p.on === false ? "off" : "on") },
+  sofa: { draw: sofa, variants: 3, key: painted },
+  lamp: { draw: lamp, variants: 3, key: (p) => `${p.on === false ? "off" : "on"}|${painted(p)}` },
   plant: { draw: plant, variants: PLANT_VARIANTS, key: (p) => (typeof p.variant === "number" ? `v${p.variant}` : "") },
   board_wall: { draw: boardWall, variants: 1 },
+  // the rooms' clutter as real objects: what it is (props.d) and its seeded look
+  // (tabletops are drawn standing on z 0; the engine lifts them to their surface)
+  decor: { draw: (s, p) => dressing(s, decorKind(p, "plant"), 0, decorSeed(p)), variants: 1, key: decorKey },
+  tabletop: { draw: (s, p) => dressing(s, decorKind(p, "mug"), 0, decorSeed(p)), variants: 1, key: decorKey },
+  frame: { draw: (s, p) => dressing(s, "frame", 0, decorSeed(p)), variants: 1, key: decorKey },
 };
+
+function decorKind(p: Props, fallback: DressKind): DressKind {
+  return (typeof p.d === "string" ? p.d : fallback) as DressKind;
+}
+function decorSeed(p: Props): number {
+  const s = Number(p.seed);
+  return Number.isFinite(s) ? s : 0.5;
+}
+function decorKey(p: Props): string {
+  return `${p.d ?? ""}|${decorSeed(p).toFixed(3)}`;
+}
 
 export function hasItemArt(kind: string): boolean {
   return Object.hasOwn(GENS, kind);
 }
 
-function variantOf(kind: string, id: string): number {
-  const g = GENS[kind];
-  return Math.floor(seedOf(id) * g.variants);
+// The look: props.variant (chosen in build mode's Design tool), else seeded by id.
+function variantOf(o: ItemRef): number {
+  return lookOf(o, seedOf(o.id));
+}
+function variantsOf(kind: string): number {
+  return entry(kind).variants ?? GENS[kind].variants;
 }
 
 export interface ItemRef {
@@ -91,7 +127,7 @@ export interface ItemRef {
 // Texture cache key: equal drawings share one texture.
 export function itemKey(o: ItemRef, slice: string, group: Group, res: number): string {
   const g = GENS[o.kind];
-  return `it|${o.kind}|${o.rot}|${slice}|${group}|${variantOf(o.kind, o.id)}|${g.key?.(o.props ?? {}) ?? ""}|${res}`;
+  return `it|${o.kind}|${o.rot}|${slice}|${group}|${variantOf(o)}|${g.key?.(o.props ?? {}) ?? ""}|${res}`;
 }
 
 // Wall items hang on the face of the thin wall along their tile's north edge.
@@ -106,7 +142,7 @@ function sketch(o: ItemRef, clip: Clip | null, group: Group): Sketch {
     h: e.h,
     clip,
     group,
-    seed: (variantOf(o.kind, o.id) + 0.5) / g.variants,
+    seed: (variantOf(o) + 0.5) / variantsOf(o.kind),
     offset: e.wall ? [0, WALL_FACE] : undefined,
   });
   g.draw(s, o.props ?? {});

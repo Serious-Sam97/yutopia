@@ -6,3 +6,6 @@ import "./whiteboard.ts";
 import "./vortex.ts";
 import "./mapedit.ts";
 import "./history.ts";
+import "./furnish.ts";
+import "./held.ts";
+import "./play.ts";

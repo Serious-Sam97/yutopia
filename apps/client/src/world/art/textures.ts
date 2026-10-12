@@ -2,22 +2,33 @@
 
 import type { AvatarLayers, Emote } from "@yutopia/shared";
 import { ImageSource, Texture } from "pixi.js";
-import { avatarSvg, type Rim, type View } from "./avatar-svg";
+import type { Face, PartArt } from "./avatar-rig";
+import type { Rim, View } from "./avatar-svg";
 import { emoteSvg } from "./emotes";
+import { HELD_BOX, heldSvg } from "./held";
+import { people } from "./people-load";
+import { svgDoc } from "./svgdoc";
 import { type VortexMood, vortexSvg } from "./vortex/vortexArt";
 
-// SVG art → GPU textures, drawn lazily and kept in a small LRU (each person
-// only ever needs the views they're actually seen in).
-const MAX = 480;
+// SVG art → GPU textures, drawn lazily and kept in an LRU (each person only
+// ever needs the views they're actually seen in). Never evicts a texture used
+// in the last moments (a sprite may still show it).
+const MAX = 3000;
+const KEEP_MS = 1500;
 const cache = new Map<string, Texture>();
+const used = new Map<string, number>();
 const pending = new Set<string>();
 
 function touch(key: string, tex: Texture) {
+  const now = performance.now();
   cache.delete(key);
   cache.set(key, tex);
+  used.set(key, now);
   while (cache.size > MAX) {
     const [old, t] = cache.entries().next().value as [string, Texture];
+    if (now - (used.get(old) ?? 0) < KEEP_MS) break; // everything left is in use
     cache.delete(old);
+    used.delete(old);
     t.destroy(true);
   }
 }
@@ -49,7 +60,7 @@ function get(key: string, make: () => string): Texture | null {
   return null;
 }
 
-// Passing frames (0, 2) share a drawing; 1 and 3 are the strides.
+// A person's whole drawing at rest (what shows while their rig's parts decode).
 // The rim light follows the hour: warm and sky blue by day, neon at night.
 export function avatarTexture(
   a: AvatarLayers,
@@ -58,13 +69,22 @@ export function avatarTexture(
   sitting: boolean,
   rim: Rim = "day",
 ): Texture | null {
-  const f = sitting ? 0 : frame % 2 === 0 ? 0 : frame % 4;
-  const base = `p|${a.body}|${a.skin}|${a.hair}|${a.hairColor}|${a.top}|${a.topColor}|${a.bottom}|${a.bottomColor}|${a.accessory}|${a.accessoryColor}|${a.style}|${a.gender}|${view}`;
-  const tex = get(`${base}|${f}|${sitting ? 1 : 0}|${rim}`, () => avatarSvg(a, view, f, sitting, 2, rim));
-  // a facing's walk frames load together, so a step never waits for its drawing
-  if (!sitting)
-    for (const w of [0, 1, 3]) if (w !== f) get(`${base}|${w}|0|${rim}`, () => avatarSvg(a, view, w, false, 2, rim));
-  return tex;
+  const base = `p|${JSON.stringify(a)}|${view}`;
+  const P = people();
+  if (!P) return null; // the people chunk is still loading
+  return get(`${base}|${frame}|${sitting ? 1 : 0}|${rim}`, () => P.avatarSvg(a, view, frame, sitting, 2, rim));
+}
+
+// One part of a person's rig (avatar-rig.ts), `RIG_PX` texture px per board
+// unit. `key` names the look, view, seat and light it belongs to.
+export const RIG_PX = 2;
+export function rigPartTexture(key: string, part: PartArt, face?: Face, svg?: string): Texture | null {
+  return get(`r|${key}|${part.name}${face ? `|${face}` : ""}`, () => svgDoc(svg ?? part.svg, part.box, RIG_PX));
+}
+
+// What someone carries (art/held.ts), at the rig's density.
+export function heldTexture(kind: string, color: string, level: number): Texture | null {
+  return get(`h|${kind}|${color}|${level}`, () => svgDoc(heldSvg(kind, color, level), HELD_BOX, RIG_PX));
 }
 
 // Vortex exactly as Yondra draws him (vortexSvg), one texture per mood.

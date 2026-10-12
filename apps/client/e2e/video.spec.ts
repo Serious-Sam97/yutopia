@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { chromium, expect, test } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, token, walkTo } from "./helpers";
+import { chromium, expect } from "@playwright/test";
+import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
 
 // A camera turned off is a muted track that stays published: the bubble over the
 // person must go away (no black square) and come back when the camera is on again.

@@ -5,15 +5,10 @@ import {
   areaAt,
   type ChatScope,
   type ClientMessages,
-  canPlace,
   dirFromDelta,
   doorCentre,
-  doorEdge,
-  type Edge,
   EMOTES,
   type Emote,
-  edgeAt,
-  edgeBlocker,
   entry,
   FLOORS,
   findPath,
@@ -24,10 +19,8 @@ import {
   hearingGain,
   isPrivate,
   isTheme,
-  isWallEdge,
   type MapDef,
   moveStep,
-  nearestEdge,
   type Point,
   parseAvatar,
   ROOM_NAME,
@@ -38,7 +31,6 @@ import {
   stereoPan,
   TICK_HZ,
   tileAt,
-  VOID,
   WALK_SPEED,
   type WbItem,
   type WorldObjectDef,
@@ -49,7 +41,9 @@ import { disconnectEcho, getEcho } from "@/lib/echo";
 import { tr } from "@/lib/i18n";
 import { deviceQuality, prefs, type Quality, resolveQuality, subscribePrefs } from "@/lib/prefs";
 import { mixer } from "./audio";
+import type { BuildController } from "./build/controller";
 import { type AvatarState, WorldEngine } from "./engine";
+import { machineSound, pianoNote } from "./foley";
 import { Media } from "./media";
 import { radio, sound } from "./sound";
 import { hud, type Person, toast } from "./store";
@@ -174,6 +168,7 @@ export class WorldController {
       onPointerWorld: (x, y) => this.buildHover(x, y),
       onPointerDown: (x, y) => this.buildDown(x, y),
       onPointerUp: (x, y) => this.buildUp(x, y),
+      onWheel: (dy) => this.build?.wheel(dy) ?? false,
     };
     this.offPrefs = subscribePrefs(() => this.engine?.setQuality(this.qualityNow(), prefs().reducedMotion));
     // Auto quality: step down a tier when this device can't keep up
@@ -394,6 +389,11 @@ export class WorldController {
       if (area) this.walkTo({ x: area.x + area.w / 2, y: area.y + area.h / 2 });
     });
     room.onMessage("toast", (m: ServerMessages["toast"]) => toast(m.text, m.tone ?? "info"));
+    // someone's playing the piano: from where they are (fades over ~10 tiles)
+    room.onMessage("piano:note", (m: ServerMessages["piano:note"]) => {
+      const d = Math.hypot(m.x - this.me.x, m.y - this.me.y);
+      pianoNote(m.n, Math.max(0, 1 - d / 10), (m.x - m.y - (this.me.x - this.me.y)) / 8);
+    });
     room.onMessage("build:history", (m: ServerMessages["build:history"]) =>
       hud.set((s) => ({ build: { ...s.build, history: m } })),
     );
@@ -475,6 +475,7 @@ export class WorldController {
 
   stop() {
     this.stopped = true;
+    this.build?.dispose();
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
     this.unbindInput();
@@ -486,6 +487,36 @@ export class WorldController {
     sound.stopAll();
     this.engine?.destroy();
     this.engine = null;
+  }
+
+  private heldShown = "";
+  putDown() {
+    this.send("item:drop", {});
+  }
+
+  // What I'm busy with (shown on my body for everyone): a machine for a moment,
+  // or the arcade / piano / whiteboard while its panel is open.
+  private usingWhat = "";
+  private usingUntil = 0;
+  private busySent = "";
+  private syncBusy() {
+    const pk = hud.get().panel.kind;
+    const want =
+      pk === "arcade" || pk === "piano" || pk === "whiteboard"
+        ? pk
+        : performance.now() < this.usingUntil
+          ? this.usingWhat
+          : "";
+    if (want !== this.busySent) {
+      this.busySent = want;
+      this.send("use", { what: want });
+    }
+  }
+
+  // A note on the piano I'm at: heard here at once, sent to everyone else.
+  playPiano(id: string, n: number) {
+    pianoNote(n, 1, 0);
+    this.send("piano:note", { id, n });
   }
 
   // ── per frame ────────────────────────────────────────────────────────────
@@ -512,8 +543,15 @@ export class WorldController {
     const here = areaAt(this.map, this.me.x, this.me.y);
     const open = !isPrivate(here) && here?.kind !== "stage";
     engine.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
+    this.syncBusy();
     const localSid = room.sessionId;
     const lp = room.state.players.get(localSid);
+    // what I carry, for the HUD
+    const heldNow = lp?.held ? `${lp.held}|${lp.heldAt}` : "";
+    if (heldNow !== this.heldShown) {
+      this.heldShown = heldNow;
+      hud.set({ held: lp?.held ? { kind: lp.held, at: lp.heldAt } : null });
+    }
     if (lp)
       engine.upsertAvatar(
         localSid,
@@ -727,9 +765,32 @@ export class WorldController {
       if (front) this.walkTo(front, id);
       return;
     }
-    if (e.interact === "coffee") {
-      this.send("emote", { e: "coffee" });
-      toast(tr("coffeeMade"));
+    // turn to face it
+    const ox = o.x + w / 2;
+    const oy = o.y + h / 2;
+    if (Math.hypot(ox - this.me.x, oy - this.me.y) > 0.2)
+      this.me.d = dirFromDelta(ox - this.me.x, oy - this.me.y, this.me.d as 0);
+    if (e.interact === "coffee" || e.interact === "water" || e.interact === "vending") {
+      // the machine does its thing (a moment, its sound), then hands you a
+      // drink, sipped little by little (shared/held.ts)
+      if (performance.now() < this.usingUntil) return;
+      const how = {
+        coffee: ["brew", 1600, "coffeeMade"],
+        water: ["pour", 1000, "waterPoured"],
+        vending: ["clunk", 900, "sodaBought"],
+      } as const;
+      const [snd, ms, msg] = how[e.interact];
+      this.usingWhat = e.interact;
+      this.usingUntil = performance.now() + ms;
+      machineSound(snd);
+      setTimeout(() => {
+        this.send("item:take", { id });
+        toast(tr(msg));
+      }, ms);
+      return;
+    }
+    if (e.interact === "piano") {
+      this.onOpenPanel("piano", id);
       return;
     }
     if (e.interact === "lamp") {
@@ -990,385 +1051,50 @@ export class WorldController {
     this.engine?.setClock(now.getHours() + now.getMinutes() / 60);
   }
 
-  // ── build mode ───────────────────────────────────────────────────────────
-  private hoverTile = { x: -1, y: -1 };
-
-  private ghostDef(tx: number, ty: number): WorldObjectDef {
-    const b = hud.get().build;
-    const held = b.holding ? this.engine?.getObject(b.holding) : undefined;
-    return held
-      ? { ...held, x: tx, y: ty, rot: b.rot }
-      : {
-          id: "ghost",
-          kind: b.kind,
-          x: tx,
-          y: ty,
-          rot: b.rot,
-          props: b.props ?? (b.kind === "chair" ? { desk: true } : undefined),
-        };
+  // ── build mode: its own chunk (world/build), loaded when an owner opens it ──
+  build: BuildController | null = null;
+  private buildLoading: Promise<void> | null = null;
+  loadBuild(): Promise<void> {
+    if (this.build) return Promise.resolve();
+    this.buildLoading ??= import("./build/controller").then((m) => {
+      if (this.stopped) return;
+      this.build = new m.BuildController(this);
+      this.build.refresh();
+    });
+    return this.buildLoading;
   }
-
   buildHover(x: number, y: number) {
-    if (!hud.get().build.on || !this.engine) return;
-    const bb = hud.get().build;
-    const br = this.brushNow();
-    if (bb.tool === "walls" && this.boxing()) {
-      const tx = Math.floor(x);
-      const ty = Math.floor(y);
-      if (tx === this.hoverTile.x && ty === this.hoverTile.y) return;
-      this.hoverTile = { x: tx, y: ty };
-      if (this.dragFrom) this.engine.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
-      return;
-    }
-    if (bb.tool === "walls" && (br.startsWith("w:") || br.startsWith("door"))) {
-      const e = this.edgeAtPointer(x, y);
-      if (this.hoverEdge && e.x === this.hoverEdge.x && e.y === this.hoverEdge.y && e.dir === this.hoverEdge.dir)
-        return;
-      this.hoverEdge = e;
-      if (this.painting) this.paintEdge(e);
-      this.refreshGhost();
-      return;
-    }
-    const tx = Math.floor(x);
-    const ty = Math.floor(y);
-    if (tx === this.hoverTile.x && ty === this.hoverTile.y) return;
-    this.hoverTile = { x: tx, y: ty };
-    const b = hud.get().build;
-    if (b.tool === "walls" && this.painting) this.paintAt(tx, ty);
-    if (b.tool === "rooms" && this.dragFrom) this.engine.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
-    this.refreshGhost();
+    this.build?.hover(x, y);
   }
-
-  // ── walls / rooms tools ──
-  private painting = false;
-  private paintQueue = new Map<string, { x: number; y: number; ch: string }>();
-  private paintTimer: ReturnType<typeof setTimeout> | null = null;
-  private dragFrom: { x: number; y: number } | null = null;
-
-  private hoverEdge: Edge | null = null;
-  private dragDir: "h" | "v" | null = null; // a wall drag stays on one line direction
-
-  // The edge under the pointer; while dragging a wall, along the drag's direction
-  // only (so passing over a corner never paints a stray wall across the line).
-  private edgeAtPointer(x: number, y: number): Edge {
-    if (this.painting && this.dragDir === "v") return { x: Math.round(x), y: Math.floor(y), dir: "v" };
-    if (this.painting && this.dragDir === "h") return { x: Math.floor(x), y: Math.round(y), dir: "h" };
-    return nearestEdge(x, y);
-  }
-  private edgeQueue = new Map<string, Edge & { ch: string }>();
-
-  // What a wall brush puts on an edge: a material, a window in the wall that's
-  // there (plaster if none), or no wall.
-  private edgeChar(e: Edge): string {
-    const brush = this.brushNow();
-    if (brush !== "w:window") return brush.slice(2);
-    const cur = edgeAt(this.map, e);
-    return isWallEdge(cur) && /^[pwfbk]$/.test(cur) ? cur.toUpperCase() : "P";
-  }
-
-  private paintEdge(e: Edge) {
-    this.edgeQueue.set(`${e.dir}${e.x},${e.y}`, { ...e, ch: this.edgeChar(e) });
-    if (!this.paintTimer) this.paintTimer = setTimeout(() => this.flushPaint(), 80);
-  }
-
-  private paintAt(tx: number, ty: number) {
-    const br = this.brushNow();
-    if (br.startsWith("door") || br.startsWith("w:")) return;
-    this.paintQueue.set(`${tx},${ty}`, { x: tx, y: ty, ch: br });
-    if (!this.paintTimer) this.paintTimer = setTimeout(() => this.flushPaint(), 80);
-  }
-
-  private flushPaint() {
-    if (this.paintTimer) clearTimeout(this.paintTimer);
-    this.paintTimer = null;
-    if (this.edgeQueue.size) {
-      this.send("map:walls", { edges: [...this.edgeQueue.values()] });
-      this.edgeQueue.clear();
-    }
-    if (!this.paintQueue.size) return;
-    this.send("map:paint", { cells: [...this.paintQueue.values()] });
-    this.paintQueue.clear();
-  }
-
-  private dragRect(tx: number, ty: number) {
-    const a = this.dragFrom ?? { x: tx, y: ty };
-    return { x: Math.min(a.x, tx), y: Math.min(a.y, ty), w: Math.abs(tx - a.x) + 1, h: Math.abs(ty - a.y) + 1 };
-  }
-
   buildDown(x: number, y: number) {
-    const b = hud.get().build;
-    if (!b.on) return;
-    const tx = Math.floor(x);
-    const ty = Math.floor(y);
-    const br = this.brushNow();
-    if (b.tool === "walls" && this.boxing()) {
-      this.dragFrom = { x: tx, y: ty };
-      this.engine?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
-    } else if (b.tool === "walls" && b.paintMode === "fill") {
-      // a click (buildClick) fills
-    } else if (b.tool === "walls" && br.startsWith("w:")) {
-      const e = nearestEdge(x, y);
-      this.painting = true;
-      this.dragDir = e.dir;
-      this.paintEdge(e);
-    } else if (b.tool === "walls" && !br.startsWith("door")) {
-      this.painting = true;
-      this.paintAt(tx, ty);
-    } else if (b.tool === "rooms") {
-      this.dragFrom = { x: tx, y: ty };
-      this.engine?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
-    }
+    this.build?.down(x, y);
   }
-
   buildUp(x: number, y: number) {
-    const b = hud.get().build;
-    if (this.painting) {
-      this.painting = false;
-      this.dragDir = null;
-      this.flushPaint();
-    }
-    if (b.tool === "walls" && this.dragFrom) {
-      const r = this.dragRect(Math.floor(x), Math.floor(y));
-      this.dragFrom = null;
-      this.engine?.setRectGhost(null);
-      this.paintBox(r);
-    }
-    if (b.tool === "rooms" && this.dragFrom) {
-      const r = this.dragRect(Math.floor(x), Math.floor(y));
-      this.dragFrom = null;
-      if (r.w >= 2 && r.h >= 2) hud.set({ build: { ...hud.get().build, roomDraft: r } });
-      else this.engine?.setRectGhost(null);
-    }
+    this.build?.up(x, y);
   }
-
-  clearRoomGhost() {
-    this.engine?.setRectGhost(null);
-  }
-
-  refreshGhost() {
-    const engine = this.engine;
-    if (!engine) return;
-    const bt = hud.get().build;
-    engine.passAvatars = bt.on;
-    if (!bt.on) return engine.setGhost(null, false);
-    if (bt.tool === "walls") {
-      const e = this.hoverEdge;
-      const br = this.brushNow();
-      if (this.boxing() || (bt.paintMode === "fill" && !br.startsWith("door"))) {
-        engine.setEdgeGhost(null, false);
-        return engine.setGhost(null, false);
-      }
-      if (br.startsWith("door") && e) {
-        engine.setEdgeGhost(null, false);
-        const d = {
-          id: "ghost-door",
-          kind: "door",
-          x: e.x,
-          y: e.y,
-          rot: e.dir === "h" ? 0 : 1,
-          props: { state: "closed", glass: br === "door:glass" },
-        };
-        return engine.setGhost(d, canPlace(this.map, engine.allObjects(), d));
-      }
-      engine.setGhost(null, false);
-      if (br.startsWith("w:") && e)
-        return engine.setEdgeGhost(e, edgeBlocker(this.map, engine.allObjects(), e, this.edgeChar(e)) === null);
-      return engine.setEdgeGhost(null, false);
-    }
-    engine.setEdgeGhost(null, false);
-    if (bt.tool !== "furniture") return engine.setGhost(null, false);
-    const def = this.ghostDef(this.hoverTile.x, this.hoverTile.y);
-    const others = engine.allObjects().filter((o) => o.id !== def.id);
-    const bodies = this.room ? [...this.room.state.players.values()].map((p: S) => ({ x: p.x, y: p.y })) : [];
-    const fits = canPlace(this.map, others, def, bodies);
-    engine.setGhost(def, fits);
-    if (bt.fits !== fits) hud.set((s) => ({ build: { ...s.build, fits } }));
-  }
-
   buildClick(x: number, y: number) {
-    const b = hud.get().build;
-    if (b.pickSpawn) {
-      this.send("map:spawn", { x: Math.floor(x), y: Math.floor(y) });
-      hud.set({ build: { ...b, pickSpawn: false } });
-      return;
-    }
-    if (b.tool === "walls") {
-      if (b.paintMode === "fill" && !b.brush.startsWith("door")) return this.fillAt(Math.floor(x), Math.floor(y));
-      if (b.brush.startsWith("door")) {
-        // a door on the edge you clicked next to (click a door to remove it)
-        const e = nearestEdge(x, y);
-        const hit = this.engine?.allObjects().find((o) => {
-          if (o.kind !== "door") return false;
-          const d = doorEdge(o);
-          return d.dir === e.dir && d.x === e.x && d.y === e.y;
-        });
-        if (hit) this.send("obj:remove", { id: hit.id });
-        else
-          this.send("obj:put", {
-            kind: "door",
-            x: e.x,
-            y: e.y,
-            rot: e.dir === "h" ? 0 : 1,
-            ...(b.brush === "door:glass" ? { props: { glass: true } } : {}),
-          });
-      }
-      return;
-    }
-    if (b.tool === "rooms") return;
-    if (b.tool === "desks") {
-      const hit = this.engine?.objectAtTile(Math.floor(x), Math.floor(y));
-      if (hit && entry(hit.kind).seat) hud.set({ build: { ...b, deskDraft: hit.id } });
-      return;
-    }
-    if (b.tool === "map") return;
-    const tx = Math.floor(x);
-    const ty = Math.floor(y);
-    if (b.holding) {
-      const def = this.ghostDef(tx, ty);
-      this.send("obj:put", {
-        id: def.id,
-        kind: def.kind,
-        x: tx,
-        y: ty,
-        rot: b.rot,
-        refId: def.refId ?? null,
-        props: def.props,
-      });
-      hud.set({ build: { ...b, holding: null } });
-    } else {
-      const hit = this.engine?.objectAtTile(tx, ty);
-      if (hit && entry(hit.kind).buildable) {
-        hud.set({ build: { ...b, holding: hit.id, rot: hit.rot ?? 0 } });
-      } else {
-        const def = this.ghostDef(tx, ty);
-        this.send("obj:put", { kind: def.kind, x: tx, y: ty, rot: b.rot, props: def.props });
-      }
-    }
-    setTimeout(() => this.refreshGhost(), 60);
+    this.build?.click(x, y);
   }
-
   buildKey(key: string): boolean {
-    const b = hud.get().build;
-    if (!b.on) return false;
-    if (key === "r") hud.set({ build: { ...b, rot: (b.rot + 1) % 4 } });
-    else if ((key === "delete" || key === "backspace") && b.holding) {
-      this.send("obj:remove", { id: b.holding });
-      hud.set({ build: { ...b, holding: null } });
-    } else if (key === "c" && b.tool === "furniture") this.copyItem();
-    else if (key === "escape") hud.set({ build: { ...b, on: !!b.holding || !!b.props, holding: null, props: null } });
-    else return false;
-    this.refreshGhost();
-    return true;
+    return this.build?.key(key) ?? false;
   }
-
-  // The brush a paint stroke uses: Erase takes walls or floors away, whichever
-  // the picked brush paints.
-  private brushNow(): string {
-    const b = hud.get().build;
-    if (b.paintMode !== "erase") return b.brush;
-    return b.brush.startsWith("w:") || b.brush.startsWith("door") ? "w:." : VOID;
+  refreshGhost() {
+    this.build?.refresh();
   }
-  private boxing(): boolean {
-    const b = hud.get().build;
-    return b.paintMode === "box" && !b.brush.startsWith("door");
+  clearRoomGhost() {
+    this.build?.clearRoomGhost();
   }
-
-  // Box: floors fill the rectangle, walls run around it.
-  private paintBox(r: { x: number; y: number; w: number; h: number }) {
-    const br = this.brushNow();
-    if (br.startsWith("w:")) {
-      const edges: Edge[] = [];
-      for (let x = r.x; x < r.x + r.w; x++) edges.push({ x, y: r.y, dir: "h" }, { x, y: r.y + r.h, dir: "h" });
-      for (let y = r.y; y < r.y + r.h; y++) edges.push({ x: r.x, y, dir: "v" }, { x: r.x + r.w, y, dir: "v" });
-      // windows check the walls painted before them: walls first
-      const all = edges.map((e) => ({ ...e, ch: this.edgeChar(e) }));
-      for (let i = 0; i < all.length; i += 600) this.send("map:walls", { edges: all.slice(i, i + 600) });
-      return;
-    }
-    const cells: { x: number; y: number; ch: string }[] = [];
-    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) cells.push({ x, y, ch: br });
-    for (let i = 0; i < cells.length; i += 600) this.send("map:paint", { cells: cells.slice(i, i + 600) });
+  seatAt(clientX: number, clientY: number): WorldObjectDef | null {
+    return this.build?.seatAt(clientX, clientY) ?? null;
   }
-
-  // Fill room: floors flood the same floor up to walls and doors; walls repaint
-  // the room you click in.
-  private fillAt(tx: number, ty: number) {
-    const br = this.brushNow();
-    if (br.startsWith("w:")) {
-      const area = areaAt(this.map, tx + 0.5, ty + 0.5);
-      const mat = br.slice(2);
-      if (!area) return toast(tr("buildFillOutside"), "warn");
-      if (!/^[pwfbkg]$/.test(mat)) return toast(tr("buildFillMaterial"), "warn");
-      this.send("map:room:walls", { key: area.key, wall: mat });
-      return;
-    }
-    const start = tileAt(this.map, tx, ty);
-    if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height || start === br) return;
-    const doors = new Set(
-      (this.engine?.allObjects() ?? [])
-        .filter((o) => o.kind === "door")
-        .map((o) => {
-          const d = doorEdge(o);
-          return `${d.dir}${d.x},${d.y}`;
-        }),
-    );
-    const blocked = (e: Edge) => doors.has(`${e.dir}${e.x},${e.y}`) || isWallEdge(edgeAt(this.map, e));
-    const seen = new Set([`${tx},${ty}`]);
-    const queue = [{ x: tx, y: ty }];
-    const cells: { x: number; y: number; ch: string }[] = [];
-    while (queue.length && cells.length < 2400) {
-      const c = queue.shift() as Point;
-      cells.push({ x: c.x, y: c.y, ch: br });
-      const next: [number, number, Edge][] = [
-        [c.x + 1, c.y, { x: c.x + 1, y: c.y, dir: "v" }],
-        [c.x - 1, c.y, { x: c.x, y: c.y, dir: "v" }],
-        [c.x, c.y + 1, { x: c.x, y: c.y + 1, dir: "h" }],
-        [c.x, c.y - 1, { x: c.x, y: c.y, dir: "h" }],
-      ];
-      for (const [nx, ny, e] of next) {
-        const k = `${nx},${ny}`;
-        if (seen.has(k) || nx < 0 || ny < 0 || nx >= this.map.width || ny >= this.map.height) continue;
-        if (tileAt(this.map, nx, ny) !== start || blocked(e)) continue;
-        seen.add(k);
-        queue.push({ x: nx, y: ny });
-      }
-    }
-    for (let i = 0; i < cells.length; i += 600) this.send("map:paint", { cells: cells.slice(i, i + 600) });
+  showSeatDrop(at: { x: number; y: number } | null) {
+    this.build?.showSeatDrop(at);
   }
-
-  // C: place copies of what you hold, or of the item under the pointer.
-  private copyItem() {
-    const b = hud.get().build;
-    const src = b.holding
-      ? this.engine?.getObject(b.holding)
-      : this.engine?.objectAtTile(this.hoverTile.x, this.hoverTile.y);
-    if (!src || !entry(src.kind).buildable) return;
-    const { ownerId: _o, ownerName: _n, roomKey: _r, ...props } = src.props ?? {};
-    hud.set({ build: { ...b, kind: src.kind, rot: src.rot ?? 0, props, holding: null } });
-    toast(tr("buildCopying").replace("{item}", entry(src.kind).label));
-  }
-
   undo() {
     this.send("build:undo", {});
   }
   redo() {
     this.send("build:redo", {});
-  }
-
-  // Desks tool: drag a person from the panel onto a seat.
-  seatAt(clientX: number, clientY: number): WorldObjectDef | null {
-    const w = this.engine?.screenToWorld(clientX, clientY);
-    if (!w) return null;
-    const o = this.engine?.objectAtTile(Math.floor(w.x), Math.floor(w.y));
-    return o && entry(o.kind).seat ? o : null;
-  }
-  showSeatDrop(at: { x: number; y: number } | null) {
-    if (!at) return this.engine?.setRectGhost(null);
-    const w = this.engine?.screenToWorld(at.x, at.y);
-    if (!w) return;
-    const seat = this.seatAt(at.x, at.y);
-    const t = seat ?? { x: Math.floor(w.x), y: Math.floor(w.y) };
-    this.engine?.setRectGhost({ x: t.x, y: t.y, w: 1, h: 1, ok: !!seat });
   }
 
   // ── build mode support ───────────────────────────────────────────────────
@@ -1419,12 +1145,12 @@ export class WorldController {
     });
     const playing = hud.get().radio.playing;
     for (const o of engine.allObjects()) {
-      if (o.kind === "chair" || o.kind === "armchair") {
+      if (o.kind === "chair" || o.kind === "armchair" || o.kind === "beanbag") {
         const occupied = sitting.has(`${o.x},${o.y}`);
         if (!!o.props?.occupied !== occupied) engine.upsertObject({ ...o, props: { ...(o.props ?? {}), occupied } });
         continue;
       }
-      if (o.kind === "radio") {
+      if (o.kind === "radio" || o.kind === "turntable") {
         if (!!o.props?.on !== playing) engine.upsertObject({ ...o, props: { ...(o.props ?? {}), on: playing } });
         continue;
       }
@@ -1480,6 +1206,11 @@ export class WorldController {
       return;
     if (hud.get().panel.kind && e.key !== "Escape") return;
     const key = e.key.toLowerCase();
+    if (hud.get().build.on && (e.metaKey || e.ctrlKey) && key === "d") {
+      e.preventDefault();
+      this.build?.duplicate();
+      return;
+    }
     if (hud.get().build.on && (e.metaKey || e.ctrlKey) && (key === "z" || key === "y")) {
       e.preventDefault();
       if (key === "y" || e.shiftKey) this.redo();
@@ -1548,6 +1279,9 @@ export class WorldController {
       emote: p.emote,
       mic: p.mic,
       bot: p.bot,
+      held: p.held,
+      heldAt: p.heldAt,
+      busy: p.busy,
     };
   }
 

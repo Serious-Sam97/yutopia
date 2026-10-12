@@ -150,9 +150,26 @@ export function crtTerminal(s: Sketch) {
   s.shadow(0.05, 0.15, 0.9, 0.75, 0.36, 0.4);
 }
 
-// Coffee corner: a cream cupboard with an espresso machine on top, cups, a
-// mug under the spout. Story: a sugar jar and a "descale me" note.
+// Espresso machine, drawn standing on z 0 (it goes on its cupboard, or any
+// counter): brushed steel, an amber display, a mug under the spout. Story: a
+// "descale me" note.
 export function coffeeMachine(s: Sketch) {
+  s.box({ x: 0.22, y: 0.18, w: 0.56, d: 0.44, z: 0, h: 20, mat: M.aluminium }, (d) => {
+    d.poly("s", fr("s", 0.62, 0.28, 0.72, 14, 18), K.graphite);
+    d.poly("s", fr("s", 0.62, 0.32, 0.46, 15, 17), K.amber, { glow: true });
+    d.poly("s", fe("s", 0.62, 0.62, 16, 0.025, 1.2, 8), K.red, { glow: true });
+    d.poly("s", fr("s", 0.62, 0.36, 0.64, 1, 3), "#4a463e");
+    // descale note (story)
+    d.poly("s", fr("s", 0.62, 0.58, 0.72, 4, 10), K.amberSoft, { stroke: "#a8721f", sw: 0.3 });
+  });
+  s.box({ x: 0.42, y: 0.62, w: 0.16, d: 0.08, z: 8, h: 3, mat: M.graphite, line: 0.6 });
+  s.cyl({ x: 0.5, y: 0.7, z: 0, r: 0.05, h: 5, mat: { c: K.cream } }, (d) =>
+    d.poly("t", te(5, 0.5, 0.7, 0.035), "#3b2416"),
+  );
+}
+
+// A cream cupboard with a walnut top: the coffee corner's counter.
+export function cupboard(s: Sketch) {
   s.box({ x: 0.08, y: 0.14, w: 0.84, d: 0.72, z: 0, h: 24, mat: M.cream, faces: { s: { c: K.creamDark } } }, (d) => {
     d.poly("s", fr("s", 0.86, 0.12, 0.49, 3, 21), sh(K.cream, 0.95), { stroke: "#b8a985", sw: 0.5 });
     d.poly("s", fr("s", 0.86, 0.51, 0.88, 3, 21), sh(K.cream, 0.95), { stroke: "#b8a985", sw: 0.5 });
@@ -160,27 +177,5 @@ export function coffeeMachine(s: Sketch) {
     d.poly("s", fr("s", 0.86, 0.06, 0.94, 0, 1.6), K.walnutDark);
   });
   s.box({ x: 0.04, y: 0.1, w: 0.92, d: 0.8, z: 24, h: 2, mat: M.walnut, line: 1 });
-  // the machine
-  s.box({ x: 0.22, y: 0.24, w: 0.56, d: 0.44, z: 26, h: 20, mat: M.aluminium }, (d) => {
-    d.poly("s", fr("s", 0.68, 0.28, 0.72, 40, 44), K.graphite);
-    d.poly("s", fr("s", 0.68, 0.32, 0.46, 41, 43), K.amber, { glow: true });
-    d.poly("s", fe("s", 0.68, 0.62, 42, 0.025, 1.2, 8), K.red, { glow: true });
-    d.poly("s", fr("s", 0.68, 0.36, 0.64, 27, 29), "#4a463e");
-    // descale note (story)
-    d.poly("s", fr("s", 0.68, 0.58, 0.72, 30, 36), K.amberSoft, { stroke: "#a8721f", sw: 0.3 });
-  });
-  s.box({ x: 0.42, y: 0.68, w: 0.16, d: 0.08, z: 34, h: 3, mat: M.graphite, line: 0.6 });
-  s.cyl({ x: 0.5, y: 0.76, z: 26, r: 0.05, h: 5, mat: { c: K.cream } }, (d) =>
-    d.poly("t", te(31, 0.5, 0.76, 0.035), "#3b2416"),
-  );
-  // cups on top + sugar jar
-  for (const [x, y] of [
-    [0.34, 0.36],
-    [0.46, 0.4],
-  ])
-    s.cyl({ x, y, z: 46, r: 0.045, h: 4, mat: { c: K.paper } });
-  s.cyl({ x: 0.82, y: 0.68, z: 26, r: 0.06, h: 7, mat: { c: "#d8e0d0", top: "#eef2e8" }, line: 0.8 }, (d) =>
-    d.poly("t", te(33, 0.82, 0.68, 0.045), K.rust),
-  );
   s.shadow(0.08, 0.14, 0.84, 0.72, 0.42, 0.3);
 }

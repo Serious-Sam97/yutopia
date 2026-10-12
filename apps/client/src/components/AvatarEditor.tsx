@@ -13,6 +13,11 @@ import { AvatarCanvas } from "@/components/AvatarCanvas";
 import { type Key, useTr } from "@/lib/i18n";
 
 type ShapeKey = keyof typeof AVATAR_OPTIONS;
+// shoes: cream, black, walnut, rust, olive, slate; frames: dark, tortoise, gold, rust, slate
+// options whose slug isn't how you'd say it
+const NAMES: Record<string, string> = { longskirt: "long skirt", hightops: "high-tops" };
+const SHOE_COLORS = ["#efe4cc", "#2a2420", "#5b3a26", "#b5562f", "#6e7b3a", "#3d4a5c"];
+const FRAME_COLORS = ["#2a2420", "#5b3a26", "#c39a4a", "#b5562f", "#3d4a5c"];
 const ROWS: { shape?: ShapeKey; color?: keyof AvatarLayers; palette?: string[]; label: Key }[] = [
   { shape: "style", label: "style" },
   { shape: "gender", label: "gender" },
@@ -24,8 +29,14 @@ const ROWS: { shape?: ShapeKey; color?: keyof AvatarLayers; palette?: string[]; 
   { color: "topColor", palette: CLOTH_COLORS, label: "topColor" },
   { shape: "bottom", label: "bottom" },
   { color: "bottomColor", palette: CLOTH_COLORS, label: "bottomColor" },
+  { shape: "shoes", label: "shoes" },
+  { color: "shoesColor", palette: SHOE_COLORS, label: "shoesColor" },
   { shape: "accessory", label: "accessory" },
   { color: "accessoryColor", palette: CLOTH_COLORS, label: "accessoryColor" },
+  { shape: "eyewear", label: "eyewear" },
+  { color: "eyewearColor", palette: FRAME_COLORS, label: "eyewearColor" },
+  { shape: "extra", label: "extra" },
+  { color: "extraColor", palette: CLOTH_COLORS, label: "extraColor" },
 ];
 
 // The avatar editor: turntable preview + every option. Used by the /avatar page
@@ -118,7 +129,9 @@ export function AvatarEditor({
                   className="deck-btn"
                   style={{ height: 36, fontSize: 11 }}
                 >
-                  {row.shape === "style" || row.shape === "gender" ? t(`${row.shape}_${opt}` as Key) : opt}
+                  {row.shape === "style" || row.shape === "gender"
+                    ? t(`${row.shape}_${opt}` as Key)
+                    : (NAMES[opt] ?? opt)}
                 </button>
               ))}
             {row.color &&

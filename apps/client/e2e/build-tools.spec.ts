@@ -125,12 +125,12 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await clickTile(page, 15, 10);
   await expect.poll(async () => (await kinds(page, "plant")).length).toBe(1);
   await clickTile(page, 15, 10); // pick it up
-  await page.keyboard.press("c");
+  await page.keyboard.press("c"); // a copy of it on the pointer (the original goes back)
   await clickTile(page, 17, 10);
   await expect.poll(async () => (await kinds(page, "plant")).length).toBe(2);
   const plants = await kinds(page, "plant");
   expect(plants.map((p) => `${p.x},${p.y}`).sort()).toEqual(["15,10", "17,10"]);
-  await page.keyboard.press("Escape"); // stop copying (build stays on)
+  // one copy per click (Shift+click keeps placing): back to the hand, build stays on
   await shot(page, "build-furnish");
 
   // A chair, then Bia dragged onto it from the Desks panel
