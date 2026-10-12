@@ -9,6 +9,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  type TrackPublication,
   VideoPresets,
 } from "livekit-client";
 import { prefs } from "@/lib/prefs";
@@ -36,6 +37,7 @@ export interface MediaEvents {
 export class Media {
   room: Room | null = null;
   private voices = new Map<string, VoiceChain>(); // uid → chain
+  private videos = new Map<string, HTMLVideoElement>(); // "uid:camera" / "uid:screen" → element
   private speaking = false;
   private hearUids = new Set<string>();
   private heardBy: string[] = [];
@@ -71,6 +73,9 @@ export class Media {
       .on(RoomEvent.ParticipantConnected, () => this.applySubscriptions())
       .on(RoomEvent.TrackSubscribed, (t, pub, p) => this.attach(t, pub, p))
       .on(RoomEvent.TrackUnsubscribed, (t, _pub, p) => this.detach(t, p))
+      // camera off = a muted track (still published): hide it until it's back on
+      .on(RoomEvent.TrackMuted, (pub, p) => this.videoMuted(pub, p, true))
+      .on(RoomEvent.TrackUnmuted, (pub, p) => this.videoMuted(pub, p, false))
       .on(RoomEvent.ActiveSpeakersChanged, (speakers: Participant[]) => {
         const on = speakers.some((s) => s.identity === room.localParticipant.identity);
         if (on !== this.speaking) {
@@ -131,8 +136,17 @@ export class Media {
       const el = track.attach() as HTMLVideoElement;
       el.muted = true;
       el.playsInline = true;
-      this.ev.onVideo(uid, el, pub.source === Track.Source.ScreenShare ? "screen" : "camera");
+      const kind = pub.source === Track.Source.ScreenShare ? "screen" : "camera";
+      this.videos.set(`${uid}:${kind}`, el);
+      this.ev.onVideo(uid, pub.isMuted ? null : el, kind);
     }
+  }
+
+  private videoMuted(pub: TrackPublication, p: Participant, muted: boolean) {
+    if (pub.kind !== Track.Kind.Video || p === this.room?.localParticipant) return;
+    const kind = pub.source === Track.Source.ScreenShare ? "screen" : "camera";
+    const el = this.videos.get(`${p.identity}:${kind}`);
+    if (el) this.ev.onVideo(p.identity, muted ? null : el, kind);
   }
 
   private detach(track: RemoteTrack, p: Participant) {
@@ -150,6 +164,7 @@ export class Media {
       }
     } else {
       const isScreen = track.source === Track.Source.ScreenShare;
+      this.videos.delete(`${uid}:${isScreen ? "screen" : "camera"}`);
       for (const el of track.detach()) el.remove();
       this.ev.onVideo(uid, null, isScreen ? "screen" : "camera");
     }

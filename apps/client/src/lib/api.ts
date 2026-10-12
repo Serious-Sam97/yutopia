@@ -61,6 +61,9 @@ export interface SpaceSummary {
   projectId: number | null;
   color: string | null;
   online: number;
+  projectName?: string | null;
+  theme?: string; // clouds | city | snow
+  people?: { userId: number; name: string; area: string | null; avatar: AvatarLayers }[]; // the first few inside
 }
 
 export interface Session {
@@ -135,6 +138,7 @@ export const yutopia = {
     api<{ spaces: SpaceSummary[]; avatar: AvatarLayers; user: { id: number; name: string } }>("/api/yutopia/spaces"),
   session: (spaceId: number) =>
     api<Session>("/api/yutopia/session", { method: "POST", body: JSON.stringify({ space_id: spaceId }) }),
+  avatar: () => api<{ avatar: AvatarLayers }>("/api/yutopia/avatar"),
   saveAvatar: (a: AvatarLayers) =>
     api<{ avatar: AvatarLayers }>("/api/yutopia/avatar", { method: "PUT", body: JSON.stringify(a) }),
   boards: (spaceId: number) => api<{ boards: BoardSummary[] }>(`/api/yutopia/spaces/${spaceId}/boards`),

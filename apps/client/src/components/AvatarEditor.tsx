@@ -41,7 +41,7 @@ export function AvatarEditor({
 }) {
   const t = useTr();
   const [a, setA] = useState<AvatarLayers>(initial);
-  const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [walk, setWalk] = useState(false);
   useEffect(() => setA(initial), [initial]);
 
@@ -56,7 +56,7 @@ export function AvatarEditor({
       await onSave(a);
       setState("saved");
     } catch {
-      setState("idle");
+      setState("failed"); // never fail silently: say so, keep the edits
     }
   }
 
@@ -91,6 +91,11 @@ export function AvatarEditor({
         >
           {state === "saved" ? `✓ ${t("saved")}` : t("save")}
         </button>
+        {state === "failed" && (
+          <p role="alert" className="mono text-xs mt-2" style={{ color: "#ff8a66" }}>
+            {t("lookNotSaved")}
+          </p>
+        )}
       </div>
     </div>
   );

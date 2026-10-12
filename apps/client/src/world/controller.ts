@@ -229,6 +229,7 @@ export class WorldController {
       if (this.stopped) return;
       this.wireRoom(room);
       hud.set({ phase: "ready" });
+      void this.syncLook();
     } catch (e) {
       if (reconnectToken) throw e;
       console.warn("[world] join failed", e);
@@ -455,6 +456,21 @@ export class WorldController {
       hud.set({ phase: "failed", error: tr("failed") });
     }
     this.reconnecting = false;
+  }
+
+  // The room learns your look from the join token, minted when the page loaded:
+  // after a rejoin (world restart, network) or a change saved elsewhere (the
+  // lobby's editor in another tab), tell it the look saved in Yondra.
+  async syncLook() {
+    try {
+      const { avatar } = await yutopia.avatar();
+      const room = this.room;
+      const me = room?.state.players.get(room.sessionId);
+      if (me && JSON.stringify(parseAvatar(me.avatar)) !== JSON.stringify(parseAvatar(avatar)))
+        this.send("avatar", { avatar });
+    } catch {
+      // offline or signed out: the room keeps what it has
+    }
   }
 
   stop() {
@@ -1502,6 +1518,7 @@ export class WorldController {
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
     window.addEventListener("pointerdown", this.onFirstGesture);
+    window.addEventListener("focus", this.onFocus);
   }
 
   private unbindInput() {
@@ -1509,7 +1526,13 @@ export class WorldController {
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
     window.removeEventListener("pointerdown", this.onFirstGesture);
+    window.removeEventListener("focus", this.onFocus);
   }
+
+  // back from another tab (maybe the lobby's avatar editor): pick up a saved look
+  private onFocus = () => {
+    if (this.room && hud.get().phase === "ready") void this.syncLook();
+  };
 
   // ── helpers ──────────────────────────────────────────────────────────────
   private avatarState(p: S, _local: boolean): AvatarState {

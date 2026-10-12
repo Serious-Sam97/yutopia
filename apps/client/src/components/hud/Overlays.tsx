@@ -136,7 +136,9 @@ export function VideoBubbles() {
   const entries: { key: string; x: number; y: number; video: HTMLVideoElement; name: string; speaking: boolean }[] = [];
   for (const p of people) {
     const v = videos[String(p.uid)];
-    if (v && p.hearing) entries.push({ key: p.sid, x: p.x, y: p.y, video: v, name: p.name, speaking: p.speaking });
+    // a bubble only while their camera is on (a muted camera is still a black track)
+    if (v && p.hearing && p.cam)
+      entries.push({ key: p.sid, x: p.x, y: p.y, video: v, name: p.name, speaking: p.speaking });
   }
   if (me && camOn && localVideo.current)
     entries.push({ key: "me", x: me.x, y: me.y, video: localVideo.current, name: me.name, speaking: me.speaking });

@@ -41,3 +41,31 @@ test("change your look in the studio; others see it live", async ({ browser }) =
     await api.put(`${API}/api/yutopia/avatar`, { data: before });
   }
 });
+
+// A look saved elsewhere (the lobby's editor in another tab, or before a world
+// restart rejoined with an old token) reaches the room when you come back.
+test("a look saved elsewhere reaches the room when you come back to the tab", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const ta = await token(ANA);
+  const s = await spaceId(ta);
+  const api = await request.newContext({
+    extraHTTPHeaders: { Authorization: `Bearer ${ta}`, Accept: "application/json" },
+  });
+  const before = (await (await api.get(`${API}/api/yutopia/avatar`)).json()).avatar;
+  const ana = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  try {
+    await enter(ana, ta, s);
+    const mine = () =>
+      ana.evaluate(() => {
+        const w = (window as any).__yutopia;
+        return JSON.parse(w.personByUid(w.myUid())?.avatar ?? "{}").hairColor;
+      });
+    const color = before.hairColor === "#d9b26a" ? "#6e7b3a" : "#d9b26a";
+    await api.put(`${API}/api/yutopia/avatar`, { data: { ...before, hairColor: color } });
+    expect(await mine()).toBe(before.hairColor); // the room still has the old look
+    await ana.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect.poll(mine, { timeout: 5000 }).toBe(color);
+  } finally {
+    await api.put(`${API}/api/yutopia/avatar`, { data: before });
+  }
+});

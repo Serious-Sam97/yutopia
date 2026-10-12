@@ -1,7 +1,7 @@
 "use client";
 
-import { parseAvatar } from "@yutopia/shared";
-import { useMemo } from "react";
+import { type AvatarLayers, parseAvatar } from "@yutopia/shared";
+import { useEffect, useState } from "react";
 import { AvatarEditor } from "@/components/AvatarEditor";
 import { yutopia } from "@/lib/api";
 import { useTr } from "@/lib/i18n";
@@ -14,7 +14,14 @@ import { Panel } from "./Panel";
 export function AvatarPanel() {
   const t = useTr();
   const w = useWorld();
-  const initial = useMemo(() => parseAvatar(w?.personByUid(w.myUid())?.avatar), [w]);
+  // start from the look saved in Yondra (the room's copy can be older)
+  const [initial, setInitial] = useState<AvatarLayers>(() => parseAvatar(w?.personByUid(w.myUid())?.avatar));
+  useEffect(() => {
+    yutopia
+      .avatar()
+      .then((r) => setInitial(parseAvatar(r.avatar)))
+      .catch(() => {});
+  }, []);
   return (
     <Panel title={t("myLook")}>
       <AvatarEditor
