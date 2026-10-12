@@ -110,6 +110,8 @@ interface BoxSpec {
   line?: number; // outline width (default 1.3)
   glow?: boolean; // the whole box is emissive
   bevel?: boolean; // light line on the top's front edges (default true)
+  op?: number; // see-through faces (glass)
+  capped?: boolean; // another box sits on top: its top face stops exactly at a slice's cut
 }
 
 export interface Draw {
@@ -234,6 +236,20 @@ export class Sketch {
     );
     return `url(#${id})`;
   }
+  // A gradient in the drawing's own coordinates (not per shape), from p1 to p2:
+  // every slice of a cut-up box computes the same colour at the same spot.
+  gradAt(a: string, b: string, p1: Pt, p2: Pt): string {
+    const key = `u${a}${b}${f2(p1[0])},${f2(p1[1])},${f2(p2[0])},${f2(p2[1])}`;
+    const found = this.defs.get(key);
+    if (found) return `url(#${found.split('"')[1]})`;
+    const id = `u${this.defs.size}`;
+    this.defs.set(
+      key,
+      `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${f2(p1[0])}" y1="${f2(p1[1])}" x2="${f2(p2[0])}" y2="${f2(p2[1])}"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`,
+    );
+    return `url(#${id})`;
+  }
+
   radial(stops: [number, string, number][], id?: string): string {
     const key = `r${JSON.stringify(stops)}`;
     const found = this.defs.get(key);
@@ -283,6 +299,24 @@ export class Sketch {
     const Sb = P(x1, y1, z0);
     const Wb = P(x0, y1, z0);
     for (const p of [N, E, S, Wt, Eb, Sb, Wb]) this.grow(p, 2);
+    // gradients follow the whole (uncut) face, across it from its top edge down
+    const down = (from: Pt, to: Pt, h: number): [Pt, Pt] => {
+      const dx = to[0] - from[0];
+      const dy = to[1] - from[1];
+      const len = Math.hypot(dx, dy) || 1;
+      let nx = -dy / len;
+      let ny = dx / len;
+      if (ny < 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+      const t = ny * h; // the face's height measured across its top edge
+      return [from, [from[0] + nx * t, from[1] + ny * t]];
+    };
+    const uS = P(r.x1, r.y1, z1);
+    const sGrad = down(P(r.x0, r.y1, z1), uS, b.h);
+    const eGrad = down(uS, P(r.x1, r.y0, z1), b.h);
+    const tGrad: [Pt, Pt] = [P(r.x0, r.y0, z1), uS];
 
     const faceMat = (world: Face) => b.faces?.[this.lface(world)] ?? b.mat;
     const topT = this.tones(b.mat).top;
@@ -316,7 +350,7 @@ export class Sketch {
     const segs: Seg[] = [];
     let s = "";
     if (b.h > 0 && !cutR) {
-      const fill = flat ? rightT : this.grad(sh(rightT, 1.06), sh(rightT, 0.84));
+      const fill = flat ? rightT : this.gradAt(sh(rightT, 1.06), sh(rightT, 0.84), ...eGrad);
       s += `<path d="${path([
         [S, false],
         [E, cutB],
@@ -325,7 +359,7 @@ export class Sketch {
       ])}" fill="${fill}"/>`;
     }
     if (b.h > 0 && !cutF) {
-      const fill = flat ? leftT : this.grad(sh(leftT, 1.06), sh(leftT, 0.82));
+      const fill = flat ? leftT : this.gradAt(sh(leftT, 1.06), sh(leftT, 0.82), ...sGrad);
       s += `<path d="${path([
         [Wt, false],
         [S, cutR],
@@ -334,15 +368,21 @@ export class Sketch {
       ])}" fill="${fill}"/>`;
     }
     {
-      const fill = flat ? topT : this.grad(sh(topT, 1.1), sh(topT, 0.95), "d");
+      const fill = flat ? topT : this.gradAt(sh(topT, 1.1), sh(topT, 0.95), ...tGrad);
+      // a covered top (bands stacked in a wall) must not overlap into the next
+      // slice: drawn after, it would poke over that slice's band above
+      const tx0 = b.capped && c ? Math.max(r.x0, c.x0) : x0;
+      const tx1 = b.capped && c ? Math.min(r.x1, c.x1) : x1;
+      const ty0 = b.capped && c ? Math.max(r.y0, c.y0) : y0;
+      const ty1 = b.capped && c ? Math.min(r.y1, c.y1) : y1;
       s += `<path d="${path([
-        [N, cutB],
-        [E, cutR],
-        [S, cutF],
-        [Wt, cutL],
+        [P(tx0, ty0, z1), cutB],
+        [P(tx1, ty0, z1), cutR],
+        [P(tx1, ty1, z1), cutF],
+        [P(tx0, ty1, z1), cutL],
       ])}" fill="${fill}"/>`;
     }
-    segs.push({ glow, svg: s });
+    segs.push({ glow, svg: b.op !== undefined ? `<g opacity="${b.op}">${s}</g>` : s });
 
     // face details (drawers, screens, buttons…)
     if (details) {
@@ -350,33 +390,53 @@ export class Sketch {
       details(d);
     }
 
+    // Lines stop exactly at a slice's cut (fills overlap it a little so
+    // neighbouring slices meet without a gap; semi-transparent lines drawn in
+    // that overlap would show as dots every slice).
+    // Sliced boxes draw their lines opaque (the colour they'd blend to) and let
+    // them run into the overlap like the fills, so slices join without seams.
+    const lx0 = x0;
+    const lx1 = x1;
+    const ly0 = y0;
+    const ly1 = y1;
+    const lN = P(lx0, ly0, z1);
+    const lE = P(lx1, ly0, z1);
+    const lS = P(lx1, ly1, z1);
+    const lW = P(lx0, ly1, z1);
+    const lEb = P(lx1, ly0, z0);
+    const lSb = P(lx1, ly1, z0);
+    const lWb = P(lx0, ly1, z0);
     // bevel light on the top's front edges, then ink
     let ink = "";
     const lw = b.line ?? 1.3;
-    if (b.bevel !== false && b.h >= 2) {
+    if (b.bevel !== false && !b.capped && b.h >= 2) {
       const hi = sh(topT, 1.45);
       const op = 0.55 + (b.mat.gloss ?? 0) * 0.4;
+      const bev = (under: string, o: number) =>
+        c ? `stroke="${mixc(under, hi, o)}"` : `stroke="${hi}" opacity="${o}"`;
       if (!cutF)
-        ink += `<path d="M${pts([Wt, S]).replace(" ", " L")}" stroke="${hi}" stroke-width=".8" opacity="${op}" fill="none" transform="translate(0 .7)"/>`;
+        ink += `<path d="M${pts([lW, lS]).replace(" ", " L")}" ${bev(leftT, op)} stroke-width=".8" fill="none" transform="translate(0 .7)"/>`;
       if (!cutR)
-        ink += `<path d="M${pts([S, E]).replace(" ", " L")}" stroke="${hi}" stroke-width=".8" opacity="${op * 0.7}" fill="none" transform="translate(0 .7)"/>`;
+        ink += `<path d="M${pts([lS, lE]).replace(" ", " L")}" ${bev(rightT, op * 0.7)} stroke-width=".8" fill="none" transform="translate(0 .7)"/>`;
     }
     if (lw > 0) {
-      const thin = `stroke="${INK}" stroke-width="${f2(lw * 0.5)}" stroke-opacity=".55" fill="none" stroke-linecap="round"`;
-      if (b.h > 0 && !cutF && !cutR && !puff) ink += `<path d="M${pts([S, Sb]).replace(" ", " L")}" ${thin}/>`;
-      if (b.h > 0 && !cutF) ink += `<path d="M${f2(Wt[0])} ${f2(Wt[1])}${seg(Wt, S, cutF)}" ${thin}/>`;
-      if (b.h > 0 && !cutR) ink += `<path d="M${f2(S[0])} ${f2(S[1])}${seg(S, E, cutR)}" ${thin}/>`;
+      const thin = c
+        ? `stroke="${mixc(leftT, INK, 0.55)}" stroke-width="${f2(lw * 0.5)}" fill="none"`
+        : `stroke="${INK}" stroke-width="${f2(lw * 0.5)}" stroke-opacity=".55" fill="none"`;
+      if (b.h > 0 && !cutF && !cutR && !puff) ink += `<path d="M${pts([lS, lSb]).replace(" ", " L")}" ${thin}/>`;
+      if (b.h > 0 && !cutF) ink += `<path d="M${f2(lW[0])} ${f2(lW[1])}${seg(lW, lS, cutF)}" ${thin}/>`;
+      if (b.h > 0 && !cutR) ink += `<path d="M${f2(lS[0])} ${f2(lS[1])}${seg(lS, lE, cutR)}" ${thin}/>`;
       // silhouette, skipping edges that lie on a slice cut
       const sil: [Pt, Pt, boolean][] = [
-        [N, E, cutB],
-        [E, Eb, cutR || cutB || b.h === 0],
-        [Eb, Sb, cutR || b.h === 0],
-        [Sb, Wb, cutF || b.h === 0],
-        [Wb, Wt, cutL || cutF || b.h === 0],
-        [Wt, N, cutL],
+        [lN, lE, cutB],
+        [lE, lEb, cutR || cutB || b.h === 0],
+        [lEb, lSb, cutR || b.h === 0],
+        [lSb, lWb, cutF || b.h === 0],
+        [lWb, lW, cutL || cutF || b.h === 0],
+        [lW, lN, cutL],
       ];
       if (b.h === 0) {
-        sil.push([E, S, cutR], [S, Wt, cutF]);
+        sil.push([lE, lS, cutR], [lS, lW, cutF]);
       }
       let d = "";
       for (const [a, q, cut] of sil) if (!cut) d += `M${f2(a[0])} ${f2(a[1])}${seg(a, q, false)}`;
@@ -486,11 +546,12 @@ export class Sketch {
       });
       const c = this.clip;
       if (!c || !clipped) return out;
+      // (a hair past the cut, like the fills, so details join across slices)
       const planes: [0 | 1, number, 1 | -1][] = [
-        [0, c.x0, 1],
-        [0, c.x1, -1],
-        [1, c.y0, 1],
-        [1, c.y1, -1],
+        [0, c.x0 - EPS / 2, 1],
+        [0, c.x1 + EPS / 2, -1],
+        [1, c.y0 - EPS / 2, 1],
+        [1, c.y1 + EPS / 2, -1],
       ];
       for (const [ax, v, sgn] of planes) {
         const res: V3[] = [];

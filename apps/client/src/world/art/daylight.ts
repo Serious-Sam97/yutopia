@@ -11,6 +11,7 @@ export interface Daylight {
   ambient: RGB; // 0..1 multiplier
   sun: { color: RGB; elevation: number; azimuth: number }; // radians; elevation < 0 = below the horizon
   night: number; // 0 day … 1 deep night
+  window: RGB; // what windows add at full strength: sunlight by day, a little moonlight at night
 }
 
 // [hour, ambient, sun colour, phase]
@@ -45,7 +46,11 @@ export function daylight(hour: number): Daylight {
   const azimuth = Math.PI * (0.25 + day); // east → south → west (over the city)
   const lum = ambient[0] * 0.3 + ambient[1] * 0.55 + ambient[2] * 0.15;
   const night = Math.max(0, Math.min(1, (1 - lum) / 0.52));
-  return { hour: h, phase: t < 0.5 ? p0 : p1, ambient, sun: { color, elevation, azimuth }, night };
+  // sunlight through a window: strongest with the sun up, warm and long at golden hour
+  const up = Math.max(0, Math.sin(Math.max(0, day) * Math.PI));
+  const k = elevation > 0 ? 0.16 + 0.22 * (1 - up) : 0.07;
+  const window = color.map((v) => v * k) as RGB;
+  return { hour: h, phase: t < 0.5 ? p0 : p1, ambient, sun: { color, elevation, azimuth }, night, window };
 }
 
 // The old single "night level" (0..0.85) as a clock time: 0 → noon, 0.85 → 23:00.

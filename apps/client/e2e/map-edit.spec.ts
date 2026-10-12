@@ -29,6 +29,25 @@ async function dragTiles(page: Page, from: [number, number], to: [number, number
   for (let i = 1; i <= 12; i++) await page.mouse.move(a.x + ((b.x - a.x) * i) / 12, a.y + ((b.y - a.y) * i) / 12);
   await page.mouse.up();
 }
+// drag along world points (walls go on the lines between tiles)
+async function dragWorld(page: Page, from: [number, number], to: [number, number]) {
+  const at = (x: number, y: number) =>
+    page.evaluate(
+      ([wx, wy]) => {
+        const e = (window as any).__yutopia.engine;
+        const r = e.app.canvas.getBoundingClientRect();
+        const s = e.worldToClient(wx, wy);
+        return { x: r.left + s.x, y: r.top + s.y };
+      },
+      [x, y],
+    );
+  const a = await at(...from);
+  const b = await at(...to);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 18; i++) await page.mouse.move(a.x + ((b.x - a.x) * i) / 18, a.y + ((b.y - a.y) * i) / 18);
+  await page.mouse.up();
+}
 const st = (page: Page, fn: (s: any) => unknown) => page.evaluate(fn as never, null as never);
 const zoom = (page: Page, z: number) => page.evaluate((v) => (window as any).__yutopia.engine.setZoom(v), z);
 
@@ -68,11 +87,17 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
     .poll(() => st(ana, () => !!(window as any).__yutopia.room.state.objects.get("door-room-ana-s-office")))
     .toBe(true);
 
-  // 1 · walls: paint a wall line, then a door in a gap
+  // 1 · walls go on tile edges: drag along the line x = 16 for a brick wall
   await ana.getByRole("tab", { name: /Walls/ }).click();
-  await ana.getByRole("button", { name: "Wall", exact: true }).click();
-  await dragTiles(ana, [16, 3], [16, 12]);
-  await expect.poll(() => st(ana, () => (window as any).__yutopia.room.state.tiles[8][16])).toBe("#");
+  await ana.getByRole("button", { name: "Brick", exact: true }).click();
+  await dragWorld(ana, [16, 3.5], [16, 12.5]);
+  await expect.poll(() => st(ana, () => (window as any).__yutopia.room.state.vWalls[8][16])).toBe("b");
+  expect(await st(ana, () => (window as any).__yutopia.room.state.tiles[8][16])).toBe("."); // no floor lost
+  // one straight line: nothing painted across it where the pointer passed corners
+  const across = (await st(ana, () =>
+    [4, 5, 6, 7, 8, 9, 10, 11, 12].map((y) => (window as any).__yutopia.room.state.hWalls[y].slice(15, 17)).join(""),
+  )) as string;
+  expect(across).toBe(".".repeat(18));
 
   // 2 · a desk for Ana inside her room
   await ana.getByRole("tab", { name: /Furniture/ }).click();
@@ -146,5 +171,5 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   await ana.getByRole("spinbutton").first().fill("40");
   await ana.getByRole("button", { name: /^Resize to/ }).click();
   await expect.poll(() => st(ana, () => (window as any).__yutopia.room.state.width)).toBe(40);
-  expect(await st(ana, () => (window as any).__yutopia.room.state.tiles[8][16])).toBe("#");
+  expect(await st(ana, () => (window as any).__yutopia.room.state.vWalls[8][16])).toBe("b");
 });

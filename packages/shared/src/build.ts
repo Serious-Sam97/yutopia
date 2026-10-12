@@ -17,10 +17,12 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
     });
   }
   const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
-  const floor = Grid.from(map, []);
+  const floor = Grid.from(map, [], undefined, { dressing: false });
   const base = Grid.from(
     map,
     others.filter((x) => x.id !== o.id),
+    undefined,
+    { dressing: false },
   );
   for (let dy = 0; dy < h; dy++)
     for (let dx = 0; dx < w; dx++) {

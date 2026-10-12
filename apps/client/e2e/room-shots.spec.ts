@@ -4,6 +4,16 @@ import { resolve } from "node:path";
 import { test } from "@playwright/test";
 import { ANA, enter, spaceId, token, walkTo } from "./helpers";
 
+// Review shots are taken on High: Auto would step down in a headless browser
+// (software GPU, ~10 fps) after a few seconds and change the look mid-run.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    const k = "yutopia:prefs";
+    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+    localStorage.setItem(k, JSON.stringify({ ...p, quality: "high" }));
+  });
+});
+
 // Fixed-camera shots of every room of the Studio, day and night. Off by default;
 // YUTOPIA_SHOTS=<folder> (relative to the repo root) turns it on:
 //   YUTOPIA_SHOTS=design/screens/visual/before npx playwright test room-shots
@@ -120,7 +130,7 @@ test("lab door shots, day and night", async ({ page }) => {
 });
 
 // The Tracking Room through the day: noon, golden hour, dusk, night.
-test("tracking room through the day", async ({ page }) => {
+test("through the day: tracking room, the building, the lobby windows", async ({ page }) => {
   test.setTimeout(120_000);
   const dir = resolve(__dirname, "../../..", OUT ?? ".");
   const tok = await token(ANA);
@@ -130,21 +140,73 @@ test("tracking room through the day", async ({ page }) => {
     (window as any).__yutopia.updateNight = () => {};
   });
   await page.waitForTimeout(1500);
-  for (const [name, hour] of [
-    ["noon", 12],
-    ["golden", 17.6],
-    ["dusk", 19.2],
-    ["night", 23],
-  ] as const) {
-    await page.evaluate(
-      ([h, room]) => {
-        const e = (window as any).__yutopia.engine;
-        e.setClock(h);
-        e.pinCamera(room);
-      },
-      [hour, ROOMS[0]] as const,
-    );
-    await page.waitForTimeout(500);
-    await page.locator(WORLD).screenshot({ path: `${dir}/tracking-${name}.png` });
+  const views = [
+    ["tracking", ROOMS[0]],
+    // the whole building, from outside: the tower's facade, the city, the sky
+    ["building", { x: 24, y: 18, zoom: 0.55 }],
+    // the Lobby's windows, from inside
+    ["lobby-windows", { x: 4, y: 26, zoom: 1.6 }],
+  ] as const;
+  for (const [view, at] of views)
+    for (const [name, hour] of [
+      ["noon", 12],
+      ["golden", 17.6],
+      ["dusk", 19.2],
+      ["night", 23],
+    ] as const) {
+      await page.evaluate(
+        ([h, room]) => {
+          const e = (window as any).__yutopia.engine;
+          e.setClock(h);
+          e.pinCamera(room);
+        },
+        [hour, at] as const,
+      );
+      await page.waitForTimeout(500);
+      await page.locator(WORLD).screenshot({ path: `${dir}/${view}-${name}.png` });
+    }
+  // the clouds drift: the whole studio twice, 3 s apart
+  await page.evaluate(() => {
+    const e = (window as any).__yutopia.engine;
+    e.setClock(12);
+    e.pinCamera({ x: 24, y: 18, zoom: 0.55 });
+  });
+  await page.waitForTimeout(600);
+  await page.locator(WORLD).screenshot({ path: `${dir}/clouds-a.png` });
+  await page.waitForTimeout(3000);
+  await page.locator(WORLD).screenshot({ path: `${dir}/clouds-b.png` });
+});
+
+// Each theme around the studio (set locally in the engine, nothing saved):
+// the whole studio at noon, golden hour and night, and a room by day.
+test("themes: clouds, city, snow", async ({ page }) => {
+  test.setTimeout(180_000);
+  const dir = resolve(__dirname, "../../..", OUT ?? ".");
+  const tok = await token(ANA);
+  await enter(page, tok, await spaceId(tok));
+  await page.addStyleTag({ content: `*{visibility:hidden!important}${WORLD}{visibility:visible!important}` });
+  await page.evaluate(() => {
+    (window as any).__yutopia.updateNight = () => {};
+  });
+  for (const theme of ["clouds", "city", "snow"]) {
+    for (const [name, hour, at] of [
+      ["noon", 12, { x: 24, y: 18, zoom: 0.55 }],
+      ["golden", 17.6, { x: 24, y: 18, zoom: 0.55 }],
+      ["night", 23, { x: 24, y: 18, zoom: 0.55 }],
+      ["room", 12, { x: 8, y: 26, zoom: 1.1 }],
+    ] as const) {
+      await page.evaluate(
+        ([t, h, p]) => {
+          const e = (window as any).__yutopia.engine;
+          e.map = { ...e.map, theme: t };
+          e.applyTheme();
+          e.setClock(h);
+          e.pinCamera(p);
+        },
+        [theme, hour, at] as const,
+      );
+      await page.waitForTimeout(1200); // the theme chunk loads lazily
+      await page.locator(WORLD).screenshot({ path: `${dir}/theme-${theme}-${name}.png` });
+    }
   }
 });

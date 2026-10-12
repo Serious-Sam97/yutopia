@@ -603,6 +603,7 @@ export class SpaceRoom extends Room<SpaceState> {
     this.state.areas = JSON.stringify(m.areas);
     this.state.spawnX = m.spawn.x;
     this.state.spawnY = m.spawn.y;
+    this.state.theme = m.theme ?? "clouds";
     this.state.mapVersion += 1;
   }
 

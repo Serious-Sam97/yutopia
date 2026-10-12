@@ -23,3 +23,32 @@ jobs:
       - run: pnpm budget
       - run: pnpm contrast
       - run: pnpm perf
+
+  # Screenshot regression + budgets (texture memory, logic and render time with
+  # 50 people) against /dev/shots — the Studio rendered offline, clock frozen.
+  # Baselines are per platform (apps/client/visual/__screenshots__/*-linux.png):
+  # a run without them writes them (`missing`) and uploads them; commit that
+  # artifact once to start comparing.
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @yutopia/client exec playwright install --with-deps chromium
+      - run: VISUAL_SERVE=1 pnpm visual --update-snapshots=missing
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-baselines-linux
+          path: apps/client/visual/__screenshots__/*-linux.png
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: visual-diffs
+          path: apps/client/test-results/

@@ -13,7 +13,8 @@ export type Interaction =
   | "notice"
   | "terminal"
   | "coffee"
-  | "door";
+  | "door"
+  | "lamp";
 
 export interface CatalogEntry {
   label: string;
@@ -47,6 +48,7 @@ export const CATALOG = {
     w: 1,
     h: 1,
     solid: true,
+    interact: "lamp",
     light: { color: 0xffb35c, radius: 4.5, intensity: 0.55 },
     buildable: true,
   },
@@ -77,6 +79,7 @@ export const CATALOG = {
   // Sits in a gap between two walls. props.state: "open" | "closed" | "locked".
   door: { label: "Door", w: 1, h: 1, solid: false, interact: "door", buildable: true },
   speaker_cab: { label: "Speaker cabinet", w: 1, h: 1, solid: true, buildable: true },
+  column: { label: "Column", w: 1, h: 1, solid: true, buildable: true },
   server_rack: {
     label: "Server rack",
     w: 1,

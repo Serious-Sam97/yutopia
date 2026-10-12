@@ -1,4 +1,6 @@
 import {
+  type DressItem,
+  dressItems,
   entry,
   footprint,
   HALF_WALL,
@@ -43,6 +45,8 @@ export interface Part {
   // wall stands between you and the camera ("wall-down")
   edge?: { dir: "h" | "v"; x: number; y: number; high: boolean };
   at?: [number, number]; // where its light is sampled (world tiles)
+  // walls: the upper layer, drawn in the same part but faded on its own (wall-down)
+  high?: { ctx: GraphicsContext; art?: Part["art"] };
   // the illustrated drawing of this slice (null while the item has none):
   // `ox/oy` = this part's origin relative to the object's origin, px
   art?: { key: string; get: () => ItemArt | null; ox: number; oy: number };
@@ -228,37 +232,41 @@ export function wallParts(map: MapDef): Part[] {
   const parts: Part[] = [];
   const m = items && !boxOnly ? items : null;
   const add = (dir: "h" | "v", x: number, y: number, ch: string) => {
-    for (let q = 0; q < 4; q++)
-      for (const high of [false, true]) {
-        const clip: Clip =
-          dir === "h" ? { x0: q / 4, x1: (q + 1) / 4, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: q / 4, y1: (q + 1) / 4 };
+    for (let q = 0; q < 4; q++) {
+      const clip: Clip =
+        dir === "h" ? { x0: q / 4, x1: (q + 1) / 4, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: q / 4, y1: (q + 1) / 4 };
+      const layer = (high: boolean) => {
         const ctx = cached(`wall|${dir}|${ch}|${q}|${high}`, (g) => {
           for (const b of wallBoxes(dir, ch, high)) drawBox(g, b, clip);
         });
-        const [sx, sy] = P(x, y);
-        const c = (q + 0.5) / 4;
-        const key = (dir === "h" ? x + c + y : x + y + c) + (high ? 0.0001 : 0);
         const part = high ? "high" : "low";
         const akey = m?.wallKey(dir, ch, q, part, artRes);
-        parts.push({
-          ctx,
-          x: sx,
-          y: sy,
-          key,
-          wx: x,
-          wy: y,
-          edge: { dir, x, y, high },
-          // lit from the floor in front of its face (or behind, on the outside)
-          at:
-            dir === "h"
-              ? [x + c, isFloor(tileAt(map, x, y)) ? y + 0.15 : y - 0.15]
-              : [isFloor(tileAt(map, x, y)) ? x + 0.15 : x - 0.15, y + c],
-          art:
-            m && akey
-              ? { key: akey, get: memo(akey, () => m.wallArt(dir, ch, q, part, artRes)), ox: 0, oy: 0 }
-              : undefined,
-        });
-      }
+        const art =
+          m && akey
+            ? { key: akey, get: memo(akey, () => m.wallArt(dir, ch, q, part, artRes)), ox: 0, oy: 0 }
+            : undefined;
+        return { ctx, art };
+      };
+      const low = layer(false);
+      const [sx, sy] = P(x, y);
+      const c = (q + 0.5) / 4;
+      parts.push({
+        ctx: low.ctx,
+        art: low.art,
+        high: layer(true),
+        x: sx,
+        y: sy,
+        key: dir === "h" ? x + c + y : x + y + c,
+        wx: x,
+        wy: y,
+        edge: { dir, x, y, high: true },
+        // lit from the floor in front of its face (or behind, on the outside)
+        at:
+          dir === "h"
+            ? [x + c, isFloor(tileAt(map, x, y)) ? y + 0.15 : y - 0.15]
+            : [isFloor(tileAt(map, x, y)) ? x + 0.15 : x - 0.15, y + c],
+      });
+    }
   };
   for (let y = 0; y <= map.height; y++)
     for (let x = 0; x < map.width; x++) {
@@ -270,15 +278,23 @@ export function wallParts(map: MapDef): Part[] {
       const ch = vWall(map, x, y);
       if (isWallEdge(ch)) add("v", x, y, ch);
     }
-  // posts at every corner a wall touches
+  // posts where walls turn, meet or end (a straight run needs none)
   for (let Y = 0; Y <= map.height; Y++)
     for (let X = 0; X <= map.width; X++) {
-      const touching = [hWall(map, X - 1, Y), hWall(map, X, Y), vWall(map, X, Y - 1), vWall(map, X, Y)].filter(
-        isWallEdge,
-      );
+      const w = hWall(map, X - 1, Y);
+      const e = hWall(map, X, Y);
+      const n = vWall(map, X, Y - 1);
+      const s = vWall(map, X, Y);
+      const touching = [w, e, n, s].filter(isWallEdge);
       if (!touching.length) continue;
-      const height = touching.every((c) => c === HALF_WALL) ? HALF : WALL_H;
-      for (const high of [false, true]) {
+      const half = (c: string) => c === HALF_WALL;
+      const straight =
+        (isWallEdge(w) && isWallEdge(e) && !isWallEdge(n) && !isWallEdge(s) && half(w) === half(e)) ||
+        (isWallEdge(n) && isWallEdge(s) && !isWallEdge(w) && !isWallEdge(e) && half(n) === half(s));
+      if (straight) continue;
+      const height = touching.every(half) ? HALF : WALL_H;
+      const pch = touching.find((c) => !half(c)) ?? touching[0];
+      const layer = (high: boolean) => {
         const ctx = cached(`post|${height}|${high}`, (g) => {
           const b = (z: number, h: number, color: number, top?: number): Box => ({
             x: -WT,
@@ -298,31 +314,89 @@ export function wallParts(map: MapDef): Part[] {
             drawBox(g, b(height - 3, 3, C.walnutDark, C.walnut));
           }
         });
-        const [sx, sy] = P(X, Y);
         const part = high ? "high" : "low";
-        const akey = m ? `post|${height}|${part}|${artRes}` : undefined;
-        // the post fades with the wall it belongs to most (h first)
-        const dir = isWallEdge(hWall(map, X, Y)) || isWallEdge(hWall(map, X - 1, Y)) ? "h" : "v";
-        parts.push({
-          ctx,
-          x: sx,
-          y: sy,
-          key: X + Y + (high ? 0.0001 : 0),
-          wx: X,
-          wy: Y,
-          edge: {
-            dir,
-            x: dir === "h" ? Math.max(0, X - (isWallEdge(hWall(map, X, Y)) ? 0 : 1)) : X,
-            y: dir === "v" ? Math.max(0, Y - (isWallEdge(vWall(map, X, Y)) ? 0 : 1)) : Y,
-            high,
-          },
-          at: [X + 0.15, Y + 0.15],
-          art:
-            m && akey ? { key: akey, get: memo(akey, () => m.postArt(height, part, artRes)), ox: 0, oy: 0 } : undefined,
-        });
-      }
+        const akey = m ? `post|${height}|${part}|${pch}|${artRes}` : undefined;
+        const art =
+          m && akey
+            ? { key: akey, get: memo(akey, () => m.postArt(height, part, pch, artRes)), ox: 0, oy: 0 }
+            : undefined;
+        return { ctx, art };
+      };
+      const low = layer(false);
+      const [sx, sy] = P(X, Y);
+      // the post fades with the wall it belongs to most (h first)
+      const dir = isWallEdge(hWall(map, X, Y)) || isWallEdge(hWall(map, X - 1, Y)) ? "h" : "v";
+      parts.push({
+        ctx: low.ctx,
+        art: low.art,
+        high: layer(true),
+        x: sx,
+        y: sy,
+        key: X + Y,
+        wx: X,
+        wy: Y,
+        edge: {
+          dir,
+          x: dir === "h" ? Math.max(0, X - (isWallEdge(hWall(map, X, Y)) ? 0 : 1)) : X,
+          y: dir === "v" ? Math.max(0, Y - (isWallEdge(vWall(map, X, Y)) ? 0 : 1)) : Y,
+          high: true,
+        },
+        at: [X + 0.15, Y + 0.15],
+      });
     }
   return parts;
+}
+
+// ── dressing (the rooms' clutter) ───────────────────────────────────────────
+// One part per piece (no box fallback: dressing appears with the drawings).
+export function dressParts(
+  map: MapDef,
+  objects: WorldObjectDef[],
+): { part: Part; item: DressItem; shadow: { key: string; get: () => ItemArt | null } | null }[] {
+  const m = items && !boxOnly ? items : null;
+  if (!m) return [];
+  const empty = cached("dress|empty", () => {});
+  const byId = new Map(objects.map((o) => [o.id, o]));
+  const out: { part: Part; item: DressItem; shadow: { key: string; get: () => ItemArt | null } | null }[] = [];
+  for (const d of dressItems(map, objects)) {
+    const wall = d.kind === "frame";
+    // the sketch is centred on (0.5, 0.5); frames hang on the edge at y
+    const ox = d.x - 0.5;
+    const oy = wall ? d.y : d.y - 0.5;
+    const [sx, sy] = P(ox, oy);
+    let key: number;
+    if (wall) key = d.x + d.y + 0.01;
+    else if (d.host) {
+      // just above the slice of the table it sits on
+      const o = byId.get(d.host);
+      const { w, h } = o ? footprint(o.kind, o.rot ?? 0) : { w: 1, h: 1 };
+      const tx = Math.floor(d.x);
+      const ty = Math.floor(d.y);
+      if (!o) key = tx + ty + 1;
+      else if (w > h) key = tx + 0.5 + o.y + h / 2;
+      else if (h > w) key = o.x + w / 2 + ty + 0.5;
+      else key = o.x + w / 2 + o.y + h / 2;
+      key += 0.03;
+    } else key = d.x + d.y;
+    const akey = m.dressKey(d.kind, d.z, d.seed, artRes);
+    const skey = `${akey}|sh`;
+    out.push({
+      item: d,
+      part: {
+        ctx: empty,
+        x: sx,
+        y: sy,
+        key,
+        wx: Math.floor(d.x),
+        wy: Math.floor(d.y),
+        at: [d.x, wall ? d.y + 0.25 : d.y],
+        edge: wall ? { dir: "h", x: Math.floor(d.x), y: d.y, high: true } : undefined,
+        art: { key: akey, get: memo(akey, () => m.dressArt(d.kind, d.z, d.seed, artRes)), ox: 0, oy: 0 },
+      },
+      shadow: d.z === 0 && !wall ? { key: skey, get: memo(skey, () => m.dressShadow(d.kind, d.z, d.seed)) } : null,
+    });
+  }
+  return out;
 }
 
 // ── furniture ──────────────────────────────────────────────────────────────
