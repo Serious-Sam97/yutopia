@@ -12,3 +12,5 @@ docker/livekit.keys.yaml
 docker/prod/.env
 docker/prod/livekit.keys.yaml
 .next-docker
+.next-visual
+apps/client/test-results

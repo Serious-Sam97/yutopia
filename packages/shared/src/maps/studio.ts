@@ -38,16 +38,16 @@ const tiles = new MapBuilder(48, 36)
   .build();
 
 const areas: AreaDef[] = [
-  { key: "tracking", name: "Tracking Room", kind: "open", x: 1, y: 1, w: 27, h: 19 },
+  { key: "tracking", name: "Tracking Room", kind: "open", x: 1, y: 1, w: 27, h: 19, dressing: "lived" },
   { key: "standup", name: "Standup Corner", kind: "standup", x: 20, y: 13, w: 8, h: 7, priority: 2 },
-  { key: "war-room", name: "War Room", kind: "private", x: 29, y: 1, w: 18, h: 10 },
+  { key: "war-room", name: "War Room", kind: "private", x: 29, y: 1, w: 18, h: 10, dressing: "tidy" },
   { key: "hall", name: "Booth Hall", kind: "open", x: 29, y: 12, w: 18, h: 2 },
   { key: "booth-1", name: "Booth 1", kind: "booth", x: 29, y: 15, w: 5, h: 5 },
   { key: "booth-2", name: "Booth 2", kind: "booth", x: 35, y: 15, w: 5, h: 5 },
   { key: "booth-3", name: "Booth 3", kind: "booth", x: 41, y: 15, w: 6, h: 5 },
-  { key: "lobby", name: "Lobby", kind: "open", x: 1, y: 21, w: 12, h: 14 },
-  { key: "lounge", name: "Lounge", kind: "open", x: 14, y: 21, w: 11, h: 14 },
-  { key: "live-room", name: "Live Room", kind: "open", x: 26, y: 21, w: 15, h: 14 },
+  { key: "lobby", name: "Lobby", kind: "open", x: 1, y: 21, w: 12, h: 14, dressing: "tidy" },
+  { key: "lounge", name: "Lounge", kind: "open", x: 14, y: 21, w: 11, h: 14, dressing: "busy" },
+  { key: "live-room", name: "Live Room", kind: "open", x: 26, y: 21, w: 15, h: 14, dressing: "lived" },
   { key: "stage", name: "Stage", kind: "stage", x: 26, y: 21, w: 15, h: 3, priority: 2 },
   { key: "server-room", name: "Server Room", kind: "private", x: 42, y: 21, w: 5, h: 14 },
 ];

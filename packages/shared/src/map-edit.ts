@@ -12,11 +12,13 @@ import {
   holdsItems,
   isFloor,
   isOuterEdge,
+  isTheme,
   isWallEdge,
   isWindow,
   type MapDef,
   NO_WALL,
   setEdge,
+  type Theme,
   tileAt,
   VOID,
   type WallMat,
@@ -36,6 +38,7 @@ export interface Layout {
   vWalls?: string[];
   areas: AreaDef[];
   spawn: Point;
+  theme?: Theme;
 }
 
 export const MAP_MIN = 16;
@@ -61,6 +64,7 @@ export function layoutFromMap(map: MapDef): Layout {
     vWalls: [...map.vWalls],
     areas: map.areas.map((a) => ({ ...a })),
     spawn: { ...map.spawn },
+    theme: map.theme ?? "clouds",
   };
 }
 
@@ -77,6 +81,7 @@ export function mapFromLayout(key: string, name: string, l: Layout): MapDef {
     areas: l.areas.map((a) => ({ ...a })),
     spawn: { ...l.spawn },
     objects: [],
+    theme: isTheme(l.theme) ? l.theme : "clouds",
   };
 }
 
@@ -101,6 +106,7 @@ export function validLayout(l: unknown): l is Layout {
       r.every((s) => typeof s === "string" && s.length === w && [...s].every((c) => edge.has(c)));
     if (!rows(x.hWalls, x.height + 1, x.width) || !rows(x.vWalls, x.height, x.width + 1)) return false;
   }
+  if (x.theme !== undefined && !isTheme(x.theme)) return false;
   if (!Array.isArray(x.areas) || x.areas.length > 200) return false;
   if (!x.spawn || !isFloor(x.tiles[Math.floor(x.spawn.y)]?.[Math.floor(x.spawn.x)] ?? VOID)) return false;
   return true;

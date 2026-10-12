@@ -1,6 +1,8 @@
+import type { DressKind } from "@yutopia/shared";
 import { entry } from "@yutopia/shared";
 import { boardWall } from "./board";
 import { chair } from "./chair";
+import { dressing } from "./clutter";
 import { desk } from "./desk";
 import { door, rug, standupMat } from "./door";
 import { type Clip, type Group, type ItemArt, Sketch, seedOf } from "./kit";
@@ -12,7 +14,7 @@ import { sofa } from "./sofa";
 import { coffeeTable, meetingTable, reception } from "./tables";
 import { arcade, coffeeMachine, crtTerminal, serverRack } from "./tech";
 import { acousticPanel, noticeBoard, poster, screenWall, whiteboard } from "./wall";
-import { post, type WallPart, wall } from "./walls";
+import { column, post, type WallPart, wall } from "./walls";
 
 type Props = Record<string, unknown>;
 
@@ -63,6 +65,7 @@ const GENS: Record<string, ItemGen> = {
   },
   rug: { draw: rug, variants: 1 },
   standup_mat: { draw: standupMat, variants: 1 },
+  column: { draw: column, variants: 2 },
   sofa: { draw: sofa, variants: 3 },
   lamp: { draw: lamp, variants: 1, key: (p) => (p.on === false ? "off" : "on") },
   plant: { draw: plant, variants: PLANT_VARIANTS, key: (p) => (typeof p.variant === "number" ? `v${p.variant}` : "") },
@@ -136,8 +139,26 @@ export function wallArt(dir: "h" | "v", ch: string, q: number, part: WallPart, r
   wall(s, dir, ch, part);
   return s.finish(res);
 }
-export function postArt(height: number, part: WallPart, res: number): ItemArt | null {
+export function postArt(height: number, part: WallPart, ch: string, res: number): ItemArt | null {
   const s = new Sketch({ w: 1, h: 1 });
-  post(s, height, part);
+  post(s, height, part, ch);
   return s.finish(res);
+}
+
+// ── dressing (the rooms' clutter) ───────────────────────────────────────────
+// Seeds are bucketed so look-alike pieces share a texture.
+const bucket = (seed: number) => (Math.floor(seed * 12) + 0.5) / 12;
+export function dressKey(kind: DressKind, z: number, seed: number, res: number): string {
+  return `dr|${kind}|${z}|${bucket(seed).toFixed(3)}|${res}`;
+}
+export function dressArt(kind: DressKind, z: number, seed: number, res: number): ItemArt | null {
+  const s = new Sketch({ w: 1, h: 1, seed: bucket(seed) });
+  dressing(s, kind, z, bucket(seed));
+  return s.finish(res);
+}
+export function dressShadow(kind: DressKind, z: number, seed: number): ItemArt | null {
+  if (z > 0 || kind === "frame") return null;
+  const s = new Sketch({ w: 1, h: 1, seed: bucket(seed) });
+  dressing(s, kind, z, bucket(seed));
+  return s.finishShadow(1);
 }

@@ -29,7 +29,8 @@
     ".next-prod/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-docker/types/**/*.ts"
+    ".next-docker/types/**/*.ts",
+    ".next-visual/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "e2e"]
+  "exclude": ["node_modules", "e2e", "visual"]
 }

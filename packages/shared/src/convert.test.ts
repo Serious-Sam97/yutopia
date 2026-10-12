@@ -53,7 +53,7 @@ test("the studio converts: no wall tiles, a valid v2 layout, rooms gain the wall
 
 test("conversion keeps who can reach whom, and rooms where they were", () => {
   const v1g = Grid.from({ ...studioV1, hWalls: [], vWalls: [] }, []);
-  const v2g = Grid.from(studio, []);
+  const v2g = Grid.from(studio, [], undefined, { dressing: false });
   const c1 = components(studioV1, v1g, false);
   const c2 = components(studio, v2g, true);
   const floors: number[] = [];

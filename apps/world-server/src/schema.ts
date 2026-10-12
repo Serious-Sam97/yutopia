@@ -87,6 +87,7 @@ export class SpaceState extends Schema {
   @type("float32") spawnX = 0;
   @type("float32") spawnY = 0;
   @type("uint32") mapVersion = 0;
+  @type("string") theme = "clouds"; // what surrounds the studio
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();

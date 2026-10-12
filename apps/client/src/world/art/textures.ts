@@ -136,6 +136,13 @@ export function acquireItem(key: string, svg: () => string, ready: (t: Texture) 
   };
 }
 
+// Drawings still decoding (the scene isn't final yet).
+export function itemsPending(): number {
+  let n = 0;
+  for (const e of items.values()) if (!e.tex) n++;
+  return n;
+}
+
 export function itemTextureStats() {
   let bytes = 0;
   let live = 0;
