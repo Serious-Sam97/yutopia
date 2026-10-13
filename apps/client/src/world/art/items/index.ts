@@ -5,7 +5,7 @@ import { chair } from "./chair";
 import { dressing } from "./clutter";
 import { desk } from "./desk";
 import { door, rug, standupMat } from "./door";
-import { beanbag, bookcase, clock, counter, neon, partition } from "./home";
+import { beanbag, bookcase, clock, counter, lightSwitch, neon, partition } from "./home";
 import { type Clip, type Group, type ItemArt, Sketch, seedOf } from "./kit";
 import { lamp } from "./lamp";
 import { micStand, mixingDesk, radio, sideTable, speakerCab, tapeShelf } from "./music";
@@ -47,6 +47,7 @@ const GENS: Record<string, ItemGen> = {
   counter: { draw: counter, variants: 2, key: painted },
   clock: { draw: clock, variants: 1, key: (p) => (p._thumb ? "t" : "") },
   neon: { draw: neon, variants: 3 },
+  light_switch: { draw: lightSwitch, variants: 1, key: (p) => (p.on === false ? "off" : "on") },
   water_cooler: { draw: waterCooler, variants: 1 },
   vending: { draw: vending, variants: 2 },
   piano: { draw: piano, variants: 2 },
@@ -90,7 +91,11 @@ const GENS: Record<string, ItemGen> = {
   // the rooms' clutter as real objects: what it is (props.d) and its seeded look
   // (tabletops are drawn standing on z 0; the engine lifts them to their surface)
   decor: { draw: (s, p) => dressing(s, decorKind(p, "plant"), 0, decorSeed(p)), variants: 1, key: decorKey },
-  tabletop: { draw: (s, p) => dressing(s, decorKind(p, "mug"), 0, decorSeed(p)), variants: 1, key: decorKey },
+  tabletop: {
+    draw: (s, p) => dressing(s, decorKind(p, "mug"), 0, decorSeed(p), p.on === false),
+    variants: 1,
+    key: (p) => `${decorKey(p)}|${p.on === false ? "off" : ""}`,
+  },
   frame: { draw: (s, p) => dressing(s, "frame", 0, decorSeed(p)), variants: 1, key: decorKey },
 };
 

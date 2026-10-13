@@ -24,6 +24,12 @@ export class Player extends Schema {
   @type("string") held = ""; // what they carry (shared/held.ts), "" for nothing
   @type("float64") heldAt = 0; // when they took it (server ms): its sips follow from this
   @type("string") busy = ""; // using something (shared USES): the body shows it
+  // with someone (shared/actions.ts SOCIAL, or "take" for the one handed a
+  // drink): what, when (server ms) and with whom (their session id)
+  @type("string") act = "";
+  @type("float64") actAt = 0;
+  @type("string") actWith = "";
+  @type("boolean") focus = false; // heads down at their desk: headphones on
 }
 
 export class WorldObject extends Schema {

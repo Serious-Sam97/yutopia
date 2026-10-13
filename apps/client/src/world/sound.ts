@@ -225,6 +225,7 @@ const midi = (n: number) => 440 * 2 ** ((n - 69) / 12);
 class Radio {
   private timer: ReturnType<typeof setInterval> | null = null;
   private out: GainNode | null = null;
+  private pan: StereoPannerNode | null = null;
   private station = 0;
   private startedAt = 0;
   private scheduledUntil = 0; // in beats
@@ -242,17 +243,20 @@ class Radio {
     const warmth = ctx.createBiquadFilter();
     warmth.type = "lowpass";
     warmth.frequency.value = 3800;
-    this.out.connect(warmth).connect(mixer.buses.music);
+    this.pan = ctx.createStereoPanner();
+    this.out.connect(warmth).connect(this.pan).connect(mixer.buses.music);
     const beatSec = 60 / STATIONS[this.station].bpm;
     this.scheduledUntil = Math.floor(this.beatNow(beatSec)) + 1;
     this.timer = setInterval(() => this.schedule(ctx, beatSec), 100);
   }
 
-  // Volume from how close I am to the radio (0..1), smoothed.
-  setLevel(level: number) {
+  // Volume from how close I am to the nearest radio (0..1) and which side it's
+  // on (−1..1), smoothed.
+  setLevel(level: number, pan = 0) {
     this.level = level;
     const ctx = mixer.ctx;
     if (this.out && ctx) this.out.gain.setTargetAtTime(level * 0.55, ctx.currentTime, 0.25);
+    if (this.pan && ctx) this.pan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan)), ctx.currentTime, 0.25);
   }
 
   private beatNow(beatSec: number) {
@@ -369,10 +373,14 @@ class Radio {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     const out = this.out;
+    const pan = this.pan;
     const ctx = mixer.ctx;
     if (out && ctx) {
       out.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
-      setTimeout(() => out.disconnect(), 600);
+      setTimeout(() => {
+        out.disconnect();
+        pan?.disconnect();
+      }, 600);
     }
     this.out = null;
     this.startedAt = 0;

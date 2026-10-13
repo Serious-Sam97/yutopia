@@ -17,7 +17,8 @@ export type Interaction =
   | "lamp"
   | "water"
   | "vending"
-  | "piano";
+  | "piano"
+  | "switch";
 
 export interface CatalogEntry {
   label: string;
@@ -72,6 +73,8 @@ export const CATALOG = {
     light: { color: 0xff8a5c, radius: 2.6, intensity: 0.32 },
   },
   poster: { label: "Poster", w: 1, h: 1, solid: false, wall: true, buildable: true },
+  // turns every lamp in its room on or off (props.on: how it was last flipped)
+  light_switch: { label: "Light switch", w: 1, h: 1, solid: false, wall: true, interact: "switch", buildable: true },
   meeting_table: {
     label: "Meeting table",
     w: 6,

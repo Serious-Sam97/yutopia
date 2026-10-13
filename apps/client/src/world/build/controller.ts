@@ -25,6 +25,7 @@ import {
   VOID,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import type { SetupItem } from "@/lib/api";
 import { tr, trMaybe } from "@/lib/i18n";
 import { C } from "../art/palette";
 import type { WorldController } from "../controller";
@@ -434,18 +435,23 @@ export class BuildController {
 
   private watchPending() {
     if (this.pendingTimer) return;
-    this.pendingTimer = setInterval(() => {
-      const now = performance.now();
-      for (const [id, p] of this.pending) {
-        const o = this.engine?.getObject(id);
-        if (now > p.until || !o || spotKey(o) === p.key) this.pending.delete(id);
-      }
-      this.syncHidden();
-      if (!this.pending.size && this.pendingTimer) {
-        clearInterval(this.pendingTimer);
-        this.pendingTimer = null;
-      }
-    }, 60);
+    this.pendingTimer = setInterval(() => this.checkPending(), 60);
+  }
+
+  // Moves that have arrived show again (checked as the room's changes land,
+  // and on a timer as a fallback).
+  checkPending() {
+    if (!this.pending.size && !this.pendingTimer) return;
+    const now = performance.now();
+    for (const [id, p] of this.pending) {
+      const o = this.engine?.getObject(id);
+      if (now > p.until || !o || spotKey(o) === p.key) this.pending.delete(id);
+    }
+    this.syncHidden();
+    if (!this.pending.size && this.pendingTimer) {
+      clearInterval(this.pendingTimer);
+      this.pendingTimer = null;
+    }
   }
 
   // What's in hand, for the action bar: the first thing and how many.
@@ -639,6 +645,45 @@ export class BuildController {
     buildSound("pickup");
   }
 
+  // ── my setups: the selection (and what's on it) saved to place again ────
+  setupOfSelection(): SetupItem[] | null {
+    const sel = this.selectedObjects();
+    if (!sel.length) return null;
+    const all = this.objects();
+    const ids = new Set(sel.map((o) => o.id));
+    for (const o of sel) for (const r of carried(o, o, all)) ids.add(r.id);
+    const group = all.filter((o) => ids.has(o.id) && entry(o.kind).buildable);
+    const x0 = Math.min(...group.map((o) => o.x));
+    const y0 = Math.min(...group.map((o) => o.y));
+    return group.map((o) => ({
+      kind: o.kind,
+      dx: o.x - x0,
+      dy: o.y - y0,
+      rot: o.rot ?? 0,
+      props: Object.keys(this.copyable(o.props)).length ? this.copyable(o.props) : null,
+    }));
+  }
+
+  // A saved setup on the pointer, as new copies (dropped all at once).
+  placeSetup(items: SetupItem[]) {
+    if (!items.length) return;
+    if (this.hand.length) this.cancel();
+    this.setBuild({ mode: "hand", selected: [] });
+    const t = this.pointerTile();
+    this.anchor = t;
+    const src: WorldObjectDef[] = items.map((it, i) => ({
+      id: `setup-${i}`,
+      kind: it.kind,
+      x: t.x + it.dx,
+      y: t.y + it.dy,
+      rot: it.rot,
+      props: it.props ?? undefined,
+    }));
+    const ids = new Map(src.map((o) => [o.id, ghostId()]));
+    this.setHand(this.holding(src, src, t, ids));
+    buildSound("pickup");
+  }
+
   // Eyedropper / C: start placing copies of a thing in the room.
   private copyFrom(pick: Pick | null) {
     if (!pick) return;
@@ -691,8 +736,16 @@ export class BuildController {
     this.hoverPick = p;
     if (!same) {
       const b = hud.get().build;
+      const n = this.under.length;
       this.setBuild({
-        hover: p && !this.hand.length ? { label: this.labelOf(p), by: p.dress ? null : this.heldByOther(p.id) } : null,
+        hover:
+          p && !this.hand.length
+            ? {
+                label: this.labelOf(p),
+                by: p.dress ? null : this.heldByOther(p.id),
+                of: { i: n ? this.cycle % n : 0, n },
+              }
+            : null,
       });
       const canvas = this.engine?.app.canvas;
       if (b.on && canvas) canvas.style.cursor = p ? (b.mode === "eyedrop" ? "copy" : "grab") : "default";
@@ -768,7 +821,19 @@ export class BuildController {
       }
       return;
     }
-    this.setHover(e.pickAt());
+    this.setHover(this.pickNow());
+  }
+
+  // What's under the pointer, front first; Tab steps to the next one behind
+  // it (back to the front when the pointer moves onto something else).
+  private cycle = 0;
+  private under: Pick[] = [];
+  private pickNow(): Pick | null {
+    const all = this.engine?.picksAt() ?? [];
+    const key = (l: Pick[]) => l.map((p) => p.id).join(",");
+    if (key(all) !== key(this.under)) this.cycle = 0;
+    this.under = all;
+    return all.length ? all[this.cycle % all.length] : null;
   }
 
   down(x: number, y: number) {
@@ -780,7 +845,7 @@ export class BuildController {
       this.press = { sx: e.pointerAt.gx, sy: e.pointerAt.gy, pick: null, carry: true, dragging: false, turned: 0 };
       return;
     }
-    const pick = e.pickAt();
+    const pick = this.pickNow();
     if (pick || b.mode === "eyedrop") {
       this.press = { sx: e.pointerAt.gx, sy: e.pointerAt.gy, pick, carry: false, dragging: false, turned: 0 };
       return;
@@ -889,7 +954,12 @@ export class BuildController {
       if (held) this.cancel();
       this.copyFrom(pick);
     } else if (furn && key === "m" && b.selected.length) void this.pickUp({ id: b.selected[0], dress: false });
-    else if (furn && this.hand.length && key.startsWith("arrow")) {
+    else if (furn && key === "tab" && !this.hand.length && this.under.length > 1) {
+      // the next thing stacked under the pointer
+      this.cycle = (this.cycle + 1) % this.under.length;
+      buildSound("select");
+      this.setHover(this.under[this.cycle]);
+    } else if (furn && this.hand.length && key.startsWith("arrow")) {
       // keyboard: nudge what you hold a tile at a time; Enter puts it down
       // (things on a surface: a quarter tile at a time)
       const d = { arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowright: [1, 0] }[key] ?? [0, 0];

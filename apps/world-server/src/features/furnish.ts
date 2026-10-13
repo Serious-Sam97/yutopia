@@ -56,7 +56,11 @@ registerFeature((room: SpaceRoom) => {
 
   room.on("obj:batch", async (client, m: ClientMessages["obj:batch"]) => {
     const p = builder(client);
-    const items = Array.isArray(m?.items) ? m.items.slice(0, MAX_BATCH) : [];
+    // what stands on the floor first, then what sits on it (a desk before its
+    // monitor: the group comes in any order)
+    const items = (Array.isArray(m?.items) ? m.items.slice(0, MAX_BATCH) : []).sort(
+      (a, b) => Number(!!entry(String(a?.kind)).onSurface) - Number(!!entry(String(b?.kind)).onSurface),
+    );
     if (!p || !items.length) return;
     const ids = new Set(items.map((i) => i.id).filter((id): id is string => typeof id === "string" && !!id));
     const rest = objects().filter((o) => !ids.has(o.id));

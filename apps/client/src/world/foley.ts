@@ -126,3 +126,73 @@ export function pianoNote(n: number, gain = 1, pan = 0) {
   }
   lp.connect(g).connect(p).connect(mixer.buses.music);
 }
+
+// Two people at it, when the hands meet (`gain` 0..1 by how near it is): a
+// high five's slap, a fist bump's soft knock, two glasses' clink.
+export function socialSound(kind: string, gain = 1) {
+  const ctx = ready();
+  if (!ctx || gain <= 0.02) return;
+  const out = mixer.buses.effects;
+  const t = ctx.currentTime;
+  const burst = (f: number, q: number, len: number, peak: number) => {
+    const s = ctx.createBufferSource();
+    s.buffer = noiseBuffer(ctx);
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = f;
+    bp.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(peak * gain, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    s.connect(bp).connect(g).connect(out);
+    s.start(t);
+    s.stop(t + len + 0.02);
+  };
+  const ping = (f: number, len: number, peak: number) => {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak * gain, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g).connect(out);
+    o.start(t);
+    o.stop(t + len + 0.02);
+  };
+  if (kind === "highfive") {
+    burst(2400, 0.9, 0.09, 0.5);
+    burst(900, 1.2, 0.06, 0.25);
+  } else if (kind === "fistbump") burst(320, 1.4, 0.08, 0.35);
+  else if (kind === "cheers") {
+    ping(2630, 0.5, 0.12);
+    ping(3950, 0.35, 0.06);
+    ping(5210, 0.2, 0.03);
+  }
+}
+
+// A card done: a short bright fanfare (a rising arpeggio on the vibes).
+export function fanfare(gain = 1) {
+  const ctx = ready();
+  if (!ctx || gain <= 0.02) return;
+  const t = ctx.currentTime;
+  [0, 4, 7, 12].forEach((n, i) => {
+    const f = 523.25 * 2 ** (n / 12);
+    const at = t + i * 0.09;
+    for (const [k, a] of [
+      [1, 1],
+      [4, 0.18],
+    ] as const) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = f * k;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.13 * a * gain, at + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + (i === 3 ? 1.1 : 0.4));
+      o.connect(g).connect(mixer.buses.effects);
+      o.start(at);
+      o.stop(at + 1.2);
+    }
+  });
+}

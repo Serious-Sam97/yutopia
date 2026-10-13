@@ -176,8 +176,9 @@ function keyboard(s: Sketch, z: number) {
   });
 }
 
-// A little desk lamp: a round base, a bent arm, an amber shade with a glow.
-function desklamp(s: Sketch, z: number, seed: number) {
+// A little desk lamp: a round base, a bent arm, an amber shade with a glow
+// (switched off: the bulb's dark).
+function desklamp(s: Sketch, z: number, seed: number, off = false) {
   const c = pick([K.rust, K.olive, K.graphite, K.cream], seed);
   s.cyl({ x: CX, y: CY, z, r: 0.07, h: 1.6, mat: { c } });
   s.shape({ x: CX - 0.1, y: CY - 0.1, w: 0.2, d: 0.2, z: z + 1.6, h: 16 }, (d) => {
@@ -190,7 +191,7 @@ function desklamp(s: Sketch, z: number, seed: number) {
     );
   });
   s.cyl({ x: CX + 0.06, y: CY + 0.07, z: z + 10, r: 0.03, r2: 0.075, h: 5, mat: { c } }, (d) =>
-    d.poly("t", te(z + 10, CX + 0.06, CY + 0.07, 0.06), K.vfd, { glow: true }),
+    d.poly("t", te(z + 10, CX + 0.06, CY + 0.07, 0.06), off ? sh(K.cream, 0.55) : K.vfd, { glow: !off }),
   );
 }
 
@@ -318,7 +319,7 @@ function bin(s: Sketch) {
   s.shadowDot(0.5, 0.5, 0.18, 0.4);
 }
 
-export function dressing(s: Sketch, kind: DressKind, z: number, seed: number) {
+export function dressing(s: Sketch, kind: DressKind, z: number, seed: number, off = false) {
   switch (kind) {
     case "papers":
       return papers(s, z, seed);
@@ -337,7 +338,7 @@ export function dressing(s: Sketch, kind: DressKind, z: number, seed: number) {
     case "keyboard":
       return keyboard(s, z);
     case "desklamp":
-      return desklamp(s, z, seed);
+      return desklamp(s, z, seed, off);
     case "phone":
       return phone(s, z);
     case "cards":

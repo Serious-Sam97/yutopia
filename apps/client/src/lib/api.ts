@@ -123,6 +123,21 @@ export interface MemberStatus {
   }[];
 }
 
+// "My setups": a group of things saved in build mode, placed again anywhere
+// (offsets from the group's corner; things on a desk keep their cell).
+export interface SetupItem {
+  kind: string;
+  dx: number;
+  dy: number;
+  rot: number;
+  props?: Record<string, unknown> | null;
+}
+export interface Setup {
+  id: number;
+  name: string;
+  items: SetupItem[];
+}
+
 export const yutopia = {
   login: (email: string, password: string) =>
     api<{ token: string; user: { id: number; name: string } }>("/api/login", {
@@ -139,6 +154,10 @@ export const yutopia = {
   session: (spaceId: number) =>
     api<Session>("/api/yutopia/session", { method: "POST", body: JSON.stringify({ space_id: spaceId }) }),
   avatar: () => api<{ avatar: AvatarLayers }>("/api/yutopia/avatar"),
+  setups: () => api<{ setups: Setup[] }>("/api/yutopia/setups"),
+  saveSetup: (name: string, items: SetupItem[]) =>
+    api<{ setup: Setup }>("/api/yutopia/setups", { method: "POST", body: JSON.stringify({ name, items }) }),
+  deleteSetup: (id: number) => api(`/api/yutopia/setups/${id}`, { method: "DELETE" }),
   saveAvatar: (a: AvatarLayers) =>
     api<{ avatar: AvatarLayers }>("/api/yutopia/avatar", { method: "PUT", body: JSON.stringify(a) }),
   boards: (spaceId: number) => api<{ boards: BoardSummary[] }>(`/api/yutopia/spaces/${spaceId}/boards`),

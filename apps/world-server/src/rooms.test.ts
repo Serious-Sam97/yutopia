@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { dressItems, findPath, Grid, getMap, ROOM_NAME, studio, takenId } from "@yutopia/shared";
+import { areaAt, canPlace, dressItems, findPath, Grid, getMap, ROOM_NAME, studio, takenId } from "@yutopia/shared";
 import { Client, type Room } from "colyseus.js";
 
 process.env.YUTOPIA_OFFLINE = "1";
@@ -73,6 +73,10 @@ async function waitFor(fn: () => boolean, ms = 3000) {
 // Walk the real path in small legal steps (like a client would).
 // the live map from room state, seen with this person's door permissions
 function liveGrid(p: Person) {
+  const { map, objects } = liveWorld(p);
+  return Grid.from(map, objects, { uid: p.room.state.players.get(p.room.sessionId).uid });
+}
+function liveWorld(p: Person) {
   const st = p.room.state;
   const map = {
     ...studio,
@@ -94,7 +98,19 @@ function liveGrid(p: Person) {
       props: JSON.parse(o.props || "{}"),
     }),
   );
-  return Grid.from(map, objects, { uid: st.players.get(p.room.sessionId).uid });
+  return { map, objects };
+}
+// A free spot for a thing near (x, y) where `ok` agrees (nearest first).
+function spotFor(p: Person, kind: string, x: number, y: number, r: number, ok: (sx: number, sy: number) => boolean) {
+  const { map, objects } = liveWorld(p);
+  const bodies = [...p.room.state.players.values()].map((b: { x: number; y: number }) => ({ x: b.x, y: b.y }));
+  const spots: [number, number][] = [];
+  for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) spots.push([x + dx, y + dy]);
+  spots.sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
+  for (const [sx, sy] of spots)
+    if (ok(sx, sy) && canPlace(map, objects, { id: "probe", kind, x: sx, y: sy, rot: 0 }, bodies))
+      return { x: sx, y: sy };
+  return null;
 }
 async function walk(p: Person, to: { x: number; y: number }) {
   const me = p.room.state.players.get(p.room.sessionId);
@@ -699,4 +715,135 @@ test("tabletops sit on surfaces and ride along; looks are checked; clutter becom
     await sleep(300);
     assert.equal(obj(takenId(other.id)), undefined);
   }
+});
+
+test("between people: a wave carries, a high five needs you close and not on do-not-disturb, a drink is handed over", async () => {
+  const s = ++space;
+  const a = await person(23, s);
+  const b = await person(24, s);
+  const seen = (who: Person, sid: string) => who.room.state.players.get(sid);
+  const machine = [...a.room.state.objects.values()].find((o) => o.kind === "coffee_machine");
+  assert.ok(machine);
+  // a wave carries across the room
+  a.room.send("social", { to: b.room.sessionId, act: "wave" });
+  await waitFor(() => seen(b, a.room.sessionId)?.act === "wave");
+  assert.equal(seen(a, b.room.sessionId)?.act, "", "a wave is one-sided");
+  await waitFor(() => seen(b, a.room.sessionId)?.act === "", 4000);
+  // Ana goes for a coffee: a high five doesn't reach that far
+  await walk(a, { x: machine.x + 0.5, y: machine.y + 1.5 });
+  a.room.send("social", { to: b.room.sessionId, act: "highfive" });
+  await sleep(300);
+  assert.equal(seen(a, a.room.sessionId)?.act, "");
+  await sleep(600);
+  a.room.send("item:take", { id: machine.id });
+  await waitFor(() => seen(b, a.room.sessionId)?.held === "mug");
+  await walk(b, { x: machine.x + 1.5, y: machine.y + 1.5 });
+  // on do-not-disturb: only a wave
+  b.room.send("status", { status: "dnd" });
+  await waitFor(() => seen(a, b.room.sessionId)?.status === "dnd");
+  a.room.send("social", { to: b.room.sessionId, act: "highfive" });
+  await sleep(900);
+  assert.equal(seen(a, a.room.sessionId)?.act, "");
+  b.room.send("status", { status: "online" });
+  await waitFor(() => seen(a, b.room.sessionId)?.status === "online");
+  // both sides show it, from the same moment; Bea hears about it
+  a.room.send("social", { to: b.room.sessionId, act: "highfive" });
+  await waitFor(() => seen(b, b.room.sessionId)?.act === "highfive");
+  assert.equal(seen(b, a.room.sessionId)?.actWith, b.room.sessionId);
+  assert.equal(seen(b, b.room.sessionId)?.actAt, seen(b, a.room.sessionId)?.actAt);
+  assert.ok((b.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("high-fived")));
+  // cheers needs two drinks
+  await waitFor(() => seen(a, a.room.sessionId)?.act === "", 3000);
+  await sleep(850);
+  a.room.send("social", { to: b.room.sessionId, act: "cheers" });
+  await sleep(400);
+  assert.equal(seen(a, a.room.sessionId)?.act, "");
+  // handing it over: Bea has it once the hands meet, with the sips it had
+  const heldAt = seen(a, a.room.sessionId)?.heldAt;
+  a.room.send("social", { to: b.room.sessionId, act: "give" });
+  await waitFor(() => seen(a, b.room.sessionId)?.act === "take");
+  await waitFor(() => seen(a, b.room.sessionId)?.held === "mug", 3000);
+  assert.equal(seen(a, a.room.sessionId)?.held, "");
+  assert.equal(seen(a, b.room.sessionId)?.heldAt, heldAt);
+  // nonsense is ignored
+  a.room.send("social", { to: b.room.sessionId, act: "<hug>" });
+  a.room.send("social", { to: a.room.sessionId, act: "wave" });
+  await sleep(300);
+});
+
+test("focus while seated; light switches turn their room's lamps", async () => {
+  const s = ++space;
+  const a = await person(25, s, "member,builder");
+  const b = await person(26, s);
+  const at = me(a);
+  // focus only while you're sitting
+  a.room.send("pos", { x: at?.x ?? 0, y: at?.y ?? 0, d: 0, a: 2, seq: 1 });
+  a.room.send("focus", { on: true });
+  await waitFor(() => b.room.state.players.get(a.room.sessionId)?.focus === true);
+  // walking off ends it; and standing, you can't
+  a.room.send("pos", { x: (at?.x ?? 0) + 0.1, y: at?.y ?? 0, d: 0, a: 1, seq: 2 });
+  await waitFor(() => b.room.state.players.get(a.room.sessionId)?.focus === false);
+  a.room.send("focus", { on: true });
+  await sleep(300);
+  assert.equal(b.room.state.players.get(a.room.sessionId)?.focus, false);
+  // a switch within reach, two lamps in its room, one in another room
+  const x = Math.floor(at?.x ?? 0);
+  const y = Math.floor(at?.y ?? 0);
+  const { map } = liveWorld(a);
+  const sw = spotFor(a, "light_switch", x, y, 10, (sx, sy) => !!areaAt(map, sx + 0.5, sy + 0.5));
+  assert.ok(sw, "a wall to put the switch on");
+  await walk(a, { x: sw.x + 0.5, y: sw.y + 1.5 });
+  const room = areaAt(map, sw.x + 0.5, sw.y + 0.5)?.key;
+  const inRoom = (sx: number, sy: number) => areaAt(map, sx + 0.5, sy + 0.5)?.key === room;
+  a.room.send("obj:put", { id: "t-switch", kind: "light_switch", ...sw, rot: 0 });
+  const l1 = spotFor(a, "lamp", sw.x, sw.y + 1, 6, inRoom);
+  assert.ok(l1);
+  a.room.send("obj:put", { id: "t-lamp1", kind: "lamp", ...l1, rot: 0 });
+  await waitFor(() => !!a.room.state.objects.get("t-lamp1"));
+  const l2 = spotFor(
+    a,
+    "lamp",
+    sw.x,
+    sw.y + 1,
+    6,
+    (sx, sy) => inRoom(sx, sy) && Math.hypot(sx - l1.x, sy - l1.y) > 1.5,
+  );
+  assert.ok(l2);
+  a.room.send("obj:put", { id: "t-lamp2", kind: "lamp", ...l2, rot: 0 });
+  const l3 = spotFor(
+    a,
+    "lamp",
+    sw.x,
+    sw.y,
+    14,
+    (sx, sy) => !!room && !inRoom(sx, sy) && !!areaAt(map, sx + 0.5, sy + 0.5),
+  );
+  assert.ok(l3, "another room nearby");
+  a.room.send("obj:put", { id: "t-lamp3", kind: "lamp", ...l3, rot: 0 });
+  await waitFor(() => ["t-switch", "t-lamp2", "t-lamp3"].every((id) => !!a.room.state.objects.get(id)));
+  const on = (id: string) => JSON.parse(b.room.state.objects.get(id)?.props ?? "{}").on !== false;
+  a.room.send("lights:room", { id: "t-switch", on: false });
+  await waitFor(() => !on("t-lamp1") && !on("t-lamp2"));
+  assert.equal(on("t-lamp3"), true, "another room's lamp stays on");
+  a.room.send("lights:room", { id: "t-switch", on: true });
+  await waitFor(() => on("t-lamp1") && on("t-lamp2"));
+  for (const id of ["t-switch", "t-lamp1", "t-lamp2", "t-lamp3"]) a.room.send("obj:remove", { id });
+});
+
+test("a group comes down in any order: what's on a desk is placed after the desk", async () => {
+  const s = ++space;
+  const a = await person(27, s, "member,builder");
+  const at = me(a);
+  const spot = spotFor(a, "desk", Math.floor(at?.x ?? 0), Math.floor(at?.y ?? 0) - 3, 6, () => true);
+  assert.ok(spot);
+  const count = () => [...a.room.state.objects.values()].filter((o) => o.x === spot.x && o.y === spot.y).length;
+  a.room.send("obj:batch", {
+    items: [
+      { kind: "tabletop", x: spot.x, y: spot.y, rot: 0, props: { d: "mug", c: [1, 1] } },
+      { kind: "desk", x: spot.x, y: spot.y, rot: 0 },
+    ],
+  });
+  await waitFor(() => count() === 2);
+  const mug = [...a.room.state.objects.values()].find((o) => o.kind === "tabletop" && o.x === spot.x && o.y === spot.y);
+  assert.equal(JSON.parse(mug?.props ?? "{}").z, 25, "standing on the desk's top");
 });

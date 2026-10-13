@@ -283,7 +283,13 @@ export class Media {
       return null;
     } catch (e) {
       this.report();
-      return (e as Error).name === "NotAllowedError" ? null : (e as Error).message;
+      // closing the picker is a NotAllowedError too: that one's not a problem.
+      // The system refusing (macOS without Screen Recording for the browser)
+      // says so in its message.
+      const err = e as Error;
+      if (err.name === "NotAllowedError") return /system/i.test(err.message) ? "system" : null;
+      if (err.name === "NotReadableError") return "system";
+      return err.message || err.name;
     }
   }
 

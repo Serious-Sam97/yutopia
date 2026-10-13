@@ -2,6 +2,7 @@ import {
   addRoom,
   applyEdges,
   applyPaint,
+  areaAt,
   blankMap,
   doorCentre,
   doorRoom,
@@ -29,6 +30,9 @@ import { registerFeature } from "./index.ts";
 // resize or start blank, move the arrival point, assign desks. Doors: anyone
 // opens/closes; the room's owner (or a builder) locks. The shared rules
 // (packages/shared/src/map-edit.ts) decide what's allowed.
+// What switches on and off: floor lamps and the desk lamps on desks.
+const isLamp = (o: WorldObjectDef) => o.kind === "lamp" || (o.kind === "tabletop" && o.props?.d === "desklamp");
+
 registerFeature((room: SpaceRoom) => {
   const builder = (c: SpaceClient) => room.state.players.get(c.sessionId)?.builder === true;
   const objects = (): WorldObjectDef[] => [...room.state.objects.values()].map(fromSchema);
@@ -230,10 +234,29 @@ registerFeature((room: SpaceRoom) => {
   room.on("lamp:set", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     const o = room.state.objects.get(String(m.id));
-    if (!p || !o || o.kind !== "lamp") return;
+    if (!p || !o || !isLamp(fromSchema(o))) return;
     if (Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5)) > 2.5) return;
     const def = fromSchema(o);
     void save({ ...def, props: { ...(def.props ?? {}), on: !!m.on } });
+  });
+
+  // A light switch: every lamp in its room (or, outside a room, nearby) on or off.
+  room.on("lights:room", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const sw = room.state.objects.get(String(m?.id ?? ""));
+    if (!p || !sw || sw.kind !== "light_switch") return;
+    if (Math.hypot(p.x - (sw.x + 0.5), p.y - (sw.y + 0.5)) > 2.5) return;
+    const on = !!m.on;
+    const where = areaAt(room.map, sw.x + 0.5, sw.y + 0.5)?.key ?? null;
+    const swDef = fromSchema(sw);
+    void save({ ...swDef, props: { ...(swDef.props ?? {}), on } });
+    for (const o of objects()) {
+      if (!isLamp(o) || (o.props?.on !== false) === on) continue;
+      const inRoom = where
+        ? areaAt(room.map, o.x + 0.5, o.y + 0.5)?.key === where
+        : Math.hypot(o.x - sw.x, o.y - sw.y) <= 6;
+      if (inRoom) void save({ ...o, props: { ...(o.props ?? {}), on } });
+    }
   });
 
   room.on("door:set", (client, m) => {

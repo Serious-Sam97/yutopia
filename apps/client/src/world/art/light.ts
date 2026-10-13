@@ -8,10 +8,13 @@ import {
   isWindow,
   type MapDef,
   tileAt,
+  topCentre,
+  variantOf,
   vWall,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import type { RGB } from "./daylight";
+import { seedOf } from "./items/kit";
 
 // Baked light: every light source is ray-marched across the tile grid (walls
 // and shut doors block it), with a soft falloff, into an RGB buffer in plan
@@ -92,6 +95,28 @@ const SCREENS: Record<string, { at: [number, number][]; color: number; radius: n
   standup_mat: { at: [[2, 2]], color: 0xffb35c, radius: 2.4, intensity: 0.12 },
 };
 
+// A neon sign's tubes (items/home.ts NEON), as light.
+const NEON_LIGHT = [0xffb35c, 0xff5fa8, 0x5ff0ff];
+// On a desk: a desk lamp's warm pool (switched like a lamp), a monitor's glow.
+const TOPS: Record<string, { color: number; radius: number; intensity: number; switched?: boolean }> = {
+  desklamp: { color: 0xffc070, radius: 2.2, intensity: 0.42, switched: true },
+  monitor: { color: 0xb8c9d8, radius: 1.5, intensity: 0.2 },
+};
+
+// The colour a lamp gives: its shade's paint (props.color) over a warm bulb.
+function shadeLight(props: Record<string, unknown> | undefined, bulb: number): number {
+  const c = props?.color;
+  if (typeof c !== "string" || !/^#[0-9a-f]{6}$/i.test(c)) return bulb;
+  const p = Number.parseInt(c.slice(1), 16);
+  const mix = (sh: number) => {
+    const a = (bulb >> sh) & 255;
+    const b = (p >> sh) & 255;
+    // a bright, tinted light: mostly the bulb, coloured by the shade
+    return Math.min(255, Math.round(a * 0.55 + b * 0.45 + 30));
+  };
+  return (mix(16) << 16) | (mix(8) << 8) | mix(0);
+}
+
 export function lightSources(objects: WorldObjectDef[]): LightSource[] {
   const out: LightSource[] = [];
   for (const o of objects) {
@@ -102,7 +127,18 @@ export function lightSources(objects: WorldObjectDef[]): LightSource[] {
       if (o.kind === "radio" && !o.props?.on) continue;
       const e = entry(o.kind);
       const [x, y] = place(o, e.w / 2, e.h / 2 + (e.wall ? 0.6 : 0));
-      out.push({ x, y, color: c.color, radius: c.radius, intensity: c.intensity });
+      const color =
+        o.kind === "neon"
+          ? NEON_LIGHT[variantOf(o, seedOf(o.id))]
+          : o.kind === "lamp"
+            ? shadeLight(o.props, c.color)
+            : c.color;
+      out.push({ x, y, color, radius: c.radius, intensity: c.intensity });
+    }
+    const t = o.kind === "tabletop" ? TOPS[String(o.props?.d ?? "")] : undefined;
+    if (t && !(t.switched && o.props?.on === false)) {
+      const at = topCentre(o);
+      out.push({ x: at.x, y: at.y + 0.3, color: t.color, radius: t.radius, intensity: t.intensity });
     }
     const s = SCREENS[o.kind];
     if (s)
@@ -291,5 +327,10 @@ export class LightMap {
 
 // What changes the light map: walls (the map), light-giving things, doors.
 export function affectsLight(o: WorldObjectDef): boolean {
-  return o.kind === "door" || o.kind in SCREENS || !!(CATALOG as Record<string, { light?: unknown }>)[o.kind]?.light;
+  return (
+    o.kind === "door" ||
+    o.kind in SCREENS ||
+    (o.kind === "tabletop" && String(o.props?.d) in TOPS) ||
+    !!(CATALOG as Record<string, { light?: unknown }>)[o.kind]?.light
+  );
 }

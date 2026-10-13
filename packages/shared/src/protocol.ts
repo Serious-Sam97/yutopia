@@ -1,5 +1,6 @@
 // Messages between client and world-server (Colyseus room "space").
 
+import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
 
 export const ROOM_NAME = "space";
@@ -31,6 +32,10 @@ export interface ClientMessages {
   use: { what: string };
   // a note on the piano I'm at (n: semitones from middle C)
   "piano:note": { id: string; n: number };
+  // with someone near (shared/actions.ts): a wave, a high five, handing over a drink…
+  social: { to: string; act: Social };
+  // heads down at my own desk: headphones on, the room's chatter turned down
+  focus: { on: boolean };
   avatar: { avatar: AvatarLayers }; // after saving it in Yondra: everyone sees the new look now
   chat: { text: string; scope: ChatScope };
   "chat:react": { id: string; e: Emote }; // toggles my reaction on a message I received
@@ -100,7 +105,8 @@ export interface ClientMessages {
   "desk:assign": { id: string; ownerId: number | null; ownerName: string | null };
   // doors: anyone opens/closes; the room's owner (or a builder) locks
   "door:set": { id: string; state: "open" | "closed" | "locked" };
-  "lamp:set": { id: string; on: boolean }; // anyone standing near it
+  "lamp:set": { id: string; on: boolean }; // anyone standing near it (floor lamps, desk lamps)
+  "lights:room": { id: string; on: boolean }; // a light switch: every lamp in its room
   "radio:set": { playing: boolean; station?: number };
   "standup:start": Record<string, never>;
   "standup:next": Record<string, never>;

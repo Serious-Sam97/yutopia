@@ -62,7 +62,11 @@ function NowOn() {
     const id = setInterval(() => setNow(new Date()), 15_000);
     return () => clearInterval(id);
   }, []);
-  const box = w?.engine?.allObjects().find((o) => o.kind === "radio");
+  // where it's playing: the radio (or record player) nearest me
+  const me = useHud((s) => s.me);
+  const boxes = w?.engine?.allObjects().filter((o) => o.kind === "radio" || o.kind === "turntable") ?? [];
+  const at = me ?? { x: 0, y: 0 };
+  const box = boxes.sort((a, b) => Math.hypot(a.x - at.x, a.y - at.y) - Math.hypot(b.x - at.x, b.y - at.y))[0];
   const room = box && w ? areaAt(w.map, box.x + 0.5, box.y + 0.5)?.name : null;
   return (
     <div className="vfd-window hidden md:flex items-center gap-2.5 px-3 h-10 shrink-0">

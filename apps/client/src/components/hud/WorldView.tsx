@@ -8,12 +8,14 @@ import { mixer } from "@/world/audio";
 import { WorldController } from "@/world/controller";
 import { radio, sound } from "@/world/sound";
 import { hud, useHud } from "@/world/store";
+import { ActionMenu, ActionQueueBar, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
 import { ConnectionOverlay, HeldChip, Knocks, Minimap, Prompt, Toasts, VideoBubbles } from "./Overlays";
 import { PanelHost } from "./PanelHost";
 import { PersonCard } from "./PersonCard";
 import { Rituals } from "./Rituals";
+import { ScreenTray } from "./Screens";
 import { TopBar } from "./TopBar";
 
 // project owners only: loaded the first time someone builds
@@ -68,10 +70,14 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
           <Toasts />
           {!building && <Prompt />}
           {!building && <HeldChip />}
+          {!building && <FocusChip />}
+          {!building && <ActionQueueBar />}
+          {!building && <ScreenTray />}
           {building && <BuildMode />}
           <Minimap />
           {!building && <Dock />}
           <PanelHost />
+          {!building && <ActionMenu />}
         </div>
         <ConnectionOverlay />
       </main>

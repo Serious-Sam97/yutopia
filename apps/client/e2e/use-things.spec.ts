@@ -69,3 +69,53 @@ test("a cup from the cooler, a can from the machine, a tune on the piano", async
     await page.waitForTimeout(500);
   }
 });
+
+// The room's music plays from every radio and record player, not just the
+// first one placed: next to either of two far-apart radios it's loud.
+test("music from every radio: loud next to the second one too", async ({ page }) => {
+  test.setTimeout(150_000);
+  const tok = await token(ANA);
+  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  const stamp = Date.now().toString(36);
+  const ids = [`e2e-r-t1-${stamp}`, `e2e-r-r1-${stamp}`, `e2e-r-t2-${stamp}`, `e2e-r-r2-${stamp}`];
+  const level = () => page.evaluate(() => (window as any).__audio.radio.level as number);
+  try {
+    // two side tables far apart on the open floor, a radio on each
+    for (const [i, x] of [
+      [0, 3],
+      [2, 25],
+    ] as const) {
+      await page.evaluate((o) => (window as any).__yutopia.send("obj:put", o), {
+        id: ids[i],
+        kind: "side_table",
+        x,
+        y: 14,
+        rot: 0,
+      });
+      await page.waitForTimeout(300);
+      await page.evaluate((o) => (window as any).__yutopia.send("obj:put", o), {
+        id: ids[i + 1],
+        kind: "radio",
+        x,
+        y: 14,
+        rot: 0,
+        props: { c: [0, 0] },
+      });
+    }
+    await expect
+      .poll(() => page.evaluate((r) => r.every((id: string) => !!(window as any).__yutopia.engine.getObject(id)), ids))
+      .toBe(true);
+    // (the music needs the page's audio started: a click does it)
+    await page.mouse.click(5, 400);
+    await page.evaluate(() => (window as any).__yutopia.send("radio:set", { playing: true, station: 0 }));
+    await walkTo(page, 3.5, 15.6, 30_000);
+    await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0.6);
+    // over by the other one, far from the first: still loud
+    await walkTo(page, 25.5, 15.6, 40_000);
+    await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0.6);
+  } finally {
+    await page.evaluate(() => (window as any).__yutopia.send("radio:set", { playing: false }));
+    await page.evaluate((x) => (window as any).__yutopia.send("obj:removeMany", { ids: x }), ids);
+    await page.waitForTimeout(500);
+  }
+});

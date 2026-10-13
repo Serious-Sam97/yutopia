@@ -2,6 +2,7 @@
 
 import { entry, TEMPLATES } from "@yutopia/shared";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "../ctx";
@@ -70,9 +71,17 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     label: "catWalls",
     icon: "frame",
     items: [
-      ...["board_wall", "screen_wall", "whiteboard", "notice_board", "clock", "neon", "acoustic_panel", "poster"].map(
-        it,
-      ),
+      ...[
+        "board_wall",
+        "screen_wall",
+        "whiteboard",
+        "notice_board",
+        "clock",
+        "neon",
+        "light_switch",
+        "acoustic_panel",
+        "poster",
+      ].map(it),
       decor("frame", "frame"),
     ],
   },
@@ -255,7 +264,7 @@ export function Catalog() {
         </span>
       </label>
       {!found && (
-        <div className="grid grid-cols-8 gap-1 px-3 pt-2.5" role="tablist" aria-label={t("buildFurniture")}>
+        <div className="grid grid-cols-9 gap-1 px-3 pt-2.5" role="tablist" aria-label={t("buildFurniture")}>
           {CATS.map((c) => (
             <button
               key={c.key}
@@ -281,10 +290,21 @@ export function Catalog() {
           >
             <Icon name="room" size={19} />
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={cat === "setups"}
+            title={t("buildSetups")}
+            aria-label={t("buildSetups")}
+            className="rail-btn flex h-10 w-full min-w-0"
+            onClick={() => setCat("setups")}
+          >
+            <Icon name="pin" size={19} />
+          </button>
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto scroll-thin px-3 pt-2 pb-3 space-y-3">
-        {!found && recentItems.length > 0 && cat !== "layouts" && (
+        {!found && recentItems.length > 0 && cat !== "layouts" && cat !== "setups" && (
           <section className="space-y-1.5">
             <h3 className="grp flex items-center gap-1.5">
               <Icon name="clock" size={12} />
@@ -295,6 +315,8 @@ export function Catalog() {
         )}
         {cat === "layouts" && !found ? (
           <Layouts />
+        ) : cat === "setups" && !found ? (
+          <Setups />
         ) : shown.length ? (
           <section className="space-y-1.5">
             <h3 className="grp">
@@ -379,6 +401,77 @@ function SellBin() {
       <Icon name="bin" size={20} />
       <span className="mono text-xs uppercase tracking-wider">{t("buildSell")}</span>
     </footer>
+  );
+}
+
+// My setups: groups of things I saved (a dressed desk…), to place again.
+function Setups() {
+  const t = useTr();
+  const w = useWorld();
+  const setups = useHud((s) => s.build.setups);
+  useEffect(() => {
+    if (setups) return;
+    yutopia
+      .setups()
+      .then(({ setups }) => hud.set((s) => ({ build: { ...s.build, setups } })))
+      .catch(() => hud.set((s) => ({ build: { ...s.build, setups: [] } })));
+  }, [setups]);
+  const forget = async (id: number) => {
+    try {
+      await yutopia.deleteSetup(id);
+      hud.set((s) => ({ build: { ...s.build, setups: (s.build.setups ?? []).filter((x) => x.id !== id) } }));
+    } catch {}
+  };
+  return (
+    <section className="space-y-1.5">
+      <h3 className="grp">{t("buildSetups")}</h3>
+      {!setups?.length ? (
+        <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+          {setups ? t("buildSetupsEmpty") : "…"}
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {setups.map((st) => {
+            // its biggest things, as pictures
+            const show = st.items.filter((i) => !entry(i.kind).onSurface).slice(0, 4);
+            return (
+              <li key={st.id} className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  className="tile-card flex-1 min-w-0 h-[64px] flex items-center gap-2 px-2 text-left"
+                  onClick={() => w?.build?.placeSetup(st.items)}
+                  aria-label={`${t("buildSetupPlace")}: ${st.name}`}
+                >
+                  <span className="flex -space-x-3 shrink-0" aria-hidden>
+                    {show.map((i, k) => (
+                      <span key={`${i.kind}${k}`} className="w-10 h-10 flex items-center justify-center">
+                        <ItemThumb kind={i.kind} props={i.props ?? undefined} />
+                      </span>
+                    ))}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-medium truncate">{st.name}</span>
+                    <span className="mono text-[10.5px] uppercase" style={{ color: "var(--muted)" }}>
+                      {t("buildSetupItems").replace("{n}", String(st.items.length))}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="w-8 h-8 rounded-lg grid place-items-center hover:bg-white/10 shrink-0"
+                  style={{ color: "var(--muted)" }}
+                  aria-label={`${t("buildSetupDelete")}: ${st.name}`}
+                  title={t("buildSetupDelete")}
+                  onClick={() => void forget(st.id)}
+                >
+                  <Icon name="bin" size={16} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

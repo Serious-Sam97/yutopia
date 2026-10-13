@@ -52,6 +52,8 @@ const st = (page: Page, fn: (s: any) => unknown) => page.evaluate(fn as never, n
 const zoom = (page: Page, z: number) => page.evaluate((v) => (window as any).__yutopia.engine.setZoom(v), z);
 
 test("build: blank map, a room with an owner, walls, a desk, and a locked door", async ({ browser }) => {
+  // a whole map built by two people (and screenshots of it): more than the default
+  test.setTimeout(180_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
   const lab = await spaceId(ta, "Yutopia Lab");
   const ana = await (await browser.newContext()).newPage();

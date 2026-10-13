@@ -158,6 +158,8 @@ export interface MotionIn {
   reduced: boolean; // reduced motion: no idle life, short gestures
   held?: { kind: HeldKind; since: number } | null; // carrying something, `since` ms
   busy?: string; // using something (shared USES): the arcade, the piano…
+  // with someone (shared SOCIAL, or "take"): what, `t` s into it, `len` s long
+  act?: { what: string; t: number; len: number } | null;
 }
 
 // Carrying a mug in the right hand, at the waist…
@@ -341,6 +343,13 @@ export class Motion {
     } else this.mouthOpen = false;
     p.face = face;
 
+    // ── with someone: a high five, a fist bump, cheers, a drink handed over
+    if (m.act && !rig.sit) {
+      const { what, t: at, len } = m.act;
+      const w = m.reduced ? 1 : ease(at / 0.3) * (1 - ease((at - (len - 0.35)) / 0.35));
+      if (w > 0) p = what === "wave" ? emotePose(rig, "wave", p, at, w) : together(rig, what, p, at / len, w);
+    }
+
     // ── emotes: a short gesture for each
     if (m.emote !== this.emote) {
       this.emote = m.emote;
@@ -412,6 +421,45 @@ function atWork(rig: Rig, what: string, base: Pose, t: number): Pose {
       return base;
   }
   return p;
+}
+
+// Two people at it: the right arm (the drink's hand) reaches for the other
+// one; the hands meet at CONTACT (0.45 of the way) — a slap, a bump, a clink.
+function together(rig: Rig, what: string, base: Pose, k: number, w: number): Pose {
+  const p: Pose = { ...base, body: { ...base.body }, head: { ...base.head }, armR: { ...base.armR } };
+  const side = rig.side;
+  // the moment the hands meet: a little push forward
+  const hit = Math.max(0, 1 - Math.abs(k - 0.45) / 0.1);
+  let arm: ArmPose;
+  switch (what) {
+    case "highfive":
+      // up high, open hand
+      arm = side ? { sh: 140 - 14 * hit, el: 12, su: 1, sf: 1 } : { sh: -148, el: -18 + 10 * hit, su: 0.92, sf: 0.95 };
+      p.body.y += -0.8 * hit;
+      p.face = hit > 0.2 ? "talk" : p.face;
+      break;
+    case "fistbump":
+      // a fist at chest height, out towards them
+      arm = side
+        ? { sh: 78 + 8 * hit, el: 18 - 10 * hit, su: 1, sf: 1 }
+        : { sh: 9, el: 74 - 8 * hit, su: 0.9, sf: 0.5 };
+      break;
+    case "cheers":
+      // the drink up between you
+      arm = side ? { sh: 96 + 6 * hit, el: 46, su: 1, sf: 1 } : { sh: 22, el: 118 - 6 * hit, su: 0.92, sf: 0.66 };
+      p.face = hit > 0.2 ? "talk" : p.face;
+      break;
+    case "give":
+    case "take":
+      // arm out, hand open (the drink goes across as the hands meet)
+      arm = side ? { sh: 66, el: 14, su: 1, sf: 1 } : { sh: 8, el: 70, su: 0.9, sf: 0.52 };
+      break;
+    default:
+      return base;
+  }
+  p.armR = arm;
+  p.head.rot += side ? -2 : 1.5;
+  return lerpPose(base, p, w);
 }
 
 // in over 0.3 s, out over 0.4 s

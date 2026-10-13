@@ -6,12 +6,15 @@ import {
   entry,
   footprint,
   type HeldKind,
+  hasActions,
   heldState,
   hostOf,
   isFloor,
   isHeld,
+  isSocial,
   type MapDef,
   Q,
+  SOCIAL_MS,
   surfaceAt,
   TILE_H,
   TILE_W,
@@ -121,6 +124,9 @@ export interface AvatarState {
   held?: string; // what they carry (shared/held.ts)
   heldAt?: number; // when they took it (server ms)
   busy?: string; // what they're using (shared USES)
+  act?: string; // with someone (shared SOCIAL, or "take"), since actAt (server ms)
+  actAt?: number;
+  actWith?: string;
 }
 
 interface AvatarView {
@@ -148,6 +154,9 @@ interface AvatarView {
   last?: { x: number; y: number };
   shownDir?: number; // the facing drawn (turns one step at a time)
   turnAt?: number;
+  // a move with someone, timed from when it showed up here (not the server's clock)
+  actKey?: string;
+  actSeen?: number;
   avatarKey: string;
   drawnFor: string; // whose look the sprite's current drawing is (avatar JSON)
   local: boolean;
@@ -216,7 +225,8 @@ function lightKey(o: WorldObjectDef | undefined): string {
   if (!o) return "";
   const st = String(o.props?.state ?? "open");
   const shut = (st === "closed" || st === "locked") && !o.props?.passing;
-  return `${shut}|${o.props?.on}`;
+  // (a lamp's shade colours its light; a neon sign's look is its colour)
+  return `${shut}|${o.props?.on}|${o.props?.color}|${o.props?.variant}`;
 }
 
 function isFloorAt(map: MapDef, x: number, y: number): boolean {
@@ -263,8 +273,8 @@ const VFD_SMALL = new TextStyle({ fontFamily: "VT323, ui-monospace, monospace", 
 
 export interface EngineEvents {
   onTileClick?: (x: number, y: number) => void;
-  onAvatarClick?: (id: string) => void;
-  onObjectClick?: (id: string) => void;
+  onAvatarClick?: (id: string, at: { x: number; y: number }) => void; // at: client px
+  onObjectClick?: (id: string, at: { x: number; y: number }) => void;
   onHoverObject?: (id: string | null) => void;
   onPointerWorld?: (x: number, y: number) => void;
   onPointerDown?: (x: number, y: number) => void;
@@ -513,8 +523,47 @@ export class WorldEngine {
     for (const v of this.objectViews.values()) {
       const name = v.def.props?.ownerName;
       if (typeof name !== "string" || !name) continue;
-      plate(name.split(" ")[0], v.def.x + 0.5, v.def.y + 0.5, 46, false);
+      // with what they're on in Yondra, lit like a display
+      const ticket = this.deskTasks.get(Number(v.def.props?.ownerId));
+      if (!ticket) {
+        plate(name.split(" ")[0], v.def.x + 0.5, v.def.y + 0.5, 68, false);
+        continue;
+      }
+      const c = new Container();
+      const n = new Text({
+        text: name.split(" ")[0],
+        style: { fontFamily: "Share Tech Mono, monospace", fontSize: 10, fill: C.ink },
+        resolution: 2,
+      });
+      const k = new Text({
+        text: ticket,
+        style: { fontFamily: "VT323, monospace", fontSize: 13, fill: C.vfd, letterSpacing: 0.5 },
+        resolution: 2,
+      });
+      const h = Math.max(n.height, k.height) + 4;
+      const w = n.width + k.width + 20;
+      n.position.set(-w / 2 + 6, -n.height / 2);
+      k.position.set(-w / 2 + n.width + 14, -k.height / 2);
+      const bg = new Graphics()
+        .roundRect(-w / 2, -h / 2, w, h, 3)
+        .fill({ color: C.cream, alpha: 0.92 })
+        .stroke({ width: 1, color: C.walnut })
+        .roundRect(-w / 2 + n.width + 10, -h / 2 + 1.5, k.width + 8, h - 3, 2)
+        .fill({ color: 0x120d09, alpha: 0.95 });
+      c.addChild(bg, n, k);
+      const p = toScreen(v.def.x + 0.5, v.def.y + 0.5);
+      c.position.set(p.x, p.y - 68);
+      this.labelLayer.addChild(c);
     }
+  }
+
+  // What each desk's owner is on in Yondra (user id → ticket), for their nameplate.
+  private deskTasks = new Map<number, string>();
+  setDeskTasks(m: Map<number, string>) {
+    const same = m.size === this.deskTasks.size && [...m].every(([k, v]) => this.deskTasks.get(k) === v);
+    if (same) return;
+    this.deskTasks = m;
+    this.drawLabels();
   }
 
   // A wall brush over an edge: a see-through wall where it would go.
@@ -1603,6 +1652,7 @@ export class WorldEngine {
     const pose = v.motion.update(r?.def ?? want.def, dt, {
       held,
       busy: s.busy ?? "",
+      act: this.actOf(v),
       dist,
       walking,
       speed: dt > 0 ? dist / dt : 0,
@@ -1636,6 +1686,23 @@ export class WorldEngine {
     r.root.scale.set((mirror ? -1 : 1) * P.FIT * def.squash, P.FIT);
     r.root.position.set(0, lift + 2 + (sitting ? P.SIT_DROP * P.FIT : 0));
     return true;
+  }
+
+  // A move with someone (shared SOCIAL): what, and how far into it.
+  private actOf(v: AvatarView): { what: string; t: number; len: number } | null {
+    const s = v.state;
+    if (!s.act) {
+      v.actKey = undefined;
+      return null;
+    }
+    const key = `${s.act}|${s.actAt}`;
+    if (v.actKey !== key) {
+      v.actKey = key;
+      v.actSeen = performance.now();
+    }
+    const kind = s.act === "take" ? "give" : s.act;
+    const len = (isSocial(kind) ? SOCIAL_MS[kind] : 1500) / 1000;
+    return { what: s.act, t: (performance.now() - (v.actSeen ?? 0)) / 1000, len };
   }
 
   // The thing in the right hand: at the hand, upright (tipped towards the mouth
@@ -2006,7 +2073,18 @@ export class WorldEngine {
   private outlines: Outline[] = [];
   private hidden = new Set<string>();
   private hulls = new Map<string, { hull: number[]; at: number }>();
-  private fx: { x: number; y: number; vx: number; vy: number; t: number; life: number; r: number; c: number }[] = [];
+  private fx: {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    t: number;
+    life: number;
+    r: number;
+    c: number;
+    sq?: boolean; // a scrap of confetti (a square, spinning), else a soft dot
+    g?: number; // its fall (px/s²)
+  }[] = [];
   pointerAt = { gx: 0, gy: 0 };
   // build mode: walls lower around this spot (world tiles) instead of the camera's focus
   focusAt: { x: number; y: number } | null = null;
@@ -2120,9 +2198,49 @@ export class WorldEngine {
   }
 
   // Dust when something lands, a poof when it goes (world tiles).
-  puff(x: number, y: number, kind: "drop" | "poof" = "drop") {
+  puff(x: number, y: number, kind: "drop" | "poof" | "spark" | "confetti" = "drop", lift = 0) {
     if (!this.animated()) return;
     const c = toScreen(x, y);
+    if (kind === "spark") {
+      // where two hands meet: a few warm sparks
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2 + Math.random() * 0.3;
+        const sp = 46 * (0.6 + Math.random() * 0.6);
+        this.fx.push({
+          x: c.x,
+          y: c.y - lift,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp * 0.8,
+          t: 0,
+          life: 0.45,
+          r: 1.6 + Math.random() * 1.4,
+          c: Math.random() < 0.5 ? 0xffd27a : 0xfff1d0,
+          g: 10,
+        });
+      }
+      return;
+    }
+    if (kind === "confetti") {
+      // a card done: confetti over their head
+      const colors = [0xffa630, 0xc4402b, 0x9aa67e, 0xf1e4cf, 0x6fa3b8, 0xffd27a];
+      for (let i = 0; i < 36; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+        const sp = 70 + Math.random() * 70;
+        this.fx.push({
+          x: c.x + (Math.random() - 0.5) * 10,
+          y: c.y - lift,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp,
+          t: 0,
+          life: 1.5 + Math.random() * 0.6,
+          r: 1.8 + Math.random() * 1.4,
+          c: colors[i % colors.length],
+          sq: true,
+          g: 150,
+        });
+      }
+      return;
+    }
     const n = kind === "poof" ? 18 : 10;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
@@ -2160,9 +2278,18 @@ export class WorldEngine {
       p.t += dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vy += 30 * dt;
+      p.vy += (p.g ?? 30) * dt;
       const k = 1 - p.t / p.life;
-      if (k > 0) f.circle(p.x, p.y, p.r * (1.3 - k * 0.3)).fill({ color: p.c, alpha: 0.55 * k });
+      if (k <= 0) continue;
+      if (p.sq) {
+        // confetti: drifts, flutters (squashed as it turns)
+        p.vx *= 1 - dt * 1.5;
+        const flip = Math.abs(Math.sin(p.t * 9 + p.r * 3));
+        f.rect(p.x - p.r, p.y - p.r * flip, p.r * 2, p.r * 2 * flip + 0.4).fill({
+          color: p.c,
+          alpha: Math.min(1, k * 2),
+        });
+      } else f.circle(p.x, p.y, p.r * (1.3 - k * 0.3)).fill({ color: p.c, alpha: 0.55 * k });
     }
     this.fx = this.fx.filter((p) => p.t < p.life);
   }
@@ -2229,10 +2356,20 @@ export class WorldEngine {
   // Build mode's pick at the pointer: the front-most drawn thing (rugs last),
   // or a piece of clutter. `filter` skips objects (held ones, say).
   pickAt(gx = this.pointerAt.gx, gy = this.pointerAt.gy, filter?: (o: WorldObjectDef) => boolean): Pick | null {
-    const px = (gx - this.world.position.x) / this.zoom;
-    const py = (gy - this.world.position.y) / this.zoom;
-    let best: Pick | null = null;
-    let bestKey = Number.NEGATIVE_INFINITY;
+    return this.picksAt(gx, gy, filter)[0] ?? null;
+  }
+
+  // Everything under the pointer, front first (Tab steps through them in build
+  // mode: a plant's leaves over the one behind it, a mug on a desk…).
+  picksAt(gx = this.pointerAt.gx, gy = this.pointerAt.gy, filter?: (o: WorldObjectDef) => boolean): Pick[] {
+    return this.picksAtLocal(
+      (gx - this.world.position.x) / this.zoom,
+      (gy - this.world.position.y) / this.zoom,
+      filter,
+    );
+  }
+  private picksAtLocal(px: number, py: number, filter?: (o: WorldObjectDef) => boolean): Pick[] {
+    const found: { pick: Pick; key: number }[] = [];
     for (const [id, v] of this.objectViews) {
       const o = v.def;
       const e = entry(o.kind);
@@ -2244,22 +2381,16 @@ export class WorldEngine {
       // small things on a surface win over the surface (and what's behind it)
       const top = e.onSurface ? topCentre(o) : null;
       const key = top ? 500 + top.x + top.y : (flat ? -1000 : 0) + o.x + o.y + (w + h) / 2;
-      if (key > bestKey) {
-        bestKey = key;
-        best = { id, dress: false };
-      }
+      found.push({ pick: { id, dress: false }, key });
     }
     for (const d of this.dress) {
       if (!d.piece || !d.root.visible) continue;
       const hull = this.dressHull(d.piece.id);
       if (!hull || !inConvex(hull, px, py)) continue;
       const key = (d.at ? d.at[0] + d.at[1] : 0) + 0.7;
-      if (key > bestKey) {
-        bestKey = key;
-        best = { id: d.piece.id, dress: true, kind: d.piece.kind };
-      }
+      found.push({ pick: { id: d.piece.id, dress: true, kind: d.piece.kind }, key });
     }
-    return best;
+    return found.sort((a, b) => b.key - a.key).map((f) => f.pick);
   }
 
   // ── input ────────────────────────────────────────────────────────────────
@@ -2318,7 +2449,9 @@ export class WorldEngine {
         best = id;
       }
     }
-    return best;
+    if (best) return best;
+    // the rest with something to do (a chair to sit on, my desk…): by their drawn outline
+    return this.picksAtLocal(gx, gy, (o) => !entry(o.kind).interact && hasActions(o)).find((p) => !p.dress)?.id ?? null;
   }
 
   // Build mode: taps go through people (and Vortex) to the floor and furniture.
@@ -2330,9 +2463,10 @@ export class WorldEngine {
     const w = toWorld(gx, gy);
     const av = this.passAvatars ? null : this.pickAvatar(gx, gy);
     // clicking yourself is handled too (it opens your look)
-    if (av) return this.events.onAvatarClick?.(av);
+    const at = { x: e.clientX, y: e.clientY };
+    if (av) return this.events.onAvatarClick?.(av, at);
     const obj = this.pickObject(w.x, w.y, gx, gy);
-    if (obj) return this.events.onObjectClick?.(obj);
+    if (obj) return this.events.onObjectClick?.(obj, at);
     this.events.onTileClick?.(w.x, w.y);
   }
 

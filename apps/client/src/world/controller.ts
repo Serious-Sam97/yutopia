@@ -5,8 +5,10 @@ import {
   areaAt,
   type ChatScope,
   type ClientMessages,
+  CONTACT,
   dirFromDelta,
   doorCentre,
+  doorRoom,
   EMOTES,
   type Emote,
   entry,
@@ -18,16 +20,21 @@ import {
   HEAR_RADIUS,
   hearingGain,
   isPrivate,
+  isSocial,
   isTheme,
   type MapDef,
   moveStep,
+  objectActions,
   type Point,
   parseAvatar,
   ROOM_NAME,
   RUN_SPEED,
   type ServerMessages,
+  SOCIAL,
+  SOCIAL_MS,
   STEP_LABELS,
   screenInputToWorld,
+  socialFor,
   stereoPan,
   TICK_HZ,
   tileAt,
@@ -36,17 +43,18 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
-import { ApiError, type Session, yutopia } from "@/lib/api";
+import { ApiError, type Session, YONDRA_APP, yutopia } from "@/lib/api";
 import { disconnectEcho, getEcho } from "@/lib/echo";
 import { tr } from "@/lib/i18n";
 import { deviceQuality, prefs, type Quality, resolveQuality, subscribePrefs } from "@/lib/prefs";
+import { ActionQueue } from "./actions";
 import { mixer } from "./audio";
 import type { BuildController } from "./build/controller";
 import { type AvatarState, WorldEngine } from "./engine";
-import { machineSound, pianoNote } from "./foley";
+import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import { Media } from "./media";
 import { radio, sound } from "./sound";
-import { hud, type Person, toast } from "./store";
+import { type ActTarget, hud, type Person, toast } from "./store";
 
 // biome-ignore lint/suspicious/noExplicitAny: decoded Colyseus schema objects
 type S = any;
@@ -89,10 +97,46 @@ export class WorldController {
   private followAt = 0;
   private uidToSid = new Map<number, string>();
   onOpenPanel: (kind: string, objectId?: string) => void = () => {};
+  readonly actions: ActionQueue;
 
   constructor(host: HTMLElement, spaceId: number) {
     this.host = host;
     this.spaceId = spaceId;
+    this.actions = new ActionQueue({
+      me: () => this.me,
+      setFacing: (d) => {
+        this.me.d = d;
+      },
+      grid: () => this.grid,
+      object: (id) => this.engine?.getObject(id),
+      person: (sid) => {
+        const p = this.room?.state.players.get(sid);
+        if (!p) return undefined;
+        const r = this.remotes.get(sid);
+        const at = r ? interpolate(r.buf, performance.now() - INTERP_MS) : { x: p.x, y: p.y };
+        return { x: at.x, y: at.y, uid: p.uid, name: p.name };
+      },
+      walk: (to) => this.walkTo(to, undefined, true),
+      walking: () => !!this.path?.length,
+      stopWalking: () => {
+        this.path = null;
+        this.pathTarget = null;
+      },
+      send: (type, msg) => this.send(type, msg),
+      activate: (id) => this.activateObject(id, false),
+      machineBusy: () => performance.now() < this.usingUntil,
+      busyFor: (what, ms) => {
+        this.usingWhat = what;
+        this.usingUntil = performance.now() + ms;
+      },
+      playNote: (id, n) => this.playPiano(id, n),
+      openPanel: (kind, objectId) => this.onOpenPanel(kind, objectId),
+      putDown: () => this.putDown(),
+      myTask: () => {
+        const c = hud.get().status[this.myUid()]?.[0];
+        return c ? { id: c.id, boardId: c.boardId } : null;
+      },
+    });
     this.media = new Media({
       onTracksChanged: (m) => {
         hud.set((s) => ({ media: { ...s.media, mic: m.mic, cam: m.cam, screen: m.screen } }));
@@ -146,15 +190,21 @@ export class WorldController {
     await engine.init(this.host, { quality: this.qualityNow(), reducedMotion: prefs().reducedMotion });
     if (this.stopped) return engine.destroy();
     engine.events = {
-      onTileClick: (x, y) => (hud.get().build.on ? this.buildClick(x, y) : this.walkTo({ x, y })),
-      onAvatarClick: (sid) => {
-        if (sid.startsWith("npc:")) return this.send("vortex:poke", {});
-        // click yourself to change your look; anyone else to see who they are
-        if (sid === this.room?.sessionId) return hud.set({ panel: { kind: "avatar" } });
-        const p = this.room?.state.players.get(sid);
-        if (p && !p.bot) hud.set({ inspect: p.uid });
+      onTileClick: (x, y) => {
+        if (hud.get().build.on) return this.buildClick(x, y);
+        // a click on the floor: go there (dropping whatever was queued)
+        if (hud.get().menu) return hud.set({ menu: null });
+        this.actions.clear();
+        this.walkTo({ x, y });
       },
-      onObjectClick: (id) => {
+      onAvatarClick: (sid, at) => {
+        if (sid.startsWith("npc:")) return this.send("vortex:poke", {});
+        // yourself: your look, your drink…; anyone else: what to do with them
+        if (sid === this.room?.sessionId) return this.openMenu({ type: "self" }, at);
+        const p = this.room?.state.players.get(sid);
+        if (p && !p.bot) this.openMenu({ type: "person", sid }, at);
+      },
+      onObjectClick: (id, at) => {
         const o = this.engine?.getObject(id);
         const b = hud.get().build;
         // the door brush removes a door you click on
@@ -162,7 +212,7 @@ export class WorldController {
           return this.send("obj:remove", { id: o.id });
         if (b.on && o && b.tool === "walls") return; // walls/floors paint by dragging
         if (b.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
-        this.activateObject(id, true);
+        if (!this.openMenu({ type: "object", id }, at)) this.activateObject(id, true);
       },
       onHoverObject: () => {},
       onPointerWorld: (x, y) => this.buildHover(x, y),
@@ -535,9 +585,14 @@ export class WorldController {
       engine.refreshFlat();
       this.rebuildGrid();
       this.applyBoards();
+      this.build?.checkPending();
       hud.set((h) => ({ objectsVersion: h.objectsVersion + 1 }));
     }
     this.moveLocal(dt);
+    if (hud.get().build.on) {
+      this.actions.clear();
+      if (hud.get().menu) hud.set({ menu: null });
+    } else this.actions.tick(now);
     // my voice's reach on open floor while the mic is on (rooms and the stage
     // don't go by distance)
     const here = areaAt(this.map, this.me.x, this.me.y);
@@ -551,6 +606,13 @@ export class WorldController {
     if (heldNow !== this.heldShown) {
       this.heldShown = heldNow;
       hud.set({ held: lp?.held ? { kind: lp.held, at: lp.heldAt } : null });
+    }
+    if (!!lp?.focus !== hud.get().focus) hud.set({ focus: !!lp?.focus });
+    // someone high-fives me, hands me something…: turn to them
+    if (lp?.act && lp.actAt !== this.facedAct) {
+      this.facedAct = lp.actAt;
+      const other = room.state.players.get(lp.actWith);
+      if (other && !this.path) this.me.d = dirFromDelta(other.x - this.me.x, other.y - this.me.y, this.me.d as 0);
     }
     if (lp)
       engine.upsertAvatar(
@@ -569,13 +631,20 @@ export class WorldController {
       if (this.hear.has(sid)) {
         const ear = { x: this.me.x, y: this.me.y, dnd: lp?.status === "dnd" };
         const src = { x: pos.x, y: pos.y, dnd: p.status === "dnd" };
-        this.media.setVoice(String(p.uid), Math.max(0.05, hearingGain(this.map, ear, src, true)), stereoPan(ear, src));
+        // focusing: the room's chatter turned down (whoever's right beside me still heard)
+        const duck = lp?.focus && Math.hypot(pos.x - this.me.x, pos.y - this.me.y) > 2 ? 0.25 : 1;
+        this.media.setVoice(
+          String(p.uid),
+          Math.max(0.05, hearingGain(this.map, ear, src, true) * duck),
+          stereoPan(ear, src),
+        );
       } else this.media.setVoice(String(p.uid), 0, 0);
     }
     room.state.npcs.forEach((n: S, id: string) => {
       const pos = interpolate(this.npcBuf.get(id) ?? [{ t: 0, x: n.x, y: n.y }], renderAt);
       engine.upsertAvatar(`npc:${id}`, { ...this.npcState(n), x: pos.x, y: pos.y });
     });
+    this.watchActs();
     engine.update(dt);
     this.updatePrompt();
     if (now - this.peopleAt > 250) {
@@ -586,19 +655,28 @@ export class WorldController {
     this.updateAudioScene();
   }
 
-  // Room tone follows my area; the radio is loud in the lounge, faint at the door.
+  // Room tone follows my area. The room's music plays from every radio and
+  // record player: loud in their room, faint by the door — heard from the
+  // loudest one where I stand (and from its side).
   private updateAudioScene() {
     const area = areaAt(this.map, this.me.x, this.me.y);
     sound.setArea(area?.key ?? "", area?.kind ?? "open");
     const r = hud.get().radio;
     if (!r.playing) return radio.stop();
     radio.play(r.station, r.startedAt);
-    const box = this.engine?.allObjects().find((o) => o.kind === "radio");
-    if (!box) return radio.setLevel(0);
-    const d = Math.hypot(this.me.x - (box.x + 0.5), this.me.y - (box.y + 0.5));
-    const boxArea = areaAt(this.map, box.x + 0.5, box.y + 0.5);
-    const same = area?.key === boxArea?.key;
-    radio.setLevel(same ? Math.max(0.2, Math.min(1, 1 - (d - 2) / 10)) : d < 5 ? 0.12 : 0);
+    let level = 0;
+    let pan = 0;
+    for (const box of this.engine?.allObjects() ?? []) {
+      if (box.kind !== "radio" && box.kind !== "turntable") continue;
+      const d = Math.hypot(this.me.x - (box.x + 0.5), this.me.y - (box.y + 0.5));
+      const same = area?.key === areaAt(this.map, box.x + 0.5, box.y + 0.5)?.key;
+      const l = same ? Math.max(0.2, Math.min(1, 1 - (d - 2) / 10)) : d < 5 ? 0.12 : 0;
+      if (l > level) {
+        level = l;
+        pan = stereoPan(this.me, { x: box.x + 0.5, y: box.y + 0.5 });
+      }
+    }
+    radio.setLevel(level, prefs().spatial ? pan * 0.6 : 0);
   }
 
   private objectsDirty = false;
@@ -612,6 +690,7 @@ export class WorldController {
     const start = { x: this.me.x, y: this.me.y };
     let moved = false;
     if (ix || iy || pad.x || pad.y) {
+      this.actions.clear();
       this.path = null;
       this.pathTarget = null;
       hud.set({ following: null });
@@ -691,17 +770,18 @@ export class WorldController {
   }
   private padA = false;
 
-  walkTo(target: Point, objectId?: string) {
-    if (hud.get().build.on) return;
+  walkTo(target: Point, objectId?: string, quiet = false): boolean {
+    if (hud.get().build.on) return false;
     const path = findPath(this.grid, this.me, target);
     if (!path) {
-      this.engine?.showMarker(target.x, target.y);
-      return;
+      if (!quiet) this.engine?.showMarker(target.x, target.y);
+      return false;
     }
     this.path = path;
     this.pathTarget = objectId ? { objectId } : null;
     const end = path[path.length - 1] ?? target;
     this.engine?.showMarker(end.x, end.y);
+    return true;
   }
 
   private follow(now: number) {
@@ -747,6 +827,134 @@ export class WorldController {
   interact() {
     const p = hud.get().prompt;
     if (p) this.activateObject(p.objectId, false);
+  }
+
+  // Moves between people: a spark and its sound where the hands meet (one of
+  // the two shows it), heard by whoever's near.
+  private actsSeen = new Map<string, string>();
+  private watchActs() {
+    const room = this.room;
+    if (!room) return;
+    room.state.players.forEach((p: S, sid: string) => {
+      const key = p.act ? `${p.act}|${p.actAt}` : "";
+      if (this.actsSeen.get(sid) === key) return;
+      this.actsSeen.set(sid, key);
+      const act = p.act as string;
+      if (!isSocial(act) || act === "wave" || act === "give") return;
+      const other = room.state.players.get(p.actWith);
+      if (other?.act === act && sid > p.actWith) return;
+      setTimeout(() => {
+        const a = this.whereIs(sid);
+        const b = this.whereIs(p.actWith);
+        if (!a || !b) return;
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        const d = Math.hypot(mid.x - this.me.x, mid.y - this.me.y);
+        this.engine?.puff(mid.x, mid.y, "spark", act === "highfive" ? 66 : 44);
+        socialSound(act, Math.max(0, 1 - d / 9));
+      }, SOCIAL_MS[act] * CONTACT);
+    });
+  }
+
+  // Where someone is drawn right now (me: where I am).
+  private whereIs(sid: string): Point | null {
+    if (sid === this.room?.sessionId) return { x: this.me.x, y: this.me.y };
+    const r = this.remotes.get(sid);
+    return r ? interpolate(r.buf, performance.now() - INTERP_MS) : null;
+  }
+
+  // ── the action menu ──────────────────────────────────────────────────────
+  private facedAct = 0;
+
+  // What can be done with it, with a title (and a line about it): null when
+  // there's nothing to do.
+  menuFor(target: ActTarget): { title: string; subtitle?: string; items: { act: string; ok: boolean }[] } | null {
+    const room = this.room;
+    const me = room?.state.players.get(room.sessionId);
+    if (!room || !me) return null;
+    if (target.type === "self") {
+      const items = [{ act: "look", ok: true }];
+      if (me.held) items.push({ act: "putDown", ok: true });
+      if (me.focus) items.push({ act: "unfocus", ok: true });
+      return { title: me.name, items };
+    }
+    if (target.type === "person") {
+      const p = room.state.players.get(target.sid);
+      if (!p) return null;
+      const can = socialFor({ held: me.held, status: me.status }, { held: p.held, status: p.status });
+      const items: { act: string; ok: boolean }[] = SOCIAL.map((act) => ({ act, ok: can.includes(act) }))
+        // cheers and give only make sense with drinks about
+        .filter((i) => i.ok || (i.act !== "cheers" && i.act !== "give"));
+      items.push({ act: "follow", ok: true }, { act: "profile", ok: true });
+      const card = hud.get().status[p.uid]?.[0];
+      const subtitle = p.focus ? tr("focusing") : card ? `${card.ticket} · ${card.name}` : undefined;
+      return { title: p.name, subtitle, items };
+    }
+    const o = this.engine?.getObject(target.id);
+    if (!o) return null;
+    const task = hud.get().status[this.myUid()]?.[0] ?? null;
+    // someone else's desk: whose, what they're on
+    const owner = Number(o.props?.ownerId);
+    if (o.kind === "desk" && owner && owner !== this.myUid()) {
+      const card = hud.get().status[owner]?.[0];
+      const items = [];
+      if (card) items.push({ act: "theirCard", ok: true });
+      if (this.uidToSid.has(owner)) items.push({ act: "profile", ok: true });
+      if (!items.length) return null;
+      return {
+        title: `${String(o.props?.ownerName ?? "").split(" ")[0]} · ${entry(o.kind).label}`,
+        subtitle: card ? `${card.ticket} · ${card.name}` : undefined,
+        items,
+      };
+    }
+    const acts = objectActions(o, {
+      uid: this.myUid(),
+      focus: !!me.focus,
+      radioOn: hud.get().radio.playing,
+      task,
+      mayLock: (d) => me.builder || doorRoom(this.map, d)?.ownerId === this.myUid(),
+    });
+    if (!acts.length) return null;
+    const e = entry(o.kind);
+    const title = o.kind === "tabletop" && o.props?.d === "desklamp" ? tr("deskLamp") : e.label;
+    const subtitle =
+      o.kind === "desk" && task && o.props?.ownerId === this.myUid() ? `${task.ticket} · ${task.name}` : undefined;
+    return { title, subtitle, items: acts.map((act) => ({ act, ok: true })) };
+  }
+
+  openMenu(target: ActTarget, at: { x: number; y: number }): boolean {
+    const m = this.menuFor(target);
+    if (!m) return false;
+    mixer.blip("click");
+    hud.set({ menu: { x: at.x, y: at.y, target, ...m } });
+    return true;
+  }
+
+  closeMenu() {
+    if (hud.get().menu) hud.set({ menu: null });
+  }
+
+  // Picked from the menu: queued (walk there, then do it).
+  pickAction(act: string) {
+    const m = hud.get().menu;
+    if (!m) return;
+    hud.set({ menu: null });
+    // looking things up happens at once (no need to walk over)
+    const t = m.target;
+    const desk = t.type === "object" ? this.engine?.getObject(t.id) : undefined;
+    const owner = Number(desk?.props?.ownerId);
+    if (act === "openCard" || act === "theirCard") {
+      const card = hud.get().status[act === "openCard" ? this.myUid() : owner]?.[0];
+      if (card) window.open(`${YONDRA_APP}/boards/${card.boardId}?card=${card.id}`, "_blank", "noopener");
+      return;
+    }
+    if (act === "profile" && desk) return hud.set({ inspect: owner });
+    if (act === "profile" && t.type === "person") {
+      const p = this.room?.state.players.get(t.sid);
+      if (p) hud.set({ inspect: p.uid });
+      return;
+    }
+    if (act === "look") return hud.set({ panel: { kind: "avatar" } });
+    this.actions.add(act, m.target, m.title);
   }
 
   activateObject(id: string, walkIfFar: boolean) {
@@ -878,6 +1086,8 @@ export class WorldController {
     const err = await this.media.setMic(on);
     if (err === "blocked") toast(tr("micBlocked"), "warn");
     else if (err === "offline") toast(tr("avOffline"), "warn");
+    // anything else (no device, the call's media link not up…): say so
+    else if (err) toast(`${tr("micFailed")} (${err})`, "warn", 8000);
     else mixer.blip(on ? "pop" : "tape");
   }
 
@@ -885,11 +1095,16 @@ export class WorldController {
     const err = await this.media.setCam(!hud.get().media.cam);
     if (err === "blocked") toast(tr("camBlocked"), "warn");
     else if (err === "offline") toast(tr("avOffline"), "warn");
+    else if (err) toast(`${tr("camFailed")} (${err})`, "warn", 8000);
   }
 
   async toggleScreen() {
-    const err = await this.media.setScreen(!hud.get().media.screen);
+    const on = !hud.get().media.screen;
+    const err = await this.media.setScreen(on);
     if (err === "offline") toast(tr("avOffline"), "warn");
+    else if (err === "system") toast(tr("screenBlocked"), "warn", 9000);
+    else if (err) toast(`${tr("screenFailed")} (${err})`, "warn");
+    else if (on && hud.get().media.screen) mixer.blip("pop");
   }
 
   myUid(): number {
@@ -996,6 +1211,7 @@ export class WorldController {
         const name = `board.${b.id}`;
         echo.private(name).listen(".board.event", (e: { type: string; payload: unknown }) => {
           this.scheduleBoards();
+          this.celebrate(e);
           for (const f of this.boardListeners) f(b.id, e);
         });
         this.boardChannels.push(name);
@@ -1036,12 +1252,51 @@ export class WorldController {
     return (o.refId && boards.find((b) => b.id === o.refId)) || (o.kind === "screen_wall" ? boards[0] : undefined);
   }
 
+  // A card someone was working on is done: confetti over them (whoever's in
+  // the room sees it, each from their own copy of the board's events), a
+  // fanfare for whoever's near, and a word in the corner.
+  private celebrated = new Set<number>();
+  private celebrate(e: { type: string; payload: unknown }) {
+    const pl = e.payload as Record<string, unknown> | null;
+    const cards: Record<string, unknown>[] =
+      e.type === "cards.reordered" && Array.isArray(pl?.cards)
+        ? (pl.cards as Record<string, unknown>[])
+        : e.type === "card.updated" && pl
+          ? [pl]
+          : [];
+    const status = hud.get().status;
+    let any = false;
+    for (const c of cards) {
+      const id = Number(c.id);
+      if (!(c.done_at || c.is_done === true) || this.celebrated.has(id)) continue;
+      // whose card it was (what they were doing a moment ago)
+      for (const [uid, doing] of Object.entries(status)) {
+        const card = doing.find((d) => d.id === id);
+        if (!card) continue;
+        this.celebrated.add(id);
+        any = true;
+        const sid = this.uidToSid.get(Number(uid));
+        const at = sid ? this.whereIs(sid) : null;
+        const who = sid ? this.room?.state.players.get(sid)?.name : null;
+        if (at) {
+          this.engine?.puff(at.x, at.y, "confetti", 70);
+          fanfare(Math.max(0, 1 - Math.hypot(at.x - this.me.x, at.y - this.me.y) / 12));
+        }
+        if (who) toast(`🎉 ${who} ${tr("taskDone")} ${card.ticket} · ${card.name}`);
+      }
+    }
+    // their list moves on
+    if (any) setTimeout(() => void this.loadStatus(), 1200);
+  }
+
   private async loadStatus() {
     try {
       const { status } = await yutopia.status(this.spaceId);
       const map: Record<number, (typeof status)[number]["doing"]> = {};
       for (const s of status) map[s.userId] = s.doing;
       hud.set({ status: map });
+      // their desks show it
+      this.engine?.setDeskTasks(new Map(status.flatMap((s) => (s.doing[0] ? [[s.userId, s.doing[0].ticket]] : []))));
     } catch {}
   }
 
@@ -1204,6 +1459,16 @@ export class WorldController {
     const t = e.target as HTMLElement;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))
       return;
+    // the action menu: a number picks, Esc closes
+    const menu = hud.get().menu;
+    if (menu) {
+      const i = Number(e.key) - 1;
+      if (e.key === "Escape") this.closeMenu();
+      else if (Number.isInteger(i) && i >= 0 && menu.items[i]?.ok) this.pickAction(menu.items[i].act);
+      else return;
+      e.preventDefault();
+      return;
+    }
     if (hud.get().panel.kind && e.key !== "Escape") return;
     const key = e.key.toLowerCase();
     if (hud.get().build.on && (e.metaKey || e.ctrlKey) && key === "d") {
@@ -1267,9 +1532,11 @@ export class WorldController {
 
   // ── helpers ──────────────────────────────────────────────────────────────
   private avatarState(p: S, _local: boolean): AvatarState {
+    const look = parseAvatar(p.avatar);
     return {
       name: p.name,
-      avatar: parseAvatar(p.avatar),
+      // focusing: headphones on
+      avatar: p.focus ? { ...look, accessory: "headphones" } : look,
       x: p.x,
       y: p.y,
       d: p.d,
@@ -1282,6 +1549,9 @@ export class WorldController {
       held: p.held,
       heldAt: p.heldAt,
       busy: p.busy,
+      act: p.act,
+      actAt: p.actAt,
+      actWith: p.actWith,
     };
   }
 

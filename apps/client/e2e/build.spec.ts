@@ -92,6 +92,8 @@ test("build mode: pick up what you see, carry, drop, select, copy, look, clutter
     await page.waitForTimeout(250);
     await page.mouse.up();
     await expect.poll(() => objectsAt(page, 12, 9)).toEqual([expect.objectContaining({ id: desk })]);
+    // (shown again once its move has landed: until then it can't be picked)
+    await expect.poll(() => page.evaluate((id) => (window as any).__yutopia.engine.hidden.has(id), desk)).toBe(false);
 
     // ── a look for the desk (Design tool): pick variant 3 from the item toolbar
     await click(page, 13, 9.5, 22); // pick up…

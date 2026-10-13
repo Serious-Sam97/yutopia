@@ -4,7 +4,7 @@ import { CLOTH_COLORS, DECOR, entry, footprint } from "@yutopia/shared";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
-import { type BuildTool, hud, useHud } from "@/world/store";
+import { type BuildTool, hud, toast, useHud } from "@/world/store";
 import { Brand } from "../../Brand";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
@@ -298,6 +298,25 @@ function ActionBar() {
   const t = useTr();
   const w = useWorld();
   const b = useHud((s) => s.build);
+  // naming the selection to save it as a setup (null: not naming)
+  const [naming, setNaming] = useState<string | null>(null);
+  useEffect(() => {
+    if (!b.selected.length) setNaming(null);
+  }, [b.selected.length]);
+  const saveSetup = async () => {
+    const items = w?.build?.setupOfSelection();
+    const name = (naming ?? "").trim();
+    if (!items?.length || !name) return;
+    if (items.some((i) => i.dx > 16 || i.dy > 16) || items.length > 40) return toast(t("buildSetupTooBig"), "warn");
+    try {
+      const { setup } = await yutopia.saveSetup(name, items);
+      hud.set((s) => ({ build: { ...s.build, setups: [setup, ...(s.build.setups ?? [])] } }));
+      toast(t("buildSetupSaved").replace("{name}", setup.name));
+      setNaming(null);
+    } catch {
+      toast(t("buildSetupFailed"), "warn");
+    }
+  };
   useHud((s) => s.objectsVersion);
   // Esc on a keyboard; a tap target everywhere (phones have no Esc)
   const esc = (label: Key) => (
@@ -327,12 +346,12 @@ function ActionBar() {
       type="button"
       className={`deck-btn whitespace-nowrap ${danger ? "danger" : ""}`}
       onClick={onClick}
-      title={`${t(label)} (${k})`}
+      title={k ? `${t(label)} (${k})` : t(label)}
       aria-label={t(label)}
     >
       <Icon name={icon} size={18} />
       <span className="hidden md:inline">{t(label)}</span>
-      {key(k)}
+      {k && key(k)}
     </button>
   );
 
@@ -392,6 +411,39 @@ function ActionBar() {
           {esc(b.held.length ? "buildCancel" : "buildExit")}
         </>
       );
+    } else if (b.selected.length && naming !== null) {
+      body = (
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void saveSetup();
+          }}
+        >
+          <Icon name="pin" size={18} />
+          <input
+            // biome-ignore lint/a11y/noAutofocus: the field the button just opened
+            autoFocus
+            value={naming}
+            maxLength={40}
+            onChange={(e) => setNaming(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setNaming(null);
+            }}
+            placeholder={t("buildSetupName")}
+            aria-label={t("buildSetupName")}
+            className="h-9 w-[min(240px,40vw)] rounded-lg px-2.5 text-sm outline-none"
+            style={{ background: "#140e0a", border: "1px solid var(--edge)", color: "var(--cream)" }}
+          />
+          <button type="submit" className="deck-btn" disabled={!naming.trim()}>
+            <Icon name="check" size={18} />
+            <span className="hidden md:inline">{t("buildSetupSave")}</span>
+          </button>
+          <button type="button" className="ghost-btn h-9" onClick={() => setNaming(null)}>
+            {t("actCancel")}
+          </button>
+        </form>
+      );
     } else if (b.selected.length) {
       body = (
         <>
@@ -402,6 +454,7 @@ function ActionBar() {
           {act("move", "buildMove", "M", () => w?.build?.pickSelection())}
           {act("rotate", "buildRotate", "R", () => w?.buildKey("r"))}
           {act("copy", "buildDuplicate", `${MOD}D`, () => w?.build?.duplicate())}
+          {act("pin", "buildSaveSetup", "", () => setNaming(""))}
           {act("bin", "kRemove", "Del", () => w?.buildKey("delete"), true)}
           {sep}
           {esc("buildDeselect")}
@@ -506,6 +559,12 @@ function HoverTag() {
     >
       {hover.label}
       {hover.by && <span style={{ color: "#ff9a7a" }}> · {t("buildHeldTag").replace("{name}", hover.by)}</span>}
+      {hover.of && hover.of.n > 1 && (
+        <span style={{ color: "var(--muted)" }}>
+          {" "}
+          · {hover.of.i + 1}/{hover.of.n} <kbd className="keycap">Tab</kbd>
+        </span>
+      )}
     </div>
   );
 }

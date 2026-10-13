@@ -9,3 +9,4 @@ import "./history.ts";
 import "./furnish.ts";
 import "./held.ts";
 import "./play.ts";
+import "./social.ts";

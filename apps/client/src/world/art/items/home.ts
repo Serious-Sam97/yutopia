@@ -174,6 +174,23 @@ export function clock(s: Sketch, props: Record<string, unknown>) {
   });
 }
 
+// A light switch: a cream plate by the door, its rocker pressed up (on) or
+// down (off) — it turns every lamp in the room.
+export function lightSwitch(s: Sketch, props: Record<string, unknown>) {
+  const on = props.on !== false;
+  const Z = 32;
+  s.box({ x: 0.43, y: -0.03, w: 0.14, d: 0.035, z: Z, h: 13, mat: { c: K.cream, top: "#f6eedb" }, line: 0.8 }, (d) => {
+    const y = 0.006;
+    // the rocker's well, and the rocker (its raised half catches the light)
+    d.poly("s", fr("s", y, 0.47, 0.53, Z + 3, Z + 10), sh(K.cream, 0.8), { stroke: INK, sw: 0.5 });
+    d.poly("s", fr("s", y + 0.001, 0.474, 0.526, on ? Z + 6.5 : Z + 3.5, on ? Z + 9.6 : Z + 6.5), "#fffaf0", {
+      stroke: INK,
+      sw: 0.45,
+    });
+    d.poly("s", fr("s", y + 0.001, 0.474, 0.526, on ? Z + 3.5 : Z + 6.5, on ? Z + 6.5 : Z + 9.6), sh(K.cream, 0.9));
+  });
+}
+
 // A neon sign on the wall: a coffee cup (amber), a heart (pink) or a bolt
 // (cyan), glowing tubes on a smoked backing.
 const NEON = [K.vfd, "#ff5fa8", "#5ff0ff"];

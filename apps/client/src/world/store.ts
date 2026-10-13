@@ -2,7 +2,7 @@
 
 import type { Emote } from "@yutopia/shared";
 import { useRef, useSyncExternalStore } from "react";
-import type { BoardSummary, MemberStatus } from "@/lib/api";
+import type { BoardSummary, MemberStatus, Setup } from "@/lib/api";
 
 // One small external store for everything the HUD shows. The world loop writes,
 // React reads with useHud(selector).
@@ -56,6 +56,24 @@ export type PanelKind =
   | "avatar"
   | null;
 
+// The action menu (click a thing or a person) and the queue of what you picked.
+export type ActTarget = { type: "object"; id: string } | { type: "person"; sid: string } | { type: "self" };
+export interface ActionMenu {
+  x: number; // where it opens (client px)
+  y: number;
+  target: ActTarget;
+  title: string;
+  subtitle?: string; // a desk's owner and their card, someone's status…
+  items: { act: string; ok: boolean }[]; // ok false: shown, greyed out
+}
+export interface QueuedAct {
+  key: number;
+  act: string;
+  title: string;
+  target: ActTarget;
+  running: boolean;
+}
+
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
 export type PaintMode = "line" | "box" | "fill" | "erase";
 
@@ -74,6 +92,9 @@ export interface HudState {
   heardBy: number[]; // user ids who can hear me right now
   prompt: { objectId: string; kind: string; label: string } | null;
   held: { kind: string; at: number } | null; // what I carry (a mug…) and since when (server ms)
+  menu: ActionMenu | null;
+  queue: QueuedAct[];
+  focus: boolean; // heads down at my desk
   panel: { kind: PanelKind; objectId?: string };
   knocks: { from: string; fromName: string; area: string; at: number }[];
   toasts: { id: number; text: string; tone: "info" | "warn" | "vortex" }[];
@@ -106,7 +127,8 @@ export interface HudState {
     carrying: number; // everything in your hand (new copies too)
     selected: string[];
     // the thing under the pointer (its name, and who's holding it), for the tag
-    hover: { label: string; by: string | null } | null;
+    // (of: which of the things stacked under the pointer it is; Tab steps through them)
+    hover: { label: string; by: string | null; of?: { i: number; n: number } } | null;
     brush: string; // "w:" + an edge char (walls), a floor char (tiles), or "door"
     paintMode: PaintMode;
     props: Record<string, unknown> | null; // what new furniture copies (C)
@@ -117,6 +139,7 @@ export interface HudState {
     history: { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
     // the last change: still on its way (saving) or what Yondra said
     save: { state: "idle" | "saving" | "saved" | "failed"; at: number };
+    setups: Setup[] | null; // my saved setups (null until loaded)
   };
   mapVersion: number;
   objectsVersion: number; // bumps when furniture arrives, moves or goes
@@ -142,6 +165,9 @@ const initial: HudState = {
   heardBy: [],
   prompt: null,
   held: null,
+  menu: null,
+  queue: [],
+  focus: false,
   panel: { kind: null },
   knocks: [],
   toasts: [],
@@ -181,6 +207,7 @@ const initial: HudState = {
     pickSpawn: false,
     history: { undo: 0, redo: 0, undoLabel: null, redoLabel: null },
     save: { state: "idle", at: 0 },
+    setups: null,
   },
   mapVersion: 0,
   objectsVersion: 0,
