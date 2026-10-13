@@ -20,8 +20,9 @@ test("HUD: who hears you, chat with reactions, people, room, status, minimap", a
   const at = await ana.evaluate(() => (window as any).__yutopia.meTile());
   await walkTo(bia, at.x + 1.5, at.y + 0.5, 25_000);
 
-  // top bars: where I am, who's in
-  await expect(ana.getByText(/Tracking Room · \d+ here/)).toBeVisible();
+  // top bars: where I am (people come in at the arrival point), who's in
+  const here = await ana.evaluate(() => (window as any).__hud.get().me?.areaName as string);
+  await expect(ana.getByText(new RegExp(`${here} · \\d+ here`))).toBeVisible();
   await expect(ana.getByText(/\d+ online/)).toBeVisible();
 
   // chat: who can hear me, then a message from Bia
@@ -58,7 +59,7 @@ test("HUD: who hears you, chat with reactions, people, room, status, minimap", a
   await expect(ana.getByRole("complementary", { name: "People" }).getByText("hears you").first()).toBeVisible();
   await ana.getByRole("tab", { name: /Room/ }).click();
   const room = ana.getByRole("complementary", { name: "Room" });
-  await expect(room.getByText("TRACKING ROOM")).toBeVisible();
+  await expect(room.getByText(here.toUpperCase())).toBeVisible();
   await expect(room.getByText(/\d+ here/)).toBeVisible();
 
   // status menu

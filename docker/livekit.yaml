@@ -8,7 +8,8 @@ rtc:
   port_range_end: 50100
   # Discover the public IP via STUN so remote browsers can reach the media ports.
   # For local-only dev on Docker Desktop, use `use_external_ip: false` + `node_ip: 127.0.0.1`.
-  use_external_ip: true
+  use_external_ip: false
+  node_ip: 127.0.0.1
 key_file: /etc/livekit.keys.yaml
 room:
   empty_timeout: 300

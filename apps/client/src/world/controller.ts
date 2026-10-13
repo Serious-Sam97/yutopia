@@ -52,7 +52,9 @@ import { mixer } from "./audio";
 import type { BuildController } from "./build/controller";
 import { type AvatarState, WorldEngine } from "./engine";
 import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
+import type { GameRoom } from "./games/room";
 import { Media } from "./media";
+import type { SlotTracks } from "./slots";
 import { radio, sound } from "./sound";
 import { type ActTarget, hud, type Person, toast } from "./store";
 
@@ -151,6 +153,10 @@ export class WorldController {
           return { [key]: next } as Partial<typeof s>;
         });
         this.syncStageScreen();
+      },
+      onTv: (identity, el) => {
+        if (el) this.tvVideos.set(identity, el);
+        else this.tvVideos.delete(identity);
       },
       onSpeaking: (on) => this.send("speaking", { on }),
       onQuality: (quality) => hud.set((s) => ({ media: { ...s.media, quality } })),
@@ -469,6 +475,9 @@ export class WorldController {
       this.emitWb(m.objectId);
     });
     room.onMessage("arcade:scores", () => {});
+    room.onMessage("game:tv", (m: ServerMessages["game:tv"]) => this.games?.onTvToken(m));
+    room.onMessage("game:pad", (m: ServerMessages["game:pad"]) => this.games?.onPad(m));
+    room.onMessage("game:audience", (m: ServerMessages["game:audience"]) => this.games?.onAudience(m));
     room.onMessage("kicked", (m: ServerMessages["kicked"]) =>
       hud.set({ phase: m.reason === "removed" ? "removed" : "kicked" }),
     );
@@ -526,6 +535,8 @@ export class WorldController {
   stop() {
     this.stopped = true;
     this.build?.dispose();
+    this.slots?.dispose();
+    this.games?.dispose();
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
     this.unbindInput();
@@ -554,9 +565,13 @@ export class WorldController {
     const want =
       pk === "arcade" || pk === "piano" || pk === "whiteboard"
         ? pk
-        : performance.now() < this.usingUntil
-          ? this.usingWhat
-          : "";
+        : pk === "slotcar" && this.slots?.atControls()
+          ? "slotcar"
+          : this.games?.atPad()
+            ? "gamepad"
+            : performance.now() < this.usingUntil
+              ? this.usingWhat
+              : "";
     if (want !== this.busySent) {
       this.busySent = want;
       this.send("use", { what: want });
@@ -567,6 +582,43 @@ export class WorldController {
   playPiano(id: string, n: number) {
     pianoNote(n, 1, 0);
     this.send("piano:note", { id, n });
+  }
+
+  // ── the game room: its own chunk (world/games), loaded once a TV or console is here ──
+  games: GameRoom | null = null;
+  private gamesLoading: Promise<void> | null = null;
+  tvVideos = new Map<string, HTMLVideoElement>(); // "tv-<console id>" → its picture
+  private gamesChanged() {
+    if (this.games) return this.games.refresh();
+    const kinds = new Set([
+      "crt_tv",
+      "cart_shelf",
+      "console_2600",
+      "console_nes",
+      "console_snes",
+      "console_md",
+      "console_gb",
+    ]);
+    if (this.gamesLoading || !this.engine?.allObjects().some((o) => kinds.has(o.kind))) return;
+    this.gamesLoading = import("./games/room").then((m) => {
+      if (this.stopped || !this.engine || !this.room) return;
+      this.games = new m.GameRoom(this);
+      this.games.refresh();
+    });
+  }
+
+  // ── slot-car tracks: their own chunk (world/slots.ts), loaded once a track is here ──
+  slots: SlotTracks | null = null;
+  private slotsLoading: Promise<void> | null = null;
+  private slotsChanged() {
+    if (this.slots) return this.slots.refresh();
+    if (this.slotsLoading || !this.engine?.allObjects().some((o) => o.kind === "slot_track")) return;
+    this.slotsLoading = import("./slots").then((m) => {
+      const room = this.room;
+      if (this.stopped || !this.engine || !room) return;
+      this.slots = new m.SlotTracks(this.engine, room, (type, msg) => this.send(type as never, msg as never));
+      this.slots.refresh();
+    });
   }
 
   // ── per frame ────────────────────────────────────────────────────────────
@@ -586,6 +638,8 @@ export class WorldController {
       this.rebuildGrid();
       this.applyBoards();
       this.build?.checkPending();
+      this.slotsChanged();
+      this.gamesChanged();
       hud.set((h) => ({ objectsVersion: h.objectsVersion + 1 }));
     }
     this.moveLocal(dt);
@@ -598,6 +652,8 @@ export class WorldController {
     const here = areaAt(this.map, this.me.x, this.me.y);
     const open = !isPrivate(here) && here?.kind !== "stage";
     engine.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
+    this.slots?.frame(dt, this.me);
+    this.games?.frame(dt, this.me);
     this.syncBusy();
     const localSid = room.sessionId;
     const lp = room.state.players.get(localSid);

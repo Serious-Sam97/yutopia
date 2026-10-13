@@ -52,6 +52,10 @@ export type PanelKind =
   | "terminal"
   | "coffee"
   | "piano"
+  | "slotcar"
+  | "console"
+  | "tv"
+  | "games"
   | "settings"
   | "avatar"
   | null;
@@ -72,6 +76,50 @@ export interface QueuedAct {
   title: string;
   target: ActTarget;
   running: boolean;
+}
+
+// The slot-car track whose controls are open (world/slots.ts): its race, lane by lane.
+export interface SlotLane {
+  name: string;
+  uid: number;
+  mine: boolean;
+  lap: number;
+  best: number; // s, 0 for none yet
+  last: number;
+  place: number; // 1.. once finished
+  time: number; // race time at the flag (s)
+  offs: number; // times it flew off
+  pos: number; // where it is in the race right now (1..), 0 outside a race
+}
+export interface SlotView {
+  id: string;
+  phase: "lobby" | "countdown" | "race" | "done";
+  lights: number; // 1..5 during the countdown
+  laps: number;
+  by: string;
+  lanes: (SlotLane | null)[];
+  mine: number; // my lane, −1 for none
+  near: boolean; // close enough to take a lane
+}
+
+// The game room panel's view of a console (world/games/room.ts), or of a TV.
+export interface GameView {
+  id: string; // the console (or the TV, for kind "tv")
+  kind: string;
+  system: string;
+  tv: string | null; // the TV it's plugged into
+  tvs: string[]; // TVs its cable reaches, nearest first: "<id>|<tiles away>"
+  cart: { id: string; title: string; color: string } | null;
+  on: boolean;
+  host: string; // who runs it ("" while paused)
+  hostMe: boolean;
+  live: boolean;
+  ports: { name: string; me: boolean }[]; // one per pad
+  myPort: number; // 0 when I hold none
+  near: boolean;
+  // a TV: the consoles plugged into it and which one it shows
+  inputs?: { id: string; label: string; title: string; on: boolean }[];
+  input?: string;
 }
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
@@ -115,6 +163,8 @@ export interface HudState {
   radio: { playing: boolean; station: number; startedAt: number; by: string };
   standup: { active: boolean; order: number[]; turn: number; turnStartedAt: number; turnSeconds: number };
   poker: { open: boolean; cardId: number; boardId: number; title: string; by: string };
+  slot: SlotView | null;
+  game: GameView | null;
   build: {
     on: boolean;
     tool: BuildTool;
@@ -188,6 +238,8 @@ const initial: HudState = {
   radio: { playing: false, station: 0, startedAt: 0, by: "" },
   standup: { active: false, order: [], turn: 0, turnStartedAt: 0, turnSeconds: 90 },
   poker: { open: false, cardId: 0, boardId: 0, title: "", by: "" },
+  slot: null,
+  game: null,
   build: {
     on: false,
     tool: "furniture",

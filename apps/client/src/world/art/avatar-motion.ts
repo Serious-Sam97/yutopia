@@ -411,6 +411,18 @@ function atWork(rig: Rig, what: string, base: Pose, t: number): Pose {
       p.head.rot += 3 * Math.sin(t * 1.4 + 0.6);
       break;
     }
+    case "slotcar":
+    case "gamepad": {
+      // the hand controller held in front, the thumb working the trigger,
+      // leaning into the corners
+      const thumb = Math.sin(t * 9);
+      p.armR = side ? { sh: 30, el: 66 + 4 * thumb, su: 1, sf: 1 } : { sh: 8, el: 70 + 4 * thumb, su: 0.95, sf: 0.5 };
+      p.armL = side ? { sh: 30, el: 64, su: 1, sf: 1 } : { sh: -8, el: -70, su: 0.95, sf: 0.5 };
+      p.armLFront = !side;
+      p.body.rot += 2.2 * Math.sin(t * 1.7);
+      p.head.rot += 2.5 * Math.sin(t * 1.7 + 0.4);
+      break;
+    }
     case "whiteboard":
       // a hand up at the board, writing
       p.armR = side

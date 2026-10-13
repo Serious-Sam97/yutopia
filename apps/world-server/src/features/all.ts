@@ -10,3 +10,5 @@ import "./furnish.ts";
 import "./held.ts";
 import "./play.ts";
 import "./social.ts";
+import "./slotcar.ts";
+import "./games.ts";

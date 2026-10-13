@@ -47,9 +47,16 @@ export const yondra = {
   seed: (id: number, objects: WorldObjectDef[]) =>
     call<{ objects: WorldObjectDef[] }>("POST", `/spaces/${id}/seed`, { objects }),
   putObject: (id: number, o: WorldObjectDef) => call<{ object: WorldObjectDef }>("PUT", `/spaces/${id}/objects`, o),
+  // a cartridge the team uploaded (game room)
+  game: (id: number, gameId: number) =>
+    call<{ game: { id: string; system: string; title: string; color: string; players: number } }>(
+      "GET",
+      `/spaces/${id}/games/${gameId}`,
+    ),
   deleteObject: (id: number, uid: string) => call("DELETE", `/spaces/${id}/objects/${encodeURIComponent(uid)}`),
-  desk: (id: number, userId: number, desks: string[]) =>
-    call<{ desk: string | null }>("POST", `/spaces/${id}/desk`, { user_id: userId, desks }),
+  // the desk that's yours (among `desks`); `assign`: give you a free one if you have none
+  desk: (id: number, userId: number, desks: string[], assign = true) =>
+    call<{ desk: string | null }>("POST", `/spaces/${id}/desk`, { user_id: userId, desks, assign }),
   putLayout: (id: number, layout: Layout) => call("PUT", `/spaces/${id}/layout`, layout),
   presence: (id: number, people: PresenceEntry[]) => call("POST", `/spaces/${id}/presence`, { people }),
   vortexLine: (id: number, context: { event: string; user_id: number | null }) =>

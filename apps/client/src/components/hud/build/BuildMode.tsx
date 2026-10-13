@@ -48,7 +48,7 @@ export function BuildMode() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: redraw the ghost when the tool changes
   useEffect(() => {
     w?.refreshGhost();
-  }, [b.on, b.tool, b.kind, b.rot, b.mode, b.brush, b.paintMode, b.props, w]);
+  }, [b.on, b.tool, b.kind, b.rot, b.mode, b.brush, b.paintMode, b.props, b.pickSpawn, w]);
 
   useEffect(() => {
     if (b.on && canBuild && spaceId)

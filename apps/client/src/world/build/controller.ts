@@ -779,6 +779,12 @@ export class BuildController {
   hover(x: number, y: number) {
     const b = hud.get().build;
     if (!b.on || !this.engine) return;
+    if (b.pickSpawn) {
+      // picking the arrival point: the tile under the pointer, and whether it can be
+      const tx = Math.floor(x);
+      const ty = Math.floor(y);
+      return this.engine.showSpawn(true, { x: tx, y: ty, ok: this.w.grid.ok(tx, ty) });
+    }
     if (b.tool !== "furniture") return this.hoverOther(x, y);
     const e = this.engine;
     const pr = this.press;
@@ -916,6 +922,7 @@ export class BuildController {
     if (b.pickSpawn) {
       this.send("map:spawn", { x: Math.floor(x), y: Math.floor(y) });
       this.setBuild({ pickSpawn: false });
+      this.engine?.showSpawn(true);
       return;
     }
     if (b.tool === "furniture") return;
@@ -990,6 +997,7 @@ export class BuildController {
     if (!engine) return;
     const bt = hud.get().build;
     engine.passAvatars = bt.on;
+    engine.showSpawn(bt.on && (bt.tool === "map" || bt.pickSpawn));
     engine.setBuildGrid(bt.on && (bt.tool === "furniture" || bt.tool === "walls" || bt.tool === "rooms"));
     if (!bt.on) {
       this.cancel();

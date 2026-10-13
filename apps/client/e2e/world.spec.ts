@@ -4,13 +4,21 @@ import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
 
 const SHOTS = "../../design/screens";
 
-test("sign in, land at your desk, walk across the building", async ({ page }) => {
+test("sign in, arrive at the arrival point, My desk, walk across the building", async ({ page }) => {
   const tok = await token(ANA);
   await enter(page, tok, await spaceId(tok));
-  const me = await page.evaluate(
-    () => (window as never as { __hud: { get(): { me: { areaName: string } } } }).__hud.get().me,
-  );
-  expect(me.areaName).toBe("Tracking Room");
+  // everyone comes in at the arrival point (builders move it: build mode → Map)
+  const at = await page.evaluate(() => {
+    const w = (window as any).__yutopia;
+    const p = w.room.state.players.get(w.room.sessionId);
+    return { x: p.x, y: p.y, spawn: { x: w.room.state.spawnX, y: w.room.state.spawnY }, desk: p.desk as string };
+  });
+  expect(Math.hypot(at.x - at.spawn.x, at.y - at.spawn.y)).toBeLessThan(1.5);
+  // your desk is still yours: "My desk" takes you there
+  if (at.desk) {
+    await page.evaluate(() => (window as any).__yutopia.teleport("desk"));
+    await expect.poll(() => page.evaluate(() => (window as any).__hud.get().me?.areaName)).toBe("Tracking Room");
+  }
   await page.screenshot({ path: `${SHOTS}/01-desk.png` });
   await walkTo(page, 19.5, 27.5, 20_000);
   await page.waitForTimeout(500);

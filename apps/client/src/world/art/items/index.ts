@@ -5,6 +5,7 @@ import { chair } from "./chair";
 import { dressing } from "./clutter";
 import { desk } from "./desk";
 import { door, rug, standupMat } from "./door";
+import { cartShelf, console2600, consoleGb, consoleMd, consoleNes, consoleSnes, crtTv } from "./games";
 import { beanbag, bookcase, clock, counter, lightSwitch, neon, partition } from "./home";
 import { type Clip, type Group, type ItemArt, Sketch, seedOf } from "./kit";
 import { lamp } from "./lamp";
@@ -12,6 +13,7 @@ import { micStand, mixingDesk, radio, sideTable, speakerCab, tapeShelf } from ".
 import { PLANT_VARIANTS, plant } from "./plant";
 import { piano, turntable, vending, waterCooler } from "./play";
 import { armchair, bench } from "./seating";
+import { slotTrack } from "./slotcar";
 import { sofa } from "./sofa";
 import { coffeeTable, meetingTable, reception } from "./tables";
 import { arcade, coffeeMachine, crtTerminal, cupboard, serverRack } from "./tech";
@@ -36,6 +38,8 @@ const occupied = (p: Props) => (p.occupied ? "sit" : "");
 // fabric / paint (props.color)
 const painted = (p: Props) => (typeof p.color === "string" ? p.color : "");
 const sitPaint = (p: Props) => `${occupied(p)}|${painted(p)}`;
+// a console's cartridge (its label colour)
+const cart = (p: Props) => (p.cart ? String(p.cartColor ?? "c") : "");
 
 const GENS: Record<string, ItemGen> = {
   desk: { draw: desk, variants: 4 },
@@ -51,6 +55,14 @@ const GENS: Record<string, ItemGen> = {
   water_cooler: { draw: waterCooler, variants: 1 },
   vending: { draw: vending, variants: 2 },
   piano: { draw: piano, variants: 2 },
+  slot_track: { draw: slotTrack, variants: 1 },
+  crt_tv: { draw: crtTv, variants: 2 },
+  console_2600: { draw: console2600, variants: 1, key: cart },
+  console_nes: { draw: consoleNes, variants: 2, key: cart },
+  console_snes: { draw: consoleSnes, variants: 1, key: cart },
+  console_md: { draw: consoleMd, variants: 1, key: cart },
+  console_gb: { draw: consoleGb, variants: 1, key: cart },
+  cart_shelf: { draw: cartShelf, variants: 1 },
   turntable: { draw: turntable, variants: 1, key: (p) => (p.on ? "on" : "off") },
   bench: { draw: bench, variants: 1 },
   meeting_table: { draw: meetingTable, variants: 1 },

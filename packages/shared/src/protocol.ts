@@ -32,6 +32,25 @@ export interface ClientMessages {
   use: { what: string };
   // a note on the piano I'm at (n: semitones from middle C)
   "piano:note": { id: string; n: number };
+  // the slot-car track (slotcar.ts): take a lane (0..3) / give it back, start
+  // a race (racers), and my car as I drive it (racers, while racing)
+  "slot:join": { id: string; lane: number };
+  "slot:leave": { id: string };
+  "slot:start": { id: string; laps: number };
+  "slot:car": { id: string; s: number; v: number; off: number; ov: number };
+  // the game room (games.ts): plug a console into a TV (null unplugs), put a
+  // cartridge in (null ejects), power, take a pad (port 0 = put it down), a
+  // pad's buttons (a bitmask of PAD_BUTTONS, for whoever streams it), the
+  // stream going out or not, a TV's input, carry on a paused game, the TV's token
+  "game:plug": { id: string; tv: string | null };
+  "game:cart": { id: string; game: string | null };
+  "game:power": { id: string; on: boolean; resume?: boolean }; // resume: from the last save state
+  "game:port": { id: string; port: number };
+  "game:pad": { id: string; bits: number };
+  "game:live": { id: string; live: boolean };
+  "game:input": { tv: string; console: string };
+  "game:continue": { id: string };
+  "game:tv": { id: string };
   // with someone near (shared/actions.ts): a wave, a high five, handing over a drink…
   social: { to: string; act: Social };
   // heads down at my own desk: headphones on, the room's chatter turned down
@@ -138,12 +157,17 @@ export interface ServerMessages {
   "build:saved": { ok: boolean; at: number };
   // a message's reactions: emote → the user ids who reacted (to whoever received it)
   "chat:react": { id: string; reactions: Partial<Record<Emote, number[]>> };
+  // to whoever streams a console: its TV's LiveKit token; another player's
+  // pad; who may see the picture and who may hear it (user ids)
+  "game:tv": { id: string; token: string; identity: string };
+  "game:pad": { id: string; port: number; bits: number };
+  "game:audience": { id: string; video: string[]; audio: string[] };
   // someone played a note (where they are, so it sounds from there)
   "piano:note": { sid: string; x: number; y: number; n: number };
 }
 
 // Things you can be busy with (shown on the body: hands on the controls…).
-export const USES = ["coffee", "water", "vending", "arcade", "piano", "whiteboard"] as const;
+export const USES = ["coffee", "water", "vending", "arcade", "piano", "whiteboard", "slotcar", "gamepad"] as const;
 export type Use = (typeof USES)[number];
 export const PIANO_RANGE = [-12, 24] as const; // semitones from middle C
 

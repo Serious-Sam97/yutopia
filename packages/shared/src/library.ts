@@ -1,0 +1,272 @@
+import type { GameInfo, GameSystem } from "./games.ts";
+
+// The cartridges that ship with Yutopia: openly licensed homebrew, served from
+// /emu/games (tools/emu-games.json pins each file), plus our own test cards.
+// Imported as "@yutopia/shared/library" so it stays out of the world page.
+// GPL and CC-BY(-SA) works are credited with their source in the library.
+
+export interface BuiltinGame extends GameInfo {
+  file: string; // under /emu/games (or /emu/test)
+  source: string; // where its source / release is
+}
+
+const g = (
+  slug: string,
+  system: GameSystem,
+  title: string,
+  color: string,
+  players: number,
+  author: string,
+  license: string,
+  source: string,
+  file: string,
+): BuiltinGame => ({
+  id: `b:${slug}`,
+  system,
+  title,
+  color,
+  players,
+  author,
+  license,
+  source,
+  file,
+  builtIn: true,
+  bytes: 0,
+});
+
+export const BUILTIN_GAMES: BuiltinGame[] = [
+  // woodgrain console
+  g(
+    "2048",
+    "2600",
+    "2048",
+    "#f0a12c",
+    2,
+    "Carlos Duarte do Nascimento",
+    "MIT",
+    "https://github.com/chesterbr/2048-2600",
+    "/emu/games/2048.bin",
+  ),
+  g(
+    "berta",
+    "2600",
+    "Berta and Butterflies",
+    "#7fa34a",
+    1,
+    "vandalton",
+    "MIT",
+    "https://github.com/vandalton/BertaAndButterflies",
+    "/emu/games/berta.bin",
+  ),
+  g(
+    "pokersquares",
+    "2600",
+    "Poker Squares",
+    "#c4402b",
+    1,
+    "B. Watson",
+    "WTFPL",
+    "https://slackware.uk/~urchlay/repos/pokersquares/",
+    "/emu/games/pokersquares.bin",
+  ),
+  g(
+    "testcard-2600",
+    "2600",
+    "Test Card",
+    "#efe4cc",
+    2,
+    "Yutopia",
+    "MIT",
+    "tools/test-rom-2600.mjs",
+    "/emu/test/colors.a26",
+  ),
+  // 8-bit
+  g(
+    "dabg",
+    "nes",
+    "Double Action Blaster Guys",
+    "#4f86c6",
+    2,
+    "NovaSquirrel",
+    "Zlib",
+    "https://github.com/NovaSquirrel/DABG",
+    "/emu/games/dabg.nes",
+  ),
+  g(
+    "croom",
+    "nes",
+    "Concentration Room",
+    "#7a5c8a",
+    2,
+    "Damian Yerrick",
+    "GPL-3.0-or-later",
+    "https://github.com/pinobatch/croom-nes",
+    "/emu/games/croom.nes",
+  ),
+  g(
+    "thwaite",
+    "nes",
+    "Thwaite",
+    "#b5562f",
+    2,
+    "Damian Yerrick",
+    "GPL-3.0-or-later",
+    "https://github.com/pinobatch/thwaite-nes",
+    "/emu/games/thwaite.nes",
+  ),
+  g(
+    "rhde",
+    "nes",
+    "RHDE: Furniture Fight",
+    "#6e7b3a",
+    2,
+    "Damian Yerrick",
+    "FSFAP",
+    "https://github.com/pinobatch/rhde-nes",
+    "/emu/games/rhde.nes",
+  ),
+  g(
+    "testcard-nes",
+    "nes",
+    "Test Card",
+    "#efe4cc",
+    2,
+    "Yutopia",
+    "MIT",
+    "tools/test-rom-nes.mjs",
+    "/emu/test/colors.nes",
+  ),
+  // 16-bit (grey)
+  g(
+    "cannons",
+    "snes",
+    "Cannons",
+    "#c4402b",
+    1,
+    "undisbeliever",
+    "MIT",
+    "https://github.com/undisbeliever/cannons",
+    "/emu/games/cannons.sfc",
+  ),
+  g(
+    "elevator",
+    "snes",
+    "Elevator Madness DX",
+    "#f0a12c",
+    1,
+    "undisbeliever",
+    "MIT",
+    "https://github.com/undisbeliever/elevator-madness-dx",
+    "/emu/games/elevator.sfc",
+  ),
+  g(
+    "castle",
+    "snes",
+    "Castle Platformer",
+    "#3d4a5c",
+    1,
+    "undisbeliever",
+    "MIT (art CC0)",
+    "https://github.com/undisbeliever/castle_platformer",
+    "/emu/games/castle.sfc",
+  ),
+  g(
+    "memory",
+    "snes",
+    "Memory Game",
+    "#7a5c8a",
+    1,
+    "undisbeliever",
+    "MIT",
+    "https://github.com/undisbeliever/memory-game",
+    "/emu/games/memory.sfc",
+  ),
+  // 16-bit (black)
+  g(
+    "kleleatoms",
+    "md",
+    "KłełeAtoms",
+    "#4f86c6",
+    2,
+    "Nightwolf-47",
+    "MIT",
+    "https://github.com/Nightwolf-47/KleleAtoms-MD",
+    "/emu/games/kleleatoms.bin",
+  ),
+  g(
+    "rc89",
+    "md",
+    "Retail Clerk '89",
+    "#d6c9a6",
+    1,
+    "Hugues Johnson",
+    "MIT (story & art CC-BY-SA-4.0)",
+    "https://github.com/huguesjohnson/RetailClerk89",
+    "/emu/games/rc89.bin",
+  ),
+  g(
+    "alexvsbus",
+    "md",
+    "Alex vs Bus: The Race",
+    "#f0a12c",
+    1,
+    "M374LX",
+    "GPL-3.0-or-later (assets CC-BY-SA-4.0)",
+    "https://github.com/M374LX/alexvsbus-md",
+    "/emu/games/alexvsbus.md",
+  ),
+  // handheld
+  g(
+    "ucity",
+    "gb",
+    "µCity",
+    "#7fa34a",
+    1,
+    "Antonio Niño Díaz",
+    "GPL-3.0-or-later (art & music CC-BY-SA-4.0)",
+    "https://github.com/AntonioND/ucity",
+    "/emu/games/ucity.gbc",
+  ),
+  g(
+    "geometrix",
+    "gb",
+    "Geometrix",
+    "#c4402b",
+    1,
+    "Antonio Niño Díaz",
+    "GPL-3.0-or-later",
+    "https://github.com/AntonioND/geometrix",
+    "/emu/games/geometrix.gbc",
+  ),
+  g(
+    "libbet",
+    "gb",
+    "Libbet and the Magic Floor",
+    "#4f86c6",
+    1,
+    "Damian Yerrick",
+    "Zlib",
+    "https://github.com/pinobatch/libbet",
+    "/emu/games/libbet.gb",
+  ),
+];
+
+export function builtinGame(id: string): BuiltinGame | undefined {
+  return BUILTIN_GAMES.find((x) => x.id === id);
+}
+
+// A ready-made game room for builders (build mode → My setups): the TV with the
+// cartridge shelf beside it, two consoles on the rug in front, bean bags and a
+// sofa facing it, a lamp. Offsets in tiles from the group's corner (5 × 5).
+export const GAME_ROOM_SETUP: { kind: string; dx: number; dy: number; rot: number; props?: Record<string, unknown> }[] =
+  [
+    { kind: "rug", dx: 0, dy: 1, rot: 0, props: { variant: 1 } },
+    { kind: "crt_tv", dx: 1, dy: 0, rot: 0 },
+    { kind: "cart_shelf", dx: 3, dy: 0, rot: 0 },
+    { kind: "lamp", dx: 0, dy: 0, rot: 0 },
+    { kind: "console_nes", dx: 1, dy: 2, rot: 0, props: { variant: 1 } },
+    { kind: "console_snes", dx: 2, dy: 2, rot: 0 },
+    { kind: "beanbag", dx: 1, dy: 3, rot: 2 },
+    { kind: "beanbag", dx: 2, dy: 3, rot: 2 },
+    { kind: "sofa", dx: 0, dy: 4, rot: 2 },
+  ];

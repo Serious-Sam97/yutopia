@@ -239,22 +239,18 @@ export class SpaceRoom extends Room<SpaceState> {
     p.builder = claims.roles.includes("builder");
     p.bot = claims.roles.includes("bot");
 
-    let at: { x: number; y: number } = this.map.spawn;
+    // Everyone arrives at the arrival point (builders set it: build mode → Map).
+    // Your desk is still yours — "My desk" takes you there — but entering
+    // doesn't hand one out: a builder assigns it, or you kept it from before.
+    const at: { x: number; y: number } = this.map.spawn;
     if (!p.bot && !config.offline) {
       const seats = [...this.state.objects.values()].filter((o) => entry(o.kind).seat && safeJson(o.props).desk);
-      // a seat assigned to you wins; otherwise any seat nobody owns
       const owned = seats.find((o) => safeJson(o.props).ownerId === claims.userId);
       const free = seats.filter((o) => safeJson(o.props).ownerId == null).map((o) => o.id);
       const desk = owned
         ? { desk: owned.id }
-        : await yondra.desk(this.spaceId, claims.userId, free).catch(() => ({ desk: null }));
-      const seat = desk.desk ? this.state.objects.get(desk.desk) : undefined;
-      if (seat) {
-        p.desk = seat.id;
-        at = { x: seat.x + 0.5, y: seat.y + 0.5 };
-        p.a = ANIM.sit;
-        p.d = seatFacing(seat.rot);
-      }
+        : await yondra.desk(this.spaceId, claims.userId, free, false).catch(() => ({ desk: null }));
+      if (desk.desk && this.state.objects.get(desk.desk)) p.desk = desk.desk;
     }
     const open = this.grid.fits(at.x, at.y) ? at : (this.grid.nearestOpen(at.x, at.y) ?? this.map.spawn);
     p.x = open.x;

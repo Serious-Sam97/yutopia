@@ -16,6 +16,7 @@
     "laravel-echo": "^2.3.4",
     "livekit-client": "2.22.3",
     "next": "15.5.7",
+    "nostalgist": "0.22.0",
     "pixi.js": "^8.13.0",
     "pusher-js": "^8.5.0",
     "react": "19.1.0",

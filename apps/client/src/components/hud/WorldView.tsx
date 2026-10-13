@@ -31,6 +31,8 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
   // build mode takes over the screen (its own top bar, panels and bottom bar)
   const building = useHud((s) => s.build.on && s.canBuild);
   const side = useHud((s) => s.side);
+  // at the slot-car track's controls, a console or a TV: their console takes the screen
+  const racing = useHud((s) => s.panel.kind === "slotcar" || s.panel.kind === "console" || s.panel.kind === "tv");
 
   useEffect(() => {
     if (!getToken()) {
@@ -74,8 +76,8 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
           {!building && <ActionQueueBar />}
           {!building && <ScreenTray />}
           {building && <BuildMode />}
-          <Minimap />
-          {!building && <Dock />}
+          {!racing && <Minimap />}
+          {!building && !racing && <Dock />}
           <PanelHost />
           {!building && <ActionMenu />}
         </div>

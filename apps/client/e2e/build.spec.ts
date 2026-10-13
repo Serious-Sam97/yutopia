@@ -159,6 +159,9 @@ test("generated clutter becomes a real thing you can move", async ({ page }) => 
     );
     return d ? { id: d.piece.id, kind: d.piece.kind, x: d.at[0], y: d.at[1] } : null;
   });
+  // look at it (people arrive at the arrival point, not by this clutter)
+  await page.evaluate((q) => (window as any).__yutopia.engine.pinCamera({ x: q.x, y: q.y }), piece);
+  await page.waitForTimeout(400);
   // point at it: the hover tag names it; click to pick it up
   // the middle of its drawing on screen
   const p = await page.evaluate((id) => {

@@ -34,8 +34,10 @@ test("walking every way shows the view facing it", async ({ page }) => {
   const cx = Math.floor(sp.x) + 0.5;
   const cy = Math.floor(sp.y) - 2.5;
   await walkTo(page, cx, cy, 30_000);
-  // the people's drawing has loaded: the rig is up
+  // the people's drawing has loaded: the rig is up; and the walk there is over
+  // (people come in at the arrival point, just a few steps from here)
   await expect.poll(async () => (await shown(page))?.rigged).toBe(true);
+  await expect.poll(async () => (await shown(page))?.walking, { timeout: 10_000 }).toBe(false);
   const headings: [number, number][] = [
     [1, 1],
     [0, 1],

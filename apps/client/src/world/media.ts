@@ -29,7 +29,13 @@ export interface MediaEvents {
   onSpeaking: (on: boolean) => void;
   onState: (s: { ready: boolean; offline: boolean }) => void;
   onQuality?: (q: string) => void;
+  // a game room TV's picture (its LiveKit participant "tv-<console id>"), or null when it stops
+  onTv?: (identity: string, el: HTMLVideoElement | null) => void;
 }
+
+// A game room TV: everyone takes its picture; its sound comes only to those the
+// TV's host lets in (in earshot), its volume set like a voice's (setVoice).
+const isTv = (identity: string) => identity.startsWith("tv-");
 
 // LiveKit wrapper. We never subscribe ourselves: the world-server subscribes us
 // to the people in range (canSubscribe=false in our token). We only attach what
@@ -69,7 +75,7 @@ export class Media {
     });
     this.room = room;
     room
-      .on(RoomEvent.TrackPublished, (pub, p) => pub.setSubscribed(this.hearUids.has(p.identity)))
+      .on(RoomEvent.TrackPublished, (pub, p) => pub.setSubscribed(isTv(p.identity) || this.hearUids.has(p.identity)))
       .on(RoomEvent.ParticipantConnected, () => this.applySubscriptions())
       .on(RoomEvent.TrackSubscribed, (t, pub, p) => this.attach(t, pub, p))
       .on(RoomEvent.TrackUnsubscribed, (t, _pub, p) => this.detach(t, p))
@@ -136,6 +142,7 @@ export class Media {
       const el = track.attach() as HTMLVideoElement;
       el.muted = true;
       el.playsInline = true;
+      if (isTv(uid)) return this.ev.onTv?.(uid, el);
       const kind = pub.source === Track.Source.ScreenShare ? "screen" : "camera";
       this.videos.set(`${uid}:${kind}`, el);
       this.ev.onVideo(uid, pub.isMuted ? null : el, kind);
@@ -162,6 +169,9 @@ export class Media {
           this.voices.delete(key);
         }
       }
+    } else if (isTv(uid)) {
+      for (const el of track.detach()) el.remove();
+      this.ev.onTv?.(uid, null);
     } else {
       const isScreen = track.source === Track.Source.ScreenShare;
       this.videos.delete(`${uid}:${isScreen ? "screen" : "camera"}`);
@@ -182,7 +192,7 @@ export class Media {
   private applySubscriptions() {
     if (!this.room) return;
     for (const p of this.room.remoteParticipants.values()) {
-      const want = this.hearUids.has(p.identity);
+      const want = isTv(p.identity) || this.hearUids.has(p.identity);
       for (const pub of p.trackPublications.values()) if (pub.isDesired !== want) pub.setSubscribed(want);
     }
   }

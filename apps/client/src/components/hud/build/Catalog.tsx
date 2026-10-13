@@ -1,6 +1,7 @@
 "use client";
 
 import { entry, TEMPLATES } from "@yutopia/shared";
+import { GAME_ROOM_SETUP } from "@yutopia/shared/library";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
@@ -61,10 +62,26 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     ],
   },
   {
+    key: "games",
+    label: "catGames",
+    icon: "gamepad",
+    items: ["crt_tv", "console_2600", "console_nes", "console_snes", "console_md", "console_gb", "cart_shelf"].map(it),
+  },
+  {
     key: "tech",
     label: "catTech",
     icon: "radio",
-    items: ["lamp", "arcade", "piano", "vending", "water_cooler", "mixing_desk", "speaker_cab", "mic_stand"].map(it),
+    items: [
+      "lamp",
+      "arcade",
+      "slot_track",
+      "piano",
+      "vending",
+      "water_cooler",
+      "mixing_desk",
+      "speaker_cab",
+      "mic_stand",
+    ].map(it),
   },
   {
     key: "walls",
@@ -424,6 +441,27 @@ function Setups() {
   };
   return (
     <section className="space-y-1.5">
+      <h3 className="grp">{t("buildReadyMade")}</h3>
+      <button
+        type="button"
+        className="tile-card w-full h-[64px] flex items-center gap-2 px-2 text-left"
+        onClick={() => w?.build?.placeSetup(GAME_ROOM_SETUP)}
+        aria-label={`${t("buildSetupPlace")}: ${t("buildGameRoom")}`}
+      >
+        <span className="flex -space-x-3 shrink-0" aria-hidden>
+          {(["crt_tv", "console_nes", "cart_shelf"] as const).map((k) => (
+            <span key={k} className="w-10 h-10 flex items-center justify-center">
+              <ItemThumb kind={k} />
+            </span>
+          ))}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[13px] font-medium truncate">{t("buildGameRoom")}</span>
+          <span className="mono text-[10.5px] uppercase" style={{ color: "var(--muted)" }}>
+            {t("buildSetupItems").replace("{n}", String(GAME_ROOM_SETUP.length))}
+          </span>
+        </span>
+      </button>
       <h3 className="grp">{t("buildSetups")}</h3>
       {!setups?.length ? (
         <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>

@@ -479,6 +479,7 @@ export class WorldEngine {
     if (!this.app) return;
     this.drawStatic();
     this.redrawFlat();
+    this.drawSpawn(); // the arrival point may have moved
   }
 
   private eventWorld(e: FederatedPointerEvent) {
@@ -593,6 +594,43 @@ export class WorldEngine {
 
   // Room drafts in build mode.
   private rectG = new Graphics();
+  // Build mode (Map): where people arrive — a pin on its tile — and, while a
+  // new one is being picked, the tile under the pointer (olive fits, rust doesn't).
+  private spawnG = new Graphics();
+  private spawnOn = false;
+  private spawnPick: { x: number; y: number; ok: boolean } | null = null;
+  showSpawn(on: boolean, pick: { x: number; y: number; ok: boolean } | null = null) {
+    this.spawnOn = on;
+    this.spawnPick = pick;
+    this.drawSpawn();
+  }
+  private drawSpawn() {
+    if (!this.spawnG.parent) this.world.addChild(this.spawnG);
+    const g = this.spawnG;
+    g.clear();
+    if (!this.spawnOn) return;
+    const tile = (x: number, y: number) =>
+      [toScreen(x, y), toScreen(x + 1, y), toScreen(x + 1, y + 1), toScreen(x, y + 1)].flatMap((p) => [p.x, p.y]);
+    const pk = this.spawnPick;
+    if (pk)
+      g.poly(tile(pk.x, pk.y))
+        .fill({ color: pk.ok ? C.olive : C.rust, alpha: 0.35 })
+        .stroke({ width: 2, color: pk.ok ? C.vfd : C.rust });
+    const s = this.map.spawn;
+    const tx = Math.floor(s.x);
+    const ty = Math.floor(s.y);
+    g.poly(tile(tx, ty)).fill({ color: C.amber, alpha: 0.22 }).stroke({ width: 2, color: C.vfd });
+    const c = toScreen(tx + 0.5, ty + 0.5);
+    g.ellipse(c.x, c.y, 9, 4.5).fill({ color: 0x2a1a12, alpha: 0.3 });
+    g.moveTo(c.x, c.y)
+      .lineTo(c.x, c.y - 26)
+      .stroke({ width: 2.5, color: 0x2a1a12 });
+    g.circle(c.x, c.y - 32, 8)
+      .fill(C.amber)
+      .stroke({ width: 2, color: 0x2a1a12 });
+    g.circle(c.x, c.y - 32, 3).fill(0xf7f0de);
+  }
+
   setRectGhost(r: { x: number; y: number; w: number; h: number; ok: boolean } | null) {
     if (!this.rectG.parent) this.world.addChild(this.rectG);
     this.rectG.clear();
@@ -723,7 +761,7 @@ export class WorldEngine {
   }
 
   // Low: people are the only thing that moves; reduced motion: nothing extra.
-  private animated(): boolean {
+  animated(): boolean {
     return this.quality !== "low" && !this.reducedMotion;
   }
 
@@ -1371,6 +1409,16 @@ export class WorldEngine {
 
   // How someone is drawn right now (tests, debugging): the facing shown, the
   // view and whether it's mirrored, and whether the posed rig is up.
+  // where someone is drawn right now (world tiles), sitting or not, facing which way
+  avatarAt(id: string): { x: number; y: number; sitting: boolean; dir: number } | null {
+    const v = this.avatars.get(id);
+    return v ? { x: v.state.x, y: v.state.y, sitting: v.state.a === 2, dir: v.shownDir ?? v.state.d } : null;
+  }
+  // 0 by day … 1 at night
+  nightLevel(): number {
+    return this.night;
+  }
+
   avatarShown(id: string): { dir: number; view: string; mirror: boolean; rigged: boolean; walking: boolean } | null {
     const v = this.avatars.get(id);
     if (!v || v.shownDir === undefined) return null;
@@ -1580,6 +1628,7 @@ export class WorldEngine {
     v.body.tint = tint;
     if (v.rig) for (const sp of v.rig.sprites.values()) sp.tint = tint;
     v.root.alpha = s.status === "away" ? 0.55 : 1;
+    if (this.seeThrough && this.inFrontOf(this.seeThrough, s.x, s.y)) v.root.alpha *= 0.28;
     v.shadow.visible = !sitting;
 
     // speaking ring
@@ -2511,16 +2560,41 @@ export class WorldEngine {
   };
 
   // Fixed camera on a world point (review shots, screenshot regression); null follows you again.
+  // `ease`: glide there (and to the zoom) instead of cutting (leaning in on the slot-car track).
   private camPin: { x: number; y: number } | null = null;
-  pinCamera(at: { x: number; y: number; zoom?: number } | null) {
+  pinCamera(at: { x: number; y: number; zoom?: number; z?: number; ease?: boolean } | null) {
     if (!at) {
       this.camPin = null;
       return;
     }
     const p = toScreen(at.x, at.y);
-    this.camPin = { x: p.x, y: p.y };
-    this.cam = { ...this.camPin };
-    if (at.zoom) this.zoom = this.targetZoom = at.zoom;
+    this.camPin = { x: p.x, y: p.y - (at.z ?? 0) };
+    if (!at.ease) this.cam = { ...this.camPin };
+    if (at.zoom && at.ease) this.setZoom(at.zoom);
+    else if (at.zoom) this.zoom = this.targetZoom = at.zoom;
+  }
+
+  // Leaning in over something (the slot-car track): people standing between it
+  // and the camera turn see-through, so they don't hide what you're watching.
+  seeThrough: { x: number; y: number; w: number; h: number } | null = null;
+  private inFrontOf(r: { x: number; y: number; w: number; h: number }, x: number, y: number): boolean {
+    const sx = x - y;
+    if (sx < r.x - r.y - r.h - 0.6 || sx > r.x + r.w - r.y + 0.6) return false; // beside it on screen
+    const d = x + y - (r.x + r.y);
+    return d > Math.min(r.w, r.h) && d < r.w + r.h + 4;
+  }
+
+  // Things drawn live by a lazy module (the slot cars): sorted with the room.
+  mountLive(c: Container) {
+    this.sortLayer.addChild(c);
+  }
+  // the light where a live thing is (its tint)
+  liveTint(x: number, y: number): number {
+    return this.tintAt(x, y);
+  }
+  // reduced motion: live things skip their flourishes (a crashed car's spin)
+  stillMotion(): boolean {
+    return this.reducedMotion;
   }
 
   setZoom(z: number) {

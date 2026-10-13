@@ -80,6 +80,50 @@ export class Poker extends Schema {
   @type("string") by = "";
 }
 
+// A slot-car track's race (features/slotcar.ts), one per track object. The
+// racers drive their own cars and report them; everyone watches.
+export class SlotCar extends Schema {
+  @type("string") sid = "";
+  @type("number") uid = 0;
+  @type("string") name = "";
+  @type("float32") s = 0; // progress on the centre line since the start
+  @type("float32") v = 0;
+  @type("float32") off = 0; // seconds since it flew off (0: on the track)
+  @type("float32") ov = 0; // the speed it flew off at
+  @type("uint8") lap = 0; // laps done
+  @type("float32") last = 0; // the last lap's time (s)
+  @type("float32") best = 0; // the best lap (s), 0 for none yet
+  @type("uint8") place = 0; // 1.. once finished
+  @type("float32") time = 0; // the race time when they finished (s)
+  @type("uint16") offs = 0; // how many times it flew off this race
+}
+
+export class SlotRace extends Schema {
+  // lobby (taking lanes) → countdown (lights 1..5) → race → done (results) → lobby
+  @type("string") phase = "lobby";
+  @type("uint8") lights = 0;
+  @type("uint8") laps = 5;
+  @type("string") by = ""; // who started it
+  @type({ map: SlotCar }) cars = new MapSchema<SlotCar>(); // lane ("0".."3") → car
+}
+
+// A console that's on (features/games.ts), by its object id. Whoever turned
+// it on runs the game and streams the TV; ports are who holds which pad.
+export class GameConsole extends Schema {
+  @type("string") game = ""; // the cartridge (b:… / u:…)
+  @type("string") title = "";
+  @type("string") system = "";
+  @type("string") host = ""; // session id streaming it ("" while nobody does: paused)
+  @type("string") hostName = "";
+  @type("string") p1 = ""; // session ids at the pads
+  @type("string") p2 = "";
+  @type("string") p1Name = "";
+  @type("string") p2Name = "";
+  @type("boolean") live = false; // the TV's picture is going out
+  @type("uint8") resumes = 0; // carried on after its host went: load the last save state
+  @type("float64") since = 0;
+}
+
 export class SpaceState extends Schema {
   @type("number") spaceId = 0;
   @type("string") name = "";
@@ -106,4 +150,6 @@ export class SpaceState extends Schema {
   @type({ map: "string" }) boothGuests = new MapSchema<string>();
   @type({ map: "string" }) locks = new MapSchema<string>(); // area → who locked it
   @type({ map: "string" }) holds = new MapSchema<string>(); // object id → "uid|name" of the builder holding it
+  @type({ map: SlotRace }) slots = new MapSchema<SlotRace>(); // slot-car track id → its race
+  @type({ map: GameConsole }) consoles = new MapSchema<GameConsole>(); // console id → what it's playing
 }

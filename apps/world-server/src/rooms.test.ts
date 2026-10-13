@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { areaAt, canPlace, dressItems, findPath, Grid, getMap, ROOM_NAME, studio, takenId } from "@yutopia/shared";
+import { newCar, SLOT_GRIP, SLOT_LAP, SLOT_VMAX, slotCurve, stepCar } from "@yutopia/shared/slotcar";
 import { Client, type Room } from "colyseus.js";
 
 process.env.YUTOPIA_OFFLINE = "1";
@@ -52,6 +53,9 @@ async function person(id: number, spaceId: number, roles = "member"): Promise<Pe
     "build:history",
     "chat:react",
     "piano:note",
+    "game:tv",
+    "game:pad",
+    "game:audience",
   ])
     room.onMessage(t, (m) => {
       if (!p.msgs[t]) p.msgs[t] = [];
@@ -846,4 +850,165 @@ test("a group comes down in any order: what's on a desk is placed after the desk
   await waitFor(() => count() === 2);
   const mug = [...a.room.state.objects.values()].find((o) => o.kind === "tabletop" && o.x === spot.x && o.y === spot.y);
   assert.equal(JSON.parse(mug?.props ?? "{}").z, 25, "standing on the desk's top");
+});
+
+test("slot cars: lanes near the track, five lights, laps counted from what a real car could do", async () => {
+  const s = ++space;
+  const a = await person(41, s, "member,builder");
+  const b = await person(42, s);
+  const at = me(a);
+  const spot = spotFor(a, "slot_track", Math.floor(at?.x ?? 0) - 2, Math.floor(at?.y ?? 0) - 4, 5, () => true);
+  assert.ok(spot, "room for a track");
+  a.room.send("obj:put", { id: "t-slot", kind: "slot_track", x: spot.x, y: spot.y, rot: 0 });
+  await waitFor(() => !!a.room.state.objects.get("t-slot"));
+  const race = () => b.room.state.slots.get("t-slot");
+  // too far from the table: no lane
+  const far = me(b);
+  const near = (p: { x: number; y: number }) =>
+    Math.hypot(p.x - Math.max(spot.x, Math.min(p.x, spot.x + 4)), p.y - Math.max(spot.y, Math.min(p.y, spot.y + 3)));
+  if (far && near(far) > 3) {
+    b.room.send("slot:join", { id: "t-slot", lane: 0 });
+    await waitFor(() => (b.msgs.toast?.length ?? 0) > 0);
+    assert.ok(!race()?.cars.get("0"));
+  }
+  if (near(me(a) ?? { x: 0, y: 0 }) > 2.5) await walk(a, { x: spot.x + 2, y: spot.y + 3.5 });
+  a.room.send("slot:join", { id: "t-slot", lane: 1 });
+  await waitFor(() => race()?.cars.get("1")?.name === "P41");
+  // starting: the lights come on one by one, then go out
+  a.room.send("slot:start", { id: "t-slot", laps: 3 });
+  await waitFor(() => race()?.phase === "countdown");
+  await waitFor(() => (race()?.lights ?? 0) >= 3, 3000);
+  await waitFor(() => race()?.phase === "race", 6000);
+  assert.equal(race()?.laps, 3);
+  // a teleport is ignored
+  a.room.send("slot:car", { id: "t-slot", s: 6, v: 3, off: 0, ov: 0 });
+  await sleep(150);
+  assert.equal(race()?.cars.get("1")?.s, 0);
+  // drive a careful lap, reporting at 20 Hz like the client
+  const car = newCar();
+  const tick = 0.05;
+  const careful = () => {
+    let lim = SLOT_VMAX;
+    for (let d = 0; d <= 1.2; d += 0.01) {
+      const k = slotCurve(car.s + d);
+      if (k) lim = Math.min(lim, Math.sqrt(SLOT_GRIP / k) * 0.9 + d * 3);
+    }
+    return car.v < lim ? 1 : 0;
+  };
+  while (car.s < SLOT_LAP + 0.3) {
+    for (let i = 0; i < 5; i++) stepCar(car, careful(), tick / 5);
+    a.room.send("slot:car", { id: "t-slot", s: car.s, v: car.v, off: car.off, ov: car.ov });
+    await sleep(tick * 1000);
+  }
+  await waitFor(() => race()?.cars.get("1")?.lap === 1);
+  const lap = race()?.cars.get("1");
+  assert.ok((lap?.best ?? 0) > 2 && (lap?.best ?? 0) < 8, `a lap in ${lap?.best}`);
+  // giving the lane back empties the race: back to the lobby
+  a.room.send("slot:leave", { id: "t-slot" });
+  await waitFor(() => race()?.cars.size === 0 && race()?.phase === "lobby");
+  a.room.send("obj:remove", { id: "t-slot" });
+  await waitFor(() => !race());
+});
+
+test("the arrival point: builders move it to open floor, and that's where people come in", async () => {
+  const s = ++space;
+  const owner = await person(43, s, "member,builder");
+  const member = await person(44, s);
+  const st = () => owner.room.state;
+  const from = { x: st().spawnX, y: st().spawnY };
+  // somewhere open a few tiles away
+  const g = liveGrid(owner);
+  let to: { x: number; y: number } | null = null;
+  for (let r = 2; r < 8 && !to; r++)
+    for (const [dx, dy] of [
+      [r, 0],
+      [0, r],
+      [-r, 0],
+      [0, -r],
+    ])
+      if (!to && g.ok(Math.floor(from.x) + dx, Math.floor(from.y) + dy))
+        to = { x: Math.floor(from.x) + dx, y: Math.floor(from.y) + dy };
+  assert.ok(to, "an open tile nearby");
+  // members can't; a wall-less void tile is refused
+  member.room.send("map:spawn", to);
+  await sleep(250);
+  assert.equal(st().spawnX, from.x);
+  owner.room.send("map:spawn", { x: -5, y: -5 });
+  await waitFor(() => (owner.msgs.toast ?? []).some((m) => /open floor/i.test((m as { text: string }).text)));
+  owner.room.send("map:spawn", to);
+  await waitFor(() => st().spawnX === to.x + 0.5 && st().spawnY === to.y + 0.5);
+  await waitFor(() => (owner.msgs.toast ?? []).some((m) => /Arrival point set/.test((m as { text: string }).text)));
+  // someone coming in now arrives there
+  const late = await person(45, s);
+  const p = late.room.state.players.get(late.room.sessionId);
+  assert.ok(Math.hypot(p.x - (to.x + 0.5), p.y - (to.y + 0.5)) < 1.01, `arrived at ${p.x},${p.y}`);
+});
+
+test("game room: plug a console into a TV, a cartridge, power, pad 2 relayed, the TV's audience, carry on", async () => {
+  const s = ++space;
+  const a = await person(46, s, "member,builder");
+  const b = await person(47, s);
+  const st = () => b.room.state;
+  const at = me(a);
+  const base = { x: Math.floor(at?.x ?? 0), y: Math.floor(at?.y ?? 0) };
+  // a TV and a console in front of it, near Ana (spots the rules allow)
+  const tvSpot = spotFor(a, "crt_tv", base.x - 1, base.y - 3, 6, () => true);
+  assert.ok(tvSpot, "room for a TV");
+  a.room.send("obj:put", { id: "t-tv", kind: "crt_tv", x: tvSpot.x, y: tvSpot.y, rot: 0 });
+  await waitFor(() => !!st().objects.get("t-tv"));
+  const conSpot = spotFor(a, "console_nes", tvSpot.x + 1, tvSpot.y + 2, 4, () => true);
+  assert.ok(conSpot, "room for a console");
+  a.room.send("obj:put", { id: "t-con", kind: "console_nes", x: conSpot.x, y: conSpot.y, rot: 0 });
+  await waitFor(() => !!st().objects.get("t-con"));
+  const props = (id: string) => JSON.parse(st().objects.get(id)?.props ?? "{}");
+  await walk(a, { x: conSpot.x + 0.5, y: conSpot.y + 1.5 });
+
+  // can't turn on: not plugged in, no cartridge
+  a.room.send("game:power", { id: "t-con", on: true });
+  await waitFor(() => (a.msgs.toast ?? []).some((m) => /Plug it into a TV/.test((m as { text: string }).text)));
+  a.room.send("game:plug", { id: "t-con", tv: "t-tv" });
+  await waitFor(() => props("t-con").tv === "t-tv" && props("t-tv").input === "t-con");
+  // a cartridge for another console doesn't fit; a built-in 8-bit one does
+  a.room.send("game:cart", { id: "t-con", game: "b:ucity" });
+  await waitFor(() => (a.msgs.toast ?? []).some((m) => /doesn't fit/.test((m as { text: string }).text)));
+  a.room.send("game:cart", { id: "t-con", game: "b:testcard-nes" });
+  await waitFor(() => props("t-con").cart === "b:testcard-nes" && !!props("t-con").cartColor);
+
+  // on: Ana hosts, pad 1; the TV's token
+  a.room.send("game:power", { id: "t-con", on: true });
+  await waitFor(() => st().consoles.get("t-con")?.host === a.room.sessionId);
+  const c = () => st().consoles.get("t-con");
+  assert.equal(c()?.p1, a.room.sessionId);
+  assert.equal(c()?.title, "Test Card");
+  a.room.send("game:tv", { id: "t-con" });
+  await waitFor(() => (a.msgs["game:tv"]?.length ?? 0) > 0);
+  assert.equal((a.msgs["game:tv"][0] as { identity: string }).identity, "tv-t-con");
+  // can't swap cartridges while it's on
+  a.room.send("game:cart", { id: "t-con", game: null });
+  await waitFor(() => (a.msgs.toast ?? []).some((m) => /Turn it off first/.test((m as { text: string }).text)));
+
+  // Bia: far away she still sees the TV (video), and doesn't hear it
+  await waitFor(() => (a.msgs["game:audience"] ?? []).length > 0);
+  const aud = () => a.msgs["game:audience"].at(-1) as { video: string[]; audio: string[] };
+  assert.ok(aud().video.includes("47"), "everyone sees the TV");
+  // she walks up and takes pad 2: her buttons reach Ana
+  await walk(b, { x: conSpot.x + 1.5, y: conSpot.y + 1.5 });
+  await waitFor(() => aud().audio.includes("47"), 4000);
+  b.room.send("game:port", { id: "t-con", port: 2 });
+  await waitFor(() => c()?.p2 === b.room.sessionId);
+  b.room.send("game:pad", { id: "t-con", bits: 0b10001 });
+  await waitFor(() => (a.msgs["game:pad"] ?? []).length > 0);
+  assert.deepEqual(a.msgs["game:pad"][0], { id: "t-con", port: 2, bits: 0b10001 });
+  // Ana's own buttons don't go round through the server; bad bits are dropped
+  b.room.send("game:pad", { id: "t-con", bits: 99999 });
+  await sleep(200);
+  assert.equal(a.msgs["game:pad"].length, 1);
+
+  // Ana leaves: paused; Bia carries on as host
+  await a.room.leave(true);
+  await waitFor(() => c()?.host === "", 4000);
+  b.room.send("game:continue", { id: "t-con" });
+  await waitFor(() => c()?.host === b.room.sessionId && c()?.p1 === b.room.sessionId && c()?.p2 === "");
+  b.room.send("game:power", { id: "t-con", on: false });
+  await waitFor(() => !c());
 });

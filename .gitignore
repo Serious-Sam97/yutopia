@@ -14,3 +14,5 @@ docker/prod/livekit.keys.yaml
 .next-docker
 .next-visual
 apps/client/test-results
+apps/client/public/emu/cores
+apps/client/public/emu/games

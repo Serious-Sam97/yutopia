@@ -1,0 +1,57 @@
+{
+  "_": "Emulator cores for the game room (docs/plan/09-game-room.md). Fetched by tools/emu-assets.mjs into apps/client/public/emu/cores (not in git), each pinned by sha256. Serving GPL cores: their sources are linked here and in /emu/cores/SOURCES.md.",
+  "cores": [
+    {
+      "core": "stella2014",
+      "systems": ["2600"],
+      "license": "GPL-2.0-only",
+      "source": "https://github.com/EmulatorJS/stella2014-libretro",
+      "from": "npm",
+      "url": "https://registry.npmjs.org/@emulatorjs/core-stella2014/-/core-stella2014-4.2.3.tgz",
+      "sha256": "848bc9d4d94eb15ab7477b5bb7bcab8a5dc9cde692177a3a49b653e618589ffb",
+      "entry": "package/stella2014-wasm.data"
+    },
+    {
+      "core": "fceumm",
+      "systems": ["nes"],
+      "license": "GPL-2.0-only",
+      "source": "https://github.com/libretro/libretro-fceumm",
+      "from": "zip",
+      "url": "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@v1.22.2/retroarch/fceumm_libretro.zip",
+      "sha256": "c890126923a13586b7735c4a551e6010afe06ed059dc8fdeb6b55d8fadf2cf1e"
+    },
+    {
+      "core": "snes9x",
+      "systems": ["snes"],
+      "license": "LicenseRef-Snes9x (non-commercial)",
+      "source": "https://github.com/libretro/snes9x",
+      "from": "zip",
+      "url": "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@v1.22.2/retroarch/snes9x_libretro.zip",
+      "sha256": "0d50b0e18607af87c0c6ed2d9068fcfd19514be09b004068c2b5f06783499ef4"
+    },
+    {
+      "core": "genesis_plus_gx",
+      "systems": ["md"],
+      "license": "LicenseRef-GenesisPlusGX (non-commercial)",
+      "source": "https://github.com/libretro/Genesis-Plus-GX",
+      "from": "zip",
+      "url": "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@v1.22.2/retroarch/genesis_plus_gx_libretro.zip",
+      "sha256": "7bd0f36eef6f61e63541a0f51c3ccecb8a7139235d9c3734739acd9c4249b3c8"
+    },
+    {
+      "core": "gambatte",
+      "systems": ["gb"],
+      "license": "GPL-2.0-only",
+      "source": "https://github.com/libretro/gambatte-libretro",
+      "from": "zip",
+      "url": "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@v1.22.2/retroarch/gambatte_libretro.zip",
+      "sha256": "a4c40420e8997fb35fe1054452b52c965cc8dd0ab202908e4609f72d560cf5a3"
+    }
+  ],
+  "frontend": {
+    "name": "RetroArch (emscripten build, in each core's .js/.wasm)",
+    "license": "GPL-3.0-or-later",
+    "source": "https://github.com/libretro/RetroArch",
+    "build": "https://github.com/arianrhodsandlot/retroarch-emscripten-build (v1.22.2), https://github.com/EmulatorJS/EmulatorJS (stella2014 4.2.3)"
+  }
+}

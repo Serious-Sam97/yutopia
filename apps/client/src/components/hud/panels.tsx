@@ -16,6 +16,8 @@ const ScreenPanel = dynamic<P>(() => import("./ScreenPanels").then((m) => m.Scre
 const TerminalPanel = dynamic<P>(() => import("./ScreenPanels").then((m) => m.TerminalPanel), { ssr: false });
 const WhiteboardPanel = dynamic<P>(() => import("./WhiteboardPanel").then((m) => m.WhiteboardPanel), { ssr: false });
 const PianoPanel = dynamic<P>(() => import("./PianoPanel").then((m) => m.PianoPanel), { ssr: false });
+const SlotPanel = dynamic<P>(() => import("./SlotPanel").then((m) => m.SlotPanel), { ssr: false });
+const GamePanel = dynamic<P>(() => import("./GamePanel").then((m) => m.GamePanel), { ssr: false });
 
 // Panels opened from in-world objects (X / click). Board walls use BoardPanel.
 export const extraPanels: Partial<Record<string, ComponentType<{ objectId: string }>>> = {
@@ -29,4 +31,8 @@ export const extraPanels: Partial<Record<string, ComponentType<{ objectId: strin
   screen: ScreenPanel,
   terminal: TerminalPanel,
   piano: PianoPanel,
+  slotcar: SlotPanel,
+  console: GamePanel,
+  tv: GamePanel,
+  games: GamePanel,
 };

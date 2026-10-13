@@ -8,6 +8,7 @@ const o = (kind: string, props: Record<string, unknown> = {}) => ({ id: "x", kin
 test("what a thing offers: the first is what X does", () => {
   assert.deepEqual(objectActions(o("coffee_machine"), ctx), ["brew"]);
   assert.deepEqual(objectActions(o("piano"), ctx), ["play", "tune"]);
+  assert.deepEqual(objectActions(o("slot_track"), ctx), ["race"]);
   assert.deepEqual(objectActions(o("chair"), ctx), ["sit"]);
   assert.deepEqual(objectActions(o("lamp"), ctx), ["lightOff"]);
   assert.deepEqual(objectActions(o("lamp", { on: false }), ctx), ["lightOn"]);

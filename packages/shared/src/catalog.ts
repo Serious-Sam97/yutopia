@@ -18,6 +18,10 @@ export type Interaction =
   | "water"
   | "vending"
   | "piano"
+  | "slotcar"
+  | "tv"
+  | "console"
+  | "games"
   | "switch";
 
 export interface CatalogEntry {
@@ -160,6 +164,27 @@ export const CATALOG = {
     light: { color: 0xffe2a8, radius: 2.4, intensity: 0.35 },
   },
   piano: { label: "Upright piano", w: 2, h: 1, solid: true, interact: "piano", buildable: true, variants: 2 },
+  // the game room (shared/games.ts): a CRT TV on its stand, consoles you plug
+  // into it with a cable (props.tv), a cartridge in them (props.cart), the
+  // shelf of cartridges (the library)
+  crt_tv: { label: "CRT TV", w: 2, h: 1, solid: true, interact: "tv", buildable: true, variants: 2 },
+  console_2600: { label: "Woodgrain console", w: 1, h: 1, solid: false, interact: "console", buildable: true },
+  console_nes: { label: "8-bit console", w: 1, h: 1, solid: false, interact: "console", buildable: true, variants: 2 },
+  console_snes: { label: "16-bit console", w: 1, h: 1, solid: false, interact: "console", buildable: true },
+  console_md: { label: "16-bit console (black)", w: 1, h: 1, solid: false, interact: "console", buildable: true },
+  console_gb: { label: "Handheld TV dock", w: 1, h: 1, solid: false, interact: "console", buildable: true },
+  cart_shelf: { label: "Cartridge shelf", w: 2, h: 1, solid: true, interact: "games", buildable: true },
+  // an autorama for up to four (shared/slotcar.ts): the track on a table, the
+  // cars race live for everyone in the room
+  slot_track: {
+    label: "Slot-car track",
+    w: 4,
+    h: 3,
+    solid: true,
+    interact: "slotcar",
+    buildable: true,
+    light: { color: 0xffe2a8, radius: 2.4, intensity: 0.22 },
+  },
   turntable: {
     label: "Record player",
     w: 1,

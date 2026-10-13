@@ -22,6 +22,7 @@
 3. [03-roadmap.md](03-roadmap.md) — delivery in **Fitas** (tapes), each with an exit test
 4. [04-world-and-art.md](04-world-and-art.md) — isometric art direction, avatars, rooms, sound
 5. [05-risks-and-open-questions.md](05-risks-and-open-questions.md) — what can sink it + decisions still open
+6. [09-game-room.md](09-game-room.md) — Fita 9 (planned): game room, consoles plugged into a TV, emulators streamed to everyone
 
 ## Workflow rules (inherited from Yondra)
 

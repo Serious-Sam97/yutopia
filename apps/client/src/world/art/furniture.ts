@@ -523,6 +523,31 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           { x: 0.06, y: 0.58, w: 1.88, d: 0.26, z: 14, h: 6, color: C.walnut },
         ],
       };
+    case "crt_tv":
+      return {
+        boxes: [
+          { x: 0.06, y: 0.1, w: 1.88, d: 0.8, z: 0, h: 13, color: C.walnut },
+          { x: 0.3, y: 0.16, w: 1.4, d: 0.62, z: 13, h: 34, color: C.teak },
+        ],
+      };
+    case "console_2600":
+    case "console_nes":
+    case "console_snes":
+    case "console_md":
+    case "console_gb":
+      return { boxes: [{ x: 0.2, y: 0.3, w: 0.6, d: 0.42, z: 0, h: 5, color: C.graphite }] };
+    case "cart_shelf":
+      return { boxes: [{ x: 0.06, y: 0.24, w: 1.88, d: 0.54, z: 0, h: 30, color: C.walnut }] };
+    case "slot_track":
+      return {
+        boxes: [
+          leg(0.12, 0.12, 19),
+          leg(3.8, 0.12, 19),
+          leg(0.12, 2.8, 19),
+          leg(3.8, 2.8, 19),
+          { x: 0, y: 0, w: 4, d: 3, z: 19, h: 4, color: C.walnut, top: 0x5f7a3a },
+        ],
+      };
     case "turntable":
       return { boxes: [{ x: 0.14, y: 0.18, w: 0.72, d: 0.64, z: 0, h: 5, color: C.walnut }] };
     case "clock":

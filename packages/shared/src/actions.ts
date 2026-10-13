@@ -13,6 +13,8 @@ export type ObjectAction =
   | "buy"
   | "play"
   | "tune"
+  | "race"
+  | "watch"
   | "open"
   | "lightOn"
   | "lightOff"
@@ -65,6 +67,15 @@ export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectActi
       break;
     case "arcade":
       out.push("play");
+      break;
+    case "slotcar":
+      out.push("race");
+      break;
+    case "console":
+      out.push("play");
+      break;
+    case "tv":
+      out.push("watch");
       break;
     case "lamp":
       out.push(props.on === false ? "lightOn" : "lightOff");

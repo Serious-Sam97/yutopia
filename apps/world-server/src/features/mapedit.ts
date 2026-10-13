@@ -142,6 +142,7 @@ registerFeature((room: SpaceRoom) => {
     const y = Math.floor(Number(m.y));
     if (!room.grid.ok(x, y)) return warn(client, "Pick an open floor tile.");
     room.commitMap({ ...room.map, spawn: { x: x + 0.5, y: y + 0.5 } });
+    room.send(client, "toast", { text: "Arrival point set — everyone who comes in arrives here." });
   });
 
   room.on("map:room", (client, m) => {
