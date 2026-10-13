@@ -412,8 +412,11 @@ export interface RadioState {
   startedAt: number;
   by: string;
   lock: boolean; // only builders change it
+  volume: number; // its own knob, 0..1 (everyone near hears it at this)
   media: MediaState | null; // the YouTube queue (source yt)
 }
+
+export const RADIO_VOLUME = 0.8; // a new radio's knob
 
 export function radioOf(o: WorldObjectDef | undefined): RadioState {
   const r = (o?.props?.radio ?? {}) as Record<string, unknown>;
@@ -425,6 +428,10 @@ export function radioOf(o: WorldObjectDef | undefined): RadioState {
     startedAt: Number(r.startedAt) || 0,
     by: typeof r.by === "string" ? r.by : "",
     lock: r.lock === true,
+    volume:
+      Number.isFinite(Number(r.volume)) && r.volume !== null
+        ? Math.max(0, Math.min(1, Number(r.volume)))
+        : RADIO_VOLUME,
     media: m && (m.item || m.queue.length) ? { ...m, lock: r.lock === true } : null,
   };
 }
@@ -450,6 +457,15 @@ export function keepPlaying(
   if (live?.media) out.media = live.media;
   if (live?.radio) out.radio = live.radio;
   return out;
+}
+
+// A TV's own volume knob (props.volume, 0..1; kept when nothing's on).
+export const TV_VOLUME = 1;
+export function tvVolume(o: WorldObjectDef | undefined): number {
+  const v = Number(o?.props?.volume);
+  return o?.props?.volume !== undefined && o?.props?.volume !== null && Number.isFinite(v)
+    ? Math.max(0, Math.min(1, v))
+    : TV_VOLUME;
 }
 
 // The CRT TV shows media on its "TV" input (consoles are AV1 / AV2).

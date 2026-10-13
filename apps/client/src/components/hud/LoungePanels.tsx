@@ -6,7 +6,7 @@ import { useLang, useTr } from "@/lib/i18n";
 import { STATIONS } from "@/world/sound";
 import { useHud } from "@/world/store";
 import { useWorld } from "./ctx";
-import { MediaRemote, PlaylistChips } from "./MediaPanel";
+import { MediaRemote, PlaylistChips, VolumeKnob } from "./MediaPanel";
 import { Panel } from "./Panel";
 
 // A radio or record player: its own lo-fi station or YouTube queue (the
@@ -28,8 +28,25 @@ export function RadioPanel({ objectId }: { objectId: string }) {
           </button>
         ))}
       </div>
+      <RadioVolume objectId={objectId} r={r} />
       {tab === "yt" ? <MediaRemote id={objectId} /> : <LofiStations objectId={objectId} r={r} />}
     </Panel>
+  );
+}
+
+// Its own volume knob (everyone near hears it at this), for either source.
+function RadioVolume({ objectId, r }: { objectId: string; r: RadioState }) {
+  const w = useWorld();
+  const pt = useLang() === "pt";
+  return (
+    <div className="mb-3">
+      <VolumeKnob
+        value={r.volume}
+        label={pt ? "Volume deste rádio" : "This radio's volume"}
+        disabled={r.lock && !w?.room?.state.players.get(w.room.sessionId)?.builder}
+        onCommit={(volume) => w?.send("radio:volume", { id: objectId, volume })}
+      />
+    </div>
   );
 }
 

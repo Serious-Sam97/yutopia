@@ -162,6 +162,11 @@ test("media: a YouTube video on a wall TV — left playing, found at the right s
     const near = await player(bia);
     expect(near?.video).toBe(VIDEO);
     expect(near?.vol ?? 0).toBeGreaterThan(mid?.vol ?? 0);
+    // the TV's own knob down: quieter right in front of it (it eases there)
+    await bia.evaluate((i) => (window as any).__yutopia.send("media:volume", { id: i, volume: 0.3 }), tvId);
+    await expect
+      .poll(async () => (await player(bia))?.vol ?? 100, { timeout: 10_000 })
+      .toBeLessThan((near?.vol ?? 0) * 0.45);
     // and it's at the right second: where it would be had it played all along
     await bia.waitForTimeout(2500);
     const want = await bia.evaluate((i) => {
@@ -227,7 +232,8 @@ test("media: YouTube on a radio — its own queue, the card plays near it, a sta
     );
     await walk(ana, { x: radio.x + 0.5, y: radio.y + 1.5 }, 60_000).catch(() => false);
     await expect.poll(async () => (await status(ana))?.card, { timeout: 20_000 }).toBe(true);
-    expect((await player(ana))?.video).toBe(VIDEO);
+    // the card shows at once, its player a moment later
+    await expect.poll(async () => (await player(ana))?.video, { timeout: 10_000 }).toBe(VIDEO);
     // the procedural lo-fi isn't playing under it
     expect(await ana.evaluate(() => !!(window as any).__audio.radio.out)).toBe(false);
     await expect(ana.locator(".ymc-tag")).toHaveText(/RADIO|RÁDIO/);

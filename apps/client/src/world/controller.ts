@@ -782,7 +782,8 @@ export class WorldController {
       if (!near || d < near.d) near = { o: box, r, d };
       if (r.source !== "lofi") continue;
       const same = area?.key === areaAt(this.map, box.x + 0.5, box.y + 0.5)?.key;
-      const l = same ? Math.max(0.2, Math.min(1, 1 - (d - 2) / 10)) : d < 5 ? 0.12 : 0;
+      // its own knob too: a radio turned down is quieter, and loses to a louder one
+      const l = (same ? Math.max(0.2, Math.min(1, 1 - (d - 2) / 10)) : d < 5 ? 0.12 : 0) * r.volume;
       if (l > level) {
         level = l;
         loud = { o: box, r };

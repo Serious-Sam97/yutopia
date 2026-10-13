@@ -396,3 +396,27 @@ test("media: playlists — rename, pin, my star", async () => {
   await waitFor(() => !lists(ana)[0]?.pinned);
   assert.equal(lists(ana)[0].stars, undefined);
 });
+
+test("media: every TV its own volume knob, kept when it's off", async () => {
+  const space = 508;
+  const ana = await person(1, space, "member,builder");
+  await placeTv(ana, "tv-v1");
+  await placeTv(ana, "tv-v2", "tv_wall");
+  const vol = (id: string) => JSON.parse(ana.room.state.objects.get(id).props || "{}").volume;
+  assert.equal(vol("tv-v1"), undefined, "a new TV is at full (no knob set)");
+  ana.room.send("media:volume", { id: "tv-v1", volume: 0.42 });
+  await waitFor(() => vol("tv-v1") === 0.42);
+  assert.equal(vol("tv-v2"), undefined, "the other TV keeps its own");
+  ana.room.send("media:volume", { id: "tv-v1", volume: -3 });
+  await waitFor(() => vol("tv-v1") === 0);
+  // something on, then off: the knob stays
+  ana.room.send("media:play", { id: "tv-v1", items: [yt("aaaaaaaaaaa", 100)], mode: "now" });
+  await waitFor(() => !!mediaOf(ana, "tv-v1")?.item);
+  ana.room.send("media:ctl", { id: "tv-v1", op: "stop" });
+  await waitFor(() => !mediaOf(ana, "tv-v1"));
+  assert.equal(vol("tv-v1"), 0);
+  // not a TV: nothing
+  ana.room.send("media:volume", { id: "lounge-radio", volume: 0.1 });
+  await sleep(200);
+  assert.equal(JSON.parse(ana.room.state.objects.get("lounge-radio").props || "{}").volume, undefined);
+});

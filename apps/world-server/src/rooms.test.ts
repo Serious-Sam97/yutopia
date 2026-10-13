@@ -275,6 +275,13 @@ test("radio: each radio its own station, with a start time", async () => {
   b.room.send("radio:set", { id: "lounge-radio", playing: false });
   await waitFor(() => radio(a, "lounge-radio").playing === false);
   assert.equal(radio(a, "lounge-turntable").playing, true);
+  // each its own volume knob, kept in 0..1 (a new one starts at 0.8)
+  assert.equal(radio(a, "lounge-radio").volume, 0.8);
+  a.room.send("radio:volume", { id: "lounge-turntable", volume: 0.35 });
+  await waitFor(() => radio(b, "lounge-turntable").volume === 0.35);
+  assert.equal(radio(b, "lounge-radio").volume, 0.8, "the radio next to it keeps its own");
+  a.room.send("radio:volume", { id: "lounge-turntable", volume: 7 });
+  await waitFor(() => radio(b, "lounge-turntable").volume === 1);
   // not a radio: nothing
   a.room.send("radio:set", { id: "nope", playing: true });
 });

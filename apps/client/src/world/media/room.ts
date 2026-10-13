@@ -10,7 +10,9 @@ import {
   mediaAt,
   mediaOf,
   positionAt,
+  radioOf,
   showsMedia,
+  tvVolume,
   ytThumb,
 } from "@yutopia/shared/media";
 import { Container, Graphics, Matrix, Sprite, Texture } from "pixi.js";
@@ -280,7 +282,7 @@ export class MediaRoom {
       const m = on ? mediaOf(o) : null;
       if (m?.item) {
         const spot = displaySpot(o);
-        const gain = hearingGain(this.w.map, ear, spot, true);
+        const gain = hearingGain(this.w.map, ear, spot, true) * tvVolume(o); // its own knob
         sources.push({ id: o.id, m, gain, radio: false });
         const ref = m.item.ref;
         if (this.lastRef.has(o.id) && this.lastRef.get(o.id) !== ref && !m.paused) tvOn(GLASS[o.kind].look, gain);
@@ -293,7 +295,8 @@ export class MediaRoom {
       if (!isRadio(o.kind)) continue;
       const m = mediaAt(o);
       if (!m?.item) continue;
-      sources.push({ id: o.id, m, gain: hearingGain(this.w.map, ear, topCentre(o), true), radio: true });
+      const knob = radioOf(o).volume; // its own volume knob
+      sources.push({ id: o.id, m, gain: hearingGain(this.w.map, ear, topCentre(o), true) * knob, radio: true });
     }
     for (const src of sources) if (src.gain <= 0) this.hidden.delete(src.id);
     this.drawProjectors(night);

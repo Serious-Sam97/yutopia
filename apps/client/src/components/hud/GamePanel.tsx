@@ -7,7 +7,7 @@ import { type Cartridge, library, removeGame, saveInfo, upload } from "@/world/g
 import { bit, KEY_HINTS } from "@/world/games/input";
 import { hud, toast, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
-import { MediaRemote } from "./MediaPanel";
+import { MediaRemote, TvVolume } from "./MediaPanel";
 
 // The game room's panel (docs/plan/09-game-room.md), for a console, a TV or the
 // cartridge shelf. Not a modal: the camera leans in over the TV and this sits
@@ -133,6 +133,11 @@ export function GamePanel({ objectId }: { objectId: string }) {
             </div>
           ) : (
             <Screen consoleId={showing} on={!!v?.on} running={!!v?.host} t={t} />
+          )}
+          {kind === "tv" && v?.input !== "media" && (
+            <div className="cabinet rise px-3 py-2">
+              <TvVolume id={objectId} />
+            </div>
           )}
           {kind === "console" && v?.on && v.myPort ? <TouchPad system={v.system as GameSystem} /> : null}
           <div className="cabinet rise px-3 py-2.5 flex flex-col gap-2">

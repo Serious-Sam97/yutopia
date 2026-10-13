@@ -128,6 +128,8 @@ export interface ClientMessages {
   "lamp:set": { id: string; on: boolean }; // anyone standing near it (floor lamps, desk lamps)
   "lights:room": { id: string; on: boolean }; // a light switch: every lamp in its room
   "radio:set": { id: string; playing: boolean; station?: number }; // a radio / record player, each its own
+  "radio:volume": { id: string; volume: number }; // its knob, 0..1
+  "media:volume": { id: string; volume: number }; // a TV's knob, 0..1
   // media on a TV or a radio (its object id), shared/media.ts:
   // play now / next / at the end of the queue (several: a playlist), the
   // controls, and a length a player found out (YouTube items arrive without one)

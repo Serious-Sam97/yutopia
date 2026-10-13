@@ -20,6 +20,7 @@ import {
   TV_SCREEN,
   turnLocal,
 } from "@yutopia/shared/games";
+import { tvVolume } from "@yutopia/shared/media";
 import { Container, Graphics, Matrix, Sprite, Text, Texture } from "pixi.js";
 import { prefs } from "@/lib/prefs";
 import { glowSprite, placeGlow } from "../art/glow";
@@ -457,7 +458,7 @@ export class GameRoom {
         const ear = { x: me.x, y: me.y, dnd: false };
         this.w.media.setVoice(
           `tv-${shows.id}`,
-          hearingGain(this.w.map, ear, spot, true) * 0.9 * prefs().vol.tv,
+          hearingGain(this.w.map, ear, spot, true) * 0.9 * prefs().vol.tv * tvVolume(tv),
           stereoPan(ear, spot),
         );
       }

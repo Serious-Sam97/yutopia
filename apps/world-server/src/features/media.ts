@@ -20,6 +20,7 @@ import {
   seek,
   skip,
   startItem,
+  tvVolume,
   YT_LIST,
 } from "@yutopia/shared/media";
 import { config } from "../config.ts";
@@ -221,6 +222,23 @@ registerFeature((room: SpaceRoom) => {
         return;
     }
     write(id, s);
+  });
+
+  // A TV's own volume knob (props.volume, kept when nothing's on): everyone
+  // near hears it at that. Radios have theirs in features/radio.ts.
+  room.on("media:volume", (client, msg) => {
+    const p = player(client);
+    const o = room.state.objects.get(String(msg.id ?? ""));
+    const v = Number(msg.volume);
+    if (!p || !o || !isDisplay(o.kind) || !Number.isFinite(v)) return;
+    const d = fromSchema(o);
+    if (cleanState(d.props?.media).lock && !p.builder)
+      return warn(client, "Only builders change this one (it's locked).");
+    const volume = Math.round(Math.max(0, Math.min(1, v)) * 100) / 100;
+    if (volume === tvVolume(d)) return;
+    const next = { ...d, props: { ...(d.props ?? {}), volume } };
+    room.state.objects.set(d.id, toSchema(next));
+    if (!config.offline) void yondra.putObject(spaceId, next).catch((e) => console.warn("[media] save", e.message));
   });
 
   // A player found out how long something is (YouTube without an API key).

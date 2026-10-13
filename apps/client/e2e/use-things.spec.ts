@@ -120,6 +120,14 @@ test("every radio its own: its station next to it, the other's faint when it's o
     await walkTo(page, 3.5, 15.6, 30_000);
     await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0.6);
     expect(await station()).toBe(0);
+    // its own knob: turned down, it's quieter right next to it; back up, loud again
+    await page.evaluate((i) => (window as any).__yutopia.send("radio:volume", { id: i, volume: 0.25 }), ids[1]);
+    await expect.poll(level, { timeout: 10_000 }).toBeLessThan(0.3);
+    expect(
+      await page.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.volume, ids[3]),
+    ).toBe(0.8);
+    await page.evaluate((i) => (window as any).__yutopia.send("radio:volume", { id: i, volume: 1 }), ids[1]);
+    await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0.9);
     // over by the other one: loud too, and its own station
     await walkTo(page, 25.5, 15.6, 40_000);
     await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0.6);

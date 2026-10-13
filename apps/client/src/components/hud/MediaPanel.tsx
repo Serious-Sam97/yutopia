@@ -8,9 +8,11 @@ import {
   type MediaItem,
   type MediaState,
   mediaAt,
+  mediaOf,
   parseYouTube,
   positionAt,
   type SavedPlaylist,
+  tvVolume,
   ytThumb,
 } from "@yutopia/shared/media";
 import { useEffect, useMemo, useState } from "react";
@@ -149,6 +151,7 @@ export function MediaRemote({ id }: { id: string }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {!radio && <TvVolume id={id} />}
       <NowPlaying t={t} m={m} radio={radio} locked={locked} canBuild={canBuild} send={send} id={id} />
       {!locked && (
         <section className="vfd-window p-3 flex flex-col gap-2">
@@ -977,5 +980,68 @@ export function PlaylistChips({ id }: { id: string }) {
         ))}
       </div>
     </section>
+  );
+}
+
+// A thing's own volume knob (a TV, a radio): everyone near hears it at this.
+// It goes out when the slider is let go, not on every step of a drag.
+export function VolumeKnob({
+  value,
+  label,
+  disabled,
+  onCommit,
+}: {
+  value: number;
+  label: string;
+  disabled?: boolean;
+  onCommit: (v: number) => void;
+}) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const v = drag ?? value;
+  const commit = () => {
+    if (drag === null) return;
+    onCommit(drag);
+    setDrag(null);
+  };
+  return (
+    <label className="flex items-center gap-3">
+      <span className="mono text-xs uppercase w-24 shrink-0" style={{ color: "var(--cream-dim)" }}>
+        {v === 0 ? "🔇" : v < 0.5 ? "🔉" : "🔊"} Volume
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={Math.round(v * 100)}
+        aria-label={label}
+        disabled={disabled}
+        onChange={(e) => setDrag(Number(e.target.value) / 100)}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
+        className="flex-1 accent-[var(--amber)]"
+      />
+      <span className="mono text-xs w-10 text-right" style={{ color: "var(--cream-dim)" }}>
+        {Math.round(v * 100)}%
+      </span>
+    </label>
+  );
+}
+
+// A TV's knob (its media and, on the CRT, its consoles' sound).
+export function TvVolume({ id }: { id: string }) {
+  const w = useWorld();
+  const pt = useLang() === "pt";
+  useHud((s) => s.objectsVersion);
+  const canBuild = useHud((s) => s.canBuild);
+  const o = w?.engine?.getObject(id);
+  const locked = !!mediaOf(o)?.lock && !canBuild;
+  return (
+    <VolumeKnob
+      value={tvVolume(o)}
+      label={pt ? "Volume desta TV" : "This TV's volume"}
+      disabled={locked}
+      onCommit={(volume) => w?.send("media:volume", { id, volume })}
+    />
   );
 }
