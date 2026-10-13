@@ -2,24 +2,30 @@ import type { ClientMessages, WorldObjectDef } from "@yutopia/shared";
 import {
   advance,
   cleanItem,
+  cleanPlaylists,
   cleanState,
+  editPlaylist,
   emptyMedia,
   isDisplay,
+  isRadio,
   MAX_DUR,
   MAX_JF_TVS,
   MAX_QUEUE,
   type MediaItem,
   type MediaState,
   pause,
+  radioOf,
+  rememberPlaylist,
   resume,
   seek,
   skip,
   startItem,
+  YT_LIST,
 } from "@yutopia/shared/media";
 import { config } from "../config.ts";
 import { jellyfinOn, playable, setPlaying } from "../media/jellyfin.ts";
 import { mediaKey } from "../media/key.ts";
-import { ytSearchOn, ytTitle, ytVideos } from "../media/youtube.ts";
+import { ytPlaylistTitle, ytSearchOn, ytTitle, ytVideos } from "../media/youtube.ts";
 import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
 import { yondra } from "../yondra.ts";
 import { registerFeature } from "./index.ts";
@@ -27,56 +33,51 @@ import { registerFeature } from "./index.ts";
 // Media on TVs and the radio (docs/plan/10-media.md). Nobody hosts it: the
 // state is a timeline (shared/media.ts) everyone's player keeps to, and this
 // moves the queue on by the clock — so whatever someone left playing keeps
-// playing, watched or not, and survives restarts (a TV's state is its
-// props.media, stored with the object; the radio's goes to Yondra).
-// Anyone in the space may change it; a locked one only builders.
-const RADIO = "radio";
+// playing, watched or not, and survives restarts: each TV's state is its
+// props.media, each radio's YouTube its props.radio (features/radio.ts), saved
+// with the object — every one its own. Anyone may change it; a locked one only
+// builders.
 const OPS_PER_5S = 12;
 
 registerFeature((room: SpaceRoom) => {
-  const radio = room.state.radio;
   const spaceId = room.spaceId;
-
-  // ── the radio as it was ──
-  const saved = room.savedRadio as Record<string, unknown> | null;
-  if (saved && typeof saved === "object") {
-    radio.source = saved.source === "yt" ? "yt" : "lofi";
-    radio.station = Number.isInteger(saved.station) ? Number(saved.station) : 0;
-    radio.playing = saved.playing === true;
-    radio.startedAt = Number(saved.startedAt) || Date.now();
-    radio.by = typeof saved.by === "string" ? saved.by : "";
-    const m = cleanState(saved.media);
-    radio.media = m.item || m.queue.length ? JSON.stringify(m) : "";
-  }
-
   const player = (c: SpaceClient) => room.state.players.get(c.sessionId);
   const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
-  const display = (id: string): WorldObjectDef | undefined => {
+  // a TV or a radio
+  const target = (id: string): WorldObjectDef | undefined => {
     const o = room.state.objects.get(id);
     const d = o ? fromSchema(o) : undefined;
-    return d && isDisplay(d.kind) ? d : undefined;
+    return d && (isDisplay(d.kind) || isRadio(d.kind)) ? d : undefined;
   };
   const read = (id: string): MediaState | null => {
-    if (id === RADIO) return cleanState(radio.media ? JSON.parse(radio.media) : null);
-    const d = display(id);
-    return d ? cleanState(d.props?.media) : null;
+    const d = target(id);
+    if (!d) return null;
+    if (isRadio(d.kind)) {
+      const r = radioOf(d);
+      return r.source === "yt" && r.media ? r.media : { ...emptyMedia(), lock: r.lock };
+    }
+    return cleanState(d.props?.media);
   };
   const write = (id: string, m: MediaState) => {
-    const empty = !m.item && !m.queue.length;
-    if (id === RADIO) {
-      radio.media = empty ? "" : JSON.stringify(m);
-      radio.source = "yt";
-      radio.playing = !!m.item && !m.paused;
-      if (m.item) radio.by = m.by;
-      return;
-    }
-    const d = display(id);
+    const d = target(id);
     if (!d) return;
-    const { media: _, ...rest } = d.props ?? {};
-    const next = { ...d, props: empty ? rest : { ...rest, media: m } };
+    const empty = !m.item && !m.queue.length;
+    let props: Record<string, unknown>;
+    if (isRadio(d.kind)) {
+      const r = radioOf(d);
+      // nothing queued: a lo-fi radio keeps its station (a lock), a YouTube one goes quiet
+      const radio = empty
+        ? { ...r, lock: m.lock, media: null, playing: r.source === "lofi" ? r.playing : false }
+        : { ...r, source: "yt", lock: m.lock, media: m, playing: !!m.item && !m.paused, by: m.item ? m.by : r.by };
+      props = { ...(d.props ?? {}), radio };
+    } else {
+      const { media: _, ...rest } = d.props ?? {};
+      props = empty ? rest : { ...rest, media: m };
+    }
+    const next = { ...d, props };
     room.state.objects.set(d.id, toSchema(next));
     if (!config.offline) void yondra.putObject(spaceId, next).catch((e) => console.warn("[media] save", e.message));
-    track(d.id, m);
+    if (isDisplay(d.kind)) track(d.id, m);
   };
 
   // which TVs play Jellyfin now (the stream routes only serve those)
@@ -143,9 +144,12 @@ registerFeature((room: SpaceRoom) => {
     const id = String(msg.id ?? "");
     const m = read(id);
     if (!m || !may(client, m) || !Array.isArray(msg.items) || !msg.items.length) return;
-    const items = await resolve(msg.items, id === RADIO);
+    const items = await resolve(msg.items, isRadio(target(id)?.kind ?? ""));
     if (!items.length) return warn(client, "That can't play here (private, removed or not allowed on other sites).");
     const by = player(client)?.name ?? "";
+    // from a YouTube playlist: onto the space's quick list (named by YouTube the first time)
+    if (typeof msg.list === "string" && YT_LIST.test(msg.list) && items.every((x) => x.src === "yt"))
+      void remember(msg.list, items, by, player(client)?.uid);
     // re-read: others may have changed it while we looked things up
     let s = read(id) ?? emptyMedia();
     const now = Date.now();
@@ -166,7 +170,7 @@ registerFeature((room: SpaceRoom) => {
     if (!m) return;
     const p = player(client);
     if (msg.op === "lock") {
-      if (!p?.builder) return warn(client, "Only builders lock a TV.");
+      if (!p?.builder) return warn(client, "Only builders lock it.");
       return write(id, { ...m, lock: !!msg.on });
     }
     if (!may(client, m)) return;
@@ -193,7 +197,6 @@ registerFeature((room: SpaceRoom) => {
         break;
       case "stop":
         s = { ...emptyMedia(), lock: m.lock, loop: m.loop };
-        if (id === RADIO) radio.playing = false;
         break;
       case "loop":
         s = { ...m, loop: !!msg.on };
@@ -233,27 +236,52 @@ registerFeature((room: SpaceRoom) => {
     write(id, { ...m, item, queue });
   });
 
-  // ── the clock moves the queues on; the radio is saved when it changes ──
-  let lastTick = 0;
-  let radioSaved = JSON.stringify(radioSnapshot());
-  let radioDirtyAt = 0;
-  function radioSnapshot() {
-    return {
-      source: radio.source,
-      station: radio.station,
-      playing: radio.playing,
-      startedAt: radio.startedAt,
-      by: radio.by,
-      media: radio.media ? JSON.parse(radio.media) : null,
-    };
-  }
-  const saveRadio = () => {
-    const snap = radioSnapshot();
-    const s = JSON.stringify(snap);
-    if (s === radioSaved) return;
-    radioSaved = s;
-    if (!config.offline) void yondra.putRadio(spaceId, snap).catch((e) => console.warn("[media] radio", e.message));
+  // ── the space's playlists ──
+  const playlists = () => cleanPlaylists(JSON.parse(room.state.playlists || "[]"));
+  let listsDirtyAt = 0;
+  const remember = async (list: string, items: MediaItem[], by: string, byUid?: number) => {
+    const known = playlists().find((p) => p.list === list);
+    const name = known ? null : config.offline ? null : await ytPlaylistTitle(list);
+    room.state.playlists = JSON.stringify(
+      rememberPlaylist(
+        playlists(),
+        { list, title: known?.title ?? name?.title ?? "YouTube playlist", channel: name?.channel, items, by, byUid },
+        Date.now(),
+      ),
+    );
+    listsDirtyAt = Date.now();
   };
+  const saveLists = () => {
+    listsDirtyAt = 0;
+    if (!config.offline)
+      void yondra.putPlaylists(spaceId, playlists()).catch((e) => console.warn("[media] playlists", e.message));
+  };
+  // rename it, pin it (for everyone), star it (my own "Mine")
+  room.on("playlist:edit", (client, msg) => {
+    const p = player(client);
+    if (!p || typeof msg.list !== "string") return;
+    const all = playlists();
+    const next = editPlaylist(all, msg.list, {
+      title: typeof msg.title === "string" ? msg.title : undefined,
+      pinned: typeof msg.pinned === "boolean" ? msg.pinned : undefined,
+      star: typeof msg.star === "boolean" ? { uid: p.uid, on: msg.star } : undefined,
+    });
+    if (next === all) return;
+    room.state.playlists = JSON.stringify(next);
+    listsDirtyAt = Date.now();
+  });
+
+  room.on("playlist:forget", (client, msg) => {
+    const p = player(client);
+    if (!p || typeof msg.list !== "string") return;
+    const all = playlists();
+    if (!all.some((x) => x.list === msg.list)) return;
+    room.state.playlists = JSON.stringify(all.filter((x) => x.list !== msg.list));
+    listsDirtyAt = Date.now();
+  });
+
+  // ── the clock moves the queues on ──
+  let lastTick = 0;
 
   return {
     join(client, p) {
@@ -265,16 +293,16 @@ registerFeature((room: SpaceRoom) => {
     tick(_dt, now) {
       if (now - lastTick < 1000) return;
       lastTick = now;
-      if (radio.media) {
-        const m = read(RADIO) as MediaState;
-        const next = advance(m, now);
-        if (next !== m) {
-          write(RADIO, next);
-          if (!next.item) radio.playing = false;
-        }
-      }
       const seen = new Set<string>();
       for (const o of room.state.objects.values()) {
+        // a radio's YouTube queue moves on like a TV's
+        if (isRadio(o.kind)) {
+          if (!o.props.includes('"source":"yt"')) continue;
+          const m = read(o.id) as MediaState;
+          const next = advance(m, now);
+          if (next !== m) write(o.id, next);
+          continue;
+        }
         if (!isDisplay(o.kind)) continue;
         seen.add(o.id);
         if (!o.props.includes('"media"')) {
@@ -287,17 +315,11 @@ registerFeature((room: SpaceRoom) => {
         else if ((m.item?.src === "jf") !== jfTvs.has(o.id)) track(o.id, m);
       }
       for (const id of jfTvs) if (!seen.has(id)) track(id, null);
-      // the radio: saved a couple of seconds after it settles
-      if (JSON.stringify(radioSnapshot()) !== radioSaved) {
-        if (!radioDirtyAt) radioDirtyAt = now;
-        else if (now - radioDirtyAt > 2000) {
-          radioDirtyAt = 0;
-          saveRadio();
-        }
-      } else radioDirtyAt = 0;
+      // the playlists: saved a couple of seconds after they settle
+      if (listsDirtyAt && now - listsDirtyAt > 2000) saveLists();
     },
     dispose() {
-      saveRadio();
+      if (listsDirtyAt) saveLists();
       for (const id of jfTvs) setPlaying(spaceId, id, null);
     },
   };

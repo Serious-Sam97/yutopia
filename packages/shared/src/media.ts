@@ -281,6 +281,177 @@ export function mediaOf(o: WorldObjectDef | undefined): MediaState | null {
   return m.item || m.queue.length ? m : null;
 }
 
+// ── playlists the space has used (quick access in the remotes) ──────────────
+// A YouTube playlist, as played: its name (from YouTube the first time), its
+// videos (so it plays again at once), who put it on first and when last.
+export const MAX_PLAYLISTS = 30; // and up to MAX_PINNED pinned on top of that
+export const MAX_PINNED = 20;
+export const MAX_PLAYLIST_ITEMS = 50;
+
+export interface SavedPlaylist {
+  list: string; // YouTube's playlist id
+  title: string; // YouTube's name for it the first time; anyone may rename it
+  channel?: string;
+  items: MediaItem[];
+  by: string; // who played it first
+  byUid?: number;
+  usedAt: number; // ms
+  uses: number;
+  pinned?: boolean; // on top for everyone, never pushed off the list
+  stars?: number[]; // user ids who keep it in "Mine"
+}
+
+// Pinned first, then the most recently played; the unpinned capped.
+function ordered(all: SavedPlaylist[]): SavedPlaylist[] {
+  const by = (a: SavedPlaylist, b: SavedPlaylist) => b.usedAt - a.usedAt;
+  const pinned = all
+    .filter((p) => p.pinned)
+    .sort(by)
+    .slice(0, MAX_PINNED);
+  const rest = all
+    .filter((p) => !p.pinned)
+    .sort(by)
+    .slice(0, MAX_PLAYLISTS);
+  return [...pinned, ...rest];
+}
+
+export function cleanPlaylists(v: unknown): SavedPlaylist[] {
+  if (!Array.isArray(v)) return [];
+  const out: SavedPlaylist[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") continue;
+    const o = raw as Record<string, unknown>;
+    if (typeof o.list !== "string" || !YT_LIST.test(o.list) || out.some((p) => p.list === o.list)) continue;
+    const items = (Array.isArray(o.items) ? o.items : [])
+      .map(cleanItem)
+      .filter((x): x is MediaItem => !!x && x.src === "yt")
+      .slice(0, MAX_PLAYLIST_ITEMS);
+    if (!items.length) continue;
+    const p: SavedPlaylist = {
+      list: o.list,
+      title: str(o.title, MAX_TITLE) || "YouTube playlist",
+      items,
+      by: str(o.by, 60),
+      usedAt: Number(o.usedAt) || 0,
+      uses: Math.max(1, Math.floor(Number(o.uses) || 1)),
+    };
+    const ch = str(o.channel, MAX_TITLE);
+    if (ch) p.channel = ch;
+    if (Number.isInteger(o.byUid)) p.byUid = Number(o.byUid);
+    if (o.pinned === true) p.pinned = true;
+    const stars = Array.isArray(o.stars) ? [...new Set(o.stars.filter((x) => Number.isInteger(x)) as number[])] : [];
+    if (stars.length) p.stars = stars.slice(0, 200);
+    out.push(p);
+  }
+  return ordered(out);
+}
+
+// Played (again): to the top, counted; new ones keep their first name and who
+// brought them, and pick up the videos as played now. Pins and stars stay.
+export function rememberPlaylist(
+  all: SavedPlaylist[],
+  p: { list: string; title: string; channel?: string; items: MediaItem[]; by: string; byUid?: number },
+  now: number,
+): SavedPlaylist[] {
+  const had = all.find((x) => x.list === p.list);
+  const items = p.items.filter((x) => x.src === "yt").slice(0, MAX_PLAYLIST_ITEMS);
+  const next: SavedPlaylist = had
+    ? { ...had, items: items.length ? items : had.items, usedAt: now, uses: had.uses + 1 }
+    : { list: p.list, title: p.title, items, by: p.by, usedAt: now, uses: 1 };
+  if (!had && p.channel) next.channel = p.channel;
+  if (!had && p.byUid !== undefined) next.byUid = p.byUid;
+  if (!next.items.length) return all;
+  return ordered([next, ...all.filter((x) => x.list !== p.list)]);
+}
+
+// A change from someone's remote: a new name, pinned or not, in my "Mine" or not.
+export function editPlaylist(
+  all: SavedPlaylist[],
+  list: string,
+  e: { title?: string; pinned?: boolean; star?: { uid: number; on: boolean } },
+): SavedPlaylist[] {
+  if (!all.some((p) => p.list === list)) return all;
+  return ordered(
+    all.map((p) => {
+      if (p.list !== list) return p;
+      const q: SavedPlaylist = { ...p };
+      if (e.title !== undefined) {
+        const t = e.title.trim().slice(0, MAX_TITLE);
+        if (t) q.title = t;
+      }
+      if (e.pinned !== undefined) {
+        if (e.pinned) q.pinned = true;
+        else delete q.pinned;
+      }
+      if (e.star) {
+        const set = new Set(q.stars ?? []);
+        if (e.star.on) set.add(e.star.uid);
+        else set.delete(e.star.uid);
+        if (set.size) q.stars = [...set];
+        else delete q.stars;
+      }
+      return q;
+    }),
+  );
+}
+
+// "Mine": what I starred or brought.
+export const isMine = (p: SavedPlaylist, uid: number | undefined) =>
+  uid !== undefined && (p.byUid === uid || !!p.stars?.includes(uid));
+
+// ── radios (the radio, the record player): each its own ─────────────────────
+// What one plays (props.radio): a lo-fi station (synthesized from station +
+// startedAt, so everyone near hears the same bar) or a YouTube queue.
+export const RADIO_KINDS = ["radio", "turntable"];
+export const isRadio = (kind: string): boolean => RADIO_KINDS.includes(kind);
+
+export interface RadioState {
+  source: "lofi" | "yt";
+  station: number;
+  playing: boolean;
+  startedAt: number;
+  by: string;
+  lock: boolean; // only builders change it
+  media: MediaState | null; // the YouTube queue (source yt)
+}
+
+export function radioOf(o: WorldObjectDef | undefined): RadioState {
+  const r = (o?.props?.radio ?? {}) as Record<string, unknown>;
+  const m = r.media ? cleanState(r.media) : null;
+  return {
+    source: r.source === "yt" ? "yt" : "lofi",
+    station: Number.isInteger(r.station) ? Math.max(0, Number(r.station)) : 0,
+    playing: r.playing === true,
+    startedAt: Number(r.startedAt) || 0,
+    by: typeof r.by === "string" ? r.by : "",
+    lock: r.lock === true,
+    media: m && (m.item || m.queue.length) ? { ...m, lock: r.lock === true } : null,
+  };
+}
+
+// The media a thing plays: a TV's (props.media) or a radio's YouTube.
+export function mediaAt(o: WorldObjectDef | undefined): MediaState | null {
+  if (!o) return null;
+  if (isRadio(o.kind)) {
+    const r = radioOf(o);
+    return r.source === "yt" ? r.media : null;
+  }
+  return mediaOf(o);
+}
+
+// What a thing plays is the server's, never a builder's copy of it: moving it
+// (or undoing a move) keeps what plays now; a new copy starts with nothing on.
+export function keepPlaying(
+  props: Record<string, unknown> | undefined,
+  live: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const { media: _m, radio: _r, ...rest } = props ?? {};
+  const out: Record<string, unknown> = { ...rest };
+  if (live?.media) out.media = live.media;
+  if (live?.radio) out.radio = live.radio;
+  return out;
+}
+
 // The CRT TV shows media on its "TV" input (consoles are AV1 / AV2).
 export const MEDIA_INPUT = "media";
 export function showsMedia(o: WorldObjectDef): boolean {

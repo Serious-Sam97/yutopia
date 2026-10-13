@@ -1,4 +1,5 @@
 import { applyStep, diffStep, HISTORY_LIMIT, type Snapshot, STEP_LABELS, type Step, snapshot } from "@yutopia/shared";
+import { keepPlaying } from "@yutopia/shared/media";
 import { config } from "../config.ts";
 import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
 import { yondra } from "../yondra.ts";
@@ -81,6 +82,8 @@ registerFeature((room: SpaceRoom) => {
     const res = applyStep(room.map, objects(), step, dir);
     if (res.map) room.commitMap(res.map);
     for (const o of res.put) {
+      const live = room.state.objects.get(o.id);
+      o.props = keepPlaying(o.props, live ? fromSchema(live).props : null);
       room.state.objects.set(o.id, toSchema(o));
       if (!config.offline) yondra.putObject(room.spaceId, o).catch(persistFailed);
     }

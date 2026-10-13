@@ -127,11 +127,14 @@ export interface ClientMessages {
   "door:set": { id: string; state: "open" | "closed" | "locked" };
   "lamp:set": { id: string; on: boolean }; // anyone standing near it (floor lamps, desk lamps)
   "lights:room": { id: string; on: boolean }; // a light switch: every lamp in its room
-  "radio:set": { playing: boolean; station?: number };
-  // media on a TV (its object id) or the radio ("radio"), shared/media.ts:
+  "radio:set": { id: string; playing: boolean; station?: number }; // a radio / record player, each its own
+  // media on a TV or a radio (its object id), shared/media.ts:
   // play now / next / at the end of the queue (several: a playlist), the
   // controls, and a length a player found out (YouTube items arrive without one)
-  "media:play": { id: string; items: MediaItem[]; mode: "now" | "next" | "end" };
+  // `list`: the YouTube playlist they came from (remembered for the space's quick list)
+  "media:play": { id: string; items: MediaItem[]; mode: "now" | "next" | "end"; list?: string };
+  "playlist:forget": { list: string }; // off the space's quick list
+  "playlist:edit": { list: string; title?: string; pinned?: boolean; star?: boolean }; // rename, pin, my star
   "media:ctl": {
     id: string;
     op: "pause" | "resume" | "seek" | "skip" | "stop" | "loop" | "lock" | "remove" | "move" | "clear";

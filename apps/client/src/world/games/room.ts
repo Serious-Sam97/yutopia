@@ -21,6 +21,8 @@ import {
   turnLocal,
 } from "@yutopia/shared/games";
 import { Container, Graphics, Matrix, Sprite, Text, Texture } from "pixi.js";
+import { prefs } from "@/lib/prefs";
+import { glowSprite, placeGlow } from "../art/glow";
 import type { WorldController } from "../controller";
 import { type GameView, hud, toast } from "../store";
 import { loadSave, putSave, romOf } from "./api";
@@ -68,7 +70,7 @@ interface Hosting {
 interface TvView {
   def: WorldObjectDef;
   root: Container; // the picture, the CRT overlay, the static
-  glow: Graphics; // on the floor in front, at night
+  glow: Sprite; // on the floor in front, at night (one soft sprite)
   pic: Sprite;
   noise: Graphics;
   scan: Graphics;
@@ -197,7 +199,7 @@ export class GameRoom {
     label.position.set(320, 240);
     root.addChild(pic, noise, label, scan);
     root.visible = false;
-    const glow = new Graphics();
+    const glow = glowSprite();
     glow.zIndex = -0.4;
     // just above the TV's front slice (scene.ts: a 2-tile item sorts per tile)
     root.zIndex = def.x + def.y + 2 + 0.003;
@@ -453,7 +455,11 @@ export class GameRoom {
         const { w, h } = footprint(tv.kind, rot);
         const spot = { x: tv.x + w / 2, y: tv.y + h / 2, dnd: false };
         const ear = { x: me.x, y: me.y, dnd: false };
-        this.w.media.setVoice(`tv-${shows.id}`, hearingGain(this.w.map, ear, spot, true) * 0.9, stereoPan(ear, spot));
+        this.w.media.setVoice(
+          `tv-${shows.id}`,
+          hearingGain(this.w.map, ear, spot, true) * 0.9 * prefs().vol.tv,
+          stereoPan(ear, spot),
+        );
       }
       if (src !== v.source) {
         v.source = src;
@@ -465,7 +471,7 @@ export class GameRoom {
       if (src) v.pic.texture.source.update();
       const on = !!shows;
       v.root.visible = on && facing;
-      v.glow.clear();
+      v.glow.visible = false;
       if (!on) continue;
       // map the 640 × 480 picture onto the glass
       const [x0, y0] = turnLocal(TV_SCREEN.x0, TV_SCREEN.y, rot, 2, 1);
@@ -497,10 +503,7 @@ export class GameRoom {
         }
         const [fx, fy] = turnLocal(1, 1.6, rot, 2, 1);
         const c = toScreen(tv.x + fx, tv.y + fy);
-        for (let i = 0; i < 4; i++)
-          v.glow
-            .ellipse(c.x, c.y, (TILE_W / 2) * (1.4 + i * 0.5), (TILE_H / 2) * (1.4 + i * 0.5))
-            .fill({ color: picture ? v.avg : 0x2a55c0, alpha: 0.085 * night });
+        placeGlow(v.glow, c.x, c.y, TILE_W * 3, TILE_H * 3, picture ? v.avg : 0x2a55c0, 0.32 * night);
       }
     }
   }

@@ -14,6 +14,9 @@ import { ANA, BIA, enter, spaceId, test, token } from "./helpers";
 
 const SHOTS = process.env.YUTOPIA_SHOTS;
 const VIDEO = "M7lc1UVf-VE";
+// a public playlist and the name YouTube gives it (oEmbed)
+const LIST = "PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i";
+const LIST_TITLE = "Top 100 Songs Global";
 
 const STUB = `
 window.__ytStubs = [];
@@ -187,7 +190,7 @@ test("media: a YouTube video on a wall TV — left playing, found at the right s
   }
 });
 
-test("media: YouTube on the radio — the lo-fi stops, the card plays near the radio", async ({ browser }) => {
+test("media: YouTube on a radio — its own queue, the card plays near it, a station takes over", async ({ browser }) => {
   test.setTimeout(150_000);
   const ta = await token(ANA);
   const ana = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
@@ -210,15 +213,18 @@ test("media: YouTube on the radio — the lo-fi stops, the card plays near the r
   await ana.waitForFunction((i) => !!(window as any).__yutopia.room.state.objects.get(i), radioId);
   try {
     await ana.evaluate(
-      (v) =>
+      ([i, v]) =>
         (window as any).__yutopia.send("media:play", {
-          id: "radio",
+          id: i,
           items: [{ src: "yt", ref: v, title: "YouTube", dur: 0 }],
           mode: "now",
         }),
-      VIDEO,
+      [radioId, VIDEO] as const,
     );
-    await ana.waitForFunction(() => (window as any).__yutopia.room.state.radio.source === "yt");
+    await ana.waitForFunction(
+      (i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.source === "yt",
+      radioId,
+    );
     await walk(ana, { x: radio.x + 0.5, y: radio.y + 1.5 }, 60_000).catch(() => false);
     await expect.poll(async () => (await status(ana))?.card, { timeout: 20_000 }).toBe(true);
     expect((await player(ana))?.video).toBe(VIDEO);
@@ -227,10 +233,87 @@ test("media: YouTube on the radio — the lo-fi stops, the card plays near the r
     await expect(ana.locator(".ymc-tag")).toHaveText(/RADIO|RÁDIO/);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/media-radio.png` });
     // back to a lo-fi station: the card goes
-    await ana.evaluate(() => (window as any).__yutopia.send("radio:set", { playing: true, station: 0 }));
+    await ana.evaluate(
+      (i) => (window as any).__yutopia.send("radio:set", { id: i, playing: true, station: 0 }),
+      radioId,
+    );
     await expect.poll(async () => (await status(ana))?.card, { timeout: 10_000 }).toBe(false);
+    // a YouTube playlist played on it: on the space's quick list, named by YouTube
+    await ana.evaluate(
+      ([i, l]) =>
+        (window as any).__yutopia.send("media:play", {
+          id: i,
+          items: [
+            { src: "yt", ref: "dQw4w9WgXcQ", title: "YouTube", dur: 0 },
+            { src: "yt", ref: "M7lc1UVf-VE", title: "YouTube", dur: 0 },
+          ],
+          mode: "now",
+          list: l,
+        }),
+      [radioId, LIST] as const,
+    );
+    await expect
+      .poll(
+        () =>
+          ana.evaluate(
+            (l) => JSON.parse((window as any).__yutopia.room.state.playlists).find((p: any) => p.list === l)?.title,
+            LIST,
+          ),
+        {
+          timeout: 15_000,
+        },
+      )
+      .toBe(LIST_TITLE);
+    // back on lo-fi, the radio's panel offers it: one tap plays it again on this radio
+    await ana.evaluate(
+      (i) => (window as any).__yutopia.send("radio:set", { id: i, playing: true, station: 1 }),
+      radioId,
+    );
+    await ana.evaluate((i) => (window as any).__hud.set({ panel: { kind: "radio", objectId: i } }), radioId);
+    const chip = ana.getByRole("button", { name: new RegExp(LIST_TITLE) });
+    await expect(chip).toBeVisible({ timeout: 10_000 });
+    if (SHOTS) await ana.screenshot({ path: `${SHOTS}/media-radio-playlists.png` });
+    await chip.click();
+    await expect
+      .poll(
+        () =>
+          ana.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.media?.item?.ref, radioId),
+        {
+          timeout: 15_000,
+        },
+      )
+      .toBe("dQw4w9WgXcQ");
+    // the YouTube tab lists it too (with its channel and size)
+    await ana
+      .getByRole("button", { name: /^YouTube/ })
+      .first()
+      .click();
+    await expect(ana.getByText(/2 (videos|vídeos)/).first()).toBeVisible();
+    // star it (Mine), then rename and pin it from its ⋯
+    const saved = () =>
+      ana.evaluate(
+        (l) => JSON.parse((window as any).__yutopia.room.state.playlists).find((p: any) => p.list === l),
+        LIST,
+      );
+    await ana.getByRole("button", { name: new RegExp(`^(Add to Mine|Pôr em Minhas): ${LIST_TITLE}`) }).click();
+    await expect.poll(async () => (await saved())?.stars?.length ?? 0).toBe(1);
+    await ana
+      .getByRole("button", { name: new RegExp(`^(Rename, pin, remove|Renomear, fixar, tirar): ${LIST_TITLE}`) })
+      .click();
+    const field = ana.getByRole("textbox", { name: /^(Rename|Renomear)$/ });
+    await field.fill("Friday mix");
+    await field.press("Enter");
+    await expect.poll(async () => (await saved())?.title).toBe("Friday mix");
+    await ana.getByRole("button", { name: /^(Rename, pin, remove|Renomear, fixar, tirar): Friday mix/ }).click();
+    await ana.getByRole("button", { name: /(Pin for everyone|Fixar para todos)/ }).click();
+    await expect.poll(async () => (await saved())?.pinned).toBe(true);
+    await ana.getByRole("button", { name: /★ (Mine|Minhas)/ }).click();
+    await expect(ana.getByRole("button", { name: /^(Play now|Tocar agora): Friday mix/ }).first()).toBeVisible();
+    if (SHOTS) await ana.screenshot({ path: `${SHOTS}/media-radio-yt-tab.png` });
+    await ana.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
   } finally {
-    await ana.evaluate(() => (window as any).__yutopia.send("radio:set", { playing: false }));
+    await ana.evaluate((l) => (window as any).__yutopia.send("playlist:forget", { list: l }), LIST);
+    await ana.evaluate((i) => (window as any).__yutopia.send("radio:set", { id: i, playing: false }), radioId);
     await ana.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), radioId);
     await ana.waitForTimeout(800);
   }

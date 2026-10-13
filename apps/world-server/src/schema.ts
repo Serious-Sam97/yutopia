@@ -55,16 +55,6 @@ export class Npc extends Schema {
   @type("string") area = "";
 }
 
-export class Radio extends Schema {
-  @type("boolean") playing = false;
-  @type("uint8") station = 0;
-  @type("float64") startedAt = 0;
-  @type("string") by = "";
-  // what it plays: the lo-fi stations, or YouTube (media: shared MediaState as JSON)
-  @type("string") source = "lofi";
-  @type("string") media = "";
-}
-
 export class Standup extends Schema {
   @type("boolean") active = false;
   @type(["number"]) order = new ArraySchema<number>();
@@ -147,7 +137,6 @@ export class SpaceState extends Schema {
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();
-  @type(Radio) radio = new Radio();
   @type(Standup) standup = new Standup();
   @type(Poker) poker = new Poker();
   @type({ map: "string" }) boothGuests = new MapSchema<string>();
@@ -155,4 +144,5 @@ export class SpaceState extends Schema {
   @type({ map: "string" }) holds = new MapSchema<string>(); // object id → "uid|name" of the builder holding it
   @type({ map: SlotRace }) slots = new MapSchema<SlotRace>(); // slot-car track id → its race
   @type({ map: GameConsole }) consoles = new MapSchema<GameConsole>(); // console id → what it's playing
+  @type("string") playlists = "[]"; // YouTube playlists played here (shared/media.ts SavedPlaylist[], JSON)
 }

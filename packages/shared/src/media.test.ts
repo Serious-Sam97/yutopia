@@ -118,3 +118,68 @@ test("media: every display kind is in the catalog, glass inside its footprint", 
   assert.equal(showsMedia({ id: "s", kind: "screen_wall", x: 0, y: 0, props: { source: "board" } }), false);
   assert.equal(showsMedia({ id: "w", kind: "tv_wall", x: 0, y: 0 }), true);
 });
+
+test("media: the space's playlists — remembered with their name, used again to the top, capped", async () => {
+  const { cleanPlaylists, rememberPlaylist, MAX_PLAYLISTS } = await import("./media.ts");
+  const a = [yt("aaaaaaaaaaa", 10), yt("bbbbbbbbbbb", 20)];
+  let all = rememberPlaylist(
+    [],
+    { list: "PLfirst00001", title: "Lo-fi beats", channel: "Chill", items: a, by: "Ana" },
+    1000,
+  );
+  all = rememberPlaylist(all, { list: "PLsecond0002", title: "Rock", items: a, by: "Bia" }, 2000);
+  assert.deepEqual(
+    all.map((p) => p.list),
+    ["PLsecond0002", "PLfirst00001"],
+  );
+  // played again (by someone else, under another name): to the top, counted, its first name kept
+  all = rememberPlaylist(all, { list: "PLfirst00001", title: "?", items: [yt("ccccccccccc", 5)], by: "Bia" }, 3000);
+  assert.equal(all[0].list, "PLfirst00001");
+  assert.equal(all[0].title, "Lo-fi beats");
+  assert.equal(all[0].by, "Ana");
+  assert.equal(all[0].uses, 2);
+  assert.equal(all[0].items[0].ref, "ccccccccccc", "the videos as played now");
+  // what Yondra hands back comes back into shape; junk out; capped
+  const many = Array.from({ length: 40 }, (_, i) => ({
+    list: `PLmany${String(i).padStart(6, "0")}`,
+    title: `p${i}`,
+    items: a,
+    usedAt: i,
+  }));
+  const clean = cleanPlaylists([...many, { list: "bad" }, { list: "PLnovideos01", items: [] }, null]);
+  assert.equal(clean.length, MAX_PLAYLISTS);
+  assert.equal(clean[0].title, "p39", "most recent first");
+});
+
+test("media: playlists — rename, pin (on top, never pushed off), stars for Mine", async () => {
+  const { editPlaylist, rememberPlaylist, isMine, MAX_PLAYLISTS } = await import("./media.ts");
+  const a = [yt("aaaaaaaaaaa", 10)];
+  let all = rememberPlaylist([], { list: "PLpinned0001", title: "Old name", items: a, by: "Ana", byUid: 1 }, 1);
+  all = editPlaylist(all, "PLpinned0001", { title: "  Friday mix  ", pinned: true });
+  assert.equal(all[0].title, "Friday mix");
+  assert.equal(all[0].pinned, true);
+  assert.equal(
+    editPlaylist(all, "PLpinned0001", { title: "   " })[0].title,
+    "Friday mix",
+    "an empty name keeps the old",
+  );
+  // 35 newer playlists: the pinned one stays on top, the unpinned capped
+  for (let i = 0; i < 35; i++)
+    all = rememberPlaylist(
+      all,
+      { list: `PLmore${String(i).padStart(6, "0")}`, title: `p${i}`, items: a, by: "Bia", byUid: 2 },
+      10 + i,
+    );
+  assert.equal(all[0].list, "PLpinned0001");
+  assert.equal(all.length, 1 + MAX_PLAYLISTS);
+  // stars: Mine for whoever starred it (and whoever brought it)
+  all = editPlaylist(all, "PLmore000034", { star: { uid: 1, on: true } });
+  const ana = all.filter((p) => isMine(p, 1)).map((p) => p.list);
+  assert.deepEqual(ana.sort(), ["PLmore000034", "PLpinned0001"].sort());
+  all = editPlaylist(all, "PLmore000034", { star: { uid: 1, on: false } });
+  assert.equal(all.filter((p) => isMine(p, 1)).length, 1);
+  // played again keeps its name, pin and stars
+  all = rememberPlaylist(all, { list: "PLpinned0001", title: "?", items: a, by: "Bia" }, 999);
+  assert.equal(all[0].title, "Friday mix");
+  assert.equal(all[0].pinned, true);
+});

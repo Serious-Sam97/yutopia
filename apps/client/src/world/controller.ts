@@ -42,6 +42,7 @@ import {
   type WbItem,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, YONDRA_APP, yutopia } from "@/lib/api";
 import { currentEcho, disconnectEcho, getEcho } from "@/lib/echo";
@@ -372,14 +373,6 @@ export class WorldController {
     const mirror = () => {
       const st = room.state;
       hud.set({
-        radio: {
-          playing: st.radio.playing,
-          station: st.radio.station,
-          startedAt: st.radio.startedAt,
-          by: st.radio.by,
-          source: st.radio.source === "yt" ? "yt" : "lofi",
-          title: st.radio.source === "yt" && st.radio.media ? radioTitle(st.radio.media) : "",
-        },
         standup: {
           active: st.standup.active,
           order: [...st.standup.order],
@@ -396,10 +389,6 @@ export class WorldController {
         },
       });
     };
-    $(room.state).radio.onChange(() => {
-      mirror();
-      this.screensChanged();
-    });
     $(room.state).standup.onChange(mirror);
     $(room.state).standup.order.onAdd(mirror);
     $(room.state).standup.order.onRemove(mirror);
@@ -635,9 +624,14 @@ export class WorldController {
   }
   private screensChanged() {
     if (this.screens) return this.screens.refresh();
-    const on =
-      this.room?.state.radio.source === "yt" ||
-      !!this.engine?.allObjects().some((o) => o.kind === "projector" || !!o.props?.media);
+    const on = !!this.engine
+      ?.allObjects()
+      .some(
+        (o) =>
+          o.kind === "projector" ||
+          !!o.props?.media ||
+          (isRadio(o.kind) && (o.props?.radio as { source?: string } | undefined)?.source === "yt"),
+      );
     if (on) void this.ensureScreens();
   }
   ensureScreens(): Promise<void> {
@@ -768,29 +762,51 @@ export class WorldController {
     this.updateAudioScene();
   }
 
-  // Room tone follows my area. The room's music plays from every radio and
-  // record player: loud in their room, faint by the door — heard from the
-  // loudest one where I stand (and from its side).
+  // Room tone follows my area. Each radio and record player plays its own
+  // music: loud in its room, faint by the door. The lo-fi I hear is the
+  // loudest one's where I stand (and from its side); YouTube on a radio plays
+  // in the media chunk's card. The top bar shows the one I hear (or the
+  // nearest that plays).
   private updateAudioScene() {
     const area = areaAt(this.map, this.me.x, this.me.y);
     sound.setArea(area?.key ?? "", area?.kind ?? "open");
-    const r = hud.get().radio;
-    // YouTube on the radio plays in the media chunk's card instead
-    if (!r.playing || r.source === "yt") return radio.stop();
-    radio.play(r.station, r.startedAt);
     let level = 0;
     let pan = 0;
+    let loud: { o: WorldObjectDef; r: RadioState } | null = null;
+    let near: { o: WorldObjectDef; r: RadioState; d: number } | null = null;
     for (const box of this.engine?.allObjects() ?? []) {
-      if (box.kind !== "radio" && box.kind !== "turntable") continue;
+      if (!isRadio(box.kind)) continue;
+      const r = radioOf(box);
+      if (!r.playing) continue;
       const d = Math.hypot(this.me.x - (box.x + 0.5), this.me.y - (box.y + 0.5));
+      if (!near || d < near.d) near = { o: box, r, d };
+      if (r.source !== "lofi") continue;
       const same = area?.key === areaAt(this.map, box.x + 0.5, box.y + 0.5)?.key;
       const l = same ? Math.max(0.2, Math.min(1, 1 - (d - 2) / 10)) : d < 5 ? 0.12 : 0;
       if (l > level) {
         level = l;
+        loud = { o: box, r };
         pan = stereoPan(this.me, { x: box.x + 0.5, y: box.y + 0.5 });
       }
     }
-    radio.setLevel(level, prefs().spatial ? pan * 0.6 : 0);
+    if (loud) {
+      radio.play(loud.r.station, loud.r.startedAt);
+      radio.setLevel(level, prefs().spatial ? pan * 0.6 : 0);
+    } else radio.stop();
+    const shown = loud ?? near;
+    const was = hud.get().radio;
+    const now = shown
+      ? {
+          id: shown.o.id,
+          playing: true,
+          station: shown.r.station,
+          startedAt: shown.r.startedAt,
+          by: shown.r.by,
+          source: shown.r.source,
+          title: shown.r.source === "yt" ? (shown.r.media?.item?.title ?? "") : "",
+        }
+      : { id: "", playing: false, station: 0, startedAt: 0, by: "", source: "lofi" as const, title: "" };
+    if (JSON.stringify(now) !== JSON.stringify(was)) hud.set({ radio: now });
   }
 
   private objectsDirty = false;
@@ -1023,7 +1039,7 @@ export class WorldController {
     const acts = objectActions(o, {
       uid: this.myUid(),
       focus: !!me.focus,
-      radioOn: hud.get().radio.playing,
+      radioOn: radioOf(o).playing,
       task,
       mayLock: (d) => me.builder || doorRoom(this.map, d)?.ownerId === this.myUid(),
     });
@@ -1512,14 +1528,15 @@ export class WorldController {
     room.state.players.forEach((p: S, sid: string) => {
       if (sid !== room.sessionId && p.a === ANIM.sit) sitting.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     });
-    const playing = hud.get().radio.playing;
     for (const o of engine.allObjects()) {
       if (o.kind === "chair" || o.kind === "armchair" || o.kind === "beanbag") {
         const occupied = sitting.has(`${o.x},${o.y}`);
         if (!!o.props?.occupied !== occupied) engine.upsertObject({ ...o, props: { ...(o.props ?? {}), occupied } });
         continue;
       }
-      if (o.kind === "radio" || o.kind === "turntable") {
+      if (isRadio(o.kind)) {
+        // its display lights while it plays (its own state)
+        const playing = radioOf(o).playing;
         if (!!o.props?.on !== playing) engine.upsertObject({ ...o, props: { ...(o.props ?? {}), on: playing } });
         continue;
       }
@@ -1721,14 +1738,4 @@ function interpolate(buf: { t: number; x: number; y: number }[], at: number): Po
     }
   }
   return buf[buf.length - 1];
-}
-
-// what the radio's YouTube is playing (its media state, JSON), for the HUD
-function radioTitle(media: string): string {
-  try {
-    const t = JSON.parse(media)?.item?.title;
-    return typeof t === "string" ? t : "";
-  } catch {
-    return "";
-  }
 }

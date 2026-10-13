@@ -298,7 +298,7 @@ export class ActionQueue {
         return null;
       case "musicOn":
       case "musicOff":
-        h.send("radio:set", { playing: q.act === "musicOn" });
+        h.send("radio:set", { id, playing: q.act === "musicOn" });
         return null;
       case "doorOpen":
       case "doorClose":

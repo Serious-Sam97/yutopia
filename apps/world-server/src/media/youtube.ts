@@ -1,4 +1,4 @@
-import { MAX_DUR, MAX_QUEUE, type MediaItem, YT_ID } from "@yutopia/shared/media";
+import { MAX_DUR, MAX_QUEUE, type MediaItem, YT_ID, YT_LIST } from "@yutopia/shared/media";
 import { config } from "../config.ts";
 
 // YouTube on the server side: titles for what people paste (oEmbed, no key),
@@ -23,6 +23,28 @@ export function ytTitle(id: string): Promise<{ title: string; sub?: string } | n
       .catch(() => null);
     titles.set(id, p);
     if (titles.size > 2000) titles.delete(titles.keys().next().value as string);
+  }
+  return p;
+}
+
+// A playlist's name and channel (oEmbed takes playlist links too, no key).
+const lists = new Map<string, Promise<{ title: string; channel?: string } | null>>();
+export function ytPlaylistTitle(list: string): Promise<{ title: string; channel?: string } | null> {
+  if (!YT_LIST.test(list)) return Promise.resolve(null);
+  let p = lists.get(list);
+  if (!p) {
+    p = fetch(
+      `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(`https://www.youtube.com/playlist?list=${list}`)}`,
+      { signal: AbortSignal.timeout(8000) },
+    )
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const j = (await r.json()) as { title?: string; author_name?: string };
+        return j.title ? { title: j.title.slice(0, 120), channel: j.author_name?.slice(0, 120) } : null;
+      })
+      .catch(() => null);
+    lists.set(list, p);
+    if (lists.size > 500) lists.delete(lists.keys().next().value as string);
   }
   return p;
 }

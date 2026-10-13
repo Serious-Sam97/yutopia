@@ -70,9 +70,10 @@ test("a cup from the cooler, a can from the machine, a tune on the piano", async
   }
 });
 
-// The room's music plays from every radio and record player, not just the
-// first one placed: next to either of two far-apart radios it's loud.
-test("music from every radio: loud next to the second one too", async ({ page }) => {
+// Each radio and record player plays its own: two far-apart radios on
+// different stations — next to each you hear its own station, loud; one off,
+// by it you only hear the other's, faint from across the room.
+test("every radio its own: its station next to it, the other's faint when it's off", async ({ page }) => {
   test.setTimeout(150_000);
   const tok = await token(ANA);
   await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
@@ -107,14 +108,32 @@ test("music from every radio: loud next to the second one too", async ({ page })
       .toBe(true);
     // (the music needs the page's audio started: a click does it)
     await page.mouse.click(5, 400);
-    await page.evaluate(() => (window as any).__yutopia.send("radio:set", { playing: true, station: 0 }));
+    const station = () => page.evaluate(() => (window as any).__audio.radio.station as number);
+    const set = (id: string, playing: boolean, st = 0) =>
+      page.evaluate(([i, p, n]) => (window as any).__yutopia.send("radio:set", { id: i, playing: p, station: n }), [
+        id,
+        playing,
+        st,
+      ] as const);
+    await set(ids[1], true, 0);
+    await set(ids[3], true, 2);
     await walkTo(page, 3.5, 15.6, 30_000);
     await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0.6);
-    // over by the other one, far from the first: still loud
+    expect(await station()).toBe(0);
+    // over by the other one: loud too, and its own station
     await walkTo(page, 25.5, 15.6, 40_000);
     await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0.6);
+    await expect.poll(station, { timeout: 10_000 }).toBe(2);
+    // that one off: by it now, only the first one's station, faint from across the room
+    await set(ids[3], false);
+    await expect.poll(station, { timeout: 10_000 }).toBe(0);
+    await expect.poll(level, { timeout: 10_000 }).toBeLessThan(0.25);
+    expect(
+      await page.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.playing, ids[1]),
+    ).toBe(true);
   } finally {
-    await page.evaluate(() => (window as any).__yutopia.send("radio:set", { playing: false }));
+    for (const id of [ids[1], ids[3]])
+      await page.evaluate((i) => (window as any).__yutopia.send("radio:set", { id: i, playing: false }), id);
     await page.evaluate((x) => (window as any).__yutopia.send("obj:removeMany", { ids: x }), ids);
     await page.waitForTimeout(500);
   }

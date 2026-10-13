@@ -149,6 +149,7 @@ const D = {
   voices: ["Voices", "Vozes"],
   ambience: ["Ambience", "Ambiente"],
   music: ["Music", "Música"],
+  tvVideo: ["TV & video", "TV e vídeo"],
   effects: ["Effects", "Efeitos"],
   quality: ["Graphics", "Gráficos"],
   qualityAuto: ["Auto (fits this device)", "Auto (conforme o aparelho)"],

@@ -9,6 +9,7 @@ import {
   takenId,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { keepPlaying } from "@yutopia/shared/media";
 import { config } from "../config.ts";
 import { cleanProps, fromSchema, type SpaceClient, type SpaceRoom, surfaceRiders, toSchema } from "../SpaceRoom.ts";
 import { yondra } from "../yondra.ts";
@@ -91,6 +92,7 @@ registerFeature((room: SpaceRoom) => {
           ((it.rot | 0) + 4) % 4,
         ),
       };
+      def.props = keepPlaying(def.props, existing ? (fromSchema(existing).props ?? {}) : null);
       // the group can't overlap the room, or itself
       if (!canPlace(room.map, [...rest, ...next], def, bodies)) return warn(client, "That doesn't all fit there.");
       next.push(def);

@@ -96,6 +96,7 @@ export function SettingsPanel() {
           {vol("master", t("master"))}
           {vol("voices", t("voices"))}
           {vol("music", t("music"))}
+          {vol("tv", t("tvVideo"))}
           {vol("effects", t("effects"))}
         </section>
         <section className="space-y-2">

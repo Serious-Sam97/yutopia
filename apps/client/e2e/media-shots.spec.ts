@@ -158,14 +158,20 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
       await page.screenshot({ path: `${dir}/media-jellyfin.png` });
       void lib;
     }
-    await page.evaluate(() => (window as any).__hud.set({ panel: { kind: "radio", objectId: "" } }));
-    await page.waitForTimeout(800);
-    await page
-      .getByRole("button", { name: /^YouTube/ })
-      .first()
-      .click();
-    await page.waitForTimeout(600);
-    await page.screenshot({ path: `${dir}/media-radio-panel.png` });
+    // a radio's panel (the Lab may have none: then skip it)
+    const radio = await page.evaluate(() =>
+      (window as any).__yutopia.engine.allObjects().find((o: any) => o.kind === "radio" || o.kind === "turntable"),
+    );
+    if (radio) {
+      await page.evaluate((i) => (window as any).__hud.set({ panel: { kind: "radio", objectId: i } }), radio.id);
+      await page.waitForTimeout(800);
+      await page
+        .getByRole("button", { name: /^YouTube/ })
+        .first()
+        .click();
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: `${dir}/media-radio-panel.png` });
+    }
     await page.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
   } finally {
     for (const id of ids) await page.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), id);

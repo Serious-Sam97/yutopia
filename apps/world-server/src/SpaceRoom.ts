@@ -44,6 +44,7 @@ import {
   validLayout,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
 import { type Feature, installFeatures } from "./features/index.ts";
@@ -76,7 +77,6 @@ export class SpaceRoom extends Room<SpaceState> {
   grid!: Grid;
   spaceId = 0;
   livekitRoom = "";
-  savedRadio: unknown = null; // the radio as Yondra kept it (features/media.ts picks it up)
   private features: Feature[] = [];
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   private removedUntil = new Map<number, number>();
@@ -158,7 +158,7 @@ export class SpaceRoom extends Room<SpaceState> {
     this.rebuildGrid();
     if (this.migrated && config.saveMigrations) this.saveMigration();
 
-    this.savedRadio = info?.radio ?? null;
+    this.state.playlists = JSON.stringify(cleanPlaylists(info?.playlists ?? []));
     this.registerMessages();
     this.features = installFeatures(this);
 
@@ -756,6 +756,8 @@ export class SpaceRoom extends Room<SpaceState> {
       }
       def.props = { state: "open", ...(def.props ?? {}) };
     }
+    // what it plays stays the server's (a stale copy from the builder's hand, or a copy's)
+    def.props = keepPlaying(def.props, existing ? safeJson(existing.props) : null);
     if (!this.placementOk(def, others)) {
       this.send(client, "toast", { text: "That doesn't fit there.", tone: "warn" });
       return;

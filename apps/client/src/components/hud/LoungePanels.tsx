@@ -1,17 +1,22 @@
 "use client";
 
+import { type RadioState, radioOf } from "@yutopia/shared/media";
 import { useState } from "react";
 import { useLang, useTr } from "@/lib/i18n";
 import { STATIONS } from "@/world/sound";
 import { useHud } from "@/world/store";
 import { useWorld } from "./ctx";
-import { MediaRemote } from "./MediaPanel";
+import { MediaRemote, PlaylistChips } from "./MediaPanel";
 import { Panel } from "./Panel";
 
-export function RadioPanel() {
+// A radio or record player: its own lo-fi station or YouTube queue (the
+// others in the space play theirs).
+export function RadioPanel({ objectId }: { objectId: string }) {
   const t = useTr();
-  const r = useHud((s) => s.radio);
+  const w = useWorld();
+  useHud((s) => s.objectsVersion);
   const pt = useLang() === "pt";
+  const r = radioOf(w?.engine?.getObject(objectId));
   const [tab, setTab] = useState<"lofi" | "yt">(r.source);
   return (
     <Panel title={t("radio")}>
@@ -23,15 +28,15 @@ export function RadioPanel() {
           </button>
         ))}
       </div>
-      {tab === "yt" ? <MediaRemote id="radio" /> : <LofiStations />}
+      {tab === "yt" ? <MediaRemote id={objectId} /> : <LofiStations objectId={objectId} r={r} />}
     </Panel>
   );
 }
 
-function LofiStations() {
+function LofiStations({ objectId, r }: { objectId: string; r: RadioState }) {
   const t = useTr();
   const w = useWorld();
-  const r = useHud((s) => s.radio);
+  const pt = useLang() === "pt";
   const lofi = r.playing && r.source === "lofi";
   const st = STATIONS[r.station % STATIONS.length];
   return (
@@ -62,7 +67,7 @@ function LofiStations() {
             className="deck-btn"
             aria-pressed={lofi && r.station === i}
             style={{ height: 52, fontSize: 10 }}
-            onClick={() => w?.send("radio:set", { playing: true, station: i })}
+            onClick={() => w?.send("radio:set", { id: objectId, playing: true, station: i })}
           >
             <span className="led" />
             {s.name}
@@ -73,13 +78,16 @@ function LofiStations() {
         type="button"
         className="deck-btn danger w-full mt-3"
         aria-pressed={false}
-        onClick={() => w?.send("radio:set", { playing: false })}
+        onClick={() => w?.send("radio:set", { id: objectId, playing: false })}
         disabled={!lofi}
       >
         ■ {t("radioStop")}
       </button>
+      <PlaylistChips id={objectId} />
       <p className="text-xs mt-3" style={{ color: "var(--muted)" }}>
-        Everyone in the lounge hears the same station, in sync. Volume: ⚙ → {t("music")}.
+        {pt
+          ? `Quem está perto deste rádio ouve a mesma estação, sincronizada; os outros rádios tocam a deles. Volume: ⚙ → ${t("music")}.`
+          : `Everyone near this radio hears the same station, in sync; other radios play their own. Volume: ⚙ → ${t("music")}.`}
       </p>
     </>
   );

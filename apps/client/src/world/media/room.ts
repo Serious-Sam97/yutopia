@@ -1,12 +1,13 @@
 import { hearingGain, TILE_H, TILE_W, topCentre, toScreen, type WorldObjectDef } from "@yutopia/shared";
 import {
-  cleanState,
   displaySpot,
   GLASS,
   glassCorners,
   glassFacing,
   isDisplay,
+  isRadio,
   type MediaState,
+  mediaAt,
   mediaOf,
   positionAt,
   showsMedia,
@@ -15,6 +16,7 @@ import {
 import { Container, Graphics, Matrix, Sprite, Texture } from "pixi.js";
 import { lang } from "@/lib/i18n";
 import { prefs } from "@/lib/prefs";
+import { glowSprite, placeGlow } from "../art/glow";
 import type { WorldController } from "../controller";
 import { hud } from "../store";
 import { MediaCard } from "./card";
@@ -40,6 +42,8 @@ export const MEDIA_CHUNK = "yutopia-media";
 const S = 36; // px along a wall per tile (engine.mountWall)
 const PROJECTOR_REACH = 7;
 const CARD_GRACE_MS = 2500;
+const ON_MS = 520; // a CRT warming up
+const OFF_MS = 380; // … collapsing
 
 interface Glassed {
   def: WorldObjectDef;
@@ -48,7 +52,10 @@ interface Glassed {
   g: CanvasRenderingContext2D;
   tex: Texture;
   roots: Container[];
-  glow: Graphics;
+  glow: Sprite; // its light on the floor at night
+  wasOn: boolean;
+  onAt: number; // performance.now() it came on (the CRT's warm-up), 0 = none
+  offAt: number; // … went off (the collapse)
   img: { url: string; el: HTMLImageElement; ok: boolean } | null;
   drawn: string; // what's on the canvas now
   avg: number; // the picture's colour (its light at night)
@@ -56,7 +63,7 @@ interface Glassed {
 }
 
 interface Source {
-  id: string; // a TV's object id, or "radio"
+  id: string; // a TV's or a radio's object id
   m: MediaState;
   gain: number;
   radio: boolean;
@@ -80,6 +87,12 @@ export class MediaRoom {
   private ytFor: string | null = null; // source id
   private ytIdleSince = 0;
   private jf: SyncedVideo | null = null;
+  // volumes ease toward where they should be (walking up, a TV taking over):
+  // no jumps; a stream being replaced fades out on its own
+  private dt = 0;
+  private ytLevel = 0;
+  private jfLevel = 0;
+  private jfFading: { p: SyncedVideo; level: number; until: number } | null = null;
   private jfFor: { id: string; ref: string } | null = null;
   private jfHolder: HTMLDivElement;
   private hidden = new Set<string>(); // sources I said "not now" to, until I walk away
@@ -134,11 +147,7 @@ export class MediaRoom {
 
   // ── what's on (for panels) ─────────────────────────────────────────────
   stateOf(id: string): MediaState | null {
-    if (id === "radio") {
-      const r = this.w.room?.state.radio;
-      return r?.media ? cleanState(JSON.parse(r.media)) : null;
-    }
-    return mediaOf(this.engine?.getObject(id));
+    return mediaAt(this.engine?.getObject(id));
   }
 
   watch(id: string | null) {
@@ -191,7 +200,7 @@ export class MediaRoom {
     canvas.width = W;
     canvas.height = H;
     const g = canvas.getContext("2d", { willReadFrequently: false }) as CanvasRenderingContext2D;
-    const glow = new Graphics();
+    const glow = glowSprite();
     glow.zIndex = -0.4;
     this.engine?.mountLive(glow);
     return {
@@ -202,6 +211,9 @@ export class MediaRoom {
       tex: Texture.from(canvas),
       roots: [],
       glow,
+      wasOn: false,
+      onAt: 0,
+      offAt: 0,
       img: null,
       drawn: "",
       avg: 0x6080a0,
@@ -254,7 +266,8 @@ export class MediaRoom {
   }
 
   // ── every frame ────────────────────────────────────────────────────────
-  frame(_dt: number, me: { x: number; y: number }) {
+  frame(dt: number, me: { x: number; y: number }) {
+    this.dt = Math.min(0.25, Math.max(0, dt));
     const engine = this.engine;
     if (!engine) return;
     const now = serverNow();
@@ -275,17 +288,12 @@ export class MediaRoom {
       } else this.lastRef.set(o.id, "");
       this.drawScreen(s, m?.item ? m : null, now, night);
     }
-    // the radio's YouTube: heard from the loudest radio / record player
-    const r = this.w.room?.state.radio;
-    if (r?.source === "yt" && r.media) {
-      const m = cleanState(JSON.parse(r.media));
-      if (m.item) {
-        let gain = 0;
-        for (const o of engine.allObjects())
-          if (o.kind === "radio" || o.kind === "turntable")
-            gain = Math.max(gain, hearingGain(this.w.map, ear, topCentre(o), true));
-        sources.push({ id: "radio", m, gain, radio: true });
-      }
+    // radios and record players playing YouTube: each its own, heard from where it is
+    for (const o of engine.allObjects()) {
+      if (!isRadio(o.kind)) continue;
+      const m = mediaAt(o);
+      if (!m?.item) continue;
+      sources.push({ id: o.id, m, gain: hearingGain(this.w.map, ear, topCentre(o), true), radio: true });
     }
     for (const src of sources) if (src.gain <= 0) this.hidden.delete(src.id);
     this.drawProjectors(night);
@@ -297,11 +305,32 @@ export class MediaRoom {
   private drawScreen(s: Glassed, m: MediaState | null, now: number, night: number) {
     const o = s.def;
     const facing = glassFacing(o);
+    const t = performance.now();
+    const still = this.engine?.stillMotion() ?? false;
     if (!m || !facing) {
+      // switched off: a CRT collapses to a line, then a dot; a flat screen fades
+      if (s.wasOn) {
+        s.wasOn = false;
+        s.offAt = still || !facing ? 0 : t;
+      }
+      s.glow.visible = false;
+      if (s.offAt && t - s.offAt < OFF_MS && s.roots.length) {
+        this.paintOff(s, (t - s.offAt) / OFF_MS);
+        s.tex.source.update();
+        s.drawn = "";
+        return;
+      }
+      s.offAt = 0;
       for (const r of s.roots) r.visible = false;
-      s.glow.clear();
       return;
     }
+    if (!s.wasOn) {
+      s.wasOn = true;
+      s.onAt = still ? 0 : t;
+      s.offAt = 0;
+    }
+    const warm = s.onAt && t - s.onAt < ON_MS ? (t - s.onAt) / ON_MS : null;
+    if (warm === null) s.onAt = 0;
     this.mount(s);
     const front = this.engine?.frontKey(o.id);
     const gl = GLASS[o.kind];
@@ -334,18 +363,17 @@ export class MediaRoom {
     }
     const pos = positionAt(m, now);
     const loading = item.src === "jf" && this.jfFor?.id === o.id && !live;
-    const key = live
-      ? `live|${performance.now()}`
-      : `${item.ref}|${s.img?.ok ? 1 : 0}|${m.paused ? 1 : 0}|${Math.floor(pos)}|${loading ? (this.engine?.stillMotion() ? "snow" : Math.floor(performance.now() / 120)) : ""}`;
+    const key =
+      live || warm !== null
+        ? `live|${t}`
+        : `${item.ref}|${s.img?.ok ? 1 : 0}|${m.paused ? 1 : 0}|${Math.floor(pos)}|${loading ? (this.engine?.stillMotion() ? "snow" : Math.floor(performance.now() / 120)) : ""}`;
     if (key !== s.drawn) {
       s.drawn = key;
-      this.paint(s, live ?? (s.img?.ok ? s.img.el : null), m, pos, loading);
+      this.paint(s, live ?? (s.img?.ok ? s.img.el : null), m, pos, loading, warm);
       s.tex.source.update();
     }
-    // its light on the floor in front of it, at night
-    s.glow.clear();
+    // its light on the floor in front of it, at night (one soft sprite)
     if (night > 0.05) {
-      const t = performance.now();
       if (t - s.avgAt > 400) {
         s.avgAt = t;
         s.avg = this.average(s.canvas, s.avg);
@@ -353,11 +381,9 @@ export class MediaRoom {
       const spot = displaySpot(o);
       const c = toScreen(spot.x, spot.y + (gl.wall ? 0.4 : 0.6));
       const k = gl.look === "screen" ? 1.6 : gl.wall ? 1.2 : 1;
-      for (let i = 0; i < 4; i++)
-        s.glow
-          .ellipse(c.x, c.y, (TILE_W / 2) * (1.2 + i * 0.5) * k, (TILE_H / 2) * (1.2 + i * 0.5) * k)
-          .fill({ color: s.avg, alpha: (m.paused ? 0.04 : 0.075) * night });
-    }
+      const a = (m.paused ? 0.16 : 0.3) * night * alpha * (warm ?? 1);
+      placeGlow(s.glow, c.x, c.y, TILE_W * 2.9 * k, TILE_H * 2.9 * k, s.avg, a);
+    } else s.glow.visible = false;
   }
 
   private paint(
@@ -366,6 +392,7 @@ export class MediaRoom {
     m: MediaState,
     pos: number,
     loading: boolean,
+    warm: number | null = null,
   ) {
     const g = s.g;
     const W = s.canvas.width;
@@ -432,6 +459,57 @@ export class MediaRoom {
       v.addColorStop(1, "rgba(0,0,0,0.3)");
       g.fillStyle = v;
       g.fillRect(0, 0, W, H);
+    }
+    if (warm !== null) this.warmUp(g, W, H, look, warm);
+  }
+
+  // Coming on: a tube's bright line opening up into the picture (with a
+  // flash); a flat screen or a projector fading in.
+  private warmUp(g: CanvasRenderingContext2D, W: number, H: number, look: string, p: number) {
+    if (look !== "crt") {
+      g.fillStyle = `rgba(0,0,0,${(1 - p).toFixed(3)})`;
+      g.fillRect(0, 0, W, H);
+      return;
+    }
+    if (p < 0.18) {
+      g.fillStyle = "#000";
+      g.fillRect(0, 0, W, H);
+      const w = W * (p / 0.18);
+      g.fillStyle = "rgba(240,250,255,0.95)";
+      g.fillRect((W - w) / 2, H / 2 - 1, w, 2);
+      return;
+    }
+    const q = (p - 0.18) / 0.82;
+    const band = Math.max(2, H * (1 - (1 - q) ** 3));
+    const top = (H - band) / 2;
+    g.fillStyle = "#000";
+    g.fillRect(0, 0, W, top);
+    g.fillRect(0, top + band, W, H - top - band);
+    g.fillStyle = `rgba(235,245,255,${((1 - q) * 0.55).toFixed(3)})`;
+    g.fillRect(0, top, W, band);
+  }
+
+  // Going off: a tube collapses to a line, then a dot; a flat screen fades.
+  private paintOff(s: Glassed, p: number) {
+    const g = s.g;
+    const W = s.canvas.width;
+    const H = s.canvas.height;
+    if (GLASS[s.def.kind].look !== "crt") {
+      g.fillStyle = "rgba(0,0,0,0.25)";
+      g.fillRect(0, 0, W, H);
+      return;
+    }
+    g.fillStyle = "#000";
+    g.fillRect(0, 0, W, H);
+    g.fillStyle = "rgba(240,250,255,0.9)";
+    if (p < 0.55) {
+      const band = Math.max(2, H * (1 - p / 0.55) ** 2);
+      g.fillRect(0, (H - band) / 2, W, band);
+    } else {
+      const r = Math.max(0.5, (1 - (p - 0.55) / 0.45) * Math.min(W, H) * 0.05);
+      g.beginPath();
+      g.arc(W / 2, H / 2, r, 0, Math.PI * 2);
+      g.fill();
     }
   }
 
@@ -505,18 +583,39 @@ export class MediaRoom {
         tl.x,
         tl.y - k.zBot,
       ];
-      const a = 0.03 + 0.11 * night;
-      g.poly(pts).fill({ color: best.avg || 0xfff3cf, alpha: a });
+      // the beam: a wide soft cone, a brighter core toward the middle of the
+      // picture, the lens glowing (stronger in the dark)
+      const color = mixColor(0xfff3cf, best.avg || 0xfff3cf, 0.45);
+      g.poly(pts).fill({ color, alpha: 0.05 + 0.13 * night });
+      const mid = (ax: number, ay: number, bx: number, by: number) => [ax + (bx - ax) * 0.3, ay + (by - ay) * 0.3];
+      const cx = (tl.x + tr.x) / 2;
+      const cyTop = (tl.y + tr.y) / 2 - k.zTop;
+      const cyBot = (tl.y + tr.y) / 2 - k.zBot;
+      const core = [
+        lens.x,
+        lens.y - z,
+        ...mid(cx, cyTop, tl.x, tl.y - k.zTop),
+        ...mid(cx, cyTop, tr.x, tr.y - k.zTop),
+        ...mid(cx, cyBot, tr.x, tr.y - k.zBot),
+        ...mid(cx, cyBot, tl.x, tl.y - k.zBot),
+      ];
+      g.poly(core).fill({ color: 0xfffaf0, alpha: 0.04 + 0.12 * night });
+      g.circle(lens.x, lens.y - z, 2.2).fill({ color: 0xfffaf0, alpha: 0.35 + 0.5 * night });
       g.zIndex = (engine.frontKey(o.id) ?? c.x + c.y) + 0.01;
     }
   }
 
   // ── sound ──────────────────────────────────────────────────────────────
-  // my music volume, turned down while someone I can hear is talking
-  private vol(): number {
+  // my volume for it (TVs: "TV & video"; radios: music), turned down while
+  // someone I can hear is talking
+  private vol(radio: boolean): number {
     const v = prefs().vol;
     const talking = hud.get().people.some((p) => p.speaking && p.hearing);
-    return v.master * Math.max(0.35, v.music) * (talking ? 0.5 : 1);
+    return v.master * (radio ? v.music : (v.tv ?? 0.8)) * (talking ? 0.5 : 1);
+  }
+  // one step of easing toward a level (τ seconds)
+  private ease(from: number, to: number, tau: number): number {
+    return from + (to - from) * (1 - Math.exp(-this.dt / tau));
   }
 
   // The loudest YouTube source in earshot (or the one I watch) plays in the card.
@@ -528,11 +627,23 @@ export class MediaRoom {
     if (!pick) {
       if (this.yt || this.card.visible) {
         if (!this.ytIdleSince) this.ytIdleSince = performance.now();
+        // out of earshot: fade while the card lingers
+        if (this.yt) {
+          this.ytLevel = this.ease(this.ytLevel, 0, 0.3);
+          this.yt.setVolume(this.ytLevel);
+        }
         if (performance.now() - this.ytIdleSince > CARD_GRACE_MS || this.hidden.size) this.stopYouTube();
       }
       return;
     }
     this.ytIdleSince = 0;
+    // another source took over: fade the one playing out first, then switch
+    if (this.yt && this.ytFor && this.ytFor !== pick.id) {
+      this.ytLevel = this.ease(this.ytLevel, 0, 0.12);
+      this.yt.setVolume(this.ytLevel);
+      if (this.ytLevel > 0.02) return;
+      this.ytLevel = 0;
+    }
     const item = pick.m.item;
     if (!item) return;
     const t = timeline(pick.m);
@@ -559,7 +670,8 @@ export class MediaRoom {
       if (this.yt.video !== item.ref) this.yt.load(item.ref, t);
       else this.yt.setTimeline(t);
       const watched = this.watching === pick.id;
-      this.yt.setVolume((watched ? 1 : pick.gain) * this.vol());
+      this.ytLevel = this.ease(this.ytLevel, (watched ? 1 : pick.gain) * this.vol(pick.radio), 0.25);
+      this.yt.setVolume(this.ytLevel);
       this.card.needsSound(this.yt.mutedByBrowser);
       // a length the server doesn't know yet
       const d = this.yt.duration();
@@ -577,6 +689,7 @@ export class MediaRoom {
   private stopYouTube() {
     this.yt?.destroy();
     this.yt = null;
+    this.ytLevel = 0;
     this.ytFor = null;
     this.ytIdleSince = 0;
     for (const c of Array.from(this.card.body.children)) if (!c.classList.contains("ymc-sound")) c.remove();
@@ -592,19 +705,21 @@ export class MediaRoom {
     if (this.watching) pick = jfs.find((s) => s.id === this.watching) ?? null;
     if (!pick) for (const s of jfs) if (s.gain > 0 && (!pick || s.gain > pick.gain)) pick = s;
     const item = pick?.m.item;
+    this.fadeOld();
     if (!pick || !item || !key) {
-      if (this.jf) this.stopJellyfin();
+      if (this.jf) this.stopJellyfin(true);
       return;
     }
     if (!this.jf || this.jfFor?.id !== pick.id || this.jfFor.ref !== item.ref) {
-      this.stopJellyfin();
+      this.stopJellyfin(true);
       const url = `${this.w.worldHttp}/media/jf/s/${encodeURIComponent(key)}/${encodeURIComponent(pick.id)}/${item.ref}/master.m3u8`;
       this.jf = new SyncedVideo(url, timeline(pick.m), this.jfHolder);
       this.jfFor = { id: pick.id, ref: item.ref };
       void this.jf.start();
     } else this.jf.setTimeline(timeline(pick.m));
     const watched = this.watching === pick.id;
-    this.jf.setVolume((watched ? 1 : pick.gain) * this.vol());
+    this.jfLevel = this.ease(this.jfLevel, (watched ? 1 : pick.gain) * this.vol(false), 0.25);
+    this.jf.setVolume(this.jfLevel);
     // watching: the stream big in the card
     const v = this.jf.video;
     if (watched) {
@@ -623,11 +738,26 @@ export class MediaRoom {
     }
   }
 
-  private stopJellyfin() {
-    this.jf?.destroy();
+  // fade: the stream keeps playing a moment, getting quieter, then goes
+  private stopJellyfin(fade = false) {
+    if (this.jf && fade && this.jfLevel > 0.02 && !this.jfFading) {
+      this.jfFading = { p: this.jf, level: this.jfLevel, until: performance.now() + 900 };
+      if (this.jf.video.parentElement !== this.jfHolder) this.jfHolder.append(this.jf.video);
+    } else this.jf?.destroy();
     this.jf = null;
     this.jfFor = null;
+    this.jfLevel = 0;
     this.cc = false;
+  }
+  private fadeOld() {
+    const f = this.jfFading;
+    if (!f) return;
+    f.level = this.ease(f.level, 0, 0.2);
+    f.p.setVolume(f.level);
+    if (f.level < 0.01 || performance.now() > f.until) {
+      f.p.destroy();
+      this.jfFading = null;
+    }
   }
 
   // what the panels show about the stream (tests read it too)
@@ -645,6 +775,7 @@ export class MediaRoom {
     clearInterval(this.clockTimer);
     this.stopYouTube();
     this.stopJellyfin();
+    this.jfFading?.p.destroy();
     this.card.destroy();
     this.jfHolder.remove();
     for (const s of this.screens.values()) {
@@ -656,4 +787,10 @@ export class MediaRoom {
     this.screens.clear();
     this.beams.clear();
   }
+}
+
+// a over b by t (0 = a, 1 = b), per channel
+function mixColor(a: number, b: number, t: number): number {
+  const ch = (sh: number) => Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
 }

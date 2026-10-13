@@ -1,7 +1,8 @@
 # Fita 10 — Media: more TVs, YouTube & Jellyfin on them, YouTube on the radio
 
 > **Status: delivered (2026-10-13)** — see PROGRESS.md → Fita 10 for what shipped,
-> the numbers and the deviations.
+> the numbers and the deviations. Since then: every radio and record player plays
+> its own (station / YouTube queue), like every TV — no shared radio.
 
 > **Ask (2026-10-13):** more TVs, some hanging on the wall; put media on a TV
 > (YouTube, Jellyfin) and leave it playing — anyone who walks by can see and
@@ -105,4 +106,4 @@ The world page is at its limit (≤ 520 KB): **nothing new goes into it** except
 - **Sync** target ±1 s. Good enough for walking by and for watching together, not lip-perfect across people.
 - **Supply chain:** hls.js is the only new npm dependency (pinned, min release age). The YouTube IFrame API is a runtime script from youtube.com (YouTube requires that), allow-listed in the CSP.
 - **Later, if wanted:** Spotify on the radio (each listener's own Premium via the Web Playback SDK — the only model Spotify allows). Dropped from this Fita.
-- **Open:** should the radio become per object (each radio / record player its own source), or stay one per space as today? Default: one per space, revisit after M5.
+- **Decided (user, 2026-10-13):** each radio / record player its own source, like each TV.

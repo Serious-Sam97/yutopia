@@ -1,13 +1,16 @@
 "use client";
 
 import {
-  cleanState,
+  cleanPlaylists,
   clock,
+  isMine,
+  isRadio,
   type MediaItem,
   type MediaState,
-  mediaOf,
+  mediaAt,
   parseYouTube,
   positionAt,
+  type SavedPlaylist,
   ytThumb,
 } from "@yutopia/shared/media";
 import { useEffect, useMemo, useState } from "react";
@@ -17,7 +20,7 @@ import { hud, toast, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
 import { Panel } from "./Panel";
 
-// The remote (docs/plan/10-media.md): what's on a TV (or the radio's YouTube),
+// The remote (docs/plan/10-media.md): what's on a TV (or a radio's YouTube),
 // its controls, adding things from YouTube or Jellyfin, the queue. Anyone may
 // use it; a locked one only builders. Words live here (EN / PT-BR), not in
 // i18n.ts: the world page's budget.
@@ -58,14 +61,30 @@ const T = {
   loading: ["Loading…", "Carregando…"],
   failed: ["The media server didn't answer.", "O servidor de mídia não respondeu."],
   listing: ["Reading the playlist…", "Lendo a playlist…"],
+  saved: ["Playlists played here", "Playlists já usadas aqui"],
+  savedShort: ["Or a playlist played here:", "Ou uma playlist já usada:"],
+  videos: ["{n} videos", "{n} vídeos"],
+  forget: ["Take off the list", "Tirar da lista"],
+  all: ["All {n}", "Todas ({n})"],
+  fewer: ["Fewer", "Menos"],
+  allLists: ["All", "Todas"],
+  mine: ["Mine", "Minhas"],
+  mineEmpty: ["Star a playlist (☆) to keep it here.", "Marque uma playlist com ☆ para guardar aqui."],
+  star: ["Add to Mine", "Pôr em Minhas"],
+  unstar: ["Take out of Mine", "Tirar de Minhas"],
+  options: ["Rename, pin, remove", "Renomear, fixar, tirar"],
+  rename: ["Rename", "Renomear"],
+  pin: ["Pin for everyone", "Fixar para todos"],
+  unpin: ["Unpin", "Desafixar"],
+  pinned: ["Pinned", "Fixada"],
   added: ["Added {n}.", "{n} adicionado(s)."],
   radioHint: [
-    "Everyone near the radio hears it, in sync. While you're near, a small player shows the video (YouTube's rule).",
-    "Todo mundo perto do rádio ouve, sincronizado. Perto dele, um player pequeno mostra o vídeo (regra do YouTube).",
+    "Everyone near this radio hears it, in sync; other radios play their own. While you're near, a small player shows the video (YouTube's rule).",
+    "Todo mundo perto deste rádio ouve, sincronizado; os outros rádios tocam o deles. Perto dele, um player pequeno mostra o vídeo (regra do YouTube).",
   ],
   tvHint: [
-    "Everyone in the space sees it on this TV; whoever's near hears it.",
-    "Todo mundo no espaço vê nesta TV; quem está perto ouve.",
+    "Everyone in the space sees it on this TV; whoever's near hears it. Every TV plays its own.",
+    "Todo mundo no espaço vê nesta TV; quem está perto ouve. Cada TV toca a sua.",
   ],
 } as const;
 type K = keyof typeof T;
@@ -105,27 +124,23 @@ export function MediaRemote({ id }: { id: string }) {
   const t = useT();
   const w = useWorld();
   useHud((s) => s.objectsVersion);
-  useHud((s) => s.radio);
   const canBuild = useHud((s) => s.canBuild);
   const [, tick] = useState(0);
-  const radio = id === "radio";
+  const obj = w?.engine?.getObject(id);
+  const radio = isRadio(obj?.kind ?? "");
   // the media chunk keeps the clock in step (and plays it)
   useEffect(() => {
     void w?.ensureScreens();
     const iv = setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(iv);
   }, [w]);
-  const m: MediaState | null = radio
-    ? (() => {
-        const raw = w?.room?.state.radio.media;
-        return raw ? cleanState(JSON.parse(raw)) : null;
-      })()
-    : mediaOf(w?.engine?.getObject(id));
+  // this TV's, or this radio's YouTube: every one its own
+  const m: MediaState | null = mediaAt(obj);
   const send = (op: string, extra: Record<string, unknown> = {}) =>
     w?.send("media:ctl", { id, op: op as never, ...extra });
-  const play = (items: MediaItem[], mode: "now" | "next" | "end") => {
+  const play = (items: MediaItem[], mode: "now" | "next" | "end", list?: string) => {
     if (!items.length) return;
-    w?.send("media:play", { id, items, mode });
+    w?.send("media:play", list ? { id, items, mode, list } : { id, items, mode });
     if (mode !== "now") toast(t("added", { n: items.length }));
   };
   const locked = !!m?.lock && !canBuild;
@@ -328,7 +343,9 @@ function Buttons({ t, onPick }: { t: TFn; onPick: (mode: "now" | "next" | "end")
 }
 
 // ── YouTube: a link (video or playlist), or a search with an API key ─────────
-function YouTube({ t, play }: { t: TFn; play: (items: MediaItem[], mode: "now" | "next" | "end") => void }) {
+type PlayFn = (items: MediaItem[], mode: "now" | "next" | "end", list?: string) => void;
+
+function YouTube({ t, play }: { t: TFn; play: PlayFn }) {
   const w = useWorld();
   const [link, setLink] = useState("");
   const [busy, setBusy] = useState(false);
@@ -355,7 +372,7 @@ function YouTube({ t, play }: { t: TFn; play: (items: MediaItem[], mode: "now" |
       if (p.video)
         items = [{ src: "yt", ref: p.video, title: "YouTube", dur: 0 }, ...items.filter((x) => x.ref !== p.video)];
     } else if (p.video) items = [{ src: "yt", ref: p.video, title: "YouTube", dur: 0 }];
-    play(items, mode);
+    play(items, mode, p.list);
     setLink("");
   };
 
@@ -376,6 +393,7 @@ function YouTube({ t, play }: { t: TFn; play: (items: MediaItem[], mode: "now" |
 
   return (
     <div className="flex flex-col gap-2">
+      <SavedPlaylists t={t} play={play} />
       <input
         className="field"
         value={link}
@@ -749,6 +767,215 @@ function Queue({
           ))}
         </ol>
       )}
+    </section>
+  );
+}
+
+// ── the space's playlists: every YouTube playlist played here (on a radio or a
+// TV), named by YouTube the first time — one click plays it again ───────────
+function savedOf(w: ReturnType<typeof useWorld>): SavedPlaylist[] {
+  try {
+    return cleanPlaylists(JSON.parse(w?.room?.state.playlists || "[]"));
+  } catch {
+    return [];
+  }
+}
+
+function SavedPlaylists({ t, play }: { t: TFn; play: PlayFn }) {
+  const w = useWorld();
+  const uid = useHud((s) => s.me?.uid);
+  const [all, setAll] = useState(false);
+  const [mine, setMine] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const every = savedOf(w);
+  if (!every.length) return null;
+  const mineN = every.filter((p) => isMine(p, uid)).length;
+  const lists = mine ? every.filter((p) => isMine(p, uid)) : every;
+  const shown = all ? lists : lists.slice(0, 5);
+  const edit = (list: string, e: { title?: string; pinned?: boolean; star?: boolean }) =>
+    w?.send("playlist:edit", { list, ...e });
+  return (
+    <section className="flex flex-col gap-1" aria-label={t("saved")}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <h3 className="mono text-[11px] uppercase tracking-wider mr-auto" style={{ color: "var(--cream-dim)" }}>
+          {t("saved")}
+        </h3>
+        <button type="button" className="chip" aria-pressed={!mine} onClick={() => setMine(false)}>
+          {t("allLists")}
+        </button>
+        <button type="button" className="chip" aria-pressed={mine} onClick={() => setMine(true)}>
+          ★ {t("mine")} ({mineN})
+        </button>
+      </div>
+      {!lists.length && (
+        <p className="text-xs" style={{ color: "var(--muted)" }}>
+          {t("mineEmpty")}
+        </p>
+      )}
+      <ul className="flex flex-col gap-1 max-h-72 overflow-y-auto scroll-thin">
+        {shown.map((p) => {
+          const starred = !!uid && !!p.stars?.includes(uid);
+          return (
+            <li key={p.list} className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 min-w-0">
+                {/* biome-ignore lint/performance/noImgElement: remote thumbnails */}
+                <img
+                  src={ytThumb(p.items[0].ref, "mq")}
+                  alt=""
+                  width={64}
+                  height={36}
+                  loading="lazy"
+                  className="rounded shrink-0 object-cover"
+                  style={{ width: 64, height: 36, background: "#000" }}
+                />
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => play(p.items, "now", p.list)}
+                  aria-label={`${t("now")}: ${p.title}`}
+                >
+                  <p className="text-sm truncate">
+                    {p.pinned && <span title={t("pinned")}>📌 </span>}
+                    {p.title}
+                  </p>
+                  <p className="mono text-xs truncate" style={{ color: "var(--muted)" }}>
+                    {[p.channel, t("videos", { n: p.items.length }), p.by].filter(Boolean).join(" · ")}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  aria-label={`${t("now")}: ${p.title}`}
+                  onClick={() => play(p.items, "now", p.list)}
+                >
+                  ▶
+                </button>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  aria-label={`${t("end")}: ${p.title}`}
+                  onClick={() => play(p.items, "end", p.list)}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  aria-pressed={starred}
+                  aria-label={`${t(starred ? "unstar" : "star")}: ${p.title}`}
+                  title={t(starred ? "unstar" : "star")}
+                  style={starred ? { color: "var(--amber)" } : undefined}
+                  onClick={() => edit(p.list, { star: !starred })}
+                >
+                  {starred ? "★" : "☆"}
+                </button>
+                <button
+                  type="button"
+                  className="ghost-btn"
+                  aria-expanded={editing === p.list}
+                  aria-label={`${t("options")}: ${p.title}`}
+                  onClick={() => {
+                    setEditing(editing === p.list ? null : p.list);
+                    setName(p.title);
+                  }}
+                >
+                  ⋯
+                </button>
+              </div>
+              {editing === p.list && (
+                <form
+                  className="flex items-center gap-2 flex-wrap pl-[72px]"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    edit(p.list, { title: name });
+                    setEditing(null);
+                  }}
+                >
+                  <input
+                    className="field flex-1 min-w-40 py-1"
+                    value={name}
+                    maxLength={120}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Escape") return;
+                      e.stopPropagation();
+                      setEditing(null);
+                    }}
+                    aria-label={t("rename")}
+                    // biome-ignore lint/a11y/noAutofocus: the field the button just opened
+                    autoFocus
+                  />
+                  <button type="submit" className="ghost-btn text-xs">
+                    {t("rename")}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn text-xs"
+                    aria-pressed={!!p.pinned}
+                    onClick={() => edit(p.list, { pinned: !p.pinned })}
+                  >
+                    📌 {t(p.pinned ? "unpin" : "pin")}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-btn text-xs"
+                    onClick={() => {
+                      w?.send("playlist:forget", { list: p.list });
+                      setEditing(null);
+                    }}
+                  >
+                    ✕ {t("forget")}
+                  </button>
+                </form>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {lists.length > 5 && (
+        <button type="button" className="ghost-btn self-start text-xs" onClick={() => setAll(!all)}>
+          {all ? t("fewer") : t("all", { n: lists.length })}
+        </button>
+      )}
+    </section>
+  );
+}
+
+// A radio's lo-fi tab: the playlists as chips (pinned, then mine, then the
+// rest), one tap switches this radio to it.
+export function PlaylistChips({ id }: { id: string }) {
+  const t = useT();
+  const w = useWorld();
+  const uid = useHud((s) => s.me?.uid);
+  useHud((s) => s.objectsVersion);
+  const every = savedOf(w);
+  const rank = (p: SavedPlaylist) => (p.pinned ? 0 : isMine(p, uid) ? 1 : 2);
+  const lists = every
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => rank(a.p) - rank(b.p) || a.i - b.i)
+    .map((x) => x.p)
+    .slice(0, 8);
+  if (!lists.length) return null;
+  return (
+    <section className="mt-4 flex flex-col gap-2">
+      <p className="text-xs" style={{ color: "var(--cream-dim)" }}>
+        {t("savedShort")}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {lists.map((p) => (
+          <button
+            key={p.list}
+            type="button"
+            className="chip normal-case max-w-full truncate"
+            aria-pressed={false}
+            title={`${p.title} · ${t("videos", { n: p.items.length })}`}
+            onClick={() => w?.send("media:play", { id, items: p.items, mode: "now", list: p.list })}
+          >
+            {p.pinned ? "📌" : isMine(p, uid) ? "★" : "▶"} {p.title}
+          </button>
+        ))}
+      </div>
     </section>
   );
 }

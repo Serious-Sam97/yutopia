@@ -8,7 +8,8 @@ export interface Prefs {
   reducedMotion: boolean;
   spatial: boolean;
   noiseSuppression: boolean;
-  vol: { master: number; voices: number; ambience: number; music: number; effects: number };
+  // tv: YouTube / Jellyfin / game consoles on TVs (radios are music)
+  vol: { master: number; voices: number; ambience: number; music: number; effects: number; tv: number };
   micId: string;
   camId: string;
   speakerId: string;
@@ -41,7 +42,7 @@ const DEFAULTS: Prefs = {
   reducedMotion: false,
   spatial: true,
   noiseSuppression: true,
-  vol: { master: 0.9, voices: 1, ambience: 0.5, music: 0.5, effects: 0.7 },
+  vol: { master: 0.9, voices: 1, ambience: 0.5, music: 0.5, effects: 0.7, tv: 0.8 },
   micId: "",
   camId: "",
   speakerId: "",

@@ -1,4 +1,5 @@
 import { ANIM, areaAt, dirFromDelta, findPath, isPrivate, type Point } from "@yutopia/shared";
+import { isRadio } from "@yutopia/shared/media";
 import { config } from "../config.ts";
 import type { SpaceClient, SpaceRoom } from "../SpaceRoom.ts";
 import { Npc, type Player } from "../schema.ts";
@@ -133,9 +134,11 @@ registerFeature((room: SpaceRoom) => {
       until = now + 60_000;
       return;
     }
-    if (room.state.radio.playing && Math.random() < 0.5) {
+    // a radio or record player playing somewhere: dance by it
+    const playing = [...room.state.objects.values()].find((o) => isRadio(o.kind) && o.props.includes('"playing":true'));
+    if (playing && Math.random() < 0.5) {
       mode = "dance";
-      go({ x: 20.5 + Math.random() * 2, y: 25.5 + Math.random() * 2 });
+      go({ x: playing.x + 0.5 + (Math.random() * 2 - 1), y: playing.y + 1.5 + Math.random() });
       until = now + 30_000;
       return;
     }

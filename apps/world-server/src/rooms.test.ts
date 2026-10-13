@@ -258,16 +258,25 @@ test("poker: only people at the table can put a card on it", async () => {
   assert.equal(outside.room.state.poker.cardId, 5);
 });
 
-test("radio: one shared station with a start time", async () => {
+test("radio: each radio its own station, with a start time", async () => {
   const s = ++space;
   const a = await person(17, s);
   const b = await person(18, s);
-  a.room.send("radio:set", { playing: true, station: 4 });
-  await waitFor(() => b.room.state.radio.playing === true);
-  assert.equal(b.room.state.radio.station, 1, "station wraps to the list");
-  assert.ok(Math.abs(b.room.state.radio.startedAt - Date.now()) < 2000);
-  b.room.send("radio:set", { playing: false });
-  await waitFor(() => a.room.state.radio.playing === false);
+  const radio = (p: Person, id: string) => JSON.parse(p.room.state.objects.get(id).props || "{}").radio ?? {};
+  a.room.send("radio:set", { id: "lounge-radio", playing: true, station: 4 });
+  await waitFor(() => radio(b, "lounge-radio").playing === true);
+  assert.equal(radio(b, "lounge-radio").station, 1, "station wraps to the list");
+  assert.ok(Math.abs(radio(b, "lounge-radio").startedAt - Date.now()) < 2000);
+  // the record player next to it plays its own
+  assert.equal(radio(b, "lounge-turntable").playing, undefined);
+  b.room.send("radio:set", { id: "lounge-turntable", playing: true, station: 2 });
+  await waitFor(() => radio(a, "lounge-turntable").station === 2);
+  assert.equal(radio(a, "lounge-radio").station, 1);
+  b.room.send("radio:set", { id: "lounge-radio", playing: false });
+  await waitFor(() => radio(a, "lounge-radio").playing === false);
+  assert.equal(radio(a, "lounge-turntable").playing, true);
+  // not a radio: nothing
+  a.room.send("radio:set", { id: "nope", playing: true });
 });
 
 test("coffee: a mug from the machine when you're next to it, for everyone to see; put it down", async () => {

@@ -114,7 +114,7 @@ const mediaOf = (p: Person, id: string): MediaState | null => {
   return o ? (JSON.parse(o.props || "{}").media ?? null) : null;
 };
 // a TV on the floor somewhere free
-async function placeTv(b: Person, id: string, kind = "tv_console") {
+async function placeTv(b: Person, id: string, kind = "tv_console", props?: Record<string, unknown>) {
   const objects = [...b.room.state.objects.values()].map(
     (o: { id: string; kind: string; x: number; y: number; rot: number; props: string }) => ({
       ...o,
@@ -124,7 +124,7 @@ async function placeTv(b: Person, id: string, kind = "tv_console") {
   for (let y = 4; y < studio.height - 2; y++)
     for (let x = 4; x < studio.width - 3; x++)
       if (canPlace(studio, objects, { id, kind, x, y, rot: 0 }, [])) {
-        b.room.send("obj:put", { id, kind, x, y, rot: 0 });
+        b.room.send("obj:put", { id, kind, x, y, rot: 0, props });
         await waitFor(() => !!b.room.state.objects.get(id));
         return;
       }
@@ -201,23 +201,67 @@ test("media: lengths from players, bad items refused", async () => {
   assert.equal(mediaOf(ana, "tv-b")?.item?.dur, 212.3);
 });
 
-test("media: the radio's YouTube source, and back to lo-fi", async () => {
+test("media: each radio its own YouTube queue, and back to lo-fi", async () => {
   const space = 503;
   const ana = await person(1, space);
   const bia = await person(2, space);
-  ana.room.send("media:play", { id: "radio", items: [yt("eeeeeeeeeee", 200)], mode: "now" });
-  await waitFor(() => bia.room.state.radio.source === "yt" && bia.room.state.radio.playing === true);
-  const m = JSON.parse(bia.room.state.radio.media) as MediaState;
-  assert.equal(m.item?.ref, "eeeeeeeeeee");
-  // Jellyfin isn't for the radio
-  ana.room.send("media:play", { id: "radio", items: [{ src: "jf", ref: ITEM, title: "x", dur: 0 }], mode: "end" });
+  const radio = (p: Person, id: string) => JSON.parse(p.room.state.objects.get(id).props || "{}").radio ?? {};
+  ana.room.send("media:play", { id: "lounge-radio", items: [yt("eeeeeeeeeee", 200)], mode: "now" });
+  await waitFor(() => radio(bia, "lounge-radio").source === "yt" && radio(bia, "lounge-radio").playing === true);
+  assert.equal(radio(bia, "lounge-radio").media.item.ref, "eeeeeeeeeee");
+  // the record player next to it: its own (another video), the radio's untouched
+  bia.room.send("media:play", { id: "lounge-turntable", items: [yt("fffffffffff", 100)], mode: "now" });
+  await waitFor(() => radio(ana, "lounge-turntable").media?.item?.ref === "fffffffffff");
+  assert.equal(radio(ana, "lounge-radio").media.item.ref, "eeeeeeeeeee");
+  assert.equal(radio(ana, "lounge-radio").media.queue.length, 0);
+  // Jellyfin isn't for radios
+  ana.room.send("media:play", {
+    id: "lounge-radio",
+    items: [{ src: "jf", ref: ITEM, title: "x", dur: 0 }],
+    mode: "end",
+  });
   await sleep(300);
-  assert.equal((JSON.parse(bia.room.state.radio.media) as MediaState).queue.length, 0);
-  bia.room.send("radio:set", { playing: true, station: 1 });
-  await waitFor(() => ana.room.state.radio.source === "lofi" && ana.room.state.radio.station === 1);
-  assert.equal(ana.room.state.radio.media, "", "YouTube's queue goes when lo-fi takes over");
-  ana.room.send("media:ctl", { id: "radio", op: "stop" });
-  await waitFor(() => ana.room.state.radio.playing === false);
+  assert.equal(radio(bia, "lounge-radio").media.queue.length, 0);
+  // a lo-fi station takes over the radio (its YouTube goes); the record player plays on
+  bia.room.send("radio:set", { id: "lounge-radio", playing: true, station: 1 });
+  await waitFor(() => radio(ana, "lounge-radio").source === "lofi" && radio(ana, "lounge-radio").station === 1);
+  assert.equal(radio(ana, "lounge-radio").media, null, "YouTube's queue goes when lo-fi takes over");
+  assert.equal(radio(ana, "lounge-turntable").media.item.ref, "fffffffffff");
+  ana.room.send("media:ctl", { id: "lounge-turntable", op: "stop" });
+  await waitFor(() => radio(ana, "lounge-turntable").playing === false);
+  assert.equal(radio(ana, "lounge-radio").playing, true);
+});
+
+test("media: every TV its own; a copy starts with nothing on, a move keeps what plays", async () => {
+  const space = 505;
+  const ana = await person(1, space, "member,builder");
+  await placeTv(ana, "tv-one");
+  await placeTv(ana, "tv-two", "tv_wall");
+  ana.room.send("media:play", { id: "tv-one", items: [yt("aaaaaaaaaaa", 100)], mode: "now" });
+  ana.room.send("media:play", { id: "tv-two", items: [yt("bbbbbbbbbbb", 100)], mode: "now" });
+  await waitFor(
+    () => mediaOf(ana, "tv-one")?.item?.ref === "aaaaaaaaaaa" && mediaOf(ana, "tv-two")?.item?.ref === "bbbbbbbbbbb",
+  );
+  ana.room.send("media:ctl", { id: "tv-one", op: "pause" });
+  await waitFor(() => mediaOf(ana, "tv-one")?.paused === true);
+  assert.equal(mediaOf(ana, "tv-two")?.paused, false, "the other TV plays on");
+  // a copy of tv-one (with its props, as the build hand sends them): nothing on
+  const one = ana.room.state.objects.get("tv-one");
+  const props = JSON.parse(one.props);
+  await placeTv(ana, "tv-copy", "tv_console", props);
+  assert.equal(mediaOf(ana, "tv-copy"), null);
+  // moving tv-one with a stale copy of its props keeps what plays now
+  ana.room.send("media:ctl", { id: "tv-one", op: "skip" });
+  await waitFor(
+    () =>
+      !mediaOf(ana, "tv-one")?.item ||
+      mediaOf(ana, "tv-one")?.item?.ref !== "aaaaaaaaaaa" ||
+      mediaOf(ana, "tv-one")?.paused === false,
+  );
+  const live = JSON.stringify(mediaOf(ana, "tv-one"));
+  ana.room.send("obj:put", { id: "tv-one", kind: one.kind, x: one.x, y: one.y, rot: 0, props });
+  await sleep(400);
+  assert.equal(JSON.stringify(mediaOf(ana, "tv-one")), live);
 });
 
 test("media: the media key, and Jellyfin through the relay — one session for everyone, no key out", async () => {
@@ -286,4 +330,69 @@ test("media: the media key, and Jellyfin through the relay — one session for e
   ana.room.send("media:ctl", { id: "tv-j", op: "stop" });
   await waitFor(() => seen.some((p) => p === "DELETE /Videos/ActiveEncodings"));
   assert.equal((await fetch(`${base}/s/${key}/tv-j/${ITEM}/master.m3u8`)).status, 410);
+});
+
+test("media: playlists played anywhere go on the space's quick list; again to the top; forget", async () => {
+  const space = 506;
+  const ana = await person(1, space, "member,builder");
+  const bia = await person(2, space);
+  const lists = (p: Person) =>
+    JSON.parse(p.room.state.playlists || "[]") as { list: string; uses: number; items: unknown[]; by: string }[];
+  ana.room.send("media:play", {
+    id: "lounge-radio",
+    items: [yt("aaaaaaaaaaa", 10), yt("bbbbbbbbbbb", 20)],
+    mode: "now",
+    list: "PLradio00001",
+  });
+  await waitFor(() => lists(bia).length === 1);
+  assert.equal(lists(bia)[0].list, "PLradio00001");
+  assert.equal(lists(bia)[0].items.length, 2);
+  assert.equal(lists(bia)[0].by, "P1");
+  // on a TV, another one; then the first again: to the top, counted
+  await placeTv(ana, "tv-pl");
+  bia.room.send("media:play", { id: "tv-pl", items: [yt("ccccccccccc", 10)], mode: "now", list: "PLtv00000002" });
+  await waitFor(() => lists(ana)[0]?.list === "PLtv00000002");
+  bia.room.send("media:play", {
+    id: "lounge-turntable",
+    items: [yt("aaaaaaaaaaa", 10)],
+    mode: "end",
+    list: "PLradio00001",
+  });
+  await waitFor(() => lists(ana)[0]?.list === "PLradio00001" && lists(ana)[0]?.uses === 2);
+  // a bad playlist id isn't kept; a plain video isn't a playlist
+  ana.room.send("media:play", { id: "tv-pl", items: [yt("ddddddddddd", 10)], mode: "end", list: "x" });
+  ana.room.send("media:play", { id: "tv-pl", items: [yt("eeeeeeeeeee", 10)], mode: "end" });
+  await sleep(300);
+  assert.equal(lists(ana).length, 2);
+  bia.room.send("playlist:forget", { list: "PLtv00000002" });
+  await waitFor(() => lists(ana).length === 1);
+});
+
+test("media: playlists — rename, pin, my star", async () => {
+  const space = 507;
+  const ana = await person(1, space);
+  const bia = await person(2, space);
+  const lists = (p: Person) =>
+    JSON.parse(p.room.state.playlists || "[]") as {
+      list: string;
+      title: string;
+      pinned?: boolean;
+      stars?: number[];
+      byUid?: number;
+    }[];
+  ana.room.send("media:play", {
+    id: "lounge-radio",
+    items: [yt("aaaaaaaaaaa", 10)],
+    mode: "now",
+    list: "PLedit000001",
+  });
+  await waitFor(() => lists(bia).length === 1);
+  assert.equal(lists(bia)[0].byUid, 1);
+  bia.room.send("playlist:edit", { list: "PLedit000001", title: "Friday mix", pinned: true, star: true });
+  await waitFor(() => lists(ana)[0]?.title === "Friday mix");
+  assert.equal(lists(ana)[0].pinned, true);
+  assert.deepEqual(lists(ana)[0].stars, [2], "Bia's star, not Ana's");
+  bia.room.send("playlist:edit", { list: "PLedit000001", star: false, pinned: false });
+  await waitFor(() => !lists(ana)[0]?.pinned);
+  assert.equal(lists(ana)[0].stars, undefined);
 });
