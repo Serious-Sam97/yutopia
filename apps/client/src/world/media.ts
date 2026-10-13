@@ -207,6 +207,12 @@ export class Media {
     );
   }
 
+  // The world's own audio context (voices, music): the game room's emulator
+  // leaves it alone when it taps its console's sound.
+  audioContext(): BaseAudioContext | null {
+    return mixer.ctx;
+  }
+
   // Called every frame-ish from the world: volume and stereo position per voice.
   setVoice(uid: string, gain: number, pan: number) {
     const ctx = mixer.ctx;

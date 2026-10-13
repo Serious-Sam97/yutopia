@@ -1,6 +1,6 @@
 "use client";
 
-import { type GameSystem, type PadButton, romFits, SYSTEMS } from "@yutopia/shared";
+import { type GameSystem, type PadButton, romFits, SYSTEMS } from "@yutopia/shared/games";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang, useTr } from "@/lib/i18n";
 import { type Cartridge, library, removeGame, saveInfo, upload } from "@/world/games/api";
@@ -126,6 +126,7 @@ export function GamePanel({ objectId }: { objectId: string }) {
       ) : (
         <>
           <Screen consoleId={showing} on={!!v?.on} running={!!v?.host} t={t} />
+          {kind === "console" && v?.on && v.myPort ? <TouchPad system={v.system as GameSystem} /> : null}
           <div className="cabinet rise px-3 py-2.5 flex flex-col gap-2">
             {kind === "tv" ? (
               <TvControls t={t} v={v} onClose={close} closeLabel={tr("close")} />
@@ -470,7 +471,6 @@ function ConsoleControls({
           {v.myPort ? <Keys system={system} t={t} /> : null}
         </div>
       ) : null}
-      {v.on && v.myPort ? <TouchPad system={system} /> : null}
     </>
   );
 }
@@ -539,7 +539,7 @@ function TouchPad({ system }: { system: GameSystem }) {
     );
   };
   return (
-    <div className="flex items-center justify-between gap-3 px-1 py-1">
+    <div className="cabinet flex items-center justify-between gap-3 px-3 py-2 shrink-0">
       <div className="grid grid-cols-3 gap-1" style={{ width: 150 }}>
         <span />
         {btn("up", "▲", "#2b2a28", 46)}
@@ -564,7 +564,10 @@ function TouchPad({ system }: { system: GameSystem }) {
 
 function Keys({ system, t }: { system: GameSystem; t: TFn }) {
   return (
-    <p className="mono text-[11px] flex flex-wrap gap-x-3 gap-y-0.5 ml-auto" style={{ color: "var(--cream-dim)" }}>
+    <p
+      className="mono text-[11px] flex-wrap gap-x-3 gap-y-0.5 ml-auto hidden [@media(pointer:fine)]:flex"
+      style={{ color: "var(--cream-dim)" }}
+    >
       <span style={{ color: "var(--muted)" }}>{t("keys")}:</span>
       {KEY_HINTS[system].map(([k, b]) => (
         <span key={k}>

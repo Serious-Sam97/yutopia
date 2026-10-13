@@ -63,6 +63,14 @@ shoulders show. Frame 0 is both "standing" and the walk's passing frame.
 - Textures are shared by key (`kind|rot|slice|group|variant|props|res`), reference-counted
   while on the map, and kept in a 64 MB budget once unused (`textures.ts`).
 
+## Real things, no marks
+
+Some items echo real products (the game room's consoles and TV, `art/items/games.ts`):
+their silhouette, colours, materials and parts are drawn faithfully — the woodgrain,
+the switches, the cartridge standing in the slot, the colour dots — but never a
+logo, a brand name or a model name. Labels in the UI are generic ("8-bit
+console"). What moves (the picture, LEDs, cables, pads in hands) is drawn live.
+
 ## Checklist for a new item
 1. Draw it in `/dev/items` on wood, carpet and tile, day and night, all four facings.
 2. Light upper-left in every facing; outlines 1.3 px; one story detail; contact shadow.

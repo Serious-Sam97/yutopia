@@ -1,23 +1,25 @@
 import {
-  CABLE_REACH,
-  CONSOLES,
   footprint,
-  type GameSystem,
-  gap,
   hearingGain,
-  isConsole,
-  PAD_BUTTONS,
-  PAD_REACH,
   type ServerMessages,
-  SYSTEMS,
   stereoPan,
   TILE_H,
   TILE_W,
-  TV_SCREEN,
   toScreen,
-  turnLocal,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import {
+  CABLE_REACH,
+  CONSOLES,
+  type GameSystem,
+  gap,
+  isConsole,
+  PAD_BUTTONS,
+  PAD_REACH,
+  SYSTEMS,
+  TV_SCREEN,
+  turnLocal,
+} from "@yutopia/shared/games";
 import { Container, Graphics, Matrix, Sprite, Text, Texture } from "pixi.js";
 import type { WorldController } from "../controller";
 import { type GameView, hud, toast } from "../store";
@@ -287,7 +289,15 @@ export class GameRoom {
         c.resumes > 0 ? loadSave(spaceId, c.game, "state") : Promise.resolve(null),
       ]);
       if (h.stopped) return;
-      h.emu = await startEmu({ system, rom: blob, romName: name, canvas, sram, state });
+      h.emu = await startEmu({
+        system,
+        rom: blob,
+        romName: name,
+        canvas,
+        sram,
+        state,
+        worldAudio: this.w.media.audioContext(),
+      });
       if (h.stopped) return h.emu.exit();
       h.stream = canvas.captureStream(30);
       this.w.send("game:tv", { id });
@@ -333,6 +343,13 @@ export class GameRoom {
     const url = this.w.session?.livekitUrl ?? "";
     void h.tv.start(url, m.token, h.canvas, h.emu.audio()).then((ok) => {
       if (!h.stopped) this.w.send("game:live", { id: h.id, live: ok });
+      // its sound may only start once the game makes some: look for it a while
+      let tries = 0;
+      const look = setInterval(() => {
+        const sound = h.emu?.audio();
+        if (h.stopped || h.tv.hasSound || ++tries > 40) return clearInterval(look);
+        if (sound) void h.tv.addSound(sound);
+      }, 500);
     });
   }
 
@@ -483,7 +500,7 @@ export class GameRoom {
         for (let i = 0; i < 4; i++)
           v.glow
             .ellipse(c.x, c.y, (TILE_W / 2) * (1.4 + i * 0.5), (TILE_H / 2) * (1.4 + i * 0.5))
-            .fill({ color: picture ? v.avg : 0x2a55c0, alpha: 0.05 * night });
+            .fill({ color: picture ? v.avg : 0x2a55c0, alpha: 0.085 * night });
       }
     }
   }

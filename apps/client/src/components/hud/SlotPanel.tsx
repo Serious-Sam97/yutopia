@@ -1,7 +1,7 @@
 "use client";
 
 import { SLOT_COLORS, SLOT_LANES, SLOT_LAPS } from "@yutopia/shared/slotcar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLang, useTr } from "@/lib/i18n";
 import { hud, type SlotLane, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
@@ -47,7 +47,7 @@ const CALL_CSS = `@keyframes slot-call{0%{transform:translate(-50%,8px) scale(.6
 export function SlotPanel({ objectId }: { objectId: string }) {
   const tr = useTr();
   const pt = useLang() === "pt";
-  const t = (k: K) => T[k][pt ? 1 : 0];
+  const t = useCallback((k: K) => T[k][pt ? 1 : 0], [pt]);
   const w = useWorld();
   const view = useHud((s) => s.slot);
   const [laps, setLaps] = useState(5);

@@ -1,5 +1,5 @@
 // A tiny NES cartridge of our own for tests (and the dev page): a light blue
-// screen that turns red while player 1 holds A and green while player 2 does.
+// screen and a test tone; red while player 1 holds A, green while player 2 does.
 // Hand-assembled 6502 (NROM, 16 KB PRG + 8 KB empty CHR), written to
 // apps/client/public/emu/test/colors.nes.   node tools/test-rom-nes.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -20,38 +20,46 @@ const code = [
   0x10, 0xfb,             // C017 bpl vw1
   0x2c, 0x02, 0x20,       // C019 vw2: bit $2002
   0x10, 0xfb,             // C01C bpl vw2
-  0xa9, 0x01,             // C01E loop: lda #1
-  0x8d, 0x16, 0x40,       // C020 sta $4016   (strobe the pads)
-  0xa9, 0x00,             // C023 lda #0
-  0x8d, 0x16, 0x40,       // C025 sta $4016
-  0xad, 0x16, 0x40,       // C028 lda $4016   (player 1: A first)
-  0x29, 0x01,             // C02B and #1
-  0xf0, 0x05,             // C02D beq p2
-  0xa2, 0x16,             // C02F ldx #$16    (red)
-  0x4c, 0x42, 0xc0,       // C031 jmp set
-  0xad, 0x17, 0x40,       // C034 p2: lda $4017
-  0x29, 0x01,             // C037 and #1
-  0xf0, 0x05,             // C039 beq none
-  0xa2, 0x1a,             // C03B ldx #$1a    (green)
-  0x4c, 0x42, 0xc0,       // C03D jmp set
-  0xa2, 0x21,             // C040 none: ldx #$21 (light blue)
-  0xad, 0x02, 0x20,       // C042 set: lda $2002
-  0xa9, 0x3f,             // C045 lda #$3f
-  0x8d, 0x06, 0x20,       // C047 sta $2006
-  0xa9, 0x00,             // C04A lda #0
-  0x8d, 0x06, 0x20,       // C04C sta $2006
-  0x8e, 0x07, 0x20,       // C04F stx $2007   (the backdrop colour)
-  0xa9, 0x00,             // C052 lda #0
-  0x8d, 0x06, 0x20,       // C054 sta $2006   (point away from the palette)
-  0x8d, 0x06, 0x20,       // C057 sta $2006
-  0x4c, 0x1e, 0xc0,       // C05A jmp loop
-  0x40,                   // C05D irq: rti
+  0xa9, 0x01,             // C01E lda #1      (a test tone: pulse 1 on…)
+  0x8d, 0x15, 0x40,       // C020 sta $4015
+  0xa9, 0xbf,             // C023 lda #$bf    (…half duty, held, full volume…)
+  0x8d, 0x00, 0x40,       // C025 sta $4000
+  0xa9, 0xfd,             // C028 lda #$fd    (…about 440 Hz)
+  0x8d, 0x02, 0x40,       // C02A sta $4002
+  0xa9, 0x00,             // C02D lda #0
+  0x8d, 0x03, 0x40,       // C02F sta $4003
+  0xa9, 0x01,             // C032 loop: lda #1
+  0x8d, 0x16, 0x40,       // C034 sta $4016   (strobe the pads)
+  0xa9, 0x00,             // C037 lda #0
+  0x8d, 0x16, 0x40,       // C039 sta $4016
+  0xad, 0x16, 0x40,       // C03C lda $4016   (player 1: A first)
+  0x29, 0x01,             // C03F and #1
+  0xf0, 0x05,             // C041 beq p2
+  0xa2, 0x16,             // C043 ldx #$16    (red)
+  0x4c, 0x56, 0xc0,       // C045 jmp set
+  0xad, 0x17, 0x40,       // C048 p2: lda $4017
+  0x29, 0x01,             // C04B and #1
+  0xf0, 0x05,             // C04D beq none
+  0xa2, 0x1a,             // C04F ldx #$1a    (green)
+  0x4c, 0x56, 0xc0,       // C051 jmp set
+  0xa2, 0x21,             // C054 none: ldx #$21 (light blue)
+  0xad, 0x02, 0x20,       // C056 set: lda $2002
+  0xa9, 0x3f,             // C059 lda #$3f
+  0x8d, 0x06, 0x20,       // C05B sta $2006
+  0xa9, 0x00,             // C05E lda #0
+  0x8d, 0x06, 0x20,       // C060 sta $2006
+  0x8e, 0x07, 0x20,       // C063 stx $2007   (the backdrop colour)
+  0xa9, 0x00,             // C066 lda #0
+  0x8d, 0x06, 0x20,       // C068 sta $2006   (point away from the palette)
+  0x8d, 0x06, 0x20,       // C06B sta $2006
+  0x4c, 0x32, 0xc0,       // C06E jmp loop
+  0x40,                   // C071 irq: rti
 ];
 
 const header = [0x4e, 0x45, 0x53, 0x1a, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const prg = new Uint8Array(16384).fill(0xea);
 prg.set(code, 0);
-prg.set([0x5d, 0xc0, 0x00, 0xc0, 0x5d, 0xc0], 0x3ffa); // NMI, RESET, IRQ
+prg.set([0x71, 0xc0, 0x00, 0xc0, 0x71, 0xc0], 0x3ffa); // NMI, RESET, IRQ
 const rom = new Uint8Array(16 + 16384 + 8192);
 rom.set(header, 0);
 rom.set(prg, 16);

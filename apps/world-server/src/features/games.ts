@@ -1,17 +1,15 @@
+import { footprint, hearingGain, type WorldObjectDef } from "@yutopia/shared";
 import {
   CABLE_REACH,
   CONSOLES,
-  footprint,
   GAME_ID,
   gap,
-  hearingGain,
   isConsole,
   MAX_LIVE_TVS,
   PAD_REACH,
   SYSTEMS,
   TV_INPUTS,
-  type WorldObjectDef,
-} from "@yutopia/shared";
+} from "@yutopia/shared/games";
 import { builtinGame } from "@yutopia/shared/library";
 import { AccessToken } from "livekit-server-sdk";
 import { config } from "../config.ts";

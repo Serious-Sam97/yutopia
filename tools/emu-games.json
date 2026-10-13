@@ -1,22 +1,96 @@
 {
   "_": "The game room's built-in cartridges: openly licensed homebrew (licence and source recorded; GPL/CC-BY credits shown in the library), fetched by tools/emu-assets.mjs from the authors' own releases into apps/client/public/emu/games (not in git), each pinned by sha256. The test cards are ours (tools/test-rom-*.mjs).",
   "games": [
-    { "file": "2048.bin", "url": "https://github.com/chesterbr/2048-2600/raw/main/2048.bin", "sha256": "c85dc2204299b0a29209d3f80ae112678c171dab216719593625647d2436f1e1" },
-    { "file": "berta.bin", "url": "https://github.com/vandalton/BertaAndButterflies/releases/download/v1.00/berta-and-butterflies.v1.00.ntsc.en.bin", "sha256": "3e0efbbf4aba069cbe06d5bf2795c2110914aa40e378743cfcc40321aae3928d" },
-    { "file": "pokersquares.bin", "url": "https://slackware.uk/~urchlay/repos/pokersquares/plain/pokersquares.release.bin", "sha256": "105b000e991d8e9191e5ef7da5de3c3f1c906a81fb278ecd8842be5894d74373" },
-    { "file": "dabg.nes", "url": "https://github.com/NovaSquirrel/DABG/releases/download/v2/dabg.nes", "sha256": "eca79b9d0b546e96c1bc73099e239539fb9c7773ff10a431bb3a9cd6763208ca" },
-    { "file": "croom.nes", "url": "https://github.com/pinobatch/croom-nes/releases/download/v0.02a/croom.nes", "sha256": "2ce17df1ad66a8a0533c0a8739f5b5ebe275c264924bbe350c42c5ac0394f20e" },
-    { "file": "thwaite.nes", "url": "https://github.com/pinobatch/thwaite-nes/releases/download/v0.04/thwaite.nes", "sha256": "a2df24d9c9f72e56c2fdc4c703becc47a5700ad0158da8208247635ebeb3779c" },
-    { "file": "rhde.nes", "url": "https://github.com/pinobatch/rhde-nes/releases/download/v0.07/rhde.nes", "sha256": "b2c4748a5b3651e393572046daf126213653b58b55472cdfdf4b863834dd0241" },
-    { "file": "cannons.sfc", "url": "https://github.com/undisbeliever/cannons/releases/download/v1.02/Cannons.v1.02.zip", "sha256": "1bcf015aad16ece68bde1024a59126695c604d0f38fce8e3c435b7d628e0e0c7", "entry": "Cannons (v1.02).sfc" },
-    { "file": "elevator.sfc", "url": "https://github.com/undisbeliever/elevator-madness-dx/releases/download/v1.03/Elevator.Madness.DX.v1.03.zip", "sha256": "aaba4a93cc4ed62436228f7c140b67d51cc22dc210c452d54cced191f590d56b", "entry": "Elevator Madness DX (v1.03).sfc" },
-    { "file": "castle.sfc", "url": "https://github.com/undisbeliever/castle_platformer/releases/download/v1.04/Castle.Platformer.v1.04.zip", "sha256": "e75da7af6f3a1bd10c21cf4324d0c4321271ce3b9ef3408b2dc2db9cb05f9159", "entry": "Castle Platformer (v1.04).sfc" },
-    { "file": "memory.sfc", "url": "https://github.com/undisbeliever/memory-game/releases/download/v1.02/Memory.Game.v1.02.zip", "sha256": "b4cac9ef9fe74ce2f68a8b72fa71e7c94c2527a308e62b85b498ee9325ecc91f", "entry": "Memory Game (v1.02).sfc" },
-    { "file": "kleleatoms.bin", "url": "https://github.com/Nightwolf-47/KleleAtoms-MD/releases/download/v1.2.1/kleleatoms-md-121.bin", "sha256": "d0660df5af9d39696272b0c6774f25f296ee38e86eacf8b52645eab3ea8b003a" },
-    { "file": "rc89.bin", "url": "https://www.huguesjohnson.com/rc89/builds/RetailClerk89_2020-09-01.zip", "sha256": "ddd7e93ee52d797c65fdaac3997e8c5868ef9b060c6083aa209c203812ca487b", "entry": "RetailClerk89_2020-09-01.bin" },
-    { "file": "alexvsbus.md", "url": "https://github.com/M374LX/alexvsbus-md/releases/download/pre3/alexvsbus-md-pre3.zip", "sha256": "eea48b73298b7d38e69557cba291eaf05cf20f637d8faeaa032a53de2c562710", "entry": "alexvsbus-pre3.md" },
-    { "file": "ucity.gbc", "url": "https://github.com/AntonioND/ucity/releases/download/v1.3/ucity_compat.gbc", "sha256": "8b98cbb5303d2159a931332dc375642fb474b2c9473c7ba473ad94c98a8814bf" },
-    { "file": "geometrix.gbc", "url": "https://raw.githubusercontent.com/AntonioND/geometrix/v1.0.0/geometrix.gbc", "sha256": "f13575af6bf87003c3eef8c2cab67a49ca6b02aa23ff6a31a38beb96d6eb1795" },
-    { "file": "libbet.gb", "url": "https://github.com/pinobatch/libbet/releases/download/v0.08/libbet.gb", "sha256": "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9" }
+    {
+      "file": "2048.bin",
+      "url": "https://github.com/chesterbr/2048-2600/raw/main/2048.bin",
+      "sha256": "c85dc2204299b0a29209d3f80ae112678c171dab216719593625647d2436f1e1"
+    },
+    {
+      "file": "berta.bin",
+      "url": "https://github.com/vandalton/BertaAndButterflies/releases/download/v1.00/berta-and-butterflies.v1.00.ntsc.en.bin",
+      "sha256": "3e0efbbf4aba069cbe06d5bf2795c2110914aa40e378743cfcc40321aae3928d"
+    },
+    {
+      "file": "pokersquares.bin",
+      "url": "https://slackware.uk/~urchlay/repos/pokersquares/plain/pokersquares.release.bin",
+      "sha256": "105b000e991d8e9191e5ef7da5de3c3f1c906a81fb278ecd8842be5894d74373"
+    },
+    {
+      "file": "dabg.nes",
+      "url": "https://github.com/NovaSquirrel/DABG/releases/download/v2/dabg.nes",
+      "sha256": "eca79b9d0b546e96c1bc73099e239539fb9c7773ff10a431bb3a9cd6763208ca"
+    },
+    {
+      "file": "croom.nes",
+      "url": "https://github.com/pinobatch/croom-nes/releases/download/v0.02a/croom.nes",
+      "sha256": "2ce17df1ad66a8a0533c0a8739f5b5ebe275c264924bbe350c42c5ac0394f20e"
+    },
+    {
+      "file": "thwaite.nes",
+      "url": "https://github.com/pinobatch/thwaite-nes/releases/download/v0.04/thwaite.nes",
+      "sha256": "a2df24d9c9f72e56c2fdc4c703becc47a5700ad0158da8208247635ebeb3779c"
+    },
+    {
+      "file": "rhde.nes",
+      "url": "https://github.com/pinobatch/rhde-nes/releases/download/v0.07/rhde.nes",
+      "sha256": "b2c4748a5b3651e393572046daf126213653b58b55472cdfdf4b863834dd0241"
+    },
+    {
+      "file": "cannons.sfc",
+      "url": "https://github.com/undisbeliever/cannons/releases/download/v1.02/Cannons.v1.02.zip",
+      "sha256": "1bcf015aad16ece68bde1024a59126695c604d0f38fce8e3c435b7d628e0e0c7",
+      "entry": "Cannons (v1.02).sfc"
+    },
+    {
+      "file": "elevator.sfc",
+      "url": "https://github.com/undisbeliever/elevator-madness-dx/releases/download/v1.03/Elevator.Madness.DX.v1.03.zip",
+      "sha256": "aaba4a93cc4ed62436228f7c140b67d51cc22dc210c452d54cced191f590d56b",
+      "entry": "Elevator Madness DX (v1.03).sfc"
+    },
+    {
+      "file": "castle.sfc",
+      "url": "https://github.com/undisbeliever/castle_platformer/releases/download/v1.04/Castle.Platformer.v1.04.zip",
+      "sha256": "e75da7af6f3a1bd10c21cf4324d0c4321271ce3b9ef3408b2dc2db9cb05f9159",
+      "entry": "Castle Platformer (v1.04).sfc"
+    },
+    {
+      "file": "memory.sfc",
+      "url": "https://github.com/undisbeliever/memory-game/releases/download/v1.02/Memory.Game.v1.02.zip",
+      "sha256": "b4cac9ef9fe74ce2f68a8b72fa71e7c94c2527a308e62b85b498ee9325ecc91f",
+      "entry": "Memory Game (v1.02).sfc"
+    },
+    {
+      "file": "kleleatoms.bin",
+      "url": "https://github.com/Nightwolf-47/KleleAtoms-MD/releases/download/v1.2.1/kleleatoms-md-121.bin",
+      "sha256": "d0660df5af9d39696272b0c6774f25f296ee38e86eacf8b52645eab3ea8b003a"
+    },
+    {
+      "file": "rc89.bin",
+      "url": "https://www.huguesjohnson.com/rc89/builds/RetailClerk89_2020-09-01.zip",
+      "sha256": "ddd7e93ee52d797c65fdaac3997e8c5868ef9b060c6083aa209c203812ca487b",
+      "entry": "RetailClerk89_2020-09-01.bin"
+    },
+    {
+      "file": "alexvsbus.md",
+      "url": "https://github.com/M374LX/alexvsbus-md/releases/download/pre3/alexvsbus-md-pre3.zip",
+      "sha256": "eea48b73298b7d38e69557cba291eaf05cf20f637d8faeaa032a53de2c562710",
+      "entry": "alexvsbus-pre3.md"
+    },
+    {
+      "file": "ucity.gbc",
+      "url": "https://github.com/AntonioND/ucity/releases/download/v1.3/ucity_compat.gbc",
+      "sha256": "8b98cbb5303d2159a931332dc375642fb474b2c9473c7ba473ad94c98a8814bf"
+    },
+    {
+      "file": "geometrix.gbc",
+      "url": "https://raw.githubusercontent.com/AntonioND/geometrix/v1.0.0/geometrix.gbc",
+      "sha256": "f13575af6bf87003c3eef8c2cab67a49ca6b02aa23ff6a31a38beb96d6eb1795"
+    },
+    {
+      "file": "libbet.gb",
+      "url": "https://github.com/pinobatch/libbet/releases/download/v0.08/libbet.gb",
+      "sha256": "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9"
+    }
   ]
 }

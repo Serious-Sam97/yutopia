@@ -6,8 +6,11 @@ the source of truth (users, projects, boards, Vortex) and is deployed as today.
 
 ## 1. Yondra side (once)
 
-1. Deploy the Yondra backend with the Yutopia module (migration
-   `2026_10_11_000001_create_yutopia_tables`, `routes/yutopia.php`).
+1. Deploy the Yondra backend with the Yutopia module (migrations
+   `2026_10_11_000001_create_yutopia_tables` … `2026_10_13_000001_create_yutopia_games`,
+   `routes/yutopia.php`). The game room keeps uploaded cartridges and saves on
+   Yondra's private `local` disk (`storage/app/private/yutopia/{games,saves}`):
+   back it up with the rest of Yondra's storage.
 2. Add to Yondra's backend `.env` (generate fresh secrets, never reuse dev ones):
    ```
    YUTOPIA_WORLD_SECRET=<openssl rand -hex 32>
@@ -64,3 +67,13 @@ docker compose up -d --build
 `npx cap add android`, then add `RECORD_AUDIO`, `CAMERA` and
 `MODIFY_AUDIO_SETTINGS` to the manifest. The PWA (`/manifest.webmanifest`) already
 installs on desktop and mobile without a store.
+
+## The game room's emulators (docs/plan/09-game-room.md)
+
+The client image fetches the emulator cores and the built-in cartridges at build
+time (`node tools/emu-assets.mjs`, each file pinned by sha256 in
+`tools/emu-cores.json` / `tools/emu-games.json`; GPL sources linked in
+`/emu/cores/SOURCES.md` and the library's credits). For a dev checkout run the
+same command once; `node tools/emu-assets.mjs --check` tells you if anything's
+missing. Snes9x and Genesis Plus GX are non-commercial licences: fine for a team
+and friends, to be swapped for other cores before Yutopia is ever sold.

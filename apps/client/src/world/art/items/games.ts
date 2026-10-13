@@ -1,4 +1,4 @@
-import { TV_SCREEN } from "@yutopia/shared";
+import { TV_SCREEN } from "@yutopia/shared/games";
 import { fe, fr, INK, rnd, type Sketch, sh, te, tr } from "./kit";
 import { K, M } from "./pal";
 
@@ -152,7 +152,7 @@ export function consoleSnes(s: Sketch, p: Props) {
       d.poly("t", tr(5.04, x, 0.4, x + 0.06, 0.46), col);
     d.poly("t", tr(5.04, 0.47, 0.55, 0.53, 0.6), "#9a968e"); // eject
     const dots = [K.red, K.amber, "#7fa34a", "#4f86c6"];
-    dots.forEach((col, i) => d.poly("t", te(5.05, 0.62 + i * 0.045, 0.68, 0.014, 8), col));
+    for (const [i, col] of dots.entries()) d.poly("t", te(5.05, 0.62 + i * 0.045, 0.68, 0.014, 8), col);
     for (const x of [0.3, 0.42]) d.poly("s", fr("s", 0.77, x, x + 0.08, 1, 2.6), "#2b2a28");
   });
   const c = cartColor(p);

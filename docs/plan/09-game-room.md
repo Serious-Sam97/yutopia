@@ -1,5 +1,8 @@
 # Fita 9 — Game room (consoles, emulators, the TV everyone sees)
 
+> **Status: delivered (2026-10-13)** — see PROGRESS.md → Fita 9 for what shipped,
+> the numbers and the deviations.
+
 > **Ask (2026-10-13):** a game room with working emulators on the TV; everyone can
 > see what's happening on the TV. Consoles with a real design; you plug the console
 > into the TV.

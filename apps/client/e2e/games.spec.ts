@@ -103,15 +103,10 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
     await expect.poll(() => consoleState(bia, conId).then((c) => c?.live), { timeout: 20_000 }).toBe(true);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/games-host.png` });
 
-    // Bia, across the room, sees it on the TV (and doesn't hear it from there)
+    // Bia, across the room, sees it on the TV
     await expect.poll(async () => hue(await colourOf(bia, "tv", conId)), { timeout: 25_000 }).toBe("blue");
-    console.log("DBGAUDIO", JSON.stringify(await ana.evaluate(() => {
-      const h = (window as any).__yutopia.games.hosting;
-      const al = h?.emu && (h.emu as any);
-      return { hasEmu: !!h?.emu, tracks: h?.emu?.audio()?.getAudioTracks().length ?? -1, pubAudio: !!h?.tv?.audio, pubVideo: !!h?.tv?.video, aud: h?.tv?.audience, al: !!al };
-    })));
     const hearsTv = () => bia.evaluate((i) => (window as any).__yutopia.media.voices.has(`tv-${i}`), conId);
-    expect(await hearsTv()).toBe(false);
+
     if (SHOTS) {
       await bia.evaluate((p) => (window as any).__yutopia.engine.pinCamera({ x: p.x + 1, y: p.y + 1, zoom: 2.4 }), at);
       await bia.waitForTimeout(600);
@@ -125,14 +120,23 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
 
     // Bia walks up, takes pad 2, presses A: green — at Ana's and on Bia's TV
     await walkTo(bia, at.x + 2.5, at.y + 3.6, 25_000);
-    // up close, its sound comes through too
-    await bia.waitForTimeout(3000);
-    console.log("DBGAUD2", JSON.stringify(await ana.evaluate(() => (window as any).__yutopia.games.hosting?.tv?.audience)), JSON.stringify(await bia.evaluate((i) => {
-      const r = (window as any).__yutopia.media.room;
-      const p = r?.remoteParticipants.get(`tv-${i}`);
-      return p ? [...p.trackPublications.values()].map((x: any) => ({ kind: x.kind, desired: x.isDesired, subscribed: x.isSubscribed, allowed: x.isAllowed, status: x.subscriptionStatus, perm: x.permissionStatus })) : "no participant";
-    }, conId)));
+    // its sound comes through too (in earshot: the Lab is one open studio)
     await expect.poll(hearsTv, { timeout: 15_000 }).toBe(true);
+    // …and it really plays: the test card's tone arrives as audio
+    const audioIn = () =>
+      bia.evaluate(async (i) => {
+        const p = (window as any).__yutopia.media.room.remoteParticipants.get(`tv-${i}`);
+        let n = 0;
+        for (const pub of p?.trackPublications.values() ?? []) {
+          if (pub.kind !== "audio" || !pub.track?.receiver) continue;
+          (await pub.track.receiver.getStats()).forEach((x: any) => {
+            if (x.type === "inbound-rtp") n += x.bytesReceived ?? 0;
+          });
+        }
+        return n;
+      }, conId);
+    const heard = await audioIn();
+    await expect.poll(async () => (await audioIn()) - heard, { timeout: 10_000 }).toBeGreaterThan(2000);
     await bia.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), conId);
     await bia.getByRole("button", { name: "Take pad 2" }).click();
     await expect.poll(() => consoleState(ana, conId).then((c) => c?.p2)).toBe("Bia Demo");
@@ -249,5 +253,61 @@ test("bring your cartridge: upload, play, save, come back and carry on", async (
       if (g.title === title) await api.delete(`${API}/api/yutopia/spaces/${s}/games/${String(g.id).slice(2)}`);
     await api.dispose();
     await page.waitForTimeout(500).catch(() => {});
+  }
+});
+
+// On a phone: the panel puts a touch pad under the picture; holding its A
+// reaches the game like a key would.
+test("phone: the touch pad plays", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const ta = await token(ANA);
+  const s = await spaceId(ta, "Yutopia Lab");
+  const page = await (
+    await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  ).newPage();
+  const stamp = Date.now().toString(36);
+  const ids = [`e2e-tv-${stamp}`, `e2e-nes-${stamp}`];
+  try {
+    await enter(page, ta, s);
+    const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
+    const p = { x: Math.floor(sp.x) - 2, y: Math.floor(sp.y) - 6 };
+    await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), {
+      id: ids[0],
+      kind: "crt_tv",
+      x: p.x,
+      y: p.y,
+      rot: 0,
+    });
+    await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), {
+      id: ids[1],
+      kind: "console_nes",
+      x: p.x + 1,
+      y: p.y + 2,
+      rot: 0,
+    });
+    await expect
+      .poll(() => page.evaluate((i) => !!(window as any).__yutopia.room.state.objects.get(i), ids[1]))
+      .toBe(true);
+    await walkTo(page, p.x + 1.5, p.y + 3.6, 25_000);
+    await page.waitForFunction(() => !!(window as any).__yutopia.games, null, { timeout: 15_000 });
+    await page.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), ids[1]);
+    await page.getByRole("button", { name: "Connect to the TV" }).click();
+    await page.getByRole("button", { name: "Insert a cartridge" }).click();
+    await page
+      .locator("li", { hasText: "Test Card" })
+      .filter({ hasText: "8-bit" })
+      .getByRole("button", { name: "▶" })
+      .click();
+    await page.getByRole("button", { name: /^⏻ Turn on/ }).click();
+    await expect.poll(async () => hue(await colourOf(page, "host", ids[1])), { timeout: 20_000 }).toBe("blue");
+    const a = page.getByRole("button", { name: "A", exact: true });
+    await a.dispatchEvent("pointerdown", { pointerId: 1 });
+    await expect.poll(async () => hue(await colourOf(page, "host", ids[1]))).toBe("red");
+    await a.dispatchEvent("pointerup", { pointerId: 1 });
+    await expect.poll(async () => hue(await colourOf(page, "host", ids[1]))).toBe("blue");
+    await page.getByRole("button", { name: /Turn off/ }).click();
+  } finally {
+    await page.evaluate((x) => (window as any).__yutopia.send("obj:removeMany", { ids: x }), ids).catch(() => {});
+    await page.waitForTimeout(600).catch(() => {});
   }
 });

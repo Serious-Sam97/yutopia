@@ -1,6 +1,6 @@
 "use client";
 
-import { type GameSystem, SYSTEMS } from "@yutopia/shared";
+import { type GameSystem, SYSTEMS } from "@yutopia/shared/games";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Emu } from "@/world/games/emu";
@@ -40,6 +40,7 @@ export default function EmuDev() {
   };
 
   // frames per second: the emulator's canvas (sampled pixels change) and the echo video
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once; start reads the URL itself
   useEffect(() => {
     let raf = 0;
     let last = performance.now();
@@ -75,7 +76,6 @@ export default function EmuDev() {
       cancelAnimationFrame(raf);
       clearInterval(timer);
     };
-    // biome-ignore lint/correctness/useExhaustiveDependencies: once; start reads the URL itself
   }, []);
 
   return (

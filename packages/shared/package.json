@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./slotcar": "./src/slotcar.ts",
-    "./library": "./src/library.ts"
+    "./library": "./src/library.ts",
+    "./games": "./src/games.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

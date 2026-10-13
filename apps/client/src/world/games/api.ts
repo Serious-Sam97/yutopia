@@ -1,4 +1,4 @@
-import { type GameInfo, type GameSystem, SYSTEMS } from "@yutopia/shared";
+import { type GameInfo, type GameSystem, SYSTEMS } from "@yutopia/shared/games";
 import { BUILTIN_GAMES, type BuiltinGame, builtinGame } from "@yutopia/shared/library";
 import { API, getToken } from "@/lib/api";
 

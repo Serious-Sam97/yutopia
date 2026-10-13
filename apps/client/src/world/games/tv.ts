@@ -1,4 +1,4 @@
-import { type LocalTrackPublication, Room, Track, VideoPresets } from "livekit-client";
+import { AudioPresets, type LocalTrackPublication, Room, Track, VideoPresets } from "livekit-client";
 
 // A game room TV going out (its host's browser): the emulator's picture and
 // sound published as a LiveKit participant of its own ("tv-<console id>",
@@ -31,16 +31,26 @@ export class TvStream {
       videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
       degradationPreference: "maintain-framerate",
     });
-    const at = sound?.getAudioTracks()[0];
-    if (at)
-      this.audio = await room.localParticipant.publishTrack(at, {
-        name: "tv-sound",
-        source: Track.Source.Unknown,
-        dtx: false,
-        red: false,
-      });
+    if (sound) await this.addSound(sound);
     this.apply();
     return true;
+  }
+
+  // The console's sound (it may only start a moment after the picture).
+  async addSound(sound: MediaStream) {
+    const at = sound.getAudioTracks()[0];
+    if (!at || this.audio || !this.room) return;
+    this.audio = await this.room.localParticipant.publishTrack(at, {
+      name: "tv-sound",
+      source: Track.Source.Unknown,
+      audioPreset: AudioPresets.music,
+      dtx: false,
+      red: false,
+    });
+    this.apply();
+  }
+  get hasSound(): boolean {
+    return !!this.audio;
   }
 
   // From the world-server: user ids who may see it, and who may hear it.

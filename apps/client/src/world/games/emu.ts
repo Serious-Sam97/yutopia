@@ -1,4 +1,4 @@
-import { type GameSystem, type PadButton, SYSTEMS } from "@yutopia/shared";
+import { type GameSystem, type PadButton, SYSTEMS } from "@yutopia/shared/games";
 import type { Nostalgist } from "nostalgist";
 
 // The emulator, in the browser of whoever turned the console on: a libretro core
@@ -85,6 +85,36 @@ const RETROPAD: Record<PadButton, number> = {
   r: 11,
 };
 
+// The console's sound, whichever way the core plays it (OpenAL, an audio
+// worklet…): whatever it connects to its speakers also feeds a stream we can
+// send with the TV. Only audio contexts other than the world's own are tapped.
+const taps = new WeakMap<BaseAudioContext, MediaStreamAudioDestinationNode>();
+const tapped = new Set<WeakRef<BaseAudioContext>>();
+const contexts = (): BaseAudioContext[] =>
+  [...tapped].map((r) => r.deref()).filter((c): c is BaseAudioContext => !!c && c.state !== "closed");
+let tapping = false;
+let worldCtx: BaseAudioContext | null = null;
+function tapSpeakers(world: BaseAudioContext | null) {
+  worldCtx = world;
+  if (tapping) return;
+  tapping = true;
+  const connect = AudioNode.prototype.connect as (this: AudioNode, ...a: unknown[]) => unknown;
+  AudioNode.prototype.connect = function (this: AudioNode, ...args: unknown[]) {
+    const out = connect.apply(this, args);
+    const dst = args[0];
+    if (dst instanceof AudioDestinationNode && this.context !== worldCtx) {
+      let tap = taps.get(this.context);
+      if (!tap && this.context instanceof AudioContext) {
+        tap = this.context.createMediaStreamDestination();
+        taps.set(this.context, tap);
+        tapped.add(new WeakRef(this.context));
+      }
+      if (tap) connect.call(this, tap);
+    }
+    return out;
+  } as typeof AudioNode.prototype.connect;
+}
+
 // RetroArch asks to keep the screen awake when it starts; refused (no gesture,
 // a hidden page), the rejection went unhandled. Asked politely now.
 let wakeQuiet = false;
@@ -118,9 +148,12 @@ export async function startEmu(o: {
   canvas: HTMLCanvasElement;
   state?: Blob | null;
   sram?: Blob | null;
+  worldAudio?: BaseAudioContext | null; // the world's own sound (never tapped)
 }): Promise<Emu> {
   const { Nostalgist: N } = await import("nostalgist");
   quietWakeLock();
+  tapSpeakers(o.worldAudio ?? null);
+  const before = new Set<BaseAudioContext>(contexts()); // (earlier games' contexts)
   const sys = SYSTEMS[o.system];
   o.canvas.width = EMU_W;
   o.canvas.height = EMU_H;
@@ -193,13 +226,12 @@ export async function startEmu(o: {
     },
     audio() {
       if (dest) return dest.stream;
-      // emscripten's OpenAL plays through one gain node: tap it
-      const al = n.getEmscriptenAL() as { currentCtx?: { audioCtx: AudioContext; gain: GainNode } } | null;
-      const ctx = al?.currentCtx;
-      if (!ctx?.gain) return null;
-      dest = ctx.audioCtx.createMediaStreamDestination();
-      ctx.gain.connect(dest);
-      return dest.stream;
+      // the core's audio context: OpenAL's, else whichever got tapped since launch
+      const al = n.getEmscriptenAL() as { currentCtx?: { audioCtx: AudioContext } } | null;
+      const ctx = al?.currentCtx?.audioCtx;
+      dest = (ctx && taps.get(ctx)) || null;
+      if (!dest) for (const c of contexts()) if (!before.has(c) && taps.get(c)) dest = taps.get(c) ?? null;
+      return dest?.stream ?? null;
     },
     exit() {
       try {

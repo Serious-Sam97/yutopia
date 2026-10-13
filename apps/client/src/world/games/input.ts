@@ -1,4 +1,4 @@
-import { type GameSystem, PAD_BUTTONS, type PadButton } from "@yutopia/shared";
+import { type GameSystem, PAD_BUTTONS, type PadButton } from "@yutopia/shared/games";
 
 // Your pad, from the keyboard or a gamepad: which of the console's buttons are
 // down, as a bitmask (PAD_BUTTONS order) — the same form whether it drives the
