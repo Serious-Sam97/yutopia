@@ -80,7 +80,7 @@ const SHORT: Record<GameSystem, string> = {
   "2600": "2600",
   nes: "8-bit",
   snes: "16-bit",
-  md: "16-bit ⚫",
+  md: "16-bit (black)",
   gb: "Handheld",
 };
 

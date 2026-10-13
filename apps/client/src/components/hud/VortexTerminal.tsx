@@ -59,9 +59,9 @@ export function VortexTerminal() {
 
   // streamed chat replies (scope vortex-chat) on App.Models.User.{id}
   useEffect(() => {
-    const echo = getEcho();
-    if (!echo || !uid) return;
-    const channel = echo.private(`App.Models.User.${uid}`);
+    if (!uid) return;
+    let off = false;
+    let stop: (() => void) | null = null;
     const onEvent = (e: {
       type: string;
       payload: {
@@ -89,9 +89,15 @@ export function VortexTerminal() {
         active.current = null;
       }
     };
-    channel.listen(".user.event", onEvent);
+    void getEcho().then((echo) => {
+      if (!echo || off) return;
+      const channel = echo.private(`App.Models.User.${uid}`);
+      channel.listen(".user.event", onEvent);
+      stop = () => channel.stopListening(".user.event", onEvent);
+    });
     return () => {
-      channel.stopListening(".user.event", onEvent);
+      off = true;
+      stop?.();
     };
   }, [uid, print]);
 

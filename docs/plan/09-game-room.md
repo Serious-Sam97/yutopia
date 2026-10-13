@@ -70,7 +70,7 @@ Per console: `on`, `tv`, `cart`, `host` (who streams), `players` (sid per port),
 
 ### Bundle
 
-The world page is over budget already (527.8 KB > 520 at HEAD; a separate task): **nothing here goes into it.** The TV display code is tiny (engine), the console panel and emulator wrapper are a lazy chunk with its own budget, the cores are static files fetched on first play and cached.
+The world page was over budget already (527.8 KB > 520 at HEAD; fixed at the end of this Fita, 505.2 KB): **nothing here goes into it.** The TV display code is tiny (engine), the console panel and emulator wrapper are a lazy chunk with its own budget, the cores are static files fetched on first play and cached.
 
 ## Phases and exit tests
 

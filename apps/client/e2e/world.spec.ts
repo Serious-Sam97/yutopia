@@ -39,7 +39,8 @@ test("two people see each other and the Yondra board wall is live", async ({ bro
     (window as never as { __hud: { get(): { boards: { name: string }[] } } }).__hud.get().boards.map((x) => x.name),
   );
   expect(boards).toContain("Product");
-  await walkTo(a, 4.5, 2.5);
+  // (from the arrival point: a longer walk than from a desk)
+  await walkTo(a, 4.5, 2.5, 30_000);
   await a.evaluate(() =>
     (window as never as { __yutopia: { engine: { setZoom(z: number): void } } }).__yutopia.engine.setZoom(1.8),
   );

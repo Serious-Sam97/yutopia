@@ -40,7 +40,13 @@ test("HUD: who hears you, chat with reactions, people, room, status, minimap", a
   await panel.getByRole("button", { name: "React: heart" }).click();
   await expect(panel.getByRole("button", { name: "heart 1" })).toBeVisible();
   await expect
-    .poll(() => bia.evaluate(() => (window as any).__hud.get().chat.at(-1)?.reactions?.heart?.length ?? 0))
+    // (that message: another line, Vortex's say, can arrive after it)
+    .poll(() =>
+      bia.evaluate(
+        () =>
+          (window as any).__hud.get().chat.find((c: any) => c.text === "standup in 5?")?.reactions?.heart?.length ?? 0,
+      ),
+    )
     .toBe(1);
 
   // a quick emote from the composer shows over my head

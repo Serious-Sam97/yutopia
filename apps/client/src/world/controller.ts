@@ -44,7 +44,7 @@ import {
 } from "@yutopia/shared";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, YONDRA_APP, yutopia } from "@/lib/api";
-import { disconnectEcho, getEcho } from "@/lib/echo";
+import { currentEcho, disconnectEcho, getEcho } from "@/lib/echo";
 import { tr } from "@/lib/i18n";
 import { deviceQuality, prefs, type Quality, resolveQuality, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
@@ -544,7 +544,7 @@ export class WorldController {
     for (const t of this.timers) clearInterval(t);
     this.unbindInput();
     this.offPrefs?.();
-    for (const ch of this.boardChannels) getEcho()?.leave(ch);
+    for (const ch of this.boardChannels) currentEcho()?.leave(ch);
     disconnectEcho();
     void this.room?.leave(true).catch(() => {});
     void this.media.disconnect();
@@ -1275,8 +1275,8 @@ export class WorldController {
       const { boards } = await yutopia.boards(this.spaceId);
       hud.set({ boards });
       this.applyBoards();
-      const echo = getEcho();
-      if (!echo) return;
+      const echo = await getEcho();
+      if (!echo || this.stopped) return;
       for (const ch of this.boardChannels) echo.leave(ch);
       this.boardChannels = [];
       for (const b of boards) {
