@@ -1,0 +1,289 @@
+import assert from "node:assert/strict";
+import { createServer, type Server } from "node:http";
+import { after, before, test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
+import { canPlace, ROOM_NAME, studio } from "@yutopia/shared";
+import type { MediaState } from "@yutopia/shared/media";
+import { Client, type Room } from "colyseus.js";
+
+// Media on TVs and the radio (features/media.ts, media/*): the timeline and the
+// queue, locks, lengths from players, the radio's YouTube source, the media
+// key, and the Jellyfin relay against a fake Jellyfin — one session per TV
+// however many watch, and its key never in anything a browser gets.
+
+process.env.YUTOPIA_OFFLINE = "1";
+process.env.YUTOPIA_WORLD_SECRET = "test";
+process.env.YUTOPIA_INTERNAL_SECRET = "test";
+const KEY = "jf-secret-key-123";
+const ITEM = "0123456789abcdef0123456789abcdef";
+const PORT = 26780 + Math.floor(Math.random() * 100);
+const JF_PORT = PORT + 200;
+process.env.YUTOPIA_JELLYFIN_URL = `http://localhost:${JF_PORT}`;
+process.env.YUTOPIA_JELLYFIN_KEY = KEY;
+
+// ── a fake Jellyfin ──
+const seen: string[] = []; // what it was asked (path + query)
+let fake: Server;
+function startFake() {
+  fake = createServer((req, res) => {
+    const u = new URL(req.url ?? "/", "http://x");
+    seen.push(req.method === "DELETE" ? `DELETE ${u.pathname}` : u.pathname + u.search);
+    const auth = String(req.headers.authorization ?? "");
+    const okKey = auth.includes(`Token="${KEY}"`) || u.searchParams.get("ApiKey") === KEY;
+    if (!okKey) return res.writeHead(401).end();
+    const json = (v: unknown) => res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(v));
+    const q = `DeviceId=tv&PlaySessionId=ps1&ApiKey=${KEY}`;
+    if (u.pathname === "/Users") return json([{ Id: "u1", Name: "admin", Policy: { IsAdministrator: true } }]);
+    if (u.pathname === `/Users/u1/Items/${ITEM}`)
+      return json({
+        Id: ITEM,
+        Name: "Pilot",
+        Type: "Episode",
+        SeriesName: "Show",
+        ParentIndexNumber: 1,
+        IndexNumber: 1,
+        RunTimeTicks: 1200 * 1e7,
+      });
+    if (u.pathname === `/Items/${ITEM}/PlaybackInfo`)
+      return json({ PlaySessionId: "ps1", MediaSources: [{ TranscodingUrl: `/videos/${ITEM}/master.m3u8?${q}` }] });
+    if (u.pathname === `/videos/${ITEM}/master.m3u8`)
+      return res
+        .writeHead(200)
+        .end(
+          `#EXTM3U\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="English",URI="${ITEM}/Subtitles/0/subtitles.m3u8?SegmentLength=30&${q}"\n#EXT-X-STREAM-INF:BANDWIDTH=1,SUBTITLES="subs"\nmain.m3u8?${q}\n`,
+        );
+    if (u.pathname === `/videos/${ITEM}/main.m3u8`)
+      return res
+        .writeHead(200)
+        .end(
+          `#EXTM3U\n#EXT-X-TARGETDURATION:3\n${[0, 1, 2, 3].map((i) => `#EXTINF:3,\nhls1/main/${i}.ts?${q}&runtimeTicks=${i * 3e7}`).join("\n")}\n#EXT-X-ENDLIST\n`,
+        );
+    const seg = u.pathname.match(/hls1\/main\/(\d+)\.ts$/);
+    if (seg) return res.writeHead(200, { "Content-Type": "video/mp2t" }).end(Buffer.alloc(1000, Number(seg[1])));
+    if (u.pathname === "/Videos/ActiveEncodings") return res.writeHead(204).end();
+    if (u.pathname.startsWith(`/Items/${ITEM}/Images/`))
+      return res.writeHead(200, { "Content-Type": "image/jpeg" }).end("jpg");
+    res.writeHead(404).end();
+  });
+  return new Promise<void>((r) => fake.listen(JF_PORT, r));
+}
+
+let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
+const rooms: Room[] = [];
+before(async () => {
+  await startFake();
+  const { startWorldServer } = await import("./server.ts");
+  server = await startWorldServer(PORT);
+});
+after(async () => {
+  const bounded = <T>(p: Promise<T>) => Promise.race([p, sleep(1000)]);
+  await Promise.all(rooms.map((r) => bounded(r.leave(true).catch(() => {}))));
+  await bounded(server.gracefullyShutdown(false));
+  fake.close();
+  setTimeout(() => process.exit(process.exitCode ?? 0), 50).unref();
+});
+
+interface Person {
+  room: Room;
+  msgs: Record<string, unknown[]>;
+}
+async function person(id: number, spaceId: number, roles = "member"): Promise<Person> {
+  const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    spaceId,
+    token: `dev:${id}:P${id}:${roles}`,
+  });
+  rooms.push(room);
+  const p: Person = { room, msgs: {} };
+  for (const t of ["toast", "media:key"])
+    room.onMessage(t, (m) => {
+      if (!p.msgs[t]) p.msgs[t] = [];
+      p.msgs[t].push(m);
+    });
+  await waitFor(() => !!room.state?.players?.get(room.sessionId));
+  return p;
+}
+async function waitFor(fn: () => boolean, ms = 4000) {
+  const t = Date.now();
+  while (!fn()) {
+    if (Date.now() - t > ms) throw new Error("timeout");
+    await sleep(20);
+  }
+}
+const mediaOf = (p: Person, id: string): MediaState | null => {
+  const o = p.room.state.objects.get(id);
+  return o ? (JSON.parse(o.props || "{}").media ?? null) : null;
+};
+// a TV on the floor somewhere free
+async function placeTv(b: Person, id: string, kind = "tv_console") {
+  const objects = [...b.room.state.objects.values()].map(
+    (o: { id: string; kind: string; x: number; y: number; rot: number; props: string }) => ({
+      ...o,
+      props: JSON.parse(o.props || "{}"),
+    }),
+  );
+  for (let y = 4; y < studio.height - 2; y++)
+    for (let x = 4; x < studio.width - 3; x++)
+      if (canPlace(studio, objects, { id, kind, x, y, rot: 0 }, [])) {
+        b.room.send("obj:put", { id, kind, x, y, rot: 0 });
+        await waitFor(() => !!b.room.state.objects.get(id));
+        return;
+      }
+  throw new Error("no room for a TV");
+}
+const yt = (ref: string, dur = 0) => ({ src: "yt" as const, ref, title: ref, dur });
+
+test("media: a TV's timeline — play, everyone sees it, pause / seek / queue / repeat, lock", async () => {
+  const space = 501;
+  const ana = await person(1, space, "member,builder");
+  const bia = await person(2, space);
+  await placeTv(ana, "tv-a");
+  ana.room.send("media:play", { id: "tv-a", items: [yt("aaaaaaaaaaa", 2), yt("bbbbbbbbbbb", 100)], mode: "now" });
+  await waitFor(() => mediaOf(bia, "tv-a")?.item?.ref === "aaaaaaaaaaa");
+  let m = mediaOf(bia, "tv-a") as MediaState;
+  assert.equal(m.by, "P1");
+  assert.deepEqual(
+    m.queue.map((x) => x.ref),
+    ["bbbbbbbbbbb"],
+  );
+  assert.ok(Math.abs(Date.now() - m.at) < 1500, "starts now");
+  // the 2 s video ends by itself: the next one starts where it ended, the
+  // first goes to the back (repeat is on by default)
+  await waitFor(() => mediaOf(bia, "tv-a")?.item?.ref === "bbbbbbbbbbb", 5000);
+  m = mediaOf(bia, "tv-a") as MediaState;
+  assert.deepEqual(
+    m.queue.map((x) => x.ref),
+    ["aaaaaaaaaaa"],
+  );
+  // Bia pauses, seeks, resumes — anyone may
+  bia.room.send("media:ctl", { id: "tv-a", op: "pause" });
+  await waitFor(() => mediaOf(ana, "tv-a")?.paused === true);
+  bia.room.send("media:ctl", { id: "tv-a", op: "seek", pos: 42 });
+  await waitFor(() => mediaOf(ana, "tv-a")?.pos === 42);
+  bia.room.send("media:ctl", { id: "tv-a", op: "resume" });
+  await waitFor(() => mediaOf(ana, "tv-a")?.paused === false);
+  m = mediaOf(ana, "tv-a") as MediaState;
+  assert.ok(Math.abs((Date.now() - m.at) / 1000 - 42) < 1.5, "resumes at 42 s");
+  // queue: add at the end, move, remove
+  bia.room.send("media:play", { id: "tv-a", items: [yt("ccccccccccc", 10)], mode: "end" });
+  await waitFor(() => mediaOf(ana, "tv-a")?.queue.length === 2);
+  bia.room.send("media:ctl", { id: "tv-a", op: "move", index: 1, to: 0 });
+  await waitFor(() => mediaOf(ana, "tv-a")?.queue[0].ref === "ccccccccccc");
+  bia.room.send("media:ctl", { id: "tv-a", op: "remove", index: 1 });
+  await waitFor(() => mediaOf(ana, "tv-a")?.queue.length === 1);
+  // only builders lock; then only builders change it
+  bia.room.send("media:ctl", { id: "tv-a", op: "lock", on: true });
+  await sleep(200);
+  assert.equal(mediaOf(ana, "tv-a")?.lock, false);
+  ana.room.send("media:ctl", { id: "tv-a", op: "lock", on: true });
+  await waitFor(() => mediaOf(bia, "tv-a")?.lock === true);
+  bia.room.send("media:ctl", { id: "tv-a", op: "skip" });
+  await waitFor(() => (bia.msgs.toast ?? []).some((t) => String((t as { text: string }).text).includes("locked")));
+  assert.equal(mediaOf(ana, "tv-a")?.item?.ref, "bbbbbbbbbbb");
+  // stop clears it
+  ana.room.send("media:ctl", { id: "tv-a", op: "stop" });
+  await waitFor(() => !mediaOf(bia, "tv-a")?.item);
+});
+
+test("media: lengths from players, bad items refused", async () => {
+  const space = 502;
+  const ana = await person(1, space, "member,builder");
+  await placeTv(ana, "tv-b", "tv_wall");
+  ana.room.send("media:play", { id: "tv-b", items: [{ src: "yt", ref: "nope" }], mode: "now" });
+  await waitFor(() => (ana.msgs.toast ?? []).length > 0);
+  ana.room.send("media:play", { id: "tv-b", items: [yt("ddddddddddd")], mode: "now" });
+  await waitFor(() => mediaOf(ana, "tv-b")?.item?.ref === "ddddddddddd");
+  assert.equal(mediaOf(ana, "tv-b")?.item?.dur, 0);
+  ana.room.send("media:dur", { id: "tv-b", ref: "ddddddddddd", dur: 212.34 });
+  await waitFor(() => mediaOf(ana, "tv-b")?.item?.dur === 212.3);
+  // a second report doesn't change it
+  ana.room.send("media:dur", { id: "tv-b", ref: "ddddddddddd", dur: 5 });
+  await sleep(200);
+  assert.equal(mediaOf(ana, "tv-b")?.item?.dur, 212.3);
+});
+
+test("media: the radio's YouTube source, and back to lo-fi", async () => {
+  const space = 503;
+  const ana = await person(1, space);
+  const bia = await person(2, space);
+  ana.room.send("media:play", { id: "radio", items: [yt("eeeeeeeeeee", 200)], mode: "now" });
+  await waitFor(() => bia.room.state.radio.source === "yt" && bia.room.state.radio.playing === true);
+  const m = JSON.parse(bia.room.state.radio.media) as MediaState;
+  assert.equal(m.item?.ref, "eeeeeeeeeee");
+  // Jellyfin isn't for the radio
+  ana.room.send("media:play", { id: "radio", items: [{ src: "jf", ref: ITEM, title: "x", dur: 0 }], mode: "end" });
+  await sleep(300);
+  assert.equal((JSON.parse(bia.room.state.radio.media) as MediaState).queue.length, 0);
+  bia.room.send("radio:set", { playing: true, station: 1 });
+  await waitFor(() => ana.room.state.radio.source === "lofi" && ana.room.state.radio.station === 1);
+  assert.equal(ana.room.state.radio.media, "", "YouTube's queue goes when lo-fi takes over");
+  ana.room.send("media:ctl", { id: "radio", op: "stop" });
+  await waitFor(() => ana.room.state.radio.playing === false);
+});
+
+test("media: the media key, and Jellyfin through the relay — one session for everyone, no key out", async () => {
+  const space = 504;
+  const ana = await person(1, space, "member,builder");
+  const bia = await person(2, space);
+  await waitFor(() => (ana.msgs["media:key"] ?? []).length > 0);
+  const { key, jf } = ana.msgs["media:key"][0] as { key: string; jf: boolean };
+  const { key: biaKey } = bia.msgs["media:key"][0] as { key: string };
+  assert.equal(jf, true);
+  const base = `http://localhost:${PORT}/media/jf`;
+  // browsing and a bad key
+  assert.equal((await fetch(`${base}/api/nope/browse`)).status, 401);
+  const lib = await fetch(`${base}/img/${key}/${ITEM}?w=200`);
+  assert.equal(lib.status, 200);
+  // nothing on the TV: no stream
+  await placeTv(ana, "tv-j");
+  assert.equal((await fetch(`${base}/s/${key}/tv-j/${ITEM}/master.m3u8`)).status, 410);
+  // an episode on it: title and length come from Jellyfin
+  ana.room.send("media:play", { id: "tv-j", items: [{ src: "jf", ref: ITEM, title: "?", dur: 0 }], mode: "now" });
+  await waitFor(() => mediaOf(bia, "tv-j")?.item?.src === "jf");
+  const it = mediaOf(bia, "tv-j")?.item;
+  assert.equal(it?.title, "Pilot");
+  assert.equal(it?.sub, "Show · S1E1");
+  assert.equal(it?.dur, 1200);
+  // two people watch: the same playlists and segments, Jellyfin asked once
+  const get = async (k: string, rest: string) => {
+    const r = await fetch(`${base}/s/${k}/tv-j/${ITEM}/${rest}`);
+    assert.equal(r.status, 200, rest);
+    assert.equal(r.headers.get("access-control-allow-origin"), "*");
+    return Buffer.from(await r.arrayBuffer());
+  };
+  const before = seen.length;
+  const masters = await Promise.all([get(key, "master.m3u8"), get(biaKey, "master.m3u8")]);
+  for (const m of masters) assert.ok(!m.toString().includes(KEY), "no key in the master playlist");
+  // the subtitles' URI keeps its closing quote once the key is out
+  assert.match(masters[0].toString(), /URI="[^"]*subtitles\.m3u8\?SegmentLength=30&DeviceId=tv&PlaySessionId=ps1"/);
+  const variant = masters[0]
+    .toString()
+    .split("\n")
+    .find((l) => l && !l.startsWith("#")) as string;
+  assert.ok(!variant.includes("ApiKey"));
+  const pls = await Promise.all([get(key, variant), get(biaKey, variant)]);
+  const segs = pls[0]
+    .toString()
+    .split("\n")
+    .filter((l) => l && !l.startsWith("#"));
+  assert.equal(segs.length, 4);
+  for (const s of segs) assert.ok(!s.includes(KEY) && !s.includes("ApiKey"), "no key in segment lines");
+  const [s0a, s0b] = await Promise.all([get(key, segs[0]), get(biaKey, segs[0])]);
+  assert.equal(s0a.length, 1000);
+  assert.equal(s0a[0], 0);
+  assert.deepEqual(s0a, s0b);
+  await sleep(300); // the next two were fetched ahead
+  const asked = seen.slice(before);
+  assert.equal(asked.filter((p) => p.includes("/PlaybackInfo")).length, 1, "one Jellyfin session");
+  assert.equal(asked.filter((p) => p.includes("/hls1/main/0.ts")).length, 1, "segment 0 fetched once");
+  assert.ok(
+    asked.some((p) => p.includes("/hls1/main/1.ts")) && asked.some((p) => p.includes("/hls1/main/2.ts")),
+    "read ahead",
+  );
+  const s1 = await get(biaKey, segs[1]);
+  assert.equal(s1[0], 1);
+  assert.equal(seen.filter((p) => p.includes("/hls1/main/1.ts")).length, 1, "served from the cache");
+  // the TV goes off: the session is closed and the stream is gone
+  ana.room.send("media:ctl", { id: "tv-j", op: "stop" });
+  await waitFor(() => seen.some((p) => p === "DELETE /Videos/ActiveEncodings"));
+  assert.equal((await fetch(`${base}/s/${key}/tv-j/${ITEM}/master.m3u8`)).status, 410);
+});

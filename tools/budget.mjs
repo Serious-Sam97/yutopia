@@ -25,6 +25,7 @@ const LAZY = {
   "yutopia-people": 40,
   "yutopia-slots": 20,
   "yutopia-games": 60,
+  "yutopia-media": 30, // TVs and the radio's media; hls.js is its own chunk, fetched for Jellyfin only
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {

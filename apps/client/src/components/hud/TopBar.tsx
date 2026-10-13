@@ -83,10 +83,12 @@ function NowOn() {
             <i />
           </span>
           <span className="mono text-[11px] leading-tight whitespace-nowrap" style={{ color: "var(--cream-dim)" }}>
-            <span className="block" style={{ color: "var(--cream)" }}>
-              {STATIONS[radio.station % STATIONS.length]?.name ?? t("radio")}
+            <span className="block max-w-[220px] truncate" style={{ color: "var(--cream)" }}>
+              {radio.source === "yt"
+                ? radio.title || "YouTube"
+                : (STATIONS[radio.station % STATIONS.length]?.name ?? t("radio"))}
             </span>
-            {room ? t("radioIn").replace("{room}", room) : t("radio")}
+            {room ? t("radioIn").replace("{room}", room) : radio.source === "yt" ? "YouTube" : t("radio")}
           </span>
         </>
       )}

@@ -530,6 +530,19 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           { x: 0.3, y: 0.16, w: 1.4, d: 0.62, z: 13, h: 34, color: C.teak },
         ],
       };
+    // more screens (art/items/screens.ts): wall pieces sit on the wall's face
+    case "tv_wall":
+      return { boxes: [{ x: 0.16, y: 0.02, w: 0.7, d: 0.3, z: 50, h: 28, color: C.graphite }] };
+    case "tv_hd":
+      return { boxes: [{ x: 0.12, y: -0.03, w: 2.76, d: 0.1, z: 25, h: 56, color: C.graphite }] };
+    case "projector_screen":
+      return { boxes: [{ x: 0.12, y: 0.03, w: 2.76, d: 0.02, z: 21, h: 60, color: 0xe9e5da }] };
+    case "projector":
+      return { boxes: [{ x: 0.3, y: 0.34, w: 0.42, d: 0.32, z: 0, h: 7, color: C.graphite }] };
+    case "tv_console":
+      return { boxes: [{ x: 0.06, y: 0.14, w: 1.88, d: 0.72, z: 0, h: 46, color: C.walnut }] };
+    case "tv_portable":
+      return { boxes: [{ x: 0.24, y: 0.36, w: 0.52, d: 0.32, z: 0, h: 15, color: C.graphite }] };
     case "console_2600":
     case "console_nes":
     case "console_snes":

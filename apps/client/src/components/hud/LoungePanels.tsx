@@ -1,24 +1,47 @@
 "use client";
 
-import { useTr } from "@/lib/i18n";
+import { useState } from "react";
+import { useLang, useTr } from "@/lib/i18n";
 import { STATIONS } from "@/world/sound";
 import { useHud } from "@/world/store";
 import { useWorld } from "./ctx";
+import { MediaRemote } from "./MediaPanel";
 import { Panel } from "./Panel";
 
 export function RadioPanel() {
   const t = useTr();
-  const w = useWorld();
   const r = useHud((s) => s.radio);
-  const st = STATIONS[r.station % STATIONS.length];
+  const pt = useLang() === "pt";
+  const [tab, setTab] = useState<"lofi" | "yt">(r.source);
   return (
     <Panel title={t("radio")}>
+      <div className="flex gap-2 mb-3">
+        {(["lofi", "yt"] as const).map((k) => (
+          <button key={k} type="button" className="chip" aria-pressed={tab === k} onClick={() => setTab(k)}>
+            {k === "lofi" ? (pt ? "Lo-fi (estações)" : "Lo-fi stations") : "YouTube"}
+            {r.playing && r.source === k ? " ●" : ""}
+          </button>
+        ))}
+      </div>
+      {tab === "yt" ? <MediaRemote id="radio" /> : <LofiStations />}
+    </Panel>
+  );
+}
+
+function LofiStations() {
+  const t = useTr();
+  const w = useWorld();
+  const r = useHud((s) => s.radio);
+  const lofi = r.playing && r.source === "lofi";
+  const st = STATIONS[r.station % STATIONS.length];
+  return (
+    <>
       <div className="vfd-window p-4 text-center">
-        <p className="lcd text-3xl">{r.playing ? st.name : "— OFF AIR —"}</p>
+        <p className="lcd text-3xl">{lofi ? st.name : "— OFF AIR —"}</p>
         <p className="mono text-xs mt-1" style={{ color: "var(--cream-dim)" }}>
-          {r.playing ? `${st.bpm} BPM · ${r.by}` : t("radioStation")}
+          {lofi ? `${st.bpm} BPM · ${r.by}` : t("radioStation")}
         </p>
-        {r.playing && (
+        {lofi && (
           <div className="flex justify-center gap-1 mt-3" aria-hidden>
             {Array.from({ length: 12 }, (_, i) => (
               <span
@@ -37,7 +60,7 @@ export function RadioPanel() {
             key={s.name}
             type="button"
             className="deck-btn"
-            aria-pressed={r.playing && r.station === i}
+            aria-pressed={lofi && r.station === i}
             style={{ height: 52, fontSize: 10 }}
             onClick={() => w?.send("radio:set", { playing: true, station: i })}
           >
@@ -51,14 +74,14 @@ export function RadioPanel() {
         className="deck-btn danger w-full mt-3"
         aria-pressed={false}
         onClick={() => w?.send("radio:set", { playing: false })}
-        disabled={!r.playing}
+        disabled={!lofi}
       >
         ■ {t("radioStop")}
       </button>
       <p className="text-xs mt-3" style={{ color: "var(--muted)" }}>
         Everyone in the lounge hears the same station, in sync. Volume: ⚙ → {t("music")}.
       </p>
-    </Panel>
+    </>
   );
 }
 

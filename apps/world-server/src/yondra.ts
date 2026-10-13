@@ -43,6 +43,7 @@ export interface SpaceInfo {
   seeded: boolean;
   objects: WorldObjectDef[];
   layout?: unknown;
+  radio?: unknown; // what the radio was playing (features/media.ts)
 }
 
 export interface PresenceEntry {
@@ -69,6 +70,8 @@ export const yondra = {
   desk: (id: number, userId: number, desks: string[], assign = true) =>
     call<{ desk: string | null }>("POST", `/spaces/${id}/desk`, { user_id: userId, desks, assign }),
   putLayout: (id: number, layout: Layout) => call("PUT", `/spaces/${id}/layout`, layout),
+  // the radio's state (station or YouTube queue), so it keeps playing across restarts
+  putRadio: (id: number, radio: Record<string, unknown>) => call("PUT", `/spaces/${id}/radio`, radio),
   presence: (id: number, people: PresenceEntry[]) => call("POST", `/spaces/${id}/presence`, { people }),
   vortexLine: (id: number, context: { event: string; user_id: number | null }) =>
     call<{ line: string | null; mood?: string; personal: boolean }>("POST", `/spaces/${id}/vortex`, context),

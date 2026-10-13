@@ -54,6 +54,7 @@ import { type AvatarState, WorldEngine } from "./engine";
 import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
 import { Media } from "./media";
+import type { MediaRoom } from "./media/room";
 import type { SlotTracks } from "./slots";
 import { radio, sound } from "./sound";
 import { type ActTarget, hud, type Person, toast } from "./store";
@@ -371,7 +372,14 @@ export class WorldController {
     const mirror = () => {
       const st = room.state;
       hud.set({
-        radio: { playing: st.radio.playing, station: st.radio.station, startedAt: st.radio.startedAt, by: st.radio.by },
+        radio: {
+          playing: st.radio.playing,
+          station: st.radio.station,
+          startedAt: st.radio.startedAt,
+          by: st.radio.by,
+          source: st.radio.source === "yt" ? "yt" : "lofi",
+          title: st.radio.source === "yt" && st.radio.media ? radioTitle(st.radio.media) : "",
+        },
         standup: {
           active: st.standup.active,
           order: [...st.standup.order],
@@ -388,7 +396,10 @@ export class WorldController {
         },
       });
     };
-    $(room.state).radio.onChange(mirror);
+    $(room.state).radio.onChange(() => {
+      mirror();
+      this.screensChanged();
+    });
     $(room.state).standup.onChange(mirror);
     $(room.state).standup.order.onAdd(mirror);
     $(room.state).standup.order.onRemove(mirror);
@@ -479,6 +490,9 @@ export class WorldController {
     });
     room.onMessage("arcade:scores", () => {});
     room.onMessage("game:tv", (m: ServerMessages["game:tv"]) => this.games?.onTvToken(m));
+    room.onMessage("media:key", (m: ServerMessages["media:key"]) => {
+      this.mediaKey = m;
+    });
     room.onMessage("game:pad", (m: ServerMessages["game:pad"]) => this.games?.onPad(m));
     room.onMessage("game:audience", (m: ServerMessages["game:audience"]) => this.games?.onAudience(m));
     room.onMessage("kicked", (m: ServerMessages["kicked"]) =>
@@ -540,6 +554,7 @@ export class WorldController {
     this.build?.dispose();
     this.slots?.dispose();
     this.games?.dispose();
+    this.screens?.dispose();
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
     this.unbindInput();
@@ -610,6 +625,30 @@ export class WorldController {
     });
   }
 
+  // ── media on TVs and the radio: its own chunk (world/media), loaded once
+  // something plays, a projector is here, or a remote opens ──
+  screens: MediaRoom | null = null;
+  private screensLoading: Promise<void> | null = null;
+  mediaKey: ServerMessages["media:key"] | null = null;
+  get worldHttp(): string {
+    return (this.session?.worldUrl ?? "").replace(/^ws(s?):/, "http$1:").replace(/\/$/, "");
+  }
+  private screensChanged() {
+    if (this.screens) return this.screens.refresh();
+    const on =
+      this.room?.state.radio.source === "yt" ||
+      !!this.engine?.allObjects().some((o) => o.kind === "projector" || !!o.props?.media);
+    if (on) void this.ensureScreens();
+  }
+  ensureScreens(): Promise<void> {
+    this.screensLoading ??= import("./media/room").then((m) => {
+      if (this.stopped || !this.engine || !this.room) return;
+      this.screens = new m.MediaRoom(this);
+      this.screens.refresh();
+    });
+    return this.screensLoading;
+  }
+
   // ── slot-car tracks: their own chunk (world/slots.ts), loaded once a track is here ──
   slots: SlotTracks | null = null;
   private slotsLoading: Promise<void> | null = null;
@@ -656,6 +695,7 @@ export class WorldController {
       this.build?.checkPending();
       this.slotsChanged();
       this.gamesChanged();
+      this.screensChanged();
       hud.set((h) => ({ objectsVersion: h.objectsVersion + 1 }));
     }
     this.moveLocal(dt);
@@ -670,6 +710,7 @@ export class WorldController {
     engine.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
     this.isolated("slots", () => this.slots?.frame(dt, this.me));
     this.isolated("games", () => this.games?.frame(dt, this.me));
+    this.isolated("media", () => this.screens?.frame(dt, this.me));
     this.syncBusy();
     const localSid = room.sessionId;
     const lp = room.state.players.get(localSid);
@@ -734,7 +775,8 @@ export class WorldController {
     const area = areaAt(this.map, this.me.x, this.me.y);
     sound.setArea(area?.key ?? "", area?.kind ?? "open");
     const r = hud.get().radio;
-    if (!r.playing) return radio.stop();
+    // YouTube on the radio plays in the media chunk's card instead
+    if (!r.playing || r.source === "yt") return radio.stop();
     radio.play(r.station, r.startedAt);
     let level = 0;
     let pan = 0;
@@ -1679,4 +1721,14 @@ function interpolate(buf: { t: number; x: number; y: number }[], at: number): Po
     }
   }
   return buf[buf.length - 1];
+}
+
+// what the radio's YouTube is playing (its media state, JSON), for the HUD
+function radioTitle(media: string): string {
+  try {
+    const t = JSON.parse(media)?.item?.title;
+    return typeof t === "string" ? t : "";
+  } catch {
+    return "";
+  }
 }

@@ -23,7 +23,13 @@ const TOP_SIZE: Record<string, [number, number]> = {
   book: [2, 1],
   photo: [1, 1],
 };
-const KIND_SIZE: Record<string, [number, number]> = { radio: [3, 2], coffee_machine: [3, 2], turntable: [3, 3] };
+const KIND_SIZE: Record<string, [number, number]> = {
+  radio: [3, 2],
+  coffee_machine: [3, 2],
+  turntable: [3, 3],
+  tv_portable: [2, 2],
+  projector: [2, 2],
+};
 
 export function topSize(o: { kind: string; rot?: number; props?: Record<string, unknown> }): [number, number] {
   const s = KIND_SIZE[o.kind] ?? TOP_SIZE[String(o.props?.d)] ?? [1, 1];

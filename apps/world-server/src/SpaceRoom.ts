@@ -76,6 +76,7 @@ export class SpaceRoom extends Room<SpaceState> {
   grid!: Grid;
   spaceId = 0;
   livekitRoom = "";
+  savedRadio: unknown = null; // the radio as Yondra kept it (features/media.ts picks it up)
   private features: Feature[] = [];
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   private removedUntil = new Map<number, number>();
@@ -157,6 +158,7 @@ export class SpaceRoom extends Room<SpaceState> {
     this.rebuildGrid();
     if (this.migrated && config.saveMigrations) this.saveMigration();
 
+    this.savedRadio = info?.radio ?? null;
     this.registerMessages();
     this.features = installFeatures(this);
 

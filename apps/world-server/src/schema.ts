@@ -60,6 +60,9 @@ export class Radio extends Schema {
   @type("uint8") station = 0;
   @type("float64") startedAt = 0;
   @type("string") by = "";
+  // what it plays: the lo-fi stations, or YouTube (media: shared MediaState as JSON)
+  @type("string") source = "lofi";
+  @type("string") media = "";
 }
 
 export class Standup extends Schema {

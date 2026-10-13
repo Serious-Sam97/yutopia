@@ -1245,10 +1245,14 @@ export class WorldEngine {
       const wrap = new Container();
       wrap.setFromMatrix(new Matrix(TILE_W / 2 / S, TILE_H / 2 / S, 0, 1, origin.x, origin.y - zTop));
       const content = build();
-      const mask = new Graphics().rect(u0, -2, u1 - u0, ph + 4).fill(0xffffff);
+      // neighbouring slices overlap by a hair (no hairline gap between them)
+      const mask = new Graphics().rect(u0 - 0.5, -2, u1 - u0 + 1, ph + 4).fill(0xffffff);
       wrap.addChild(content, mask);
       content.mask = mask;
-      wrap.zIndex = o.x + (k + 0.5) / 4 + o.y + 0.02;
+      // just over the item's next slice too: its art's edge pixels (dark glass,
+      // a bezel) bleed a pixel into this one and drew a dark line at every
+      // quarter tile across the picture
+      wrap.zIndex = o.x + (k + 0.5) / 4 + o.y + 0.27;
       this.sortLayer.addChild(wrap);
       v.displays.push(wrap);
     }
@@ -2587,6 +2591,38 @@ export class WorldEngine {
   // Things drawn live by a lazy module (the slot cars): sorted with the room.
   mountLive(c: Container) {
     this.sortLayer.addChild(c);
+  }
+  // the draw order of a thing's front-most piece (a live picture goes just over it)
+  frontKey(id: string): number | null {
+    const v = this.objectViews.get(id);
+    if (!v?.parts.length) return null;
+    return Math.max(...v.parts.map((p) => p.root.zIndex));
+  }
+  // live content on a wall item's face, sliced like the wall (mountWall); the
+  // caller destroys what comes back
+  mountWallLive(
+    o: WorldObjectDef,
+    ox: number,
+    oy: number,
+    zTop: number,
+    pw: number,
+    ph: number,
+    build: () => Container,
+  ) {
+    const holder = { def: o, displays: [] as Container[] };
+    this.mountWall(holder, ox, oy, zTop, pw, ph, build);
+    return holder.displays;
+  }
+  // how faded a thing is right now (a wall you're behind, cut away; 0 while a
+  // builder carries it): live pictures on it go with it
+  partAlpha(id: string): number {
+    const r = this.objectViews.get(id)?.parts[0]?.root;
+    if (!r) return 1;
+    return r.visible ? r.alpha : 0; // hidden: in a builder's hand
+  }
+  // a big screen showing someone's screen share right now
+  showsShare(id: string): boolean {
+    return this.screenVideo.has(id);
   }
   // the light where a live thing is (its tint)
   liveTint(x: number, y: number): number {

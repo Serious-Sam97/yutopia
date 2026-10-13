@@ -56,6 +56,7 @@ export type PanelKind =
   | "console"
   | "tv"
   | "games"
+  | "media"
   | "settings"
   | "avatar"
   | null;
@@ -160,7 +161,7 @@ export interface HudState {
   screens: Record<string, HTMLVideoElement>; // uid → screen share video
   boards: BoardSummary[];
   status: Record<number, MemberStatus["doing"]>;
-  radio: { playing: boolean; station: number; startedAt: number; by: string };
+  radio: { playing: boolean; station: number; startedAt: number; by: string; source: "lofi" | "yt"; title: string };
   standup: { active: boolean; order: number[]; turn: number; turnStartedAt: number; turnSeconds: number };
   poker: { open: boolean; cardId: number; boardId: number; title: string; by: string };
   slot: SlotView | null;
@@ -235,7 +236,7 @@ const initial: HudState = {
   screens: {},
   boards: [],
   status: {},
-  radio: { playing: false, station: 0, startedAt: 0, by: "" },
+  radio: { playing: false, station: 0, startedAt: 0, by: "", source: "lofi", title: "" },
   standup: { active: false, order: [], turn: 0, turnStartedAt: 0, turnSeconds: 90 },
   poker: { open: false, cardId: 0, boardId: 0, title: "", by: "" },
   slot: null,

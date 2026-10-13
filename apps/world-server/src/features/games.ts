@@ -11,6 +11,7 @@ import {
   TV_INPUTS,
 } from "@yutopia/shared/games";
 import { builtinGame } from "@yutopia/shared/library";
+import { MEDIA_INPUT } from "@yutopia/shared/media";
 import { AccessToken } from "livekit-server-sdk";
 import { config } from "../config.ts";
 import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
@@ -90,9 +91,13 @@ registerFeature((room: SpaceRoom) => {
       await save({ ...tv, props: { ...(tv.props ?? {}), input: o.id } });
   });
 
-  // a TV shows one of the consoles plugged into it
+  // a TV shows one of the consoles plugged into it, or its TV input (media)
   room.on("game:input", async (client, m) => {
     const tv = obj(String(m?.tv ?? ""));
+    if (tv?.kind === "crt_tv" && m.console === MEDIA_INPUT) {
+      if (away(client.sessionId, tv) > PAD_REACH + 4) return;
+      return save({ ...tv, props: { ...(tv.props ?? {}), input: MEDIA_INPUT } });
+    }
     const o = obj(String(m?.console ?? ""));
     if (!tv || tv.kind !== "crt_tv" || !o || o.props?.tv !== tv.id) return;
     if (away(client.sessionId, tv) > PAD_REACH) return;

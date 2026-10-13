@@ -2,6 +2,7 @@
 
 import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
+import type { MediaItem } from "./media.ts";
 
 export const ROOM_NAME = "space";
 export const TICK_HZ = 20;
@@ -127,6 +128,19 @@ export interface ClientMessages {
   "lamp:set": { id: string; on: boolean }; // anyone standing near it (floor lamps, desk lamps)
   "lights:room": { id: string; on: boolean }; // a light switch: every lamp in its room
   "radio:set": { playing: boolean; station?: number };
+  // media on a TV (its object id) or the radio ("radio"), shared/media.ts:
+  // play now / next / at the end of the queue (several: a playlist), the
+  // controls, and a length a player found out (YouTube items arrive without one)
+  "media:play": { id: string; items: MediaItem[]; mode: "now" | "next" | "end" };
+  "media:ctl": {
+    id: string;
+    op: "pause" | "resume" | "seek" | "skip" | "stop" | "loop" | "lock" | "remove" | "move" | "clear";
+    pos?: number; // seek (s)
+    on?: boolean; // loop / lock
+    index?: number; // remove / move (in the queue)
+    to?: number; // move
+  };
+  "media:dur": { id: string; ref: string; dur: number };
   "standup:start": Record<string, never>;
   "standup:next": Record<string, never>;
   "standup:stop": Record<string, never>;
@@ -165,6 +179,9 @@ export interface ServerMessages {
   "game:audience": { id: string; video: string[]; audio: string[] };
   // someone played a note (where they are, so it sounds from there)
   "piano:note": { sid: string; x: number; y: number; n: number };
+  // on joining: the key for the world-server's media routes (Jellyfin browsing,
+  // streams, pictures; YouTube search) and what's set up
+  "media:key": { key: string; jf: boolean; ytSearch: boolean };
 }
 
 // Things you can be busy with (shown on the body: hands on the controls…).

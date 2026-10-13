@@ -323,6 +323,7 @@ const D = {
   catSurfaces: ["Desks & tables", "Mesas"],
   catTech: ["Tech & music", "Tecnologia e música"],
   catGames: ["Game room", "Sala de jogos"],
+  catScreens: ["Screens & TVs", "Telas e TVs"],
   catWalls: ["On the walls", "Nas paredes"],
   catDecor: ["Decor", "Decoração"],
   catTops: ["On desks & tables", "Sobre as mesas"],

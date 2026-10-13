@@ -62,6 +62,13 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     ],
   },
   {
+    // YouTube / Jellyfin on them for everyone nearby (docs/plan/10-media.md)
+    key: "screens",
+    label: "catScreens",
+    icon: "tv",
+    items: ["tv_wall", "tv_hd", "projector_screen", "projector", "tv_console", "tv_portable"].map(it),
+  },
+  {
     key: "games",
     label: "catGames",
     icon: "gamepad",

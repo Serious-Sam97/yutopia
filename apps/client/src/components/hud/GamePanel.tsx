@@ -7,6 +7,7 @@ import { type Cartridge, library, removeGame, saveInfo, upload } from "@/world/g
 import { bit, KEY_HINTS } from "@/world/games/input";
 import { hud, toast, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
+import { MediaRemote } from "./MediaPanel";
 
 // The game room's panel (docs/plan/09-game-room.md), for a console, a TV or the
 // cartridge shelf. Not a modal: the camera leans in over the TV and this sits
@@ -125,7 +126,14 @@ export function GamePanel({ objectId }: { objectId: string }) {
         <Shelf t={t} games={games} spaceId={spaceId} onChange={reload} onClose={close} closeLabel={tr("close")} />
       ) : (
         <>
-          <Screen consoleId={showing} on={!!v?.on} running={!!v?.host} t={t} />
+          {kind === "tv" && v?.input === "media" ? (
+            // the TV input: YouTube / Jellyfin (docs/plan/10-media.md)
+            <div className="cabinet rise p-3">
+              <MediaRemote id={objectId} />
+            </div>
+          ) : (
+            <Screen consoleId={showing} on={!!v?.on} running={!!v?.host} t={t} />
+          )}
           {kind === "console" && v?.on && v.myPort ? <TouchPad system={v.system as GameSystem} /> : null}
           <div className="cabinet rise px-3 py-2.5 flex flex-col gap-2">
             {kind === "tv" ? (
@@ -615,7 +623,17 @@ function TvControls({
           {i.on ? " ●" : ""}
         </button>
       ))}
-      {!v.on ? (
+      <button
+        type="button"
+        className="deck-btn"
+        style={{ height: 28, fontSize: 11 }}
+        aria-pressed={v.input === "media"}
+        disabled={!v.near}
+        onClick={() => w?.send("game:input", { tv: v.id, console: "media" })}
+      >
+        TV · YouTube{w?.mediaKey?.jf ? " / Jellyfin" : ""}
+      </button>
+      {v.input === "media" ? null : !v.on ? (
         <span className="text-xs" style={{ color: "var(--muted)" }}>
           {t("tvOff")}
         </span>

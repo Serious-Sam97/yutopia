@@ -22,6 +22,7 @@ export type Interaction =
   | "tv"
   | "console"
   | "games"
+  | "media"
   | "switch";
 
 export interface CatalogEntry {
@@ -168,6 +169,31 @@ export const CATALOG = {
   // into it with a cable (props.tv), a cartridge in them (props.cart), the
   // shelf of cartridges (the library)
   crt_tv: { label: "CRT TV", w: 2, h: 1, solid: true, interact: "tv", buildable: true, variants: 2 },
+  // more screens (shared/media.ts): YouTube or Jellyfin on them, for everyone
+  // nearby (props.media); the projector lights the screen it faces
+  tv_wall: { label: "Wall TV", w: 1, h: 1, solid: false, wall: true, interact: "media", buildable: true, variants: 2 },
+  tv_hd: { label: "Big HD TV", w: 3, h: 1, solid: false, wall: true, interact: "media", buildable: true },
+  projector_screen: {
+    label: "Projector screen",
+    w: 3,
+    h: 1,
+    solid: false,
+    wall: true,
+    interact: "media",
+    buildable: true,
+  },
+  projector: { label: "Projector", w: 1, h: 1, solid: false, onSurface: true, buildable: true },
+  tv_console: { label: "Console TV", w: 2, h: 1, solid: true, interact: "media", buildable: true, variants: 2 },
+  tv_portable: {
+    label: "Portable TV",
+    w: 1,
+    h: 1,
+    solid: false,
+    onSurface: true,
+    interact: "media",
+    buildable: true,
+    variants: 2,
+  },
   console_2600: { label: "Woodgrain console", w: 1, h: 1, solid: false, interact: "console", buildable: true },
   console_nes: { label: "8-bit console", w: 1, h: 1, solid: false, interact: "console", buildable: true, variants: 2 },
   console_snes: { label: "16-bit console", w: 1, h: 1, solid: false, interact: "console", buildable: true },
