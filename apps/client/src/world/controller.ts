@@ -454,7 +454,9 @@ export class WorldController {
       hud.set((s) => ({ build: { ...s.build, history: m } })),
     );
     room.onMessage("build:saved", (m: ServerMessages["build:saved"]) =>
-      hud.set((s) => ({ build: { ...s.build, save: { state: m.ok ? "saved" : "failed", at: m.at } } })),
+      hud.set((s) => ({
+        build: { ...s.build, save: { state: m.ok ? "saved" : m.rejected ? "rejected" : "failed", at: m.at } },
+      })),
     );
     room.onMessage("vortex:say", (m: ServerMessages["vortex:say"]) => {
       engine.say("npc:vortex", m.text, 7000);

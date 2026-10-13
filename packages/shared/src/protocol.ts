@@ -154,7 +154,8 @@ export interface ServerMessages {
   kicked: { reason: string };
   // builders: what Undo/Redo would do, and whether the last change reached Yondra
   "build:history": { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
-  "build:saved": { ok: boolean; at: number };
+  // rejected: Yondra answered and refused the map (vs. couldn't be reached)
+  "build:saved": { ok: boolean; at: number; rejected?: boolean };
   // a message's reactions: emote → the user ids who reacted (to whoever received it)
   "chat:react": { id: string; reactions: Partial<Record<Emote, number[]>> };
   // to whoever streams a console: its TV's LiveKit token; another player's

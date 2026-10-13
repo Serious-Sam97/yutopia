@@ -177,12 +177,14 @@ function SaveState() {
       ? [t("buildSaving"), "var(--vfd)"]
       : save.state === "failed"
         ? [t("buildSaveFailed"), "#e79a7c"]
-        : save.state === "saved"
-          ? [
-              `${t("buildSaved")} · ${mins < 1 ? t("buildJustNow") : t("buildMinAgo").replace("{n}", String(mins))}`,
-              "#8aa04a",
-            ]
-          : [t("buildAutoSave"), "var(--muted)"];
+        : save.state === "rejected"
+          ? [t("buildSaveRejected"), "#e79a7c"]
+          : save.state === "saved"
+            ? [
+                `${t("buildSaved")} · ${mins < 1 ? t("buildJustNow") : t("buildMinAgo").replace("{n}", String(mins))}`,
+                "#8aa04a",
+              ]
+            : [t("buildAutoSave"), "var(--muted)"];
   return (
     <span
       className="hidden xl:flex items-center gap-1.5 mono text-xs mx-1.5 whitespace-nowrap"

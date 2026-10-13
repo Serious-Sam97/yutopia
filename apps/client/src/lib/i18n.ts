@@ -428,7 +428,14 @@ const D = {
   buildDone: ["Done", "Pronto"],
   buildSaving: ["Saving…", "Salvando…"],
   buildSaved: ["Saved to Yondra", "Salvo no Yondra"],
-  buildSaveFailed: ["Couldn't save — check the connection", "Não salvou — verifique a conexão"],
+  buildSaveFailed: [
+    "Couldn't save — Yondra is down or unreachable",
+    "Não salvou — o Yondra está fora do ar ou inacessível",
+  ],
+  buildSaveRejected: [
+    "Yondra refused this map — not saved, it'll be lost on restart",
+    "O Yondra recusou este mapa — não salvou, vai se perder ao reiniciar",
+  ],
   buildAutoSave: ["Changes save to Yondra", "Mudanças salvam no Yondra"],
   buildJustNow: ["just now", "agora mesmo"],
   buildMinAgo: ["{n} min ago", "há {n} min"],

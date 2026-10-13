@@ -3,6 +3,16 @@ import type { Layout, WorldObjectDef } from "@yutopia/shared";
 import { config } from "./config.ts";
 import { metrics } from "./metrics.ts";
 
+// A non-2xx answer from Yondra; `status` tells a refusal (4xx) from an outage.
+export class YondraError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 // Signed calls to Yondra's /api/internal/yutopia/* (see YutopiaInternalController).
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const raw = body === undefined ? "" : JSON.stringify(body);
@@ -20,7 +30,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) metrics.inc("yondra_errors_total");
-  if (!res.ok) throw new Error(`Yondra ${method} ${path} → ${res.status} ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok)
+    throw new YondraError(`Yondra ${method} ${path} → ${res.status} ${(await res.text()).slice(0, 200)}`, res.status);
   return (await res.json()) as T;
 }
 

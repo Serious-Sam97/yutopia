@@ -50,7 +50,7 @@ import { type Feature, installFeatures } from "./features/index.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
 import { metrics } from "./metrics.ts";
 import { Player, SpaceState, WorldObject } from "./schema.ts";
-import { type PresenceEntry, yondra } from "./yondra.ts";
+import { type PresenceEntry, YondraError, yondra } from "./yondra.ts";
 
 interface ClientData {
   claims: WorldClaims;
@@ -287,6 +287,11 @@ export class SpaceRoom extends Room<SpaceState> {
 
   async onDispose() {
     if (this.presenceTimer) clearTimeout(this.presenceTimer);
+    // an edit still waiting on its debounce (e.g. a deploy right after a resize)
+    if (this.layoutTimer) {
+      clearTimeout(this.layoutTimer);
+      await this.saveLayout();
+    }
     if (!config.offline) await yondra.presence(this.spaceId, []).catch(() => {});
     for (const f of this.features) f.dispose?.();
   }
@@ -677,15 +682,19 @@ export class SpaceRoom extends Room<SpaceState> {
     // the first edit of a converted map saves the whole conversion with it
     if (this.migrated) this.saveMigration();
     if (this.layoutTimer) clearTimeout(this.layoutTimer);
-    this.layoutTimer = setTimeout(() => {
-      yondra
-        .putLayout(this.spaceId, layoutFromMap(this.map))
-        .then(() => this.toBuilders("build:saved", { ok: true, at: Date.now() }))
-        .catch((e) => {
-          console.warn("[layout] save failed", e.message);
-          this.toBuilders("build:saved", { ok: false, at: Date.now() });
-        });
-    }, 1200);
+    this.layoutTimer = setTimeout(() => void this.saveLayout(), 1200);
+  }
+
+  private saveLayout() {
+    this.layoutTimer = null;
+    return yondra
+      .putLayout(this.spaceId, layoutFromMap(this.map))
+      .then(() => this.toBuilders("build:saved", { ok: true, at: Date.now() }))
+      .catch((e) => {
+        console.warn(`[layout] space ${this.spaceId}: save failed`, e.message);
+        const rejected = e instanceof YondraError && e.status >= 400 && e.status < 500;
+        this.toBuilders("build:saved", { ok: false, at: Date.now(), rejected });
+      });
   }
 
   toBuilders<K extends keyof ServerMessages>(type: K, msg: ServerMessages[K]) {

@@ -188,7 +188,7 @@ export interface HudState {
     pickSpawn: boolean;
     history: { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
     // the last change: still on its way (saving) or what Yondra said
-    save: { state: "idle" | "saving" | "saved" | "failed"; at: number };
+    save: { state: "idle" | "saving" | "saved" | "failed" | "rejected"; at: number };
     setups: Setup[] | null; // my saved setups (null until loaded)
   };
   mapVersion: number;
