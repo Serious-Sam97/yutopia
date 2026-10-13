@@ -237,10 +237,11 @@ export class WorldController {
     this.lastFrame = performance.now();
     const loop = (t: number) => {
       if (this.stopped) return;
+      // asked first: a frame that throws mustn't end the loop
+      this.raf = requestAnimationFrame(loop);
       const dt = Math.min(0.1, (t - this.lastFrame) / 1000);
       this.lastFrame = t;
       this.frame(dt, t);
-      this.raf = requestAnimationFrame(loop);
     };
     this.raf = requestAnimationFrame(loop);
     // rAF stops in hidden tabs: keep walking, hearing and voice panning alive
@@ -624,6 +625,19 @@ export class WorldController {
   }
 
   // ── per frame ────────────────────────────────────────────────────────────
+  // A feature's frame (games, slot cars) that throws: logged once, and the
+  // world carries on without it instead of freezing.
+  private failed = new Set<string>();
+  private isolated(name: string, fn: () => void) {
+    try {
+      fn();
+    } catch (e) {
+      if (this.failed.has(name)) return;
+      this.failed.add(name);
+      console.error(`[${name}] frame failed`, e);
+    }
+  }
+
   private frame(dt: number, now: number) {
     const engine = this.engine;
     const room = this.room;
@@ -654,8 +668,8 @@ export class WorldController {
     const here = areaAt(this.map, this.me.x, this.me.y);
     const open = !isPrivate(here) && here?.kind !== "stage";
     engine.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
-    this.slots?.frame(dt, this.me);
-    this.games?.frame(dt, this.me);
+    this.isolated("slots", () => this.slots?.frame(dt, this.me));
+    this.isolated("games", () => this.games?.frame(dt, this.me));
     this.syncBusy();
     const localSid = room.sessionId;
     const lp = room.state.players.get(localSid);
