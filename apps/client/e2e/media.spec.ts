@@ -325,6 +325,76 @@ test("media: YouTube on a radio — its own queue, the card plays near it, a sta
   }
 });
 
+test("media: one saved playlist after another on a radio", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const ta = await token(ANA);
+  const ana = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await stubYouTube(ana);
+  await enter(ana, ta, await spaceId(ta, "Yutopia Lab"));
+  const radioId = `e2e-radio2-${Date.now().toString(36)}`;
+  const { map, objects } = await liveMap(ana);
+  let box: WorldObjectDef | null = null;
+  for (const d of objects.filter((o) => o.kind === "desk"))
+    for (let qy = d.y * Q; qy < (d.y + 2) * Q && !box; qy++)
+      for (let qx = d.x * Q; qx < (d.x + 2) * Q && !box; qx++) {
+        const r = topAt({ id: radioId, kind: "radio", x: 0, y: 0, rot: 0 }, qx, qy);
+        if (canPlace(map, objects, r, [])) box = r;
+      }
+  expect(box, "a desk with room for a radio").toBeTruthy();
+  await ana.evaluate((o) => (window as any).__yutopia.send("obj:put", o), box);
+  await ana.waitForFunction((i) => !!(window as any).__yutopia.room.state.objects.get(i), radioId);
+  const LIST2 = "PLx0sYbCqOb8TBPRdmBHs5Iftvv9TPboYG";
+  const A = ["dQw4w9WgXcQ", "M7lc1UVf-VE"];
+  const B = ["9bZkp7q19f0", "kJQP7kiw5Fk"];
+  const now = () =>
+    ana.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.media?.item?.ref, radioId);
+  const saved = (l: string) =>
+    ana.evaluate((x) => JSON.parse((window as any).__yutopia.room.state.playlists).find((p: any) => p.list === x), l);
+  try {
+    // two playlists played here: both on the quick list, B playing
+    for (const [l, refs] of [
+      [LIST, A],
+      [LIST2, B],
+    ] as const) {
+      await ana.evaluate(
+        ([i, list, r]) =>
+          (window as any).__yutopia.send("media:play", {
+            id: i,
+            items: r.map((ref: string) => ({ src: "yt", ref, title: "YouTube", dur: 0 })),
+            mode: "now",
+            list,
+          }),
+        [radioId, l, refs] as const,
+      );
+      await expect.poll(() => saved(l), { timeout: 15_000 }).toBeTruthy();
+      await expect.poll(now, { timeout: 15_000 }).toBe(refs[0]);
+    }
+    await ana.evaluate(
+      (l) => (window as any).__yutopia.send("playlist:edit", { list: l, title: "Second list" }),
+      LIST2,
+    );
+    await expect.poll(async () => (await saved(LIST2))?.title).toBe("Second list");
+
+    // the YouTube tab: A again, now
+    await ana.evaluate((i) => (window as any).__hud.set({ panel: { kind: "radio", objectId: i } }), radioId);
+    await ana
+      .getByRole("button", { name: new RegExp(`^(Play now|Tocar agora): ${LIST_TITLE}`) })
+      .first()
+      .click();
+    await expect.poll(now, { timeout: 15_000 }).toBe(A[0]);
+    // and B from the lo-fi tab's chips
+    await ana.getByRole("button", { name: /^Lo-fi/ }).click();
+    await ana.getByRole("button", { name: /Second list/ }).click();
+    await expect.poll(now, { timeout: 15_000 }).toBe(B[0]);
+  } finally {
+    await ana.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
+    for (const l of [LIST, LIST2])
+      await ana.evaluate((x) => (window as any).__yutopia.send("playlist:forget", { list: x }), l);
+    await ana.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), radioId);
+    await ana.waitForTimeout(800);
+  }
+});
+
 test("media: Jellyfin on a console TV — the stream on the glass, in step (live server)", async ({ browser }) => {
   test.skip(!process.env.YUTOPIA_JF_LIVE, "set YUTOPIA_JF_LIVE=1 to play from the real Jellyfin");
   test.setTimeout(240_000);
