@@ -69,6 +69,11 @@ export const yondra = {
   // the desk that's yours (among `desks`); `assign`: give you a free one if you have none
   desk: (id: number, userId: number, desks: string[], assign = true) =>
     call<{ desk: string | null }>("POST", `/spaces/${id}/desk`, { user_id: userId, desks, assign }),
+  // where this person arrives here when they picked a spot of their own (null: the space's)
+  spawn: (id: number, userId: number) =>
+    call<{ spawn: { x: number; y: number } | null }>("GET", `/spaces/${id}/spawn/${userId}`),
+  putSpawn: (id: number, userId: number, spawn: { x: number; y: number } | null) =>
+    call("PUT", `/spaces/${id}/spawn/${userId}`, { spawn }),
   putLayout: (id: number, layout: Layout) => call("PUT", `/spaces/${id}/layout`, layout),
   putPlaylists: (id: number, playlists: unknown[]) => call("PUT", `/spaces/${id}/playlists`, { playlists }),
   presence: (id: number, people: PresenceEntry[]) => call("POST", `/spaces/${id}/presence`, { people }),

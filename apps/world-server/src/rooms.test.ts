@@ -56,6 +56,7 @@ async function person(id: number, spaceId: number, roles = "member"): Promise<Pe
     "game:tv",
     "game:pad",
     "game:audience",
+    "spawn:mine",
   ])
     room.onMessage(t, (m) => {
       if (!p.msgs[t]) p.msgs[t] = [];
@@ -958,6 +959,55 @@ test("the arrival point: builders move it to open floor, and that's where people
   const late = await person(45, s);
   const p = late.room.state.players.get(late.room.sessionId);
   assert.ok(Math.hypot(p.x - (to.x + 0.5), p.y - (to.y + 0.5)) < 1.01, `arrived at ${p.x},${p.y}`);
+});
+
+test("your own arrival point: pick a spot you can walk to, arrive there, go back to it, reset it", async () => {
+  const s = ++space;
+  const ana = await person(54, s);
+  const bia = await person(55, s); // keeps the room alive while Ana comes back
+  const sp = { x: ana.room.state.spawnX, y: ana.room.state.spawnY };
+  const mine = () => (ana.msgs["spawn:mine"] ?? []).at(-1) as { at: { x: number; y: number } | null } | undefined;
+  await waitFor(() => mine() !== undefined && mine()?.at === null);
+  // an open tile a few steps away, reachable from the arrival point, not in a booth
+  const g = liveGrid(ana);
+  const { map } = liveWorld(ana);
+  let to: { x: number; y: number } | null = null;
+  for (let r = 3; r < 9 && !to; r++)
+    for (const [dx, dy] of [
+      [r, 0],
+      [0, r],
+      [-r, 0],
+      [0, -r],
+    ]) {
+      const x = Math.floor(sp.x) + dx;
+      const y = Math.floor(sp.y) + dy;
+      if (!to && g.ok(x, y) && g.fits(x + 0.5, y + 0.5) && areaAt(map, x + 0.5, y + 0.5)?.kind !== "booth")
+        if (findPath(g, sp, { x: x + 0.5, y: y + 0.5 })?.length) to = { x, y };
+    }
+  assert.ok(to, "an open tile nearby");
+  // off the map: refused, nothing changes
+  ana.room.send("spawn:mine", { at: { x: -4, y: -4 } });
+  await waitFor(() => (ana.msgs.toast ?? []).some((m) => /off the map/i.test((m as { text: string }).text)));
+  assert.equal(mine()?.at, null);
+  await sleep(550);
+  ana.room.send("spawn:mine", { at: to });
+  await waitFor(() => mine()?.at?.x === to.x + 0.5 && mine()?.at?.y === to.y + 0.5);
+  // coming back in: Ana arrives at hers, Bia still at the space's
+  await ana.room.leave(true);
+  const again = await person(54, s);
+  const p = me(again);
+  assert.ok(Math.hypot(p.x - (to.x + 0.5), p.y - (to.y + 0.5)) < 0.01, `arrived at ${p.x},${p.y}`);
+  await waitFor(() => (again.msgs["spawn:mine"] ?? []).some((m) => (m as { at: unknown }).at !== null));
+  assert.ok(Math.hypot(me(bia).x - sp.x, me(bia).y - sp.y) < 1.5, "Bia at the space's arrival point");
+  // "go to the arrival point" takes her to her own; reset → the space's again
+  again.room.send("teleport", { to: { userId: 55 } });
+  await waitFor(() => Math.hypot(me(again).x - (to.x + 0.5), me(again).y - (to.y + 0.5)) > 0.5);
+  again.room.send("teleport", { to: "spawn" });
+  await waitFor(() => Math.hypot(me(again).x - (to.x + 0.5), me(again).y - (to.y + 0.5)) < 0.01);
+  again.room.send("spawn:mine", { at: null });
+  await waitFor(() => ((again.msgs["spawn:mine"] ?? []).at(-1) as { at: unknown }).at === null);
+  again.room.send("teleport", { to: "spawn" });
+  await waitFor(() => Math.hypot(me(again).x - sp.x, me(again).y - sp.y) < 1.5);
 });
 
 test("game room: plug a console into a TV, a cartridge, power, pad 2 relayed, the TV's audience, carry on", async () => {

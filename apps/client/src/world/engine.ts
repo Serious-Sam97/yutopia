@@ -677,6 +677,35 @@ export class WorldEngine {
     g.circle(c.x, c.y - 32, 3).fill(0xf7f0de);
   }
 
+  // My own arrival point (anyone, outside build mode): an olive pin on its
+  // tile while I pick one — the tile under the pointer too — and for a moment
+  // after it's set.
+  private mineG = new Graphics();
+  showMine(at: { x: number; y: number } | null, pick: { x: number; y: number; ok: boolean } | null = null) {
+    if (!this.mineG.parent) this.world.addChild(this.mineG);
+    const g = this.mineG;
+    g.clear();
+    const tile = (x: number, y: number) =>
+      [toScreen(x, y), toScreen(x + 1, y), toScreen(x + 1, y + 1), toScreen(x, y + 1)].flatMap((p) => [p.x, p.y]);
+    if (pick)
+      g.poly(tile(pick.x, pick.y))
+        .fill({ color: pick.ok ? C.olive : C.rust, alpha: 0.35 })
+        .stroke({ width: 2, color: pick.ok ? C.vfd : C.rust });
+    if (!at) return;
+    const tx = Math.floor(at.x);
+    const ty = Math.floor(at.y);
+    g.poly(tile(tx, ty)).fill({ color: C.olive, alpha: 0.25 }).stroke({ width: 2, color: C.cream });
+    const c = toScreen(tx + 0.5, ty + 0.5);
+    g.ellipse(c.x, c.y, 9, 4.5).fill({ color: 0x2a1a12, alpha: 0.3 });
+    g.moveTo(c.x, c.y)
+      .lineTo(c.x, c.y - 26)
+      .stroke({ width: 2.5, color: 0x2a1a12 });
+    g.circle(c.x, c.y - 32, 8)
+      .fill(C.olive)
+      .stroke({ width: 2, color: 0x2a1a12 });
+    g.circle(c.x, c.y - 32, 3).fill(C.cream);
+  }
+
   setRectGhost(r: { x: number; y: number; w: number; h: number; ok: boolean } | null) {
     this.rectGhost = r;
     if (!this.rectG.parent) this.world.addChild(this.rectG);

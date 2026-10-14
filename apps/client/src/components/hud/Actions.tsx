@@ -6,6 +6,7 @@ import { type ActTarget, useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
 import { Face } from "./Face";
+import { Icon } from "./icons";
 
 const R = 92; // the ring's radius (px)
 const BOX = { w: 440, h: 270 }; // what the ring takes up around the click
@@ -74,6 +75,10 @@ export function ActionMenu() {
             const r = n <= 2 ? R * 0.9 : R + (n > 5 ? 10 : 0);
             const ix = Math.cos(a) * r * 1.25;
             const iy = Math.sin(a) * r;
+            // grow away from the middle (long labels on both sides never meet);
+            // straight above or below: centred
+            const c = Math.cos(a);
+            const tx = Math.abs(c) < 0.3 ? "-50%" : c > 0 ? "-24px" : "calc(-100% + 24px)";
             return (
               <button
                 key={it.act}
@@ -81,8 +86,8 @@ export function ActionMenu() {
                 role="menuitem"
                 disabled={!it.ok}
                 onClick={() => w?.pickAction(it.act)}
-                className="pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 cabinet rounded-full pl-1.5 pr-3.5 h-9 flex items-center gap-2 text-[13px] whitespace-nowrap pop-in act-item disabled:opacity-45"
-                style={{ left: ix, top: iy, animationDelay: `${i * 25}ms` }}
+                className="pointer-events-auto absolute cabinet rounded-full pl-1.5 pr-3.5 h-9 flex items-center gap-2 text-[13px] whitespace-nowrap pop-in act-item disabled:opacity-45"
+                style={{ left: ix, top: iy, translate: `${tx} -50%`, animationDelay: `${i * 25}ms` }}
               >
                 <kbd className="keycap" style={{ height: 20, minWidth: 20, fontSize: 11, opacity: 1 }}>
                   {i + 1}
@@ -197,6 +202,39 @@ export function FocusChip() {
         onClick={() => w?.send("focus", { on: false })}
       >
         {t("act_unfocus")}
+      </button>
+    </div>
+  );
+}
+
+// Choosing where I arrive: what to do, and ways out.
+export function ArrivalChip() {
+  const t = useTr();
+  const w = useWorld();
+  const on = useHud((s) => s.pickArrival);
+  const mine = useHud((s) => s.mySpawn);
+  if (!on) return null;
+  return (
+    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[184px] cabinet rounded-full pl-3 pr-1.5 py-1 flex items-center gap-2.5 rise">
+      <Icon name="pin" size={15} />
+      <span className="text-sm">{t("arrivalPick")}</span>
+      {mine && (
+        <button
+          type="button"
+          className="ghost-btn whitespace-nowrap"
+          style={{ height: 28, fontSize: 12 }}
+          onClick={() => w?.setArrival(null)}
+        >
+          {t("arrivalUsual")}
+        </button>
+      )}
+      <button
+        type="button"
+        className="deck-btn"
+        style={{ height: 28, fontSize: 12 }}
+        onClick={() => w?.pickArrival(false)}
+      >
+        {t("actCancel")}
       </button>
     </div>
   );

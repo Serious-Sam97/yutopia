@@ -8,7 +8,7 @@ import { mixer } from "@/world/audio";
 import { WorldController } from "@/world/controller";
 import { radio, sound } from "@/world/sound";
 import { hud, useHud } from "@/world/store";
-import { ActionMenu, ActionQueueBar, FocusChip } from "./Actions";
+import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
 import { ConnectionOverlay, HeldChip, Knocks, Minimap, Prompt, Toasts, VideoBubbles } from "./Overlays";
@@ -73,6 +73,7 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
           {!building && <Prompt />}
           {!building && <HeldChip />}
           {!building && <FocusChip />}
+          {!building && <ArrivalChip />}
           {!building && <ActionQueueBar />}
           {!building && <ScreenTray />}
           {building && <BuildMode />}

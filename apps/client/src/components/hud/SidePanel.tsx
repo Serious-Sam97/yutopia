@@ -443,6 +443,10 @@ function PeopleTab() {
           <Icon name="desk" size={15} />
           {t("myDesk")}
         </button>
+        <button type="button" className="ghost-btn flex items-center gap-1.5" onClick={() => w?.pickArrival(true)}>
+          <Icon name="pin" size={15} />
+          {t("myArrival")}
+        </button>
       </div>
       <ul className="flex-1 min-h-0 overflow-y-auto scroll-thin p-2 space-y-0.5">
         {me && row(me, true)}

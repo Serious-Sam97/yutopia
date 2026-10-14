@@ -80,6 +80,8 @@ export class SpaceRoom extends Room<SpaceState> {
   private features: Feature[] = [];
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   private removedUntil = new Map<number, number>();
+  // the arrival points people picked for themselves (user id → tile centre)
+  readonly mySpawns = new Map<number, { x: number; y: number }>();
   private lastPresence = "";
   // recent chat messages: who received each one and its reactions
   private chatLog = new Map<string, { audience: Set<string>; reactions: Map<string, Set<number>> }>();
@@ -241,19 +243,25 @@ export class SpaceRoom extends Room<SpaceState> {
     p.builder = claims.roles.includes("builder");
     p.bot = claims.roles.includes("bot");
 
-    // Everyone arrives at the arrival point (builders set it: build mode → Map).
+    // Everyone arrives at the arrival point (builders set it: build mode → Map),
+    // or at the spot they picked for themselves (features/arrival.ts).
     // Your desk is still yours — "My desk" takes you there — but entering
     // doesn't hand one out: a builder assigns it, or you kept it from before.
-    const at: { x: number; y: number } = this.map.spawn;
     if (!p.bot && !config.offline) {
       const seats = [...this.state.objects.values()].filter((o) => entry(o.kind).seat && safeJson(o.props).desk);
       const owned = seats.find((o) => safeJson(o.props).ownerId === claims.userId);
       const free = seats.filter((o) => safeJson(o.props).ownerId == null).map((o) => o.id);
-      const desk = owned
-        ? { desk: owned.id }
-        : await yondra.desk(this.spaceId, claims.userId, free, false).catch(() => ({ desk: null }));
+      const [desk, mine] = await Promise.all([
+        owned
+          ? { desk: owned.id }
+          : yondra.desk(this.spaceId, claims.userId, free, false).catch(() => ({ desk: null })),
+        yondra.spawn(this.spaceId, claims.userId).catch(() => ({ spawn: undefined })),
+      ]);
       if (desk.desk && this.state.objects.get(desk.desk)) p.desk = desk.desk;
+      if (mine.spawn) this.mySpawns.set(claims.userId, mine.spawn);
+      else if (mine.spawn === null) this.mySpawns.delete(claims.userId);
     }
+    const at = p.bot ? this.map.spawn : this.arrivalFor(claims.userId);
     const open = this.grid.fits(at.x, at.y) ? at : (this.grid.nearestOpen(at.x, at.y) ?? this.map.spawn);
     p.x = open.x;
     p.y = open.y;
@@ -435,7 +443,7 @@ export class SpaceRoom extends Room<SpaceState> {
       const p = this.state.players.get(client.sessionId);
       if (!p) return;
       let target: { x: number; y: number } | null = null;
-      if (m.to === "spawn") target = this.map.spawn;
+      if (m.to === "spawn") target = this.arrivalFor(p.uid);
       else if (m.to === "desk") {
         const seat = p.desk ? this.state.objects.get(p.desk) : undefined;
         target = seat ? { x: seat.x + 0.5, y: seat.y + 0.5 } : null;
@@ -520,6 +528,28 @@ export class SpaceRoom extends Room<SpaceState> {
   }
 
   // ── booths ────────────────────────────────────────────────────────────────
+  // Where this person arrives: their own spot while they can still get there
+  // from the space's arrival point (doors, rooms and furniture change), else the space's.
+  arrivalFor(uid: number): { x: number; y: number } {
+    const mine = this.mySpawns.get(uid);
+    return mine && !this.arrivalProblem(uid, mine, this.map.spawn) ? mine : this.map.spawn;
+  }
+
+  // Why someone can't arrive at `at` (a tile centre), walking from `from`; null: they can.
+  arrivalProblem(uid: number, at: { x: number; y: number }, from: { x: number; y: number }): string | null {
+    const g = this.gridFor(uid);
+    if (!g.inBounds(Math.floor(at.x), Math.floor(at.y))) return "That's off the map.";
+    if (!g.ok(Math.floor(at.x), Math.floor(at.y)) || !g.fits(at.x, at.y)) return "Pick an open floor tile.";
+    const area = areaAt(this.map, at.x, at.y);
+    if (area?.kind === "booth") return "Not in a booth — those are for calls.";
+    if (area && this.state.locks.has(area.key)) return "That room is locked right now.";
+    const start = g.fits(from.x, from.y) ? from : g.nearestOpen(from.x, from.y);
+    if (!start) return "Can't get there from here.";
+    if (Math.hypot(start.x - at.x, start.y - at.y) < 0.5 || findPath(g, start, at, g.width * g.height)?.length)
+      return null;
+    return "Can't get there — the door is locked.";
+  }
+
   mayEnter(p: Player, areaKey: string): boolean {
     const area = this.map.areas.find((a) => a.key === areaKey);
     // booths, and rooms an owner locked: knock to get in

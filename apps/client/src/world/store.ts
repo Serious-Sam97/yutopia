@@ -144,6 +144,8 @@ export interface HudState {
   menu: ActionMenu | null;
   queue: QueuedAct[];
   focus: boolean; // heads down at my desk
+  mySpawn: { x: number; y: number } | null; // where I arrive here (null: the space's arrival point)
+  pickArrival: boolean; // choosing it on the map: the next floor click sets it
   panel: { kind: PanelKind; objectId?: string };
   knocks: { from: string; fromName: string; area: string; at: number }[];
   toasts: { id: number; text: string; tone: "info" | "warn" | "vortex" }[];
@@ -228,6 +230,8 @@ const initial: HudState = {
   menu: null,
   queue: [],
   focus: false,
+  mySpawn: null,
+  pickArrival: false,
   panel: { kind: null },
   knocks: [],
   toasts: [],

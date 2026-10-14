@@ -66,6 +66,8 @@ export interface ClientMessages {
   admit: { userId: number; area: string };
   follow: { userId: number | null };
   teleport: { to: "desk" | "spawn" | { userId: number } | { x: number; y: number } };
+  // where I arrive in this space (a tile I can walk to); null: the space's arrival point
+  "spawn:mine": { at: { x: number; y: number } | null };
   "obj:put": {
     id?: string;
     kind: string;
@@ -160,6 +162,8 @@ export interface ClientMessages {
 // server → client
 export interface ServerMessages {
   snap: { x: number; y: number };
+  // my own arrival point here (on join and after I change it); null: the space's
+  "spawn:mine": { at: { x: number; y: number } | null };
   // whom I may listen to (session ids) and who may listen to me (user ids)
   hear: { ids: string[]; heardBy: string[] };
   chat: { id: string; from: string; fromName: string; text: string; scope: ChatScope; at: number };

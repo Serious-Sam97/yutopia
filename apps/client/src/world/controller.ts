@@ -215,6 +215,7 @@ export class WorldController {
     engine.events = {
       onTileClick: (x, y) => {
         if (hud.get().build.on) return this.buildClick(x, y);
+        if (hud.get().pickArrival) return this.setArrival({ x, y });
         // a click on the floor: go there (dropping whatever was queued)
         if (hud.get().menu) return hud.set({ menu: null });
         this.actions.clear();
@@ -238,7 +239,7 @@ export class WorldController {
         if (!this.openMenu({ type: "object", id }, at)) this.activateObject(id, true);
       },
       onHoverObject: () => {},
-      onPointerWorld: (x, y) => this.buildHover(x, y),
+      onPointerWorld: (x, y) => (hud.get().pickArrival ? this.hoverArrival(x, y) : this.buildHover(x, y)),
       onPointerDown: (x, y) => this.buildDown(x, y),
       onPointerUp: (x, y) => this.buildUp(x, y),
       onWheel: (dy) => this.build?.wheel(dy) ?? false,
@@ -475,6 +476,13 @@ export class WorldController {
       if (area) this.walkTo({ x: area.x + area.w / 2, y: area.y + area.h / 2 });
     });
     room.onMessage("toast", (m: ServerMessages["toast"]) => toast(m.text, m.tone ?? "info"));
+    room.onMessage("spawn:mine", (m: ServerMessages["spawn:mine"]) => {
+      const was = hud.get().mySpawn;
+      hud.set({ mySpawn: m.at });
+      if (hud.get().pickArrival) return this.engine?.showMine(m.at);
+      // just set: show where for a moment
+      if (m.at && (m.at.x !== was?.x || m.at.y !== was?.y) && this.arrivalAsked) this.flashArrival();
+    });
     // someone's playing the piano: from where they are (fades over ~10 tiles)
     room.onMessage("piano:note", (m: ServerMessages["piano:note"]) => {
       const d = Math.hypot(m.x - this.me.x, m.y - this.me.y);
@@ -575,6 +583,8 @@ export class WorldController {
     this.screens?.dispose();
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
+    if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
+    if (hud.get().pickArrival) hud.set({ pickArrival: false });
     this.unbindInput();
     this.closeTp();
     this.offPrefs?.();
@@ -1085,6 +1095,8 @@ export class WorldController {
       const items = [{ act: "look", ok: true }];
       if (me.held) items.push({ act: "putDown", ok: true });
       if (me.focus) items.push({ act: "unfocus", ok: true });
+      items.push({ act: "arriveHere", ok: true });
+      if (hud.get().mySpawn) items.push({ act: "arriveUsual", ok: true });
       return { title: me.name, items };
     }
     if (target.type === "person") {
@@ -1164,6 +1176,8 @@ export class WorldController {
       return;
     }
     if (act === "look") return hud.set({ panel: { kind: "avatar" } });
+    if (act === "arriveHere") return this.setArrival({ x: this.me.x, y: this.me.y });
+    if (act === "arriveUsual") return this.setArrival(null);
     this.actions.add(act, m.target, m.title);
   }
 
@@ -1279,6 +1293,40 @@ export class WorldController {
   teleport(to: ClientMessages["teleport"]["to"]) {
     this.path = null;
     this.send("teleport", { to });
+  }
+
+  // ── my own arrival point (features/arrival.ts on the server) ─────────────
+  private arrivalAsked = false; // I changed it this session (so the pin flashes)
+  private arrivalFlash: ReturnType<typeof setTimeout> | null = null;
+
+  // choose it on the map: the next floor click sets it (Esc cancels)
+  pickArrival(on: boolean) {
+    hud.set({ pickArrival: on, menu: null });
+    if (on) this.actions.clear();
+    if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
+    this.engine?.showMine(on ? hud.get().mySpawn : null);
+  }
+
+  // here (a tile), or null: back to the space's arrival point
+  setArrival(at: Point | null) {
+    this.arrivalAsked = true;
+    this.send("spawn:mine", { at: at && { x: Math.floor(at.x), y: Math.floor(at.y) } });
+    if (hud.get().pickArrival) this.pickArrival(false);
+  }
+
+  private hoverArrival(x: number, y: number) {
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    const ok = this.grid.ok(tx, ty) && this.grid.fits(tx + 0.5, ty + 0.5);
+    this.engine?.showMine(hud.get().mySpawn, { x: tx, y: ty, ok });
+  }
+
+  private flashArrival() {
+    if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
+    this.engine?.showMine(hud.get().mySpawn);
+    this.arrivalFlash = setTimeout(() => {
+      if (!hud.get().pickArrival) this.engine?.showMine(null);
+    }, 2500);
   }
 
   admit(k: { from: string; area: string }) {
@@ -1831,6 +1879,10 @@ export class WorldController {
     const t = e.target as HTMLElement;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))
       return;
+    if (hud.get().pickArrival && e.key === "Escape") {
+      e.preventDefault();
+      return this.pickArrival(false);
+    }
     // the action menu: a number picks, Esc closes
     const menu = hud.get().menu;
     if (menu) {
