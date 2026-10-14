@@ -124,27 +124,10 @@ export class Surroundings {
         if (!f(x, y + 1)) quad(x, y + 1, x + 1, y + 1);
         if (!f(x - 1, y)) quad(x, y, x, y + 1);
         if (!f(x + 1, y)) quad(x + 1, y + 1, x + 1, y);
-        // the base under the floor, facing down
-        pos.push(
-          x,
-          -depth,
-          y,
-          x + 1,
-          -depth,
-          y,
-          x + 1,
-          -depth,
-          y + 1,
-          x,
-          -depth,
-          y,
-          x + 1,
-          -depth,
-          y + 1,
-          x,
-          -depth,
-          y + 1,
-        );
+        // the base under the floor, facing down (a hair above the ground the
+        // snow and city themes lay at -depth, so the two never fight)
+        const b = -depth + 0.02;
+        pos.push(x, b, y, x + 1, b, y, x + 1, b, y + 1, x, b, y, x + 1, b, y + 1, x, b, y + 1);
       }
     const g = new BufferGeometry();
     g.setAttribute("position", new Float32BufferAttribute(pos, 3));

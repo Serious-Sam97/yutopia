@@ -510,6 +510,14 @@ export class World3 {
     b.objs = [];
   }
 
+  // After a lost WebGL context comes back: three uploads every texture again
+  // from its source, and the floor's (one big, GPU-backed canvas) is the one
+  // Chrome empties in a GPU reset — so it's drawn afresh.
+  rebakeFloor() {
+    if (this.floor) this.floor = { ...this.floor, sig: "" };
+    this.bakeFloor();
+  }
+
   // ── the floor, from above, with the items' contact shadows ────────────────
   // (baked again only when something on it moves or comes or goes)
   private bakeFloor() {
@@ -554,10 +562,37 @@ export class World3 {
       this.floor = { ...this.floor, tex, sig };
       return;
     }
-    const geo = new PlaneGeometry(map.width, map.height);
-    geo.rotateX(-Math.PI / 2);
-    geo.translate(map.width / 2, 0, map.height / 2);
-    const floorMat = new MeshLambertMaterial({ map: tex, alphaTest: 0.5 });
+    // one quad per run of floor tiles (the void outside is cut by the shape,
+    // never by the texture's alpha: a lost canvas can't take the floor away)
+    const pos: number[] = [];
+    const nor: number[] = [];
+    const uv: number[] = [];
+    for (let y = 0; y < map.height; y++) {
+      let x = 0;
+      while (x < map.width) {
+        if (!isFloor(tileAt(map, x, y))) {
+          x++;
+          continue;
+        }
+        let x1 = x;
+        while (x1 < map.width && isFloor(tileAt(map, x1, y))) x1++;
+        // (plan px: u along x, v down from the top row, as the canvas is laid)
+        const u0 = x / map.width;
+        const u1 = x1 / map.width;
+        const v0 = 1 - y / map.height;
+        const v1 = 1 - (y + 1) / map.height;
+        pos.push(x, 0, y, x, 0, y + 1, x1, 0, y + 1, x, 0, y, x1, 0, y + 1, x1, 0, y);
+        uv.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
+        for (let i = 0; i < 6; i++) nor.push(0, 1, 0);
+        x = x1;
+      }
+    }
+    const geo = new BufferGeometry();
+    geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
+    geo.setAttribute("normal", new Float32BufferAttribute(nor, 3));
+    geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+    geo.computeBoundingSphere();
+    const floorMat = new MeshLambertMaterial({ map: tex });
     this.light(floorMat);
     const mesh = new Mesh(geo, floorMat);
     mesh.receiveShadow = true;

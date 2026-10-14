@@ -170,6 +170,11 @@ export class ThirdPersonView {
       this.light.patch(m),
     );
     this.scene.add(this.world.root);
+    // a GPU reset (Chrome, mid-call) empties big canvases: draw the baked ones again
+    this.renderer.domElement.addEventListener("webglcontextrestored", () => {
+      this.world.rebakeFloor();
+      this.light.setHour(this.hour);
+    });
     this.scene.add(this.hemi);
     const s = this.sun;
     s.castShadow = true;
