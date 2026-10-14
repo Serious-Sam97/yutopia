@@ -75,6 +75,7 @@ interface Remote {
 }
 
 const INTERP_MS = 110;
+const IDLE_MS = 3000; // nothing moved for this long: frames at 30/s
 const INTERACT_RANGE = 1.7;
 
 export class WorldController {
@@ -97,6 +98,11 @@ export class WorldController {
   private hear = new Set<string>();
   private raf = 0;
   private lastFrame = 0;
+  private lastTick = 0;
+  private tick = 0;
+  private rafGap = 1000 / 60; // how often the screen asks for a frame (ms, smoothed)
+  private activeAt = 0;
+  private hudFrames = new Set<() => void>();
   private stopped = false;
   private timers: ReturnType<typeof setInterval>[] = [];
   private offPrefs: (() => void) | null = null;
@@ -200,7 +206,11 @@ export class WorldController {
     const engine = new WorldEngine(this.map);
     this.engine = engine;
     this.autoTier = deviceQuality();
-    await engine.init(this.host, { quality: this.qualityNow(), reducedMotion: prefs().reducedMotion });
+    await engine.init(this.host, {
+      quality: this.qualityNow(),
+      reducedMotion: prefs().reducedMotion,
+      autoStart: false,
+    });
     if (this.stopped) return engine.destroy();
     engine.events = {
       onTileClick: (x, y) => {
@@ -246,10 +256,21 @@ export class WorldController {
     if (this.stopped) return;
     this.bindInput();
     this.lastFrame = performance.now();
+    this.lastTick = this.lastFrame;
+    this.activeAt = this.lastFrame;
     const loop = (t: number) => {
       if (this.stopped) return;
       // asked first: a frame that throws mustn't end the loop
       this.raf = requestAnimationFrame(loop);
+      // Frames are drawn every n-th screen frame so they stay evenly spaced
+      // (a 144 Hz screen capped at 60 draws every 2nd: 72/s), from the
+      // screen's own rate, smoothed.
+      const gap = t - this.lastTick;
+      this.lastTick = t;
+      if (gap > 0 && gap < 100) this.rafGap += (gap - this.rafGap) * 0.1;
+      const cap = this.fpsCap(t);
+      const every = cap ? Math.max(1, Math.round(1000 / this.rafGap / cap)) : 1;
+      if (++this.tick % every) return;
       const dt = Math.min(0.1, (t - this.lastFrame) / 1000);
       this.lastFrame = t;
       this.frame(dt, t);
@@ -790,8 +811,10 @@ export class WorldController {
       }
       tp.setLiveFrom({ engine, screens: this.screens, games: this.games });
       tp.setCars(this.slots?.cars() ?? []);
-      tp.frame(dt, bodies, localSid);
-    }
+      // (a hidden tab: nothing to draw for)
+      if (!document.hidden) tp.frame(dt, bodies, localSid);
+    } else if (!document.hidden) engine.render();
+    for (const cb of this.hudFrames) cb();
     this.updatePrompt();
     if (now - this.peopleAt > 250) {
       this.peopleAt = now;
@@ -1569,7 +1592,6 @@ export class WorldController {
       v.setMode(prefs().cam3p);
       v.setHour(this.hour);
       v.yaw = this.meAngle; // start behind me
-      engine.app.ticker.stop();
       engine.app.canvas.style.visibility = "hidden";
       engine.onPuff = (x, y, kind, lift) => v.puff(x, y, kind, lift);
       this.tp = v;
@@ -1595,7 +1617,6 @@ export class WorldController {
       e.picksOverride = null;
       e.clientOverride = null;
       e.floorOverride = null;
-      e.app.ticker.start();
       e.app.canvas.style.visibility = "";
     }
   }
@@ -1766,12 +1787,33 @@ export class WorldController {
     return prefs().quality === "auto" ? this.autoTier : resolveQuality(prefs().quality);
   }
 
+  // Frames per second, at most, right now: the setting — or 30 once nothing
+  // has moved for a while (ambient life alone doesn't need more). 0 = no cap.
+  private fpsCap(now: number): number {
+    const cap = prefs().maxFps;
+    if (!cap) return 0;
+    const e = this.engine;
+    const last = Math.max(this.activeAt, e?.activeAt ?? 0, this.tp?.activeAt ?? 0);
+    const h = hud.get();
+    const idle = now - last > IDLE_MS && !h.build.on && !h.menu && !this.path && !e?.busy();
+    return idle ? Math.min(30, cap) : cap;
+  }
+
+  // HUD pieces that follow the picture (tags, meters): run once per drawn frame
+  onFrame(cb: () => void): () => void {
+    this.hudFrames.add(cb);
+    return () => void this.hudFrames.delete(cb);
+  }
+
   private watchFrameRate() {
     const e = this.engine;
     if (!e || prefs().quality !== "auto" || Date.now() - this.startedAt < 8000 || document.hidden) return;
     // (third person: its own frame rate — the iso engine isn't drawing)
     const fps = this.tp ? this.tp.fps : e.stats().fps;
-    this.slowFor = fps > 0 && fps < 40 ? this.slowFor + 1 : 0;
+    // (under the cap, or 30 when idle: slow is well under what's asked for)
+    const cap = this.fpsCap(performance.now());
+    const floor = cap ? Math.min(40, cap * 0.7) : 40;
+    this.slowFor = fps > 0 && fps < floor ? this.slowFor + 1 : 0;
     if (this.slowFor < 6 || this.autoTier === "low") return;
     this.slowFor = 0;
     this.autoTier = this.autoTier === "high" ? "medium" : "low";
@@ -1785,6 +1827,7 @@ export class WorldController {
 
   // ── input ────────────────────────────────────────────────────────────────
   private onKeyDown = (e: KeyboardEvent) => {
+    this.activeAt = performance.now();
     const t = e.target as HTMLElement;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))
       return;

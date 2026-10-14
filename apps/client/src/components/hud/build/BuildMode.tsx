@@ -535,18 +535,15 @@ function HoverTag() {
   const carrying = useHud((s) => s.build.carrying);
   const el = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    let raf = 0;
-    const tick = () => {
-      const e = w?.engine;
+    if (!w) return;
+    return w.onFrame(() => {
+      const e = w.engine;
       const node = el.current;
-      if (e && node) {
-        const r = e.app.canvas.getBoundingClientRect();
-        node.style.transform = `translate(${Math.round(r.left + e.pointerAt.gx + 16)}px, ${Math.round(r.top + e.pointerAt.gy + 18)}px)`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+      if (!e || !node) return;
+      const r = e.app.canvas.getBoundingClientRect();
+      const t = `translate(${Math.round(r.left + e.pointerAt.gx + 16)}px, ${Math.round(r.top + e.pointerAt.gy + 18)}px)`;
+      if (node.style.transform !== t) node.style.transform = t;
+    });
   }, [w]);
   if (!hover || carrying) return null;
   return (
@@ -583,18 +580,15 @@ function ItemToolbar() {
   const el = useRef<HTMLDivElement>(null);
   const [look, setLook] = useState(false);
   useEffect(() => {
-    let raf = 0;
-    const tick = () => {
+    if (!w) return;
+    return w.onFrame(() => {
       const node = el.current;
-      const at = sel[0] ? w?.build?.anchorOf(sel[0]) : null;
-      if (node && at) {
-        const r = w?.engine?.app.canvas.getBoundingClientRect();
-        node.style.transform = `translate(${Math.round((r?.left ?? 0) + at.x)}px, ${Math.round((r?.top ?? 0) + at.y)}px) translate(-50%, -100%)`;
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+      const at = sel[0] ? w.build?.anchorOf(sel[0]) : null;
+      if (!node || !at) return;
+      const r = w.engine?.app.canvas.getBoundingClientRect();
+      const t = `translate(${Math.round((r?.left ?? 0) + at.x)}px, ${Math.round((r?.top ?? 0) + at.y)}px) translate(-50%, -100%)`;
+      if (node.style.transform !== t) node.style.transform = t;
+    });
   }, [w, sel]);
   const objs = sel.map((id) => w?.engine?.getObject(id)).filter((o): o is NonNullable<typeof o> => !!o);
   const kind = objs.every((o) => o.kind === objs[0]?.kind) ? objs[0]?.kind : null;

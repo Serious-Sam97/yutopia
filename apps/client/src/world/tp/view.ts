@@ -138,6 +138,7 @@ export class ThirdPersonView {
   private target = new Vector3();
   private targetReady = false;
   private dragged = -10; // time of the last manual turn
+  activeAt = 0; // when the pointer or keys last did something here (performance.now)
   private time = 0;
 
   // input
@@ -663,9 +664,11 @@ export class ThirdPersonView {
         this.people.delete(id);
       }
 
-    if (this.post) this.post.render(dt > 0 && !me?.reduced);
-    else this.renderer.render(this.scene, this.camera);
-    this.drawTags(bodies);
+    if (!document.hidden) {
+      if (this.post) this.post.render(dt > 0 && !me?.reduced);
+      else this.renderer.render(this.scene, this.camera);
+      this.drawTags(bodies);
+    }
     const now = performance.now();
     if (this.lastFrameAt) this.fps += (1000 / Math.max(1, now - this.lastFrameAt) - this.fps) * 0.05;
     this.lastFrameAt = now;
@@ -842,6 +845,7 @@ export class ThirdPersonView {
   }
 
   private onDown = (e: PointerEvent) => {
+    this.activeAt = performance.now();
     if (this.onTouch(e)) return;
     this.renderer.domElement.setPointerCapture(e.pointerId);
     // build mode: the left button builds (the right one turns the camera)
@@ -854,6 +858,7 @@ export class ThirdPersonView {
     this.drag = { x: e.clientX, y: e.clientY, id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now() };
   };
   private onMove = (e: PointerEvent) => {
+    this.activeAt = performance.now();
     if (this.onTouch(e)) return;
     this.pointer = { x: e.clientX, y: e.clientY };
     if (this.buildMode) {
@@ -1035,6 +1040,7 @@ export class ThirdPersonView {
     if (x >= 0 && y >= 0 && x < this.map.width && y < this.map.height) this.events.floor?.(x, y);
   }
   private onWheel = (e: WheelEvent) => {
+    this.activeAt = performance.now();
     e.preventDefault();
     if (this.buildMode && this.events.wheel?.(e.deltaY)) return; // turning what you hold
     this.dist *= e.deltaY > 0 ? 1.1 : 1 / 1.1;
@@ -1042,6 +1048,7 @@ export class ThirdPersonView {
   };
   private onKey = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    this.activeAt = performance.now();
     if (e.type === "keydown") this.keys.add(e.code);
     else this.keys.delete(e.code);
   };

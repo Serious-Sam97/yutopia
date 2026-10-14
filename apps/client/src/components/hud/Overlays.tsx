@@ -177,23 +177,21 @@ export function VideoBubbles() {
   }, [camOn, w]);
 
   useEffect(() => {
-    let raf = 0;
-    const tick = () => {
+    if (!w) return;
+    // placed after each drawn frame (so at the world's frame rate, not the screen's)
+    return w.onFrame(() => {
       const el = host.current;
-      if (el && w?.engine) {
-        for (const node of Array.from(el.children) as HTMLElement[]) {
-          const x = Number(node.dataset.x);
-          const y = Number(node.dataset.y);
-          // over their head, in whichever view is showing (iso or third person)
-          const p = w.clientAt(x, y, 116 * PERSON);
-          node.style.transform = `translate(${Math.round(p.x - 60)}px, ${Math.round(p.y - 90)}px)`;
-        }
+      if (!el || !w.engine) return;
+      for (const node of Array.from(el.children) as HTMLElement[]) {
+        const x = Number(node.dataset.x);
+        const y = Number(node.dataset.y);
+        // over their head, in whichever view is showing (iso or third person)
+        const p = w.clientAt(x, y, 116 * PERSON);
+        const t = `translate(${Math.round(p.x - 60)}px, ${Math.round(p.y - 90)}px)`;
+        if (node.style.transform !== t) node.style.transform = t;
       }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  });
+    });
+  }, [w]);
 
   const entries: { key: string; x: number; y: number; video: HTMLVideoElement; name: string; speaking: boolean }[] = [];
   for (const p of people) {

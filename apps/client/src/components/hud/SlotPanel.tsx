@@ -83,9 +83,9 @@ export function SlotPanel({ objectId }: { objectId: string }) {
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
     window.addEventListener("blur", onBlur);
-    let raf = 0;
     let last = performance.now();
-    const loop = (now: number) => {
+    const loop = () => {
+      const now = performance.now();
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       squeeze.current = keyDown.current ? Math.min(1, squeeze.current + dt * RAMP) : 0;
@@ -101,11 +101,11 @@ export function SlotPanel({ objectId }: { objectId: string }) {
           slip.current.style.opacity = live.slip > 0.72 ? String(Math.min(1, 0.4 + live.slip * 0.6)) : "0.12";
         if (clock.current) clock.current.textContent = live.clock ? live.clock.toFixed(1) : "0.0";
       }
-      raf = requestAnimationFrame(loop);
     };
-    raf = requestAnimationFrame(loop);
+    // once per drawn frame (the cars move in the world's own frame)
+    const off = w?.onFrame(loop);
     return () => {
-      cancelAnimationFrame(raf);
+      off?.();
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", onBlur);

@@ -17,10 +17,14 @@ export interface Prefs {
   // how you see the world: the iso view, or behind you in 3D (beta)
   view: "iso" | "3p";
   cam3p: "chase" | "free";
+  // frames per second, at most (0 = as many as the screen shows); 30 once nothing moves
+  maxFps: MaxFps;
 }
 
 export type Quality = "high" | "medium" | "low";
 export type QualityPref = Quality | "auto";
+export type MaxFps = 0 | 30 | 60 | 120;
+export const MAX_FPS: readonly MaxFps[] = [30, 60, 120, 0];
 
 // Auto: a tier for this device (the world steps down one more if it can't keep up).
 export function deviceQuality(): Quality {
@@ -52,6 +56,7 @@ const DEFAULTS: Prefs = {
   seenIntro: false,
   view: "iso",
   cam3p: "chase",
+  maxFps: 60,
 };
 
 let cache: Prefs | null = null;
@@ -65,6 +70,7 @@ export function prefs(): Prefs {
     if (cache && !["auto", "high", "medium", "low"].includes(cache.quality)) cache.quality = "auto";
     if (cache && cache.view !== "3p") cache.view = "iso";
     if (cache && cache.cam3p !== "free") cache.cam3p = "chase";
+    if (cache && !MAX_FPS.includes(cache.maxFps)) cache.maxFps = 60;
     if (
       cache &&
       typeof window !== "undefined" &&

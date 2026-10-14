@@ -52,7 +52,8 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   await enter(page, tokA, lab);
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   // the iso engine stops drawing underneath
-  expect(await page.evaluate(() => (window as any).__yutopia.engine.app.ticker.started)).toBe(false);
+  // (the iso picture is hidden under the 3D one; the engine keeps its logic running)
+  expect(await page.evaluate(() => (window as any).__yutopia.engine.app.canvas.style.visibility)).toBe("hidden");
 
   // Bia: iso, in her own browser
   const ctxB = await browser.newContext({ viewport: { width: 1280, height: 800 } });
@@ -132,7 +133,7 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   // T: back to iso and into third person again
   await page.keyboard.press("t");
   await page.waitForFunction(
-    () => !(window as any).__yutopia.tp && (window as any).__yutopia.engine.app.ticker.started,
+    () => !(window as any).__yutopia.tp && (window as any).__yutopia.engine.app.canvas.style.visibility !== "hidden",
   );
   await page.keyboard.press("t");
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });

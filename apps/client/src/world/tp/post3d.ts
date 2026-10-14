@@ -1,6 +1,5 @@
 import { type Camera, type Scene, Vector2, type WebGLRenderer } from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
@@ -8,6 +7,10 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 // High quality's finish, as the iso view's (world/post.ts): screens, lamps and
 // neon bloom at night, then a gentle warm grade, a soft vignette and a whisper
 // of film grain. Medium and Low draw straight to the screen.
+//
+// One pass does what three's OutputPass does (linear → the screen's sRGB) and
+// the finish together: a full-screen pass fewer per frame (they're 3200×2000
+// pixels on a Retina screen).
 
 const FINISH = {
   uniforms: {
@@ -19,10 +22,12 @@ const FINISH = {
   vertexShader:
     "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
   fragmentShader: `
+    // (sRGBTransferOETF comes with every fragment shader's prefix in three)
     uniform sampler2D tDiffuse; uniform float frame; uniform float grain; uniform vec2 res; varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
-      vec4 c = texture2D(tDiffuse, vUv);
+      // the scene is rendered linear (half float); to the screen's colours first
+      vec4 c = sRGBTransferOETF(texture2D(tDiffuse, vUv));
       c.rgb *= vec3(1.0, 0.97, 0.93); // warm, no dimming
       // vignette: clear in the middle, a warm dark at the corners
       float d = distance(vUv, vec2(0.5)) / 0.7071;
@@ -46,8 +51,6 @@ export class Post3 {
     this.composer.addPass(new RenderPass(scene, camera));
     this.bloom = new UnrealBloomPass(new Vector2(256, 256), 0, 0.62, 0.72);
     this.composer.addPass(this.bloom);
-    // (the finish works on the screen's colours, after the output pass, like iso's overlays)
-    this.composer.addPass(new OutputPass());
     this.finish = new ShaderPass(FINISH);
     this.composer.addPass(this.finish);
   }

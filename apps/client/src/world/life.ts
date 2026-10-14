@@ -84,6 +84,7 @@ export interface LifeInput {
 export class Life {
   readonly front = new Container(); // overlays sorted with the scene go in sortLayer; this is for motes
   private overlays: Overlay[] = [];
+  private overlayAt = -1;
   private steam: { s: Sprite; o: WorldObjectDef; t: number }[] = [];
   private motes: { s: Sprite; x: number; y: number; z: number; ph: number }[] = [];
   private fans: { c: Container; blades: Graphics; speed: number }[] = [];
@@ -113,6 +114,7 @@ export class Life {
       seed += 0.618;
       if (o.kind === "mixing_desk" || o.kind === "server_rack") {
         const g = new Graphics();
+        g.isRenderGroup = true; // redrawn every frame: its own little draw list
         // just in front of the object's slices
         g.zIndex = o.x + o.y + entry(o.kind).w + 0.6;
         this.sortLayer.addChild(g);
@@ -208,10 +210,14 @@ export class Life {
         e.sprite.alpha = e.base * (0.86 + 0.14 * (0.5 + 0.5 * n1(t * 6, e.seed)));
     }
     // overlays: reels + meters on the mixing desk, LEDs on racks
+    // reels, meters and LEDs: 30 redraws a second (each rebuilds its draw list)
+    const redraw = on && t - this.overlayAt >= 1 / 30;
+    if (redraw) this.overlayAt = t;
     for (const { g, o, seed } of this.overlays) {
-      g.clear();
+      if (!on && g.visible) g.clear();
       g.visible = on;
-      if (!on) continue;
+      if (!redraw) continue;
+      g.clear();
       if (o.kind === "mixing_desk") {
         // two tape reels standing on the meter bridge
         for (const lx of [0.45, 2.55]) {

@@ -111,6 +111,12 @@ function toVortexMood(m: string | undefined): VortexMood {
   return (m && VORTEX_MOODS.has(m) ? m : "smug") as VortexMood;
 }
 
+declare module "pixi.js" {
+  interface Container {
+    sortIndex?: number; // where setDepth found it last time (engine.ts)
+  }
+}
+
 export interface AvatarState {
   vortexMood?: string;
   name: string;
@@ -162,6 +168,8 @@ interface AvatarView {
   actKey?: string;
   actSeen?: number;
   avatarKey: string;
+  ringOn?: boolean; // the speaking ring is drawn
+  dotKey?: string; // what the status dot shows
   drawnFor: string; // whose look the sprite's current drawing is (avatar JSON)
   local: boolean;
 }
@@ -331,6 +339,20 @@ export class WorldEngine {
   // how far my voice carries (tiles; 0 = hidden): a dashed ring on the floor
   earshot = 0;
   private earshotG = new Graphics();
+  // which of the frame-by-frame Graphics hold a drawing (cleared only then)
+  private earshotOn = false;
+  private markerOn = false;
+  private highlightOn = false;
+  private outlineOn = false;
+  private fxOn = false;
+  // when something last happened here (pointer, a person moving, a bubble):
+  // the controller drops to a low frame rate while nothing does
+  activeAt = 0;
+  private noteActivity = () => {
+    this.activeAt = performance.now();
+  };
+  private fpsNow = 0;
+  private renderedAt = 0;
   private ghostLayer = new Container();
   private walls: PartView[] = [];
   private dress: PartView[] = []; // the rooms' clutter
@@ -360,7 +382,9 @@ export class WorldEngine {
     this.map = map;
   }
 
-  async init(host: HTMLElement, opts: { quality: Quality; reducedMotion: boolean }) {
+  // autoStart false: the caller draws each frame with render() (the world
+  // controller paces frames itself); on, Pixi's ticker draws every screen frame
+  async init(host: HTMLElement, opts: { quality: Quality; reducedMotion: boolean; autoStart?: boolean }) {
     this.quality = opts.quality;
     this.reducedMotion = opts.reducedMotion;
     setArtRes(this.artRes());
@@ -375,6 +399,7 @@ export class WorldEngine {
         opts.quality === "high" ? 2 : opts.quality === "medium" ? 1.5 : 1,
       ),
       preference: "webgl",
+      autoStart: opts.autoStart ?? true,
     });
     if (this.destroyed) {
       app.destroy(true);
@@ -384,9 +409,15 @@ export class WorldEngine {
     host.appendChild(app.canvas);
     app.canvas.style.display = "block";
     app.canvas.setAttribute("aria-label", "Yutopia world");
+    // Pixi 8 rebuilds a render group's whole draw list whenever one of its
+    // Graphics is redrawn — and the world's list is ~2000 nodes. Everything
+    // redrawn frame by frame (rings, hands, meters, outlines, dust) gets a
+    // group of its own, so only that little list is rebuilt.
+    for (const g of [this.highlightG, this.markerG, this.earshotG, this.outlineG, this.fxG]) g.isRenderGroup = true;
 
     this.sortLayer.sortableChildren = true;
     this.overlay.sortableChildren = true;
+    this.overlay.isRenderGroup = true; // tags re-sort as people move: a list of their own
     this.world.addChild(
       this.shellBody,
       this.shellLights,
@@ -465,6 +496,8 @@ export class WorldEngine {
     app.canvas.addEventListener("pointerup", this.onTouchEnd);
     app.canvas.addEventListener("pointercancel", this.onTouchEnd);
     app.canvas.style.touchAction = "none";
+    for (const ev of ["pointermove", "pointerdown", "wheel"] as const)
+      app.canvas.addEventListener(ev, this.noteActivity, { passive: true });
 
     const c = toScreen(this.map.spawn.x, this.map.spawn.y);
     this.cam = { x: c.x, y: c.y };
@@ -741,6 +774,7 @@ export class WorldEngine {
     if (o.kind === "board_wall" || o.kind === "screen_wall") this.drawDisplay(o.id);
     if (o.kind === "clock") {
       view.hands = new Graphics();
+      view.hands.isRenderGroup = true; // redrawn every frame
       view.hands.zIndex = o.x + 0.75 + o.y + 0.02;
       this.sortLayer.addChild(view.hands);
     }
@@ -1413,6 +1447,7 @@ export class WorldEngine {
       const root = new Container();
       const shadow = new Graphics(PERSON_SHADOW);
       const ring = new Graphics();
+      ring.isRenderGroup = true; // pulses while they speak
       const body = new Graphics();
       const sprite = new Sprite();
       sprite.anchor.set(0.5, 0.96);
@@ -1458,6 +1493,21 @@ export class WorldEngine {
       this.avatars.set(id, v);
       this.layoutTag(v);
     }
+    const o = v.state;
+    if (
+      o !== s &&
+      (o.x !== s.x ||
+        o.y !== s.y ||
+        o.a !== s.a ||
+        o.d !== s.d ||
+        o.emote !== s.emote ||
+        o.speaking !== s.speaking ||
+        o.status !== s.status ||
+        o.held !== s.held ||
+        o.act !== s.act ||
+        o.busy !== s.busy)
+    )
+      this.activeAt = performance.now();
     const prevName = v.state.name;
     v.state = s;
     v.local = local;
@@ -1518,6 +1568,7 @@ export class WorldEngine {
     v.bubbleText.position.set(-w / 2 + 8, -h + 5);
     v.bubble.visible = true;
     v.bubbleUntil = performance.now() + ms;
+    this.activeAt = performance.now();
   }
 
   private layoutTag(v: AvatarView) {
@@ -1533,8 +1584,15 @@ export class WorldEngine {
   // ellipse), dashed and turning slowly.
   private drawEarshot(local: AvatarView | undefined) {
     const g = this.earshotG;
+    if (!this.earshot || !local) {
+      if (this.earshotOn) {
+        g.clear();
+        this.earshotOn = false;
+      }
+      return;
+    }
     g.clear();
-    if (!this.earshot || !local) return;
+    this.earshotOn = true;
     const c = toScreen(local.state.x, local.state.y);
     const rx = this.earshot * (TILE_W / 2) * Math.SQRT2;
     const ry = this.earshot * (TILE_H / 2) * Math.SQRT2;
@@ -1627,17 +1685,23 @@ export class WorldEngine {
     );
     v.sprite.position.set(jitter, -12 + bob);
     v.root.position.set(p.x, p.y);
-    v.root.zIndex = depthOf(s.x, s.y) + 0.02;
+    this.setDepth(v.root, depthOf(s.x, s.y) + 0.02);
     // Vortex glows a little on his own: only half the shading
     const t = this.tintAt(s.x, s.y);
     v.sprite.tint =
       (((((t >> 16) & 255) + 255) >> 1) << 16) | (((((t >> 8) & 255) + 255) >> 1) << 8) | (((t & 255) + 255) >> 1);
-    v.ring.clear();
+    if (v.ringOn) {
+      v.ring.clear();
+      v.ringOn = false;
+    }
     v.emote.visible = false;
     const inv = 1 / Math.max(0.7, this.zoom * 0.85);
     v.tag.position.set(p.x, p.y + (-66 + bob) * PERSON);
     v.tag.scale.set(inv);
-    v.dot.clear().circle(0, 0, 3.2).fill(0xff2d95);
+    if (v.dotKey !== "vortex") {
+      v.dotKey = "vortex";
+      v.dot.clear().circle(0, 0, 3.2).fill(0xff2d95);
+    }
     if (v.bubble.visible) {
       v.bubble.position.set(p.x, p.y + (-80 + bob) * PERSON);
       v.bubble.scale.set(inv);
@@ -1698,7 +1762,7 @@ export class WorldEngine {
       }
     }
     v.root.position.set(p.x, p.y);
-    v.root.zIndex = depthOf(s.x, s.y) + (sitting ? 0 : 0.01);
+    this.setDepth(v.root, depthOf(s.x, s.y) + (sitting ? 0 : 0.01));
     // people take the light where they stand
     const tint = this.tintAt(s.x, s.y);
     v.sprite.tint = tint;
@@ -1708,11 +1772,14 @@ export class WorldEngine {
     if (this.seeThrough && this.inFrontOf(this.seeThrough, s.x, s.y)) v.root.alpha *= 0.28;
     v.shadow.visible = !sitting;
 
-    // speaking ring
-    v.ring.clear();
+    // speaking ring (cleared only once it was drawn: any redraw costs a rebuild)
     if (s.speaking) {
       const pulse = this.reducedMotion ? 0.7 : 0.55 + Math.sin(this.time * 12) * 0.25;
-      v.ring.ellipse(0, 0, 17, 8.5).stroke({ width: 2.5, color: C.amber, alpha: pulse });
+      v.ring.clear().ellipse(0, 0, 17, 8.5).stroke({ width: 2.5, color: C.amber, alpha: pulse });
+      v.ringOn = true;
+    } else if (v.ringOn) {
+      v.ring.clear();
+      v.ringOn = false;
     }
 
     // emote
@@ -1729,11 +1796,15 @@ export class WorldEngine {
     const inv = 1 / Math.max(0.7, this.zoom * 0.85);
     v.tag.position.set(p.x, p.y + (-106 + lift) * PERSON);
     v.tag.scale.set(inv);
-    v.tag.zIndex = v.local ? 1e6 : p.y;
-    v.dot.clear();
+    this.setDepth(v.tag, v.local ? 1e6 : p.y);
     const dotColor = s.status === "dnd" ? C.rust : s.status === "away" ? C.alumDark : s.npc ? C.red : C.olive;
-    v.dot.circle(0, 0, 3.2).fill(dotColor);
-    if (!s.mic && !s.npc && !s.bot) v.dot.moveTo(-3, -3).lineTo(3, 3).stroke({ width: 1.4, color: C.cream });
+    const slash = !s.mic && !s.npc && !s.bot;
+    const dotKey = `${dotColor}|${slash}`;
+    if (v.dotKey !== dotKey) {
+      v.dotKey = dotKey;
+      v.dot.clear().circle(0, 0, 3.2).fill(dotColor);
+      if (slash) v.dot.moveTo(-3, -3).lineTo(3, 3).stroke({ width: 1.4, color: C.cream });
+    }
     if (v.bubble.visible) {
       v.bubble.position.set(p.x, p.y + (-120 + lift) * PERSON);
       v.bubble.scale.set(inv);
@@ -1950,19 +2021,27 @@ export class WorldEngine {
 
   // Wall clocks tell the time where you are: hour, minute and a red second
   // hand on the face's plane (the face is drawn by the clock's art at z 52).
+  private clockTick = -1;
   private drawClocks() {
     const now = new Date();
-    const sec = now.getSeconds() + (this.reducedMotion ? 0 : now.getMilliseconds() / 1000);
+    // the second hand sweeps in tenths: 10 redraws a second (each one rebuilds
+    // the hands' draw list), and nobody can tell it from 60
+    const tick = this.reducedMotion ? now.getSeconds() : Math.floor(now.getTime() / 100);
+    const redraw = tick !== this.clockTick;
+    this.clockTick = tick;
+    const sec = now.getSeconds() + (this.reducedMotion ? 0 : Math.floor(now.getMilliseconds() / 100) / 10);
     const min = now.getMinutes() + sec / 60;
     const hr = (now.getHours() % 12) + min / 60;
     for (const v of this.objectViews.values()) {
       const g = v.hands;
       if (!g) continue;
       const part = v.parts[0];
-      g.visible = !!part?.root.visible;
+      const show = !!part?.root.visible;
+      const fresh = show && !g.visible; // just revealed: draw now
+      g.visible = show;
       g.alpha = part?.high?.alpha ?? part?.root.alpha ?? 1;
+      if (!g.visible || !(redraw || fresh)) continue;
       g.clear();
-      if (!g.visible) continue;
       const o = v.def;
       const c = toScreen(o.x + 0.5, o.y + 0.134);
       const cy = c.y - 52;
@@ -2147,12 +2226,20 @@ export class WorldEngine {
   }
 
   private drawMarker(dt: number) {
+    if (!this.marker) {
+      if (this.markerOn) {
+        this.markerG.clear();
+        this.markerOn = false;
+      }
+      return;
+    }
     this.markerG.clear();
-    if (!this.marker) return;
+    this.markerOn = true;
     this.marker.t += dt;
     const t = this.marker.t;
     if (t > 0.9) {
       this.marker = null;
+      this.markerOn = false;
       return;
     }
     const c = toScreen(this.marker.x, this.marker.y);
@@ -2165,9 +2252,16 @@ export class WorldEngine {
   }
 
   private drawHighlight() {
-    this.highlightG.clear();
     const o = this.highlightId ? this.objectViews.get(this.highlightId)?.def : undefined;
-    if (!o) return;
+    if (!o) {
+      if (this.highlightOn) {
+        this.highlightG.clear();
+        this.highlightOn = false;
+      }
+      return;
+    }
+    this.highlightG.clear();
+    this.highlightOn = true;
     const e = entry(o.kind);
     const { w, h } = placedFootprint(o);
     const a = 0.55 + (this.reducedMotion ? 0 : Math.sin(this.time * 5) * 0.25);
@@ -2420,7 +2514,9 @@ export class WorldEngine {
       const bob = this.ghostLift > 0 && !this.reducedMotion ? Math.sin(this.time * 4) * 2 : 0;
       for (const it of this.ghostItems) it.root.y = -this.ghostLift + bob;
     }
-    const g = this.outlineG.clear();
+    const g = this.outlineG;
+    if (this.outlines.length || this.outlineOn) g.clear();
+    this.outlineOn = this.outlines.length > 0;
     for (const o of this.outlines) {
       const hull = o.dress ? this.dressHull(o.id) : this.hullOf(o.id);
       if (!hull) continue;
@@ -2428,7 +2524,9 @@ export class WorldEngine {
         .fill({ color: o.color, alpha: o.fill ?? 0.08 })
         .stroke({ width: 2, color: o.color, alpha: 0.95 });
     }
-    const f = this.fxG.clear();
+    const f = this.fxG;
+    if (this.fx.length || this.fxOn) f.clear();
+    this.fxOn = this.fx.length > 0;
     if (!this.fx.length) return;
     for (const p of this.fx) {
       p.t += dt;
@@ -2760,9 +2858,52 @@ export class WorldEngine {
     return this.targetZoom;
   }
 
+  // Draw a frame now (the controller paces them; see init's autoStart).
+  render() {
+    if (!this.app) return;
+    this.app.render();
+    const now = performance.now();
+    if (this.renderedAt) this.fpsNow += (1000 / Math.max(1, now - this.renderedAt) - this.fpsNow) * 0.05;
+    this.renderedAt = now;
+  }
+
+  // A thing's depth in the sort layer (or the overlay). Pixi re-sorts the
+  // whole layer — and rebuilds its draw list — on any zIndex change, so the
+  // value is only set when the order would change: while the new depth still
+  // lies between the neighbours', the drawn order is already right.
+  private setDepth(node: Container, z: number) {
+    if (node.zIndex === z) return;
+    const parent = node.parent;
+    if (parent && !parent.sortDirty) {
+      const kids = parent.children;
+      let i = node.sortIndex ?? -1;
+      if (kids[i] !== node) i = kids.indexOf(node);
+      node.sortIndex = i;
+      if (i >= 0) {
+        const lo = i > 0 ? kids[i - 1].zIndex : -Infinity;
+        const hi = i < kids.length - 1 ? kids[i + 1].zIndex : Infinity;
+        if (z >= lo && z <= hi) return;
+      }
+    }
+    node.zIndex = z;
+  }
+
+  // Something is in motion that wants every frame (the camera settling, a
+  // marker, dust, a held item); otherwise idle frames can be skipped.
+  busy(): boolean {
+    return (
+      !!this.marker ||
+      this.fx.length > 0 ||
+      this.bumps.length > 0 ||
+      this.ghostItems.length > 0 ||
+      Math.abs(this.targetZoom - this.zoom) > 0.002 ||
+      Math.hypot(this.camFocus.x - this.cam.x, this.camFocus.y - this.cam.y) > 0.5
+    );
+  }
+
   stats() {
     return {
-      fps: this.app?.ticker.FPS ?? 0,
+      fps: this.fpsNow || (this.app?.ticker.FPS ?? 0),
       avatars: this.avatars.size,
       objects: this.objectViews.size,
       children: this.sortLayer.children.length,

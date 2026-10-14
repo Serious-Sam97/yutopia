@@ -157,6 +157,12 @@ const D = {
   qualityMedium: ["Medium (light, life)", "Média (luz, vida)"],
   qualityLow: ["Low (battery saver)", "Baixa (economia de bateria)"],
   reducedMotion: ["Reduced motion", "Movimento reduzido"],
+  maxFps: ["Frame rate", "Taxa de quadros"],
+  fpsUnlimited: ["No limit", "Sem limite"],
+  maxFpsHelp: [
+    "Fewer frames run cooler and quieter. Drops to 30 while nothing moves.",
+    "Menos quadros esquentam menos e gastam menos. Cai para 30 enquanto nada se move.",
+  ],
   view: ["View", "Visão"],
   viewIso: ["Isometric", "Isométrica"],
   view3p: ["Third person (beta)", "Terceira pessoa (beta)"],

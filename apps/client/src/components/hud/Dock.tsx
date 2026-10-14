@@ -213,20 +213,20 @@ function MicMeter() {
   const w = useWorld();
   const bars = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    let raf = 0;
+    if (!w) return;
     let level = 0;
-    const tick = () => {
+    let lit = -1;
+    return w.onFrame(() => {
       const el = bars.current;
-      if (el && w) {
-        level = Math.max(w.media.micLevel(), level * 0.82);
-        Array.from(el.children).forEach((b, i) => {
-          (b as HTMLElement).style.background = level > (i + 0.5) / 5 ? "#6b3b10" : "#d9cba9";
-        });
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+      if (!el) return;
+      level = Math.max(w.media.micLevel(), level * 0.82);
+      const n = Math.min(5, Math.floor(level * 5 + 0.5));
+      if (n === lit) return;
+      lit = n;
+      Array.from(el.children).forEach((b, i) => {
+        (b as HTMLElement).style.background = i < n ? "#6b3b10" : "#d9cba9";
+      });
+    });
   }, [w]);
   return (
     <span ref={bars} className="flex items-end gap-[2px] h-[18px]" aria-hidden>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { LangSwitch } from "@/components/LangSwitch";
 import { useTr } from "@/lib/i18n";
-import { type Prefs, setPrefs, usePrefs } from "@/lib/prefs";
+import { MAX_FPS, type Prefs, setPrefs, usePrefs } from "@/lib/prefs";
 import { hud } from "@/world/store";
 import { useWorld } from "./ctx";
 import { Panel } from "./Panel";
@@ -136,6 +136,26 @@ export function SettingsPanel() {
             ))}
           </div>
           {toggle(t("reducedMotion"), p.reducedMotion, (v) => setPrefs({ reducedMotion: v }))}
+          <div className="mono text-[10px] uppercase tracking-widest pt-1" style={{ color: "var(--muted)" }}>
+            {t("maxFps")}
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {MAX_FPS.map((f) => (
+              <button
+                key={f}
+                type="button"
+                className="deck-btn"
+                aria-pressed={p.maxFps === f}
+                onClick={() => setPrefs({ maxFps: f })}
+                style={{ height: 32, fontSize: 10 }}
+              >
+                {f === 0 ? t("fpsUnlimited") : `${f} fps`}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] leading-snug" style={{ color: "var(--muted)" }}>
+            {t("maxFpsHelp")}
+          </p>
         </section>
         <section className="space-y-2">
           <h3 className="mono text-xs uppercase tracking-widest" style={{ color: "var(--vfd)" }}>

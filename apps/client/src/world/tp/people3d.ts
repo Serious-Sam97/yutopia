@@ -136,6 +136,8 @@ export class Person3 {
   private ring: Mesh; // speaking
   private actKey = "";
   private actSeen = 0;
+  private drawnHash = 0; // the pose last drawn
+  private drawnAt = 0;
 
   constructor(
     readonly id: string,
@@ -233,8 +235,10 @@ export class Person3 {
     // the mug / cup in the right hand: in front of the arm, behind the body seen from the back
     let heldImg: HTMLImageElement | null = null;
     let tip = 0;
+    let heldLevel = 0;
     if (held) {
       const st = heldState(held.kind, held.since);
+      heldLevel = Math.round(st.level * 4) + 1;
       const color = MUG_COLORS[Math.floor(hashSeed(p.name) * MUG_COLORS.length)];
       heldImg = heldImage(held.kind, color, Math.round(st.level * 4));
       if (!heldImg) all = false;
@@ -249,14 +253,36 @@ export class Person3 {
       if (img) parts.push({ img, box: part.box, name: part.name });
       else all = false;
     }
-    if (all && (redraw || !this.shown)) {
+    // Drawn again only when the drawing would differ (a hash of the pose):
+    // standing still, breathing settles for 20 redraws a second at most;
+    // walking, talking and gestures every frame. (Each redraw is a canvas
+    // and a texture upload.)
+    const b = P.bones(rig, pose);
+    let h = mirror ? 7 : 3;
+    const mix = (v: number) => {
+      h = (Math.imul(h, 31) + Math.round(v * 200)) | 0;
+    };
+    mix(rig.squash);
+    mix(tip);
+    mix(heldLevel);
+    mix(pose.face === "blink" ? 1 : pose.face === "talk" ? 2 : 0);
+    mix(parts.length);
+    for (const part of parts) {
+      mix(part.name.length);
+      for (const m of b[part.name as keyof typeof b]) mix(m);
+    }
+    const calm = !walking && !p.speaking && !p.typing && !p.emote && !held && !this.actOf(p);
+    const now = performance.now();
+    const changed = h !== this.drawnHash && (!calm || now - this.drawnAt >= 50);
+    if (all && ((redraw && changed) || !this.shown)) {
+      this.drawnHash = h;
+      this.drawnAt = now;
       const g = this.g;
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.clearRect(0, 0, this.canvas.width, this.canvas.height);
       const sx = (mirror ? -1 : 1) * rig.squash;
       // board → canvas, mirrored / squashed about the board's middle (x 60)
       const base: Aff = [sx * PX, 0, 0, PX, (60 - 60 * sx - BX0) * PX, -BY0 * PX];
-      const b = P.bones(rig, pose);
       const drawHeld = () => {
         if (!heldImg) return;
         const hand = P.apply(b.armRf, rig.joints.hand);
