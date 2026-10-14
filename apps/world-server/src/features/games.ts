@@ -5,13 +5,14 @@ import {
   GAME_ID,
   gap,
   isConsole,
+  isGameTv,
   MAX_LIVE_TVS,
   PAD_REACH,
   SYSTEMS,
   TV_INPUTS,
 } from "@yutopia/shared/games";
 import { builtinGame } from "@yutopia/shared/library";
-import { MEDIA_INPUT } from "@yutopia/shared/media";
+import { MEDIA_INPUT, tvInput } from "@yutopia/shared/media";
 import { AccessToken } from "livekit-server-sdk";
 import { config } from "../config.ts";
 import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
@@ -63,43 +64,59 @@ registerFeature((room: SpaceRoom) => {
   };
   const tvOf = (o: WorldObjectDef) => {
     const tv = typeof o.props?.tv === "string" ? obj(o.props.tv) : undefined;
-    return tv?.kind === "crt_tv" ? tv : undefined;
+    return tv && isGameTv(tv.kind) ? tv : undefined;
   };
   const off = (id: string) => {
     consoles.delete(id);
     lastAudience.delete(id);
   };
+  // a console's cable out of a TV: that TV stops showing it (but `keep`, the one it goes into)
+  const unplugFrom = async (consoleId: string, keep?: string) => {
+    for (const x of [...room.state.objects.values()]) {
+      if (!isGameTv(x.kind) || x.id === keep) continue;
+      const tv = fromSchema(x);
+      if (tv.props?.input !== consoleId) continue;
+      const { input: _, ...rest } = tv.props;
+      await save({ ...tv, props: rest });
+    }
+  };
 
   // ── plugging in ───────────────────────────────────────────────────────────
+  // unplugged at the console; plugged in at the TV (its cable carried over)
   room.on("game:plug", async (client, m) => {
-    const o = consoleAt(client, m?.id);
-    if (!o) return;
-    if (m.tv === null) {
+    if (m?.tv === null) {
+      const o = consoleAt(client, m?.id);
+      if (!o) return;
       const { tv: _, ...rest } = o.props ?? {};
       off(o.id);
-      return save({ ...o, props: rest });
+      await save({ ...o, props: rest });
+      return unplugFrom(o.id);
     }
-    const tv = obj(String(m.tv ?? ""));
-    if (!tv || tv.kind !== "crt_tv") return;
+    const o = obj(String(m?.id ?? ""));
+    const tv = obj(String(m?.tv ?? ""));
+    if (!o || !isConsole(o.kind) || !tv || !isGameTv(tv.kind)) return;
+    if (away(client.sessionId, tv) > PAD_REACH) return warn(client, "Get closer to the TV.");
     if (gap(rect(o), rect(tv)) > CABLE_REACH) return warn(client, "The cable doesn't reach that TV.");
     const plugged = [...room.state.objects.values()].filter(
       (x) => x.id !== o.id && isConsole(x.kind) && fromSchema(x).props?.tv === tv.id,
     );
     if (plugged.length >= TV_INPUTS) return warn(client, "That TV has no free input.");
     await save({ ...o, props: { ...(o.props ?? {}), tv: tv.id } });
-    if (!tv.props?.input || !obj(String(tv.props.input)))
-      await save({ ...tv, props: { ...(tv.props ?? {}), input: o.id } });
+    await unplugFrom(o.id, tv.id);
+    // the TV switches to it, unless the other console on it is playing
+    const input = tvInput(tv);
+    if (input !== o.id && !consoles.has(input)) await save({ ...tv, props: { ...(tv.props ?? {}), input: o.id } });
   });
 
   // a TV shows one of the consoles plugged into it, or its TV input (media)
   room.on("game:input", async (client, m) => {
     const tv = obj(String(m?.tv ?? ""));
-    if (tv?.kind === "crt_tv" && m.console === MEDIA_INPUT) {
+    if (tv && isGameTv(tv.kind) && m.console === MEDIA_INPUT) {
       if (away(client.sessionId, tv) > PAD_REACH + 4) return;
       return save({ ...tv, props: { ...(tv.props ?? {}), input: MEDIA_INPUT } });
     }
     const o = obj(String(m?.console ?? ""));
-    if (!tv || tv.kind !== "crt_tv" || !o || o.props?.tv !== tv.id) return;
+    if (!tv || !isGameTv(tv.kind) || !o || o.props?.tv !== tv.id) return;
     if (away(client.sessionId, tv) > PAD_REACH) return;
     await save({ ...tv, props: { ...(tv.props ?? {}), input: o.id } });
   });
@@ -121,6 +138,24 @@ registerFeature((room: SpaceRoom) => {
     await save({ ...o, props: { ...rest, cart: id, cartColor: game.color, cartTitle: game.title.slice(0, 60) } });
   });
 
+  // A game runs in its host's browser, one at a time: starting another pauses
+  // the one I run (saved as my tab lets it go; anyone at it can carry on), as
+  // walking away from it would.
+  const pauseMine = (client: SpaceClient) => {
+    const sid = client.sessionId;
+    for (const c of consoles.values()) {
+      if (c.host !== sid) continue;
+      if (c.p1 === sid) c.p1 = c.p1Name = "";
+      c.host = "";
+      c.hostName = "";
+      c.live = false;
+      room.send(client, "toast", {
+        text: `${c.title || "Your other game"} is paused: you run one game at a time (anyone at it can carry on).`,
+        tone: "info",
+      });
+    }
+  };
+
   // ── power ─────────────────────────────────────────────────────────────────
   room.on("game:power", async (client, m) => {
     const o = consoleAt(client, m?.id);
@@ -130,8 +165,9 @@ registerFeature((room: SpaceRoom) => {
     const tv = tvOf(o);
     if (!tv || gap(rect(o), rect(tv)) > CABLE_REACH) return warn(client, "Plug it into a TV first.");
     if (typeof o.props?.cart !== "string") return warn(client, "Put a cartridge in first.");
-    if ([...consoles.values()].filter((c) => c.host).length >= MAX_LIVE_TVS)
+    if ([...consoles.values()].filter((c) => c.host && c.host !== client.sessionId).length >= MAX_LIVE_TVS)
       return warn(client, "Too many TVs are on in this space right now.");
+    pauseMine(client);
     const c = new GameConsole();
     c.game = o.props.cart;
     c.title = String(o.props.cartTitle ?? "");
@@ -204,6 +240,7 @@ registerFeature((room: SpaceRoom) => {
     const o = consoleAt(client, m?.id);
     const c = o && consoles.get(o.id);
     if (!o || !c || c.host) return;
+    pauseMine(client);
     const sid = client.sessionId;
     c.host = sid;
     c.hostName = nameOf(sid);
@@ -286,7 +323,7 @@ registerFeature((room: SpaceRoom) => {
           if (hearingGain(room.map, { x: p.x, y: p.y, dnd: p.status === "dnd" }, speaker, true) > 0)
             audio.push(String(p.uid));
         }
-        const key = `${video.join(",")}|${audio.join(",")}`;
+        const key = `${c.host}|${video.join(",")}|${audio.join(",")}`; // (a new host hears it too)
         if (lastAudience.get(id) === key) continue;
         lastAudience.set(id, key);
         const host = clientOf(c.host);

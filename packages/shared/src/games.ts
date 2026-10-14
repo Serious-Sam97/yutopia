@@ -67,6 +67,12 @@ export const isPadButton = (b: unknown): b is PadButton =>
 
 // A cable from a console reaches a TV this far (tiles between their footprints).
 export const CABLE_REACH = 4;
+// The TVs a console plugs into: the CRT (made for it) and the media TVs, which
+// keep their own TV input (YouTube / Jellyfin) as well.
+export const GAME_TVS = ["crt_tv", "tv_console", "tv_wall", "tv_hd"] as const;
+export const isGameTv = (kind: string): boolean => (GAME_TVS as readonly string[]).includes(kind);
+// the shape of a console's picture (letterboxed on a wide TV)
+export const GAME_ASPECT = 4 / 3;
 // TVs have two inputs (AV1, AV2).
 export const TV_INPUTS = 2;
 // You take a pad standing this near the console (its cord's length).

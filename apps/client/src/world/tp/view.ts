@@ -11,6 +11,7 @@ import {
 import {
   BoxGeometry,
   BufferGeometry,
+  CatmullRomCurve3,
   Color,
   DirectionalLight,
   Fog,
@@ -37,6 +38,7 @@ import {
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
+  TubeGeometry,
   Vector2,
   Vector3,
   WebGLRenderer,
@@ -46,6 +48,7 @@ import { emoteUrl } from "../art/emotes";
 import type { people } from "../art/people-load";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
+import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { zt } from "./kit3d";
 import { Light3 } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
@@ -301,6 +304,63 @@ export class ThirdPersonView {
   private reduced = false;
 
   // The slot cars (each frame): a little 1:32 formula car per lane, in its colour.
+  // A console's cable in my hands: from its back along the floor, up to my hand.
+  private cable: Mesh | null = null;
+  private cableKey = "";
+  // The game room: cables, pads (by their consoles or in hands), power LEDs —
+  // drawn once the people are placed (held pads go where their hands are).
+  private games3: GamesIn3D | null = null;
+  private gameScene: GameScene3 | null = null;
+  setGames(s: GameScene3 | null) {
+    this.gameScene = s;
+    if (s && !this.games3) {
+      this.games3 = new GamesIn3D((m) => this.light.patch(m));
+      this.scene.add(this.games3.root);
+    }
+    if (this.games3) this.games3.root.visible = !!s;
+  }
+  // in front of someone's drawing, towards the camera, a little to the left
+  // (pad 1) or right (pad 2), at hand height
+  private handOf(id: string, port: number, sitting: boolean): Vector3 | null {
+    const p = this.people.get(id);
+    if (!p?.root.visible) return null;
+    const at = p.root.position;
+    const cam = this.camera.position;
+    const d = Math.hypot(cam.x - at.x, cam.z - at.z) || 1;
+    const tx = (cam.x - at.x) / d;
+    const tz = (cam.z - at.z) / d;
+    const side = port === 1 ? -0.07 : 0.07;
+    return new Vector3(at.x + tx * 0.14 + tz * side, zt(sitting ? HAND_SIT : HAND_STAND), at.z + tz * 0.14 - tx * side);
+  }
+
+  setCable(ends: { from: { x: number; y: number }; to: { x: number; y: number } } | null) {
+    const key = ends ? [ends.from.x, ends.from.y, ends.to.x, ends.to.y].map((n) => n.toFixed(2)).join() : "";
+    if (key === this.cableKey) return;
+    this.cableKey = key;
+    if (!ends) {
+      if (this.cable) this.cable.visible = false;
+      return;
+    }
+    if (!this.cable) {
+      const mat = new MeshLambertMaterial({ color: 0x15120f });
+      this.light.patch(mat);
+      this.cable = new Mesh(new BufferGeometry(), mat);
+      this.cable.castShadow = true;
+      this.scene.add(this.cable);
+    }
+    const { from: a, to: b } = ends;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    // the hand: a little in front of me, on the console's side
+    const hand = new Vector3(b.x - (dx / len) * 0.18, zt(30), b.y - (dy / len) * 0.18);
+    const along = (t: number, h: number) => new Vector3(a.x + dx * t, h, a.y + dy * t);
+    const pts = [new Vector3(a.x, 0.04, a.y), along(0.35, 0.015), along(0.75, 0.015), along(0.93, 0.18), hand];
+    this.cable.geometry.dispose();
+    this.cable.geometry = new TubeGeometry(new CatmullRomCurve3(pts), 40, 0.016, 5);
+    this.cable.visible = true;
+  }
+
   private cars: Group[] = [];
   setCars(list: { x: number; y: number; z: number; h: number; color: number; tilt: number }[]) {
     while (this.cars.length < list.length) {
@@ -693,6 +753,7 @@ export class ThirdPersonView {
         p.dispose();
         this.people.delete(id);
       }
+    if (this.gameScene) this.games3?.set(this.gameScene, (id, port, sitting) => this.handOf(id, port, sitting), face);
 
     if (!document.hidden) {
       if (this.post) this.post.render(dt > 0 && !me?.reduced);
@@ -1104,6 +1165,7 @@ export class ThirdPersonView {
     this.post?.dispose();
     this.light.dispose();
     for (const p of this.people.values()) p.dispose();
+    this.games3?.dispose();
     this.world.dispose();
     this.around.dispose();
     this.renderer.dispose();

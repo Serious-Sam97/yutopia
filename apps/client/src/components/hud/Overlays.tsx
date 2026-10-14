@@ -40,10 +40,42 @@ export function Prompt() {
         </kbd>
       )}
       <span className="text-sm truncate">{prompt.label}</span>
-      <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
-        · {touch ? t("tapToUse") : opens ? t("pressToOpen") : t("pressToUse")}
-      </span>
+      {prompt.kind !== "plug" && (
+        <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+          · {touch ? t("tapToUse") : opens ? t("pressToOpen") : t("pressToUse")}
+        </span>
+      )}
     </button>
+  );
+}
+
+// A console's cable in my hands (taken from its panel): where to take it, and
+// a button to let it go.
+export function CableChip() {
+  const t = useTr();
+  const w = useWorld();
+  const cable = useHud((s) => s.cable);
+  const held = useHud((s) => !!s.held);
+  if (!cable) return null;
+  return (
+    <div
+      className={`pointer-events-auto absolute left-1/2 -translate-x-1/2 ${held ? "bottom-[184px]" : "bottom-[136px]"} cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise max-w-[calc(100vw-24px)]`}
+    >
+      <span
+        className="w-8 h-8 rounded-full grid place-items-center shrink-0"
+        style={{ background: "radial-gradient(#4a3324,#241912)", border: "1px solid var(--edge)" }}
+        aria-hidden
+      >
+        🔌
+      </span>
+      <span className="text-sm whitespace-nowrap">{t("cableHeld")}</span>
+      <span className="mono text-[11px] truncate" style={{ color: "var(--muted)" }}>
+        · {t("cableHint")}
+      </span>
+      <button type="button" className="deck-btn" style={{ height: 28, fontSize: 12 }} onClick={() => w?.dropCable()}>
+        {t("cableLetGo")}
+      </button>
+    </div>
   );
 }
 

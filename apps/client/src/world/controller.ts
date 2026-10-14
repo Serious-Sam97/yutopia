@@ -43,6 +43,7 @@ import {
   type WorldObjectDef,
   wallRot,
 } from "@yutopia/shared";
+import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, YONDRA_APP, yutopia } from "@/lib/api";
@@ -236,6 +237,8 @@ export class WorldController {
           return this.send("obj:remove", { id: o.id });
         if (b.on && o && b.tool === "walls") return; // walls/floors paint by dragging
         if (b.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
+        // carrying a cable: a TV clicked is where it goes
+        if (hud.get().cable && o && isGameTv(o.kind)) return this.activateObject(id, true);
         if (!this.openMenu({ type: "object", id }, at)) this.activateObject(id, true);
       },
       onHoverObject: () => {},
@@ -602,6 +605,42 @@ export class WorldController {
     this.send("item:drop", {});
   }
 
+  // ── a console's cable: taken from its panel, plugged in at a TV ─────────
+  grabCable(consoleId: string) {
+    mixer.blip("click");
+    hud.set({ cable: { consoleId }, panel: { kind: null } });
+  }
+
+  dropCable(why?: string) {
+    if (!hud.get().cable) return;
+    hud.set({ cable: null });
+    if (why) toast(why, "warn");
+  }
+
+  // still in hand: the console's there, not plugged in yet, and I haven't
+  // walked further off than the cable goes
+  private checkCable() {
+    const c = hud.get().cable;
+    if (!c) return;
+    const o = this.engine?.getObject(c.consoleId);
+    if (!o) return this.dropCable();
+    if (typeof o.props?.tv === "string") {
+      mixer.blip("pop");
+      return this.dropCable();
+    }
+    const { w, h } = placedFootprint(o);
+    const me = { x: this.me.x, y: this.me.y, w: 0, h: 0 };
+    if (gap({ x: o.x, y: o.y, w, h }, me) > CABLE_REACH + 2) this.dropCable(tr("cableTooFar"));
+  }
+
+  // the cable from the console to my hands (for the 3D view; iso draws its own)
+  private cableEnds(): { from: Point; to: Point } | null {
+    const c = hud.get().cable;
+    const o = c ? this.engine?.getObject(c.consoleId) : undefined;
+    if (!o) return null;
+    return { from: { x: o.x + 0.5, y: o.y + 0.3 }, to: { x: this.me.x, y: this.me.y } };
+  }
+
   // What I'm busy with (shown on my body for everyone): a machine for a moment,
   // or the arcade / piano / whiteboard while its panel is open.
   private usingWhat = "";
@@ -821,10 +860,13 @@ export class WorldController {
       }
       tp.setLiveFrom({ engine, screens: this.screens, games: this.games });
       tp.setCars(this.slots?.cars() ?? []);
+      tp.setCable(this.cableEnds());
+      tp.setGames(this.games?.scene3d() ?? null);
       // (a hidden tab: nothing to draw for)
       if (!document.hidden) tp.frame(dt, bodies, localSid);
     } else if (!document.hidden) engine.render();
     for (const cb of this.hudFrames) cb();
+    this.checkCable();
     this.updatePrompt();
     if (now - this.peopleAt > 250) {
       this.peopleAt = now;
@@ -1018,9 +1060,10 @@ export class WorldController {
     if (!this.engine) return null;
     let best: WorldObjectDef | null = null;
     let bestD = INTERACT_RANGE;
+    const cable = !!hud.get().cable; // a cable in hand: only what it plugs into
     for (const o of this.engine.allObjects()) {
       const e = entry(o.kind);
-      if (!e.interact) continue;
+      if (!e.interact || (cable && !isGameTv(o.kind))) continue;
       const { w, h } = placedFootprint(o);
       const cx = Math.max(o.x, Math.min(this.me.x, o.x + w));
       const cy = Math.max(o.y, Math.min(this.me.y, o.y + h));
@@ -1036,11 +1079,12 @@ export class WorldController {
   private updatePrompt() {
     const o = this.nearestInteractable();
     const cur = hud.get().prompt;
-    if ((o?.id ?? null) === (cur?.objectId ?? null)) return;
+    const kind = !o ? "" : hud.get().cable ? "plug" : (entry(o.kind).interact as string);
+    if ((o?.id ?? null) === (cur?.objectId ?? null) && kind === (cur?.kind ?? "")) return;
     this.engine?.setHighlight(o?.id ?? null);
     this.tp?.setHighlight(this.footprintOf(o?.id));
     hud.set({
-      prompt: o ? { objectId: o.id, kind: entry(o.kind).interact as string, label: entry(o.kind).label } : null,
+      prompt: o ? { objectId: o.id, kind, label: kind === "plug" ? tr("cablePlug") : entry(o.kind).label } : null,
     });
   }
 
@@ -1202,6 +1246,13 @@ export class WorldController {
     const oy = o.y + h / 2;
     if (Math.hypot(ox - this.me.x, oy - this.me.y) > 0.2)
       this.me.d = dirFromDelta(ox - this.me.x, oy - this.me.y, this.me.d as 0);
+    // a console's cable in hand: into this TV (the server says if it reaches)
+    const cable = hud.get().cable;
+    if (cable) {
+      if (isGameTv(o.kind)) this.send("game:plug", { id: cable.consoleId, tv: id });
+      else toast(tr("cableNotHere"), "warn");
+      return;
+    }
     if (e.interact === "coffee" || e.interact === "water" || e.interact === "vending") {
       // the machine does its thing (a moment, its sound), then hands you a
       // drink, sipped little by little (shared/held.ts)
@@ -1230,8 +1281,19 @@ export class WorldController {
       this.send("lamp:set", { id, on: o.props?.on === false });
       return;
     }
+    // (no panel for a switch: one opened anyway would swallow the keys)
+    if (e.interact === "switch") {
+      mixer.blip("click");
+      this.send("lights:room", { id, on: o.props?.on === false });
+      return;
+    }
     if (e.interact === "terminal") this.send("vortex:poke", {});
-    this.onOpenPanel(e.interact, id);
+    // a media TV with a console plugged in: the TV's own panel (its inputs, the remote among them)
+    const plugged =
+      e.interact === "media" &&
+      isGameTv(o.kind) &&
+      !!this.engine?.allObjects().some((x) => isConsole(x.kind) && x.props?.tv === id);
+    this.onOpenPanel(plugged ? "tv" : e.interact, id);
   }
 
   // ── people / HUD ─────────────────────────────────────────────────────────
@@ -1892,6 +1954,10 @@ export class WorldController {
       else return;
       e.preventDefault();
       return;
+    }
+    if (hud.get().cable && e.key === "Escape" && !hud.get().panel.kind) {
+      e.preventDefault();
+      return this.dropCable();
     }
     if (hud.get().panel.kind && e.key !== "Escape") return;
     const key = e.key.toLowerCase();

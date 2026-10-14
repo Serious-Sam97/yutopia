@@ -141,6 +141,7 @@ export interface HudState {
   heardBy: number[]; // user ids who can hear me right now
   prompt: { objectId: string; kind: string; label: string } | null;
   held: { kind: string; at: number } | null; // what I carry (a mug…) and since when (server ms)
+  cable: { consoleId: string } | null; // a console's cable in my hands, on the way to a TV
   menu: ActionMenu | null;
   queue: QueuedAct[];
   focus: boolean; // heads down at my desk
@@ -227,6 +228,7 @@ const initial: HudState = {
   heardBy: [],
   prompt: null,
   held: null,
+  cable: null,
   menu: null,
   queue: [],
   focus: false,

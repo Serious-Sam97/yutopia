@@ -1,5 +1,6 @@
 import { entryWallItem, type WorldObjectDef, wallRot } from "@yutopia/shared";
-import { glassCorners } from "@yutopia/shared/media";
+import { GAME_ASPECT } from "@yutopia/shared/games";
+import { GLASS, glassCorners } from "@yutopia/shared/media";
 import {
   CanvasTexture,
   type Color,
@@ -154,6 +155,9 @@ export interface LiveSources {
   games: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement }[] } | null;
 }
 
+// a console's 4:3 picture on a wide TV: letterboxed
+const wide = (o: WorldObjectDef) => ((GLASS[o.kind]?.aspect ?? GAME_ASPECT) > GAME_ASPECT ? GAME_ASPECT : undefined);
+
 // Every live picture now: a console on a game-room TV wins over the TV's own
 // media; media playing on a big screen wins over its board.
 export class LiveFeed {
@@ -166,7 +170,7 @@ export class LiveFeed {
     for (const p of games?.pictures() ?? []) {
       const c = glassCorners(p.def);
       if (!c) continue;
-      out.push({ key: `g:${p.def.id}`, src: p.canvas, ...c, version: -1, glow: true });
+      out.push({ key: `g:${p.def.id}`, src: p.canvas, ...c, version: -1, glow: true, fit: wide(p.def) });
       taken.add(p.def.id);
     }
     for (const p of screens?.pictures() ?? []) {

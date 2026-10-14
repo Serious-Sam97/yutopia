@@ -4,7 +4,7 @@
 // world-server (rules, the queue's clock) and the tests.
 
 import { entry, footprint, placedFootprint, rotOf, type WorldObjectDef, wallRot } from "./catalog.ts";
-import { TV_SCREEN, turnLocal } from "./games.ts";
+import { isGameTv, TV_SCREEN, turnLocal } from "./games.ts";
 import { topCentre } from "./tops.ts";
 
 export type MediaSrc = "yt" | "jf";
@@ -466,11 +466,17 @@ export function tvVolume(o: WorldObjectDef | undefined): number {
     : TV_VOLUME;
 }
 
-// The CRT TV shows media on its "TV" input (consoles are AV1 / AV2).
+// A TV a console plugs into shows media on its "TV" input (consoles are AV1 / AV2).
 export const MEDIA_INPUT = "media";
+// What it's set to: a console's id, or the TV input. The CRT starts on its
+// consoles (nothing), the media TVs on the TV input.
+export function tvInput(o: WorldObjectDef): string {
+  const i = typeof o.props?.input === "string" ? o.props.input : "";
+  return i || (o.kind === "crt_tv" ? "" : MEDIA_INPUT);
+}
 export function showsMedia(o: WorldObjectDef): boolean {
   if (!isDisplay(o.kind)) return false;
-  if (o.kind === "crt_tv") return o.props?.input === MEDIA_INPUT;
+  if (isGameTv(o.kind)) return tvInput(o) === MEDIA_INPUT;
   // the big screen: media unless it's set to show a board or the stage
   if (o.kind === "screen_wall") return !o.props?.source;
   return true;

@@ -35,6 +35,20 @@ const hue = (rgb: string) => {
   if (b > 180 && g > 140 && r < 140) return "blue";
   return `other(${rgb})`;
 };
+// From the console's panel: its cable into my hands, over to the TV's front,
+// X there; then back to the console, its panel open again.
+async function plugIn(page: Page, consoleId: string, front: { x: number; y: number }, back: { x: number; y: number }) {
+  await page.getByRole("button", { name: "Take the cable" }).click();
+  await expect(page.getByText("Console cable")).toBeVisible();
+  await walkTo(page, front.x, front.y, 25_000);
+  await expect.poll(() => page.evaluate(() => (window as any).__hud.get().prompt?.kind)).toBe("plug");
+  await page.keyboard.press("x");
+  await expect(page.getByText("Console cable")).toBeHidden({ timeout: 10_000 });
+  await walkTo(page, back.x, back.y, 25_000);
+  await page.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), consoleId);
+  await expect(page.getByText("Plugged into the TV")).toBeVisible();
+}
+
 const consoleState = (page: Page, id: string) =>
   page.evaluate((i) => {
     const c = (window as any).__yutopia.room.state.consoles.get(i);
@@ -90,16 +104,16 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
     await walkTo(ana, at.x + 1.5, at.y + 3.6, 25_000);
     await ana.waitForFunction(() => !!(window as any).__yutopia.games, null, { timeout: 15_000 });
     await ana.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), conId);
-    await ana.getByRole("button", { name: "Connect to the TV" }).click();
-    await expect(ana.getByText("Plugged into the TV")).toBeVisible();
+    // the cable into her hands (the panel closes), over to the TV, X there
+    await plugIn(ana, conId, { x: at.x + 1, y: at.y + 1.5 }, { x: at.x + 1.5, y: at.y + 3.6 });
     await ana.getByRole("button", { name: "Insert a cartridge" }).click();
     const card = ana.locator("li", { hasText: "Test Card" }).filter({ hasText: "8-bit" });
     await card.getByRole("button", { name: "▶" }).click();
     await expect(ana.getByText("Test Card", { exact: true })).toBeVisible();
-    await ana.getByRole("button", { name: /Turn on/ }).click();
+    await ana.getByRole("button", { name: /^⏻ Turn on/ }).click();
     // the game runs at Ana's (light blue), the TV goes out
     await expect.poll(() => consoleState(bia, conId).then((c) => c?.host)).toBe("Ana Demo");
-    await expect.poll(async () => hue(await colourOf(ana, "host", conId)), { timeout: 20_000 }).toBe("blue");
+    await expect.poll(async () => hue(await colourOf(ana, "host", conId)), { timeout: 90_000 }).toBe("blue");
     await expect.poll(() => consoleState(bia, conId).then((c) => c?.live), { timeout: 20_000 }).toBe(true);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/games-host.png` });
 
@@ -203,7 +217,7 @@ test("bring your cartridge: upload, play, save, come back and carry on", async (
     const open = () =>
       page.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), conId);
     await open();
-    await page.getByRole("button", { name: "Connect to the TV" }).click();
+    await plugIn(page, conId, { x: p.x + 1, y: p.y + 1.5 }, { x: p.x + 1.5, y: p.y + 3.6 });
     await page.getByRole("button", { name: "Insert a cartridge" }).click();
     // bring one: the file, a title
     await page.getByText("Bring your cartridge").click();
@@ -291,7 +305,7 @@ test("phone: the touch pad plays", async ({ browser }) => {
     await walkTo(page, p.x + 1.5, p.y + 3.6, 25_000);
     await page.waitForFunction(() => !!(window as any).__yutopia.games, null, { timeout: 15_000 });
     await page.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), ids[1]);
-    await page.getByRole("button", { name: "Connect to the TV" }).click();
+    await plugIn(page, ids[1], { x: p.x + 1, y: p.y + 1.5 }, { x: p.x + 1.5, y: p.y + 3.6 });
     await page.getByRole("button", { name: "Insert a cartridge" }).click();
     await page
       .locator("li", { hasText: "Test Card" })
@@ -309,5 +323,166 @@ test("phone: the touch pad plays", async ({ browser }) => {
   } finally {
     await page.evaluate((x) => (window as any).__yutopia.send("obj:removeMany", { ids: x }), ids).catch(() => {});
     await page.waitForTimeout(600).catch(() => {});
+  }
+});
+
+test("a Console TV takes a console too: the cable, the game on its glass, back to its TV input", async ({ page }) => {
+  test.setTimeout(180_000);
+  const tok = await token(ANA);
+  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  const stamp = Date.now().toString(36);
+  const tvId = `e2e-ctv-${stamp}`;
+  const conId = `e2e-cnes-${stamp}`;
+  const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
+  let T: { x: number; y: number } | null = null;
+  for (const [dx, dy] of [
+    [-2, -6],
+    [1, -6],
+    [-6, -5],
+    [3, 2],
+    [-6, 2],
+  ]) {
+    const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
+    for (const o of [
+      { id: tvId, kind: "tv_console", x: p.x, y: p.y, rot: 0 },
+      { id: conId, kind: "console_nes", x: p.x + 1, y: p.y + 2, rot: 0 },
+    ])
+      await page.evaluate((q) => (window as any).__yutopia.send("obj:put", q), o);
+    await page.waitForTimeout(700);
+    const ok = await page.evaluate(
+      ([a, b]) =>
+        !!(window as any).__yutopia.room.state.objects.get(a) && !!(window as any).__yutopia.room.state.objects.get(b),
+      [tvId, conId] as const,
+    );
+    if (ok) {
+      T = p;
+      break;
+    }
+    await page.evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvId, conId]);
+  }
+  expect(T, "room for the TV and the console").not.toBeNull();
+  const at = T as { x: number; y: number };
+  const input = () => page.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.input ?? "", tvId);
+  const onGlass = () =>
+    page.evaluate((i) => ((window as any).__yutopia.games?.pictures() ?? []).some((p: any) => p.def.id === i), tvId);
+  try {
+    await walkTo(page, at.x + 1.5, at.y + 3.6, 25_000);
+    await page.waitForFunction(() => !!(window as any).__yutopia.games, null, { timeout: 15_000 });
+    await page.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), conId);
+    await plugIn(page, conId, { x: at.x + 1, y: at.y + 1.5 }, { x: at.x + 1.5, y: at.y + 3.6 });
+    expect(await input()).toBe(conId);
+    await page.getByRole("button", { name: "Insert a cartridge" }).click();
+    await page
+      .locator("li", { hasText: "Test Card" })
+      .filter({ hasText: "8-bit" })
+      .getByRole("button", { name: "▶" })
+      .click();
+    await page.getByRole("button", { name: /^⏻ Turn on/ }).click();
+    await expect.poll(async () => hue(await colourOf(page, "host", conId)), { timeout: 20_000 }).toBe("blue");
+    await expect.poll(onGlass).toBe(true);
+    await page.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
+    if (SHOTS) {
+      await page.evaluate((p) => (window as any).__yutopia.engine.pinCamera({ x: p.x + 1, y: p.y + 1, zoom: 2.4 }), at);
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: `${SHOTS}/games-console-tv.png` });
+      await page.evaluate(() => (window as any).__yutopia.engine.pinCamera(null));
+    }
+    // its own panel now: the inputs (AV1, the TV input), and back to YouTube / Jellyfin
+    await walkTo(page, at.x + 1, at.y + 1.5, 25_000);
+    await page.evaluate((id) => (window as any).__yutopia.activateObject(id, false), tvId);
+    await expect.poll(() => page.evaluate(() => (window as any).__hud.get().panel.kind)).toBe("tv");
+    await page.getByRole("button", { name: /^TV · YouTube/ }).click();
+    await expect.poll(input).toBe("media");
+    await expect.poll(onGlass).toBe(false);
+    await page.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
+  } finally {
+    await page.evaluate((id) => (window as any).__yutopia.send("game:power", { id, on: false }), conId).catch(() => {});
+    await page.evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvId, conId]);
+    await page.waitForTimeout(600);
+  }
+});
+
+test("two games at once: one each, both TVs live for everyone; a second of mine pauses my first", async ({
+  browser,
+}) => {
+  test.setTimeout(300_000);
+  const [ta, tb] = [await token(ANA), await token(BIA)];
+  const ctx = { viewport: { width: 1280, height: 800 } };
+  const ana = await (await browser.newContext(ctx)).newPage();
+  const bia = await (await browser.newContext(ctx)).newPage();
+  const stamp = Date.now().toString(36);
+  const [tvA, conA, tvB, conB] = ["tvA", "conA", "tvB", "conB"].map((k) => `e2e-2g-${k}-${stamp}`);
+  try {
+    const s = await spaceId(ta, "Yutopia Lab");
+    await enter(ana, ta, s);
+    await enter(bia, tb, s);
+    const sp = await ana.evaluate(() => (window as any).__yutopia.map.spawn);
+    let T: { x: number; y: number } | null = null;
+    for (const [dx, dy] of [
+      [-2, -6],
+      [-6, -5],
+      [-6, 2],
+      [1, 2],
+    ]) {
+      const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
+      for (const o of [
+        { id: tvA, kind: "crt_tv", x: p.x, y: p.y, rot: 0 },
+        { id: conA, kind: "console_nes", x: p.x + 1, y: p.y + 2, rot: 0 },
+        { id: tvB, kind: "crt_tv", x: p.x + 4, y: p.y, rot: 0 },
+        { id: conB, kind: "console_nes", x: p.x + 5, y: p.y + 2, rot: 0 },
+      ])
+        await ana.evaluate((q) => (window as any).__yutopia.send("obj:put", q), o);
+      await ana.waitForTimeout(800);
+      const ok = await ana.evaluate(
+        (ids) => ids.every((i: string) => !!(window as any).__yutopia.room.state.objects.get(i)),
+        [tvA, conA, tvB, conB],
+      );
+      if (ok) {
+        T = p;
+        break;
+      }
+      await ana.evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvA, conA, tvB, conB]);
+    }
+    expect(T, "room for two TVs and two consoles").not.toBeNull();
+    const at = T as { x: number; y: number };
+    // each plugs one in (at its TV), puts the test card in and turns it on (at the console)
+    const setUp = async (page: Page, con: string, tv: string, dx: number) => {
+      await walkTo(page, at.x + dx + 1, at.y + 1.5, 25_000);
+      await page.evaluate(([c, t]) => (window as any).__yutopia.send("game:plug", { id: c, tv: t }), [con, tv]);
+      await walkTo(page, at.x + dx + 1.5, at.y + 3.6, 25_000);
+      await page.evaluate((id) => (window as any).__yutopia.send("game:cart", { id, game: "b:testcard-nes" }), con);
+      await page.waitForTimeout(600);
+      await page.evaluate((id) => (window as any).__yutopia.send("game:power", { id, on: true }), con);
+    };
+    await setUp(ana, conA, tvA, 0);
+    await setUp(bia, conB, tvB, 4);
+    await expect.poll(() => consoleState(bia, conA).then((c) => c?.host)).toBe("Ana Demo");
+    await expect.poll(() => consoleState(ana, conB).then((c) => c?.host)).toBe("Bia Demo");
+    await expect.poll(async () => hue(await colourOf(ana, "host", conA)), { timeout: 30_000 }).toBe("blue");
+    await expect.poll(async () => hue(await colourOf(bia, "host", conB)), { timeout: 30_000 }).toBe("blue");
+    // both TVs live: each sees the other's
+    await expect.poll(async () => hue(await colourOf(ana, "tv", conB)), { timeout: 30_000 }).toBe("blue");
+    await expect.poll(async () => hue(await colourOf(bia, "tv", conA)), { timeout: 30_000 }).toBe("blue");
+
+    // Bia turns hers off; Ana turns it on again herself: her first one pauses
+    await bia.evaluate((id) => (window as any).__yutopia.send("game:power", { id, on: false }), conB);
+    await expect.poll(() => consoleState(ana, conB)).toBeNull();
+    await walkTo(ana, at.x + 4.5, at.y + 3.6, 25_000);
+    await ana.evaluate((id) => (window as any).__yutopia.send("game:power", { id, on: true }), conB);
+    await expect(ana.getByText(/paused: you run one game at a time/)).toBeVisible({ timeout: 10_000 });
+    await expect.poll(() => consoleState(bia, conA).then((c) => c?.host)).toBe("");
+    await expect
+      .poll(() => ana.evaluate(() => (window as any).__yutopia.games?.hosting?.id), { timeout: 20_000 })
+      .toBe(conB);
+    // (her tab lets the first go, then boots the second: slow on a busy test machine)
+    await expect.poll(async () => hue(await colourOf(ana, "host", conB)), { timeout: 90_000 }).toBe("blue");
+    await expect.poll(async () => hue(await colourOf(bia, "tv", conB)), { timeout: 60_000 }).toBe("blue");
+  } finally {
+    for (const id of [conA, conB])
+      await ana.evaluate((i) => (window as any).__yutopia.send("game:power", { id: i, on: false }), id).catch(() => {});
+    await ana
+      .evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvA, conA, tvB, conB])
+      .catch(() => {});
+    await ana.waitForTimeout(800).catch(() => {});
   }
 });

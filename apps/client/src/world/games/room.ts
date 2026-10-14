@@ -11,21 +11,22 @@ import {
 import {
   CABLE_REACH,
   CONSOLES,
+  GAME_ASPECT,
   type GameSystem,
   gap,
   isConsole,
+  isGameTv,
   PAD_BUTTONS,
   PAD_REACH,
   SYSTEMS,
-  TV_SCREEN,
-  turnLocal,
 } from "@yutopia/shared/games";
-import { tvVolume } from "@yutopia/shared/media";
+import { displaySpot, GLASS, glassCorners, glassFacing, tvInput, tvVolume } from "@yutopia/shared/media";
 import { Container, Graphics, Matrix, Sprite, Text, Texture } from "pixi.js";
 import { prefs } from "@/lib/prefs";
 import { glowSprite, placeGlow } from "../art/glow";
 import type { WorldController } from "../controller";
 import { type GameView, hud, toast } from "../store";
+import type { GameScene3 } from "../tp/games3d";
 import { loadSave, putSave, romOf } from "./api";
 import { type Emu, startEmu } from "./emu";
 import { gamepadBits, keyBits } from "./input";
@@ -90,6 +91,7 @@ export class GameRoom {
   private live = new Map<string, Graphics>(); // console → its pads, LED (sorted with the room)
   private holder: HTMLDivElement; // off-screen: the emulator canvas
   private videoHolder: HTMLDivElement; // tiny, on screen: TV videos (LiveKit plays what's visible)
+  private videoCss = document.createElement("style");
   private hosting: Hosting | null = null;
   private keys = new Set<string>();
   private sentBits = 0;
@@ -119,6 +121,11 @@ export class GameRoom {
       opacity: "0.01",
       pointerEvents: "none",
     });
+    // every TV's video on the same few pixels: one laid out below another is off
+    // screen, and LiveKit stops sending what isn't seen (a second TV went black)
+    this.videoHolder.className = "yt-tv-videos";
+    this.videoCss.textContent = ".yt-tv-videos>video{position:absolute;left:0;top:0;width:100%;height:100%}";
+    document.head.append(this.videoCss);
     document.body.append(this.holder, this.videoHolder);
     this.cables.zIndex = -0.5;
     this.w.engine?.mountLive(this.cables);
@@ -153,7 +160,7 @@ export class GameRoom {
   refresh() {
     const engine = this.engine;
     if (!engine) return;
-    const tvs = engine.allObjects().filter((o) => o.kind === "crt_tv");
+    const tvs = engine.allObjects().filter((o) => isGameTv(o.kind));
     const keep = new Set(tvs.map((o) => o.id));
     for (const [id, v] of this.tvs)
       if (
@@ -239,7 +246,7 @@ export class GameRoom {
     const engine = this.engine;
     if (!engine) return;
     const o = focus ? this.obj(focus) : undefined;
-    const tv = o && (o.kind === "crt_tv" ? o : typeof o.props?.tv === "string" ? this.obj(o.props.tv) : undefined);
+    const tv = o && (isGameTv(o.kind) ? o : typeof o.props?.tv === "string" ? this.obj(o.props.tv) : undefined);
     if (tv) {
       const { w, h } = footprint(tv.kind, tv.rot ?? 0);
       if (!this.focus) this.zoomBack = engine.getZoom();
@@ -254,13 +261,26 @@ export class GameRoom {
   }
 
   // ── hosting: the server says I run a console ───────────────────────────
+  // One emulator at a time, and one after the other: the last one's let go of
+  // (saved — so whoever carries it on starts from there — and exited) before
+  // the next one boots.
+  private switching: Promise<void> | null = null;
   private syncHosting() {
+    if (this.switching) return;
     const sid = this.mySid;
     let mine: [string, S] | null = null;
     for (const [id, c] of this.state.consoles as Map<string, S>) if (c.host === sid) mine = [id, c];
     const h = this.hosting;
-    if (h && (!mine || mine[0] !== h.id)) void this.stopHosting();
-    if (mine && (!this.hosting || this.hosting.id !== mine[0])) void this.startHosting(mine[0], mine[1]);
+    const stop = !!h && (!mine || mine[0] !== h.id);
+    const next = mine && (!h || stop) ? mine : null;
+    if (!stop && !next) return;
+    this.switching = (async () => {
+      if (stop) await this.stopHosting();
+      // (a launch that never finishes doesn't hold everything up)
+      if (next) await Promise.race([this.startHosting(next[0], next[1]), new Promise((r) => setTimeout(r, 30_000))]);
+    })().finally(() => {
+      this.switching = null;
+    });
   }
 
   private async startHosting(id: string, c: S) {
@@ -275,7 +295,7 @@ export class GameRoom {
       system,
       canvas,
       emu: null,
-      tv: new TvStream(),
+      tv: this.streamFor(id),
       stream: null,
       view: null,
       remote: new Map(),
@@ -309,6 +329,14 @@ export class GameRoom {
       toast("The console wouldn't start.", "warn");
       this.w.send("game:power", { id, on: false });
     }
+  }
+
+  // a TV stream that already knows who may watch it
+  private streamFor(id: string): TvStream {
+    const tv = new TvStream();
+    const a = this.audiences.get(id);
+    if (a) tv.setAudience(a.video, a.audio);
+    return tv;
   }
 
   private async stopHosting() {
@@ -356,7 +384,10 @@ export class GameRoom {
     });
   }
 
+  // (kept for every console: it can arrive before the state saying I host it)
+  private audiences = new Map<string, ServerMessages["game:audience"]>();
   onAudience(m: ServerMessages["game:audience"]) {
+    this.audiences.set(m.id, m);
     if (this.hosting?.id === m.id) this.hosting.tv.setAudience(m.video, m.audio);
   }
 
@@ -428,8 +459,9 @@ export class GameRoom {
   // ── drawing ──────────────────────────────────────────────────────────────
   // what a TV shows: the console on its input, if that's on
   private tvShows(tv: WorldObjectDef): { id: string; c: S } | null {
-    const input = typeof tv.props?.input === "string" ? tv.props.input : null;
-    const c = input ? this.consoleOf(input) : undefined;
+    const input = tvInput(tv);
+    // (only while its cable's still in this TV: an older TV may still name it)
+    const c = input && this.obj(input)?.props?.tv === tv.id ? this.consoleOf(input) : undefined;
     return input && c ? { id: input, c } : null;
   }
 
@@ -440,9 +472,8 @@ export class GameRoom {
     const night = engine.nightLevel();
     for (const v of this.tvs.values()) {
       const tv = v.def;
-      const rot = tv.rot ?? 0;
       const shows = this.tvShows(tv);
-      const facing = rot === 0 || rot === 3; // the glass faces the room
+      const facing = glassFacing(tv); // the glass faces the room
       // the picture's source: my emulator, or the TV's video
       let src: HTMLVideoElement | HTMLCanvasElement | null = null;
       if (shows) {
@@ -453,8 +484,7 @@ export class GameRoom {
           src = el;
         }
         // its sound, from where the TV is (the host hears the console itself)
-        const { w, h } = footprint(tv.kind, rot);
-        const spot = { x: tv.x + w / 2, y: tv.y + h / 2, dnd: false };
+        const spot = { ...displaySpot(tv), dnd: false };
         const ear = { x: me.x, y: me.y, dnd: false };
         this.w.media.setVoice(
           `tv-${shows.id}`,
@@ -474,13 +504,16 @@ export class GameRoom {
       v.root.visible = on && facing;
       v.glow.visible = false;
       if (!on) continue;
-      // map the 640 × 480 picture onto the glass
-      const [x0, y0] = turnLocal(TV_SCREEN.x0, TV_SCREEN.y, rot, 2, 1);
-      const [x1, y1] = turnLocal(TV_SCREEN.x1, TV_SCREEN.y, rot, 2, 1);
-      const tl = toScreen(tv.x + x0, tv.y + y0);
-      const tr = toScreen(tv.x + x1, tv.y + y1);
-      const zTop = TV_SCREEN.z1;
-      const zBot = TV_SCREEN.z0;
+      // map the 640 × 480 picture onto its glass (letterboxed on a wide one)
+      const g = glassCorners(tv);
+      if (!g) continue;
+      const f = Math.min(1, GAME_ASPECT / (GLASS[tv.kind]?.aspect ?? GAME_ASPECT));
+      const along = (t: number) => toScreen(g.tl[0] + (g.tr[0] - g.tl[0]) * t, g.tl[1] + (g.tr[1] - g.tl[1]) * t);
+      const tl = along((1 - f) / 2);
+      const tr = along((1 + f) / 2);
+      const { zTop, zBot } = g;
+      const front = engine.frontKey(tv.id);
+      if (front != null) v.root.zIndex = front + 0.004;
       const m = new Matrix((tr.x - tl.x) / 640, (tr.y - tl.y) / 640, 0, (zTop - zBot) / 480, tl.x, tl.y - zTop);
       v.root.setFromMatrix(m);
       const picture = !!src && !!shows.c.host;
@@ -488,6 +521,7 @@ export class GameRoom {
       v.pic.width = 640;
       v.pic.height = 480;
       v.label.visible = !picture;
+      v.scan.visible = GLASS[tv.kind]?.look === "crt"; // scanlines on a tube, not a flat panel
       v.noise.clear();
       if (!picture) {
         // a blue "no signal" screen with a little snow
@@ -495,15 +529,15 @@ export class GameRoom {
         for (let i = 0; i < 90; i++)
           v.noise.rect(Math.random() * 640, Math.random() * 480, 6, 3).fill({ color: 0xffffff, alpha: 0.18 });
       }
-      v.root.alpha = 1;
+      v.root.alpha = engine.partAlpha(tv.id); // (cut-away walls, a builder's hand)
       // the glow on the floor in front of it, coloured like the picture
       if (night > 0.05) {
         if (picture && src && now - v.avgAt > 300) {
           v.avgAt = now;
           v.avg = this.average(src, v.avg);
         }
-        const [fx, fy] = turnLocal(1, 1.6, rot, 2, 1);
-        const c = toScreen(tv.x + fx, tv.y + fy);
+        const at = displaySpot(tv);
+        const c = toScreen(at.x, at.y);
         placeGlow(v.glow, c.x, c.y, TILE_W * 3, TILE_H * 3, picture ? v.avg : 0x2a55c0, 0.32 * night);
       }
     }
@@ -552,6 +586,20 @@ export class GameRoom {
       const base = toScreen(o.x + 0.5, o.y + 0.72); // its front, on the floor
       // the cable to its TV: along the floor, sagging a little
       const tv = typeof o.props?.tv === "string" ? this.obj(o.props.tv) : undefined;
+      // …or in my hands, on the way to one (rising from the floor to them)
+      const me = !tv && hud.get().cable?.consoleId === o.id ? engine.avatarAt(this.mySid) : null;
+      if (me) {
+        const back = toScreen(o.x + 0.5, o.y + 0.3);
+        const feet = toScreen(me.x, me.y);
+        const hand = { x: feet.x - 4, y: feet.y - (me.sitting ? PAD_Z_SIT : PAD_Z_STAND) };
+        const mid = { x: (back.x + feet.x) / 2, y: Math.max(back.y, feet.y) + 4 };
+        g.moveTo(back.x, back.y - 1)
+          .quadraticCurveTo(mid.x, mid.y, feet.x - 2, feet.y - 1)
+          .quadraticCurveTo(feet.x - 7, feet.y - 10, hand.x, hand.y)
+          .stroke({ width: 1.6, color: 0x15120f, alpha: 0.9 });
+        g.rect(hand.x - 1.5, hand.y - 3.5, 3, 4).fill(0x2a2622); // the plug
+        g.zIndex = Math.max(g.zIndex, me.x + me.y + 0.03);
+      }
       if (tv) {
         const { w, h } = footprint(tv.kind, tv.rot ?? 0);
         const back = toScreen(o.x + 0.5, o.y + 0.3);
@@ -649,7 +697,7 @@ export class GameRoom {
     }
     const near = gap({ x: me.x, y: me.y, w: 0, h: 0 }, this.rect(o)) <= PAD_REACH;
     let view: GameView;
-    if (o.kind === "crt_tv") {
+    if (isGameTv(o.kind)) {
       const inputs = (this.engine?.allObjects() ?? [])
         .filter((x) => isConsole(x.kind) && x.props?.tv === o.id)
         .map((x, i) => ({
@@ -658,7 +706,7 @@ export class GameRoom {
           title: this.consoleOf(x.id)?.title || String(x.props?.cartTitle ?? ""),
           on: !!this.consoleOf(x.id),
         }));
-      const showing = typeof o.props?.input === "string" ? o.props.input : "";
+      const showing = tvInput(o);
       const c = showing ? this.consoleOf(showing) : undefined;
       view = {
         id: o.id,
@@ -683,7 +731,7 @@ export class GameRoom {
       // the TVs its cable reaches, nearest first
       const tvs = (this.engine?.allObjects() ?? [])
         .map((x) => ({ id: x.id, kind: x.kind, d: gap(this.rect(o), this.rect(x)) }))
-        .filter((x) => x.kind === "crt_tv" && x.d <= CABLE_REACH)
+        .filter((x) => isGameTv(x.kind) && x.d <= CABLE_REACH)
         .sort((a, b) => a.d - b.d)
         .map((x) => `${x.id}|${x.d.toFixed(1)}`);
       const ports = Array.from({ length: SYSTEMS[system].ports }, (_, i) => {
@@ -740,6 +788,44 @@ export class GameRoom {
     this.videoHolder.append(el);
   }
 
+  // for the third-person view: the cables, the pads (by their console or in
+  // someone's hands, cord back to it), the power LEDs — as iso draws them
+  scene3d(): GameScene3 {
+    const out: GameScene3 = { cables: [], pads: [], leds: [] };
+    for (const o of this.engine?.allObjects() ?? []) {
+      if (!isConsole(o.kind)) continue;
+      const c = this.consoleOf(o.id);
+      const tv = typeof o.props?.tv === "string" ? this.obj(o.props.tv) : undefined;
+      if (tv) {
+        const from = { x: o.x + 0.5, y: o.y + 0.3 };
+        const g = GLASS[tv.kind]?.wall ? glassCorners(tv) : null;
+        if (g) {
+          // up the wall to the bottom of the screen
+          const at = { x: (g.tl[0] + g.tr[0]) / 2, y: (g.tl[1] + g.tr[1]) / 2 };
+          out.cables.push({ from, to: at, up: g.zBot });
+        } else {
+          const { w, h } = footprint(tv.kind, tv.rot ?? 0);
+          out.cables.push({ from, to: { x: tv.x + w / 2, y: tv.y + h / 2 }, up: 0 });
+        }
+      }
+      if (c) out.leds.push({ x: o.x + 0.3, y: o.y + 0.8 }); // on its front face
+      const system = CONSOLES[o.kind];
+      for (let port = 1; port <= SYSTEMS[system].ports; port++) {
+        const sid: string = c ? (port === 1 ? c.p1 : c.p2) : "";
+        out.pads.push({
+          key: `${o.id}|${port}`,
+          system,
+          port,
+          cord: { x: o.x + (port === 1 ? 0.4 : 0.6), y: o.y + 0.72 },
+          rest: { x: o.x + (port === 1 ? 0.22 : 0.78), y: o.y + 0.86 },
+          holder: sid || null,
+          sitting: !!(sid && this.engine?.avatarAt(sid)?.sitting),
+        });
+      }
+    }
+    return out;
+  }
+
   // for the third-person view: what each TV shows now (the console's picture)
   pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement }[] {
     const out: { def: WorldObjectDef; canvas: HTMLCanvasElement }[] = [];
@@ -762,5 +848,6 @@ export class GameRoom {
     this.cables.destroy();
     this.holder.remove();
     this.videoHolder.remove();
+    this.videoCss.remove();
   }
 }

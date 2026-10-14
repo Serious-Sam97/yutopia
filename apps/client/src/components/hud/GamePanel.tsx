@@ -16,8 +16,8 @@ import { MediaRemote, TvVolume } from "./MediaPanel";
 const T = {
   plugged: ["Plugged into the TV", "Ligado na TV"],
   unplugged: ["Not plugged into a TV", "Não está ligado numa TV"],
-  plug: ["Connect to the TV", "Ligar na TV"],
-  plugN: ["…or the TV {d} tiles away", "…ou na TV a {d} tiles"],
+  plug: ["Take the cable", "Pegar o cabo"],
+  plugHow: ["Then walk to a TV and press X there.", "Depois vá até uma TV e aperte X lá."],
   unplug: ["Unplug", "Desligar o cabo"],
   noTv: [
     "No TV close enough: put this by one (a cable reaches 4 tiles).",
@@ -325,21 +325,19 @@ function ConsoleControls({
               {t("unplug")}
             </button>
           ) : v.tvs.length ? (
+            // the cable into my hands: I take it to the TV I want and plug it in there
             <div className="flex flex-col gap-1 mt-1.5">
-              {v.tvs.map((entry, i) => {
-                const [tv, d] = entry.split("|");
-                return (
-                  <button
-                    key={tv}
-                    type="button"
-                    className={i === 0 ? "deck-btn" : "ghost-btn text-xs"}
-                    style={i === 0 ? { height: 28, fontSize: 11 } : undefined}
-                    onClick={() => w?.send("game:plug", { id, tv })}
-                  >
-                    {i === 0 ? t("plug") : t("plugN", { d })}
-                  </button>
-                );
-              })}
+              <button
+                type="button"
+                className="deck-btn"
+                style={{ height: 28, fontSize: 11 }}
+                onClick={() => w?.grabCable(id)}
+              >
+                🔌 {t("plug")}
+              </button>
+              <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+                {t("plugHow")}
+              </p>
             </div>
           ) : (
             <p className="text-[11px] mt-1" style={{ color: "var(--muted)" }}>

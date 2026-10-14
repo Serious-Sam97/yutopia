@@ -246,6 +246,23 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
         timeout: 20_000,
       })
       .toBe(false);
+
+    // E at the switch: back on, and the keys still walk me (no panel left
+    // open behind it to swallow them)
+    await expect.poll(() => page.evaluate(() => (window as any).__hud.get().prompt?.objectId)).toBe(sw);
+    await page.keyboard.press("e");
+    await expect
+      .poll(() => page.evaluate((id) => (window as any).__yutopia.engine.getObject(id)?.props?.on, lamp), {
+        timeout: 20_000,
+      })
+      .not.toBe(false);
+    expect(await page.evaluate(() => (window as any).__hud.get().panel.kind)).toBeNull();
+    const from = await me(page);
+    await page.keyboard.down("s");
+    await page.waitForTimeout(600);
+    await page.keyboard.up("s");
+    const to = await me(page);
+    expect(Math.hypot(to.x - from.x, to.y - from.y)).toBeGreaterThan(0.5);
   } finally {
     // as it was: unassigned first (that lands), then its own props back
     await page.evaluate(

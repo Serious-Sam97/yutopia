@@ -239,6 +239,15 @@ const D = {
   ],
   heldEmpty: ["empty", "vazio"],
   heldPutDown: ["Put down", "Largar"],
+  cableHeld: ["Console cable", "Cabo do console"],
+  cableHint: ["take it to a TV, press X there", "leve até uma TV e aperte X lá"],
+  cableLetGo: ["Let go", "Soltar"],
+  cablePlug: ["Plug the cable in", "Ligar o cabo"],
+  cableTooFar: [
+    "The cable slipped out of your hands: it only reaches 4 tiles.",
+    "O cabo escapou das suas mãos: ele só alcança 4 tiles.",
+  ],
+  cableNotHere: ["That's not a TV the console can plug into.", "Não dá para ligar o console aí."],
   terminal: ["Terminal", "Terminal"],
   buildMode: ["Build mode", "Modo construção"],
   buildHelp: [

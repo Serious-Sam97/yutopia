@@ -1037,6 +1037,96 @@ test("your own arrival point in a booth: fine while it's free, the space's while
   assert.deepEqual(mine(again)?.at, spot, "the spot is kept");
 });
 
+test("game room: a console moved to another TV (a media one too), or unplugged, leaves the old TV's input", async () => {
+  const s = ++space;
+  const a = await person(48, s, "member,builder");
+  const st = () => a.room.state;
+  const at = me(a);
+  const base = { x: Math.floor(at?.x ?? 0), y: Math.floor(at?.y ?? 0) };
+  const put = async (id: string, kind: string, x: number, y: number) => {
+    const p = spotFor(a, kind, x, y, 6, () => true);
+    assert.ok(p, `room for ${id}`);
+    a.room.send("obj:put", { id, kind, x: p.x, y: p.y, rot: 0 });
+    await waitFor(() => !!st().objects.get(id));
+    return p;
+  };
+  const tv1 = await put("m-tv1", "crt_tv", base.x - 2, base.y - 3);
+  const con = await put("m-con", "console_nes", tv1.x + 1, tv1.y + 2);
+  const tv2 = await put("m-tv2", "tv_console", con.x + 2, con.y); // a media TV: consoles too
+  const props = (id: string) => JSON.parse(st().objects.get(id)?.props ?? "{}");
+  const toasts = () => (a.msgs.toast ?? []).map((m) => (m as { text: string }).text);
+
+  // the cable's plugged in at the TV: from across the room, no
+  await walk(a, { x: tv1.x + 1, y: tv1.y + 8 });
+  a.room.send("game:plug", { id: "m-con", tv: "m-tv1" });
+  await waitFor(() => toasts().some((x) => /Get closer to the TV/.test(x)));
+  assert.equal(props("m-con").tv, undefined);
+  await walk(a, { x: tv1.x + 1, y: tv1.y + 1.5 });
+  a.room.send("game:plug", { id: "m-con", tv: "m-tv1" });
+  await waitFor(() => props("m-tv1").input === "m-con");
+  // moved to the Console TV: the first one lets go of it, this one switches to it
+  await walk(a, { x: tv2.x + 1, y: tv2.y + 1.5 });
+  a.room.send("game:plug", { id: "m-con", tv: "m-tv2" });
+  await waitFor(() => props("m-con").tv === "m-tv2" && props("m-tv2").input === "m-con");
+  await waitFor(() => props("m-tv1").input === undefined);
+  // …and back to its TV input (YouTube / Jellyfin), and to the console again
+  a.room.send("game:input", { tv: "m-tv2", console: "media" });
+  await waitFor(() => props("m-tv2").input === "media");
+  a.room.send("game:input", { tv: "m-tv2", console: "m-con" });
+  await waitFor(() => props("m-tv2").input === "m-con");
+  // unplugged (at the console): so does the second
+  await walk(a, { x: con.x + 0.5, y: con.y + 1.5 });
+  a.room.send("game:plug", { id: "m-con", tv: null });
+  await waitFor(() => props("m-con").tv === undefined && props("m-tv2").input === undefined);
+  await a.room.leave(true);
+});
+
+test("game room: one game at a time per person — a second one pauses the first (anyone can carry it on)", async () => {
+  const s = ++space;
+  const a = await person(49, s, "member,builder");
+  const b = await person(50, s);
+  const st = () => a.room.state;
+  const at = me(a);
+  const base = { x: Math.floor(at?.x ?? 0), y: Math.floor(at?.y ?? 0) };
+  const put = async (id: string, kind: string, x: number, y: number) => {
+    const p = spotFor(a, kind, x, y, 6, () => true);
+    assert.ok(p, `room for ${id}`);
+    a.room.send("obj:put", { id, kind, x: p.x, y: p.y, rot: 0 });
+    await waitFor(() => !!st().objects.get(id));
+    return p;
+  };
+  const tv1 = await put("g1-tv", "crt_tv", base.x - 2, base.y - 3);
+  const c1 = await put("g1-con", "console_nes", tv1.x, tv1.y + 2);
+  const c2 = await put("g2-con", "console_nes", tv1.x + 2, tv1.y + 2);
+  const props = (id: string) => JSON.parse(st().objects.get(id)?.props ?? "{}");
+  await walk(a, { x: tv1.x + 1, y: tv1.y + 1.5 });
+  for (const id of ["g1-con", "g2-con"]) {
+    a.room.send("game:plug", { id, tv: "g1-tv" });
+    await waitFor(() => props(id).tv === "g1-tv");
+    a.room.send("game:cart", { id, game: "b:testcard-nes" });
+    await waitFor(() => props(id).cart === "b:testcard-nes");
+  }
+  await walk(a, { x: (c1.x + c2.x) / 2 + 0.5, y: c1.y + 1.5 });
+  const c = (id: string) => st().consoles.get(id);
+  a.room.send("game:power", { id: "g1-con", on: true });
+  await waitFor(() => c("g1-con")?.host === a.room.sessionId);
+  // the second: Ana runs it now; the first is paused (still on, nobody running it)
+  a.room.send("game:power", { id: "g2-con", on: true });
+  await waitFor(() => c("g2-con")?.host === a.room.sessionId);
+  assert.equal(c("g1-con")?.host, "");
+  assert.equal(c("g1-con")?.p1, "");
+  await waitFor(() =>
+    (a.msgs.toast ?? []).some((m) => /paused: you run one game at a time/.test((m as { text: string }).text)),
+  );
+  // Bia carries the first one on
+  await walk(b, { x: c1.x + 0.5, y: c1.y + 1.5 });
+  b.room.send("game:continue", { id: "g1-con" });
+  await waitFor(() => c("g1-con")?.host === b.room.sessionId);
+  assert.equal(c("g2-con")?.host, a.room.sessionId, "two games at once, one each");
+  await a.room.leave(true);
+  await b.room.leave(true);
+});
+
 test("game room: plug a console into a TV, a cartridge, power, pad 2 relayed, the TV's audience, carry on", async () => {
   const s = ++space;
   const a = await person(46, s, "member,builder");
