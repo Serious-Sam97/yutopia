@@ -449,13 +449,14 @@ export class FloorBake {
     return c;
   }
 
-  // The whole floor seen from straight above, `px` canvas px per tile (the
-  // third-person view lays it on the ground as one texture).
-  drawPlan(px: number): HTMLCanvasElement {
-    const c = canvas(this.map.width * px, this.map.height * px);
+  // The floor seen from straight above, `px` canvas px per tile: the tiles
+  // from (x0, y0), w by h of them (the third-person view lays it on the ground
+  // in pieces no bigger than a screen: one huge canvas is slow, or blank, in Chrome).
+  drawPlan(px: number, x0 = 0, y0 = 0, w = this.map.width, h = this.map.height): HTMLCanvasElement {
+    const c = canvas(w * px, h * px);
     const g = c.getContext("2d") as CanvasRenderingContext2D;
-    g.setTransform(px / T, 0, 0, px / T, 0, 0);
-    this.paint(g, px / T, () => true);
+    g.setTransform(px / T, 0, 0, px / T, -x0 * px, -y0 * px);
+    this.paint(g, px / T, (x, y) => x >= x0 - 1 && x <= x0 + w && y >= y0 - 1 && y <= y0 + h);
     return c;
   }
 

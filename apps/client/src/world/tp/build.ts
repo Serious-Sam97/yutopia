@@ -113,7 +113,7 @@ export class World3 {
   private areas = new Map<string, { sig: string; built: Built }>();
   private tall = new Map<string, { sig: string; built: Built; fade: FadeGroup }>();
   private tallIds = new Set<string>(); // things known to stand tall (drawn on their own)
-  private floor: { mesh: Mesh; tex: CanvasTexture; sig: string } | null = null;
+  private floor: { meshes: Mesh[]; sig: string } | null = null;
   private objects: WorldObjectDef[] = [];
 
   // `light`: how lit materials take the room's light (the iso light map)
@@ -528,77 +528,74 @@ export class World3 {
     if (this.floor?.sig === sig) return;
     const map = this.map;
     const px = Math.max(16, Math.min(64, Math.floor(4096 / Math.max(map.width, map.height))));
-    const plan = new FloorBake(map, this.objects, 1).drawPlan(px);
-    const g = plan.getContext("2d") as CanvasRenderingContext2D;
-    g.save();
-    g.globalCompositeOperation = "source-atop";
-    g.filter = `blur(${Math.max(1, px * 0.05)}px)`;
-    g.fillStyle = INK;
+    // in pieces of at most 1024 px a side, as the iso view bakes it: a canvas
+    // the size of the whole floor (12 M px on a big map) is slow in Chrome, and
+    // on some of them comes out blank
+    const CH = Math.max(1, Math.floor(1024 / px));
+    const bake = new FloorBake(map, this.objects, 1);
     const softs = [...this.areas.values(), ...this.tall.values()].map((a) => a.built.soft);
-    for (const soft of softs) {
-      for (const r of soft.rects) {
-        g.globalAlpha = r.op * 0.8;
-        const rad = Math.min(r.round * px * 0.5, ((r.x1 - r.x0) * px) / 2, ((r.y1 - r.y0) * px) / 2);
-        g.beginPath();
-        g.roundRect(r.x0 * px, r.y0 * px, (r.x1 - r.x0) * px, (r.y1 - r.y0) * px, rad);
-        g.fill();
-      }
-      for (const d of soft.dots) {
-        g.globalAlpha = d.op * 0.8;
-        g.beginPath();
-        g.arc(d.x * px, d.y * px, d.r * px, 0, Math.PI * 2);
-        g.fill();
-      }
-    }
-    g.restore();
-    const tex = new CanvasTexture(plan);
-    tex.colorSpace = SRGBColorSpace;
-    tex.anisotropy = this.anisotropy;
-    if (this.floor) {
-      this.floor.tex.dispose();
-      const mat = this.floor.mesh.material as MeshLambertMaterial;
-      mat.map = tex;
-      mat.needsUpdate = true;
-      this.floor = { ...this.floor, tex, sig };
-      return;
-    }
-    // one quad per run of floor tiles (the void outside is cut by the shape,
-    // never by the texture's alpha: a lost canvas can't take the floor away)
-    const pos: number[] = [];
-    const nor: number[] = [];
-    const uv: number[] = [];
-    for (let y = 0; y < map.height; y++) {
-      let x = 0;
-      while (x < map.width) {
-        if (!isFloor(tileAt(map, x, y))) {
-          x++;
-          continue;
+    this.dropFloor();
+    const meshes: Mesh[] = [];
+    for (let cy = 0; cy < map.height; cy += CH)
+      for (let cx = 0; cx < map.width; cx += CH) {
+        const w = Math.min(CH, map.width - cx);
+        const h = Math.min(CH, map.height - cy);
+        // one quad per run of floor tiles (the void outside is cut by the
+        // shape, never by the texture's alpha: a lost canvas can't take the floor away)
+        const pos: number[] = [];
+        const nor: number[] = [];
+        const uv: number[] = [];
+        for (let y = cy; y < cy + h; y++) {
+          let x = cx;
+          while (x < cx + w) {
+            if (!isFloor(tileAt(map, x, y))) {
+              x++;
+              continue;
+            }
+            let x1 = x;
+            while (x1 < cx + w && isFloor(tileAt(map, x1, y))) x1++;
+            // (u along x, v down from the chunk's top row, as the canvas is laid)
+            const u0 = (x - cx) / w;
+            const u1 = (x1 - cx) / w;
+            const v0 = 1 - (y - cy) / h;
+            const v1 = 1 - (y + 1 - cy) / h;
+            pos.push(x, 0, y, x, 0, y + 1, x1, 0, y + 1, x, 0, y, x1, 0, y + 1, x1, 0, y);
+            uv.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
+            for (let i = 0; i < 6; i++) nor.push(0, 1, 0);
+            x = x1;
+          }
         }
-        let x1 = x;
-        while (x1 < map.width && isFloor(tileAt(map, x1, y))) x1++;
-        // (plan px: u along x, v down from the top row, as the canvas is laid)
-        const u0 = x / map.width;
-        const u1 = x1 / map.width;
-        const v0 = 1 - y / map.height;
-        const v1 = 1 - (y + 1) / map.height;
-        pos.push(x, 0, y, x, 0, y + 1, x1, 0, y + 1, x, 0, y, x1, 0, y + 1, x1, 0, y);
-        uv.push(u0, v0, u0, v1, u1, v1, u0, v0, u1, v1, u1, v0);
-        for (let i = 0; i < 6; i++) nor.push(0, 1, 0);
-        x = x1;
+        if (!pos.length) continue;
+        const plan = bake.drawPlan(px, cx, cy, w, h);
+        softShadows(plan, px, cx, cy, w, h, softs);
+        const tex = new CanvasTexture(plan);
+        tex.colorSpace = SRGBColorSpace;
+        tex.anisotropy = this.anisotropy;
+        const mat = new MeshLambertMaterial({ map: tex });
+        this.light(mat);
+        const geo = new BufferGeometry();
+        geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
+        geo.setAttribute("normal", new Float32BufferAttribute(nor, 3));
+        geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+        geo.computeBoundingSphere();
+        const mesh = new Mesh(geo, mat);
+        mesh.receiveShadow = true;
+        mesh.name = "floor";
+        this.root.add(mesh);
+        meshes.push(mesh);
       }
+    this.floor = { meshes, sig };
+  }
+
+  private dropFloor() {
+    for (const m of this.floor?.meshes ?? []) {
+      this.root.remove(m);
+      m.geometry.dispose();
+      const mat = m.material as MeshLambertMaterial;
+      mat.map?.dispose();
+      mat.dispose();
     }
-    const geo = new BufferGeometry();
-    geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
-    geo.setAttribute("normal", new Float32BufferAttribute(nor, 3));
-    geo.setAttribute("uv", new Float32BufferAttribute(uv, 2));
-    geo.computeBoundingSphere();
-    const floorMat = new MeshLambertMaterial({ map: tex });
-    this.light(floorMat);
-    const mesh = new Mesh(geo, floorMat);
-    mesh.receiveShadow = true;
-    mesh.name = "floor";
-    this.root.add(mesh);
-    this.floor = { mesh, tex, sig };
+    this.floor = null;
   }
 
   dispose() {
@@ -607,16 +604,65 @@ export class World3 {
     for (const t of this.tall.values()) this.unmount(t.built);
     for (const f of [...this.wallFades, ...[...this.tall.values()].map((t) => t.fade)])
       for (const m of f.own?.values() ?? []) m.dispose();
-    if (this.floor) {
-      this.floor.tex.dispose();
-      this.floor.mesh.geometry.dispose();
-      (this.floor.mesh.material as Material).dispose();
-    }
+    this.dropFloor();
     for (const m of Object.values(this.materials)) m.dispose();
   }
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+// The items' contact shadows on a floor piece (tiles cx, cy, w by h at `px`
+// a tile), soft without a canvas filter (a filtered fill on a big canvas is
+// what Chrome draws slowly, or not at all): a few fills of each shape, from a
+// little inside its edge to a little outside, each as faint as the sum needs.
+function softShadows(
+  plan: HTMLCanvasElement,
+  px: number,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  softs: Out["soft"][],
+) {
+  const g = plan.getContext("2d") as CanvasRenderingContext2D;
+  g.save();
+  g.globalCompositeOperation = "source-atop";
+  g.setTransform(px, 0, 0, px, -cx * px, -cy * px);
+  g.fillStyle = INK;
+  const STEPS = 3;
+  const blur = Math.max(1, px * 0.05) / px; // tiles
+  const layer = (op: number) => 1 - (1 - op) ** (1 / STEPS);
+  const inside = (x0: number, y0: number, x1: number, y1: number) =>
+    x1 >= cx - 1 && x0 <= cx + w + 1 && y1 >= cy - 1 && y0 <= cy + h + 1;
+  for (const soft of softs) {
+    for (const r of soft.rects) {
+      if (!inside(r.x0, r.y0, r.x1, r.y1)) continue;
+      g.globalAlpha = layer(r.op * 0.8);
+      for (let i = 0; i < STEPS; i++) {
+        const d = blur * ((2 * i) / (STEPS - 1) - 1);
+        const rw = r.x1 - r.x0 + 2 * d;
+        const rh = r.y1 - r.y0 + 2 * d;
+        if (rw <= 0 || rh <= 0) continue;
+        const rad = Math.max(0, Math.min(r.round * 0.5 + d, rw / 2, rh / 2));
+        g.beginPath();
+        g.roundRect(r.x0 - d, r.y0 - d, rw, rh, rad);
+        g.fill();
+      }
+    }
+    for (const dot of soft.dots) {
+      if (!inside(dot.x - dot.r, dot.y - dot.r, dot.x + dot.r, dot.y + dot.r)) continue;
+      g.globalAlpha = layer(dot.op * 0.8);
+      for (let i = 0; i < STEPS; i++) {
+        const rr = dot.r + blur * ((2 * i) / (STEPS - 1) - 1);
+        if (rr <= 0) continue;
+        g.beginPath();
+        g.arc(dot.x, dot.y, rr, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  }
+  g.restore();
+}
+
 const areaKey = (x: number, y: number) => `${Math.floor(x / AREA)},${Math.floor(y / AREA)}`;
 
 function getOr<K, V>(m: Map<K, V>, k: K, make: () => V): V {
