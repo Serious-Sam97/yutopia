@@ -85,12 +85,13 @@ export function piece(kind: string, props: Props, id = ""): Piece {
       };
     case "sofa":
       return {
+        seat: true,
         boxes: [
           { x: 0.02, y: 0.12, w: 2.96, d: 0.82, z: 0, h: 11, color: C.rustDark },
           { x: 0.26, y: 0.38, w: 0.82, d: 0.54, z: 11, h: 5, color: C.rust },
           { x: 1.1, y: 0.38, w: 0.82, d: 0.54, z: 11, h: 5, color: C.rust },
           { x: 1.94, y: 0.38, w: 0.8, d: 0.54, z: 11, h: 5, color: C.rust },
-          { x: 0.02, y: 0.12, w: 2.96, d: 0.26, z: 11, h: 19, color: C.rustDark },
+          { x: 0.02, y: 0.12, w: 2.96, d: 0.26, z: 11, h: 19, color: C.rustDark, bias: 1 },
           { x: 0.02, y: 0.38, w: 0.24, d: 0.56, z: 11, h: 10, color: shade(C.rustDark, 0.9) },
           { x: 2.74, y: 0.38, w: 0.24, d: 0.56, z: 11, h: 10, color: shade(C.rustDark, 0.9) },
         ],

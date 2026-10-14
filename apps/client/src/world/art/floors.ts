@@ -445,6 +445,23 @@ export class FloorBake {
       const sy = (x + y) * HH;
       return sx + HW >= k.x && sx - HW <= k.x + k.w && sy + 2 * HH >= k.y && sy <= k.y + k.h;
     };
+    this.paint(g, res, visible);
+    return c;
+  }
+
+  // The whole floor seen from straight above, `px` canvas px per tile (the
+  // third-person view lays it on the ground as one texture).
+  drawPlan(px: number): HTMLCanvasElement {
+    const c = canvas(this.map.width * px, this.map.height * px);
+    const g = c.getContext("2d") as CanvasRenderingContext2D;
+    g.setTransform(px / T, 0, 0, px / T, 0, 0);
+    this.paint(g, px / T, () => true);
+    return c;
+  }
+
+  // Materials, ambient occlusion and strips, in plan px (T per tile) through
+  // whatever transform `g` has; `res` = device px per plan px at T.
+  private paint(g: CanvasRenderingContext2D, res: number, visible: (x: number, y: number) => boolean) {
     const ms = Math.round(T * res);
     const e = 0.6 / res; // overlap so materials meet without hairline gaps
     for (const [ch, tiles] of this.byMat) {
@@ -486,7 +503,6 @@ export class FloorBake {
       strip(w > h ? [x, y + h * 0.35, w, h * 0.3] : [x + w * 0.35, y, w * 0.3, h], "#c39a4a", "rgba(255,240,200,0.5)");
     }
     if (this.stage) strip(this.stage, "#ffa630", "rgba(255,240,200,0.4)");
-    return c;
   }
 }
 

@@ -4,6 +4,7 @@ import {
   EMOTES,
   type Emote,
   entry,
+  entryWallItem,
   footprint,
   type HeldKind,
   hasActions,
@@ -13,6 +14,7 @@ import {
   isHeld,
   isSocial,
   type MapDef,
+  placedFootprint,
   Q,
   SOCIAL_MS,
   surfaceAt,
@@ -27,6 +29,7 @@ import {
   WB_W,
   type WbItem,
   type WorldObjectDef,
+  wallRot,
 } from "@yutopia/shared";
 import {
   Application,
@@ -49,6 +52,7 @@ import type { Motion } from "./art/avatar-motion";
 import type { Aff, PartName, Pose } from "./art/avatar-rig";
 import type { AvatarRig } from "./art/avatar-svg";
 import { loadPeople, people } from "./art/people-load";
+import { loadThemes } from "./art/themes-load";
 
 type People = NonNullable<ReturnType<typeof people>>;
 
@@ -237,6 +241,14 @@ function isFloorAt(map: MapDef, x: number, y: number): boolean {
 function affectsFloor(o: WorldObjectDef): boolean {
   const e = entry(o.kind);
   return o.kind === "door" || (e.solid && !e.wall);
+}
+
+// What a thing covers on the floor, for outlines (w, d in tiles from its
+// corner): its footprint, or a strip `depth` deep along the wall it hangs on.
+function wallStrip(o: WorldObjectDef, depth: number): [number, number] {
+  const { w, h } = placedFootprint(o);
+  if (!entry(o.kind).wall) return [w, h];
+  return wallRot(o.rot) === 3 ? [depth, h] : [w, depth];
 }
 
 // Soft contact shadows: stacked ellipses fading out from the feet.
@@ -570,6 +582,7 @@ export class WorldEngine {
   // A wall brush over an edge: a see-through wall where it would go.
   private edgeG = new Graphics();
   setEdgeGhost(e: { x: number; y: number; dir: "h" | "v" } | null, ok: boolean) {
+    this.edgeGhost = e ? { e, ok } : null;
     if (!this.edgeG.parent) this.world.addChild(this.edgeG);
     this.edgeG.clear();
     if (!e) return;
@@ -632,6 +645,7 @@ export class WorldEngine {
   }
 
   setRectGhost(r: { x: number; y: number; w: number; h: number; ok: boolean } | null) {
+    this.rectGhost = r;
     if (!this.rectG.parent) this.world.addChild(this.rectG);
     this.rectG.clear();
     if (!r) return;
@@ -746,6 +760,7 @@ export class WorldEngine {
     if (affectsLight(v.def)) this.bakeLight();
     this.dropView(v);
     this.objectViews.delete(id);
+    this.panels.delete(id);
     this.hulls.delete(id);
     if (redrawFlat) this.redrawFlat();
   }
@@ -874,7 +889,7 @@ export class WorldEngine {
       return;
     }
     this.themeKey = key;
-    import("./art/themes").then(({ makeTheme }) => {
+    loadThemes().then(({ makeTheme }) => {
       if (this.destroyed || this.themeKey !== key) return;
       this.theme?.destroy();
       this.theme = makeTheme(this.map.theme ?? "clouds", this.animated(), this.quality);
@@ -1138,7 +1153,7 @@ export class WorldEngine {
     let best: WorldObjectDef | undefined;
     for (const v of this.objectViews.values()) {
       const o = v.def;
-      const { w, h } = footprint(o.kind, entry(o.kind).wall ? 0 : (o.rot ?? 0));
+      const { w, h } = placedFootprint(o);
       if (x >= o.x && x < o.x + w && y >= o.y && y < o.y + h) {
         // prefer things on the floor over rugs
         if (!best || best.kind === "rug" || best.kind === "standup_mat") best = o;
@@ -1181,11 +1196,63 @@ export class WorldEngine {
     const v = this.objectViews.get(objectId);
     if (!v) return;
     this.clearDisplays(v);
+    this.panels.delete(objectId);
     if (!items.length) return;
     const S = 36;
     const pw = 1.72 * S;
     const ph = 34;
-    this.mountWall(v, 0.14, 0.065, 61, pw, ph, () => this.whiteboardContent(items, pw, ph));
+    const build = () => this.whiteboardContent(items, pw, ph);
+    this.mountWall(v, 0.14, 0.065, 61, pw, ph, build);
+    this.keepPanel(v.def, 0.14, 0.065, 61, pw, ph, build);
+  }
+
+  // ── for the third-person view: what's on each wall display ─────────────────
+  // (board walls, the big screens' board or share, whiteboard miniatures), as
+  // the iso view mounts it; `panelCanvas` draws one into a canvas.
+  private panels = new Map<
+    string,
+    {
+      def: WorldObjectDef;
+      ox: number;
+      oy: number;
+      zTop: number;
+      pw: number;
+      ph: number;
+      build: () => Container;
+      version: number;
+    }
+  >();
+  private panelVersion = 0;
+  private keepPanel(
+    def: WorldObjectDef,
+    ox: number,
+    oy: number,
+    zTop: number,
+    pw: number,
+    ph: number,
+    build: () => Container,
+  ) {
+    this.panels.set(def.id, { def, ox, oy, zTop, pw, ph, build, version: ++this.panelVersion });
+  }
+  livePanels() {
+    return this.panels;
+  }
+  panelCanvas(id: string, res = 4): HTMLCanvasElement | null {
+    const p = this.panels.get(id);
+    if (!p || !this.app) return null;
+    const c = p.build();
+    const canvas = this.app.renderer.extract.canvas({
+      target: c,
+      frame: new Rectangle(0, 0, p.pw, p.ph),
+      resolution: res,
+      clearColor: "#00000000",
+    }) as HTMLCanvasElement;
+    c.destroy({ children: true });
+    return canvas;
+  }
+  // the screen share on a big screen right now (its video), if any
+  shareVideo(id: string): HTMLVideoElement | null {
+    return this.screenVideo.get(id) ?? null;
   }
 
   private whiteboardContent(items: WbItem[], pw: number, ph: number): Container {
@@ -1234,16 +1301,20 @@ export class WorldEngine {
   ) {
     const o = v.def;
     const S = 36;
-    // on the face of the thin wall (WALL_FACE in front of the tile edge)
-    const origin = toScreen(o.x + ox, o.y + oy + 0.1);
-    const tiles = footprint(o.kind, 0).w;
+    // on the face of the thin wall (WALL_FACE in front of the tile edge); on a
+    // west wall the panel runs from its south end (the item turned to rot 3)
+    const tiles = entryWallItem(o.kind);
+    const west = wallRot(o.rot) === 3;
+    const origin = west ? toScreen(o.x + oy + 0.1, o.y + tiles - ox) : toScreen(o.x + ox, o.y + oy + 0.1);
     // a quarter of a tile per slice, like the wall and the board it's on
     for (let k = 0; k < tiles * 4; k++) {
       const u0 = Math.max(0, (k / 4 - ox) * S);
       const u1 = Math.min(pw, ((k + 1) / 4 - ox) * S);
       if (u1 <= u0) continue;
       const wrap = new Container();
-      wrap.setFromMatrix(new Matrix(TILE_W / 2 / S, TILE_H / 2 / S, 0, 1, origin.x, origin.y - zTop));
+      wrap.setFromMatrix(
+        new Matrix(TILE_W / 2 / S, ((west ? -1 : 1) * TILE_H) / 2 / S, 0, 1, origin.x, origin.y - zTop),
+      );
       const content = build();
       // neighbouring slices overlap by a hair (no hairline gap between them)
       const mask = new Graphics().rect(u0 - 0.5, -2, u1 - u0 + 1, ph + 4).fill(0xffffff);
@@ -1252,7 +1323,7 @@ export class WorldEngine {
       // just over the item's next slice too: its art's edge pixels (dark glass,
       // a bezel) bleed a pixel into this one and drew a dark line at every
       // quarter tile across the picture
-      wrap.zIndex = o.x + (k + 0.5) / 4 + o.y + 0.27;
+      wrap.zIndex = o.x + o.y + (west ? tiles - (k + 0.5) / 4 : (k + 0.5) / 4) + 0.27;
       this.sortLayer.addChild(wrap);
       v.displays.push(wrap);
     }
@@ -1270,7 +1341,9 @@ export class WorldEngine {
     const S = 36; // panel px per tile along the wall
     const pw = (tiles - 0.28) * S;
     const ph = z1 - z0;
-    this.mountWall(v, 0.14, 0.06, z1, pw, ph, () => this.displayContent(objectId, wide, pw, ph));
+    const build = () => this.displayContent(objectId, wide, pw, ph);
+    this.mountWall(v, 0.14, 0.06, z1, pw, ph, build);
+    this.keepPanel(o, 0.14, 0.06, z1, pw, ph, build);
   }
 
   private displayContent(objectId: string, wide: boolean, pw: number, ph: number): Container {
@@ -1855,7 +1928,7 @@ export class WorldEngine {
 
   // Seated at a desk with a keyboard or a screen in reach: typing.
   private workCache = new Map<string, boolean>();
-  private atWork(x: number, y: number): boolean {
+  atWork(x: number, y: number): boolean {
     const k = `${Math.floor(x)},${Math.floor(y)}`;
     let w = this.workCache.get(k);
     if (w === undefined) {
@@ -2096,14 +2169,17 @@ export class WorldEngine {
     const o = this.highlightId ? this.objectViews.get(this.highlightId)?.def : undefined;
     if (!o) return;
     const e = entry(o.kind);
-    const { w, h } = footprint(o.kind, o.rot ?? 0);
+    const { w, h } = placedFootprint(o);
     const a = 0.55 + (this.reducedMotion ? 0 : Math.sin(this.time * 5) * 0.25);
-    const y0 = e.wall ? o.y : o.y - 0.08;
+    // wall items: flush with their wall
+    const west = e.wall && wallRot(o.rot) === 3;
+    const x0 = west ? o.x : o.x - 0.08;
+    const y0 = e.wall && !west ? o.y : o.y - 0.08;
     const pts = [
-      toScreen(o.x - 0.08, y0),
+      toScreen(x0, y0),
       toScreen(o.x + w + 0.08, y0),
       toScreen(o.x + w + 0.08, o.y + h + 0.08),
-      toScreen(o.x - 0.08, o.y + h + 0.08),
+      toScreen(x0, o.y + h + 0.08),
     ];
     this.highlightG
       .poly(pts.flatMap((p) => [p.x, p.y]))
@@ -2172,9 +2248,9 @@ export class WorldEngine {
         this.cellsOnTop(g, o, ok);
         continue;
       }
-      const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
-      const d = e.wall ? 0.25 : h;
-      const pts = [toScreen(o.x, o.y), toScreen(o.x + w, o.y), toScreen(o.x + w, o.y + d), toScreen(o.x, o.y + d)];
+      const { w, h } = placedFootprint(o);
+      const [sw, sh] = wallStrip(o, 0.25);
+      const pts = [toScreen(o.x, o.y), toScreen(o.x + sw, o.y), toScreen(o.x + sw, o.y + sh), toScreen(o.x, o.y + sh)];
       g.poly(pts.flatMap((p) => [p.x, p.y]))
         .fill({ color: ok ? C.olive : C.rust, alpha: 0.38 })
         .stroke({ width: 2, color: ok ? C.vfd : C.rust, alpha: 0.95 });
@@ -2235,7 +2311,30 @@ export class WorldEngine {
     this.outlines = list;
   }
 
+  // ── while the third-person view shows ──────────────────────────────────────
+  // it answers what's under the pointer and where things are on screen, and
+  // draws what build mode shows (from `buildLook`)
+  picksOverride: ((filter?: (o: WorldObjectDef) => boolean) => Pick[]) | null = null;
+  clientOverride: ((x: number, y: number, z: number) => { x: number; y: number }) | null = null;
+  floorOverride: ((clientX: number, clientY: number, z: number) => { x: number; y: number }) | null = null;
+  private edgeGhost: { e: { x: number; y: number; dir: "h" | "v" }; ok: boolean } | null = null;
+  private rectGhost: { x: number; y: number; w: number; h: number; ok: boolean } | null = null;
+  private gridOn = false;
+  buildLook() {
+    return {
+      ghosts: this.ghostItems.map((g) => ({ def: g.def, ok: g.ok })),
+      lift: this.ghostLift,
+      edge: this.edgeGhost,
+      rect: this.rectGhost,
+      spawn: this.spawnOn ? { at: this.map.spawn, pick: this.spawnPick } : null,
+      outlines: this.outlines,
+      hidden: this.hidden,
+      grid: this.gridOn,
+    };
+  }
+
   setBuildGrid(on: boolean) {
+    this.gridOn = on;
     const g = this.gridG.clear();
     if (!on) return;
     for (let y = 0; y < this.map.height; y++)
@@ -2251,7 +2350,11 @@ export class WorldEngine {
   }
 
   // Dust when something lands, a poof when it goes (world tiles).
+  // the third-person view draws the same bursts (set while it shows)
+  onPuff: ((x: number, y: number, kind: "drop" | "poof" | "spark" | "confetti", lift: number) => void) | null = null;
+
   puff(x: number, y: number, kind: "drop" | "poof" | "spark" | "confetti" = "drop", lift = 0) {
+    this.onPuff?.(x, y, kind, lift);
     if (!this.animated()) return;
     const c = toScreen(x, y);
     if (kind === "spark") {
@@ -2356,8 +2459,7 @@ export class WorldEngine {
     if (c && performance.now() - c.at < 500) return c.hull;
     const o = v.def;
     const e = entry(o.kind);
-    const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
-    const d = e.wall ? 0.12 : h;
+    const [w, d] = wallStrip(o, 0.12);
     // things on a surface stand on their cells, raised to the top
     const r = e.onSurface ? topRect(o) : null;
     const lift = r ? Number(o.props?.z) || 0 : 0;
@@ -2408,13 +2510,17 @@ export class WorldEngine {
 
   // Build mode's pick at the pointer: the front-most drawn thing (rugs last),
   // or a piece of clutter. `filter` skips objects (held ones, say).
-  pickAt(gx = this.pointerAt.gx, gy = this.pointerAt.gy, filter?: (o: WorldObjectDef) => boolean): Pick | null {
+  pickAt(gx?: number, gy?: number, filter?: (o: WorldObjectDef) => boolean): Pick | null {
     return this.picksAt(gx, gy, filter)[0] ?? null;
   }
 
   // Everything under the pointer, front first (Tab steps through them in build
   // mode: a plant's leaves over the one behind it, a mug on a desk…).
-  picksAt(gx = this.pointerAt.gx, gy = this.pointerAt.gy, filter?: (o: WorldObjectDef) => boolean): Pick[] {
+  picksAt(gx?: number, gy?: number, filter?: (o: WorldObjectDef) => boolean): Pick[] {
+    // (at the pointer, in third person: what its camera sees there)
+    if (gx === undefined && this.picksOverride) return this.picksOverride(filter);
+    gx ??= this.pointerAt.gx;
+    gy ??= this.pointerAt.gy;
     return this.picksAtLocal(
       (gx - this.world.position.x) / this.zoom,
       (gy - this.world.position.y) / this.zoom,
@@ -2429,7 +2535,7 @@ export class WorldEngine {
       if (!e.buildable || this.hidden.has(id) || (filter && !filter(o))) continue;
       const hull = this.hullOf(id);
       if (!hull || !inConvex(hull, px, py)) continue;
-      const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
+      const { w, h } = placedFootprint(o);
       const flat = o.kind === "rug" || o.kind === "standup_mat";
       // small things on a surface win over the surface (and what's behind it)
       const top = e.onSurface ? topCentre(o) : null;
@@ -2448,13 +2554,26 @@ export class WorldEngine {
 
   // ── input ────────────────────────────────────────────────────────────────
   screenToWorld(clientX: number, clientY: number): { x: number; y: number } {
+    if (this.floorOverride) return this.floorOverride(clientX, clientY, 0);
     const rect = this.app.canvas.getBoundingClientRect();
     const sx = (clientX - rect.left - this.world.position.x) / this.zoom;
     const sy = (clientY - rect.top - this.world.position.y) / this.zoom;
     return toWorld(sx, sy);
   }
 
+  // The world point under the pointer at height `z` px (on a surface that
+  // high), as this view sees it — or the third-person view's camera.
+  pointerWorld(z = 0): { x: number; y: number } {
+    if (this.floorOverride) {
+      const r = this.app.canvas.getBoundingClientRect();
+      return this.floorOverride(r.left + this.pointerAt.gx, r.top + this.pointerAt.gy, z);
+    }
+    const r = this.app.canvas.getBoundingClientRect();
+    return this.screenToWorld(r.left + this.pointerAt.gx, r.top + this.pointerAt.gy + z * this.zoom);
+  }
+
   worldToClient(x: number, y: number, z = 0): { x: number; y: number } {
+    if (this.clientOverride) return this.clientOverride(x, y, z);
     const p = toScreen(x, y);
     return { x: this.world.position.x + p.x * this.zoom, y: this.world.position.y + (p.y - z) * this.zoom };
   }
@@ -2483,12 +2602,12 @@ export class WorldEngine {
       const o = v.def;
       const e = entry(o.kind);
       if (!e.interact) continue;
-      const { w, h } = footprint(o.kind, o.rot ?? 0);
+      const { w, h } = placedFootprint(o);
       let hit = wx >= o.x && wx < o.x + w && wy >= o.y && wy < o.y + h;
       if (e.wall) {
         // wall items are hit on the wall plane above their tiles
         const a = toScreen(o.x, o.y);
-        const b = toScreen(o.x + w, o.y);
+        const b = wallRot(o.rot) === 3 ? toScreen(o.x, o.y + h) : toScreen(o.x + w, o.y);
         const t = (gx - a.x) / (b.x - a.x);
         const yLine = a.y + (b.y - a.y) * t;
         hit = t >= 0 && t <= 1 && gy <= yLine && gy >= yLine - 80;
@@ -2532,7 +2651,7 @@ export class WorldEngine {
     const w = toWorld(gx, gy);
     this.events.onPointerWorld?.(w.x, w.y);
     const id = this.pickObject(w.x, w.y, gx, gy);
-    const av = this.pickAvatar(gx, gy);
+    const av = this.passAvatars ? null : this.pickAvatar(gx, gy);
     this.app.canvas.style.cursor = id || av ? "pointer" : "default";
     if (id !== this.hoverId) {
       this.hoverId = id;

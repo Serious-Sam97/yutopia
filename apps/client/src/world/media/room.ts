@@ -1,4 +1,4 @@
-import { hearingGain, TILE_H, TILE_W, topCentre, toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { hearingGain, TILE_H, TILE_W, topCentre, toScreen, type WorldObjectDef, wallRot } from "@yutopia/shared";
 import {
   displaySpot,
   GLASS,
@@ -382,7 +382,9 @@ export class MediaRoom {
         s.avg = this.average(s.canvas, s.avg);
       }
       const spot = displaySpot(o);
-      const c = toScreen(spot.x, spot.y + (gl.wall ? 0.4 : 0.6));
+      // (a wall display: further out from the wall it's on, north or west)
+      const west = gl.wall && wallRot(o.rot) === 3;
+      const c = toScreen(spot.x + (west ? 0.4 : 0), spot.y + (west ? 0 : gl.wall ? 0.4 : 0.6));
       const k = gl.look === "screen" ? 1.6 : gl.wall ? 1.2 : 1;
       const a = (m.paused ? 0.16 : 0.3) * night * alpha * (warm ?? 1);
       placeGlow(s.glow, c.x, c.y, TILE_W * 2.9 * k, TILE_H * 2.9 * k, s.avg, a);
@@ -772,6 +774,11 @@ export class MediaRoom {
       big: this.card.big,
       watching: this.watching,
     };
+  }
+
+  // for the third-person view: every display's canvas (what the iso view maps onto its glass)
+  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean }[] {
+    return [...this.screens.values()].map((s) => ({ def: s.def, canvas: s.canvas, on: s.wasOn }));
   }
 
   dispose() {

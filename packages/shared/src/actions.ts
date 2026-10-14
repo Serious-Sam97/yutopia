@@ -40,7 +40,7 @@ export interface ActionContext {
 }
 
 // Things that hand out a drink, and things you sit on.
-const SEATS = new Set(["chair", "armchair", "beanbag", "bench"]);
+const SEATS = new Set(["chair", "armchair", "beanbag", "bench", "sofa"]);
 
 export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectAction[] {
   const e = entry(o.kind);

@@ -200,6 +200,7 @@ export class SlotTracks {
     const pk = hud.get().panel;
     this.lean(pk.kind === "slotcar" && pk.objectId && this.tracks.has(pk.objectId) ? pk.objectId : null);
     this.drive(dt, now);
+    this.poses = [];
     for (const [id, v] of this.tracks) this.drawTrack(id, v, now, me);
     this.publish(this.focus, me);
   }
@@ -209,6 +210,13 @@ export class SlotTracks {
   // of it turn see-through. Closing gives the lane back and the camera returns.
   private focus: string | null = null;
   private zoomBack = 0;
+
+  // For the third-person view: where every car is this frame (world tiles,
+  // height in px, heading in world radians, its lane's colour).
+  private poses: { x: number; y: number; z: number; h: number; color: number; tilt: number }[] = [];
+  cars() {
+    return this.poses;
+  }
   private lean(focus: string | null) {
     if (focus === this.focus) return;
     const engine = this.engine;
@@ -453,6 +461,8 @@ export class SlotTracks {
     const [cx, cy] = local(x, y);
     const z0 = SLOT_TOP + 0.3 + lift;
     const color = COLORS[lane];
+    const [hx, hy] = local(x + fx, y + fy);
+    this.poses.push({ x: cx, y: cy, z: z0, h: Math.atan2(hy - cy, hx - cx), color, tilt });
     const dark = shade(color, 0.55);
     return {
       x: cx,

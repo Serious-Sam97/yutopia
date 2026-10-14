@@ -1,7 +1,7 @@
-import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, placedFootprint, type WorldObjectDef, wallRot } from "./catalog.ts";
 import { doorEdge, doorFits, Grid } from "./grid.ts";
 import type { Point } from "./iso.ts";
-import { holdsItems, hWall, type MapDef, wallBetween } from "./map.ts";
+import { holdsItems, hungOn, hWall, type MapDef, vWall, wallBetween } from "./map.ts";
 import { fitsOnSurface, splitAll } from "./tops.ts";
 
 // One placement rule for client (ghost preview) and server (authority).
@@ -19,7 +19,8 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
   }
   // tabletops: all of them on one surface's top, clear of the rest there
   if (e.onSurface) return fitsOnSurface(others, o);
-  const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
+  const { w, h } = placedFootprint(o);
+  const west = e.wall && wallRot(o.rot) === 3;
   const floor = Grid.from(map, [], undefined, { dressing: false });
   const base = Grid.from(
     map,
@@ -33,12 +34,10 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
       const ty = o.y + dy;
       if (!floor.ok(tx, ty)) return false;
       if (e.wall) {
-        // hangs on the wall along the tile's north edge, no other wall item there
-        if (!holdsItems(hWall(map, tx, ty))) return false;
-        const clash = others.some(
-          (x) => x.id !== o.id && entry(x.kind).wall && tx >= x.x && tx < x.x + footprint(x.kind, 0).w && ty === x.y,
-        );
-        if (clash) return false;
+        // hangs on the wall along the tile's north edge (turned: its west edge),
+        // no other wall item there
+        if (!holdsItems(west ? vWall(map, tx, ty) : hWall(map, tx, ty))) return false;
+        if (hungOn(others, { dir: west ? "v" : "h", x: tx, y: ty }, o.id)) return false;
         continue;
       }
       if (e.solid && !base.ok(tx, ty)) return false;

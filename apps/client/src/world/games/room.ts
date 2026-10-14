@@ -740,6 +740,14 @@ export class GameRoom {
     this.videoHolder.append(el);
   }
 
+  // for the third-person view: what each TV shows now (the console's picture)
+  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement }[] {
+    const out: { def: WorldObjectDef; canvas: HTMLCanvasElement }[] = [];
+    for (const v of this.tvs.values())
+      if (v.source) out.push({ def: v.def, canvas: v.source instanceof HTMLVideoElement ? v.frame : v.source });
+    return out;
+  }
+
   dispose() {
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("keyup", this.onKey);

@@ -1,4 +1,4 @@
-import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
 import { doorEdge } from "./grid.ts";
 import type { Point } from "./iso.ts";
 import {
@@ -22,6 +22,7 @@ import {
   tileAt,
   VOID,
   type WallMat,
+  wallSpan,
 } from "./map.ts";
 
 // Per-space layouts: the map is data (saved in Yondra), not code. Builders
@@ -137,7 +138,7 @@ export function paintBlocker(
   for (const o of objects) {
     const e = entry(o.kind);
     if (o.kind === "door") continue;
-    const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
+    const { w, h } = placedFootprint(o);
     if (x >= o.x && x < o.x + w && y >= o.y && y < o.y + h) return `${e.label} is there`;
   }
   return null;
@@ -170,8 +171,7 @@ export function edgeSides(e: Edge): [[number, number], [number, number]] {
 }
 
 function covers(o: WorldObjectDef, x: number, y: number): boolean {
-  const e = entry(o.kind);
-  const { w, h } = footprint(o.kind, e.wall ? 0 : (o.rot ?? 0));
+  const { w, h } = placedFootprint(o);
   return x >= o.x && x < o.x + w && y >= o.y && y < o.y + h;
 }
 
@@ -190,8 +190,8 @@ export function edgeBlocker(map: MapDef, objects: WorldObjectDef[], e: Edge, ch:
     }
     const ent = entry(o.kind);
     if (ent.wall) {
-      // boards hang on the north edge of their tiles
-      if (!holdsItems(ch) && e.dir === "h" && covers(o, e.x, e.y) && e.y === o.y)
+      // boards hang on the north (or west) edge of their tiles
+      if (!holdsItems(ch) && wallSpan(o).some((s) => s.dir === e.dir && s.x === e.x && s.y === e.y))
         return `${ent.label} hangs on that wall`;
       continue;
     }

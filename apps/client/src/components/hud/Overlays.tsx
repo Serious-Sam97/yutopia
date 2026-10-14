@@ -184,7 +184,8 @@ export function VideoBubbles() {
         for (const node of Array.from(el.children) as HTMLElement[]) {
           const x = Number(node.dataset.x);
           const y = Number(node.dataset.y);
-          const p = w.engine.worldToClient(x, y, 116 * PERSON);
+          // over their head, in whichever view is showing (iso or third person)
+          const p = w.clientAt(x, y, 116 * PERSON);
           node.style.transform = `translate(${Math.round(p.x - 60)}px, ${Math.round(p.y - 90)}px)`;
         }
       }

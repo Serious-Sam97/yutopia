@@ -48,6 +48,9 @@ function mug(s: Sketch, z: number, seed: number) {
   const c = pick([K.rust, K.olive, K.cream, K.slate, K.amberSoft], seed);
   s.cyl({ x: CX, y: CY, z, r: 0.05, h: 6, mat: { c } }, (d) => {
     d.poly("t", te(z + 6, CX, CY, 0.037), "#3b2416");
+  });
+  // the handle sticks out (its own shape: the 3D view stands it beside the mug, not on it)
+  s.shape({ x: CX + 0.04, y: CY, w: 0.05, d: 0.04, z, h: 6 }, (d) => {
     const [x, y] = d.m(CX + 0.05, CY + 0.02, z + 3);
     d.raw(
       `<path d="M${x} ${y - 2}q4 0 4 2.4t-4 2.4" stroke="${INK}" stroke-width="1.6" fill="none"/><path d="M${x} ${y - 2}q4 0 4 2.4t-4 2.4" stroke="${c}" stroke-width=".8" fill="none"/>`,

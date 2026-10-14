@@ -7,6 +7,7 @@ import {
   isFloor,
   isWindow,
   type MapDef,
+  rotOf,
   tileAt,
   topCentre,
   variantOf,
@@ -42,7 +43,7 @@ function place(o: WorldObjectDef, lx: number, ly: number): [number, number] {
   let y = ly;
   let W = e.w;
   let H = e.h;
-  const rot = e.wall ? 0 : (o.rot ?? 0) & 3;
+  const rot = rotOf(o) & 3;
   for (let i = 0; i < rot; i++) {
     [x, y] = [H - y, x];
     [W, H] = [H, W];

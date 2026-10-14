@@ -8,7 +8,7 @@ import { canvas, css, keyed, lerpHex, outerEdges, rng, type ThemeView } from "./
 // tower's stone facade drops away. Warm palette, no neon.
 
 // hour, sky top, sky horizon, city tint
-const SKY: [number, string, string, string][] = [
+export const SKY: [number, string, string, string][] = [
   [0, "#0c0f26", "#272444", "#3a3d62"],
   [5, "#121530", "#2f2a4c", "#3e4066"],
   [6.5, "#3d3d6c", "#f0a07c", "#9a8aa2"],

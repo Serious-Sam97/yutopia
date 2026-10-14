@@ -7,9 +7,11 @@ import {
   type Grid,
   isSocial,
   type Point,
+  placedFootprint,
   SOCIAL_MS,
   SOCIAL_REACH,
   type WorldObjectDef,
+  wallRot,
 } from "@yutopia/shared";
 import { YONDRA_APP } from "@/lib/api";
 import { tr } from "@/lib/i18n";
@@ -257,9 +259,11 @@ export class ActionQueue {
     const id = o.id;
     // face it
     if (q.act !== "sit" && q.act !== "work" && q.act !== "focus") {
-      const { w, h: d } = footprint(o.kind, o.rot ?? 0);
-      const dx = o.x + w / 2 - me.x;
-      const dy = (entry(o.kind).wall ? o.y : o.y + d / 2) - me.y;
+      const { w, h: d } = placedFootprint(o);
+      // (wall things: the wall they hang on)
+      const west = entry(o.kind).wall && wallRot(o.rot) === 3;
+      const dx = (west ? o.x : o.x + w / 2) - me.x;
+      const dy = (entry(o.kind).wall && !west ? o.y : o.y + d / 2) - me.y;
       if (Math.hypot(dx, dy) > 0.2) h.setFacing(dirFromDelta(dx, dy, me.d as 0));
     }
     switch (q.act) {
@@ -335,7 +339,7 @@ export class ActionQueue {
 
 // Within `r` tiles of a thing's footprint.
 function within(o: WorldObjectDef, p: Point, r: number) {
-  const { w, h } = footprint(o.kind, o.rot ?? 0);
+  const { w, h } = placedFootprint(o);
   const cx = Math.max(o.x, Math.min(p.x, o.x + w));
   const cy = Math.max(o.y, Math.min(p.y, o.y + h));
   return Math.hypot(p.x - cx, p.y - cy) <= r;
@@ -350,8 +354,11 @@ const FRONT: [number, number][] = [
   [-1, 0],
 ];
 function frontOf(grid: Grid, o: WorldObjectDef): Point | null {
-  const { w, h } = footprint(o.kind, o.rot ?? 0);
-  if (entry(o.kind).wall) return grid.nearestOpen(o.x + w / 2, o.y + 0.5, 3);
+  const { w, h } = placedFootprint(o);
+  if (entry(o.kind).wall)
+    return wallRot(o.rot) === 3
+      ? grid.nearestOpen(o.x + 0.5, o.y + h / 2, 3)
+      : grid.nearestOpen(o.x + w / 2, o.y + 0.5, 3);
   const [fx, fy] = FRONT[(o.rot ?? 0) % 4];
   const x = o.x + w / 2 + fx * (w / 2 + 0.5);
   const y = o.y + h / 2 + fy * (h / 2 + 0.5);

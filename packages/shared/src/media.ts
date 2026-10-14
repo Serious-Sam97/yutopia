@@ -3,7 +3,7 @@
 // checks on what people send. Shared by the client (players, panels), the
 // world-server (rules, the queue's clock) and the tests.
 
-import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, footprint, placedFootprint, rotOf, type WorldObjectDef, wallRot } from "./catalog.ts";
 import { TV_SCREEN, turnLocal } from "./games.ts";
 import { topCentre } from "./tops.ts";
 
@@ -193,7 +193,7 @@ export function skip(m: MediaState, now: number, by: string): MediaState {
 // ── where the picture goes ───────────────────────────────────────────────────
 // The glass of each display, in rot-0 local tiles (x along the front, y the
 // plane it's on, z px up): the art draws the set around it, the client maps
-// the picture onto it. `wall`: hangs on a north wall (always rot 0).
+// the picture onto it. `wall`: hangs on a wall (rot 0 north, rot 3 west).
 export interface Glass {
   x0: number;
   x1: number;
@@ -222,7 +222,7 @@ export const DISPLAY_KINDS = Object.keys(GLASS);
 export const isDisplay = (kind: string): boolean => Object.hasOwn(GLASS, kind);
 
 // The glass's top-left and top-right corners in world tiles, and its top and
-// bottom z (px). Wall displays hang at rot 0; TVs turn with the item; a
+// bottom z (px). Wall displays and TVs turn with the item; a
 // portable TV turns round its middle and stands on its surface (props.z).
 export function glassCorners(o: WorldObjectDef): {
   tl: [number, number];
@@ -233,8 +233,7 @@ export function glassCorners(o: WorldObjectDef): {
   const g = GLASS[o.kind];
   if (!g) return null;
   const lift = g.top ? Number(o.props?.z) || 0 : 0;
-  if (g.wall) return { tl: [o.x + g.x0, o.y + g.y], tr: [o.x + g.x1, o.y + g.y], zTop: g.z1, zBot: g.z0 };
-  const rot = o.rot ?? 0;
+  const rot = rotOf(o);
   if (g.top) {
     const c = topCentre(o);
     const a = turnLocal(g.x0, g.y, rot, 1, 1);
@@ -252,8 +251,7 @@ export function glassCorners(o: WorldObjectDef): {
   return { tl: [o.x + a[0], o.y + a[1]], tr: [o.x + b[0], o.y + b[1]], zTop: g.z1, zBot: g.z0 };
 }
 
-// Whether the glass faces the camera (rot 0 / 3 for things on the floor; wall
-// displays always do).
+// Whether the glass faces the camera (rot 0 / 3; wall displays always do).
 export function glassFacing(o: WorldObjectDef): boolean {
   const g = GLASS[o.kind];
   if (!g) return false;
@@ -266,8 +264,8 @@ export function glassFacing(o: WorldObjectDef): boolean {
 export function displaySpot(o: WorldObjectDef): { x: number; y: number } {
   const g = GLASS[o.kind];
   if (g?.wall) {
-    const { w } = footprint(o.kind, 0);
-    return { x: o.x + w / 2, y: o.y + 0.6 };
+    const { w, h } = placedFootprint(o);
+    return wallRot(o.rot) === 3 ? { x: o.x + 0.6, y: o.y + h / 2 } : { x: o.x + w / 2, y: o.y + 0.6 };
   }
   if (g?.top) return topCentre(o);
   const { w, h } = footprint(o.kind, o.rot ?? 0);

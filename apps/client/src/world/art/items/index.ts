@@ -23,6 +23,10 @@ import { column, post, type WallPart, wall } from "./walls";
 
 type Props = Record<string, unknown>;
 
+// The third-person view (world/tp) draws walls, doors and the rooms' clutter
+// from this chunk too (one copy of the drawings for both views).
+export { dressing, door, post, wall };
+
 // Marks this chunk for `pnpm budget` (it loads lazily, outside the page's files).
 export const ITEM_ART_CHUNK = "yutopia-item-art";
 
@@ -157,19 +161,31 @@ export function itemKey(o: ItemRef, slice: string, group: Group, res: number): s
 // Wall items hang on the face of the thin wall along their tile's north edge.
 export const WALL_FACE = 0.1;
 
-function sketch(o: ItemRef, clip: Clip | null, group: Group): Sketch {
-  const g = GENS[o.kind];
+// How an item's sketch is set up, and drawing it into one: the third-person
+// view (world/tp) draws the same items into its own 3D sketch.
+export function itemSketchOpts(o: ItemRef): {
+  rot: number;
+  w: number;
+  h: number;
+  seed: number;
+  offset?: [number, number];
+} {
   const e = entry(o.kind);
-  const s = new Sketch({
+  return {
     rot: o.rot,
     w: e.w,
     h: e.h,
-    clip,
-    group,
     seed: (variantOf(o) + 0.5) / variantsOf(o.kind),
     offset: e.wall ? [0, WALL_FACE] : undefined,
-  });
-  g.draw(s, o.props ?? {});
+  };
+}
+export function drawItem(s: Sketch, o: ItemRef) {
+  GENS[o.kind].draw(s, o.props ?? {});
+}
+
+function sketch(o: ItemRef, clip: Clip | null, group: Group): Sketch {
+  const s = new Sketch({ ...itemSketchOpts(o), clip, group });
+  drawItem(s, o);
   return s;
 }
 

@@ -9,7 +9,7 @@ import { canvas, css, keyed, outerEdges, rng, type ThemeView } from "./common";
 // lit cold white at night.
 
 // hour, sky top, sky horizon, land tint
-const SKY: [number, string, string, string][] = [
+export const SKY: [number, string, string, string][] = [
   [0, "#141a28", "#2a3346", "#4a5670"],
   [5, "#18202f", "#303a4e", "#55607a"],
   [7, "#6e7486", "#b9b1b4", "#b9bccb"],
@@ -24,7 +24,7 @@ const SKY: [number, string, string, string][] = [
 const W_LAYER = 1600;
 
 // A bare winter tree: a trunk and forking branches.
-function tree(g: CanvasRenderingContext2D, x: number, y: number, h: number, r: () => number, color: string) {
+export function tree(g: CanvasRenderingContext2D, x: number, y: number, h: number, r: () => number, color: string) {
   g.strokeStyle = color;
   g.lineCap = "round";
   const branch = (x0: number, y0: number, len: number, a: number, w: number, depth: number) => {

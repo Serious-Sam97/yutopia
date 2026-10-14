@@ -1,8 +1,26 @@
-import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, footprint, type WorldObjectDef, wallRot } from "./catalog.ts";
 
 // How many tiles of wall a wall item covers (0 = not a wall item).
 export function entryWallItem(kind: string): number {
   return entry(kind).wall ? footprint(kind, 0).w : 0;
+}
+
+// The edges a wall item hangs on, one per tile: the north edges of a row of
+// tiles, or (turned) the west edges of a column.
+export function wallSpan(o: { kind: string; x: number; y: number; rot?: number }): Edge[] {
+  const n = entryWallItem(o.kind);
+  const west = wallRot(o.rot) === 3;
+  return Array.from({ length: n }, (_, i) =>
+    west ? { dir: "v" as const, x: o.x, y: o.y + i } : { dir: "h" as const, x: o.x + i, y: o.y },
+  );
+}
+
+// Is anything (but `except`) hanging on this edge?
+export function hungOn(objects: Iterable<WorldObjectDef>, e: Edge, except?: string): WorldObjectDef | undefined {
+  for (const o of objects)
+    if (o.id !== except && entry(o.kind).wall && wallSpan(o).some((s) => s.dir === e.dir && s.x === e.x && s.y === e.y))
+      return o;
+  return undefined;
 }
 
 // Floors. Anything not listed (wall/void) is not walkable.

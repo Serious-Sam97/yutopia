@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { canPlace, TEMPLATES } from "./build.ts";
-import { entry, variantOf, type WorldObjectDef } from "./catalog.ts";
+import { entry, placedFootprint, rotOf, variantOf, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
+import { Grid } from "./grid.ts";
+import { holdsItems, hungOn, vWall, wallSpan } from "./map.ts";
+import { edgeBlocker } from "./map-edit.ts";
 import { studio } from "./maps/studio.ts";
 import { carried, hostOf, riders, splitAll, splitBuiltIns, surfaceAt, topAt, topCentre, topRect } from "./tops.ts";
 
@@ -119,4 +122,39 @@ test("a room's hidden pieces keep the rules out of the way; nothing's generated 
     all.every((d) => d.z === 0),
     "no generated clutter on surfaces",
   );
+});
+
+test("wall items hang on a north wall, or turned (rot 3) on a west wall", () => {
+  const board = (x: number, y: number, rot = 0): WorldObjectDef => ({ id: "wb", kind: "whiteboard", x, y, rot });
+  // a stretch of the studio's west wall that holds things (no window, two tiles)
+  const y = Array.from({ length: studio.height }, (_, i) => i).find(
+    (i) =>
+      [i, i + 1].every((t) => holdsItems(vWall(studio, 0, t)) && !hungOn(studio.objects, { dir: "v", x: 0, y: t })) &&
+      canPlace(studio, studio.objects, board(0, i, 3)),
+  );
+  assert.ok(y !== undefined, "the studio has room on its west wall");
+  const west = board(0, y, 3);
+  assert.deepEqual(placedFootprint(west), { w: 1, h: 2 });
+  assert.deepEqual(wallSpan(west), [
+    { dir: "v", x: 0, y },
+    { dir: "v", x: 0, y: y + 1 },
+  ]);
+  // not over another one on the same wall
+  assert.ok(!canPlace(studio, [...studio.objects, { ...west, id: "other" }], board(0, y + 1, 3)));
+  // the corner tile can hold one on each wall
+  assert.equal(hungOn([west], { dir: "h", x: 0, y }), undefined);
+  // any other stored turn is the north wall (older saves)
+  assert.equal(rotOf(board(3, 0, 1)), 0);
+  assert.equal(rotOf(board(3, 0, 3)), 3);
+  // a wall can't be taken away from under it
+  assert.equal(edgeBlocker(studio, [west], { dir: "v", x: 0, y }, "."), "Whiteboard hangs on that wall");
+});
+
+test("a sofa is three seats, walkable, facing the way it's turned", () => {
+  const sofa: WorldObjectDef = { id: "s", kind: "sofa", x: 6, y: 6, rot: 2 };
+  const g = Grid.from(studio, [sofa], undefined, { dressing: false });
+  for (const x of [6, 7, 8]) {
+    assert.ok(g.ok(x, 6), `tile ${x} is walkable`);
+    assert.deepEqual(g.seats.get(g.idx(x, 6)), { id: "s", rot: 2 });
+  }
 });

@@ -1,4 +1,4 @@
-import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
+import { entry, footprint, placedFootprint, type WorldObjectDef } from "./catalog.ts";
 
 // Things on surfaces (mugs, monitors, the radio…) sit on a quarter-tile grid
 // over the desk, table or shelf under them, Sims-style: a desk comes bare and
@@ -96,7 +96,7 @@ export function hostWorld(o: WorldObjectDef, lx: number, ly: number): [number, n
 }
 
 function covers(o: WorldObjectDef, x: number, y: number): boolean {
-  const { w, h } = footprint(o.kind, entry(o.kind).wall ? 0 : (o.rot ?? 0));
+  const { w, h } = placedFootprint(o);
   return x >= o.x && x < o.x + w && y >= o.y && y < o.y + h;
 }
 

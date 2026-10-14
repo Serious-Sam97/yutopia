@@ -11,8 +11,10 @@ import {
   footprint,
   hostOf,
   isWallEdge,
+  type MapDef,
   nearestEdge,
   type Point,
+  placedFootprint,
   Q,
   surfaceAt,
   takenId,
@@ -24,6 +26,7 @@ import {
   topSize,
   VOID,
   type WorldObjectDef,
+  wallRot,
 } from "@yutopia/shared";
 import type { SetupItem } from "@/lib/api";
 import { tr, trMaybe } from "@/lib/i18n";
@@ -96,9 +99,21 @@ export class BuildController {
     window.addEventListener("keydown", this.onMods);
     window.addEventListener("keyup", this.onMods);
     window.addEventListener("blur", this.onBlur);
+    // leaving build mode tidies up here, not in the panel: the panel unmounts in
+    // the same render that turns it off (and people stayed unclickable after)
+    this.wasOn = hud.get().build.on;
+    this.unsub = hud.subscribe(() => {
+      const on = hud.get().build.on;
+      if (on === this.wasOn) return;
+      this.wasOn = on;
+      this.refresh();
+    });
   }
+  private wasOn: boolean;
+  private unsub: () => void;
 
   dispose() {
+    this.unsub();
     window.removeEventListener("keydown", this.onMods);
     window.removeEventListener("keyup", this.onMods);
     window.removeEventListener("blur", this.onBlur);
@@ -189,7 +204,15 @@ export class BuildController {
         const under = hostOf([...rest, ...sofar], def);
         def.props = { ...(def.props ?? {}), z: under ? (entry(under.kind).surface ?? 0) : 0 };
       }
-      const ok = canPlace(this.map, [...rest, ...sofar], def, bodies);
+      let ok = canPlace(this.map, [...rest, ...sofar], def, bodies);
+      // one wall item in hand goes on whichever wall is under the pointer
+      if (!ok && this.hand.length === 1 && entry(def.kind).wall) {
+        const other = { ...def, rot: otherWall(def.rot) };
+        if (canPlace(this.map, rest, other, bodies)) {
+          def = other;
+          ok = true;
+        }
+      }
       sofar.push(def);
       out.push({ def, ok });
     }
@@ -206,18 +229,17 @@ export class BuildController {
   private surfacePoint(): Point {
     const e = this.engine;
     if (!e) return { x: this.anchor.x + 0.5, y: this.anchor.y + 0.5 };
-    const r = e.app.canvas.getBoundingClientRect();
     const away = new Set(this.hand.flatMap((h) => (h.origin ? [h.origin.id] : [])));
     const rest = this.objects().filter((o) => !away.has(o.id));
     const heights = [
       ...new Set(rest.map((o) => entry(o.kind).surface).filter((z): z is number => z !== undefined)),
     ].sort((a, b) => b - a);
     for (const z of heights) {
-      const w = e.screenToWorld(r.left + e.pointerAt.gx, r.top + e.pointerAt.gy + z * e.zoom);
+      const w = e.pointerWorld(z);
       const host = surfaceAt(rest, Math.floor(w.x), Math.floor(w.y));
       if (host && entry(host.kind).surface === z) return w;
     }
-    return e.screenToWorld(r.left + e.pointerAt.gx, r.top + e.pointerAt.gy);
+    return e.pointerWorld();
   }
   private pointerCell(): Point {
     const p = this.surfacePoint();
@@ -368,8 +390,7 @@ export class BuildController {
   private pointerTile(): Point {
     const e = this.engine;
     if (!e) return this.anchor;
-    const r = e.app.canvas.getBoundingClientRect();
-    const w = e.screenToWorld(r.left + e.pointerAt.gx, r.top + e.pointerAt.gy);
+    const w = e.pointerWorld();
     return { x: Math.floor(w.x), y: Math.floor(w.y) };
   }
 
@@ -523,9 +544,11 @@ export class BuildController {
         if (h.ride) return h;
         // one thing: turns where it stands (on its first tile, like The Sims)
         if (one)
-          return entry(h.def.kind).wall || h.def.kind === "door"
-            ? h
-            : { ...h, def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 } };
+          return entry(h.def.kind).wall
+            ? swapWall(h)
+            : h.def.kind === "door"
+              ? h
+              : { ...h, def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 } };
         return turnAbout(h, pivot);
       });
       const b = hud.get().build;
@@ -551,10 +574,21 @@ export class BuildController {
     if (group.length) {
       // turn the group about its corner, then check it all fits
       const pivot = { x: Math.min(...group.map((o) => o.x)), y: Math.min(...group.map((o) => o.y)) };
-      const turned = group.map((o) => turn({ def: o, origin: o, dx: o.x - pivot.x, dy: o.y - pivot.y }));
-      const nx = Math.min(...turned.map((t) => t.dx));
-      const ny = Math.min(...turned.map((t) => t.dy));
-      defs.push(...turned.map((t) => ({ ...t.def, x: pivot.x + t.dx - nx, y: pivot.y + t.dy - ny })));
+      if (group.length === 1 && entry(group[0].kind).wall) {
+        // a wall item on its own goes over to the other wall, as near as it fits
+        const turned = wallSpotNear(this.map, rest, group[0], this.bodies());
+        if (!turned) {
+          buildSound("nope");
+          toast(tr("buildNoFit"), "warn");
+          return;
+        }
+        defs.push(turned);
+      } else {
+        const turned = group.map((o) => turn({ def: o, origin: o, dx: o.x - pivot.x, dy: o.y - pivot.y }));
+        const nx = Math.min(...turned.map((t) => t.dx));
+        const ny = Math.min(...turned.map((t) => t.dy));
+        defs.push(...turned.map((t) => ({ ...t.def, x: pivot.x + t.dx - nx, y: pivot.y + t.dy - ny })));
+      }
     }
     for (const o of alone) {
       const c = topCentre(o);
@@ -761,7 +795,7 @@ export class BuildController {
       const c = topCentre(o);
       return this.engine.worldToClient(c.x, c.y, (Number(o.props?.z) || 0) + 30);
     }
-    const { w, h } = footprint(o.kind, entry(o.kind).wall ? 0 : (o.rot ?? 0));
+    const { w, h } = placedFootprint(o);
     return this.engine.worldToClient(o.x + w / 2, o.y + h / 2, entry(o.kind).wall ? 70 : 52);
   }
 
@@ -771,7 +805,7 @@ export class BuildController {
       const c = topCentre(o);
       return [c.x, c.y];
     }
-    const { w, h } = footprint(o.kind, entry(o.kind).wall ? 0 : (o.rot ?? 0));
+    const { w, h } = placedFootprint(o);
     return [o.x + w / 2, o.y + h / 2];
   }
 
@@ -904,7 +938,7 @@ export class BuildController {
       this.engine?.setRectGhost(null);
       const inBox = this.objects().filter((o) => {
         if (!entry(o.kind).buildable || o.kind === "door") return false;
-        const { w, h } = footprint(o.kind, entry(o.kind).wall ? 0 : (o.rot ?? 0));
+        const { w, h } = placedFootprint(o);
         return o.x < r.x + r.w && o.x + w > r.x && o.y < r.y + r.h && o.y + h > r.y;
       });
       const single = r.w === 1 && r.h === 1;
@@ -1315,6 +1349,41 @@ export class BuildController {
     }
     for (let i = 0; i < cells.length; i += 600) this.send("map:paint", { cells: cells.slice(i, i + 600) });
   }
+}
+
+// Wall items hang on the north wall (rot 0) or the west wall (rot 3): turning
+// one swaps walls.
+const otherWall = (rot?: number) => (wallRot(rot) === 3 ? 0 : 3);
+function swapWall(h: Held): Held {
+  return { ...h, def: { ...h.def, rot: otherWall(h.def.rot) } };
+}
+
+// A wall item turned onto the other wall: where it hangs if that fits, else the
+// nearest place on such a wall within a few tiles (the corner, usually).
+function wallSpotNear(
+  map: MapDef,
+  others: WorldObjectDef[],
+  o: WorldObjectDef,
+  bodies: Point[],
+): WorldObjectDef | null {
+  const rot = otherWall(o.rot);
+  const n = footprint(o.kind, 0).w;
+  // keep its middle where it was
+  const [mx, my] = wallRot(o.rot) === 3 ? [o.x, o.y + n / 2] : [o.x + n / 2, o.y];
+  const [cx, cy] = rot === 3 ? [mx, my - n / 2] : [mx - n / 2, my];
+  let best: WorldObjectDef | null = null;
+  let bestD = Number.POSITIVE_INFINITY;
+  for (let dy = -4; dy <= 4; dy++)
+    for (let dx = -4; dx <= 4; dx++) {
+      const d = Math.hypot(dx, dy);
+      if (d >= bestD) continue;
+      const def = { ...o, rot, x: Math.round(cx) + dx, y: Math.round(cy) + dy };
+      if (canPlace(map, others, def, bodies)) {
+        best = def;
+        bestD = d;
+      }
+    }
+  return best;
 }
 
 // A quarter turn clockwise of something held, about the pointer's tile.

@@ -21,7 +21,8 @@
     "pixi.js": "^8.13.0",
     "pusher-js": "^8.5.0",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "three": "0.186.1"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
@@ -29,6 +30,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "0.186.0",
     "tailwindcss": "^4",
     "typescript": "^5.9.2"
   }

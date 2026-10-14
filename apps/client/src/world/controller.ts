@@ -14,7 +14,6 @@ import {
   entry,
   FLOORS,
   findPath,
-  footprint,
   Grid,
   getMap,
   HEAR_RADIUS,
@@ -27,6 +26,7 @@ import {
   objectActions,
   type Point,
   parseAvatar,
+  placedFootprint,
   ROOM_NAME,
   RUN_SPEED,
   type ServerMessages,
@@ -41,14 +41,18 @@ import {
   WALK_SPEED,
   type WbItem,
   type WorldObjectDef,
+  wallRot,
 } from "@yutopia/shared";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, YONDRA_APP, yutopia } from "@/lib/api";
 import { currentEcho, disconnectEcho, getEcho } from "@/lib/echo";
 import { tr } from "@/lib/i18n";
-import { deviceQuality, prefs, type Quality, resolveQuality, subscribePrefs } from "@/lib/prefs";
+import { deviceQuality, prefs, type Quality, resolveQuality, setPrefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
+import { loadPeople } from "./art/people-load";
+import { loadItemArt } from "./art/scene";
+import { loadThemes } from "./art/themes-load";
 import { mixer } from "./audio";
 import type { BuildController } from "./build/controller";
 import { type AvatarState, WorldEngine } from "./engine";
@@ -59,6 +63,7 @@ import type { MediaRoom } from "./media/room";
 import type { SlotTracks } from "./slots";
 import { radio, sound } from "./sound";
 import { type ActTarget, hud, type Person, toast } from "./store";
+import type { Body3, ThirdPersonView } from "./tp/view";
 
 // biome-ignore lint/suspicious/noExplicitAny: decoded Colyseus schema objects
 type S = any;
@@ -228,7 +233,11 @@ export class WorldController {
       onPointerUp: (x, y) => this.buildUp(x, y),
       onWheel: (dy) => this.build?.wheel(dy) ?? false,
     };
-    this.offPrefs = subscribePrefs(() => this.engine?.setQuality(this.qualityNow(), prefs().reducedMotion));
+    this.offPrefs = subscribePrefs(() => {
+      this.engine?.setQuality(this.qualityNow(), prefs().reducedMotion);
+      if (this.tp && this.tp.quality !== this.qualityNow()) this.tp.setQuality(this.qualityNow());
+      this.syncView();
+    });
     // Auto quality: step down a tier when this device can't keep up
     this.timers.push(setInterval(() => this.watchFrameRate(), 1000));
     this.updateNight();
@@ -364,7 +373,7 @@ export class WorldController {
         if (n.sayAt === lastSay || !n.say) return;
         lastSay = n.sayAt;
         if (Math.hypot(n.x - this.me.x, n.y - this.me.y) > 8) return;
-        engine.say(`npc:${id}`, n.say, 7000);
+        this.say(`npc:${id}`, n.say, 7000);
         this.vortexLog(n.say);
       });
     });
@@ -407,7 +416,6 @@ export class WorldController {
   }
 
   private wireMessages(room: Room<S>) {
-    const engine = this.engine as WorldEngine;
     room.onMessage("snap", (m: ServerMessages["snap"]) => {
       this.me.x = m.x;
       this.me.y = m.y;
@@ -433,7 +441,7 @@ export class WorldController {
         chat: [...s.chat.slice(-199), { ...m, mine }],
         chatUnread: s.side === "chat" || mine ? s.chatUnread : s.chatUnread + 1,
       }));
-      engine.say(m.from, m.text);
+      this.say(m.from, m.text);
       if (!mine) mixer.blip("pop");
     });
     room.onMessage("knock", (m: ServerMessages["knock"]) => {
@@ -460,7 +468,7 @@ export class WorldController {
       })),
     );
     room.onMessage("vortex:say", (m: ServerMessages["vortex:say"]) => {
-      engine.say("npc:vortex", m.text, 7000);
+      this.say("npc:vortex", m.text, 7000);
       this.vortexLog(m.text);
       for (const f of this.vortexListeners) f(m.text);
     });
@@ -547,6 +555,7 @@ export class WorldController {
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
     this.unbindInput();
+    this.closeTp();
     this.offPrefs?.();
     for (const ch of this.boardChannels) currentEcho()?.leave(ch);
     disconnectEcho();
@@ -692,6 +701,7 @@ export class WorldController {
       this.screensChanged();
       hud.set((h) => ({ objectsVersion: h.objectsVersion + 1 }));
     }
+    this.syncView();
     this.moveLocal(dt);
     if (hud.get().build.on) {
       this.actions.clear();
@@ -702,6 +712,7 @@ export class WorldController {
     const here = areaAt(this.map, this.me.x, this.me.y);
     const open = !isPrivate(here) && here?.kind !== "stage";
     engine.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
+    if (this.tp) this.tp.earshot = engine.earshot;
     this.isolated("slots", () => this.slots?.frame(dt, this.me));
     this.isolated("games", () => this.games?.frame(dt, this.me));
     this.isolated("media", () => this.screens?.frame(dt, this.me));
@@ -721,19 +732,30 @@ export class WorldController {
       const other = room.state.players.get(lp.actWith);
       if (other && !this.path) this.me.d = dirFromDelta(other.x - this.me.x, other.y - this.me.y, this.me.d as 0);
     }
-    if (lp)
-      engine.upsertAvatar(
-        localSid,
-        { ...this.avatarState(lp, true), x: this.me.x, y: this.me.y, d: this.me.d, a: this.me.a },
-        true,
-      );
+    const tp = this.tp;
+    const bodies: Body3[] = [];
+    const reduced = prefs().reducedMotion;
+    if (lp) {
+      const st = { ...this.avatarState(lp, true), x: this.me.x, y: this.me.y, d: this.me.d, a: this.me.a };
+      engine.upsertAvatar(localSid, st, true);
+      if (tp)
+        bodies.push({
+          ...st,
+          id: localSid,
+          angle: this.meAngle,
+          typing: st.a === 2 && engine.atWork(st.x, st.y),
+          reduced,
+        });
+    }
 
     const renderAt = now - INTERP_MS;
     for (const [sid, r] of this.remotes) {
       const p = room.state.players.get(sid);
       if (!p) continue;
       const pos = interpolate(r.buf, renderAt);
-      engine.upsertAvatar(sid, { ...this.avatarState(p, false), x: pos.x, y: pos.y, d: r.d, a: r.a });
+      const st = { ...this.avatarState(p, false), x: pos.x, y: pos.y, d: r.d, a: r.a };
+      engine.upsertAvatar(sid, st);
+      if (tp) bodies.push({ ...st, id: sid, typing: st.a === 2 && engine.atWork(st.x, st.y), reduced });
       // voice: volume + stereo from where they are relative to me
       if (this.hear.has(sid)) {
         const ear = { x: this.me.x, y: this.me.y, dnd: lp?.status === "dnd" };
@@ -743,16 +765,33 @@ export class WorldController {
         this.media.setVoice(
           String(p.uid),
           Math.max(0.05, hearingGain(this.map, ear, src, true) * duck),
-          stereoPan(ear, src),
+          tp ? tp.pan(ear, src) : stereoPan(ear, src),
         );
       } else this.media.setVoice(String(p.uid), 0, 0);
     }
     room.state.npcs.forEach((n: S, id: string) => {
       const pos = interpolate(this.npcBuf.get(id) ?? [{ t: 0, x: n.x, y: n.y }], renderAt);
-      engine.upsertAvatar(`npc:${id}`, { ...this.npcState(n), x: pos.x, y: pos.y });
+      const st = { ...this.npcState(n), x: pos.x, y: pos.y };
+      engine.upsertAvatar(`npc:${id}`, st);
+      if (tp) bodies.push({ ...st, id: `npc:${id}`, reduced });
     });
     this.watchActs();
     engine.update(dt);
+    if (tp) {
+      // the room as it is (doors swinging, seats taken, edits): only what changed is redrawn
+      // build mode: what it shows (ghosts, previews, outlines); things in hand are left out of the room
+      const look = hud.get().build.on ? engine.buildLook() : null;
+      tp.setBuild(look);
+      if (now >= this.tpDue || (look && look.hidden.size !== this.tpHidden)) {
+        this.tpDue = now + 200;
+        this.tpHidden = look?.hidden.size ?? 0;
+        const all = engine.allObjects();
+        tp.update(this.map, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all);
+      }
+      tp.setLiveFrom({ engine, screens: this.screens, games: this.games });
+      tp.setCars(this.slots?.cars() ?? []);
+      tp.frame(dt, bodies, localSid);
+    }
     this.updatePrompt();
     if (now - this.peopleAt > 250) {
       this.peopleAt = now;
@@ -787,7 +826,9 @@ export class WorldController {
       if (l > level) {
         level = l;
         loud = { o: box, r };
-        pan = stereoPan(this.me, { x: box.x + 0.5, y: box.y + 0.5 });
+        pan = this.tp
+          ? this.tp.pan(this.me, { x: box.x + 0.5, y: box.y + 0.5 })
+          : stereoPan(this.me, { x: box.x + 0.5, y: box.y + 0.5 });
       }
     }
     if (loud) {
@@ -825,8 +866,12 @@ export class WorldController {
       this.path = null;
       this.pathTarget = null;
       hud.set({ following: null });
-      const dir = screenInputToWorld(ix || pad.x, iy || pad.y);
+      // third person: relative to where the camera looks (W = away from it)
+      const dir = this.tp
+        ? unit(this.tp.relative(-(iy || pad.y), ix || pad.x))
+        : screenInputToWorld(ix || pad.x, iy || pad.y);
       const next = moveStep(this.grid, this.me, dir, speed, dt);
+      this.turnTowards(Math.atan2(dir.y, dir.x), dt);
       this.me.x = next.x;
       this.me.y = next.y;
       this.me.d = dirFromDelta(dir.x, dir.y, this.me.d as 0);
@@ -848,7 +893,10 @@ export class WorldController {
           this.me.y += (dy / d) * budget;
           budget = 0;
         }
-        if (d > 0.001) this.me.d = dirFromDelta(dx, dy, this.me.d as 0);
+        if (d > 0.001) {
+          this.me.d = dirFromDelta(dx, dy, this.me.d as 0);
+          this.turnTowards(Math.atan2(dy, dx), dt);
+        }
       }
       moved = true;
       if (!this.path.length) {
@@ -872,6 +920,9 @@ export class WorldController {
         this.me.d = [1, 7, 5, 3][seat.rot % 4];
       }
     } else this.me.a = ANIM.idle;
+    // turned some other way (a seat, someone high-fiving me…): face it in 3D too
+    if (!moved && dirFromDelta(Math.cos(this.meAngle), Math.sin(this.meAngle), this.me.d as 0) !== this.me.d)
+      this.meAngle = DIR_ANGLE[this.me.d] ?? this.meAngle;
 
     const now = performance.now();
     const changed =
@@ -905,13 +956,17 @@ export class WorldController {
     if (hud.get().build.on) return false;
     const path = findPath(this.grid, this.me, target);
     if (!path) {
-      if (!quiet) this.engine?.showMarker(target.x, target.y);
+      if (!quiet) {
+        this.engine?.showMarker(target.x, target.y);
+        this.tp?.showMarker(target.x, target.y);
+      }
       return false;
     }
     this.path = path;
     this.pathTarget = objectId ? { objectId } : null;
     const end = path[path.length - 1] ?? target;
     this.engine?.showMarker(end.x, end.y);
+    this.tp?.showMarker(end.x, end.y);
     return true;
   }
 
@@ -933,7 +988,7 @@ export class WorldController {
     for (const o of this.engine.allObjects()) {
       const e = entry(o.kind);
       if (!e.interact) continue;
-      const { w, h } = footprint(o.kind, o.rot ?? 0);
+      const { w, h } = placedFootprint(o);
       const cx = Math.max(o.x, Math.min(this.me.x, o.x + w));
       const cy = Math.max(o.y, Math.min(this.me.y, o.y + h));
       const d = Math.hypot(this.me.x - cx, this.me.y - cy);
@@ -950,6 +1005,7 @@ export class WorldController {
     const cur = hud.get().prompt;
     if ((o?.id ?? null) === (cur?.objectId ?? null)) return;
     this.engine?.setHighlight(o?.id ?? null);
+    this.tp?.setHighlight(this.footprintOf(o?.id));
     hud.set({
       prompt: o ? { objectId: o.id, kind: entry(o.kind).interact as string, label: entry(o.kind).label } : null,
     });
@@ -1093,7 +1149,7 @@ export class WorldController {
     if (!o) return;
     const e = entry(o.kind);
     if (!e.interact) return;
-    const { w, h } = footprint(o.kind, o.rot ?? 0);
+    const { w, h } = placedFootprint(o);
     const cx = Math.max(o.x, Math.min(this.me.x, o.x + w));
     const cy = Math.max(o.y, Math.min(this.me.y, o.y + h));
     if (Math.hypot(this.me.x - cx, this.me.y - cy) > INTERACT_RANGE + 0.3) {
@@ -1434,7 +1490,146 @@ export class WorldController {
   // The light follows the local clock (art/daylight.ts: day, golden hour, dusk, night).
   private updateNight() {
     const now = new Date();
-    this.engine?.setClock(now.getHours() + now.getMinutes() / 60);
+    this.hour = now.getHours() + now.getMinutes() / 60;
+    this.engine?.setClock(this.hour);
+    this.tp?.setHour(this.hour);
+  }
+  private hour = 12;
+
+  // ── third person (world/tp, its own chunk) ─────────────────────────────────
+  // A per-player way of seeing the same world: the iso engine keeps running
+  // (it's what everything else asks about the room) but stops drawing, and a
+  // three.js view behind you draws the same people and things. Build mode
+  // always opens in iso.
+  tp: ThirdPersonView | null = null;
+  private tpHost: HTMLDivElement | null = null;
+  private tpLoading = false;
+  private tpDue = 0;
+  private tpHidden = 0;
+  private meAngle = 0; // my facing in 3D (free; others see the nearest of 8)
+  private viewNow: "iso" | "3p" = "iso";
+
+  private syncView() {
+    if (!this.engine || !this.room) return;
+    const want = prefs().view === "3p" ? "3p" : "iso";
+    this.tp?.setMode(prefs().cam3p);
+    if (want === this.viewNow) return;
+    this.viewNow = want;
+    if (want === "3p") void this.openTp();
+    else this.closeTp();
+  }
+
+  private async openTp() {
+    if (this.tp || this.tpLoading) return;
+    this.tpLoading = true;
+    try {
+      const [{ ThirdPersonView }, P, items, themes] = await Promise.all([
+        import("./tp/view"),
+        loadPeople(),
+        loadItemArt() as Promise<typeof import("./art/items")>,
+        loadThemes(),
+      ]);
+      const engine = this.engine;
+      if (this.stopped || this.viewNow !== "3p" || !engine) return;
+      const host = document.createElement("div");
+      host.style.cssText = "position:absolute;inset:0";
+      this.host.appendChild(host);
+      const v = new ThirdPersonView(this.map, engine.allObjects(), P, items, { keys: false, themes });
+      v.events = {
+        floor: (x, y) => engine.events.onTileClick?.(x, y),
+        person: (id, at) => engine.events.onAvatarClick?.(id, at),
+        object: (id, at) => engine.events.onObjectClick?.(id, at),
+        // build mode: the iso build controller, fed the floor under the 3D pointer
+        buildMove: (x, y, at) => {
+          // (canvas px, as the iso engine keeps it: drags measure by it)
+          const r = engine.app.canvas.getBoundingClientRect();
+          engine.pointerAt = { gx: at.x - r.left, gy: at.y - r.top };
+          engine.events.onPointerWorld?.(x, y);
+        },
+        buildDown: (x, y) => engine.events.onPointerDown?.(x, y),
+        buildUp: (x, y) => engine.events.onPointerUp?.(x, y),
+        wheel: (dy) => engine.events.onWheel?.(dy) ?? false,
+      };
+      // what's under the pointer and where things are on screen: as this camera sees them
+      engine.picksOverride = (filter) =>
+        v
+          .picksAtPointer()
+          .filter((p) => {
+            if (p.dress) return true;
+            const o = engine.getObject(p.id);
+            return !!o && !!entry(o.kind).buildable && (!filter || filter(o));
+          })
+          .map((p) =>
+            p.dress ? { id: p.id, dress: true as const, kind: p.kind ?? "" } : { id: p.id, dress: false as const },
+          );
+      engine.clientOverride = (x, y, z) => v.project(x, y, z / 39.19) ?? { x: -9999, y: -9999 };
+      engine.floorOverride = (cx, cy, z) => v.floorAt(cx, cy, z / 39.19) ?? { x: -1, y: -1 };
+      v.mount(host);
+      v.setQuality(this.qualityNow());
+      v.setMode(prefs().cam3p);
+      v.setHour(this.hour);
+      v.yaw = this.meAngle; // start behind me
+      engine.app.ticker.stop();
+      engine.app.canvas.style.visibility = "hidden";
+      engine.onPuff = (x, y, kind, lift) => v.puff(x, y, kind, lift);
+      this.tp = v;
+      this.tpHost = host;
+      v.setHighlight(this.footprintOf(hud.get().prompt?.objectId));
+    } catch (e) {
+      console.error("third person", e);
+      toast(tr("failed"));
+      setPrefs({ view: "iso" });
+    } finally {
+      this.tpLoading = false;
+    }
+  }
+
+  private closeTp() {
+    this.tp?.destroy();
+    this.tp = null;
+    this.tpHost?.remove();
+    this.tpHost = null;
+    const e = this.engine;
+    if (e) {
+      e.onPuff = null;
+      e.picksOverride = null;
+      e.clientOverride = null;
+      e.floorOverride = null;
+      e.app.ticker.start();
+      e.app.canvas.style.visibility = "";
+    }
+  }
+
+  // ease my 3D facing towards an angle (radians)
+  private turnTowards(a: number, dt: number) {
+    let d = a - this.meAngle;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    this.meAngle += d * Math.min(1, dt * 12);
+  }
+
+  // the floor outline of a thing (wall items: just in front of their wall)
+  private footprintOf(id: string | undefined): { x: number; y: number; w: number; h: number } | null {
+    const o = id ? this.engine?.getObject(id) : undefined;
+    if (!o) return null;
+    const e = entry(o.kind);
+    const { w, h } = placedFootprint(o);
+    const west = e.wall && wallRot(o.rot) === 3;
+    const x0 = west ? o.x : o.x - 0.08;
+    const y0 = e.wall && !west ? o.y : o.y - 0.08;
+    return { x: x0, y: y0, w: o.x + w + 0.08 - x0, h: o.y + h + 0.08 - y0 };
+  }
+
+  // A chat bubble over someone, in both views (switching keeps it).
+  private say(id: string, text: string, ms?: number) {
+    this.engine?.say(id, text, ms);
+    this.tp?.say(id, text, ms);
+  }
+
+  // Where a world point is on screen (canvas px), in whichever view is showing.
+  // `z`: iso px above the floor (as the iso engine measures).
+  clientAt(x: number, y: number, z: number): { x: number; y: number } {
+    if (this.tp) return this.tp.project(x, y, z / 39.19) ?? { x: -9999, y: -9999 };
+    return this.engine?.worldToClient(x, y, z) ?? { x: -9999, y: -9999 };
   }
 
   // ── build mode: its own chunk (world/build), loaded when an owner opens it ──
@@ -1574,12 +1769,14 @@ export class WorldController {
   private watchFrameRate() {
     const e = this.engine;
     if (!e || prefs().quality !== "auto" || Date.now() - this.startedAt < 8000 || document.hidden) return;
-    const fps = e.stats().fps;
+    // (third person: its own frame rate — the iso engine isn't drawing)
+    const fps = this.tp ? this.tp.fps : e.stats().fps;
     this.slowFor = fps > 0 && fps < 40 ? this.slowFor + 1 : 0;
     if (this.slowFor < 6 || this.autoTier === "low") return;
     this.slowFor = 0;
     this.autoTier = this.autoTier === "high" ? "medium" : "low";
     e.setQuality(this.autoTier, prefs().reducedMotion);
+    this.tp?.setQuality(this.autoTier);
   }
 
   meTile() {
@@ -1629,10 +1826,13 @@ export class WorldController {
     if (key === "x" || key === "e") this.interact();
     else if (key === "m") void this.toggleMic();
     else if (key === "v") void this.toggleCam();
+    else if (key === "t") setPrefs({ view: prefs().view === "3p" ? "iso" : "3p" });
     else if (key === "enter") {
       e.preventDefault();
       hud.set({ side: "chat", chatUnread: 0 });
     } else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
+    else if ((key === "+" || key === "=") && this.tp) this.tp.zoomBy(1 / 1.15);
+    else if (key === "-" && this.tp) this.tp.zoomBy(1.15);
     else if (key === "+" || key === "=") this.engine?.setZoom((this.engine?.getZoom() ?? 1) * 1.15);
     else if (key === "-") this.engine?.setZoom((this.engine?.getZoom() ?? 1) / 1.15);
   };
@@ -1739,4 +1939,21 @@ function interpolate(buf: { t: number; x: number; y: number }[], at: number): Po
     }
   }
   return buf[buf.length - 1];
+}
+
+// the 8 facings (shared/iso.ts) as world angles, for my 3D facing
+const DIR_ANGLE = [
+  [1, 1],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [1, 0],
+].map(([x, y]) => Math.atan2(y, x));
+
+function unit(p: Point): Point {
+  const l = Math.hypot(p.x, p.y) || 1;
+  return { x: p.x / l, y: p.y / l };
 }

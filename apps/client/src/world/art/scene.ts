@@ -8,6 +8,7 @@ import {
   isFloor,
   isWallEdge,
   type MapDef,
+  rotOf,
   tileAt,
   topCentre,
   vWall,
@@ -97,7 +98,7 @@ export function setArtRes(r: number) {
 export function objectShadow(o: WorldObjectDef): { key: string; get: () => ItemArt | null } | null {
   // things on a surface cast on the surface (in their drawing), not the floor
   if (!illustrated(o.kind) || entry(o.kind).onSurface) return null;
-  const rot = entry(o.kind).wall ? 0 : (o.rot ?? 0);
+  const rot = rotOf(o);
   const m = items as ItemsModule;
   const ref = { kind: o.kind, id: o.id, rot, props: o.props };
   const key = m.itemKey(ref, "shadow", "all", 1);
@@ -399,12 +400,13 @@ export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
   const p = piece(o.kind, o.props ?? {}, o.id);
   if (p.flat) return [];
   if (e.onSurface) return topParts(o, p, host);
-  const rot = e.wall ? 0 : (o.rot ?? 0);
+  const rot = rotOf(o);
+  const west = e.wall && rot === 3; // hangs on a west wall, facing east
   const { w, h } = footprint(o.kind, rot);
-  let boxes = rotateBoxes(p.boxes, e.w, e.h, rot);
-  if (e.wall) boxes = boxes.map((b) => ({ ...b, y: b.y + WALL_FACE }));
+  const boxes = rotateBoxes(e.wall ? p.boxes.map((b) => ({ ...b, y: b.y + WALL_FACE })) : p.boxes, e.w, e.h, rot);
   const slices: Clip[] = [];
-  if (e.wall) for (let i = 0; i < w * 4; i++) slices.push({ x0: i / 4, x1: (i + 1) / 4, y0: -1, y1: h + 1 });
+  if (west) for (let i = 0; i < h * 4; i++) slices.push({ x0: -1, x1: w + 1, y0: i / 4, y1: (i + 1) / 4 });
+  else if (e.wall) for (let i = 0; i < w * 4; i++) slices.push({ x0: i / 4, x1: (i + 1) / 4, y0: -1, y1: h + 1 });
   else if (w > h) for (let i = 0; i < w; i++) slices.push({ x0: i, x1: i + 1, y0: -1, y1: h + 1 });
   else if (h > w) for (let i = 0; i < h; i++) slices.push({ x0: -1, x1: w + 1, y0: i, y1: i + 1 });
   else slices.push({ x0: -1, x1: w + 1, y0: -1, y1: h + 1 });
@@ -422,8 +424,8 @@ export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
         // organic extras (leaves, poles) — only 1×1 pieces have them, so no offset
         if (p.custom && i === 0 && bias <= 0) p.custom(g);
       });
-      const sw = e.wall ? 0.25 : slices.length > 1 ? Math.min(1, w) : w;
-      const sh = slices.length > 1 ? Math.min(1, h) : h;
+      const sw = e.wall && !west ? 0.25 : slices.length > 1 ? Math.min(1, w) : w;
+      const sh = west ? 0.25 : slices.length > 1 ? Math.min(1, h) : h;
       const wx = o.x + cx;
       const wy = o.y + cy;
       const [sx, sy] = P(wx, wy);
@@ -438,9 +440,11 @@ export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
         art = { key: akey, get: memo(akey, () => m.itemArt(ref, clipped, group, artRes)), ox, oy };
       }
       // wall items: just in front of the wall slice behind them, fading with that wall
-      const key = e.wall
-        ? wx + sw / 2 + o.y + 0.01
-        : wx + Math.min(sw, w - cx) / 2 + wy + Math.min(sh, h - cy) / 2 + bias;
+      const key = west
+        ? o.x + wy + sh / 2 + 0.01
+        : e.wall
+          ? wx + sw / 2 + o.y + 0.01
+          : wx + Math.min(sw, w - cx) / 2 + wy + Math.min(sh, h - cy) / 2 + bias;
       out.push({
         ctx,
         x: sx,
@@ -450,8 +454,16 @@ export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
         wy,
         objectId: o.id,
         art,
-        edge: e.wall ? { dir: "h", x: Math.floor(wx), y: o.y, high: true } : undefined,
-        at: e.wall ? [wx + sw / 2, o.y + 0.25] : [wx + Math.min(sw, w - cx) / 2, wy + Math.min(sh, h - cy) / 2],
+        edge: west
+          ? { dir: "v", x: o.x, y: Math.floor(wy), high: true }
+          : e.wall
+            ? { dir: "h", x: Math.floor(wx), y: o.y, high: true }
+            : undefined,
+        at: west
+          ? [o.x + 0.25, wy + sh / 2]
+          : e.wall
+            ? [wx + sw / 2, o.y + 0.25]
+            : [wx + Math.min(sw, w - cx) / 2, wy + Math.min(sh, h - cy) / 2],
       });
     }
   });

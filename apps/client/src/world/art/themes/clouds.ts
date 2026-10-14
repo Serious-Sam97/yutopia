@@ -3,7 +3,7 @@ import type { Daylight } from "../daylight";
 import { canvas, css, keyed, outerEdges, rng, type ThemeView } from "./common";
 
 // hour, sky top, sky middle, sky bottom, cloud tint
-const SKY: [number, string, string, string, string][] = [
+export const SKY: [number, string, string, string, string][] = [
   [0, "#0b1430", "#14214a", "#22305e", "#3a4466"],
   [5, "#0e1838", "#1a2754", "#2c3a6a", "#454f74"],
   [6.5, "#4a5e9a", "#9a90b8", "#f2b49a", "#f6d6cc"],
@@ -33,7 +33,7 @@ function starsCanvas(): HTMLCanvasElement {
 
 // A fluffy cartoon cloud: a row of round puffs on a flat-ish base, white on
 // top, a soft blue shade underneath, a light outline.
-function cloudCanvas(seed: number): HTMLCanvasElement {
+export function cloudCanvas(seed: number): HTMLCanvasElement {
   const r = rng(seed);
   const W = 420;
   const H = 180;

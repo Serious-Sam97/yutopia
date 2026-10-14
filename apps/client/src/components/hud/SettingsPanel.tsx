@@ -137,6 +137,38 @@ export function SettingsPanel() {
           </div>
           {toggle(t("reducedMotion"), p.reducedMotion, (v) => setPrefs({ reducedMotion: v }))}
         </section>
+        <section className="space-y-2">
+          <h3 className="mono text-xs uppercase tracking-widest" style={{ color: "var(--vfd)" }}>
+            {t("view")}
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            {(["iso", "3p"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                className="deck-btn"
+                aria-pressed={p.view === v}
+                onClick={() => setPrefs({ view: v })}
+                style={{ height: 40, fontSize: 10 }}
+              >
+                {t(v === "iso" ? "viewIso" : "view3p")}
+              </button>
+            ))}
+            {p.view === "3p" &&
+              (["chase", "free"] as const).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className="deck-btn"
+                  aria-pressed={p.cam3p === c}
+                  onClick={() => setPrefs({ cam3p: c })}
+                  style={{ height: 40, fontSize: 10 }}
+                >
+                  {t(c === "chase" ? "cam3pChase" : "cam3pFree")}
+                </button>
+              ))}
+          </div>
+        </section>
         <section className="flex items-center justify-between">
           <span>{t("language")}</span>
           <LangSwitch />

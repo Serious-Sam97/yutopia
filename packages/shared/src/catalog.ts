@@ -114,7 +114,7 @@ export const CATALOG = {
     paint: true,
   },
   cupboard: { label: "Cupboard", w: 1, h: 1, solid: true, buildable: true, surface: 26 },
-  sofa: { label: "Sofa", w: 3, h: 1, solid: true, buildable: true, variants: 3, paint: true },
+  sofa: { label: "Sofa", w: 3, h: 1, solid: false, seat: true, buildable: true, variants: 3, paint: true },
   armchair: { label: "Armchair", w: 1, h: 1, solid: false, seat: true, buildable: true, variants: 2, paint: true },
   beanbag: { label: "Bean bag", w: 1, h: 1, solid: false, seat: true, buildable: true, paint: true },
   bench: { label: "Bench", w: 3, h: 1, solid: false, seat: true, buildable: true },
@@ -312,6 +312,23 @@ export function entry(kind: string): CatalogEntry {
 export function footprint(kind: string, rot = 0): { w: number; h: number } {
   const e = entry(kind);
   return rot % 2 === 1 ? { w: e.h, h: e.w } : { w: e.w, h: e.h };
+}
+
+// Wall items hang on the north wall of their tiles (rot 0) or, turned, on the
+// west wall (rot 3, facing east): the two walls seen from the front. Any other
+// turn stored on one (older saves) is the north wall.
+export function wallRot(rot = 0): 0 | 3 {
+  return rot === 3 ? 3 : 0;
+}
+
+// The turn something is laid out and drawn with.
+export function rotOf(o: { kind: string; rot?: number }): number {
+  return entry(o.kind).wall ? wallRot(o.rot) : (o.rot ?? 0);
+}
+
+// Its footprint where it stands (wall items: the tiles along their wall).
+export function placedFootprint(o: { kind: string; rot?: number }): { w: number; h: number } {
+  return footprint(o.kind, rotOf(o));
 }
 
 export interface WorldObjectDef {
