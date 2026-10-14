@@ -1625,8 +1625,10 @@ export class WorldEngine {
     this.cam.y += (this.camFocus.y - this.cam.y) * k;
     this.zoom += (this.targetZoom - this.zoom) * (this.reducedMotion ? 1 : 1 - Math.exp(-dt * 10));
     this.drawEarshot(local);
-    const W = this.app.renderer.width / this.app.renderer.resolution;
-    const H = this.app.renderer.height / this.app.renderer.resolution;
+    // Pixi 8's renderer.width is already in CSS pixels (it's screen.width, not
+    // the canvas's pixel width) — dividing it by the resolution again made the
+    // camera and the finish think the screen was half its size on 2× displays
+    const { width: W, height: H } = this.app.renderer.screen;
     this.world.scale.set(this.zoom);
     this.theme?.update(dt, W, H, this.cam.x, this.cam.y, this.zoom);
     this.post?.update(W, H, dt > 0 && !this.reducedMotion); // grain only moves while time does
