@@ -78,8 +78,8 @@ interface TvView {
   scan: Graphics;
   label: Text;
   source: HTMLVideoElement | HTMLCanvasElement | null;
-  // a TV's video is copied into this canvas each frame (Pixi's video textures
-  // don't refresh on the engine's own loop): the same path as the host's canvas
+  // a TV's picture is copied into this canvas each frame (Pixi's video textures
+  // don't refresh on the engine's own loop; the 3D view reads only this one)
   frame: HTMLCanvasElement;
   avg: number; // the picture's average colour (for the glow)
   avgAt: number;
@@ -496,7 +496,9 @@ export class GameRoom {
         v.source = src;
         v.pic.texture = !src ? Texture.EMPTY : Texture.from(src instanceof HTMLVideoElement ? v.frame : src);
       }
-      if (src instanceof HTMLVideoElement && src.readyState >= 2)
+      // (my emulator's picture too: the 3D view takes the 2D copy, never the
+      // emulator's WebGL canvas itself — Firefox showed nothing on a 3D TV from that)
+      if (src && (!(src instanceof HTMLVideoElement) || src.readyState >= 2))
         v.frame.getContext("2d")?.drawImage(src, 0, 0, v.frame.width, v.frame.height);
       // the engine draws on its own loop (not Pixi's ticker): push each new frame up
       if (src) v.pic.texture.source.update();
@@ -829,8 +831,7 @@ export class GameRoom {
   // for the third-person view: what each TV shows now (the console's picture)
   pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement }[] {
     const out: { def: WorldObjectDef; canvas: HTMLCanvasElement }[] = [];
-    for (const v of this.tvs.values())
-      if (v.source) out.push({ def: v.def, canvas: v.source instanceof HTMLVideoElement ? v.frame : v.source });
+    for (const v of this.tvs.values()) if (v.source) out.push({ def: v.def, canvas: v.frame });
     return out;
   }
 
