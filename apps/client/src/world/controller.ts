@@ -950,7 +950,7 @@ export class WorldController {
         // snap onto the seat and face its direction
         this.me.x = Math.floor(this.me.x) + 0.5;
         this.me.y = Math.floor(this.me.y) + 0.5;
-        this.me.d = [1, 7, 5, 3][seat.rot % 4];
+        this.me.d = [1, 3, 5, 7][seat.rot % 4]; // away from the seat's back (server `seatFacing`)
       }
     } else this.me.a = ANIM.idle;
     // turned some other way (a seat, someone high-fiving me…): face it in 3D too

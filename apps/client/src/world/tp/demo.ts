@@ -55,7 +55,7 @@ const LINES = [
   "brb",
 ];
 
-const SEAT_DIR = [1, 7, 5, 3]; // seat rot → facing (as the controller does)
+const SEAT_DIR = [1, 3, 5, 7]; // seat rot → facing, away from the seat's back (as the controller does)
 const NAMES = ["Ana", "Bia", "Caio", "Duda", "Enzo", "Flora", "Gui", "Helô", "Iara", "João", "Kika", "Lia"];
 
 export class DemoWorld {

@@ -971,10 +971,13 @@ export function safeJson(s: string): Record<string, unknown> {
   }
 }
 
-// Seat rotation → which way you face when sitting (towards the desk/table).
+// Seat rotation → which way you face when sitting: away from the seat's back.
+// A seat is drawn with its back on −y and turned like everything else (90°
+// clockwise steps, `Sketch.rp`): rot 0 faces +y (screen down-left = SW),
+// 1 faces −x (NW), 2 faces −y (NE), 3 faces +x (SE) — the same turn as wall
+// items (rot 3 = on the west wall, facing east).
 export function seatFacing(rot: number): number {
-  // rot 0 faces +y (screen down-left = SW), 1 faces +x (SE), 2 faces -y (NE), 3 faces -x (NW)
-  return [1, 7, 5, 3][rot % 4];
+  return [1, 3, 5, 7][rot % 4];
 }
 
 // Messages only arrive after onJoin has filled userData.

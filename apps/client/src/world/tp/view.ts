@@ -1,4 +1,13 @@
-import { EMOTES, type Emote, type MapDef, type Point, type Theme, type WorldObjectDef } from "@yutopia/shared";
+import {
+  EMOTES,
+  type Emote,
+  entry,
+  type MapDef,
+  type Point,
+  placedFootprint,
+  type Theme,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -166,6 +175,7 @@ export class ThirdPersonView {
     this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.light.update(map, objects);
+    this.indexSeats(map, objects);
     this.world = new World3(items, map, objects, this.renderer.capabilities.getMaxAnisotropy(), (m) =>
       this.light.patch(m),
     );
@@ -421,6 +431,7 @@ export class ThirdPersonView {
   // the areas whose things changed are redrawn (cheap: call it often).
   update(map: MapDef, objects: WorldObjectDef[]) {
     this.light.update(map, objects);
+    this.indexSeats(map, objects);
     if (layoutSig(map) === layoutSig(this.map)) return this.world.update(objects);
     const old = this.world;
     this.map = map;
@@ -562,6 +573,19 @@ export class ThirdPersonView {
     return Math.max(-1, Math.min(1, ((src.x - ear.x) * rx + (src.y - ear.y) * ry) / 6));
   }
 
+  // What seat is on each tile (its catalog kind): a sitter's hips rest at its
+  // cushion's height.
+  private seatKinds = new Map<number, string>();
+  private indexSeats(map: MapDef, objects: WorldObjectDef[]) {
+    this.seatKinds.clear();
+    for (const o of objects) {
+      if (!entry(o.kind).seat) continue;
+      const { w, h } = placedFootprint(o);
+      for (let dy = 0; dy < h; dy++)
+        for (let dx = 0; dx < w; dx++) this.seatKinds.set((o.y + dy) * map.width + o.x + dx, o.kind);
+    }
+  }
+
   // One frame: people from the world's bodies (`me` = whose camera this is).
   frame(dt: number, bodies: Body3[], meId: string) {
     this.time += dt;
@@ -648,8 +672,9 @@ export class ThirdPersonView {
       const onScreen = this.frustum.intersectsSphere(this.sphere);
       const near = Math.hypot(cam.x - b.x, cam.z - b.y) < 12;
       const redraw = onScreen && (near || (this.tick + hashId(b.id)) % 3 === 0);
+      const seat = b.a === 2 ? this.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
       p.update(
-        { ...b, angle },
+        { ...b, angle, seat },
         dt,
         cam.x,
         cam.z,
@@ -715,7 +740,7 @@ export class ThirdPersonView {
         t.bubbleUntil = 0;
         t.bubble.style.display = "none";
       }
-      const h = b.npc ? 1.6 : b.a === 2 ? 1.6 : 2.0;
+      const h = b.npc ? 1.6 : b.a === 2 ? 1.45 : 2.0;
       const far = Math.hypot(cam.x - b.x, cam.z - b.y) > 16;
       const p = far || this.hidden(b.x, b.y, h) ? null : this.project(b.x, b.y, h);
       t.root.style.display = p ? "" : "none";

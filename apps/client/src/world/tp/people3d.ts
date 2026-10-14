@@ -36,9 +36,16 @@ const BX1 = 132;
 const BY0 = -14;
 const BY1 = 186;
 const PX = 1.6; // canvas px per board unit
-const SEAT_FWD = 0.55; // tiles: a sitter's drawing, forward from the seat's middle (feet on the floor in front)
-const PULL_SIT = 0.75; // tiles towards the camera (in front of the whole seat)
+const SEAT_FWD = 0.22; // tiles: a sitter's hips, forward from the seat's middle (over the cushion's front half)
+const SEAT_BACK = 0.36; // tiles: a sitter's hips, back from the middle for a camera behind (inside the back; its rear face is 0.4 back)
+const PULL_SIT = 0.42; // tiles towards a camera in front (past the cushion's front edge; nothing from the sides or behind)
 const PULL_STAND = 0.2; // (in front of what they stand right against)
+const HIP = 168 - 104; // board units from the feet line up to the hips (the seated drawing's hips are on y 104)
+const SIT_FEET = 131 - 104; // board units from a sitter's hips down to their shoes (y 131)
+const SIT_IN = 0.3; // s: sitting down / getting up
+// Where a sitter's hips rest, iso px of height: each seat's cushion top less
+// what it gives (the iso drawings sink an occupied cushion a px or two).
+const SEAT_HIP: Record<string, number> = { chair: 14, armchair: 13.5, sofa: 15.2, beanbag: 11, bench: 11.2 };
 const RIG_PX = 2; // part images, px per board unit
 
 // 8 facings (screen dirs, shared/iso.ts) as world angles (atan2 of the world direction)
@@ -112,6 +119,7 @@ export interface PersonIn {
   actAt?: number;
   typing?: boolean; // seated at a desk with a keyboard
   reduced?: boolean; // reduced motion
+  seat?: string; // what they sit on (catalog kind), when `a` is 2
 }
 
 // What people carry, one image per kind / colour / level
@@ -126,6 +134,8 @@ export class Person3 {
   private tex: CanvasTexture;
   private mat: MeshBasicMaterial;
   readonly plane: Mesh;
+  private pivot = new Group(); // the drawing turns and leans about this: the feet, or a sitter's hips
+  private sitW: number | null = null; // 0 standing … 1 seated (eases: sitting down / getting up)
   private motion: Motion | null = null;
   private rig: AvatarRig | null = null;
   private rigKey = "";
@@ -169,7 +179,9 @@ export class Person3 {
     );
     this.ring.position.y = 0.006;
     this.ring.visible = false;
-    this.root.add(this.plane, shadow, this.ring);
+    this.pivot.rotation.order = "YXZ";
+    this.pivot.add(this.plane);
+    this.root.add(this.pivot, shadow, this.ring);
   }
 
   // `camX/camY`: where the camera stands (plan), `lean`: how far the drawing
@@ -304,42 +316,53 @@ export class Person3 {
     }
     this.plane.visible = this.shown;
 
-    // place: feet on the floor (seated: as the iso engine lowers them onto the seat)
-    // seated: the drawing sits at the seat's front edge, where they face (a flat
-    // drawing in the middle of a seat would vanish behind its cushions and
-    // back), feet on the floor, leaning back less
+    // place. Standing: feet on the floor. Seated: the hips on the seat's
+    // cushion (per seat kind), a little forward of its middle, the drawing
+    // leaning about the hips; the shoes then hang just over the floor, as
+    // drawn. Sitting down / getting up slides there over a moment (the hips
+    // drop from standing height onto the cushion).
+    const s = this.s;
+    const baseY = -(2 * PERSON) / ZPX;
+    if (this.sitW === null || p.reduced) this.sitW = sitting ? 1 : 0;
+    else this.sitW = Math.max(0, Math.min(1, this.sitW + (sitting ? dt : -dt) / SIT_IN));
+    const w = this.sitW * this.sitW * (3 - 2 * this.sitW);
+    const hipY = Math.max((SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX, SIT_FEET * s + 0.015);
     this.root.position.set(p.x, 0, p.y);
-    if (sitting) {
-      this.plane.position.x = Math.cos(p.angle) * SEAT_FWD;
-      this.plane.position.z = Math.sin(p.angle) * SEAT_FWD;
-    } else this.plane.position.x = this.plane.position.z = 0;
-    this.plane.position.y = -(2 * PERSON) / ZPX;
-    this.plane.rotation.set(0, 0, 0);
-    this.plane.rotation.order = "YXZ";
-    this.plane.rotation.y = -face + Math.PI / 2;
-    this.plane.rotation.x = -camPitch * lean * (sitting ? 0.35 : 1);
+    // how much the camera looks at the seat's front (1) … side (0) … back (-1)
+    const front = cam ? Math.cos(Math.atan2(cam.z - p.y, cam.x - p.x) - p.angle) : 1;
+    // From the side the torso belongs against the back (the lap reaches the
+    // front edge); from behind, well into the back (just short of its rear
+    // face, so it still covers the card) — a chase camera looks down over a
+    // seat's back, and a torso drawn forward of it shows whole, perched on it.
+    const fwd = (front >= 0 ? SEAT_FWD * front : SEAT_BACK * front) * w;
+    const pivotY = sitting ? HIP * s + baseY + (hipY - HIP * s - baseY) * w : baseY;
+    this.pivot.position.set(Math.cos(p.angle) * fwd, pivotY, Math.sin(p.angle) * fwd);
+    this.plane.position.set(0, sitting ? -HIP * s : 0, 0);
+    // (a sitter leans back towards a high camera only from the front: from
+    // behind, a tipped card lifts the torso out of the seat's back)
+    this.pivot.rotation.set(-camPitch * lean * (sitting ? 0.3 * Math.max(0, front) : 1), -face + Math.PI / 2, 0);
     // Pulled towards the camera along the line of sight and shrunk by the same
-    // ratio: exactly the same on screen, but in front of the seat it sits on
-    // (and of a desk edge it stands against). What's really between you and
-    // them — more than the pull nearer — still covers them.
-    this.plane.scale.setScalar(1);
+    // ratio: exactly the same on screen, but in front of the cushion a sitter
+    // sits on (and of a desk edge someone stands against). What's really
+    // between you and them — more than the pull nearer — still covers them.
+    // A sitter is pulled only for a camera in front of the seat: from the
+    // sides its arms cover their lap, from behind its back covers them.
+    this.pivot.scale.setScalar(1);
     if (cam) {
-      const pull = sitting ? PULL_SIT : PULL_STAND;
-      const wx = p.x + this.plane.position.x;
-      const wy = this.plane.position.y + 0.8;
-      const wz = p.y + this.plane.position.z;
-      const d = Math.hypot(wx - cam.x, wy - cam.y, wz - cam.z);
-      if (d > pull * 2) {
+      let pull = PULL_STAND;
+      if (sitting) pull = PULL_SIT * Math.max(0, front) * w + PULL_STAND * (1 - w);
+      const px = p.x + this.pivot.position.x;
+      const py = this.pivot.position.y;
+      const pz = p.y + this.pivot.position.z;
+      const d = Math.hypot(px - cam.x, py + (sitting ? 0.3 : 0.8) - cam.y, pz - cam.z);
+      if (pull > 0 && d > pull * 2) {
         const k = (d - pull) / d;
-        const px = p.x + this.plane.position.x;
-        const pz = p.y + this.plane.position.z;
-        const py = this.plane.position.y;
-        this.plane.position.set(
+        this.pivot.position.set(
           cam.x + (px - cam.x) * k - p.x,
           cam.y + (py - cam.y) * k,
           cam.z + (pz - cam.z) * k - p.y,
         );
-        this.plane.scale.setScalar(k);
+        this.pivot.scale.setScalar(k);
       }
     }
     (this.root.getObjectByName("shadow") as Mesh).visible = !sitting && this.shown;
@@ -393,9 +416,10 @@ export class Person3 {
     }
     this.plane.visible = this.shown;
     this.root.position.set(p.x, 0, p.y);
-    this.plane.position.y = 0.12 + Math.sin(performance.now() / 420) * 0.05;
-    this.plane.rotation.order = "YXZ";
-    this.plane.rotation.set(-camPitch * lean, -face + Math.PI / 2, 0);
+    this.plane.position.set(0, 0, 0);
+    this.pivot.scale.setScalar(1);
+    this.pivot.position.set(0, 0.12 + Math.sin(performance.now() / 420) * 0.05, 0);
+    this.pivot.rotation.set(-camPitch * lean, -face + Math.PI / 2, 0);
     (this.root.getObjectByName("shadow") as Mesh).visible = this.shown;
     this.mat.color.copy(tint);
   }

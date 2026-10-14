@@ -104,8 +104,8 @@ for (let x = 34; x <= 39; x++) {
   add(`war-seat-s-${x}`, "chair", x, 6, 2);
 }
 for (const y of [4, 5]) {
-  add(`war-seat-w-${y}`, "chair", 33, y, 1);
-  add(`war-seat-e-${y}`, "chair", 40, y, 3);
+  add(`war-seat-w-${y}`, "chair", 33, y, 3); // backs to the walls, facing the table
+  add(`war-seat-e-${y}`, "chair", 40, y, 1);
 }
 for (const [i, [x, y]] of [
   [29, 1],
@@ -120,8 +120,8 @@ add("war-lamp", "lamp", 46, 6);
 for (const [i, bx] of [29, 35, 41].entries()) {
   const n = i + 1;
   const right = n === 3 ? bx + 5 : bx + 4;
-  add(`booth-${n}-chair-a`, "armchair", bx + 1, 17, 1);
-  add(`booth-${n}-chair-b`, "armchair", right - 1, 17, 3);
+  add(`booth-${n}-chair-a`, "armchair", bx + 1, 17, 3); // facing each other
+  add(`booth-${n}-chair-b`, "armchair", right - 1, 17, 1);
   add(`booth-${n}-panel-a`, "acoustic_panel", bx, 15);
   add(`booth-${n}-panel-b`, "acoustic_panel", right, 15);
   add(`booth-${n}-lamp`, "lamp", bx, 19);
@@ -135,7 +135,7 @@ add("lobby-notice", "notice_board", 2, 21);
 add("lobby-poster", "poster", 10, 21, 0, { art: "yondra" });
 add("lobby-sofa", "sofa", 2, 33);
 add("lobby-table", "coffee_table", 2, 31);
-add("lobby-armchair", "armchair", 5, 31, 3);
+add("lobby-armchair", "armchair", 5, 31, 1); // facing the coffee table (−x)
 add("lobby-lamp", "lamp", 11, 31);
 for (const [i, [x, y]] of [
   [1, 21],
@@ -152,7 +152,7 @@ add("lounge-radio", "radio", 24, 24);
 add("lounge-rug", "rug", 15, 27);
 add("lounge-sofa", "sofa", 15, 31);
 add("lounge-table", "coffee_table", 16, 28);
-add("lounge-armchair", "armchair", 19, 28, 3);
+add("lounge-armchair", "armchair", 19, 28, 1); // facing the coffee table (−x)
 add("lounge-shelf", "tape_shelf", 14, 24, 3);
 add("lounge-coffee", "coffee_machine", 14, 22);
 add("lounge-lamp", "lamp", 20, 33);
