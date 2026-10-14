@@ -1010,6 +1010,33 @@ test("your own arrival point: pick a spot you can walk to, arrive there, go back
   await waitFor(() => Math.hypot(me(again).x - sp.x, me(again).y - sp.y) < 1.5);
 });
 
+test("your own arrival point in a booth: fine while it's free, the space's while someone's talking in it", async () => {
+  const s = ++space;
+  const ana = await person(56, s);
+  const bia = await person(57, s);
+  const sp = { x: ana.room.state.spawnX, y: ana.room.state.spawnY };
+  const mine = (p: Person) =>
+    (p.msgs["spawn:mine"] ?? []).at(-1) as { at: { x: number; y: number } | null } | undefined;
+  await walk(ana, { x: 31.5, y: 16.5 });
+  assert.equal(me(ana).area, "booth-1");
+  ana.room.send("spawn:mine", { at: { x: me(ana).x, y: me(ana).y } });
+  await waitFor(() => mine(ana)?.at !== null && mine(ana)?.at !== undefined);
+  const spot = mine(ana)?.at as { x: number; y: number };
+  // back in while it's free: in the booth
+  await ana.room.leave(true);
+  let again = await person(56, s);
+  assert.ok(Math.hypot(me(again).x - spot.x, me(again).y - spot.y) < 0.01, "arrived in the booth");
+  // Bia takes the booth for a call (Ana steps out): Ana comes in at the space's spot
+  await walk(again, { x: 31.5, y: 12.5 });
+  assert.notEqual(me(again).area, "booth-1");
+  await walk(bia, { x: 31.5, y: 17.5 });
+  assert.equal(me(bia).area, "booth-1");
+  await again.room.leave(true);
+  again = await person(56, s);
+  assert.ok(Math.hypot(me(again).x - sp.x, me(again).y - sp.y) < 1.5, `arrived at ${me(again).x},${me(again).y}`);
+  assert.deepEqual(mine(again)?.at, spot, "the spot is kept");
+});
+
 test("game room: plug a console into a TV, a cartridge, power, pad 2 relayed, the TV's audience, carry on", async () => {
   const s = ++space;
   const a = await person(46, s, "member,builder");

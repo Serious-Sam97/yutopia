@@ -5,8 +5,9 @@ import { registerFeature } from "./index.ts";
 
 // Your own arrival point: anyone can pick a tile they can walk to (from where
 // they stand) and arrive there next time, instead of at the space's arrival
-// point. Stored in Yondra per space and person; checked again on every arrival
-// (SpaceRoom.arrivalFor), so a spot walled off later falls back to the space's.
+// point — your office or booth included. Stored in Yondra per space and person;
+// checked again on every arrival (SpaceRoom.arrivalFor), so a spot walled off
+// later, or a booth someone's talking in, falls back to the space's.
 
 registerFeature((room: SpaceRoom) => {
   const last = new Map<string, number>();
@@ -27,7 +28,7 @@ registerFeature((room: SpaceRoom) => {
       const y = Math.floor(Number(m.at?.y));
       if (!Number.isFinite(x) || !Number.isFinite(y)) return;
       at = { x: x + 0.5, y: y + 0.5 };
-      const why = room.arrivalProblem(p.uid, at, p);
+      const why = room.arrivalProblem(p, at, p);
       if (why) {
         tell(client.sessionId, p.uid);
         return room.send(client, "toast", { text: why, tone: "warn" });

@@ -261,7 +261,7 @@ export class SpaceRoom extends Room<SpaceState> {
       if (mine.spawn) this.mySpawns.set(claims.userId, mine.spawn);
       else if (mine.spawn === null) this.mySpawns.delete(claims.userId);
     }
-    const at = p.bot ? this.map.spawn : this.arrivalFor(claims.userId);
+    const at = p.bot ? this.map.spawn : this.arrivalFor(p);
     const open = this.grid.fits(at.x, at.y) ? at : (this.grid.nearestOpen(at.x, at.y) ?? this.map.spawn);
     p.x = open.x;
     p.y = open.y;
@@ -443,7 +443,7 @@ export class SpaceRoom extends Room<SpaceState> {
       const p = this.state.players.get(client.sessionId);
       if (!p) return;
       let target: { x: number; y: number } | null = null;
-      if (m.to === "spawn") target = this.arrivalFor(p.uid);
+      if (m.to === "spawn") target = this.arrivalFor(p);
       else if (m.to === "desk") {
         const seat = p.desk ? this.state.objects.get(p.desk) : undefined;
         target = seat ? { x: seat.x + 0.5, y: seat.y + 0.5 } : null;
@@ -527,22 +527,22 @@ export class SpaceRoom extends Room<SpaceState> {
     });
   }
 
-  // ── booths ────────────────────────────────────────────────────────────────
   // Where this person arrives: their own spot while they can still get there
-  // from the space's arrival point (doors, rooms and furniture change), else the space's.
-  arrivalFor(uid: number): { x: number; y: number } {
-    const mine = this.mySpawns.get(uid);
-    return mine && !this.arrivalProblem(uid, mine, this.map.spawn) ? mine : this.map.spawn;
+  // from the space's arrival point (doors, rooms and furniture change) and may
+  // walk in (a booth someone's talking in, a room locked right now), else the space's.
+  arrivalFor(p: Player): { x: number; y: number } {
+    const mine = this.mySpawns.get(p.uid);
+    return mine && !this.arrivalProblem(p, mine, this.map.spawn) ? mine : this.map.spawn;
   }
 
   // Why someone can't arrive at `at` (a tile centre), walking from `from`; null: they can.
-  arrivalProblem(uid: number, at: { x: number; y: number }, from: { x: number; y: number }): string | null {
-    const g = this.gridFor(uid);
+  arrivalProblem(p: Player, at: { x: number; y: number }, from: { x: number; y: number }): string | null {
+    const g = this.gridFor(p.uid);
     if (!g.inBounds(Math.floor(at.x), Math.floor(at.y))) return "That's off the map.";
     if (!g.ok(Math.floor(at.x), Math.floor(at.y)) || !g.fits(at.x, at.y)) return "Pick an open floor tile.";
     const area = areaAt(this.map, at.x, at.y);
-    if (area?.kind === "booth") return "Not in a booth — those are for calls.";
-    if (area && this.state.locks.has(area.key)) return "That room is locked right now.";
+    if (area && area.key !== p.area && !this.mayEnter(p, area.key))
+      return `Someone's in ${area.name} with the door shut — try again when it's free.`;
     const start = g.fits(from.x, from.y) ? from : g.nearestOpen(from.x, from.y);
     if (!start) return "Can't get there from here.";
     if (Math.hypot(start.x - at.x, start.y - at.y) < 0.5 || findPath(g, start, at, g.width * g.height)?.length)
@@ -550,6 +550,7 @@ export class SpaceRoom extends Room<SpaceState> {
     return "Can't get there — the door is locked.";
   }
 
+  // ── booths ────────────────────────────────────────────────────────────────
   mayEnter(p: Player, areaKey: string): boolean {
     const area = this.map.areas.find((a) => a.key === areaKey);
     // booths, and rooms an owner locked: knock to get in
