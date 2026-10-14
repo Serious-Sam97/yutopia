@@ -1,5 +1,10 @@
 # Yutopia for local dev: LiveKit + world-server + client, one command.
-#   docker compose -f docker/compose.yaml up -d      (or: pnpm up)
+#   docker compose -f docker/compose.yaml up -d      (or: pnpm docker:up)
+# Source changes are picked up live (the repo is bind-mounted). Dependency
+# changes are not: `pnpm install` only runs when a container starts, and
+# `up -d --build` leaves a running container alone because nothing here is
+# built. After touching a package.json or the lockfile run:
+#   pnpm docker:restart     (= docker compose restart client world)
 # Joins Yondra's `sail` network so the world-server reaches Laravel at
 # http://laravel.test — start Yondra's stack first.
 name: yutopia

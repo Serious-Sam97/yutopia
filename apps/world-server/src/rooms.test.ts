@@ -1105,3 +1105,49 @@ test("game room: plug a console into a TV, a cartridge, power, pad 2 relayed, th
   b.room.send("game:power", { id: "t-con", on: false });
   await waitFor(() => !c());
 });
+
+test("your own booth: you arrive at your spot in it with someone talking in it, and right after a reload", async () => {
+  const s = ++space;
+  const owner = await person(58, s, "member,builder");
+  const sam = await person(59, s);
+  const gabe = await person(60, s);
+  owner.room.send("map:new", { width: 32, height: 24 });
+  await waitFor(() => owner.room.state.width === 32);
+  owner.room.send("map:room", {
+    name: "Sam's office",
+    kind: "booth",
+    x: 4,
+    y: 4,
+    w: 5,
+    h: 4,
+    ownerId: 59,
+    ownerName: "P59",
+    walls: true,
+    floor: ",",
+  });
+  await waitFor(() => !!owner.room.state.objects.get("door-room-sam-s-office"));
+  const mine = (p: Person) =>
+    (p.msgs["spawn:mine"] ?? []).at(-1) as { at: { x: number; y: number } | null } | undefined;
+  await walk(sam, { x: 6.5, y: 5.5 });
+  assert.equal(me(sam).area, "room-sam-s-office");
+  sam.room.send("spawn:mine", { at: { x: me(sam).x, y: me(sam).y } });
+  await waitFor(() => mine(sam)?.at != null);
+  const spot = mine(sam)?.at as { x: number; y: number };
+  // Gabe is let in and stays for a call; Sam steps out and comes back in: his own room
+  sam.room.send("admit", { userId: 60, area: "room-sam-s-office" });
+  await waitFor(() => (gabe.msgs.admitted?.length ?? 0) > 0);
+  await walk(gabe, { x: 5.5, y: 5.5 });
+  assert.equal(me(gabe).area, "room-sam-s-office");
+  await sam.room.leave(true);
+  let again = await person(59, s);
+  assert.ok(Math.hypot(me(again).x - spot.x, me(again).y - spot.y) < 0.01, "the owner arrives in his own booth");
+  // a reload: the old session lingers (reconnection window) while the new one comes in
+  again.room.connection.close();
+  await sleep(100);
+  again = await person(59, s);
+  assert.ok(Math.hypot(me(again).x - spot.x, me(again).y - spot.y) < 0.01, "after a reload too");
+  await waitFor(
+    () => [...again.room.state.players.values()].filter((q: { uid: number }) => q.uid === 59).length === 1,
+    25000,
+  );
+});

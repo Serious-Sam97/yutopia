@@ -555,7 +555,13 @@ export class SpaceRoom extends Room<SpaceState> {
     const area = this.map.areas.find((a) => a.key === areaKey);
     // booths, and rooms an owner locked: knock to get in
     if (area?.kind !== "booth" && !this.state.locks.has(areaKey)) return true;
-    const inside = [...this.state.players.values()].filter((q) => q !== p && q.area === areaKey && !q.bot);
+    // your own booth is yours: walk in whoever's talking in it (a project
+    // owner's lock still holds)
+    if (area?.kind === "booth" && area.ownerId === p.uid && !this.state.locks.has(areaKey)) return true;
+    // "someone" never means you: your last session may still be in there
+    // (a reload keeps it for RECONNECT_SECONDS) — arrivals checked it before
+    // the new one was seated and bounced you to the space's arrival point.
+    const inside = [...this.state.players.values()].filter((q) => q.uid !== p.uid && q.area === areaKey && !q.bot);
     return inside.length === 0 || this.state.boothGuests.has(`${areaKey}:${p.uid}`);
   }
 

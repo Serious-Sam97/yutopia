@@ -14,6 +14,7 @@
     "perf": "pnpm --filter @yutopia/world-server perf",
     "docker:up": "docker compose -f docker/compose.yaml up -d",
     "docker:down": "docker compose -f docker/compose.yaml down",
+    "docker:restart": "docker compose -f docker/compose.yaml restart client world",
     "docker:logs": "docker compose -f docker/compose.yaml logs -f --tail=50",
     "sync:vortex": "node tools/sync-vortex-art.mjs",
     "visual": "pnpm --filter @yutopia/client exec playwright test -c playwright.visual.config.ts"
