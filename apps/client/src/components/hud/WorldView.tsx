@@ -11,7 +11,17 @@ import { hud, useHud } from "@/world/store";
 import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
-import { CableChip, ConnectionOverlay, HeldChip, Knocks, Minimap, Prompt, Toasts, VideoBubbles } from "./Overlays";
+import {
+  CableChip,
+  ConnectionOverlay,
+  HeldChip,
+  Knocks,
+  LookHint,
+  Minimap,
+  Prompt,
+  Toasts,
+  VideoBubbles,
+} from "./Overlays";
 import { PanelHost } from "./PanelHost";
 import { PersonCard } from "./PersonCard";
 import { Rituals } from "./Rituals";
@@ -73,6 +83,7 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
           {!building && <Prompt />}
           {!building && <HeldChip />}
           {!building && <CableChip />}
+          {!building && <LookHint />}
           {!building && <FocusChip />}
           {!building && <ArrivalChip />}
           {!building && <ActionQueueBar />}

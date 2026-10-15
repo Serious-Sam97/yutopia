@@ -211,6 +211,7 @@ export interface HudState {
   locks: Record<string, string>;
   vortex: { x: number; y: number; say: string; sayAt: number; mood: string } | null;
   fps: number;
+  look: boolean; // mouse look (3D): the pointer locked, the mouse turns the camera
 }
 
 const initial: HudState = {
@@ -284,6 +285,7 @@ const initial: HudState = {
   locks: {},
   vortex: null,
   fps: 0,
+  look: false,
 };
 
 let state: HudState = initial;

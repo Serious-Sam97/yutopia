@@ -107,6 +107,7 @@ export class WorldController {
   private stopped = false;
   private timers: ReturnType<typeof setInterval>[] = [];
   private offPrefs: (() => void) | null = null;
+  private offLook: (() => void) | null = null;
   private boardChannels: string[] = [];
   private reconnecting = false;
   private peopleAt = 0;
@@ -247,6 +248,7 @@ export class WorldController {
       onPointerUp: (x, y) => this.buildUp(x, y),
       onWheel: (dy) => this.build?.wheel(dy) ?? false,
     };
+    this.offLook = hud.subscribe(this.watchLook);
     this.offPrefs = subscribePrefs(() => {
       this.engine?.setQuality(this.qualityNow(), prefs().reducedMotion);
       if (this.tp && this.tp.quality !== this.qualityNow()) this.tp.setQuality(this.qualityNow());
@@ -591,6 +593,7 @@ export class WorldController {
     this.unbindInput();
     this.closeTp();
     this.offPrefs?.();
+    this.offLook?.();
     for (const ch of this.boardChannels) currentEcho()?.leave(ch);
     disconnectEcho();
     void this.room?.leave(true).catch(() => {});
@@ -1076,8 +1079,40 @@ export class WorldController {
     return best;
   }
 
+  // Mouse look (Z, 3D only): the pointer locked, the mouse turns the camera.
+  // It lets go by itself when something wants the pointer: a menu, a panel,
+  // build mode, a side panel opening, chat.
+  private aimId: string | null = null; // the usable thing under the crosshair
+  private lookWas = { menu: false, panel: false, build: false, side: null as string | null, pick: false };
+  private toggleLook() {
+    const v = this.tp;
+    if (!v || hud.get().build.on || window.matchMedia?.("(pointer: coarse)").matches) return;
+    v.setLook(!v.looking);
+  }
+  private watchLook = () => {
+    const h = hud.get();
+    const now = { menu: !!h.menu, panel: !!h.panel.kind, build: h.build.on, side: h.side, pick: h.pickArrival };
+    const was = this.lookWas;
+    this.lookWas = now;
+    if (!this.tp?.looking) return;
+    const opened =
+      (now.menu && !was.menu) ||
+      (now.panel && !was.panel) ||
+      (now.build && !was.build) ||
+      (now.pick && !was.pick) ||
+      (now.side !== null && now.side !== was.side);
+    if (opened) this.tp.setLook(false);
+  };
+  // what E / X uses: in mouse look the thing under the crosshair (when it's
+  // something to use), else the nearest
+  private aimedObject(): WorldObjectDef | null {
+    if (!this.aimId || !this.tp?.looking || hud.get().cable) return null;
+    const o = this.engine?.getObject(this.aimId);
+    return o && entry(o.kind).interact ? o : null;
+  }
+
   private updatePrompt() {
-    const o = this.nearestInteractable();
+    const o = this.aimedObject() ?? this.nearestInteractable();
     const cur = hud.get().prompt;
     const kind = !o ? "" : hud.get().cable ? "plug" : (entry(o.kind).interact as string);
     if ((o?.id ?? null) === (cur?.objectId ?? null) && kind === (cur?.kind ?? "")) return;
@@ -1646,6 +1681,10 @@ export class WorldController {
     if (!this.engine || !this.room) return;
     const want = prefs().view === "3p" ? "3p" : "iso";
     this.tp?.setMode(prefs().cam3p);
+    if (this.tp) {
+      this.tp.lookSens = prefs().lookSens;
+      this.tp.lookInvert = prefs().lookInvert;
+    }
     if (want === this.viewNow) return;
     this.viewNow = want;
     if (want === "3p") void this.openTp();
@@ -1682,6 +1721,15 @@ export class WorldController {
         buildDown: (x, y) => engine.events.onPointerDown?.(x, y),
         buildUp: (x, y) => engine.events.onPointerUp?.(x, y),
         wheel: (dy) => engine.events.onWheel?.(dy) ?? false,
+        look: (on) => {
+          hud.set({ look: on });
+          if (!on) this.aimId = null;
+        },
+        lookRefused: () => toast(tr("lookRefused")),
+        aim: (at) => {
+          this.aimId = at?.object ?? null;
+          this.updatePrompt();
+        },
       };
       // what's under the pointer and where things are on screen: as this camera sees them
       engine.picksOverride = (filter) =>
@@ -1700,6 +1748,8 @@ export class WorldController {
       v.mount(host);
       v.setQuality(this.qualityNow());
       v.setMode(prefs().cam3p);
+      v.lookSens = prefs().lookSens;
+      v.lookInvert = prefs().lookInvert;
       v.setHour(this.hour);
       v.yaw = this.meAngle; // start behind me
       engine.app.canvas.style.visibility = "hidden";
@@ -1718,6 +1768,8 @@ export class WorldController {
 
   private closeTp() {
     this.tp?.destroy();
+    this.aimId = null;
+    if (hud.get().look) hud.set({ look: false });
     this.tp = null;
     this.tpHost?.remove();
     this.tpHost = null;
@@ -1988,8 +2040,10 @@ export class WorldController {
     else if (key === "m") void this.toggleMic();
     else if (key === "v") void this.toggleCam();
     else if (key === "t") setPrefs({ view: prefs().view === "3p" ? "iso" : "3p" });
+    else if (key === "z") this.toggleLook();
     else if (key === "enter") {
       e.preventDefault();
+      this.tp?.setLook(false);
       hud.set({ side: "chat", chatUnread: 0 });
     } else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
     else if ((key === "+" || key === "=") && this.tp) this.tp.zoomBy(1 / 1.15);

@@ -17,6 +17,9 @@ export interface Prefs {
   // how you see the world: the iso view, or behind you in 3D (beta)
   view: "iso" | "3p";
   cam3p: "chase" | "free";
+  // mouse look (Z, in 3D): how fast the mouse turns the camera (× the base), up/down flipped
+  lookSens: number;
+  lookInvert: boolean;
   // frames per second, at most (0 = as many as the screen shows); 30 once nothing moves
   maxFps: MaxFps;
 }
@@ -56,6 +59,8 @@ const DEFAULTS: Prefs = {
   seenIntro: false,
   view: "iso",
   cam3p: "chase",
+  lookSens: 1,
+  lookInvert: false,
   maxFps: 60,
 };
 
@@ -71,6 +76,8 @@ export function prefs(): Prefs {
     if (cache && cache.view !== "3p") cache.view = "iso";
     if (cache && cache.cam3p !== "free") cache.cam3p = "chase";
     if (cache && !MAX_FPS.includes(cache.maxFps)) cache.maxFps = 60;
+    if (cache && !(cache.lookSens >= 0.25 && cache.lookSens <= 3)) cache.lookSens = 1;
+    if (cache) cache.lookInvert = cache.lookInvert === true;
     if (
       cache &&
       typeof window !== "undefined" &&

@@ -63,7 +63,8 @@ type People = NonNullable<ReturnType<typeof people>>;
 //   chase — follows behind you, looks down 20–57° (the drawn people read best
 //           from above), turns with you as you walk; drag / Q E to look around
 //   free  — orbit anywhere with the mouse, down to eye level, never turns on its own
-// WASD moves relative to the camera in both. Walls between the camera and you
+// WASD moves relative to the camera in both. Mouse look (Z): the pointer is
+// locked and the mouse turns the camera; a crosshair picks what a click uses. Walls between the camera and you
 // turn see-through (the iso view's "wall-down", in 3D).
 
 export type CamMode = "chase" | "free";
@@ -96,6 +97,11 @@ export interface ViewEvents {
   wheel?: (dy: number) => boolean;
   person?: (id: string, at: { x: number; y: number }) => void;
   object?: (id: string, at: { x: number; y: number }) => void;
+  // mouse look on / off (the pointer locked or let go — by Z, Esc, the browser…)
+  look?: (on: boolean) => void;
+  lookRefused?: () => void; // the browser said no (right after Esc it waits a moment)
+  // in mouse look: what the crosshair is on (someone, a thing to use), or null
+  aim?: (at: { person?: string; object?: string } | null) => void;
 }
 
 const LAMPS = 10; // point lights in the pool (the nearest lamps get them)
@@ -476,6 +482,15 @@ export class ThirdPersonView {
     c.addEventListener("pointercancel", this.onUp);
     c.addEventListener("wheel", this.onWheel, { passive: false });
     c.addEventListener("contextmenu", this.noMenu);
+    document.addEventListener("pointerlockchange", this.onLockChange);
+    document.addEventListener("pointerlockerror", this.onLockError);
+    const x = document.createElement("div");
+    x.style.cssText =
+      "position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;" +
+      "background:#f6eedb;box-shadow:0 0 0 1.5px rgba(26,16,10,.75);pointer-events:none;display:none;" +
+      "transition:transform .12s,background .12s";
+    host.appendChild(x);
+    this.crosshair = x;
     if (this.opts.keys !== false) {
       window.addEventListener("keydown", this.onKey);
       window.addEventListener("keyup", this.onKey);
@@ -667,6 +682,11 @@ export class ThirdPersonView {
     if (turn) {
       this.yaw += turn * dt * 2.2;
       this.dragged = this.time;
+    }
+    // mouse look: the mouse aims the camera (no swinging in behind you)
+    if (this.looking) {
+      this.dragged = this.time;
+      this.aimAt();
     }
     if (me) {
       this.meAt = { x: me.x, y: me.y };
@@ -939,6 +959,14 @@ export class ThirdPersonView {
 
   private onDown = (e: PointerEvent) => {
     this.activeAt = performance.now();
+    // mouse look: a click uses what the crosshair is on
+    if (this.looking) {
+      if (e.button === 0) {
+        const r = this.renderer.domElement.getBoundingClientRect();
+        this.pick(r.left + r.width / 2, r.top + r.height / 2);
+      }
+      return;
+    }
     if (this.onTouch(e)) return;
     this.renderer.domElement.setPointerCapture(e.pointerId);
     // build mode: the left button builds (the right one turns the camera)
@@ -952,6 +980,16 @@ export class ThirdPersonView {
   };
   private onMove = (e: PointerEvent) => {
     this.activeAt = performance.now();
+    if (this.looking) {
+      // (some browsers send one huge jump as the lock starts)
+      if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
+      const k = 0.0024 * this.lookSens;
+      this.yaw += e.movementX * k;
+      this.pitch += e.movementY * k * 0.8 * (this.lookInvert ? -1 : 1);
+      this.dragged = this.time;
+      this.clampCam();
+      return;
+    }
     if (this.onTouch(e)) return;
     this.pointer = { x: e.clientX, y: e.clientY };
     if (this.buildMode) {
@@ -1069,6 +1107,7 @@ export class ThirdPersonView {
   private buildLook: BuildLook | null = null;
   private builder: BuildLayer;
   setBuild(look: BuildLook | null) {
+    if (look) this.setLook(false);
     this.buildMode = !!look;
     this.buildLook = look;
   }
@@ -1142,11 +1181,85 @@ export class ThirdPersonView {
   private onKey = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     this.activeAt = performance.now();
+    if (e.type === "keydown" && e.code === "KeyZ" && !e.repeat && !e.metaKey && !e.ctrlKey) this.setLook(!this.looking);
     if (e.type === "keydown") this.keys.add(e.code);
     else this.keys.delete(e.code);
   };
   private onBlur = () => this.keys.clear();
   private noMenu = (e: Event) => e.preventDefault();
+
+  // ── mouse look ─────────────────────────────────────────────────────────────
+  // The browser owns the lock: Esc, another window or tab let it go, and right
+  // after Esc it refuses to lock again for a moment. `looking` follows it.
+  looking = false;
+  lookSens = 1; // × the base speed
+  lookInvert = false;
+  private crosshair: HTMLDivElement | null = null;
+  private aimKey = "";
+  private aimDue = 0;
+  setLook(on: boolean) {
+    const c = this.renderer.domElement;
+    if (!on) {
+      if (document.pointerLockElement === c) document.exitPointerLock();
+      return;
+    }
+    if (this.looking || this.buildMode || !c.requestPointerLock) return;
+    // raw mouse movement where there is (Chrome); a plain lock elsewhere (Firefox)
+    const lock = c.requestPointerLock as (o?: { unadjustedMovement?: boolean }) => Promise<void> | undefined;
+    // a refusal: the promise says so (Chrome), or the error event (Firefox: no promise)
+    const refused = () => this.events.lookRefused?.();
+    this.lockAsked = 0;
+    try {
+      const p = lock.call(c, { unadjustedMovement: true });
+      if (!p?.catch) this.lockAsked = 1;
+      else
+        p.catch(() => {
+          if (document.pointerLockElement === c) return;
+          const q = lock.call(c);
+          if (q?.catch) q.catch(refused);
+          else this.lockAsked = 1;
+        });
+    } catch {
+      this.lockAsked = 1;
+      lock.call(c);
+    }
+  }
+  private onLockChange = () => {
+    const on = document.pointerLockElement === this.renderer.domElement;
+    if (on === this.looking) return;
+    this.looking = on;
+    this.drag = null;
+    this.renderer.domElement.style.cursor = "";
+    if (this.crosshair) this.crosshair.style.display = on ? "block" : "none";
+    this.aimKey = "";
+    if (!on) this.events.aim?.(null);
+    this.events.look?.(on);
+  };
+  private lockAsked = 0;
+  private onLockError = () => {
+    if (!this.lockAsked) return;
+    this.lockAsked = 0;
+    this.events.lookRefused?.();
+  };
+  // what the crosshair is on (a few times a second)
+  private aimAt() {
+    const now = performance.now();
+    if (now - this.aimDue < 80) return;
+    this.aimDue = now;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    this.setRay(r.left + r.width / 2, r.top + r.height / 2);
+    const person = this.personAt();
+    const object = person ? null : this.pickObject();
+    const key = person ? `p${person}` : object ? `o${object}` : "";
+    if (key === this.aimKey) return;
+    this.aimKey = key;
+    const x = this.crosshair;
+    if (x) {
+      x.style.background = key ? "#ffa630" : "#f6eedb";
+      x.style.transform = key ? "scale(1.6)" : "";
+    }
+    this.events.aim?.(person ? { person } : object ? { object } : null);
+  }
 
   destroy() {
     const c = this.renderer.domElement;
@@ -1156,6 +1269,10 @@ export class ThirdPersonView {
     c.removeEventListener("pointercancel", this.onUp);
     c.removeEventListener("wheel", this.onWheel);
     c.removeEventListener("contextmenu", this.noMenu);
+    document.removeEventListener("pointerlockchange", this.onLockChange);
+    document.removeEventListener("pointerlockerror", this.onLockError);
+    if (document.pointerLockElement === c) document.exitPointerLock();
+    this.crosshair?.remove();
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("keyup", this.onKey);
     window.removeEventListener("blur", this.onBlur);

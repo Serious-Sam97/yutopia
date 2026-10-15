@@ -188,6 +188,30 @@ export function SettingsPanel() {
                 </button>
               ))}
           </div>
+          {p.view === "3p" && (
+            <div className="space-y-2 pt-1">
+              <div className="mono text-xs uppercase" style={{ color: "var(--cream-dim)" }}>
+                {t("mouseLook")}
+              </div>
+              <label className="flex items-center gap-3">
+                <span className="mono text-xs uppercase w-24" style={{ color: "var(--cream-dim)" }}>
+                  {t("lookSpeed")}
+                </span>
+                <input
+                  type="range"
+                  min={0.25}
+                  max={3}
+                  step={0.05}
+                  value={p.lookSens}
+                  onChange={(e) => setPrefs({ lookSens: Number(e.target.value) })}
+                  className="flex-1 accent-[#ffa630]"
+                  aria-label={t("lookSpeed")}
+                />
+                <span className="lcd w-10 text-right">{p.lookSens.toFixed(1)}</span>
+              </label>
+              {toggle(t("lookInvert"), p.lookInvert, (v) => setPrefs({ lookInvert: v }))}
+            </div>
+          )}
         </section>
         <section className="flex items-center justify-between">
           <span>{t("language")}</span>

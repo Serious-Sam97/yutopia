@@ -49,6 +49,23 @@ export function Prompt() {
   );
 }
 
+// Mouse look (3D): the pointer is locked — how to get it back.
+export function LookHint() {
+  const t = useTr();
+  const look = useHud((s) => s.look);
+  if (!look) return null;
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 top-[76px] cabinet rounded-full px-3 py-1 flex items-center gap-2 rise">
+      <kbd className="keycap" style={{ color: "var(--cream)", opacity: 1, height: 20, minWidth: 20, fontSize: 11 }}>
+        Z
+      </kbd>
+      <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+        {t("lookHint")}
+      </span>
+    </div>
+  );
+}
+
 // A console's cable in my hands (taken from its panel): where to take it, and
 // a button to let it go.
 export function CableChip() {
