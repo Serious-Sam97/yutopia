@@ -49,13 +49,30 @@ export function Prompt() {
   );
 }
 
-// Mouse look (3D): the pointer is locked — how to get it back.
+// Mouse look (3D): the pointer is locked — how to get it back. Shown as it
+// starts, gone after a few seconds (it fades).
+const LOOK_HINT_MS = 3000;
 export function LookHint() {
   const t = useTr();
   const look = useHud((s) => s.look);
-  if (!look) return null;
+  const [phase, setPhase] = useState<"on" | "fading" | "off">("off");
+  useEffect(() => {
+    if (!look) return setPhase("off");
+    setPhase("on");
+    const fade = setTimeout(() => setPhase("fading"), LOOK_HINT_MS);
+    const gone = setTimeout(() => setPhase("off"), LOOK_HINT_MS + 400);
+    return () => {
+      clearTimeout(fade);
+      clearTimeout(gone);
+    };
+  }, [look]);
+  if (phase === "off") return null;
   return (
-    <div className="absolute left-1/2 -translate-x-1/2 top-[76px] cabinet rounded-full px-3 py-1 flex items-center gap-2 rise">
+    <div
+      // (rise holds opacity 1 once in: off while fading)
+      className={`absolute left-1/2 -translate-x-1/2 top-[76px] cabinet rounded-full px-3 py-1 flex items-center gap-2 ${phase === "on" ? "rise" : ""}`}
+      style={{ opacity: phase === "fading" ? 0 : 1, transition: "opacity .4s" }}
+    >
       <kbd className="keycap" style={{ color: "var(--cream)", opacity: 1, height: 20, minWidth: 20, fontSize: 11 }}>
         Z
       </kbd>

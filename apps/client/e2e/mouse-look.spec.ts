@@ -4,7 +4,8 @@ import { ANA, enter, spaceId, test, token } from "./helpers";
 
 // Mouse look (third person): Z locks the pointer and the mouse turns the
 // camera; a click uses what's under the crosshair (the middle of the view);
-// Z again, or something that wants the pointer (chat), lets it go.
+// Z again, or something that wants the pointer (chat), lets it go. The hint
+// saying so shows for a few seconds.
 // Headless Chromium never grants a pointer lock, so the lock is stubbed: it
 // behaves as the browser's (the element, the change event, letting go).
 
@@ -72,6 +73,10 @@ test("mouse look: Z locks the pointer, the mouse turns the camera, a click picks
     return { seen, mid: [r.left + r.width / 2, r.top + r.height / 2] };
   });
   expect(picked.seen).toEqual([picked.mid]);
+
+  // the hint goes after a few seconds; mouse look stays on
+  await expect(page.getByText("Z or Esc frees the mouse")).toBeHidden({ timeout: 6000 });
+  expect(await looking(page)).toBe(true);
 
   // Z again lets go
   await page.keyboard.press("z");
