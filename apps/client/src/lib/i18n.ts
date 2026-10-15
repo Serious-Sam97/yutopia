@@ -189,6 +189,11 @@ const D = {
   view: ["View", "Visão"],
   viewIso: ["Isometric", "Isométrica"],
   view3p: ["Third person (beta)", "Terceira pessoa (beta)"],
+  view1p: ["First person (beta)", "Primeira pessoa (beta)"],
+  view1pHelp: [
+    "T goes between the iso view and 3D, C between third and first person. In first person Z locks the mouse so you can look around; where you look is where you face.",
+    "T alterna entre a visão iso e o 3D, C entre terceira e primeira pessoa. Em primeira pessoa, Z prende o mouse para você olhar em volta; para onde você olha é para onde você fica virado.",
+  ],
   cam3pChase: ["Camera follows me", "Câmera me segue"],
   cam3pFree: ["Free camera", "Câmera livre"],
   mouseLook: ["Mouse look (Z)", "Olhar com o mouse (Z)"],
@@ -204,8 +209,8 @@ const D = {
   spatialAudio: ["Spatial audio", "Áudio espacial"],
   controls: ["Controls", "Controles"],
   controlsHelp: [
-    "WASD / arrows to walk · click to walk there · Shift to run · X to interact · Enter to chat · 1–8 emotes · M mic · V camera · T 3D · Z mouse look (3D) · Esc closes",
-    "WASD / setas para andar · clique para ir até lá · Shift para correr · X para interagir · Enter para o chat · 1–8 reações · M microfone · V câmera · T 3D · Z olhar com o mouse (3D) · Esc fecha",
+    "WASD / arrows to walk · click to walk there · Shift to run · X to interact · Enter to chat · 1–8 emotes · M mic · V camera · T 3D · C third / first person · Z mouse look (3D) · Esc closes",
+    "WASD / setas para andar · clique para ir até lá · Shift para correr · X para interagir · Enter para o chat · 1–8 reações · M microfone · V câmera · T 3D · C terceira / primeira pessoa · Z olhar com o mouse (3D) · Esc fecha",
   ],
   micBlocked: ["Microphone blocked — allow it in the browser.", "Microfone bloqueado — libere no navegador."],
   camBlocked: ["Camera blocked — allow it in the browser.", "Câmera bloqueada — libere no navegador."],

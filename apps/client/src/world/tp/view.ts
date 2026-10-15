@@ -63,11 +63,13 @@ type People = NonNullable<ReturnType<typeof people>>;
 //   chase — follows behind you, looks down 20–57° (the drawn people read best
 //           from above), turns with you as you walk; drag / Q E to look around
 //   free  — orbit anywhere with the mouse, down to eye level, never turns on its own
-// WASD moves relative to the camera in both. Mouse look (Z): the pointer is
+//   first — in your head: the camera stands on you at eye height and looks
+//           where you look; you aren't drawn (the camera is inside you)
+// WASD moves relative to the camera in all three. Mouse look (Z): the pointer is
 // locked and the mouse turns the camera; a crosshair picks what a click uses. Walls between the camera and you
 // turn see-through (the iso view's "wall-down", in 3D).
 
-export type CamMode = "chase" | "free";
+export type CamMode = "chase" | "free" | "first";
 
 // Someone to draw: what the server sends for a person (8 facings `d`; `a` 0
 // idle, 1 walk, 2 sit). `angle`: your own facing, free (radians) — others turn
@@ -106,10 +108,15 @@ export interface ViewEvents {
 
 const LAMPS = 10; // point lights in the pool (the nearest lamps get them)
 const EYE = 1.15; // tiles: what the camera looks at, above your feet
+// first person: where your eyes are (the name tag sits at 2.0 / 1.45)
+const EYE_1P = 1.7;
+const EYE_1P_SEATED = 1.2;
+const FOV = 50;
 
 const LIMITS: Record<CamMode, { pitch: [number, number]; dist: [number, number] }> = {
   chase: { pitch: [0.35, 1.0], dist: [2.6, 9] },
   free: { pitch: [-0.12, 1.45], dist: [1.2, 14] },
+  first: { pitch: [-1.25, 1.25], dist: [0, 0] },
 };
 
 export class ThirdPersonView {
@@ -157,6 +164,8 @@ export class ThirdPersonView {
   hour = 12;
   private target = new Vector3();
   private targetReady = false;
+  private eyeY = EYE_1P; // first person: the eyes' height (eases sitting down / getting up)
+  private meId = "";
   private dragged = -10; // time of the last manual turn
   activeAt = 0; // when the pointer or keys last did something here (performance.now)
   private time = 0;
@@ -568,6 +577,12 @@ export class ThirdPersonView {
   }
 
   zoomBy(k: number) {
+    // (first person: the lens, not the distance)
+    if (this.mode === "first") {
+      this.camera.fov = Math.max(40, Math.min(80, this.camera.fov * k));
+      this.camera.updateProjectionMatrix();
+      return;
+    }
     this.dist *= k;
     this.clampCam();
   }
@@ -575,6 +590,10 @@ export class ThirdPersonView {
   setMode(m: CamMode) {
     if (m === this.mode) return;
     this.mode = m;
+    if (m !== "first" && this.camera.fov !== FOV) {
+      this.camera.fov = FOV;
+      this.camera.updateProjectionMatrix();
+    }
     this.clampCam();
   }
 
@@ -688,6 +707,8 @@ export class ThirdPersonView {
       this.dragged = this.time;
       this.aimAt();
     }
+    this.meId = meId;
+    const first = this.mode === "first";
     if (me) {
       this.meAt = { x: me.x, y: me.y };
       // the chase camera swings in behind you as you walk forward (not while you
@@ -697,23 +718,42 @@ export class ThirdPersonView {
         d = Math.atan2(Math.sin(d), Math.cos(d));
         if (Math.abs(d) < 1.0) this.yaw += d * Math.min(1, dt * 1.8) * (1 - Math.abs(d) / 1.0);
       }
-      const eye = me.a === 2 ? EYE - 0.3 : EYE;
-      const want = new Vector3(me.x, eye, me.y);
-      if (!this.targetReady) {
-        this.target.copy(want);
+      if (first) {
+        // in your head: exactly where you are, every frame (an eased position
+        // floats); only the eyes' height eases, sitting down and getting up
+        const eye = me.a === 2 ? EYE_1P_SEATED : EYE_1P;
+        this.eyeY = this.targetReady ? this.eyeY + (eye - this.eyeY) * (1 - Math.exp(-dt * 8)) : eye;
+        this.target.set(me.x, this.eyeY, me.y);
         this.targetReady = true;
-      } else this.target.lerp(want, 1 - Math.exp(-dt * 12));
+      } else {
+        const eye = me.a === 2 ? EYE - 0.3 : EYE;
+        const want = new Vector3(me.x, eye, me.y);
+        if (!this.targetReady) {
+          this.target.copy(want);
+          this.targetReady = true;
+        } else this.target.lerp(want, 1 - Math.exp(-dt * 12));
+      }
     }
     this.clampCam();
     const cp = Math.cos(this.pitch);
     const cam = this.camera.position;
-    cam.set(
-      this.target.x - Math.cos(this.yaw) * this.dist * cp,
-      this.target.y + Math.sin(this.pitch) * this.dist,
-      this.target.z - Math.sin(this.yaw) * this.dist * cp,
-    );
-    if (cam.y < 0.25) cam.y = 0.25;
-    this.camera.lookAt(this.target);
+    if (first) {
+      // the camera is the eye point, looking along yaw / pitch (pitch > 0 = down, as the others)
+      cam.copy(this.target);
+      this.camera.lookAt(
+        cam.x + Math.cos(this.yaw) * cp,
+        cam.y - Math.sin(this.pitch),
+        cam.z + Math.sin(this.yaw) * cp,
+      );
+    } else {
+      cam.set(
+        this.target.x - Math.cos(this.yaw) * this.dist * cp,
+        this.target.y + Math.sin(this.pitch) * this.dist,
+        this.target.z - Math.sin(this.yaw) * this.dist * cp,
+      );
+      if (cam.y < 0.25) cam.y = 0.25;
+      this.camera.lookAt(this.target);
+    }
 
     this.reduced = !!me?.reduced;
     this.builder.sync(this.buildLook, this.world, dt);
@@ -751,7 +791,11 @@ export class ThirdPersonView {
       const angle = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
       this.personTint.setHex(this.light.tintAt(b.x, b.y));
       this.sphere.center.set(b.x, 0.9, b.y);
-      const onScreen = this.frustum.intersectsSphere(this.sphere);
+      // first person: you aren't drawn (the camera is inside you); the rig
+      // keeps stepping so the other cameras find you as you left them
+      const hidden = first && b.id === meId;
+      p.root.visible = !hidden;
+      const onScreen = !hidden && this.frustum.intersectsSphere(this.sphere);
       const near = Math.hypot(cam.x - b.x, cam.z - b.y) < 12;
       const redraw = onScreen && (near || (this.tick + hashId(b.id)) % 3 === 0);
       const seat = b.a === 2 ? this.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
@@ -761,7 +805,7 @@ export class ThirdPersonView {
         cam.x,
         cam.z,
         this.pitch,
-        this.lean,
+        first ? 0 : this.lean, // (at eye level nobody tips back)
         this.personTint,
         this.night,
         face,
@@ -825,7 +869,9 @@ export class ThirdPersonView {
       }
       const h = b.npc ? 1.6 : b.a === 2 ? 1.45 : 2.0;
       const far = Math.hypot(cam.x - b.x, cam.z - b.y) > 16;
-      const p = far || this.hidden(b.x, b.y, h) ? null : this.project(b.x, b.y, h);
+      // (first person: nothing over your own head — the camera is in it)
+      const mine = this.mode === "first" && b.id === this.meId;
+      const p = far || mine || this.hidden(b.x, b.y, h) ? null : this.project(b.x, b.y, h);
       t.root.style.display = p ? "" : "none";
       if (p) {
         const bob = emote && !b.reduced ? Math.sin(now / 166) * 2 : 0;
@@ -860,9 +906,11 @@ export class ThirdPersonView {
   private fadeWalls(dt: number) {
     const cam = this.camera.position;
     const t = this.target;
+    // (first person: the camera is you — nothing stands between)
+    const inside = this.mode === "first";
     for (const f of this.world.fades) {
       let block = false;
-      const hit = segBox(cam.x, cam.z, t.x, t.z, f.x0 - 0.06, f.y0 - 0.06, f.x1 + 0.06, f.y1 + 0.06);
+      const hit = inside ? null : segBox(cam.x, cam.z, t.x, t.z, f.x0 - 0.06, f.y0 - 0.06, f.x1 + 0.06, f.y1 + 0.06);
       if (hit !== null) {
         const h = cam.y + (t.y - 0.5 - cam.y) * hit;
         block = h < f.top + 0.1;
@@ -1083,7 +1131,7 @@ export class ThirdPersonView {
   // what's under the pointer: someone, or something to use
   private personAt(): string | null {
     const planes: Object3D[] = [];
-    for (const p of this.people.values()) if (p.plane.visible) planes.push(p.plane);
+    for (const p of this.people.values()) if (p.plane.visible && p.root.visible) planes.push(p.plane);
     for (const hit of this.ray.intersectObjects(planes, false)) {
       const found = [...this.people].find(([, p]) => p.plane === hit.object);
       if (found && hit.uv && found[1].opaqueAt(hit.uv.x, hit.uv.y)) return found[0];

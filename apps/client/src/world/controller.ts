@@ -66,7 +66,7 @@ import type { MediaRoom } from "./media/room";
 import type { SlotTracks } from "./slots";
 import { radio, sound } from "./sound";
 import { type ActTarget, hud, type Person, toast } from "./store";
-import type { Body3, ThirdPersonView } from "./tp/view";
+import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 
 // biome-ignore lint/suspicious/noExplicitAny: decoded Colyseus schema objects
 type S = any;
@@ -940,6 +940,7 @@ export class WorldController {
     const pad = this.gamepad();
     const speed = k.has("shift") || pad.run ? RUN_SPEED : WALK_SPEED;
     const start = { x: this.me.x, y: this.me.y };
+    const first = this.firstPerson();
     let moved = false;
     if (ix || iy || pad.x || pad.y) {
       this.actions.clear();
@@ -951,10 +952,13 @@ export class WorldController {
         ? unit(this.tp.relative(-(iy || pad.y), ix || pad.x))
         : screenInputToWorld(ix || pad.x, iy || pad.y);
       const next = moveStep(this.grid, this.me, dir, speed, dt);
-      this.turnTowards(Math.atan2(dir.y, dir.x), dt);
+      // (first person: I keep facing where I look — S walks backwards, A / D sideways)
+      if (!first) {
+        this.turnTowards(Math.atan2(dir.y, dir.x), dt);
+        this.me.d = dirFromDelta(dir.x, dir.y, this.me.d as 0);
+      }
       this.me.x = next.x;
       this.me.y = next.y;
-      this.me.d = dirFromDelta(dir.x, dir.y, this.me.d as 0);
       moved = next.x !== start.x || next.y !== start.y;
     } else if (this.path?.length) {
       let budget = speed * dt;
@@ -973,7 +977,7 @@ export class WorldController {
           this.me.y += (dy / d) * budget;
           budget = 0;
         }
-        if (d > 0.001) {
+        if (d > 0.001 && !first) {
           this.me.d = dirFromDelta(dx, dy, this.me.d as 0);
           this.turnTowards(Math.atan2(dy, dx), dt);
         }
@@ -1000,9 +1004,27 @@ export class WorldController {
         this.me.d = [1, 3, 5, 7][seat.rot % 4]; // away from the seat's back (server `seatFacing`)
       }
     } else this.me.a = ANIM.idle;
-    // turned some other way (a seat, someone high-fiving me…): face it in 3D too
-    if (!moved && dirFromDelta(Math.cos(this.meAngle), Math.sin(this.meAngle), this.me.d as 0) !== this.me.d)
-      this.meAngle = DIR_ANGLE[this.me.d] ?? this.meAngle;
+    if (first && this.tp) {
+      // first person: I face where I look. Turned some other way (a seat,
+      // someone high-fiving me): the view turns there.
+      const v = this.tp;
+      if (this.me.d !== this.lookD && this.lookD >= 0) v.yaw = DIR_ANGLE[this.me.d] ?? v.yaw;
+      this.meAngle = v.yaw;
+      // my 8-way facing for everyone else: where I look, flipping only a
+      // little past a boundary (no flutter on it, no message spam)
+      const d8 = dirFromDelta(Math.cos(v.yaw), Math.sin(v.yaw), this.me.d as 0);
+      if (d8 !== this.me.d) {
+        let off = v.yaw - (DIR_ANGLE[this.me.d] ?? v.yaw);
+        off = Math.atan2(Math.sin(off), Math.cos(off));
+        if (Math.abs(off) > Math.PI / 8 + 0.1 || this.lookD < 0) this.me.d = d8;
+      }
+      this.lookD = this.me.d;
+    } else {
+      this.lookD = -1;
+      // turned some other way (a seat, someone high-fiving me…): face it in 3D too
+      if (!moved && dirFromDelta(Math.cos(this.meAngle), Math.sin(this.meAngle), this.me.d as 0) !== this.me.d)
+        this.meAngle = DIR_ANGLE[this.me.d] ?? this.meAngle;
+    }
 
     const now = performance.now();
     const changed =
@@ -1087,6 +1109,16 @@ export class WorldController {
     const v = this.tp;
     if (!v || hud.get().build.on || window.matchMedia?.("(pointer: coarse)").matches) return;
     v.setLook(!v.looking);
+  }
+  // C (3D only): third person ↔ first person. Into first person from a key
+  // press, mouse look starts at once (half the mode without it).
+  private swapCamera() {
+    const v = this.tp;
+    if (!v || prefs().view === "iso") return;
+    const view = prefs().view === "1p" ? "3p" : "1p";
+    setPrefs({ view, last3d: view });
+    v.setMode(this.camWanted());
+    if (view === "1p" && !hud.get().build.on && !window.matchMedia?.("(pointer: coarse)").matches) v.setLook(true);
   }
   private watchLook = () => {
     const h = hud.get();
@@ -1703,19 +1735,32 @@ export class WorldController {
   private tpDue = 0;
   private tpHidden = 0;
   private meAngle = 0; // my facing in 3D (free; others see the nearest of 8)
-  private viewNow: "iso" | "3p" = "iso";
+  private lookD = -1; // first person: the 8-way facing I last set from where I look
+  private viewNow: "iso" | "3d" = "iso";
+
+  // the 3D camera the prefs ask for (first person steps back out to the
+  // chase camera while build mode is on: placing things from inside your
+  // head is awkward)
+  private camWanted(): CamMode {
+    if (prefs().view === "1p") return hud.get().build.on ? "chase" : "first";
+    return prefs().cam3p;
+  }
+  // in my head (the first-person camera is showing)
+  firstPerson(): boolean {
+    return this.tp?.mode === "first";
+  }
 
   private syncView() {
     if (!this.engine || !this.room) return;
-    const want = prefs().view === "3p" ? "3p" : "iso";
-    this.tp?.setMode(prefs().cam3p);
+    const want = prefs().view === "iso" ? "iso" : "3d";
+    this.tp?.setMode(this.camWanted());
     if (this.tp) {
       this.tp.lookSens = prefs().lookSens;
       this.tp.lookInvert = prefs().lookInvert;
     }
     if (want === this.viewNow) return;
     this.viewNow = want;
-    if (want === "3p") void this.openTp();
+    if (want === "3d") void this.openTp();
     else this.closeTp();
   }
 
@@ -1730,7 +1775,7 @@ export class WorldController {
         loadThemes(),
       ]);
       const engine = this.engine;
-      if (this.stopped || this.viewNow !== "3p" || !engine) return;
+      if (this.stopped || this.viewNow !== "3d" || !engine) return;
       const host = document.createElement("div");
       host.style.cssText = "position:absolute;inset:0";
       this.host.appendChild(host);
@@ -1777,7 +1822,7 @@ export class WorldController {
       engine.throughOverride = () => v.lookedThrough();
       v.mount(host);
       v.setQuality(this.qualityNow());
-      v.setMode(prefs().cam3p);
+      v.setMode(this.camWanted());
       v.lookSens = prefs().lookSens;
       v.lookInvert = prefs().lookInvert;
       v.setHour(this.hour);
@@ -2073,7 +2118,8 @@ export class WorldController {
     if (key === "x" || key === "e") this.interact();
     else if (key === "m") void this.toggleMic();
     else if (key === "v") void this.toggleCam();
-    else if (key === "t") setPrefs({ view: prefs().view === "3p" ? "iso" : "3p" });
+    else if (key === "t") setPrefs({ view: prefs().view === "iso" ? prefs().last3d : "iso" });
+    else if (key === "c") this.swapCamera();
     else if (key === "z") this.toggleLook();
     else if (key === "enter") {
       e.preventDefault();

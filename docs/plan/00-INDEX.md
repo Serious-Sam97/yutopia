@@ -24,6 +24,8 @@
 5. [05-risks-and-open-questions.md](05-risks-and-open-questions.md) — what can sink it + decisions still open
 6. [09-game-room.md](09-game-room.md) — Fita 9 (delivered): game room, consoles plugged into a TV, emulators streamed to everyone
 7. [10-media.md](10-media.md) — Fita 10 (delivered): more TVs (wall too), YouTube + Jellyfin on them for everyone nearby, YouTube on the radio
+8. [11-wall-building.md](11-wall-building.md) — Fita 11 (delivered): Sims-style wall building and painting, face indicators
+9. [12-first-person.md](12-first-person.md) — First person (delivered): the 3D view's camera in your head, a third View choice
 
 ## Workflow rules (inherited from Yondra)
 

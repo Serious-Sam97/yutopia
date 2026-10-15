@@ -14,8 +14,9 @@ export interface Prefs {
   camId: string;
   speakerId: string;
   seenIntro: boolean;
-  // how you see the world: the iso view, or behind you in 3D (beta)
-  view: "iso" | "3p";
+  // how you see the world: the iso view, behind you in 3D (beta), or in your head
+  view: "iso" | "3p" | "1p";
+  last3d: "3p" | "1p"; // the 3D view T goes back to
   cam3p: "chase" | "free";
   // mouse look (Z, in 3D): how fast the mouse turns the camera (× the base), up/down flipped
   lookSens: number;
@@ -58,6 +59,7 @@ const DEFAULTS: Prefs = {
   speakerId: "",
   seenIntro: false,
   view: "iso",
+  last3d: "3p",
   cam3p: "chase",
   lookSens: 1,
   lookInvert: false,
@@ -73,7 +75,8 @@ export function prefs(): Prefs {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
     cache = { ...DEFAULTS, ...raw, vol: { ...DEFAULTS.vol, ...(raw?.vol ?? {}) } };
     if (cache && !["auto", "high", "medium", "low"].includes(cache.quality)) cache.quality = "auto";
-    if (cache && cache.view !== "3p") cache.view = "iso";
+    if (cache && cache.view !== "3p" && cache.view !== "1p") cache.view = "iso";
+    if (cache && cache.last3d !== "1p") cache.last3d = "3p";
     if (cache && cache.cam3p !== "free") cache.cam3p = "chase";
     if (cache && !MAX_FPS.includes(cache.maxFps)) cache.maxFps = 60;
     if (cache && !(cache.lookSens >= 0.25 && cache.lookSens <= 3)) cache.lookSens = 1;

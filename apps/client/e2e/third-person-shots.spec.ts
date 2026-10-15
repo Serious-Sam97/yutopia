@@ -83,3 +83,36 @@ test("third person vs iso, side by side", async ({ page }) => {
     localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", cam3p: "chase" }));
   });
 });
+
+// First person (opt-in): the same spots from Ana's own eyes, looking level,
+// in the Demo space; plus night under the lounge lamps.
+test("first person review shots", async ({ page }) => {
+  test.skip(!dir, "YUTOPIA_SHOTS not set");
+  test.setTimeout(180_000);
+  const tok = await token(ANA);
+  await page.addInitScript(() => {
+    const k = "yutopia:prefs";
+    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "1p", last3d: "1p" }));
+  });
+  await enter(page, tok, await spaceId(tok));
+  await page.waitForFunction(() => (window as any).__yutopia.tp?.mode === "first", null, { timeout: 60_000 });
+  const only = process.env.YUTOPIA_SHOT;
+  for (const s of SPOTS) {
+    if (only && !s.name.includes(only)) continue;
+    await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x, y: p.y }), s);
+    await page.waitForTimeout(1200);
+    await page.evaluate((p) => {
+      const t = (window as any).__yutopia.tp;
+      t.yaw = p.yaw;
+      t.pitch = 0.08;
+    }, s);
+    await page.waitForTimeout(2200);
+    await page.screenshot({ path: `${dir}/1p-${s.name}.png` });
+  }
+  await page.evaluate(() => {
+    const k = "yutopia:prefs";
+    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", last3d: "3p" }));
+  });
+});

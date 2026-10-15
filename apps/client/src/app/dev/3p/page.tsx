@@ -11,13 +11,13 @@ import { WorldEngine } from "@/world/engine";
 // wander and sit, seen by a three.js camera behind you — or, with V, by the
 // normal iso engine at the same spot, from the same people data. Dev only (or
 // a build with NEXT_PUBLIC_YUTOPIA_SHOTS=1).
-//   /dev/3p?crowd=8&hour=12&cam=chase|free&view=3p|iso&theme=clouds&x=&y=&yaw=&pitch=&dist=&frozen=1
+//   /dev/3p?crowd=8&hour=12&cam=chase|free|first&view=3p|iso&theme=clouds&x=&y=&yaw=&pitch=&dist=&frozen=1
 type Tp = typeof import("@/world/tp/view");
 type Demo = typeof import("@/world/tp/demo");
 
 interface Hud {
   view: "3p" | "iso";
-  cam: "chase" | "free";
+  cam: "chase" | "free" | "first";
   hour: number;
   lean: number;
   fps: number;
@@ -78,7 +78,7 @@ export default function ThirdPersonDemo() {
       const st = view.world.stats;
       let state: Hud = {
         view: q.get("view") === "iso" ? "iso" : "3p",
-        cam: q.get("cam") === "free" ? "free" : "chase",
+        cam: q.get("cam") === "free" ? "free" : q.get("cam") === "first" ? "first" : "chase",
         hour: Number(q.get("hour") ?? 12),
         lean: Number(q.get("lean") ?? 0.55),
         fps: 0,
@@ -145,7 +145,8 @@ export default function ThirdPersonDemo() {
         if (e.type === "keydown") {
           isoKeys.add(e.code);
           if (e.code === "KeyV") setView(state.view === "3p" ? "iso" : "3p");
-          if (e.code === "KeyC") api.current?.setCam(state.cam === "chase" ? "free" : "chase");
+          if (e.code === "KeyC")
+            api.current?.setCam(state.cam === "chase" ? "free" : state.cam === "free" ? "first" : "chase");
           if (e.code === "BracketLeft") api.current?.setHour((state.hour + 23) % 24);
           if (e.code === "BracketRight") api.current?.setHour((state.hour + 1) % 24);
         } else isoKeys.delete(e.code);
@@ -249,6 +250,9 @@ export default function ThirdPersonDemo() {
               </Seg>
               <Seg on={hud.cam === "free"} onClick={() => a?.setCam("free")}>
                 Free orbit
+              </Seg>
+              <Seg on={hud.cam === "first"} onClick={() => a?.setCam("first")}>
+                First person
               </Seg>
             </Row>
             <Row label={`Hour ${String(Math.floor(hud.hour)).padStart(2, "0")}:00`}>

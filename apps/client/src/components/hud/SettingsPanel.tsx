@@ -161,19 +161,26 @@ export function SettingsPanel() {
           <h3 className="mono text-xs uppercase tracking-widest" style={{ color: "var(--vfd)" }}>
             {t("view")}
           </h3>
-          <div className="grid grid-cols-2 gap-2">
-            {(["iso", "3p"] as const).map((v) => (
+          <div className="grid grid-cols-3 gap-2">
+            {(["iso", "3p", "1p"] as const).map((v) => (
               <button
                 key={v}
                 type="button"
                 className="deck-btn"
                 aria-pressed={p.view === v}
-                onClick={() => setPrefs({ view: v })}
+                onClick={() => setPrefs(v === "iso" ? { view: v } : { view: v, last3d: v })}
                 style={{ height: 40, fontSize: 10 }}
               >
-                {t(v === "iso" ? "viewIso" : "view3p")}
+                {t(v === "iso" ? "viewIso" : v === "3p" ? "view3p" : "view1p")}
               </button>
             ))}
+          </div>
+          {p.view !== "iso" && (
+            <p className="text-[11px] leading-snug" style={{ color: "var(--muted)" }}>
+              {t("view1pHelp")}
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-2">
             {p.view === "3p" &&
               (["chase", "free"] as const).map((c) => (
                 <button
@@ -188,7 +195,7 @@ export function SettingsPanel() {
                 </button>
               ))}
           </div>
-          {p.view === "3p" && (
+          {p.view !== "iso" && (
             <div className="space-y-2 pt-1">
               <div className="mono text-xs uppercase" style={{ color: "var(--cream-dim)" }}>
                 {t("mouseLook")}

@@ -251,6 +251,11 @@ export function VideoBubbles() {
       for (const node of Array.from(el.children) as HTMLElement[]) {
         const x = Number(node.dataset.x);
         const y = Number(node.dataset.y);
+        // (first person: my own head is the camera — no bubble of me)
+        const hide = node.dataset.me === "1" && w.firstPerson();
+        const display = hide ? "none" : "";
+        if (node.style.display !== display) node.style.display = display;
+        if (hide) continue;
         // over their head, in whichever view is showing (iso or third person)
         const p = w.clientAt(x, y, 116 * PERSON);
         const t = `translate(${Math.round(p.x - 60)}px, ${Math.round(p.y - 90)}px)`;
@@ -276,6 +281,7 @@ export function VideoBubbles() {
           key={e.key}
           data-x={e.x}
           data-y={e.y}
+          data-me={e.key === "me" ? "1" : undefined}
           className="absolute left-0 top-0 rounded-xl overflow-hidden"
           style={{
             width: 120,
