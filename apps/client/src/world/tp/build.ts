@@ -1,6 +1,7 @@
 import {
   type DressItem,
   type DressKind,
+  doorEdge,
   dressItems,
   entry,
   HALF_WALL,
@@ -116,6 +117,7 @@ export class World3 {
   private floor: { meshes: Mesh[]; sig: string } | null = null;
   private objects: WorldObjectDef[] = [];
   private cardN = 0;
+  private posts = new Set<string>(); // "x,y" of every wall post (doors stop at them too)
 
   // `light`: how lit materials take the room's light (the iso light map)
   constructor(
@@ -192,6 +194,7 @@ export class World3 {
         const ch = vWall(map, x, y);
         if (isWallEdge(ch)) addWall("v", x, y, ch);
       }
+    this.posts = new Set(posts.keys());
     for (const [key, { height, ch, e, w, s }] of posts) {
       const [X, Y] = key.split(",").map(Number);
       post(sketch({ w: 1, h: 1, at: [X, Y], out: lowOf(X, Y) }), height, "low", ch);
@@ -369,8 +372,15 @@ export class World3 {
       const rot = (o.rot ?? 0) % 2 === 1 ? 3 : 0;
       const st = String(o.props?.state ?? "open");
       const shut = (st === "closed" || st === "locked") && !o.props?.passing;
+      // the frame stops at a post at either end (the wall beside it ends in one),
+      // or its faces would lie in the post's and flicker
+      const d = doorEdge(o);
+      const T = this.items.WALL_HALF_T;
+      const a0 = this.posts.has(`${d.x},${d.y}`) ? T : 0;
+      const a1 = this.posts.has(d.dir === "h" ? `${d.x + 1},${d.y}` : `${d.x},${d.y + 1}`) ? 1 - T : 1;
+      const clip = d.dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
       for (const part of shut ? ["edge"] : ["edge", "leaf"]) {
-        const s = new MeshSketch({ rot, w: 1, h: 1, at: [o.x, o.y], out });
+        const s = new MeshSketch({ rot, w: 1, h: 1, at: [o.x, o.y], out, clip: part === "edge" ? clip : null });
         door(s, { ...(o.props ?? {}), _part: part });
         s.end();
       }
