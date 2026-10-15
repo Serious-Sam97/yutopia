@@ -46,7 +46,7 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
-import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
+import { isRadio, type RadioState, radioOf, showsBoards } from "@yutopia/shared/media";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, YONDRA_APP, yutopia } from "@/lib/api";
 import { currentEcho, disconnectEcho, getEcho } from "@/lib/echo";
@@ -1591,7 +1591,7 @@ export class WorldController {
     if (!engine) return;
     const boards = hud.get().boards;
     for (const o of engine.allObjects()) {
-      if (o.kind === "board_wall" || (o.kind === "screen_wall" && o.props?.source === "board")) {
+      if (showsBoards(o)) {
         const b =
           (o.refId && boards.find((x) => x.id === o.refId)) || (o.kind === "screen_wall" ? boards[0] : undefined);
         engine.setBoardContent(o.id, b ? { name: b.name, sections: b.sections } : null);
@@ -1604,6 +1604,35 @@ export class WorldController {
     const boards = hud.get().boards;
     if (!o) return undefined;
     return (o.refId && boards.find((b) => b.id === o.refId)) || (o.kind === "screen_wall" ? boards[0] : undefined);
+  }
+
+  // Put a board on a board wall (or a big screen showing boards): its refId,
+  // everything else as stored. Builders only (the server says no otherwise).
+  setBoard(objectId: string, boardId: number) {
+    const s = this.room?.state.objects.get(objectId);
+    if (!s || !hud.get().canBuild) return;
+    let props: Record<string, unknown> = {};
+    try {
+      props = JSON.parse(s.props || "{}");
+    } catch {}
+    this.send("obj:put", { id: s.id, kind: s.kind, x: s.x, y: s.y, rot: s.rot, refId: boardId, props });
+  }
+
+  // How many board walls show each board (the picker says where it's up already).
+  boardsOnShow(): Map<number, number> {
+    const n = new Map<number, number>();
+    for (const o of this.engine?.allObjects() ?? [])
+      if (o.refId && showsBoards(o)) n.set(o.refId, (n.get(o.refId) ?? 0) + 1);
+    return n;
+  }
+
+  // A new board in the space's project, straight from a board wall.
+  async createBoard(name: string, type: "kanban" | "scrum"): Promise<number | null> {
+    const projectId = hud.get().projectId;
+    if (!projectId) return null;
+    const board = await yutopia.createBoard(projectId, name, type);
+    await this.loadBoards();
+    return board.id;
   }
 
   // A card someone was working on is done: confetti over them (whoever's in

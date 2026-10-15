@@ -161,6 +161,12 @@ export const yutopia = {
   saveAvatar: (a: AvatarLayers) =>
     api<{ avatar: AvatarLayers }>("/api/yutopia/avatar", { method: "PUT", body: JSON.stringify(a) }),
   boards: (spaceId: number) => api<{ boards: BoardSummary[] }>(`/api/yutopia/spaces/${spaceId}/boards`),
+  // a new board in the space's project (Yondra seeds its columns)
+  createBoard: (projectId: number, name: string, type: "kanban" | "scrum") =>
+    api<{ id: number; name: string }>("/api/boards", {
+      method: "POST",
+      body: JSON.stringify({ name, type, project_id: projectId }),
+    }),
   status: (spaceId: number) => api<{ status: MemberStatus[] }>(`/api/yutopia/spaces/${spaceId}/status`),
   logout: () => api("/api/logout", { method: "POST" }).catch(() => {}),
   members: (spaceId: number) =>

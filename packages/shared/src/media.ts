@@ -484,6 +484,11 @@ export function showsMedia(o: WorldObjectDef): boolean {
   if (o.kind === "screen_wall") return !o.props?.source;
   return true;
 }
+// Board walls, and the big screen set to show a board (props.source): the
+// Yondra board in refId (the big screen's fallback: the space's first).
+export function showsBoards(o: WorldObjectDef): boolean {
+  return o.kind === "board_wall" || (o.kind === "screen_wall" && o.props?.source === "board");
+}
 
 // A Jellyfin item's running time: ticks (100 ns) → s.
 export const ticksToSec = (t: unknown) => (Number.isFinite(Number(t)) ? Math.round(Number(t) / 1e7) : 0);

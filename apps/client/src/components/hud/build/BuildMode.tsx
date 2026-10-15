@@ -1,11 +1,13 @@
 "use client";
 
 import { areaAt, CLOTH_COLORS, DECOR, edgeAt, entry, faceMat, footprint, isWindow, panelTile } from "@yutopia/shared";
+import { showsBoards } from "@yutopia/shared/media";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
 import { type BuildTool, hud, toast, useHud } from "@/world/store";
 import { Brand } from "../../Brand";
+import { BoardPicker } from "../BoardPanel";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
 import { Catalog, sizeLabel } from "./Catalog";
@@ -787,6 +789,7 @@ function ItemToolbar() {
   useHud((s) => s.objectsVersion);
   const el = useRef<HTMLDivElement>(null);
   const [look, setLook] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   useEffect(() => {
     if (!w) return;
     return w.onFrame(() => {
@@ -794,7 +797,13 @@ function ItemToolbar() {
       const at = sel[0] ? w.build?.anchorOf(sel[0]) : null;
       if (!node || !at) return;
       const r = w.engine?.app.canvas.getBoundingClientRect();
-      const t = `translate(${Math.round((r?.left ?? 0) + at.x)}px, ${Math.round((r?.top ?? 0) + at.y)}px) translate(-50%, -100%)`;
+      // over the item, but never under the top bar or off the screen (its
+      // look or board picker open above it, high up a tall wall)
+      const h = node.offsetHeight;
+      const wd = node.offsetWidth;
+      const x = Math.min(Math.max((r?.left ?? 0) + at.x, wd / 2 + 8), window.innerWidth - wd / 2 - 8);
+      const y = Math.max((r?.top ?? 0) + at.y, h + 76);
+      const t = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
       if (node.style.transform !== t) node.style.transform = t;
     });
   }, [w, sel]);
@@ -804,6 +813,8 @@ function ItemToolbar() {
   const decorOpts = kind && kind in DECOR ? (DECOR[kind as keyof typeof DECOR] as readonly string[]) : null;
   const paintable = !!kind && !!entry(kind).paint;
   const canLook = !!kind && (looks > 1 || !!decorOpts || paintable);
+  // a board wall (or a screen showing boards): which board it shows
+  const boardOf = objs.length === 1 && showsBoards(objs[0]) ? objs[0].id : null;
   const btn = (icon: IconName, label: Key, onClick: () => void, pressed?: boolean) => (
     <button
       type="button"
@@ -819,6 +830,11 @@ function ItemToolbar() {
   );
   return (
     <div ref={el} className="pointer-events-none fixed left-0 top-0 z-10 flex flex-col items-center gap-1.5">
+      {boardOpen && boardOf && (
+        <fieldset className="pointer-events-auto cabinet p-2 rise" aria-label={t("boardPick")}>
+          <BoardPicker key={boardOf} objectId={boardOf} compact onDone={() => setBoardOpen(false)} />
+        </fieldset>
+      )}
       {look && kind && (
         <fieldset className="pointer-events-auto cabinet p-1.5 flex flex-col gap-1.5 rise" aria-label={t("buildLook")}>
           {(looks > 1 || decorOpts) && (
@@ -903,6 +919,16 @@ function ItemToolbar() {
         {btn("rotate", "buildRotate", () => w?.buildKey("r"))}
         {btn("copy", "buildDuplicate", () => w?.build?.duplicate())}
         {canLook && btn("palette", "buildLook", () => setLook((v) => !v), look)}
+        {boardOf &&
+          btn(
+            "board",
+            "boardPick",
+            () => {
+              setBoardOpen((v) => !v);
+              setLook(false);
+            },
+            boardOpen,
+          )}
         {btn("bin", "kRemove", () => w?.buildKey("delete"))}
       </div>
     </div>

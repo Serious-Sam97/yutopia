@@ -15,6 +15,7 @@ import {
   positionAt,
   resume,
   seek,
+  showsBoards,
   showsMedia,
   skip,
   startItem,
@@ -117,6 +118,12 @@ test("media: every display kind is in the catalog, glass inside its footprint", 
   assert.equal(showsMedia({ id: "t", kind: "crt_tv", x: 0, y: 0, props: { input: "media" } }), true);
   assert.equal(showsMedia({ id: "s", kind: "screen_wall", x: 0, y: 0, props: { source: "board" } }), false);
   assert.equal(showsMedia({ id: "w", kind: "tv_wall", x: 0, y: 0 }), true);
+  // what can show a Yondra board (and take a pick of which)
+  assert.equal(showsBoards({ id: "b", kind: "board_wall", x: 0, y: 0 }), true);
+  assert.equal(showsBoards({ id: "s", kind: "screen_wall", x: 0, y: 0, props: { source: "board" } }), true);
+  assert.equal(showsBoards({ id: "s", kind: "screen_wall", x: 0, y: 0, props: { source: "stage" } }), false);
+  assert.equal(showsBoards({ id: "s", kind: "screen_wall", x: 0, y: 0 }), false);
+  assert.equal(showsBoards({ id: "p", kind: "projector_screen", x: 0, y: 0 }), false);
 });
 
 test("media: the space's playlists — remembered with their name, used again to the top, capped", async () => {
