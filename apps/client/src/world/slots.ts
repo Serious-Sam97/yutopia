@@ -6,16 +6,20 @@ import {
   SLOT_COLORS,
   SLOT_GANTRY,
   SLOT_LANES,
-  SLOT_LAP,
   SLOT_REACH,
   SLOT_SLIDE,
   SLOT_TOP,
   SLOT_VMAX,
+  type SlotSetup,
+  type SlotTrackId,
   slotBend,
   slotCrash,
+  slotDiffOf,
   slotLamps,
+  slotLap,
   slotPoint,
   slotSlip,
+  slotTrackOf,
   slotTurn,
   stepCar,
 } from "@yutopia/shared/slotcar";
@@ -156,8 +160,17 @@ export class SlotTracks {
   leave(id: string) {
     this.send("slot:leave", { id });
   }
-  start(id: string, laps: number) {
-    this.send("slot:start", { id, laps });
+  start(id: string, laps: number, diff: string) {
+    this.send("slot:start", { id, laps, diff });
+  }
+  // the track laid on the table (anyone by it, between races)
+  setTrack(id: string, track: SlotTrackId) {
+    this.send("slot:track", { id, track });
+  }
+  // what a race on a table runs on: its track (the table's props) and the
+  // race's difficulty
+  private setupOf(id: string): SlotSetup {
+    return { track: slotTrackOf(this.tracks.get(id)?.def.props), diff: slotDiffOf(this.race(id)?.diff) };
   }
   setThrottle(u: number) {
     this.throttle = Math.max(0, Math.min(1, u));
@@ -167,7 +180,7 @@ export class SlotTracks {
     const racing = this.carTrack && this.race(this.carTrack)?.phase === "race";
     return {
       speed: this.car.v / SLOT_VMAX,
-      slip: this.car.off ? 1 : slotSlip(this.car),
+      slip: this.car.off ? 1 : slotSlip(this.car, this.setupOf(this.carTrack)),
       clock: racing && this.raceAt ? (performance.now() - this.raceAt) / 1000 : 0,
       throttle: this.throttle,
     };
@@ -273,9 +286,10 @@ export class SlotTracks {
       fanfare(placed === 1 ? 1 : 0.5);
     }
     if (this.finished) return;
-    const flew = stepCar(this.car, this.throttle, dt);
+    const setup = this.setupOf(mine);
+    const flew = stepCar(this.car, this.throttle, dt, setup);
     if (flew) this.crashSound(v.def, 1);
-    const goal = race.laps * SLOT_LAP;
+    const goal = race.laps * slotLap(setup.track);
     if (this.car.s >= goal) {
       this.car.s = goal;
       this.car.v = 0;
@@ -309,6 +323,8 @@ export class SlotTracks {
     v.lights = lights;
 
     const rot = o.rot ?? 0;
+    const setup = this.setupOf(id);
+    const tr = setup.track;
     const local = (x: number, y: number): [number, number] => {
       const [X, Y] = slotTurn(x, y, rot);
       return [o.x + X, o.y + Y];
@@ -331,20 +347,20 @@ export class SlotTracks {
       // a car that flies off: sparks and a clack where it leaves
       const off = st.off > 0;
       if (off && !v.wasOff[lane] && lane !== mineLane) {
-        const p = slotPoint(st.s, laneOffset(lane));
+        const p = slotPoint(st.s, laneOffset(lane), tr);
         const [wx, wy] = local(p.x, p.y);
         this.engine.puff(wx, wy, "spark", SLOT_TOP + 2);
         if (dist < HEAR) this.crashSound(o, Math.max(0, 1 - dist / HEAR));
       } else if (off && !v.wasOff[lane] && lane === mineLane) {
-        const p = slotPoint(st.s, laneOffset(lane));
+        const p = slotPoint(st.s, laneOffset(lane), tr);
         const [wx, wy] = local(p.x, p.y);
         this.engine.puff(wx, wy, "spark", SLOT_TOP + 2);
       }
       v.wasOff[lane] = off;
-      ops.push(this.carOp(lane, st, local));
+      ops.push(this.carOp(lane, st, local, setup));
       // sparks off the braids under a fast car (the guide's at its nose)
       if (!off && st.v > 1.6 && this.engine.animated() && Math.random() < (st.v / SLOT_VMAX) * 0.55) {
-        const p = slotPoint(st.s - GRID_BACK + 0.11, laneOffset(lane));
+        const p = slotPoint(st.s - GRID_BACK + 0.11, laneOffset(lane), tr);
         const [wx, wy] = local(p.x, p.y);
         const [bx, by] = local(p.x - Math.cos(p.h) * 0.3, p.y - Math.sin(p.h) * 0.3);
         const k = 0.6 + Math.random() * 0.8;
@@ -360,7 +376,7 @@ export class SlotTracks {
     }
     const flash = phase === "race" && now - v.goAt < 900;
     const flag = phase === "done" || (phase === "race" && [...cars.values()].some((c) => c.place));
-    ops.push(...this.gantryOps(phase === "countdown" ? lights : flash ? -1 : 0, flag, local, now));
+    ops.push(...this.gantryOps(phase === "countdown" ? lights : flash ? -1 : 0, flag, local, now, tr));
     const dt = this.dt;
     for (const sp of v.sparks) sp.life -= dt;
     v.sparks = v.sparks.filter((sp) => sp.life > 0);
@@ -426,7 +442,7 @@ export class SlotTracks {
   // rear wing on its struts, four fat tyres. Built from small shaded prisms in
   // the car's own frame (x forward, y left, in half-lengths / half-widths),
   // turned to its heading at any angle.
-  private carOp(lane: number, st: CarState, local: (x: number, y: number) => [number, number]): Op {
+  private carOp(lane: number, st: CarState, local: (x: number, y: number) => [number, number], setup: SlotSetup): Op {
     const off = laneOffset(lane);
     let x: number;
     let y: number;
@@ -434,19 +450,19 @@ export class SlotTracks {
     let lift = 0;
     let tilt = 0;
     if (st.off > 0) {
-      const c = slotCrash(st, lane);
+      const c = slotCrash(st, lane, setup.track);
       x = c.x;
       y = c.y;
       h = c.h + (this.engine.stillMotion() ? 0 : c.spin);
       lift = Math.sin(Math.min(1, st.off / 0.5) * Math.PI) * 5 * c.out;
     } else {
-      const p = slotPoint(st.s - GRID_BACK, off);
+      const p = slotPoint(st.s - GRID_BACK, off, setup.track);
       x = p.x;
       y = p.y;
       // the tail steps out in a fast corner, the body leans
-      const pull = slotSlip(st);
+      const pull = slotSlip(st, setup);
       const yaw = Math.max(0, Math.min(1.4, (pull - SLOT_SLIDE) / (1 - SLOT_SLIDE)));
-      const bend = Math.sign(slotBend(st.s));
+      const bend = Math.sign(slotBend(st.s, setup.track));
       h = p.h + bend * yaw * 0.32;
       tilt = bend * Math.min(1, pull) * 0.5;
     }
@@ -648,7 +664,13 @@ export class SlotTracks {
   // (so cars sort under it), a chequered banner under it, a lamp on each piece
   // — red one by one, out at GO (a quick phosphor flash) — and the chequered
   // flag waving on top once someone has finished.
-  private gantryOps(lit: number, flag: boolean, local: (x: number, y: number) => [number, number], now: number): Op[] {
+  private gantryOps(
+    lit: number,
+    flag: boolean,
+    local: (x: number, y: number) => [number, number],
+    now: number,
+    track: SlotTrackId,
+  ): Op[] {
     const ops: Op[] = [];
     const rect = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [
       local(x0, y0),
@@ -664,7 +686,7 @@ export class SlotTracks {
     });
     const G = SLOT_TOP + SLOT_GANTRY;
     for (const side of [-1, 1]) {
-      const p = slotPoint(0.02, side * GANTRY_POST);
+      const p = slotPoint(0.02, side * GANTRY_POST, track);
       const [wx, wy] = local(p.x, p.y);
       ops.push(
         at(wx, wy, (g) => {
@@ -673,9 +695,9 @@ export class SlotTracks {
         }),
       );
     }
-    const lamps = slotLamps();
-    const a = slotPoint(0.02, -GANTRY_POST);
-    const b = slotPoint(0.02, GANTRY_POST);
+    const lamps = slotLamps(track);
+    const a = slotPoint(0.02, -GANTRY_POST, track);
+    const b = slotPoint(0.02, GANTRY_POST, track);
     for (let i = 0; i < 5; i++) {
       const y0 = a.y + ((b.y - a.y) * i) / 5;
       const y1 = a.y + ((b.y - a.y) * (i + 1)) / 5;
@@ -711,7 +733,7 @@ export class SlotTracks {
     }
     if (flag) {
       // a chequered flag on a short pole over the middle of the bar, waving
-      const m = slotPoint(0.02, 0);
+      const m = slotPoint(0.02, 0, track);
       const [wx, wy] = local(m.x, m.y);
       const t = now / 1000;
       ops.push(
@@ -782,6 +804,8 @@ export class SlotTracks {
       phase: (race?.phase ?? "lobby") as SlotView["phase"],
       lights: race?.lights ?? 0,
       laps: race?.laps ?? 5,
+      diff: slotDiffOf(race?.diff),
+      track: slotTrackOf(o?.props),
       by: race?.by ?? "",
       lanes,
       mine: this.myLane(focus),

@@ -6,7 +6,11 @@ import { expectedPosition, type Timeline } from "./youtube";
 // world-server's relay (one Jellyfin session per TV, shared by everyone), via
 // hls.js (Safari plays HLS itself). Under a second off it plays a touch faster
 // or slower; more than that, it seeks. Its picture is copied onto the TV's
-// glass each frame (world/media/room.ts); its volume follows hearing.
+// glass each frame (world/media/room.ts); its volume follows hearing. When
+// the browser won't let it start with sound (no click on the page yet: you
+// arrived while the TV was already on), it plays muted and the sound comes
+// with the next click or key. A stream that keeps failing says so (`failed`);
+// the room drops it and tries again later.
 
 const SEEK_ABOVE = 1.0;
 const NUDGE_ABOVE = 0.15;
@@ -20,6 +24,8 @@ export class SyncedVideo {
   lead = 0.5; // s to aim ahead when seeking (learned: how long the stream takes to start)
   drift = 0;
   failed = false;
+  private mutedForNow = false; // playing muted until a click or key (the browser's rule)
+  private unarm: (() => void) | null = null;
 
   constructor(
     readonly url: string, // master playlist
@@ -44,8 +50,12 @@ export class SyncedVideo {
       const hls = new H({ maxBufferLength: 30, backBufferLength: 30, startPosition: expectedPosition(this.timeline) });
       this.hls = hls;
       // a fatal error: retry a few times (a cold transcode can stall the first
-      // segment), then give up — the glass keeps the item's picture
+      // segment), then give up — the room drops the stream and tries again
+      // later. Retries count in a row: a segment that comes through clears them.
       let retries = 0;
+      hls.on(H.Events.FRAG_LOADED, () => {
+        retries = 0;
+      });
       hls.on(H.Events.ERROR, (_e, d) => {
         if (!d.fatal) return;
         if (++retries > 4) {
@@ -67,8 +77,39 @@ export class SyncedVideo {
     }
     v.currentTime = expectedPosition(this.timeline);
     this.settleUntil = performance.now() + 4000;
-    void v.play().catch(() => {});
+    this.tryPlay();
     this.timer = window.setInterval(() => this.tick(), 250);
+  }
+
+  // play(); refused for want of a click (sound needs one), play muted — that's
+  // always allowed — and unmute on the next click or key anywhere
+  private tryPlay() {
+    const v = this.video;
+    void v.play().catch((e: unknown) => {
+      if ((e as Error)?.name !== "NotAllowedError" || v.muted) return;
+      v.muted = true;
+      this.mutedForNow = true;
+      this.armUnmute();
+      void v.play().catch(() => {});
+    });
+  }
+  private armUnmute() {
+    if (this.unarm) return;
+    const go = () => {
+      this.unarm?.();
+      this.video.muted = false;
+      this.mutedForNow = false;
+    };
+    window.addEventListener("pointerdown", go, true);
+    window.addEventListener("keydown", go, true);
+    this.unarm = () => {
+      window.removeEventListener("pointerdown", go, true);
+      window.removeEventListener("keydown", go, true);
+      this.unarm = null;
+    };
+  }
+  get mutedByBrowser(): boolean {
+    return this.mutedForNow;
   }
 
   setTimeline(t: Timeline) {
@@ -103,7 +144,7 @@ export class SyncedVideo {
       if (Math.abs(v.currentTime - (this.timeline.pos ?? 0)) > 0.5) v.currentTime = this.timeline.pos ?? 0;
       return;
     }
-    if (v.paused) void v.play().catch(() => {});
+    if (v.paused) this.tryPlay();
     if (v.readyState < 3) return; // buffering (a cold transcode takes a few seconds)
     const exp = expectedPosition(this.timeline, serverNow());
     const drift = v.currentTime - exp;
@@ -126,6 +167,7 @@ export class SyncedVideo {
   }
 
   destroy() {
+    this.unarm?.();
     clearInterval(this.timer);
     this.hls?.destroy();
     this.video.pause();

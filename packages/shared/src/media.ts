@@ -36,8 +36,8 @@ export interface MediaState {
 export const MAX_QUEUE = 50;
 export const MAX_TITLE = 120;
 export const MAX_DUR = 12 * 3600;
-// Jellyfin TVs playing at once per space (each is one transcode on the server).
-export const MAX_JF_TVS = 3;
+// (Jellyfin TVs playing at once per space used to be capped at 3, one transcode
+// each on the server; any number may play now.)
 export const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 export const YT_LIST = /^[A-Za-z0-9_-]{10,64}$/;
 export const JF_ID = /^[0-9a-f]{32}$/;

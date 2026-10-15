@@ -9,7 +9,6 @@ import {
   isDisplay,
   isRadio,
   MAX_DUR,
-  MAX_JF_TVS,
   MAX_QUEUE,
   type MediaItem,
   type MediaState,
@@ -139,8 +138,6 @@ registerFeature((room: SpaceRoom) => {
     return ok;
   };
 
-  const jfBusy = (id: string) => [...jfTvs].filter((t) => t !== id && !read(t)?.paused).length >= MAX_JF_TVS;
-
   room.on("media:play", async (client, msg) => {
     const id = String(msg.id ?? "");
     const m = read(id);
@@ -156,8 +153,6 @@ registerFeature((room: SpaceRoom) => {
     const now = Date.now();
     const mode = msg.mode === "next" || msg.mode === "end" ? msg.mode : "now";
     if (mode === "now" || !s.item) {
-      if (items[0].src === "jf" && jfBusy(id))
-        return warn(client, `${MAX_JF_TVS} TVs are on Jellyfin already: turn one off first.`);
       const queue = mode === "now" ? [...items.slice(1), ...s.queue] : [...s.queue, ...items.slice(1)];
       s = startItem({ ...s, queue: queue.slice(0, MAX_QUEUE) }, items[0], now, by);
     } else if (mode === "next") s = { ...s, queue: [...items, ...s.queue].slice(0, MAX_QUEUE) };
@@ -184,8 +179,6 @@ registerFeature((room: SpaceRoom) => {
         s = pause(m, now);
         break;
       case "resume":
-        if (m.item?.src === "jf" && jfBusy(id))
-          return warn(client, `${MAX_JF_TVS} TVs are on Jellyfin already: turn one off first.`);
         s = resume(m, now);
         break;
       case "seek":
@@ -194,7 +187,6 @@ registerFeature((room: SpaceRoom) => {
         break;
       case "skip":
         s = skip(m, now, by);
-        if (s.item?.src === "jf" && jfBusy(id)) s = { ...s, paused: true, pos: 0 };
         break;
       case "stop":
         s = { ...emptyMedia(), lock: m.lock, loop: m.loop };

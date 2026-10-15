@@ -38,12 +38,16 @@ export const MEDIA_CHUNK = "yutopia-media";
 //    scanlines, its light on the floor at night; projectors beam onto their
 //    screen;
 //  · in earshot, you hear it: the loudest YouTube TV (or the radio's YouTube)
-//    plays in the "On TV" card; the loudest Jellyfin TV streams (one at a time);
+//    plays in the "On TV" card; every Jellyfin TV in earshot streams (the
+//    loudest few, each at its own volume), a stream that fails is tried again;
 //  · Watch makes the card big (YouTube) or shows the Jellyfin stream big.
 
 const S = 36; // px along a wall per tile (engine.mountWall)
 const PROJECTOR_REACH = 7;
 const CARD_GRACE_MS = 2500;
+const MAX_JF_STREAMS = 3; // Jellyfin TVs streaming to me at once (the loudest)
+const YT_START_MS = 20_000; // a YouTube player that isn't ready by then is given up on
+const JF_RETRY_MS = [3000, 6000, 12_000, 30_000]; // a failed stream: tried again after
 const ON_MS = 520; // a CRT warming up
 const OFF_MS = 380; // … collapsing
 
@@ -71,6 +75,13 @@ interface Source {
   radio: boolean;
 }
 
+interface JfStream {
+  id: string; // the TV
+  ref: string; // the item
+  p: SyncedVideo;
+  level: number; // its volume, eased
+}
+
 const timeline = (m: MediaState): Timeline => ({
   at: m.at,
   dur: m.item?.dur ?? 0,
@@ -85,21 +96,23 @@ export class MediaRoom {
   private card: MediaCard;
   private yt: SyncedYouTube | null = null;
   private ytStarting = false;
+  private ytGen = 0; // a start that finishes after a stop (or another pick) is thrown away
   private ytFailedAt = 0; // the YouTube script didn't load (offline): try again later
   private ytFor: string | null = null; // source id
   private ytIdleSince = 0;
-  private jf: SyncedVideo | null = null;
   // volumes ease toward where they should be (walking up, a TV taking over):
   // no jumps; a stream being replaced fades out on its own
   private dt = 0;
   private ytLevel = 0;
-  private jfLevel = 0;
-  private jfFading: { p: SyncedVideo; level: number; until: number } | null = null;
-  private jfFor: { id: string; ref: string } | null = null;
+  private jfs = new Map<string, JfStream>(); // the Jellyfin TVs streaming to me, by TV
+  private jfFading: { s: JfStream; until: number }[] = []; // on their way out
+  private jfRetryAt = new Map<string, number>(); // a TV whose stream failed: when to try again
+  private jfFails = new Map<string, number>(); // … and how many times in a row
   private jfHolder: HTMLDivElement;
   private hidden = new Set<string>(); // sources I said "not now" to, until I walk away
   private reported = new Set<string>(); // lengths told to the server
   private watching: string | null = null;
+  private watchLostAt = 0; // the watched thing went off (or away): the card lets go after a moment
   private cc = false; // subtitles on (watching a Jellyfin stream)
   private clockTimer = 0;
   private sample = document.createElement("canvas");
@@ -109,7 +122,7 @@ export class MediaRoom {
   constructor(private w: WorldController) {
     this.card = new MediaCard(lang() === "pt");
     this.card.onBig = (big) => {
-      if (big && !this.watching) this.watching = this.ytFor ?? this.jfFor?.id ?? null;
+      if (big && !this.watching) this.watching = this.ytFor ?? this.loudestJf()?.id ?? null;
       if (!big) this.watching = null;
     };
     this.card.onHide = () => {
@@ -118,9 +131,10 @@ export class MediaRoom {
     };
     this.card.onSound = () => this.yt?.unmute();
     this.card.onCc = () => {
-      if (!this.jf) return;
+      const s = this.watchedJf();
+      if (!s) return;
       this.cc = !this.cc;
-      this.jf.setSubtitles(this.cc);
+      s.p.setSubtitles(this.cc);
     };
     this.jfHolder = document.createElement("div");
     Object.assign(this.jfHolder.style, {
@@ -285,7 +299,10 @@ export class MediaRoom {
         const gain = hearingGain(this.w.map, ear, spot, true) * tvVolume(o); // its own knob
         sources.push({ id: o.id, m, gain, radio: false });
         const ref = m.item.ref;
-        if (this.lastRef.has(o.id) && this.lastRef.get(o.id) !== ref && !m.paused) tvOn(GLASS[o.kind].look, gain);
+        if (this.lastRef.has(o.id) && this.lastRef.get(o.id) !== ref) {
+          if (!m.paused) tvOn(GLASS[o.kind].look, gain);
+          this.hidden.delete(o.id); // something new on it: the card may come back
+        }
         this.lastRef.set(o.id, ref);
       } else this.lastRef.set(o.id, "");
       this.drawScreen(s, m?.item ? m : null, now, night);
@@ -299,9 +316,30 @@ export class MediaRoom {
       sources.push({ id: o.id, m, gain: hearingGain(this.w.map, ear, topCentre(o), true) * knob, radio: true });
     }
     for (const src of sources) if (src.gain <= 0) this.hidden.delete(src.id);
+    this.letGo(sources);
     this.drawProjectors(night);
     this.playYouTube(sources);
     this.playJellyfin(sources);
+  }
+
+  // The thing I was watching went off, or was taken away: after a moment the
+  // card lets go, so what plays elsewhere isn't held back by it.
+  private letGo(sources: Source[]) {
+    if (!this.watching) {
+      this.watchLostAt = 0;
+      return;
+    }
+    if (sources.some((s) => s.id === this.watching)) {
+      this.watchLostAt = 0;
+      return;
+    }
+    const now = performance.now();
+    if (!this.watchLostAt) this.watchLostAt = now;
+    else if (now - this.watchLostAt > CARD_GRACE_MS) {
+      this.watching = null;
+      this.watchLostAt = 0;
+      this.card.setBig(false);
+    }
   }
 
   // ── the picture on the glass ───────────────────────────────────────────
@@ -346,8 +384,9 @@ export class MediaRoom {
     }
     const item = m.item;
     if (!item) return;
-    // what goes on it: the live stream (the Jellyfin TV I'm near), or a picture
-    const live = this.jf && this.jfFor?.id === o.id && this.jf.ready ? this.jf.video : null;
+    // what goes on it: its live stream (a Jellyfin TV I'm near), or a picture
+    const st = this.jfs.get(o.id);
+    const live = st?.p.ready ? st.p.video : null;
     const url =
       item.src === "yt"
         ? ytThumb(item.ref, "mq")
@@ -366,7 +405,7 @@ export class MediaRoom {
       s.img = img;
     }
     const pos = positionAt(m, now);
-    const loading = item.src === "jf" && this.jfFor?.id === o.id && !live;
+    const loading = item.src === "jf" && !!st && !live;
     const key =
       live || warm !== null
         ? `live|${t}`
@@ -627,8 +666,11 @@ export class MediaRoom {
   private playYouTube(sources: Source[]) {
     const yts = sources.filter((s) => s.m.item?.src === "yt");
     let pick: Source | null = null;
+    // the one I watch; while I watch a Jellyfin stream, no YouTube over it
+    const watchingJf = !!this.watching && sources.some((s) => s.id === this.watching && s.m.item?.src === "jf");
     if (this.watching) pick = yts.find((s) => s.id === this.watching) ?? null;
-    if (!pick) for (const s of yts) if (s.gain > 0 && !this.hidden.has(s.id) && (!pick || s.gain > pick.gain)) pick = s;
+    if (!pick && !watchingJf)
+      for (const s of yts) if (s.gain > 0 && !this.hidden.has(s.id) && (!pick || s.gain > pick.gain)) pick = s;
     if (!pick) {
       if (this.yt || this.card.visible) {
         if (!this.ytIdleSince) this.ytIdleSince = performance.now();
@@ -656,20 +698,27 @@ export class MediaRoom {
     const retryOk = !this.ytFailedAt || performance.now() - this.ytFailedAt > 30_000;
     if (!this.yt && !this.ytStarting && retryOk) {
       this.ytStarting = true;
+      const gen = ++this.ytGen;
       const host = document.createElement("div");
       this.card.body.prepend(host);
       const p = new SyncedYouTube(host, item.ref, t);
-      void p
-        .start()
+      // (a player that never gets ready — the script stalled, the card was
+      // taken down under it — mustn't leave this stuck: it's timed out and dropped)
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("YouTube player timed out")), YT_START_MS),
+      );
+      void Promise.race([p.start(), timeout])
         .then(() => {
+          if (gen !== this.ytGen) throw new Error("stale");
           this.yt = p;
         })
-        .catch(() => {
+        .catch((e: Error) => {
+          p.destroy();
           host.remove();
-          this.ytFailedAt = performance.now();
+          if (e.message !== "stale") this.ytFailedAt = performance.now();
         })
         .finally(() => {
-          this.ytStarting = false;
+          if (gen === this.ytGen) this.ytStarting = false;
         });
     } else if (this.yt) {
       if (this.yt.video !== item.ref) this.yt.load(item.ref, t);
@@ -686,94 +735,146 @@ export class MediaRoom {
         this.w.send("media:dur", { id: pick.id, ref: item.ref, dur: d });
       }
     }
-    if (this.jfFor && this.watching === this.jfFor.id) return; // the card shows the stream
+    if (this.watching && this.jfs.has(this.watching)) return; // the card shows the stream
     this.card.show({ title: item.title, sub: item.sub, radio: pick.radio });
     if (this.watching === pick.id && !this.card.big) this.card.setBig(true);
   }
 
   private stopYouTube() {
+    this.ytGen++; // a start still in flight is thrown away when it lands
+    this.ytStarting = false;
     this.yt?.destroy();
     this.yt = null;
     this.ytLevel = 0;
     this.ytFor = null;
     this.ytIdleSince = 0;
     for (const c of Array.from(this.card.body.children)) if (!c.classList.contains("ymc-sound")) c.remove();
-    if (!this.jfFor || this.watching !== this.jfFor.id) this.card.hide();
+    if (!this.watching || !this.jfs.has(this.watching)) this.card.hide();
   }
 
-  // The loudest Jellyfin TV in earshot (or the one I watch) streams: its
-  // picture goes on its glass, its sound to me.
+  // Every Jellyfin TV in earshot streams onto its glass (the loudest few, each
+  // at its own volume; the one I watch always, and big in the card). A stream
+  // that fails is dropped and tried again a little later, longer each time.
   private playJellyfin(sources: Source[]) {
     const key = this.w.mediaKey?.key;
+    const now = performance.now();
     const jfs = sources.filter((s) => s.m.item?.src === "jf" && !s.m.paused);
-    let pick: Source | null = null;
-    if (this.watching) pick = jfs.find((s) => s.id === this.watching) ?? null;
-    if (!pick) for (const s of jfs) if (s.gain > 0 && (!pick || s.gain > pick.gain)) pick = s;
-    const item = pick?.m.item;
+    const picks: Source[] = [];
+    if (key) {
+      const watched = this.watching ? jfs.find((s) => s.id === this.watching) : null;
+      if (watched) picks.push(watched);
+      for (const s of jfs.filter((x) => x.gain > 0 && x !== watched).sort((x, y) => y.gain - x.gain))
+        if (picks.length < MAX_JF_STREAMS) picks.push(s);
+    }
+    // streams for TVs no longer picked (or showing something else): out they go
+    const keep = new Set(picks.map((s) => s.id));
+    for (const [id, st] of this.jfs) {
+      const src = picks.find((s) => s.id === id);
+      if (!src || src.m.item?.ref !== st.ref) this.dropJf(id, true);
+    }
     this.fadeOld();
-    if (!pick || !item || !key) {
-      if (this.jf) this.stopJellyfin(true);
-      return;
-    }
-    if (!this.jf || this.jfFor?.id !== pick.id || this.jfFor.ref !== item.ref) {
-      this.stopJellyfin(true);
-      const url = `${this.w.worldHttp}/media/jf/s/${encodeURIComponent(key)}/${encodeURIComponent(pick.id)}/${item.ref}/master.m3u8`;
-      this.jf = new SyncedVideo(url, timeline(pick.m), this.jfHolder);
-      this.jfFor = { id: pick.id, ref: item.ref };
-      void this.jf.start();
-    } else this.jf.setTimeline(timeline(pick.m));
-    const watched = this.watching === pick.id;
-    this.jfLevel = this.ease(this.jfLevel, (watched ? 1 : pick.gain) * this.vol(false), 0.25);
-    this.jf.setVolume(this.jfLevel);
-    // watching: the stream big in the card
-    const v = this.jf.video;
-    if (watched) {
-      if (v.parentElement !== this.card.body) {
-        this.yt?.destroy();
-        this.yt = null;
-        this.ytFor = null;
-        this.card.body.prepend(v);
+    for (const src of picks) {
+      const item = src.m.item;
+      if (!item || !key) continue;
+      let st = this.jfs.get(src.id);
+      if (st?.p.failed) {
+        // give up on this one for a while
+        const n = (this.jfFails.get(src.id) ?? 0) + 1;
+        this.jfFails.set(src.id, n);
+        this.jfRetryAt.set(src.id, now + JF_RETRY_MS[Math.min(n, JF_RETRY_MS.length) - 1]);
+        this.dropJf(src.id, false);
+        st = undefined;
       }
-      this.card.show({ title: item.title, sub: item.sub, radio: false, cc: this.jf.hasSubtitles });
-      this.card.needsSound(false);
-      if (!this.card.big) this.card.setBig(true);
-    } else if (v.parentElement !== this.jfHolder) {
-      this.jfHolder.append(v);
-      if (!this.ytFor) this.card.hide();
+      if (!st) {
+        if (now < (this.jfRetryAt.get(src.id) ?? 0)) continue;
+        const url = `${this.w.worldHttp}/media/jf/s/${encodeURIComponent(key)}/${encodeURIComponent(src.id)}/${item.ref}/master.m3u8`;
+        const p = new SyncedVideo(url, timeline(src.m), this.jfHolder);
+        st = { id: src.id, ref: item.ref, p, level: 0 };
+        this.jfs.set(src.id, st);
+        void p.start();
+      } else {
+        st.p.setTimeline(timeline(src.m));
+        if (st.p.ready && this.jfFails.has(src.id)) {
+          this.jfFails.delete(src.id); // playing again: the next failure starts the backoff over
+          this.jfRetryAt.delete(src.id);
+        }
+      }
+      const watched = this.watching === src.id;
+      st.level = this.ease(st.level, (watched ? 1 : src.gain) * this.vol(false), 0.25);
+      st.p.setVolume(st.level);
+      const v = st.p.video;
+      if (watched) {
+        // watching: the stream big in the card
+        if (v.parentElement !== this.card.body) {
+          this.stopYouTube();
+          this.card.body.prepend(v);
+        }
+        this.card.show({ title: item.title, sub: item.sub, radio: false, cc: st.p.hasSubtitles });
+        this.card.needsSound(st.p.mutedByBrowser);
+        if (!this.card.big) this.card.setBig(true);
+      } else if (v.parentElement !== this.jfHolder) {
+        this.jfHolder.append(v);
+        if (!this.ytFor) this.card.hide();
+      }
     }
+    if (!keep.size && !this.watching) this.cc = false;
   }
 
-  // fade: the stream keeps playing a moment, getting quieter, then goes
-  private stopJellyfin(fade = false) {
-    if (this.jf && fade && this.jfLevel > 0.02 && !this.jfFading) {
-      this.jfFading = { p: this.jf, level: this.jfLevel, until: performance.now() + 900 };
-      if (this.jf.video.parentElement !== this.jfHolder) this.jfHolder.append(this.jf.video);
-    } else this.jf?.destroy();
-    this.jf = null;
-    this.jfFor = null;
-    this.jfLevel = 0;
-    this.cc = false;
+  // the stream I watch big, if any
+  private watchedJf(): JfStream | null {
+    return (this.watching && this.jfs.get(this.watching)) || null;
+  }
+  // the loudest stream playing to me
+  private loudestJf(): JfStream | null {
+    let best: JfStream | null = null;
+    for (const s of this.jfs.values()) if (!best || s.level > best.level) best = s;
+    return best;
+  }
+
+  // A stream goes: at once, or fading out over a moment while the next one comes in.
+  private dropJf(id: string, fade: boolean) {
+    const st = this.jfs.get(id);
+    if (!st) return;
+    this.jfs.delete(id);
+    if (fade && st.level > 0.02 && !st.p.failed) {
+      if (st.p.video.parentElement !== this.jfHolder) this.jfHolder.append(st.p.video);
+      this.jfFading.push({ s: st, until: performance.now() + 900 });
+    } else st.p.destroy();
+    if (this.watching === id) this.cc = false;
   }
   private fadeOld() {
-    const f = this.jfFading;
-    if (!f) return;
-    f.level = this.ease(f.level, 0, 0.2);
-    f.p.setVolume(f.level);
-    if (f.level < 0.01 || performance.now() > f.until) {
-      f.p.destroy();
-      this.jfFading = null;
+    const now = performance.now();
+    for (let i = this.jfFading.length - 1; i >= 0; i--) {
+      const f = this.jfFading[i];
+      f.s.level = this.ease(f.s.level, 0, 0.2);
+      f.s.p.setVolume(f.s.level);
+      if (f.s.level < 0.01 || now > f.until) {
+        f.s.p.destroy();
+        this.jfFading.splice(i, 1);
+      }
     }
+  }
+  private stopJellyfin() {
+    for (const id of [...this.jfs.keys()]) this.dropJf(id, false);
+    for (const f of this.jfFading) f.s.p.destroy();
+    this.jfFading = [];
+    this.cc = false;
   }
 
   // what the panels show about the stream (tests read it too)
   get status() {
     return {
       yt: this.yt ? { for: this.ytFor, video: this.yt.video, stats: this.yt.stats } : null,
-      jf: this.jf ? { for: this.jfFor, ready: this.jf.ready, drift: this.jf.drift, failed: this.jf.failed } : null,
+      jf: this.jfStatus(this.watchedJf() ?? this.loudestJf()),
+      jfs: [...this.jfs.values()].map((s) => this.jfStatus(s)),
       card: this.card.visible,
       big: this.card.big,
       watching: this.watching,
     };
+  }
+
+  private jfStatus(s: JfStream | null) {
+    return s ? { for: { id: s.id, ref: s.ref }, ready: s.p.ready, drift: s.p.drift, failed: s.p.failed } : null;
   }
 
   // for the third-person view: every display's canvas (what the iso view maps onto its glass)
@@ -785,7 +886,6 @@ export class MediaRoom {
     clearInterval(this.clockTimer);
     this.stopYouTube();
     this.stopJellyfin();
-    this.jfFading?.p.destroy();
     this.card.destroy();
     this.jfHolder.remove();
     for (const s of this.screens.values()) {

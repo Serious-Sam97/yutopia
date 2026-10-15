@@ -1,6 +1,6 @@
 "use client";
 
-import { isTheme, screenInputToWorld, splitAll, studio } from "@yutopia/shared";
+import { Grid, isTheme, screenInputToWorld, splitAll, studio } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 // (static, like the world page: the lazy chunks it shares — themes, items,
@@ -54,6 +54,27 @@ export default function ThirdPersonDemo() {
     const theme = q.get("theme");
     const map = { ...studio, theme: isTheme(theme) ? theme : "clouds" };
     const objects = splitAll(studio.objects).objects;
+    // ?slot=<track id>: a slot-car table with that track, on the first clear
+    // 4 × 3 patch of floor near where you start (a look at the track in 3D)
+    const slot = q.get("slot");
+    if (slot) {
+      const grid = Grid.from(map, objects);
+      const sx = Number(q.get("x")) || map.spawn.x;
+      const sy = Number(q.get("y")) || map.spawn.y;
+      let best: { x: number; y: number; d: number } | null = null;
+      for (let y = 1; y < map.height - 4; y++)
+        for (let x = 1; x < map.width - 5; x++) {
+          let ok = true;
+          for (let dy = -1; dy <= 3 && ok; dy++)
+            for (let dx = -1; dx <= 4 && ok; dx++)
+              ok = grid.ok(x + dx, y + dy) && Math.hypot(x + dx + 0.5 - sx, y + dy + 0.5 - sy) > 1.2;
+          const d = Math.hypot(x + 2 - sx, y + 1.5 - sy);
+          if (ok && (!best || d < best.d)) best = { x, y, d };
+        }
+      if (best)
+        objects.push({ id: "demo-slot", kind: "slot_track", x: best.x, y: best.y, rot: 0, props: { track: slot } });
+      (window as unknown as { __demoSlot?: unknown }).__demoSlot = best;
+    }
     let stop = false;
     let raf = 0;
     let iso: WorldEngine | null = null;

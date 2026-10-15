@@ -96,6 +96,7 @@ export class SlotRace extends Schema {
   @type("string") phase = "lobby";
   @type("uint8") lights = 0;
   @type("uint8") laps = 5;
+  @type("string") diff = "medium"; // free / medium / hard (shared/slotcar.ts)
   @type("string") by = ""; // who started it
   @type({ map: SlotCar }) cars = new MapSchema<SlotCar>(); // lane ("0".."3") → car
 }

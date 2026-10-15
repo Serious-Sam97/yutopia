@@ -26,6 +26,10 @@ const EPS = 0.02;
 const STEP = 0.0012; // tiles between one layer and the next
 const NEAR = 0.003; // closer than this to what's drawn: the same plane
 const LIFT = 0.003; // details off their face, at least
+// …but never further than this over where it was drawn: a long run of details
+// that each overlap the last (the slot-car track's hundreds of strips and
+// rails along the table) would otherwise climb a STEP each and float off.
+const LIFT_MAX = LIFT + 6 * STEP;
 const PUSH_MAX = 0.006; // a box face moves out at most this (its sides grow with it)
 
 // ── buffers ──────────────────────────────────────────────────────────────────
@@ -117,7 +121,7 @@ export class Layers {
             Math.min(m.b1, b1) - Math.max(m.b0, b0) > 1e-4
           )
             top = m.top;
-    const at = Math.max(min, top + STEP);
+    const at = Math.min(Math.max(min, top + STEP), Math.max(min, h + LIFT_MAX));
     const m = { base: h, top: at, a0, a1, b0, b1 };
     for (let c = c0; c <= c1; c++) {
       const key = `${f}${bin}|${c}`;

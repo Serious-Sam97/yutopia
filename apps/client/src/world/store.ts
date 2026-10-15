@@ -97,6 +97,8 @@ export interface SlotView {
   phase: "lobby" | "countdown" | "race" | "done";
   lights: number; // 1..5 during the countdown
   laps: number;
+  diff: string; // the race's difficulty (shared/slotcar.ts SlotDiff)
+  track: string; // the track on the table (SlotTrackId)
   by: string;
   lanes: (SlotLane | null)[];
   mine: number; // my lane, −1 for none

@@ -34,11 +34,13 @@ export interface ClientMessages {
   // a note on the piano I'm at (n: semitones from middle C)
   "piano:note": { id: string; n: number };
   // the slot-car track (slotcar.ts): take a lane (0..3) / give it back, start
-  // a race (racers), and my car as I drive it (racers, while racing)
+  // a race (racers; laps and difficulty), my car as I drive it (racers, while
+  // racing), and the track laid on the table (anyone by it, between races)
   "slot:join": { id: string; lane: number };
   "slot:leave": { id: string };
-  "slot:start": { id: string; laps: number };
+  "slot:start": { id: string; laps: number; diff?: string };
   "slot:car": { id: string; s: number; v: number; off: number; ov: number };
+  "slot:track": { id: string; track: string };
   // the game room (games.ts): plug a console into a TV (null unplugs), put a
   // cartridge in (null ejects), power, take a pad (port 0 = put it down), a
   // pad's buttons (a bitmask of PAD_BUTTONS, for whoever streams it), the

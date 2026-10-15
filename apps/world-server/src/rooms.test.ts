@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { areaAt, canPlace, dressItems, findPath, Grid, getMap, ROOM_NAME, studio, takenId } from "@yutopia/shared";
-import { newCar, SLOT_GRIP, SLOT_LAP, SLOT_VMAX, slotCurve, stepCar } from "@yutopia/shared/slotcar";
+import { newCar, SLOT_GRIP, SLOT_LAP, SLOT_VMAX, slotCurve, slotLap, stepCar } from "@yutopia/shared/slotcar";
 import { Client, type Room } from "colyseus.js";
 
 process.env.YUTOPIA_OFFLINE = "1";
@@ -954,6 +954,41 @@ test("slot cars: lanes near the track, five lights, laps counted from what a rea
   const lap = race()?.cars.get("1");
   assert.ok((lap?.best ?? 0) > 2 && (lap?.best ?? 0) < 8, `a lap in ${lap?.best}`);
   // giving the lane back empties the race: back to the lobby
+  a.room.send("slot:leave", { id: "t-slot" });
+  await waitFor(() => race()?.cars.size === 0 && race()?.phase === "lobby");
+
+  // another track on the table (saved with it), a race on "free": flat out
+  // through a corner is a car a real one could be, leaving the slot isn't
+  if (far && near(far) > 3) {
+    b.room.send("slot:track", { id: "t-slot", track: "speedway" });
+    await sleep(150);
+    assert.ok(!JSON.parse(a.room.state.objects.get("t-slot")?.props ?? "{}").track, "Bia is too far to change it");
+  }
+  a.room.send("slot:track", { id: "t-slot", track: "moon" });
+  a.room.send("slot:track", { id: "t-slot", track: "speedway" });
+  await waitFor(() => JSON.parse(a.room.state.objects.get("t-slot")?.props ?? "{}").track === "speedway");
+  a.room.send("slot:join", { id: "t-slot", lane: 2 });
+  await waitFor(() => race()?.cars.get("2")?.name === "P41");
+  a.room.send("slot:start", { id: "t-slot", laps: 3, diff: "free" });
+  await waitFor(() => race()?.phase === "race", 8000);
+  assert.equal(race()?.diff, "free");
+  const bend = 1.4 + 0.3; // into the speedway's first bend
+  assert.ok(slotCurve(bend, "speedway") > 0);
+  // (reported as a car gets there: a jump the length of the straight is a teleport)
+  for (let s = 0.3; s < bend + 0.01; s = Math.min(bend, s + 0.3)) {
+    a.room.send("slot:car", { id: "t-slot", s, v: 3.9, off: 0, ov: 0 });
+    await sleep(90);
+    if (s === bend) break;
+  }
+  await waitFor(() => (race()?.cars.get("2")?.s ?? 0) >= bend - 1e-6);
+  a.room.send("slot:car", { id: "t-slot", s: bend + 0.05, v: 0, off: 0.05, ov: 3.9 });
+  await sleep(150);
+  assert.equal(race()?.cars.get("2")?.off, 0, "a car off its slot is no car on free");
+  // laps count on this track's own length (a lap is shorter than the classic's)
+  assert.ok(slotLap("speedway") < SLOT_LAP);
+  a.room.send("slot:track", { id: "t-slot", track: "clover" });
+  await sleep(150);
+  assert.equal(JSON.parse(a.room.state.objects.get("t-slot")?.props ?? "{}").track, "speedway", "not during a race");
   a.room.send("slot:leave", { id: "t-slot" });
   await waitFor(() => race()?.cars.size === 0 && race()?.phase === "lobby");
   a.room.send("obj:remove", { id: "t-slot" });

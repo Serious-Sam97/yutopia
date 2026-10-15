@@ -1,4 +1,4 @@
-import { ANIM, areaAt, dirFromDelta, findPath, isPrivate, type Point } from "@yutopia/shared";
+import { ANIM, areaAt, dirFromDelta, findPath, type Point } from "@yutopia/shared";
 import { isRadio } from "@yutopia/shared/media";
 import { config } from "../config.ts";
 import type { SpaceClient, SpaceRoom } from "../SpaceRoom.ts";
@@ -10,7 +10,9 @@ import { registerFeature } from "./index.ts";
 // the radio is on, sleeps in the server room at night. His lines come from
 // Laravel (same soul/persona as in Yondra). Rules from the voice guide:
 //  · public lines never name anyone; personal lines go only to that person
-//  · he keeps out of private rooms and booths, and goes quiet near rituals
+//  · he keeps out of booths and the standup ring (he walks into any room whose
+//    door isn't locked — a closed door swings for him too), and goes quiet
+//    near rituals
 //  · speech budget: one public line per ~40 s, and only if someone's around
 
 const SPEED = 3.1;
@@ -52,8 +54,10 @@ registerFeature((room: SpaceRoom) => {
 
   const humans = () => [...room.state.players.values()].filter((p) => !p.bot);
   const near = (r: number) => humans().filter((p) => Math.hypot(p.x - npc.x, p.y - npc.y) <= r);
-  const okTarget = (pt: Point) =>
-    !isPrivate(areaAt(room.map, pt.x, pt.y)) && areaAt(room.map, pt.x, pt.y)?.kind !== "booth";
+  const okTarget = (pt: Point) => {
+    const kind = areaAt(room.map, pt.x, pt.y)?.kind;
+    return kind !== "booth" && kind !== "standup";
+  };
 
   const go = (to: Point) => {
     if (!okTarget(to)) return false;

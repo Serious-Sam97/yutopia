@@ -1,13 +1,29 @@
 import { footprint } from "@yutopia/shared";
-import { plausibleCar, SLOT_LANES, SLOT_LAP, SLOT_LAPS, SLOT_LIGHT_MS, SLOT_REACH } from "@yutopia/shared/slotcar";
-import type { SpaceClient, SpaceRoom } from "../SpaceRoom.ts";
-import { SlotCar, SlotRace } from "../schema.ts";
+import {
+  isSlotTrack,
+  plausibleCar,
+  SLOT_LANES,
+  SLOT_LAPS,
+  SLOT_LIGHT_MS,
+  SLOT_REACH,
+  type SlotSetup,
+  slotDiffOf,
+  slotLap,
+  slotTrackOf,
+} from "@yutopia/shared/slotcar";
+import { config } from "../config.ts";
+import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
+import { type SlotRace as Race, SlotCar, SlotRace } from "../schema.ts";
+import { yondra } from "../yondra.ts";
 import { registerFeature } from "./index.ts";
 
 // Slot-car tracks: up to four racers take a lane, one starts the race (five red
-// lights, then GO), each drives their own car and reports it here; we check
-// it's a car a real trigger could drive, count laps and places, and everyone
-// sees the cars go round. Racers who walk away (or leave) give their lane back.
+// lights, then GO; its laps and difficulty), each drives their own car and
+// reports it here; we check it's a car a real trigger could drive on this
+// table's track at this difficulty, count laps and places, and everyone sees
+// the cars go round. Racers who walk away (or leave) give their lane back.
+// Anyone by the table picks which track is laid on it (between races); it's
+// saved with the table, so it stays.
 const WALK_AWAY = SLOT_REACH + 1.5; // a little slack before the lane is freed
 const RESULTS_MS = 9000; // results stay up, then back to the lobby
 const LAST_ONE_MS = 25_000; // after the winner, the rest have this long
@@ -34,6 +50,15 @@ registerFeature((room: SpaceRoom) => {
   const track = (id: string) => {
     const o = room.state.objects.get(id);
     return o?.kind === "slot_track" ? o : undefined;
+  };
+  // what a race on this table runs on: the table's track, the race's difficulty
+  const setupOf = (id: string, race: Race): SlotSetup => {
+    const o = track(id);
+    return { track: slotTrackOf(o ? fromSchema(o).props : null), diff: slotDiffOf(race.diff) };
+  };
+  const save = async (o: ReturnType<typeof fromSchema>) => {
+    const saved = config.offline ? o : (await yondra.putObject(room.spaceId, o).catch(() => ({ object: o }))).object;
+    room.state.objects.set(saved.id, toSchema(saved));
   };
   // how far someone is from the table's edge
   const away = (id: string, sid: string) => {
@@ -98,6 +123,7 @@ registerFeature((room: SpaceRoom) => {
     if (race.phase === "countdown" || race.phase === "race") return;
     const laps = Number(m?.laps);
     race.laps = (SLOT_LAPS as readonly number[]).includes(laps) ? laps : 5;
+    race.diff = slotDiffOf(m?.diff);
     race.by = room.state.players.get(client.sessionId)?.name ?? "";
     lobby(id, race);
     for (const car of race.cars.values()) {
@@ -126,7 +152,8 @@ registerFeature((room: SpaceRoom) => {
     const now = Date.now();
     const next = { s: Number(m.s), v: Number(m.v), off: Number(m.off), ov: Number(m.ov) };
     const dt = (now - (c.seenAt.get(lane) ?? c.at)) / 1000;
-    if (!plausibleCar(car, next, dt)) return;
+    const setup = setupOf(id, race);
+    if (!plausibleCar(car, next, dt, setup)) return;
     c.seenAt.set(lane, now);
     if (next.off > 0 && car.off === 0) car.offs++;
     car.s = next.s;
@@ -134,7 +161,7 @@ registerFeature((room: SpaceRoom) => {
     car.off = next.off;
     car.ov = next.ov;
     // laps: each time it passes the line
-    const done = Math.min(race.laps, Math.floor(car.s / SLOT_LAP));
+    const done = Math.min(race.laps, Math.floor(car.s / slotLap(setup.track)));
     if (done > car.lap) {
       const began = c.lapAt.get(lane) ?? c.at;
       car.last = (now - began) / 1000;
@@ -148,6 +175,22 @@ registerFeature((room: SpaceRoom) => {
       car.v = 0;
       if (car.place === 1) c.firstAt = now;
     }
+  });
+
+  // The track laid on the table: anyone by it, between races.
+  room.on("slot:track", (client, m) => {
+    const id = String(m?.id ?? "");
+    const o = track(id);
+    const pick = m?.track;
+    if (!o || !isSlotTrack(pick)) return;
+    if (away(id, client.sessionId) > SLOT_REACH) return warn(client, "Get closer to the track to change it.");
+    const race = room.state.slots.get(id);
+    if (race && (race.phase === "countdown" || race.phase === "race"))
+      return warn(client, "Wait for this race to finish.");
+    const def = fromSchema(o);
+    if (slotTrackOf(def.props) === pick) return;
+    void save({ ...def, props: { ...(def.props ?? {}), track: pick } });
+    if (race) lobby(id, race); // the cars back on the new grid
   });
 
   return {

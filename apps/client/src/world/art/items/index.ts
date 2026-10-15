@@ -60,7 +60,7 @@ const GENS: Record<string, ItemGen> = {
   water_cooler: { draw: waterCooler, variants: 1 },
   vending: { draw: vending, variants: 2 },
   piano: { draw: piano, variants: 2 },
-  slot_track: { draw: slotTrack, variants: 1 },
+  slot_track: { draw: slotTrack, variants: 1, key: (p) => String(p.track ?? "") },
   crt_tv: { draw: crtTv, variants: 2 },
   tv_wall: { draw: tvWall, variants: 2 },
   tv_hd: { draw: tvHd, variants: 1 },

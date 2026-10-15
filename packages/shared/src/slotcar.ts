@@ -2,10 +2,15 @@
 // world-server (it checks what racers report), the item's drawing (the track
 // painted on the table) and the live cars.
 //
-// The track lies on the table's top in local tiles at rot 0 (x along the 4-tile
+// A track lies on the table's top in local tiles at rot 0 (x along the 4-tile
 // side, y towards the room). It's a loop of straights and arcs; four lanes run
 // beside its centre line. Each racer drives their own car (their throttle, their
 // physics, at once) and reports it; the server checks it and everyone sees it.
+//
+// There are several tracks (SLOT_TRACKS): the table shows the one in its
+// `props.track`, picked at the console. And three difficulties (SLOT_DIFFS),
+// picked per race: free (flat out everywhere, the car never leaves its slot),
+// medium (the tuned one) and hard (less grip, it goes sooner).
 //
 // Fair lanes: the physics runs on the centre line — progress `s` is distance on
 // it, and every curve is as tight for every lane — and each lane draws that
@@ -42,39 +47,225 @@ const STEP = 1 / 240;
 // random pause, like Formula 1.
 export const SLOT_LIGHT_MS = 650;
 
-// ── the track ───────────────────────────────────────────────────────────────
-type Seg = { k: "line"; len: number } | { k: "arc"; r: number; turn: number }; // turn: radians, signed (+ turns towards +y from +x)
+// ── difficulty ──────────────────────────────────────────────────────────────
+export const SLOT_DIFFS = ["free", "medium", "hard"] as const;
+export type SlotDiff = (typeof SLOT_DIFFS)[number];
+export const isSlotDiff = (d: unknown): d is SlotDiff =>
+  typeof d === "string" && (SLOT_DIFFS as readonly string[]).includes(d);
+export const slotDiffOf = (d: unknown): SlotDiff => (isSlotDiff(d) ? d : "medium");
 
-// Anticlockwise seen from above: along the front straight (the side towards
-// the room) to the right, up the right side, back along the far side through a
-// chicane that dips into the infield, down the left side.
-// (the far side is as long as the front straight: two runs, the chicane between)
-// Built on first use: nothing here runs in bundles that never race.
-function layout(): Seg[] {
-  const run = (2 - 0.3 - 4 * 0.45 * Math.sin(deg(50))) / 2;
-  const q = -Math.PI / 2;
-  return [
-    { k: "line", len: 2.0 }, // the front straight (start / finish)
-    { k: "arc", r: 0.55, turn: q },
-    { k: "line", len: 0.9 },
-    { k: "arc", r: 0.55, turn: q },
-    { k: "line", len: run },
-    { k: "arc", r: 0.45, turn: -deg(50) }, // the chicane: in…
-    { k: "arc", r: 0.45, turn: deg(50) },
-    { k: "line", len: 0.3 },
-    { k: "arc", r: 0.45, turn: deg(50) }, // …and out
-    { k: "arc", r: 0.45, turn: -deg(50) },
-    { k: "line", len: run },
-    { k: "arc", r: 0.55, turn: q },
-    { k: "line", len: 0.9 },
-    { k: "arc", r: 0.55, turn: q },
-  ];
+interface Physics {
+  grip: number; // v² / r it holds
+  slideTime: number; // s sliding past the grip before it goes
+  snap: number; // gone at once over this many times the grip
+  scrub: number; // speed a slide scrubs off
+  offs: boolean; // it can leave the slot at all
 }
-const START: [number, number, number] = [1.0, 2.5, 0]; // x, y, heading (on the front straight)
+export const SLOT_PHYSICS: Record<SlotDiff, Physics> = {
+  // as fast as you like: the tail steps out for show, the car stays in its slot
+  free: { grip: SLOT_GRIP, slideTime: Number.POSITIVE_INFINITY, snap: Number.POSITIVE_INFINITY, scrub: 0, offs: false },
+  medium: { grip: SLOT_GRIP, slideTime: SLOT_SLIDE_TIME, snap: SLOT_SNAP, scrub: SLOT_SCRUB, offs: true },
+  // less grip, a shorter slide, more speed scrubbed: a corner taken a touch
+  // too fast is gone before you can lift
+  hard: { grip: 5.4, slideTime: 0.16, snap: 1.35, scrub: 6, offs: true },
+};
+export const SLOT_DIFF_LABELS: Record<SlotDiff, readonly [string, string]> = {
+  free: ["Free", "Livre"],
+  medium: ["Medium", "Médio"],
+  hard: ["Hard", "Difícil"],
+};
+
+// ── the tracks ──────────────────────────────────────────────────────────────
+type Seg = { k: "line"; len: number } | { k: "arc"; r: number; turn: number }; // turn: radians, signed (+ turns towards +y from +x)
 
 function deg(d: number) {
   return (d * Math.PI) / 180;
 }
+const line = (len: number): Seg => ({ k: "line", len });
+const arc = (r: number, turn: number): Seg => ({ k: "arc", r, turn });
+const Q = -Math.PI / 2;
+
+export interface SlotTrackDef {
+  name: readonly [string, string]; // EN, PT-BR
+  blurb: readonly [string, string];
+  start: readonly [number, number, number]; // x, y, heading on the table (rot 0)
+  layout: () => Seg[]; // built on first use: nothing here runs in bundles that never race
+}
+
+// The figure of eight: loops of radius r with centres 2d apart; the crossing
+// straights are the tangents from the middle point (length t), meeting at 2a.
+const F8 = { r: 0.6, d: 0.9, a: Math.asin(0.6 / 0.9), t: Math.sqrt(0.9 * 0.9 - 0.6 * 0.6) };
+
+// Every track stays on the 4 × 3 table: its centre line within x 0.45…3.55,
+// y 0.5…2.56 (room for the kerbs, the grandstand along the far edge and the
+// sponsor boards along the front), no arc tighter than r 1/3.
+export const SLOT_TRACKS = {
+  // Anticlockwise seen from above: along the front straight (the side towards
+  // the room) to the right, up the right side, back along the far side through a
+  // chicane that dips into the infield, down the left side.
+  classic: {
+    name: ["Classic", "Clássico"],
+    blurb: [
+      "Two hairpins and a chicane: the one that came in the box.",
+      "Dois grampos e uma chicane: a pista da caixa.",
+    ],
+    start: [1.0, 2.5, 0],
+    layout: () => {
+      // (the far side is as long as the front straight: two runs, the chicane between)
+      const run = (2 - 0.3 - 4 * 0.45 * Math.sin(deg(50))) / 2;
+      return [
+        line(2.0), // the front straight (start / finish)
+        arc(0.55, Q),
+        line(0.9),
+        arc(0.55, Q),
+        line(run),
+        arc(0.45, -deg(50)), // the chicane: in…
+        arc(0.45, deg(50)),
+        line(0.3),
+        arc(0.45, deg(50)), // …and out
+        arc(0.45, -deg(50)),
+        line(run),
+        arc(0.55, Q),
+        line(0.9),
+        arc(0.55, Q),
+      ];
+    },
+  },
+  // An oval: two long straights, two wide bends — nearly flat out all the way round.
+  speedway: {
+    name: ["Speedway", "Oval"],
+    blurb: ["Two straights, two sweeping bends: keep it pinned.", "Duas retas, duas curvas largas: pé embaixo."],
+    start: [1.3, 2.5, 0],
+    layout: () => [line(1.4), arc(0.8, -Math.PI), line(1.4), arc(0.8, -Math.PI)],
+  },
+  // A figure of eight: two loops joined by straights that cross in the middle
+  // of the table — the cars cross each other's path twice a lap.
+  figure8: {
+    name: ["Figure 8", "Oito"],
+    blurb: ["The lanes cross in the middle. Don't blink.", "As pistas se cruzam no meio. Não pisque."],
+    // half-way along the first crossing straight, out of the middle
+    start: [2 + (F8.t / 2) * Math.cos(F8.a), 1.5 - (F8.t / 2) * Math.sin(F8.a), -F8.a],
+    layout: () => {
+      const { r, a, t } = F8;
+      return [line(t / 2), arc(r, Math.PI + 2 * a), line(t), line(t), arc(r, -(Math.PI + 2 * a)), line(1.5 * t)];
+    },
+  },
+  // Four leaves out of one crossing: every lap goes through the middle four times.
+  clover: {
+    name: ["Cloverleaf", "Trevo"],
+    blurb: [
+      "Four loops through one crossing — traffic from every side.",
+      "Quatro laços por um só cruzamento — trânsito de todo lado.",
+    ],
+    start: [2.25, 1.5, 0],
+    layout: () => {
+      const r = 0.5;
+      const leaf = (first: number, last: number) => [line(first), arc(r, (3 * Math.PI) / 2), line(last)];
+      return [...leaf(r / 2, r), ...leaf(r, r), ...leaf(r, r), ...leaf(r, 1.5 * r)];
+    },
+  },
+  // Four rows of straight joined by hairpins, down one side and back up the other.
+  switchback: {
+    name: ["Switchback", "Grampos"],
+    blurb: [
+      "Three hairpins in a row: brake, turn, floor it, again.",
+      "Três grampos em fila: freia, vira, acelera, de novo.",
+    ],
+    start: [1.3, 2.5, 0],
+    layout: () => {
+      const r = 1 / 3;
+      return [
+        line(1.85),
+        arc(r, -Math.PI),
+        line(1.95),
+        arc(r, Math.PI),
+        line(1.95),
+        arc(r, -Math.PI),
+        line(2.3),
+        arc(0.35, Q),
+        line(1.3),
+        arc(0.35, Q),
+        line(0.45),
+      ];
+    },
+  },
+  // A loop whose far side wriggles: a run of S-bends you take in one rhythm.
+  snake: {
+    name: ["Snake", "Serpente"],
+    blurb: ["The far side wriggles — find the rhythm.", "O lado de lá serpenteia — ache o ritmo."],
+    start: [0.95, 2.55, 0],
+    layout: () => {
+      // two S-bends, one to each side of the line (each: in, over, back)
+      const w = 0.35;
+      const s = (k: number) => [arc(w, k * deg(45)), arc(w, -k * deg(90)), arc(w, k * deg(45))];
+      const gap = 2.0 - 8 * w * Math.sin(deg(45));
+      return [
+        line(2.0),
+        arc(0.5, Q),
+        line(0.8),
+        arc(0.5, Q),
+        ...s(1),
+        ...s(-1),
+        line(gap),
+        arc(0.5, Q),
+        line(0.8),
+        arc(0.5, Q),
+      ];
+    },
+  },
+  // Three loops out of one crossing, each turning 240°: a pretzel.
+  pretzel: {
+    name: ["Pretzel", "Pretzel"],
+    blurb: [
+      "Three tight loops, one crossing, no two corners alike.",
+      "Três laços apertados, um cruzamento, nenhuma curva igual.",
+    ],
+    start: [2 + (0.35 * Math.sqrt(3)) / 2, 1.5, 0],
+    layout: () => {
+      const r = 0.35;
+      const t = r * Math.sqrt(3);
+      const leaf = (first: number, last: number) => [line(first), arc(r, -(4 * Math.PI) / 3), line(last)];
+      return [...leaf(t / 2, t), ...leaf(t, t), ...leaf(t, 1.5 * t)];
+    },
+  },
+  // The oval with a bus stop: a quick left-right-right-left on the back straight.
+  busstop: {
+    name: ["Bus stop", "Chicane"],
+    blurb: ["The oval, with a bus stop on the back straight.", "O oval, com uma chicane na reta de trás."],
+    start: [1.3, 2.5, 0],
+    layout: () => {
+      const r = 0.4;
+      const a = deg(45);
+      const run = (1.4 - 4 * r * Math.sin(a)) / 3;
+      return [
+        line(1.4),
+        arc(0.8, -Math.PI),
+        line(run),
+        arc(r, a),
+        arc(r, -a),
+        line(run),
+        arc(r, -a),
+        arc(r, a),
+        line(run),
+        arc(0.8, -Math.PI),
+      ];
+    },
+  },
+} as const satisfies Record<string, SlotTrackDef>;
+
+export type SlotTrackId = keyof typeof SLOT_TRACKS;
+export const SLOT_TRACK_IDS = Object.keys(SLOT_TRACKS) as SlotTrackId[];
+export const isSlotTrack = (id: unknown): id is SlotTrackId => typeof id === "string" && Object.hasOwn(SLOT_TRACKS, id);
+// the track a table shows (its props), the classic for none
+export const slotTrackOf = (props?: Record<string, unknown> | null): SlotTrackId =>
+  isSlotTrack(props?.track) ? props.track : "classic";
+
+// What a race runs on: the table's track and the race's difficulty.
+export interface SlotSetup {
+  track: SlotTrackId;
+  diff: SlotDiff;
+}
+export const SLOT_DEFAULT: SlotSetup = { track: "classic", diff: "medium" };
 
 interface Placed {
   k: "line" | "arc";
@@ -89,11 +280,16 @@ interface Placed {
   cy: number;
 }
 
-function place(): { segs: Placed[]; length: number } {
-  let [x, y, h] = START;
+interface Track {
+  segs: Placed[];
+  length: number;
+}
+
+function place(def: SlotTrackDef): Track {
+  let [x, y, h] = def.start;
   let s = 0;
   const segs: Placed[] = [];
-  for (const g of layout()) {
+  for (const g of def.layout()) {
     if (g.k === "line") {
       segs.push({ k: "line", s0: s, len: g.len, x, y, h, r: 0, turn: 0, cx: 0, cy: 0 });
       x += Math.cos(h) * g.len;
@@ -114,15 +310,25 @@ function place(): { segs: Placed[]; length: number } {
   return { segs, length: s };
 }
 
-let placed: ReturnType<typeof place> | null = null;
-const track = () => {
-  placed ??= place();
-  return placed;
+const placed = new Map<SlotTrackId, Track>();
+const track = (id: SlotTrackId): Track => {
+  let t = placed.get(id);
+  if (!t) {
+    t = place(SLOT_TRACKS[id]);
+    placed.set(id, t);
+  }
+  return t;
 };
-export const SLOT_LAP: number = /* @__PURE__ */ track().length; // one lap, in tiles of centre line
 
-function segAt(s: number): Placed {
-  const segs = track().segs;
+// One lap of a track, in tiles of centre line.
+export function slotLap(id: SlotTrackId = "classic"): number {
+  return track(id).length;
+}
+// (the classic's lap, for what predates the other tracks)
+export const SLOT_LAP: number = /* @__PURE__ */ slotLap("classic");
+
+function segAt(s: number, id: SlotTrackId): Placed {
+  const segs = track(id).segs;
   let lo = 0;
   let hi = segs.length - 1;
   while (lo < hi) {
@@ -133,31 +339,34 @@ function segAt(s: number): Placed {
   return segs[lo];
 }
 
-const wrap = (s: number) => ((s % SLOT_LAP) + SLOT_LAP) % SLOT_LAP;
+const wrap = (s: number, id: SlotTrackId) => {
+  const lap = track(id).length;
+  return ((s % lap) + lap) % lap;
+};
 
 // How hard the track turns at `s` (1 / radius; 0 on straights).
-export function slotCurve(s: number): number {
-  const g = segAt(wrap(s));
+export function slotCurve(s: number, id: SlotTrackId = "classic"): number {
+  const g = segAt(wrap(s, id), id);
   return g.k === "arc" ? 1 / g.r : 0;
 }
 
 // …and which way: + turns from +x towards +y (as the layout's turns), − the other way.
-export function slotBend(s: number): number {
-  const g = segAt(wrap(s));
+export function slotBend(s: number, id: SlotTrackId = "classic"): number {
+  const g = segAt(wrap(s, id), id);
   return g.k === "arc" ? Math.sign(g.turn) / g.r : 0;
 }
 
 // Sideways offset of a lane from the centre line (+ is to the left of travel:
-// the infield on this anticlockwise loop; lane 0 is the outside one).
+// the infield on an anticlockwise loop; lane 0 is the outside one).
 export function laneOffset(lane: number): number {
   return (lane - (SLOT_LANES - 1) / 2) * SLOT_LANE_GAP;
 }
 
 // A point on the track at progress `s`, `off` tiles to the left of the centre
 // line (rot-0 table tiles), and the heading there.
-export function slotPoint(s: number, off = 0): { x: number; y: number; h: number } {
-  const t = wrap(s);
-  const g = segAt(t);
+export function slotPoint(s: number, off = 0, id: SlotTrackId = "classic"): { x: number; y: number; h: number } {
+  const t = wrap(s, id);
+  const g = segAt(t, id);
   const u = Math.min(g.len, Math.max(0, t - g.s0));
   let x: number;
   let y: number;
@@ -178,11 +387,12 @@ export function slotPoint(s: number, off = 0): { x: number; y: number; h: number
 
 // The line of a lane (or an edge) as points, for drawing: `step` tiles apart
 // on the centre line, closed (the last point is the first).
-export function slotPath(off: number, step = 0.06): [number, number][] {
+export function slotPath(off: number, step = 0.06, id: SlotTrackId = "classic"): [number, number][] {
   const out: [number, number][] = [];
-  const n = Math.ceil(SLOT_LAP / step);
+  const lap = track(id).length;
+  const n = Math.ceil(lap / step);
   for (let i = 0; i <= n; i++) {
-    const p = slotPoint((i / n) * SLOT_LAP, off);
+    const p = slotPoint((i / n) * lap, off, id);
     out.push([p.x, p.y]);
   }
   return out;
@@ -191,21 +401,30 @@ export function slotPath(off: number, step = 0.06): [number, number][] {
 // Where to cut the track for drawing it: every segment's start, and arcs every
 // `step` tiles (straights need no more), up to the lap. Each stop says whether
 // it's on a curve.
-export function slotStops(step = 0.05): { s: number; curve: boolean }[] {
+export function slotStops(step = 0.05, id: SlotTrackId = "classic"): { s: number; curve: boolean }[] {
   const out: { s: number; curve: boolean }[] = [];
-  for (const g of track().segs) {
+  const t = track(id);
+  for (const g of t.segs) {
     const n = g.k === "arc" ? Math.max(2, Math.ceil(g.len / step)) : 1;
     for (let i = 0; i < n; i++) out.push({ s: g.s0 + (g.len * i) / n, curve: g.k === "arc" });
   }
-  out.push({ s: SLOT_LAP, curve: false });
+  out.push({ s: t.length, curve: false });
   return out;
+}
+
+// How far a point on the table is from the track's centre line (for standing
+// things in the infield where the track isn't).
+export function slotDistance(x: number, y: number, id: SlotTrackId = "classic"): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (const [px, py] of slotPath(0, 0.04, id)) best = Math.min(best, Math.hypot(px - x, py - y));
+  return best;
 }
 
 // The five start lamps sit on top of the gantry's bar, across the track
 // (rot-0 table tiles, z in px).
-export function slotLamps(): { x: number; y: number; z: number }[] {
+export function slotLamps(id: SlotTrackId = "classic"): { x: number; y: number; z: number }[] {
   return [-2, -1, 0, 1, 2].map((i) => {
-    const p = slotPoint(0.02, i * 0.1);
+    const p = slotPoint(0.02, i * 0.1, id);
     return { x: p.x, y: p.y, z: SLOT_TOP + SLOT_GANTRY + 4 };
   });
 }
@@ -224,13 +443,14 @@ export function newCar(): CarState {
 }
 
 // How close to flying off it is right now (0 calm … 1 gone).
-export function slotSlip(c: CarState): number {
-  return c.off ? 0 : (c.v * c.v * slotCurve(c.s)) / SLOT_GRIP;
+export function slotSlip(c: CarState, setup: SlotSetup = SLOT_DEFAULT): number {
+  return c.off ? 0 : (c.v * c.v * slotCurve(c.s, setup.track)) / SLOT_PHYSICS[setup.diff].grip;
 }
 
 // One step of the car with the trigger at `u` (0..1). Returns true the moment
 // it flies off. While off it slides away, then sits back in its slot.
-export function stepCar(c: CarState, u: number, dt: number): boolean {
+export function stepCar(c: CarState, u: number, dt: number, setup: SlotSetup = SLOT_DEFAULT): boolean {
+  const ph = SLOT_PHYSICS[setup.diff];
   let flew = false;
   let left = Math.min(dt, 0.25);
   while (left > 1e-9) {
@@ -249,10 +469,10 @@ export function stepCar(c: CarState, u: number, dt: number): boolean {
     const k = want * SLOT_VMAX > c.v ? SLOT_ACCEL : SLOT_BRAKE;
     c.v = Math.max(0, Math.min(SLOT_VMAX, c.v + k * (want - c.v / SLOT_VMAX) * h));
     c.s += c.v * h;
-    const pull = (c.v * c.v * slotCurve(c.s)) / SLOT_GRIP;
-    if (pull > 1) c.v = Math.max(0, c.v - SLOT_SCRUB * (pull - 1) * h);
+    const pull = (c.v * c.v * slotCurve(c.s, setup.track)) / ph.grip;
+    if (pull > 1) c.v = Math.max(0, c.v - ph.scrub * (pull - 1) * h);
     c.slide = pull > 1 ? (c.slide ?? 0) + h : Math.max(0, (c.slide ?? 0) - h * 2);
-    if (pull > SLOT_SNAP || c.slide > SLOT_SLIDE_TIME) {
+    if (ph.offs && (pull > ph.snap || c.slide > ph.slideTime)) {
       c.slide = 0;
       c.off = 1e-6;
       c.ov = c.v;
@@ -265,12 +485,16 @@ export function stepCar(c: CarState, u: number, dt: number): boolean {
 
 // Where a car that flew off is (a slide out of its lane, spinning), as an
 // offset from the point where it left, in table tiles, and its spin (radians).
-export function slotCrash(c: CarState, lane: number): { x: number; y: number; h: number; spin: number; out: number } {
-  const p = slotPoint(c.s, laneOffset(lane));
+export function slotCrash(
+  c: CarState,
+  lane: number,
+  id: SlotTrackId = "classic",
+): { x: number; y: number; h: number; spin: number; out: number } {
+  const p = slotPoint(c.s, laneOffset(lane), id);
   const t = Math.min(c.off, 0.7);
   const dist = Math.max(0, c.ov * t - 0.5 * (c.ov / 0.7) * t * t); // slides to a stop in 0.7 s
   // the tail goes out: away from the corner's centre, mostly forwards
-  const g = segAt(wrap(c.s));
+  const g = segAt(wrap(c.s, id), id);
   const away = g.k === "arc" ? -Math.sign(g.turn) : 1;
   const a = p.h + away * -0.55;
   return {
@@ -299,14 +523,17 @@ export function slotTurn(x: number, y: number, rot: number, w = 4, h = 3): [numb
 
 // ── checking what a racer reports (world-server) ────────────────────────────
 // `prev` what we had, `next` what they say, `dt` seconds between the two.
-export function plausibleCar(prev: CarState, next: CarState, dt: number): boolean {
+export function plausibleCar(prev: CarState, next: CarState, dt: number, setup: SlotSetup = SLOT_DEFAULT): boolean {
+  const ph = SLOT_PHYSICS[setup.diff];
   const nums = [next.s, next.v, next.off, next.ov];
   if (!nums.every(Number.isFinite)) return false;
   if (next.v < 0 || next.v > SLOT_VMAX * 1.01 || next.ov < 0 || next.ov > SLOT_VMAX * 1.01) return false;
   if (next.off < 0 || next.off > SLOT_OFF_TIME + 0.1) return false;
+  if (!ph.offs && next.off > 0) return false; // it can't leave the slot on this setting
   const ds = next.s - prev.s;
   if (ds < -0.001 || ds > SLOT_VMAX * Math.max(dt, 0.05) * 1.35 + 0.15) return false;
   // on the track in a corner faster than it can be
-  if (!next.off && next.v * next.v * slotCurve(next.s) > SLOT_GRIP * (SLOT_SNAP + 0.05)) return false;
+  if (ph.offs && !next.off && next.v * next.v * slotCurve(next.s, setup.track) > ph.grip * (ph.snap + 0.05))
+    return false;
   return true;
 }
