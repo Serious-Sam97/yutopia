@@ -35,7 +35,8 @@ const screen = (color: number = C.phosphor) => ({
   faces: { s: color, n: color, e: shade(color, 0.7), w: color },
 });
 
-export const WALL_H = 84;
+export const WALL_H = 128; // iso px (as WALL_Z in art/items/walls.ts)
+const DOOR_H = 88; // a doorway's opening (DOOR_Z there)
 export const STUB_H = 10;
 
 export function piece(kind: string, props: Props, id = ""): Piece {
@@ -351,30 +352,30 @@ export function piece(kind: string, props: Props, id = ""): Piece {
       const state = String(props.state ?? "open");
       const shut = (state === "closed" || state === "locked") && !props.passing;
       const boxes: Box[] = [
-        { x: 0, y: 0, w: 0.07, d: 1, z: 0, h: 72, color: C.walnutDark, outline: false },
-        { x: 0.93, y: 0, w: 0.07, d: 1, z: 0, h: 72, color: C.walnutDark, outline: false },
+        { x: 0, y: 0, w: 0.07, d: 1, z: 0, h: DOOR_H, color: C.walnutDark, outline: false },
+        { x: 0.93, y: 0, w: 0.07, d: 1, z: 0, h: DOOR_H, color: C.walnutDark, outline: false },
         {
           x: 0,
           y: 0,
           w: 1,
           d: 1,
-          z: 72,
-          h: 12,
+          z: DOOR_H,
+          h: WALL_H - DOOR_H,
           color: C.cream,
           faces: { s: C.cream, e: shade(C.cream, 0.88) },
           outline: false,
         },
-        { x: -0.02, y: -0.02, w: 1.04, d: 1.04, z: 84, h: 3, color: C.walnutDark, top: C.walnut },
+        { x: -0.02, y: -0.02, w: 1.04, d: 1.04, z: WALL_H, h: 3, color: C.walnutDark, top: C.walnut },
       ];
       if (shut) {
-        boxes.push({ x: 0.07, y: 0.86, w: 0.86, d: 0.1, z: 0, h: 72, color: C.walnut, faces: { s: 0x6e4a31 } });
+        boxes.push({ x: 0.07, y: 0.86, w: 0.86, d: 0.1, z: 0, h: DOOR_H, color: C.walnut, faces: { s: 0x6e4a31 } });
         boxes.push({
           x: 0.16,
           y: 0.96,
           w: 0.68,
           d: 0.01,
-          z: 42,
-          h: 22,
+          z: 46,
+          h: 34,
           color: 0x5e3d28,
           faces: { s: 0x5e3d28 },
           outline: false,
@@ -385,7 +386,7 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           w: 0.68,
           d: 0.01,
           z: 10,
-          h: 26,
+          h: 30,
           color: 0x5e3d28,
           faces: { s: 0x5e3d28 },
           outline: false,

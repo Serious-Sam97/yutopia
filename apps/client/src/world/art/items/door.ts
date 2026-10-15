@@ -1,6 +1,7 @@
 import { paintOf } from "./home";
 import { fe, fr, type Mat, rnd, type Sketch, sh, te, tr } from "./kit";
 import { K, M } from "./pal";
+import { DOOR_Z, WALL_Z } from "./walls";
 
 // A door on a tile edge (map v2): rot 0 = the north edge of its tile, in a
 // thin wall along x (the scene turns doors on west edges to rot 3). The frame,
@@ -11,6 +12,12 @@ import { K, M } from "./pal";
 // Story: a brass kick plate and a little porthole.
 const LEAF: Mat = { c: K.walnut, top: "#74492f", left: "#6e4a31", right: "#5a3a26" };
 const T = 0.1;
+const D = DOOR_Z; // the opening's height (the leaf's)
+const PANELS = [
+  [12, 42],
+  [48, D - 8],
+] as const;
+const PORT = 66; // the porthole's middle, about eye level
 
 export function door(s: Sketch, props: Record<string, unknown>) {
   const state = String(props.state ?? "open");
@@ -21,28 +28,26 @@ export function door(s: Sketch, props: Record<string, unknown>) {
   if (part === "edge") {
     for (const x of [0, 0.92]) {
       s.box({ x, y: -T, w: 0.08, d: 2 * T, z: 0, h: 5, mat: M.walnutDark, line: 0.8 });
-      s.box({ x, y: -T, w: 0.08, d: 2 * T, z: 5, h: 67, mat: M.walnut, line: 0.8 });
+      s.box({ x, y: -T, w: 0.08, d: 2 * T, z: 5, h: D - 5, mat: M.walnut, line: 0.8 });
     }
-    s.box({ x: 0, y: -T, w: 1, d: 2 * T, z: 72, h: 9, mat: M.cream, line: 0.9 }, (d) => {
-      d.poly("s", fr("s", T, 0.08, 0.92, 72, 74), M.walnutDark.c);
-      if (locked) d.poly("s", fe("s", T, 0.5, 77, 0.06, 2.2, 12), K.red, { glow: true });
+    // the lintel: up to the wall's cap
+    s.box({ x: 0, y: -T, w: 1, d: 2 * T, z: D, h: WALL_Z - 3 - D, mat: M.cream, line: 0.9 }, (d) => {
+      d.poly("s", fr("s", T, 0.08, 0.92, D, D + 2), M.walnutDark.c);
+      if (locked) d.poly("s", fe("s", T, 0.5, D + 5, 0.06, 2.2, 12), K.red, { glow: true });
     });
-    s.box({ x: -0.01, y: -T, w: 1.02, d: 2 * T, z: 81, h: 3, mat: M.walnutDark, line: 1 });
+    s.box({ x: -0.01, y: -T, w: 1.02, d: 2 * T, z: WALL_Z - 3, h: 3, mat: M.walnutDark, line: 1 });
     if (shut) {
-      s.box({ x: 0.08, y: -0.04, w: 0.84, d: 0.08, z: 0, h: 72, mat: LEAF }, (d) => {
+      s.box({ x: 0.08, y: -0.04, w: 0.84, d: 0.08, z: 0, h: D, mat: LEAF }, (d) => {
         const Y = 0.04;
         if (glass) {
-          d.poly("s", fr("s", Y, 0.16, 0.84, 14, 64), "#3a4a4a", { op: 0.55, stroke: sh(K.walnut, 1.2), sw: 0.6 });
-          d.poly("s", fr("s", Y, 0.2, 0.4, 40, 62), "#ffffff", { op: 0.1 });
+          d.poly("s", fr("s", Y, 0.16, 0.84, 14, D - 8), "#3a4a4a", { op: 0.55, stroke: sh(K.walnut, 1.2), sw: 0.6 });
+          d.poly("s", fr("s", Y, 0.2, 0.4, 46, D - 10), "#ffffff", { op: 0.1 });
         } else {
-          for (const [z0, z1] of [
-            [12, 34],
-            [40, 66],
-          ])
+          for (const [z0, z1] of PANELS)
             d.poly("s", fr("s", Y, 0.17, 0.83, z0, z1), sh(K.walnut, 0.88), { stroke: sh(K.walnut, 1.25), sw: 0.6 });
-          d.poly("s", fe("s", Y, 0.5, 56, 0.12, 5.2, 20), K.brass);
-          d.poly("s", fe("s", Y, 0.5, 56, 0.095, 4.2, 20), "#2a3a3a");
-          d.poly("s", fe("s", Y, 0.47, 57.4, 0.03, 1.4, 10), "#ffffff", { op: 0.3 });
+          d.poly("s", fe("s", Y, 0.5, PORT, 0.12, 5.2, 20), K.brass);
+          d.poly("s", fe("s", Y, 0.5, PORT, 0.095, 4.2, 20), "#2a3a3a");
+          d.poly("s", fe("s", Y, 0.47, PORT + 1.4, 0.03, 1.4, 10), "#ffffff", { op: 0.3 });
         }
         d.poly("s", fr("s", Y, 0.1, 0.9, 1, 7), K.brass, { stroke: "#8a6a2c", sw: 0.4 });
         d.poly("s", fe("s", Y, 0.78, 36, 0.035, 1.6, 10), K.brass, { stroke: "#8a6a2c", sw: 0.4 });
@@ -53,20 +58,17 @@ export function door(s: Sketch, props: Record<string, unknown>) {
   }
   if (shut) return;
   // swung open into the room, against the frame
-  s.box({ x: 0.08, y: T, w: 0.07, d: 0.8, z: 0, h: 72, mat: LEAF }, (d) => {
+  s.box({ x: 0.08, y: T, w: 0.07, d: 0.8, z: 0, h: D, mat: LEAF }, (d) => {
     const X = 0.15;
-    if (glass) d.poly("e", fr("e", X, T + 0.08, T + 0.72, 14, 64), "#3a4a4a", { op: 0.55 });
+    if (glass) d.poly("e", fr("e", X, T + 0.08, T + 0.72, 14, D - 8), "#3a4a4a", { op: 0.55 });
     else {
-      for (const [z0, z1] of [
-        [12, 34],
-        [40, 66],
-      ])
+      for (const [z0, z1] of PANELS)
         d.poly("e", fr("e", X, T + 0.08, T + 0.72, z0, z1), sh(K.walnut, 0.78), {
           stroke: sh(K.walnut, 1.15),
           sw: 0.6,
         });
-      d.poly("e", fe("e", X, T + 0.4, 56, 0.12, 5.2, 20), K.brass);
-      d.poly("e", fe("e", X, T + 0.4, 56, 0.095, 4.2, 20), "#2a3a3a");
+      d.poly("e", fe("e", X, T + 0.4, PORT, 0.12, 5.2, 20), K.brass);
+      d.poly("e", fe("e", X, T + 0.4, PORT, 0.095, 4.2, 20), "#2a3a3a");
     }
     d.poly("e", fr("e", X, T + 0.02, T + 0.78, 1, 7), K.brass);
   });

@@ -9,13 +9,16 @@ import { K, M } from "./pal";
 // window; "h" = a half wall. Each wall is cut into four slices (depth sorting)
 // and into a low part (skirting, always shown) and a high part (fades when the
 // wall stands between you and the camera).
-export const WALL_Z = 84;
+// Heights in iso px (39.2 a tile). A person is ~74 tall: walls about 1.7× that
+// (3.3 tiles, a loft), doorways 1.2×. (Same as WALL_H in art/furniture.ts.)
+export const WALL_Z = 128;
+export const DOOR_Z = 88; // a doorway's opening
 export const LOW_Z = 14; // what stays when a wall is "down"
 export const HALF_Z = 34;
 export const WALL_HALF_T = 0.1; // half thickness, tiles (a post is 2× this square)
 const T = WALL_HALF_T;
-const WIN0 = 32; // window opening
-const WIN1 = 72;
+const WIN0 = 36; // window opening (its top level with the doorways')
+const WIN1 = DOOR_Z;
 
 export type WallPart = "low" | "high";
 
@@ -235,7 +238,7 @@ function windowFrame(r: Run) {
       f.rect(0.1, 0.36, WIN1 - 8, WIN1 - 3, "#ffffff", { op: 0.35 });
       f.rect(0.1, 0.2, WIN0 + 6, WIN1 - 8, "#ffffff", { op: 0.18 });
       f.line(0.5, WIN0, 0.5, WIN1 - 3, K.walnut, 1.6);
-      f.line(0.06, 52, 0.94, 52, K.walnut, 1.4);
+      f.line(0.06, (WIN0 + WIN1) / 2, 0.94, (WIN0 + WIN1) / 2, K.walnut, 1.4);
     },
     0.5,
     0.02,
