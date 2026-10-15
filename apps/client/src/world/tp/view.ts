@@ -109,7 +109,9 @@ const LIMITS: Record<CamMode, { pitch: [number, number]; dist: [number, number] 
 export class ThirdPersonView {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
-  readonly camera = new PerspectiveCamera(50, 1, 0.05, 200);
+  // (near 0.1, not less: the depth buffer's precision is spent near the camera,
+  // and faces a hair apart far off would flicker — see kit3d Layers)
+  readonly camera = new PerspectiveCamera(50, 1, 0.1, 200);
   world: World3;
   events: ViewEvents = {};
   private people = new Map<string, Person3>();

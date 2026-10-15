@@ -115,6 +115,7 @@ export class World3 {
   private tallIds = new Set<string>(); // things known to stand tall (drawn on their own)
   private floor: { meshes: Mesh[]; sig: string } | null = null;
   private objects: WorldObjectDef[] = [];
+  private cardN = 0;
 
   // `light`: how lit materials take the room's light (the iso light map)
   constructor(
@@ -134,7 +135,7 @@ export class World3 {
 
   // ── walls (once per layout) ────────────────────────────────────────────────
   private buildWalls() {
-    const { post, wall } = this.items;
+    const { post, wall, WALL_HALF_T } = this.items;
     const map = this.map;
     const low = new Map<string, Out>();
     const lowOf = (x: number, y: number) => getOr(low, areaKey(x, y), () => new Out());
@@ -151,8 +152,31 @@ export class World3 {
       return r;
     };
     const sketch = (o: Opts3) => new MeshSketch(o);
+    // posts where walls turn, meet or end (a straight run of one height has none)
+    const half = (c: string) => c === HALF_WALL;
+    const posts = new Map<string, { height: number; ch: string; e: string; w: string; s: string }>();
+    for (let Y = 0; Y <= map.height; Y++)
+      for (let X = 0; X <= map.width; X++) {
+        const w = hWall(map, X - 1, Y);
+        const e = hWall(map, X, Y);
+        const n = vWall(map, X, Y - 1);
+        const s = vWall(map, X, Y);
+        const touching = [w, e, n, s].filter(isWallEdge);
+        if (!touching.length) continue;
+        const straight =
+          (isWallEdge(w) && isWallEdge(e) && !isWallEdge(n) && !isWallEdge(s) && half(w) === half(e)) ||
+          (isWallEdge(n) && isWallEdge(s) && !isWallEdge(w) && !isWallEdge(e) && half(n) === half(s));
+        if (straight) continue;
+        const height = touching.every(half) ? 34 : WALL_H;
+        posts.set(`${X},${Y}`, { height, ch: touching.find((c) => !half(c)) ?? touching[0], e, w, s });
+      }
     const addWall = (dir: "h" | "v", x: number, y: number, ch: string) => {
-      const clip = dir === "h" ? { x0: 0, x1: 1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: 0, y1: 1 };
+      // a wall stops at the post's faces: running on to the joint, its faces
+      // would lie in the post's own (in other colours) and flicker
+      const [ax, ay, bx, by] = dir === "h" ? [x, y, x + 1, y] : [x, y, x, y + 1];
+      const a0 = posts.has(`${ax},${ay}`) ? WALL_HALF_T : 0;
+      const a1 = posts.has(`${bx},${by}`) ? 1 - WALL_HALF_T : 1;
+      const clip = dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
       const top = ch === HALF_WALL ? 34 : WALL_H;
       wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], mirror: true, out: lowOf(x, y) }), dir, ch, "low");
       const run = runOf(dir, x, y, zt(top));
@@ -168,31 +192,17 @@ export class World3 {
         const ch = vWall(map, x, y);
         if (isWallEdge(ch)) addWall("v", x, y, ch);
       }
-    // posts where walls turn, meet or end
-    for (let Y = 0; Y <= map.height; Y++)
-      for (let X = 0; X <= map.width; X++) {
-        const w = hWall(map, X - 1, Y);
-        const e = hWall(map, X, Y);
-        const n = vWall(map, X, Y - 1);
-        const s = vWall(map, X, Y);
-        const touching = [w, e, n, s].filter(isWallEdge);
-        if (!touching.length) continue;
-        const half = (c: string) => c === HALF_WALL;
-        const straight =
-          (isWallEdge(w) && isWallEdge(e) && !isWallEdge(n) && !isWallEdge(s) && half(w) === half(e)) ||
-          (isWallEdge(n) && isWallEdge(s) && !isWallEdge(w) && !isWallEdge(e) && half(n) === half(s));
-        if (straight) continue;
-        const height = touching.every(half) ? 34 : WALL_H;
-        const pch = touching.find((c) => !half(c)) ?? touching[0];
-        post(sketch({ w: 1, h: 1, at: [X, Y], out: lowOf(X, Y) }), height, "low", pch);
-        // the upper part fades with the run it belongs to most (h first)
-        const hx = isWallEdge(e) ? X : X - 1;
-        const run =
-          isWallEdge(e) || isWallEdge(w)
-            ? runOf("h", Math.max(0, hx), Y, zt(height))
-            : runOf("v", X, isWallEdge(s) ? Y : Y - 1, zt(height));
-        post(sketch({ w: 1, h: 1, at: [X, Y], out: run.out }), height, "high", pch);
-      }
+    for (const [key, { height, ch, e, w, s }] of posts) {
+      const [X, Y] = key.split(",").map(Number);
+      post(sketch({ w: 1, h: 1, at: [X, Y], out: lowOf(X, Y) }), height, "low", ch);
+      // the upper part fades with the run it belongs to most (h first)
+      const hx = isWallEdge(e) ? X : X - 1;
+      const run =
+        isWallEdge(e) || isWallEdge(w)
+          ? runOf("h", Math.max(0, hx), Y, zt(height))
+          : runOf("v", X, isWallEdge(s) ? Y : Y - 1, zt(height));
+      post(sketch({ w: 1, h: 1, at: [X, Y], out: run.out }), height, "high", ch);
+    }
     for (const out of low.values()) this.walls.push(this.mount(out));
     this.buildCeiling();
     for (const r of runs.values()) {
@@ -473,9 +483,20 @@ export class World3 {
     // cards: free-hand drawing, turned to the camera
     for (const c of out.cards) {
       const geo = new PlaneGeometry(c.u1 - c.u0, c.v1 - c.v0);
-      geo.translate((c.u0 + c.u1) / 2, (c.v0 + c.v1) / 2, 0);
+      // cards all turn the same way: neighbours in a row would share one plane
+      // when you look along it, so each stands a hair nearer or further
+      geo.translate((c.u0 + c.u1) / 2, (c.v0 + c.v1) / 2, (this.cardN++ % 8) * 0.0015);
+      // (a glow card stands where its lit card does: drawn a hair nearer, or the two flicker)
       const mat = c.glow
-        ? new MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false, side: DoubleSide })
+        ? new MeshBasicMaterial({
+            transparent: true,
+            depthWrite: false,
+            toneMapped: false,
+            side: DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -4,
+          })
         : new MeshLambertMaterial({ transparent: true, alphaTest: 0.04, side: DoubleSide });
       if (!c.glow) this.light(mat);
       built.dispose.push(geo, mat);

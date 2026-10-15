@@ -19,13 +19,13 @@ import { sofa } from "./sofa";
 import { coffeeTable, meetingTable, reception } from "./tables";
 import { arcade, coffeeMachine, crtTerminal, cupboard, serverRack } from "./tech";
 import { acousticPanel, noticeBoard, poster, screenWall, whiteboard } from "./wall";
-import { column, post, type WallPart, wall } from "./walls";
+import { column, post, WALL_HALF_T, type WallPart, wall } from "./walls";
 
 type Props = Record<string, unknown>;
 
 // The third-person view (world/tp) draws walls, doors and the rooms' clutter
 // from this chunk too (one copy of the drawings for both views).
-export { dressing, door, post, wall };
+export { dressing, door, post, WALL_HALF_T, wall };
 
 // Marks this chunk for `pnpm budget` (it loads lazily, outside the page's files).
 export const ITEM_ART_CHUNK = "yutopia-item-art";

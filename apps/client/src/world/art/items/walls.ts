@@ -12,7 +12,8 @@ import { K, M } from "./pal";
 export const WALL_Z = 84;
 export const LOW_Z = 14; // what stays when a wall is "down"
 export const HALF_Z = 34;
-const T = 0.1; // half thickness, tiles
+export const WALL_HALF_T = 0.1; // half thickness, tiles (a post is 2× this square)
+const T = WALL_HALF_T;
 const WIN0 = 32; // window opening
 const WIN1 = 72;
 

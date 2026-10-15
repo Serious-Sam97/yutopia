@@ -18,6 +18,16 @@ export const zt = (z: number) => z / ZPX;
 
 const EPS = 0.02;
 
+// Overlapping faces in one plane fight over the depth buffer (they flicker as
+// the camera moves). The iso view paints in order, the later on top; here the
+// later one goes a hair in front instead — box faces lying in an earlier box's
+// face, details on faces, an outline over its own fill (see Layers).
+// (camera near = 0.1: a 24-bit depth buffer tells STEP apart out to ~40 tiles)
+const STEP = 0.0012; // tiles between one layer and the next
+const NEAR = 0.003; // closer than this to what's drawn: the same plane
+const LIFT = 0.003; // details off their face, at least
+const PUSH_MAX = 0.006; // a box face moves out at most this (its sides grow with it)
+
 // ── buffers ──────────────────────────────────────────────────────────────────
 // Non-indexed triangles: position, normal, rgba colour (linear).
 export class Geo {
@@ -76,7 +86,51 @@ export interface Decal {
   glow: boolean;
 }
 
+// What's drawn flat on faces so far (one per Out, so the slices of a wall and
+// its post see each other): `place` puts the next thing in front of all it
+// overlaps in its plane. Heights run along the face's normal; (a, b) are the
+// face's own axes (t: x, y — n/s: x, z — e/w: y, z), in world tiles.
+interface Mark {
+  base: number;
+  top: number;
+  a0: number;
+  a1: number;
+  b0: number;
+  b1: number;
+}
+export class Layers {
+  private cells = new Map<string, Mark[]>();
+  // returns the height to draw at: `min` or more
+  place(f: Face | "t", h: number, a0: number, a1: number, b0: number, b1: number, min = h): number {
+    const bin = Math.round(h * 20);
+    const c0 = Math.floor(a0);
+    const c1 = Math.floor(a1);
+    let top = Number.NEGATIVE_INFINITY;
+    for (let k = bin - 1; k <= bin + 1; k++)
+      for (let c = c0; c <= c1; c++)
+        for (const m of this.cells.get(`${f}${k}|${c}`) ?? [])
+          if (
+            m.top > top &&
+            h >= m.base - NEAR &&
+            h <= m.top + NEAR &&
+            Math.min(m.a1, a1) - Math.max(m.a0, a0) > 1e-4 &&
+            Math.min(m.b1, b1) - Math.max(m.b0, b0) > 1e-4
+          )
+            top = m.top;
+    const at = Math.max(min, top + STEP);
+    const m = { base: h, top: at, a0, a1, b0, b1 };
+    for (let c = c0; c <= c1; c++) {
+      const key = `${f}${bin}|${c}`;
+      const list = this.cells.get(key);
+      if (list) list.push(m);
+      else this.cells.set(key, [m]);
+    }
+    return at;
+  }
+}
+
 export class Out {
+  layers = new Layers(); // what lies on faces, in order (see STEP)
   lit = new Geo();
   glow = new Geo();
   clear = new Geo(); // see-through (glass, op < 1)
@@ -149,7 +203,6 @@ export class MeshSketch extends Sketch {
   private gdefs = new Map<string, { id: string; svg: string; mid: string }>();
   private raw: { svg: string; glow: boolean }[] = [];
   private rawBB: { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number; pad: number } | null = null;
-  private layer = 0; // decals stack a hair apart
 
   constructor(o: Opts3) {
     super({ rot: o.rot, w: o.w, h: o.h, seed: o.seed, offset: o.offset });
@@ -243,7 +296,30 @@ export class MeshSketch extends Sketch {
       if (x1 <= x0 + 1e-4 || y1 <= y0 + 1e-4) return;
     }
     const z0 = b.z;
-    const z1 = b.z + b.h;
+    let z1 = b.z + b.h;
+    // faces lying in what's already drawn (this sketch's out): out a hair
+    if (!((b.puff ?? 0) > 0 && b.h >= 3)) {
+      const [ox, oy] = this.o3.at;
+      const [X0, X1, Y0, Y1] = [x0 + ox, x1 + ox, y0 + oy, y1 + oy];
+      const Z0 = this.wp(0, 0, z0)[1];
+      const Z1 = this.wp(0, 0, z1)[1];
+      const L = this.out.layers;
+      const out = (f: Face | "t", h: number, a0: number, a1: number, b0: number, b1: number) =>
+        Math.min(PUSH_MAX, L.place(f, h, a0, a1, b0, b1) - h);
+      const t = out("t", Z1, X0, X1, Y0, Y1);
+      if (b.h > 0) {
+        const n = out("n", -Y0, X0, X1, Z0, Z1);
+        const s = out("s", Y1, X0, X1, Z0, Z1);
+        const w = out("w", -X0, Y0, Y1, Z0, Z1);
+        const e = out("e", X1, Y0, Y1, Z0, Z1);
+        // (a slice's cut ends stay on the cut)
+        if (!(c && x0 <= c.x0 + 1e-4)) x0 -= w;
+        if (!(c && x1 >= c.x1 - 1e-4)) x1 += e;
+        if (!(c && y0 <= c.y0 + 1e-4)) y0 -= n;
+        if (!(c && y1 >= c.y1 - 1e-4)) y1 += s;
+      }
+      z1 += t * ZPX;
+    }
     const op = b.op ?? 1;
     const target = b.glow ? this.out.glow : op < 1 ? this.out.clear : this.out.lit;
     const faceMat = (world: Face): Mat => b.faces?.[this.lfaceOf(world)] ?? b.mat;
@@ -335,7 +411,6 @@ export class MeshSketch extends Sketch {
         if (!cutX0 && !cutY1) seg(D, Dt);
       }
     }
-    this.layer = 0;
     // free-hand drawing on its faces: a decal on the faces the iso view saw (top, +y, +x)
     this.onFace = [];
     details?.(this.drawer3(!!b.glow));
@@ -416,7 +491,6 @@ export class MeshSketch extends Sketch {
         this.out.lineCol.push(...ink, ...ink);
       }
     }
-    this.layer = 0;
     // free-hand drawing on it: a decal round the half the iso view saw, and its top
     this.onFace = [];
     details?.(this.drawer3(!!o.glow));
@@ -462,7 +536,6 @@ export class MeshSketch extends Sketch {
     const cx = (r.x0 + r.x1) / 2;
     const cy = (r.y0 + r.y1) / 2;
     if (c && (cx < c.x0 - EPS || cx >= c.x1 - EPS || cy < c.y0 - EPS || cy >= c.y1 - EPS)) return;
-    this.layer = 0;
     this.withRaw({ ...r, z0: bb.z, z1: bb.z + bb.h, pad: o.pad ?? 2 }, () => draw(this.drawer3(false)));
   }
 
@@ -548,13 +621,15 @@ export class MeshSketch extends Sketch {
       const faces: [Face | "t", V3[]][] = [[wf, pts]];
       if (this.o3.mirror && wf === "s") faces.push(["n", pts.map(([X, Y, z]) => [X, -Y, z] as V3)]);
       if (this.o3.mirror && wf === "e") faces.push(["w", pts.map(([X, Y, z]) => [-X, Y, z] as V3)]);
-      const lift = 0.004 + Math.min(this.layer++, 24) * 0.0006;
       for (const [f, p] of faces) {
         const n = NORMAL[f];
-        const world = p.map(([X, Y, z]) => {
-          const w = this.wp(X, Y, z);
-          return [w[0] + n[0] * lift, w[1] + n[1] * lift, w[2] + n[2] * lift] as V3;
-        });
+        const base = p.map(([X, Y, z]) => this.wp(X, Y, z));
+        // in front of what it overlaps (its outline in front of its fill)
+        const lifted = (h: number) => {
+          const d = h - dot(base[0], n);
+          return base.map((w) => [w[0] + n[0] * d, w[1] + n[1] * d, w[2] + n[2] * d] as V3);
+        };
+        const world = lifted(this.lay(f, fill ? base : this.outline(base, n, sw)));
         if (fill) {
           const flat = world.map((w) =>
             f === "t"
@@ -579,8 +654,10 @@ export class MeshSketch extends Sketch {
             else target.tri(A, C, B, n, fill);
           }
         }
-        if (stroke)
-          for (let i = 0; i < world.length; i++) this.strip(world[i], world[(i + 1) % world.length], n, sw, stroke);
+        if (stroke) {
+          const edge = fill ? lifted(this.lay(f, this.outline(base, n, sw))) : world;
+          for (let i = 0; i < edge.length; i++) this.strip(edge[i], edge[(i + 1) % edge.length], n, sw, stroke);
+        }
       }
     };
     return {
@@ -603,11 +680,11 @@ export class MeshSketch extends Sketch {
         const pairs: [Face | "t", V3, V3][] = [[wf, q[0], q[1]]];
         if (this.o3.mirror && wf === "s") pairs.push(["n", [q[0][0], -q[0][1], q[0][2]], [q[1][0], -q[1][1], q[1][2]]]);
         if (this.o3.mirror && wf === "e") pairs.push(["w", [-q[0][0], q[0][1], q[0][2]], [-q[1][0], q[1][1], q[1][2]]]);
-        const lift = 0.004 + Math.min(this.layer++, 24) * 0.0006;
         for (const [f2, A, B] of pairs) {
           const n = NORMAL[f2];
           const wa = this.wp(A[0], A[1], A[2]);
           const wb = this.wp(B[0], B[1], B[2]);
+          const lift = this.lay(f2, stripQuad(wa, wb, n, sw) ?? [wa, wb]) - dot(wa, n);
           this.strip(
             [wa[0] + n[0] * lift, wa[1] + n[1] * lift, wa[2] + n[2] * lift],
             [wb[0] + n[0] * lift, wb[1] + n[1] * lift, wb[2] + n[2] * lift],
@@ -623,20 +700,37 @@ export class MeshSketch extends Sketch {
     };
   }
 
+  // the corners of a closed outline's strips (what it covers)
+  private outline(pts: V3[], n: V3, sw: number): V3[] {
+    const all: V3[] = [];
+    for (let i = 0; i < pts.length; i++) all.push(...(stripQuad(pts[i], pts[(i + 1) % pts.length], n, sw) ?? []));
+    return all.length ? all : pts;
+  }
+
+  // A detail on face `f` (the world points it covers): the height along the
+  // face's normal to draw it at.
+  private lay(f: Face | "t", pts: V3[]): number {
+    const [ai, bi] = f === "t" ? [0, 2] : f === "n" || f === "s" ? [0, 1] : [2, 1];
+    let a0 = 1e9;
+    let a1 = -1e9;
+    let b0 = 1e9;
+    let b1 = -1e9;
+    for (const q of pts) {
+      a0 = Math.min(a0, q[ai]);
+      a1 = Math.max(a1, q[ai]);
+      b0 = Math.min(b0, q[bi]);
+      b1 = Math.max(b1, q[bi]);
+    }
+    const h = dot(pts[0], NORMAL[f]);
+    return this.out.layers.place(f, h, a0, a1, b0, b1, h + LIFT);
+  }
+
   // a line on a face: a thin quad, `sw` iso px wide
   private strip(a: V3, b: V3, n: V3, sw: number, col: number[]) {
-    const d = sub(b, a);
-    const len = Math.hypot(d[0], d[1], d[2]);
-    if (len < 1e-5) return;
-    const p = cross(d, n);
-    const pl = Math.hypot(p[0], p[1], p[2]) || 1;
-    const w = Math.max(0.006, sw / LPX) / 2;
-    const o: V3 = [(p[0] / pl) * w, (p[1] / pl) * w, (p[2] / pl) * w];
+    const q = stripQuad(a, b, n, sw);
+    if (!q) return;
+    const [A, B, C, D] = q;
     const target = col[3] < 1 ? this.out.clear : this.out.lit;
-    const A: V3 = [a[0] - o[0], a[1] - o[1], a[2] - o[2]];
-    const B: V3 = [b[0] - o[0], b[1] - o[1], b[2] - o[2]];
-    const C: V3 = [b[0] + o[0], b[1] + o[1], b[2] + o[2]];
-    const D: V3 = [a[0] + o[0], a[1] + o[1], a[2] + o[2]];
     const cr = cross(sub(B, A), sub(C, A));
     if (dot(cr, n) >= 0) target.quad(A, B, C, D, n, col);
     else target.quad(A, D, C, B, n, col);
@@ -729,6 +823,22 @@ export class MeshSketch extends Sketch {
       });
     }
   }
+}
+
+// a line on a face as a thin quad, `sw` iso px wide (null if it has no length)
+function stripQuad(a: V3, b: V3, n: V3, sw: number): [V3, V3, V3, V3] | null {
+  const d = sub(b, a);
+  if (Math.hypot(d[0], d[1], d[2]) < 1e-5) return null;
+  const p = cross(d, n);
+  const pl = Math.hypot(p[0], p[1], p[2]) || 1;
+  const w = Math.max(0.006, sw / LPX) / 2;
+  const o: V3 = [(p[0] / pl) * w, (p[1] / pl) * w, (p[2] / pl) * w];
+  return [
+    [a[0] - o[0], a[1] - o[1], a[2] - o[2]],
+    [b[0] - o[0], b[1] - o[1], b[2] - o[2]],
+    [b[0] + o[0], b[1] + o[1], b[2] + o[2]],
+    [a[0] + o[0], a[1] + o[1], a[2] + o[2]],
+  ];
 }
 
 function trimPartial(g: Geo) {
