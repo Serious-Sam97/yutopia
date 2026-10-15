@@ -1,22 +1,26 @@
 import {
+  backAt,
   type DressItem,
   type DressKind,
   doorEdge,
   dressItems,
   entry,
   HALF_WALL,
+  hangOf,
+  hangStrip,
   hasActions,
   hWall,
   isFloor,
   isWallEdge,
+  isWindow,
   type MapDef,
+  NO_WALL,
   placedFootprint,
   rotOf,
   tileAt,
   topCentre,
   vWall,
   type WorldObjectDef,
-  wallRot,
 } from "@yutopia/shared";
 import {
   BufferGeometry,
@@ -180,9 +184,26 @@ export class World3 {
       const a1 = posts.has(`${bx},${by}`) ? 1 - WALL_HALF_T : 1;
       const clip = dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
       const top = ch === HALF_WALL ? 34 : WALL_H;
-      wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], mirror: true, out: lowOf(x, y) }), dir, ch, "low");
       const run = runOf(dir, x, y, zt(top));
-      wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], mirror: true, out: run.out }), dir, ch, "high");
+      const back = backAt(map, { dir, x, y });
+      if (back === NO_WALL) {
+        // one material through and through: drawn once, its face mirrored onto the other side
+        wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], mirror: true, out: lowOf(x, y) }), dir, ch, "low");
+        wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], mirror: true, out: run.out }), dir, ch, "high");
+        return;
+      }
+      // two faces: the front half as it is, the back half drawn as the front of
+      // the sketch turned round from the tile behind (its +y / +x face lands on −y / −x)
+      const bch = isWindow(ch) ? back.toUpperCase() : back;
+      const behind: [number, number] = dir === "h" ? [x, y - 1] : [x - 1, y];
+      const bclip = dir === "h" ? { x0: a0, x1: a1, y0: 0, y1: 2 } : { x0: 0, x1: 2, y0: a0, y1: a1 };
+      for (const [part, out] of [
+        ["low", lowOf(x, y)],
+        ["high", run.out],
+      ] as const) {
+        wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], out }), dir, ch, part, "front");
+        wall(sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: behind, rot: 2, out }), dir, bch, part, "back");
+      }
     };
     for (let y = 0; y <= map.height; y++)
       for (let x = 0; x < map.width; x++) {
@@ -320,16 +341,16 @@ export class World3 {
       const one = this.drawObject(t.o);
       const built = this.mount(one.out);
       if (one.pick) built.picks = [one.pick];
-      const { w, h } = placedFootprint(t.o);
-      // a wall item: the strip along its wall (north edge, or west when turned)
+      // a wall item: the strip along its face of the wall, and the wall's thickness
       const hang = entry(t.o.kind).wall;
-      const west = hang && wallRot(t.o.rot) === 3;
-      const [fw, fh] = hang ? (west ? [0.3, h] : [w, 0.3]) : [w, h];
+      const r = hang ? hangStrip(t.o, 0.3) : footRect(t.o);
+      if (hang) {
+        const hg = hangOf(t.o);
+        if (hg.dir === "h") [r.y0, r.y1] = [Math.min(r.y0, hg.line - 0.1), Math.max(r.y1, hg.line + 0.1)];
+        else [r.x0, r.x1] = [Math.min(r.x0, hg.line - 0.1), Math.max(r.x1, hg.line + 0.1)];
+      }
       const fade: FadeGroup = {
-        x0: t.o.x - (hang ? 0.1 : 0),
-        y0: t.o.y - (hang ? 0.1 : 0),
-        x1: t.o.x + fw,
-        y1: t.o.y + fh,
+        ...r,
         top: hang ? zt(WALL_H) : one.top, // (a wall item fades exactly when its wall does)
         objects: built.objs,
         alpha: 1,
@@ -388,7 +409,7 @@ export class World3 {
       const rot = rotOf(o);
       const ref = { kind: o.kind, id: o.id, rot, props: o.props };
       const at = anchorOf(o);
-      const lift = e.onSurface ? Number(o.props?.z) || 0 : 0;
+      const lift = e.onSurface ? Number(o.props?.z) || 0 : e.wall ? hangOf(o).lift : 0;
       if (hasItemArt(o.kind)) {
         // things on a surface are drawn around the middle of a 1×1 tile
         const s = new MeshSketch({ ...itemSketchOpts(ref), ...(e.onSurface ? { w: 1, h: 1 } : {}), at, lift, out });
@@ -711,7 +732,17 @@ function anchorOf(o: WorldObjectDef): [number, number] {
     const c = topCentre(o);
     return [c.x - 0.5, c.y - 0.5];
   }
+  // wall items: where their drawing is along the wall (hang.ts)
+  if (entry(o.kind).wall) {
+    const h = hangOf(o);
+    return [h.ax, h.ay];
+  }
   return [o.x, o.y];
+}
+
+function footRect(o: WorldObjectDef): { x0: number; y0: number; x1: number; y1: number } {
+  const { w, h } = placedFootprint(o);
+  return { x0: o.x, y0: o.y, x1: o.x + w, y1: o.y + h };
 }
 
 // the clutter's sketch is centred on (0.5, 0.5); frames hang on the edge at y

@@ -6,7 +6,11 @@ import {
   entry,
   entryWallItem,
   footprint,
+  HANG_HIGH,
+  HANG_LOW,
   type HeldKind,
+  hangOf,
+  hangStrip,
   hasActions,
   heldState,
   hostOf,
@@ -16,6 +20,7 @@ import {
   type MapDef,
   placedFootprint,
   Q,
+  type Ray,
   SOCIAL_MS,
   surfaceAt,
   TILE_H,
@@ -29,7 +34,8 @@ import {
   WB_W,
   type WbItem,
   type WorldObjectDef,
-  wallRot,
+  WQ,
+  WZ_PX,
 } from "@yutopia/shared";
 import {
   Application,
@@ -251,13 +257,19 @@ function affectsFloor(o: WorldObjectDef): boolean {
   return o.kind === "door" || (e.solid && !e.wall);
 }
 
-// What a thing covers on the floor, for outlines (w, d in tiles from its
-// corner): its footprint, or a strip `depth` deep along the wall it hangs on.
-function wallStrip(o: WorldObjectDef, depth: number): [number, number] {
+// What a thing covers on the floor, for outlines (world tiles): its footprint,
+// or a strip `depth` deep along the wall it hangs on (in front of its face).
+function wallStrip(o: WorldObjectDef, depth: number): { x0: number; y0: number; x1: number; y1: number } {
+  if (entry(o.kind).wall) return hangStrip(o, depth);
   const { w, h } = placedFootprint(o);
-  if (!entry(o.kind).wall) return [w, h];
-  return wallRot(o.rot) === 3 ? [depth, h] : [w, depth];
+  return { x0: o.x, y0: o.y, x1: o.x + w, y1: o.y + h };
 }
+const rectPts = (r: { x0: number; y0: number; x1: number; y1: number }) => [
+  toScreen(r.x0, r.y0),
+  toScreen(r.x1, r.y0),
+  toScreen(r.x1, r.y1),
+  toScreen(r.x0, r.y1),
+];
 
 // Soft contact shadows: stacked ellipses fading out from the feet.
 function softShadow(rx: number, ry: number, alpha: number): GraphicsContext {
@@ -804,7 +816,8 @@ export class WorldEngine {
     if (o.kind === "clock") {
       view.hands = new Graphics();
       view.hands.isRenderGroup = true; // redrawn every frame
-      view.hands.zIndex = o.x + 0.75 + o.y + 0.02;
+      const hg = hangOf(o);
+      view.hands.zIndex = hg.line + (hg.u0 + hg.u1) / 2 / WQ + 0.02;
       this.sortLayer.addChild(view.hands);
     }
     if (o.kind === "whiteboard") {
@@ -1364,11 +1377,14 @@ export class WorldEngine {
   ) {
     const o = v.def;
     const S = 36;
+    const hg = hangOf(o);
+    // on its wall's far face this view never sees it (the 3D view draws it, from keepPanel)
+    if (hg.side < 0) return;
     // on the face of the thin wall (WALL_FACE in front of the tile edge); on a
     // west wall the panel runs from its south end (the item turned to rot 3)
     const tiles = entryWallItem(o.kind);
-    const west = wallRot(o.rot) === 3;
-    const origin = west ? toScreen(o.x + oy + 0.1, o.y + tiles - ox) : toScreen(o.x + ox, o.y + oy + 0.1);
+    const west = hg.dir === "v";
+    const origin = west ? toScreen(hg.ax + oy + 0.1, hg.ay + tiles - ox) : toScreen(hg.ax + ox, hg.ay + oy + 0.1);
     // a quarter of a tile per slice, like the wall and the board it's on
     for (let k = 0; k < tiles * 4; k++) {
       const u0 = Math.max(0, (k / 4 - ox) * S);
@@ -1376,7 +1392,7 @@ export class WorldEngine {
       if (u1 <= u0) continue;
       const wrap = new Container();
       wrap.setFromMatrix(
-        new Matrix(TILE_W / 2 / S, ((west ? -1 : 1) * TILE_H) / 2 / S, 0, 1, origin.x, origin.y - zTop),
+        new Matrix(TILE_W / 2 / S, ((west ? -1 : 1) * TILE_H) / 2 / S, 0, 1, origin.x, origin.y - zTop - hg.lift),
       );
       const content = build();
       // neighbouring slices overlap by a hair (no hairline gap between them)
@@ -1386,7 +1402,7 @@ export class WorldEngine {
       // just over the item's next slice too: its art's edge pixels (dark glass,
       // a bezel) bleed a pixel into this one and drew a dark line at every
       // quarter tile across the picture
-      wrap.zIndex = o.x + o.y + (west ? tiles - (k + 0.5) / 4 : (k + 0.5) / 4) + 0.27;
+      wrap.zIndex = hg.ax + hg.ay + (west ? tiles - (k + 0.5) / 4 : (k + 0.5) / 4) + 0.27;
       this.sortLayer.addChild(wrap);
       v.displays.push(wrap);
     }
@@ -2067,17 +2083,20 @@ export class WorldEngine {
       const g = v.hands;
       if (!g) continue;
       const part = v.parts[0];
-      const show = !!part?.root.visible;
+      // (on a wall's far face it's behind the wall)
+      const show = !!part?.root.visible && hangOf(v.def).side > 0;
       const fresh = show && !g.visible; // just revealed: draw now
       g.visible = show;
       g.alpha = part?.high?.alpha ?? part?.root.alpha ?? 1;
       if (!g.visible || !(redraw || fresh)) continue;
       g.clear();
-      const o = v.def;
-      const c = toScreen(o.x + 0.5, o.y + 0.134);
-      const cy = c.y - 52;
-      const ex = TILE_W / 2;
-      const ey = TILE_H / 2;
+      const hg = hangOf(v.def);
+      const mid = (hg.u0 + hg.u1) / 2 / WQ;
+      const c = hg.dir === "h" ? toScreen(mid, hg.line + 0.134) : toScreen(hg.line + 0.134, mid);
+      const cy = c.y - 52 - hg.lift;
+      // across the face: along +x (walls along x) or −y (west walls: left to right is north)
+      const ex = hg.dir === "h" ? TILE_W / 2 : TILE_W / 2;
+      const ey = hg.dir === "h" ? TILE_H / 2 : -TILE_H / 2;
       const hand = (turns: number, l: number, w: number, color: number) => {
         const a = turns * Math.PI * 2;
         const u = Math.sin(a) * 0.15 * l;
@@ -2294,18 +2313,11 @@ export class WorldEngine {
     this.highlightG.clear();
     this.highlightOn = true;
     const e = entry(o.kind);
-    const { w, h } = placedFootprint(o);
     const a = 0.55 + (this.reducedMotion ? 0 : Math.sin(this.time * 5) * 0.25);
-    // wall items: flush with their wall
-    const west = e.wall && wallRot(o.rot) === 3;
-    const x0 = west ? o.x : o.x - 0.08;
-    const y0 = e.wall && !west ? o.y : o.y - 0.08;
-    const pts = [
-      toScreen(x0, y0),
-      toScreen(o.x + w + 0.08, y0),
-      toScreen(o.x + w + 0.08, o.y + h + 0.08),
-      toScreen(x0, o.y + h + 0.08),
-    ];
+    // wall items: the floor in front of them, flush with their wall
+    const r = e.wall ? hangStrip(o, 0.6) : wallStrip(o, 0);
+    const g = e.wall ? 0 : 0.08;
+    const pts = rectPts({ x0: r.x0 - g, y0: r.y0 - g, x1: r.x1 + g, y1: r.y1 + g });
     this.highlightG
       .poly(pts.flatMap((p) => [p.x, p.y]))
       .fill({ color: C.amber, alpha: 0.12 })
@@ -2374,17 +2386,50 @@ export class WorldEngine {
         continue;
       }
       const { w, h } = placedFootprint(o);
-      const [sw, sh] = wallStrip(o, 0.25);
-      const pts = [toScreen(o.x, o.y), toScreen(o.x + sw, o.y), toScreen(o.x + sw, o.y + sh), toScreen(o.x, o.y + sh)];
+      const pts = rectPts(wallStrip(o, 0.25));
       g.poly(pts.flatMap((p) => [p.x, p.y]))
         .fill({ color: ok ? C.olive : C.rust, alpha: 0.38 })
         .stroke({ width: 2, color: ok ? C.vfd : C.rust, alpha: 0.95 });
+      if (e.wall) this.cellsOnWall(g, o, ok);
       if (this.ghostLift > 0 && !e.wall) {
         // the shadow of something held above the floor
         const c = toScreen(o.x + w / 2, o.y + h / 2);
         g.ellipse(c.x, c.y, 14 * Math.max(w, h), 7 * Math.max(w, h)).fill({ color: 0x000000, alpha: 0.22 });
       }
     }
+  }
+
+  // A thing on a wall: its spot on the face (the quarter tiles it takes, along
+  // and up) with the face's grid faintly around it — on the faces this view
+  // sees (the others are behind their wall: the strip on the floor shows it).
+  private cellsOnWall(g: Graphics, o: WorldObjectDef, ok: boolean) {
+    const h = hangOf(o);
+    if (h.side < 0) return;
+    const F = 0.1; // the face, out from the wall's line
+    const at = (u: number, z: number) => {
+      const p = h.dir === "h" ? toScreen(u / WQ, h.line + F) : toScreen(h.line + F, u / WQ);
+      return [p.x, p.y - z];
+    };
+    const quad = (u0: number, u1: number, z0: number, z1: number) => [
+      ...at(u0, z1),
+      ...at(u1, z1),
+      ...at(u1, z0),
+      ...at(u0, z0),
+    ];
+    // the grid: a tile either side, from the skirting to the cap
+    const a = Math.floor(h.u0) - WQ;
+    const b = Math.ceil(h.u1) + WQ;
+    for (let u = a; u <= b; u++)
+      g.moveTo(...(at(u, HANG_LOW) as [number, number])).lineTo(...(at(u, HANG_HIGH) as [number, number]));
+    for (let k = 0; HANG_LOW + k * WZ_PX <= HANG_HIGH; k++) {
+      const z = h.z0 + (Math.round((HANG_LOW - h.z0) / WZ_PX) + k) * WZ_PX;
+      if (z < HANG_LOW - 0.01 || z > HANG_HIGH) continue;
+      g.moveTo(...(at(a, z) as [number, number])).lineTo(...(at(b, z) as [number, number]));
+    }
+    g.stroke({ width: 1, color: C.cream, alpha: 0.18 });
+    g.poly(quad(h.u0, h.u1, h.z0, h.z1))
+      .fill({ color: ok ? C.olive : C.rust, alpha: 0.22 })
+      .stroke({ width: 1.5, color: ok ? C.vfd : C.rust, alpha: 0.9 });
   }
 
   // A thing on a surface: its spot (the quarter-tile cells it takes) drawn on
@@ -2588,7 +2633,7 @@ export class WorldEngine {
     if (c && performance.now() - c.at < 500) return c.hull;
     const o = v.def;
     const e = entry(o.kind);
-    const [w, d] = wallStrip(o, 0.12);
+    const strip = wallStrip(o, 0.12);
     // things on a surface stand on their cells, raised to the top
     const r = e.onSurface ? topRect(o) : null;
     const lift = r ? Number(o.props?.z) || 0 : 0;
@@ -2600,7 +2645,7 @@ export class WorldEngine {
             toScreen((r.x + r.w) / Q, (r.y + r.h) / Q),
             toScreen(r.x / Q, (r.y + r.h) / Q),
           ]
-        : [toScreen(o.x, o.y), toScreen(o.x + w, o.y), toScreen(o.x + w, o.y + d), toScreen(o.x, o.y + d)]
+        : rectPts(strip)
     ).map((p) => ({ x: p.x, y: p.y - lift }));
     let top = Number.POSITIVE_INFINITY;
     let bottom = Number.NEGATIVE_INFINITY;
@@ -2692,6 +2737,34 @@ export class WorldEngine {
 
   // The world point under the pointer at height `z` px (on a surface that
   // high), as this view sees it — or the third-person view's camera.
+  // the third-person view is showing (it sees every side of things)
+  get seesAllSides(): boolean {
+    return this.floorOverride !== null;
+  }
+
+  // The ray from the camera through the pointer (world tiles, z in iso px):
+  // straight down the view here, or the third-person camera's.
+  rayOverride: ((clientX: number, clientY: number) => Ray) | null = null;
+  pointerRay(): Ray | null {
+    const r = this.app.canvas.getBoundingClientRect();
+    if (this.rayOverride) return this.rayOverride(r.left + this.pointerAt.gx, r.top + this.pointerAt.gy);
+    const H = 600;
+    const a = this.pointerWorld(H);
+    const b = this.pointerWorld(0);
+    return { o: { x: a.x, y: a.y, z: H }, d: { x: b.x - a.x, y: b.y - a.y, z: -H } };
+  }
+  // The walls this view looks through right now (cut away / faded): "h3,4" keys.
+  throughOverride: (() => Set<string>) | null = null;
+  lookedThrough(): Set<string> {
+    if (this.throughOverride) return this.throughOverride();
+    const out = new Set<string>();
+    for (const v of this.walls) {
+      const e = v.edge;
+      if (e && (v.high ?? v.root).alpha < 0.5) out.add(`${e.dir}${e.x},${e.y}`);
+    }
+    return out;
+  }
+
   pointerWorld(z = 0): { x: number; y: number } {
     if (this.floorOverride) {
       const r = this.app.canvas.getBoundingClientRect();
@@ -2734,12 +2807,19 @@ export class WorldEngine {
       const { w, h } = placedFootprint(o);
       let hit = wx >= o.x && wx < o.x + w && wy >= o.y && wy < o.y + h;
       if (e.wall) {
-        // wall items are hit on the wall plane above their tiles
-        const a = toScreen(o.x, o.y);
-        const b = wallRot(o.rot) === 3 ? toScreen(o.x, o.y + h) : toScreen(o.x + w, o.y);
+        // wall items are hit on their face of the wall (the faces this view sees)
+        const hg = hangOf(o);
+        const at = (u: number) => (hg.dir === "h" ? toScreen(u / WQ, hg.line) : toScreen(hg.line, u / WQ));
+        const a = at(hg.u0);
+        const b = at(hg.u1);
         const t = (gx - a.x) / (b.x - a.x);
         const yLine = a.y + (b.y - a.y) * t;
-        hit = t >= 0 && t <= 1 && gy <= yLine && gy >= yLine - 80;
+        hit = hg.side > 0 && t >= 0 && t <= 1 && gy <= yLine - hg.z0 + 4 && gy >= yLine - hg.z1 - 4;
+        // on a wall's far face (behind its wall here): the floor in front of it
+        if (hg.side < 0) {
+          const r = hangStrip(o, 0.8);
+          hit = wx >= r.x0 && wx < r.x1 && wy >= r.y0 && wy < r.y1;
+        }
       } else if (!hit) {
         // tall things: allow clicking on the body above the footprint
         const c = toScreen(o.x + w / 2, o.y + h / 2);

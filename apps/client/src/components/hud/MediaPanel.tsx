@@ -114,6 +114,8 @@ const LABELS: Record<string, string> = {
   tv_wall: "Wall TV",
   tv_hd: "Big HD TV",
   projector_screen: "Projector",
+  tv_giant: "Giant TV",
+  cinema_screen: "Cinema screen",
   tv_console: "Console TV",
   tv_portable: "Portable TV",
   crt_tv: "CRT TV",

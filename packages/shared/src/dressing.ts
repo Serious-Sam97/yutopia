@@ -1,16 +1,6 @@
 import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
-import {
-  type AreaDef,
-  areaAt,
-  holdsItems,
-  hWall,
-  isFloor,
-  isWallEdge,
-  type MapDef,
-  tileAt,
-  vWall,
-  wallSpan,
-} from "./map.ts";
+import { hangOf, wallSpan } from "./hang.ts";
+import { type AreaDef, areaAt, holdsItems, hWall, isFloor, isWallEdge, type MapDef, tileAt, vWall } from "./map.ts";
 
 // Dressing: the clutter that makes a room lived in, chosen per room as a preset
 // and placed by rules, the same on every client and on the server (so a plant
@@ -112,7 +102,7 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
   }
   const hung = new Set<string>();
   for (const o of objs)
-    if (entry(o.kind).wall) for (const e of wallSpan(o)) if (e.dir === "h") hung.add(`${e.x},${e.y}`);
+    if (entry(o.kind).wall && hangOf(o).rot === 0) for (const e of wallSpan(o)) hung.add(`${e.x},${e.y}`);
   if (map.spawn) near.add(`${Math.floor(map.spawn.x)},${Math.floor(map.spawn.y)}`);
 
   for (const a of map.areas) {

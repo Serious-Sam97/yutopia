@@ -3,8 +3,8 @@ import { expect, type Page } from "@playwright/test";
 import { ANA, enter, spaceId, test, token } from "./helpers";
 
 // Three fixes, in the Lab (everything put out is removed after): things that
-// hang on a wall go on a west wall too (turned, rot 3) and turning one swaps
-// walls; people stay clickable after build mode closes; the sofa seats people.
+// hang on a wall go on a west wall too (turned, rot 3); people stay clickable
+// after build mode closes; the sofa seats people.
 
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
@@ -36,7 +36,7 @@ const setBuild = (page: Page, b: Record<string, unknown>) =>
     h.set({ build: { ...h.get().build, ...p } });
   }, b);
 
-test("wall things hang on a west wall and turning one swaps walls", async ({ page }) => {
+test("wall things hang on a west wall", async ({ page }) => {
   test.setTimeout(90_000);
   const tok = await token(ANA);
   await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
@@ -80,15 +80,7 @@ test("wall things hang on a west wall and turning one swaps walls", async ({ pag
     expect(hull?.length).toBeGreaterThan(4);
     await page.screenshot({ path: test.info().outputPath("west-wall.png") });
 
-    // build mode: select it and turn it: over to the north wall nearby
-    await setBuild(page, { on: true, tool: "furniture", mode: "hand", selected: [id] });
-    await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
-    await page.evaluate(() => (window as any).__yutopia.build.rotate());
-    await expect.poll(async () => (await obj(page, id))?.rot).toBe(0);
-    // and back
-    await page.evaluate(() => (window as any).__yutopia.build.rotate());
-    await expect.poll(async () => (await obj(page, id))?.rot).toBe(3);
-    await setBuild(page, { on: false, selected: [] });
+    // (turning one now takes it over to its wall's other side: wall-faces.spec.ts)
   } finally {
     await page.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), id);
   }

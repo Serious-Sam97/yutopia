@@ -53,7 +53,9 @@ type Face2 = {
 
 // An edge-local drawer: walls along x ("h") or along y ("v").
 // `capFrom`: boxes ending below it have another band on top (their top is hidden).
-function runFor(s: Sketch, dir: "h" | "v", capFrom = WALL_Z - 3): Run {
+// `half`: only the front half of its thickness (a two-faced wall, drawn a face
+// at a time; the 3D view turns the sketch round for the back one).
+function runFor(s: Sketch, dir: "h" | "v", capFrom = WALL_Z - 3, half = false): Run {
   return {
     box(a0, a1, z0, z1, mat, d, line, depth = 2 * T, op) {
       // full-length boxes run half a tile past the edge and are cut by the
@@ -61,10 +63,11 @@ function runFor(s: Sketch, dir: "h" | "v", capFrom = WALL_Z - 3): Run {
       const full = a0 === 0 && a1 === 1;
       const u0 = full ? -0.5 : a0;
       const u1 = full ? 1.5 : a1;
+      const [v0, dv] = half ? [0, depth / 2] : [-depth / 2, depth];
       const spec =
         dir === "h"
-          ? { x: u0, y: -depth / 2, w: u1 - u0, d: depth, z: z0, h: z1 - z0 }
-          : { x: -depth / 2, y: u0, w: depth, d: u1 - u0, z: z0, h: z1 - z0 };
+          ? { x: u0, y: v0, w: u1 - u0, d: dv, z: z0, h: z1 - z0 }
+          : { x: v0, y: u0, w: dv, d: u1 - u0, z: z0, h: z1 - z0 };
       s.box({ ...spec, mat, line: line ?? 1.1, op, capped: z1 < capFrom }, (draw) => {
         if (!d) return;
         const f = dir === "h" ? "s" : "e";
@@ -86,10 +89,11 @@ const span = (a0: number, a1: number, b0: number, b1: number): [number, number] 
 };
 
 // Draw one wall edge: `ch` its char, `part` low or high. (Clipping to a slice
-// is the sketch's clip.)
-export function wall(s: Sketch, dir: "h" | "v", ch: string, part: WallPart) {
+// is the sketch's clip.) `face`: only one face's half of a two-faced wall —
+// "front" (with the window's frame and glass, through and through) or "back".
+export function wall(s: Sketch, dir: "h" | "v", ch: string, part: WallPart, face?: "front" | "back") {
   const half = ch === "h";
-  const r = runFor(s, dir, (half ? HALF_Z : WALL_Z) - 3);
+  const r = runFor(s, dir, (half ? HALF_Z : WALL_Z) - 3, !!face);
   const mat = half ? "p" : ch.toLowerCase();
   const window = !half && ch !== mat; // upper case
   const top = half ? HALF_Z : WALL_Z;
@@ -112,7 +116,7 @@ export function wall(s: Sketch, dir: "h" | "v", ch: string, part: WallPart) {
     const cap = span(b0, b1, top - 3, top);
     if (cap) r.box(0, 1, cap[0], cap[1], CAP, undefined, 1.1);
   }
-  if (window && part === "high") windowFrame(r);
+  if (window && part === "high" && face !== "back") windowFrame(face ? runFor(s, dir) : r);
 }
 
 function paintMaterial(r: Run, mat: string, z0: number, z1: number, top: number, seed: number) {

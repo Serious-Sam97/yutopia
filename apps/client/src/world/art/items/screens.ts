@@ -84,6 +84,109 @@ export function tvHd(s: Sketch) {
   });
 }
 
+// ── giant TV (5 tiles, for the tall walls): a slim panel between two tower
+// speakers, a soundbar under it. Story: a game controller left on its cable.
+export function tvGiant(s: Sketch) {
+  const g = GLASS.tv_giant;
+  const front = g.y - WALL;
+  s.shape({ x: 0.3, y: -0.06, w: 4.4, d: 0.02, z: g.z0 - 5, h: g.z1 - g.z0 + 10 }, (d) => {
+    d.poly("s", fr("s", -0.05, 0.38, 4.78, g.z0 - 7, g.z1 + 2), "#1a120c", { op: 0.2 });
+  });
+  s.box(
+    {
+      x: 0.3,
+      y: -0.03,
+      w: 4.4,
+      d: front + 0.03,
+      z: g.z0 - 3,
+      h: g.z1 - g.z0 + 6,
+      mat: { c: "#1b1a18", top: "#2a2825" },
+      line: 1,
+    },
+    (d) => {
+      glass(d, front + 0.001, g.x0, g.x1, g.z0, g.z1, "#121416");
+      // a hairline of brushed metal round the glass, the standby light under it
+      d.line("s", [g.x0 - 0.02, front + 0.002, g.z0 - 2], [g.x1 + 0.02, front + 0.002, g.z0 - 2], K.alumDark, 0.6, 0.8);
+      d.poly("s", fe("s", front + 0.002, 2.5, g.z0 - 1.6, 0.014, 0.5, 10), "#f2efe6", { glow: true, op: 0.8 });
+    },
+  );
+  // tower speakers either side: walnut cabinets, black cloth, two cones each
+  for (const x of [0.04, 4.76]) {
+    s.box({ x, y: -0.04, w: 0.2, d: 0.14, z: 18, h: 64, mat: M.walnutDark, puff: 0.4 }, (d) => {
+      d.poly("s", fr("s", 0.101, x + 0.025, x + 0.175, 21, 79), "#1c1a17");
+      for (const [z, r] of [
+        [70, 3.2],
+        [56, 4.2],
+        [30, 4.2],
+      ] as const) {
+        d.poly("s", fe("s", 0.102, x + 0.1, z, 0.06, r, 16), "#2b2925", { stroke: "#0d0b0a", sw: 0.4 });
+        d.poly("s", fe("s", 0.103, x + 0.1, z, 0.018, r * 0.35, 10), "#45413a");
+      }
+    });
+  }
+  // the soundbar
+  s.box({ x: 1.6, y: 0.0, w: 1.8, d: 0.08, z: g.z0 - 11, h: 4.5, mat: M.graphite, puff: 0.6 }, (d) => {
+    for (let i = 0; i < 30; i++) d.poly("s", fe("s", 0.081, 1.66 + i * 0.056, g.z0 - 8.8, 0.012, 0.6, 6), "#45413a");
+  });
+}
+
+// ── cinema screen (6 tiles, for the tall walls): a matte screen in a black
+// masking frame between velvet curtains (red or blue), a pleated valance on
+// top with a gold fringe, the curtains held back with gold ropes.
+const VELVET = [
+  { c: "#7a1f24", lit: "#9c2c2f", dark: "#541418" },
+  { c: "#1f2f5a", lit: "#2f4479", dark: "#141f3e" },
+];
+export function cinemaScreen(s: Sketch) {
+  const g = GLASS.cinema_screen;
+  const front = g.y - WALL;
+  const v = VELVET[Math.floor(s.seed * VELVET.length) % VELVET.length];
+  // the black masking frame and the screen in it
+  s.box({ x: 0.48, y: -0.04, w: 5.04, d: front + 0.02, z: 12, h: 104, mat: { c: "#151310", top: "#22201c" } }, (d) => {
+    d.poly("s", fr("s", front - 0.019, g.x0, g.x1, g.z0, g.z1), "#ece8dd");
+    // the cloth's faint perforation sheen
+    d.poly(
+      "s",
+      [
+        [g.x0 + 0.3, front - 0.018, g.z1 - 2],
+        [g.x0 + 1.4, front - 0.018, g.z1 - 2],
+        [g.x0 + 0.6, front - 0.018, g.z0 + 30],
+      ],
+      "#ffffff",
+      { op: 0.06 },
+    );
+  });
+  // curtains: soft folds from the valance to the floor, gathered at a gold rope
+  const curtain = (x0: number, x1: number, tie: number) => {
+    s.box({ x: x0, y: -0.02, w: x1 - x0, d: 0.12, z: 6, h: 110, mat: { c: v.c, top: v.lit }, puff: 0.6 }, (d) => {
+      const n = 5;
+      for (let i = 0; i < n; i++) {
+        const a = x0 + ((x1 - x0) * i) / n;
+        const b = x0 + ((x1 - x0) * (i + 0.5)) / n;
+        d.poly("s", fr("s", 0.101, a, b, 6, 116), v.lit, { op: 0.55 });
+        d.line("s", [b, 0.102, 8], [b, 0.102, 114], v.dark, 0.8, 0.7);
+      }
+      // the rope
+      d.poly("s", fr("s", 0.104, x0 - 0.01, x1 + 0.01, 40, 42.4), K.brass, { stroke: "#7a5a22", sw: 0.4 });
+      d.poly("s", fe("s", 0.105, tie, 37.5, 0.03, 3.4, 10), K.brass, { stroke: "#7a5a22", sw: 0.4 });
+    });
+  };
+  curtain(0.06, 0.62, 0.5);
+  curtain(5.38, 5.94, 5.5);
+  // the valance: pleats and a gold fringe
+  s.box({ x: 0.02, y: -0.05, w: 5.96, d: 0.18, z: 116, h: 8, mat: { c: v.c, top: v.lit }, line: 1 }, (d) => {
+    for (let i = 0; i < 24; i++) {
+      const u = 0.02 + i * (5.96 / 24);
+      d.line("s", [u, 0.131, 117], [u, 0.131, 123.5], v.dark, 0.7, 0.8);
+    }
+    d.poly("s", fr("s", 0.132, 0.02, 5.98, 116, 117.4), K.brass);
+    for (let i = 0; i < 60; i++) {
+      const u = 0.06 + i * 0.098;
+      d.line("s", [u, 0.133, 116], [u, 0.133, 114.4], K.amberSoft, 0.6, 0.9);
+    }
+  });
+}
+
 // ── pull-down projector screen (3 tiles): a roller case, the matte cloth ─────
 export function projectorScreen(s: Sketch) {
   const g = GLASS.projector_screen;

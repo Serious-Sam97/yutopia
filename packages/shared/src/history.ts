@@ -12,7 +12,7 @@ export interface Snapshot {
   objects: Map<string, string>; // id → JSON of the def
 }
 
-type Layer = "t" | "h" | "v";
+type Layer = "t" | "h" | "v" | "hb" | "vb"; // tiles, walls, the walls' back faces
 interface CellChange {
   l: Layer;
   x: number;
@@ -42,7 +42,17 @@ export function snapshot(map: MapDef, objects: Iterable<WorldObjectDef>): Snapsh
   return { map, objects: m };
 }
 
-const rows = (map: MapDef, l: Layer) => (l === "t" ? map.tiles : l === "h" ? map.hWalls : map.vWalls);
+const blank = (walls: string[]) => walls.map((r) => ".".repeat(r.length));
+const rows = (map: MapDef, l: Layer) =>
+  l === "t"
+    ? map.tiles
+    : l === "h"
+      ? map.hWalls
+      : l === "v"
+        ? map.vWalls
+        : l === "hb"
+          ? (map.hBacks ?? blank(map.hWalls))
+          : (map.vBacks ?? blank(map.vWalls));
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export function diffStep(before: Snapshot, after: Snapshot, label: string): Step | null {
@@ -51,7 +61,7 @@ export function diffStep(before: Snapshot, after: Snapshot, label: string): Step
   const step: Step = { label, cells: [], objects: [] };
   if (a.width !== b.width || a.height !== b.height) step.full = { a, b };
   else
-    for (const l of ["t", "h", "v"] as const) {
+    for (const l of ["t", "h", "v", "hb", "vb"] as const) {
       const ra = rows(a, l);
       const rb = rows(b, l);
       for (let y = 0; y < Math.max(ra.length, rb.length); y++) {
@@ -104,7 +114,13 @@ export function applyStep(
     if (map.width === f.width && map.height === f.height) next = { ...to(step.full), objects: map.objects };
     else res.skipped++;
   } else {
-    const grid = { t: [...map.tiles], h: [...map.hWalls], v: [...map.vWalls] };
+    const grid = {
+      t: [...map.tiles],
+      h: [...map.hWalls],
+      v: [...map.vWalls],
+      hb: [...rows(map, "hb")],
+      vb: [...rows(map, "vb")],
+    };
     let touched = false;
     for (const c of step.cells) {
       const r = grid[c.l];
@@ -116,7 +132,17 @@ export function applyStep(
       r[c.y] = row.slice(0, c.x) + to(c) + row.slice(c.x + 1);
       touched = true;
     }
-    if (touched) next = { ...next, tiles: grid.t, hWalls: grid.h, vWalls: grid.v };
+    if (touched) {
+      const backs = [...grid.hb, ...grid.vb].some((r) => /[^.]/.test(r));
+      next = {
+        ...next,
+        tiles: grid.t,
+        hWalls: grid.h,
+        vWalls: grid.v,
+        hBacks: backs ? grid.hb : undefined,
+        vBacks: backs ? grid.vb : undefined,
+      };
+    }
     if (step.areas) {
       if (sameJson(map.areas, from(step.areas))) next = { ...next, areas: to(step.areas) };
       else next = { ...next, areas: mergeAreas(map.areas, from(step.areas), to(step.areas)) };

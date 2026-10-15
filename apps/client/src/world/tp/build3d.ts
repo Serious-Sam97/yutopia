@@ -1,4 +1,4 @@
-import { entry, isFloor, type MapDef, placedFootprint, tileAt, type WorldObjectDef, wallRot } from "@yutopia/shared";
+import { entry, hangStrip, isFloor, type MapDef, placedFootprint, tileAt, type WorldObjectDef } from "@yutopia/shared";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -135,11 +135,10 @@ export class BuildLayer {
       // its spot on the floor (at floor level, not lifted): a strip along the wall for wall things
       const e = entry(g.def.kind);
       const { w, h } = placedFootprint(g.def);
-      const wall = e.wall;
-      const west = wall && wallRot(g.def.rot) === 3;
-      const [sw, sh] = wall ? (west ? [0.25, h] : [w, 0.25]) : [w, h];
+      const r = e.wall ? hangStrip(g.def, 0.25) : { x0: g.def.x, y0: g.def.y, x1: g.def.x + w, y1: g.def.y + h };
+      const [sw, sh] = [r.x1 - r.x0, r.y1 - r.y0];
       const spot = new Mesh(new PlaneGeometry(sw, sh).rotateX(-Math.PI / 2), cue(g.ok ? OK : BAD, 0.4));
-      spot.position.set(g.def.x + sw / 2, 0.015, g.def.y + sh / 2);
+      spot.position.set(r.x0 + sw / 2, 0.015, r.y0 + sh / 2);
       this.root.add(spot); // (on the floor: not lifted with the ghost)
       this.ghostFloor.push(spot);
     }

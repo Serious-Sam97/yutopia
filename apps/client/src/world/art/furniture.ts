@@ -539,6 +539,15 @@ export function piece(kind: string, props: Props, id = ""): Piece {
       return { boxes: [{ x: 0.12, y: -0.03, w: 2.76, d: 0.1, z: 25, h: 56, color: C.graphite }] };
     case "projector_screen":
       return { boxes: [{ x: 0.12, y: 0.03, w: 2.76, d: 0.02, z: 21, h: 60, color: 0xe9e5da }] };
+    case "tv_giant":
+      return { boxes: [{ x: 0.3, y: -0.03, w: 4.4, d: 0.1, z: 24, h: 94, color: C.graphite }] };
+    case "cinema_screen":
+      return {
+        boxes: [
+          { x: 0.48, y: -0.04, w: 5.04, d: 0.08, z: 12, h: 106, color: 0x151310 },
+          { x: 0.68, y: 0.04, w: 4.64, d: 0.02, z: 18, h: 94, color: 0xe9e5da },
+        ],
+      };
     case "projector":
       return { boxes: [{ x: 0.3, y: 0.34, w: 0.42, d: 0.32, z: 0, h: 7, color: C.graphite }] };
     case "tv_console":

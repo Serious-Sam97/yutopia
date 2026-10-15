@@ -12,7 +12,7 @@ import { lamp } from "./lamp";
 import { micStand, mixingDesk, radio, sideTable, speakerCab, tapeShelf } from "./music";
 import { PLANT_VARIANTS, plant } from "./plant";
 import { piano, turntable, vending, waterCooler } from "./play";
-import { projector, projectorScreen, tvConsole, tvHd, tvPortable, tvWall } from "./screens";
+import { cinemaScreen, projector, projectorScreen, tvConsole, tvGiant, tvHd, tvPortable, tvWall } from "./screens";
 import { armchair, bench } from "./seating";
 import { slotTrack } from "./slotcar";
 import { sofa } from "./sofa";
@@ -65,6 +65,8 @@ const GENS: Record<string, ItemGen> = {
   tv_wall: { draw: tvWall, variants: 2 },
   tv_hd: { draw: tvHd, variants: 1 },
   projector_screen: { draw: projectorScreen, variants: 1 },
+  tv_giant: { draw: tvGiant, variants: 1 },
+  cinema_screen: { draw: cinemaScreen, variants: 2 },
   projector: { draw: projector, variants: 1, key: (p) => (p.on ? "on" : "off") },
   tv_console: { draw: tvConsole, variants: 2 },
   tv_portable: { draw: tvPortable, variants: 2 },

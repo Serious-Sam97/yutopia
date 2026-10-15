@@ -6,6 +6,7 @@ import {
   blankMap,
   doorCentre,
   doorRoom,
+  type EdgeEdit,
   edgeBlocker,
   isDressing,
   isTheme,
@@ -74,15 +75,16 @@ registerFeature((room: SpaceRoom) => {
   room.on("map:walls", (client, m) => {
     if (!builder(client) || !Array.isArray(m.edges)) return;
     const objs = objects();
-    const ok: { x: number; y: number; dir: "h" | "v"; ch: string }[] = [];
+    const ok: EdgeEdit[] = [];
     let reason: string | null = null;
     let next = room.map;
     for (const e of m.edges.slice(0, 600)) {
-      const edge = {
+      const edge: EdgeEdit = {
         x: Math.floor(Number(e?.x)),
         y: Math.floor(Number(e?.y)),
         dir: e?.dir === "v" ? ("v" as const) : ("h" as const),
         ch: String(e?.ch ?? ""),
+        side: e?.side === 1 || e?.side === -1 ? e.side : undefined,
       };
       const why = edgeBlocker(next, objs, edge, edge.ch);
       if (why) reason ??= why;

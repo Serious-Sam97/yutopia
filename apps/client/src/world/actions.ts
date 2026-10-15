@@ -5,13 +5,14 @@ import {
   entry,
   footprint,
   type Grid,
+  hangSpot,
   isSocial,
   type Point,
   placedFootprint,
+  reachOf,
   SOCIAL_MS,
   SOCIAL_REACH,
   type WorldObjectDef,
-  wallRot,
 } from "@yutopia/shared";
 import { YONDRA_APP } from "@/lib/api";
 import { tr } from "@/lib/i18n";
@@ -260,10 +261,10 @@ export class ActionQueue {
     // face it
     if (q.act !== "sit" && q.act !== "work" && q.act !== "focus") {
       const { w, h: d } = placedFootprint(o);
-      // (wall things: the wall they hang on)
-      const west = entry(o.kind).wall && wallRot(o.rot) === 3;
-      const dx = (west ? o.x : o.x + w / 2) - me.x;
-      const dy = (entry(o.kind).wall && !west ? o.y : o.y + d / 2) - me.y;
+      // (wall things: the spot on the wall they hang on)
+      const at = entry(o.kind).wall ? hangSpot(o, 0) : { x: o.x + w / 2, y: o.y + d / 2 };
+      const dx = at.x - me.x;
+      const dy = at.y - me.y;
       if (Math.hypot(dx, dy) > 0.2) h.setFacing(dirFromDelta(dx, dy, me.d as 0));
     }
     switch (q.act) {
@@ -339,14 +340,11 @@ export class ActionQueue {
 
 // Within `r` tiles of a thing's footprint.
 function within(o: WorldObjectDef, p: Point, r: number) {
-  const { w, h } = placedFootprint(o);
-  const cx = Math.max(o.x, Math.min(p.x, o.x + w));
-  const cy = Math.max(o.y, Math.min(p.y, o.y + h));
-  return Math.hypot(p.x - cx, p.y - cy) <= r;
+  return reachOf(o, p) <= r;
 }
 
 // Where to stand to use a thing: just in front of it (things face +y at rot
-// 0, then +x, −y, −x; wall things are used from the tile they hang over).
+// 0, then +x, −y, −x; wall things are used from the floor in front of them).
 const FRONT: [number, number][] = [
   [0, 1],
   [1, 0],
@@ -355,10 +353,10 @@ const FRONT: [number, number][] = [
 ];
 function frontOf(grid: Grid, o: WorldObjectDef): Point | null {
   const { w, h } = placedFootprint(o);
-  if (entry(o.kind).wall)
-    return wallRot(o.rot) === 3
-      ? grid.nearestOpen(o.x + 0.5, o.y + h / 2, 3)
-      : grid.nearestOpen(o.x + w / 2, o.y + 0.5, 3);
+  if (entry(o.kind).wall) {
+    const at = hangSpot(o, 0.5);
+    return grid.nearestOpen(at.x, at.y, 3);
+  }
   const [fx, fy] = FRONT[(o.rot ?? 0) % 4];
   const x = o.x + w / 2 + fx * (w / 2 + 0.5);
   const y = o.y + h / 2 + fy * (h / 2 + 0.5);

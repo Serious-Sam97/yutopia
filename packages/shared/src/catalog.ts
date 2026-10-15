@@ -1,6 +1,6 @@
 // Every placeable thing in the world. Footprints are in tiles at rot 0; rot 1/3
-// swap width and height. `wall` objects hang on the back wall behind their tile
-// and never block. `seat` tiles are walkable and make the avatar sit.
+// swap width and height. `wall` objects hang on a wall face, anywhere along and
+// up it (hang.ts), and never block. `seat` tiles are walkable and make the avatar sit.
 
 export type Interaction =
   | "board"
@@ -182,6 +182,18 @@ export const CATALOG = {
     interact: "media",
     buildable: true,
   },
+  // for the tall walls: a giant panel and a cinema screen between velvet curtains
+  tv_giant: { label: "Giant TV", w: 5, h: 1, solid: false, wall: true, interact: "media", buildable: true },
+  cinema_screen: {
+    label: "Cinema screen",
+    w: 6,
+    h: 1,
+    solid: false,
+    wall: true,
+    interact: "media",
+    buildable: true,
+    variants: 2,
+  },
   projector: { label: "Projector", w: 1, h: 1, solid: false, onSurface: true, buildable: true },
   tv_console: { label: "Console TV", w: 2, h: 1, solid: true, interact: "media", buildable: true, variants: 2 },
   tv_portable: {
@@ -314,20 +326,26 @@ export function footprint(kind: string, rot = 0): { w: number; h: number } {
   return rot % 2 === 1 ? { w: e.h, h: e.w } : { w: e.w, h: e.h };
 }
 
-// Wall items hang on the north wall of their tiles (rot 0) or, turned, on the
-// west wall (rot 3, facing east): the two walls seen from the front. Any other
-// turn stored on one (older saves) is the north wall.
+// Older saves: wall items hung on the north wall of their tiles (rot 0) or,
+// turned, on the west wall (rot 3); any other turn was the north wall. Placed
+// on the free grid (props.wu set, hang.ts) any turn is a face.
 export function wallRot(rot = 0): 0 | 3 {
   return rot === 3 ? 3 : 0;
 }
 
-// The turn something is laid out and drawn with.
-export function rotOf(o: { kind: string; rot?: number }): number {
-  return entry(o.kind).wall ? wallRot(o.rot) : (o.rot ?? 0);
+// The turn something is laid out and drawn with (wall items: the face they
+// hang on, hang.ts `hangRot`).
+export function rotOf(o: { kind: string; rot?: number; props?: Record<string, unknown> }): number {
+  if (!entry(o.kind).wall) return o.rot ?? 0;
+  return Number.isInteger(o.props?.wu) ? (o.rot ?? 0) & 3 : wallRot(o.rot);
 }
 
-// Its footprint where it stands (wall items: the tiles along their wall).
-export function placedFootprint(o: { kind: string; rot?: number }): { w: number; h: number } {
+// Its footprint where it stands (wall items: the tiles along their wall, from
+// the tile it's in front of; hang.ts has where exactly).
+export function placedFootprint(o: { kind: string; rot?: number; props?: Record<string, unknown> }): {
+  w: number;
+  h: number;
+} {
   return footprint(o.kind, rotOf(o));
 }
 

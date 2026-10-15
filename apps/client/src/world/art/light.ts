@@ -3,6 +3,7 @@ import {
   CATALOG,
   doorEdge,
   entry,
+  hangOf,
   hWall,
   isFloor,
   isWindow,
@@ -47,6 +48,11 @@ function place(o: WorldObjectDef, lx: number, ly: number): [number, number] {
   for (let i = 0; i < rot; i++) {
     [x, y] = [H - y, x];
     [W, H] = [H, W];
+  }
+  // (wall items: where their drawing is along the wall)
+  if (e.wall) {
+    const h = hangOf(o);
+    return [h.ax + x, h.ay + y];
   }
   return [o.x + x, o.y + y];
 }

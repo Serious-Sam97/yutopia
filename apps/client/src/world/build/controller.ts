@@ -8,7 +8,15 @@ import {
   edgeAt,
   edgeBlocker,
   entry,
+  type Face,
+  faceHit,
+  faceNear,
   footprint,
+  hangAt,
+  hangCanon,
+  hangNear,
+  hangOf,
+  hangSpot,
   hostOf,
   isWallEdge,
   type MapDef,
@@ -26,7 +34,8 @@ import {
   topSize,
   VOID,
   type WorldObjectDef,
-  wallRot,
+  WQ,
+  WZ_PX,
 } from "@yutopia/shared";
 import type { SetupItem } from "@/lib/api";
 import { tr, trMaybe } from "@/lib/i18n";
@@ -93,6 +102,10 @@ export class BuildController {
   private shift = false;
   private overBin = false; // the pointer is over the catalog's bin
   private lastWheel = 0;
+  // one wall item in hand: the face it's aimed at (where along it, how high;
+  // z null keeps its height), and R's "the other side of this wall"
+  private aim: { face: Face; along: number; z: number | null } | null = null;
+  private flip = false;
   hoverPick: Pick | null = null;
 
   constructor(private w: WorldController) {
@@ -204,19 +217,51 @@ export class BuildController {
         const under = hostOf([...rest, ...sofar], def);
         def.props = { ...(def.props ?? {}), z: under ? (entry(under.kind).surface ?? 0) : 0 };
       }
-      let ok = canPlace(this.map, [...rest, ...sofar], def, bodies);
-      // one wall item in hand goes on whichever wall is under the pointer
-      if (!ok && this.hand.length === 1 && entry(def.kind).wall) {
-        const other = { ...def, rot: otherWall(def.rot) };
-        if (canPlace(this.map, rest, other, bodies)) {
-          def = other;
-          ok = true;
-        }
+      // one wall item in hand: on the face it's aimed at, its middle at the
+      // pointer (R: the same spot on the wall's other side)
+      if (this.hanging() && this.aim) {
+        const f = this.aim.face;
+        def = hangNear(def, this.flip ? { ...f, side: f.side > 0 ? -1 : 1 } : f, this.aim.along, this.aim.z);
       }
+      const ok = canPlace(this.map, [...rest, ...sofar], def, bodies);
       sofar.push(def);
       out.push({ def, ok });
     }
     return out;
+  }
+
+  // One wall item in hand: it goes where the pointer meets a wall.
+  private hanging(): boolean {
+    return this.hand.length === 1 && !!entry(this.hand[0].def.kind).wall;
+  }
+
+  // The wall face under the pointer (the first one it meets, facing it; the
+  // walls cut away for the view are looked through), else the face nearest
+  // the floor under the pointer (the only way to reach the faces this view
+  // can't see).
+  private aimWall(): boolean {
+    const e = this.engine;
+    if (!e) return false;
+    const ray = e.pointerRay();
+    const through = e.lookedThrough();
+    const hit = ray ? faceHit(this.map, ray, (w) => through.has(`${w.dir}${w.x},${w.y}`)) : null;
+    let aim: typeof this.aim = null;
+    if (hit) aim = { face: hit.face, along: hit.along, z: hit.z };
+    else {
+      const p = e.pointerWorld();
+      const n = faceNear(this.map, p.x, p.y);
+      if (n) aim = { face: n.face, along: n.along, z: null };
+    }
+    const was = this.aim;
+    if (!aim) return false;
+    // another wall: R's flip starts over
+    if (!was || was.face.dir !== aim.face.dir || was.face.line !== aim.face.line) this.flip = false;
+    this.aim = aim;
+    const key = (a: typeof aim) => {
+      const d = this.hand[0] ? hangNear(this.hand[0].def, a.face, a.along, a.z) : null;
+      return d ? `${d.x},${d.y},${d.rot},${d.props?.wu},${d.props?.wz}` : "";
+    };
+    return !was || key(was) !== key(aim);
   }
 
   // Only things that stand on surfaces in hand: they move cell by cell.
@@ -257,8 +302,9 @@ export class BuildController {
     const placed = this.placed();
     // walls between the camera and what you carry lower out of the way
     const first = placed[0]?.def;
-    if (first) e.focusAt = { x: first.x + 0.5, y: first.y + 0.5 };
-    e.setGhosts(placed, this.hand.length ? LIFT : 0);
+    if (first) e.focusAt = entry(first.kind).wall ? hangSpot(first, 0.5) : { x: first.x + 0.5, y: first.y + 0.5 };
+    // (a wall item shows exactly where it would hang: not lifted)
+    e.setGhosts(placed, this.hand.length && !this.hanging() ? LIFT : 0);
     const fits = placed.every((p) => p.ok);
     if (hud.get().build.fits !== fits) this.setBuild({ fits });
     this.syncHidden();
@@ -273,6 +319,11 @@ export class BuildController {
 
   private setHand(hand: Held[]) {
     this.hand = hand;
+    if (this.hanging()) this.aimWall();
+    else {
+      this.aim = null;
+      this.flip = false;
+    }
     // nothing in hand, no bin: the catalog's bin goes away while it may still be
     // under the pointer (so it never hears it leave)
     if (!hand.length) this.overBin = false;
@@ -285,7 +336,7 @@ export class BuildController {
 
   // A new thing from the catalog (or a copy) on the pointer.
   private fresh(kind: string, props: Record<string, unknown> | null, rot: number): WorldObjectDef {
-    return {
+    const def: WorldObjectDef = {
       id: `ghost-${Math.random().toString(36).slice(2, 8)}`,
       kind,
       x: this.anchor.x,
@@ -293,6 +344,8 @@ export class BuildController {
       rot,
       props: props ?? (kind === "chair" ? { desk: true } : undefined),
     };
+    // (a wall item at its own height until it's aimed somewhere)
+    return entry(kind).wall ? hangCanon({ ...def, props: { ...(def.props ?? {}), wz: 0 } }) : def;
   }
 
   // Props worth copying: not whose desk it is, nor which room it labels.
@@ -360,7 +413,8 @@ export class BuildController {
     if (tops) this.cell = this.pointerCell();
     const inHand = new Set(group.map((o) => o.id));
     return group.map((o) => {
-      const copy = ids ? { ...o, id: ids.get(o.id) ?? ghostId(), props: this.copyable(o.props) } : { ...o };
+      const base = ids ? { ...o, id: ids.get(o.id) ?? ghostId(), props: this.copyable(o.props) } : { ...o };
+      const copy = hangCanon(base);
       const h: Held = { def: copy, origin: ids ? null : o, dx: o.x - t.x, dy: o.y - t.y };
       if (tops) {
         const r = topRect(o);
@@ -412,10 +466,9 @@ export class BuildController {
         x: def.x,
         y: def.y,
         rot: def.rot ?? 0,
-        // moved: as stored (never drawing-only flags), in its new cell if on a top
-        props: h.origin
-          ? { ...(this.storedProps(h.origin.id) ?? {}), ...(onTop(def) ? { c: def.props?.c } : {}) }
-          : def.props,
+        // moved: as stored (never drawing-only flags), in its new cell if on a
+        // top, at its new spot if on a wall
+        props: h.origin ? { ...(this.storedProps(h.origin.id) ?? {}), ...spotProps(def) } : def.props,
       };
     });
     if (items.length === 1) {
@@ -544,15 +597,15 @@ export class BuildController {
         if (h.ride) return h;
         // one thing: turns where it stands (on its first tile, like The Sims)
         if (one)
-          return entry(h.def.kind).wall
-            ? swapWall(h)
-            : h.def.kind === "door"
-              ? h
-              : { ...h, def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 } };
+          return entry(h.def.kind).wall || h.def.kind === "door"
+            ? h
+            : { ...h, def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 } };
         return turnAbout(h, pivot);
       });
+      // a wall item: over to the wall's other side
+      if (this.hanging()) this.flip = !this.flip;
       const b = hud.get().build;
-      if (b.mode === "place" && this.hand.length === 1 && !this.hand[0].origin)
+      if (b.mode === "place" && this.hand.length === 1 && !this.hand[0].origin && !this.hanging())
         this.setBuild({ rot: this.hand[0].def.rot ?? 0 });
       buildSound("rotate");
       return this.drawHand();
@@ -575,8 +628,8 @@ export class BuildController {
       // turn the group about its corner, then check it all fits
       const pivot = { x: Math.min(...group.map((o) => o.x)), y: Math.min(...group.map((o) => o.y)) };
       if (group.length === 1 && entry(group[0].kind).wall) {
-        // a wall item on its own goes over to the other wall, as near as it fits
-        const turned = wallSpotNear(this.map, rest, group[0], this.bodies());
+        // a wall item on its own goes over to the wall's other side, as near as it fits
+        const turned = otherSide(this.map, rest, group[0]);
         if (!turned) {
           buildSound("nope");
           toast(tr("buildNoFit"), "warn");
@@ -605,7 +658,7 @@ export class BuildController {
     }
     const props = (d: WorldObjectDef) => ({
       ...(this.storedProps(d.id) ?? {}),
-      ...(onTop(d) ? { c: d.props?.c } : {}),
+      ...spotProps(d),
     });
     if (defs.length === 1) {
       const d = defs[0];
@@ -795,8 +848,12 @@ export class BuildController {
       const c = topCentre(o);
       return this.engine.worldToClient(c.x, c.y, (Number(o.props?.z) || 0) + 30);
     }
+    if (entry(o.kind).wall) {
+      const p = hangSpot(o, 0.15);
+      return this.engine.worldToClient(p.x, p.y, hangOf(o).z1 + 10);
+    }
     const { w, h } = placedFootprint(o);
-    return this.engine.worldToClient(o.x + w / 2, o.y + h / 2, entry(o.kind).wall ? 70 : 52);
+    return this.engine.worldToClient(o.x + w / 2, o.y + h / 2, 52);
   }
 
   // A thing's middle on the floor plan (world tiles).
@@ -804,6 +861,10 @@ export class BuildController {
     if (onTop(o)) {
       const c = topCentre(o);
       return [c.x, c.y];
+    }
+    if (entry(o.kind).wall) {
+      const p = hangSpot(o, 0.3);
+      return [p.x, p.y];
     }
     const { w, h } = placedFootprint(o);
     return [o.x + w / 2, o.y + h / 2];
@@ -847,6 +908,14 @@ export class BuildController {
       const c = this.pointerCell();
       if (c.x !== this.cell.x || c.y !== this.cell.y) {
         this.cell = c;
+        buildSound("snap");
+        this.drawHand();
+      }
+      return;
+    }
+    if (this.hanging()) {
+      this.anchor = { x: Math.floor(x), y: Math.floor(y) };
+      if (this.aimWall()) {
         buildSound("snap");
         this.drawHand();
       }
@@ -1004,7 +1073,14 @@ export class BuildController {
       // keyboard: nudge what you hold a tile at a time; Enter puts it down
       // (things on a surface: a quarter tile at a time)
       const d = { arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowright: [1, 0] }[key] ?? [0, 0];
-      if (this.fine()) this.cell = { x: this.cell.x + d[0], y: this.cell.y + d[1] };
+      if (this.hanging() && this.aim) {
+        // on a wall: ← → along it a quarter tile (as it runs on screen), ↑ ↓ up and down a step
+        const a = this.aim;
+        const k = hangOf(this.placed()[0].def);
+        const z = a.z ?? (k.z0 + k.z1) / 2;
+        const along = a.face.dir === "h" ? d[0] : -d[0];
+        this.aim = { ...a, along: a.along + along / WQ, z: z - d[1] * WZ_PX };
+      } else if (this.fine()) this.cell = { x: this.cell.x + d[0], y: this.cell.y + d[1] };
       else this.anchor = { x: this.anchor.x + d[0], y: this.anchor.y + d[1] };
       buildSound("snap");
       this.drawHand();
@@ -1109,7 +1185,22 @@ export class BuildController {
     if (this.painting && this.dragDir === "h") return { x: Math.floor(x), y: Math.round(y), dir: "h" };
     return nearestEdge(x, y);
   }
-  private edgeQueue = new Map<string, Edge & { ch: string }>();
+  private edgeQueue = new Map<string, Edge & { ch: string; side?: 1 | -1 }>();
+  // a material dragged over walls that are there paints the face it started on
+  private dragSide: 1 | -1 = 1;
+
+  // Which face of an edge the pointer is at: the one it sees, when it's on
+  // that wall's face; else the side of the wall the floor under it is on.
+  private sideAt(e: Edge, x: number, y: number): 1 | -1 {
+    const ray = this.engine?.pointerRay();
+    const through = this.engine?.lookedThrough();
+    const hit = ray ? faceHit(this.map, ray, (w) => !!through?.has(`${w.dir}${w.x},${w.y}`)) : null;
+    if (hit && hit.face.dir === e.dir && hit.face.line === (e.dir === "h" ? e.y : e.x)) {
+      const a = e.dir === "h" ? e.x : e.y;
+      if (hit.along >= a && hit.along <= a + 1) return hit.face.side;
+    }
+    return (e.dir === "h" ? y >= e.y : x >= e.x) ? 1 : -1;
+  }
 
   // What a wall brush puts on an edge: a material, a window in the wall that's
   // there (plaster if none), or no wall.
@@ -1121,7 +1212,10 @@ export class BuildController {
   }
 
   private paintEdge(e: Edge) {
-    this.edgeQueue.set(`${e.dir}${e.x},${e.y}`, { ...e, ch: this.edgeChar(e) });
+    const ch = this.edgeChar(e);
+    // (a material: only that face of a wall that's there; the server builds new walls whole)
+    const side = /^[pwfbk]$/.test(ch) ? this.dragSide : undefined;
+    this.edgeQueue.set(`${e.dir}${e.x},${e.y}`, { ...e, ch, side });
     if (!this.paintTimer) this.paintTimer = setTimeout(() => this.flushPaint(), 80);
   }
 
@@ -1163,6 +1257,7 @@ export class BuildController {
       const e = nearestEdge(x, y);
       this.painting = true;
       this.dragDir = e.dir;
+      this.dragSide = this.sideAt(e, x, y);
       this.paintEdge(e);
     } else if (b.tool === "walls" && !br.startsWith("door")) {
       this.painting = true;
@@ -1291,11 +1386,18 @@ export class BuildController {
   private paintBox(r: { x: number; y: number; w: number; h: number }) {
     const br = this.brushNow();
     if (br.startsWith("w:")) {
-      const edges: Edge[] = [];
-      for (let x = r.x; x < r.x + r.w; x++) edges.push({ x, y: r.y, dir: "h" }, { x, y: r.y + r.h, dir: "h" });
-      for (let y = r.y; y < r.y + r.h; y++) edges.push({ x: r.x, y, dir: "v" }, { x: r.x + r.w, y, dir: "v" });
+      // (with the face looking into the box: a material over walls that are
+      // there paints their inner faces)
+      const edges: (Edge & { side: 1 | -1 })[] = [];
+      for (let x = r.x; x < r.x + r.w; x++)
+        edges.push({ x, y: r.y, dir: "h", side: 1 }, { x, y: r.y + r.h, dir: "h", side: -1 });
+      for (let y = r.y; y < r.y + r.h; y++)
+        edges.push({ x: r.x, y, dir: "v", side: 1 }, { x: r.x + r.w, y, dir: "v", side: -1 });
       // windows check the walls painted before them: walls first
-      const all = edges.map((e) => ({ ...e, ch: this.edgeChar(e) }));
+      const all = edges.map((e) => {
+        const ch = this.edgeChar(e);
+        return { dir: e.dir, x: e.x, y: e.y, ch, side: /^[pwfbk]$/.test(ch) ? e.side : undefined };
+      });
       for (let i = 0; i < all.length; i += 600) this.send("map:walls", { edges: all.slice(i, i + 600) });
       return;
     }
@@ -1351,39 +1453,25 @@ export class BuildController {
   }
 }
 
-// Wall items hang on the north wall (rot 0) or the west wall (rot 3): turning
-// one swaps walls.
-const otherWall = (rot?: number) => (wallRot(rot) === 3 ? 0 : 3);
-function swapWall(h: Held): Held {
-  return { ...h, def: { ...h.def, rot: otherWall(h.def.rot) } };
+// Where a moved thing is, beyond x / y / rot: its cell on a top, its spot on a wall.
+function spotProps(d: WorldObjectDef): Record<string, unknown> {
+  if (onTop(d)) return { c: d.props?.c };
+  if (entry(d.kind).wall) return { wu: d.props?.wu, wz: d.props?.wz };
+  return {};
 }
 
-// A wall item turned onto the other wall: where it hangs if that fits, else the
-// nearest place on such a wall within a few tiles (the corner, usually).
-function wallSpotNear(
-  map: MapDef,
-  others: WorldObjectDef[],
-  o: WorldObjectDef,
-  bodies: Point[],
-): WorldObjectDef | null {
-  const rot = otherWall(o.rot);
-  const n = footprint(o.kind, 0).w;
-  // keep its middle where it was
-  const [mx, my] = wallRot(o.rot) === 3 ? [o.x, o.y + n / 2] : [o.x + n / 2, o.y];
-  const [cx, cy] = rot === 3 ? [mx, my - n / 2] : [mx - n / 2, my];
-  let best: WorldObjectDef | null = null;
-  let bestD = Number.POSITIVE_INFINITY;
-  for (let dy = -4; dy <= 4; dy++)
-    for (let dx = -4; dx <= 4; dx++) {
-      const d = Math.hypot(dx, dy);
-      if (d >= bestD) continue;
-      const def = { ...o, rot, x: Math.round(cx) + dx, y: Math.round(cy) + dy };
-      if (canPlace(map, others, def, bodies)) {
-        best = def;
-        bestD = d;
-      }
+// A wall item turned over to its wall's other side: the same spot if that
+// fits, else the nearest along that face (up to two tiles either way).
+function otherSide(map: MapDef, others: WorldObjectDef[], o: WorldObjectDef): WorldObjectDef | null {
+  const h = hangOf(o);
+  const face: Face = { dir: h.dir, line: h.line, side: h.side > 0 ? -1 : 1 };
+  const wz = Math.round(h.lift / WZ_PX);
+  for (let k = 0; k <= 2 * WQ; k++)
+    for (const s of k ? [1, -1] : [1]) {
+      const def = hangAt(o, face, h.u0 + s * k, wz);
+      if (canPlace(map, others, def)) return def;
     }
-  return best;
+  return null;
 }
 
 // A quarter turn clockwise of something held, about the pointer's tile.

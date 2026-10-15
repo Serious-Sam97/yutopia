@@ -4,6 +4,7 @@ import {
   entry,
   footprint,
   HALF_WALL,
+  hangOf,
   hWall,
   isFloor,
   isWallEdge,
@@ -401,12 +402,16 @@ export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
   if (p.flat) return [];
   if (e.onSurface) return topParts(o, p, host);
   const rot = rotOf(o);
-  const west = e.wall && rot === 3; // hangs on a west wall, facing east
+  // wall items: on any face of a wall, shifted along it and raised (hang.ts);
+  // `along`: the wall runs along y (east / west faces)
+  const hg = e.wall ? hangOf(o) : null;
+  const along = hg?.dir === "v";
+  const [ax, ay, lift] = hg ? [hg.ax, hg.ay, hg.lift] : [o.x, o.y, 0];
   const { w, h } = footprint(o.kind, rot);
   const boxes = rotateBoxes(e.wall ? p.boxes.map((b) => ({ ...b, y: b.y + WALL_FACE })) : p.boxes, e.w, e.h, rot);
   const slices: Clip[] = [];
-  if (west) for (let i = 0; i < h * 4; i++) slices.push({ x0: -1, x1: w + 1, y0: i / 4, y1: (i + 1) / 4 });
-  else if (e.wall) for (let i = 0; i < w * 4; i++) slices.push({ x0: i / 4, x1: (i + 1) / 4, y0: -1, y1: h + 1 });
+  if (hg && along) for (let i = 0; i < h * 4; i++) slices.push({ x0: -1, x1: w + 1, y0: i / 4, y1: (i + 1) / 4 });
+  else if (hg) for (let i = 0; i < w * 4; i++) slices.push({ x0: i / 4, x1: (i + 1) / 4, y0: -1, y1: h + 1 });
   else if (w > h) for (let i = 0; i < w; i++) slices.push({ x0: i, x1: i + 1, y0: -1, y1: h + 1 });
   else if (h > w) for (let i = 0; i < h; i++) slices.push({ x0: -1, x1: w + 1, y0: i, y1: i + 1 });
   else slices.push({ x0: -1, x1: w + 1, y0: -1, y1: h + 1 });
@@ -424,10 +429,10 @@ export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
         // organic extras (leaves, poles) — only 1×1 pieces have them, so no offset
         if (p.custom && i === 0 && bias <= 0) p.custom(g);
       });
-      const sw = e.wall && !west ? 0.25 : slices.length > 1 ? Math.min(1, w) : w;
-      const sh = west ? 0.25 : slices.length > 1 ? Math.min(1, h) : h;
-      const wx = o.x + cx;
-      const wy = o.y + cy;
+      const sw = hg && !along ? 0.25 : slices.length > 1 ? Math.min(1, w) : w;
+      const sh = hg && along ? 0.25 : slices.length > 1 ? Math.min(1, h) : h;
+      const wx = ax + cx;
+      const wy = ay + cy;
       const [sx, sy] = P(wx, wy);
       let art: Part["art"];
       if (illustrated(o.kind)) {
@@ -439,31 +444,30 @@ export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
         const [ox, oy] = P(cx, cy);
         art = { key: akey, get: memo(akey, () => m.itemArt(ref, clipped, group, artRes)), ox, oy };
       }
-      // wall items: just in front of the wall slice behind them, fading with that wall
-      const key = west
-        ? o.x + wy + sh / 2 + 0.01
-        : e.wall
-          ? wx + sw / 2 + o.y + 0.01
-          : wx + Math.min(sw, w - cx) / 2 + wy + Math.min(sh, h - cy) / 2 + bias;
+      // wall items: just in front of the wall slice behind them (just behind it
+      // on its far face), fading with that wall
+      const key = hg
+        ? hg.line + (along ? wy + sh / 2 : wx + sw / 2) + 0.01 * hg.side
+        : wx + Math.min(sw, w - cx) / 2 + wy + Math.min(sh, h - cy) / 2 + bias;
       out.push({
         ctx,
         x: sx,
-        y: sy,
+        y: sy - lift,
         key,
         wx,
         wy,
         objectId: o.id,
         art,
-        edge: west
-          ? { dir: "v", x: o.x, y: Math.floor(wy), high: true }
-          : e.wall
-            ? { dir: "h", x: Math.floor(wx), y: o.y, high: true }
-            : undefined,
-        at: west
-          ? [o.x + 0.25, wy + sh / 2]
-          : e.wall
-            ? [wx + sw / 2, o.y + 0.25]
-            : [wx + Math.min(sw, w - cx) / 2, wy + Math.min(sh, h - cy) / 2],
+        edge: hg
+          ? along
+            ? { dir: "v", x: hg.line, y: Math.floor(wy), high: true }
+            : { dir: "h", x: Math.floor(wx), y: hg.line, high: true }
+          : undefined,
+        at: hg
+          ? along
+            ? [hg.line + hg.side * 0.25, wy + sh / 2]
+            : [wx + sw / 2, hg.line + hg.side * 0.25]
+          : [wx + Math.min(sw, w - cx) / 2, wy + Math.min(sh, h - cy) / 2],
       });
     }
   });

@@ -129,6 +129,9 @@ export class SpaceState extends Schema {
   // walls on tile edges (map v2): north edges per row, west edges per row
   @type(["string"]) hWalls = new ArraySchema<string>();
   @type(["string"]) vWalls = new ArraySchema<string>();
+  // their other faces' materials where they differ (shared map.ts: two faces); empty = none
+  @type(["string"]) hBacks = new ArraySchema<string>();
+  @type(["string"]) vBacks = new ArraySchema<string>();
   @type("string") areas = "[]";
   @type("float32") spawnX = 0;
   @type("float32") spawnY = 0;

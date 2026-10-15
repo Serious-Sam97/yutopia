@@ -96,7 +96,8 @@ export interface ClientMessages {
   "mod:lock": { area: string; locked: boolean };
   // map editing (builders)
   "map:paint": { cells: { x: number; y: number; ch: string }[] }; // floors (tiles)
-  "map:walls": { edges: { x: number; y: number; dir: "h" | "v"; ch: string }[] }; // walls (tile edges)
+  // walls (tile edges); `side` (a material on a wall that's there): paint only that face
+  "map:walls": { edges: { x: number; y: number; dir: "h" | "v"; ch: string; side?: 1 | -1 }[] };
   "map:resize": { width: number; height: number };
   "map:theme": { theme: string }; // clouds | city | snow
   "map:new": { width: number; height: number };

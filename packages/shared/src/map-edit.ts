@@ -1,15 +1,20 @@
 import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
 import { doorEdge } from "./grid.ts";
+import { hangOf, hangTiles, WQ, wallSpan } from "./hang.ts";
 import type { Point } from "./iso.ts";
 import {
   type AreaDef,
   type AreaKind,
+  backAt,
   EDGE_CHARS,
   type Edge,
   edgeAt,
   emptyEdges,
+  FACE_MATS,
   FLOORS,
+  hasBacks,
   holdsItems,
+  isFacedWall,
   isFloor,
   isOuterEdge,
   isTheme,
@@ -17,12 +22,12 @@ import {
   isWindow,
   type MapDef,
   NO_WALL,
+  setBack,
   setEdge,
   type Theme,
   tileAt,
   VOID,
   type WallMat,
-  wallSpan,
 } from "./map.ts";
 
 // Per-space layouts: the map is data (saved in Yondra), not code. Builders
@@ -37,6 +42,8 @@ export interface Layout {
   tiles: string[];
   hWalls?: string[]; // v2 (absent in v1 layouts: walls were "#" tiles)
   vWalls?: string[];
+  hBacks?: string[]; // the walls' other faces where they differ (map.ts: two faces)
+  vBacks?: string[];
   areas: AreaDef[];
   spawn: Point;
   theme?: Theme;
@@ -63,15 +70,27 @@ export function layoutFromMap(map: MapDef): Layout {
     tiles: [...map.tiles],
     hWalls: [...map.hWalls],
     vWalls: [...map.vWalls],
+    ...(hasBacks(map) ? backRows(map) : {}),
     areas: map.areas.map((a) => ({ ...a })),
     spawn: { ...map.spawn },
     theme: map.theme ?? "clouds",
   };
 }
 
+// The back faces' rows, full size (as long as the walls' rows).
+function backRows(map: { hWalls: string[]; vWalls: string[]; hBacks?: string[]; vBacks?: string[] }): {
+  hBacks: string[];
+  vBacks: string[];
+} {
+  const fit = (walls: string[], backs?: string[]) =>
+    walls.map((r, y) => (backs?.[y] ?? "").slice(0, r.length).padEnd(r.length, NO_WALL));
+  return { hBacks: fit(map.hWalls, map.hBacks), vBacks: fit(map.vWalls, map.vBacks) };
+}
+
 // A v2 layout as a map (v1 layouts go through convertV1 first).
 export function mapFromLayout(key: string, name: string, l: Layout): MapDef {
   const edges = l.hWalls && l.vWalls ? { hWalls: [...l.hWalls], vWalls: [...l.vWalls] } : emptyEdges(l.width, l.height);
+  const backs = l.hWalls && l.vWalls && (l.hBacks || l.vBacks) ? backRows({ ...edges, ...l }) : {};
   return {
     key,
     name,
@@ -79,6 +98,7 @@ export function mapFromLayout(key: string, name: string, l: Layout): MapDef {
     height: l.height,
     tiles: [...l.tiles],
     ...edges,
+    ...backs,
     areas: l.areas.map((a) => ({ ...a })),
     spawn: { ...l.spawn },
     objects: [],
@@ -106,6 +126,13 @@ export function validLayout(l: unknown): l is Layout {
       r.length === n &&
       r.every((s) => typeof s === "string" && s.length === w && [...s].every((c) => edge.has(c)));
     if (!rows(x.hWalls, x.height + 1, x.width) || !rows(x.vWalls, x.height, x.width + 1)) return false;
+    const back = new Set<string>([NO_WALL, ...FACE_MATS]);
+    const backs = (r: unknown, n: number, w: number) =>
+      r === undefined ||
+      (Array.isArray(r) &&
+        r.length === n &&
+        r.every((s) => typeof s === "string" && s.length === w && [...s].every((c) => back.has(c))));
+    if (!backs(x.hBacks, x.height + 1, x.width) || !backs(x.vBacks, x.height, x.width + 1)) return false;
   }
   if (x.theme !== undefined && !isTheme(x.theme)) return false;
   if (!Array.isArray(x.areas) || x.areas.length > 200) return false;
@@ -138,6 +165,10 @@ export function paintBlocker(
   for (const o of objects) {
     const e = entry(o.kind);
     if (o.kind === "door") continue;
+    if (e.wall) {
+      if (hangTiles(o).some(([tx, ty]) => tx === x && ty === y)) return `${e.label} hangs there`;
+      continue;
+    }
     const { w, h } = placedFootprint(o);
     if (x >= o.x && x < o.x + w && y >= o.y && y < o.y + h) return `${e.label} is there`;
   }
@@ -190,9 +221,11 @@ export function edgeBlocker(map: MapDef, objects: WorldObjectDef[], e: Edge, ch:
     }
     const ent = entry(o.kind);
     if (ent.wall) {
-      // boards hang on the north (or west) edge of their tiles
+      // never away from under something hanging on it (either face)
       if (!holdsItems(ch) && wallSpan(o).some((s) => s.dir === e.dir && s.x === e.x && s.y === e.y))
         return `${ent.label} hangs on that wall`;
+      // nor a wall built across one
+      if (isWallEdge(ch) && hangCrosses(o, e)) return `${ent.label} hangs across there`;
       continue;
     }
     if (isWallEdge(ch) && covers(o, a[0], a[1]) && covers(o, b[0], b[1])) return `${ent.label} is in the way`;
@@ -201,9 +234,48 @@ export function edgeBlocker(map: MapDef, objects: WorldObjectDef[], e: Edge, ch:
   return null;
 }
 
-export function applyEdges(map: MapDef, edges: (Edge & { ch: string })[]): MapDef {
-  const next = { ...map, hWalls: [...map.hWalls], vWalls: [...map.vWalls] };
-  for (const e of edges) setEdge(next, e, e.ch);
+// Does a wall on edge `e` run across a wall item (meet its face somewhere along it)?
+function hangCrosses(o: WorldObjectDef, e: Edge): boolean {
+  const h = hangOf(o);
+  if (e.dir === h.dir) return false;
+  const back = h.side > 0 ? h.line : h.line - 1;
+  const [p, q] = h.dir === "h" ? [e.x, e.y] : [e.y, e.x];
+  return q === back && p * WQ > h.u0 && p * WQ < h.u1;
+}
+
+// An edit of one edge: `ch` the wall it gets; `side` (a material on a wall
+// that's there): paint only that face (+1: its +y / +x face, −1 the other).
+export type EdgeEdit = Edge & { ch: string; side?: number };
+
+export function applyEdges(map: MapDef, edges: EdgeEdit[]): MapDef {
+  const next = {
+    ...map,
+    hWalls: [...map.hWalls],
+    vWalls: [...map.vWalls],
+    hBacks: map.hBacks && [...map.hBacks],
+    vBacks: map.vBacks && [...map.vBacks],
+  };
+  for (const e of edges) {
+    const cur = edgeAt(next, e);
+    const front = isFacedWall(cur) ? cur.toLowerCase() : null;
+    const back = backAt(next, e) === NO_WALL ? front : backAt(next, e);
+    if (e.side && front && FACE_MATS.includes(e.ch) && e.ch.length === 1) {
+      // one face only
+      if (e.side > 0) {
+        setEdge(next, e, isWindow(cur) ? e.ch.toUpperCase() : e.ch);
+        setBack(next, e, back === e.ch ? NO_WALL : (back ?? NO_WALL));
+      } else setBack(next, e, e.ch === front ? NO_WALL : e.ch);
+      continue;
+    }
+    setEdge(next, e, e.ch);
+    // still a two-faced wall (a window put in, the front repainted): the back keeps its look
+    const keep = front && isFacedWall(e.ch) ? back : null;
+    setBack(next, e, keep && keep !== e.ch.toLowerCase() ? keep : NO_WALL);
+  }
+  if (next.hBacks && !hasBacks(next)) {
+    next.hBacks = undefined;
+    next.vBacks = undefined;
+  }
   return next;
 }
 
@@ -227,6 +299,8 @@ export function resizeMap(map: MapDef, width: number, height: number): MapDef {
     tiles,
     hWalls: fit(map.hWalls, h + 1, w),
     vWalls: fit(map.vWalls, h, w + 1),
+    hBacks: map.hBacks && fit(map.hBacks, h + 1, w),
+    vBacks: map.vBacks && fit(map.vBacks, h, w + 1),
     areas,
   };
   if (!isFloor(tileAt(next, Math.floor(map.spawn.x), Math.floor(map.spawn.y))))
@@ -251,11 +325,12 @@ export function firstFloor(map: MapDef): Point | null {
   return best;
 }
 
-// A ring of walls around a rectangle of tiles (on its outer edges).
-function ring(x: number, y: number, w: number, h: number): Edge[] {
-  const out: Edge[] = [];
-  for (let i = 0; i < w; i++) out.push({ x: x + i, y, dir: "h" }, { x: x + i, y: y + h, dir: "h" });
-  for (let j = 0; j < h; j++) out.push({ x, y: y + j, dir: "v" }, { x: x + w, y: y + j, dir: "v" });
+// A ring of walls around a rectangle of tiles (on its outer edges); `side`:
+// the face looking into it.
+function ring(x: number, y: number, w: number, h: number): (Edge & { side: 1 | -1 })[] {
+  const out: (Edge & { side: 1 | -1 })[] = [];
+  for (let i = 0; i < w; i++) out.push({ x: x + i, y, dir: "h", side: 1 }, { x: x + i, y: y + h, dir: "h", side: -1 });
+  for (let j = 0; j < h; j++) out.push({ x, y: y + j, dir: "v", side: 1 }, { x: x + w, y: y + j, dir: "v", side: -1 });
   return out;
 }
 
@@ -320,13 +395,19 @@ export function addRoom(
     const dx = r.x + Math.floor(r.w / 2);
     // the doorway: bottom wall, or the top one when the room sits on the map's bottom edge
     const dy = r.y + r.h < map.height ? r.y + r.h : r.y;
-    const walls: (Edge & { ch: string })[] = [];
+    const walls: EdgeEdit[] = [];
     for (const e of ring(r.x, r.y, r.w, r.h)) {
       if (e.dir === "h" && e.x === dx && e.y === dy) continue;
-      if (isWallEdge(edgeAt(next, e)) && edgeAt(next, e) === mat) continue;
+      const cur = edgeAt(next, e);
+      // a wall that's there (a neighbour's): only its face on this side changes
+      if (isFacedWall(cur) && FACE_MATS.includes(mat)) {
+        walls.push({ ...e, ch: mat });
+        continue;
+      }
+      if (isWallEdge(cur) && cur === mat) continue;
       const why = edgeBlocker(next, objects, e, mat);
       if (why) return `can't build a wall there: ${why}`;
-      walls.push({ ...e, ch: mat });
+      walls.push({ dir: e.dir, x: e.x, y: e.y, ch: mat });
     }
     next = applyEdges(next, walls);
     // keep the doorway open even if a wall was there
@@ -349,15 +430,17 @@ export function addRoom(
   return { map: next, door };
 }
 
-// Repaint the walls around a room in another material (keeps windows).
+// Repaint the walls around a room in another material: the faces looking into
+// it (the room next door keeps its side), windows kept. Glass is the whole wall.
 export function setRoomWalls(map: MapDef, key: string, mat: WallMat): MapDef {
   const a = map.areas.find((x) => x.key === key);
   if (!a) return map;
-  const edges: (Edge & { ch: string })[] = [];
+  const edges: EdgeEdit[] = [];
   for (const e of ring(a.x, a.y, a.w, a.h)) {
     const ch = edgeAt(map, e);
     if (!isWallEdge(ch) || ch === "h") continue;
-    edges.push({ ...e, ch: isWindow(ch) && mat !== "g" ? mat.toUpperCase() : mat });
+    if (mat !== "g" && isFacedWall(ch)) edges.push({ ...e, ch: mat });
+    else edges.push({ dir: e.dir, x: e.x, y: e.y, ch: isWindow(ch) && mat !== "g" ? mat.toUpperCase() : mat });
   }
   return applyEdges(map, edges);
 }

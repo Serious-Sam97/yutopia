@@ -1,4 +1,4 @@
-import { entryWallItem, type WorldObjectDef, wallRot } from "@yutopia/shared";
+import { hangOf, hangPoint, type WorldObjectDef } from "@yutopia/shared";
 import { GAME_ASPECT } from "@yutopia/shared/games";
 import { GLASS, glassCorners } from "@yutopia/shared/media";
 import {
@@ -184,13 +184,13 @@ export class LiveFeed {
       if (taken.has(id)) continue;
       const o = engine.getObject(id) ?? p.def;
       // as the iso view mounts it (engine.mountWall): on the wall's face, from ox along it
+      // (any face, shifted along and raised: hang.ts)
       const S = 36;
-      const tiles = entryWallItem(o.kind);
-      const west = wallRot(o.rot) === 3;
       const len = p.pw / S;
-      const tl: [number, number] = west ? [o.x + p.oy + 0.1, o.y + tiles - p.ox] : [o.x + p.ox, o.y + p.oy + 0.1];
-      const tr: [number, number] = west ? [tl[0], tl[1] - len] : [tl[0] + len, tl[1]];
-      const at = { tl, tr, zTop: p.zTop, zBot: p.zTop - p.ph };
+      const tl = hangPoint(o, p.ox, p.oy + 0.1);
+      const tr = hangPoint(o, p.ox + len, p.oy + 0.1);
+      const up = hangOf(o).lift;
+      const at = { tl, tr, zTop: p.zTop + up, zBot: p.zTop + up - p.ph };
       const video = engine.shareVideo(id);
       if (video) {
         const fit = (video.videoWidth || 16) / (video.videoHeight || 9);

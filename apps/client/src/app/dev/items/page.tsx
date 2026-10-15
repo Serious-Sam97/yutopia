@@ -63,6 +63,9 @@ const ROWS: Row[] = [
   { label: "Wall TV · cream", kind: "tv_wall", id: "tw2", props: { variant: 1 }, rots: [0] },
   { label: "Big HD TV", kind: "tv_hd", id: "hd1", rots: [0] },
   { label: "Projector screen", kind: "projector_screen", id: "ps1", rots: [0] },
+  { label: "Giant TV", kind: "tv_giant", id: "gt1", rots: [0] },
+  { label: "Cinema screen · red / blue velvet", kind: "cinema_screen", id: "cs1", props: { variant: 0 }, rots: [0] },
+  { label: "Cinema screen · blue velvet", kind: "cinema_screen", id: "cs2", props: { variant: 1 }, rots: [0] },
   {
     label: "Film projector · off / on",
     kind: "projector",

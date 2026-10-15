@@ -17,6 +17,8 @@ import {
   Grid,
   getMap,
   HEAR_RADIUS,
+  hangSpot,
+  hangStrip,
   hearingGain,
   isPrivate,
   isSocial,
@@ -29,6 +31,7 @@ import {
   placedFootprint,
   ROOM_NAME,
   RUN_SPEED,
+  reachOf,
   type ServerMessages,
   SOCIAL,
   SOCIAL_MS,
@@ -41,7 +44,6 @@ import {
   WALK_SPEED,
   type WbItem,
   type WorldObjectDef,
-  wallRot,
 } from "@yutopia/shared";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
@@ -1067,10 +1069,7 @@ export class WorldController {
     for (const o of this.engine.allObjects()) {
       const e = entry(o.kind);
       if (!e.interact || (cable && !isGameTv(o.kind))) continue;
-      const { w, h } = placedFootprint(o);
-      const cx = Math.max(o.x, Math.min(this.me.x, o.x + w));
-      const cy = Math.max(o.y, Math.min(this.me.y, o.y + h));
-      const d = Math.hypot(this.me.x - cx, this.me.y - cy);
+      const d = reachOf(o, this.me);
       if (d < bestD) {
         bestD = d;
         best = o;
@@ -1266,13 +1265,13 @@ export class WorldController {
     const e = entry(o.kind);
     if (!e.interact) return;
     const { w, h } = placedFootprint(o);
-    const cx = Math.max(o.x, Math.min(this.me.x, o.x + w));
-    const cy = Math.max(o.y, Math.min(this.me.y, o.y + h));
-    if (Math.hypot(this.me.x - cx, this.me.y - cy) > INTERACT_RANGE + 0.3) {
+    if (reachOf(o, this.me) > INTERACT_RANGE + 0.3) {
       if (!walkIfFar) return;
-      // walk to the nearest open tile in front of it, then open
-      const front =
-        this.grid.nearestOpen(o.x + w / 2, o.y + h + 0.5, 4) ?? this.grid.nearestOpen(o.x + w / 2, o.y + h / 2, 4);
+      // walk to the nearest open tile in front of it (a wall item: its side of the wall), then open
+      const spot = e.wall ? hangSpot(o, 0.7) : null;
+      const front = spot
+        ? this.grid.nearestOpen(spot.x, spot.y, 4)
+        : (this.grid.nearestOpen(o.x + w / 2, o.y + h + 0.5, 4) ?? this.grid.nearestOpen(o.x + w / 2, o.y + h / 2, 4));
       if (front) this.walkTo(front, id);
       return;
     }
@@ -1745,6 +1744,8 @@ export class WorldController {
           );
       engine.clientOverride = (x, y, z) => v.project(x, y, z / 39.19) ?? { x: -9999, y: -9999 };
       engine.floorOverride = (cx, cy, z) => v.floorAt(cx, cy, z / 39.19) ?? { x: -1, y: -1 };
+      engine.rayOverride = (cx, cy) => v.rayAt(cx, cy);
+      engine.throughOverride = () => v.lookedThrough();
       v.mount(host);
       v.setQuality(this.qualityNow());
       v.setMode(prefs().cam3p);
@@ -1779,6 +1780,8 @@ export class WorldController {
       e.picksOverride = null;
       e.clientOverride = null;
       e.floorOverride = null;
+      e.rayOverride = null;
+      e.throughOverride = null;
       e.app.canvas.style.visibility = "";
     }
   }
@@ -1794,12 +1797,12 @@ export class WorldController {
   private footprintOf(id: string | undefined): { x: number; y: number; w: number; h: number } | null {
     const o = id ? this.engine?.getObject(id) : undefined;
     if (!o) return null;
-    const e = entry(o.kind);
+    if (entry(o.kind).wall) {
+      const r = hangStrip(o, 0.6);
+      return { x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0 };
+    }
     const { w, h } = placedFootprint(o);
-    const west = e.wall && wallRot(o.rot) === 3;
-    const x0 = west ? o.x : o.x - 0.08;
-    const y0 = e.wall && !west ? o.y : o.y - 0.08;
-    return { x: x0, y: y0, w: o.x + w + 0.08 - x0, h: o.y + h + 0.08 - y0 };
+    return { x: o.x - 0.08, y: o.y - 0.08, w: w + 0.16, h: h + 0.16 };
   }
 
   // A chat bubble over someone, in both views (switching keeps it).
@@ -1885,6 +1888,8 @@ export class WorldController {
       theme: isTheme(st.theme) ? st.theme : "clouds",
       hWalls: [...(st.hWalls ?? [])],
       vWalls: [...(st.vWalls ?? [])],
+      hBacks: st.hBacks?.length ? [...st.hBacks] : undefined,
+      vBacks: st.vBacks?.length ? [...st.vBacks] : undefined,
       areas,
       spawn: { x: st.spawnX, y: st.spawnY },
       objects: [],

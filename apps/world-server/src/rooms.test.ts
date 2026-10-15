@@ -452,6 +452,39 @@ test("map editing: builders paint floors and walls on edges, nobody gets walled 
   await waitFor(() => Math.abs(me(member).y - 6) >= 0.32); // off the wall
 });
 
+test("two-faced walls: each face its own material; wall items hang on either face, anywhere on it", async () => {
+  const s = ++space;
+  const owner = await person(29, s, "member,builder");
+  const hw = () => [...owner.room.state.hWalls] as string[];
+  const hb = () => [...owner.room.state.hBacks] as string[];
+  const obj = (id: string) => owner.room.state.objects.get(id);
+  owner.room.send("map:walls", {
+    edges: [10, 11, 12].map((x) => ({ x, y: 3, dir: "h" as const, ch: "p" })),
+  });
+  await waitFor(() => hw()[3].slice(10, 13) === "ppp");
+  // the back face (−y) cork, the front stays plaster
+  owner.room.send("map:walls", { edges: [{ x: 11, y: 3, dir: "h", ch: "k", side: -1 }] });
+  await waitFor(() => hb()[3]?.[11] === "k");
+  assert.equal(hw()[3][11], "p");
+  // a whiteboard on the back face, half a tile along and raised three steps
+  owner.room.send("obj:put", { id: "wb-back", kind: "whiteboard", x: 10, y: 2, rot: 2, props: { wu: 2, wz: 3 } });
+  await waitFor(() => !!obj("wb-back"));
+  assert.equal(obj("wb-back")?.rot, 2);
+  assert.deepEqual(JSON.parse(obj("wb-back")?.props ?? "{}"), { wu: 2, wz: 3 });
+  // the same spot on that face is taken; on the other face it's free
+  const toasts = owner.msgs.toast?.length ?? 0;
+  owner.room.send("obj:put", { id: "wb-over", kind: "whiteboard", x: 10, y: 2, rot: 2, props: { wu: 3, wz: 3 } });
+  await waitFor(() => (owner.msgs.toast?.length ?? 0) > toasts);
+  assert.equal(obj("wb-over"), undefined);
+  owner.room.send("obj:put", { id: "wb-front", kind: "whiteboard", x: 10, y: 3, rot: 0, props: { wu: 2, wz: 99 } });
+  await waitFor(() => !!obj("wb-front"));
+  assert.equal(JSON.parse(obj("wb-front")?.props ?? "{}").wz, 6, "as high as it goes, not off the wall");
+  // the wall can't go from under them
+  owner.room.send("map:walls", { edges: [{ x: 11, y: 3, dir: "h", ch: "." }] });
+  await sleep(250);
+  assert.equal(hw()[3][11], "p");
+});
+
 test("chat reactions: only people who got the message react, and they all see the count", async () => {
   const s = ++space;
   const ana = await person(50, s);

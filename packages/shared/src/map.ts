@@ -1,26 +1,8 @@
-import { entry, footprint, type WorldObjectDef, wallRot } from "./catalog.ts";
+import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
 
-// How many tiles of wall a wall item covers (0 = not a wall item).
+// How many tiles of wall a wall item's drawing is (0 = not a wall item).
 export function entryWallItem(kind: string): number {
   return entry(kind).wall ? footprint(kind, 0).w : 0;
-}
-
-// The edges a wall item hangs on, one per tile: the north edges of a row of
-// tiles, or (turned) the west edges of a column.
-export function wallSpan(o: { kind: string; x: number; y: number; rot?: number }): Edge[] {
-  const n = entryWallItem(o.kind);
-  const west = wallRot(o.rot) === 3;
-  return Array.from({ length: n }, (_, i) =>
-    west ? { dir: "v" as const, x: o.x, y: o.y + i } : { dir: "h" as const, x: o.x + i, y: o.y },
-  );
-}
-
-// Is anything (but `except`) hanging on this edge?
-export function hungOn(objects: Iterable<WorldObjectDef>, e: Edge, except?: string): WorldObjectDef | undefined {
-  for (const o of objects)
-    if (o.id !== except && entry(o.kind).wall && wallSpan(o).some((s) => s.dir === e.dir && s.x === e.x && s.y === e.y))
-      return o;
-  return undefined;
 }
 
 // Floors. Anything not listed (wall/void) is not walkable.
@@ -61,6 +43,16 @@ export const blocksLight = (ch: string | undefined): boolean => isWallEdge(ch) &
 // a wall things can hang on (boards, posters): opaque, full height, no window
 export const holdsItems = (ch: string | undefined): boolean => blocksLight(ch) && !isWindow(ch);
 export const wallMat = (ch: string): WallMat => (ch === HALF_WALL ? "p" : (ch.toLowerCase() as WallMat));
+
+// ── two faces ────────────────────────────────────────────────────────────────
+// A full opaque wall (plaster, walnut, foam, brick, cork; with a window or not)
+// has two faces, each in its own material: the edge's char is the "front" one
+// (the +y face of a wall along x, the +x face of one along y: the faces the iso
+// view looks at), `hBacks` / `vBacks` (same shape as hWalls / vWalls) the other
+// one — "." (or nothing stored) = the same as the front. Glass and half walls
+// are one thing through and through.
+export const FACE_MATS = "pwfbk";
+export const isFacedWall = (ch: string | undefined): boolean => !!ch && ch.length === 1 && "pwfbkPWFBK".includes(ch);
 
 export type EdgeDir = "h" | "v";
 export interface Edge {
@@ -108,6 +100,9 @@ export interface MapDef {
   tiles: string[]; // floor chars or VOID (v1 maps also had WALL tiles)
   hWalls: string[]; // height + 1 rows of width chars
   vWalls: string[]; // height rows of width + 1 chars
+  // the other face's material where it differs (two faces, above); absent = none
+  hBacks?: string[];
+  vBacks?: string[];
   spawn: { x: number; y: number };
   areas: AreaDef[];
   objects: WorldObjectDef[];
@@ -125,6 +120,21 @@ export function vWall(map: MapDef, x: number, y: number): string {
 }
 export function edgeAt(map: MapDef, e: Edge): string {
   return e.dir === "h" ? hWall(map, e.x, e.y) : vWall(map, e.x, e.y);
+}
+
+// The material of one face of a wall (side +1: its +y / +x face), or null when
+// it isn't a two-faced wall.
+export function faceMat(map: MapDef, e: Edge, side: number): WallMat | null {
+  const ch = edgeAt(map, e);
+  if (!isFacedWall(ch)) return null;
+  if (side > 0) return ch.toLowerCase() as WallMat;
+  const rows = e.dir === "h" ? map.hBacks : map.vBacks;
+  const b = rows?.[e.y]?.[e.x];
+  return b && FACE_MATS.includes(b) ? (b as WallMat) : (ch.toLowerCase() as WallMat);
+}
+export function backAt(map: MapDef, e: Edge): string {
+  const b = (e.dir === "h" ? map.hBacks : map.vBacks)?.[e.y]?.[e.x];
+  return b && FACE_MATS.includes(b) ? b : NO_WALL;
 }
 
 // Is there a wall between two side-by-side tiles?
@@ -166,6 +176,30 @@ export function setEdge(map: { hWalls: string[]; vWalls: string[] }, e: Edge, ch
   if (row === undefined || e.x < 0 || e.x >= row.length) return;
   rows[e.y] = row.slice(0, e.x) + ch + row.slice(e.x + 1);
 }
+
+// Set the back face's material ("." = as the front). The rows are made (as
+// long as the walls' rows) the first time one is set. (Mutates `map`'s arrays:
+// give it copies.)
+export function setBack(
+  map: { hWalls: string[]; vWalls: string[]; hBacks?: string[]; vBacks?: string[] },
+  e: Edge,
+  ch: string,
+): void {
+  const key = e.dir === "h" ? "hBacks" : "vBacks";
+  const walls = e.dir === "h" ? map.hWalls : map.vWalls;
+  if (!map[key]) {
+    if (ch === NO_WALL) return;
+    map[key] = walls.map((r) => NO_WALL.repeat(r.length));
+  }
+  const rows = map[key] as string[];
+  const row = (rows[e.y] ?? "").padEnd(walls[e.y]?.length ?? 0, NO_WALL);
+  if (e.x < 0 || e.x >= row.length) return;
+  rows[e.y] = row.slice(0, e.x) + ch + row.slice(e.x + 1);
+}
+
+// Any back face that differs from its front?
+export const hasBacks = (map: { hBacks?: string[]; vBacks?: string[] }): boolean =>
+  [...(map.hBacks ?? []), ...(map.vBacks ?? [])].some((r) => /[^.]/.test(r));
 
 export function tileAt(map: MapDef, x: number, y: number): string {
   if (x < 0 || y < 0 || x >= map.width || y >= map.height) return VOID;

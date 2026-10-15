@@ -66,7 +66,16 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     key: "screens",
     label: "catScreens",
     icon: "tv",
-    items: ["tv_wall", "tv_hd", "projector_screen", "projector", "tv_console", "tv_portable"].map(it),
+    items: [
+      "tv_wall",
+      "tv_hd",
+      "tv_giant",
+      "projector_screen",
+      "cinema_screen",
+      "projector",
+      "tv_console",
+      "tv_portable",
+    ].map(it),
   },
   {
     key: "games",

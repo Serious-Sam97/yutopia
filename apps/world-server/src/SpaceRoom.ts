@@ -8,6 +8,7 @@ import {
   type ClientMessages,
   canPlace,
   carried,
+  clampLift,
   convertV1,
   DECOR,
   dirFromDelta,
@@ -701,6 +702,10 @@ export class SpaceRoom extends Room<SpaceState> {
     for (const row of m.hWalls) this.state.hWalls.push(row);
     this.state.vWalls.clear();
     for (const row of m.vWalls) this.state.vWalls.push(row);
+    this.state.hBacks.clear();
+    for (const row of m.hBacks ?? []) this.state.hBacks.push(row);
+    this.state.vBacks.clear();
+    for (const row of m.vBacks ?? []) this.state.vBacks.push(row);
     this.state.areas = JSON.stringify(m.areas);
     this.state.spawnX = m.spawn.x;
     this.state.spawnY = m.spawn.y;
@@ -949,6 +954,15 @@ export function cleanProps(
     out.z = entry(hostOf(others, def)?.kind ?? "").surface ?? 0;
   }
   if ((SPLIT_KINDS as readonly string[]).includes(kind)) out.split = 1;
+  // on a wall: where along it (a quarter-tile shift, 0..3) and how high (steps
+  // that keep it on the wall); without wu it's an older save's spot
+  if (entry(kind).wall) {
+    if (out.wu !== undefined) out.wu = Number.isInteger(out.wu) ? Math.max(0, Math.min(3, out.wu as number)) : 0;
+    if (out.wz !== undefined) {
+      if (Number.isInteger(out.wz)) out.wz = clampLift(kind, out.wz as number);
+      else delete out.wz;
+    }
+  }
   return out;
 }
 

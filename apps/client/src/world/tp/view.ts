@@ -972,8 +972,8 @@ export class ThirdPersonView {
     // build mode: the left button builds (the right one turns the camera)
     if (this.buildMode && e.button === 0) {
       this.buildPress = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now() };
-      const f = this.floorAt(e.clientX, e.clientY);
-      if (f) this.events.buildDown?.(f.x, f.y);
+      const f = this.buildAt(e.clientX, e.clientY);
+      this.events.buildDown?.(f.x, f.y);
       return;
     }
     this.drag = { x: e.clientX, y: e.clientY, id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now() };
@@ -993,8 +993,8 @@ export class ThirdPersonView {
     if (this.onTouch(e)) return;
     this.pointer = { x: e.clientX, y: e.clientY };
     if (this.buildMode) {
-      const f = this.floorAt(e.clientX, e.clientY);
-      if (f) this.events.buildMove?.(f.x, f.y, this.pointer);
+      const f = this.buildAt(e.clientX, e.clientY);
+      this.events.buildMove?.(f.x, f.y, this.pointer);
     }
     if (!this.drag || this.drag.id !== e.pointerId)
       return this.buildMode ? undefined : this.hover(e.clientX, e.clientY);
@@ -1012,17 +1012,11 @@ export class ThirdPersonView {
     const b = this.buildPress;
     if (b && b.id === e.pointerId) {
       this.buildPress = null;
-      const f = this.floorAt(e.clientX, e.clientY);
-      if (f) {
-        this.events.buildUp?.(f.x, f.y);
-        // a click: build mode's click on the floor there (it picks what's under the pointer itself)
-        if (
-          e.type === "pointerup" &&
-          Math.hypot(e.clientX - b.x0, e.clientY - b.y0) < 6 &&
-          performance.now() - b.t < 600
-        )
-          this.events.floor?.(f.x, f.y);
-      }
+      const f = this.buildAt(e.clientX, e.clientY);
+      this.events.buildUp?.(f.x, f.y);
+      // a click: build mode's click on the floor there (it picks what's under the pointer itself)
+      if (e.type === "pointerup" && Math.hypot(e.clientX - b.x0, e.clientY - b.y0) < 6 && performance.now() - b.t < 600)
+        this.events.floor?.(f.x, f.y);
       return;
     }
     const d = this.drag;
@@ -1114,6 +1108,46 @@ export class ThirdPersonView {
 
   // the floor under a point of the screen (tiles), or null looking up; `h`:
   // the point at that height instead (on a surface that high, in tiles)
+  // The ray through a screen point, from the camera (world tiles; z in iso px).
+  rayAt(
+    clientX: number,
+    clientY: number,
+  ): { o: { x: number; y: number; z: number }; d: { x: number; y: number; z: number } } {
+    this.setRay(clientX, clientY);
+    const o = this.ray.ray.origin;
+    const d = this.ray.ray.direction;
+    return { o: { x: o.x, y: o.z, z: o.y * 39.19 }, d: { x: d.x, y: d.z, z: d.y * 39.19 } };
+  }
+
+  // The walls this view looks through now (faded runs): "h3,4" keys.
+  lookedThrough(): Set<string> {
+    const out = new Set<string>();
+    for (const f of this.world.fades) {
+      if (f.item || f.alpha >= 0.5) continue;
+      if (f.y1 - f.y0 < 0.5) {
+        const y = Math.round((f.y0 + f.y1) / 2);
+        for (let x = Math.floor(f.x0 + 0.2); x < f.x1 - 0.2; x++) out.add(`h${x},${y}`);
+      } else if (f.x1 - f.x0 < 0.5) {
+        const x = Math.round((f.x0 + f.x1) / 2);
+        for (let y = Math.floor(f.y0 + 0.2); y < f.y1 - 0.2; y++) out.add(`v${x},${y}`);
+      }
+    }
+    return out;
+  }
+
+  // Where build mode's pointer is on the floor. Pointing above the horizon (high
+  // up a wall, the camera low) there's no floor under it: the last floor point
+  // then, so presses, drags and clicks still reach build mode (a wall item in
+  // hand goes by the pointer's ray anyway).
+  private lastBuildFloor: { x: number; y: number } | null = null;
+  private buildAt(clientX: number, clientY: number): { x: number; y: number } {
+    const f = this.floorAt(clientX, clientY);
+    if (f) this.lastBuildFloor = f;
+    if (f ?? this.lastBuildFloor) return (f ?? this.lastBuildFloor) as { x: number; y: number };
+    const c = this.camera.position;
+    return { x: c.x, y: c.z };
+  }
+
   floorAt(clientX: number, clientY: number, h = 0): { x: number; y: number } | null {
     this.setRay(clientX, clientY);
     const o = this.ray.ray.origin;
