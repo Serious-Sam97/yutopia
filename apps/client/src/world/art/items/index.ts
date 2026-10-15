@@ -10,6 +10,7 @@ import { beanbag, bookcase, clock, counter, lightSwitch, neon, partition } from 
 import { type Clip, type Group, type ItemArt, Sketch, seedOf } from "./kit";
 import { lamp } from "./lamp";
 import { micStand, mixingDesk, radio, sideTable, speakerCab, tapeShelf } from "./music";
+import { petBed, petBowl, petHouse, scratchPost, waterBowl } from "./pets";
 import { PLANT_VARIANTS, plant } from "./plant";
 import { piano, turntable, vending, waterCooler } from "./play";
 import { cinemaScreen, projector, projectorScreen, tvConsole, tvGiant, tvHd, tvPortable, tvWall } from "./screens";
@@ -122,6 +123,12 @@ const GENS: Record<string, ItemGen> = {
     key: (p) => `${decorKey(p)}|${p.on === false ? "off" : ""}`,
   },
   frame: { draw: (s, p) => dressing(s, "frame", 0, decorSeed(p)), variants: 1, key: decorKey },
+  // for pets (shared/pets.ts)
+  pet_bed: { draw: petBed, variants: 2, key: painted },
+  pet_bowl: { draw: petBowl, variants: 1, key: (p) => `${painted(p)}|${Number(p.portions ?? 0)}` },
+  water_bowl: { draw: waterBowl, variants: 1, key: (p) => `${painted(p)}|${Number(p.portions ?? 0)}` },
+  scratch_post: { draw: scratchPost, variants: 1 },
+  pet_house: { draw: petHouse, variants: 2, key: painted },
 };
 
 function decorKind(p: Props, fallback: DressKind): DressKind {

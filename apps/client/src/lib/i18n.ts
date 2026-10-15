@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
+import type { PetKey } from "./i18n-pets";
 
 // Interface text in EN and PT-BR, following the browser unless picked in
 // settings (same convention as Yondra's Vortex rack). Vortex's lines stay English.
@@ -674,21 +675,55 @@ const D = {
   buildSetupItems: ["{n} things", "{n} itens"],
   buildSetupPlace: ["Place", "Colocar"],
   buildSetupDelete: ["Forget this setup", "Esquecer conjunto"],
+  // pets (docs/plan/13-pets.md): the rest of their strings come with the pets chunk (i18n-pets.ts)
+  pets: ["Pets", "Pets"],
+  act_fillFood: ["Fill with food", "Encher de comida"],
+  act_fillWater: ["Fill with water", "Encher de água"],
+  act_takeBall: ["Take the ball", "Pegar a bola"],
+  act_takeFrisbee: ["Take the frisbee", "Pegar o frisbee"],
+  act_takeRope: ["Take the rope", "Pegar a corda"],
+  act_takeFeather: ["Take the feather", "Pegar a pena"],
+  act_takeLaser: ["Take the laser pointer", "Pegar o laser"],
+  toyBox: ["Toy box", "Caixa de brinquedos"],
+  catPets: ["Pets", "Pets"],
 } as const;
 
-export type Key = keyof typeof D;
+export type Key = keyof typeof D | PetKey;
+
+// Strings that come with a lazy chunk (the pets'): added once it loads; until
+// then a key reads as itself. `tag` names the chunk (kept for the bundle budget).
+const EXTRA: Record<string, readonly [string, string]> = {};
+const TAGS: string[] = [];
+let version = 0;
+export function addStrings(d: Record<string, readonly [string, string]>, tag: string) {
+  Object.assign(EXTRA, d);
+  TAGS.push(tag);
+  version++;
+  for (const s of subs) s();
+}
 
 export function tr(key: Key, l: Lang = lang()): string {
-  return D[key][l === "pt" ? 1 : 0];
+  const e = (D as Record<string, readonly [string, string]>)[key] ?? EXTRA[key];
+  return e ? e[l === "pt" ? 1 : 0] : key;
 }
 
 // For keys built at runtime (decor_<kind>…): undefined when there's no such label.
 export function trMaybe(key: string, l: Lang = lang()): string | undefined {
-  return Object.hasOwn(D, key) ? D[key as Key][l === "pt" ? 1 : 0] : undefined;
+  const e = (D as Record<string, readonly [string, string]>)[key] ?? EXTRA[key];
+  return e ? e[l === "pt" ? 1 : 0] : undefined;
 }
 
-// Stable per language, so it's safe in effect dependencies.
+// Stable per language (and per batch of strings loaded), so it's safe in effect dependencies.
 export function useTr(): (key: Key) => string {
   const l = useLang();
-  return useCallback((key: Key) => tr(key, l), [l]);
+  const v = useSyncExternalStore(
+    (cb) => {
+      subs.add(cb);
+      return () => subs.delete(cb);
+    },
+    () => version,
+    () => 0,
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: v re-makes it when strings arrive
+  return useCallback((key: Key) => tr(key, l), [l, v]);
 }

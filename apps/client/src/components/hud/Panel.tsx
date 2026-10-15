@@ -9,11 +9,13 @@ export function Panel({
   title,
   children,
   wide = false,
+  size,
   onClose,
 }: {
   title: string;
   children: React.ReactNode;
   wide?: boolean;
+  size?: string; // the cabinet's own size classes (instead of wide / the default)
   onClose?: () => void;
 }) {
   const t = useTr();
@@ -34,7 +36,7 @@ export function Panel({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`cabinet flex flex-col rise w-full ${wide ? "max-w-6xl h-[min(860px,92vh)]" : "max-w-lg max-h-[86vh]"}`}
+        className={`cabinet flex flex-col rise w-full ${size ?? (wide ? "max-w-6xl h-[min(860px,92vh)]" : "max-w-lg max-h-[86vh]")}`}
       >
         <header className="flex items-center justify-between gap-3 px-4 pt-3 pb-2">
           <div className="vfd-window px-3 py-1 min-w-0">

@@ -72,6 +72,7 @@ import { PERSON, WORLD_SCALE } from "./art/iso";
 import type { ItemArt } from "./art/items/kit";
 import { affectsLight, PX as LIGHT_PX, LightMap } from "./art/light";
 import { C } from "./art/palette";
+import { loadPets, pets as petsArt } from "./art/pets-load";
 import {
   drawFlat,
   drawFloors,
@@ -99,6 +100,7 @@ import {
 import type { ThemeView } from "./art/themes";
 import type { VortexMood } from "./art/vortex/vortexArt";
 import type { Life, Swayable } from "./life";
+import { PET_HURT_MS, type PetView } from "./petview";
 import type { Post } from "./post";
 
 const VORTEX_MOODS = new Set([
@@ -145,9 +147,12 @@ export interface AvatarState {
   act?: string; // with someone (shared SOCIAL, or "take"), since actAt (server ms)
   actAt?: number;
   actWith?: string;
+  pet?: PetView; // a pet, not a person (world/petview.ts)
 }
 
 interface AvatarView {
+  petPhase?: number; // a pet's walk cycle (steps)
+  petLift?: number; // a pet's height off the ground last frame (tiles)
   eyes?: Graphics;
   sprite: Sprite;
   blinkUntil?: number;
@@ -287,6 +292,8 @@ function softShadow(rx: number, ry: number, alpha: number): GraphicsContext {
 }
 const PERSON_SHADOW = softShadow(16, 7.5, 1);
 const VORTEX_SHADOW = softShadow(15, 6.5, 1.1);
+const PET_SHADOW = softShadow(13, 6, 1);
+const petSpriteTextures = new WeakMap<HTMLCanvasElement, Texture>(); // a sprite per rendered pet frame
 
 const NAME_STYLE = new TextStyle({
   fontFamily: "Share Tech Mono, ui-monospace, monospace",
@@ -305,8 +312,13 @@ const BUBBLE_STYLE = new TextStyle({
 const VFD_STYLE = new TextStyle({ fontFamily: "VT323, ui-monospace, monospace", fontSize: 15, fill: C.vfd });
 const VFD_SMALL = new TextStyle({ fontFamily: "VT323, ui-monospace, monospace", fontSize: 11, fill: C.vfd });
 
+export interface ClickMods {
+  shift: boolean;
+  right: boolean;
+}
 export interface EngineEvents {
-  onTileClick?: (x: number, y: number) => void;
+  onTileClick?: (x: number, y: number, mods?: ClickMods) => void;
+  onToyClick?: (id: string) => void; // a pet's toy on the floor
   onAvatarClick?: (id: string, at: { x: number; y: number }) => void; // at: client px
   onObjectClick?: (id: string, at: { x: number; y: number }) => void;
   onHoverObject?: (id: string | null) => void;
@@ -1843,8 +1855,100 @@ export class WorldEngine {
     }
   }
 
+  // A pet (world/petview.ts): its 3D model (art/pets3d.ts) rendered from the
+  // iso camera into a sprite for the way it faces and what it's doing
+  // (art/pets-render.ts), its name over it.
+  private updatePet(v: AvatarView, dt: number, now: number) {
+    const s = v.state;
+    const pet = s.pet as PetView;
+    const p = toScreen(s.x, s.y);
+    const P = petsArt();
+    v.body.visible = false;
+    if (v.shadow.context !== PET_SHADOW) v.shadow.context = PET_SHADOW;
+    v.root.position.set(p.x, p.y);
+    this.setDepth(v.root, depthOf(s.x, s.y) + 0.01);
+    if (!P) {
+      void loadPets();
+      v.sprite.visible = false;
+      return;
+    }
+    // turning goes through the facings in between, as people do
+    if (v.shownDir === undefined) v.shownDir = s.d;
+    if (v.shownDir !== s.d && now > (v.turnAt ?? 0)) {
+      const diff = ((((s.d - v.shownDir + 12) % 8) + 8) % 8) - 4;
+      v.shownDir = (v.shownDir + (diff > 0 ? 1 : -1) + 8) % 8;
+      v.turnAt = now + 38;
+    }
+    const wall = Date.now();
+    const sp = P.petRenderer().sprite(
+      pet.species,
+      pet.look,
+      pet.outfit,
+      v.shownDir,
+      {
+        species: pet.species,
+        a: s.a,
+        mode: pet.mode,
+        act: pet.act,
+        actAt: pet.actAt,
+        feeling: pet.feeling,
+        carry: pet.carry,
+      },
+      wall,
+      s.name,
+    );
+    if (sp) {
+      let tex = petSpriteTextures.get(sp.canvas);
+      if (!tex) {
+        tex = Texture.from(sp.canvas);
+        tex.source.autoGenerateMipmaps = true;
+        tex.source.scaleMode = "linear";
+        petSpriteTextures.set(sp.canvas, tex);
+      }
+      v.sprite.texture = tex;
+      v.sprite.visible = true;
+      v.sprite.anchor.set(sp.anchorX, sp.anchorY);
+      v.sprite.scale.set(sp.scale, sp.scale);
+      v.sprite.rotation = 0;
+      v.sprite.position.set(0, 0);
+      // off the ground (a jump, a hop): the shadow stays down and shrinks; dust when it lands
+      const lift = sp.lift;
+      const k = 1 / (1 + lift * 2.2);
+      v.shadow.scale.set(k);
+      v.shadow.alpha = 0.45 + 0.55 * k;
+      if ((v.petLift ?? 0) > 0.06 && lift <= 0.005) this.puff(s.x, s.y, "drop");
+      v.petLift = lift;
+    }
+    const hurt = pet.hurtAt && wall - pet.hurtAt < PET_HURT_MS;
+    v.sprite.tint = hurt ? 0xff6a5a : this.tintAt(s.x, s.y);
+    if (v.ringOn) {
+      v.ring.clear();
+      v.ringOn = false;
+    }
+    v.emote.visible = false;
+    const inv = 1 / Math.max(0.7, this.zoom * 0.85);
+    const height = P.petRenderer().model(pet.species, pet.look, pet.outfit).height;
+    const top = -(height * 39.19 + 14);
+    v.tag.position.set(p.x, p.y + top * PERSON);
+    v.tag.scale.set(inv);
+    this.setDepth(v.tag, p.y);
+    const dotKey = `pet|${pet.look.color}`;
+    if (v.dotKey !== dotKey) {
+      v.dotKey = dotKey;
+      v.dot.clear().circle(0, 0, 3.2).fill(pet.look.color);
+    }
+    if (v.bubble.visible) {
+      v.bubble.position.set(p.x, p.y + (top - 16) * PERSON);
+      v.bubble.scale.set(inv);
+      v.bubble.zIndex = 2e6;
+      if (now > v.bubbleUntil) v.bubble.visible = false;
+    }
+    void dt;
+  }
+
   private updateAvatar(v: AvatarView, dt: number, now: number) {
     const s = v.state;
+    if (s.pet) return this.updatePet(v, dt, now);
     if (s.npc) return this.updateVortex(v, now);
     const p = toScreen(s.x, s.y);
     const sitting = s.a === 2;
@@ -2875,8 +2979,9 @@ export class WorldEngine {
     let bestKey = -1;
     for (const [id, v] of this.avatars) {
       const p = toScreen(v.state.x, v.state.y);
-      // the person's body: ~92 px tall since the City-pop redraw
-      if (gx > p.x - 16 * PERSON && gx < p.x + 16 * PERSON && gy > p.y - 92 * PERSON && gy < p.y + 4) {
+      // the person's body: ~92 px tall since the City-pop redraw; a pet: wide and low
+      const [hw, hh] = v.state.pet ? [30 * PERSON, 44 * PERSON] : [16 * PERSON, 92 * PERSON];
+      if (gx > p.x - hw && gx < p.x + hw && gy > p.y - hh && gy < p.y + 6) {
         const k = v.state.x + v.state.y;
         if (k > bestKey) {
           bestKey = k;
@@ -2925,6 +3030,64 @@ export class WorldEngine {
     return this.picksAtLocal(gx, gy, (o) => !entry(o.kind).interact && hasActions(o)).find((p) => !p.dress)?.id ?? null;
   }
 
+  // ── pets' toys (shared/pets.ts): in the air, on the floor ────────────────
+  private toyViews = new Map<string, { root: Container; sprite: Sprite; shadow: Graphics; kind: string }>();
+  setToys(list: { id: string; kind: string; x: number; y: number; z: number }[]) {
+    const seen = new Set<string>();
+    const P = petsArt();
+    if (!P && list.length) void loadPets();
+    for (const t of list) {
+      seen.add(t.id);
+      let v = this.toyViews.get(t.id);
+      if (!v) {
+        const root = new Container();
+        const shadow = new Graphics(PET_SHADOW);
+        shadow.scale.set(0.5);
+        const sprite = new Sprite();
+        sprite.visible = false;
+        root.addChild(shadow, sprite);
+        root.scale.set(PERSON);
+        this.sortLayer.addChild(root);
+        v = { root, sprite, shadow, kind: t.kind };
+        this.toyViews.set(t.id, v);
+      }
+      if (!v.sprite.visible && P) {
+        const sp = P.toySpriteOf(P.petRenderer(), t.kind);
+        if (sp) {
+          let tex = petSpriteTextures.get(sp.canvas);
+          if (!tex) {
+            tex = Texture.from(sp.canvas);
+            petSpriteTextures.set(sp.canvas, tex);
+          }
+          v.sprite.texture = tex;
+          v.sprite.anchor.set(sp.anchorX, sp.anchorY);
+          v.sprite.scale.set(sp.scale, sp.scale);
+          v.sprite.visible = true;
+        }
+      }
+      const p = toScreen(t.x, t.y);
+      v.root.position.set(p.x, p.y);
+      v.sprite.position.y = -t.z * 39.19;
+      const k = 1 / (1 + t.z * 1.6);
+      v.shadow.scale.set(0.5 * k);
+      v.shadow.alpha = 0.5 + 0.5 * k;
+      v.sprite.tint = this.tintAt(t.x, t.y);
+      this.setDepth(v.root, depthOf(t.x, t.y) + 0.005);
+    }
+    for (const [id, v] of this.toyViews)
+      if (!seen.has(id)) {
+        v.root.destroy({ children: true });
+        this.toyViews.delete(id);
+      }
+  }
+  private pickToy(gx: number, gy: number): string | null {
+    for (const [id, v] of this.toyViews) {
+      const p = v.root.position;
+      if (Math.abs(gx - p.x) < 16 && gy > p.y - 30 && gy < p.y + 6) return id;
+    }
+    return null;
+  }
+
   // Build mode: taps go through people (and Vortex) to the floor and furniture.
   passAvatars = false;
 
@@ -2936,9 +3099,11 @@ export class WorldEngine {
     // clicking yourself is handled too (it opens your look)
     const at = { x: e.clientX, y: e.clientY };
     if (av) return this.events.onAvatarClick?.(av, at);
+    const toy = this.pickToy(gx, gy);
+    if (toy) return this.events.onToyClick?.(toy);
     const obj = this.pickObject(w.x, w.y, gx, gy);
     if (obj) return this.events.onObjectClick?.(obj, at);
-    this.events.onTileClick?.(w.x, w.y);
+    this.events.onTileClick?.(w.x, w.y, { shift: e.shiftKey, right: e.button === 2 });
   }
 
   private hoverId: string | null = null;

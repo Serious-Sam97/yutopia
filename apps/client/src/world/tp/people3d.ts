@@ -19,6 +19,7 @@ import type { people } from "../art/people-load";
 import { svgDoc } from "../art/svgdoc";
 import { viewFor } from "../art/views";
 import { type VortexMood, vortexSvg } from "../art/vortex/vortexArt";
+import type { PetView } from "../petview";
 import { ZPX } from "./kit3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
@@ -109,6 +110,7 @@ export interface PersonIn {
   a: number; // 0 idle, 1 walk, 2 sit
   npc?: boolean; // Vortex
   vortexMood?: string;
+  pet?: PetView; // a pet (world/petview.ts): drawn as a model by the view, not here
   status?: string; // available / away / dnd…
   speaking?: boolean;
   emote?: string;

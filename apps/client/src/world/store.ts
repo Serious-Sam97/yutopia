@@ -1,6 +1,7 @@
 "use client";
 
 import type { Emote } from "@yutopia/shared";
+import type { BattleEvent, Needs, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
 import { useRef, useSyncExternalStore } from "react";
 import type { BoardSummary, MemberStatus, Setup } from "@/lib/api";
 
@@ -59,10 +60,56 @@ export type PanelKind =
   | "media"
   | "settings"
   | "avatar"
+  | "pets"
   | null;
 
+// A pet in the room (shared/pets.ts), as the panel and the menus see it.
+export interface PetInfo {
+  id: string;
+  uid: number;
+  owner: string;
+  mine: boolean;
+  name: string;
+  species: Species;
+  look: PetLook;
+  outfit: PetOutfit;
+  needs: Needs;
+  xp: number;
+  level: number;
+  tricks: Record<string, number>;
+  alive: boolean;
+  wins: number;
+  losses: number;
+  mode: string;
+  act: string;
+  battle: string;
+  near: boolean; // close enough to care for it
+}
+// A battle I'm in (or watching): both sides, whose move is pending.
+export interface BattleView {
+  id: string;
+  a: string; // pet ids
+  b: string;
+  mine: "a" | "b" | null;
+  hpA: number;
+  hpB: number;
+  maxA: number;
+  maxB: number;
+  moveA: string;
+  moveB: string;
+  round: number;
+  phase: string;
+  until: number;
+  log: BattleEvent[];
+  winner: string;
+}
+
 // The action menu (click a thing or a person) and the queue of what you picked.
-export type ActTarget = { type: "object"; id: string } | { type: "person"; sid: string } | { type: "self" };
+export type ActTarget =
+  | { type: "object"; id: string }
+  | { type: "person"; sid: string }
+  | { type: "pet"; id: string }
+  | { type: "self" };
 export interface ActionMenu {
   x: number; // where it opens (client px)
   y: number;
@@ -166,7 +213,8 @@ export interface HudState {
   chatUnread: number;
   heardBy: number[]; // user ids who can hear me right now
   prompt: { objectId: string; kind: string; label: string } | null;
-  held: { kind: string; at: number } | null; // what I carry (a mug…) and since when (server ms)
+  held: { kind: string; at: number } | null; // what I carry (a mug, a ball…) and since when (server ms)
+  throwArm: boolean; // the next floor click throws what I hold (or points the laser)
   cable: { consoleId: string } | null; // a console's cable in my hands, on the way to a TV
   menu: ActionMenu | null;
   queue: QueuedAct[];
@@ -241,6 +289,10 @@ export interface HudState {
   inspect: number | null;
   locks: Record<string, string>;
   vortex: { x: number; y: number; say: string; sayAt: number; mood: string } | null;
+  pets: PetInfo[]; // every pet in the room (mine first)
+  petFocus: string | null; // the pet the panel shows (null: my first)
+  battle: BattleView | null; // the battle one of my pets is in
+  challenge: { battle: string; fromName: string; pet: string; mine: string } | null; // a battle proposed to me
   fps: number;
   look: boolean; // mouse look (3D): the pointer locked, the mouse turns the camera
 }
@@ -260,6 +312,7 @@ const initial: HudState = {
   heardBy: [],
   prompt: null,
   held: null,
+  throwArm: false,
   cable: null,
   menu: null,
   queue: [],
@@ -320,6 +373,10 @@ const initial: HudState = {
   inspect: null,
   locks: {},
   vortex: null,
+  pets: [],
+  petFocus: null,
+  battle: null,
+  challenge: null,
   fps: 0,
   look: false,
 };

@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import type { Layout, WorldObjectDef } from "@yutopia/shared";
+import type { PetRecord } from "@yutopia/shared/pets";
 import { config } from "./config.ts";
 import { metrics } from "./metrics.ts";
 
@@ -79,6 +80,12 @@ export const yondra = {
   presence: (id: number, people: PresenceEntry[]) => call("POST", `/spaces/${id}/presence`, { people }),
   vortexLine: (id: number, context: { event: string; user_id: number | null }) =>
     call<{ line: string | null; mood?: string; personal: boolean }>("POST", `/spaces/${id}/vortex`, context),
+  // someone's pets (features/pets.ts): all of them, a new one, a change, one let go
+  pets: (userId: number) => call<{ pets: PetRecord[] }>("GET", `/pets/${userId}`),
+  createPet: (userId: number, pet: Omit<PetRecord, "id">) => call<{ pet: PetRecord }>("POST", `/pets/${userId}`, pet),
+  savePet: (userId: number, petId: number, patch: Partial<PetRecord>) =>
+    call<{ pet: PetRecord }>("PUT", `/pets/${userId}/${petId}`, patch),
+  deletePet: (userId: number, petId: number) => call("DELETE", `/pets/${userId}/${petId}`),
   grantFragment: (id: number, fragment: string, userIds: number[]) =>
     call<{ granted: number[] }>("POST", `/spaces/${id}/fragment`, { fragment, user_ids: userIds }),
 };

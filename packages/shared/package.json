@@ -10,7 +10,8 @@
     "./slotcar": "./src/slotcar.ts",
     "./library": "./src/library.ts",
     "./games": "./src/games.ts",
-    "./media": "./src/media.ts"
+    "./media": "./src/media.ts",
+    "./pets": "./src/pets.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

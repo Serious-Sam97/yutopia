@@ -4,7 +4,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { gzipSync } from "node:zlib";
 
-const BUDGETS = { "/s/[spaceId]/page": 520, "/page": 260, "/login/page": 160 }; // KB gzip
+// (the world page was 524.5 before pets, 2026-10-15; pets add ~3 KB of page code, the rest is lazy)
+const BUDGETS = { "/s/[spaceId]/page": 540, "/page": 260, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;
@@ -23,6 +24,7 @@ const LAZY = {
   "yutopia-themes": 30,
   "yutopia-build": 40,
   "yutopia-people": 40,
+  "yutopia-pets": 40, // the drawings, animation, sounds and strings; the panel carries a copy
   "yutopia-slots": 20,
   "yutopia-games": 60,
   "yutopia-media": 30, // TVs and the radio's media; hls.js is its own chunk, fetched for Jellyfin only

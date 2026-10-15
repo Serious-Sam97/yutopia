@@ -12,6 +12,7 @@ import {
   BoxGeometry,
   BufferGeometry,
   CatmullRomCurve3,
+  CircleGeometry,
   Color,
   DirectionalLight,
   Fog,
@@ -46,6 +47,8 @@ import {
 import { daylight } from "../art/daylight";
 import { emoteUrl } from "../art/emotes";
 import type { people } from "../art/people-load";
+import { loadPets, pets as petsArt } from "../art/pets-load";
+import type { PetModel } from "../art/pets3d";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
@@ -91,7 +94,8 @@ export interface ViewOpts {
 
 // Clicks: on the floor (tiles) or on someone (their id, where on the page).
 export interface ViewEvents {
-  floor?: (x: number, y: number) => void;
+  floor?: (x: number, y: number, mods?: { shift: boolean; right: boolean }) => void;
+  toy?: (id: string) => void; // a pet's toy on the floor
   // build mode: the floor under the pointer as it moves / presses / lets go; the wheel
   buildMove?: (x: number, y: number, client: { x: number; y: number }) => void;
   buildDown?: (x: number, y: number) => void;
@@ -128,6 +132,8 @@ export class ThirdPersonView {
   world: World3;
   events: ViewEvents = {};
   private people = new Map<string, Person3>();
+  // pets: real models (art/pets3d.ts), lit by the room, turned to where they walk
+  private pets3 = new Map<string, { model: PetModel; key: string; turned: number }>();
   private hemi = new HemisphereLight(0xffffff, 0x6b4a33, 1);
   private sun = new DirectionalLight(0xffffff, 2);
   private pool: PointLight[] = [];
@@ -780,7 +786,13 @@ export class ThirdPersonView {
     );
     this.tick++;
     const seen = new Set<string>();
+    const seenPets = new Set<string>();
     for (const b of bodies) {
+      if (b.pet) {
+        seenPets.add(b.id);
+        this.petFrame(b, dt);
+        continue;
+      }
       seen.add(b.id);
       let p = this.people.get(b.id);
       if (!p) {
@@ -819,6 +831,12 @@ export class ThirdPersonView {
         p.dispose();
         this.people.delete(id);
       }
+    for (const [id, e] of this.pets3)
+      if (!seenPets.has(id)) {
+        this.scene.remove(e.model.root);
+        e.model.dispose();
+        this.pets3.delete(id);
+      }
     if (this.gameScene) this.games3?.set(this.gameScene, (id, port, sitting) => this.handOf(id, port, sitting), face);
 
     if (!document.hidden) {
@@ -831,12 +849,86 @@ export class ThirdPersonView {
     this.lastFrameAt = now;
   }
 
+  // A pet this frame: its model where it is, turned the way it walks (eased),
+  // posed by what it's doing (its rig), looking at its owner.
+  private petFrame(b: Body3, dt: number) {
+    const P = petsArt();
+    const pet = b.pet;
+    if (!pet) return;
+    if (!P) {
+      void loadPets();
+      return;
+    }
+    const key = `${pet.species}|${JSON.stringify(pet.look)}|${JSON.stringify(pet.outfit)}|${b.name}`;
+    let e = this.pets3.get(b.id);
+    if (e && e.key !== key) {
+      this.scene.remove(e.model.root);
+      e.model.dispose();
+      e = undefined;
+    }
+    if (!e) {
+      const model = new P.PetModel(
+        pet.species,
+        pet.look,
+        pet.outfit,
+        (c, o) => {
+          // toon-ramped, lit by the room's light map, with the rim light on top
+          const m = P.petMaterial(c, o);
+          this.light.patch(m);
+          P.rimPatch(m);
+          return m;
+        },
+        b.name,
+      );
+      this.scene.add(model.root);
+      e = { model, key, turned: dirAngle(b.d) };
+      this.pets3.set(b.id, e);
+    }
+    const angle = dirAngle(b.d);
+    let d = angle - e.turned;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    e.turned += d * Math.min(1, dt * 9);
+    const now = Date.now();
+    const r = P.rigOf(
+      {
+        species: pet.species,
+        a: b.a,
+        mode: pet.mode,
+        act: pet.act,
+        actAt: pet.actAt,
+        feeling: pet.feeling,
+        hurtAt: pet.hurtAt,
+        carry: pet.carry,
+      },
+      now,
+    );
+    // the head turns to its owner (never right round)
+    let look = 0;
+    if (pet.lookAt) {
+      let rel = Math.atan2(pet.lookAt.y - b.y, pet.lookAt.x - b.x) - e.turned;
+      rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+      look = Math.max(-1.1, Math.min(1.1, -rel));
+    }
+    e.model.pose(
+      { kind: r.kind, t: r.t, face: r.face, look, carry: pet.carry ?? null, flash: r.flash },
+      dt,
+      performance.now(),
+    );
+    e.model.root.position.set(b.x, e.model.root.position.y, b.y);
+    e.model.root.rotation.y -= e.turned;
+    e.model.root.visible = true;
+  }
+
   // Over heads, as in iso: the name tag (status dot, a slash when the mic is
   // off), the emote above it, chat bubbles above that. HTML over the canvas
   // (crisp at any distance), hidden behind standing walls and far away.
+  // name tags off while a panel covers the world (they're HTML, above the canvas)
+  tagsHidden = false;
   private drawTags(bodies: Body3[]) {
     const layer = this.tagLayer;
     if (!layer) return;
+    const hide = this.tagsHidden ? "none" : "";
+    if (layer.style.display !== hide) layer.style.display = hide;
     const cam = this.camera.position;
     const now = performance.now();
     const seen = new Set<string>();
@@ -849,8 +941,16 @@ export class ThirdPersonView {
         this.tagEls.set(b.id, t);
       }
       if (t.name.textContent !== b.name) t.name.textContent = b.name;
-      const dot = b.npc ? "#c4402b" : b.status === "dnd" ? "#b5562f" : b.status === "away" ? "#8d877a" : "#6e7b3a";
-      const muted = !b.mic && !b.npc && !b.bot;
+      const dot = b.pet
+        ? b.pet.look.color
+        : b.npc
+          ? "#c4402b"
+          : b.status === "dnd"
+            ? "#b5562f"
+            : b.status === "away"
+              ? "#8d877a"
+              : "#6e7b3a";
+      const muted = !b.mic && !b.npc && !b.bot && !b.pet;
       const dotKey = `${dot}|${muted}`;
       if (t.dotKey !== dotKey) {
         t.dotKey = dotKey;
@@ -867,7 +967,7 @@ export class ThirdPersonView {
         t.bubbleUntil = 0;
         t.bubble.style.display = "none";
       }
-      const h = b.npc ? 1.6 : b.a === 2 ? 1.45 : 2.0;
+      const h = b.pet ? (this.pets3.get(b.id)?.model.height ?? 0.8) + 0.18 : b.npc ? 1.6 : b.a === 2 ? 1.45 : 2.0;
       const far = Math.hypot(cam.x - b.x, cam.z - b.y) > 16;
       // (first person: nothing over your own head — the camera is in it)
       const mine = this.mode === "first" && b.id === this.meId;
@@ -1079,7 +1179,7 @@ export class ThirdPersonView {
     this.drag = null;
     // a click (not a drag): someone, or a spot on the floor
     if (e.type === "pointerup" && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 6 && performance.now() - d.t < 600)
-      this.pick(e.clientX, e.clientY);
+      this.pick(e.clientX, e.clientY, { shift: e.shiftKey, right: e.button === 2 });
   };
 
   // the nearest usable thing along the ray (its 3D box; see-through walls don't stop it)
@@ -1135,6 +1235,14 @@ export class ThirdPersonView {
     for (const hit of this.ray.intersectObjects(planes, false)) {
       const found = [...this.people].find(([, p]) => p.plane === hit.object);
       if (found && hit.uv && found[1].opaqueAt(hit.uv.x, hit.uv.y)) return found[0];
+    }
+    // pets: their meshes
+    const roots: Object3D[] = [...this.pets3.values()].map((e) => e.model.root);
+    const hit = this.ray.intersectObjects(roots, true)[0];
+    if (hit) {
+      let o: Object3D | null = hit.object;
+      while (o && !roots.includes(o)) o = o.parent;
+      if (o) return [...this.pets3].find(([, e]) => e.model.root === o)?.[0] ?? null;
     }
     return null;
   }
@@ -1245,11 +1353,20 @@ export class ThirdPersonView {
     return out.sort((a, b) => a.t - b.t);
   }
 
-  private pick(clientX: number, clientY: number) {
+  private pick(clientX: number, clientY: number, mods?: { shift: boolean; right: boolean }) {
     this.setRay(clientX, clientY);
     // the nearest drawing actually under the pointer (not a plane's empty margin)
     const who = this.personAt();
     if (who) return this.events.person?.(who, { x: clientX, y: clientY });
+    const toyHit = this.ray.intersectObjects(
+      [...this.toys3.values()].map((t) => t.root),
+      true,
+    )[0];
+    if (toyHit) {
+      let o: Object3D | null = toyHit.object;
+      while (o?.parent && !o.userData.toyId) o = o.parent;
+      if (o?.userData.toyId) return this.events.toy?.(o.userData.toyId as string);
+    }
     const hitObj = this.pickObject();
     if (hitObj) return this.events.object?.(hitObj, { x: clientX, y: clientY });
     const o = this.ray.ray.origin;
@@ -1258,7 +1375,54 @@ export class ThirdPersonView {
     const t = -o.y / dir.y;
     const x = o.x + dir.x * t;
     const y = o.z + dir.z * t;
-    if (x >= 0 && y >= 0 && x < this.map.width && y < this.map.height) this.events.floor?.(x, y);
+    if (x >= 0 && y >= 0 && x < this.map.width && y < this.map.height) this.events.floor?.(x, y, mods);
+  }
+
+  // pets' toys (shared/pets.ts): a mesh each, where it is (in the air too)
+  private toys3 = new Map<string, { root: Group; kind: string; shadow: Mesh }>();
+  setToys(list: { id: string; kind: string; x: number; y: number; z: number }[]) {
+    const P = petsArt();
+    if (!P && list.length) void loadPets();
+    const seen = new Set<string>();
+    for (const t of list) {
+      seen.add(t.id);
+      let v = this.toys3.get(t.id);
+      if (!v && P) {
+        const root = new Group();
+        root.userData.toyId = t.id;
+        const m = P.toyMesh(t.kind, (c, o) => {
+          const mat = new MeshLambertMaterial({ color: c, emissive: o?.glow ? c : 0 });
+          this.light.patch(mat);
+          return mat;
+        });
+        if (!m) continue;
+        m.traverse((x) => {
+          x.castShadow = true;
+        });
+        root.add(m);
+        const shadow = new Mesh(
+          new CircleGeometry(0.09, 16).rotateX(-Math.PI / 2),
+          new MeshBasicMaterial({ color: 0x1a100a, transparent: true, opacity: 0.3, depthWrite: false }),
+        );
+        shadow.position.y = 0.004;
+        root.add(shadow);
+        this.scene.add(root);
+        v = { root, kind: t.kind, shadow };
+        this.toys3.set(t.id, v);
+      }
+      if (!v) continue;
+      v.root.position.set(t.x, 0, t.y);
+      (v.root.children[0] as Object3D).position.y = t.z + (t.kind === "ball" ? 0.1 : 0.012);
+      if (t.kind === "ball" && t.z > 0.01) (v.root.children[0] as Object3D).rotation.x += 0.2;
+      const k = 1 / (1 + t.z * 1.6);
+      v.shadow.scale.setScalar(k);
+      (v.shadow.material as MeshBasicMaterial).opacity = 0.12 + 0.2 * k;
+    }
+    for (const [id, v] of this.toys3)
+      if (!seen.has(id)) {
+        this.scene.remove(v.root);
+        this.toys3.delete(id);
+      }
   }
   private onWheel = (e: WheelEvent) => {
     this.activeAt = performance.now();
@@ -1373,6 +1537,7 @@ export class ThirdPersonView {
     this.post?.dispose();
     this.light.dispose();
     for (const p of this.people.values()) p.dispose();
+    for (const e of this.pets3.values()) e.model.dispose();
     this.games3?.dispose();
     this.world.dispose();
     this.around.dispose();

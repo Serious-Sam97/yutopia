@@ -10,13 +10,22 @@ export interface HeldDef {
   every: number; // ms between them
   linger: number; // ms it's kept once finished, before it's put away
   from: string[]; // the interactions that hand one out
+  toy?: boolean; // a pet's toy (pets.ts): kept until it's thrown, dropped or put down
 }
 
 export const HELD = {
   mug: { label: "Coffee", uses: 8, first: 2500, every: 7000, linger: 6000, from: ["coffee"] },
   cup: { label: "Water", uses: 5, first: 2000, every: 6000, linger: 4000, from: ["water"] },
   soda: { label: "Soda", uses: 6, first: 2200, every: 6500, linger: 5000, from: ["vending"] },
+  // a pet's toys, from the toy box (or the Pets panel): thrown, tugged, waved, pointed
+  ball: { label: "Ball", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
+  frisbee: { label: "Frisbee", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
+  rope: { label: "Rope", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
+  feather: { label: "Feather", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
+  laser: { label: "Laser pointer", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
 } as const satisfies Record<string, HeldDef>;
+export const isToyHeld = (k: unknown): boolean => isHeld(k) && !!(HELD[k] as HeldDef).toy;
+export const THROWN = ["ball", "frisbee"] as const; // what flies when you throw it
 
 export type HeldKind = keyof typeof HELD;
 export const isHeld = (k: unknown): k is HeldKind => typeof k === "string" && Object.hasOwn(HELD, k);
@@ -33,6 +42,7 @@ export interface HeldState {
 // Where someone is with what they hold, `now − heldAt` ms after taking it.
 export function heldState(kind: HeldKind, since: number): HeldState {
   const d: HeldDef = HELD[kind];
+  if (d.toy) return { used: 0, level: 1, sip: -1, done: false };
   const t = since - d.first;
   const started = t < 0 ? 0 : Math.min(d.uses, Math.floor(t / d.every) + 1);
   const into = t < 0 ? -1 : t - (started - 1) * d.every; // ms into the latest sip

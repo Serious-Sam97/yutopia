@@ -33,6 +33,13 @@ const BuildMode = dynamic(() => import("./build/BuildMode").then((m) => m.BuildM
 // chat · people · room: loaded the first time the panel opens
 const SidePanel = dynamic(() => import("./SidePanel").then((m) => m.SidePanel), { ssr: false });
 
+// A battle proposed to me, or one going on: their chunk loads when there is one.
+const PetOverlaysLazy = dynamic(() => import("./PetOverlays").then((m) => m.PetOverlays), { ssr: false });
+function PetOverlays() {
+  const on = useHud((s) => !!s.challenge || !!s.battle);
+  return on ? <PetOverlaysLazy /> : null;
+}
+
 export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null }) {
   const router = useRouter();
   const host = useRef<HTMLDivElement>(null);
@@ -87,6 +94,7 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
           {!building && <FocusChip />}
           {!building && <ArrivalChip />}
           {!building && <ActionQueueBar />}
+          {!building && <PetOverlays />}
           {!building && <ScreenTray />}
           {building && <BuildMode />}
           {!racing && <Minimap />}

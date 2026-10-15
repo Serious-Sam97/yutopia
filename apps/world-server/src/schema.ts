@@ -118,6 +118,84 @@ export class GameConsole extends Schema {
   @type("float64") since = 0;
 }
 
+// Someone's pet (features/pets.ts, rules in shared/pets.ts): where it is and
+// what it's doing, its needs and growth. The record lives in Yondra; this is
+// what everyone in the room sees.
+export class Pet extends Schema {
+  @type("string") id = ""; // the record's id
+  @type("number") uid = 0; // its owner
+  @type("string") sid = ""; // the owner's session
+  @type("string") owner = ""; // the owner's name
+  @type("string") name = "";
+  @type("string") species = "dog";
+  @type("string") look = "{}"; // shared PetLook (JSON)
+  @type("string") outfit = "{}"; // shared PetOutfit (JSON)
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("uint8") d = 0;
+  @type("uint8") a = 0; // ANIM: idle / walk / sit (asleep)
+  @type("string") mode = "follow"; // shared PetMode
+  // what it's doing right now ("" for nothing): eat, drink, pet, play:<toy>,
+  // trick:<trick>, lesson:<trick>, attack, special, defend, rest, hurt, ko,
+  // sleep; since when (server ms); a spot it runs to (fetch, a laser dot)
+  @type("string") act = "";
+  @type("float64") actAt = 0;
+  @type("float32") actX = 0;
+  @type("float32") actY = 0;
+  @type("string") say = ""; // a sound: <mood> (shared PetMood), heard near it
+  @type("float64") sayAt = 0;
+  @type("uint8") food = 100;
+  @type("uint8") water = 100;
+  @type("uint8") energy = 100;
+  @type("uint8") fun = 100;
+  @type("uint8") health = 100;
+  @type("uint32") xp = 0;
+  @type("uint8") level = 1;
+  @type("string") tricks = "{}"; // trick → progress 0..100 (JSON)
+  @type("boolean") alive = true;
+  @type("uint16") wins = 0;
+  @type("uint16") losses = 0;
+  @type("string") battle = ""; // the battle it's in
+  @type("string") carry = ""; // a toy in its mouth (shared/held.ts kind)
+}
+
+// A battle between two pets (shared/pets.ts): each owner picks a move, the
+// round plays out, until a KO or the last round.
+export class PetBattle extends Schema {
+  @type("string") id = "";
+  @type("string") a = ""; // pet ids
+  @type("string") b = "";
+  @type("string") sidA = ""; // their owners
+  @type("string") sidB = "";
+  @type("int16") hpA = 0;
+  @type("int16") hpB = 0;
+  @type("int16") maxA = 0;
+  @type("int16") maxB = 0;
+  @type("string") moveA = ""; // picked this round ("" while thinking)
+  @type("string") moveB = "";
+  @type("uint8") round = 1;
+  @type("string") phase = "pick"; // pick → anim → pick … → done
+  @type("float64") until = 0; // when the phase ends on its own (server ms)
+  @type("string") log = "[]"; // the last round's events (shared BattleEvent[], JSON)
+  @type("string") winner = ""; // a / b / draw
+}
+
+// A toy out in the world (features/pets.ts, shared/pets.ts): flying, on the
+// floor, or in a pet's mouth. (In a hand it's the player's `held`.)
+export class Toy extends Schema {
+  @type("string") id = "";
+  @type("string") kind = ""; // shared/held.ts kind
+  @type("string") state = "floor"; // flying | floor | mouth
+  @type("string") by = ""; // the session that threw it (whose pets fetch it)
+  @type("string") holder = ""; // the pet carrying it
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") fromX = 0;
+  @type("float32") fromY = 0;
+  @type("float64") at = 0;
+  @type("uint16") dur = 0;
+}
+
 export class SpaceState extends Schema {
   @type("number") spaceId = 0;
   @type("string") name = "";
@@ -148,5 +226,8 @@ export class SpaceState extends Schema {
   @type({ map: "string" }) holds = new MapSchema<string>(); // object id → "uid|name" of the builder holding it
   @type({ map: SlotRace }) slots = new MapSchema<SlotRace>(); // slot-car track id → its race
   @type({ map: GameConsole }) consoles = new MapSchema<GameConsole>(); // console id → what it's playing
+  @type({ map: Pet }) pets = new MapSchema<Pet>(); // pet id → the pet (while its owner is here)
+  @type({ map: PetBattle }) battles = new MapSchema<PetBattle>();
+  @type({ map: Toy }) toys = new MapSchema<Toy>();
   @type("string") playlists = "[]"; // YouTube playlists played here (shared/media.ts SavedPlaylist[], JSON)
 }

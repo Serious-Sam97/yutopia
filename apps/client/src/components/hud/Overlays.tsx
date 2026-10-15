@@ -1,8 +1,8 @@
 "use client";
 
-import { HELD, heldState, isHeld } from "@yutopia/shared";
+import { HELD, heldState, isHeld, isToyHeld } from "@yutopia/shared";
 import { useEffect, useRef, useState } from "react";
-import { type Key, useTr } from "@/lib/i18n";
+import { type Key, trMaybe, useTr } from "@/lib/i18n";
 import { HELD_BOX, heldSvg, MUG_COLORS } from "@/world/art/held";
 import { PERSON } from "@/world/art/iso";
 import { svgDoc } from "@/world/art/svgdoc";
@@ -126,7 +126,46 @@ export function HeldChip() {
     const i = setInterval(() => tick((n) => n + 1), 500);
     return () => clearInterval(i);
   }, [held]);
+  const armed = useHud((s) => s.throwArm);
   if (!held || !isHeld(held.kind)) return null;
+  if (isToyHeld(held.kind)) {
+    const kind = held.kind;
+    const throws = kind === "ball" || kind === "frisbee";
+    const points = kind === "laser";
+    const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgDoc(heldSvg(kind, "", 4), HELD_BOX, 3))}`;
+    return (
+      <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[136px] cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise">
+        <span
+          className="w-8 h-8 rounded-full grid place-items-center shrink-0"
+          style={{ background: "radial-gradient(#4a3324,#241912)", border: "1px solid var(--edge)" }}
+          aria-hidden
+        >
+          {/* biome-ignore lint/performance/noImgElement: generated SVG data URI */}
+          <img src={src} alt="" width={22} height={25} />
+        </span>
+        <span className="text-sm">{trMaybe(`toy_${kind}`) ?? HELD[kind].label}</span>
+        {(throws || points) && (
+          <span className="mono text-[11px] hidden sm:inline" style={{ color: "var(--muted)" }}>
+            · {armed ? trMaybe(throws ? "throwArmed" : "pointArmed") : trMaybe(throws ? "throwHint" : "pointHint")}
+          </span>
+        )}
+        {(throws || points) && (
+          <button
+            type="button"
+            className={`deck-btn ${armed ? "primary" : ""}`}
+            style={{ height: 28, fontSize: 12 }}
+            aria-pressed={armed}
+            onClick={() => w?.armThrow(!armed)}
+          >
+            {trMaybe(throws ? "throwArm" : "pointArm")}
+          </button>
+        )}
+        <button type="button" className="deck-btn" style={{ height: 28, fontSize: 12 }} onClick={() => w?.putDown()}>
+          {t("heldPutDown")}
+        </button>
+      </div>
+    );
+  }
   const st = heldState(held.kind, Date.now() - held.at);
   const level = Math.round(st.level * 4);
   // the same mug the world draws in my hand

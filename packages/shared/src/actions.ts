@@ -29,7 +29,14 @@ export type ObjectAction =
   | "work"
   | "focus"
   | "unfocus"
-  | "openCard";
+  | "openCard"
+  | "fillFood"
+  | "fillWater"
+  | "takeBall"
+  | "takeFrisbee"
+  | "takeRope"
+  | "takeFeather"
+  | "takeLaser";
 
 export interface ActionContext {
   uid: number;
@@ -85,6 +92,15 @@ export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectActi
       break;
     case "radio":
       out.push(ctx.radioOn ? "musicOff" : "musicOn", "open");
+      break;
+    case "petbowl":
+      out.push("fillFood");
+      break;
+    case "waterbowl":
+      out.push("fillWater");
+      break;
+    case "toybox":
+      out.push("takeBall", "takeFrisbee", "takeRope", "takeFeather", "takeLaser");
       break;
     case "door": {
       const st = String(props.state ?? "open");

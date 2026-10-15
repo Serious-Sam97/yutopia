@@ -132,6 +132,12 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     ],
   },
   { key: "floor", label: "catFloor", icon: "marquee", items: ["rug", "standup_mat"].map(it) },
+  {
+    key: "pets",
+    label: "catPets",
+    icon: "paw",
+    items: ["pet_bed", "pet_bowl", "water_bowl", "scratch_post", "pet_house"].map(it),
+  },
 ];
 const ALL = CATS.flatMap((c) => c.items);
 const RECENT_KEY = "yutopia:build:recent";

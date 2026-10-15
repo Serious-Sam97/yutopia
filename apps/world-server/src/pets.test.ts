@@ -1,0 +1,214 @@
+import assert from "node:assert/strict";
+import { after, before, test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
+import { ROOM_NAME } from "@yutopia/shared";
+import { CARE, LESSON_MS, XP } from "@yutopia/shared/pets";
+import { Client, type Room } from "colyseus.js";
+
+process.env.YUTOPIA_OFFLINE = "1";
+process.env.YUTOPIA_WORLD_SECRET = "test";
+process.env.YUTOPIA_INTERNAL_SECRET = "test";
+
+const PORT = 27670 + Math.floor(Math.random() * 100);
+let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
+const rooms: Room[] = [];
+let space = 300;
+
+before(async () => {
+  const { startWorldServer } = await import("./server.ts");
+  server = await startWorldServer(PORT);
+});
+after(async () => {
+  const bounded = <T>(p: Promise<T>) => Promise.race([p, sleep(1000)]);
+  await Promise.all(rooms.map((r) => bounded(r.leave(true).catch(() => {}))));
+  await bounded(server.gracefullyShutdown(false));
+  setTimeout(() => process.exit(process.exitCode ?? 0), 50).unref();
+});
+
+interface Person {
+  room: Room;
+  msgs: Record<string, unknown[]>;
+}
+async function person(id: number, spaceId: number, roles = "member"): Promise<Person> {
+  const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    spaceId,
+    token: `dev:${id}:P${id}:${roles}`,
+  });
+  rooms.push(room);
+  const p: Person = { room, msgs: {} };
+  for (const t of ["toast", "pet:event", "pet:challenge", "snap"])
+    room.onMessage(t, (m) => {
+      if (!p.msgs[t]) p.msgs[t] = [];
+      p.msgs[t].push(m);
+    });
+  await waitFor(() => !!room.state?.players?.get(room.sessionId));
+  return p;
+}
+async function waitFor(fn: () => boolean, ms = 4000) {
+  const t = Date.now();
+  while (!fn()) {
+    if (Date.now() - t > ms) throw new Error("timeout");
+    await sleep(25);
+  }
+}
+const petsOf = (p: Person) => [...p.room.state.pets.values()].filter((x: S) => x.sid === p.room.sessionId);
+type S = Record<string, never> & { [k: string]: never };
+const me = (p: Person) => p.room.state.players.get(p.room.sessionId) as S;
+
+test("adopt a platypus: it shows up beside you, follows, and comes back after a teleport", async () => {
+  const sp = space++;
+  const ana = await person(1, sp, "builder"); // (a builder may teleport anywhere)
+  ana.room.send("pet:adopt", { species: "platypus", name: "Perry", look: { color: "#5b3a26", mark: "socks" } });
+  await waitFor(() => petsOf(ana).length === 1);
+  const pet = petsOf(ana)[0];
+  assert.equal(pet.species, "platypus");
+  assert.equal(pet.name, "Perry");
+  assert.equal(JSON.parse(pet.look).mark, "socks");
+  assert.ok(Math.hypot(pet.x - me(ana).x, pet.y - me(ana).y) < 5);
+  // a second one with a bad look is cleaned; a fourth is refused
+  ana.room.send("pet:adopt", { species: "dog", name: "", look: { color: "red" } });
+  await waitFor(() => petsOf(ana).length === 2);
+  assert.equal(petsOf(ana)[1].name, "Dog");
+  ana.room.send("pet:adopt", { species: "cat", name: "Tom" });
+  await waitFor(() => petsOf(ana).length === 3);
+  ana.room.send("pet:adopt", { species: "parrot", name: "Polly" });
+  await waitFor(() => (ana.msgs.toast ?? []).length > 0);
+  assert.equal(petsOf(ana).length, 3);
+  // far away: it turns up next to its owner again
+  const before = { x: me(ana).x, y: me(ana).y };
+  ana.room.send("teleport", { to: { x: 33.5, y: 30.5 } }); // the Live Room
+  await waitFor(() => Math.hypot(me(ana).x - before.x, me(ana).y - before.y) > 14);
+  await waitFor(() => petsOf(ana).every((x: S) => Math.hypot(x.x - me(ana).x, x.y - me(ana).y) < 7), 8000);
+});
+
+test("commands, care and a lesson", async () => {
+  const sp = space++;
+  const bia = await person(2, sp);
+  bia.room.send("pet:adopt", { species: "dog", name: "Rex" });
+  await waitFor(() => petsOf(bia).length === 1);
+  const id = petsOf(bia)[0].id;
+  const pet = () => bia.room.state.pets.get(id) as S;
+  bia.room.send("pet:cmd", { id, cmd: "stay" });
+  await waitFor(() => pet().mode === "stay");
+  bia.room.send("pet:cmd", { id, cmd: "speak" });
+  await waitFor(() => pet().say === "call" && pet().sayAt > 0);
+  assert.equal(pet().xp, XP.command * 2);
+  // a stranger's commands do nothing
+  const cid = await person(3, sp);
+  cid.room.send("pet:cmd", { id, cmd: "roam" });
+  await sleep(200);
+  assert.equal(pet().mode, "stay");
+  // care by hand: a snack, then the cooldown
+  bia.room.send("pet:care", { id, what: "snack" });
+  await waitFor(() => pet().act === "eat");
+  assert.equal(pet().xp, XP.command * 2 + CARE.snack.xp);
+  bia.room.send("pet:care", { id, what: "snack" });
+  await waitFor(() => (bia.msgs["pet:event"] ?? []).some((e) => (e as { kind: string }).kind === "wait"));
+  // a lesson (once the snack's eaten): progress after it, learned after enough of them
+  await waitFor(() => pet().act === "", 5000);
+  bia.room.send("pet:teach", { id, trick: "sit" });
+  await waitFor(() => pet().act === "lesson:sit");
+  await waitFor(() => pet().act === "", LESSON_MS + 2000);
+  const prog = JSON.parse(pet().tricks).sit;
+  assert.ok(prog > 0 && prog < 100, `progress ${prog}`);
+  // not learned yet: "do the trick" does nothing; "fetch" isn't a dog's trick to learn either way
+  bia.room.send("pet:cmd", { id, cmd: "trick", trick: "sit" });
+  await sleep(150);
+  assert.equal(pet().act, "");
+  // a toy: the ball in hand, thrown ahead, fetched and brought back
+  bia.room.send("pet:cmd", { id, cmd: "follow" });
+  bia.room.send("toy:take", { toy: "ball" });
+  await waitFor(() => me(bia).held === "ball");
+  const at = { x: me(bia).x, y: me(bia).y };
+  bia.room.send("toy:throw", { x: at.x + 4, y: at.y });
+  await waitFor(() => bia.room.state.toys.size === 1);
+  const toy = () => [...bia.room.state.toys.values()][0] as S;
+  assert.equal(toy().kind, "ball");
+  assert.equal(me(bia).held, "");
+  assert.ok(Math.hypot(toy().x - at.x, toy().y - at.y) > 2, "it flew");
+  await waitFor(() => toy().state === "floor", 3000);
+  await waitFor(() => pet().act === "fetch:go", 3000);
+  await waitFor(() => pet().carry === "ball" && toy().state === "mouth", 6000);
+  await waitFor(() => pet().carry === "" && toy().state === "floor", 8000);
+  assert.ok(Math.hypot(toy().x - me(bia).x, toy().y - me(bia).y) < 1.6, "brought back to my feet");
+  assert.ok(pet().xp > XP.command * 3 + CARE.snack.xp, "xp for the fetch");
+  // picked up again
+  bia.room.send("toy:pick", { id: toy().id });
+  await waitFor(() => me(bia).held === "ball");
+  assert.equal(bia.room.state.toys.size, 0);
+});
+
+test("a throw stops at a wall", async () => {
+  const sp = space++;
+  const gil = await person(7, sp, "builder");
+  gil.room.send("pet:adopt", { species: "dog", name: "Rex" });
+  await waitFor(() => petsOf(gil).length === 1);
+  // the lobby's north wall runs along the top of row 21: a throw north from
+  // (3.5, 22.5) lands this side of it
+  gil.room.send("teleport", { to: { x: 3.5, y: 22.5 } });
+  await waitFor(() => Math.abs(me(gil).y - 22.5) < 1);
+  gil.room.send("toy:take", { toy: "ball" });
+  await waitFor(() => me(gil).held === "ball");
+  gil.room.send("toy:throw", { x: me(gil).x, y: me(gil).y - 5 });
+  await waitFor(() => gil.room.state.toys.size === 1);
+  const toy = [...gil.room.state.toys.values()][0] as S;
+  assert.ok(toy.y >= 21, `landed at y ${toy.y}, inside the lobby`);
+});
+
+test("a battle between two pets: challenge, accept, a round, and the end", async () => {
+  const sp = space++;
+  const dan = await person(4, sp);
+  const eva = await person(5, sp);
+  dan.room.send("pet:adopt", { species: "dog", name: "Brutus" });
+  eva.room.send("pet:adopt", { species: "cat", name: "Luna" });
+  await waitFor(() => petsOf(dan).length === 1 && petsOf(eva).length === 1);
+  const a = petsOf(dan)[0].id;
+  const b = petsOf(eva)[0].id;
+  dan.room.send("pet:challenge", { id: b, mine: a });
+  await waitFor(() => (eva.msgs["pet:challenge"] ?? []).length === 1);
+  const ch = eva.msgs["pet:challenge"][0] as { battle: string; fromName: string; pet: string; mine: string };
+  assert.equal(ch.fromName, "P4");
+  assert.equal(ch.pet, a);
+  assert.equal(ch.mine, b);
+  eva.room.send("pet:answer", { battle: ch.battle, accept: true });
+  await waitFor(() => dan.room.state.battles.get(ch.battle)?.phase === "pick");
+  const bt = () => dan.room.state.battles.get(ch.battle) as S;
+  assert.ok(bt().hpA > 0 && bt().hpB > 0);
+  assert.equal(dan.room.state.pets.get(a).battle, ch.battle);
+  dan.room.send("pet:move", { battle: ch.battle, move: "attack" });
+  eva.room.send("pet:move", { battle: ch.battle, move: "defend" });
+  await waitFor(() => bt().phase === "anim");
+  const log = JSON.parse(bt().log) as { who: string; move: string; dmg?: number }[];
+  assert.ok(log.some((e) => e.who === "a" && e.move === "attack" && e.dmg));
+  assert.ok(bt().hpB < bt().maxB);
+  // the next round comes round on its own
+  await waitFor(() => bt().phase === "pick" && bt().round === 2, 5000);
+  // eva leaves: the battle ends with nobody winning, Brutus is free again
+  await eva.room.leave(true);
+  await waitFor(() => !dan.room.state.battles.get(ch.battle));
+  assert.equal(dan.room.state.pets.get(a).battle, "");
+  assert.equal(petsOf(dan)[0].wins, 0);
+});
+
+test("a pet is kept between visits", async () => {
+  const sp = space++;
+  const fay = await person(6, sp);
+  fay.room.send("pet:adopt", { species: "capybara", name: "Capi" });
+  await waitFor(() => petsOf(fay).length === 1);
+  const id = petsOf(fay)[0].id;
+  fay.room.send("pet:care", { id, what: "pet" });
+  await waitFor(() => fay.room.state.pets.get(id).xp === CARE.pet.xp);
+  fay.room.send("pet:edit", { id, name: "Capivara", outfit: { hat: "crown", coat: "nope" } });
+  await waitFor(() => fay.room.state.pets.get(id).name === "Capivara");
+  await fay.room.leave(true);
+  const again = await person(6, sp);
+  await waitFor(() => petsOf(again).length === 1);
+  const pet = petsOf(again)[0];
+  assert.equal(pet.id, id);
+  assert.equal(pet.name, "Capivara");
+  assert.equal(pet.xp, CARE.pet.xp);
+  assert.equal(JSON.parse(pet.outfit).hat, "crown");
+  assert.equal(JSON.parse(pet.outfit).coat, "none");
+  again.room.send("pet:release", { id });
+  await waitFor(() => petsOf(again).length === 0);
+});

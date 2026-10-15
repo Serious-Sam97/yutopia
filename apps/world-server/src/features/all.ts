@@ -14,3 +14,4 @@ import "./slotcar.ts";
 import "./games.ts";
 import "./media.ts";
 import "./arrival.ts";
+import "./pets.ts";

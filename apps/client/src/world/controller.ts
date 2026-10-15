@@ -23,6 +23,7 @@ import {
   isPrivate,
   isSocial,
   isTheme,
+  isToyHeld,
   type MapDef,
   moveStep,
   objectActions,
@@ -39,6 +40,7 @@ import {
   screenInputToWorld,
   socialFor,
   stereoPan,
+  THROWN,
   TICK_HZ,
   tileAt,
   WALK_SPEED,
@@ -47,13 +49,15 @@ import {
 } from "@yutopia/shared";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf, showsBoards } from "@yutopia/shared/media";
+import { type BattleEvent, type PetLook, type PetOutfit, type Species, toyAt } from "@yutopia/shared/pets";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, YONDRA_APP, yutopia } from "@/lib/api";
 import { currentEcho, disconnectEcho, getEcho } from "@/lib/echo";
-import { tr } from "@/lib/i18n";
+import { lang, tr } from "@/lib/i18n";
 import { deviceQuality, prefs, type Quality, resolveQuality, setPrefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
 import { loadPeople } from "./art/people-load";
+import { loadPets, pets as petsArt } from "./art/pets-load";
 import { loadItemArt } from "./art/scene";
 import { loadThemes } from "./art/themes-load";
 import { mixer } from "./audio";
@@ -63,9 +67,10 @@ import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
+import type { PetView } from "./petview";
 import type { SlotTracks } from "./slots";
 import { radio, sound } from "./sound";
-import { type ActTarget, hud, type Person, toast } from "./store";
+import { type ActTarget, type BattleView, hud, type Person, type PetInfo, toast } from "./store";
 import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 
 // biome-ignore lint/suspicious/noExplicitAny: decoded Colyseus schema objects
@@ -98,6 +103,10 @@ export class WorldController {
   private seq = 0;
   private remotes = new Map<string, Remote>();
   private npcBuf = new Map<string, { t: number; x: number; y: number }[]>();
+  private petBuf = new Map<string, { t: number; x: number; y: number }[]>();
+  private petHurt = new Map<string, number>(); // pet id → when it last took a hit (client ms)
+  private toyPick: string | null = null; // a toy I'm walking over to pick up
+  private battleSeen = ""; // the last battle round shown (id|round)
   private hear = new Set<string>();
   private raf = 0;
   private lastFrame = 0;
@@ -134,6 +143,12 @@ export class WorldController {
         const r = this.remotes.get(sid);
         const at = r ? interpolate(r.buf, performance.now() - INTERP_MS) : { x: p.x, y: p.y };
         return { x: at.x, y: at.y, uid: p.uid, name: p.name };
+      },
+      pet: (id) => {
+        const pet = this.room?.state.pets.get(id);
+        if (!pet) return undefined;
+        const at = interpolate(this.petBuf.get(id) ?? [{ t: 0, x: pet.x, y: pet.y }], performance.now() - INTERP_MS);
+        return { x: at.x, y: at.y, name: pet.name };
       },
       walk: (to) => this.walkTo(to, undefined, true),
       walking: () => !!this.path?.length,
@@ -217,15 +232,20 @@ export class WorldController {
     });
     if (this.stopped) return engine.destroy();
     engine.events = {
-      onTileClick: (x, y) => {
+      onTileClick: (x, y, mods) => {
         if (hud.get().build.on) return this.buildClick(x, y);
         if (hud.get().pickArrival) return this.setArrival({ x, y });
-        // a click on the floor: go there (dropping whatever was queued)
         if (hud.get().menu) return hud.set({ menu: null });
+        // a toy in hand: Shift / right-click (or the chip's Throw) throws it there, or points the laser
+        if (this.throwAt(x, y, !!mods?.shift || !!mods?.right)) return;
+        // a click on the floor: go there (dropping whatever was queued)
         this.actions.clear();
+        this.toyPick = null;
         this.walkTo({ x, y });
       },
+      onToyClick: (id) => this.pickToy(id),
       onAvatarClick: (sid, at) => {
+        if (sid.startsWith("pet:")) return void this.openMenu({ type: "pet", id: sid.slice(4) }, at);
         if (sid.startsWith("npc:")) return this.send("vortex:poke", {});
         // yourself: your look, your drink…; anyone else: what to do with them
         if (sid === this.room?.sessionId) return this.openMenu({ type: "self" }, at);
@@ -408,6 +428,46 @@ export class WorldController {
     });
     $(room.state).npcs.onRemove((_n: S, id: string) => engine.removeAvatar(`npc:${id}`));
 
+    // pets (features/pets.ts): drawn like people, with their sounds near me
+    $(room.state).pets.onAdd((pet: S, id: string) => {
+      this.petBuf.set(id, [{ t: performance.now(), x: pet.x, y: pet.y }]);
+      void loadPets(); // its drawing, animation, sounds and strings
+      if (pet.alive) engine.upsertAvatar(`pet:${id}`, this.petState(pet));
+      let lastSay = pet.sayAt;
+      $(pet).onChange(() => {
+        const buf = this.petBuf.get(id);
+        const last = buf?.[buf.length - 1];
+        if (buf && (!last || last.x !== pet.x || last.y !== pet.y)) {
+          buf.push({ t: performance.now(), x: pet.x, y: pet.y });
+          if (buf.length > 12) buf.shift();
+        }
+        if (!pet.alive && engine.hasAvatar(`pet:${id}`)) engine.removeAvatar(`pet:${id}`);
+        if (pet.sayAt === lastSay || !pet.say) return;
+        lastSay = pet.sayAt;
+        const d = Math.hypot(pet.x - this.me.x, pet.y - this.me.y);
+        if (d > 10) return;
+        const P = petsArt();
+        if (!P) return;
+        const sp = pet.species as Species;
+        this.say(`pet:${id}`, P.petNoise(sp, pet.say as never, lang()), 2200);
+        P.petSound(P.SPECIES_DEFS[sp].sound, pet.say, Math.max(0.15, 1 - d / 12));
+      });
+      this.publishPets();
+    });
+    $(room.state).pets.onRemove((_pet: S, id: string) => {
+      engine.removeAvatar(`pet:${id}`);
+      this.petBuf.delete(id);
+      this.publishPets();
+    });
+    $(room.state).battles.onAdd((b: S) => {
+      $(b).onChange(() => this.watchBattle(b));
+      this.watchBattle(b);
+    });
+    $(room.state).battles.onRemove(() => this.publishPets());
+    $(room.state).toys.onRemove((t: S) => {
+      if (this.toyPick === t.id) this.toyPick = null;
+    });
+
     const mirror = () => {
       const st = room.state;
       hud.set({
@@ -503,6 +563,11 @@ export class WorldController {
         build: { ...s.build, save: { state: m.ok ? "saved" : m.rejected ? "rejected" : "failed", at: m.at } },
       })),
     );
+    room.onMessage("pet:challenge", (m: ServerMessages["pet:challenge"]) => {
+      mixer.blip("knock");
+      hud.set({ challenge: { battle: m.battle, fromName: m.fromName, pet: m.pet, mine: m.mine } });
+    });
+    room.onMessage("pet:event", (m: ServerMessages["pet:event"]) => this.petEvent(m));
     room.onMessage("vortex:say", (m: ServerMessages["vortex:say"]) => {
       this.say("npc:vortex", m.text, 7000);
       this.vortexLog(m.text);
@@ -850,6 +915,29 @@ export class WorldController {
       engine.upsertAvatar(`npc:${id}`, st);
       if (tp) bodies.push({ ...st, id: `npc:${id}`, reduced });
     });
+    // toys in the air and on the floor (shared/pets.ts): where each is right now
+    const toyList: { id: string; kind: string; x: number; y: number; z: number }[] = [];
+    const wall = Date.now();
+    room.state.toys.forEach((t: S) => {
+      if (t.state === "mouth") return;
+      const at = toyAt({ fromX: t.fromX, fromY: t.fromY, toX: t.x, toY: t.y, at: t.at, dur: t.dur }, wall);
+      toyList.push({ id: t.id, kind: t.kind, x: at.x, y: at.y, z: at.z });
+    });
+    engine.setToys(toyList);
+    if (tp) tp.setToys(toyList);
+    // walking over to pick a toy up
+    if (this.toyPick && !this.path) {
+      const t = room.state.toys.get(this.toyPick);
+      if (t && Math.hypot(t.x - this.me.x, t.y - this.me.y) < 1.6) this.send("toy:pick", { id: t.id });
+      this.toyPick = null;
+    }
+    room.state.pets.forEach((pet: S, id: string) => {
+      if (!pet.alive) return;
+      const pos = interpolate(this.petBuf.get(id) ?? [{ t: 0, x: pet.x, y: pet.y }], renderAt);
+      const st = { ...this.petState(pet), x: pos.x, y: pos.y };
+      engine.upsertAvatar(`pet:${id}`, st);
+      if (tp) bodies.push({ ...st, id: `pet:${id}`, reduced });
+    });
     this.watchActs();
     engine.update(dt);
     if (tp) {
@@ -868,6 +956,7 @@ export class WorldController {
       tp.setCable(this.cableEnds());
       tp.setGames(this.games?.scene3d() ?? null);
       // (a hidden tab: nothing to draw for)
+      tp.tagsHidden = !!hud.get().panel.kind;
       if (!document.hidden) tp.frame(dt, bodies, localSid);
     } else if (!document.hidden) engine.render();
     for (const cb of this.hudFrames) cb();
@@ -1209,6 +1298,32 @@ export class WorldController {
       if (hud.get().mySpawn) items.push({ act: "arriveUsual", ok: true });
       return { title: me.name, items };
     }
+    if (target.type === "pet") {
+      const pet = room.state.pets.get(target.id);
+      const P = petsArt();
+      if (!pet || !pet.alive || !P) return null;
+      const mine = pet.sid === room.sessionId;
+      const items: { act: string; ok: boolean }[] = [{ act: "petpet", ok: !pet.battle }];
+      const sp = pet.species as Species;
+      if (mine) {
+        const free = !pet.battle;
+        items.push({ act: "snack", ok: free }, { act: "water", ok: free }, { act: "speak", ok: free });
+        const far = Math.hypot(pet.x - me.x, pet.y - me.y) > 3;
+        if (far) items.push({ act: "come", ok: free });
+        items.push({ act: pet.mode === "stay" ? "followMe" : "stay", ok: free });
+        if (pet.mode !== "sleep") items.push({ act: "sleep", ok: free });
+        const t = safeParse(pet.tricks) as Record<string, number>;
+        const known = P.tricksFor(sp).filter((x) => P.learned(t, x));
+        if (known.length) items.push({ act: `trick_${known[0]}`, ok: free });
+        items.push({ act: "petCare", ok: true });
+      } else {
+        const myFree =
+          [...room.state.players.values()].length > 0 && hud.get().pets.some((x) => x.mine && x.alive && !x.battle);
+        items.push({ act: "challenge", ok: myFree && !pet.battle }, { act: "petCare", ok: true });
+      }
+      const feeling = tr(`feel_${P.feelingOf(petNeeds(pet))}` as never);
+      return { title: pet.name, subtitle: `${tr(`sp_${sp}` as never)} · Lv ${pet.level} · ${feeling}`, items };
+    }
     if (target.type === "person") {
       const p = room.state.players.get(target.sid);
       if (!p) return null;
@@ -1286,6 +1401,17 @@ export class WorldController {
       return;
     }
     if (act === "look") return hud.set({ panel: { kind: "avatar" } });
+    // a pet's commands need no walking over; care, toys and lessons do
+    if (t.type === "pet") {
+      const id = t.id;
+      if (act === "petCare") return hud.set({ panel: { kind: "pets" }, petFocus: id });
+      const cmd = act === "followMe" ? "follow" : act;
+      if (cmd === "come" || cmd === "stay" || cmd === "follow" || cmd === "roam" || cmd === "sleep" || cmd === "speak")
+        return this.send("pet:cmd", { id, cmd });
+      const tk = act.slice(6);
+      if (act.startsWith("trick_") && petsArt()?.isTrick(tk))
+        return this.send("pet:cmd", { id, cmd: "trick", trick: tk as never });
+    }
     if (act === "arriveHere") return this.setArrival({ x: this.me.x, y: this.me.y });
     if (act === "arriveUsual") return this.setArrival(null);
     this.actions.add(act, m.target, m.title);
@@ -1399,6 +1525,182 @@ export class WorldController {
     hud.set({ me, people, fps: Math.round(st?.fps ?? 0) });
     const vx = room.state.npcs.get("vortex");
     hud.set({ vortex: vx ? { x: vx.x, y: vx.y, say: vx.say, sayAt: vx.sayAt, mood: vx.mood } : null });
+    this.publishPets();
+  }
+
+  // ── pets ─────────────────────────────────────────────────────────────────
+  private petState(pet: S): AvatarState {
+    const view: PetView = {
+      id: pet.id,
+      species: pet.species as Species,
+      look: petLook(pet),
+      outfit: petOutfit(pet),
+      mode: pet.mode,
+      act: pet.act,
+      actAt: pet.actAt,
+      feeling: petsArt()?.feelingOf(petNeeds(pet)) ?? "ok",
+      level: pet.level,
+      mine: pet.sid === this.room?.sessionId,
+      hurtAt: this.petHurt.get(pet.id),
+      lookAt: this.whereIs(pet.sid),
+      carry: pet.carry || null,
+    };
+    return {
+      name: pet.name,
+      avatar: VORTEX_LOOK,
+      x: pet.x,
+      y: pet.y,
+      d: pet.d,
+      a: pet.a,
+      status: "online",
+      speaking: false,
+      emote: "",
+      mic: false,
+      pet: view,
+    };
+  }
+
+  // The pets in the room and the battle I'm in, for the panel and the menus.
+  private petsKey = "";
+  publishPets() {
+    const room = this.room;
+    if (!room) return;
+    const mySid = room.sessionId;
+    const pets: PetInfo[] = [];
+    room.state.pets.forEach((pet: S) => {
+      pets.push({
+        id: pet.id,
+        uid: pet.uid,
+        owner: pet.owner,
+        mine: pet.sid === mySid,
+        name: pet.name,
+        species: pet.species as Species,
+        look: petLook(pet),
+        outfit: petOutfit(pet),
+        needs: petNeeds(pet),
+        xp: pet.xp,
+        level: pet.level,
+        tricks: safeParse(pet.tricks) as Record<string, number>,
+        alive: pet.alive,
+        wins: pet.wins,
+        losses: pet.losses,
+        mode: pet.mode,
+        act: pet.act,
+        battle: pet.battle,
+        near: Math.hypot(pet.x - this.me.x, pet.y - this.me.y) <= 2.8,
+      });
+    });
+    pets.sort((a, b) => Number(b.mine) - Number(a.mine) || a.name.localeCompare(b.name));
+    let battle: BattleView | null = null;
+    room.state.battles.forEach((b: S) => {
+      const mine = b.sidA === mySid ? "a" : b.sidB === mySid ? "b" : null;
+      if (b.phase === "offer" || (!mine && battle)) return;
+      if (mine || !battle)
+        battle = {
+          id: b.id,
+          a: b.a,
+          b: b.b,
+          mine,
+          hpA: b.hpA,
+          hpB: b.hpB,
+          maxA: b.maxA,
+          maxB: b.maxB,
+          moveA: b.moveA,
+          moveB: b.moveB,
+          round: b.round,
+          phase: b.phase,
+          until: b.until,
+          log: safeParseList(b.log) as BattleEvent[],
+          winner: b.winner,
+        };
+    });
+    const key = JSON.stringify([pets, battle]);
+    if (key === this.petsKey) return;
+    this.petsKey = key;
+    hud.set({ pets, battle });
+  }
+
+  // A round played out: who got hit flashes, and the sounds of it.
+  private watchBattle(b: S) {
+    const key = `${b.id}|${b.round}|${b.phase}`;
+    if (this.battleSeen === key) return;
+    this.battleSeen = key;
+    if (b.phase !== "anim") return this.publishPets();
+    const log = safeParseList(b.log) as BattleEvent[];
+    let at = 0;
+    for (const ev of log) {
+      if (!ev.dmg) continue;
+      const hit = ev.who === "a" ? b.b : b.a;
+      at += 350;
+      setTimeout(() => {
+        this.petHurt.set(hit, performance.now());
+        const pet = this.room?.state.pets.get(hit);
+        if (pet) {
+          const d = Math.hypot(pet.x - this.me.x, pet.y - this.me.y);
+          this.engine?.puff(pet.x, pet.y, "spark", 40);
+          socialSound("fistbump", Math.max(0, 1 - d / 10));
+        }
+      }, at);
+    }
+    this.publishPets();
+  }
+
+  private petEvent(m: ServerMessages["pet:event"]) {
+    if (!petsArt()) return void loadPets().then(() => this.petEvent(m)); // (its strings come with the chunk)
+    const pet = this.room?.state.pets.get(m.id);
+    const name = pet?.name ?? "";
+    const trick = m.trick ? tr(`trick_${m.trick}` as never) : "";
+    const text = tr(`petEv_${m.kind}` as never)
+      .replace("{name}", name)
+      .replace("{n}", String(m.n ?? ""))
+      .replace("{trick}", trick);
+    if (!text) return;
+    if (m.kind === "levelUp" || m.kind === "learned" || m.kind === "won") fanfare(0.6);
+    toast(text, m.kind === "died" ? "warn" : "info");
+  }
+
+  // A toy in my hand thrown where I click (or the laser pointed there): true when it was.
+  private throwAt(x: number, y: number, mods: boolean): boolean {
+    const me = this.room?.state.players.get(this.room.sessionId);
+    const held = me?.held;
+    if (!held || !isToyHeld(held)) return false;
+    const armed = hud.get().throwArm;
+    if (!armed && !mods) return false;
+    if (armed) hud.set({ throwArm: false });
+    if ((THROWN as readonly string[]).includes(held)) this.send("toy:throw", { x, y });
+    else if (held === "laser") this.send("laser:point", { x, y });
+    else return false;
+    this.actions.clear();
+    return true;
+  }
+  armThrow(on = true) {
+    hud.set({ throwArm: on });
+  }
+  // A toy on the floor clicked: picked up (walking over first)
+  pickToy(id: string) {
+    const t = this.room?.state.toys.get(id);
+    if (!t || t.state !== "floor") return;
+    if (Math.hypot(t.x - this.me.x, t.y - this.me.y) < 1.6) return this.send("toy:pick", { id });
+    this.actions.clear();
+    this.toyPick = id;
+    this.walkTo({ x: t.x, y: t.y });
+  }
+  // Take a toy into my hand (from the Pets panel; the toy box hands them out too)
+  takeToy(toy: string) {
+    this.send("toy:take", { toy: toy as never });
+  }
+
+  // Answering a battle proposed to me, and my move each round.
+  answerChallenge(accept: boolean) {
+    const c = hud.get().challenge;
+    if (!c) return;
+    hud.set({ challenge: null });
+    this.send("pet:answer", { battle: c.battle, accept });
+  }
+  battleMove(move: string) {
+    const b = hud.get().battle;
+    if (!b || !b.mine) return;
+    this.send("pet:move", { battle: b.id, move: move as never });
   }
 
   setStatus(status: "online" | "away" | "dnd") {
@@ -1781,8 +2083,9 @@ export class WorldController {
       this.host.appendChild(host);
       const v = new ThirdPersonView(this.map, engine.allObjects(), P, items, { keys: false, themes });
       v.events = {
-        floor: (x, y) => engine.events.onTileClick?.(x, y),
+        floor: (x, y, mods) => engine.events.onTileClick?.(x, y, mods),
         person: (id, at) => engine.events.onAvatarClick?.(id, at),
+        toy: (id) => engine.events.onToyClick?.(id),
         object: (id, at) => engine.events.onObjectClick?.(id, at),
         // build mode: the iso build controller, fed the floor under the 3D pointer
         buildMove: (x, y, at) => {
@@ -2212,6 +2515,44 @@ const VORTEX_LOOK = parseAvatar({
   accessory: "glasses",
   accessoryColor: "#ffa630",
 });
+
+// A pet's look, clothes and needs as the server keeps them (it cleans them on the way in).
+const petNeeds = (pet: S) => ({
+  food: pet.food,
+  water: pet.water,
+  energy: pet.energy,
+  fun: pet.fun,
+  health: pet.health,
+});
+const petLook = (pet: S): PetLook =>
+  ({ color: "#c68a5e", mark: "none", markColor: "#efe4cc", breed: "", ...safeParse(pet.look) }) as PetLook;
+const petOutfit = (pet: S): PetOutfit =>
+  ({
+    hat: "none",
+    hatColor: "#c4402b",
+    collar: "none",
+    collarColor: "#c4402b",
+    coat: "none",
+    coatColor: "#6e7b3a",
+    ...safeParse(pet.outfit),
+  }) as PetOutfit;
+
+function safeParse(s: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(s || "{}");
+    return v && typeof v === "object" ? v : {};
+  } catch {
+    return {};
+  }
+}
+function safeParseList(s: string): unknown[] {
+  try {
+    const v = JSON.parse(s || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
 
 function objFromState(o: S): WorldObjectDef {
   let props: Record<string, unknown> = {};

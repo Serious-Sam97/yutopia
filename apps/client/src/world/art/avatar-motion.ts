@@ -385,6 +385,12 @@ function atWork(rig: Rig, what: string, base: Pose, t: number): Pose {
         : { sh: 12, el: 62 + 6 * Math.sin(t * 6), su: 0.9, sf: 0.66 };
       p.head.rot += side ? -2 : 2;
       break;
+    case "throw":
+      // the follow-through of a throw: the arm out and up, the body leaning in
+      p.armR = side ? { sh: 118, el: 6, su: 1, sf: 1 } : { sh: 48, el: 24, su: 0.9, sf: 0.62 };
+      p.body.rot += side ? 3 : 1;
+      p.head.rot += side ? -3 : 1;
+      break;
     case "arcade": {
       // both hands on the controls, mashing
       const mash = Math.sin(t * 17);

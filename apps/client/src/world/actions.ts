@@ -38,6 +38,7 @@ export interface ActionHost {
   grid(): Grid;
   object(id: string): WorldObjectDef | undefined;
   person(sid: string): { x: number; y: number; uid: number; name: string } | undefined;
+  pet(id: string): { x: number; y: number; name: string } | undefined;
   walk(to: Point): boolean; // false: no way there
   walking(): boolean;
   stopWalking(): void;
@@ -52,6 +53,7 @@ export interface ActionHost {
 }
 
 const REACH = 1.6; // close enough to use a thing (tiles from its footprint)
+const PET_REACH = 2.6; // close enough to a pet (the server allows 3)
 const MAX = 6;
 
 // A little tune for "play a tune" (semitones from middle C, beats)
@@ -181,6 +183,13 @@ export class ActionQueue {
     const h = this.host;
     const me = h.me();
     if (t.type === "self") return true;
+    if (t.type === "pet") {
+      const p = h.pet(t.id);
+      if (!p) return false;
+      if (this.inReach(c.q)) return true;
+      const spot = besideOf(h.grid(), p, me);
+      return !!spot && h.walk(spot);
+    }
     if (t.type === "person") {
       const p = h.person(t.sid);
       if (!p) return false;
@@ -212,6 +221,10 @@ export class ActionQueue {
     const h = this.host;
     const me = h.me();
     if (q.target.type === "self") return true;
+    if (q.target.type === "pet") {
+      const p = h.pet(q.target.id);
+      return !!p && Math.hypot(p.x - me.x, p.y - me.y) <= PET_REACH;
+    }
     if (q.target.type === "person") {
       const p = h.person(q.target.sid);
       if (!p) return false;
@@ -237,6 +250,35 @@ export class ActionQueue {
       const until = performance.now() + ms;
       return () => performance.now() > until;
     };
+    if (q.target.type === "pet") {
+      const p = h.pet(q.target.id);
+      if (!p) return null;
+      h.setFacing(dirFromDelta(p.x - me.x, p.y - me.y, me.d as 0));
+      const id = q.target.id;
+      // care by hand, a toy, a lesson, a trick, a battle (shared/pets.ts)
+      if (q.act === "petpet" || q.act === "snack" || q.act === "water") {
+        h.send("pet:care", { id, what: q.act === "petpet" ? "pet" : q.act });
+        return later(q.act === "petpet" ? 1600 : 2400);
+      }
+      if (q.act.startsWith("play_")) {
+        h.send("pet:play", { id, toy: q.act.slice(5) as never });
+        return later(1200);
+      }
+      if (q.act.startsWith("teach_")) {
+        h.send("pet:teach", { id, trick: q.act.slice(6) as never });
+        return later(1200);
+      }
+      if (q.act.startsWith("trick_")) {
+        h.send("pet:cmd", { id, cmd: "trick", trick: q.act.slice(6) as never });
+        return later(1200);
+      }
+      if (q.act === "challenge") {
+        const mine = hud.get().pets.find((x) => x.mine && x.alive && !x.battle);
+        if (mine) h.send("pet:challenge", { id, mine: mine.id });
+        return null;
+      }
+      return null;
+    }
     if (q.target.type === "person") {
       const p = h.person(q.target.sid);
       if (!p) return null;
@@ -297,6 +339,13 @@ export class ActionQueue {
       case "lightOff":
         h.send("lamp:set", { id, on: q.act === "lightOn" });
         return null;
+      case "takeBall":
+      case "takeFrisbee":
+      case "takeRope":
+      case "takeFeather":
+      case "takeLaser":
+        h.send("toy:take", { id, toy: q.act.slice(4).toLowerCase() as never });
+        return later(500);
       case "roomLightsOn":
       case "roomLightsOff":
         h.send("lights:room", { id, on: q.act === "roomLightsOn" });

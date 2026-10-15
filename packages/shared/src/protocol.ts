@@ -3,6 +3,7 @@
 import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
 import type { MediaItem } from "./media.ts";
+import type { Command, Move, Species, Toy, Trick } from "./pets.ts";
 
 export const ROOM_NAME = "space";
 export const TICK_HZ = 20;
@@ -162,6 +163,26 @@ export interface ClientMessages {
   "wb:op": { objectId: string; op: WbOp };
   "arcade:score": { score: number };
   "vortex:poke": Record<string, never>;
+  // pets (shared/pets.ts): adopt one, let it go, its name / look / clothes, a
+  // command, care by hand, a toy, a lesson, a bowl filled, a battle (the
+  // challenge, the answer, a move each round)
+  "pet:adopt": { species: Species; name: string; look?: unknown };
+  "pet:release": { id: string };
+  "pet:edit": { id: string; name?: string; look?: unknown; outfit?: unknown };
+  "pet:cmd": { id: string; cmd: Command; trick?: Trick };
+  "pet:care": { id: string; what: "pet" | "snack" | "water" };
+  "pet:play": { id: string; toy: Toy };
+  "pet:teach": { id: string; trick: Trick };
+  "pet:bowl": { id: string }; // the bowl's object id
+  // toys (shared/pets.ts): take one (from a toy box by `id`, or with a pet of
+  // yours), throw it where you point, pick one up off the floor, point the laser
+  "toy:take": { toy: Toy; id?: string };
+  "toy:throw": { x: number; y: number };
+  "toy:pick": { id: string };
+  "laser:point": { x: number; y: number };
+  "pet:challenge": { id: string; mine: string }; // their pet, my pet
+  "pet:answer": { battle: string; accept: boolean };
+  "pet:move": { battle: string; move: Move };
 }
 
 // server → client
@@ -196,10 +217,25 @@ export interface ServerMessages {
   // on joining: the key for the world-server's media routes (Jellyfin browsing,
   // streams, pictures; YouTube search) and what's set up
   "media:key": { key: string; jf: boolean; ytSearch: boolean };
+  // a pet battle proposed to me: whose pet against mine
+  "pet:challenge": { battle: string; from: string; fromName: string; pet: string; mine: string };
+  // what happened with a pet of mine (the client words it): levelUp, learned,
+  // died, ignored, won, lost, draw, full (no more pets)
+  "pet:event": { id: string; kind: string; n?: number; trick?: string };
 }
 
 // Things you can be busy with (shown on the body: hands on the controls…).
-export const USES = ["coffee", "water", "vending", "arcade", "piano", "whiteboard", "slotcar", "gamepad"] as const;
+export const USES = [
+  "coffee",
+  "water",
+  "vending",
+  "arcade",
+  "piano",
+  "whiteboard",
+  "slotcar",
+  "gamepad",
+  "throw",
+] as const;
 export type Use = (typeof USES)[number];
 export const PIANO_RANGE = [-12, 24] as const; // semitones from middle C
 

@@ -197,6 +197,15 @@ export function Dock() {
         <button
           type="button"
           className="deck-btn"
+          onClick={() => hud.set({ panel: { kind: "pets" }, petFocus: null })}
+          title={t("pets")}
+          aria-label={t("pets")}
+        >
+          <Icon name="paw" size={20} />
+        </button>
+        <button
+          type="button"
+          className="deck-btn"
           onClick={() => hud.set({ panel: { kind: "settings" } })}
           title={t("settings")}
           aria-label={t("settings")}

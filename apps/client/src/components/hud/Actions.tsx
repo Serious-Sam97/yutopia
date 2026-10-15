@@ -7,6 +7,7 @@ import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
 import { Face } from "./Face";
 import { Icon } from "./icons";
+import { PetFace } from "./PetFace";
 
 const R = 92; // the ring's radius (px)
 const BOX = { w: 440, h: 270 }; // what the ring takes up around the click
@@ -244,6 +245,7 @@ export function ArrivalChip() {
 function Thumb({ target, size }: { target: ActTarget; size: number }) {
   const w = useWorld();
   const people = useHud((s) => s.people);
+  const pets = useHud((s) => s.pets);
   const me = useHud((s) => s.me);
   const disc = {
     width: size,
@@ -256,6 +258,14 @@ function Thumb({ target, size }: { target: ActTarget; size: number }) {
     return (
       <span className="rounded-full grid place-items-center shrink-0 p-1" style={disc}>
         {o && <ItemThumb kind={o.kind} props={o.props} />}
+      </span>
+    );
+  }
+  if (target.type === "pet") {
+    const pet = pets.find((x) => x.id === target.id);
+    return (
+      <span className="rounded-full grid place-items-center shrink-0 overflow-hidden" style={disc}>
+        {pet && <PetFace species={pet.species} look={pet.look} outfit={pet.outfit} size={size - 4} />}
       </span>
     );
   }

@@ -56,12 +56,56 @@ export function sodaSvg(color: string, level: number): string {
   );
 }
 
+// A pet's toys in the hand (shared/held.ts): a ball, a frisbee, a rope, a
+// feather on a stick, a laser pointer.
+export function toySvg(kind: string): string {
+  switch (kind) {
+    case "ball":
+      return (
+        `<circle cx="-1.5" cy="-5.5" r="5.2" fill="#c4402b" stroke="${INK}" stroke-width=".9"/>` +
+        `<path d="M-6.3 -7.2 Q-1.5 -4 3.3 -7.2" fill="none" stroke="#f7f0de" stroke-width="1.4"/>` +
+        `<circle cx="-3.4" cy="-7.6" r="1.3" fill="#ffffff" opacity=".55"/>`
+      );
+    case "frisbee":
+      return (
+        `<ellipse cx="-1.5" cy="-6" rx="8" ry="3.2" fill="#e8a33d" stroke="${INK}" stroke-width=".9"/>` +
+        `<ellipse cx="-1.5" cy="-6.6" rx="5.2" ry="1.7" fill="#f2b85a" stroke="#b5773f" stroke-width=".5"/>`
+      );
+    case "rope":
+      return (
+        `<path d="M-7 -3 Q-4 -9 -1 -4 T5 -5" fill="none" stroke="${INK}" stroke-width="3.6" stroke-linecap="round"/>` +
+        `<path d="M-7 -3 Q-4 -9 -1 -4 T5 -5" fill="none" stroke="#d9b26a" stroke-width="2.2" stroke-linecap="round"/>` +
+        `<circle cx="-7" cy="-3" r="2" fill="#b5562f" stroke="${INK}" stroke-width=".7"/><circle cx="5" cy="-5" r="2" fill="#b5562f" stroke="${INK}" stroke-width=".7"/>`
+      );
+    case "feather":
+      return (
+        `<path d="M-1.5 0 L-1.5 -7" stroke="${INK}" stroke-width="1.2"/>` +
+        `<path d="M-1.5 -7 Q-6 -11 -2.5 -16 Q2 -11 -1.5 -7z" fill="#7a5c8a" stroke="${INK}" stroke-width=".8"/>` +
+        `<path d="M-1.5 -7.5 L-2.2 -14.5" stroke="#4a3a5a" stroke-width=".6"/>`
+      );
+    case "laser":
+      return (
+        `<rect x="-3.2" y="-9" width="3.4" height="9.5" rx="1.4" fill="#3d4a5c" stroke="${INK}" stroke-width=".8"/>` +
+        `<rect x="-3.2" y="-9" width="3.4" height="2" rx="1" fill="#8d877a"/>` +
+        `<circle cx="-1.5" cy="-9.4" r="1" fill="#ff2d2d"/>`
+      );
+    default:
+      return "";
+  }
+}
+
 export function heldSvg(kind: string, color: string, level: number): string {
   switch (kind) {
     case "cup":
       return cupSvg(level);
     case "soda":
       return sodaSvg(color, level);
+    case "ball":
+    case "frisbee":
+    case "rope":
+    case "feather":
+    case "laser":
+      return toySvg(kind);
     default:
       return mugSvg(color, level);
   }

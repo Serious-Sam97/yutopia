@@ -26,6 +26,10 @@
 7. [10-media.md](10-media.md) — Fita 10 (delivered): more TVs (wall too), YouTube + Jellyfin on them for everyone nearby, YouTube on the radio
 8. [11-wall-building.md](11-wall-building.md) — Fita 11 (delivered): Sims-style wall building and painting, face indicators
 9. [12-first-person.md](12-first-person.md) — First person (delivered): the 3D view's camera in your head, a third View choice
+10. [13-pets.md](13-pets.md) — Fita 12 (delivered): pets — six species incl. the platypus, needs, XP, tricks, toys, clothes, commands, sounds, battles, pet furniture
+11. [14-pets-v2.md](14-pets-v2.md) — Pets v2 (delivered): real 3D models in both views, throw-and-fetch play with toys in the world, the Pets cabinet
+12. [15-pets-models-v3.md](15-pets-models-v3.md) — Pet models v3 (delivered): one-piece bodies and ramp shading, weight and gaits, expressions and species behaviour, breeds, sharper iso
+13. [16-pets-breeds.md](16-pets-breeds.md) — Pets breeds (delivered): twelve dog and twelve cat breeds, part colours and eye colour for every species, a fedora
 
 ## Workflow rules (inherited from Yondra)
 

@@ -6,7 +6,7 @@ import { mixer } from "./audio";
 export type MachineSound = "brew" | "pour" | "clunk";
 
 let noise: AudioBuffer | null = null;
-function noiseBuffer(ctx: AudioContext): AudioBuffer {
+export function noiseBuffer(ctx: AudioContext): AudioBuffer {
   if (noise && noise.sampleRate === ctx.sampleRate) return noise;
   const b = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const d = b.getChannelData(0);
@@ -15,7 +15,7 @@ function noiseBuffer(ctx: AudioContext): AudioBuffer {
   return b;
 }
 
-function ready(): AudioContext | null {
+export function ready(): AudioContext | null {
   const ctx = mixer.ctx;
   return ctx && ctx.state === "running" ? ctx : null;
 }

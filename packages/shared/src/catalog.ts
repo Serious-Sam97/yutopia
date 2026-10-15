@@ -23,7 +23,10 @@ export type Interaction =
   | "console"
   | "games"
   | "media"
-  | "switch";
+  | "switch"
+  | "petbowl"
+  | "waterbowl"
+  | "toybox";
 
 export interface CatalogEntry {
   label: string;
@@ -278,6 +281,14 @@ export const CATALOG = {
   decor: { label: "Decor", w: 1, h: 1, solid: true, buildable: true },
   tabletop: { label: "On a desk", w: 1, h: 1, solid: false, buildable: true, onSurface: true },
   frame: { label: "Picture frame", w: 1, h: 1, solid: false, wall: true, buildable: true },
+  // for pets (shared/pets.ts): a bed it sleeps in, bowls it eats and drinks
+  // from (props.portions left; anyone fills them), a post, a house
+  pet_bed: { label: "Pet bed", w: 1, h: 1, solid: false, buildable: true, variants: 2, paint: true },
+  pet_bowl: { label: "Food bowl", w: 1, h: 1, solid: false, interact: "petbowl", buildable: true, paint: true },
+  water_bowl: { label: "Water bowl", w: 1, h: 1, solid: false, interact: "waterbowl", buildable: true, paint: true },
+  scratch_post: { label: "Scratching post", w: 1, h: 1, solid: true, buildable: true },
+  pet_house: { label: "Pet house", w: 1, h: 1, solid: true, buildable: true, variants: 2, paint: true },
+  toy_box: { label: "Toy box", w: 1, h: 1, solid: true, interact: "toybox", buildable: true, paint: true },
 } satisfies Record<string, CatalogEntry>;
 
 // What decor pieces can be (props.d), by kind.
