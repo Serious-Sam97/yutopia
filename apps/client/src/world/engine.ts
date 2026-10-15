@@ -3,9 +3,11 @@ import {
   depthOf,
   EMOTES,
   type Emote,
+  edgeAt,
   entry,
   entryWallItem,
   footprint,
+  HALF_WALL,
   HANG_HIGH,
   HANG_LOW,
   type HeldKind,
@@ -627,28 +629,112 @@ export class WorldEngine {
   // A wall brush over an edge: a see-through wall where it would go.
   private edgeG = new Graphics();
   setEdgeGhost(e: { x: number; y: number; dir: "h" | "v" } | null, ok: boolean) {
-    this.edgeGhost = e ? { e, ok } : null;
+    this.setEdgeGhosts(e ? [{ e, ok }] : []);
+  }
+  // Walls about to go on edges (a run being drawn): each one's footprint and
+  // the face that would stand up, olive where it can, rust where not; `remove`:
+  // walls about to go (a cross over them).
+  setEdgeGhosts(list: EdgeGhost[]) {
+    this.edgeGhosts = list;
     if (!this.edgeG.parent) this.world.addChild(this.edgeG);
     this.edgeG.clear();
-    if (!e) return;
     const t = 0.1;
-    const [a0, a1, b0, b1] = e.dir === "h" ? [e.x, e.x + 1, e.y - t, e.y + t] : [e.x - t, e.x + t, e.y, e.y + 1];
     const at = (x: number, y: number, z = 0) => {
       const p = toScreen(x, y);
       return [p.x, p.y - z];
     };
-    const col = ok ? C.olive : C.rust;
-    // footprint on the floor + the face that would stand up
-    this.edgeG.poly([...at(a0, b0), ...at(a1, b0), ...at(a1, b1), ...at(a0, b1)]).fill({ color: col, alpha: 0.6 });
-    const face =
-      e.dir === "h"
-        ? [...at(a0, b1), ...at(a1, b1), ...at(a1, b1, WALL_H), ...at(a0, b1, WALL_H)]
-        : [...at(a1, b0), ...at(a1, b1), ...at(a1, b1, WALL_H), ...at(a1, b0, WALL_H)];
-    this.edgeG
-      .poly(face)
-      .fill({ color: col, alpha: 0.22 })
-      .stroke({ width: 1.5, color: ok ? C.vfd : C.rust, alpha: 0.9 });
+    for (const { e, ok, remove } of list) {
+      const [a0, a1, b0, b1] = e.dir === "h" ? [e.x, e.x + 1, e.y - t, e.y + t] : [e.x - t, e.x + t, e.y, e.y + 1];
+      const col = ok && !remove ? C.olive : C.rust;
+      // footprint on the floor + the face that would stand up
+      this.edgeG.poly([...at(a0, b0), ...at(a1, b0), ...at(a1, b1), ...at(a0, b1)]).fill({ color: col, alpha: 0.6 });
+      const face =
+        e.dir === "h"
+          ? [...at(a0, b1), ...at(a1, b1), ...at(a1, b1, WALL_H), ...at(a0, b1, WALL_H)]
+          : [...at(a1, b0), ...at(a1, b1), ...at(a1, b1, WALL_H), ...at(a1, b0, WALL_H)];
+      this.edgeG
+        .poly(face)
+        .fill({ color: col, alpha: remove ? 0.12 : 0.22 })
+        .stroke({ width: 1.5, color: ok && !remove ? C.vfd : C.rust, alpha: 0.9 });
+      if (remove) {
+        const m = e.dir === "h" ? [a0 + 0.5, b1] : [a1, b0 + 0.5];
+        const [cx, cy] = at(m[0], m[1], WALL_H / 2);
+        this.edgeG
+          .moveTo(cx - 7, cy - 7)
+          .lineTo(cx + 7, cy + 7)
+          .moveTo(cx + 7, cy - 7)
+          .lineTo(cx - 7, cy + 7)
+          .stroke({ width: 2.5, color: C.rust, alpha: 0.95 });
+      }
+    }
   }
+
+  // Wall faces the Walls tool points at (panels: one face of one edge): an
+  // outline on the face, the brush's material on it (a preview), an arrow strip
+  // on the floor into the room it looks into. The faces this view can't see
+  // (a wall's far side) show through their wall as a dashed ghost.
+  private faceG = new Graphics();
+  private faceGhosts: FaceGhost[] = [];
+  setFaceGhosts(list: FaceGhost[]) {
+    this.faceGhosts = list;
+    if (!this.faceG.parent) this.world.addChild(this.faceG);
+    const g = this.faceG.clear();
+    const F = 0.105; // just off the face
+    for (const f of list) {
+      const p = f.p;
+      const top = edgeAt(this.map, p) === HALF_WALL ? 34 : WALL_H;
+      const plane = (p.dir === "h" ? p.y : p.x) + p.side * F;
+      const at = (u: number, z: number) => {
+        const s = p.dir === "h" ? toScreen(p.x + u, plane) : toScreen(plane, p.y + u);
+        return [s.x, s.y - z];
+      };
+      const quad = (u0: number, u1: number, z0: number, z1: number) => [
+        ...at(u0, z1),
+        ...at(u1, z1),
+        ...at(u1, z0),
+        ...at(u0, z0),
+      ];
+      const far = p.side < 0 && !this.seesAllSides;
+      const col = !f.ok ? C.rust : f.sel ? C.vfd : C.amber;
+      // the floor strip in front, and a chevron into the room
+      const d = 0.32;
+      const [b0, b1] = p.side > 0 ? [0, d] : [-d, 0];
+      const base = p.dir === "h" ? p.y : p.x;
+      const fl = (u: number, v: number) => {
+        const s = p.dir === "h" ? toScreen(p.x + u, base + v) : toScreen(base + v, p.y + u);
+        return [s.x, s.y];
+      };
+      g.poly([...fl(0.04, b0), ...fl(0.96, b0), ...fl(0.96, b1), ...fl(0.04, b1)]).fill({ color: col, alpha: 0.28 });
+      const tip = p.side * (d + 0.14);
+      g.poly([...fl(0.38, p.side * d), ...fl(0.62, p.side * d), ...fl(0.5, tip)]).fill({ color: col, alpha: 0.8 });
+      // the brush's material on the face (what it will look like)
+      if (f.mat && f.ok) previewMat(g, f.mat, quad, top, far ? 0.4 : 0.82);
+      else g.poly(quad(0, 1, 0, top)).fill({ color: col, alpha: far ? 0.1 : 0.18 });
+      // the outline: solid on a face this view sees, dashed through the wall on one it doesn't
+      if (far) {
+        const corners: [number, number][] = [
+          [0, top],
+          [1, top],
+          [1, 0],
+          [0, 0],
+        ];
+        for (let i = 0; i < 4; i++) {
+          const [u0, z0] = corners[i];
+          const [u1, z1] = corners[(i + 1) % 4];
+          for (let k = 0; k < 8; k += 2) {
+            const a = at(u0 + ((u1 - u0) * k) / 8, z0 + ((z1 - z0) * k) / 8);
+            const b = at(u0 + ((u1 - u0) * (k + 1)) / 8, z0 + ((z1 - z0) * (k + 1)) / 8);
+            g.moveTo(a[0], a[1]).lineTo(b[0], b[1]);
+          }
+        }
+        g.stroke({ width: 1.5, color: col, alpha: 0.95 });
+      } else g.poly(quad(0, 1, 0, top)).stroke({ width: f.sel ? 2.5 : 1.8, color: col, alpha: 0.95 });
+    }
+  }
+
+  // how the walls show in build mode (up / cut away round the focus / down);
+  // null outside it (cut away, as always)
+  wallView: "up" | "cut" | "down" | null = null;
 
   // Room drafts in build mode.
   private rectG = new Graphics();
@@ -2125,10 +2211,12 @@ export class WorldEngine {
       const e = v.edge;
       if (!e?.high) return;
       const node = v.high ?? v.root;
-      const down =
+      const cut =
         e.dir === "h"
           ? e.y > py && e.y - py < 9 && Math.abs(e.x + 0.5 - px) < 8
           : e.x > px && e.x - px < 9 && Math.abs(e.y + 0.5 - py) < 8;
+      // build mode's walls up / down override it
+      const down = this.wallView === "up" ? false : this.wallView === "down" ? true : cut;
       const target = down ? 0.06 : 1;
       if (Math.abs(node.alpha - target) > 0.005) node.alpha += (target - node.alpha) * k;
       else node.alpha = target;
@@ -2487,14 +2575,16 @@ export class WorldEngine {
   picksOverride: ((filter?: (o: WorldObjectDef) => boolean) => Pick[]) | null = null;
   clientOverride: ((x: number, y: number, z: number) => { x: number; y: number }) | null = null;
   floorOverride: ((clientX: number, clientY: number, z: number) => { x: number; y: number }) | null = null;
-  private edgeGhost: { e: { x: number; y: number; dir: "h" | "v" }; ok: boolean } | null = null;
+  private edgeGhosts: EdgeGhost[] = [];
   private rectGhost: { x: number; y: number; w: number; h: number; ok: boolean } | null = null;
   private gridOn = false;
   buildLook() {
     return {
       ghosts: this.ghostItems.map((g) => ({ def: g.def, ok: g.ok })),
       lift: this.ghostLift,
-      edge: this.edgeGhost,
+      edges: this.edgeGhosts,
+      faces: this.faceGhosts,
+      wallView: this.wallView,
       rect: this.rectGhost,
       spawn: this.spawnOn ? { at: this.map.spawn, pick: this.spawnPick } : null,
       outlines: this.outlines,
@@ -3071,4 +3161,76 @@ function inConvex(poly: number[], x: number, y: number): boolean {
     else if (s !== sign) return false;
   }
   return true;
+}
+
+export interface EdgeGhost {
+  e: { x: number; y: number; dir: "h" | "v" };
+  ok: boolean;
+  remove?: boolean;
+}
+export interface FaceGhost {
+  p: { x: number; y: number; dir: "h" | "v"; side: 1 | -1 };
+  mat: string | null; // a material to preview on it
+  ok: boolean;
+  sel?: boolean; // selected (the inspector's)
+}
+
+// A wall material drawn flat on a face (the Walls tool's preview): its colours
+// and its pattern, enough to tell plaster from brick at a glance.
+function previewMat(
+  g: Graphics,
+  mat: string,
+  quad: (u0: number, u1: number, z0: number, z1: number) => number[],
+  top: number,
+  alpha: number,
+) {
+  const lines = (pts: [number, number, number, number][], color: number, a = 0.55) => {
+    for (const [u0, z0, u1, z1] of pts) {
+      const q = quad(u0, u1, z0, z1);
+      g.moveTo(q[6], q[7]).lineTo(q[2], q[3]);
+    }
+    g.stroke({ width: 0.8, color, alpha: a * alpha });
+  };
+  g.poly(quad(0, 1, 0, 5)).fill({ color: 0x3e2718, alpha }); // the skirting
+  switch (mat) {
+    case "w": {
+      g.poly(quad(0, 1, 5, top)).fill({ color: 0x6b4430, alpha });
+      lines(
+        [1 / 3, 2 / 3].map((u) => [u, 5, u, top] as [number, number, number, number]),
+        0x3e2718,
+      );
+      return;
+    }
+    case "f": {
+      g.poly(quad(0, 1, 5, top)).fill({ color: 0x8a3b2e, alpha });
+      for (let z = 8; z < top - 6; z += 8)
+        for (let i = 0; i < 4; i++)
+          if ((i + z / 8) % 2 === 0)
+            g.poly(quad(i * 0.25 + 0.02, i * 0.25 + 0.23, z, z + 7)).fill({ color: 0x9e4a36, alpha });
+      return;
+    }
+    case "b": {
+      g.poly(quad(0, 1, 5, top)).fill({ color: 0x9a4a30, alpha });
+      const ls: [number, number, number, number][] = [];
+      for (let z = 10; z < top - 3; z += 5) ls.push([0, z, 1, z]);
+      lines(ls, 0xd9cba9, 0.7);
+      return;
+    }
+    case "k": {
+      g.poly(quad(0, 1, 5, 28)).fill({ color: 0x5b3a26, alpha });
+      g.poly(quad(0, 1, 28, top)).fill({ color: 0xc49a6c, alpha });
+      for (let i = 0; i < 14; i++) {
+        const u = ((i * 37) % 97) / 97;
+        const z = 30 + (((i * 53) % 89) / 89) * (top - 36);
+        g.poly(quad(u, u + 0.02, z, z + 1.2)).fill({ color: 0x9c754c, alpha });
+      }
+      return;
+    }
+    default: {
+      // plaster over a walnut dado
+      g.poly(quad(0, 1, 5, 29)).fill({ color: 0x5b3a26, alpha });
+      g.poly(quad(0, 1, 29, 32)).fill({ color: 0x3e2718, alpha });
+      g.poly(quad(0, 1, 32, top)).fill({ color: 0xefe4cc, alpha });
+    }
+  }
 }

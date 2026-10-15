@@ -268,3 +268,68 @@ test("third person: a click high up a wall, above the horizon, hangs the thing",
     });
   }
 });
+
+// A wall drag keeps to the line it started on and leaves no gaps: the 3D
+// view's floor point wobbles across lines and jumps tiles with small mouse
+// moves (it painted a second wall beside the first). Fed to build mode the
+// way the 3D view feeds it.
+test("a wall drag stays on its line, wobble and jumps and all", async ({ page }) => {
+  test.setTimeout(90_000);
+  const tok = await token(ANA);
+  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  // a 6 × 3 patch of open floor with no walls on its edges
+  const spot = await page.evaluate(() => {
+    const w = (window as any).__yutopia;
+    const m = w.map;
+    const open = (x: number, y: number) => !!w.grid?.ok?.(x, y);
+    const none = (s: string | undefined) => !s || s === ".";
+    for (let y = 2; y < m.height - 4; y++)
+      for (let x = 2; x < m.width - 8; x++) {
+        let ok = true;
+        for (let dy = -1; dy <= 1 && ok; dy++)
+          for (let dx = 0; dx < 6 && ok; dx++) {
+            if (!open(x + dx, y + dy)) ok = false;
+            if (!none(m.hWalls[y + dy]?.[x + dx]) || !none(m.hWalls[y + dy + 1]?.[x + dx])) ok = false;
+            if (!none(m.vWalls[y + dy]?.[x + dx])) ok = false;
+          }
+        if (ok) return { x, y };
+      }
+    return null;
+  });
+  expect(spot, "the Lab has open floor").not.toBeNull();
+  const { x, y } = spot as { x: number; y: number };
+  const row = (yy: number) => page.evaluate((r) => (window as any).__yutopia.map.hWalls[r].slice(0, 200), yy);
+  const before = [await row(y - 1), await row(y), await row(y + 1)];
+  try {
+    await setBuild(page, { on: true, tool: "walls", wallMode: "build", brush: "w:p", paintMode: "line" });
+    await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
+    // press by the corner (x, y), then wobble across the lines either side and jump two tiles
+    await page.evaluate((p) => {
+      const b = (window as any).__yutopia.build;
+      b.down(p.x + 0.1, p.y + 0.1);
+      for (const [dx, dy] of [
+        [0.9, 0.62],
+        [1.4, -0.58],
+        [3.6, 0.7],
+        [4.5, -0.3],
+      ])
+        b.hover(p.x + dx, p.y + dy);
+      b.up(p.x + 4.5, p.y - 0.3);
+    }, spot);
+    await expect.poll(async () => (await row(y)).slice(x, x + 5)).toBe("ppppp");
+    expect((await row(y - 1)).slice(x, x + 6)).toBe(before[0].slice(x, x + 6));
+    expect((await row(y + 1)).slice(x, x + 6)).toBe(before[2].slice(x, x + 6));
+  } finally {
+    await page.evaluate(
+      (p) =>
+        (window as any).__yutopia.send("map:walls", {
+          edges: [0, 1, 2, 3, 4, 5].flatMap((d) =>
+            [p.y - 1, p.y, p.y + 1].map((yy) => ({ x: p.x + d, y: yy, dir: "h", ch: "." })),
+          ),
+        }),
+      spot,
+    );
+    await setBuild(page, { on: false });
+  }
+  await expect.poll(async () => (await row(y)).slice(x, x + 6)).toBe(before[1].slice(x, x + 6));
+});

@@ -15,6 +15,7 @@ import {
   type Object3D,
   PlaneGeometry,
   SphereGeometry,
+  Vector3,
 } from "three";
 import { WALL_H } from "../art/furniture";
 import { cardTexture, type Pick3, type World3 } from "./build";
@@ -31,7 +32,15 @@ import { zt } from "./kit3d";
 export interface BuildLook {
   ghosts: { def: WorldObjectDef; ok: boolean }[];
   lift: number;
-  edge: { e: { x: number; y: number; dir: "h" | "v" }; ok: boolean } | null;
+  edges: { e: { x: number; y: number; dir: "h" | "v" }; ok: boolean; remove?: boolean }[];
+  // wall faces pointed at / painted / selected (the Walls tool)
+  faces: {
+    p: { x: number; y: number; dir: "h" | "v"; side: 1 | -1 };
+    mat: string | null;
+    ok: boolean;
+    sel?: boolean;
+  }[];
+  wallView: "up" | "cut" | "down" | null;
   rect: { x: number; y: number; w: number; h: number; ok: boolean } | null;
   spawn: { at: { x: number; y: number }; pick: { x: number; y: number; ok: boolean } | null } | null;
   outlines: { id: string; dress?: boolean; color: number; fill?: number }[];
@@ -42,6 +51,9 @@ export interface BuildLook {
 const OK = 0x6e7b3a; // olive
 const BAD = 0xb5562f; // rust
 const VFD = 0xffb35c;
+const AMBER = 0xffa630;
+// a wall material's face colour (the Walls tool's preview)
+const MAT_COLOR: Record<string, number> = { p: 0xefe4cc, w: 0x6b4430, f: 0x9e4a36, b: 0x9a4a30, k: 0xc49a6c };
 
 const cue = (color: number, opacity: number) =>
   new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, toneMapped: false, side: DoubleSide });
@@ -148,30 +160,79 @@ export class BuildLayer {
 
   // ── edges, rooms, the arrival pin, outlines ────────────────────────────────
   private setCues(look: BuildLook | null, world: World3) {
-    const sig = look ? JSON.stringify([look.edge, look.rect, look.spawn, look.outlines, world.picks.length]) : "";
+    const sig = look
+      ? JSON.stringify([look.edges, look.faces, look.rect, look.spawn, look.outlines, world.picks.length])
+      : "";
     if (sig === this.cueSig) return;
     this.cueSig = sig;
     clear(this.cues);
     if (!look) return;
     const ok = (b: boolean) => (b ? OK : BAD);
-    if (look.edge) {
-      const { e } = look.edge;
+    for (const g of look.edges) {
+      const { e } = g;
+      const good = g.ok && !g.remove;
       const t = 0.1;
       const strip = new Mesh(
         new PlaneGeometry(e.dir === "h" ? 1 : 2 * t, e.dir === "h" ? 2 * t : 1).rotateX(-Math.PI / 2),
-        cue(ok(look.edge.ok), 0.6),
+        cue(ok(good), 0.6),
       );
       strip.position.set(e.dir === "h" ? e.x + 0.5 : e.x, 0.016, e.dir === "h" ? e.y : e.y + 0.5);
-      const face = new Mesh(new PlaneGeometry(1, zt(WALL_H)), cue(ok(look.edge.ok), 0.22));
+      const face = new Mesh(new PlaneGeometry(1, zt(WALL_H)), cue(ok(good), g.remove ? 0.12 : 0.22));
       face.position.set(e.dir === "h" ? e.x + 0.5 : e.x, zt(WALL_H) / 2, e.dir === "h" ? e.y : e.y + 0.5);
       if (e.dir === "v") face.rotation.y = Math.PI / 2;
       const rim = new LineSegments(
         new EdgesGeometry(face.geometry),
-        new LineBasicMaterial({ color: look.edge.ok ? VFD : BAD }),
+        new LineBasicMaterial({ color: good ? VFD : BAD }),
       );
       rim.position.copy(face.position);
       rim.rotation.copy(face.rotation);
       this.cues.add(strip, face, rim);
+      if (g.remove) {
+        // a cross on it: this wall goes
+        const c = 0.3;
+        const x = new LineSegments(
+          new BufferGeometry().setFromPoints([
+            new Vector3(-c, -c * 2, 0.12),
+            new Vector3(c, c * 2, 0.12),
+            new Vector3(c, -c * 2, 0.12),
+            new Vector3(-c, c * 2, 0.12),
+            new Vector3(-c, -c * 2, -0.12),
+            new Vector3(c, c * 2, -0.12),
+            new Vector3(c, -c * 2, -0.12),
+            new Vector3(-c, c * 2, -0.12),
+          ]),
+          new LineBasicMaterial({ color: BAD }),
+        );
+        x.position.copy(face.position);
+        x.rotation.copy(face.rotation);
+        this.cues.add(x);
+      }
+    }
+    // wall faces: on the face (just off it), the material's colour as a preview,
+    // an outline, and a strip on the floor with an arrow into the room
+    for (const f of look.faces) {
+      const p = f.p;
+      const col = !f.ok ? BAD : f.sel ? VFD : AMBER;
+      const top = zt(WALL_H);
+      const off = p.side * 0.106;
+      const [cx, cy] = p.dir === "h" ? [p.x + 0.5, p.y + off] : [p.x + off, p.y + 0.5];
+      const face = new Mesh(
+        new PlaneGeometry(0.98, top),
+        cue(f.mat && f.ok ? (MAT_COLOR[f.mat] ?? col) : col, f.mat && f.ok ? 0.72 : 0.2),
+      );
+      face.position.set(cx, top / 2, cy);
+      if (p.dir === "v") face.rotation.y = Math.PI / 2;
+      const rim = new LineSegments(new EdgesGeometry(face.geometry), new LineBasicMaterial({ color: col }));
+      rim.position.copy(face.position);
+      rim.rotation.copy(face.rotation);
+      const d = 0.32;
+      const strip = new Mesh(
+        new PlaneGeometry(p.dir === "h" ? 0.92 : d, p.dir === "h" ? d : 0.92).rotateX(-Math.PI / 2),
+        cue(col, 0.3),
+      );
+      const s = p.side * (d / 2);
+      strip.position.set(p.dir === "h" ? cx : p.x + s, 0.017, p.dir === "h" ? p.y + s : cy);
+      this.cues.add(face, rim, strip);
     }
     if (look.rect) {
       const r = look.rect;

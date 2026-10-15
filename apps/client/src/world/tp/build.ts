@@ -75,6 +75,7 @@ export interface FadeGroup {
   alpha: number;
   own?: Map<Material, Material>; // per-group see-through copies, made on the first fade
   item?: boolean; // a tall piece of furniture (not a wall run)
+  wall?: boolean; // …that hangs on a wall (it goes with its wall)
 }
 
 // Something you can click: its 3D bounds (tiles; z = height).
@@ -355,6 +356,7 @@ export class World3 {
         objects: built.objs,
         alpha: 1,
         item: true,
+        wall: hang,
       };
       this.tall.set(id, { sig: t.sig, built, fade });
     }

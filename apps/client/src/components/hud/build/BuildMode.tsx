@@ -1,6 +1,6 @@
 "use client";
 
-import { CLOTH_COLORS, DECOR, entry, footprint } from "@yutopia/shared";
+import { areaAt, CLOTH_COLORS, DECOR, edgeAt, entry, faceMat, footprint, isWindow, panelTile } from "@yutopia/shared";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
@@ -14,7 +14,7 @@ import { DeskDialog, RoomDialog } from "./Dialogs";
 import { MapPanel } from "./MapPanel";
 import { RoomsPanel } from "./RoomsPanel";
 import { ItemThumb } from "./thumbs";
-import { MODE_HINT, WallsPanel } from "./WallsPanel";
+import { MODE_HINT, matLabel, WALL_HINT, WALL_SWATCHES, WallsPanel } from "./WallsPanel";
 
 export type Member = { id: number; name: string };
 
@@ -48,7 +48,21 @@ export function BuildMode() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: redraw the ghost when the tool changes
   useEffect(() => {
     w?.refreshGhost();
-  }, [b.on, b.tool, b.kind, b.rot, b.mode, b.brush, b.paintMode, b.props, b.pickSpawn, w]);
+  }, [
+    b.on,
+    b.tool,
+    b.kind,
+    b.rot,
+    b.mode,
+    b.brush,
+    b.paintMode,
+    b.props,
+    b.pickSpawn,
+    b.wallMode,
+    b.paint,
+    b.wallView,
+    w,
+  ]);
 
   useEffect(() => {
     if (b.on && canBuild && spaceId)
@@ -75,6 +89,8 @@ export function BuildMode() {
       </section>
       {keys && <KeysCard onClose={() => setKeys(false)} />}
       {b.tool === "furniture" && <HoverTag />}
+      {b.tool === "walls" && <WallTagChip />}
+      {b.tool === "walls" && b.wallMode === "select" && b.wallSel.length > 0 && <WallInspector />}
       {b.tool === "furniture" && b.selected.length > 0 && b.carrying === 0 && <ItemToolbar />}
       <ActionBar />
       {b.roomDraft && <RoomDialog draft={b.roomDraft} members={members} />}
@@ -240,27 +256,42 @@ function ToolRail({ keys, onKeys }: { keys: boolean; onKeys: () => void }) {
   );
 }
 
+// (the Walls tool has keys of its own)
+const WALL_KEYS: [string, Key][] = [
+  ["Drag", "kWallRun"],
+  [`${MOD}Drag`, "kWallRemove"],
+  ["Shift+Click", "kWallRoom"],
+  ["Tab", "kWallFlip"],
+  ["E", "kWallSample"],
+  ["[  ]", "kWallView"],
+  ["Esc", "kDrop"],
+  [`${MOD}Z`, "kUndo"],
+];
+
 function KeysCard({ onClose }: { onClose: () => void }) {
   const t = useTr();
-  const rows: [string, Key][] = [
-    ["Click", "kMove"],
-    ["Shift+Click", "kSelect"],
-    ["Drag", "kBox"],
-    ["R / Scroll", "kRotate"],
-    ["Drag ↔", "kTurnDrag"],
-    ["Shift+Click", "kPlaceMore"],
-    ["Arrows", "kNudge"],
-    ["E", "kEyedrop"],
-    ["H", "kHand"],
-    ["C", "kCopy"],
-    [`${MOD}D`, "kDuplicate"],
-    ["Del", "kRemove"],
-    ["Esc", "kDrop"],
-    [`${MOD}Z`, "kUndo"],
-    [`Shift+${MOD}Z`, "kRedo"],
-    ["/", "kSearch"],
-    ["WASD", "kWalk"],
-  ];
+  const walls = useHud((s) => s.build.tool === "walls");
+  const rows: [string, Key][] = walls
+    ? WALL_KEYS
+    : [
+        ["Click", "kMove"],
+        ["Shift+Click", "kSelect"],
+        ["Drag", "kBox"],
+        ["R / Scroll", "kRotate"],
+        ["Drag ↔", "kTurnDrag"],
+        ["Shift+Click", "kPlaceMore"],
+        ["Arrows", "kNudge"],
+        ["E", "kEyedrop"],
+        ["H", "kHand"],
+        ["C", "kCopy"],
+        [`${MOD}D`, "kDuplicate"],
+        ["Del", "kRemove"],
+        ["Esc", "kDrop"],
+        [`${MOD}Z`, "kUndo"],
+        [`Shift+${MOD}Z`, "kRedo"],
+        ["/", "kSearch"],
+        ["WASD", "kWalk"],
+      ];
   return (
     <div
       className="pointer-events-auto cabinet absolute left-[100px] bottom-3 w-[260px] p-3 rise hidden sm:block"
@@ -498,9 +529,13 @@ function ActionBar() {
   } else {
     const hint: Key =
       b.tool === "walls"
-        ? b.brush.startsWith("door")
-          ? "buildHintDoor"
-          : MODE_HINT[b.paintMode]
+        ? b.wallMode !== "build" && b.wallMode !== "floors"
+          ? WALL_HINT[b.wallMode]
+          : b.brush.startsWith("door")
+            ? "buildHintDoor"
+            : b.wallMode === "build" && b.paintMode === "line"
+              ? WALL_HINT.build
+              : MODE_HINT[b.paintMode]
         : b.tool === "rooms"
           ? "buildDrawRoomHint"
           : b.tool === "desks"
@@ -564,6 +599,179 @@ function HoverTag() {
           · {hover.of.i + 1}/{hover.of.n} <kbd className="keycap">Tab</kbd>
         </span>
       )}
+    </div>
+  );
+}
+
+// The Walls tool's chip by the pointer: the face it's on — this side or the
+// far one, the room it looks into, its material now → the brush's — or a run
+// being drawn (how many walls, how many skipped and why).
+function WallTagChip() {
+  const t = useTr();
+  const w = useWorld();
+  const tag = useHud((s) => s.build.wallTag);
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!w) return;
+    return w.onFrame(() => {
+      const e = w.engine;
+      const node = el.current;
+      if (!e || !node) return;
+      const r = e.app.canvas.getBoundingClientRect();
+      const tr = `translate(${Math.round(r.left + e.pointerAt.gx + 18)}px, ${Math.round(r.top + e.pointerAt.gy + 20)}px)`;
+      if (node.style.transform !== tr) node.style.transform = tr;
+    });
+  }, [w]);
+  if (!tag) return null;
+  const bad = !!tag.why && (tag.kind === "face" ? !tag.to : tag.n === 0);
+  const swatch = (m: string | null) => {
+    const c = WALL_SWATCHES.find((s) => s.ch === `w:${m}`)?.face;
+    return c ? (
+      <span className="inline-block w-2.5 h-2.5 rounded-sm align-[-1px] mr-1" style={{ background: c }} />
+    ) : null;
+  };
+  return (
+    <div
+      ref={el}
+      data-testid="wall-tag"
+      className="pointer-events-none fixed left-0 top-0 z-10 rounded-md px-2 py-1 mono text-[11px] whitespace-nowrap"
+      style={{
+        background: "rgba(30,23,18,.94)",
+        border: `1px solid ${bad ? "#c7452d" : "#7a5636"}`,
+        color: "var(--cream)",
+      }}
+    >
+      {tag.kind === "face" ? (
+        <>
+          <span style={{ color: tag.far ? "#ffcf8a" : "var(--vfd)" }}>
+            {t(tag.far ? "wallFarSide" : "wallThisSide")}
+          </span>
+          {" · "}
+          {tag.room ?? t("wallOpenFloor")}
+          {" · "}
+          {swatch(tag.from)}
+          {matLabel(tag.from)}
+          {tag.to && tag.to !== tag.from && (
+            <>
+              {" → "}
+              {swatch(tag.to)}
+              {matLabel(tag.to)}
+            </>
+          )}
+          {tag.n > 1 && (
+            <span style={{ color: "var(--muted)" }}> · {t("wallFaces").replace("{n}", String(tag.n))}</span>
+          )}
+          {!tag.why && (
+            <span style={{ color: "var(--muted)" }}>
+              {" "}
+              <kbd className="keycap">Tab</kbd>
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          {tag.w && tag.h ? `${tag.w} × ${tag.h} · ` : ""}
+          <span style={{ color: tag.remove ? "#ff9a7a" : "var(--vfd)" }}>
+            {t(tag.remove ? "wallRunRemove" : "wallRun").replace("{n}", String(tag.n))}
+          </span>
+          {tag.skipped > 0 && (
+            <span style={{ color: "var(--muted)" }}> · {t("wallSkipped").replace("{n}", String(tag.skipped))}</span>
+          )}
+        </>
+      )}
+      {tag.why && (
+        <div style={{ color: bad ? "#ff9a7a" : "var(--muted)" }} className="mt-0.5">
+          {tag.why}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Select in the Walls tool: a card over the wall(s) picked — what it is, both
+// faces (their material and the room each looks into), and what to do.
+function WallInspector() {
+  const t = useTr();
+  const w = useWorld();
+  const sel = useHud((s) => s.build.wallSel);
+  useHud((s) => s.mapVersion);
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!w) return;
+    return w.onFrame(() => {
+      const node = el.current;
+      const at = w.build?.wallAnchor();
+      if (!node || !at) return;
+      const r = w.engine?.app.canvas.getBoundingClientRect();
+      // over the wall, but never under the top bar or off the screen (walls are tall)
+      const h = node.offsetHeight;
+      const wd = node.offsetWidth;
+      const x = Math.min(Math.max((r?.left ?? 0) + at.x, wd / 2 + 8), window.innerWidth - wd / 2 - 8);
+      const y = Math.min(Math.max((r?.top ?? 0) + at.y, h + 76), window.innerHeight - 96);
+      const tr = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
+      if (node.style.transform !== tr) node.style.transform = tr;
+    });
+  }, [w]);
+  const map = w?.map;
+  const p = sel[0];
+  if (!map || !p) return null;
+  const ch = edgeAt(map, p);
+  const faced = /^[pwfbkPWFBK]$/.test(ch);
+  const room = (side: 1 | -1) => {
+    const [x, y] = panelTile({ ...p, side });
+    return areaAt(map, x + 0.5, y + 0.5)?.name ?? t("wallOpenFloor");
+  };
+  const kind = ch === "g" ? t("wallGlass") : ch === "h" ? t("wallHalf") : t("wallInspect");
+  const face = (side: 1 | -1, label: Key) => {
+    const m = faceMat(map, p, side);
+    const c = WALL_SWATCHES.find((s) => s.ch === `w:${m}`)?.face;
+    return (
+      <div className="flex items-center gap-2 text-[12px]">
+        <span
+          className="inline-block w-4 h-4 rounded"
+          style={{ background: c ?? "#3a4a4a", border: "1px solid #2a1a12" }}
+        />
+        <span
+          className="mono uppercase text-[10px]"
+          style={{ color: side === p.side ? "var(--vfd)" : "var(--cream-dim)" }}
+        >
+          {t(label)}
+        </span>
+        <span>{faced ? matLabel(m) : kind}</span>
+        <span style={{ color: "var(--muted)" }}>· {room(side)}</span>
+      </div>
+    );
+  };
+  const act = (label: Key, a: "same" | "swap" | "window" | "remove", danger = false) => (
+    <button
+      type="button"
+      className="mono text-[11px] uppercase tracking-wide px-2 h-8 rounded-md hover:bg-white/10"
+      style={{ color: danger ? "#ff9a7a" : "var(--cream)", border: "1px solid var(--edge)" }}
+      onClick={() => w?.build?.wallAction(a)}
+    >
+      {t(label)}
+    </button>
+  );
+  return (
+    <div ref={el} className="pointer-events-none fixed left-0 top-0 z-10">
+      <section
+        aria-label={t("wallInspect")}
+        data-testid="wall-inspector"
+        className="pointer-events-auto cabinet p-2.5 flex flex-col gap-2 rise min-w-[260px]"
+      >
+        <h3 className="lcd text-lg leading-none">
+          {sel.length > 1 ? t("wallsSelected").replace("{n}", String(sel.length)) : kind}
+          {isWindow(ch) && <span className="text-[11px] mono"> · {t("wallWindow")}</span>}
+        </h3>
+        {face(p.side, "wallThisSide")}
+        {face(p.side > 0 ? -1 : 1, "wallOtherSide")}
+        <div className="flex flex-wrap gap-1.5">
+          {faced && act("wallSame", "same")}
+          {faced && act("wallSwap", "swap")}
+          {faced && act(isWindow(ch) ? "wallTakeWindow" : "wallAddWindow", "window")}
+          {act("wallRemove", "remove", true)}
+        </div>
+      </section>
     </div>
   );
 }

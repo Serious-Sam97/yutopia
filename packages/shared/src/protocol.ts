@@ -98,6 +98,8 @@ export interface ClientMessages {
   "map:paint": { cells: { x: number; y: number; ch: string }[] }; // floors (tiles)
   // walls (tile edges); `side` (a material on a wall that's there): paint only that face
   "map:walls": { edges: { x: number; y: number; dir: "h" | "v"; ch: string; side?: 1 | -1 }[] };
+  // paint wall faces (panels: one face of one edge) — never builds or removes a wall
+  "map:faces": { faces: { x: number; y: number; dir: "h" | "v"; side: 1 | -1 }[]; mat: string };
   "map:resize": { width: number; height: number };
   "map:theme": { theme: string }; // clouds | city | snow
   "map:new": { width: number; height: number };

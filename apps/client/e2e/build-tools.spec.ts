@@ -75,7 +75,8 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await build(true, "walls");
   await expect(page.getByRole("region", { name: /build mode/i })).toBeVisible();
 
-  // Box: a carpet rectangle in one drag
+  // Box: a carpet rectangle in one drag (floors have their own tab)
+  await page.getByRole("button", { name: "Floors", exact: true }).click();
   await page.getByRole("button", { name: "Carpet", exact: true }).click();
   await page.getByRole("button", { name: "Box", exact: true }).click();
   await drag(page, [16.5, 4.5], [19.5, 6.5]);
@@ -92,8 +93,10 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await expect.poll(() => tile(page, 16, 4)).toBe(",");
   await shot(page, "build-walls-box");
 
-  // Box with a wall brush: brick walls all around
+  // Box with a wall brush (Build): brick walls all around
+  await page.getByRole("button", { name: "Build", exact: true }).click();
   await page.getByRole("button", { name: "Brick", exact: true }).click();
+  await page.getByRole("button", { name: "Box", exact: true }).click();
   await drag(page, [8.5, 3.5], [11.5, 5.5]);
   await expect.poll(() => hWall(page, 8, 3)).toBe("b");
   expect(await hWall(page, 11, 6)).toBe("b");
@@ -101,6 +104,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   expect(await vWall(page, 12, 4)).toBe("b");
 
   // Fill room: a tile floor inside those walls, not past them
+  await page.getByRole("button", { name: "Floors", exact: true }).click();
   await page.getByRole("button", { name: "Tile", exact: true }).click();
   await page.getByRole("button", { name: "Fill room", exact: true }).click();
   await clickTile(page, 9, 4);
@@ -108,7 +112,8 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   expect(await tile(page, 8, 3)).toBe("_");
   expect(await tile(page, 13, 4)).toBe(".");
 
-  // Erase: drag along the top wall line with a wall brush picked
+  // Erase: drag along the top wall line, corner to corner, in Build
+  await page.getByRole("button", { name: "Build", exact: true }).click();
   await page.getByRole("button", { name: "Brick", exact: true }).click();
   await page.getByRole("button", { name: "Erase", exact: true }).click();
   await drag(page, [8.2, 3], [11.8, 3], 18);

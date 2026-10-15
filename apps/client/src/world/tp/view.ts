@@ -867,6 +867,13 @@ export class ThirdPersonView {
         const h = cam.y + (t.y - 0.5 - cam.y) * hit;
         block = h < f.top + 0.1;
       }
+      // (build mode's walls up / down override it)
+      // (walls and what hangs on them: not tall furniture)
+      const view = this.buildLook?.wallView;
+      if (!f.item || f.wall) {
+        if (view === "up") block = false;
+        else if (view === "down") block = true;
+      }
       const want = block ? 0.06 : 1; // cut down to the skirting, as iso's wall-down
       if (Math.abs(f.alpha - want) < 0.002 && (f.alpha === 1 || f.alpha === want)) continue;
       f.alpha += (want - f.alpha) * Math.min(1, dt * 10);
@@ -1420,7 +1427,9 @@ function makeTag(): Tag {
   return { root, name, dot, slash, emote, bubble, dotKey: "", emoteKey: "", bubbleUntil: 0 };
 }
 
-const layoutSig = (m: MapDef) => `${m.width}x${m.height}|${m.tiles.join("")}|${m.hWalls.join("")}|${m.vWalls.join("")}`;
+// (the walls' back faces too: painting only a far side changes nothing else here)
+const layoutSig = (m: MapDef) =>
+  `${m.width}x${m.height}|${m.tiles.join("")}|${m.hWalls.join("")}|${m.vWalls.join("")}|${(m.hBacks ?? []).join("")}|${(m.vBacks ?? []).join("")}`;
 
 function hashId(s: string): number {
   let h = 0;

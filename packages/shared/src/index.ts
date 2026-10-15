@@ -4,6 +4,7 @@ export * from "./build.ts";
 export * from "./catalog.ts";
 export * from "./convert.ts";
 export * from "./dressing.ts";
+export * from "./faces.ts";
 export * from "./grid.ts";
 export * from "./hang.ts";
 export * from "./hearing.ts";

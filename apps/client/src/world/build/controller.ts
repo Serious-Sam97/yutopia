@@ -3,6 +3,7 @@ import {
   type ClientMessages,
   canPlace,
   carried,
+  cornerNear,
   doorEdge,
   type Edge,
   edgeAt,
@@ -10,6 +11,7 @@ import {
   entry,
   type Face,
   faceHit,
+  faceMat,
   faceNear,
   footprint,
   hangAt,
@@ -18,12 +20,23 @@ import {
   hangOf,
   hangSpot,
   hostOf,
+  isFacedWall,
+  isFloor,
   isWallEdge,
+  isWindow,
+  joinedFaces,
   type MapDef,
+  NO_WALL,
   nearestEdge,
+  otherFace,
+  type Panel,
   type Point,
+  panelAt,
+  panelKey,
+  panelTile,
   placedFootprint,
   Q,
+  runBetween,
   surfaceAt,
   takenId,
   tileAt,
@@ -41,8 +54,8 @@ import type { SetupItem } from "@/lib/api";
 import { tr, trMaybe } from "@/lib/i18n";
 import { C } from "../art/palette";
 import type { WorldController } from "../controller";
-import type { Outline, Pick } from "../engine";
-import { hud, toast } from "../store";
+import type { EdgeGhost, FaceGhost, Outline, Pick } from "../engine";
+import { hud, toast, type WallTag, type WallView } from "../store";
 import { buildSound } from "./sounds";
 
 // Marks this chunk for `pnpm budget` (build mode loads on demand).
@@ -135,10 +148,16 @@ export class BuildController {
   }
 
   private onMods = (e: KeyboardEvent) => {
+    const was = `${this.shift}${this.removing}`;
     this.shift = e.shiftKey;
+    this.removing = e.ctrlKey || e.metaKey;
+    // the Walls tool shows what Shift / ⌘ would do
+    if (was !== `${this.shift}${this.removing}` && hud.get().build.on && hud.get().build.tool === "walls")
+      this.refreshOther();
   };
   private onBlur = () => {
     this.shift = false;
+    this.removing = false;
   };
 
   private get engine() {
@@ -1047,6 +1066,7 @@ export class BuildController {
   key(key: string): boolean {
     const b = hud.get().build;
     if (!b.on) return false;
+    if (this.wallKey(key)) return true;
     const furn = b.tool === "furniture";
     if (key === "r") {
       if (furn) this.rotate();
@@ -1109,14 +1129,23 @@ export class BuildController {
     engine.passAvatars = bt.on;
     engine.showSpawn(bt.on && (bt.tool === "map" || bt.pickSpawn));
     engine.setBuildGrid(bt.on && (bt.tool === "furniture" || bt.tool === "walls" || bt.tool === "rooms"));
+    engine.wallView = bt.on ? bt.wallView : null;
     if (!bt.on) {
       this.cancel();
       engine.focusAt = null;
       engine.setGhosts([], 0);
       engine.setOutlines([]);
       engine.setHidden([]);
-      this.setBuild({ selected: [], hover: null });
+      engine.setEdgeGhosts([]);
+      engine.setFaceGhosts([]);
+      this.setBuild({ selected: [], hover: null, wallTag: null, wallSel: [] });
       return;
+    }
+    if (bt.tool !== "walls") {
+      engine.setFaceGhosts([]);
+      this.run = null;
+      this.stroke = null;
+      if (bt.wallTag) this.setBuild({ wallTag: null });
     }
     if (bt.tool === "furniture") {
       engine.setEdgeGhost(null, false);
@@ -1135,38 +1164,311 @@ export class BuildController {
     this.refreshOther();
   }
 
-  // ── walls, rooms, desks, map (moved here unchanged from the world controller) ──
+  // ── walls, rooms, desks, map ──
+  // The Walls tool, Sims-style (docs/plan/11-wall-building.md): Build draws
+  // straight runs of walls (and openings) between tile corners, ⌘/Ctrl-drag or
+  // Erase takes them away; Paint puts a material on wall faces (one, a drag
+  // along a line, Shift: the room's); Floors paints tiles; Select picks walls
+  // for the inspector. The face under the pointer is always shown.
   private hoverTile = { x: -1, y: -1 };
 
   private hoverOther(x: number, y: number) {
     const bb = hud.get().build;
-    const br = this.brushNow();
     if (!this.engine) return;
-    if (bb.tool === "walls" && this.boxing()) {
-      const tx = Math.floor(x);
-      const ty = Math.floor(y);
-      if (tx === this.hoverTile.x && ty === this.hoverTile.y) return;
-      this.hoverTile = { x: tx, y: ty };
-      if (this.dragFrom) this.engine.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
-      return;
-    }
-    if (bb.tool === "walls" && (br.startsWith("w:") || br.startsWith("door"))) {
-      const e = this.edgeAtPointer(x, y);
-      if (this.hoverEdge && e.x === this.hoverEdge.x && e.y === this.hoverEdge.y && e.dir === this.hoverEdge.dir)
-        return;
-      this.hoverEdge = e;
-      if (this.painting) this.paintEdge(e);
-      this.refreshOther();
-      return;
+    if (bb.tool === "walls") {
+      this.lastFloor = { x, y };
+      if (bb.wallMode === "paint") return this.paintHover();
+      if (bb.wallMode === "select") return this.selectHover();
+      if (bb.wallMode === "build") return this.buildHover(x, y);
     }
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     if (tx === this.hoverTile.x && ty === this.hoverTile.y) return;
     this.hoverTile = { x: tx, y: ty };
-    const b = hud.get().build;
-    if (b.tool === "walls" && this.painting) this.paintAt(tx, ty);
-    if (b.tool === "rooms" && this.dragFrom) this.engine.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
+    if (bb.tool === "walls" && this.boxing() && this.dragFrom)
+      this.engine.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
+    else if (bb.tool === "walls" && this.painting) this.paintAt(tx, ty);
+    if (bb.tool === "rooms" && this.dragFrom) this.engine.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
     this.refreshOther();
+  }
+
+  // ── what the pointer is on ──
+  private lastFloor: Point | null = null;
+  private flipFace = false; // Tab: the other face of the panel under the pointer
+  private flipOf: string | null = null; // (the edge it was flipped on)
+  private panelNow(): Panel | null {
+    const e = this.engine;
+    if (!e) return null;
+    const through = e.lookedThrough();
+    const p = panelAt(this.map, e.pointerRay(), this.lastFloor, (w) => through.has(`${w.dir}${w.x},${w.y}`));
+    if (!p) return null;
+    const k = `${p.dir}${p.x},${p.y}`;
+    if (this.flipOf !== k) {
+      this.flipOf = k;
+      this.flipFace = false;
+    }
+    return this.flipFace ? otherFace(p) : p;
+  }
+  // The chip for a face: the room it looks into, what it is now and what the
+  // brush would make it.
+  private faceTag(p: Panel, to: string | null, why: string | null, n = 1): WallTag {
+    const [tx, ty] = panelTile(p);
+    const room = isFloor(tileAt(this.map, tx, ty)) ? (areaAt(this.map, tx + 0.5, ty + 0.5)?.name ?? null) : null;
+    const ch = edgeAt(this.map, p);
+    const from = faceMat(this.map, p, p.side) ?? (ch === "g" ? "g" : ch === "h" ? "h" : null);
+    const far = p.side < 0 && !this.engine?.seesAllSides;
+    return { kind: "face", far, room, from, to, why, n };
+  }
+  private setTag(tag: WallTag | null) {
+    const was = hud.get().build.wallTag;
+    if (JSON.stringify(was) !== JSON.stringify(tag)) this.setBuild({ wallTag: tag });
+  }
+
+  // ── Paint ──
+  // a stroke: the panels painted so far, along the line it started on, on its side
+  private stroke: { p: Panel; at: number; panels: Map<string, Panel> } | null = null;
+  private paintable(p: Panel): string | null {
+    const ch = edgeAt(this.map, p);
+    if (isFacedWall(ch)) return null;
+    if (ch === "g") return tr("wallWhyGlass");
+    if (ch === "h") return tr("wallWhyHalf");
+    return tr("wallWhyNone");
+  }
+  private paintHover() {
+    const e = this.engine;
+    if (!e) return;
+    const mat = hud.get().build.paint;
+    if (this.stroke) {
+      // along the stroke's line, on its side, every panel from where it was to the pointer
+      const s = this.stroke;
+      const along = this.alongFace(s.p);
+      if (along !== null) {
+        const to = Math.floor(along);
+        const step = to >= s.at ? 1 : -1;
+        for (let a = s.at; a !== to + step; a += step) {
+          const q: Panel = s.p.dir === "h" ? { ...s.p, x: a } : { ...s.p, y: a };
+          if (!this.paintable(q)) s.panels.set(panelKey(q), q);
+        }
+        s.at = to;
+      }
+      const list = [...s.panels.values()];
+      e.setFaceGhosts(list.map((p) => ({ p, mat, ok: true })));
+      this.setTag(list.length ? this.faceTag(list[list.length - 1], mat, null, list.length) : null);
+      return;
+    }
+    const p = this.panelNow();
+    if (!p) {
+      e.setFaceGhosts([]);
+      return this.setTag(null);
+    }
+    const why = this.paintable(p);
+    // Shift: the faces round the room it looks into
+    const list = this.shift && !why ? joinedFaces(this.map, this.objects(), p) : [p];
+    e.setFaceGhosts(list.slice(0, 800).map((q) => ({ p: q, mat: why ? null : mat, ok: !why })));
+    this.setTag(this.faceTag(p, why ? null : mat, why, list.length));
+  }
+  // Where along a panel's wall line the pointer is: on that face (the
+  // pointer's ray meets its plane), else the floor under the pointer.
+  private alongFace(p: Panel): number | null {
+    const ray = this.engine?.pointerRay();
+    if (ray) {
+      const plane = (p.dir === "h" ? p.y : p.x) + p.side * 0.1;
+      const dn = p.dir === "h" ? ray.d.y : ray.d.x;
+      if (Math.abs(dn) > 1e-9) {
+        const t = (plane - (p.dir === "h" ? ray.o.y : ray.o.x)) / dn;
+        if (t > 0) return p.dir === "h" ? ray.o.x + ray.d.x * t : ray.o.y + ray.d.y * t;
+      }
+    }
+    const f = this.lastFloor;
+    return f ? (p.dir === "h" ? f.x : f.y) : null;
+  }
+  private paintDown() {
+    const p = this.panelNow();
+    if (!p || this.paintable(p)) {
+      if (p) buildSound("nope");
+      return;
+    }
+    this.stroke = { p, at: p.dir === "h" ? p.x : p.y, panels: new Map([[panelKey(p), p]]) };
+    this.paintHover();
+  }
+  private paintUp() {
+    const s = this.stroke;
+    this.stroke = null;
+    if (!s) return;
+    const mat = hud.get().build.paint;
+    // a click with Shift: the room's faces on that side
+    const faces =
+      this.shift && s.panels.size === 1 ? joinedFaces(this.map, this.objects(), s.p) : [...s.panels.values()];
+    const todo = faces.filter((p) => faceMat(this.map, p, p.side) !== mat);
+    for (let i = 0; i < todo.length; i += 1200)
+      this.send("map:faces", {
+        faces: todo.slice(i, i + 1200).map((p) => ({ dir: p.dir, x: p.x, y: p.y, side: p.side })),
+        mat,
+      });
+    buildSound(todo.length ? "drop" : "snap");
+    this.paintHover();
+  }
+  // E over a face: its material in the brush
+  private sampleFace(): boolean {
+    const p = this.panelNow();
+    const m = p ? faceMat(this.map, p, p.side) : null;
+    if (!m) return false;
+    this.setBuild({ paint: m });
+    buildSound("select");
+    this.paintHover();
+    return true;
+  }
+
+  // ── Select (the inspector) ──
+  private selectHover() {
+    const e = this.engine;
+    if (!e) return;
+    const p = this.panelNow();
+    const sel = hud.get().build.wallSel;
+    const key = new Set(sel.map(panelKey));
+    const list: FaceGhost[] = sel.map((q) => ({ p: q, mat: null, ok: true, sel: true }));
+    if (p && !key.has(panelKey(p))) list.push({ p, mat: null, ok: true });
+    e.setFaceGhosts(list);
+    this.setTag(p ? this.faceTag(p, null, null) : null);
+  }
+  private selectClick() {
+    const p = this.panelNow();
+    const sel = hud.get().build.wallSel;
+    if (!p) {
+      if (!this.shift) this.setBuild({ wallSel: [] });
+    } else if (this.shift) {
+      const k = panelKey(p);
+      const has = sel.some((q) => panelKey(q) === k);
+      this.setBuild({ wallSel: has ? sel.filter((q) => panelKey(q) !== k) : [...sel, p] });
+    } else this.setBuild({ wallSel: [p] });
+    buildSound("select");
+    this.selectHover();
+  }
+  // The inspector's actions, on every selected panel.
+  wallAction(act: "same" | "swap" | "window" | "remove") {
+    const sel = hud.get().build.wallSel;
+    if (!sel.length) return;
+    const byMat = new Map<string, Panel[]>();
+    const paint = (p: Panel, m: string | null) => {
+      if (!m) return;
+      byMat.set(m, [...(byMat.get(m) ?? []), p]);
+    };
+    if (act === "same" || act === "swap") {
+      for (const p of sel) {
+        const a = faceMat(this.map, p, p.side);
+        const b = faceMat(this.map, p, -p.side);
+        if (!a || !b) continue;
+        paint(otherFace(p), a);
+        if (act === "swap") paint(p, b);
+      }
+      for (const [mat, faces] of byMat)
+        this.send("map:faces", { faces: faces.map((p) => ({ dir: p.dir, x: p.x, y: p.y, side: p.side })), mat });
+    } else {
+      const edges = sel.flatMap((p) => {
+        const ch = edgeAt(this.map, p);
+        if (!isWallEdge(ch)) return [];
+        if (act === "remove") return [{ dir: p.dir, x: p.x, y: p.y, ch: NO_WALL }];
+        if (!isFacedWall(ch)) return [];
+        return [{ dir: p.dir, x: p.x, y: p.y, ch: isWindow(ch) ? ch.toLowerCase() : ch.toUpperCase() }];
+      });
+      if (edges.length) this.send("map:walls", { edges });
+      if (act === "remove") this.setBuild({ wallSel: [] });
+    }
+    buildSound(act === "remove" ? "remove" : "drop");
+  }
+
+  // ── Build: straight runs between corners ──
+  private run: { from: Point; press: Point } | null = null;
+  private removing = false; // ⌘/Ctrl held: Build takes walls away
+  // What Build does to an edge: build `ch`, take the wall away, or skip it (and why).
+  private runEdge(e: Edge, remove: boolean): EdgeGhost & { ch: string; why: string | null; skip: boolean } {
+    const cur = edgeAt(this.map, e);
+    const objs = this.objects();
+    if (remove) {
+      if (!isWallEdge(cur)) return { e, ok: true, remove: true, ch: NO_WALL, why: null, skip: true };
+      const why = edgeBlocker(this.map, objs, e, NO_WALL);
+      return { e, ok: !why, remove: true, ch: NO_WALL, why, skip: !!why };
+    }
+    const ch = this.edgeChar(e);
+    // never repaints a wall that's there (that's Paint's job); a window or
+    // another kind of wall (glass, half) changes it
+    if (cur === ch || (isFacedWall(cur) && /^[pwfbk]$/.test(ch)))
+      return { e, ok: true, ch, why: tr("wallWhyThere"), skip: true };
+    const why = edgeBlocker(this.map, objs, e, ch);
+    return { e, ok: !why, ch, why, skip: !!why };
+  }
+  private runList(): ReturnType<BuildController["runEdge"]>[] {
+    const r = this.run;
+    const f = this.lastFloor;
+    if (!r || !f) return [];
+    const remove = this.removing || hud.get().build.paintMode === "erase";
+    const to = cornerNear(f.x, f.y);
+    const { edges } = runBetween(r.from, to);
+    // a click without a drag: the edge it was pressed next to
+    const list = edges.length ? edges : [nearestEdge(r.press.x, r.press.y)];
+    return list.map((e) => this.runEdge(e, remove));
+  }
+  private buildHover(x: number, y: number) {
+    const e = this.engine;
+    if (!e) return;
+    const br = this.brushNow();
+    if (this.boxing()) {
+      const tx = Math.floor(x);
+      const ty = Math.floor(y);
+      if (!this.dragFrom) {
+        e.setEdgeGhosts([]);
+        return this.setTag(null);
+      }
+      const r = this.dragRect(tx, ty);
+      const list = ringEdges(r).map((q) => this.runEdge(q, false));
+      e.setEdgeGhosts(list.filter((g) => !g.skip || g.why === null).map(({ e: q, ok }) => ({ e: q, ok })));
+      return this.setTag(runTag(list, false, r));
+    }
+    if (br.startsWith("door")) {
+      // a door on the edge next to the pointer
+      const q = nearestEdge(x, y);
+      e.setEdgeGhosts([]);
+      const d = {
+        id: "ghost-door",
+        kind: "door",
+        x: q.x,
+        y: q.y,
+        rot: q.dir === "h" ? 0 : 1,
+        props: { state: "closed", glass: br === "door:glass" },
+      };
+      e.setGhost(d, canPlace(this.map, e.allObjects(), d));
+      e.setFaceGhosts([]);
+      return this.setTag(null);
+    }
+    e.setGhost(null, false);
+    if (this.run) {
+      const list = this.runList();
+      e.setEdgeGhosts(
+        list.filter((g) => !g.skip || !!g.why).map(({ e: q, ok, remove, skip }) => ({ e: q, ok: ok && !skip, remove })),
+      );
+      e.setFaceGhosts([]);
+      return this.setTag(runTag(list, !!list[0]?.remove));
+    }
+    // not pressed: the edge a click would start on, and the wall face that's there
+    const q = nearestEdge(x, y);
+    const g = this.runEdge(q, this.removing || hud.get().build.paintMode === "erase");
+    e.setEdgeGhosts(g.skip && !g.remove ? [] : [{ e: q, ok: g.ok && !g.skip, remove: g.remove }]);
+    const p = isWallEdge(edgeAt(this.map, q)) ? this.panelNow() : null;
+    e.setFaceGhosts(p && g.skip && !g.remove ? [{ p, mat: null, ok: true }] : []);
+    this.setTag(p && g.skip && !g.remove ? this.faceTag(p, null, g.why) : g.why ? runTag([g], !!g.remove) : null);
+  }
+  private buildUp() {
+    const list = this.runList();
+    this.run = null;
+    const edges = list.filter((g) => !g.skip).map((g) => ({ dir: g.e.dir, x: g.e.x, y: g.e.y, ch: g.ch }));
+    for (let i = 0; i < edges.length; i += 600) this.send("map:walls", { edges: edges.slice(i, i + 600) });
+    if (edges.length) buildSound(list[0]?.remove ? "remove" : "drop");
+    else if (list.some((g) => g.why && g.why !== tr("wallWhyThere"))) {
+      buildSound("nope");
+      toast(list.find((g) => g.why)?.why ?? tr("buildNoFit"), "warn");
+    }
+    this.engine?.setEdgeGhosts([]);
+    this.setTag(null);
   }
 
   // ── walls / rooms tools ──
@@ -1175,33 +1477,6 @@ export class BuildController {
   private paintTimer: ReturnType<typeof setTimeout> | null = null;
   private dragFrom: { x: number; y: number } | null = null;
 
-  private hoverEdge: Edge | null = null;
-  private dragDir: "h" | "v" | null = null; // a wall drag stays on one line direction
-
-  // The edge under the pointer; while dragging a wall, along the drag's direction
-  // only (so passing over a corner never paints a stray wall across the line).
-  private edgeAtPointer(x: number, y: number): Edge {
-    if (this.painting && this.dragDir === "v") return { x: Math.round(x), y: Math.floor(y), dir: "v" };
-    if (this.painting && this.dragDir === "h") return { x: Math.floor(x), y: Math.round(y), dir: "h" };
-    return nearestEdge(x, y);
-  }
-  private edgeQueue = new Map<string, Edge & { ch: string; side?: 1 | -1 }>();
-  // a material dragged over walls that are there paints the face it started on
-  private dragSide: 1 | -1 = 1;
-
-  // Which face of an edge the pointer is at: the one it sees, when it's on
-  // that wall's face; else the side of the wall the floor under it is on.
-  private sideAt(e: Edge, x: number, y: number): 1 | -1 {
-    const ray = this.engine?.pointerRay();
-    const through = this.engine?.lookedThrough();
-    const hit = ray ? faceHit(this.map, ray, (w) => !!through?.has(`${w.dir}${w.x},${w.y}`)) : null;
-    if (hit && hit.face.dir === e.dir && hit.face.line === (e.dir === "h" ? e.y : e.x)) {
-      const a = e.dir === "h" ? e.x : e.y;
-      if (hit.along >= a && hit.along <= a + 1) return hit.face.side;
-    }
-    return (e.dir === "h" ? y >= e.y : x >= e.x) ? 1 : -1;
-  }
-
   // What a wall brush puts on an edge: a material, a window in the wall that's
   // there (plaster if none), or no wall.
   private edgeChar(e: Edge): string {
@@ -1209,14 +1484,6 @@ export class BuildController {
     if (brush !== "w:window") return brush.slice(2);
     const cur = edgeAt(this.map, e);
     return isWallEdge(cur) && /^[pwfbk]$/.test(cur) ? cur.toUpperCase() : "P";
-  }
-
-  private paintEdge(e: Edge) {
-    const ch = this.edgeChar(e);
-    // (a material: only that face of a wall that's there; the server builds new walls whole)
-    const side = /^[pwfbk]$/.test(ch) ? this.dragSide : undefined;
-    this.edgeQueue.set(`${e.dir}${e.x},${e.y}`, { ...e, ch, side });
-    if (!this.paintTimer) this.paintTimer = setTimeout(() => this.flushPaint(), 80);
   }
 
   private paintAt(tx: number, ty: number) {
@@ -1229,10 +1496,6 @@ export class BuildController {
   private flushPaint() {
     if (this.paintTimer) clearTimeout(this.paintTimer);
     this.paintTimer = null;
-    if (this.edgeQueue.size) {
-      this.send("map:walls", { edges: [...this.edgeQueue.values()] });
-      this.edgeQueue.clear();
-    }
     if (!this.paintQueue.size) return;
     this.send("map:paint", { cells: [...this.paintQueue.values()] });
     this.paintQueue.clear();
@@ -1248,21 +1511,28 @@ export class BuildController {
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     const br = this.brushNow();
-    if (b.tool === "walls" && this.boxing()) {
-      this.dragFrom = { x: tx, y: ty };
-      this.engine?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
-    } else if (b.tool === "walls" && b.paintMode === "fill") {
-      // a click (buildClick) fills
-    } else if (b.tool === "walls" && br.startsWith("w:")) {
-      const e = nearestEdge(x, y);
-      this.painting = true;
-      this.dragDir = e.dir;
-      this.dragSide = this.sideAt(e, x, y);
-      this.paintEdge(e);
-    } else if (b.tool === "walls" && !br.startsWith("door")) {
+    if (b.tool === "walls") {
+      this.lastFloor = { x, y };
+      if (b.wallMode === "paint") return this.paintDown();
+      if (b.wallMode === "select") return;
+      if (this.boxing()) {
+        this.dragFrom = { x: tx, y: ty };
+        if (b.wallMode === "floors") this.engine?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
+        else this.buildHover(x, y);
+        return;
+      }
+      if (b.wallMode === "build") {
+        if (br.startsWith("door")) return; // a click puts it in
+        this.run = { from: cornerNear(x, y), press: { x, y } };
+        return this.buildHover(x, y);
+      }
+      // floors
+      if (b.paintMode === "fill") return; // a click (buildClick) fills
       this.painting = true;
       this.paintAt(tx, ty);
-    } else if (b.tool === "rooms") {
+      return;
+    }
+    if (b.tool === "rooms") {
       this.dragFrom = { x: tx, y: ty };
       this.engine?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
     }
@@ -1270,15 +1540,21 @@ export class BuildController {
 
   private upOther(x: number, y: number) {
     const b = hud.get().build;
+    if (b.tool === "walls" && b.wallMode === "paint") return this.paintUp();
+    if (b.tool === "walls" && this.run) {
+      this.lastFloor = { x, y };
+      return this.buildUp();
+    }
     if (this.painting) {
       this.painting = false;
-      this.dragDir = null;
       this.flushPaint();
     }
     if (b.tool === "walls" && this.dragFrom) {
       const r = this.dragRect(Math.floor(x), Math.floor(y));
       this.dragFrom = null;
       this.engine?.setRectGhost(null);
+      this.engine?.setEdgeGhosts([]);
+      this.setTag(null);
       this.paintBox(r);
     }
     if (b.tool === "rooms" && this.dragFrom) {
@@ -1293,32 +1569,15 @@ export class BuildController {
     const engine = this.engine;
     if (!engine) return;
     const bt = hud.get().build;
-    if (bt.tool === "walls") {
-      const e = this.hoverEdge;
-      const br = this.brushNow();
-      if (this.boxing() || (bt.paintMode === "fill" && !br.startsWith("door"))) {
-        engine.setEdgeGhost(null, false);
-        return engine.setGhost(null, false);
-      }
-      if (br.startsWith("door") && e) {
-        engine.setEdgeGhost(null, false);
-        const d = {
-          id: "ghost-door",
-          kind: "door",
-          x: e.x,
-          y: e.y,
-          rot: e.dir === "h" ? 0 : 1,
-          props: { state: "closed", glass: br === "door:glass" },
-        };
-        return engine.setGhost(d, canPlace(this.map, engine.allObjects(), d));
-      }
-      engine.setGhost(null, false);
-      if (br.startsWith("w:") && e)
-        return engine.setEdgeGhost(e, edgeBlocker(this.map, engine.allObjects(), e, this.edgeChar(e)) === null);
-      return engine.setEdgeGhost(null, false);
+    if (bt.tool === "walls" && bt.wallMode !== "floors") {
+      // (the mode's hover draws what it shows)
+      if (this.lastFloor) this.hoverOther(this.lastFloor.x, this.lastFloor.y);
+      return;
     }
-    engine.setEdgeGhost(null, false);
+    engine.setEdgeGhosts([]);
+    engine.setFaceGhosts([]);
     engine.setGhost(null, false);
+    if (bt.wallTag) this.setBuild({ wallTag: null });
   }
 
   clearRoomGhost() {
@@ -1328,8 +1587,9 @@ export class BuildController {
   private clickOther(x: number, y: number) {
     const b = hud.get().build;
     if (b.tool === "walls") {
-      if (b.paintMode === "fill" && !b.brush.startsWith("door")) return this.fillAt(Math.floor(x), Math.floor(y));
-      if (b.brush.startsWith("door")) {
+      if (b.wallMode === "select") return this.selectClick();
+      if (b.wallMode === "floors" && b.paintMode === "fill") return this.fillAt(Math.floor(x), Math.floor(y));
+      if (b.wallMode === "build" && b.brush.startsWith("door")) {
         // a door on the edge you clicked next to (click a door to remove it)
         const e = nearestEdge(x, y);
         const hit = this.engine?.allObjects().find((o) => {
@@ -1353,6 +1613,53 @@ export class BuildController {
       const hit = this.engine?.objectAtTile(Math.floor(x), Math.floor(y));
       if (hit && entry(hit.kind).seat) this.setBuild({ deskDraft: hit.id });
     }
+  }
+
+  // Keys for the Walls tool (true = handled): Tab the other face, E sample a
+  // face (Paint), [ ] the walls' view, Esc lets go of a run / the selection.
+  private wallKey(key: string): boolean {
+    const b = hud.get().build;
+    if (key === "[" || key === "]") {
+      const views: WallView[] = ["down", "cut", "up"];
+      const i = views.indexOf(b.wallView) + (key === "]" ? 1 : -1);
+      this.setWallView(views[Math.max(0, Math.min(2, i))]);
+      return true;
+    }
+    if (b.tool !== "walls") return false;
+    if (key === "tab" && (b.wallMode === "paint" || b.wallMode === "select" || b.wallMode === "build")) {
+      this.flipFace = !this.flipFace;
+      buildSound("rotate");
+      this.refreshOther();
+      return true;
+    }
+    if (key === "e" && b.wallMode === "paint") return this.sampleFace();
+    if (key === "escape") {
+      if (this.run || this.stroke) {
+        this.run = null;
+        this.stroke = null;
+        this.engine?.setEdgeGhosts([]);
+        this.refreshOther();
+        return true;
+      }
+      if (b.wallSel.length) {
+        this.setBuild({ wallSel: [] });
+        this.refreshOther();
+        return true;
+      }
+    }
+    return false;
+  }
+  // Where the wall inspector goes (client px): over the first selected wall.
+  wallAnchor(): { x: number; y: number } | null {
+    const p = hud.get().build.wallSel[0];
+    if (!p || !this.engine) return null;
+    const [mx, my] = p.dir === "h" ? [p.x + 0.5, p.y + p.side * 0.1] : [p.x + p.side * 0.1, p.y + 0.5];
+    return this.engine.worldToClient(mx, my, 136);
+  }
+  setWallView(v: WallView) {
+    this.setBuild({ wallView: v });
+    if (this.engine) this.engine.wallView = v;
+    buildSound("select");
   }
 
   // Desks tool: drag a person from the panel onto a seat.
@@ -1382,23 +1689,18 @@ export class BuildController {
     return b.paintMode === "box" && !b.brush.startsWith("door");
   }
 
-  // Box: floors fill the rectangle, walls run around it.
+  // Box: floors fill the rectangle, walls run around it (a wall that's there
+  // stays as it is: Paint repaints).
   private paintBox(r: { x: number; y: number; w: number; h: number }) {
     const br = this.brushNow();
     if (br.startsWith("w:")) {
-      // (with the face looking into the box: a material over walls that are
-      // there paints their inner faces)
-      const edges: (Edge & { side: 1 | -1 })[] = [];
-      for (let x = r.x; x < r.x + r.w; x++)
-        edges.push({ x, y: r.y, dir: "h", side: 1 }, { x, y: r.y + r.h, dir: "h", side: -1 });
-      for (let y = r.y; y < r.y + r.h; y++)
-        edges.push({ x: r.x, y, dir: "v", side: 1 }, { x: r.x + r.w, y, dir: "v", side: -1 });
       // windows check the walls painted before them: walls first
-      const all = edges.map((e) => {
-        const ch = this.edgeChar(e);
-        return { dir: e.dir, x: e.x, y: e.y, ch, side: /^[pwfbk]$/.test(ch) ? e.side : undefined };
-      });
+      const all = ringEdges(r)
+        .map((e) => this.runEdge(e, false))
+        .filter((g) => !g.skip)
+        .map((g) => ({ dir: g.e.dir, x: g.e.x, y: g.e.y, ch: g.ch }));
       for (let i = 0; i < all.length; i += 600) this.send("map:walls", { edges: all.slice(i, i + 600) });
+      if (all.length) buildSound("drop");
       return;
     }
     const cells: { x: number; y: number; ch: string }[] = [];
@@ -1406,18 +1708,10 @@ export class BuildController {
     for (let i = 0; i < cells.length; i += 600) this.send("map:paint", { cells: cells.slice(i, i + 600) });
   }
 
-  // Fill room: floors flood the same floor up to walls and doors; walls repaint
-  // the room you click in.
+  // Fill: floors flood the same floor up to walls and doors.
   private fillAt(tx: number, ty: number) {
     const br = this.brushNow();
-    if (br.startsWith("w:")) {
-      const area = areaAt(this.map, tx + 0.5, ty + 0.5);
-      const mat = br.slice(2);
-      if (!area) return toast(tr("buildFillOutside"), "warn");
-      if (!/^[pwfbkg]$/.test(mat)) return toast(tr("buildFillMaterial"), "warn");
-      this.send("map:room:walls", { key: area.key, wall: mat });
-      return;
-    }
+    if (br.startsWith("w:")) return;
     const start = tileAt(this.map, tx, ty);
     if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height || start === br) return;
     const doors = new Set(
@@ -1451,6 +1745,26 @@ export class BuildController {
     }
     for (let i = 0; i < cells.length; i += 600) this.send("map:paint", { cells: cells.slice(i, i + 600) });
   }
+}
+
+// The edges round a rectangle of tiles.
+function ringEdges(r: { x: number; y: number; w: number; h: number }): Edge[] {
+  const out: Edge[] = [];
+  for (let x = r.x; x < r.x + r.w; x++) out.push({ x, y: r.y, dir: "h" }, { x, y: r.y + r.h, dir: "h" });
+  for (let y = r.y; y < r.y + r.h; y++) out.push({ x: r.x, y, dir: "v" }, { x: r.x + r.w, y, dir: "v" });
+  return out;
+}
+
+// The chip for a run (or a box) being drawn: how many walls go up (or come
+// down), how many are skipped, the first reason.
+function runTag(
+  list: { skip: boolean; why: string | null }[],
+  remove: boolean,
+  box?: { w: number; h: number },
+): WallTag {
+  const n = list.filter((g) => !g.skip).length;
+  const why = list.find((g) => g.skip && g.why)?.why ?? null;
+  return { kind: "run", n, remove, skipped: list.length - n, why, ...(box ? { w: box.w, h: box.h } : {}) };
 }
 
 // Where a moved thing is, beyond x / y / rot: its cell on a top, its spot on a wall.

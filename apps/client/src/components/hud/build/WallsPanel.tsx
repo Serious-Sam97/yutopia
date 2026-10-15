@@ -1,7 +1,8 @@
 "use client";
 
 import { type Key, useTr } from "@/lib/i18n";
-import { hud, type PaintMode, useHud } from "@/world/store";
+import { hud, type PaintMode, useHud, type WallMode, type WallView } from "@/world/store";
+import { useWorld } from "../ctx";
 
 // Walls paint tile edges ("w:" + an edge char); floors paint tiles; doors are
 // placed on a gap in a wall line.
@@ -156,57 +157,136 @@ function Swatch({
   );
 }
 
+// Paint's materials (a face of a wall that's there)
+const PAINTS = WALL_SWATCHES.filter((w) => w.ch !== "w:g");
+// Build: a new wall in a material, or another kind of wall / an opening
+const BUILD_WALLS = WALL_SWATCHES;
+const TABS: [WallMode, Key][] = [
+  ["build", "wallModeBuild"],
+  ["paint", "wallModePaint"],
+  ["floors", "wallModeFloors"],
+  ["select", "wallModeSelect"],
+];
+const VIEWS: [WallView, Key][] = [
+  ["down", "wallViewDown"],
+  ["cut", "wallViewCut"],
+  ["up", "wallViewUp"],
+];
+export const WALL_HINT: Record<WallMode, Key> = {
+  build: "wallHintBuild",
+  paint: "wallHintPaint",
+  floors: "wallHintFloors",
+  select: "wallHintSelect",
+};
+export const matLabel = (m: string | null): string =>
+  m === "g" ? "Glass" : m === "h" ? "Half wall" : (WALL_SWATCHES.find((w) => w.ch === `w:${m}`)?.label ?? "");
+
 export function WallsPanel() {
   const t = useTr();
+  const w = useWorld();
   const b = useHud((s) => s.build);
   const set = (patch: Partial<typeof b>) => hud.set((s) => ({ build: { ...s.build, ...patch } }));
   const door = b.brush.startsWith("door");
+  const mode = b.wallMode;
+  // each tab keeps a brush that fits it
+  const pick = (m: WallMode) => {
+    const floor = !b.brush.startsWith("w:") && !b.brush.startsWith("door");
+    const patch: Partial<typeof b> = { wallMode: m, wallSel: [] };
+    if (m === "floors" && !floor) patch.brush = ".";
+    if (m === "build" && floor) patch.brush = "w:p";
+    if (m === "build" && b.paintMode === "fill") patch.paintMode = "line";
+    set(patch);
+  };
+  const modes = MODES.filter(([m]) => (mode === "floors" ? true : m !== "fill"));
   return (
     <>
       <header className="flex items-baseline justify-between px-4 pt-3 pb-2">
         <h2 className="lcd text-2xl leading-none">{t("buildWallsFloors").toUpperCase()}</h2>
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto scroll-thin px-3 pb-3 space-y-2.5">
-        <fieldset className="seg min-w-0" aria-label="Paint mode">
-          {MODES.map(([m, label]) => (
+        <fieldset className="seg min-w-0" aria-label="Walls tool">
+          {TABS.map(([m, label]) => (
+            <button key={m} type="button" aria-pressed={mode === m} onClick={() => pick(m)}>
+              {t(label)}
+            </button>
+          ))}
+        </fieldset>
+        {(mode === "build" || mode === "floors") && (
+          <fieldset className="seg min-w-0" aria-label="Paint mode">
+            {modes.map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={!door && b.paintMode === m}
+                disabled={door}
+                onClick={() => set({ paintMode: m })}
+              >
+                {t(label)}
+              </button>
+            ))}
+          </fieldset>
+        )}
+        {mode === "build" && (
+          <>
+            <h3 className="grp">{t("buildWalls")}</h3>
+            <div className="grid grid-cols-3 gap-[7px]">
+              {BUILD_WALLS.map((s) => (
+                <Swatch key={s.ch} on={b.brush === s.ch} label={s.label} onClick={() => set({ brush: s.ch })}>
+                  <WallChip ch={s.ch} />
+                </Swatch>
+              ))}
+            </div>
+            <h3 className="grp">{t("buildOpenings")}</h3>
+            <div className="grid grid-cols-4 gap-[6px]">
+              {OPENINGS.map((o) => (
+                <Swatch key={o.ch} on={b.brush === o.ch} label={o.label} onClick={() => set({ brush: o.ch })}>
+                  <WallChip ch={o.ch} />
+                </Swatch>
+              ))}
+            </div>
+          </>
+        )}
+        {mode === "paint" && (
+          <div className="grid grid-cols-3 gap-[7px]">
+            {PAINTS.map((s) => (
+              <Swatch
+                key={s.ch}
+                on={b.paint === s.ch.slice(2)}
+                label={s.label}
+                onClick={() => set({ paint: s.ch.slice(2) })}
+              >
+                <WallChip ch={s.ch} />
+              </Swatch>
+            ))}
+          </div>
+        )}
+        {mode === "floors" && (
+          <div className="grid grid-cols-4 gap-[6px]">
+            {FLOOR_SWATCHES.map((f) => (
+              <Swatch key={f.ch} on={b.brush === f.ch} label={f.label} onClick={() => set({ brush: f.ch })}>
+                <FloorTile fill={f.fill} line={f.line} none={f.ch === " "} />
+              </Swatch>
+            ))}
+          </div>
+        )}
+        <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+          {t(mode === "build" && door ? "buildHintDoor" : WALL_HINT[mode])}{" "}
+          {mode === "build" && b.brush === "w:window" ? t("buildWindowsOuter") : ""}
+        </p>
+        <h3 className="grp">{t("wallView")}</h3>
+        <fieldset className="seg min-w-0" aria-label={t("wallView")}>
+          {VIEWS.map(([v, label]) => (
             <button
-              key={m}
+              key={v}
               type="button"
-              aria-pressed={!door && b.paintMode === m}
-              disabled={door}
-              onClick={() => set({ paintMode: m })}
+              aria-pressed={b.wallView === v}
+              onClick={() => w?.build?.setWallView(v)}
+              title={`${t(label)} ([ ])`}
             >
               {t(label)}
             </button>
           ))}
         </fieldset>
-        <h3 className="grp">{t("buildWalls")}</h3>
-        <div className="grid grid-cols-3 gap-[7px]">
-          {WALL_SWATCHES.map((w) => (
-            <Swatch key={w.ch} on={b.brush === w.ch} label={w.label} onClick={() => set({ brush: w.ch })}>
-              <WallChip ch={w.ch} />
-            </Swatch>
-          ))}
-        </div>
-        <h3 className="grp">{t("buildOpenings")}</h3>
-        <div className="grid grid-cols-4 gap-[6px]">
-          {OPENINGS.map((o) => (
-            <Swatch key={o.ch} on={b.brush === o.ch} label={o.label} onClick={() => set({ brush: o.ch })}>
-              <WallChip ch={o.ch} />
-            </Swatch>
-          ))}
-        </div>
-        <h3 className="grp">{t("buildFloors")}</h3>
-        <div className="grid grid-cols-4 gap-[6px]">
-          {FLOOR_SWATCHES.map((f) => (
-            <Swatch key={f.ch} on={b.brush === f.ch} label={f.label} onClick={() => set({ brush: f.ch })}>
-              <FloorTile fill={f.fill} line={f.line} none={f.ch === " "} />
-            </Swatch>
-          ))}
-        </div>
-        <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
-          {t(door ? "buildHintDoor" : MODE_HINT[b.paintMode])} {b.brush === "w:window" ? t("buildWindowsOuter") : ""}
-        </p>
       </div>
     </>
   );

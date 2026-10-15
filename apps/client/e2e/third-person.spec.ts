@@ -360,13 +360,15 @@ test("third person: build mode places, picks up and moves a thing in 3D", async 
     // the Walls tool: a wall about to go on the edge under the pointer, drawn in 3D
     await page.evaluate(() => {
       const h = (window as any).__hud;
-      h.set({ build: { ...h.get().build, tool: "walls", brush: "w:p", selected: [] } });
+      h.set({ build: { ...h.get().build, tool: "walls", wallMode: "build", brush: "w:p", selected: [] } });
     });
     await page.waitForTimeout(300);
     const pe = await screenAt(X + 4.5, Y + 0.05);
     await page.mouse.move(pe.x - 5, pe.y);
     await page.mouse.move(pe.x, pe.y);
-    await expect.poll(() => page.evaluate(() => !!(window as any).__yutopia.engine.buildLook().edge)).toBe(true);
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__yutopia.engine.buildLook().edges.length))
+      .toBeGreaterThan(0);
     await expect
       .poll(() => page.evaluate(() => (window as any).__yutopia.tp.builder.cues.children.length))
       .toBeGreaterThan(0);

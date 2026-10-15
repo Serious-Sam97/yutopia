@@ -125,6 +125,30 @@ export interface GameView {
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
 export type PaintMode = "line" | "box" | "fill" | "erase";
+// The Walls tool, Sims-style (docs/plan/11-wall-building.md): build walls and
+// openings, paint wall faces, paint floors, or select walls (the inspector).
+export type WallMode = "build" | "paint" | "floors" | "select";
+// how walls show while building: all up, cut away round what you point at, all down
+export type WallView = "up" | "cut" | "down";
+// The chip by the pointer in the Walls tool: the face it's on (which side, the
+// room it looks into, its material now → the brush's), or a run being drawn.
+export type WallTag =
+  | {
+      kind: "face";
+      far: boolean;
+      room: string | null;
+      from: string | null;
+      to: string | null;
+      why: string | null;
+      n: number;
+    }
+  | { kind: "run"; n: number; w?: number; h?: number; remove: boolean; skipped: number; why: string | null };
+export interface WallPanel {
+  dir: "h" | "v";
+  x: number;
+  y: number;
+  side: 1 | -1;
+}
 
 export interface HudState {
   phase: "loading" | "connecting" | "ready" | "reconnecting" | "failed" | "kicked" | "removed";
@@ -194,6 +218,11 @@ export interface HudState {
     hover: { label: string; by: string | null; of?: { i: number; n: number } } | null;
     brush: string; // "w:" + an edge char (walls), a floor char (tiles), or "door"
     paintMode: PaintMode;
+    wallMode: WallMode;
+    paint: string; // the material Paint puts on faces (p w f b k)
+    wallView: WallView;
+    wallTag: WallTag | null;
+    wallSel: WallPanel[]; // walls selected (Select): the inspector's
     props: Record<string, unknown> | null; // what new furniture copies (C)
     fits: boolean; // the ghost under the pointer fits
     roomDraft: { x: number; y: number; w: number; h: number } | null;
@@ -269,6 +298,11 @@ const initial: HudState = {
     hover: null,
     brush: "w:p",
     paintMode: "line",
+    wallMode: "build",
+    paint: "b",
+    wallView: "cut",
+    wallTag: null,
+    wallSel: [],
     props: null,
     fits: true,
     roomDraft: null,

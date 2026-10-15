@@ -7,8 +7,10 @@ import {
   doorCentre,
   doorRoom,
   type EdgeEdit,
+  edgeAt,
   edgeBlocker,
   isDressing,
+  isFacedWall,
   isTheme,
   MAP_MAX,
   MAP_MIN,
@@ -98,6 +100,23 @@ registerFeature((room: SpaceRoom) => {
       room.rescue();
     }
     if (reason) warn(client, `Skipped a wall: ${reason}.`);
+  });
+
+  // Paint faces: only walls that have two faces, only the material
+  room.on("map:faces", (client, m) => {
+    const w = mat(m.mat);
+    if (!builder(client) || !w || w === "g" || !Array.isArray(m.faces)) return;
+    const edits: EdgeEdit[] = [];
+    for (const f of m.faces.slice(0, 1200)) {
+      const e = {
+        x: Math.floor(Number(f?.x)),
+        y: Math.floor(Number(f?.y)),
+        dir: f?.dir === "v" ? ("v" as const) : ("h" as const),
+      };
+      if (!isFacedWall(edgeAt(room.map, e))) continue;
+      edits.push({ ...e, ch: w, side: f?.side === -1 ? -1 : 1 });
+    }
+    if (edits.length) room.commitMap(applyEdges(room.map, edits));
   });
 
   room.on("map:room:walls", (client, m) => {
