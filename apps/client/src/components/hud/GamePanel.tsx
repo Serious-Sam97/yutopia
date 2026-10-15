@@ -134,9 +134,15 @@ export function GamePanel({ objectId }: { objectId: string }) {
           ) : (
             <Screen consoleId={showing} on={!!v?.on} running={!!v?.host} t={t} />
           )}
+          {/* the TV's volume: on its own panel, and on the console's (its TV) */}
           {kind === "tv" && v?.input !== "media" && (
             <div className="cabinet rise px-3 py-2">
               <TvVolume id={objectId} />
+            </div>
+          )}
+          {kind === "console" && v?.tv && (
+            <div className="cabinet rise px-3 py-2">
+              <TvVolume id={v.tv} />
             </div>
           )}
           {kind === "console" && v?.on && v.myPort ? <TouchPad system={v.system as GameSystem} /> : null}

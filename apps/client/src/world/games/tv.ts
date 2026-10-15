@@ -27,7 +27,8 @@ export class TvStream {
       name: "tv",
       source: Track.Source.Unknown,
       simulcast: true,
-      videoEncoding: { maxBitrate: 1_400_000, maxFramerate: 30 },
+      // (a 640 × 480 retro picture: ~100 kbps most of the time; the cap bounds a busy one)
+      videoEncoding: { maxBitrate: 1_000_000, maxFramerate: 30 },
       videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
       degradationPreference: "maintain-framerate",
     });

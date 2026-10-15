@@ -101,6 +101,11 @@ export class GameRoom {
   private sample = document.createElement("canvas");
 
   constructor(private w: WorldController) {
+    // The emulator draws into a canvas kept off screen on purpose: once a
+    // WebGL canvas is composited, Chrome clears its drawing buffer after each
+    // frame and reading it back (the TV's picture, the glow's colour) gives
+    // black; a canvas that's never composited stays readable, and its stream
+    // (captureStream, for the TV) is taken from the drawing itself.
     this.holder = document.createElement("div");
     Object.assign(this.holder.style, {
       position: "fixed",
@@ -228,9 +233,27 @@ export class GameRoom {
     this.lean(focus);
     this.syncHosting();
     this.pad();
+    this.hostVolume(me);
     this.drawTvs(me);
     this.drawConsoles();
     this.publish(pk.kind === "console" || pk.kind === "tv" ? (pk.objectId ?? null) : null, me);
+  }
+
+  // What I hear of the console I run: the core plays straight to my speakers,
+  // so its volume is set here — the TV's knob, my TV & video setting and how
+  // far I stand, the same as everyone else hears it from the TV.
+  private hostVolume(me: { x: number; y: number }) {
+    const h = this.hosting;
+    if (!h?.emu) return;
+    const o = this.obj(h.id);
+    const tv = o && typeof o.props?.tv === "string" ? this.obj(o.props.tv) : undefined;
+    let gain = prefs().vol.tv;
+    if (tv) {
+      const spot = { ...displaySpot(tv), dnd: false };
+      const ear = { x: me.x, y: me.y, dnd: false };
+      gain = hearingGain(this.w.map, ear, spot, true) * 0.9 * prefs().vol.tv * tvVolume(tv);
+    }
+    h.emu.volume(gain);
   }
 
   // I hold a pad somewhere (shown with it in my hands).
@@ -286,8 +309,6 @@ export class GameRoom {
   private async startHosting(id: string, c: S) {
     const system = c.system as GameSystem;
     const canvas = document.createElement("canvas");
-    canvas.style.width = "640px";
-    canvas.style.height = "480px";
     this.holder.append(canvas);
     const h: Hosting = {
       id,
