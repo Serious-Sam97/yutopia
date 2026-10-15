@@ -1480,6 +1480,16 @@ export class WorldController {
       return;
     }
     if (e.interact === "terminal") this.send("vortex:poke", {});
+    // a pet's bowl: fill it; the toy box: the Pets cabinet's Play deck (no panel of their own)
+    if (e.interact === "petbowl" || e.interact === "waterbowl") {
+      mixer.blip("click");
+      this.send("pet:bowl", { id });
+      return;
+    }
+    if (e.interact === "toybox") {
+      this.onOpenPanel("pets", id);
+      return;
+    }
     // a media TV with a console plugged in: the TV's own panel (its inputs, the remote among them)
     const plugged =
       e.interact === "media" &&

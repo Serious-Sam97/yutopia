@@ -8,6 +8,11 @@ import { mixer } from "@/world/audio";
 import { WorldController } from "@/world/controller";
 import { radio, sound } from "@/world/sound";
 import { hud, useHud } from "@/world/store";
+import { extraPanels } from "./panels";
+
+// the panels PanelHost draws itself (the rest come from ./panels)
+const OWN_PANELS = new Set(["settings", "avatar", "pets", "board"]);
+
 import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
@@ -57,7 +62,11 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
       return;
     }
     const c = new WorldController(host.current as HTMLDivElement, spaceId);
-    c.onOpenPanel = (kind, objectId) => hud.set({ panel: { kind: kind as never, objectId } });
+    c.onOpenPanel = (kind, objectId) => {
+      // only a panel that exists: an unknown kind would sit open unseen and swallow the keys
+      if (!(kind in extraPanels) && !OWN_PANELS.has(kind)) return;
+      hud.set({ panel: { kind: kind as never, objectId } });
+    };
     setCtrl(c);
     void c.start();
     // handy for debugging and the e2e/perf tools

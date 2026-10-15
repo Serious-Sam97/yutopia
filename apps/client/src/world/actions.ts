@@ -339,6 +339,11 @@ export class ActionQueue {
       case "lightOff":
         h.send("lamp:set", { id, on: q.act === "lightOn" });
         return null;
+      case "fillFood":
+      case "fillWater":
+        // the bowl fills (the room redraws it with its portions)
+        h.send("pet:bowl", { id });
+        return later(600);
       case "takeBall":
       case "takeFrisbee":
       case "takeRope":
