@@ -17,7 +17,8 @@
     "./pool": "./src/pool.ts",
     "./pong": "./src/pong.ts",
     "./tables": "./src/tables.ts",
-    "./pool-game": "./src/pool-game.ts"
+    "./pool-game": "./src/pool-game.ts",
+    "./phone": "./src/phone.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

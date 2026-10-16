@@ -4,6 +4,7 @@ import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
 import type { MediaItem } from "./media.ts";
 import type { Command, Move, Needs, Species, Toy, Trick } from "./pets.ts";
+import type { CallEnd, CallInfo } from "./phone.ts";
 
 export const ROOM_NAME = "space";
 export const TICK_HZ = 20;
@@ -18,8 +19,6 @@ export type Emote = (typeof EMOTES)[number];
 // what a pet wants, over its head (shared/mind.ts WANT_ICON; "no": a refusal)
 export const WANTS = ["bone", "drop", "zzz", "ball", "look", "house", "paws", "no"] as const;
 export type Want = (typeof WANTS)[number];
-
-export type ChatScope = "nearby" | "area" | "space";
 
 export interface JoinOptions {
   spaceId: number;
@@ -87,8 +86,6 @@ export interface ClientMessages {
   // heads down at my own desk: headphones on, the room's chatter turned down
   focus: { on: boolean };
   avatar: { avatar: AvatarLayers }; // after saving it in Yondra: everyone sees the new look now
-  chat: { text: string; scope: ChatScope };
-  "chat:react": { id: string; e: Emote }; // toggles my reaction on a message I received
   status: { status: Status };
   media: { mic: boolean; cam: boolean; screen: boolean; tracks?: string[] };
   speaking: { on: boolean };
@@ -215,6 +212,21 @@ export interface ClientMessages {
   "pet:challenge": { id: string; mine: string }; // their pet, my pet
   "pet:answer": { battle: string; accept: boolean };
   "pet:move": { battle: string; move: Move };
+  // the phone (shared/phone.ts): what it's doing in my hand (text, photo,
+  // selfie, "" put away; call/video while on a call), my case and ringtone,
+  // a photo taken (the flash others see)
+  "phone:state": { state: string };
+  "phone:prefs": { case: string; ringtone: string };
+  "phone:shot": Record<string, never>;
+  "phone:pose": { pose: string }; // a pose for the photo (shared PHOTO_POSES)
+  // calls (features/phone.ts): call people (user ids; anywhere in Yutopia),
+  // answer, decline, hang up, add someone, the camera on or off
+  "call:start": { to: number[]; video: boolean };
+  "call:answer": { id: string };
+  "call:decline": { id: string };
+  "call:end": { id: string };
+  "call:add": { id: string; uid: number };
+  "call:video": { id: string; on: boolean };
 }
 
 // server → client
@@ -224,7 +236,6 @@ export interface ServerMessages {
   "spawn:mine": { at: { x: number; y: number } | null };
   // whom I may listen to (session ids) and who may listen to me (user ids)
   hear: { ids: string[]; heardBy: string[] };
-  chat: { id: string; from: string; fromName: string; text: string; scope: ChatScope; at: number };
   knock: { from: string; fromName: string; area: string };
   admitted: { area: string };
   toast: { text: string; tone?: "info" | "warn" | "vortex" };
@@ -239,8 +250,6 @@ export interface ServerMessages {
   "build:history": { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
   // rejected: Yondra answered and refused the map (vs. couldn't be reached)
   "build:saved": { ok: boolean; at: number; rejected?: boolean };
-  // a message's reactions: emote → the user ids who reacted (to whoever received it)
-  "chat:react": { id: string; reactions: Partial<Record<Emote, number[]>> };
   // to whoever streams a console: its TV's LiveKit token; another player's
   // pad; who may see the picture and who may hear it (user ids)
   "game:tv": { id: string; token: string; identity: string };
@@ -259,6 +268,11 @@ export interface ServerMessages {
   // the computer is mine now (open its panel), or no longer (it went off under me)
   "computer:ok": { id: string };
   "computer:off": { id: string };
+  // calls: one ringing for me, how a call I'm in stands (ringing, live, ended
+  // and why), and the line itself once I'm in (its own LiveKit room)
+  "call:ring": CallInfo;
+  "call:update": CallInfo & { phase: "ringing" | "live" | "ended"; end?: CallEnd };
+  "call:join": { id: string; url: string; token: string; room: string };
 }
 
 // Things you can be busy with (shown on the body: hands on the controls…).
@@ -290,6 +304,5 @@ export const WB_H = 600;
 export const WB_MAX_ITEMS = 1500;
 export const WB_MAX_POINTS = 600;
 
-export const MAX_CHAT = 500;
 export const STATION_COUNT = 3;
 export const LIVEKIT_IDENTITY = (userId: number | string) => String(userId);

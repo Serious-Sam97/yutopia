@@ -135,7 +135,13 @@ export class Media {
           .setSinkId?.(prefs().speakerId)
           .catch(() => {});
       }
-      const key = pub.source === Track.Source.ScreenShareAudio ? `${uid}:screen` : uid;
+      // (a phone on speaker: the far side of their call, from where they stand — world/phone/call.ts)
+      const key =
+        pub.source === Track.Source.ScreenShareAudio
+          ? `${uid}:screen`
+          : pub.trackName === "phone-speaker"
+            ? `${uid}:phone`
+            : uid;
       this.voices.get(key)?.el.remove();
       this.voices.set(key, { track: audio, gain, pan, vol, el });
     } else if (track.kind === Track.Kind.Video) {
@@ -159,7 +165,7 @@ export class Media {
   private detach(track: RemoteTrack, p: Participant) {
     const uid = p.identity;
     if (track.kind === Track.Kind.Audio) {
-      for (const key of [uid, `${uid}:screen`]) {
+      for (const key of [uid, `${uid}:screen`, `${uid}:phone`]) {
         const v = this.voices.get(key);
         if (v && v.track === track) {
           v.el.remove();
@@ -218,7 +224,7 @@ export class Media {
     const ctx = mixer.ctx;
     if (!ctx) return;
     const spatial = prefs().spatial;
-    for (const key of [uid, `${uid}:screen`]) {
+    for (const key of [uid, `${uid}:screen`, `${uid}:phone`]) {
       const v = this.voices.get(key);
       if (!v) continue;
       v.gain.gain.setTargetAtTime(gain, ctx.currentTime, 0.08);

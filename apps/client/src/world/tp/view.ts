@@ -11,8 +11,10 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 import {
+  AdditiveBlending,
   BoxGeometry,
   BufferGeometry,
+  CanvasTexture,
   CatmullRomCurve3,
   CircleGeometry,
   Color,
@@ -404,7 +406,10 @@ export class ThirdPersonView {
   }
   // A game camera (playing at a table): where to look from and at, world tiles
   // (z = height in tiles). The chase camera eases over to it and back.
-  gameCam: { eye: [number, number, number]; look: [number, number, number] } | null = null;
+  // (the phone's camera uses it too: `showMe` keeps you drawn — a selfie —
+  // and `fov` is the lens)
+  gameCam: { eye: [number, number, number]; look: [number, number, number]; showMe?: boolean; fov?: number } | null =
+    null;
   private gcEye = new Vector3();
   private gcLook = new Vector3();
   private gcMix = 0; // 0 = the usual camera, 1 = the game's
@@ -613,6 +618,71 @@ export class ThirdPersonView {
     this.poolDue = 0;
   }
 
+  // The phone's camera in first person: its zoom (1 = the eye's lens). null lets go.
+  lensFov: number | null = null;
+  lens(zoom: number | null) {
+    this.lensFov = zoom === null ? null : Math.max(14, FOV / zoom);
+    if (zoom === null && this.mode !== "first") this.camera.fov = FOV;
+  }
+
+  // The frame as it is (the phone's camera): drawn now and copied in the same
+  // task, so it's there without keeping the drawing buffer.
+  snapshot(): HTMLCanvasElement | null {
+    const tags = this.tagLayer?.style.display ?? "";
+    if (this.post) this.post.render(false);
+    else this.renderer.render(this.scene, this.camera);
+    const src = this.renderer.domElement;
+    const c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    const g = c.getContext("2d");
+    if (!g) return null;
+    g.drawImage(src, 0, 0);
+    if (this.tagLayer) this.tagLayer.style.display = tags;
+    return c;
+  }
+
+  // Someone took a photo: the flash, at their hand.
+  private flashes: { s: Sprite; t: number }[] = [];
+  private flashTex: CanvasTexture | null = null;
+  flash(id: string) {
+    const p = this.people.get(id);
+    if (!p) return;
+    if (!this.flashTex) {
+      const c = document.createElement("canvas");
+      c.width = c.height = 64;
+      const g = c.getContext("2d") as CanvasRenderingContext2D;
+      const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      r.addColorStop(0, "rgba(255,255,255,1)");
+      r.addColorStop(0.2, "rgba(255,250,235,.8)");
+      r.addColorStop(1, "rgba(255,240,210,0)");
+      g.fillStyle = r;
+      g.fillRect(0, 0, 64, 64);
+      this.flashTex = new CanvasTexture(c);
+    }
+    const s = new Sprite(
+      new SpriteMaterial({ map: this.flashTex, blending: AdditiveBlending, depthWrite: false, transparent: true }),
+    );
+    s.position.set(p.root.position.x, 1.5, p.root.position.z);
+    s.scale.setScalar(0.2);
+    s.renderOrder = 999;
+    this.scene.add(s);
+    this.flashes.push({ s, t: 0 });
+  }
+  private stepFlashes(dt: number) {
+    for (const f of this.flashes) {
+      f.t += dt;
+      const k = f.t / 0.3;
+      f.s.scale.setScalar(0.25 + k * 1.6);
+      (f.s.material as SpriteMaterial).opacity = Math.max(0, 1 - k * k);
+    }
+    for (const f of this.flashes.filter((x) => x.t > 0.3)) {
+      this.scene.remove(f.s);
+      (f.s.material as SpriteMaterial).dispose();
+    }
+    this.flashes = this.flashes.filter((x) => x.t <= 0.3);
+  }
+
   zoomBy(k: number) {
     // (first person: the lens, not the distance)
     if (this.mode === "first") {
@@ -807,10 +877,17 @@ export class ThirdPersonView {
       cam.lerp(this.gcEye, m);
       this.camera.lookAt(look.lerp(this.gcLook, m));
     }
+    // the lens: a game camera's own, or the photo zoom in first person
+    const fov = gc?.fov ?? (first ? (this.lensFov ?? this.camera.fov) : FOV);
+    if (Math.abs(this.camera.fov - fov) > 0.05) {
+      this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-dt * 10));
+      this.camera.updateProjectionMatrix();
+    }
 
     this.reduced = !!me?.reduced;
     this.builder.sync(this.buildLook, this.world, dt);
     this.stepFx(dt);
+    this.stepFlashes(dt);
     this.fadeWalls(dt);
     this.around.update(dt, this.camera.position, !me?.reduced);
     this.drawCues(dt, !!me?.reduced);
@@ -856,7 +933,8 @@ export class ThirdPersonView {
       // keeps stepping so the other cameras find you as you left them
       // (nor under a game camera: it stands where you'd block the table)
       const byLens = this.byLens(b);
-      const hidden = ((first || (this.gameCam !== null && this.gcMix > 0.5)) && b.id === meId) || byLens;
+      const hidden =
+        ((first || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) && b.id === meId) || byLens;
       p.root.visible = !hidden;
       const onScreen = !hidden && this.frustum.intersectsSphere(this.sphere);
       const near = Math.hypot(cam.x - b.x, cam.z - b.y) < 12;
@@ -903,9 +981,10 @@ export class ThirdPersonView {
   // A pet this frame: its model where it is, turned the way it walks (eased),
   // posed by what it's doing (its rig), looking at its owner.
   // under a game camera: someone (or a pet) standing right by it, in the way
-  private byLens(b: { x: number; y: number }): boolean {
+  private byLens(b: { x: number; y: number; id?: string }): boolean {
     return (
       this.gameCam !== null &&
+      !(this.gameCam.showMe && b.id === this.meId) &&
       this.gcMix > 0.5 &&
       Math.hypot(b.x - this.camera.position.x, b.y - this.camera.position.z) < 2.7
     );

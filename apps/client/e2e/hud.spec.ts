@@ -2,11 +2,11 @@
 import { expect } from "@playwright/test";
 import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
 
-// The main HUD (proposal v2): top bars, the side panel (chat · people · room)
-// with who can hear you, reactions and quick emotes, the status menu, the minimap.
+// The main HUD (proposal v2): top bars, the side panel (people · room) with
+// who can hear you, quick emotes, the phone key, the status menu, the minimap.
 const SHOTS = process.env.YUTOPIA_SHOTS;
 
-test("HUD: who hears you, chat with reactions, people, room, status, minimap", async ({ browser }) => {
+test("HUD: who hears you, emotes, the phone key, people, room, status, minimap", async ({ browser }) => {
   test.setTimeout(180_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
   const s = await spaceId(ta);
@@ -25,32 +25,16 @@ test("HUD: who hears you, chat with reactions, people, room, status, minimap", a
   await expect(ana.getByText(new RegExp(`${here} · \\d+ here`))).toBeVisible();
   await expect(ana.getByText(/\d+ online/)).toBeVisible();
 
-  // chat: who can hear me, then a message from Bia
-  await ana.keyboard.press("Enter");
-  const panel = ana.getByRole("complementary", { name: "Chat" });
+  // the people panel: who can hear me (the chat's gone — texts are on the phone)
+  await ana.getByTitle("People", { exact: true }).click();
+  const panel = ana.getByRole("complementary", { name: "People" });
   await expect(panel).toBeVisible();
   await expect(panel.getByText(/Bia Demo.* can hear you/)).toBeVisible({ timeout: 10_000 });
-  await expect(panel.getByPlaceholder(/Say something to Bia/)).toBeVisible();
-  await bia.evaluate(() => (window as any).__yutopia.chat("standup in 5?", "nearby"));
-  const msg = panel.getByText("standup in 5?");
-  await expect(msg).toBeVisible();
+  await expect(ana.locator("[data-phone-key]")).toBeVisible();
 
-  // react from the UI; Bia sees the count
-  await msg.hover();
-  await panel.getByRole("button", { name: "React: heart" }).click();
-  await expect(panel.getByRole("button", { name: "heart 1" })).toBeVisible();
-  await expect
-    // (that message: another line, Vortex's say, can arrive after it)
-    .poll(() =>
-      bia.evaluate(
-        () =>
-          (window as any).__hud.get().chat.find((c: any) => c.text === "standup in 5?")?.reactions?.heart?.length ?? 0,
-      ),
-    )
-    .toBe(1);
-
-  // a quick emote from the composer shows over my head
-  await panel.getByRole("button", { name: "wave" }).click();
+  // a quick emote from the dock shows over my head
+  await ana.getByRole("button", { name: "Emote" }).click();
+  await ana.getByRole("menuitem", { name: "wave" }).click();
   await expect
     .poll(() =>
       ana.evaluate(
@@ -58,11 +42,10 @@ test("HUD: who hears you, chat with reactions, people, room, status, minimap", a
       ),
     )
     .toBe("wave");
-  if (SHOTS) await ana.screenshot({ path: `${SHOTS}/hud-chat.png` });
+  if (SHOTS) await ana.screenshot({ path: `${SHOTS}/hud-people.png` });
 
   // people and room tabs
-  await panel.getByRole("tab", { name: /People/ }).click();
-  await expect(ana.getByRole("complementary", { name: "People" }).getByText("hears you").first()).toBeVisible();
+  await expect(panel.getByText("hears you").first()).toBeVisible();
   await ana.getByRole("tab", { name: /Room/ }).click();
   const room = ana.getByRole("complementary", { name: "Room" });
   await expect(room.getByText(here.toUpperCase())).toBeVisible();

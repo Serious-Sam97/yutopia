@@ -142,6 +142,33 @@ body {
     opacity: 0.5;
     cursor: not-allowed;
   }
+  /* the phone key: lit while it's out or ringing, a little shake on a ring */
+  .deck-btn.lit {
+    background: linear-gradient(180deg, #ffbe6a, #e8952d);
+    box-shadow:
+      0 3px 0 #a5641a,
+      0 0 16px rgba(255, 166, 48, 0.45);
+  }
+  .deck-btn.ringing svg {
+    animation: ring-shake 0.9s ease-in-out infinite;
+  }
+  @keyframes ring-shake {
+    0%,
+    40%,
+    100% {
+      transform: rotate(0);
+    }
+    5%,
+    15%,
+    25% {
+      transform: rotate(-14deg);
+    }
+    10%,
+    20%,
+    30% {
+      transform: rotate(14deg);
+    }
+  }
   .deck-btn .led {
     position: absolute;
     top: 5px;

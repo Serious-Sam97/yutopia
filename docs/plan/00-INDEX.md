@@ -34,6 +34,7 @@
 15. [18-snow-campus.md](18-snow-campus.md) — The snow campus (delivered): the Ruptura-style headquarters, lawn and parking lot outside the 3D windows
 16. [19-vortexos.md](19-vortexos.md) — VortexOS on the computers (delivered): a `computer` item you sit at, the real OS from vortex.serious-sam.dev in a monitor panel, a drawn boot / desktop / screensaver on the glass for everyone, sign in with Yondra
 17. [20-sinuca-pingpong.md](20-sinuca-pingpong.md) — Fita 13 (delivered): Sinuca (8-ball pool) and Ping-pong — real physics, played in the world for everyone, against people or a Vortex at four levels
+18. [21-cellphone.md](21-cellphone.md) — Fita 14 (delivered): the cellphone running Vortex Mobile — replaces the chat; messages, calls across spaces, camera + selfies, wallpapers and ringtones, GTA-style use; Store and Maps later
 
 ## Workflow rules (inherited from Yondra)
 

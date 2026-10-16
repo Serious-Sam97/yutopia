@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css"><link rel="stylesheet" href="hud.css">
+<script src="emotes.js"></script><script src="hud.js"></script><script src="phone.js"></script>
+<style>
+.ring{position:absolute;border-radius:50%;border:2px solid rgba(0,229,208,.55);box-shadow:0 0 14px rgba(0,229,208,.35);z-index:12}
+.ring.p{border-color:rgba(255,45,149,.5);box-shadow:0 0 14px rgba(255,45,149,.3)}
+.notes{position:absolute;font:20px 'Space Grotesk';color:#ffd6ef;text-shadow:0 0 10px #ff2d95;z-index:13}
+.glowface{position:absolute;left:668px;top:300px;width:110px;height:140px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,80,190,.35),rgba(120,60,255,.12) 60%,transparent);mix-blend-mode:screen;z-index:11}
+.mini-ph{position:absolute;width:12px;height:22px;border-radius:3px;background:#5b3a26;box-shadow:0 0 0 1px #000,0 0 14px rgba(255,45,149,1),0 0 30px rgba(0,229,208,.6);z-index:12}
+.callbg{position:absolute;inset:0;background:radial-gradient(70% 45% at 50% 32%,rgba(255,45,149,.55),transparent 70%),radial-gradient(80% 50% at 50% 100%,rgba(0,229,208,.35),transparent 70%),linear-gradient(180deg,#22063f,#0a0118)}
+.cc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:58px 18px 30px;text-align:center}
+.cc .k{font:600 10.5px Inter;letter-spacing:.16em;text-transform:uppercase;color:var(--cya)}
+.halo{position:relative;margin:26px 0 16px;width:128px;height:128px}
+.halo .pf{width:128px;height:128px;position:relative;z-index:2;box-shadow:0 0 0 3px rgba(255,255,255,.85),0 0 30px rgba(255,45,149,.7)}
+.halo i{position:absolute;inset:-14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.35)}
+.halo i:nth-child(2){inset:-30px;border-color:rgba(255,45,149,.35)}
+.halo i:nth-child(3){inset:-48px;border-color:rgba(0,229,208,.2)}
+.cc .nm{font:600 27px 'Space Grotesk';letter-spacing:-.01em}
+.cc .wh{font:12.5px Inter;color:var(--dim);margin-top:4px}
+.cc .tone{margin-top:8px;font:11px Inter;color:#ffc8e6;display:flex;gap:5px;align-items:center}
+.cc .tone svg{width:13px;height:13px}
+.quick{display:flex;gap:10px;margin-top:auto;margin-bottom:22px}
+.quick span{display:flex;flex-direction:column;align-items:center;gap:5px;font:500 10.5px Inter;color:var(--dim)}
+.quick b{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);border:1px solid var(--hair)}
+.quick b svg{width:19px;height:19px;color:#fff}
+.btns{display:flex;justify-content:space-between;width:100%;padding:0 18px}
+.btns .cbtn{width:68px;height:68px}
+.btns .cbtn.green svg{width:30px;height:30px}
+.btns .cbtn.red svg{width:34px;height:34px}
+.pill{position:absolute;left:50%;top:82px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:6px 8px 6px 6px;border-radius:24px;z-index:30;background:rgba(26,6,48,.88);border:1px solid rgba(0,229,208,.45);box-shadow:0 0 20px rgba(0,229,208,.25),0 10px 24px rgba(0,0,0,.4);font:500 12.5px Inter}
+.pill .t{font:600 13px 'Space Grotesk';color:var(--cya)}
+.pill .end{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(150deg,#ff6b7d,#e8173c)}
+.pill .end svg{width:18px;height:18px;color:#fff}
+.wave{display:flex;gap:2px;align-items:center;height:16px}.wave i{width:2.5px;border-radius:2px;background:var(--cya)}
+</style></head>
+<body>
+<div class="bg" style="background-image:url(b-night.jpg)"></div>
+<div id="hud" data-room="Open office" data-clock="21:08" data-lit></div>
+
+<!-- the ring, heard from where you stand -->
+<div class="glowface"></div>
+<span class="mini-ph" style="left:664px;top:478px;transform:rotate(-14deg)"></span>
+<div class="ring" style="left:610px;top:380px;width:120px;height:120px"></div>
+<div class="ring p" style="left:570px;top:340px;width:200px;height:200px;opacity:.75"></div>
+<div class="ring" style="left:520px;top:290px;width:300px;height:300px;opacity:.45"></div>
+<div class="ring p" style="left:465px;top:235px;width:410px;height:410px;opacity:.22"></div>
+<span class="notes" style="left:610px;top:330px">♪</span><span class="notes" style="left:790px;top:380px;font-size:16px">♫</span><span class="notes" style="left:560px;top:450px;font-size:14px">♪</span>
+<div class="note" style="left:140px;top:250px;max-width:300px"><span class="n">1</span><b>It rings out loud from where you stand.</b> People near you hear your ringtone, positional like your voice, and your phone lights your face at night. Vibrate gives a faint buzz. Sleep mode (your DND status) makes no sound at all.</div>
+<div class="lead" data-from="440,320" data-to="560,390"></div>
+
+<!-- the phone pops up by itself -->
+<div class="phone case-walnut" style="right:58px;top:170px">
+  <div class="screen" data-time="21:08" data-noind>
+    <div class="callbg"></div>
+    <div class="cc">
+      <div class="k">Incoming call</div>
+      <div class="halo"><i></i><i></i><i></i><span class="pf" data-p="1" data-bg="radial-gradient(circle at 50% 30%,#ff7ac8,#7a3bdc)"></span></div>
+      <div class="nm">Bia Demo</div>
+      <div class="wh">Tracking room · Yutopia Demo</div>
+      <div class="tone"><span data-ic="music"></span>City Pop</div>
+      <div class="quick"><span><b data-ic="chat"></b>Text instead</span><span><b data-ic="clock"></b>Remind me</span><span><b data-ic="video"></b>Video</span></div>
+      <div class="btns"><div><span class="cbtn red" data-ic="end"></span><div class="clab">Decline</div></div><div><span class="cbtn green" data-ic="phone"></span><div class="clab">Answer</div></div></div>
+    </div>
+  </div>
+</div>
+<div class="hint shell" style="right:58px;top:118px"><span class="kc">⏎</span><b>answer</b> · <span class="kc">⌫</span><b>decline</b> · <span class="kc">→</span><b>more</b></div>
+
+<!-- and while you're on a call with the phone put away -->
+<div class="pill"><span class="pf call" data-p="1" style="width:30px;height:30px"></span><span>On a call with <b>Bia</b></span><span class="wave"><i style="height:6px"></i><i style="height:12px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:13px"></i><i style="height:5px"></i></span><span class="t">03:12</span><span class="end" data-ic="end"></span></div>
+<div class="note" style="left:316px;top:70px;max-width:262px;padding:6px 10px;font-size:12px"><span class="n">3</span>Put the phone away and the call goes on: a pill at the top, end it any time.</div>
+
+<div class="note" style="left:842px;top:300px;max-width:250px"><span class="n">2</span><b>Calls work anywhere</b>: across spaces, inside booths and private rooms. Each call is its own line. People near <b>you</b> hear your side of it, GTA-style; Speaker lets them hear the other side too. 30 s with no answer makes it a missed call.</div>
+<div class="note" style="left:842px;top:520px;max-width:250px"><span class="n">4</span><b>Answer</b> and your character raises the phone to the ear. You can walk while you talk. A handset icon appears on your name tag, and anyone else who calls you gets a busy tone.</div>
+</body></html>

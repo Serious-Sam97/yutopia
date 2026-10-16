@@ -12,18 +12,17 @@ import { Icon } from "./icons";
 const STATUSES = ["online", "dnd", "away"] as const;
 
 // The deck: media (mic with a live meter, camera, screen) · social (emotes,
-// chat, people) · me (status) · tools (build, settings).
+// the phone, people) · me (status) · tools (build, settings).
 export function Dock() {
   const t = useTr();
   const w = useWorld();
   const media = useHud((s) => s.media);
   const status = useHud((s) => s.me?.status ?? "online");
   const side = useHud((s) => s.side);
-  const unread = useHud((s) => s.chatUnread);
+  const phone = useHud((s) => s.phone);
   const canBuild = useHud((s) => s.canBuild);
   const [menu, setMenu] = useState<"emotes" | "status" | null>(null);
-  const toggleSide = (tab: SideTab) =>
-    hud.set((s) => ({ side: s.side === tab ? null : tab, ...(tab === "chat" ? { chatUnread: 0 } : {}) }));
+  const toggleSide = (tab: SideTab) => hud.set((s) => ({ side: s.side === tab ? null : tab }));
   const ready = media.ready || media.offline;
 
   // menus close on Escape or a click elsewhere
@@ -139,19 +138,20 @@ export function Dock() {
         </button>
         <button
           type="button"
-          className="deck-btn"
-          aria-pressed={side === "chat"}
-          onClick={() => toggleSide("chat")}
-          title={`${t("chat")} (Enter)`}
-          aria-label={t("chat")}
+          className={`deck-btn ${phone.open || phone.ringing ? "lit" : ""} ${phone.ringing ? "ringing" : ""}`}
+          aria-pressed={phone.open}
+          onClick={() => void w?.togglePhone()}
+          title={`${t("phone")} (P)`}
+          aria-label={t("phone")}
+          data-phone-key
         >
-          <Icon name="chat" size={20} />
-          {unread > 0 && (
+          <Icon name="phone" size={20} />
+          {phone.badge > 0 && (
             <span
               className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full text-[11px] font-semibold flex items-center justify-center"
               style={{ background: "var(--rust)", color: "var(--cream)", border: "2px solid #2a1c13" }}
             >
-              {unread}
+              {phone.badge}
             </span>
           )}
         </button>

@@ -1,4 +1,3 @@
-import type { ChatScope } from "@yutopia/shared";
 import type { SpaceClient, SpaceRoom } from "../SpaceRoom.ts";
 import type { Player } from "../schema.ts";
 
@@ -9,7 +8,6 @@ export interface Feature {
   join?(client: SpaceClient, p: Player): void;
   leave?(client: SpaceClient, p: Player): void;
   areaChange?(client: SpaceClient, p: Player, from: string, to: string): void;
-  chat?(client: SpaceClient, p: Player, text: string, scope: ChatScope): void;
   dispose?(): void;
 }
 

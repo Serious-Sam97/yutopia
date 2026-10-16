@@ -1,0 +1,133 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css">
+<script src="emotes.js"></script><script src="phone.js"></script>
+<style>
+body{background:radial-gradient(70% 60% at 50% 0%,#2a0a4a,#0c0216 70%)}
+h2{position:absolute;left:40px;top:30px;font:700 22px 'Space Grotesk';letter-spacing:.02em}
+h2 small{font:500 13px Inter;color:var(--dim);margin-left:12px;letter-spacing:0}
+.slot{position:absolute;top:96px;width:300px;height:620px}
+.slot .phone{transform:scale(.86);transform-origin:top left;left:0;top:0}
+.cap{position:absolute;top:648px;width:258px;text-align:center}
+.cap b{display:block;font:600 15px 'Space Grotesk';color:#fff}
+.cap span{display:block;font:12.5px/1.45 Inter;color:var(--dim);margin-top:4px}
+.seg{flex:none;display:flex;padding:3px;border-radius:12px;background:rgba(255,255,255,.08);margin-bottom:8px}
+.seg span{flex:1;text-align:center;padding:6px 0;border-radius:9px;font:600 11px Inter;color:var(--dim)}
+.seg span.a{background:rgba(255,255,255,.16);color:#fff}
+.gg{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;border-radius:12px;overflow:hidden}
+.gg i{height:84px;background-size:cover;position:relative}
+.gg i.sf::after{content:"";position:absolute;right:4px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--mag);box-shadow:0 0 6px var(--mag)}
+.gsec{font:600 11px Inter;color:#fff;margin:10px 2px 6px;display:flex;justify-content:space-between}
+.gsec span{color:var(--mute);font-weight:500}
+.viewer{position:absolute;inset:0;background:#05000c;display:flex;flex-direction:column}
+.viewer .pic{margin-top:92px;height:300px;background:url(b-selfie.jpg) 50% 28%/560px auto;filter:sepia(.3) saturate(1.25) contrast(1.06);position:relative}
+.viewer .pic::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,transparent 55%,rgba(40,10,20,.45))}
+.viewer .info{padding:12px 16px;font:11.5px/1.5 Inter;color:var(--dim)}
+.viewer .info b{color:#fff;font:600 13px Inter;display:block}
+.vtop{position:absolute;top:44px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:center}
+.vtop span{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1)}
+.vtop span svg{width:16px;height:16px}
+.vact{margin-top:auto;margin-bottom:26px;display:flex;justify-content:space-around;padding:0 6px}
+.vact div{display:flex;flex-direction:column;align-items:center;gap:5px;font:500 10px Inter;color:var(--dim)}
+.vact b{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);border:1px solid var(--hair)}
+.vact b svg{width:19px;height:19px;color:#fff}
+.vact b.hl{background:var(--holo);border:none;box-shadow:0 0 14px rgba(255,45,149,.5)}
+/* video call */
+.vc{position:absolute;inset:0;background:linear-gradient(180deg,#2a1240,#120620)}
+.far{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(80% 60% at 50% 40%,#5a2b7a,#1a0a2c)}
+.far .ph{position:absolute;inset:40px 20px 150px;border:2px dashed rgba(255,255,255,.35);border-radius:22px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:14px;font:600 11px Inter;letter-spacing:.08em;color:rgba(255,255,255,.65)}
+.far .pf{width:150px;height:150px;margin-top:-80px}
+.pip{position:absolute;right:14px;top:52px;width:86px;height:118px;border-radius:16px;border:2px solid rgba(255,255,255,.8);background:radial-gradient(circle at 50% 35%,#6b4b2a,#2a160a);overflow:hidden;display:grid;place-items:center;box-shadow:0 8px 20px rgba(0,0,0,.5)}
+.pip .pf{width:70px;height:70px}
+.pip em{position:absolute;bottom:5px;font:600 8.5px Inter;font-style:normal;letter-spacing:.08em}
+.vbar{position:absolute;left:12px;right:12px;bottom:22px;padding:12px 10px;border-radius:26px;display:flex;justify-content:space-around;align-items:center}
+.vbar .cbtn{width:48px;height:48px}.vbar .cbtn svg{width:21px;height:21px}
+.vname{position:absolute;left:18px;top:52px}
+.vname b{font:600 18px 'Space Grotesk';display:block}.vname span{font:600 11.5px Inter;color:var(--cya)}
+/* store */
+.feat{flex:none;height:150px;border-radius:20px;position:relative;overflow:hidden;padding:14px;background:linear-gradient(135deg,#ff2d95,#7a3bdc 55%,#00e5d0);box-shadow:0 10px 26px rgba(255,45,149,.35)}
+.feat .orb{position:absolute;right:-46px;top:-34px;width:110px;height:110px;opacity:.8}
+.feat small{font:700 9.5px Inter;letter-spacing:.16em}
+.feat b{display:block;font:700 21px/1.15 'Space Grotesk';margin-top:6px;max-width:150px}
+.feat .by{position:absolute;left:14px;bottom:12px;font:500 11px Inter;opacity:.9}
+.chips{flex:none;display:flex;gap:6px;margin:12px 0 8px}
+.chips span{padding:5px 11px;border-radius:14px;font:600 11px Inter;background:rgba(255,255,255,.08);color:var(--dim)}
+.chips span.a{background:#fff;color:#2a0a40}
+.sapp{display:flex;align-items:center;gap:10px;padding:8px 10px}
+.sapp + .sapp{border-top:1px solid rgba(255,255,255,.07)}
+.sapp .tile{width:44px;height:44px;border-radius:13px}.sapp .tile svg.ic{width:22px;height:22px}
+.sapp .nm{font:600 13px Inter}.sapp .sub{font:11px Inter;color:var(--dim)}
+.get{margin-left:auto;padding:6px 12px;border-radius:14px;font:700 10.5px Inter;letter-spacing:.06em;background:rgba(255,255,255,.12);color:#fff;white-space:nowrap}
+.get.later{background:transparent;border:1px solid rgba(0,229,208,.6);color:var(--cya)}
+</style></head>
+<body>
+<h2>Photos, video calls and the Store <small>the Store is a shell now. Apps come later.</small></h2>
+
+<!-- gallery -->
+<div class="slot" style="left:40px"><div class="phone case-walnut"><div class="screen" data-time="17:10">
+  <div class="wp wp-portal"></div>
+  <div class="content">
+    <div class="apphead"><h1>Gallery</h1><span class="sp"></span><span style="font:600 12px Inter;color:var(--cya)">Select</span></div>
+    <div class="seg"><span class="a">All</span><span>Selfies</span><span>Sent</span></div>
+    <div class="gsec">Today <span>Open office</span></div>
+    <div class="gg">
+      <i class="sf" style="background-image:url(b-selfie.jpg);background-position:50% 25%;background-size:200px;filter:sepia(.3) saturate(1.25)"></i>
+      <i style="background-image:url(b-fp.jpg);background-position:60% 60%"></i>
+      <i style="background-image:url(c-iso.jpg);background-position:48% 45%;background-size:300px;filter:grayscale(1) contrast(1.2)"></i>
+      <i style="background-image:url(a1.jpg);background-position:30% 20%;background-size:260px"></i>
+      <i style="background-image:url(b-night.jpg);background-position:50% 40%;background-size:220px;filter:saturate(1.8) hue-rotate(-12deg)"></i>
+      <i style="background-image:url(02-lot-night.jpg);background-position:50% 50%"></i>
+    </div>
+    <div class="gsec">Yesterday <span>Snow campus</span></div>
+    <div class="gg">
+      <i style="background-image:url(01-entrance-day.jpg);background-position:50% 50%"></i>
+      <i style="background-image:url(05-campus-from-above.jpg);background-position:40% 50%"></i>
+      <i style="background-image:url(06-lot-ground-level.jpg);background-position:50% 50%"></i>
+    </div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:40px"><b>Gallery</b><span>Everything you shot, saved in Yondra (300 photos per person, and deleting removes the file). The dot marks selfies.</span></div>
+
+<!-- viewer -->
+<div class="slot" style="left:318px"><div class="phone case-walnut"><div class="screen" data-time="17:10">
+  <div class="viewer">
+    <div class="vtop"><span data-ic="back"></span><span data-ic="heart"></span></div>
+    <div class="pic"></div>
+    <div class="info"><b>Selfie · Film 84</b>Open office, Yutopia Demo · today 16:51<br>With Iara in the background</div>
+    <div class="vact"><div><b class="hl" data-ic="send"></b>Send</div><div><b data-ic="wall"></b>Wallpaper</div><div><b data-ic="dl"></b>Save</div><div><b data-ic="trash"></b>Delete</div></div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:318px"><b>A photo</b><span>Send it to a thread, make it your wallpaper, or save the file to your computer.</span></div>
+
+<!-- video call -->
+<div class="slot" style="left:596px"><div class="phone case-walnut"><div class="screen" data-time="21:15" data-noind>
+  <div class="vc">
+    <div class="far"><div class="ph">BIA'S CAMERA</div><span class="pf" data-p="1" data-bg="transparent"></span></div>
+    <div class="vname"><b>Bia Demo</b><span>video · 06:41</span></div>
+    <div class="pip"><span class="pf" data-p="0" data-bg="transparent"></span><em>YOU</em></div>
+    <div class="vbar glass" style="background:rgba(20,4,40,.6)"><span class="cbtn" data-ic="micoff"></span><span class="cbtn on" data-ic="video"></span><span class="cbtn" data-ic="addp"></span><span class="cbtn red" data-ic="end"></span></div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:596px"><b>Video call</b><span>Uses the camera you already have in Yutopia. With the camera off you see their drawn portrait. Groups take up to 8 people.</span></div>
+
+<!-- store -->
+<div class="slot" style="left:874px"><div class="phone case-walnut"><div class="screen" data-time="17:12">
+  <div class="wp wp-portal"></div>
+  <div class="content">
+    <div class="apphead"><h1>Vortex Store</h1></div>
+    <div class="feat"><div class="orb"></div><small>COMING SOON</small><b>Apps for your phone. Some of them legal.</b><span class="by">— Vortex, probably</span></div>
+    <div class="chips"><span class="a">All</span><span>Games</span><span>Tools</span><span>Music</span><span>Weird</span></div>
+    <div class="glass" style="border-radius:16px;flex:none">
+      <div class="sapp"><span class="tile t-msg" data-ic="msg"></span><div><div class="nm">Messages</div><div class="sub">Built in</div></div><span class="get">OPEN</span></div>
+      <div class="sapp"><span class="tile t-maps" data-ic="maps" style="color:#fff"></span><div><div class="nm">Maps · GPS</div><div class="sub">Find anyone, anywhere</div></div><span class="get later">SOON</span></div>
+      <div class="sapp"><span class="tile" style="background:linear-gradient(150deg,#ffb35c,#b5562f)" data-ic="music"></span><div><div class="nm">Tape Deck</div><div class="sub">Your radio, in your pocket</div></div><span class="get later">SOON</span></div>
+    </div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:874px"><b>Vortex Store</b><span>The storefront is designed now. Installing works from day one (built-in apps are listed as installed). New apps arrive later, each as its own lazy-loaded piece.</span></div>
+
+<!-- right column notes -->
+<div class="note" style="left:1160px;top:110px;max-width:250px"><span class="n">!</span><b>Not in v1</b><br>• video recording in the camera<br>• voicemail<br>• a public photo feed (photos only go where you send them)<br>• GPS / Maps (placeholder only)<br>• real Store apps</div>
+<div class="note" style="left:1160px;top:300px;max-width:250px"><b>Phone screens</b>: on a touch screen the phone is a full-height sheet you swipe up from the dock's phone key. Same OS, bigger.</div>
+</body></html>

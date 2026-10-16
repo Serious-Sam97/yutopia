@@ -160,6 +160,9 @@ export interface MotionIn {
   busy?: string; // using something (shared USES): the arcade, the piano…
   // with someone (shared SOCIAL, or "take"): what, `t` s into it, `len` s long
   act?: { what: string; t: number; len: number } | null;
+  // the phone (shared/phone.ts): what it's doing in the hand ("" in the
+  // pocket), a pose for a photo, ringing in the pocket
+  phone?: { state: string; pose: string; ringing: boolean } | null;
 }
 
 // Carrying a mug in the right hand, at the waist…
@@ -209,6 +212,8 @@ export class Motion {
   private sipping = false;
   private busyW = 0;
   private busyWhat = "";
+  private phoneW = 0;
+  private phoneWhat = "";
   // sitting down / getting up: a short settle
   private seated: boolean | null = null;
   private settleT = 1;
@@ -289,7 +294,8 @@ export class Motion {
 
     // carrying: the right hand holds it (no swing, no typing with it), and
     // brings it up for each sip
-    if (m.held) {
+    const ph = m.phone?.state ?? "";
+    if (m.held && !ph) {
       const st = heldState(m.held.kind, m.held.since);
       const up = sipEnv(st.sip);
       p.armR = lerpArm(holdArm(rig), sipArm(rig), up);
@@ -304,6 +310,14 @@ export class Motion {
     if (m.busy) this.busyWhat = m.busy;
     this.busyW = Math.max(0, Math.min(1, this.busyW + (m.busy && !rig.sit ? dt : -dt) * 5));
     if (this.busyW > 0 && this.busyWhat) p = lerpPose(p, atWork(rig, this.busyWhat, p, t), ease(this.busyW));
+
+    // the phone in the hand: texting, at the ear, held up for a photo…
+    if (ph) this.phoneWhat = ph;
+    this.phoneW = Math.max(0, Math.min(1, this.phoneW + (ph ? dt : -dt) * 5));
+    if (this.phoneW > 0 && this.phoneWhat)
+      p = lerpPose(p, phonePose(rig, this.phoneWhat, m.phone?.pose ?? "", p, t, m.speaking), ease(this.phoneW));
+    // ringing in the pocket: a buzz at the hip
+    if (m.phone?.ringing && !ph && !m.reduced) p.body.x += 0.35 * Math.sin(t * 46) * (Math.sin(t * 2.6) > 0 ? 1 : 0);
 
     // lowering onto the seat (from a little higher) or rising off it (from a crouch)
     if (this.settleT < 1 && !m.reduced) {
@@ -362,6 +376,95 @@ export class Motion {
       if (e > 0) p = emotePose(rig, this.emote, p, this.emoteT, e);
     }
     return p;
+  }
+}
+
+// The phone in the hand (shared/phone.ts PHONE_STATES), and a pose for a
+// photo with the free hand. Front views: + on the right arm brings the hand
+// across the chest, − lifts it out; the left arm mirrors.
+export function phonePose(rig: Rig, state: string, pose: string, base: Pose, t: number, talking: boolean): Pose {
+  const p: Pose = {
+    ...base,
+    body: { ...base.body },
+    head: { ...base.head },
+    armL: { ...base.armL },
+    armR: { ...base.armR },
+  };
+  const side = rig.side;
+  switch (state) {
+    case "text": {
+      // both hands low in front, the thumbs going, head down over it
+      const tap = Math.sin(t * 13) * (Math.sin(t * 0.8) > -0.3 ? 1 : 0);
+      p.armR = side ? { sh: 30, el: 70 + 3 * tap, su: 1, sf: 1 } : { sh: 12, el: 88 + 3 * tap, su: 0.95, sf: 0.6 };
+      p.armL = side ? { sh: 28, el: 72, su: 1, sf: 1 } : { sh: -12, el: -88 - 3 * tap, su: 0.95, sf: 0.6 };
+      p.armLFront = !side;
+      if (side) p.head.rot += 8;
+      else p.head.y += 1.6;
+      break;
+    }
+    case "call": {
+      // at the ear; the free hand talks along
+      p.armR = side ? { sh: 62, el: 150, su: 1, sf: 1 } : { sh: 36, el: 148, su: 0.42, sf: 1 };
+      p.head.rot += side ? -2 : 4;
+      if (talking && !side) {
+        const g = Math.sin(t * 2.2);
+        if (g > 0.2) {
+          p.armL = { sh: -10 - 6 * g, el: -70 - 10 * Math.sin(t * 6), su: 0.95, sf: 0.7 };
+          p.armLFront = true;
+        }
+      }
+      break;
+    }
+    case "video":
+      // held up in front of the face, talking to it
+      p.armR = side ? { sh: 76, el: 44, su: 1, sf: 1 } : { sh: 14, el: 118, su: 0.66, sf: 0.6 };
+      p.head.rot += side ? -2 : 1;
+      break;
+    case "photo":
+      // raised in both hands, aiming
+      p.armR = side ? { sh: 84, el: 36, su: 1, sf: 1 } : { sh: 16, el: 120, su: 0.72, sf: 0.7 };
+      p.armL = side ? { sh: 84, el: 36, su: 1, sf: 1 } : { sh: -16, el: -120, su: 0.72, sf: 0.7 };
+      p.armLFront = !side;
+      break;
+    case "selfie":
+      // the arm out and up, the screen looking back at you
+      p.armR = side ? { sh: 128, el: 10, su: 1, sf: 1 } : { sh: -124, el: -12, su: 0.82, sf: 0.82 };
+      p.head.rot += side ? -3 : -3;
+      p.body.rot += side ? 0 : -1.5;
+      break;
+  }
+  if (state === "selfie" || state === "photo") {
+    // the free hand poses for it
+    if (pose === "peace") {
+      p.armL = side ? { sh: 24, el: 128, su: 1, sf: 1 } : { sh: -8, el: -142, su: 0.95, sf: 0.76 };
+      p.armLFront = !side;
+    } else if (pose === "point") {
+      p.armL = side ? { sh: 92, el: 6, su: 1, sf: 1 } : { sh: -40, el: -40, su: 0.62, sf: 0.66 };
+      p.armLFront = !side;
+    } else if (pose === "thumbs") {
+      p.armL = side ? { sh: 34, el: 96, su: 1, sf: 1 } : { sh: -16, el: -104, su: 0.95, sf: 0.72 };
+      p.armLFront = !side;
+      p.face = "talk";
+    }
+  }
+  return p;
+}
+
+// How the phone sits in the hand for each state: its tilt (degrees, on the
+// board) and which of its faces this view sees.
+export function phoneGrip(rig: Rig, state: string): { tilt: number; face: "screen" | "back" | "edge"; scale: number } {
+  const side = rig.side;
+  // from behind you see the screen over the shoulder; from the front, the case
+  const away = rig.back ? "screen" : "back";
+  switch (state) {
+    case "call":
+      return { tilt: side ? -20 : -12, face: "edge", scale: 1 };
+    case "selfie":
+      return { tilt: side ? -10 : 8, face: rig.back ? "back" : "screen", scale: 1.05 };
+    case "text":
+      return { tilt: side ? -35 : 0, face: side ? "edge" : away, scale: 0.92 };
+    default:
+      return { tilt: side ? -8 : 0, face: side ? "edge" : away, scale: 1 };
   }
 }
 

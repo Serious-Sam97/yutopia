@@ -44,14 +44,12 @@ async function person(id: number, spaceId: number, roles = "member"): Promise<Pe
     "knock",
     "admitted",
     "toast",
-    "chat",
     "kicked",
     "vortex:say",
     "wb:scene",
     "wb:op",
     "arcade:scores",
     "build:history",
-    "chat:react",
     "piano:note",
     "game:tv",
     "game:pad",
@@ -59,6 +57,9 @@ async function person(id: number, spaceId: number, roles = "member"): Promise<Pe
     "spawn:mine",
     "computer:ok",
     "computer:off",
+    "call:ring",
+    "call:update",
+    "call:join",
   ])
     room.onMessage(t, (m) => {
       if (!p.msgs[t]) p.msgs[t] = [];
@@ -485,25 +486,6 @@ test("two-faced walls: each face its own material; wall items hang on either fac
   owner.room.send("map:walls", { edges: [{ x: 11, y: 3, dir: "h", ch: "." }] });
   await sleep(250);
   assert.equal(hw()[3][11], "p");
-});
-
-test("chat reactions: only people who got the message react, and they all see the count", async () => {
-  const s = ++space;
-  const ana = await person(50, s);
-  const bia = await person(51, s);
-  ana.room.send("chat", { text: "standup in 5", scope: "space" });
-  await waitFor(() => (bia.msgs.chat?.length ?? 0) > 0);
-  const id = (bia.msgs.chat?.[0] as { id: string }).id;
-  const late = await person(52, s); // joined after: never got it
-  late.room.send("chat:react", { id, e: "heart" });
-  bia.room.send("chat:react", { id, e: "heart" });
-  await waitFor(() => (ana.msgs["chat:react"]?.length ?? 0) > 0);
-  const last = (p: Person) => p.msgs["chat:react"]?.at(-1) as { id: string; reactions: Record<string, number[]> };
-  assert.deepEqual(last(ana).reactions, { heart: [51] });
-  assert.equal(late.msgs["chat:react"], undefined, "not in the audience");
-  bia.room.send("chat:react", { id, e: "heart" }); // toggles off
-  await waitFor(() => ana.msgs["chat:react"]?.length === 2);
-  assert.deepEqual(last(ana).reactions, {});
 });
 
 test("build undo/redo: per person, a drag is one step, others' later edits are kept", async () => {
@@ -1520,4 +1502,57 @@ test("ping-pong: Ana serves to Vortex — her hit checked against her racket, he
   assert.deepEqual(score().points, [0, 1]);
   a.room.send("pong:concede", { id: "t-pong" });
   await waitFor(() => t()?.phase === "done");
+});
+
+test("the phone: calls ring across spaces, answer, the line, hang up; declined, busy, nobody there", async () => {
+  const sa = ++space;
+  const sb = ++space;
+  const ana = await person(80, sa);
+  const bia = await person(81, sb); // another space
+  const caio = await person(82, sa);
+  const me = (p: Person) => p.room.state.players.get(p.room.sessionId);
+  const last = (p: Person, t: string) => p.msgs[t]?.at(-1) as Record<string, unknown> | undefined;
+  // case and ringtone, seen on the body
+  bia.room.send("phone:prefs", { case: "rust", ringtone: "bell" });
+  bia.room.send("phone:prefs", { case: "nope", ringtone: "nope" });
+  await waitFor(() => me(bia)?.phoneCase === "rust" && me(bia)?.tone === "bell");
+  // out of the pocket: others see it; at the ear only on a call
+  ana.room.send("phone:state", { state: "text" });
+  await waitFor(() => caio.room.state.players.get(ana.room.sessionId)?.phone === "text");
+  ana.room.send("phone:state", { state: "call" });
+  await sleep(150);
+  assert.equal(me(ana)?.phone, "text", "not on a call yet");
+
+  // Ana calls Bia (a different space): it rings there
+  ana.room.send("call:start", { to: [81], video: false });
+  await waitFor(() => (bia.msgs["call:ring"]?.length ?? 0) > 0);
+  const id = (last(bia, "call:ring") as { id: string }).id;
+  await waitFor(() => me(bia)?.ringing === true);
+  await waitFor(() => last(ana, "call:update")?.phase === "ringing");
+  // Bia answers: both get the line, both at the ear
+  bia.room.send("call:answer", { id });
+  await waitFor(() => (ana.msgs["call:join"]?.length ?? 0) > 0 && (bia.msgs["call:join"]?.length ?? 0) > 0);
+  assert.equal((last(ana, "call:join") as { room: string }).room, `call-${id}`);
+  await waitFor(() => me(bia)?.ringing === false && me(bia)?.phone === "call" && me(ana)?.phone === "call");
+  assert.equal(last(ana, "call:update")?.phase, "live");
+  // Caio calls Ana meanwhile: busy
+  caio.room.send("call:start", { to: [80], video: false });
+  await waitFor(() => last(caio, "call:update")?.end === "busy");
+  // Bia hangs up: it's over for both, phones back in the pocket
+  bia.room.send("call:end", { id });
+  await waitFor(() => last(ana, "call:update")?.phase === "ended" && last(ana, "call:update")?.end === "answered");
+  await waitFor(() => me(ana)?.phone === "" && me(bia)?.phone === "");
+
+  // Caio calls Ana, she declines
+  caio.room.send("call:start", { to: [80], video: false });
+  await waitFor(() => (ana.msgs["call:ring"]?.length ?? 0) > 0);
+  ana.room.send("call:decline", { id: (last(ana, "call:ring") as { id: string }).id });
+  await waitFor(() => last(caio, "call:update")?.end === "declined");
+  await waitFor(() => me(ana)?.ringing === false);
+  // nobody by that id in Yutopia
+  caio.room.send("call:start", { to: [999], video: false });
+  await waitFor(() => last(caio, "call:update")?.end === "unreachable");
+  // a photo: the flash, rate-limited
+  caio.room.send("phone:shot", {});
+  await waitFor(() => (ana.room.state.players.get(caio.room.sessionId)?.shotAt ?? 0) > 0);
 });

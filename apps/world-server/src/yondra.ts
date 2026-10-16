@@ -88,4 +88,7 @@ export const yondra = {
   deletePet: (userId: number, petId: number) => call("DELETE", `/pets/${userId}/${petId}`),
   grantFragment: (id: number, fragment: string, userIds: number[]) =>
     call<{ granted: number[] }>("POST", `/spaces/${id}/fragment`, { fragment, user_ids: userIds }),
+  // a call that ended (features/phone.ts): written into the thread, for Recents and "missed"
+  phoneCall: (c: { from: number; to: number[]; end: string; secs: number; video: boolean; answered: number[] }) =>
+    call("POST", "/phone/calls", c),
 };

@@ -38,6 +38,13 @@ const BuildMode = dynamic(() => import("./build/BuildMode").then((m) => m.BuildM
 // chat · people · room: loaded the first time the panel opens
 const SidePanel = dynamic(() => import("./SidePanel").then((m) => m.SidePanel), { ssr: false });
 
+// The phone (Vortex Mobile): its screens load with the phone's chunk, soon after arriving.
+const PhoneLayerLazy = dynamic(() => import("./phone/PhoneLayer").then((m) => m.PhoneLayer), { ssr: false });
+function PhoneLayer() {
+  const on = useHud((s) => s.phone.loaded);
+  return on ? <PhoneLayerLazy /> : null;
+}
+
 // A battle proposed to me, or one going on: their chunk loads when there is one.
 const PetOverlaysLazy = dynamic(() => import("./PetOverlays").then((m) => m.PetOverlays), { ssr: false });
 function PetOverlays() {
@@ -53,6 +60,8 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
   // build mode takes over the screen (its own top bar, panels and bottom bar)
   const building = useHud((s) => s.build.on && s.canBuild);
   const side = useHud((s) => s.side);
+  // the phone's camera: the screen is the viewfinder, the HUD steps aside
+  const camera = useHud((s) => s.phone.camera);
   // at the slot-car track's controls, a console or a TV: their console takes the screen
   const racing = useHud(
     (s) =>
@@ -96,7 +105,7 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
       <main className="relative h-full w-full overflow-hidden select-none">
         <div ref={host} className="absolute inset-0" />
         <VideoBubbles />
-        <div className="pointer-events-none absolute inset-0">
+        <div className="pointer-events-none absolute inset-0" style={camera ? { display: "none" } : undefined}>
           {!building && <TopBar />}
           {!building && <Rituals />}
           {!building && side && <SidePanel />}
@@ -118,6 +127,7 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
           <PanelHost />
           {!building && <ActionMenu />}
         </div>
+        {!building && <PhoneLayer />}
         <ConnectionOverlay />
       </main>
     </WorldCtx.Provider>

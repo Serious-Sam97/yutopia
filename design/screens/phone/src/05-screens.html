@@ -1,0 +1,138 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css">
+<script src="emotes.js"></script><script src="phone.js"></script>
+<style>
+body{background:radial-gradient(70% 60% at 50% 0%,#2a0a4a,#0c0216 70%)}
+body::before{content:"";position:absolute;left:-20%;right:-20%;bottom:0;height:300px;background:repeating-linear-gradient(90deg,rgba(255,45,149,.18) 0 1px,transparent 1px 60px),repeating-linear-gradient(180deg,rgba(0,229,208,.14) 0 1px,transparent 1px 30px);transform:perspective(300px) rotateX(60deg);transform-origin:bottom}
+.slot{position:absolute;top:96px;width:258px;height:533px}
+.slot .phone{transform:scale(.86);transform-origin:top left;left:0;top:0}
+.cap{position:absolute;top:648px;width:258px;text-align:center}
+.cap b{display:block;font:600 15px 'Space Grotesk';color:#fff}
+.cap span{display:block;font:12.5px/1.45 Inter;color:var(--dim);margin-top:4px}
+h2{position:absolute;left:40px;top:30px;font:700 22px 'Space Grotesk';letter-spacing:.02em}
+h2 small{font:500 13px Inter;color:var(--dim);margin-left:12px;letter-spacing:0}
+/* boot */
+.boot{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(60% 40% at 50% 45%,#3a0a5e,#0a0118 75%)}
+.boot .orb{width:118px;height:118px}
+.boot .wm{margin-top:44px;font:700 30px 'Space Grotesk';letter-spacing:.32em;padding-left:.32em}
+.boot .ed{font:500 10px Inter;letter-spacing:.32em;color:var(--dim);margin-top:6px;padding-left:.32em}
+.boot .bar{width:120px;height:3px;border-radius:2px;background:rgba(255,255,255,.12);margin-top:40px;overflow:hidden}
+.boot .bar i{display:block;width:62%;height:100%;background:var(--holo);box-shadow:0 0 10px #ff2d95}
+.boot .by{position:absolute;bottom:34px;font:10px 'Space Mono';color:var(--mute);letter-spacing:.06em}
+/* lists */
+.srch{flex:none;display:flex;align-items:center;gap:7px;height:32px;border-radius:12px;padding:0 10px;background:rgba(255,255,255,.08);font:12.5px Inter;color:var(--mute);margin-bottom:8px}
+.srch svg{width:15px;height:15px}
+.sec{flex:none;font:600 9.5px Inter;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:8px 4px 2px}
+.listc{flex:none;overflow:hidden;padding:2px 0;border-radius:18px}
+.grp{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;background:linear-gradient(150deg,#ffb35c,#b5562f);font:20px VT323;color:#2a1a12}
+.stk{position:relative;width:38px;height:38px;flex:none}
+.stk .pf{position:absolute;width:26px;height:26px}
+.cnt{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--mag);font:700 10px/18px Inter;text-align:center;box-shadow:0 0 8px rgba(255,45,149,.6)}
+.tm2{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font:10.5px Inter;color:var(--mute);align-self:stretch;padding-top:2px}
+.miss .nm{color:#ff6b86}
+/* keypad */
+.kd{text-align:center;margin:14px 0 6px;font:500 34px 'Space Grotesk';letter-spacing:.08em}
+.kd small{display:block;font:11px Inter;color:var(--cya);letter-spacing:0;margin-top:2px}
+.keys{display:grid;grid-template-columns:repeat(3,64px);gap:12px 18px;justify-content:center;margin-top:12px}
+.key{width:64px;height:64px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.1)}
+.key b{font:500 25px/1 'Space Grotesk'}.key i{font:600 8px Inter;letter-spacing:.18em;color:var(--dim);font-style:normal;margin-top:2px}
+.key.hl{box-shadow:0 0 0 2px #fff,0 0 18px rgba(255,45,149,.6)}
+.seg{display:flex;padding:3px;border-radius:12px;background:rgba(255,255,255,.08);margin-bottom:4px}
+.seg span{flex:1;text-align:center;padding:6px 0;border-radius:9px;font:600 11px Inter;color:var(--dim)}
+.seg span.a{background:rgba(255,255,255,.16);color:#fff}
+/* vortex call */
+.vcall{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;padding:58px 16px 26px;background:radial-gradient(70% 45% at 50% 34%,rgba(0,229,208,.25),transparent 70%),linear-gradient(180deg,#14002b,#05000c)}
+.vcall .vx{width:150px;height:140px;margin:18px 0 6px;filter:drop-shadow(0 0 22px rgba(255,45,149,.5))}
+.vcall .nm{font:700 24px 'Space Grotesk';letter-spacing:.2em}
+.vcall .st{font:600 11px Inter;color:var(--cya);letter-spacing:.06em;margin-top:3px}
+.subt{margin-top:14px;padding:10px 12px;border-radius:14px;font:11.5px/1.45 'Space Mono';color:#ffe0f0;background:rgba(255,45,149,.1);border:1px solid rgba(255,45,149,.35);text-align:left}
+.wave2{display:flex;gap:2.5px;align-items:center;height:30px;margin-top:12px}
+.wave2 i{width:3px;border-radius:2px;background:linear-gradient(180deg,#ff2d95,#00e5d0)}
+.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px 14px;margin-top:auto;margin-bottom:12px}
+.cgrid .cbtn{width:54px;height:54px}.cgrid .cbtn svg{width:22px;height:22px}
+</style></head>
+<body>
+<h2>Vortex Mobile <small>five of the screens · Vortex era · walnut case</small></h2>
+
+<!-- 1 boot -->
+<div class="slot" style="left:40px"><div class="phone case-walnut"><div class="screen" data-nosb data-noind>
+  <div class="boot"><div class="orb"></div><div class="wm holo-t">VORTEX</div><div class="ed">MOBILE · EXPERIMENTAL EDITION</div><div class="bar"><i></i></div><div class="by">M. VEX SYSTEMS · 1989 / 20XX</div></div>
+</div></div></div>
+<div class="cap" style="left:40px"><b>Boot</b><span>Once per session: the portal opens with a short Vortex chord. Later the phone wakes straight to the lock glance.</span></div>
+
+<!-- 2 messages -->
+<div class="slot" style="left:318px"><div class="phone case-walnut"><div class="screen" data-time="16:48">
+  <div class="wp wp-portal"></div>
+  <div class="content">
+    <div class="apphead"><h1>Messages</h1><span class="sp"></span><span class="act" data-ic="edit"></span></div>
+    <div class="srch"><span data-ic="search"></span>Search</div>
+    <div class="listc glass">
+      <div class="row"><span class="grp">YT</span><div class="col"><div class="nm"># Studio</div><div class="sub">Ana: standup in 5!</div></div><div class="tm2">16:40<span class="cnt">3</span></div></div>
+      <div class="row"><span class="pf on" data-p="6" style="width:38px;height:38px"></span><div class="col"><div class="nm">Iara</div><div class="sub" style="color:#fff">lunch at the lounge? 🍜</div></div><div class="tm2">16:47<span class="cnt">1</span></div></div>
+      <div class="row"><span class="pf" data-vx="sideeye" style="width:38px;height:38px;background:#14002b;padding:2px"></span><div class="col"><div class="nm">Vortex</div><div class="sub">You checked your battery 4 times. It's always 100%. Get help.</div></div><div class="tm2">16:20<i class="dot"></i></div></div>
+      <div class="row"><span class="pf on" data-p="1" style="width:38px;height:38px"></span><div class="col"><div class="nm">Bia Demo</div><div class="sub">You: Vortex will take credit for it</div></div><div class="tm2">16:38</div></div>
+      <div class="row"><span class="stk"><span class="pf" data-p="3" style="left:0;top:0"></span><span class="pf" data-p="4" style="left:12px;top:12px"></span></span><div class="col"><div class="nm">Board walls crew</div><div class="sub">Rafa: merged 🎉</div></div><div class="tm2">15:02</div></div>
+      <div class="row"><span class="pf away" data-p="7" style="width:38px;height:38px"></span><div class="col"><div class="nm">Leo</div><div class="sub">📷 Photo</div></div><div class="tm2">Yesterday</div></div>
+    </div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:318px"><b>Messages</b><span>The #Studio group for the space, 1:1s, groups, and Vortex, whose personal lines now arrive as texts.</span></div>
+
+<!-- 3 contacts -->
+<div class="slot" style="left:596px"><div class="phone case-walnut"><div class="screen" data-time="16:48">
+  <div class="wp wp-portal"></div>
+  <div class="content">
+    <div class="apphead"><h1>Contacts</h1><span class="sp"></span><span class="act" data-ic="plus"></span></div>
+    <div class="srch"><span data-ic="search"></span>Search the team</div>
+    <div class="sec">In Yutopia Demo</div>
+    <div class="listc glass">
+      <div class="row"><span class="pf call" data-p="0" style="width:34px;height:34px"></span><div class="col"><div class="nm">Ana Demo</div><div class="sub" style="color:var(--cya)">On a call · Open office</div></div></div>
+      <div class="row"><span class="pf on" data-p="1" style="width:34px;height:34px"></span><div class="col"><div class="nm">Bia Demo</div><div class="sub">Tracking room</div></div></div>
+      <div class="row"><span class="pf on" data-p="6" style="width:34px;height:34px"></span><div class="col"><div class="nm">Iara</div><div class="sub">Lounge</div></div></div>
+    </div>
+    <div class="sec">Elsewhere</div>
+    <div class="listc glass">
+      <div class="row"><span class="pf on" data-p="3" style="width:34px;height:34px"></span><div class="col"><div class="nm">Rafa</div><div class="sub">Yutopia Lab · Game room</div></div></div>
+      <div class="row"><span class="pf" data-p="7" style="width:34px;height:34px;opacity:.7"></span><div class="col"><div class="nm">Leo</div><div class="sub">Offline · seen 2 h ago</div></div></div>
+      <div class="row"><span class="pf" data-vx="smug" style="width:34px;height:34px;background:#14002b;padding:2px"></span><div class="col"><div class="nm">Vortex</div><div class="sub">Somewhere in the walls</div></div></div>
+    </div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:596px"><b>Contacts</b><span>Your team, with where each of them is right now. Anyone in any space can be called or texted, and offline people get the message later.</span></div>
+
+<!-- 4 keypad -->
+<div class="slot" style="left:874px"><div class="phone case-walnut"><div class="screen" data-time="16:49">
+  <div class="wp wp-portal"></div>
+  <div class="content">
+    <div class="seg"><span>Recents</span><span>Favourites</span><span class="a">Keypad</span></div>
+    <div class="kd">1989<small>Some numbers do things.</small></div>
+    <div class="keys">
+      <span class="key"><b>1</b><i>&nbsp;</i></span><span class="key"><b>2</b><i>ABC</i></span><span class="key"><b>3</b><i>DEF</i></span>
+      <span class="key"><b>4</b><i>GHI</i></span><span class="key"><b>5</b><i>JKL</i></span><span class="key"><b>6</b><i>MNO</i></span>
+      <span class="key"><b>7</b><i>PQRS</i></span><span class="key"><b>8</b><i>TUV</i></span><span class="key hl"><b>9</b><i>WXYZ</i></span>
+      <span class="key"><b>*</b><i>&nbsp;</i></span><span class="key"><b>0</b><i>+</i></span><span class="key"><b>#</b><i>&nbsp;</i></span>
+    </div>
+    <div style="display:flex;justify-content:center;margin-top:14px"><span class="cbtn green" data-ic="phone"></span></div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:874px"><b>Phone · Keypad</b><span>Recents with missed calls, Favourites, and a keypad for the lore: a few secret numbers ring somewhere strange.</span></div>
+
+<!-- 5 calling vortex -->
+<div class="slot" style="left:1152px"><div class="phone case-walnut"><div class="screen" data-time="16:50" data-noind>
+  <div class="vcall">
+    <div class="vx" data-vx="malicious"></div>
+    <div class="nm">VORTEX</div><div class="st">00:07 · he picked up. unfortunately.</div>
+    <div class="wave2"><i style="height:8px"></i><i style="height:18px"></i><i style="height:26px"></i><i style="height:12px"></i><i style="height:22px"></i><i style="height:30px"></i><i style="height:16px"></i><i style="height:9px"></i><i style="height:20px"></i><i style="height:27px"></i><i style="height:14px"></i><i style="height:6px"></i><i style="height:18px"></i><i style="height:10px"></i></div>
+    <div class="subt">"You CALLED me? Nobody calls anymore. Unless they're dying. Are you dying? Don't answer that."</div>
+    <div class="cgrid">
+      <div><span class="cbtn" data-ic="micoff"></span><div class="clab">Mute</div></div>
+      <div><span class="cbtn on" data-ic="spk"></span><div class="clab">Speaker</div></div>
+      <div><span class="cbtn" data-ic="chat"></span><div class="clab">Text him</div></div>
+    </div>
+    <span class="cbtn red" data-ic="end"></span>
+  </div>
+</div></div></div>
+<div class="cap" style="left:1152px"><b>Calling Vortex</b><span>He answers in his own Yondra voice (the worn microcassette) with subtitles. Sometimes he won't pick up. Sometimes he calls you back at the worst time.</span></div>
+</body></html>

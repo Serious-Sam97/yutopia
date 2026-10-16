@@ -4,7 +4,6 @@ import {
   areaAt,
   avatarFromSeed,
   CATALOG,
-  type ChatScope,
   type ClientMessages,
   canPlace,
   carried,
@@ -19,7 +18,6 @@ import {
   findPath,
   Grid,
   getMap,
-  HEAR_RADIUS,
   HEARING_HZ,
   hearingGain,
   hostOf,
@@ -28,7 +26,6 @@ import {
   isLegalMove,
   isV2,
   layoutFromMap,
-  MAX_CHAT,
   type MapDef,
   mapFromLayout,
   parseAvatar,
@@ -58,8 +55,6 @@ import { type PresenceEntry, YondraError, yondra } from "./yondra.ts";
 interface ClientData {
   claims: WorldClaims;
   lastPosAt: number;
-  chatBucket: number;
-  chatRefillAt: number;
   avatarAt?: number; // last look change (rate limit)
   hears: Set<string>; // sids this client can hear
   heardByKey: string; // last "heard by" list sent, to skip no-op updates
@@ -79,14 +74,13 @@ export class SpaceRoom extends Room<SpaceState> {
   grid!: Grid;
   spaceId = 0;
   livekitRoom = "";
+  spaceName = ""; // as Yondra calls it (the phone says where someone is)
   private features: Feature[] = [];
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   private removedUntil = new Map<number, number>();
   // the arrival points people picked for themselves (user id → tile centre)
   readonly mySpawns = new Map<number, { x: number; y: number }>();
   private lastPresence = "";
-  // recent chat messages: who received each one and its reactions
-  private chatLog = new Map<string, { audience: Set<string>; reactions: Map<string, Set<number>> }>();
   // features that watch every message before it's handled (build history)
   readonly messageTaps: ((client: SpaceClient, type: string) => void)[] = [];
 
@@ -120,6 +114,7 @@ export class SpaceRoom extends Room<SpaceState> {
     this.autoDispose = true;
 
     const info = config.offline ? null : await yondra.space(this.spaceId);
+    this.spaceName = info?.name ?? `Space ${this.spaceId}`;
     const base = getMap(info?.mapKey ?? "studio");
     const layout = info?.layout && validLayout(info.layout) ? info.layout : null;
     let objects: WorldObjectDef[] = info?.objects ?? base.objects;
@@ -239,8 +234,6 @@ export class SpaceRoom extends Room<SpaceState> {
     client.userData = {
       claims,
       lastPosAt: Date.now(),
-      chatBucket: 5,
-      chatRefillAt: Date.now(),
       hears: new Set(),
       heardByKey: "",
     };
@@ -363,56 +356,6 @@ export class SpaceRoom extends Room<SpaceState> {
       if (!p || now - (ud.avatarAt ?? 0) < 2000) return;
       ud.avatarAt = now;
       p.avatar = JSON.stringify(parseAvatar(m?.avatar));
-    });
-
-    this.on("chat", (client, m) => {
-      const p = this.state.players.get(client.sessionId);
-      const text = String(m.text ?? "")
-        .trim()
-        .slice(0, MAX_CHAT);
-      if (!p || !text || !this.takeChatToken(client)) return;
-      const scope: ChatScope = m.scope === "area" || m.scope === "space" ? m.scope : "nearby";
-      const msg = {
-        id: `${Date.now()}-${client.sessionId}`,
-        from: client.sessionId,
-        fromName: p.name,
-        text,
-        scope,
-        at: Date.now(),
-      };
-      const audience = new Set<string>();
-      for (const c of this.clients) {
-        const q = this.state.players.get(c.sessionId);
-        if (!q) continue;
-        const reach =
-          scope === "space" ||
-          c === client ||
-          (scope === "area" && q.area === p.area) ||
-          (scope === "nearby" && (hearingGain(this.map, q, p) > 0 || Math.hypot(q.x - p.x, q.y - p.y) <= HEAR_RADIUS));
-        if (reach) {
-          this.send(c, "chat", msg);
-          audience.add(c.sessionId);
-        }
-      }
-      // remembered so reactions go back to the same people
-      this.chatLog.set(msg.id, { audience, reactions: new Map() });
-      if (this.chatLog.size > 200) this.chatLog.delete(this.chatLog.keys().next().value as string);
-      for (const f of this.features) f.chat?.(client, p, text, scope);
-    });
-
-    this.on("chat:react", (client, m) => {
-      const p = this.state.players.get(client.sessionId);
-      const entry = this.chatLog.get(String(m.id));
-      if (!p || !entry || !entry.audience.has(client.sessionId) || !EMOTES.includes(m.e)) return;
-      const who = entry.reactions.get(m.e) ?? new Set<number>();
-      if (who.has(p.uid)) who.delete(p.uid);
-      else who.add(p.uid);
-      entry.reactions.set(m.e, who);
-      const reactions = Object.fromEntries(
-        [...entry.reactions].filter(([, s]) => s.size > 0).map(([e, s]) => [e, [...s]]),
-      ) as ServerMessages["chat:react"]["reactions"];
-      for (const c of this.clients)
-        if (entry.audience.has(c.sessionId)) this.send(c, "chat:react", { id: m.id, reactions });
     });
 
     this.on("status", (client, m) => {
@@ -892,16 +835,6 @@ export class SpaceRoom extends Room<SpaceState> {
     }
     this.rebuildGrid();
     this.broadcastMsg("toast", { text: `${p.name} switched the room to "${t.name}".` });
-  }
-
-  private takeChatToken(client: SpaceClient): boolean {
-    const ud = data(client);
-    const now = Date.now();
-    ud.chatBucket = Math.min(5, ud.chatBucket + (now - ud.chatRefillAt) / 2000);
-    ud.chatRefillAt = now;
-    if (ud.chatBucket < 1) return false;
-    ud.chatBucket -= 1;
-    return true;
   }
 
   facing(from: { x: number; y: number }, to: { x: number; y: number }) {

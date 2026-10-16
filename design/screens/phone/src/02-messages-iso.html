@@ -1,0 +1,76 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css"><link rel="stylesheet" href="hud.css">
+<script src="emotes.js"></script><script src="hud.js"></script><script src="phone.js"></script>
+<style>
+.th-h{display:flex;align-items:center;gap:9px;padding:2px 2px 10px;border-bottom:1px solid rgba(255,255,255,.08)}
+.th-h .nm{font:600 14px Inter}.th-h .sub{font:11px Inter;color:var(--cya)}
+.th-h .ib{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--glass);border:1px solid var(--hair)}
+.th-h .ib svg{width:17px;height:17px}
+.msgs{flex:1;display:flex;flex-direction:column;gap:8px;padding:10px 2px 6px;overflow:hidden}
+.day{font:600 10px Inter;letter-spacing:.1em;color:var(--mute);text-align:center;text-transform:uppercase}
+.photo{flex:none;width:170px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);align-self:flex-start;border-bottom-left-radius:6px;background:rgba(255,255,255,.08)}
+.photo .pic{height:96px;background:url(b-fp.jpg) 55% 62%/520px auto;position:relative}
+.photo .pic::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,170,90,.18),rgba(80,20,60,.18));mix-blend-mode:overlay}
+.photo .cap{font:12.5px Inter;padding:7px 10px}
+.typing{align-self:flex-start;display:flex;gap:4px;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.1)}
+.typing i{width:6px;height:6px;border-radius:50%;background:#d9d0f5;opacity:.5}.typing i:nth-child(2){opacity:.8}.typing i:nth-child(3){opacity:1}
+.comp{display:flex;align-items:center;gap:7px;padding-top:8px}
+.comp .pl{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--glass);border:1px solid var(--hair)}
+.comp .pl svg{width:17px;height:17px}
+.comp .fld{flex:1;height:34px;border-radius:17px;border:1px solid var(--hair);background:rgba(255,255,255,.06);font:13px/32px Inter;color:#fff;padding:0 12px}
+.comp .fld::after{content:"";display:inline-block;width:1.5px;height:15px;background:var(--mag);vertical-align:-3px;margin-left:1px;box-shadow:0 0 6px var(--mag)}
+.comp .sd{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--holo);box-shadow:0 0 14px rgba(255,45,149,.5)}
+.comp .sd svg{width:17px;height:17px}
+.tick{color:var(--cya)}
+/* the peek */
+.peekbox{position:absolute;left:250px;top:470px;width:340px;height:200px;overflow:hidden;border-radius:14px;z-index:25;border:2px dashed rgba(255,233,168,.8);background:url(c-iso.jpg) -980px -560px/1440px 900px}
+.peekbox .phone{transform:scale(.92);transform-origin:top center;left:30px;top:56px}
+.banner{position:absolute;left:10px;right:10px;top:40px;padding:10px 11px;border-radius:18px;display:flex;gap:9px;align-items:center;z-index:9;background:rgba(36,14,64,.82);border:1px solid rgba(255,255,255,.16);box-shadow:0 8px 24px rgba(0,0,0,.45);backdrop-filter:blur(12px)}
+.banner .nm{font:600 12.5px Inter}.banner .sub{font:12px Inter;color:#e7e0ff}.banner .ap{font:600 9.5px Inter;letter-spacing:.08em;color:var(--mute);text-transform:uppercase;margin-left:auto;align-self:flex-start}
+</style></head>
+<body>
+<div class="bg" style="background-image:url(c-iso.jpg)"></div>
+<div id="hud" data-room="Open office" data-badge="" data-lit></div>
+<span class="mini-ph" style="position:absolute;left:712px;top:398px;width:6px;height:10px;border-radius:1.5px;background:#5b3a26;box-shadow:0 0 0 .8px #000,0 0 6px rgba(255,45,149,.9)"></span>
+
+<div class="phone case-walnut" style="right:58px;top:170px">
+  <div class="screen" data-time="16:44">
+    <div class="wp wp-portal"></div>
+    <div class="content" style="padding-top:42px">
+      <div class="th-h">
+        <span class="back" data-ic="back" style="width:24px;height:24px;display:grid;place-items:center"></span>
+        <span class="pf on" data-p="1" style="width:36px;height:36px"></span>
+        <div style="flex:1;min-width:0"><div class="nm">Bia Demo</div><div class="sub">Tracking room · nearby</div></div>
+        <span class="ib" data-ic="phone"></span><span class="ib" data-ic="video"></span>
+      </div>
+      <div class="msgs">
+        <div class="day">Today</div>
+        <div class="bub in">board walls PR is up — anyone free before standup?</div>
+        <div class="bub out">on it. pairing in the war room?</div>
+        <div class="meta">16:33 <span class="tick">✓✓</span> read</div>
+        <div class="photo"><div class="pic"></div><div class="cap">look who finally fixed the floor lamp</div></div>
+        <span class="react" style="margin-left:8px"><img data-e="heart">2 <img data-e="laugh">1</span>
+        <div class="bub out">Vortex will take credit for it</div>
+        <div class="typing"><i></i><i></i><i></i></div>
+      </div>
+      <div class="comp"><span class="pl" data-ic="cam"></span><span class="fld">omw</span><span class="sd" data-ic="send"></span></div>
+    </div>
+  </div>
+</div>
+<div class="hint shell" style="right:58px;top:118px"><span class="kc">P</span><b>put away</b> · <span class="kc">⏎</span><b>send</b> · <span class="kc">⌫</span><b>back</b> · <span class="kc">1–8</span><b>react</b></div>
+
+<!-- the peek, when the phone is away -->
+<div class="peekbox">
+  <div class="phone case-walnut"><div class="screen" data-time="16:47" data-noind>
+    <div class="wp wp-portal"></div>
+    <div class="banner"><span class="pf on" data-p="6" style="width:34px;height:34px"></span><div style="min-width:0"><div class="nm">Iara</div><div class="sub">lunch at the lounge? 🍜</div></div><span class="ap">now</span></div>
+  </div></div>
+</div>
+<div class="note" style="left:250px;top:684px;max-width:340px"><span class="n">3</span><b>With the phone away</b>, a text makes it peek up bottom-right with a banner and the text tone. P (or a click) opens that thread. It hides again after 4 s. In Sleep mode there's no sound, only the badge.</div>
+
+<div class="note" style="left:842px;top:190px;max-width:250px"><span class="n">1</span><b>Messages replace the chat.</b> 1:1 and groups, plus a <b>#Studio</b> group for the whole space. Anyone on your team, online or not; saved in Yondra. Photos, the 8 drawn emotes as reactions, typing…, read ticks.</div>
+<div class="note" style="left:842px;top:420px;max-width:250px"><span class="n">2</span><b>Call or video</b> straight from the thread. The line under the name shows where they are right now (room, on a call, offline).</div>
+<div class="note" style="left:842px;top:560px;max-width:250px"><span class="n">4</span>Typing in the phone takes the keyboard. <b>Esc</b> or <b>⌫</b> on an empty line goes back to walking.</div>
+</body></html>

@@ -18,3 +18,4 @@ import "./media.ts";
 import "./arrival.ts";
 import "./pets.ts";
 import "./computer.ts";
+import "./phone.ts";

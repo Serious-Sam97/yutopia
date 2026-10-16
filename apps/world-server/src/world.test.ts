@@ -78,16 +78,6 @@ test("hearing: neighbours hear each other, far away people don't", async () => {
   assert.ok(b.sessionId);
 });
 
-test("chat reaches people nearby and is rate-limited", async () => {
-  const a = rooms[0];
-  const b = rooms[1];
-  const got: string[] = [];
-  b.onMessage("chat", (m) => got.push(m.text));
-  for (let i = 0; i < 8; i++) a.send("chat", { text: `hi ${i}`, scope: "nearby" });
-  await sleep(300);
-  assert.equal(got.length, 5, "burst of 5 then throttled");
-});
-
 test("a new look reaches everyone, validated", async () => {
   const [a, b] = rooms;
   const look = { ...JSON.parse(me(a).avatar || "{}"), hair: "afro", style: "ligne", topColor: "#123456" };

@@ -1,6 +1,5 @@
 "use client";
 
-import type { Emote } from "@yutopia/shared";
 import type { BattleEvent, Needs, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
 import { useRef, useSyncExternalStore } from "react";
 import type { BoardSummary, MemberStatus, Setup } from "@/lib/api";
@@ -27,19 +26,18 @@ export interface Person {
   y: number;
 }
 
-export interface ChatMsg {
-  id: string;
-  from: string;
-  fromName: string;
-  text: string;
-  scope: "nearby" | "area" | "space";
-  at: number;
-  mine: boolean;
-  vortex?: boolean;
-  reactions?: Partial<Record<Emote, number[]>>; // emote → who reacted (user ids)
-}
+export type SideTab = "people" | "room";
 
-export type SideTab = "chat" | "people" | "room";
+// The phone (world/phone, docs/plan/21-cellphone.md) as the rest of the HUD
+// sees it; the phone's own screens keep their state in its chunk (phone/store.ts).
+export interface PhoneHud {
+  open: boolean; // out of the pocket, its screen up
+  loaded: boolean; // its chunk is in
+  badge: number; // unread texts + missed calls
+  ringing: boolean; // a call coming in
+  onCall: boolean; // a call going on
+  camera: boolean; // the viewfinder is up (the HUD steps aside)
+}
 
 export type PanelKind =
   | "board"
@@ -214,9 +212,8 @@ export interface HudState {
   canBuild: boolean;
   me: Person | null;
   people: Person[];
-  chat: ChatMsg[];
   side: SideTab | null; // the right-hand panel and its tab
-  chatUnread: number;
+  phone: PhoneHud;
   heardBy: number[]; // user ids who can hear me right now
   prompt: { objectId: string; kind: string; label: string } | null;
   held: { kind: string; at: number } | null; // what I carry (a mug, a ball…) and since when (server ms)
@@ -313,9 +310,8 @@ const initial: HudState = {
   canBuild: false,
   me: null,
   people: [],
-  chat: [],
   side: null,
-  chatUnread: 0,
+  phone: { open: false, loaded: false, badge: 0, ringing: false, onCall: false, camera: false },
   heardBy: [],
   prompt: null,
   held: null,

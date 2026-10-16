@@ -2,7 +2,7 @@
 
 import type { AvatarLayers, Emote, Want } from "@yutopia/shared";
 import { ImageSource, Texture } from "pixi.js";
-import type { Face, PartArt } from "./avatar-rig";
+import type { Box, Face, PartArt } from "./avatar-rig";
 import type { Rim, View } from "./avatar-svg";
 import { emoteSvg } from "./emotes";
 import { HELD_BOX, heldSvg } from "./held";
@@ -85,6 +85,13 @@ export function rigPartTexture(key: string, part: PartArt, face?: Face, svg?: st
 // What someone carries (art/held.ts), at the rig's density.
 export function heldTexture(kind: string, color: string, level: number): Texture | null {
   return get(`h|${kind}|${color}|${level}`, () => svgDoc(heldSvg(kind, color, level), HELD_BOX, RIG_PX));
+}
+
+// A phone in the hand (art/held.ts phoneSvg): its case colours and the face seen.
+// Drawn at twice the rig's density (it's small and it's the point).
+// (its drawing comes with the people chunk: `svg` builds it)
+export function phoneTexture(key: string, svg: () => string, box: Box): Texture | null {
+  return get(`ph|${key}`, () => svgDoc(svg(), box, RIG_PX * 2));
 }
 
 // Vortex exactly as Yondra draws him (vortexSvg), one texture per mood.

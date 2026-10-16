@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css"><link rel="stylesheet" href="hud.css">
+<script src="emotes.js"></script><script src="hud.js"></script><script src="phone.js"></script>
+<style>
+.zoom{position:absolute;left:452px;top:330px;width:190px;height:190px;border-radius:50%;overflow:hidden;border:3px solid #ffe9a8;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:30;background:url(a1.jpg) -1251px -795px/2880px 1800px}
+.mini-ph{position:absolute;width:13px;height:24px;border-radius:3px;background:#2b2a26;box-shadow:0 0 0 1px #000;transform:rotate(-14deg)}
+.mini-ph::after{content:"";position:absolute;inset:1.5px;border-radius:2px;background:linear-gradient(160deg,#ff2d95,#7a3bdc 60%,#00e5d0);box-shadow:0 0 8px rgba(255,45,149,.8)}
+.widget{padding:14px 16px 12px;margin:4px 0 18px}
+.widget .t{font:600 50px/1 'Space Grotesk';letter-spacing:-.03em}
+.widget .d{font:500 12.5px Inter;color:var(--dim);margin-top:4px}
+.widget .w{display:flex;align-items:center;gap:6px;margin-top:10px;font:500 11.5px Inter;color:#efe9ff}
+.widget .w svg{width:14px;height:14px;color:var(--cya)}
+.dots{display:flex;gap:6px;justify-content:center;margin-top:auto;margin-bottom:12px}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.35)}.dots i.a{background:#fff;width:16px;border-radius:3px}
+.sel{position:absolute;inset:-6px;border-radius:24px;border:2px solid #fff;box-shadow:0 0 0 4px rgba(255,45,149,.45),0 0 22px rgba(255,45,149,.6)}
+</style></head>
+<body>
+<div class="bg" style="background-image:url(a1.jpg)"></div>
+<div id="hud" data-room="Open office" data-badge="3" data-lit></div>
+
+<!-- the phone in the hand (stand-in: the real pose comes from the rig in P1) -->
+<span class="mini-ph" style="left:664px;top:478px"></span>
+<div class="zoom"><span class="mini-ph" style="left:68px;top:110px;width:26px;height:48px;border-radius:6px"></span></div>
+<div class="note" style="left:200px;top:540px;max-width:270px"><span class="n">1</span><b>Everyone sees it.</b> Your character takes the phone out and looks down at it, screen lit in the case colour you picked. At the ear on a call, held up for photos. Drawn from the real rig in iso and 3D (P1). Here it's pasted on.</div>
+<div class="lead" data-from="470,540" data-to="560,480"></div>
+
+<!-- the phone UI: slides up bottom-right, you keep walking -->
+<div class="phone case-walnut" style="right:58px;top:170px">
+  <div class="screen" data-time="16:42">
+    <div class="wp wp-portal"></div>
+    <div class="content">
+      <div class="widget glass">
+        <div class="t disp">16:42</div>
+        <div class="d">Friday, 16 October</div>
+        <div class="w"><span data-ic="pin"></span>Open office · Bia, Iara and 4 more nearby</div>
+      </div>
+      <div class="grid">
+        <div class="app"><span class="tile t-phone" data-ic="phone"></span>Phone<span class="badge" style="right:14px">1</span></div>
+        <div class="app"><span class="tile t-msg"><span data-ic="msg"></span><span class="sel"></span></span>Messages<span class="badge" style="right:14px">2</span></div>
+        <div class="app"><span class="tile t-cam" data-ic="cam"></span>Camera</div>
+        <div class="app"><span class="tile t-gal" data-ic="gal"></span>Gallery</div>
+        <div class="app"><span class="tile t-con" data-ic="con"></span>Contacts</div>
+        <div class="app"><span class="tile t-vx"><span class="vx" data-vx="smug"></span></span>Vortex</div>
+        <div class="app"><span class="tile t-store" data-ic="store"></span>Vortex Store</div>
+        <div class="app"><span class="tile t-maps" data-ic="maps"></span>Maps<span class="soon">SOON</span></div>
+        <div class="app"><span class="tile t-set" data-ic="set"></span>Settings</div>
+      </div>
+      <div class="dots"><i class="a"></i><i></i></div>
+    </div>
+  </div>
+</div>
+<div class="hint shell" style="right:58px;top:118px"><span class="kc">P</span><b>put away</b> · <span class="kc">↑↓←→</span><b>choose</b> · <span class="kc">⏎</span><b>open</b> · <span class="kc">⌫</span><b>back</b></div>
+
+<div class="note" style="left:850px;top:250px;max-width:250px"><span class="n">2</span><b>P or the phone key in the dock</b> (where Chat was, with its unread badge). The phone slides up bottom-right, GTA-style. <b>WASD keeps walking</b> and the camera keeps following you.</div>
+<div class="lead" data-from="1100,300" data-to="1132,300"></div>
+<div class="note" style="left:850px;top:420px;max-width:250px"><span class="n">3</span><b>Vortex Mobile.</b> The Vortex era of VortexOS on a phone: holographic glass, the portal orb, a 3×3 grid like GTA's. Arrow keys move the highlight, Enter opens. The mouse and a touch screen work too.</div>
+<div class="note" style="left:850px;top:600px;max-width:250px"><span class="n">4</span><b>Case colour</b> (walnut here) is yours, and the same phone is in your hand in the world. Maps is a placeholder until GPS.</div>
+<div class="lead" data-from="1100,640" data-to="1140,700"></div>
+<div class="lead" data-from="640,790" data-to="672,826"></div>
+<div class="note" style="left:520px;top:752px;max-width:240px;padding:5px 9px;font-size:12px">The Chat button is gone. <b>Phone</b> takes its place.</div>
+</body></html>

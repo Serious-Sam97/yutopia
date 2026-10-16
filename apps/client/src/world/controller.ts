@@ -3,14 +3,12 @@
 import {
   ANIM,
   areaAt,
-  type ChatScope,
   type ClientMessages,
   CONTACT,
   dirFromDelta,
   doorCentre,
   doorRoom,
   EMOTES,
-  type Emote,
   entry,
   FLOORS,
   findPath,
@@ -70,6 +68,7 @@ import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import type { OsRoom } from "./os/room";
 import type { PetView } from "./petview";
+import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
 import { radio, sound } from "./sound";
 import { type ActTarget, type BattleView, hud, type Person, type PetInfo, toast } from "./store";
@@ -346,6 +345,10 @@ export class WorldController {
       this.wireRoom(room);
       hud.set({ phase: "ready" });
       void this.syncLook();
+      // the phone: in my pocket from the start (texts and calls reach it)
+      setTimeout(() => {
+        if (!this.stopped) void this.ensurePhone();
+      }, 1500);
     } catch (e) {
       if (reconnectToken) throw e;
       console.warn("[world] join failed", e);
@@ -427,7 +430,6 @@ export class WorldController {
         lastSay = n.sayAt;
         if (Math.hypot(n.x - this.me.x, n.y - this.me.y) > 8) return;
         this.say(`npc:${id}`, n.say, 7000);
-        this.vortexLog(n.say);
       });
     });
     $(room.state).npcs.onRemove((_n: S, id: string) => engine.removeAvatar(`npc:${id}`));
@@ -525,18 +527,6 @@ export class WorldController {
       const heardBy = (m.heardBy ?? []).map(Number).filter((u) => u !== this.myUid());
       if (heardBy.join() !== hud.get().heardBy.join()) hud.set({ heardBy });
     });
-    room.onMessage("chat:react", (m: ServerMessages["chat:react"]) =>
-      hud.set((s) => ({ chat: s.chat.map((c) => (c.id === m.id ? { ...c, reactions: m.reactions } : c)) })),
-    );
-    room.onMessage("chat", (m: ServerMessages["chat"]) => {
-      const mine = m.from === room.sessionId;
-      hud.set((s) => ({
-        chat: [...s.chat.slice(-199), { ...m, mine }],
-        chatUnread: s.side === "chat" || mine ? s.chatUnread : s.chatUnread + 1,
-      }));
-      this.say(m.from, m.text);
-      if (!mine) mixer.blip("pop");
-    });
     room.onMessage("knock", (m: ServerMessages["knock"]) => {
       mixer.blip("knock");
       hud.set((s) => ({ knocks: [...s.knocks.filter((k) => k.from !== m.from), { ...m, at: Date.now() }] }));
@@ -584,9 +574,23 @@ export class WorldController {
       hud.set({ challenge: { battle: m.battle, fromName: m.fromName, pet: m.pet, mine: m.mine } });
     });
     room.onMessage("pet:event", (m: ServerMessages["pet:event"]) => this.petEvent(m));
+    // calls (world/phone/call.ts): the phone's chunk takes them
+    room.onMessage(
+      "call:ring",
+      (m: ServerMessages["call:ring"]) => void this.ensurePhone().then((ph) => ph?.calls.onRing(m)),
+    );
+    room.onMessage(
+      "call:update",
+      (m: ServerMessages["call:update"]) => void this.ensurePhone().then((ph) => ph?.calls.onUpdate(m)),
+    );
+    room.onMessage(
+      "call:join",
+      (m: ServerMessages["call:join"]) => void this.ensurePhone().then((ph) => ph?.calls.onJoin(m)),
+    );
     room.onMessage("vortex:say", (m: ServerMessages["vortex:say"]) => {
       this.say("npc:vortex", m.text, 7000);
-      this.vortexLog(m.text);
+      // his personal lines also land in his thread on the phone
+      void this.ensurePhone().then((ph) => ph?.vortexLine(m.text));
       for (const f of this.vortexListeners) f(m.text);
     });
     room.onMessage("wb:scene", (m: ServerMessages["wb:scene"]) => {
@@ -835,6 +839,135 @@ export class WorldController {
     return this.osLoading;
   }
 
+  // ── the phone (world/phone, Vortex Mobile): its own chunk, loaded soon after
+  // arriving (texts and calls reach it while it's in the pocket) or when it comes out ──
+  phone: Phone | null = null;
+  private phoneLoading: Promise<Phone | null> | null = null;
+  ensurePhone(): Promise<Phone | null> {
+    this.phoneLoading ??= import("./phone").then((m) => {
+      if (this.stopped) return null;
+      this.phone = new m.Phone(this);
+      hud.set((s) => ({ phone: { ...s.phone, loaded: true } }));
+      return this.phone;
+    });
+    return this.phoneLoading;
+  }
+  async togglePhone(open = !hud.get().phone.open) {
+    (await this.ensurePhone())?.setOpen(open);
+  }
+
+  // ── the phone's camera (world/phone/camera.ts): the view becomes the viewfinder ──
+  // 3D: Photo is your eyes (first person, the lens zooms), Selfie a camera at
+  // arm's length in front of you (Q / E walk it round you). Iso: Photo is the
+  // view as it is, Selfie leans in on you (you turn to face it).
+  private photo: {
+    mode: "photo" | "selfie";
+    angle: number; // the selfie camera, round me (world radians)
+    tilt: number;
+    zoom: number;
+    was: { cam: CamMode | null; isoZoom: number; yaw: number; pitch: number };
+  } | null = null;
+  photoMode(mode: "photo" | "selfie" | null) {
+    const tp = this.tp;
+    const e = this.engine;
+    if (!mode) {
+      const was = this.photo?.was;
+      this.photo = null;
+      if (e) {
+        e.tagsHidden = false;
+        e.pinCamera(null);
+        if (was) e.setZoom(was.isoZoom);
+      }
+      if (tp) {
+        tp.lens(null);
+        tp.setMode(this.camWanted());
+        if (was) {
+          tp.yaw = was.yaw;
+          tp.pitch = was.pitch;
+        }
+      }
+      return;
+    }
+    const was = this.photo?.was ?? {
+      cam: tp ? (this.tp?.mode ?? null) : null,
+      isoZoom: e?.getZoom() ?? 1,
+      yaw: tp?.yaw ?? 0,
+      pitch: tp?.pitch ?? 0,
+    };
+    this.photo = { mode, angle: this.meAngle, tilt: 0, zoom: 1, was };
+    tp?.setLook(false);
+    if (e) e.tagsHidden = true;
+    if (tp) {
+      tp.lens(mode === "photo" ? 1 : null);
+      if (mode === "photo") {
+        tp.setMode("first");
+        tp.yaw = this.meAngle;
+        tp.pitch = 0.04;
+      } else tp.setMode("chase");
+    } else if (e) {
+      if (mode === "selfie") {
+        const z = Math.min(5.2, was.isoZoom * 2.4);
+        e.pinCamera({ x: this.me.x, y: this.me.y, zoom: z, ease: true, z: 34, zoomMax: z });
+      } else {
+        e.pinCamera(null);
+        e.setZoom(was.isoZoom);
+      }
+    }
+  }
+  photoZoom(z: number) {
+    if (!this.photo) return;
+    this.photo.zoom = z;
+    if (this.tp) this.tp.lens(this.photo.mode === "photo" ? z : null);
+    else {
+      const base = this.photo.was.isoZoom * (this.photo.mode === "selfie" ? 2.4 : 1);
+      if (this.photo.mode === "selfie")
+        this.engine?.pinCamera({ x: this.me.x, y: this.me.y, zoom: base * z, ease: true, z: 34, zoomMax: base * z });
+      else this.engine?.setZoom(base * z);
+    }
+  }
+  photoTurn(dir: number) {
+    if (!this.photo) return;
+    if (this.photo.mode === "selfie") this.photo.angle += dir * 0.22;
+    else if (this.tp) this.tp.yaw += dir * 0.09;
+  }
+  photoTilt(dir: number) {
+    if (!this.photo) return;
+    if (this.photo.mode === "selfie") this.photo.tilt = Math.max(-0.4, Math.min(0.5, this.photo.tilt + dir * 0.08));
+    else if (this.tp) this.tp.pitch = Math.max(-0.6, Math.min(0.8, this.tp.pitch + dir * 0.05));
+  }
+  // the selfie camera in 3D (null otherwise): at arm's length, a little above
+  private photoCam(): ThirdPersonView["gameCam"] {
+    const p = this.photo;
+    if (!p || p.mode !== "selfie" || !this.tp) return null;
+    const a = p.angle;
+    const r = 1.35 / Math.max(1, p.zoom * 0.8);
+    // the billboards face back along the camera's yaw: point it at me
+    this.tp.yaw = a + Math.PI;
+    return {
+      eye: [this.me.x + Math.cos(a) * r, this.me.y + Math.sin(a) * r, 1.78 + p.tilt],
+      look: [this.me.x, this.me.y, 1.42 + p.tilt * 0.4],
+      showMe: true,
+      fov: 56,
+    };
+  }
+  snapshot(): HTMLCanvasElement | null {
+    return this.tp ? this.tp.snapshot() : (this.engine?.snapshot() ?? null);
+  }
+  // a selfie in iso: the box round me on the canvas (px), for the crop
+  selfieFrame(): { x: number; y: number; w: number; h: number } | null {
+    if (this.tp || !this.engine) return null;
+    const dpr = this.engine.app.renderer.resolution;
+    const feet = this.engine.worldToClient(this.me.x, this.me.y, 0);
+    const head = this.engine.worldToClient(this.me.x, this.me.y, 110);
+    const r = this.engine.app.canvas.getBoundingClientRect();
+    const h = (feet.y - head.y) * 2.1;
+    return { x: (feet.x - r.left - h * 0.4) * dpr, y: (head.y - r.top - h * 0.25) * dpr, w: h * 0.8 * dpr, h: h * dpr };
+  }
+  flashPerson(sid: string) {
+    this.engine?.flash(sid);
+    this.tp?.flash(sid);
+  }
+
   // ── slot-car tracks: their own chunk (world/slots.ts), loaded once a track is here ──
   slots: SlotTracks | null = null;
   private slotsLoading: Promise<void> | null = null;
@@ -1067,11 +1200,11 @@ export class WorldController {
       tp.setLiveFrom({ engine, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
       tp.setTables(this.tables?.scene3d() ?? null);
-      tp.gameCam = this.tables?.gameCam() ?? null;
+      tp.gameCam = this.photoCam() ?? this.tables?.gameCam() ?? null;
       tp.setCable(this.cableEnds());
       tp.setGames(this.games?.scene3d() ?? null);
       // (a hidden tab: nothing to draw for)
-      tp.tagsHidden = !!hud.get().panel.kind;
+      tp.tagsHidden = !!hud.get().panel.kind || !!this.photo;
       if (!document.hidden) tp.frame(dt, bodies, localSid);
     } else if (!document.hidden) engine.render();
     for (const cb of this.hudFrames) cb();
@@ -1208,6 +1341,12 @@ export class WorldController {
         this.me.d = [1, 3, 5, 7][seat.rot % 4]; // away from the seat's back (server `seatFacing`)
       }
     } else this.me.a = ANIM.idle;
+    // a selfie: I face the camera (it's in front of me)
+    if (this.photo?.mode === "selfie" && !moved) {
+      const a = this.tp ? this.photo.angle : Math.atan2(1, 1);
+      this.me.d = dirFromDelta(Math.cos(a), Math.sin(a), this.me.d as 0);
+      this.meAngle = a;
+    }
     if (first && this.tp) {
       // first person: I face where I look. Turned some other way (a seat,
       // someone high-fiving me): the view turns there.
@@ -1306,7 +1445,7 @@ export class WorldController {
 
   // Mouse look (Z, 3D only): the pointer locked, the mouse turns the camera.
   // It lets go by itself when something wants the pointer: a menu, a panel,
-  // build mode, a side panel opening, chat.
+  // build mode, a side panel opening, the phone.
   private aimId: string | null = null; // the usable thing under the crosshair
   private lookWas = { menu: false, panel: false, build: false, side: null as string | null, pick: false };
   private toggleLook() {
@@ -1890,14 +2029,6 @@ export class WorldController {
     this.send("status", { status });
   }
 
-  chat(text: string, scope: ChatScope) {
-    this.send("chat", { text, scope });
-  }
-
-  react(id: string, e: Emote) {
-    this.send("chat:react", { id, e });
-  }
-
   emote(i: number) {
     const e = EMOTES[i];
     if (e) this.send("emote", { e });
@@ -2012,25 +2143,6 @@ export class WorldController {
     return () => {
       this.vortexListeners.delete(fn);
     };
-  }
-
-  private vortexLog(text: string) {
-    hud.set((s) => ({
-      chat: [
-        ...s.chat.slice(-199),
-        {
-          id: `vx-${Date.now()}`,
-          from: "vortex",
-          fromName: "VORTEX",
-          text,
-          scope: "nearby",
-          at: Date.now(),
-          mine: false,
-          vortex: true,
-        },
-      ],
-      chatUnread: s.side === "chat" ? s.chatUnread : s.chatUnread + 1,
-    }));
   }
 
   // ── Yondra sync ──────────────────────────────────────────────────────────
@@ -2230,6 +2342,8 @@ export class WorldController {
   // chase camera while build mode is on: placing things from inside your
   // head is awkward)
   private camWanted(): CamMode {
+    // the phone's camera: Photo is my eyes, Selfie a camera out in front of me
+    if (this.photo) return this.photo.mode === "photo" ? "first" : "chase";
     if (prefs().view === "1p") return hud.get().build.on ? "chase" : "first";
     return prefs().cam3p;
   }
@@ -2368,7 +2482,7 @@ export class WorldController {
     return { x: o.x - 0.08, y: o.y - 0.08, w: w + 0.16, h: h + 0.16 };
   }
 
-  // A chat bubble over someone, in both views (switching keeps it).
+  // A speech bubble over someone (Vortex, a pet), in both views (switching keeps it).
   private say(id: string, text: string, ms?: number) {
     this.engine?.say(id, text, ms);
     this.tp?.say(id, text, ms);
@@ -2579,6 +2693,11 @@ export class WorldController {
       e.preventDefault();
       return this.dropCable();
     }
+    // the phone: while it's out it takes the arrows, Enter, Backspace and Esc (WASD still walks)
+    if (hud.get().phone.open && !hud.get().panel.kind && !hud.get().build.on && this.phone?.key(e)) {
+      e.preventDefault();
+      return;
+    }
     if (hud.get().panel.kind && e.key !== "Escape") return;
     const key = e.key.toLowerCase();
     if (hud.get().build.on && (e.metaKey || e.ctrlKey) && key === "d") {
@@ -2610,11 +2729,8 @@ export class WorldController {
     else if (key === "t") setPrefs({ view: prefs().view === "iso" ? prefs().last3d : "iso" });
     else if (key === "c") this.swapCamera();
     else if (key === "z") this.toggleLook();
-    else if (key === "enter") {
-      e.preventDefault();
-      this.tp?.setLook(false);
-      hud.set({ side: "chat", chatUnread: 0 });
-    } else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
+    else if (key === "p" && !hud.get().build.on) void this.togglePhone();
+    else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
     else if ((key === "+" || key === "=") && this.tp) this.tp.zoomBy(1 / 1.15);
     else if (key === "-" && this.tp) this.tp.zoomBy(1.15);
     else if (key === "+" || key === "=") this.engine?.setZoom((this.engine?.getZoom() ?? 1) * 1.15);
@@ -2668,6 +2784,10 @@ export class WorldController {
       act: p.act,
       actAt: p.actAt,
       actWith: p.actWith,
+      phone: p.phone,
+      phoneCase: p.phoneCase,
+      phonePose: p.phonePose,
+      ringing: p.ringing,
     };
   }
 

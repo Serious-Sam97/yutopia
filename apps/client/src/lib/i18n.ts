@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import type { PetKey } from "./i18n-pets";
+import type { PhoneKey } from "./i18n-phone";
 
 // Interface text in EN and PT-BR, following the browser unless picked in
 // settings (same convention as Yondra's Vortex rack). Vortex's lines stay English.
@@ -111,7 +112,7 @@ const D = {
   mic: ["Mic", "Microfone"],
   cam: ["Camera", "Câmera"],
   screen: ["Share screen", "Compartilhar tela"],
-  chat: ["Chat", "Chat"],
+  phone: ["Phone", "Celular"],
   people: ["People", "Pessoas"],
   emote: ["Emote", "Reação"],
   settings: ["Settings", "Ajustes"],
@@ -121,12 +122,6 @@ const D = {
   status_away: ["Away", "Ausente"],
   status_dnd: ["Focus (do not disturb)", "Foco (não perturbe)"],
   nearby: ["Nearby", "Por perto"],
-  area: ["This room", "Esta sala"],
-  space: ["Everyone", "Todos"],
-  sayNearby: ["Say something to people nearby…", "Diga algo para quem está por perto…"],
-  sayArea: ["Say something to this room…", "Diga algo para esta sala…"],
-  saySpace: ["Say something to everyone…", "Diga algo para todos…"],
-  noMessages: ["Quiet in here.", "Silêncio por aqui."],
   goTo: ["Go to", "Ir até"],
   myDesk: ["My desk", "Minha mesa"],
   follow: ["Follow", "Seguir"],
@@ -210,8 +205,8 @@ const D = {
   spatialAudio: ["Spatial audio", "Áudio espacial"],
   controls: ["Controls", "Controles"],
   controlsHelp: [
-    "WASD / arrows to walk · click to walk there · Shift to run · X to interact · Enter to chat · 1–8 emotes · M mic · V camera · T 3D · C third / first person · Z mouse look (3D) · Esc closes",
-    "WASD / setas para andar · clique para ir até lá · Shift para correr · X para interagir · Enter para o chat · 1–8 reações · M microfone · V câmera · T 3D · C terceira / primeira pessoa · Z olhar com o mouse (3D) · Esc fecha",
+    "WASD / arrows to walk · click to walk there · Shift to run · X to interact · P phone · 1–8 emotes · M mic · V camera · T 3D · C third / first person · Z mouse look (3D) · Esc closes",
+    "WASD / setas para andar · clique para ir até lá · Shift para correr · X para interagir · P celular · 1–8 reações · M microfone · V câmera · T 3D · C terceira / primeira pessoa · Z olhar com o mouse (3D) · Esc fecha",
   ],
   micBlocked: ["Microphone blocked — allow it in the browser.", "Microfone bloqueado — libere no navegador."],
   camBlocked: ["Camera blocked — allow it in the browser.", "Câmera bloqueada — libere no navegador."],
@@ -219,8 +214,8 @@ const D = {
   camFailed: ["Couldn't turn the camera on", "Não deu pra ligar a câmera"],
   avNotReady: ["Voice is still connecting…", "A voz ainda está conectando…"],
   avOffline: [
-    "Voice/video server unreachable — you can still walk and chat.",
-    "Servidor de voz/vídeo fora do ar — dá para andar e conversar mesmo assim.",
+    "Voice/video server unreachable — you can still walk around and send texts.",
+    "Servidor de voz/vídeo fora do ar — dá para andar e mandar mensagens mesmo assim.",
   ],
   inYutopia: ["in Yutopia", "no Yutopia"],
   minimap: ["Map", "Mapa"],
@@ -566,8 +561,6 @@ const D = {
   kWalk: ["Walk", "Andar"],
   room: ["Room", "Sala"],
   status: ["Status", "Status"],
-  send: ["Send", "Enviar"],
-  react: ["React", "Reagir"],
   connection: ["Connection", "Conexão"],
   and: ["and", "e"],
   nOthers: ["{n} others", "mais {n}"],
@@ -580,7 +573,6 @@ const D = {
   earMore: ["Walk closer to talk to more people.", "Chegue mais perto para falar com mais gente."],
   earWalk: ["Walk up to someone to talk.", "Chegue perto de alguém para conversar."],
   earPrivate: ["In {room}, everyone inside hears everyone.", "Em {room}, todos lá dentro se ouvem."],
-  sayTo: ["Say something to {who}…", "Diga algo para {who}…"],
   hearsYou: ["hears you", "ouve você"],
   roomOpen: ["Open room: people near you hear you", "Sala aberta: quem está perto ouve você"],
   roomPrivate: [
@@ -689,7 +681,7 @@ const D = {
   catPets: ["Pets", "Pets"],
 } as const;
 
-export type Key = keyof typeof D | PetKey;
+export type Key = keyof typeof D | PetKey | PhoneKey;
 
 // Strings that come with a lazy chunk (the pets'): added once it loads; until
 // then a key reads as itself. `tag` names the chunk (kept for the bundle budget).

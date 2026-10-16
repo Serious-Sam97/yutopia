@@ -147,10 +147,10 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   });
 });
 
-// What people do shows in third person as in iso (an emote, a chat bubble over
-// Bia's head in Ana's 3D view), and things are used by clicking them in 3D: a
+// What people do shows in third person as in iso (an emote over Bia's head in
+// Ana's 3D view, her phone in her hand), and things are used by clicking them in 3D: a
 // sofa put down in the Lab, clicked, Sit → Ana sits on it (drawn seated).
-test("third person: emotes and chat over heads, a sofa clicked in 3D seats you", async ({ page, browser }) => {
+test("third person: emotes and phones over there, a sofa clicked in 3D seats you", async ({ page, browser }) => {
   test.setTimeout(150_000);
   const tokA = await token(ANA);
   const tokB = await token(BIA);
@@ -180,10 +180,21 @@ test("third person: emotes and chat over heads, a sofa clicked in 3D seats you",
       }, biaSid),
     )
     .toBe(true);
-  await pageB.evaluate(() => (window as any).__yutopia.chat("hello from iso", "nearby"));
+  // Bia takes her phone out: Ana's 3D view draws it in her hand
+  await pageB.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
+  await pageB.evaluate(() => (window as any).__yutopia.togglePhone(true));
   await expect
-    .poll(() => page.evaluate((i) => (window as any).__yutopia.tp.tagEls.get(i)?.bubble.textContent ?? "", biaSid))
-    .toBe("hello from iso");
+    .poll(() =>
+      page.evaluate((i) => {
+        let out = "";
+        (window as any).__yutopia.room.state.players.forEach((p: any, s: string) => {
+          if (s === i) out = p.phone;
+        });
+        return out;
+      }, biaSid),
+    )
+    .toBe("text");
+  await pageB.evaluate(() => (window as any).__yutopia.togglePhone(false));
 
   // a sofa by the spawn, clicked in 3D
   await page.evaluate(() => (window as any).__yutopia.teleport("spawn"));

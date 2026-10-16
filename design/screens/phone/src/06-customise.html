@@ -1,0 +1,141 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css">
+<script src="emotes.js"></script><script src="phone.js"></script>
+<style>
+body{background:radial-gradient(70% 60% at 30% 0%,#3a1c10,#140b07 70%)}
+h2{position:absolute;left:40px;top:30px;font:700 22px 'Space Grotesk';letter-spacing:.02em}
+h2 small{font:500 13px Inter;color:#d8c6a8;margin-left:12px;letter-spacing:0}
+/* case backs */
+.cases{position:absolute;left:40px;top:96px;width:520px;display:grid;grid-template-columns:repeat(4,1fr);gap:26px 16px}
+.cb{display:flex;flex-direction:column;align-items:center;gap:9px}
+.back{position:relative;width:96px;height:198px;border-radius:20px;
+  background:linear-gradient(145deg,var(--caseHi,#4a4740),var(--case,#2b2a26) 40%,var(--caseLo,#151410));box-shadow:0 0 0 1.2px rgba(0,0,0,.6),inset 0 1.5px 0 rgba(255,255,255,.25),inset 0 -2px 0 rgba(0,0,0,.3),0 16px 30px rgba(0,0,0,.5)}
+.back .bump{position:absolute;left:9px;top:9px;width:40px;height:44px;border-radius:12px;background:linear-gradient(145deg,rgba(255,255,255,.18),rgba(0,0,0,.25));box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+.back .bump i{position:absolute;width:15px;height:15px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#5a6aa0,#0a0a14 55%);box-shadow:0 0 0 2px rgba(0,0,0,.6),0 0 0 3.2px rgba(255,255,255,.15)}
+.back .bump b{position:absolute;left:28px;top:30px;width:6px;height:6px;border-radius:50%;background:#ffe9a8;box-shadow:0 0 5px #ffe9a8}
+.back .logo{position:absolute;left:50%;top:92px;width:26px;height:26px;margin-left:-13px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.35) 0 18%,transparent 20%),conic-gradient(rgba(255,255,255,.28),rgba(255,255,255,.06),rgba(255,255,255,.28));box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.back .wm{position:absolute;bottom:16px;left:0;right:0;text-align:center;font:600 7px 'Space Grotesk';letter-spacing:.3em;color:rgba(255,255,255,.4)}
+.back.case-cream .wm,.back.case-brass .wm{color:rgba(42,26,18,.4)}
+.back.case-vortex{background:linear-gradient(160deg,rgba(255,45,149,.55),rgba(80,20,140,.75) 50%,rgba(0,229,208,.5));box-shadow:0 0 0 1.2px rgba(0,0,0,.5),inset 0 1.5px 0 rgba(255,255,255,.4),0 0 24px rgba(255,45,149,.4),0 16px 30px rgba(0,0,0,.5)}
+.back.case-vortex::after{content:"";position:absolute;inset:0;border-radius:20px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.06) 0 1px,transparent 1px 7px)}
+.cb span{font:600 12px Inter;color:#efe4cc}
+.cb small{font:11px Inter;color:#b8a688;margin-top:-6px}
+.sel{box-shadow:0 0 0 3px #ffe9a8,0 16px 30px rgba(0,0,0,.5)!important}
+.inhand{position:absolute;left:40px;top:640px;width:520px;display:flex;gap:14px;align-items:center;padding:12px;border-radius:14px;background:rgba(0,0,0,.25);border:1px solid rgba(239,228,204,.15)}
+.inhand .pic{width:150px;height:150px;border-radius:10px;flex:none;background:url(b-night.jpg) -628px -390px/1440px 900px;position:relative}
+.inhand .pic i{position:absolute;left:36px;top:88px;width:12px;height:22px;border-radius:3px;background:#5b3a26;transform:rotate(-14deg);box-shadow:0 0 0 1px #000,0 0 14px rgba(255,45,149,1),0 0 28px rgba(0,229,208,.6)}
+.inhand p{font:13px/1.5 Inter;color:#e6d9bf}
+.inhand b{color:#fff}
+/* phones */
+.slot{position:absolute;top:96px;width:240px;height:496px}
+.slot .phone{transform:scale(.8);transform-origin:top left;left:0;top:0}
+.cap{position:absolute;top:606px;width:240px;text-align:center}
+.cap b{display:block;font:600 15px 'Space Grotesk';color:#fff}
+.cap span{display:block;font:12.5px/1.45 Inter;color:#d8c6a8;margin-top:4px}
+.me{display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:10px}
+.me .nm{font:600 14px Inter}.me .sub{font:11.5px Inter;color:var(--dim)}
+.srow{display:flex;align-items:center;gap:10px;padding:9px 10px;font:500 13px Inter}
+.srow + .srow{border-top:1px solid rgba(255,255,255,.07)}
+.srow .si{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;flex:none}
+.srow .si svg{width:16px;height:16px}
+.srow .v{margin-left:auto;font:12px Inter;color:var(--dim);display:flex;align-items:center;gap:4px}
+.srow .v svg{width:14px;height:14px}
+.tog{width:38px;height:22px;border-radius:11px;background:rgba(255,255,255,.18);position:relative;margin-left:auto}
+.tog::after{content:"";position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;background:#fff}
+.tog.on{background:var(--holo)}.tog.on::after{left:18px}
+.sw{width:16px;height:16px;border-radius:50%;box-shadow:0 0 0 1.5px rgba(255,255,255,.6)}
+.wps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.wpt{height:122px;border-radius:12px;position:relative;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+.wpt.a{box-shadow:0 0 0 2.5px #fff,0 0 16px rgba(255,45,149,.6)}
+.wpt .wp{position:absolute;inset:0}
+.wpt em{position:absolute;left:6px;bottom:5px;font:600 9.5px Inter;font-style:normal;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+.seg{display:flex;padding:3px;border-radius:12px;background:rgba(255,255,255,.08);margin-bottom:10px}
+.seg span{flex:1;text-align:center;padding:6px 0;border-radius:9px;font:600 11px Inter;color:var(--dim)}
+.seg span.a{background:rgba(255,255,255,.16);color:#fff}
+.tones .srow{padding:8px 10px}
+.pb{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);flex:none}
+.pb svg{width:12px;height:12px}
+.pb.on{background:var(--holo);box-shadow:0 0 10px rgba(255,45,149,.6)}
+.eq{display:flex;gap:2px;align-items:flex-end;height:12px;margin-left:auto}.eq i{width:2.5px;border-radius:1px;background:var(--cya)}
+.ck{margin-left:auto;color:var(--cya)}.ck svg{width:16px;height:16px}
+</style></head>
+<body>
+<h2>Make it yours <small>the case everyone sees · wallpapers · ringtones</small></h2>
+
+<div class="cases">
+  <div class="cb"><div class="back case-walnut sel"><span class="bump"><i style="left:5px;top:5px"></i><i style="left:5px;top:24px"></i><b></b></span><span class="logo"></span><span class="wm">VORTEX</span></div><span>Walnut</span></div>
+  <div class="cb"><div class="back case-cream"><span class="bump"><i style="left:5px;top:5px"></i><i style="left:5px;top:24px"></i><b></b></span><span class="logo" style="filter:invert(.7)"></span><span class="wm">VORTEX</span></div><span>Cream</span></div>
+  <div class="cb"><div class="back case-rust"><span class="bump"><i style="left:5px;top:5px"></i><i style="left:5px;top:24px"></i><b></b></span><span class="logo"></span><span class="wm">VORTEX</span></div><span>Rust</span></div>
+  <div class="cb"><div class="back case-olive"><span class="bump"><i style="left:5px;top:5px"></i><i style="left:5px;top:24px"></i><b></b></span><span class="logo"></span><span class="wm">VORTEX</span></div><span>Olive</span></div>
+  <div class="cb"><div class="back case-graphite"><span class="bump"><i style="left:5px;top:5px"></i><i style="left:5px;top:24px"></i><b></b></span><span class="logo"></span><span class="wm">VORTEX</span></div><span>Graphite</span></div>
+  <div class="cb"><div class="back case-brass"><span class="bump"><i style="left:5px;top:5px"></i><i style="left:5px;top:24px"></i><b></b></span><span class="logo" style="filter:invert(.7)"></span><span class="wm">VORTEX</span></div><span>Brass</span></div>
+  <div class="cb"><div class="back case-vortex"><span class="bump"><i style="left:5px;top:5px"></i><i style="left:5px;top:24px"></i><b></b></span><span class="logo"></span><span class="wm">VORTEX</span></div><span>Vortex clear</span><small>faint glow</small></div>
+</div>
+<div class="inhand"><div class="pic"><i></i></div><p><b>The case is seen in the world.</b> It's a 3D model in your hand, the same in iso (as a sprite from the model) and 3D. The lit screen is the only glow, so at night it lights your face. The case colour is saved with your avatar.</p></div>
+
+<!-- settings -->
+<div class="slot" style="left:610px"><div class="phone case-walnut"><div class="screen" data-time="17:02">
+  <div class="wp wp-portal"></div>
+  <div class="content">
+    <div class="apphead"><h1>Settings</h1></div>
+    <div class="me glass"><span class="pf" data-p="0" style="width:42px;height:42px"></span><div><div class="nm">You</div><div class="sub">Walnut · Portal · City Pop</div></div></div>
+    <div class="glass" style="border-radius:16px">
+      <div class="srow"><span class="si" style="background:linear-gradient(150deg,#ff7ac8,#a23cf0)" data-ic="wall"></span>Wallpaper<span class="v">Portal<span data-ic="chev"></span></span></div>
+      <div class="srow"><span class="si" style="background:linear-gradient(150deg,#41f3d9,#00766e)" data-ic="music"></span>Sounds<span class="v">City Pop<span data-ic="chev"></span></span></div>
+      <div class="srow"><span class="si" style="background:linear-gradient(150deg,#7d5438,#3a2416)" data-ic="palette"></span>Case<span class="v"><span class="sw" style="background:#5b3a26"></span><span data-ic="chev"></span></span></div>
+      <div class="srow"><span class="si" style="background:#2c2840" data-ic="text"></span>Text size<span class="v">Normal<span data-ic="chev"></span></span></div>
+      <div class="srow"><span class="si" style="background:#2c2840" data-ic="vib"></span>Vibrate<span class="tog on"></span></div>
+      <div class="srow"><span class="si" style="background:linear-gradient(150deg,#5a4bd8,#241a6a)" data-ic="moon"></span>Sleep mode<span class="tog"></span></div>
+    </div>
+    <div style="font:11px/1.4 Inter;color:var(--mute);margin:8px 6px">Sleep mode is your Do-not-disturb status: calls don't ring and texts wait quietly.</div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:610px"><b>Settings</b><span>Everything is saved to your Yondra account, so it's the same phone on any computer.</span></div>
+
+<!-- wallpapers -->
+<div class="slot" style="left:880px"><div class="phone case-walnut"><div class="screen" data-time="17:02">
+  <div class="wp wp-portal"></div>
+  <div class="content">
+    <div class="apphead"><span class="back" data-ic="back"></span><h1 style="font-size:19px">Wallpaper</h1></div>
+    <div class="seg"><span class="a">Home</span><span>Lock</span></div>
+    <div class="wps">
+      <div class="wpt a"><span class="wp wp-portal"></span><span class="orb" style="position:absolute;left:28px;top:34px;width:20px;height:20px"></span><em>Portal</em></div>
+      <div class="wpt"><span class="wp wp-grid"></span><em>Grid 84</em></div>
+      <div class="wpt"><span class="wp" style="background:url(a1.jpg) 35% 30%/320px auto;filter:sepia(.3) saturate(1.3)"></span><em>Golden hour</em></div>
+      <div class="wpt"><span class="wp" style="background:url(05-campus-from-above.jpg) 50% 50%/260px auto"></span><em>Snow campus</em></div>
+      <div class="wpt"><span class="wp" style="background:radial-gradient(circle at 50% 50%,#3b0a5e,#14002b)"></span><span data-vx="love" style="position:absolute;left:6px;top:24px;width:62px;height:60px"></span><em>Vortex ♥</em></div>
+      <div class="wpt"><span class="wp" style="background:linear-gradient(180deg,#efe4cc 0 30%,#b5562f 30% 42%,#e8a33d 42% 54%,#6e7b3a 54% 66%,#2b2a26 66%)"></span><em>Tape</em></div>
+    </div>
+    <div class="sec" style="font:600 9.5px Inter;letter-spacing:.14em;color:var(--mute);margin:12px 4px 6px;text-transform:uppercase">Your photos</div>
+    <div class="wps">
+      <div class="wpt" style="height:80px"><span class="wp" style="background:url(b-selfie.jpg) 50% 25%/260px auto;filter:sepia(.3)"></span></div>
+      <div class="wpt" style="height:80px"><span class="wp" style="background:url(b-fp.jpg) 40% 60%/260px auto"></span></div>
+      <div class="wpt" style="height:80px;display:grid;place-items:center;background:rgba(255,255,255,.06)"><span data-ic="plus" style="opacity:.7"></span></div>
+    </div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:880px"><b>Wallpapers</b><span>12 designed ones (the portal, the grid, the studio at golden hour, the snow campus, Vortex…) plus any photo you took. Lock and Home are set separately.</span></div>
+
+<!-- ringtones -->
+<div class="slot" style="left:1150px"><div class="phone case-walnut"><div class="screen" data-time="17:03">
+  <div class="wp wp-portal"></div>
+  <div class="content">
+    <div class="apphead"><span class="back" data-ic="back"></span><h1 style="font-size:19px">Sounds</h1></div>
+    <div class="seg"><span class="a">Ringtone</span><span>Text tone</span><span>Per contact</span></div>
+    <div class="glass tones" style="border-radius:16px">
+      <div class="srow"><span class="pb on" data-ic="play"></span>City Pop<span class="eq"><i style="height:5px"></i><i style="height:11px"></i><i style="height:8px"></i><i style="height:12px"></i></span><span class="ck" data-ic="check"></span></div>
+      <div class="srow"><span class="pb" data-ic="play"></span>Vortex Chord</div>
+      <div class="srow"><span class="pb" data-ic="play"></span>Cassette Rewind</div>
+      <div class="srow"><span class="pb" data-ic="play"></span>Hi-Fi Bleep</div>
+      <div class="srow"><span class="pb" data-ic="play"></span>Synth Bass</div>
+      <div class="srow"><span class="pb" data-ic="play"></span>Arcade 1-Up</div>
+      <div class="srow"><span class="pb" data-ic="play"></span>Old Bell</div>
+      <div class="srow"><span class="pb" data-ic="play"></span>Rotary</div>
+      <div class="srow"><span class="pb" data-ic="play"></span>Silent<span class="v" style="font-size:11px">vibrate only</span></div>
+    </div>
+  </div>
+</div></div></div>
+<div class="cap" style="left:1150px"><b>Ringtones</b><span>About 10 ringtones and 6 text tones, all played live by a synth like the lo-fi radio. A contact can have its own. What you pick is what people near you hear.</span></div>
+</body></html>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css">
+<script src="emotes.js"></script><script src="phone.js"></script>
+<style>
+.vf{position:absolute;inset:0;background:url(b-selfie.jpg) center/cover;filter:sepia(.28) saturate(1.25) contrast(1.06) brightness(1.03)}
+.grain{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,transparent 55%,rgba(40,10,20,.45)),linear-gradient(180deg,rgba(255,170,90,.10),rgba(255,60,140,.06));mix-blend-mode:multiply;pointer-events:none}
+.thirds{position:absolute;inset:0;background:linear-gradient(90deg,transparent calc(33.33% - .5px),rgba(255,255,255,.22) calc(33.33% - .5px) calc(33.33% + .5px),transparent 0,transparent calc(66.66% - .5px),rgba(255,255,255,.22) calc(66.66% - .5px) calc(66.66% + .5px),transparent 0),linear-gradient(180deg,transparent calc(33.33% - .5px),rgba(255,255,255,.22) calc(33.33% - .5px) calc(33.33% + .5px),transparent 0,transparent calc(66.66% - .5px),rgba(255,255,255,.22) calc(66.66% - .5px) calc(66.66% + .5px),transparent 0)}
+.frame{position:absolute;inset:22px;border-radius:34px;box-shadow:0 0 0 2000px rgba(8,0,18,.0),inset 0 0 0 1.5px rgba(255,255,255,.25)}
+.corner{position:absolute;width:26px;height:26px;border:2.5px solid #fff;filter:drop-shadow(0 0 4px rgba(0,0,0,.5))}
+.focus{position:absolute;left:632px;top:200px;width:172px;height:186px}
+.focus i{position:absolute;width:22px;height:22px;border:2px solid #ffd36b;filter:drop-shadow(0 0 4px rgba(255,180,60,.8))}
+.focus span{position:absolute;left:50%;bottom:-24px;transform:translateX(-50%);font:600 10.5px Inter;letter-spacing:.1em;color:#ffd36b;text-shadow:0 1px 3px rgba(0,0,0,.7);white-space:nowrap}
+.top{position:absolute;left:50%;top:38px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:5px;border-radius:24px;z-index:5}
+.top .m{padding:7px 16px;border-radius:18px;font:600 11.5px Inter;letter-spacing:.12em;color:#e8e2ff}
+.top .m.a{background:var(--holo);color:#fff;box-shadow:0 0 14px rgba(255,45,149,.5)}
+.tl2{position:absolute;left:44px;top:38px;display:flex;gap:8px;z-index:5}
+.chipb{height:38px;padding:0 13px;border-radius:19px;display:flex;align-items:center;gap:6px;font:600 11.5px Inter;color:#fff}
+.chipb svg{width:17px;height:17px}
+.rail{position:absolute;right:40px;top:50%;transform:translateY(-50%);width:96px;padding:20px 0;border-radius:48px;display:flex;flex-direction:column;align-items:center;gap:26px;z-index:5}
+.shut{width:76px;height:76px;border-radius:50%;padding:5px;background:conic-gradient(#ff2d95,#a23cf0,#00e5d0,#a23cf0,#ff2d95);box-shadow:0 0 24px rgba(255,45,149,.55)}
+.shut i{display:block;width:100%;height:100%;border-radius:50%;background:#fff;box-shadow:inset 0 0 0 4px #1a0033}
+.rb{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);border:1px solid var(--hair)}
+.rb svg{width:22px;height:22px}
+.thumb{width:48px;height:48px;border-radius:12px;background:url(b-fp.jpg) 50% 60%/160px auto;border:2px solid #fff}
+.poses{position:absolute;left:40px;bottom:40px;padding:10px 12px;border-radius:22px;z-index:5;width:330px}
+.poses h4,.filters h4{font:600 10px Inter;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:0 0 8px 2px}
+.prow{display:flex;gap:7px;flex-wrap:wrap}
+.pz{height:34px;padding:0 11px;border-radius:17px;display:flex;align-items:center;gap:5px;font:500 12px Inter;background:rgba(255,255,255,.1);border:1px solid var(--hair)}
+.pz.a{background:#fff;color:#2a0a40;font-weight:600}
+.pz img{width:22px;height:22px}
+.filters{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);padding:10px 12px 12px;border-radius:22px;z-index:5}
+.frow{display:flex;gap:10px}
+.fl{display:flex;flex-direction:column;align-items:center;gap:5px;font:500 11px Inter;color:#eee8ff}
+.fl b{width:70px;height:70px;border-radius:14px;background:url(b-selfie.jpg) 50% 22%/300px auto;border:2px solid transparent;position:relative;overflow:hidden}
+.fl.a b{border-color:#fff;box-shadow:0 0 0 3px rgba(255,45,149,.6)}
+.keys{position:absolute;right:40px;bottom:40px;padding:9px 12px;border-radius:14px;font:500 11.5px Inter;color:var(--dim);z-index:5;line-height:1.9}
+.keys .kc{margin-right:4px}
+.flash{position:absolute;right:170px;top:120px;width:300px;padding:10px;border-radius:18px;z-index:6}
+.flash .pic{height:150px;border-radius:10px;background:url(c-iso.jpg) -560px -260px/1440px 900px;position:relative;overflow:hidden}
+.flash .pic::after{content:"";position:absolute;left:150px;top:118px;width:90px;height:90px;margin:-45px 0 0 -45px;background:radial-gradient(closest-side,#fff,rgba(255,255,255,.75) 25%,rgba(255,240,200,.25) 55%,transparent);mix-blend-mode:screen}
+.flash .cap{font:500 11.5px Inter;color:#eee8ff;margin-top:8px;line-height:1.35}
+.glass{background:rgba(22,4,44,.62);border-color:rgba(255,255,255,.16)}
+</style></head>
+<body>
+<div class="vf"></div><div class="grain"></div><div class="thirds"></div>
+<span class="corner" style="left:30px;top:30px;border-right:0;border-bottom:0;border-radius:12px 0 0 0"></span>
+<span class="corner" style="right:30px;top:30px;border-left:0;border-bottom:0;border-radius:0 12px 0 0"></span>
+<span class="corner" style="left:30px;bottom:30px;border-right:0;border-top:0;border-radius:0 0 0 12px"></span>
+<span class="corner" style="right:30px;bottom:30px;border-left:0;border-top:0;border-radius:0 0 12px 0"></span>
+<div class="focus"><i style="left:0;top:0;border-right:0;border-bottom:0"></i><i style="right:0;top:0;border-left:0;border-bottom:0"></i><i style="left:0;bottom:0;border-right:0;border-top:0"></i><i style="right:0;bottom:0;border-left:0;border-top:0"></i><span>FACE · PEACE SIGN</span></div>
+
+<div class="tl2"><span class="chipb glass" data-ic="back"></span><span class="chipb glass"><span data-ic="bolt"></span>Flash</span><span class="chipb glass"><span data-ic="timer"></span>3 s</span></div>
+<div class="top glass"><span class="m">PHOTO</span><span class="m a">SELFIE</span><span class="m" style="opacity:.55">VIDEO · LATER</span></div>
+<div class="rail glass"><span class="rb" data-ic="flip"></span><span class="shut"><i></i></span><span class="thumb"></span></div>
+
+<div class="poses glass"><h4>Pose</h4><div class="prow">
+  <span class="pz">Smile</span><span class="pz a">✌ Peace</span><span class="pz">Wink</span><span class="pz">Point</span><span class="pz">👍</span><span class="pz"><img data-e="heart">Heart</span><span class="pz"><img data-e="laugh">Laugh</span><span class="pz"><img data-e="fire">Fire</span></div></div>
+
+<div class="filters glass"><h4>Filter</h4><div class="frow">
+  <span class="fl"><b></b>None</span>
+  <span class="fl a"><b style="filter:sepia(.35) saturate(1.3) contrast(1.05)"></b>Film 84</span>
+  <span class="fl"><b style="filter:saturate(1.8) hue-rotate(-12deg) contrast(1.15)"><i style="position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px)"></i></b>VHS</span>
+  <span class="fl"><b style="filter:grayscale(1) contrast(1.25)"></b>B&amp;W</span>
+  <span class="fl"><b style="box-shadow:inset 0 0 0 5px #f4efe4,inset 0 -14px 0 5px #f4efe4"></b>Polaroid</span>
+</div></div>
+
+<div class="keys glass"><span class="kc">Space</span>shoot &nbsp; <span class="kc">Q</span><span class="kc">E</span>turn<br><span class="kc">wheel</span>zoom &nbsp; <span class="kc">1–8</span>pose &nbsp; <span class="kc">Esc</span>back</div>
+
+<div class="flash glass"><div class="pic"></div><div class="cap"><b>What the room sees</b>: you hold the phone out at arm's length, the shutter clicks, and a flash goes off. Friends in the frame get a "Sam is taking a photo" chip and can strike a pose.</div></div>
+
+<div class="note" style="left:300px;top:150px;max-width:280px"><span class="n">1</span><b>The screen becomes the viewfinder</b> and the HUD hides. In 3D, Selfie puts a camera at arm's length facing you, and you turn to frame the background (the arm-out and peace-sign poses are drawn in P1). Photo is your own eyes (first person) and the wheel zooms. In iso it frames your character up close.</div>
+<div class="note" style="left:300px;top:340px;max-width:280px"><span class="n">2</span><b>Pose + filter</b>, then shoot. The photo goes to the Gallery (saved in Yondra) and you can send it in a thread or make it your wallpaper.</div>
+</body></html>

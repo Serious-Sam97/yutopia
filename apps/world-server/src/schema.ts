@@ -30,6 +30,14 @@ export class Player extends Schema {
   @type("float64") actAt = 0;
   @type("string") actWith = "";
   @type("boolean") focus = false; // heads down at their desk: headphones on
+  // the phone (shared/phone.ts): what it's doing in their hand, ringing (heard
+  // near them, in their ringtone), the case everyone sees, the last photo's flash
+  @type("string") phone = "";
+  @type("boolean") ringing = false;
+  @type("string") tone = "citypop";
+  @type("string") phoneCase = "walnut";
+  @type("float64") shotAt = 0;
+  @type("string") phonePose = ""; // posing for a photo (shared PHOTO_POSES)
 }
 
 export class WorldObject extends Schema {

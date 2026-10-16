@@ -95,6 +95,7 @@ import {
   heldTexture,
   itemsPending,
   itemTextureStats,
+  phoneTexture,
   RIG_PX,
   rigPartTexture,
   vortexTexture,
@@ -150,6 +151,12 @@ export interface AvatarState {
   actAt?: number;
   actWith?: string;
   pet?: PetView; // a pet, not a person (world/petview.ts)
+  // the phone (shared/phone.ts): what it's doing in the hand, its case, a photo
+  // pose, ringing in the pocket
+  phone?: string;
+  phoneCase?: string;
+  phonePose?: string;
+  ringing?: boolean;
 }
 
 interface AvatarView {
@@ -172,6 +179,8 @@ interface AvatarView {
   bubbleText: Text;
   bubbleBg: Graphics;
   bubbleUntil: number;
+  flash?: Graphics; // a photo's flash going off in their hand
+  flashAt?: number;
   state: AvatarState;
   rig?: RigView; // the rig being drawn
   rigNext?: RigView; // a new view / look while its parts decode
@@ -197,6 +206,8 @@ interface RigView {
   sprites: Map<PartName, Sprite>;
   held?: Sprite; // what's in the right hand
   steam?: Graphics; // …and the steam off it
+  phone?: Sprite; // the phone, when it's out
+  glow?: Graphics; // its screen's light at night
 }
 
 // A drawn slice of an object: the quick box art first, the illustrated sprite
@@ -1415,6 +1426,23 @@ export class WorldEngine {
   livePanels() {
     return this.panels;
   }
+  // The view as it is (the phone's camera): the whole stage, at the screen's
+  // resolution, without the name tags.
+  tagsHidden = false;
+  snapshot(): HTMLCanvasElement | null {
+    if (!this.app) return null;
+    const r = this.app.renderer;
+    const overlay = this.overlay.visible;
+    this.overlay.visible = false;
+    const canvas = r.extract.canvas({
+      target: this.app.stage,
+      frame: new Rectangle(0, 0, r.screen.width, r.screen.height),
+      resolution: r.resolution,
+    }) as HTMLCanvasElement;
+    this.overlay.visible = overlay;
+    return canvas;
+  }
+
   panelCanvas(id: string, res = 4): HTMLCanvasElement | null {
     const p = this.panels.get(id);
     if (!p || !this.app) return null;
@@ -1652,7 +1680,10 @@ export class WorldEngine {
         o.status !== s.status ||
         o.held !== s.held ||
         o.act !== s.act ||
-        o.busy !== s.busy)
+        o.busy !== s.busy ||
+        o.phone !== s.phone ||
+        o.phonePose !== s.phonePose ||
+        o.ringing !== s.ringing)
     )
       this.activeAt = performance.now();
     const prevName = v.state.name;
@@ -1698,6 +1729,29 @@ export class WorldEngine {
     if (!v || v.shownDir === undefined) return null;
     const { view, mirror } = viewFor(v.shownDir);
     return { dir: v.shownDir, view, mirror, rigged: !!v.rig?.root.visible, walking: v.state.a === 1 };
+  }
+
+  // Someone took a photo: the flash, over their hand.
+  flash(id: string) {
+    const v = this.avatars.get(id);
+    if (!v) return;
+    if (!v.flash) {
+      const g = new Graphics();
+      g.blendMode = "add";
+      g.circle(0, 0, 26).fill({ color: 0xfff6e0, alpha: 0.18 });
+      g.circle(0, 0, 13).fill({ color: 0xffffff, alpha: 0.45 });
+      g.circle(0, 0, 5).fill({ color: 0xffffff, alpha: 1 });
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 4;
+        g.moveTo(Math.cos(a) * -22, Math.sin(a) * -22)
+          .lineTo(Math.cos(a) * 22, Math.sin(a) * 22)
+          .stroke({ width: 1.6, color: 0xffffff, alpha: 0.7 });
+      }
+      v.flash = g;
+      this.overlay.addChild(g);
+    }
+    v.flashAt = performance.now();
+    this.activeAt = performance.now();
   }
 
   say(id: string, text: string, ms = 6000) {
@@ -2036,21 +2090,44 @@ export class WorldEngine {
     // name tag + bubble (overlay, scale-compensated so text stays crisp)
     const inv = 1 / Math.max(0.7, this.zoom * 0.85);
     v.tag.position.set(p.x, p.y + (-106 + lift) * PERSON);
+    v.tag.visible = !this.tagsHidden;
     v.tag.scale.set(inv);
     this.setDepth(v.tag, v.local ? 1e6 : p.y);
     const dotColor = s.status === "dnd" ? C.rust : s.status === "away" ? C.alumDark : s.npc ? C.red : C.olive;
     const slash = !s.mic && !s.npc && !s.bot;
-    const dotKey = `${dotColor}|${slash}`;
+    // on a call: a little handset instead of the dot (so nobody waves at someone mid-call)
+    const onCall = s.phone === "call" || s.phone === "video";
+    const dotKey = `${dotColor}|${slash}|${onCall}`;
     if (v.dotKey !== dotKey) {
       v.dotKey = dotKey;
-      v.dot.clear().circle(0, 0, 3.2).fill(dotColor);
-      if (slash) v.dot.moveTo(-3, -3).lineTo(3, 3).stroke({ width: 1.4, color: C.cream });
+      if (onCall)
+        v.dot
+          .clear()
+          .circle(0, 0, 4.2)
+          .fill(0x00b8a8)
+          .moveTo(-2.2, -1.6)
+          .quadraticCurveTo(-1.6, 2.2, 2.2, 1.8)
+          .stroke({ width: 1.6, color: 0xffffff, cap: "round" });
+      else {
+        v.dot.clear().circle(0, 0, 3.2).fill(dotColor);
+        if (slash) v.dot.moveTo(-3, -3).lineTo(3, 3).stroke({ width: 1.4, color: C.cream });
+      }
     }
     if (v.bubble.visible) {
       v.bubble.position.set(p.x, p.y + (-120 + lift) * PERSON);
       v.bubble.scale.set(inv);
       v.bubble.zIndex = 2e6;
       if (now > v.bubbleUntil) v.bubble.visible = false;
+    }
+    if (v.flash) {
+      const k = (now - (v.flashAt ?? 0)) / 280;
+      v.flash.visible = k < 1;
+      if (k < 1) {
+        v.flash.alpha = 1 - k * k;
+        v.flash.scale.set((0.7 + k * 0.9) * PERSON * 1.4);
+        v.flash.position.set(p.x + (s.phone === "selfie" ? -14 : 4) * PERSON, p.y + (-92 + lift) * PERSON);
+        v.flash.zIndex = 2e6 - 1;
+      }
     }
   }
 
@@ -2086,9 +2163,10 @@ export class WorldEngine {
     }
     const r = v.rig;
     v.motion ??= new P.Motion(seedOf(s.name + (v.local ? "me" : "")));
-    const held = isHeld(s.held) && s.heldAt ? { kind: s.held, since: Date.now() - s.heldAt } : null;
+    const held = isHeld(s.held) && s.heldAt && !s.phone ? { kind: s.held, since: Date.now() - s.heldAt } : null;
     const pose = v.motion.update(r?.def ?? want.def, dt, {
       held,
+      phone: s.phone || s.ringing ? { state: s.phone ?? "", pose: s.phonePose ?? "", ringing: !!s.ringing } : null,
       busy: s.busy ?? "",
       act: this.actOf(v),
       dist,
@@ -2119,6 +2197,7 @@ export class WorldEngine {
       sp.setFromMatrix(RIG_M.set(m[0], m[1], m[2], m[3], m[4], m[5]));
     });
     this.drawHeld(P, r, s, pose, b, held);
+    this.drawPhone(P, r, s, b);
     r.root.visible = true;
     r.root.pivot.set(60, 168);
     r.root.scale.set((mirror ? -1 : 1) * P.FIT * def.squash, P.FIT);
@@ -2201,6 +2280,59 @@ export class WorldEngine {
           .quadraticCurveTo(x0 + sway, y0 - 3, x0 - sway * 0.5, y0 - 6)
           .stroke({ width: 1.1, color: 0xffffff, alpha: 0.42 * (1 - ph) });
       }
+    }
+  }
+
+  // The phone in the hand (shared/phone.ts): which face this view sees, tilted
+  // as the pose holds it; its lit screen glows a little once it's dark.
+  private drawPhone(P: People, r: RigView, s: AvatarState, b: Record<PartName, Aff>) {
+    if (!s.phone) {
+      if (r.phone) r.phone.visible = false;
+      if (r.glow) r.glow.visible = false;
+      return;
+    }
+    const def = r.def;
+    const grip = P.phoneGrip(def, s.phone);
+    const col = P.phoneColors(s.phoneCase);
+    const tex = phoneTexture(`${col[0]}|${grip.face}`, () => P.phoneSvg(col, grip.face), P.PHONE_BOX);
+    if (!r.phone || !r.glow) {
+      r.phone = new Sprite();
+      r.glow = new Graphics();
+      r.glow.blendMode = "add";
+      r.root.addChild(r.glow, r.phone);
+    }
+    const sp = r.phone;
+    if (tex) sp.texture = tex;
+    sp.visible = !!tex;
+    const hand = P.apply(b.armRf, def.joints.hand);
+    const k = (1 / (RIG_PX * 2)) * grip.scale;
+    const rad = (grip.tilt * Math.PI) / 180;
+    const c = Math.cos(rad);
+    const sn = Math.sin(rad);
+    const m: Aff = [c * k, sn * k, -sn * k, c * k, 0, 0];
+    const at = P.apply(m, [P.PHONE_BOX[0] * RIG_PX * 2, P.PHONE_BOX[1] * RIG_PX * 2]);
+    sp.setFromMatrix(RIG_M.set(m[0], m[1], m[2], m[3], hand[0] + at[0], hand[1] + at[1]));
+    const armZ = r.sprites.get("armRf")?.zIndex ?? 50;
+    const torsoZ = r.sprites.get("torso")?.zIndex ?? 40;
+    // at the ear, from behind: behind the head; held out in front: over the arm
+    sp.zIndex = def.back && s.phone !== "selfie" ? torsoZ - 0.5 : armZ + 0.5;
+    sp.tint = grip.face === "screen" ? 0xffffff : (r.sprites.get("torso")?.tint ?? 0xffffff);
+    const g = r.glow;
+    g.clear();
+    const lit = this.night > 0.15 && s.phone !== "call" && this.quality !== "low";
+    g.visible = lit;
+    if (lit) {
+      // the screen's light: on the face (front views) or round the hand
+      const a = Math.min(0.5, this.night * 0.6);
+      const cx = grip.face === "back" ? hand[0] + 2 : hand[0];
+      const cy = hand[1] - 8;
+      g.circle(cx, cy, 16).fill({ color: 0xff5ab0, alpha: a * 0.25 });
+      g.circle(cx, cy, 9).fill({ color: 0xc89bff, alpha: a * 0.35 });
+      if (!def.back) {
+        const head = P.apply(b.head, def.joints.mouth);
+        g.ellipse(head[0], head[1] - 6, 11, 9).fill({ color: 0xd890ff, alpha: a * 0.3 });
+      }
+      g.zIndex = sp.zIndex + 0.2;
     }
   }
 

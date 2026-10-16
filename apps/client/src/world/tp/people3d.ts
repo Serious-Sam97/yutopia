@@ -16,6 +16,7 @@ import type { Aff, Face } from "../art/avatar-rig";
 import type { AvatarRig } from "../art/avatar-svg";
 import { HELD_BOX, heldSvg, MUG_COLORS } from "../art/held";
 import type { people } from "../art/people-load";
+import { PHONE_BOX, phoneColors, phoneSvg } from "../art/phone-art";
 import { svgDoc } from "../art/svgdoc";
 import { viewFor } from "../art/views";
 import { type VortexMood, vortexSvg } from "../art/vortex/vortexArt";
@@ -122,6 +123,17 @@ export interface PersonIn {
   typing?: boolean; // seated at a desk with a keyboard
   reduced?: boolean; // reduced motion
   seat?: string; // what they sit on (catalog kind), when `a` is 2
+  // the phone (shared/phone.ts): in the hand, its case, a photo pose, ringing
+  phone?: string;
+  phoneCase?: string;
+  phonePose?: string;
+  ringing?: boolean;
+}
+
+// A phone in the hand: its case and the face this view sees
+function phoneImage(caseId: string, face: "screen" | "back" | "edge"): HTMLImageElement | null {
+  const c = phoneColors(caseId);
+  return partImage(`phone|${c[0]}|${face}`, phoneSvg(c, face), PHONE_BOX);
 }
 
 // What people carry, one image per kind / colour / level
@@ -228,9 +240,11 @@ export class Person3 {
     if (dist > 1.5) dist = 0;
     this.last = { x: p.x, y: p.y };
     const walking = p.a === 1;
-    const held = isHeld(p.held) && p.heldAt ? { kind: p.held as HeldKind, since: Date.now() - p.heldAt } : null;
+    const held =
+      isHeld(p.held) && p.heldAt && !p.phone ? { kind: p.held as HeldKind, since: Date.now() - p.heldAt } : null;
     const pose = this.motion.update(rig, dt, {
       held,
+      phone: p.phone || p.ringing ? { state: p.phone ?? "", pose: p.phonePose ?? "", ringing: !!p.ringing } : null,
       busy: p.busy ?? "",
       act: this.actOf(p),
       dist,
@@ -258,6 +272,14 @@ export class Person3 {
       if (!heldImg) all = false;
       tip = ((rig.side ? -38 : -22) * P.sipEnv(st.sip) * Math.PI) / 180;
     }
+    // the phone in the hand, tilted as the pose holds it
+    let phoneImg: HTMLImageElement | null = null;
+    let grip = { tilt: 0, face: "back" as "screen" | "back" | "edge", scale: 1 };
+    if (p.phone) {
+      grip = P.phoneGrip(rig, p.phone);
+      phoneImg = phoneImage(p.phoneCase ?? "walnut", grip.face);
+      if (!phoneImg) all = false;
+    }
     for (const part of P.drawOrder(rig, pose)) {
       const head = part.name === "head";
       const look: Face | undefined = head ? (rig.back ? "open" : pose.face) : undefined;
@@ -279,13 +301,14 @@ export class Person3 {
     mix(rig.squash);
     mix(tip);
     mix(heldLevel);
+    mix(p.phone ? p.phone.length + (grip.face === "screen" ? 10 : grip.face === "edge" ? 20 : 30) : 0);
     mix(pose.face === "blink" ? 1 : pose.face === "talk" ? 2 : 0);
     mix(parts.length);
     for (const part of parts) {
       mix(part.name.length);
       for (const m of b[part.name as keyof typeof b]) mix(m);
     }
-    const calm = !walking && !p.speaking && !p.typing && !p.emote && !held && !this.actOf(p);
+    const calm = !walking && !p.speaking && !p.typing && !p.emote && !held && !this.actOf(p) && !p.phone && !p.ringing;
     const now = performance.now();
     const changed = h !== this.drawnHash && (!calm || now - this.drawnAt >= 50);
     if (all && ((redraw && changed) || !this.shown)) {
@@ -306,12 +329,34 @@ export class Person3 {
         g.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
         g.drawImage(heldImg, HELD_BOX[0], HELD_BOX[1], HELD_BOX[2], HELD_BOX[3]);
       };
+      const drawPhone = () => {
+        if (!phoneImg) return;
+        const hand = P.apply(b.armRf, rig.joints.hand);
+        const r = (grip.tilt * Math.PI) / 180;
+        const k = grip.scale;
+        const m = P.mul(base, [Math.cos(r) * k, Math.sin(r) * k, -Math.sin(r) * k, Math.cos(r) * k, hand[0], hand[1]]);
+        g.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
+        // its lit screen at night: a soft light round it
+        if (night && p.phone !== "call") {
+          const gl = g.createRadialGradient(0, -8, 0, 0, -8, 18);
+          gl.addColorStop(0, "rgba(255,120,210,.35)");
+          gl.addColorStop(1, "rgba(160,90,255,0)");
+          g.fillStyle = gl;
+          g.fillRect(-18, -26, 36, 36);
+        }
+        g.drawImage(phoneImg, PHONE_BOX[0], PHONE_BOX[1], PHONE_BOX[2], PHONE_BOX[3]);
+      };
+      const phoneBehind = rig.back && p.phone !== "selfie";
       for (const part of parts) {
-        if (rig.back && part.name === "torso") drawHeld();
+        if (rig.back && part.name === "torso") {
+          drawHeld();
+          if (phoneBehind) drawPhone();
+        }
         const m = P.mul(base, b[part.name as keyof typeof b]);
         g.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
         g.drawImage(part.img, part.box[0], part.box[1], part.box[2], part.box[3]);
         if (!rig.back && part.name === "armRf") drawHeld();
+        if (!phoneBehind && part.name === "armRf") drawPhone();
       }
       this.shown = true;
       this.tex.needsUpdate = true;

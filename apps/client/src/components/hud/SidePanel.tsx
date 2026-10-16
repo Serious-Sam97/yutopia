@@ -1,36 +1,28 @@
 "use client";
 
-import { type ChatScope, EMOTES, type Emote, entry, isPrivate, MAX_CHAT } from "@yutopia/shared";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { entry, isPrivate } from "@yutopia/shared";
 import { type Key, useTr } from "@/lib/i18n";
-import { emoteUrl } from "@/world/art/emotes";
-import { vortexSvg } from "@/world/art/vortex/vortexArt";
-import { type ChatMsg, hud, type Person, type SideTab, useHud } from "@/world/store";
+import { hud, type Person, type SideTab, useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
 import { Face, STATUS_COLOR } from "./Face";
 import { Icon, type IconName } from "./icons";
 
 const TABS: { key: SideTab; label: Key; icon: IconName }[] = [
-  { key: "chat", label: "chat", icon: "chat" },
   { key: "people", label: "people", icon: "people" },
   { key: "room", label: "room", icon: "home" },
 ];
-// reactions offered on a message (all eight are in the composer as emotes)
-const REACT: Emote[] = ["heart", "laugh", "clap", "fire", "question"];
-const VORTEX_FACE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(vortexSvg("curious", "chatface"))}`;
-
-// The right-hand panel: Chat, People and Room as tabs of one drawer. It grows
+// The right-hand panel: People and Room as tabs of one drawer (texts and calls
+// are on the phone now, world/phone). It grows
 // with what's in it and always stays above the dock.
 export function SidePanel() {
   const t = useTr();
   const side = useHud((s) => s.side);
-  const unread = useHud((s) => s.chatUnread);
   const count = useHud((s) => s.people.filter((p) => !p.bot).length + 1);
   if (!side) return null;
   return (
     <aside
-      aria-label={t(TABS.find((x) => x.key === side)?.label ?? "chat")}
+      aria-label={t(TABS.find((x) => x.key === side)?.label ?? "people")}
       className="pointer-events-auto cabinet absolute left-3 right-3 sm:left-auto top-[78px] sm:w-[372px] flex flex-col overflow-hidden rise"
       style={{ maxHeight: "calc(100vh - 78px - 96px)" }}
     >
@@ -41,7 +33,7 @@ export function SidePanel() {
             type="button"
             role="tab"
             aria-selected={side === x.key}
-            onClick={() => hud.set({ side: x.key, ...(x.key === "chat" ? { chatUnread: 0 } : {}) })}
+            onClick={() => hud.set({ side: x.key })}
             className="flex-1 h-[34px] rounded-lg flex items-center justify-center gap-1.5 mono text-xs uppercase tracking-wide"
             style={
               side === x.key
@@ -56,14 +48,6 @@ export function SidePanel() {
             <Icon name={x.icon} size={16} />
             {t(x.label)}
             {x.key === "people" && <span style={{ color: "var(--muted)" }}>{count}</span>}
-            {x.key === "chat" && unread > 0 && side !== "chat" && (
-              <span
-                className="rounded-full px-1.5 text-[10px] font-semibold"
-                style={{ background: "var(--rust)", color: "var(--cream)" }}
-              >
-                {unread}
-              </span>
-            )}
           </button>
         ))}
         <button
@@ -76,7 +60,6 @@ export function SidePanel() {
           <Icon name="close" size={16} />
         </button>
       </div>
-      {side === "chat" && <ChatTab />}
       {side === "people" && <PeopleTab />}
       {side === "room" && <RoomTab />}
     </aside>
@@ -146,218 +129,6 @@ function Earshot() {
           </>
         )}
       </p>
-    </div>
-  );
-}
-
-function ChatTab() {
-  const t = useTr();
-  const w = useWorld();
-  const chat = useHud((s) => s.chat);
-  const people = useHud((s) => s.people);
-  const me = useHud((s) => s.me);
-  const myUid = me?.uid ?? 0;
-  const { listeners } = useEarshot();
-  const [text, setText] = useState("");
-  const [scope, setScope] = useState<ChatScope>("nearby");
-  const input = useRef<HTMLInputElement>(null);
-  const list = useRef<HTMLDivElement>(null);
-  const bySid = useMemo(() => new Map([...people, ...(me ? [me] : [])].map((p) => [p.sid, p])), [people, me]);
-
-  useEffect(() => {
-    setTimeout(() => input.current?.focus(), 20);
-  }, []);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when messages arrive
-  useEffect(() => {
-    list.current?.scrollTo({ top: list.current.scrollHeight });
-  }, [chat.length]);
-
-  const placeholder =
-    scope === "nearby"
-      ? listeners.length
-        ? t("sayTo").replace(
-            "{who}",
-            names(
-              listeners.map((p) => p.name.split(" ")[0]),
-              t,
-            ),
-          )
-        : t("sayNearby")
-      : scope === "area"
-        ? t("sayArea")
-        : t("saySpace");
-
-  return (
-    <>
-      <Earshot />
-      <div className="flex gap-1.5 px-3 pt-2.5 pb-1 shrink-0">
-        {(["nearby", "area", "space"] as const).map((s) => (
-          <button key={s} type="button" className="chip" aria-pressed={scope === s} onClick={() => setScope(s)}>
-            {t(s)}
-          </button>
-        ))}
-      </div>
-      <div
-        ref={list}
-        className="flex-1 min-h-[90px] overflow-y-auto scroll-thin px-3 py-2 space-y-3"
-        aria-live="polite"
-      >
-        {chat.length === 0 && (
-          <p className="text-sm text-center py-6" style={{ color: "var(--muted)" }}>
-            {t("noMessages")}
-          </p>
-        )}
-        {chat.map((m) => (
-          <Message key={m.id} m={m} from={bySid.get(m.from)} myUid={myUid} />
-        ))}
-      </div>
-      <form
-        className="mx-3 mb-3 mt-1 rounded-xl shrink-0 focus-within:shadow-[0_0_0_3px_rgba(255,166,48,.14)]"
-        style={{ background: "#140e0a", border: "1px solid var(--amber)" }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          const v = text.trim();
-          if (!v) return;
-          w?.chat(v, scope);
-          setText("");
-        }}
-      >
-        <div className="flex items-center gap-2 pl-3 pr-1.5 py-1.5">
-          <input
-            ref={input}
-            className="flex-1 min-w-0 bg-transparent !outline-none text-sm py-1.5"
-            style={{ color: "var(--cream)" }}
-            maxLength={MAX_CHAT}
-            value={text}
-            placeholder={placeholder}
-            aria-label={placeholder}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                hud.set({ side: null });
-                (e.target as HTMLInputElement).blur();
-              }
-            }}
-          />
-          <button
-            type="submit"
-            className="w-[34px] h-[34px] rounded-[9px] grid place-items-center shrink-0"
-            style={{
-              background: "linear-gradient(180deg,#ffc274,#e8952d)",
-              color: "var(--ink)",
-              boxShadow: "0 2px 0 #9a5c17",
-            }}
-            aria-label={t("send")}
-          >
-            <Icon name="send" size={16} />
-          </button>
-        </div>
-        <div
-          className="flex items-center gap-0.5 px-1.5 pb-1.5 pt-1"
-          style={{ borderTop: "1px solid rgba(120,86,58,.35)" }}
-        >
-          {EMOTES.map((e, i) => (
-            <button
-              key={e}
-              type="button"
-              className="w-8 h-8 rounded-md p-0.5 hover:bg-white/10"
-              title={`${e} (${i + 1})`}
-              aria-label={e}
-              onClick={() => w?.emote(i)}
-            >
-              {/* biome-ignore lint/performance/noImgElement: inline SVG data URL */}
-              <img alt="" src={emoteUrl(e)} className="w-full h-full" draggable={false} />
-            </button>
-          ))}
-          <span className="ml-auto mono text-[10.5px] pr-1" style={{ color: "var(--muted)" }}>
-            1–8
-          </span>
-        </div>
-      </form>
-    </>
-  );
-}
-
-function Message({ m, from, myUid }: { m: ChatMsg; from: Person | undefined; myUid: number }) {
-  const t = useTr();
-  const w = useWorld();
-  const time = new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
-  const reactions = Object.entries(m.reactions ?? {}) as [Emote, number[]][];
-  const canReact = !m.vortex;
-  const bubble = m.vortex
-    ? { background: "#1a0f0c", color: "#ffb35c", border: "1px solid #6b2a1e" }
-    : m.mine
-      ? { background: "rgba(255,179,92,.12)", border: "1px solid rgba(255,179,92,.3)" }
-      : undefined;
-  return (
-    <div className={`group flex gap-2.5 ${m.mine ? "flex-row-reverse text-right" : ""}`}>
-      {!m.mine &&
-        (m.vortex ? (
-          // biome-ignore lint/performance/noImgElement: inline SVG data URL
-          <img alt="" src={VORTEX_FACE} className="w-7 h-7 shrink-0" draggable={false} />
-        ) : (
-          <Face avatar={from?.avatar ?? ""} name={m.fromName} size={28} />
-        ))}
-      <div className={`min-w-0 ${m.mine ? "flex flex-col items-end" : ""}`}>
-        {!m.mine && (
-          <p className="text-xs font-semibold">
-            <span style={{ color: m.vortex ? "#ff6a4d" : "var(--cream)" }}>{m.fromName}</span>
-            <span className="font-normal ml-1.5 text-[11px]" style={{ color: "var(--muted)" }}>
-              {time}
-              {m.scope !== "nearby" && ` · ${t(m.scope)}`}
-            </span>
-          </p>
-        )}
-        <p
-          className={`text-[13px] leading-snug break-words mt-0.5 ${bubble ? "inline-block px-2.5 py-1.5 rounded-[10px] text-left" : ""}`}
-          style={bubble ?? { color: "#e6dbc2" }}
-        >
-          {m.text}
-        </p>
-        {(reactions.length > 0 || canReact) && (
-          <div className={`flex flex-wrap items-center gap-1 mt-1 ${m.mine ? "justify-end" : ""}`}>
-            {reactions.map(([e, uids]) => {
-              const mine = uids.includes(myUid);
-              return (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => w?.react(m.id, e)}
-                  aria-pressed={mine}
-                  aria-label={`${e} ${uids.length}`}
-                  className="flex items-center gap-0.5 rounded-full pl-0.5 pr-2 py-[1px] mono text-[11px]"
-                  style={{
-                    background: mine ? "rgba(255,179,92,.16)" : "#2a1c13",
-                    border: `1px solid ${mine ? "rgba(255,179,92,.5)" : "var(--edge)"}`,
-                    color: mine ? "var(--vfd)" : "var(--cream-dim)",
-                  }}
-                >
-                  {/* biome-ignore lint/performance/noImgElement: inline SVG data URL */}
-                  <img alt="" src={emoteUrl(e)} className="w-5 h-5" draggable={false} />
-                  {uids.length}
-                </button>
-              );
-            })}
-            {canReact && (
-              <span className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                {REACT.filter((e) => !m.reactions?.[e]).map((e) => (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => w?.react(m.id, e)}
-                    className="w-6 h-6 rounded-md p-[1px] hover:bg-white/10"
-                    aria-label={`${t("react")}: ${e}`}
-                    title={`${t("react")}: ${e}`}
-                  >
-                    {/* biome-ignore lint/performance/noImgElement: inline SVG data URL */}
-                    <img alt="" src={emoteUrl(e)} className="w-full h-full" draggable={false} />
-                  </button>
-                ))}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -438,6 +209,7 @@ function PeopleTab() {
 
   return (
     <>
+      <Earshot />
       <div className="px-3 pt-2.5 flex gap-2 shrink-0">
         <button type="button" className="ghost-btn flex items-center gap-1.5" onClick={() => w?.teleport("desk")}>
           <Icon name="desk" size={15} />
