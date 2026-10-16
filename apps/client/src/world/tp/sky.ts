@@ -17,12 +17,14 @@ import {
   Points,
   PointsMaterial,
   Quaternion,
+  RepeatWrapping,
   ShaderMaterial,
   SphereGeometry,
   SRGBColorSpace,
   Vector3,
 } from "three";
 import type { Daylight } from "../art/daylight";
+import { Campus } from "./campus";
 
 // the themes' drawings and skies: the same lazy chunk the iso view loads
 export type Themes = typeof import("../art/themes");
@@ -33,7 +35,43 @@ export type Themes = typeof import("../art/themes");
 // skyline whose windows light up at night; snow: a chalet in falling snow. The
 // building gets a body under its floor's outer edge (its "shell").
 
-const R = 160; // the dome's radius (tiles)
+// the dome's radius (tiles): the snow campus reaches far (see fogFor)
+const domeR = (theme: Theme) => (theme === "snow" ? 760 : 160);
+
+// How far the camera and the fog see, by theme: the campus is a landscape.
+export function fogFor(theme: Theme): { near: number; far: number; cameraFar: number } {
+  return theme === "snow" ? { near: 120, far: 520, cameraFar: 1400 } : { near: 40, far: 150, cameraFar: 200 };
+}
+
+// A tileable overcast: soft grey mottling, lighter and darker patches.
+function overcast(T: Themes): CanvasTexture {
+  const S = 512;
+  const { c, g } = T.canvas(S, S);
+  g.fillStyle = "#808080";
+  g.fillRect(0, 0, S, S);
+  const r = T.rng(81);
+  for (let i = 0; i < 160; i++) {
+    const x = r() * S;
+    const y = r() * S;
+    const w = 40 + r() * 120;
+    const light = r() < 0.5;
+    for (const ox of [-S, 0, S])
+      for (const oy of [-S, 0, S]) {
+        const grd = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, w);
+        grd.addColorStop(0, light ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)");
+        grd.addColorStop(1, light ? "rgba(255,255,255,0)" : "rgba(0,0,0,0)");
+        g.fillStyle = grd;
+        g.beginPath();
+        g.ellipse(x + ox, y + oy, w, w * (0.5 + r() * 0.5), r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+  }
+  const t = new CanvasTexture(c);
+  t.wrapS = RepeatWrapping;
+  t.wrapT = RepeatWrapping;
+  t.anisotropy = 4;
+  return t;
+}
 
 export class Surroundings {
   readonly root = new Group();
@@ -41,9 +79,7 @@ export class Surroundings {
   private domeMat: ShaderMaterial;
   private stars: Points;
   private clouds: { mesh: Mesh; speed: number; r: number; a: number; y: number }[] = [];
-  private snow: Points | null = null;
-  private snowFloor = 0;
-  private trees: Mesh[] = []; // (cards: turned to the camera)
+  private campus: Campus | null = null;
   private windows: MeshLambertMaterial | null = null;
   private ground: MeshBasicMaterial | null = null;
   private shellMat: MeshLambertMaterial;
@@ -64,12 +100,37 @@ export class Surroundings {
       side: BackSide,
       depthWrite: false,
       fog: false,
-      uniforms: { top: { value: new Color() }, mid: { value: new Color() }, bot: { value: new Color() } },
+      uniforms: {
+        top: { value: new Color() },
+        mid: { value: new Color() },
+        bot: { value: new Color() },
+        clouds: { value: theme === "snow" ? overcast(T) : null },
+        cloudK: { value: theme === "snow" ? 1 : 0 },
+        cloudOff: { value: [0, 0] },
+      },
       vertexShader:
-        "varying float vY; void main() { vY = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-      fragmentShader:
-        "uniform vec3 top; uniform vec3 mid; uniform vec3 bot; varying float vY; void main() { float t = clamp(vY, -1.0, 1.0); vec3 c = t > 0.0 ? mix(mid, top, smoothstep(0.0, 0.7, t)) : mix(mid, bot, smoothstep(0.0, 0.35, -t)); gl_FragColor = vec4(c, 1.0);\n#include <colorspace_fragment>\n}",
+        "varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+      // the gradient, and (snow) an overcast deck: the cloud texture laid on a
+      // plane overhead and seen through each direction, drifting, fading out
+      // towards the horizon where the fog takes over
+      fragmentShader: [
+        "uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform sampler2D clouds; uniform float cloudK; uniform vec2 cloudOff; varying vec3 vDir;",
+        "void main() {",
+        "  vec3 d = normalize(vDir); float t = clamp(d.y, -1.0, 1.0);",
+        "  vec3 c = t > 0.0 ? mix(mid, top, smoothstep(0.0, 0.7, t)) : mix(mid, bot, smoothstep(0.0, 0.35, -t));",
+        "  if (cloudK > 0.0 && d.y > 0.0) {",
+        "    vec2 uv = d.xz / max(d.y, 0.05) * 0.55 + cloudOff;",
+        "    float n = texture2D(clouds, uv).r;",
+        "    float k = cloudK * smoothstep(0.0, 0.2, d.y);",
+        "    c *= mix(1.0, 0.8 + 0.34 * n, k);",
+        "  }",
+        "  gl_FragColor = vec4(c, 1.0);",
+        "#include <colorspace_fragment>",
+        "}",
+      ].join("\n"),
     });
+    if (theme === "snow") this.disposables.push(this.domeMat.uniforms.clouds.value as CanvasTexture);
+    const R = domeR(theme);
     this.dome = new Mesh(new SphereGeometry(R, 32, 16), this.domeMat);
     this.dome.renderOrder = -10;
     this.disposables.push(this.dome.geometry, this.domeMat);
@@ -102,11 +163,16 @@ export class Surroundings {
       side: DoubleSide,
     });
     this.disposables.push(this.shellMat);
-    const depth = theme === "city" ? 26 : theme === "snow" ? 3.2 : 1.4;
-    this.root.add(this.shell(map, depth));
-    if (theme === "city") this.city(depth);
-    else if (theme === "snow") this.snowy(map, depth);
-    else this.cloudy();
+    if (theme === "snow") {
+      // the campus draws the building itself (the studio is its top floor)
+      this.campus = new Campus(map, T);
+      this.root.add(this.campus.root);
+    } else {
+      const depth = theme === "city" ? 26 : 1.4;
+      this.root.add(this.shell(map, depth));
+      if (theme === "city") this.city(depth);
+      else this.cloudy();
+    }
   }
 
   // the building's body: walls down from the floor's outer edge (and a base under it)
@@ -201,69 +267,7 @@ export class Surroundings {
     this.root.add(g, towers);
   }
 
-  private snowy(map: MapDef, depth: number) {
-    const ground = new MeshBasicMaterial({ color: 0xf2f4f7 });
-    this.ground = ground;
-    const g = new Mesh(new PlaneGeometry(800, 800).rotateX(-Math.PI / 2), ground);
-    g.position.set(this.cx, -depth, this.cy);
-    // bare winter trees on the snowfield (the iso theme's own drawing), as cards
-    const r = this.T.rng(3);
-    const kinds: CanvasTexture[] = [];
-    for (let k = 0; k < 4; k++) {
-      const c = this.T.canvas(160, 220);
-      this.T.bareTree(c.g, 80, 214, 190, this.T.rng(40 + k), "#4a525c");
-      const t = new CanvasTexture(c.c);
-      t.colorSpace = SRGBColorSpace;
-      kinds.push(t);
-      this.disposables.push(t);
-    }
-    const reach = Math.hypot(map.width, map.height) / 2;
-    for (let i = 0; i < 80; i++) {
-      const a = r() * Math.PI * 2;
-      const dd = reach + 6 + r() * 55;
-      const h = 4 + r() * 5;
-      const mat = new MeshBasicMaterial({ map: kinds[i % 4], transparent: true, alphaTest: 0.1, side: DoubleSide });
-      const m = new Mesh(new PlaneGeometry(h * (160 / 220), h), mat);
-      m.position.set(this.cx + Math.cos(a) * dd, -depth + h / 2, this.cy + Math.sin(a) * dd);
-      this.disposables.push(mat, m.geometry);
-      this.trees.push(m);
-      this.root.add(m);
-    }
-    // snowflakes: soft dots falling in a ring round the building (never inside it)
-    const dot = this.T.canvas(32, 32);
-    const grd = dot.g.createRadialGradient(16, 16, 0, 16, 16, 16);
-    grd.addColorStop(0, "rgba(255,255,255,1)");
-    grd.addColorStop(1, "rgba(255,255,255,0)");
-    dot.g.fillStyle = grd;
-    dot.g.fillRect(0, 0, 32, 32);
-    const flake = new CanvasTexture(dot.c);
-    const pts: number[] = [];
-    const W = map.width;
-    const H = map.height;
-    while (pts.length < 2400 * 3) {
-      const x = -30 + r() * (W + 60);
-      const z = -30 + r() * (H + 60);
-      if (x > -0.5 && x < W + 0.5 && z > -0.5 && z < H + 0.5) continue; // over the building
-      pts.push(x, -depth + r() * 22, z);
-    }
-    const sg = new BufferGeometry();
-    sg.setAttribute("position", new Float32BufferAttribute(pts, 3));
-    const sm = new PointsMaterial({
-      color: 0xffffff,
-      size: 0.09,
-      map: flake,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: false,
-    });
-    this.snow = new Points(sg, sm);
-    this.snowFloor = -depth;
-    this.disposables.push(ground, g.geometry, flake, sg, sm);
-    this.root.add(g, this.snow);
-  }
-
   readonly horizon = new Color();
-  private treeTint = new Color(1, 1, 1);
 
   setDay(d: Daylight) {
     const [top, mid, bot] =
@@ -281,11 +285,11 @@ export class Surroundings {
     const amb = new Color(d.ambient[0], d.ambient[1], d.ambient[2]);
     for (const c of this.clouds) (c.mesh.material as MeshBasicMaterial).color.copy(amb);
     if (this.windows) this.windows.emissiveIntensity = d.night * 1.2;
-    this.treeTint.copy(amb);
+    this.campus?.setDay(d, mid);
     // the ground far below goes dark at night like the iso backdrops (snow under the moon, the city's streets)
     if (this.ground)
       this.ground.color
-        .setHex(this.theme === "city" ? 0x2c2f38 : 0xf2f4f7)
+        .setHex(0x2c2f38)
         .multiply(amb)
         .multiplyScalar(1 - 0.62 * d.night);
   }
@@ -294,26 +298,21 @@ export class Surroundings {
   update(dt: number, cam: Vector3, animate: boolean) {
     this.dome.position.copy(cam);
     this.stars.position.copy(cam);
+    if (animate && this.theme === "snow") {
+      const off = this.domeMat.uniforms.cloudOff.value as number[];
+      off[0] += dt * 0.0035;
+      off[1] += dt * 0.0015;
+    }
     for (const c of this.clouds) {
       if (animate) c.a += c.speed * dt;
       c.mesh.position.set(this.cx + Math.cos(c.a) * c.r, c.y, this.cy + Math.sin(c.a) * c.r);
       c.mesh.lookAt(cam);
     }
-    for (const t of this.trees) t.rotation.y = Math.atan2(cam.x - t.position.x, cam.z - t.position.z);
-    for (const t of this.trees) (t.material as MeshBasicMaterial).color.copy(this.treeTint);
-    if (this.snow && animate) {
-      const p = this.snow.geometry.getAttribute("position");
-      for (let i = 0; i < p.count; i++) {
-        let y = p.getY(i) - dt * 0.9;
-        if (y < this.snowFloor) y += 22;
-        p.setY(i, y);
-        p.setX(i, p.getX(i) + Math.sin(y * 0.7 + i) * dt * 0.25);
-      }
-      p.needsUpdate = true;
-    }
+    this.campus?.update(dt, cam, animate);
   }
 
   dispose() {
     for (const d of this.disposables) d.dispose();
+    this.campus?.dispose();
   }
 }

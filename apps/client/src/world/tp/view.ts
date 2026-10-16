@@ -59,7 +59,7 @@ import { Light3 } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
 import { Post3 } from "./post3d";
-import { Surroundings, type Themes } from "./sky";
+import { fogFor, Surroundings, type Themes } from "./sky";
 
 type People = NonNullable<ReturnType<typeof people>>;
 
@@ -234,7 +234,10 @@ export class ThirdPersonView {
     // what the studio stands in (clouds / city / snow), the sky by the hour
     this.around = new Surroundings(theme, map, opts.themes);
     this.scene.add(this.around.root);
-    this.scene.fog = new Fog(0xa8c8e0, 40, 150);
+    const fog = fogFor(theme);
+    this.scene.fog = new Fog(0xa8c8e0, fog.near, fog.far);
+    this.camera.far = fog.cameraFar;
+    this.camera.updateProjectionMatrix();
     // floor cues (amber, unlit, drawn over the floor)
     const amber = (o: number) =>
       new MeshBasicMaterial({ color: 0xffa630, transparent: true, opacity: o, depthWrite: false, toneMapped: false });
@@ -540,6 +543,11 @@ export class ThirdPersonView {
     this.around.dispose();
     this.around = new Surroundings(this.opts.theme ?? map.theme ?? "clouds", map, this.opts.themes);
     this.scene.add(this.around.root);
+    const fog = fogFor(this.around.theme);
+    (this.scene.fog as Fog).near = fog.near;
+    (this.scene.fog as Fog).far = fog.far;
+    this.camera.far = fog.cameraFar;
+    this.camera.updateProjectionMatrix();
     this.setHour(this.hour); // (the new room's glass, the new sky)
     this.poolDue = 0;
   }
