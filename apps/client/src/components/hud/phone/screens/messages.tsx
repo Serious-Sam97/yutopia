@@ -10,7 +10,7 @@ import { usePhone } from "@/world/phone/store";
 import { useHud } from "@/world/store";
 import { useWorld } from "../../ctx";
 import s from "../phone.module.css";
-import { cx, dayLabel, Head, hhmm, Ic, PFace, secs, VxFace, Wallpaper, when } from "../ui";
+import { cx, dayLabel, Head, hhmm, Ic, PFace, secs, Thumb, VxFace, Wallpaper, when } from "../ui";
 
 // Messages: threads (1:1, groups, the space's #thread, Vortex), a thread with
 // its bubbles, and starting a new one. Yondra keeps them (world/phone/data.ts).
@@ -162,6 +162,7 @@ export function Thread({ id }: { id: number }) {
   const vxTyping = usePhone((p) => p.vortexTyping);
   const wp = usePhone((p) => p.settings.wallpaper);
   const people = useHud((h) => h.people);
+  const contacts = usePhone((p) => p.contacts);
   const [text, setText] = useState("");
   const [reply, setReply] = useState<Msg | null>(null);
   const [reacting, setReacting] = useState<number | null>(null);
@@ -188,14 +189,17 @@ export function Thread({ id }: { id: number }) {
   if (!ph || !th) return null;
   const vortex = th.kind === "vortex";
   const other = th.kind === "direct" ? th.members[0] : null;
-  const contact = other ? ph.contact(other) : null;
+  const contact = other ? (contacts.find((c) => c.uid === other) ?? null) : null;
+  const stranger = th.kind === "direct" && !!other && !contact;
   const inRoom = other ? people.find((p) => p.uid === other) : null;
   const where = vortex
     ? t("phVortexWhere")
     : th.kind === "direct"
-      ? contact?.online
-        ? [contact.area, contact.here ? null : contact.space].filter(Boolean).join(" · ") || t("phOnCallNow")
-        : t("phOfflineNow")
+      ? stranger
+        ? t("phNotContact")
+        : contact?.online
+          ? [contact.area, contact.here ? null : contact.space].filter(Boolean).join(" · ") || "Yutopia"
+          : t("phOfflineNow")
       : t("phMembers").replace("{n}", String(th.members.length + 1));
   const lastMine = [...(msgs ?? [])].reverse().find((m) => m.from === me && m.id > 0);
   const readBy = lastMine
@@ -224,6 +228,18 @@ export function Thread({ id }: { id: number }) {
               {where}
             </div>
           </div>
+          {stranger && other && (
+            <button
+              type="button"
+              className={s.act}
+              data-nav
+              aria-label={t("phAddToContacts")}
+              title={t("phAddToContacts")}
+              onClick={() => void ph.addContact(other)}
+            >
+              <Ic n="addPerson" size={15} w={2.1} />
+            </button>
+          )}
           {(th.kind === "direct" || vortex) && (
             <button
               type="button"
@@ -295,11 +311,11 @@ export function Thread({ id }: { id: number }) {
                         type="button"
                         className={s.photoBub}
                         style={{ alignSelf: mine ? "flex-end" : "flex-start" }}
-                        onClick={() => ph.go({ app: "gallery", view: "photo", arg: String(m.photo?.id) })}
+                        onClick={() => m.photo && ph.viewPhoto(m.photo)}
                         data-nav
+                        data-photo-msg={m.id}
                       >
-                        {/* biome-ignore lint/performance/noImgElement: a photo from Yondra */}
-                        <img alt="" src={m.photo.url} />
+                        <Thumb p={m.photo} />
                         {m.body && (
                           <div style={{ padding: "7px 10px", font: "12.5px var(--font-body)", textAlign: "left" }}>
                             {m.body}

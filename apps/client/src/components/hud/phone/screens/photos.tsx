@@ -4,12 +4,12 @@ import { EMOTES } from "@yutopia/shared";
 import { useEffect, useState } from "react";
 import { type Key, useTr } from "@/lib/i18n";
 import { emoteUrl } from "@/world/art/emotes";
-import { FILTERS, POSES } from "@/world/phone/camera";
+import { FILTERS, MAX_REC_S, POSES } from "@/world/phone/camera";
 import { usePhone } from "@/world/phone/store";
 import { useHud } from "@/world/store";
 import { useWorld } from "../../ctx";
 import s from "../phone.module.css";
-import { cx, dayLabel, Head, Ic, Wallpaper } from "../ui";
+import { cx, dayLabel, Head, Ic, secs, Thumb, Wallpaper } from "../ui";
 import { ThreadIcon } from "./messages";
 
 // The Gallery (photos kept in Yondra), one photo (send it, make it the
@@ -23,12 +23,15 @@ export function Gallery() {
   const photos = usePhone((p) => p.photos);
   const loaded = usePhone((p) => p.photosLoaded);
   const wp = usePhone((p) => p.settings.wallpaper);
-  const [tab, setTab] = useState<"all" | "selfies" | "sent">("all");
+  const [tab, setTab] = useState<"all" | "selfies" | "videos" | "sent">("all");
   useEffect(() => {
     void ph?.loadPhotos();
   }, [ph]);
   if (!ph) return null;
-  const list = photos.filter((p) => p.id > 0 && (tab === "all" || (tab === "selfies" ? p.selfie : p.sent)));
+  const list = photos.filter(
+    (p) =>
+      p.id > 0 && (tab === "all" || (tab === "selfies" ? p.selfie : tab === "videos" ? p.kind === "video" : p.sent)),
+  );
   const groups: { day: string; items: typeof list }[] = [];
   for (const p of list) {
     const day = dayLabel(p.at);
@@ -52,9 +55,9 @@ export function Gallery() {
           </button>
         </Head>
         <div className={s.seg}>
-          {(["all", "selfies", "sent"] as const).map((x) => (
+          {(["all", "selfies", "videos", "sent"] as const).map((x) => (
             <button key={x} type="button" className={cx(tab === x && s.on)} onClick={() => setTab(x)} data-nav>
-              {t(x === "all" ? "phAll" : x === "selfies" ? "phSelfies" : "phSent")}
+              {t(x === "all" ? "phAll" : x === "selfies" ? "phSelfies" : x === "videos" ? "phVideos" : "phSent")}
             </button>
           ))}
         </div>
@@ -66,15 +69,8 @@ export function Gallery() {
               <div className={s.sec}>{g.day}</div>
               <div className={s.gg}>
                 {g.items.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    data-nav
-                    onClick={() => ph.go({ app: "gallery", view: "photo", arg: String(p.id) })}
-                    data-photo={p.id}
-                  >
-                    {/* biome-ignore lint/performance/noImgElement: a photo from Yondra */}
-                    <img alt="" src={p.url} loading="lazy" />
+                  <button key={p.id} type="button" data-nav onClick={() => ph.viewPhoto(p)} data-photo={p.id}>
+                    <Thumb p={p} />
                     {p.selfie && <span className={s.selfieDot} />}
                   </button>
                 ))}
@@ -91,9 +87,28 @@ export function PhotoView({ id }: { id: number }) {
   const t = useTr();
   const w = useWorld();
   const ph = w?.phone;
-  const p = usePhone((x) => x.photos.find((y) => y.id === id) ?? x.camera?.last ?? null);
+  // mine (in my Gallery), or one sent to me (opened from a thread)
+  const p = usePhone(
+    (x) => x.photos.find((y) => y.id === id) ?? (x.viewing?.id === id ? x.viewing : null) ?? x.camera?.last ?? null,
+  );
+  const me = usePhone((x) => x.me.uid);
   const [sure, setSure] = useState(false);
-  if (!ph || !p) return null;
+  if (!ph) return null;
+  if (!p)
+    return (
+      <div className={s.viewer}>
+        <div style={{ position: "absolute", top: 44, left: 12 }}>
+          <button type="button" className={s.round} onClick={() => ph.back()} aria-label={t("phBack")} data-nav>
+            <Ic n="back" size={16} />
+          </button>
+        </div>
+        <p className={s.empty} style={{ marginTop: 120 }}>
+          {t("phLoading")}
+        </p>
+      </div>
+    );
+  const mine = !p.owner || p.owner === me;
+  const video = p.kind === "video";
   const date = new Date(p.at).toLocaleString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -109,15 +124,45 @@ export function PhotoView({ id }: { id: number }) {
           <Ic n="back" size={16} />
         </button>
       </div>
-      {/* biome-ignore lint/performance/noImgElement: a photo from Yondra */}
-      <img alt="" src={p.url} />
+      {video ? (
+        // biome-ignore lint/a11y/useMediaCaption: a clip from the world, no speech track to caption
+        <video src={p.url} controls autoPlay playsInline />
+      ) : (
+        // biome-ignore lint/performance/noImgElement: a photo from Yondra
+        <img alt="" src={p.url} />
+      )}
       <div style={{ padding: "12px 16px", font: "11.5px/1.5 var(--font-body)", color: "var(--dim)" }}>
         <b style={{ color: "#fff", font: "600 13px var(--font-body)", display: "block" }}>
-          {p.selfie ? "Selfie" : t("app_camera")} · {t(`filter_${p.filter}` as Key)}
+          {mine ? "" : `${ph.nameOf(p.owner)} · `}
+          {video ? t("phVideos").replace(/s$/, "") : p.selfie ? "Selfie" : t("app_camera")} ·{" "}
+          {t(`filter_${p.filter}` as Key)}
         </b>
         {p.where} · {date}
       </div>
-      {sure ? (
+      {!mine ? (
+        <div className={s.vact}>
+          <button type="button" data-nav onClick={() => void ph.keepPhoto(p)}>
+            <b className={s.hl}>
+              <Ic n="gallery" size={19} />
+            </b>
+            {t("phKeep")}
+          </button>
+          <a
+            href={p.url}
+            download={`yutopia-${id}.${video ? "webm" : "jpg"}`}
+            target="_blank"
+            rel="noreferrer"
+            data-nav
+            className={s.cbtnWrap}
+            style={{ fontSize: 10 }}
+          >
+            <b className={s.cbtn} style={{ width: 44, height: 44, background: "rgba(255,255,255,.1)" }}>
+              <Ic n="dl" size={19} />
+            </b>
+            {t("phSaveFile")}
+          </a>
+        </div>
+      ) : sure ? (
         <div className={s.vact}>
           <span className={s.sub} style={{ alignSelf: "center" }}>
             {t("phDeleteSure")}
@@ -143,22 +188,24 @@ export function PhotoView({ id }: { id: number }) {
             </b>
             {t("phSend")}
           </button>
-          <button
-            type="button"
-            data-nav
-            onClick={() => {
-              ph.setSettings({ wallpaper: `photo:${id}` });
-              ph.note(t("phWallpaperSet"));
-            }}
-          >
-            <b>
-              <Ic n="wall" size={19} />
-            </b>
-            {t("phSetWallpaper")}
-          </button>
+          {!video && (
+            <button
+              type="button"
+              data-nav
+              onClick={() => {
+                ph.setSettings({ wallpaper: `photo:${id}` });
+                ph.note(t("phWallpaperSet"));
+              }}
+            >
+              <b>
+                <Ic n="wall" size={19} />
+              </b>
+              {t("phSetWallpaper")}
+            </button>
+          )}
           <a
             href={p.url}
-            download={`yutopia-${id}.jpg`}
+            download={`yutopia-${id}.${video ? "webm" : "jpg"}`}
             target="_blank"
             rel="noreferrer"
             data-nav
@@ -228,8 +275,7 @@ export function SendTo({ id }: { id: number | string }) {
                     ph.back();
                   }}
                 >
-                  {/* biome-ignore lint/performance/noImgElement: a photo from Yondra */}
-                  <img alt="" src={p.url} loading="lazy" />
+                  <Thumb p={p} />
                 </button>
               ))}
             </div>
@@ -339,30 +385,37 @@ export function Viewfinder() {
         </button>
       </div>
       <div className={cx(s.vfTop, s.vfGlass)}>
-        <button type="button" className={cx(c.mode === "photo" && s.on)} onClick={() => cam.setMode("photo")}>
+        <button type="button" className={cx(!c.video && s.on)} onClick={() => cam.setVideo(false)} disabled={!!c.rec}>
           {t("phPhotoMode")}
         </button>
-        <button type="button" className={cx(c.mode === "selfie" && s.on)} onClick={() => cam.setMode("selfie")}>
-          {t("phSelfieMode")}
-        </button>
-        <button type="button" className={s.off} disabled>
-          {t("phVideoLater")}
+        <button
+          type="button"
+          className={cx(c.video && s.on)}
+          onClick={() => cam.setVideo(true)}
+          disabled={!!c.rec}
+          data-video-mode
+        >
+          {t("phVideoMode")}
         </button>
       </div>
+      {c.rec > 0 && <RecTimer since={c.rec} />}
       <div className={cx(s.rail, s.vfGlass)}>
         <button
           type="button"
-          className={s.rb}
+          className={cx(s.rb, c.mode === "selfie" && s.onBtn)}
           onClick={() => cam.setMode(c.mode === "selfie" ? "photo" : "selfie")}
-          aria-label="Flip"
+          aria-label={t("phSelfieMode")}
+          aria-pressed={c.mode === "selfie"}
+          title={t("phSelfieMode")}
+          disabled={!!c.rec}
         >
           <Ic n="flip" size={22} />
         </button>
         <button
           type="button"
-          className={s.shut}
+          className={cx(s.shut, c.video && s.shutVideo, c.rec > 0 && s.shutRec)}
           onClick={() => void cam.shoot()}
-          aria-label={t("phShoot")}
+          aria-label={c.video ? t("phRecord") : t("phShoot")}
           disabled={c.busy}
           data-shutter
         >
@@ -373,13 +426,12 @@ export function Viewfinder() {
           className={s.thumb}
           onClick={() => {
             cam.close();
-            if (c.last && c.last.id > 0) ph.go({ app: "gallery", view: "photo", arg: String(c.last.id) });
+            if (c.last && c.last.id > 0) ph.viewPhoto(c.last);
             else ph.open("gallery");
           }}
           aria-label={t("app_gallery")}
         >
-          {/* biome-ignore lint/performance/noImgElement: a photo */}
-          {c.last && <img alt="" src={c.last.url} />}
+          {c.last && <Thumb p={c.last} />}
         </button>
       </div>
       <div className={cx(s.poses, s.vfGlass)}>
@@ -446,7 +498,8 @@ export function Viewfinder() {
         <br />
         <span className={s.kc}>+</span>
         <span className={s.kc}>−</span>
-        {t("phZoom")} &nbsp; <span className={s.kc}>1–8</span>
+        {t("phZoom")} &nbsp; <span className={s.kc}>V</span>
+        {t("phVideoMode").toLowerCase()} &nbsp; <span className={s.kc}>1–8</span>
         {t("phPose")} &nbsp; <span className={s.kc}>Esc</span>
         {t("phBack")}
       </div>
@@ -462,6 +515,22 @@ export function Viewfinder() {
         </div>
       )}
       <span hidden data-me={name} />
+    </div>
+  );
+}
+
+// recording: the red light and how long, against the 30 s
+function RecTimer({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const i = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(i);
+  }, []);
+  const s0 = Math.min(MAX_REC_S, Math.floor((now - since) / 1000));
+  return (
+    <div className={s.rec} data-rec>
+      <i />
+      {secs(s0)} / {secs(MAX_REC_S)}
     </div>
   );
 }

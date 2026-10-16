@@ -38,6 +38,7 @@ export class Player extends Schema {
   @type("string") phoneCase = "walnut";
   @type("float64") shotAt = 0;
   @type("string") phonePose = ""; // posing for a photo (shared PHOTO_POSES)
+  @type("boolean") recording = false; // its camera recording a video
 }
 
 export class WorldObject extends Schema {

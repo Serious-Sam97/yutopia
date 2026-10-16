@@ -5,6 +5,7 @@ import { type ReactNode, type RefObject, useEffect, useLayoutEffect, useState } 
 import { lang, tr } from "@/lib/i18n";
 import { type VortexMood, vortexSvg } from "@/world/art/vortex/vortexArt";
 import type { Phone } from "@/world/phone";
+import type { PhotoRef } from "@/world/phone/store";
 import { phone, usePhone } from "@/world/phone/store";
 import { Face } from "../Face";
 import s from "./phone.module.css";
@@ -277,4 +278,21 @@ export function useNav(root: RefObject<HTMLDivElement | null>, ph: Phone | null,
   useEffect(() => {
     phone.set({ sel: 0 });
   }, [key]);
+}
+
+// A photo or a video in a grid or a bubble (a video: its first frame, a play
+// mark and its length).
+export function Thumb({ p }: { p: PhotoRef }) {
+  if (p.kind !== "video")
+    // biome-ignore lint/performance/noImgElement: a photo from Yondra
+    return <img alt="" src={p.url} loading="lazy" />;
+  return (
+    <>
+      <video src={`${p.url}#t=0.1`} muted playsInline preload="metadata" />
+      <span className={s.playMark}>
+        <Ic n="play" size={12} fill />
+        {secs(p.secs)}
+      </span>
+    </>
+  );
 }

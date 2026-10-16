@@ -289,28 +289,14 @@ function VideoCall({ name, uid }: { name: string; uid: number }) {
   const w = useWorld();
   const ph = w?.phone;
   const c = usePhone((p) => p.call);
-  const far = useRef<HTMLDivElement>(null);
-  const mine = useRef<HTMLDivElement>(null);
   const [, bump] = useState(0);
   useEffect(() => ph?.calls.onVideos(() => bump((n) => n + 1)), [ph]);
   const theirs = ph?.calls.videoOf(uid) ?? null;
   const myCam = ph?.calls.myCamera() ?? null;
-  useEffect(() => {
-    const el = far.current;
-    if (!el) return;
-    el.replaceChildren(...(theirs ? [theirs] : []));
-    void theirs?.play().catch(() => {});
-  });
-  useEffect(() => {
-    const el = mine.current;
-    if (!el) return;
-    el.replaceChildren(...(myCam ? [myCam] : []));
-    void myCam?.play().catch(() => {});
-  });
   if (!ph || !c) return null;
   return (
     <div style={{ position: "absolute", inset: 0 }} data-video-call>
-      <div className={s.far} ref={far} />
+      <VideoSlot el={theirs} className={s.far} />
       {!theirs && (
         <div
           className={s.far}
@@ -332,8 +318,12 @@ function VideoCall({ name, uid }: { name: string; uid: number }) {
           {t("phVideo").toLowerCase()} · {secs(Math.floor((Date.now() - c.startedAt) / 1000))}
         </div>
       </div>
-      <div className={s.pip} ref={mine}>
-        {!myCam && <PFace avatar={ph.avatarOf(ph.ctl.myUid())} name="" size={64} />}
+      <div className={s.pip}>
+        {myCam ? (
+          <VideoSlot el={myCam} className={s.pipVideo} />
+        ) : (
+          <PFace avatar={ph.avatarOf(ph.ctl.myUid())} name="" size={64} />
+        )}
       </div>
       <div className={s.vbar}>
         <button
@@ -376,4 +366,18 @@ function VideoCall({ name, uid }: { name: string; uid: number }) {
       </div>
     </div>
   );
+}
+
+// A live <video> from LiveKit, in a box React never fills (React mustn't own
+// what's moved in and out of it).
+function VideoSlot({ el, className }: { el: HTMLVideoElement | null; className?: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const b = box.current;
+    if (!b) return;
+    if (el && el.parentElement !== b) b.replaceChildren(el);
+    if (!el) b.replaceChildren();
+    void el?.play().catch(() => {});
+  }, [el]);
+  return <div ref={box} className={className} />;
 }

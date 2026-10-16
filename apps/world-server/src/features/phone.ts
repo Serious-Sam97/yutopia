@@ -179,7 +179,14 @@ registerFeature((room: SpaceRoom) => {
     // at the ear / held up only while on a call; in the pocket or looking at it any time
     if ((s === "call" || s === "video") && !onCall) return;
     p.phone = s;
-    if (s !== "photo" && s !== "selfie") p.phonePose = "";
+    if (s !== "photo" && s !== "selfie") {
+      p.phonePose = "";
+      p.recording = false;
+    }
+  });
+  room.on("phone:rec", (client, m) => {
+    const p = me(client);
+    if (p) p.recording = !!m?.on && (p.phone === "photo" || p.phone === "selfie");
   });
   room.on("phone:pose", (client, m) => {
     const p = me(client);

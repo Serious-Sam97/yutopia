@@ -77,6 +77,10 @@ test("texts arrive live (the phone peeks up), and a call rings, is answered and 
   for (const p of [page, bia])
     await p.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
   const biaUid = (await world(bia, (w) => w.myUid())) as number;
+  const anaUid = (await world(page, (w) => w.myUid())) as number;
+  // the phone book: Ana adds Bia by her id (from Bia's Settings), Bia adds Ana
+  await page.evaluate((u) => (window as any).__yutopia.phone.addContact(u), biaUid);
+  await bia.evaluate((u) => (window as any).__yutopia.phone.addContact(u), anaUid);
 
   // Ana opens a thread with Bia and texts her
   await world(page, (w) => w.togglePhone(true));
@@ -177,4 +181,137 @@ test("the phone's screens (shots)", async ({ page }) => {
   await page.waitForTimeout(9000);
   await page.locator("[data-phone-open]").screenshot({ path: `${SHOTS}/screen-vortex-call.png` });
   await page.evaluate(() => (window as any).__yutopia.phone.calls.hangup());
+});
+
+test("contacts are the people you add by id; a photo sent to you opens; a video call holds up", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(150_000);
+  const tokA = await token(ANA);
+  const tokB = await token(BIA);
+  const space = await spaceId(tokA);
+  await enter(page, tokA, space);
+  const bia = await browser.newPage();
+  const errors: string[] = [];
+  for (const p of [page, bia]) p.on("pageerror", (e) => errors.push(e.message));
+  await enter(bia, tokB, space);
+  for (const p of [page, bia])
+    await p.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
+  const biaUid = (await world(bia, (w) => w.myUid())) as number;
+  const anaUid = (await world(page, (w) => w.myUid())) as number;
+
+  // Ana's Settings show her id; Bia removes her, then adds her back by typing it
+  await world(page, (w) => w.togglePhone(true));
+  await page.waitForTimeout(2300);
+  await page.evaluate(() => (window as any).__phone.set({ stack: [{ app: "home" }, { app: "settings" }], sel: 0 }));
+  await expect(page.locator(`[data-my-id="${anaUid}"]`)).toBeVisible();
+  await bia.evaluate((u) => (window as any).__yutopia.phone.removeContact(u), anaUid);
+  await world(bia, (w) => w.togglePhone(true));
+  await bia.waitForTimeout(2300);
+  await bia.evaluate(() => (window as any).__phone.set({ stack: [{ app: "home" }, { app: "contacts" }], sel: 0 }));
+  await bia.locator("[data-add-contact]").click();
+  await bia.locator("[data-contact-id]").fill(String(anaUid));
+  await bia.keyboard.press("Enter");
+  await bia.locator("[data-contact-add]").click();
+  await expect
+    .poll(() => bia.evaluate(() => (window as any).__phone.get().contacts.map((c: any) => c.uid)))
+    .toContain(anaUid);
+  await page.evaluate((u) => (window as any).__yutopia.phone.addContact(u), biaUid);
+
+  // Ana takes a photo and sends it to Bia; Bia opens it from the thread (not a black screen) and keeps it
+  await page.evaluate(() => (window as any).__yutopia.phone.camera.open("photo"));
+  await page.waitForTimeout(1200);
+  const n0 = (await page.evaluate(() => (window as any).__phone.get().photos.length)) as number;
+  await page.locator("[data-shutter]").click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__phone.get().photos.length), { timeout: 15_000 })
+    .toBeGreaterThan(n0);
+  await page.keyboard.press("Escape");
+  const photoId = (await page.evaluate(
+    () => (window as any).__phone.get().photos.find((p: any) => p.id > 0).id,
+  )) as number;
+  await page.evaluate(
+    async ([u, pid]) => {
+      const ph = (window as any).__yutopia.phone;
+      await ph.openThreadWith([u]);
+      const t = (window as any).__phone.get().threads.find((x: any) => x.kind === "direct" && x.members[0] === u);
+      await ph.send(t.id, "", { photoId: pid });
+    },
+    [biaUid, photoId],
+  );
+  await bia.evaluate((u) => (window as any).__yutopia.phone.openThreadWith([u]), anaUid);
+  await bia.locator("[data-photo-msg]").last().click();
+  await expect(bia.locator(`[data-photo-view="${photoId}"] img`)).toBeVisible();
+  if (SHOTS) await bia.screenshot({ path: `${SHOTS}/phone-received-photo.png` });
+
+  // a video call: answered, both pictures up, no crash, hung up
+  await page.evaluate((u) => (window as any).__yutopia.phone.calls.start([u], true), biaUid);
+  await expect(bia.locator("[data-call-answer]")).toBeVisible({ timeout: 10_000 });
+  await bia.locator("[data-call-answer]").click();
+  await expect(page.locator("[data-video-call]")).toBeVisible({ timeout: 15_000 });
+  await expect(bia.locator("[data-video-call]")).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(4000);
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/phone-video-call.png` });
+  // the camera off and on again (where it used to crash)
+  await page.locator("[data-video-call] button[aria-label='Camera']").click();
+  await page.waitForTimeout(800);
+  await page.locator("[data-video-call] button[aria-label='Camera']").click();
+  await page.waitForTimeout(1500);
+  await expect(page.locator("[data-video-call]")).toBeVisible();
+  await page.locator("[data-call-end]").first().click();
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__phone.get().call?.phase ?? "none"), { timeout: 10_000 })
+    .not.toBe("live");
+  expect(errors.filter((e) => !/ResizeObserver/.test(e))).toEqual([]);
+  await bia.close();
+});
+
+test("the camera records a video into the Gallery; others see the red light", async ({ page }) => {
+  const tok = await token(ANA);
+  await enter(page, tok, await spaceId(tok));
+  await page.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
+  await world(page, (w) => w.togglePhone(true));
+  await page.waitForTimeout(2300);
+  await page.evaluate(() => (window as any).__yutopia.phone.camera.open("selfie"));
+  await page.locator("[data-video-mode]").click();
+  const v0 = (await page.evaluate(
+    () => (window as any).__phone.get().photos.filter((p: any) => p.kind === "video").length,
+  )) as number;
+  await page.locator("[data-shutter]").click();
+  await expect(page.locator("[data-rec]")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const w = (window as any).__yutopia;
+        return w.room.state.players.get(w.room.sessionId).recording;
+      }),
+    )
+    .toBe(true);
+  await page.waitForTimeout(3500);
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/phone-recording.png` });
+  await page.locator("[data-shutter]").click();
+  await expect
+    .poll(
+      () => page.evaluate(() => (window as any).__phone.get().photos.filter((p: any) => p.kind === "video").length),
+      {
+        timeout: 20_000,
+      },
+    )
+    .toBeGreaterThan(v0);
+  const v = await page.evaluate(() => (window as any).__phone.get().photos.find((p: any) => p.kind === "video"));
+  expect(v.secs).toBeGreaterThanOrEqual(2);
+  // it plays in the viewer
+  await page.keyboard.press("Escape");
+  await page.evaluate((p) => (window as any).__yutopia.phone.viewPhoto(p), v);
+  await expect(page.locator(`[data-photo-view="${v.id}"] video`)).toBeVisible();
+  await page.waitForFunction(
+    (id) => {
+      const el = document.querySelector(`[data-photo-view="${id}"] video`) as HTMLVideoElement | null;
+      return !!el && el.readyState >= 2;
+    },
+    v.id,
+    { timeout: 15_000 },
+  );
+  if (SHOTS) await page.locator("[data-phone-open]").screenshot({ path: `${SHOTS}/phone-video-view.png` });
 });

@@ -950,6 +950,10 @@ export class WorldController {
       fov: 56,
     };
   }
+  // the canvas the world is drawn on right now (the phone records it)
+  viewCanvas(): HTMLCanvasElement {
+    return this.tp ? this.tp.renderer.domElement : (this.engine?.app.canvas as HTMLCanvasElement);
+  }
   snapshot(): HTMLCanvasElement | null {
     return this.tp ? this.tp.snapshot() : (this.engine?.snapshot() ?? null);
   }
@@ -2788,6 +2792,7 @@ export class WorldController {
       phoneCase: p.phoneCase,
       phonePose: p.phonePose,
       ringing: p.ringing,
+      recording: p.recording,
     };
   }
 

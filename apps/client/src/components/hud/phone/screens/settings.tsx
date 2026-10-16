@@ -57,6 +57,28 @@ export function Settings() {
               </div>
             </div>
           </div>
+          <div className={cx(s.glass, s.idCard)} data-my-id={me.uid}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className={s.sec} style={{ margin: 0 }}>
+                {t("phYourId")}
+              </div>
+              <div className={cx(s.idNum, s.holoText)}>{me.uid}</div>
+              <div className={s.sub} style={{ whiteSpace: "normal", fontSize: 11 }}>
+                {t("phYourIdHint")}
+              </div>
+            </div>
+            <button
+              type="button"
+              className={s.get}
+              data-nav
+              onClick={() => {
+                void navigator.clipboard?.writeText(String(me.uid)).catch(() => {});
+                ph.note(t("phCopied"), 1400);
+              }}
+            >
+              {t("phCopy")}
+            </button>
+          </div>
           <div className={cx(s.list, s.glass)}>
             {row("wall", "linear-gradient(150deg,#ff7ac8,#a23cf0)", t("phWallpaper"), chev(""), () =>
               ph.go({ app: "settings", view: "wallpaper" }),
@@ -113,7 +135,7 @@ export function Wallpapers() {
   const w = useWorld();
   const ph = w?.phone;
   const st = usePhone((p) => p.settings);
-  const photos = usePhone((p) => p.photos.filter((x) => x.id > 0).slice(0, 8));
+  const photos = usePhone((p) => p.photos.filter((x) => x.id > 0 && x.kind !== "video").slice(0, 8));
   const [lock, setLock] = useState(false);
   useEffect(() => {
     void ph?.loadPhotos();

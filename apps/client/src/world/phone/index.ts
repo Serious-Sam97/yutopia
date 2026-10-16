@@ -11,7 +11,7 @@ import { Calls } from "./call";
 import { Camera } from "./camera";
 import { liveOf, phoneApi } from "./data";
 import { Ringer, textTone, ui } from "./sounds";
-import { type AppId, type Msg, phone, type Screen, type Thread, top } from "./store";
+import { type AppId, type Msg, type PhotoRef, phone, type Screen, type Thread, top } from "./store";
 import { VortexLine } from "./vortex";
 
 // The phone's chunk (docs/plan/21-cellphone.md): Vortex Mobile. It loads soon
@@ -247,12 +247,43 @@ export class Phone {
   nameOf(uid: number | null): string {
     if (uid === null || uid === 0) return "Vortex";
     if (uid === phone.get().me.uid) return tr("phYou");
-    return this.contact(uid)?.name ?? this.ctl.personByUid(uid)?.name ?? "…";
+    return this.contact(uid)?.name ?? this.ctl.personByUid(uid)?.name ?? this.known(uid)?.name ?? "…";
   }
   avatarOf(uid: number | null): string {
     if (uid === null || uid === 0) return "vortex";
     if (uid === phone.get().me.uid) return phone.get().me.avatar;
-    return this.ctl.personByUid(uid)?.avatar ?? this.contact(uid)?.avatar ?? "{}";
+    return this.ctl.personByUid(uid)?.avatar ?? this.contact(uid)?.avatar ?? this.known(uid)?.avatar ?? "{}";
+  }
+  // someone I'm in a thread with (maybe not in my contacts)
+  private known(uid: number) {
+    for (const t of phone.get().threads) {
+      const w = t.who[String(uid)];
+      if (w) return w;
+    }
+    return null;
+  }
+
+  // ── my phone book: people I added by their user id ───────────────────────
+  isContact(uid: number): boolean {
+    return phone.get().contacts.some((c) => c.uid === uid);
+  }
+  lookup(uid: number) {
+    return phoneApi.lookup(uid);
+  }
+  async addContact(uid: number): Promise<boolean> {
+    try {
+      const c = await phoneApi.addContact(uid, this.ctl.session?.space.id ?? 0);
+      phone.set((s) => ({ contacts: [...s.contacts.filter((x) => x.uid !== c.uid), c] }));
+      ui("connect", 0.5);
+      return true;
+    } catch {
+      this.note(tr("phOffline"));
+      return false;
+    }
+  }
+  async removeContact(uid: number) {
+    phone.set((s) => ({ contacts: s.contacts.filter((x) => x.uid !== uid) }));
+    phoneApi.removeContact(uid).catch(() => this.note(tr("phOffline")));
   }
 
   // ── threads and texts ────────────────────────────────────────────────────
@@ -541,6 +572,23 @@ export class Phone {
       if (st.lockWallpaper === `photo:${id}`) this.setSettings({ lockWallpaper: "portal" });
     } catch {
       this.note(tr("phOffline"));
+    }
+  }
+  // a photo / video from a thread: open it (it may be someone else's)
+  viewPhoto(p: PhotoRef) {
+    phone.set({ viewing: p });
+    this.go({ app: "gallery", view: "photo", arg: String(p.id) });
+  }
+  // someone else's: a copy in my own Gallery
+  async keepPhoto(p: PhotoRef) {
+    try {
+      const mine = await phoneApi.keep(p.id);
+      phone.set((s) => ({ photos: [mine, ...s.photos.filter((x) => x.id !== mine.id)] }));
+      this.note(tr("phSaved"), 1600);
+      return mine;
+    } catch {
+      this.note(tr("phSaveFailed"));
+      return null;
     }
   }
   markSent(id: number) {

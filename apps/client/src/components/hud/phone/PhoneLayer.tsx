@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Component, type ReactNode, useEffect, useRef, useState } from "react";
 import { useTr } from "@/lib/i18n";
 import { phone, top, usePhone } from "@/world/phone/store";
 import { useHud } from "@/world/store";
@@ -9,7 +9,7 @@ import s from "./phone.module.css";
 import { CallScreen } from "./screens/call";
 import { Boot, Home } from "./screens/home";
 import { Messages, NewThread, Thread } from "./screens/messages";
-import { ContactCard, Contacts, PhoneApp, VortexCard } from "./screens/people";
+import { AddContact, ContactCard, Contacts, PhoneApp, VortexCard } from "./screens/people";
 import { Gallery, PhotoView, SendTo, Viewfinder } from "./screens/photos";
 import { About, CasePick, Maps, Settings, Sounds, Store, Wallpapers } from "./screens/settings";
 import { caseVars, cx, Ic, PFace, StatusBar, secs, useNav, VxFace } from "./ui";
@@ -19,6 +19,36 @@ import { caseVars, cx, Ic, PFace, StatusBar, secs, useNav, VxFace } from "./ui";
 // when a text arrives, keeps a pill at the top while a call goes on with it
 // put away, and turns the whole screen into the viewfinder for the camera.
 export function PhoneLayer() {
+  return (
+    <PhoneGuard>
+      <PhoneLayerInner />
+    </PhoneGuard>
+  );
+}
+
+// A bug in the phone never takes the world down: it puts the phone away and
+// comes back clean (the error is logged).
+class PhoneGuard extends Component<{ children: ReactNode }, { broke: number }> {
+  state = { broke: 0 };
+  static getDerivedStateFromError() {
+    return { broke: Date.now() };
+  }
+  componentDidCatch(e: unknown) {
+    console.error("[phone] screen crashed", e);
+    const ph = (
+      window as unknown as { __yutopia?: { phone?: { camera: { close(): void }; setOpen(o: boolean): void } } }
+    ).__yutopia?.phone;
+    ph?.camera.close();
+    ph?.setOpen(false);
+    phone.set({ stack: [{ app: "home" }], sel: 0 });
+    setTimeout(() => this.setState({ broke: 0 }), 300);
+  }
+  render() {
+    return this.state.broke ? null : this.props.children;
+  }
+}
+
+function PhoneLayerInner() {
   const open = usePhone((p) => p.open);
   const camera = usePhone((p) => !!p.camera);
   const theme = usePhone((p) => p.settings.theme);
@@ -95,6 +125,7 @@ function Route() {
       return <Messages />;
     case "contacts":
       if (sc.view === "card") return <ContactCard uid={Number(arg)} key={arg} />;
+      if (sc.view === "add") return <AddContact />;
       return <Contacts />;
     case "phone":
       return <PhoneApp tab={arg || "recents"} />;

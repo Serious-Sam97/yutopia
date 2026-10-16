@@ -157,6 +157,7 @@ export interface AvatarState {
   phoneCase?: string;
   phonePose?: string;
   ringing?: boolean;
+  recording?: boolean; // its camera recording (a red light)
 }
 
 interface AvatarView {
@@ -1683,7 +1684,8 @@ export class WorldEngine {
         o.busy !== s.busy ||
         o.phone !== s.phone ||
         o.phonePose !== s.phonePose ||
-        o.ringing !== s.ringing)
+        o.ringing !== s.ringing ||
+        o.recording !== s.recording)
     )
       this.activeAt = performance.now();
     const prevName = v.state.name;
@@ -2320,7 +2322,14 @@ export class WorldEngine {
     const g = r.glow;
     g.clear();
     const lit = this.night > 0.15 && s.phone !== "call" && this.quality !== "low";
-    g.visible = lit;
+    const rec = !!s.recording && Math.floor(this.time * 2) % 2 === 0;
+    g.visible = lit || rec;
+    if (rec) {
+      // recording: a red light on the phone, blinking
+      g.circle(hand[0] - 1.5, hand[1] - 13, 2.2).fill({ color: 0xff2030, alpha: 1 });
+      g.circle(hand[0] - 1.5, hand[1] - 13, 5).fill({ color: 0xff2030, alpha: 0.35 });
+      g.zIndex = sp.zIndex + 0.2;
+    }
     if (lit) {
       // the screen's light: on the face (front views) or round the hand
       const a = Math.min(0.5, this.night * 0.6);

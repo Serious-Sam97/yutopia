@@ -10,13 +10,14 @@ import { useWorld } from "../../ctx";
 import s from "../phone.module.css";
 import { cx, Head, Ic, PFace, secs, VxFace, Wallpaper, when } from "../ui";
 
-// The team as contacts (where each of them is right now), one person's card,
-// the Phone app (Recents · Favourites · Keypad) and Vortex's card.
+// Contacts (the people you added by their user id, and where each of them is
+// right now), adding someone, one person's card, the Phone app (Recents ·
+// Favourites · Keypad) and Vortex's card.
 
 function whereOf(c: Contact, t: ReturnType<typeof useTr>): string {
   if (c.uid === 0) return t("phVortexWhere");
   if (!c.online) return t("phOfflineNow");
-  return [c.area, c.here ? null : c.space].filter(Boolean).join(" · ") || (c.space ?? "");
+  return [c.area, c.here ? null : c.space].filter(Boolean).join(" · ") || "Yutopia";
 }
 
 export function Contacts() {
@@ -59,7 +60,19 @@ export function Contacts() {
     <>
       <Wallpaper id={wp} dim />
       <div className={s.content}>
-        <Head title={t("app_contacts")} ph={ph} />
+        <Head title={t("app_contacts")} ph={ph}>
+          <button
+            type="button"
+            className={s.act}
+            data-nav
+            aria-label={t("phAddContact")}
+            title={t("phAddContact")}
+            onClick={() => ph.go({ app: "contacts", view: "add" })}
+            data-add-contact
+          >
+            <Ic n="plus" size={15} w={2.2} />
+          </button>
+        </Head>
         <label className={s.srch}>
           <Ic n="search" size={15} />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("phSearchTeam")} data-nav />
@@ -71,8 +84,9 @@ export function Contacts() {
               <div className={cx(s.list, s.glass)}>{here.map(row)}</div>
             </>
           )}
-          <div className={s.sec}>{t("phElsewhere")}</div>
-          <div className={cx(s.list, s.glass)}>
+          {!contacts.length && !q && <p className={s.empty}>{t("phNoContacts")}</p>}
+          {here.length > 0 && rest.length > 0 && <div className={s.sec}>{t("phElsewhere")}</div>}
+          <div className={cx(s.list, s.glass)} style={here.length && !rest.length ? { marginTop: 8 } : undefined}>
             {rest.map(row)}
             {(!q || "vortex".includes(q.toLowerCase())) && (
               <button type="button" className={s.row} data-nav onClick={() => ph.open("vortex")}>
@@ -85,6 +99,115 @@ export function Contacts() {
             )}
           </div>
         </div>
+      </div>
+    </>
+  );
+}
+
+// Add someone by their user id (it's in their phone's Settings)
+export function AddContact() {
+  const t = useTr();
+  const w = useWorld();
+  const ph = w?.phone;
+  const wp = usePhone((p) => p.settings.wallpaper);
+  const [id, setId] = useState("");
+  const [found, setFound] = useState<{ uid: number; name: string; avatar: string; added: boolean } | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!ph) return null;
+  const find = async () => {
+    const uid = Number(id);
+    if (!uid) return;
+    setBusy(true);
+    setErr("");
+    setFound(null);
+    try {
+      const r = await ph.lookup(uid);
+      setFound({ uid: r.person.uid, name: r.person.name, avatar: r.person.avatar, added: r.added });
+    } catch {
+      setErr(t("phNobody"));
+    }
+    setBusy(false);
+  };
+  return (
+    <>
+      <Wallpaper id={wp} dim />
+      <div className={s.content}>
+        <Head title={t("phAddContact")} ph={ph} />
+        <div className={s.sec}>{t("phAddById")}</div>
+        <form
+          style={{ display: "flex", gap: 8 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void find();
+          }}
+        >
+          <input
+            className={s.idIn}
+            inputMode="numeric"
+            value={id}
+            onChange={(e) => setId(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
+            onKeyDown={(e) => e.stopPropagation()}
+            placeholder="1234"
+            aria-label={t("phAddById")}
+            data-nav
+            data-contact-id
+          />
+          <button
+            type="submit"
+            className={s.act}
+            style={{ width: 44, height: 44 }}
+            disabled={busy || !id}
+            aria-label={t("phFind")}
+            data-nav
+          >
+            <Ic n="search" size={18} />
+          </button>
+        </form>
+        <p className={s.sub} style={{ whiteSpace: "normal", margin: "8px 4px", fontSize: 11.5 }}>
+          {t("phAddHint")}
+        </p>
+        {err && <p className={s.empty}>{err}</p>}
+        {found && (
+          <div
+            className={s.glass}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 8,
+              padding: 16,
+              marginTop: 8,
+            }}
+          >
+            <PFace avatar={found.avatar} name={found.name} size={72} />
+            <div className={s.nm} style={{ fontSize: 16 }}>
+              {found.name}
+            </div>
+            <div className={s.sub}>ID {found.uid}</div>
+            {found.added ? (
+              <span className={s.sub} style={{ color: "var(--cya)" }}>
+                {t("phAdded")}
+              </span>
+            ) : (
+              <button
+                type="button"
+                className={s.get}
+                style={{ background: "var(--holo)", padding: "9px 22px" }}
+                data-nav
+                data-contact-add
+                onClick={async () => {
+                  if (await ph.addContact(found.uid)) {
+                    setFound({ ...found, added: true });
+                    setTimeout(() => ph.back(), 700);
+                  }
+                }}
+              >
+                {t("phAdd")}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
@@ -145,6 +268,29 @@ export function ContactCard({ uid }: { uid: number }) {
           ))}
         </div>
         <div className={cx(s.list, s.glass)}>
+          {c ? (
+            <button
+              type="button"
+              className={s.srow}
+              data-nav
+              onClick={() => {
+                void ph.removeContact(uid);
+                ph.back();
+              }}
+            >
+              <span className={s.si} style={{ background: "#5a2433" }}>
+                <Ic n="trash" />
+              </span>
+              {t("phRemoveContact")}
+            </button>
+          ) : (
+            <button type="button" className={s.srow} data-nav onClick={() => void ph.addContact(uid)}>
+              <span className={s.si} style={{ background: "linear-gradient(150deg,#ff7ac8,#a23cf0)" }}>
+                <Ic n="addPerson" />
+              </span>
+              {t("phAddToContacts")}
+            </button>
+          )}
           <button
             type="button"
             className={s.srow}

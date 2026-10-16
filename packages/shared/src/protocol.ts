@@ -219,6 +219,7 @@ export interface ClientMessages {
   "phone:prefs": { case: string; ringtone: string };
   "phone:shot": Record<string, never>;
   "phone:pose": { pose: string }; // a pose for the photo (shared PHOTO_POSES)
+  "phone:rec": { on: boolean }; // recording a video (a red light on the phone)
   // calls (features/phone.ts): call people (user ids; anywhere in Yutopia),
   // answer, decline, hang up, add someone, the camera on or off
   "call:start": { to: number[]; video: boolean };

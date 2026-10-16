@@ -41,6 +41,9 @@ export interface Contact {
 
 export interface PhotoRef {
   id: number;
+  kind: "photo" | "video";
+  secs: number; // a video's length
+  owner: number; // whose it is (a photo sent to me is someone else's)
   url: string;
   w: number;
   h: number;
@@ -76,6 +79,7 @@ export interface Thread {
   last: Msg | null;
   muted: boolean;
   readAt: Record<string, number>; // uid → the last message id they've read
+  who: Record<string, { name: string; avatar: string }>; // its members (people not in my contacts too)
 }
 
 export interface CallView {
@@ -96,6 +100,8 @@ export interface CallView {
 
 export interface CameraState {
   mode: "photo" | "selfie";
+  video: boolean; // recording video instead of taking photos
+  rec: number; // recording since (ms), 0: not
   filter: string; // none · film · vhs · bw · polaroid
   pose: string; // "" · smile · peace · wink · point · thumbs · or an emote
   flash: boolean;
@@ -140,6 +146,7 @@ export interface PhoneState {
   typing: Record<number, { uid: number; until: number }>;
   photos: PhotoRef[];
   photosLoaded: boolean;
+  viewing: PhotoRef | null; // a photo / video opened from a thread (maybe someone else's)
   recents: Recent[];
   call: CallView | null;
   peek: Peek | null;
@@ -165,6 +172,7 @@ const initial: PhoneState = {
   typing: {},
   photos: [],
   photosLoaded: false,
+  viewing: null,
   recents: [],
   call: null,
   peek: null,

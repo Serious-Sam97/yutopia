@@ -1,7 +1,9 @@
 "use client";
 
 import { PHOTO_MAX_PX } from "@yutopia/shared/phone";
+import { Track } from "livekit-client";
 import { tr } from "@/lib/i18n";
+import { mixer } from "../audio";
 import { hud } from "../store";
 import type { Phone } from ".";
 import { phoneApi } from "./data";
@@ -35,6 +37,8 @@ export class Camera {
     phone.set({
       camera: {
         mode,
+        video: p.camera?.video ?? false,
+        rec: 0,
         filter: p.camera?.filter ?? "none",
         pose: "",
         flash: p.camera?.flash ?? false,
@@ -59,6 +63,7 @@ export class Camera {
 
   close() {
     if (!phone.get().camera) return;
+    if (this.rec) void this.stopRec();
     if (this.countTimer) clearInterval(this.countTimer);
     this.countTimer = null;
     this.ph.ctl.photoMode(null);
@@ -122,6 +127,7 @@ export class Camera {
     }
     if (e.repeat) return k === " " || k === "enter";
     if (k === " " || k === "enter") void this.shoot();
+    else if (k === "v") this.setVideo(!phone.get().camera?.video);
     else if (k === "tab" || k === "c") this.setMode(phone.get().camera?.mode === "selfie" ? "photo" : "selfie");
     else if (k === "f") this.toggleFlash();
     else if (k === "t") this.cycleTimer();
@@ -137,9 +143,18 @@ export class Camera {
   }
 
   // Take it (after the self-timer, if one's set).
+  // Photo or Video (the record button)
+  setVideo(on: boolean) {
+    const c = phone.get().camera;
+    if (!c || c.video === on || c.rec) return;
+    this.set({ video: on, timer: 0 });
+    ui("toggle", 0.5);
+  }
+
   async shoot() {
     const c = phone.get().camera;
     if (!c || c.busy || c.count) return;
+    if (c.video) return c.rec ? this.stopRec() : this.startRec();
     if (c.timer) {
       this.set({ count: c.timer });
       this.countTimer = setInterval(() => {
@@ -158,6 +173,67 @@ export class Camera {
       return;
     }
     await this.take();
+  }
+
+  // ── recording ─────────────────────────────────────────────────────────
+  private rec: Recording | null = null;
+  private recTimer: ReturnType<typeof setTimeout> | null = null;
+  startRec() {
+    const c = phone.get().camera;
+    if (!c || this.rec || typeof MediaRecorder === "undefined") return;
+    try {
+      this.rec = new Recording(this.ph, c.filter, c.mode === "selfie");
+    } catch (e) {
+      console.warn("[phone] can't record", e);
+      return this.ph.note(tr("phRecFailed"));
+    }
+    this.set({ rec: Date.now() });
+    this.ph.ctl.send("phone:rec", { on: true });
+    ui("toggle", 0.8);
+    this.recTimer = setTimeout(() => void this.stopRec(), MAX_REC_S * 1000);
+  }
+  async stopRec() {
+    const r = this.rec;
+    if (!r) return;
+    this.rec = null;
+    if (this.recTimer) clearTimeout(this.recTimer);
+    this.ph.ctl.send("phone:rec", { on: false });
+    ui("end", 0.5);
+    const c = phone.get().camera;
+    this.set({ rec: 0, busy: true });
+    const secs = Math.max(1, Math.round((Date.now() - r.startedAt) / 1000));
+    const blob = await r.stop();
+    const me = hud.get().me;
+    const where = [me?.areaName, hud.get().spaceName].filter(Boolean).join(" · ");
+    const local: PhotoRef = {
+      id: -Date.now(),
+      kind: "video",
+      secs,
+      owner: phone.get().me.uid,
+      url: URL.createObjectURL(blob),
+      w: r.canvas.width,
+      h: r.canvas.height,
+      filter: c?.filter ?? "none",
+      where,
+      at: Date.now(),
+      selfie: c?.mode === "selfie",
+    };
+    this.set({ last: local });
+    try {
+      const saved = await phoneApi.uploadPhoto(blob, {
+        filter: local.filter,
+        selfie: local.selfie,
+        where,
+        spaceId: this.ph.ctl.session?.space.id ?? 0,
+        video: { w: local.w, h: local.h, secs },
+      });
+      phone.set((s) => ({ photos: [saved, ...s.photos.filter((p) => p.id !== saved.id)] }));
+      if (phone.get().camera) this.set({ last: saved, busy: false });
+      this.ph.note(tr("phSavedVideo"), 1600);
+    } catch {
+      if (phone.get().camera) this.set({ busy: false });
+      this.ph.note(tr("phSaveFailed"));
+    }
   }
 
   private async take() {
@@ -180,6 +256,9 @@ export class Camera {
     const where = [me?.areaName, hud.get().spaceName].filter(Boolean).join(" · ");
     const local: PhotoRef = {
       id: -Date.now(),
+      kind: "photo",
+      secs: 0,
+      owner: phone.get().me.uid,
       url: thumb,
       w: canvas.width,
       h: canvas.height,
@@ -209,6 +288,137 @@ export class Camera {
     }
   }
 }
+
+// ── video ──────────────────────────────────────────────────────────────────
+export const MAX_REC_S = 30;
+const FILTER_CSS: Record<string, string> = {
+  film: "sepia(.35) saturate(1.3) contrast(1.05) brightness(1.03)",
+  polaroid: "sepia(.3) saturate(1.15) brightness(1.06)",
+  vhs: "saturate(1.6) contrast(1.12) hue-rotate(-10deg)",
+  bw: "grayscale(1) contrast(1.22)",
+};
+
+// Records what the world shows (its own canvas, frame by frame right after
+// it's drawn), with the filter, the world's sound and my mic.
+class Recording {
+  readonly canvas = document.createElement("canvas");
+  private g: CanvasRenderingContext2D;
+  private rec: MediaRecorder;
+  private chunks: Blob[] = [];
+  private off: () => void;
+  private audio: { dest: MediaStreamAudioDestinationNode; nodes: AudioNode[] } | null = null;
+  readonly startedAt = Date.now();
+  readonly done: Promise<Blob>;
+
+  constructor(
+    private readonly ph: Phone,
+    private readonly filter: string,
+    private readonly selfie: boolean,
+  ) {
+    const src = ph.ctl.viewCanvas();
+    const crop = this.cropOf(src);
+    const k = Math.min(1, 1280 / Math.max(crop.w, crop.h));
+    this.canvas.width = Math.round((crop.w * k) / 2) * 2;
+    this.canvas.height = Math.round((crop.h * k) / 2) * 2;
+    this.g = this.canvas.getContext("2d") as CanvasRenderingContext2D;
+    const stream = this.canvas.captureStream(30);
+    // the sound: the world's mix, and my voice
+    const ctx = mixer.ensure();
+    const dest = ctx.createMediaStreamDestination();
+    const nodes: AudioNode[] = [];
+    mixer.master.connect(dest);
+    const mic = ph.ctl.media.room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track
+      ?.mediaStreamTrack;
+    if (mic && mic.readyState === "live") {
+      const n = ctx.createMediaStreamSource(new MediaStream([mic]));
+      n.connect(dest);
+      nodes.push(n);
+    }
+    this.audio = { dest, nodes };
+    for (const t of dest.stream.getAudioTracks()) stream.addTrack(t);
+    const mime =
+      [
+        "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+        "video/mp4",
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm",
+      ].find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) ?? "";
+    this.rec = new MediaRecorder(stream, { mimeType: mime || undefined, videoBitsPerSecond: 2_200_000 });
+    this.rec.ondataavailable = (e) => {
+      if (e.data.size) this.chunks.push(e.data);
+    };
+    this.done = new Promise((res) => {
+      this.rec.onstop = () => res(new Blob(this.chunks, { type: this.rec.mimeType || "video/webm" }));
+    });
+    this.off = ph.ctl.onFrame(() => this.draw());
+    this.draw();
+    this.rec.start(1000);
+  }
+
+  private cropOf(src: HTMLCanvasElement) {
+    const focus = this.selfie ? this.ph.ctl.selfieFrame() : null;
+    if (focus) {
+      const w = Math.min(src.width, Math.max(focus.w, focus.h * 0.8));
+      const h = Math.min(src.height, w * 1.25);
+      return {
+        x: Math.max(0, Math.min(src.width - w, focus.x + focus.w / 2 - w / 2)),
+        y: Math.max(0, Math.min(src.height - h, focus.y + focus.h / 2 - h / 2)),
+        w,
+        h,
+      };
+    }
+    // 16:9 out of the middle
+    let w = src.width;
+    let h = src.height;
+    if (w / h > 16 / 9) w = h * (16 / 9);
+    else h = w / (16 / 9);
+    return { x: (src.width - w) / 2, y: (src.height - h) / 2, w, h };
+  }
+
+  // (right after the world drew its frame: the drawing buffer still holds it)
+  private draw() {
+    const src = this.ph.ctl.viewCanvas();
+    const c = this.cropOf(src);
+    const g = this.g;
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    if ("filter" in g) g.filter = FILTER_CSS[this.filter] ?? "none";
+    g.drawImage(src, c.x, c.y, c.w, c.h, 0, 0, W, H);
+    if ("filter" in g) g.filter = "none";
+    if (this.filter === "vhs") {
+      g.fillStyle = "rgba(0,0,0,.18)";
+      for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+      g.font = `${Math.round(H * 0.05)}px monospace`;
+      g.fillStyle = "rgba(255,255,255,.85)";
+      g.fillText(`REC ● ${secsOf(Date.now() - this.startedAt)}`, W * 0.05, H * 0.1);
+    }
+    if (this.filter === "polaroid") {
+      const b = Math.round(W * 0.03);
+      g.fillStyle = "#f4efe4";
+      g.fillRect(0, 0, W, b);
+      g.fillRect(0, 0, b, H);
+      g.fillRect(W - b, 0, b, H);
+      g.fillRect(0, H - b * 2.5, W, b * 2.5);
+    }
+  }
+
+  stop(): Promise<Blob> {
+    this.off();
+    if (this.rec.state !== "inactive") this.rec.stop();
+    for (const n of this.audio?.nodes ?? []) n.disconnect();
+    if (this.audio) {
+      try {
+        mixer.master.disconnect(this.audio.dest);
+      } catch {}
+    }
+    return this.done;
+  }
+}
+const secsOf = (ms: number) => {
+  const s = Math.floor(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+};
 
 // ── developing the frame ───────────────────────────────────────────────────
 // The world's frame, cropped to a photo's 3:2 (or around your face for a

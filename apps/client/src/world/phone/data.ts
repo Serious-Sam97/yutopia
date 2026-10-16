@@ -25,6 +25,9 @@ interface MsgIn {
 }
 interface PhotoIn {
   id: number;
+  kind?: "photo" | "video";
+  secs?: number;
+  user_id?: number;
   url: string;
   w: number;
   h: number;
@@ -44,10 +47,17 @@ interface ThreadIn {
   last: MsgIn | null;
   muted: boolean;
   read: Record<string, number>;
+  who?: Record<string, { name: string; avatar: string }>;
 }
 
 // (Yondra signs the file's path; the origin is its API)
-export const photoOf = (p: PhotoIn): PhotoRef => ({ ...p, url: p.url.startsWith("/") ? `${API}${p.url}` : p.url });
+export const photoOf = (p: PhotoIn): PhotoRef => ({
+  ...p,
+  kind: p.kind ?? "photo",
+  secs: p.secs ?? 0,
+  owner: p.user_id ?? 0,
+  url: p.url.startsWith("/") ? `${API}${p.url}` : p.url,
+});
 export function msgOf(m: MsgIn): Msg {
   return {
     id: m.id,
@@ -76,6 +86,7 @@ export function threadOf(t: ThreadIn): Thread {
     last: t.last ? msgOf(t.last) : null,
     muted: t.muted,
     readAt: t.read ?? {},
+    who: t.who ?? {},
   };
 }
 
@@ -87,6 +98,16 @@ export const phoneApi = {
     api<{ contacts: Omit<Contact, "here">[] }>(`${P}/contacts?space=${spaceId}`).then((r) =>
       r.contacts.map((c) => ({ ...c, here: c.spaceId === spaceId })),
     ),
+  lookup: (uid: number) =>
+    api<{ person: Omit<Contact, "here"> & { here?: boolean }; added: boolean }>(`${P}/users/${uid}`),
+  addContact: (uid: number, spaceId: number) =>
+    api<{ contact: Contact }>(`${P}/contacts?space=${spaceId}`, {
+      method: "POST",
+      body: JSON.stringify({ id: uid }),
+    }).then((r) => r.contact),
+  removeContact: (uid: number) => api(`${P}/contacts/${uid}`, { method: "DELETE" }),
+  keep: (id: number) =>
+    api<{ photo: PhotoIn }>(`${P}/photos/${id}/keep`, { method: "POST", body: "{}" }).then((r) => photoOf(r.photo)),
   threads: (spaceId: number) =>
     api<{ threads: ThreadIn[] }>(`${P}/threads?space=${spaceId}`).then((r) => r.threads.map(threadOf)),
   open: (members: number[], name?: string) =>
@@ -120,9 +141,24 @@ export const phoneApi = {
   markSent: (id: number) => api(`${P}/photos/${id}`, { method: "PATCH", body: JSON.stringify({ sent: true }) }),
   deletePhoto: (id: number) => api(`${P}/photos/${id}`, { method: "DELETE" }),
   // multipart: api() forces JSON, so this one is by hand
-  async uploadPhoto(blob: Blob, meta: { filter: string; selfie: boolean; where: string; spaceId: number }) {
+  async uploadPhoto(
+    blob: Blob,
+    meta: {
+      filter: string;
+      selfie: boolean;
+      where: string;
+      spaceId: number;
+      video?: { w: number; h: number; secs: number };
+    },
+  ) {
     const fd = new FormData();
-    fd.append("file", blob, "photo.jpg");
+    fd.append("file", blob, meta.video ? (blob.type.includes("mp4") ? "clip.mp4" : "clip.webm") : "photo.jpg");
+    if (meta.video) {
+      fd.append("kind", "video");
+      fd.append("w", String(meta.video.w));
+      fd.append("h", String(meta.video.h));
+      fd.append("secs", String(meta.video.secs));
+    }
     fd.append("filter", meta.filter);
     fd.append("selfie", meta.selfie ? "1" : "0");
     fd.append("where", meta.where.slice(0, 120));

@@ -128,6 +128,7 @@ export interface PersonIn {
   phoneCase?: string;
   phonePose?: string;
   ringing?: boolean;
+  recording?: boolean;
 }
 
 // A phone in the hand: its case and the face this view sees
@@ -302,6 +303,7 @@ export class Person3 {
     mix(tip);
     mix(heldLevel);
     mix(p.phone ? p.phone.length + (grip.face === "screen" ? 10 : grip.face === "edge" ? 20 : 30) : 0);
+    mix(p.recording ? Math.floor(performance.now() / 500) % 2 : 3);
     mix(pose.face === "blink" ? 1 : pose.face === "talk" ? 2 : 0);
     mix(parts.length);
     for (const part of parts) {
@@ -345,6 +347,17 @@ export class Person3 {
           g.fillRect(-18, -26, 36, 36);
         }
         g.drawImage(phoneImg, PHONE_BOX[0], PHONE_BOX[1], PHONE_BOX[2], PHONE_BOX[3]);
+        // recording: a red light, blinking
+        if (p.recording && Math.floor(performance.now() / 500) % 2 === 0) {
+          g.fillStyle = "rgba(255,32,48,.35)";
+          g.beginPath();
+          g.arc(-1.5, -13, 4.5, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = "#ff2030";
+          g.beginPath();
+          g.arc(-1.5, -13, 2, 0, Math.PI * 2);
+          g.fill();
+        }
       };
       const phoneBehind = rig.back && p.phone !== "selfie";
       for (const part of parts) {
