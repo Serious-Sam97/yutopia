@@ -2094,7 +2094,7 @@ export class WorldEngine {
       dist,
       walking,
       speed: dt > 0 ? dist / dt : 0,
-      typing: sitting && this.atWork(s.x, s.y),
+      typing: sitting && (s.busy === "computer" || this.atWork(s.x, s.y)),
       speaking: s.speaking,
       emote: s.emote,
       reduced: this.reducedMotion,
@@ -2251,7 +2251,11 @@ export class WorldEngine {
       w =
         !!seat &&
         objs.some((o) => {
-          if (o.kind !== "tabletop" || (o.props?.d !== "keyboard" && o.props?.d !== "monitor")) return false;
+          if (
+            o.kind !== "computer" &&
+            (o.kind !== "tabletop" || (o.props?.d !== "keyboard" && o.props?.d !== "monitor"))
+          )
+            return false;
           const c = topCentre(o);
           return Math.hypot(c.x - x, c.y - y) < 1.7;
         });

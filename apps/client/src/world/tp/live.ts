@@ -153,6 +153,14 @@ export interface LiveSources {
   engine: Pick<WorldEngine, "livePanels" | "getObject" | "shareVideo" | "panelCanvas">;
   screens: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean }[] } | null;
   games: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement }[] } | null;
+  // computers someone's at (world/os): VortexOS's picture on their glass
+  os?: {
+    pictures(): {
+      def: WorldObjectDef;
+      canvas: HTMLCanvasElement;
+      at: { tl: [number, number]; tr: [number, number]; zTop: number; zBot: number };
+    }[];
+  } | null;
 }
 
 // a console's 4:3 picture on a wide TV: letterboxed
@@ -163,9 +171,11 @@ const wide = (o: WorldObjectDef) => ((GLASS[o.kind]?.aspect ?? GAME_ASPECT) > GA
 export class LiveFeed {
   private cache = new Map<string, { version: number; canvas: HTMLCanvasElement }>();
 
-  collect({ engine, screens, games }: LiveSources): Live[] {
+  collect({ engine, screens, games, os }: LiveSources): Live[] {
     const out: Live[] = [];
     const taken = new Set<string>();
+    for (const p of os?.pictures() ?? [])
+      out.push({ key: `o:${p.def.id}`, src: p.canvas, ...p.at, version: -1, glow: true });
     const panels = engine.livePanels();
     for (const p of games?.pictures() ?? []) {
       const c = glassCorners(p.def);

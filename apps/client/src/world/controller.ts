@@ -47,6 +47,7 @@ import {
   type WbItem,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { COMPUTER_REACH, computerAway, isComputer } from "@yutopia/shared/computer";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf, showsBoards } from "@yutopia/shared/media";
 import { type BattleEvent, type PetLook, type PetOutfit, type Species, toyAt } from "@yutopia/shared/pets";
@@ -67,6 +68,7 @@ import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
+import type { OsRoom } from "./os/room";
 import type { PetView } from "./petview";
 import type { SlotTracks } from "./slots";
 import { radio, sound } from "./sound";
@@ -544,6 +546,18 @@ export class WorldController {
       if (area) this.walkTo({ x: area.x + area.w / 2, y: area.y + area.h / 2 });
     });
     room.onMessage("toast", (m: ServerMessages["toast"]) => toast(m.text, m.tone ?? "info"));
+    // the computer I sat down at is mine (its panel boots VortexOS), or it went off under me
+    room.onMessage("computer:ok", (m: ServerMessages["computer:ok"]) => {
+      this.computerId = m.id;
+      void this.ensureOs();
+      this.onOpenPanel("computer", m.id);
+    });
+    room.onMessage("computer:off", (m: ServerMessages["computer:off"]) => {
+      if (this.computerId !== m.id) return;
+      this.computerId = null;
+      const pk = hud.get().panel;
+      if (pk.kind === "computer" && pk.objectId === m.id) hud.set({ panel: { kind: null } });
+    });
     room.onMessage("spawn:mine", (m: ServerMessages["spawn:mine"]) => {
       const was = hud.get().mySpawn;
       hud.set({ mySpawn: m.at });
@@ -654,6 +668,7 @@ export class WorldController {
     this.slots?.dispose();
     this.games?.dispose();
     this.screens?.dispose();
+    this.os?.dispose();
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
     if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
@@ -718,9 +733,15 @@ export class WorldController {
   private usingUntil = 0;
   private busySent = "";
   private syncBusy() {
-    const pk = hud.get().panel.kind;
+    const panel = hud.get().panel;
+    const pk = panel.kind;
+    // the computer's panel closed (stood up, Esc, walked off): it shuts down
+    if (this.computerId && !(pk === "computer" && panel.objectId === this.computerId)) {
+      this.send("computer:leave", { id: this.computerId });
+      this.computerId = null;
+    }
     const want =
-      pk === "arcade" || pk === "piano" || pk === "whiteboard"
+      pk === "arcade" || pk === "piano" || pk === "whiteboard" || pk === "computer"
         ? pk
         : pk === "slotcar" && this.slots?.atControls()
           ? "slotcar"
@@ -793,6 +814,23 @@ export class WorldController {
     return this.screensLoading;
   }
 
+  // ── computers running VortexOS: their own chunk (world/os), loaded once
+  // someone's at one (the picture on its glass) ──
+  os: OsRoom | null = null;
+  private osLoading: Promise<void> | null = null;
+  computerId: string | null = null; // the one I'm at
+  private computersChanged() {
+    if (this.os || !this.room?.state?.computers?.size) return;
+    void this.ensureOs();
+  }
+  ensureOs(): Promise<void> {
+    this.osLoading ??= import("./os/room").then((m) => {
+      if (this.stopped || !this.engine || !this.room) return;
+      this.os = new m.OsRoom(this);
+    });
+    return this.osLoading;
+  }
+
   // ── slot-car tracks: their own chunk (world/slots.ts), loaded once a track is here ──
   slots: SlotTracks | null = null;
   private slotsLoading: Promise<void> | null = null;
@@ -857,6 +895,8 @@ export class WorldController {
     this.isolated("slots", () => this.slots?.frame(dt, this.me));
     this.isolated("games", () => this.games?.frame(dt, this.me));
     this.isolated("media", () => this.screens?.frame(dt, this.me));
+    this.computersChanged();
+    this.isolated("os", () => this.os?.frame(dt, this.me));
     this.syncBusy();
     const localSid = room.sessionId;
     const lp = room.state.players.get(localSid);
@@ -884,7 +924,7 @@ export class WorldController {
           ...st,
           id: localSid,
           angle: this.meAngle,
-          typing: st.a === 2 && engine.atWork(st.x, st.y),
+          typing: st.a === 2 && (st.busy === "computer" || engine.atWork(st.x, st.y)),
           reduced,
         });
     }
@@ -896,7 +936,13 @@ export class WorldController {
       const pos = interpolate(r.buf, renderAt);
       const st = { ...this.avatarState(p, false), x: pos.x, y: pos.y, d: r.d, a: r.a };
       engine.upsertAvatar(sid, st);
-      if (tp) bodies.push({ ...st, id: sid, typing: st.a === 2 && engine.atWork(st.x, st.y), reduced });
+      if (tp)
+        bodies.push({
+          ...st,
+          id: sid,
+          typing: st.a === 2 && (st.busy === "computer" || engine.atWork(st.x, st.y)),
+          reduced,
+        });
       // voice: volume + stereo from where they are relative to me
       if (this.hear.has(sid)) {
         const ear = { x: this.me.x, y: this.me.y, dnd: lp?.status === "dnd" };
@@ -952,7 +998,7 @@ export class WorldController {
         const all = engine.allObjects();
         tp.update(this.map, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all);
       }
-      tp.setLiveFrom({ engine, screens: this.screens, games: this.games });
+      tp.setLiveFrom({ engine, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
       tp.setCable(this.cableEnds());
       tp.setGames(this.games?.scene3d() ?? null);
@@ -1424,7 +1470,26 @@ export class WorldController {
     const e = entry(o.kind);
     if (!e.interact) return;
     const { w, h } = placedFootprint(o);
-    if (reachOf(o, this.me) > INTERACT_RANGE + 0.3) {
+    // a computer: sit down at its desk (the seat nearest me), else stand in front of it
+    if (isComputer(o.kind) && computerAway(o, this.me) > COMPUTER_REACH - 0.15) {
+      if (!walkIfFar) return;
+      let seat: { x: number; y: number } | null = null;
+      let best = Number.POSITIVE_INFINITY;
+      for (let y = o.y - 1; y <= o.y + 1; y++)
+        for (let x = o.x - 1; x <= o.x + 1; x++) {
+          if (!this.grid.seatAt(x + 0.5, y + 0.5)) continue;
+          const d = Math.hypot(x + 0.5 - this.me.x, y + 0.5 - this.me.y);
+          if (d < best) {
+            best = d;
+            seat = { x: x + 0.5, y: y + 0.5 };
+          }
+        }
+      const to =
+        seat ?? this.grid.nearestOpen(o.x + 0.5, o.y - 0.5, 3) ?? this.grid.nearestOpen(o.x + 0.5, o.y + 1.5, 3);
+      if (to) this.walkTo(to, id);
+      return;
+    }
+    if (!isComputer(o.kind) && reachOf(o, this.me) > INTERACT_RANGE + 0.3) {
       if (!walkIfFar) return;
       // walk to the nearest open tile in front of it (a wall item: its side of the wall), then open
       const spot = e.wall ? hangSpot(o, 0.7) : null;
@@ -1496,6 +1561,11 @@ export class WorldController {
       e.interact === "media" &&
       isGameTv(o.kind) &&
       !!this.engine?.allObjects().some((x) => isConsole(x.kind) && x.props?.tv === id);
+    // a computer: the server says if it's mine (computer:ok opens its panel)
+    if (e.interact === "computer") {
+      this.send("computer:use", { id });
+      return;
+    }
     this.onOpenPanel(plugged ? "tv" : e.interact, id);
   }
 
@@ -1843,6 +1913,9 @@ export class WorldController {
   }
 
   private vortexLog(text: string) {
+  myName(): string {
+    return this.session?.user.name ?? "";
+  }
     hud.set((s) => ({
       chat: [
         ...s.chat.slice(-199),

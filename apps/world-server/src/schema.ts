@@ -118,6 +118,19 @@ export class GameConsole extends Schema {
   @type("float64") since = 0;
 }
 
+// A computer someone is at (features/computer.ts, shared/computer.ts), by its
+// object id: who, and what its VortexOS shows (others draw it on the glass).
+export class Computer extends Schema {
+  @type("string") sid = "";
+  @type("number") uid = 0;
+  @type("string") name = "";
+  @type("string") phase = "boot";
+  @type("string") era = "";
+  @type("string") app = "";
+  @type("string") user = "";
+  @type("float64") since = 0;
+}
+
 // Someone's pet (features/pets.ts, rules in shared/pets.ts): where it is and
 // what it's doing, its needs and growth. The record lives in Yondra; this is
 // what everyone in the room sees.
@@ -232,6 +245,7 @@ export class SpaceState extends Schema {
   @type({ map: "string" }) holds = new MapSchema<string>(); // object id → "uid|name" of the builder holding it
   @type({ map: SlotRace }) slots = new MapSchema<SlotRace>(); // slot-car track id → its race
   @type({ map: GameConsole }) consoles = new MapSchema<GameConsole>(); // console id → what it's playing
+  @type({ map: Computer }) computers = new MapSchema<Computer>(); // computer id → who's at it
   @type({ map: Pet }) pets = new MapSchema<Pet>(); // pet id → the pet (while its owner is here)
   @type({ map: PetBattle }) battles = new MapSchema<PetBattle>();
   @type({ map: Toy }) toys = new MapSchema<Toy>();

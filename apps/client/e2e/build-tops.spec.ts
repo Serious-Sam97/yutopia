@@ -31,7 +31,7 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
     page.evaluate(
       (skip) =>
         [...(window as any).__yutopia.room.state.objects.values()]
-          .filter((o: any) => o.kind === "tabletop" && !skip.includes(o.id))
+          .filter((o: any) => (o.kind === "tabletop" || o.kind === "computer") && !skip.includes(o.id))
           .map((o: any) => ({ id: o.id, x: o.x, y: o.y, rot: o.rot, p: JSON.parse(o.props) })),
       [...before],
     );
@@ -54,7 +54,7 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
 
     // ── a workstation, piece by piece: seven things on one desk
     const plan: [string, number, number][] = [
-      ["Monitor", D.x + 0.5, D.y + 0.75],
+      ["Computer", D.x + 0.5, D.y + 0.75],
       ["Keyboard", D.x + 0.5, D.y + 0.15],
       ["Mug", D.x + 0.9, D.y + 0.3],
       ["Desk lamp", D.x + 1.85, D.y + 0.85],

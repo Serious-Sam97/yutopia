@@ -115,6 +115,7 @@ export function VortexTerminal() {
     switch (head.toLowerCase()) {
       case "help":
         print("sys", "help · ls · cat <tape> · whoami · claim <phrase> · clear · anything else: talk to me");
+        print("sys", "the desks upstairs run vortexos now. my old house. sit down at one. sign in. it remembers.");
         return;
       case "clear":
         setLines([]);

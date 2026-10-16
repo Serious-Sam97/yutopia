@@ -66,6 +66,7 @@ const KINDS_REPLACED = [
   "rug",
   "tape_shelf",
   "tabletop", // what stood on the old desks goes with them
+  "computer", // (their computers too)
 ];
 export function replacedByTemplate(kind: string): boolean {
   return KINDS_REPLACED.includes(kind);

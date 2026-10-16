@@ -52,7 +52,8 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     label: "catTops",
     icon: "mug",
     items: [
-      ...(["monitor", "keyboard", "desklamp", "phone"] as const).map((d) => decor("tabletop", d)),
+      it("computer"),
+      ...(["keyboard", "desklamp", "phone"] as const).map((d) => decor("tabletop", d)),
       it("radio"),
       it("turntable"),
       it("coffee_machine"),
@@ -75,6 +76,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       "projector",
       "tv_console",
       "tv_portable",
+      "computer",
     ].map(it),
   },
   {

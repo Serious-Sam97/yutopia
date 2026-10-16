@@ -629,6 +629,7 @@ const D = {
   act_doorLock: ["Lock", "Trancar"],
   act_doorUnlock: ["Unlock", "Destrancar"],
   act_work: ["Sit and work", "Sentar e trabalhar"],
+  act_useComputer: ["Use the computer", "Usar o computador"],
   act_focus: ["Focus", "Foco"],
   act_unfocus: ["Stop focusing", "Sair do foco"],
   act_openCard: ["Open my card", "Abrir meu card"],

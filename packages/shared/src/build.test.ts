@@ -72,16 +72,16 @@ test("bare furniture: what used to be drawn on it becomes real things, once", ()
   const s = splitBuiltIns(d);
   assert.ok(s);
   assert.equal(s.self.props?.split, 1);
-  const kinds = s.add.map((t) => t.props?.d).sort();
-  assert.deepEqual(kinds.slice(0, 2), ["keyboard", "keyboard"]);
-  assert.equal(kinds.filter((k) => k === "monitor").length, 2);
-  // all on the desk, none on another, monitors facing the sitter (turned with it)
+  const kinds = s.add.map((t) => t.props?.d ?? t.kind).sort();
+  assert.deepEqual(kinds.slice(0, 2), ["computer", "computer"]);
+  assert.equal(kinds.filter((k) => k === "keyboard").length, 2);
+  // all on the desk, none on another, the computers facing the sitter (turned with it)
   let placed: WorldObjectDef[] = [s.self];
   for (const t of s.add) {
     assert.ok(canPlace(studio, placed, t), `${t.props?.d} fits`);
     placed = [...placed, t];
   }
-  assert.ok(s.add.filter((t) => t.props?.d === "monitor").every((t) => t.rot === 2));
+  assert.ok(s.add.filter((t) => t.kind === "computer").every((t) => t.rot === 2));
   assert.ok(s.add.every((t) => t.props?.z === 25));
   // a second run finds it split
   assert.equal(splitBuiltIns(s.self), null);
@@ -99,7 +99,7 @@ test("bare furniture: what used to be drawn on it becomes real things, once", ()
   );
   assert.equal(splitAll(one.objects).changed.length, 0);
   // the layouts come set up
-  assert.ok(TEMPLATES.every((t) => t.objects.some((o) => o.props?.d === "monitor")));
+  assert.ok(TEMPLATES.every((t) => t.objects.some((o) => o.kind === "computer")));
 });
 
 test("a look: props.variant when valid, else the kind's own or seeded by id", () => {

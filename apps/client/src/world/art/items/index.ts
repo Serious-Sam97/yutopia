@@ -3,6 +3,7 @@ import { entry, variantOf as lookOf } from "@yutopia/shared";
 import { boardWall } from "./board";
 import { chair } from "./chair";
 import { dressing } from "./clutter";
+import { computer } from "./computer";
 import { desk } from "./desk";
 import { door, rug, standupMat } from "./door";
 import { cartShelf, console2600, consoleGb, consoleMd, consoleNes, consoleSnes, crtTv } from "./games";
@@ -71,6 +72,7 @@ const GENS: Record<string, ItemGen> = {
   projector: { draw: projector, variants: 1, key: (p) => (p.on ? "on" : "off") },
   tv_console: { draw: tvConsole, variants: 2 },
   tv_portable: { draw: tvPortable, variants: 2 },
+  computer: { draw: computer, variants: 2, key: (p) => (Number(p.seed) > 0.5 ? "n" : "") },
   console_2600: { draw: console2600, variants: 1, key: cart },
   console_nes: { draw: consoleNes, variants: 2, key: cart },
   console_snes: { draw: consoleSnes, variants: 1, key: cart },

@@ -141,6 +141,10 @@ export interface ClientMessages {
   "radio:set": { id: string; playing: boolean; station?: number }; // a radio / record player, each its own
   "radio:volume": { id: string; volume: number }; // its knob, 0..1
   "media:volume": { id: string; volume: number }; // a TV's knob, 0..1
+  // a computer (shared/computer.ts): sit down at it, what its OS shows now, stand up
+  "computer:use": { id: string };
+  "computer:phase": { id: string; phase: string; era?: string; app?: string; user?: string };
+  "computer:leave": { id: string };
   // media on a TV or a radio (its object id), shared/media.ts:
   // play now / next / at the end of the queue (several: a playlist), the
   // controls, and a length a player found out (YouTube items arrive without one)
@@ -226,6 +230,9 @@ export interface ServerMessages {
   // what happened with a pet of mine (the client words it): levelUp, learned,
   // died, ignored, won, lost, draw, full (no more pets)
   "pet:event": { id: string; kind: string; n?: number; trick?: string };
+  // the computer is mine now (open its panel), or no longer (it went off under me)
+  "computer:ok": { id: string };
+  "computer:off": { id: string };
 }
 
 // Things you can be busy with (shown on the body: hands on the controls…).
@@ -239,6 +246,7 @@ export const USES = [
   "slotcar",
   "gamepad",
   "throw",
+  "computer",
 ] as const;
 export type Use = (typeof USES)[number];
 export const PIANO_RANGE = [-12, 24] as const; // semitones from middle C

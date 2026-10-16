@@ -26,7 +26,8 @@ export type Interaction =
   | "switch"
   | "petbowl"
   | "waterbowl"
-  | "toybox";
+  | "toybox"
+  | "computer";
 
 export interface CatalogEntry {
   label: string;
@@ -199,6 +200,18 @@ export const CATALOG = {
   },
   projector: { label: "Projector", w: 1, h: 1, solid: false, onSurface: true, buildable: true },
   tv_console: { label: "Console TV", w: 2, h: 1, solid: true, interact: "media", buildable: true, variants: 2 },
+  // runs VortexOS (shared/computer.ts): sit down, press X
+  computer: {
+    label: "Computer",
+    w: 1,
+    h: 1,
+    solid: false,
+    onSurface: true,
+    interact: "computer",
+    buildable: true,
+    variants: 2,
+    look: 0,
+  },
   tv_portable: {
     label: "Portable TV",
     w: 1,
@@ -295,7 +308,6 @@ export const CATALOG = {
 export const DECOR = {
   decor: ["plant", "boxes", "bin", "cable"],
   tabletop: [
-    "monitor",
     "keyboard",
     "desklamp",
     "phone",

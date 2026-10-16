@@ -29,6 +29,7 @@ const KIND_SIZE: Record<string, [number, number]> = {
   turntable: [3, 3],
   tv_portable: [2, 2],
   projector: [2, 2],
+  computer: [2, 2],
 };
 
 export function topSize(o: { kind: string; rot?: number; props?: Record<string, unknown> }): [number, number] {
@@ -192,8 +193,8 @@ function spotsOf(o: WorldObjectDef): Spot[] {
     case "desk": {
       const story = ["mug", "papers", "tapes", "mug"][Math.floor(r * 4)];
       return [
-        { d: "monitor", at: [0.5, 0.75] },
-        { d: "monitor", at: [1.5, 0.75] },
+        { kind: "computer", at: [0.5, 0.75] },
+        { kind: "computer", at: [1.5, 0.75] },
         { d: "keyboard", at: [0.5, 0.125] },
         { d: "keyboard", at: [1.5, 0.125] },
         { d: story, at: [1.0, 0.375] },
@@ -206,7 +207,7 @@ function spotsOf(o: WorldObjectDef): Spot[] {
       ];
     case "reception":
       return [
-        { d: "monitor", at: [1.25, 0.5] },
+        { kind: "computer", at: [1.25, 0.5] },
         { d: "book", at: [2.25, 0.625] },
         { d: "bell", at: [2.625, 0.625] },
       ];
@@ -249,11 +250,11 @@ export function splitBuiltIns(o: WorldObjectDef): { self: WorldObjectDef; add: W
     const [wx, wy] = hostWorld(o, s.at[0], s.at[1]);
     const t: WorldObjectDef = {
       id: `${o.id}-t${i}`,
-      kind: "tabletop",
+      kind: s.kind ?? "tabletop",
       x: 0,
       y: 0,
       rot: ((s.rot ?? 0) + (o.rot ?? 0)) % 4,
-      props: { d: s.d, seed: hash(`${o.id}|${i}`), z },
+      props: { ...(s.d ? { d: s.d } : {}), seed: hash(`${o.id}|${i}`), z },
     };
     return topNear(t, wx, wy);
   });

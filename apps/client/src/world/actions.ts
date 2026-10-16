@@ -14,6 +14,7 @@ import {
   SOCIAL_REACH,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { COMPUTER_REACH, computerAway } from "@yutopia/shared/computer";
 import { YONDRA_APP } from "@/lib/api";
 import { tr } from "@/lib/i18n";
 import { type ActTarget, hud, toast } from "./store";
@@ -211,6 +212,12 @@ export class ActionQueue {
       const seat = seatFor(h.grid(), o, me);
       return !!seat && h.walk(seat);
     }
+    // a computer: the seat at its desk (sitting down to it), else stand at it
+    if (c.q.act === "useComputer") {
+      if (this.inReach(c.q)) return true;
+      c.spot ??= seatFor(h.grid(), o, me) ?? frontOf(h.grid(), o) ?? undefined;
+      return !!c.spot && h.walk(c.spot);
+    }
     // in front of it, like you'd stand to use it
     c.spot ??= frontOf(h.grid(), o) ?? undefined;
     if (!c.spot) return false;
@@ -236,6 +243,10 @@ export class ActionQueue {
     if (q.act === "sit" || q.act === "work" || q.act === "focus") {
       const seat = h.grid().seatAt(me.x, me.y);
       return !!seat && (q.act === "sit" ? within(o, me, 0.2) : within(o, me, 1.5));
+    }
+    if (q.act === "useComputer") {
+      if (spot) return Math.hypot(spot.x - me.x, spot.y - me.y) < 0.45;
+      return computerAway(o, me) <= COMPUTER_REACH - 0.2;
     }
     // at its front (or, with nowhere in front to stand, near enough)
     if (spot) return Math.hypot(spot.x - me.x, spot.y - me.y) < 0.45;
@@ -301,7 +312,9 @@ export class ActionQueue {
     if (!o) return null;
     const id = o.id;
     // face it
-    if (q.act !== "sit" && q.act !== "work" && q.act !== "focus") {
+    // (seated at a computer: the seat already faces the desk)
+    const seatedAt = q.act === "useComputer" && !!h.grid().seatAt(me.x, me.y);
+    if (q.act !== "sit" && q.act !== "work" && q.act !== "focus" && !seatedAt) {
       const { w, h: d } = placedFootprint(o);
       // (wall things: the spot on the wall they hang on)
       const at = entry(o.kind).wall ? hangSpot(o, 0) : { x: o.x + w / 2, y: o.y + d / 2 };

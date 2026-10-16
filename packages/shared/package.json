@@ -12,7 +12,8 @@
     "./games": "./src/games.ts",
     "./media": "./src/media.ts",
     "./pets": "./src/pets.ts",
-    "./mind": "./src/mind.ts"
+    "./mind": "./src/mind.ts",
+    "./computer": "./src/computer.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

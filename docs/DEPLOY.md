@@ -77,3 +77,8 @@ time (`node tools/emu-assets.mjs`, each file pinned by sha256 in
 same command once; `node tools/emu-assets.mjs --check` tells you if anything's
 missing. Snes9x and Genesis Plus GX are non-commercial licences: fine for a team
 and friends, to be swapped for other cores before Yutopia is ever sold.
+
+## VortexOS on the computers (docs/plan/19-vortexos.md)
+- Yutopia client: `NEXT_PUBLIC_VORTEXOS_URL` (default `https://vortex.serious-sam.dev`).
+- VortexOS frontend (its own repo): build with `VITE_HOST_ORIGINS=https://<yutopia origin>` (comma-separated) so the bridge talks to Yutopia; consider `add_header Content-Security-Policy "frame-ancestors 'self' https://<yutopia origin>" always;` in its nginx `location /`.
+- Sign in with Yondra: one random secret, set as `VORTEXOS_SHARED_SECRET` in Yondra and `YONDRA_SHARED_SECRET` in VortexOS's backend, plus `YONDRA_URL=<Yondra's API base>` there. Unset = off (people sign in with their VortexOS account).

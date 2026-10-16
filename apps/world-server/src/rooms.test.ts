@@ -57,6 +57,8 @@ async function person(id: number, spaceId: number, roles = "member"): Promise<Pe
     "game:pad",
     "game:audience",
     "spawn:mine",
+    "computer:ok",
+    "computer:off",
   ])
     room.onMessage(t, (m) => {
       if (!p.msgs[t]) p.msgs[t] = [];
@@ -699,9 +701,15 @@ test("tabletops sit on surfaces and ride along; looks are checked; clutter becom
   // the room's own desks came set up: monitors and keyboards are real things
   const tops = [...st.objects.values()].filter((o) => o.kind === "tabletop");
   assert.ok(
-    tops.some((o) => JSON.parse(o.props).d === "monitor"),
-    "monitors on the studio's desks",
+    tops.some((o) => JSON.parse(o.props).d === "keyboard"),
+    "keyboards on the studio's desks",
   );
+  // …and their screens are computers (VortexOS, shared/computer.ts), none left a plain monitor
+  assert.ok(
+    [...st.objects.values()].some((o) => o.kind === "computer"),
+    "computers on the studio's desks",
+  );
+  assert.ok(!tops.some((o) => JSON.parse(o.props).d === "monitor"), "no plain monitors left");
   assert.ok(
     [...st.objects.values()].some((o) => o.kind === "side_table"),
     "the radio's stand",
@@ -1308,4 +1316,80 @@ test("your own booth: you arrive at your spot in it with someone talking in it, 
     () => [...again.room.state.players.values()].filter((q: { uid: number }) => q.uid === 59).length === 1,
     25000,
   );
+});
+
+test("a computer: one person at a time, what its OS shows reaches everyone, standing up shuts it down", async () => {
+  const s = ++space;
+  const a = await person(61, s, "member,builder");
+  const b = await person(62, s);
+  const st = () => a.room.state;
+  const at = me(a);
+  const d = spotFor(a, "desk", Math.floor(at?.x ?? 0) - 2, Math.floor(at?.y ?? 0) - 3, 6, () => true);
+  assert.ok(d, "room for a desk");
+  a.room.send("obj:put", { id: "pc-desk", kind: "desk", x: d.x, y: d.y, rot: 0 });
+  await waitFor(() => !!st().objects.get("pc-desk"));
+  a.room.send("obj:put", { id: "pc-1", kind: "computer", x: d.x, y: d.y, rot: 0, props: { c: [1, 2], z: 25 } });
+  await waitFor(() => !!st().objects.get("pc-1"));
+  const pc = () => st().computers.get("pc-1");
+  const toasts = (p: Person) => (p.msgs.toast ?? []).map((m) => (m as { text: string }).text);
+
+  // too far: nothing
+  await walk(a, { x: d.x + 0.5, y: d.y + 6.5 });
+  a.room.send("computer:use", { id: "pc-1" });
+  await waitFor(() => toasts(a).some((t) => /closer/.test(t)));
+  assert.equal(pc(), undefined);
+
+  // at it: it's hers and boots
+  await walk(a, { x: d.x + 0.5, y: d.y + 1.6 });
+  a.room.send("computer:use", { id: "pc-1" });
+  await waitFor(() => (a.msgs["computer:ok"] ?? []).length === 1);
+  await waitFor(() => pc()?.sid === a.room.sessionId);
+  assert.equal(pc()?.phase, "boot");
+
+  // her OS says what it shows; labels are cleaned, unknown eras ignored
+  a.room.send("computer:phase", { id: "pc-1", phase: "desktop", era: "win98", app: "Paint<script>", user: "ana" });
+  await waitFor(() => pc()?.phase === "desktop");
+  assert.equal(pc()?.era, "win98");
+  assert.equal(pc()?.app, "Paintscript");
+  assert.equal(pc()?.user, "ana");
+  a.room.send("computer:phase", { id: "pc-1", phase: "saver", era: "amiga" });
+  await waitFor(() => pc()?.phase === "saver");
+  assert.equal(pc()?.era, "win98");
+  a.room.send("computer:phase", { id: "pc-1", phase: "hacked" });
+  await sleep(200);
+  assert.equal(pc()?.phase, "saver");
+
+  // Bia: can't take it, can't speak for it
+  await walk(b, { x: d.x + 1.5, y: d.y + 1.6 });
+  b.room.send("computer:use", { id: "pc-1" });
+  await waitFor(() => toasts(b).some((t) => /using this computer/.test(t)));
+  b.room.send("computer:phase", { id: "pc-1", phase: "login" });
+  await sleep(200);
+  assert.equal(pc()?.sid, a.room.sessionId);
+  assert.equal(pc()?.phase, "saver");
+
+  // Ana stands up: it shuts down (nothing changes it after), then it's off
+  a.room.send("computer:leave", { id: "pc-1" });
+  await waitFor(() => pc()?.phase === "shutdown");
+  a.room.send("computer:phase", { id: "pc-1", phase: "desktop" });
+  await sleep(200);
+  assert.equal(pc()?.phase, "shutdown");
+  await waitFor(() => !pc(), 6000);
+
+  // now Bia can; walking off shuts it down (and tells her)
+  b.room.send("computer:use", { id: "pc-1" });
+  await waitFor(() => pc()?.sid === b.room.sessionId);
+  await walk(b, { x: d.x + 0.5, y: d.y + 7.5 });
+  await waitFor(() => pc()?.phase === "shutdown");
+  await waitFor(() => (b.msgs["computer:off"] ?? []).length === 1);
+  await waitFor(() => !pc(), 6000);
+
+  // leaving the space, or the computer taken away, does too
+  await walk(a, { x: d.x + 0.5, y: d.y + 1.6 });
+  a.room.send("computer:use", { id: "pc-1" });
+  await waitFor(() => pc()?.sid === a.room.sessionId);
+  a.room.send("obj:remove", { id: "pc-1" });
+  await waitFor(() => !pc());
+  await a.room.leave(true);
+  await b.room.leave(true);
 });

@@ -57,6 +57,8 @@ const ROWS: Row[] = [
   { label: "Bench", kind: "bench", id: "b1" },
   { label: "Meeting table", kind: "meeting_table", id: "m1", rots: [0, 1] },
   { label: "Slot-car track (autorama)", kind: "slot_track", id: "st1", rots: [0, 1] },
+  { label: "Computer · putty (VortexOS)", kind: "computer", id: "pc1", props: { variant: 0, seed: 0.8 } },
+  { label: "Computer · graphite", kind: "computer", id: "pc2", props: { variant: 1, seed: 0.2 } },
   { label: "CRT TV · woodgrain", kind: "crt_tv", id: "tv1", props: { variant: 0 } },
   { label: "CRT TV · silver", kind: "crt_tv", id: "tv2", props: { variant: 1 }, rots: [0, 1] },
   { label: "Wall TV · black", kind: "tv_wall", id: "tw1", props: { variant: 0 }, rots: [0] },

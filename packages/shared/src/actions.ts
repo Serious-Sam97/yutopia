@@ -36,7 +36,8 @@ export type ObjectAction =
   | "takeFrisbee"
   | "takeRope"
   | "takeFeather"
-  | "takeLaser";
+  | "takeLaser"
+  | "useComputer";
 
 export interface ActionContext {
   uid: number;
@@ -80,6 +81,9 @@ export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectActi
       break;
     case "console":
       out.push("play");
+      break;
+    case "computer":
+      out.push("useComputer");
       break;
     case "tv":
       out.push("watch");

@@ -61,6 +61,7 @@ export type PanelKind =
   | "settings"
   | "avatar"
   | "pets"
+  | "computer"
   | null;
 
 // A pet in the room (shared/pets.ts), as the panel and the menus see it.

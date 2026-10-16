@@ -45,6 +45,7 @@ import {
   validLayout,
   type WorldObjectDef,
 } from "@yutopia/shared";
+import { monitorsToComputers } from "@yutopia/shared/computer";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
@@ -156,6 +157,13 @@ export class SpaceRoom extends Room<SpaceState> {
     if (bare.changed.length) {
       console.log(`[bare] space ${this.spaceId}: ${bare.changed.length} things set out on their own`);
       if (!config.offline) await saveAll(bare.changed, (o) => yondra.putObject(this.spaceId, o));
+    }
+    // monitors from before the computers (shared/computer.ts): each becomes one, once
+    const pcs = monitorsToComputers(objects);
+    objects = pcs.objects;
+    if (pcs.changed.length) {
+      console.log(`[computers] space ${this.spaceId}: ${pcs.changed.length} monitors are computers now`);
+      if (!config.offline) await saveAll(pcs.changed, (o) => yondra.putObject(this.spaceId, o));
     }
     for (const o of objects) this.state.objects.set(o.id, toSchema(o));
     this.rebuildGrid();

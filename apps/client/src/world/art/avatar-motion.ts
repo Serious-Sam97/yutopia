@@ -429,6 +429,18 @@ function atWork(rig: Rig, what: string, base: Pose, t: number): Pose {
       p.head.rot += 2.5 * Math.sin(t * 1.7 + 0.4);
       break;
     }
+    case "computer": {
+      // standing at a computer: both hands on its keyboard, typing in bursts
+      const burst = Math.sin(t * 0.9) > -0.2 ? 1 : 0;
+      const tap = burst * Math.sin(t * 19);
+      p.armR = side ? { sh: 34, el: 58 + 4 * tap, su: 1, sf: 1 } : { sh: 12, el: 64 + 4 * tap, su: 0.95, sf: 0.6 };
+      p.armL = side
+        ? { sh: 34, el: 58 - 4 * tap, su: 1, sf: 1 }
+        : { sh: -12, el: -64 + 4 * Math.sin(t * 19 + 1.7) * burst, su: 0.95, sf: 0.6 };
+      p.armLFront = !side;
+      p.head.rot += 1.2 * Math.sin(t * 0.7);
+      break;
+    }
     case "whiteboard":
       // a hand up at the board, writing
       p.armR = side
