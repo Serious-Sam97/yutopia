@@ -1,6 +1,6 @@
 "use client";
 
-import type { AvatarLayers, Emote } from "@yutopia/shared";
+import type { AvatarLayers, Emote, Want } from "@yutopia/shared";
 import { ImageSource, Texture } from "pixi.js";
 import type { Face, PartArt } from "./avatar-rig";
 import type { Rim, View } from "./avatar-svg";
@@ -93,7 +93,7 @@ export function vortexTexture(mood: VortexMood): Texture | null {
 }
 
 // Emotes over heads: drawn at 2× the size they're shown.
-export function emoteTexture(e: Emote): Texture | null {
+export function emoteTexture(e: Emote | Want): Texture | null {
   return get(`em|${e}`, () => emoteSvg(e, 128));
 }
 

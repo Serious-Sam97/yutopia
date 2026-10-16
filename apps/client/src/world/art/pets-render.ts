@@ -40,6 +40,9 @@ export const dirAngle = (d: number) => {
 
 // frames per cycle for each pose (the iso sprites)
 const FRAMES: Record<PoseKind, number> = {
+  beg: 6,
+  nudge: 6,
+  sniff: 6,
   idle: 6,
   walk: 8,
   sit: 1,

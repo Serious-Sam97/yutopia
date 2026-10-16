@@ -212,3 +212,50 @@ test("a pet is kept between visits", async () => {
   again.room.send("pet:release", { id });
   await waitFor(() => petsOf(again).length === 0);
 });
+
+test("its mind: hungry with an empty bowl it begs there; filled, it eats; a friend at the door is greeted", async () => {
+  const sp = space++;
+  const ana = await person(11, sp, "builder");
+  const bx = (me(ana).x | 0) + 1;
+  const by = me(ana).y | 0;
+  ana.room.send("obj:batch", {
+    items: [{ id: "t-bowl", kind: "pet_bowl", x: bx, y: by, rot: 0, props: { portions: 0 } }],
+  });
+  await waitFor(() => !!ana.room.state.objects.get("t-bowl"));
+  ana.room.send("pet:adopt", { species: "dog", name: "Rex" });
+  await waitFor(() => petsOf(ana).length === 1);
+  const id = petsOf(ana)[0].id;
+  const pet = () => ana.room.state.pets.get(id) as S;
+  const traits = JSON.parse(pet().traits);
+  assert.ok(traits.obedience > 0 && traits.obedience <= 1, "traits rolled at adoption");
+  assert.equal(pet().want, "");
+  // hungry, and the only bowl is empty: a bone on its mind, over to the bowl, and it begs
+  ana.room.send("pet:test", { id, needs: { food: 20 } });
+  await waitFor(() => pet().want === "bone", 4000);
+  await waitFor(() => pet().act === "beg", 4000);
+  await waitFor(() => Math.hypot(pet().x - bx - 0.5, pet().y - by - 0.5) < 1.5, 6000);
+  await waitFor(() => (ana.msgs["pet:event"] ?? []).some((e) => (e as { kind: string }).kind === "hungry"));
+  // filled: it eats, and the bone leaves its mind
+  ana.room.send("pet:bowl", { id: "t-bowl" });
+  await waitFor(() => pet().act === "eat", 20_000);
+  await waitFor(() => pet().food > 20, 10_000);
+  // fed and done (a lively one runs a few laps after a meal): nothing on its mind
+  ana.room.send("pet:test", { id, needs: { food: 100 } });
+  await waitFor(() => pet().want === "" && pet().act === "", 20_000);
+  // a friend it knows well comes in: over to greet them
+  ana.room.send("pet:test", { id, bonds: { "12": 60 } });
+  await waitFor(() => JSON.parse(pet().bonds)["12"] === 60);
+  const bia = await person(12, sp);
+  try {
+    await waitFor(() => String(pet().act).startsWith("greet:") || pet().act === "trick:jump", 8000);
+  } catch (e) {
+    console.log("greet state", {
+      act: pet().act,
+      mode: pet().mode,
+      bonds: pet().bonds,
+      uid: me(bia).uid,
+      want: pet().want,
+    });
+    throw e;
+  }
+});

@@ -77,7 +77,11 @@ export type PoseKind =
   | "yawn"
   | "flat"
   | "preen"
-  | "wing";
+  | "wing"
+  // its mind (docs/plan/17-pets-minds.md): begging, a nudge, a sniff
+  | "beg"
+  | "nudge"
+  | "sniff";
 export type Face3 =
   | "open"
   | "closed"
@@ -1858,6 +1862,46 @@ export class PetModel {
         break;
       }
       // species idle sets (M3)
+      case "beg": {
+        // sat up on its haunches, front paws in the air, eyes on you
+        this.body.rotation.z = 0.95;
+        this.body.position.y -= by * 0.3;
+        this.body.position.x -= bx * 0.2;
+        for (const [i, l] of this.legs.entries()) {
+          if (i >= 2) {
+            l.pivot.rotation.z = -1.5;
+            l.pivot.position.y = pr.up - by * 0.3 - by * 0.5;
+          } else {
+            l.pivot.rotation.z = -1.9 + Math.sin(t * TAU * 2 + i * 1.3) * 0.3;
+            l.pivot.position.y = pr.up - by * 0.3 - by * 0.05;
+          }
+        }
+        this.head.rotation.z = -0.6;
+        mouthOpen = 0.25;
+        wag += 0.3;
+        wagSpeed = 1.6;
+        break;
+      }
+      case "nudge": {
+        // a push forward with the head, again and again
+        const k = Math.max(0, Math.sin(t * TAU * 2));
+        this.body.rotation.z = -0.12 * k;
+        this.body.position.x += bx * 0.14 * k;
+        this.head.rotation.z = 0.4 * k;
+        eyes = "happy";
+        wag += 0.3;
+        break;
+      }
+      case "sniff": {
+        // nose to the ground, side to side, the tail up
+        this.head.rotation.z = -0.6;
+        this.head.rotation.y = Math.sin(t * TAU * 3) * 0.3;
+        this.head.rotation.x = Math.sin(t * TAU * 12) * 0.03;
+        this.body.rotation.z = -0.08;
+        this.tail.rotation.z = 0.5;
+        for (const e of this.ears) e.rotation.z += 0.25;
+        break;
+      }
       case "scratch": {
         // sat down, a hind leg going at an ear
         this.body.rotation.z = 0.5;
@@ -2496,6 +2540,41 @@ export function rigOf(s: RigIn, now: number): RigOut & { t: number; flash: numbe
     case "rest":
       kind = "sit";
       face = "open";
+      break;
+    // its mind (features/pets.ts think / plan)
+    case "beg":
+      if (s.a !== 1) {
+        kind = "beg";
+        cycle = 1600;
+      }
+      face = "sad";
+      break;
+    case "nudge":
+      if (s.a !== 1) {
+        kind = "nudge";
+        cycle = 900;
+      }
+      face = "happy";
+      break;
+    case "seek":
+      if (s.a !== 1) {
+        kind = "sniff";
+        cycle = 1400;
+      }
+      face = "open";
+      break;
+    case "hide":
+      if (s.a !== 1) kind = "flat";
+      face = "scared";
+      break;
+    case "watch":
+      if (s.a !== 1) kind = "sit";
+      face = "open";
+      break;
+    case "zoom":
+    case "company":
+    case "greet":
+      face = "excited";
       break;
     case "ko":
       kind = "ko";

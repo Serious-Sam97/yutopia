@@ -1,3 +1,4 @@
+import { type Bonds, emptyMemory, type Memory, rollTraits, type Traits } from "./mind";
 // Pets (docs/plan/13-pets.md): the rules the world-server applies and the
 // panel shows. A pet belongs to a person (Yondra `yutopia_pets`), walks in
 // with them, and lives by these numbers: needs that drop with real time, XP
@@ -466,13 +467,21 @@ export interface PetRecord {
   seenAt: number; // when the needs were last settled (ms)
   wins: number;
   losses: number;
+  // its mind (shared/mind.ts): who it is, what it remembers, who it's close to
+  traits?: Traits;
+  memory?: Memory;
+  bonds?: Bonds;
 }
 export function newPet(id: number, species: Species, name: string, look: unknown, now: number): PetRecord {
+  const clean = cleanLook(species, look);
   return {
     id,
     species,
     name: cleanName(name, SPECIES_DEFS[species].label),
-    look: cleanLook(species, look),
+    look: clean,
+    traits: rollTraits(species, clean.breed, (id * 7919 + (now % 100_000)) >>> 0),
+    memory: emptyMemory(),
+    bonds: {},
     outfit: { ...DEFAULT_OUTFIT },
     needs: { ...FULL_NEEDS },
     xp: 0,

@@ -1,5 +1,6 @@
 "use client";
 
+import { traitWords } from "@yutopia/shared/mind";
 import {
   BREED_COAT,
   BREEDS,
@@ -29,6 +30,7 @@ import {
 } from "@yutopia/shared/pets";
 import { useEffect, useMemo, useState } from "react";
 import { type Key as TrKey, useTr } from "@/lib/i18n";
+import { emoteUrl } from "@/world/art/emotes";
 import { HELD_BOX, heldSvg } from "@/world/art/held";
 import { svgDoc } from "@/world/art/svgdoc";
 import { hud, type PetInfo, useHud } from "@/world/store";
@@ -397,6 +399,7 @@ function StatusTab({ pet, t }: { pet: PetInfo; t: Tr }) {
           {t("petNeedsHint")}
         </div>
       </div>
+      <Mind pet={pet} t={t} />
       <div className="flex flex-col gap-2">
         <div className="grp">{t("petStats")}</div>
         <div className="grid grid-cols-4 gap-2">
@@ -459,6 +462,79 @@ const HOW: Record<Toy, TrKey> = {
   feather: "petPlay_feather",
   laser: "petPlay_laser",
 };
+
+// Its mind (shared/mind.ts): what it wants right now, who it is, who it's close to.
+function Mind({ pet, t }: { pet: PetInfo; t: Tr }) {
+  const people = useHud((s) => s.people);
+  const words = traitWords(pet.traits as never);
+  const bonds = Object.entries(pet.bonds)
+    .filter(([, v]) => v >= 1)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  const nameOf = (uid: string) => people.find((p) => String(p.uid) === uid)?.name ?? t("petBondSomeone");
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <div className="grp">{t("petWants")}</div>
+        <div className="flex items-center gap-2 text-sm">
+          {pet.want ? (
+            <>
+              {/* biome-ignore lint/performance/noImgElement: a drawn token */}
+              <img alt="" src={emoteUrl(pet.want as never)} width={28} height={28} draggable={false} />
+              <span>{t(`want_${pet.want}` as TrKey)}</span>
+            </>
+          ) : (
+            <span style={{ color: "var(--muted)" }}>{t("petWantsNothing")}</span>
+          )}
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="grp">{t("petPersonality")}</div>
+        <div className="text-sm">{words.map((w) => t(`trait_${w}` as TrKey)).join(" · ")}</div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+          {Object.entries(pet.traits).map(([k, v]) => (
+            <div key={k} className="flex items-center gap-2">
+              <span className="mono text-[10px] uppercase w-24 shrink-0" style={{ color: "var(--cream-dim)" }}>
+                {t(`trait_${k}` as TrKey)}
+              </span>
+              <span className="flex-1 h-1.5 rounded-full" style={{ background: "var(--edge)" }}>
+                <span
+                  className="block h-full rounded-full"
+                  style={{ width: `${Math.round(v * 100)}%`, background: "var(--vfd)" }}
+                />
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mono text-[10px]" style={{ color: "var(--muted)" }}>
+          {t("petPersonalityHint")}
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="grp">{t("petBonds")}</div>
+        {bonds.length ? (
+          <div className="flex gap-3 flex-wrap">
+            {bonds.map(([uid, v]) => (
+              <div key={uid} className="flex flex-col items-center gap-0.5">
+                <Ring value={v} done={false} />
+                <span className="mono text-[10px] uppercase" style={{ color: "var(--cream-dim)" }}>
+                  {nameOf(uid)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm" style={{ color: "var(--muted)" }}>
+            {t("petBondsNone")}
+          </div>
+        )}
+        <div className="mono text-[10px]" style={{ color: "var(--muted)" }}>
+          {t("petBondsHint")}
+        </div>
+      </div>
+    </>
+  );
+}
 
 function PlayTab({ pet, t }: { pet: PetInfo; t: Tr }) {
   const w = useWorld();

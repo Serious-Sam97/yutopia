@@ -30,6 +30,7 @@
 11. [14-pets-v2.md](14-pets-v2.md) — Pets v2 (delivered): real 3D models in both views, throw-and-fetch play with toys in the world, the Pets cabinet
 12. [15-pets-models-v3.md](15-pets-models-v3.md) — Pet models v3 (delivered): one-piece bodies and ramp shading, weight and gaits, expressions and species behaviour, breeds, sharper iso
 13. [16-pets-breeds.md](16-pets-breeds.md) — Pets breeds (delivered): twelve dog and twelve cat breeds, part colours and eye colour for every species, a fedora
+14. [17-pets-minds.md](17-pets-minds.md) — Pets with a mind (delivered): drives and intentions with thought bubbles, personality traits and a will of its own, memory and bonds, a day
 
 ## Workflow rules (inherited from Yondra)
 

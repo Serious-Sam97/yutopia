@@ -1,6 +1,36 @@
 import { ANIM, dirFromDelta, findPath, isToyHeld, type Point, THROWN, type WorldObjectDef } from "@yutopia/shared";
 import { isRadio } from "@yutopia/shared/media";
 import {
+  type Bonds,
+  bondDecay,
+  bondOf,
+  bondUp,
+  choose,
+  cleanBonds,
+  cleanMemory,
+  cleanTraits,
+  compatible,
+  drift,
+  drives,
+  favouriteSpot,
+  greets,
+  hasGrudge,
+  holdGrudge,
+  type Intent,
+  isDusk,
+  learnK,
+  type Memory,
+  nightOf,
+  obeyChance,
+  type Raising,
+  rememberBowl,
+  rememberSpot,
+  rememberToy,
+  shyOf,
+  type Traits,
+  WANT_ICON,
+} from "@yutopia/shared/mind";
+import {
   afterBattle,
   BATTLE,
   type BattleEvent,
@@ -13,7 +43,6 @@ import {
   FETCH,
   type Fighter,
   flightMs,
-  HUNGRY_AT,
   hpFor,
   isCommand,
   isDead,
@@ -29,7 +58,6 @@ import {
   type Move,
   type Needs,
   newPet,
-  obeys,
   PET_MAX,
   type PetMood,
   type PetRecord,
@@ -107,6 +135,18 @@ const SAVE_MS = 30_000;
 const HUNGRY_CALL_MS = 120_000;
 const EAT_MS = 4000;
 const PET_MS = 1500;
+// its mind (shared/mind.ts): how often it thinks, how long a want shows, how
+// soon it asks again, how long it begs / nudges / sniffs / watches
+const THINK_MS = 1000;
+const WANT_AGAIN_MS = 25_000;
+const BEG_AGAIN_MS = 14_000;
+const BEG_MS = 3500;
+const NUDGE_MS = 2600;
+const SNIFF_MS = 2600;
+const WATCH_MS = 20_000;
+const GREET_DELAY_MS = 1500;
+const ZOOM_AGAIN_MS = 20 * 60_000;
+const ZOOM_PACE = 2.1;
 
 interface Run {
   path: Point[];
@@ -124,6 +164,24 @@ interface Run {
   toyAt: number; // the throw it last answered (the toy's `at`)
   since: number; // when it joined the room
   greeted: boolean;
+  // its mind (shared/mind.ts)
+  traits: Traits;
+  memory: Memory;
+  bonds: Bonds;
+  intent: Intent | null;
+  thinkAt: number; // when it thinks next
+  lastPlay: number;
+  lastPetted: number; // petted or spoken to
+  lastNear: number; // beside another pet
+  lastLooked: number; // had a look at something new / explored
+  seen: Set<string>; // the things it has had a look at
+  wantAt: number; // when its want was last shown
+  calledAt: number; // a command it ignored (a second call works)
+  begAt: number; // the last beg / nudge (not again at once)
+  shyAt: number; // the last step away from a stranger
+  zoomAt: number; // the last zoomies
+  pace: number; // × its walking pace (zoomies)
+  echo?: { mood: PetMood; at: number }; // a parrot about to repeat a sound
 }
 
 // Offline (tests, no Yondra): records kept here.
@@ -175,6 +233,23 @@ registerFeature((room: SpaceRoom) => {
       say(pet, "happy");
     }
     touch(pet);
+  };
+  // its mind, kept on the run and (traits, bonds) in the state for the panel
+  const setTraits = (pet: Pet, r: Run, t: Traits) => {
+    r.traits = t;
+    pet.traits = JSON.stringify(t);
+    r.dirty = true;
+  };
+  const setBonds = (pet: Pet, r: Run, b: Bonds) => {
+    r.bonds = b;
+    pet.bonds = JSON.stringify(b);
+    r.dirty = true;
+  };
+  const raise = (pet: Pet, r: Run, ev: Raising) => setTraits(pet, r, drift(r.traits, ev));
+  const want = (pet: Pet, r: Run, icon: string, now: number) => {
+    pet.want = icon;
+    pet.wantAt = now;
+    r.wantAt = now;
   };
   const tricks = (pet: Pet): Record<string, number> => {
     try {
@@ -266,6 +341,9 @@ registerFeature((room: SpaceRoom) => {
     return (await yondra.createPet(uid, rec)).pet;
   };
   const patchOf = (pet: Pet, now: number): Partial<PetRecord> => ({
+    traits: runs.get(pet.id)?.traits,
+    memory: runs.get(pet.id)?.memory,
+    bonds: runs.get(pet.id)?.bonds,
     needs: needsOf(pet),
     xp: pet.xp,
     tricks: tricks(pet),
@@ -339,12 +417,33 @@ registerFeature((room: SpaceRoom) => {
     pet.mode = rec.needs.energy < SLEEP_AT ? "sleep" : "follow";
     pet.a = pet.mode === "sleep" ? ANIM.sit : ANIM.idle;
     records.set(pet.id, rec);
+    const seed = (Number(rec.id) * 7919 + (rec.bornAt % 100_000)) >>> 0;
+    const traits = cleanTraits(rec.traits, rec.species, rec.look.breed, seed);
+    const bonds = bondDecay(cleanBonds(rec.bonds), Math.max(0, now - rec.seenAt) / 3_600_000);
+    pet.traits = JSON.stringify(traits);
+    pet.bonds = JSON.stringify(bonds);
     runs.set(pet.id, {
+      traits,
+      memory: cleanMemory(rec.memory),
+      bonds,
+      intent: null,
+      thinkAt: now + 2000,
+      lastPlay: now,
+      lastPetted: now,
+      lastNear: now,
+      lastLooked: now,
+      seen: new Set(objects().map((o) => o.id)),
+      wantAt: 0,
+      calledAt: 0,
+      begAt: 0,
+      shyAt: 0,
+      zoomAt: 0,
+      pace: 1,
       path: [],
       until: now + 1000,
       care: {},
       lesson: 0,
-      hungryCall: now,
+      hungryCall: 0, // (it says so at once if it arrives hungry)
       seenAt: now,
       dirty: false,
       savedAt: now,
@@ -457,15 +556,29 @@ registerFeature((room: SpaceRoom) => {
     const pet = mine(c, m?.id);
     const p = pet && owner(pet);
     if (!pet || !p || !isCommand(m.cmd) || pet.battle) return;
-    if (!obeys(needsOf(pet), Math.random())) {
+    const r = runs.get(pet.id);
+    if (!r) return;
+    const now = Date.now();
+    r.lastPetted = now; // spoken to
+    setBonds(pet, r, bondUp(r.bonds, p.uid, "word"));
+    // a will of its own: obedience, the bond, its mood; a second call within
+    // a few seconds always works (it heard you)
+    const chance = obeyChance(r.traits, bondOf(r.bonds, p.uid), needsOf(pet), r.intent?.drive ?? null);
+    // (offline — the tests — it always does: the chance itself is tested in shared)
+    const roll = config.offline ? 0 : Math.random();
+    if (m.cmd !== "speak" && now - r.calledAt > 5000 && roll > chance) {
+      r.calledAt = now;
       event(pet, "ignored");
+      want(pet, r, "no", now);
       say(pet, "sad");
+      raise(pet, r, "ignored");
       return;
     }
+    r.calledAt = 0;
     addXp(pet, XP.command);
     pet.act = "";
-    const r = runs.get(pet.id);
-    if (r) r.until = Date.now() + 2000;
+    r.pace = 1;
+    r.until = now + 2000;
     switch (m.cmd) {
       case "come":
         pet.mode = "follow";
@@ -503,6 +616,21 @@ registerFeature((room: SpaceRoom) => {
     }
   });
 
+  // (tests only, offline: its needs, bonds and clock set by hand)
+  room.on("pet:test", (c, m) => {
+    const pet = config.offline ? mine(c, m?.id) : null;
+    const r = pet && runs.get(pet.id);
+    if (!pet || !r) return;
+    if (m.needs) setNeeds(pet, { ...needsOf(pet), ...m.needs });
+    if (m.bonds) setBonds(pet, r, cleanBonds(m.bonds));
+    if (m.ago) {
+      r.lastPetted -= m.ago;
+      r.lastPlay -= m.ago;
+    }
+    r.thinkAt = 0;
+    r.begAt = 0;
+  });
+
   // ── care ─────────────────────────────────────────────────────────────────
   room.on("pet:care", (c, m) => {
     const what = m?.what;
@@ -518,6 +646,9 @@ registerFeature((room: SpaceRoom) => {
     const careKey = what === "pet" ? `pet:${c.sessionId}` : what;
     if (now - (r.care[careKey] ?? 0) < CARE[what].cooldown) return void event(pet, "wait");
     r.care[careKey] = now;
+    r.lastPetted = now;
+    setBonds(pet, r, bondUp(r.bonds, p.uid, what === "pet" ? "pet" : "feed"));
+    raise(pet, r, what === "pet" ? "pet" : "fed");
     const n = needsOf(pet);
     if (what === "pet") n.fun = Math.min(100, n.fun + CARE.pet.fun);
     if (what === "snack") n.food = Math.min(100, n.food + CARE.snack.food);
@@ -556,6 +687,10 @@ registerFeature((room: SpaceRoom) => {
     if (def.run === "fetch" || def.run === "dart") return; // thrown / pointed instead (toy:throw, laser:point)
     r.toy = toy;
     r.phase = 0;
+    r.lastPlay = Date.now();
+    r.memory = rememberToy(r.memory, toy);
+    setBonds(pet, r, bondUp(r.bonds, p.uid, "play"));
+    raise(pet, r, "play");
     stop(pet);
     face(pet, p);
     if (toy === "rope") pet.carry = "rope";
@@ -700,6 +835,9 @@ registerFeature((room: SpaceRoom) => {
       r.after = t.id;
       r.toyAt = t.at;
       r.phase = 0;
+      r.lastPlay = Date.now();
+      r.memory = rememberToy(r.memory, t.kind);
+      setBonds(pet, r, bondUp(r.bonds, p.uid, "play"));
       act(pet, "fetch:go", { x: t.x, y: t.y });
       say(pet, "happy");
       return;
@@ -888,6 +1026,12 @@ registerFeature((room: SpaceRoom) => {
         else pet.losses++;
         setNeeds(pet, afterBattle(needsOf(pet), won));
         addXp(pet, won ? XP.win : XP.loss);
+        const r = runs.get(pet.id);
+        if (r && winner !== "draw") {
+          raise(pet, r, won ? "won" : "lost");
+          // the loser keeps away from the winner for a while
+          if (!won) r.memory = holdGrudge(r.memory, side === "a" ? b.b : b.a, Date.now());
+        }
         event(pet, winner === "draw" ? "draw" : won ? "won" : "lost");
         say(pet, won ? "happy" : "sad");
       }
@@ -963,23 +1107,244 @@ registerFeature((room: SpaceRoom) => {
       wake(pet);
       say(pet, "happy");
     } else if (pet.mode !== "sleep" && n.energy < SLEEP_AT && !pet.act && !pet.battle) sleep(pet);
-    // hungry or thirsty: a bowl with something in it, else a word to the owner
-    if (!pet.act && !pet.battle && pet.mode !== "sleep" && (n.food < HUNGRY_AT || n.water < HUNGRY_AT)) {
-      const kind = n.water < n.food ? "water_bowl" : "pet_bowl";
-      const bowl = objects()
-        .filter((o) => o.kind === kind && portions(o) > 0)
-        .sort((a, b) => Math.hypot(a.x - pet.x, a.y - pet.y) - Math.hypot(b.x - pet.x, b.y - pet.y))
-        .find((o) => findPath(room.gridFor(pet.uid), pet, { x: o.x + 0.5, y: o.y + 0.5 }));
-      if (bowl) {
-        r.bowl = bowl.id;
-        go(pet, { x: bowl.x + 0.5, y: bowl.y + 0.5 });
-        act(pet, kind === "pet_bowl" ? "eat" : "drink");
-        r.phase = 0;
-      } else if (p && now - r.hungryCall > HUNGRY_CALL_MS && (n.food < 25 || n.water < 25)) {
-        r.hungryCall = now;
-        say(pet, "sad");
-        event(pet, n.water < n.food ? "thirsty" : "hungry");
+    void p; // (hunger and thirst are on its mind: think())
+  };
+  const byDistance = (list: WorldObjectDef[], pet: Pet) =>
+    [...list].sort((a, b) => Math.hypot(a.x - pet.x, a.y - pet.y) - Math.hypot(b.x - pet.x, b.y - pet.y));
+  const centre = (o: WorldObjectDef) => ({ x: o.x + 0.5, y: o.y + 0.5 });
+  const reachable = (pet: Pet) => (o: WorldObjectDef) => !!findPath(room.gridFor(pet.uid), pet, centre(o));
+  // a bowl with something in it: over to it, and a portion gone (finishAct eat / drink)
+  const goEat = (pet: Pet, r: Run, bowl: WorldObjectDef) => {
+    r.bowl = bowl.id;
+    r.memory = rememberBowl(r.memory, bowl.x, bowl.y, bowl.kind);
+    go(pet, centre(bowl));
+    act(pet, bowl.kind === "pet_bowl" ? "eat" : "drink");
+    r.phase = 0;
+  };
+  // how loud it is where it stands: a battle next to it, a radio, a crowd
+  const noiseAt = (pet: Pet): number => {
+    let noise = 0;
+    for (const b of room.state.battles.values()) {
+      if (b.phase !== "pick" && b.phase !== "anim") continue;
+      const A = room.state.pets.get(b.a);
+      if (A && Math.hypot(A.x - pet.x, A.y - pet.y) < 8) noise = 1;
+    }
+    if (
+      noise < 0.4 &&
+      objects().some(
+        (o) => isRadio(o.kind) && o.props?.playing === true && Math.hypot(o.x + 0.5 - pet.x, o.y + 0.5 - pet.y) < 5,
+      )
+    )
+      noise = 0.4;
+    let crowd = 0;
+    for (const q of owners().values()) if (Math.hypot(q.x - pet.x, q.y - pet.y) < 4) crowd++;
+    if (crowd > 4) noise = Math.max(noise, 0.3);
+    return noise;
+  };
+  const hourNow = () => new Date().getHours() + new Date().getMinutes() / 60;
+  const isTv = (o: WorldObjectDef) => o.kind.includes("tv") && o.props?.playing !== false;
+
+  // ── its mind ─────────────────────────────────────────────────────────────
+  // once a second with nothing on: what it wants most, an icon over its head,
+  // and a plan — the room's paths and acts do the rest (finishAct)
+  const think = (pet: Pet, r: Run, p: Player, now: number) => {
+    r.thinkAt = now + THINK_MS;
+    const n = needsOf(pet);
+    const others = [...room.state.pets.values()].filter(
+      (o) => o !== pet && o.alive && !o.battle && Math.hypot(o.x - pet.x, o.y - pet.y) < 10,
+    );
+    if (others.some((o) => Math.hypot(o.x - pet.x, o.y - pet.y) < 2.2)) r.lastNear = now;
+    // a parrot repeats a sound it just heard
+    if (pet.species === "parrot" && !r.echo) {
+      const heard = others.find((o) => o.say && now - o.sayAt < 1500 && Math.hypot(o.x - pet.x, o.y - pet.y) < 6);
+      if (heard) r.echo = { mood: heard.say as PetMood, at: now + 1500 };
+    }
+    const friends = others.filter((o) => {
+      const or = runs.get(o.id);
+      return (
+        !!or && compatible(r.traits, or.traits) && !hasGrudge(r.memory, o.id, now) && !hasGrudge(or.memory, pet.id, now)
+      );
+    });
+    // time beside people counts a little
+    for (const q of owners().values())
+      if (Math.hypot(q.x - pet.x, q.y - pet.y) < 3 && Math.random() < 1 / 60)
+        setBonds(pet, r, bondUp(r.bonds, q.uid, "near"));
+    const hour = hourNow();
+    const d = drives(n, r.traits, {
+      now,
+      night: nightOf(hour),
+      noise: noiseAt(pet),
+      lastPlay: r.lastPlay,
+      lastPetted: r.lastPetted,
+      lastNear: r.lastNear,
+      lastLooked: r.lastLooked,
+      newThings: objects().filter((o) => !r.seen.has(o.id)).length,
+      pets: friends.length,
+    });
+    const was = r.intent;
+    r.intent = choose(d, r.intent, now);
+    if (!r.intent) {
+      if (was) pet.want = "";
+      // nothing pressing: now and then something of the day (M4)
+      if (isDusk(hour) && r.traits.energy > 0.6 && now - r.zoomAt > ZOOM_AGAIN_MS && Math.random() < 0.02)
+        return zoom(pet, r, now);
+      if (
+        n.fun < 55 &&
+        Math.random() < 0.04 &&
+        ![...owners().values()].some((q) => Math.hypot(q.x - pet.x, q.y - pet.y) < 4)
+      ) {
+        const tv = byDistance(objects().filter(isTv), pet).find((o) => Math.hypot(o.x - pet.x, o.y - pet.y) < 9);
+        if (tv && goNear(pet, centre(tv), 1.6)) {
+          r.phase = 0;
+          act(pet, `watch:${tv.id}`, centre(tv));
+        }
       }
+      return;
+    }
+    if (r.intent !== was || now - r.wantAt > WANT_AGAIN_MS) want(pet, r, WANT_ICON[r.intent.drive], now);
+    if (pet.mode === "stay") return; // (it stays put, but says what it wants)
+    plan(pet, r, p, now, friends);
+  };
+  const plan = (pet: Pet, r: Run, p: Player, now: number, friends: Pet[]) => {
+    const drive = r.intent?.drive;
+    const n = needsOf(pet);
+    const g = room.gridFor(pet.uid);
+    const begin = (what: string, at?: Point) => {
+      r.phase = 0;
+      act(pet, what, at);
+    };
+    switch (drive) {
+      case "hunger":
+      case "thirst": {
+        const kind = drive === "thirst" ? "water_bowl" : "pet_bowl";
+        const full = byDistance(
+          objects().filter((o) => o.kind === kind && portions(o) > 0),
+          pet,
+        ).find(reachable(pet));
+        if (full) return goEat(pet, r, full);
+        // an empty bowl: it stands there and paws at it; none: it begs at its owner
+        if (now - r.hungryCall > HUNGRY_CALL_MS && (n.food < 25 || n.water < 25)) {
+          r.hungryCall = now;
+          say(pet, "sad");
+          event(pet, drive === "thirst" ? "thirsty" : "hungry");
+        }
+        if (now - r.begAt < BEG_AGAIN_MS) return;
+        r.begAt = now;
+        const empty = byDistance(
+          objects().filter((o) => o.kind === kind),
+          pet,
+        ).find(reachable(pet));
+        if (empty) {
+          if (goNear(pet, centre(empty), 0.9)) begin("beg", centre(empty));
+        } else if (goNear(pet, p, 1.2)) begin("beg", p);
+        return;
+      }
+      case "rest": {
+        if (n.energy < SLEEP_AT) return sleep(pet);
+        if (now - r.begAt < BEG_AGAIN_MS) return;
+        r.begAt = now;
+        // its bed (or house) for a lie-down; taken: it sits beside it; none: its favourite spot
+        const bed = byDistance(
+          objects().filter((o) => o.kind === "pet_bed" || o.kind === "pet_house"),
+          pet,
+        ).find(reachable(pet));
+        const taken =
+          !!bed &&
+          [...room.state.pets.values()].some(
+            (o) => o !== pet && Math.hypot(o.x - bed.x - 0.5, o.y - bed.y - 0.5) < 0.6,
+          );
+        const at = bed && !taken ? centre(bed) : favouriteSpot(r.memory);
+        if (at && go(pet, at)) return begin("rest", at);
+        if (bed && taken && goNear(pet, centre(bed), 1.1)) return begin("trick:sit");
+        return;
+      }
+      case "play": {
+        // a toy of its owner's on the floor: after it; a friend: a romp; else it asks, ball in its eyes
+        if (canExert(n)) maybeFetch(pet, r);
+        if (pet.act) return;
+        if (friends.length && Math.random() < 0.5) return romp(pet, r, friends[0]);
+        if (pet.species === "cat" && Math.random() < 0.35) {
+          const post = byDistance(
+            objects().filter((o) => o.kind === "scratch_post"),
+            pet,
+          ).find((o) => Math.hypot(o.x - pet.x, o.y - pet.y) < 8);
+          if (post && goNear(pet, centre(post), 0.9)) {
+            begin("scratch");
+            r.lastPlay = now;
+            return;
+          }
+        }
+        if (now - r.begAt < BEG_AGAIN_MS) return;
+        r.begAt = now;
+        if (goNear(pet, p, 1.1)) begin("nudge", p);
+        return;
+      }
+      case "attention": {
+        if (now - r.begAt < BEG_AGAIN_MS) return;
+        r.begAt = now;
+        if (goNear(pet, p, 1.0)) begin("nudge", p);
+        return;
+      }
+      case "curiosity": {
+        const fresh = byDistance(
+          objects().filter((o) => !r.seen.has(o.id)),
+          pet,
+        );
+        const target = fresh.find((o) => goNear(pet, centre(o), 1.0));
+        if (target) return begin(`seek:${target.id}`, centre(target));
+        for (const o of fresh) r.seen.add(o.id); // (can't get to them: never mind)
+        // nothing new: a wander somewhere else
+        for (let i = 0; i < 6; i++) {
+          const t = { x: pet.x + (Math.random() * 2 - 1) * 8, y: pet.y + (Math.random() * 2 - 1) * 8 };
+          if (g.fits(t.x, t.y) && go(pet, t)) return begin("seek:");
+        }
+        r.lastLooked = now;
+        return;
+      }
+      case "comfort": {
+        if (now - r.begAt < BEG_AGAIN_MS) return;
+        r.begAt = now;
+        const den = byDistance(
+          objects().filter((o) => o.kind === "pet_house" || o.kind === "pet_bed"),
+          pet,
+        ).find(reachable(pet));
+        if (den && go(pet, centre(den))) return begin("hide");
+        if (goNear(pet, p, 0.9)) begin("hide");
+        return;
+      }
+      case "company": {
+        if (friends.length) romp(pet, r, friends[0]);
+        return;
+      }
+    }
+  };
+  // over to a friend for a romp (a jump / hop together: finishAct company)
+  const romp = (pet: Pet, r: Run, other: Pet) => {
+    if (!goNear(pet, other, 1.1)) return;
+    r.phase = 0;
+    act(pet, `company:${other.id}`, other);
+  };
+  // zoomies: a few laps of wherever it is, flat out
+  const zoom = (pet: Pet, r: Run, now: number) => {
+    r.zoomAt = now;
+    r.pace = ZOOM_PACE;
+    r.phase = 0;
+    act(pet, "zoom");
+    say(pet, "happy");
+  };
+  // a step away from a stranger (a timid pet that doesn't know them yet)
+  const shy = (pet: Pet, r: Run, now: number) => {
+    if (now - r.shyAt < 4000 || pet.act || pet.mode === "sleep") return;
+    for (const q of owners().values()) {
+      if (q.sid === pet.sid || Math.hypot(q.x - pet.x, q.y - pet.y) > 1.3) continue;
+      if (!shyOf(r.traits, bondOf(r.bonds, q.uid))) continue;
+      r.shyAt = now;
+      const dx = pet.x - q.x;
+      const dy = pet.y - q.y;
+      const k = 2 / Math.max(0.2, Math.hypot(dx, dy));
+      const to = room.gridFor(pet.uid).nearestOpen(pet.x + dx * k, pet.y + dy * k, 2);
+      if (to) go(pet, to);
+      return;
     }
   };
 
@@ -995,6 +1360,96 @@ registerFeature((room: SpaceRoom) => {
       case "idle": {
         const own = IDLE_SETS[pet.species as Species].find((x) => x.kind === arg);
         if (!own || since > own.ms) pet.act = "";
+        break;
+      }
+      case "beg":
+      case "nudge":
+      case "seek":
+      case "hide":
+      case "watch": {
+        // walking there first; then a while at it
+        if (r.path.length) break;
+        if (r.phase === 0) {
+          r.phase = 1;
+          pet.actAt = now;
+          if (what === "watch" || what === "seek" || pet.actX || pet.actY) face(pet, { x: pet.actX, y: pet.actY });
+          if ((what === "beg" || what === "nudge") && p && !(pet.actX || pet.actY)) face(pet, p);
+          break;
+        }
+        const ms =
+          what === "beg"
+            ? BEG_MS
+            : what === "nudge"
+              ? NUDGE_MS
+              : what === "seek"
+                ? SNIFF_MS
+                : what === "watch"
+                  ? WATCH_MS
+                  : 6000;
+        if (since < ms) break;
+        if (what === "hide" && noiseAt(pet) > 0.2 && since < 60_000) break;
+        pet.act = "";
+        if (what === "seek") {
+          for (const o of objects()) r.seen.add(o.id);
+          r.lastLooked = now;
+        }
+        if (what === "watch") {
+          r.lastLooked = now;
+          const n = needsOf(pet);
+          n.fun = Math.min(100, n.fun + 4);
+          setNeeds(pet, n);
+        }
+        break;
+      }
+      case "rest": {
+        if (r.path.length) break;
+        pet.act = "";
+        r.memory = rememberSpot(r.memory, pet.x, pet.y);
+        r.dirty = true;
+        const n = needsOf(pet);
+        if (nightOf(hourNow()) > 0.5 || n.energy < 45) sleep(pet);
+        else act(pet, "trick:chill");
+        break;
+      }
+      case "company": {
+        if (r.path.length) break;
+        pet.act = "";
+        const other = room.state.pets.get(arg);
+        if (!other) break;
+        face(pet, other);
+        r.lastNear = now;
+        r.lastPlay = now;
+        act(pet, pet.species === "rabbit" ? "trick:hop" : pet.species === "parrot" ? "trick:dance" : "trick:jump");
+        say(pet, "happy");
+        break;
+      }
+      case "greet": {
+        if (r.path.length) break;
+        pet.act = "";
+        const q = owners().get(arg);
+        if (q) face(pet, q);
+        act(pet, pet.species === "rabbit" ? "trick:hop" : "trick:jump");
+        say(pet, "happy");
+        break;
+      }
+      case "zoom": {
+        if (r.path.length) break;
+        if (r.phase < 3) {
+          const g = room.gridFor(pet.uid);
+          let gone = false;
+          for (let i = 0; i < 8 && !gone; i++) {
+            const t = { x: pet.x + (Math.random() * 2 - 1) * 7, y: pet.y + (Math.random() * 2 - 1) * 7 };
+            if (Math.hypot(t.x - pet.x, t.y - pet.y) > 3 && g.fits(t.x, t.y) && go(pet, t)) gone = true;
+          }
+          r.phase++;
+          if (gone) break;
+        }
+        pet.act = "";
+        r.pace = 1;
+        const n = needsOf(pet);
+        n.fun = Math.min(100, n.fun + 8);
+        n.energy = Math.max(0, n.energy - 4);
+        setNeeds(pet, n);
         break;
       }
       case "scratch":
@@ -1030,6 +1485,8 @@ registerFeature((room: SpaceRoom) => {
           setNeeds(pet, n);
           addXp(pet, what === "eat" ? XP.feed : XP.water);
           say(pet, "happy");
+          if (what === "eat" && r.traits.energy > 0.55 && now - r.zoomAt > ZOOM_AGAIN_MS && Math.random() < 0.5)
+            zoom(pet, r, now);
         } else if (since > EAT_MS * 0.6) pet.act = "";
         break;
       }
@@ -1048,7 +1505,7 @@ registerFeature((room: SpaceRoom) => {
           const t = tricks(pet);
           const wit = statsOf(pet.species as Species, pet.level).wit;
           const was = t[arg] ?? 0;
-          t[arg] = Math.min(100, was + lessonGain(wit));
+          t[arg] = Math.min(100, was + lessonGain(wit) * learnK(r.traits));
           pet.tricks = JSON.stringify(t);
           const n = needsOf(pet);
           n.energy = Math.max(0, n.energy - 5);
@@ -1248,9 +1705,17 @@ registerFeature((room: SpaceRoom) => {
     const p = owner(pet);
     if (!p) return;
     if (pet.act === "battle" || pet.act === "ko" || isMove(pet.act)) return;
+    if (r.echo && now > r.echo.at) {
+      say(pet, r.echo.mood);
+      r.echo = undefined;
+    }
     if (pet.act) return finishAct(pet, r, now);
     if (pet.mode !== "sleep" && pet.mode !== "stay" && canExert(needsOf(pet))) maybeFetch(pet, r);
     if (pet.act) return;
+    if (pet.mode !== "sleep" && !r.path.length && now > r.thinkAt) think(pet, r, p, now);
+    if (pet.act) return;
+    shy(pet, r, now);
+    if (r.path.length && r.intent) return; // (on its way somewhere of its own)
     const d = Math.hypot(p.x - pet.x, p.y - pet.y);
     // lost its owner (a teleport, a locked door): turn up beside them
     if (d > 14 && pet.mode !== "stay") {
@@ -1288,6 +1753,24 @@ registerFeature((room: SpaceRoom) => {
     join(c, p) {
       if (p.bot) return;
       void bring(c, p);
+      // a friend at the door: the pets that know them come over
+      room.clock.setTimeout(() => {
+        const q = owners().get(c.sessionId);
+        if (!q) return;
+        for (const pet of room.state.pets.values()) {
+          const r = runs.get(pet.id);
+          if (!r || !pet.alive || pet.sid === c.sessionId || pet.battle || pet.mode === "sleep") continue;
+          // (a sit or a scratch beside its owner gives way; anything else it's doing doesn't)
+          const idling =
+            !pet.act || pet.act.startsWith("idle:") || pet.act.startsWith("trick:") || pet.act === "scratch";
+          if (!idling || !greets(bondOf(r.bonds, q.uid))) continue;
+          pet.act = "";
+          if (goNear(pet, q, 1.2)) {
+            r.phase = 0;
+            act(pet, `greet:${c.sessionId}`, q);
+          }
+        }
+      }, GREET_DELAY_MS);
     },
     leave(c) {
       const now = Date.now();
@@ -1320,7 +1803,7 @@ registerFeature((room: SpaceRoom) => {
         behave(pet, r, now);
         // walk
         if (r.path.length) {
-          let budget = SPECIES_DEFS[pet.species as Species].pace * dt;
+          let budget = SPECIES_DEFS[pet.species as Species].pace * dt * r.pace;
           while (budget > 0 && r.path.length) {
             const wp = r.path[0];
             const dx = wp.x - pet.x;

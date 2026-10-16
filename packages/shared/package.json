@@ -11,7 +11,8 @@
     "./library": "./src/library.ts",
     "./games": "./src/games.ts",
     "./media": "./src/media.ts",
-    "./pets": "./src/pets.ts"
+    "./pets": "./src/pets.ts",
+    "./mind": "./src/mind.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

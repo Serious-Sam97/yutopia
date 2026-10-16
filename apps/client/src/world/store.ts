@@ -84,6 +84,9 @@ export interface PetInfo {
   act: string;
   battle: string;
   near: boolean; // close enough to care for it
+  want: string; // what's on its mind (shared WANTS), "" for nothing
+  traits: Record<string, number>; // shared/mind.ts Traits (0..1)
+  bonds: Record<string, number>; // uid → 0..100
 }
 // A battle I'm in (or watching): both sides, whose move is pending.
 export interface BattleView {

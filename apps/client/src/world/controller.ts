@@ -84,6 +84,7 @@ interface Remote {
 
 const INTERP_MS = 110;
 const IDLE_MS = 3000; // nothing moved for this long: frames at 30/s
+const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
 
 export class WorldController {
@@ -1564,7 +1565,7 @@ export class WorldController {
       a: pet.a,
       status: "online",
       speaking: false,
-      emote: "",
+      emote: pet.want && Date.now() - pet.wantAt < WANT_MS ? pet.want : "", // what it wants, over its head
       mic: false,
       pet: view,
     };
@@ -1598,6 +1599,9 @@ export class WorldController {
         act: pet.act,
         battle: pet.battle,
         near: Math.hypot(pet.x - this.me.x, pet.y - this.me.y) <= 2.8,
+        want: pet.want,
+        traits: safeParse(pet.traits) as PetInfo["traits"],
+        bonds: safeParse(pet.bonds) as PetInfo["bonds"],
       });
     });
     pets.sort((a, b) => Number(b.mine) - Number(a.mine) || a.name.localeCompare(b.name));

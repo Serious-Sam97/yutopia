@@ -47,6 +47,9 @@ const POSES: PoseKind[] = [
   "flat",
   "preen",
   "wing",
+  "beg",
+  "nudge",
+  "sniff",
 ];
 const FACES: Face3[] = ["open", "happy", "closed", "angry", "sad", "surprised", "sleepy", "excited", "scared", "smug"];
 const OUTFITS: Partial<PetOutfit>[] = [

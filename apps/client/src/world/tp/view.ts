@@ -6,6 +6,8 @@ import {
   type Point,
   placedFootprint,
   type Theme,
+  WANTS,
+  type Want,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import {
@@ -957,7 +959,10 @@ export class ThirdPersonView {
         t.dot.style.background = dot;
         t.slash.style.display = muted ? "" : "none";
       }
-      const emote = b.emote && (EMOTES as readonly string[]).includes(b.emote) ? (b.emote as Emote) : "";
+      const emote =
+        b.emote && ((EMOTES as readonly string[]).includes(b.emote) || (WANTS as readonly string[]).includes(b.emote))
+          ? (b.emote as Emote | Want)
+          : "";
       if (t.emoteKey !== emote) {
         t.emoteKey = emote;
         t.emote.style.display = emote ? "" : "none";

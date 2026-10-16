@@ -3,7 +3,7 @@
 import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
 import type { MediaItem } from "./media.ts";
-import type { Command, Move, Species, Toy, Trick } from "./pets.ts";
+import type { Command, Move, Needs, Species, Toy, Trick } from "./pets.ts";
 
 export const ROOM_NAME = "space";
 export const TICK_HZ = 20;
@@ -15,6 +15,9 @@ export type Anim = (typeof ANIM)[keyof typeof ANIM];
 
 export const EMOTES = ["wave", "heart", "laugh", "clap", "fire", "question", "coffee", "tape"] as const;
 export type Emote = (typeof EMOTES)[number];
+// what a pet wants, over its head (shared/mind.ts WANT_ICON; "no": a refusal)
+export const WANTS = ["bone", "drop", "zzz", "ball", "look", "house", "paws", "no"] as const;
+export type Want = (typeof WANTS)[number];
 
 export type ChatScope = "nearby" | "area" | "space";
 
@@ -174,6 +177,7 @@ export interface ClientMessages {
   "pet:play": { id: string; toy: Toy };
   "pet:teach": { id: string; trick: Trick };
   "pet:bowl": { id: string }; // the bowl's object id
+  "pet:test": { id: string; needs?: Partial<Needs>; bonds?: Record<string, number>; ago?: number }; // offline tests only
   // toys (shared/pets.ts): take one (from a toy box by `id`, or with a pet of
   // yours), throw it where you point, pick one up off the floor, point the laser
   "toy:take": { toy: Toy; id?: string };

@@ -32,6 +32,8 @@ import {
   topRect,
   toScreen,
   toWorld,
+  WANTS,
+  type Want,
   WB_H,
   WB_W,
   type WbItem,
@@ -243,7 +245,9 @@ function seedOf(id: string): number {
   for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
   return (h >>> 0) / 4294967296;
 }
-const isEmote = (e: string): e is Emote => (EMOTES as readonly string[]).includes(e);
+// (an emote, or what a pet wants: both ride the emote slot over a head)
+const isEmote = (e: string): e is Emote | Want =>
+  (EMOTES as readonly string[]).includes(e) || (WANTS as readonly string[]).includes(e);
 
 // What about an object changes the light map (doors: shut or not; lamps, radio: on).
 function lightKey(o: WorldObjectDef | undefined): string {

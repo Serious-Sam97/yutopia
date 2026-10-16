@@ -1,4 +1,4 @@
-import type { Emote } from "@yutopia/shared";
+import type { Emote, Want } from "@yutopia/shared";
 
 // Emotes drawn by the same hand as the people and items: a cream speech-bubble
 // token (warm ink outline, light from the upper-left) holding a small
@@ -22,7 +22,45 @@ function hand(fill = SKIN[0], shade = SKIN[1]) {
     <path d="M-5.6 -11 v3 M-0.4 -14 v3 M4.8 -13 v3" stroke="#fff6e3" stroke-width="1.2" stroke-linecap="round" opacity=".7"/>`;
 }
 
-const ART: Record<Emote, string> = {
+const ART: Record<Emote | Want, string> = {
+  // what a pet wants (shared/mind.ts WANT_ICON), drawn by the same hand
+  bone: `
+    <path d="M19 23 a5 5 0 1 1 5 -5 h16 a5 5 0 1 1 5 5 a5 5 0 1 1 -5 5 h-16 a5 5 0 1 1 -5 -5 z" fill="url(#g-mug)" ${O}/>
+    <path d="M24 24 h16" stroke="#cdbf9f" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M17 20 q1 -3 4 -3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>`,
+  drop: `
+    <path d="M32 8 C26 18 19 24 19 32 a13 13 0 0 0 26 0 C45 24 38 18 32 8 Z" fill="url(#g-water)" ${O}/>
+    <path d="M25 31 q0 6 5 8" fill="none" stroke="#e6f3ff" stroke-width="2.4" stroke-linecap="round" opacity=".9"/>`,
+  zzz: `
+    <path d="M14 36 H26 L14 46 H27" fill="none" ${ink(3.4)}/>
+    <path d="M30 24 H39 L30 32 H40" fill="none" ${ink(2.8)}/>
+    <path d="M42 12 H49 L42 18 H50" fill="none" ${ink(2.2)}/>`,
+  ball: `
+    <circle cx="32" cy="27" r="15" fill="url(#g-rust)" ${O}/>
+    <path d="M18 24 q14 -8 28 0 M18 30 q14 8 28 0" fill="none" stroke="#efe4cc" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M22 18 q3 -4 8 -4.5" fill="none" stroke="#ffd9c4" stroke-width="2" stroke-linecap="round" opacity=".85"/>`,
+  look: `
+    <circle cx="28" cy="24" r="11" fill="#dbe9ef" ${O}/>
+    <circle cx="28" cy="24" r="6.5" fill="#f6fbff" opacity=".9"/>
+    <path d="M36.5 32.5 L47 43" ${ink(5)}/>
+    <path d="M36.5 32.5 L47 43" stroke="#7a5236" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M21 20 q2 -4 6 -4.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".9"/>`,
+  house: `
+    <path d="M14 28 L32 12 L50 28 V42 H14 Z" fill="url(#g-walnut)" ${O}/>
+    <path d="M11 29 L32 10 L53 29" fill="none" ${ink(3)}/>
+    <path d="M26 42 V31 a6 6 0 0 1 12 0 V42 Z" fill="#2a1a12"/>
+    <path d="M17 29 L32 16 L47 29" fill="none" stroke="#9a6d4b" stroke-width="2" stroke-linecap="round" opacity=".8"/>`,
+  paws: `
+    <ellipse cx="22" cy="31" rx="5.5" ry="4.5" fill="url(#g-rust)" ${THIN}/>
+    <ellipse cx="14.5" cy="22" rx="2.6" ry="3.2" fill="url(#g-rust)" ${THIN}/><ellipse cx="20.5" cy="18.5" rx="2.6" ry="3.2" fill="url(#g-rust)" ${THIN}/>
+    <ellipse cx="27" cy="20" rx="2.6" ry="3.2" fill="url(#g-rust)" ${THIN}/>
+    <ellipse cx="42" cy="37" rx="5.5" ry="4.5" fill="url(#g-amber)" ${THIN}/>
+    <ellipse cx="34.5" cy="28" rx="2.6" ry="3.2" fill="url(#g-amber)" ${THIN}/><ellipse cx="40.5" cy="24.5" rx="2.6" ry="3.2" fill="url(#g-amber)" ${THIN}/>
+    <ellipse cx="47" cy="26" rx="2.6" ry="3.2" fill="url(#g-amber)" ${THIN}/>`,
+  no: `
+    <circle cx="32" cy="27" r="14" fill="none" stroke="#c4402b" stroke-width="4.5"/>
+    <path d="M22 17 L42 37" stroke="#c4402b" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="32" cy="27" r="14" fill="none" ${ink(1.4)} opacity=".5"/>`,
   wave: `
     <g transform="translate(32 27) rotate(-14)">${hand()}</g>
     <path d="M13 15 q-3 5 0 10 M9 13 q-4 7 0 14" fill="none" stroke="#e8952d" stroke-width="2" stroke-linecap="round"/>
@@ -85,7 +123,8 @@ const DEFS = `
   <linearGradient id="g-fire" x1="0" y1="0" x2=".3" y2="1"><stop offset="0" stop-color="#e8952d"/><stop offset=".7" stop-color="#c4402b"/><stop offset="1" stop-color="#9e3524"/></linearGradient>
   <linearGradient id="g-rust" x1="0" y1="0" x2=".6" y2="1"><stop offset="0" stop-color="#d06a3c"/><stop offset="1" stop-color="#93402a"/></linearGradient>
   <linearGradient id="g-mug" x1="0" y1="0" x2="1" y2=".4"><stop offset="0" stop-color="#fbf4e3"/><stop offset="1" stop-color="#cdbf9f"/></linearGradient>
-  <linearGradient id="g-walnut" x1="0" y1="0" x2=".5" y2="1"><stop offset="0" stop-color="#7a5236"/><stop offset="1" stop-color="#4a2f20"/></linearGradient>`;
+  <linearGradient id="g-walnut" x1="0" y1="0" x2=".5" y2="1"><stop offset="0" stop-color="#7a5236"/><stop offset="1" stop-color="#4a2f20"/></linearGradient>
+  <linearGradient id="g-water" x1="0" y1="0" x2=".5" y2="1"><stop offset="0" stop-color="#8fc3e6"/><stop offset="1" stop-color="#3f7fb0"/></linearGradient>`;
 
 // The token: a rounded bubble with a little tail, a soft ground shadow.
 const BUBBLE = `
@@ -94,10 +133,10 @@ const BUBBLE = `
   <path d="M8 9 Q8.6 6 12 6 H30" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>`;
 
 // px: the drawn size (the texture is made at that many pixels per side)
-export function emoteSvg(e: Emote, px = 64): string {
+export function emoteSvg(e: Emote | Want, px = 64): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="${px}" height="${px}"><defs>${DEFS}</defs>${BUBBLE}<g transform="translate(0 0.5)">${ART[e]}</g></svg>`;
 }
 
-export function emoteUrl(e: Emote): string {
+export function emoteUrl(e: Emote | Want): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(emoteSvg(e))}`;
 }

@@ -157,6 +157,12 @@ export class Pet extends Schema {
   @type("uint16") losses = 0;
   @type("string") battle = ""; // the battle it's in
   @type("string") carry = ""; // a toy in its mouth (shared/held.ts kind)
+  // its mind (shared/mind.ts): what it wants right now (a WANT icon over its
+  // head, since when), who it is and who it's close to (JSON, for the panel)
+  @type("string") want = "";
+  @type("float64") wantAt = 0;
+  @type("string") traits = "{}";
+  @type("string") bonds = "{}";
 }
 
 // A battle between two pets (shared/pets.ts): each owner picks a move, the
