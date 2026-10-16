@@ -230,6 +230,7 @@ export interface HudState {
   media: {
     ready: boolean;
     offline: boolean;
+    asleep: boolean; // the voice line closed after a quiet spell (wakes on demand)
     mic: boolean;
     cam: boolean;
     screen: boolean;
@@ -328,6 +329,7 @@ const initial: HudState = {
   media: {
     ready: false,
     offline: false,
+    asleep: false,
     mic: false,
     cam: false,
     screen: false,

@@ -67,7 +67,8 @@ export class Calls {
     if (phone.get().call) return;
     if (uids.length === 1 && uids[0] === 0) return this.ph.vortex.call();
     const ctl = this.ph.ctl;
-    if (!ctl.media.room || hudOffline()) return this.ph.note(tr("phNoLine"), 3500);
+    // (asleep is fine: a call has its own line, and the world's wakes for it)
+    if (hudOffline() || (!ctl.media.room && !ctl.media.asleep())) return this.ph.note(tr("phNoLine"), 3500);
     const peers = uids.map((uid) => ({
       uid,
       name: this.ph.nameOf(uid),
@@ -319,14 +320,18 @@ export class Calls {
       this.relay = null;
       return;
     }
-    if (!space || this.relayTrack) return;
+    if (this.relayTrack) return;
+    // the world's line may be asleep: the relay goes out on it, so wake it
+    if (!space && this.ph.ctl.media.asleep()) await this.ph.ctl.media.wake();
+    const room = this.ph.ctl.media.room;
+    if (!room || this.relayTrack || !phone.get().call?.speaker) return;
     const ctx = mixer.ensure();
     this.relay = ctx.createMediaStreamDestination();
     for (const ch of this.chains.values()) ch.nodes[ch.nodes.length - 1]?.connect(this.relay);
     const mst = this.relay.stream.getAudioTracks()[0];
     if (!mst) return;
     this.relayTrack = new LocalAudioTrack(mst, undefined, false);
-    await space.localParticipant
+    await room.localParticipant
       .publishTrack(this.relayTrack, { name: "phone-speaker", source: Track.Source.Unknown, dtx: false })
       .catch(() => {});
   }

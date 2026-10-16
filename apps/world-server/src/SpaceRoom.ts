@@ -371,6 +371,9 @@ export class SpaceRoom extends Room<SpaceState> {
       p.mic = !!m.mic && !p.muted;
       p.cam = !!m.cam;
       p.screen = !!m.screen;
+      // muted by an owner: their voice line may have reconnected (it sleeps
+      // when they're alone, a fresh connection can publish): say no again
+      if (p.muted) void setCanPublish(this.livekitRoom, String(p.uid), false);
     });
 
     this.on("speaking", (client, m) => {

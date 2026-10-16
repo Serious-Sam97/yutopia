@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { LangSwitch } from "@/components/LangSwitch";
 import { useTr } from "@/lib/i18n";
 import { MAX_FPS, type Prefs, setPrefs, usePrefs } from "@/lib/prefs";
-import { hud } from "@/world/store";
+import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
 import { Panel } from "./Panel";
 
@@ -13,13 +13,53 @@ export function SettingsPanel() {
   const w = useWorld();
   const p = usePrefs();
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  // (browsers only name the devices once one is in use: list again when the mic
+  // or camera comes on, and when something is plugged in or out)
+  const live = useHud((s) => s.media.mic || s.media.cam);
+  const [relist, setRelist] = useState(0);
+  // the browser won't name them: not allowed yet (it can ask), or blocked (it won't)
+  const [blocked, setBlocked] = useState(false);
 
   useEffect(() => {
-    navigator.mediaDevices
-      ?.enumerateDevices()
-      .then(setDevices)
+    const md = navigator.mediaDevices;
+    if (!md) return;
+    const list = () =>
+      md
+        .enumerateDevices()
+        .then((all) => setDevices(all.filter((d) => d.deviceId)))
+        .catch(() => {});
+    void live;
+    void relist;
+    list();
+    md.addEventListener("devicechange", list);
+    navigator.permissions
+      ?.query({ name: "microphone" as PermissionName })
+      .then((s) => setBlocked(s.state === "denied"))
       .catch(() => {});
-  }, []);
+    return () => md.removeEventListener("devicechange", list);
+  }, [live, relist]);
+
+  const named = devices.some((d) => d.kind === "audioinput" && d.label);
+  // ask the browser (its prompt), let go at once: from then on it names the devices
+  const allow = async () => {
+    const md = navigator.mediaDevices;
+    if (!md) return;
+    for (const want of [{ audio: true, video: true }, { audio: true }]) {
+      try {
+        const s = await md.getUserMedia(want);
+        for (const tr of s.getTracks()) tr.stop();
+        setBlocked(false);
+        setRelist((n) => n + 1);
+        return;
+      } catch (e) {
+        if ((e as Error).name === "NotAllowedError") {
+          setBlocked(true);
+          return;
+        }
+        // (no camera here: try the mic alone)
+      }
+    }
+  };
 
   const vol = (k: keyof Prefs["vol"], label: string) => (
     <label className="flex items-center gap-3">
@@ -41,8 +81,8 @@ export function SettingsPanel() {
   );
 
   const device = (kind: MediaDeviceKind, key: "micId" | "camId" | "speakerId", label: string) => {
+    // (not named yet, or none: "Default" still works)
     const list = devices.filter((d) => d.kind === kind);
-    if (!list.length) return null;
     return (
       <label className="block">
         <span className="mono text-xs uppercase" style={{ color: "var(--cream-dim)" }}>
@@ -57,9 +97,9 @@ export function SettingsPanel() {
           }}
         >
           <option value="">Default</option>
-          {list.map((d) => (
+          {list.map((d, i) => (
             <option key={d.deviceId} value={d.deviceId}>
-              {d.label || d.deviceId.slice(0, 8)}
+              {d.label || `${label} ${i + 1}`}
             </option>
           ))}
         </select>
@@ -103,6 +143,16 @@ export function SettingsPanel() {
           <h3 className="mono text-xs uppercase tracking-widest" style={{ color: "var(--vfd)" }}>
             {t("devices")}
           </h3>
+          {!named && (
+            <div className="mono text-xs space-y-2" style={{ color: "var(--cream-dim)" }} data-devices-access>
+              <p>{blocked ? t("devicesBlocked") : t("devicesHidden")}</p>
+              {!blocked && (
+                <button type="button" className="btn" onClick={() => void allow()} data-devices-allow>
+                  {t("devicesAllow")}
+                </button>
+              )}
+            </div>
+          )}
           {device("audioinput", "micId", t("microphone"))}
           {device("videoinput", "camId", t("camera"))}
           {device("audiooutput", "speakerId", t("speakers"))}

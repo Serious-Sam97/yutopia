@@ -99,7 +99,7 @@ function PresenceBar() {
   const me = useHud((s) => s.me);
   const people = useHud((s) => s.people.filter((p) => !p.bot));
   const projectId = useHud((s) => s.projectId);
-  const quality = useHud((s) => (s.media.offline ? "lost" : s.media.quality));
+  const quality = useHud((s) => (s.media.offline ? "lost" : s.media.asleep ? "asleep" : s.media.quality));
   const areaKey = useHud((s) => s.me?.area ?? "");
   const lockedBy = useHud((s) => s.locks[s.me?.area ?? ""]);
   const canBuild = useHud((s) => s.canBuild);

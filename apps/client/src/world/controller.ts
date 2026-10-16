@@ -85,6 +85,9 @@ interface Remote {
 }
 
 const INTERP_MS = 110;
+const MEDIA_SLEEP_MS = 5 * 60_000; // quiet this long: the voice line sleeps
+const MEDIA_NEAR = HEAR_RADIUS + 4; // someone this close (tiles) keeps it awake
+const LIVEKIT_TOKEN_FRESH_MS = 5 * 3600_000; // LiveKit tokens last 6 h (YutopiaTokens)
 const IDLE_MS = 3000; // nothing moved for this long: frames at 30/s
 const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
@@ -195,8 +198,25 @@ export class WorldController {
       },
       onSpeaking: (on) => this.send("speaking", { on }),
       onQuality: (quality) => hud.set((s) => ({ media: { ...s.media, quality } })),
-      onState: (st) => hud.set((s) => ({ media: { ...s.media, ready: st.ready, offline: st.offline } })),
+      onState: (st) => {
+        // just woke: the quiet spell starts over
+        if (!st.asleep && hud.get().media.asleep) this.mediaBusyAt = Date.now();
+        hud.set((s) => ({ media: { ...s.media, ready: st.ready, offline: st.offline, asleep: st.asleep } }));
+      },
     });
+    // waking the voice line after a long sleep: a fresh token if ours is getting old
+    this.media.refreshCreds = async () => {
+      if (Date.now() - this.sessionAt < LIVEKIT_TOKEN_FRESH_MS && this.session)
+        return {
+          url: this.session.livekitUrl,
+          token: this.session.livekitToken,
+          iceServers: this.session.iceServers ?? [],
+        };
+      const s = await yutopia.session(this.spaceId);
+      this.session = s;
+      this.sessionAt = Date.now();
+      return { url: s.livekitUrl, token: s.livekitToken, iceServers: s.iceServers ?? [] };
+    };
   }
 
   send<K extends keyof ClientMessages>(type: K, msg: ClientMessages[K]) {
@@ -213,6 +233,7 @@ export class WorldController {
     hud.set({ phase: "loading", spaceId: this.spaceId });
     try {
       this.session = await yutopia.session(this.spaceId);
+      this.sessionAt = Date.now();
     } catch (e) {
       if (this.stopped) return;
       hud.set({ phase: "failed", error: e instanceof ApiError && e.status === 404 ? "404" : tr("failed") });
@@ -320,6 +341,7 @@ export class WorldController {
     );
 
     void this.media.connect(s.livekitUrl, s.livekitToken, s.iceServers);
+    this.timers.push(setInterval(() => this.superviseMedia(), 1000));
     void this.loadBoards();
     void this.loadStatus();
     this.timers.push(setInterval(() => void this.loadStatus(), 60_000));
@@ -526,6 +548,8 @@ export class WorldController {
       this.media.setHearing(uids, m.heardBy ?? []);
       const heardBy = (m.heardBy ?? []).map(Number).filter((u) => u !== this.myUid());
       if (heardBy.join() !== hud.get().heardBy.join()) hud.set({ heardBy });
+      // someone's in earshot: a sleeping voice line wakes now (not on the next tick)
+      if ((m.ids.length || heardBy.length) && this.media.asleep()) this.superviseMedia();
     });
     room.onMessage("knock", (m: ServerMessages["knock"]) => {
       mixer.blip("knock");
@@ -643,6 +667,7 @@ export class WorldController {
     // seat expired: fresh session + join
     try {
       this.session = await yutopia.session(this.spaceId);
+      this.sessionAt = Date.now();
       this.engine?.setObjects([]);
       for (const sid of [...this.remotes.keys()]) this.engine?.removeAvatar(sid);
       await this.join();
@@ -837,6 +862,51 @@ export class WorldController {
       this.os = new m.OsRoom(this);
     });
     return this.osLoading;
+  }
+
+  // ── the voice line's sleep (media.ts) ────────────────────────────────────
+  // Nothing of mine live (mic, camera, screen), not on a call, nobody within
+  // earshot or about to walk into it, no game TV streaming here: after
+  // MEDIA_SLEEP_MS of that the LiveKit connection closes. Any of them again
+  // wakes it (turning the mic, camera or screen on wakes it first, media.ts).
+  private sessionAt = 0; // when the session (and its LiveKit token) was minted
+  private mediaBusyAt = Date.now();
+  private mediaRetryAt = 0;
+  mediaNeeded(): boolean {
+    const h = hud.get();
+    if (h.media.mic || h.media.cam || h.media.screen) return true;
+    if (h.phone.onCall || h.phone.ringing) return true;
+    if (this.hear.size > 0 || h.heardBy.length > 0) return true;
+    const st = this.room?.state;
+    if (!st) return true;
+    let busy = false;
+    // a console's picture going out on a TV here (everyone gets it through this line)
+    st.consoles?.forEach((c: S) => {
+      if (c.live) busy = true;
+    });
+    if (busy) return true;
+    // someone close enough to walk into earshot in a moment
+    const meSid = this.room?.sessionId;
+    st.players?.forEach((p: S, sid: string) => {
+      if (busy || sid === meSid || p.bot) return;
+      if (Math.hypot(p.x - this.me.x, p.y - this.me.y) < MEDIA_NEAR) busy = true;
+    });
+    return busy;
+  }
+  private superviseMedia() {
+    if (this.stopped || hud.get().phase !== "ready") return;
+    const now = Date.now();
+    if (this.mediaNeeded()) {
+      this.mediaBusyAt = now;
+      if (this.media.asleep() && now >= this.mediaRetryAt)
+        void this.media.wake().then((ok) => {
+          if (!ok) this.mediaRetryAt = Date.now() + 15_000;
+        });
+      return;
+    }
+    // (e2e shortens the wait: window.__voiceSleepMs)
+    const wait = (globalThis as { __voiceSleepMs?: number }).__voiceSleepMs ?? MEDIA_SLEEP_MS;
+    if (this.media.on() && now - this.mediaBusyAt >= wait) void this.media.sleep();
   }
 
   // ── the phone (world/phone, Vortex Mobile): its own chunk, loaded soon after

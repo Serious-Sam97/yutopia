@@ -208,11 +208,27 @@ const D = {
     "WASD / arrows to walk · click to walk there · Shift to run · X to interact · P phone · 1–8 emotes · M mic · V camera · T 3D · C third / first person · Z mouse look (3D) · Esc closes",
     "WASD / setas para andar · clique para ir até lá · Shift para correr · X para interagir · P celular · 1–8 reações · M microfone · V câmera · T 3D · C terceira / primeira pessoa · Z olhar com o mouse (3D) · Esc fecha",
   ],
-  micBlocked: ["Microphone blocked — allow it in the browser.", "Microfone bloqueado — libere no navegador."],
+  micBlocked: [
+    "Microphone blocked for this site — click the icon left of the address, allow Microphone, then reload.",
+    "Microfone bloqueado neste site — clique no ícone à esquerda do endereço, permita o Microfone e recarregue.",
+  ],
+  devicesHidden: [
+    "The browser hasn't let Yutopia use your mic and camera yet, so it can't list them.",
+    "O navegador ainda não liberou seu microfone e câmera para o Yutopia, então não dá para listá-los.",
+  ],
+  devicesAllow: ["Allow mic & camera", "Liberar microfone e câmera"],
+  devicesBlocked: [
+    "Blocked for this site: click the icon left of the address (padlock / sliders), set Microphone and Camera to Allow, then reload the page.",
+    "Bloqueado neste site: clique no ícone à esquerda do endereço (cadeado / ajustes), coloque Microfone e Câmera em Permitir e recarregue a página.",
+  ],
   camBlocked: ["Camera blocked — allow it in the browser.", "Câmera bloqueada — libere no navegador."],
   micFailed: ["Couldn't turn the mic on", "Não deu pra ligar o microfone"],
   camFailed: ["Couldn't turn the camera on", "Não deu pra ligar a câmera"],
   avNotReady: ["Voice is still connecting…", "A voz ainda está conectando…"],
+  voiceAsleep: [
+    "voice asleep: it wakes when someone's near or you unmute",
+    "voz em repouso: acorda quando alguém chega perto ou você liga o microfone",
+  ],
   avOffline: [
     "Voice/video server unreachable — you can still walk around and send texts.",
     "Servidor de voz/vídeo fora do ar — dá para andar e mandar mensagens mesmo assim.",

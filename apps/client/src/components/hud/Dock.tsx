@@ -95,12 +95,22 @@ export function Dock() {
           className={`deck-btn ${media.mic ? "" : "danger"}`}
           aria-pressed={media.mic}
           onClick={() => void w?.toggleMic()}
-          title={`${t("mic")} (M)`}
+          title={media.asleep ? `${t("mic")} (M) — ${t("voiceAsleep")}` : `${t("mic")} (M)`}
           aria-label={t("mic")}
           disabled={!ready}
+          data-voice-asleep={media.asleep || undefined}
         >
           <Icon name={media.mic ? "mic" : "micOff"} size={20} />
           {media.mic && <MicMeter />}
+          {media.asleep && (
+            <span
+              className="absolute -top-1.5 -right-1.5 h-5 px-1 rounded-full text-[10px] font-semibold flex items-center"
+              style={{ background: "#2a1c13", color: "var(--cream-dim)", border: "1px solid var(--edge)" }}
+              aria-hidden
+            >
+              zz
+            </span>
+          )}
         </button>
         <button
           type="button"
