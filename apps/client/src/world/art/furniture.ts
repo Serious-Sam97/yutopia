@@ -572,6 +572,26 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           { x: 0, y: 0, w: 4, d: 3, z: 19, h: 4, color: C.walnut, top: 0x5f7a3a },
         ],
       };
+    case "pool_table":
+      return {
+        boxes: [
+          leg(0.5, 0.22, 15),
+          leg(3.42, 0.22, 15),
+          leg(0.5, 1.7, 15),
+          leg(3.42, 1.7, 15),
+          { x: 0.23, y: 0, w: 3.54, d: 2, z: 15, h: 12, color: C.walnut, top: 0x2f6a4c },
+        ],
+      };
+    case "pingpong_table":
+      return {
+        boxes: [
+          leg(0.6, 0.25, 22, C.graphite, 0.07),
+          leg(3.34, 0.25, 22, C.graphite, 0.07),
+          leg(0.6, 1.68, 22, C.graphite, 0.07),
+          leg(3.34, 1.68, 22, C.graphite, 0.07),
+          { x: 0.27, y: 0.04, w: 3.46, d: 1.92, z: 22, h: 2, color: 0x1f4f86, top: 0x1f4f86 },
+        ],
+      };
     case "turntable":
       return { boxes: [{ x: 0.14, y: 0.18, w: 0.72, d: 0.64, z: 0, h: 5, color: C.walnut }] };
     case "clock":

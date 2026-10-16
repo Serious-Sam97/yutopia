@@ -101,6 +101,64 @@ export class SlotRace extends Schema {
   @type({ map: SlotCar }) cars = new MapSchema<SlotCar>(); // lane ("0".."3") → car
 }
 
+// A pool table's game (features/pool.ts), one per table object. Two seats (a
+// person, or Vortex at a level); the game itself (shared/pool-game.ts) and the
+// last shot travel as JSON — they change once a shot, everyone replays the shot
+// from `before` with the same physics and eases to `game`'s layout.
+export class PoolSeat extends Schema {
+  @type("string") sid = "";
+  @type("number") uid = 0;
+  @type("string") name = "";
+  @type("string") vortex = ""; // his level, when it's Vortex in this seat
+}
+
+export class PoolTable extends Schema {
+  @type("string") phase = "lobby"; // lobby → play → done (the result up) → lobby / play again
+  @type({ map: PoolSeat }) seats = new MapSchema<PoolSeat>(); // "0" / "1"
+  @type("string") game = ""; // PoolGame (JSON)
+  @type("string") before = ""; // the balls before the last shot (JSON)
+  @type("string") shot = ""; // the last shot: { angle, power, spinX, spinY, called, seat } (JSON)
+  @type("uint16") shotNo = 0;
+  @type("float64") shotAt = 0; // server ms
+  @type("float64") until = 0; // server ms: the last shot's balls are still rolling till then
+  @type("string") result = ""; // what the last shot meant (JSON: foul, potted, outcome, assigned…)
+  @type("string") aim = ""; // the shooter's cue as they aim (JSON, ~10 a second)
+  @type("float64") turnAt = 0; // server ms: when this turn began (the shot clock)
+  @type("uint8") clock = 0; // the shot clock: 0 (off) / 30 / 60 s
+  @type("string") guide = "short"; // the guideline: long / short / pro
+  @type("uint8") breaker = 0; // who breaks the next game
+  @type("string") by = "";
+}
+
+// A ping-pong table's match (features/pong.ts). The ball's flight is one event
+// (when, where, how) the server and every client run through the same physics
+// (shared/pong.ts); a new one each serve and hit. Each player's racket streams
+// in for the others to see (and the referee to check hits against).
+export class PongSeat extends Schema {
+  @type("string") sid = "";
+  @type("number") uid = 0;
+  @type("string") name = "";
+  @type("string") vortex = ""; // his level, when it's Vortex at this end
+}
+
+export class PongTable extends Schema {
+  @type("string") phase = "lobby"; // lobby → play → done
+  @type({ map: PongSeat }) seats = new MapSchema<PongSeat>(); // "0" (−x end) / "1" (+x end)
+  @type("string") score = ""; // PongScore (JSON)
+  @type("string") rally = ""; // Rally (JSON)
+  @type("string") flight = ""; // the ball's flight now: PongFlight (JSON), "" = in the server's hand
+  @type("uint16") seq = 0; // a new flight, a new number
+  @type("string") point = ""; // the last point: { no, winner, why } (JSON)
+  @type("uint16") pointNo = 0;
+  @type("float64") wait = 0; // server ms: no serve before this (after a point)
+  @type("string") r0 = ""; // the rackets as they move (JSON: x y z nx ny nz vx vy vz t)
+  @type("string") r1 = "";
+  @type("string") cpu = ""; // Vortex's next hit: { seq, t, x, y, z, whiff } (JSON)
+  @type("uint8") to = 11;
+  @type("uint8") bestOf = 1;
+  @type("uint8") first = 0; // who serves first next match
+}
+
 // A console that's on (features/games.ts), by its object id. Whoever turned
 // it on runs the game and streams the TV; ports are who holds which pad.
 export class GameConsole extends Schema {
@@ -244,6 +302,8 @@ export class SpaceState extends Schema {
   @type({ map: "string" }) locks = new MapSchema<string>(); // area → who locked it
   @type({ map: "string" }) holds = new MapSchema<string>(); // object id → "uid|name" of the builder holding it
   @type({ map: SlotRace }) slots = new MapSchema<SlotRace>(); // slot-car track id → its race
+  @type({ map: PoolTable }) pool = new MapSchema<PoolTable>(); // pool table id → its game
+  @type({ map: PongTable }) pong = new MapSchema<PongTable>(); // ping-pong table id → its match
   @type({ map: GameConsole }) consoles = new MapSchema<GameConsole>(); // console id → what it's playing
   @type({ map: Computer }) computers = new MapSchema<Computer>(); // computer id → who's at it
   @type({ map: Pet }) pets = new MapSchema<Pet>(); // pet id → the pet (while its owner is here)

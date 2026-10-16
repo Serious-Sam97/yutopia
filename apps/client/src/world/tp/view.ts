@@ -60,6 +60,7 @@ import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
 import { Post3 } from "./post3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
+import { type TableScene3, TablesIn3D } from "./tables3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
 
@@ -388,6 +389,26 @@ export class ThirdPersonView {
     this.cable.geometry = new TubeGeometry(new CatmullRomCurve3(pts), 40, 0.016, 5);
     this.cable.visible = true;
   }
+
+  // The game tables (Fita 13, tp/tables3d.ts): balls, cues, the lamp, rackets.
+  private tables3: TablesIn3D | null = null;
+  setTables(s: TableScene3 | null) {
+    if (s && !this.tables3) {
+      this.tables3 = new TablesIn3D((m) => this.light.patch(m));
+      this.scene.add(this.tables3.root);
+    }
+    if (this.tables3) {
+      this.tables3.root.visible = !!s;
+      if (s) this.tables3.sync(s);
+    }
+  }
+  // A game camera (playing at a table): where to look from and at, world tiles
+  // (z = height in tiles). The chase camera eases over to it and back.
+  gameCam: { eye: [number, number, number]; look: [number, number, number] } | null = null;
+  private gcEye = new Vector3();
+  private gcLook = new Vector3();
+  private gcMix = 0; // 0 = the usual camera, 1 = the game's
+  private gcReady = false;
 
   private cars: Group[] = [];
   setCars(list: { x: number; y: number; z: number; h: number; color: number; tilt: number }[]) {
@@ -771,6 +792,22 @@ export class ThirdPersonView {
       this.camera.lookAt(this.target);
     }
 
+    // a game camera: ease over to it (and back when it lets go)
+    const gc = this.gameCam;
+    this.gcMix += ((gc ? 1 : 0) - this.gcMix) * (1 - Math.exp(-dt * 5));
+    if (gc) {
+      const k = this.gcReady ? 1 - Math.exp(-dt * 7) : 1;
+      this.gcEye.lerp(new Vector3(gc.eye[0], gc.eye[2], gc.eye[1]), k);
+      this.gcLook.lerp(new Vector3(gc.look[0], gc.look[2], gc.look[1]), k);
+      this.gcReady = true;
+    } else if (this.gcMix < 0.002) this.gcReady = false;
+    if (this.gcMix > 0.002 && this.gcReady) {
+      const m = this.gcMix;
+      const look = this.camera.getWorldDirection(new Vector3()).multiplyScalar(4).add(cam);
+      cam.lerp(this.gcEye, m);
+      this.camera.lookAt(look.lerp(this.gcLook, m));
+    }
+
     this.reduced = !!me?.reduced;
     this.builder.sync(this.buildLook, this.world, dt);
     this.stepFx(dt);
@@ -801,6 +838,8 @@ export class ThirdPersonView {
       if (b.pet) {
         seenPets.add(b.id);
         this.petFrame(b, dt);
+        const pe = this.pets3.get(b.id);
+        if (pe) pe.model.root.visible = !this.byLens(b);
         continue;
       }
       seen.add(b.id);
@@ -815,7 +854,9 @@ export class ThirdPersonView {
       this.sphere.center.set(b.x, 0.9, b.y);
       // first person: you aren't drawn (the camera is inside you); the rig
       // keeps stepping so the other cameras find you as you left them
-      const hidden = first && b.id === meId;
+      // (nor under a game camera: it stands where you'd block the table)
+      const byLens = this.byLens(b);
+      const hidden = ((first || (this.gameCam !== null && this.gcMix > 0.5)) && b.id === meId) || byLens;
       p.root.visible = !hidden;
       const onScreen = !hidden && this.frustum.intersectsSphere(this.sphere);
       const near = Math.hypot(cam.x - b.x, cam.z - b.y) < 12;
@@ -861,6 +902,15 @@ export class ThirdPersonView {
 
   // A pet this frame: its model where it is, turned the way it walks (eased),
   // posed by what it's doing (its rig), looking at its owner.
+  // under a game camera: someone (or a pet) standing right by it, in the way
+  private byLens(b: { x: number; y: number }): boolean {
+    return (
+      this.gameCam !== null &&
+      this.gcMix > 0.5 &&
+      Math.hypot(b.x - this.camera.position.x, b.y - this.camera.position.z) < 2.7
+    );
+  }
+
   private petFrame(b: Body3, dt: number) {
     const P = petsArt();
     const pet = b.pet;

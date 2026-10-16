@@ -54,7 +54,14 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
   const building = useHud((s) => s.build.on && s.canBuild);
   const side = useHud((s) => s.side);
   // at the slot-car track's controls, a console or a TV: their console takes the screen
-  const racing = useHud((s) => s.panel.kind === "slotcar" || s.panel.kind === "console" || s.panel.kind === "tv");
+  const racing = useHud(
+    (s) =>
+      s.panel.kind === "slotcar" ||
+      s.panel.kind === "pool" ||
+      s.panel.kind === "pong" ||
+      s.panel.kind === "console" ||
+      s.panel.kind === "tv",
+  );
 
   useEffect(() => {
     if (!getToken()) {

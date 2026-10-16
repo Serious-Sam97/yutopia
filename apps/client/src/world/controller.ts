@@ -73,6 +73,7 @@ import type { PetView } from "./petview";
 import type { SlotTracks } from "./slots";
 import { radio, sound } from "./sound";
 import { type ActTarget, type BattleView, hud, type Person, type PetInfo, toast } from "./store";
+import type { GameTables } from "./tables";
 import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 
 // biome-ignore lint/suspicious/noExplicitAny: decoded Colyseus schema objects
@@ -666,6 +667,7 @@ export class WorldController {
     this.stopped = true;
     this.build?.dispose();
     this.slots?.dispose();
+    this.tables?.dispose();
     this.games?.dispose();
     this.screens?.dispose();
     this.os?.dispose();
@@ -745,11 +747,13 @@ export class WorldController {
         ? pk
         : pk === "slotcar" && this.slots?.atControls()
           ? "slotcar"
-          : this.games?.atPad()
-            ? "gamepad"
-            : performance.now() < this.usingUntil
-              ? this.usingWhat
-              : "";
+          : (pk === "pool" || pk === "pong") && this.tables?.busy()
+            ? (this.tables?.busy() as string)
+            : this.games?.atPad()
+              ? "gamepad"
+              : performance.now() < this.usingUntil
+                ? this.usingWhat
+                : "";
     if (want !== this.busySent) {
       this.busySent = want;
       this.send("use", { what: want });
@@ -845,6 +849,45 @@ export class WorldController {
     });
   }
 
+  // ── the game tables (pool, ping-pong): their own chunk (world/tables), loaded once one is here ──
+  tables: GameTables | null = null;
+  private tablesLoading: Promise<void> | null = null;
+  private tableVortexes = new Set<string>();
+  private tablesChanged() {
+    if (this.tables) return this.tables.refresh();
+    if (
+      this.tablesLoading ||
+      !this.engine?.allObjects().some((o) => o.kind === "pool_table" || o.kind === "pingpong_table")
+    )
+      return;
+    this.tablesLoading = import("./tables").then((m) => {
+      const room = this.room;
+      const engine = this.engine;
+      if (this.stopped || !engine || !room) return;
+      this.tables = new m.GameTables({
+        engine,
+        room,
+        send: (type, msg) => this.send(type as never, msg as never),
+        walkTo: (p) => {
+          this.walkTo(p, undefined, true);
+        },
+        face: (x, y) => {
+          if (this.path) return;
+          this.me.d = dirFromDelta(x - this.me.x, y - this.me.y, this.me.d as 0);
+          this.meAngle = Math.atan2(y - this.me.y, x - this.me.x);
+        },
+        stand: (x, y) => {
+          if (this.path || !this.grid.ok(Math.floor(x), Math.floor(y))) return;
+          this.me.x = x;
+          this.me.y = y;
+        },
+        threeD: () => !!this.tp,
+        worldHttp: () => this.worldHttp,
+      });
+      this.tables.refresh();
+    });
+  }
+
   // ── per frame ────────────────────────────────────────────────────────────
   // A feature's frame (games, slot cars) that throws: logged once, and the
   // world carries on without it instead of freezing.
@@ -876,6 +919,7 @@ export class WorldController {
       this.applyBoards();
       this.build?.checkPending();
       this.slotsChanged();
+      this.tablesChanged();
       this.gamesChanged();
       this.screensChanged();
       hud.set((h) => ({ objectsVersion: h.objectsVersion + 1 }));
@@ -893,6 +937,7 @@ export class WorldController {
     engine.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
     if (this.tp) this.tp.earshot = engine.earshot;
     this.isolated("slots", () => this.slots?.frame(dt, this.me));
+    this.isolated("tables", () => this.tables?.frame(dt, this.me));
     this.isolated("games", () => this.games?.frame(dt, this.me));
     this.isolated("media", () => this.screens?.frame(dt, this.me));
     this.computersChanged();
@@ -962,6 +1007,27 @@ export class WorldController {
       engine.upsertAvatar(`npc:${id}`, st);
       if (tp) bodies.push({ ...st, id: `npc:${id}`, reduced });
     });
+    // Vortexes at the game tables (a Vortex for every game)
+    const tv = new Set<string>();
+    for (const v of this.tables?.vortexes() ?? []) {
+      const id = `npc:${v.key}`;
+      tv.add(id);
+      const st = {
+        ...this.npcState({
+          x: v.x,
+          y: v.y,
+          d: dirFromDelta(Math.cos(v.angle), Math.sin(v.angle), 3),
+          a: 0,
+          mood: v.mood,
+        }),
+        x: v.x,
+        y: v.y,
+      };
+      engine.upsertAvatar(id, st);
+      if (tp) bodies.push({ ...st, id, reduced });
+    }
+    for (const id of this.tableVortexes) if (!tv.has(id)) engine.removeAvatar(id);
+    this.tableVortexes = tv;
     // toys in the air and on the floor (shared/pets.ts): where each is right now
     const toyList: { id: string; kind: string; x: number; y: number; z: number }[] = [];
     const wall = Date.now();
@@ -1000,6 +1066,8 @@ export class WorldController {
       }
       tp.setLiveFrom({ engine, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
+      tp.setTables(this.tables?.scene3d() ?? null);
+      tp.gameCam = this.tables?.gameCam() ?? null;
       tp.setCable(this.cableEnds());
       tp.setGames(this.games?.scene3d() ?? null);
       // (a hidden tab: nothing to draw for)

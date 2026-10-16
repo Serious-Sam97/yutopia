@@ -45,6 +45,30 @@ export interface ClientMessages {
   "slot:start": { id: string; laps: number; diff?: string };
   "slot:car": { id: string; s: number; v: number; off: number; ov: number };
   "slot:track": { id: string; track: string };
+  // the pool table (pool.ts / pool-game.ts): take a seat (0 / 1) or give it
+  // back, put Vortex in the other seat (his level; null takes him out), start
+  // (both seats filled; the shot clock and the guideline), the cue as I aim, the
+  // cue ball placed (ball in hand), the shot (the pocket called for the 8), give up
+  "pool:sit": { id: string; seat: number };
+  "pool:leave": { id: string };
+  "pool:vortex": { id: string; level: string | null };
+  "pool:start": { id: string; clock?: number; guide?: string };
+  "pool:aim": { id: string; a: number; p: number; sx: number; sy: number; cx?: number; cy?: number; drag?: boolean };
+  "pool:place": { id: string; x: number; y: number };
+  "pool:shot": { id: string; angle: number; power: number; spinX: number; spinY: number; called: number };
+  "pool:concede": { id: string };
+  // the ping-pong table (pong.ts): seats (0: the −x end, 1: the +x end), Vortex
+  // at the other end, start (points to win, best of), my racket as it moves
+  // (t: server ms), the toss (serving), a hit I made (on flight `seq`, at `t`,
+  // the ball as it left my racket), give up
+  "pong:sit": { id: string; seat: number };
+  "pong:leave": { id: string };
+  "pong:vortex": { id: string; level: string | null };
+  "pong:start": { id: string; to?: number; bestOf?: number };
+  "pong:racket": { id: string; r: number[] };
+  "pong:toss": { id: string; t: number; y: number };
+  "pong:hit": { id: string; seq: number; t: number; b: number[] };
+  "pong:concede": { id: string };
   // the game room (games.ts): plug a console into a TV (null unplugs), put a
   // cartridge in (null ejects), power, take a pad (port 0 = put it down), a
   // pad's buttons (a bitmask of PAD_BUTTONS, for whoever streams it), the
@@ -204,6 +228,8 @@ export interface ServerMessages {
   knock: { from: string; fromName: string; area: string };
   admitted: { area: string };
   toast: { text: string; tone?: "info" | "warn" | "vortex" };
+  // ping-pong: the hit I reported wasn't taken (which flight, why) — my ball goes back to its real path
+  "pong:no": { id: string; seq: number; why: "seq" | "turn" | "late" | "early" | "check" | "over" };
   "wb:scene": { objectId: string; items: WbItem[] };
   "wb:op": { objectId: string; op: WbOp; by: string };
   "arcade:scores": { scores: { name: string; score: number }[] };
@@ -244,6 +270,8 @@ export const USES = [
   "piano",
   "whiteboard",
   "slotcar",
+  "pool",
+  "pong",
   "gamepad",
   "throw",
   "computer",

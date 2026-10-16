@@ -1393,3 +1393,131 @@ test("a computer: one person at a time, what its OS shows reaches everyone, stan
   await a.room.leave(true);
   await b.room.leave(true);
 });
+
+test("pool: a seat near the table, Vortex in the other, a break, his turn by himself, out of turn ignored, leaving loses", async () => {
+  const s = ++space;
+  const a = await person(51, s, "member,builder");
+  const b = await person(52, s);
+  const at = me(a);
+  const spot = spotFor(a, "pool_table", Math.floor(at?.x ?? 0) - 2, Math.floor(at?.y ?? 0) - 3, 5, () => true);
+  assert.ok(spot, "room for a pool table");
+  a.room.send("obj:put", { id: "t-pool", kind: "pool_table", x: spot.x, y: spot.y, rot: 0 });
+  await waitFor(() => !!a.room.state.objects.get("t-pool"));
+  const t = () => b.room.state.pool.get("t-pool");
+  const near = (p: { x: number; y: number }) =>
+    Math.hypot(p.x - Math.max(spot.x, Math.min(p.x, spot.x + 4)), p.y - Math.max(spot.y, Math.min(p.y, spot.y + 2)));
+  if (near(me(a) ?? { x: 0, y: 0 }) > 2) await walk(a, { x: spot.x + 2, y: spot.y + 2.6 });
+  a.room.send("pool:sit", { id: "t-pool", seat: 0 });
+  await waitFor(() => t()?.seats.get("0")?.name === "P51");
+  // two seats needed
+  a.room.send("pool:start", { id: "t-pool" });
+  await waitFor(() => (a.msgs.toast?.length ?? 0) > 0);
+  assert.equal(t()?.phase, "lobby");
+  a.room.send("pool:vortex", { id: "t-pool", level: "medium" });
+  await waitFor(() => t()?.seats.get("1")?.vortex === "medium");
+  a.room.send("pool:start", { id: "t-pool", clock: 30, guide: "long" });
+  await waitFor(() => t()?.phase === "play");
+  assert.equal(t()?.clock, 30);
+  const game = () => JSON.parse(t()?.game ?? "{}");
+  assert.equal(game().turn, 0, "the first game: seat 0 breaks");
+  // someone not seated can't shoot
+  b.room.send("pool:shot", { id: "t-pool", angle: 0, power: 1, spinX: 0, spinY: 0, called: -1 });
+  await sleep(150);
+  assert.equal(t()?.shotNo, 0);
+  // the break
+  a.room.send("pool:shot", { id: "t-pool", angle: 0, power: 1, spinX: 0, spinY: 0, called: -1 });
+  await waitFor(() => t()?.shotNo === 1);
+  assert.ok(game().broken);
+  assert.ok(t()?.before && t()?.shot);
+  // a second shot while the balls still roll: ignored
+  a.room.send("pool:shot", { id: "t-pool", angle: 1, power: 0.2, spinX: 0, spinY: 0, called: -1 });
+  await sleep(100);
+  assert.equal(t()?.shotNo, 1);
+  // when it's Vortex's turn he plays it himself
+  if (game().turn === 1) {
+    await waitFor(() => (t()?.shotNo ?? 0) >= 2, 20_000);
+    const r = JSON.parse(t()?.shot ?? "{}");
+    assert.equal(r.seat, 1);
+  }
+  // walking out mid-game: Vortex wins, the table remembers it
+  a.room.send("pool:leave", { id: "t-pool" });
+  await waitFor(() => t()?.phase === "done" || t()?.phase === "lobby");
+  await waitFor(() => !!JSON.parse(a.room.state.objects.get("t-pool")?.props ?? "{}").record);
+  const rec = JSON.parse(a.room.state.objects.get("t-pool")?.props ?? "{}").record;
+  assert.equal(rec.last[0].w, "Vortex");
+});
+
+test("ping-pong: Ana serves to Vortex — her hit checked against her racket, he returns it, her miss is his point", async () => {
+  const { ballAt, hitBall, flightEvents } = await import("@yutopia/shared/pong");
+  const s = ++space;
+  const a = await person(61, s, "member,builder");
+  const b = await person(62, s);
+  const at = me(a);
+  const spot = spotFor(a, "pingpong_table", Math.floor(at?.x ?? 0) - 2, Math.floor(at?.y ?? 0) - 3, 6, () => true);
+  assert.ok(spot, "room for a table");
+  a.room.send("obj:put", { id: "t-pong", kind: "pingpong_table", x: spot.x, y: spot.y, rot: 0 });
+  await waitFor(() => !!a.room.state.objects.get("t-pong"));
+  const t = () => b.room.state.pong.get("t-pong");
+  const near = (p: { x: number; y: number }) =>
+    Math.hypot(p.x - Math.max(spot.x, Math.min(p.x, spot.x + 4)), p.y - Math.max(spot.y, Math.min(p.y, spot.y + 2)));
+  if (near(me(a) ?? { x: 0, y: 0 }) > 2) await walk(a, { x: spot.x - 0.8, y: spot.y + 1 });
+  a.room.send("pong:sit", { id: "t-pong", seat: 0 });
+  await waitFor(() => t()?.seats.get("0")?.name === "P61");
+  a.room.send("pong:vortex", { id: "t-pong", level: "turbo" });
+  await waitFor(() => t()?.seats.get("1")?.vortex === "turbo");
+  a.room.send("pong:start", { id: "t-pong", to: 11, bestOf: 1 });
+  await waitFor(() => t()?.phase === "play");
+  const score = () => JSON.parse(t()?.score ?? "{}");
+  assert.equal(score().server, 0, "Ana serves first");
+  await sleep(700);
+  // the toss
+  a.room.send("pong:toss", { id: "t-pong", t: Date.now(), y: 0 });
+  await waitFor(() => JSON.parse(t()?.flight || "{}").kind === "toss");
+  const toss = JSON.parse(t()?.flight ?? "{}");
+  // she meets it on the way down, ~0.36 s after the toss: report the racket there, then the hit
+  const hitAt = toss.t0 + 420;
+  const ball = ballAt(toss, hitAt).ball;
+  const racket = { x: ball.x - 0.02, y: ball.y, z: ball.z, nx: 1, ny: 0, nz: 0.1, vx: 3.5, vy: 0, vz: 0.6 };
+  while (Date.now() < hitAt) await sleep(10);
+  // a racket far away first: refused
+  a.room.send("pong:racket", { id: "t-pong", r: [ball.x, ball.y + 1.5, ball.z, 1, 0, 0, 0, 0, 0, hitAt] });
+  const nb = hitBall(ball, racket, { side: 0, assist: 1, serve: true });
+  a.room.send("pong:hit", {
+    id: "t-pong",
+    seq: t()?.seq,
+    t: hitAt,
+    b: [nb.x, nb.y, nb.z, nb.vx, nb.vy, nb.vz, nb.wx, nb.wy, nb.wz],
+  });
+  await sleep(150);
+  assert.equal(JSON.parse(t()?.flight || "{}").kind, "toss", "a hit far from her racket isn't taken");
+  // Bia can't hit Ana's toss
+  b.room.send("pong:hit", {
+    id: "t-pong",
+    seq: t()?.seq,
+    t: hitAt,
+    b: [nb.x, nb.y, nb.z, nb.vx, nb.vy, nb.vz, nb.wx, nb.wy, nb.wz],
+  });
+  // now with her racket right there
+  a.room.send("pong:racket", { id: "t-pong", r: [racket.x, racket.y, racket.z, 1, 0, 0.1, 3.5, 0, 0.6, hitAt] });
+  a.room.send("pong:hit", {
+    id: "t-pong",
+    seq: t()?.seq,
+    t: hitAt,
+    b: [nb.x, nb.y, nb.z, nb.vx, nb.vy, nb.vz, nb.wx, nb.wy, nb.wz],
+  });
+  await waitFor(() => JSON.parse(t()?.flight || "{}").kind === "serve");
+  const serve = JSON.parse(t()?.flight ?? "{}");
+  const sides = flightEvents(serve)
+    .filter((e) => e.k === "table")
+    .map((e) => e.side);
+  assert.deepEqual(sides.slice(0, 2), [0, 1], "the assisted serve: her side, then his");
+  // Vortex (Turbo) plays it back
+  await waitFor(() => JSON.parse(t()?.flight || "{}").by === 1, 4000);
+  // and Ana doesn't: his point
+  await waitFor(() => (t()?.pointNo ?? 0) >= 1, 6000);
+  const pt = JSON.parse(t()?.point ?? "{}");
+  assert.equal(pt.winner, 1);
+  assert.deepEqual(score().points, [0, 1]);
+  a.room.send("pong:concede", { id: "t-pong" });
+  await waitFor(() => t()?.phase === "done");
+});

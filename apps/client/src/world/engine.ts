@@ -2955,6 +2955,15 @@ export class WorldEngine {
     const b = this.pointerWorld(0);
     return { o: { x: a.x, y: a.y, z: H }, d: { x: b.x - a.x, y: b.y - a.y, z: -H } };
   }
+  // The same ray from any point on the screen (client px): the game tables read
+  // the pointer through their own overlay.
+  rayAt(clientX: number, clientY: number): Ray {
+    if (this.rayOverride) return this.rayOverride(clientX, clientY);
+    const H = 600;
+    const a = this.screenToWorld(clientX, clientY + H * this.zoom);
+    const b = this.screenToWorld(clientX, clientY);
+    return { o: { x: a.x, y: a.y, z: H }, d: { x: b.x - a.x, y: b.y - a.y, z: -H } };
+  }
   // The walls this view looks through right now (cut away / faded): "h3,4" keys.
   throughOverride: (() => Set<string>) | null = null;
   lookedThrough(): Set<string> {
@@ -3157,11 +3166,15 @@ export class WorldEngine {
   // Fixed camera on a world point (review shots, screenshot regression); null follows you again.
   // `ease`: glide there (and to the zoom) instead of cutting (leaning in on the slot-car track).
   private camPin: { x: number; y: number } | null = null;
-  pinCamera(at: { x: number; y: number; zoom?: number; z?: number; ease?: boolean } | null) {
+  // `zoomMax`: how far it may lean in while pinned (a game table fills the view)
+  private zoomCap = 0;
+  pinCamera(at: { x: number; y: number; zoom?: number; z?: number; ease?: boolean; zoomMax?: number } | null) {
     if (!at) {
       this.camPin = null;
+      this.zoomCap = 0;
       return;
     }
+    this.zoomCap = at.zoomMax ?? 0;
     const p = toScreen(at.x, at.y);
     this.camPin = { x: p.x, y: p.y - (at.z ?? 0) };
     if (!at.ease) this.cam = { ...this.camPin };
@@ -3225,7 +3238,7 @@ export class WorldEngine {
   }
 
   setZoom(z: number) {
-    this.targetZoom = Math.max(0.55 * WORLD_SCALE, Math.min(2.4 * WORLD_SCALE, z));
+    this.targetZoom = Math.max(0.55 * WORLD_SCALE, Math.min(Math.max(2.4 * WORLD_SCALE, this.zoomCap), z));
   }
 
   getZoom() {

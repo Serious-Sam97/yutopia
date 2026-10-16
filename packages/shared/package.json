@@ -13,7 +13,11 @@
     "./media": "./src/media.ts",
     "./pets": "./src/pets.ts",
     "./mind": "./src/mind.ts",
-    "./computer": "./src/computer.ts"
+    "./computer": "./src/computer.ts",
+    "./pool": "./src/pool.ts",
+    "./pong": "./src/pong.ts",
+    "./tables": "./src/tables.ts",
+    "./pool-game": "./src/pool-game.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

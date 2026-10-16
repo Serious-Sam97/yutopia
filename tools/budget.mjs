@@ -26,6 +26,7 @@ const LAZY = {
   "yutopia-people": 40,
   "yutopia-pets": 40, // the drawings, animation, sounds and strings; the panel carries a copy
   "yutopia-slots": 20,
+  "yutopia-tables": 40,
   "yutopia-games": 60,
   "yutopia-media": 30, // TVs and the radio's media; hls.js is its own chunk, fetched for Jellyfin only
   "yutopia-os": 15, // VortexOS on the computers' glass (docs/plan/19-vortexos.md)

@@ -19,6 +19,8 @@ export type Interaction =
   | "vending"
   | "piano"
   | "slotcar"
+  | "pool"
+  | "pong"
   | "tv"
   | "console"
   | "games"
@@ -239,6 +241,19 @@ export const CATALOG = {
     buildable: true,
     light: { color: 0xffe2a8, radius: 2.4, intensity: 0.22 },
   },
+  // the game tables (Fita 13, shared/tables.ts): 8-ball pool and ping-pong,
+  // played in the world for everyone to see
+  pool_table: {
+    label: "Pool table",
+    w: 4,
+    h: 2,
+    solid: true,
+    interact: "pool",
+    buildable: true,
+    variants: 3,
+    light: { color: 0xffd9a0, radius: 2.6, intensity: 0.3 },
+  },
+  pingpong_table: { label: "Ping-pong table", w: 4, h: 2, solid: true, interact: "pong", buildable: true, variants: 3 },
   turntable: {
     label: "Record player",
     w: 1,

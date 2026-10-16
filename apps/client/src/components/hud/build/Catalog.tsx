@@ -93,6 +93,8 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       "lamp",
       "arcade",
       "slot_track",
+      "pool_table",
+      "pingpong_table",
       "piano",
       "vending",
       "water_cooler",

@@ -7,6 +7,7 @@ import { computer } from "./computer";
 import { desk } from "./desk";
 import { door, rug, standupMat } from "./door";
 import { cartShelf, console2600, consoleGb, consoleMd, consoleNes, consoleSnes, crtTv } from "./games";
+import { pingpongTable, poolTable } from "./gametables";
 import { beanbag, bookcase, clock, counter, lightSwitch, neon, partition } from "./home";
 import { type Clip, type Group, type ItemArt, Sketch, seedOf } from "./kit";
 import { lamp } from "./lamp";
@@ -63,6 +64,8 @@ const GENS: Record<string, ItemGen> = {
   vending: { draw: vending, variants: 2 },
   piano: { draw: piano, variants: 2 },
   slot_track: { draw: slotTrack, variants: 1, key: (p) => String(p.track ?? "") },
+  pool_table: { draw: poolTable, variants: 3 },
+  pingpong_table: { draw: pingpongTable, variants: 3 },
   crt_tv: { draw: crtTv, variants: 2 },
   tv_wall: { draw: tvWall, variants: 2 },
   tv_hd: { draw: tvHd, variants: 1 },

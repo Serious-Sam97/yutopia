@@ -57,6 +57,16 @@ const ROWS: Row[] = [
   { label: "Bench", kind: "bench", id: "b1" },
   { label: "Meeting table", kind: "meeting_table", id: "m1", rots: [0, 1] },
   { label: "Slot-car track (autorama)", kind: "slot_track", id: "st1", rots: [0, 1] },
+  {
+    label: "Pool table · green / blue / wine",
+    kind: "pool_table",
+    cells: [0, 1, 2].map((v) => ({ rot: v === 1 ? 1 : 0, props: { variant: v }, id: `pt${v}` })),
+  },
+  {
+    label: "Ping-pong table · blue / green / grey",
+    kind: "pingpong_table",
+    cells: [0, 1, 2].map((v) => ({ rot: v === 1 ? 1 : 0, props: { variant: v }, id: `pp${v}` })),
+  },
   { label: "Computer · putty (VortexOS)", kind: "computer", id: "pc1", props: { variant: 0, seed: 0.8 } },
   { label: "Computer · graphite", kind: "computer", id: "pc2", props: { variant: 1, seed: 0.2 } },
   { label: "CRT TV · woodgrain", kind: "crt_tv", id: "tv1", props: { variant: 0 } },

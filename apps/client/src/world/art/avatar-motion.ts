@@ -429,6 +429,27 @@ function atWork(rig: Rig, what: string, base: Pose, t: number): Pose {
       p.head.rot += 2.5 * Math.sin(t * 1.7 + 0.4);
       break;
     }
+    case "pool": {
+      // the cue in both hands, low and forward: the back hand at the hip, the
+      // bridge hand out in front; a slow sway as they line it up
+      const sway = Math.sin(t * 1.3);
+      p.armR = side ? { sh: 18, el: 34 + 3 * sway, su: 1, sf: 1 } : { sh: 14, el: 40 + 3 * sway, su: 0.95, sf: 0.6 };
+      p.armL = side ? { sh: 62, el: 8, su: 1, sf: 1 } : { sh: -30, el: -20, su: 0.95, sf: 0.7 };
+      p.armLFront = !side;
+      p.body.rot += 4 + 1.2 * sway;
+      p.head.rot += 2 + 1.5 * Math.sin(t * 1.3 + 0.5);
+      break;
+    }
+    case "pong": {
+      // ready: the racket hand up in front, knees soft, bouncing on the toes
+      const bob = Math.sin(t * 6);
+      p.armR = side ? { sh: 48, el: 70, su: 1, sf: 1 } : { sh: 20, el: 72, su: 0.95, sf: 0.6 };
+      p.armL = side ? { sh: 30, el: 50, su: 1, sf: 1 } : { sh: -16, el: -50, su: 0.95, sf: 0.6 };
+      p.armLFront = !side;
+      p.body.y += 0.8 * bob;
+      p.body.rot += 3;
+      break;
+    }
     case "computer": {
       // standing at a computer: both hands on its keyboard, typing in bursts
       const burst = Math.sin(t * 0.9) > -0.2 ? 1 : 0;

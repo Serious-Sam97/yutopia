@@ -33,6 +33,7 @@
 14. [17-pets-minds.md](17-pets-minds.md) — Pets with a mind (delivered): drives and intentions with thought bubbles, personality traits and a will of its own, memory and bonds, a day
 15. [18-snow-campus.md](18-snow-campus.md) — The snow campus (delivered): the Ruptura-style headquarters, lawn and parking lot outside the 3D windows
 16. [19-vortexos.md](19-vortexos.md) — VortexOS on the computers (delivered): a `computer` item you sit at, the real OS from vortex.serious-sam.dev in a monitor panel, a drawn boot / desktop / screensaver on the glass for everyone, sign in with Yondra
+17. [20-sinuca-pingpong.md](20-sinuca-pingpong.md) — Fita 13 (delivered): Sinuca (8-ball pool) and Ping-pong — real physics, played in the world for everyone, against people or a Vortex at four levels
 
 ## Workflow rules (inherited from Yondra)
 

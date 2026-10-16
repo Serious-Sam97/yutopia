@@ -54,6 +54,8 @@ export type PanelKind =
   | "coffee"
   | "piano"
   | "slotcar"
+  | "pool"
+  | "pong"
   | "console"
   | "tv"
   | "games"

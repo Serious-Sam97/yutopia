@@ -79,6 +79,10 @@ export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectActi
     case "slotcar":
       out.push("race");
       break;
+    case "pool":
+    case "pong":
+      out.push("play");
+      break;
     case "console":
       out.push("play");
       break;

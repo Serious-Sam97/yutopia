@@ -56,22 +56,34 @@ export default function ThirdPersonDemo() {
     const objects = splitAll(studio.objects).objects;
     // ?slot=<track id>: a slot-car table with that track, on the first clear
     // 4 × 3 patch of floor near where you start (a look at the track in 3D)
+    // ?table=pool_table|pingpong_table: the same for a game table (4 × 2)
     const slot = q.get("slot");
-    if (slot) {
+    const table = q.get("table");
+    if (slot || table) {
+      const [fw, fh] = table ? [4, 2] : [4, 3];
       const grid = Grid.from(map, objects);
       const sx = Number(q.get("x")) || map.spawn.x;
       const sy = Number(q.get("y")) || map.spawn.y;
       let best: { x: number; y: number; d: number } | null = null;
-      for (let y = 1; y < map.height - 4; y++)
-        for (let x = 1; x < map.width - 5; x++) {
+      for (let y = 1; y < map.height - fh - 1; y++)
+        for (let x = 1; x < map.width - fw - 1; x++) {
           let ok = true;
-          for (let dy = -1; dy <= 3 && ok; dy++)
-            for (let dx = -1; dx <= 4 && ok; dx++)
+          for (let dy = -1; dy <= fh && ok; dy++)
+            for (let dx = -1; dx <= fw && ok; dx++)
               ok = grid.ok(x + dx, y + dy) && Math.hypot(x + dx + 0.5 - sx, y + dy + 0.5 - sy) > 1.2;
-          const d = Math.hypot(x + 2 - sx, y + 1.5 - sy);
+          const d = Math.hypot(x + fw / 2 - sx, y + fh / 2 - sy);
           if (ok && (!best || d < best.d)) best = { x, y, d };
         }
-      if (best)
+      if (best && table)
+        objects.push({
+          id: "demo-table",
+          kind: table,
+          x: best.x,
+          y: best.y,
+          rot: 0,
+          props: { variant: Number(q.get("v") ?? 0) },
+        });
+      else if (best)
         objects.push({ id: "demo-slot", kind: "slot_track", x: best.x, y: best.y, rot: 0, props: { track: slot } });
       (window as unknown as { __demoSlot?: unknown }).__demoSlot = best;
     }

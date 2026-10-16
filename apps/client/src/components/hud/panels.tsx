@@ -17,6 +17,8 @@ const TerminalPanel = dynamic<P>(() => import("./ScreenPanels").then((m) => m.Te
 const WhiteboardPanel = dynamic<P>(() => import("./WhiteboardPanel").then((m) => m.WhiteboardPanel), { ssr: false });
 const PianoPanel = dynamic<P>(() => import("./PianoPanel").then((m) => m.PianoPanel), { ssr: false });
 const SlotPanel = dynamic<P>(() => import("./SlotPanel").then((m) => m.SlotPanel), { ssr: false });
+const PoolPanel = dynamic<P>(() => import("./PoolPanel").then((m) => m.PoolPanel), { ssr: false });
+const PongPanel = dynamic<P>(() => import("./PongPanel").then((m) => m.PongPanel), { ssr: false });
 const GamePanel = dynamic<P>(() => import("./GamePanel").then((m) => m.GamePanel), { ssr: false });
 const MediaPanel = dynamic<P>(() => import("./MediaPanel").then((m) => m.MediaPanel), { ssr: false });
 const ComputerPanel = dynamic<P>(() => import("./ComputerPanel").then((m) => m.ComputerPanel), { ssr: false });
@@ -34,6 +36,8 @@ export const extraPanels: Partial<Record<string, ComponentType<{ objectId: strin
   terminal: TerminalPanel,
   piano: PianoPanel,
   slotcar: SlotPanel,
+  pool: PoolPanel,
+  pong: PongPanel,
   console: GamePanel,
   tv: GamePanel,
   games: GamePanel,
