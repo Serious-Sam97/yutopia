@@ -404,6 +404,7 @@ export function Minimap() {
   const people = useHud((s) => s.people);
   const me = useHud((s) => s.me);
   const vortex = useHud((s) => s.vortex);
+  const petsAt = useHud((s) => s.myPetsAt);
   const phase = useHud((s) => s.phase);
   const mapVersion = useHud((s) => s.mapVersion);
   const building = useHud((s) => s.build.on);
@@ -469,6 +470,16 @@ export function Minimap() {
       x.arc(p.x * S, p.y * S, 4, 0, Math.PI * 2);
       x.fill();
     }
+    // my pets: a small teal dot, ringed (one off exploring is easy to find)
+    for (const p of petsAt) {
+      x.fillStyle = "#3fd0b4";
+      x.strokeStyle = "#1a120c";
+      x.lineWidth = 1.5;
+      x.beginPath();
+      x.arc(p.x * S, p.y * S, 3.5, 0, Math.PI * 2);
+      x.fill();
+      x.stroke();
+    }
     if (vortex) {
       x.fillStyle = "#ff2d95";
       x.beginPath();
@@ -488,7 +499,7 @@ export function Minimap() {
       x.fill();
       x.stroke();
     }
-  }, [w, people, me, vortex, phase, mapVersion]);
+  }, [w, people, me, vortex, petsAt, phase, mapVersion]);
 
   const zoom = (f: number) => w?.engine?.setZoom((w.engine?.getZoom() ?? 1) * f);
   return (

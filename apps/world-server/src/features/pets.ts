@@ -1,4 +1,15 @@
-import { ANIM, dirFromDelta, findPath, isToyHeld, type Point, THROWN, type WorldObjectDef } from "@yutopia/shared";
+import {
+  ANIM,
+  type AreaDef,
+  areaAt,
+  dirFromDelta,
+  findPath,
+  isToyHeld,
+  type Point,
+  RUN_SPEED,
+  THROWN,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 import { isRadio } from "@yutopia/shared/media";
 import {
   type Bonds,
@@ -85,7 +96,7 @@ import { registerFeature } from "./index.ts";
 
 // Pets (docs/plan/13-pets.md, rules in shared/pets.ts). A pet is its owner's
 // (a record in Yondra), walks in with them and leaves with them. Here it
-// lives: follows, stays, roams, sleeps when tired (in its bed if it finds
+// lives: follows, stays, explores, sleeps when tired (in its bed if it finds
 // one), eats and drinks from bowls, answers commands, plays with toys, learns
 // tricks, makes its sounds, and battles other pets. Its needs settle with
 // real time — slowly while the owner is away — and it can die of neglect.
@@ -147,6 +158,33 @@ const WATCH_MS = 20_000;
 const GREET_DELAY_MS = 1500;
 const ZOOM_AGAIN_MS = 20 * 60_000;
 const ZOOM_PACE = 2.1;
+// following: within NEAR it's beside them; past FAR it drops whatever it was
+// idling at and runs after them (all the way, never a jump); a fresh path
+// every REPATH_MS while they keep moving
+const FOLLOW_NEAR = 2.6;
+const FOLLOW_FAR = 8;
+const REPATH_MS = 600;
+const CATCH_UP = RUN_SPEED * 1.05; // tiles per second at most: a little quicker than a run
+// what it lets go of to catch up (eating, a lesson, a fetch, a battle it sees through)
+const LET_GO = new Set([
+  "idle",
+  "trick",
+  "seek",
+  "watch",
+  "beg",
+  "nudge",
+  "hide",
+  "company",
+  "greet",
+  "zoom",
+  "scratch",
+]);
+const FETCHED: ReadonlySet<string> = new Set(["ball", "frisbee", "laser"]);
+// exploring: rooms it keeps out of (as Vortex does), and the beat between legs
+const KEEP_OUT: ReadonlySet<string> = new Set(["booth", "standup"]);
+const EXPLORE_REST_MS = 1500;
+const BIG_ROOM = 120; // tiles: an open floor, toured in several legs
+const SNIFFED_AGAIN_MS = 10 * 60_000;
 
 interface Run {
   path: Point[];
@@ -180,7 +218,13 @@ interface Run {
   begAt: number; // the last beg / nudge (not again at once)
   shyAt: number; // the last step away from a stranger
   zoomAt: number; // the last zoomies
-  pace: number; // × its walking pace (zoomies)
+  pace: number; // × its walking pace (zoomies, catching up)
+  lost: number; // tries in a row it found no way to its owner
+  // exploring: the room it's touring (legs left there), when it last was in each, what it has sniffed
+  tour: { area: string | null; legs: number } | null;
+  visited: Map<string, number>;
+  sniffed: Map<string, number>;
+  trail: Point[]; // its last stops (the next one is somewhere it hasn't been)
   echo?: { mood: PetMood; at: number }; // a parrot about to repeat a sound
 }
 
@@ -271,7 +315,8 @@ registerFeature((room: SpaceRoom) => {
   const go = (pet: Pet, to: Point): boolean => {
     const r = runs.get(pet.id);
     if (!r) return false;
-    const p = findPath(room.gridFor(pet.uid), pet, to);
+    const g = room.gridFor(pet.uid);
+    const p = findPath(g, pet, to, g.width * g.height);
     if (!p) return false;
     r.path = p;
     return true;
@@ -439,6 +484,11 @@ registerFeature((room: SpaceRoom) => {
       shyAt: 0,
       zoomAt: 0,
       pace: 1,
+      lost: 0,
+      tour: null,
+      visited: new Map(),
+      sniffed: new Map(),
+      trail: [],
       path: [],
       until: now + 1000,
       care: {},
@@ -583,7 +633,9 @@ registerFeature((room: SpaceRoom) => {
       case "come":
         pet.mode = "follow";
         pet.a = ANIM.idle;
+        r.tour = null;
         goNear(pet, p, 1.2);
+        r.until = now + REPATH_MS;
         break;
       case "stay":
         pet.mode = "stay";
@@ -591,12 +643,20 @@ registerFeature((room: SpaceRoom) => {
         stop(pet);
         break;
       case "follow":
+        // (from anywhere: it comes the whole way back, behave's chase)
         pet.mode = "follow";
         pet.a = ANIM.idle;
+        r.tour = null;
+        stop(pet);
+        r.until = now;
         break;
-      case "roam":
-        pet.mode = "roam";
+      case "explore":
+        pet.mode = "explore";
         pet.a = ANIM.idle;
+        r.tour = null;
+        stop(pet);
+        r.until = now + 700; // (a beat, then off it goes)
+        say(pet, "happy");
         break;
       case "sleep":
         sleep(pet);
@@ -829,7 +889,7 @@ registerFeature((room: SpaceRoom) => {
     if (!p) return;
     for (const t of toys.values()) {
       if (t.by !== pet.sid || t.state !== "floor" || t.at === r.toyAt) continue;
-      if (t.kind !== "ball" && t.kind !== "frisbee" && t.kind !== "laser") continue;
+      if (!FETCHED.has(t.kind)) continue;
       if ([...runs.values()].some((o) => o !== r && o.after === t.id)) continue;
       if (!go(pet, { x: t.x, y: t.y })) continue;
       r.after = t.id;
@@ -1701,6 +1761,101 @@ registerFeature((room: SpaceRoom) => {
     }
   };
 
+  // how much quicker than its own pace it goes to catch up: none close by, up
+  // to a little more than a person's run when they're far ahead
+  const catchUp = (pet: Pet, d: number) => {
+    if (d <= 4) return 1;
+    const own = SPECIES_DEFS[pet.species as Species].pace;
+    return Math.max(1, Math.min(CATCH_UP / own, 1 + (d - 4) / 5));
+  };
+
+  // ── exploring ─────────────────────────────────────────────────────────────
+  // Off round the whole space on its own: over to the room it has been in
+  // least lately, a sniff at two or three things there (or a corner of it),
+  // then on to the next, until it's called back. Booths and the standup ring
+  // stay private.
+  const inArea = (a: AreaDef, at: Point) => at.x >= a.x && at.x < a.x + a.w && at.y >= a.y && at.y < a.y + a.h;
+  // somewhere open in the room (or anywhere), as far as it can find from
+  // where it has stopped lately: a big open floor gets covered, not circled
+  const spotIn = (pet: Pet, r: Run, a: AreaDef | null): Point | null => {
+    const g = room.gridFor(pet.uid);
+    const map = room.map;
+    let best: Point | null = null;
+    let far = -1;
+    for (let i = 0; i < 16; i++) {
+      const t = a
+        ? { x: a.x + 0.5 + Math.random() * (a.w - 1), y: a.y + 0.5 + Math.random() * (a.h - 1) }
+        : { x: 0.5 + Math.random() * (map.width - 1), y: 0.5 + Math.random() * (map.height - 1) };
+      const at = areaAt(map, t.x, t.y);
+      if (!g.fits(t.x, t.y) || (at && KEEP_OUT.has(at.kind)) || (a && at?.key !== a.key)) continue;
+      const d = Math.min(...[pet, ...r.trail].map((q) => Math.hypot(q.x - t.x, q.y - t.y)));
+      if (d > far) {
+        far = d;
+        best = t;
+      }
+    }
+    return best;
+  };
+  const explore = (pet: Pet, r: Run, now: number) => {
+    const map = room.map;
+    const here = areaAt(map, pet.x, pet.y);
+    if (here) r.visited.set(here.key, now);
+    r.trail = [...r.trail.slice(-7), { x: pet.x, y: pet.y }];
+    r.until = now + EXPLORE_REST_MS + Math.random() * 2500;
+    const tour = r.tour;
+    if (tour && tour.legs > 0) {
+      tour.legs--;
+      const area = map.areas.find((a) => a.key === tour.area) ?? null;
+      // a thing in this room it hasn't had its nose in lately
+      const things = byDistance(
+        objects().filter(
+          (o) => (!area || inArea(area, centre(o))) && now - (r.sniffed.get(o.id) ?? 0) > SNIFFED_AGAIN_MS,
+        ),
+        pet,
+      );
+      for (const o of things.slice(0, 4)) {
+        if (!goNear(pet, centre(o), 1.0)) continue;
+        r.sniffed.set(o.id, now);
+        r.seen.add(o.id);
+        r.phase = 0;
+        return act(pet, `seek:${o.id}`, centre(o));
+      }
+      // nothing there: a corner of it
+      const t = spotIn(pet, r, area);
+      if (t && go(pet, t)) {
+        r.phase = 0;
+        act(pet, "seek:");
+      }
+      return;
+    }
+    // on to the next room: the one it saw longest ago (never, first), nearer
+    // ones first among those, a little chance in it
+    const rooms = map.areas
+      .filter((a) => !KEEP_OUT.has(a.kind) && a.w * a.h >= 4 && (a.key !== here?.key || a.w * a.h >= BIG_ROOM))
+      .map((a) => {
+        const age = Math.min(now - (r.visited.get(a.key) ?? 0), 15 * 60_000) / 1000;
+        const dist = Math.hypot(a.x + a.w / 2 - pet.x, a.y + a.h / 2 - pet.y);
+        return { a, score: age - dist * 2 + Math.random() * 40 };
+      })
+      .sort((x, y) => y.score - x.score);
+    for (const { a } of rooms.slice(0, 5)) {
+      const t = spotIn(pet, r, a);
+      if (!t || !go(pet, t)) continue;
+      r.visited.set(a.key, now);
+      r.tour = { area: a.key, legs: 1 + Math.floor(Math.random() * 3) + (a.w * a.h >= BIG_ROOM ? 3 : 0) };
+      if (Math.random() < 0.5) say(pet, "happy");
+      return;
+    }
+    // no rooms on this map (or none it can get into): anywhere a good way off
+    for (let i = 0; i < 6; i++) {
+      const t = spotIn(pet, r, null);
+      if (t && Math.hypot(t.x - pet.x, t.y - pet.y) > 6 && go(pet, t)) {
+        r.tour = { area: null, legs: 1 };
+        return;
+      }
+    }
+  };
+
   const behave = (pet: Pet, r: Run, now: number) => {
     const p = owner(pet);
     if (!p) return;
@@ -1709,44 +1864,56 @@ registerFeature((room: SpaceRoom) => {
       say(pet, r.echo.mood);
       r.echo = undefined;
     }
+    const d = Math.hypot(p.x - pet.x, p.y - pet.y);
+    // left behind: whatever it was idling at can wait, it goes after them
+    const behind = pet.mode === "follow" && d > FOLLOW_FAR;
+    // (and a ball just thrown for it gets it up from a sit or a sniff)
+    const thrown =
+      pet.mode !== "sleep" &&
+      pet.mode !== "stay" &&
+      [...toys.values()].some(
+        (t) => t.by === pet.sid && t.state === "floor" && t.at !== r.toyAt && FETCHED.has(t.kind),
+      );
+    if ((behind || thrown) && pet.act && LET_GO.has(pet.act.split(":")[0])) {
+      pet.act = "";
+      r.path = [];
+      r.pace = 1;
+    }
     if (pet.act) return finishAct(pet, r, now);
     if (pet.mode !== "sleep" && pet.mode !== "stay" && canExert(needsOf(pet))) maybeFetch(pet, r);
     if (pet.act) return;
-    if (pet.mode !== "sleep" && !r.path.length && now > r.thinkAt) think(pet, r, p, now);
+    if (pet.mode !== "sleep" && !behind && !r.path.length && now > r.thinkAt) think(pet, r, p, now);
     if (pet.act) return;
     shy(pet, r, now);
-    if (r.path.length && r.intent) return; // (on its way somewhere of its own)
-    const d = Math.hypot(p.x - pet.x, p.y - pet.y);
-    // lost its owner (a teleport, a locked door): turn up beside them
-    if (d > 14 && pet.mode !== "stay") {
-      const spot = room.gridFor(pet.uid).nearestOpen(p.x, p.y, 6);
-      if (spot) {
-        pet.x = spot.x;
-        pet.y = spot.y;
-        r.path = [];
-      }
-    }
+    if (r.path.length && r.intent && !behind) return; // (on its way somewhere of its own)
     if (!r.greeted && now - r.since > 800) {
       r.greeted = true;
       if (pet.mode !== "sleep") say(pet, "happy");
     }
     if (pet.mode === "follow") {
-      if (d > 2.6 && !r.path.length && now > r.until) {
-        if (!goNear(pet, p, 1.3)) r.until = now + 1500;
-        pet.a = ANIM.idle;
-      } else if (d <= 2.6 && !r.path.length && now > r.until) {
+      if (d > FOLLOW_NEAR) {
+        // after them the whole way, however far: a new path whenever they've
+        // moved on from where it was heading, and a run when they're well ahead
+        const end = r.path[r.path.length - 1];
+        if ((!end || Math.hypot(end.x - p.x, end.y - p.y) > 2.2) && now > r.until) {
+          if (goNear(pet, p, 1.3)) {
+            r.until = now + REPATH_MS;
+            r.lost = 0;
+          } else {
+            // no way through (a door locked to it): it waits, and whines now and then
+            r.until = now + 1500;
+            if (r.lost++ % 6 === 0) say(pet, "sad");
+          }
+        }
+        r.pace = catchUp(pet, d);
+      } else {
+        r.pace = 1;
         // by its owner, with time on its paws: a sniff about, a sit-down, a
         // look at them, a trick it's proud of, a cat's scratch on the post
-        idle(pet, r, p, now);
+        if (!r.path.length && now > r.until) idle(pet, r, p, now);
       }
-    } else if (pet.mode === "roam" && !r.path.length && now > r.until) {
-      const g = room.gridFor(pet.uid);
-      for (let i = 0; i < 5; i++) {
-        const t = { x: p.x + (Math.random() * 2 - 1) * 6, y: p.y + (Math.random() * 2 - 1) * 6 };
-        if (g.fits(t.x, t.y) && go(pet, t)) break;
-      }
-      r.until = now + 6000 + Math.random() * 8000;
-    } else if (pet.mode === "sleep" && !r.path.length) pet.a = ANIM.sit;
+    } else if (pet.mode === "explore" && !r.path.length && now > r.until) explore(pet, r, now);
+    else if (pet.mode === "sleep" && !r.path.length) pet.a = ANIM.sit;
   };
 
   return {

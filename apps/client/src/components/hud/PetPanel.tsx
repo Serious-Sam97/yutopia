@@ -412,7 +412,7 @@ function StatusTab({ pet, t }: { pet: PetInfo; t: Tr }) {
         <div className="flex flex-col gap-2">
           <div className="grp">{t("petCommands")}</div>
           <div className="flex flex-wrap gap-1.5">
-            {(["come", "stay", "follow", "roam", "sleep", "speak"] as const).map((c) => (
+            {(["come", "follow", "explore", "stay", "sleep", "speak"] as const).map((c) => (
               <DeckKey key={c} disabled={busy} onClick={() => cmd(c)}>
                 {t(`act_${c === "follow" ? "followMe" : c}` as TrKey)}
               </DeckKey>

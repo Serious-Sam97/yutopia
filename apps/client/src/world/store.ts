@@ -294,6 +294,7 @@ export interface HudState {
   locks: Record<string, string>;
   vortex: { x: number; y: number; say: string; sayAt: number; mood: string } | null;
   pets: PetInfo[]; // every pet in the room (mine first)
+  myPetsAt: { x: number; y: number }[]; // where my pets are (the minimap: one off exploring)
   petFocus: string | null; // the pet the panel shows (null: my first)
   battle: BattleView | null; // the battle one of my pets is in
   challenge: { battle: string; fromName: string; pet: string; mine: string } | null; // a battle proposed to me
@@ -378,6 +379,7 @@ const initial: HudState = {
   locks: {},
   vortex: null,
   pets: [],
+  myPetsAt: [],
   petFocus: null,
   battle: null,
   challenge: null,

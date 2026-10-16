@@ -437,11 +437,12 @@ export const PLAY = { fun: 30, energy: 12 } as const;
 export const playFun = (species: Species, toy: Toy) => PLAY.fun * (SPECIES_DEFS[species].favourite === toy ? 2 : 1);
 
 // ── commands ────────────────────────────────────────────────────────────────
-export const COMMANDS = ["come", "stay", "follow", "roam", "sleep", "speak", "trick"] as const;
+export const COMMANDS = ["come", "stay", "follow", "explore", "sleep", "speak", "trick"] as const;
 export type Command = (typeof COMMANDS)[number];
 export const isCommand = (c: unknown): c is Command =>
   typeof c === "string" && (COMMANDS as readonly string[]).includes(c);
-export type PetMode = "follow" | "stay" | "roam" | "sleep";
+// explore: a tour of the whole space on its own, room by room, until it's called back
+export type PetMode = "follow" | "stay" | "explore" | "sleep";
 // a happy pet obeys; a bored one listens half the time
 export const obeys = (n: Needs, rnd: number) => n.fun >= 15 || rnd < 0.5;
 

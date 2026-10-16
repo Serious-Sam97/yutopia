@@ -55,7 +55,7 @@ const petsOf = (p: Person) => [...p.room.state.pets.values()].filter((x: S) => x
 type S = Record<string, never> & { [k: string]: never };
 const me = (p: Person) => p.room.state.players.get(p.room.sessionId) as S;
 
-test("adopt a platypus: it shows up beside you, follows, and comes back after a teleport", async () => {
+test("adopt a platypus: it shows up beside you, follows, and runs after you all the way", async () => {
   const sp = space++;
   const ana = await person(1, sp, "builder"); // (a builder may teleport anywhere)
   ana.room.send("pet:adopt", { species: "platypus", name: "Perry", look: { color: "#5b3a26", mark: "socks" } });
@@ -74,11 +74,53 @@ test("adopt a platypus: it shows up beside you, follows, and comes back after a 
   ana.room.send("pet:adopt", { species: "parrot", name: "Polly" });
   await waitFor(() => (ana.msgs.toast ?? []).length > 0);
   assert.equal(petsOf(ana).length, 3);
-  // far away: it turns up next to its owner again
+  // far away: it runs after its owner the whole way — never a jump
   const before = { x: me(ana).x, y: me(ana).y };
   ana.room.send("teleport", { to: { x: 33.5, y: 30.5 } }); // the Live Room
   await waitFor(() => Math.hypot(me(ana).x - before.x, me(ana).y - before.y) > 14);
-  await waitFor(() => petsOf(ana).every((x: S) => Math.hypot(x.x - me(ana).x, x.y - me(ana).y) < 7), 8000);
+  const last = new Map(petsOf(ana).map((x: S) => [x.id, { x: x.x as number, y: x.y as number }]));
+  let jump = 0;
+  const watch = setInterval(() => {
+    for (const x of petsOf(ana) as S[]) {
+      const was = last.get(x.id);
+      if (was) jump = Math.max(jump, Math.hypot(x.x - was.x, x.y - was.y));
+      last.set(x.id, { x: x.x, y: x.y });
+    }
+  }, 20);
+  try {
+    await waitFor(() => petsOf(ana).every((x: S) => Math.hypot(x.x - me(ana).x, x.y - me(ana).y) < 4), 15000);
+  } finally {
+    clearInterval(watch);
+  }
+  assert.ok(jump < 2, `a step of ${jump.toFixed(2)} tiles`);
+});
+
+test("explore: off round the rooms on its own; follow me brings it back the whole way", async () => {
+  const sp = space++;
+  const ana = await person(7, sp);
+  ana.room.send("pet:adopt", { species: "dog", name: "Scout" });
+  await waitFor(() => petsOf(ana).length === 1);
+  const id = petsOf(ana)[0].id;
+  const pet = () => ana.room.state.pets.get(id) as S;
+  ana.room.send("pet:cmd", { id, cmd: "explore" });
+  await waitFor(() => pet().mode === "explore");
+  // it wanders well away from its owner (who stands still)
+  await waitFor(() => Math.hypot(pet().x - me(ana).x, pet().y - me(ana).y) > 9, 20000);
+  // and back when called, walking
+  ana.room.send("pet:cmd", { id, cmd: "follow" });
+  await waitFor(() => pet().mode === "follow");
+  let prev = { x: pet().x as number, y: pet().y as number };
+  let jump = 0;
+  const watch = setInterval(() => {
+    jump = Math.max(jump, Math.hypot(pet().x - prev.x, pet().y - prev.y));
+    prev = { x: pet().x, y: pet().y };
+  }, 20);
+  try {
+    await waitFor(() => Math.hypot(pet().x - me(ana).x, pet().y - me(ana).y) < 4, 15000);
+  } finally {
+    clearInterval(watch);
+  }
+  assert.ok(jump < 2, `a step of ${jump.toFixed(2)} tiles`);
 });
 
 test("commands, care and a lesson", async () => {
@@ -95,7 +137,7 @@ test("commands, care and a lesson", async () => {
   assert.equal(pet().xp, XP.command * 2);
   // a stranger's commands do nothing
   const cid = await person(3, sp);
-  cid.room.send("pet:cmd", { id, cmd: "roam" });
+  cid.room.send("pet:cmd", { id, cmd: "explore" });
   await sleep(200);
   assert.equal(pet().mode, "stay");
   // care by hand: a snack, then the cooldown

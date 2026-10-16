@@ -14,7 +14,7 @@ pode dormir etc. · 6 customizar o pet, adicionar roupa · 7 dar comandos ao pet
   platypus, capybara, parrot. Each has its own stats growth, sound, signature
   trick and battle special (the platypus has venom — the real one does).
 - Everything is **server-owned** (`apps/world-server/src/features/pets.ts`, one
-  `Pet` schema per pet in `state.pets`): the AI (follow / stay / roam / sleep /
+  `Pet` schema per pet in `state.pets`): the AI (follow / stay / explore / sleep /
   eat / drink / play / lesson / battle), needs, XP, tricks, battles. Clients
   only ask and draw. Rules live in `packages/shared/src/pets.ts` (unit-tested)
   so the panel shows exactly what the server will do.
@@ -33,7 +33,7 @@ pode dormir etc. · 6 customizar o pet, adicionar roupa · 7 dar comandos ao pet
 | 4 | XP and stats | XP from everything; level = f(xp); power / speed / wit / heart = species base + growth × level |
 | 5 | food, water, death, sleep | Needs food / water / energy / fun / health, 0..100, real-time decay (¼ speed while the owner is away). Food or water at 0 drains health; health 0 → the pet dies (a memorial in the panel, "say goodbye"). Snack / give water by hand (cooldown), or bowls it eats and drinks from alone. It sleeps when tired (in its bed if there is one) |
 | 6 | customise, clothes | Name, colour, marking; hat / collar / coat with colours. Pet panel → Outfit, with a live preview |
-| 7 | commands | Come, stay, follow me, roam free, go to sleep, speak, do <trick>. Obeys when it's happy enough, else it may ignore you (toast) |
+| 7 | commands | Come, stay, follow me, go explore (2026-10-16: was "roam free"), go to sleep, speak, do <trick>. Obeys when it's happy enough, else it may ignore you (toast) |
 | 8 | sounds | Synthesised per species (bark, meow, thump, growl, squeak, squawk) in moods (call / happy / sad / angry); a bubble with the onomatopoeia (EN/PT). On speak, greeting, hunger, play, tricks, battles |
 | 9 | pet items | Pet bed (it sleeps there), food bowl and water bowl (fill them; portions), scratching post, pet house — in build mode → Pets |
 

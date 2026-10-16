@@ -1343,6 +1343,8 @@ export class WorldController {
       if (me.focus) items.push({ act: "unfocus", ok: true });
       items.push({ act: "arriveHere", ok: true });
       if (hud.get().mySpawn) items.push({ act: "arriveUsual", ok: true });
+      // a pet off exploring (or told to stay) somewhere: called back from here
+      if (this.petsAway().length) items.push({ act: "callPets", ok: true });
       return { title: me.name, items };
     }
     if (target.type === "pet") {
@@ -1357,7 +1359,9 @@ export class WorldController {
         items.push({ act: "snack", ok: free }, { act: "water", ok: free }, { act: "speak", ok: free });
         const far = Math.hypot(pet.x - me.x, pet.y - me.y) > 3;
         if (far) items.push({ act: "come", ok: free });
-        items.push({ act: pet.mode === "stay" ? "followMe" : "stay", ok: free });
+        if (pet.mode !== "follow") items.push({ act: "followMe", ok: free });
+        if (pet.mode !== "explore") items.push({ act: "explore", ok: free });
+        if (pet.mode !== "stay") items.push({ act: "stay", ok: free });
         if (pet.mode !== "sleep") items.push({ act: "sleep", ok: free });
         const t = safeParse(pet.tricks) as Record<string, number>;
         const known = P.tricksFor(sp).filter((x) => P.learned(t, x));
@@ -1453,7 +1457,14 @@ export class WorldController {
       const id = t.id;
       if (act === "petCare") return hud.set({ panel: { kind: "pets" }, petFocus: id });
       const cmd = act === "followMe" ? "follow" : act;
-      if (cmd === "come" || cmd === "stay" || cmd === "follow" || cmd === "roam" || cmd === "sleep" || cmd === "speak")
+      if (
+        cmd === "come" ||
+        cmd === "stay" ||
+        cmd === "follow" ||
+        cmd === "explore" ||
+        cmd === "sleep" ||
+        cmd === "speak"
+      )
         return this.send("pet:cmd", { id, cmd });
       const tk = act.slice(6);
       if (act.startsWith("trick_") && petsArt()?.isTrick(tk))
@@ -1461,6 +1472,10 @@ export class WorldController {
     }
     if (act === "arriveHere") return this.setArrival({ x: this.me.x, y: this.me.y });
     if (act === "arriveUsual") return this.setArrival(null);
+    if (act === "callPets") {
+      for (const id of this.petsAway()) this.send("pet:cmd", { id, cmd: "follow" });
+      return;
+    }
     this.actions.add(act, m.target, m.title);
   }
 
@@ -1546,6 +1561,11 @@ export class WorldController {
       return;
     }
     if (e.interact === "terminal") this.send("vortex:poke", {});
+    // a computer: the server says if it's mine (computer:ok opens its panel)
+    if (e.interact === "computer") {
+      this.send("computer:use", { id });
+      return;
+    }
     // a pet's bowl: fill it; the toy box: the Pets cabinet's Play deck (no panel of their own)
     if (e.interact === "petbowl" || e.interact === "waterbowl") {
       mixer.blip("click");
@@ -1561,11 +1581,6 @@ export class WorldController {
       e.interact === "media" &&
       isGameTv(o.kind) &&
       !!this.engine?.allObjects().some((x) => isConsole(x.kind) && x.props?.tv === id);
-    // a computer: the server says if it's mine (computer:ok opens its panel)
-    if (e.interact === "computer") {
-      this.send("computer:use", { id });
-      return;
-    }
     this.onOpenPanel(plugged ? "tv" : e.interact, id);
   }
 
@@ -1606,6 +1621,11 @@ export class WorldController {
     hud.set({ me, people, fps: Math.round(st?.fps ?? 0) });
     const vx = room.state.npcs.get("vortex");
     hud.set({ vortex: vx ? { x: vx.x, y: vx.y, say: vx.say, sayAt: vx.sayAt, mood: vx.mood } : null });
+    const petsAt: { x: number; y: number }[] = [];
+    room.state.pets.forEach((pet: S) => {
+      if (pet.sid === room.sessionId && pet.alive) petsAt.push({ x: pet.x, y: pet.y });
+    });
+    if (petsAt.length || hud.get().myPetsAt.length) hud.set({ myPetsAt: petsAt });
     this.publishPets();
   }
 
@@ -1639,6 +1659,17 @@ export class WorldController {
       mic: false,
       pet: view,
     };
+  }
+
+  // My pets not at my heels (exploring, staying put): "Call my pets" brings them.
+  private petsAway(): string[] {
+    const room = this.room;
+    const out: string[] = [];
+    room?.state.pets.forEach((pet: S) => {
+      if (pet.sid === room.sessionId && pet.alive && !pet.battle && (pet.mode === "explore" || pet.mode === "stay"))
+        out.push(pet.id);
+    });
+    return out;
   }
 
   // The pets in the room and the battle I'm in, for the panel and the menus.
@@ -1882,6 +1913,9 @@ export class WorldController {
   myUid(): number {
     return this.session?.user.id ?? 0;
   }
+  myName(): string {
+    return this.session?.user.name ?? "";
+  }
 
   personByUid(uid: number) {
     const sid = this.uidToSid.get(uid);
@@ -1913,9 +1947,6 @@ export class WorldController {
   }
 
   private vortexLog(text: string) {
-  myName(): string {
-    return this.session?.user.name ?? "";
-  }
     hud.set((s) => ({
       chat: [
         ...s.chat.slice(-199),
