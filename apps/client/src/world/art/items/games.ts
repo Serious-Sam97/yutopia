@@ -1,5 +1,5 @@
 import { TV_SCREEN } from "@yutopia/shared/games";
-import { fe, fr, INK, rnd, type Sketch, sh, te, tr } from "./kit";
+import { fe, fr, INK, type Mat, rnd, type Sketch, sh, te, tr } from "./kit";
 import { K, M } from "./pal";
 
 // The game room (docs/plan/09-game-room.md): a CRT TV on its stand, the
@@ -254,4 +254,212 @@ export function cartShelf(s: Sketch) {
       line: 0.6,
     });
   s.shadow(0.06, 0.24, 1.88, 0.54, 0.42, 0.3);
+}
+
+// ── the disc consoles (docs/plan/23-disc-console.md) ───────────────────────
+// A disc in the console (props.cart, props.cartColor: its label colour) shows
+// while the lid is open (props.lid === "open"); a memory card in slot 1 while
+// the console holds a save (props.card). What's live (the LED lit, the lid
+// opening, pads) comes from world/games.
+const discOpen = (p: Props) => p.lid === "open";
+
+// The disc in its bay: silver, the label printed round the hole.
+function discIn(s: Sketch, x: number, y: number, z: number, label: string | null) {
+  s.cyl({ x, y, z, r: 0.15, h: 0.25, mat: { c: "#b9bcc2", top: "#dfe2e6", gloss: 1 }, line: 0.4 }, (d) => {
+    d.poly("t", te(z + 0.27, x, y, 0.13, 24), "none", { stroke: "#f6f7f9", sw: 0.4, op: 0.8 });
+    if (label) d.poly("t", te(z + 0.28, x, y, 0.09, 22), label);
+    d.poly("t", te(z + 0.29, x, y, 0.035, 14), "#8f949c");
+    d.poly("t", te(z + 0.3, x, y, 0.015, 10), "#2b2a28");
+  });
+}
+
+// The open bay: a dark well in the top (the disc rests on it, drawn after).
+function bayIn(s: Sketch, x: number, y: number, z: number, r: number, c: string) {
+  s.shape({ x: x - r, y: y - r, w: r * 2, d: r * 2, z, h: 0.01 }, (d) => {
+    d.poly("t", te(z + 0.01, x, y, r, 32), c, { stroke: INK, sw: 0.5 });
+    d.poly("t", te(z + 0.015, x, y, 0.03, 12), "#8f949c"); // the spindle
+  });
+}
+
+// The lid standing open at the back of its bay (round, hinged at the back):
+// an invisible slab carrying the lid's two faces.
+function lidUp(s: Sketch, x: number, y: number, z: number, r: number, mat: Mat, ring: string) {
+  const h = r * 2 * 39.2;
+  s.box({ x: x - r, y, w: r * 2, d: 0.03, z, h, mat, op: 0, line: 0, bevel: false }, (d) => {
+    for (const [f, at] of [
+      ["s", y + 0.03],
+      ["n", y],
+    ] as const) {
+      d.poly(f, fe(f, at, x, z + h / 2, r, h / 2, 28), mat.top ?? mat.c, { stroke: INK, sw: 0.6 });
+      d.poly(f, fe(f, at + (f === "s" ? 0.001 : -0.001), x, z + h / 2, r * 0.72, h * 0.36, 26), "none", {
+        stroke: ring,
+        sw: 0.5,
+      });
+    }
+  });
+}
+
+// The memory card in slot 1: a small grey card standing out of the front.
+function memCard(s: Sketch, x: number, y: number, z: number) {
+  s.box({ x, y: y - 0.02, w: 0.08, d: 0.05, z, h: 0.7, mat: { c: "#8f8c86", top: "#a8a59f" }, line: 0.4 }, (d) => {
+    d.poly("s", fr("s", y + 0.03, x + 0.02, x + 0.06, z + 0.15, z + 0.55), "#6f6c66");
+  });
+}
+
+// Grey original: a light grey slab, the round lid with its ring on the left,
+// three round buttons on the right (open behind, power and reset in front,
+// the green LED by power); in front, two pad ports with the memory card slots
+// over them; vents at the back.
+export function consolePs1(s: Sketch, p: Props) {
+  const G: Mat = { c: "#bdbab3", top: "#cfccc5", gloss: 0.4 };
+  const [x0, y0, w, d0, H] = [0.17, 0.28, 0.66, 0.46, 4.4];
+  const fy = y0 + d0;
+  s.box({ x: x0, y: y0, w, d: d0, z: 0, h: H, mat: G, puff: 0.5 }, (d) => {
+    d.poly("s", fr("s", fy, x0 + 0.03, x0 + w - 0.03, 0.4, 2.9), "#aeaba4"); // the darker front band
+    for (const x of [0.27, 0.55]) {
+      d.poly("s", fr("s", fy + 0.001, x, x + 0.15, 0.8, 1.9), "#2a2927", { stroke: "#7f7c76", sw: 0.3 }); // pad port
+      d.poly("s", fr("s", fy + 0.002, x + 0.015, x + 0.135, 1.15, 1.5), "#55524d");
+      d.poly("s", fr("s", fy + 0.001, x + 0.025, x + 0.125, 2.15, 2.55), "#1c1b1a"); // card slot
+    }
+    for (let i = 0; i < 7; i++)
+      d.line("t", [0.62 + i * 0.026, 0.31, H + 0.02], [0.62 + i * 0.026, 0.36, H + 0.02], "#8f8c86", 0.4); // vents
+    d.line("t", [0.6, y0 + 0.02, H + 0.02], [0.6, fy - 0.02, H + 0.02], "#a8a59e", 0.4); // the seam by the buttons
+  });
+  const [lx, ly, lr] = [0.39, 0.51, 0.17];
+  if (discOpen(p)) {
+    bayIn(s, lx, ly, H, lr, "#2b2a28");
+    if (p.cart) discIn(s, lx, ly, H + 0.02, cartColor(p));
+    lidUp(s, lx, ly - lr - 0.03, H, lr, G, "#a8a59e");
+  } else
+    s.cyl({ x: lx, y: ly, z: H, r: lr, h: 0.35, mat: { c: "#c6c3bc", top: "#d6d3cc" }, line: 0.6 }, (d) => {
+      for (const r of [0.15, 0.11]) d.poly("t", te(H + 0.37, lx, ly, r, 30), "none", { stroke: "#aeaba4", sw: 0.5 });
+      d.poly("t", te(H + 0.38, lx, ly, 0.03, 12), "#b5b2ab");
+    });
+  // buttons: open (big), power, reset; the LED
+  s.cyl({ x: 0.71, y: 0.42, z: H, r: 0.055, h: 0.5, mat: { c: "#b3b0a9", top: "#c4c1ba" }, line: 0.5 });
+  for (const x of [0.66, 0.76])
+    s.cyl({ x, y: 0.62, z: H, r: 0.035, h: 0.4, mat: { c: "#b3b0a9", top: "#c4c1ba" }, line: 0.5 });
+  s.shape({ x: 0.69, y: 0.54, w: 0.02, d: 0.02, z: H, h: 0.2 }, (d) =>
+    d.poly("t", te(H + 0.05, 0.7, 0.545, 0.012, 8), p.on ? "#7dff7a" : "#3b5a37", { glow: !!p.on }),
+  );
+  if (p.card) memCard(s, 0.295, fy, 2.0);
+  s.shadow(x0, y0, w, d0, 0.4, 0.2);
+}
+
+// Small white round: the later slim one — soft white, a big lid with its hub
+// over most of the top, open and power on the right. Variant 1 has the
+// flip-up screen standing at the back (the picture goes on it live).
+export function consolePs1Slim(s: Sketch, p: Props) {
+  const lcd = Math.floor(s.seed * 2) === 1;
+  const W: Mat = { c: "#e3e1dc", top: "#efede8", gloss: 0.5 };
+  const [x0, y0, w, d0, H] = [0.22, 0.3, 0.56, 0.42, 3.6];
+  const fy = y0 + d0;
+  s.box({ x: x0, y: y0, w, d: d0, z: 0, h: H, mat: W, puff: 1.2 }, (d) => {
+    d.poly("s", fr("s", fy, x0 + 0.05, x0 + w - 0.05, 0.5, 2.5), "#d2cfc8");
+    for (const x of [0.3, 0.52]) {
+      d.poly("s", fr("s", fy + 0.001, x, x + 0.14, 0.8, 1.7), "#3a3835", { stroke: "#a8a59e", sw: 0.3 });
+      d.poly("s", fr("s", fy + 0.001, x + 0.025, x + 0.115, 1.95, 2.25), "#4a4844");
+    }
+  });
+  const [lx, ly, lr] = [0.45, 0.52, 0.18];
+  if (discOpen(p)) {
+    bayIn(s, lx, ly, H, lr, "#4a4844");
+    if (p.cart) discIn(s, lx, ly, H + 0.02, cartColor(p));
+    lidUp(s, lx, ly - lr - 0.02, H, lr, W, "#c9c6bf");
+  } else
+    s.cyl({ x: lx, y: ly, z: H, r: lr, h: 0.3, mat: { c: "#e8e6e1", top: "#f4f2ee" }, line: 0.6 }, (d) => {
+      d.poly("t", te(H + 0.32, lx, ly, 0.16, 32), "none", { stroke: "#d0cdc6", sw: 0.4 });
+      d.poly("t", te(H + 0.33, lx, ly, 0.05, 16), "#dddad4", { stroke: "#c9c6bf", sw: 0.4 }); // the hub
+    });
+  for (const [y, big] of [
+    [0.42, true],
+    [0.6, false],
+  ] as const)
+    s.cyl({ x: 0.71, y, z: H, r: big ? 0.04 : 0.032, h: 0.4, mat: { c: "#d8d5cf", top: "#e6e4df" }, line: 0.5 });
+  s.shape({ x: 0.7, y: 0.66, w: 0.02, d: 0.02, z: H, h: 0.2 }, (d) =>
+    d.poly("t", te(H + 0.05, 0.71, 0.67, 0.011, 8), p.on ? "#7dff7a" : "#4d6b48", { glow: !!p.on }),
+  );
+  if (lcd)
+    // the screen, flipped up at the back: a white frame, the glass, two speaker dots
+    s.box({ x: 0.25, y: 0.3, w: 0.5, d: 0.035, z: H, h: 15, mat: W, puff: 0.6, line: 0.8 }, (d) => {
+      d.poly("s", fr("s", 0.336, 0.29, 0.65, H + 2.2, H + 13.2), "#1d2220", { stroke: "#9a978f", sw: 0.4 });
+      d.poly("s", fr("s", 0.337, 0.3, 0.42, H + 10.8, H + 12.6), "#ffffff", { op: 0.08 });
+      for (const z of [H + 5, H + 9]) d.poly("s", fe("s", 0.336, 0.7, z, 0.012, 0.6, 8), "#a8a59e");
+    });
+  if (p.card) memCard(s, 0.325, fy, 1.8);
+  s.shadow(x0, y0, w, d0, 0.4, 0.25);
+}
+
+// ── the disc rack (the library) ───────────────────────────────────────────
+// A slim CD tower — black lacquer or walnut — of jewel cases lying spine out
+// in four bays (label colours seeded, a few gaps), one case on top.
+export function discRack(s: Sketch) {
+  const walnut = Math.floor(s.seed * 2) === 1;
+  const frame: Mat = walnut ? M.walnut : { c: "#22201e", top: "#302d2a", gloss: 0.7 };
+  const labels = [K.red, K.amber, "#4f86c6", "#7fa34a", K.cream, "#7a5c8a", K.rust, "#2b2a28", "#d6c9a6", "#3d7f8a"];
+  const [x0, y0, w, d0, H] = [0.27, 0.36, 0.46, 0.3, 54];
+  const fy = y0 + d0;
+  s.box({ x: x0, y: y0, w, d: d0, z: 0, h: 2.4, mat: frame }); // plinth
+  // the sides: a long window each, the cases' clear edges showing through
+  for (const [x, f] of [
+    [x0, "w"],
+    [x0 + w - 0.035, "e"],
+  ] as const)
+    s.box({ x, y: y0, w: 0.035, d: d0, z: 2.4, h: H - 4, mat: frame }, (d) => {
+      const at = f === "w" ? x : x + 0.035;
+      d.poly(f, fr(f, at, y0 + 0.06, y0 + d0 - 0.05, 4, H - 4), "#141312");
+      for (let z = 4.6; z < H - 4.4; z += 1.15)
+        d.line(f, [at, y0 + 0.07, z], [at, y0 + d0 - 0.06, z], "#c9ced2", 0.45, 0.55);
+    });
+  // the back: slots, the cases' backs between them
+  s.box({ x: x0 + 0.035, y: y0 - 0.005, w: w - 0.07, d: 0.01, z: 2.4, h: H - 4, mat: frame, line: 0.4 }, (d) => {
+    for (let i = 0; i < 3; i++) {
+      const u = x0 + 0.07 + i * 0.12;
+      d.poly("n", fr("n", y0 - 0.005, u, u + 0.08, 4, H - 4), "#141312");
+      for (let z = 4.6; z < H - 4.4; z += 1.15)
+        d.line("n", [u + 0.005, y0 - 0.006, z], [u + 0.075, y0 - 0.006, z], "#c9ced2", 0.4, 0.4);
+    }
+  });
+  const bay = (H - 6) / 4;
+  for (let b = 0; b < 4; b++) {
+    const z = 2.4 + b * bay;
+    if (b > 0) s.box({ x: x0 + 0.035, y: y0 + 0.02, w: w - 0.07, d: d0 - 0.03, z, h: 0.8, mat: frame, line: 0.5 }); // shelf
+    const n = 8 + Math.floor(rnd(b, 3, s.seed) * 3); // cases in this bay
+    const base = z + (b > 0 ? 0.8 : 0);
+    s.box(
+      {
+        x: x0 + 0.045,
+        y: y0 + 0.03,
+        w: w - 0.09,
+        d: d0 - 0.05,
+        z: base,
+        h: n * 1.15,
+        mat: { c: "#1c1b1a", top: "#d9dde0" },
+        line: 0.5,
+      },
+      (d) => {
+        for (let i = 0; i < n; i++) {
+          const zz = base + i * 1.15;
+          d.poly(
+            "s",
+            fr("s", fy - 0.02, x0 + 0.06, x0 + w - 0.06, zz + 0.12, zz + 1.03),
+            labels[Math.floor(rnd(i, b, s.seed + 0.3) * labels.length)],
+          );
+          d.poly("s", fr("s", fy - 0.019, x0 + 0.05, x0 + 0.075, zz + 0.12, zz + 1.03), "#d9dde0", { op: 0.55 }); // the hinge
+        }
+      },
+    );
+  }
+  s.box({ x: x0 - 0.01, y: y0 - 0.01, w: w + 0.02, d: d0 + 0.02, z: H - 1.6, h: 1.6, mat: frame }); // top
+  // a case lying on top: clear plastic over its cover
+  s.box(
+    { x: 0.37, y: 0.41, w: 0.27, d: 0.24, z: H, h: 0.9, mat: { c: "#c9ced2", top: "#e8ecef", gloss: 1 }, line: 0.4 },
+    (d) => {
+      d.poly("t", tr(H + 0.92, 0.39, 0.43, 0.62, 0.63), labels[Math.floor(rnd(9, 9, s.seed) * labels.length)], {
+        op: 0.85,
+      });
+      d.poly("t", tr(H + 0.93, 0.39, 0.43, 0.62, 0.48), "#ffffff", { op: 0.25 });
+    },
+  );
+  s.shadow(x0, y0, w, d0, 0.42, 0.2);
 }

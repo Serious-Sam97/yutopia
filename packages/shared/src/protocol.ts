@@ -76,7 +76,8 @@ export interface ClientMessages {
   "game:cart": { id: string; game: string | null };
   "game:power": { id: string; on: boolean; resume?: boolean }; // resume: from the last save state
   "game:port": { id: string; port: number };
-  "game:pad": { id: string; bits: number };
+  "game:pad": { id: string; bits: number; sticks?: number[] }; // sticks: [lx, ly, rx, ry] −127…127
+  "game:analog": { id: string; on: boolean }; // my pad's analog mode (its LED, for everyone)
   "game:live": { id: string; live: boolean };
   "game:input": { tv: string; console: string };
   "game:continue": { id: string };
@@ -254,7 +255,7 @@ export interface ServerMessages {
   // to whoever streams a console: its TV's LiveKit token; another player's
   // pad; who may see the picture and who may hear it (user ids)
   "game:tv": { id: string; token: string; identity: string };
-  "game:pad": { id: string; port: number; bits: number };
+  "game:pad": { id: string; port: number; bits: number; sticks?: number[] };
   "game:audience": { id: string; video: string[]; audio: string[] };
   // someone played a note (where they are, so it sounds from there)
   "piano:note": { sid: string; x: number; y: number; n: number };

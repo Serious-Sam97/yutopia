@@ -114,6 +114,30 @@ const ROWS: Row[] = [
   },
   { label: "Handheld TV dock · cartridge in", kind: "console_gb", id: "c6", props: { cart: 1, cartColor: "#7a5c8a" } },
   { label: "Cartridge shelf", kind: "cart_shelf", id: "cs1" },
+  // the disc console (docs/plan/23-disc-console.md P1)
+  { label: "32-bit disc console · grey", kind: "console_ps1", id: "p1" },
+  {
+    label: "32-bit disc console · grey: lid open with a disc, memory card in, on",
+    kind: "console_ps1",
+    id: "p2",
+    props: { lid: "open", cart: 1, cartColor: "#c4402b", card: 1, on: true },
+  },
+  { label: "32-bit disc console · slim white", kind: "console_ps1_slim", id: "p3", props: { variant: 0 } },
+  {
+    label: "32-bit disc console · slim white: lid open with a disc, memory card in",
+    kind: "console_ps1_slim",
+    id: "p4",
+    props: { variant: 0, lid: "open", cart: 1, cartColor: "#4f86c6", card: 1 },
+    rots: [0, 1],
+  },
+  {
+    label: "32-bit disc console · slim white with its screen up, on",
+    kind: "console_ps1_slim",
+    id: "p5",
+    props: { variant: 1, on: true },
+  },
+  { label: "Disc rack · black", kind: "disc_rack", id: "dr1", props: { variant: 0 } },
+  { label: "Disc rack · walnut", kind: "disc_rack", id: "dr2", props: { variant: 1 }, rots: [0, 1] },
   { label: "Coffee table", kind: "coffee_table", id: "ct1" },
   { label: "Reception", kind: "reception", id: "r1" },
   {

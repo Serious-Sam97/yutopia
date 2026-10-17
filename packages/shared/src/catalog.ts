@@ -230,6 +230,20 @@ export const CATALOG = {
   console_md: { label: "16-bit console (black)", w: 1, h: 1, solid: false, interact: "console", buildable: true },
   console_gb: { label: "Handheld TV dock", w: 1, h: 1, solid: false, interact: "console", buildable: true },
   cart_shelf: { label: "Cartridge shelf", w: 2, h: 1, solid: true, interact: "games", buildable: true },
+  // the disc console (docs/plan/23-disc-console.md): a disc in it (props.cart,
+  // the lid opening while it goes in or out: props.lid), the team's BIOS; the
+  // rack is the discs' library (and where the BIOS is brought)
+  console_ps1: { label: "32-bit disc console", w: 1, h: 1, solid: false, interact: "console", buildable: true },
+  console_ps1_slim: {
+    label: "32-bit disc console (slim)",
+    w: 1,
+    h: 1,
+    solid: false,
+    interact: "console",
+    buildable: true,
+    variants: 2,
+  },
+  disc_rack: { label: "Disc rack", w: 1, h: 1, solid: true, interact: "games", buildable: true, variants: 2 },
   // an autorama for up to four (shared/slotcar.ts): the track on a table, the
   // cars race live for everyone in the room
   slot_track: {

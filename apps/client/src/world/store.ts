@@ -59,6 +59,7 @@ export type PanelKind =
   | "games"
   | "media"
   | "settings"
+  | "pads"
   | "avatar"
   | "pets"
   | "computer"
@@ -168,12 +169,14 @@ export interface GameView {
   host: string; // who runs it ("" while paused)
   hostMe: boolean;
   live: boolean;
-  ports: { name: string; me: boolean }[]; // one per pad
+  ports: { name: string; me: boolean; analog?: boolean }[]; // one per pad (analog: its sticks on)
   myPort: number; // 0 when I hold none
   near: boolean;
   // a TV: the consoles plugged into it and which one it shows
   inputs?: { id: string; label: string; title: string; on: boolean }[];
   input?: string;
+  // the host's disc on its way down (bytes), before the console can start
+  loading?: [number, number] | null;
 }
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";

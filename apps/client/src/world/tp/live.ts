@@ -152,7 +152,13 @@ function placeQuad(mesh: Mesh, l: Live) {
 export interface LiveSources {
   engine: Pick<WorldEngine, "livePanels" | "getObject" | "shareVideo" | "panelCanvas">;
   screens: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean }[] } | null;
-  games: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement }[] } | null;
+  games: {
+    pictures(): {
+      def: WorldObjectDef;
+      canvas: HTMLCanvasElement;
+      at?: { tl: [number, number]; tr: [number, number]; zTop: number; zBot: number };
+    }[];
+  } | null;
   // computers someone's at (world/os): VortexOS's picture on their glass
   os?: {
     pictures(): {
@@ -178,9 +184,16 @@ export class LiveFeed {
       out.push({ key: `o:${p.def.id}`, src: p.canvas, ...p.at, version: -1, glow: true });
     const panels = engine.livePanels();
     for (const p of games?.pictures() ?? []) {
-      const c = glassCorners(p.def);
+      const c = p.at ?? glassCorners(p.def); // (a slim console's own screen brings its corners)
       if (!c) continue;
-      out.push({ key: `g:${p.def.id}`, src: p.canvas, ...c, version: -1, glow: true, fit: wide(p.def) });
+      out.push({
+        key: `g:${p.def.id}`,
+        src: p.canvas,
+        ...c,
+        version: -1,
+        glow: true,
+        fit: p.at ? undefined : wide(p.def),
+      });
       taken.add(p.def.id);
     }
     for (const p of screens?.pictures() ?? []) {

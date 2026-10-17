@@ -16,6 +16,7 @@ import {
 } from "@yutopia/shared/slotcar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLang, useTr } from "@/lib/i18n";
+import { activePad } from "@/world/pads";
 import { hud, type SlotLane, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
 
@@ -148,7 +149,7 @@ export function SlotPanel({ objectId }: { objectId: string }) {
       last = now;
       squeeze.current = keyDown.current ? Math.min(1, squeeze.current + dt * RAMP) : 0;
       let u = Math.max(squeeze.current, padDown.current ?? 0);
-      const gp = navigator.getGamepads?.().find((g) => g?.connected);
+      const gp = activePad();
       if (gp) u = Math.max(u, gp.buttons[7]?.value ?? 0, gp.buttons[0]?.pressed ? 1 : 0);
       w?.slots?.setThrottle(u);
       const live = w?.slots?.live();

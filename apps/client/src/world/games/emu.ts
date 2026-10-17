@@ -1,11 +1,13 @@
-import { type GameSystem, type PadButton, SYSTEMS } from "@yutopia/shared/games";
+import { ANALOG_COMBO, type GameSystem, type PadButton, STICK_MAX, SYSTEMS } from "@yutopia/shared/games";
 import type { Nostalgist } from "nostalgist";
+import { hidePads, installVirtualPads, onRumble, pulseVirtualPad, type Rumble, STD, setVirtualPad } from "./vpad";
 
 // The emulator, in the browser of whoever turned the console on: a libretro core
 // (served from /emu/cores, fetched by tools/emu-cores.mjs) run by Nostalgist.
-// Every player's buttons come in through `press` — our own keyboard and gamepad
-// handling for the local player, the network for the others — so the core never
-// reads the keyboard or gamepads itself. Its picture and sound can be captured
+// Every player's buttons (and sticks) come in through `press` / `sticks` — our
+// own bindings for the local player (input.ts), the network for the others —
+// into virtual pads the core reads (vpad.ts): it never reads the keyboard or the
+// real gamepads itself. Its picture and sound can be captured
 // for the TV everyone sees (world/games/tv.ts).
 
 // Marks this chunk for `pnpm budget`.
@@ -15,48 +17,19 @@ export const GAMES_CHUNK = "yutopia-games";
 export const EMU_W = 640;
 export const EMU_H = 480;
 
-// Keys only the core sees (synthetic events): distinct per player.
-const KEYS: Record<1 | 2, Record<PadButton, string>> = {
-  1: {
-    up: "up",
-    down: "down",
-    left: "left",
-    right: "right",
-    a: "x",
-    b: "z",
-    x: "s",
-    y: "a",
-    l: "q",
-    r: "w",
-    start: "enter",
-    select: "rshift",
-  },
-  2: {
-    up: "t",
-    down: "g",
-    left: "f",
-    right: "h",
-    a: "l",
-    b: "k",
-    x: "o",
-    y: "i",
-    l: "r",
-    r: "y",
-    start: "p",
-    select: "u",
-  },
-};
-
 // The sound buffer (ms): the web audio driver fills it from the page's own
 // frame loop, so a hitch on the main thread longer than this is a gap you hear
 // (the 16-bit cores take the most time per frame — and the host's page is
 // also drawing the world and sending the TV out). Bigger = safer, later.
-const AUDIO_LATENCY: Record<GameSystem, number> = { "2600": 80, nes: 80, gb: 80, snes: 128, md: 112 };
+const AUDIO_LATENCY: Record<GameSystem, number> = { "2600": 80, nes: 80, gb: 80, snes: 128, md: 112, ps1: 160 };
 
 function retroarchConfig(system: GameSystem): Record<string, string | number | boolean> {
   const c: Record<string, string | number | boolean> = {
     // our own input only: no joypad driver reading the gamepads, no menu on a key
-    input_joypad_driver: "null",
+    // the pads: RetroArch's web joypad driver, reading the virtual pads (vpad.ts)
+    // — never the real ones (what the core gets is what our bindings say)
+    input_joypad_driver: "rwebpad",
+    input_autodetect_enable: true,
     input_menu_toggle: "nul",
     input_enable_hotkey: "nul",
     savestate_auto_load: false,
@@ -66,7 +39,6 @@ function retroarchConfig(system: GameSystem): Record<string, string | number | b
     notification_show_when_menu_is_alive: false,
     video_font_enable: false,
   };
-  for (const p of [1, 2] as const) for (const [b, key] of Object.entries(KEYS[p])) c[`input_player${p}_${b}`] = key;
   return c;
 }
 
@@ -89,6 +61,10 @@ const RETROPAD: Record<PadButton, number> = {
   x: 9,
   l: 10,
   r: 11,
+  l2: 12,
+  r2: 13,
+  l3: 14,
+  r3: 15,
 };
 
 // The console's sound, whichever way the core plays it (OpenAL, scheduled
@@ -151,12 +127,58 @@ function quietWakeLock() {
   wl.request = (type?: "screen") => request(type).catch(() => ({ release: async () => {}, released: true }));
 }
 
+const named = (fileName: string, fileContent: Blob) => ({ fileName, fileContent });
+
+// The disc console's pads: DualShocks (they start digital; L1 + R1 + L3 held
+// together switch analog on and off), their sticks only sticks. A port's device
+// type only sticks through a remap file (RetroArch puts every port back to a
+// plain pad on load without one).
+const REMAPS = "/home/web_user/retroarch/userdata/remaps";
+const DUALSHOCK = 517; // RETRO_DEVICE_SUBCLASS(ANALOG, 1) in PCSX ReARMed
+function padSetup(system: GameSystem): {
+  config: Record<string, string | number | boolean>;
+  files: { path: string; text: string }[];
+} {
+  if (system !== "ps1") return { config: {}, files: [] };
+  return {
+    config: { input_remapping_directory: REMAPS, auto_remaps_enable: true, input_remap_binds_enable: true },
+    files: [
+      {
+        path: `${REMAPS}/PCSX-ReARMed/PCSX-ReARMed.rmp`,
+        text: [1, 2]
+          .flatMap((p) => [`input_libretro_device_p${p} = "${DUALSHOCK}"`, `input_player${p}_analog_dpad_mode = "0"`])
+          .join("\n"),
+      },
+    ],
+  };
+}
+
+// A core's own options: the disc console boots the team's BIOS (its start-up
+// logo on the TV for everyone); with none it's the core's stand-in (HLE) —
+// what the game room only allows for the dev stack's test BIOS (room.ts).
+function coreOptions(system: GameSystem, bios: boolean): Record<string, string> {
+  if (system !== "ps1") return {};
+  return {
+    pcsx_rearmed_bios: bios ? "auto" : "HLE",
+    pcsx_rearmed_show_bios_bootlogo: "enabled",
+    pcsx_rearmed_vibration: "enabled",
+    pcsx_rearmed_analog_combo: "l1+r1+l3",
+  };
+}
+// Above this, a game's files are written into the core's file system by us (see startEmu).
+const DIRECT_BYTES = 32 * 1024 * 1024;
+const CONTENT_DIR = "/home/web_user/retroarch/userdata/content"; // (Nostalgist's)
+const base = (name: string) => name.replace(/\.[^.]+$/, "");
+
 export interface Emu {
   canvas: HTMLCanvasElement;
   system: GameSystem;
   // a player's button (port 1 or 2), down or up
   press(port: number, button: PadButton, down: boolean): void;
-  release(port: number): void; // everything that player holds, up
+  release(port: number): void; // everything that player holds, up (sticks back to rest)
+  sticks(port: number, sticks: readonly number[]): void; // [lx, ly, rx, ry] −127…127 (pads with sticks)
+  analog(port: number): void; // the disc console's pad: switch its analog mode (on ↔ off)
+  onRumble(f: ((port: number, r: Rumble) => void) | null): void; // what the core asks a pad to do
   pause(): void;
   resume(): void;
   saveState(): Promise<Blob>;
@@ -165,6 +187,7 @@ export interface Emu {
   audio(): MediaStream | null; // the console's sound, for the TV stream
   volume(v: number): void; // what the host hears of it (0..1; the stream stays at full)
   exit(): void;
+  emscripten(): unknown; // the core's module (dev tools: its memory)
 }
 
 export async function startEmu(o: {
@@ -175,6 +198,14 @@ export async function startEmu(o: {
   state?: Blob | null;
   sram?: Blob | null;
   worldAudio?: BaseAudioContext | null; // the world's own sound (never tapped)
+  // a disc's other files (a .cue's .bin tracks), by their own names
+  more?: File[];
+  bios?: File[]; // into the core's system folder
+  // the disc console's spike (docs/plan/23-disc-console.md P0): another core, more config
+  core?: string;
+  config?: Record<string, string | number | boolean>;
+  coreConfig?: Record<string, string>;
+  files?: { path: string; text: string }[]; // written before the core starts (a remap file…)
 }): Promise<Emu> {
   const { Nostalgist: N } = await import("nostalgist");
   quietWakeLock();
@@ -208,20 +239,51 @@ export async function startEmu(o: {
   } catch {
     sizing.observe(o.canvas);
   }
+  // A disc (hundreds of MB, maybe in several files) goes into the core's file
+  // system from here, handed over without a copy: Nostalgist's own writes make
+  // four (a 771 MB disc took the tab from 0.2 to 3.3 GB). The core gets a
+  // one-line .m3u that names it.
+  const pads = padSetup(o.system);
+  const disc =
+    o.more?.length || o.rom.size > DIRECT_BYTES
+      ? [named(o.romName, o.rom), ...(o.more ?? []).map((f) => named(f.name, f))]
+      : null;
+  const unhide = hidePads();
   const n: Nostalgist = await N.launch({
-    core: sys.core,
-    rom: new File([o.rom], o.romName),
+    core: o.core ?? sys.core,
+    // by name: Nostalgist calls a bare Blob / File "data<n>.bin" (a .cue names its tracks)
+    // (Nostalgist takes an .m3u for a set of discs and wants the first one next
+    // to it; it gets an empty stand-in, the real files are ours)
+    rom: disc
+      ? [named(`${base(o.romName)}.m3u`, new Blob([o.romName])), named(`${base(o.romName)}.none`, new Blob([]))]
+      : named(o.romName, o.rom),
+    ...(o.bios?.length ? { bios: o.bios.map((f) => named(f.name, f)) } : {}),
+    retroarchCoreConfig: { ...coreOptions(o.system, !!o.bios?.length), ...o.coreConfig },
     element: o.canvas,
     size: { width: EMU_W, height: EMU_H },
     style: { imageRendering: "pixelated", backgroundColor: "#000" },
     respondToGlobalEvents: false,
     resolveCoreJs: (core: unknown) => `/emu/cores/${String(core)}_libretro.js`,
     resolveCoreWasm: (core: unknown) => `/emu/cores/${String(core)}_libretro.wasm`,
-    retroarchConfig: retroarchConfig(o.system) as never,
+    retroarchConfig: { ...retroarchConfig(o.system), ...pads.config, ...o.config } as never,
     // EmulatorJS-built cores (the 2600's) look for their canvas's parent
     emscriptenModule: { parent: o.canvas.parentElement ?? document.body } as never,
     ...(o.sram ? { sram: new File([o.sram], "sram") } : {}),
-  });
+    async beforeLaunch(nn: Nostalgist) {
+      const fs = nn.getEmscriptenFS() as {
+        mkdirTree(p: string): void;
+        writeFile(p: string, d: string | Uint8Array, opts?: { canOwn?: boolean }): void;
+      };
+      for (const f of [...pads.files, ...(o.files ?? [])]) {
+        fs.mkdirTree(f.path.slice(0, f.path.lastIndexOf("/")));
+        fs.writeFile(f.path, f.text);
+      }
+      for (const f of disc ?? [])
+        fs.writeFile(`${CONTENT_DIR}/${f.fileName}`, new Uint8Array(await f.fileContent.arrayBuffer()), {
+          canOwn: true,
+        });
+    },
+  }).finally(unhide);
   fit(window.devicePixelRatio || 1); // (launch styles the canvas too; the observer corrects it)
   // the page keeps the keyboard: the core only hears what we press for it
   o.canvas.tabIndex = -1;
@@ -232,10 +294,21 @@ export async function startEmu(o: {
   // EmulatorJS-built cores take buttons straight in (and save their own way)
   const mod = n.getEmscriptenModule() as unknown as EjsModule;
   const ejs = typeof mod._simulate_input === "function";
+  // the pads the core reads (after launch: Nostalgist announces real pads as
+  // GamepadEvents, which only take real ones); per port, the standard
+  // mapping's buttons as bits and the sticks −1…1
+  const unplug = installVirtualPads(2);
+  const vbits = [0, 0, 0];
+  const vsticks = [
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+    [0, 0, 0, 0],
+  ];
   const send = (port: number, button: PadButton, down: boolean) => {
-    if (ejs) mod._simulate_input(port - 1, RETROPAD[button], down ? 1 : 0);
-    else if (down) n.pressDown({ button, player: port });
-    else n.pressUp({ button, player: port });
+    if (ejs) return mod._simulate_input(port - 1, RETROPAD[button], down ? 1 : 0);
+    const b = 1 << STD[button];
+    vbits[port] = down ? vbits[port] | b : vbits[port] & ~b;
+    setVirtualPad(port, vbits[port], vsticks[port]);
   };
   // the core's audio context: OpenAL's, else whichever got tapped since launch
   const mine = (): BaseAudioContext | null => {
@@ -260,6 +333,22 @@ export async function startEmu(o: {
     release(port) {
       for (const b of held.get(port) ?? []) send(port, b, false);
       held.delete(port);
+      if (port === 1 || port === 2) emu.sticks(port, [0, 0, 0, 0]);
+    },
+    sticks(port, s) {
+      if (ejs || (port !== 1 && port !== 2)) return;
+      vsticks[port] = s.map((v) => v / STICK_MAX);
+      setVirtualPad(port, vbits[port], vsticks[port]);
+    },
+    analog(port) {
+      if (o.system !== "ps1" || ejs || (port !== 1 && port !== 2)) return;
+      pulseVirtualPad(
+        port,
+        ANALOG_COMBO.reduce((n, b) => n | (1 << STD[b]), 0),
+      );
+    },
+    onRumble(f) {
+      for (const p of [1, 2]) onRumble(p, f ? (r) => f(p, r) : null);
     },
     pause: () => n.pause(),
     resume: () => n.resume(),
@@ -299,8 +388,11 @@ export async function startEmu(o: {
       heard = v;
       ear.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
     },
+    emscripten: () => n.getEmscriptenModule(),
     exit() {
       sizing.disconnect();
+      emu.onRumble(null);
+      unplug();
       try {
         n.exit({ removeCanvas: false });
       } catch {

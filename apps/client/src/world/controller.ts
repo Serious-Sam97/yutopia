@@ -67,6 +67,7 @@ import type { GameRoom } from "./games/room";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import type { OsRoom } from "./os/room";
+import { activePad } from "./pads";
 import type { PetView } from "./petview";
 import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
@@ -809,6 +810,9 @@ export class WorldController {
       "console_snes",
       "console_md",
       "console_gb",
+      "console_ps1",
+      "console_ps1_slim",
+      "disc_rack",
     ]);
     if (this.gamesLoading || !this.engine?.allObjects().some((o) => kinds.has(o.kind))) return;
     this.gamesLoading = import("./games/room").then((m) => {
@@ -1456,9 +1460,15 @@ export class WorldController {
   }
 
   private gamepad(): { x: number; y: number; run: boolean } {
-    const pads = typeof navigator !== "undefined" && navigator.getGamepads ? navigator.getGamepads() : [];
-    for (const p of pads) {
-      if (!p) continue;
+    // (playing a console: the pad's the game's — no walking away on its stick)
+    if (this.games?.playing()) {
+      this.padA = true;
+      if (this.tp) this.tp.padFree = false;
+      return { x: 0, y: 0, run: false };
+    }
+    if (this.tp) this.tp.padFree = true;
+    const p = activePad();
+    if (p) {
       const x = Math.abs(p.axes[0]) > 0.25 ? p.axes[0] : 0;
       const y = Math.abs(p.axes[1]) > 0.25 ? p.axes[1] : 0;
       if (p.buttons[0]?.pressed && !this.padA) {

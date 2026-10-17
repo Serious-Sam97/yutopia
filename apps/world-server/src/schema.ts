@@ -180,6 +180,8 @@ export class GameConsole extends Schema {
   @type("string") p2 = "";
   @type("string") p1Name = "";
   @type("string") p2Name = "";
+  @type("boolean") a1 = false; // a pad in its analog mode (the disc console's: its red LED)
+  @type("boolean") a2 = false;
   @type("boolean") live = false; // the TV's picture is going out
   @type("uint8") resumes = 0; // carried on after its host went: load the last save state
   @type("float64") since = 0;

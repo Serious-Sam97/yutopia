@@ -3,7 +3,24 @@ import { existsSync } from "node:fs";
 import { test } from "node:test";
 import { canPlace } from "./build.ts";
 import { footprint, type WorldObjectDef } from "./catalog.ts";
-import { CABLE_REACH, CONSOLES, GAME_ID, gap, isConsole, romFits, SYSTEMS, TV_SCREEN, turnLocal } from "./games.ts";
+import {
+  ANALOG_COMBO,
+  CABLE_REACH,
+  CONSOLES,
+  discFits,
+  GAME_ID,
+  gap,
+  hasSticks,
+  isConsole,
+  isDiscSystem,
+  PAD_BITS_MAX,
+  PAD_BUTTONS,
+  romFits,
+  SYSTEMS,
+  sticksFit,
+  TV_SCREEN,
+  turnLocal,
+} from "./games.ts";
 import { BUILTIN_GAMES, builtinGame, GAME_ROOM_SETUP } from "./library.ts";
 import { FLOORS, type MapDef, NO_WALL } from "./map.ts";
 
@@ -81,4 +98,51 @@ test("the ready-made game room fits on an empty floor", () => {
     assert.ok(gap(rect(c), rect(tv)) <= CABLE_REACH, c.kind);
     assert.ok(CONSOLES[c.kind]);
   }
+});
+
+test("a disc's files: one .chd / .pbp / .iso, or a .cue with its tracks (the .cue first)", () => {
+  const f = (name: string, size = 10) => ({ name, size });
+  assert.deepEqual(
+    discFits("ps1", [f("a.bin"), f("a.cue")]).ordered.map((x) => x.name),
+    ["a.cue", "a.bin"],
+  );
+  assert.deepEqual(
+    discFits("ps1", [f("t2.bin"), f("g.cue"), f("t1.bin")]).ordered.map((x) => x.name),
+    ["g.cue", "t2.bin", "t1.bin"],
+  );
+  assert.equal(discFits("ps1", [f("g.chd")]).why, null);
+  assert.equal(discFits("ps1", [f("g.pbp")]).why, null);
+  assert.match(String(discFits("ps1", [f("g.bin")]).why), /needs its \.cue/);
+  assert.match(String(discFits("ps1", [f("a.cue"), f("b.cue"), f("a.bin")]).why), /one \.cue/);
+  assert.match(String(discFits("ps1", [f("a.chd"), f("b.chd")]).why), /needs its \.cue/);
+  assert.match(String(discFits("ps1", [f("a.cue")]).why), /tracks/);
+  assert.match(String(discFits("ps1", [f("g.exe")]).why), /aren't a disc/);
+  assert.match(String(discFits("ps1", [f("g.chd", 901 * 1024 * 1024)]).why), /too big/);
+  assert.ok(isDiscSystem("ps1") && !isDiscSystem("nes"));
+});
+
+test("a pad: 16 buttons in a mask (new ones at the end), sticks −127…127", () => {
+  assert.equal(PAD_BUTTONS.length, 16);
+  assert.deepEqual(PAD_BUTTONS.slice(0, 12), [
+    "up",
+    "down",
+    "left",
+    "right",
+    "a",
+    "b",
+    "x",
+    "y",
+    "l",
+    "r",
+    "start",
+    "select",
+  ]);
+  assert.equal(PAD_BITS_MAX, 0xffff);
+  assert.ok(sticksFit([0, 127, -127, 5]));
+  for (const bad of [[0, 0, 0], [128, 0, 0, 0], [0.5, 0, 0, 0], "0,0,0,0", null])
+    assert.ok(!sticksFit(bad), String(bad));
+  assert.ok(hasSticks("ps1") && !hasSticks("snes"));
+  // the disc console's pad has every button, the analog switch's among them
+  for (const b of ANALOG_COMBO) assert.ok((SYSTEMS.ps1.buttons as readonly string[]).includes(b), b);
+  for (const b of PAD_BUTTONS) assert.ok((SYSTEMS.ps1.buttons as readonly string[]).includes(b), b);
 });

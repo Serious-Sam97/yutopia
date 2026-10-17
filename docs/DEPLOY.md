@@ -11,6 +11,16 @@ the source of truth (users, projects, boards, Vortex) and is deployed as today.
    `routes/yutopia.php`). The game room keeps uploaded cartridges and saves on
    Yondra's private `local` disk (`storage/app/private/yutopia/{games,saves}`):
    back it up with the rest of Yondra's storage.
+   **Discs** (the disc console, `docs/plan/23-disc-console.md`) live there too
+   (`yutopia/games/<space>/<sha1>/` for a .cue and its tracks), up to
+   `YUTOPIA_DISC_QUOTA` per space (default 10 GB) — size the disk for it. They come
+   in **8 MB pieces** (`PUT …/games/uploads/{id}/{file}/{n}`): the proxy in front of
+   Yondra must take request bodies of at least 9 MB (nginx `client_max_body_size`),
+   and its read timeout must outlast one piece on a slow line. Unfinished uploads
+   (`yutopia/uploads/`) are dropped by `yutopia:prune-uploads`, hourly from the
+   scheduler (run `schedule:work` / the cron). The team's **BIOS** dumps sit in
+   `yutopia/bios/<space>/`. **Never set `YUTOPIA_TEST_BIOS_MD5` in production**
+   (it makes one fake BIOS acceptable, for tests and the dev stack).
 2. Add to Yondra's backend `.env` (generate fresh secrets, never reuse dev ones):
    ```
    YUTOPIA_WORLD_SECRET=<openssl rand -hex 32>

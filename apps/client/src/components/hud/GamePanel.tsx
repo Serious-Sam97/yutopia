@@ -1,11 +1,32 @@
 "use client";
 
-import { type GameSystem, type PadButton, romFits, SYSTEMS } from "@yutopia/shared/games";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  DISC_SYSTEMS,
+  discFits,
+  type GameSystem,
+  hasSticks,
+  isDiscSystem,
+  type PadButton,
+  romFits,
+  SYSTEMS,
+} from "@yutopia/shared/games";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLang, useTr } from "@/lib/i18n";
-import { type Cartridge, library, removeGame, saveInfo, upload } from "@/world/games/api";
-import { bit, KEY_HINTS } from "@/world/games/input";
+import {
+  type BiosInfo,
+  bringBios,
+  bringGame,
+  type Cartridge,
+  library,
+  listBios,
+  removeBios,
+  removeGame,
+  saveInfo,
+  upload,
+} from "@/world/games/api";
+import { bit, keyHints, onPadPrefs, padPrefs } from "@/world/games/input";
 import { hud, toast, useHud } from "@/world/store";
+import { ControllersPanel } from "./ControllersPanel";
 import { useWorld } from "./ctx";
 import { MediaRemote, TvVolume } from "./MediaPanel";
 
@@ -74,6 +95,43 @@ const T = {
   close: ["Close", "Fechar"],
   pick: ["Pick a cartridge", "Escolha um cartucho"],
   pPlayers: ["{n} players", "{n} jogadores"],
+  // the disc console (docs/plan/23-disc-console.md)
+  rack: ["Disc rack", "Rack de discos"],
+  bringDisc: ["Bring your disc", "Traga seu disco"],
+  discHint: [
+    "Only discs you own. A .chd (one file, smaller) is best; a .cue with its .bin tracks works too — pick them all together. Big discs take a while: you can pause and carry on later (pick the same files again).",
+    "Só discos que você tem. Um .chd (um arquivo, menor) é o melhor; um .cue com as faixas .bin também serve — escolha todos juntos. Discos grandes demoram: dá pra pausar e continuar depois (escolha os mesmos arquivos de novo).",
+  ],
+  discFiles: ["The disc's files", "Os arquivos do disco"],
+  addDisc: ["Put it in the rack", "Colocar no rack"],
+  addedDisc: ["In the rack.", "No rack."],
+  pause: ["Pause", "Pausar"],
+  carryOnUp: ["Carry on", "Continuar"],
+  upPaused: ["Paused — pick the same files to carry on.", "Pausado — escolha os mesmos arquivos pra continuar."],
+  sending: ["Sending… {done} of {total}", "Enviando… {done} de {total}"],
+  finishing: ["Putting it together…", "Montando…"],
+  bios: ["BIOS", "BIOS"],
+  needsBios: [
+    "This console needs its BIOS: bring a dump of a console you own (512 KB, e.g. SCPH-5501). Everyone in the space can play then.",
+    "Este console precisa da BIOS: traga um dump de um console que você tem (512 KB, ex. SCPH-5501). Aí todo mundo no espaço pode jogar.",
+  ],
+  bringBios: ["Bring the BIOS", "Trazer a BIOS"],
+  bringMoreBios: ["Bring another BIOS", "Trazer outra BIOS"],
+  biosLogo: ["BIOS · start-up logo", "BIOS · logo de abertura"],
+  biosRegions: [
+    "The PlayStation logo plays before every USA and Japan disc with any of these BIOS (USA: SCPH-1001, 5501, 7001, 101; Japan: 5500). A European disc needs the European one (5502) for it; without it, the game starts straight away.",
+    "O logo do PlayStation aparece antes de todo disco dos EUA e do Japão com qualquer uma dessas BIOS (EUA: SCPH-1001, 5501, 7001, 101; Japão: 5500). Um disco europeu precisa da europeia (5502); sem ela, o jogo começa direto.",
+  ],
+  biosAdded: ["{model} BIOS: in.", "BIOS {model}: pronta."],
+  biosWho: ["brought by you", "trazida por você"],
+  disc: ["Disc", "Disco"],
+  noDisc: ["No disc in", "Sem disco"],
+  changeDisc: ["Change disc", "Trocar disco"],
+  insertDisc: ["Insert a disc", "Colocar um disco"],
+  pickDisc: ["Pick a disc", "Escolha um disco"],
+  reading: ["Reading the disc… {done} of {total}", "Lendo o disco… {done} de {total}"],
+  analog: ["Analog", "Analógico"],
+  controllers: ["Controllers", "Controles"],
 } as const;
 type K = keyof typeof T;
 const LABELS = ["#c4402b", "#f0a12c", "#7fa34a", "#4f86c6", "#7a5c8a", "#efe4cc", "#3d4a5c", "#b5562f"];
@@ -83,7 +141,9 @@ const SHORT: Record<GameSystem, string> = {
   snes: "16-bit",
   md: "16-bit (black)",
   gb: "Handheld",
+  ps1: "32-bit disc",
 };
+const mb = (n: number) => `${(n / 1024 / 1024).toFixed(n < 100 * 1024 * 1024 ? 1 : 0)} MB`;
 
 export function GamePanel({ objectId }: { objectId: string }) {
   const pt = useLang() === "pt";
@@ -96,12 +156,13 @@ export function GamePanel({ objectId }: { objectId: string }) {
   const spaceId = useHud((s) => s.spaceId);
   const close = () => hud.set({ panel: { kind: null } });
   const [picking, setPicking] = useState(false);
+  const [padsOpen, setPadsOpen] = useState(false); // Controllers, over the console
   const [games, setGames] = useState<Cartridge[] | null>(null);
   const reload = () => void library(spaceId).then(setGames);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape" && !padsOpen) close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -112,18 +173,36 @@ export function GamePanel({ objectId }: { objectId: string }) {
   }, [kind, picking, spaceId]);
 
   const v = view?.id === objectId ? view : null;
+  if (padsOpen)
+    return (
+      <ControllersPanel start={(v?.system || undefined) as GameSystem | undefined} onClose={() => setPadsOpen(false)} />
+    );
+  // the games panel: the disc rack (discs, the BIOS) or the cartridge shelf
+  const rack = kind === "games" && w?.engine?.getObject(objectId)?.kind === "disc_rack";
   const showing = kind === "tv" ? (v?.input ?? "") : objectId;
 
   return (
     <section
       role="dialog"
       aria-label={
-        kind === "games" ? t("shelf") : kind === "tv" ? t("watch") : SYSTEMS[(v?.system || "nes") as GameSystem].label
+        kind === "games"
+          ? t(rack ? "rack" : "shelf")
+          : kind === "tv"
+            ? t("watch")
+            : SYSTEMS[(v?.system || "nes") as GameSystem].label
       }
       className="pointer-events-auto absolute left-1/2 -translate-x-1/2 top-16 bottom-3 w-[min(760px,calc(100%-24px))] flex flex-col gap-2 overflow-y-auto scroll-thin"
     >
       {kind === "games" ? (
-        <Shelf t={t} games={games} spaceId={spaceId} onChange={reload} onClose={close} closeLabel={tr("close")} />
+        <Shelf
+          t={t}
+          games={games}
+          spaceId={spaceId}
+          discs={rack}
+          onChange={reload}
+          onClose={close}
+          closeLabel={tr("close")}
+        />
       ) : (
         <>
           {kind === "tv" && v?.input === "media" ? (
@@ -132,7 +211,7 @@ export function GamePanel({ objectId }: { objectId: string }) {
               <MediaRemote id={objectId} />
             </div>
           ) : (
-            <Screen consoleId={showing} on={!!v?.on} running={!!v?.host} t={t} />
+            <Screen consoleId={showing} on={!!v?.on} running={!!v?.host} loading={v?.loading ?? null} t={t} />
           )}
           {/* the TV's volume: on its own panel, and on the console's (its TV) */}
           {kind === "tv" && v?.input !== "media" && (
@@ -145,7 +224,9 @@ export function GamePanel({ objectId }: { objectId: string }) {
               <TvVolume id={v.tv} />
             </div>
           )}
-          {kind === "console" && v?.on && v.myPort ? <TouchPad system={v.system as GameSystem} /> : null}
+          {kind === "console" && v?.on && v.myPort ? (
+            <TouchPad system={v.system as GameSystem} analog={!!v.ports[v.myPort - 1]?.analog} />
+          ) : null}
           <div className="cabinet rise px-3 py-2.5 flex flex-col gap-2">
             {kind === "tv" ? (
               <TvControls t={t} v={v} onClose={close} closeLabel={tr("close")} />
@@ -153,6 +234,7 @@ export function GamePanel({ objectId }: { objectId: string }) {
               <ConsoleControls
                 t={t}
                 v={v}
+                onPads={() => setPadsOpen(true)}
                 picking={picking}
                 setPicking={setPicking}
                 games={games}
@@ -185,7 +267,19 @@ export function GamePanel({ objectId }: { objectId: string }) {
 type TFn = (k: K, v?: Record<string, string | number>) => string;
 
 // The picture, big, in a CRT's bezel: my own game, the TV's video, or no signal.
-function Screen({ consoleId, on, running, t }: { consoleId: string; on: boolean; running: boolean; t: TFn }) {
+function Screen({
+  consoleId,
+  on,
+  running,
+  loading,
+  t,
+}: {
+  consoleId: string;
+  on: boolean;
+  running: boolean;
+  loading: [number, number] | null; // my disc coming down
+  t: TFn;
+}) {
   const w = useWorld();
   const box = useRef<HTMLDivElement>(null);
   const [el, setEl] = useState<HTMLVideoElement | null>(null);
@@ -237,8 +331,12 @@ function Screen({ consoleId, on, running, t }: { consoleId: string; on: boolean;
             style={{ background: on ? "#1d3f8a" : "#0d120e" }}
           >
             {on ? (
-              <span className="lcd text-2xl" style={{ color: "#f2e8d2" }}>
-                {running ? t("starting") : t("noSignal")}
+              <span className="lcd text-2xl text-center px-4" style={{ color: "#f2e8d2" }} data-testid="screen-status">
+                {loading
+                  ? t("reading", { done: mb(loading[0]), total: mb(loading[1]) })
+                  : running
+                    ? t("starting")
+                    : t("noSignal")}
               </span>
             ) : null}
           </div>
@@ -259,6 +357,7 @@ function Screen({ consoleId, on, running, t }: { consoleId: string; on: boolean;
 function ConsoleControls({
   t,
   v,
+  onPads,
   picking,
   setPicking,
   onClose,
@@ -266,6 +365,7 @@ function ConsoleControls({
 }: {
   t: TFn;
   v: import("@/world/store").GameView | null;
+  onPads: () => void;
   picking: boolean;
   setPicking: (b: boolean) => void;
   games: Cartridge[] | null;
@@ -290,9 +390,27 @@ function ConsoleControls({
       live = false;
     };
   }, [cartId, isOn, spaceId]);
+  // the disc console: the space's BIOS first
+  const disc = isDiscSystem(v?.system ?? "");
+  const [bios, setBios] = useState<number | null>(null); // how many the space has (null: asking)
+  useEffect(() => {
+    if (!disc) return;
+    let live = true;
+    const ask = () =>
+      void listBios(spaceId)
+        .then((b) => live && setBios(b.length))
+        .catch(() => live && setBios(0));
+    ask();
+    const again = setInterval(ask, 4000); // (someone may bring one meanwhile)
+    return () => {
+      live = false;
+      clearInterval(again);
+    };
+  }, [disc, spaceId]);
   if (!v) return null;
   const id = v.id;
   const system = v.system as GameSystem;
+  const noBios = disc && bios === 0;
   return (
     <>
       <header className="flex items-center gap-2 flex-wrap">
@@ -354,7 +472,7 @@ function ConsoleControls({
         {/* the cartridge */}
         <div className="rounded-md px-2.5 py-2" style={{ background: "#1a1410", border: "1px solid #3a2c1f" }}>
           <p className="text-[11px]" style={{ color: "var(--muted)" }}>
-            {t("cart")}
+            {t(disc ? "disc" : "cart")}
           </p>
           <p
             className="text-sm font-semibold flex items-center gap-1.5 truncate"
@@ -366,7 +484,7 @@ function ConsoleControls({
                 style={{ width: 12, height: 14, background: v.cart.color, border: "1px solid #000" }}
               />
             ) : null}
-            <span className="truncate">{v.cart ? v.cart.title : t("noCart")}</span>
+            <span className="truncate">{v.cart ? v.cart.title : t(disc ? "noDisc" : "noCart")}</span>
           </p>
           <div className="flex gap-1 mt-1.5">
             <button
@@ -377,7 +495,7 @@ function ConsoleControls({
               aria-pressed={picking}
               onClick={() => setPicking(!picking)}
             >
-              {v.cart ? t("change") : t("insert")}
+              {v.cart ? t(disc ? "changeDisc" : "change") : t(disc ? "insertDisc" : "insert")}
             </button>
             {v.cart ? (
               <button
@@ -401,13 +519,13 @@ function ConsoleControls({
             className={`deck-btn ${v.on ? "danger" : ""}`}
             style={{ height: 34, fontSize: 12 }}
             aria-pressed={v.on}
-            disabled={!v.on && (!v.tv || !v.cart)}
+            disabled={!v.on && (!v.tv || !v.cart || noBios || (disc && bios === null))}
             // (turning it off saves it: the host's emulator saves as it stops)
             onClick={() => w?.send("game:power", { id, on: !v.on })}
           >
             ⏻ {v.on ? t("off") : t("on")}
           </button>
-          {!v.on && resumable !== null && v.tv && v.cart ? (
+          {!v.on && resumable !== null && v.tv && v.cart && !noBios ? (
             <button
               type="button"
               className="deck-btn"
@@ -448,6 +566,19 @@ function ConsoleControls({
         </div>
       </div>
 
+      {/* the disc console without a BIOS: what to do */}
+      {noBios && !v.on ? <Bios t={t} spaceId={spaceId} /> : null}
+      {disc && !!bios && !v.on ? (
+        <details data-testid="console-bios">
+          <summary className="text-xs cursor-pointer" style={{ color: "var(--muted)" }}>
+            {t("biosLogo")} ({bios})
+          </summary>
+          <div className="mt-1.5">
+            <Bios t={t} spaceId={spaceId} />
+          </div>
+        </details>
+      ) : null}
+
       {/* the pads */}
       {v.on ? (
         <div className="flex gap-2 flex-wrap items-center">
@@ -474,6 +605,22 @@ function ConsoleControls({
                   {t("take", { n: i + 1 })}
                 </button>
               )}
+              {p.me && hasSticks(system) ? (
+                // the pad's analog mode: its sticks on (its red LED)
+                <button
+                  type="button"
+                  className="deck-btn"
+                  style={{ height: 26, fontSize: 11 }}
+                  aria-pressed={!!p.analog}
+                  onClick={() => w?.games?.analog(id)}
+                >
+                  <span
+                    className="led"
+                    style={p.analog ? { background: "#ff3a2a", boxShadow: "0 0 6px #ff3a2a" } : {}}
+                  />{" "}
+                  {t("analog")}
+                </button>
+              ) : null}
               {p.me && !v.hostMe ? (
                 <button
                   type="button"
@@ -486,6 +633,9 @@ function ConsoleControls({
             </div>
           ))}
           {v.myPort ? <Keys system={system} t={t} /> : null}
+          <button type="button" className="ghost-btn text-xs" onClick={onPads}>
+            🎮 {t("controllers")}
+          </button>
         </div>
       ) : null}
     </>
@@ -515,8 +665,15 @@ const FACE: Record<GameSystem, [PadButton, string, string][]> = {
     ["b", "B", "#7a1f3a"],
     ["a", "A", "#7a1f3a"],
   ],
+  // □ △ ✕ ○ where they sit (left, top, bottom, right), in their colours
+  ps1: [
+    ["y", "□", "#d889b8"],
+    ["x", "△", "#5fae8a"],
+    ["b", "✕", "#6f8fd0"],
+    ["a", "○", "#d0524a"],
+  ],
 };
-function TouchPad({ system }: { system: GameSystem }) {
+function TouchPad({ system, analog }: { system: GameSystem; analog: boolean }) {
   const w = useWorld();
   const [coarse, setCoarse] = useState(false);
   const held = useRef(0);
@@ -555,38 +712,82 @@ function TouchPad({ system }: { system: GameSystem }) {
       </button>
     );
   };
+  // the disc console's left stick, dragged inside its ring (while analog)
+  const stick = (
+    <fieldset
+      aria-label="stick"
+      className="rounded-full touch-none select-none relative shrink-0"
+      style={{
+        width: 96,
+        height: 96,
+        background: "#2b2a28",
+        border: "2px solid #15100c",
+        padding: 0,
+        margin: 0,
+        minWidth: 0,
+      }}
+      onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+      onPointerMove={(e) => {
+        if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - r.left) / r.width) * 2 - 1;
+        const y = ((e.clientY - r.top) / r.height) * 2 - 1;
+        const k = Math.min(1, 1 / Math.max(1e-6, Math.hypot(x, y)));
+        w?.games?.touch(held.current, [Math.round(x * k * 127), Math.round(y * k * 127), 0, 0]);
+      }}
+      onPointerUp={() => w?.games?.touch(held.current, [0, 0, 0, 0])}
+      onPointerCancel={() => w?.games?.touch(held.current, [0, 0, 0, 0])}
+    />
+  );
   return (
-    <div className="cabinet flex items-center justify-between gap-3 px-3 py-2 shrink-0">
-      <div className="grid grid-cols-3 gap-1" style={{ width: 150 }}>
-        <span />
-        {btn("up", "▲", "#2b2a28", 46)}
-        <span />
-        {btn("left", "◀", "#2b2a28", 46)}
-        <span />
-        {btn("right", "▶", "#2b2a28", 46)}
-        <span />
-        {btn("down", "▼", "#2b2a28", 46)}
-        <span />
-      </div>
-      <div className="flex flex-col gap-1.5 items-center">
-        {SYSTEMS[system].buttons.includes("select" as never) ? btn("select", "SEL", "#55534d", 40) : null}
-        {btn("start", "START", "#55534d", 40)}
-      </div>
-      <div className="flex gap-2 flex-wrap justify-end" style={{ maxWidth: 130 }}>
-        {FACE[system].map(([b, label, color]) => btn(b, label, color))}
+    <div className="cabinet flex flex-col gap-2 px-3 py-2 shrink-0">
+      {system === "ps1" ? (
+        // the shoulders, over the pad as on the real one
+        <div className="flex justify-between">
+          <div className="flex gap-1">
+            {btn("l2", "L2", "#55534d", 40)}
+            {btn("l", "L1", "#55534d", 40)}
+          </div>
+          <div className="flex gap-1">
+            {btn("r", "R1", "#55534d", 40)}
+            {btn("r2", "R2", "#55534d", 40)}
+          </div>
+        </div>
+      ) : null}
+      <div className="flex items-center justify-between gap-3">
+        {analog ? stick : null}
+        <div className="grid grid-cols-3 gap-1" style={{ width: 150 }}>
+          <span />
+          {btn("up", "▲", "#2b2a28", 46)}
+          <span />
+          {btn("left", "◀", "#2b2a28", 46)}
+          <span />
+          {btn("right", "▶", "#2b2a28", 46)}
+          <span />
+          {btn("down", "▼", "#2b2a28", 46)}
+          <span />
+        </div>
+        <div className="flex flex-col gap-1.5 items-center">
+          {SYSTEMS[system].buttons.includes("select" as never) ? btn("select", "SEL", "#55534d", 40) : null}
+          {btn("start", "START", "#55534d", 40)}
+        </div>
+        <div className="flex gap-2 flex-wrap justify-end" style={{ maxWidth: 130 }}>
+          {FACE[system].map(([b, label, color]) => btn(b, label, color))}
+        </div>
       </div>
     </div>
   );
 }
 
 function Keys({ system, t }: { system: GameSystem; t: TFn }) {
+  useSyncExternalStore(onPadPrefs, padPrefs, padPrefs); // (your bindings changed: new hints)
   return (
     <p
       className="mono text-[11px] flex-wrap gap-x-3 gap-y-0.5 ml-auto hidden [@media(pointer:fine)]:flex"
       style={{ color: "var(--cream-dim)" }}
     >
       <span style={{ color: "var(--muted)" }}>{t("keys")}:</span>
-      {KEY_HINTS[system].map(([k, b]) => (
+      {keyHints(system).map(([k, b]) => (
         <span key={k}>
           <b style={{ color: "var(--cream)" }}>{k}</b> {b}
         </span>
@@ -677,16 +878,17 @@ function Picker({
   onClose: () => void;
 }) {
   const fits = (games ?? []).filter((g) => g.system === system);
+  const discs = isDiscSystem(system);
   return (
     <div className="cabinet rise px-3 py-2.5 flex flex-col gap-2">
       <header className="flex items-center gap-2">
-        <h3 className="lcd text-base">{t("pick").toUpperCase()}</h3>
+        <h3 className="lcd text-base">{t(discs ? "pickDisc" : "pick").toUpperCase()}</h3>
         <button type="button" className="ghost-btn ml-auto text-xs" onClick={onClose}>
           ✕
         </button>
       </header>
       <CartList t={t} games={fits} onPick={onPick} />
-      <Upload t={t} spaceId={spaceId} fixed={system} onDone={onUploaded} />
+      <Upload t={t} spaceId={spaceId} fixed={system} discs={discs} onDone={onUploaded} />
     </div>
   );
 }
@@ -721,10 +923,27 @@ function CartList({
                   className="rounded-md px-2 py-1.5 flex items-center gap-2"
                   style={{ background: "#1a1410", border: "1px solid #3a2c1f" }}
                 >
-                  <span
-                    className="inline-block rounded-sm shrink-0"
-                    style={{ width: 14, height: 18, background: g.color, border: "1px solid #000" }}
-                  />
+                  {isDiscSystem(g.system) ? (
+                    // a jewel case: its cover's colour, the disc showing through
+                    <span
+                      className="relative inline-block rounded-[2px] shrink-0"
+                      style={{ width: 18, height: 18, background: g.color, border: "1px solid #000" }}
+                    >
+                      <span
+                        className="absolute rounded-full"
+                        style={{
+                          inset: 3,
+                          background: "radial-gradient(circle, #1a1410 0 18%, #dfe2e6 20% 60%, #9aa0a8 62%)",
+                        }}
+                      />
+                      <span className="absolute inset-y-0 left-0" style={{ width: 3, background: "rgba(0,0,0,.35)" }} />
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-block rounded-sm shrink-0"
+                      style={{ width: 14, height: 18, background: g.color, border: "1px solid #000" }}
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-semibold truncate" style={{ color: "var(--cream)" }}>
                       {g.title} <span style={{ color: "var(--muted)" }}>· {SHORT[g.system]}</span>
@@ -767,54 +986,111 @@ function CartList({
   );
 }
 
-// Bring your own cartridge: a file you own, for one console, a title and a label colour.
-function Upload({ t, spaceId, fixed, onDone }: { t: TFn; spaceId: number; fixed?: GameSystem; onDone: () => void }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [system, setSystem] = useState<GameSystem>(fixed ?? "nes");
+// Bring your own game: a cartridge (one file) or a disc (a .chd, or a .cue and
+// its tracks — big: sent in pieces, with a bar, paused and carried on), for one
+// console, a title and a label colour.
+function Upload({
+  t,
+  spaceId,
+  fixed,
+  discs = false,
+  onDone,
+}: {
+  t: TFn;
+  spaceId: number;
+  fixed?: GameSystem;
+  discs?: boolean; // the rack: discs only (else the shelf: cartridges only)
+  onDone: () => void;
+}) {
+  const choices = (Object.keys(SYSTEMS) as GameSystem[]).filter((k) => isDiscSystem(k) === discs);
+  const [files, setFiles] = useState<File[]>([]);
+  const [system, setSystem] = useState<GameSystem>(fixed ?? choices[0] ?? "nes");
   const [title, setTitle] = useState("");
   const [color, setColor] = useState(LABELS[0]);
   const [players, setPlayers] = useState(1);
   const [busy, setBusy] = useState(false);
-  const ok = !!file && romFits(system, file.name, file.size) && title.trim().length > 0;
+  const [sent, setSent] = useState<[number, number] | null>(null);
+  const [stopped, setStopped] = useState(false);
+  const stop = useRef<AbortController | null>(null);
+  const [picker, setPicker] = useState(0); // (a new file input once a game's in)
+  const disc = isDiscSystem(system);
+  const file = files[0] ?? null;
+  const why = disc
+    ? discFits(system, files).why
+    : file && !romFits(system, file.name, file.size)
+      ? t("wrongFile")
+      : null;
+  const ok = files.length > 0 && !why && title.trim().length > 0;
   const guessed = useMemo(() => file?.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ") ?? "", [file]);
+  const done = () => {
+    toast(t(disc ? "addedDisc" : "added"));
+    setFiles([]);
+    setTitle("");
+    setSent(null);
+    setPicker((n) => n + 1);
+    onDone();
+  };
+  const go = () => {
+    if (!ok) return;
+    setBusy(true);
+    setStopped(false);
+    if (!disc && file) {
+      void upload(spaceId, { file, system, title: title.trim(), color, players })
+        .then(done)
+        .catch((err: Error) => toast(err.message, "warn"))
+        .finally(() => setBusy(false));
+      return;
+    }
+    const ctl = new AbortController();
+    stop.current = ctl;
+    void bringGame(
+      spaceId,
+      { files, system, title: title.trim(), color, players },
+      (a, b) => setSent([a, b]),
+      ctl.signal,
+    )
+      .then(done)
+      .catch((err: Error) => {
+        if (ctl.signal.aborted) setStopped(true);
+        else {
+          toast(err.message, "warn");
+          setSent(null);
+        }
+      })
+      .finally(() => setBusy(false));
+  };
   return (
     <details className="rounded-md px-2.5 py-2" style={{ background: "#120d0a", border: "1px dashed #3a2c1f" }}>
       <summary className="text-xs font-semibold cursor-pointer" style={{ color: "var(--cream)" }}>
-        + {t("bring")}
+        + {t(discs ? "bringDisc" : "bring")}
       </summary>
       <p className="text-[11px] mt-1.5" style={{ color: "var(--muted)" }}>
-        {t("bringHint")}
+        {t(discs ? "discHint" : "bringHint")}
       </p>
       <form
         className="grid sm:grid-cols-2 gap-2 mt-2 text-xs"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!file || !ok) return;
-          setBusy(true);
-          void upload(spaceId, { file, system, title: title.trim(), color, players })
-            .then(() => {
-              toast(t("added"));
-              setFile(null);
-              setTitle("");
-              onDone();
-            })
-            .catch((err: Error) => toast(err.message, "warn"))
-            .finally(() => setBusy(false));
+          go();
         }}
       >
         <label className="flex flex-col gap-1">
-          <span style={{ color: "var(--muted)" }}>{t("file")}</span>
+          <span style={{ color: "var(--muted)" }}>{t(disc ? "discFiles" : "file")}</span>
           <input
+            key={picker}
             type="file"
-            accept={Object.values(SYSTEMS)
-              .flatMap((s) => s.ext.map((x) => `.${x}`))
-              .join(",")}
+            multiple={disc}
+            disabled={busy}
+            accept={choices.flatMap((k) => SYSTEMS[k].ext.map((x) => `.${x}`)).join(",")}
             onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              setFile(f);
-              if (f && !title)
+              const fs = [...(e.target.files ?? [])];
+              setFiles(fs);
+              setSent(null);
+              setStopped(false);
+              const main = fs.find((f) => /\.(cue|chd|pbp|iso)$/i.test(f.name)) ?? fs[0];
+              if (main && !title)
                 setTitle(
-                  f.name
+                  main.name
                     .replace(/\.[^.]+$/, "")
                     .replace(/[_-]+/g, " ")
                     .slice(0, 60),
@@ -822,7 +1098,7 @@ function Upload({ t, spaceId, fixed, onDone }: { t: TFn; spaceId: number; fixed?
             }}
           />
         </label>
-        {!fixed ? (
+        {!fixed && choices.length > 1 ? (
           <label className="flex flex-col gap-1">
             <span style={{ color: "var(--muted)" }}>{t("console")}</span>
             <select
@@ -830,9 +1106,9 @@ function Upload({ t, spaceId, fixed, onDone }: { t: TFn; spaceId: number; fixed?
               onChange={(e) => setSystem(e.target.value as GameSystem)}
               className="text-black rounded px-1 py-0.5"
             >
-              {Object.entries(SYSTEMS).map(([k, s]) => (
+              {choices.map((k) => (
                 <option key={k} value={k}>
-                  {s.label}
+                  {SYSTEMS[k].label}
                 </option>
               ))}
             </select>
@@ -883,13 +1159,41 @@ function Upload({ t, spaceId, fixed, onDone }: { t: TFn; spaceId: number; fixed?
             ))}
           </select>
         </label>
+        {disc && sent ? (
+          <div className="sm:col-span-2 flex flex-col gap-1" data-testid="upload-progress">
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#2a1f16" }}>
+              <div
+                className="h-full"
+                style={{ width: `${(100 * sent[0]) / Math.max(1, sent[1])}%`, background: "var(--amber, #ffa630)" }}
+              />
+            </div>
+            <span className="mono text-[11px]" style={{ color: "var(--cream-dim)" }}>
+              {stopped
+                ? t("upPaused")
+                : sent[0] >= sent[1]
+                  ? t("finishing")
+                  : t("sending", { done: mb(sent[0]), total: mb(sent[1]) })}
+            </span>
+          </div>
+        ) : null}
         <div className="sm:col-span-2 flex items-center gap-2">
-          <button type="submit" className="deck-btn" style={{ height: 30, fontSize: 11 }} disabled={!ok || busy}>
-            {t("add")}
-          </button>
-          {file && !romFits(system, file.name, file.size) ? (
+          {busy && disc ? (
+            <button
+              type="button"
+              className="deck-btn"
+              style={{ height: 30, fontSize: 11 }}
+              onClick={() => stop.current?.abort()}
+            >
+              {t("pause")}
+            </button>
+          ) : (
+            <button type="submit" className="deck-btn" style={{ height: 30, fontSize: 11 }} disabled={!ok || busy}>
+              {stopped ? t("carryOnUp") : t(disc ? "addDisc" : "add")}
+            </button>
+          )}
+          {files.length && why ? (
             <span className="text-[11px]" style={{ color: "#e79a7c" }}>
-              {t("wrongFile")}
+              {why}
             </span>
           ) : null}
         </div>
@@ -898,11 +1202,88 @@ function Upload({ t, spaceId, fixed, onDone }: { t: TFn; spaceId: number; fixed?
   );
 }
 
+// The disc console's BIOS in this space: which there are, bring one (a dump of
+// a console you own; Yondra only takes known retail ones), take yours away.
+function Bios({ t, spaceId }: { t: TFn; spaceId: number }) {
+  const [list, setList] = useState<BiosInfo[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const reload = () =>
+    void listBios(spaceId)
+      .then(setList)
+      .catch(() => setList([]));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per space
+  useEffect(reload, [spaceId]);
+  return (
+    <div
+      className="rounded-md px-2.5 py-2 flex flex-col gap-1.5"
+      style={{ background: "#120d0a", border: "1px solid #3a2c1f" }}
+    >
+      <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
+        {t("bios")}
+      </p>
+      {list?.length ? (
+        <ul className="flex flex-col gap-1" data-testid="bios-list">
+          {list.map((b) => (
+            <li key={b.id} className="flex items-center gap-2 text-xs" style={{ color: "var(--cream)" }}>
+              <span className="mono">✓ {b.model}</span>
+              <span style={{ color: "var(--muted)" }}>
+                · {b.region} · v{b.version}
+                {b.mine ? ` · ${t("biosWho")}` : ""}
+              </span>
+              {b.mine ? (
+                <button
+                  type="button"
+                  className="ghost-btn text-xs ml-auto"
+                  onClick={() => void removeBios(spaceId, b.id).then(reload, (e: Error) => toast(e.message, "warn"))}
+                >
+                  {t("remove")}
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : list ? (
+        <p className="text-[11px]" style={{ color: "#e79a7c" }}>
+          {t("needsBios")}
+        </p>
+      ) : null}
+      {list?.length ? (
+        <p className="text-[11px]" style={{ color: "var(--muted)" }}>
+          {t("biosRegions")}
+        </p>
+      ) : null}
+      <label className="text-xs flex items-center gap-2" style={{ color: "var(--cream)" }}>
+        <span className="font-semibold">+ {t(list?.length ? "bringMoreBios" : "bringBios")}</span>
+        <input
+          type="file"
+          accept=".bin,.BIN"
+          disabled={busy}
+          data-testid="bios-file"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (!f) return;
+            setBusy(true);
+            void bringBios(spaceId, f)
+              .then((b) => {
+                toast(t("biosAdded", { model: b.model }));
+                reload();
+              })
+              .catch((err: Error) => toast(err.message, "warn"))
+              .finally(() => setBusy(false));
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
 // The shelf: everything in the library, by console; bring one, take yours away.
 function Shelf({
   t,
   games,
   spaceId,
+  discs,
   onChange,
   onClose,
   closeLabel,
@@ -910,6 +1291,7 @@ function Shelf({
   t: TFn;
   games: Cartridge[] | null;
   spaceId: number;
+  discs: boolean; // the disc rack (else the cartridge shelf)
   onChange: () => void;
   onClose: () => void;
   closeLabel: string;
@@ -918,7 +1300,7 @@ function Shelf({
     <div className="cabinet rise px-3 py-2.5 flex flex-col gap-2 my-auto">
       <header className="flex items-center gap-2">
         <div className="vfd-window px-3 py-1">
-          <h2 className="lcd text-lg">{t("shelf").toUpperCase()}</h2>
+          <h2 className="lcd text-lg">{t(discs ? "rack" : "shelf").toUpperCase()}</h2>
         </div>
         <button type="button" className="ghost-btn ml-auto" onClick={onClose} aria-label={closeLabel}>
           ✕ <span className="hidden sm:inline">Esc</span>
@@ -926,14 +1308,15 @@ function Shelf({
       </header>
       <CartList
         t={t}
-        games={games ?? []}
+        games={(games ?? []).filter((g) => isDiscSystem(g.system) === discs)}
         onRemove={(g) =>
           void removeGame(spaceId, g.id)
             .then(onChange)
             .catch(() => toast("—", "warn"))
         }
       />
-      <Upload t={t} spaceId={spaceId} onDone={onChange} />
+      <Upload t={t} spaceId={spaceId} discs={discs} fixed={discs ? DISC_SYSTEMS[0] : undefined} onDone={onChange} />
+      {discs ? <Bios t={t} spaceId={spaceId} /> : null}
     </div>
   );
 }

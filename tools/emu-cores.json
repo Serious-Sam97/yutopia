@@ -46,6 +46,15 @@
       "from": "zip",
       "url": "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@v1.22.2/retroarch/gambatte_libretro.zip",
       "sha256": "a4c40420e8997fb35fe1054452b52c965cc8dd0ab202908e4609f72d560cf5a3"
+    },
+    {
+      "core": "pcsx_rearmed",
+      "systems": ["ps1"],
+      "license": "GPL-2.0-only",
+      "source": "https://github.com/libretro/pcsx_rearmed",
+      "from": "zip",
+      "url": "https://cdn.jsdelivr.net/gh/arianrhodsandlot/retroarch-emscripten-build@v1.22.2/retroarch/pcsx_rearmed_libretro.zip",
+      "sha256": "4c058822c08d38df709e8a03a0e3a4209d178bada0478996a46d2cf058d6a530"
     }
   ],
   "frontend": {

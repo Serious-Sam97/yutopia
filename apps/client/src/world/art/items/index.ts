@@ -6,7 +6,18 @@ import { dressing } from "./clutter";
 import { computer } from "./computer";
 import { desk } from "./desk";
 import { door, rug, standupMat } from "./door";
-import { cartShelf, console2600, consoleGb, consoleMd, consoleNes, consoleSnes, crtTv } from "./games";
+import {
+  cartShelf,
+  console2600,
+  consoleGb,
+  consoleMd,
+  consoleNes,
+  consolePs1,
+  consolePs1Slim,
+  consoleSnes,
+  crtTv,
+  discRack,
+} from "./games";
 import { pingpongTable, poolTable } from "./gametables";
 import { beanbag, bookcase, clock, counter, lightSwitch, neon, partition } from "./home";
 import { type Clip, type Group, type ItemArt, Sketch, seedOf } from "./kit";
@@ -48,6 +59,8 @@ const painted = (p: Props) => (typeof p.color === "string" ? p.color : "");
 const sitPaint = (p: Props) => `${occupied(p)}|${painted(p)}`;
 // a console's cartridge (its label colour)
 const cart = (p: Props) => (p.cart ? String(p.cartColor ?? "c") : "");
+// a disc console: its disc, the lid, the memory card, the LED
+const disc = (p: Props) => `${cart(p)}${p.lid === "open" ? "o" : ""}${p.card ? "m" : ""}${p.on ? "1" : ""}`;
 
 const GENS: Record<string, ItemGen> = {
   desk: { draw: desk, variants: 4 },
@@ -82,6 +95,9 @@ const GENS: Record<string, ItemGen> = {
   console_md: { draw: consoleMd, variants: 1, key: cart },
   console_gb: { draw: consoleGb, variants: 1, key: cart },
   cart_shelf: { draw: cartShelf, variants: 1 },
+  console_ps1: { draw: consolePs1, variants: 1, key: disc },
+  console_ps1_slim: { draw: consolePs1Slim, variants: 2, key: disc },
+  disc_rack: { draw: discRack, variants: 2 },
   turntable: { draw: turntable, variants: 1, key: (p) => (p.on ? "on" : "off") },
   bench: { draw: bench, variants: 1 },
   meeting_table: { draw: meetingTable, variants: 1 },

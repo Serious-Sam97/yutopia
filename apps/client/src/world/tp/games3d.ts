@@ -12,6 +12,7 @@ import {
   Vector3,
 } from "three";
 import { zt } from "./kit3d";
+import { type PadLook, ps1Pad } from "./pads3d";
 
 // The game room in 3D (world/games/room.ts draws the same in iso): consoles'
 // cables to their TVs, the pads — lying by the console, or in a player's hands
@@ -20,8 +21,17 @@ import { zt } from "./kit3d";
 type P = { x: number; y: number };
 export interface GameScene3 {
   cables: { from: P; to: P; up: number }[]; // up: iso px it climbs at the end (a wall TV's screen)
-  pads: { key: string; system: string; port: number; cord: P; rest: P; holder: string | null; sitting: boolean }[];
-  leds: P[];
+  pads: {
+    key: string;
+    system: string;
+    port: number;
+    cord: P;
+    rest: P;
+    holder: string | null;
+    sitting: boolean;
+    analog?: boolean; // its LED lit (the disc console's pad)
+  }[];
+  leds: (P & { h?: number; color?: number })[]; // h: tiles up (default: a front LED's)
 }
 
 // where hands are, iso px up (the 3D drawings stand taller than iso's 30 / 21)
@@ -35,6 +45,7 @@ const PADS: Record<string, { color: number; w: number; d: number }> = {
   "2600": { color: 0x1c1a18, w: 0.12, d: 0.12 },
   nes: { color: 0xbdb8ae, w: 0.17, d: 0.075 },
   gb: { color: 0x8d877a, w: 0.17, d: 0.075 },
+  ps1: { color: 0xb9b6af, w: 0.21, d: 0.1 },
   snes: { color: 0xc7c3bb, w: 0.19, d: 0.085 },
   md: { color: 0x1c1b1a, w: 0.18, d: 0.09 },
 };
@@ -48,6 +59,9 @@ export class GamesIn3D {
   readonly root = new Group();
   private dark: MeshLambertMaterial;
   private red = new MeshBasicMaterial({ color: 0xff4a2a, toneMapped: false });
+  private green = new MeshBasicMaterial({ color: 0x7dff7a, toneMapped: false });
+  private ledOff = new MeshLambertMaterial({ color: 0x4a1d18 });
+  private padLook: PadLook | null = null; // the disc console's pad's materials
   private padMats = new Map<string, MeshLambertMaterial>();
   private tubes: Tube[] = [];
   private pads = new Map<string, { g: Group; system: string }>();
@@ -105,6 +119,8 @@ export class GamesIn3D {
         this.pads.set(p.key, v);
         this.root.add(v.g);
       }
+      const led = v.g.getObjectByName("led") as Mesh | undefined;
+      if (led) led.material = p.analog ? this.red : this.ledOff;
       const at = p.holder ? hand(p.holder, p.port, p.sitting) : null;
       if (at) {
         v.g.position.copy(at);
@@ -134,7 +150,8 @@ export class GamesIn3D {
         this.leds.push(m);
       }
       m.visible = true;
-      m.position.set(l.x, 0.045, l.y);
+      m.material = l.color === 0x7dff7a ? this.green : this.red;
+      m.position.set(l.x, l.h ?? 0.045, l.y);
     });
     for (let i = s.leds.length; i < this.leds.length; i++) this.leds[i].visible = false;
   }
@@ -142,6 +159,15 @@ export class GamesIn3D {
   // a pad: its body, a dark strip, two red buttons (a stick on the 2600's)
   private padMesh(system: string): Group {
     const spec = PADS[system] ?? PADS.nes;
+    if (system === "ps1") {
+      this.padLook ??= {
+        body: this.lit(spec.color),
+        dark: this.dark,
+        colors: [this.lit(0x5fae8a), this.lit(0xd0524a), this.lit(0x6f8fd0), this.lit(0xd889b8)],
+        led: this.red,
+      };
+      return ps1Pad(this.padLook, spec.w);
+    }
     let body = this.padMats.get(system);
     if (!body) {
       body = this.lit(spec.color);
@@ -170,6 +196,9 @@ export class GamesIn3D {
     this.ledGeo.dispose();
     this.dark.dispose();
     this.red.dispose();
+    this.green.dispose();
+    this.ledOff.dispose();
+    if (this.padLook) for (const m of [this.padLook.body, ...this.padLook.colors]) m.dispose();
     for (const m of this.padMats.values()) m.dispose();
   }
 }

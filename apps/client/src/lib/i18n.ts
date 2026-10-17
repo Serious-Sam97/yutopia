@@ -86,6 +86,7 @@ const D = {
   myLook: ["My look", "Meu visual"],
   lookNotSaved: ["Couldn't save your look. Try again.", "Não deu para salvar seu visual. Tente de novo."],
   editLook: ["Change my look", "Mudar meu visual"],
+  controllers: ["Controllers", "Controles"],
   gender: ["Gender", "Gênero"],
   gender_neutral: ["Neutral", "Neutro"],
   gender_feminine: ["Feminine", "Feminino"],

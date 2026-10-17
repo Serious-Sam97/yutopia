@@ -5,10 +5,13 @@ import {
   GAME_ID,
   gap,
   isConsole,
+  isDiscSystem,
   isGameTv,
   MAX_LIVE_TVS,
+  PAD_BITS_MAX,
   PAD_REACH,
   SYSTEMS,
+  sticksFit,
   TV_INPUTS,
 } from "@yutopia/shared/games";
 import { builtinGame } from "@yutopia/shared/library";
@@ -126,16 +129,28 @@ registerFeature((room: SpaceRoom) => {
     const o = consoleAt(client, m?.id);
     if (!o) return;
     if (consoles.has(o.id)) return warn(client, "Turn it off first.");
-    const { cart: _a, cartColor: _b, cartTitle: _c, ...rest } = o.props ?? {};
-    if (m.game === null) return save({ ...o, props: rest });
+    const disc = isDiscSystem(CONSOLES[o.kind]);
+    const what = disc ? "disc" : "cartridge";
+    const { cart: _a, cartColor: _b, cartTitle: _c, lid: _d, ...rest } = o.props ?? {};
+    // a disc goes in (or out) with the lid up a moment
+    const lidUp = async (props: Record<string, unknown>) => {
+      await save({ ...o, props: { ...props, lid: "open" } });
+      setTimeout(() => {
+        const now = obj(o.id);
+        if (now && now.props?.lid === "open" && now.props?.cart === props.cart && !consoles.has(o.id))
+          void save({ ...now, props: { ...(now.props ?? {}), lid: "closed" } });
+      }, 1400);
+    };
+    if (m.game === null) return disc ? lidUp(rest) : save({ ...o, props: rest });
     const id = String(m.game ?? "");
     if (!GAME_ID.test(id)) return;
     let game: { system: string; title: string; color: string } | undefined = builtinGame(id);
     if (!game && id.startsWith("u:") && !config.offline)
       game = (await yondra.game(room.spaceId, Number(id.slice(2))).catch(() => null))?.game;
-    if (!game) return warn(client, "That cartridge isn't on the shelf.");
-    if (game.system !== CONSOLES[o.kind]) return warn(client, "That cartridge doesn't fit this console.");
-    await save({ ...o, props: { ...rest, cart: id, cartColor: game.color, cartTitle: game.title.slice(0, 60) } });
+    if (!game) return warn(client, `That ${what} isn't ${disc ? "in the rack" : "on the shelf"}.`);
+    if (game.system !== CONSOLES[o.kind]) return warn(client, `That ${what} doesn't fit this console.`);
+    const props = { ...rest, cart: id, cartColor: game.color, cartTitle: game.title.slice(0, 60) };
+    await (disc ? lidUp(props) : save({ ...o, props }));
   });
 
   // A game runs in its host's browser, one at a time: starting another pauses
@@ -164,7 +179,8 @@ registerFeature((room: SpaceRoom) => {
     if (consoles.has(o.id)) return;
     const tv = tvOf(o);
     if (!tv || gap(rect(o), rect(tv)) > CABLE_REACH) return warn(client, "Plug it into a TV first.");
-    if (typeof o.props?.cart !== "string") return warn(client, "Put a cartridge in first.");
+    if (typeof o.props?.cart !== "string")
+      return warn(client, `Put a ${isDiscSystem(CONSOLES[o.kind]) ? "disc" : "cartridge"} in first.`);
     if ([...consoles.values()].filter((c) => c.host && c.host !== client.sessionId).length >= MAX_LIVE_TVS)
       return warn(client, "Too many TVs are on in this space right now.");
     pauseMine(client);
@@ -217,7 +233,8 @@ registerFeature((room: SpaceRoom) => {
     if (!c?.host || c.host === sid) return;
     const port = c.p1 === sid ? 1 : c.p2 === sid ? 2 : 0;
     const bits = Number(m.bits);
-    if (!port || !Number.isInteger(bits) || bits < 0 || bits > 0xfff) return;
+    if (!port || !Number.isInteger(bits) || bits < 0 || bits > PAD_BITS_MAX) return;
+    if (m.sticks !== undefined && !sticksFit(m.sticks)) return;
     const now = Date.now();
     const b = budget.get(sid) ?? { n: 0, at: now };
     if (now - b.at > 1000) {
@@ -227,7 +244,16 @@ registerFeature((room: SpaceRoom) => {
     if (++b.n > PADS_PER_SECOND) return;
     budget.set(sid, b);
     const host = clientOf(c.host);
-    if (host) room.send(host, "game:pad", { id: String(m.id), port, bits });
+    if (host) room.send(host, "game:pad", { id: String(m.id), port, bits, ...(m.sticks ? { sticks: m.sticks } : {}) });
+  });
+
+  // a pad's analog mode, as its holder switched it (shown on the pad, for everyone)
+  room.on("game:analog", (client, m) => {
+    const c = consoles.get(String(m?.id ?? ""));
+    const sid = client.sessionId;
+    if (!c) return;
+    if (c.p1 === sid) c.a1 = !!m.on;
+    else if (c.p2 === sid) c.a2 = !!m.on;
   });
 
   room.on("game:live", (client, m) => {
@@ -240,6 +266,9 @@ registerFeature((room: SpaceRoom) => {
     const o = consoleAt(client, m?.id);
     const c = o && consoles.get(o.id);
     if (!o || !c || c.host) return;
+    // (a new host's core starts with its pads digital again)
+    c.a1 = false;
+    c.a2 = false;
     pauseMine(client);
     const sid = client.sessionId;
     c.host = sid;

@@ -129,6 +129,9 @@ export function SettingsPanel() {
         <button type="button" className="deck-btn w-full" onClick={() => hud.set({ panel: { kind: "avatar" } })}>
           {t("editLook")}
         </button>
+        <button type="button" className="deck-btn w-full" onClick={() => hud.set({ panel: { kind: "pads" } })}>
+          🎮 {t("controllers")}
+        </button>
         <section className="space-y-2">
           <h3 className="mono text-xs uppercase tracking-widest" style={{ color: "var(--vfd)" }}>
             {t("mixer")}

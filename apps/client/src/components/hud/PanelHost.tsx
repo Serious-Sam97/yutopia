@@ -1,11 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useHud } from "@/world/store";
+import { hud, useHud } from "@/world/store";
 import { extraPanels } from "./panels";
 
 const BoardPanel = dynamic(() => import("./BoardPanel").then((m) => m.BoardPanel), { ssr: false });
 const SettingsPanel = dynamic(() => import("./SettingsPanel").then((m) => m.SettingsPanel), { ssr: false });
+const ControllersPanel = dynamic(() => import("./ControllersPanel").then((m) => m.ControllersPanel), { ssr: false });
 
 // the avatar editor loads on demand (the world page is close to its size budget)
 const AvatarPanel = dynamic(() => import("./AvatarPanel").then((m) => m.AvatarPanel), { ssr: false });
@@ -15,6 +16,7 @@ export function PanelHost() {
   const panel = useHud((s) => s.panel);
   if (!panel.kind) return null;
   if (panel.kind === "settings") return <SettingsPanel />;
+  if (panel.kind === "pads") return <ControllersPanel onClose={() => hud.set({ panel: { kind: "settings" } })} />;
   if (panel.kind === "avatar") return <AvatarPanel />;
   if (panel.kind === "pets") return <PetPanel />;
   if (panel.kind === "board" || (panel.kind === "screen" && panel.objectId)) {

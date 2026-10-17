@@ -54,6 +54,7 @@ import { emoteUrl } from "../art/emotes";
 import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
+import { activePad } from "../pads";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
@@ -188,6 +189,7 @@ export class ThirdPersonView {
   hour = 12;
   private target = new Vector3();
   private targetReady = false;
+  padFree = true; // the gamepad moves me and the camera (not while it plays a console)
   private eyeY = EYE_1P; // first person: the eyes' height (eases sitting down / getting up)
   private meId = "";
   private dragged = -10; // time of the last manual turn
@@ -763,7 +765,7 @@ export class ThirdPersonView {
     if (k.has("KeyD") || k.has("ArrowRight")) r += 1;
     if (k.has("KeyA") || k.has("ArrowLeft")) r -= 1;
     let run = k.has("ShiftLeft") || k.has("ShiftRight");
-    const pad = navigator.getGamepads?.()[0];
+    const pad = this.padFree ? activePad() : null;
     if (pad) {
       const [lx = 0, ly = 0] = pad.axes;
       if (Math.hypot(lx, ly) > 0.18) {
@@ -812,7 +814,7 @@ export class ThirdPersonView {
   frame(dt: number, bodies: Body3[], meId: string) {
     this.time += dt;
     const me = bodies.find((b) => b.id === meId);
-    const pad = navigator.getGamepads?.()[0];
+    const pad = this.padFree ? activePad() : null;
     // look around: Q / E, the right stick
     let turn = 0;
     if (this.opts.keys !== false) {

@@ -6,6 +6,7 @@ import {
   TILE_H,
   TILE_W,
   toScreen,
+  variantOf,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import {
@@ -14,11 +15,14 @@ import {
   GAME_ASPECT,
   type GameSystem,
   gap,
+  hasSticks,
   isConsole,
+  isDiscSystem,
   isGameTv,
   PAD_BUTTONS,
   PAD_REACH,
   SYSTEMS,
+  turnLocal,
 } from "@yutopia/shared/games";
 import { displaySpot, GLASS, glassCorners, glassFacing, tvInput, tvVolume } from "@yutopia/shared/media";
 import { Container, Graphics, Matrix, Sprite, Text, Texture } from "pixi.js";
@@ -27,9 +31,11 @@ import { glowSprite, placeGlow } from "../art/glow";
 import type { WorldController } from "../controller";
 import { type GameView, hud, toast } from "../store";
 import type { GameScene3 } from "../tp/games3d";
-import { loadSave, putSave, romOf } from "./api";
+import { biosFiles, library, listBios, loadSave, putSave, romOf } from "./api";
 import { type Emu, startEmu } from "./emu";
-import { gamepadBits, keyBits } from "./input";
+import * as sound from "./foley";
+import { myGamepad, readPad } from "./input";
+import { biosFits, discRegion, hasBootLogo, ntsc, REGION_BIOS, REGION_NAMES, type Region, relicense } from "./region";
 import { TvStream } from "./tv";
 
 // The game room, live (lazy chunk with the emulator, loaded once a space has a
@@ -49,10 +55,47 @@ import { TvStream } from "./tv";
 type S = any;
 
 const AUTOSAVE_MS = 45_000;
+const MIN_HOLD_MS = 80;
+// The slim disc console's flip-up screen (its variant 1): where its glass is
+// (rot-0 local tiles on its front face, height in px; art/items/games.ts)
+const LCD = { x0: 0.29, x1: 0.65, y: 0.336, z0: 5.8, z1: 16.8 };
+// (the art's seed for an id: kit.ts's seedOf, here so the item art's chunk isn't pulled in)
+function seedOf(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+const hasLcd = (o: WorldObjectDef) => o.kind === "console_ps1_slim" && variantOf(o, seedOf(o.id)) === 1;
+type Corners = { tl: [number, number]; tr: [number, number]; zTop: number; zBot: number };
+interface LcdView {
+  root: Container;
+  pic: Sprite;
+  frame: HTMLCanvasElement;
+  source: HTMLVideoElement | HTMLCanvasElement | null;
+  at: Corners | null; // (shown: where, for the 3D view)
+} // a remote press lasts at least this (a few emulator frames)
 const PAD_Z_STAND = 30; // px: where hands are, standing / sitting
 const PAD_Z_SIT = 21;
 const INK = 0x2a1a12;
 const SKIP_KEYS = new Set(["Escape", "Tab"]);
+// Where a console's power LED is (rot-0 local tiles, height in px) and its
+// colour: on the front of the cartridge consoles, on the top of the disc ones
+// (where their drawings put it, art/items/games.ts).
+const LED: Record<string, { at: [number, number]; z: number; color: number }> = {
+  console_ps1: { at: [0.7, 0.545], z: 4.5, color: 0x7dff7a },
+  console_ps1_slim: { at: [0.71, 0.67], z: 3.7, color: 0x7dff7a },
+};
+const LED_FRONT = { at: [0.3, 0.74] as [number, number], z: 2, color: 0xff6a3a };
+// iso px of height → tiles, as tp/kit3d's zt (not imported: that's three.js's chunk)
+const zt = (z: number) => z / (45.25 * Math.cos(Math.PI / 6));
+const ledOf = (o: WorldObjectDef) => {
+  const l = LED[o.kind] ?? LED_FRONT;
+  const [x, y] = turnLocal(l.at[0], l.at[1], o.rot ?? 0, 1, 1);
+  return { x: o.x + x, y: o.y + y, z: l.z, color: l.color };
+};
 
 interface Hosting {
   id: string;
@@ -65,6 +108,8 @@ interface Hosting {
   view: HTMLVideoElement | null; // the host's own big picture (the canvas's stream)
   remote: Map<number, number>; // port → the buttons it holds (bits)
   local: number;
+  localSticks: string; // (what my sticks last were, to only pass changes on)
+  analog: [boolean, boolean]; // each pad's analog mode in the core (they start digital)
   saveAt: number;
   stopped: boolean;
 }
@@ -93,6 +138,7 @@ export class GameRoom {
   private videoHolder: HTMLDivElement; // tiny, on screen: TV videos (LiveKit plays what's visible)
   private videoCss = document.createElement("style");
   private hosting: Hosting | null = null;
+  private loading: [string, number, number] | null = null; // my disc coming down: console, bytes, of
   private keys = new Set<string>();
   private sentBits = 0;
   private focus: string | null = null; // the console / TV whose panel is open
@@ -235,6 +281,8 @@ export class GameRoom {
     this.pad();
     this.hostVolume(me);
     this.drawTvs(me);
+    this.drawLcds();
+    this.foley(me);
     this.drawConsoles();
     this.publish(pk.kind === "console" || pk.kind === "tv" ? (pk.objectId ?? null) : null, me);
   }
@@ -257,6 +305,12 @@ export class GameRoom {
   }
 
   // I hold a pad somewhere (shown with it in my hands).
+  // My pad's in use: I hold one and its console's panel is open (the keyboard
+  // and the gamepad play the game, not the world).
+  playing(): boolean {
+    return !!this.myPad();
+  }
+
   atPad(): boolean {
     const sid = this.mySid;
     for (const c of this.state?.consoles?.values() ?? []) if (c.p1 === sid || c.p2 === sid) return true;
@@ -321,28 +375,86 @@ export class GameRoom {
       view: null,
       remote: new Map(),
       local: 0,
+      localSticks: "",
+      analog: [false, false],
       saveAt: performance.now() + AUTOSAVE_MS,
       stopped: false,
     };
     this.hosting = h;
     const spaceId = hud.get().spaceId;
     try {
-      const [{ blob, name }, sram, state] = await Promise.all([
-        romOf(spaceId, c.game, system),
+      // the disc console needs the team's BIOS (the panel says so before it's
+      // turned on; this is for whoever carries on). The dev stack's test BIOS
+      // isn't one a core can run: with it, the core's stand-in (HLE) boots.
+      const all = isDiscSystem(system) ? await listBios(spaceId).catch(() => []) : [];
+      if (isDiscSystem(system) && !all.length) {
+        toast("This console needs its BIOS: bring one to the disc rack.", "warn");
+        this.w.send("game:power", { id, on: false });
+        return;
+      }
+      // (an uploaded disc: its files and hash, from the library; it comes down
+      // once per computer, the panel shows how far)
+      const game = c.game.startsWith("u:") ? (await library(spaceId)).find((g) => g.id === c.game) : undefined;
+      const [{ blob: rom, name, more: tracks }, sram, state] = await Promise.all([
+        romOf(spaceId, c.game, system, {
+          game,
+          onProgress: (done, total) => {
+            this.loading = total > 32 * 1024 * 1024 && done < total ? [id, done, total] : null;
+          },
+        }),
         loadSave(spaceId, c.game, "sram"),
         c.resumes > 0 ? loadSave(spaceId, c.game, "state") : Promise.resolve(null),
-      ]);
+      ]).finally(() => {
+        this.loading = null;
+      });
+      // Through the BIOS (its start-up logo) with one of the disc's region: a
+      // BIOS of another region shows its own menu instead, as the console
+      // would — so for a USA / Japan disc and a BIOS of the other one, the core
+      // gets the disc as a modded console reads it (region.ts relicense). Else
+      // (a European disc and no European BIOS, or a disc without the logo's
+      // data, like our test card) the core starts the disc itself.
+      let bios: File[] | undefined;
+      let logo = false;
+      let blob: Blob = rom;
+      let more = tracks;
+      if (isDiscSystem(system)) {
+        const real = all.filter((b) => b.model !== "Test BIOS");
+        const files = [{ name, blob: rom }, ...tracks.map((f) => ({ name: f.name, blob: f as Blob }))];
+        const [region, drawn] = await Promise.all([
+          discRegion(files).catch(() => null),
+          hasBootLogo(files).catch(() => false),
+        ]);
+        const fits = drawn ? real.find((b) => biosFits(b.region, region)) : undefined;
+        const other = drawn && !fits && ntsc(region) ? real.find((b) => ntsc(b.region)) : undefined;
+        if (other) {
+          const moved = await relicense(files, other.region as Region).catch(() => files);
+          blob = moved[0].blob;
+          more = moved.slice(1).map((f) => f.blob as File);
+        }
+        logo = !!(fits ?? other);
+        if (!logo && drawn && region && real.length)
+          toast(
+            `No ${REGION_NAMES[region]} BIOS in this space: the game starts without the PlayStation logo. Bring one (${REGION_BIOS[region]}) to the disc rack for it.`,
+          );
+        bios = await biosFiles(spaceId, fits ? [fits] : other ? [other] : real);
+      }
       if (h.stopped) return;
       h.emu = await startEmu({
         system,
         rom: blob,
         romName: name,
+        more,
+        bios,
+        ...(isDiscSystem(system)
+          ? { coreConfig: { pcsx_rearmed_show_bios_bootlogo: logo ? "enabled" : "disabled" } }
+          : {}),
         canvas,
         sram,
         state,
         worldAudio: this.w.media.audioContext(),
       });
       if (h.stopped) return h.emu.exit();
+      h.emu.onRumble(this.rumble);
       h.stream = canvas.captureStream(30);
       this.w.send("game:tv", { id });
     } catch (e) {
@@ -413,13 +525,38 @@ export class GameRoom {
   }
 
   // Another player's pad: what changed goes into the emulator.
+  // (a press and its release can arrive together — a quick tap, a busy
+  // line: the press is held a few frames first, or the core never sees it)
+  private pressedAt = new Map<number, number[]>(); // port → when each button went down
   onPad(m: ServerMessages["game:pad"]) {
     const h = this.hosting;
     if (!h?.emu || h.id !== m.id) return;
     const before = h.remote.get(m.port) ?? 0;
-    this.apply(h, m.port, before, m.bits);
-    h.remote.set(m.port, m.bits);
+    const now = performance.now();
+    const at = this.pressedAt.get(m.port) ?? [];
+    this.pressedAt.set(m.port, at);
+    let early = 0;
+    PAD_BUTTONS.forEach((_, i) => {
+      const b = 1 << i;
+      if (m.bits & b && !(before & b)) at[i] = now;
+      else if (before & b && !(m.bits & b) && now - (at[i] ?? 0) < MIN_HOLD_MS) early |= b;
+    });
+    const bits = m.bits | early;
+    this.apply(h, m.port, before, bits);
+    h.remote.set(m.port, bits);
+    this.holding.set(m.port, m.bits);
+    if (early)
+      setTimeout(() => {
+        if (this.hosting !== h || !h.emu) return;
+        // the held-on ones go now, unless the player's pressed them again since
+        const cur = h.remote.get(m.port) ?? 0;
+        const next = cur & ~(early & ~(this.holding.get(m.port) ?? 0));
+        this.apply(h, m.port, cur, next);
+        h.remote.set(m.port, next);
+      }, MIN_HOLD_MS);
+    if (m.sticks) h.emu.sticks(m.port, m.sticks);
   }
+  private holding = new Map<number, number>(); // port → what its player really holds now
 
   private apply(h: Hosting, port: number, before: number, after: number) {
     const changed = before ^ after;
@@ -454,28 +591,81 @@ export class GameRoom {
 
   // the panel's on-screen pad (phones)
   private touchBits = 0;
-  touch(bits: number) {
+  private touchSticks: [number, number, number, number] = [0, 0, 0, 0];
+  touch(bits: number, sticks?: [number, number, number, number]) {
     this.touchBits = bits;
+    if (sticks) this.touchSticks = sticks;
   }
 
+  // The disc console's analog mode, for my pad: the server's told (the pad's
+  // LED, for everyone); whoever runs it switches the core's pad to match.
+  analog(id: string) {
+    const p = this.myPad();
+    const c = this.consoleOf(id);
+    if (!p || p.id !== id || !c || !hasSticks(p.system)) return;
+    this.w.send("game:analog", { id, on: !(p.port === 1 ? c.a1 : c.a2) });
+  }
+  // (hosting: each pad's mode in the core, as the console's state says)
+  private syncAnalog(h: Hosting) {
+    const c = this.consoleOf(h.id);
+    if (!c || !h.emu || !hasSticks(h.system)) return;
+    for (const [i, want] of [!!c.a1, !!c.a2].entries()) {
+      if (h.analog[i] === want) continue;
+      h.analog[i] = want;
+      h.emu.analog(i + 1);
+    }
+  }
+
+  private sentSticks = "";
   private pad() {
     const p = this.myPad();
-    const bits = p ? keyBits(p.system, this.keys) | gamepadBits(p.system) | this.touchBits : 0;
+    const read = p ? readPad(p.system, this.keys, this.touchBits) : null;
+    const bits = read?.bits ?? 0;
+    const sticks = read?.sticks ?? [0, 0, 0, 0];
+    for (let i = 0; i < 4; i++) sticks[i] = Math.max(-127, Math.min(127, sticks[i] + this.touchSticks[i]));
+    const sticky = !!p && hasSticks(p.system);
     const h = this.hosting;
+    if (h) this.syncAnalog(h);
     if (p && h && h.id === p.id) {
       this.apply(h, p.port, h.local, bits);
       h.local = bits;
+      const sig = sticky ? sticks.join(",") : "";
+      if (sig !== h.localSticks) {
+        h.localSticks = sig;
+        h.emu?.sticks(p.port, sticks);
+      }
       return;
     }
     if (h?.local) {
       this.apply(h, 1, h.local, 0);
       h.local = 0;
     }
-    if (bits !== this.sentBits) {
+    // to whoever runs it: on a change (sticks: past a small step, so a stick
+    // resting a hair off centre doesn't keep sending)
+    const near = (a: string, b: number[]) => {
+      const was = a ? a.split(",").map(Number) : [0, 0, 0, 0];
+      return b.every((v, i) => Math.abs(v - was[i]) < 4 && (v === 0) === (was[i] === 0));
+    };
+    const moved = sticky && !near(this.sentSticks, sticks);
+    if (bits !== this.sentBits || moved) {
       this.sentBits = bits;
-      if (p) this.w.send("game:pad", { id: p.id, bits });
+      if (moved) this.sentSticks = sticks.join(",");
+      if (p) this.w.send("game:pad", { id: p.id, bits, ...(sticky ? { sticks } : {}) });
     }
   }
+
+  // The core's rumble, on my own pad when it's mine (port 1 at the host).
+  private rumble = (port: number, r: { strong: number; weak: number; ms: number }) => {
+    const h = this.hosting;
+    const mine = this.myPad();
+    if (!h || !mine || mine.id !== h.id || mine.port !== port) return;
+    const gp = myGamepad() as
+      | (Gamepad & { vibrationActuator?: { playEffect(t: string, p: object): Promise<unknown> } })
+      | null;
+    void gp?.vibrationActuator
+      ?.playEffect("dual-rumble", { duration: r.ms || 200, strongMagnitude: r.strong, weakMagnitude: r.weak })
+      .catch(() => {});
+  };
 
   // ── drawing ──────────────────────────────────────────────────────────────
   // what a TV shows: the console on its input, if that's on
@@ -566,6 +756,97 @@ export class GameRoom {
     }
   }
 
+  // The disc consoles' sounds as their state changes (the lid up / down, on /
+  // off and the disc spinning), from where each one is. What's there when we
+  // first look is taken as it is (no sounds for a space just joined).
+  private heard = new Map<string, { lid: string; on: boolean }>();
+  private foley(me: { x: number; y: number }) {
+    const engine = this.engine;
+    if (!engine) return;
+    for (const o of engine.allObjects()) {
+      if (!isConsole(o.kind) || !isDiscSystem(CONSOLES[o.kind])) continue;
+      const now = { lid: String(o.props?.lid ?? ""), on: !!this.consoleOf(o.id) };
+      const was = this.heard.get(o.id);
+      this.heard.set(o.id, now);
+      if (!was) continue;
+      const g = hearingGain(
+        this.w.map,
+        { x: me.x, y: me.y, dnd: false },
+        { x: o.x + 0.5, y: o.y + 0.5, dnd: false },
+        true,
+      );
+      if (now.lid !== was.lid && (now.lid === "open" || was.lid === "open")) sound.lid(now.lid === "open", g);
+      if (now.on !== was.on) {
+        sound.power(g);
+        setTimeout(() => sound.spin(now.on, g), now.on ? 250 : 80);
+      }
+    }
+  }
+
+  // The slim console's own screen, flipped up: the game it's running — my
+  // emulator's picture, or the TV's video for everyone else — on its glass.
+  private lcds = new Map<string, LcdView>();
+  private drawLcds() {
+    const engine = this.engine;
+    if (!engine) return;
+    const seen = new Set<string>();
+    for (const o of engine.allObjects()) {
+      if (!hasLcd(o)) continue;
+      const c = this.consoleOf(o.id);
+      let src: HTMLVideoElement | HTMLCanvasElement | null = null;
+      if (c?.host) {
+        if (this.hosting?.id === o.id && this.hosting.emu) src = this.hosting.canvas;
+        else {
+          const el = this.w.tvVideos.get(`tv-${o.id}`) ?? null;
+          if (el && !el.isConnected) this.videoHolder.append(el);
+          src = el && el.readyState >= 2 ? el : null;
+        }
+      }
+      if (!src) continue;
+      seen.add(o.id);
+      let v = this.lcds.get(o.id);
+      if (!v) {
+        const root = new Container();
+        const pic = new Sprite(Texture.EMPTY);
+        root.addChild(pic);
+        engine.mountLive(root);
+        const frame = document.createElement("canvas");
+        frame.width = 320;
+        frame.height = 240;
+        v = { root, pic, frame, source: null, at: null };
+        this.lcds.set(o.id, v);
+      }
+      if (src !== v.source) {
+        v.source = src;
+        v.pic.texture = Texture.from(v.frame);
+      }
+      v.frame.getContext("2d")?.drawImage(src, 0, 0, v.frame.width, v.frame.height);
+      v.pic.texture.source.update();
+      // its glass, turned with the console
+      const rot = o.rot ?? 0;
+      const a = turnLocal(LCD.x0, LCD.y, rot, 1, 1);
+      const b = turnLocal(LCD.x1, LCD.y, rot, 1, 1);
+      v.at = { tl: [o.x + a[0], o.y + a[1]], tr: [o.x + b[0], o.y + b[1]], zTop: LCD.z1, zBot: LCD.z0 };
+      // iso: only when its glass faces the room (as the TVs')
+      const r = rot & 3;
+      v.root.visible = r === 0 || r === 3;
+      const tl = toScreen(v.at.tl[0], v.at.tl[1]);
+      const tr = toScreen(v.at.tr[0], v.at.tr[1]);
+      v.root.zIndex = (engine.frontKey(o.id) ?? o.x + o.y + 1) + 0.004;
+      v.root.setFromMatrix(
+        new Matrix((tr.x - tl.x) / 320, (tr.y - tl.y) / 320, 0, (LCD.z1 - LCD.z0) / 240, tl.x, tl.y - LCD.z1),
+      );
+      v.pic.width = 320;
+      v.pic.height = 240;
+      v.root.alpha = engine.partAlpha(o.id);
+    }
+    for (const [id, v] of this.lcds)
+      if (!seen.has(id)) {
+        v.root.destroy({ children: true });
+        this.lcds.delete(id);
+      }
+  }
+
   // the picture's average colour (8 × 6 pixels), a little brighter
   private average(src: HTMLVideoElement | HTMLCanvasElement, fallback: number): number {
     try {
@@ -638,9 +919,10 @@ export class GameRoom {
       }
       // the power LED
       if (c) {
-        const led = toScreen(o.x + 0.3, o.y + 0.74);
-        g.circle(led.x, led.y - 2, 1.6).fill({ color: 0xff4a2a, alpha: 0.35 });
-        g.circle(led.x, led.y - 2, 0.8).fill(0xff6a3a);
+        const l = ledOf(o);
+        const led = toScreen(l.x, l.y);
+        g.circle(led.x, led.y - l.z, 1.6).fill({ color: l.color, alpha: 0.35 });
+        g.circle(led.x, led.y - l.z, 0.8).fill(l.color);
       }
       // the pads: a held one at its player's hands, cord back to the console
       const ports = SYSTEMS[system].ports;
@@ -675,6 +957,21 @@ export class GameRoom {
   private drawPad(g: Graphics, system: GameSystem, x: number, y: number, held: boolean) {
     const s = held ? 1 : 0.85;
     switch (system) {
+      case "ps1":
+        // the twin-grip pad: the grips hanging down, two sticks, the shape buttons
+        for (const dx of [-3.1, 3.1])
+          g.ellipse(x + dx * s, y + 1.3 * s, 1.7 * s, 2 * s)
+            .fill(0xb9b6af)
+            .stroke({ width: 0.4, color: INK });
+        g.roundRect(x - 4.8 * s, y - 2.3 * s, 9.6 * s, 3.4 * s, 1.6 * s)
+          .fill(0xb9b6af)
+          .stroke({ width: 0.4, color: INK });
+        for (const dx of [-1.2, 1.2]) g.circle(x + dx * s, y + 0.5 * s, 0.75 * s).fill(0x2a2826);
+        g.rect(x - 3.6 * s, y - 1.25 * s, 1.6 * s, 0.5 * s).fill(0x2a2826);
+        g.rect(x - 3.05 * s, y - 1.8 * s, 0.5 * s, 1.6 * s).fill(0x2a2826);
+        for (const [i, col] of [0x5fae8a, 0xd0524a, 0x6f8fd0, 0xd889b8].entries())
+          g.circle(x + (2.9 + [0, 0.7, 0, -0.7][i]) * s, y + (-1 + [-0.6, 0, 0.6, 0][i]) * s, 0.42 * s).fill(col);
+        break;
       case "2600":
         g.roundRect(x - 3.5 * s, y - 2 * s, 7 * s, 4 * s, 1)
           .fill(0x1c1a18)
@@ -759,7 +1056,11 @@ export class GameRoom {
         .map((x) => `${x.id}|${x.d.toFixed(1)}`);
       const ports = Array.from({ length: SYSTEMS[system].ports }, (_, i) => {
         const sid = c ? (i === 0 ? c.p1 : c.p2) : "";
-        return { name: sid ? (i === 0 ? c.p1Name : c.p2Name) : "", me: !!sid && sid === this.mySid };
+        return {
+          name: sid ? (i === 0 ? c.p1Name : c.p2Name) : "",
+          me: !!sid && sid === this.mySid,
+          analog: !!c && !!(i === 0 ? c.a1 : c.a2),
+        };
       });
       view = {
         id: o.id,
@@ -782,6 +1083,11 @@ export class GameRoom {
         ports,
         myPort: ports.findIndex((p) => p.me) + 1,
         near,
+        // (in steps of 1 %: the view's re-published only when it changes)
+        loading:
+          this.loading?.[0] === o.id
+            ? [Math.floor((this.loading[1] / this.loading[2]) * 100) * (this.loading[2] / 100), this.loading[2]]
+            : null,
       };
     }
     const sig = JSON.stringify(view);
@@ -831,7 +1137,11 @@ export class GameRoom {
           out.cables.push({ from, to: { x: tv.x + w / 2, y: tv.y + h / 2 }, up: 0 });
         }
       }
-      if (c) out.leds.push({ x: o.x + 0.3, y: o.y + 0.8 }); // on its front face
+      if (c) {
+        const l = ledOf(o);
+        // (the front LED a touch out of the face; the disc ones' on their tops)
+        out.leds.push(LED[o.kind] ? { x: l.x, y: l.y, h: zt(l.z), color: l.color } : { x: o.x + 0.3, y: o.y + 0.8 });
+      }
       const system = CONSOLES[o.kind];
       for (let port = 1; port <= SYSTEMS[system].ports; port++) {
         const sid: string = c ? (port === 1 ? c.p1 : c.p2) : "";
@@ -843,6 +1153,7 @@ export class GameRoom {
           rest: { x: o.x + (port === 1 ? 0.22 : 0.78), y: o.y + 0.86 },
           holder: sid || null,
           sitting: !!(sid && this.engine?.avatarAt(sid)?.sitting),
+          analog: !!c && !!(port === 1 ? c.a1 : c.a2),
         });
       }
     }
@@ -850,13 +1161,20 @@ export class GameRoom {
   }
 
   // for the third-person view: what each TV shows now (the console's picture)
-  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement }[] {
-    const out: { def: WorldObjectDef; canvas: HTMLCanvasElement }[] = [];
+  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; at?: Corners }[] {
+    const out: { def: WorldObjectDef; canvas: HTMLCanvasElement; at?: Corners }[] = [];
     for (const v of this.tvs.values()) if (v.source) out.push({ def: v.def, canvas: v.frame });
+    // the slim consoles' own screens (their glass isn't a TV's: its corners come along)
+    for (const [id, v] of this.lcds) {
+      const def = this.obj(id);
+      if (def && v.at) out.push({ def, canvas: v.frame, at: v.at });
+    }
     return out;
   }
 
   dispose() {
+    for (const v of this.lcds.values()) v.root.destroy({ children: true });
+    this.lcds.clear();
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("keyup", this.onKey);
     window.removeEventListener("blur", this.onBlur);

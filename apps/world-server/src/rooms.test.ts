@@ -1244,6 +1244,18 @@ test("game room: plug a console into a TV, a cartridge, power, pad 2 relayed, th
   b.room.send("game:pad", { id: "t-con", bits: 99999 });
   await sleep(200);
   assert.equal(a.msgs["game:pad"].length, 1);
+  // the 16 buttons (L2 R2 L3 R3 too) and the sticks travel; sticks out of range are dropped
+  b.room.send("game:pad", { id: "t-con", bits: 0xc000, sticks: [127, -127, 0, 5] });
+  await waitFor(() => a.msgs["game:pad"].length === 2);
+  assert.deepEqual(a.msgs["game:pad"][1], { id: "t-con", port: 2, bits: 0xc000, sticks: [127, -127, 0, 5] });
+  for (const sticks of [[200, 0, 0, 0], [0, 0, 0], [0.5, 0, 0, 0], "x"])
+    b.room.send("game:pad", { id: "t-con", bits: 1, sticks: sticks as never });
+  await sleep(200);
+  assert.equal(a.msgs["game:pad"].length, 2);
+  // a pad's analog mode: who holds it says, everyone sees it (its LED)
+  b.room.send("game:analog", { id: "t-con", on: true });
+  await waitFor(() => c()?.a2 === true);
+  assert.equal(c()?.a1, false);
 
   // Ana leaves: paused; Bia carries on as host
   await a.room.leave(true);
