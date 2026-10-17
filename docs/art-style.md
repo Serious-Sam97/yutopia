@@ -5,29 +5,63 @@ outlines, three-tone shading lit from the upper-left, gentle gradients, and smal
 that reward zooming in. Review sheets: `/dev/items` (items), `/dev/sheet` (people), both
 dev-only. Reference shots: `design/screens/visual/`.
 
-## People — City-pop 80s anime (default) or Ligne claire
+## People — Ligne claire
 
-Each person picks their style in the avatar editor (`AvatarLayers.style`: `citypop` |
-`ligne`; Yondra validates it, older avatars default to `citypop`). **Ligne claire** draws
-the same figure and poses with one even black line (`#151515`), flat colours, dot eyes,
-thin brows and a nose hook — no shade shapes, hair gradient or rim light. Review it with
-`/dev/sheet?style=ligne`; `/dev/shots?crowd=N` alternates the two styles.
+Everyone is drawn in **Ligne claire**: one even black line (`#151515`), flat colours
+with a darker flat tone for shade (`shade()` mixes 22 % black), dot eyes, thin brows,
+a nose hook and a line for a mouth — no shade shapes, hair gradient or rim light.
+City-pop, the second style people could pick until 2026-10-17, was retired
+(`docs/plan/22-people-3d.md`, P0): `AvatarLayers.style` is always `ligne` (Yondra
+saves `ligne` whatever it is sent; the migration `2026_10_17_000003` moved every saved
+look; `parseAvatar` turns anything else into `ligne`). The 3D people (`world/chars`,
+same plan) are Ligne claire too.
 
-### City-pop
+### The 3D model (everywhere)
 
-`apps/client/src/world/art/avatar-svg.ts`. About 5½ heads tall, drawn on a 120×180 board
+`apps/client/src/world/chars/` (the lazy `yutopia-chars` chunk; plan
+`docs/plan/22-people-3d.md`). Every person in every view is one parametric model:
+- **Built only from smooth, bevelled shapes** — lathes and swept tubes along splines,
+  `Shape` + `ExtrudeGeometry` with bevels, flat pieces bent onto the body after an
+  edge-based refinement — with welded smooth normals; never a raw box or a low-segment
+  cylinder. Every dimension sits at the top of `params.ts` (`BASE`, as tuned with the
+  user: 5 heads, a belly, legs 0.36, a long torso; `BODY` slim/regular/broad and
+  `GENDER` as changes to it) and can change at runtime.
+- **Flat colour + one line:** a single `MeshBasicMaterial` with the colours in the
+  vertices, and the ink drawn as a screen-space inverted hull (`ink.ts`) — the same
+  width in pixels near and far, with creases (hems, seams) as hair-thin rings. Two
+  draw calls per person. Lit only by the room's light map, so night dims them.
+- **Every `AvatarLayers` option** has its 3D part (`build/`): 10 hair styles, 11 tops,
+  7 bottoms, 5 shoes, 7 headwear, 3 eyewear, 6 extras. Hair hangs from under a hat's
+  rim; skin hidden by clothes isn't built.
+- **Levels of detail** ~44k / 17k / 6k triangles on one skeleton (16 joints); a factory
+  builds each look × level once, a few per frame, shared by everyone wearing it.
+- **Motion** (`motion.ts`) has the 2D people's layers and timings: idle life, the walk
+  from distance, sitting and typing, drinks with sips, every busy use, the phone,
+  moves with someone, every emote, blink and talk (morphs); hands go to the ear,
+  mouth, chin, chest, belly by IK.
+- **Where:** in the 3D / first-person view each person is a model (`tp/person3d.ts`);
+  in first person my own arms come up when they're doing something (`tp/hands1p.ts`);
+  in iso each person is a sprite of the model drawn from the iso camera
+  (`chars/iso.ts`, 1.38× life-size, ~92 px tall); the HUD's turntable and portraits
+  are the model too. Vortex stays his drawing everywhere.
+- **Review:** `/dev/chars` (`?turn=`, `?lods=`, `?crowd=`, `?sheet=<field>`,
+  `?anim=base|busy|phone|social|emote`), `/dev/3p?cam=first&me=…` (the hands),
+  `/dev/3p?view=iso`; concepts and sheets in `design/chars-3d/`.
+
+### The 2D drawing (the fallback)
+
+Where WebGL can't draw (and for a moment while the 3D people load) people are still
+the vector drawing: `apps/client/src/world/art/avatar-svg.ts`. About 5½ heads tall, drawn on a 120×180 board
 (feet on y = 168) and fitted into the engine's 64×100 texture box (shown at 0.5 →
 ~92 px tall). The world is drawn `WORLD_SCALE` (1.3, `world/art/iso.ts`) larger than
 the people in it: the camera zooms in by that much and each person's container is
 scaled by `PERSON` (1 / 1.3), so people keep their size on screen while rooms and
-furniture read at believable proportions; item and floor art are drawn that much finer. Flat fills with **hard violet shade shapes** on the right side
-(`shade()` mixes towards `#2a1a5e`), gradient hair with a highlight band, big glossy
-eyes, thin plum ink (`#2a1430`). A **rim light** runs down the edges: warm + sky blue by
-day, neon pink + cyan at night (`Rim`, picked by the engine from the hour). Five drawn
-views (S, SW, W, NW, N; the rest mirror), every hair style has a real back and side —
-never a bare scalp. Seated poses put the hips on the seat (engine `lift` 12); from
-behind, the chair's backrest (the `bias` part) sorts in front, so only head and
-shoulders show. Frame 0 is both "standing" and the walk's passing frame.
+furniture read at believable proportions; item and floor art are drawn that much finer.
+Five drawn views (S, SW, W, NW, N; the rest mirror), every hair style has a real back
+and side — never a bare scalp. Seated poses put the hips on the seat (engine `lift`
+12); from behind, the chair's backrest (the `bias` part) sorts in front, so only head
+and shoulders show. Frame 0 is both "standing" and the walk's passing frame. Review it
+with `/dev/sheet`; `/dev/shots?crowd=N` puts a crowd in the Studio.
 
 ## Rules every item follows
 

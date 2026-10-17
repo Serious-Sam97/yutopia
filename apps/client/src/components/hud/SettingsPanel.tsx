@@ -267,6 +267,7 @@ export function SettingsPanel() {
                 <span className="lcd w-10 text-right">{p.lookSens.toFixed(1)}</span>
               </label>
               {toggle(t("lookInvert"), p.lookInvert, (v) => setPrefs({ lookInvert: v }))}
+              {p.view === "1p" && toggle(t("hands1p"), p.hands1p, (v) => setPrefs({ hands1p: v }))}
             </div>
           )}
         </section>

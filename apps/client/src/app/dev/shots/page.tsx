@@ -54,7 +54,7 @@ export default function Shots() {
             bottomColor: "#3d4a5c",
             accessory: "none",
             accessoryColor: "#e8a33d",
-            style: ["citypop", "ligne"][i % 2],
+            style: "ligne",
             gender: ["feminine", "masculine", "neutral"][i % 3],
           },
           x,

@@ -10,14 +10,11 @@ import {
   HALF_WALL,
   HANG_HIGH,
   HANG_LOW,
-  type HeldKind,
   hangOf,
   hangStrip,
   hasActions,
-  heldState,
   hostOf,
   isFloor,
-  isHeld,
   isSocial,
   type MapDef,
   placedFootprint,
@@ -57,23 +54,18 @@ import {
   Texture,
 } from "pixi.js";
 import type { Quality } from "@/lib/prefs";
-import { avatarContext, viewFor } from "./art/avatar";
 import type { Motion } from "./art/avatar-motion";
-import type { Aff, PartName, Pose } from "./art/avatar-rig";
-import type { AvatarRig } from "./art/avatar-svg";
-import { loadPeople, people } from "./art/people-load";
-import { loadThemes } from "./art/themes-load";
-
-type People = NonNullable<ReturnType<typeof people>>;
-
+import { chars, loadChars } from "./art/chars-load";
 import { type Daylight, daylight, hourForNight } from "./art/daylight";
 import { FloorBake, floorRes } from "./art/floors";
 import { WALL_H } from "./art/furniture";
-import { HELD_BOX, MUG_COLORS } from "./art/held";
+import { MUG_COLORS } from "./art/held";
 import { PERSON, WORLD_SCALE } from "./art/iso";
 import type { ItemArt } from "./art/items/kit";
 import { affectsLight, PX as LIGHT_PX, LightMap } from "./art/light";
 import { C } from "./art/palette";
+import { pawnContext } from "./art/pawn";
+import { loadPeople, people } from "./art/people-load";
 import { loadPets, pets as petsArt } from "./art/pets-load";
 import {
   drawFlat,
@@ -92,19 +84,18 @@ import {
   acquireItem,
   avatarTexture,
   emoteTexture,
-  heldTexture,
   itemsPending,
   itemTextureStats,
-  phoneTexture,
-  RIG_PX,
-  rigPartTexture,
   vortexTexture,
 } from "./art/textures";
 import type { ThemeView } from "./art/themes";
+import { loadThemes } from "./art/themes-load";
+import { viewFor } from "./art/views";
 import type { VortexMood } from "./art/vortex/vortexArt";
 import type { Life, Swayable } from "./life";
 import { PET_HURT_MS, type PetView } from "./petview";
 import type { Post } from "./post";
+import type { RigView } from "./rig-draw";
 
 const VORTEX_MOODS = new Set([
   "smug",
@@ -183,6 +174,7 @@ interface AvatarView {
   flash?: Graphics; // a photo's flash going off in their hand
   flashAt?: number;
   state: AvatarState;
+  iso?: import("./chars").IsoMem; // the model's sprite: what it remembers between frames
   rig?: RigView; // the rig being drawn
   rigNext?: RigView; // a new view / look while its parts decode
   motion?: Motion;
@@ -197,18 +189,6 @@ interface AvatarView {
   dotKey?: string; // what the status dot shows
   drawnFor: string; // whose look the sprite's current drawing is (avatar JSON)
   local: boolean;
-}
-
-// A person drawn as a rig: one sprite per part, posed every frame.
-interface RigView {
-  key: string;
-  def: AvatarRig;
-  root: Container;
-  sprites: Map<PartName, Sprite>;
-  held?: Sprite; // what's in the right hand
-  steam?: Graphics; // …and the steam off it
-  phone?: Sprite; // the phone, when it's out
-  glow?: Graphics; // its screen's light at night
 }
 
 // A drawn slice of an object: the quick box art first, the illustrated sprite
@@ -249,7 +229,6 @@ export interface BoardContent {
 
 // emote art in world px (the bubble's tail points at the head)
 const EMOTE_PX = 34;
-const RIG_M = new Matrix(); // scratch for posing rig parts
 
 // A steady 0..1 from a string (who someone is → their own rhythm of blinks).
 function seedOf(id: string): number {
@@ -310,6 +289,7 @@ const PERSON_SHADOW = softShadow(16, 7.5, 1);
 const VORTEX_SHADOW = softShadow(15, 6.5, 1.1);
 const PET_SHADOW = softShadow(13, 6, 1);
 const petSpriteTextures = new WeakMap<HTMLCanvasElement, Texture>(); // a sprite per rendered pet frame
+const personTextures = new WeakMap<HTMLCanvasElement, Texture>(); // a sprite per rendered person frame (world/chars/iso.ts)
 
 const NAME_STYLE = new TextStyle({
   fontFamily: "Share Tech Mono, ui-monospace, monospace",
@@ -507,8 +487,13 @@ export class WorldEngine {
 
     this.drawStatic();
     // illustrated items replace the box art as soon as their drawings load
-    // the people's drawing loads alongside (a quick figure until it's here)
-    void loadPeople();
+    // the 3D people load alongside (a pawn until they're here); their
+    // vector drawing only where WebGL can't draw them — or only on the CPU, or the chunk won't come
+    loadChars()
+      .then((C) => {
+        if (!C.isoPeople().canDraw()) void loadPeople();
+      })
+      .catch(() => void loadPeople());
     loadItemArt().then(() => {
       if (this.destroyed) return;
       for (const v of [...this.objectViews.values()]) this.upsertObject(v.def, false);
@@ -1730,7 +1715,9 @@ export class WorldEngine {
     const v = this.avatars.get(id);
     if (!v || v.shownDir === undefined) return null;
     const { view, mirror } = viewFor(v.shownDir);
-    return { dir: v.shownDir, view, mirror, rigged: !!v.rig?.root.visible, walking: v.state.a === 1 };
+    // (posed: the drawn rig, or the 3D model's sprite)
+    const rigged = !!v.rig?.root.visible || (!!v.iso?.last && v.sprite.visible);
+    return { dir: v.shownDir, view, mirror, rigged, walking: v.state.a === 1 };
   }
 
   // Someone took a photo: the flash, over their hand.
@@ -2022,20 +2009,24 @@ export class WorldEngine {
     }
     const { view, mirror } = viewFor(v.shownDir);
     const lift = sitting ? 12 : 0; // the drawing sits its hips on the seat
-    const rim = this.night > 0.5 ? "night" : "day";
     const look = JSON.stringify(s.avatar);
     // the distance covered this frame: the walk cycle follows it
     let dist = v.last ? Math.hypot(s.x - v.last.x, s.y - v.last.y) : 0;
     if (dist > 1.5) dist = 0; // a jump (sitting down, a teleport), not a step
     v.last = { x: s.x, y: s.y };
-    const rigged = this.drawRig(v, view, mirror, sitting, rim, look, dt, dist, walking, lift);
-    if (rigged) {
+    // the 3D model from the iso camera (world/chars/iso.ts); the drawn rig until it's in
+    const model = this.modelSprite(v, dt, dist, sitting, now);
+    const rigged = model || this.drawRig(v, view, mirror, sitting, look, dt, dist, walking, lift);
+    if (model) {
+      v.body.visible = false;
+      if (v.rig) v.rig.root.visible = false;
+    } else if (rigged) {
       v.sprite.visible = false;
       v.body.visible = false;
     } else {
-      // the rig's parts are still decoding: the whole drawing, or the quick figure
+      // nothing posed yet: the whole drawing (if the drawings are in), or a pawn
       v.sprite.visible = false;
-      const tex = avatarTexture(s.avatar, view, 0, sitting, rim);
+      const tex = avatarTexture(s.avatar, view, 0, sitting);
       const keep = !tex && v.drawnFor === look && v.sprite.texture !== Texture.EMPTY && !v.sprite.texture.destroyed;
       if (tex || keep) {
         if (tex) {
@@ -2048,9 +2039,9 @@ export class WorldEngine {
         v.sprite.scale.set((mirror ? -1 : 1) * k, k);
         v.sprite.position.set(0, lift + 2);
       } else {
-        const key = `${view}|${sitting}|${look}`;
+        const key = `${sitting}|${look}`;
         if (key !== v.avatarKey) {
-          v.body.context = avatarContext(s.avatar, view, 0, sitting);
+          v.body.context = pawnContext(s.avatar, sitting);
           v.avatarKey = key;
         }
         v.body.visible = true;
@@ -2133,15 +2124,74 @@ export class WorldEngine {
     }
   }
 
-  // A person as a rig: the parts for this look, view and seat (a new view
-  // waits for its parts to decode while the last one keeps moving), posed by
-  // their Motion. False while nothing's ready to draw.
+  // A person as their 3D model drawn from the iso camera: a sprite per look,
+  // facing, pose and frame, made on demand by the chars chunk (iso.ts). False
+  // while the chunk or their model isn't in yet (the drawn rig stands in).
+  private modelSprite(v: AvatarView, dt: number, dist: number, sitting: boolean, now: number): boolean {
+    const C = chars();
+    if (!C) {
+      void loadChars();
+      return false;
+    }
+    const iso = C.isoPeople();
+    if (!iso.canDraw()) return false; // (no GPU: every sprite would stall the frame — the drawn rig)
+    iso.onDrop ??= (c) => {
+      personTextures.get(c)?.destroy(true);
+      personTextures.delete(c);
+    };
+    const P = petsArt();
+    if (P && !iso.toy) iso.toy = P.toyMesh;
+    const s = v.state;
+    v.iso ??= {};
+    const sp = iso.sprite(
+      v.iso,
+      {
+        avatar: s.avatar,
+        dir: v.shownDir ?? s.d,
+        a: s.a,
+        dist,
+        dt,
+        held: s.held,
+        heldAt: s.heldAt,
+        phone: s.phone,
+        phonePose: s.phonePose,
+        phoneCase: s.phoneCase,
+        mugColor: MUG_COLORS[Math.floor(seedOf(s.name) * MUG_COLORS.length)],
+        recording: s.recording,
+        busy: s.busy,
+        emote: s.emote,
+        speaking: s.speaking,
+        typing: sitting && (s.busy === "computer" || this.atWork(s.x, s.y)),
+        reduced: this.reducedMotion,
+        act: this.actOf(v),
+      },
+      now,
+    );
+    if (!sp) return false;
+    let tex = personTextures.get(sp.canvas);
+    if (!tex || tex.destroyed) {
+      tex = Texture.from(sp.canvas);
+      tex.source.autoGenerateMipmaps = true;
+      tex.source.scaleMode = "linear";
+      personTextures.set(sp.canvas, tex);
+    }
+    v.sprite.texture = tex;
+    v.sprite.visible = true;
+    v.sprite.anchor.set(sp.anchorX, sp.anchorY);
+    v.sprite.scale.set(sp.scale, sp.scale);
+    v.sprite.rotation = 0;
+    v.sprite.position.set(0, 0);
+    return true;
+  }
+
+  // A person as the drawn rig (the fallback where the 3D model can't be
+  // drawn): posed by the people chunk (rig-draw.ts). False while nothing's
+  // ready (the pawn).
   private drawRig(
     v: AvatarView,
     view: ReturnType<typeof viewFor>["view"],
     mirror: boolean,
     sitting: boolean,
-    rim: "day" | "night",
     look: string,
     dt: number,
     dist: number,
@@ -2149,62 +2199,17 @@ export class WorldEngine {
     lift: number,
   ): boolean {
     const P = people();
-    if (!P) return false; // the people chunk is still loading: the quick figure
+    if (!P) return false; // the people chunk is still loading: the pawn
     const s = v.state;
-    const key = `${look}|${view}|${sitting ? 1 : 0}|${rim}`;
-    let want = v.rig?.key === key ? v.rig : v.rigNext?.key === key ? v.rigNext : undefined;
-    if (!want) {
-      if (v.rigNext) this.dropRig(v.rigNext);
-      want = this.makeRig(v, key, P.avatarRig(s.avatar, view, sitting, rim));
-      v.rigNext = want;
-    }
-    if (want !== v.rig && this.rigReady(want)) {
-      if (v.rig) this.dropRig(v.rig);
-      v.rig = want;
-      v.rigNext = undefined;
-    }
-    const r = v.rig;
-    v.motion ??= new P.Motion(seedOf(s.name + (v.local ? "me" : "")));
-    const held = isHeld(s.held) && s.heldAt && !s.phone ? { kind: s.held, since: Date.now() - s.heldAt } : null;
-    const pose = v.motion.update(r?.def ?? want.def, dt, {
-      held,
-      phone: s.phone || s.ringing ? { state: s.phone ?? "", pose: s.phonePose ?? "", ringing: !!s.ringing } : null,
-      busy: s.busy ?? "",
-      act: this.actOf(v),
-      dist,
-      walking,
-      speed: dt > 0 ? dist / dt : 0,
-      typing: sitting && (s.busy === "computer" || this.atWork(s.x, s.y)),
-      speaking: s.speaking,
-      emote: s.emote,
+    const at = {
       reduced: this.reducedMotion,
-    });
-    if (!r) return false;
-    const def = r.def;
-    const b = P.bones(def, pose);
-    P.drawOrder(def, pose).forEach((part, i) => {
-      const sp = r.sprites.get(part.name);
-      if (!sp) return;
-      sp.zIndex = i;
-      const head = part.name === "head";
-      const face = head && !def.back ? pose.face : undefined;
-      const tex = head
-        ? (rigPartTexture(r.key, part, face, face ? def.heads[face] : def.heads.open) ??
-          rigPartTexture(r.key, part, def.back ? undefined : "open", def.heads.open))
-        : rigPartTexture(r.key, part);
-      if (tex) sp.texture = tex;
-      sp.visible = !!tex;
-      // the part's box, at RIG_PX texture px per board unit, moved by its bone
-      const m: Aff = P.mul(b[part.name], [1 / RIG_PX, 0, 0, 1 / RIG_PX, part.box[0], part.box[1]]);
-      sp.setFromMatrix(RIG_M.set(m[0], m[1], m[2], m[3], m[4], m[5]));
-    });
-    this.drawHeld(P, r, s, pose, b, held);
-    this.drawPhone(P, r, s, b);
-    r.root.visible = true;
-    r.root.pivot.set(60, 168);
-    r.root.scale.set((mirror ? -1 : 1) * P.FIT * def.squash, P.FIT);
-    r.root.position.set(0, lift + 2 + (sitting ? P.SIT_DROP * P.FIT : 0));
-    return true;
+      time: this.time,
+      night: this.night,
+      low: this.quality === "low",
+      act: this.actOf(v),
+      typing: sitting && (s.busy === "computer" || this.atWork(s.x, s.y)),
+    };
+    return P.drawRig(at, v, view, mirror, sitting, look, dt, dist, walking, lift, P);
   }
 
   // A move with someone (shared SOCIAL): what, and how far into it.
@@ -2222,161 +2227,6 @@ export class WorldEngine {
     const kind = s.act === "take" ? "give" : s.act;
     const len = (isSocial(kind) ? SOCIAL_MS[kind] : 1500) / 1000;
     return { what: s.act, t: (performance.now() - (v.actSeen ?? 0)) / 1000, len };
-  }
-
-  // The thing in the right hand: at the hand, upright (tipped towards the mouth
-  // while sipping), in front of the body (behind it, seen from the back), with
-  // a little steam while it's hot.
-  private drawHeld(
-    P: People,
-    r: RigView,
-    s: AvatarState,
-    _pose: Pose,
-    b: Record<PartName, Aff>,
-    held: { kind: HeldKind; since: number } | null,
-  ) {
-    if (!held) {
-      if (r.held) r.held.visible = false;
-      r.steam?.clear();
-      return;
-    }
-    const st = heldState(held.kind, held.since);
-    const color = MUG_COLORS[Math.floor(seedOf(s.name) * MUG_COLORS.length)];
-    const tex = heldTexture(held.kind, color, Math.round(st.level * 4));
-    if (!r.held || !r.steam) {
-      r.held = new Sprite();
-      r.steam = new Graphics();
-      r.root.addChild(r.held, r.steam);
-    }
-    const sp = r.held;
-    if (tex) sp.texture = tex;
-    sp.visible = !!tex;
-    const def = r.def;
-    const hand = P.apply(b.armRf, def.joints.hand);
-    const up = P.sipEnv(st.sip);
-    const tip = (def.side ? -38 : -22) * up;
-    const k = 1 / RIG_PX;
-    const rad = (tip * Math.PI) / 180;
-    const c = Math.cos(rad);
-    const sn = Math.sin(rad);
-    // the grip (0, 0) of the drawing at the hand; its box, scaled to board units
-    const m: Aff = [c * k, sn * k, -sn * k, c * k, 0, 0];
-    const at = P.apply(m, [HELD_BOX[0] * RIG_PX, HELD_BOX[1] * RIG_PX]);
-    sp.setFromMatrix(RIG_M.set(m[0], m[1], m[2], m[3], hand[0] + at[0], hand[1] + at[1]));
-    const armZ = r.sprites.get("armRf")?.zIndex ?? 50;
-    const torsoZ = r.sprites.get("torso")?.zIndex ?? 40;
-    sp.zIndex = def.back ? torsoZ - 0.5 : armZ + 0.5;
-    sp.tint = r.sprites.get("torso")?.tint ?? 0xffffff;
-    // steam: two wisps rising off a hot mug (not mid-sip, not from behind)
-    const g = r.steam;
-    g.clear();
-    g.zIndex = sp.zIndex + 0.1;
-    if (st.level > 0.4 && up === 0 && !def.back && !this.reducedMotion) {
-      const t = this.time;
-      for (let i = 0; i < 2; i++) {
-        const ph = (t * 0.7 + i * 0.5) % 1;
-        const x0 = hand[0] - 2.5 + i * 2;
-        const y0 = hand[1] - 12 - ph * 9;
-        const sway = Math.sin(t * 3 + i * 2) * 1.6;
-        g.moveTo(x0, y0)
-          .quadraticCurveTo(x0 + sway, y0 - 3, x0 - sway * 0.5, y0 - 6)
-          .stroke({ width: 1.1, color: 0xffffff, alpha: 0.42 * (1 - ph) });
-      }
-    }
-  }
-
-  // The phone in the hand (shared/phone.ts): which face this view sees, tilted
-  // as the pose holds it; its lit screen glows a little once it's dark.
-  private drawPhone(P: People, r: RigView, s: AvatarState, b: Record<PartName, Aff>) {
-    if (!s.phone) {
-      if (r.phone) r.phone.visible = false;
-      if (r.glow) r.glow.visible = false;
-      return;
-    }
-    const def = r.def;
-    const grip = P.phoneGrip(def, s.phone);
-    const col = P.phoneColors(s.phoneCase);
-    const tex = phoneTexture(`${col[0]}|${grip.face}`, () => P.phoneSvg(col, grip.face), P.PHONE_BOX);
-    if (!r.phone || !r.glow) {
-      r.phone = new Sprite();
-      r.glow = new Graphics();
-      r.glow.blendMode = "add";
-      r.root.addChild(r.glow, r.phone);
-    }
-    const sp = r.phone;
-    if (tex) sp.texture = tex;
-    sp.visible = !!tex;
-    const hand = P.apply(b.armRf, def.joints.hand);
-    const k = (1 / (RIG_PX * 2)) * grip.scale;
-    const rad = (grip.tilt * Math.PI) / 180;
-    const c = Math.cos(rad);
-    const sn = Math.sin(rad);
-    const m: Aff = [c * k, sn * k, -sn * k, c * k, 0, 0];
-    const at = P.apply(m, [P.PHONE_BOX[0] * RIG_PX * 2, P.PHONE_BOX[1] * RIG_PX * 2]);
-    sp.setFromMatrix(RIG_M.set(m[0], m[1], m[2], m[3], hand[0] + at[0], hand[1] + at[1]));
-    const armZ = r.sprites.get("armRf")?.zIndex ?? 50;
-    const torsoZ = r.sprites.get("torso")?.zIndex ?? 40;
-    // at the ear, from behind: behind the head; held out in front: over the arm
-    sp.zIndex = def.back && s.phone !== "selfie" ? torsoZ - 0.5 : armZ + 0.5;
-    sp.tint = grip.face === "screen" ? 0xffffff : (r.sprites.get("torso")?.tint ?? 0xffffff);
-    const g = r.glow;
-    g.clear();
-    const lit = this.night > 0.15 && s.phone !== "call" && this.quality !== "low";
-    const rec = !!s.recording && Math.floor(this.time * 2) % 2 === 0;
-    g.visible = lit || rec;
-    if (rec) {
-      // recording: a red light on the phone, blinking
-      g.circle(hand[0] - 1.5, hand[1] - 13, 2.2).fill({ color: 0xff2030, alpha: 1 });
-      g.circle(hand[0] - 1.5, hand[1] - 13, 5).fill({ color: 0xff2030, alpha: 0.35 });
-      g.zIndex = sp.zIndex + 0.2;
-    }
-    if (lit) {
-      // the screen's light: on the face (front views) or round the hand
-      const a = Math.min(0.5, this.night * 0.6);
-      const cx = grip.face === "back" ? hand[0] + 2 : hand[0];
-      const cy = hand[1] - 8;
-      g.circle(cx, cy, 16).fill({ color: 0xff5ab0, alpha: a * 0.25 });
-      g.circle(cx, cy, 9).fill({ color: 0xc89bff, alpha: a * 0.35 });
-      if (!def.back) {
-        const head = P.apply(b.head, def.joints.mouth);
-        g.ellipse(head[0], head[1] - 6, 11, 9).fill({ color: 0xd890ff, alpha: a * 0.3 });
-      }
-      g.zIndex = sp.zIndex + 0.2;
-    }
-  }
-
-  private makeRig(v: AvatarView, key: string, def: AvatarRig): RigView {
-    const root = new Container();
-    root.sortableChildren = true;
-    root.visible = false;
-    const sprites = new Map<PartName, Sprite>();
-    for (const p of def.parts) {
-      const sp = new Sprite();
-      sp.visible = false;
-      root.addChild(sp);
-      sprites.set(p.name, sp);
-    }
-    v.root.addChildAt(root, v.root.getChildIndex(v.sprite));
-    return { key, def, root, sprites };
-  }
-
-  // all of a rig's parts decoded (and the faces it blinks and talks with asked for)
-  private rigReady(r: RigView): boolean {
-    let ok = true;
-    for (const p of r.def.parts) {
-      if (p.name === "head") {
-        if (!rigPartTexture(r.key, p, r.def.back ? undefined : "open", r.def.heads.open)) ok = false;
-        if (!r.def.back) {
-          rigPartTexture(r.key, p, "blink", r.def.heads.blink);
-          rigPartTexture(r.key, p, "talk", r.def.heads.talk);
-        }
-      } else if (!rigPartTexture(r.key, p)) ok = false;
-    }
-    return ok;
-  }
-
-  private dropRig(r: RigView) {
-    r.root.destroy({ children: true }); // the textures belong to the cache
   }
 
   // Seated at a desk with a keyboard or a screen in reach: typing.

@@ -31,6 +31,7 @@ const LAZY = {
   "yutopia-media": 30, // TVs and the radio's media; hls.js is its own chunk, fetched for Jellyfin only
   "yutopia-os": 15, // VortexOS on the computers' glass (docs/plan/19-vortexos.md)
   "yutopia-phone": 60, // the phone: Vortex Mobile's screens, calls, camera, sounds (docs/plan/21-cellphone.md)
+  "yutopia-chars": 40, // the 3D people: the model builder, motion, iso sprites (docs/plan/22-people-3d.md)
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {

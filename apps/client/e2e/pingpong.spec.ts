@@ -9,6 +9,22 @@ import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
 // from across the room. The 3D view stands behind Ana's end. In the Lab; the
 // table is removed after. YUTOPIA_SHOTS=<dir> keeps pictures.
 const SHOTS = process.env.YUTOPIA_SHOTS;
+// Hits land on frames: this one needs the GPU, not software GL (headless
+// Chromium draws WebGL on the CPU by default, two 3D pages at ~5 fps, and a
+// frame that stalls past the server's 450 ms refuses the hit). Metal on macOS;
+// elsewhere the flags fall back to whatever the machine has.
+test.use({
+  launchOptions: {
+    args: [
+      "--use-fake-ui-for-media-stream",
+      "--use-fake-device-for-media-stream",
+      "--autoplay-policy=no-user-gesture-required",
+      "--enable-gpu",
+      "--ignore-gpu-blocklist",
+      ...(process.platform === "darwin" ? ["--use-angle=metal"] : []),
+    ],
+  },
+});
 const pong = (page: Page, id: string) =>
   page.evaluate((i) => {
     const t = (window as any).__yutopia.room.state.pong.get(i);

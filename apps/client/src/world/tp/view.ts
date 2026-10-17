@@ -48,6 +48,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
+import { chars, loadChars } from "../art/chars-load";
 import { daylight } from "../art/daylight";
 import { emoteUrl } from "../art/emotes";
 import type { people } from "../art/people-load";
@@ -56,10 +57,12 @@ import type { PetModel } from "../art/pets3d";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
+import { Hands1P, handsDoing } from "./hands1p";
 import { zt } from "./kit3d";
 import { Light3 } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
+import { type Mats as CharMats, Person3D } from "./person3d";
 import { Post3 } from "./post3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
 import { type TableScene3, TablesIn3D } from "./tables3d";
@@ -137,6 +140,16 @@ export class ThirdPersonView {
   world: World3;
   events: ViewEvents = {};
   private people = new Map<string, Person3>();
+  // the 3D people (world/chars): a model each, built a few a frame; the
+  // drawing above stands in until a person's model is ready (and for Vortex)
+  private people3 = new Map<string, Person3D>();
+  private charF: InstanceType<NonNullable<ReturnType<typeof chars>>["CharFactory"]> | null = null;
+  private charMats: CharMats | null = null;
+  private propMats = new Map<string, Material>();
+  charsChunk = "";
+  // first person: my own arms when they're doing something (hands1p.ts; Settings can turn them off)
+  private hands: Hands1P | null = null;
+  handsOn = true;
   // pets: real models (art/pets3d.ts), lit by the room, turned to where they walk
   private pets3 = new Map<string, { model: PetModel; key: string; turned: number }>();
   private hemi = new HemisphereLight(0xffffff, 0x6b4a33, 1);
@@ -353,6 +366,9 @@ export class ThirdPersonView {
   // in front of someone's drawing, towards the camera, a little to the left
   // (pad 1) or right (pad 2), at hand height
   private handOf(id: string, port: number, sitting: boolean): Vector3 | null {
+    // a 3D person holds it in their hands
+    const p3 = this.people3.get(id);
+    if (p3?.ready && p3.root.visible) return p3.hand("L").add(p3.hand("R")).multiplyScalar(0.5);
     const p = this.people.get(id);
     if (!p?.root.visible) return null;
     const at = p.root.position;
@@ -588,6 +604,7 @@ export class ThirdPersonView {
     this.post?.setSize(w, h, this.renderer.getPixelRatio());
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    chars()?.inkResolution(w, h);
   }
 
   // High: shadows in detail, bloom and the finish; Medium: softer shadows, no
@@ -646,8 +663,9 @@ export class ThirdPersonView {
   private flashes: { s: Sprite; t: number }[] = [];
   private flashTex: CanvasTexture | null = null;
   flash(id: string) {
+    const p3 = this.people3.get(id);
     const p = this.people.get(id);
-    if (!p) return;
+    if (!p && !p3?.ready) return;
     if (!this.flashTex) {
       const c = document.createElement("canvas");
       c.width = c.height = 64;
@@ -663,7 +681,8 @@ export class ThirdPersonView {
     const s = new Sprite(
       new SpriteMaterial({ map: this.flashTex, blending: AdditiveBlending, depthWrite: false, transparent: true }),
     );
-    s.position.set(p.root.position.x, 1.5, p.root.position.z);
+    if (p3?.ready) s.position.copy(p3.hand("R"));
+    else if (p) s.position.set(p.root.position.x, 1.5, p.root.position.z);
     s.scale.setScalar(0.2);
     s.renderOrder = 999;
     this.scene.add(s);
@@ -911,6 +930,7 @@ export class ThirdPersonView {
     this.tick++;
     const seen = new Set<string>();
     const seenPets = new Set<string>();
+    let mySeat: string | undefined;
     for (const b of bodies) {
       if (b.pet) {
         seenPets.add(b.id);
@@ -920,6 +940,43 @@ export class ThirdPersonView {
         continue;
       }
       seen.add(b.id);
+      const angle3 = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
+      const hidden3 =
+        ((first || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) && b.id === meId) ||
+        this.byLens(b);
+      // a person in 3D (not Vortex: he's his drawing, exactly as in Yondra)
+      const C = b.npc ? null : this.chars();
+      if (C && this.charF && this.charMats) {
+        let p3 = this.people3.get(b.id);
+        if (!p3) {
+          p3 = new Person3D(b.id, C, this.charF, this.charMats, { ...b, angle: angle3 });
+          this.people3.set(b.id, p3);
+          this.scene.add(p3.root);
+        }
+        this.sphere.center.set(b.x, 0.9, b.y);
+        const seat3 = b.a === 2 ? this.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
+        p3.root.visible = !hidden3;
+        if (b.id === meId) mySeat = seat3;
+        p3.update({ ...b, angle: angle3, seat: seat3 }, dt, {
+          camX: cam.x,
+          camZ: cam.z,
+          onScreen:
+            (!hidden3 && this.frustum.intersectsSphere(this.sphere)) ||
+            (b.id === meId && first && this.handsOn && handsDoing(b) !== ""),
+          lowQuality: this.quality === "low",
+        });
+        if (p3.ready) {
+          // (its drawing stood in until now)
+          const old = this.people.get(b.id);
+          if (old) {
+            this.scene.remove(old.root);
+            old.dispose();
+            this.people.delete(b.id);
+          }
+          continue;
+        }
+        p3.root.visible = false;
+      }
       let p = this.people.get(b.id);
       if (!p) {
         p = new Person3(b.id, this.P);
@@ -960,6 +1017,31 @@ export class ThirdPersonView {
         p.dispose();
         this.people.delete(id);
       }
+    for (const [id, p] of this.people3)
+      if (!seen.has(id)) {
+        p.dispose();
+        this.people3.delete(id);
+      }
+    // first person: my hands, posed by my body's motion, framed in front of my eyes
+    const C3 = this.chars();
+    if (first && this.handsOn && me && !me.npc && C3 && this.charF && this.charMats && this.gcMix < 0.002) {
+      const angle = me.angle ?? dirAngle(me.d);
+      this.hands ??= new Hands1P(C3, this.charF, this.charMats, { ...me, angle });
+      this.hands.update(
+        { ...me, angle, seat: mySeat },
+        this.people3.get(me.id)?.motionOut ?? null,
+        dt,
+        this.camera,
+        this.pitch,
+        this.lensFov !== null,
+        this.quality === "low",
+      );
+    } else if (this.hands) {
+      this.hands.dispose();
+      this.hands = null;
+    }
+    // build what's waiting (nearest first), a few milliseconds a frame
+    this.charF?.pump(4);
     for (const [id, e] of this.pets3)
       if (!seenPets.has(id)) {
         this.scene.remove(e.model.root);
@@ -969,13 +1051,74 @@ export class ThirdPersonView {
     if (this.gameScene) this.games3?.set(this.gameScene, (id, port, sitting) => this.handOf(id, port, sitting), face);
 
     if (!document.hidden) {
-      if (this.post) this.post.render(dt > 0 && !me?.reduced);
-      else this.renderer.render(this.scene, this.camera);
+      const hands = this.hands?.shown ? this.hands : null;
+      if (this.post) this.post.render(dt > 0 && !me?.reduced, hands);
+      else {
+        this.renderer.render(this.scene, this.camera);
+        if (hands) {
+          // over the room, its depth cleared: the hands never sink into a wall or a desk
+          this.renderer.autoClear = false;
+          this.renderer.clearDepth();
+          this.renderer.render(hands.scene, hands.camera);
+          this.renderer.autoClear = true;
+        }
+      }
       this.drawTags(bodies);
     }
     const now = performance.now();
     if (this.lastFrameAt) this.fps += (1000 / Math.max(1, now - this.lastFrameAt) - this.fps) * 0.05;
     this.lastFrameAt = now;
+  }
+
+  // The 3D people's chunk, its factory and materials (lit by the room); null while it loads.
+  private chars() {
+    const C = chars();
+    if (!C) {
+      void loadChars();
+      return null;
+    }
+    if (!this.charF) {
+      this.charsChunk = C.CHARS_CHUNK;
+      this.charF = new C.CharFactory();
+      const body = new MeshBasicMaterial({ vertexColors: true });
+      this.light.patch(body);
+      const bodyAway = new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 });
+      this.light.patch(bodyAway);
+      const prop = (color: string) => {
+        let m = this.propMats.get(color);
+        if (!m) {
+          const mat = new MeshBasicMaterial({ color });
+          this.light.patch(mat);
+          // (an unskinned basic material has no objectNormal for the light map to read)
+          const lit = mat.onBeforeCompile;
+          mat.onBeforeCompile = (sh, r) => {
+            lit.call(mat, sh, r);
+            sh.vertexShader = sh.vertexShader.replace(
+              "#include <begin_vertex>",
+              "#include <begin_vertex>\n#if !defined( USE_ENVMAP ) && !defined( USE_SKINNING )\nvec3 objectNormal = vec3( normal );\n#endif",
+            );
+          };
+          mat.customProgramCacheKey = () => "yutopia-lightmap-basic";
+          m = mat;
+          this.propMats.set(color, m);
+        }
+        return m;
+      };
+      this.charMats = {
+        body,
+        bodyAway,
+        ink: C.inkMaterial(),
+        inkAway: C.inkMaterial("#151515", 0.55),
+        prop,
+        toy: (kind) => {
+          const P = petsArt();
+          return P ? P.toyMesh(kind, (c) => prop(`#${new Color(c).getHexString()}`)) : null;
+        },
+      };
+      const r = this.renderer.domElement.getBoundingClientRect();
+      C.inkResolution(r.width || 1, r.height || 1);
+    }
+    return C;
   }
 
   // A pet this frame: its model where it is, turned the way it walks (eased),
@@ -1109,7 +1252,16 @@ export class ThirdPersonView {
         t.bubbleUntil = 0;
         t.bubble.style.display = "none";
       }
-      const h = b.pet ? (this.pets3.get(b.id)?.model.height ?? 0.8) + 0.18 : b.npc ? 1.6 : b.a === 2 ? 1.45 : 2.0;
+      const p3 = this.people3.get(b.id);
+      const h = b.pet
+        ? (this.pets3.get(b.id)?.model.height ?? 0.8) + 0.18
+        : p3?.ready
+          ? p3.tagY()
+          : b.npc
+            ? 1.6
+            : b.a === 2
+              ? 1.45
+              : 2.0;
       const far = Math.hypot(cam.x - b.x, cam.z - b.y) > 16;
       // (first person: nothing over your own head — the camera is in it)
       const mine = this.mode === "first" && b.id === this.meId;
@@ -1127,6 +1279,21 @@ export class ThirdPersonView {
         t.root.remove();
         this.tagEls.delete(id);
       }
+  }
+
+  /** Where someone is drawn now (their 3D model, or the drawing standing in), in tiles; null if not at all. (tests) */
+  /** (tests) my hands in first person: drawn, and what they're doing */
+  handsNow(): { shown: boolean; doing: string } | null {
+    return this.hands ? { shown: this.hands.shown, doing: this.hands.now } : null;
+  }
+
+  drawnAt(id: string): { x: number; y: number; shown: boolean; model: boolean } | null {
+    const p3 = this.people3.get(id);
+    if (p3?.ready) return { x: p3.root.position.x, y: p3.root.position.z, shown: p3.root.visible, model: true };
+    const p = this.people.get(id);
+    if (p)
+      return { x: p.root.position.x, y: p.root.position.z, shown: p.root.visible && p.plane.visible, model: false };
+    return null;
   }
 
   // A chat bubble over someone's head (as the iso engine's `say`).
@@ -1372,6 +1539,13 @@ export class ThirdPersonView {
 
   // what's under the pointer: someone, or something to use
   private personAt(): string | null {
+    // the 3D people: the nearest one the ray passes through
+    let best: { id: string; t: number } | null = null;
+    for (const [id, p] of this.people3) {
+      const t = p.hitDistance(this.ray.ray);
+      if (t !== null && (!best || t < best.t)) best = { id, t };
+    }
+    if (best) return best.id;
     const planes: Object3D[] = [];
     for (const p of this.people.values()) if (p.plane.visible && p.root.visible) planes.push(p.plane);
     for (const hit of this.ray.intersectObjects(planes, false)) {
@@ -1679,6 +1853,12 @@ export class ThirdPersonView {
     this.post?.dispose();
     this.light.dispose();
     for (const p of this.people.values()) p.dispose();
+    for (const p of this.people3.values()) p.dispose();
+    this.hands?.dispose();
+    this.charF?.dispose();
+    for (const m of this.propMats.values()) m.dispose();
+    (this.charMats?.body as Material | undefined)?.dispose();
+    (this.charMats?.bodyAway as Material | undefined)?.dispose();
     for (const e of this.pets3.values()) e.model.dispose();
     this.games3?.dispose();
     this.world.dispose();

@@ -40,7 +40,7 @@ const cam = (page: Page) =>
 const myCardShown = (page: Page) =>
   page.evaluate(() => {
     const w = (window as any).__yutopia;
-    return !!w.tp?.people.get(w.room.sessionId)?.root.visible;
+    return !!w.tp?.drawnAt(w.room.sessionId)?.shown;
   });
 // Ana's 8-way facing as Bia's world has it
 const seenD = (pageB: Page, id: string) =>
@@ -247,5 +247,51 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
     localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", last3d: "3p" }));
+  });
+});
+
+// My hands (docs/plan/22-people-3d.md, P5): with nothing to do they stay out
+// of view; the phone out brings them up holding it (drawn in their own pass);
+// put away, they go down again; Settings can turn them off.
+test("first person: my hands come up with the phone, and Settings can hide them", async ({ page }) => {
+  test.setTimeout(120_000);
+  const tok = await token(ANA);
+  const lab = await spaceId(tok, "Yutopia Lab");
+  await stubLock(page);
+  await enter(page, tok, lab);
+  await page.waitForFunction(() => (window as any).__yutopia.tp?.mode === "first", null, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as any).__hud.get().phone.loaded, null, { timeout: 20_000 });
+  const hands = () =>
+    page.evaluate(() => (window as any).__yutopia.tp.handsNow() as { shown: boolean; doing: string } | null);
+  await page.waitForTimeout(800);
+  expect((await hands())?.shown ?? false).toBe(false);
+
+  await page.keyboard.press("p");
+  await expect.poll(async () => (await hands())?.doing, { timeout: 15_000 }).toBe("text");
+  await expect.poll(async () => (await hands())?.shown, { timeout: 30_000 }).toBe(true);
+  if (shots) {
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: `${shots}/live-ana-hands-phone.png` });
+  }
+  await page.keyboard.press("Escape");
+  await expect.poll(async () => (await hands())?.shown ?? false, { timeout: 10_000 }).toBe(false);
+
+  // Settings: the switch is there in first person, on; off, the phone comes out with no hands
+  await page.evaluate(() => (window as any).__hud.set({ panel: { kind: "settings" } }));
+  const row = page.locator("label", { hasText: "Show my hands in first person" }).getByRole("button");
+  await expect(row).toHaveAttribute("aria-pressed", "true");
+  await row.click();
+  await expect(row).toHaveAttribute("aria-pressed", "false");
+  await page.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
+  await page.keyboard.press("p");
+  await page.waitForTimeout(1500);
+  expect(await hands()).toBeNull();
+  await page.keyboard.press("Escape");
+
+  // leave her settings as they were for the other specs
+  await page.evaluate(() => {
+    const k = "yutopia:prefs";
+    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", last3d: "3p", hands1p: true }));
   });
 });

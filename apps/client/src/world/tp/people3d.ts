@@ -229,10 +229,9 @@ export class Person3 {
     const { view, mirror } = viewFor(dir);
     if (p.npc) return this.vortex(p, face, camPitch, lean, tint);
     const sitting = p.a === 2;
-    const rim = night ? "night" : "day";
-    const key = `${JSON.stringify(p.avatar)}|${view}|${sitting ? 1 : 0}|${rim}`;
+    const key = `${JSON.stringify(p.avatar)}|${view}|${sitting ? 1 : 0}`;
     if (key !== this.rigKey) {
-      this.rig = P.avatarRig(p.avatar, view, sitting, rim);
+      this.rig = P.avatarRig(p.avatar, view, sitting);
       this.rigKey = key;
     }
     const rig = this.rig as AvatarRig;

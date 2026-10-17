@@ -2,12 +2,29 @@
 // drawn procedurally by the client, so new options are code, not art files.
 
 export const AVATAR_OPTIONS = {
-  // how the person is drawn: City-pop 80s anime or Ligne claire (clean line, flat colour)
-  style: ["citypop", "ligne"],
+  // how the person is drawn: Ligne claire (one even line, flat colour) — the
+  // only style since City-pop was retired (docs/plan/22-people-3d.md, P0)
+  style: ["ligne"],
   // shapes the body and face only (shoulders, waist, jaw, lashes); neutral = the original figure
   gender: ["neutral", "feminine", "masculine"],
   body: ["regular", "broad", "slim"],
-  hair: ["short", "long", "curly", "bun", "afro", "bob", "mohawk", "bald", "ponytail", "buzz"],
+  hair: [
+    "short",
+    "long",
+    "curly",
+    "bun",
+    "afro",
+    "bob",
+    "mohawk",
+    "bald",
+    "ponytail",
+    "buzz",
+    "crew",
+    "slick",
+    "spiky",
+  ],
+  // facial hair (in the hair's colour): a shadow of stubble, a moustache, a goatee, a full beard
+  beard: ["none", "stubble", "mustache", "goatee", "full"],
   top: ["tee", "hoodie", "shirt", "jacket", "sweater", "dress", "polo", "turtleneck", "blazer", "cardigan", "tank"],
   bottom: ["jeans", "trousers", "shorts", "skirt", "cargo", "longskirt", "joggers"],
   // on the head
@@ -55,6 +72,7 @@ export interface AvatarLayers {
   extraColor: string;
   shoes: string;
   shoesColor: string;
+  beard: string;
 }
 
 export const DEFAULT_AVATAR: AvatarLayers = {
@@ -68,7 +86,7 @@ export const DEFAULT_AVATAR: AvatarLayers = {
   bottomColor: "#3d4a5c",
   accessory: "none",
   accessoryColor: "#e8a33d",
-  style: "citypop",
+  style: "ligne",
   gender: "neutral",
   eyewear: "none",
   eyewearColor: "#2a2420",
@@ -76,6 +94,7 @@ export const DEFAULT_AVATAR: AvatarLayers = {
   extraColor: "#e8a33d",
   shoes: "sneakers",
   shoesColor: "#efe4cc",
+  beard: "none",
 };
 
 export function parseAvatar(raw: unknown): AvatarLayers {
@@ -97,6 +116,8 @@ export function parseAvatar(raw: unknown): AvatarLayers {
     const color = k === "skin" || k.endsWith("Color");
     if (color ? /^#[0-9a-f]{6}$/i.test(v) : /^[a-z0-9_-]{1,24}$/i.test(v)) out[k] = v;
   }
+  // one style for everyone: a City-pop look (an old token, an old tab) is Ligne claire
+  out.style = "ligne";
   // looks saved before glasses and the walkman had slots of their own
   // (Yondra fills missing slots with their defaults, so an empty slot is "none")
   if (out.accessory === "glasses") {
@@ -116,16 +137,20 @@ export function parseAvatar(raw: unknown): AvatarLayers {
 }
 
 // Deterministic "random" avatar for bots and Vortex-touched guests.
+// the hair styles there were when bots got their looks (newer ones aren't drawn
+// for them, so each bot keeps its hair)
+const SEED_HAIR = ["short", "long", "curly", "bun", "afro", "bob", "mohawk", "bald", "ponytail", "buzz"] as const;
+
 export function avatarFromSeed(seed: number): AvatarLayers {
   let s = seed * 9301 + 49297;
   const pick = <T>(arr: readonly T[]): T => {
     s = (s * 9301 + 49297) % 233280;
     return arr[Math.floor((s / 233280) * arr.length)];
   };
-  return {
+  const a: AvatarLayers = {
     body: pick(AVATAR_OPTIONS.body),
     skin: pick(SKIN_TONES),
-    hair: pick(AVATAR_OPTIONS.hair),
+    hair: pick(SEED_HAIR),
     hairColor: pick(HAIR_COLORS),
     top: pick(AVATAR_OPTIONS.top),
     topColor: pick(CLOTH_COLORS),
@@ -133,7 +158,9 @@ export function avatarFromSeed(seed: number): AvatarLayers {
     bottomColor: pick(CLOTH_COLORS),
     accessory: pick(AVATAR_OPTIONS.accessory),
     accessoryColor: pick(CLOTH_COLORS),
-    style: pick(AVATAR_OPTIONS.style),
+    // (still one draw from the old two-style list, so every pick after it — and
+    // so each bot's look — stays as it was)
+    style: pick(["ligne", "ligne"]),
     gender: pick(AVATAR_OPTIONS.gender),
     // (picked after the rest: bots keep the looks they had)
     eyewear: pick(["none", "none", ...AVATAR_OPTIONS.eyewear]),
@@ -142,5 +169,10 @@ export function avatarFromSeed(seed: number): AvatarLayers {
     extraColor: pick(CLOTH_COLORS),
     shoes: pick(AVATAR_OPTIONS.shoes),
     shoesColor: pick(["#efe4cc", "#2a2420", "#5b3a26", "#b5562f", "#efe4cc"]),
+    beard: "none",
   };
+  // (the last draw: everything above stays as it was) some masculine bots grow one
+  const beard = pick(["none", "none", "stubble", "mustache", "goatee", "full"]);
+  if (a.gender === "masculine") a.beard = beard;
+  return a;
 }

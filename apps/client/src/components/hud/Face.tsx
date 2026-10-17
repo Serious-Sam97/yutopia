@@ -2,11 +2,22 @@
 
 import { parseAvatar } from "@yutopia/shared";
 import { useMemo } from "react";
+import { useChars } from "../useChars";
 import { usePeople } from "../usePeople";
 
 type People = NonNullable<ReturnType<typeof usePeople>>;
+type Chars = NonNullable<ReturnType<typeof useChars>>;
 
-// A person's portrait: the head of their own avatar drawing, facing you.
+// A person's portrait: their 3D model's head and shoulders, a little turned
+// (world/chars, rendered once per look and kept as a picture); the head of
+// their vector drawing where WebGL can't draw.
+const portraits = new Map<string, string | null>();
+function portrait3d(C: Chars, seed: string): string | null {
+  const iso = C.isoPeople();
+  if (!iso.canDraw()) return null; // (no GPU: the drawing)
+  if (!portraits.has(seed)) portraits.set(seed, iso.portrait(parseAvatar(seed), 128));
+  return portraits.get(seed) ?? null;
+}
 const cache = new Map<string, string>();
 function portrait(P: People, seed: string): string {
   let url = cache.get(seed);
@@ -36,9 +47,11 @@ export function Face({
   status?: string;
   ring?: string; // e.g. the speaking glow
 }) {
-  // (the drawing loads with the people chunk; a plain disc until then)
-  const P = usePeople();
-  const src = useMemo(() => (P ? portrait(P, avatar) : ""), [P, avatar]);
+  // (a plain disc while the 3D people load; the drawing only without WebGL)
+  const C = useChars();
+  const pic = useMemo(() => (C ? portrait3d(C, avatar) : ""), [C, avatar]);
+  const P = usePeople(pic === null);
+  const src = useMemo(() => pic || (pic === null && P ? portrait(P, avatar) : ""), [pic, P, avatar]);
   return (
     <span
       className="relative inline-block shrink-0 rounded-full"

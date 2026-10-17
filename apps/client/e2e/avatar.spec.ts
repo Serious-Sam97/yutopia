@@ -3,7 +3,8 @@ import { expect, request } from "@playwright/test";
 import { ANA, API, BIA, enter, spaceId, test, token } from "./helpers";
 
 // Changing your look without leaving the studio: Settings → Change my look,
-// pick Ligne claire, save — it's kept in Yondra and Bia sees it right away.
+// pick another figure, save — it's kept in Yondra and Bia sees it right away.
+// (Everyone is Ligne claire: the editor has no style row, the look keeps it.)
 test("change your look in the studio; others see it live", async ({ browser }) => {
   test.setTimeout(120_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
@@ -21,21 +22,24 @@ test("change your look in the studio; others see it live", async ({ browser }) =
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     const anaUid = await ana.evaluate(() => (window as any).__yutopia.myUid());
-    const style = () =>
-      bia.evaluate((uid) => JSON.parse((window as any).__yutopia.personByUid(uid)?.avatar ?? "{}").style, anaUid);
-    const next = before.style === "ligne" ? "City-pop 80s" : "Ligne claire";
+    const look = () =>
+      bia.evaluate((uid) => JSON.parse((window as any).__yutopia.personByUid(uid)?.avatar ?? "{}"), anaUid);
+    const next = before.gender === "feminine" ? "Masculine" : "Feminine";
 
     await ana.getByRole("button", { name: "Settings" }).click();
     await ana.getByRole("button", { name: "Change my look" }).click();
     const panel = ana.getByRole("dialog", { name: "My look" });
+    await expect(panel.getByRole("button", { name: next })).toBeVisible();
+    await expect(panel.getByRole("button", { name: /City-pop/ })).toHaveCount(0);
     await panel.getByRole("button", { name: next }).click();
     await panel.getByRole("button", { name: "Save" }).click();
     await expect(panel).toBeHidden();
-
-    const want = next === "Ligne claire" ? "ligne" : "citypop";
-    await expect.poll(style, { timeout: 5000 }).toBe(want);
+    const want = next.toLowerCase();
+    await expect.poll(async () => (await look()).gender, { timeout: 5000 }).toBe(want);
+    expect((await look()).style).toBe("ligne");
     const saved = (await (await api.get(`${API}/api/yutopia/avatar`)).json()).avatar;
-    expect(saved.style).toBe(want);
+    expect(saved.gender).toBe(want);
+    expect(saved.style).toBe("ligne");
     expect(errors).toEqual([]);
   } finally {
     await api.put(`${API}/api/yutopia/avatar`, { data: before });

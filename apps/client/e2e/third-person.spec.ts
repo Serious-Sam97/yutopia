@@ -19,8 +19,8 @@ const mePos = (page: Page) =>
 // where Ana's 3D view draws someone (tiles), or null
 const drawnIn3d = (page: Page, id: string) =>
   page.evaluate((i) => {
-    const p = (window as any).__yutopia.tp?.people.get(i);
-    return p?.plane.visible ? { x: p.root.position.x as number, y: p.root.position.z as number } : null;
+    const p = (window as any).__yutopia.tp?.drawnAt(i);
+    return p?.shown ? { x: p.x as number, y: p.y as number } : null;
   }, id);
 // where Bia's iso engine draws someone
 const drawnInIso = (page: Page, id: string) =>
@@ -257,8 +257,8 @@ test("third person: emotes and phones over there, a sofa clicked in 3D seats you
       .poll(() =>
         page.evaluate(() => {
           const w = (window as any).__yutopia;
-          const p = w.tp.people.get(w.room.sessionId);
-          return p?.plane.visible ? Math.floor(p.root.position.z) : null;
+          const p = w.tp.drawnAt(w.room.sessionId);
+          return p?.shown ? Math.floor(p.y) : null;
         }),
       )
       .toBe(Y);

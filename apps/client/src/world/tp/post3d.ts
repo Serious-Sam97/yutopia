@@ -45,6 +45,7 @@ export class Post3 {
   private bloom: UnrealBloomPass;
   private finish: ShaderPass;
   private frame = 0;
+  private over: RenderPass | null = null; // first person's hands, over the room (its depth cleared)
 
   constructor(renderer: WebGLRenderer, scene: Scene, camera: Camera) {
     this.composer = new EffectComposer(renderer);
@@ -69,13 +70,27 @@ export class Post3 {
     this.bloom.enabled = n > 0.05;
   }
 
-  render(moving: boolean) {
+  render(moving: boolean, over?: { scene: Scene; camera: Camera } | null) {
+    if (over && !this.over) {
+      this.over = new RenderPass(over.scene, over.camera);
+      this.over.clear = false;
+      this.over.clearDepth = true;
+      this.composer.insertPass(this.over, 1);
+    }
+    if (this.over) {
+      this.over.enabled = !!over;
+      if (over) {
+        this.over.scene = over.scene;
+        this.over.camera = over.camera;
+      }
+    }
     if (moving) this.frame = (this.frame + 1) % 997;
     this.finish.uniforms.frame.value = this.frame;
     this.composer.render();
   }
 
   dispose() {
+    this.over?.dispose();
     this.composer.dispose();
     this.bloom.dispose();
   }

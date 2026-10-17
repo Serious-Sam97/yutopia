@@ -3,12 +3,15 @@
 import { type AvatarLayers, avatarFromSeed, DEFAULT_AVATAR } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useChars } from "@/components/useChars";
 import { Motion, walkPose } from "@/world/art/avatar-motion";
 import { composeSvg } from "@/world/art/avatar-rig";
 import { avatarRig, avatarSvg, type View } from "@/world/art/avatar-svg";
 import { vortexSvg } from "@/world/art/vortex/vortexArt";
 
 // Dev-only turnaround sheet for the character art (image-first review).
+// ?3d=1: the same cast as the iso view draws it now — sprites of the 3D models
+// (world/chars/iso.ts), the 8 facings and the walk's 8 frames.
 const VIEWS: [View, boolean][] = [
   ["S", false],
   ["SW", false],
@@ -20,7 +23,6 @@ const VIEWS: [View, boolean][] = [
   ["SW", true],
 ];
 
-// ?style=ligne draws the whole cast in Ligne claire (default: City-pop);
 // ?gender=feminine|masculine|neutral sets everyone (default: rows cycle through them)
 const BASE = (({ style: _s, gender: _g, ...rest }) => rest)(DEFAULT_AVATAR);
 const CAST: Omit<AvatarLayers, "style" | "gender">[] = [
@@ -214,6 +216,60 @@ function RigClip({ a, clip, z }: { a: AvatarLayers; clip: Clip; z: number }) {
   );
 }
 
+// The cast as iso sprites of their 3D models: each row the 8 facings standing, then the walk.
+function Sheet3d({ cast, z }: { cast: AvatarLayers[]; z: number }) {
+  const C = useChars();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = ref.current;
+    if (!C || !host) return;
+    const iso = C.isoPeople();
+    const W = C.ISO.W;
+    const H = C.ISO.H;
+    host.innerHTML = "";
+    const jobs = cast.flatMap((a) => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:0;background:#3b281b;margin-bottom:4px;border-radius:6px";
+      host.appendChild(row);
+      const cells = [...Array(16).keys()].map((i) => {
+        const c = document.createElement("canvas");
+        c.width = W;
+        c.height = H;
+        c.style.cssText = `width:${(W / 2) * z}px;height:${(H / 2) * z}px${i === 8 ? ";margin-left:12px" : ""}`;
+        row.appendChild(c);
+        return c;
+      });
+      return cells.map((cell, i) => ({ a, cell, dir: i < 8 ? i : 0, walk: i < 8 ? -1 : i - 8, done: false }));
+    });
+    let raf = 0;
+    let n = 0;
+    const tick = () => {
+      for (const j of jobs) {
+        if (j.done) continue;
+        const mem = { phase: j.walk >= 0 ? (j.walk + 0.5) / 8 : 0 };
+        const sp = iso.sprite(
+          mem,
+          { avatar: j.a, dir: j.dir, a: j.walk >= 0 ? 1 : 0, dist: 0, dt: 1 / 60, reduced: true },
+          performance.now() + n++,
+        );
+        if (!sp) continue;
+        (j.cell.getContext("2d") as CanvasRenderingContext2D).drawImage(sp.canvas, 0, 0);
+        j.done = true;
+      }
+      if (jobs.some((j) => !j.done)) raf = requestAnimationFrame(tick);
+      else (window as unknown as { __sheet3d?: boolean }).__sheet3d = true;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [C, cast, z]);
+  return (
+    <main style={{ background: "#2a1c13", minHeight: "100%", overflow: "auto", padding: 16, height: "100vh" }}>
+      <h1 className="lcd text-2xl mb-2">YUTOPIA · PEOPLE IN ISO (3D MODELS)</h1>
+      <div ref={ref} />
+    </main>
+  );
+}
+
 export default function Sheet() {
   // review tool only: not served in production builds
   if (process.env.NODE_ENV === "production") notFound();
@@ -222,13 +278,13 @@ export default function Sheet() {
   useEffect(() => setQ(new URLSearchParams(location.search)), []);
   const z = Number(q.get("z") ?? 1);
   const only = q.get("n") ? Number(q.get("n")) : CAST.length;
-  const style = q.get("style") ?? "citypop";
   const genders = ["feminine", "masculine", "neutral"];
   const cast: AvatarLayers[] = CAST.slice(0, only).map((c, i) => ({
     ...c,
-    style,
+    style: "ligne",
     gender: q.get("gender") ?? genders[i % 3],
   }));
+  if (q.get("3d")) return <Sheet3d cast={cast} z={z} />;
   if (q.get("frames")) {
     // the walk cycle as a contact strip: 8 phases per view
     const views: View[] = ["S", "SW", "W", "NW", "N"];

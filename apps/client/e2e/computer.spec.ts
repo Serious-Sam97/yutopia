@@ -30,6 +30,43 @@ setTimeout(() => { P({ type: "vortexos:user", username: "ana", era: "win98" }); 
 setTimeout(() => { P({ type: "vortexos:app", name: "Paint" }); document.getElementById("s").textContent = "desktop"; }, 1500);
 </script>`;
 
+// A desk near the arrival point, where there's room: the Lab is a shared dev
+// space, so the first free spot the server accepts (it says what fits), not
+// one fixed tile. Returns where it went (the chair goes at y + 1).
+async function deskSpot(page: Page, sp: { x: number; y: number }, id: string) {
+  const tries = [
+    [-4, -4],
+    [-4, -7],
+    [-7, -4],
+    [-7, -7],
+    [2, -7],
+    [-4, 2],
+    [-10, -4],
+  ];
+  for (const [dx, dy] of tries) {
+    const D = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
+    const clear = await page.evaluate(
+      (d) =>
+        ![...(window as any).__yutopia.room.state.objects.values()].some(
+          (o: any) => o.x >= d.x - 1 && o.x <= d.x + 2 && o.y >= d.y - 1 && o.y <= d.y + 2,
+        ),
+      D,
+    );
+    if (!clear) continue;
+    await page.evaluate(
+      ([d, i]) => (window as any).__yutopia.send("obj:put", { id: i, kind: "desk", x: d.x, y: d.y, rot: 2 }),
+      [D, id] as const,
+    );
+    const placed = await expect
+      .poll(() => page.evaluate((i) => !!(window as any).__yutopia.engine.getObject(i), id), { timeout: 4000 })
+      .toBe(true)
+      .then(() => true)
+      .catch(() => false);
+    if (placed) return D;
+  }
+  throw new Error("no room for a desk near the arrival point");
+}
+
 const comp = (page: Page, id: string) =>
   page.evaluate((cid) => {
     const c = (window as any).__yutopia.room.state.computers.get(cid);
@@ -43,9 +80,9 @@ test("a computer boots VortexOS for everyone, one person at a time", async ({ pa
   const space = await spaceId(tok, "Yutopia Lab");
   await enter(page, tok, space);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
-  const D = { x: Math.floor(sp.x) - 4, y: Math.floor(sp.y) - 4 };
   const stamp = Date.now().toString(36);
   const ids = { desk: `e2e-pc-desk-${stamp}`, chair: `e2e-pc-chair-${stamp}`, pc: `e2e-pc-${stamp}` };
+  const D = await deskSpot(page, sp, ids.desk);
   const ctxB = await browser.newContext();
   const bia = await ctxB.newPage();
   try {
@@ -55,7 +92,6 @@ test("a computer boots VortexOS for everyone, one person at a time", async ({ pa
         const w = (window as any).__yutopia;
         // (turned to face the camera: the sitter on the +y side)
         w.send("obj:put", { id: i.chair, kind: "chair", x: d.x, y: d.y + 1, rot: 2, props: { desk: true } });
-        w.send("obj:put", { id: i.desk, kind: "desk", x: d.x, y: d.y, rot: 2 });
       },
       [D, ids] as const,
     );
@@ -166,9 +202,9 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
   const space = await spaceId(tok, "Yutopia Lab");
   await enter(page, tok, space);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
-  const D = { x: Math.floor(sp.x) - 4, y: Math.floor(sp.y) - 4 };
   const stamp = Date.now().toString(36);
   const ids = { desk: `e2e-pc3-desk-${stamp}`, chair: `e2e-pc3-chair-${stamp}`, pc: `e2e-pc3-${stamp}` };
+  const D = await deskSpot(page, sp, ids.desk);
   const ctxB = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const bia = await ctxB.newPage();
   await bia.addInitScript(() => {
@@ -181,7 +217,6 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
       ([d, i]) => {
         const w = (window as any).__yutopia;
         w.send("obj:put", { id: i.chair, kind: "chair", x: d.x + 1, y: d.y + 1, rot: 2, props: { desk: true } });
-        w.send("obj:put", { id: i.desk, kind: "desk", x: d.x, y: d.y, rot: 2 });
       },
       [D, ids] as const,
     );
@@ -239,9 +274,9 @@ test("the real VortexOS: boot, sign in with Yondra, desktop, stand up", async ({
   const space = await spaceId(tok, "Yutopia Lab");
   await enter(page, tok, space);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
-  const D = { x: Math.floor(sp.x) - 4, y: Math.floor(sp.y) - 4 };
   const stamp = Date.now().toString(36);
   const ids = { desk: `e2e-pcr-desk-${stamp}`, chair: `e2e-pcr-chair-${stamp}`, pc: `e2e-pcr-${stamp}` };
+  const D = await deskSpot(page, sp, ids.desk);
   const ctxB = await browser.newContext();
   const bia = await ctxB.newPage();
   const seen: string[] = [];
@@ -250,7 +285,6 @@ test("the real VortexOS: boot, sign in with Yondra, desktop, stand up", async ({
       ([d, i]) => {
         const w = (window as any).__yutopia;
         w.send("obj:put", { id: i.chair, kind: "chair", x: d.x, y: d.y + 1, rot: 2, props: { desk: true } });
-        w.send("obj:put", { id: i.desk, kind: "desk", x: d.x, y: d.y, rot: 2 });
       },
       [D, ids] as const,
     );
@@ -324,14 +358,10 @@ test("a VortexOS that doesn't talk back: no NO SIGNAL, the glass goes on by itse
   const tok = await token(ANA);
   await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
-  const D = { x: Math.floor(sp.x) - 4, y: Math.floor(sp.y) - 4 };
   const stamp = Date.now().toString(36);
   const ids = { desk: `e2e-pcq-desk-${stamp}`, pc: `e2e-pcq-${stamp}` };
+  const D = await deskSpot(page, sp, ids.desk);
   try {
-    await page.evaluate(
-      ([d, i]) => (window as any).__yutopia.send("obj:put", { id: i.desk, kind: "desk", x: d.x, y: d.y, rot: 2 }),
-      [D, ids] as const,
-    );
     await expect
       .poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.desk))
       .toBe(true);

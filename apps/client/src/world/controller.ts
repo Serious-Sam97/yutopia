@@ -2433,6 +2433,7 @@ export class WorldController {
     if (this.tp) {
       this.tp.lookSens = prefs().lookSens;
       this.tp.lookInvert = prefs().lookInvert;
+      this.tp.handsOn = prefs().hands1p;
     }
     if (want === this.viewNow) return;
     this.viewNow = want;
@@ -2502,6 +2503,7 @@ export class WorldController {
       v.setMode(this.camWanted());
       v.lookSens = prefs().lookSens;
       v.lookInvert = prefs().lookInvert;
+      v.handsOn = prefs().hands1p;
       v.setHour(this.hour);
       v.yaw = this.meAngle; // start behind me
       engine.app.canvas.style.visibility = "hidden";

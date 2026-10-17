@@ -6,7 +6,6 @@
 export type Fill = (d: string, c: string, w?: number) => string;
 export interface Paint {
   fill: Fill;
-  flat: (d: string, c: string, op?: number) => string;
   shade: (c: string) => string;
   light: (c: string) => string;
   ink: string;
@@ -18,7 +17,7 @@ const mirror = (g: string) => `<g transform="translate(120 0) scale(-1 1)">${g}<
 // ── shoes ────────────────────────────────────────────────────────────────────
 // One foot from the front (the left; the right is its mirror), standing.
 function footFront(p: Paint, kind: string, c: string, skin: string, stripe: string, back: boolean): string {
-  const { fill, flat, shade, light } = p;
+  const { fill, shade, light } = p;
   const base = back ? "M46 159 Q45 166 50 167 L57 167 L57 159Z" : "M46 159 Q45 167 50 167.5 L58 167.5 Q59 163 56 159Z";
   switch (kind) {
     case "hightops":
@@ -73,7 +72,6 @@ function footFront(p: Paint, kind: string, c: string, skin: string, stripe: stri
       let g = fill(base, c);
       if (!back) {
         g += `<path d="M47.5 162.5 Q51.5 161 55.5 162.5" stroke="${stripe}" stroke-width="1.1" fill="none" stroke-linecap="round"/>`;
-        g += flat("M46 164.5 H58.2 L58.4 166.2 Q54 167.8 49.6 167.4 Q45.6 166.8 46 164.5Z", shade(c), 0.35);
       }
       return g;
     }
@@ -172,12 +170,10 @@ export const JACKET_CUT = new Set(["jacket", "blazer"]);
 
 // Details on the front of the new tops (S, SW), inside the torso's clip.
 export function topFront(p: Paint, top: string, c: string, inner: string, cx: number, accent: string): string {
-  const { fill, flat, shade, light } = p;
+  const { fill, shade, light } = p;
   const tS = shade(c);
   const hem = fill("M41 100 Q60 105 79 100 L79 104 Q60 109 41 104Z", c, 0.8);
-  const rib =
-    fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", c, 0.8) +
-    flat("M66 102.6 Q73 101.5 79 99 L79 105 Q72 107 66 108.3Z", tS);
+  const rib = fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", c, 0.8);
   switch (top) {
     case "polo":
       return (
@@ -216,7 +212,7 @@ export function topFront(p: Paint, top: string, c: string, inner: string, cx: nu
 
 // …from behind (N, NW)
 export function topBack(p: Paint, top: string, c: string): string {
-  const { fill, flat, shade, light } = p;
+  const { fill, shade, light } = p;
   const tS = shade(c);
   switch (top) {
     case "polo":
@@ -228,7 +224,7 @@ export function topBack(p: Paint, top: string, c: string): string {
       return `<path d="M60 58 V90" stroke="${tS}" stroke-width=".8"/><path d="M60 92 V104" stroke="${tS}" stroke-width="1.1"/>`;
     case "cardigan":
     case "turtleneck":
-      return `<path d="M60 58 V100" stroke="${tS}" stroke-width=".8"/>${fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", c, 0.8)}${flat("M66 102.6 Q73 101.5 79 99 L79 105 Q72 107 66 108.3Z", tS)}`;
+      return `<path d="M60 58 V100" stroke="${tS}" stroke-width=".8"/>${fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", c, 0.8)}`;
     default:
       return "";
   }
@@ -316,7 +312,6 @@ export function bottomSide(p: Paint, bottom: string, c: string, part: "thigh" | 
   return "";
 }
 export const LONGSKIRT_FRONT = "M44 100 L37.5 155.5 Q60 161.5 82.5 155.5 L76 100Z";
-export const LONGSKIRT_SHADE = "M66 101 L76 100 L82.5 155.5 Q74 158.6 66 159.4Z";
 export const LONGSKIRT_SIDE = "M50.5 100 L44.5 154 Q59 158 75 154 L69.5 100Z";
 
 // ── on the head ──────────────────────────────────────────────────────────────
@@ -413,7 +408,7 @@ export function eyewear(p: Paint, kind: string, c: string, view: "front" | "tq" 
 // ── one more thing ───────────────────────────────────────────────────────────
 // Round the neck and over the chest (drawn over the neck), by view.
 export function neckThing(p: Paint, kind: string, c: string, view: "front" | "back" | "side", cx: number): string {
-  const { fill, flat, shade, light } = p;
+  const { fill, shade, light } = p;
   if (kind === "scarf") {
     if (view === "side")
       return (
@@ -421,16 +416,11 @@ export function neckThing(p: Paint, kind: string, c: string, view: "front" | "ba
         fill("M55.4 57.4 L53.2 74 L57.4 74.6 L58.6 57.8Z", c) +
         `<path d="M53.6 72 l-.4 3.2 M55.4 72.4 l-.2 3.2 M57 72.6 v3" stroke="${shade(c)}" stroke-width=".7"/>`
       );
-    if (view === "back")
-      return (
-        fill("M51 51.6 Q60 55.8 69 51.6 L70 57 Q60 61.2 50 57Z", c) +
-        flat("M63 54 L70 51.6 L70 57 L63 59Z", shade(c), 0.6)
-      );
+    if (view === "back") return fill("M51 51.6 Q60 55.8 69 51.6 L70 57 Q60 61.2 50 57Z", c);
     return (
       fill("M51.4 51.8 Q60 58.4 68.6 51.8 L70 57.6 Q60 64.4 50 57.6Z", c) +
       fill(`M${cx + 2} 58.4 L${cx + 3.4} 77 L${cx + 7.6} 76.2 L${cx + 6.6} 57.6Z`, c) +
-      `<path d="M${cx + 4} 74.6 v3 M${cx + 5.6} 74.4 v3 M${cx + 7} 74.2 v2.8" stroke="${light(c)}" stroke-width=".7"/>` +
-      flat("M63 55 L70 52 L70 57.6 L63 60Z", shade(c), 0.6)
+      `<path d="M${cx + 4} 74.6 v3 M${cx + 5.6} 74.4 v3 M${cx + 7} 74.2 v2.8" stroke="${light(c)}" stroke-width=".7"/>`
     );
   }
   if (kind === "necklace") {
@@ -445,7 +435,7 @@ export function neckThing(p: Paint, kind: string, c: string, view: "front" | "ba
 // A backpack: on the back (seen from behind), its straps from the front, its
 // pack behind the shoulder in profile (`behind`: the part drawn before the torso).
 export function backpack(p: Paint, c: string, view: "front" | "back" | "side", behind: boolean): string {
-  const { fill, flat, shade } = p;
+  const { fill, shade } = p;
   if (view === "back")
     return behind
       ? ""
@@ -454,12 +444,10 @@ export function backpack(p: Paint, c: string, view: "front" | "back" | "side", b
           c,
         ) +
           fill("M50 80 L70 80 L70 92 Q70 93.6 68.4 93.6 L51.6 93.6 Q50 93.6 50 92Z", shade(c)) +
-          `<path d="M50.6 84 H69.4" stroke="${shade(shade(c))}" stroke-width=".8"/>` +
-          flat("M66 58 L73.4 60 L74 92 Q73 95.6 69 96.2 L66 96.2Z", shade(c), 0.5);
+          `<path d="M50.6 84 H69.4" stroke="${shade(shade(c))}" stroke-width=".8"/>`;
   if (view === "side")
     return behind
-      ? fill("M70.6 59.6 Q76 59.6 77.6 64 L78.6 92 Q78.2 96.4 74 96.4 L70.6 96.4Z", c) +
-          flat("M74 62 Q77.4 63 77.8 66 L78.6 92 Q78 95.6 75.4 96.2Z", shade(c), 0.6)
+      ? fill("M70.6 59.6 Q76 59.6 77.6 64 L78.6 92 Q78.2 96.4 74 96.4 L70.6 96.4Z", c)
       : `<path d="M56 58.6 Q61 56.6 66 59.6" stroke="${shade(c)}" stroke-width="2.6" fill="none"/><path d="M63.6 60 L63 82" stroke="${shade(c)}" stroke-width="2.4"/>`;
   return behind
     ? ""

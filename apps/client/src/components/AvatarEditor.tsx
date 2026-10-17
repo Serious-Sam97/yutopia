@@ -15,16 +15,22 @@ import { type Key, useTr } from "@/lib/i18n";
 type ShapeKey = keyof typeof AVATAR_OPTIONS;
 // shoes: cream, black, walnut, rust, olive, slate; frames: dark, tortoise, gold, rust, slate
 // options whose slug isn't how you'd say it
-const NAMES: Record<string, string> = { longskirt: "long skirt", hightops: "high-tops" };
+const NAMES: Record<string, string> = {
+  longskirt: "long skirt",
+  hightops: "high-tops",
+  crew: "crew cut",
+  slick: "slicked back",
+  full: "full beard",
+};
 const SHOE_COLORS = ["#efe4cc", "#2a2420", "#5b3a26", "#b5562f", "#6e7b3a", "#3d4a5c"];
 const FRAME_COLORS = ["#2a2420", "#5b3a26", "#c39a4a", "#b5562f", "#3d4a5c"];
 const ROWS: { shape?: ShapeKey; color?: keyof AvatarLayers; palette?: string[]; label: Key }[] = [
-  { shape: "style", label: "style" },
   { shape: "gender", label: "gender" },
   { shape: "body", label: "body" },
   { color: "skin", palette: SKIN_TONES, label: "skin" },
   { shape: "hair", label: "hair" },
   { color: "hairColor", palette: HAIR_COLORS, label: "hairColor" },
+  { shape: "beard", label: "beard" },
   { shape: "top", label: "top" },
   { color: "topColor", palette: CLOTH_COLORS, label: "topColor" },
   { shape: "bottom", label: "bottom" },
@@ -129,9 +135,7 @@ export function AvatarEditor({
                   className="deck-btn"
                   style={{ height: 36, fontSize: 11 }}
                 >
-                  {row.shape === "style" || row.shape === "gender"
-                    ? t(`${row.shape}_${opt}` as Key)
-                    : (NAMES[opt] ?? opt)}
+                  {row.shape === "gender" ? t(`${row.shape}_${opt}` as Key) : (NAMES[opt] ?? opt)}
                 </button>
               ))}
             {row.color &&

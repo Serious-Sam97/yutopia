@@ -3,7 +3,7 @@
 import type { AvatarLayers, Emote, Want } from "@yutopia/shared";
 import { ImageSource, Texture } from "pixi.js";
 import type { Box, Face, PartArt } from "./avatar-rig";
-import type { Rim, View } from "./avatar-svg";
+import type { View } from "./avatar-svg";
 import { emoteSvg } from "./emotes";
 import { HELD_BOX, heldSvg } from "./held";
 import { people } from "./people-load";
@@ -61,22 +61,15 @@ function get(key: string, make: () => string): Texture | null {
 }
 
 // A person's whole drawing at rest (what shows while their rig's parts decode).
-// The rim light follows the hour: warm and sky blue by day, neon at night.
-export function avatarTexture(
-  a: AvatarLayers,
-  view: View,
-  frame: number,
-  sitting: boolean,
-  rim: Rim = "day",
-): Texture | null {
+export function avatarTexture(a: AvatarLayers, view: View, frame: number, sitting: boolean): Texture | null {
   const base = `p|${JSON.stringify(a)}|${view}`;
   const P = people();
   if (!P) return null; // the people chunk is still loading
-  return get(`${base}|${frame}|${sitting ? 1 : 0}|${rim}`, () => P.avatarSvg(a, view, frame, sitting, 2, rim));
+  return get(`${base}|${frame}|${sitting ? 1 : 0}`, () => P.avatarSvg(a, view, frame, sitting, 2));
 }
 
 // One part of a person's rig (avatar-rig.ts), `RIG_PX` texture px per board
-// unit. `key` names the look, view, seat and light it belongs to.
+// unit. `key` names the look, view and seat it belongs to.
 export const RIG_PX = 2;
 export function rigPartTexture(key: string, part: PartArt, face?: Face, svg?: string): Texture | null {
   return get(`r|${key}|${part.name}${face ? `|${face}` : ""}`, () => svgDoc(svg ?? part.svg, part.box, RIG_PX));

@@ -23,7 +23,6 @@ import {
   headThing,
   JACKET_CUT,
   LONGSKIRT_FRONT,
-  LONGSKIRT_SHADE,
   LONGSKIRT_SIDE,
   neckThing,
   type Paint,
@@ -43,34 +42,25 @@ import {
   watch,
 } from "./wardrobe";
 
-// Yutopia people in the style each person picks (`style`, docs/art-style.md).
-// City-pop 80s anime (default): about 5½ heads
-// tall, flat fills with hard violet shade shapes, gradient hair with a highlight
-// band, big glossy eyes, and a rim light down the edges — warm and sky blue by
-// day, neon pink and cyan at night. Five drawn views — S (front), SW (¾ front),
-// W (side), NW (¾ back), N (back); the other three facings are mirrors.
+// Yutopia people in Ligne claire (docs/art-style.md): one even black line,
+// flat colours with a darker flat tone for shade, dot eyes and a nose hook.
+// (City-pop, the other style, was retired: docs/plan/22-people-3d.md, P0.)
+// Five drawn views — S (front), SW (¾ front), W (side), NW (¾ back), N (back);
+// the other three facings are mirrors. This 2D drawing is what the world shows
+// until the 3D people (world/chars) replace it, and the fallback after.
 //
 // The figure is drawn on a 120×180 board (feet on y = 168) and placed into the
 // 64×100 box the engine and the HUD expect (feet on y = 96). It's drawn as a
 // rig (avatar-rig.ts): parts with joints, posed by the world every frame;
 // `avatarSvg` composes them into one still drawing (portraits, previews).
-//
-// Ligne claire paints the same figure and poses differently: one even black
-// line, flat colours, dot eyes and a nose hook — no violet shade, no rim light.
 
 // Marks the people chunk for `pnpm budget` (art/people.ts loads it on demand).
 export const PEOPLE_CHUNK = "yutopia-people";
 
 export type View = "S" | "SW" | "W" | "NW" | "N";
-export type Rim = "day" | "night";
 
-const INK = "#2a1430";
-const LIGNE_INK = "#151515";
-// the paint of the drawing being made (set at the top of rigFor(); drawing is synchronous)
-let ligne = false;
-let ink = INK;
+const ink = "#151515";
 const SHOE = "#fff4ea";
-const RIMS: Record<Rim, [string, string]> = { day: ["#ffc070", "#a8dcff"], night: ["#ff5fa8", "#5ff0ff"] };
 // board → texture box: feet (60, 168) land on (32, 96)
 export const FIT = 0.585;
 const FIT_X = 32 - 60 * FIT;
@@ -96,8 +86,8 @@ export function mix(a: string, b: string, t: number): string {
       .padStart(2, "0"),
   ).join("")}`;
 }
-// hard shadows lean violet; Ligne claire just uses a darker flat tone
-const shade = (c: string) => (ligne ? mix(c, "#000000", 0.22) : mix(c, "#2a1a5e", 0.45));
+// shade is just a darker flat tone
+const shade = (c: string) => mix(c, "#000000", 0.22);
 const light = (c: string) => mix(c, "#fff4e6", 0.4);
 const lum = (c: string) => {
   const [r, g, b] = rgb(c);
@@ -106,15 +96,8 @@ const lum = (c: string) => {
 
 // A still drawing: the rig at rest, or (frame 1–7) a step of the walk —
 // what the editor's turntable and the lobby show.
-export function avatarSvg(
-  a: AvatarLayers,
-  view: View,
-  frame: number,
-  sitting: boolean,
-  px = 2,
-  rim: Rim = "day",
-): string {
-  const rig = avatarRig(a, view, sitting, rim);
+export function avatarSvg(a: AvatarLayers, view: View, frame: number, sitting: boolean, px = 2): string {
+  const rig = avatarRig(a, view, sitting);
   const pose = sitting || !frame ? stillPose(rig) : walkPose(rig, (frame % 8) / 8, 1);
   const shadow =
     rig.back && sitting
@@ -131,13 +114,18 @@ export const partSvg = svgDoc;
 const rigs = new Map<string, AvatarRig>();
 export type AvatarRig = Rig & { squash: number; id: string };
 
+// The 3D people's newer hair styles, as the nearest one the drawing has (the
+// drawing is only the fallback now; facial hair is the 3D model's alone).
+const DRAWN_HAIR: Record<string, string> = { crew: "buzz", slick: "short", spiky: "short" };
+const drawable = (a: AvatarLayers): AvatarLayers => (a.hair in DRAWN_HAIR ? { ...a, hair: DRAWN_HAIR[a.hair] } : a);
+
 // The rig for a look, a view and seated or not (cached: building it is all
 // string work).
-export function avatarRig(a: AvatarLayers, view: View, sit: boolean, rim: Rim = "day"): AvatarRig {
-  const key = `${JSON.stringify(a)}|${view}|${sit ? 1 : 0}|${rim}`;
+export function avatarRig(a: AvatarLayers, view: View, sit: boolean): AvatarRig {
+  const key = `${JSON.stringify(a)}|${view}|${sit ? 1 : 0}`;
   let r = rigs.get(key);
   if (!r) {
-    r = rigFor(a, view, sit, rim);
+    r = rigFor(drawable(a), view, sit);
     rigs.set(key, r);
     if (rigs.size > 400) rigs.delete(rigs.keys().next().value as string);
   }
@@ -163,39 +151,27 @@ const BOX: Record<string, Box> = {
   sideLap: [20, 90, 48, 50],
 };
 
-function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): AvatarRig {
-  ligne = a.style === "ligne";
-  ink = ligne ? LIGNE_INK : INK;
-  const id = `a${hash(`${JSON.stringify(a)}|${view}|${sit}|${rimMode}`)}`;
+function rigFor(a: AvatarLayers, view: View, sit: boolean): AvatarRig {
+  const id = `a${hash(`${JSON.stringify(a)}|${view}|${sit}`)}`;
   const back = view === "N" || view === "NW";
   const nw = view === "NW";
   const tq = view === "SW";
   const side = view === "W";
-  const backSit = back && sit;
 
-  const O = (w = 1) =>
-    `stroke="${ink}" stroke-width="${ligne ? w * 1.15 : w}" stroke-linejoin="round" stroke-linecap="round"`;
+  const O = (w = 1) => `stroke="${ink}" stroke-width="${w * 1.15}" stroke-linejoin="round" stroke-linecap="round"`;
   const fill = (d: string, c: string, w?: number) => `<path d="${d}" fill="${c}" ${O(w)}/>`;
-  // shade shapes and rim light belong to City-pop only
-  const flat = (d: string, c: string, op = 1) => (ligne ? "" : `<path d="${d}" fill="${c}" opacity="${op}"/>`);
-  const rim = (d: string, c: string) =>
-    ligne
-      ? ""
-      : `<path d="${d}" stroke="${c}" stroke-width="1.1" stroke-opacity=".8" fill="none" stroke-linecap="round"/>`;
-  const [R1, R2] = RIMS[rimMode];
 
   const skin = a.skin;
   const sS = mix(skin, "#8a3a7a", 0.38);
   const hair = a.hairColor;
   const hS = shade(hair);
-  const hH = ligne ? hair : light(hair);
+  const hH = hair;
   const top = a.topColor;
   const tS = shade(top);
   const dress = a.top === "dress";
   const bot = dress ? top : a.bottomColor;
   const bS = shade(bot);
   const acc = a.accessoryColor;
-  const eye = mix(mix(hair, "#000000", 0.3), "#6a3a9a", 0.45);
   const inner = lum(top) > 0.62 ? "#2a2a3a" : "#f4ece0";
   const bw = ({ slim: 0.9, regular: 1, broad: 1.12 } as Record<string, number>)[a.body] ?? 1;
   const longSkirt = a.bottom === "longskirt" && !dress;
@@ -211,23 +187,19 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
   const tank = a.top === "tank";
   const shoeC = a.shoesColor || SHOE;
   const ec = a.extraColor;
-  const hat = ["cap", "beanie", "beret", "bucket"].includes(a.accessory);
   const earsShow = !(a.hair === "bob" || a.hair === "long" || a.hair === "curly");
   const closeCrop = a.hair === "buzz" || a.hair === "bald" || a.hair === "mohawk"; // hats sit on the skull
-  const H = ligne ? hair : `url(#${id}h)`;
+  const H = hair;
   const defs = `<defs><linearGradient id="${id}h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hH}"/><stop offset=".35" stop-color="${hair}"/><stop offset="1" stop-color="${hS}"/></linearGradient></defs>`;
   const widen = (g: string) =>
     bw === 1 ? g : `<g transform="translate(60 0) scale(${bw} 1) translate(-60 0)">${g}</g>`;
   const wx = (x: number) => 60 + (x - 60) * bw;
-  // a limb's shade: a slimmer copy along its lit-away side (+x)
-  const limbShade = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number, c: string) =>
-    flat(capsule(x0 + r0 * 0.42, y0, x1 + r1 * 0.42, y1, r0 * 0.5, r1 * 0.5), c, 0.85);
   const hand = (x: number, y: number, c = skin) => `<ellipse cx="${x}" cy="${y}" rx="3" ry="3.9" fill="${c}" ${O()}/>`;
   // the lower segment of a joint (forearm, shin): its round top covers the
   // joint with no outline across the limb; only its sides are outlined
   const lower = (x0: number, y0: number, x1: number, y1: number, r0: number, r1: number, c: string) =>
     `<path d="${capsule(x0, y0, x1, y1, r0, r1)}" fill="${c}"/><path d="${capsuleSides(x0, y0, x1, y1, r0, r1)}" fill="none" ${O()}/>`;
-  const P: Paint = { fill, flat, shade, light, ink, O };
+  const P: Paint = { fill, shade, light, ink, O };
 
   const parts: PartArt[] = [];
   const add = (name: PartName, svg: string, box: Box) => parts.push({ name, svg, box });
@@ -274,13 +246,11 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
           fill("M54 102 L55 128 L65.5 128 L66.5 102Z", tone(bot));
       else thigh = fill(capsule(60.25, 102, 60.2, 132.3, 6.2, 5.35), tone(bot));
       if (!skirtish && !shorts) thigh += bottomSide(P, a.bottom, tone(bot), "thigh");
-      if (near && !skirtish) thigh += rim("M66.2 104 L65.6 130", R2);
       let shin = skirtish
         ? lower(60.1, 132.3, 60, 158, 4.1, 3.5, tone(skin))
         : lower(60.2, 132.3, 60, 158, 5.35, 4.5, tone(shorts ? skin : c));
       if (!skirtish && !shorts) shin += bottomSide(P, a.bottom, tone(bot), "shin");
       shin += shoeSide(P, a.shoes, tone(shoeC), tone(skin), tone(top));
-      if (near && !skirtish) shin += rim("M65.4 134 L64.4 157", R2);
       return [shin, thigh];
     };
     if (sit) {
@@ -288,7 +258,6 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
       let lap = fill("M32.5 106 L33.5 128 L41.5 128 L42 107Z", shin);
       lap += shoeLapSide(P, a.shoes, shoeC, skin);
       lap += fill("M57 97 L36 98.5 Q31.5 99 31.5 105 Q31.5 112 37 112 L60 112Z", bot);
-      lap += flat("M36 107.5 L60 107.5 L60 112 L37 112 Q33 111.6 32 108Z", bS, 0.8);
       add("lap", widen(lap), BOX.sideLap);
     } else {
       // far arm, a shade darker
@@ -314,24 +283,19 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
     let torso = "";
     if (a.extra === "backpack") torso += backpack(P, ec, "side", true);
     if (skirtish && !sit)
-      torso +=
-        fill(
-          dress
-            ? "M48.5 98 L44 126 Q59 129.5 74 126 L71.5 98Z"
-            : longSkirt
-              ? LONGSKIRT_SIDE
-              : "M50.5 100 L46.5 124 Q59 127.5 72 124 L69.5 100Z",
-          bot,
-        ) +
-        flat(
-          longSkirt ? "M62 100 L69.5 100 L75 154 Q68 156 62 156.4Z" : "M62 100 L71.5 99 L74 125.5 Q68 127 62 127.5Z",
-          bS,
-        );
+      torso += fill(
+        dress
+          ? "M48.5 98 L44 126 Q59 129.5 74 126 L71.5 98Z"
+          : longSkirt
+            ? LONGSKIRT_SIDE
+            : "M50.5 100 L46.5 124 Q59 127.5 72 124 L69.5 100Z",
+        bot,
+      );
     // a tank top: the body under it is skin
     if (tank) torso += fill(sideTorso, skin);
     const sideShape = tank ? TANK_SIDE : sideTorso;
     torso += `<clipPath id="${id}s"><path d="${sideShape}"/></clipPath>${fill(sideShape, top)}`;
-    torso += `<g clip-path="url(#${id}s)">${flat("M63 54 Q70 54.6 73 60 L73 104 Q67 106 63 106.6Z", tS)}</g>`;
+    torso += `<g clip-path="url(#${id}s)"></g>`;
     if (a.top === "jacket")
       torso +=
         fill("M50 58.5 L55 58 L54 75 L50.3 70Z", inner, 0.8) +
@@ -346,13 +310,13 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
         fill("M60 54.5 Q70 53 72 60 Q68 64 63 62Z", tS, 0.9) +
         `<path d="M52 59 L51.6 70" stroke="${light(top)}" stroke-width=".9"/>`;
     else if (!dress) torso += fill("M48 99 Q60 102.5 72 99 L72 105 Q60 108.5 48 105Z", top, 0.8);
-    torso += rim(jacket ? "M71.8 60 L71.6 102" : "M71 60 L71.6 102", R2);
     torso = widen(torso);
     if (a.extra === "walkman")
       torso += `<rect x="64" y="${sit ? 92 : 94}" width="7" height="9" rx="1.4" fill="${ec}" ${O(0.9)}/><path d="M67 ${sit ? 92 : 94} Q71 70 64.5 40" stroke="${ink}" stroke-width=".8" fill="none"/>`;
-    torso +=
-      fill(masc ? "M57 45 L57 57 Q61 59.4 65.2 57 L65.2 45Z" : "M57.5 45 L57.5 57 Q61 59 64.5 57 L64.5 45Z", skin) +
-      flat("M57.5 47 L64.5 47 L64.5 52 Q61 53 57.5 50Z", sS);
+    torso += fill(
+      masc ? "M57 45 L57 57 Q61 59.4 65.2 57 L65.2 45Z" : "M57.5 45 L57.5 57 Q61 59 64.5 57 L64.5 45Z",
+      skin,
+    );
     if (a.top === "turtleneck") torso += turtleneck(P, top, "side");
     torso += neckThing(P, a.extra, ec, "side", 60);
     if (a.extra === "backpack") torso += backpack(P, ec, "side", false);
@@ -360,11 +324,9 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
     // near arm
     const nc = short || bare ? skin : top;
     let nu = fill(capsule(SH[0], SH[1], EL[0], EL[1], 4.6, 4.1), nc);
-    nu += limbShade(SH[0], SH[1], EL[0], EL[1], 4.6, 4.1, short || bare ? sS : tS);
     if (short) nu += fill("M55.5 60 Q52.5 70 53.4 79 L63.8 79 Q64.5 70 64.5 62Z", top);
     add("armRu", widen(nu), BOX.sideArmU);
     let nf = lower(EL[0], EL[1], WR[0], WR[1], 4.1, 3.6, nc);
-    nf += limbShade(EL[0], EL[1], WR[0], WR[1], 4.1, 3.6, short || bare ? sS : tS);
     if (jacket) nf += `<path d="M55.6 99.5 L63.2 99.7" stroke="${tS}" stroke-width="1.2"/>`;
     if (a.extra === "watch") nf += watch(P, ec, WR[0], WR[1]);
     nf += hand(59.3, 107);
@@ -375,38 +337,22 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
         "M50.5 32 Q50.5 21 61 21 Q72 21 72 33 Q72 44 65 48.5 Q61 50.5 57.5 48.5 L55.5 46 Q52.5 46 52.6 43.6 L52 41.6 Q50.4 41 51 39.6 L51.4 38.4 Q48.4 37.6 50.5 32Z",
         skin,
       );
-      S += flat("M66 24 Q72 28 72 33 Q72 44 65 48.5 Q69 38 66 24Z", sS, 0.9);
       if (!(a.hair === "bob" || a.hair === "long" || a.hair === "curly"))
         S += `<ellipse cx="63.5" cy="37" rx="2.2" ry="3" fill="${skin}" ${O(0.9)}/>`;
-      if (ligne) {
-        S +=
-          face === "blink"
-            ? `<path d="M53 37.6 h2.8" stroke="${ink}" stroke-width="1" stroke-linecap="round"/>`
-            : `<circle cx="54.4" cy="37.4" r="1.3" fill="${ink}"/>`;
-        S += `<path d="M52 32.4 Q54.2 31.6 56.4 32.6" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
-        S +=
-          face === "talk"
-            ? `<path d="M52.6 44.2 Q54 44 55 44.4 Q54.6 46.6 53.6 46.6 Q52.8 46.4 52.6 44.2Z" fill="${ink}"/>`
-            : `<path d="M52.6 44.6 Q53.8 45.2 55 44.8" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
-      } else {
-        S += `<path d="M51.6 34.4 Q54 32.8 56.4 34.8" stroke="${ink}" stroke-width="1.7" fill="none" stroke-linecap="round"/>`;
-        S +=
-          face === "blink"
-            ? `<path d="M52 38 Q54.2 39.8 56.2 38.2" stroke="${ink}" stroke-width="1.4" fill="none" stroke-linecap="round"/>`
-            : `<ellipse cx="54.2" cy="37.8" rx="1.6" ry="3.2" fill="${eye}"/><ellipse cx="54.2" cy="39.2" rx="1.1" ry="1.4" fill="${mix(eye, "#ffc0e0", 0.55)}"/><ellipse cx="54" cy="37" rx=".8" ry="1.4" fill="#1a0a20"/><circle cx="54.7" cy="36.4" r=".75" fill="#fff"/>`;
-        S += `<path d="M51.5 31 L56 30.2" stroke="${hS}" stroke-width="${masc ? 1.8 : 1}" stroke-linecap="round"/>`;
-        if (fem) S += `<path d="M51.6 34.4 l-1.6 -1.1" stroke="${ink}" stroke-width="1.2" stroke-linecap="round"/>`;
-        S +=
-          face === "talk"
-            ? `<path d="M52.4 44 Q53.8 43.6 55.2 44.2 Q54.8 47.2 53.6 47.2 Q52.6 47 52.4 44Z" fill="#7a2040" ${O(0.7)}/>`
-            : `<path d="M52.4 44.4 Q53.8 45.8 55 44.8" stroke="#b03050" stroke-width="1" fill="none" stroke-linecap="round"/>`;
-        S += `<path d="M55.5 41 l2.4 -.9 M56.5 42 l2.4 -.9" stroke="#ff8aa0" stroke-width=".6"/>`;
-      }
+      S +=
+        face === "blink"
+          ? `<path d="M53 37.6 h2.8" stroke="${ink}" stroke-width="1" stroke-linecap="round"/>`
+          : `<circle cx="54.4" cy="37.4" r="1.3" fill="${ink}"/>`;
+      S += `<path d="M52 32.4 Q54.2 31.6 56.4 32.6" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+      S +=
+        face === "talk"
+          ? `<path d="M52.6 44.2 Q54 44 55 44.4 Q54.6 46.6 53.6 46.6 Q52.8 46.4 52.6 44.2Z" fill="${ink}"/>`
+          : `<path d="M52.6 44.6 Q53.8 45.2 55 44.8" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+
       if (a.extra === "earrings" && earsShow) S += earrings(ec, [[63.6, 40.8]]);
       S += hairFront(a.hair, "W", H, hH, hair, fill);
       S += eyewear(P, a.eyewear, a.eyewearColor, "side", 0);
       S += accessory(a.accessory, "W", acc, fill, O) + headThing(P, a.accessory, acc, "side", closeCrop);
-      if (!hat) S += rim("M50.8 31 Q51 23 57 21.4", R1);
       return defs + S;
     };
     heads = { open: head("open"), blink: head("blink"), talk: head("talk") };
@@ -430,12 +376,10 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
     if (!back) {
       const shin = legBare || shorts ? skin : bot;
       let L = fill("M47 110 L47.5 123 L55 123 L56 111Z", shin) + fill("M64 111 L65 123 L72.5 123 L73 110Z", shin);
-      L += flat("M69 111 L73 110 L72.5 123 L70 123Z", shade(shin), 0.8);
       L += shoesLap(P, a.shoes, shoeC, skin);
       L +=
         fill("M44 100 L43.5 111 Q51 114 59 112 L59.5 102Z", bot) +
         fill("M60.5 102 L61 112 Q69 114 76.5 111 L76 100Z", bot);
-      L += flat("M68 102 L76 100 L76.5 111 Q72 113 68 113Z", bS, 0.9);
       add("lap", widen(L), BOX.lap);
     }
     // seen from behind, the seat and the chair back hide the legs
@@ -444,18 +388,15 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
     let LR = "";
     if (legBare) {
       LL += fill("M49 120 L50 160 L56 160 L57 122Z", skin);
-      LR += fill("M63 122 L64 160 L70 160 L71 120Z", skin) + flat("M67 122 L71 120 L70 160 L67.5 160Z", sS, 0.8);
+      LR += fill("M63 122 L64 160 L70 160 L71 120Z", skin);
     } else if (shorts) {
       LL += fill("M49 126 L50 160 L56 160 L57.5 126Z", skin);
-      LR += fill("M62.5 126 L64 160 L70 160 L71 126Z", skin) + flat("M67 127 L71 126 L70 160 L67.5 160Z", sS, 0.8);
+      LR += fill("M62.5 126 L64 160 L70 160 L71 126Z", skin);
       LL += fill("M46.5 102 L47 129 L58 129 L59.5 106 L60.3 106 L60.3 102Z", bot);
       LR += fill("M59.7 102 L59.7 106 L60.5 106 L62 129 L73 129 L73.5 102Z", bot);
-      LR += flat("M66 104 L73.5 102 L73 129 L66.5 129Z", bS);
     } else {
       LL += fill("M47 104 L49 160 L56 160 L59.5 106Z", bot);
       LR += fill("M60.5 106 L64 160 L71 160 L73 104Z", bot);
-      LR += flat("M67 106 L73 104 L71 160 L68 160Z", bS);
-      LL += flat("M54 108 L59.5 106 L56 160 L54.5 160Z", bS, 0.7);
       if (a.bottom === "jeans") {
         const st = `stroke="${light(bot)}" stroke-width=".7" stroke-dasharray="1.6 1.2" opacity=".7"`;
         LL += `<path d="M51.5 110 L52.6 157" ${st}/>`;
@@ -470,7 +411,6 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
     }
     LL += shoesFront(P, a.shoes, shoeC, skin, top, back, false);
     LR += shoesFront(P, a.shoes, shoeC, skin, top, back, true);
-    if (!skirtish) LR += rim("M72.6 104.5 L71 158", R2);
     const farLeg = (g: string, left: boolean) =>
       farSide === (left ? "L" : "R") ? `<g transform="translate(${left ? FAR_LEG : -FAR_LEG} 0)">${g}</g>` : g;
     add("legL", widen(farLeg(LL, true)), BOX.legL);
@@ -514,24 +454,17 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
     const isFar = farSide === (left ? "L" : "R");
     const dim = (c: string) => (isFar ? shade(c) : c);
     const limbColor = dim(short || bare ? skin : top);
-    const limbShadeColor = short || bare ? sS : tS;
     let up = fill(capsule(sh[0], sh[1], el[0], el[1], ru[0], ru[1]), limbColor);
-    if (!left && !isFar) up += limbShade(sh[0], sh[1], el[0], el[1], ru[0], ru[1], limbShadeColor);
     if (short) {
       up += fill(
         left ? "M45 61 Q39 67 38.5 78 L46.5 79.5 Q47.5 72 49 70Z" : "M75 61 Q81 67 81.5 78 L73.5 79.5 Q72.5 72 71 70Z",
         dim(top),
       );
-      if (!left && !isFar) up += flat("M77 64 Q80.5 70 81.2 77.6 L78.5 78.4 Q78 70 77 64Z", tS);
     }
-    if (left && !backSit && !isFar) up += rim(jacket ? "M40.6 63 Q35.6 70 36.5 86" : "M43 63 Q38.5 70 37.8 86", R1);
     let fo = lower(el[0], el[1], wr[0], wr[1], rf[0], rf[1], limbColor);
-    if (!left && !isFar) fo += limbShade(el[0], el[1], wr[0], wr[1], rf[0], rf[1], limbShadeColor);
     if (jacket)
       fo += `<path d="M${wr[0] - 4.2} ${wr[1] - 4.5} L${wr[0] + 4.2} ${wr[1] - 4.3}" stroke="${tS}" stroke-width="1.2"/>`;
     if (left && a.extra === "watch") fo += watch(P, ec, wr[0], wr[1]);
-    if (!left && !sit && !isFar)
-      fo += rim(`M${wr[0] + rf[1] + 0.2} ${el[1] + 3} L${wr[0] + rf[1] + 0.4} ${wr[1] - 1}`, R2);
     fo += hand(hd[0], hd[1], isFar ? sS : skin);
     const shift = (g: string) => widen(`<g transform="translate(${left ? axL : -axR} 0)">${g}</g>`);
     return [shift(up), shift(fo)];
@@ -565,16 +498,7 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
         ? LONGSKIRT_FRONT
         : "M44 100 L40 124 Q60 129 80 124 L76 100Z";
     const hemY = dress ? 130 : longSkirt ? 158 : 126;
-    T +=
-      fill(sk, bot) +
-      flat(
-        dress
-          ? "M66 99 L75.5 98 L81 128 Q73.5 130.5 66 131Z"
-          : longSkirt
-            ? LONGSKIRT_SHADE
-            : "M66 101 L76 100 L80 124 Q73 126.5 66 127Z",
-        bS,
-      );
+    T += fill(sk, bot);
     T += `<path d="M52 104 L${longSkirt ? 47 : 50} ${hemY} M60 104 V${hemY + 1} M68 104 L${longSkirt ? 73 : 70} ${hemY}" stroke="${bS}" stroke-width=".8"/>`;
   }
   if (a.top === "hoodie" && !back) T += fill("M47 58 Q60 47 73 58 Q66 64 60 64 Q54 64 47 58Z", tS);
@@ -582,28 +506,16 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
   if (tank) T += fill(torso, skin);
   const shape = tank ? (back ? TANK_BACK : TANK_FRONT) : torso;
   T += `<clipPath id="${id}t"><path d="${shape}"/></clipPath>${fill(shape, top)}<g clip-path="url(#${id}t)">`;
-  T += flat(
-    jacket
-      ? "M66 56 Q73 57 79 60 L78 104 Q72 106 64 107 Q70 86 66 56Z"
-      : dress
-        ? "M66 56 Q72 57 75 60 L76 100 Q71 101.5 65 102 Q70 84 66 56Z"
-        : "M66 56 Q72 57 76 60 L79 104 Q72 106 64 107 Q70 86 66 56Z",
-    tS,
-  );
   if (back) {
     if (a.top === "hoodie") T += fill("M49 58 Q60 76 71 58 Q60 54 49 58Z", tS, 0.9);
     else T += `<path d="M60 58 V${dress ? 100 : 104}" stroke="${tS}" stroke-width=".8"/>`;
-    if (a.top === "sweater" || a.top === "hoodie")
-      T +=
-        fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", top, 0.8) +
-        flat("M66 102.6 Q73 101.5 79 99 L79 105 Q72 107 66 108.3Z", tS);
+    if (a.top === "sweater" || a.top === "hoodie") T += fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", top, 0.8);
     T += topBack(P, a.top, top);
   } else {
     const cx = 60 + fx * 0.4;
     switch (a.top) {
       case "jacket":
         T += fill(`M${cx - 6} 56.5 L${cx} 82 L${cx + 6} 56.5Z`, inner, 0.8);
-        T += flat(`M${cx - 3} 60 L${cx} 82 L${cx + 3} 60Z`, shade(inner), 0.25);
         T +=
           fill(`M${cx - 6} 56.5 L${cx - 2.5} 74 L${cx - 9} 64Z`, tS, 0.8) +
           fill(`M${cx + 6} 56.5 L${cx + 2.5} 74 L${cx + 9} 64Z`, shade(tS), 0.8);
@@ -623,15 +535,11 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
       case "hoodie":
         T += `<path d="M${cx - 3} 58 V70 M${cx + 3} 58 V70" stroke="${light(top)}" stroke-width="1.1" stroke-linecap="round"/>`;
         T += fill(`M${cx - 10} 86 H${cx + 10} L${cx + 12} 98 H${cx - 12}Z`, tS, 0.8);
-        T +=
-          fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", top, 0.8) +
-          flat("M66 102.6 Q73 101.5 79 99 L79 105 Q72 107 66 108.3Z", tS);
+        T += fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", top, 0.8);
         break;
       case "sweater":
         T += `<path d="M44 75 H76" stroke="${light(top)}" stroke-width="2.6"/><path d="M44 79.5 H76" stroke="${tS}" stroke-width="1.2"/>`;
-        T +=
-          fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", top, 0.8) +
-          flat("M66 102.6 Q73 101.5 79 99 L79 105 Q72 107 66 108.3Z", tS);
+        T += fill("M41 99 Q60 104 79 99 L79 105 Q60 110 41 105Z", top, 0.8);
         break;
       case "dress":
         T += `<path d="M44.5 96 Q60 99 75.5 96" stroke="${shade(tS)}" stroke-width="2" fill="none"/>`;
@@ -645,36 +553,20 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
   }
   T += "</g>"; // shade and details stay inside the torso's outline
   // cool rim on the torso's lit edge, under the right arm
-  if (!backSit)
-    T += rim(
-      fem
-        ? jacket
-          ? "M77.6 62 Q78.2 74 74.3 84 Q77.2 93 77.6 100"
-          : "M74.3 62 Q75.8 71 72.8 82 Q76.4 92 78.4 100"
-        : masc
-          ? jacket
-            ? "M80 62 L78.8 100"
-            : "M77.2 62 L77.8 100"
-          : jacket
-            ? "M78.6 62 L77.8 100"
-            : "M76.2 62 L78.6 100",
-      R2,
-    );
   if (a.extra === "walkman") {
     if (back) T += `<rect x="64" y="94" width="8" height="10" rx="1.6" fill="${ec}" ${O(0.9)}/>`;
     else
       T += `<rect x="${68 + fx * 0.4}" y="92" width="8" height="10" rx="1.6" fill="${ec}" ${O(0.9)}/><rect x="${69.6 + fx * 0.4}" y="94" width="4.8" height="2.8" rx=".6" fill="${ink}"/><path d="M${72 + fx * 0.4} 92 Q75 70 ${66 + fx} 46" stroke="${ink}" stroke-width=".8" fill="none"/>`;
   }
   if (a.extra === "backpack") T += backpack(P, ec, back ? "back" : "front", false);
-  let neck =
-    fill(
-      masc
-        ? "M55 45 L55 57 Q60 59.6 65 57 L65 45Z"
-        : fem
-          ? "M56.6 45 L56.6 57 Q60 58.6 63.4 57 L63.4 45Z"
-          : "M56 45 L56 57 Q60 59 64 57 L64 45Z",
-      skin,
-    ) + flat("M56 47 L64 47 L64 51 Q60 53 56 50Z", sS);
+  let neck = fill(
+    masc
+      ? "M55 45 L55 57 Q60 59.6 65 57 L65 45Z"
+      : fem
+        ? "M56.6 45 L56.6 57 Q60 58.6 63.4 57 L63.4 45Z"
+        : "M56 45 L56 57 Q60 59 64 57 L64 45Z",
+    skin,
+  );
   if (!back && !jacket && a.top !== "shirt" && !tank && a.top !== "turtleneck")
     neck += `<path d="M53 56 Q60 61 67 56" fill="none" ${O()}/>`;
   if (a.top === "turtleneck") neck += turtleneck(P, top, back ? "back" : "front");
@@ -692,7 +584,6 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
         : "M48 34 Q48 21 60 21 Q72 21 72 34 Q72 45 63 49 Q60 50.5 57 49 Q48 45 48 34Z",
       skin,
     );
-    if (!back) Hd += flat("M67 26 Q72 30 72 35 Q72 45 63 49 Q68 40 67 26Z", sS, 0.9);
     if (!back && a.hair !== "long" && a.hair !== "bob" && a.hair !== "curly")
       Hd += `<ellipse cx="${tq ? 69.5 : 47.6}" cy="37.5" rx="1.9" ry="2.8" fill="${skin}" ${O(0.8)}/>${tq ? "" : `<ellipse cx="72.4" cy="37.5" rx="1.9" ry="2.8" fill="${skin}" ${O(0.8)}/>`}`;
     if (back) {
@@ -704,44 +595,22 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
             ? ""
             : `<ellipse cx="49.6" cy="37.5" rx="1.9" ry="2.8" fill="${skin}" ${O(0.8)}/>`);
     } else {
-      const eyeAt = (cx: number, far: boolean, outer: -1 | 1) => {
-        const k = far ? 0.72 : 1;
-        const lash = fem
-          ? `<path d="M${outer < 0 ? cx - 3.5 * k : cx + 3.5 * k} ${outer < 0 ? 35.5 : 34.6} l${outer * 1.9 * k} -1.5" stroke="${ink}" stroke-width="1.3" stroke-linecap="round"/>`
-          : "";
-        if (face === "blink")
-          return `${lash}<path d="M${cx - 3.2 * k} 37.4 Q${cx} 40.2 ${cx + 3.2 * k} 37.4" stroke="${ink}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
-        return `${lash}<path d="M${cx - 3.5 * k} 35.5 Q${cx} 32.5 ${cx + 3.5 * k} 34.6" stroke="${ink}" stroke-width="1.8" fill="none" stroke-linecap="round"/><ellipse cx="${cx}" cy="38" rx="${2.3 * k}" ry="${masc ? 3 : 3.4}" fill="${eye}"/><ellipse cx="${cx}" cy="39.4" rx="${1.5 * k}" ry="1.6" fill="${mix(eye, "#ffc0e0", 0.55)}"/><ellipse cx="${cx}" cy="37.2" rx="${1.1 * k}" ry="1.5" fill="#1a0a20"/><circle cx="${cx + 0.8}" cy="36.5" r=".9" fill="#fff"/>`;
-      };
-      if (ligne) {
-        // Ligne claire: dot eyes, thin brows, a nose hook, a line for a mouth
-        const k = tq ? 0.8 : 1;
-        Hd +=
-          face === "blink"
-            ? `<path d="M${54 + fx} 37.6 h${3 * k} M${63 + fx} 37.6 h3" stroke="${ink}" stroke-width="1" stroke-linecap="round"/>`
-            : `<circle cx="${55.5 + fx}" cy="37.6" r="${1.35 * k}" fill="${ink}"/><circle cx="${64.5 + fx}" cy="37.6" r="1.35" fill="${ink}"/>`;
-        Hd += `<path d="M${53 + fx} 33.4 Q${55.5 + fx} 32.4 ${58 + fx} 33.3 M${62 + fx} 33.3 Q${64.5 + fx} 32.4 ${67 + fx} 33.4" stroke="${ink}" stroke-width="${masc ? 1.6 : 0.9}" fill="none" stroke-linecap="round"/>`;
-        if (fem)
-          Hd += `<path d="M${54.1 + fx} 36.6 l-1.3 -1 M${65.9 + fx} 36.6 l1.3 -1" stroke="${ink}" stroke-width=".8" stroke-linecap="round"/>`;
-        Hd += tq
-          ? `<path d="M58.4 38.6 Q56.4 41.6 58.4 42.2" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`
-          : `<path d="M60.5 38.5 Q62.2 41.5 60 42" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
-        Hd +=
-          face === "talk"
-            ? `<ellipse cx="${60 + fx}" cy="45.6" rx="2" ry="1.5" fill="${ink}"/>`
-            : `<path d="M${57.5 + fx} 45 Q${60 + fx} 46.2 ${62.5 + fx} 45" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
-      } else {
-        Hd += eyeAt(55 + fx, tq, -1) + eyeAt(65 + fx, false, 1);
-        Hd += `<path d="M${52.5 + fx} 31 L${57.5 + fx} 30.2 M${62.5 + fx} 30.2 L${67.5 + fx} 31" stroke="${hS}" stroke-width="${masc ? 1.8 : 1}" stroke-linecap="round"/>`;
-        Hd += tq
-          ? `<path d="M58.6 39.5 L56.6 42.4 L58.4 42.6" stroke="${sS}" stroke-width=".9" fill="none"/>`
-          : `<path d="M60.3 40.5 L59.6 42.6 L60.6 42.6" stroke="${sS}" stroke-width=".8" fill="none"/>`;
-        Hd +=
-          face === "talk"
-            ? `<path d="M${57.6 + fx} 44.4 Q${60 + fx} 43.8 ${62.4 + fx} 44.4 Q${61.8 + fx} 48.2 ${60 + fx} 48.2 Q${58.2 + fx} 48.2 ${57.6 + fx} 44.4Z" fill="#7a2040" ${O(0.7)}/><path d="M${58.6 + fx} 47 Q${60 + fx} 46.2 ${61.4 + fx} 47" stroke="#ff8aa0" stroke-width=".9" fill="none"/>`
-            : `<path d="M${57.5 + fx} 44.8 Q${60 + fx} 46.8 ${62.5 + fx} 44.8" stroke="${fem ? "#c8305a" : "#b03050"}" stroke-width="${fem ? 1.5 : 1.1}" fill="none" stroke-linecap="round"/>`;
-        Hd += `<path d="M${51 + fx} 41.5 l2.5 -1 M${52 + fx} 42.5 l2.5 -1 M${65.5 + fx} 40.5 l2.5 1 M${66.5 + fx} 41.5 l2.5 1" stroke="#ff8aa0" stroke-width=".6"/>`;
-      }
+      // Ligne claire: dot eyes, thin brows, a nose hook, a line for a mouth
+      const k = tq ? 0.8 : 1;
+      Hd +=
+        face === "blink"
+          ? `<path d="M${54 + fx} 37.6 h${3 * k} M${63 + fx} 37.6 h3" stroke="${ink}" stroke-width="1" stroke-linecap="round"/>`
+          : `<circle cx="${55.5 + fx}" cy="37.6" r="${1.35 * k}" fill="${ink}"/><circle cx="${64.5 + fx}" cy="37.6" r="1.35" fill="${ink}"/>`;
+      Hd += `<path d="M${53 + fx} 33.4 Q${55.5 + fx} 32.4 ${58 + fx} 33.3 M${62 + fx} 33.3 Q${64.5 + fx} 32.4 ${67 + fx} 33.4" stroke="${ink}" stroke-width="${masc ? 1.6 : 0.9}" fill="none" stroke-linecap="round"/>`;
+      if (fem)
+        Hd += `<path d="M${54.1 + fx} 36.6 l-1.3 -1 M${65.9 + fx} 36.6 l1.3 -1" stroke="${ink}" stroke-width=".8" stroke-linecap="round"/>`;
+      Hd += tq
+        ? `<path d="M58.4 38.6 Q56.4 41.6 58.4 42.2" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`
+        : `<path d="M60.5 38.5 Q62.2 41.5 60 42" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
+      Hd +=
+        face === "talk"
+          ? `<ellipse cx="${60 + fx}" cy="45.6" rx="2" ry="1.5" fill="${ink}"/>`
+          : `<path d="M${57.5 + fx} 45 Q${60 + fx} 46.2 ${62.5 + fx} 45" stroke="${ink}" stroke-width=".9" fill="none" stroke-linecap="round"/>`;
       if (a.extra === "earrings" && earsShow)
         Hd += earrings(
           ec,
@@ -759,7 +628,6 @@ function rigFor(a: AvatarLayers, view: View, sit: boolean, rimMode: Rim): Avatar
     Hd +=
       accessory(a.accessory, view, acc, fill, O) +
       headThing(P, a.accessory, acc, back ? "back" : tq ? "tq" : "front", closeCrop);
-    if (!hat) Hd += rim("M48.6 32 Q49 23 56 21.6", R1);
     return defs + Hd;
   };
   const open = head("open");

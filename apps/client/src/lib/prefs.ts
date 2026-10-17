@@ -21,6 +21,8 @@ export interface Prefs {
   // mouse look (Z, in 3D): how fast the mouse turns the camera (× the base), up/down flipped
   lookSens: number;
   lookInvert: boolean;
+  // first person: my own arms come into view when they're doing something
+  hands1p: boolean;
   // frames per second, at most (0 = as many as the screen shows); 30 once nothing moves
   maxFps: MaxFps;
 }
@@ -63,6 +65,7 @@ const DEFAULTS: Prefs = {
   cam3p: "chase",
   lookSens: 1,
   lookInvert: false,
+  hands1p: true,
   maxFps: 60,
 };
 
@@ -81,6 +84,7 @@ export function prefs(): Prefs {
     if (cache && !MAX_FPS.includes(cache.maxFps)) cache.maxFps = 60;
     if (cache && !(cache.lookSens >= 0.25 && cache.lookSens <= 3)) cache.lookSens = 1;
     if (cache) cache.lookInvert = cache.lookInvert === true;
+    if (cache) cache.hands1p = cache.hands1p !== false;
     if (
       cache &&
       typeof window !== "undefined" &&

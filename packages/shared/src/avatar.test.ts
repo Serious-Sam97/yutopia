@@ -29,3 +29,32 @@ test("seeded looks use every slot and stay the same for the same seed", () => {
   for (const k of ["shoes", "eyewear", "extra", "accessory", "top", "bottom", "hair"] as const)
     assert.ok((AVATAR_OPTIONS[k] as readonly string[]).includes(a[k]), `${k}: ${a[k]}`);
 });
+
+test("one style: City-pop looks (old tokens, old tabs) come out Ligne claire", () => {
+  assert.deepEqual(AVATAR_OPTIONS.style, ["ligne"]);
+  assert.equal(DEFAULT_AVATAR.style, "ligne");
+  assert.equal(parseAvatar({ style: "citypop", hair: "bob" }).style, "ligne");
+  assert.equal(parseAvatar({ style: "citypop", hair: "bob" }).hair, "bob");
+  assert.equal(parseAvatar({}).style, "ligne");
+  // bots keep the rest of the look they had before City-pop went (pinned seed)
+  const bot = avatarFromSeed(7);
+  assert.equal(bot.style, "ligne");
+  assert.deepEqual(
+    { hair: bot.hair, top: bot.top, gender: bot.gender, eyewear: bot.eyewear, shoes: bot.shoes },
+    { hair: "curly", top: "dress", gender: "feminine", eyewear: "none", shoes: "sneakers" },
+  );
+});
+
+test("facial hair: its own slot, none for looks saved before it; bots keep their looks", () => {
+  assert.deepEqual(AVATAR_OPTIONS.beard, ["none", "stubble", "mustache", "goatee", "full"]);
+  assert.equal(parseAvatar({ hair: "crew" }).beard, "none");
+  assert.equal(parseAvatar({ beard: "goatee", hair: "crew" }).beard, "goatee");
+  assert.equal(parseAvatar({ beard: "<b>" }).beard, "none");
+  for (const h of ["crew", "slick", "spiky"]) assert.ok((AVATAR_OPTIONS.hair as readonly string[]).includes(h));
+  // every bot: a beard only on a masculine figure, and the hair drawn from the styles bots always had
+  for (let s = 1; s <= 200; s++) {
+    const a = avatarFromSeed(s);
+    if (a.gender !== "masculine") assert.equal(a.beard, "none");
+    assert.ok(!["crew", "slick", "spiky"].includes(a.hair));
+  }
+});

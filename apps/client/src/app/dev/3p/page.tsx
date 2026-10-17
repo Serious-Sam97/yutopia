@@ -12,6 +12,7 @@ import { WorldEngine } from "@/world/engine";
 // normal iso engine at the same spot, from the same people data. Dev only (or
 // a build with NEXT_PUBLIC_YUTOPIA_SHOTS=1).
 //   /dev/3p?crowd=8&hour=12&cam=chase|free|first&view=3p|iso&theme=clouds&x=&y=&yaw=&pitch=&dist=&frozen=1
+//   &me=phone:text|held:mug|type|busy:coffee|emote:wave|act:highfive  (what you're doing: first person's hands)
 type Tp = typeof import("@/world/tp/view");
 type Demo = typeof import("@/world/tp/demo");
 
@@ -105,6 +106,23 @@ export default function ThirdPersonDemo() {
       const x = Number(q.get("x"));
       const y = Number(q.get("y"));
       if (x && y) Object.assign(demo.me, { x, y });
+      // what you're doing, held every frame (the demo's own life would change it)
+      const [doing, what = ""] = (q.get("me") ?? "").split(":");
+      const since = Date.now();
+      const meState: Record<string, unknown> | null =
+        doing === "phone"
+          ? { phone: what || "text", phoneCase: "walnut" }
+          : doing === "held"
+            ? { held: what || "mug", heldAt: since }
+            : doing === "type"
+              ? { a: 2, typing: true }
+              : doing === "busy"
+                ? { busy: what || "coffee" }
+                : doing === "emote"
+                  ? { emote: what || "wave" }
+                  : doing === "act"
+                    ? { act: what || "wave", actAt: since }
+                    : null;
       const view = new ThirdPersonView(map, objects, P, items, { theme: map.theme, themes });
       view.mount(tpHost.current);
       cleanup.push(() => view.destroy());
@@ -203,6 +221,9 @@ export default function ThirdPersonDemo() {
         if (state.view === "3p") {
           const { move, run } = view.input();
           demo.step(dt, move, run);
+          if (meState) Object.assign(demo.me, meState);
+          // (an act plays again every 2.5 s, so there's always one to look at)
+          if (meState?.act) Object.assign(demo.me, { actAt: Math.floor(Date.now() / 2500) * 2500 });
           view.frame(dt, demo.all(), "me");
           for (const m of demo.said.splice(0)) view.say(m.id, m.text);
         } else {
@@ -212,6 +233,8 @@ export default function ThirdPersonDemo() {
           const iy = (k.has("KeyS") || k.has("ArrowDown") ? 1 : 0) - (k.has("KeyW") || k.has("ArrowUp") ? 1 : 0);
           const run = k.has("ShiftLeft") || k.has("ShiftRight");
           demo.step(dt, screenInputToWorld(ix, iy), run);
+          if (meState) Object.assign(demo.me, meState);
+          if (meState?.act) Object.assign(demo.me, { actAt: Math.floor(Date.now() / 2500) * 2500 });
           if (iso)
             for (const b of demo.all())
               iso.upsertAvatar(
@@ -229,6 +252,15 @@ export default function ThirdPersonDemo() {
                   mic: b.mic,
                   held: b.held,
                   heldAt: b.heldAt,
+                  ...(b.id === "me" && meState
+                    ? {
+                        phone: meState.phone as string | undefined,
+                        phoneCase: meState.phoneCase as string | undefined,
+                        busy: (meState.busy ?? (meState.typing ? "computer" : undefined)) as string | undefined,
+                        act: meState.act as string | undefined,
+                        actAt: (b as { actAt?: number }).actAt,
+                      }
+                    : {}),
                 },
                 b.id === "me",
               );
