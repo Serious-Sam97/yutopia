@@ -6,6 +6,7 @@ export class Player extends Schema {
   @type("string") name = "";
   @type("float32") x = 0;
   @type("float32") y = 0;
+  @type("float32") z = 0; // feet off the floor (on something, or in a jump), tiles
   @type("uint8") d = 0;
   @type("uint8") a = 0;
   @type("string") area = "";
@@ -39,6 +40,9 @@ export class Player extends Schema {
   @type("float64") shotAt = 0;
   @type("string") phonePose = ""; // posing for a photo (shared PHOTO_POSES)
   @type("boolean") recording = false; // its camera recording a video
+  // a jump (shared/jump.ts): which, and when it started (server ms)
+  @type("string") jump = "";
+  @type("float64") jumpAt = 0;
 }
 
 export class WorldObject extends Schema {

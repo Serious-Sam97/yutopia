@@ -1,4 +1,4 @@
-import { type AvatarLayers, type HeldKind, heldState, isHeld } from "@yutopia/shared";
+import { type AvatarLayers, type HeldKind, heldState, isHeld, type JumpKind, type JumpNow } from "@yutopia/shared";
 import {
   Color,
   type Group,
@@ -20,6 +20,7 @@ import {
   ease,
   emotePose,
   holdPose,
+  jumpPose,
   phonePose,
   STRIDE,
   seatedPose,
@@ -89,6 +90,7 @@ export interface IsoIn {
   typing?: boolean;
   reduced?: boolean;
   act?: { what: string; t: number; len: number } | null;
+  jump?: JumpNow | null; // jumping (shared/jump.ts): its stage
 }
 
 /** What a person's sprite remembers between frames (the walk's phase, the blinks…). */
@@ -105,7 +107,7 @@ export interface IsoMem {
 
 /** One drawn frame of a person. */
 export interface IsoState {
-  base: "stand" | "walk" | "run" | "sit" | "type";
+  base: "stand" | "walk" | "run" | "sit" | "type" | JumpKind;
   bf: number; // the base's frame
   upper: string; // "" | hold | sip | busy:<use> | phone:<state>:<pose> | act:<what> | emote:<emote>
   uf: number; // its frame
@@ -137,6 +139,24 @@ const BUSY_N = 8;
 const ACT_N = 6;
 const EMOTE_N = 8;
 const EMOTE_LEN = 3.2; // s (Motion3's)
+// a jump's frames: the crouch, the air (a flip turns a whole way round in it), the landing
+const JUMP_N = { crouch: 2, air: { hop: 9, flip: 16 }, land: 3 };
+
+/** Which of a jump's frames its stage falls on. */
+export function jumpFrame(j: JumpNow): number {
+  const air = JUMP_N.air[j.kind];
+  const at = (n: number) => Math.min(n - 1, Math.max(0, Math.floor(j.k * n)));
+  if (j.stage === "crouch") return at(JUMP_N.crouch);
+  if (j.stage === "air") return JUMP_N.crouch + at(air);
+  return JUMP_N.crouch + air + at(JUMP_N.land);
+}
+/** The stage in the middle of a jump's frame. */
+export function jumpAtFrame(kind: JumpKind, f: number): JumpNow {
+  const air = JUMP_N.air[kind];
+  if (f < JUMP_N.crouch) return { kind, stage: "crouch", k: (f + 0.5) / JUMP_N.crouch };
+  if (f < JUMP_N.crouch + air) return { kind, stage: "air", k: (f - JUMP_N.crouch + 0.5) / air };
+  return { kind, stage: "land", k: (f - JUMP_N.crouch - air + 0.5) / JUMP_N.land };
+}
 
 /** Boil this frame down to a drawable state (and step what it remembers). */
 export function isoState(m: IsoMem, p: IsoIn, now: number): IsoState {
@@ -151,6 +171,12 @@ export function isoState(m: IsoMem, p: IsoIn, now: number): IsoState {
   if (base === "walk" || base === "run") bf = Math.floor(m.phase * WALK_N) % WALK_N;
   else if (base === "type" && !p.reduced) bf = Math.floor(t * 5) % 2;
   if (p.reduced && base === "run") base = "walk";
+  // a jump takes the body (a flip with reduced motion: a hop's frames)
+  if (p.jump && !sitting) {
+    const kind = p.reduced ? "hop" : p.jump.kind;
+    base = kind;
+    bf = jumpFrame({ ...p.jump, kind });
+  }
 
   let upper = "";
   let uf = 0;
@@ -237,6 +263,10 @@ export function isoPose(s: IsoState): {
       p.wristR = [(p.wristR?.[0] ?? 0) + 0.1 * k, p.wristR?.[1] ?? 0, p.wristR?.[2] ?? 0];
       p.wristL = [(p.wristL?.[0] ?? 0) - 0.1 * k, p.wristL?.[1] ?? 0, p.wristL?.[2] ?? 0];
     }
+  } else if (s.base === "hop" || s.base === "flip") {
+    const j = jumpPose(jumpAtFrame(s.base, s.bf));
+    p = blend(standPose(), j.pose, j.w);
+    lift = [0, j.lift[1] * j.w, 0];
   } else p = standPose();
   let sip = 0;
   let blink = s.face === 1 ? 1 : 0;

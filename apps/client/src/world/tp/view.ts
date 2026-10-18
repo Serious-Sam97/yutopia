@@ -54,6 +54,7 @@ import { emoteUrl } from "../art/emotes";
 import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
+import type { PuffKind } from "../engine";
 import { activePad } from "../pads";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
@@ -86,6 +87,14 @@ export type CamMode = "chase" | "free" | "first";
 // Someone to draw: what the server sends for a person (8 facings `d`; `a` 0
 // idle, 1 walk, 2 sit). `angle`: your own facing, free (radians) — others turn
 // between their 8. `npc`: Vortex.
+// The eyes' dip as the knees load up for a jump and soak up its landing
+function jumpDip(b: Body3): number {
+  const a = b.a === 2 ? null : b.jump;
+  if (a?.stage === "crouch") return -0.16 * Math.sin((a.k * Math.PI) / 2);
+  if (a?.stage === "land") return -0.2 * Math.sin(Math.min(1, a.k * 1.6) * Math.PI) * (1 - a.k * 0.4);
+  return 0;
+}
+
 export type Body3 = Omit<PersonIn, "angle"> & {
   id: string;
   d: number;
@@ -300,18 +309,70 @@ export class ThirdPersonView {
 
   // Little bursts, as iso's `puff`: warm sparks, confetti over a head (a card
   // done), a poof of dust, a drop. Tiny sprites with a bit of gravity.
-  private fx: { s: Sprite; vx: number; vy: number; vz: number; t: number; life: number; g: number }[] = [];
-  puff(x: number, y: number, kind: "drop" | "poof" | "spark" | "confetti", lift = 0) {
+  private fx: {
+    s: Sprite;
+    vx: number;
+    vy: number;
+    vz: number;
+    t: number;
+    life: number;
+    g: number;
+    drag?: number; // slowing (1/s): dust thrown out that hangs
+    grow?: number; // its size at the end, times its first
+    size?: number;
+  }[] = [];
+  /** `lift`: px off the floor; `hard` (a jump's "land" / "kick"): how hard, 0..1 */
+  puff(x: number, y: number, kind: PuffKind, lift = 0, hard = 1) {
     if (this.reduced) return;
-    const z = zt(lift);
-    const add = (color: number, size: number, vx: number, vy: number, vz: number, life: number, g: number, h = z) => {
-      const s = new Sprite(new SpriteMaterial({ color, transparent: true, depthWrite: false, toneMapped: false }));
+    const z = zt(lift) + (kind === "land" || kind === "kick" ? 0.04 : 0);
+    const add = (
+      color: number,
+      size: number,
+      vx: number,
+      vy: number,
+      vz: number,
+      life: number,
+      g: number,
+      h = z,
+      more?: { drag: number; grow: number; opacity: number },
+    ) => {
+      const s = new Sprite(
+        new SpriteMaterial({
+          color,
+          transparent: true,
+          depthWrite: false,
+          toneMapped: false,
+          opacity: more?.opacity ?? 1,
+        }),
+      );
       s.scale.setScalar(size);
       s.position.set(x, h, y);
       this.scene.add(s);
-      this.fx.push({ s, vx, vy, vz, t: 0, life, g });
+      this.fx.push({ s, vx, vy, vz, t: 0, life, g, drag: more?.drag, grow: more?.grow, size });
     };
     const rnd = Math.random;
+    if (kind === "land" || kind === "kick") {
+      // a jump: a ring of dust thrown out low along the floor as it lands (a
+      // little kicked back at take-off), slowing, swelling and drifting up
+      const land = kind === "land";
+      const n = Math.round((land ? 22 : 8) * (0.5 + hard / 2));
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + rnd() * 0.3;
+        const sp = (land ? 2.2 : 1.1) * (0.5 + hard / 2) * (0.75 + rnd() * 0.5);
+        add(
+          rnd() < 0.5 ? 0xe6d6b4 : 0xcdb894,
+          0.07 + rnd() * 0.05,
+          Math.cos(a) * sp,
+          Math.sin(a) * sp,
+          0.25 + rnd() * 0.3,
+          (land ? 0.6 : 0.4) + rnd() * 0.2,
+          -0.3,
+          z,
+          { drag: 4.5, grow: 2.4, opacity: 0.7 },
+        );
+      }
+      return;
+    }
     if (kind === "spark")
       for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2 + rnd() * 0.3;
@@ -336,10 +397,17 @@ export class ThirdPersonView {
       const f = this.fx[i];
       f.t += dt;
       f.vz -= f.g * dt;
+      if (f.drag) {
+        const d = Math.max(0, 1 - f.drag * dt);
+        f.vx *= d;
+        f.vy *= d;
+        f.vz *= d;
+      }
       f.s.position.x += f.vx * dt;
       f.s.position.z += f.vy * dt;
       f.s.position.y = Math.max(0.01, f.s.position.y + f.vz * dt);
-      (f.s.material as SpriteMaterial).opacity = Math.max(0, 1 - f.t / f.life);
+      if (f.grow && f.size) f.s.scale.setScalar(f.size * (1 + (f.grow - 1) * Math.min(1, f.t / f.life)));
+      (f.s.material as SpriteMaterial).opacity = Math.max(0, 1 - f.t / f.life) * (f.grow ? 0.7 : 1);
       if (f.t >= f.life) {
         this.scene.remove(f.s);
         (f.s.material as SpriteMaterial).dispose();
@@ -851,11 +919,14 @@ export class ThirdPersonView {
         // floats); only the eyes' height eases, sitting down and getting up
         const eye = me.a === 2 ? EYE_1P_SEATED : EYE_1P;
         this.eyeY = this.targetReady ? this.eyeY + (eye - this.eyeY) * (1 - Math.exp(-dt * 8)) : eye;
-        this.target.set(me.x, this.eyeY, me.y);
+        this.target.set(me.x, this.eyeY + (me.a === 2 ? 0 : (me.z ?? 0)) + jumpDip(me), me.y);
         this.targetReady = true;
       } else {
         const eye = me.a === 2 ? EYE - 0.3 : EYE;
-        const want = new Vector3(me.x, eye, me.y);
+        // up on something the camera's up there with you; in a jump it rides some of the
+        // way (you see yourself go up)
+        const ground = me.a === 2 ? 0 : (me.ground ?? 0);
+        const want = new Vector3(me.x, eye + ground + ((me.a === 2 ? 0 : (me.z ?? 0)) - ground) * 0.55, me.y);
         if (!this.targetReady) {
           this.target.copy(want);
           this.targetReady = true;
@@ -1035,7 +1106,8 @@ export class ThirdPersonView {
         dt,
         this.camera,
         this.pitch,
-        this.lensFov !== null,
+        // (a flip turns the body over: the hands drop out of view for it)
+        this.lensFov !== null || (me.jump?.kind === "flip" && me.jump.stage === "air" && !me.reduced),
         this.quality === "low",
       );
     } else if (this.hands) {

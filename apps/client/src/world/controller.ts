@@ -15,13 +15,22 @@ import {
   Grid,
   getMap,
   HEAR_RADIUS,
+  type Height,
   hangSpot,
   hangStrip,
   hearingGain,
+  isJump,
   isPrivate,
   isSocial,
   isTheme,
   isToyHeld,
+  type JumpKind,
+  type JumpNow,
+  JumpTrack,
+  jumpArc,
+  jumpNowAt,
+  jumpSpeed,
+  jumpTimes,
   type MapDef,
   moveStep,
   objectActions,
@@ -37,6 +46,7 @@ import {
   STEP_LABELS,
   screenInputToWorld,
   socialFor,
+  stepHeight,
   stereoPan,
   THROWN,
   TICK_HZ,
@@ -44,6 +54,7 @@ import {
   WALK_SPEED,
   type WbItem,
   type WorldObjectDef,
+  ZPX_TILE,
 } from "@yutopia/shared";
 import { COMPUTER_REACH, computerAway, isComputer } from "@yutopia/shared/computer";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
@@ -64,6 +75,7 @@ import type { BuildController } from "./build/controller";
 import { type AvatarState, WorldEngine } from "./engine";
 import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
+import { jumps, loadJumps } from "./jumps-load";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import type { OsRoom } from "./os/room";
@@ -80,9 +92,11 @@ import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 type S = any;
 
 interface Remote {
-  buf: { t: number; x: number; y: number }[];
+  buf: { t: number; x: number; y: number; z: number }[];
   d: number;
   a: number;
+  jumpKey: string; // their last jump (kind|server ms), timed from when it showed up here
+  track: JumpTrack;
 }
 
 const INTERP_MS = 110;
@@ -92,6 +106,8 @@ const LIVEKIT_TOKEN_FRESH_MS = 5 * 3600_000; // LiveKit tokens last 6 h (Yutopia
 const IDLE_MS = 3000; // nothing moved for this long: frames at 30/s
 const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
+const JUMP_BUFFER_MS = 220; // Space a moment before landing: the next jump goes as it lands
+const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 
 export class WorldController {
   engine: WorldEngine | null = null;
@@ -103,10 +119,19 @@ export class WorldController {
   private host: HTMLElement;
   private spaceId: number;
   private keys = new Set<string>();
+  // my feet (shared/jump.ts): how high (up on something, in a jump), my jump's stage,
+  // whether it's left the ground yet; Space pressed just before landing, waiting
+  private height: Height = { z: 0, vz: 0, up: false };
+  private jumpTrack = new JumpTrack();
+  private launched = false;
+  private jumpWanted = 0;
+  private jumpStages = new Map<string, string>(); // everyone's jump stage last frame (dust, sound)
+  /** review shots / e2e: a jump of mine held at this moment (s in), while it's set */
+  jumpHold: { kind: JumpKind; t: number } | null = null;
   private path: Point[] | null = null;
   private pathTarget: { objectId?: string } | null = null;
   private me = { x: 0, y: 0, d: 0, a: 0 as number };
-  private lastSent = { x: 0, y: 0, d: 0, a: 0, t: 0 };
+  private lastSent = { x: 0, y: 0, z: 0, d: 0, a: 0, t: 0 };
   private seq = 0;
   private remotes = new Map<string, Remote>();
   private npcBuf = new Map<string, { t: number; x: number; y: number }[]>();
@@ -392,10 +417,17 @@ export class WorldController {
       this.uidToSid.set(p.uid, sid);
       if (local) {
         this.me = { x: p.x, y: p.y, d: p.d, a: p.a };
-        this.lastSent = { ...this.me, t: 0 };
+        this.height = { z: p.z ?? 0, vz: 0, up: false };
+        this.lastSent = { ...this.me, z: this.height.z, t: 0 };
         engine.localId = sid;
       } else {
-        this.remotes.set(sid, { buf: [{ t: performance.now(), x: p.x, y: p.y }], d: p.d, a: p.a });
+        this.remotes.set(sid, {
+          buf: [{ t: performance.now(), x: p.x, y: p.y, z: p.z ?? 0 }],
+          d: p.d,
+          a: p.a,
+          jumpKey: `${p.jump}|${p.jumpAt}`, // (a jump from before I came isn't played)
+          track: new JumpTrack(),
+        });
         if (hud.get().phase === "ready" && !p.bot) mixer.blip("join");
       }
       engine.upsertAvatar(sid, this.avatarState(p, local), local);
@@ -404,8 +436,8 @@ export class WorldController {
         const r = this.remotes.get(sid);
         if (!r) return;
         const last = r.buf[r.buf.length - 1];
-        if (!last || last.x !== p.x || last.y !== p.y) {
-          r.buf.push({ t: performance.now(), x: p.x, y: p.y });
+        if (!last || last.x !== p.x || last.y !== p.y || last.z !== p.z) {
+          r.buf.push({ t: performance.now(), x: p.x, y: p.y, z: p.z ?? 0 });
           if (r.buf.length > 12) r.buf.shift();
         }
         r.d = p.d;
@@ -537,6 +569,7 @@ export class WorldController {
     room.onMessage("snap", (m: ServerMessages["snap"]) => {
       this.me.x = m.x;
       this.me.y = m.y;
+      this.height = { z: m.z ?? 0, vz: 0, up: false };
       this.path = null;
     });
     room.onMessage("hear", (m: ServerMessages["hear"]) => {
@@ -1173,7 +1206,15 @@ export class WorldController {
     const bodies: Body3[] = [];
     const reduced = prefs().reducedMotion;
     if (lp) {
-      const st = { ...this.avatarState(lp, true), x: this.me.x, y: this.me.y, d: this.me.d, a: this.me.a };
+      const st = {
+        ...this.avatarState(lp, true),
+        x: this.me.x,
+        y: this.me.y,
+        d: this.me.d,
+        a: this.me.a,
+        ...this.myJump(now),
+      };
+      this.jumpEffects(localSid, st, 1);
       engine.upsertAvatar(localSid, st, true);
       if (tp)
         bodies.push({
@@ -1190,7 +1231,15 @@ export class WorldController {
       const p = room.state.players.get(sid);
       if (!p) continue;
       const pos = interpolate(r.buf, renderAt);
-      const st = { ...this.avatarState(p, false), x: pos.x, y: pos.y, d: r.d, a: r.a };
+      const st = {
+        ...this.avatarState(p, false),
+        x: pos.x,
+        y: pos.y,
+        d: r.d,
+        a: r.a,
+        ...this.theirJump(r, p, pos, now),
+      };
+      this.jumpEffects(sid, st, Math.max(0, 1 - Math.hypot(pos.x - this.me.x, pos.y - this.me.y) / JUMP_HEARD));
       engine.upsertAvatar(sid, st);
       if (tp)
         bodies.push({
@@ -1366,7 +1415,7 @@ export class WorldController {
       const dir = this.tp
         ? unit(this.tp.relative(-(iy || pad.y), ix || pad.x))
         : screenInputToWorld(ix || pad.x, iy || pad.y);
-      const next = moveStep(this.grid, this.me, dir, speed, dt);
+      const next = moveStep(this.grid, this.me, dir, speed, dt, this.height.z);
       // (first person: I keep facing where I look — S walks backwards, A / D sideways)
       if (!first) {
         this.turnTowards(Math.atan2(dir.y, dir.x), dt);
@@ -1405,7 +1454,20 @@ export class WorldController {
         if (target?.objectId) this.activateObject(target.objectId, false);
       }
     }
-    const seat = this.grid.seatAt(this.me.x, this.me.y);
+    // my feet: a jump leaves the ground after its crouch, then gravity — landing on
+    // whatever's under them (a desk, the floor); walking off the edge of something drops them
+    const hgt = this.height;
+    const jk = this.jumpTrack.kind;
+    if (jk && !this.launched && this.jumpTrack.since(performance.now()) >= jumpTimes(jk).crouch) {
+      hgt.vz = jumpSpeed(jk);
+      hgt.up = true;
+      this.launched = true;
+    }
+    stepHeight(this.grid, this.me.x, this.me.y, hgt, Math.min(dt, 0.05));
+    if (this.jumpWanted && performance.now() - this.jumpWanted > JUMP_BUFFER_MS) this.jumpWanted = 0;
+    if (this.jumpWanted && !hgt.up) this.jump();
+    // (up on something or in the air nobody sits down: a jump over a chair lands on its feet)
+    const seat = hgt.up || hgt.z > 0 || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
     const floor =
       FLOORS[tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y)) as keyof typeof FLOORS] ?? "wood";
     sound.step(dt, moved, speed === RUN_SPEED, floor);
@@ -1451,11 +1513,13 @@ export class WorldController {
     const changed =
       Math.abs(this.me.x - this.lastSent.x) > 0.01 ||
       Math.abs(this.me.y - this.lastSent.y) > 0.01 ||
+      Math.abs(this.height.z - this.lastSent.z) > 0.01 ||
       this.me.d !== this.lastSent.d ||
       this.me.a !== this.lastSent.a;
     if (changed && now - this.lastSent.t >= 1000 / TICK_HZ) {
-      this.send("pos", { x: this.me.x, y: this.me.y, d: this.me.d, a: this.me.a, seq: ++this.seq });
-      this.lastSent = { ...this.me, t: now };
+      const z = Math.round(this.height.z * 1000) / 1000;
+      this.send("pos", { x: this.me.x, y: this.me.y, z, d: this.me.d, a: this.me.a, seq: ++this.seq });
+      this.lastSent = { ...this.me, z, t: now };
     }
   }
 
@@ -2113,6 +2177,76 @@ export class WorldController {
     this.send("status", { status });
   }
 
+  // ── jumping ─────────────────────────────────────────────────────────────
+  /** Space: a hop — or, running, a front flip. Pressed on the way down, it goes as I land. */
+  jump() {
+    const lp = this.room?.state.players.get(this.room.sessionId);
+    if (!lp || this.me.a === ANIM.sit || lp.busy || lp.act || this.games?.playing()) return;
+    const now = performance.now();
+    // still up: pressed on the way down it goes as I land (a buffer); loading up: nothing
+    if (this.height.up) {
+      if (this.height.vz < 0 && !this.jumpWanted) this.jumpWanted = now;
+      return;
+    }
+    if (this.jumpTrack.kind && !this.launched) return;
+    this.jumpWanted = 0;
+    const k = this.keys;
+    const moving =
+      k.has("w") || k.has("a") || k.has("s") || k.has("d") || [...k].some((x) => x.startsWith("arrow")) || !!this.path;
+    const pad = this.gamepad();
+    const running = (k.has("shift") || pad.run) && (moving || !!pad.x || !!pad.y);
+    const kind: JumpKind = running && !prefs().reducedMotion ? "flip" : "hop";
+    this.jumpTrack.begin(kind, now);
+    this.launched = false;
+    void loadJumps();
+    this.activeAt = now;
+    this.send("jump", { k: kind });
+  }
+
+  // my jump as the views show it, my feet's height and what's under them
+  private myJump(now: number): { jump?: JumpNow; z: number; ground: number } {
+    const h = this.height;
+    const ground = this.grid.groundAt(this.me.x, this.me.y, h.z);
+    const hold = this.jumpHold;
+    if (hold) return { jump: jumpNowAt(hold.kind, hold.t) ?? undefined, z: h.z + jumpArc(hold.kind, hold.t).h, ground };
+    return { jump: this.jumpTrack.update(now, h.up) ?? undefined, z: h.z, ground };
+  }
+
+  // someone else's: from when it showed up here, as late as their position is drawn
+  private theirJump(r: Remote, p: S, at: { x: number; y: number; z: number }, now: number) {
+    const key = `${p.jump}|${p.jumpAt}`;
+    if (key !== r.jumpKey) {
+      r.jumpKey = key;
+      if (isJump(p.jump)) r.track.begin(p.jump, now + INTERP_MS);
+      void loadJumps();
+    }
+    const ground = this.grid.groundAt(at.x, at.y, at.z);
+    const jump = r.track.update(now, at.z > ground + 0.03) ?? undefined;
+    return { jump, z: at.z, ground };
+  }
+
+  // dust kicked up at take-off and thrown out on landing, a whoosh, a thud (`near`: 0..1, how loud)
+  private jumpEffects(id: string, st: { x: number; y: number; jump?: JumpNow; ground?: number }, near: number) {
+    const stage = st.jump?.stage ?? "";
+    const was = this.jumpStages.get(id) ?? "";
+    if (stage === was) return;
+    if (stage) this.jumpStages.set(id, stage);
+    else this.jumpStages.delete(id);
+    const j = st.jump;
+    if (!j) return;
+    const hard = j.kind === "flip" ? 1 : 0.6;
+    const floor = FLOORS[tileAt(this.map, Math.floor(st.x), Math.floor(st.y)) as keyof typeof FLOORS] ?? "wood";
+    // (up on something the dust is on its top)
+    const lift = (st.ground ?? 0) * ZPX_TILE;
+    if (stage === "air" && was === "crouch") {
+      this.engine?.puff(st.x, st.y, "kick", lift, hard);
+      if (near > 0) jumps()?.jumpSound(j.kind, near);
+    } else if (stage === "land") {
+      this.engine?.puff(st.x, st.y, "land", lift, hard);
+      if (near > 0) jumps()?.landSound(j.kind, st.ground ? "wood" : floor, near);
+    }
+  }
+
   emote(i: number) {
     const e = EMOTES[i];
     if (e) this.send("emote", { e });
@@ -2517,7 +2651,7 @@ export class WorldController {
       v.setHour(this.hour);
       v.yaw = this.meAngle; // start behind me
       engine.app.canvas.style.visibility = "hidden";
-      engine.onPuff = (x, y, kind, lift) => v.puff(x, y, kind, lift);
+      engine.onPuff = (x, y, kind, lift, hard) => v.puff(x, y, kind, lift, hard);
       this.tp = v;
       this.tpHost = host;
       v.setHighlight(this.footprintOf(hud.get().prompt?.objectId));
@@ -2808,6 +2942,11 @@ export class WorldController {
       void mixer.resume();
       return;
     }
+    if (key === " ") {
+      e.preventDefault();
+      if (!e.repeat) this.jump();
+      return;
+    }
     if (e.repeat) return;
     if (key === "x" || key === "e") this.interact();
     else if (key === "m") void this.toggleMic();
@@ -2828,6 +2967,7 @@ export class WorldController {
   private onFirstGesture = () => void mixer.resume();
 
   private bindInput() {
+    void loadJumps(); // (a jump's dust and sounds: small, fetched now so the first one has them)
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
@@ -2955,19 +3095,24 @@ function objFromState(o: S): WorldObjectDef {
   return { id: o.id, kind: o.kind, x: o.x, y: o.y, rot: o.rot, refId: o.refId || null, props };
 }
 
-function interpolate(buf: { t: number; x: number; y: number }[], at: number): Point {
-  if (buf.length === 0) return { x: 0, y: 0 };
-  if (at <= buf[0].t) return buf[0];
+function interpolate<T extends { t: number; x: number; y: number; z?: number }>(
+  buf: T[],
+  at: number,
+): { x: number; y: number; z: number } {
+  if (buf.length === 0) return { x: 0, y: 0, z: 0 };
+  const of = (p: T) => ({ x: p.x, y: p.y, z: p.z ?? 0 });
+  if (at <= buf[0].t) return of(buf[0]);
   for (let i = buf.length - 1; i >= 0; i--) {
     const a = buf[i];
     if (a.t <= at) {
       const b = buf[i + 1];
-      if (!b) return a;
+      if (!b) return of(a);
       const k = (at - a.t) / Math.max(1, b.t - a.t);
-      return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+      const az = a.z ?? 0;
+      return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: az + ((b.z ?? 0) - az) * k };
     }
   }
-  return buf[buf.length - 1];
+  return of(buf[buf.length - 1]);
 }
 
 // the 8 facings (shared/iso.ts) as world angles, for my 3D facing

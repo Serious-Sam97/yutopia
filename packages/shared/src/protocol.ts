@@ -2,6 +2,7 @@
 
 import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
+import type { JumpKind } from "./jump.ts";
 import type { MediaItem } from "./media.ts";
 import type { Command, Move, Needs, Species, Toy, Trick } from "./pets.ts";
 import type { CallEnd, CallInfo } from "./phone.ts";
@@ -27,8 +28,10 @@ export interface JoinOptions {
 
 // client → server
 export interface ClientMessages {
-  pos: { x: number; y: number; d: number; a: number; seq: number };
+  pos: { x: number; y: number; z?: number; d: number; a: number; seq: number };
   emote: { e: Emote };
+  // a jump (shared/jump.ts): a hop, or a flip on the run
+  jump: { k: JumpKind };
   // take something to carry from a thing that hands it out (a mug from the coffee machine)
   "item:take": { id: string };
   "item:drop": Record<string, never>;
@@ -233,7 +236,7 @@ export interface ClientMessages {
 
 // server → client
 export interface ServerMessages {
-  snap: { x: number; y: number };
+  snap: { x: number; y: number; z?: number };
   // my own arrival point here (on join and after I change it); null: the space's
   "spawn:mine": { at: { x: number; y: number } | null };
   // whom I may listen to (session ids) and who may listen to me (user ids)

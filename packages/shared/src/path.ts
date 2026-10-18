@@ -57,8 +57,8 @@ class Heap {
 // straight segments as the body can actually walk. Returns waypoints after `from`.
 export function findPath(grid: Grid, from: Point, to: Point, maxNodes = 6000): Point[] | null {
   const W = grid.width;
-  const sx = Math.floor(from.x);
-  const sy = Math.floor(from.y);
+  let sx = Math.floor(from.x);
+  let sy = Math.floor(from.y);
   let tx = Math.floor(to.x);
   let ty = Math.floor(to.y);
   if (!grid.ok(tx, ty)) {
@@ -67,7 +67,13 @@ export function findPath(grid: Grid, from: Point, to: Point, maxNodes = 6000): P
     tx = Math.floor(near.x);
     ty = Math.floor(near.y);
   }
-  if (!grid.ok(sx, sy)) return null;
+  if (!grid.ok(sx, sy)) {
+    // up on something (shared/jump.ts): from the floor beside it (walking off its edge)
+    const near = grid.nearestOpen(from.x, from.y, 2);
+    if (!near) return null;
+    sx = Math.floor(near.x);
+    sy = Math.floor(near.y);
+  }
   const start = sy * W + sx;
   const goal = ty * W + tx;
   const N = grid.width * grid.height;

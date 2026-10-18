@@ -16,6 +16,7 @@ import {
   hostOf,
   isFloor,
   isSocial,
+  type JumpNow,
   type MapDef,
   placedFootprint,
   Q,
@@ -37,6 +38,7 @@ import {
   type WorldObjectDef,
   WQ,
   WZ_PX,
+  ZPX_TILE,
 } from "@yutopia/shared";
 import {
   Application,
@@ -92,6 +94,7 @@ import type { ThemeView } from "./art/themes";
 import { loadThemes } from "./art/themes-load";
 import { viewFor } from "./art/views";
 import type { VortexMood } from "./art/vortex/vortexArt";
+import { jumps } from "./jumps-load";
 import type { Life, Swayable } from "./life";
 import { PET_HURT_MS, type PetView } from "./petview";
 import type { Post } from "./post";
@@ -121,6 +124,8 @@ declare module "pixi.js" {
   }
 }
 
+export type PuffKind = "drop" | "poof" | "spark" | "confetti" | "land" | "kick";
+
 export interface AvatarState {
   vortexMood?: string;
   name: string;
@@ -149,7 +154,13 @@ export interface AvatarState {
   phonePose?: string;
   ringing?: boolean;
   recording?: boolean; // its camera recording (a red light)
+  jump?: JumpNow; // jumping (shared/jump.ts): its stage (the controller tracks it)
+  z?: number; // feet off the floor (up on something, in a jump), tiles
+  ground?: number; // the top under them (the floor: 0), tiles
 }
+
+// a tile of height in a person's own px (they're drawn at PERSON: their feet land right on a top)
+const JUMP_PX = ZPX_TILE / PERSON;
 
 interface AvatarView {
   petPhase?: number; // a pet's walk cycle (steps)
@@ -2008,7 +2019,12 @@ export class WorldEngine {
       v.turnAt = now + 38;
     }
     const { view, mirror } = viewFor(v.shownDir);
-    const lift = sitting ? 12 : 0; // the drawing sits its hips on the seat
+    // off the floor (in a jump, up on something): the body up, the shadow on what's under
+    // them, smaller the higher they are over it
+    const z = sitting ? 0 : (s.z ?? 0);
+    const ground = sitting ? 0 : Math.min(z, s.ground ?? 0);
+    const air = z * JUMP_PX;
+    const lift = (sitting ? 12 : 0) - air; // the drawing sits its hips on the seat
     const look = JSON.stringify(s.avatar);
     // the distance covered this frame: the walk cycle follows it
     let dist = v.last ? Math.hypot(s.x - v.last.x, s.y - v.last.y) : 0;
@@ -2050,7 +2066,9 @@ export class WorldEngine {
       }
     }
     v.root.position.set(p.x, p.y);
-    this.setDepth(v.root, depthOf(s.x, s.y) + (sitting ? 0 : 0.01));
+    // (up on something: drawn over it — its slice under their feet sorts after where they stand)
+    const depth = depthOf(s.x, s.y) + (sitting ? 0 : 0.01);
+    this.setDepth(v.root, ground > 0 ? Math.max(depth, this.topKey(s.x, s.y) + 0.02) : depth);
     // people take the light where they stand
     const tint = this.tintAt(s.x, s.y);
     v.sprite.tint = tint;
@@ -2059,6 +2077,10 @@ export class WorldEngine {
     v.root.alpha = s.status === "away" ? 0.55 : 1;
     if (this.seeThrough && this.inFrontOf(this.seeThrough, s.x, s.y)) v.root.alpha *= 0.28;
     v.shadow.visible = !sitting;
+    const shrink = 1 / (1 + (z - ground) * 1.6);
+    v.shadow.scale.set(shrink);
+    v.shadow.alpha = 0.4 + 0.6 * shrink;
+    v.shadow.y = -ground * JUMP_PX;
 
     // speaking ring (cleared only once it was drawn: any redraw costs a rebuild)
     if (s.speaking) {
@@ -2164,6 +2186,7 @@ export class WorldEngine {
         typing: sitting && (s.busy === "computer" || this.atWork(s.x, s.y)),
         reduced: this.reducedMotion,
         act: this.actOf(v),
+        jump: sitting ? null : s.jump,
       },
       now,
     );
@@ -2180,7 +2203,7 @@ export class WorldEngine {
     v.sprite.anchor.set(sp.anchorX, sp.anchorY);
     v.sprite.scale.set(sp.scale, sp.scale);
     v.sprite.rotation = 0;
-    v.sprite.position.set(0, 0);
+    v.sprite.position.set(0, s.a === 2 ? 0 : -(s.z ?? 0) * JUMP_PX);
     return true;
   }
 
@@ -2210,6 +2233,22 @@ export class WorldEngine {
       typing: sitting && (s.busy === "computer" || this.atWork(s.x, s.y)),
     };
     return P.drawRig(at, v, view, mirror, sitting, look, dt, dist, walking, lift, P);
+  }
+
+  // The sort key of the slice of whatever's under (x, y) (as art/scene.ts slices
+  // things: a tile column along a long thing, a row across a deep one, one piece).
+  private topKey(x: number, y: number): number {
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    for (const v of this.objectViews.values()) {
+      const o = v.def;
+      const { w, h } = footprint(o.kind, o.rot ?? 0);
+      if (tx < o.x || ty < o.y || tx >= o.x + w || ty >= o.y + h || !entry(o.kind).solid) continue;
+      if (w > h) return tx + 0.5 + o.y + h / 2;
+      if (h > w) return o.x + w / 2 + ty + 0.5;
+      return o.x + w / 2 + o.y + h / 2;
+    }
+    return 0;
   }
 
   // A move with someone (shared SOCIAL): what, and how far into it.
@@ -2541,6 +2580,7 @@ export class WorldEngine {
     c: number;
     sq?: boolean; // a scrap of confetti (a square, spinning), else a soft dot
     g?: number; // its fall (px/s²)
+    drag?: number; // slowing down (1/s): dust that's thrown out and hangs
   }[] = [];
   pointerAt = { gx: 0, gy: 0 };
   // build mode: walls lower around this spot (world tiles) instead of the camera's focus
@@ -2714,12 +2754,18 @@ export class WorldEngine {
 
   // Dust when something lands, a poof when it goes (world tiles).
   // the third-person view draws the same bursts (set while it shows)
-  onPuff: ((x: number, y: number, kind: "drop" | "poof" | "spark" | "confetti", lift: number) => void) | null = null;
+  onPuff: ((x: number, y: number, kind: PuffKind, lift: number, hard: number) => void) | null = null;
 
-  puff(x: number, y: number, kind: "drop" | "poof" | "spark" | "confetti" = "drop", lift = 0) {
-    this.onPuff?.(x, y, kind, lift);
+  /** `lift`: px off the floor; `hard` (a jump's "land" / "kick"): how hard, 0..1 */
+  puff(x: number, y: number, kind: PuffKind = "drop", lift = 0, hard = 1) {
+    this.onPuff?.(x, y, kind, lift, hard);
     if (!this.animated()) return;
     const c = toScreen(x, y);
+    if (kind === "land" || kind === "kick") {
+      // a jump: its dust (jumps.ts), once that's in
+      for (const p of jumps()?.jumpDust(kind, hard, c.x, c.y - lift) ?? []) this.fx.push(p);
+      return;
+    }
     if (kind === "spark") {
       // where two hands meet: a few warm sparks
       for (let i = 0; i < 12; i++) {
@@ -2802,6 +2848,11 @@ export class WorldEngine {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.vy += (p.g ?? 30) * dt;
+      if (p.drag) {
+        const d = Math.max(0, 1 - p.drag * dt);
+        p.vx *= d;
+        p.vy *= d;
+      }
       const k = 1 - p.t / p.life;
       if (k <= 0) continue;
       if (p.sq) {

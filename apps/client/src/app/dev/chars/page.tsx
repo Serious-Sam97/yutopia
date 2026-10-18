@@ -1,6 +1,15 @@
 "use client";
 
-import { AVATAR_OPTIONS, type AvatarLayers, avatarFromSeed, DEFAULT_AVATAR } from "@yutopia/shared";
+import {
+  AVATAR_OPTIONS,
+  type AvatarLayers,
+  avatarFromSeed,
+  DEFAULT_AVATAR,
+  type JumpKind,
+  jumpArc,
+  jumpNowAt,
+  jumpTimes,
+} from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -91,7 +100,15 @@ type Act = {
   emote?: string;
   speaking?: boolean;
   ringing?: boolean;
+  jump?: JumpKind; // frozen jt s into a jump (a filmstrip: the same person, moment by moment)
+  jt?: number;
 };
+// a jump as a filmstrip: n moments evenly through it
+const jumpStrip = (kind: JumpKind, n: number): Act[] =>
+  Array.from({ length: n }, (_, i) => {
+    const jt = ((i + 0.5) / n) * jumpTimes(kind).len;
+    return { label: `${kind} ${jt.toFixed(2)}`, jump: kind, jt };
+  });
 const ANIMS: Record<string, Act[]> = {
   base: [
     { label: "stand" },
@@ -119,6 +136,8 @@ const ANIMS: Record<string, Act[]> = {
   ],
   social: ["wave", "highfive", "fistbump", "cheers", "give"].map((a) => ({ label: a, act: a })),
   emote: ["wave", "clap", "laugh", "heart", "question", "fire", "coffee", "tape"].map((e) => ({ label: e, emote: e })),
+  hop: jumpStrip("hop", 10),
+  flip: jumpStrip("flip", 12),
 };
 
 type Mode =
@@ -219,10 +238,12 @@ function Sheet({ q }: { q: URLSearchParams }) {
       const motions = acts.map((_, i) => new C.Motion3(i * 0.137 + 0.05));
       if (mode.kind === "anim")
         acts.forEach((a, i) => {
-          const look = withQuery({ ...CAST[i % CAST.length], accessory: "none" }, q);
+          // (a jump's filmstrip: one person, side on, going left to right)
+          const look = withQuery({ ...CAST[a.jump ? 0 : i % CAST.length], accessory: "none" }, q);
           // (&yaw= turns everyone: π shows their backs)
           const turn = Number(q.get("yaw") ?? 0);
-          add(look, 0, (i - (acts.length - 1) / 2) * 0.95, 0, (a.walk ? Math.PI / 2 - 0.5 : 0.4) + turn);
+          const yaw = a.jump ? Math.PI / 2 : a.walk ? Math.PI / 2 - 0.5 : 0.4;
+          add(look, 0, (i - (acts.length - 1) / 2) * 0.95, 0, yaw + turn);
         });
       // a stool for whoever sits (a lathe, like everything else)
       const stools: InstanceType<typeof T.Mesh>[] = [];
@@ -327,7 +348,9 @@ function Sheet({ q }: { q: URLSearchParams }) {
             busy: a.busy,
             act: a.act ? { what: a.act, t: at % 1.6, len: 1.6 } : null,
             phone: a.phone || a.ringing ? { state: a.phone ?? "", pose: a.photo ?? "", ringing: !!a.ringing } : null,
+            jump: a.jump ? jumpNowAt(a.jump, a.jt ?? 0) : null,
           });
+          if (a.jump) m.root.position.y = jumpArc(a.jump, a.jt ?? 0).h;
           const drop = a.sit ? m.sitDrop(seatY) : 0;
           m.setPose(mo.pose, [mo.lift[0], mo.lift[1] + drop * mo.settle, mo.lift[2]], mo.reach);
           m.setFace(mo.blink, mo.talk);

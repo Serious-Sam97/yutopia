@@ -1,4 +1,4 @@
-import { type HeldKind, heldState } from "@yutopia/shared";
+import { type HeldKind, heldState, type JumpNow } from "@yutopia/shared";
 import { Euler, Quaternion } from "three";
 import type { Reach } from "./model";
 import { type Euler3, JOINTS, type JointName, type Pose, REST } from "./rig";
@@ -25,6 +25,7 @@ export interface MotionIn {
   busy?: string; // using something (shared USES)
   act?: { what: string; t: number; len: number } | null; // with someone (shared SOCIAL, or "take")
   phone?: { state: string; pose: string; ringing: boolean } | null;
+  jump?: JumpNow | null; // jumping (shared/jump.ts): its stage
 }
 
 export interface MotionOut {
@@ -441,6 +442,111 @@ export function emotePose(
   return { pose: p, lift };
 }
 
+// ── a jump (shared/jump.ts) ─────────────────────────────────────────────────
+// Keyframes along the arc, eased one into the next. A hop: load up low with
+// the arms back, whip them up and stretch off the toes, at the top a fist
+// punched up and a knee driven high, legs reaching down for the floor, a
+// squash as it lands. Running, a front flip: up off the toes into a tight tuck, a
+// whole turn about the hips, opening out arms high to stick the landing.
+type Key = { pose: Pose; lift: number };
+function key(
+  spine: number,
+  head: number,
+  shoulder: Euler3,
+  elbow: number,
+  thigh: number,
+  knee: number,
+  ankle: number,
+  lift = 0,
+  // the right leg, when it isn't the left's mirror
+  right?: [number, number, number],
+): Key {
+  const p: Pose = { hips: [0, 0, 0], spine: [spine, 0, 0], neck: [0, 0, 0], head: [head, 0, 0] };
+  both(p, "shoulder", shoulder);
+  both(p, "elbow", [elbow, 0, 0]);
+  both(p, "wrist", [0, 0, 0]);
+  both(p, "thigh", [thigh, 0, 0.04], right ? [right[0], 0, -0.04] : undefined);
+  both(p, "knee", [knee, 0, 0], right ? [right[1], 0, 0] : undefined);
+  both(p, "ankle", [ankle, 0, 0], right ? [right[2], 0, 0] : undefined);
+  return { pose: p, lift };
+}
+/** `k` with the right arm its own: [shoulder, elbow]. */
+function rightArm(k: Key, shoulder: Euler3, elbow: number): Key {
+  return { pose: { ...k.pose, shoulderR: shoulder, elbowR: [elbow, 0, 0] }, lift: k.lift };
+}
+const HOP = {
+  crouch: key(0.38, -0.3, [0.75, 0, 0.18], -0.25, -0.85, 1.55, -0.7, -0.2),
+  launch: key(-0.06, -0.12, [-2.75, 0, 0.22], -0.12, 0.08, 0.1, 0.55),
+  // the top: a fist punched up, the other arm out; one knee driven high, the other heel kicked back
+  tuck: rightArm(
+    key(0.1, -0.12, [-0.35, 0, 1.1], -0.3, -1.65, 2.1, 0.3, 0.06, [0.25, 1.9, 0.5]),
+    [-2.85, 0, -0.15],
+    -0.5,
+  ),
+  reach: key(0.1, -0.05, [-1.05, 0, 0.55], -0.3, -0.45, 0.55, -0.1),
+  impact: key(0.3, -0.2, [-0.9, 0, 0.45], -0.4, -0.75, 1.35, -0.6, -0.17),
+};
+const FLIP = {
+  crouch: key(0.5, -0.2, [0.9, 0, 0.12], -0.2, -0.8, 1.45, -0.65, -0.19),
+  launch: key(-0.15, -0.25, [-2.9, 0, 0.15], -0.1, 0.12, 0.05, 0.5),
+  // balled up: knees to the chest, hands on the shins
+  tuck: key(0.75, 0.5, [-0.7, 0, 0.1], -1.9, -2.4, 2.6, 0.4, 0.12),
+  open: key(0.05, -0.1, [-1.6, 0, 0.9], -0.2, -0.6, 0.7, 0),
+  impact: key(0.35, -0.15, [-1.3, 0, 0.75], -0.3, -0.9, 1.6, -0.7, -0.22),
+};
+// [from k, key] along the air time: each eases into the next
+const HOP_AIR: [number, Key][] = [
+  [0, HOP.crouch],
+  [0.2, HOP.launch],
+  [0.5, HOP.tuck],
+  [0.62, HOP.tuck],
+  [0.9, HOP.reach],
+];
+const FLIP_AIR: [number, Key][] = [
+  [0, FLIP.crouch],
+  [0.14, FLIP.launch],
+  [0.32, FLIP.tuck],
+  [0.68, FLIP.tuck],
+  [0.88, FLIP.open],
+];
+function along(track: [number, Key][], k: number): { pose: Pose; lift: number } {
+  let i = 0;
+  while (i < track.length - 1 && k >= track[i + 1][0]) i++;
+  const [k0, a] = track[i];
+  const next = track[i + 1];
+  if (!next) return { pose: a.pose, lift: a.lift };
+  const w = ease((k - k0) / (next[0] - k0));
+  return { pose: blend(a.pose, next[1].pose, w), lift: a.lift + (next[1].lift - a.lift) * w };
+}
+const smoother = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * t * (t * (t * 6 - 15) + 10));
+
+/** The body at a jump's stage, and how much of it to lay over the rest (w). `spin`: false keeps a flip upright (reduced motion). */
+export function jumpPose(a: JumpNow, spin = true): { pose: Pose; lift: Euler3; w: number } {
+  const kind = a.kind;
+  const K = kind === "flip" ? FLIP : HOP;
+  let pose: Pose;
+  let lift = 0;
+  let w = 1;
+  if (a.stage === "crouch") {
+    pose = K.crouch.pose;
+    lift = K.crouch.lift;
+    w = ease(a.k * 1.4);
+  } else if (a.stage === "air") {
+    const at = along(kind === "flip" ? FLIP_AIR : HOP_AIR, a.k);
+    pose = { ...at.pose };
+    lift = at.lift;
+    // a whole turn forward about the hips, fastest in the tuck
+    if (kind === "flip" && spin) pose.hips = [TAU * smoother((a.k - 0.12) / 0.74), 0, 0];
+  } else if (a.stage === "land") {
+    const last = kind === "flip" ? FLIP.open : HOP.reach;
+    const hit = ease(a.k / 0.3);
+    pose = blend(last.pose, K.impact.pose, hit);
+    lift = last.lift + (K.impact.lift - last.lift) * hit;
+    w = 1 - ease((a.k - 0.3) / 0.7);
+  } else return { pose: {}, lift: [0, 0, 0], w: 0 };
+  return { pose, lift: [0, lift, 0], w };
+}
+
 // making a point while talking: the forearm up, the hand open
 function explainPose(t: number): Pose {
   return { shoulderR: [-0.5, 0, -0.22], elbowR: [-1.45 + 0.12 * Math.sin(t * 5), 0, 0], wristR: [0, -0.7, 0] };
@@ -559,6 +665,14 @@ export class Motion3 {
       const w = walkPose(this.phase, k);
       p = blend(p, w.pose, ease(this.walkW));
       lifted(w.lift, ease(this.walkW));
+    }
+    // a jump takes the whole body (what's in the hands is laid back over it next)
+    if (m.jump && !m.sit) {
+      const j = jumpPose(m.jump, !m.reduced);
+      if (j.w > 0) {
+        p = blend(p, j.pose, j.w);
+        lift[1] = lift[1] * (1 - j.w) + j.lift[1] * j.w;
+      }
     }
 
     // carrying: the right hand holds it, and brings it up for each sip

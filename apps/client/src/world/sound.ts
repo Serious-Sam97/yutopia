@@ -8,7 +8,7 @@ import { mixer } from "./audio";
 //  · a procedural lo-fi radio, deterministic from (station, startedAt) so every
 //    client in the room plays the same bar at the same time.
 
-type Floor = "wood" | "carpet" | "tile" | "felt" | "stage" | "grate";
+export type Floor = "wood" | "carpet" | "tile" | "felt" | "stage" | "grate";
 
 interface Tone {
   out: GainNode;

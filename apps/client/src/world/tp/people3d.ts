@@ -1,4 +1,12 @@
-import { type AvatarLayers, type HeldKind, heldState, isHeld, isSocial, SOCIAL_MS } from "@yutopia/shared";
+import {
+  type AvatarLayers,
+  type HeldKind,
+  heldState,
+  isHeld,
+  isSocial,
+  type JumpNow,
+  SOCIAL_MS,
+} from "@yutopia/shared";
 import {
   CanvasTexture,
   CircleGeometry,
@@ -129,6 +137,9 @@ export interface PersonIn {
   phonePose?: string;
   ringing?: boolean;
   recording?: boolean;
+  jump?: JumpNow; // jumping (shared/jump.ts): its stage
+  z?: number; // feet off the floor (up on something, in a jump), tiles
+  ground?: number; // the top under them, tiles
 }
 
 // A phone in the hand: its case and the face this view sees
@@ -386,7 +397,7 @@ export class Person3 {
     else this.sitW = Math.max(0, Math.min(1, this.sitW + (sitting ? dt : -dt) / SIT_IN));
     const w = this.sitW * this.sitW * (3 - 2 * this.sitW);
     const hipY = Math.max((SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX, SIT_FEET * s + 0.015);
-    this.root.position.set(p.x, 0, p.y);
+    this.root.position.set(p.x, sitting ? 0 : (p.z ?? 0), p.y);
     // how much the camera looks at the seat's front (1) … side (0) … back (-1)
     const front = cam ? Math.cos(Math.atan2(cam.z - p.y, cam.x - p.x) - p.angle) : 1;
     // From the side the torso belongs against the back (the lap reaches the

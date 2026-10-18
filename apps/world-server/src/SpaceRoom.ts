@@ -22,9 +22,12 @@ import {
   hearingGain,
   hostOf,
   isFloor,
+  isJump,
   isKind,
   isLegalMove,
   isV2,
+  jumpReady,
+  jumpTimes,
   layoutFromMap,
   type MapDef,
   mapFromLayout,
@@ -32,6 +35,7 @@ import {
   replacedByTemplate,
   type ServerMessages,
   SPLIT_KINDS,
+  STEP,
   type Status,
   splitAll,
   studioV1,
@@ -52,9 +56,13 @@ import { metrics } from "./metrics.ts";
 import { Player, SpaceState, WorldObject } from "./schema.ts";
 import { type PresenceEntry, YondraError, yondra } from "./yondra.ts";
 
+// a jump lets a body up for this long (the longest one, falling to the floor from up high)
+const JUMP_AIR_MS = 3000;
+
 interface ClientData {
   claims: WorldClaims;
   lastPosAt: number;
+  zMax?: number; // how high their jump can take them (tiles)
   avatarAt?: number; // last look change (rate limit)
   hears: Set<string>; // sids this client can hear
   heardByKey: string; // last "heard by" list sent, to skip no-op updates
@@ -317,18 +325,24 @@ export class SpaceRoom extends Room<SpaceState> {
       const dt = (now - data(client).lastPosAt) / 1000;
       data(client).lastPosAt = now;
       const to = { x: m.x, y: m.y };
-      if (!isLegalMove(this.gridFor(p.uid), p, to, dt)) {
-        this.send(client, "snap", { x: p.x, y: p.y });
+      // the feet's height: up only in a jump (as high as it goes from where it started) or a step
+      const z = Math.max(0, Math.min(12, Number(m.z) || 0));
+      const ud = data(client);
+      const jumping = isJump(p.jump) && now - p.jumpAt < JUMP_AIR_MS;
+      const cap = jumping ? (ud.zMax ?? 0) : p.z + STEP + 0.05;
+      if (z > cap || !isLegalMove(this.gridFor(p.uid), p, to, dt, z, p.z)) {
+        this.send(client, "snap", { x: p.x, y: p.y, z: p.z });
         return;
       }
       const nextArea = areaAt(this.map, to.x, to.y);
       if (nextArea && nextArea.key !== p.area && !this.mayEnter(p, nextArea.key)) {
-        this.send(client, "snap", { x: p.x, y: p.y });
+        this.send(client, "snap", { x: p.x, y: p.y, z: p.z });
         this.knock(client, p, nextArea.key);
         return;
       }
       p.x = to.x;
       p.y = to.y;
+      p.z = z;
       p.d = (Math.max(0, Math.min(7, m.d | 0)) as number) ?? 0;
       p.a = m.a === ANIM.walk || m.a === ANIM.sit ? m.a : ANIM.idle;
       const area = nextArea?.key ?? "";
@@ -346,6 +360,18 @@ export class SpaceRoom extends Room<SpaceState> {
       if (!p || !EMOTES.includes(m.e)) return;
       p.emote = m.e;
       p.emoteAt = Date.now();
+    });
+
+    // a jump: standing on the floor (not seated, not at something), once the last one is coming down
+    this.on("jump", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || !isJump(m?.k) || p.a === ANIM.sit || p.busy || p.act) return;
+      const now = Date.now();
+      if (isJump(p.jump) && !jumpReady(p.jump, (now - p.jumpAt) / 1000 + 0.1)) return;
+      p.jump = m.k;
+      p.jumpAt = now;
+      // (how high it can take them: from where they stand)
+      data(client).zMax = p.z + jumpTimes(m.k).h + 0.2;
     });
 
     // a new look, saved in Yondra by the editor: validated, at most every 2 s
@@ -433,10 +459,11 @@ export class SpaceRoom extends Room<SpaceState> {
       const seat = this.grid.seatAt(spot.x, spot.y);
       p.x = spot.x;
       p.y = spot.y;
+      p.z = 0;
       p.a = seat ? ANIM.sit : ANIM.idle;
       if (seat) p.d = seatFacing(seat.rot);
       p.area = area?.key ?? "";
-      this.send(client, "snap", { x: p.x, y: p.y });
+      this.send(client, "snap", { x: p.x, y: p.y, z: 0 });
       this.pushPresence();
     });
 
@@ -705,11 +732,13 @@ export class SpaceRoom extends Room<SpaceState> {
     const g = Grid.from(this.map, [...this.state.objects.values()].map(fromSchema));
     for (const c of this.clients) {
       const p = this.state.players.get(c.sessionId);
-      if (!p || (isFloor(tileAt(this.map, Math.floor(p.x), Math.floor(p.y))) && g.fits(p.x, p.y))) continue;
+      // (up on something that's still there: they stay)
+      if (!p || (isFloor(tileAt(this.map, Math.floor(p.x), Math.floor(p.y))) && g.fitsAt(p.x, p.y, p.z))) continue;
       const to = g.nearestOpen(p.x, p.y, 2) ?? this.map.spawn;
       p.x = to.x;
       p.y = to.y;
-      this.send(c, "snap", { x: p.x, y: p.y });
+      p.z = 0;
+      this.send(c, "snap", { x: p.x, y: p.y, z: 0 });
     }
   }
 

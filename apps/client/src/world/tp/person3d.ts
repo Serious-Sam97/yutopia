@@ -73,6 +73,9 @@ export class Person3D {
   private actSeen = 0;
   private due = 0; // motion time not stepped yet (off screen, far away)
   private away = false;
+  private jumpH = 0; // off the floor (a jump), tiles
+  private jumpOn = false;
+  private headUp = 0; // the head's height standing as they last stood (the tag stays over it through a flip)
   /** what posed them last (first person's hands take mine from here) */
   motionOut: MotionOut | null = null;
 
@@ -137,8 +140,17 @@ export class Person3D {
     else this.sitW = Math.max(0, Math.min(1, this.sitW + (sitting ? dt : -dt) / SIT_IN));
     const w = this.sitW * this.sitW * (3 - 2 * this.sitW);
     const back = -SEAT_BACK * w;
+    // off the floor (in a jump, up on something): the shadow and the ring stay on what's under them
+    const jump = !sitting ? (p.jump ?? null) : null;
+    const h = sitting ? 0 : (p.z ?? 0);
+    const ground = Math.min(h, sitting ? 0 : (p.ground ?? 0));
     if (this.part === "all")
-      this.root.position.set(p.x + Math.cos(this.turned) * back, 0, p.y + Math.sin(this.turned) * back);
+      this.root.position.set(p.x + Math.cos(this.turned) * back, h, p.y + Math.sin(this.turned) * back);
+    this.jumpH = h;
+    this.jumpOn = !!jump;
+    this.shadow.position.y = 0.004 + ground - h;
+    this.shadow.scale.setScalar(1 / (1 + (h - ground) * 1.6));
+    this.ring.position.y = 0.006 + ground - h;
 
     // the motion: stepped every frame on screen, caught up when it comes back
     let dist = this.last ? Math.hypot(p.x - this.last.x, p.y - this.last.y) : 0;
@@ -165,6 +177,7 @@ export class Person3D {
         busy: p.busy ?? "",
         act: this.actOf(p),
         phone: p.phone || p.ringing ? { state: p.phone ?? "", pose: p.phonePose ?? "", ringing: !!p.ringing } : null,
+        jump,
       });
     this.motionOut = mo;
     const seatY = (SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX;
@@ -292,10 +305,13 @@ export class Person3D {
     return t;
   }
 
-  /** The name tag's height: over the head (seated too). */
+  /** The name tag's height: over the head (seated too; in a jump, up with them — over where the head
+   *  was standing, as a flip turns them over). */
   tagY(): number {
     if (!this.model.ready) return 2.0;
-    return this.model.jointPosition("head").y + 0.46;
+    const head = this.model.jointPosition("head").y;
+    if (!this.jumpOn) this.headUp = head;
+    return this.jumpH + Math.max(head, this.jumpOn ? this.headUp : 0) + 0.46;
   }
 
   /** A hand, in the world (game pads, the photo flash). */

@@ -373,6 +373,38 @@ export function entry(kind: string): CatalogEntry {
   return isKind(kind) ? CATALOG[kind] : { label: kind, w: 1, h: 1, solid: true };
 }
 
+// What a body can stand on once it's jumped up there (shared/jump.ts): the top
+// of the thing, iso px up (as `surface`; 39.2 px a tile), by what its drawing
+// shows. Surfaces (desks, tables, shelves…) are stood on at their surface;
+// these are the solid things without one. Thin, tall or awkward things (lamps,
+// plants, partitions, a mic stand, the water cooler's bottle) aren't.
+const STAND: Partial<Record<ObjectKind, number>> = {
+  arcade: 54,
+  vending: 62,
+  piano: 44,
+  crt_tv: 47,
+  tv_console: 46,
+  cart_shelf: 30,
+  disc_rack: 16,
+  slot_track: 23,
+  pool_table: 27,
+  pingpong_table: 24,
+  mixing_desk: 18,
+  speaker_cab: 46,
+  column: 84,
+  server_rack: 66,
+  crt_terminal: 20,
+  pet_house: 16,
+  toy_box: 16,
+};
+
+/** How high a body stands on top of this (iso px), or undefined: it can't. */
+export function standHeight(kind: string): number | undefined {
+  const e = entry(kind);
+  if (!e.solid || e.wall) return undefined;
+  return isKind(kind) ? (STAND[kind] ?? e.surface) : undefined;
+}
+
 export function footprint(kind: string, rot = 0): { w: number; h: number } {
   const e = entry(kind);
   return rot % 2 === 1 ? { w: e.h, h: e.w } : { w: e.w, h: e.h };

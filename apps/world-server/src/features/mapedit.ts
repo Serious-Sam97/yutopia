@@ -147,7 +147,8 @@ registerFeature((room: SpaceRoom) => {
       p.x = next.spawn.x + (Math.random() - 0.5) * 3;
       p.y = next.spawn.y + (Math.random() - 0.5);
       p.desk = "";
-      room.send(c, "snap", { x: p.x, y: p.y });
+      p.z = 0;
+      room.send(c, "snap", { x: p.x, y: p.y, z: 0 });
     }
     room.broadcastMsg("toast", { text: `A blank ${w}×${h} studio. Time to build.` });
   });
