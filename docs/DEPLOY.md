@@ -85,7 +85,11 @@ time (`node tools/emu-assets.mjs`, each file pinned by sha256 in
 `tools/emu-cores.json` / `tools/emu-games.json`; GPL sources linked in
 `/emu/cores/SOURCES.md` and the library's credits). For a dev checkout run the
 same command once; `node tools/emu-assets.mjs --check` tells you if anything's
-missing. Snes9x and Genesis Plus GX are non-commercial licences: fine for a team
+missing. The client's `build` runs it first too (it only fetches what's
+missing), so a server that builds from a checkout gets a new core with the
+next build. Next only serves `public/` files that were there when it built:
+after fetching a core by hand, rebuild (or restart `next dev`) — until then
+the core's `.js` / `.wasm` are 404s and the console stays dark. Snes9x and Genesis Plus GX are non-commercial licences: fine for a team
 and friends, to be swapped for other cores before Yutopia is ever sold.
 
 ## VortexOS on the computers (docs/plan/19-vortexos.md)

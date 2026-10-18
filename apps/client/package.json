@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3100",
-    "build": "next build --turbopack",
+    "build": "node ../../tools/emu-assets.mjs && next build --turbopack",
     "start": "next start -p 3100",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/**/*.test.ts",
