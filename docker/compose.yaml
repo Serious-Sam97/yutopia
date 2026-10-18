@@ -1,6 +1,7 @@
 # Yutopia for local dev: LiveKit + world-server + client, one command.
 #   docker compose -f docker/compose.yaml up -d      (or: pnpm docker:up)
-# Source changes are picked up live (the repo is bind-mounted). Dependency
+# Source changes are picked up live (the repo is bind-mounted); the client
+# fetches the emulator cores it's missing each time it starts. Dependency
 # changes are not: `pnpm install` only runs when a container starts, and
 # `up -d --build` leaves a running container alone because nothing here is
 # built. After touching a package.json or the lockfile run:
@@ -64,7 +65,13 @@ services:
     command:
       - sh
       - -c
-      - corepack enable && corepack prepare pnpm@12.6.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @yutopia/client exec next dev -p 3100 -H 0.0.0.0
+      # (the emulator cores and built-in cartridges aren't in git: fetched here
+      # when missing — bsdtar opens the 2600 core's 7z; offline, it starts without)
+      - >-
+        corepack enable && corepack prepare pnpm@12.6.0 --activate && pnpm install --frozen-lockfile && {
+        command -v bsdtar >/dev/null || apk add --no-cache libarchive-tools >/dev/null;
+        node tools/emu-assets.mjs || echo "[emu] couldn't fetch the emulator cores; the consoles stay dark until: node tools/emu-assets.mjs";
+        pnpm --filter @yutopia/client exec next dev -p 3100 -H 0.0.0.0; }
     environment:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       # own build folder, so it never fights a `next dev` running on the host
