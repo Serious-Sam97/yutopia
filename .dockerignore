@@ -1,0 +1,19 @@
+# build context for the client and world-server images (docker/prod/compose.yaml);
+# the API builds from apps/api with its own .dockerignore
+.git
+**/node_modules
+**/.next
+**/.next-*
+**/dist
+**/test-results
+**/playwright-report
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+apps/api
+docker
+design
+docs
+apps/client/public/emu/cores
+apps/client/public/emu/games

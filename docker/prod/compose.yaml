@@ -1,52 +1,147 @@
-# Production: client + world-server + LiveKit behind Caddy (automatic TLS).
-# Yondra (Laravel + Reverb) runs separately; see docs/DEPLOY.md.
+# Production: Yutopia's API (+ queue, scheduler, Postgres), world-server, client and
+# LiveKit, as built images (no bind-mounted source, no watchers). TLS is in front:
+# on the server a cloudflared tunnel maps
+#   yutopia.yondra.net   ^/api/ → :8100 (api), everything else → :3100 (client)
+#   yutopia-world…       → :2567     yutopia-livekit… → :7880
+# so api/world/client only listen on 127.0.0.1. See docs/DEPLOY.md.
+#
+# Run from the repo root, with the root .env for interpolation (the client's
+# NEXT_PUBLIC_* are baked in at build time):
+#   docker compose -f docker/prod/compose.yaml --env-file .env up -d --build
+# Secrets come from the root .env (shared with the world-server) and APP_KEY from
+# apps/api/.env, both at runtime.
 name: yutopia-prod
 
+x-api: &api
+  build:
+    context: ../../apps/api
+    target: prod
+  image: yutopia-api
+  restart: unless-stopped
+  env_file: [../../apps/api/.env, ../../.env]
+  environment: &api-env
+    APP_ENV: production
+    APP_DEBUG: "false"
+    LOG_CHANNEL: stderr
+    LOG_LEVEL: info
+    DB_CONNECTION: pgsql
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_DATABASE: yutopia
+    DB_USERNAME: yutopia
+    DB_PASSWORD: yutopia
+    YUTOPIA_FILES: /data/files
+    # live phone events go to the world-server (its /internal/push)
+    YUTOPIA_WORLD_INTERNAL: http://world:2567
+    YUTOPIA_DEMO: "false"
+    YUTOPIA_E2E: "false"
+    # FrankenPHP's Caddy keeps TLS state in /data and /config (root's); there's no
+    # TLS here (the tunnel does it), but give www-data somewhere it may write
+    XDG_DATA_HOME: /tmp/xdg-data
+    XDG_CONFIG_HOME: /tmp/xdg-config
+  volumes:
+    # games, discs, saves, BIOS, photos (owned by www-data, uid 82)
+    - ../../apps/api/storage/app/private:/data/files
+
 services:
-  caddy:
-    image: caddy:2.10
+  db:
+    image: postgres:18.4-alpine
+    container_name: yutopia-db
     restart: unless-stopped
-    ports: ["80:80", "443:443", "443:443/udp"]
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
     environment:
-      YUTOPIA_DOMAIN: ${YUTOPIA_DOMAIN}
-      WORLD_DOMAIN: ${WORLD_DOMAIN}
-      LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN}
+      POSTGRES_DB: yutopia
+      POSTGRES_USER: yutopia
+      POSTGRES_PASSWORD: yutopia
+    volumes:
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "yutopia", "-d", "yutopia"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *api
+    container_name: yutopia-api
+    ports:
+      - "127.0.0.1:8100:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/up"]
+      interval: 15s
+      timeout: 3s
+      start_period: 60s
+
+  queue:
+    <<: *api
+    container_name: yutopia-queue
+    command: ["php", "artisan", "queue:work", "--tries=3", "--sleep=2"]
+    healthcheck:
+      disable: true # (the FrankenPHP image's own check is for the web server)
+    depends_on:
+      api:
+        condition: service_healthy
+
+  scheduler:
+    <<: *api
+    container_name: yutopia-scheduler
+    command: ["php", "artisan", "schedule:work"]
+    healthcheck:
+      disable: true
+    depends_on:
+      api:
+        condition: service_healthy
+
+  livekit:
+    image: livekit/livekit-server:v1.13.7
+    container_name: yutopia-livekit
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      # the same config as the dev stack: advertises the public IP (STUN); TURN is
+      # Cloudflare's (CLOUDFLARE_TURN_*, handed out by the API)
+      - ../livekit.yaml:/etc/livekit.yaml:ro
+      - ../livekit.keys.yaml:/etc/livekit.keys.yaml:ro
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+
+  world:
+    build:
+      context: ../..
+      dockerfile: apps/world-server/Dockerfile
+    image: yutopia-world
+    container_name: yutopia-world
+    restart: unless-stopped
+    env_file: ../../.env
+    environment:
+      YUTOPIA_API_INTERNAL: http://api:8000
+      LIVEKIT_HTTP_URL: http://livekit:7880
+    ports:
+      - "127.0.0.1:2567:2567"
+    depends_on:
+      livekit:
+        condition: service_started
+      api:
+        condition: service_healthy
 
   client:
     build:
       context: ../..
       dockerfile: apps/client/Dockerfile
       args:
-        NEXT_PUBLIC_API: ${YONDRA_API_URL}
-        NEXT_PUBLIC_YONDRA_APP: ${YONDRA_APP_URL}
-        NEXT_PUBLIC_REVERB_APP_KEY: ${REVERB_APP_KEY}
-        NEXT_PUBLIC_REVERB_HOST: ${REVERB_HOST}
+        # empty: the API is on the client's own origin, under /api
+        NEXT_PUBLIC_API: ""
+        NEXT_PUBLIC_VORTEXOS_URL: ${NEXT_PUBLIC_VORTEXOS_URL:?run with --env-file .env (from the repo root)}
+    image: yutopia-client
+    container_name: yutopia-client
     restart: unless-stopped
-
-  world:
-    build:
-      context: ../..
-      dockerfile: apps/world-server/Dockerfile
-    restart: unless-stopped
-    environment:
-      YUTOPIA_WORLD_SECRET: ${YUTOPIA_WORLD_SECRET}
-      YUTOPIA_INTERNAL_SECRET: ${YUTOPIA_INTERNAL_SECRET}
-      YONDRA_API_INTERNAL: ${YONDRA_API_INTERNAL}
-      LIVEKIT_HTTP_URL: http://livekit:7880
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-
-  livekit:
-    image: livekit/livekit-server:v1.13.7
-    restart: unless-stopped
-    command: ["--config", "/etc/livekit.yaml"]
-    network_mode: host # WebRTC needs the host's UDP ports and public IP
-    volumes:
-      - ./livekit.yaml:/etc/livekit.yaml:ro
-      - ./livekit.keys.yaml:/etc/livekit.keys.yaml:ro
+    ports:
+      - "127.0.0.1:3100:3100"
+    depends_on: [world]
 
 volumes:
-  caddy_data:
+  db_data:

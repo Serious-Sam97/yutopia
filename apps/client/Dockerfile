@@ -3,7 +3,8 @@
 # NEXT_PUBLIC_API empty (the default here) = the API on the client's own origin, under /api.
 FROM node:24-alpine AS build
 WORKDIR /app
-RUN corepack enable
+# the same pnpm as the dev stack (an unpinned corepack fetches the newest)
+RUN corepack enable && corepack prepare pnpm@12.6.0 --activate
 ARG NEXT_PUBLIC_API=""
 ARG NEXT_PUBLIC_VORTEXOS_URL
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -19,10 +20,11 @@ RUN apk add --no-cache libarchive-tools && node tools/emu-assets.mjs && node too
 RUN pnpm --filter @yutopia/client build
 
 FROM node:24-alpine
-WORKDIR /app
-RUN corepack enable
 COPY --from=build /app /app
 ENV NODE_ENV=production
 EXPOSE 3100
 USER node
-CMD ["pnpm", "--filter", "@yutopia/client", "start"]
+# next itself, not `pnpm start`: pnpm would re-check the install on every start
+# (as `node`, who can't write node_modules)
+WORKDIR /app/apps/client
+CMD ["./node_modules/.bin/next", "start", "-p", "3100"]
