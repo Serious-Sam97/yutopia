@@ -14,6 +14,7 @@ export * from "./history.ts";
 export * from "./iso.ts";
 export * from "./jump.ts";
 export * from "./levels.ts";
+export * from "./lift.ts";
 export * from "./map.ts";
 export * from "./map-edit.ts";
 export * from "./openings.ts";

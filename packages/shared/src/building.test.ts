@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CAMPUS_HOME, CORE, campusBuilding, GROUND_OFFSET, STAIRS_AT } from "./building.ts";
-import type { WorldObjectDef } from "./catalog.ts";
+import { CAMPUS_HOME, CORE, campusBuilding, clearCoreFronts, GROUND_OFFSET, STAIRS_AT } from "./building.ts";
+import { entry, type WorldObjectDef } from "./catalog.ts";
 import { Grid, moveStep, WALK_SPEED } from "./grid.ts";
 import { hearingGain } from "./hearing.ts";
 import { type Height, stepHeight } from "./jump.ts";
 import { across, floorsOf, levelMap, objLevel, STOREY } from "./levels.ts";
+import { liftFront } from "./lift.ts";
 import { areaAt, type MapDef } from "./map.ts";
 import { blankMap, layoutFromMap, mapFromLayout, validLayout } from "./map-edit.ts";
 import { studio } from "./maps/studio.ts";
@@ -127,17 +128,40 @@ test("the stairs: no walking off the landing into the well, nor up a flight from
   assert.ok(top.hWallAt(STAIRS_AT.x + 2, STAIRS_AT.y + 1), "a rail over the flight below");
 });
 
-test("elevators: a car's doors shut are a wall; open, a way in", () => {
+test("elevators: shut doors are a wall (inside, you still move); open, a way in; without the car, the shaft", () => {
   const { map, objects } = world();
   const g = levelMap(map, 2) as MapDef;
   const lift = objects.find((o) => o.kind === "elevator" && objLevel(o, map) === 2) as WorldObjectDef;
-  const shut = Grid.from(g, objects);
-  assert.ok(!shut.fits(lift.x + 1, lift.y + 1));
-  const open = Grid.from(
-    g,
-    objects.map((o) => (o.id === lift.id ? { ...o, props: { ...o.props, door: "open" } } : o)),
+  const front = liftFront(lift);
+  const inside = { x: lift.x + 1, y: lift.y + 1 };
+  const as = (props: Record<string, unknown>) =>
+    Grid.from(
+      g,
+      objects.map((o) => (o.id === lift.id ? { ...o, props: { ...o.props, ...props } } : o)),
+    );
+  const shut = as({ door: "closed", at: 2 });
+  assert.ok(shut.fits(inside.x, inside.y), "the car's floor is there");
+  assert.ok(!shut.clear(front, inside), "but its doors are shut");
+  assert.ok(shut.clear(inside, { x: lift.x + 0.5, y: lift.y + 1.5 }), "inside, you can move about");
+  const open = as({ door: "open", at: 2 });
+  assert.ok(open.clear(front, inside), "open: in");
+  assert.ok(!open.clear(inside, { x: lift.x + 1, y: lift.y + 2.6 }), "never out the back");
+  const away = as({ door: "closed", at: 4 });
+  assert.ok(!away.fits(inside.x, inside.y), "the car on another floor: nowhere to stand");
+});
+
+test("the core's doors: nothing stands in front of them", () => {
+  const { map, objects } = world();
+  const c = map.core as { x: number; y: number };
+  const front = objects.filter(
+    (o) => objLevel(o, map) === CAMPUS_HOME && o.y === c.y - 1 && o.x >= c.x && o.x < c.x + 6 && !entry(o.kind).wall,
   );
-  assert.ok(open.fits(lift.x + 1, lift.y + 1));
+  assert.deepEqual(front, []);
+  // a world built before that: its lamp moved aside on load
+  const lamp: WorldObjectDef = { id: "lamp-x", kind: "lamp", x: c.x + 3, y: c.y - 1, rot: 0 };
+  const moved = clearCoreFronts(map, [...objects, lamp]);
+  assert.equal(moved.length, 1);
+  assert.ok(moved[0].y !== c.y - 1 || moved[0].x >= c.x + 6, "out of the doors' way");
 });
 
 test("hearing: other floors are silent, but for the stairwell", () => {

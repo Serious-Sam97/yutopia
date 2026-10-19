@@ -23,6 +23,7 @@ import {
   hangSpot,
   hangStrip,
   hearingGain,
+  inLift,
   isDoorKind,
   isJump,
   isPrivate,
@@ -36,6 +37,8 @@ import {
   jumpSpeed,
   jumpTimes,
   levelMap,
+  liftFront,
+  liftHere,
   type MapDef,
   mayLockDoor,
   moveStep,
@@ -354,6 +357,8 @@ export class WorldController {
         if (b.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
         // carrying a cable: a TV clicked is where it goes
         if (hud.get().cable && o && isGameTv(o.kind)) return this.activateObject(id, true);
+        // an elevator: in when it's open, else a call (no menu to go through)
+        if (o?.kind === "elevator") return this.activateObject(id, true);
         if (!this.openMenu({ type: "object", id }, at)) this.activateObject(id, true);
       },
       onHoverObject: () => {},
@@ -1919,10 +1924,17 @@ export class WorldController {
     const e = entry(o.kind);
     if (!e.interact) return;
     const { w, h } = placedFootprint(o);
-    // an elevator: call it to my floor (from in front of its doors)
+    // an elevator (shared lift.ts): its doors open here, a click takes me in;
+    // shut, I call it to my floor (from in front of its doors). In it, its
+    // panel does the rest.
     if (e.interact === "lift") {
-      const front = { x: o.x + w / 2, y: o.y - 0.7 };
-      if (Math.hypot(front.x - this.me.x, front.y - this.me.y) > 2.6) {
+      if (inLift(o, this.me)) return;
+      if (o.props?.door === "open" && liftHere(o, this.map)) {
+        if (walkIfFar) this.walkTo({ x: o.x + w / 2, y: o.y + h / 2 });
+        return;
+      }
+      const front = liftFront(o);
+      if (Math.hypot(front.x - this.me.x, front.y - this.me.y) > 2) {
         const to = walkIfFar ? this.grid.nearestOpen(front.x, front.y, 3) : null;
         if (to) this.walkTo(to, id);
         return;

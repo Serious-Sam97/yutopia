@@ -1,4 +1,5 @@
 import {
+  across,
   cutsSig,
   EMOTES,
   type Emote,
@@ -7,12 +8,15 @@ import {
   floorOf,
   floorsOf,
   homeOf,
+  isFloor,
   levelMap,
   type MapDef,
   offsetOf,
   onLevel,
   type Point,
   placedFootprint,
+  STOREY,
+  tileAt,
   WANTS,
   type Want,
   type WorldObjectDef,
@@ -41,6 +45,7 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   type Object3D,
+  OrthographicCamera,
   PCFShadowMap,
   PerspectiveCamera,
   PlaneGeometry,
@@ -56,6 +61,7 @@ import {
   Vector2,
   Vector3,
   WebGLRenderer,
+  WebGLRenderTarget,
 } from "three";
 import { chars, loadChars } from "../art/chars-load";
 import { daylight } from "../art/daylight";
@@ -170,7 +176,7 @@ export class ThirdPersonView {
   map: MapDef;
   building: MapDef;
   level: number;
-  private below = new Map<number, { world: World3; sig: string }>();
+  private floors = new Map<number, { world: World3; sig: string }>(); // every floor built so far (mine is `world`)
   private wellSig = "";
   private people = new Map<string, Person3>();
   // the 3D people (world/chars): a model each, built a few a frame; the
@@ -257,6 +263,7 @@ export class ThirdPersonView {
     this.renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
+    this.renderer.localClippingEnabled = true; // (the building cut above my floor: campus.cutAbove)
     this.renderer.shadowMap.type = PCFShadowMap;
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.light.update(map, objects);
@@ -298,7 +305,8 @@ export class ThirdPersonView {
     this.winSig = cutsSig(home);
     this.around = new Surroundings(building, opts.themes, wallCuts(home));
     this.scene.add(this.around.root);
-    this.floorsBelow(all);
+    this.floors.set(this.level, { world: this.world, sig: `${layoutSig(map)}|${this.wellSig}` });
+    this.placeFloors(all);
     const fog = fogFor();
     this.scene.fog = new Fog(0xa8c8e0, fog.near, fog.far);
     this.camera.far = fog.cameraFar;
@@ -684,6 +692,7 @@ export class ThirdPersonView {
     this.building = building;
     this.level = level;
     const all = objects;
+    this.allObjects = all;
     objects = onLevel(all, map);
     const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
     const wellSig = wellsKey(wells);
@@ -691,31 +700,43 @@ export class ThirdPersonView {
     this.indexSeats(map, objects);
     const home = onLevel(all, building);
     const winSig = cutsSig(home);
-    this.floorsBelow(all);
-    if (!moved && wellSig === this.wellSig && layoutSig(map) === layoutSig(this.map)) {
-      this.world.update(objects);
-      // windows came or went: the campus outside opens where they are now
-      if (winSig !== this.winSig) this.surround(building, home);
-      this.winSig = winSig;
-      return;
+    // my floor: kept from before (every floor is built once and kept — going
+    // up or down only moves and shows them), built again when its layout changed
+    const sig = `${layoutSig(map)}|${wellSig}`;
+    let mine = this.floors.get(level);
+    if (mine && mine.sig !== sig) {
+      this.scene.remove(mine.world.root);
+      mine.world.dispose();
+      mine = undefined;
     }
-    this.winSig = winSig;
-    this.wellSig = wellSig;
-    const old = this.world;
+    if (!mine) {
+      const world = new World3(
+        this.items,
+        map,
+        objects,
+        this.renderer.capabilities.getMaxAnisotropy(),
+        (m) => this.light.patch(m),
+        wells,
+      );
+      mine = { world, sig };
+      this.floors.set(level, mine);
+      this.scene.add(world.root);
+    } else mine.world.update(objects);
+    const changed = mine.world !== this.world || layoutSig(map) !== layoutSig(this.map);
+    if (mine.world !== this.world) {
+      // the floor I left keeps its drawing, without my floor's light map
+      this.world.setLight(null);
+      mine.world.setLight((m) => this.light.patch(m));
+      this.world = mine.world;
+    }
     this.map = map;
-    this.world = new World3(
-      this.items,
-      map,
-      objects,
-      this.renderer.capabilities.getMaxAnisotropy(),
-      (m) => this.light.patch(m),
-      wells,
-    );
-    this.scene.remove(old.root);
-    old.dispose();
-    this.scene.add(this.world.root);
+    this.wellSig = wellSig;
+    this.placeFloors(all);
+    // the campus is built once: only the studio's windows change it
+    if (winSig !== this.winSig) this.surround(building, home);
+    this.winSig = winSig;
+    if (!changed && !moved) return;
     this.builder.setMap(map);
-    this.surround(building, home);
     const fog = fogFor();
     (this.scene.fog as Fog).near = fog.near;
     (this.scene.fog as Fog).far = fog.far;
@@ -743,36 +764,112 @@ export class ThirdPersonView {
     return { x: a.x - b.x, y: a.y - b.y, h: elevOf(level) - elevOf(this.level) };
   }
 
-  // The floors below mine: built (again when their layout changed), placed.
-  private floorsBelow(all: WorldObjectDef[]) {
-    const want = new Set(floorsOf(this.building).filter((f) => f < this.level));
-    for (const [f, b] of this.below)
-      if (!want.has(f)) {
+  // Every floor kept built (`floors`): mine at the origin, the ones below where
+  // they are from it, the ones above hidden (the Sims rule). A floor below is
+  // built the first time it's needed (or again when its layout changed); one
+  // above that was built stays, hidden, for when I go up.
+  private placeFloors(all: WorldObjectDef[]) {
+    const have = new Set(floorsOf(this.building));
+    for (const [f, b] of this.floors)
+      if (!have.has(f)) {
         this.scene.remove(b.world.root);
         b.world.dispose();
-        this.below.delete(f);
+        this.floors.delete(f);
       }
-    for (const f of want) {
+    for (const f of have) {
+      if (f === this.level) {
+        const b = this.floors.get(f);
+        if (b) {
+          b.world.root.visible = true;
+          b.world.root.position.set(0, 0, 0);
+        }
+        continue;
+      }
+      let b = this.floors.get(f);
+      if (f > this.level) {
+        if (b) b.world.root.visible = false;
+        continue;
+      }
       const lm = levelMap(this.building, f);
       if (!lm) continue;
       const objs = onLevel(all, lm);
       const wells = { floor: wellsOf(lm, all), ceiling: wellsOf(lm, all, "ceiling") };
       const sig = `${layoutSig(lm)}|${wellsKey(wells)}`;
-      let b = this.below.get(f);
-      if (!b || b.sig !== sig) {
-        if (b) {
-          this.scene.remove(b.world.root);
-          b.world.dispose();
-        }
+      if (b && b.sig !== sig) {
+        this.scene.remove(b.world.root);
+        b.world.dispose();
+        b = undefined;
+      }
+      if (!b) {
         const world = new World3(this.items, lm, objs, this.renderer.capabilities.getMaxAnisotropy(), () => {}, wells);
         b = { world, sig };
-        this.below.set(f, b);
+        this.floors.set(f, b);
         this.scene.add(world.root);
       } else b.world.update(objs);
       const o = this.offsetTo(f);
       b.world.root.position.set(o.x, o.h, o.y);
+      b.world.root.visible = true;
     }
     this.placeAround();
+  }
+
+  // The floors not built yet, built ahead in quiet moments (one at a time, a
+  // little apart) and drawn once off screen — so their geometry and textures
+  // are on the GPU and their shaders compiled before anyone goes there: a
+  // floor change then only moves and shows what's ready.
+  private allObjects: WorldObjectDef[] = [];
+  private warmAt = 0;
+  private warmTarget: WebGLRenderTarget | null = null;
+  private warmCam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
+  private warmUp(now: number) {
+    if (now < this.warmAt || !this.allObjects.length) return;
+    this.warmAt = now + 600;
+    const f = floorsOf(this.building).find((l) => !this.floors.has(l));
+    if (f === undefined) return;
+    const lm = levelMap(this.building, f);
+    if (!lm) {
+      this.warmAt = Number.POSITIVE_INFINITY;
+      return;
+    }
+    const all = this.allObjects;
+    const wells = { floor: wellsOf(lm, all), ceiling: wellsOf(lm, all, "ceiling") };
+    const world = new World3(this.items, lm, onLevel(all, lm), this.renderer.capabilities.getMaxAnisotropy(), () => {}, wells);
+    this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wellsKey(wells)}` });
+    this.scene.add(world.root);
+    const o = this.offsetTo(f);
+    world.root.position.set(o.x, o.h, o.y);
+    // drawn once, from above, all of it in view, into a tiny target
+    this.warmTarget ??= new WebGLRenderTarget(4, 4);
+    const c = this.warmCam;
+    const r = Math.max(lm.width, lm.height) / 2 + 2;
+    c.left = -r;
+    c.right = r;
+    c.top = r;
+    c.bottom = -r;
+    c.position.set(o.x + lm.width / 2, o.h + 60, o.y + lm.height / 2);
+    c.lookAt(o.x + lm.width / 2, o.h, o.y + lm.height / 2);
+    c.updateProjectionMatrix();
+    const shadows = this.renderer.shadowMap.autoUpdate;
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.setRenderTarget(this.warmTarget);
+    // (both ways it's drawn: as the floor I'm on, with the light map, and as one below)
+    world.setLight((m) => this.light.patch(m));
+    this.renderer.render(this.scene, c);
+    world.setLight(null);
+    this.renderer.render(this.scene, c);
+    this.renderer.setRenderTarget(null);
+    this.renderer.shadowMap.autoUpdate = shadows;
+    // (shown only if it's below mine)
+    world.root.visible = f < this.level;
+  }
+
+  // Am I in the building (on its footprint) on a floor under the studio? Then
+  // the floors above me aren't drawn, and neither is the building's glass up there.
+  private insideBelowHome(me: { x: number; y: number } | undefined): boolean {
+    const home = homeOf(this.building);
+    if (!me || this.level >= home) return false;
+    const h = across(this.building, this.level, home, me);
+    return isFloor(tileAt(this.building, Math.floor(h.x), Math.floor(h.y)));
   }
 
   // The campus is built in the home floor's coords, its ground STOREYs below it.
@@ -999,20 +1096,17 @@ export class ThirdPersonView {
   }
 
   // One frame: people from the world's bodies (`me` = whose camera this is).
-  private outside: { x: number; z: number }[] = [];
   frame(dt: number, bodies: Body3[], meId: string) {
     this.time += dt;
+    this.warmUp(performance.now());
     // everyone in my floor's frame: the floors below where they are, above not drawn
-    const outside: { x: number; z: number }[] = [];
     bodies = bodies.flatMap((b) => {
       const l = b.level ?? this.level;
       const o = this.offsetTo(l);
-      if (l === 0) outside.push({ x: b.x + o.x, z: b.y + o.y });
       if (l === this.level) return [b];
       if (l > this.level) return [];
       return [{ ...b, x: b.x + o.x, y: b.y + o.y, z: (b.z ?? 0) + o.h, ground: (b.ground ?? 0) + o.h }];
     });
-    this.outside = outside;
     const me = bodies.find((b) => b.id === meId);
     const pad = this.padFree ? activePad() : null;
     // look around: Q / E, the right stick
@@ -1113,13 +1207,7 @@ export class ThirdPersonView {
     this.stepFx(dt);
     this.stepFlashes(dt);
     this.fadeWalls(dt);
-    // people out on the ground (the visitor's car waits for them), in the campus's coords
-    const c = this.around.campus.root.position;
-    this.around.campus.people = this.outside;
-    for (const q of this.outside) {
-      q.x -= c.x;
-      q.z -= c.z;
-    }
+    this.around.campus.cutAbove(this.insideBelowHome(me) ? STOREY - 0.15 : null);
     this.around.update(dt, this.camera.position, !me?.reduced);
     this.drawCues(dt, !!me?.reduced);
     this.placeSun();
@@ -1409,7 +1497,9 @@ export class ThirdPersonView {
       dt,
       performance.now(),
     );
-    e.model.root.position.set(b.x, e.model.root.position.y, b.y);
+    // (on a floor below mine: down there, its height is that floor's)
+    const below = (b.level ?? this.level) !== this.level ? (b.z ?? 0) : 0;
+    e.model.root.position.set(b.x, below, b.y);
     e.model.root.rotation.y -= e.turned;
     e.model.root.visible = true;
   }
@@ -1478,7 +1568,9 @@ export class ThirdPersonView {
       const far = Math.hypot(cam.x - b.x, cam.z - b.y) > 16;
       // (first person: nothing over your own head — the camera is in it)
       const mine = this.mode === "first" && b.id === this.meId;
-      const p = far || mine || this.hidden(b.x, b.y, h) ? null : this.project(b.x, b.y, h);
+      // (someone on a floor below: the floor's between us — no tag through it)
+      const below = (b.level ?? this.level) !== this.level;
+      const p = far || mine || below || this.hidden(b.x, b.y, h) ? null : this.project(b.x, b.y, h);
       t.root.style.display = p ? "" : "none";
       if (p) {
         const bob = emote && !b.reduced ? Math.sin(now / 166) * 2 : 0;
@@ -2074,7 +2166,8 @@ export class ThirdPersonView {
     (this.charMats?.bodyAway as Material | undefined)?.dispose();
     for (const e of this.pets3.values()) e.model.dispose();
     this.games3?.dispose();
-    this.world.dispose();
+    for (const b of this.floors.values()) b.world.dispose();
+    this.warmTarget?.dispose();
     this.around.dispose();
     this.renderer.dispose();
     c.remove();

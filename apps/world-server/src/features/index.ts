@@ -7,6 +7,10 @@ export interface Feature {
   tick?(dt: number, now: number): void;
   join?(client: WorldClient, p: Player): void;
   leave?(client: WorldClient, p: Player): void;
+  // the line dropped (a closed tab, the network): the room keeps them for
+  // RECONNECT_SECONDS, then leave() — unless they're back() first, on a new client
+  drop?(client: WorldClient, p: Player): void;
+  back?(client: WorldClient, p: Player): void;
   areaChange?(client: WorldClient, p: Player, from: string, to: string): void;
   // someone went to another floor (the stairs, an elevator, a teleport)
   levelChange?(client: WorldClient, p: Player, from: number, to: number): void;

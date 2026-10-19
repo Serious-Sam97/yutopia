@@ -1,4 +1,4 @@
-import { footprint, objLevel, type WorldObjectDef } from "@yutopia/shared";
+import { BODY_R, inLift, inLiftDoorway, liftFront, objLevel, type WorldObjectDef } from "@yutopia/shared";
 import type { Player } from "../schema.ts";
 import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -8,9 +8,12 @@ import { registerFeature } from "./index.ts";
 // car runs in it. Call it to your floor (E at its doors); in it, pick a floor:
 // the doors shut, everyone inside rides (and their pets with them), the doors
 // open there. Each stop's props tell everyone what it shows — the doors open
-// only where the car is (shared grid.ts: shut doors are a wall), the floor it's
-// at and which way it's going (the indicator over the doors). Not stored: a
-// restart starts every car shut at the home floor.
+// only where the car is (shared lift.ts: shut doors are a wall, a floor without
+// the car is the empty shaft), the floor it's at and which way it's going (the
+// indicator over the doors). Like a real one, the doors don't shut on someone
+// in the doorway, and stay open while someone's in the car with nowhere to go
+// (they pick a floor, or walk out). Not stored: a restart starts every car
+// shut at the home floor.
 
 const OPEN_MS = 7000; // doors stay open this long with nobody coming or going
 const CLOSE_MS = 1100;
@@ -18,7 +21,8 @@ const OPEN_DOORS_MS = 700;
 const RIDE_MS = 1500; // a ride: this, and a bit more a floor
 const FLOOR_MS = 800;
 const MAX_RIDERS = 4;
-const REACH = 3; // how near the doors a call is made (tiles from the middle)
+const HOLD_MS = 1500; // held open (someone in the doorway, or in it going nowhere): looked at again after this
+const REACH = 2.2; // how near the doors a call is made (tiles from the spot in front of them)
 
 type Phase = "open" | "shut" | "closing" | "moving" | "opening";
 interface Car {
@@ -47,19 +51,20 @@ registerFeature((room: WorldRoom) => {
       const at = floors.includes(room.home) ? room.home : (floors.sort((a, b) => a - b)[0] ?? room.home);
       c = { shaft, at, to: null, queue: [], phase: "shut", until: 0, riders: [] };
       cars.set(shaft, c);
+      show(c); // (every stop learns where it is: the shaft is empty elsewhere)
     }
     return c;
   };
   const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
 
-  // inside the car's footprint on the floor it's at
-  const inside = (o: WorldObjectDef, p: { x: number; y: number }) => {
-    const { w, h } = footprint(o.kind, o.rot ?? 0);
-    return p.x >= o.x && p.x < o.x + w && p.y >= o.y && p.y < o.y + h;
-  };
+  // in the car where it is; in its doorway (the doors wait for them)
   const people = (shaft: string, level: number) => {
     const o = stopOn(shaft, level);
-    return o ? [...room.state.players.values()].filter((p) => p.level === level && inside(o, p)) : [];
+    return o ? [...room.state.players.values()].filter((p) => p.level === level && inLift(o, p)) : [];
+  };
+  const doorway = (c: Car) => {
+    const o = stopOn(c.shaft, c.at);
+    return !!o && [...room.state.players.values()].some((p) => p.level === c.at && inLiftDoorway(o, p, BODY_R));
   };
 
   // what every stop shows: open doors where the car stands open, the floor it's
@@ -98,8 +103,9 @@ registerFeature((room: WorldRoom) => {
     const o = room.state.objects.get(String(m?.id ?? ""));
     if (!p || !o || o.kind !== "elevator") return;
     const def = fromSchema(o);
-    const { w, h } = footprint(def.kind, def.rot ?? 0);
-    if (objLevel(def, room.map) !== p.level || Math.hypot(p.x - (def.x + w / 2), p.y - (def.y + h / 2)) > REACH) return;
+    const front = liftFront(def);
+    if (objLevel(def, room.map) !== p.level) return;
+    if (!inLift(def, p) && Math.hypot(p.x - front.x, p.y - front.y) > REACH) return;
     go(car(shaftOf(def)), p.level);
   });
 
@@ -110,7 +116,7 @@ registerFeature((room: WorldRoom) => {
     if (!p || !o || o.kind !== "elevator" || !Number.isInteger(level)) return;
     const def = fromSchema(o);
     const c = car(shaftOf(def));
-    if (objLevel(def, room.map) !== p.level || c.at !== p.level || !inside(def, p)) return;
+    if (objLevel(def, room.map) !== p.level || c.at !== p.level || !inLift(def, p)) return;
     if (!stopOn(c.shaft, level)) return warn(client, "This elevator doesn't stop there.");
     if (people(c.shaft, p.level).length > MAX_RIDERS) return warn(client, `Four at most — someone step out.`);
     if (level === p.level) return go(c, level);
@@ -139,6 +145,10 @@ registerFeature((room: WorldRoom) => {
     const stop = stopOn(c.shaft, to);
     c.at = to;
     c.to = null;
+    c.phase = "opening";
+    c.until = now + OPEN_DOORS_MS;
+    // (the car's floor is there before its riders are: the grids have it)
+    show(c);
     if (stop)
       for (const r of c.riders) {
         const p = room.state.players.get(r.sid) as Player | undefined;
@@ -148,8 +158,6 @@ registerFeature((room: WorldRoom) => {
         room.moveTo(client, p, { x: stop.x + r.dx, y: stop.y + r.dy, level: to });
       }
     c.riders = [];
-    c.phase = "opening";
-    c.until = now + OPEN_DOORS_MS;
   };
 
   return {
@@ -160,12 +168,21 @@ registerFeature((room: WorldRoom) => {
           cars.delete(c.shaft);
           continue;
         }
-        if (now < c.until && c.phase !== "shut") continue;
         const before = c.phase;
+        // someone in the doorway as they close: they open again
+        if (c.phase === "closing" && doorway(c)) {
+          c.phase = "open";
+          c.until = now + HOLD_MS;
+        }
+        if (now < c.until && c.phase !== "shut") continue;
         if (c.phase === "open") {
-          // nobody there keeping it: the doors close (to go on, if it's wanted)
-          c.phase = "closing";
-          c.until = now + CLOSE_MS;
+          // nobody in the way, and nobody in it waiting with nowhere to go
+          // (they'd be shut in): the doors close (to go on, if it's wanted)
+          if (doorway(c) || (!c.queue.length && people(c.shaft, c.at).length)) c.until = now + HOLD_MS;
+          else {
+            c.phase = "closing";
+            c.until = now + CLOSE_MS;
+          }
         } else if (c.phase === "closing") {
           c.phase = "shut";
         } else if (c.phase === "opening") {

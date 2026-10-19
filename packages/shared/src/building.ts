@@ -2,7 +2,7 @@ import { canPlace } from "./build.ts";
 import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
 import { convertV1 } from "./convert.ts";
 import type { Point } from "./iso.ts";
-import { floorOf } from "./levels.ts";
+import { floorOf, floorsOf, levelMap, objLevel, offsetOf } from "./levels.ts";
 import {
   type AreaDef,
   type Edge,
@@ -607,7 +607,40 @@ function hits(c: Core, o: WorldObjectDef): boolean {
     return openingEdges(o).some((e) => inCore(c, e.x, e.y) && !(e.dir === "h" && e.y === c.y + CORE.h));
   if (entry(o.kind).wall) return false;
   const f = placedFootprint(o);
-  return inCore(c, o.x, o.y, f.w, f.h);
+  return inCore(c, o.x, o.y, f.w, f.h) || inFront(c, o);
+}
+
+// the row in front of the core's doors (the two cars', the stairs'): kept
+// clear, or half a car's doorway is a lamp
+function inFront(c: Core, o: WorldObjectDef): boolean {
+  if (isOpening(o.kind) || entry(o.kind).wall) return false;
+  const f = placedFootprint(o);
+  return o.x < c.x + 6 && o.x + f.w > c.x && o.y < c.y && o.y + f.h > c.y - 1;
+}
+
+/** Things standing in front of the core's doors, on any floor, moved aside
+ *  (a building made before they were kept clear: the studio's lobby lamp). */
+export function clearCoreFronts(home: MapDef, objects: WorldObjectDef[]): WorldObjectDef[] {
+  const core = home.core;
+  if (!core) return [];
+  const moved: WorldObjectDef[] = [];
+  for (const level of floorsOf(home)) {
+    const lm = levelMap(home, level);
+    if (!lm) continue;
+    const off = offsetOf(home, level);
+    const c = { x: core.x - off.x, y: core.y - off.y };
+    const on = objects.filter((o) => objLevel(o, home) === level && o.kind !== "elevator" && o.kind !== "stairs");
+    const others = on.filter((o) => !inFront(c, o));
+    for (const o of on) {
+      if (!inFront(c, o)) continue;
+      const spot = nearestFree(lm, others, o, (n) => hits(c, n));
+      if (!spot) continue;
+      const next = { ...o, x: spot.x, y: spot.y };
+      others.push(next);
+      moved.push(next);
+    }
+  }
+  return moved;
 }
 
 function nearestFree(

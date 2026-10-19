@@ -2,6 +2,7 @@ import { entry, footprint, standHeight, type WorldObjectDef } from "./catalog.ts
 import { dressItems } from "./dressing.ts";
 import type { Point } from "./iso.ts";
 import { across, floorOf, objLevel, onLevel, STOREY } from "./levels.ts";
+import { liftDoorEdges, liftHere, liftWallEdges } from "./lift.ts";
 import { type AreaDef, type Edge, edgeAt, hWall, isFloor, isWallEdge, type MapDef, tileAt, vWall } from "./map.ts";
 import { doorLockable, isDoorKind, isOpening, openingCentre, openingEdges, ringOf, wallTakes } from "./openings.ts";
 import { inRamp, type Ramp, rampHeight, stairsDivider, stairsRamps, stairsTopRail, stairsWell } from "./stairs.ts";
@@ -82,10 +83,20 @@ export class Grid {
     for (const o of objects) {
       const e = entry(o.kind);
       const { w, h } = footprint(o.kind, o.rot ?? 0);
-      // an elevator's car is only a way in while it's here with its doors open
+      // an elevator (lift.ts): where its car is, a box you're in or out of —
+      // walls round it, the doors a way through while they're open (so whoever's
+      // inside when they shut can still move, and gets out when they open); a
+      // floor it isn't at, the empty shaft
       if (o.kind === "elevator") {
-        if (o.props?.door !== "open")
+        if (!liftHere(o, map)) {
           for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) g.block(o.x + dx, o.y + dy);
+          continue;
+        }
+        for (const e of liftWallEdges(o)) g.blockEdge(e);
+        for (const e of liftDoorEdges(o)) {
+          if (o.props?.door === "open") g.openEdge(e);
+          else g.blockEdge(e);
+        }
         continue;
       }
       if (e.seat)

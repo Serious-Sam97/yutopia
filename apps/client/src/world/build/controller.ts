@@ -1166,6 +1166,7 @@ export class BuildController {
     if (!engine) return;
     const bt = hud.get().build;
     engine.passAvatars = bt.on;
+    engine.passObjects = bt.on && bt.tool === "walls";
     engine.showSpawn(bt.on && (bt.tool === "map" || bt.pickSpawn));
     engine.setBuildGrid(bt.on && (bt.tool === "furniture" || bt.tool === "walls" || bt.tool === "rooms"));
     engine.wallView = bt.on ? bt.wallView : null;

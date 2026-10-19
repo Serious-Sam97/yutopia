@@ -11,6 +11,7 @@ import {
   canPlace,
   carried,
   clampLift,
+  clearCoreFronts,
   convertV1,
   DECOR,
   dirFromDelta,
@@ -38,6 +39,7 @@ import {
   jumpTimes,
   layoutFromMap,
   levelMap,
+  liftFront,
   lockedRooms,
   type MapDef,
   mapFromLayout,
@@ -234,6 +236,14 @@ export class WorldRoom extends Room<WorldState> {
         await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
       }
     }
+    // nothing standing in front of the elevators' and the stairs' doors
+    const fronts = clearCoreFronts(this.map, objects);
+    if (fronts.length) {
+      const moved = new Map(fronts.map((o) => [o.id, o]));
+      objects = objects.map((o) => moved.get(o.id) ?? o);
+      console.log(`[building] the core's doors: ${fronts.length} things moved out of the way`);
+      if (!config.offline) await saveAll(fronts, (o) => api.putObject(o));
+    }
     for (const o of objects) this.state.objects.set(o.id, toSchema(o));
     this.rebuildGrid();
     if (this.migrated && config.saveMigrations) this.saveMigration();
@@ -348,9 +358,11 @@ export class WorldRoom extends Room<WorldState> {
       client.userData?.kicked || this.clients.some((c) => c !== client && c.auth?.userId === client.auth?.userId);
     if (p && !consented && !replaced) {
       p.status = "away";
+      for (const f of this.features) f.drop?.(client, p);
       try {
-        await this.allowReconnection(client, WorldRoom.RECONNECT_SECONDS);
+        const again = (await this.allowReconnection(client, WorldRoom.RECONNECT_SECONDS)) as WorldClient;
         p.status = "online";
+        for (const f of this.features) f.back?.(again, p);
         return;
       } catch {
         // timed out — fall through and remove
@@ -815,8 +827,10 @@ export class WorldRoom extends Room<WorldState> {
   levelEntry(level: number, uid: number): { x: number; y: number } | null {
     const g = this.gridFor(uid, level);
     for (const o of this.state.objects.values()) {
-      if (o.kind !== "elevator" || objLevel(fromSchema(o), this.map) !== level) continue;
-      const at = g.nearestOpen(o.x + 1, o.y - 0.5, 3);
+      const def = fromSchema(o);
+      if (o.kind !== "elevator" || objLevel(def, this.map) !== level) continue;
+      const front = liftFront(def, 0.5);
+      const at = g.nearestOpen(front.x, front.y, 3);
       if (at) return at;
     }
     const lm = this.levelMap(level);

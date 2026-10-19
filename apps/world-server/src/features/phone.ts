@@ -1,5 +1,6 @@
 import type { ServerMessages } from "@yutopia/shared";
 import {
+  CALL_DROP_MS,
   CALL_MAX,
   type CallEnd,
   type CallInfo,
@@ -49,6 +50,11 @@ interface Call {
 const calls = new Map<string, Call>();
 const callOf = new Map<number, string>(); // user id → the call they're on (or ringing for)
 let nextId = 1;
+// Lines that dropped (a closed tab, the network) — the room keeps the player a
+// while in case they come back, but a call can't wait that long: off it after
+// dropMs. And what they missed meanwhile, for when the line's up again.
+const dropped = new Map<number, { room: WorldRoom; sid: string; until: number }>();
+const missed = new Map<number, ServerMessages["call:update"]>();
 
 function playerOf(uid: number): { line: Line; p: Player } | null {
   const line = hub.get(uid);
@@ -150,6 +156,23 @@ function leave(c: Call, uid: number, why: "left" | "declined" | "missed") {
   if (uid === c.from) return end(c, "cancelled");
   if (ringing > 0) return update(c, "ringing");
   end(c, why === "declined" ? "declined" : "missed");
+}
+
+// Off the call they're on, from a line that's gone (dropped, or an older tab):
+// the others go on without them, and this person hears it's over when they're back.
+function hangUpFor(uid: number) {
+  const id = callOf.get(uid);
+  const c = id ? calls.get(id) : undefined;
+  if (!c) return;
+  const ringing = c.members.get(uid)?.state === "ringing";
+  leave(c, uid, ringing ? "missed" : "left");
+  const end: CallEnd = ringing ? "missed" : c.startedAt ? "answered" : "cancelled";
+  missed.set(uid, { ...info(c), phase: "ended", end });
+}
+function flush(uid: number) {
+  const m = missed.get(uid);
+  missed.delete(uid);
+  if (m) tell(uid, "call:update", m);
 }
 
 function ring(c: Call, uid: number) {
@@ -289,19 +312,39 @@ registerFeature((room: WorldRoom) => {
   let at = 0;
   return {
     join(client, p) {
-      if (!p.bot) hub.set(p.uid, { room, client });
+      if (p.bot) return;
+      hub.set(p.uid, { room, client });
+      dropped.delete(p.uid);
+      // a new tab (or back after the room gave up on the old one): whatever call
+      // the old one was on, this one isn't
+      hangUpFor(p.uid);
+      flush(p.uid);
+    },
+    // (by session: after a reconnect the room hands us a new client object)
+    drop(client, p) {
+      if (hub.get(p.uid)?.client.sessionId === client.sessionId)
+        dropped.set(p.uid, { room, sid: client.sessionId, until: Date.now() + phoneHub.dropMs });
+    },
+    back(client, p) {
+      if (hub.get(p.uid)?.client.sessionId !== client.sessionId) return;
+      hub.set(p.uid, { room, client });
+      dropped.delete(p.uid);
+      flush(p.uid);
     },
     leave(client, p) {
-      if (hub.get(p.uid)?.client !== client) return;
+      if (hub.get(p.uid)?.client.sessionId !== client.sessionId) return;
       hub.delete(p.uid);
+      dropped.delete(p.uid);
+      missed.delete(p.uid);
       const id = callOf.get(p.uid);
       const c = id ? calls.get(id) : undefined;
       if (c) leave(c, p.uid, c.members.get(p.uid)?.state === "ringing" ? "missed" : "left");
     },
-    // unanswered rings run out (checked twice a second)
+    // unanswered rings run out, dropped lines come off their calls (checked twice a second)
     tick(_dt, now) {
       if (now - at < 500) return;
       at = now;
+      for (const [uid, d] of dropped) if (d.room === room && now > d.until && callOf.has(uid)) hangUpFor(uid);
       for (const c of calls.values())
         for (const [uid, until] of c.ringUntil) if (now > until && hub.get(uid)?.room === room) leave(c, uid, "missed");
       if (lastShot.size > 200) lastShot = new Map();
@@ -310,4 +353,4 @@ registerFeature((room: WorldRoom) => {
 });
 
 // for tests
-export const phoneHub = { hub, calls, callOf };
+export const phoneHub = { hub, calls, callOf, dropMs: CALL_DROP_MS };

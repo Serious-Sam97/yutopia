@@ -301,3 +301,25 @@ test("its mind: hungry with an empty bowl it begs there; filled, it eats; a frie
     throw e;
   }
 });
+
+test("floors: a pet left behind (told to stay) goes after its owner when called; with them, it comes along", async () => {
+  const sp = space++;
+  const ana = await person(71, sp, "builder"); // (someone with no pets yet)
+  ana.room.send("pet:adopt", { species: "dog", name: "Rex" });
+  await waitFor(() => petsOf(ana).length === 1);
+  const pet = () => petsOf(ana)[0];
+  ana.room.send("pet:cmd", { id: pet().id, cmd: "stay" });
+  await waitFor(() => pet().mode === "stay");
+  // down to the lobby (the ground floor's corner is at −60, −10 in the studio's)
+  ana.room.send("teleport", { to: { x: 72.5, y: 27.5, level: 0 } });
+  await waitFor(() => me(ana).level === 0);
+  await sleep(3200);
+  assert.equal(pet().floor, 4, "it stayed upstairs");
+  ana.room.send("pet:cmd", { id: pet().id, cmd: "follow" });
+  await waitFor(() => pet().floor === 0, 6000);
+  assert.ok(Math.hypot(pet().x - me(ana).x, pet().y - me(ana).y) < 4, "beside its owner down there");
+  // and back up together
+  ana.room.send("teleport", { to: { x: 16.5, y: 20.5, level: 4 } });
+  await waitFor(() => me(ana).level === 4);
+  await waitFor(() => pet().floor === 4, 3000);
+});

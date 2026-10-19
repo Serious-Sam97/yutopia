@@ -7,6 +7,7 @@ import {
   type Grid,
   hangSpot,
   isSocial,
+  liftFront,
   type Point,
   placedFootprint,
   reachOf,
@@ -413,6 +414,10 @@ const FRONT: [number, number][] = [
 ];
 function frontOf(grid: Grid, o: WorldObjectDef): Point | null {
   const { w, h } = placedFootprint(o);
+  if (o.kind === "elevator") {
+    const at = liftFront(o, 0.6);
+    return grid.fits(at.x, at.y) ? at : grid.nearestOpen(at.x, at.y, 2);
+  }
   if (entry(o.kind).wall) {
     const at = hangSpot(o, 0.5);
     return grid.nearestOpen(at.x, at.y, 3);

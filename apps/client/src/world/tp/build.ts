@@ -143,12 +143,13 @@ export class World3 {
     readonly map: MapDef,
     objects: WorldObjectDef[],
     private anisotropy = 4,
-    private light: (m: Material) => void = () => {},
+    light: (m: Material) => void = () => {},
     // the stairwells (shared wellsOf): no floor where the stairs from below come
     // up, no ceiling over this floor's own
     private wells: { floor: Set<string>; ceiling: Set<string> } = { floor: new Set(), ceiling: new Set() },
   ) {
     const t0 = performance.now();
+    this.lightFn = light;
     this.light(this.materials.lit);
     this.light(this.materials.clear);
     this.cuts = wallCuts(objects);
@@ -698,6 +699,27 @@ export class World3 {
       mat.dispose();
     }
     this.floor = null;
+  }
+
+  // The room's light on its lit materials: the floor I'm on takes the light
+  // map, the others (kept built, below mine) don't (it's mine, in my floor's
+  // coords). Switching only swaps the shader variant (both stay compiled).
+  private lightFn: (m: Material) => void = () => {};
+  private litMats = new Set<Material>();
+  private light(m: Material) {
+    this.litMats.add(m);
+    this.lightFn(m);
+  }
+  setLight(fn: ((m: Material) => void) | null) {
+    this.lightFn = fn ?? (() => {});
+    for (const m of this.litMats) {
+      if (fn) fn(m);
+      else {
+        m.onBeforeCompile = () => {};
+        m.customProgramCacheKey = () => "";
+        m.needsUpdate = true;
+      }
+    }
   }
 
   dispose() {

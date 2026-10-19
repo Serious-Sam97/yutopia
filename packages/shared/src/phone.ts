@@ -140,6 +140,7 @@ export const MAX_TEXT = 1000; // characters in a text
 export const GROUP_MAX = 50; // people in a group thread
 export const CALL_MAX = 8; // people on one call
 export const RING_MS = 30_000; // unanswered after this: a missed call
+export const CALL_DROP_MS = 5000; // a line that dropped mid-call (a closed tab, the network) is off it after this
 export const PHOTO_MAX_PX = 1600; // the long side of a photo
 export const PHOTO_QUOTA = 300; // photos per person
 

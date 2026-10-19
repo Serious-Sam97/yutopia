@@ -165,6 +165,7 @@ const ZOOM_PACE = 2.1;
 const FOLLOW_NEAR = 2.6;
 const FOLLOW_FAR = 8;
 const REPATH_MS = 600;
+const AWAY_MS = 2500; // its owner on another floor this long: it goes after them
 const CATCH_UP = RUN_SPEED * 1.05; // tiles per second at most: a little quicker than a run
 // what it lets go of to catch up (eating, a lesson, a fetch, a battle it sees through)
 const LET_GO = new Set([
@@ -218,6 +219,7 @@ interface Run {
   calledAt: number; // a command it ignored (a second call works)
   begAt: number; // the last beg / nudge (not again at once)
   shyAt: number; // the last step away from a stranger
+  away?: number; // since when its owner's been on another floor (it follows after AWAY_MS)
   zoomAt: number; // the last zoomies
   pace: number; // × its walking pace (zoomies, catching up)
   lost: number; // tries in a row it found no way to its owner
@@ -1863,10 +1865,32 @@ registerFeature((room: WorldRoom) => {
     }
   };
 
+  // A pet to its owner's floor (with them up or down the stairs, in the lift):
+  // beside them there.
+  const comeAlong = (pet: Pet, p: Player) => {
+    stop(pet);
+    pet.act = "";
+    pet.floor = p.level;
+    const g = room.gridFor(pet.uid, pet.floor);
+    const at = g.nearestOpen(p.x - 0.8, p.y + 0.8, 3) ?? { x: p.x, y: p.y };
+    pet.x = at.x;
+    pet.y = at.y;
+    const r = runs.get(pet.id);
+    if (r) r.away = 0;
+  };
+
   const behave = (pet: Pet, r: Run, now: number) => {
     const p = owner(pet);
     if (!p) return;
     if (pet.act === "battle" || pet.act === "ko" || isMove(pet.act)) return;
+    // its owner on another floor (it was asleep, or told to stay, when they
+    // went): following again, it goes after them — up the stairs, out of sight
+    if (pet.floor !== p.level && pet.mode === "follow" && !pet.battle) {
+      if (!r.away) r.away = now;
+      else if (now - r.away > AWAY_MS) comeAlong(pet, p);
+      return;
+    }
+    if (pet.floor === p.level) r.away = 0;
     if (r.echo && now > r.echo.at) {
       say(pet, r.echo.mood);
       r.echo = undefined;
@@ -1929,13 +1953,7 @@ registerFeature((room: WorldRoom) => {
     levelChange(c, p) {
       for (const pet of room.state.pets.values()) {
         if (pet.sid !== c.sessionId || pet.battle || pet.mode === "sleep" || pet.mode === "stay") continue;
-        stop(pet);
-        pet.act = "";
-        pet.floor = p.level;
-        const g = room.gridFor(pet.uid, pet.floor);
-        const at = g.nearestOpen(p.x - 0.8, p.y + 0.8, 3) ?? { x: p.x, y: p.y };
-        pet.x = at.x;
-        pet.y = at.y;
+        comeAlong(pet, p);
       }
     },
     join(c, p) {

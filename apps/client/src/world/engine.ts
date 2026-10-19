@@ -945,6 +945,8 @@ export class WorldEngine {
     if (affectsLight(v.def)) this.bakeLight();
     this.dropView(v);
     this.objectViews.delete(id);
+    // (its name plate goes with it: a desk on a floor I just left)
+    if (v.def.props?.ownerName || isDoorKind(v.def.kind)) this.labelsDirty = true;
     if (isOpening(v.def.kind)) this.cutsChanged();
     this.panels.delete(id);
     this.hulls.delete(id);
@@ -3157,8 +3159,11 @@ export class WorldEngine {
     return null;
   }
 
-  // Build mode: taps go through people (and Vortex) to the floor and furniture.
+  // Build mode: taps go through people (and Vortex) to the floor and furniture;
+  // with the Walls tool, through things too (an elevator's car stood over the
+  // walls round it, and a click on them did nothing).
   passAvatars = false;
+  passObjects = false;
 
   private handleTap(e: FederatedPointerEvent) {
     const gx = (e.global.x - this.world.position.x) / this.zoom;
@@ -3170,7 +3175,7 @@ export class WorldEngine {
     if (av) return this.events.onAvatarClick?.(av, at);
     const toy = this.pickToy(gx, gy);
     if (toy) return this.events.onToyClick?.(toy);
-    const obj = this.pickObject(w.x, w.y, gx, gy);
+    const obj = this.passObjects ? null : this.pickObject(w.x, w.y, gx, gy);
     if (obj) return this.events.onObjectClick?.(obj, at);
     this.events.onTileClick?.(w.x, w.y, { shift: e.shiftKey, right: e.button === 2 });
   }

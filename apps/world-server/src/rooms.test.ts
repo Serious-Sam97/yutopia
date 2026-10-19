@@ -1578,6 +1578,85 @@ test("the phone: calls ring across spaces, answer, the line, hang up; declined, 
   await waitFor(() => (ana.room.state.players.get(caio.room.sessionId)?.shotAt ?? 0) > 0);
 });
 
+// Someone's line drops mid-call (a closed tab, the network): the others' call
+// ends in seconds — not after the room's reconnection grace, and not never
+// (after an earlier blip the room hands back a new client object).
+test("the phone: a dropped line ends the call; a blip doesn't; a group call loses just that one", async () => {
+  const { phoneHub } = await import("./features/phone.ts");
+  const was = phoneHub.dropMs;
+  phoneHub.dropMs = 800;
+  try {
+    const ana = await person(90, ++space);
+    const bia = await person(91, ++space);
+    const cai = await person(92, ++space);
+    const dan = await person(93, ++space);
+    const last = (p: Person) =>
+      p.msgs["call:update"]?.at(-1) as
+        | { phase: string; end?: string; members: { uid: number; state: string }[] }
+        | undefined;
+    const stateOf = (p: Person, uid: number) => last(p)?.members.find((m) => m.uid === uid)?.state;
+    // the line comes back (the client's reconnect): same session, a new socket
+    const back = async (p: Person) => {
+      p.room = await new Client(`ws://localhost:${PORT}`).reconnect(p.room.reconnectionToken);
+      rooms.push(p.room);
+      p.msgs = {};
+      for (const t of ["call:update", "call:join"])
+        p.room.onMessage(t, (m) => {
+          if (!p.msgs[t]) p.msgs[t] = [];
+          p.msgs[t].push(m);
+        });
+    };
+    const answer = async (p: Person) => {
+      await waitFor(() => (p.msgs["call:ring"]?.length ?? 0) > 0);
+      p.room.send("call:answer", { id: (p.msgs["call:ring"]?.at(-1) as { id: string }).id });
+    };
+
+    // Ana calls Bia
+    ana.room.send("call:start", { to: [91], video: false });
+    await answer(bia);
+    await waitFor(() => last(ana)?.phase === "live" && me(bia)?.phone === "call");
+    // a blip: Bia's line is back before the drop counts — still on the call
+    bia.room.connection.close();
+    await sleep(50);
+    await back(bia);
+    await sleep(phoneHub.dropMs + 400);
+    assert.equal(last(ana)?.phase, "live", "a blip doesn't end the call");
+    assert.equal(phoneHub.calls.size > 0, true);
+    // then Bia closes the tab: over for Ana within a few seconds
+    bia.room.connection.close();
+    await waitFor(() => last(ana)?.phase === "ended" && last(ana)?.end === "answered", phoneHub.dropMs + 2000);
+    await waitFor(() => me(ana)?.phone === "");
+
+    // a group call: Ana, Cai and Dan
+    ana.room.send("call:start", { to: [92, 93], video: false });
+    await answer(cai);
+    await answer(dan);
+    await waitFor(() => stateOf(ana, 92) === "in" && stateOf(ana, 93) === "in");
+    // Cai's line is gone longer than the drop allows: Cai is off the call (the others go on),
+    // and hears it's over when the line comes back
+    cai.room.connection.close();
+    await waitFor(() => stateOf(ana, 92) === "left", phoneHub.dropMs + 2000);
+    assert.equal(last(ana)?.phase, "live");
+    assert.equal(stateOf(dan, 92), "left");
+    await back(cai);
+    await waitFor(() => last(cai)?.phase === "ended");
+    // Dan drops too: Ana's alone on the line, so it ends
+    dan.room.connection.close();
+    await waitFor(() => last(ana)?.phase === "ended", phoneHub.dropMs + 2000);
+
+    // Cai, back, takes Ana's call, then opens Yutopia in another tab: that tab isn't on it
+    ana.room.send("call:start", { to: [92], video: false });
+    cai.msgs["call:ring"] = [];
+    cai.room.onMessage("call:ring", (m) => cai.msgs["call:ring"]?.push(m));
+    await answer(cai);
+    await waitFor(() => last(ana)?.phase === "live");
+    await person(92, ++space);
+    await waitFor(() => last(ana)?.phase === "ended" && last(ana)?.end === "answered");
+  } finally {
+    phoneHub.dropMs = was;
+  }
+});
+
 // The API's live phone events (apps/api Push) reach the person through the world.
 test("phone pushes from the API: signed, delivered to that person only", async () => {
   // (imported here: a static import would read the config before YUTOPIA_OFFLINE is set)
@@ -1721,6 +1800,72 @@ test("elevators: call one, step in, ride it to the lot's floor — the doors ope
   assert.ok(Math.hypot(me(a).x - g.x, me(a).y - g.y) < 0.6, "at the same spot of the car, a floor down");
   await waitFor(() => door(0) === "open", 3000);
   assert.equal(door(4), "closed", "and shut up there");
+});
+
+test("elevators: two ride; the doors wait for whoever's in the car or the doorway; nobody is shut in", async () => {
+  const s = ++space;
+  const a = await person(85, s, "member,builder");
+  const b = await person(86, s, "member,builder");
+  for (const [p, x] of [
+    [a, 8.6],
+    [b, 9.4],
+  ] as const)
+    await stepTo(p, [
+      { x: 7.2, y: 28.8, z: 0, l: 4 },
+      { x: 7.9, y: 29.0, z: 0, l: 4 },
+      { x: (7.9 + x) / 2, y: 29.1, z: 0, l: 4 },
+      { x, y: 29.2, z: 0, l: 4 },
+      { x, y: 29.5, z: 0, l: 4 },
+    ]);
+  const stop = (level: number) =>
+    [...a.room.state.objects.values()].find(
+      (o: { kind: string; props: string }) =>
+        o.kind === "elevator" && JSON.parse(o.props).shaft === "A" && JSON.parse(o.props).level === level,
+    ) as { id: string; props: string };
+  const door = (level: number) => JSON.parse(stop(level).props).door;
+  assert.ok(Math.abs(me(b).x - 9.4) < 0.2, "b at the doors (nothing standing in front of them)");
+  a.room.send("lift:call", { id: stop(4).id });
+  await waitFor(() => door(4) === "open", 5000);
+  for (const [p, x] of [
+    [a, 8.6],
+    [b, 9.4],
+  ] as const)
+    await stepTo(p, [
+      { x, y: 30, z: 0, l: 4 },
+      { x, y: 30.6, z: 0, l: 4 },
+      { x, y: 31, z: 0, l: 4 },
+    ]);
+  assert.ok(me(a).y > 30.5 && me(b).y > 30.5, "both in the car");
+  // well past the doors' own time: nobody's picked a floor, so they don't shut on them
+  await sleep(8500);
+  assert.equal(door(4), "open", "held open for the people in it");
+  // b steps out; a rides down alone
+  await stepTo(b, [
+    { x: 9.4, y: 30.4, z: 0, l: 4 },
+    { x: 9.4, y: 29.8, z: 0, l: 4 },
+    { x: 9.4, y: 29.3, z: 0, l: 4 },
+  ]);
+  assert.ok(me(b).y < 29.6, "b walked out");
+  a.room.send("lift:go", { id: stop(4).id, level: 0 });
+  await waitFor(() => me(a).level === 0, 12000);
+  assert.equal(me(b).level, 4, "b stayed");
+  await waitFor(() => door(0) === "open", 3000);
+  await sleep(8500);
+  assert.equal(door(0), "open", "open till they walk out");
+  const out = G(8.6, 29.3);
+  await stepTo(a, [
+    { ...G(8.6, 30.4), z: 0, l: 0 },
+    { ...G(8.6, 29.8), z: 0, l: 0 },
+    { ...out, z: 0, l: 0 },
+  ]);
+  assert.ok(Math.abs(me(a).y - out.y) < 0.2, "a walked out on the ground floor");
+  // up on the studio's floor the car's gone: its shaft is nowhere to step into
+  await stepTo(b, [{ x: 9.4, y: 29.8, z: 0, l: 4 }]);
+  await stepTo(b, [
+    { x: 9.4, y: 30.2, z: 0, l: 4 },
+    { x: 9.4, y: 30.6, z: 0, l: 4 },
+  ]);
+  assert.ok(me(b).y < 30, "no stepping into the empty shaft");
 });
 
 test("stairs: walked up a floor (the server follows the treads); never two floors at once", async () => {

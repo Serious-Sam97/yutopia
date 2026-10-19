@@ -29,6 +29,7 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   MultiplyBlending,
+  Plane,
   PlaneGeometry,
   Points,
   PointsMaterial,
@@ -786,16 +787,21 @@ class Flakes {
 
 // A car that comes down the driveway now and then, parks by the building for
 // a while, and leaves: a polyline it follows at a speed by stretch, with its
-// headlights on and a beam on the snow (bright after dark).
+// headlights on and a beam on the snow (bright after dark). Everyone sees the
+// same car: where it is comes from the clock (a cycle of VISIT_S, its waits
+// drawn from the cycle's number), not from anything one browser decided.
+const VISIT_S = 420;
+const BACK_UP = 6; // tiles it reverses out of the bay
+const BACK_V = 1.4;
 class Visitor {
   readonly root = new Group();
   private pts: { x: number; z: number; s: number; v: number }[] = [];
   private total = 0;
-  private phase: "away" | "arrive" | "parked" | "turn" | "leave" = "away";
-  private wait = 12;
-  private s = 0;
+  // the drive in and the drive out as (time, distance along the route) samples
+  private inTrack: number[] = [];
+  private outTrack: number[] = [];
   private heading = 0;
-  private turnFrom = 0;
+  private shown = false;
   private lights: MeshBasicMaterial;
   private tail: MeshBasicMaterial;
   private beam: MeshBasicMaterial;
@@ -815,6 +821,12 @@ class Visitor {
       this.pts.push({ x: route[i].x, z: route[i].z, s: acc, v: route[i].v });
     }
     this.total = acc;
+    const STEP = 0.05;
+    for (let d = 0; d < this.total; d += STEP * this.at(d).v) this.inTrack.push(d);
+    this.inTrack.push(this.total);
+    for (let d = this.total; d > 0; d -= STEP * (d > this.total - BACK_UP ? BACK_V : this.at(d).v))
+      this.outTrack.push(d);
+    this.outTrack.push(0);
     this.root.add(new Mesh(solid, solidMat), new Mesh(glass, glassMat));
     this.lights = new MeshBasicMaterial({ color: 0xfff4d0, transparent: true, opacity: 0, toneMapped: false });
     this.tail = new MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0, toneMapped: false });
@@ -854,78 +866,70 @@ class Visitor {
     return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, dx: b.x - a.x, dz: b.z - a.z, v: b.v };
   }
   // the car's nose points along -x in its own frame: heading from a world direction
+  // (eased; at once when it's just come into view)
   private face(dx: number, dz: number, dt: number, reverse = false) {
     const want = Math.atan2(-dz, -dx) + (reverse ? Math.PI : 0);
     let d = want - this.heading;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
-    this.heading += d * Math.min(1, dt * 4);
+    this.heading += this.shown ? d * Math.min(1, dt * 4) : d;
     this.root.rotation.y = this.heading;
   }
-  // `people`: anyone in its way makes it wait (campus coords)
-  update(dt: number, night: number, animate: boolean, people: { x: number; z: number }[] = []) {
+  // a sample of a track, `t` seconds in
+  private along(track: number[], t: number): number {
+    const f = t / 0.05;
+    const i = Math.min(track.length - 1, Math.floor(f));
+    const j = Math.min(track.length - 1, i + 1);
+    return track[i] + (track[j] - track[i]) * (f - i);
+  }
+  /** Where it is in its cycle at a time (seconds; the same for everyone). */
+  private phaseAt(now: number): { phase: "away" | "arrive" | "parked" | "leave"; t: number } {
+    const k = Math.floor(now / VISIT_S);
+    // (two numbers from the cycle's: a hash, the same in every browser)
+    const r = (i: number) => {
+      const x = Math.sin(k * 12.9898 + i * 78.233) * 43758.5453;
+      return x - Math.floor(x);
+    };
+    const away = 20 + r(1) * 100;
+    const parked = 90 + r(2) * 120;
+    const arrive = (this.inTrack.length - 1) * 0.05;
+    const leave = (this.outTrack.length - 1) * 0.05;
+    let t = now - k * VISIT_S;
+    if (t < away) return { phase: "away", t };
+    t -= away;
+    if (t < arrive) return { phase: "arrive", t };
+    t -= arrive;
+    if (t < parked) return { phase: "parked", t };
+    t -= parked;
+    if (t < leave) return { phase: "leave", t };
+    return { phase: "away", t: 0 };
+  }
+  update(dt: number, night: number, animate: boolean) {
     if (!animate) {
       this.park();
+      this.root.visible = true;
       this.lights.opacity = this.tail.opacity = this.beam.opacity = 0;
       return;
     }
-    const on = this.phase === "arrive" || this.phase === "leave" || this.phase === "turn";
+    const { phase, t } = this.phaseAt(Date.now() / 1000);
+    const on = phase === "arrive" || phase === "leave";
     const lit = on ? 0.35 + 0.65 * night : 0;
     this.lights.opacity = lit;
     this.tail.opacity = lit * 0.9;
     this.beam.opacity = on ? night * 0.8 : 0;
-    switch (this.phase) {
-      case "away":
-        this.wait -= dt;
-        this.root.visible = false;
-        if (this.wait <= 0) {
-          this.phase = "arrive";
-          this.s = 0;
-          this.root.visible = true;
-          const p = this.at(0.01);
-          this.root.position.set(p.x, GROUND + 0.02, p.z);
-          this.heading = Math.atan2(-p.dz, -p.dx);
-        }
-        break;
-      case "arrive": {
-        const p = this.at(this.s);
-        // someone in front of it: it waits (its nose is CAR_L / 2 ahead)
-        const len = Math.hypot(p.dx, p.dz) || 1;
-        const fx = p.x + (p.dx / len) * (CAR_L / 2 + 1);
-        const fz = p.z + (p.dz / len) * (CAR_L / 2 + 1);
-        if (!people.some((q) => Math.hypot(q.x - fx, q.z - fz) < 2.4)) this.s += dt * p.v;
-        this.root.position.set(p.x, GROUND + 0.02, p.z);
-        this.face(p.dx, p.dz, dt);
-        if (this.s >= this.total) {
-          this.phase = "parked";
-          this.park();
-          this.wait = 90 + Math.random() * 60;
-        }
-        break;
-      }
-      case "parked":
-        this.wait -= dt;
-        if (this.wait <= 0) {
-          this.phase = "leave";
-          this.s = this.total;
-          this.turnFrom = this.total - 6;
-        }
-        break;
-      case "leave": {
-        const reversing = this.s > this.turnFrom;
-        const p = this.at(this.s);
-        this.s -= dt * (reversing ? 1.4 : p.v);
-        this.root.position.set(p.x, GROUND + 0.02, p.z);
-        this.face(-p.dx, -p.dz, dt, reversing);
-        if (this.s <= 0) {
-          this.phase = "away";
-          this.wait = 120 + Math.random() * 120;
-        }
-        break;
-      }
-      default:
-        break;
+    this.root.visible = phase !== "away";
+    if (phase === "parked") this.park();
+    else if (phase === "arrive") {
+      const p = this.at(this.along(this.inTrack, t));
+      this.root.position.set(p.x, GROUND + 0.02, p.z);
+      this.face(p.dx, p.dz, dt);
+    } else if (phase === "leave") {
+      const s = this.along(this.outTrack, t);
+      const p = this.at(s);
+      this.root.position.set(p.x, GROUND + 0.02, p.z);
+      this.face(-p.dx, -p.dz, dt, s > this.total - BACK_UP);
     }
+    this.shown = this.root.visible;
   }
   dispose() {
     this.lights.dispose();
@@ -972,6 +976,11 @@ export class Campus {
   // materials tinted by the hour: [material, base colour]
   private tinted: [MeshLambertMaterial | MeshBasicMaterial | PointsMaterial, Color][] = [];
   private facade: MeshLambertMaterial;
+  // the main block's own (the building you're in): cut above your floor from inside
+  private mainFacade: MeshLambertMaterial;
+  private mainCut: MeshLambertMaterial[] = [];
+  private cutPlane = new Plane(new Vector3(0, -1, 0), 0);
+  private cutY: number | null = null;
   private glassTint = new Color();
   private lamps: MeshBasicMaterial; // lamp heads, the entrance, lit at night
   private pools: MeshBasicMaterial;
@@ -995,8 +1004,6 @@ export class Campus {
   private door: { z0: number; z1: number } | null = null;
   // the top storey's skin even close up (the studio isn't drawn: you're below it)
   skinAlways = false;
-  // people outside (the campus's coords): the visitor's car waits for them
-  people: { x: number; z: number }[] = [];
   // the studio's footprint (snow never falls inside it)
   private fx0: number;
   private fz0: number;
@@ -1030,7 +1037,8 @@ export class Campus {
       emissiveMap: lit,
       emissiveIntensity: 0,
     });
-    this.disposables.push(facadeMap, lit, this.facade);
+    this.mainFacade = this.facade.clone();
+    this.disposables.push(facadeMap, lit, this.facade, this.mainFacade);
     const concrete = this.lambert(0xcfcbc2);
     const white = this.lambert(0xf4f6f8);
     // soft shadows on the ground (multiplied): blobs under things, a band at the foot of walls
@@ -1078,12 +1086,15 @@ export class Campus {
       return isWindow(e.dir === "h" ? hWall(map, e.x, e.y) : vWall(map, e.x, e.y)) ? [WIN0, WIN1] : null;
     };
     for (const r of mainRuns) this.facadeRun(skin, cap, coping, r, 0, (i) => win(r, i), topSkin);
-    this.add(skin.build(), this.facade);
+    const mainWhite = this.lambert(0xf4f6f8);
+    const mainConcrete = this.lambert(0xcfcbc2);
+    this.mainCut = [this.mainFacade, mainWhite, mainConcrete];
+    this.add(skin.build(), this.mainFacade);
     // the top storey's skin would stand between a camera just outside the
     // building and you (walls fade, this wouldn't): only from further away
-    this.topSkin = this.add(topSkin.build(), this.facade);
-    this.add(cap.build(), white);
-    this.add(coping.build(), concrete);
+    this.topSkin = this.add(topSkin.build(), this.mainFacade);
+    this.add(cap.build(), mainWhite);
+    this.add(coping.build(), mainConcrete);
 
     // ── two more blocks across a courtyard, with roofs, and a bridge ──
     const bSkin = new G();
@@ -1140,10 +1151,12 @@ export class Campus {
       const dx = r.nx === 0 ? 1 : 0;
       const dz = r.nz === 0 ? 1 : 0;
       for (let t = 0.8; t < len; t += 1.6 + rd() * 1.4) {
-        const x = r.x0 + dx * t + r.nx * (SKIN + 0.3);
-        const z = r.z0 + dz * t + r.nz * (SKIN + 0.3);
-        if (r.nx === -1 && r.x0 === 0 && Math.abs(z - ezMain) < 6.5) continue; // the entrance
         const sz = 0.9 + rd() * 1.5;
+        // (all of it outside the wall: the ground floor's rooms are behind it)
+        const out = SKIN + 0.12 + sz * 0.55;
+        const x = r.x0 + dx * t + r.nx * out;
+        const z = r.z0 + dz * t + r.nz * out;
+        if (r.nx === -1 && r.x0 === 0 && Math.abs(z - ezMain) < 6.5) continue; // the entrance
         const g = new SphereGeometry(1, 9, 6).scale(sz * (dx ? 1.3 : 0.55), sz * 0.38, sz * (dz ? 1.3 : 0.55));
         drifts.push(place(tinted(g, 0xf6f8fa), x, GROUND - 0.12, z));
       }
@@ -1966,6 +1979,8 @@ export class Campus {
       .multiplyScalar(0.75 + 0.35 * (1 - d.night))
       .multiplyScalar(k);
     this.facade.emissiveIntensity = Math.max(0, d.night * 0.55 - 0.03);
+    this.mainFacade.color.copy(this.facade.color);
+    this.mainFacade.emissiveIntensity = this.facade.emissiveIntensity;
     const on = Math.min(1, Math.max(0, d.night * 1.3 - 0.1));
     this.lamps.opacity = on * 0.85;
     this.headMat.opacity = on;
@@ -1980,6 +1995,19 @@ export class Campus {
   }
   private night = 0;
 
+  /** Inside the building on a floor under the studio, the Sims rule: nothing of
+   *  the main block above `y` (world height; null: all of it, seen from outside).
+   *  The floors above aren't drawn, so their glass would hang in the air. */
+  cutAbove(y: number | null) {
+    if (y === this.cutY) return;
+    this.cutY = y;
+    this.cutPlane.constant = y ?? 0;
+    for (const m of this.mainCut) {
+      m.clippingPlanes = y === null ? null : [this.cutPlane];
+      m.needsUpdate = true;
+    }
+  }
+
   update(dt: number, cam: Vector3, animate: boolean) {
     if (animate) this.t += dt;
     const outX = Math.max(0, this.fx0 + 0.5 - cam.x, cam.x - this.fx1 + 0.5);
@@ -1989,7 +2017,7 @@ export class Campus {
     // the tower's beacon blinks at night
     this.beacon.opacity = this.night > 0.1 ? (Math.sin(this.t * 2.2) > 0.3 ? this.night : 0.08) : 0;
     for (const f of this.flakes) f.update(dt, cam, animate, this.fx0, this.fz0, this.fx1, this.fz1);
-    this.visitor?.update(dt, this.night, animate, this.people);
+    this.visitor?.update(dt, this.night, animate);
     this.steam?.update(dt, animate);
   }
 
