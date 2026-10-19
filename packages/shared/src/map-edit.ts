@@ -1,5 +1,4 @@
 import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
-import { doorEdge } from "./grid.ts";
 import { hangOf, hangTiles, WQ, wallSpan } from "./hang.ts";
 import type { Point } from "./iso.ts";
 import {
@@ -16,7 +15,6 @@ import {
   holdsItems,
   isFacedWall,
   isFloor,
-  isOuterEdge,
   isTheme,
   isWallEdge,
   isWindow,
@@ -29,6 +27,7 @@ import {
   VOID,
   type WallMat,
 } from "./map.ts";
+import { edgeKey, isDoorKind, isOpening, openingEdges, wallCuts, wallTakes } from "./openings.ts";
 
 // Per-space layouts: the map is data (saved in Yondra), not code. Builders
 // paint floors (tiles) and walls (tile edges), draw rooms, resize the map.
@@ -164,7 +163,12 @@ export function paintBlocker(
   if (bodies.some((b) => Math.floor(b.x) === x && Math.floor(b.y) === y)) return "someone is standing there";
   for (const o of objects) {
     const e = entry(o.kind);
-    if (o.kind === "door") continue;
+    if (isOpening(o.kind)) {
+      // a door opens onto floor on both sides
+      if (isDoorKind(o.kind) && openingEdges(o).some((d) => edgeSides(d).some(([tx, ty]) => tx === x && ty === y)))
+        return "a door opens onto it";
+      continue;
+    }
     if (e.wall) {
       if (hangTiles(o).some(([tx, ty]) => tx === x && ty === y)) return `${e.label} hangs there`;
       continue;
@@ -207,18 +211,18 @@ function covers(o: WorldObjectDef, x: number, y: number): boolean {
 }
 
 // Why a wall (or no wall) can't go on an edge (null = fine): never through a
-// piece of furniture, never over a door, never away from under a hanging board;
-// windows only in outer walls.
+// piece of furniture, never away from under a hanging board or from round a
+// door or window (repainting it is fine, if the new wall takes it); no
+// windows painted on (older saves' were; openings.ts turns them into things).
 export function edgeBlocker(map: MapDef, objects: WorldObjectDef[], e: Edge, ch: string): string | null {
   if (!inMap(map, e)) return "outside the map";
   if (!(EDGE_CHARS as readonly string[]).includes(ch)) return "unknown wall";
   const [a, b] = edgeSides(e);
+  const cut = wallCuts(objects).get(edgeKey(e));
+  if (cut && !wallTakes(cut.kind, ch))
+    return isDoorKind(cut.kind) ? "a door is in that wall" : "a window is in that wall";
   for (const o of objects) {
-    if (o.kind === "door") {
-      const d = doorEdge(o);
-      if (isWallEdge(ch) && d.dir === e.dir && d.x === e.x && d.y === e.y) return "a door is there";
-      continue;
-    }
+    if (isOpening(o.kind)) continue;
     const ent = entry(o.kind);
     if (ent.wall) {
       // never away from under something hanging on it (either face)
@@ -230,7 +234,8 @@ export function edgeBlocker(map: MapDef, objects: WorldObjectDef[], e: Edge, ch:
     }
     if (isWallEdge(ch) && covers(o, a[0], a[1]) && covers(o, b[0], b[1])) return `${ent.label} is in the way`;
   }
-  if (isWindow(ch) && !isOuterEdge(map, e)) return "windows go in outer walls";
+  // (windows are things in a wall now, openings.ts: no painting them on)
+  if (isWindow(ch)) return "windows go in from the catalog now";
   return null;
 }
 
@@ -368,9 +373,9 @@ export interface RoomSpec {
   wall?: WallMat; // wall material (default: foam for booths, plaster otherwise)
 }
 
-// A room (an area) and, optionally, walls on the edges around it with a
-// doorway in the middle of the bottom wall (the top one at the map's edge).
-// Returns where the door goes: the edge, as a door object's x, y, rot.
+// A room (an area) and, optionally, walls on the edges around it and a door
+// in the middle of the bottom wall (the top one at the map's edge). Returns
+// where the door goes: the edge, as a door object's x, y, rot.
 export function addRoom(
   map: MapDef,
   objects: WorldObjectDef[],
@@ -397,7 +402,6 @@ export function addRoom(
     const dy = r.y + r.h < map.height ? r.y + r.h : r.y;
     const walls: EdgeEdit[] = [];
     for (const e of ring(r.x, r.y, r.w, r.h)) {
-      if (e.dir === "h" && e.x === dx && e.y === dy) continue;
       const cur = edgeAt(next, e);
       // a wall that's there (a neighbour's): only its face on this side changes
       if (isFacedWall(cur) && FACE_MATS.includes(mat)) {
@@ -410,9 +414,8 @@ export function addRoom(
       walls.push({ dir: e.dir, x: e.x, y: e.y, ch: mat });
     }
     next = applyEdges(next, walls);
-    // keep the doorway open even if a wall was there
-    next = applyEdges(next, [{ x: dx, y: dy, dir: "h", ch: NO_WALL }]);
-    door = { x: dx, y: dy, rot: 0 };
+    // (a door or window there already: no second one)
+    if (!wallCuts(objects).has(edgeKey({ dir: "h", x: dx, y: dy }))) door = { x: dx, y: dy, rot: 0 };
   }
   const area: AreaDef = {
     key: r.key,
@@ -431,14 +434,18 @@ export function addRoom(
 }
 
 // Repaint the walls around a room in another material: the faces looking into
-// it (the room next door keeps its side), windows kept. Glass is the whole wall.
-export function setRoomWalls(map: MapDef, key: string, mat: WallMat): MapDef {
+// it (the room next door keeps its side), windows kept. Glass is the whole wall
+// (not where a window is: those walls keep theirs).
+export function setRoomWalls(map: MapDef, key: string, mat: WallMat, objects: WorldObjectDef[] = []): MapDef {
   const a = map.areas.find((x) => x.key === key);
   if (!a) return map;
+  const cuts = wallCuts(objects);
   const edges: EdgeEdit[] = [];
   for (const e of ring(a.x, a.y, a.w, a.h)) {
     const ch = edgeAt(map, e);
     if (!isWallEdge(ch) || ch === "h") continue;
+    const cut = cuts.get(edgeKey(e));
+    if (cut && !wallTakes(cut.kind, mat)) continue;
     if (mat !== "g" && isFacedWall(ch)) edges.push({ ...e, ch: mat });
     else edges.push({ dir: e.dir, x: e.x, y: e.y, ch: isWindow(ch) && mat !== "g" ? mat.toUpperCase() : mat });
   }

@@ -53,6 +53,9 @@ export interface CatalogEntry {
   surface?: number;
   top?: [number, number, number, number];
   onSurface?: boolean;
+  // doors and windows (openings.ts): set into a wall on tile edges, `w` of
+  // them along it, cutting their own hole; the wall keeps its material
+  opening?: "door" | "window";
 }
 
 export const CATALOG = {
@@ -297,8 +300,61 @@ export const CATALOG = {
     buildable: true,
   },
   standup_mat: { label: "Standup ring", w: 4, h: 4, solid: false, interact: "standup", buildable: true },
-  // Sits in a gap between two walls. props.state: "open" | "closed" | "locked".
-  door: { label: "Door", w: 1, h: 1, solid: false, interact: "door", buildable: true },
+  // Set into a wall (openings.ts). props.state: "open" | "closed" | "locked";
+  // props.glass: glazed; props.swing −1: opens to the other side (a barn door:
+  // slides the other way); props.color: the leaf's paint.
+  door: { label: "Door", w: 1, h: 1, solid: false, interact: "door", buildable: true, opening: "door", paint: true },
+  door_double: {
+    label: "Double door",
+    w: 2,
+    h: 1,
+    solid: false,
+    interact: "door",
+    buildable: true,
+    opening: "door",
+    paint: true,
+  },
+  door_studio: {
+    label: "Studio door",
+    w: 1,
+    h: 1,
+    solid: false,
+    interact: "door",
+    buildable: true,
+    opening: "door",
+    paint: true,
+  },
+  door_barn: {
+    label: "Barn door",
+    w: 1,
+    h: 1,
+    solid: false,
+    interact: "door",
+    buildable: true,
+    opening: "door",
+    paint: true,
+  },
+  door_saloon: {
+    label: "Saloon doors",
+    w: 1,
+    h: 1,
+    solid: false,
+    interact: "door",
+    buildable: true,
+    opening: "door",
+    paint: true,
+  },
+  // a doorway with no door: always open
+  archway: { label: "Archway", w: 1, h: 1, solid: false, buildable: true, opening: "door" },
+  window: { label: "Window", w: 1, h: 1, solid: false, buildable: true, opening: "window" },
+  window_wide: { label: "Wide window", w: 2, h: 1, solid: false, buildable: true, opening: "window" },
+  window_tall: { label: "Tall window", w: 1, h: 1, solid: false, buildable: true, opening: "window" },
+  window_round: { label: "Round window", w: 1, h: 1, solid: false, buildable: true, opening: "window" },
+  window_arched: { label: "Arched window", w: 1, h: 1, solid: false, buildable: true, opening: "window" },
+  window_high: { label: "High window", w: 2, h: 1, solid: false, buildable: true, opening: "window" },
+  window_stained: { label: "Stained glass", w: 1, h: 1, solid: false, buildable: true, opening: "window" },
+  window_blinds: { label: "Window with blinds", w: 1, h: 1, solid: false, buildable: true, opening: "window" },
+  window_studio: { label: "Studio glass", w: 2, h: 1, solid: false, buildable: true, opening: "window" },
   speaker_cab: { label: "Speaker cabinet", w: 1, h: 1, solid: true, buildable: true },
   column: { label: "Column", w: 1, h: 1, solid: true, buildable: true, variants: 2 },
   server_rack: {

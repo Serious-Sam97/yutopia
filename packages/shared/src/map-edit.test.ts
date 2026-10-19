@@ -34,14 +34,17 @@ test("painting floors: anywhere, but no floor taken from under furniture, people
   assert.equal(tileAt(studio, 10, 3), ".", "original untouched");
 });
 
-test("painting walls on edges: never through furniture, over a door, or away from a board; windows outside only", () => {
+test("painting walls on edges: never through furniture, or away from a board; no painted-on windows", () => {
   assert.equal(edgeBlocker(studio, studio.objects, { x: 10, y: 5, dir: "h" }, "p"), null);
   // desks at (3,6) and (3,7) span x 3..4: an edge between their two tiles cuts through
   assert.match(edgeBlocker(studio, studio.objects, { x: 4, y: 6, dir: "v" }, "p") ?? "", /Desk/);
   assert.match(edgeBlocker(studio, studio.objects, { x: 4, y: 0, dir: "h" }, ".") ?? "", /hangs/);
   assert.equal(edgeBlocker(studio, studio.objects, { x: 4, y: 0, dir: "h" }, "w"), null, "another material is fine");
-  assert.match(edgeBlocker(studio, studio.objects, { x: 10, y: 5, dir: "h" }, "P") ?? "", /outer/);
-  assert.equal(edgeBlocker(studio, studio.objects, { x: 11, y: 0, dir: "h" }, "P"), null);
+  assert.match(
+    edgeBlocker(studio, studio.objects, { x: 11, y: 0, dir: "h" }, "P") ?? "",
+    /catalog/,
+    "windows are things",
+  );
   assert.match(edgeBlocker(studio, studio.objects, { x: 99, y: 0, dir: "h" }, "p") ?? "", /outside/);
   const m = applyEdges(studio, [{ x: 10, y: 5, dir: "h", ch: "b" }]);
   assert.equal(hWall(m, 10, 5), "b");
@@ -129,7 +132,7 @@ test("rooms: walls on their edges, a doorway, an owner, and a locked door only t
   assert.equal(tileAt(map, 5, 5), ",");
   assert.equal(tileAt(map, 3, 3), ".", "no tile lost to walls");
   assert.deepEqual(door, { x: 6, y: 8, rot: 0 });
-  assert.equal(hWall(map, 6, 8), ".", "the doorway");
+  assert.equal(hWall(map, 6, 8), "p", "the door's wall: the door goes in it");
   assert.ok(doorFits(map, { x: 6, y: 8, dir: "h" }));
   assert.equal(areaAt(map, 5, 5)?.ownerId, 7);
   const d = { id: "d", kind: "door", x: 6, y: 8, rot: 0, props: { state: "locked" } };

@@ -1,6 +1,6 @@
 "use client";
 
-import { Grid, isTheme, screenInputToWorld, splitAll, studio } from "@yutopia/shared";
+import { Grid, isTheme, openingsIntoWalls, screenInputToWorld, splitAll, studio } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 // (static, like the world page: the lazy chunks it shares — themes, items,
@@ -53,8 +53,10 @@ export default function ThirdPersonDemo() {
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     const theme = q.get("theme");
-    const map = { ...studio, theme: isTheme(theme) ? theme : "clouds" };
-    const objects = splitAll(studio.objects).objects;
+    // as the world-server loads it: doors and windows set into the walls
+    const into = openingsIntoWalls(studio, splitAll(studio.objects).objects);
+    const map = { ...into.map, theme: isTheme(theme) ? theme : "clouds" };
+    const objects = into.objects;
     // ?slot=<track id>: a slot-car table with that track, on the first clear
     // 4 × 3 patch of floor near where you start (a look at the track in 3D)
     // ?table=pool_table|pingpong_table: the same for a game table (4 × 2)

@@ -265,7 +265,8 @@ export interface HudState {
     // the thing under the pointer (its name, and who's holding it), for the tag
     // (of: which of the things stacked under the pointer it is; Tab steps through them)
     hover: { label: string; by: string | null; of?: { i: number; n: number } } | null;
-    brush: string; // "w:" + an edge char (walls), a floor char (tiles), or "door"
+    brush: string; // "w:" + an edge char (walls) or a floor char (tiles)
+    catalogTab: string; // the catalog's tab (the Walls panel sends you to Doors or Windows)
     paintMode: PaintMode;
     wallMode: WallMode;
     paint: string; // the material Paint puts on faces (p w f b k)
@@ -348,6 +349,7 @@ const initial: HudState = {
     selected: [],
     hover: null,
     brush: "w:p",
+    catalogTab: "seating",
     paintMode: "line",
     wallMode: "build",
     paint: "b",

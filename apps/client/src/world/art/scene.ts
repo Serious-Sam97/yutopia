@@ -1,18 +1,26 @@
 import {
   type DressItem,
+  doorLeaves,
+  doorShut,
+  doorSlides,
   dressItems,
+  edgeKey,
   entry,
   footprint,
   HALF_WALL,
   hangOf,
   hWall,
+  isDoorKind,
   isFloor,
+  isOpening,
   isWallEdge,
   type MapDef,
+  openingCut,
   rotOf,
   tileAt,
   topCentre,
   vWall,
+  type WallCut,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { Graphics, type GraphicsContext } from "pixi.js";
@@ -221,33 +229,51 @@ const WT = 0.1; // half thickness
 const LOW = 14;
 const HALF = 34;
 
-// Box art for a wall slice, until the drawings load.
-function wallBoxes(dir: "h" | "v", ch: string, high: boolean): Box[] {
+// Box art for a wall slice, until the drawings load (`cut`: a door's or a
+// window's hole through it).
+function wallBoxes(dir: "h" | "v", ch: string, high: boolean, cut: readonly [number, number] | null): Box[] {
   const top = ch === HALF_WALL ? HALF : WALL_H;
-  const along = (z: number, h: number, color: number, t?: number): Box =>
-    dir === "h"
-      ? { x: 0, y: -WT, w: 1, d: 2 * WT, z, h, color, top: t, outline: false }
-      : { x: -WT, y: 0, w: 2 * WT, d: 1, z, h, color, top: t, outline: false };
-  if (!high) return [along(0, LOW, C.walnut)];
-  return [along(LOW, 30 - LOW, C.walnut), along(30, top - 33, C.cream), along(top - 3, 3, C.walnutDark, C.walnut)];
+  const along = (z: number, h: number, color: number, t?: number): Box[] => {
+    const box = (z0: number, z1: number): Box =>
+      dir === "h"
+        ? { x: 0, y: -WT, w: 1, d: 2 * WT, z: z0, h: z1 - z0, color, top: t, outline: false }
+        : { x: -WT, y: 0, w: 2 * WT, d: 1, z: z0, h: z1 - z0, color, top: t, outline: false };
+    if (!cut) return [box(z, z + h)];
+    return [
+      [z, Math.min(z + h, cut[0])],
+      [Math.max(z, cut[1]), z + h],
+    ]
+      .filter(([a, b]) => b > a)
+      .map(([a, b]) => box(a, b));
+  };
+  if (!high) return along(0, LOW, C.walnut);
+  return [
+    ...along(LOW, 30 - LOW, C.walnut),
+    ...along(30, top - 33, C.cream),
+    ...along(top - 3, 3, C.walnutDark, C.walnut),
+  ];
 }
 
-export function wallParts(map: MapDef): Part[] {
+// `cuts`: the holes doors and windows make in walls (shared wallCuts).
+export function wallParts(map: MapDef, cuts: Map<string, WallCut> = new Map()): Part[] {
   const parts: Part[] = [];
   const m = items && !boxOnly ? items : null;
   const add = (dir: "h" | "v", x: number, y: number, ch: string) => {
+    const c = cuts.get(edgeKey({ dir, x, y }));
+    const cut = c ? ([c.z0, c.z1] as const) : null;
+    const ck = cut ? cut.join("-") : "";
     for (let q = 0; q < 4; q++) {
       const clip: Clip =
         dir === "h" ? { x0: q / 4, x1: (q + 1) / 4, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: q / 4, y1: (q + 1) / 4 };
       const layer = (high: boolean) => {
-        const ctx = cached(`wall|${dir}|${ch}|${q}|${high}`, (g) => {
-          for (const b of wallBoxes(dir, ch, high)) drawBox(g, b, clip);
+        const ctx = cached(`wall|${dir}|${ch}|${q}|${high}|${ck}`, (g) => {
+          for (const b of wallBoxes(dir, ch, high, cut)) drawBox(g, b, clip);
         });
         const part = high ? "high" : "low";
-        const akey = m?.wallKey(dir, ch, q, part, artRes);
+        const akey = m?.wallKey(dir, ch, q, part, artRes, cut);
         const art =
           m && akey
-            ? { key: akey, get: memo(akey, () => m.wallArt(dir, ch, q, part, artRes)), ox: 0, oy: 0 }
+            ? { key: akey, get: memo(akey, () => m.wallArt(dir, ch, q, part, artRes, cut)), ox: 0, oy: 0 }
             : undefined;
         return { ctx, art };
       };
@@ -397,7 +423,7 @@ const WALL_FACE = 0.1; // wall items hang on the face of the thin wall
 // `host`: what it stands on, for things on a surface.
 export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
   const e = entry(o.kind);
-  if (o.kind === "door") return doorParts(o);
+  if (isOpening(o.kind)) return openingParts(o);
   const p = piece(o.kind, o.props ?? {}, o.id);
   if (p.flat) return [];
   if (e.onSurface) return topParts(o, p, host);
@@ -522,69 +548,127 @@ function topKey(c: { x: number; y: number }, host?: WorldObjectDef): number {
   return key + 0.03 + ((c.x % 1) + (c.y % 1)) * 0.005;
 }
 
-// A door on an edge: four slices in the wall line (frame, lintel, a shut
-// leaf) sorted like the wall, and an open leaf sorted in its own tile.
-function doorParts(o: WorldObjectDef): Part[] {
+// A door or window in a wall (shared openings.ts): four slices per edge in the
+// wall line (its frame, glass, a shut leaf) sorted and faded like the wall, and
+// a door's open leaf sorted in the tile it swings into.
+function openingParts(o: WorldObjectDef): Part[] {
+  const door = isDoorKind(o.kind);
+  const n = Math.max(1, entry(o.kind).w);
   const odd = (o.rot ?? 0) % 2 === 1;
-  const rot = odd ? 3 : 0; // west edges: the leaf faces +x
+  const rot = odd ? 3 : 0; // west edges: its +y side faces +x
   const dir = odd ? "v" : "h";
-  const st = String(o.props?.state ?? "open");
-  const shut = (st === "closed" || st === "locked") && !o.props?.passing;
+  const st = String(o.props?.state ?? "");
+  const shut = doorShut(o);
+  const slides = doorSlides(o.kind);
+  const [z0, z1] = openingCut(o.kind);
+  const jamb = (x: number): Box => ({
+    x,
+    y: -WT,
+    w: 0.07,
+    d: 2 * WT,
+    z: z0,
+    h: z1 - z0,
+    color: C.walnut,
+    outline: false,
+  });
   const frame: Box[] = [
-    { x: 0, y: -WT, w: 0.08, d: 2 * WT, z: 0, h: 72, color: C.walnut, outline: false },
-    { x: 0.92, y: -WT, w: 0.08, d: 2 * WT, z: 0, h: 72, color: C.walnut, outline: false },
-    { x: 0, y: -WT, w: 1, d: 2 * WT, z: 72, h: 12, color: C.cream, outline: false },
-    { x: -0.01, y: -WT, w: 1.02, d: 2 * WT, z: 81, h: 3, color: C.walnutDark, top: C.walnut, outline: false },
+    jamb(0),
+    jamb(n - 0.07),
+    // the head: a door's casing over it, a window's head in it
+    {
+      x: 0,
+      y: -WT - 0.02,
+      w: n,
+      d: 2 * WT + 0.04,
+      z: door ? z1 : z1 - 3,
+      h: door ? 5 : 3,
+      color: C.walnutDark,
+      outline: false,
+    },
   ];
-  if (shut) frame.push({ x: 0.08, y: -0.04, w: 0.84, d: 0.08, z: 0, h: 72, color: C.walnut, outline: false });
-  const leaf: Box[] = shut ? [] : [{ x: 0.08, y: WT, w: 0.07, d: 0.8, z: 0, h: 72, color: C.walnut, outline: false }];
+  if (!door)
+    frame.push({ x: 0.07, y: -0.01, w: n - 0.14, d: 0.02, z: z0, h: z1 - z0, color: 0xa9c2d0, outline: false });
+  if (shut && !slides)
+    frame.push({ x: 0.08, y: -0.04, w: n - 0.16, d: 0.08, z: 0, h: z1, color: C.walnut, outline: false });
   const out: Part[] = [];
-  const m = illustrated("door") ? (items as ItemsModule) : null;
+  const m = illustrated(o.kind) ? (items as ItemsModule) : null;
   const [sx, sy] = P(o.x, o.y);
-  const state = shut ? st : "open";
-  for (let q = 0; q < 4; q++) {
-    const clip: Clip = odd
-      ? { x0: -1, x1: 1, y0: q / 4, y1: (q + 1) / 4 }
-      : { x0: q / 4, x1: (q + 1) / 4, y0: -1, y1: 1 };
-    const ctx = cached(`door|${dir}|${state}|${q}`, (g) => {
-      for (const b of rotateBoxes(frame, 1, 1, rot)) drawBox(g, b, clip);
+  const state = door ? (shut ? st : "open") : "";
+  const props = { ...(o.props ?? {}), _part: "edge" };
+  for (let i = 0; i < n * 4; i++) {
+    const u0 = i / 4;
+    const clip: Clip = odd ? { x0: -1, x1: 1, y0: u0, y1: u0 + 0.25 } : { x0: u0, x1: u0 + 0.25, y0: -1, y1: 1 };
+    const ctx = cached(`${o.kind}|${dir}|${state}|${i}`, (g) => {
+      for (const b of rotateBoxes(frame, n, 1, rot)) drawBox(g, b, clip);
     });
-    const ref = { kind: "door", id: o.id, rot, props: { ...(o.props ?? {}), _part: "edge" } };
-    const akey = m?.itemKey(ref, `q${q}`, "all", artRes);
-    const c = (q + 0.5) / 4;
+    const ref = { kind: o.kind, id: o.id, rot, props };
+    const akey = m?.itemKey(ref, `q${i}`, "all", artRes);
+    const c = u0 + 0.125;
+    const k = Math.floor(u0);
+    const [ex, ey] = odd ? [o.x, o.y + k] : [o.x + k, o.y];
     out.push({
       ctx,
       x: sx,
       y: sy,
-      key: (odd ? o.x + o.y + c : o.x + c + o.y) + 0.005,
-      wx: o.x,
-      wy: o.y,
+      key: o.x + o.y + c + 0.005,
+      wx: ex,
+      wy: ey,
       objectId: o.id,
-      edge: { dir, x: o.x, y: o.y, high: true },
+      edge: { dir, x: ex, y: ey, high: true },
       at: odd ? [o.x + 0.15, o.y + c] : [o.x + c, o.y + 0.15],
       art:
         m && akey ? { key: akey, get: memo(akey, () => m.itemArt(ref, clip, "all", artRes)), ox: 0, oy: 0 } : undefined,
     });
   }
-  if (!shut) {
-    const ctx = cached(`door|${dir}|leaf`, (g) => {
-      for (const b of rotateBoxes(leaf, 1, 1, rot)) drawBox(g, b, null);
+  // a tile along it (k) on one side (front: +y / +x; back: the other)
+  const tileOf = (k: number, front: boolean): [number, number] =>
+    odd ? [front ? o.x : o.x - 1, o.y + k] : [o.x + k, front ? o.y : o.y - 1];
+  const back = Number(o.props?.swing) < 0;
+  const leafPart = (i: number, tile: [number, number], key: number, box: Box, fade: boolean) => {
+    const ctx = cached(`${o.kind}|${dir}|leaf|${i}|${back ? "-" : ""}|${shut ? "s" : ""}`, (g) => {
+      for (const b of rotateBoxes([box], n, 1, rot)) drawBox(g, b, null);
     });
-    const ref = { kind: "door", id: o.id, rot, props: { ...(o.props ?? {}), _part: "leaf" } };
-    const akey = m?.itemKey(ref, "leaf", "all", artRes);
+    const ref = { kind: o.kind, id: o.id, rot, props: { ...(o.props ?? {}), _part: "leaf", _leaf: i } };
+    const akey = m?.itemKey(ref, `leaf${i}`, "all", artRes);
+    const [tx, ty] = tile;
     out.push({
       ctx,
       x: sx,
       y: sy,
-      key: o.x + 0.5 + o.y + 0.5,
-      wx: o.x,
-      wy: o.y,
+      key,
+      wx: tx,
+      wy: ty,
       objectId: o.id,
-      at: [o.x + 0.5, o.y + 0.5],
+      ...(fade ? { edge: { dir, x: odd ? o.x : tx, y: odd ? ty : o.y, high: true } } : {}),
+      at: [tx + 0.5, ty + 0.5],
       art:
         m && akey ? { key: akey, get: memo(akey, () => m.itemArt(ref, null, "all", artRes)), ox: 0, oy: 0 } : undefined,
     });
-  }
+  };
+  if (slides) {
+    // a barn door rolls along the face (+y), aside when open: sorted just in
+    // front of the stretch of wall it's on, fading with it
+    const k = shut ? 0 : back ? -1 : 1;
+    const box: Box = { x: k * 0.92, y: WT + 0.01, w: n, d: 0.05, z: 0, h: z1, color: C.walnut, outline: false };
+    leafPart(0, tileOf(k, true), o.x + o.y + k + 0.5 + 0.012, box, true);
+  } else if (door && !shut)
+    // open: each leaf in the tile it swings into (props.swing −1: the one behind the wall)
+    for (let i = 0; i < doorLeaves(o.kind); i++) {
+      const k = n > 1 ? i : 0;
+      const tile = tileOf(k, !back);
+      const hinge = n > 1 ? (i === 0 ? 0.08 : 1.85) : i === 0 ? 0.08 : 0.85;
+      const box: Box = {
+        x: hinge,
+        y: back ? -WT - 0.8 : WT,
+        w: 0.07,
+        d: 0.8,
+        z: 0,
+        h: z1,
+        color: C.walnut,
+        outline: false,
+      };
+      leafPart(i, tile, tile[0] + 0.5 + tile[1] + 0.5, box, false);
+    }
   return out;
 }
 

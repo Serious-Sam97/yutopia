@@ -1,6 +1,7 @@
 import { entry, footprint, type WorldObjectDef } from "./catalog.ts";
 import { hangOf, wallSpan } from "./hang.ts";
 import { type AreaDef, areaAt, holdsItems, hWall, isFloor, isWallEdge, type MapDef, tileAt, vWall } from "./map.ts";
+import { isDoorKind, isOpening, openingEdges } from "./openings.ts";
 
 // Dressing: the clutter that makes a room lived in, chosen per room as a preset
 // and placed by rules, the same on every client and on the server (so a plant
@@ -80,10 +81,12 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
   const near = new Set<string>(); // tiles that must stay free: doorways, seats' fronts
   for (const o of objs) {
     const e = entry(o.kind);
-    if (e.wall || o.kind === "door") {
-      if (o.kind === "door") {
+    if (e.wall || isOpening(o.kind)) {
+      if (isDoorKind(o.kind)) {
+        // the doorway's tiles both sides, and one more each way along the wall
         const odd = (o.rot ?? 0) % 2 === 1;
-        for (let d = -1; d <= 1; d++)
+        const n = entry(o.kind).w;
+        for (let d = -1; d <= n; d++)
           for (const [x, y] of odd
             ? [
                 [o.x - 1, o.y + d],
@@ -101,8 +104,11 @@ export function dressItems(map: MapDef, objects: Iterable<WorldObjectDef>): Dres
     for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) taken.add(`${o.x + dx},${o.y + dy}`);
   }
   const hung = new Set<string>();
-  for (const o of objs)
+  for (const o of objs) {
     if (entry(o.kind).wall && hangOf(o).rot === 0) for (const e of wallSpan(o)) hung.add(`${e.x},${e.y}`);
+    // (no pictures over a door or a window)
+    if (isOpening(o.kind)) for (const e of openingEdges(o)) if (e.dir === "h") hung.add(`${e.x},${e.y}`);
+  }
   if (map.spawn) near.add(`${Math.floor(map.spawn.x)},${Math.floor(map.spawn.y)}`);
 
   for (const a of map.areas) {

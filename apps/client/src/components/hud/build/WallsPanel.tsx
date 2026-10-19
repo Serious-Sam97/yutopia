@@ -3,9 +3,10 @@
 import { type Key, useTr } from "@/lib/i18n";
 import { hud, type PaintMode, useHud, type WallMode, type WallView } from "@/world/store";
 import { useWorld } from "../ctx";
+import { Icon } from "../icons";
 
-// Walls paint tile edges ("w:" + an edge char); floors paint tiles; doors are
-// placed on a gap in a wall line.
+// Walls paint tile edges ("w:" + an edge char); floors paint tiles. Doors and
+// windows are things you put into a wall (the catalog's Doors & windows).
 export const WALL_SWATCHES = [
   { ch: "w:p", label: "Plaster", face: "#efe4cc", side: "#c9bb9b" },
   { ch: "w:w", label: "Walnut", face: "#6b4430", side: "#4a2f20", grain: true },
@@ -14,12 +15,7 @@ export const WALL_SWATCHES = [
   { ch: "w:k", label: "Cork", face: "#c49a6c", side: "#9a754f", dots: true },
   { ch: "w:g", label: "Glass", face: "rgba(150,190,200,.55)", side: "rgba(110,150,160,.55)" },
 ] as const;
-const OPENINGS = [
-  { ch: "w:h", label: "Half wall" },
-  { ch: "w:window", label: "Window" },
-  { ch: "door", label: "Door" },
-  { ch: "door:glass", label: "Glass door" },
-] as const;
+const OPENINGS = [{ ch: "w:h", label: "Half wall" }] as const;
 export const FLOOR_SWATCHES = [
   { ch: ".", label: "Wood", fill: "#8f6038", line: "#6f4527" },
   { ch: ",", label: "Carpet", fill: "#6b6a3a", line: "#5a592f" },
@@ -87,20 +83,6 @@ function WallChip({ ch }: { ch: string }) {
               <circle cx="38" cy="12" r="1" />
               <circle cx="18" cy="15" r="1" />
             </g>
-          )}
-          {ch === "w:window" && (
-            <polygon points="14,26 14,14 38,8 38,20" fill="#9fb6c8" stroke="#5b3a26" strokeWidth="2" />
-          )}
-          {ch.startsWith("door") && (
-            <>
-              <polygon
-                points="20,32 20,13 32,10 32,29"
-                fill={ch === "door:glass" ? "#7d9aa6" : "#5b3a26"}
-                stroke="#2a1a12"
-                strokeWidth="1.2"
-              />
-              <circle cx="29.5" cy="21" r="1" fill="#c39a4a" />
-            </>
           )}
           <polygon points="6,12 46,2 50,4 10,14" fill="#3e2718" />
         </>
@@ -186,11 +168,10 @@ export function WallsPanel() {
   const w = useWorld();
   const b = useHud((s) => s.build);
   const set = (patch: Partial<typeof b>) => hud.set((s) => ({ build: { ...s.build, ...patch } }));
-  const door = b.brush.startsWith("door");
   const mode = b.wallMode;
   // each tab keeps a brush that fits it
   const pick = (m: WallMode) => {
-    const floor = !b.brush.startsWith("w:") && !b.brush.startsWith("door");
+    const floor = !b.brush.startsWith("w:");
     const patch: Partial<typeof b> = { wallMode: m, wallSel: [] };
     if (m === "floors" && !floor) patch.brush = ".";
     if (m === "build" && floor) patch.brush = "w:p";
@@ -214,13 +195,7 @@ export function WallsPanel() {
         {(mode === "build" || mode === "floors") && (
           <fieldset className="seg min-w-0" aria-label="Paint mode">
             {modes.map(([m, label]) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={!door && b.paintMode === m}
-                disabled={door}
-                onClick={() => set({ paintMode: m })}
-              >
+              <button key={m} type="button" aria-pressed={b.paintMode === m} onClick={() => set({ paintMode: m })}>
                 {t(label)}
               </button>
             ))}
@@ -243,6 +218,32 @@ export function WallsPanel() {
                   <WallChip ch={o.ch} />
                 </Swatch>
               ))}
+              {/* doors and windows: things for walls, in the catalog's own tabs */}
+              <div
+                className="col-span-3 rounded-[9px] px-2.5 py-2 flex flex-col gap-1.5 text-[12px] leading-snug"
+                style={{ border: "1px dashed var(--edge)", color: "var(--cream-dim)" }}
+              >
+                {t("buildToOpenings")}
+                <span className="flex gap-1.5">
+                  {(
+                    [
+                      ["doors", "door", "catDoors"],
+                      ["windows", "window", "catWindows"],
+                    ] as const
+                  ).map(([tab, icon, label]) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      data-testid={`walls-to-${tab}`}
+                      className="ghost-btn flex-1 flex items-center justify-center gap-1.5 h-8 mono text-[11px] uppercase tracking-wide"
+                      onClick={() => set({ tool: "furniture", catalogTab: tab, mode: "hand" })}
+                    >
+                      <Icon name={icon} size={16} />
+                      {t(label)} →
+                    </button>
+                  ))}
+                </span>
+              </div>
             </div>
           </>
         )}
@@ -270,8 +271,7 @@ export function WallsPanel() {
           </div>
         )}
         <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
-          {t(mode === "build" && door ? "buildHintDoor" : WALL_HINT[mode])}{" "}
-          {mode === "build" && b.brush === "w:window" ? t("buildWindowsOuter") : ""}
+          {t(WALL_HINT[mode])}
         </p>
         <h3 className="grp">{t("wallView")}</h3>
         <fieldset className="seg min-w-0" aria-label={t("wallView")}>

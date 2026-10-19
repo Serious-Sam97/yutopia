@@ -1,13 +1,17 @@
 import {
   blocksLight,
   CATALOG,
-  doorEdge,
+  doorBlocksLight,
+  type Edge,
   entry,
   hangOf,
   hWall,
   isFloor,
+  isOpening,
   isWindow,
+  isWindowKind,
   type MapDef,
+  openingEdges,
   rotOf,
   tileAt,
   topCentre,
@@ -186,17 +190,28 @@ export class LightMap {
       for (let x = 0; x < W; x++) if (blocksLight(hWall(map, x, y))) this.hBlk[y * W + x] = 1;
     for (let y = 0; y < H; y++)
       for (let x = 0; x <= W; x++) if (blocksLight(vWall(map, x, y))) this.vBlk[y * (W + 1) + x] = 1;
+    // doors and windows in walls (shared openings.ts): an open door and a
+    // window's glass let light through, a shut door doesn't
+    const floor = (x: number, y: number) => isFloor(tileAt(map, x, y));
+    const glazed: Edge[] = [];
     for (const o of objects) {
-      if (o.kind !== "door") continue;
-      const st = String(o.props?.state ?? "open");
-      if (!((st === "closed" || st === "locked") && !o.props?.passing)) continue;
-      const e = doorEdge(o);
-      if (e.dir === "h") this.hBlk[e.y * W + e.x] = 1;
-      else this.vBlk[e.y * (W + 1) + e.x] = 1;
+      if (!isOpening(o.kind)) continue;
+      const shut = doorBlocksLight(o);
+      for (const e of openingEdges(o)) {
+        if (e.dir === "h") this.hBlk[e.y * W + e.x] = shut ? 1 : 0;
+        else this.vBlk[e.y * (W + 1) + e.x] = shut ? 1 : 0;
+        if (isWindowKind(o.kind)) glazed.push(e);
+      }
     }
     for (const s of lightSources(objects)) this.add(s);
-    // windows: a soft pool of light just inside each pane
-    const floor = (x: number, y: number) => isFloor(tileAt(map, x, y));
+    // windows to the outside: a soft pool of light just inside each pane
+    for (const e of glazed) {
+      const [a, b] = e.dir === "h" ? [floor(e.x, e.y - 1), floor(e.x, e.y)] : [floor(e.x - 1, e.y), floor(e.x, e.y)];
+      if (a === b) continue; // between two rooms: no daylight of its own
+      const inn = b ? 0.45 : -0.45;
+      const at = e.dir === "h" ? { x: e.x + 0.5, y: e.y + inn } : { x: e.x + inn, y: e.y + 0.5 };
+      this.add({ ...at, color: 0xffffff, radius: 4.2, intensity: 0.9 }, this.win);
+    }
     for (let y = 0; y <= H; y++)
       for (let x = 0; x < W; x++)
         if (isWindow(hWall(map, x, y))) {
@@ -335,7 +350,7 @@ export class LightMap {
 // What changes the light map: walls (the map), light-giving things, doors.
 export function affectsLight(o: WorldObjectDef): boolean {
   return (
-    o.kind === "door" ||
+    isOpening(o.kind) ||
     o.kind in SCREENS ||
     (o.kind === "tabletop" && String(o.props?.d) in TOPS) ||
     !!(CATALOG as Record<string, { light?: unknown }>)[o.kind]?.light

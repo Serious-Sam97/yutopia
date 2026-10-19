@@ -1,4 +1,14 @@
-import { hWall, isFloor, isWindow, type MapDef, tileAt, vWall } from "@yutopia/shared";
+import {
+  edgeKey,
+  hWall,
+  isFloor,
+  isWindow,
+  isWindowKind,
+  type MapDef,
+  tileAt,
+  vWall,
+  type WallCut,
+} from "@yutopia/shared";
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -981,6 +991,7 @@ export class Campus {
   constructor(
     map: MapDef,
     private T: Themes,
+    cuts: Map<string, WallCut> = new Map(),
   ) {
     const W = map.width;
     const H = map.height;
@@ -1036,7 +1047,13 @@ export class Campus {
     const cap = new G();
     const coping = new G();
     const mainRuns = runs(floor, -1, -1, W + 1, H + 1);
-    const win = (r: Run, i: number) => isWindow(r.nz !== 0 ? hWall(map, r.x0 + i, r.z0) : vWall(map, r.x0, r.z0 + i));
+    // a window in the studio's wall there (shared openings.ts; older saves' painted ones): its hole, tiles up
+    const win = (r: Run, i: number): [number, number] | null => {
+      const e = r.nz !== 0 ? { dir: "h" as const, x: r.x0 + i, y: r.z0 } : { dir: "v" as const, x: r.x0, y: r.z0 + i };
+      const c = cuts.get(edgeKey(e));
+      if (c && isWindowKind(c.kind)) return [c.z0 / 39.19, c.z1 / 39.19];
+      return isWindow(e.dir === "h" ? hWall(map, e.x, e.y) : vWall(map, e.x, e.y)) ? [WIN0, WIN1] : null;
+    };
     for (const r of mainRuns) this.facadeRun(skin, cap, coping, r, 0, (i) => win(r, i), topSkin);
     this.add(skin.build(), this.facade);
     // the top storey's skin would stand between a camera just outside the
@@ -1780,7 +1797,7 @@ export class Campus {
     coping: G,
     r: Run,
     top: number,
-    win: ((i: number) => boolean) | null,
+    win: ((i: number) => [number, number] | null) | null,
     topSkin?: G,
   ) {
     const studio = !!win;
@@ -1827,9 +1844,10 @@ export class Campus {
         const u0 = Math.hypot(x0 - ax, z0 - az) / U;
         const u1 = Math.hypot(x1 - ax, z1 - az) / U;
         const g = topSkin ?? skin;
-        if (win(i)) {
-          band(x0, z0, x1, z1, u0, u1, 0, WIN0 - 0.02, g);
-          band(x0, z0, x1, z1, u0, u1, WIN1 + 0.03, WALL, g);
+        const hole = win(i);
+        if (hole) {
+          band(x0, z0, x1, z1, u0, u1, 0, hole[0] - 0.02, g);
+          band(x0, z0, x1, z1, u0, u1, hole[1] + 0.03, WALL, g);
         } else band(x0, z0, x1, z1, u0, u1, 0, WALL, g);
       }
     }

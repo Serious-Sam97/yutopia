@@ -1,4 +1,4 @@
-import type { MapDef, WorldObjectDef } from "@yutopia/shared";
+import { isOpening, type MapDef, type WorldObjectDef } from "@yutopia/shared";
 import { CanvasTexture, LinearFilter, type Material, SRGBColorSpace, Vector2 } from "three";
 import { daylight } from "../art/daylight";
 import { LightMap, lightSources } from "../art/light";
@@ -30,9 +30,10 @@ export class Light3 {
 
   // Bake again when what gives or blocks light changed (cheap to call often).
   update(map: MapDef, objects: WorldObjectDef[]) {
+    // doors (open or shut) and windows: what lets light through walls
     const doors = objects
-      .filter((o) => o.kind === "door")
-      .map((o) => `${o.x},${o.y},${o.props?.state ?? ""}`)
+      .filter((o) => isOpening(o.kind))
+      .map((o) => `${o.kind},${o.x},${o.y},${o.rot ?? 0},${o.props?.state ?? ""}`)
       .join(";");
     const sig = `${map.width}x${map.height}|${map.hWalls.join("")}|${map.vWalls.join("")}|${JSON.stringify(lightSources(objects))}|${doors}`;
     if (sig === this.sig) return;

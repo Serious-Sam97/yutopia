@@ -6,13 +6,14 @@ import {
   dressItems,
   entry,
   isKind,
+  isOpening,
   takenId,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { keepPlaying } from "@yutopia/shared/media";
-import { config } from "../config.ts";
-import { cleanProps, fromSchema, type WorldClient, type WorldRoom, surfaceRiders, toSchema } from "../WorldRoom.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { cleanProps, fromSchema, surfaceRiders, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Build mode, Sims-style: a builder's hand (what they're holding, so nobody
@@ -45,6 +46,11 @@ registerFeature((room: WorldRoom) => {
     for (const id of (Array.isArray(m?.ids) ? m.ids : []).slice(0, MAX_BATCH)) {
       const o = room.state.objects.get(String(id));
       if (!o || !entry(o.kind).buildable) continue;
+      const locked = room.lockBreak(p, null, [fromSchema(o)]);
+      if (locked) {
+        warn(client, `${locked}.`);
+        continue;
+      }
       const stale = now - (heldAt.get(o.id) ?? 0) > HOLD_MS;
       if (room.heldByOther(o.id, p.uid) && !stale) {
         warn(client, `${room.holderName(o.id)} is moving that.`);
@@ -69,7 +75,7 @@ registerFeature((room: WorldRoom) => {
     const next: WorldObjectDef[] = [];
     const base = Date.now().toString(36);
     for (const [n, it] of items.entries()) {
-      if (!isKind(it.kind) || !CATALOG[it.kind] || !entry(it.kind).buildable || it.kind === "door") return;
+      if (!isKind(it.kind) || !CATALOG[it.kind] || !entry(it.kind).buildable || isOpening(it.kind)) return;
       const id = typeof it.id === "string" && it.id ? it.id.slice(0, 64) : `b-${it.kind}-${base}${n}`;
       const existing = room.state.objects.get(id);
       if ((existing && existing.kind !== it.kind) || next.some((d) => d.id === id)) return; // same thing twice: no
@@ -118,6 +124,11 @@ registerFeature((room: WorldRoom) => {
       if (!o || !entry(o.kind).buildable) continue;
       if (room.heldByOther(o.id, p.uid)) {
         warn(client, `${room.holderName(o.id)} is moving that.`);
+        continue;
+      }
+      const locked = room.lockBreak(p, null, [fromSchema(o)]);
+      if (locked) {
+        warn(client, `${locked}.`);
         continue;
       }
       gone.add(o.id);

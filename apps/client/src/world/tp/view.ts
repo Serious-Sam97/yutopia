@@ -1,4 +1,5 @@
 import {
+  cutsSig,
   EMOTES,
   type Emote,
   entry,
@@ -9,6 +10,7 @@ import {
   WANTS,
   type Want,
   type WorldObjectDef,
+  wallCuts,
 } from "@yutopia/shared";
 import {
   AdditiveBlending,
@@ -259,7 +261,8 @@ export class ThirdPersonView {
       this.scene.add(l);
     }
     // what the studio stands in (clouds / city / snow), the sky by the hour
-    this.around = new Surroundings(theme, map, opts.themes);
+    this.winSig = cutsSig(objects);
+    this.around = new Surroundings(theme, map, opts.themes, wallCuts(objects));
     this.scene.add(this.around.root);
     const fog = fogFor(theme);
     this.scene.fog = new Fog(0xa8c8e0, fog.near, fog.far);
@@ -641,7 +644,15 @@ export class ThirdPersonView {
   update(map: MapDef, objects: WorldObjectDef[]) {
     this.light.update(map, objects);
     this.indexSeats(map, objects);
-    if (layoutSig(map) === layoutSig(this.map)) return this.world.update(objects);
+    const winSig = cutsSig(objects);
+    if (layoutSig(map) === layoutSig(this.map)) {
+      this.world.update(objects);
+      // windows came or went: the campus outside opens where they are now
+      if (winSig !== this.winSig && this.around.theme === "snow") this.surround(map, objects);
+      this.winSig = winSig;
+      return;
+    }
+    this.winSig = winSig;
     const old = this.world;
     this.map = map;
     this.world = new World3(this.items, map, objects, this.renderer.capabilities.getMaxAnisotropy(), (m) =>
@@ -651,10 +662,7 @@ export class ThirdPersonView {
     old.dispose();
     this.scene.add(this.world.root);
     this.builder.setMap(map);
-    this.scene.remove(this.around.root);
-    this.around.dispose();
-    this.around = new Surroundings(this.opts.theme ?? map.theme ?? "clouds", map, this.opts.themes);
-    this.scene.add(this.around.root);
+    this.surround(map, objects);
     const fog = fogFor(this.around.theme);
     (this.scene.fog as Fog).near = fog.near;
     (this.scene.fog as Fog).far = fog.far;
@@ -662,6 +670,16 @@ export class ThirdPersonView {
     this.camera.updateProjectionMatrix();
     this.setHour(this.hour); // (the new room's glass, the new sky)
     this.poolDue = 0;
+  }
+
+  // what the studio stands in, again (a new layout, or the windows changed)
+  private winSig = "";
+  private surround(map: MapDef, objects: WorldObjectDef[]) {
+    this.scene.remove(this.around.root);
+    this.around.dispose();
+    this.around = new Surroundings(this.opts.theme ?? map.theme ?? "clouds", map, this.opts.themes, wallCuts(objects));
+    this.scene.add(this.around.root);
+    this.setHour(this.hour);
   }
 
   private resize() {

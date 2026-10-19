@@ -1,4 +1,4 @@
-import { isFloor, type MapDef, type Theme, tileAt } from "@yutopia/shared";
+import { isFloor, type MapDef, type Theme, tileAt, type WallCut } from "@yutopia/shared";
 import {
   BackSide,
   BoxGeometry,
@@ -87,10 +87,12 @@ export class Surroundings {
   private cx: number;
   private cy: number;
 
+  // `cuts`: the walls' windows (shared wallCuts): the campus's façade opens there
   constructor(
     readonly theme: Theme,
     map: MapDef,
     private T: Themes,
+    cuts: Map<string, WallCut> = new Map(),
   ) {
     const { rng } = T;
     this.cx = map.width / 2;
@@ -165,7 +167,7 @@ export class Surroundings {
     this.disposables.push(this.shellMat);
     if (theme === "snow") {
       // the campus draws the building itself (the studio is its top floor)
-      this.campus = new Campus(map, T);
+      this.campus = new Campus(map, T, cuts);
       this.root.add(this.campus.root);
     } else {
       const depth = theme === "city" ? 26 : 1.4;

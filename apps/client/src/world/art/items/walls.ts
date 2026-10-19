@@ -91,18 +91,29 @@ const span = (a0: number, a1: number, b0: number, b1: number): [number, number] 
 // Draw one wall edge: `ch` its char, `part` low or high. (Clipping to a slice
 // is the sketch's clip.) `face`: only one face's half of a two-faced wall —
 // "front" (with the window's frame and glass, through and through) or "back".
-export function wall(s: Sketch, dir: "h" | "v", ch: string, part: WallPart, face?: "front" | "back") {
+// `cut`: the hole a door or window in it makes, px up (shared openings.ts;
+// the opening draws its own frame); older saves' painted-on windows (upper
+// case) cut their own and get their frame here.
+export function wall(
+  s: Sketch,
+  dir: "h" | "v",
+  ch: string,
+  part: WallPart,
+  face?: "front" | "back",
+  cut?: readonly [number, number] | null,
+) {
   const half = ch === "h";
   const r = runFor(s, dir, (half ? HALF_Z : WALL_Z) - 3, !!face);
   const mat = half ? "p" : ch.toLowerCase();
-  const window = !half && ch !== mat; // upper case
+  const window = !half && ch !== mat && !cut; // upper case
   const top = half ? HALF_Z : WALL_Z;
   const [z0, z1] = part === "low" ? [0, LOW_Z] : [LOW_Z, top];
-  // the wall body, in horizontal bands so a window can cut through
-  const bands: [number, number][] = window
+  // the wall body, in horizontal bands so a window or door can cut through
+  const hole = cut ?? (window ? ([WIN0, WIN1] as const) : null);
+  const bands: [number, number][] = hole
     ? ([
-        [z0, Math.min(z1, WIN0)],
-        [Math.max(z0, WIN1), z1],
+        [z0, Math.min(z1, hole[0])],
+        [Math.max(z0, hole[1]), z1],
       ].filter(([a, b]) => b > a) as [number, number][])
     : [[z0, z1]];
   const skirt = { c: K.walnutDark, top: "#5a3a26" } as Mat;

@@ -1,8 +1,8 @@
 import { applyStep, diffStep, HISTORY_LIMIT, type Snapshot, STEP_LABELS, type Step, snapshot } from "@yutopia/shared";
 import { keepPlaying } from "@yutopia/shared/media";
-import { config } from "../config.ts";
-import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Build undo/redo, per person. Every builder message opens (or extends) a step;
@@ -80,6 +80,15 @@ registerFeature((room: WorldRoom) => {
     const step = (dir === "back" ? s.undo : s.redo).pop();
     if (!step) return report(p.uid);
     const res = applyStep(room.map, objects(), step, dir);
+    // never a way into someone else's locked room (its walls, doors, windows)
+    const now = new Map(objects().map((o) => [o.id, o]));
+    const touched = [...res.put, ...[...res.put.map((o) => o.id), ...res.remove].flatMap((id) => now.get(id) ?? [])];
+    const locked = room.lockBreak(p, res.map ?? null, touched);
+    if (locked) {
+      s[dir === "back" ? "undo" : "redo"].push(step);
+      report(p.uid);
+      return room.send(client, "toast", { text: `${locked}.`, tone: "warn" });
+    }
     if (res.map) room.commitMap(res.map);
     for (const o of res.put) {
       const live = room.state.objects.get(o.id);

@@ -52,7 +52,21 @@ test("wall things hang on a west wall", async ({ page }) => {
       return !!ch && ch !== " " && ch !== "#";
     };
     const hung = [...w.room.state.objects.values()].filter((o: any) =>
-      ["board_wall", "screen_wall", "whiteboard", "notice_board", "poster", "frame", "clock", "neon"].includes(o.kind),
+      [
+        "board_wall",
+        "screen_wall",
+        "whiteboard",
+        "notice_board",
+        "poster",
+        "frame",
+        "clock",
+        "neon",
+        // set into walls (shared openings.ts)
+        "door",
+        "window",
+        "window_wide",
+        "window_tall",
+      ].includes(o.kind),
     );
     const free = (x: number, y: number) => !hung.some((o: any) => Math.abs(o.x - x) < 5 && Math.abs(o.y - y) < 5);
     for (let y = 1; y < m.height - 2; y++)

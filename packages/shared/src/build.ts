@@ -1,23 +1,16 @@
 import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
-import { doorEdge, doorFits, Grid } from "./grid.ts";
-import { hangFits } from "./hang.ts";
+import { Grid } from "./grid.ts";
+import { hangEdges, hangFits, hangOf } from "./hang.ts";
 import type { Point } from "./iso.ts";
-import { type MapDef, wallBetween } from "./map.ts";
+import { type Edge, type MapDef, wallBetween } from "./map.ts";
+import { isOpening, openingBlocker } from "./openings.ts";
 import { fitsOnSurface, splitAll } from "./tops.ts";
 
 // One placement rule for client (ghost preview) and server (authority).
 export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDef, bodies: Point[] = []): boolean {
   const e = entry(o.kind);
-  if (o.kind === "door") {
-    // a door fills a gap in a wall line (an edge), one door per edge
-    const e = doorEdge(o);
-    if (!doorFits(map, e)) return false;
-    return !others.some((x) => {
-      if (x.id === o.id || x.kind !== "door") return false;
-      const d = doorEdge(x);
-      return d.dir === e.dir && d.x === e.x && d.y === e.y;
-    });
-  }
+  // doors and windows: set into a wall (openings.ts)
+  if (isOpening(o.kind)) return openingBlocker(map, others, o, hungOnEdge(others)) === null;
   // tabletops: all of them on one surface's top, clear of the rest there
   if (e.onSurface) return fitsOnSurface(others, o);
   // wall items: on a face of a wall, anywhere it fits (hang.ts)
@@ -45,6 +38,18 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
       if (e.solid) for (const b of bodies) if (Math.floor(b.x) === tx && Math.floor(b.y) === ty) return false;
     }
   return true;
+}
+
+// What hangs on an edge (either face), as openingBlocker wants it.
+export function hungOnEdge(objects: WorldObjectDef[]): (e: Edge) => [number, number, string][] {
+  return (e) =>
+    objects.flatMap((x): [number, number, string][] => {
+      if (!entry(x.kind).wall) return [];
+      const h = hangOf(x);
+      return hangEdges(h).some((s) => s.dir === e.dir && s.x === e.x && s.y === e.y)
+        ? [[h.z0, h.z1, entry(x.kind).label]]
+        : [];
+    });
 }
 
 // Layout templates for a room: the builder swaps the furniture in one go.

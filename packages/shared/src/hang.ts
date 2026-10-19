@@ -11,11 +11,13 @@ import {
   tileAt,
   vWall,
 } from "./map.ts";
+import { edgeKey, isDoorKind, wallCuts } from "./openings.ts";
 
 // Things on walls, Sims-style — like things on a desk's top (tops.ts): a board,
 // a poster, a TV hangs anywhere on either face of a wall, on a grid of quarter
-// tiles along it and up it, as long as all of it is on wall (no window, door or
-// corner in the way) and it overlaps nothing else on that face.
+// tiles along it and up it, as long as all of it is on wall (no corner in the
+// way, nor a door or window where it would hang: above a door is fine) and it
+// overlaps nothing else on that face.
 //
 // Stored on the object: `rot` = the face (the item kit's turn: its back against
 // that wall) — 0 on the north wall of its tile, facing +y; 1 on the east wall,
@@ -262,6 +264,12 @@ export function hangBlocker(map: MapDef, others: WorldObjectDef[], o: WorldObjec
     if (isWallEdge(across)) return "a wall is in the way";
   }
   if (hungOver(others, h, o.id)) return "something hangs there";
+  // a door or window cuts the wall there (either face: they go through)
+  const cuts = wallCuts(others);
+  for (const e of hangEdges(h)) {
+    const c = cuts.get(edgeKey(e));
+    if (c && overlaps(c.z0, c.z1, h.z0, h.z1)) return isDoorKind(c.kind) ? "a door is there" : "a window is there";
+  }
   return null;
 }
 export function hangFits(map: MapDef, others: WorldObjectDef[], o: WorldObjectDef): boolean {
@@ -310,8 +318,13 @@ export function faceHit(
 }
 
 // The wall face nearest a point on the floor, among the four round its tile
-// that hold things and face into it: where along it (world tiles).
-export function faceNear(map: MapDef, x: number, y: number): { face: Face; along: number } | null {
+// that hold things (or `takes`) and face into it: where along it (world tiles).
+export function faceNear(
+  map: MapDef,
+  x: number,
+  y: number,
+  takes: (ch: string) => boolean = holdsItems,
+): { face: Face; along: number } | null {
   const tx = Math.floor(x);
   const ty = Math.floor(y);
   if (!isFloor(tileAt(map, tx, ty))) return null;
@@ -326,7 +339,7 @@ export function faceNear(map: MapDef, x: number, y: number): { face: Face; along
   cands.sort((a, b) => a[0] - b[0]);
   for (const [, f, along] of cands) {
     const e: Edge = f.dir === "h" ? { dir: "h", x: tx, y: f.line } : { dir: "v", x: f.line, y: ty };
-    if (holdsItems(edgeAt(map, e))) return { face: f, along };
+    if (takes(edgeAt(map, e))) return { face: f, along };
   }
   return null;
 }

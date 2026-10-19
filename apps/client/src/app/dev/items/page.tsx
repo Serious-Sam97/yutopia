@@ -175,6 +175,25 @@ const ROWS: Row[] = [
       { rot: 3, props: { state: "open" } },
     ],
   },
+  ...(["door_double", "door_studio", "door_barn", "door_saloon"] as const).map((kind) => ({
+    label: `${kind} · closed, open, locked, open the other way (along x) · closed, open (along y)`,
+    kind,
+    cells: [
+      { rot: 0, props: { state: "closed" } },
+      { rot: 0, props: { state: "open" } },
+      { rot: 0, props: { state: "locked" } },
+      { rot: 0, props: { state: "open", swing: -1 } },
+      { rot: 3, props: { state: "closed" } },
+      { rot: 3, props: { state: "open" } },
+    ],
+  })),
+  { label: "Archway", kind: "archway", id: "ar", rots: [0, 3] },
+  { label: "Window (in a wall)", kind: "window", id: "wn", rots: [0, 3] },
+  { label: "Wide window (in a wall)", kind: "window_wide", id: "ww", rots: [0, 3] },
+  { label: "Tall window (in a wall)", kind: "window_tall", id: "wt", rots: [0, 3] },
+  ...(
+    ["window_round", "window_arched", "window_high", "window_stained", "window_blinds", "window_studio"] as const
+  ).map((kind) => ({ label: `${kind} (in a wall)`, kind, id: kind, rots: [0, 3] })),
   { label: "Rug", kind: "rug", id: "rg", rots: [0, 1] },
   { label: "Standup ring", kind: "standup_mat", id: "su", rots: [0] },
 ];

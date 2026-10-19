@@ -11,9 +11,10 @@ import {
   convertV1,
   DECOR,
   dirFromDelta,
-  doorEdge,
-  doorFits,
+  doorStartState,
   EMOTES,
+  edgeAt,
+  edgeKey,
   entry,
   findPath,
   Grid,
@@ -21,18 +22,25 @@ import {
   HEARING_HZ,
   hearingGain,
   hostOf,
+  hungOnEdge,
   isFloor,
   isJump,
   isKind,
   isLegalMove,
+  isOpening,
   isV2,
   jumpReady,
   jumpTimes,
   layoutFromMap,
+  lockedRooms,
   type MapDef,
   mapFromLayout,
+  openingBlocker,
+  openingEdges,
+  openingsIntoWalls,
   parseAvatar,
   replacedByTemplate,
+  ringOf,
   type ServerMessages,
   SPLIT_KINDS,
   STEP,
@@ -156,6 +164,20 @@ export class WorldRoom extends Room<WorldState> {
       }
     }
     if (this.migrated) console.log(`[map v2] the world: converted (${this.migrated.length} objects moved)`);
+    // doors and windows set into walls (openings.ts): doors in a gap get their
+    // wall, windows painted on become windows — once, stored right away
+    const into = openingsIntoWalls(this.map, objects);
+    if (into.mapChanged) {
+      // (a world seeded from now, or offline: its seed carries the windows too)
+      this.map = info?.seeded ? into.map : { ...into.map, objects: [...into.map.objects, ...into.added] };
+      objects = into.objects;
+      console.log(`[openings] the world: into the walls (${into.added.length} windows)`);
+      if (!config.offline && info?.seeded) {
+        await saveAll(into.added, (o) => api.putObject(o));
+        if (this.migrated) this.saveMigration();
+        else await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[openings] layout", e.message));
+      }
+    }
     this.state.mapKey = this.map.key;
     this.syncMapState();
     this.state.name = info?.name ?? "Offline studio";
@@ -781,14 +803,22 @@ export class WorldRoom extends Room<WorldState> {
       refId: m.refId ?? existing?.refId ?? null,
       props: cleanProps(m.kind, m.props ?? safeJson(existing?.props ?? "{}"), others, x, y, rot),
     };
-    if (def.kind === "door") {
-      // doors sit on an edge (rot even: north edge of x, y; odd: west edge) and start open
+    if (isOpening(def.kind)) {
+      // doors and windows sit in a wall, on edges (rot even: from the north
+      // edge of x, y; odd: from the west edge); never into someone's locked room
       def.rot = rot % 2;
-      if (!doorFits(this.map, doorEdge(def))) {
-        this.send(client, "toast", { text: "Doors go in a gap in a wall line.", tone: "warn" });
+      const why =
+        this.lockBreak(p, null, existing ? [fromSchema(existing), def] : [def]) ??
+        openingBlocker(this.map, others, def, hungOnEdge(others));
+      if (why) {
+        this.send(client, "toast", { text: `Can't put it there: ${why}.`, tone: "warn" });
         return;
       }
-      def.props = { state: "open", ...(def.props ?? {}) };
+      // a door keeps its state (a new one, or a copy, starts open: nobody locks by placing)
+      const start = doorStartState(def.kind);
+      if (start)
+        def.props = { ...(def.props ?? {}), state: existing ? (safeJson(existing.props).state ?? start) : start };
+      else if (def.props) delete def.props.state;
     }
     // what it plays stays the server's (a stale copy from the builder's hand, or a copy's)
     def.props = keepPlaying(def.props, existing ? safeJson(existing.props) : null);
@@ -831,6 +861,11 @@ export class WorldRoom extends Room<WorldState> {
       this.send(client, "toast", { text: `${this.holderName(id)} is moving that.`, tone: "warn" });
       return;
     }
+    const locked = this.lockBreak(p, null, [fromSchema(o)]);
+    if (locked) {
+      this.send(client, "toast", { text: `${locked}.`, tone: "warn" });
+      return;
+    }
     // what sits on it goes with it
     const riders = surfaceRiders(fromSchema(o), [...this.state.objects.values()].map(fromSchema));
     for (const rid of [id, ...riders]) {
@@ -839,6 +874,29 @@ export class WorldRoom extends Room<WorldState> {
       this.state.holds.delete(rid);
     }
     this.rebuildGrid();
+  }
+
+  // Why `p` can't make this change (null: they can): it would open a way into
+  // someone else's locked room — its walls, its doors and windows, the room
+  // itself. Only its owner holds that key (admins too: an owner's lock is
+  // theirs). `next`: the map after; `objs`: things moved, added or taken
+  // away (where they were and where they'd go).
+  lockBreak(p: { uid: number }, next: MapDef | null, objs: WorldObjectDef[] = []): string | null {
+    const all = [...this.state.objects.values()].map(fromSchema);
+    for (const { area, ownerId } of lockedRooms(this.map, all)) {
+      if (ownerId === p.uid) continue;
+      const why = `${area.ownerName ?? "Its owner"} locked ${area.name}`;
+      const ring = ringOf(area);
+      if (next) {
+        const a = next.areas.find((x) => x.key === area.key);
+        if (!a || a.ownerId !== area.ownerId || a.x !== area.x || a.y !== area.y || a.w !== area.w || a.h !== area.h)
+          return why;
+        if (ring.some((e) => edgeAt(this.map, e) !== edgeAt(next, e))) return why;
+      }
+      const keys = new Set(ring.map(edgeKey));
+      for (const o of objs) if (isOpening(o.kind) && openingEdges(o).some((e) => keys.has(edgeKey(e)))) return why;
+    }
+    return null;
   }
 
   placementOk(o: WorldObjectDef, others: WorldObjectDef[]): boolean {

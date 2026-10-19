@@ -5,15 +5,23 @@ import {
   areaAt,
   blankMap,
   doorCentre,
+  doorLockable,
   doorRoom,
+  doorStartState,
   type EdgeEdit,
   edgeAt,
   edgeBlocker,
+  entry,
+  hungOnEdge,
   isDressing,
   isFacedWall,
   isTheme,
+  lockedEdge,
   MAP_MAX,
   MAP_MIN,
+  type MapDef,
+  mayLockDoor,
+  openingBlocker,
   paintBlocker,
   ROOM_KINDS,
   resizeMap,
@@ -24,15 +32,16 @@ import {
   type WallMat,
   type WorldObjectDef,
 } from "@yutopia/shared";
-import { config } from "../config.ts";
-import { fromSchema, type WorldClient, type WorldRoom, safeJson, toSchema } from "../WorldRoom.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { fromSchema, safeJson, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Builders edit the map itself: paint floors (tiles) and walls (tile edges), draw rooms (with an owner),
 // resize or start blank, move the arrival point, assign desks. Doors: anyone
-// opens/closes; the room's owner (or an admin) locks. The shared rules
-// (packages/shared/src/map-edit.ts) decide what's allowed.
+// opens/closes; the room's owner locks (an admin, rooms with no owner), and
+// while it's locked nobody else changes that room (room.lockBreak). The shared
+// rules (packages/shared/src/map-edit.ts) decide what's allowed.
 // What switches on and off: floor lamps and the desk lamps on desks.
 const isLamp = (o: WorldObjectDef) => o.kind === "lamp" || (o.kind === "tabletop" && o.props?.d === "desklamp");
 
@@ -49,6 +58,13 @@ registerFeature((room: WorldRoom) => {
   const drop = async (id: string) => {
     room.state.objects.delete(id);
     if (!config.offline) await api.deleteObject(id).catch(() => {});
+  };
+  // a change that would open someone else's locked room: told why, not made
+  const blocked = (c: WorldClient, next: MapDef): boolean => {
+    const p = room.state.players.get(c.sessionId);
+    const why = p ? room.lockBreak(p, next) : "no";
+    if (why) warn(c, `${why}.`);
+    return !!why;
   };
   const mat = (m: unknown): WallMat | undefined =>
     typeof m === "string" && Object.hasOwn(WALL_MATS, m) ? (m as WallMat) : undefined;
@@ -77,6 +93,8 @@ registerFeature((room: WorldRoom) => {
   room.on("map:walls", (client, m) => {
     if (!builder(client) || !Array.isArray(m.edges)) return;
     const objs = objects();
+    const uid = room.state.players.get(client.sessionId)?.uid ?? null;
+    const lockedHere = (e: EdgeEdit) => lockedEdge(room.map, objs, e, uid);
     const ok: EdgeEdit[] = [];
     let reason: string | null = null;
     let next = room.map;
@@ -88,7 +106,7 @@ registerFeature((room: WorldRoom) => {
         ch: String(e?.ch ?? ""),
         side: e?.side === 1 || e?.side === -1 ? e.side : undefined,
       };
-      const why = edgeBlocker(next, objs, edge, edge.ch);
+      const why = edgeBlocker(next, objs, edge, edge.ch) ?? lockedHere(edge);
       if (why) reason ??= why;
       else {
         ok.push(edge);
@@ -122,12 +140,14 @@ registerFeature((room: WorldRoom) => {
   room.on("map:room:walls", (client, m) => {
     const w = mat(m.wall);
     if (!builder(client) || !w) return;
-    room.commitMap(setRoomWalls(room.map, String(m.key), w));
+    const next = setRoomWalls(room.map, String(m.key), w, objects());
+    if (!blocked(client, next)) room.commitMap(next);
   });
 
   room.on("map:resize", (client, m) => {
     if (!builder(client)) return;
     const next = resizeMap(room.map, Number(m.width), Number(m.height));
+    if (blocked(client, next)) return;
     for (const o of objects()) if (o.x >= next.width || o.y >= next.height) void drop(o.id);
     room.commitMap(next);
     room.rescue();
@@ -139,6 +159,7 @@ registerFeature((room: WorldRoom) => {
     const w = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(Number(m.width) || 32)));
     const h = Math.max(MAP_MIN, Math.min(MAP_MAX, Math.floor(Number(m.height) || 24)));
     const next = blankMap(room.map.key, room.map.name, w, h);
+    if (blocked(client, next)) return;
     for (const o of objects()) void drop(o.id);
     room.commitMap(next);
     for (const c of room.clients) {
@@ -192,21 +213,29 @@ registerFeature((room: WorldRoom) => {
       wall: mat(m.wall),
     });
     if (typeof res === "string") return warn(client, `Couldn't make the room: ${res}.`);
+    if (blocked(client, res.map)) return;
     room.commitMap(res.map);
     room.rescue();
-    if (res.door)
-      void save({
-        id: `door-${key}`,
-        kind: "door",
-        x: res.door.x,
-        y: res.door.y,
-        rot: res.door.rot,
-        props: { state: "open", roomKey: key },
-      }).then(() => room.rebuildGrid());
+    const door = res.door && {
+      id: `door-${key}`,
+      kind: "door",
+      x: res.door.x,
+      y: res.door.y,
+      rot: res.door.rot,
+      props: { state: "open", roomKey: key },
+    };
+    // its door, in the wall it just got (if it fits there: floor both sides)
+    if (door && !openingBlocker(res.map, objects(), door, hungOnEdge(objects())))
+      void save(door).then(() => room.rebuildGrid());
   });
 
   room.on("map:room:update", (client, m) => {
     if (!builder(client)) return;
+    const p = room.state.players.get(client.sessionId);
+    const was = room.map.areas.find((a) => a.key === m.key);
+    // someone's room: only they (or an admin) give it to someone else
+    if (m.ownerId !== undefined && was?.ownerId && was.ownerId !== p?.uid && !p?.admin)
+      return warn(client, `Only ${was.ownerName ?? "its owner"} or an admin can give ${was.name} to someone else.`);
     const areas = room.map.areas.map((a) => {
       if (a.key !== m.key) return a;
       const next = { ...a };
@@ -219,12 +248,17 @@ registerFeature((room: WorldRoom) => {
       }
       return next;
     });
-    room.commitMap({ ...room.map, areas });
+    if (!blocked(client, { ...room.map, areas })) room.commitMap({ ...room.map, areas });
   });
 
   room.on("map:room:remove", (client, m) => {
     if (!builder(client)) return;
-    room.commitMap({ ...room.map, areas: room.map.areas.filter((a) => a.key !== m.key) });
+    const p = room.state.players.get(client.sessionId);
+    const was = room.map.areas.find((a) => a.key === m.key);
+    if (was?.ownerId && was.ownerId !== p?.uid && !p?.admin)
+      return warn(client, `Only ${was.ownerName ?? "its owner"} or an admin can take ${was.name} away.`);
+    const next = { ...room.map, areas: room.map.areas.filter((a) => a.key !== m.key) };
+    if (!blocked(client, next)) room.commitMap(next);
   });
 
   room.on("desk:assign", (client, m) => {
@@ -285,16 +319,17 @@ registerFeature((room: WorldRoom) => {
   room.on("door:set", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     const o = room.state.objects.get(String(m.id));
-    if (!p || !o || o.kind !== "door" || !["open", "closed", "locked"].includes(m.state)) return;
+    if (!p || !o || entry(o.kind).interact !== "door" || !["open", "closed", "locked"].includes(m.state)) return;
+    if (m.state === "locked" && !doorLockable(o.kind)) return warn(client, `${entry(o.kind).label} don't lock.`);
     const def = fromSchema(o);
-    const current = String(def.props?.state ?? "open");
+    const current = String(def.props?.state ?? doorStartState(o.kind) ?? "open");
     const area = doorRoom(room.map, def);
     const owner = area?.ownerId ?? null;
     const c = doorCentre(def);
     const near = Math.hypot(p.x - c.x, p.y - c.y) <= 2.5;
-    const mayLock = p.uid === owner || p.admin;
+    // an owner's lock is theirs alone: nobody else (not an admin) opens it
     if (m.state === "locked" || current === "locked") {
-      if (!mayLock)
+      if (!mayLockDoor(room.map, def, p))
         return warn(
           client,
           owner

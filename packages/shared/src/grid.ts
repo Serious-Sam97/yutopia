@@ -1,7 +1,8 @@
 import { entry, footprint, standHeight, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
 import type { Point } from "./iso.ts";
-import { type AreaDef, type Edge, hWall, isFloor, isWallEdge, type MapDef, NO_WALL, tileAt, vWall } from "./map.ts";
+import { type AreaDef, type Edge, edgeAt, hWall, isFloor, isWallEdge, type MapDef, tileAt, vWall } from "./map.ts";
+import { doorLockable, isDoorKind, isOpening, openingCentre, openingEdges, ringOf, wallTakes } from "./openings.ts";
 
 // Walkability: floor tiles minus solid furniture, and walls on tile edges that
 // bodies can't cross (thin walls, WALL_T thick). Rebuilt whenever objects or
@@ -30,8 +31,9 @@ export class Grid {
     this.vBlock = new Uint8Array(height * (width + 1));
   }
 
-  // `as` = whose grid: locked doors are walls for everyone but their room's
-  // owner. Without it (shared paths, previews) locked doors block everyone.
+  // `as` = whose grid: doors are a way through their wall, but locked ones are
+  // walls for everyone but their room's owner. Without it (shared paths,
+  // previews) locked doors block everyone. Windows are wall.
   // `dressing: false` leaves the rooms' clutter out (placement checks: furniture wins).
   static from(
     map: MapDef,
@@ -59,10 +61,16 @@ export class Grid {
       if (e.seat)
         for (let dy = 0; dy < h; dy++)
           for (let dx = 0; dx < w; dx++) g.seats.set(g.idx(o.x + dx, o.y + dy), { id: o.id, rot: o.rot ?? 0 });
-      if (o.kind === "door") {
-        if (o.props?.state === "locked" && (as?.uid == null || doorOwner(map, o) !== as.uid)) g.blockEdge(doorEdge(o));
+      if (isDoorKind(o.kind)) {
+        const locked =
+          doorLockable(o.kind) && o.props?.state === "locked" && (as?.uid == null || doorOwner(map, o) !== as.uid);
+        for (const e of openingEdges(o)) {
+          if (locked) g.blockEdge(e);
+          else g.openEdge(e);
+        }
         continue;
       }
+      if (isOpening(o.kind)) continue;
       if (!e.solid || e.wall) continue;
       const stand = standHeight(o.kind);
       for (let dy = 0; dy < h; dy++)
@@ -96,6 +104,13 @@ export class Grid {
       this.hBlock[e.y * this.width + e.x] = 1;
     if (e.dir === "v" && e.y >= 0 && e.y < this.height && e.x >= 0 && e.x <= this.width)
       this.vBlock[e.y * (this.width + 1) + e.x] = 1;
+  }
+
+  openEdge(e: Edge): void {
+    if (e.dir === "h" && e.x >= 0 && e.x < this.width && e.y >= 0 && e.y <= this.height)
+      this.hBlock[e.y * this.width + e.x] = 0;
+    if (e.dir === "v" && e.y >= 0 && e.y < this.height && e.x >= 0 && e.x <= this.width)
+      this.vBlock[e.y * (this.width + 1) + e.x] = 0;
   }
 
   inBounds(x: number, y: number): boolean {
@@ -257,28 +272,17 @@ export function doorEdge(o: { x: number; y: number; rot?: number }): Edge {
   return (o.rot ?? 0) % 2 === 0 ? { x: o.x, y: o.y, dir: "h" } : { x: o.x, y: o.y, dir: "v" };
 }
 
-// The middle of a door's edge (tile coords).
-export function doorCentre(o: { x: number; y: number; rot?: number }): Point {
-  return (o.rot ?? 0) % 2 === 0 ? { x: o.x + 0.5, y: o.y } : { x: o.x, y: o.y + 0.5 };
+// The middle of a door (tile coords; a double door spans two edges).
+export function doorCentre(o: { kind?: string; x: number; y: number; rot?: number }): Point {
+  return openingCentre({ kind: o.kind ?? "door", x: o.x, y: o.y, rot: o.rot });
 }
 
-// Can a door go on this edge? It must be a gap in a wall line: no wall on the
-// edge itself, walls on both edges next to it along the line, floor both sides.
+// Can a door go on this edge? In a wall that takes one (openings.ts), with
+// floor on both sides. (Where exactly, with what's around: openingBlocker.)
 export function doorFits(map: MapDef, e: Edge): boolean {
   const floor = (x: number, y: number) => isFloor(tileAt(map, x, y));
-  if (e.dir === "h") {
-    if (hWall(map, e.x, e.y) !== NO_WALL || !floor(e.x, e.y - 1) || !floor(e.x, e.y)) return false;
-    return isWallEdge(hWall(map, e.x - 1, e.y)) && isWallEdge(hWall(map, e.x + 1, e.y));
-  }
-  if (vWall(map, e.x, e.y) !== NO_WALL || !floor(e.x - 1, e.y) || !floor(e.x, e.y)) return false;
-  return isWallEdge(vWall(map, e.x, e.y - 1)) && isWallEdge(vWall(map, e.x, e.y + 1));
-}
-
-// Which edge of a tile (north first, then west) can take a door: 0 / 1 / null.
-export function doorRot(map: MapDef, x: number, y: number): 0 | 1 | null {
-  if (doorFits(map, { x, y, dir: "h" })) return 0;
-  if (doorFits(map, { x, y, dir: "v" })) return 1;
-  return null;
+  if (!wallTakes("door", edgeAt(map, e))) return false;
+  return e.dir === "h" ? floor(e.x, e.y - 1) && floor(e.x, e.y) : floor(e.x - 1, e.y) && floor(e.x, e.y);
 }
 
 // The room a door belongs to: its roomKey, or a room whose border the door's
@@ -306,4 +310,40 @@ export function doorOwner(
   door: { x: number; y: number; rot?: number; props?: Record<string, unknown> },
 ): number | null {
   return doorRoom(map, door)?.ownerId ?? null;
+}
+
+// Who may lock or unlock it: the owner of its room, and nobody else (not even
+// an admin: an owner's lock is theirs); a door to a room with no owner, the
+// admins.
+export function mayLockDoor(
+  map: MapDef,
+  door: { x: number; y: number; rot?: number; props?: Record<string, unknown> },
+  who: { uid: number | null; admin?: boolean },
+): boolean {
+  if (!doorLockable((door as { kind?: string }).kind ?? "door")) return false;
+  const owner = doorOwner(map, door);
+  return owner != null ? who.uid === owner : !!who.admin;
+}
+
+// Owned rooms with a door locked right now, and who holds the key: their
+// walls, doors and windows (and the room itself) are the owner's to change.
+export function lockedRooms(map: MapDef, objects: Iterable<WorldObjectDef>): { area: AreaDef; ownerId: number }[] {
+  const out = new Map<string, { area: AreaDef; ownerId: number }>();
+  for (const o of objects) {
+    if (!doorLockable(o.kind) || o.props?.state !== "locked") continue;
+    const a = doorRoom(map, o);
+    if (a?.ownerId) out.set(a.key, { area: a, ownerId: a.ownerId });
+  }
+  return [...out.values()];
+}
+
+// Why `uid` can't change an edge (a wall, or a door or window in it): it's on
+// the border of someone else's locked room. null = they can.
+export function lockedEdge(map: MapDef, objects: Iterable<WorldObjectDef>, e: Edge, uid: number | null): string | null {
+  for (const { area, ownerId } of lockedRooms(map, objects)) {
+    if (ownerId === uid) continue;
+    if (ringOf(area).some((r) => r.dir === e.dir && r.x === e.x && r.y === e.y))
+      return `${area.ownerName ?? "Its owner"} locked ${area.name}`;
+  }
+  return null;
 }

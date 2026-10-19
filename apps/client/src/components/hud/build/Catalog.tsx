@@ -134,6 +134,39 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     ],
   },
   {
+    // set into a wall (shared openings.ts): the wall keeps its material
+    key: "doors",
+    label: "catDoors",
+    icon: "door",
+    items: [
+      // (shown shut in the catalog; they go in open)
+      { key: "door", kind: "door", props: { state: "closed" } },
+      { key: "door:glass", kind: "door", props: { glass: true, state: "closed" } },
+      { key: "door_double", kind: "door_double", props: { state: "closed" } },
+      { key: "door_studio", kind: "door_studio", props: { state: "closed" } },
+      { key: "door_barn", kind: "door_barn", props: { state: "closed" } },
+      { key: "door_saloon", kind: "door_saloon", props: { state: "closed" } },
+      it("archway"),
+    ],
+  },
+  {
+    // windows, set into a wall the same way
+    key: "windows",
+    label: "catWindows",
+    icon: "window",
+    items: [
+      it("window"),
+      it("window_wide"),
+      it("window_tall"),
+      it("window_round"),
+      it("window_arched"),
+      it("window_high"),
+      it("window_stained"),
+      it("window_blinds"),
+      it("window_studio"),
+    ],
+  },
+  {
     key: "decor",
     label: "catDecor",
     icon: "leaf",
@@ -159,6 +192,7 @@ const RECENT_KEY = "yutopia:build:recent";
 
 function labelOf(i: Item): string {
   if (i.props?.d) return trMaybe(`decor_${String(i.props.d)}`) ?? entry(i.kind).label;
+  if (i.kind === "door" && i.props?.glass) return "Glass door";
   return entry(i.kind).label;
 }
 
@@ -167,7 +201,7 @@ function labelOf(i: Item): string {
 export function sizeLabel(kind: string): string {
   const e = entry(kind);
   if (e.onSurface) return "";
-  return e.wall ? `wall ${e.w}` : `${e.w}×${e.h}`;
+  return e.wall || e.opening ? `wall ${e.w}` : `${e.w}×${e.h}`;
 }
 
 function readRecent(): string[] {
@@ -193,7 +227,9 @@ function choose(i: Item) {
 export function Catalog() {
   const t = useTr();
   const w = useWorld();
-  const [cat, setCat] = useState<string>("seating");
+  // (the tab is kept in the HUD: the Walls panel opens Doors & windows)
+  const cat = useHud((s) => s.build.catalogTab);
+  const setCat = (k: string) => hud.set((s) => ({ build: { ...s.build, catalogTab: k } }));
   const [q, setQ] = useState("");
   const [hover, setHover] = useState<Item | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
@@ -399,6 +435,7 @@ function Details({ item }: { item: Item }) {
   if (e.interact) chips.push(t("buildInfoUse"));
   if (e.surface !== undefined) chips.push(t("buildInfoSurface"));
   if (e.wall) chips.push(t("buildInfoWall"));
+  if (e.opening) chips.push(t("buildInfoOpening"));
   if (e.onSurface) chips.push(t("buildInfoOnSurface"));
   if ((e.variants ?? 1) > 1) chips.push(t("buildInfoLooks").replace("{n}", String(e.variants)));
   return (

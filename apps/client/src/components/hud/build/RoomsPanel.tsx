@@ -1,6 +1,6 @@
 "use client";
 
-import { type AreaDef, doorRoom } from "@yutopia/shared";
+import { type AreaDef, doorRoom, isDoorKind } from "@yutopia/shared";
 import { useState } from "react";
 import { type Key, useTr } from "@/lib/i18n";
 import { toast, useHud } from "@/world/store";
@@ -78,7 +78,7 @@ function RoomCard({
   const w = useWorld();
   const locked = useHud((s) => !!s.locks[room.key]);
   const doors = (w?.engine?.allObjects() ?? []).filter(
-    (o) => o.kind === "door" && w && doorRoom(w.map, o)?.key === room.key,
+    (o) => isDoorKind(o.kind) && w && doorRoom(w.map, o)?.key === room.key,
   ).length;
   const meta = [
     room.kind,

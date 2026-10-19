@@ -3,7 +3,9 @@ import {
   hWall,
   isFloor,
   isWindow,
+  isWindowKind,
   type MapDef,
+  openingEdges,
   TILE_H,
   TILE_W,
   tileAt,
@@ -157,6 +159,14 @@ export class Life {
       for (let x = 0; x < map.width; x++) if (isWindow(hWall(map, x, y))) add(x + 0.5, floor(x, y) ? y + 1 : y - 1);
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x <= map.width; x++) if (isWindow(vWall(map, x, y))) add(floor(x, y) ? x + 1 : x - 1, y + 0.5);
+    // (windows set into the walls: shared openings.ts)
+    for (const o of objects)
+      if (isWindowKind(o.kind))
+        for (const e of openingEdges(o)) {
+          if (e.dir === "h") {
+            if (floor(e.x, e.y) !== floor(e.x, e.y - 1)) add(e.x + 0.5, floor(e.x, e.y) ? e.y + 1 : e.y - 1);
+          } else if (floor(e.x, e.y) !== floor(e.x - 1, e.y)) add(floor(e.x, e.y) ? e.x + 1 : e.x - 1, e.y + 0.5);
+        }
     // a ceiling fan's shadow in rooms that are lived in
     for (const a of map.areas) {
       if (a.dressing !== "lived" && a.dressing !== "busy") continue;

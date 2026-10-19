@@ -146,6 +146,12 @@ export class Sketch {
   private ox: number;
   private oy: number;
 
+  // Seen from all round (the 3D view's meshes), or, as here, from its +y side
+  // only (iso): things set into a wall leave out what's behind it.
+  get round(): boolean {
+    return false;
+  }
+
   // `offset`: shifts the whole drawing in local tiles before turning it (wall
   // items sit on the face of a thin wall, a little in front of their tile edge)
   constructor(o: {

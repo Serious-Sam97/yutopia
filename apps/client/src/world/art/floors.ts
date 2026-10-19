@@ -2,6 +2,7 @@ import {
   entry,
   footprint,
   hWall,
+  isDoorKind,
   isFloor,
   isWallEdge,
   type MapDef,
@@ -414,10 +415,11 @@ export class FloorBake {
         if (isFloor(b) && b !== ch) this.edges.push([x, y + 1 - 0.035, 1, 0.07]);
       }
     for (const o of objects) {
-      if (o.kind !== "door") continue;
-      // across the door's edge: the north edge of its tile, or the west one
-      if ((o.rot ?? 0) % 2 === 0) this.sills.push([o.x + 0.05, o.y - 0.1, 0.9, 0.2]);
-      else this.sills.push([o.x - 0.1, o.y + 0.05, 0.2, 0.9]);
+      if (!isDoorKind(o.kind)) continue;
+      // across the doorway: along x from the north edge of its tile, or along y from the west one
+      const n = entry(o.kind).w;
+      if ((o.rot ?? 0) % 2 === 0) this.sills.push([o.x + 0.05, o.y - 0.1, n - 0.1, 0.2]);
+      else this.sills.push([o.x - 0.1, o.y + 0.05, 0.2, n - 0.1]);
     }
     const st = map.areas.find((a) => a.kind === "stage");
     if (st) this.stage = [st.x, st.y + st.h - 0.04, st.w, 0.08];

@@ -51,7 +51,7 @@ function testRoom(ch: string): { map: MapDef; objects: WorldObjectDef[] } {
     areas: [],
     objects: [],
   };
-  for (let x = 1; x < W; x++) if (x !== 3) setEdge(map, { x, y: 1, dir: "h" }, "p");
+  for (let x = 1; x < W; x++) setEdge(map, { x, y: 1, dir: "h" }, "p"); // (the door goes in it)
   for (let y = 1; y < H; y++) setEdge(map, { x: 1, y, dir: "v" }, "p");
   const objects: WorldObjectDef[] = [
     { id: "door", kind: "door", x: 3, y: 1, rot: 0, props: { state: "closed" } },

@@ -259,9 +259,16 @@ test("third person: Paint shows the face under the pointer", async ({ page }) =>
     const w = (window as any).__yutopia;
     const m = w.map;
     const open = (x: number, y: number) => !!w.grid?.ok?.(x, y);
+    // (no door or window in it: shared openings.ts)
+    const cut = new Set(
+      [...w.room.state.objects.values()]
+        .filter((o: any) => o.kind === "door" || String(o.kind).startsWith("window"))
+        .flatMap((o: any) => [o.rot % 2 ? `v${o.x},${o.y}` : `h${o.x},${o.y}`, `h${o.x + 1},${o.y}`]),
+    );
     for (let y = 1; y < m.height - 5; y++)
       for (let x = 1; x < m.width - 3; x++)
         if (
+          !cut.has(`h${x},${y}`) &&
           "pwfbk".includes(m.hWalls[y]?.[x] ?? ".") &&
           m.hWalls[y][x] !== "." &&
           [0, 1, 2, 3].every((k) => open(x, y + k))

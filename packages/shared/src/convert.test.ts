@@ -6,6 +6,7 @@ import { doorEdge, doorFits, Grid } from "./grid.ts";
 import { areaAt, holdsItems, hWall, isFloor, MapBuilder, type MapDef, tileAt, WALL } from "./map.ts";
 import { layoutFromMap, validLayout } from "./map-edit.ts";
 import { studio, studioV1 } from "./maps/studio.ts";
+import { openingsIntoWalls } from "./openings.ts";
 import { findPath } from "./path.ts";
 
 // Connected components of walkable tiles: v1 by tile adjacency, v2 by steps
@@ -106,10 +107,15 @@ test("conversion moves boards onto their wall and doors onto their edge", () => 
     objects: [],
   };
   const door = { id: "door-room-a", kind: "door", x: 7, y: 9, rot: 0, props: { state: "locked", roomKey: "room-a" } };
-  const { map, objects, changed } = convertV1(v1, [door]);
+  const conv = convertV1(v1, [door]);
+  const { objects, changed } = conv;
   const d = objects[0];
   assert.deepEqual([d.x, d.y, d.rot], [7, 10, 0], "onto the edge below the old doorway");
   assert.equal(changed.length, 1);
+  // then into a wall of its own (openings.ts): the wall beside it
+  assert.equal(hWall(conv.map, 7, 10), ".", "converted v1: a doorway");
+  const { map } = openingsIntoWalls(conv.map, objects);
+  assert.equal(hWall(map, 7, 10), hWall(map, 6, 10), "the door's wall is the wall beside it");
   assert.ok(doorFits(map, doorEdge(d)));
   assert.ok(canPlace(map, [], d));
   const outside = { x: 7.5, y: 13.5 };

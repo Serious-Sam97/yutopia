@@ -1,6 +1,6 @@
 "use client";
 
-import { areaAt, CLOTH_COLORS, DECOR, edgeAt, entry, faceMat, footprint, isWindow, panelTile } from "@yutopia/shared";
+import { areaAt, CLOTH_COLORS, DECOR, edgeAt, entry, faceMat, footprint, isOpening, panelTile } from "@yutopia/shared";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
@@ -422,10 +422,15 @@ function ActionBar() {
                   ·{" "}
                   {entry(info.kind).onSurface
                     ? t("buildOnTop")
-                    : entry(info.kind).wall
+                    : entry(info.kind).wall || isOpening(info.kind)
                       ? sizeLabel(info.kind)
-                      : `${fp.w}×${fp.h}`}{" "}
-                  · {t("buildFacing")} {FACING[info.rot % 4]}
+                      : `${fp.w}×${fp.h}`}
+                  {!isOpening(info.kind) && (
+                    <>
+                      {" "}
+                      · {t("buildFacing")} {FACING[info.rot % 4]}
+                    </>
+                  )}
                 </span>
               </span>
             </span>
@@ -438,7 +443,7 @@ function ActionBar() {
             className="hidden 2xl:block text-[12px] max-w-[300px] leading-snug px-1"
             style={{ color: "var(--muted)" }}
           >
-            {t("buildCarryHint")}
+            {t(isOpening(info.kind) ? "buildDoorHint" : "buildCarryHint")}
           </span>
           {esc(b.held.length ? "buildCancel" : "buildExit")}
         </>
@@ -530,11 +535,9 @@ function ActionBar() {
       b.tool === "walls"
         ? b.wallMode !== "build" && b.wallMode !== "floors"
           ? WALL_HINT[b.wallMode]
-          : b.brush.startsWith("door")
-            ? "buildHintDoor"
-            : b.wallMode === "build" && b.paintMode === "line"
-              ? WALL_HINT.build
-              : MODE_HINT[b.paintMode]
+          : b.wallMode === "build" && b.paintMode === "line"
+            ? WALL_HINT.build
+            : MODE_HINT[b.paintMode]
         : b.tool === "rooms"
           ? "buildDrawRoomHint"
           : b.tool === "desks"
@@ -741,7 +744,7 @@ function WallInspector() {
       </div>
     );
   };
-  const act = (label: Key, a: "same" | "swap" | "window" | "remove", danger = false) => (
+  const act = (label: Key, a: "same" | "swap" | "remove", danger = false) => (
     <button
       type="button"
       className="mono text-[11px] uppercase tracking-wide px-2 h-8 rounded-md hover:bg-white/10"
@@ -760,14 +763,12 @@ function WallInspector() {
       >
         <h3 className="lcd text-lg leading-none">
           {sel.length > 1 ? t("wallsSelected").replace("{n}", String(sel.length)) : kind}
-          {isWindow(ch) && <span className="text-[11px] mono"> · {t("wallWindow")}</span>}
         </h3>
         {face(p.side, "wallThisSide")}
         {face(p.side > 0 ? -1 : 1, "wallOtherSide")}
         <div className="flex flex-wrap gap-1.5">
           {faced && act("wallSame", "same")}
           {faced && act("wallSwap", "swap")}
-          {faced && act(isWindow(ch) ? "wallTakeWindow" : "wallAddWindow", "window")}
           {act("wallRemove", "remove", true)}
         </div>
       </section>

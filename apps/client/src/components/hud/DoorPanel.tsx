@@ -1,12 +1,13 @@
 "use client";
 
-import { doorRoom } from "@yutopia/shared";
+import { doorLockable, doorRoom, doorSlides, doorStartState, entry, mayLockDoor } from "@yutopia/shared";
 import { useHud } from "@/world/store";
 import { useWorld } from "./ctx";
 import { Panel } from "./Panel";
 
-// A door: anyone opens or closes it; only the room's owner (or a project owner)
-// locks it — and while locked, only the room's owner can go in or out.
+// A door: anyone opens or closes it; only the room's owner locks and unlocks it
+// (an admin only when the room has no owner) — and while locked, only the
+// room's owner can go in or out, and nobody else changes that room.
 export function DoorPanel({ objectId }: { objectId: string }) {
   const w = useWorld();
   useHud((s) => s.mapVersion); // re-render when the map (rooms/owners) changes
@@ -14,12 +15,13 @@ export function DoorPanel({ objectId }: { objectId: string }) {
   const isAdmin = useHud((s) => s.isAdmin);
   if (!w || !door) return null;
   const room = doorRoom(w.map, door);
-  const state = String(door.props?.state ?? "open");
+  const state = String(door.props?.state ?? doorStartState(door.kind) ?? "open");
+  const label = entry(door.kind).label;
   const mine = room?.ownerId != null && room.ownerId === w.myUid();
-  const mayLock = mine || isAdmin;
+  const mayLock = mayLockDoor(w.map, door, { uid: w.myUid(), admin: isAdmin });
   const set = (s: "open" | "closed" | "locked") => w.send("door:set", { id: objectId, state: s });
   return (
-    <Panel title={room ? `Door · ${room.name}` : "Door"}>
+    <Panel title={room ? `${label} · ${room.name}` : label}>
       <div className="vfd-window p-4 flex items-center justify-between">
         <span className="lcd text-3xl">
           {state === "locked" ? "🔒 LOCKED" : state === "closed" ? "▮ CLOSED" : "▯ OPEN"}
@@ -31,9 +33,13 @@ export function DoorPanel({ objectId }: { objectId: string }) {
       <p className="text-sm mt-3" style={{ color: "var(--cream-dim)" }}>
         {state === "locked"
           ? mine
-            ? "Locked. Only you can walk in or out."
-            : `Locked. Only ${room?.ownerName ?? "the room's owner"} can walk in or out.`
-          : "Anyone can walk through. Closed doors swing open as people pass."}
+            ? "Locked. Only you can walk in or out — and only you can unlock it."
+            : room?.ownerId
+              ? `Locked. Only ${room.ownerName ?? "the room's owner"} can walk in or out, or unlock it.`
+              : "Locked by an admin."
+          : doorSlides(door.kind)
+            ? "Anyone can walk through. Closed, it rolls aside as people pass."
+            : "Anyone can walk through. Closed doors swing open as people pass."}
       </p>
       <div className="flex gap-2 mt-4">
         {state !== "locked" && (
@@ -53,9 +59,9 @@ export function DoorPanel({ objectId }: { objectId: string }) {
           </button>
         )}
       </div>
-      {!mayLock && room?.ownerId && (
+      {!mayLock && room?.ownerId && doorLockable(door.kind) && (
         <p className="mono text-[11px] mt-3" style={{ color: "var(--muted)" }}>
-          Only {room.ownerName ?? "the owner"} can lock this door.
+          Only {room.ownerName ?? "the owner"} can lock or unlock this door.
         </p>
       )}
     </Panel>

@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_AVATAR, isTheme, splitAll, studio } from "@yutopia/shared";
+import { DEFAULT_AVATAR, isTheme, openingsIntoWalls, splitAll, studio } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef } from "react";
 import type { Quality } from "@/lib/prefs";
@@ -19,7 +19,9 @@ export default function Shots() {
     const theme = q.get("theme");
     const quality = (q.get("quality") ?? "high") as Quality;
     const crowd = Number(q.get("crowd") ?? 0);
-    const map = { ...studio, theme: isTheme(theme) ? theme : "clouds" };
+    // as the world-server loads it: doors and windows set into the walls
+    const into = openingsIntoWalls(studio, splitAll(studio.objects).objects);
+    const map = { ...into.map, theme: isTheme(theme) ? theme : "clouds" };
     const engine = new WorldEngine(map);
     let stop = false;
     void (async () => {
@@ -32,7 +34,7 @@ export default function Shots() {
       await engine.init(host.current, { quality, reducedMotion: false });
       if (stop) return engine.destroy();
       // as a room loads it: furniture from before bare desks set out as real things
-      engine.setObjects(splitAll(studio.objects).objects);
+      engine.setObjects(into.objects);
       engine.setClock(Number(q.get("hour") ?? 12));
       engine.pinCamera({ x: Number(q.get("x") ?? 24), y: Number(q.get("y") ?? 18), zoom: Number(q.get("zoom") ?? 1) });
       // a crowd (budgets): people standing around the open floor, seeded

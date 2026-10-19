@@ -1,26 +1,36 @@
 import {
   backAt,
+  cutsSig,
   type DressItem,
   type DressKind,
-  doorEdge,
+  doorLeaves,
+  doorShut,
+  doorSlides,
   dressItems,
+  edgeKey,
   entry,
   HALF_WALL,
   hangOf,
   hangStrip,
   hasActions,
   hWall,
+  isDoorKind,
   isFloor,
+  isOpening,
   isWallEdge,
   isWindow,
+  isWindowKind,
   type MapDef,
   NO_WALL,
+  openingEdges,
   placedFootprint,
   rotOf,
   tileAt,
   topCentre,
   vWall,
+  type WallCut,
   type WorldObjectDef,
+  wallCuts,
 } from "@yutopia/shared";
 import {
   BufferGeometry,
@@ -51,8 +61,9 @@ export type Items = typeof import("../art/items");
 // The Studio as a three.js scene, from the same data the iso engine draws:
 // the floor bake (seen from above), walls on tile edges, every item drawn by
 // its own sketch (in 3D), the rooms' clutter.
-//   walls  — built once per layout; the upper part of each wall run (4 edges)
-//            is its own group, to turn see-through when it hides you
+//   walls  — built once per layout (and again when a door or window comes,
+//            goes or moves: they cut the walls); the upper part of each wall
+//            run (4 edges) is its own group, to turn see-through when it hides you
 //   areas  — furniture + clutter merged per 6×6-tile area; `update` redraws
 //            only the areas whose things changed (a door swinging, someone
 //            sitting down, a lamp switched on, build-mode edits)
@@ -123,6 +134,8 @@ export class World3 {
   private objects: WorldObjectDef[] = [];
   private cardN = 0;
   private posts = new Set<string>(); // "x,y" of every wall post (doors stop at them too)
+  private cuts = new Map<string, WallCut>(); // doors' and windows' holes, by edge
+  private cutSig = "";
 
   // `light`: how lit materials take the room's light (the iso light map)
   constructor(
@@ -135,6 +148,8 @@ export class World3 {
     const t0 = performance.now();
     this.light(this.materials.lit);
     this.light(this.materials.clear);
+    this.cuts = wallCuts(objects);
+    this.cutSig = cutsSig(objects);
     this.buildWalls();
     this.update(objects);
     this.stats.ms = performance.now() - t0;
@@ -187,10 +202,13 @@ export class World3 {
       const top = ch === HALF_WALL ? 34 : WALL_H;
       const run = runOf(dir, x, y, zt(top));
       const back = backAt(map, { dir, x, y });
+      const c = this.cuts.get(edgeKey({ dir, x, y }));
+      const cut = c ? ([c.z0, c.z1] as const) : null;
       if (back === NO_WALL) {
         // one material through and through: drawn once, its face mirrored onto the other side
-        wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], mirror: true, out: lowOf(x, y) }), dir, ch, "low");
-        wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], mirror: true, out: run.out }), dir, ch, "high");
+        const at = { w: 1, h: 1, seed: 0.37, clip, at: [x, y] as [number, number], mirror: true };
+        wall(sketch({ ...at, out: lowOf(x, y) }), dir, ch, "low", undefined, cut);
+        wall(sketch({ ...at, out: run.out }), dir, ch, "high", undefined, cut);
         return;
       }
       // two faces: the front half as it is, the back half drawn as the front of
@@ -202,8 +220,8 @@ export class World3 {
         ["low", lowOf(x, y)],
         ["high", run.out],
       ] as const) {
-        wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], out }), dir, ch, part, "front");
-        wall(sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: behind, rot: 2, out }), dir, bch, part, "back");
+        wall(sketch({ w: 1, h: 1, seed: 0.37, clip, at: [x, y], out }), dir, ch, part, "front", cut);
+        wall(sketch({ w: 1, h: 1, seed: 0.37, clip: bclip, at: behind, rot: 2, out }), dir, bch, part, "back", cut);
       }
     };
     for (let y = 0; y <= map.height; y++)
@@ -272,6 +290,18 @@ export class World3 {
   // ── furniture + clutter (again where it changed) ────────────────────────────
   update(objects: WorldObjectDef[]) {
     this.objects = objects;
+    // a door or window came, went or moved: the walls again, with their holes
+    const sig = cutsSig(objects);
+    let rewalled = false;
+    if (sig !== this.cutSig) {
+      this.cutSig = sig;
+      this.cuts = wallCuts(objects);
+      for (const b of this.walls) this.unmount(b);
+      this.walls = [];
+      this.wallFades = [];
+      this.buildWalls();
+      rewalled = true;
+    }
     const byArea = new Map<string, { objs: WorldObjectDef[]; dress: DressItem[]; sig: string[] }>();
     const area = (k: string) => getOr(byArea, k, () => ({ objs: [], dress: [], sig: [] }));
     const tallNow = new Map<string, { o: WorldObjectDef; sig: string }>();
@@ -342,10 +372,12 @@ export class World3 {
       const one = this.drawObject(t.o);
       const built = this.mount(one.out);
       if (one.pick) built.picks = [one.pick];
-      // a wall item: the strip along its face of the wall, and the wall's thickness
-      const hang = entry(t.o.kind).wall;
-      const r = hang ? hangStrip(t.o, 0.3) : footRect(t.o);
-      if (hang) {
+      // a wall item: the strip along its face of the wall, and the wall's thickness;
+      // a window: its stretch of the wall line
+      const pane = isWindowKind(t.o.kind);
+      const hang = !!entry(t.o.kind).wall || pane;
+      const r = pane ? edgeRect(t.o) : hang ? hangStrip(t.o, 0.3) : footRect(t.o);
+      if (hang && !pane) {
         const hg = hangOf(t.o);
         if (hg.dir === "h") [r.y0, r.y1] = [Math.min(r.y0, hg.line - 0.1), Math.max(r.y1, hg.line + 0.1)];
         else [r.x0, r.x1] = [Math.min(r.x0, hg.line - 0.1), Math.max(r.x1, hg.line + 0.1)];
@@ -367,7 +399,7 @@ export class World3 {
         this.tallIds.delete(id);
         changed = true;
       }
-    if (!changed && this.floor) return;
+    if (!changed && !rewalled && this.floor) return;
     this.collect();
     this.bakeFloor();
   }
@@ -388,23 +420,27 @@ export class World3 {
 
   // one thing drawn on its own (also build mode's ghosts)
   drawObject(o: WorldObjectDef): { out: Out; top: number; tall: boolean; pick: Pick3 | null } {
-    const { door, drawItem, hasItemArt, itemSketchOpts } = this.items;
+    const { drawItem, hasItemArt, itemSketchOpts } = this.items;
     const e = entry(o.kind);
     const out = new Out();
-    if (o.kind === "door") {
+    if (isOpening(o.kind)) {
+      // a door or window in its wall (rot 3 on west edges)
       const rot = (o.rot ?? 0) % 2 === 1 ? 3 : 0;
-      const st = String(o.props?.state ?? "open");
-      const shut = (st === "closed" || st === "locked") && !o.props?.passing;
+      // open leaves (and a barn door, always: it rolls along the face) are drawn whole
+      const leaves = isDoorKind(o.kind) && doorLeaves(o.kind) > 0 && (!doorShut(o) || doorSlides(o.kind));
       // the frame stops at a post at either end (the wall beside it ends in one),
       // or its faces would lie in the post's and flicker
-      const d = doorEdge(o);
+      const edges = openingEdges(o);
+      const first = edges[0];
+      const last = edges[edges.length - 1];
+      const n = edges.length;
       const T = this.items.WALL_HALF_T;
-      const a0 = this.posts.has(`${d.x},${d.y}`) ? T : 0;
-      const a1 = this.posts.has(d.dir === "h" ? `${d.x + 1},${d.y}` : `${d.x},${d.y + 1}`) ? 1 - T : 1;
-      const clip = d.dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
-      for (const part of shut ? ["edge"] : ["edge", "leaf"]) {
-        const s = new MeshSketch({ rot, w: 1, h: 1, at: [o.x, o.y], out, clip: part === "edge" ? clip : null });
-        door(s, { ...(o.props ?? {}), _part: part });
+      const a0 = this.posts.has(`${first.x},${first.y}`) ? T : 0;
+      const a1 = this.posts.has(first.dir === "h" ? `${last.x + 1},${last.y}` : `${last.x},${last.y + 1}`) ? n - T : n;
+      const clip = first.dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
+      for (const part of leaves ? ["edge", "leaf"] : ["edge"]) {
+        const s = new MeshSketch({ rot, w: n, h: 1, at: [o.x, o.y], out, clip: part === "edge" ? clip : null });
+        drawItem(s, { kind: o.kind, id: o.id, rot, props: { ...(o.props ?? {}), _part: part } });
         s.end();
       }
     } else {
@@ -443,7 +479,8 @@ export class World3 {
       out,
       top,
       // on their own (to fade): tall furniture, and what hangs on a wall (it goes with its wall)
-      tall: o.kind !== "door" && !e.onSurface && (e.wall || top > TALL),
+      // (a window goes with its wall too; a door stays, like the wall's skirting)
+      tall: !isDoorKind(o.kind) && !e.onSurface && (e.wall || isWindowKind(o.kind) || top > TALL),
       pick: b ? { id: o.id, use: !!e.interact || hasActions(o), ...b } : null,
     };
   }
@@ -740,6 +777,14 @@ function anchorOf(o: WorldObjectDef): [number, number] {
     return [h.ax, h.ay];
   }
   return [o.x, o.y];
+}
+
+// a door's or window's stretch of its wall line, the wall's thickness deep
+function edgeRect(o: WorldObjectDef): { x0: number; y0: number; x1: number; y1: number } {
+  const n = Math.max(1, entry(o.kind).w);
+  return (o.rot ?? 0) % 2 === 0
+    ? { x0: o.x, y0: o.y - 0.1, x1: o.x + n, y1: o.y + 0.1 }
+    : { x0: o.x - 0.1, y0: o.y, x1: o.x + 0.1, y1: o.y + n };
 }
 
 function footRect(o: WorldObjectDef): { x0: number; y0: number; x1: number; y1: number } {

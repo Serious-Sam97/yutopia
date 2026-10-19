@@ -4,7 +4,7 @@ import {
   canPlace,
   carried,
   cornerNear,
-  doorEdge,
+  doorLeaves,
   type Edge,
   edgeAt,
   edgeBlocker,
@@ -20,14 +20,19 @@ import {
   hangOf,
   hangSpot,
   hostOf,
+  isDoorKind,
   isFacedWall,
   isFloor,
+  isOpening,
   isWallEdge,
-  isWindow,
   joinedFaces,
+  lockedEdge,
   type MapDef,
   NO_WALL,
   nearestEdge,
+  openingCentre,
+  openingEdges,
+  openingNear,
   otherFace,
   type Panel,
   type Point,
@@ -49,6 +54,7 @@ import {
   type WorldObjectDef,
   WQ,
   WZ_PX,
+  wallTakes,
 } from "@yutopia/shared";
 import type { SetupItem } from "@/lib/api";
 import { tr, trMaybe } from "@/lib/i18n";
@@ -242,6 +248,8 @@ export class BuildController {
         const f = this.aim.face;
         def = hangNear(def, this.flip ? { ...f, side: f.side > 0 ? -1 : 1 } : f, this.aim.along, this.aim.z);
       }
+      // a door or window in hand: into the wall it's aimed at, its middle at the pointer
+      if (this.slotting() && this.aim) def = openingNear(def, this.aim.face, this.aim.along);
       const ok = canPlace(this.map, [...rest, ...sofar], def, bodies);
       sofar.push(def);
       out.push({ def, ok });
@@ -252,6 +260,11 @@ export class BuildController {
   // One wall item in hand: it goes where the pointer meets a wall.
   private hanging(): boolean {
     return this.hand.length === 1 && !!entry(this.hand[0].def.kind).wall;
+  }
+  // One door or window in hand (shared openings.ts): it goes into the wall the
+  // pointer is at, edge by edge.
+  private slotting(): boolean {
+    return this.hand.length === 1 && isOpening(this.hand[0].def.kind);
   }
 
   // The wall face under the pointer (the first one it meets, facing it; the
@@ -264,11 +277,13 @@ export class BuildController {
     const ray = e.pointerRay();
     const through = e.lookedThrough();
     const hit = ray ? faceHit(this.map, ray, (w) => through.has(`${w.dir}${w.x},${w.y}`)) : null;
+    const kind = this.hand[0]?.def.kind ?? "";
+    const slot = isOpening(kind);
     let aim: typeof this.aim = null;
     if (hit) aim = { face: hit.face, along: hit.along, z: hit.z };
     else {
       const p = e.pointerWorld();
-      const n = faceNear(this.map, p.x, p.y);
+      const n = faceNear(this.map, p.x, p.y, slot ? (ch) => wallTakes(kind, ch) : undefined);
       if (n) aim = { face: n.face, along: n.along, z: null };
     }
     const was = this.aim;
@@ -277,7 +292,8 @@ export class BuildController {
     if (!was || was.face.dir !== aim.face.dir || was.face.line !== aim.face.line) this.flip = false;
     this.aim = aim;
     const key = (a: typeof aim) => {
-      const d = this.hand[0] ? hangNear(this.hand[0].def, a.face, a.along, a.z) : null;
+      const h = this.hand[0];
+      const d = !h ? null : slot ? openingNear(h.def, a.face, a.along) : hangNear(h.def, a.face, a.along, a.z);
       return d ? `${d.x},${d.y},${d.rot},${d.props?.wu},${d.props?.wz}` : "";
     };
     return !was || key(was) !== key(aim);
@@ -321,9 +337,14 @@ export class BuildController {
     const placed = this.placed();
     // walls between the camera and what you carry lower out of the way
     const first = placed[0]?.def;
-    if (first) e.focusAt = entry(first.kind).wall ? hangSpot(first, 0.5) : { x: first.x + 0.5, y: first.y + 0.5 };
-    // (a wall item shows exactly where it would hang: not lifted)
-    e.setGhosts(placed, this.hand.length && !this.hanging() ? LIFT : 0);
+    if (first)
+      e.focusAt = entry(first.kind).wall
+        ? hangSpot(first, 0.5)
+        : isOpening(first.kind)
+          ? openingCentre(first)
+          : { x: first.x + 0.5, y: first.y + 0.5 };
+    // (a wall item, a door or a window shows exactly where it would go: not lifted)
+    e.setGhosts(placed, this.hand.length && !this.hanging() && !this.slotting() ? LIFT : 0);
     const fits = placed.every((p) => p.ok);
     if (hud.get().build.fits !== fits) this.setBuild({ fits });
     this.syncHidden();
@@ -338,7 +359,7 @@ export class BuildController {
 
   private setHand(hand: Held[]) {
     this.hand = hand;
-    if (this.hanging()) this.aimWall();
+    if (this.hanging() || this.slotting()) this.aimWall();
     else {
       this.aim = null;
       this.flip = false;
@@ -402,6 +423,17 @@ export class BuildController {
     }
     const obj = this.engine?.getObject(id);
     if (!obj || !entry(obj.kind).buildable) return;
+    // a door or window of someone else's locked room stays where it is
+    const locked = isOpening(obj.kind)
+      ? openingEdges(obj)
+          .map((e) => lockedEdge(this.map, this.objects(), e, this.w.myUid()))
+          .find(Boolean)
+      : null;
+    if (locked) {
+      buildSound("nope");
+      toast(`${locked}.`, "warn");
+      return;
+    }
     const by = this.heldByOther(id);
     if (by) {
       buildSound("nope");
@@ -615,16 +647,19 @@ export class BuildController {
         if (fine) return turnTop(h);
         if (h.ride) return h;
         // one thing: turns where it stands (on its first tile, like The Sims)
-        if (one)
-          return entry(h.def.kind).wall || h.def.kind === "door"
+        if (one) {
+          // a door: R swings it the other way (a window has no turn)
+          if (isDoorKind(h.def.kind) && doorLeaves(h.def.kind)) return { ...h, def: swung(h.def) };
+          return entry(h.def.kind).wall || isOpening(h.def.kind)
             ? h
             : { ...h, def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 } };
+        }
         return turnAbout(h, pivot);
       });
       // a wall item: over to the wall's other side
       if (this.hanging()) this.flip = !this.flip;
       const b = hud.get().build;
-      if (b.mode === "place" && this.hand.length === 1 && !this.hand[0].origin && !this.hanging())
+      if (b.mode === "place" && this.hand.length === 1 && !this.hand[0].origin && !this.hanging() && !this.slotting())
         this.setBuild({ rot: this.hand[0].def.rot ?? 0 });
       buildSound("rotate");
       return this.drawHand();
@@ -646,7 +681,11 @@ export class BuildController {
     if (group.length) {
       // turn the group about its corner, then check it all fits
       const pivot = { x: Math.min(...group.map((o) => o.x)), y: Math.min(...group.map((o) => o.y)) };
-      if (group.length === 1 && entry(group[0].kind).wall) {
+      if (group.length === 1 && isOpening(group[0].kind)) {
+        // a door swings the other way; a window stays as it is
+        if (!isDoorKind(group[0].kind) || !doorLeaves(group[0].kind)) return;
+        defs.push(swung(group[0]));
+      } else if (group.length === 1 && entry(group[0].kind).wall) {
         // a wall item on its own goes over to the wall's other side, as near as it fits
         const turned = otherSide(this.map, rest, group[0]);
         if (!turned) {
@@ -932,7 +971,7 @@ export class BuildController {
       }
       return;
     }
-    if (this.hanging()) {
+    if (this.hanging() || this.slotting()) {
       this.anchor = { x: Math.floor(x), y: Math.floor(y) };
       if (this.aimWall()) {
         buildSound("snap");
@@ -1025,7 +1064,7 @@ export class BuildController {
       this.boxFrom = null;
       this.engine?.setRectGhost(null);
       const inBox = this.objects().filter((o) => {
-        if (!entry(o.kind).buildable || o.kind === "door") return false;
+        if (!entry(o.kind).buildable || isOpening(o.kind)) return false;
         const { w, h } = placedFootprint(o);
         return o.x < r.x + r.w && o.x + w > r.x && o.y < r.y + r.h && o.y + h > r.y;
       });
@@ -1345,7 +1384,7 @@ export class BuildController {
     this.selectHover();
   }
   // The inspector's actions, on every selected panel.
-  wallAction(act: "same" | "swap" | "window" | "remove") {
+  wallAction(act: "same" | "swap" | "remove") {
     const sel = hud.get().build.wallSel;
     if (!sel.length) return;
     const byMat = new Map<string, Panel[]>();
@@ -1367,9 +1406,7 @@ export class BuildController {
       const edges = sel.flatMap((p) => {
         const ch = edgeAt(this.map, p);
         if (!isWallEdge(ch)) return [];
-        if (act === "remove") return [{ dir: p.dir, x: p.x, y: p.y, ch: NO_WALL }];
-        if (!isFacedWall(ch)) return [];
-        return [{ dir: p.dir, x: p.x, y: p.y, ch: isWindow(ch) ? ch.toLowerCase() : ch.toUpperCase() }];
+        return act === "remove" ? [{ dir: p.dir, x: p.x, y: p.y, ch: NO_WALL }] : [];
       });
       if (edges.length) this.send("map:walls", { edges });
       if (act === "remove") this.setBuild({ wallSel: [] });
@@ -1411,7 +1448,6 @@ export class BuildController {
   private buildHover(x: number, y: number) {
     const e = this.engine;
     if (!e) return;
-    const br = this.brushNow();
     if (this.boxing()) {
       const tx = Math.floor(x);
       const ty = Math.floor(y);
@@ -1423,22 +1459,6 @@ export class BuildController {
       const list = ringEdges(r).map((q) => this.runEdge(q, false));
       e.setEdgeGhosts(list.filter((g) => !g.skip || g.why === null).map(({ e: q, ok }) => ({ e: q, ok })));
       return this.setTag(runTag(list, false, r));
-    }
-    if (br.startsWith("door")) {
-      // a door on the edge next to the pointer
-      const q = nearestEdge(x, y);
-      e.setEdgeGhosts([]);
-      const d = {
-        id: "ghost-door",
-        kind: "door",
-        x: q.x,
-        y: q.y,
-        rot: q.dir === "h" ? 0 : 1,
-        props: { state: "closed", glass: br === "door:glass" },
-      };
-      e.setGhost(d, canPlace(this.map, e.allObjects(), d));
-      e.setFaceGhosts([]);
-      return this.setTag(null);
     }
     e.setGhost(null, false);
     if (this.run) {
@@ -1477,18 +1497,15 @@ export class BuildController {
   private paintTimer: ReturnType<typeof setTimeout> | null = null;
   private dragFrom: { x: number; y: number } | null = null;
 
-  // What a wall brush puts on an edge: a material, a window in the wall that's
-  // there (plaster if none), or no wall.
-  private edgeChar(e: Edge): string {
-    const brush = this.brushNow();
-    if (brush !== "w:window") return brush.slice(2);
-    const cur = edgeAt(this.map, e);
-    return isWallEdge(cur) && /^[pwfbk]$/.test(cur) ? cur.toUpperCase() : "P";
+  // What a wall brush puts on an edge: a material, or no wall. (Doors and
+  // windows are things now: the catalog's Doors & windows.)
+  private edgeChar(_e: Edge): string {
+    return this.brushNow().slice(2);
   }
 
   private paintAt(tx: number, ty: number) {
     const br = this.brushNow();
-    if (br.startsWith("door") || br.startsWith("w:")) return;
+    if (br.startsWith("w:")) return;
     this.paintQueue.set(`${tx},${ty}`, { x: tx, y: ty, ch: br });
     if (!this.paintTimer) this.paintTimer = setTimeout(() => this.flushPaint(), 80);
   }
@@ -1510,7 +1527,6 @@ export class BuildController {
     const b = hud.get().build;
     const tx = Math.floor(x);
     const ty = Math.floor(y);
-    const br = this.brushNow();
     if (b.tool === "walls") {
       this.lastFloor = { x, y };
       if (b.wallMode === "paint") return this.paintDown();
@@ -1522,7 +1538,6 @@ export class BuildController {
         return;
       }
       if (b.wallMode === "build") {
-        if (br.startsWith("door")) return; // a click puts it in
         this.run = { from: cornerNear(x, y), press: { x, y } };
         return this.buildHover(x, y);
       }
@@ -1589,24 +1604,6 @@ export class BuildController {
     if (b.tool === "walls") {
       if (b.wallMode === "select") return this.selectClick();
       if (b.wallMode === "floors" && b.paintMode === "fill") return this.fillAt(Math.floor(x), Math.floor(y));
-      if (b.wallMode === "build" && b.brush.startsWith("door")) {
-        // a door on the edge you clicked next to (click a door to remove it)
-        const e = nearestEdge(x, y);
-        const hit = this.engine?.allObjects().find((o) => {
-          if (o.kind !== "door") return false;
-          const d = doorEdge(o);
-          return d.dir === e.dir && d.x === e.x && d.y === e.y;
-        });
-        if (hit) this.send("obj:remove", { id: hit.id });
-        else
-          this.send("obj:put", {
-            kind: "door",
-            x: e.x,
-            y: e.y,
-            rot: e.dir === "h" ? 0 : 1,
-            ...(b.brush === "door:glass" ? { props: { glass: true } } : {}),
-          });
-      }
       return;
     }
     if (b.tool === "desks") {
@@ -1682,11 +1679,11 @@ export class BuildController {
   private brushNow(): string {
     const b = hud.get().build;
     if (b.paintMode !== "erase") return b.brush;
-    return b.brush.startsWith("w:") || b.brush.startsWith("door") ? "w:." : VOID;
+    return b.brush.startsWith("w:") ? "w:." : VOID;
   }
   private boxing(): boolean {
     const b = hud.get().build;
-    return b.paintMode === "box" && !b.brush.startsWith("door");
+    return b.paintMode === "box";
   }
 
   // Box: floors fill the rectangle, walls run around it (a wall that's there
@@ -1708,21 +1705,13 @@ export class BuildController {
     for (let i = 0; i < cells.length; i += 600) this.send("map:paint", { cells: cells.slice(i, i + 600) });
   }
 
-  // Fill: floors flood the same floor up to walls and doors.
+  // Fill: floors flood the same floor up to walls (doors are in them).
   private fillAt(tx: number, ty: number) {
     const br = this.brushNow();
     if (br.startsWith("w:")) return;
     const start = tileAt(this.map, tx, ty);
     if (tx < 0 || ty < 0 || tx >= this.map.width || ty >= this.map.height || start === br) return;
-    const doors = new Set(
-      (this.engine?.allObjects() ?? [])
-        .filter((o) => o.kind === "door")
-        .map((o) => {
-          const d = doorEdge(o);
-          return `${d.dir}${d.x},${d.y}`;
-        }),
-    );
-    const blocked = (e: Edge) => doors.has(`${e.dir}${e.x},${e.y}`) || isWallEdge(edgeAt(this.map, e));
+    const blocked = (e: Edge) => isWallEdge(edgeAt(this.map, e));
     const seen = new Set([`${tx},${ty}`]);
     const queue = [{ x: tx, y: ty }];
     const cells: { x: number; y: number; ch: string }[] = [];
@@ -1789,16 +1778,21 @@ function otherSide(map: MapDef, others: WorldObjectDef[], o: WorldObjectDef): Wo
 }
 
 // A quarter turn clockwise of something held, about the pointer's tile.
+// A door swung the other way (props.swing: 1 into its own tile, −1 the other).
+function swung(o: WorldObjectDef): WorldObjectDef {
+  return { ...o, props: { ...(o.props ?? {}), swing: Number(o.props?.swing) < 0 ? 1 : -1 } };
+}
+
 function turn(h: Held): Held {
   const e = entry(h.def.kind);
-  if (e.wall || h.def.kind === "door") return h; // things on walls face the room
+  if (e.wall || isOpening(h.def.kind)) return h; // things on (and in) walls face the room
   const { h: fh } = footprint(h.def.kind, h.def.rot ?? 0);
   return { ...h, def: { ...h.def, rot: ((h.def.rot ?? 0) + 1) % 4 }, dx: 1 - h.dy - fh, dy: h.dx };
 }
 
 // The middle of what's in hand (tile offsets from the pointer's tile).
 function handMiddle(hand: Held[]): Point {
-  const solid = hand.filter((h) => !h.ride && !entry(h.def.kind).wall && h.def.kind !== "door");
+  const solid = hand.filter((h) => !h.ride && !entry(h.def.kind).wall && !isOpening(h.def.kind));
   if (!solid.length) return { x: 0.5, y: 0.5 };
   let x0 = Number.POSITIVE_INFINITY;
   let y0 = Number.POSITIVE_INFINITY;
@@ -1818,7 +1812,7 @@ function handMiddle(hand: Held[]): Point {
 // its middle turns about the point, its footprint turns with it.
 function turnAbout(h: Held, p: Point): Held {
   const e = entry(h.def.kind);
-  if (e.wall || h.def.kind === "door") return h; // things on walls face the room
+  if (e.wall || isOpening(h.def.kind)) return h; // things on (and in) walls face the room
   const { w, h: d } = footprint(h.def.kind, h.def.rot ?? 0);
   const cx = h.dx + w / 2 - p.x;
   const cy = h.dy + d / 2 - p.y;

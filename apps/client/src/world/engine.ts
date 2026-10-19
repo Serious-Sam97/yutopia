@@ -1,5 +1,6 @@
 import {
   type AvatarLayers,
+  cutsSig,
   depthOf,
   EMOTES,
   type Emote,
@@ -14,7 +15,9 @@ import {
   hangStrip,
   hasActions,
   hostOf,
+  isDoorKind,
   isFloor,
+  isOpening,
   isSocial,
   type JumpNow,
   type MapDef,
@@ -38,6 +41,7 @@ import {
   type WorldObjectDef,
   WQ,
   WZ_PX,
+  wallCuts,
   ZPX_TILE,
 } from "@yutopia/shared";
 import {
@@ -267,7 +271,7 @@ function isFloorAt(map: MapDef, x: number, y: number): boolean {
 // Solid furniture darkens the floor around it (AO) and doors get a sill.
 function affectsFloor(o: WorldObjectDef): boolean {
   const e = entry(o.kind);
-  return o.kind === "door" || (e.solid && !e.wall);
+  return isDoorKind(o.kind) || (e.solid && !e.wall && !e.opening);
 }
 
 // What a thing covers on the floor, for outlines (world tiles): its footprint,
@@ -549,11 +553,32 @@ export class WorldEngine {
     this.applyTheme();
     this.bakeFloors(true);
     for (const w of this.walls) this.unmountPart(w);
-    this.walls = wallParts(this.map).map((part) => this.mountPart(part, this.sortLayer));
+    this.mountWalls();
     this.bakeLight(true);
     this.rebuildDressing(true);
     this.applyLight();
     this.drawLabels();
+  }
+
+  // The walls, cut where doors and windows are (shared openings.ts).
+  private cutSig = "";
+  private cutsDue = false;
+  private mountWalls() {
+    const objs = [...this.objectViews.values()].map((v) => v.def);
+    this.cutSig = cutsSig(objs);
+    for (const w of this.walls) this.unmountPart(w);
+    this.walls = wallParts(this.map, wallCuts(objs)).map((part) => this.mountPart(part, this.sortLayer));
+  }
+  // A door or window came, went or moved: the walls again (once, after a batch).
+  private cutsChanged() {
+    if (this.cutsDue) return;
+    this.cutsDue = true;
+    queueMicrotask(() => {
+      this.cutsDue = false;
+      if (!this.app) return;
+      const sig = cutsSig([...this.objectViews.values()].map((v) => v.def));
+      if (sig !== this.cutSig) this.mountWalls();
+    });
   }
 
   // The map changed (builders painted walls, added rooms, resized).
@@ -596,7 +621,7 @@ export class WorldEngine {
       c.position.set(p.x, p.y - z);
       this.labelLayer.addChild(c);
     };
-    const doors = [...this.objectViews.values()].map((v) => v.def).filter((o) => o.kind === "door");
+    const doors = [...this.objectViews.values()].map((v) => v.def).filter((o) => isDoorKind(o.kind));
     for (const a of this.map.areas) {
       if (!a.ownerName && !a.key.startsWith("room-")) continue;
       const text = a.ownerName ? `${a.name.toUpperCase()} · ${a.ownerName}` : a.name.toUpperCase();
@@ -866,14 +891,17 @@ export class WorldEngine {
       view.flatReady = true;
       this.redrawFlat();
     });
-    if (o.props?.ownerName || o.kind === "chair" || o.kind === "armchair" || o.kind === "door") this.labelsDirty = true;
+    if (o.props?.ownerName || o.kind === "chair" || o.kind === "armchair" || isDoorKind(o.kind))
+      this.labelsDirty = true;
+    if (isOpening(o.kind) && (!old || old.def.x !== o.x || old.def.y !== o.y || old.def.rot !== o.rot))
+      this.cutsChanged();
     this.objectViews.set(o.id, view);
     this.hulls.delete(o.id);
     if (this.hidden.has(o.id)) this.showView(view, false);
     const moved = !old || old.def.x !== o.x || old.def.y !== o.y || old.def.rot !== o.rot;
     // feedback: a door swings as it opens or shuts, a chair wobbles as someone sits or stands
     if (old && !moved && this.animated()) {
-      const swung = o.kind === "door" && lightKey(old.def) !== lightKey(o);
+      const swung = isDoorKind(o.kind) && lightKey(old.def) !== lightKey(o);
       const sat =
         (o.kind === "chair" || o.kind === "armchair" || o.kind === "beanbag") &&
         !!old.def.props?.occupied !== !!o.props?.occupied;
@@ -907,6 +935,7 @@ export class WorldEngine {
     if (affectsLight(v.def)) this.bakeLight();
     this.dropView(v);
     this.objectViews.delete(id);
+    if (isOpening(v.def.kind)) this.cutsChanged();
     this.panels.delete(id);
     this.hulls.delete(id);
     if (redrawFlat) this.redrawFlat();

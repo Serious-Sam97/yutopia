@@ -218,6 +218,10 @@ export class MeshSketch extends Sketch {
     return this.o3.out;
   }
 
+  override get round(): boolean {
+    return true;
+  }
+
   // rotated-local tiles + iso px height → world (three axes)
   private wp(X: number, Y: number, z: number): V3 {
     return [X + this.o3.at[0], zt(z + (this.o3.lift ?? 0)), Y + this.o3.at[1]];

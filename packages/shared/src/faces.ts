@@ -1,5 +1,5 @@
 import type { WorldObjectDef } from "./catalog.ts";
-import { doorEdge } from "./grid.ts";
+import { isDoorKind, openingEdges } from "./openings.ts";
 import { faceHit, type Ray } from "./hang.ts";
 import {
   type Edge,
@@ -59,11 +59,8 @@ export function panelAt(
 export function joinedFaces(map: MapDef, objects: WorldObjectDef[], p: Panel, cap = 6000): Panel[] {
   const doors = new Set(
     objects
-      .filter((o) => o.kind === "door")
-      .map((o) => {
-        const d = doorEdge(o);
-        return `${d.dir}${d.x},${d.y}`;
-      }),
+      .filter((o) => isDoorKind(o.kind))
+      .flatMap((o) => openingEdges(o).map((d) => `${d.dir}${d.x},${d.y}`)),
   );
   const closed = (e: Edge) => isWallEdge(edgeAt(map, e)) || doors.has(`${e.dir}${e.x},${e.y}`);
   const [sx, sy] = panelTile(p);

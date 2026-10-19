@@ -1,6 +1,6 @@
 "use client";
 
-import { entry, isPrivate } from "@yutopia/shared";
+import { entry, isOpening, isPrivate } from "@yutopia/shared";
 import { type Key, useTr } from "@/lib/i18n";
 import { hud, type Person, type SideTab, useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
@@ -249,7 +249,7 @@ function RoomTab() {
   const inside = (o: { x: number; y: number }) =>
     o.x >= area.x && o.x < area.x + area.w && o.y >= area.y && o.y < area.y + area.h;
   const things = (w?.engine?.allObjects() ?? [])
-    .filter((o) => entry(o.kind).interact && o.kind !== "door" && inside(o))
+    .filter((o) => entry(o.kind).interact && !isOpening(o.kind) && inside(o))
     .slice(0, 8);
   return (
     <div className="flex-1 min-h-0 overflow-y-auto scroll-thin p-3 space-y-3">

@@ -1,11 +1,12 @@
 import type { DressKind } from "@yutopia/shared";
-import { entry, variantOf as lookOf } from "@yutopia/shared";
+import { doorShut, entry, variantOf as lookOf } from "@yutopia/shared";
 import { boardWall } from "./board";
 import { chair } from "./chair";
 import { dressing } from "./clutter";
 import { computer } from "./computer";
 import { desk } from "./desk";
-import { door, rug, standupMat } from "./door";
+import { rug, standupMat } from "./door";
+import { doorItem } from "./doors";
 import {
   cartShelf,
   console2600,
@@ -34,12 +35,13 @@ import { coffeeTable, meetingTable, reception } from "./tables";
 import { arcade, coffeeMachine, crtTerminal, cupboard, serverRack } from "./tech";
 import { acousticPanel, noticeBoard, poster, screenWall, whiteboard } from "./wall";
 import { column, post, WALL_HALF_T, type WallPart, wall } from "./walls";
+import { windowItem } from "./window";
 
 type Props = Record<string, unknown>;
 
 // The third-person view (world/tp) draws walls, doors and the rooms' clutter
 // from this chunk too (one copy of the drawings for both views).
-export { dressing, door, post, WALL_HALF_T, wall };
+export { dressing, post, WALL_HALF_T, wall };
 
 // Marks this chunk for `pnpm budget` (it loads lazily, outside the page's files).
 export const ITEM_ART_CHUNK = "yutopia-item-art";
@@ -119,15 +121,27 @@ const GENS: Record<string, ItemGen> = {
   notice_board: { draw: noticeBoard, variants: 3 },
   acoustic_panel: { draw: acousticPanel, variants: 1 },
   poster: { draw: poster, variants: 1, key: (p) => String(p.art ?? "tape") },
-  door: {
-    draw: door,
-    variants: 1,
-    key: (p) => {
-      const st = String(p.state ?? "open");
-      const shut = (st === "closed" || st === "locked") && !p.passing ? st : "open";
-      return `${shut}|${p._part ?? "edge"}|${p.glass ? "g" : ""}`;
-    },
-  },
+  // doors set into a wall (shared openings.ts; art/items/doors.ts)
+  ...Object.fromEntries(
+    ["door", "door_double", "door_studio", "door_barn", "door_saloon", "archway"].map((k) => [
+      k,
+      { draw: (s: Sketch, p: Props) => doorItem(s, k, p), variants: 1, key: doorKey(k) } satisfies ItemGen,
+    ]),
+  ),
+  // windows set into a wall (shared openings.ts)
+  ...Object.fromEntries(
+    [
+      "window",
+      "window_wide",
+      "window_tall",
+      "window_round",
+      "window_arched",
+      "window_high",
+      "window_stained",
+      "window_blinds",
+      "window_studio",
+    ].map((k) => [k, { draw: (s: Sketch) => windowItem(s, k, entry(k).w), variants: 1 } satisfies ItemGen]),
+  ),
   rug: { draw: rug, variants: 3, key: painted },
   standup_mat: { draw: standupMat, variants: 1 },
   column: { draw: column, variants: 2 },
@@ -151,6 +165,14 @@ const GENS: Record<string, ItemGen> = {
   scratch_post: { draw: scratchPost, variants: 1 },
   pet_house: { draw: petHouse, variants: 2, key: painted },
 };
+
+// What changes a door's drawing: shut or not (and how), its part and leaf, glass, which way, its paint.
+function doorKey(kind: string) {
+  return (p: Props) => {
+    const shut = p._thumb ? "thumb" : doorShut({ kind, props: p }) ? `shut-${p.state ?? ""}` : "open";
+    return `${kind}|${shut}|${p._part ?? "edge"}|${p._leaf ?? ""}|${p.glass ? "g" : ""}|${Number(p.swing) < 0 ? "-" : ""}|${painted(p)}`;
+  };
+}
 
 function decorKind(p: Props, fallback: DressKind): DressKind {
   return (typeof p.d === "string" ? p.d : fallback) as DressKind;
@@ -235,14 +257,16 @@ export function isFlatArt(kind: string): boolean {
 // ── walls (map v2) ───────────────────────────────────────────────────────────
 // One quarter `q` (0..3) of a wall on an edge, low or high part. Edge-local:
 // "h" runs along x from (0, 0), "v" along y.
-export function wallKey(dir: "h" | "v", ch: string, q: number, part: WallPart, res: number): string {
-  return `wl|${dir}|${ch}|${q}|${part}|${res}`;
+// `cut`: the hole a door or window in it makes (shared openings.ts).
+type Cut = readonly [number, number] | null | undefined;
+export function wallKey(dir: "h" | "v", ch: string, q: number, part: WallPart, res: number, cut?: Cut): string {
+  return `wl|${dir}|${ch}|${q}|${part}|${res}|${cut ? cut.join("-") : ""}`;
 }
-export function wallArt(dir: "h" | "v", ch: string, q: number, part: WallPart, res: number): ItemArt | null {
+export function wallArt(dir: "h" | "v", ch: string, q: number, part: WallPart, res: number, cut?: Cut): ItemArt | null {
   const clip =
     dir === "h" ? { x0: q / 4, x1: (q + 1) / 4, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: q / 4, y1: (q + 1) / 4 };
   const s = new Sketch({ w: 1, h: 1, clip, seed: 0.37 });
-  wall(s, dir, ch, part);
+  wall(s, dir, ch, part, undefined, cut);
   return s.finish(res);
 }
 export function postArt(height: number, part: WallPart, ch: string, res: number): ItemArt | null {

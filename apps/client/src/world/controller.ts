@@ -7,7 +7,7 @@ import {
   CONTACT,
   dirFromDelta,
   doorCentre,
-  doorRoom,
+  doorLeaves,
   EMOTES,
   entry,
   FLOORS,
@@ -19,6 +19,7 @@ import {
   hangSpot,
   hangStrip,
   hearingGain,
+  isDoorKind,
   isJump,
   isPrivate,
   isSocial,
@@ -32,6 +33,7 @@ import {
   jumpSpeed,
   jumpTimes,
   type MapDef,
+  mayLockDoor,
   moveStep,
   objectActions,
   type Point,
@@ -297,9 +299,6 @@ export class WorldController {
       onObjectClick: (id, at) => {
         const o = this.engine?.getObject(id);
         const b = hud.get().build;
-        // the door brush removes a door you click on
-        if (b.on && b.tool === "walls" && b.brush.startsWith("door") && o?.kind === "door")
-          return this.send("obj:remove", { id: o.id });
         if (b.on && o && b.tool === "walls") return; // walls/floors paint by dragging
         if (b.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
         // carrying a cable: a TV clicked is where it goes
@@ -1738,7 +1737,7 @@ export class WorldController {
       uid: this.myUid(),
       focus: !!me.focus,
       radioOn: radioOf(o).playing,
-      mayLock: (d) => me.admin || doorRoom(this.map, d)?.ownerId === this.myUid(),
+      mayLock: (d) => mayLockDoor(this.map, d, { uid: this.myUid(), admin: me.admin }),
     });
     if (!acts.length) return null;
     const e = entry(o.kind);
@@ -2644,13 +2643,14 @@ export class WorldController {
         if (!!o.props?.on !== playing) engine.upsertObject({ ...o, props: { ...(o.props ?? {}), on: playing } });
         continue;
       }
-      if (o.kind !== "door") continue;
-      // someone in the doorway: close to the middle of the door's edge
+      if (!isDoorKind(o.kind) || !doorLeaves(o.kind)) continue;
+      // someone in the doorway: close to the middle of the door's edges
       const c = doorCentre(o);
+      const half = entry(o.kind).w / 2;
       const on = (x: number, y: number) =>
         (o.rot ?? 0) % 2 === 0
-          ? Math.abs(x - c.x) < 0.5 && Math.abs(y - c.y) < 0.55
-          : Math.abs(y - c.y) < 0.5 && Math.abs(x - c.x) < 0.55;
+          ? Math.abs(x - c.x) < half && Math.abs(y - c.y) < 0.55
+          : Math.abs(y - c.y) < half && Math.abs(x - c.x) < 0.55;
       let occupied = on(this.me.x, this.me.y);
       room.state.players.forEach((p: S, sid: string) => {
         if (sid !== room.sessionId && on(p.x, p.y)) occupied = true;

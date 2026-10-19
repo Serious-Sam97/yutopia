@@ -60,6 +60,11 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
         "clock",
         "neon",
         "tv_wall",
+        // doors and windows are set into walls now (shared openings.ts)
+        "door",
+        "window",
+        "window_wide",
+        "window_tall",
       ].includes(o.kind),
     );
     const near = (x: number, y: number) => hung.some((o: any) => Math.abs(o.x - x) < 6 && Math.abs(o.y - y) < 3);
@@ -198,6 +203,10 @@ test("third person: a click high up a wall, above the horizon, hangs the thing",
       "neon",
       "tv_wall",
       "light_switch",
+      "door",
+      "window",
+      "window_wide",
+      "window_tall",
     ]);
     const hung = [...w.room.state.objects.values()].filter((o: any) => wallKinds.has(o.kind));
     const free = (x: number, y: number) => !hung.some((o: any) => Math.abs(o.x - x) < 3 && Math.abs(o.y - y) < 2);

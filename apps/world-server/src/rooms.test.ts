@@ -561,9 +561,25 @@ test("rooms + doors: an owned room with walls, locked so only its owner gets in 
   // ana can still walk out (and back in)
   await walk(ana, { x: 6.5, y: 11.5 });
   assert.ok(me(ana).y > 9, "the owner walks out");
-  // an admin can unlock in an emergency
+  // an owner's lock is theirs: not even an admin opens it, nor builds a way round it
+  const door = () => owner.room.state.objects.get("door-room-ana-s-office");
+  const toasts = owner.msgs.toast?.length ?? 0;
   owner.room.send("door:set", { id: "door-room-ana-s-office", state: "open" });
-  await waitFor(() => JSON.parse(owner.room.state.objects.get("door-room-ana-s-office").props).state === "open");
+  await waitFor(() => (owner.msgs.toast?.length ?? 0) > toasts);
+  assert.equal(JSON.parse(door().props).state, "locked", "the admin can't unlock it");
+  owner.room.send("map:walls", { edges: [{ x: 4, y: 5, dir: "v", ch: "." }] });
+  owner.room.send("obj:remove", { id: "door-room-ana-s-office" });
+  owner.room.send("map:room:remove", { key: "room-ana-s-office" });
+  await sleep(400);
+  assert.notEqual(owner.room.state.vWalls[5][4], ".", "its walls stay");
+  assert.ok(door(), "its door stays");
+  assert.ok(JSON.parse(owner.room.state.areas).some((a: { key: string }) => a.key === "room-ana-s-office"));
+  // a wall elsewhere is fine
+  owner.room.send("map:walls", { edges: [{ x: 20, y: 5, dir: "v", ch: "p" }] });
+  await waitFor(() => owner.room.state.vWalls[5][20] === "p");
+  // ana unlocks it (from anywhere): bia walks in
+  ana.room.send("door:set", { id: "door-room-ana-s-office", state: "open" });
+  await waitFor(() => JSON.parse(door().props).state === "open");
   await sleep(200);
   await walk(bia, { x: 6.5, y: 5.5 });
   assert.ok(me(bia).y < 8, "open again: bia walks in");
