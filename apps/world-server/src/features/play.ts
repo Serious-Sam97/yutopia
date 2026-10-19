@@ -1,5 +1,5 @@
 import { footprint, PIANO_RANGE, USES } from "@yutopia/shared";
-import type { SpaceRoom } from "../SpaceRoom.ts";
+import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Using things: what someone's busy with (the arcade, the piano, a drink from
@@ -8,7 +8,7 @@ import { registerFeature } from "./index.ts";
 const REACH = 2.6;
 const NOTES_PER_SECOND = 24;
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   room.on("use", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     if (!p) return;

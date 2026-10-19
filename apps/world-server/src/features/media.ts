@@ -26,8 +26,8 @@ import { config } from "../config.ts";
 import { jellyfinOn, playable, setPlaying } from "../media/jellyfin.ts";
 import { mediaKey } from "../media/key.ts";
 import { ytPlaylistTitle, ytSearchOn, ytTitle, ytVideos } from "../media/youtube.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
-import { yondra } from "../yondra.ts";
+import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Media on TVs and the radio (docs/plan/10-media.md). Nobody hosts it: the
@@ -36,13 +36,12 @@ import { registerFeature } from "./index.ts";
 // playing, watched or not, and survives restarts: each TV's state is its
 // props.media, each radio's YouTube its props.radio (features/radio.ts), saved
 // with the object — every one its own. Anyone may change it; a locked one only
-// builders.
+// admins.
 const OPS_PER_5S = 12;
 
-registerFeature((room: SpaceRoom) => {
-  const spaceId = room.spaceId;
-  const player = (c: SpaceClient) => room.state.players.get(c.sessionId);
-  const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
+registerFeature((room: WorldRoom) => {
+  const player = (c: WorldClient) => room.state.players.get(c.sessionId);
+  const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   // a TV or a radio
   const target = (id: string): WorldObjectDef | undefined => {
     const o = room.state.objects.get(id);
@@ -76,7 +75,7 @@ registerFeature((room: SpaceRoom) => {
     }
     const next = { ...d, props };
     room.state.objects.set(d.id, toSchema(next));
-    if (!config.offline) void yondra.putObject(spaceId, next).catch((e) => console.warn("[media] save", e.message));
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[media] save", e.message));
     if (isDisplay(d.kind)) track(d.id, m);
   };
 
@@ -84,7 +83,7 @@ registerFeature((room: SpaceRoom) => {
   const jfTvs = new Set<string>();
   const track = (id: string, m: MediaState | null) => {
     const ref = m?.item?.src === "jf" ? m.item.ref : null;
-    setPlaying(spaceId, id, ref);
+    setPlaying(id, ref);
     if (ref) jfTvs.add(id);
     else jfTvs.delete(id);
   };
@@ -92,7 +91,7 @@ registerFeature((room: SpaceRoom) => {
 
   // ── who may ──
   const budget = new Map<string, number[]>();
-  const may = (c: SpaceClient, m: MediaState): boolean => {
+  const may = (c: WorldClient, m: MediaState): boolean => {
     const p = player(c);
     if (!p) return false;
     const now = Date.now();
@@ -100,8 +99,8 @@ registerFeature((room: SpaceRoom) => {
     if (recent.length >= OPS_PER_5S) return false;
     recent.push(now);
     budget.set(c.sessionId, recent);
-    if (m.lock && !p.builder) {
-      warn(c, "Only builders change this one (it's locked).");
+    if (m.lock && !p.admin) {
+      warn(c, "Only an admin changes this one (it's locked).");
       return false;
     }
     return true;
@@ -145,7 +144,7 @@ registerFeature((room: SpaceRoom) => {
     const items = await resolve(msg.items, isRadio(target(id)?.kind ?? ""));
     if (!items.length) return warn(client, "That can't play here (private, removed or not allowed on other sites).");
     const by = player(client)?.name ?? "";
-    // from a YouTube playlist: onto the space's quick list (named by YouTube the first time)
+    // from a YouTube playlist: onto the world's quick list (named by YouTube the first time)
     if (typeof msg.list === "string" && YT_LIST.test(msg.list) && items.every((x) => x.src === "yt"))
       void remember(msg.list, items, by, player(client)?.uid);
     // re-read: others may have changed it while we looked things up
@@ -166,7 +165,7 @@ registerFeature((room: SpaceRoom) => {
     if (!m) return;
     const p = player(client);
     if (msg.op === "lock") {
-      if (!p?.builder) return warn(client, "Only builders lock it.");
+      if (!p?.admin) return warn(client, "Only admins lock it.");
       return write(id, { ...m, lock: !!msg.on });
     }
     if (!may(client, m)) return;
@@ -224,13 +223,13 @@ registerFeature((room: SpaceRoom) => {
     const v = Number(msg.volume);
     if (!p || !o || !isDisplay(o.kind) || !Number.isFinite(v)) return;
     const d = fromSchema(o);
-    if (cleanState(d.props?.media).lock && !p.builder)
-      return warn(client, "Only builders change this one (it's locked).");
+    if (cleanState(d.props?.media).lock && !p.admin)
+      return warn(client, "Only an admin changes this one (it's locked).");
     const volume = Math.round(Math.max(0, Math.min(1, v)) * 100) / 100;
     if (volume === tvVolume(d)) return;
     const next = { ...d, props: { ...(d.props ?? {}), volume } };
     room.state.objects.set(d.id, toSchema(next));
-    if (!config.offline) void yondra.putObject(spaceId, next).catch((e) => console.warn("[media] save", e.message));
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[media] save", e.message));
   });
 
   // A player found out how long something is (YouTube without an API key).
@@ -246,7 +245,7 @@ registerFeature((room: SpaceRoom) => {
     write(id, { ...m, item, queue });
   });
 
-  // ── the space's playlists ──
+  // ── the world's playlists ──
   const playlists = () => cleanPlaylists(JSON.parse(room.state.playlists || "[]"));
   let listsDirtyAt = 0;
   const remember = async (list: string, items: MediaItem[], by: string, byUid?: number) => {
@@ -264,7 +263,7 @@ registerFeature((room: SpaceRoom) => {
   const saveLists = () => {
     listsDirtyAt = 0;
     if (!config.offline)
-      void yondra.putPlaylists(spaceId, playlists()).catch((e) => console.warn("[media] playlists", e.message));
+      void api.putPlaylists(playlists()).catch((e) => console.warn("[media] playlists", e.message));
   };
   // rename it, pin it (for everyone), star it (my own "Mine")
   room.on("playlist:edit", (client, msg) => {
@@ -295,7 +294,7 @@ registerFeature((room: SpaceRoom) => {
 
   return {
     join(client, p) {
-      room.send(client, "media:key", { key: mediaKey(spaceId, p.uid), jf: jellyfinOn(), ytSearch: ytSearchOn() });
+      room.send(client, "media:key", { key: mediaKey(p.uid), jf: jellyfinOn(), ytSearch: ytSearchOn() });
     },
     leave(client) {
       budget.delete(client.sessionId);
@@ -330,7 +329,7 @@ registerFeature((room: SpaceRoom) => {
     },
     dispose() {
       if (listsDirtyAt) saveLists();
-      for (const id of jfTvs) setPlaying(spaceId, id, null);
+      for (const id of jfTvs) setPlaying(id, null);
     },
   };
 });

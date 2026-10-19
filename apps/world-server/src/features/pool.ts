@@ -16,9 +16,9 @@ import {
 } from "@yutopia/shared/pool-game";
 import { TABLE_REACH, TABLE_WALK_AWAY, tableAway } from "@yutopia/shared/tables";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
 import { PoolSeat, PoolTable } from "../schema.ts";
-import { yondra } from "../yondra.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Pool tables (8-ball, shared/pool.ts + pool-game.ts). Two seats — people, or
@@ -46,7 +46,7 @@ interface Mind {
   sweep: number; // his aim wandering while he thinks
 }
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const minds = new Map<string, Mind>();
   const mind = (id: string): Mind => {
     let m = minds.get(id);
@@ -65,7 +65,7 @@ registerFeature((room: SpaceRoom) => {
     const p = room.state.players.get(sid);
     return o && p ? tableAway(o, p.x, p.y) : Number.POSITIVE_INFINITY;
   };
-  const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
+  const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const seatOf = (t: PoolTable, sid: string): 0 | 1 | -1 => {
     for (const [k, s] of t.seats) if (s.sid === sid && !s.vortex) return Number(k) as 0 | 1;
     return -1;
@@ -77,7 +77,7 @@ registerFeature((room: SpaceRoom) => {
     return s ? (s.vortex ? "Vortex" : s.name) : "";
   };
   const save = async (o: ReturnType<typeof fromSchema>) => {
-    const saved = config.offline ? o : (await yondra.putObject(room.spaceId, o).catch(() => ({ object: o }))).object;
+    const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
     room.state.objects.set(saved.id, toSchema(saved));
   };
 
@@ -237,7 +237,7 @@ registerFeature((room: SpaceRoom) => {
     minds.delete(id);
   });
 
-  const myTurn = (client: SpaceClient, id: string): { t: PoolTable; g: PoolGame } | null => {
+  const myTurn = (client: WorldClient, id: string): { t: PoolTable; g: PoolGame } | null => {
     const t = room.state.pool.get(id);
     if (!t || t.phase !== "play") return null;
     const g = gameOf(t);

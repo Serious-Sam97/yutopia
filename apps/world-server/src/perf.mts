@@ -20,7 +20,7 @@ const timers: ReturnType<typeof setInterval>[] = [];
 
 for (let i = 0; i < BOTS; i++) {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
-    spaceId: 1,
+    sandbox: 1,
     token: `bot:${800000 + i}:B${i}`,
   });
   for (const t of [

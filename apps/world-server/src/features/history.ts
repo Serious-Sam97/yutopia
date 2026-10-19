@@ -1,8 +1,8 @@
 import { applyStep, diffStep, HISTORY_LIMIT, type Snapshot, STEP_LABELS, type Step, snapshot } from "@yutopia/shared";
 import { keepPlaying } from "@yutopia/shared/media";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
-import { yondra } from "../yondra.ts";
+import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Build undo/redo, per person. Every builder message opens (or extends) a step;
@@ -11,11 +11,11 @@ import { registerFeature } from "./index.ts";
 // Undo only reverts what nobody else has changed since.
 const QUIET_MS = 600;
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const stacks = new Map<number, { undo: Step[]; redo: Step[] }>();
   const open = new Map<number, { before: Snapshot; label: string; timer: ReturnType<typeof setTimeout> }>();
   const objects = () => [...room.state.objects.values()].map(fromSchema);
-  const player = (c: SpaceClient) => room.state.players.get(c.sessionId);
+  const player = (c: WorldClient) => room.state.players.get(c.sessionId);
   const stackOf = (uid: number) => {
     const s = stacks.get(uid) ?? { undo: [], redo: [] };
     stacks.set(uid, s);
@@ -72,7 +72,7 @@ registerFeature((room: SpaceRoom) => {
     room.toBuilders("build:saved", { ok: false, at: Date.now() });
   };
 
-  const travel = (client: SpaceClient, dir: "back" | "forward") => {
+  const travel = (client: WorldClient, dir: "back" | "forward") => {
     const p = player(client);
     if (!p?.builder) return;
     close(p.uid);
@@ -85,11 +85,11 @@ registerFeature((room: SpaceRoom) => {
       const live = room.state.objects.get(o.id);
       o.props = keepPlaying(o.props, live ? fromSchema(live).props : null);
       room.state.objects.set(o.id, toSchema(o));
-      if (!config.offline) yondra.putObject(room.spaceId, o).catch(persistFailed);
+      if (!config.offline) api.putObject(o).catch(persistFailed);
     }
     for (const id of res.remove) {
       room.state.objects.delete(id);
-      if (!config.offline) yondra.deleteObject(room.spaceId, id).catch(persistFailed);
+      if (!config.offline) api.deleteObject(id).catch(persistFailed);
     }
     room.rebuildGrid();
     room.rescue();

@@ -48,13 +48,13 @@ import {
 } from "@yutopia/shared";
 import { monitorsToComputers } from "@yutopia/shared/computer";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
+import { ApiError, api, type PresenceEntry } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
 import { type Feature, installFeatures } from "./features/index.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
 import { metrics } from "./metrics.ts";
-import { Player, SpaceState, WorldObject } from "./schema.ts";
-import { type PresenceEntry, YondraError, yondra } from "./yondra.ts";
+import { Player, WorldObject, WorldState } from "./schema.ts";
 
 // a jump lets a body up for this long (the longest one, falling to the floor from up high)
 const JUMP_AIR_MS = 3000;
@@ -69,20 +69,27 @@ interface ClientData {
   kicked?: boolean; // replaced by a newer tab
 }
 
-export type SpaceClient = Client<ClientData, WorldClaims>;
+export type WorldClient = Client<ClientData, WorldClaims>;
 
 const STATUSES: Status[] = ["online", "away", "dnd"];
 
-export class SpaceRoom extends Room<SpaceState> {
-  maxClients = 120;
+// The one world everybody walks in: a single room for the whole process (never a
+// second copy writing the same world), its voice in one LiveKit room.
+export class WorldRoom extends Room<WorldState> {
+  // the most people in at once; past it a join is refused (Colyseus would
+  // otherwise open a second copy of the world at maxClients)
+  static CAPACITY = 500;
+  maxClients = WorldRoom.CAPACITY + 50;
   // Reconnects (network blips, laptop sleep) keep your avatar for this long.
   static RECONNECT_SECONDS = 20;
+  // the live world (the API's pushes reach people through it, server.ts)
+  static current: WorldRoom | null = null;
+  // the API is replacing the world's data (server.ts /internal/hold): no opening it meanwhile
+  static held = false;
 
   map!: MapDef;
   grid!: Grid;
-  spaceId = 0;
-  livekitRoom = "";
-  spaceName = ""; // as Yondra calls it (the phone says where someone is)
+  readonly livekitRoom = "world";
   private features: Feature[] = [];
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   private removedUntil = new Map<number, number>();
@@ -90,7 +97,7 @@ export class SpaceRoom extends Room<SpaceState> {
   readonly mySpawns = new Map<number, { x: number; y: number }>();
   private lastPresence = "";
   // features that watch every message before it's handled (build history)
-  readonly messageTaps: ((client: SpaceClient, type: string) => void)[] = [];
+  readonly messageTaps: ((client: WorldClient, type: string) => void)[] = [];
 
   send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {
     client.send(type, msg);
@@ -100,8 +107,8 @@ export class SpaceRoom extends Room<SpaceState> {
     this.broadcast(type, msg, except ? { except } : undefined);
   }
 
-  on<K extends keyof ClientMessages>(type: K, fn: (client: SpaceClient, msg: ClientMessages[K]) => void): void {
-    this.onMessage(type, (client: SpaceClient, msg: unknown) => {
+  on<K extends keyof ClientMessages>(type: K, fn: (client: WorldClient, msg: ClientMessages[K]) => void): void {
+    this.onMessage(type, (client: WorldClient, msg: unknown) => {
       if (!msg || typeof msg !== "object") return;
       metrics.inc("messages_total");
       try {
@@ -109,20 +116,25 @@ export class SpaceRoom extends Room<SpaceState> {
         fn(client, msg as ClientMessages[K]);
       } catch (e) {
         metrics.inc("message_errors_total");
-        console.warn(`[space ${this.spaceId}] ${String(type)} failed:`, (e as Error).message);
+        console.warn(`[world] ${String(type)} failed:`, (e as Error).message);
       }
     });
   }
 
-  async onCreate(options: { spaceId: number }) {
-    this.spaceId = Number(options.spaceId);
-    this.livekitRoom = `space-${this.spaceId}`;
-    this.setState(new SpaceState());
-    this.state.spaceId = this.spaceId;
+  async onCreate() {
+    // (offline sandboxes, server.ts, may be several: the newest is "current")
+    if (WorldRoom.held) throw new Error("The world is being reset — try again in a moment");
+    if (WorldRoom.current && !config.offline) throw new Error("The world is already open");
+    WorldRoom.current = this;
+    this.setState(new WorldState());
     this.autoDispose = true;
 
-    const info = config.offline ? null : await yondra.space(this.spaceId);
-    this.spaceName = info?.name ?? `Space ${this.spaceId}`;
+    const info = config.offline
+      ? null
+      : await api.world().catch((e) => {
+          WorldRoom.current = null;
+          throw e;
+        });
     const base = getMap(info?.mapKey ?? "studio");
     const layout = info?.layout && validLayout(info.layout) ? info.layout : null;
     let objects: WorldObjectDef[] = info?.objects ?? base.objects;
@@ -143,30 +155,29 @@ export class SpaceRoom extends Room<SpaceState> {
         this.migrated = c.changed;
       }
     }
-    if (this.migrated) console.log(`[map v2] space ${this.spaceId}: converted (${this.migrated.length} objects moved)`);
+    if (this.migrated) console.log(`[map v2] the world: converted (${this.migrated.length} objects moved)`);
     this.state.mapKey = this.map.key;
     this.syncMapState();
     this.state.name = info?.name ?? "Offline studio";
-    this.state.projectId = info?.projectId ?? 0;
     if (info && !info.seeded) {
-      objects = (await yondra.seed(this.spaceId, this.map.objects)).objects;
-      // a fresh space starts on map v2: store its layout so it's never taken for an old one
-      if (!layout) void yondra.putLayout(this.spaceId, layoutFromMap(this.map)).catch(() => {});
+      objects = (await api.seed(this.map.objects)).objects;
+      // a fresh world starts on map v2: store its layout so it's never taken for an old one
+      if (!layout) void api.putLayout(layoutFromMap(this.map)).catch(() => {});
     }
     // furniture from before bare desks: what was drawn on it becomes real
     // things, once, stored before anyone can move them
     const bare = splitAll(objects);
     objects = bare.objects;
     if (bare.changed.length) {
-      console.log(`[bare] space ${this.spaceId}: ${bare.changed.length} things set out on their own`);
-      if (!config.offline) await saveAll(bare.changed, (o) => yondra.putObject(this.spaceId, o));
+      console.log(`[bare] the world: ${bare.changed.length} things set out on their own`);
+      if (!config.offline) await saveAll(bare.changed, (o) => api.putObject(o));
     }
     // monitors from before the computers (shared/computer.ts): each becomes one, once
     const pcs = monitorsToComputers(objects);
     objects = pcs.objects;
     if (pcs.changed.length) {
-      console.log(`[computers] space ${this.spaceId}: ${pcs.changed.length} monitors are computers now`);
-      if (!config.offline) await saveAll(pcs.changed, (o) => yondra.putObject(this.spaceId, o));
+      console.log(`[computers] the world: ${pcs.changed.length} monitors are computers now`);
+      if (!config.offline) await saveAll(pcs.changed, (o) => api.putObject(o));
     }
     for (const o of objects) this.state.objects.set(o.id, toSchema(o));
     this.rebuildGrid();
@@ -190,27 +201,24 @@ export class SpaceRoom extends Room<SpaceState> {
     this.clock.setInterval(() => this.pushPresence(true), 60_000);
   }
 
-  async onAuth(
-    _client: Client,
-    options: { token?: string; spaceId?: number },
-    _ctx: AuthContext,
-  ): Promise<WorldClaims> {
+  async onAuth(_client: Client, options: { token?: string }, _ctx: AuthContext): Promise<WorldClaims> {
     const claims = await this.claimsFor(options);
-    if ((this.removedUntil.get(claims.userId) ?? 0) > Date.now()) throw new Error("Removed by an owner for a while");
+    if ((this.removedUntil.get(claims.userId) ?? 0) > Date.now()) throw new Error("Removed by an admin for a while");
+    // (someone already in, opening a new tab, takes their own place)
+    const here = this.clients.some((c) => c.auth?.userId === claims.userId);
+    if (!here && this.clients.length >= WorldRoom.CAPACITY) throw new Error("The world is full right now");
     return claims;
   }
 
-  private async claimsFor(options: { token?: string; spaceId?: number }): Promise<WorldClaims> {
+  private async claimsFor(options: { token?: string }): Promise<WorldClaims> {
     const token = String(options?.token ?? "");
     if (config.offline && token.startsWith("dev:")) {
-      // offline tests only: a real (non-bot) person without Laravel
+      // offline tests only: a real (non-bot) person without the API
       const [, id, name, roles] = token.split(":");
       return {
         userId: Number(id),
         name: name || `Dev ${id}`,
         avatar: avatarFromSeed(Number(id)),
-        spaceId: this.spaceId,
-        projectId: null,
         roles: (roles || "member").split(","),
       };
     }
@@ -220,17 +228,13 @@ export class SpaceRoom extends Room<SpaceState> {
         userId: Number(id),
         name: name || `Bot ${id}`,
         avatar: avatarFromSeed(Number(id)),
-        spaceId: this.spaceId,
-        projectId: null,
         roles: ["member", "bot"],
       };
     }
-    const claims = await verifyWorldToken(token);
-    if (claims.spaceId !== this.spaceId) throw new Error("Token is for another space");
-    return claims;
+    return verifyWorldToken(token);
   }
 
-  async onJoin(client: SpaceClient, _options: unknown, claims: WorldClaims) {
+  async onJoin(client: WorldClient, _options: unknown, claims: WorldClaims) {
     // One avatar per person: a second tab takes over from the first.
     for (const other of this.clients) {
       if (other !== client && other.auth?.userId === claims.userId) {
@@ -251,21 +255,20 @@ export class SpaceRoom extends Room<SpaceState> {
     p.name = claims.name;
     p.avatar = JSON.stringify(claims.avatar);
     p.builder = claims.roles.includes("builder");
+    p.admin = claims.roles.includes("admin");
     p.bot = claims.roles.includes("bot");
 
-    // Everyone arrives at the arrival point (builders set it: build mode → Map),
-    // or at the spot they picked for themselves (features/arrival.ts).
+    // Everyone arrives at the arrival point (set in build mode → Map), or at
+    // the spot they picked for themselves (features/arrival.ts).
     // Your desk is still yours — "My desk" takes you there — but entering
-    // doesn't hand one out: a builder assigns it, or you kept it from before.
+    // doesn't hand one out: someone assigns it in build mode, or you kept it from before.
     if (!p.bot && !config.offline) {
       const seats = [...this.state.objects.values()].filter((o) => entry(o.kind).seat && safeJson(o.props).desk);
       const owned = seats.find((o) => safeJson(o.props).ownerId === claims.userId);
       const free = seats.filter((o) => safeJson(o.props).ownerId == null).map((o) => o.id);
       const [desk, mine] = await Promise.all([
-        owned
-          ? { desk: owned.id }
-          : yondra.desk(this.spaceId, claims.userId, free, false).catch(() => ({ desk: null })),
-        yondra.spawn(this.spaceId, claims.userId).catch(() => ({ spawn: undefined })),
+        owned ? { desk: owned.id } : api.desk(claims.userId, free, false).catch(() => ({ desk: null })),
+        api.spawn(claims.userId).catch(() => ({ spawn: undefined })),
       ]);
       if (desk.desk && this.state.objects.get(desk.desk)) p.desk = desk.desk;
       if (mine.spawn) this.mySpawns.set(claims.userId, mine.spawn);
@@ -282,14 +285,14 @@ export class SpaceRoom extends Room<SpaceState> {
     this.pushPresence();
   }
 
-  async onLeave(client: SpaceClient, consented: boolean) {
+  async onLeave(client: WorldClient, consented: boolean) {
     const p = this.state.players.get(client.sessionId);
     const replaced =
       client.userData?.kicked || this.clients.some((c) => c !== client && c.auth?.userId === client.auth?.userId);
     if (p && !consented && !replaced) {
       p.status = "away";
       try {
-        await this.allowReconnection(client, SpaceRoom.RECONNECT_SECONDS);
+        await this.allowReconnection(client, WorldRoom.RECONNECT_SECONDS);
         p.status = "online";
         return;
       } catch {
@@ -306,13 +309,14 @@ export class SpaceRoom extends Room<SpaceState> {
   }
 
   async onDispose() {
+    if (WorldRoom.current === this) WorldRoom.current = null;
     if (this.presenceTimer) clearTimeout(this.presenceTimer);
     // an edit still waiting on its debounce (e.g. a deploy right after a resize)
     if (this.layoutTimer) {
       clearTimeout(this.layoutTimer);
       await this.saveLayout();
     }
-    if (!config.offline) await yondra.presence(this.spaceId, []).catch(() => {});
+    if (!config.offline) await api.presence([]).catch(() => {});
     for (const f of this.features) f.dispose?.();
   }
 
@@ -374,7 +378,7 @@ export class SpaceRoom extends Room<SpaceState> {
       data(client).zMax = p.z + jumpTimes(m.k).h + 0.2;
     });
 
-    // a new look, saved in Yondra by the editor: validated, at most every 2 s
+    // a new look, saved in the API by the editor: validated, at most every 2 s
     this.on("avatar", (client, m) => {
       const p = this.state.players.get(client.sessionId);
       const ud = data(client);
@@ -397,7 +401,7 @@ export class SpaceRoom extends Room<SpaceState> {
       p.mic = !!m.mic && !p.muted;
       p.cam = !!m.cam;
       p.screen = !!m.screen;
-      // muted by an owner: their voice line may have reconnected (it sleeps
+      // muted by an admin: their voice line may have reconnected (it sleeps
       // when they're alone, a fresh connection can publish): say no again
       if (p.muted) void setCanPublish(this.livekitRoom, String(p.uid), false);
     });
@@ -471,8 +475,8 @@ export class SpaceRoom extends Room<SpaceState> {
     this.on("obj:remove", (client, m) => void this.removeObject(client, m.id));
     this.on("build:template", (client, m) => void this.applyTemplate(client, String(m.template)));
 
-    // ── moderation (project owners) ──
-    const owner = (client: SpaceClient) => this.state.players.get(client.sessionId)?.builder === true;
+    // ── moderation (admins) ──
+    const owner = (client: WorldClient) => this.state.players.get(client.sessionId)?.admin === true;
     const byUid = (uid: number) => [...this.state.players.values()].find((q) => q.uid === uid);
     this.on("mod:mute", (client, m) => {
       const target = byUid(Number(m.userId));
@@ -483,7 +487,7 @@ export class SpaceRoom extends Room<SpaceState> {
       const c = this.clients.getById(target.sid);
       if (c)
         this.send(c, "toast", {
-          text: target.muted ? "An owner muted you in this space." : "You can talk again.",
+          text: target.muted ? "An admin muted you." : "You can talk again.",
           tone: "warn",
         });
     });
@@ -492,7 +496,7 @@ export class SpaceRoom extends Room<SpaceState> {
       const me = this.state.players.get(client.sessionId);
       if (!owner(client) || !target || target.uid === me?.uid) return;
       this.removedUntil.set(target.uid, Date.now() + 10 * 60_000);
-      const c = this.clients.getById(target.sid) as SpaceClient | undefined;
+      const c = this.clients.getById(target.sid) as WorldClient | undefined;
       if (c) {
         if (c.userData) c.userData.kicked = true;
         this.send(c, "kicked", { reason: "removed" });
@@ -510,8 +514,8 @@ export class SpaceRoom extends Room<SpaceState> {
   }
 
   // Where this person arrives: their own spot while they can still get there
-  // from the space's arrival point (doors, rooms and furniture change) and may
-  // walk in (a booth someone's talking in, a room locked right now), else the space's.
+  // from the world's arrival point (doors, rooms and furniture change) and may
+  // walk in (a booth someone's talking in, a room locked right now), else the world's.
   arrivalFor(p: Player): { x: number; y: number } {
     const mine = this.mySpawns.get(p.uid);
     return mine && !this.arrivalProblem(p, mine, this.map.spawn) ? mine : this.map.spawn;
@@ -542,12 +546,12 @@ export class SpaceRoom extends Room<SpaceState> {
     if (area?.kind === "booth" && area.ownerId === p.uid && !this.state.locks.has(areaKey)) return true;
     // "someone" never means you: your last session may still be in there
     // (a reload keeps it for RECONNECT_SECONDS) — arrivals checked it before
-    // the new one was seated and bounced you to the space's arrival point.
+    // the new one was seated and bounced you to the world's arrival point.
     const inside = [...this.state.players.values()].filter((q) => q.uid !== p.uid && q.area === areaKey && !q.bot);
     return inside.length === 0 || this.state.boothGuests.has(`${areaKey}:${p.uid}`);
   }
 
-  private knock(client: SpaceClient, p: Player, areaKey: string) {
+  private knock(client: WorldClient, p: Player, areaKey: string) {
     const area = this.map.areas.find((a) => a.key === areaKey);
     if (!area) return;
     const lastKey = `knock:${areaKey}`;
@@ -616,7 +620,15 @@ export class SpaceRoom extends Room<SpaceState> {
     }
   }
 
-  // ── presence → Yondra ───────────────────────────────────────────────────────
+  // Where someone is, as the phone tells others: their room's name, or the
+  // world's in the open, in a booth or in focus mode (those stay discreet).
+  whereIs(p: Player): string {
+    const area = this.map.areas.find((a) => a.key === p.area);
+    if (!area || area.kind === "booth" || p.status === "dnd") return this.state.name;
+    return area.name;
+  }
+
+  // ── presence → the API (the phone's contacts show where people are) ───────────
   pushPresence(force = false) {
     if (config.offline) return;
     if (this.presenceTimer) clearTimeout(this.presenceTimer);
@@ -625,7 +637,7 @@ export class SpaceRoom extends Room<SpaceState> {
         .filter((p) => !p.bot)
         .map((p) => {
           const area = this.map.areas.find((a) => a.key === p.area);
-          // Booths and focus mode stay discreet in Yondra.
+          // Booths and focus mode stay discreet.
           const discreet = area?.kind === "booth" || p.status === "dnd";
           return {
             user_id: p.uid,
@@ -638,7 +650,7 @@ export class SpaceRoom extends Room<SpaceState> {
       const key = JSON.stringify(people);
       if (!force && key === this.lastPresence) return;
       this.lastPresence = key;
-      yondra.presence(this.spaceId, people).catch((e) => console.warn("[presence]", e.message));
+      api.presence(people).catch((e) => console.warn("[presence]", e.message));
     }, 500);
   }
 
@@ -657,7 +669,7 @@ export class SpaceRoom extends Room<SpaceState> {
     return g;
   }
 
-  // Objects moved by a v1 → v2 conversion that isn't in Yondra yet.
+  // Objects moved by a v1 → v2 conversion that isn't stored yet.
   private migrated: WorldObjectDef[] | null = null;
 
   // Write a conversion back: the v2 layout and the boards/doors it moved.
@@ -665,12 +677,9 @@ export class SpaceRoom extends Room<SpaceState> {
     const moved = this.migrated;
     this.migrated = null;
     if (config.offline || !moved) return;
-    void yondra
-      .putLayout(this.spaceId, layoutFromMap(this.map))
-      .catch((e) => console.warn("[map v2] layout", e.message));
-    for (const o of moved)
-      void yondra.putObject(this.spaceId, o).catch((e) => console.warn("[map v2] object", e.message));
-    console.log(`[map v2] space ${this.spaceId}: saved`);
+    void api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[map v2] layout", e.message));
+    for (const o of moved) void api.putObject(o).catch((e) => console.warn("[map v2] object", e.message));
+    console.log("[map v2] the world: saved");
   }
 
   syncMapState() {
@@ -694,7 +703,7 @@ export class SpaceRoom extends Room<SpaceState> {
     this.state.mapVersion += 1;
   }
 
-  // Apply a new map: state, grids, and (debounced) storage in Yondra.
+  // Apply a new map: state, grids, and (debounced) storage in the API.
   commitMap(next: MapDef) {
     this.map = next;
     this.syncMapState();
@@ -712,12 +721,12 @@ export class SpaceRoom extends Room<SpaceState> {
 
   private saveLayout() {
     this.layoutTimer = null;
-    return yondra
-      .putLayout(this.spaceId, layoutFromMap(this.map))
+    return api
+      .putLayout(layoutFromMap(this.map))
       .then(() => this.toBuilders("build:saved", { ok: true, at: Date.now() }))
       .catch((e) => {
-        console.warn(`[layout] space ${this.spaceId}: save failed`, e.message);
-        const rejected = e instanceof YondraError && e.status >= 400 && e.status < 500;
+        console.warn("[layout] save failed", e.message);
+        const rejected = e instanceof ApiError && e.status >= 400 && e.status < 500;
         this.toBuilders("build:saved", { ok: false, at: Date.now(), rejected });
       });
   }
@@ -747,7 +756,7 @@ export class SpaceRoom extends Room<SpaceState> {
     this.grid = Grid.from(this.map, [...this.state.objects.values()].map(fromSchema));
   }
 
-  private async putObject(client: SpaceClient, m: ClientMessages["obj:put"]) {
+  private async putObject(client: WorldClient, m: ClientMessages["obj:put"]) {
     const p = this.state.players.get(client.sessionId);
     if (!p?.builder || !isKind(m.kind) || !CATALOG[m.kind as keyof typeof CATALOG]) return;
     const e = entry(m.kind);
@@ -788,7 +797,7 @@ export class SpaceRoom extends Room<SpaceState> {
       return;
     }
     const before = existing ? fromSchema(existing) : null;
-    const saved = config.offline ? def : (await yondra.putObject(this.spaceId, def)).object;
+    const saved = config.offline ? def : (await api.putObject(def)).object;
     this.state.objects.set(id, toSchema(saved));
     if (before) await this.carryTabletops(before, saved);
     this.state.holds.delete(id);
@@ -801,7 +810,7 @@ export class SpaceRoom extends Room<SpaceState> {
     for (const t of carried(before, after, all)) {
       if (skip.has(t.id)) continue;
       this.state.objects.set(t.id, toSchema(t));
-      if (!config.offline) await yondra.putObject(this.spaceId, t).catch(() => {});
+      if (!config.offline) await api.putObject(t).catch(() => {});
     }
   }
 
@@ -814,7 +823,7 @@ export class SpaceRoom extends Room<SpaceState> {
     return this.state.holds.get(id)?.split("|").slice(1).join("|") || "Someone";
   }
 
-  private async removeObject(client: SpaceClient, id: string) {
+  private async removeObject(client: WorldClient, id: string) {
     const p = this.state.players.get(client.sessionId);
     const o = this.state.objects.get(id);
     if (!p?.builder || !o || !entry(o.kind).buildable) return;
@@ -825,7 +834,7 @@ export class SpaceRoom extends Room<SpaceState> {
     // what sits on it goes with it
     const riders = surfaceRiders(fromSchema(o), [...this.state.objects.values()].map(fromSchema));
     for (const rid of [id, ...riders]) {
-      if (!config.offline) await yondra.deleteObject(this.spaceId, rid);
+      if (!config.offline) await api.deleteObject(rid);
       this.state.objects.delete(rid);
       this.state.holds.delete(rid);
     }
@@ -836,8 +845,8 @@ export class SpaceRoom extends Room<SpaceState> {
     return canPlace(this.map, others, o, [...this.state.players.values()]);
   }
 
-  // Swap a room's furniture for a template (owners only). Persisted object by object.
-  private async applyTemplate(client: SpaceClient, key: string) {
+  // Swap a room's furniture for a template (builders). Persisted object by object.
+  private async applyTemplate(client: WorldClient, key: string) {
     const p = this.state.players.get(client.sessionId);
     const t = TEMPLATES.find((x) => x.key === key);
     if (!p?.builder || !t) return;
@@ -859,14 +868,26 @@ export class SpaceRoom extends Room<SpaceState> {
     }
     for (const o of remove) {
       this.state.objects.delete(o.id);
-      if (!config.offline) await yondra.deleteObject(this.spaceId, o.id).catch(() => {});
+      if (!config.offline) await api.deleteObject(o.id).catch(() => {});
     }
     for (const o of add) {
-      const saved = config.offline ? o : (await yondra.putObject(this.spaceId, o).catch(() => ({ object: o }))).object;
+      const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
       this.state.objects.set(saved.id, toSchema(saved));
     }
     this.rebuildGrid();
     this.broadcastMsg("toast", { text: `${p.name} switched the room to "${t.name}".` });
+  }
+
+  // A live phone event from the API (a text, a read, typing…) for whoever of
+  // that person's sessions is here; nobody here: dropped (they fetch on open).
+  relay(uid: number, event: Record<string, unknown>): boolean {
+    let sent = false;
+    for (const c of this.clients) {
+      if (c.auth?.userId !== uid) continue;
+      this.send(c, "phone:live", { event });
+      sent = true;
+    }
+    return sent;
   }
 
   facing(from: { x: number; y: number }, to: { x: number; y: number }) {
@@ -968,7 +989,7 @@ export function seatFacing(rot: number): number {
 }
 
 // Messages only arrive after onJoin has filled userData.
-export function data(client: SpaceClient): ClientData {
+export function data(client: WorldClient): ClientData {
   if (!client.userData) throw new Error("client not joined");
   return client.userData;
 }

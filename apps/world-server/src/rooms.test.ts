@@ -31,9 +31,9 @@ interface Person {
   msgs: Record<string, unknown[]>;
 }
 
-async function person(id: number, spaceId: number, roles = "member"): Promise<Person> {
+async function person(id: number, sandbox: number, roles = "member"): Promise<Person> {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
-    spaceId,
+    sandbox,
     token: `dev:${id}:P${id}:${roles}`,
   });
   rooms.push(room);
@@ -58,6 +58,7 @@ async function person(id: number, spaceId: number, roles = "member"): Promise<Pe
     "computer:ok",
     "computer:off",
     "call:ring",
+    "phone:live",
     "call:update",
     "call:join",
   ])
@@ -250,18 +251,6 @@ test("standup: everyone in the ring gets a turn, then it ends", async () => {
   await waitFor(() => (b.msgs.toast?.length ?? 0) > 0);
 });
 
-test("poker: only people at the table can put a card on it", async () => {
-  const s = ++space;
-  const outside = await person(16, s);
-  outside.room.send("poker:open", { cardId: 5, boardId: 2, title: "Nope" });
-  await sleep(200);
-  assert.equal(outside.room.state.poker.open, false);
-  await walk(outside, { x: 36.5, y: 3.5 });
-  outside.room.send("poker:open", { cardId: 5, boardId: 2, title: "Card" });
-  await waitFor(() => outside.room.state.poker.open === true);
-  assert.equal(outside.room.state.poker.cardId, 5);
-});
-
 test("radio: each radio its own station, with a start time", async () => {
   const s = ++space;
   const a = await person(17, s);
@@ -395,13 +384,15 @@ test("build: owners can switch the tracking room to a template", async () => {
   await waitFor(() => !!member.room.state.objects.get("seat-3-5-a"));
 });
 
-test("moderation: owners mute, lock rooms and remove people; members can't", async () => {
+test("moderation: admins mute, lock rooms and remove people; builders and members can't", async () => {
   const s = ++space;
-  const owner = await person(25, s, "member,builder");
-  const guest = await person(26, s);
+  const owner = await person(25, s, "member,builder,admin");
+  const guest = await person(26, s, "member,builder");
+  assert.equal(me(owner).admin, true);
+  assert.equal(me(guest).admin, false);
   guest.room.send("mod:mute", { userId: 25, muted: true });
   await sleep(200);
-  assert.equal(me(owner).muted, false, "members can't mute");
+  assert.equal(me(owner).muted, false, "builders can't mute");
   owner.room.send("mod:mute", { userId: 26, muted: true });
   await waitFor(() => me(guest).muted === true);
   guest.room.send("media", { mic: true, cam: false, screen: false });
@@ -521,7 +512,7 @@ test("build undo/redo: per person, a drag is one step, others' later edits are k
 
 test("rooms + doors: an owned room with walls, locked so only its owner gets in or out", async () => {
   const s = ++space;
-  const owner = await person(29, s, "member,builder"); // project owner = builder
+  const owner = await person(29, s, "member,builder,admin"); // an admin
   const ana = await person(30, s); // room owner
   const bia = await person(31, s);
   owner.room.send("map:new", { width: 32, height: 24 });
@@ -570,7 +561,7 @@ test("rooms + doors: an owned room with walls, locked so only its owner gets in 
   // ana can still walk out (and back in)
   await walk(ana, { x: 6.5, y: 11.5 });
   assert.ok(me(ana).y > 9, "the owner walks out");
-  // a project owner can unlock in an emergency
+  // an admin can unlock in an emergency
   owner.room.send("door:set", { id: "door-room-ana-s-office", state: "open" });
   await waitFor(() => JSON.parse(owner.room.state.objects.get("door-room-ana-s-office").props).state === "open");
   await sleep(200);
@@ -1567,4 +1558,91 @@ test("the phone: calls ring across spaces, answer, the line, hang up; declined, 
   // a photo: the flash, rate-limited
   caio.room.send("phone:shot", {});
   await waitFor(() => (ana.room.state.players.get(caio.room.sessionId)?.shotAt ?? 0) > 0);
+});
+
+// The API's live phone events (apps/api Push) reach the person through the world.
+test("phone pushes from the API: signed, delivered to that person only", async () => {
+  // (imported here: a static import would read the config before YUTOPIA_OFFLINE is set)
+  const { signInternal } = await import("./api.ts");
+  const s = ++space;
+  const ana = await person(41, s);
+  const bia = await person(42, s);
+  const push = (body: unknown, opts: { ts?: string; path?: string; sig?: string } = {}) => {
+    const raw = JSON.stringify(body);
+    const ts = opts.ts ?? Math.floor(Date.now() / 1000).toString();
+    const sig = opts.sig ?? signInternal(ts, "POST", opts.path ?? "/internal/push", raw);
+    return fetch(`http://localhost:${PORT}/internal/push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Yutopia-Timestamp": ts, "X-Yutopia-Signature": sig },
+      body: raw,
+    });
+  };
+  const event = { type: "message", message: { id: 7, body: "hi" } };
+  const ok = await push({
+    events: [
+      { uid: 41, event },
+      { uid: 999, event },
+      { uid: "x", event },
+    ],
+  });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { ok: true, delivered: 1 });
+  await waitFor(() => (ana.msgs["phone:live"]?.length ?? 0) === 1);
+  assert.deepEqual(ana.msgs["phone:live"]?.[0], { event });
+  await sleep(100);
+  assert.equal(bia.msgs["phone:live"]?.length ?? 0, 0, "not to anyone else");
+
+  // unsigned, a signature for another path, an old one, not JSON-shaped
+  assert.equal((await push({ events: [] }, { sig: "0".repeat(64) })).status, 401);
+  assert.equal((await push({ events: [] }, { path: "/internal/other" })).status, 401);
+  assert.equal((await push({ events: [] }, { ts: String(Math.floor(Date.now() / 1000) - 400) })).status, 401);
+  assert.equal((await push({ nope: true })).status, 422);
+  assert.equal((await fetch(`http://localhost:${PORT}/internal/push`)).status, 405);
+});
+
+test("one world, with a cap: past it a join is refused, a second tab still takes its own place", async () => {
+  const { WorldRoom } = await import("./WorldRoom.ts");
+  const was = WorldRoom.CAPACITY;
+  WorldRoom.CAPACITY = 2;
+  try {
+    const s = ++space;
+    const a = await person(51, s);
+    const b = await person(52, s);
+    assert.equal(a.room.roomId, b.room.roomId);
+    await assert.rejects(() => person(53, s), /full/);
+    const again = await person(52, s); // Bia's new tab: allowed, the old one goes
+    assert.equal(again.room.roomId, a.room.roomId);
+    await waitFor(() => (b.msgs.kicked?.length ?? 0) > 0);
+  } finally {
+    WorldRoom.CAPACITY = was;
+  }
+});
+
+// The API replacing the world's data (apps/api WorldSnapshot): the room closes and
+// stays shut until it's let go, then opens from the new data on the next join.
+test("hold: the API closes the world, nobody gets in, then it opens again", async () => {
+  const { signInternal } = await import("./api.ts");
+  const hold = (on: boolean) => {
+    const raw = JSON.stringify({ hold: on });
+    const ts = Math.floor(Date.now() / 1000).toString();
+    return fetch(`http://localhost:${PORT}/internal/hold`, {
+      method: "POST",
+      headers: { "X-Yutopia-Timestamp": ts, "X-Yutopia-Signature": signInternal(ts, "POST", "/internal/hold", raw) },
+      body: raw,
+    });
+  };
+  const s = ++space;
+  const a = await person(61, s);
+  const first = a.room.roomId;
+  const res = await hold(true);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, held: true, closed: true });
+  await waitFor(() => a.room.connection.isOpen === false);
+  await assert.rejects(() => person(62, ++space), /being reset/);
+  assert.equal((await (await hold(false)).json()).held, false);
+  const b = await person(63, s);
+  assert.notEqual(b.room.roomId, first, "a fresh room");
+  // unsigned: no
+  const bad = await fetch(`http://localhost:${PORT}/internal/hold`, { method: "POST", body: '{"hold":true}' });
+  assert.equal(bad.status, 401);
 });

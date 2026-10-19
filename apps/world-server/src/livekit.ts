@@ -1,7 +1,7 @@
 import { RoomServiceClient } from "livekit-server-sdk";
 import { config } from "./config.ts";
 
-// Who hears whom is decided here (see SpaceRoom.hearingPass) and enforced by
+// Who hears whom is decided here (see WorldRoom.hearingPass) and enforced by
 // LiveKit through each publisher's track permissions. The server API is only
 // used to drop a person's media connection when they really leave.
 const client =

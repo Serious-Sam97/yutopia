@@ -29,9 +29,9 @@ interface Person {
   room: Room;
   msgs: Record<string, unknown[]>;
 }
-async function person(id: number, spaceId: number, roles = "member"): Promise<Person> {
+async function person(id: number, sandbox: number, roles = "member"): Promise<Person> {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
-    spaceId,
+    sandbox,
     token: `dev:${id}:P${id}:${roles}`,
   });
   rooms.push(room);

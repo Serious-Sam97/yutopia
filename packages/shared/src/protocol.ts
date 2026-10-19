@@ -1,4 +1,4 @@
-// Messages between client and world-server (Colyseus room "space").
+// Messages between client and world-server (Colyseus room "world": the one world).
 
 import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
@@ -7,7 +7,7 @@ import type { MediaItem } from "./media.ts";
 import type { Command, Move, Needs, Species, Toy, Trick } from "./pets.ts";
 import type { CallEnd, CallInfo } from "./phone.ts";
 
-export const ROOM_NAME = "space";
+export const ROOM_NAME = "world";
 export const TICK_HZ = 20;
 export const HEARING_HZ = 4;
 
@@ -22,7 +22,6 @@ export const WANTS = ["bone", "drop", "zzz", "ball", "look", "house", "paws", "n
 export type Want = (typeof WANTS)[number];
 
 export interface JoinOptions {
-  spaceId: number;
   token: string;
 }
 
@@ -97,7 +96,7 @@ export interface ClientMessages {
   admit: { userId: number; area: string };
   follow: { userId: number | null };
   teleport: { to: "desk" | "spawn" | { userId: number } | { x: number; y: number } };
-  // where I arrive in this space (a tile I can walk to); null: the space's arrival point
+  // where I arrive (a tile I can walk to); null: the world's arrival point
   "spawn:mine": { at: { x: number; y: number } | null };
   "obj:put": {
     id?: string;
@@ -173,9 +172,9 @@ export interface ClientMessages {
   // media on a TV or a radio (its object id), shared/media.ts:
   // play now / next / at the end of the queue (several: a playlist), the
   // controls, and a length a player found out (YouTube items arrive without one)
-  // `list`: the YouTube playlist they came from (remembered for the space's quick list)
+  // `list`: the YouTube playlist they came from (remembered for the world's quick list)
   "media:play": { id: string; items: MediaItem[]; mode: "now" | "next" | "end"; list?: string };
-  "playlist:forget": { list: string }; // off the space's quick list
+  "playlist:forget": { list: string }; // off the world's quick list
   "playlist:edit": { list: string; title?: string; pinned?: boolean; star?: boolean }; // rename, pin, my star
   "media:ctl": {
     id: string;
@@ -189,8 +188,6 @@ export interface ClientMessages {
   "standup:start": Record<string, never>;
   "standup:next": Record<string, never>;
   "standup:stop": Record<string, never>;
-  "poker:open": { cardId: number; boardId: number; title: string };
-  "poker:close": Record<string, never>;
   "wb:get": { objectId: string };
   "wb:op": { objectId: string; op: WbOp };
   "arcade:score": { score: number };
@@ -237,7 +234,7 @@ export interface ClientMessages {
 // server → client
 export interface ServerMessages {
   snap: { x: number; y: number; z?: number };
-  // my own arrival point here (on join and after I change it); null: the space's
+  // my own arrival point here (on join and after I change it); null: the world's
   "spawn:mine": { at: { x: number; y: number } | null };
   // whom I may listen to (session ids) and who may listen to me (user ids)
   hear: { ids: string[]; heardBy: string[] };
@@ -276,6 +273,9 @@ export interface ServerMessages {
   // calls: one ringing for me, how a call I'm in stands (ringing, live, ended
   // and why), and the line itself once I'm in (its own LiveKit room)
   "call:ring": CallInfo;
+  // a phone event from the API, relayed (a text, read, typing, react, thread): the
+  // same shape the phone got from Yondra's private channel
+  "phone:live": { event: Record<string, unknown> };
   "call:update": CallInfo & { phase: "ringing" | "live" | "ended"; end?: CallEnd };
   "call:join": { id: string; url: string; token: string; room: string };
 }

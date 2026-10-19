@@ -1,5 +1,5 @@
 import { ANIM, answerOf, CONTACT, isHeld, isSocial, SOCIAL_MS, SOCIAL_REACH, socialFor } from "@yutopia/shared";
-import type { SpaceRoom } from "../SpaceRoom.ts";
+import type { WorldRoom } from "../WorldRoom.ts";
 import type { Player } from "../schema.ts";
 import { registerFeature } from "./index.ts";
 
@@ -17,7 +17,7 @@ const NAMES: Record<string, string> = {
   give: "handed you their drink",
 };
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const last = new Map<string, number>();
   const end = (p: Player) => {
     p.act = "";

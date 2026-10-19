@@ -89,7 +89,7 @@ export async function handleMedia(req: IncomingMessage, res: ServerResponse): Pr
           return true;
         }
         const tail = path.join("/") + url.search;
-        const r = await stream(who.spaceId, decodeURIComponent(tv), item, tail);
+        const r = await stream(decodeURIComponent(tv), item, tail);
         if (!r) {
           sendJson(res, 410, { error: "not on that TV now" });
           return true;

@@ -20,6 +20,7 @@ export class Player extends Schema {
   @type("boolean") speaking = false;
   @type("string") desk = "";
   @type("boolean") builder = false;
+  @type("boolean") admin = false; // mutes, kicks, locks (everyone builds)
   @type("boolean") bot = false;
   @type("boolean") muted = false; // by an owner: LiveKit publish permission revoked
   @type("string") held = ""; // what they carry (shared/held.ts), "" for nothing
@@ -74,15 +75,6 @@ export class Standup extends Schema {
   @type("uint8") turn = 0;
   @type("float64") turnStartedAt = 0;
   @type("uint16") turnSeconds = 90;
-  @type("string") by = "";
-}
-
-// The card on the poker table. Votes live in Yondra's planning session.
-export class Poker extends Schema {
-  @type("boolean") open = false;
-  @type("number") cardId = 0;
-  @type("number") boardId = 0;
-  @type("string") title = "";
   @type("string") by = "";
 }
 
@@ -205,7 +197,7 @@ export class Computer extends Schema {
 }
 
 // Someone's pet (features/pets.ts, rules in shared/pets.ts): where it is and
-// what it's doing, its needs and growth. The record lives in Yondra; this is
+// what it's doing, its needs and growth. The record lives in the API; this is
 // what everyone in the room sees.
 export class Pet extends Schema {
   @type("string") id = ""; // the record's id
@@ -288,12 +280,10 @@ export class Toy extends Schema {
   @type("uint16") dur = 0;
 }
 
-export class SpaceState extends Schema {
-  @type("number") spaceId = 0;
+export class WorldState extends Schema {
   @type("string") name = "";
   @type("string") mapKey = "studio";
-  @type("number") projectId = 0;
-  // the map itself (per-space layout): tiles rows, rooms as JSON, arrival point
+  // the map itself (the world's layout): tiles rows, rooms as JSON, arrival point
   @type("uint16") width = 0;
   @type("uint16") height = 0;
   @type(["string"]) tiles = new ArraySchema<string>();
@@ -312,7 +302,6 @@ export class SpaceState extends Schema {
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();
   @type(Standup) standup = new Standup();
-  @type(Poker) poker = new Poker();
   @type({ map: "string" }) boothGuests = new MapSchema<string>();
   @type({ map: "string" }) locks = new MapSchema<string>(); // area → who locked it
   @type({ map: "string" }) holds = new MapSchema<string>(); // object id → "uid|name" of the builder holding it

@@ -89,13 +89,13 @@ import {
   XP,
 } from "@yutopia/shared/pets";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
 import { Pet, PetBattle, type Player, Toy as ToyState } from "../schema.ts";
-import { yondra } from "../yondra.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Pets (docs/plan/13-pets.md, rules in shared/pets.ts). A pet is its owner's
-// (a record in Yondra), walks in with them and leaves with them. Here it
+// (a record in the API), walks in with them and leaves with them. Here it
 // lives: follows, stays, explores, sleeps when tired (in its bed if it finds
 // one), eats and drinks from bowls, answers commands, plays with toys, learns
 // tricks, makes its sounds, and battles other pets. Its needs settle with
@@ -228,16 +228,16 @@ interface Run {
   echo?: { mood: PetMood; at: number }; // a parrot about to repeat a sound
 }
 
-// Offline (tests, no Yondra): records kept here.
+// Offline (tests, no API): records kept here.
 const offlinePets = new Map<number, PetRecord[]>();
 let offlineId = 1;
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const runs = new Map<string, Run>();
   const records = new Map<string, PetRecord>();
   const owners = () => room.state.players;
 
-  const client = (sid: string) => room.clients.getById(sid) as SpaceClient | undefined;
+  const client = (sid: string) => room.clients.getById(sid) as WorldClient | undefined;
   const toast = (sid: string, text: string, tone: "info" | "warn" = "info") => {
     const c = client(sid);
     if (c) room.send(c, "toast", { text, tone });
@@ -303,7 +303,7 @@ registerFeature((room: SpaceRoom) => {
     }
   };
   const owner = (pet: Pet) => owners().get(pet.sid);
-  const mine = (c: SpaceClient, id: unknown): Pet | null => {
+  const mine = (c: WorldClient, id: unknown): Pet | null => {
     const pet = room.state.pets.get(String(id ?? ""));
     return pet && pet.sid === c.sessionId && pet.alive ? pet : null;
   };
@@ -368,14 +368,14 @@ registerFeature((room: SpaceRoom) => {
   const objects = () => [...room.state.objects.values()].map(fromSchema);
   const portions = (o: WorldObjectDef) => Number(o.props?.portions ?? 0);
   const saveObject = async (o: WorldObjectDef) => {
-    const saved = config.offline ? o : (await yondra.putObject(room.spaceId, o).catch(() => ({ object: o }))).object;
+    const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
     room.state.objects.set(saved.id, toSchema(saved));
   };
 
   // ── the record ────────────────────────────────────────────────────────────
   const load = async (uid: number): Promise<PetRecord[]> => {
     if (config.offline) return offlinePets.get(uid) ?? [];
-    return (await yondra.pets(uid)).pets;
+    return (await api.pets(uid)).pets;
   };
   const create = async (uid: number, rec: Omit<PetRecord, "id">): Promise<PetRecord> => {
     if (config.offline) {
@@ -383,7 +383,7 @@ registerFeature((room: SpaceRoom) => {
       offlinePets.set(uid, [...(offlinePets.get(uid) ?? []), pet]);
       return pet;
     }
-    return (await yondra.createPet(uid, rec)).pet;
+    return (await api.createPet(uid, rec)).pet;
   };
   const patchOf = (pet: Pet, now: number): Partial<PetRecord> => ({
     traits: runs.get(pet.id)?.traits,
@@ -411,7 +411,7 @@ registerFeature((room: SpaceRoom) => {
     const rec = records.get(pet.id);
     if (rec) Object.assign(rec, patch);
     if (config.offline) return;
-    await yondra
+    await api
       .savePet(pet.uid, Number(pet.id), patch)
       .catch((e) => console.warn("[pets] save", (e as Error).message));
   };
@@ -423,7 +423,7 @@ registerFeature((room: SpaceRoom) => {
       );
       return;
     }
-    await yondra.deletePet(uid, id).catch(() => {});
+    await api.deletePet(uid, id).catch(() => {});
   };
 
   // A pet into the room, by its owner.
@@ -522,7 +522,7 @@ registerFeature((room: SpaceRoom) => {
   };
 
   // ── joining and leaving ──────────────────────────────────────────────────
-  const bring = async (c: SpaceClient, p: Player) => {
+  const bring = async (c: WorldClient, p: Player) => {
     const now = Date.now();
     let recs: PetRecord[];
     try {
@@ -1770,7 +1770,7 @@ registerFeature((room: SpaceRoom) => {
   };
 
   // ── exploring ─────────────────────────────────────────────────────────────
-  // Off round the whole space on its own: over to the room it has been in
+  // Off round the whole world on its own: over to the room it has been in
   // least lately, a sniff at two or three things there (or a corner of it),
   // then on to the next, until it's called back. Booths and the standup ring
   // stay private.

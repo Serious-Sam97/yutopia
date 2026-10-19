@@ -2,12 +2,12 @@
 // swap width and height. `wall` objects hang on a wall face, anywhere along and
 // up it (hang.ts), and never block. `seat` tiles are walkable and make the avatar sit.
 
+// (board walls, the meeting table and the arcade cabinet had Yondra's boards,
+// planning poker and arcade behind them; they're decor until the per-office
+// Yondra integration, docs/plan/24-standalone.md §9)
 export type Interaction =
-  | "board"
   | "whiteboard"
   | "radio"
-  | "arcade"
-  | "poker"
   | "standup"
   | "screen"
   | "notice"
@@ -58,7 +58,7 @@ export interface CatalogEntry {
 export const CATALOG = {
   desk: { label: "Desk", w: 2, h: 1, solid: true, buildable: true, variants: 4, look: 0, surface: 25 },
   chair: { label: "Chair", w: 1, h: 1, solid: false, seat: true, buildable: true, variants: 4, paint: true },
-  board_wall: { label: "Board wall", w: 3, h: 1, solid: false, wall: true, interact: "board", buildable: true },
+  board_wall: { label: "Board wall", w: 3, h: 1, solid: false, wall: true, buildable: true },
   screen_wall: { label: "Big screen", w: 4, h: 1, solid: false, wall: true, interact: "screen", buildable: true },
   whiteboard: { label: "Whiteboard", w: 2, h: 1, solid: false, wall: true, interact: "whiteboard", buildable: true },
   notice_board: {
@@ -91,7 +91,6 @@ export const CATALOG = {
     w: 6,
     h: 2,
     solid: true,
-    interact: "poker",
     buildable: true,
     surface: 25,
   },
@@ -138,7 +137,7 @@ export const CATALOG = {
     paint: true,
   },
   rug: { label: "Rug", w: 4, h: 3, solid: false, buildable: true, variants: 3, look: 0, paint: true },
-  arcade: { label: "Arcade cabinet", w: 1, h: 1, solid: true, interact: "arcade", buildable: true },
+  arcade: { label: "Arcade cabinet", w: 1, h: 1, solid: true, buildable: true },
   radio: {
     label: "Lo-fi radio",
     w: 1,

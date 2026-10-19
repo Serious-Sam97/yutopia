@@ -25,30 +25,30 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom, safeJson, toSchema } from "../SpaceRoom.ts";
-import { yondra } from "../yondra.ts";
+import { fromSchema, type WorldClient, type WorldRoom, safeJson, toSchema } from "../WorldRoom.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Builders edit the map itself: paint floors (tiles) and walls (tile edges), draw rooms (with an owner),
 // resize or start blank, move the arrival point, assign desks. Doors: anyone
-// opens/closes; the room's owner (or a builder) locks. The shared rules
+// opens/closes; the room's owner (or an admin) locks. The shared rules
 // (packages/shared/src/map-edit.ts) decide what's allowed.
 // What switches on and off: floor lamps and the desk lamps on desks.
 const isLamp = (o: WorldObjectDef) => o.kind === "lamp" || (o.kind === "tabletop" && o.props?.d === "desklamp");
 
-registerFeature((room: SpaceRoom) => {
-  const builder = (c: SpaceClient) => room.state.players.get(c.sessionId)?.builder === true;
+registerFeature((room: WorldRoom) => {
+  const builder = (c: WorldClient) => room.state.players.get(c.sessionId)?.builder === true;
   const objects = (): WorldObjectDef[] => [...room.state.objects.values()].map(fromSchema);
   const bodies = () => [...room.state.players.values()].map((p) => ({ x: p.x, y: p.y }));
-  const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
+  const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
 
   const save = async (o: WorldObjectDef) => {
-    const saved = config.offline ? o : (await yondra.putObject(room.spaceId, o).catch(() => ({ object: o }))).object;
+    const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
     room.state.objects.set(saved.id, toSchema(saved));
   };
   const drop = async (id: string) => {
     room.state.objects.delete(id);
-    if (!config.offline) await yondra.deleteObject(room.spaceId, id).catch(() => {});
+    if (!config.offline) await api.deleteObject(id).catch(() => {});
   };
   const mat = (m: unknown): WallMat | undefined =>
     typeof m === "string" && Object.hasOwn(WALL_MATS, m) ? (m as WallMat) : undefined;
@@ -292,14 +292,14 @@ registerFeature((room: SpaceRoom) => {
     const owner = area?.ownerId ?? null;
     const c = doorCentre(def);
     const near = Math.hypot(p.x - c.x, p.y - c.y) <= 2.5;
-    const mayLock = p.uid === owner || p.builder;
+    const mayLock = p.uid === owner || p.admin;
     if (m.state === "locked" || current === "locked") {
       if (!mayLock)
         return warn(
           client,
           owner
             ? `Only ${area?.ownerName ?? "the room's owner"} can lock or unlock this door.`
-            : "Only a project owner can lock this door.",
+            : "Only an admin can lock this door.",
         );
     } else if (!near) return;
     void save({ ...def, props: { ...(def.props ?? {}), state: m.state } }).then(() => room.rebuildGrid());

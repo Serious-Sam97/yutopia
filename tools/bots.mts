@@ -1,6 +1,6 @@
-// Bot swarm: N fake people wandering the real space (needs YUTOPIA_ALLOW_BOTS=1
+// Bot swarm: N fake people wandering the real world (needs YUTOPIA_ALLOW_BOTS=1
 // on the world-server). Usage:
-//   pnpm tsx tools/bots.mts --space 1 --count 45 [--url ws://localhost:2567] [--seconds 120] [--chatty]
+//   pnpm tsx tools/bots.mts --count 45 [--url ws://localhost:2567] [--seconds 120] [--chatty]
 import {
   ANIM,
   avatarFromSeed,
@@ -18,7 +18,6 @@ const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
   return i > 0 ? process.argv[i + 1] : d;
 };
-const SPACE = Number(arg("space", "1"));
 const COUNT = Number(arg("count", "45"));
 const URL = arg("url", "ws://localhost:2567");
 const SECONDS = Number(arg("seconds", "120"));
@@ -28,7 +27,6 @@ const map = getMap("studio");
 async function bot(i: number) {
   const id = 900000 + i;
   const room = await new Client(URL).joinOrCreate(ROOM_NAME, {
-    spaceId: SPACE,
     token: `bot:${id}:Bot ${String(i + 1).padStart(2, "0")}`,
   });
   await new Promise<void>((r) => (room.state?.players ? r() : room.onStateChange.once(() => r())));
@@ -107,7 +105,7 @@ for (let i = 0; i < COUNT; i++) {
   stops.push(await bot(i));
   await new Promise((r) => setTimeout(r, 40));
 }
-console.log(`[bots] ${COUNT} bots wandering space ${SPACE} for ${SECONDS}s`);
+console.log(`[bots] ${COUNT} bots wandering the world for ${SECONDS}s`);
 setTimeout(async () => {
   await Promise.all(stops.map((s) => s().catch(() => {})));
   console.log("[bots] done");

@@ -22,9 +22,9 @@ after(async () => {
   await server.gracefullyShutdown(false);
 });
 
-async function join(id: number, spaceId = 1) {
+async function join(id: number, sandbox = 1) {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
-    spaceId,
+    sandbox,
     token: `bot:${id}:Bot${id}`,
   });
   rooms.push(room);
@@ -43,7 +43,7 @@ async function waitFor(fn: () => boolean, ms = 3000) {
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const me = (room: Room): any => room.state.players.get(room.sessionId);
 
-test("two people join the same space and see each other; other spaces are separate", async () => {
+test("two people join the world and see each other; offline sandboxes are separate", async () => {
   const a = await join(1);
   const b = await join(2);
   const c = await join(3, 2);

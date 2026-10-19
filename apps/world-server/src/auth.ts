@@ -6,24 +6,20 @@ export interface WorldClaims {
   userId: number;
   name: string;
   avatar: AvatarLayers;
-  spaceId: number;
-  projectId: number | null;
-  roles: string[];
+  roles: string[]; // member, builder (everyone), admin (moderation), bot
 }
 
-// Verifies the short-lived world token minted by Laravel (YutopiaTokens::world).
+// Verifies the short-lived world token minted by Yutopia's API (apps/api Tokens::world).
 export async function verifyWorldToken(token: string): Promise<WorldClaims> {
   const { payload } = await jwtVerify(token, new TextEncoder().encode(config.worldSecret()), {
     audience: "yutopia-world",
-    issuer: "yondra",
+    issuer: "yutopia",
     algorithms: ["HS256"],
   });
   return {
     userId: Number(payload.sub),
     name: String(payload.name ?? "Someone"),
     avatar: parseAvatar(payload.avatar),
-    spaceId: Number(payload.space_id),
-    projectId: payload.project_id == null ? null : Number(payload.project_id),
     roles: Array.isArray(payload.roles) ? payload.roles.map(String) : [],
   };
 }

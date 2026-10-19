@@ -12,9 +12,9 @@ import {
   slotTrackOf,
 } from "@yutopia/shared/slotcar";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
 import { type SlotRace as Race, SlotCar, SlotRace } from "../schema.ts";
-import { yondra } from "../yondra.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Slot-car tracks: up to four racers take a lane, one starts the race (five red
@@ -37,7 +37,7 @@ interface Clock {
   seenAt: Map<string, number>; // lane → when its last report came
 }
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const clocks = new Map<string, Clock>();
   const clock = (id: string): Clock => {
     let c = clocks.get(id);
@@ -57,7 +57,7 @@ registerFeature((room: SpaceRoom) => {
     return { track: slotTrackOf(o ? fromSchema(o).props : null), diff: slotDiffOf(race.diff) };
   };
   const save = async (o: ReturnType<typeof fromSchema>) => {
-    const saved = config.offline ? o : (await yondra.putObject(room.spaceId, o).catch(() => ({ object: o }))).object;
+    const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
     room.state.objects.set(saved.id, toSchema(saved));
   };
   // how far someone is from the table's edge
@@ -71,7 +71,7 @@ registerFeature((room: SpaceRoom) => {
     return Math.hypot(p.x - cx, p.y - cy);
   };
   const laneOf = (race: SlotRace, sid: string) => [...race.cars.entries()].find(([, c]) => c.sid === sid)?.[0];
-  const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
+  const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const lobby = (id: string, race: SlotRace) => {
     race.phase = "lobby";
     race.lights = 0;

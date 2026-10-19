@@ -87,9 +87,9 @@ interface Person {
   room: Room;
   msgs: Record<string, unknown[]>;
 }
-async function person(id: number, spaceId: number, roles = "member"): Promise<Person> {
+async function person(id: number, sandbox: number, roles = "member"): Promise<Person> {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
-    spaceId,
+    sandbox,
     token: `dev:${id}:P${id}:${roles}`,
   });
   rooms.push(room);
@@ -134,7 +134,7 @@ const yt = (ref: string, dur = 0) => ({ src: "yt" as const, ref, title: ref, dur
 
 test("media: a TV's timeline — play, everyone sees it, pause / seek / queue / repeat, lock", async () => {
   const space = 501;
-  const ana = await person(1, space, "member,builder");
+  const ana = await person(1, space, "member,builder,admin");
   const bia = await person(2, space);
   await placeTv(ana, "tv-a");
   ana.room.send("media:play", { id: "tv-a", items: [yt("aaaaaaaaaaa", 2), yt("bbbbbbbbbbb", 100)], mode: "now" });
@@ -170,7 +170,7 @@ test("media: a TV's timeline — play, everyone sees it, pause / seek / queue / 
   await waitFor(() => mediaOf(ana, "tv-a")?.queue[0].ref === "ccccccccccc");
   bia.room.send("media:ctl", { id: "tv-a", op: "remove", index: 1 });
   await waitFor(() => mediaOf(ana, "tv-a")?.queue.length === 1);
-  // only builders lock; then only builders change it
+  // only admins lock; then only admins change it
   bia.room.send("media:ctl", { id: "tv-a", op: "lock", on: true });
   await sleep(200);
   assert.equal(mediaOf(ana, "tv-a")?.lock, false);

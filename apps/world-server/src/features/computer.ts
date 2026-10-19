@@ -12,9 +12,9 @@ import {
   SHUTDOWN_MS,
 } from "@yutopia/shared/computer";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom } from "../SpaceRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { Computer } from "../schema.ts";
-import { yondra } from "../yondra.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // The studio's computers (docs/plan/19-vortexos.md, shared/computer.ts). One
@@ -27,21 +27,17 @@ const PHASES_PER_SECOND = 4;
 // Vortex wrote VortexOS (the lore): a boot near him gets a public remark, now and then
 const VORTEX_HEARS = 7;
 const VORTEX_EVERY_MS = 90_000;
-const Y04_TEXT =
-  "the computer on the desk asked for a network password. it already knew yours. it has been waiting since 1989. (fragment)";
-
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const computers = room.state.computers;
   const obj = (id: unknown) => {
     const o = room.state.objects.get(String(id ?? ""));
     return o && isComputer(o.kind) ? fromSchema(o) : undefined;
   };
-  const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
+  const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const clientOf = (sid: string) => room.clients.find((c) => c.sessionId === sid);
   const offAt = new Map<string, number>(); // shut down: dark at
   const budget = new Map<string, { n: number; at: number }>();
   let vortexSaidAt = 0;
-  const signedIn = new Set<number>(); // who got Y04's chance this run (Yondra keeps it once anyway)
 
   // Vortex near a computer that boots: one of his VortexOS lines, for everyone near
   const vortexHears = (o: { x: number; y: number }) => {
@@ -50,8 +46,8 @@ registerFeature((room: SpaceRoom) => {
     if (!npc || config.offline || now - vortexSaidAt < VORTEX_EVERY_MS) return;
     if (Math.hypot(npc.x - o.x, npc.y - o.y) > VORTEX_HEARS) return;
     vortexSaidAt = now;
-    void yondra
-      .vortexLine(room.spaceId, { event: "vortexos", user_id: null })
+    void api
+      .vortexLine({ event: "vortexos", user_id: null })
       .then((res) => {
         if (!res?.line) return;
         npc.mood = res.mood ?? "smug";
@@ -60,19 +56,6 @@ registerFeature((room: SpaceRoom) => {
       })
       .catch(() => {});
   };
-  // someone signed in to VortexOS here for real (the OS told us): fragment Y04
-  const grantY04 = (uid: number, sid: string) => {
-    if (config.offline || !uid || signedIn.has(uid)) return;
-    signedIn.add(uid);
-    void yondra
-      .grantFragment(room.spaceId, "Y04", [uid])
-      .then(({ granted }) => {
-        const c = clientOf(sid);
-        if (c && granted.includes(uid)) room.send(c, "toast", { text: Y04_TEXT, tone: "vortex" });
-      })
-      .catch(() => signedIn.delete(uid));
-  };
-
   const shutDown = (id: string) => {
     const c = computers.get(id);
     if (!c || c.phase === "shutdown") return;
@@ -142,7 +125,6 @@ registerFeature((room: SpaceRoom) => {
     if (isEra(m.era)) c.era = m.era;
     if (m.app !== undefined) c.app = cleanLabel(m.app);
     if (m.user !== undefined) c.user = cleanLabel(m.user, 24);
-    if (c.phase === "desktop" && c.user) grantY04(c.uid, c.sid);
   });
 
   room.on("computer:leave", (client, m: ClientMessages["computer:leave"]) => {

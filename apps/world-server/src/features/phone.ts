@@ -11,22 +11,22 @@ import {
 } from "@yutopia/shared/phone";
 import { AccessToken } from "livekit-server-sdk";
 import { config } from "../config.ts";
-import type { SpaceClient, SpaceRoom } from "../SpaceRoom.ts";
+import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import type { Player } from "../schema.ts";
-import { yondra } from "../yondra.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // The phone (docs/plan/21-cellphone.md), the world's half of it: what a phone
 // is doing in someone's hand (everyone sees it), its case and ringtone, a
 // photo's flash — and calls. A call is its own LiveKit room ("call-<id>"), so it
-// reaches anyone in Yutopia, in any space, through booths and private rooms;
-// this process rings people, keeps who's on the line and mints their tokens.
-// Texts don't come through here: Yondra keeps them and pushes them (phone chunk).
+// reaches anyone in the world, through booths and private rooms; this process
+// rings people, keeps who's on the line and mints their tokens. Texts don't come
+// through here: the API keeps them and pushes them through us (server.ts → phone:live).
 
-// Everyone in Yutopia right now, across every space this process runs.
+// Everyone in Yutopia right now.
 interface Line {
-  room: SpaceRoom;
-  client: SpaceClient;
+  room: WorldRoom;
+  client: WorldClient;
 }
 const hub = new Map<number, Line>();
 
@@ -108,7 +108,7 @@ function ringingCount(c: Call) {
 }
 
 // The call is over: everyone's phone goes back to the pocket, and the thread
-// gets a line about it (Yondra: Recents and "Missed call").
+// gets a line about it (the API: Recents and "Missed call").
 function end(c: Call, why: CallEnd) {
   if (c.ended) return;
   c.ended = true;
@@ -122,7 +122,7 @@ function end(c: Call, why: CallEnd) {
   update(c, "ended", why);
   calls.delete(c.id);
   if (!config.offline)
-    void yondra
+    void api
       .phoneCall({
         from: c.from,
         to: [...c.members.keys()].filter((u) => u !== c.from),
@@ -159,7 +159,7 @@ function ring(c: Call, uid: number) {
     uid,
     name: x.p.name,
     avatar: x.p.avatar,
-    space: x.line.room.spaceName,
+    space: x.line.room.whereIs(x.p), // where they are (the field keeps its old name)
     state: "ringing",
   });
   c.ringUntil.set(uid, Date.now() + RING_MS);
@@ -168,8 +168,8 @@ function ring(c: Call, uid: number) {
   tell(uid, "call:ring", info(c));
 }
 
-registerFeature((room: SpaceRoom) => {
-  const me = (client: SpaceClient) => room.state.players.get(client.sessionId);
+registerFeature((room: WorldRoom) => {
+  const me = (client: WorldClient) => room.state.players.get(client.sessionId);
 
   room.on("phone:state", (client, m) => {
     const p = me(client);
@@ -219,7 +219,7 @@ registerFeature((room: SpaceRoom) => {
       from: p.uid,
       video: !!m?.video,
       members: new Map([
-        [p.uid, { uid: p.uid, name: p.name, avatar: p.avatar, space: room.spaceName, state: "in" as const }],
+        [p.uid, { uid: p.uid, name: p.name, avatar: p.avatar, space: room.whereIs(p), state: "in" as const }],
       ]),
       startedAt: 0,
       ringUntil: new Map(),

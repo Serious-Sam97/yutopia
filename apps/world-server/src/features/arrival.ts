@@ -1,15 +1,15 @@
 import { config } from "../config.ts";
-import type { SpaceRoom } from "../SpaceRoom.ts";
-import { yondra } from "../yondra.ts";
+import type { WorldRoom } from "../WorldRoom.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Your own arrival point: anyone can pick a tile they can walk to (from where
-// they stand) and arrive there next time, instead of at the space's arrival
-// point — your office or booth included. Stored in Yondra per space and person;
-// checked again on every arrival (SpaceRoom.arrivalFor), so a spot walled off
-// later, or a booth someone's talking in, falls back to the space's.
+// they stand) and arrive there next time, instead of at the world's arrival
+// point — your office or booth included. Stored in the API per person; checked
+// again on every arrival (WorldRoom.arrivalFor), so a spot walled off later, or
+// a booth someone's talking in, falls back to the world's.
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const last = new Map<string, number>();
   const tell = (sid: string, uid: number) => {
     const c = room.clients.getById(sid);
@@ -37,11 +37,11 @@ registerFeature((room: SpaceRoom) => {
     } else room.mySpawns.delete(p.uid);
     tell(client.sessionId, p.uid);
     room.send(client, "toast", {
-      text: at ? "You'll arrive here from now on." : "You'll arrive at the space's arrival point again.",
+      text: at ? "You'll arrive here from now on." : "You'll arrive at the world's arrival point again.",
     });
     if (!config.offline)
-      void yondra.putSpawn(room.spaceId, p.uid, at).catch((e) => {
-        console.warn(`[space ${room.spaceId}] arrival point not saved:`, (e as Error).message);
+      void api.putSpawn(p.uid, at).catch((e) => {
+        console.warn("[arrival] point not saved:", (e as Error).message);
         const c = room.clients.getById(p.sid);
         if (c) room.send(c, "toast", { text: "Couldn't save your arrival point — try again.", tone: "warn" });
       });

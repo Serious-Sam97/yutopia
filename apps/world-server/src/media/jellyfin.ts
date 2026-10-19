@@ -185,7 +185,7 @@ const PROFILE = {
 };
 
 interface Session {
-  key: string; // "<space>:<tv>:<item>"
+  key: string; // "<tv>:<item>"
   device: string;
   item: string;
   base: string; // /videos/<item>/
@@ -197,25 +197,25 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 // what each TV plays now (the media feature keeps this up to date)
-const playing = new Map<string, string>(); // "<space>:<tv>" → item id
+const playing = new Map<string, string>(); // TV id → item id
 
 // (stops at a quote: subtitle URIs sit inside URI="…" attributes)
 const stripKey = (s: string) => s.replace(/([?&])(ApiKey|api_key)=[^&\s"]*(&?)/gi, (_m, a, _k, b) => (b ? a : ""));
 
-export function setPlaying(spaceId: number, tv: string, item: string | null) {
-  const k = `${spaceId}:${tv}`;
+export function setPlaying(tv: string, item: string | null) {
+  const k = tv;
   const was = playing.get(k);
   if (was === item) return;
   if (item) playing.set(k, item);
   else playing.delete(k);
   if (was) void close(`${k}:${was}`);
 }
-export function isPlaying(spaceId: number, tv: string, item: string): boolean {
-  return playing.get(`${spaceId}:${tv}`) === item;
+export function isPlaying(tv: string, item: string): boolean {
+  return playing.get(tv) === item;
 }
 
-function open(spaceId: number, tv: string, item: string): Session {
-  const key = `${spaceId}:${tv}:${item}`;
+function open(tv: string, item: string): Session {
+  const key = `${tv}:${item}`;
   const had = sessions.get(key);
   if (had) {
     had.lastUsed = Date.now();
@@ -223,7 +223,7 @@ function open(spaceId: number, tv: string, item: string): Session {
   }
   const s: Session = {
     key,
-    device: `yutopia-${spaceId}-${tv}`.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80),
+    device: `yutopia-${tv}`.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80),
     item,
     base: `/videos/${item}/`,
     master: "",
@@ -320,13 +320,12 @@ function segment(s: Session, rest: string): Promise<Buffer> {
 
 // What the HTTP route asks: a playlist or a segment of a TV's stream.
 export async function stream(
-  spaceId: number,
   tv: string,
   item: string,
   rest: string,
 ): Promise<{ body: Buffer | string; type: string } | null> {
-  if (!isPlaying(spaceId, tv, item)) return null;
-  const s = open(spaceId, tv, item);
+  if (!isPlaying(tv, item)) return null;
+  const s = open(tv, item);
   await s.ready;
   s.lastUsed = Date.now();
   if (rest === "master.m3u8") {

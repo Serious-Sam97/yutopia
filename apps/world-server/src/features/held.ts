@@ -1,5 +1,5 @@
 import { entry, footprint, HELD, type HeldKind, heldState, isHeld } from "@yutopia/shared";
-import type { SpaceRoom } from "../SpaceRoom.ts";
+import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Things people carry (shared/held.ts): taken from what hands them out — a mug
@@ -8,7 +8,7 @@ import { registerFeature } from "./index.ts";
 // down). One thing at a time; taking another swaps it.
 const REACH = 2.2; // tiles from the thing's footprint
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   room.on("item:take", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     const o = room.state.objects.get(String(m?.id ?? ""));

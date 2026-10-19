@@ -23,9 +23,9 @@ import {
 } from "@yutopia/shared/pong";
 import { TABLE_REACH, TABLE_WALK_AWAY, tableAway } from "@yutopia/shared/tables";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
 import { PongSeat, PongTable } from "../schema.ts";
-import { yondra } from "../yondra.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Ping-pong tables. A match between two seats — people, or Vortex at a level
@@ -67,7 +67,7 @@ const toBall = (a: number[]): PongBall => ({
   wz: a[8],
 });
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const refs = new Map<string, Ref>();
   const ref = (id: string): Ref => {
     let r = refs.get(id);
@@ -94,7 +94,7 @@ registerFeature((room: SpaceRoom) => {
     const p = room.state.players.get(sid);
     return o && p ? tableAway(o, p.x, p.y) : Number.POSITIVE_INFINITY;
   };
-  const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
+  const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const seatOf = (t: PongTable, sid: string): 0 | 1 | -1 => {
     for (const [k, s] of t.seats) if (s.sid === sid && !s.vortex) return Number(k) as 0 | 1;
     return -1;
@@ -112,7 +112,7 @@ registerFeature((room: SpaceRoom) => {
     }
   };
   const save = async (o: ReturnType<typeof fromSchema>) => {
-    const saved = config.offline ? o : (await yondra.putObject(room.spaceId, o).catch(() => ({ object: o }))).object;
+    const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
     room.state.objects.set(saved.id, toSchema(saved));
   };
   const record = (id: string, winner: string, loser: string, how: string) => {

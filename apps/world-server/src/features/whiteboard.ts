@@ -1,13 +1,13 @@
 import { WB_H, WB_MAX_ITEMS, WB_MAX_POINTS, WB_W, type WbItem, type WbOp } from "@yutopia/shared";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceRoom, safeJson, toSchema } from "../SpaceRoom.ts";
-import { yondra } from "../yondra.ts";
+import { fromSchema, type WorldRoom, safeJson, toSchema } from "../WorldRoom.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Shared whiteboards: ops in, ops out. The scene lives in memory and is saved
-// into the object's props in Laravel (debounced), so it survives restarts and
+// into the object's props in the API (debounced), so it survives restarts and
 // the in-world whiteboard shows a live preview.
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const scenes = new Map<string, WbItem[]>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -32,7 +32,7 @@ registerFeature((room: SpaceRoom) => {
         const def = fromSchema(o);
         def.props = { ...(def.props ?? {}), scene: items };
         try {
-          const saved = config.offline ? def : (await yondra.putObject(room.spaceId, def)).object;
+          const saved = config.offline ? def : (await api.putObject(def)).object;
           room.state.objects.set(id, toSchema(saved));
         } catch (e) {
           console.warn("[whiteboard] save failed", (e as Error).message);

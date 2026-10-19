@@ -18,22 +18,22 @@ import { builtinGame } from "@yutopia/shared/library";
 import { MEDIA_INPUT, tvInput } from "@yutopia/shared/media";
 import { AccessToken } from "livekit-server-sdk";
 import { config } from "../config.ts";
-import { fromSchema, type SpaceClient, type SpaceRoom, toSchema } from "../SpaceRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
 import { GameConsole } from "../schema.ts";
-import { yondra } from "../yondra.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // The game room (docs/plan/09-game-room.md). Consoles are plugged into a TV by
 // a cable (props.tv, a few tiles long at most), a cartridge sits in them
 // (props.cart …). Turning one on makes you its host: the game runs in your
 // browser and your TV goes out to everyone (a LiveKit participant of its own,
-// with a token minted here: picture for the whole space, sound for whoever's in
+// with a token minted here: picture for the whole world, sound for whoever's in
 // earshot of the TV). Others take pad 2; their buttons come through here to
 // the host. If the host goes, the game pauses until someone at it carries on.
 const WALK_AWAY = PAD_REACH + 1.5;
 const PADS_PER_SECOND = 90;
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const consoles = room.state.consoles;
   const obj = (id: string) => {
     const o = room.state.objects.get(id);
@@ -49,14 +49,14 @@ registerFeature((room: SpaceRoom) => {
     if (!p) return Number.POSITIVE_INFINITY;
     return gap({ x: p.x, y: p.y, w: 0, h: 0 }, rect(o));
   };
-  const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
+  const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const save = async (o: WorldObjectDef) => {
-    const saved = config.offline ? o : (await yondra.putObject(room.spaceId, o).catch(() => ({ object: o }))).object;
+    const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
     room.state.objects.set(saved.id, toSchema(saved));
   };
   const nameOf = (sid: string) => room.state.players.get(sid)?.name ?? "";
   const clientOf = (sid: string) => room.clients.find((c) => c.sessionId === sid);
-  const consoleAt = (c: SpaceClient, id: unknown) => {
+  const consoleAt = (c: WorldClient, id: unknown) => {
     const o = obj(String(id ?? ""));
     if (!o || !isConsole(o.kind)) return null;
     if (away(c.sessionId, o) > PAD_REACH) {
@@ -146,7 +146,7 @@ registerFeature((room: SpaceRoom) => {
     if (!GAME_ID.test(id)) return;
     let game: { system: string; title: string; color: string } | undefined = builtinGame(id);
     if (!game && id.startsWith("u:") && !config.offline)
-      game = (await yondra.game(room.spaceId, Number(id.slice(2))).catch(() => null))?.game;
+      game = (await api.game(Number(id.slice(2))).catch(() => null))?.game;
     if (!game) return warn(client, `That ${what} isn't ${disc ? "in the rack" : "on the shelf"}.`);
     if (game.system !== CONSOLES[o.kind]) return warn(client, `That ${what} doesn't fit this console.`);
     const props = { ...rest, cart: id, cartColor: game.color, cartTitle: game.title.slice(0, 60) };
@@ -156,7 +156,7 @@ registerFeature((room: SpaceRoom) => {
   // A game runs in its host's browser, one at a time: starting another pauses
   // the one I run (saved as my tab lets it go; anyone at it can carry on), as
   // walking away from it would.
-  const pauseMine = (client: SpaceClient) => {
+  const pauseMine = (client: WorldClient) => {
     const sid = client.sessionId;
     for (const c of consoles.values()) {
       if (c.host !== sid) continue;
@@ -182,7 +182,7 @@ registerFeature((room: SpaceRoom) => {
     if (typeof o.props?.cart !== "string")
       return warn(client, `Put a ${isDiscSystem(CONSOLES[o.kind]) ? "disc" : "cartridge"} in first.`);
     if ([...consoles.values()].filter((c) => c.host && c.host !== client.sessionId).length >= MAX_LIVE_TVS)
-      return warn(client, "Too many TVs are on in this space right now.");
+      return warn(client, "Too many TVs are on right now.");
     pauseMine(client);
     const c = new GameConsole();
     c.game = o.props.cart;
@@ -341,7 +341,7 @@ registerFeature((room: SpaceRoom) => {
         }
         if (!c.host) continue;
         c.since = Date.now();
-        // the picture for everyone in the space, the sound for whoever's in earshot of the TV
+        // the picture for everyone in the world, the sound for whoever's in earshot of the TV
         const { w, h } = footprint(tv.kind, tv.rot ?? 0);
         const speaker = { x: tv.x + w / 2, y: tv.y + h / 2, dnd: false };
         const video: string[] = [];

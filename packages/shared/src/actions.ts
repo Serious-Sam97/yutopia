@@ -29,7 +29,6 @@ export type ObjectAction =
   | "work"
   | "focus"
   | "unfocus"
-  | "openCard"
   | "fillFood"
   | "fillWater"
   | "takeBall"
@@ -42,9 +41,8 @@ export type ObjectAction =
 export interface ActionContext {
   uid: number;
   focus: boolean; // I'm focusing (at my desk, headphones on)
-  mayLock: (o: WorldObjectDef) => boolean; // the room's owner or a builder
+  mayLock: (o: WorldObjectDef) => boolean; // the room's owner or an admin
   radioOn: boolean;
-  task: { ticket: string } | null; // my current Yondra card, if any
 }
 
 // Things that hand out a drink, and things you sit on.
@@ -58,7 +56,6 @@ export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectActi
   if (o.kind === "desk" && props.ownerId === ctx.uid) {
     // my desk: sit down to work, with focus on or off
     out.push(ctx.focus ? "unfocus" : "focus", "work");
-    if (ctx.task) out.push("openCard");
   }
   switch (e.interact) {
     case "coffee":
@@ -72,9 +69,6 @@ export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectActi
       break;
     case "piano":
       out.push("play", "tune");
-      break;
-    case "arcade":
-      out.push("play");
       break;
     case "slotcar":
       out.push("race");

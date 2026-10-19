@@ -1,14 +1,14 @@
 import { ANIM, areaAt, dirFromDelta, findPath, type Point } from "@yutopia/shared";
 import { isRadio } from "@yutopia/shared/media";
 import { config } from "../config.ts";
-import type { SpaceClient, SpaceRoom } from "../SpaceRoom.ts";
+import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import { Npc, type Player } from "../schema.ts";
-import { yondra } from "../yondra.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Vortex lives in the building (Fita 6). He wanders, stalks people, dances when
 // the radio is on, sleeps in the server room at night. His lines come from
-// Laravel (same soul/persona as in Yondra). Rules from the voice guide:
+// the API (curated, apps/api Vortex). Rules from the voice guide:
 //  · public lines never name anyone; personal lines go only to that person
 //  · he keeps out of booths and the standup ring (he walks into any room whose
 //    door isn't locked — a closed door swings for him too), and goes quiet
@@ -34,7 +34,7 @@ const OFFLINE_LINES = ["the tape hisses. nobody listens. classic.", "i'm not wan
 
 type Mode = "idle" | "wander" | "stalk" | "dance" | "sleep";
 
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const npc = new Npc();
   npc.id = "vortex";
   npc.kind = "vortex";
@@ -67,13 +67,13 @@ registerFeature((room: SpaceRoom) => {
     return true;
   };
 
-  const say = async (event: string, userId?: number, client?: SpaceClient) => {
+  const say = async (event: string, userId?: number, client?: WorldClient) => {
     if (busy) return;
     busy = true;
     try {
       const res = config.offline
         ? { line: OFFLINE_LINES[Math.floor(Math.random() * OFFLINE_LINES.length)], mood: "smug", personal: false }
-        : await yondra.vortexLine(room.spaceId, { event, user_id: userId ?? null });
+        : await api.vortexLine({ event, user_id: userId ?? null });
       if (!res?.line) return;
       npc.mood = res.mood ?? "smug";
       if (client && userId) {
@@ -90,7 +90,7 @@ registerFeature((room: SpaceRoom) => {
     }
   };
 
-  const clientOf = (p: Player) => room.clients.getById(p.sid) as SpaceClient | undefined;
+  const clientOf = (p: Player) => room.clients.getById(p.sid) as WorldClient | undefined;
 
   room.on("vortex:poke", (client) => {
     const p = room.state.players.get(client.sessionId);
@@ -104,30 +104,6 @@ registerFeature((room: SpaceRoom) => {
     npc.mood = "glitch";
     npc.d = dirFromDelta(p.x - npc.x, p.y - npc.y);
     void say("poke", p.uid, client);
-    // two people at the terminal: the pencil (fragment Y03)
-    if (atTerminal && !config.offline) {
-      const inRoom = humans().filter((q) => q.area === p.area);
-      if (inRoom.length >= 2) {
-        void yondra
-          .grantFragment(
-            room.spaceId,
-            "Y03",
-            inRoom.map((q) => q.uid),
-          )
-          .then(({ granted }) => {
-            for (const q of inRoom) {
-              if (!granted.includes(q.uid)) continue;
-              const c = clientOf(q);
-              if (c)
-                room.send(c, "toast", {
-                  text: 'the screen shows a pencil, turning in the reel. a voice: "not yet." (fragment)',
-                  tone: "vortex",
-                });
-            }
-          })
-          .catch(() => {});
-      }
-    }
   });
 
   const pickMode = (now: number) => {

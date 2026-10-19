@@ -1,9 +1,9 @@
-import type { SpaceRoom } from "../SpaceRoom.ts";
+import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Daily standup in the Standup Corner: everyone standing in the ring gets a turn
 // (shuffled), each with a timer; the turn moves on by itself when time is up.
-registerFeature((room: SpaceRoom) => {
+registerFeature((room: WorldRoom) => {
   const st = () => room.state.standup;
   const areaKey = room.map.areas.find((a) => a.kind === "standup")?.key ?? "standup";
   const inRing = () => [...room.state.players.values()].filter((p) => p.area === areaKey && !p.bot);

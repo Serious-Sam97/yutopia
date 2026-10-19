@@ -11,8 +11,8 @@ import {
 } from "@yutopia/shared";
 import { keepPlaying } from "@yutopia/shared/media";
 import { config } from "../config.ts";
-import { cleanProps, fromSchema, type SpaceClient, type SpaceRoom, surfaceRiders, toSchema } from "../SpaceRoom.ts";
-import { yondra } from "../yondra.ts";
+import { cleanProps, fromSchema, type WorldClient, type WorldRoom, surfaceRiders, toSchema } from "../WorldRoom.ts";
+import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Build mode, Sims-style: a builder's hand (what they're holding, so nobody
@@ -21,14 +21,14 @@ import { registerFeature } from "./index.ts";
 const MAX_BATCH = 60;
 const HOLD_MS = 120_000; // a forgotten hand lets go after two minutes
 
-registerFeature((room: SpaceRoom) => {
-  const builder = (c: SpaceClient) => {
+registerFeature((room: WorldRoom) => {
+  const builder = (c: WorldClient) => {
     const p = room.state.players.get(c.sessionId);
     return p?.builder ? p : null;
   };
   const heldAt = new Map<string, number>(); // id → when it was picked up
   const objects = () => [...room.state.objects.values()].map(fromSchema);
-  const warn = (c: SpaceClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
+  const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const release = (uid: number) => {
     for (const [id, h] of room.state.holds.entries())
       if (Number(h.split("|")[0]) === uid) {
@@ -99,7 +99,7 @@ registerFeature((room: SpaceRoom) => {
     }
     const before = new Map(objects().map((o) => [o.id, o]));
     for (const def of next) {
-      const saved = config.offline ? def : (await yondra.putObject(room.spaceId, def)).object;
+      const saved = config.offline ? def : (await api.putObject(def)).object;
       room.state.objects.set(saved.id, toSchema(saved));
       room.state.holds.delete(saved.id);
       const was = before.get(saved.id);
@@ -124,7 +124,7 @@ registerFeature((room: SpaceRoom) => {
       for (const r of surfaceRiders(fromSchema(o), all)) gone.add(r);
     }
     for (const id of gone) {
-      if (!config.offline) await yondra.deleteObject(room.spaceId, id).catch(() => {});
+      if (!config.offline) await api.deleteObject(id).catch(() => {});
       room.state.objects.delete(id);
       room.state.holds.delete(id);
     }
@@ -133,7 +133,7 @@ registerFeature((room: SpaceRoom) => {
 
   // A generated piece of clutter: hide it from the rules (per room), and for
   // "take", put the same thing there as a real object you can now move.
-  const fromDressing = (client: SpaceClient, pieceId: string, take: boolean) => {
+  const fromDressing = (client: WorldClient, pieceId: string, take: boolean) => {
     const p = builder(client);
     if (!p) return;
     const piece = dressItems(room.map, objects()).find((d) => d.id === pieceId);
@@ -160,7 +160,7 @@ registerFeature((room: SpaceRoom) => {
     room.state.objects.set(def.id, toSchema(def));
     room.state.holds.set(def.id, `${p.uid}|${p.name}`);
     heldAt.set(def.id, Date.now());
-    if (!config.offline) void yondra.putObject(room.spaceId, def).catch(() => {});
+    if (!config.offline) void api.putObject(def).catch(() => {});
     room.rebuildGrid();
   };
   room.on("dress:take", (client, m: ClientMessages["dress:take"]) => fromDressing(client, String(m?.id ?? ""), true));
