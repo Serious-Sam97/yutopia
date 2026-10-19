@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page, test } from "@playwright/test";
-import { ANA, enter, spaceId, token, walkTo } from "./helpers";
+import { ANA, enter, token, useWorld, walkTo } from "./helpers";
 
 // Build mode works like The Sims: pick up what you see (click its body), carry
 // it, drop it; drag to move; box-select; turn, copy, delete; pick a look;
@@ -43,7 +43,7 @@ const setBuild = (page: Page, patch: Record<string, unknown>) =>
 test("build mode: pick up what you see, carry, drop, select, copy, look, clutter", async ({ page }) => {
   test.setTimeout(240_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await walkTo(page, 9.5, 13.5, 30_000);
   // hold the camera still (a moving camera makes a click land on the next tile)
   await page.evaluate(() => (window as any).__yutopia.engine.pinCamera({ x: 11, y: 10, zoom: 1.8 }));
@@ -146,7 +146,7 @@ test("build mode: pick up what you see, carry, drop, select, copy, look, clutter
 test("generated clutter becomes a real thing you can move", async ({ page }) => {
   test.setTimeout(150_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await setBuild(page, { on: true, tool: "furniture", mode: "hand", selected: [] });
   await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
   // a piece of floor clutter (boxes by a wall, a bin…) the rules placed, away from real things

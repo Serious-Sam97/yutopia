@@ -1,7 +1,7 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import net from "node:net";
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // Two people at the ping-pong table, one of them far away: Bia's world socket
 // (and her clock sync) carries PONG_LAG ms each way (default 150). Both swing
@@ -82,7 +82,7 @@ test(`ping-pong: two people, one ${LAG} ms away — hits taken, no jumps, real r
     await p.waitForFunction(() => !!(window as any).__yutopia.tables?.pong, null, { timeout: 15_000 });
   };
   try {
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     // tables an earlier, interrupted run left behind

@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, spaceId, test, token } from "./helpers";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // Mouse look (third person): Z locks the pointer and the mouse turns the
 // camera; a click uses what's under the crosshair (the middle of the view);
@@ -16,7 +16,7 @@ const yaw = (page: Page) => page.evaluate(() => (window as any).__yutopia.tp.yaw
 test("mouse look: Z locks the pointer, the mouse turns the camera, a click picks the middle", async ({ page }) => {
   test.setTimeout(120_000);
   const tok = await token(ANA);
-  const lab = await spaceId(tok, "Yutopia Lab");
+  const lab = await useWorld("lab");
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");

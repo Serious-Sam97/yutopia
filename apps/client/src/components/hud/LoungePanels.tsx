@@ -43,7 +43,7 @@ function RadioVolume({ objectId, r }: { objectId: string; r: RadioState }) {
       <VolumeKnob
         value={r.volume}
         label={pt ? "Volume deste rádio" : "This radio's volume"}
-        disabled={r.lock && !w?.room?.state.players.get(w.room.sessionId)?.builder}
+        disabled={r.lock && !w?.room?.state.players.get(w.room.sessionId)?.admin}
         onCommit={(volume) => w?.send("radio:volume", { id: objectId, volume })}
       />
     </div>
@@ -112,15 +112,10 @@ function LofiStations({ objectId, r }: { objectId: string; r: RadioState }) {
 
 export function NoticePanel() {
   const t = useTr();
-  const name = useHud((s) => s.spaceName);
+  const name = useHud((s) => s.worldName);
   const people = useHud((s) => s.people.filter((p) => !p.bot));
   const me = useHud((s) => s.me);
-  const status = useHud((s) => s.status);
-  const boards = useHud((s) => s.boards);
   const all = me ? [me, ...people] : people;
-  const blocked = Object.values(status)
-    .flat()
-    .filter((c) => c.blocked);
   return (
     <Panel title={t("notice")}>
       <div className="faceplate p-4 space-y-4" style={{ background: "linear-gradient(180deg,#d9b98c,#c49a6c)" }}>
@@ -132,28 +127,6 @@ export function NoticePanel() {
             {all.length} {t("online")}: {all.map((p) => p.name).join(", ")}
           </p>
         </section>
-        <section className="rounded-md p-3 shadow" style={{ background: "#f3d27a", transform: "rotate(0.8deg)" }}>
-          <h3 className="font-bold">Boards</h3>
-          <ul className="text-sm">
-            {boards.map((b) => (
-              <li key={b.id}>
-                ▸ {b.name}: {b.sections.map((s) => `${s.name} ${s.count}`).join(" · ")}
-              </li>
-            ))}
-          </ul>
-        </section>
-        {blocked.length > 0 && (
-          <section className="rounded-md p-3 shadow" style={{ background: "#f1b9a0", transform: "rotate(-0.4deg)" }}>
-            <h3 className="font-bold">⚠ Jammed</h3>
-            <ul className="text-sm">
-              {blocked.map((c) => (
-                <li key={c.id}>
-                  {c.ticket} {c.name}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
         <section
           className="rounded-md p-3 shadow text-sm"
           style={{ background: "var(--paper)", transform: "rotate(0.3deg)" }}

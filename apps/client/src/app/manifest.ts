@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Yutopia",
     short_name: "Yutopia",
-    description: "Your team's studio, synced with Yondra.",
+    description: "Your team's studio. Walk in.",
     start_url: "/",
     display: "standalone",
     background_color: "#17110d",

@@ -1,19 +1,20 @@
 "use client";
 
-import { useParams, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { WorldView } from "@/components/hud/WorldView";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
 
-function World() {
-  const params = useParams<{ spaceId: string }>();
-  const search = useSearchParams();
-  return <WorldView spaceId={Number(params.spaceId)} to={search.get("to")} />;
+// Old links to a space (/s/<id>?to=…): there's one world now.
+function ToWorld() {
+  const router = useRouter();
+  const to = useSearchParams().get("to");
+  useEffect(() => router.replace(to ? `/?to=${encodeURIComponent(to)}` : "/"), [router, to]);
+  return null;
 }
 
-export default function SpacePage() {
+export default function OldSpacePage() {
   return (
     <Suspense>
-      <World />
+      <ToWorld />
     </Suspense>
   );
 }

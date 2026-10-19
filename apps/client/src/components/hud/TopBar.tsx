@@ -1,10 +1,9 @@
 "use client";
 
 import { areaAt } from "@yutopia/shared";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Brand } from "@/components/Brand";
-import { YONDRA_APP } from "@/lib/api";
+import { setToken, yutopia } from "@/lib/api";
 import { useTr } from "@/lib/i18n";
 import { STATIONS } from "@/world/sound";
 import { hud, useHud } from "@/world/store";
@@ -14,8 +13,8 @@ import { Icon } from "./icons";
 
 const LOCKABLE = ["war-room", "booth-1", "booth-2", "booth-3", "standup", "server-room"];
 
-// Top left: where you are (studio, room, who's here) and what's on (the
-// studio's clock, the radio). Top right: who's in, the connection, the exits.
+// Top left: where you are (the world, the room, who's here) and what's on (the
+// studio's clock, the radio). Top right: who's in, the connection, signing out.
 export function TopBar() {
   return (
     <>
@@ -27,18 +26,18 @@ export function TopBar() {
 
 function WhereBar() {
   const t = useTr();
-  const spaceName = useHud((s) => s.spaceName);
+  const worldName = useHud((s) => s.worldName);
   const area = useHud((s) => s.me?.area ?? "");
   const areaName = useHud((s) => s.me?.areaName ?? "");
   const here = useHud((s) => (s.me ? 1 : 0) + s.people.filter((p) => !p.bot && p.area === area && area).length);
   return (
     <header className="pointer-events-auto cabinet absolute top-3 left-3 h-[54px] flex items-center gap-2.5 pl-3 pr-2 max-w-[calc(100vw-196px)] sm:max-w-[calc(100vw-480px)]">
-      <Link href="/" aria-label={t("back")} className="shrink-0">
+      <span className="shrink-0">
         <Brand small compact />
-      </Link>
+      </span>
       <span className="hidden sm:block w-px h-6 shrink-0" style={{ background: "var(--edge)" }} aria-hidden />
       <div className="vfd-window px-3 h-10 flex flex-col justify-center min-w-0">
-        <p className="lcd text-[22px] leading-none truncate">{spaceName.toUpperCase() || "…"}</p>
+        <p className="lcd text-[22px] leading-none truncate">{worldName.toUpperCase() || "…"}</p>
         <p className="mono text-[11px] leading-tight truncate" style={{ color: "var(--cream-dim)" }} aria-live="polite">
           ▸ {areaName || "—"}
           {area && ` · ${t("hereCount").replace("{n}", String(here))}`}
@@ -98,12 +97,11 @@ function PresenceBar() {
   const w = useWorld();
   const me = useHud((s) => s.me);
   const people = useHud((s) => s.people.filter((p) => !p.bot));
-  const projectId = useHud((s) => s.projectId);
   const quality = useHud((s) => (s.media.offline ? "lost" : s.media.asleep ? "asleep" : s.media.quality));
   const areaKey = useHud((s) => s.me?.area ?? "");
   const lockedBy = useHud((s) => s.locks[s.me?.area ?? ""]);
-  const canBuild = useHud((s) => s.canBuild);
-  const lockable = canBuild && LOCKABLE.includes(areaKey);
+  const isAdmin = useHud((s) => s.isAdmin);
+  const lockable = isAdmin && LOCKABLE.includes(areaKey);
   const everyone = me ? [me, ...people] : people;
   const shown = everyone.slice(0, 4);
   const bars = quality === "excellent" ? 3 : quality === "good" ? 2 : quality === "poor" ? 1 : 0;
@@ -168,26 +166,19 @@ function PresenceBar() {
           <span className="hidden lg:inline">{lockedBy ? t("unlockRoom") : t("lockRoom")}</span>
         </button>
       )}
-      {projectId && (
-        <a
-          className="ghost-btn hidden md:flex items-center gap-1.5 h-[34px]"
-          href={`${YONDRA_APP}/projects/${projectId}`}
-          target="_blank"
-          rel="noreferrer"
-          title={t("openInYondra")}
-        >
-          <Icon name="external" size={15} />
-          Yondra
-        </a>
-      )}
-      <Link
-        href="/"
+      <button
+        type="button"
         className="ghost-btn flex items-center gap-1.5 h-[34px]"
         style={{ borderColor: "#7a3a22", color: "#f0b49a" }}
+        onClick={async () => {
+          await yutopia.logout();
+          setToken(null);
+          location.href = "/login";
+        }}
       >
         <Icon name="leave" size={15} />
-        <span className="hidden sm:inline">{t("leave")}</span>
-      </Link>
+        <span className="hidden sm:inline">{t("signOut")}</span>
+      </button>
     </header>
   );
 }

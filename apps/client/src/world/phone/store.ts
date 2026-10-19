@@ -32,10 +32,8 @@ export interface Contact {
   name: string;
   avatar: string; // the avatar seed (Face)
   online: boolean; // in Yutopia right now
-  spaceId: number | null;
-  space: string | null; // where they are (a space's name)
-  area: string | null; // and the room in it
-  here: boolean; // in my space
+  area: string | null; // the room they're in
+  here: boolean; // in the world with me (everyone online is)
   status: string; // online · away · dnd
 }
 
@@ -71,10 +69,9 @@ export interface Msg {
 
 export interface Thread {
   id: number;
-  kind: "direct" | "group" | "space" | "vortex";
-  name: string; // groups and the space; a direct one is named after the other person
+  kind: "direct" | "group" | "everyone" | "vortex";
+  name: string; // groups and everyone's; a direct one is named after the other person
   members: number[]; // user ids (not me)
-  spaceId: number | null;
   unread: number;
   last: Msg | null;
   muted: boolean;

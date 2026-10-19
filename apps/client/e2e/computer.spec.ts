@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // VortexOS on the studio's computers (docs/plan/19-vortexos.md). Ana sits at a
 // computer and presses X: it boots for everyone, the OS in her panel says
@@ -77,7 +77,7 @@ test("a computer boots VortexOS for everyone, one person at a time", async ({ pa
   test.setTimeout(180_000);
   await page.route(`${OS}/**`, (r) => r.fulfill({ contentType: "text/html", body: STUB }));
   const tok = await token(ANA);
-  const space = await spaceId(tok, "Yutopia Lab");
+  const space = await useWorld("lab");
   await enter(page, tok, space);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const stamp = Date.now().toString(36);
@@ -199,7 +199,7 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
   test.setTimeout(180_000);
   await page.route(`${OS}/**`, (r) => r.fulfill({ contentType: "text/html", body: STUB }));
   const tok = await token(ANA);
-  const space = await spaceId(tok, "Yutopia Lab");
+  const space = await useWorld("lab");
   await enter(page, tok, space);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const stamp = Date.now().toString(36);
@@ -263,15 +263,15 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
 });
 
 // Against a real VortexOS in host mode (opt-in: YUTOPIA_VORTEXOS=<its url>, e.g. a local
-// one on :5174 with its backend set up for sign-in with Yondra): it boots straight away,
-// Yondra signs Ana in, her desktop reaches everyone, standing up saves and switches it off.
+// one on :5174 with its backend set up for sign-in with Yutopia): it boots straight away,
+// Yutopia signs Ana in, her desktop reaches everyone, standing up saves and switches it off.
 const REAL = process.env.YUTOPIA_VORTEXOS;
-test("the real VortexOS: boot, sign in with Yondra, desktop, stand up", async ({ page, browser }) => {
+test("the real VortexOS: boot, sign in with Yutopia, desktop, stand up", async ({ page, browser }) => {
   test.skip(!REAL, "needs YUTOPIA_VORTEXOS");
   test.setTimeout(240_000);
   await page.addInitScript((url) => localStorage.setItem("yutopia:vortexos", url), REAL as string);
   const tok = await token(ANA);
-  const space = await spaceId(tok, "Yutopia Lab");
+  const space = await useWorld("lab");
   await enter(page, tok, space);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const stamp = Date.now().toString(36);
@@ -315,7 +315,7 @@ test("the real VortexOS: boot, sign in with Yondra, desktop, stand up", async ({
     await expect
       .poll(() => page.evaluate(() => (window as any).__hud.get().panel.kind), { timeout: 30_000 })
       .toBe("computer");
-    // no "Are you ready?": it boots, Yondra signs her in, her desktop comes up for everyone
+    // no "Are you ready?": it boots, Yutopia signs her in, her desktop comes up for everyone
     await expect.poll(async () => (await comp(bia, ids.pc))?.phase, { timeout: 60_000 }).toBe("desktop");
     const c = await comp(bia, ids.pc);
     expect(c?.user).toBeTruthy();
@@ -356,7 +356,7 @@ test("a VortexOS that doesn't talk back: no NO SIGNAL, the glass goes on by itse
     r.fulfill({ contentType: "text/html", body: '<!doctype html><body style="background:#3a6ea5">a quiet OS</body>' }),
   );
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const stamp = Date.now().toString(36);
   const ids = { desk: `e2e-pcq-desk-${stamp}`, pc: `e2e-pcq-${stamp}` };

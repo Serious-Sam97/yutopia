@@ -11,7 +11,7 @@ import { hud, useHud } from "@/world/store";
 import { extraPanels } from "./panels";
 
 // the panels PanelHost draws itself (the rest come from ./panels)
-const OWN_PANELS = new Set(["settings", "avatar", "pets", "board"]);
+const OWN_PANELS = new Set(["settings", "avatar", "pets"]);
 
 import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
@@ -33,7 +33,7 @@ import { Rituals } from "./Rituals";
 import { ScreenTray } from "./Screens";
 import { TopBar } from "./TopBar";
 
-// project owners only: loaded the first time someone builds
+// loaded the first time someone builds
 const BuildMode = dynamic(() => import("./build/BuildMode").then((m) => m.BuildMode), { ssr: false });
 // chat · people · room: loaded the first time the panel opens
 const SidePanel = dynamic(() => import("./SidePanel").then((m) => m.SidePanel), { ssr: false });
@@ -52,7 +52,7 @@ function PetOverlays() {
   return on ? <PetOverlaysLazy /> : null;
 }
 
-export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null }) {
+export function WorldView({ to }: { to?: string | null }) {
   const router = useRouter();
   const host = useRef<HTMLDivElement>(null);
   const [ctrl, setCtrl] = useState<WorldController | null>(null);
@@ -74,10 +74,10 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
 
   useEffect(() => {
     if (!getToken()) {
-      router.replace(`/login?next=/s/${spaceId}`);
+      router.replace("/login");
       return;
     }
-    const c = new WorldController(host.current as HTMLDivElement, spaceId);
+    const c = new WorldController(host.current as HTMLDivElement);
     c.onOpenPanel = (kind, objectId) => {
       // only a panel that exists: an unknown kind would sit open unseen and swallow the keys
       if (!(kind in extraPanels) && !OWN_PANELS.has(kind)) return;
@@ -91,9 +91,9 @@ export function WorldView({ spaceId, to }: { spaceId: number; to?: string | null
       c.stop();
       setCtrl(null);
     };
-  }, [spaceId, router]);
+  }, [router]);
 
-  // "Join them" deep link from Yondra: /s/12?to=user:5
+  // "Join them" deep link: /?to=user:5
   useEffect(() => {
     if (phase !== "ready" || !ctrl || !to) return;
     const m = /^user:(\d+)$/.exec(to);

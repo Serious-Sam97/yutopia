@@ -195,14 +195,6 @@ export class BuildController {
   }
   // An object's stored props (the engine's copy carries drawing-only flags like
   // a chair's `occupied`, which must never be saved).
-  // A board wall put up from the catalog shows the first board no wall shows
-  // yet (none left: it asks which when it's opened).
-  private freeBoard(kind: string): number | null {
-    if (kind !== "board_wall") return null;
-    const shown = new Set(this.engine?.allObjects().map((o) => (o.kind === "board_wall" ? o.refId : null)));
-    return hud.get().boards.find((b) => !shown.has(b.id))?.id ?? null;
-  }
-
   private storedProps(id: string): Record<string, unknown> | undefined {
     const o = this.room?.state.objects.get(id);
     if (!o) return undefined;
@@ -501,7 +493,7 @@ export class BuildController {
     if (items.length === 1) {
       const it = items[0];
       const h = this.hand[0];
-      this.send("obj:put", { ...it, refId: h.origin ? (h.origin.refId ?? null) : this.freeBoard(it.kind) });
+      this.send("obj:put", { ...it, refId: h.origin ? (h.origin.refId ?? null) : null });
     } else this.send("obj:batch", { items });
     // the originals stay hidden until their move arrives (no flash back)
     const until = performance.now() + 2500;

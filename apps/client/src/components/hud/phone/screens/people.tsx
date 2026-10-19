@@ -17,7 +17,7 @@ import { cx, Head, Ic, PFace, secs, VxFace, Wallpaper, when } from "../ui";
 function whereOf(c: Contact, t: ReturnType<typeof useTr>): string {
   if (c.uid === 0) return t("phVortexWhere");
   if (!c.online) return t("phOfflineNow");
-  return [c.area, c.here ? null : c.space].filter(Boolean).join(" · ") || "Yutopia";
+  return c.area || "Yutopia";
 }
 
 export function Contacts() {
@@ -26,7 +26,7 @@ export function Contacts() {
   const ph = w?.phone;
   const contacts = usePhone((p) => p.contacts);
   const wp = usePhone((p) => p.settings.wallpaper);
-  const space = w?.session?.space.name ?? "";
+  const space = w?.session?.world.name ?? "";
   const [q, setQ] = useState("");
   useEffect(() => {
     void ph?.loadContacts(true);

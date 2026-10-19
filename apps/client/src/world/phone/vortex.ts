@@ -9,7 +9,7 @@ import { LineTone, Ringer, textTone, ui } from "./sounds";
 import { type Msg, phone } from "./store";
 
 // Vortex, on the phone (docs/plan/21-cellphone.md § 5–6): always in Contacts,
-// "somewhere in the walls". Text him and he texts back (Yondra's curated,
+// "somewhere in the walls". Text him and he texts back (the API's curated,
 // in-character lines with your real data — the same voice as in the world);
 // what he says to you in the world lands in his thread. Call him and he
 // answers — or doesn't — in his own voice: the browser's speech, pitched

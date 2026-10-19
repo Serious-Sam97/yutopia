@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect } from "@playwright/test";
-import { ANA, enter, spaceId, test, token } from "./helpers";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // The 3D people everywhere (docs/plan/22-people-3d.md): in iso I'm a sprite of
 // my 3D model (no drawn rig), in the 3D view a model, in the top bar a portrait
@@ -23,7 +23,7 @@ test.use({
 test("the 3D people: an iso sprite of my model, a model in 3D, a portrait, the turntable", async ({ page }) => {
   test.setTimeout(150_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const gpu = await page.evaluate(() => {
     const g = document.createElement("canvas").getContext("webgl2");
     const d = g?.getExtension("WEBGL_debug_renderer_info");

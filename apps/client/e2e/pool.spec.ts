@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // The pool table: walk up and press X — the camera leans in, the console opens;
 // take a seat, put Vortex in the other, break (aim at the rack with the mouse,
@@ -37,7 +37,7 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
   const bia = await (await browser.newContext(ctx)).newPage();
   const id = `e2e-pool-${Date.now().toString(36)}`;
   try {
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     // tables an earlier, interrupted run left behind

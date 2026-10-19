@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Yutopia",
-  description: "Your team's studio, synced with Yondra.",
+  description: "Your team's studio. Walk in.",
 };
 
 export const viewport: Viewport = {

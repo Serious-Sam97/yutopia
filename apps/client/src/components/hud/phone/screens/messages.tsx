@@ -13,7 +13,7 @@ import s from "../phone.module.css";
 import { cx, dayLabel, Head, hhmm, Ic, PFace, secs, Thumb, VxFace, Wallpaper, when } from "../ui";
 
 // Messages: threads (1:1, groups, the space's #thread, Vortex), a thread with
-// its bubbles, and starting a new one. Yondra keeps them (world/phone/data.ts).
+// its bubbles, and starting a new one. The API keeps them (world/phone/data.ts).
 
 function useThreadLabel() {
   const w = useWorld();
@@ -21,18 +21,18 @@ function useThreadLabel() {
   return (th: ThreadT) => {
     const ph = w?.phone;
     if (!ph) return "";
-    if (th.kind === "space") return `# ${th.name}`;
+    if (th.kind === "everyone") return `# ${th.name}`;
     return ph.threadName(th) || t("phMessage");
   };
 }
 
 function lastLine(th: ThreadT, me: number, nameOf: (u: number | null) => string, t: (k: Key) => string): string {
   const m = th.last;
-  if (!m) return th.kind === "space" ? t("phSpaceThread").replace("{space}", th.name) : "";
+  if (!m) return th.kind === "everyone" ? t("phSpaceThread").replace("{space}", th.name) : "";
   const who =
     m.from === me
       ? `${t("phYou")}: `
-      : th.kind === "group" || th.kind === "space"
+      : th.kind === "group" || th.kind === "everyone"
         ? `${nameOf(m.from).split(" ")[0]}: `
         : "";
   if (m.kind === "photo") return `${who}${t("phPhoto")}`;
@@ -45,7 +45,7 @@ export function ThreadIcon({ th, size = 38 }: { th: ThreadT; size?: number }) {
   const w = useWorld();
   const ph = w?.phone;
   if (th.kind === "vortex") return <VxFace size={size} mood="sideeye" />;
-  if (th.kind === "space")
+  if (th.kind === "everyone")
     return (
       <span className={s.grp} style={{ width: size, height: size }}>
         #
@@ -90,7 +90,7 @@ export function Messages() {
   if (!ph) return null;
   const list = threads.filter((th) => !q || label(th).toLowerCase().includes(q.toLowerCase()));
   // the space's thread first, then by the last message
-  list.sort((a, b) => (a.kind === "space" ? -1 : b.kind === "space" ? 1 : (b.last?.at ?? 0) - (a.last?.at ?? 0)));
+  list.sort((a, b) => (a.kind === "everyone" ? -1 : b.kind === "everyone" ? 1 : (b.last?.at ?? 0) - (a.last?.at ?? 0)));
   return (
     <>
       <Wallpaper id={wp} dim />
@@ -198,7 +198,7 @@ export function Thread({ id }: { id: number }) {
       ? stranger
         ? t("phNotContact")
         : contact?.online
-          ? [contact.area, contact.here ? null : contact.space].filter(Boolean).join(" · ") || "Yutopia"
+          ? contact.area || "Yutopia"
           : t("phOfflineNow")
       : t("phMembers").replace("{n}", String(th.members.length + 1));
   const lastMine = [...(msgs ?? [])].reverse().find((m) => m.from === me && m.id > 0);
@@ -262,7 +262,7 @@ export function Thread({ id }: { id: number }) {
               <Ic n="video" size={16} />
             </button>
           )}
-          {(th.kind === "group" || th.kind === "space") && (
+          {(th.kind === "group" || th.kind === "everyone") && (
             <button
               type="button"
               className={s.round}
@@ -288,7 +288,7 @@ export function Thread({ id }: { id: number }) {
             const showDay = day !== lastDay;
             lastDay = day;
             const mine = m.from === me;
-            const showWho = !mine && (th.kind === "group" || th.kind === "space");
+            const showWho = !mine && (th.kind === "group" || th.kind === "everyone");
             const quoted = m.replyTo ? byId.get(m.replyTo) : null;
             return (
               <Fragment key={m.id}>
@@ -566,7 +566,7 @@ export function NewThread({ group }: { group: boolean }) {
                   <PFace avatar={c.avatar} name={c.name} size={34} status={c.online ? "on" : "off"} />
                   <div className={s.col}>
                     <div className={s.nm}>{c.name}</div>
-                    <div className={s.sub}>{c.online ? (c.area ?? c.space ?? "") : t("phOfflineNow")}</div>
+                    <div className={s.sub}>{c.online ? (c.area ?? "") : t("phOfflineNow")}</div>
                   </div>
                   {group &&
                     (on ? (

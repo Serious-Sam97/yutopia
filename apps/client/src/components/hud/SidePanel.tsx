@@ -138,14 +138,12 @@ function PeopleTab() {
   const w = useWorld();
   const me = useHud((s) => s.me);
   const people = useHud((s) => s.people);
-  const status = useHud((s) => s.status);
   const following = useHud((s) => s.following);
   const heardBy = useHud((s) => s.heardBy);
   const rows = people.filter((p) => !p.bot);
   const bots = people.length - rows.length;
 
   const row = (p: Person, mine = false) => {
-    const doing = status[p.uid] ?? [];
     const hears = heardBy.includes(p.uid);
     return (
       <li
@@ -180,15 +178,6 @@ function PeopleTab() {
             {p.screen && <Icon name="screen" size={14} />}
           </span>
         </div>
-        {doing.length > 0 && (
-          <ul className="mt-1.5 ml-11 space-y-0.5">
-            {doing.slice(0, 2).map((c) => (
-              <li key={c.id} className="text-xs truncate" style={{ color: c.blocked ? "#ff8a66" : "var(--vfd)" }}>
-                ▸ <span className="mono">{c.ticket}</span> {c.name}
-              </li>
-            ))}
-          </ul>
-        )}
         {!mine && (
           <div className="flex gap-1.5 mt-1.5 ml-11">
             <button type="button" className="ghost-btn" onClick={() => w?.teleport({ userId: p.uid })}>

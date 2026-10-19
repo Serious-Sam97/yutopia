@@ -1,12 +1,12 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // The action menu, Sims-style (in the Lab; everything put out is removed
 // after): click a thing → what you can do with it in a ring; picks queue up
 // (chips top left), you walk over and do them in order; moving drops the
 // queue. Then people (a high five, a drink handed over), focus at your own
-// desk, a light switch for the room, and a card done in Yondra.
+// desk, and a light switch for the room.
 
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
@@ -39,7 +39,7 @@ const put = (page: Page, o: Record<string, unknown>) =>
 test("the action menu: pick from the ring, the queue walks you over and does it", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const X = Math.floor(sp.x) - 4;
   const Y = Math.floor(sp.y) - 5;
@@ -102,7 +102,7 @@ test("people: a high five both of you do, a drink handed over", async ({ browser
   const bia = await (await browser.newContext(ctx)).newPage();
   const cooler = `e2e-pp-cool-${Date.now().toString(36)}`;
   try {
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     const sp = await ana.evaluate(() => (window as any).__yutopia.map.spawn);
@@ -153,7 +153,7 @@ test("people: a high five both of you do, a drink handed over", async ({ browser
 test("my desk: focus with headphones on; the room's lights by the switch; a card done", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const stamp = Date.now().toString(36);
   const sw = `e2e-sw-${stamp}`;
   const lamp = `e2e-lamp-${stamp}`;
@@ -200,23 +200,6 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
     ).toBe("headphones");
     await page.getByRole("button", { name: "Stop focusing" }).click({ timeout: 5000 });
     await expect.poll(async () => (await me(page)).focus).toBe(false);
-
-    // a card I'm on is done in Yondra: confetti over me, and a word about it
-    await page.evaluate(
-      ([u]) => {
-        const h = (window as any).__hud;
-        h.set({
-          status: {
-            [u]: [
-              { id: 990001, name: "Ship the thing", boardId: 1, boardName: "B", section: "Doing", ticket: "LAB-9" },
-            ],
-          },
-        });
-        (window as any).__yutopia.celebrate({ type: "card.updated", payload: { id: 990001, done_at: "now" } });
-      },
-      [uid],
-    );
-    await expect(page.getByText(/finished LAB-9 · Ship the thing/)).toBeVisible();
 
     // a light switch on the wall behind the desk, a lamp in the room
     const spots = await page.evaluate(

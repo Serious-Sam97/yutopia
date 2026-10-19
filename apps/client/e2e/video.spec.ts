@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { chromium, expect } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // A camera turned off is a muted track that stays published: the bubble over the
 // person must go away (no black square) and come back when the camera is on again.
@@ -11,7 +11,7 @@ test("video bubble shows only while the camera is on", async () => {
   });
   try {
     const [ta, tb] = [await token(ANA), await token(BIA)];
-    const s = await spaceId(ta);
+    const s = await useWorld("demo");
     const ctx = { viewport: { width: 1280, height: 800 }, permissions: ["camera", "microphone"] };
     const ana = await (await browser.newContext(ctx)).newPage();
     const bia = await (await browser.newContext(ctx)).newPage();
@@ -48,7 +48,7 @@ test("a shared screen: your tile, theirs, big, and gone when you stop", async ()
   });
   try {
     const [ta, tb] = [await token(ANA), await token(BIA)];
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     const ctx = { viewport: { width: 1280, height: 800 }, permissions: ["camera", "microphone"] };
     const ana = await (await browser.newContext(ctx)).newPage();
     const bia = await (await browser.newContext(ctx)).newPage();

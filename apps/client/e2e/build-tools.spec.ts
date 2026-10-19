@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page, test } from "@playwright/test";
-import { ANA, enter, spaceId, token, walkTo } from "./helpers";
+import { ANA, enter, token, useWorld, walkTo } from "./helpers";
 
 // Build mode's tools beyond placing: box / fill / erase painting, undo + redo,
 // copies, catalog search, dragging a person onto a seat, "go there".
@@ -56,7 +56,7 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   test.setTimeout(180_000);
   const tok = await token(ANA);
   page.on("dialog", (d) => d.accept());
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const build = (on: boolean, tool = "walls") =>
     page.evaluate(
       ([o, t]) => (window as any).__hud.set({ build: { ...(window as any).__hud.get().build, on: o, tool: t } }),

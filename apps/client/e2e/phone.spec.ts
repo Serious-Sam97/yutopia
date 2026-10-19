@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // The phone (docs/plan/21-cellphone.md): P brings it out (it boots once), the
 // home grid with the keyboard, you keep walking with it out, others see it in
@@ -17,7 +17,7 @@ const ph = (page: Page) => page.evaluate(() => (window as any).__phone?.get());
 
 test("the phone: out with P, the grid by keyboard, walking with it, others see it", async ({ page, browser }) => {
   const tok = await token(ANA);
-  const space = await spaceId(tok);
+  const space = await useWorld("demo");
   await enter(page, tok, space);
   await page.waitForFunction(() => (window as any).__hud.get().phone.loaded, null, { timeout: 20_000 });
   // the dock's phone key (the chat's gone)
@@ -70,7 +70,7 @@ test("the phone: out with P, the grid by keyboard, walking with it, others see i
 test("texts arrive live (the phone peeks up), and a call rings, is answered and hung up", async ({ page, browser }) => {
   const tokA = await token(ANA);
   const tokB = await token(BIA);
-  const space = await spaceId(tokA);
+  const space = await useWorld("demo");
   await enter(page, tokA, space);
   const bia = await browser.newPage();
   await enter(bia, tokB, space);
@@ -112,7 +112,7 @@ test("texts arrive live (the phone peeks up), and a call rings, is answered and 
 
 test("the camera: a selfie in iso and in 3D, saved to the Gallery", async ({ page }) => {
   const tok = await token(ANA);
-  const space = await spaceId(tok);
+  const space = await useWorld("demo");
   await enter(page, tok, space);
   await page.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
   await world(page, (w) => w.togglePhone(true));
@@ -147,7 +147,7 @@ test("the camera: a selfie in iso and in 3D, saved to the Gallery", async ({ pag
 test("the phone's screens (shots)", async ({ page }) => {
   test.skip(!SHOTS, "review shots only");
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await page.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
   await world(page, (w) => w.togglePhone(true));
   await page.waitForTimeout(2300);
@@ -190,7 +190,7 @@ test("contacts are the people you add by id; a photo sent to you opens; a video 
   test.setTimeout(150_000);
   const tokA = await token(ANA);
   const tokB = await token(BIA);
-  const space = await spaceId(tokA);
+  const space = await useWorld("demo");
   await enter(page, tokA, space);
   const bia = await browser.newPage();
   const errors: string[] = [];
@@ -269,7 +269,7 @@ test("contacts are the people you add by id; a photo sent to you opens; a video 
 
 test("the camera records a video into the Gallery; others see the red light", async ({ page }) => {
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await page.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
   await world(page, (w) => w.togglePhone(true));
   await page.waitForTimeout(2300);

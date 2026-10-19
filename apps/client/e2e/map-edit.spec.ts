@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 const SHOTS = "../../design/screens";
 
@@ -55,7 +55,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   // a whole map built by two people (and screenshots of it): more than the default
   test.setTimeout(180_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
-  const lab = await spaceId(ta, "Yutopia Lab");
+  const lab = await useWorld("lab");
   const ana = await (await browser.newContext()).newPage();
   const bia = await (await browser.newContext()).newPage();
   ana.on("dialog", (d) => d.accept());

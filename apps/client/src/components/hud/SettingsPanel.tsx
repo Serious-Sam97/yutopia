@@ -6,6 +6,7 @@ import { useTr } from "@/lib/i18n";
 import { MAX_FPS, type Prefs, setPrefs, usePrefs } from "@/lib/prefs";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
+import { Invites } from "./Invites";
 import { Panel } from "./Panel";
 
 export function SettingsPanel() {
@@ -17,6 +18,7 @@ export function SettingsPanel() {
   // or camera comes on, and when something is plugged in or out)
   const live = useHud((s) => s.media.mic || s.media.cam);
   const [relist, setRelist] = useState(0);
+  const isAdmin = useHud((s) => s.isAdmin);
   // the browser won't name them: not allowed yet (it can ask), or blocked (it won't)
   const [blocked, setBlocked] = useState(false);
 
@@ -278,6 +280,7 @@ export function SettingsPanel() {
           <span>{t("language")}</span>
           <LangSwitch />
         </section>
+        {isAdmin && <Invites />}
         <section>
           <h3 className="mono text-xs uppercase tracking-widest mb-1" style={{ color: "var(--vfd)" }}>
             {t("controls")}

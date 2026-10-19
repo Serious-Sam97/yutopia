@@ -3,8 +3,8 @@ import { BUILTIN_GAMES, type BuiltinGame, builtinGame } from "@yutopia/shared/li
 import { API, getToken } from "@/lib/api";
 import { cachedFiles } from "./discs";
 
-// The game room's side of Yondra: the team's cartridges (uploads), their ROMs,
-// and the saves of every game played in the space. Built-in cartridges are
+// The game room's side of the API: the cartridges people brought (uploads),
+// their ROMs, and the saves of every game played in the world. Built-in cartridges are
 // static files served with the client (/emu/games, tools/emu-assets.mjs).
 
 const auth = (): Record<string, string> => {
@@ -20,11 +20,11 @@ async function get(path: string): Promise<Response> {
 
 export type Cartridge = (GameInfo & { source?: string; file?: string }) | BuiltinGame;
 
-// Everything on the shelf for this space: what ships with Yutopia, then the team's.
-export async function library(spaceId: number): Promise<Cartridge[]> {
+// Everything on the shelf: what ships with Yutopia, then what people brought.
+export async function library(): Promise<Cartridge[]> {
   let mine: GameInfo[] = [];
   try {
-    mine = (await (await get(`/api/yutopia/spaces/${spaceId}/games`)).json()).games;
+    mine = (await (await get(`/api/games`)).json()).games;
   } catch {
     // offline or no uploads: the built-in ones still play
   }
@@ -34,7 +34,6 @@ export async function library(spaceId: number): Promise<Cartridge[]> {
 // A game's bytes (and a file name the core recognises); a disc's other files
 // (its tracks) in `more`. Discs come from this browser's copy (world/games/discs.ts).
 export async function romOf(
-  spaceId: number,
   id: string,
   system: GameSystem,
   o: { game?: Cartridge; onProgress?: (done: number, total: number) => void; signal?: AbortSignal } = {},
@@ -57,7 +56,7 @@ export async function romOf(
       g.files.map((f, i) => ({
         name: f.name,
         bytes: f.bytes,
-        url: `${API}/api/yutopia/spaces/${spaceId}/games/${id.slice(2)}/files/${i}`,
+        url: `${API}/api/games/${id.slice(2)}/files/${i}`,
       })),
       auth(),
       o.onProgress,
@@ -65,7 +64,7 @@ export async function romOf(
     );
     return { blob: files[0], name: files[0].name, more: files.slice(1) };
   }
-  const res = await get(`/api/yutopia/spaces/${spaceId}/games/${id.slice(2)}/rom`);
+  const res = await get(`/api/games/${id.slice(2)}/rom`);
   // (the console's own extension: some cores tell systems apart by it)
   return { blob: await res.blob(), name: `game.${SYSTEMS[system].ext[0]}`, more: [] };
 }
@@ -93,9 +92,9 @@ async function send(path: string, init: RequestInit): Promise<Response> {
   }
   return res;
 }
-// what a stopped upload is remembered by: the space and the files (pick the same ones again to carry on)
-const upKey = (spaceId: number, files: File[]) =>
-  `yutopia:upload:${spaceId}:${files.map((f) => `${f.name}|${f.size}|${f.lastModified}`).join("/")}`;
+// what a stopped upload is remembered by: its files (pick the same ones again to carry on)
+const upKey = (files: File[]) =>
+  `yutopia:upload:${files.map((f) => `${f.name}|${f.size}|${f.lastModified}`).join("/")}`;
 const remember = {
   get: (k: string) => {
     try {
@@ -116,12 +115,11 @@ const remember = {
 // again), send the pieces that aren't there yet (each retried; a busy server
 // waited for), then finish. `signal` pauses it: what's sent stays.
 export async function bringGame(
-  spaceId: number,
   f: { files: File[]; system: GameSystem; title: string; color: string; players: number },
   onProgress?: (sent: number, total: number) => void,
   signal?: AbortSignal,
 ): Promise<GameInfo> {
-  const base = `/api/yutopia/spaces/${spaceId}/games/uploads`;
+  const base = `/api/games/uploads`;
   const fit = isDiscSystem(f.system)
     ? discFits(
         f.system,
@@ -130,7 +128,7 @@ export async function bringGame(
     : null;
   if (fit?.why) throw new Error(fit.why);
   const files = fit ? fit.ordered.map((o) => f.files.find((x) => x.name === o.name) as File) : f.files;
-  const key = upKey(spaceId, files);
+  const key = upKey(files);
   let up: UploadState | null = null;
   const known = remember.get(key);
   if (known)
@@ -205,43 +203,46 @@ export interface BiosInfo {
   md5: string;
   mine: boolean;
 }
-export async function listBios(spaceId: number): Promise<BiosInfo[]> {
-  return (await (await get(`/api/yutopia/spaces/${spaceId}/bios`)).json()).bios;
+export async function listBios(): Promise<BiosInfo[]> {
+  return (await (await get(`/api/bios`)).json()).bios;
 }
-export async function bringBios(spaceId: number, file: File): Promise<BiosInfo> {
+export async function bringBios(file: File): Promise<BiosInfo> {
   const body = new FormData();
   body.set("file", file);
-  return (await (await send(`/api/yutopia/spaces/${spaceId}/bios`, { method: "POST", body })).json()).bios;
+  return (await (await send(`/api/bios`, { method: "POST", body })).json()).bios;
 }
-export async function removeBios(spaceId: number, id: number): Promise<void> {
-  await send(`/api/yutopia/spaces/${spaceId}/bios/${id}`, { method: "DELETE" });
+export async function removeBios(id: number): Promise<void> {
+  await send(`/api/bios/${id}`, { method: "DELETE" });
 }
 // The space's BIOS files, for the core's system folder (kept in this browser too).
-export async function biosFiles(spaceId: number, list?: BiosInfo[]): Promise<File[]> {
-  const all = list ?? (await listBios(spaceId));
+export async function biosFiles(list?: BiosInfo[]): Promise<File[]> {
+  const all = list ?? (await listBios());
   const out: File[] = [];
   for (const b of all)
     out.push(
       ...(await cachedFiles(
         `bios-${b.md5}`,
-        [{ name: b.fileName, bytes: 512 * 1024, url: `${API}/api/yutopia/spaces/${spaceId}/bios/${b.id}/file` }],
+        [{ name: b.fileName, bytes: 512 * 1024, url: `${API}/api/bios/${b.id}/file` }],
         auth(),
       )),
     );
   return out;
 }
 
-export async function upload(
-  spaceId: number,
-  f: { file: File; system: string; title: string; color: string; players: number },
-): Promise<GameInfo> {
+export async function upload(f: {
+  file: File;
+  system: string;
+  title: string;
+  color: string;
+  players: number;
+}): Promise<GameInfo> {
   const body = new FormData();
   body.set("file", f.file);
   body.set("system", f.system);
   body.set("title", f.title);
   body.set("color", f.color);
   body.set("players", String(f.players));
-  const res = await fetch(`${API}/api/yutopia/spaces/${spaceId}/games`, {
+  const res = await fetch(`${API}/api/games`, {
     method: "POST",
     headers: { Accept: "application/json", ...auth() },
     body,
@@ -256,8 +257,8 @@ export async function upload(
   return (await res.json()).game;
 }
 
-export async function removeGame(spaceId: number, id: string): Promise<void> {
-  const res = await fetch(`${API}/api/yutopia/spaces/${spaceId}/games/${id.slice(2)}`, {
+export async function removeGame(id: string): Promise<void> {
+  const res = await fetch(`${API}/api/games/${id.slice(2)}`, {
     method: "DELETE",
     headers: { Accept: "application/json", ...auth() },
   });
@@ -265,9 +266,9 @@ export async function removeGame(spaceId: number, id: string): Promise<void> {
 }
 
 // Whether this game has saves in the space (and when the last one was made).
-export async function saveInfo(spaceId: number, game: string): Promise<{ state: boolean; updatedAt: string | null }> {
+export async function saveInfo(game: string): Promise<{ state: boolean; updatedAt: string | null }> {
   try {
-    const j = await (await get(`/api/yutopia/spaces/${spaceId}/saves/${game}`)).json();
+    const j = await (await get(`/api/saves/${game}`)).json();
     return { state: !!j.state, updatedAt: j.updatedAt ?? null };
   } catch {
     return { state: false, updatedAt: null };
@@ -275,20 +276,20 @@ export async function saveInfo(spaceId: number, game: string): Promise<{ state: 
 }
 
 // Where this game left off in the space (a missing save is null).
-export async function loadSave(spaceId: number, game: string, kind: "state" | "sram"): Promise<Blob | null> {
+export async function loadSave(game: string, kind: "state" | "sram"): Promise<Blob | null> {
   try {
-    return await (await get(`/api/yutopia/spaces/${spaceId}/saves/${game}/${kind}`)).blob();
+    return await (await get(`/api/saves/${game}/${kind}`)).blob();
   } catch {
     return null;
   }
 }
 
-export async function putSave(spaceId: number, game: string, s: { state?: Blob | null; sram?: Blob | null }) {
+export async function putSave(game: string, s: { state?: Blob | null; sram?: Blob | null }) {
   const body = new FormData();
   if (s.state) body.set("state", s.state, "state.bin");
   if (s.sram) body.set("sram", s.sram, "sram.bin");
   if (!s.state && !s.sram) return;
-  await fetch(`${API}/api/yutopia/spaces/${spaceId}/saves/${game}`, {
+  await fetch(`${API}/api/saves/${game}`, {
     method: "POST",
     headers: { Accept: "application/json", ...auth() },
     body,

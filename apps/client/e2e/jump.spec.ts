@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // Jumping (shared/jump.ts): Space hops, Space while running flips. The server
 // takes it and everyone sees it; in iso the body leaves the floor (its shadow
@@ -27,7 +27,7 @@ test("Space jumps: a hop, a flip on the run, seen by others, off the floor in is
 }) => {
   test.setTimeout(200_000);
   const tok = await token(ANA);
-  const lab = await spaceId(tok, "Yutopia Lab");
+  const lab = await useWorld("lab");
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
@@ -158,7 +158,7 @@ test("Space jumps: a hop, a flip on the run, seen by others, off the floor in is
 test("a hop up onto a desk: standing on it, seen up there, dropping off its edge", async ({ page, browser }) => {
   test.setTimeout(150_000);
   const tok = await token(ANA);
-  const lab = await spaceId(tok, "Yutopia Lab");
+  const lab = await useWorld("lab");
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");

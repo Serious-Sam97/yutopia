@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // Walking in all eight directions, in the world: while the step is under way
 // the person is drawn in the view that faces where they're going on screen
@@ -29,7 +29,7 @@ const shown = (page: Page) =>
 test("walking every way shows the view facing it", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const cx = Math.floor(sp.x) + 0.5;
   const cy = Math.floor(sp.y) - 2.5;

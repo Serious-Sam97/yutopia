@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page, request } from "@playwright/test";
-import { ANA, API, enter, spaceId, test, token } from "./helpers";
+import { ANA, API, enter, test, token, useWorld } from "./helpers";
 
 // Build mode, in the Lab: Tab steps through things stacked under the pointer
 // (a computer on a desk, then the desk), and a dressed desk saved as one of
@@ -29,7 +29,7 @@ const mine = (page: Page, skip: string[]) =>
 test("Tab steps through what's stacked; a dressed desk saved as a setup and placed again", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const before: string[] = await page.evaluate(() => [...(window as any).__yutopia.room.state.objects.keys()]);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const X = Math.floor(sp.x) - 3;
@@ -112,8 +112,8 @@ test("Tab steps through what's stacked; a dressed desk saved as a setup and plac
   } finally {
     const ids = (await mine(page, before)).map((o) => o.id);
     if (ids.length) await page.evaluate((x) => (window as any).__yutopia.send("obj:removeMany", { ids: x }), ids);
-    const list = await (await api.get(`${API}/api/yutopia/setups`)).json();
-    for (const s of list.setups ?? []) if (s.name === name) await api.delete(`${API}/api/yutopia/setups/${s.id}`);
+    const list = await (await api.get(`${API}/api/setups`)).json();
+    for (const s of list.setups ?? []) if (s.name === name) await api.delete(`${API}/api/setups/${s.id}`);
     await page.waitForTimeout(500);
   }
 });

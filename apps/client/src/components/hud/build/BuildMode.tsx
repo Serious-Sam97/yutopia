@@ -1,13 +1,11 @@
 "use client";
 
 import { areaAt, CLOTH_COLORS, DECOR, edgeAt, entry, faceMat, footprint, isWindow, panelTile } from "@yutopia/shared";
-import { showsBoards } from "@yutopia/shared/media";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
 import { type BuildTool, hud, toast, useHud } from "@/world/store";
 import { Brand } from "../../Brand";
-import { BoardPicker } from "../BoardPanel";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
 import { Catalog, sizeLabel } from "./Catalog";
@@ -33,13 +31,12 @@ const MOD = typeof navigator !== "undefined" && /Mac|iP/.test(navigator.platform
 
 // Build mode (project owners) takes over the screen: its own top bar with
 // undo/redo and save state, a tool rail, the tool's panel, and a bar at the
-// bottom for what you're doing right now. Everything persists to Yondra.
+// bottom for what you're doing right now. Everything persists to the API.
 export function BuildMode() {
   const t = useTr();
   const w = useWorld();
   const b = useHud((s) => s.build);
   const canBuild = useHud((s) => s.canBuild);
-  const spaceId = useHud((s) => s.spaceId);
   const [members, setMembers] = useState<Member[]>([]);
   const [keys, setKeys] = useState(false);
 
@@ -67,12 +64,12 @@ export function BuildMode() {
   ]);
 
   useEffect(() => {
-    if (b.on && canBuild && spaceId)
+    if (b.on && canBuild)
       yutopia
-        .members(spaceId)
+        .members()
         .then((r) => setMembers(r.members))
         .catch(() => {});
-  }, [b.on, canBuild, spaceId]);
+  }, [b.on, canBuild]);
 
   if (!b.on || !canBuild) return null;
   return (
@@ -104,7 +101,7 @@ export function BuildMode() {
 function BuildTopBar() {
   const t = useTr();
   const w = useWorld();
-  const spaceName = useHud((s) => s.spaceName);
+  const worldName = useHud((s) => s.worldName);
   const area = useHud((s) => s.me?.areaName ?? "");
   const h = useHud((s) => s.build.history);
   const mic = useHud((s) => s.media.mic);
@@ -130,7 +127,7 @@ function BuildTopBar() {
           {t("buildMode").toUpperCase()}
         </h2>
         <span className="mono text-xs truncate hidden lg:inline" style={{ color: "var(--cream-dim)" }}>
-          {[spaceName, area].filter(Boolean).join(" · ")}
+          {[worldName, area].filter(Boolean).join(" · ")}
         </span>
       </div>
       <div className="flex-1" />
@@ -789,7 +786,6 @@ function ItemToolbar() {
   useHud((s) => s.objectsVersion);
   const el = useRef<HTMLDivElement>(null);
   const [look, setLook] = useState(false);
-  const [boardOpen, setBoardOpen] = useState(false);
   useEffect(() => {
     if (!w) return;
     return w.onFrame(() => {
@@ -814,7 +810,6 @@ function ItemToolbar() {
   const paintable = !!kind && !!entry(kind).paint;
   const canLook = !!kind && (looks > 1 || !!decorOpts || paintable);
   // a board wall (or a screen showing boards): which board it shows
-  const boardOf = objs.length === 1 && showsBoards(objs[0]) ? objs[0].id : null;
   const btn = (icon: IconName, label: Key, onClick: () => void, pressed?: boolean) => (
     <button
       type="button"
@@ -830,11 +825,6 @@ function ItemToolbar() {
   );
   return (
     <div ref={el} className="pointer-events-none fixed left-0 top-0 z-10 flex flex-col items-center gap-1.5">
-      {boardOpen && boardOf && (
-        <fieldset className="pointer-events-auto cabinet p-2 rise" aria-label={t("boardPick")}>
-          <BoardPicker key={boardOf} objectId={boardOf} compact onDone={() => setBoardOpen(false)} />
-        </fieldset>
-      )}
       {look && kind && (
         <fieldset className="pointer-events-auto cabinet p-1.5 flex flex-col gap-1.5 rise" aria-label={t("buildLook")}>
           {(looks > 1 || decorOpts) && (
@@ -919,16 +909,6 @@ function ItemToolbar() {
         {btn("rotate", "buildRotate", () => w?.buildKey("r"))}
         {btn("copy", "buildDuplicate", () => w?.build?.duplicate())}
         {canLook && btn("palette", "buildLook", () => setLook((v) => !v), look)}
-        {boardOf &&
-          btn(
-            "board",
-            "boardPick",
-            () => {
-              setBoardOpen((v) => !v);
-              setLook(false);
-            },
-            boardOpen,
-          )}
         {btn("bin", "kRemove", () => w?.buildKey("delete"))}
       </div>
     </div>

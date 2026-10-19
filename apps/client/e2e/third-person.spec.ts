@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // Third person, live: Ana sees the Lab in third person (a per-player setting),
 // Bia in iso, in the same room at the same time. Each sees the other where
@@ -41,7 +41,7 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   test.setTimeout(150_000);
   const tokA = await token(ANA);
   const tokB = await token(BIA);
-  const lab = await spaceId(tokA, "Yutopia Lab");
+  const lab = await useWorld("lab");
 
   // Ana: third person (her own setting), chase camera
   await page.addInitScript(() => {
@@ -154,7 +154,7 @@ test("third person: emotes and phones over there, a sofa clicked in 3D seats you
   test.setTimeout(150_000);
   const tokA = await token(ANA);
   const tokB = await token(BIA);
-  const lab = await spaceId(tokA, "Yutopia Lab");
+  const lab = await useWorld("lab");
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
@@ -280,7 +280,7 @@ test("third person: emotes and phones over there, a sofa clicked in 3D seats you
 test("third person: build mode places, picks up and moves a thing in 3D", async ({ page }) => {
   test.setTimeout(150_000);
   const tok = await token(ANA);
-  const lab = await spaceId(tok, "Yutopia Lab");
+  const lab = await useWorld("lab");
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");

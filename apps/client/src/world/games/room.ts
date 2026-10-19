@@ -381,12 +381,11 @@ export class GameRoom {
       stopped: false,
     };
     this.hosting = h;
-    const spaceId = hud.get().spaceId;
     try {
       // the disc console needs the team's BIOS (the panel says so before it's
       // turned on; this is for whoever carries on). The dev stack's test BIOS
       // isn't one a core can run: with it, the core's stand-in (HLE) boots.
-      const all = isDiscSystem(system) ? await listBios(spaceId).catch(() => []) : [];
+      const all = isDiscSystem(system) ? await listBios().catch(() => []) : [];
       if (isDiscSystem(system) && !all.length) {
         toast("This console needs its BIOS: bring one to the disc rack.", "warn");
         this.w.send("game:power", { id, on: false });
@@ -394,16 +393,16 @@ export class GameRoom {
       }
       // (an uploaded disc: its files and hash, from the library; it comes down
       // once per computer, the panel shows how far)
-      const game = c.game.startsWith("u:") ? (await library(spaceId)).find((g) => g.id === c.game) : undefined;
+      const game = c.game.startsWith("u:") ? (await library()).find((g) => g.id === c.game) : undefined;
       const [{ blob: rom, name, more: tracks }, sram, state] = await Promise.all([
-        romOf(spaceId, c.game, system, {
+        romOf(c.game, system, {
           game,
           onProgress: (done, total) => {
             this.loading = total > 32 * 1024 * 1024 && done < total ? [id, done, total] : null;
           },
         }),
-        loadSave(spaceId, c.game, "sram"),
-        c.resumes > 0 ? loadSave(spaceId, c.game, "state") : Promise.resolve(null),
+        loadSave(c.game, "sram"),
+        c.resumes > 0 ? loadSave(c.game, "state") : Promise.resolve(null),
       ]).finally(() => {
         this.loading = null;
       });
@@ -436,7 +435,7 @@ export class GameRoom {
           toast(
             `No ${REGION_NAMES[region]} BIOS in this space: the game starts without the PlayStation logo. Bring one (${REGION_BIOS[region]}) to the disc rack for it.`,
           );
-        bios = await biosFiles(spaceId, fits ? [fits] : other ? [other] : real);
+        bios = await biosFiles(fits ? [fits] : other ? [other] : real);
       }
       if (h.stopped) return;
       h.emu = await startEmu({
@@ -489,7 +488,7 @@ export class GameRoom {
     if (!h.emu) return;
     try {
       const [state, sram] = await Promise.all([h.emu.saveState().catch(() => null), h.emu.saveSRAM()]);
-      await putSave(hud.get().spaceId, h.game, { state, sram });
+      await putSave(h.game, { state, sram });
     } catch {
       // nothing to save yet
     }

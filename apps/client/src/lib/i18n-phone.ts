@@ -13,7 +13,7 @@ export const PHONE_STRINGS = {
   phBack: ["Back", "Voltar"],
   phSoon: ["SOON", "EM BREVE"],
   phNotYet: ["Coming soon", "Em breve"],
-  phOffline: ["No connection to Yondra right now.", "Sem conexão com o Yondra agora."],
+  phOffline: ["No connection right now.", "Sem conexão agora."],
   phRetry: ["Try again", "Tentar de novo"],
   phLoading: ["Loading…", "Carregando…"],
   // apps
@@ -45,7 +45,7 @@ export const PHONE_STRINGS = {
   phNoMsgs: ["Start the conversation.", "Comece a conversa."],
   phTyping: ["typing…", "digitando…"],
   phFailed: ["Couldn't send — tap to retry", "Não enviou — toque para tentar de novo"],
-  phSpaceThread: ["Everyone in {space}", "Todos em {space}"],
+  phSpaceThread: ["Everyone in {space}", "Todos em {space}"], // the "everyone" thread
   phMembers: ["{n} people", "{n} pessoas"],
   phMute: ["Mute", "Silenciar"],
   phUnmute: ["Unmute", "Ativar som"],
@@ -255,8 +255,6 @@ export const PHONE_STRINGS = {
   store_tape_d: ["Your radio, in your pocket", "Seu rádio, no seu bolso"],
   store_snake: ["Snake '89", "Snake '89"],
   store_snake_d: ["The classic, but it bites back", "O clássico, mas ele morde de volta"],
-  store_pager: ["Board Pager", "Pager do Quadro"],
-  store_pager_d: ["Your Yondra cards, buzzing", "Seus cards do Yondra, vibrando"],
   store_horoscope: ["Vortex Horoscope", "Horóscopo do Vortex"],
   store_horoscope_d: ["He reads your future. It's bad.", "Ele lê seu futuro. É ruim."],
   phMapsSoon: [

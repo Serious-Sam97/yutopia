@@ -15,7 +15,7 @@ import { type CameraState, type PhotoRef, phone } from "./store";
 // hides). In 3D, Photo looks through your eyes (the wheel zooms) and Selfie
 // puts a camera at arm's length facing you (Q / E walk it round you); in iso,
 // Photo frames the view as it is and Selfie leans in on you. The shot is the
-// world's own frame, filtered, saved in Yondra (the Gallery), and everyone
+// world's own frame, filtered, saved in the API (the Gallery), and everyone
 // near you sees the arm up and the flash.
 
 export const FILTERS = ["none", "film", "vhs", "bw", "polaroid"] as const;
@@ -204,7 +204,7 @@ export class Camera {
     const secs = Math.max(1, Math.round((Date.now() - r.startedAt) / 1000));
     const blob = await r.stop();
     const me = hud.get().me;
-    const where = [me?.areaName, hud.get().spaceName].filter(Boolean).join(" · ");
+    const where = [me?.areaName, hud.get().worldName].filter(Boolean).join(" · ");
     const local: PhotoRef = {
       id: -Date.now(),
       kind: "video",
@@ -224,7 +224,6 @@ export class Camera {
         filter: local.filter,
         selfie: local.selfie,
         where,
-        spaceId: this.ph.ctl.session?.space.id ?? 0,
         video: { w: local.w, h: local.h, secs },
       });
       phone.set((s) => ({ photos: [saved, ...s.photos.filter((p) => p.id !== saved.id)] }));
@@ -253,7 +252,7 @@ export class Camera {
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.9));
     const thumb = canvas.toDataURL("image/jpeg", 0.6);
     const me = hud.get().me;
-    const where = [me?.areaName, hud.get().spaceName].filter(Boolean).join(" · ");
+    const where = [me?.areaName, hud.get().worldName].filter(Boolean).join(" · ");
     const local: PhotoRef = {
       id: -Date.now(),
       kind: "photo",
@@ -277,7 +276,6 @@ export class Camera {
         filter: c.filter,
         selfie: c.mode === "selfie",
         where,
-        spaceId: this.ph.ctl.session?.space.id ?? 0,
       });
       phone.set((s) => ({ photos: [saved, ...s.photos.filter((p) => p.id !== saved.id)] }));
       this.set({ last: saved, busy: false });

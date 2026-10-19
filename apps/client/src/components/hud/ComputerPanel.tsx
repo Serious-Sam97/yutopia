@@ -89,7 +89,7 @@ export function ComputerPanel({ objectId }: { objectId: string }) {
           setFailed(false);
           const name = w?.myName() ?? "";
           frame.current?.contentWindow?.postMessage({ type: "yutopia:hello", name, lang: pt ? "pt" : "en" }, origin);
-          // not signed in: Yondra vouches for us (a one-time code VortexOS trades for its own session)
+          // not signed in: Yutopia vouches for us (a one-time code VortexOS trades for its own session)
           if (d.signedIn === false)
             api<{ code: string }>("/api/vortexos/handoff", { method: "POST" })
               .then((r) => frame.current?.contentWindow?.postMessage({ type: "yutopia:auth", code: r.code }, origin))

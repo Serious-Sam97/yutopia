@@ -1,4 +1,4 @@
-// Bundle budget: gzip size of the JS the world page (/s/[spaceId]) loads, from
+// Bundle budget: gzip size of the JS the world page (/, the one world) loads, from
 // the production build's manifest. Run after:
 //   NEXT_DIST_DIR=.next-prod pnpm --filter @yutopia/client build
 import { readdirSync, readFileSync } from "node:fs";
@@ -6,7 +6,8 @@ import { gzipSync } from "node:zlib";
 
 // (the world page was 524.5 before pets, 2026-10-15; pets add ~3 KB of page code, the rest is lazy)
 // (raised to 545 on 2026-10-18 by the user's call: HEAD was 539.8 and jumping needs ~1.3 KB on the page)
-const BUDGETS = { "/s/[spaceId]/page": 545, "/page": 260, "/login/page": 160 }; // KB gzip
+// (the world moved from /s/[spaceId] to / on 2026-10-18, one world; the lobby that was / is gone)
+const BUDGETS = { "/page": 545, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;

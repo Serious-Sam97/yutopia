@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { canPlace, findPath, Grid, Q, topAt, type WorldObjectDef } from "@yutopia/shared";
-import { ANA, enter, spaceId, test, token } from "./helpers";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // Review shots for media on TVs (docs/plan/10-media.md): the new screens in the
 // Lab, each with something on (YouTube thumbnails; one paused), by day and by
@@ -28,7 +28,7 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
     r.fulfill({ status: 200, contentType: "text/javascript", body: STUB }),
   );
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const stamp = Date.now().toString(36);
   const ids: string[] = [];
   try {

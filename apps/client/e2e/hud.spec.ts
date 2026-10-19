@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // The main HUD (proposal v2): top bars, the side panel (people · room) with
 // who can hear you, quick emotes, the phone key, the status menu, the minimap.
@@ -9,7 +9,7 @@ const SHOTS = process.env.YUTOPIA_SHOTS;
 test("HUD: who hears you, emotes, the phone key, people, room, status, minimap", async ({ browser }) => {
   test.setTimeout(180_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
-  const s = await spaceId(ta);
+  const s = await useWorld("demo");
   const ctx = { viewport: { width: 1440, height: 900 } };
   const ana = await (await browser.newContext(ctx)).newPage();
   const bia = await (await browser.newContext(ctx)).newPage();

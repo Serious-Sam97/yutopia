@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page, request } from "@playwright/test";
-import { ANA, API, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, API, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // Controllers (docs/plan/23-disc-console.md P4), with a fake gamepad in each
 // player's browser. The disc console's test card: colour bars; ✕ on pad 1 →
@@ -73,13 +73,12 @@ const api = async (tok: string) =>
     baseURL: API,
     extraHTTPHeaders: { Authorization: `Bearer ${tok}`, Accept: "application/json" },
   });
-async function testBios(tok: string, space: number, on: boolean) {
+async function testBios(tok: string, on: boolean) {
   const c = await api(tok);
-  const bios = (await (await c.get(`/api/yutopia/spaces/${space}/bios`)).json()).bios ?? [];
-  for (const b of bios.filter((x: any) => x.model === "Test BIOS"))
-    await c.delete(`/api/yutopia/spaces/${space}/bios/${b.id}`);
+  const bios = (await (await c.get(`/api/bios`)).json()).bios ?? [];
+  for (const b of bios.filter((x: any) => x.model === "Test BIOS")) await c.delete(`/api/bios/${b.id}`);
   if (on)
-    await c.post(`/api/yutopia/spaces/${space}/bios`, {
+    await c.post(`/api/bios`, {
       multipart: {
         file: { name: "scph5501.bin", mimeType: "application/octet-stream", buffer: Buffer.alloc(512 * 1024, 0x42) },
       },
@@ -90,8 +89,8 @@ async function testBios(tok: string, space: number, on: boolean) {
 test("controllers: rebind on a fake pad, the analog switch, pad 2's stick through the server", async ({ browser }) => {
   test.setTimeout(300_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
-  const s = await spaceId(ta, "Yutopia Lab");
-  await testBios(ta, s, true);
+  const s = await useWorld("lab");
+  await testBios(ta, true);
   const open = async (who: string) => {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
     await ctx.addInitScript(fakePad);
@@ -229,6 +228,6 @@ test("controllers: rebind on a fake pad, the analog switch, pad 2's stick throug
       .evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvId, conId])
       .catch(() => {});
     await ana.waitForTimeout(1500).catch(() => {});
-    await testBios(ta, s, false);
+    await testBios(ta, false);
   }
 });

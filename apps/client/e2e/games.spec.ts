@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page, request } from "@playwright/test";
-import { ANA, API, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, API, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // The game room, end to end (docs/plan/09-game-room.md): Ana puts a TV and an
 // 8-bit console in the Lab, plugs it in, puts our test cartridge in (light blue;
@@ -65,7 +65,7 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
   const tvId = `e2e-tv-${stamp}`;
   const conId = `e2e-nes-${stamp}`;
   try {
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     // a TV and, two tiles in front of it, the console (the server says no to a bad spot)
@@ -182,7 +182,7 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
   } finally {
     // (Ana builds; Bia can't take things away)
     const clean = await (await browser.newContext()).newPage();
-    await enter(clean, ta, await spaceId(ta, "Yutopia Lab"));
+    await enter(clean, ta, await useWorld("lab"));
     await clean.evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvId, conId]);
     await clean.waitForTimeout(800);
   }
@@ -194,7 +194,7 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
 test("bring your cartridge: upload, play, save, come back and carry on", async ({ browser }) => {
   test.setTimeout(240_000);
   const ta = await token(ANA);
-  const s = await spaceId(ta, "Yutopia Lab");
+  const s = await useWorld("lab");
   const stamp = Date.now().toString(36);
   const tvId = `e2e-tv-${stamp}`;
   const conId = `e2e-nes-${stamp}`;
@@ -262,9 +262,9 @@ test("bring your cartridge: upload, play, save, come back and carry on", async (
     const api = await request.newContext({
       extraHTTPHeaders: { Authorization: `Bearer ${ta}`, Accept: "application/json" },
     });
-    const list = await (await api.get(`${API}/api/yutopia/spaces/${s}/games`)).json();
+    const list = await (await api.get(`${API}/api/games`)).json();
     for (const g of list.games ?? [])
-      if (g.title === title) await api.delete(`${API}/api/yutopia/spaces/${s}/games/${String(g.id).slice(2)}`);
+      if (g.title === title) await api.delete(`${API}/api/games/${String(g.id).slice(2)}`);
     await api.dispose();
     await page.waitForTimeout(500).catch(() => {});
   }
@@ -275,7 +275,7 @@ test("bring your cartridge: upload, play, save, come back and carry on", async (
 test("phone: the touch pad plays", async ({ browser }) => {
   test.setTimeout(180_000);
   const ta = await token(ANA);
-  const s = await spaceId(ta, "Yutopia Lab");
+  const s = await useWorld("lab");
   const page = await (
     await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   ).newPage();
@@ -329,7 +329,7 @@ test("phone: the touch pad plays", async ({ browser }) => {
 test("a Console TV takes a console too: the cable, the game on its glass, back to its TV input", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const stamp = Date.now().toString(36);
   const tvId = `e2e-ctv-${stamp}`;
   const conId = `e2e-cnes-${stamp}`;
@@ -413,7 +413,7 @@ test("two games at once: one each, both TVs live for everyone; a second of mine 
   const stamp = Date.now().toString(36);
   const [tvA, conA, tvB, conB] = ["tvA", "conA", "tvB", "conB"].map((k) => `e2e-2g-${k}-${stamp}`);
   try {
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     const sp = await ana.evaluate(() => (window as any).__yutopia.map.spawn);

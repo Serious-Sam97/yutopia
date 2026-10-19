@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, spaceId, test, token } from "./helpers";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // The rest of the hand (plan phase 2), in the Lab: Shift-click keeps placing
 // copies; what you hold turns with the wheel and with a sideways drag while
@@ -43,7 +43,7 @@ const plantsAt = (page: Page, ids: string[]) =>
 test("the hand: Shift keeps placing, wheel and drag turn, arrows nudge, Delete removes", async ({ page }) => {
   test.setTimeout(150_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const before: string[] = await page.evaluate(() => [...(window as any).__yutopia.room.state.objects.keys()]);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const X = Math.floor(sp.x) - 3;

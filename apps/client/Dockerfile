@@ -1,14 +1,11 @@
 # client (Next.js). NEXT_PUBLIC_* are baked in at build time.
-#   docker build -f apps/client/Dockerfile --build-arg NEXT_PUBLIC_API=https://api.example -t yutopia-client .
+#   docker build -f apps/client/Dockerfile -t yutopia-client .
+# NEXT_PUBLIC_API empty (the default here) = the API on the client's own origin, under /api.
 FROM node:24-alpine AS build
 WORKDIR /app
 RUN corepack enable
-ARG NEXT_PUBLIC_API
-ARG NEXT_PUBLIC_YONDRA_APP
-ARG NEXT_PUBLIC_REVERB_APP_KEY
-ARG NEXT_PUBLIC_REVERB_HOST
-ARG NEXT_PUBLIC_REVERB_PORT=443
-ARG NEXT_PUBLIC_REVERB_SCHEME=https
+ARG NEXT_PUBLIC_API=""
+ARG NEXT_PUBLIC_VORTEXOS_URL
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/client/package.json apps/client/

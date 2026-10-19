@@ -1,10 +1,10 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, type Page, request } from "@playwright/test";
-import { ANA, API, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // Two builders in one studio: what one holds, the other can't grab — they see
 // it outlined in rust with "held by …", and get told who's moving it. Once it's
-// put down, it's free again. (Bia is made a co-owner of the Lab for the test.)
+// put down, it's free again. (Everyone builds in the one world.)
 const SHOTS = process.env.YUTOPIA_SHOTS;
 
 async function at(page: Page, x: number, y: number, z = 0) {
@@ -28,22 +28,12 @@ const buildOn = (page: Page) =>
 test("two builders: one hand at a time, and you can see whose", async ({ browser }) => {
   test.setTimeout(240_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
-  const auth = (t: string) =>
-    request.newContext({ extraHTTPHeaders: { Authorization: `Bearer ${t}`, Accept: "application/json" } });
-  const [apiA, apiB] = [await auth(ta), await auth(tb)];
-  const lab = (await (await apiA.get(`${API}/api/yutopia/spaces`)).json()).spaces.find(
-    (s: any) => s.name === "Yutopia Lab",
-  );
-  const biaId = (await (await apiB.get(`${API}/api/yutopia/spaces`)).json()).user.id;
-  const promote = (role: string) =>
-    apiA.put(`${API}/api/projects/${lab.projectId}/members/${biaId}`, { data: { role } });
-  expect((await promote("owner")).ok()).toBeTruthy();
   const ctx = { viewport: { width: 1280, height: 820 } };
   const ana = await (await browser.newContext(ctx)).newPage();
   const bia = await (await browser.newContext(ctx)).newPage();
   let plant = "";
   try {
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     expect(await bia.evaluate(() => (window as any).__hud.get().canBuild)).toBe(true);
@@ -117,7 +107,5 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
   } finally {
     if (plant) await ana.evaluate((id) => (window as any).__yutopia.send("obj:remove", { id }), plant).catch(() => {});
     await ana.waitForTimeout(400);
-    await promote("member");
-    await Promise.all([apiA.dispose(), apiB.dispose()]);
   }
 });

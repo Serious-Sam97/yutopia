@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // Ping-pong against Vortex: walk up to the −x end, open the table, take the
 // end, put Vortex at the other one, start. Ana serves with the mouse — click
@@ -54,7 +54,7 @@ test("ping-pong: serve to Vortex with the mouse, he plays it back — seen from 
   const bia = await (await browser.newContext(ctx)).newPage();
   const id = `e2e-pong-${Date.now().toString(36)}`;
   try {
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     // tables an earlier, interrupted run left behind

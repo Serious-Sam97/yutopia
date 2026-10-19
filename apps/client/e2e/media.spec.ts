@@ -2,7 +2,7 @@
 
 import { expect, type Page } from "@playwright/test";
 import { canPlace, findPath, Grid, type MapDef, Q, topAt, type WorldObjectDef } from "@yutopia/shared";
-import { ANA, BIA, enter, spaceId, test, token } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // Media on TVs and the radio, end to end (docs/plan/10-media.md). YouTube's
 // player is a stub here (the real IFrame API needs the network and plays ads):
@@ -111,7 +111,7 @@ test("media: a YouTube video on a wall TV — left playing, found at the right s
   const ctx = { viewport: { width: 1280, height: 800 } };
   const ana = await (await browser.newContext(ctx)).newPage();
   await stubYouTube(ana);
-  const s = await spaceId(ta, "Yutopia Lab");
+  const s = await useWorld("lab");
   await enter(ana, ta, s);
   const tvId = `e2e-hd-${Date.now().toString(36)}`;
   try {
@@ -187,7 +187,7 @@ test("media: a YouTube video on a wall TV — left playing, found at the right s
     // tidy up
     await bia.evaluate((i) => (window as any).__yutopia.send("media:ctl", { id: i, op: "stop" }), tvId);
   } finally {
-    // only builders remove things: Ana does it
+    // Ana takes it away (anyone builds)
     const a2 = await (await browser.newContext(ctx)).newPage();
     await enter(a2, ta, s);
     await a2.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), tvId);
@@ -200,7 +200,7 @@ test("media: YouTube on a radio — its own queue, the card plays near it, a sta
   const ta = await token(ANA);
   const ana = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
   await stubYouTube(ana);
-  const s = await spaceId(ta, "Yutopia Lab");
+  const s = await useWorld("lab");
   await enter(ana, ta, s);
   const radioId = `e2e-radio-${Date.now().toString(36)}`;
   // a radio on a desk (a surface with room on its top)
@@ -330,7 +330,7 @@ test("media: one saved playlist after another on a radio", async ({ browser }) =
   const ta = await token(ANA);
   const ana = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
   await stubYouTube(ana);
-  await enter(ana, ta, await spaceId(ta, "Yutopia Lab"));
+  await enter(ana, ta, await useWorld("lab"));
   const radioId = `e2e-radio2-${Date.now().toString(36)}`;
   const { map, objects } = await liveMap(ana);
   let box: WorldObjectDef | null = null;
@@ -400,7 +400,7 @@ test("media: Jellyfin on a console TV — the stream on the glass, in step (live
   test.setTimeout(240_000);
   const ta = await token(ANA);
   const ana = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
-  const s = await spaceId(ta, "Yutopia Lab");
+  const s = await useWorld("lab");
   await enter(ana, ta, s);
   const tvId = `e2e-ctv-${Date.now().toString(36)}`;
   try {

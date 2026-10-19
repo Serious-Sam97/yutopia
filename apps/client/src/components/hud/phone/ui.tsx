@@ -284,7 +284,7 @@ export function useNav(root: RefObject<HTMLDivElement | null>, ph: Phone | null,
 // mark and its length).
 export function Thumb({ p }: { p: PhotoRef }) {
   if (p.kind !== "video")
-    // biome-ignore lint/performance/noImgElement: a photo from Yondra
+    // biome-ignore lint/performance/noImgElement: a photo from the API
     return <img alt="" src={p.url} loading="lazy" />;
   return (
     <>

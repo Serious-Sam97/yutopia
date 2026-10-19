@@ -9,12 +9,12 @@ import { hud } from "@/world/store";
 import { useWorld } from "./ctx";
 import { Panel } from "./Panel";
 
-// Change your look without leaving the studio: saved in Yondra (so it sticks),
+// Change your look without leaving the studio: saved in the API (so it sticks),
 // then sent to the room so everyone sees it right away.
 export function AvatarPanel() {
   const t = useTr();
   const w = useWorld();
-  // start from the look saved in Yondra (the room's copy can be older)
+  // start from the look saved in the API (the room's copy can be older)
   const [initial, setInitial] = useState<AvatarLayers>(() => parseAvatar(w?.personByUid(w.myUid())?.avatar));
   useEffect(() => {
     yutopia

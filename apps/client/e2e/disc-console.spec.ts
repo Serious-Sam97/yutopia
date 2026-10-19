@@ -1,15 +1,15 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page, request } from "@playwright/test";
-import { ANA, API, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, API, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // The disc console, played (docs/plan/23-disc-console.md P3). Ana puts a TV and
 // the grey disc console in the Lab, plugs it in and puts our test disc in (the
 // lid goes up and down). The space has no BIOS: it won't turn on until she
-// brings one (the dev stack's Test BIOS, YUTOPIA_TEST_BIOS_MD5 in Yondra's .env —
+// brings one (the dev stack's Test BIOS, YUTOPIA_TEST_BIOS_MD5 in the API's .env —
 // with it the core boots its stand-in, HLE; a real BIOS would boot itself).
 // On: the test card's colour bars at hers and on Bia's TV; ✕ on pad 1 turns it
 // red; Bia takes pad 2, ✕: green on both. Saved and off: the memory card and a
-// state are in Yondra; a new session turns on where it was left.
+// state are in the API; a new session turns on where it was left.
 const SHOTS = process.env.YUTOPIA_SHOTS;
 
 // the picture's left side (the test card's second bar: yellow), sampled
@@ -62,11 +62,10 @@ const api = async (tok: string) =>
     baseURL: API,
     extraHTTPHeaders: { Authorization: `Bearer ${tok}`, Accept: "application/json" },
   });
-async function dropTestBios(tok: string, space: number) {
+async function dropTestBios(tok: string) {
   const c = await api(tok);
-  const bios = (await (await c.get(`/api/yutopia/spaces/${space}/bios`)).json()).bios ?? [];
-  for (const b of bios.filter((x: any) => x.model === "Test BIOS"))
-    await c.delete(`/api/yutopia/spaces/${space}/bios/${b.id}`);
+  const bios = (await (await c.get(`/api/bios`)).json()).bios ?? [];
+  for (const b of bios.filter((x: any) => x.model === "Test BIOS")) await c.delete(`/api/bios/${b.id}`);
   await c.dispose();
 }
 
@@ -75,8 +74,8 @@ test("disc console: plug in, a disc, the BIOS gate, play for everyone, pads, sav
 }) => {
   test.setTimeout(360_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
-  const s = await spaceId(ta, "Yutopia Lab");
-  await dropTestBios(ta, s);
+  const s = await useWorld("lab");
+  await dropTestBios(ta);
   const ctx = { viewport: { width: 1280, height: 800 } };
   let ana = await (await browser.newContext(ctx)).newPage();
   const bia = await (await browser.newContext(ctx)).newPage();
@@ -153,9 +152,7 @@ test("disc console: plug in, a disc, the BIOS gate, play for everyone, pads, sav
     // brought a real one to the Lab (theirs: it stays; the gate isn't checked then)
     const power = ana.getByRole("button", { name: /^⏻ Turn on/ });
     const ca = await api(ta);
-    const real = ((await (await ca.get(`/api/yutopia/spaces/${s}/bios`)).json()).bios ?? []).some(
-      (b: any) => b.model !== "Test BIOS",
-    );
+    const real = ((await (await ca.get(`/api/bios`)).json()).bios ?? []).some((b: any) => b.model !== "Test BIOS");
     await ca.dispose();
     if (real)
       test.info().annotations.push({ type: "skipped part", description: "the Lab has a real BIOS: no gate to check" });
@@ -219,15 +216,15 @@ test("disc console: plug in, a disc, the BIOS gate, play for everyone, pads, sav
     }
     await bia.keyboard.up("KeyX");
 
-    // saved and off: the memory card and a state are in Yondra
+    // saved and off: the memory card and a state are in the API
     await ana.getByRole("button", { name: /Save now/ }).click();
     await expect(ana.getByText(/Saved —/)).toBeVisible({ timeout: 10_000 });
     await ana.getByRole("button", { name: /Turn off/ }).click();
     await expect.poll(() => consoleState(ana, conId)).toBeNull();
     const c = await api(ta);
-    const saves = await (await c.get(`/api/yutopia/spaces/${s}/saves/b:testcard-ps1`)).json();
+    const saves = await (await c.get(`/api/saves/b:testcard-ps1`)).json();
     expect(saves).toMatchObject({ state: true, sram: true });
-    const card = await c.get(`/api/yutopia/spaces/${s}/saves/b:testcard-ps1/sram`);
+    const card = await c.get(`/api/saves/b:testcard-ps1/sram`);
     expect((await card.body()).length, "the memory card").toBe(128 * 1024);
     await c.dispose();
 
@@ -252,7 +249,7 @@ test("disc console: plug in, a disc, the BIOS gate, play for everyone, pads, sav
       .evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvId, conId])
       .catch(() => {});
     await ana.waitForTimeout(1500).catch(() => {});
-    await dropTestBios(ta, s);
+    await dropTestBios(ta);
   }
 });
 
@@ -267,7 +264,7 @@ test("disc console: a big disc comes down once, with its progress", async ({ bro
   const { tmpdir } = await import("node:os");
   const { join, resolve } = await import("node:path");
   const ta = await token(ANA);
-  const s = await spaceId(ta, "Yutopia Lab");
+  const s = await useWorld("lab");
   const title = `Big Disc ${Date.now().toString(36)}`;
   const dir = mkdtempSync(join(tmpdir(), "yutopia-disc-"));
   execFileSync("node", [join(resolve(__dirname, "../../.."), "tools/test-rom-ps1.mjs"), "--pad", "40", "--out", dir]);
@@ -276,7 +273,7 @@ test("disc console: a big disc comes down once, with its progress", async ({ bro
   const c = await api(ta);
   const up = (
     await (
-      await c.post(`/api/yutopia/spaces/${s}/games/uploads`, {
+      await c.post(`/api/games/uploads`, {
         data: {
           system: "ps1",
           title,
@@ -290,15 +287,15 @@ test("disc console: a big disc comes down once, with its progress", async ({ bro
     for (let n = 0; n < f.chunks; n++)
       expect(
         (
-          await c.put(`/api/yutopia/spaces/${s}/games/uploads/${up.id}/${i}/${n}`, {
+          await c.put(`/api/games/uploads/${up.id}/${i}/${n}`, {
             data: files[i].data.subarray(n * up.chunk, (n + 1) * up.chunk),
             headers: { "Content-Type": "application/octet-stream" },
           })
         ).ok(),
       ).toBe(true);
-  const game = (await (await c.post(`/api/yutopia/spaces/${s}/games/uploads/${up.id}/finish`)).json()).game;
+  const game = (await (await c.post(`/api/games/uploads/${up.id}/finish`)).json()).game;
   expect(game.title).toBe(title);
-  await c.post(`/api/yutopia/spaces/${s}/bios`, {
+  await c.post(`/api/bios`, {
     multipart: {
       file: { name: "scph5501.bin", mimeType: "application/octet-stream", buffer: Buffer.alloc(512 * 1024, 0x42) },
     },
@@ -388,9 +385,9 @@ test("disc console: a big disc comes down once, with its progress", async ({ bro
       .evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvId, conId])
       .catch(() => {});
     await page.waitForTimeout(1500).catch(() => {});
-    await c.delete(`/api/yutopia/spaces/${s}/games/${String(game.id).slice(2)}`);
+    await c.delete(`/api/games/${String(game.id).slice(2)}`);
     await c.dispose();
-    await dropTestBios(ta, s);
+    await dropTestBios(ta);
   }
 });
 
@@ -399,10 +396,10 @@ test("disc console: a big disc comes down once, with its progress", async ({ bro
 test("disc console: the slim one's own screen shows the game", async ({ browser }) => {
   test.setTimeout(240_000);
   const ta = await token(ANA);
-  const s = await spaceId(ta, "Yutopia Lab");
-  await dropTestBios(ta, s);
+  const s = await useWorld("lab");
+  await dropTestBios(ta);
   const c = await api(ta);
-  await c.post(`/api/yutopia/spaces/${s}/bios`, {
+  await c.post(`/api/bios`, {
     multipart: {
       file: { name: "scph5501.bin", mimeType: "application/octet-stream", buffer: Buffer.alloc(512 * 1024, 0x42) },
     },
@@ -508,6 +505,6 @@ test("disc console: the slim one's own screen shows the game", async ({ browser 
       .evaluate((ids) => (window as any).__yutopia.send("obj:removeMany", { ids }), [tvId, conId])
       .catch(() => {});
     await page.waitForTimeout(1500).catch(() => {});
-    await dropTestBios(ta, s);
+    await dropTestBios(ta);
   }
 });

@@ -73,7 +73,7 @@ export class Calls {
       uid,
       name: this.ph.nameOf(uid),
       avatar: this.ph.avatarOf(uid),
-      space: this.ph.contact(uid)?.space ?? "",
+      space: this.ph.contact(uid)?.area ?? "", // (where they are)
       state: "ringing" as const,
     }));
     phone.set({

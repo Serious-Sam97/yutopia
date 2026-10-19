@@ -2,7 +2,7 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { type Page, test } from "@playwright/test";
-import { ANA, enter, spaceId, token } from "./helpers";
+import { ANA, enter, token, useWorld } from "./helpers";
 
 // Review shots of the disc console's look (docs/plan/23-disc-console.md P1):
 // a disc corner put down in the Lab — a TV, the grey console with its lid open
@@ -93,7 +93,7 @@ test("disc console shots: iso and 3D, day and night", async ({ browser }) => {
   const dir = resolve(__dirname, "../../..", OUT ?? ".");
   mkdirSync(dir, { recursive: true });
   const tok = await token(ANA);
-  const space = await spaceId(tok, "Yutopia Lab");
+  const space = await useWorld("lab");
   const open = async (view: "iso" | "1p") => {
     const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
     const page = await ctx.newPage();

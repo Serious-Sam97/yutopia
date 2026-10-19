@@ -11,12 +11,12 @@ export function DoorPanel({ objectId }: { objectId: string }) {
   const w = useWorld();
   useHud((s) => s.mapVersion); // re-render when the map (rooms/owners) changes
   const door = w?.engine?.getObject(objectId);
-  const canBuild = useHud((s) => s.canBuild);
+  const isAdmin = useHud((s) => s.isAdmin);
   if (!w || !door) return null;
   const room = doorRoom(w.map, door);
   const state = String(door.props?.state ?? "open");
   const mine = room?.ownerId != null && room.ownerId === w.myUid();
-  const mayLock = mine || canBuild;
+  const mayLock = mine || isAdmin;
   const set = (s: "open" | "closed" | "locked") => w.send("door:set", { id: objectId, state: s });
   return (
     <Panel title={room ? `Door · ${room.name}` : "Door"}>

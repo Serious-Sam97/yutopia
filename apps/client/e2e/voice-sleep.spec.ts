@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { chromium, expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // The voice line sleeps after a quiet spell (nothing of mine live, nobody near)
 // and wakes on demand; proximity voice must work exactly as before. The wait is
@@ -26,7 +26,7 @@ async function launch() {
 }
 async function open(browser: Awaited<ReturnType<typeof launch>>, who: { email: string; password: string }) {
   const tok = await token(who);
-  const lab = await spaceId(tok, "Yutopia Lab");
+  const lab = await useWorld("lab");
   const ctx = await browser.newContext({
     viewport: { width: 1100, height: 720 },
     permissions: ["camera", "microphone"],

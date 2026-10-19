@@ -7,15 +7,14 @@ import { emoteUrl } from "@/world/art/emotes";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
 
-// Click someone in the world → who they are and what they're doing in Yondra.
+// Click someone in the world → who they are, where, and what you can do with them.
 export function PersonCard() {
   const t = useTr();
   const w = useWorld();
   const uid = useHud((s) => s.inspect);
   const p = useHud((s) => s.people.find((x) => x.uid === s.inspect));
-  const doing = useHud((s) => (s.inspect ? (s.status[s.inspect] ?? []) : []));
   const following = useHud((s) => s.following);
-  const canModerate = useHud((s) => s.canBuild);
+  const canModerate = useHud((s) => s.isAdmin);
   if (!uid || !p) return null;
   const avatar = parseAvatar(w?.personByUid(uid)?.avatar);
   const close = () => hud.set({ inspect: null });
@@ -46,32 +45,6 @@ export function PersonCard() {
           </p>
         </div>
       </div>
-      <h3 className="mono text-[11px] uppercase tracking-widest mt-3 mb-1" style={{ color: "var(--vfd)" }}>
-        {t("doing")}
-      </h3>
-      {doing.length ? (
-        <ul className="space-y-1">
-          {doing.map((c) => (
-            <li
-              key={c.id}
-              className="text-sm rounded px-2 py-1"
-              style={{ background: "#120d09", color: c.blocked ? "#ff8a66" : "var(--cream)" }}
-            >
-              <span className="mono text-xs" style={{ color: "var(--vfd)" }}>
-                {c.ticket}
-              </span>{" "}
-              {c.name}
-              <span className="block mono text-[10px]" style={{ color: "var(--muted)" }}>
-                {c.boardName} · {c.section}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          {t("nothingDoing")}
-        </p>
-      )}
       <div className="flex gap-2 mt-3">
         <button
           type="button"

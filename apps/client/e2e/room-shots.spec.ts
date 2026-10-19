@@ -2,7 +2,7 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { test } from "@playwright/test";
-import { ANA, enter, spaceId, token, walkTo } from "./helpers";
+import { ANA, enter, token, useWorld, walkTo } from "./helpers";
 
 // Review shots are taken on High: Auto would step down in a headless browser
 // (software GPU, ~10 fps) after a few seconds and change the look mid-run.
@@ -38,7 +38,7 @@ test("room shots, day and night", async ({ page }) => {
   const dir = resolve(__dirname, "../../..", OUT ?? ".");
   mkdirSync(dir, { recursive: true });
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   // the world only: no HUD, no clock ticking the light while we shoot
   await page.addStyleTag({
     content: `*{visibility:hidden!important}${WORLD}{visibility:visible!important}`,
@@ -102,7 +102,7 @@ test("lab door shots, day and night", async ({ page }) => {
   test.setTimeout(120_000);
   const dir = resolve(__dirname, "../../..", OUT ?? ".");
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   await page.addStyleTag({ content: `*{visibility:hidden!important}${WORLD}{visibility:visible!important}` });
   const door = (await page.evaluate(() => {
     const c = (window as any).__yutopia;
@@ -134,7 +134,7 @@ test("through the day: tracking room, the building, the lobby windows", async ({
   test.setTimeout(120_000);
   const dir = resolve(__dirname, "../../..", OUT ?? ".");
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await page.addStyleTag({ content: `*{visibility:hidden!important}${WORLD}{visibility:visible!important}` });
   await page.evaluate(() => {
     (window as any).__yutopia.updateNight = () => {};
@@ -183,7 +183,7 @@ test("themes: clouds, city, snow", async ({ page }) => {
   test.setTimeout(180_000);
   const dir = resolve(__dirname, "../../..", OUT ?? ".");
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await page.addStyleTag({ content: `*{visibility:hidden!important}${WORLD}{visibility:visible!important}` });
   await page.evaluate(() => {
     (window as any).__yutopia.updateNight = () => {};

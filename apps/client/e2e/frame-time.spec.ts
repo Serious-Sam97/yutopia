@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { test } from "@playwright/test";
-import { ANA, enter, spaceId, token } from "./helpers";
+import { ANA, enter, token, useWorld } from "./helpers";
 
 // Frame time over the Tracking Room (run the bot swarm first for a crowd).
 // Off by default: YUTOPIA_PERF=1 npx playwright test frame-time
@@ -12,7 +12,7 @@ test("frame time over the Tracking Room", async ({ page }) => {
   test.setTimeout(120_000);
   const tok = await token(ANA);
   await page.addInitScript((box) => localStorage.setItem("yutopia:boxart", box ? "1" : "0"), MODE === "box");
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   // YUTOPIA_PERF_HOUR=23 measures the night (lights, emissive layer, bloom)
   await page.evaluate(
     (hour) => {

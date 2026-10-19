@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // Pets (docs/plan/13-pets.md), in the Lab: adopt one from the panel, it
 // turns up beside you; its ring of actions; "Speak!" makes a sound bubble;
@@ -34,7 +34,7 @@ const release = async (page: Page) => {
 test("adopt a platypus, its actions, a sound, and a battle with a friend's cat", async ({ page, browser }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  const space = await spaceId(tok, "Yutopia Lab");
+  const space = await useWorld("lab");
   await enter(page, tok, space);
   const bia = await browser.newContext();
   const page2 = await bia.newPage();

@@ -607,47 +607,8 @@ export class WorldEngine {
     for (const v of this.objectViews.values()) {
       const name = v.def.props?.ownerName;
       if (typeof name !== "string" || !name) continue;
-      // with what they're on in Yondra, lit like a display
-      const ticket = this.deskTasks.get(Number(v.def.props?.ownerId));
-      if (!ticket) {
-        plate(name.split(" ")[0], v.def.x + 0.5, v.def.y + 0.5, 68, false);
-        continue;
-      }
-      const c = new Container();
-      const n = new Text({
-        text: name.split(" ")[0],
-        style: { fontFamily: "Share Tech Mono, monospace", fontSize: 10, fill: C.ink },
-        resolution: 2,
-      });
-      const k = new Text({
-        text: ticket,
-        style: { fontFamily: "VT323, monospace", fontSize: 13, fill: C.vfd, letterSpacing: 0.5 },
-        resolution: 2,
-      });
-      const h = Math.max(n.height, k.height) + 4;
-      const w = n.width + k.width + 20;
-      n.position.set(-w / 2 + 6, -n.height / 2);
-      k.position.set(-w / 2 + n.width + 14, -k.height / 2);
-      const bg = new Graphics()
-        .roundRect(-w / 2, -h / 2, w, h, 3)
-        .fill({ color: C.cream, alpha: 0.92 })
-        .stroke({ width: 1, color: C.walnut })
-        .roundRect(-w / 2 + n.width + 10, -h / 2 + 1.5, k.width + 8, h - 3, 2)
-        .fill({ color: 0x120d09, alpha: 0.95 });
-      c.addChild(bg, n, k);
-      const p = toScreen(v.def.x + 0.5, v.def.y + 0.5);
-      c.position.set(p.x, p.y - 68);
-      this.labelLayer.addChild(c);
+      plate(name.split(" ")[0], v.def.x + 0.5, v.def.y + 0.5, 68, false);
     }
-  }
-
-  // What each desk's owner is on in Yondra (user id → ticket), for their nameplate.
-  private deskTasks = new Map<number, string>();
-  setDeskTasks(m: Map<number, string>) {
-    const same = m.size === this.deskTasks.size && [...m].every(([k, v]) => this.deskTasks.get(k) === v);
-    if (same) return;
-    this.deskTasks = m;
-    this.drawLabels();
   }
 
   // A wall brush over an edge: a see-through wall where it would go.

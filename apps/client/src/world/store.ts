@@ -2,7 +2,7 @@
 
 import type { BattleEvent, Needs, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
 import { useRef, useSyncExternalStore } from "react";
-import type { BoardSummary, MemberStatus, Setup } from "@/lib/api";
+import type { Setup } from "@/lib/api";
 
 // One small external store for everything the HUD shows. The world loop writes,
 // React reads with useHud(selector).
@@ -40,15 +40,11 @@ export interface PhoneHud {
 }
 
 export type PanelKind =
-  | "board"
   | "whiteboard"
   | "radio"
-  | "arcade"
-  | "poker"
   | "standup"
   | "screen"
   | "notice"
-  | "terminal"
   | "coffee"
   | "piano"
   | "slotcar"
@@ -120,7 +116,7 @@ export interface ActionMenu {
   y: number;
   target: ActTarget;
   title: string;
-  subtitle?: string; // a desk's owner and their card, someone's status…
+  subtitle?: string; // a desk's owner, someone's status…
   items: { act: string; ok: boolean }[]; // ok false: shown, greyed out
 }
 export interface QueuedAct {
@@ -209,10 +205,9 @@ export interface WallPanel {
 export interface HudState {
   phase: "loading" | "connecting" | "ready" | "reconnecting" | "failed" | "kicked" | "removed";
   error: string;
-  spaceId: number;
-  spaceName: string;
-  projectId: number | null;
-  canBuild: boolean;
+  worldName: string; // the one world's name (the API's YUTOPIA_WORLD_NAME)
+  canBuild: boolean; // everyone, with a real account
+  isAdmin: boolean; // mutes, kicks, locks
   me: Person | null;
   people: Person[];
   side: SideTab | null; // the right-hand panel and its tab
@@ -225,7 +220,7 @@ export interface HudState {
   menu: ActionMenu | null;
   queue: QueuedAct[];
   focus: boolean; // heads down at my desk
-  mySpawn: { x: number; y: number } | null; // where I arrive here (null: the space's arrival point)
+  mySpawn: { x: number; y: number } | null; // where I arrive (null: the world's arrival point)
   pickArrival: boolean; // choosing it on the map: the next floor click sets it
   panel: { kind: PanelKind; objectId?: string };
   knocks: { from: string; fromName: string; area: string; at: number }[];
@@ -243,8 +238,6 @@ export interface HudState {
   };
   videos: Record<string, HTMLVideoElement>; // uid → camera video
   screens: Record<string, HTMLVideoElement>; // uid → screen share video
-  boards: BoardSummary[];
-  status: Record<number, MemberStatus["doing"]>;
   // the radio I hear (or the nearest one playing): each radio plays its own
   radio: {
     id: string;
@@ -256,7 +249,6 @@ export interface HudState {
     title: string;
   };
   standup: { active: boolean; order: number[]; turn: number; turnStartedAt: number; turnSeconds: number };
-  poker: { open: boolean; cardId: number; boardId: number; title: string; by: string };
   slot: SlotView | null;
   game: GameView | null;
   build: {
@@ -286,7 +278,7 @@ export interface HudState {
     deskDraft: string | null;
     pickSpawn: boolean;
     history: { undo: number; redo: number; undoLabel: string | null; redoLabel: string | null };
-    // the last change: still on its way (saving) or what Yondra said
+    // the last change: still on its way (saving) or what the API said
     save: { state: "idle" | "saving" | "saved" | "failed" | "rejected"; at: number };
     setups: Setup[] | null; // my saved setups (null until loaded)
   };
@@ -308,10 +300,9 @@ export interface HudState {
 const initial: HudState = {
   phase: "loading",
   error: "",
-  spaceId: 0,
-  spaceName: "",
-  projectId: null,
+  worldName: "",
   canBuild: false,
+  isAdmin: false,
   me: null,
   people: [],
   side: null,
@@ -342,11 +333,8 @@ const initial: HudState = {
   },
   videos: {},
   screens: {},
-  boards: [],
-  status: {},
   radio: { id: "", playing: false, station: 0, startedAt: 0, by: "", source: "lofi", title: "" },
   standup: { active: false, order: [], turn: 0, turnStartedAt: 0, turnSeconds: 90 },
-  poker: { open: false, cardId: 0, boardId: 0, title: "", by: "" },
   slot: null,
   game: null,
   build: {

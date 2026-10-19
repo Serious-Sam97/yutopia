@@ -188,14 +188,14 @@ export default function EmuDev() {
       measureState,
       // a game of a space through this browser's copy (the disc cache), stopped
       // after `stopAt` bytes when asked (the next call carries on with Range)
-      cacheGame: async (spaceId: number, id: string, stopAt = 0) => {
+      cacheGame: async (id: string, stopAt = 0) => {
         const api = await import("@/world/games/api");
-        const game = (await api.library(spaceId)).find((g) => g.id === id);
+        const game = (await api.library()).find((g) => g.id === id);
         if (!game) return { error: "no such game" };
         const ctl = new AbortController();
         let last = 0;
         try {
-          const r = await api.romOf(spaceId, id, game.system, {
+          const r = await api.romOf(id, game.system, {
             game,
             signal: ctl.signal,
             onProgress: (done) => {

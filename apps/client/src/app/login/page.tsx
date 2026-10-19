@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
-import { Brand } from "@/components/Brand";
-import { setToken, YONDRA_APP, yutopia } from "@/lib/api";
+import { Suspense, useEffect, useState } from "react";
+import { AuthCard, AuthField } from "@/components/AuthCard";
+import { type Signup, setToken, yutopia } from "@/lib/api";
 import { useTr } from "@/lib/i18n";
 
 function LoginForm() {
@@ -14,6 +14,14 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [signup, setSignup] = useState<Signup>("closed");
+
+  useEffect(() => {
+    yutopia
+      .config()
+      .then((c) => setSignup(c.signup))
+      .catch(() => {});
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,60 +39,32 @@ function LoginForm() {
   }
 
   return (
-    <main className="min-h-full flex items-center justify-center p-4">
-      <form onSubmit={submit} className="cabinet w-full max-w-sm p-5 rise" aria-labelledby="login-title">
-        <Brand />
-        <p className="mt-1 mb-5 text-sm" style={{ color: "var(--muted)" }}>
-          {t("tagline")}
+    <AuthCard
+      title={t("signIn")}
+      onSubmit={submit}
+      error={error}
+      links={[
+        { href: "/forgot", label: t("forgotLink") },
+        ...(signup === "open" ? [{ href: "/register", label: t("noAccount") }] : []),
+      ]}
+    >
+      <AuthField label={t("email")} type="email" autoComplete="email" value={email} onChange={setEmail} />
+      <AuthField
+        label={t("password")}
+        type="password"
+        autoComplete="current-password"
+        value={password}
+        onChange={setPassword}
+      />
+      <button type="submit" className="deck-btn w-full" disabled={busy}>
+        {busy ? t("signingIn") : t("enter")}
+      </button>
+      {signup === "invite" && (
+        <p className="text-center text-xs mt-4" style={{ color: "var(--muted)" }}>
+          {t("inviteOnly")}
         </p>
-        <h1
-          id="login-title"
-          className="mono text-xs uppercase tracking-widest mb-3"
-          style={{ color: "var(--cream-dim)" }}
-        >
-          {t("signIn")}
-        </h1>
-        <label className="block mb-3">
-          <span className="sr-only">{t("email")}</span>
-          <input
-            className="field"
-            type="email"
-            autoComplete="email"
-            required
-            placeholder={t("email")}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
-        <label className="block mb-4">
-          <span className="sr-only">{t("password")}</span>
-          <input
-            className="field"
-            type="password"
-            autoComplete="current-password"
-            required
-            placeholder={t("password")}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
-        {error && (
-          <p role="alert" className="text-sm mb-3" style={{ color: "#ff8a66" }}>
-            {error}
-          </p>
-        )}
-        <button type="submit" className="deck-btn w-full" disabled={busy}>
-          {busy ? t("signingIn") : t("enter")}
-        </button>
-        <a
-          href={`${YONDRA_APP}/register`}
-          className="block text-center text-xs mt-4 underline"
-          style={{ color: "var(--muted)" }}
-        >
-          {t("noAccount")}
-        </a>
-      </form>
-    </main>
+      )}
+    </AuthCard>
   );
 }
 

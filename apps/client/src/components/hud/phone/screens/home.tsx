@@ -48,7 +48,7 @@ export function Home() {
   const missed = usePhone(
     (p) => p.threads.filter((x) => x.unread > 0 && x.last?.kind === "call" && x.last.from !== p.me.uid).length,
   );
-  const room = useHud((h) => h.me?.areaName || h.spaceName);
+  const room = useHud((h) => h.me?.areaName || h.worldName);
   const near = useHud((h) => h.heardBy.length);
   const ph = w?.phone;
   if (!ph) return null;

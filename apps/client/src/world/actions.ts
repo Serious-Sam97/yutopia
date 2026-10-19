@@ -15,7 +15,6 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { COMPUTER_REACH, computerAway } from "@yutopia/shared/computer";
-import { YONDRA_APP } from "@/lib/api";
 import { tr } from "@/lib/i18n";
 import { type ActTarget, hud, toast } from "./store";
 
@@ -50,7 +49,6 @@ export interface ActionHost {
   playNote(id: string, n: number): void;
   openPanel(kind: string, objectId?: string): void;
   putDown(): void;
-  myTask(): { id: number; boardId: number } | null;
 }
 
 const REACH = 1.6; // close enough to use a thing (tiles from its footprint)
@@ -337,11 +335,6 @@ export class ActionQueue {
       case "unfocus":
         h.send("focus", { on: false });
         return null;
-      case "openCard": {
-        const task = h.myTask();
-        if (task) window.open(`${YONDRA_APP}/boards/${task.boardId}?card=${task.id}`, "_blank", "noopener");
-        return null;
-      }
       case "brew":
       case "pour":
       case "buy":

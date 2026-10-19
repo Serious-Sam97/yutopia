@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, spaceId, test, token } from "./helpers";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // The Walls tool, Sims-style (docs/plan/11-wall-building.md), in the Lab on a
 // patch of open floor (everything built is taken down after): Build draws a
@@ -67,7 +67,7 @@ const gesture = (page: Page, from: [number, number], moves: [number, number][]) 
 test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, the view", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   // an 8 × 6 patch of open floor, no walls on its edges, nothing on it
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;
@@ -252,7 +252,7 @@ test("third person: Paint shows the face under the pointer", async ({ page }) =>
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
     localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "free" }));
   });
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   // a solid north wall with open floor in front
   const spot = await page.evaluate(() => {

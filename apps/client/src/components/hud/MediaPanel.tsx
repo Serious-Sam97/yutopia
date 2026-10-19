@@ -24,7 +24,7 @@ import { Panel } from "./Panel";
 
 // The remote (docs/plan/10-media.md): what's on a TV (or a radio's YouTube),
 // its controls, adding things from YouTube or Jellyfin, the queue. Anyone may
-// use it; a locked one only builders. Words live here (EN / PT-BR), not in
+// use it; a locked one only admins. Words live here (EN / PT-BR), not in
 // i18n.ts: the world page's budget.
 const T = {
   remote: ["TV", "TV"],
@@ -40,7 +40,7 @@ const T = {
   stop: ["Turn off", "Desligar"],
   repeat: ["Repeat", "Repetir"],
   lock: ["Lock", "Travar"],
-  locked: ["Locked: only builders change it.", "Travada: só builders mudam."],
+  locked: ["Locked: only admins change it.", "Travada: só admins mudam."],
   watch: ["Watch", "Assistir"],
   yt: ["YouTube", "YouTube"],
   jf: ["Jellyfin", "Jellyfin"],
@@ -128,7 +128,7 @@ export function MediaRemote({ id }: { id: string }) {
   const t = useT();
   const w = useWorld();
   useHud((s) => s.objectsVersion);
-  const canBuild = useHud((s) => s.canBuild);
+  const canLock = useHud((s) => s.isAdmin);
   const [, tick] = useState(0);
   const obj = w?.engine?.getObject(id);
   const radio = isRadio(obj?.kind ?? "");
@@ -147,14 +147,14 @@ export function MediaRemote({ id }: { id: string }) {
     w?.send("media:play", list ? { id, items, mode, list } : { id, items, mode });
     if (mode !== "now") toast(t("added", { n: items.length }));
   };
-  const locked = !!m?.lock && !canBuild;
+  const locked = !!m?.lock && !canLock;
   const jfOn = !!w?.mediaKey?.jf && !radio;
   const [tab, setTab] = useState<"yt" | "jf">("yt");
 
   return (
     <div className="flex flex-col gap-3">
       {!radio && <TvVolume id={id} />}
-      <NowPlaying t={t} m={m} radio={radio} locked={locked} canBuild={canBuild} send={send} id={id} />
+      <NowPlaying t={t} m={m} radio={radio} locked={locked} canLock={canLock} send={send} id={id} />
       {!locked && (
         <section className="vfd-window p-3 flex flex-col gap-2">
           {jfOn && (
@@ -182,7 +182,7 @@ function NowPlaying({
   m,
   radio,
   locked,
-  canBuild,
+  canLock,
   send,
   id,
 }: {
@@ -190,7 +190,7 @@ function NowPlaying({
   m: MediaState | null;
   radio: boolean;
   locked: boolean;
-  canBuild: boolean;
+  canLock: boolean;
   send: (op: string, extra?: Record<string, unknown>) => void;
   id: string;
 }) {
@@ -280,7 +280,7 @@ function NowPlaying({
           <span className="led" />
           {t("repeat")}
         </button>
-        {canBuild && m && (
+        {canLock && m && (
           <button
             type="button"
             className="deck-btn"
@@ -1035,9 +1035,9 @@ export function TvVolume({ id }: { id: string }) {
   const w = useWorld();
   const pt = useLang() === "pt";
   useHud((s) => s.objectsVersion);
-  const canBuild = useHud((s) => s.canBuild);
+  const canLock = useHud((s) => s.isAdmin);
   const o = w?.engine?.getObject(id);
-  const locked = !!mediaOf(o)?.lock && !canBuild;
+  const locked = !!mediaOf(o)?.lock && !canLock;
   return (
     <VolumeKnob
       value={tvVolume(o)}

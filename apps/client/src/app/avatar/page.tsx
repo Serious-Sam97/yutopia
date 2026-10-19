@@ -18,7 +18,7 @@ export default function AvatarPage() {
     if (!getToken()) router.replace("/login?next=/avatar");
     else
       yutopia
-        .spaces()
+        .avatar()
         .then((r) => setA(r.avatar))
         .catch(() => {});
   }, [router]);

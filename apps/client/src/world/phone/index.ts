@@ -2,7 +2,6 @@
 
 import { hearingGain, stereoPan } from "@yutopia/shared";
 import { type PhoneSettings, type PhoneState, parsePhoneSettings, type Ringtone } from "@yutopia/shared/phone";
-import { getEcho } from "@/lib/echo";
 import { addStrings, tr } from "@/lib/i18n";
 import { PHONE_STRINGS } from "@/lib/i18n-phone";
 import type { WorldController } from "../controller";
@@ -16,7 +15,7 @@ import { VortexLine } from "./vortex";
 
 // The phone's chunk (docs/plan/21-cellphone.md): Vortex Mobile. It loads soon
 // after arriving — texts and calls reach it in the pocket — and holds the
-// phone's state (phone/store.ts), the line to Yondra (texts, photos,
+// phone's state (phone/store.ts), the line to the API (texts, photos,
 // settings), calls (call.ts), the camera (camera.ts), Vortex (vortex.ts), and
 // everything the world hears of phones: other people's ringtones near you.
 export const PHONE_CHUNK = "yutopia-phone";
@@ -37,7 +36,6 @@ export class Phone {
   private peekTimer: ReturnType<typeof setTimeout> | null = null;
   private typingSent = new Map<number, number>();
   private contactsTimer: ReturnType<typeof setInterval> | null = null;
-  private echoChannel = "";
   private nextLocal = -1;
 
   constructor(readonly ctl: WorldController) {
@@ -61,7 +59,6 @@ export class Phone {
     this.offs.push(ctl.onFrame(() => this.frame()));
     void this.loadSettings();
     void this.loadThreads();
-    void this.listen();
     this.contactsTimer = setInterval(() => {
       if (phone.get().open) void this.loadContacts();
     }, 20_000);
@@ -74,7 +71,6 @@ export class Phone {
     this.calls.destroy();
     this.camera.close();
     if (this.contactsTimer) clearInterval(this.contactsTimer);
-    if (this.echoChannel) getEcho().then((e) => e?.leave(this.echoChannel));
   }
 
   // ── out of the pocket and back ───────────────────────────────────────────
@@ -235,7 +231,7 @@ export class Phone {
     if (!force && Date.now() - p.contactsAt < 8000) return;
     phone.set({ contactsAt: Date.now() });
     try {
-      const contacts = await phoneApi.contacts(this.ctl.session?.space.id ?? 0);
+      const contacts = await phoneApi.contacts();
       phone.set({ contacts });
     } catch {
       // keep what we had; the people in this room still show from the world
@@ -272,7 +268,7 @@ export class Phone {
   }
   async addContact(uid: number): Promise<boolean> {
     try {
-      const c = await phoneApi.addContact(uid, this.ctl.session?.space.id ?? 0);
+      const c = await phoneApi.addContact(uid);
       phone.set((s) => ({ contacts: [...s.contacts.filter((x) => x.uid !== c.uid), c] }));
       ui("connect", 0.5);
       return true;
@@ -289,7 +285,7 @@ export class Phone {
   // ── threads and texts ────────────────────────────────────────────────────
   async loadThreads() {
     try {
-      const threads = await phoneApi.threads(this.ctl.session?.space.id ?? 0);
+      const threads = await phoneApi.threads();
       phone.set({ threads: sortThreads(threads), threadsLoaded: true });
     } catch {
       phone.set({ threadsLoaded: true });
@@ -440,16 +436,10 @@ export class Phone {
     }));
   }
 
-  // ── live, from Yondra ────────────────────────────────────────────────────
-  private async listen() {
-    const uid = phone.get().me.uid;
-    const echo = await getEcho();
-    if (!echo || !uid) return;
-    this.echoChannel = `App.Models.User.${uid}`;
-    echo.private(this.echoChannel).listen(".phone", (raw: { type: string } & Record<string, unknown>) => {
-      const e = liveOf(raw);
-      if (e) this.live(e);
-    });
+  // ── live, from the API through the world-server (phone:live) ─────────────
+  onLive(raw: Record<string, unknown>) {
+    const e = typeof raw?.type === "string" ? liveOf(raw as { type: string } & Record<string, unknown>) : null;
+    if (e) this.live(e);
   }
   private live(e: NonNullable<ReturnType<typeof liveOf>>) {
     const me = phone.get().me.uid;

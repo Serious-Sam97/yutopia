@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // A pet off exploring (docs/plan/13-pets.md, "Explore"), in the Lab: "Go
 // explore" from its ring sends it round the place on its own; "Call my pets
@@ -60,7 +60,7 @@ async function command(page: Page, target: unknown, label: RegExp, done: () => P
 test("explore: the dog tours the place, comes back when called, and runs after me all the way", async ({ page }) => {
   test.setTimeout(150_000);
   const tok = await token(BIA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   for (const id of await mine(page)) await send(page, "pet:release", { id });
   await send(page, "pet:adopt", { species: "dog", name: "Rex" });
   await expect.poll(async () => (await mine(page)).length).toBe(1);

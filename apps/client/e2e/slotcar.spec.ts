@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // The slot-car track: walk up and press X — the camera leans in over the table
 // and the controls open; take a lane, start, five lights, GO; hold Space and
@@ -27,7 +27,7 @@ test("a race on the slot-car track: lean in, lights, GO, fly off — seen from a
   const bia = await (await browser.newContext(ctx)).newPage();
   const id = `e2e-slot-${Date.now().toString(36)}`;
   try {
-    const s = await spaceId(ta, "Yutopia Lab");
+    const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     // a free spot for the 4 × 3 table near the arrival point (the server says no to a bad one)

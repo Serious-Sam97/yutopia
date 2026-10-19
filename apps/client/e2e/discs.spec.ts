@@ -4,12 +4,12 @@ import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, type Page, request } from "@playwright/test";
-import { ANA, API, enter, spaceId, test, token } from "./helpers";
+import { ANA, API, enter, test, token, useWorld } from "./helpers";
 
 // The disc console's library (docs/plan/23-disc-console.md P2), end to end:
 // Ana puts a disc rack in the Lab and opens it. No BIOS yet: it says so; a
 // 512 KB file that isn't a known dump is refused, the dev stack's test BIOS
-// (YUTOPIA_TEST_BIOS_MD5 in Yondra's .env: 512 KB of 0x42) goes in with its
+// (YUTOPIA_TEST_BIOS_MD5 in the API's .env: 512 KB of 0x42) goes in with its
 // model. Then a ~40 MB disc (our test card, padded: a .cue and its .bin) comes
 // in pieces — the tab closed after two of them; a new tab, the same files picked
 // again, carries on (fewer pieces the second time) and puts it in the rack.
@@ -25,15 +25,13 @@ const api = async (tok: string) =>
     extraHTTPHeaders: { Authorization: `Bearer ${tok}`, Accept: "application/json" },
   });
 
-// the space's e2e leftovers (a failed run's): the disc, the test BIOS
-async function tidy(tok: string, space: number) {
+// e2e leftovers (a failed run's): the disc, the test BIOS
+async function tidy(tok: string) {
   const c = await api(tok);
-  const games = (await (await c.get(`/api/yutopia/spaces/${space}/games`)).json()).games ?? [];
-  for (const g of games.filter((x: any) => x.title === TITLE))
-    await c.delete(`/api/yutopia/spaces/${space}/games/${String(g.id).slice(2)}`);
-  const bios = (await (await c.get(`/api/yutopia/spaces/${space}/bios`)).json()).bios ?? [];
-  for (const b of bios.filter((x: any) => x.model === "Test BIOS"))
-    await c.delete(`/api/yutopia/spaces/${space}/bios/${b.id}`);
+  const games = (await (await c.get(`/api/games`)).json()).games ?? [];
+  for (const g of games.filter((x: any) => x.title === TITLE)) await c.delete(`/api/games/${String(g.id).slice(2)}`);
+  const bios = (await (await c.get(`/api/bios`)).json()).bios ?? [];
+  for (const b of bios.filter((x: any) => x.model === "Test BIOS")) await c.delete(`/api/bios/${b.id}`);
 }
 
 async function putRack(page: Page, id: string) {
@@ -76,8 +74,8 @@ test("disc rack: the BIOS, a disc in pieces carried on after the tab closed, the
 }) => {
   test.setTimeout(300_000);
   const tok = await token(ANA);
-  const space = await spaceId(tok, "Yutopia Lab");
-  await tidy(tok, space);
+  const space = await useWorld("lab");
+  await tidy(tok);
   const dir = mkdtempSync(join(tmpdir(), "yutopia-disc-"));
   execFileSync("node", [join(ROOT, "tools/test-rom-ps1.mjs"), "--pad", "40", "--out", dir]);
   const files = [join(dir, "testcard.cue"), join(dir, "testcard.bin")];
@@ -150,9 +148,7 @@ test("disc rack: the BIOS, a disc in pieces carried on after the tab closed, the
     await expect(page.locator("li", { hasText: TITLE })).toBeVisible();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/rack-done.png` });
     const c = await api(tok);
-    const game = ((await (await c.get(`/api/yutopia/spaces/${space}/games`)).json()).games as any[]).find(
-      (g) => g.title === TITLE,
-    );
+    const game = ((await (await c.get(`/api/games`)).json()).games as any[]).find((g) => g.title === TITLE);
     expect(game.system).toBe("ps1");
     expect(game.files.map((f: any) => f.name)).toEqual(["testcard.cue", "testcard.bin"]);
     expect(game.files.map((f: any) => f.bytes)).toEqual(sizes);
@@ -167,12 +163,9 @@ test("disc rack: the BIOS, a disc in pieces carried on after the tab closed, the
     dev.on("request", (r) => {
       if (r.url().includes(`/games/${String(game.id).slice(2)}/files/`)) ranges.push(r.headers().range ?? "");
     });
-    const first = await dev.evaluate(([s, id]) => (window as any).__emuDev.cacheGame(s, id, 10 * 1024 * 1024), [
-      space,
-      game.id,
-    ] as const);
+    const first = await dev.evaluate((id) => (window as any).__emuDev.cacheGame(id, 10 * 1024 * 1024), game.id);
     expect(first.stopped).toBe(true);
-    const whole = await dev.evaluate(([s, id]) => (window as any).__emuDev.cacheGame(s, id), [space, game.id] as const);
+    const whole = await dev.evaluate((id) => (window as any).__emuDev.cacheGame(id), game.id);
     expect(whole.sizes).toEqual(sizes);
     expect(whole.names).toEqual(["testcard.cue", "testcard.bin"]);
     expect(
@@ -181,16 +174,16 @@ test("disc rack: the BIOS, a disc in pieces carried on after the tab closed, the
     ).toBe(true);
     // a third time: from the copy, nothing downloaded
     const before = ranges.length;
-    await dev.evaluate(([s, id]) => (window as any).__emuDev.cacheGame(s, id), [space, game.id] as const);
+    await dev.evaluate((id) => (window as any).__emuDev.cacheGame(id), game.id);
     expect(ranges.length).toBe(before);
     await dev.evaluate(() => (window as any).__emuDev.forgetGames());
   } finally {
     // the rack away, from a tab in the world (the last one, or a new one)
-    const p = !page.isClosed() && page.url().includes("/s/") ? page : await ctx.newPage();
+    const p = !page.isClosed() && !page.url().includes("/dev/") ? page : await ctx.newPage();
     if (p !== page) await enter(p, tok, space);
     await p.evaluate((i) => (window as any).__yutopia.send("obj:removeMany", { ids: [i] }), rack);
     await p.waitForTimeout(1500);
-    await tidy(tok, space);
+    await tidy(tok);
     await ctx.close();
   }
 });

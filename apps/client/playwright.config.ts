@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// e2e against the running local stack (Yondra API on :80, world-server :2567,
-// LiveKit :7880, this client on :3100). Uses the demo seed accounts.
+// e2e against the running local stack (Yutopia's API on :8100 with YUTOPIA_E2E=1,
+// world-server :2567, LiveKit :7880, this client on :3100). Uses the demo seed
+// accounts, and puts the one world back to a fixture (e2e/worlds) as specs need.
 export default defineConfig({
   testDir: "./e2e",
   timeout: 90_000,

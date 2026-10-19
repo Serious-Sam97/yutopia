@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, spaceId, test, token } from "./helpers";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // Three fixes, in the Lab (everything put out is removed after): things that
 // hang on a wall go on a west wall too (turned, rot 3); people stay clickable
@@ -39,7 +39,7 @@ const setBuild = (page: Page, b: Record<string, unknown>) =>
 test("wall things hang on a west wall", async ({ page }) => {
   test.setTimeout(90_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const id = `e2e-west-${Date.now().toString(36)}`;
   // two tiles of solid west wall (no window, nothing hung there) with a solid
   // north wall within reach: where a whiteboard goes and comes back from
@@ -89,7 +89,7 @@ test("wall things hang on a west wall", async ({ page }) => {
 test("after build mode, people (and you) are clickable again", async ({ page }) => {
   test.setTimeout(60_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   await setBuild(page, { on: true, tool: "furniture", mode: "hand", selected: [] });
   await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
   await expect.poll(() => page.evaluate(() => (window as any).__yutopia.engine.passAvatars)).toBe(true);
@@ -116,7 +116,7 @@ test("after build mode, people (and you) are clickable again", async ({ page }) 
 test("the sofa: click it, Sit, and you sit on it", async ({ page }) => {
   test.setTimeout(60_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const id = `e2e-sofa-${Date.now().toString(36)}`;
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const X = Math.floor(sp.x) - 1;

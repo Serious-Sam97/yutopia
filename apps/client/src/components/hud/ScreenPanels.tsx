@@ -4,14 +4,11 @@ import { mediaOf } from "@yutopia/shared/media";
 import { useEffect, useRef, useState } from "react";
 import { useLang, useTr } from "@/lib/i18n";
 import { useHud } from "@/world/store";
-import { BoardPanel } from "./BoardPanel";
 import { useWorld } from "./ctx";
 import { MediaRemote } from "./MediaPanel";
 import { Panel } from "./Panel";
-import { VortexTerminal } from "./VortexTerminal";
 
-// Big screens: the War Room screen shows the board; the Live Room screen shows
-// whoever is sharing (people you can hear), full size.
+// Big screens: whoever is sharing (people you can hear), full size, or the TV.
 export function ScreenPanel({ objectId }: { objectId: string }) {
   const t = useTr();
   const w = useWorld();
@@ -35,7 +32,6 @@ export function ScreenPanel({ objectId }: { objectId: string }) {
     return () => clone.remove();
   }, [video]);
 
-  if (source === "board") return <BoardPanel objectId={objectId} />;
   return <ScreenTabs objectId={objectId} share={!!video} stage={source === "stage"} body={<ShareView />} />;
 
   function ShareView() {
@@ -106,8 +102,4 @@ function ScreenTabs({
       </div>
     </Panel>
   );
-}
-
-export function TerminalPanel() {
-  return <VortexTerminal />;
 }

@@ -1,12 +1,12 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, test } from "@playwright/test";
-import { ANA, enter, spaceId, token } from "./helpers";
+import { ANA, enter, token, useWorld } from "./helpers";
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
 test("phone: world loads, HUD fits, tap to walk", async ({ page }) => {
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow).toBe(false);
   await expect(page.getByRole("navigation", { name: /controls/i })).toBeVisible();

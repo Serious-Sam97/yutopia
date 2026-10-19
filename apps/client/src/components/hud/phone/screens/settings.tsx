@@ -388,7 +388,6 @@ const COMING = [
   { id: "maps", icon: "maps" as IconName, bg: "linear-gradient(150deg,#4d5a5c,#2c3436)", cat: "tools" },
   { id: "tape", icon: "music" as IconName, bg: "linear-gradient(150deg,#ffb35c,#b5562f)", cat: "music" },
   { id: "snake", icon: "play" as IconName, bg: "linear-gradient(150deg,#8aa04a,#3d5a1a)", cat: "games" },
-  { id: "pager", icon: "bell" as IconName, bg: "linear-gradient(150deg,#5fd8ff,#3b7bff)", cat: "tools" },
   { id: "horoscope", icon: "star" as IconName, bg: "linear-gradient(150deg,#a98bff,#4b1aa0)", cat: "weird" },
 ];
 export function Store() {

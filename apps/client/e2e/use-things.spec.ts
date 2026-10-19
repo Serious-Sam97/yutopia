@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // Things to use, Sims-style: walk up, press X — the water cooler pours you a
 // cup and the vending machine drops a can (in hand, sipped little by little),
@@ -15,7 +15,7 @@ const mine = (page: Page) =>
 test("a cup from the cooler, a can from the machine, a tune on the piano", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const X = Math.floor(sp.x) - 4;
   const Y = Math.floor(sp.y) - 5;
@@ -76,7 +76,7 @@ test("a cup from the cooler, a can from the machine, a tune on the piano", async
 test("every radio its own: its station next to it, the other's faint when it's off", async ({ page }) => {
   test.setTimeout(150_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const stamp = Date.now().toString(36);
   const ids = [`e2e-r-t1-${stamp}`, `e2e-r-r1-${stamp}`, `e2e-r-t2-${stamp}`, `e2e-r-r2-${stamp}`];
   const level = () => page.evaluate(() => (window as any).__audio.radio.level as number);

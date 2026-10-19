@@ -2,10 +2,10 @@
 
 import type { AvatarLayers } from "@yutopia/shared";
 
-// Yondra's Laravel API, with the same accounts. The token is a normal Sanctum
-// token, stored per-origin (Yutopia runs on its own origin).
-export const API = process.env.NEXT_PUBLIC_API ?? "http://localhost";
-export const YONDRA_APP = process.env.NEXT_PUBLIC_YONDRA_APP ?? "http://localhost:3000";
+// Yutopia's own API (apps/api). In production it answers under /api on the
+// client's own origin; on the dev stack at :8100. The token is a Sanctum token,
+// stored per origin.
+export const API = process.env.NEXT_PUBLIC_API ?? "http://localhost:8100";
 const KEY = "yutopia:token";
 
 export class ApiError extends Error {
@@ -14,6 +14,16 @@ export class ApiError extends Error {
     readonly body: string,
   ) {
     super(`API ${status}`);
+  }
+
+  // Laravel's validation / abort message, if there is one
+  get message(): string {
+    try {
+      const j = JSON.parse(this.body) as { message?: string; errors?: Record<string, string[]> };
+      return Object.values(j.errors ?? {})[0]?.[0] ?? j.message ?? `API ${this.status}`;
+    } catch {
+      return `API ${this.status}`;
+    }
   }
 }
 
@@ -32,6 +42,9 @@ export function setToken(token: string | null) {
   } catch {}
 }
 
+// pages that work signed out (a 401 there doesn't send you to sign in)
+const OPEN_PAGES = ["/login", "/register", "/forgot", "/reset"];
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const res = await fetch(`${API}${path}`, {
@@ -43,9 +56,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       ...init.headers,
     },
   });
-  if (res.status === 401) {
+  if (res.status === 401 && token) {
     setToken(null);
-    if (typeof window !== "undefined" && !location.pathname.startsWith("/login")) {
+    if (typeof window !== "undefined" && !OPEN_PAGES.some((p) => location.pathname.startsWith(p))) {
       location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
     }
   }
@@ -53,22 +66,17 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-export interface SpaceSummary {
+export interface Me {
   id: number;
-  slug: string;
   name: string;
-  mapKey: string;
-  projectId: number | null;
-  color: string | null;
-  online: number;
-  projectName?: string | null;
-  theme?: string; // clouds | city | snow
-  people?: { userId: number; name: string; area: string | null; avatar: AvatarLayers }[]; // the first few inside
+  email: string;
+  isAdmin: boolean;
 }
 
 export interface Session {
-  space: { id: number; name: string; mapKey: string; projectId: number | null; canBuild: boolean };
-  user: { id: number; name: string };
+  world: { name: string; mapKey: string };
+  user: Me;
+  canBuild: boolean; // everyone, in the one world
   avatar: AvatarLayers;
   worldUrl: string;
   worldToken: string;
@@ -78,49 +86,15 @@ export interface Session {
   expiresIn: number;
 }
 
-export interface BoardSummary {
+export type Signup = "open" | "invite" | "closed";
+
+export interface Invite {
   id: number;
-  name: string;
-  type: string;
-  sections: { id: number; name: string; count: number }[];
-}
-
-export interface YondraCard {
-  id: number;
-  name: string;
-  section_id: number;
-  story_points?: number | null;
-  archived_at?: string | null;
-  is_done?: boolean;
-  ticket_number?: number | null;
-}
-
-// Yondra's planning poker session (PlanningController::snapshot).
-export interface PlanningSnapshot {
-  card_id: number;
-  board_id: number;
-  round: number;
-  revealed: boolean;
-  facilitator_id: number;
-  deck: string;
-  hand: string[];
-  timer_ends_at: string | null;
-  participants: { user_id: number; name: string; has_voted: boolean; value: string | null; is_spectator: boolean }[];
-  applied_value: number | null;
-  my_value?: string | null;
-}
-
-export interface MemberStatus {
-  userId: number;
-  doing: {
-    id: number;
-    name: string;
-    boardId: number;
-    boardName: string;
-    section: string | null;
-    ticket: string;
-    blocked: boolean;
-  }[];
+  code: string;
+  email: string | null;
+  url: string;
+  usedAt: string | null;
+  expiresAt: string;
 }
 
 // "My setups": a group of things saved in build mode, placed again anywhere
@@ -138,56 +112,31 @@ export interface Setup {
   items: SetupItem[];
 }
 
+const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
+
 export const yutopia = {
-  login: (email: string, password: string) =>
-    api<{ token: string; user: { id: number; name: string } }>("/api/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    }),
-  exchange: (code: string) =>
-    api<{ token: string; user: { id: number; name: string } }>("/api/yutopia/handoff/exchange", {
-      method: "POST",
-      body: JSON.stringify({ code }),
-    }),
-  spaces: () =>
-    api<{ spaces: SpaceSummary[]; avatar: AvatarLayers; user: { id: number; name: string } }>("/api/yutopia/spaces"),
-  session: (spaceId: number) =>
-    api<Session>("/api/yutopia/session", { method: "POST", body: JSON.stringify({ space_id: spaceId }) }),
-  avatar: () => api<{ avatar: AvatarLayers }>("/api/yutopia/avatar"),
-  setups: () => api<{ setups: Setup[] }>("/api/yutopia/setups"),
-  saveSetup: (name: string, items: SetupItem[]) =>
-    api<{ setup: Setup }>("/api/yutopia/setups", { method: "POST", body: JSON.stringify({ name, items }) }),
-  deleteSetup: (id: number) => api(`/api/yutopia/setups/${id}`, { method: "DELETE" }),
-  saveAvatar: (a: AvatarLayers) =>
-    api<{ avatar: AvatarLayers }>("/api/yutopia/avatar", { method: "PUT", body: JSON.stringify(a) }),
-  boards: (spaceId: number) => api<{ boards: BoardSummary[] }>(`/api/yutopia/spaces/${spaceId}/boards`),
-  // a new board in the space's project (Yondra seeds its columns)
-  createBoard: (projectId: number, name: string, type: "kanban" | "scrum") =>
-    api<{ id: number; name: string }>("/api/boards", {
-      method: "POST",
-      body: JSON.stringify({ name, type, project_id: projectId }),
-    }),
-  status: (spaceId: number) => api<{ status: MemberStatus[] }>(`/api/yutopia/spaces/${spaceId}/status`),
+  config: () => api<{ worldName: string; signup: Signup }>("/api/config"),
+  login: (email: string, password: string) => api<{ token: string; user: Me }>("/api/login", post({ email, password })),
+  register: (b: { name: string; email: string; password: string; password_confirmation: string; invite?: string }) =>
+    api<{ token: string; user: Me }>("/api/register", post(b)),
+  invite: (code: string) =>
+    api<{ email: string | null; by: string | null }>(`/api/invites/${encodeURIComponent(code)}`),
+  forgot: (email: string) => api<{ message: string }>("/api/forgot-password", post({ email })),
+  reset: (b: { token: string; email: string; password: string; password_confirmation: string }) =>
+    api<{ message: string }>("/api/reset-password", post(b)),
+  me: () => api<{ user: Me }>("/api/me"),
   logout: () => api("/api/logout", { method: "POST" }).catch(() => {}),
-  members: (spaceId: number) =>
-    api<{ members: { id: number; name: string }[] }>(`/api/yutopia/spaces/${spaceId}/members`),
-  board: (boardId: number) =>
-    api<{
-      id: number;
-      name: string;
-      type: string;
-      sections: { id: number; name: string }[];
-      done_section_id?: number | null;
-      cards: YondraCard[];
-    }>(`/api/boards/${boardId}`),
-  planning: (
-    boardId: number,
-    cardId: number,
-    action: "show" | "join" | "vote" | "reveal" | "reset" | "apply" | "leave",
-    body?: unknown,
-  ) =>
-    api<PlanningSnapshot>(`/api/boards/${boardId}/cards/${cardId}/planning${action === "show" ? "" : `/${action}`}`, {
-      method: action === "show" ? "GET" : "POST",
-      body: body ? JSON.stringify(body) : undefined,
-    }),
+  session: () => api<Session>("/api/session", { method: "POST" }),
+  avatar: () => api<{ avatar: AvatarLayers }>("/api/avatar"),
+  saveAvatar: (a: AvatarLayers) =>
+    api<{ avatar: AvatarLayers }>("/api/avatar", { method: "PUT", body: JSON.stringify(a) }),
+  setups: () => api<{ setups: Setup[] }>("/api/setups"),
+  saveSetup: (name: string, items: SetupItem[]) => api<{ setup: Setup }>("/api/setups", post({ name, items })),
+  deleteSetup: (id: number) => api(`/api/setups/${id}`, { method: "DELETE" }),
+  // everyone with an account (to hand a room or a desk to)
+  members: () => api<{ members: { id: number; name: string }[] }>("/api/members"),
+  // admins: single-use sign-up links
+  invites: () => api<{ invites: Invite[] }>("/api/admin/invites"),
+  makeInvite: (email: string | null) => api<{ invite: Invite }>("/api/admin/invites", post({ email })),
+  dropInvite: (id: number) => api(`/api/admin/invites/${id}`, { method: "DELETE" }),
 };

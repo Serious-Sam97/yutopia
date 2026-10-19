@@ -58,11 +58,10 @@ import {
 } from "@yutopia/shared";
 import { COMPUTER_REACH, computerAway, isComputer } from "@yutopia/shared/computer";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
-import { isRadio, type RadioState, radioOf, showsBoards } from "@yutopia/shared/media";
+import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { type BattleEvent, type PetLook, type PetOutfit, type Species, toyAt } from "@yutopia/shared/pets";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
-import { ApiError, type Session, YONDRA_APP, yutopia } from "@/lib/api";
-import { currentEcho, disconnectEcho, getEcho } from "@/lib/echo";
+import { ApiError, type Session, yutopia } from "@/lib/api";
 import { lang, tr } from "@/lib/i18n";
 import { deviceQuality, prefs, type Quality, resolveQuality, setPrefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
@@ -102,7 +101,7 @@ interface Remote {
 const INTERP_MS = 110;
 const MEDIA_SLEEP_MS = 5 * 60_000; // quiet this long: the voice line sleeps
 const MEDIA_NEAR = HEAR_RADIUS + 4; // someone this close (tiles) keeps it awake
-const LIVEKIT_TOKEN_FRESH_MS = 5 * 3600_000; // LiveKit tokens last 6 h (YutopiaTokens)
+const LIVEKIT_TOKEN_FRESH_MS = 5 * 3600_000; // LiveKit tokens last 6 h (apps/api Tokens)
 const IDLE_MS = 3000; // nothing moved for this long: frames at 30/s
 const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
@@ -117,7 +116,6 @@ export class WorldController {
   map!: MapDef;
   grid!: Grid;
   private host: HTMLElement;
-  private spaceId: number;
   private keys = new Set<string>();
   // my feet (shared/jump.ts): how high (up on something, in a jump), my jump's stage,
   // whether it's left the ground yet; Space pressed just before landing, waiting
@@ -151,7 +149,6 @@ export class WorldController {
   private timers: ReturnType<typeof setInterval>[] = [];
   private offPrefs: (() => void) | null = null;
   private offLook: (() => void) | null = null;
-  private boardChannels: string[] = [];
   private reconnecting = false;
   private peopleAt = 0;
   private followAt = 0;
@@ -159,9 +156,8 @@ export class WorldController {
   onOpenPanel: (kind: string, objectId?: string) => void = () => {};
   readonly actions: ActionQueue;
 
-  constructor(host: HTMLElement, spaceId: number) {
+  constructor(host: HTMLElement) {
     this.host = host;
-    this.spaceId = spaceId;
     this.actions = new ActionQueue({
       me: () => this.me,
       setFacing: (d) => {
@@ -198,10 +194,6 @@ export class WorldController {
       playNote: (id, n) => this.playPiano(id, n),
       openPanel: (kind, objectId) => this.onOpenPanel(kind, objectId),
       putDown: () => this.putDown(),
-      myTask: () => {
-        const c = hud.get().status[this.myUid()]?.[0];
-        return c ? { id: c.id, boardId: c.boardId } : null;
-      },
     });
     this.media = new Media({
       onTracksChanged: (m) => {
@@ -238,7 +230,7 @@ export class WorldController {
           token: this.session.livekitToken,
           iceServers: this.session.iceServers ?? [],
         };
-      const s = await yutopia.session(this.spaceId);
+      const s = await yutopia.session();
       this.session = s;
       this.sessionAt = Date.now();
       return { url: s.livekitUrl, token: s.livekitToken, iceServers: s.iceServers ?? [] };
@@ -256,9 +248,9 @@ export class WorldController {
   // ── lifecycle ────────────────────────────────────────────────────────────
   async start() {
     hud.reset();
-    hud.set({ phase: "loading", spaceId: this.spaceId });
+    hud.set({ phase: "loading" });
     try {
-      this.session = await yutopia.session(this.spaceId);
+      this.session = await yutopia.session();
       this.sessionAt = Date.now();
     } catch (e) {
       if (this.stopped) return;
@@ -268,8 +260,8 @@ export class WorldController {
     // A discarded mount (React StrictMode) must not touch the shared HUD.
     if (this.stopped) return;
     const s = this.session;
-    hud.set({ spaceName: s.space.name, projectId: s.space.projectId, canBuild: s.space.canBuild, phase: "connecting" });
-    this.map = getMap(s.space.mapKey);
+    hud.set({ worldName: s.world.name, canBuild: s.canBuild, isAdmin: s.user.isAdmin, phase: "connecting" });
+    this.map = getMap(s.world.mapKey);
     this.grid = Grid.from(this.map, this.map.objects);
 
     const engine = new WorldEngine(this.map);
@@ -368,9 +360,6 @@ export class WorldController {
 
     void this.media.connect(s.livekitUrl, s.livekitToken, s.iceServers);
     this.timers.push(setInterval(() => this.superviseMedia(), 1000));
-    void this.loadBoards();
-    void this.loadStatus();
-    this.timers.push(setInterval(() => void this.loadStatus(), 60_000));
     this.timers.push(setInterval(() => this.updateNight(), 60_000));
   }
 
@@ -380,7 +369,7 @@ export class WorldController {
     try {
       const room: Room<S> = reconnectToken
         ? await client.reconnect(reconnectToken)
-        : await client.joinOrCreate(ROOM_NAME, { spaceId: s.space.id, token: s.worldToken });
+        : await client.joinOrCreate(ROOM_NAME, { token: s.worldToken });
       if (this.stopped) {
         void room.leave(true);
         return;
@@ -539,19 +528,11 @@ export class WorldController {
           turnStartedAt: st.standup.turnStartedAt,
           turnSeconds: st.standup.turnSeconds,
         },
-        poker: {
-          open: st.poker.open,
-          cardId: st.poker.cardId,
-          boardId: st.poker.boardId,
-          title: st.poker.title,
-          by: st.poker.by,
-        },
       });
     };
     $(room.state).standup.onChange(mirror);
     $(room.state).standup.order.onAdd(mirror);
     $(room.state).standup.order.onRemove(mirror);
-    $(room.state).poker.onChange(mirror);
     const mirrorLocks = () => {
       const locks: Record<string, string> = {};
       room.state.locks.forEach((by: string, area: string) => {
@@ -632,6 +613,11 @@ export class WorldController {
       hud.set({ challenge: { battle: m.battle, fromName: m.fromName, pet: m.pet, mine: m.mine } });
     });
     room.onMessage("pet:event", (m: ServerMessages["pet:event"]) => this.petEvent(m));
+    // texts and the like, from the API (world/phone): the phone's chunk takes them
+    room.onMessage(
+      "phone:live",
+      (m: ServerMessages["phone:live"]) => void this.ensurePhone().then((ph) => ph?.onLive(m.event)),
+    );
     // calls (world/phone/call.ts): the phone's chunk takes them
     room.onMessage(
       "call:ring",
@@ -700,7 +686,7 @@ export class WorldController {
     }
     // seat expired: fresh session + join
     try {
-      this.session = await yutopia.session(this.spaceId);
+      this.session = await yutopia.session();
       this.sessionAt = Date.now();
       this.engine?.setObjects([]);
       for (const sid of [...this.remotes.keys()]) this.engine?.removeAvatar(sid);
@@ -713,7 +699,7 @@ export class WorldController {
 
   // The room learns your look from the join token, minted when the page loaded:
   // after a rejoin (world restart, network) or a change saved elsewhere (the
-  // lobby's editor in another tab), tell it the look saved in Yondra.
+  // editor in another tab), tell it the look saved in the API.
   async syncLook() {
     try {
       const { avatar } = await yutopia.avatar();
@@ -742,8 +728,6 @@ export class WorldController {
     this.closeTp();
     this.offPrefs?.();
     this.offLook?.();
-    for (const ch of this.boardChannels) currentEcho()?.leave(ch);
-    disconnectEcho();
     void this.room?.leave(true).catch(() => {});
     void this.media.disconnect();
     sound.stopAll();
@@ -793,7 +777,7 @@ export class WorldController {
   }
 
   // What I'm busy with (shown on my body for everyone): a machine for a moment,
-  // or the arcade / piano / whiteboard while its panel is open.
+  // or the piano / whiteboard / computer while its panel is open.
   private usingWhat = "";
   private usingUntil = 0;
   private busySent = "";
@@ -806,7 +790,7 @@ export class WorldController {
       this.computerId = null;
     }
     const want =
-      pk === "arcade" || pk === "piano" || pk === "whiteboard" || pk === "computer"
+      pk === "piano" || pk === "whiteboard" || pk === "computer"
         ? pk
         : pk === "slotcar" && this.slots?.atControls()
           ? "slotcar"
@@ -1160,7 +1144,6 @@ export class WorldController {
       this.objectsDirty = false;
       engine.refreshFlat();
       this.rebuildGrid();
-      this.applyBoards();
       this.build?.checkPending();
       this.slotsChanged();
       this.tablesChanged();
@@ -1738,40 +1721,29 @@ export class WorldController {
         // cheers and give only make sense with drinks about
         .filter((i) => i.ok || (i.act !== "cheers" && i.act !== "give"));
       items.push({ act: "follow", ok: true }, { act: "profile", ok: true });
-      const card = hud.get().status[p.uid]?.[0];
-      const subtitle = p.focus ? tr("focusing") : card ? `${card.ticket} · ${card.name}` : undefined;
-      return { title: p.name, subtitle, items };
+      return { title: p.name, subtitle: p.focus ? tr("focusing") : undefined, items };
     }
     const o = this.engine?.getObject(target.id);
     if (!o) return null;
-    const task = hud.get().status[this.myUid()]?.[0] ?? null;
-    // someone else's desk: whose, what they're on
+    // someone else's desk: whose (and who they are, when they're here)
     const owner = Number(o.props?.ownerId);
     if (o.kind === "desk" && owner && owner !== this.myUid()) {
-      const card = hud.get().status[owner]?.[0];
-      const items = [];
-      if (card) items.push({ act: "theirCard", ok: true });
-      if (this.uidToSid.has(owner)) items.push({ act: "profile", ok: true });
-      if (!items.length) return null;
+      if (!this.uidToSid.has(owner)) return null;
       return {
         title: `${String(o.props?.ownerName ?? "").split(" ")[0]} · ${entry(o.kind).label}`,
-        subtitle: card ? `${card.ticket} · ${card.name}` : undefined,
-        items,
+        items: [{ act: "profile", ok: true }],
       };
     }
     const acts = objectActions(o, {
       uid: this.myUid(),
       focus: !!me.focus,
       radioOn: radioOf(o).playing,
-      task,
-      mayLock: (d) => me.builder || doorRoom(this.map, d)?.ownerId === this.myUid(),
+      mayLock: (d) => me.admin || doorRoom(this.map, d)?.ownerId === this.myUid(),
     });
     if (!acts.length) return null;
     const e = entry(o.kind);
     const title = o.kind === "tabletop" && o.props?.d === "desklamp" ? tr("deskLamp") : e.label;
-    const subtitle =
-      o.kind === "desk" && task && o.props?.ownerId === this.myUid() ? `${task.ticket} · ${task.name}` : undefined;
-    return { title, subtitle, items: acts.map((act) => ({ act, ok: true })) };
+    return { title, items: acts.map((act) => ({ act, ok: true })) };
   }
 
   openMenu(target: ActTarget, at: { x: number; y: number }): boolean {
@@ -1795,11 +1767,6 @@ export class WorldController {
     const t = m.target;
     const desk = t.type === "object" ? this.engine?.getObject(t.id) : undefined;
     const owner = Number(desk?.props?.ownerId);
-    if (act === "openCard" || act === "theirCard") {
-      const card = hud.get().status[act === "openCard" ? this.myUid() : owner]?.[0];
-      if (card) window.open(`${YONDRA_APP}/boards/${card.boardId}?card=${card.id}`, "_blank", "noopener");
-      return;
-    }
     if (act === "profile" && desk) return hud.set({ inspect: owner });
     if (act === "profile" && t.type === "person") {
       const p = this.room?.state.players.get(t.sid);
@@ -2363,19 +2330,6 @@ export class WorldController {
     };
   }
 
-  // ── Yondra sync ──────────────────────────────────────────────────────────
-  private boardsTimer: ReturnType<typeof setTimeout> | null = null;
-  private boardListeners = new Set<(boardId: number, e: { type: string; payload: unknown }) => void>();
-
-  // Panels (planning poker) listen to Yondra board events without opening
-  // their own Echo subscriptions.
-  onBoardEvent(fn: (boardId: number, e: { type: string; payload: unknown }) => void) {
-    this.boardListeners.add(fn);
-    return () => {
-      this.boardListeners.delete(fn);
-    };
-  }
-
   // ── whiteboards ──────────────────────────────────────────────────────────
   private wbScenes = new Map<string, WbItem[]>();
   private wbListeners = new Set<(objectId: string, items: WbItem[]) => void>();
@@ -2400,137 +2354,6 @@ export class WorldController {
     const items = this.whiteboardItems(objectId);
     this.engine?.setWhiteboard(objectId, items);
     for (const f of this.wbListeners) f(objectId, items);
-  }
-
-  async loadBoards() {
-    try {
-      const { boards } = await yutopia.boards(this.spaceId);
-      hud.set({ boards });
-      this.applyBoards();
-      const echo = await getEcho();
-      if (!echo || this.stopped) return;
-      for (const ch of this.boardChannels) echo.leave(ch);
-      this.boardChannels = [];
-      for (const b of boards) {
-        const name = `board.${b.id}`;
-        echo.private(name).listen(".board.event", (e: { type: string; payload: unknown }) => {
-          this.scheduleBoards();
-          this.celebrate(e);
-          for (const f of this.boardListeners) f(b.id, e);
-        });
-        this.boardChannels.push(name);
-      }
-    } catch (e) {
-      console.warn("[world] boards", e);
-    }
-  }
-
-  private scheduleBoards() {
-    if (this.boardsTimer) clearTimeout(this.boardsTimer);
-    this.boardsTimer = setTimeout(async () => {
-      try {
-        const { boards } = await yutopia.boards(this.spaceId);
-        hud.set({ boards });
-        this.applyBoards();
-      } catch {}
-    }, 400);
-  }
-
-  private applyBoards() {
-    const engine = this.engine;
-    if (!engine) return;
-    const boards = hud.get().boards;
-    for (const o of engine.allObjects()) {
-      if (showsBoards(o)) {
-        const b =
-          (o.refId && boards.find((x) => x.id === o.refId)) || (o.kind === "screen_wall" ? boards[0] : undefined);
-        engine.setBoardContent(o.id, b ? { name: b.name, sections: b.sections } : null);
-      }
-    }
-  }
-
-  boardFor(objectId: string) {
-    const o = this.engine?.getObject(objectId);
-    const boards = hud.get().boards;
-    if (!o) return undefined;
-    return (o.refId && boards.find((b) => b.id === o.refId)) || (o.kind === "screen_wall" ? boards[0] : undefined);
-  }
-
-  // Put a board on a board wall (or a big screen showing boards): its refId,
-  // everything else as stored. Builders only (the server says no otherwise).
-  setBoard(objectId: string, boardId: number) {
-    const s = this.room?.state.objects.get(objectId);
-    if (!s || !hud.get().canBuild) return;
-    let props: Record<string, unknown> = {};
-    try {
-      props = JSON.parse(s.props || "{}");
-    } catch {}
-    this.send("obj:put", { id: s.id, kind: s.kind, x: s.x, y: s.y, rot: s.rot, refId: boardId, props });
-  }
-
-  // How many board walls show each board (the picker says where it's up already).
-  boardsOnShow(): Map<number, number> {
-    const n = new Map<number, number>();
-    for (const o of this.engine?.allObjects() ?? [])
-      if (o.refId && showsBoards(o)) n.set(o.refId, (n.get(o.refId) ?? 0) + 1);
-    return n;
-  }
-
-  // A new board in the space's project, straight from a board wall.
-  async createBoard(name: string, type: "kanban" | "scrum"): Promise<number | null> {
-    const projectId = hud.get().projectId;
-    if (!projectId) return null;
-    const board = await yutopia.createBoard(projectId, name, type);
-    await this.loadBoards();
-    return board.id;
-  }
-
-  // A card someone was working on is done: confetti over them (whoever's in
-  // the room sees it, each from their own copy of the board's events), a
-  // fanfare for whoever's near, and a word in the corner.
-  private celebrated = new Set<number>();
-  private celebrate(e: { type: string; payload: unknown }) {
-    const pl = e.payload as Record<string, unknown> | null;
-    const cards: Record<string, unknown>[] =
-      e.type === "cards.reordered" && Array.isArray(pl?.cards)
-        ? (pl.cards as Record<string, unknown>[])
-        : e.type === "card.updated" && pl
-          ? [pl]
-          : [];
-    const status = hud.get().status;
-    let any = false;
-    for (const c of cards) {
-      const id = Number(c.id);
-      if (!(c.done_at || c.is_done === true) || this.celebrated.has(id)) continue;
-      // whose card it was (what they were doing a moment ago)
-      for (const [uid, doing] of Object.entries(status)) {
-        const card = doing.find((d) => d.id === id);
-        if (!card) continue;
-        this.celebrated.add(id);
-        any = true;
-        const sid = this.uidToSid.get(Number(uid));
-        const at = sid ? this.whereIs(sid) : null;
-        const who = sid ? this.room?.state.players.get(sid)?.name : null;
-        if (at) {
-          this.engine?.puff(at.x, at.y, "confetti", 70);
-          fanfare(Math.max(0, 1 - Math.hypot(at.x - this.me.x, at.y - this.me.y) / 12));
-        }
-        if (who) toast(`🎉 ${who} ${tr("taskDone")} ${card.ticket} · ${card.name}`);
-      }
-    }
-    // their list moves on
-    if (any) setTimeout(() => void this.loadStatus(), 1200);
-  }
-
-  private async loadStatus() {
-    try {
-      const { status } = await yutopia.status(this.spaceId);
-      const map: Record<number, (typeof status)[number]["doing"]> = {};
-      for (const s of status) map[s.userId] = s.doing;
-      hud.set({ status: map });
-      // their desks show it
-      this.engine?.setDeskTasks(new Map(status.flatMap((s) => (s.doing[0] ? [[s.userId, s.doing[0].ticket]] : []))));
-    } catch {}
   }
 
   // The light follows the local clock (art/daylight.ts: day, golden hour, dusk, night).

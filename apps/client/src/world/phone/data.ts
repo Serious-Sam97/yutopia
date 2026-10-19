@@ -4,13 +4,13 @@ import type { PhoneSettings } from "@yutopia/shared/phone";
 import { API, api, getToken } from "@/lib/api";
 import type { Contact, Msg, PhotoRef, Thread } from "./store";
 
-// Yondra keeps everything the phone remembers (YutopiaPhoneController): the
-// settings, the team as contacts, threads and texts, photos. Live changes come
-// back on the person's private channel (`.phone` events, phone/index.ts).
+// Yutopia's API keeps everything the phone remembers (apps/api PhoneController):
+// the settings, contacts, threads and texts, photos. Live changes come through
+// the world-server (`phone:live`, phone/index.ts).
 
-const P = "/api/yutopia/phone";
+const P = "/api/phone";
 
-// Yondra's shapes → the phone's (times in ms)
+// the API's shapes → the phone's (times in ms)
 interface MsgIn {
   id: number;
   thread_id: number;
@@ -42,7 +42,6 @@ interface ThreadIn {
   kind: Thread["kind"];
   name: string;
   members: number[];
-  space_id: number | null;
   unread: number;
   last: MsgIn | null;
   muted: boolean;
@@ -50,7 +49,7 @@ interface ThreadIn {
   who?: Record<string, { name: string; avatar: string }>;
 }
 
-// (Yondra signs the file's path; the origin is its API)
+// (the API signs the file's path; relative to its origin)
 export const photoOf = (p: PhotoIn): PhotoRef => ({
   ...p,
   kind: p.kind ?? "photo",
@@ -81,7 +80,6 @@ export function threadOf(t: ThreadIn): Thread {
     kind: t.kind,
     name: t.name,
     members: t.members,
-    spaceId: t.space_id,
     unread: t.unread,
     last: t.last ? msgOf(t.last) : null,
     muted: t.muted,
@@ -94,22 +92,17 @@ export const phoneApi = {
   me: () => api<{ settings: PhoneSettings }>(P),
   saveSettings: (settings: PhoneSettings) =>
     api<{ settings: PhoneSettings }>(P, { method: "PUT", body: JSON.stringify({ settings }) }),
-  contacts: (spaceId: number) =>
-    api<{ contacts: Omit<Contact, "here">[] }>(`${P}/contacts?space=${spaceId}`).then((r) =>
-      r.contacts.map((c) => ({ ...c, here: c.spaceId === spaceId })),
-    ),
-  lookup: (uid: number) =>
-    api<{ person: Omit<Contact, "here"> & { here?: boolean }; added: boolean }>(`${P}/users/${uid}`),
-  addContact: (uid: number, spaceId: number) =>
-    api<{ contact: Contact }>(`${P}/contacts?space=${spaceId}`, {
+  contacts: () => api<{ contacts: Contact[] }>(`${P}/contacts`).then((r) => r.contacts),
+  lookup: (uid: number) => api<{ person: Contact; added: boolean }>(`${P}/users/${uid}`),
+  addContact: (uid: number) =>
+    api<{ contact: Contact }>(`${P}/contacts`, {
       method: "POST",
       body: JSON.stringify({ id: uid }),
     }).then((r) => r.contact),
   removeContact: (uid: number) => api(`${P}/contacts/${uid}`, { method: "DELETE" }),
   keep: (id: number) =>
     api<{ photo: PhotoIn }>(`${P}/photos/${id}/keep`, { method: "POST", body: "{}" }).then((r) => photoOf(r.photo)),
-  threads: (spaceId: number) =>
-    api<{ threads: ThreadIn[] }>(`${P}/threads?space=${spaceId}`).then((r) => r.threads.map(threadOf)),
+  threads: () => api<{ threads: ThreadIn[] }>(`${P}/threads`).then((r) => r.threads.map(threadOf)),
   open: (members: number[], name?: string) =>
     api<{ thread: ThreadIn }>(`${P}/threads`, { method: "POST", body: JSON.stringify({ members, name }) }).then((r) =>
       threadOf(r.thread),
@@ -147,7 +140,6 @@ export const phoneApi = {
       filter: string;
       selfie: boolean;
       where: string;
-      spaceId: number;
       video?: { w: number; h: number; secs: number };
     },
   ) {
@@ -162,7 +154,6 @@ export const phoneApi = {
     fd.append("filter", meta.filter);
     fd.append("selfie", meta.selfie ? "1" : "0");
     fd.append("where", meta.where.slice(0, 120));
-    fd.append("space_id", String(meta.spaceId));
     const token = getToken();
     const res = await fetch(`${API}${P}/photos`, {
       method: "POST",
@@ -190,7 +181,7 @@ export const phoneApi = {
     }),
 };
 
-// What Yondra pushes on the private channel, already in the phone's shapes.
+// What the API pushes (through the world-server), already in the phone's shapes.
 export type LiveEvent =
   | { type: "message"; message: Msg; thread: Thread | null }
   | { type: "read"; thread: number; uid: number; upto: number }

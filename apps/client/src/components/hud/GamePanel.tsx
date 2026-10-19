@@ -153,12 +153,11 @@ export function GamePanel({ objectId }: { objectId: string }) {
   const w = useWorld();
   const kind = useHud((s) => s.panel.kind);
   const view = useHud((s) => s.game);
-  const spaceId = useHud((s) => s.spaceId);
   const close = () => hud.set({ panel: { kind: null } });
   const [picking, setPicking] = useState(false);
   const [padsOpen, setPadsOpen] = useState(false); // Controllers, over the console
   const [games, setGames] = useState<Cartridge[] | null>(null);
-  const reload = () => void library(spaceId).then(setGames);
+  const reload = () => void library().then(setGames);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -170,7 +169,7 @@ export function GamePanel({ objectId }: { objectId: string }) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per space
   useEffect(() => {
     if (kind === "games" || picking) reload();
-  }, [kind, picking, spaceId]);
+  }, [kind, picking]);
 
   const v = view?.id === objectId ? view : null;
   if (padsOpen)
@@ -194,15 +193,7 @@ export function GamePanel({ objectId }: { objectId: string }) {
       className="pointer-events-auto absolute left-1/2 -translate-x-1/2 top-16 bottom-3 w-[min(760px,calc(100%-24px))] flex flex-col gap-2 overflow-y-auto scroll-thin"
     >
       {kind === "games" ? (
-        <Shelf
-          t={t}
-          games={games}
-          spaceId={spaceId}
-          discs={rack}
-          onChange={reload}
-          onClose={close}
-          closeLabel={tr("close")}
-        />
+        <Shelf t={t} games={games} discs={rack} onChange={reload} onClose={close} closeLabel={tr("close")} />
       ) : (
         <>
           {kind === "tv" && v?.input === "media" ? (
@@ -251,7 +242,6 @@ export function GamePanel({ objectId }: { objectId: string }) {
           t={t}
           system={v.system as GameSystem}
           games={games}
-          spaceId={spaceId}
           onPick={(id) => {
             w?.send("game:cart", { id: objectId, game: id });
             setPicking(false);
@@ -374,7 +364,6 @@ function ConsoleControls({
 }) {
   const w = useWorld();
   const [savedAt, setSavedAt] = useState(0);
-  const spaceId = useHud((s) => s.spaceId);
   // a save state for the cartridge in it: offer to carry on from there
   const [resumable, setResumable] = useState<string | null>(null);
   const cartId = v?.cart?.id ?? "";
@@ -383,13 +372,13 @@ function ConsoleControls({
     setResumable(null);
     if (!cartId || isOn) return;
     let live = true;
-    void saveInfo(spaceId, cartId).then((s) => {
+    void saveInfo(cartId).then((s) => {
       if (live && s.state) setResumable(s.updatedAt);
     });
     return () => {
       live = false;
     };
-  }, [cartId, isOn, spaceId]);
+  }, [cartId, isOn]);
   // the disc console: the space's BIOS first
   const disc = isDiscSystem(v?.system ?? "");
   const [bios, setBios] = useState<number | null>(null); // how many the space has (null: asking)
@@ -397,7 +386,7 @@ function ConsoleControls({
     if (!disc) return;
     let live = true;
     const ask = () =>
-      void listBios(spaceId)
+      void listBios()
         .then((b) => live && setBios(b.length))
         .catch(() => live && setBios(0));
     ask();
@@ -406,7 +395,7 @@ function ConsoleControls({
       live = false;
       clearInterval(again);
     };
-  }, [disc, spaceId]);
+  }, [disc]);
   if (!v) return null;
   const id = v.id;
   const system = v.system as GameSystem;
@@ -567,14 +556,14 @@ function ConsoleControls({
       </div>
 
       {/* the disc console without a BIOS: what to do */}
-      {noBios && !v.on ? <Bios t={t} spaceId={spaceId} /> : null}
+      {noBios && !v.on ? <Bios t={t} /> : null}
       {disc && !!bios && !v.on ? (
         <details data-testid="console-bios">
           <summary className="text-xs cursor-pointer" style={{ color: "var(--muted)" }}>
             {t("biosLogo")} ({bios})
           </summary>
           <div className="mt-1.5">
-            <Bios t={t} spaceId={spaceId} />
+            <Bios t={t} />
           </div>
         </details>
       ) : null}
@@ -864,7 +853,6 @@ function Picker({
   t,
   system,
   games,
-  spaceId,
   onPick,
   onUploaded,
   onClose,
@@ -872,7 +860,6 @@ function Picker({
   t: TFn;
   system: GameSystem;
   games: Cartridge[] | null;
-  spaceId: number;
   onPick: (id: string) => void;
   onUploaded: () => void;
   onClose: () => void;
@@ -888,7 +875,7 @@ function Picker({
         </button>
       </header>
       <CartList t={t} games={fits} onPick={onPick} />
-      <Upload t={t} spaceId={spaceId} fixed={system} discs={discs} onDone={onUploaded} />
+      <Upload t={t} fixed={system} discs={discs} onDone={onUploaded} />
     </div>
   );
 }
@@ -991,13 +978,11 @@ function CartList({
 // console, a title and a label colour.
 function Upload({
   t,
-  spaceId,
   fixed,
   discs = false,
   onDone,
 }: {
   t: TFn;
-  spaceId: number;
   fixed?: GameSystem;
   discs?: boolean; // the rack: discs only (else the shelf: cartridges only)
   onDone: () => void;
@@ -1035,7 +1020,7 @@ function Upload({
     setBusy(true);
     setStopped(false);
     if (!disc && file) {
-      void upload(spaceId, { file, system, title: title.trim(), color, players })
+      void upload({ file, system, title: title.trim(), color, players })
         .then(done)
         .catch((err: Error) => toast(err.message, "warn"))
         .finally(() => setBusy(false));
@@ -1043,12 +1028,7 @@ function Upload({
     }
     const ctl = new AbortController();
     stop.current = ctl;
-    void bringGame(
-      spaceId,
-      { files, system, title: title.trim(), color, players },
-      (a, b) => setSent([a, b]),
-      ctl.signal,
-    )
+    void bringGame({ files, system, title: title.trim(), color, players }, (a, b) => setSent([a, b]), ctl.signal)
       .then(done)
       .catch((err: Error) => {
         if (ctl.signal.aborted) setStopped(true);
@@ -1203,16 +1183,15 @@ function Upload({
 }
 
 // The disc console's BIOS in this space: which there are, bring one (a dump of
-// a console you own; Yondra only takes known retail ones), take yours away.
-function Bios({ t, spaceId }: { t: TFn; spaceId: number }) {
+// a console you own; the API only takes known retail ones), take yours away.
+function Bios({ t }: { t: TFn }) {
   const [list, setList] = useState<BiosInfo[] | null>(null);
   const [busy, setBusy] = useState(false);
   const reload = () =>
-    void listBios(spaceId)
+    void listBios()
       .then(setList)
       .catch(() => setList([]));
-  // biome-ignore lint/correctness/useExhaustiveDependencies: once per space
-  useEffect(reload, [spaceId]);
+  useEffect(reload, []);
   return (
     <div
       className="rounded-md px-2.5 py-2 flex flex-col gap-1.5"
@@ -1234,7 +1213,7 @@ function Bios({ t, spaceId }: { t: TFn; spaceId: number }) {
                 <button
                   type="button"
                   className="ghost-btn text-xs ml-auto"
-                  onClick={() => void removeBios(spaceId, b.id).then(reload, (e: Error) => toast(e.message, "warn"))}
+                  onClick={() => void removeBios(b.id).then(reload, (e: Error) => toast(e.message, "warn"))}
                 >
                   {t("remove")}
                 </button>
@@ -1264,7 +1243,7 @@ function Bios({ t, spaceId }: { t: TFn; spaceId: number }) {
             e.target.value = "";
             if (!f) return;
             setBusy(true);
-            void bringBios(spaceId, f)
+            void bringBios(f)
               .then((b) => {
                 toast(t("biosAdded", { model: b.model }));
                 reload();
@@ -1282,7 +1261,6 @@ function Bios({ t, spaceId }: { t: TFn; spaceId: number }) {
 function Shelf({
   t,
   games,
-  spaceId,
   discs,
   onChange,
   onClose,
@@ -1290,7 +1268,6 @@ function Shelf({
 }: {
   t: TFn;
   games: Cartridge[] | null;
-  spaceId: number;
   discs: boolean; // the disc rack (else the cartridge shelf)
   onChange: () => void;
   onClose: () => void;
@@ -1310,13 +1287,13 @@ function Shelf({
         t={t}
         games={(games ?? []).filter((g) => isDiscSystem(g.system) === discs)}
         onRemove={(g) =>
-          void removeGame(spaceId, g.id)
+          void removeGame(g.id)
             .then(onChange)
             .catch(() => toast("—", "warn"))
         }
       />
-      <Upload t={t} spaceId={spaceId} discs={discs} fixed={discs ? DISC_SYSTEMS[0] : undefined} onDone={onChange} />
-      {discs ? <Bios t={t} spaceId={spaceId} /> : null}
+      <Upload t={t} discs={discs} fixed={discs ? DISC_SYSTEMS[0] : undefined} onDone={onChange} />
+      {discs ? <Bios t={t} /> : null}
     </div>
   );
 }

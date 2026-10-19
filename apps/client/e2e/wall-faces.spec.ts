@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, spaceId, test, token } from "./helpers";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // Both faces of a wall, in the Lab (everything put out is put back after):
 // each face its own material, things hung on either face, anywhere along it
@@ -38,7 +38,7 @@ async function at(page: Page, x: number, y: number, z = 0) {
 test("both faces of a wall: a material each, things on either, anywhere on it", async ({ page }) => {
   test.setTimeout(150_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   // three tiles of solid wall along x with floor on both sides, nothing hung
   // near, no wall meeting it (an inside wall), and the material it is
   const spot = await page.evaluate(() => {
@@ -180,7 +180,7 @@ test("third person: a click high up a wall, above the horizon, hangs the thing",
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
     localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "free" }));
   });
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   // two tiles of solid north wall (facing +y) with open floor in front, nothing hung near
   const spot = await page.evaluate(() => {
@@ -276,7 +276,7 @@ test("third person: a click high up a wall, above the horizon, hangs the thing",
 test("a wall drag stays on its line, wobble and jumps and all", async ({ page }) => {
   test.setTimeout(90_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   // a 6 × 3 patch of open floor with no walls on its edges
   const spot = await page.evaluate(() => {
     const w = (window as any).__yutopia;

@@ -12,7 +12,7 @@ import s from "../phone.module.css";
 import { cx, dayLabel, Head, Ic, secs, Thumb, Wallpaper } from "../ui";
 import { ThreadIcon } from "./messages";
 
-// The Gallery (photos kept in Yondra), one photo (send it, make it the
+// The Gallery (photos kept in the API), one photo (send it, make it the
 // wallpaper, save the file, delete it), sending one to a thread, and the
 // camera's viewfinder over the world.
 
@@ -128,7 +128,7 @@ export function PhotoView({ id }: { id: number }) {
         // biome-ignore lint/a11y/useMediaCaption: a clip from the world, no speech track to caption
         <video src={p.url} controls autoPlay playsInline />
       ) : (
-        // biome-ignore lint/performance/noImgElement: a photo from Yondra
+        // biome-ignore lint/performance/noImgElement: a photo from the API
         <img alt="" src={p.url} />
       )}
       <div style={{ padding: "12px 16px", font: "11.5px/1.5 var(--font-body)", color: "var(--dim)" }}>
@@ -306,7 +306,7 @@ export function SendTo({ id }: { id: number | string }) {
               >
                 <ThreadIcon th={th} size={34} />
                 <div className={s.col}>
-                  <div className={s.nm}>{th.kind === "space" ? `# ${th.name}` : ph.threadName(th)}</div>
+                  <div className={s.nm}>{th.kind === "everyone" ? `# ${th.name}` : ph.threadName(th)}</div>
                 </div>
                 <Ic n="send" size={15} />
               </button>

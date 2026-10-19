@@ -20,7 +20,7 @@ export function Prompt() {
   const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
   if (!prompt || panel || building) return null;
   const o = w?.engine?.getObject(prompt.objectId);
-  const opens = prompt.kind === "board" || prompt.kind === "notice" || prompt.kind === "screen";
+  const opens = prompt.kind === "notice" || prompt.kind === "screen";
   return (
     <button
       type="button"
@@ -366,9 +366,7 @@ export function ConnectionOverlay() {
           ? t("kicked")
           : phase === "removed"
             ? t("removed")
-            : error === "404"
-              ? t("noSpaces")
-              : error || t("failed");
+            : error || t("failed");
   const blocking = phase !== "reconnecting";
   return (
     <div

@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page, test } from "@playwright/test";
-import { ANA, enter, spaceId, token } from "./helpers";
+import { ANA, enter, token, useWorld } from "./helpers";
 
 // Desks come bare and you dress them, Sims-style: things from the "On desks &
 // tables" tab go on a quarter-tile grid on the top (several per tile), move
@@ -24,7 +24,7 @@ const build = (page: Page) => page.evaluate(() => (window as any).__hud.get().bu
 test("dress a desk: many things on top, moved cell by cell, carried with the desk", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const before = new Set<string>(await page.evaluate(() => [...(window as any).__yutopia.room.state.objects.keys()]));
   // the things made here (by id), as [kind/d, tile x, y, rot, cell]
   const mine = () =>
@@ -139,7 +139,7 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
 test("the bin takes only what's dropped on it", async ({ page }) => {
   test.setTimeout(120_000);
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok, "Yutopia Lab"));
+  await enter(page, tok, await useWorld("lab"));
   const exists = (id: string) => page.evaluate((i) => !!(window as any).__yutopia.room.state.objects.get(i), id);
   const sp = await page.evaluate(() => (window as any).__yutopia.map.spawn);
   const P = { x: Math.floor(sp.x) + 2, y: Math.floor(sp.y) - 1 };

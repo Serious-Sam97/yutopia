@@ -1,12 +1,12 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 const SHOTS = "../../design/screens";
 
 test("sign in, arrive at the arrival point, My desk, walk across the building", async ({ page }) => {
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   // everyone comes in at the arrival point (builders move it: build mode → Map)
   const at = await page.evaluate(() => {
     const w = (window as any).__yutopia;
@@ -25,9 +25,9 @@ test("sign in, arrive at the arrival point, My desk, walk across the building", 
   await page.screenshot({ path: `${SHOTS}/02-lounge.png` });
 });
 
-test("two people see each other and the Yondra board wall is live", async ({ browser }) => {
+test("two people see each other in the one world", async ({ browser }) => {
   const [ta, tb] = [await token(ANA), await token(BIA)];
-  const space = await spaceId(ta);
+  const space = await useWorld("demo");
   const a = await (await browser.newContext()).newPage();
   const b = await (await browser.newContext()).newPage();
   await enter(a, ta, space);
@@ -35,10 +35,9 @@ test("two people see each other and the Yondra board wall is live", async ({ bro
   await a.waitForFunction(
     () => (window as never as { __hud: { get(): { people: unknown[] } } }).__hud.get().people.length >= 1,
   );
-  const boards = await a.evaluate(() =>
-    (window as never as { __hud: { get(): { boards: { name: string }[] } } }).__hud.get().boards.map((x) => x.name),
+  await b.waitForFunction(
+    () => (window as never as { __hud: { get(): { people: unknown[] } } }).__hud.get().people.length >= 1,
   );
-  expect(boards).toContain("Product");
   // (from the arrival point: a longer walk than from a desk)
   await walkTo(a, 4.5, 2.5, 30_000);
   await a.evaluate(() =>
@@ -50,7 +49,7 @@ test("two people see each other and the Yondra board wall is live", async ({ bro
 
 test("vortex wanders and answers when poked", async ({ page }) => {
   const tok = await token(ANA);
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   const said = await page.evaluate(async () => {
     const c = (window as any).__yutopia;
     const out: string[] = [];

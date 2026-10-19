@@ -1,5 +1,5 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { ANA, enter, spaceId, test, token } from "./helpers";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // Review shots of the live world in third person (opt-in: YUTOPIA_SHOTS=<dir>):
 // Ana in the Demo space, at a few spots, the camera set by hand.
@@ -22,7 +22,7 @@ test("third person review shots", async ({ page }) => {
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
     localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "free" }));
   });
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   const only = process.env.YUTOPIA_SHOT;
   for (const s of SPOTS) {
@@ -56,7 +56,7 @@ test("third person vs iso, side by side", async ({ page }) => {
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
     localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "free" }));
   });
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   for (const s of SPOTS) {
     await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x, y: p.y }), s);
@@ -95,7 +95,7 @@ test("first person review shots", async ({ page }) => {
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
     localStorage.setItem(k, JSON.stringify({ ...p, view: "1p", last3d: "1p" }));
   });
-  await enter(page, tok, await spaceId(tok));
+  await enter(page, tok, await useWorld("demo"));
   await page.waitForFunction(() => (window as any).__yutopia.tp?.mode === "first", null, { timeout: 60_000 });
   const only = process.env.YUTOPIA_SHOT;
   for (const s of SPOTS) {

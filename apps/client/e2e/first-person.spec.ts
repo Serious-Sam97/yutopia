@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, spaceId, test, token } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // First person, live: Ana sees the Lab from her own eyes (the 3D view's
 // "first" camera, a per-player setting), Bia in iso. The camera stands on
@@ -74,7 +74,7 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   test.setTimeout(180_000);
   const tokA = await token(ANA);
   const tokB = await token(BIA);
-  const lab = await spaceId(tokA, "Yutopia Lab");
+  const lab = await useWorld("lab");
   await stubLock(page);
   await enter(page, tokA, lab);
   await page.waitForFunction(() => (window as any).__yutopia.tp?.mode === "first", null, { timeout: 60_000 });
@@ -256,7 +256,7 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
 test("first person: my hands come up with the phone, and Settings can hide them", async ({ page }) => {
   test.setTimeout(120_000);
   const tok = await token(ANA);
-  const lab = await spaceId(tok, "Yutopia Lab");
+  const lab = await useWorld("lab");
   await stubLock(page);
   await enter(page, tok, lab);
   await page.waitForFunction(() => (window as any).__yutopia.tp?.mode === "first", null, { timeout: 60_000 });
