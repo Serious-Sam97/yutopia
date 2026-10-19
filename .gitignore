@@ -16,3 +16,4 @@ docker/prod/livekit.keys.yaml
 apps/client/test-results
 apps/client/public/emu/cores
 apps/client/public/emu/games
+docker/livekit.local.yaml

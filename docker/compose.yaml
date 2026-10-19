@@ -1,4 +1,4 @@
-# Yutopia for local dev: LiveKit + world-server + client, one command.
+# Yutopia for local dev: API + Postgres + LiveKit + world-server + client, one command.
 #   docker compose -f docker/compose.yaml up -d      (or: pnpm docker:up)
 # Source changes are picked up live (the repo is bind-mounted); the client
 # fetches the emulator cores it's missing each time it starts. Dependency
@@ -6,8 +6,9 @@
 # `up -d --build` leaves a running container alone because nothing here is
 # built. After touching a package.json or the lockfile run:
 #   pnpm docker:restart     (= docker compose restart client world)
-# Joins Yondra's `sail` network so the world-server reaches Laravel at
-# http://laravel.test — start Yondra's stack first.
+# Nothing of Yondra's is needed: Yutopia's own API (apps/api, Laravel) answers on
+# http://localhost:8100 (/api/…), the world-server reaches it at http://api:8000;
+# it migrates and seeds the demo people (ana@ / bia@yutopia.test) each time it starts.
 name: yutopia
 
 x-node: &node
@@ -15,22 +16,95 @@ x-node: &node
   working_dir: /app
   restart: unless-stopped
   env_file: ../.env
-  networks: [sail]
+
+x-api: &api
+  build:
+    context: ../apps/api
+    target: dev
+  image: yutopia-api-dev
+  working_dir: /app
+  restart: unless-stopped
+  env_file: ../.env
+  environment: &api-env
+    DB_CONNECTION: pgsql
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_DATABASE: yutopia
+    DB_USERNAME: yutopia
+    DB_PASSWORD: yutopia
+    # live phone events go to the world-server (its /internal/push)
+    YUTOPIA_WORLD_INTERNAL: http://world:2567
+  volumes:
+    - ../apps/api:/app
+  depends_on:
+    db:
+      condition: service_healthy
 
 services:
+  db:
+    image: postgres:17.11-alpine
+    container_name: yutopia-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: yutopia
+      POSTGRES_USER: yutopia
+      POSTGRES_PASSWORD: yutopia
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5444:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "yutopia", "-d", "yutopia"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *api
+    container_name: yutopia-api
+    ports:
+      - "8100:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8000/up"]
+      interval: 15s
+      timeout: 3s
+      start_period: 60s
+
+  queue:
+    <<: *api
+    container_name: yutopia-queue
+    command: ["php", "artisan", "queue:work", "--tries=3", "--sleep=2"]
+    healthcheck:
+      disable: true # (the FrankenPHP image's own check is for the web server)
+    depends_on:
+      api:
+        condition: service_healthy
+
+  scheduler:
+    <<: *api
+    container_name: yutopia-scheduler
+    command: ["php", "artisan", "schedule:work"]
+    healthcheck:
+      disable: true # (the FrankenPHP image's own check is for the web server)
+    depends_on:
+      api:
+        condition: service_healthy
+
   livekit:
     image: livekit/livekit-server:v1.13.7
     container_name: yutopia-livekit
     restart: unless-stopped
     command: ["--config", "/etc/livekit.yaml"]
     volumes:
-      - ./livekit.yaml:/etc/livekit.yaml:ro
+      # LIVEKIT_CONFIG_FILE in docker/.env (gitignored) picks another one: livekit.yaml
+      # advertises the public IP (STUN); on a machine whose router won't loop that back
+      # (this Mac, the e2e suite) use a copy with `use_external_ip: false` + `node_ip: 127.0.0.1`
+      - ./${LIVEKIT_CONFIG_FILE:-livekit.yaml}:/etc/livekit.yaml:ro
       - ./livekit.keys.yaml:/etc/livekit.keys.yaml:ro
     ports:
       - "7880:7880"
       - "7881:7881"
       - "50000-50100:50000-50100/udp"
-    networks: [sail]
 
   world:
     <<: *node
@@ -41,7 +115,7 @@ services:
       - corepack enable && corepack prepare pnpm@12.6.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @yutopia/world-server dev
     environment:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
-      YONDRA_API_INTERNAL: http://laravel.test
+      YUTOPIA_API_INTERNAL: http://api:8000
       LIVEKIT_HTTP_URL: http://livekit:7880
     volumes:
       - ..:/app
@@ -52,7 +126,11 @@ services:
       - world_nm_client:/app/apps/client/node_modules
     ports:
       - "2567:2567"
-    depends_on: [livekit]
+    depends_on:
+      livekit:
+        condition: service_started
+      api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:2567/health"]
       interval: 15s
@@ -89,6 +167,7 @@ services:
     depends_on: [world]
 
 volumes:
+  db_data:
   world_nm:
   world_nm_shared:
   world_nm_world:
@@ -97,8 +176,3 @@ volumes:
   client_nm_shared:
   client_nm_world:
   client_nm_client:
-
-networks:
-  sail:
-    name: yondra_sail
-    external: true

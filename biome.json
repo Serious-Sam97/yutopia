@@ -15,7 +15,8 @@
       "!build",
       "!**/.next",
       "!**/next-env.d.ts",
-      "!**/world/art/vortex/vortexArt.ts"
+      "!**/world/art/vortex/vortexArt.ts",
+      "!apps/api"
     ]
   },
   "formatter": {
