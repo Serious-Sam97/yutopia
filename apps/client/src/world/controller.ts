@@ -275,7 +275,7 @@ export class WorldController {
   send<K extends keyof ClientMessages>(type: K, msg: ClientMessages[K]) {
     msg = this.onMyFloor(type, msg);
     // (a lift's button pressed: its click, at once)
-    if (type === "lift:call" || type === "lift:go") liftSound("lift/button", { gain: 0.8 });
+    if (type === "lift:call" || type === "lift:go" || type === "lift:close") liftSound("lift/button", { gain: 0.8 });
     try {
       this.room?.send(type, msg);
     } catch {}
@@ -361,6 +361,9 @@ export class WorldController {
         if (p && !p.bot) this.openMenu({ type: "person", sid }, at);
       },
       onObjectClick: (id, at) => {
+        // a button on an elevator car's own panel (3D): a floor, open, close
+        const btn = id.split("|btn|");
+        if (btn.length === 2) return this.pressLiftButton(btn[0], btn[1]);
         const o = this.engine?.getObject(id);
         const b = hud.get().build;
         if (b.on && o && b.tool === "walls") return; // walls/floors paint by dragging
@@ -1591,6 +1594,7 @@ export class WorldController {
       hgt.z += change.dz;
       // (a way up or down the stairs goes on from where it was, in the new floor's coords)
       const rest = this.path?.map((p) => across(this.building, from, change.level, p)) ?? null;
+      if (this.tp) this.tp.carryFrom = from; // (the 3D camera keeps its place in the building)
       this.setLevel(change.level);
       this.path = rest?.length ? rest : null;
       moved = true;
@@ -1778,7 +1782,9 @@ export class WorldController {
   }
 
   private updatePrompt() {
-    const o = this.aimedObject() ?? this.nearestInteractable();
+    // (in an elevator's car its panel is the way to use it: no "X" for it)
+    const near = this.aimedObject() ?? this.nearestInteractable();
+    const o = near?.kind === "elevator" && hud.get().lift ? null : near;
     const cur = hud.get().prompt;
     const kind = !o ? "" : hud.get().cable ? "plug" : (entry(o.kind).interact as string);
     if ((o?.id ?? null) === (cur?.objectId ?? null) && kind === (cur?.kind ?? "")) return;
@@ -2787,7 +2793,8 @@ export class WorldController {
       const { w, h } = placedFootprint(o);
       if (this.me.x >= o.x && this.me.x < o.x + w && this.me.y >= o.y && this.me.y < o.y + h) at = o;
     }
-    const key = at ? `${at.id}|${hud.get().floors.join()}` : "";
+    const pr = at?.props ?? {};
+    const key = at ? `${at.id}|${hud.get().floors.join()}|${pr.ph}|${pr.at}|${pr.to}` : "";
     if (key === this.liftShown) return;
     this.liftShown = key;
     if (!at) {
@@ -2799,7 +2806,42 @@ export class WorldController {
       .filter((o) => o.kind === "elevator" && String(o.props?.shaft ?? o.id) === shaft)
       .map((o) => objLevel(o, this.building))
       .sort((a, b) => b - a);
-    hud.set({ lift: { id: at.id, floors: floors.map((level) => ({ level, name: this.floorName(level) })) } });
+    // (from the stop's props: the car's phase and floors, as the server says)
+    const live = this.objs.get(at.id)?.props ?? pr;
+    hud.set({
+      lift: {
+        id: at.id,
+        floors: floors.map((level) => ({ level, name: this.floorName(level) })),
+        at: typeof live.at === "number" ? live.at : this.level,
+        to: typeof live.to === "number" ? live.to : this.level,
+        phase: String(live.ph ?? (live.door === "open" ? "open" : "shut")),
+      },
+    });
+    // stepping out (Esc) waited for the doors: they're open, out I go
+    if (this.liftOut === at.id && live.ph === "open") {
+      this.liftOut = null;
+      this.walkTo(liftFront(at, 0.9));
+    }
+  }
+
+  private pressLiftButton(id: string, label: string) {
+    if (label === "◀▶") return this.send("lift:go", { id, level: this.level });
+    if (label === "▶◀") return this.send("lift:close", { id });
+    const level = label === "G" ? 0 : Number(label);
+    if (Number.isInteger(level)) this.send("lift:go", { id, level });
+  }
+
+  /** Esc in the car: out of it — at once if its doors are open, else they open first. */
+  private liftOut: string | null = null;
+  stepOutOfLift() {
+    const l = hud.get().lift;
+    const o = l ? this.objs.get(l.id) : undefined;
+    if (!l || !o) return;
+    if (o.props?.ph === "open" || o.props?.door === "open") this.walkTo(liftFront(o, 0.9));
+    else {
+      this.liftOut = o.id;
+      this.send("lift:go", { id: o.id, level: this.level });
+    }
   }
 
   /** The room's things as the server has them, on my floor (e2e reads these). */
@@ -2998,6 +3040,7 @@ export class WorldController {
     now: number,
   ): { eye: [number, number, number]; look: [number, number, number]; showMe: boolean; fov: number } | null {
     const at = this.myLift(now);
+    if (this.tp) this.tp.liftIn = at?.o.id ?? null;
     if (!at) {
       if (this.tp) this.tp.liftSway = 0;
       return null;
@@ -3017,6 +3060,9 @@ export class WorldController {
     };
     const [ex, ey] = turn(1, 1.82);
     const [lx, ly] = turn(1, -1.6);
+    // (the keys follow this camera — W towards the doors — and so does the one
+    // behind me as I walk out)
+    if (this.tp) this.tp.yaw = Math.atan2(ly - ey, lx - ex);
     return { eye: [ex, ey, 2.2 + sway], look: [lx, ly, 1.15 + sway], showMe: true, fov: 74 };
   }
 

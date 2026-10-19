@@ -7,14 +7,15 @@ import type { Edge, MapDef } from "./map.ts";
 // floor to the one above (docs/plan/25-building-floors.md). Local coords (rot
 // 0): u across 0..4, v along 0..6; the door side is v = 0.
 //
-//   v 0..1   the landing by the door: floor (the floor's own)
-//   v 1..4   flight A (u 2..4): up, away from the door, 0 → STOREY/2
-//   v 4..6   the half landing (all across), STOREY/2
-//   v 4..1   flight B (u 0..2): up, back towards the door, STOREY/2 → STOREY,
+//   v 0..2   the landing by the door: floor (the floor's own) — two tiles
+//            deep (2026-10-19: one was too tight a turn onto the flight)
+//   v 2..5   flight A (u 2..4): up, away from the door, 0 → STOREY/2
+//   v 5..7   the half landing (all across), STOREY/2
+//   v 5..2   flight B (u 0..2): up, back towards the door, STOREY/2 → STOREY,
 //            arriving by the same door one floor up
 //
-// A wall runs between the flights (u = 2, v 1..4). The floor above has a hole
-// over v 1..6; there flight B (seen from up there, STOREY lower) is the way
+// A wall runs between the flights (u = 2, v 2..5). The floor above has a hole
+// over v 2..7; there flight B (seen from up there, STOREY lower) is the way
 // down and the next staircase's flight A the way up. You really walk them: the
 // treads are surfaces (Grid ramps) your feet follow, step by step.
 //
@@ -22,9 +23,9 @@ import type { Edge, MapDef } from "./map.ts";
 // rot 2 south, rot 3 west.
 
 export const STAIRS_W = 4;
-export const STAIRS_D = 6;
-const V_FLIGHT = 1; // where the flights start (the door's landing ends)
-const V_TURN = 4; // where they turn (the half landing starts)
+export const STAIRS_D = 7;
+export const V_FLIGHT = 2; // where the flights start (the door's landing ends)
+export const V_TURN = 5; // where they turn (the half landing starts)
 const HALF = STOREY / 2;
 
 /** A surface you walk on, in tile coords of the floor it's on: a rectangle
@@ -107,7 +108,7 @@ export function stairsRamps(o: { x: number; y: number; rot?: number }, dz = 0): 
   ];
 }
 
-/** The tiles of the well (v 1..6): no floor of their own, only the treads. */
+/** The tiles of the well (v 2..7): no floor of their own, only the treads. */
 export function stairsWell(o: { x: number; y: number; rot?: number }): [number, number][] {
   const r = rect(o, 0, V_FLIGHT, STAIRS_W, STAIRS_D);
   const out: [number, number][] = [];
@@ -185,14 +186,15 @@ export function stairsDoor(o: { x: number; y: number; rot?: number }): Point {
  *  spot of the building): flight A, the half landing, flight B. Reversed, the
  *  way down from the floor above. */
 export function stairsWayUp(o: { x: number; y: number; rot?: number }): Point[] {
+  const [f, t] = [V_FLIGHT, V_TURN];
   return [
-    [1, 0.55],
-    [3, 0.8],
-    [3, 3.9],
-    [3, 5],
-    [1, 5],
-    [1, 3.9],
-    [1, 1.05],
-    [1, 0.5],
+    [1, 0.9],
+    [3, f - 0.4],
+    [3, t - 0.1],
+    [3, t + 1],
+    [1, t + 1],
+    [1, t - 0.1],
+    [1, f + 0.05],
+    [1, f - 0.8],
   ].map(([u, v]) => stairsPoint(o, u, v));
 }

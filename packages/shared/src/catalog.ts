@@ -362,7 +362,7 @@ export const CATALOG = {
   // (stairs.ts), an elevator's car where it stops on each floor (props.shaft
   // names the shaft; the world-server runs the car), and outside the lot's cars
   // and lamp posts
-  stairs: { label: "Staircase", w: 4, h: 6, solid: false, buildable: true },
+  stairs: { label: "Staircase", w: 4, h: 7, solid: false, buildable: true },
   elevator: { label: "Elevator", w: 2, h: 2, solid: false, interact: "lift", buildable: true },
   car: { label: "Car", w: 5, h: 2, solid: true, buildable: true, variants: 9, paint: true },
   lamp_post: {

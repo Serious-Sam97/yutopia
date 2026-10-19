@@ -143,6 +143,7 @@ export interface ClientMessages {
   // send it to a floor from inside it
   "lift:call": { id: string };
   "lift:go": { id: string; level: number };
+  "lift:close": { id: string }; // in the car: shut its doors now
   "map:room": {
     name: string;
     kind: string;

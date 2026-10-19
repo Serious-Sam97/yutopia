@@ -62,6 +62,7 @@ import {
   TICK_HZ,
   tileAt,
   topCell,
+  upgradeCore,
   validLayout,
   type WorldObjectDef,
 } from "@yutopia/shared";
@@ -233,6 +234,18 @@ export class WorldRoom extends Room<WorldState> {
       );
       if (!config.offline) {
         await saveAll([...building.moved, ...building.add], (o) => api.putObject(o));
+        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
+      }
+    }
+    // a building with the first core (the stairs' landing one tile deep): today's
+    const upgraded = config.building ? upgradeCore(this.map, objects) : null;
+    if (upgraded) {
+      this.map = upgraded.map;
+      objects = upgraded.objects;
+      this.syncMapState();
+      console.log(`[building] the core: a row deeper (${upgraded.moved.length} things moved)`);
+      if (!config.offline) {
+        await saveAll(upgraded.moved, (o) => api.putObject(o));
         await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
       }
     }
@@ -523,8 +536,28 @@ export class WorldRoom extends Room<WorldState> {
         const userId = m.to.userId;
         const other = [...this.state.players.values()].find((q) => q.uid === userId);
         if (other) {
+          // beside them, somewhere they could walk to (not the far side of a
+          // wall, not inside a shut elevator car)
           const og = this.gridFor(p.uid, other.level);
-          const near = og.nearestOpen(other.x + 1, other.y + 1) ?? { x: other.x, y: other.y };
+          const near =
+            [
+              [1, 1],
+              [-1, 1],
+              [1, -1],
+              [-1, -1],
+              [0, 1.4],
+              [1.4, 0],
+              [-1.4, 0],
+              [0, -1.4],
+            ]
+              .map(([dx, dy]) => ({ x: other.x + dx, y: other.y + dy }))
+              .find((c) => {
+                if (!og.fits(c.x, c.y)) return false;
+                const way = findPath(og, other, c);
+                return !!way && way.length <= 4;
+              }) ??
+            og.nearestOpen(other.x + 1, other.y + 1) ??
+            ({ x: other.x, y: other.y } as { x: number; y: number });
           target = { ...near, level: other.level };
         }
       } else if (typeof m.to === "object" && m.to && "x" in m.to && p.builder) {

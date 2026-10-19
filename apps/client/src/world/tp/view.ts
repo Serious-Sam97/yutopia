@@ -702,6 +702,7 @@ export class ThirdPersonView {
   update(building: MapDef, objects: WorldObjectDef[], level = this.level) {
     const map = levelMap(building, level) ?? building;
     const moved = level !== this.level;
+    const from = this.level;
     this.building = building;
     this.level = level;
     const all = objects;
@@ -735,6 +736,7 @@ export class ThirdPersonView {
       this.floors.set(level, mine);
       this.scene.add(world.root);
     } else mine.world.update(noLifts(objects));
+    if (moved) this.cameraAcross(from);
     const changed = mine.world !== this.world || layoutSig(map) !== layoutSig(this.map);
     if (mine.world !== this.world) {
       // the floor I left keeps its drawing, without my floor's light map
@@ -840,6 +842,7 @@ export class ThirdPersonView {
   private liftObjs: WorldObjectDef[] = [];
   private liftSince = new Map<string, number>();
   liftSway = 0; // (the car I'm riding: its sway, tiles)
+  liftIn: string | null = null; // (the stop whose car I'm standing in, on my floor)
   setLifts(objects: WorldObjectDef[], since: Map<string, number>) {
     this.liftObjs = objects;
     this.liftSince = since;
@@ -854,7 +857,6 @@ export class ThirdPersonView {
     const stops: LiftStop3[] = [];
     for (const o of this.liftObjs) {
       const level = objLevel(o, this.building);
-      if (level > this.level) continue; // (the floors above aren't drawn)
       const floors = [...(shafts.get(String(o.props?.shaft ?? o.id)) ?? [])].sort((a, b) => b - a).map(liftFloorName);
       const since = (now - (this.liftSince.get(o.id) ?? now)) / 1000;
       const motion = liftMotion(o, level, since);
@@ -864,6 +866,9 @@ export class ThirdPersonView {
         motion,
         floors,
         floor: liftFloorName(level),
+        mine: level === this.level,
+        shown: level <= this.level, // (the floors above aren't drawn — kept, hidden)
+        inside: level === this.level && o.id === this.liftIn,
         sway: level === this.level && motion.phase === "moving" ? this.liftSway : 0,
       });
     }
@@ -878,9 +883,9 @@ export class ThirdPersonView {
     for (const o of this.allObjects) {
       if (o.kind !== "stairs") continue;
       const level = objLevel(o, this.building);
-      if (level > this.level) continue;
       const off = this.offsetTo(level);
       stops.push({
+        shown: level <= this.level,
         o,
         off,
         floor: liftFloorName(level),
@@ -909,6 +914,30 @@ export class ThirdPersonView {
       // clipped shaders compiled too, before anyone first goes downstairs
       if (!this.cutWarm) {
         this.cutWarm = true;
+        // every elevator and stairwell, every floor's, drawn once off screen
+        this.lifts3?.showAll(true);
+        this.stairs3.showAll(true);
+        const hw = this.building.width;
+        const hh = this.building.height;
+        const c = this.warmCam;
+        const r = Math.max(hw, hh) / 2 + 4;
+        Object.assign(c, { left: -r, right: r, top: r, bottom: -r });
+        const o = this.offsetTo(homeOf(this.building));
+        c.position.set(o.x + hw / 2, o.h + 80, o.y + hh / 2);
+        c.lookAt(o.x + hw / 2, o.h - 20, o.y + hh / 2);
+        c.far = 400;
+        c.updateProjectionMatrix();
+        this.warmTarget ??= new WebGLRenderTarget(4, 4, {
+          colorSpace: this.post ? LinearSRGBColorSpace : SRGBColorSpace,
+        });
+        const shadows = this.renderer.shadowMap.autoUpdate;
+        this.renderer.shadowMap.autoUpdate = false;
+        this.renderer.setRenderTarget(this.warmTarget);
+        this.renderer.render(this.scene, c);
+        this.renderer.setRenderTarget(null);
+        this.renderer.shadowMap.autoUpdate = shadows;
+        this.lifts3?.showAll(false);
+        this.stairs3.showAll(false);
         this.around.campus.cutAbove(STOREY - 0.15);
         this.renderer.setRenderTarget(this.warmTarget);
         this.renderer.render(this.scene, this.camera);
@@ -968,6 +997,26 @@ export class ThirdPersonView {
     this.renderer.shadowMap.autoUpdate = shadows;
     // (shown only if it's below mine)
     world.root.visible = f < this.level;
+  }
+
+  // My floor changed: the scene now sits round the new one. Up or down the
+  // stairs (`carryFrom` = the floor I came from) the camera keeps its place in
+  // the building — shifted with it, no swoop; any other way (an elevator's
+  // arrival, a teleport) it's simply there at once.
+  carryFrom: number | null = null;
+  private cameraAcross(from: number) {
+    if (this.carryFrom === from) {
+      const o = this.offsetTo(from);
+      const d = new Vector3(o.x, o.h, o.y);
+      this.target.add(d);
+      this.camera.position.add(d);
+      this.gcEye.add(d);
+      this.gcLook.add(d);
+    } else {
+      this.targetReady = false;
+      this.gcReady = false;
+    }
+    this.carryFrom = null;
   }
 
   // Am I in the building (on its footprint) on a floor under the studio? Then
@@ -1905,13 +1954,21 @@ export class ThirdPersonView {
       this.pick(e.clientX, e.clientY, { shift: e.shiftKey, right: e.button === 2 });
   };
 
-  // the nearest usable thing along the ray (its 3D box; see-through walls don't stop it)
+  // the nearest usable thing along the ray (its 3D box; see-through walls don't
+  // stop it) — an elevator car's buttons first (you're in the car's own box)
   private pickObject(): string | null {
+    const btn = this.lifts3?.buttonPicks.length ? this.nearestPick(this.lifts3.buttonPicks) : null;
+    if (btn) return btn;
+    return this.nearestPick([...this.world.picks, ...(this.lifts3?.picks ?? []), ...this.stairs3.picks]);
+  }
+  private nearestPick(
+    picks: { id: string; use: boolean; x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }[],
+  ): string | null {
     const o = this.ray.ray.origin;
     const d = this.ray.ray.direction;
     let best: string | null = null;
     let bestT = Number.POSITIVE_INFINITY;
-    for (const p of [...this.world.picks, ...(this.lifts3?.picks ?? []), ...this.stairs3.picks]) {
+    for (const p of picks) {
       if (!p.use) continue;
       let t0 = 0;
       let t1 = bestT;

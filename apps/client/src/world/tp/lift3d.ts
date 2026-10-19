@@ -4,6 +4,7 @@ import {
   CanvasTexture,
   CylinderGeometry,
   DoubleSide,
+  EquirectangularReflectionMapping,
   Group,
   type Material,
   Mesh,
@@ -18,9 +19,9 @@ import {
   SpotLight,
   SRGBColorSpace,
   type Texture,
+  Vector3,
   type WebGLRenderer,
 } from "three";
-import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { Pick3 } from "./build";
 
 // The elevator, made properly (docs/plan/26-floor-transitions.md, phase 0):
@@ -210,8 +211,17 @@ export class DotMatrix {
   }
 }
 
-// a label drawn on a small canvas (the panel's buttons)
+// a label drawn on a small canvas (the panel's buttons), one texture a label
+const labels = new Map<string, CanvasTexture>();
 function label(text: string, size = 64, fg = "#1b1f22"): CanvasTexture {
+  const key = `${text}|${size}|${fg}`;
+  const had = labels.get(key);
+  if (had) return had;
+  const t = drawLabel(text, size, fg);
+  labels.set(key, t);
+  return t;
+}
+function drawLabel(text: string, size: number, fg: string): CanvasTexture {
   const { c, g } = canvas(size, size);
   g.clearRect(0, 0, size, size);
   g.fillStyle = fg;
@@ -220,6 +230,17 @@ function label(text: string, size = 64, fg = "#1b1f22"): CanvasTexture {
   g.textBaseline = "middle";
   g.fillText(text, size / 2, size / 2 + size * 0.03);
   return tex(c);
+}
+
+// a button's face (its label), one material a label, shared by every car
+const faces = new Map<string, MeshBasicMaterial>();
+function faceMat(k: string): MeshBasicMaterial {
+  let m = faces.get(k);
+  if (!m) {
+    m = new MeshBasicMaterial({ map: label(k, 64), transparent: true, side: DoubleSide });
+    faces.set(k, m);
+  }
+  return m;
 }
 
 export interface LiftMats {
@@ -402,7 +423,7 @@ export class LiftLanding {
 export class LiftCar {
   readonly root = new Group();
   private leaves: Mesh[] = [];
-  private buttons = new Map<string, Mesh>();
+  readonly buttons = new Map<string, Mesh>(); // the panel's, by label (their light rings)
   readonly display = new DotMatrix();
   readonly light: PointLight;
   readonly spill: SpotLight;
@@ -418,10 +439,12 @@ export class LiftCar {
     const cut = !!opts.cut;
     const lights = opts.lights !== false;
     const WH = cut ? 0.35 : CAR_H; // the walls' height
-    const i0 = 0.12; // the inner faces
-    const i1 = 1.88;
+    // the inner faces: well clear of the shaft's walls (the map's, WALL_T thick
+    // with their skirting, and the posts at the corners), or they show through
+    const i0 = 0.18;
+    const i1 = 1.82;
     const front = WALL_T / 2 + 0.02;
-    const back = 1.9;
+    const back = 1.8;
     const w = i1 - i0;
     // the floor
     const fl = new Mesh(new PlaneGeometry(w, back - front), m.carFloor);
@@ -528,10 +551,7 @@ export class LiftCar {
       const cap = new Mesh(new CylinderGeometry(0.022, 0.022, 0.012, 24), m.steel);
       cap.rotation.x = Math.PI / 2;
       cap.position.set(x, y, pz + 0.012);
-      const face = new Mesh(
-        new PlaneGeometry(0.036, 0.036),
-        new MeshBasicMaterial({ map: label(k, 64), transparent: true, side: DoubleSide }),
-      );
+      const face = new Mesh(new PlaneGeometry(0.036, 0.036), faceMat(k));
       face.position.set(x, y, pz + 0.0185);
       this.root.add(ring, cap, face);
       this.buttons.set(k, ring);
@@ -566,10 +586,14 @@ export interface LiftStop3 {
   motion: LiftMotion;
   floors: string[]; // the car's buttons, top down
   floor: string; // this stop's floor (on the jamb)
+  mine: boolean; // on my floor (its car's buttons can be pressed)
+  shown: boolean; // drawn (the floors above mine are kept, hidden: ready for going up)
+  inside: boolean; // I'm in its car (it's here, whatever the props still say)
   sway: number; // the car swaying as it travels (tiles)
 }
 
 interface StopView {
+  shown: boolean;
   outer: Group;
   landing: LiftLanding;
   car: LiftCar;
@@ -585,28 +609,57 @@ export class Lifts3 {
   private env: Texture | null = null;
 
   constructor(renderer: WebGLRenderer) {
-    // metal needs something to reflect: a soft room, for the lifts' own materials
-    // (the rest of the scene keeps its light as it is)
+    // metal needs something to reflect, for the lifts' own materials (the rest
+    // of the scene keeps its light as it is): a soft gradient — a light
+    // ceiling, a darker floor — never brighter than white, so no reflection
+    // ever crosses the bloom's threshold (a room environment's lamps did, as a
+    // white blaze at some angles in the car)
+    const c = document.createElement("canvas");
+    c.width = 64;
+    c.height = 32;
+    const g = c.getContext("2d") as CanvasRenderingContext2D;
+    const grd = g.createLinearGradient(0, 0, 0, 32);
+    grd.addColorStop(0, "#d8d6d2");
+    grd.addColorStop(0.45, "#a9a7a3");
+    grd.addColorStop(0.55, "#77736d");
+    grd.addColorStop(1, "#3a3733");
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 64, 32);
+    const sky = new CanvasTexture(c);
+    sky.mapping = EquirectangularReflectionMapping;
+    sky.colorSpace = SRGBColorSpace;
     const pm = new PMREMGenerator(renderer);
-    this.env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.env = pm.fromEquirectangular(sky).texture;
     pm.dispose();
+    sky.dispose();
     const m = liftMats();
     for (const mat of Object.values(m))
       if (mat instanceof MeshStandardMaterial) {
         mat.envMap = this.env;
-        mat.envMapIntensity = 0.5;
+        mat.envMapIntensity = 0.55;
         mat.needsUpdate = true;
       }
-    // (the game's light is brighter than the prototype's, and blooms: the steel
-    // a little darker, the ceiling's panel under the bloom's threshold)
+    // (the game's light is brighter than the prototype's, and blooms above a
+    // luminance of 0.72 at night: the steel a little darker and its sheen
+    // spread — the room's bright panels made hot spots on it at some angles —
+    // the mirror smoky, the ceiling's panel well under the threshold)
     m.steel.color.multiplyScalar(0.72);
     m.steelV.color.multiplyScalar(0.72);
-    m.ceiling.color.set("#c9bfae");
+    m.steel.roughness = m.steelV.roughness = 0.44;
+    m.mirror.roughness = 0.24;
+    m.mirror.color.multiplyScalar(0.7);
+    m.ceiling.color.set("#a39b8e");
   }
+
+  // the car's buttons where a click finds them (`${stop id}|btn|${label}`): looked
+  // at before anything else, the car's own box round you included
+  buttonPicks: Pick3[] = [];
+  private v = new Vector3();
 
   sync(stops: LiftStop3[]) {
     const seen = new Set<string>();
     this.picks = [];
+    this.buttonPicks = [];
     for (const s of stops) {
       seen.add(s.o.id);
       const key = `${s.floors.join(",")}|${s.floor}`;
@@ -624,24 +677,46 @@ export class Lifts3 {
         inner.add(landing.root, car.root);
         outer.add(inner);
         this.root.add(outer);
-        v = { outer, landing, car, floorsKey: key };
+        v = { shown: s.shown, outer, landing, car, floorsKey: key };
         this.views.set(s.o.id, v);
       }
       const { o, off, motion } = s;
+      v.shown = s.shown;
+      v.outer.visible = s.shown || this.warming;
       v.outer.position.set(o.x + 1 + off.x, off.h, o.y + 1 + off.y);
       v.outer.rotation.y = -((o.rot ?? 0) & 3) * (Math.PI / 2);
       const shown = `${liftFloorName(Math.round(motion.car))}${motion.dir > 0 ? "▲" : motion.dir < 0 ? "▼" : ""}`;
       v.landing.setDoors(motion.doors);
       v.landing.display.set(shown);
       v.landing.setLantern(motion.dir, motion.here && motion.doors > 0.02);
-      v.car.root.visible = motion.here;
-      v.car.root.position.y = motion.here ? s.sway : 0;
+      // (the car I'm in is here: arriving, the server's word may be a moment behind me)
+      const here = motion.here || s.inside;
+      v.car.root.visible = here;
+      v.car.root.position.y = here ? s.sway : 0;
       v.car.setDoors(motion.doors);
       v.car.display.set(shown);
       v.car.setLit(
         motion.phase === "moving" || motion.phase === "closing" ? [liftFloorName(Math.round(motion.to))] : [],
       );
+      if (here && s.mine) {
+        v.outer.updateMatrixWorld(true);
+        const r = 0.04;
+        for (const [label, ring] of v.car.buttons) {
+          ring.getWorldPosition(this.v);
+          this.buttonPicks.push({
+            id: `${o.id}|btn|${label}`,
+            use: true,
+            x0: this.v.x - r,
+            x1: this.v.x + r,
+            y0: this.v.z - r,
+            y1: this.v.z + r,
+            z0: this.v.y - r,
+            z1: this.v.y + r,
+          });
+        }
+      }
       // where a click finds it: the doors and the car behind them
+      if (!s.shown) continue;
       const r = (o.rot ?? 0) & 3;
       const x0 = o.x + off.x;
       const y0 = o.y + off.y;
@@ -657,6 +732,13 @@ export class Lifts3 {
       });
     }
     for (const [id, v] of this.views) if (!seen.has(id)) this.drop(id, v);
+  }
+
+  /** Every stop drawn for a moment (the view's warm-up: on the GPU ahead). */
+  private warming = false;
+  showAll(on: boolean) {
+    this.warming = on;
+    for (const v of this.views.values()) v.outer.visible = on || v.shown;
   }
 
   private drop(id: string, v: StopView) {

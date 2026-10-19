@@ -289,7 +289,14 @@ export interface HudState {
   floors: number[];
   // in an elevator's car with its doors open (features/lifts.ts): its stop on
   // my floor, the floors it goes to (and their names), where it is
-  lift: { id: string; floors: { level: number; name: string }[] } | null;
+  // in an elevator's car: its floors, and what it's doing (the panel's status)
+  lift: {
+    id: string;
+    floors: { level: number; name: string }[];
+    at: number;
+    to: number;
+    phase: string;
+  } | null;
   objectsVersion: number; // bumps when furniture arrives, moves or goes
   following: number | null;
   inspect: number | null;

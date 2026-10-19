@@ -1773,9 +1773,10 @@ test("elevators: call one, step in, ride it to the lot's floor — the doors ope
   const a = await person(81, s, "member,builder");
   // from the arrival point, up to the doors of car A (x 8–10)
   await stepTo(a, [
-    { x: 7.2, y: 28.8, z: 0, l: 4 },
-    { x: 8.0, y: 29.2, z: 0, l: 4 },
-    { x: 8.8, y: 29.5, z: 0, l: 4 },
+    { x: 6.8, y: 28.2, z: 0, l: 4 },
+    { x: 7.2, y: 27.8, z: 0, l: 4 },
+    { x: 8.0, y: 28.2, z: 0, l: 4 },
+    { x: 8.8, y: 28.5, z: 0, l: 4 },
   ]);
   assert.ok(Math.abs(me(a).x - 8.8) < 0.2, "at the doors");
   const stop = (level: number) =>
@@ -1789,14 +1790,14 @@ test("elevators: call one, step in, ride it to the lot's floor — the doors ope
   await waitFor(() => door(4) === "open", 5000);
   // in (the doors are a way in now), and down to the ground floor
   await stepTo(a, [
-    { x: 8.9, y: 30, z: 0, l: 4 },
-    { x: 9, y: 30.6, z: 0, l: 4 },
-    { x: 9, y: 31, z: 0, l: 4 },
+    { x: 8.9, y: 29, z: 0, l: 4 },
+    { x: 9, y: 29.6, z: 0, l: 4 },
+    { x: 9, y: 30, z: 0, l: 4 },
   ]);
-  assert.ok(me(a).y > 30.5, "in the car");
+  assert.ok(me(a).y > 29.5, "in the car");
   a.room.send("lift:go", { id: stop(4).id, level: 0 });
   await waitFor(() => me(a).level === 0, 12000);
-  const g = G(9, 31);
+  const g = G(9, 30);
   assert.ok(Math.hypot(me(a).x - g.x, me(a).y - g.y) < 0.6, "at the same spot of the car, a floor down");
   await waitFor(() => door(0) === "open", 3000);
   assert.equal(door(4), "closed", "and shut up there");
@@ -1811,11 +1812,12 @@ test("elevators: two ride; the doors wait for whoever's in the car or the doorwa
     [b, 9.4],
   ] as const)
     await stepTo(p, [
-      { x: 7.2, y: 28.8, z: 0, l: 4 },
-      { x: 7.9, y: 29.0, z: 0, l: 4 },
-      { x: (7.9 + x) / 2, y: 29.1, z: 0, l: 4 },
-      { x, y: 29.2, z: 0, l: 4 },
-      { x, y: 29.5, z: 0, l: 4 },
+      { x: 6.8, y: 28.2, z: 0, l: 4 },
+      { x: 7.2, y: 27.8, z: 0, l: 4 },
+      { x: 7.9, y: 28, z: 0, l: 4 },
+      { x: (7.9 + x) / 2, y: 28.1, z: 0, l: 4 },
+      { x, y: 28.2, z: 0, l: 4 },
+      { x, y: 28.5, z: 0, l: 4 },
     ]);
   const stop = (level: number) =>
     [...a.room.state.objects.values()].find(
@@ -1831,41 +1833,41 @@ test("elevators: two ride; the doors wait for whoever's in the car or the doorwa
     [b, 9.4],
   ] as const)
     await stepTo(p, [
+      { x, y: 29, z: 0, l: 4 },
+      { x, y: 29.6, z: 0, l: 4 },
       { x, y: 30, z: 0, l: 4 },
-      { x, y: 30.6, z: 0, l: 4 },
-      { x, y: 31, z: 0, l: 4 },
     ]);
-  assert.ok(me(a).y > 30.5 && me(b).y > 30.5, "both in the car");
+  assert.ok(me(a).y > 29.5 && me(b).y > 29.5, "both in the car");
   // well past the doors' own time: nobody's picked a floor, so they don't shut on them
   await sleep(8500);
   assert.equal(door(4), "open", "held open for the people in it");
   // b steps out; a rides down alone
   await stepTo(b, [
-    { x: 9.4, y: 30.4, z: 0, l: 4 },
-    { x: 9.4, y: 29.8, z: 0, l: 4 },
-    { x: 9.4, y: 29.3, z: 0, l: 4 },
+    { x: 9.4, y: 29.4, z: 0, l: 4 },
+    { x: 9.4, y: 28.8, z: 0, l: 4 },
+    { x: 9.4, y: 28.3, z: 0, l: 4 },
   ]);
-  assert.ok(me(b).y < 29.6, "b walked out");
+  assert.ok(me(b).y < 28.6, "b walked out");
   a.room.send("lift:go", { id: stop(4).id, level: 0 });
   await waitFor(() => me(a).level === 0, 12000);
   assert.equal(me(b).level, 4, "b stayed");
   await waitFor(() => door(0) === "open", 3000);
   await sleep(8500);
   assert.equal(door(0), "open", "open till they walk out");
-  const out = G(8.6, 29.3);
+  const out = G(8.6, 28.3);
   await stepTo(a, [
-    { ...G(8.6, 30.4), z: 0, l: 0 },
-    { ...G(8.6, 29.8), z: 0, l: 0 },
+    { ...G(8.6, 29.4), z: 0, l: 0 },
+    { ...G(8.6, 28.8), z: 0, l: 0 },
     { ...out, z: 0, l: 0 },
   ]);
   assert.ok(Math.abs(me(a).y - out.y) < 0.2, "a walked out on the ground floor");
   // up on the studio's floor the car's gone: its shaft is nowhere to step into
-  await stepTo(b, [{ x: 9.4, y: 29.8, z: 0, l: 4 }]);
+  await stepTo(b, [{ x: 9.4, y: 28.8, z: 0, l: 4 }]);
   await stepTo(b, [
-    { x: 9.4, y: 30.2, z: 0, l: 4 },
-    { x: 9.4, y: 30.6, z: 0, l: 4 },
+    { x: 9.4, y: 29.2, z: 0, l: 4 },
+    { x: 9.4, y: 29.6, z: 0, l: 4 },
   ]);
-  assert.ok(me(b).y < 30, "no stepping into the empty shaft");
+  assert.ok(me(b).y < 29, "no stepping into the empty shaft");
 });
 
 test("stairs: walked up a floor (the server follows the treads); never two floors at once", async () => {

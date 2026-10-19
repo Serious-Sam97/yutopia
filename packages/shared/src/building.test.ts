@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CAMPUS_HOME, CORE, campusBuilding, clearCoreFronts, GROUND_OFFSET, STAIRS_AT } from "./building.ts";
+import {
+  CAMPUS_HOME,
+  CORE,
+  campusBuilding,
+  clearCoreFronts,
+  GROUND_OFFSET,
+  STAIRS_AT,
+  upgradeCore,
+} from "./building.ts";
 import { entry, type WorldObjectDef } from "./catalog.ts";
 import { Grid, moveStep, WALK_SPEED } from "./grid.ts";
 import { hearingGain } from "./hearing.ts";
@@ -68,7 +76,7 @@ test("the stairs: walked step by step from the ground floor to floor 1, and back
   const grids = new Map(floors.map((f) => [f, Grid.from(levelMap(map, f) as MapDef, objects)]));
   // the stairs in floor 0's coords; walk to points given in the building's coords
   let level = 0;
-  let pos = across(map, CAMPUS_HOME, 0, { x: STAIRS_AT.x + 3, y: STAIRS_AT.y + 0.5 });
+  let pos = across(map, CAMPUS_HOME, 0, { x: STAIRS_AT.x + 3, y: STAIRS_AT.y + 1.5 });
   const h: Height = { z: 0, vz: 0, up: false };
   let highest = 0;
   const walk = (bx: number, by: number) => {
@@ -99,17 +107,17 @@ test("the stairs: walked step by step from the ground floor to floor 1, and back
   };
   // up flight A (the east half, away from the door), across the half landing,
   // up flight B (the west half) to the door one floor up
-  walk(STAIRS_AT.x + 3, STAIRS_AT.y + 4.2);
-  walk(STAIRS_AT.x + 1, STAIRS_AT.y + 5);
+  walk(STAIRS_AT.x + 3, STAIRS_AT.y + 5.2);
+  walk(STAIRS_AT.x + 1, STAIRS_AT.y + 6);
+  walk(STAIRS_AT.x + 1, STAIRS_AT.y + 2.2);
   walk(STAIRS_AT.x + 1, STAIRS_AT.y + 1.2);
-  walk(STAIRS_AT.x + 1, STAIRS_AT.y + 0.5);
   assert.equal(level, 1, "on floor 1");
   assert.ok(Math.abs(h.z) < 0.05, `on its floor (z ${h.z})`);
   assert.ok(highest > STOREY - 0.2, "climbed a whole storey");
   // and back down the way we came
-  walk(STAIRS_AT.x + 1, STAIRS_AT.y + 4.2);
-  walk(STAIRS_AT.x + 3, STAIRS_AT.y + 5);
-  walk(STAIRS_AT.x + 3, STAIRS_AT.y + 0.5);
+  walk(STAIRS_AT.x + 1, STAIRS_AT.y + 5.2);
+  walk(STAIRS_AT.x + 3, STAIRS_AT.y + 6);
+  walk(STAIRS_AT.x + 3, STAIRS_AT.y + 1.5);
   assert.equal(level, 0, "back on the ground floor");
   assert.ok(Math.abs(h.z) < 0.05);
 });
@@ -119,13 +127,13 @@ test("the stairs: no walking off the landing into the well, nor up a flight from
   const g0 = Grid.from(levelMap(map, 0) as MapDef, objects);
   const at = (bx: number, by: number) => across(map, CAMPUS_HOME, 0, { x: bx, y: by });
   // by the door (floor level) the top of flight B is a storey up: no way in
-  const door = at(STAIRS_AT.x + 1, STAIRS_AT.y + 0.5);
+  const door = at(STAIRS_AT.x + 1, STAIRS_AT.y + 1.5);
   assert.ok(g0.fitsAt(door.x, door.y, 0));
-  const bTop = at(STAIRS_AT.x + 1, STAIRS_AT.y + 1.6);
+  const bTop = at(STAIRS_AT.x + 1, STAIRS_AT.y + 2.6);
   assert.ok(!g0.fitsAt(bTop.x, bTop.y, 0), "flight B's top isn't a step from the floor");
   // the top floor (nothing going up): a rail where the next flight would be
   const top = Grid.from(levelMap(map, CAMPUS_HOME) as MapDef, objects);
-  assert.ok(top.hWallAt(STAIRS_AT.x + 2, STAIRS_AT.y + 1), "a rail over the flight below");
+  assert.ok(top.hWallAt(STAIRS_AT.x + 2, STAIRS_AT.y + 2), "a rail over the flight below");
 });
 
 test("elevators: shut doors are a wall (inside, you still move); open, a way in; without the car, the shaft", () => {
@@ -226,4 +234,26 @@ test("an elevator's motion: the doors slide over their phase, the car rides betw
   assert.ok(Math.abs(liftMotion(ride, 4, 4).car - 0) < 0.01);
   // a stop from before the motion was published: its door as it was
   assert.equal(liftMotion({ props: { door: "open", at: 2 } }, 2, 0).doors, 1);
+});
+
+test("a building with the first core (6 deep) is brought up to today's: a row north, 7 deep", () => {
+  const { map, objects } = world();
+  const c = map.core as { x: number; y: number };
+  // as it was made before: the core a row south and 6 deep, its stops and stairs with it
+  const was: MapDef = {
+    ...map,
+    core: { x: c.x, y: c.y + 1 },
+    areas: map.areas.map((a) => (a.key.startsWith("core-") ? { ...a, y: a.y + 1, h: 6 } : a)),
+  };
+  const before = objects.map((o) => (o.kind === "elevator" || o.kind === "stairs" ? { ...o, y: o.y + 1 } : o));
+  const up = upgradeCore(was, before);
+  assert.ok(up, "upgraded");
+  assert.deepEqual(up.map.core, c);
+  assert.equal(up.map.areas.find((a) => a.key.startsWith("core-"))?.h, CORE.h);
+  for (const o of up.objects.filter((x) => x.kind === "elevator" || x.kind === "stairs")) {
+    const now = objects.find((x) => x.id === o.id) as WorldObjectDef;
+    assert.equal(o.y, now.y, `${o.id} back where today's core has it`);
+  }
+  // today's needs nothing
+  assert.equal(upgradeCore(map, objects), null);
 });

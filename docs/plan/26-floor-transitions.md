@@ -301,3 +301,48 @@ climbs).
   switch); "walk to" someone on another floor through the stairs; pets walking
   the stairs (they still come along); the iso slide at the switch.
 
+## Round of fixes after trying it (2026-10-19)
+
+The user, after a go: "some textures inside the elevator are bugged · the
+controls in it are a little confusing · make its real buttons work with a click
+· arriving, a flick of lag · the stairs: the space between the wall and the way
+up is too narrow, one more tile · changing floors on the stairs, a slight
+1-second stall".
+
+- **The car's inside**: its walls stood in the shaft's own (the map's, with
+  their skirting): they showed through in patches. The car's shell is inset
+  (inner faces 0.18 from the shaft's lines, the back 1.8).
+- **The controls** (`LiftPanel.tsx`): a status line (pick a floor · going up to
+  3 · doors closing · doors shut), the floor I'm on ringed and the one it's going
+  to lit, Open / Close, Esc steps out (the doors open first if they're shut);
+  no "X Elevator" prompt while you're in it. New `lift:close` on the server.
+- **The car's real buttons**: in 3D, each button on its panel is clickable (a
+  floor, open, close) — looked at before the car's own box round you.
+- **Arriving without a flick**: the car I'm in is drawn there at once (the
+  server's word on where it is may come a moment after me); every floor's
+  elevators and stairwells are built at load, kept hidden above mine and drawn
+  once off screen (no building, no uploads on a floor change); the buttons'
+  textures shared; the camera jumps with me to the new floor (it used to swoop
+  across: the ground floor's coords are 60 tiles off).
+- **The stairs' landing two tiles deep**: the staircase is 4 × 7 (flights v 2..5,
+  the half landing 5..7), the core 8 × 7, a row further into the lobby; a
+  building made before is brought up to it on load (`upgradeCore`: every floor's
+  core walls and room, the cars' stops and the stairs a row north, anything in
+  the way moved; stored). Teleporting to someone picks a spot beside them they
+  could walk to (it could land in a shut car next to the lifts).
+- **Changing floors on the stairs**: the camera keeps its place in the building
+  across the change (it used to drop a storey and ease back), and nothing is
+  built or uploaded at the change.
+- Checked live (GPU, dev world migrated: 20 things moved): the panel's status,
+  a real click on the car's "G" → going down, arrival worst frame 33 ms, a climb
+  by a click 3 → 4 worst frame 33 ms, the car's walls clean. Shared 136 (+1:
+  upgradeCore), world-server 68, client 20; world page 548.9 KB ≤ 550.
+- Then (same day): "a light inside too bright at a specific angle" — the car's
+  steel and mirror reflected the room environment's lamps (HDR) over the bloom's
+  threshold, a white blaze at some angles: the lifts' reflections are now a soft
+  gradient (a light ceiling, a darker floor, never past white), the sheen spread,
+  the ceiling panel dimmer. "In the car the controls are inverted": the keys went
+  by the chase camera's yaw while the car's own camera looked the other way —
+  in the car the yaw follows the car's camera (W walks to the doors), and the
+  camera behind you as you walk out carries on from it.
+

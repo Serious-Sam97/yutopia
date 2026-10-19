@@ -1,4 +1,4 @@
-import { stairsDoor } from "@yutopia/shared";
+import { STAIRS_D, stairsDoor, V_FLIGHT, V_TURN } from "@yutopia/shared";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -34,6 +34,8 @@ import {
 
 export const STOREY = 3.5;
 const N = 9; // steps a flight
+const F = V_FLIGHT; // the flights start here (the door's landing is 0..F deep)
+const T = V_TURN; // and turn here (the half landing T..T+2)
 const RISE = STOREY / 2 / N;
 const RUN = 3 / N;
 const RAIL_H = 0.95;
@@ -216,27 +218,27 @@ export class Stairwell {
     // the well's walls: block, two storeys of them
     const H = STOREY * storeys + 0.2;
     const walls = opts.walls ?? ["w", "e", "s"];
-    if (walls.includes("w")) this.root.add(box(0.12, H, 6, m.wall, -0.06, H / 2, 3));
-    if (walls.includes("e")) this.root.add(box(0.12, H, 6, m.wall, 4.06, H / 2, 3));
-    if (walls.includes("s")) this.root.add(box(4.24, H, 0.12, m.wall, 2, H / 2, 6.06));
+    if (walls.includes("w")) this.root.add(box(0.12, H, 7, m.wall, -0.06, H / 2, 3.5));
+    if (walls.includes("e")) this.root.add(box(0.12, H, 7, m.wall, 4.06, H / 2, 3.5));
+    if (walls.includes("s")) this.root.add(box(4.24, H, 0.12, m.wall, 2, H / 2, 7.06));
     // the floor's number at the half landing's wall, facing the climb
     if (opts.floor) {
       const sign = new Mesh(
         new PlaneGeometry(1.0, 1.0),
         new MeshBasicMaterial({ map: stencil(opts.floor, opts.next ?? `FLOOR ${opts.floor}`), transparent: true }),
       );
-      sign.position.set(2, STOREY / 2 + 1.25, 5.99);
+      sign.position.set(2, STOREY / 2 + 1.25, 6.99);
       sign.rotation.y = Math.PI;
       this.root.add(sign);
     }
     // a bulkhead over the half landing, its light
-    const lamp = box(0.34, 0.18, 0.08, m.frame, 2, STOREY / 2 + 2.35, 5.95);
-    const lens = box(0.28, 0.12, 0.02, m.bulb, 2, STOREY / 2 + 2.35, 5.905);
+    const lamp = box(0.34, 0.18, 0.08, m.frame, 2, STOREY / 2 + 2.35, 6.95);
+    const lens = box(0.28, 0.12, 0.02, m.bulb, 2, STOREY / 2 + 2.35, 6.905);
     this.root.add(lamp, lens);
     // (the game leaves the light out: every light costs every surface; the lens glows)
     this.light = new PointLight("#fff0d8", lights ? 4 : 0, 7, 1.5);
     this.light.visible = lights;
-    this.light.position.set(2, STOREY / 2 + 2.1, 5.5);
+    this.light.position.set(2, STOREY / 2 + 2.1, 6.5);
     this.light.castShadow = lights;
     this.light.shadow.mapSize.set(1024, 1024);
     this.light.shadow.bias = -0.001;
@@ -264,44 +266,44 @@ export class Stairwell {
     // flight A: solid steps from the floor (u 2..4, v 1 → 4)
     for (let i = 0; i < N; i++) {
       const top = y0 + RISE * (i + 1);
-      const z = 1 + RUN * i;
+      const z = F + RUN * i;
       const h = first ? top - y0 : RISE * 2;
       this.root.add(box(1.9, h, RUN + 0.005, m.concrete, 3, top - h / 2, z + RUN / 2));
       this.root.add(box(1.9, 0.012, 0.05, m.nosing, 3, top + 0.006, z + 0.025));
     }
-    if (!first) this.root.add(slopedSlab(2.05, 3.95, 1, y0 - 0.02, 4, y0 + STOREY / 2 - RISE, 0.2, m.soffit));
+    if (!first) this.root.add(slopedSlab(2.05, 3.95, F, y0 - 0.02, T, y0 + STOREY / 2 - RISE, 0.2, m.soffit));
     // the half landing (all across), its slab and edge
     const L = y0 + STOREY / 2;
-    this.root.add(box(4, 0.22, 2, m.concrete, 2, L - 0.11, 5));
-    this.root.add(box(4, 0.012, 0.05, m.nosing, 2, L + 0.006, 4.025));
+    this.root.add(box(4, 0.22, 2, m.concrete, 2, L - 0.11, T + 1));
+    this.root.add(box(4, 0.012, 0.05, m.nosing, 2, L + 0.006, T + 0.025));
     // flight B: treads on a sloped slab (u 0..2, v 4 → 1), its soffit over flight A's door side
     for (let i = 0; i < N; i++) {
       const top = L + RISE * (i + 1);
-      const z = 4 - RUN * (i + 1);
+      const z = T - RUN * (i + 1);
       this.root.add(box(1.9, RISE + 0.02, RUN + 0.005, m.concrete, 1, top - (RISE + 0.02) / 2, z + RUN / 2));
       this.root.add(box(1.9, 0.012, 0.05, m.nosing, 1, top + 0.006, z + RUN - 0.025));
     }
-    this.root.add(slopedSlab(0.05, 1.95, 4, L - 0.02, 1, y0 + STOREY - RISE - 0.02, 0.2, m.soffit));
+    this.root.add(slopedSlab(0.05, 1.95, T, L - 0.02, F, y0 + STOREY - RISE - 0.02, 0.2, m.soffit));
     // the spine between the flights: a slim upstand, and the balustrade on it
     // with one handrail rising with A, round the end at the landing, up with B
     const pts: Vector3[] = [];
     const railAt = (z: number, y: number) => new Vector3(2, y + RAIL_H, z);
-    pts.push(railAt(1.0, y0 + 0.05));
-    pts.push(railAt(3.95, L - RISE * 0.5));
-    pts.push(new Vector3(2.12, L + RAIL_H, 4.2));
-    pts.push(new Vector3(2.0, L + RAIL_H, 4.32));
-    pts.push(new Vector3(1.88, L + RAIL_H, 4.2));
-    pts.push(railAt(3.95, L + RISE * 0.5).setX(1.92));
-    pts.push(railAt(1.05, y0 + STOREY - RISE).setX(1.92));
+    pts.push(railAt(F, y0 + 0.05));
+    pts.push(railAt(T - 0.05, L - RISE * 0.5));
+    pts.push(new Vector3(2.12, L + RAIL_H, T + 0.2));
+    pts.push(new Vector3(2.0, L + RAIL_H, T + 0.32));
+    pts.push(new Vector3(1.88, L + RAIL_H, T + 0.2));
+    pts.push(railAt(T - 0.05, L + RISE * 0.5).setX(1.92));
+    pts.push(railAt(F + 0.05, y0 + STOREY - RISE).setX(1.92));
     const curve = new CatmullRomCurve3(pts, false, "catmullrom", 0.1);
     const rail = new Mesh(new TubeGeometry(curve, 120, 0.024, 10, false), m.rail);
     rail.castShadow = true;
     this.root.add(rail);
     // balusters: flat bars every 12 cm along both flights
-    for (let z = 1.05; z < 4; z += 0.12) {
-      const ya = y0 + ((z - 1) / 3) * (STOREY / 2);
+    for (let z = F + 0.05; z < T; z += 0.12) {
+      const ya = y0 + ((z - F) / 3) * (STOREY / 2);
       this.root.add(box(0.012, RAIL_H, 0.035, m.rail, 2.07, ya + RAIL_H / 2 + 0.02, z));
-      const yb = L + ((4 - z) / 3) * (STOREY / 2);
+      const yb = L + ((T - z) / 3) * (STOREY / 2);
       this.root.add(box(0.012, RAIL_H, 0.035, m.rail, 1.93, yb + RAIL_H / 2 + 0.02, z));
     }
     // a wall rail on each flight's outer side, on brackets
@@ -325,8 +327,8 @@ export class Stairwell {
         );
       }
     };
-    wallRail(3.92, 1, y0, 4, L);
-    wallRail(0.08, 4, L, 1, y0 + STOREY);
+    wallRail(3.92, F, y0, T, L);
+    wallRail(0.08, T, L, F, y0 + STOREY);
   }
 
   /** The fire door: 0 shut … 1 open (it swings into the well). */
@@ -345,6 +347,7 @@ export interface StairStop3 {
   floor: string; // the number stencilled at its half landing
   next: string; // the strip under it
   people: { x: number; y: number }[]; // on its floor, in my floor's coords
+  shown: boolean; // drawn (the floors above mine are kept, hidden)
 }
 
 /** The staircases of the 3D view (tp/view.ts): the stairwell drawn for each,
@@ -353,7 +356,16 @@ export interface StairStop3 {
 export class Stairs3 {
   readonly root = new Group();
   picks: { id: string; use: boolean; x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }[] = [];
-  private views = new Map<string, { outer: Group; well: Stairwell; open: number; want: number; key: string }>();
+  private views = new Map<
+    string,
+    { outer: Group; well: Stairwell; open: number; want: number; key: string; shown: boolean }
+  >();
+  private warming = false;
+  /** Every stairwell drawn for a moment (the view's warm-up). */
+  showAll(on: boolean) {
+    this.warming = on;
+    for (const v of this.views.values()) v.outer.visible = on || v.shown;
+  }
 
   sync(stops: StairStop3[], dt: number): { id: string; open: boolean; at: { x: number; y: number } }[] {
     const moved: { id: string; open: boolean; at: { x: number; y: number } }[] = [];
@@ -370,14 +382,16 @@ export class Stairs3 {
       if (!v) {
         const outer = new Group();
         const well = new Stairwell({ floor: s.floor, next: s.next, walls: [], lights: false });
-        well.root.position.set(-2, 0, -3);
+        well.root.position.set(-2, 0, -STAIRS_D / 2);
         outer.add(well.root);
         this.root.add(outer);
-        v = { outer, well, open: 0, want: 0, key };
+        v = { outer, well, open: 0, want: 0, key, shown: s.shown };
         this.views.set(s.o.id, v);
       }
+      v.shown = s.shown;
+      v.outer.visible = s.shown || this.warming;
       const r = (s.o.rot ?? 0) & 3;
-      const [fw, fh] = r % 2 ? [6, 4] : [4, 6];
+      const [fw, fh] = r % 2 ? [STAIRS_D, 4] : [4, STAIRS_D];
       v.outer.position.set(s.o.x + fw / 2 + s.off.x, s.off.h, s.o.y + fh / 2 + s.off.y);
       v.outer.rotation.y = -r * (Math.PI / 2);
       // the door: open while someone's within reach of it, either side

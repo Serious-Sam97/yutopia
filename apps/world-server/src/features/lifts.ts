@@ -133,6 +133,22 @@ registerFeature((room: WorldRoom) => {
     }
   });
 
+  // the car's "close" button: shut the doors now (they'll go where they're
+  // wanted, or stay shut with you in it — its "open" opens them again)
+  room.on("lift:close", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const o = room.state.objects.get(String(m?.id ?? ""));
+    if (!p || !o || o.kind !== "elevator") return;
+    const def = fromSchema(o);
+    const c = car(shaftOf(def));
+    if (objLevel(def, room.map) !== p.level || c.at !== p.level || !inLift(def, p)) return;
+    if (c.phase === "open" && !doorway(c)) {
+      c.phase = "closing";
+      c.until = Date.now() + CLOSE_MS;
+      show(c);
+    }
+  });
+
   const ride = (c: Car, now: number) => {
     const from = stopOn(c.shaft, c.at);
     // who's in it as the doors shut, and where in it

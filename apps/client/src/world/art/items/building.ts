@@ -30,7 +30,7 @@ const LIT: Mat = { c: K.vfd, top: K.amber, flat: true };
 const DARK: Mat = { c: "#2a2016", top: "#3a2e20", flat: true };
 const STEEL_DK: Mat = { c: "#6c7378", top: "#848b90", left: "#737a7f", right: "#5c6267" };
 
-// A staircase: a switchback in a 4 × 6 well (shared stairs.ts) — up the east
+// A staircase: a switchback in a 4 × 7 well (shared stairs.ts; the door's landing two tiles deep) — up the east
 // half away from the door, a half landing at the far end, back up the west
 // half to the floor above. Treads with an amber nosing, a wall between the
 // flights, a rail up the outer side of each.
@@ -39,37 +39,37 @@ export function stairs(s: Sketch) {
   // flight A (u 2..4, v 1 → 4): solid steps from the floor
   for (let i = 0; i < N; i++) {
     const top = (HALF * (i + 1)) / N;
-    const v = 1 + run * i;
+    const v = 2 + run * i;
     s.box({ x: 2.04, y: v, w: 1.9, d: run + 0.01, z: 0, h: top, mat: TREAD, line: 0.8 });
     s.box({ x: 2.04, y: v, w: 1.9, d: 0.05, z: top - 1, h: 1.6, mat: NOSING, line: 0, bevel: false });
   }
   // the half landing (all across the far end)
-  s.box({ x: 0.04, y: 4, w: 3.92, d: 1.94, z: 0, h: HALF, mat: CONCRETE, line: 0.8 });
-  s.box({ x: 0.04, y: 4, w: 3.92, d: 0.05, z: HALF - 1, h: 1.6, mat: NOSING, line: 0, bevel: false });
+  s.box({ x: 0.04, y: 5, w: 3.92, d: 1.94, z: 0, h: HALF, mat: CONCRETE, line: 0.8 });
+  s.box({ x: 0.04, y: 5, w: 3.92, d: 0.05, z: HALF - 1, h: 1.6, mat: NOSING, line: 0, bevel: false });
   // flight B (u 0..2, v 4 → 1): a slab of steps over the floor (the soffit under it)
   for (let i = 0; i < N; i++) {
     const top = HALF + (HALF * (i + 1)) / N;
-    const v = 4 - run * (i + 1);
+    const v = 5 - run * (i + 1);
     const thick = 26;
     s.box({ x: 0.06, y: v, w: 1.9, d: run + 0.01, z: top - thick, h: thick, mat: TREAD, line: 0.8 });
     s.box({ x: 0.06, y: v + run - 0.05, w: 1.9, d: 0.05, z: top - 1, h: 1.6, mat: NOSING, line: 0, bevel: false });
   }
   // the spine between the flights: a low concrete upstand (the rails ride on it)
-  s.box({ x: 1.96, y: 1, w: 0.08, d: 3, z: 0, h: 14, mat: CONCRETE, line: 0.8 });
+  s.box({ x: 1.96, y: 2, w: 0.08, d: 3, z: 0, h: 14, mat: CONCRETE, line: 0.8 });
   // rails: posts along the outer side of each flight, a bar stepping with them
   for (let i = 0; i <= N; i += 3) {
     const a = (HALF * Math.max(1, i)) / N;
-    s.box({ x: 3.88, y: 1 + run * i, w: 0.06, d: 0.06, z: a, h: 36, mat: RAIL, line: 0 });
+    s.box({ x: 3.88, y: 2 + run * i, w: 0.06, d: 0.06, z: a, h: 36, mat: RAIL, line: 0 });
     const b = HALF + (HALF * Math.max(1, i)) / N;
-    s.box({ x: 0.08, y: 4 - run * i - 0.06, w: 0.06, d: 0.06, z: b, h: 36, mat: RAIL, line: 0 });
+    s.box({ x: 0.08, y: 5 - run * i - 0.06, w: 0.06, d: 0.06, z: b, h: 36, mat: RAIL, line: 0 });
   }
   for (let i = 0; i < N; i++) {
     const a = (HALF * (i + 1)) / N + 36;
-    s.box({ x: 3.86, y: 1 + run * i, w: 0.1, d: run, z: a - 2, h: 3, mat: RAIL, line: 0, bevel: false });
+    s.box({ x: 3.86, y: 2 + run * i, w: 0.1, d: run, z: a - 2, h: 3, mat: RAIL, line: 0, bevel: false });
     const b = HALF + (HALF * (i + 1)) / N + 36;
-    s.box({ x: 0.06, y: 4 - run * (i + 1), w: 0.1, d: run, z: b - 2, h: 3, mat: RAIL, line: 0, bevel: false });
+    s.box({ x: 0.06, y: 5 - run * (i + 1), w: 0.1, d: run, z: b - 2, h: 3, mat: RAIL, line: 0, bevel: false });
   }
-  s.shadow(0, 1, 4, 5, 0.25);
+  s.shadow(0, 2, 4, 5, 0.25);
 }
 
 // An elevator's stop (2 × 2; the doors on the north edge, rot 0), as the iso

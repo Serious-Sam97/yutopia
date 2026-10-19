@@ -25,12 +25,12 @@ test("the building: five floors, the studio on top, the floor shown in the HUD",
 test("an elevator: call it, step in, pick the ground floor on its panel — out by the lobby", async ({ page }) => {
   test.setTimeout(120_000);
   await enter(page, await token(ANA), "demo");
-  // up to car A's doors (x 8–10, y 30) on the studio's floor
-  await page.evaluate(() => (window as any).__yutopia.teleport({ x: 8.5, y: 28.5, level: 4 }));
+  // up to car A's doors (x 8–10, y 29) on the studio's floor
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: 8.5, y: 27.5, level: 4 }));
   await page.waitForTimeout(800);
   await page.evaluate(() => {
     const c = (window as any).__yutopia;
-    c.path = [{ x: 8.8, y: 29.4 }];
+    c.path = [{ x: 8.8, y: 28.4 }];
   });
   await page.waitForTimeout(800);
   const stop = await page.evaluate(() => {
@@ -46,8 +46,8 @@ test("an elevator: call it, step in, pick the ground floor on its panel — out 
     .toBe("open");
   await page.evaluate(() => {
     (window as any).__yutopia.path = [
-      { x: 9, y: 30.3 },
-      { x: 9, y: 31 },
+      { x: 9, y: 29.3 },
+      { x: 9, y: 30 },
     ];
   });
   // the panel: the floors it goes to, mine lit
@@ -57,7 +57,7 @@ test("an elevator: call it, step in, pick the ground floor on its panel — out 
   await page.locator('[data-testid="lift-panel"] [data-floor="0"]').click();
   await expect.poll(async () => (await state(page)).level, { timeout: 15_000 }).toBe(0);
   const s = await state(page);
-  const at = G(9, 31);
+  const at = G(9, 30);
   expect(Math.hypot(s.x - at.x, s.y - at.y)).toBeLessThan(0.7);
   await expect(page.getByTestId("floor-chip")).toContainText("G");
 });

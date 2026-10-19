@@ -29,15 +29,17 @@ import { isOpening, openingEdges } from "./openings.ts";
 
 export const CAMPUS_HOME = 4; // the studio's floor
 // the core, in the building's (the studio's) coords: cars at x 6–8 and 8–10,
-// the stairwell at x 10–14, all their doors on the north edge (y 30)
+// the stairwell at x 10–14, all their doors on the north edge (y 29)
 // (where it goes when the studio has room there: the south end of its Lobby;
 // otherwise the first 8 × 6 stretch of floor — `findCore`; the map keeps it)
-export const CORE = { x: 6, y: 30, w: 8, h: 6 };
+// (7 deep since the stairs' landing became two tiles: one row further into
+// the Lobby than the first one — upgradeCore moves a building made before)
+export const CORE = { x: 6, y: 29, w: 8, h: 7 };
 export const LIFT_SHAFTS = [
-  { shaft: "A", x: 8, y: 30 },
-  { shaft: "B", x: 6, y: 30 },
+  { shaft: "A", x: 8, y: 29 },
+  { shaft: "B", x: 6, y: 29 },
 ];
-export const STAIRS_AT = { x: 10, y: 30 };
+export const STAIRS_AT = { x: 10, y: 29 };
 type Core = Point;
 // the core's rectangle, its shafts and stairs, for a core at `c`
 const rectOf = (c: Core) => ({ x: c.x, y: c.y, w: CORE.w, h: CORE.h });
@@ -658,6 +660,67 @@ function nearestFree(
         if (canPlace(map, others, next)) return { x: next.x, y: next.y };
       }
   return null;
+}
+
+/** A building made with the first core (6 deep: the stairs' landing one tile)
+ *  brought up to today's: the core a row further north and 7 deep, on every
+ *  floor — its walls, its room, the cars' stops and the stairs a row north,
+ *  anything else in its way (or in front of its doors) moved aside. null:
+ *  nothing to do, or no floor there to grow into. */
+export function upgradeCore(
+  home: MapDef,
+  objects: WorldObjectDef[],
+): { map: MapDef; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
+  const old = home.core;
+  const area = home.areas.find((a) => a.key.startsWith("core-"));
+  if (!old || !area || area.h === CORE.h) return null;
+  const c = { x: old.x, y: old.y - 1 };
+  for (let x = c.x; x < c.x + CORE.w; x++) if (!isFloor(tileAt(home, x, c.y))) return null;
+  const rooms = (areas: AreaDef[], off: Point, level: number) => [
+    ...areas.filter((a) => !a.key.startsWith("core-")),
+    ...coreArea(off, level, c),
+  ];
+  const map: MapDef = {
+    ...withCore(home, { x: 0, y: 0 }, c),
+    core: c,
+    areas: rooms(home.areas, { x: 0, y: 0 }, floorOf(home)),
+    levels: (home.levels ?? []).map((l) => {
+      const off = { x: l.ox, y: l.oy };
+      return { ...withCore(l, off, c), areas: rooms(l.areas, off, l.index) };
+    }),
+  };
+  // the stops and the stairs: a row north (in the old core: theirs)
+  const moved = new Map<string, WorldObjectDef>();
+  const oldRect = { x: old.x, y: old.y, w: CORE.w, h: CORE.h - 1 };
+  let next = objects.map((o) => {
+    if (o.kind !== "elevator" && o.kind !== "stairs") return o;
+    const off = offsetOf(map, objLevel(o, map));
+    const bx = o.x + off.x;
+    const by = o.y + off.y;
+    if (bx < oldRect.x || bx >= oldRect.x + oldRect.w || by < oldRect.y || by >= oldRect.y + oldRect.h) return o;
+    const m = { ...o, y: o.y - 1 };
+    moved.set(m.id, m);
+    return m;
+  });
+  // anything else now in the core, or in front of its doors, moved aside
+  for (const level of floorsOf(map)) {
+    const lm = levelMap(map, level);
+    if (!lm) continue;
+    const off = offsetOf(map, level);
+    const cf = { x: c.x - off.x, y: c.y - off.y };
+    const on = next.filter((o) => objLevel(o, map) === level && o.kind !== "elevator" && o.kind !== "stairs");
+    const others = on.filter((o) => !hits(cf, o));
+    for (const o of on) {
+      if (!hits(cf, o)) continue;
+      const spot = nearestFree(lm, others, o, (n) => hits(cf, n));
+      if (!spot) continue;
+      const m = { ...o, x: spot.x, y: spot.y };
+      others.push(m);
+      moved.set(m.id, m);
+    }
+  }
+  next = next.map((o) => moved.get(o.id) ?? o);
+  return { map, objects: next, moved: [...moved.values()] };
 }
 
 /** The whole building from a studio with no floors yet (null: it has them). */
