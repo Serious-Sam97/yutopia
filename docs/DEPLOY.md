@@ -64,6 +64,9 @@ git pull
 docker compose -f docker/prod/compose.yaml --env-file .env up -d --build
 ```
 
+(or `pnpm prod:up`; `pnpm prod:logs`, `pnpm prod:down`. The `docker:*` scripts are the
+**dev** stack — bind-mounted source and watchers — never run them on the server.)
+
 From the repo root, always with `--env-file .env`: the client's `NEXT_PUBLIC_*` are
 baked in at build time (the compose file refuses to build without them). The API
 migrates on every start. The client image fetches the emulator cores while it

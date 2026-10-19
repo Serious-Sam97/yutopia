@@ -1,6 +1,7 @@
 {
   "name": "yutopia",
   "private": true,
+  "packageManager": "pnpm@12.6.0",
   "scripts": {
     "dev:client": "pnpm --filter @yutopia/client dev",
     "dev:server": "pnpm --filter @yutopia/world-server dev",
@@ -18,6 +19,9 @@
     "docker:down": "docker compose -f docker/compose.yaml down",
     "docker:restart": "docker compose -f docker/compose.yaml restart client world api queue scheduler",
     "docker:logs": "docker compose -f docker/compose.yaml logs -f --tail=50",
+    "prod:up": "docker compose -f docker/prod/compose.yaml --env-file .env up -d --build",
+    "prod:down": "docker compose -f docker/prod/compose.yaml --env-file .env down",
+    "prod:logs": "docker compose -f docker/prod/compose.yaml --env-file .env logs -f --tail=50",
     "sync:vortex": "node tools/sync-vortex-art.mjs",
     "visual": "pnpm --filter @yutopia/client exec playwright test -c playwright.visual.config.ts"
   },
