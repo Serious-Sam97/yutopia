@@ -70,6 +70,8 @@ test("the stairs: up a floor step by step, the feet on the treads", async ({ pag
     localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase" }));
   });
   await enter(page, await token(ANA), "demo");
+  // (the 3D view first: building five floors' scene keeps the page busy a while)
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   const foot = G(13, 30.5);
   // (again if it went out while the last test's session was still being replaced)
   await expect
@@ -79,7 +81,7 @@ test("the stairs: up a floor step by step, the feet on the treads", async ({ pag
         await page.waitForTimeout(1200);
         return (await state(page)).level;
       },
-      { timeout: 15_000 },
+      { timeout: 30_000 },
     )
     .toBe(0);
   await page.waitForTimeout(1500);

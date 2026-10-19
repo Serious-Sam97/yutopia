@@ -1,4 +1,5 @@
 import { CAR_COLOURS } from "@yutopia/shared";
+import { shade } from "../palette";
 import type { Mat, Sketch } from "./kit";
 import { K, M } from "./pal";
 
@@ -12,12 +13,12 @@ const HALF = STOREY / 2;
 const N = 9; // steps a flight
 
 const hex = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
-const shade = (h: string, f: number) => {
-  const n = Number.parseInt(h.slice(1), 16);
-  const c = (v: number) => Math.max(0, Math.min(255, Math.round(v * f)));
-  return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => c(v).toString(16).padStart(2, "0")).join("")}`;
-};
-const paint = (c: string): Mat => ({ c, top: shade(c, 1.15), left: shade(c, 0.95), right: shade(c, 0.78) });
+const paint = (n: number): Mat => ({
+  c: hex(n),
+  top: hex(shade(n, 1.15)),
+  left: hex(shade(n, 0.95)),
+  right: hex(shade(n, 0.78)),
+});
 
 const TREAD: Mat = { c: "#8d8a84", top: "#a7a39b", left: "#7d7a74", right: "#6c6964" };
 const CONCRETE: Mat = { c: "#b9b6ae", top: "#cbc8c0" };
@@ -129,7 +130,8 @@ export function elevator(s: Sketch, props: Record<string, unknown>) {
 // CAR_COLOURS); dx / dz: where exactly it stands in its bay.
 export function car(s: Sketch, props: Record<string, unknown>) {
   const v = Number.isInteger(props.variant) ? (props.variant as number) : Math.floor(s.seed * CAR_COLOURS.length);
-  const colour = typeof props.color === "string" ? props.color : hex(CAR_COLOURS[v % CAR_COLOURS.length]);
+  const colour =
+    typeof props.color === "string" ? Number.parseInt(props.color.slice(1), 16) : CAR_COLOURS[v % CAR_COLOURS.length];
   const body = paint(colour);
   const wagon = !!props.wagon;
   const snowy = props.snowy !== 0 && props.snowy !== false;
@@ -154,10 +156,10 @@ export function car(s: Sketch, props: Record<string, unknown>) {
   b(0.12, 0.14, 4.76, 1.72, 8, 23, body, { line: 1 });
   b(0, 0.2, 0.14, 1.6, 10, 7, M.aluminium, { line: 0.6 });
   b(4.86, 0.2, 0.14, 1.6, 10, 7, M.aluminium, { line: 0.6 });
-  b(0.04, 0.3, 0.06, 0.3, 21, 4, { c: "#fff4cc", top: "#fffbe8", flat: true }, { glow: true, line: 0 });
-  b(0.04, 1.4, 0.06, 0.3, 21, 4, { c: "#fff4cc", top: "#fffbe8", flat: true }, { glow: true, line: 0 });
-  b(4.92, 0.3, 0.05, 0.3, 21, 4, { c: K.red, top: "#d8553f", flat: true }, { line: 0 });
-  b(4.92, 1.4, 0.05, 0.3, 21, 4, { c: K.red, top: "#d8553f", flat: true }, { line: 0 });
+  for (const y of [0.3, 1.4]) {
+    b(0.04, y, 0.06, 0.3, 21, 4, { c: "#fff4cc", top: "#fffbe8", flat: true }, { glow: true, line: 0 });
+    b(4.92, y, 0.05, 0.3, 21, 4, { c: K.red, top: "#d8553f", flat: true }, { line: 0 });
+  }
   // the cabin: dark glass, the roof in the body's colour (a wagon's runs to the back)
   const c0 = 1.55;
   const c1 = wagon ? 4.7 : 3.95;
