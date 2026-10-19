@@ -36,9 +36,11 @@ import {
   jumpNowAt,
   jumpSpeed,
   jumpTimes,
+  type LiftMotion,
   levelMap,
   liftFront,
   liftHere,
+  liftMotion,
   type MapDef,
   mayLockDoor,
   moveStep,
@@ -57,6 +59,9 @@ import {
   STEP_LABELS,
   screenInputToWorld,
   socialFor,
+  stairsDoor,
+  stairsLocal,
+  stairsWayUp,
   stepHeight,
   stereoPan,
   THROWN,
@@ -87,6 +92,7 @@ import { type AvatarState, WorldEngine } from "./engine";
 import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
 import { jumps, loadJumps } from "./jumps-load";
+import { liftSound, loadLiftSounds, nearGain, stairStep } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import type { OsRoom } from "./os/room";
@@ -268,6 +274,8 @@ export class WorldController {
 
   send<K extends keyof ClientMessages>(type: K, msg: ClientMessages[K]) {
     msg = this.onMyFloor(type, msg);
+    // (a lift's button pressed: its click, at once)
+    if (type === "lift:call" || type === "lift:go") liftSound("lift/button", { gain: 0.8 });
     try {
       this.room?.send(type, msg);
     } catch {}
@@ -336,9 +344,11 @@ export class WorldController {
         if (hud.get().menu) return hud.set({ menu: null });
         // a toy in hand: Shift / right-click (or the chip's Throw) throws it there, or points the laser
         if (this.throwAt(x, y, !!mods?.shift || !!mods?.right)) return;
-        // a click on the floor: go there (dropping whatever was queued)
+        // a click on the floor: go there (dropping whatever was queued) — on a
+        // stairwell's flights, up or down them to the other floor
         this.actions.clear();
         this.toyPick = null;
+        if (this.climbAt(x, y)) return;
         this.walkTo({ x, y });
       },
       onToyClick: (id) => this.pickToy(id),
@@ -359,6 +369,13 @@ export class WorldController {
         if (hud.get().cable && o && isGameTv(o.kind)) return this.activateObject(id, true);
         // an elevator: in when it's open, else a call (no menu to go through)
         if (o?.kind === "elevator") return this.activateObject(id, true);
+        // a staircase (3D): up it from its floor, down it from the one above
+        const st = !o ? this.objs.get(id) : o;
+        if (st?.kind === "stairs" && !hud.get().build.on) {
+          this.actions.clear();
+          this.climb(st, objLevel(st, this.building) === this.level);
+          return;
+        }
         if (!this.openMenu({ type: "object", id }, at)) this.activateObject(id, true);
       },
       onHoverObject: () => {},
@@ -511,7 +528,8 @@ export class WorldController {
     const putObj = (o: S) => {
       const def = objFromState(o);
       this.objs.set(def.id, def);
-      if (objLevel(def, this.building) === this.level) engine.upsertObject(def, false);
+      if (def.kind === "elevator") this.liftHeard(def);
+      if (objLevel(def, this.building) === this.level) engine.upsertObject(this.liftDrawn(def), false);
       else if (engine.getObject(def.id)) engine.removeObject(def.id, false);
       this.objectsDirty = true;
     };
@@ -1212,10 +1230,19 @@ export class WorldController {
       this.mapDirty = false;
       this.applyMapFromState();
     }
+    if (this.isoSwap === 2) {
+      this.isoSwap = 1;
+      engine.setMap(this.map);
+    } else if (this.isoSwap === 1) {
+      this.isoSwap = 0;
+      engine.setObjects(onLevel(this.objs.values(), this.map).map((o) => this.liftDrawn(o)));
+      this.objectsDirty = true;
+    }
     this.updateDoors();
     if (this.objectsDirty) {
       // batched: hundreds of objects arrive in the first patch
       this.objectsDirty = false;
+      this.prewarmFloors();
       engine.refreshFlat();
       engine.setWells(wellsOf(this.map, this.objs.values()));
       this.rebuildGrid();
@@ -1229,6 +1256,8 @@ export class WorldController {
     this.syncView();
     this.moveLocal(dt);
     this.updateLift();
+    if (!this.tp) this.liftsIso(now);
+    this.stairsDoors();
     if (hud.get().build.on) {
       this.actions.clear();
       if (hud.get().menu) hud.set({ menu: null });
@@ -1407,7 +1436,14 @@ export class WorldController {
       tp.setLiveFrom({ engine, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
       tp.setTables(this.tables?.scene3d() ?? null);
-      tp.gameCam = this.photoCam() ?? this.tables?.gameCam() ?? null;
+      tp.gameCam = this.photoCam() ?? this.tables?.gameCam() ?? this.liftCam(now) ?? null;
+      if (this.liftsDirty) {
+        this.liftsDirty = false;
+        tp.setLifts(
+          [...this.objs.values()].filter((o) => o.kind === "elevator"),
+          this.liftSince,
+        );
+      }
       tp.setCable(this.cableEnds());
       tp.setGames(this.games?.scene3d() ?? null);
       // (a hidden tab: nothing to draw for)
@@ -1548,11 +1584,15 @@ export class WorldController {
     // (its frame is a storey off, its coords maybe shifted)
     const change = floorChange(hgt.z, this.level, floorsOf(this.building));
     if (change) {
-      const at = across(this.building, this.level, change.level, this.me);
+      const from = this.level;
+      const at = across(this.building, from, change.level, this.me);
       this.me.x = at.x;
       this.me.y = at.y;
       hgt.z += change.dz;
+      // (a way up or down the stairs goes on from where it was, in the new floor's coords)
+      const rest = this.path?.map((p) => across(this.building, from, change.level, p)) ?? null;
       this.setLevel(change.level);
+      this.path = rest?.length ? rest : null;
       moved = true;
     }
     if (this.jumpWanted && performance.now() - this.jumpWanted > JUMP_BUFFER_MS) this.jumpWanted = 0;
@@ -1561,7 +1601,11 @@ export class WorldController {
     const seat = hgt.up || hgt.z > 0 || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
     const floor =
       FLOORS[tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y)) as keyof typeof FLOORS] ?? "wood";
-    sound.step(dt, moved, speed === RUN_SPEED, floor);
+    // (on the stairs: a shoe on concrete treads, in the stairwell)
+    if (this.grid.onRamp(this.me.x, this.me.y)) {
+      stairStep(dt, moved, speed === RUN_SPEED);
+      sound.step(0, false, false, floor);
+    } else sound.step(dt, moved, speed === RUN_SPEED, floor);
     if (moved) this.me.a = ANIM.walk;
     else if (seat) {
       this.me.a = ANIM.sit;
@@ -2787,13 +2831,209 @@ export class WorldController {
 
   // To another floor (the stairs, a ride, a teleport): the iso view, my walk
   // grid and the HUD show that floor now.
+  // The other floors' things drawn ahead, once, a few seconds after arriving
+  // (engine.prewarm): the first visit to a floor then has its art ready.
+  private prewarmed = false;
+  private prewarmFloors() {
+    if (this.prewarmed || this.objs.size === 0 || !this.building) return;
+    this.prewarmed = true;
+    setTimeout(async () => {
+      for (const f of floorsOf(this.building)) {
+        if (this.stopped) return;
+        const lm = levelMap(this.building, f);
+        if (!lm || f === this.level) continue;
+        await this.engine?.prewarm(onLevel(this.objs.values(), lm), lm);
+      }
+    }, 2500);
+  }
+
+  // ── the stairs (shared stairs.ts) ─────────────────────────────────────
+  // A click on a stairwell's flights: on my floor's own stairs (flight A's
+  // side) up them, on the ones coming up from the floor below (flight B's) down.
+  private climbAt(x: number, y: number): boolean {
+    let up: WorldObjectDef | null = null;
+    let down: WorldObjectDef | null = null;
+    for (const o of this.objs.values()) {
+      if (o.kind !== "stairs") continue;
+      const l = objLevel(o, this.building);
+      if (l !== this.level && l !== this.level - 1) continue;
+      const p = across(this.building, this.level, l, { x, y });
+      const { u, v } = stairsLocal(o, p.x, p.y);
+      if (u < 0 || u > 4 || v < 1 || v > 6) continue;
+      if (l === this.level) up = o;
+      else down = o;
+    }
+    if (up && down) {
+      const p = { x, y };
+      return this.climb(stairsLocal(up, p.x, p.y).u >= 2 ? up : down, stairsLocal(up, p.x, p.y).u >= 2);
+    }
+    if (up) return this.climb(up, true);
+    if (down) return this.climb(down, false);
+    return false;
+  }
+
+  /** Walk to a staircase and up it (from its floor) or down it (from the floor
+   *  above): over to its door, then the flights, out on the other floor. */
+  private climb(o: WorldObjectDef, up: boolean): boolean {
+    if (hud.get().build.on) return false;
+    const S = objLevel(o, this.building);
+    if (up ? S !== this.level : S + 1 !== this.level) return false;
+    const way = stairsWayUp(o).map((p) => across(this.building, S, this.level, p));
+    const pts = up ? way : [...way].reverse();
+    const lead = findPath(this.grid, this.me, pts[0]);
+    if (!lead) return false;
+    this.path = [...lead, ...pts.slice(1)];
+    this.pathTarget = null;
+    const end = pts[pts.length - 1];
+    this.engine?.showMarker(end.x, end.y);
+    this.tp?.showMarker(end.x, end.y);
+    return true;
+  }
+
+  // The fire doors on my floor: they swing open as someone comes near and shut
+  // behind them (the 3D view draws it, both views hear it).
+  private fireDoors = new Map<string, boolean>();
+  private stairsDoors() {
+    const people: { x: number; y: number }[] = [this.me];
+    this.room?.state.players.forEach((p: S, sid: string) => {
+      if (sid !== this.room?.sessionId && (p.level ?? 0) === this.level) people.push({ x: p.x, y: p.y });
+    });
+    for (const o of this.objs.values()) {
+      if (o.kind !== "stairs" || objLevel(o, this.building) !== this.level) continue;
+      const d = stairsDoor(o);
+      const open = people.some((p) => Math.hypot(p.x - d.x, p.y - d.y) < 1.15);
+      const was = this.fireDoors.get(o.id);
+      this.fireDoors.set(o.id, open);
+      if (was === undefined || was === open) continue;
+      loadLiftSounds();
+      const gain = nearGain(Math.hypot(d.x - this.me.x, d.y - this.me.y));
+      liftSound(open ? "stairs/door-open" : "stairs/door-close", { gain: gain * 0.75, delay: open ? 0 : 0.35 });
+    }
+  }
+
+  // ── the elevators' motion (shared lift.ts: liftMotion) ─────────────────
+  // When each stop's phase was heard of: the doors and the car move from then
+  // (everyone hears it at about the same moment). Its sounds start with it.
+  private liftSince = new Map<string, number>();
+  private liftKeys = new Map<string, string>();
+  private liftsDirty = true;
+  private liftHeard(o: WorldObjectDef) {
+    loadLiftSounds(); // (the building has elevators: their sounds, decoded ahead)
+    const p = o.props ?? {};
+    const key = `${p.ph}|${p.len}|${p.at}|${p.to}`;
+    this.liftsDirty = true;
+    if (this.liftKeys.get(o.id) === key) return;
+    const was = this.liftKeys.get(o.id);
+    this.liftKeys.set(o.id, key);
+    this.liftSince.set(o.id, performance.now());
+    if (was !== undefined) this.liftSound(o, was);
+  }
+
+  // A stop's phase changed (`was`: the one before): what it sounds like, if it's
+  // on my floor — the doors, the chime as it arrives, the ride if I'm in it.
+  private liftRide: ((fade?: number) => void) | null = null;
+  private liftSound(o: WorldObjectDef, wasKey: string) {
+    loadLiftSounds();
+    const [was, , wasAt, wasTo] = wasKey.split("|");
+    if (objLevel(o, this.building) !== this.level) return;
+    const p = o.props ?? {};
+    const ph = String(p.ph ?? "");
+    const len = (Number(p.len) || 0) / 1000;
+    const here = p.at === this.level;
+    const c = { x: o.x + 1, y: o.y + 1 };
+    const inside = inLift(o, this.me);
+    const gain = inside ? 1 : nearGain(Math.hypot(c.x - this.me.x, c.y - this.me.y));
+    if (here && ph === "opening") {
+      if (was === "moving") liftSound("lift/chime", { gain: gain * 0.7 });
+      // (one tone for a car that came up, a second, lower, for one that came down)
+      if (was === "moving" && Number(wasTo) < Number(wasAt))
+        liftSound("lift/chime", { gain: gain * 0.7, rate: 0.8, delay: 0.42 });
+      liftSound("lift/door-open", { gain: gain * 0.8, rate: 1.7 / Math.max(0.5, len) });
+    }
+    if (here && ph === "closing") liftSound("lift/door-close", { gain: gain * 0.8, rate: 1.7 / Math.max(0.5, len) });
+    if (ph === "moving" && inside) {
+      this.liftRide?.(0.3);
+      const stop = liftSound("lift/ride.wav", { gain: 0.7, loop: true });
+      this.liftRide = stop;
+      if (stop) setTimeout(() => stop(0.6), Math.max(0, len - 0.6) * 1000);
+    }
+  }
+
+  /** An elevator stop as the iso view draws it now (its doors' step, the car
+   *  there or not); anything else as it is. */
+  private liftDrawn(o: WorldObjectDef): WorldObjectDef {
+    if (o.kind !== "elevator") return o;
+    const now = performance.now();
+    const m = liftMotion(o, objLevel(o, this.building), (now - (this.liftSince.get(o.id) ?? now)) / 1000);
+    return { ...o, props: { ...(o.props ?? {}), anim: Math.round(m.doors * 5) / 5, here: m.here } };
+  }
+
+  // Iso: the doors on my floor slide in steps (six, each one's art cached once),
+  // the inside shown where the car is
+  private liftsIso(now: number) {
+    const engine = this.engine;
+    if (!engine) return;
+    for (const o of this.objs.values()) {
+      if (o.kind !== "elevator" || objLevel(o, this.building) !== this.level) continue;
+      const m = liftMotion(o, this.level, (now - (this.liftSince.get(o.id) ?? now)) / 1000);
+      const anim = Math.round(m.doors * 5) / 5;
+      const shown = engine.getObject(o.id);
+      if (!shown || (shown.props?.anim === anim && shown.props?.here === m.here)) continue;
+      engine.upsertObject(this.liftDrawn(o));
+    }
+  }
+
+  /** The car I'm standing in on my floor (and its motion), if I am. */
+  private myLift(now: number): { o: WorldObjectDef; m: LiftMotion } | null {
+    for (const o of this.objs.values()) {
+      if (o.kind !== "elevator" || objLevel(o, this.building) !== this.level || !inLift(o, this.me)) continue;
+      return { o, m: liftMotion(o, this.level, (now - (this.liftSince.get(o.id) ?? now)) / 1000) };
+    }
+    return null;
+  }
+
+  // In the car (3D), the camera rides in it with you: high in its back corner,
+  // over your shoulder to the doors and the panel; it sways a hair on the way.
+  private liftCam(
+    now: number,
+  ): { eye: [number, number, number]; look: [number, number, number]; showMe: boolean; fov: number } | null {
+    const at = this.myLift(now);
+    if (!at) {
+      if (this.tp) this.tp.liftSway = 0;
+      return null;
+    }
+    const { o, m } = at;
+    const moving = m.phase === "moving";
+    const sway = moving ? Math.sin((now / 1000) * 31) * 0.002 + Math.sin((now / 1000) * 7.3) * 0.003 : 0;
+    if (this.tp) this.tp.liftSway = sway;
+    // the car's own frame: doors on its local −y side (rot 0), turned with it
+    const r = (o.rot ?? 0) & 3;
+    const turn = (u: number, v: number): [number, number] => {
+      const dx = u - 1;
+      const dy = v - 1;
+      const c = [1, 0, -1, 0][r];
+      const s = [0, 1, 0, -1][r];
+      return [o.x + 1 + dx * c - dy * s, o.y + 1 + dx * s + dy * c];
+    };
+    const [ex, ey] = turn(1, 1.82);
+    const [lx, ly] = turn(1, -1.6);
+    return { eye: [ex, ey, 2.2 + sway], look: [lx, ly, 1.15 + sway], showMe: true, fov: 74 };
+  }
+
+  private isoSwap = 0; // (3D: the iso engine's floor change, spread over frames)
   setLevel(level: number) {
     if (level === this.level && floorOf(this.map) === level) return;
     this.level = level;
     if (!this.building || !this.engine) return;
     this.map = levelMap(this.building, level) ?? this.building;
-    this.engine.setMap(this.map);
-    this.engine.setObjects(onLevel(this.objs.values(), this.map));
+    // in 3D the iso engine follows over the next two frames (its map, then its
+    // things), so no one frame carries the whole change; in iso, at once
+    if (this.tp) this.isoSwap = 2;
+    else {
+      this.isoSwap = 0;
+      this.engine.setMap(this.map);
+      this.engine.setObjects(onLevel(this.objs.values(), this.map).map((o) => this.liftDrawn(o)));
+    }
     this.rebuildGrid();
     this.path = null;
     this.objectsDirty = true;

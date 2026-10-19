@@ -619,6 +619,9 @@ const D = {
   liftTitle: ["Elevator", "Elevador"],
   liftCalled: ["Elevator called — it's on its way.", "Elevador chamado — já vem."],
   liftKeys: ["G 1–9 pick a floor · Esc step out", "G 1–9 escolhe o andar · Esc sai"],
+  // the strip under a stairwell's floor number (docs/plan/26)
+  stairsSignGround: ["GROUND · EXIT TO THE LOT", "TÉRREO · SAÍDA P/ ESTACIONAMENTO"],
+  stairsSignFloor: ["FLOOR {n}", "ANDAR {n}"],
   floorAdd: ["Floor", "Andar"],
   floorRemove: ["Take the top floor away", "Tirar o último andar"],
   floorRemoveConfirm: ["Take floor {n} away, and everything on it?", "Tirar o andar {n}, e tudo o que estiver nele?"],

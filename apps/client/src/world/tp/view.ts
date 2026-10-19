@@ -10,7 +10,10 @@ import {
   homeOf,
   isFloor,
   levelMap,
+  liftFloorName,
+  liftMotion,
   type MapDef,
+  objLevel,
   offsetOf,
   onLevel,
   type Point,
@@ -36,6 +39,7 @@ import {
   Frustum,
   Group,
   HemisphereLight,
+  LinearSRGBColorSpace,
   LineBasicMaterial,
   LineLoop,
   LineSegments,
@@ -63,6 +67,7 @@ import {
   WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
+import { tr } from "@/lib/i18n";
 import { chars, loadChars } from "../art/chars-load";
 import { daylight } from "../art/daylight";
 import { emoteUrl } from "../art/emotes";
@@ -76,12 +81,14 @@ import { BuildLayer, type BuildLook } from "./build3d";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { Hands1P, handsDoing } from "./hands1p";
 import { zt } from "./kit3d";
+import { type LiftStop3, Lifts3 } from "./lift3d";
 import { Light3 } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
 import { type Mats as CharMats, Person3D } from "./person3d";
 import { Post3 } from "./post3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
+import { type StairStop3, Stairs3 } from "./stairs3d";
 import { type TableScene3, TablesIn3D } from "./tables3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
@@ -96,6 +103,10 @@ type People = NonNullable<ReturnType<typeof people>>;
 // WASD moves relative to the camera in all three. Mouse look (Z): the pointer is
 // locked and the mouse turns the camera; a crosshair picks what a click uses. Walls between the camera and you
 // turn see-through (the iso view's "wall-down", in 3D).
+
+// (the elevators and the staircases are drawn by Lifts3 / Stairs3, not with the floor's things)
+const noLifts = (objects: WorldObjectDef[]): WorldObjectDef[] =>
+  objects.filter((o) => o.kind !== "elevator" && o.kind !== "stairs");
 
 export type CamMode = "chase" | "free" | "first";
 
@@ -271,7 +282,7 @@ export class ThirdPersonView {
     this.world = new World3(
       items,
       map,
-      objects,
+      noLifts(objects),
       this.renderer.capabilities.getMaxAnisotropy(),
       (m) => this.light.patch(m),
       wells,
@@ -283,6 +294,8 @@ export class ThirdPersonView {
       this.light.setHour(this.hour);
     });
     this.scene.add(this.hemi);
+    this.lifts3 = new Lifts3(this.renderer);
+    this.scene.add(this.lifts3.root, this.stairs3.root);
     const s = this.sun;
     s.castShadow = true;
     s.shadow.mapSize.set(2048, 2048);
@@ -713,7 +726,7 @@ export class ThirdPersonView {
       const world = new World3(
         this.items,
         map,
-        objects,
+        noLifts(objects),
         this.renderer.capabilities.getMaxAnisotropy(),
         (m) => this.light.patch(m),
         wells,
@@ -721,7 +734,7 @@ export class ThirdPersonView {
       mine = { world, sig };
       this.floors.set(level, mine);
       this.scene.add(world.root);
-    } else mine.world.update(objects);
+    } else mine.world.update(noLifts(objects));
     const changed = mine.world !== this.world || layoutSig(map) !== layoutSig(this.map);
     if (mine.world !== this.world) {
       // the floor I left keeps its drawing, without my floor's light map
@@ -801,16 +814,81 @@ export class ThirdPersonView {
         b = undefined;
       }
       if (!b) {
-        const world = new World3(this.items, lm, objs, this.renderer.capabilities.getMaxAnisotropy(), () => {}, wells);
+        const world = new World3(
+          this.items,
+          lm,
+          noLifts(objs),
+          this.renderer.capabilities.getMaxAnisotropy(),
+          () => {},
+          wells,
+        );
         b = { world, sig };
         this.floors.set(f, b);
         this.scene.add(world.root);
-      } else b.world.update(objs);
+      } else b.world.update(noLifts(objs));
       const o = this.offsetTo(f);
       b.world.root.position.set(o.x, o.h, o.y);
       b.world.root.visible = true;
     }
     this.placeAround();
+  }
+
+  // The elevators (tp/lift3d.ts): every stop's landing and car, drawn apart
+  // from the floors' things and moved every frame from the shared motion —
+  // `since`: when each stop's current phase was heard of (performance.now()).
+  private lifts3: Lifts3 | null = null;
+  private liftObjs: WorldObjectDef[] = [];
+  private liftSince = new Map<string, number>();
+  liftSway = 0; // (the car I'm riding: its sway, tiles)
+  setLifts(objects: WorldObjectDef[], since: Map<string, number>) {
+    this.liftObjs = objects;
+    this.liftSince = since;
+  }
+  private syncLifts(now: number) {
+    if (!this.lifts3) return;
+    const shafts = new Map<string, number[]>();
+    for (const o of this.liftObjs) {
+      const sh = String(o.props?.shaft ?? o.id);
+      shafts.set(sh, [...(shafts.get(sh) ?? []), objLevel(o, this.building)]);
+    }
+    const stops: LiftStop3[] = [];
+    for (const o of this.liftObjs) {
+      const level = objLevel(o, this.building);
+      if (level > this.level) continue; // (the floors above aren't drawn)
+      const floors = [...(shafts.get(String(o.props?.shaft ?? o.id)) ?? [])].sort((a, b) => b - a).map(liftFloorName);
+      const since = (now - (this.liftSince.get(o.id) ?? now)) / 1000;
+      const motion = liftMotion(o, level, since);
+      stops.push({
+        o,
+        off: this.offsetTo(level),
+        motion,
+        floors,
+        floor: liftFloorName(level),
+        sway: level === this.level && motion.phase === "moving" ? this.liftSway : 0,
+      });
+    }
+    this.lifts3.sync(stops);
+  }
+
+  // The staircases (tp/stairs3d.ts): each floor's stairwell, its fire doors
+  // opening for whoever comes near (anyone on that floor, as drawn here)
+  private stairs3 = new Stairs3();
+  private syncStairs(dt: number, bodies: Body3[]) {
+    const stops: StairStop3[] = [];
+    for (const o of this.allObjects) {
+      if (o.kind !== "stairs") continue;
+      const level = objLevel(o, this.building);
+      if (level > this.level) continue;
+      const off = this.offsetTo(level);
+      stops.push({
+        o,
+        off,
+        floor: liftFloorName(level),
+        next: level === 0 ? tr("stairsSignGround") : tr("stairsSignFloor").replace("{n}", liftFloorName(level)),
+        people: bodies.filter((b) => (b.level ?? this.level) === level).map((b) => ({ x: b.x, y: b.y })),
+      });
+    }
+    this.stairs3.sync(stops, dt);
   }
 
   // The floors not built yet, built ahead in quiet moments (one at a time, a
@@ -819,13 +897,26 @@ export class ThirdPersonView {
   // floor change then only moves and shows what's ready.
   private allObjects: WorldObjectDef[] = [];
   private warmAt = 0;
+  private cutWarm = false;
   private warmTarget: WebGLRenderTarget | null = null;
   private warmCam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
   private warmUp(now: number) {
     if (now < this.warmAt || !this.allObjects.length) return;
     this.warmAt = now + 600;
     const f = floorsOf(this.building).find((l) => !this.floors.has(l));
-    if (f === undefined) return;
+    if (f === undefined) {
+      // last: the building's glass cut above a floor (campus.cutAbove) — its
+      // clipped shaders compiled too, before anyone first goes downstairs
+      if (!this.cutWarm) {
+        this.cutWarm = true;
+        this.around.campus.cutAbove(STOREY - 0.15);
+        this.renderer.setRenderTarget(this.warmTarget);
+        this.renderer.render(this.scene, this.camera);
+        this.renderer.setRenderTarget(null);
+        this.around.campus.cutAbove(null);
+      }
+      return;
+    }
     const lm = levelMap(this.building, f);
     if (!lm) {
       this.warmAt = Number.POSITIVE_INFINITY;
@@ -833,13 +924,29 @@ export class ThirdPersonView {
     }
     const all = this.allObjects;
     const wells = { floor: wellsOf(lm, all), ceiling: wellsOf(lm, all, "ceiling") };
-    const world = new World3(this.items, lm, onLevel(all, lm), this.renderer.capabilities.getMaxAnisotropy(), () => {}, wells);
+    const objs = onLevel(all, lm);
+    this.light.prebake(lm, objs);
+    const world = new World3(
+      this.items,
+      lm,
+      noLifts(objs),
+      this.renderer.capabilities.getMaxAnisotropy(),
+      () => {},
+      wells,
+    );
     this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wellsKey(wells)}` });
     this.scene.add(world.root);
     const o = this.offsetTo(f);
     world.root.position.set(o.x, o.h, o.y);
     // drawn once, from above, all of it in view, into a tiny target
-    this.warmTarget ??= new WebGLRenderTarget(4, 4);
+    // (in the colour space the room is drawn in — the finish's linear buffer,
+    // or the canvas — so the shaders compiled are the ones the screen uses)
+    const space = this.post ? LinearSRGBColorSpace : SRGBColorSpace;
+    if (this.warmTarget && this.warmTarget.texture.colorSpace !== space) {
+      this.warmTarget.dispose();
+      this.warmTarget = null;
+    }
+    this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: space });
     const c = this.warmCam;
     const r = Math.max(lm.width, lm.height) / 2 + 2;
     c.left = -r;
@@ -1099,6 +1206,7 @@ export class ThirdPersonView {
   frame(dt: number, bodies: Body3[], meId: string) {
     this.time += dt;
     this.warmUp(performance.now());
+    this.syncLifts(performance.now());
     // everyone in my floor's frame: the floors below where they are, above not drawn
     bodies = bodies.flatMap((b) => {
       const l = b.level ?? this.level;
@@ -1108,6 +1216,7 @@ export class ThirdPersonView {
       return [{ ...b, x: b.x + o.x, y: b.y + o.y, z: (b.z ?? 0) + o.h, ground: (b.ground ?? 0) + o.h }];
     });
     const me = bodies.find((b) => b.id === meId);
+    this.syncStairs(dt, bodies);
     const pad = this.padFree ? activePad() : null;
     // look around: Q / E, the right stick
     let turn = 0;
@@ -1802,7 +1911,7 @@ export class ThirdPersonView {
     const d = this.ray.ray.direction;
     let best: string | null = null;
     let bestT = Number.POSITIVE_INFINITY;
-    for (const p of this.world.picks) {
+    for (const p of [...this.world.picks, ...(this.lifts3?.picks ?? []), ...this.stairs3.picks]) {
       if (!p.use) continue;
       let t0 = 0;
       let t1 = bestT;
@@ -2166,6 +2275,8 @@ export class ThirdPersonView {
     (this.charMats?.bodyAway as Material | undefined)?.dispose();
     for (const e of this.pets3.values()) e.model.dispose();
     this.games3?.dispose();
+    this.lifts3?.dispose();
+    this.stairs3.dispose();
     for (const b of this.floors.values()) b.world.dispose();
     this.warmTarget?.dispose();
     this.around.dispose();

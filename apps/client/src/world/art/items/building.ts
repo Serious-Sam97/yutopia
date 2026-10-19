@@ -22,10 +22,12 @@ const paint = (n: number): Mat => ({
 
 const TREAD: Mat = { c: "#8d8a84", top: "#a7a39b", left: "#7d7a74", right: "#6c6964" };
 const CONCRETE: Mat = { c: "#b9b6ae", top: "#cbc8c0" };
-const NOSING: Mat = { c: K.amberSoft, top: K.amber, flat: true };
+const NOSING: Mat = { c: "#2b2d2f", top: "#3a3d40", flat: true }; // anti-slip strips
 const RAIL: Mat = { c: "#2f3336", top: "#4a4f53", flat: true };
-const PLASTER: Mat = { c: "#e9e5dc", top: "#f3efe7" };
 const STEEL: Mat = { c: "#9aa1a6", top: "#b8bec2", left: "#a3aaaf", right: "#7d858a", gloss: 0.7 };
+const CAR_FLOOR: Mat = { c: "#3a3633", top: "#46413d" };
+const LIT: Mat = { c: K.vfd, top: K.amber, flat: true };
+const DARK: Mat = { c: "#2a2016", top: "#3a2e20", flat: true };
 const STEEL_DK: Mat = { c: "#6c7378", top: "#848b90", left: "#737a7f", right: "#5c6267" };
 
 // A staircase: a switchback in a 4 × 6 well (shared stairs.ts) — up the east
@@ -52,8 +54,8 @@ export function stairs(s: Sketch) {
     s.box({ x: 0.06, y: v, w: 1.9, d: run + 0.01, z: top - thick, h: thick, mat: TREAD, line: 0.8 });
     s.box({ x: 0.06, y: v + run - 0.05, w: 1.9, d: 0.05, z: top - 1, h: 1.6, mat: NOSING, line: 0, bevel: false });
   }
-  // the wall between the flights, up to rail height over flight A's top
-  s.box({ x: 1.96, y: 1, w: 0.08, d: 3, z: 0, h: HALF + 34, mat: PLASTER, line: 0.8 });
+  // the spine between the flights: a low concrete upstand (the rails ride on it)
+  s.box({ x: 1.96, y: 1, w: 0.08, d: 3, z: 0, h: 14, mat: CONCRETE, line: 0.8 });
   // rails: posts along the outer side of each flight, a bar stepping with them
   for (let i = 0; i <= N; i += 3) {
     const a = (HALF * Math.max(1, i)) / N;
@@ -70,59 +72,42 @@ export function stairs(s: Sketch) {
   s.shadow(0, 1, 4, 5, 0.25);
 }
 
-// An elevator's car where it stops on a floor (2 × 2; the doors on the
-// north edge, rot 0). props: door "open" (the car here, open: you see in),
-// at (the floor it's at), dir (−1 / 0 / 1). Shut: the doors and the shaft.
+// An elevator's stop (2 × 2; the doors on the north edge, rot 0), as the iso
+// camera sees it — from inside, over the cut-away car (docs/plan/26): the
+// steel portal and the doors' inner faces, sliding apart by props.anim (0 shut
+// … 1 open, stepped by the controller from the shared motion), the display
+// over them lit while the car's here or coming; props.here: the car's floor
+// (low steel walls, a walnut rail, its panel) or the empty shaft (dark).
 export function elevator(s: Sketch, props: Record<string, unknown>) {
-  const open = props.door === "open";
-  const H = 96; // the car's inside
-  // the frame round the doors and the wall over them
-  s.box({ x: 0, y: 0, w: 0.14, d: 0.16, z: 0, h: H + 4, mat: STEEL, line: 0.9 });
-  s.box({ x: 1.86, y: 0, w: 0.14, d: 0.16, z: 0, h: H + 4, mat: STEEL, line: 0.9 });
-  s.box({ x: 0.14, y: 0, w: 1.72, d: 0.16, z: H, h: 6, mat: STEEL, line: 0.9 });
-  // the indicator over them: lit while the car's here or coming
-  const lit = open || props.dir !== 0;
-  s.box({
-    x: 0.6,
-    y: 0,
-    w: 0.8,
-    d: 0.06,
-    z: H + 10,
-    h: 12,
-    mat: lit ? { c: K.vfd, top: K.amber, flat: true } : { c: "#2a2016", top: "#3a2e20", flat: true },
-    glow: lit,
-    line: 0.7,
-  });
-  // the floor of the car (or the shaft's, dark)
-  s.box({ x: 0.06, y: 0.12, w: 1.88, d: 1.84, z: 0, h: 2, mat: open ? { c: "#3a3633", top: "#46413d" } : M.graphite });
-  if (open) {
-    // in: brushed steel walls, a walnut rail, the panel by the door
-    s.box({ x: 0.06, y: 1.88, w: 1.88, d: 0.08, z: 0, h: H, mat: STEEL, line: 0.8 });
-    s.box({ x: 0.06, y: 0.16, w: 0.08, d: 1.72, z: 0, h: H, mat: STEEL, line: 0.8 });
-    s.box({ x: 1.86, y: 0.16, w: 0.08, d: 1.72, z: 0, h: H, mat: STEEL, line: 0.8 });
-    s.box({ x: 0.2, y: 1.78, w: 1.6, d: 0.08, z: 36, h: 3, mat: M.walnut, line: 0.6 });
-    s.box({ x: 0.14, y: 0.3, w: 0.04, d: 0.3, z: 36, h: 24, mat: { c: "#2b2f33", top: "#3a3f43" }, line: 0.5 });
-    for (let i = 0; i < 5; i++)
-      s.box({
-        x: 0.17,
-        y: 0.4,
-        w: 0.03,
-        d: 0.1,
-        z: 38 + i * 4.4,
-        h: 2.6,
-        mat: i === 0 ? { c: K.amber, top: K.vfd, flat: true } : { c: "#c9ced2", top: "#e0e4e7", flat: true },
-        glow: i === 0,
-        line: 0,
-      });
-    // the doors, slid aside
-    s.box({ x: 0.14, y: 0.04, w: 0.22, d: 0.06, z: 0, h: H, mat: STEEL_DK, line: 0.7 });
-    s.box({ x: 1.64, y: 0.04, w: 0.22, d: 0.06, z: 0, h: H, mat: STEEL_DK, line: 0.7 });
-  } else {
-    // shut: two leaves, and the shaft behind them (its roof, so nothing shows through)
-    s.box({ x: 0.14, y: 0.04, w: 0.86, d: 0.06, z: 0, h: H, mat: STEEL_DK, line: 0.7 });
-    s.box({ x: 1.0, y: 0.04, w: 0.86, d: 0.06, z: 0, h: H, mat: STEEL_DK, line: 0.7 });
-    s.box({ x: 0.06, y: 0.12, w: 1.88, d: 1.84, z: H - 4, h: 4, mat: M.graphite, line: 0.8 });
+  const k = Math.max(0, Math.min(1, Number(props.anim ?? (props.door === "open" ? 1 : 0))));
+  const here = props.here !== false;
+  const H = 86; // the doors (2.2 tiles)
+  s.box({ x: 0.06, y: 0.14, w: 1.88, d: 1.8, z: 0, h: 2, mat: here ? CAR_FLOOR : M.graphite });
+  if (here) {
+    // the car cut away low: its sides and back, a rail along them, the panel
+    for (const [x, y, w, d] of [
+      [0.06, 0.14, 0.06, 1.8],
+      [1.88, 0.14, 0.06, 1.8],
+      [0.06, 1.88, 1.88, 0.06],
+    ])
+      s.box({ x, y, w, d, z: 0, h: 14, mat: STEEL, line: 0.7 });
+    s.box({ x: 0.14, y: 1.8, w: 1.72, d: 0.04, z: 14, h: 2, mat: M.walnut, line: 0 });
+    s.box({ x: 1.62, y: 0.16, w: 0.2, d: 0.03, z: 30, h: 34, mat: STEEL, line: 0.6 });
+    s.box({ x: 1.68, y: 0.13, w: 0.08, d: 0.02, z: 54, h: 5, mat: LIT, glow: true, line: 0 });
   }
+  // the portal: posts and head
+  s.box({ x: 0.36, y: 0, w: 0.08, d: 0.14, z: 0, h: H + 6, mat: STEEL, line: 0.8 });
+  s.box({ x: 1.56, y: 0, w: 0.08, d: 0.14, z: 0, h: H + 6, mat: STEEL, line: 0.8 });
+  s.box({ x: 0.44, y: 0, w: 1.12, d: 0.14, z: H, h: 6, mat: STEEL, line: 0.8 });
+  // the leaves, each sliding into the wall on its side
+  const w = 0.56 * (1 - k);
+  if (w > 0.02) {
+    s.box({ x: 0.44, y: 0.03, w, d: 0.06, z: 0, h: H, mat: STEEL_DK, line: 0.7 });
+    s.box({ x: 1.56 - w, y: 0.03, w, d: 0.06, z: 0, h: H, mat: STEEL_DK, line: 0.7 });
+  }
+  // the display over them (inside): amber while the car's here or coming
+  const lit = (here && k > 0) || (props.dir !== undefined && props.dir !== 0);
+  s.box({ x: 0.72, y: 0.14, w: 0.56, d: 0.04, z: H + 8, h: 9, mat: lit ? LIT : DARK, glow: lit, line: 0.6 });
 }
 
 // An 80s sedan or wagon parked in a bay, its nose to −x (rot 0), snow on the

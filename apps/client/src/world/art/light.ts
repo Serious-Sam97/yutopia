@@ -356,3 +356,28 @@ export function affectsLight(o: WorldObjectDef): boolean {
     !!(CATALOG as Record<string, { light?: unknown }>)[o.kind]?.light
   );
 }
+
+// ── kept per floor ──────────────────────────────────────────────────────────
+// A floor's bake, kept (a few): going back to a floor, or the other view
+// lighting the same one, doesn't ray-march it again. Keyed by everything that
+// lights it or stands in the light's way.
+const baked = new Map<string, LightMap>();
+export function lightSig(map: MapDef, objects: WorldObjectDef[]): string {
+  const doors = objects
+    .filter((o) => isOpening(o.kind))
+    .map((o) => `${o.kind},${o.x},${o.y},${o.rot ?? 0},${o.props?.state ?? ""}`)
+    .join(";");
+  return `${map.key}|${map.floor ?? ""}|${map.width}x${map.height}|${map.tiles.join("")}|${map.hWalls.join("")}|${map.vWalls.join("")}|${JSON.stringify(lightSources(objects))}|${doors}`;
+}
+export function lightMapFor(map: MapDef, objects: WorldObjectDef[], sig = lightSig(map, objects)): LightMap {
+  let lm = baked.get(sig);
+  if (lm) {
+    baked.delete(sig);
+    baked.set(sig, lm);
+    return lm;
+  }
+  lm = new LightMap(map, objects);
+  baked.set(sig, lm);
+  if (baked.size > 8) baked.delete(baked.keys().next().value as string);
+  return lm;
+}

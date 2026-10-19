@@ -1,0 +1,5 @@
+# the downloaded originals stay out of git (big WAVs); what the game plays is
+# cut from them into apps/client/public/sfx
+*
+!.gitignore
+!README.md

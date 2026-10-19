@@ -16,8 +16,8 @@ import { registerFeature } from "./index.ts";
 // shut at the home floor.
 
 const OPEN_MS = 7000; // doors stay open this long with nobody coming or going
-const CLOSE_MS = 1100;
-const OPEN_DOORS_MS = 700;
+const CLOSE_MS = 1300; // the doors closing (drawn eased over this)
+const OPEN_DOORS_MS = 1100; // and opening
 const RIDE_MS = 1500; // a ride: this, and a bit more a floor
 const FLOOR_MS = 800;
 const MAX_RIDERS = 4;
@@ -68,17 +68,22 @@ registerFeature((room: WorldRoom) => {
   };
 
   // what every stop shows: open doors where the car stands open, the floor it's
-  // at, which way it's going
+  // at, which way it's going — and, for the clients to move things as they
+  // happen (shared lift.ts: liftMotion), the phase it's in, how long it lasts
+  // (ms; doors opening or closing, a ride) and where it's going
   const show = (c: Car) => {
     const dir = c.to === null ? 0 : Math.sign(c.to - c.at);
+    const timed = c.phase === "opening" || c.phase === "closing" || c.phase === "moving";
+    const len = timed ? Math.max(0, c.until - Date.now()) : 0;
     let changed = false;
     for (const o of stops(c.shaft)) {
       const level = objLevel(o, room.map);
       const door = level === c.at && (c.phase === "open" || c.phase === "closing") ? "open" : "closed";
-      const props = { ...(o.props ?? {}), door, at: c.at, dir };
+      const props = { ...(o.props ?? {}), door, at: c.at, dir, ph: c.phase, len, to: c.to ?? c.at };
       if (JSON.stringify(props) === JSON.stringify(o.props ?? {})) continue;
+      // (the walls only move with the doors or the car)
+      if (o.props?.door !== door || o.props?.at !== c.at) changed = true;
       room.state.objects.set(o.id, toSchema({ ...o, props }));
-      changed = true;
     }
     if (changed) room.rebuildGrid();
   };

@@ -126,3 +126,28 @@ test("the lot: out through the glass doors, a car to jump up on", async ({ page 
   expect(car.top).toBeGreaterThan(1.2);
   if (dir) await page.screenshot({ path: `${dir}/floors-lot.png` });
 });
+
+test("the stairs by a click: up them from floor 3, down them again from 4", async ({ page }) => {
+  test.setTimeout(120_000);
+  await enter(page, await token(ANA), "demo");
+  // the staircase from floor 3 (the core's stairwell, x 10–14, y 30–36)
+  const S = await page.evaluate(() => {
+    const c = (window as any).__yutopia;
+    const o = [...c.objs.values()].find((x: any) => x.kind === "stairs" && x.props.level === 3);
+    return { x: o.x, y: o.y };
+  });
+  await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 1, y: p.y - 2.5, level: 3 }), S);
+  await expect.poll(async () => (await state(page)).level, { timeout: 8000 }).toBe(3);
+  await page.waitForTimeout(1500);
+  // a click on flight A's treads: over to the door, up, out on floor 4
+  await page.evaluate((p) => (window as any).__yutopia.engine.events.onTileClick(p.x + 3.2, p.y + 2.5), S);
+  await expect.poll(async () => (await state(page)).level, { timeout: 20_000 }).toBe(4);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__yutopia.path?.length ?? 0), { timeout: 10_000 })
+    .toBe(0);
+  const top = await state(page);
+  expect(Math.abs(top.y - (S.y + 0.5))).toBeLessThan(0.7);
+  // from floor 4, a click on flight B down in the well: back to floor 3's landing
+  await page.evaluate((p) => (window as any).__yutopia.engine.events.onTileClick(p.x + 1, p.y + 2.5), S);
+  await expect.poll(async () => (await state(page)).level, { timeout: 20_000 }).toBe(3);
+});

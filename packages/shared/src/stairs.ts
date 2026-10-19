@@ -174,3 +174,25 @@ export function wellsOf(
   }
   return out;
 }
+
+/** The middle of the stairs' fire doors (the pair on their door side, u 0..2). */
+export function stairsDoor(o: { x: number; y: number; rot?: number }): Point {
+  return stairsPoint(o, 1, 0);
+}
+
+/** The way up a staircase, from inside its door to the floor above's landing
+ *  (its floor's tile coords; the last point is on the floor above, in the same
+ *  spot of the building): flight A, the half landing, flight B. Reversed, the
+ *  way down from the floor above. */
+export function stairsWayUp(o: { x: number; y: number; rot?: number }): Point[] {
+  return [
+    [1, 0.55],
+    [3, 0.8],
+    [3, 3.9],
+    [3, 5],
+    [1, 5],
+    [1, 3.9],
+    [1, 1.05],
+    [1, 0.5],
+  ].map(([u, v]) => stairsPoint(o, u, v));
+}

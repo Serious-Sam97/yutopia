@@ -1,3 +1,4 @@
+import { type LiftMotion, liftFloorName } from "@yutopia/shared";
 import {
   BoxGeometry,
   CanvasTexture,
@@ -9,6 +10,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  PMREMGenerator,
   PointLight,
   RepeatWrapping,
   Shape,
@@ -16,7 +18,10 @@ import {
   SpotLight,
   SRGBColorSpace,
   type Texture,
+  type WebGLRenderer,
 } from "three";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import type { Pick3 } from "./build";
 
 // The elevator, made properly (docs/plan/26-floor-transitions.md, phase 0):
 // one stop of a car on a floor, in tiles (1 tile ≈ 1 m), three.js axes —
@@ -308,7 +313,7 @@ export class LiftLanding {
       this.root.add(box(0.012, DOOR_H, WALL_T, m.steel, x + (x === X0 ? 0.006 : -0.006), DOOR_H / 2, 0));
     this.root.add(box(DOOR_W, 0.012, WALL_T, m.steel, 1, DOOR_H - 0.006, 0));
     // the sill: brushed aluminium, a groove for the leaves
-    this.root.add(box(DOOR_W + 0.1, 0.012, WALL_T + 0.12, m.steel, 1, 0.006, -0.02));
+    this.root.add(box(DOOR_W + 0.1, 0.012, WALL_T + 0.12, m.darkSteel, 1, 0.006, -0.02));
     this.root.add(box(DOOR_W, 0.014, 0.012, m.reveal, 1, 0.007, -0.05));
     // the doors: two leaves, vertical grain, a fine meeting line
     for (const s of [-1, 1]) {
@@ -404,9 +409,14 @@ export class LiftCar {
 
   /** `cut`: the iso view's cut-away — the back and the sides low, no ceiling
    *  (the iso camera looks into the car from behind it). */
-  constructor(floors: string[] = ["4", "3", "2", "1", "G"], mats = liftMats(), opts: { cut?: boolean } = {}) {
+  constructor(
+    floors: string[] = ["4", "3", "2", "1", "G"],
+    mats = liftMats(),
+    opts: { cut?: boolean; lights?: boolean } = {},
+  ) {
     const m = mats;
     const cut = !!opts.cut;
+    const lights = opts.lights !== false;
     const WH = cut ? 0.35 : CAR_H; // the walls' height
     const i0 = 0.12; // the inner faces
     const i1 = 1.88;
@@ -469,14 +479,18 @@ export class LiftCar {
       glow.position.set(1, CAR_H - 0.002, (front + back) / 2);
       this.root.add(glow);
     }
-    this.light = new PointLight("#fff1dc", 2.3, 4.2, 1.6);
+    // (the game leaves them out: every light costs every surface in the scene;
+    // the backlit ceiling and the room's light map carry it there)
+    this.light = new PointLight("#fff1dc", lights ? 2.3 : 0, 4.2, 1.6);
+    this.light.visible = lights;
     this.light.position.set(1, CAR_H - 0.25, (front + back) / 2);
-    this.light.castShadow = true;
+    this.light.castShadow = lights;
     this.light.shadow.mapSize.set(512, 512);
     this.light.shadow.bias = -0.002;
     this.root.add(this.light);
     // its light out onto the landing, as wide as the doors are open
     this.spill = new SpotLight("#ffeacc", 0, 6, 0.7, 0.6, 1.4);
+    this.spill.visible = lights;
     this.spill.position.set(1, CAR_H - 0.3, 1.3);
     this.spill.target.position.set(1, 0, -2.2);
     this.root.add(this.spill, this.spill.target);
@@ -532,7 +546,7 @@ export class LiftCar {
       const s = i === 0 ? -1 : 1;
       leaf.position.x = 1 + (s * DOOR_W) / 4 + s * k * (DOOR_W / 2 - 0.02);
     });
-    this.spill.intensity = 7 * k;
+    if (this.spill.visible) this.spill.intensity = 7 * k;
   }
 
   /** A button lit (a floor picked; open held), or none. */
@@ -542,20 +556,119 @@ export class LiftCar {
   }
 }
 
-/** The doors' motion over a cycle: eased, a motor's start and a soft stop. */
-export function doorEase(t: number): number {
-  const k = Math.max(0, Math.min(1, t));
-  // a short hesitation as the motor takes, then ease-in-out
-  const s = Math.max(0, (k - 0.06) / 0.94);
-  return s * s * (3 - 2 * s);
+// (the motion's maths is shared with the iso view and the server: shared lift.ts)
+export { doorEase, rideAt } from "@yutopia/shared";
+
+// ── in the game: every stop on the floors drawn ─────────────────────────────
+export interface LiftStop3 {
+  o: { id: string; x: number; y: number; rot?: number };
+  off: { x: number; y: number; h: number }; // its floor from mine
+  motion: LiftMotion;
+  floors: string[]; // the car's buttons, top down
+  floor: string; // this stop's floor (on the jamb)
+  sway: number; // the car swaying as it travels (tiles)
 }
 
-/** A ride's position between two heights over time: an S-curve (it
- *  accelerates, cruises, slows), and a tiny settle as it stops. */
-export function rideAt(from: number, to: number, t: number, len: number): number {
-  const k = Math.max(0, Math.min(1, t / len));
-  const s = k * k * k * (k * (k * 6 - 15) + 10);
-  const after = t - len;
-  const settle = after > 0 && after < 0.35 ? Math.sin((after / 0.35) * Math.PI) * 0.012 * Math.sign(from - to) : 0;
-  return from + (to - from) * s + settle;
+interface StopView {
+  outer: Group;
+  landing: LiftLanding;
+  car: LiftCar;
+  floorsKey: string;
+}
+
+/** The elevators of the 3D view (tp/view.ts): the new landing and car for each
+ *  stop, moved every frame from the shared motion (doors, display, lantern). */
+export class Lifts3 {
+  readonly root = new Group();
+  picks: Pick3[] = [];
+  private views = new Map<string, StopView>();
+  private env: Texture | null = null;
+
+  constructor(renderer: WebGLRenderer) {
+    // metal needs something to reflect: a soft room, for the lifts' own materials
+    // (the rest of the scene keeps its light as it is)
+    const pm = new PMREMGenerator(renderer);
+    this.env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    pm.dispose();
+    const m = liftMats();
+    for (const mat of Object.values(m))
+      if (mat instanceof MeshStandardMaterial) {
+        mat.envMap = this.env;
+        mat.envMapIntensity = 0.5;
+        mat.needsUpdate = true;
+      }
+    // (the game's light is brighter than the prototype's, and blooms: the steel
+    // a little darker, the ceiling's panel under the bloom's threshold)
+    m.steel.color.multiplyScalar(0.72);
+    m.steelV.color.multiplyScalar(0.72);
+    m.ceiling.color.set("#c9bfae");
+  }
+
+  sync(stops: LiftStop3[]) {
+    const seen = new Set<string>();
+    this.picks = [];
+    for (const s of stops) {
+      seen.add(s.o.id);
+      const key = `${s.floors.join(",")}|${s.floor}`;
+      let v = this.views.get(s.o.id);
+      if (v && v.floorsKey !== key) {
+        this.drop(s.o.id, v);
+        v = undefined;
+      }
+      if (!v) {
+        const outer = new Group();
+        const inner = new Group();
+        inner.position.set(-1, 0, -1);
+        const landing = new LiftLanding(liftMats(), { floor: s.floor });
+        const car = new LiftCar(s.floors, liftMats(), { lights: false });
+        inner.add(landing.root, car.root);
+        outer.add(inner);
+        this.root.add(outer);
+        v = { outer, landing, car, floorsKey: key };
+        this.views.set(s.o.id, v);
+      }
+      const { o, off, motion } = s;
+      v.outer.position.set(o.x + 1 + off.x, off.h, o.y + 1 + off.y);
+      v.outer.rotation.y = -((o.rot ?? 0) & 3) * (Math.PI / 2);
+      const shown = `${liftFloorName(Math.round(motion.car))}${motion.dir > 0 ? "▲" : motion.dir < 0 ? "▼" : ""}`;
+      v.landing.setDoors(motion.doors);
+      v.landing.display.set(shown);
+      v.landing.setLantern(motion.dir, motion.here && motion.doors > 0.02);
+      v.car.root.visible = motion.here;
+      v.car.root.position.y = motion.here ? s.sway : 0;
+      v.car.setDoors(motion.doors);
+      v.car.display.set(shown);
+      v.car.setLit(
+        motion.phase === "moving" || motion.phase === "closing" ? [liftFloorName(Math.round(motion.to))] : [],
+      );
+      // where a click finds it: the doors and the car behind them
+      const r = (o.rot ?? 0) & 3;
+      const x0 = o.x + off.x;
+      const y0 = o.y + off.y;
+      this.picks.push({
+        id: o.id,
+        use: true,
+        x0: r === 3 ? x0 - 0.25 : x0,
+        x1: r === 1 ? x0 + 2.25 : x0 + 2,
+        y0: r === 0 ? y0 - 0.25 : y0,
+        y1: r === 2 ? y0 + 2.25 : y0 + 2,
+        z0: off.h,
+        z1: off.h + 2.6,
+      });
+    }
+    for (const [id, v] of this.views) if (!seen.has(id)) this.drop(id, v);
+  }
+
+  private drop(id: string, v: StopView) {
+    this.root.remove(v.outer);
+    v.outer.traverse((x) => {
+      if (x instanceof Mesh) x.geometry.dispose();
+    });
+    this.views.delete(id);
+  }
+
+  dispose() {
+    for (const [id, v] of this.views) this.drop(id, v);
+    this.env?.dispose();
+  }
 }

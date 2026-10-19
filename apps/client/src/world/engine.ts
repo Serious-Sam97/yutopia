@@ -69,7 +69,7 @@ import { WALL_H } from "./art/furniture";
 import { MUG_COLORS } from "./art/held";
 import { PERSON, WORLD_SCALE } from "./art/iso";
 import type { ItemArt } from "./art/items/kit";
-import { affectsLight, PX as LIGHT_PX, LightMap } from "./art/light";
+import { affectsLight, PX as LIGHT_PX, type LightMap, lightMapFor } from "./art/light";
 import { C } from "./art/palette";
 import { pawnContext } from "./art/pawn";
 import { loadPeople, people } from "./art/people-load";
@@ -1364,6 +1364,42 @@ export class WorldEngine {
     return this.objectViews.get(id)?.def;
   }
 
+  /** Another floor's things, drawn ahead (their art built, decoded and on the
+   *  GPU) so the first visit there doesn't build them all in one frame. A few
+   *  at a time; the textures stay in the shared cache (idle, under its budget). */
+  async prewarm(objects: WorldObjectDef[], map?: MapDef, each = 6): Promise<void> {
+    // its light (kept per floor, art/light.ts)
+    if (map && this.quality !== "low") lightMapFor(map, objects);
+    const prepare = (this.app.renderer as unknown as { prepare?: { upload(t: unknown): Promise<void> } }).prepare;
+    for (let i = 0; i < objects.length; i += each) {
+      for (const o of objects.slice(i, i + each)) {
+        const host = entry(o.kind).onSurface ? hostOf(objects, o) : undefined;
+        for (const p of objectParts(o, host)) {
+          const pa = p.art;
+          const art = pa?.get();
+          if (!pa || !art) continue;
+          // (ready may come at once, from the cache: let go after, either way)
+          let release: (() => void) | null = null;
+          let done = false;
+          release = acquireItem(
+            pa.key,
+            () => art.svg,
+            (t) => {
+              void (prepare?.upload(t) ?? Promise.resolve()).finally(() => {
+                done = true;
+                release?.();
+              });
+            },
+          );
+          if (done) release();
+        }
+      }
+      // (a frame between batches)
+      await new Promise((r) => setTimeout(r, 16));
+      if (this.destroyed) return;
+    }
+  }
+
   allObjects(): WorldObjectDef[] {
     return [...this.objectViews.values()].map((v) => v.def);
   }
@@ -2434,7 +2470,7 @@ export class WorldEngine {
     if (!this.lightDue || performance.now() < this.lightDue) return;
     this.lightDue = 0;
     const t = performance.now();
-    this.lightMap = new LightMap(this.map, this.allObjects());
+    this.lightMap = lightMapFor(this.map, this.allObjects());
     this.lightBakeMs = performance.now() - t;
     this.applyLight();
     this.lightApplyMs = performance.now() - t - this.lightBakeMs;

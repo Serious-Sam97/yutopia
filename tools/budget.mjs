@@ -7,7 +7,8 @@ import { gzipSync } from "node:zlib";
 // (the world page was 524.5 before pets, 2026-10-15; pets add ~3 KB of page code, the rest is lazy)
 // (raised to 545 on 2026-10-18 by the user's call: HEAD was 539.8 and jumping needs ~1.3 KB on the page)
 // (the world moved from /s/[spaceId] to / on 2026-10-18, one world; the lobby that was / is gone)
-const BUDGETS = { "/page": 545, "/login/page": 160 }; // KB gzip
+// (raised to 550 on 2026-10-19 by the user's call: floors without a hitch — docs/plan/26 — keep every floor ready)
+const BUDGETS = { "/page": 550, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;

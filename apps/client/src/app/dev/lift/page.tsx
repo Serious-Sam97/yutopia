@@ -3,6 +3,7 @@
 import { type AvatarLayers, DEFAULT_AVATAR } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { playSample, sample } from "@/world/sfx";
 
 // The elevator and the stairs, made properly — phase 0's prototype
 // (docs/plan/26-floor-transitions.md): the new models (world/tp/lift3d.ts,
@@ -16,8 +17,9 @@ import { useEffect, useRef, useState } from "react";
 //
 // The timeline (seconds): call 0.3 · the car arrives 2.0 (chime, doors open)
 // · in 3.3–5.0 · "4" pressed 5.3 · doors shut 6.0–7.1 · the ride 7.3–11.5
-// (G → 4) · chime 11.6, doors open 11.8–12.9 · out. Sounds are stand-ins
-// (synthesised) until the CC0 samples are in. In the iso shot the walls
+// (G → 4) · chime 11.6, doors open 11.8–12.9 · out. Sounds: the CC0 samples
+// in public/sfx where they're there (world/sfx.ts), synthesised stand-ins for
+// the rest. In the iso shot the walls
 // towards the camera are cut, as the iso view's "cut" walls.
 
 type Scene = "landing" | "car" | "ride" | "stairs" | "iso" | "isostairs";
@@ -106,9 +108,32 @@ function sounds() {
     g.gain.exponentialRampToValueAtTime(peak, at + a);
     g.gain.exponentialRampToValueAtTime(0.0001, at + a + d);
   };
+  // the recorded samples (world/sfx.ts), where they're in public/sfx: each one
+  // there replaces its stand-in below
+  const bufs = new Map<string, AudioBuffer>();
+  for (const n of [
+    "lift/button",
+    "lift/chime",
+    "lift/door-open",
+    "lift/door-close",
+    "lift/ride.wav",
+    "stairs/door-open",
+    "stairs/door-close",
+    "stairs/step-1",
+    "stairs/step-2",
+    "stairs/step-3",
+    "stairs/step-4",
+  ])
+    void sample(ctx, n).then((b) => b && bufs.set(n, b));
+  const rec = (n: string, o: Parameters<typeof playSample>[2] = {}) => {
+    const b = bufs.get(n);
+    return b ? playSample(ctx, b, { out, ...o }) : null;
+  };
   return {
     ctx,
+    recorded: () => [...bufs.keys()],
     click() {
+      if (rec("lift/button")) return;
       const at = ctx.currentTime;
       const n = noise(0.05);
       const f = ctx.createBiquadFilter();
@@ -128,6 +153,11 @@ function sounds() {
     },
     // a bell: one tone going up, two going down (the real convention)
     chime(up: boolean) {
+      // (one tone going up; two, the second lower, going down)
+      if (rec("lift/chime")) {
+        if (!up) rec("lift/chime", { at: ctx.currentTime + 0.42, rate: 0.8 });
+        return;
+      }
       const at = ctx.currentTime;
       const notes = up ? [1318.5] : [1318.5, 1046.5];
       notes.forEach((hz, i) => {
@@ -147,7 +177,9 @@ function sounds() {
       });
     },
     // the doors: a motor's whirr and the leaves' slide
-    doors(len: number) {
+    doors(len: number, opening: boolean) {
+      // (the recording's length fitted to the doors')
+      if (rec(opening ? "lift/door-open" : "lift/door-close", { rate: 1.7 / len })) return;
       const at = ctx.currentTime;
       const o = ctx.createOscillator();
       o.type = "sawtooth";
@@ -186,6 +218,11 @@ function sounds() {
     },
     // the ride: a hum and air rising and falling with the speed
     ride(len: number) {
+      const stop = rec("lift/ride.wav", { loop: true, fadeIn: 0.6, gain: 0.8 });
+      if (stop) {
+        setTimeout(() => stop(0.6), Math.max(0, len - 0.6) * 1000);
+        return;
+      }
       const at = ctx.currentTime;
       const o = ctx.createOscillator();
       o.frequency.value = 48;
@@ -210,7 +247,13 @@ function sounds() {
       n.connect(lp).connect(g2).connect(out);
       n.start(at);
     },
+    // the stairs' fire door (no stand-in: silent without its sample)
+    fireDoor(open: boolean) {
+      rec(open ? "stairs/door-open" : "stairs/door-close", { gain: 0.9 });
+    },
     step() {
+      if (rec(`stairs/step-${1 + Math.floor(Math.random() * 4)}`, { gain: 0.7, rate: 0.95 + Math.random() * 0.1 }))
+        return;
       const at = ctx.currentTime;
       const n = noise(0.08);
       const f = ctx.createBiquadFilter();
@@ -242,6 +285,7 @@ export default function LiftPrototype() {
   const [scene, setScene] = useState<Scene>("landing");
   const [clock, setClock] = useState(0);
   const [audio, setAudio] = useState(false);
+  const [recorded, setRecorded] = useState(0);
   const snd = useRef<ReturnType<typeof sounds> | null>(null);
 
   useEffect(() => {
@@ -472,6 +516,7 @@ export default function LiftPrototype() {
       ];
       for (const p of people) world.add(p.m.root);
 
+      let well: InstanceType<typeof S.Stairwell> | null = null; // (the stairs shot's)
       // ── which shot ──
       const cam = new THREE.PerspectiveCamera(sc === "car" || sc === "ride" ? 74 : 38, W / H, 0.05, 200);
       let ortho: InstanceType<typeof THREE.OrthographicCamera> | null = null;
@@ -510,7 +555,7 @@ export default function LiftPrototype() {
         // wall is behind, the core's own walls show as they would)
       } else if (sc === "stairs") {
         world.background = new THREE.Color("#cfcac1");
-        const well = new S.Stairwell({ floor: "3", next: "FLOOR 3 · LOBBY ↓ G", storeys: 2, walls: ["w", "s"] });
+        well = new S.Stairwell({ floor: "3", next: "FLOOR 3 · LOBBY ↓ G", storeys: 2, walls: ["w", "s"] });
         world.add(well.root);
         const fl = new THREE.Mesh(
           new THREE.BoxGeometry(4.4, 0.25, 1.2),
@@ -618,15 +663,23 @@ export default function LiftPrototype() {
         }
         // the sounds (playing, after a click)
         const a = snd.current;
-        if (a && frozen === null) {
+        // the stairs (playing): the fire door swings open and shut, someone climbs
+        const STAIRS = { open: [1.0, 1.7] as const, shut: [3.8, 4.6] as const };
+        if (well && inStairs && frozen === null)
+          well.setDoor(L.doorEase(between(t, STAIRS.open)) * (1 - L.doorEase(between(t, STAIRS.shut))));
+        if (a && frozen === null && inStairs) {
+          fire("fd-open", t, STAIRS.open[0], () => a.fireDoor(true));
+          fire("fd-shut", t, STAIRS.shut[1] - 0.15, () => a.fireDoor(false));
+          for (let k = 0; k < 9; k++) fire(`sstep${k}`, t, 1.4 + k * 0.48, () => a.step());
+        } else if (a && frozen === null) {
           fire("call", t, T.call, () => a.click());
           fire("arrive", t, T.arrive, () => a.chime(false));
-          fire("open", t, T.open[0], () => a.doors(T.open[1] - T.open[0]));
+          fire("open", t, T.open[0], () => a.doors(T.open[1] - T.open[0], true));
           fire("press", t, T.press, () => a.click());
-          fire("shut", t, T.shut[0], () => a.doors(T.shut[1] - T.shut[0]));
+          fire("shut", t, T.shut[0], () => a.doors(T.shut[1] - T.shut[0], false));
           fire("ride", t, T.ride[0], () => a.ride(T.ride[1] - T.ride[0]));
           fire("chime", t, T.chime, () => a.chime(true));
-          fire("open2", t, T.open2[0], () => a.doors(T.open2[1] - T.open2[0]));
+          fire("open2", t, T.open2[0], () => a.doors(T.open2[1] - T.open2[0], true));
           for (let k = 0; k < 6; k++) fire(`step${k}`, t, T.walkIn[0] + k * 0.3, () => a.step());
         }
         lastT = t;
@@ -683,10 +736,11 @@ export default function LiftPrototype() {
             snd.current ??= sounds();
             void snd.current.ctx.resume();
             setAudio(true);
+            setTimeout(() => setRecorded(snd.current?.recorded().length ?? 0), 1500);
           }}
           style={{ padding: "4px 8px", borderRadius: 6, background: audio ? "#4d6b52" : "rgba(30,20,12,.8)" }}
         >
-          {audio ? "sound on" : "▶ sound"}
+          {audio ? `sound on · ${recorded} recorded` : "▶ sound"}
         </button>
         <span style={{ padding: "4px 8px" }}>t {clock.toFixed(1)} s</span>
       </div>

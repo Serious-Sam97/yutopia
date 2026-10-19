@@ -1,7 +1,7 @@
-import { isOpening, type MapDef, type WorldObjectDef } from "@yutopia/shared";
+import type { MapDef, WorldObjectDef } from "@yutopia/shared";
 import { CanvasTexture, LinearFilter, type Material, SRGBColorSpace, Vector2 } from "three";
 import { daylight } from "../art/daylight";
-import { LightMap, lightSources } from "../art/light";
+import { type LightMap, lightMapFor, lightSig } from "../art/light";
 
 // The iso view's light, in 3D: the same baked light map (lamps and windows
 // ray-marched across the tiles, walls and shut doors blocking them) plus the
@@ -30,17 +30,18 @@ export class Light3 {
 
   // Bake again when what gives or blocks light changed (cheap to call often).
   update(map: MapDef, objects: WorldObjectDef[]) {
-    // doors (open or shut) and windows: what lets light through walls
-    const doors = objects
-      .filter((o) => isOpening(o.kind))
-      .map((o) => `${o.kind},${o.x},${o.y},${o.rot ?? 0},${o.props?.state ?? ""}`)
-      .join(";");
-    const sig = `${map.width}x${map.height}|${map.hWalls.join("")}|${map.vWalls.join("")}|${JSON.stringify(lightSources(objects))}|${doors}`;
+    const sig = lightSig(map, objects);
     if (sig === this.sig) return;
     this.sig = sig;
-    this.lm = new LightMap(map, objects);
+    // (each floor's bake kept, shared with the iso view: art/light.ts)
+    this.lm = lightMapFor(map, objects, sig);
     this.uniforms.lmSize.value.set(map.width, map.height);
     this.composite();
+  }
+
+  /** Bake a floor's light ahead (the view warming a floor up), not shown yet. */
+  prebake(map: MapDef, objects: WorldObjectDef[]) {
+    lightMapFor(map, objects);
   }
 
   setHour(h: number) {

@@ -6,7 +6,7 @@ import { Grid, moveStep, WALK_SPEED } from "./grid.ts";
 import { hearingGain } from "./hearing.ts";
 import { type Height, stepHeight } from "./jump.ts";
 import { across, floorsOf, levelMap, objLevel, STOREY } from "./levels.ts";
-import { liftFront } from "./lift.ts";
+import { liftFront, liftMotion } from "./lift.ts";
 import { areaAt, type MapDef } from "./map.ts";
 import { blankMap, layoutFromMap, mapFromLayout, validLayout } from "./map-edit.ts";
 import { studio } from "./maps/studio.ts";
@@ -207,4 +207,23 @@ test("a smaller studio: the core goes where it fits (and the map keeps where)", 
     assert.ok(at.x >= c.x && at.x < c.x + CORE.w && at.y >= c.y && at.y < c.y + CORE.h, `${o.id} in the core`);
   }
   assert.deepEqual(mapFromLayout("lab", "Lab", layoutFromMap(b.map)).core, c);
+});
+
+test("an elevator's motion: the doors slide over their phase, the car rides between floors", () => {
+  const stop = (props: Record<string, unknown>) => ({ props: { level: 2, ...props } });
+  // opening on its floor: shut at first, open by the end, eased between
+  const opening = stop({ ph: "opening", len: 1000, at: 2, to: 2 });
+  assert.equal(liftMotion(opening, 2, 0).doors, 0);
+  assert.ok(liftMotion(opening, 2, 0.5).doors > 0.3 && liftMotion(opening, 2, 0.5).doors < 0.7);
+  assert.equal(liftMotion(opening, 2, 1.2).doors, 1);
+  // another floor's stop: its doors stay shut, the car isn't there
+  assert.equal(liftMotion(opening, 3, 0.8).doors, 0);
+  assert.equal(liftMotion(opening, 3, 0.8).here, false);
+  // a ride from 4 to 0 in 4 s: going down, halfway at the middle, there at the end
+  const ride = stop({ ph: "moving", len: 4000, at: 4, to: 0 });
+  assert.equal(liftMotion(ride, 4, 0).dir, -1);
+  assert.ok(Math.abs(liftMotion(ride, 4, 2).car - 2) < 0.01);
+  assert.ok(Math.abs(liftMotion(ride, 4, 4).car - 0) < 0.01);
+  // a stop from before the motion was published: its door as it was
+  assert.equal(liftMotion({ props: { door: "open", at: 2 } }, 2, 0).doors, 1);
 });

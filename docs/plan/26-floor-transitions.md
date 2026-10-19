@@ -1,4 +1,4 @@
-# Elevators, stairs and changing floors — done properly (plan — decided 2026-10-19, phase 0 delivered for review)
+# Elevators, stairs and changing floors — done properly (plan — decided 2026-10-19; phases 0–2 and 4 delivered)
 
 > Follows `25-building-floors.md`. The post-launch bugs 5, 6 and 9, and the
 > user's verdict after the fixes (2026-10-19): "the elevator and stairs are
@@ -174,4 +174,130 @@ Seen while making them, for phases 1–4:
   PMREM of a room); `World3` gets one in phase 2.
 - The people's 3D models stand at the right scale in a 2 × 2 car: two fit
   comfortably, four is the most.
+
+## Phase 1 — no lag: delivered (2026-10-19)
+
+Phase 0 approved by the user ("Aprovado"). What made a floor change stall,
+measured on the machine's GPU (Apple M4 Pro through ANGLE/Metal; headless
+Chrome's software GPU is ~10× slower at everything and was misleading):
+
+| Worst frame of a floor change | Before | Now, first visit | Now, after |
+|---|---|---|---|
+| 3D | 120–270 ms, every change | 33–50 ms | 17–33 ms |
+| Iso | ~170 ms (first visit to G) | 50–67 ms | 17–33 ms |
+
+- **3D** (`tp/view.ts`): every floor's `World3` is built once and kept
+  (`floors`); a change only moves them (mine at the origin, the ones below
+  where they are, the ones above hidden) and switches which one takes the
+  light map (`World3.setLight` — both shader variants stay compiled). The
+  campus is built once (again only when the studio's windows change). The
+  floors not built yet are built ahead, one every 0.6 s, and drawn once off
+  screen into a tiny target (both light variants, in the colour space the room
+  is drawn in) so their geometry, textures and shaders are on the GPU before
+  anyone goes there (`warmUp`); the building's clipped glass too.
+- **Light maps** (`art/light.ts`, `lightMapFor`): a floor's bake is kept and
+  shared by both views; the other floors are baked ahead.
+- **Iso** (`engine.prewarm`, `controller.prewarmFloors`): the other floors'
+  things have their art built, decoded and uploaded (Pixi's `prepare`) a few
+  seconds after arriving; in 3D the iso engine follows a floor change over the
+  next two frames (`isoSwap`) instead of in the same one.
+- Left: the first iso visit to the ground floor still uploads its big baked
+  floor in one frame (~67 ms); the iso slide of phase 4 is where that goes.
+- Check: `e2e/floors-perf.spec.ts` (opt-in, `YUTOPIA_GPU=1`: six changes,
+  both views; first visits under 85 ms, the rest under 55 ms).
+
+## Sounds: the CC0 shortlist (approved 2026-10-19: the first of each)
+
+Licenses checked on each page. Freesound needs a (free) account to download;
+OpenGameArt and Kenney don't. The user downloads the Freesound ones into
+`design/sounds/raw/` (its README lists them; the originals stay out of git);
+the doors (OpenGameArt) are in: `public/sfx/lift/door-open.mp3` and
+`door-close.mp3` (cut to 1.7 s, levelled, mono MP3, 18 KB each; credits in
+`public/sfx/CREDITS.md`). `world/sfx.ts` loads them; `/dev/lift` plays each
+recorded one in place of its stand-in.
+
+| Sound | Pick | Alternative |
+|---|---|---|
+| Arrival chime | gristi, *snd_elevator_power_down* (Freesound 562188, 0.4 s single ding) | uniuniversal, *Elevator_DingDong* (634327, two-tone, trim) · fvcalderan, *Elevator ding* (OpenGameArt 172356, no account, synthetic) |
+| Doors | PagDev, *Elevator_Door_Opening* (OpenGameArt copy, no account; trim to ~1.5 s, reversed for the close) | tiptoe84, *ElevatorDoor2* (155897, more motor) |
+| Ride hum | Julien_Matthey, *JM_AMB_INT_Lift 01* (112354; a loop cut from the travel) | simplen00b, *elev_loop* (182331, ready loop, 1.5 s) |
+| Button | paulfabb, *Elevator Button* (579078) | jchamusantana, *Button Clicks* (634354) |
+| Stair steps | itinerantmonk108, *walk and run up stairs* (553902; cut 4–6 steps) | G.Lamont, *Concrete Stairs* (118041, mono) |
+| Fire door | wlabarron, *Push-bar fire door opening* + *Fire door closing* (475312 + 475313) | klangfabrik, *stairwelldoorsandpanicbar* (155752) |
+
+**Freesound was down (2026-10-19)** → the user: make them all, recorded ones
+replace them later if needed. `tools/sfx-synth.mjs` makes each one as the real
+thing works (Node, no dependencies; ffmpeg encodes): the chime (a struck tuned
+bar, A5, its 4th and 10th partials), the button (the switch's click, a beep),
+the ride (the hoist motor's 50 Hz hum and harmonics, shaft air, a faint drive
+whine — a 4 s seamless loop, kept WAV: an MP3's padding would gap it), four
+steps on concrete (heel, roll, toe, the stairwell's room), the fire door (the
+push bar's latch with ringing modes and a hinge creak; the close: a heavy thud,
+the latch, a frame rattle). About 400 KB in all, fetched on demand.
+`/dev/lift` plays all eleven (the stairs shot: the fire door swings and someone
+climbs).
+
+## Phase 2 — the new elevator in the game: delivered (2026-10-19)
+
+- **The motion from the server** (`features/lifts.ts`): every stop's props
+  carry the car's phase (`ph`), how long it lasts (`len`, ms: the doors
+  opening 1.1 s, closing 1.3 s, a ride) and where it's going (`to`); the walls
+  in the grid change only with the doors or the car (as before). Shared
+  `liftMotion` (lift.ts) turns props + seconds since into the doors' opening
+  (eased), the car's height (an S-curve between floors), its direction; the
+  clients time it from when they heard of it (`controller.liftSince`) —
+  everyone sees the doors slide together.
+- **3D** (`tp/lift3d.ts` `Lifts3`, in `tp/view.ts`): the phase-0 landing and car
+  on every stop of the floors drawn, instead of the old box drawing (World3
+  leaves elevators out); doors, display, lantern, the panel's lit floor from the
+  motion; clickable. No extra lights (the scene's light count stays); a room
+  environment map for the lifts' own metal only.
+- **The camera rides in the car**: standing in one (3D), the camera goes to its
+  back corner over your shoulder, to the doors and the panel (`liftCam`, through
+  the view's game camera); the car sways a hair while it travels. The floor
+  changes while the doors are shut: they open on the new one.
+- **Sounds** (`world/lift-sound.ts`): the panel's and the call's button at once,
+  the doors (their length fitted to the phase), the chime as a car arrives (a
+  second, lower tone for one that came down), the ride's hum looped while I'm in
+  it; on my floor only, fading with the distance, through the effects volume.
+- **Iso** (`art/items/building.ts`): the elevator drawn in the new style as the
+  iso camera sees it — from inside, the car cut away low (steel, walnut rail,
+  its panel), the portal and the doors' inner faces sliding apart in six steps
+  (`controller.liftsIso`: each step's drawing cached once), the display lit.
+- Checked: shared 135 (+1: the motion), world-server 68, client 20,
+  typecheck, Biome on the touched files, build + budget: world page 547.0 KB ≤
+  550, item art 39.9 ≤ 40. Live in the dev stack (GPU): two people call a car,
+  walk in, ride 4 → G with the camera in the car, doors open on G; iso doors
+  stepping 0 → 1 in ~1.1 s.
+- Left for phase 3/4: a car seen travelling from outside (through an open
+  landing door it's the empty shaft today); the stairs' new model in the game.
+
+## Phase 4 — the new stairs in the game: delivered (2026-10-19)
+
+- **3D** (`tp/stairs3d.ts` `Stairs3`, in `tp/view.ts`): each floor's stairwell
+  drawn with the phase-0 model instead of the old boxes (concrete flights and
+  their soffit, dark nosings, the balustrade with one handrail round the turn,
+  wall rails, the floor stencilled at the half landing with a translated strip,
+  a bulkhead — no extra lights); the core's own walls stay the map's. The fire
+  doors are a pair (the stairs' doorway is two tiles) and swing open for
+  whoever comes near, either side, shutting behind them.
+- **Click to climb** (`controller.climbAt` / `climb`, shared
+  `stairsWayUp`): a click on a stairwell's flights — my floor's own stairs (the
+  up flight's side) or the ones coming up from below (the down flight's side),
+  in iso on the tiles, in 3D on the stairs — walks me to the door, up or down
+  the flights and out on the other floor's landing. The rest of a walk carries
+  on across the floor change (converted to the new floor's coords) instead of
+  stopping there.
+- **Sounds**: steps on concrete treads while on the stairs (their own rhythm),
+  the fire doors opening and closing, on my floor, fading with the distance.
+- **Iso** (`art/items/building.ts`): dark anti-slip nosings, a low concrete
+  spine between the flights instead of the plaster wall.
+- Checked: live in the dev stack (GPU, 3D): a click on floor 3's flight → up to
+  4 (the walk carried across the change), a click down the well from 4 → back
+  to 3; worst frame 50 ms. Shared 135, client 20, typecheck, Biome, build +
+  budget: world page 547.8 KB ≤ 550, item art 39.9 ≤ 40. New e2e in
+  `floors.spec.ts` (not run: the e2e swap the dev world to their fixtures).
+- Not done: the floor above fading in as you arrive (it still appears at the
+  switch); "walk to" someone on another floor through the stairs; pets walking
+  the stairs (they still come along); the iso slide at the switch.
 
