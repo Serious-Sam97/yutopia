@@ -1,6 +1,6 @@
+import { api } from "../api.ts";
 import { config } from "../config.ts";
 import type { WorldRoom } from "../WorldRoom.ts";
-import { api } from "../api.ts";
 import { registerFeature } from "./index.ts";
 
 // Your own arrival point: anyone can pick a tile they can walk to (from where
@@ -22,12 +22,13 @@ registerFeature((room: WorldRoom) => {
     const now = Date.now();
     if (now - (last.get(client.sessionId) ?? 0) < 500) return;
     last.set(client.sessionId, now);
-    let at: { x: number; y: number } | null = null;
+    let at: { x: number; y: number; level: number } | null = null;
     if (m.at !== null) {
       const x = Math.floor(Number(m.at?.x));
       const y = Math.floor(Number(m.at?.y));
       if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      at = { x: x + 0.5, y: y + 0.5 };
+      // (on the floor you're on)
+      at = { x: x + 0.5, y: y + 0.5, level: p.level };
       const why = room.arrivalProblem(p, at, p);
       if (why) {
         tell(client.sessionId, p.uid);

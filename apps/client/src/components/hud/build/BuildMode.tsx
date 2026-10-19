@@ -8,6 +8,7 @@ import { type BuildTool, hud, toast, useHud } from "@/world/store";
 import { Brand } from "../../Brand";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
+import { floorLabel } from "../LiftPanel";
 import { Catalog, sizeLabel } from "./Catalog";
 import { DesksPanel } from "./DesksPanel";
 import { DeskDialog, RoomDialog } from "./Dialogs";
@@ -130,6 +131,7 @@ function BuildTopBar() {
           {[worldName, area].filter(Boolean).join(" · ")}
         </span>
       </div>
+      <FloorPicker />
       <div className="flex-1" />
       <button
         type="button"
@@ -913,5 +915,76 @@ function ItemToolbar() {
         {btn("bin", "kRemove", () => w?.buildKey("delete"))}
       </div>
     </div>
+  );
+}
+
+// Which floor I'm building (shared levels.ts): a button a floor, mine lit (a
+// click, or PgUp / PgDn, takes me there); a blank floor on top, the top one
+// taken away (never the home floor).
+function FloorPicker() {
+  const t = useTr();
+  const w = useWorld();
+  const floor = useHud((s) => s.floor);
+  const floors = useHud((s) => s.floors);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key !== "PageUp" && e.key !== "PageDown") return;
+      const i = floors.indexOf(floor) + (e.key === "PageUp" ? 1 : -1);
+      if (i < 0 || i >= floors.length) return;
+      e.preventDefault();
+      w?.goToFloor(floors[i]);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [w, floor, floors]);
+  if (!w) return null;
+  const top = floors[floors.length - 1];
+  const home = w.building ? (w.building.floor ?? 0) : 0;
+  return (
+    <fieldset className="hidden md:flex items-center gap-1 shrink-0 border-0 p-0 m-0" aria-label={t("floor")}>
+      <span className="mono text-[10px] mr-0.5" style={{ color: "var(--cream-dim)" }}>
+        {t("floor").toUpperCase()}
+      </span>
+      {floors.map((f) => (
+        <button
+          key={f}
+          type="button"
+          className="w-[30px] h-[30px] rounded-[7px] lcd text-[18px] leading-none"
+          aria-pressed={f === floor}
+          data-floor={f}
+          title={`${w.floorName(f)} (PgUp / PgDn)`}
+          onClick={() => w.goToFloor(f)}
+          style={
+            f === floor
+              ? { background: "linear-gradient(180deg,#ffc477,#ffa630)", color: "#2a1a12" }
+              : { border: "1px solid var(--edge)", color: "var(--cream)" }
+          }
+        >
+          {floorLabel(f)}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="ghost-btn h-[30px] px-2 mono text-[11px]"
+        title={t("floorAdd")}
+        onClick={() => w.send("level:add", {})}
+      >
+        + {t("floorAdd")}
+      </button>
+      {top !== home && (
+        <button
+          type="button"
+          className="ghost-btn h-[30px] px-2 mono text-[11px]"
+          title={t("floorRemove")}
+          onClick={() => {
+            if (window.confirm(t("floorRemoveConfirm").replace("{n}", floorLabel(top))))
+              w.send("level:remove", { level: top });
+          }}
+        >
+          − {floorLabel(top)}
+        </button>
+      )}
+    </fieldset>
   );
 }

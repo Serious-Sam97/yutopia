@@ -1,6 +1,6 @@
 "use client";
 
-import { Grid, isTheme, openingsIntoWalls, screenInputToWorld, splitAll, studio } from "@yutopia/shared";
+import { Grid, openingsIntoWalls, screenInputToWorld, splitAll, studio } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 // (static, like the world page: the lazy chunks it shares — themes, items,
@@ -11,7 +11,7 @@ import { WorldEngine } from "@/world/engine";
 // wander and sit, seen by a three.js camera behind you — or, with V, by the
 // normal iso engine at the same spot, from the same people data. Dev only (or
 // a build with NEXT_PUBLIC_YUTOPIA_SHOTS=1).
-//   /dev/3p?crowd=8&hour=12&cam=chase|free|first&view=3p|iso&theme=clouds&x=&y=&yaw=&pitch=&dist=&frozen=1
+//   /dev/3p?crowd=8&hour=12&cam=chase|free|first&view=3p|iso&x=&y=&yaw=&pitch=&dist=&frozen=1
 //   &me=phone:text|held:mug|type|busy:coffee|emote:wave|act:highfive  (what you're doing: first person's hands)
 type Tp = typeof import("@/world/tp/view");
 type Demo = typeof import("@/world/tp/demo");
@@ -52,10 +52,9 @@ export default function ThirdPersonDemo() {
 
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    const theme = q.get("theme");
     // as the world-server loads it: doors and windows set into the walls
     const into = openingsIntoWalls(studio, splitAll(studio.objects).objects);
-    const map = { ...into.map, theme: isTheme(theme) ? theme : "clouds" };
+    const map = into.map;
     const objects = into.objects;
     // ?slot=<track id>: a slot-car table with that track, on the first clear
     // 4 × 3 patch of floor near where you start (a look at the track in 3D)
@@ -125,7 +124,7 @@ export default function ThirdPersonDemo() {
                   : doing === "act"
                     ? { act: what || "wave", actAt: since }
                     : null;
-      const view = new ThirdPersonView(map, objects, P, items, { theme: map.theme, themes });
+      const view = new ThirdPersonView(map, objects, P, items, { themes });
       view.mount(tpHost.current);
       cleanup.push(() => view.destroy());
       const st = view.world.stats;

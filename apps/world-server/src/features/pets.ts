@@ -5,6 +5,7 @@ import {
   dirFromDelta,
   findPath,
   isToyHeld,
+  objLevel,
   type Point,
   RUN_SPEED,
   THROWN,
@@ -88,10 +89,10 @@ import {
   WAKE_AT,
   XP,
 } from "@yutopia/shared/pets";
-import { config } from "../config.ts";
-import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
-import { Pet, PetBattle, type Player, Toy as ToyState } from "../schema.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { Pet, PetBattle, type Player, Toy as ToyState } from "../schema.ts";
+import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Pets (docs/plan/13-pets.md, rules in shared/pets.ts). A pet is its owner's
@@ -315,7 +316,7 @@ registerFeature((room: WorldRoom) => {
   const go = (pet: Pet, to: Point): boolean => {
     const r = runs.get(pet.id);
     if (!r) return false;
-    const g = room.gridFor(pet.uid);
+    const g = room.gridFor(pet.uid, pet.floor);
     const p = findPath(g, pet, to, g.width * g.height);
     if (!p) return false;
     r.path = p;
@@ -323,8 +324,9 @@ registerFeature((room: WorldRoom) => {
   };
   // Beside someone: at their side first (where a camera behind them still
   // sees it), then ahead, behind last; among equals the nearest spot.
-  const goNear = (pet: Pet, p: Point & { d?: number }, radius = 1.3): boolean => {
-    const g = room.gridFor(pet.uid);
+  const goNear = (pet: Pet, p: Point & { d?: number; level?: number }, radius = 1.3): boolean => {
+    if (p.level !== undefined && p.level !== pet.floor) return false; // (someone on another floor)
+    const g = room.gridFor(pet.uid, pet.floor);
     const [fx, fy] = FACING[(p.d ?? 0) & 7];
     const ahead = Math.atan2(fy, fx);
     const spots: { x: number; y: number; rank: number }[] = [];
@@ -365,7 +367,9 @@ registerFeature((room: WorldRoom) => {
       pet.actY = at.y;
     }
   };
-  const objects = () => [...room.state.objects.values()].map(fromSchema);
+  // the things on a floor (a pet only knows the floor it's on)
+  const objects = (floor: number) =>
+    [...room.state.objects.values()].map(fromSchema).filter((o) => objLevel(o, room.map) === floor);
   const portions = (o: WorldObjectDef) => Number(o.props?.portions ?? 0);
   const saveObject = async (o: WorldObjectDef) => {
     const saved = config.offline ? o : (await api.putObject(o).catch(() => ({ object: o }))).object;
@@ -411,9 +415,7 @@ registerFeature((room: WorldRoom) => {
     const rec = records.get(pet.id);
     if (rec) Object.assign(rec, patch);
     if (config.offline) return;
-    await api
-      .savePet(pet.uid, Number(pet.id), patch)
-      .catch((e) => console.warn("[pets] save", (e as Error).message));
+    await api.savePet(pet.uid, Number(pet.id), patch).catch((e) => console.warn("[pets] save", (e as Error).message));
   };
   const remove = async (uid: number, id: number) => {
     if (config.offline) {
@@ -439,7 +441,8 @@ registerFeature((room: WorldRoom) => {
     pet.outfit = JSON.stringify(rec.outfit);
     // at their side (not ahead, where a camera behind them can't see it)
     const [fx, fy] = FACING[p.d & 7];
-    const g = room.gridFor(p.uid);
+    pet.floor = p.level;
+    const g = room.gridFor(p.uid, p.level);
     const want = [
       { x: p.x - fy * 1.3, y: p.y + fx * 1.3 },
       { x: p.x + fy * 1.3, y: p.y - fx * 1.3 },
@@ -477,7 +480,7 @@ registerFeature((room: WorldRoom) => {
       lastPetted: now,
       lastNear: now,
       lastLooked: now,
-      seen: new Set(objects().map((o) => o.id)),
+      seen: new Set(objects(pet.floor).map((o) => o.id)),
       wantAt: 0,
       calledAt: 0,
       begAt: 0,
@@ -775,7 +778,7 @@ registerFeature((room: WorldRoom) => {
   // Where a throw from `from` towards `to` lands: along the line, as far as
   // the floor goes and never across a wall; the toy stops where it's stopped.
   const landing = (uid: number, from: Point, to: Point): Point => {
-    const g = room.gridFor(uid);
+    const g = room.gridFor(uid, [...owners().values()].find((q) => q.uid === uid)?.level);
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const d = Math.hypot(dx, dy);
@@ -1020,7 +1023,7 @@ registerFeature((room: WorldRoom) => {
       const ux = pb.x - pa.x;
       const uy = pb.y - pa.y;
       const l = Math.hypot(ux, uy) || 1;
-      const g = room.gridFor(A.uid);
+      const g = room.gridFor(A.uid, A.floor);
       // two different tiles along the line between the owners, a step apart
       let sa: Point | null = null;
       let sb: Point | null = null;
@@ -1141,8 +1144,8 @@ registerFeature((room: WorldRoom) => {
   const sleep = (pet: Pet) => {
     pet.mode = "sleep";
     pet.act = "";
-    const bed = objects().find(
-      (o) => o.kind === "pet_bed" && findPath(room.gridFor(pet.uid), pet, { x: o.x + 0.5, y: o.y + 0.5 }),
+    const bed = objects(pet.floor).find(
+      (o) => o.kind === "pet_bed" && findPath(room.gridFor(pet.uid, pet.floor), pet, { x: o.x + 0.5, y: o.y + 0.5 }),
     );
     if (bed) go(pet, { x: bed.x + 0.5, y: bed.y + 0.5 });
     else {
@@ -1172,7 +1175,7 @@ registerFeature((room: WorldRoom) => {
   const byDistance = (list: WorldObjectDef[], pet: Pet) =>
     [...list].sort((a, b) => Math.hypot(a.x - pet.x, a.y - pet.y) - Math.hypot(b.x - pet.x, b.y - pet.y));
   const centre = (o: WorldObjectDef) => ({ x: o.x + 0.5, y: o.y + 0.5 });
-  const reachable = (pet: Pet) => (o: WorldObjectDef) => !!findPath(room.gridFor(pet.uid), pet, centre(o));
+  const reachable = (pet: Pet) => (o: WorldObjectDef) => !!findPath(room.gridFor(pet.uid, pet.floor), pet, centre(o));
   // a bowl with something in it: over to it, and a portion gone (finishAct eat / drink)
   const goEat = (pet: Pet, r: Run, bowl: WorldObjectDef) => {
     r.bowl = bowl.id;
@@ -1191,7 +1194,7 @@ registerFeature((room: WorldRoom) => {
     }
     if (
       noise < 0.4 &&
-      objects().some(
+      objects(pet.floor).some(
         (o) => isRadio(o.kind) && o.props?.playing === true && Math.hypot(o.x + 0.5 - pet.x, o.y + 0.5 - pet.y) < 5,
       )
     )
@@ -1238,7 +1241,7 @@ registerFeature((room: WorldRoom) => {
       lastPetted: r.lastPetted,
       lastNear: r.lastNear,
       lastLooked: r.lastLooked,
-      newThings: objects().filter((o) => !r.seen.has(o.id)).length,
+      newThings: objects(pet.floor).filter((o) => !r.seen.has(o.id)).length,
       pets: friends.length,
     });
     const was = r.intent;
@@ -1253,7 +1256,9 @@ registerFeature((room: WorldRoom) => {
         Math.random() < 0.04 &&
         ![...owners().values()].some((q) => Math.hypot(q.x - pet.x, q.y - pet.y) < 4)
       ) {
-        const tv = byDistance(objects().filter(isTv), pet).find((o) => Math.hypot(o.x - pet.x, o.y - pet.y) < 9);
+        const tv = byDistance(objects(pet.floor).filter(isTv), pet).find(
+          (o) => Math.hypot(o.x - pet.x, o.y - pet.y) < 9,
+        );
         if (tv && goNear(pet, centre(tv), 1.6)) {
           r.phase = 0;
           act(pet, `watch:${tv.id}`, centre(tv));
@@ -1268,7 +1273,7 @@ registerFeature((room: WorldRoom) => {
   const plan = (pet: Pet, r: Run, p: Player, now: number, friends: Pet[]) => {
     const drive = r.intent?.drive;
     const n = needsOf(pet);
-    const g = room.gridFor(pet.uid);
+    const g = room.gridFor(pet.uid, pet.floor);
     const begin = (what: string, at?: Point) => {
       r.phase = 0;
       act(pet, what, at);
@@ -1278,7 +1283,7 @@ registerFeature((room: WorldRoom) => {
       case "thirst": {
         const kind = drive === "thirst" ? "water_bowl" : "pet_bowl";
         const full = byDistance(
-          objects().filter((o) => o.kind === kind && portions(o) > 0),
+          objects(pet.floor).filter((o) => o.kind === kind && portions(o) > 0),
           pet,
         ).find(reachable(pet));
         if (full) return goEat(pet, r, full);
@@ -1291,7 +1296,7 @@ registerFeature((room: WorldRoom) => {
         if (now - r.begAt < BEG_AGAIN_MS) return;
         r.begAt = now;
         const empty = byDistance(
-          objects().filter((o) => o.kind === kind),
+          objects(pet.floor).filter((o) => o.kind === kind),
           pet,
         ).find(reachable(pet));
         if (empty) {
@@ -1305,7 +1310,7 @@ registerFeature((room: WorldRoom) => {
         r.begAt = now;
         // its bed (or house) for a lie-down; taken: it sits beside it; none: its favourite spot
         const bed = byDistance(
-          objects().filter((o) => o.kind === "pet_bed" || o.kind === "pet_house"),
+          objects(pet.floor).filter((o) => o.kind === "pet_bed" || o.kind === "pet_house"),
           pet,
         ).find(reachable(pet));
         const taken =
@@ -1325,7 +1330,7 @@ registerFeature((room: WorldRoom) => {
         if (friends.length && Math.random() < 0.5) return romp(pet, r, friends[0]);
         if (pet.species === "cat" && Math.random() < 0.35) {
           const post = byDistance(
-            objects().filter((o) => o.kind === "scratch_post"),
+            objects(pet.floor).filter((o) => o.kind === "scratch_post"),
             pet,
           ).find((o) => Math.hypot(o.x - pet.x, o.y - pet.y) < 8);
           if (post && goNear(pet, centre(post), 0.9)) {
@@ -1347,7 +1352,7 @@ registerFeature((room: WorldRoom) => {
       }
       case "curiosity": {
         const fresh = byDistance(
-          objects().filter((o) => !r.seen.has(o.id)),
+          objects(pet.floor).filter((o) => !r.seen.has(o.id)),
           pet,
         );
         const target = fresh.find((o) => goNear(pet, centre(o), 1.0));
@@ -1365,7 +1370,7 @@ registerFeature((room: WorldRoom) => {
         if (now - r.begAt < BEG_AGAIN_MS) return;
         r.begAt = now;
         const den = byDistance(
-          objects().filter((o) => o.kind === "pet_house" || o.kind === "pet_bed"),
+          objects(pet.floor).filter((o) => o.kind === "pet_house" || o.kind === "pet_bed"),
           pet,
         ).find(reachable(pet));
         if (den && go(pet, centre(den))) return begin("hide");
@@ -1402,7 +1407,7 @@ registerFeature((room: WorldRoom) => {
       const dx = pet.x - q.x;
       const dy = pet.y - q.y;
       const k = 2 / Math.max(0.2, Math.hypot(dx, dy));
-      const to = room.gridFor(pet.uid).nearestOpen(pet.x + dx * k, pet.y + dy * k, 2);
+      const to = room.gridFor(pet.uid, pet.floor).nearestOpen(pet.x + dx * k, pet.y + dy * k, 2);
       if (to) go(pet, to);
       return;
     }
@@ -1450,7 +1455,7 @@ registerFeature((room: WorldRoom) => {
         if (what === "hide" && noiseAt(pet) > 0.2 && since < 60_000) break;
         pet.act = "";
         if (what === "seek") {
-          for (const o of objects()) r.seen.add(o.id);
+          for (const o of objects(pet.floor)) r.seen.add(o.id);
           r.lastLooked = now;
         }
         if (what === "watch") {
@@ -1495,7 +1500,7 @@ registerFeature((room: WorldRoom) => {
       case "zoom": {
         if (r.path.length) break;
         if (r.phase < 3) {
-          const g = room.gridFor(pet.uid);
+          const g = room.gridFor(pet.uid, pet.floor);
           let gone = false;
           for (let i = 0; i < 8 && !gone; i++) {
             const t = { x: pet.x + (Math.random() * 2 - 1) * 7, y: pet.y + (Math.random() * 2 - 1) * 7 };
@@ -1682,7 +1687,7 @@ registerFeature((room: WorldRoom) => {
             goNear(pet, p, 1.1);
           }
         } else if (def.run === "dart" && p && !r.path.length) {
-          const g = room.gridFor(pet.uid);
+          const g = room.gridFor(pet.uid, pet.floor);
           for (let i = 0; i < 6; i++) {
             const t = {
               x: p.x + (Math.random() * 2 - 1) * def.range,
@@ -1720,7 +1725,7 @@ registerFeature((room: WorldRoom) => {
     r.until = now + 2500 + Math.random() * 4000;
     if (roll < 0.3) {
       // a sniff about: a step or two nearby, still beside them
-      const g = room.gridFor(pet.uid);
+      const g = room.gridFor(pet.uid, pet.floor);
       const t = { x: p.x + (Math.random() * 2 - 1) * 1.6, y: p.y + (Math.random() * 2 - 1) * 1.6 };
       if (g.fits(t.x, t.y) && nearBy(g, p, t)) go(pet, t);
     } else if (roll < 0.45) {
@@ -1736,7 +1741,9 @@ registerFeature((room: WorldRoom) => {
         act(pet, `trick:${known[Math.floor(Math.random() * known.length)]}`);
       }
     } else if (roll < 0.74 && sp === "cat") {
-      const post = objects().find((o) => o.kind === "scratch_post" && Math.hypot(o.x + 0.5 - p.x, o.y + 0.5 - p.y) < 6);
+      const post = objects(pet.floor).find(
+        (o) => o.kind === "scratch_post" && Math.hypot(o.x + 0.5 - p.x, o.y + 0.5 - p.y) < 6,
+      );
       if (post && goNear(pet, { x: post.x + 0.5, y: post.y + 0.5, d: 0 }, 0.9)) {
         act(pet, "scratch");
         r.until = now + 7000;
@@ -1754,7 +1761,7 @@ registerFeature((room: WorldRoom) => {
     } else if (n.fun > 40) say(pet, "happy");
     // a parrot bobs to a radio playing near it
     if (sp === "parrot" && !pet.act && Math.random() < 0.25) {
-      const playing = objects().find(
+      const playing = objects(pet.floor).find(
         (o) => isRadio(o.kind) && o.props?.playing === true && Math.hypot(o.x + 0.5 - pet.x, o.y + 0.5 - pet.y) < 6,
       );
       if (playing) act(pet, "trick:dance");
@@ -1778,8 +1785,8 @@ registerFeature((room: WorldRoom) => {
   // somewhere open in the room (or anywhere), as far as it can find from
   // where it has stopped lately: a big open floor gets covered, not circled
   const spotIn = (pet: Pet, r: Run, a: AreaDef | null): Point | null => {
-    const g = room.gridFor(pet.uid);
-    const map = room.map;
+    const g = room.gridFor(pet.uid, pet.floor);
+    const map = room.levelMap(pet.floor);
     let best: Point | null = null;
     let far = -1;
     for (let i = 0; i < 16; i++) {
@@ -1797,7 +1804,7 @@ registerFeature((room: WorldRoom) => {
     return best;
   };
   const explore = (pet: Pet, r: Run, now: number) => {
-    const map = room.map;
+    const map = room.levelMap(pet.floor);
     const here = areaAt(map, pet.x, pet.y);
     if (here) r.visited.set(here.key, now);
     r.trail = [...r.trail.slice(-7), { x: pet.x, y: pet.y }];
@@ -1808,7 +1815,7 @@ registerFeature((room: WorldRoom) => {
       const area = map.areas.find((a) => a.key === tour.area) ?? null;
       // a thing in this room it hasn't had its nose in lately
       const things = byDistance(
-        objects().filter(
+        objects(pet.floor).filter(
           (o) => (!area || inArea(area, centre(o))) && now - (r.sniffed.get(o.id) ?? 0) > SNIFFED_AGAIN_MS,
         ),
         pet,
@@ -1917,6 +1924,20 @@ registerFeature((room: WorldRoom) => {
   };
 
   return {
+    // its owner went up or down (the stairs, an elevator): a pet with them comes
+    // along (they go together; a pet told to stay, or asleep, stays put)
+    levelChange(c, p) {
+      for (const pet of room.state.pets.values()) {
+        if (pet.sid !== c.sessionId || pet.battle || pet.mode === "sleep" || pet.mode === "stay") continue;
+        stop(pet);
+        pet.act = "";
+        pet.floor = p.level;
+        const g = room.gridFor(pet.uid, pet.floor);
+        const at = g.nearestOpen(p.x - 0.8, p.y + 0.8, 3) ?? { x: p.x, y: p.y };
+        pet.x = at.x;
+        pet.y = at.y;
+      }
+    },
     join(c, p) {
       if (p.bot) return;
       void bring(c, p);

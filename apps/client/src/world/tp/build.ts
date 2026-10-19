@@ -144,6 +144,9 @@ export class World3 {
     objects: WorldObjectDef[],
     private anisotropy = 4,
     private light: (m: Material) => void = () => {},
+    // the stairwells (shared wellsOf): no floor where the stairs from below come
+    // up, no ceiling over this floor's own
+    private wells: { floor: Set<string>; ceiling: Set<string> } = { floor: new Set(), ceiling: new Set() },
   ) {
     const t0 = performance.now();
     this.light(this.materials.lit);
@@ -261,15 +264,20 @@ export class World3 {
     const map = this.map;
     const z = zt(WALL_H);
     const pos: number[] = [];
+    // (none outdoors — the lot is open sky — nor over a stairwell)
+    const under = (x: number, y: number) => {
+      const ch = tileAt(map, x, y);
+      return isFloor(ch) && ch !== "a" && ch !== "c" && !this.wells.ceiling.has(`${x},${y}`);
+    };
     for (let y = 0; y < map.height; y++) {
       let x = 0;
       while (x < map.width) {
-        if (!isFloor(tileAt(map, x, y))) {
+        if (!under(x, y)) {
           x++;
           continue;
         }
         let x1 = x;
-        while (x1 < map.width && isFloor(tileAt(map, x1, y))) x1++;
+        while (x1 < map.width && under(x1, y)) x1++;
         // a run of floor along x: one quad, wound to face down
         pos.push(x, z, y, x1, z, y, x1, z, y + 1, x, z, y, x1, z, y + 1, x, z, y + 1);
         x = x1;
@@ -480,7 +488,9 @@ export class World3 {
       top,
       // on their own (to fade): tall furniture, and what hangs on a wall (it goes with its wall)
       // (a window goes with its wall too; a door stays, like the wall's skirting)
-      tall: !isDoorKind(o.kind) && !e.onSurface && (e.wall || isWindowKind(o.kind) || top > TALL),
+      // (stairs are walked on: they never fade out under you)
+      tall:
+        !isDoorKind(o.kind) && !e.onSurface && o.kind !== "stairs" && (e.wall || isWindowKind(o.kind) || top > TALL),
       pick: b ? { id: o.id, use: !!e.interact || hasActions(o), ...b } : null,
     };
   }
@@ -623,7 +633,8 @@ export class World3 {
     // the size of the whole floor (12 M px on a big map) is slow in Chrome, and
     // on some of them comes out blank
     const CH = Math.max(1, Math.floor(1024 / px));
-    const bake = new FloorBake(map, this.objects, 1);
+    const bake = new FloorBake(map, this.objects, 1, 1024, this.wells.floor);
+    const floorAt = (x: number, y: number) => isFloor(tileAt(map, x, y)) && !this.wells.floor.has(`${x},${y}`);
     const softs = [...this.areas.values(), ...this.tall.values()].map((a) => a.built.soft);
     this.dropFloor();
     const meshes: Mesh[] = [];
@@ -639,12 +650,12 @@ export class World3 {
         for (let y = cy; y < cy + h; y++) {
           let x = cx;
           while (x < cx + w) {
-            if (!isFloor(tileAt(map, x, y))) {
+            if (!floorAt(x, y)) {
               x++;
               continue;
             }
             let x1 = x;
-            while (x1 < cx + w && isFloor(tileAt(map, x1, y))) x1++;
+            while (x1 < cx + w && floorAt(x1, y)) x1++;
             // (u along x, v down from the chunk's top row, as the canvas is laid)
             const u0 = (x - cx) / w;
             const u1 = (x1 - cx) / w;

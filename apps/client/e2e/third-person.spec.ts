@@ -296,7 +296,7 @@ test("third person: build mode places, picks up and moves a thing in 3D", async 
   const objectsAt = (x: number, y: number) =>
     page.evaluate(
       ([tx, ty]) =>
-        [...(window as any).__yutopia.room.state.objects.values()]
+        [...(window as any).__yutopia.floorObjects()]
           .filter((o: any) => o.x === tx && o.y === ty)
           .map((o: any) => ({ id: o.id, kind: o.kind })),
       [x, y],

@@ -122,9 +122,12 @@ it('keeps each person\'s own arrival point, and forgets it on reset', function (
 
     expect(internalCall($this, 'GET', $url($ana))->assertOk()->json('spawn'))->toBeNull();
     internalCall($this, 'PUT', $url($ana), ['spawn' => ['x' => 12.5, 'y' => 7.5]])->assertOk();
+    // on a floor of the building
+    internalCall($this, 'PUT', $url($ana), ['spawn' => ['x' => 70.5, 'y' => 30.5, 'level' => 0]])->assertOk();
+    expect(internalCall($this, 'GET', $url($ana))->json('spawn'))->toEqual(['x' => 70.5, 'y' => 30.5, 'level' => 0]);
     internalCall($this, 'PUT', $url($ana), ['spawn' => ['x' => 14.5, 'y' => 8.5]])->assertOk();
 
-    expect(internalCall($this, 'GET', $url($ana))->json('spawn'))->toEqual(['x' => 14.5, 'y' => 8.5])
+    expect(internalCall($this, 'GET', $url($ana))->json('spawn'))->toEqual(['x' => 14.5, 'y' => 8.5, 'level' => null])
         ->and(internalCall($this, 'GET', $url($bia))->json('spawn'))->toBeNull()
         ->and(Spawn::count())->toBe(1);
 
@@ -207,10 +210,27 @@ it('stores a validated map layout and lists who can own rooms', function () {
     expect(World::current()->layout['vBacks'][3])->toBe(str_repeat('.', 16).'k');
     $put(['hBacks' => array_fill(0, 17, 'g'.str_repeat('.', 15))] + $faces)->assertUnprocessable();
     $put(['vBacks' => array_fill(0, 16, '.')] + $faces)->assertStatus(422);
-    // the theme around the studio
+    // themes are gone: an old client's theme is dropped, not stored
     $put(['theme' => 'snow'] + $v2)->assertOk();
-    expect(World::current()->layout['theme'])->toBe('snow');
-    $put(['theme' => 'lava'] + $v2)->assertUnprocessable();
+    expect(World::current()->layout)->not->toHaveKey('theme');
+
+    // the building: the map is one floor, its others ride along (docs/plan/25)
+    $level = fn (int $i, int $w = 20) => [
+        'index' => $i, 'name' => "Floor {$i}", 'ox' => -2, 'oy' => 0, 'width' => $w, 'height' => 16,
+        'tiles' => array_fill(0, 16, str_repeat('a', 4).str_repeat('_', $w - 4)),
+        'hWalls' => array_fill(0, 17, str_repeat('.', $w)), 'vWalls' => array_fill(0, 16, str_repeat('.', $w + 1)),
+        'areas' => [['key' => "floor-{$i}", 'name' => "Floor {$i}", 'kind' => 'open', 'x' => 0, 'y' => 0, 'w' => $w, 'h' => 16]],
+    ];
+    $put(['floor' => 4, 'levels' => [$level(0, 120), $level(1)]] + $v2)->assertOk();
+    expect(World::current()->layout['levels'])->toHaveCount(2)
+        ->and(World::current()->layout['levels'][0]['width'])->toBe(120)
+        ->and(World::current()->layout['levels'][1]['areas'][0]['key'])->toBe('floor-1')
+        ->and(World::current()->layout['floor'])->toBe(4);
+    $put(['floor' => 4, 'levels' => [$level(1), $level(1)]] + $v2)->assertUnprocessable(); // one number, twice
+    $put(['floor' => 1, 'levels' => [$level(1)]] + $v2)->assertStatus(422); // the map's own floor
+    $bad = $level(2);
+    $bad['tiles'][3] = 'x';
+    $put(['floor' => 4, 'levels' => [$bad]] + $v2)->assertStatus(422);
 
     // the empty space a resize adds (rows ending in void, all-void rows) is kept as sent
     $tiles = array_merge(array_fill(0, 12, str_repeat('.', 12).'    '), array_fill(0, 4, str_repeat(' ', 16)));

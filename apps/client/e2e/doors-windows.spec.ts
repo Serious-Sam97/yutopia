@@ -48,7 +48,7 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
     const m = w.map;
     const solid = (ch: string | undefined) => !!ch && "pwfbk".includes(ch);
     const floor = (x: number, y: number) => !!w.grid?.ok?.(x, y);
-    const things = [...w.room.state.objects.values()].filter(
+    const things = [...w.floorObjects()].filter(
       (o: any) =>
         ["door", "window", "window_wide", "window_tall", "poster", "frame", "clock", "whiteboard"].includes(o.kind) ||
         o.kind.startsWith("board") ||
@@ -56,13 +56,18 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
         o.kind.includes("screen"),
     );
     const near = (x: number, y: number) => things.some((o: any) => Math.abs(o.x - x) < 6 && Math.abs(o.y - y) < 3);
+    // (not the building's core: its stairs and elevators' walls)
+    const core = (x: number, y: number) =>
+      m.areas.some(
+        (a: any) => a.key.startsWith("core-") && x >= a.x - 5 && x <= a.x + a.w && y >= a.y - 2 && y <= a.y + a.h + 1,
+      );
     const v = (x: number, y: number) => m.vWalls[y]?.[x] ?? ".";
     for (let y = 2; y < m.height - 3; y++)
       for (let x = 1; x < m.width - 5; x++) {
         const k = [0, 1, 2, 3];
         if (!k.every((d) => solid(m.hWalls[y]?.[x + d]) && floor(x + d, y) && floor(x + d, y - 1))) continue;
         if ([1, 2, 3].some((d) => v(x + d, y) !== "." || v(x + d, y - 1) !== ".")) continue;
-        if (!floor(x, y + 1) || !floor(x, y - 2) || near(x, y)) continue;
+        if (!floor(x, y + 1) || !floor(x, y - 2) || near(x, y) || core(x, y)) continue;
         return { x, y, ch: m.hWalls[y][x] as string };
       }
     return null;
@@ -165,7 +170,7 @@ test("doors and windows: review shots", async ({ page }) => {
     const w = (window as any).__yutopia;
     const m = w.map;
     const floor = (x: number, y: number) => !!w.grid?.ok?.(x, y);
-    const busy = [...w.room.state.objects.values()];
+    const busy = [...w.floorObjects()];
     const near = (x: number, y: number) => busy.some((o: any) => o.x >= x - 2 && o.x <= x + 8 && Math.abs(o.y - y) < 4);
     for (let y = 4; y < m.height - 4; y++)
       for (let x = 2; x < m.width - 9; x++) {
@@ -259,7 +264,7 @@ test("door kinds: review shots", async ({ page }) => {
     const w = (window as any).__yutopia;
     const m = w.map;
     const floor = (x: number, y: number) => !!w.grid?.ok?.(x, y);
-    const busy = [...w.room.state.objects.values()];
+    const busy = [...w.floorObjects()];
     const near = (x: number, y: number) =>
       busy.some((o: any) => o.x >= x - 2 && o.x <= x + len + 1 && Math.abs(o.y - y) < 4);
     for (let y = 4; y < m.height - 4; y++)
@@ -371,7 +376,7 @@ test("window kinds: review shots", async ({ page }) => {
     const w = (window as any).__yutopia;
     const m = w.map;
     const floor = (x: number, y: number) => !!w.grid?.ok?.(x, y);
-    const busy = [...w.room.state.objects.values()];
+    const busy = [...w.floorObjects()];
     const near = (x: number, y: number) =>
       busy.some((o: any) => o.x >= x - 2 && o.x <= x + len + 1 && Math.abs(o.y - y) < 4);
     for (let y = 4; y < m.height - 4; y++)

@@ -1,0 +1,47 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css"><link rel="stylesheet" href="hud.css"><link rel="stylesheet" href="building.css">
+<script src="emotes.js"></script><script src="phone.js"></script><script src="building.js"></script>
+<style>
+.panel{position:absolute;right:46px;top:150px;width:290px;border-radius:18px;padding:16px 18px 14px;z-index:40;
+  background:linear-gradient(160deg,#b9bfc3,#8d9499 55%,#767d82);box-shadow:0 0 0 1.5px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.5),0 24px 60px rgba(0,0,0,.55)}
+.panel .scr{height:62px;border-radius:9px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;margin-bottom:12px}
+.panel .scr b{font:46px/1 VT323;color:var(--vfd);font-weight:400;text-shadow:0 0 10px rgba(255,166,48,.7)}
+.panel .scr span{font:12px 'Share Tech Mono';color:var(--hdim);text-align:right;line-height:1.35}
+.panel .bt{display:flex;align-items:center;gap:12px;margin:7px 0}
+.panel .bt i{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font:600 17px 'Space Grotesk';font-style:normal;color:#2a2f33;
+  background:radial-gradient(circle at 40% 35%,#f4f6f7,#c4cacd 70%);box-shadow:0 0 0 2px #5c6367,0 3px 0 #4c5256,inset 0 -2px 3px rgba(0,0,0,.2)}
+.panel .bt.on i{color:#2a1a12;background:radial-gradient(circle at 40% 35%,#ffe1a8,#ffa630 70%);box-shadow:0 0 0 2px #8a5a1e,0 3px 0 #6e4714,0 0 18px rgba(255,166,48,.8)}
+.panel .bt.sel i{box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(255,179,92,.6),0 3px 0 #4c5256}
+.panel .bt label{font:600 13px Inter;color:#1e2326}
+.panel .bt small{display:block;font:500 11px Inter;color:#3b4246}
+.panel .row{display:flex;gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(0,0,0,.25)}
+.panel .row i{flex:1;height:36px;border-radius:9px;display:grid;place-items:center;font:12px 'Share Tech Mono';font-style:normal;color:#1e2326;background:linear-gradient(180deg,#e6e9eb,#b9bfc3);box-shadow:0 2px 0 #5c6367}
+.panel .who{margin-top:12px;font:11.5px 'Share Tech Mono';color:#1e2326;display:flex;gap:6px;align-items:center}
+.panel .keys{margin-top:10px;font:10.5px 'Share Tech Mono';color:#2f3539;letter-spacing:.03em}
+.panel .keys kbd{font:10.5px 'Share Tech Mono';background:#2a2f33;color:#f2f4f5;border-radius:3px;padding:0 4px}
+</style></head>
+<body>
+<div class="bg" style="background-image:url(r-elevator.jpg)"></div>
+<div id="hud" data-room="Lobby" data-floor="G" data-clock="11:00" data-here="9" data-dotx="100" data-doty="104"></div>
+<div class="title" style="left:28px;top:84px">6 · The elevator<small>Third person from the lobby: you and Bia in car 2; its panel comes up on screen.</small></div>
+<div class="panel">
+    <div class="scr vfd"><b>G ▸</b><span>CAR 2 · DOORS OPEN<br>2 INSIDE · MAX 4</span></div>
+    <div class="bt"><i>4</i><label>Studio<small>The Studio Building</small></label></div>
+    <div class="bt sel"><i>3</i><label>Floor 3<small>blank — build it</small></label></div>
+    <div class="bt"><i>2</i><label>Floor 2<small>blank</small></label></div>
+    <div class="bt"><i>1</i><label>Floor 1<small>blank</small></label></div>
+    <div class="bt on"><i>G</i><label>Lobby · lot<small>you're here</small></label></div>
+    <div class="row"><i>◀▶ OPEN</i><i>▶◀ CLOSE</i><i>🔔</i></div>
+    <div class="who">RIDING: <span class="pf" data-p="1" style="width:22px;height:22px;display:inline-block;border-radius:50%"></span> You · <span class="pf" data-p="2" style="width:22px;height:22px;display:inline-block;border-radius:50%"></span> Bia</div>
+    <div class="keys"><kbd>G</kbd> <kbd>1</kbd>–<kbd>4</kbd> or <kbd>↑</kbd><kbd>↓</kbd> <kbd>Enter</kbd> go · <kbd>Esc</kbd> out</div>
+  </div>
+<div class="note" style="left:40px;top:460px;max-width:300px"><span class="n">1</span><b>Call it.</b> <b>E</b> at the doors (or click the ▲▼ plate). The VFD over each car shows where it is and which way it's going; the nearer car comes.</div>
+<div class="lead" data-from="260,460" data-to="330,160"></div>
+<div class="note" style="left:560px;top:96px;max-width:330px"><span class="n">2</span><b>Step in: the panel comes up.</b> Pick a floor with a click, <b>G</b>/<b>1</b>–<b>4</b>, or the arrows. Everyone inside rides with you; the doors close for everyone to see.</div>
+<div class="lead" data-from="890,150" data-to="1120,170"></div>
+<div class="note" style="left:40px;top:640px;max-width:330px"><span class="n">3</span><b>The ride:</b> ~1.5 s + 0.8 s a floor, a ding, the doors open on that floor — you're there in both views (the iso switches floor). The server moves you; no page change.</div>
+<div class="note" style="left:640px;top:760px;max-width:330px"><span class="n">4</span><b>Four at most</b>; a full car doesn't stop. Pets ride with their owner. Builders see blank floors marked so — the first stop to build on.</div>
+<div class="lead" data-from="800,760" data-to="760,560"></div>
+</body></html>

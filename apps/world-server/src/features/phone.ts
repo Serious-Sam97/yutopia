@@ -10,10 +10,10 @@ import {
   RING_MS,
 } from "@yutopia/shared/phone";
 import { AccessToken } from "livekit-server-sdk";
-import { config } from "../config.ts";
-import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
-import type { Player } from "../schema.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import type { Player } from "../schema.ts";
+import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // The phone (docs/plan/21-cellphone.md), the world's half of it: what a phone

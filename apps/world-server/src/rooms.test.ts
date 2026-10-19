@@ -96,6 +96,9 @@ function liveWorld(p: Person) {
     vWalls: [...st.vWalls],
     areas: JSON.parse(st.areas),
     spawn: { x: st.spawnX, y: st.spawnY },
+    // the building's other floors (the grid of this one leaves their things out)
+    floor: st.floor,
+    levels: JSON.parse(st.levels),
   };
   const objects = [...st.objects.values()].map(
     (o: { id: string; kind: string; x: number; y: number; rot: number; props: string }) => ({
@@ -597,23 +600,11 @@ test("desks for a person, and resizing the map", async () => {
   await waitFor(() => owner.room.state.width === 64 && owner.room.state.tiles.length === 48);
   owner.room.send("map:resize", { width: 20, height: 16 });
   await waitFor(() => owner.room.state.width === 20);
-  const left = [...owner.room.state.objects.values()].every((o: { x: number; y: number }) => o.x < 20 && o.y < 16);
+  // (on the studio's floor: the floors below aren't resized)
+  const left = [...owner.room.state.objects.values()]
+    .filter((o: { props: string }) => JSON.parse(o.props).level === undefined)
+    .every((o: { x: number; y: number }) => o.x < 20 && o.y < 16);
   assert.ok(left, "furniture outside the new size is removed");
-});
-
-test("the theme around the studio: builders pick it, members can't", async () => {
-  const s = ++space;
-  const member = await person(34, s);
-  const owner = await person(35, s, "member,builder");
-  assert.equal(member.room.state.theme, "clouds");
-  member.room.send("map:theme", { theme: "snow" });
-  await sleep(250);
-  assert.equal(member.room.state.theme, "clouds", "members can't");
-  owner.room.send("map:theme", { theme: "lava" });
-  await sleep(250);
-  assert.equal(member.room.state.theme, "clouds", "only known themes");
-  owner.room.send("map:theme", { theme: "snow" });
-  await waitFor(() => member.room.state.theme === "snow");
 });
 
 test("build hand: one builder holds a thing at a time; group moves are all or nothing", async () => {
@@ -841,7 +832,18 @@ test("focus while seated; light switches turn their room's lamps", async () => {
   const x = Math.floor(at?.x ?? 0);
   const y = Math.floor(at?.y ?? 0);
   const { map } = liveWorld(a);
-  const sw = spotFor(a, "light_switch", x, y, 10, (sx, sy) => !!areaAt(map, sx + 0.5, sy + 0.5));
+  // (a wall you can walk up to: not the inside of the elevators' core)
+  const grid = liveGrid(a);
+  const sw = spotFor(
+    a,
+    "light_switch",
+    x,
+    y,
+    10,
+    (sx, sy) =>
+      !!areaAt(map, sx + 0.5, sy + 0.5) &&
+      !!findPath(grid, { x: at?.x ?? 0, y: at?.y ?? 0 }, { x: sx + 0.5, y: sy + 1.5 }),
+  );
   assert.ok(sw, "a wall to put the switch on");
   await walk(a, { x: sw.x + 0.5, y: sw.y + 1.5 });
   const room = areaAt(map, sw.x + 0.5, sw.y + 0.5)?.key;
@@ -1661,4 +1663,129 @@ test("hold: the API closes the world, nobody gets in, then it opens again", asyn
   // unsigned: no
   const bad = await fetch(`http://localhost:${PORT}/internal/hold`, { method: "POST", body: '{"hold":true}' });
   assert.equal(bad.status, 401);
+});
+
+// ── the building (docs/plan/25-building-floors.md) ──────────────────────────
+// The world is the top of five floors: the lobby and the lot on the ground
+// floor (its corner at -60, -10 in the studio's coords), the core at x 6–14, y 30–36.
+const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
+const stepTo = async (p: Person, path: { x: number; y: number; z: number; l: number }[]) => {
+  let seq = 0;
+  for (const s of path) {
+    p.room.send("pos", { ...s, d: 0, a: 1, seq: ++seq });
+    await sleep(55);
+  }
+  await sleep(150);
+};
+
+test("the building: you arrive on the studio's floor, five floors up", async () => {
+  const s = ++space;
+  const a = await person(80, s);
+  assert.equal(a.room.state.floor, 4);
+  assert.deepEqual(
+    JSON.parse(a.room.state.levels).map((l: { index: number }) => l.index),
+    [0, 1, 2, 3],
+  );
+  assert.equal(me(a).level, 4);
+});
+
+test("elevators: call one, step in, ride it to the lot's floor — the doors open where it is", async () => {
+  const s = ++space;
+  const a = await person(81, s, "member,builder");
+  // from the arrival point, up to the doors of car A (x 8–10)
+  await stepTo(a, [
+    { x: 7.2, y: 28.8, z: 0, l: 4 },
+    { x: 8.0, y: 29.2, z: 0, l: 4 },
+    { x: 8.8, y: 29.5, z: 0, l: 4 },
+  ]);
+  assert.ok(Math.abs(me(a).x - 8.8) < 0.2, "at the doors");
+  const stop = (level: number) =>
+    [...a.room.state.objects.values()].find(
+      (o: { kind: string; props: string }) =>
+        o.kind === "elevator" && JSON.parse(o.props).shaft === "A" && JSON.parse(o.props).level === level,
+    ) as { id: string; props: string };
+  const door = (level: number) => JSON.parse(stop(level).props).door;
+  assert.equal(door(4), "closed", "shut until it's called");
+  a.room.send("lift:call", { id: stop(4).id });
+  await waitFor(() => door(4) === "open", 5000);
+  // in (the doors are a way in now), and down to the ground floor
+  await stepTo(a, [
+    { x: 8.9, y: 30, z: 0, l: 4 },
+    { x: 9, y: 30.6, z: 0, l: 4 },
+    { x: 9, y: 31, z: 0, l: 4 },
+  ]);
+  assert.ok(me(a).y > 30.5, "in the car");
+  a.room.send("lift:go", { id: stop(4).id, level: 0 });
+  await waitFor(() => me(a).level === 0, 12000);
+  const g = G(9, 31);
+  assert.ok(Math.hypot(me(a).x - g.x, me(a).y - g.y) < 0.6, "at the same spot of the car, a floor down");
+  await waitFor(() => door(0) === "open", 3000);
+  assert.equal(door(4), "closed", "and shut up there");
+});
+
+test("stairs: walked up a floor (the server follows the treads); never two floors at once", async () => {
+  const s = ++space;
+  const a = await person(82, s, "member,builder");
+  const foot = G(13, 30.5);
+  a.room.send("teleport", { to: { ...foot, level: 0 } });
+  await waitFor(() => me(a).level === 0 && Math.abs(me(a).x - foot.x) < 0.3);
+  // a cheat first: straight to floor 2
+  a.room.send("pos", { x: 11, y: 30.5, z: 0, l: 2, d: 0, a: 1, seq: 1 });
+  await sleep(250);
+  assert.equal(me(a).level, 0, "two floors at once: no");
+  // up flight A (east half, away from the door), the landing, flight B, onto floor 1
+  const path: { x: number; y: number; z: number; l: number }[] = [];
+  for (let v = 0.6; v <= 4.2; v += 0.2) {
+    const h = Math.max(0, Math.min(1.75, ((v - 1) / 3) * 1.75));
+    path.push({ ...G(13, 30 + v), z: h, l: 0 });
+  }
+  for (let u = 13; u >= 11; u -= 0.25) path.push({ ...G(u, 34.6), z: 1.75, l: 0 });
+  for (let v = 4.2; v >= 1.1; v -= 0.2) {
+    const h = Math.min(3.5, 1.75 + ((4 - Math.min(4, v)) / 3) * 1.75);
+    if (h > 2.9) {
+      path.push({ x: 11, y: 30 + v, z: h - 3.5, l: 1 });
+    } else path.push({ ...G(11, 30 + v), z: h, l: 0 });
+  }
+  path.push({ x: 11, y: 30.6, z: 0, l: 1 });
+  await stepTo(a, path);
+  assert.equal(me(a).level, 1, "on floor 1");
+  assert.ok(Math.abs(me(a).y - 30.6) < 0.3);
+  assert.ok(Math.abs(me(a).z) < 0.15);
+});
+
+test("teleport to someone on another floor lands you on theirs; other floors don't hear you", async () => {
+  const s = ++space;
+  const a = await person(83, s, "member,builder");
+  const b = await person(84, s, "member,builder");
+  // b goes down to the lobby; a stands right over them on the studio's floor
+  b.room.send("teleport", { to: { ...G(12, 18), level: 0 } });
+  await waitFor(() => me(b).level === 0);
+  a.room.send("teleport", { to: { x: 12, y: 18, level: 4 } });
+  await waitFor(() => Math.abs(me(a).x - 12) < 0.6 && Math.abs(me(a).y - 18) < 0.6);
+  await sleep(600);
+  assert.ok(!a.hear.ids.includes(b.room.sessionId), "a floor between them (four, here)");
+  a.room.send("teleport", { to: { userId: 84 } });
+  await waitFor(() => me(a).level === 0);
+  await waitFor(() => a.hear.ids.includes(b.room.sessionId), 3000);
+});
+
+test("floors: a blank one on top, and taken away again (never the studio's)", async () => {
+  const s = ++space;
+  const a = await person(85, s, "member,builder");
+  const floors = () => [a.room.state.floor, ...JSON.parse(a.room.state.levels).map((l: { index: number }) => l.index)];
+  a.room.send("level:remove", { level: 4 });
+  await sleep(300);
+  assert.equal(floors().length, 5, "the studio stays");
+  a.room.send("level:add", {});
+  await waitFor(() => floors().includes(5));
+  // (a thing on the studio's floor, the home one, doesn't say its level)
+  const things = (level: number, kind: string) =>
+    [...a.room.state.objects.values()].filter(
+      (o: { kind: string; props: string }) => o.kind === kind && (JSON.parse(o.props).level ?? 4) === level,
+    ).length;
+  await waitFor(() => things(5, "elevator") === 2);
+  assert.equal(things(4, "stairs"), 1, "stairs up to it from the studio");
+  a.room.send("level:remove", { level: 5 });
+  await waitFor(() => !floors().includes(5));
+  await waitFor(() => things(4, "stairs") === 0 && things(5, "elevator") === 0);
 });

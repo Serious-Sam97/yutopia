@@ -84,15 +84,17 @@ class InternalController extends Controller
     {
         $row = Spawn::where('user_id', $userId)->first();
 
-        return response()->json(['spawn' => $row ? ['x' => $row->x, 'y' => $row->y] : null]);
+        return response()->json(['spawn' => $row ? ['x' => $row->x, 'y' => $row->y, 'level' => $row->level] : null]);
     }
 
     public function putSpawn(Request $request, int $userId): JsonResponse
     {
         $data = $request->validate([
             'spawn' => ['present', 'nullable', 'array'],
-            'spawn.x' => ['required_with:spawn', 'numeric', 'between:0,96'],
-            'spawn.y' => ['required_with:spawn', 'numeric', 'between:0,96'],
+            'spawn.x' => ['required_with:spawn', 'numeric', 'between:0,160'],
+            'spawn.y' => ['required_with:spawn', 'numeric', 'between:0,160'],
+            // the floor it's on (the building's, see layout); none: the home floor
+            'spawn.level' => ['nullable', 'integer', 'between:0,12'],
         ]);
         User::findOrFail($userId);
         if ($data['spawn'] === null) {
@@ -100,7 +102,11 @@ class InternalController extends Controller
 
             return response()->json(['spawn' => null]);
         }
-        $at = ['x' => (float) $data['spawn']['x'], 'y' => (float) $data['spawn']['y']];
+        $at = [
+            'x' => (float) $data['spawn']['x'],
+            'y' => (float) $data['spawn']['y'],
+            'level' => isset($data['spawn']['level']) ? (int) $data['spawn']['level'] : null,
+        ];
         Spawn::updateOrCreate(['user_id' => $userId], $at);
 
         return response()->json(['spawn' => $at]);
@@ -143,11 +149,10 @@ class InternalController extends Controller
     {
         $data = $request->validate([
             'version' => ['nullable', 'integer', 'in:2'],
-            'theme' => ['nullable', 'string', 'in:clouds,city,snow'],
             'width' => ['required', 'integer', 'between:16,96'],
             'height' => ['required', 'integer', 'between:16,96'],
             'tiles' => ['required', 'array'],
-            'tiles.*' => ['string', 'regex:/^[#\\ .,_:~x]*$/'],
+            'tiles.*' => ['string', 'regex:/^[#\\ .,_:~xac]*$/'],
             'hWalls' => ['nullable', 'array', 'required_with:vWalls'],
             'hWalls.*' => ['string', 'regex:/^[.pwfbkgPWFBKh]*$/'],
             'vWalls' => ['nullable', 'array', 'required_with:hWalls'],
@@ -172,6 +177,36 @@ class InternalController extends Controller
             'areas.*.ownerId' => ['nullable', 'integer'],
             'areas.*.ownerName' => ['nullable', 'string', 'max:120'],
             'areas.*.dressing' => ['nullable', 'string', 'in:tidy,lived,busy'],
+            'areas.*.dressOff' => ['nullable', 'array'],
+            // the building (docs/plan/25-building-floors.md): the floor this map is,
+            // and the others, each a map of its own placed by its corner (ox, oy)
+            'floor' => ['nullable', 'integer', 'between:0,12'],
+            'core' => ['nullable', 'array'],
+            'core.x' => ['required_with:core', 'integer', 'between:0,160'],
+            'core.y' => ['required_with:core', 'integer', 'between:0,160'],
+            'levels' => ['nullable', 'array', 'max:12'],
+            'levels.*.index' => ['required', 'integer', 'between:0,12', 'distinct'],
+            'levels.*.name' => ['required', 'string', 'max:60'],
+            'levels.*.ox' => ['required', 'integer', 'between:-400,400'],
+            'levels.*.oy' => ['required', 'integer', 'between:-400,400'],
+            'levels.*.outdoor' => ['nullable', 'boolean'],
+            'levels.*.width' => ['required', 'integer', 'between:16,160'],
+            'levels.*.height' => ['required', 'integer', 'between:16,160'],
+            'levels.*.tiles' => ['required', 'array'],
+            'levels.*.tiles.*' => ['string', 'regex:/^[\\ .,_:~xac]*$/'],
+            'levels.*.hWalls' => ['required', 'array'],
+            'levels.*.hWalls.*' => ['string', 'regex:/^[.pwfbkgPWFBKh]*$/'],
+            'levels.*.vWalls' => ['required', 'array'],
+            'levels.*.vWalls.*' => ['string', 'regex:/^[.pwfbkgPWFBKh]*$/'],
+            'levels.*.hBacks' => ['nullable', 'array'],
+            'levels.*.hBacks.*' => ['string', 'regex:/^[.pwfbk]*$/'],
+            'levels.*.vBacks' => ['nullable', 'array'],
+            'levels.*.vBacks.*' => ['string', 'regex:/^[.pwfbk]*$/'],
+            'levels.*.spawn' => ['nullable', 'array'],
+            'levels.*.spawn.x' => ['required_with:levels.*.spawn', 'numeric'],
+            'levels.*.spawn.y' => ['required_with:levels.*.spawn', 'numeric'],
+            'levels.*.areas' => ['present', 'array', 'max:200'],
+            'levels.*.areas.*' => ['array'],
         ]);
         abort_unless(count($data['tiles']) === $data['height'], 422, 'tiles must have one row per height');
         foreach ($data['tiles'] as $row) {
@@ -188,6 +223,21 @@ class InternalController extends Controller
             }
             foreach ($data['tiles'] as $row) {
                 abort_if(str_contains($row, '#'), 422, 'v2 layouts keep walls on edges, not tiles');
+            }
+        }
+        foreach ($data['levels'] ?? [] as $i => $level) {
+            abort_if(($data['floor'] ?? 0) === $level['index'], 422, "floor {$level['index']} is the map itself");
+            abort_unless(count($level['tiles']) === $level['height'], 422, "levels.{$i}: tiles must have one row per height");
+            foreach ($level['tiles'] as $row) {
+                abort_unless(strlen($row) === $level['width'], 422, "levels.{$i}: every row must be width long");
+            }
+            abort_unless(count($level['hWalls']) === $level['height'] + 1, 422, "levels.{$i}: hWalls must have height + 1 rows");
+            abort_unless(count($level['vWalls']) === $level['height'], 422, "levels.{$i}: vWalls must have one row per height");
+            foreach ($level['hWalls'] as $row) {
+                abort_unless(strlen($row) === $level['width'], 422, "levels.{$i}: every hWalls row must be width long");
+            }
+            foreach ($level['vWalls'] as $row) {
+                abort_unless(strlen($row) === $level['width'] + 1, 422, "levels.{$i}: every vWalls row must be width + 1 long");
             }
         }
         if (isset($data['hBacks'])) {

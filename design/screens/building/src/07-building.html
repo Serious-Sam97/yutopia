@@ -1,0 +1,118 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="phone.css"><link rel="stylesheet" href="hud.css"><link rel="stylesheet" href="building.css">
+<script src="emotes.js"></script><script src="phone.js"></script>
+<style>
+body{background:radial-gradient(120% 100% at 30% 0%,#2a1f17,#120d09 70%)}
+.title{top:24px}
+.card{position:absolute;border-radius:14px;background:rgba(239,228,204,.04);border:1px solid var(--edge);padding:14px 16px}
+.card h3{font:600 12px 'Share Tech Mono';letter-spacing:.12em;color:var(--vfd);margin-bottom:10px}
+.plans{display:flex;gap:16px}
+.plans figure{margin:0}
+.plans img{width:322px;display:block;border-radius:6px;background:#0e0a07}
+.plans figcaption{font:11.5px 'Share Tech Mono';color:var(--hdim);margin-top:6px}
+.plans figcaption b{color:var(--hcream);font-weight:400}
+.bar{display:flex;align-items:center;gap:10px;height:58px;padding:0 12px}
+.bar .lbl{font:11px 'Share Tech Mono';color:var(--hdim);letter-spacing:.12em}
+.bar .fl{display:flex;gap:6px}
+.bar .fl i{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;font:22px VT323;font-style:normal;color:var(--hcream);border:1px solid var(--edge);background:rgba(255,255,255,.03)}
+.bar .fl i.on{background:linear-gradient(180deg,#ffc477,#ffa630);color:#2a1a12;box-shadow:0 3px 0 #a5641a,0 0 14px rgba(255,166,48,.45)}
+.bar .fl i.blank{opacity:.6;border-style:dashed}
+.bar .kbd{font:10px 'Share Tech Mono';background:#2a1c13;color:var(--vfd);border-radius:4px;padding:1px 5px;border:1px solid var(--edge)}
+</style></head>
+<body>
+<div class="title">7 · The building: five real floors, one core<small>A section through the block (west → east) and the floor plans of G and the studio, drawn from the maps.</small></div>
+
+<!-- the section -->
+<div class="card" style="left:28px;top:96px;width:640px;height:560px">
+  <h3>SECTION · WEST → EAST</h3>
+  <svg viewBox="0 0 608 500" width="608" height="500" font-family="Share Tech Mono">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3f47"/><stop offset="1" stop-color="#6b727a"/></linearGradient>
+      <pattern id="glass" width="22" height="70" patternUnits="userSpaceOnUse"><rect width="22" height="70" fill="#2b3640"/><rect x="0" y="0" width="1.5" height="70" fill="#4d5c68"/></pattern>
+    </defs>
+    <rect x="0" y="0" width="608" height="440" fill="url(#sky)" rx="6"/>
+    <!-- snow field and the lot (west) -->
+    <rect x="0" y="440" width="608" height="60" fill="#e9eef1"/>
+    <rect x="0" y="436" width="250" height="6" fill="#3d3f42"/>
+    <g fill="#f4f6f7"><ellipse cx="258" cy="438" rx="14" ry="7"/><ellipse cx="6" cy="438" rx="12" ry="6"/></g>
+    <!-- cars -->
+    <g><rect x="30" y="420" width="46" height="14" rx="3" fill="#7a2e2a"/><rect x="40" y="410" width="26" height="11" rx="2" fill="#2a3036"/><rect x="40" y="408" width="26" height="3" fill="#f4f6f7"/><circle cx="40" cy="435" r="4" fill="#1d1d1d"/><circle cx="66" cy="435" r="4" fill="#1d1d1d"/></g>
+    <g><rect x="120" y="420" width="46" height="14" rx="3" fill="#8c8f8a"/><rect x="130" y="410" width="26" height="11" rx="2" fill="#2a3036"/><rect x="130" y="408" width="26" height="3" fill="#f4f6f7"/><circle cx="130" cy="435" r="4" fill="#1d1d1d"/><circle cx="156" cy="435" r="4" fill="#1d1d1d"/></g>
+    <!-- Davi on the roof, you by the car -->
+    <g fill="#e8a33d"><circle cx="143" cy="393" r="4"/><rect x="140" y="397" width="6" height="11" rx="2"/></g>
+    <g fill="#ff9a5a"><circle cx="200" cy="418" r="4"/><rect x="197" y="422" width="6" height="12" rx="2"/></g>
+    <line x1="96" y1="436" x2="96" y2="352" stroke="#6c7074" stroke-width="2.5"/><line x1="96" y1="352" x2="112" y2="352" stroke="#6c7074" stroke-width="2.5"/><path d="M104 354 L120 354 L112 436 L96 436 Z" fill="rgba(255,240,200,.12)"/>
+    <text x="8" y="470" font-size="11" fill="#3b3f44">THE LOT · OUTDOORS · LEVEL G</text>
+    <!-- the block: 5 storeys of 3.5 tiles (70 px) -->
+    <g transform="translate(270 76)">
+      <rect x="0" y="0" width="320" height="360" fill="url(#glass)"/>
+      <!-- interiors (cut) -->
+      <rect x="6" y="2" width="308" height="64" fill="#8a5d3e"/>
+      <rect x="6" y="74" width="308" height="64" fill="#2f2b27"/>
+      <rect x="6" y="146" width="308" height="64" fill="#2f2b27"/>
+      <rect x="6" y="218" width="308" height="64" fill="#2f2b27"/>
+      <rect x="6" y="290" width="308" height="64" fill="#d9ccb0"/>
+      <!-- slabs -->
+      <g fill="#b9b6ae"><rect x="0" y="66" width="320" height="8"/><rect x="0" y="138" width="320" height="8"/><rect x="0" y="210" width="320" height="8"/><rect x="0" y="282" width="320" height="8"/><rect x="0" y="354" width="320" height="6"/><rect x="-4" y="-10" width="328" height="12" fill="#cfcac0"/></g>
+      <g fill="#f4f6f7"><rect x="-4" y="-14" width="328" height="4"/></g>
+      <!-- the core: stairs (zigzag) and a car in its shaft -->
+      <rect x="36" y="2" width="58" height="352" fill="rgba(255,179,92,.16)" stroke="#ffb35c" stroke-dasharray="5 4"/>
+      <g stroke="#ffb35c" stroke-width="2" fill="none">
+        <path d="M70 354 L92 318 L70 290 M70 282 L92 246 L70 218 M70 210 L92 174 L70 146 M70 138 L92 102 L70 74 M70 66 L92 30 L70 2"/>
+      </g>
+      <rect x="40" y="152" width="24" height="52" rx="2" fill="#9aa1a6" stroke="#2a2f33"/>
+      <g fill="#ffb35c"><circle cx="52" cy="170" r="3.5"/><rect x="49.5" y="174" width="5" height="10" rx="1.5"/></g>
+      <path d="M52 140 v-10 M48 134 l4 -5 4 5" stroke="#ffb35c" stroke-width="1.6" fill="none"/>
+      <!-- the entrance (west, G) and the canopy -->
+      <rect x="-1" y="300" width="4" height="54" fill="#8fd0ea"/>
+      <rect x="-40" y="296" width="44" height="5" fill="#cfcac0"/><rect x="-38" y="301" width="3" height="53" fill="#9a9690"/>
+      <g fill="#7a5338"><rect x="150" y="40" width="40" height="8"/><rect x="230" y="40" width="40" height="8"/></g>
+      <g fill="#6a5a48"><rect x="140" y="330" width="34" height="10"/></g>
+      <g fill="#e8a33d"><circle cx="210" cy="328" r="4"/><rect x="207" y="332" width="6" height="14" rx="2"/></g>
+      <g fill="#8fd0ea"><circle cx="250" cy="42" r="4"/><rect x="247" y="46" width="6" height="14" rx="2"/></g>
+    </g>
+    <!-- levels -->
+    <g font-size="12" fill="#fff8e6">
+      <text x="600" y="114" text-anchor="end">4 · STUDIO</text>
+      <text x="600" y="186" text-anchor="end" fill="#cbbd9c">3 · BLANK</text>
+      <text x="600" y="258" text-anchor="end" fill="#cbbd9c">2 · BLANK</text>
+      <text x="600" y="330" text-anchor="end" fill="#cbbd9c">1 · BLANK</text>
+      <text x="600" y="402" text-anchor="end" fill="#2a1a12">G · LOBBY</text>
+    </g>
+    <g font-size="10" fill="#ffd9a3">
+      <text x="236" y="80">+14</text><text x="236" y="152">+10.5</text><text x="236" y="224">+7</text><text x="236" y="296">+3.5</text><text x="236" y="368">0</text>
+    </g>
+    <text x="300" y="44" font-size="10" fill="#ffd9a3">CORE ↓ — stairs + 2 cars, same tiles every floor</text>
+  </svg>
+</div>
+<div class="note" style="left:44px;top:672px;max-width:300px"><span class="n">1</span><b>A real block:</b> five storeys of 3.5 tiles. The studio stays the top floor — every window's view is today's, and nothing in it moves but two things (3).</div>
+<div class="note" style="left:364px;top:672px;max-width:300px"><span class="n">2</span><b>Floors live in one space</b> — no new rooms, servers or pages. People, pets and things each have a floor; you hear only your own floor (and the stairwell, faintly).</div>
+
+<!-- the plans -->
+<div class="card" style="left:690px;top:96px;width:722px;height:340px">
+  <h3>FLOOR PLANS · THE CORE IN AMBER</h3>
+  <div class="plans">
+    <figure><img src="plan-ground.svg"><figcaption><b>G · Lobby</b> — glass front (blue) on the lot side, the entrance in it; the corridor runs east.</figcaption></figure>
+    <figure><img src="plan-studio.svg"><figcaption><b>4 · Studio</b> — today's map. The core takes the south end of its Lobby; only <b style="color:#ff5a3c">the lamp and a plant</b> move.</figcaption></figure>
+  </div>
+</div>
+<div class="note" style="left:706px;top:452px;max-width:330px"><span class="n">3</span><b>One core, every floor:</b> tiles x 6–13, y 30–35 — two cars (2 × 2) and a 4 × 6 stairwell, doors facing north. Blank floors come with it and the curtain wall already in.</div>
+
+<!-- build mode: the floor picker -->
+<div class="card" style="left:690px;top:560px;width:722px;height:176px">
+  <h3>BUILD MODE · WHICH FLOOR YOU'RE BUILDING</h3>
+  <div class="bar shell" style="position:relative;display:inline-flex">
+    <span class="lbl">FLOOR</span>
+    <span class="fl"><i>G</i><i class="blank">1</i><i class="blank on">2</i><i class="blank">3</i><i>4</i></span>
+    <span class="dsep"></span>
+    <span class="ghost">+ ADD FLOOR</span><span class="ghost">REMOVE</span>
+    <span class="dsep"></span>
+    <span class="lbl"><span class="kbd">PgUp</span> <span class="kbd">PgDn</span></span>
+  </div>
+</div>
+<div class="note" style="left:706px;top:690px;max-width:330px"><span class="n">4</span><b>Build on any floor.</b> The picker (PgUp / PgDn) takes the camera there; dashed = blank. Add / remove floors on top; the core can't be built over.</div>
+<div class="note" style="left:1060px;top:690px;max-width:340px"><span class="n">5</span><b>Still open:</b> two cars or one? · does the world stop at the gatehouse barrier, or does the driveway lead somewhere later?</div>
+<script>document.addEventListener("DOMContentLoaded",()=>document.body.dataset.ready="1")</script>
+</body></html>

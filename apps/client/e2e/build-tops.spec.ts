@@ -30,7 +30,7 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
   const mine = () =>
     page.evaluate(
       (skip) =>
-        [...(window as any).__yutopia.room.state.objects.values()]
+        [...(window as any).__yutopia.floorObjects()]
           .filter((o: any) => (o.kind === "tabletop" || o.kind === "computer") && !skip.includes(o.id))
           .map((o: any) => ({ id: o.id, x: o.x, y: o.y, rot: o.rot, p: JSON.parse(o.props) })),
       [...before],

@@ -1,5 +1,6 @@
 import {
   edgeKey,
+  entranceZOf,
   hWall,
   isFloor,
   isWindow,
@@ -861,7 +862,8 @@ class Visitor {
     this.heading += d * Math.min(1, dt * 4);
     this.root.rotation.y = this.heading;
   }
-  update(dt: number, night: number, animate: boolean) {
+  // `people`: anyone in its way makes it wait (campus coords)
+  update(dt: number, night: number, animate: boolean, people: { x: number; z: number }[] = []) {
     if (!animate) {
       this.park();
       this.lights.opacity = this.tail.opacity = this.beam.opacity = 0;
@@ -887,7 +889,11 @@ class Visitor {
         break;
       case "arrive": {
         const p = this.at(this.s);
-        this.s += dt * p.v;
+        // someone in front of it: it waits (its nose is CAR_L / 2 ahead)
+        const len = Math.hypot(p.dx, p.dz) || 1;
+        const fx = p.x + (p.dx / len) * (CAR_L / 2 + 1);
+        const fz = p.z + (p.dz / len) * (CAR_L / 2 + 1);
+        if (!people.some((q) => Math.hypot(q.x - fx, q.z - fz) < 2.4)) this.s += dt * p.v;
         this.root.position.set(p.x, GROUND + 0.02, p.z);
         this.face(p.dx, p.dz, dt);
         if (this.s >= this.total) {
@@ -982,6 +988,15 @@ export class Campus {
   private t = 0;
   private cx: number;
   private cz: number;
+  // the building's ground floor is real (shared levels.ts, docs/plan/25): the
+  // lot, its cars and lamp posts are things on it, the doors an opening in the
+  // facade — the campus leaves those out
+  private walkable: boolean;
+  private door: { z0: number; z1: number } | null = null;
+  // the top storey's skin even close up (the studio isn't drawn: you're below it)
+  skinAlways = false;
+  // people outside (the campus's coords): the visitor's car waits for them
+  people: { x: number; z: number }[] = [];
   // the studio's footprint (snow never falls inside it)
   private fx0: number;
   private fz0: number;
@@ -997,6 +1012,12 @@ export class Campus {
     const H = map.height;
     this.cx = W / 2;
     this.cz = H / 2;
+    this.walkable = !!map.levels?.some((l) => l.index === 0);
+    const ezDoor = entranceZOf(map);
+    if (this.walkable) {
+      const p0 = Math.round(ezDoor - 2);
+      this.door = { z0: p0, z1: p0 + 4 };
+    }
     this.fx0 = -0.5;
     this.fz0 = -0.5;
     this.fx1 = W + 0.5;
@@ -1033,6 +1054,8 @@ export class Campus {
         lotRect,
         ...blocks,
         { x0: -3, z0: -3, x1: W + 3, z1: H + 3 },
+        // the path from the lot to the doors (walked on: never under the snow)
+        ...(this.walkable ? [{ x0: -14, z0: ezDoor - 5, x1: 0, z1: ezDoor + 5 }] : []),
         { x0: towerAt.x - 6, z0: towerAt.z - 6, x1: towerAt.x + 6, z1: towerAt.z + 6 },
       ],
       this.cx,
@@ -1222,7 +1245,12 @@ export class Campus {
       this.lambert(0xffffff, lotTex),
     );
     lotMesh.position.set((lot.x0 + lot.x1) / 2, GROUND + 0.02, (lot.z0 + lot.z1) / 2);
-    this.add(lotMesh);
+    // (walkable: the ground floor's asphalt is the lot)
+    if (!this.walkable) this.add(lotMesh);
+    else {
+      lotMesh.geometry.dispose();
+      (lotMesh.material as MeshLambertMaterial).dispose();
+    }
     // cars in the bays nearest the building most often
     const rc = T.rng(123);
     const taken = new Set<number>();
@@ -1247,18 +1275,21 @@ export class Campus {
       const b = lot.bays[i];
       const wagon = rc() < 0.3;
       const colour = CAR_COLOURS[Math.floor(rc() * CAR_COLOURS.length)];
-      const { solid, glass } = carGeometry(wagon, colour, rc() > 0.2);
+      const snowy = rc() > 0.2;
       const ry = (b.dir > 0 ? 0 : Math.PI) + (rc() - 0.5) * 0.04;
       const z = b.z + (rc() - 0.5) * 0.3;
+      // (walkable: the cars are things on the ground floor, drawn there)
+      if (this.walkable) continue;
+      const { solid, glass } = carGeometry(wagon, colour, snowy);
       solids.push(place(solid, b.x, GROUND + 0.02, z, ry));
       glasses.push(place(glass, b.x, GROUND + 0.02, z, ry));
       shadowAt(b.x, z, 3.1, 1.7, ry, GROUND + 0.03);
     }
     const carMat = this.lambert(0xffffff, undefined, true);
-    this.add(mergeGeometries(solids, false), carMat);
+    if (solids.length) this.add(mergeGeometries(solids, false), carMat);
     for (const s of solids) s.dispose();
     const carGlass = new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.92 });
-    this.add(mergeGeometries(glasses, false), carGlass);
+    if (glasses.length) this.add(mergeGeometries(glasses, false), carGlass);
     this.tinted.push([carGlass, new Color(1, 1, 1)]);
     for (const s of glasses) s.dispose();
     // ploughed snow heaped along the lot's edges
@@ -1370,13 +1401,15 @@ export class Campus {
       ent.color(0x5b5f66).box(ex - 1.1, GROUND, ez - 4, ex, GROUND + 0.08, ez + 4); // the mat
       this.add(ent.build(), this.lambert(0xffffff), true);
       const vest = new G().color(0x9fb4c4);
-      vest.quad(
-        [ex - 1.1, GROUND, ez - 4],
-        [ex - 1.1, GROUND, ez + 4],
-        [ex - 1.1, GROUND + 3.3, ez + 4],
-        [ex - 1.1, GROUND + 3.3, ez - 4],
-        [-1, 0, 0],
-      );
+      // (walkable: its front is open — you walk in)
+      if (!this.walkable)
+        vest.quad(
+          [ex - 1.1, GROUND, ez - 4],
+          [ex - 1.1, GROUND, ez + 4],
+          [ex - 1.1, GROUND + 3.3, ez + 4],
+          [ex - 1.1, GROUND + 3.3, ez - 4],
+          [-1, 0, 0],
+        );
       vest.quad(
         [ex - 1.1, GROUND, ez - 4],
         [ex, GROUND, ez - 4],
@@ -1442,7 +1475,7 @@ export class Campus {
         [lot.x1 + 0.5, GROUND + 0.012, ez + 2.2],
         [0, 1, 0],
       );
-      this.add(path.build(), this.lambert(0x4c5056));
+      if (!this.walkable) this.add(path.build(), this.lambert(0x4c5056));
       // trodden snow either side of the path, bollard lights along it
       const slushTex = new CanvasTexture(slushCanvas(T));
       slushTex.colorSpace = SRGBColorSpace;
@@ -1517,23 +1550,29 @@ export class Campus {
     const posts: BufferGeometry[] = [];
     const heads = new G().color(0xe9f2ff);
     const pools = new G();
-    const lampAt = (x: number, z: number, ry: number) => {
+    const lampAt = (x: number, z: number, ry: number, post = true) => {
       const gy = ground(x, z);
-      posts.push(place(tinted(new CylinderGeometry(0.09, 0.13, 9, 8).translate(0, 4.5, 0), 0x3a3e44), x, gy, z, ry));
-      posts.push(place(tinted(new CylinderGeometry(0.22, 0.26, 0.5, 8).translate(0, 0.25, 0), 0x3a3e44), x, gy, z, ry));
-      posts.push(place(tinted(new BoxGeometry(2.2, 0.12, 0.12).translate(1.0, 8.95, 0), 0x3a3e44), x, gy, z, ry));
-      posts.push(place(tinted(new BoxGeometry(1.0, 0.24, 0.42).translate(2.0, 8.9, 0), 0x50555b), x, gy, z, ry));
-      posts.push(place(tinted(new BoxGeometry(1.0, 0.08, 0.42).translate(2.0, 9.06, 0), 0xffffff), x, gy, z, ry));
-      shadowAt(x, z, 0.9, 0.9, 0, gy + 0.028);
+      if (post)
+        posts.push(place(tinted(new CylinderGeometry(0.09, 0.13, 9, 8).translate(0, 4.5, 0), 0x3a3e44), x, gy, z, ry));
+      if (post) {
+        posts.push(
+          place(tinted(new CylinderGeometry(0.22, 0.26, 0.5, 8).translate(0, 0.25, 0), 0x3a3e44), x, gy, z, ry),
+        );
+        posts.push(place(tinted(new BoxGeometry(2.2, 0.12, 0.12).translate(1.0, 8.95, 0), 0x3a3e44), x, gy, z, ry));
+        posts.push(place(tinted(new BoxGeometry(1.0, 0.24, 0.42).translate(2.0, 8.9, 0), 0x50555b), x, gy, z, ry));
+        posts.push(place(tinted(new BoxGeometry(1.0, 0.08, 0.42).translate(2.0, 9.06, 0), 0xffffff), x, gy, z, ry));
+        shadowAt(x, z, 0.9, 0.9, 0, gy + 0.028);
+      }
       const hx = x + Math.cos(ry) * 2.0;
       const hz = z - Math.sin(ry) * 2.0;
-      heads.quad(
-        [hx - 0.55, GROUND + 8.77, hz - 0.24],
-        [hx + 0.55, GROUND + 8.77, hz - 0.24],
-        [hx + 0.55, GROUND + 8.77, hz + 0.24],
-        [hx - 0.55, GROUND + 8.77, hz + 0.24],
-        [0, -1, 0],
-      );
+      if (post)
+        heads.quad(
+          [hx - 0.55, GROUND + 8.77, hz - 0.24],
+          [hx + 0.55, GROUND + 8.77, hz - 0.24],
+          [hx + 0.55, GROUND + 8.77, hz + 0.24],
+          [hx - 0.55, GROUND + 8.77, hz + 0.24],
+          [0, -1, 0],
+        );
       const R = 10.5;
       pools.quad(
         [hx - R, GROUND + 0.03, hz - R],
@@ -1543,9 +1582,12 @@ export class Campus {
         [0, 1, 0],
       );
     };
-    for (const x of [c2, c4]) for (const z of [lot.z0 + 9, lot.z0 + 23, lot.z0 + 37]) lampAt(x, z, Math.PI / 2);
-    lampAt(lot.x1 - 1, lot.z0 + 4, Math.PI);
-    lampAt(lot.x1 - 1, lot.z1 - 4, Math.PI);
+    // (walkable: the lot's lamp posts are things on the ground floor; their pools stay)
+    const lotPost = !this.walkable;
+    for (const x of [c2, c4])
+      for (const z of [lot.z0 + 9, lot.z0 + 23, lot.z0 + 37]) lampAt(x, z, Math.PI / 2, lotPost);
+    lampAt(lot.x1 - 1, lot.z0 + 4, Math.PI, lotPost);
+    lampAt(lot.x1 - 1, lot.z1 - 4, Math.PI, lotPost);
     for (let i = 8; i < roadPts.length; i += 12) {
       const p = roadPts[i];
       const side = (i / 12) % 2 === 0 ? 1 : -1;
@@ -1832,7 +1874,14 @@ export class Campus {
         [u1, v(y0)],
         [u0, v(y0)],
       ]);
-    band(ax, az, bx, bz, 0, len / U, GROUND, top);
+    const door = this.door;
+    if (door && nx === -1 && r.x0 === 0 && door.z0 > r.z0 && door.z1 < r.z1) {
+      // the entrance: an opening in the glass, as tall as the ground floor's walls
+      const u = (z: number) => (z - az) / U;
+      band(ax, az, ax, door.z0, 0, u(door.z0), GROUND, top);
+      band(ax, door.z1, bx, bz, u(door.z1), len / U, GROUND, top);
+      band(ax, door.z0, ax, door.z1, u(door.z0), u(door.z1), GROUND + WALL, top);
+    } else band(ax, az, bx, bz, 0, len / U, GROUND, top);
     if (win) {
       // the top storey, tile by tile, open where a window is
       const tiles = Math.abs(r.x1 - r.x0) + Math.abs(r.z1 - r.z0);
@@ -1935,12 +1984,12 @@ export class Campus {
     if (animate) this.t += dt;
     const outX = Math.max(0, this.fx0 + 0.5 - cam.x, cam.x - this.fx1 + 0.5);
     const outZ = Math.max(0, this.fz0 + 0.5 - cam.z, cam.z - this.fz1 + 0.5);
-    this.topSkin.visible = Math.hypot(outX, outZ) > 14.5;
+    this.topSkin.visible = this.skinAlways || Math.hypot(outX, outZ) > 14.5;
     for (const t of this.trees) t.rotation.y = Math.atan2(cam.x - t.position.x, cam.z - t.position.z);
     // the tower's beacon blinks at night
     this.beacon.opacity = this.night > 0.1 ? (Math.sin(this.t * 2.2) > 0.3 ? this.night : 0.08) : 0;
     for (const f of this.flakes) f.update(dt, cam, animate, this.fx0, this.fz0, this.fx1, this.fz1);
-    this.visitor?.update(dt, this.night, animate);
+    this.visitor?.update(dt, this.night, animate, this.people);
     this.steam?.update(dt, animate);
   }
 

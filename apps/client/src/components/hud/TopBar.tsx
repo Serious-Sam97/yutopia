@@ -10,6 +10,7 @@ import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
 import { Face } from "./Face";
 import { Icon } from "./icons";
+import { FloorChip } from "./LiftPanel";
 
 const LOCKABLE = ["war-room", "booth-1", "booth-2", "booth-3", "standup", "server-room"];
 
@@ -43,6 +44,7 @@ function WhereBar() {
           {area && ` · ${t("hereCount").replace("{n}", String(here))}`}
         </p>
       </div>
+      <FloorChip />
       <NowOn />
     </header>
   );

@@ -5,6 +5,7 @@ import {
   isDoorKind,
   isFloor,
   isWallEdge,
+  lotStripes,
   type MapDef,
   tileAt,
   vWall,
@@ -249,6 +250,54 @@ const MATERIALS: Record<string, Painter> = {
   },
   // stage boards, dark, with tape marks
   "~": planks(["#2f2620", "#352a22", "#2a221c", "#3a2e25"], 3, 0.3, { tape: true }),
+  // outdoors: the lot's asphalt (ploughed, wet, slush in streaks) and the
+  // cleared concrete path (salt, expansion joints)
+  a: (g, s, r) => {
+    speckle(
+      "#3b3d40",
+      [
+        ["rgba(0,0,0,0.25)", 0.5],
+        ["rgba(220,226,232,0.10)", 0.5],
+      ],
+      0.35,
+      Math.max(1, s / 48),
+    )(g, s, r);
+    const S = s * PERIOD;
+    for (let i = 0; i < 26; i++) {
+      const x = r() * S;
+      const y = r() * S;
+      const w = s * (0.6 + r() * 1.8);
+      g.fillStyle = r() < 0.5 ? "rgba(225,232,238,0.10)" : "rgba(10,12,16,0.18)";
+      for (const [ox, oy] of [
+        [0, 0],
+        [S, 0],
+        [0, S],
+        [-S, 0],
+        [0, -S],
+      ]) {
+        g.beginPath();
+        g.ellipse(x + ox, y + oy, w, w * (0.15 + r() * 0.25), r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+  },
+  c: (g, s, r) => {
+    speckle(
+      "#c7c3ba",
+      [
+        ["rgba(90,86,78,0.18)", 0.6],
+        ["rgba(255,255,255,0.35)", 0.4],
+      ],
+      0.3,
+      Math.max(1, s / 64),
+    )(g, s, r);
+    const S = s * PERIOD;
+    g.fillStyle = "rgba(80,76,68,0.35)";
+    for (let i = 0; i < PERIOD; i++) {
+      g.fillRect(0, i * s, S, Math.max(1, s / 64));
+      g.fillRect(i * s * 2, 0, Math.max(1, s / 64), S);
+    }
+  },
   // metal grate (server room)
   x: (g, s, r) => {
     const S = s * PERIOD;
@@ -392,19 +441,22 @@ export class FloorBake {
   private edges: [number, number, number, number][] = []; // plan rects (tiles) for strips
   private sills: [number, number, number, number][] = [];
   private stage: [number, number, number, number] | null = null;
+  private stripes: [number, number, number, number][] = []; // the lot's painted bays
 
+  // `wells`: tiles open to the floor below (stairwells, shared wellsOf): no floor there
   constructor(
     readonly map: MapDef,
     objects: WorldObjectDef[],
     readonly res: number,
     chunkPx = 1024,
+    wells: Set<string> = new Set(),
   ) {
     const W = map.width;
     const H = map.height;
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const ch = tileAt(map, x, y);
-        if (!isFloor(ch)) continue;
+        if (!isFloor(ch) || wells.has(`${x},${y}`)) continue;
         const list = this.byMat.get(ch) ?? [];
         list.push([x, y]);
         this.byMat.set(ch, list);
@@ -423,6 +475,18 @@ export class FloorBake {
     }
     const st = map.areas.find((a) => a.kind === "stage");
     if (st) this.stage = [st.x, st.y + st.h - 0.04, st.w, 0.08];
+    // a parking lot (the asphalt): its bays painted on
+    const lot = this.byMat.get("a");
+    if (lot?.length) {
+      const xs = lot.map(([x]) => x);
+      const ys = lot.map(([, y]) => y);
+      this.stripes = lotStripes({
+        x0: Math.min(...xs),
+        z0: Math.min(...ys),
+        x1: Math.max(...xs) + 1,
+        z1: Math.max(...ys) + 1,
+      });
+    }
     this.ao = aoCanvas(map, objects);
     // screen bounds of the floor, cut into chunks of `chunkPx` device px
     const x0 = -H * HW;
@@ -506,6 +570,11 @@ export class FloorBake {
       strip(w > h ? [x, y + h * 0.35, w, h * 0.3] : [x + w * 0.35, y, w * 0.3, h], "#c39a4a", "rgba(255,240,200,0.5)");
     }
     if (this.stage) strip(this.stage, "#ffa630", "rgba(255,240,200,0.4)");
+    for (const [x, y, w, h] of this.stripes) {
+      if (!visible(Math.floor(x), Math.floor(y)) && !visible(Math.floor(x + w), Math.floor(y + h))) continue;
+      g.fillStyle = "rgba(236,234,226,0.85)";
+      g.fillRect(x * T, y * T, w * T, h * T);
+    }
   }
 }
 

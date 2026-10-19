@@ -16,5 +16,6 @@ import "./games.ts";
 import "./media.ts";
 import "./arrival.ts";
 import "./pets.ts";
+import "./lifts.ts";
 import "./computer.ts";
 import "./phone.ts";

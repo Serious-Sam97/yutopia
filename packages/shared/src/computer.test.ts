@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { canPlace, studio, type WorldObjectDef } from "./index.ts";
 import {
   cleanLabel,
   computerFacing,
@@ -10,6 +9,7 @@ import {
   monitorsToComputers,
   nextPhaseOk,
 } from "./computer.ts";
+import { canPlace, studio, type WorldObjectDef } from "./index.ts";
 
 // The studio's computers (docs/plan/19-vortexos.md).
 test("computers: the glass on the monitor, turned with it, lifted onto the desk", () => {
@@ -24,7 +24,10 @@ test("computers: the glass on the monitor, turned with it, lifted onto the desk"
   // turned: the glass turns too, and only rot 1/2 face the iso camera
   const turned = computerGlass({ ...pc, rot: 2 });
   assert.ok(turned && turned.tl[0] < turned.tr[0]);
-  assert.deepEqual([0, 1, 2, 3].map((rot) => computerFacing({ ...pc, rot })), [false, true, true, false]);
+  assert.deepEqual(
+    [0, 1, 2, 3].map((rot) => computerFacing({ ...pc, rot })),
+    [false, true, true, false],
+  );
   assert.equal(computerGlass({ ...pc, kind: "tv_portable" }), null);
 });
 
@@ -40,7 +43,14 @@ test("computers: what an OS may report", () => {
 
 test("computers: the desks' old monitors become computers, in place, once", () => {
   const desk: WorldObjectDef = { id: "d", kind: "desk", x: 10, y: 3, rot: 0, props: { split: 1 } };
-  const mon: WorldObjectDef = { id: "m", kind: "tabletop", x: 10, y: 3, rot: 2, props: { d: "monitor", c: [1, 2], z: 25, seed: 0.7 } };
+  const mon: WorldObjectDef = {
+    id: "m",
+    kind: "tabletop",
+    x: 10,
+    y: 3,
+    rot: 2,
+    props: { d: "monitor", c: [1, 2], z: 25, seed: 0.7 },
+  };
   const mug: WorldObjectDef = { id: "u", kind: "tabletop", x: 11, y: 3, rot: 0, props: { d: "mug", c: [0, 0], z: 25 } };
   const one = monitorsToComputers([desk, mon, mug]);
   assert.equal(one.changed.length, 1);

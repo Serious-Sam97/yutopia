@@ -1,6 +1,6 @@
 import { ANIM, answerOf, CONTACT, isHeld, isSocial, SOCIAL_MS, SOCIAL_REACH, socialFor } from "@yutopia/shared";
-import type { WorldRoom } from "../WorldRoom.ts";
 import type { Player } from "../schema.ts";
+import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Between people (shared/actions.ts): a wave across the room, a high five, a

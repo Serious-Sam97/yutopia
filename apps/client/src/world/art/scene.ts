@@ -179,6 +179,12 @@ export function drawFloors(g: Graphics, map: MapDef) {
             .lineTo(...P(x + 1, y))
             .stroke({ width: 1, color: 0x15100c, alpha: 0.6 });
           break;
+        case "a":
+          diamond(g, x, y, 1, 1, 0, mix(0x3b3d40, 0x47494c, n * 0.6));
+          break;
+        case "c":
+          diamond(g, x, y, 1, 1, 0, mix(0xc7c3ba, 0xd4d0c8, n * 0.6));
+          break;
         case "x":
           diamond(g, x, y, 1, 1, 0, mix(C.grate, C.grateLight, n * 0.4));
           for (let i = 1; i < 4; i++)

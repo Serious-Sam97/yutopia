@@ -22,12 +22,12 @@ import {
   tvVolume,
   YT_LIST,
 } from "@yutopia/shared/media";
+import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { jellyfinOn, playable, setPlaying } from "../media/jellyfin.ts";
 import { mediaKey } from "../media/key.ts";
 import { ytPlaylistTitle, ytSearchOn, ytTitle, ytVideos } from "../media/youtube.ts";
-import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
-import { api } from "../api.ts";
+import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Media on TVs and the radio (docs/plan/10-media.md). Nobody hosts it: the
@@ -262,8 +262,7 @@ registerFeature((room: WorldRoom) => {
   };
   const saveLists = () => {
     listsDirtyAt = 0;
-    if (!config.offline)
-      void api.putPlaylists(playlists()).catch((e) => console.warn("[media] playlists", e.message));
+    if (!config.offline) void api.putPlaylists(playlists()).catch((e) => console.warn("[media] playlists", e.message));
   };
   // rename it, pin it (for everyone), star it (my own "Mine")
   room.on("playlist:edit", (client, msg) => {

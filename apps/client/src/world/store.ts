@@ -284,6 +284,12 @@ export interface HudState {
     setups: Setup[] | null; // my saved setups (null until loaded)
   };
   mapVersion: number;
+  // the building (shared levels.ts): the floor I'm on, and every floor there is
+  floor: number;
+  floors: number[];
+  // in an elevator's car with its doors open (features/lifts.ts): its stop on
+  // my floor, the floors it goes to (and their names), where it is
+  lift: { id: string; floors: { level: number; name: string }[] } | null;
   objectsVersion: number; // bumps when furniture arrives, moves or goes
   following: number | null;
   inspect: number | null;
@@ -366,6 +372,9 @@ const initial: HudState = {
     setups: null,
   },
   mapVersion: 0,
+  floor: 0,
+  floors: [0],
+  lift: null,
   objectsVersion: 0,
   following: null,
   inspect: null,

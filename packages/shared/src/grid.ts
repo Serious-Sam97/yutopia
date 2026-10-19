@@ -1,8 +1,10 @@
 import { entry, footprint, standHeight, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
 import type { Point } from "./iso.ts";
+import { across, floorOf, objLevel, onLevel, STOREY } from "./levels.ts";
 import { type AreaDef, type Edge, edgeAt, hWall, isFloor, isWallEdge, type MapDef, tileAt, vWall } from "./map.ts";
 import { doorLockable, isDoorKind, isOpening, openingCentre, openingEdges, ringOf, wallTakes } from "./openings.ts";
+import { inRamp, type Ramp, rampHeight, stairsDivider, stairsRamps, stairsTopRail, stairsWell } from "./stairs.ts";
 
 // Walkability: floor tiles minus solid furniture, and walls on tile edges that
 // bodies can't cross (thin walls, WALL_T thick). Rebuilt whenever objects or
@@ -13,6 +15,7 @@ export const WALL_T = 0.2; // wall thickness, tiles (the wall is centred on its 
 // Infinity (no floor, walls' clutter, something not to stand on).
 export const STEP = 0.12; // tiles: a body steps up this much, and lands on a top its feet are this close to
 export const ZPX_TILE = 39.19; // iso px of height a tile (45.25 · cos 30°)
+const RAMP_REACH = 0.35; // tiles: how far up a stair tread the feet still find it
 
 export class Grid {
   readonly walk: Uint8Array;
@@ -20,6 +23,10 @@ export class Grid {
   readonly hBlock: Uint8Array; // north edge of (x, y): (height + 1) × width
   readonly vBlock: Uint8Array; // west edge of (x, y): height × (width + 1)
   readonly seats = new Map<number, { id: string; rot: number }>();
+  // stairs (stairs.ts): the treads' surfaces, and the tiles of their wells,
+  // which have no floor of their own (only the treads)
+  readonly ramps: Ramp[] = [];
+  readonly well: Uint8Array;
 
   constructor(
     readonly width: number,
@@ -29,12 +36,15 @@ export class Grid {
     this.top = new Float32Array(width * height).fill(Number.POSITIVE_INFINITY);
     this.hBlock = new Uint8Array((height + 1) * width);
     this.vBlock = new Uint8Array(height * (width + 1));
+    this.well = new Uint8Array(width * height);
   }
 
   // `as` = whose grid: doors are a way through their wall, but locked ones are
   // walls for everyone but their room's owner. Without it (shared paths,
   // previews) locked doors block everyone. Windows are wall.
   // `dressing: false` leaves the rooms' clutter out (placement checks: furniture wins).
+  // `map` is one floor (levels.ts): only the things on it count, and the stairs
+  // coming up from the floor below (their top half is how you get down).
   static from(
     map: MapDef,
     objects: Iterable<WorldObjectDef>,
@@ -42,7 +52,8 @@ export class Grid {
     opts: { dressing?: boolean } = {},
   ): Grid {
     const g = new Grid(map.width, map.height);
-    const list = [...objects];
+    const all = [...objects];
+    const list = onLevel(all, map);
     objects = list;
     const W = map.width;
     for (let y = 0; y < map.height; y++)
@@ -55,9 +66,28 @@ export class Grid {
       for (let x = 0; x < W; x++) if (isWallEdge(hWall(map, x, y))) g.hBlock[y * W + x] = 1;
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x <= W; x++) if (isWallEdge(vWall(map, x, y))) g.vBlock[y * (W + 1) + x] = 1;
+    // stairs: up from here, and down to the floor below (theirs, seen from here)
+    const floor = floorOf(map);
+    const up = list.filter((o) => o.kind === "stairs");
+    const down = all
+      .filter((o) => o.kind === "stairs" && objLevel(o, map) === floor - 1)
+      .map((o) => ({ ...o, ...across(map, floor - 1, floor, o) }));
+    for (const o of up) g.addStairs(o, 0);
+    for (const o of down) {
+      g.addStairs(o, -STOREY);
+      // nothing going on up from here: a rail where the next flight would start
+      if (!up.some((u) => u.x === o.x && u.y === o.y && (u.rot ?? 0) === (o.rot ?? 0)))
+        for (const e of stairsTopRail(o)) g.blockEdge(e);
+    }
     for (const o of objects) {
       const e = entry(o.kind);
       const { w, h } = footprint(o.kind, o.rot ?? 0);
+      // an elevator's car is only a way in while it's here with its doors open
+      if (o.kind === "elevator") {
+        if (o.props?.door !== "open")
+          for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) g.block(o.x + dx, o.y + dy);
+        continue;
+      }
       if (e.seat)
         for (let dy = 0; dy < h; dy++)
           for (let dx = 0; dx < w; dx++) g.seats.set(g.idx(o.x + dx, o.y + dy), { id: o.id, rot: o.rot ?? 0 });
@@ -83,6 +113,47 @@ export class Grid {
 
   idx(x: number, y: number): number {
     return y * this.width + x;
+  }
+
+  // A staircase `dz` up from this floor (−STOREY: the one from the floor below).
+  private addStairs(o: { x: number; y: number; rot?: number }, dz: number) {
+    this.ramps.push(...stairsRamps(o, dz));
+    for (const [x, y] of stairsWell(o)) {
+      if (!this.inBounds(x, y)) continue;
+      const i = this.idx(x, y);
+      this.well[i] = 1;
+      this.walk[i] = 0;
+      this.top[i] = Number.POSITIVE_INFINITY;
+    }
+    for (const e of stairsDivider(o)) this.blockEdge(e);
+  }
+
+  /** What's under a point to stand on, no higher than `up` (tiles; −Infinity: nothing). */
+  standOn(px: number, py: number, up: number): number {
+    const x = Math.floor(px);
+    const y = Math.floor(py);
+    if (!this.inBounds(x, y)) return Number.NEGATIVE_INFINITY;
+    const i = this.idx(x, y);
+    if (this.well[i]) {
+      let best = Number.NEGATIVE_INFINITY;
+      for (const r of this.ramps) {
+        if (!inRamp(r, px, py)) continue;
+        const h = rampHeight(r, px, py);
+        // (treads are a slope: feet follow them up even a slow frame's long step;
+        // the next flight up is a storey above, never within reach)
+        if (h <= up + RAMP_REACH && h > best) best = h;
+      }
+      return best;
+    }
+    const t = this.top[i];
+    return t <= up ? t : Number.NEGATIVE_INFINITY;
+  }
+
+  /** Is (x, y) on a staircase (its feet follow the treads)? */
+  onRamp(x: number, y: number): boolean {
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    return this.inBounds(tx, ty) && this.well[this.idx(tx, ty)] === 1;
   }
 
   /** Something solid on a tile: `stand` = its top (tiles up) when it can be stood on. */
@@ -174,13 +245,14 @@ export class Grid {
   // A body with its feet z tiles up: every corner over something no higher than
   // a step above them (the floor, or a top it's up on), and no wall.
   fitsAt(x: number, y: number, z: number, r = BODY_R): boolean {
-    if (z <= 0) return this.fits(x, y, r);
+    if (z <= 0 && z > -STEP && !this.ramps.length) return this.fits(x, y, r);
     const up = z + STEP;
+    const none = Number.NEGATIVE_INFINITY;
     if (
-      this.topAt(Math.floor(x - r), Math.floor(y - r)) > up ||
-      this.topAt(Math.floor(x + r), Math.floor(y - r)) > up ||
-      this.topAt(Math.floor(x - r), Math.floor(y + r)) > up ||
-      this.topAt(Math.floor(x + r), Math.floor(y + r)) > up
+      this.standOn(x - r, y - r, up) === none ||
+      this.standOn(x + r, y - r, up) === none ||
+      this.standOn(x - r, y + r, up) === none ||
+      this.standOn(x + r, y + r, up) === none
     )
       return false;
     return this.clearOfWalls(x, y, r);
@@ -190,17 +262,18 @@ export class Grid {
   // any of it within a step of its feet (it stands on an edge, platform-style).
   groundAt(x: number, y: number, z: number, r = BODY_R): number {
     const up = z + STEP;
-    let g = 0;
+    // (stairs: the treads can be below the floor's level, down to the floor below)
+    let g = this.ramps.length ? Number.NEGATIVE_INFINITY : 0;
     for (const [cx, cy] of [
       [x - r, y - r],
       [x + r, y - r],
       [x - r, y + r],
       [x + r, y + r],
     ]) {
-      const t = this.topAt(Math.floor(cx), Math.floor(cy));
-      if (t <= up && t > g) g = t;
+      const t = this.standOn(cx, cy, up);
+      if (t > g) g = t;
     }
-    return g;
+    return g === Number.NEGATIVE_INFINITY ? -2 * STOREY : g;
   }
 
   private clearOfWalls(x: number, y: number, r: number): boolean {

@@ -181,6 +181,14 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
   },
   { key: "floor", label: "catFloor", icon: "marquee", items: ["rug", "standup_mat"].map(it) },
   {
+    // the building (docs/plan/25): stairs up to the floor above, an elevator's
+    // stop (it joins the shaft of the ones above or below), and outside
+    key: "building",
+    label: "catBuilding",
+    icon: "stairs",
+    items: ["stairs", "elevator", "car", "lamp_post"].map(it),
+  },
+  {
     key: "pets",
     label: "catPets",
     icon: "paw",

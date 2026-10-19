@@ -1,0 +1,31 @@
+/* the current Yutopia HUD, redrawn for the mocks (house language) */
+.tl{position:absolute;top:14px;left:14px;height:54px;display:flex;align-items:center;gap:10px;padding:0 8px 0 12px;z-index:20}
+.tl .tape{width:7px;height:24px;border-radius:2px;background:linear-gradient(180deg,#b5562f 0 25%,#e8a33d 25% 50%,#6e7b3a 50% 75%,#efe4cc 75%)}
+.tl .brand{font:24px VT323;color:var(--vfd);letter-spacing:.06em}
+.vfd{background:radial-gradient(120% 140% at 50% 0%,#2a2016,#120d09 70%);border:1px solid #000;border-radius:8px;box-shadow:inset 0 2px 8px rgba(0,0,0,.8)}
+.tl .room{display:flex;flex-direction:column;justify-content:center;padding:4px 12px;height:40px}
+.tl .room b{font:21px/1 VT323;color:var(--vfd);font-weight:400;letter-spacing:.04em;text-shadow:0 0 6px rgba(255,166,48,.45)}
+.tl .room span{font:11px 'Share Tech Mono';color:var(--hdim)}
+.tl .clk{font:24px/40px VT323;color:var(--vfd);padding:0 12px;text-shadow:0 0 6px rgba(255,166,48,.45)}
+.tr{position:absolute;top:14px;right:14px;height:54px;display:flex;align-items:center;gap:10px;padding:0 8px 0 10px;z-index:20}
+.tr .faces{display:flex}.tr .faces .pf{margin-left:-8px;box-shadow:0 0 0 2px #2a1c13}.tr .faces .pf:first-child{margin-left:0}
+.tr .cnt{font:12px 'Share Tech Mono';color:var(--hdim)}
+.ghost{height:34px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:9px;border:1px solid var(--edge);background:rgba(255,255,255,.03);font:12px 'Share Tech Mono';letter-spacing:.07em;text-transform:uppercase;color:var(--hcream)}
+.ghost svg.ic{width:15px;height:15px}
+.dock{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);height:62px;display:flex;align-items:center;gap:8px;padding:0 10px;z-index:20}
+.dk{width:44px;height:44px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(180deg,#efe4cc,#d6c9a6);color:#2a1a12;box-shadow:0 3px 0 #8f8166,inset 0 1px 0 #fff;position:relative}
+.dk svg.ic{width:21px;height:21px;stroke-width:1.9}
+.dk.red{background:linear-gradient(180deg,#d4774c,#b5562f);color:#fff3e0;box-shadow:0 3px 0 #6f2f14,inset 0 1px 0 rgba(255,255,255,.3)}
+.dk.lit{background:linear-gradient(180deg,#ffc477,#ffa630);box-shadow:0 3px 0 #a5641a,inset 0 1px 0 #fff,0 0 16px rgba(255,166,48,.45)}
+.dk .bd{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:#b5562f;color:#fff3e0;font:700 10px/18px Inter;text-align:center;padding:0 5px;box-shadow:0 0 0 2px #2a1c13}
+.dk .kk{position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);font:9.5px 'Share Tech Mono';background:#2a1c13;color:var(--vfd);border-radius:4px;padding:0 4px;border:1px solid var(--edge)}
+.dsep{width:1px;height:30px;background:var(--edge)}
+.status{height:44px;display:flex;align-items:center;gap:8px;padding:0 14px;border-radius:9px;border:1px solid var(--edge);font:12px 'Share Tech Mono';letter-spacing:.08em;color:var(--hcream)}
+.status i{width:9px;height:9px;border-radius:50%;background:#5fd068;box-shadow:0 0 6px #5fd068}
+.mini{position:absolute;left:14px;bottom:12px;width:206px;height:186px;padding:8px;z-index:20}
+.mini .map{position:relative;height:140px;border-radius:6px;overflow:hidden;background:#1c140e;border:1px solid #000}
+.mini .map i{position:absolute;border:1px solid rgba(0,0,0,.6)}
+.mini .ft{font:11px 'Share Tech Mono';color:var(--vfd);padding:8px 2px 0;letter-spacing:.08em}
+.tag{position:absolute;transform:translateX(-50%);font:12px 'Share Tech Mono';padding:2px 7px;border-radius:6px;background:rgba(34,23,16,.85);color:var(--hcream);border:1px solid var(--edge);white-space:nowrap;z-index:15}
+.hint{position:absolute;display:flex;align-items:center;gap:8px;padding:8px 12px;font:12px 'Share Tech Mono';letter-spacing:.06em;color:var(--hdim);z-index:20}
+.hint b{color:var(--hcream);font-weight:400}

@@ -1,4 +1,4 @@
-import { footprint, hearingGain, type WorldObjectDef } from "@yutopia/shared";
+import { footprint, hearingGain, objLevel, type WorldObjectDef } from "@yutopia/shared";
 import {
   CABLE_REACH,
   CONSOLES,
@@ -17,10 +17,10 @@ import {
 import { builtinGame } from "@yutopia/shared/library";
 import { MEDIA_INPUT, tvInput } from "@yutopia/shared/media";
 import { AccessToken } from "livekit-server-sdk";
-import { config } from "../config.ts";
-import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
-import { GameConsole } from "../schema.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { GameConsole } from "../schema.ts";
+import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // The game room (docs/plan/09-game-room.md). Consoles are plugged into a TV by
@@ -343,13 +343,13 @@ registerFeature((room: WorldRoom) => {
         c.since = Date.now();
         // the picture for everyone in the world, the sound for whoever's in earshot of the TV
         const { w, h } = footprint(tv.kind, tv.rot ?? 0);
-        const speaker = { x: tv.x + w / 2, y: tv.y + h / 2, dnd: false };
+        const speaker = { x: tv.x + w / 2, y: tv.y + h / 2, dnd: false, level: objLevel(tv, room.map) };
         const video: string[] = [];
         const audio: string[] = [];
         for (const [sid, p] of room.state.players) {
           if (sid === c.host || p.bot) continue;
           video.push(String(p.uid));
-          if (hearingGain(room.map, { x: p.x, y: p.y, dnd: p.status === "dnd" }, speaker, true) > 0)
+          if (hearingGain(room.map, { x: p.x, y: p.y, dnd: p.status === "dnd", level: p.level }, speaker, true) > 0)
             audio.push(String(p.uid));
         }
         const key = `${c.host}|${video.join(",")}|${audio.join(",")}`; // (a new host hears it too)

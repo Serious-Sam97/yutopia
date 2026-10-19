@@ -22,10 +22,10 @@ import {
   serveToss,
 } from "@yutopia/shared/pong";
 import { TABLE_REACH, TABLE_WALK_AWAY, tableAway } from "@yutopia/shared/tables";
-import { config } from "../config.ts";
-import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
-import { PongSeat, PongTable } from "../schema.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { PongSeat, PongTable } from "../schema.ts";
+import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Ping-pong tables. A match between two seats — people, or Vortex at a level

@@ -40,8 +40,7 @@ export function doorLeaves(kind: string): number {
   return kind === "archway" ? 0 : kind === "door_double" || kind === "door_saloon" ? 2 : 1;
 }
 export const doorSlides = (kind: string): boolean => kind === "door_barn";
-export const doorLockable = (kind: string): boolean =>
-  isDoorKind(kind) && kind !== "door_saloon" && kind !== "archway";
+export const doorLockable = (kind: string): boolean => isDoorKind(kind) && kind !== "door_saloon" && kind !== "archway";
 export const doorStartState = (kind: string): string | undefined =>
   kind === "archway" ? undefined : kind === "door_saloon" ? "closed" : "open";
 

@@ -1,8 +1,8 @@
 import { STATION_COUNT } from "@yutopia/shared";
 import { isRadio, radioOf } from "@yutopia/shared/media";
-import { config } from "../config.ts";
-import { fromSchema, type WorldRoom, toSchema } from "../WorldRoom.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { fromSchema, toSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Radios and record players, each its own (props.radio, saved with the
@@ -35,8 +35,7 @@ registerFeature((room: WorldRoom) => {
     r.by = p.name;
     const next = { ...def, props: { ...(def.props ?? {}), radio: r } };
     room.state.objects.set(next.id, toSchema(next));
-    if (!config.offline)
-      void api.putObject(next).catch((e) => console.warn("[radio] save", e.message));
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[radio] save", e.message));
   });
   // its own volume knob (everyone near hears it at that)
   room.on("radio:volume", (client, m) => {
@@ -52,8 +51,7 @@ registerFeature((room: WorldRoom) => {
     if (volume === r.volume) return;
     const next = { ...def, props: { ...(def.props ?? {}), radio: { ...r, volume } } };
     room.state.objects.set(next.id, toSchema(next));
-    if (!config.offline)
-      void api.putObject(next).catch((e) => console.warn("[radio] save", e.message));
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[radio] save", e.message));
   });
   return {};
 });

@@ -1,9 +1,9 @@
 import { ANIM, areaAt, dirFromDelta, findPath, type Point } from "@yutopia/shared";
 import { isRadio } from "@yutopia/shared/media";
-import { config } from "../config.ts";
-import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
-import { Npc, type Player } from "../schema.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { Npc, type Player } from "../schema.ts";
+import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Vortex lives in the building (Fita 6). He wanders, stalks people, dances when

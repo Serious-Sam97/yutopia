@@ -24,6 +24,9 @@ export const config = {
   // With this on, the conversion is written back right away (layout + moved
   // boards/doors); otherwise only when someone edits the map.
   saveMigrations: process.env.YUTOPIA_MAP_V2_SAVE === "1",
+  // The building (docs/plan/25-building-floors.md): a world with one floor
+  // becomes the top of five, once. Off: it stays as it is (tests of other things).
+  building: process.env.YUTOPIA_BUILDING !== "0",
   // Media on TVs (docs/plan/10-media.md). Jellyfin: the server, an API key
   // (never leaves this process) and the Jellyfin user whose libraries Yutopia
   // shows (default: the first administrator). YouTube: a Data API key for

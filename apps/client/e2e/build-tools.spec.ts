@@ -43,7 +43,7 @@ const width = (page: Page) => page.evaluate(() => (window as any).__yutopia.room
 const kinds = (page: Page, kind: string) =>
   page.evaluate(
     (k) =>
-      [...(window as any).__yutopia.room.state.objects.values()]
+      [...(window as any).__yutopia.floorObjects()]
         .filter((o: any) => o.kind === k)
         .map((o: any) => ({ x: o.x, y: o.y, props: JSON.parse(o.props) })),
     kind,

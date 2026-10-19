@@ -49,7 +49,7 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
       const ch = m.tiles[y]?.[x];
       return !!ch && ch !== " " && ch !== "#";
     };
-    const hung = [...w.room.state.objects.values()].filter((o: any) =>
+    const hung = [...w.floorObjects()].filter((o: any) =>
       [
         "board_wall",
         "screen_wall",
@@ -68,12 +68,17 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
       ].includes(o.kind),
     );
     const near = (x: number, y: number) => hung.some((o: any) => Math.abs(o.x - x) < 6 && Math.abs(o.y - y) < 3);
+    // (not the building's core: its stairs and elevators' walls)
+    const core = (x: number, y: number) =>
+      m.areas.some(
+        (a: any) => a.key.startsWith("core-") && x >= a.x - 4 && x <= a.x + a.w && y >= a.y - 1 && y <= a.y + a.h,
+      );
     const v = (x: number, y: number) => m.vWalls[y]?.[x] ?? ".";
     for (let y = 2; y < m.height - 2; y++)
       for (let x = 1; x < m.width - 4; x++) {
         if (![0, 1, 2].every((d) => solid(m.hWalls[y]?.[x + d]) && floor(x + d, y) && floor(x + d, y - 1))) continue;
         if ([1, 2].some((d) => v(x + d, y) !== "." || v(x + d, y - 1) !== ".")) continue;
-        if (near(x, y)) continue;
+        if (near(x, y) || core(x, y)) continue;
         return { x, y, ch: m.hWalls[y][x + 1] as string };
       }
     return null;
@@ -208,7 +213,7 @@ test("third person: a click high up a wall, above the horizon, hangs the thing",
       "window_wide",
       "window_tall",
     ]);
-    const hung = [...w.room.state.objects.values()].filter((o: any) => wallKinds.has(o.kind));
+    const hung = [...w.floorObjects()].filter((o: any) => wallKinds.has(o.kind));
     const free = (x: number, y: number) => !hung.some((o: any) => Math.abs(o.x - x) < 3 && Math.abs(o.y - y) < 2);
     const open = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     for (let y = 1; y < m.height - 5; y++)

@@ -1,6 +1,7 @@
 import type { DressKind } from "@yutopia/shared";
 import { doorShut, entry, variantOf as lookOf } from "@yutopia/shared";
 import { boardWall } from "./board";
+import { car, elevator, lampPost, stairs } from "./building";
 import { chair } from "./chair";
 import { dressing } from "./clutter";
 import { computer } from "./computer";
@@ -145,6 +146,16 @@ const GENS: Record<string, ItemGen> = {
   rug: { draw: rug, variants: 3, key: painted },
   standup_mat: { draw: standupMat, variants: 1 },
   column: { draw: column, variants: 2 },
+  // the building (docs/plan/25): the elevator shows its doors and indicator,
+  // a car its colour, body, snow and where in its bay it stands
+  stairs: { draw: stairs, variants: 1 },
+  elevator: { draw: elevator, variants: 1, key: (p) => `${p.door === "open" ? "o" : "c"}|${p.dir ?? 0}` },
+  car: {
+    draw: car,
+    variants: 9,
+    key: (p) => `${p.variant ?? ""}|${p.wagon ? "w" : ""}${p.snowy ? "s" : ""}|${p.dx ?? 0}|${p.dz ?? 0}|${painted(p)}`,
+  },
+  lamp_post: { draw: lampPost, variants: 1 },
   sofa: { draw: sofa, variants: 3, key: painted },
   lamp: { draw: lamp, variants: 3, key: (p) => `${p.on === false ? "off" : "on"}|${painted(p)}` },
   plant: { draw: plant, variants: PLANT_VARIANTS, key: (p) => (typeof p.variant === "number" ? `v${p.variant}` : "") },

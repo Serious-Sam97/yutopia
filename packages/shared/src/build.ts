@@ -2,6 +2,7 @@ import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
 import { Grid } from "./grid.ts";
 import { hangEdges, hangFits, hangOf } from "./hang.ts";
 import type { Point } from "./iso.ts";
+import { onLevel } from "./levels.ts";
 import { type Edge, type MapDef, wallBetween } from "./map.ts";
 import { isOpening, openingBlocker } from "./openings.ts";
 import { fitsOnSurface, splitAll } from "./tops.ts";
@@ -9,6 +10,8 @@ import { fitsOnSurface, splitAll } from "./tops.ts";
 // One placement rule for client (ghost preview) and server (authority).
 export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDef, bodies: Point[] = []): boolean {
   const e = entry(o.kind);
+  // only what's on this floor counts (levels.ts)
+  others = onLevel(others, map);
   // doors and windows: set into a wall (openings.ts)
   if (isOpening(o.kind)) return openingBlocker(map, others, o, hungOnEdge(others)) === null;
   // tabletops: all of them on one surface's top, clear of the rest there

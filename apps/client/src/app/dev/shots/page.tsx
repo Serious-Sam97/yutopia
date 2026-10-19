@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_AVATAR, isTheme, openingsIntoWalls, splitAll, studio } from "@yutopia/shared";
+import { DEFAULT_AVATAR, openingsIntoWalls, splitAll, studio } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef } from "react";
 import type { Quality } from "@/lib/prefs";
@@ -10,18 +10,17 @@ import { WorldEngine } from "@/world/engine";
 // built-in map — no server, no people, a fixed hour and camera, the clock
 // frozen (every frame is dt = 0, so nothing moves but High's finish still
 // shows). Dev only, or a build with NEXT_PUBLIC_YUTOPIA_SHOTS=1.
-//   /dev/shots?x=12&y=9&zoom=1.15&hour=12&theme=clouds&quality=high[&crowd=50]
+//   /dev/shots?x=12&y=9&zoom=1.15&hour=12&quality=high[&crowd=50]
 export default function Shots() {
   if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_YUTOPIA_SHOTS !== "1") notFound();
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    const theme = q.get("theme");
     const quality = (q.get("quality") ?? "high") as Quality;
     const crowd = Number(q.get("crowd") ?? 0);
     // as the world-server loads it: doors and windows set into the walls
     const into = openingsIntoWalls(studio, splitAll(studio.objects).objects);
-    const map = { ...into.map, theme: isTheme(theme) ? theme : "clouds" };
+    const map = into.map;
     const engine = new WorldEngine(map);
     let stop = false;
     void (async () => {

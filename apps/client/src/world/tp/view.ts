@@ -2,15 +2,22 @@ import {
   cutsSig,
   EMOTES,
   type Emote,
+  elevOf,
   entry,
+  floorOf,
+  floorsOf,
+  homeOf,
+  levelMap,
   type MapDef,
+  offsetOf,
+  onLevel,
   type Point,
   placedFootprint,
-  type Theme,
   WANTS,
   type Want,
   type WorldObjectDef,
   wallCuts,
+  wellsOf,
 } from "@yutopia/shared";
 import {
   AdditiveBlending,
@@ -100,16 +107,17 @@ function jumpDip(b: Body3): number {
 export type Body3 = Omit<PersonIn, "angle"> & {
   id: string;
   d: number;
+  level?: number; // the floor they're on (shared levels.ts; their x / y are that floor's)
   angle?: number;
   mic?: boolean;
   bot?: boolean;
 };
 
 export interface ViewOpts {
-  themes: Themes; // the themes chunk (skies, clouds), shared with iso
-  theme?: Theme;
+  themes: Themes; // the themes chunk (the sky, trees), shared with iso
   keys?: boolean; // its own keyboard (the demo); the live world reads keys itself
   tags?: boolean; // name tags over heads (default on)
+  level?: number; // the floor to show (shared levels.ts; default: the map's own)
 }
 
 // Clicks: on the floor (tiles) or on someone (their id, where on the page).
@@ -143,6 +151,10 @@ const LIMITS: Record<CamMode, { pitch: [number, number]; dist: [number, number] 
   first: { pitch: [-1.25, 1.25], dist: [0, 0] },
 };
 
+// the stairwells' tiles as a signature (a floor rebuilt when they change)
+const wellsKey = (w: { floor: Set<string>; ceiling: Set<string> }) =>
+  `${[...w.floor].sort().join(";")}/${[...w.ceiling].sort().join(";")}`;
+
 export class ThirdPersonView {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
@@ -151,6 +163,15 @@ export class ThirdPersonView {
   readonly camera = new PerspectiveCamera(50, 1, 0.1, 200);
   world: World3;
   events: ViewEvents = {};
+  // The building (shared levels.ts): its home map, the floor I'm on (`map`: it,
+  // drawn at the origin, in its own coords) and the floors below it, drawn
+  // where they are in the building (seen down a stairwell, out of a window);
+  // the floors above aren't drawn (the Sims rule), the campus moves to match.
+  map: MapDef;
+  building: MapDef;
+  level: number;
+  private below = new Map<number, { world: World3; sig: string }>();
+  private wellSig = "";
   private people = new Map<string, Person3>();
   // the 3D people (world/chars): a model each, built a few a frame; the
   // drawing above stands in until a person's model is ready (and for Vortex)
@@ -219,13 +240,20 @@ export class ThirdPersonView {
   private night = false;
 
   constructor(
-    public map: MapDef,
+    building: MapDef,
     objects: WorldObjectDef[],
     private P: People,
     private items: Items,
     private opts: ViewOpts,
   ) {
-    const theme = opts.theme ?? map.theme ?? "clouds";
+    this.building = building;
+    this.level = opts.level ?? floorOf(building);
+    const map = levelMap(building, this.level) ?? building;
+    this.map = map;
+    const all = objects;
+    objects = onLevel(all, map);
+    const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
+    this.wellSig = wellsKey(wells);
     this.renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
@@ -233,8 +261,13 @@ export class ThirdPersonView {
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     this.light.update(map, objects);
     this.indexSeats(map, objects);
-    this.world = new World3(items, map, objects, this.renderer.capabilities.getMaxAnisotropy(), (m) =>
-      this.light.patch(m),
+    this.world = new World3(
+      items,
+      map,
+      objects,
+      this.renderer.capabilities.getMaxAnisotropy(),
+      (m) => this.light.patch(m),
+      wells,
     );
     this.scene.add(this.world.root);
     // a GPU reset (Chrome, mid-call) empties big canvases: draw the baked ones again
@@ -261,10 +294,12 @@ export class ThirdPersonView {
       this.scene.add(l);
     }
     // what the studio stands in (clouds / city / snow), the sky by the hour
-    this.winSig = cutsSig(objects);
-    this.around = new Surroundings(theme, map, opts.themes, wallCuts(objects));
+    const home = onLevel(all, building);
+    this.winSig = cutsSig(home);
+    this.around = new Surroundings(building, opts.themes, wallCuts(home));
     this.scene.add(this.around.root);
-    const fog = fogFor(theme);
+    this.floorsBelow(all);
+    const fog = fogFor();
     this.scene.fog = new Fog(0xa8c8e0, fog.near, fog.far);
     this.camera.far = fog.cameraFar;
     this.camera.updateProjectionMatrix();
@@ -641,29 +676,47 @@ export class ThirdPersonView {
 
   // The room as it is now: a new layout builds it all again; otherwise only
   // the areas whose things changed are redrawn (cheap: call it often).
-  update(map: MapDef, objects: WorldObjectDef[]) {
+  // `building`: the home map with every floor; `objects`: everything on every
+  // floor; `level`: the floor I'm on.
+  update(building: MapDef, objects: WorldObjectDef[], level = this.level) {
+    const map = levelMap(building, level) ?? building;
+    const moved = level !== this.level;
+    this.building = building;
+    this.level = level;
+    const all = objects;
+    objects = onLevel(all, map);
+    const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
+    const wellSig = wellsKey(wells);
     this.light.update(map, objects);
     this.indexSeats(map, objects);
-    const winSig = cutsSig(objects);
-    if (layoutSig(map) === layoutSig(this.map)) {
+    const home = onLevel(all, building);
+    const winSig = cutsSig(home);
+    this.floorsBelow(all);
+    if (!moved && wellSig === this.wellSig && layoutSig(map) === layoutSig(this.map)) {
       this.world.update(objects);
       // windows came or went: the campus outside opens where they are now
-      if (winSig !== this.winSig && this.around.theme === "snow") this.surround(map, objects);
+      if (winSig !== this.winSig) this.surround(building, home);
       this.winSig = winSig;
       return;
     }
     this.winSig = winSig;
+    this.wellSig = wellSig;
     const old = this.world;
     this.map = map;
-    this.world = new World3(this.items, map, objects, this.renderer.capabilities.getMaxAnisotropy(), (m) =>
-      this.light.patch(m),
+    this.world = new World3(
+      this.items,
+      map,
+      objects,
+      this.renderer.capabilities.getMaxAnisotropy(),
+      (m) => this.light.patch(m),
+      wells,
     );
     this.scene.remove(old.root);
     old.dispose();
     this.scene.add(this.world.root);
     this.builder.setMap(map);
-    this.surround(map, objects);
-    const fog = fogFor(this.around.theme);
+    this.surround(building, home);
+    const fog = fogFor();
     (this.scene.fog as Fog).near = fog.near;
     (this.scene.fog as Fog).far = fog.far;
     this.camera.far = fog.cameraFar;
@@ -674,12 +727,61 @@ export class ThirdPersonView {
 
   // what the studio stands in, again (a new layout, or the windows changed)
   private winSig = "";
-  private surround(map: MapDef, objects: WorldObjectDef[]) {
+  private surround(building: MapDef, home: WorldObjectDef[]) {
     this.scene.remove(this.around.root);
     this.around.dispose();
-    this.around = new Surroundings(this.opts.theme ?? map.theme ?? "clouds", map, this.opts.themes, wallCuts(objects));
+    this.around = new Surroundings(building, this.opts.themes, wallCuts(home));
     this.scene.add(this.around.root);
+    this.placeAround();
     this.setHour(this.hour);
+  }
+
+  // Where floor `level` is from mine: its corner and its height.
+  private offsetTo(level: number): { x: number; y: number; h: number } {
+    const a = offsetOf(this.building, level);
+    const b = offsetOf(this.building, this.level);
+    return { x: a.x - b.x, y: a.y - b.y, h: elevOf(level) - elevOf(this.level) };
+  }
+
+  // The floors below mine: built (again when their layout changed), placed.
+  private floorsBelow(all: WorldObjectDef[]) {
+    const want = new Set(floorsOf(this.building).filter((f) => f < this.level));
+    for (const [f, b] of this.below)
+      if (!want.has(f)) {
+        this.scene.remove(b.world.root);
+        b.world.dispose();
+        this.below.delete(f);
+      }
+    for (const f of want) {
+      const lm = levelMap(this.building, f);
+      if (!lm) continue;
+      const objs = onLevel(all, lm);
+      const wells = { floor: wellsOf(lm, all), ceiling: wellsOf(lm, all, "ceiling") };
+      const sig = `${layoutSig(lm)}|${wellsKey(wells)}`;
+      let b = this.below.get(f);
+      if (!b || b.sig !== sig) {
+        if (b) {
+          this.scene.remove(b.world.root);
+          b.world.dispose();
+        }
+        const world = new World3(this.items, lm, objs, this.renderer.capabilities.getMaxAnisotropy(), () => {}, wells);
+        b = { world, sig };
+        this.below.set(f, b);
+        this.scene.add(world.root);
+      } else b.world.update(objs);
+      const o = this.offsetTo(f);
+      b.world.root.position.set(o.x, o.h, o.y);
+    }
+    this.placeAround();
+  }
+
+  // The campus is built in the home floor's coords, its ground STOREYs below it.
+  private placeAround() {
+    const home = homeOf(this.building);
+    const o = this.offsetTo(home);
+    // (its snow a hair under the ground floor's)
+    this.around.campus.root.position.set(o.x, o.h - (home > 0 ? 0.03 : 0), o.y);
+    this.around.campus.skinAlways = this.level < home;
   }
 
   private resize() {
@@ -818,7 +920,7 @@ export class ThirdPersonView {
     this.night = d.night > 0.5;
     this.nightLevel = d.night;
     this.post?.setNight(d.night);
-    // the sky (the theme's, as in iso); far things fade into its horizon
+    // the sky (as in iso); far things fade into its horizon
     this.around.setDay(d);
     (this.scene.fog as Fog).color.copy(this.around.horizon);
     // the hour's colour comes from the light map (as in iso); these only give
@@ -897,8 +999,20 @@ export class ThirdPersonView {
   }
 
   // One frame: people from the world's bodies (`me` = whose camera this is).
+  private outside: { x: number; z: number }[] = [];
   frame(dt: number, bodies: Body3[], meId: string) {
     this.time += dt;
+    // everyone in my floor's frame: the floors below where they are, above not drawn
+    const outside: { x: number; z: number }[] = [];
+    bodies = bodies.flatMap((b) => {
+      const l = b.level ?? this.level;
+      const o = this.offsetTo(l);
+      if (l === 0) outside.push({ x: b.x + o.x, z: b.y + o.y });
+      if (l === this.level) return [b];
+      if (l > this.level) return [];
+      return [{ ...b, x: b.x + o.x, y: b.y + o.y, z: (b.z ?? 0) + o.h, ground: (b.ground ?? 0) + o.h }];
+    });
+    this.outside = outside;
     const me = bodies.find((b) => b.id === meId);
     const pad = this.padFree ? activePad() : null;
     // look around: Q / E, the right stick
@@ -999,6 +1113,13 @@ export class ThirdPersonView {
     this.stepFx(dt);
     this.stepFlashes(dt);
     this.fadeWalls(dt);
+    // people out on the ground (the visitor's car waits for them), in the campus's coords
+    const c = this.around.campus.root.position;
+    this.around.campus.people = this.outside;
+    for (const q of this.outside) {
+      q.x -= c.x;
+      q.z -= c.z;
+    }
     this.around.update(dt, this.camera.position, !me?.reduced);
     this.drawCues(dt, !!me?.reduced);
     this.placeSun();

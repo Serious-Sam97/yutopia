@@ -29,7 +29,8 @@ export type Interaction =
   | "petbowl"
   | "waterbowl"
   | "toybox"
-  | "computer";
+  | "computer"
+  | "lift";
 
 export interface CatalogEntry {
   label: string;
@@ -357,6 +358,21 @@ export const CATALOG = {
   window_studio: { label: "Studio glass", w: 2, h: 1, solid: false, buildable: true, opening: "window" },
   speaker_cab: { label: "Speaker cabinet", w: 1, h: 1, solid: true, buildable: true },
   column: { label: "Column", w: 1, h: 1, solid: true, buildable: true, variants: 2 },
+  // the building (docs/plan/25-building-floors.md): stairs up to the floor above
+  // (stairs.ts), an elevator's car where it stops on each floor (props.shaft
+  // names the shaft; the world-server runs the car), and outside the lot's cars
+  // and lamp posts
+  stairs: { label: "Staircase", w: 4, h: 6, solid: false, buildable: true },
+  elevator: { label: "Elevator", w: 2, h: 2, solid: false, interact: "lift", buildable: true },
+  car: { label: "Car", w: 5, h: 2, solid: true, buildable: true, variants: 9, paint: true },
+  lamp_post: {
+    label: "Lamp post",
+    w: 1,
+    h: 1,
+    solid: true,
+    buildable: true,
+    light: { color: 0xdfe8ff, radius: 9, intensity: 0.7 },
+  },
   server_rack: {
     label: "Server rack",
     w: 1,
@@ -447,6 +463,7 @@ const STAND: Partial<Record<ObjectKind, number>> = {
   mixing_desk: 18,
   speaker_cab: 46,
   column: 84,
+  car: 56,
   server_rack: 66,
   crt_terminal: 20,
   pet_house: 16,

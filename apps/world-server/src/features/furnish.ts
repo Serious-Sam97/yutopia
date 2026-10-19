@@ -1,5 +1,6 @@
 import {
   areaAt,
+  atLevel,
   CATALOG,
   type ClientMessages,
   canPlace,
@@ -7,6 +8,8 @@ import {
   entry,
   isKind,
   isOpening,
+  levelMap,
+  objLevel,
   takenId,
   type WorldObjectDef,
 } from "@yutopia/shared";
@@ -46,7 +49,7 @@ registerFeature((room: WorldRoom) => {
     for (const id of (Array.isArray(m?.ids) ? m.ids : []).slice(0, MAX_BATCH)) {
       const o = room.state.objects.get(String(id));
       if (!o || !entry(o.kind).buildable) continue;
-      const locked = room.lockBreak(p, null, [fromSchema(o)]);
+      const locked = room.lockBreak(p, null, [fromSchema(o)], objLevel(fromSchema(o), room.map));
       if (locked) {
         warn(client, `${locked}.`);
         continue;
@@ -99,8 +102,14 @@ registerFeature((room: WorldRoom) => {
         ),
       };
       def.props = keepPlaying(def.props, existing ? (fromSchema(existing).props ?? {}) : null);
-      // the group can't overlap the room, or itself
-      if (!canPlace(room.map, [...rest, ...next], def, bodies)) return warn(client, "That doesn't all fit there.");
+      // on a floor that's there (the group's own: its things say so), clear of
+      // the room and of itself
+      const level = objLevel(def, room.map);
+      if (!levelMap(room.map, level)) return;
+      def.props = atLevel(def, level, room.map).props;
+      const floorBodies = bodies.filter((q) => q.level === level);
+      if (!canPlace(room.levelMap(level), [...rest, ...next], def, floorBodies))
+        return warn(client, "That doesn't all fit there.");
       next.push(def);
     }
     const before = new Map(objects().map((o) => [o.id, o]));
@@ -126,7 +135,7 @@ registerFeature((room: WorldRoom) => {
         warn(client, `${room.holderName(o.id)} is moving that.`);
         continue;
       }
-      const locked = room.lockBreak(p, null, [fromSchema(o)]);
+      const locked = room.lockBreak(p, null, [fromSchema(o)], objLevel(fromSchema(o), room.map));
       if (locked) {
         warn(client, `${locked}.`);
         continue;

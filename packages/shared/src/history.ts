@@ -1,5 +1,5 @@
 import type { WorldObjectDef } from "./catalog.ts";
-import type { AreaDef, MapDef, Theme } from "./map.ts";
+import type { AreaDef, LevelDef, MapDef } from "./map.ts";
 
 // Build undo/redo. A step is the difference between two snapshots of the
 // studio (map + objects), so any edit — a drag of floor paint, a room, a
@@ -32,7 +32,8 @@ export interface Step {
   full?: { a: MapDef; b: MapDef };
   areas?: { a: AreaDef[]; b: AreaDef[] };
   spawn?: { a: MapDef["spawn"]; b: MapDef["spawn"] };
-  theme?: { a: Theme | undefined; b: Theme | undefined };
+  // the building's other floors (levels.ts): each one whole
+  levels?: { a: LevelDef[]; b: LevelDef[] };
   objects: ObjChange[];
 }
 
@@ -75,7 +76,7 @@ export function diffStep(before: Snapshot, after: Snapshot, label: string): Step
   if (!step.full) {
     if (!sameJson(a.areas, b.areas)) step.areas = { a: a.areas, b: b.areas };
     if (!sameJson(a.spawn, b.spawn)) step.spawn = { a: a.spawn, b: b.spawn };
-    if ((a.theme ?? "clouds") !== (b.theme ?? "clouds")) step.theme = { a: a.theme, b: b.theme };
+    if (!sameJson(a.levels ?? [], b.levels ?? [])) step.levels = { a: a.levels ?? [], b: b.levels ?? [] };
   }
   const ids = new Set([...before.objects.keys(), ...after.objects.keys()]);
   for (const id of ids) {
@@ -84,7 +85,7 @@ export function diffStep(before: Snapshot, after: Snapshot, label: string): Step
     if (ja === jb) continue;
     step.objects.push({ id, a: ja ? JSON.parse(ja) : null, b: jb ? JSON.parse(jb) : null });
   }
-  const empty = !step.full && !step.cells.length && !step.areas && !step.spawn && !step.theme && !step.objects.length;
+  const empty = !step.full && !step.cells.length && !step.areas && !step.spawn && !step.levels && !step.objects.length;
   return empty ? null : step;
 }
 
@@ -151,9 +152,22 @@ export function applyStep(
       if (sameJson(map.spawn, from(step.spawn))) next = { ...next, spawn: to(step.spawn) };
       else res.skipped++;
     }
-    if (step.theme) {
-      if ((map.theme ?? "clouds") === (from(step.theme) ?? "clouds")) next = { ...next, theme: to(step.theme) };
-      else res.skipped++;
+    if (step.levels) {
+      // floor by floor: one someone changed since stays theirs
+      const was = new Map(from(step.levels).map((l) => [l.index, l]));
+      const will = new Map(to(step.levels).map((l) => [l.index, l]));
+      const out: LevelDef[] = [];
+      for (const i of new Set([...(map.levels ?? []).map((l) => l.index), ...will.keys()])) {
+        const cur = map.levels?.find((l) => l.index === i);
+        if (sameJson(cur ?? null, was.get(i) ?? null)) {
+          const n = will.get(i);
+          if (n) out.push(n);
+        } else {
+          res.skipped++;
+          if (cur) out.push(cur);
+        }
+      }
+      next = { ...next, levels: out.sort((x, y) => x.index - y.index) };
     }
   }
   if (next !== map) res.map = next;
@@ -208,7 +222,6 @@ export const STEP_LABELS: Record<string, string> = {
   "map:room:remove": "removed a room",
   "map:resize": "resized the studio",
   "map:new": "started blank",
-  "map:theme": "changed the view",
   "map:spawn": "moved the arrival point",
   "desk:assign": "assigned a desk",
 };

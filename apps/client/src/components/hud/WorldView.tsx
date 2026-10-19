@@ -16,6 +16,7 @@ const OWN_PANELS = new Set(["settings", "avatar", "pets"]);
 import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
+import { LiftPanel } from "./LiftPanel";
 import {
   CableChip,
   ConnectionOverlay,
@@ -113,6 +114,7 @@ export function WorldView({ to }: { to?: string | null }) {
           <Knocks />
           <Toasts />
           {!building && <Prompt />}
+          {!building && <LiftPanel />}
           {!building && <HeldChip />}
           {!building && <CableChip />}
           {!building && <LookHint />}

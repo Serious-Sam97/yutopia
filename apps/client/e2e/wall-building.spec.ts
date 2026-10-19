@@ -261,14 +261,20 @@ test("third person: Paint shows the face under the pointer", async ({ page }) =>
     const open = (x: number, y: number) => !!w.grid?.ok?.(x, y);
     // (no door or window in it: shared openings.ts)
     const cut = new Set(
-      [...w.room.state.objects.values()]
+      [...w.floorObjects()]
         .filter((o: any) => o.kind === "door" || String(o.kind).startsWith("window"))
         .flatMap((o: any) => [o.rot % 2 ? `v${o.x},${o.y}` : `h${o.x},${o.y}`, `h${o.x + 1},${o.y}`]),
     );
+    // (not the building's core: its stairs and elevators' walls)
+    const core = (x: number, y: number) =>
+      m.areas.some(
+        (a: any) => a.key.startsWith("core-") && x >= a.x - 1 && x <= a.x + a.w && y >= a.y - 4 && y <= a.y + a.h,
+      );
     for (let y = 1; y < m.height - 5; y++)
       for (let x = 1; x < m.width - 3; x++)
         if (
           !cut.has(`h${x},${y}`) &&
+          !core(x, y) &&
           "pwfbk".includes(m.hWalls[y]?.[x] ?? ".") &&
           m.hWalls[y][x] !== "." &&
           [0, 1, 2, 3].every((k) => open(x, y + k))

@@ -11,10 +11,10 @@ import {
   nextPhaseOk,
   SHUTDOWN_MS,
 } from "@yutopia/shared/computer";
-import { config } from "../config.ts";
-import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
-import { Computer } from "../schema.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { Computer } from "../schema.ts";
+import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // The studio's computers (docs/plan/19-vortexos.md, shared/computer.ts). One

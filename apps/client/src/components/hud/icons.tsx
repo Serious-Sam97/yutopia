@@ -56,6 +56,8 @@ const PATHS = {
   board: "M3 4h18v16H3zM9 4v16M15 4v16M5 7.5h2M11 7.5h2M17 7.5h2M5 10.5h2M11 10.5h2M5 13.5h2",
   frame: "M4 4h16v16H4zM7 7h10v10H7zM7 15l3.5-3.5 2.5 2.5 1.5-1.5L17 15",
   door: "M3 21h18M5.5 21V3.5h13V21M8.5 21V6.5h7V21M13 14h.6",
+  // the building: a flight of stairs going up
+  stairs: "M3 20.5h4v-4h4v-4h4v-4h4v-4h2M3 20.5h18",
   window: "M4.5 3.5h15v15h-15zM12 3.5v15M4.5 11h15M3 20.5h18",
   clock: "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 1 0 0-17M12 7.5V12l3 2",
   mug: "M5 8h11v8.5a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3zM16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 4.5c0 1 1 1.2 1 2.2M11.5 4.5c0 1 1 1.2 1 2.2",

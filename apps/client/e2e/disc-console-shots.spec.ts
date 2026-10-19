@@ -75,7 +75,7 @@ async function putCorner(page: Page): Promise<{ x: number; y: number }> {
 async function takeAway(page: Page) {
   const ours = () =>
     page.evaluate(() =>
-      [...(window as any).__yutopia.room.state.objects.values()]
+      [...(window as any).__yutopia.floorObjects()]
         .map((o: any) => o.id as string)
         .filter((id) => id.startsWith("dc-")),
     );

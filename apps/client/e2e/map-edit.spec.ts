@@ -111,10 +111,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   await clickTile(ana, 5, 4);
   await expect
     .poll(() =>
-      st(
-        ana,
-        () => [...(window as any).__yutopia.room.state.objects.values()].filter((o: any) => o.kind === "chair").length,
-      ),
+      st(ana, () => [...(window as any).__yutopia.floorObjects()].filter((o: any) => o.kind === "chair").length),
     )
     .toBe(1);
   await ana.getByRole("tab", { name: "Desks", exact: true }).click();
@@ -124,9 +121,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   await expect
     .poll(() =>
       st(ana, () =>
-        [...(window as any).__yutopia.room.state.objects.values()].some(
-          (o: any) => JSON.parse(o.props).ownerName === "Ana Demo",
-        ),
+        [...(window as any).__yutopia.floorObjects()].some((o: any) => JSON.parse(o.props).ownerName === "Ana Demo"),
       ),
     )
     .toBe(true);

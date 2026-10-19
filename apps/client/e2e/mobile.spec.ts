@@ -10,10 +10,27 @@ test("phone: world loads, HUD fits, tap to walk", async ({ page }) => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow).toBe(false);
   await expect(page.getByRole("navigation", { name: /controls/i })).toBeVisible();
+  // (the camera settles on me first: a tap aimed while it glides lands elsewhere)
+  const onScreen = () =>
+    page.evaluate(() => {
+      const c = (window as any).__yutopia;
+      const s = c.engine.worldToClient(c.me.x, c.me.y);
+      return `${Math.round(s.x)},${Math.round(s.y)}`;
+    });
+  let was = "";
+  await expect
+    .poll(async () => {
+      const now = await onScreen();
+      const still = now === was;
+      was = now;
+      return still;
+    })
+    .toBe(true);
   const before = await page.evaluate(() =>
     (window as never as { __yutopia: { meTile(): { x: number; y: number } } }).__yutopia.meTile(),
   );
-  // tap two tiles away from me
+  // tap three tiles away from me, up and right on the screen (south of the
+  // arrival point stand the elevators, shut; straight up is my own head)
   const p = await page.evaluate(
     ([x, y]) => {
       const e = (window as any).__yutopia.engine;
@@ -21,7 +38,7 @@ test("phone: world loads, HUD fits, tap to walk", async ({ page }) => {
       const s = e.worldToClient(x, y);
       return { x: r.left + s.x, y: r.top + s.y };
     },
-    [before.x + 2, before.y + 2],
+    [before.x, before.y - 3],
   );
   await page.touchscreen.tap(p.x, p.y);
   await page.waitForTimeout(1500);

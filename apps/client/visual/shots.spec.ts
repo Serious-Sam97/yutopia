@@ -31,23 +31,22 @@ for (const [name, x, y, zoom] of ROOMS)
     ["night", 23],
   ] as const)
     test(`room ${name} · ${when}`, async ({ page }) => {
-      await open(page, { x, y, zoom, hour, theme: "clouds", quality: "high" });
+      await open(page, { x, y, zoom, hour, quality: "high" });
       await expect(page).toHaveScreenshot(`room-${name}-${when}.png`);
     });
 
-for (const theme of ["clouds", "city", "snow"])
-  for (const [when, hour] of [
-    ["noon", 12],
-    ["night", 23],
-  ] as const)
-    test(`theme ${theme} · ${when}`, async ({ page }) => {
-      await open(page, { x: 24, y: 18, zoom: 0.55, hour, theme, quality: "high" });
-      await expect(page).toHaveScreenshot(`theme-${theme}-${when}.png`);
-    });
+for (const [when, hour] of [
+  ["noon", 12],
+  ["night", 23],
+] as const)
+  test(`campus · ${when}`, async ({ page }) => {
+    await open(page, { x: 24, y: 18, zoom: 0.55, hour, quality: "high" });
+    await expect(page).toHaveScreenshot(`campus-${when}.png`);
+  });
 
 for (const quality of ["medium", "low"])
   test(`quality ${quality}`, async ({ page }) => {
-    await open(page, { x: 12, y: 9, zoom: 1.15, hour: 19.2, theme: "clouds", quality });
+    await open(page, { x: 12, y: 9, zoom: 1.15, hour: 19.2, quality });
     await expect(page).toHaveScreenshot(`quality-${quality}.png`);
   });
 
@@ -89,7 +88,7 @@ async function measure(page: Page) {
 }
 
 test("budgets: texture memory, logic and render time with 50 people", async ({ page }) => {
-  const at = { x: 12, y: 9, zoom: 1.15, theme: "clouds", quality: "high", crowd: 50 };
+  const at = { x: 12, y: 9, zoom: 1.15, quality: "high", crowd: 50 };
   await open(page, { ...at, hour: 23 });
   const night = await measure(page);
   const software = /swiftshader/i.test(night.gpu);

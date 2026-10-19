@@ -7,6 +7,7 @@ import {
   edgeAt,
   entry,
   entryWallItem,
+  floorOf,
   footprint,
   HALF_WALL,
   HANG_HIGH,
@@ -354,7 +355,7 @@ export class WorldEngine {
   app!: Application;
   map: MapDef;
   private world = new Container();
-  // what surrounds the studio (the space's theme): a backdrop + the building below the floor
+  // what surrounds the studio (the snow campus): a backdrop + the building below the floor
   private theme: ThemeView | null = null;
   private themeKey = "";
   private backdropLayer = new Container();
@@ -579,6 +580,15 @@ export class WorldEngine {
       const sig = cutsSig([...this.objectViews.values()].map((v) => v.def));
       if (sig !== this.cutSig) this.mountWalls();
     });
+  }
+
+  // The stairwells on this floor (shared wellsOf): open, no floor drawn there.
+  private wells = new Set<string>();
+  setWells(wells: Set<string>) {
+    const sig = [...wells].sort().join(";");
+    if (sig === [...this.wells].sort().join(";")) return;
+    this.wells = wells;
+    this.bakeFloors();
   }
 
   // The map changed (builders painted walls, added rooms, resized).
@@ -973,7 +983,7 @@ export class WorldEngine {
       !!this.theme &&
       !!this.post &&
       !!this.life &&
-      this.themeKey.startsWith(this.map.theme ?? "clouds")
+      this.themeKey.startsWith("snow")
     );
   }
 
@@ -1050,10 +1060,14 @@ export class WorldEngine {
     life.update({ dt, time: this.time, people, radio, night: this.night, emits });
   }
 
-  // ── the theme around the studio ──────────────────────────────────────────
-  // Themes load in their own chunk; the shell is drawn once the theme is in.
+  // ── what's around the building ─────────────────────────────────────────
+  // The backdrop loads in its own chunk; the shell is drawn once it's in.
   private applyTheme() {
-    const key = `${this.map.theme ?? "clouds"}|${this.quality}`;
+    const key = `snow|${this.quality}`;
+    // the ground floor of a building stands on the ground: nothing hangs under it
+    const ground = floorOf(this.map) === 0 && !!this.map.levels?.length;
+    this.shellBody.visible = !ground;
+    this.shellLights.visible = !ground;
     if (key === this.themeKey) {
       this.theme?.drawShell(
         this.shellBody,
@@ -1068,7 +1082,7 @@ export class WorldEngine {
     loadThemes().then(({ makeTheme }) => {
       if (this.destroyed || this.themeKey !== key) return;
       this.theme?.destroy();
-      this.theme = makeTheme(this.map.theme ?? "clouds", this.animated(), this.quality);
+      this.theme = makeTheme(this.animated(), this.quality);
       this.backdropLayer.addChild(this.theme.root);
       this.theme.setDay(this.day);
       this.theme.drawShell(
@@ -1096,7 +1110,13 @@ export class WorldEngine {
       this.floorDue = 0;
       for (const sp of this.floorJob?.sprites ?? []) sp.destroy(true);
       const t = performance.now();
-      const bake = new FloorBake(this.map, this.allObjects(), floorRes(this.map, this.quality, WORLD_SCALE));
+      const bake = new FloorBake(
+        this.map,
+        this.allObjects(),
+        floorRes(this.map, this.quality, WORLD_SCALE),
+        1024,
+        this.wells,
+      );
       this.floorStats = {
         setupMs: performance.now() - t,
         maxChunkMs: 0,

@@ -8,7 +8,7 @@ import { mixer } from "./audio";
 //  · a procedural lo-fi radio, deterministic from (station, startedAt) so every
 //    client in the room plays the same bar at the same time.
 
-export type Floor = "wood" | "carpet" | "tile" | "felt" | "stage" | "grate";
+export type Floor = "wood" | "carpet" | "tile" | "felt" | "stage" | "grate" | "asphalt" | "concrete";
 
 interface Tone {
   out: GainNode;
@@ -159,6 +159,9 @@ class Sound {
       felt: [320, 0.04, 0.07],
       stage: [700, 0.1, 0.05],
       grate: [3200, 0.08, 0.06],
+      // outdoors: slush on the lot crunches, the cleared path scuffs
+      asphalt: [1500, 0.09, 0.09],
+      concrete: [1900, 0.07, 0.04],
     };
     const [freq, gain, len] = spec[floor];
     const b = ctx.createBufferSource();

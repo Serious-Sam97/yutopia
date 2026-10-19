@@ -47,7 +47,7 @@ async function deskSpot(page: Page, sp: { x: number; y: number }, id: string) {
     const D = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
     const clear = await page.evaluate(
       (d) =>
-        ![...(window as any).__yutopia.room.state.objects.values()].some(
+        ![...(window as any).__yutopia.floorObjects()].some(
           (o: any) => o.x >= d.x - 1 && o.x <= d.x + 2 && o.y >= d.y - 1 && o.y <= d.y + 2,
         ),
       D,

@@ -20,7 +20,7 @@ const build = (page: Page) => page.evaluate(() => (window as any).__hud.get().bu
 const mine = (page: Page, skip: string[]) =>
   page.evaluate(
     (s) =>
-      [...(window as any).__yutopia.room.state.objects.values()]
+      [...(window as any).__yutopia.floorObjects()]
         .filter((o: any) => !s.includes(o.id) && ["desk", "tabletop", "computer"].includes(o.kind))
         .map((o: any) => ({ id: o.id, kind: o.kind, x: o.x, y: o.y, props: JSON.parse(o.props || "{}") })),
     skip,

@@ -28,7 +28,7 @@ async function click(page: Page, x: number, y: number, z = 0) {
 const objectsAt = (page: Page, x: number, y: number) =>
   page.evaluate(
     ([tx, ty]) =>
-      [...(window as any).__yutopia.room.state.objects.values()]
+      [...(window as any).__yutopia.floorObjects()]
         .filter((o: any) => o.x === tx && o.y === ty)
         .map((o: any) => ({ id: o.id, kind: o.kind, rot: o.rot, props: JSON.parse(o.props) })),
     [x, y],

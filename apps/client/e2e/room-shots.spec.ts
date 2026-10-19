@@ -177,9 +177,9 @@ test("through the day: tracking room, the building, the lobby windows", async ({
   await page.locator(WORLD).screenshot({ path: `${dir}/clouds-b.png` });
 });
 
-// Each theme around the studio (set locally in the engine, nothing saved):
-// the whole studio at noon, golden hour and night, and a room by day.
-test("themes: clouds, city, snow", async ({ page }) => {
+// The snow campus around the studio: the whole studio at noon, golden hour and
+// night, and a room by day.
+test("the campus around the studio", async ({ page }) => {
   test.setTimeout(180_000);
   const dir = resolve(__dirname, "../../..", OUT ?? ".");
   const tok = await token(ANA);
@@ -188,25 +188,21 @@ test("themes: clouds, city, snow", async ({ page }) => {
   await page.evaluate(() => {
     (window as any).__yutopia.updateNight = () => {};
   });
-  for (const theme of ["clouds", "city", "snow"]) {
-    for (const [name, hour, at] of [
-      ["noon", 12, { x: 24, y: 18, zoom: 0.55 }],
-      ["golden", 17.6, { x: 24, y: 18, zoom: 0.55 }],
-      ["night", 23, { x: 24, y: 18, zoom: 0.55 }],
-      ["room", 12, { x: 8, y: 26, zoom: 1.1 }],
-    ] as const) {
-      await page.evaluate(
-        ([t, h, p]) => {
-          const e = (window as any).__yutopia.engine;
-          e.map = { ...e.map, theme: t };
-          e.applyTheme();
-          e.setClock(h);
-          e.pinCamera(p);
-        },
-        [theme, hour, at] as const,
-      );
-      await page.waitForTimeout(1200); // the theme chunk loads lazily
-      await page.locator(WORLD).screenshot({ path: `${dir}/theme-${theme}-${name}.png` });
-    }
+  for (const [name, hour, at] of [
+    ["noon", 12, { x: 24, y: 18, zoom: 0.55 }],
+    ["golden", 17.6, { x: 24, y: 18, zoom: 0.55 }],
+    ["night", 23, { x: 24, y: 18, zoom: 0.55 }],
+    ["room", 12, { x: 8, y: 26, zoom: 1.1 }],
+  ] as const) {
+    await page.evaluate(
+      ([h, p]) => {
+        const e = (window as any).__yutopia.engine;
+        e.setClock(h);
+        e.pinCamera(p);
+      },
+      [hour, at] as const,
+    );
+    await page.waitForTimeout(1200); // the backdrop's chunk loads lazily
+    await page.locator(WORLD).screenshot({ path: `${dir}/campus-${name}.png` });
   }
 });

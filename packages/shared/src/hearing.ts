@@ -1,3 +1,4 @@
+import { across, homeOf, levelMap } from "./levels.ts";
 import { type AreaDef, type AreaKind, areaAt, type MapDef } from "./map.ts";
 
 // Who hears whom. The world-server runs this to decide LiveKit subscriptions
@@ -12,7 +13,11 @@ export interface Ear {
   x: number;
   y: number;
   dnd?: boolean;
+  level?: number; // the floor (levels.ts; none: the home floor)
+  stairs?: boolean; // in a stairwell: voices carry one floor up and down it, faintly
 }
+
+const STAIRWELL_GAIN = 0.3;
 
 const PRIVATE: AreaKind[] = ["private", "booth", "standup"];
 
@@ -20,9 +25,20 @@ export function isPrivate(a: AreaDef | null): boolean {
   return !!a && PRIVATE.includes(a.kind);
 }
 
-// 0 = can't hear, (0..1] = volume before stereo panning.
+// 0 = can't hear, (0..1] = volume before stereo panning. `map`: the building
+// (its home map); each ear says its floor. Other floors are silent — but in the
+// stairwell, one floor up or down, faintly.
 export function hearingGain(map: MapDef, listener: Ear, speaker: Ear, wasHearing = false): number {
   if (listener.dnd || speaker.dnd) return 0;
+  const home = homeOf(map);
+  const ll = listener.level ?? home;
+  const sl = speaker.level ?? home;
+  if (ll !== sl) {
+    if (Math.abs(ll - sl) !== 1 || !listener.stairs || !speaker.stairs) return 0;
+    const s = across(map, sl, ll, speaker);
+    return Math.hypot(listener.x - s.x, listener.y - s.y) < HEAR_RADIUS ? STAIRWELL_GAIN : 0;
+  }
+  if (ll !== home) map = levelMap(map, ll) ?? map;
   const la = areaAt(map, listener.x, listener.y);
   const sa = areaAt(map, speaker.x, speaker.y);
   if (sa?.kind === "stage") return 1;

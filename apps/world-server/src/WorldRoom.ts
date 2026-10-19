@@ -1,10 +1,13 @@
 import { type AuthContext, type Client, Room } from "@colyseus/core";
 import {
   ANIM,
+  across,
   areaAt,
+  atLevel,
   avatarFromSeed,
   CATALOG,
   type ClientMessages,
+  campusBuilding,
   canPlace,
   carried,
   clampLift,
@@ -17,10 +20,12 @@ import {
   edgeKey,
   entry,
   findPath,
+  floorsOf,
   Grid,
   getMap,
   HEARING_HZ,
   hearingGain,
+  homeOf,
   hostOf,
   hungOnEdge,
   isFloor,
@@ -32,9 +37,12 @@ import {
   jumpReady,
   jumpTimes,
   layoutFromMap,
+  levelMap,
   lockedRooms,
   type MapDef,
   mapFromLayout,
+  objLevel,
+  onLevel,
   openingBlocker,
   openingEdges,
   openingsIntoWalls,
@@ -44,6 +52,7 @@ import {
   type ServerMessages,
   SPLIT_KINDS,
   STEP,
+  STOREY,
   type Status,
   splitAll,
   studioV1,
@@ -66,6 +75,13 @@ import { Player, WorldObject, WorldState } from "./schema.ts";
 
 // a jump lets a body up for this long (the longest one, falling to the floor from up high)
 const JUMP_AIR_MS = 3000;
+
+// A spot in the building: a floor (shared levels.ts) and where on it.
+export interface Spot {
+  x: number;
+  y: number;
+  level: number;
+}
 
 interface ClientData {
   claims: WorldClaims;
@@ -101,8 +117,8 @@ export class WorldRoom extends Room<WorldState> {
   private features: Feature[] = [];
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   private removedUntil = new Map<number, number>();
-  // the arrival points people picked for themselves (user id → tile centre)
-  readonly mySpawns = new Map<number, { x: number; y: number }>();
+  // the arrival points people picked for themselves (user id → tile centre, its floor)
+  readonly mySpawns = new Map<number, { x: number; y: number; level?: number }>();
   private lastPresence = "";
   // features that watch every message before it's handled (build history)
   readonly messageTaps: ((client: WorldClient, type: string) => void)[] = [];
@@ -201,6 +217,23 @@ export class WorldRoom extends Room<WorldState> {
       console.log(`[computers] the world: ${pcs.changed.length} monitors are computers now`);
       if (!config.offline) await saveAll(pcs.changed, (o) => api.putObject(o));
     }
+    // the building (docs/plan/25-building-floors.md): a world from before floors
+    // becomes the top of five — the lobby and the lot below, the core — once,
+    // stored right away
+    const building = config.building ? campusBuilding(this.map, objects) : null;
+    if (building) {
+      this.map = building.map;
+      const moved = new Map(building.moved.map((o) => [o.id, o]));
+      objects = [...objects.map((o) => moved.get(o.id) ?? o), ...building.add];
+      this.syncMapState();
+      console.log(
+        `[building] the world: ${floorsOf(this.map).length} floors (${building.add.length} new things, ${building.moved.length} moved)`,
+      );
+      if (!config.offline) {
+        await saveAll([...building.moved, ...building.add], (o) => api.putObject(o));
+        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
+      }
+    }
     for (const o of objects) this.state.objects.set(o.id, toSchema(o));
     this.rebuildGrid();
     if (this.migrated && config.saveMigrations) this.saveMigration();
@@ -293,14 +326,16 @@ export class WorldRoom extends Room<WorldState> {
         api.spawn(claims.userId).catch(() => ({ spawn: undefined })),
       ]);
       if (desk.desk && this.state.objects.get(desk.desk)) p.desk = desk.desk;
-      if (mine.spawn) this.mySpawns.set(claims.userId, mine.spawn);
+      if (mine.spawn) this.mySpawns.set(claims.userId, { ...mine.spawn, level: mine.spawn.level ?? undefined });
       else if (mine.spawn === null) this.mySpawns.delete(claims.userId);
     }
-    const at = p.bot ? this.map.spawn : this.arrivalFor(p);
-    const open = this.grid.fits(at.x, at.y) ? at : (this.grid.nearestOpen(at.x, at.y) ?? this.map.spawn);
+    const at = p.bot ? this.homeSpot() : this.arrivalFor(p);
+    const g = this.gridFor(p.uid, at.level);
+    const open = g.fits(at.x, at.y) ? at : (g.nearestOpen(at.x, at.y) ?? this.map.spawn);
+    p.level = at.level;
     p.x = open.x;
     p.y = open.y;
-    p.area = areaAt(this.map, p.x, p.y)?.key ?? "";
+    p.area = this.areaOf(p)?.key ?? "";
     this.state.players.set(client.sessionId, p);
     metrics.inc("joins_total");
     for (const f of this.features) f.join?.(client, p);
@@ -351,20 +386,38 @@ export class WorldRoom extends Room<WorldState> {
       const dt = (now - data(client).lastPosAt) / 1000;
       data(client).lastPosAt = now;
       const to = { x: m.x, y: m.y };
-      // the feet's height: up only in a jump (as high as it goes from where it started) or a step
-      const z = Math.max(0, Math.min(12, Number(m.z) || 0));
+      // the feet's height: up only in a jump (as high as it goes from where it
+      // started), a step, or the stairs (as high as the tread under them; below
+      // the floor going down them)
+      const z = Math.max(-STOREY, Math.min(12, Number(m.z) || 0));
       const ud = data(client);
-      const jumping = isJump(p.jump) && now - p.jumpAt < JUMP_AIR_MS;
-      const cap = jumping ? (ud.zMax ?? 0) : p.z + STEP + 0.05;
-      if (z > cap || !isLegalMove(this.gridFor(p.uid), p, to, dt, z, p.z)) {
-        this.send(client, "snap", { x: p.x, y: p.y, z: p.z });
-        return;
+      const snap = () => this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
+      // another floor: only up or down the stairs, one at a time (the frame moves a storey)
+      const level = Number.isInteger(m.l) ? (m.l as number) : p.level;
+      let from: { x: number; y: number } = p;
+      let zFrom = p.z;
+      if (level !== p.level) {
+        if (Math.abs(level - p.level) !== 1 || !levelMap(this.map, level)) return snap();
+        from = across(this.map, p.level, level, p);
+        zFrom = p.z + (level > p.level ? -STOREY : STOREY);
+        if (!this.gridFor(p.uid, level).onRamp(to.x, to.y)) return snap();
+        if (ud.zMax !== undefined) ud.zMax += level > p.level ? -STOREY : STOREY;
       }
-      const nextArea = areaAt(this.map, to.x, to.y);
+      const grid = this.gridFor(p.uid, level);
+      const jumping = isJump(p.jump) && now - p.jumpAt < JUMP_AIR_MS;
+      let cap = jumping ? (ud.zMax ?? 0) : zFrom + STEP + 0.05;
+      if (grid.onRamp(to.x, to.y)) cap = Math.max(cap, grid.groundAt(to.x, to.y, z) + 0.05);
+      if (z > cap || !isLegalMove(grid, from, to, dt, z, zFrom)) return snap();
+      const nextArea = areaAt(this.levelMap(level), to.x, to.y);
       if (nextArea && nextArea.key !== p.area && !this.mayEnter(p, nextArea.key)) {
-        this.send(client, "snap", { x: p.x, y: p.y, z: p.z });
+        snap();
         this.knock(client, p, nextArea.key);
         return;
+      }
+      if (level !== p.level) {
+        const was = p.level;
+        p.level = level;
+        for (const f of this.features) f.levelChange?.(client, p, was, level);
       }
       p.x = to.x;
       p.y = to.y;
@@ -449,47 +502,60 @@ export class WorldRoom extends Room<WorldState> {
     this.on("teleport", (client, m) => {
       const p = this.state.players.get(client.sessionId);
       if (!p) return;
-      let target: { x: number; y: number } | null = null;
+      let target: Spot | null = null;
       if (m.to === "spawn") target = this.arrivalFor(p);
       else if (m.to === "desk") {
         const seat = p.desk ? this.state.objects.get(p.desk) : undefined;
-        target = seat ? { x: seat.x + 0.5, y: seat.y + 0.5 } : null;
+        target = seat ? { x: seat.x + 0.5, y: seat.y + 0.5, level: objLevel(fromSchema(seat), this.map) } : null;
       } else if (typeof m.to === "object" && m.to && "userId" in m.to) {
         const userId = m.to.userId;
         const other = [...this.state.players.values()].find((q) => q.uid === userId);
-        if (other) target = this.grid.nearestOpen(other.x + 1, other.y + 1) ?? { x: other.x, y: other.y };
+        if (other) {
+          const og = this.gridFor(p.uid, other.level);
+          const near = og.nearestOpen(other.x + 1, other.y + 1) ?? { x: other.x, y: other.y };
+          target = { ...near, level: other.level };
+        }
       } else if (typeof m.to === "object" && m.to && "x" in m.to && p.builder) {
-        // a spot on the map ("Go there" in build mode)
+        // a spot on a floor ("Go there" in build mode)
         const x = Number(m.to.x);
         const y = Number(m.to.y);
-        if (Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0 && x < this.map.width && y < this.map.height)
-          target = { x, y };
+        const level = Number.isInteger(m.to.level) ? (m.to.level as number) : p.level;
+        const lm = levelMap(this.map, level);
+        if (lm && Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0 && x < lm.width && y < lm.height)
+          target = { x, y, level };
       }
       if (!target) return;
-      // never into a room you can't walk into (locked doors, sealed rooms)
-      const mine = this.gridFor(p.uid);
+      // never into a room you can't walk into (locked doors, sealed rooms): from
+      // your floor's way up (an elevator, the stairs) when it's another floor
+      const mine = this.gridFor(p.uid, target.level);
       const landing = mine.fits(target.x, target.y) ? target : mine.nearestOpen(target.x, target.y);
-      if (!landing || (!findPath(mine, p, landing)?.length && Math.hypot(landing.x - p.x, landing.y - p.y) > 0.5)) {
+      const startAt: { x: number; y: number } =
+        target.level === p.level ? p : (this.levelEntry(target.level, p.uid) ?? landing ?? p);
+      if (
+        !landing ||
+        (!findPath(mine, startAt, landing)?.length && Math.hypot(landing.x - startAt.x, landing.y - startAt.y) > 0.5)
+      ) {
         this.send(client, "toast", { text: "Can't get there — the door is locked.", tone: "warn" });
         return;
       }
-      target = landing;
-      const area = areaAt(this.map, target.x, target.y);
+      const lm = this.levelMap(target.level);
+      const area = areaAt(lm, landing.x, landing.y);
       if (area && !this.mayEnter(p, area.key)) {
         // Land at the door instead and knock.
         this.knock(client, p, area.key);
         return;
       }
-      const spot = this.grid.fits(target.x, target.y) ? target : this.grid.nearestOpen(target.x, target.y);
-      if (!spot) return;
-      const seat = this.grid.seatAt(spot.x, spot.y);
-      p.x = spot.x;
-      p.y = spot.y;
+      const seat = mine.seatAt(landing.x, landing.y);
+      const was = p.level;
+      p.level = target.level;
+      p.x = landing.x;
+      p.y = landing.y;
       p.z = 0;
       p.a = seat ? ANIM.sit : ANIM.idle;
       if (seat) p.d = seatFacing(seat.rot);
       p.area = area?.key ?? "";
-      this.send(client, "snap", { x: p.x, y: p.y, z: 0 });
+      this.send(client, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
+      if (was !== p.level) for (const f of this.features) f.levelChange?.(client, p, was, p.level);
       this.pushPresence();
     });
 
@@ -528,7 +594,7 @@ export class WorldRoom extends Room<WorldState> {
     });
     this.on("mod:lock", (client, m) => {
       const p = this.state.players.get(client.sessionId);
-      const area = this.map.areas.find((a) => a.key === m.area);
+      const area = this.areaByKey(m.area);
       if (!owner(client) || !p || !area || area.kind === "open" || area.kind === "stage") return;
       if (m.locked) this.state.locks.set(area.key, p.name);
       else this.state.locks.delete(area.key);
@@ -538,17 +604,30 @@ export class WorldRoom extends Room<WorldState> {
   // Where this person arrives: their own spot while they can still get there
   // from the world's arrival point (doors, rooms and furniture change) and may
   // walk in (a booth someone's talking in, a room locked right now), else the world's.
-  arrivalFor(p: Player): { x: number; y: number } {
-    const mine = this.mySpawns.get(p.uid);
-    return mine && !this.arrivalProblem(p, mine, this.map.spawn) ? mine : this.map.spawn;
+  arrivalFor(p: Player): Spot {
+    const m = this.mySpawns.get(p.uid);
+    const mine = m ? { x: m.x, y: m.y, level: m.level ?? this.home } : null;
+    return mine && !this.arrivalProblem(p, mine, this.homeSpot()) ? mine : this.homeSpot();
+  }
+
+  /** The world's arrival point (on the home floor). */
+  homeSpot(): Spot {
+    return { ...this.map.spawn, level: this.home };
+  }
+
+  get home(): number {
+    return homeOf(this.map);
   }
 
   // Why someone can't arrive at `at` (a tile centre), walking from `from`; null: they can.
-  arrivalProblem(p: Player, at: { x: number; y: number }, from: { x: number; y: number }): string | null {
-    const g = this.gridFor(p.uid);
+  arrivalProblem(p: Player, at: Spot, from: Spot): string | null {
+    const g = this.gridFor(p.uid, at.level);
+    if (!levelMap(this.map, at.level)) return "That floor isn't there any more.";
     if (!g.inBounds(Math.floor(at.x), Math.floor(at.y))) return "That's off the map.";
     if (!g.ok(Math.floor(at.x), Math.floor(at.y)) || !g.fits(at.x, at.y)) return "Pick an open floor tile.";
-    const area = areaAt(this.map, at.x, at.y);
+    // from another floor: from where the elevators stop on this one
+    if (from.level !== at.level) from = { ...(this.levelEntry(at.level, p.uid) ?? at), level: at.level };
+    const area = areaAt(this.levelMap(at.level), at.x, at.y);
     if (area && area.key !== p.area && !this.mayEnter(p, area.key))
       return `Someone's in ${area.name} with the door shut — try again when it's free.`;
     const start = g.fits(from.x, from.y) ? from : g.nearestOpen(from.x, from.y);
@@ -560,7 +639,7 @@ export class WorldRoom extends Room<WorldState> {
 
   // ── booths ────────────────────────────────────────────────────────────────
   mayEnter(p: Player, areaKey: string): boolean {
-    const area = this.map.areas.find((a) => a.key === areaKey);
+    const area = this.areaByKey(areaKey);
     // booths, and rooms an owner locked: knock to get in
     if (area?.kind !== "booth" && !this.state.locks.has(areaKey)) return true;
     // your own booth is yours: walk in whoever's talking in it (a project
@@ -574,7 +653,7 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   private knock(client: WorldClient, p: Player, areaKey: string) {
-    const area = this.map.areas.find((a) => a.key === areaKey);
+    const area = this.areaByKey(areaKey);
     if (!area) return;
     const lastKey = `knock:${areaKey}`;
     const ud = client.userData as ClientData & Record<string, number>;
@@ -611,15 +690,10 @@ export class WorldRoom extends Room<WorldState> {
       const me = this.state.players.get(client.sessionId);
       if (!ud || !me || me.bot) continue;
       const hears = new Set<string>();
-      const ear = { x: me.x, y: me.y, dnd: me.status === "dnd" };
+      const ear = this.earOf(me);
       for (const [sid, other] of players) {
         if (sid === client.sessionId || other.bot) continue;
-        const g = hearingGain(
-          this.map,
-          ear,
-          { x: other.x, y: other.y, dnd: other.status === "dnd" },
-          ud.hears.has(sid),
-        );
+        const g = hearingGain(this.map, ear, this.earOf(other), ud.hears.has(sid));
         if (g > 0) {
           hears.add(sid);
           if (!heardBy.has(sid)) heardBy.set(sid, new Set());
@@ -645,7 +719,7 @@ export class WorldRoom extends Room<WorldState> {
   // Where someone is, as the phone tells others: their room's name, or the
   // world's in the open, in a booth or in focus mode (those stay discreet).
   whereIs(p: Player): string {
-    const area = this.map.areas.find((a) => a.key === p.area);
+    const area = this.areaByKey(p.area);
     if (!area || area.kind === "booth" || p.status === "dnd") return this.state.name;
     return area.name;
   }
@@ -658,7 +732,7 @@ export class WorldRoom extends Room<WorldState> {
       const people: PresenceEntry[] = [...this.state.players.values()]
         .filter((p) => !p.bot)
         .map((p) => {
-          const area = this.map.areas.find((a) => a.key === p.area);
+          const area = this.areaByKey(p.area);
           // Booths and focus mode stay discreet.
           const discreet = area?.kind === "booth" || p.status === "dnd";
           return {
@@ -678,17 +752,75 @@ export class WorldRoom extends Room<WorldState> {
 
   // ── build mode ──────────────────────────────────────────────────────────────
   // ── the map ─────────────────────────────────────────────────────────────────
-  private personalGrids = new Map<number, Grid>();
+  private personalGrids = new Map<string, Grid>();
   private layoutTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Each person's walk grid: locked doors are walls unless it's their room.
-  gridFor(uid: number): Grid {
-    let g = this.personalGrids.get(uid);
+  // Each person's walk grid on a floor: locked doors are walls unless it's their room.
+  gridFor(uid: number, level = this.home): Grid {
+    const key = `${uid}|${level}`;
+    let g = this.personalGrids.get(key);
     if (!g) {
-      g = Grid.from(this.map, [...this.state.objects.values()].map(fromSchema), { uid });
-      this.personalGrids.set(uid, g);
+      g = Grid.from(this.levelMap(level), [...this.state.objects.values()].map(fromSchema), { uid });
+      this.personalGrids.set(key, g);
     }
     return g;
+  }
+
+  // ── the building (shared levels.ts) ─────────────────────────────────────
+  /** One floor as a map (the home floor for one that isn't there). */
+  levelMap(level: number): MapDef {
+    return levelMap(this.map, level) ?? this.map;
+  }
+
+  /** The room with this key, on whichever floor it is (keys are the building's). */
+  areaByKey(key: string) {
+    for (const level of floorsOf(this.map)) {
+      const a = this.levelMap(level).areas.find((x) => x.key === key);
+      if (a) return a;
+    }
+    return undefined;
+  }
+
+  /** The room someone's in. */
+  areaOf(p: { x: number; y: number; level: number }) {
+    return areaAt(this.levelMap(p.level), p.x, p.y);
+  }
+
+  /** How someone hears and is heard: their floor, and whether they're in a stairwell. */
+  earOf(p: Player) {
+    return {
+      x: p.x,
+      y: p.y,
+      dnd: p.status === "dnd",
+      level: p.level,
+      stairs: this.gridFor(p.uid, p.level).onRamp(p.x, p.y),
+    };
+  }
+
+  /** Someone put somewhere in the building by the server (an elevator ride):
+   *  their client snaps there, and the features hear of a floor change. */
+  moveTo(client: WorldClient, p: Player, to: Spot) {
+    const was = p.level;
+    p.level = to.level;
+    p.x = to.x;
+    p.y = to.y;
+    p.z = 0;
+    p.area = this.areaOf(p)?.key ?? "";
+    this.send(client, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
+    if (was !== p.level) for (const f of this.features) f.levelChange?.(client, p, was, p.level);
+    this.pushPresence();
+  }
+
+  /** Where you come out on a floor from another one: in front of its elevators. */
+  levelEntry(level: number, uid: number): { x: number; y: number } | null {
+    const g = this.gridFor(uid, level);
+    for (const o of this.state.objects.values()) {
+      if (o.kind !== "elevator" || objLevel(fromSchema(o), this.map) !== level) continue;
+      const at = g.nearestOpen(o.x + 1, o.y - 0.5, 3);
+      if (at) return at;
+    }
+    const lm = this.levelMap(level);
+    return g.fits(lm.spawn.x, lm.spawn.y) ? lm.spawn : g.nearestOpen(lm.spawn.x, lm.spawn.y);
   }
 
   // Objects moved by a v1 → v2 conversion that isn't stored yet.
@@ -706,6 +838,8 @@ export class WorldRoom extends Room<WorldState> {
 
   syncMapState() {
     const m = this.map;
+    this.state.floor = m.floor ?? 0;
+    this.state.levels = JSON.stringify(m.levels ?? []);
     this.state.width = m.width;
     this.state.height = m.height;
     this.state.tiles.clear();
@@ -721,7 +855,6 @@ export class WorldRoom extends Room<WorldState> {
     this.state.areas = JSON.stringify(m.areas);
     this.state.spawnX = m.spawn.x;
     this.state.spawnY = m.spawn.y;
-    this.state.theme = m.theme ?? "clouds";
     this.state.mapVersion += 1;
   }
 
@@ -732,7 +865,7 @@ export class WorldRoom extends Room<WorldState> {
     this.rebuildGrid();
     for (const c of this.clients) {
       const p = this.state.players.get(c.sessionId);
-      if (p) p.area = areaAt(this.map, p.x, p.y)?.key ?? "";
+      if (p) p.area = this.areaOf(p)?.key ?? "";
     }
     if (config.offline) return;
     // the first edit of a converted map saves the whole conversion with it
@@ -760,16 +893,31 @@ export class WorldRoom extends Room<WorldState> {
   // People standing somewhere that's no longer floor (or now inside a wall or
   // furniture) step to the nearest open spot, or go back to the arrival point.
   rescue() {
-    const g = Grid.from(this.map, [...this.state.objects.values()].map(fromSchema));
+    const all = [...this.state.objects.values()].map(fromSchema);
+    const grids = new Map<number, Grid>();
     for (const c of this.clients) {
       const p = this.state.players.get(c.sessionId);
-      // (up on something that's still there: they stay)
-      if (!p || (isFloor(tileAt(this.map, Math.floor(p.x), Math.floor(p.y))) && g.fitsAt(p.x, p.y, p.z))) continue;
-      const to = g.nearestOpen(p.x, p.y, 2) ?? this.map.spawn;
+      if (!p) continue;
+      // their floor gone: the world's arrival point
+      if (!levelMap(this.map, p.level)) {
+        Object.assign(p, this.homeSpot(), { z: 0 });
+        this.send(c, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
+        continue;
+      }
+      const lm = this.levelMap(p.level);
+      let g = grids.get(p.level);
+      if (!g) {
+        g = Grid.from(lm, all);
+        grids.set(p.level, g);
+      }
+      // (up on something that's still there, or on the stairs: they stay)
+      if ((isFloor(tileAt(lm, Math.floor(p.x), Math.floor(p.y))) || g.onRamp(p.x, p.y)) && g.fitsAt(p.x, p.y, p.z))
+        continue;
+      const to = g.nearestOpen(p.x, p.y, 2) ?? (p.level === this.home ? this.map.spawn : lm.spawn);
       p.x = to.x;
       p.y = to.y;
       p.z = 0;
-      this.send(c, "snap", { x: p.x, y: p.y, z: 0 });
+      this.send(c, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
     }
   }
 
@@ -794,22 +942,40 @@ export class WorldRoom extends Room<WorldState> {
       this.send(client, "toast", { text: `${this.holderName(id)} is moving that.`, tone: "warn" });
       return;
     }
-    const def: WorldObjectDef = {
+    // which floor (props.level; none: the home floor), one that's there
+    const props0 = m.props ?? safeJson(existing?.props ?? "{}");
+    const level = Number.isInteger(props0.level) ? (props0.level as number) : this.home;
+    if (!levelMap(this.map, level)) return;
+    const lm = this.levelMap(level);
+    const sameFloor = onLevel(others, lm);
+    let def: WorldObjectDef = {
       id,
       kind: m.kind,
       x,
       y,
       rot,
       refId: m.refId ?? existing?.refId ?? null,
-      props: cleanProps(m.kind, m.props ?? safeJson(existing?.props ?? "{}"), others, x, y, rot),
+      props: cleanProps(m.kind, props0, sameFloor, x, y, rot),
     };
+    def = atLevel(def, level, this.map);
+    // an elevator's stop joins the shaft of the stops at the same spot on the
+    // other floors (or starts one of its own)
+    if (def.kind === "elevator" && !def.props?.shaft) {
+      const here = across(this.map, level, this.home, def);
+      const same = [...this.state.objects.values()].map(fromSchema).find((o) => {
+        if (o.kind !== "elevator" || o.id === def.id) return false;
+        const at = across(this.map, objLevel(o, this.map), this.home, o);
+        return at.x === here.x && at.y === here.y;
+      });
+      def.props = { ...(def.props ?? {}), shaft: String(same?.props?.shaft ?? def.id), door: "closed" };
+    }
     if (isOpening(def.kind)) {
       // doors and windows sit in a wall, on edges (rot even: from the north
       // edge of x, y; odd: from the west edge); never into someone's locked room
       def.rot = rot % 2;
       const why =
-        this.lockBreak(p, null, existing ? [fromSchema(existing), def] : [def]) ??
-        openingBlocker(this.map, others, def, hungOnEdge(others));
+        this.lockBreak(p, null, existing ? [fromSchema(existing), def] : [def], level) ??
+        openingBlocker(lm, sameFloor, def, hungOnEdge(sameFloor));
       if (why) {
         this.send(client, "toast", { text: `Can't put it there: ${why}.`, tone: "warn" });
         return;
@@ -881,9 +1047,10 @@ export class WorldRoom extends Room<WorldState> {
   // itself. Only its owner holds that key (admins too: an owner's lock is
   // theirs). `next`: the map after; `objs`: things moved, added or taken
   // away (where they were and where they'd go).
-  lockBreak(p: { uid: number }, next: MapDef | null, objs: WorldObjectDef[] = []): string | null {
-    const all = [...this.state.objects.values()].map(fromSchema);
-    for (const { area, ownerId } of lockedRooms(this.map, all)) {
+  lockBreak(p: { uid: number }, next: MapDef | null, objs: WorldObjectDef[] = [], level = this.home): string | null {
+    const lm = this.levelMap(level);
+    const all = onLevel([...this.state.objects.values()].map(fromSchema), lm);
+    for (const { area, ownerId } of lockedRooms(lm, all)) {
       if (ownerId === p.uid) continue;
       const why = `${area.ownerName ?? "Its owner"} locked ${area.name}`;
       const ring = ringOf(area);
@@ -891,7 +1058,7 @@ export class WorldRoom extends Room<WorldState> {
         const a = next.areas.find((x) => x.key === area.key);
         if (!a || a.ownerId !== area.ownerId || a.x !== area.x || a.y !== area.y || a.w !== area.w || a.h !== area.h)
           return why;
-        if (ring.some((e) => edgeAt(this.map, e) !== edgeAt(next, e))) return why;
+        if (ring.some((e) => edgeAt(lm, e) !== edgeAt(next, e))) return why;
       }
       const keys = new Set(ring.map(edgeKey));
       for (const o of objs) if (isOpening(o.kind) && openingEdges(o).some((e) => keys.has(edgeKey(e)))) return why;
@@ -900,7 +1067,9 @@ export class WorldRoom extends Room<WorldState> {
   }
 
   placementOk(o: WorldObjectDef, others: WorldObjectDef[]): boolean {
-    return canPlace(this.map, others, o, [...this.state.players.values()]);
+    const level = objLevel(o, this.map);
+    const bodies = [...this.state.players.values()].filter((q) => q.level === level);
+    return canPlace(this.levelMap(level), others, o, bodies);
   }
 
   // Swap a room's furniture for a template (builders). Persisted object by object.

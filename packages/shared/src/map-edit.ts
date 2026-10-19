@@ -15,14 +15,13 @@ import {
   holdsItems,
   isFacedWall,
   isFloor,
-  isTheme,
   isWallEdge,
   isWindow,
+  type LevelDef,
   type MapDef,
   NO_WALL,
   setBack,
   setEdge,
-  type Theme,
   tileAt,
   VOID,
   type WallMat,
@@ -45,7 +44,10 @@ export interface Layout {
   vBacks?: string[];
   areas: AreaDef[];
   spawn: Point;
-  theme?: Theme;
+  // the building (levels.ts): this map's floor and the others
+  floor?: number;
+  levels?: LevelDef[];
+  core?: Point;
 }
 
 export const MAP_MIN = 16;
@@ -72,8 +74,57 @@ export function layoutFromMap(map: MapDef): Layout {
     ...(hasBacks(map) ? backRows(map) : {}),
     areas: map.areas.map((a) => ({ ...a })),
     spawn: { ...map.spawn },
-    theme: map.theme ?? "clouds",
+    ...(map.levels?.length ? { floor: map.floor ?? 0, levels: map.levels.map((l) => levelDefCopy(l)) } : {}),
+    ...(map.core ? { core: { ...map.core } } : {}),
   };
+}
+
+const levelDefCopy = (l: LevelDef): LevelDef => JSON.parse(JSON.stringify(l));
+
+// a floor's size can be bigger than the home floor's (the ground floor takes the lot in)
+export const LEVEL_MAX = 160;
+export const LEVELS_MAX = 12;
+
+// Shape check for a stored floor (levels.ts).
+export function validLevel(l: unknown): l is LevelDef {
+  if (!l || typeof l !== "object") return false;
+  const x = l as LevelDef;
+  if (!Number.isInteger(x.index) || x.index < 0 || x.index > LEVELS_MAX) return false;
+  if (typeof x.name !== "string" || x.name.length > 60) return false;
+  if (!Number.isInteger(x.ox) || !Number.isInteger(x.oy) || Math.abs(x.ox) > 400 || Math.abs(x.oy) > 400) return false;
+  if (!Number.isInteger(x.width) || !Number.isInteger(x.height)) return false;
+  if (x.width < MAP_MIN || x.width > LEVEL_MAX || x.height < MAP_MIN || x.height > LEVEL_MAX) return false;
+  if (!Array.isArray(x.tiles) || x.tiles.length !== x.height) return false;
+  const ok = new Set<string>(PAINT_CHARS);
+  for (const row of x.tiles) {
+    if (typeof row !== "string" || row.length !== x.width) return false;
+    for (const ch of row) if (!ok.has(ch)) return false;
+  }
+  if (!edgeRowsOk(x)) return false;
+  return Array.isArray(x.areas) && x.areas.length <= 200;
+}
+
+function edgeRowsOk(x: {
+  width: number;
+  height: number;
+  hWalls?: unknown;
+  vWalls?: unknown;
+  hBacks?: unknown;
+  vBacks?: unknown;
+}): boolean {
+  const edge = new Set<string>(EDGE_CHARS);
+  const rows = (r: unknown, n: number, w: number) =>
+    Array.isArray(r) &&
+    r.length === n &&
+    r.every((s) => typeof s === "string" && s.length === w && [...s].every((c) => edge.has(c)));
+  if (!rows(x.hWalls, x.height + 1, x.width) || !rows(x.vWalls, x.height, x.width + 1)) return false;
+  const back = new Set<string>([NO_WALL, ...FACE_MATS]);
+  const backs = (r: unknown, n: number, w: number) =>
+    r === undefined ||
+    (Array.isArray(r) &&
+      r.length === n &&
+      r.every((s) => typeof s === "string" && s.length === w && [...s].every((c) => back.has(c))));
+  return backs(x.hBacks, x.height + 1, x.width) && backs(x.vBacks, x.height, x.width + 1);
 }
 
 // The back faces' rows, full size (as long as the walls' rows).
@@ -101,7 +152,8 @@ export function mapFromLayout(key: string, name: string, l: Layout): MapDef {
     areas: l.areas.map((a) => ({ ...a })),
     spawn: { ...l.spawn },
     objects: [],
-    theme: isTheme(l.theme) ? l.theme : "clouds",
+    ...(l.levels?.length ? { floor: l.floor ?? 0, levels: l.levels.map((v) => levelDefCopy(v)) } : {}),
+    ...(l.core && Number.isInteger(l.core.x) && Number.isInteger(l.core.y) ? { core: { ...l.core } } : {}),
   };
 }
 
@@ -118,22 +170,14 @@ export function validLayout(l: unknown): l is Layout {
     if (typeof row !== "string" || row.length !== x.width) return false;
     for (const ch of row) if (!ok.has(ch)) return false;
   }
-  if (v2) {
-    const edge = new Set<string>(EDGE_CHARS);
-    const rows = (r: unknown, n: number, w: number) =>
-      Array.isArray(r) &&
-      r.length === n &&
-      r.every((s) => typeof s === "string" && s.length === w && [...s].every((c) => edge.has(c)));
-    if (!rows(x.hWalls, x.height + 1, x.width) || !rows(x.vWalls, x.height, x.width + 1)) return false;
-    const back = new Set<string>([NO_WALL, ...FACE_MATS]);
-    const backs = (r: unknown, n: number, w: number) =>
-      r === undefined ||
-      (Array.isArray(r) &&
-        r.length === n &&
-        r.every((s) => typeof s === "string" && s.length === w && [...s].every((c) => back.has(c))));
-    if (!backs(x.hBacks, x.height + 1, x.width) || !backs(x.vBacks, x.height, x.width + 1)) return false;
+  if (v2 && !edgeRowsOk(x)) return false;
+  if (x.levels !== undefined) {
+    if (!Array.isArray(x.levels) || x.levels.length > LEVELS_MAX || !x.levels.every(validLevel)) return false;
+    const floor = x.floor ?? 0;
+    if (!Number.isInteger(floor) || floor < 0 || floor > LEVELS_MAX) return false;
+    const idx = x.levels.map((l) => l.index);
+    if (new Set(idx).size !== idx.length || idx.includes(floor)) return false;
   }
-  if (x.theme !== undefined && !isTheme(x.theme)) return false;
   if (!Array.isArray(x.areas) || x.areas.length > 200) return false;
   if (!x.spawn || !isFloor(x.tiles[Math.floor(x.spawn.y)]?.[Math.floor(x.spawn.x)] ?? VOID)) return false;
   return true;

@@ -1,5 +1,5 @@
-import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import type { Player } from "../schema.ts";
+import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 
 // Room features (rituals, radio, whiteboard, Vortex…) plug into these hooks so
 // WorldRoom stays about movement, hearing and presence.
@@ -8,6 +8,8 @@ export interface Feature {
   join?(client: WorldClient, p: Player): void;
   leave?(client: WorldClient, p: Player): void;
   areaChange?(client: WorldClient, p: Player, from: string, to: string): void;
+  // someone went to another floor (the stairs, an elevator, a teleport)
+  levelChange?(client: WorldClient, p: Player, from: number, to: number): void;
   dispose?(): void;
 }
 

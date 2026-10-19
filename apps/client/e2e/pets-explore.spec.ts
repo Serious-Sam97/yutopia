@@ -107,7 +107,8 @@ test("explore: the dog tours the place, comes back when called, and runs after m
     expect(back).toBeLessThan(12);
     // following: I walk a long way off, it runs after me — never a jump
     const from = await me(page);
-    const to = { x: from.x > 16 ? 3.5 : 28.5, y: from.y };
+    // (on a row above the building's core, the Lab's bottom-left corner)
+    const to = { x: from.x > 16 ? 3.5 : 28.5, y: Math.min(from.y, 16.5) };
     await walkTo(page, to.x, to.y, 20_000);
     const caught = await watchSteps(page, id, near, 20_000);
     expect(caught).toBeLessThan(12);

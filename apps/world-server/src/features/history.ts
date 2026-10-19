@@ -46,7 +46,7 @@ registerFeature((room: WorldRoom) => {
     s.redo = [];
     report(uid);
     // object edits are saved as they happen; map edits report when the layout lands
-    if (!step.cells.length && !step.full && !step.areas && !step.spawn && !step.theme)
+    if (!step.cells.length && !step.full && !step.areas && !step.spawn && !step.levels)
       room.toBuilders("build:saved", { ok: true, at: Date.now() });
   };
 

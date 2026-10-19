@@ -27,7 +27,8 @@ export interface JoinOptions {
 
 // client → server
 export interface ClientMessages {
-  pos: { x: number; y: number; z?: number; d: number; a: number; seq: number };
+  // `l`: the floor (changes only on the stairs; elevators are the server's)
+  pos: { x: number; y: number; z?: number; l?: number; d: number; a: number; seq: number };
   emote: { e: Emote };
   // a jump (shared/jump.ts): a hop, or a flip on the run
   jump: { k: JumpKind };
@@ -95,7 +96,8 @@ export interface ClientMessages {
   knock: { area: string };
   admit: { userId: number; area: string };
   follow: { userId: number | null };
-  teleport: { to: "desk" | "spawn" | { userId: number } | { x: number; y: number } };
+  // { x, y, level }: a spot on that floor (build mode's "Go there"; level: the floor shown)
+  teleport: { to: "desk" | "spawn" | { userId: number } | { x: number; y: number; level?: number } };
   // where I arrive (a tile I can walk to); null: the world's arrival point
   "spawn:mine": { at: { x: number; y: number } | null };
   "obj:put": {
@@ -124,16 +126,23 @@ export interface ClientMessages {
   "mod:mute": { userId: number; muted: boolean };
   "mod:kick": { userId: number };
   "mod:lock": { area: string; locked: boolean };
-  // map editing (builders)
-  "map:paint": { cells: { x: number; y: number; ch: string }[] }; // floors (tiles)
+  // map editing (builders); `level`: which floor of the building (levels.ts;
+  // none: the home floor)
+  "map:paint": { cells: { x: number; y: number; ch: string }[]; level?: number }; // floors (tiles)
   // walls (tile edges); `side` (a material on a wall that's there): paint only that face
-  "map:walls": { edges: { x: number; y: number; dir: "h" | "v"; ch: string; side?: 1 | -1 }[] };
+  "map:walls": { edges: { x: number; y: number; dir: "h" | "v"; ch: string; side?: 1 | -1 }[]; level?: number };
   // paint wall faces (panels: one face of one edge) — never builds or removes a wall
-  "map:faces": { faces: { x: number; y: number; dir: "h" | "v"; side: 1 | -1 }[]; mat: string };
+  "map:faces": { faces: { x: number; y: number; dir: "h" | "v"; side: 1 | -1 }[]; mat: string; level?: number };
   "map:resize": { width: number; height: number };
-  "map:theme": { theme: string }; // clouds | city | snow
   "map:new": { width: number; height: number };
   "map:spawn": { x: number; y: number };
+  // floors: a blank one on top of the building (its footprint and core), the top one gone
+  "level:add": Record<string, never>;
+  "level:remove": { level: number };
+  // elevators (features/lifts.ts): call the car to my floor (the stop's id),
+  // send it to a floor from inside it
+  "lift:call": { id: string };
+  "lift:go": { id: string; level: number };
   "map:room": {
     name: string;
     kind: string;
@@ -146,17 +155,19 @@ export interface ClientMessages {
     walls: boolean;
     floor?: string;
     wall?: string; // wall material (p, w, f, b, k, g)
+    level?: number;
   };
-  "map:room:walls": { key: string; wall: string }; // repaint a room's walls
+  "map:room:walls": { key: string; wall: string; level?: number }; // repaint a room's walls
   "map:room:update": {
     key: string;
+    level?: number;
     name?: string;
     kind?: string;
     ownerId?: number | null;
     ownerName?: string | null;
     dressing?: string | null; // tidy | lived | busy | null (bare)
   };
-  "map:room:remove": { key: string };
+  "map:room:remove": { key: string; level?: number };
   "desk:assign": { id: string; ownerId: number | null; ownerName: string | null };
   // doors: anyone opens/closes; the room's owner (or a builder) locks
   "door:set": { id: string; state: "open" | "closed" | "locked" };
@@ -233,7 +244,7 @@ export interface ClientMessages {
 
 // server → client
 export interface ServerMessages {
-  snap: { x: number; y: number; z?: number };
+  snap: { x: number; y: number; z?: number; level?: number };
   // my own arrival point here (on join and after I change it); null: the world's
   "spawn:mine": { at: { x: number; y: number } | null };
   // whom I may listen to (session ids) and who may listen to me (user ids)

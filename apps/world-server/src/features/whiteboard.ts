@@ -1,7 +1,7 @@
 import { WB_H, WB_MAX_ITEMS, WB_MAX_POINTS, WB_W, type WbItem, type WbOp } from "@yutopia/shared";
-import { config } from "../config.ts";
-import { fromSchema, type WorldRoom, safeJson, toSchema } from "../WorldRoom.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { fromSchema, safeJson, toSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Shared whiteboards: ops in, ops out. The scene lives in memory and is saved

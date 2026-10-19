@@ -13,6 +13,9 @@ export const FLOORS = {
   "~": "stage",
   ":": "felt",
   x: "grate",
+  // outdoors (the parking lot, levels.ts)
+  a: "asphalt",
+  c: "concrete",
 } as const;
 export type FloorChar = keyof typeof FLOORS;
 export const WALL = "#"; // v1 maps only (walls were tiles); see convert.ts
@@ -87,11 +90,6 @@ export interface AreaDef {
   dressOff?: string[];
 }
 
-// What surrounds the studio (chosen per space in build mode).
-export const THEMES = ["clouds", "city", "snow"] as const;
-export type Theme = (typeof THEMES)[number];
-export const isTheme = (t: unknown): t is Theme => typeof t === "string" && (THEMES as readonly string[]).includes(t);
-
 export interface MapDef {
   key: string;
   name: string;
@@ -106,7 +104,38 @@ export interface MapDef {
   spawn: { x: number; y: number };
   areas: AreaDef[];
   objects: WorldObjectDef[];
-  theme?: Theme; // default "clouds"
+  // The building (levels.ts): which floor this map is (0 = the ground, STOREY
+  // tiles a floor), where its corner sits in the home floor's coords, the
+  // building's other floors (on the home map) and, on a view of another floor,
+  // which one is home. All absent: a building of one floor, the ground.
+  floor?: number;
+  ox?: number;
+  oy?: number;
+  home?: number;
+  levels?: LevelDef[];
+  outdoor?: boolean;
+  // where the building's core (its stairs and elevators) stands, in the home
+  // floor's coords (building.ts)
+  core?: { x: number; y: number };
+}
+
+// One floor of the building other than the home one (levels.ts): a map of its
+// own (tiles, walls, rooms), placed by its corner in the home floor's coords.
+export interface LevelDef {
+  index: number;
+  name: string;
+  ox: number;
+  oy: number;
+  outdoor?: boolean; // open sky (the parking lot): no ceiling, snow falls
+  width: number;
+  height: number;
+  tiles: string[];
+  hWalls: string[];
+  vWalls: string[];
+  hBacks?: string[];
+  vBacks?: string[];
+  areas: AreaDef[];
+  spawn?: { x: number; y: number };
 }
 
 // The wall on the north edge of (x, y) / the west edge of (x, y).

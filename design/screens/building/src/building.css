@@ -1,0 +1,19 @@
+/* the building plan's mocks (docs/plan/24-building-floors.md, phase 0) — on top of phone.css + hud.css */
+body{background:#17110d}
+.title{color:#fff}
+.title small{color:#efe4cc}
+/* the floor you're on, beside where you are (a VFD, like the clock) */
+.tl .floor{display:flex;flex-direction:column;align-items:center;justify-content:center;height:40px;min-width:46px;padding:0 8px}
+.tl .floor small{font:9px 'Share Tech Mono';color:var(--hdim);letter-spacing:.12em}
+.tl .floor b{font:26px/22px VT323;color:var(--vfd);font-weight:400;text-shadow:0 0 8px rgba(255,166,48,.6)}
+/* the minimap's floor strip */
+.mini .lv{position:absolute;right:12px;top:14px;display:flex;flex-direction:column;gap:3px;z-index:2}
+.mini .lv i{position:static;font:11px/16px 'Share Tech Mono';font-style:normal;width:18px;height:16px;text-align:center;border-radius:3px;background:rgba(0,0,0,.55);color:var(--hdim);border:1px solid rgba(0,0,0,.6)}
+.mini .lv i.on{background:#ffb35c;color:#2a1a12;box-shadow:0 0 8px rgba(255,179,92,.7)}
+/* a prompt over the world (E to call…) */
+.prompt{position:absolute;display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:9px;background:rgba(34,23,16,.9);border:1px solid var(--edge);font:12.5px 'Share Tech Mono';color:var(--hcream);z-index:30;box-shadow:0 6px 16px rgba(0,0,0,.4);transform:translateX(-50%)}
+.prompt kbd{font:12px 'Share Tech Mono';background:#efe4cc;color:#2a1a12;border-radius:4px;padding:1px 6px;box-shadow:0 2px 0 #8f8166}
+/* an inset render (the same moment, another view) */
+.inset{position:absolute;border-radius:12px;overflow:hidden;border:3px solid #ffe9a8;box-shadow:0 14px 40px rgba(0,0,0,.55);background-size:cover;background-position:center;z-index:40}
+.inset .cap{position:absolute;left:8px;bottom:8px;font:11px 'Share Tech Mono';background:rgba(34,23,16,.85);color:var(--hcream);border-radius:5px;padding:2px 7px;letter-spacing:.06em}
+.stand{position:absolute;font:600 10.5px Inter;color:#1d1408;background:#c9e7ff;border-radius:5px;padding:2px 7px;z-index:50}

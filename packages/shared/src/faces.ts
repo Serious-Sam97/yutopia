@@ -1,5 +1,4 @@
 import type { WorldObjectDef } from "./catalog.ts";
-import { isDoorKind, openingEdges } from "./openings.ts";
 import { faceHit, type Ray } from "./hang.ts";
 import {
   type Edge,
@@ -12,6 +11,7 @@ import {
   nearestEdge,
   tileAt,
 } from "./map.ts";
+import { isDoorKind, openingEdges } from "./openings.ts";
 
 // Wall building, Sims-style (docs/plan/11-wall-building.md): a **panel** is one
 // face of one wall edge — what a paint stroke paints, what the pointer points
@@ -58,9 +58,7 @@ export function panelAt(
 // studio is fine; the map's outside never is floor.)
 export function joinedFaces(map: MapDef, objects: WorldObjectDef[], p: Panel, cap = 6000): Panel[] {
   const doors = new Set(
-    objects
-      .filter((o) => isDoorKind(o.kind))
-      .flatMap((o) => openingEdges(o).map((d) => `${d.dir}${d.x},${d.y}`)),
+    objects.filter((o) => isDoorKind(o.kind)).flatMap((o) => openingEdges(o).map((d) => `${d.dir}${d.x},${d.y}`)),
   );
   const closed = (e: Edge) => isWallEdge(edgeAt(map, e)) || doors.has(`${e.dir}${e.x},${e.y}`);
   const [sx, sy] = panelTile(p);

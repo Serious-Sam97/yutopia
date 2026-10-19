@@ -56,6 +56,13 @@ export async function useWorld(name: World = "demo"): Promise<World> {
   if (current === name) return name;
   const snap = JSON.parse(readFileSync(join(__dirname, "worlds", `${name}.json`), "utf8"));
   const ctx = await request.newContext();
+  // the fixtures were saved with Ana as user 1; a reseeded database numbers her anew
+  const me = await ctx.get(`${API}/api/me`, {
+    headers: { Authorization: `Bearer ${await token(ANA)}`, Accept: "application/json" },
+  });
+  const ana = (await me.json()).user.id as number;
+  for (const o of [...(snap.objects ?? []).map((x: any) => x.props), ...(snap.layout?.areas ?? [])])
+    if (o?.ownerId === 1) o.ownerId = ana;
   const res = await ctx.post(`${API}/api/e2e/world`, {
     data: snap,
     headers: { Authorization: `Bearer ${await token(ANA)}`, Accept: "application/json" },

@@ -11,10 +11,10 @@ import {
   slotLap,
   slotTrackOf,
 } from "@yutopia/shared/slotcar";
-import { config } from "../config.ts";
-import { fromSchema, type WorldClient, type WorldRoom, toSchema } from "../WorldRoom.ts";
-import { type SlotRace as Race, SlotCar, SlotRace } from "../schema.ts";
 import { api } from "../api.ts";
+import { config } from "../config.ts";
+import { type SlotRace as Race, SlotCar, SlotRace } from "../schema.ts";
+import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Slot-car tracks: up to four racers take a lane, one starts the race (five red

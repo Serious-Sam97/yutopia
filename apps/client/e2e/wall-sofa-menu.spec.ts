@@ -51,7 +51,7 @@ test("wall things hang on a west wall", async ({ page }) => {
       const ch = m.tiles[y]?.[x];
       return !!ch && ch !== " " && ch !== "#";
     };
-    const hung = [...w.room.state.objects.values()].filter((o: any) =>
+    const hung = [...w.floorObjects()].filter((o: any) =>
       [
         "board_wall",
         "screen_wall",

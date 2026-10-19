@@ -1,4 +1,9 @@
-import { ArraySchema, MapSchema, Schema, type } from "@colyseus/schema";
+import { ArraySchema, Encoder, MapSchema, Schema, type } from "@colyseus/schema";
+
+// The whole world's state for someone joining: the building's five floors and
+// everything on them outgrow the default 8 KB buffer (it grows, with a warning,
+// patch by patch); start big enough.
+Encoder.BUFFER_SIZE = 512 * 1024;
 
 export class Player extends Schema {
   @type("string") sid = "";
@@ -6,7 +11,8 @@ export class Player extends Schema {
   @type("string") name = "";
   @type("float32") x = 0;
   @type("float32") y = 0;
-  @type("float32") z = 0; // feet off the floor (on something, or in a jump), tiles
+  @type("float32") z = 0; // feet off the floor (on something, in a jump, on the stairs), tiles
+  @type("uint8") level = 0; // the floor they're on (shared levels.ts)
   @type("uint8") d = 0;
   @type("uint8") a = 0;
   @type("string") area = "";
@@ -210,6 +216,7 @@ export class Pet extends Schema {
   @type("string") outfit = "{}"; // shared PetOutfit (JSON)
   @type("float32") x = 0;
   @type("float32") y = 0;
+  @type("uint8") floor = 0; // the floor of the building it's on (its owner's, shared levels.ts)
   @type("uint8") d = 0;
   @type("uint8") a = 0; // ANIM: idle / walk / sit (asleep)
   @type("string") mode = "follow"; // shared PetMode
@@ -297,7 +304,9 @@ export class WorldState extends Schema {
   @type("float32") spawnX = 0;
   @type("float32") spawnY = 0;
   @type("uint32") mapVersion = 0;
-  @type("string") theme = "clouds"; // what surrounds the studio
+  // the building (shared levels.ts): the floor the map above is, and the others (LevelDef[], JSON)
+  @type("uint8") floor = 0;
+  @type("string") levels = "[]";
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();

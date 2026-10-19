@@ -36,7 +36,8 @@ export type ObjectAction =
   | "takeRope"
   | "takeFeather"
   | "takeLaser"
-  | "useComputer";
+  | "useComputer"
+  | "callLift";
 
 export interface ActionContext {
   uid: number;
@@ -103,6 +104,9 @@ export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectActi
       break;
     case "toybox":
       out.push("takeBall", "takeFrisbee", "takeRope", "takeFeather", "takeLaser");
+      break;
+    case "lift":
+      out.push("callLift");
       break;
     case "door": {
       const st = String(props.state ?? "open");

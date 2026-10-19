@@ -34,7 +34,7 @@ const build = (page: Page) => page.evaluate(() => (window as any).__hud.get().bu
 const plantsAt = (page: Page, ids: string[]) =>
   page.evaluate(
     (skip) =>
-      [...(window as any).__yutopia.room.state.objects.values()]
+      [...(window as any).__yutopia.floorObjects()]
         .filter((o: any) => o.kind === "plant" && !skip.includes(o.id))
         .map((o: any) => ({ id: o.id, x: o.x, y: o.y, rot: o.rot })),
     ids,
