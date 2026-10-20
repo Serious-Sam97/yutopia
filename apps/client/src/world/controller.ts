@@ -9,6 +9,7 @@ import {
   dirFromDelta,
   doorCentre,
   doorLeaves,
+  doorOwner,
   EMOTES,
   entry,
   FLOORS,
@@ -1432,8 +1433,10 @@ export class WorldController {
       if (now >= this.tpDue || (look && look.hidden.size !== this.tpHidden)) {
         this.tpDue = now + 200;
         this.tpHidden = look?.hidden.size ?? 0;
-        // (every floor's things: the 3D view draws the floors below mine too)
-        const all = [...this.objs.values()];
+        // (every floor's things: the 3D view draws the floors below mine too —
+        // my floor's as the iso engine has them: a door swung open for someone
+        // passing, a seat taken, a radio's display on live only there)
+        const all = [...this.objs.values()].map((o) => engine.getObject(o.id) ?? o);
         tp.update(this.building, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all, this.level);
       }
       tp.setLiveFrom({ engine, screens: this.screens, games: this.games, os: this.os });
@@ -3158,13 +3161,19 @@ export class WorldController {
         (o.rot ?? 0) % 2 === 0
           ? Math.abs(x - c.x) < half && Math.abs(y - c.y) < 0.55
           : Math.abs(y - c.y) < half && Math.abs(x - c.x) < 0.55;
-      let occupied = on(this.me.x, this.me.y);
+      // (a locked door swings only for its room's owner, the one who can go
+      // through it: anyone else at it finds it shut)
+      const locked = o.props?.state === "locked";
+      const owner = locked ? doorOwner(this.map, o) : null;
+      const may = (uid: number) => !locked || (owner != null && uid === owner);
+      let occupied = may(this.myUid()) && on(this.me.x, this.me.y);
       room.state.players.forEach((p: S, sid: string) => {
-        if (sid !== room.sessionId && (p.level ?? 0) === this.level && on(p.x, p.y)) occupied = true;
+        if (sid !== room.sessionId && (p.level ?? 0) === this.level && on(p.x, p.y) && may(p.uid)) occupied = true;
       });
-      room.state.npcs.forEach((n: S) => {
-        if (on(n.x, n.y)) occupied = true;
-      });
+      if (!locked)
+        room.state.npcs.forEach((n: S) => {
+          if (on(n.x, n.y)) occupied = true;
+        });
       if ((this.passing.get(o.id) ?? false) !== occupied) {
         this.passing.set(o.id, occupied);
         engine.upsertObject({ ...o, props: { ...(o.props ?? {}), passing: occupied } });
