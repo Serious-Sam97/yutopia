@@ -1456,13 +1456,16 @@ export class Campus {
         [ex - 1.05, GROUND + 3.2, ez + 3.9],
         [0, 0, 1],
       );
-      glow.quad(
-        [ex - 1.05, GROUND + 0.2, ez - 3.9],
-        [ex - 1.05, GROUND + 0.2, ez + 3.9],
-        [ex - 1.05, GROUND + 3.2, ez + 3.9],
-        [ex - 1.05, GROUND + 3.2, ez - 3.9],
-        [-1, 0, 0],
-      );
+      // (walkable: no glass in front, the lobby's own light is behind it — this
+      // was a solid wall of light across the open doorway at night)
+      if (!this.walkable)
+        glow.quad(
+          [ex - 1.05, GROUND + 0.2, ez - 3.9],
+          [ex - 1.05, GROUND + 0.2, ez + 3.9],
+          [ex - 1.05, GROUND + 3.2, ez + 3.9],
+          [ex - 1.05, GROUND + 3.2, ez - 3.9],
+          [-1, 0, 0],
+        );
       this.lamps = new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false });
       this.add(glow.build(), this.lamps);
       // the name on the canopy
@@ -1586,6 +1589,9 @@ export class Campus {
           [hx - 0.55, GROUND + 8.77, hz + 0.24],
           [0, -1, 0],
         );
+      // (a lot lamp on the walkable ground floor: its pool is that floor's light
+      // map's — one drawn here as well lay right on its asphalt and flickered)
+      if (!post) return;
       const R = 10.5;
       pools.quad(
         [hx - R, GROUND + 0.03, hz - R],
@@ -1595,7 +1601,7 @@ export class Campus {
         [0, 1, 0],
       );
     };
-    // (walkable: the lot's lamp posts are things on the ground floor; their pools stay)
+    // (walkable: the lot's lamp posts are things on the ground floor, their light too)
     const lotPost = !this.walkable;
     for (const x of [c2, c4])
       for (const z of [lot.z0 + 9, lot.z0 + 23, lot.z0 + 37]) lampAt(x, z, Math.PI / 2, lotPost);

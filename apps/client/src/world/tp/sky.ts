@@ -6,7 +6,10 @@ import {
   Color,
   Float32BufferAttribute,
   Group,
+  type Material,
   Mesh,
+  MeshLambertMaterial,
+  MeshStandardMaterial,
   Points,
   PointsMaterial,
   RepeatWrapping,
@@ -17,6 +20,7 @@ import {
 } from "three";
 import type { Daylight } from "../art/daylight";
 import { Campus } from "./campus";
+import { patchOutdoors } from "./light3d";
 
 // the themes' drawings and skies: the same lazy chunk the iso view loads
 export type Themes = typeof import("../art/themes");
@@ -144,6 +148,16 @@ export class Surroundings {
     // the campus draws the building itself
     this.campus = new Campus(map, T, cuts);
     this.root.add(this.campus.root);
+    // all of it out under the sky: the open sky's balance of sun and fill (light3d.ts)
+    const seen = new Set<Material>();
+    this.campus.root.traverse((o) => {
+      const m = (o as Mesh).material;
+      for (const x of Array.isArray(m) ? m : m ? [m] : [])
+        if (!seen.has(x) && (x instanceof MeshLambertMaterial || x instanceof MeshStandardMaterial)) {
+          seen.add(x);
+          patchOutdoors(x);
+        }
+    });
   }
 
   readonly horizon = new Color();

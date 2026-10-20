@@ -53,6 +53,16 @@ export function daylight(hour: number): Daylight {
   return { hour: h, phase: t < 0.5 ? p0 : p1, ambient, sun: { color, elevation, azimuth }, night, window };
 }
 
+// The brightest a lit surface gets (3D, linear; its highlights roll off towards
+// it): white by day, never clipped; after dark the bloom takes what's over it,
+// so lit things ease in under it and only what's meant to glow — lamps,
+// screens — glows (a white shoe under a lamp was a blaze). It comes down over
+// dusk as the bloom comes in.
+export function litCap(night: number): number {
+  const n = Math.min(1, Math.max(0, (night - 0.03) / 0.22));
+  return 0.7 + 0.3 * (1 - n * n * (3 - 2 * n));
+}
+
 // The old single "night level" (0..0.85) as a clock time: 0 → noon, 0.85 → 23:00.
 export function hourForNight(level: number): number {
   return level <= 0.01 ? 12 : 20 + Math.min(1, level / 0.85) * 3;

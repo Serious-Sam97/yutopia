@@ -3,6 +3,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { litCap } from "../art/daylight";
 
 // High quality's finish, as the iso view's (world/post.ts): screens, lamps and
 // neon bloom at night, then a gentle warm grade, a soft vignette and a whisper
@@ -68,6 +69,8 @@ export class Post3 {
   setNight(n: number) {
     this.bloom.strength = 1.2 * n; // (iso's High halo round lamps, screens and light strips)
     this.bloom.enabled = n > 0.05;
+    // over what lit things can reach (light3d.ts): only what glows blooms
+    this.bloom.threshold = litCap(n) + 0.02;
   }
 
   render(moving: boolean, over?: { scene: Scene; camera: Camera } | null) {

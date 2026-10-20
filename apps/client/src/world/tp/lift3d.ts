@@ -297,6 +297,20 @@ export function liftMats(): LiftMats {
   return mats;
 }
 
+// The car's own copies of its lit materials: the 3D view lights the landings
+// as the rooms round them (dark after dark, tp/view.ts); the car has its own
+// lamp, and stays lit.
+let carShared: LiftMats | null = null;
+export function liftCarMats(): LiftMats {
+  if (carShared) return carShared;
+  const m = liftMats();
+  const own = { ...m };
+  for (const k of Object.keys(m) as (keyof LiftMats)[])
+    if (m[k] instanceof MeshStandardMaterial) (own as Record<string, unknown>)[k] = m[k].clone();
+  carShared = own;
+  return carShared;
+}
+
 const box = (w: number, h: number, d: number, mat: Material, x: number, y: number, z: number) => {
   const m = new Mesh(new BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
@@ -427,6 +441,7 @@ export class LiftCar {
   readonly display = new DotMatrix();
   readonly light: PointLight;
   readonly spill: SpotLight;
+  private mats: LiftMats;
 
   /** `cut`: the iso view's cut-away — the back and the sides low, no ceiling
    *  (the iso camera looks into the car from behind it). */
@@ -436,6 +451,7 @@ export class LiftCar {
     opts: { cut?: boolean; lights?: boolean } = {},
   ) {
     const m = mats;
+    this.mats = mats;
     const cut = !!opts.cut;
     const lights = opts.lights !== false;
     const WH = cut ? 0.35 : CAR_H; // the walls' height
@@ -571,7 +587,7 @@ export class LiftCar {
 
   /** A button lit (a floor picked; open held), or none. */
   setLit(keys: string[]) {
-    const m = liftMats();
+    const m = this.mats;
     for (const [k, ring] of this.buttons) ring.material = keys.includes(k) ? m.lamp : m.lampOff;
   }
 }
@@ -673,7 +689,7 @@ export class Lifts3 {
         const inner = new Group();
         inner.position.set(-1, 0, -1);
         const landing = new LiftLanding(liftMats(), { floor: s.floor });
-        const car = new LiftCar(s.floors, liftMats(), { lights: false });
+        const car = new LiftCar(s.floors, liftCarMats(), { lights: false });
         inner.add(landing.root, car.root);
         outer.add(inner);
         this.root.add(outer);

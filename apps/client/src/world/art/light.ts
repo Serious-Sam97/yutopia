@@ -37,6 +37,7 @@ export interface LightSource {
   color: number;
   radius: number;
   intensity: number;
+  h?: number; // how high it hangs (tiles; the 3D view's lamps), when it's not a room lamp
 }
 
 const rgbOf = (c: number): RGB => [((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255];
@@ -137,14 +138,18 @@ export function lightSources(objects: WorldObjectDef[]): LightSource[] {
       if (o.kind === "lamp" && o.props?.on === false) continue;
       if (o.kind === "radio" && !o.props?.on) continue;
       const e = entry(o.kind);
-      const [x, y] = place(o, e.w / 2, e.h / 2 + (e.wall ? 0.6 : 0));
+      // (a lamp post's light falls from its head, out at the end of its arm)
+      const [x, y] = o.kind === "lamp_post" ? place(o, 2.25, 0.5) : place(o, e.w / 2, e.h / 2 + (e.wall ? 0.6 : 0));
       const color =
         o.kind === "neon"
           ? NEON_LIGHT[variantOf(o, seedOf(o.id))]
           : o.kind === "lamp"
             ? shadeLight(o.props, c.color)
             : c.color;
-      out.push({ x, y, color, radius: c.radius, intensity: c.intensity });
+      // (a lot's lamp post: well up its pole, over the cars and people it lights
+      // — its head, at ~8.8, is too high for a point light to reach them)
+      const h = o.kind === "lamp_post" ? 3.3 : undefined;
+      out.push({ x, y, color, radius: c.radius, intensity: c.intensity, ...(h ? { h } : {}) });
     }
     const t = o.kind === "tabletop" ? TOPS[String(o.props?.d ?? "")] : undefined;
     if (t && !(t.switched && o.props?.on === false)) {
@@ -157,6 +162,22 @@ export function lightSources(objects: WorldObjectDef[]): LightSource[] {
         const [x, y] = place(o, lx, ly);
         out.push({ x, y, color: s.color, radius: s.radius, intensity: s.intensity });
       }
+  }
+  return out;
+}
+
+/** A car's headlights: where they shine from (the middle of its nose) and which
+ *  way, for the 3D view's beams on the ground at night. */
+export function headlights(objects: WorldObjectDef[]): { x: number; y: number; dx: number; dy: number }[] {
+  const out: { x: number; y: number; dx: number; dy: number }[] = [];
+  for (const o of objects) {
+    if (o.kind !== "car") continue;
+    // (as the drawing: its nose to −x at rot 0, nudged in its bay by dx / dz)
+    const ox = Math.max(-0.4, Math.min(0.4, Number(o.props?.dx) || 0));
+    const oy = Math.max(-0.4, Math.min(0.4, Number(o.props?.dz) || 0));
+    const [x, y] = place(o, ox, 1 + oy);
+    const [bx, by] = place(o, 1 + ox, 1 + oy);
+    out.push({ x, y, dx: x - bx, dy: y - by });
   }
   return out;
 }
@@ -267,6 +288,12 @@ export class LightMap {
       }
     }
     return true;
+  }
+
+  /** Does a light reach (x, y) — no wall or shut door in the way? (the 3D view's lamps) */
+  reaches(s: LightSource, x: number, y: number): boolean {
+    if (this.blocked(x, y)) return false;
+    return this.visible(s, x, y);
   }
 
   private add(s: LightSource, into?: Float32Array) {

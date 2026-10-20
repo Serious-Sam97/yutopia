@@ -267,18 +267,18 @@ const MATERIALS: Record<string, Painter> = {
       const x = r() * S;
       const y = r() * S;
       const w = s * (0.6 + r() * 1.8);
-      g.fillStyle = r() < 0.5 ? "rgba(225,232,238,0.10)" : "rgba(10,12,16,0.18)";
-      for (const [ox, oy] of [
-        [0, 0],
-        [S, 0],
-        [0, S],
-        [-S, 0],
-        [0, -S],
-      ]) {
-        g.beginPath();
-        g.ellipse(x + ox, y + oy, w, w * (0.15 + r() * 0.25), r() * Math.PI, 0, Math.PI * 2);
-        g.fill();
-      }
+      // (soft: shadows have to read on it; wrapped every way round the
+      // repeat, each copy the same shape — the corners left out, and every copy
+      // a new shape, cut patches square: a grid over the lot)
+      g.fillStyle = r() < 0.5 ? "rgba(225,232,238,0.05)" : "rgba(10,12,16,0.09)";
+      const h = w * (0.15 + r() * 0.25);
+      const turn = r() * Math.PI;
+      for (const ox of [-S, 0, S])
+        for (const oy of [-S, 0, S]) {
+          g.beginPath();
+          g.ellipse(x + ox, y + oy, w, h, turn, 0, Math.PI * 2);
+          g.fill();
+        }
     }
   },
   c: (g, s, r) => {

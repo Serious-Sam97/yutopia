@@ -30,6 +30,7 @@ import {
   AdditiveBlending,
   BoxGeometry,
   BufferGeometry,
+  type Camera,
   CanvasTexture,
   CatmullRomCurve3,
   CircleGeometry,
@@ -48,6 +49,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  MeshStandardMaterial,
   type Object3D,
   OrthographicCamera,
   PCFShadowMap,
@@ -64,6 +66,7 @@ import {
   TubeGeometry,
   Vector2,
   Vector3,
+  Vector4,
   WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
@@ -71,6 +74,7 @@ import { tr } from "@/lib/i18n";
 import { chars, loadChars } from "../art/chars-load";
 import { daylight } from "../art/daylight";
 import { emoteUrl } from "../art/emotes";
+import type { LightSource } from "../art/light";
 import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
@@ -81,14 +85,14 @@ import { BuildLayer, type BuildLook } from "./build3d";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { Hands1P, handsDoing } from "./hands1p";
 import { zt } from "./kit3d";
-import { type LiftStop3, Lifts3 } from "./lift3d";
-import { Light3 } from "./light3d";
+import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
+import { Light3, litBalance } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
 import { type Mats as CharMats, Person3D } from "./person3d";
 import { Post3 } from "./post3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
-import { type StairStop3, Stairs3 } from "./stairs3d";
+import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { type TableScene3, TablesIn3D } from "./tables3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
@@ -156,6 +160,11 @@ export interface ViewEvents {
 }
 
 const LAMPS = 10; // point lights in the pool (the nearest lamps get them)
+const LAMP_REACH = 16; // tiles from the camera's target a lamp gets one within
+const LAMP_FADE = 4; // …fading out over the last few
+const LAMP_GLOW = 3.5; // how strongly a lamp post's pool lights what's under it at night
+const CAM_ROOM = 2.2; // the least room in front of a wall for the camera to stand there (else it rises)
+const CAM_LIFT_MAX = 1.3; // …up to this pitch
 const EYE = 1.15; // tiles: what the camera looks at, above your feet
 // first person: where your eyes are (the name tag sits at 2.0 / 1.45)
 const EYE_1P = 1.7;
@@ -187,7 +196,10 @@ export class ThirdPersonView {
   map: MapDef;
   building: MapDef;
   level: number;
-  private floors = new Map<number, { world: World3; sig: string }>(); // every floor built so far (mine is `world`)
+  // every floor built so far (mine is `world`); `lit`: the light map its things take
+  private floors = new Map<number, { world: World3; sig: string; lit?: Light3 }>();
+  // the floors drawn below mine: each its own light map, so they take the hour too
+  private below = new Map<number, Light3>();
   private wellSig = "";
   private people = new Map<string, Person3>();
   // the 3D people (world/chars): a model each, built a few a frame; the
@@ -205,7 +217,6 @@ export class ThirdPersonView {
   private hemi = new HemisphereLight(0xffffff, 0x6b4a33, 1);
   private sun = new DirectionalLight(0xffffff, 2);
   private pool: PointLight[] = [];
-  private poolDue = 0;
   private around: Surroundings;
   private host: HTMLElement | null = null;
   private ro: ResizeObserver | null = null;
@@ -292,10 +303,16 @@ export class ThirdPersonView {
     this.renderer.domElement.addEventListener("webglcontextrestored", () => {
       this.world.rebakeFloor();
       this.light.setHour(this.hour);
+      for (const l of this.below.values()) l.setHour(this.hour);
     });
     this.scene.add(this.hemi);
     this.lifts3 = new Lifts3(this.renderer);
     this.scene.add(this.lifts3.root, this.stairs3.root);
+    // the stairwells and the elevators' landings take the hour as the rooms round
+    // them do (the well is in the same place on every floor: my floor's light
+    // map lights it); the cars have their own (lift3d.ts liftCarMats), lit
+    for (const m of [...Object.values(stairMats()), ...Object.values(liftMats())])
+      if (m instanceof MeshStandardMaterial) this.light.patch(m);
     const s = this.sun;
     s.castShadow = true;
     s.shadow.mapSize.set(2048, 2048);
@@ -318,7 +335,7 @@ export class ThirdPersonView {
     this.winSig = cutsSig(home);
     this.around = new Surroundings(building, opts.themes, wallCuts(home));
     this.scene.add(this.around.root);
-    this.floors.set(this.level, { world: this.world, sig: `${layoutSig(map)}|${this.wellSig}` });
+    this.floors.set(this.level, { world: this.world, sig: `${layoutSig(map)}|${this.wellSig}`, lit: this.light });
     this.placeFloors(all);
     const fog = fogFor();
     this.scene.fog = new Fog(0xa8c8e0, fog.near, fog.far);
@@ -732,16 +749,16 @@ export class ThirdPersonView {
         (m) => this.light.patch(m),
         wells,
       );
-      mine = { world, sig };
+      mine = { world, sig, lit: this.light };
       this.floors.set(level, mine);
       this.scene.add(world.root);
     } else mine.world.update(noLifts(objects));
     if (moved) this.cameraAcross(from);
     const changed = mine.world !== this.world || layoutSig(map) !== layoutSig(this.map);
     if (mine.world !== this.world) {
-      // the floor I left keeps its drawing, without my floor's light map
-      this.world.setLight(null);
-      mine.world.setLight((m) => this.light.patch(m));
+      // (the floor I left takes its own light map below mine: placeFloors)
+      if (mine.lit !== this.light) mine.world.setLight((m) => this.light.patch(m));
+      mine.lit = this.light;
       this.world = mine.world;
     }
     this.map = map;
@@ -758,7 +775,6 @@ export class ThirdPersonView {
     this.camera.far = fog.cameraFar;
     this.camera.updateProjectionMatrix();
     this.setHour(this.hour); // (the new room's glass, the new sky)
-    this.poolDue = 0;
   }
 
   // what the studio stands in, again (a new layout, or the windows changed)
@@ -790,6 +806,8 @@ export class ThirdPersonView {
         this.scene.remove(b.world.root);
         b.world.dispose();
         this.floors.delete(f);
+        this.below.get(f)?.dispose();
+        this.below.delete(f);
       }
     for (const f of have) {
       if (f === this.level) {
@@ -815,24 +833,42 @@ export class ThirdPersonView {
         b.world.dispose();
         b = undefined;
       }
+      const o = this.offsetTo(f);
+      const lit = this.belowLight(f, lm, objs);
+      lit.setOffset(o.x, o.y);
       if (!b) {
         const world = new World3(
           this.items,
           lm,
           noLifts(objs),
           this.renderer.capabilities.getMaxAnisotropy(),
-          () => {},
+          (m) => lit.patch(m),
           wells,
         );
-        b = { world, sig };
+        b = { world, sig, lit };
         this.floors.set(f, b);
         this.scene.add(world.root);
       } else b.world.update(noLifts(objs));
-      const o = this.offsetTo(f);
+      if (b.lit !== lit) {
+        b.world.setLight((m) => lit.patch(m));
+        b.lit = lit;
+      }
       b.world.root.position.set(o.x, o.h, o.y);
       b.world.root.visible = true;
     }
     this.placeAround();
+  }
+
+  // A floor below mine's light: baked from its own lamps and windows, at the hour.
+  private belowLight(f: number, lm: MapDef, objs: WorldObjectDef[]): Light3 {
+    let l = this.below.get(f);
+    if (!l) {
+      l = new Light3();
+      l.setHour(this.hour); // (before the bake: it's composited at this hour)
+      this.below.set(f, l);
+    }
+    l.update(lm, objs);
+    return l;
   }
 
   // The elevators (tp/lift3d.ts): every stop's landing and car, drawn apart
@@ -907,6 +943,9 @@ export class ThirdPersonView {
   private warmCam = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
   private warmUp(now: number) {
     if (now < this.warmAt || !this.allObjects.length) return;
+    // (not before the sun's shadow map is made: drawn without it — the warm-up
+    // keeps it from updating — every lit thing's draw failed, a burst of GL errors)
+    if (this.sun.castShadow && !this.sun.shadow.map) return;
     this.warmAt = now + 600;
     const f = floorsOf(this.building).find((l) => !this.floors.has(l));
     if (f === undefined) {
@@ -927,21 +966,11 @@ export class ThirdPersonView {
         c.lookAt(o.x + hw / 2, o.h - 20, o.y + hh / 2);
         c.far = 400;
         c.updateProjectionMatrix();
-        this.warmTarget ??= new WebGLRenderTarget(4, 4, {
-          colorSpace: this.post ? LinearSRGBColorSpace : SRGBColorSpace,
-        });
-        const shadows = this.renderer.shadowMap.autoUpdate;
-        this.renderer.shadowMap.autoUpdate = false;
-        this.renderer.setRenderTarget(this.warmTarget);
-        this.renderer.render(this.scene, c);
-        this.renderer.setRenderTarget(null);
-        this.renderer.shadowMap.autoUpdate = shadows;
+        this.warmDraw(c);
         this.lifts3?.showAll(false);
         this.stairs3.showAll(false);
         this.around.campus.cutAbove(STOREY - 0.15);
-        this.renderer.setRenderTarget(this.warmTarget);
-        this.renderer.render(this.scene, this.camera);
-        this.renderer.setRenderTarget(null);
+        this.warmDraw(this.camera);
         this.around.campus.cutAbove(null);
       }
       return;
@@ -954,28 +983,21 @@ export class ThirdPersonView {
     const all = this.allObjects;
     const wells = { floor: wellsOf(lm, all), ceiling: wellsOf(lm, all, "ceiling") };
     const objs = onLevel(all, lm);
-    this.light.prebake(lm, objs);
+    const o = this.offsetTo(f);
+    const lit = this.belowLight(f, lm, objs);
+    lit.setOffset(o.x, o.y);
     const world = new World3(
       this.items,
       lm,
       noLifts(objs),
       this.renderer.capabilities.getMaxAnisotropy(),
-      () => {},
+      (m) => lit.patch(m),
       wells,
     );
-    this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wellsKey(wells)}` });
+    this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wellsKey(wells)}`, lit });
     this.scene.add(world.root);
-    const o = this.offsetTo(f);
     world.root.position.set(o.x, o.h, o.y);
-    // drawn once, from above, all of it in view, into a tiny target
-    // (in the colour space the room is drawn in — the finish's linear buffer,
-    // or the canvas — so the shaders compiled are the ones the screen uses)
-    const space = this.post ? LinearSRGBColorSpace : SRGBColorSpace;
-    if (this.warmTarget && this.warmTarget.texture.colorSpace !== space) {
-      this.warmTarget.dispose();
-      this.warmTarget = null;
-    }
-    this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: space });
+    // drawn once, from above, all of it in view (warmDraw)
     const c = this.warmCam;
     const r = Math.max(lm.width, lm.height) / 2 + 2;
     c.left = -r;
@@ -985,18 +1007,36 @@ export class ThirdPersonView {
     c.position.set(o.x + lm.width / 2, o.h + 60, o.y + lm.height / 2);
     c.lookAt(o.x + lm.width / 2, o.h, o.y + lm.height / 2);
     c.updateProjectionMatrix();
-    const shadows = this.renderer.shadowMap.autoUpdate;
-    this.renderer.shadowMap.autoUpdate = false;
-    this.renderer.setRenderTarget(this.warmTarget);
-    // (both ways it's drawn: as the floor I'm on, with the light map, and as one below)
-    world.setLight((m) => this.light.patch(m));
-    this.renderer.render(this.scene, c);
-    world.setLight(null);
-    this.renderer.render(this.scene, c);
-    this.renderer.setRenderTarget(null);
-    this.renderer.shadowMap.autoUpdate = shadows;
+    // (lit by a light map as every floor is, mine or one below: one set of shaders)
+    this.warmDraw(c);
     // (shown only if it's below mine)
     world.root.visible = f < this.level;
+  }
+
+  // One draw of the warm-up, as the screen draws (so the shaders compiled are the
+  // ones it uses): High into a tiny linear target, as its finish's buffer;
+  // Medium and Low into one pixel of the screen itself — its tones and colours —
+  // which the frame then draws over.
+  private warmView = new Vector4();
+  private warmDraw(cam: Camera) {
+    const r = this.renderer;
+    const shadows = r.shadowMap.autoUpdate;
+    r.shadowMap.autoUpdate = false;
+    if (this.post) {
+      this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
+      r.setRenderTarget(this.warmTarget);
+      r.render(this.scene, cam);
+      r.setRenderTarget(null);
+    } else {
+      r.getViewport(this.warmView);
+      r.setViewport(0, 0, 1, 1);
+      r.setScissor(0, 0, 1, 1);
+      r.setScissorTest(true);
+      r.render(this.scene, cam);
+      r.setScissorTest(false);
+      r.setViewport(this.warmView);
+    }
+    r.shadowMap.autoUpdate = shadows;
   }
 
   // My floor changed: the scene now sits round the new one. Up or down the
@@ -1032,8 +1072,10 @@ export class ThirdPersonView {
   private placeAround() {
     const home = homeOf(this.building);
     const o = this.offsetTo(home);
-    // (its snow a hair under the ground floor's)
-    this.around.campus.root.position.set(o.x, o.h - (home > 0 ? 0.03 : 0), o.y);
+    // (its snow a little under the ground floor's: what it lays on the snow —
+    // shadows, slush, light — stays clear of the floor's own surface, or the
+    // two fight over the same depth and flicker)
+    this.around.campus.root.position.set(o.x, o.h - (home > 0 ? 0.05 : 0), o.y);
     this.around.campus.skinAlways = this.level < home;
   }
 
@@ -1075,7 +1117,6 @@ export class ThirdPersonView {
       this.post = null;
     }
     this.resize();
-    this.poolDue = 0;
   }
 
   // The phone's camera in first person: its zoom (1 = the eye's lens). null lets go.
@@ -1181,19 +1222,34 @@ export class ThirdPersonView {
     this.hemi.color.setRGB(1, 1, 1, SRGBColorSpace);
     this.hemi.groundColor.setRGB(0.62, 0.52, 0.44, SRGBColorSpace);
     this.hemi.intensity = 2.1;
+    // …out under the open sky with the sun up, more sun and less fill
+    // (light3d.ts): the rooms' even fill washed the sun's shadows off the lot
+    // and the snow (by the sun's height: at dawn, less fill and a sun too low to
+    // make up for it was a lot as dark as night)
+    const up = Math.min(1, Math.max(0, (d.sun.elevation - 0.05) / 0.4));
+    const k = up * up * (3 - 2 * up);
+    litBalance.lmSunOut.value = 1 + 0.6 * k;
+    litBalance.lmFillOut.value = 1 - 0.4 * k;
+    // …and the lamp posts' pools come up after dark (light3d.ts: stored halved)
+    litBalance.lmGlowK.value = 2 * LAMP_GLOW * Math.min(1, Math.max(0, (d.night - 0.1) / 0.4));
     // …and the sun's shadows (a soft moon at night)
     const [sr, sg, sb] = d.sun.color;
     this.sun.color.setRGB(sr, sg, sb, SRGBColorSpace);
-    this.sun.intensity = d.sun.elevation > 0 ? 0.35 + 0.9 * Math.min(1, d.sun.elevation * 1.6) : 0.25;
-    this.sun.userData.el = d.sun.elevation > 0.05 ? d.sun.elevation : 0.9;
-    this.sun.userData.az = d.sun.elevation > 0.05 ? d.sun.azimuth : Math.PI * 0.6;
+    // (sun and moon blended round the horizon: the shadows turned over at once
+    // when the sun went down, and came back as suddenly at dawn)
+    const el = d.sun.elevation;
+    const w = Math.min(1, Math.max(0, (el + 0.1) / 0.25));
+    const sw = w * w * (3 - 2 * w);
+    this.sun.intensity = 0.25 + (0.1 + 0.9 * Math.min(1, Math.max(0, el) * 1.6)) * sw;
+    this.sun.userData.el = 0.9 + (Math.max(0.05, el) - 0.9) * sw;
+    this.sun.userData.az = Math.PI * 0.6 + (d.sun.azimuth - Math.PI * 0.6) * sw;
     // people and paper pictures aren't lit: they take the light map's tint (per person, in frame)
     this.tint.setRGB(0.55 + 0.45 * ar, 0.55 + 0.45 * ag, 0.6 + 0.4 * ab);
     this.light.setHour(h);
+    for (const l of this.below.values()) l.setHour(h);
     // glass (windows, glass walls and doors) shows the night outside: darker after dark
     const g = 1 - 0.62 * d.night;
     this.world.materials.clear.color.setRGB(g * 0.92, g * 0.95, g, SRGBColorSpace);
-    this.poolDue = 0;
   }
 
   // Your input as a world direction (camera-relative) and whether you run.
@@ -1329,10 +1385,12 @@ export class ThirdPersonView {
         cam.z + Math.sin(this.yaw) * cp,
       );
     } else {
+      const v = this.camView(dt);
+      const vc = Math.cos(v.pitch);
       cam.set(
-        this.target.x - Math.cos(this.yaw) * this.dist * cp,
-        this.target.y + Math.sin(this.pitch) * this.dist,
-        this.target.z - Math.sin(this.yaw) * this.dist * cp,
+        this.target.x - Math.cos(this.yaw) * v.dist * vc,
+        this.target.y + Math.sin(v.pitch) * v.dist,
+        this.target.z - Math.sin(this.yaw) * v.dist * vc,
       );
       if (cam.y < 0.25) cam.y = 0.25;
       this.camera.lookAt(this.target);
@@ -1369,11 +1427,7 @@ export class ThirdPersonView {
     this.around.update(dt, this.camera.position, !me?.reduced);
     this.drawCues(dt, !!me?.reduced);
     this.placeSun();
-    this.poolDue -= dt;
-    if (this.poolDue <= 0) {
-      this.assignLamps();
-      this.poolDue = 0.3;
-    }
+    this.assignLamps(dt);
 
     // cards and people face back along the camera's view (all the same way)
     const face = this.yaw + Math.PI;
@@ -1774,6 +1828,78 @@ export class ThirdPersonView {
     this.dist = Math.max(L.dist[0], Math.min(L.dist[1], this.dist));
   }
 
+  // The camera keeps out of walls. A wall it would stand behind, below the
+  // wall's top: in front of it when there's room (eased back out after), else
+  // up, to look over it. Backed into a wall, or lined up along one, it saw the
+  // wall faded from inside — a ghost column over you, its skirting a block at
+  // the foot of the screen. And inside the building on a floor under the
+  // studio, the building's outer walls likewise: through them it looked at the
+  // campus's façade from outside — a pane of glass filling the screen, dark by
+  // day and lit at night.
+  private camPull = 0; // how much nearer than `dist` the camera stands (eased)
+  private camLift = 0; // …and how much higher it looks down from (eased)
+  private camView(dt: number): { dist: number; pitch: number } {
+    const t = this.target;
+    const cp = Math.cos(this.pitch);
+    const sp = Math.sin(this.pitch);
+    const dx = -Math.cos(this.yaw);
+    const dz = -Math.sin(this.yaw);
+    let reach = Number.POSITIVE_INFINITY;
+    let lift = 0; // how far up from your pitch, to look over a wall too close to stand in front of
+    // (both by degrees: in front of it down to CAM_ROOM, then rising as the room
+    // runs out — switched, the camera jumped tiles in a frame walking past one)
+    const block = (along: number, top: number) => {
+      const room = along - 0.25 / Math.max(cp, 0.01);
+      reach = Math.min(reach, Math.max(room, CAM_ROOM));
+      if (room >= CAM_ROOM) return;
+      const over = Math.atan2(top + 0.2 - t.y, Math.max(0.3, along * cp - 0.15)) - this.pitch;
+      const k = Math.min(1, (CAM_ROOM - room) / 1.2);
+      lift = Math.max(lift, over * k * k * (3 - 2 * k));
+    };
+    if (cp > 0.01) {
+      const home = homeOf(this.building);
+      if (this.level < home) {
+        const o = this.offsetTo(home);
+        const m = 0.3; // (clear of the wall's inner face)
+        const x0 = o.x + m;
+        const z0 = o.y + m;
+        const x1 = o.x + this.building.width - m;
+        const z1 = o.y + this.building.height - m;
+        if (t.x > x0 && t.x < x1 && t.z > z0 && t.z < z1) {
+          const rx = dx < 0 ? (t.x - x0) / -dx : dx > 0 ? (x1 - t.x) / dx : Number.POSITIVE_INFINITY;
+          const rz = dz < 0 ? (t.z - z0) / -dz : dz > 0 ? (z1 - t.z) / dz : Number.POSITIVE_INFINITY;
+          const along = Math.min(rx, rz) / cp;
+          if (along < this.dist) block(along + 0.25 / cp, STOREY - 0.15);
+        }
+      }
+      // (not building: placing things by a wall, the camera stays where it's put)
+      if (!this.buildMode) {
+        const cx = t.x + dx * this.dist * cp;
+        const cz = t.z + dz * this.dist * cp;
+        for (const f of this.world.fades) {
+          if (f.item) continue;
+          const x0 = f.x0 - 0.06;
+          const y0 = f.y0 - 0.06;
+          const x1 = f.x1 + 0.06;
+          const y1 = f.y1 + 0.06;
+          if (t.x > x0 && t.x < x1 && t.z > y0 && t.z < y1) continue; // (you're at it: it fades)
+          const hit = segBox(t.x, t.z, cx, cz, x0, y0, x1, y1);
+          if (hit === null) continue;
+          const along = hit * this.dist;
+          if (t.y + sp * along > f.top + 0.1) continue; // (it looks over it)
+          block(along, f.top);
+        }
+      }
+    }
+    // eased: in quickly, back out gently (a zoom isn't: it's the distance itself)
+    const pull = Math.max(0, this.dist - reach);
+    this.camPull += (pull - this.camPull) * (1 - Math.exp(-dt * (pull > this.camPull ? 14 : 3)));
+    if (Math.abs(pull - this.camPull) < 0.005) this.camPull = pull;
+    const up = Math.max(0, Math.min(CAM_LIFT_MAX - this.pitch, lift));
+    this.camLift += (up - this.camLift) * (1 - Math.exp(-dt * (up > this.camLift ? 10 : 3)));
+    return { dist: Math.max(0.6, this.dist - this.camPull), pitch: this.pitch + this.camLift };
+  }
+
   // Walls standing between the camera and you go see-through (their upper part).
   private fadeWalls(dt: number) {
     const cam = this.camera.position;
@@ -1782,10 +1908,13 @@ export class ThirdPersonView {
     const inside = this.mode === "first";
     for (const f of this.world.fades) {
       let block = false;
-      const hit = inside ? null : segBox(cam.x, cam.z, t.x, t.z, f.x0 - 0.06, f.y0 - 0.06, f.x1 + 0.06, f.y1 + 0.06);
+      // (from your side: the sight line where it leaves the wall nearest you,
+      // its lowest over it, and down to your feet — a thick wall close by,
+      // the camera up over it, still hid your legs)
+      const hit = inside ? null : segBox(t.x, t.z, cam.x, cam.z, f.x0 - 0.06, f.y0 - 0.06, f.x1 + 0.06, f.y1 + 0.06);
       if (hit !== null) {
-        const h = cam.y + (t.y - 0.5 - cam.y) * hit;
-        block = h < f.top + 0.1;
+        const feet = t.y - EYE + 0.1;
+        block = feet + (cam.y - feet) * hit < f.top + 0.1;
       }
       // (build mode's walls up / down override it)
       // (walls and what hangs on them: not tall furniture)
@@ -1802,6 +1931,10 @@ export class ThirdPersonView {
     }
   }
 
+  private sunX = new Vector3();
+  private sunY = new Vector3();
+  private sunZ = new Vector3();
+  private sunAt = new Vector3();
   private placeSun() {
     const el = this.sun.userData.el as number;
     const az = this.sun.userData.az as number;
@@ -1810,29 +1943,74 @@ export class ThirdPersonView {
     const dx = -Math.cos(az) * Math.cos(el);
     const dz = Math.sin(az) * Math.cos(el);
     const dy = Math.sin(el);
-    this.sun.position.set(t.x + dx * 30, dy * 30, t.z + dz * 30);
-    this.sun.target.position.set(t.x, 0, t.z);
+    // the shadows cover what's in view: a box round you, reaching further ahead
+    // the further back the camera stands (a far free camera saw them stop
+    // short); its size in steps, so its texels stay put between them
+    const sc = this.sun.shadow.camera;
+    const cam = this.camera.position;
+    const back = Math.hypot(cam.x - t.x, cam.z - t.z);
+    const R = 14 + 2 * Math.round(Math.max(0, back - 6) * 0.75);
+    if (sc.right !== R) {
+      Object.assign(sc, { left: -R, right: R, top: R, bottom: -R, far: 2 * R + 50 });
+      sc.updateProjectionMatrix();
+    }
+    const ahead = (R - 14) * 0.6 + 2;
+    const fx = t.x + Math.cos(this.yaw) * ahead;
+    const fz = t.z + Math.sin(this.yaw) * ahead;
+    // the shadow map moves with you a whole texel at a time (snapped in the
+    // light's view): sliding with you, every shadow's edge crawled and shimmered
+    const texel = (sc.right - sc.left) / this.sun.shadow.mapSize.x;
+    const z = this.sunZ.set(dx, dy, dz).normalize();
+    const x = this.sunX.set(z.z, 0, -z.x).normalize(); // up × z
+    const y = this.sunY.crossVectors(z, x);
+    const p = this.sunAt.set(fx, 0, fz);
+    const u = p.dot(x);
+    const v = p.dot(y);
+    p.addScaledVector(x, Math.round(u / texel) * texel - u).addScaledVector(y, Math.round(v / texel) * texel - v);
+    const far = R + 20;
+    this.sun.position.set(p.x + dx * far, p.y + dy * far, p.z + dz * far);
+    this.sun.target.position.copy(p);
   }
 
-  private assignLamps() {
+  // The point lights go to the lamps nearest the camera's target that light
+  // where it is (a lamp in the next room shone through the wall onto this one's
+  // things); each fades in and out with its distance, with the last one in
+  // reach when there are more lamps than lights, and as a wall or a door comes
+  // between — every frame: a lamp switching on or off as you walked by was a
+  // flash on the floor round it.
+  private lampSeen = new Map<string, number>(); // how much each lamp lights where you are (eased)
+  private assignLamps(dt: number) {
     const d = daylight(this.hour);
     const t = this.target;
-    const near = this.world.lights
-      .map((l) => ({ l, d: Math.hypot(l.x - t.x, l.y - t.z) }))
-      .filter((x) => x.d < 16)
-      .sort((a, b) => a.d - b.d)
-      .slice(0, this.lamps);
+    const ease = 1 - Math.exp(-dt * 6);
+    const seen = new Map<string, number>();
+    const all: { l: LightSource; d: number; w: number }[] = [];
+    for (const l of this.world.lights) {
+      const dist = Math.hypot(l.x - t.x, l.y - t.z);
+      if (dist >= LAMP_REACH) continue;
+      const key = `${l.x},${l.y}`;
+      const want = this.light.reaches(l, t.x, t.z) ? 1 : 0;
+      const was = this.lampSeen.get(key) ?? want;
+      const w = Math.abs(want - was) < 0.01 ? want : was + (want - was) * ease;
+      seen.set(key, w);
+      if (w > 0.001) all.push({ l, d: dist, w });
+    }
+    this.lampSeen = seen;
+    all.sort((a, b) => a.d - b.d);
+    const near = all.slice(0, this.lamps);
+    const edge = Math.min(LAMP_REACH, all[this.lamps]?.d ?? LAMP_REACH);
     const k = 0.15 + 1.1 * d.night; // (the light map has their pools; this lights what stands up)
     this.pool.forEach((p, i) => {
       const n = near[i];
-      if (!n) {
+      const fade = n ? Math.min(1, Math.max(0, (edge - n.d) / LAMP_FADE)) : 0;
+      if (!n || fade <= 0) {
         p.intensity = 0;
         return;
       }
       p.color.setHex(n.l.color);
-      p.position.set(n.l.x, 1.05, n.l.y);
+      p.position.set(n.l.x, n.l.h ?? 1.05, n.l.y);
       p.distance = n.l.radius * 1.4;
-      p.intensity = n.l.intensity * k;
+      p.intensity = n.l.intensity * k * fade * fade * (3 - 2 * fade) * n.w;
     });
   }
 
@@ -2323,6 +2501,7 @@ export class ThirdPersonView {
     for (const f of this.fx) (f.s.material as SpriteMaterial).dispose();
     this.post?.dispose();
     this.light.dispose();
+    for (const l of this.below.values()) l.dispose();
     for (const p of this.people.values()) p.dispose();
     for (const p of this.people3.values()) p.dispose();
     this.hands?.dispose();
