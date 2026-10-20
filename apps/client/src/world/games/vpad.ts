@@ -126,7 +126,9 @@ export function hidePads(): () => void {
 // The core reads the pads once a frame (RetroArch's input poll): a pulse is a
 // port's buttons for exactly one read — the disc console's analog switch toggles
 // on every frame its combo is held (its latch is shared by both ports), so it's
-// held for one frame exactly.
+// held for one frame exactly. So the core must be the only one to call
+// navigator.getGamepads while these are in (the page reads `realGamepads`):
+// another read would take the pulse, and the switch never reach the core.
 const pulses = new Map<number, number>(); // port index → buttons for the next read
 const pulsed = new Map<number, VButton[]>(); // what those pads really hold (put back next read)
 function read(): VGamepad[] {

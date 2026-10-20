@@ -629,8 +629,8 @@ The user: "start phase 5".
       virtual pads, so it could take the combo first.
     - The fix: `activePad()` reads `realGamepads()`. With it, a new
       `games/vpad.test.ts` passes and the spec passed 5 of 5. The fix is on
-      the side session's branch `claude/funny-joliot-b4a4d9`, not merged
-      here yet.
+      the side session's branch, merged into main; `yutopia-input` 8.2 KB
+      (it now carries the virtual pads' reader), the page still 554.0.
 - **Firefox: not checked here.** Playwright's Firefox (Nightly 1543) won't
   start on this Mac, headless or headed ("Could not find profile folder";
   headed, its helpers are killed). Read through for Firefox instead:
