@@ -52,6 +52,12 @@ export class Player extends Schema {
   @type("float64") jumpAt = 0;
   // the phone's flashlight on (the Grounds at night: a beam everyone sees)
   @type("boolean") torch = false;
+  // the move (docs/plan/29-the-move.md M7): the gait (shared/move packMv), the facing and the
+  // look (a byte each), and the sender's own clock when it moved (ms, for playing it back)
+  @type("uint8") mv = 0;
+  @type("uint8") yaw = 0;
+  @type("int8") pitch = 0;
+  @type("uint32") mt = 0;
 }
 
 export class WorldObject extends Schema {
@@ -353,6 +359,8 @@ export class WorldState extends Schema {
   // where the wind blows from (radians)
   @type("float32") storm = 0;
   @type("float32") wind = 0;
+  // the world's hour, 0..24: São Paulo's (shared clock.ts) unless an admin set one
+  @type("float32") hour = 12;
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();

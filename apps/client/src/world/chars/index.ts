@@ -15,10 +15,31 @@ export {
   isoPose,
   isoState,
   type PictureMotion,
+  verbAt,
 } from "./iso";
 export type { Anchor } from "./kit";
+export { jumpNowOf, type LocoIn, Locomotion, localVel, verbT } from "./locomotion";
 export { bodyMaterial, CharFactory, lookKey, PersonModel, type Reach } from "./model";
 export { blend, CONTACT, carPose, Motion3, type MotionIn, type MotionOut, STRIDE } from "./motion";
+export {
+  aimPose,
+  BACK_STRIDE,
+  backpedalPose,
+  crouchPose,
+  crouchWalkPose,
+  HIP_H,
+  landPose,
+  type Moved,
+  runPose,
+  runStride,
+  SNEAK_STRIDE,
+  STRAFE_STRIDE,
+  strafePose,
+  VERB_LEN,
+  type Verb,
+  verbPose,
+  verbRoot,
+} from "./moves";
 export { BASE, LODS, type Lod, type Params, paramsFor } from "./params";
 export { buildProp, inHand, keepUpright, type PropKind } from "./props";
 export { JOINTS, type JointName, type Pose, REST } from "./rig";

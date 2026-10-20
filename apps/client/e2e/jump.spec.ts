@@ -199,11 +199,13 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
     await page.waitForTimeout(1200);
     const top = 25 / 39.19;
 
-    // run at it (D + S: along +x) and hop
+    // run at it (D + S: along +x) and hop — a few steps' run-up first: the body takes a moment
+    // to get going (docs/plan/29-the-move.md M2)
     await page.keyboard.down("d");
     await page.keyboard.down("s");
+    await page.waitForTimeout(160);
     await page.keyboard.press(" ");
-    await page.waitForTimeout(560);
+    await page.waitForTimeout(480);
     await page.keyboard.up("d");
     await page.keyboard.up("s");
     await page.waitForTimeout(500);

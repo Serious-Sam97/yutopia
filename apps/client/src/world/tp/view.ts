@@ -280,6 +280,16 @@ export class ThirdPersonView {
   private target = new Vector3();
   private targetReady = false;
   padFree = true; // the gamepad moves me and the camera (not while it plays a console)
+  private walkAt = { x: 0, y: 0 }; // where I was last frame (the chase camera follows where I go)
+  /** aiming (docs/plan/29-the-move.md M5): over the shoulder (`shoulder` 1 the right, -1 the left) */
+  aim = false;
+  shoulder = 1;
+  private aimK = 0;
+  /** where I aim, up from level (radians), from the camera's pitch */
+  get aimPitch(): number {
+    return Math.max(-0.9, Math.min(0.9, -(this.pitch - 0.2)));
+  }
+  private aheadFor = 0; // s I've been going roughly where it looks
   private eyeY = EYE_1P; // first person: the eyes' height (eases sitting down / getting up)
   private meId = "";
   private dragged = -10; // time of the last manual turn
@@ -1460,13 +1470,19 @@ export class ThirdPersonView {
     const first = this.mode === "first";
     if (me) {
       this.meAt = { x: me.x, y: me.y };
-      // the chase camera swings in behind you as you walk forward (not while you
-      // strafe or walk towards it: that would spin you in circles)
-      if (this.mode === "chase" && me.a === 1 && this.time - this.dragged > 1.2) {
-        let d = (me.angle ?? dirAngle(me.d)) - this.yaw;
-        d = Math.atan2(Math.sin(d), Math.cos(d));
-        if (Math.abs(d) < 1.0) this.yaw += d * Math.min(1, dt * 1.8) * (1 - Math.abs(d) / 1.0);
-      }
+      // the chase camera swings in behind where you go — only going roughly ahead (within 25°
+      // of where it looks) for a moment: on a diagonal, or across it, it holds still (it once
+      // followed your facing there and spun you round in circles: docs/plan/29-the-move.md M5)
+      const mx = me.x - this.walkAt.x;
+      const my = me.y - this.walkAt.y;
+      this.walkAt = { x: me.x, y: me.y };
+      const step = Math.hypot(mx, my);
+      const speed = step < 1 && dt > 0 ? step / dt : 0;
+      const going = Math.atan2(my, mx);
+      const off = Math.atan2(Math.sin(going - this.yaw), Math.cos(going - this.yaw));
+      this.aheadFor = speed > 0.8 && Math.abs(off) < 0.44 ? this.aheadFor + dt : 0;
+      if (this.mode === "chase" && !this.aim && this.aheadFor > 0.4 && this.time - this.dragged > 1.2)
+        this.yaw += off * Math.min(1, dt * 1.4 * Math.min(1.6, speed / 4.2));
       if (first) {
         // in your head: exactly where you are, every frame (an eased position
         // floats); only the eyes' height eases, sitting down and getting up
@@ -1486,6 +1502,10 @@ export class ThirdPersonView {
         } else this.target.lerp(want, 1 - Math.exp(-dt * 12));
       }
     }
+    this.aimK += ((this.aim && !first ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * 10));
+    // (into an aim the camera comes up to look ahead, near level — not at the ground at your feet)
+    if (this.aim && this.aimK < 0.95 && this.time - this.dragged > 0.3)
+      this.pitch += (0.15 - this.pitch) * (1 - Math.exp(-dt * 10));
     this.clampCam();
     const cp = Math.cos(this.pitch);
     const cam = this.camera.position;
@@ -1500,13 +1520,19 @@ export class ThirdPersonView {
     } else {
       const v = this.camView(dt);
       const vc = Math.cos(v.pitch);
+      // aiming: closer, over a shoulder (our people's heads are big: 0.8 out), a little up
+      const a = this.aimK;
+      const d = v.dist + (Math.min(v.dist, 2.6) - v.dist) * a;
+      const sx = -Math.sin(this.yaw) * 0.8 * this.shoulder * a;
+      const sz = Math.cos(this.yaw) * 0.8 * this.shoulder * a;
+      const up = 0.35 * a;
       cam.set(
-        this.target.x - Math.cos(this.yaw) * v.dist * vc,
-        this.target.y + Math.sin(v.pitch) * v.dist,
-        this.target.z - Math.sin(this.yaw) * v.dist * vc,
+        this.target.x - Math.cos(this.yaw) * d * vc + sx,
+        this.target.y + up + Math.sin(v.pitch) * d,
+        this.target.z - Math.sin(this.yaw) * d * vc + sz,
       );
       if (cam.y < 0.25) cam.y = 0.25;
-      this.camera.lookAt(this.target);
+      this.camera.lookAt(this.target.x + sx, this.target.y + up, this.target.z + sz);
     }
 
     // a game camera: ease over to it (and back when it lets go)
@@ -1526,7 +1552,7 @@ export class ThirdPersonView {
       this.camera.lookAt(look.lerp(this.gcLook, m));
     }
     // the lens: a game camera's own, or the photo zoom in first person
-    const fov = gc?.fov ?? (first ? (this.lensFov ?? this.camera.fov) : FOV);
+    const fov = gc?.fov ?? (first ? (this.lensFov ?? this.camera.fov) : FOV - 8 * this.aimK);
     if (Math.abs(this.camera.fov - fov) > 0.05) {
       this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-dt * 10));
       this.camera.updateProjectionMatrix();
@@ -1545,7 +1571,7 @@ export class ThirdPersonView {
     this.assignLamps(dt);
     this.weatherFrame();
     this.torches(bodies, meId);
-    if (!me?.reduced) this.breathe(bodies, meId);
+    if (!me?.reduced) this.breathe(bodies);
 
     // cards and people face back along the camera's view (all the same way)
     const face = this.yaw + Math.PI;
@@ -1570,7 +1596,7 @@ export class ThirdPersonView {
         continue;
       }
       seen.add(b.id);
-      const angle3 = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
+      const angle3 = b.angle ?? dirAngle(b.d);
       const hidden3 =
         ((first || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) && b.id === meId) ||
         this.byLens(b);
@@ -1613,7 +1639,7 @@ export class ThirdPersonView {
         this.people.set(b.id, p);
         this.scene.add(p.root);
       }
-      const angle = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
+      const angle = b.angle ?? dirAngle(b.d);
       this.personTint.setHex(this.light.tintAt(b.x, b.y));
       if (this.onLand(b.x, b.y)) this.landTint(b.x, b.y, this.personTint);
       this.sphere.center.set(b.x, 0.9, b.y);
@@ -1943,7 +1969,8 @@ export class ThirdPersonView {
 
   private clampCam() {
     const L = LIMITS[this.mode];
-    this.pitch = Math.max(L.pitch[0], Math.min(L.pitch[1], this.pitch));
+    // (aiming: up to looking above level)
+    this.pitch = Math.max(this.aimK > 0.5 ? -0.5 : L.pitch[0], Math.min(L.pitch[1], this.pitch));
     this.dist = Math.max(L.dist[0], Math.min(L.dist[1], this.dist));
   }
 
@@ -2397,7 +2424,7 @@ export class ThirdPersonView {
         tc.beam.visible = false;
         continue;
       }
-      const a = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
+      const a = b.angle ?? dirAngle(b.d);
       const ca = Math.cos(a);
       const sa = Math.sin(a);
       const feet = b.z ?? b.ground ?? 0;
@@ -2417,7 +2444,7 @@ export class ThirdPersonView {
   }
 
   // breath in the cold: a little cloud now and then from everyone out on the land
-  private breathe(bodies: Body3[], meId: string) {
+  private breathe(bodies: Body3[]) {
     const now = this.time;
     const cam = this.camera.position;
     for (const b of bodies) {
@@ -2436,7 +2463,7 @@ export class ThirdPersonView {
       }
       // (quicker running)
       this.breathAt.set(b.id, now + (b.a === 1 ? 1.6 : 2.8) + Math.random() * 0.6);
-      const a = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
+      const a = b.angle ?? dirAngle(b.d);
       const feet = b.z ?? b.ground ?? 0;
       for (let i = 0; i < 3; i++) {
         const s = new Sprite(

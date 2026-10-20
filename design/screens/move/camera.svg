@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 1000" font-family="ui-sans-serif, system-ui" fill="#2a1430">
+  <!-- docs/plan/29-the-move.md, M5: the camera, phase 0 diagrams -->
+  <rect width="1800" height="1000" rx="18" fill="#f1e8d2"/>
+  <text x="36" y="52" font-size="13" letter-spacing="4" opacity="0.7">YUTOPIA · THE MOVE</text>
+  <text x="36" y="100" font-size="44" font-weight="800" letter-spacing="-1">Camera</text>
+
+  <!-- ── 1. today: the spiral ───────────────────────────────── -->
+  <g transform="translate(60 150)">
+    <text x="0" y="0" font-size="22" font-weight="700">1 · Today: holding W+D spirals</text>
+    <text x="0" y="28" font-size="15" opacity="0.75">Chase eases in behind your facing; movement is relative to the camera.</text>
+    <text x="0" y="48" font-size="15" opacity="0.75">With W+D the facing is 45° off the camera, so the camera turns, so the way turns…</text>
+    <g transform="translate(250 330)" fill="none" stroke="#b5562f" stroke-width="3">
+      <path d="M0 0 C 60 -40 140 -30 170 30 C 200 100 140 170 60 170 C -40 170 -100 90 -90 0 C -80 -110 30 -190 140 -180" stroke-dasharray="8 7"/>
+      <polygon points="140,-180 122,-170 128,-190" fill="#b5562f"/>
+    </g>
+    <g transform="translate(250 330)">
+      <circle r="13" fill="#2fb3a0" stroke="#2a1430" stroke-width="2.5"/>
+      <text x="-30" y="42" font-size="14">you</text>
+      <g transform="translate(-70 70) rotate(-35)">
+        <rect x="-16" y="-11" width="32" height="22" rx="4" fill="#3d4a5c"/>
+        <polygon points="16,-6 30,-12 30,12 16,6" fill="#3d4a5c"/>
+      </g>
+      <text x="-150" y="120" font-size="14">camera chasing</text>
+    </g>
+  </g>
+
+  <!-- ── 2. the fix: follow the velocity, only when going ahead ─ -->
+  <g transform="translate(640 150)">
+    <text x="0" y="0" font-size="22" font-weight="700">2 · The fix: follow where you go</text>
+    <text x="0" y="28" font-size="15" opacity="0.75">Eases in behind your <tspan font-weight="700">velocity</tspan>, only inside 25° of ahead for 0.4 s;</text>
+    <text x="0" y="48" font-size="15" opacity="0.75">never while aiming, strafing, backing up or on ice. Faster with speed.</text>
+    <g transform="translate(250 360)">
+      <!-- 25° cone each side of the camera's ahead -->
+      <path d="M0 0 L -98 -210 A 232 232 0 0 1 98 -210 Z" fill="#2fb3a0" opacity="0.18"/>
+      <line x1="0" y1="0" x2="-98" y2="-210" stroke="#2fb3a0" stroke-width="2"/>
+      <line x1="0" y1="0" x2="98" y2="-210" stroke="#2fb3a0" stroke-width="2"/>
+      <text x="-40" y="-240" font-size="14" fill="#1f7a6d">±25°: aligns</text>
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#2a1430" stroke-width="1.5" stroke-dasharray="4 5"/>
+      <!-- velocity outside the cone: no align -->
+      <line x1="0" y1="0" x2="150" y2="-150" stroke="#b5562f" stroke-width="4"/>
+      <polygon points="150,-150 132,-146 146,-132" fill="#b5562f"/>
+      <text x="158" y="-150" font-size="14" fill="#8a3a1c">W+D: 45° → the camera stays</text>
+      <circle r="13" fill="#2fb3a0" stroke="#2a1430" stroke-width="2.5"/>
+      <g transform="translate(0 110)">
+        <rect x="-16" y="-11" width="32" height="22" rx="4" fill="#3d4a5c"/>
+        <polygon points="-6,-11 -12,-26 12,-26 6,-11" fill="#3d4a5c"/>
+      </g>
+      <text x="26" y="118" font-size="14">camera</text>
+      <text x="-230" y="190" font-size="14" opacity="0.8">Look-at point: a damped spring (ω 10) with vel × 0.25 ahead.</text>
+      <text x="-230" y="212" font-size="14" opacity="0.8">Sprint: FOV +4°, a little bob (both off with reduced motion).</text>
+    </g>
+  </g>
+
+  <!-- ── 3. aim: over the shoulder ─────────────────────────────── -->
+  <g transform="translate(1220 150)">
+    <text x="0" y="0" font-size="22" font-weight="700">3 · Aim: over the shoulder</text>
+    <text x="0" y="28" font-size="15" opacity="0.75">RMB / LT. The body faces the camera (you strafe);</text>
+    <text x="0" y="48" font-size="15" opacity="0.75">V / R3 swaps the shoulder; kept out of walls.</text>
+    <!-- top view -->
+    <g transform="translate(240 300)">
+      <text x="-220" y="-150" font-size="14" font-weight="700">from above</text>
+      <path d="M0 -40 L -70 -230 L 70 -230 Z" fill="#e8a33d" opacity="0.25"/>
+      <text x="-30" y="-238" font-size="13" fill="#8a5a10">the torch</text>
+      <circle r="15" fill="#2fb3a0" stroke="#2a1430" stroke-width="2.5"/>
+      <line x1="-62" y1="0" x2="62" y2="0" stroke="#2a1430" stroke-width="3"/>
+      <g transform="translate(55 120)">
+        <rect x="-16" y="-11" width="32" height="22" rx="4" fill="#3d4a5c"/>
+        <polygon points="-6,-11 -12,-26 12,-26 6,-11" fill="#3d4a5c"/>
+        <path d="M0 -26 L -60 -260 M0 -26 L 60 -260" stroke="#3d4a5c" stroke-dasharray="3 5"/>
+      </g>
+      <line x1="0" y1="140" x2="55" y2="140" stroke="#b5562f" stroke-width="2"/>
+      <text x="4" y="160" font-size="13" fill="#8a3a1c">0.45 right</text>
+      <line x1="95" y1="20" x2="95" y2="120" stroke="#b5562f" stroke-width="2"/>
+      <text x="102" y="76" font-size="13" fill="#8a3a1c">2.3 back</text>
+    </g>
+    <!-- side view -->
+    <g transform="translate(240 700)">
+      <text x="-220" y="-200" font-size="14" font-weight="700">from the side</text>
+      <line x1="-240" y1="0" x2="300" y2="0" stroke="#9a8b76" stroke-width="2"/>
+      <rect x="-9" y="-100" width="18" height="100" rx="8" fill="#2fb3a0" stroke="#2a1430" stroke-width="2"/>
+      <circle cy="-118" r="20" fill="#3b2a20"/>
+      <g transform="translate(-150 -128)">
+        <rect x="-16" y="-11" width="32" height="22" rx="4" fill="#3d4a5c"/>
+        <polygon points="16,-6 30,-12 30,12 16,6" fill="#3d4a5c"/>
+      </g>
+      <line x1="-150" y1="-128" x2="0" y2="-128" stroke="#b5562f" stroke-width="2"/>
+      <text x="-112" y="-136" font-size="13" fill="#8a3a1c">2.3</text>
+      <line x1="-178" y1="-128" x2="-178" y2="-103" stroke="#b5562f" stroke-width="2"/>
+      <text x="-232" y="-110" font-size="13" fill="#8a3a1c">+0.25</text>
+      <text x="-220" y="44" font-size="14" opacity="0.8">FOV 62° → 52° in 0.15 s. Aiming in iso switches to 3D.</text>
+    </g>
+  </g>
+</svg>

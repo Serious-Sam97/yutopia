@@ -1750,9 +1750,12 @@ test("hold: the API closes the world, nobody gets in, then it opens again", asyn
 const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
 const stepTo = async (p: Person, path: { x: number; y: number; z: number; l: number }[]) => {
   let seq = 0;
+  // (at a jog's pace: the server allows no more than a sprint's, docs/plan/29-the-move.md M7)
+  let at = { x: me(p).x, y: me(p).y };
   for (const s of path) {
+    await sleep(Math.max(55, (Math.hypot(s.x - at.x, s.y - at.y) / 4.5) * 1000));
     p.room.send("pos", { ...s, d: 0, a: 1, seq: ++seq });
-    await sleep(55);
+    at = s;
   }
   await sleep(150);
 };

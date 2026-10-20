@@ -23,6 +23,8 @@ const URL = arg("url", "ws://localhost:2567");
 const SECONDS = Number(arg("seconds", "120"));
 const CHATTY = process.argv.includes("--chatty");
 const map = getMap("studio");
+// put back by the server (an honest walk should never be: docs/plan/29-the-move.md phase 2)
+let snaps = 0;
 
 async function bot(i: number) {
   const id = 900000 + i;
@@ -52,6 +54,7 @@ async function bot(i: number) {
   let seq = 0;
   void avatarFromSeed(id);
   room.onMessage("snap", (m: Point) => {
+    snaps++;
     pos.x = m.x;
     pos.y = m.y;
     path = [];
@@ -108,6 +111,6 @@ for (let i = 0; i < COUNT; i++) {
 console.log(`[bots] ${COUNT} bots wandering the world for ${SECONDS}s`);
 setTimeout(async () => {
   await Promise.all(stops.map((s) => s().catch(() => {})));
-  console.log("[bots] done");
+  console.log(`[bots] done · ${snaps} snap${snaps === 1 ? "" : "s"} back`);
   process.exit(0);
 }, SECONDS * 1000);

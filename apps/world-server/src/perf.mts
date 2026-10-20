@@ -1,7 +1,9 @@
 // Server perf budget: an offline world-server with N bots walking real paths.
-// Fails if the average tick (features + simulation) goes over budget.
+// Fails if the average tick (features + simulation) goes over budget, or if
+// the server puts back an honest walk, jog or sprint (docs/plan/29-the-move.md).
 //   pnpm --filter @yutopia/world-server perf
-import { ANIM, dirFromDelta, findPath, Grid, getMap, type Point, ROOM_NAME, WALK_SPEED } from "@yutopia/shared";
+import { ANIM, dirFromDelta, findPath, type Point, ROOM_NAME } from "@yutopia/shared";
+import { type Gait, MOVE, packMv, yawToByte } from "@yutopia/shared/move";
 import { Client } from "colyseus.js";
 
 process.env.YUTOPIA_OFFLINE = "1";
@@ -14,9 +16,9 @@ const PORT = 27600 + Math.floor(Math.random() * 200);
 
 const { startWorldServer } = await import("./server.ts");
 const server = await startWorldServer(PORT);
-const map = getMap("studio");
-const grid = Grid.from(map, map.objects);
+const { WorldRoom } = await import("./WorldRoom.ts");
 const timers: ReturnType<typeof setInterval>[] = [];
+let snaps = 0;
 
 for (let i = 0; i < BOTS; i++) {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
@@ -25,7 +27,6 @@ for (let i = 0; i < BOTS; i++) {
   });
   for (const t of [
     "hear",
-    "snap",
     "chat",
     "toast",
     "knock",
@@ -40,16 +41,29 @@ for (let i = 0; i < BOTS; i++) {
   await new Promise<void>((r) => (room.state?.players ? r() : room.onStateChange.once(() => r())));
   const me = room.state.players.get(room.sessionId);
   const pos: Point = { x: me.x, y: me.y };
+  // walking the world as the server has it: its floor, its grid for them (locked doors and all)
+  const world = WorldRoom.current;
+  if (!world) throw new Error("no world room");
+  const grid = world.gridFor(800000 + i, me.level);
+  const areas = world.levelMap(me.level).areas.filter((a) => world.mayEnter(me, a.key));
   let path: Point[] = [];
   let seq = 0;
+  // a third each walk, jog and sprint, as the move's gaits go
+  const gait: Gait = (["walk", "jog", "sprint"] as const)[i % 3];
+  const speed = MOVE[gait];
+  let yaw = 0;
+  room.onMessage("snap", (m: Point) => {
+    snaps++;
+    Object.assign(pos, { x: m.x, y: m.y });
+    path = [];
+  });
   timers.push(
     setInterval(() => {
       if (!path.length) {
-        const a = map.areas[Math.floor(Math.random() * map.areas.length)];
-        if (a.kind !== "booth")
-          path = findPath(grid, pos, { x: a.x + Math.random() * a.w, y: a.y + Math.random() * a.h }) ?? [];
+        const a = areas[Math.floor(Math.random() * areas.length)];
+        path = findPath(grid, pos, { x: a.x + Math.random() * a.w, y: a.y + Math.random() * a.h }) ?? [];
       }
-      let budget = WALK_SPEED * 0.05;
+      let budget = speed * 0.05;
       let d = 0;
       while (budget > 0 && path.length) {
         const wp = path[0];
@@ -57,6 +71,7 @@ for (let i = 0; i < BOTS; i++) {
         const dy = wp.y - pos.y;
         const dist = Math.hypot(dx, dy);
         d = dirFromDelta(dx, dy);
+        yaw = Math.atan2(dy, dx);
         if (dist <= budget) {
           Object.assign(pos, wp);
           budget -= dist;
@@ -67,7 +82,17 @@ for (let i = 0; i < BOTS; i++) {
           budget = 0;
         }
       }
-      room.send("pos", { x: pos.x, y: pos.y, d, a: path.length ? ANIM.walk : ANIM.idle, seq: ++seq });
+      const moving = path.length > 0;
+      room.send("pos", {
+        x: pos.x,
+        y: pos.y,
+        d,
+        a: moving ? ANIM.walk : ANIM.idle,
+        seq: ++seq,
+        mv: packMv(moving ? gait : "still"),
+        yaw: yawToByte(yaw),
+        mt: Math.round(performance.now()) >>> 0,
+      });
     }, 50),
   );
 }
@@ -82,8 +107,8 @@ const avg = Number(/yutopia_tick_ms_avg ([\d.]+)/.exec(text)?.[1] ?? "NaN");
 const max = Number(/yutopia_tick_ms_max ([\d.]+)/.exec(text)?.[1] ?? "NaN");
 const cpuPct = ((cpu.user + cpu.system) / 1000 / (SECONDS * 1000)) * 100;
 console.log(
-  `[perf] ${BOTS} bots · tick avg ${avg} ms · max ${max} ms · process CPU ${cpuPct.toFixed(0)}% (incl. the bots themselves)`,
+  `[perf] ${BOTS} bots · tick avg ${avg} ms · max ${max} ms · process CPU ${cpuPct.toFixed(0)}% (incl. the bots themselves) · ${snaps} put back`,
 );
 for (const t of timers) clearInterval(t);
 await server.gracefullyShutdown(false);
-process.exit(avg <= BUDGET_MS ? 0 : 1);
+process.exit(avg <= BUDGET_MS && snaps === 0 ? 0 : 1);

@@ -35,7 +35,6 @@ import {
   JumpTrack,
   jumpArc,
   jumpNowAt,
-  jumpSpeed,
   jumpTimes,
   type LiftMotion,
   levelMap,
@@ -44,7 +43,6 @@ import {
   liftMotion,
   type MapDef,
   mayLockDoor,
-  moveStep,
   objectActions,
   objLevel,
   onLevel,
@@ -52,25 +50,22 @@ import {
   parseAvatar,
   placedFootprint,
   ROOM_NAME,
-  RUN_SPEED,
   reachOf,
   type ServerMessages,
   SOCIAL,
   SOCIAL_MS,
   STEP_LABELS,
-  screenInputToWorld,
   setAreasBeyond,
   setOutdoors,
   socialFor,
+  spHour,
   stairsDoor,
   stairsLocal,
   stairsWayUp,
-  stepHeight,
   stereoPan,
   THROWN,
   TICK_HZ,
   tileAt,
-  WALK_SPEED,
   type WbItem,
   type WorldObjectDef,
   wellsOf,
@@ -101,7 +96,6 @@ import { liftSound, loadLiftSounds, nearGain, stairStep } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import type { OsRoom } from "./os/room";
-import { activePad } from "./pads";
 import type { PetView } from "./petview";
 import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
@@ -124,11 +118,37 @@ const FLOOR_EDITS = new Set<string>([
   "map:room:remove",
 ]);
 
-interface Remote {
-  level: number; // the floor they're on (their coords are that floor's)
-  buf: { t: number; x: number; y: number; z: number }[];
+// someone as they were at a moment of their own clock, put on mine (docs/plan/29-the-move.md M7)
+interface Sample {
+  t: number;
+  x: number;
+  y: number;
+  z: number;
   d: number;
   a: number;
+  mv: number;
+  yaw: number;
+}
+const sampleOf = (
+  p: { x: number; y: number; z?: number; d: number; a: number; mv?: number; yaw?: number },
+  t: number,
+): Sample => ({
+  t,
+  x: p.x,
+  y: p.y,
+  z: p.z ?? 0,
+  d: p.d,
+  a: p.a,
+  mv: p.mv ?? 0,
+  yaw: p.yaw ?? 0,
+});
+
+interface Remote {
+  level: number; // the floor they're on (their coords are that floor's)
+  buf: Sample[];
+  off: number; // their clock to mine: the lowest gap seen (NaN: none yet)
+  verbAt: number; // when their last verb shows (as late as they're drawn)
+  offAt: number;
   jumpKey: string; // their last jump (kind|server ms), timed from when it showed up here
   track: JumpTrack;
 }
@@ -140,7 +160,7 @@ const LIVEKIT_TOKEN_FRESH_MS = 5 * 3600_000; // LiveKit tokens last 6 h (apps/ap
 const IDLE_MS = 3000; // nothing moved for this long: frames at 30/s
 const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
-const JUMP_BUFFER_MS = 220; // Space a moment before landing: the next jump goes as it lands
+const ISO_UP = (-3 * Math.PI) / 4; // iso: W goes up the screen, the world's north-west (shared iso.ts)
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 
 // (a lot car out being driven: not where it was parked — docs/plan/28-the-car.md)
@@ -159,13 +179,18 @@ export class WorldController {
   level = 0;
   readonly objs = new Map<string, WorldObjectDef>();
   private host: HTMLElement;
-  private keys = new Set<string>();
+  // my body (docs/plan/29-the-move.md): the movement core under the keys and the pad (input chunk)
+  private walker: import("./input").Walker | null = null;
+  private walkYaw = 0;
+  private myVerb: { kind: string; t: number } | undefined;
+  private myPitch = 0;
+  private lastPitch = 0;
+  private lastMv = 0;
+  private lastYaw = 0;
   // my feet (shared/jump.ts): how high (up on something, in a jump), my jump's stage,
   // whether it's left the ground yet; Space pressed just before landing, waiting
   private height: Height = { z: 0, vz: 0, up: false };
   private jumpTrack = new JumpTrack();
-  private launched = false;
-  private jumpWanted = 0;
   private jumpStages = new Map<string, string>(); // everyone's jump stage last frame (dust, sound)
   /** review shots / e2e: a jump of mine held at this moment (s in), while it's set */
   jumpHold: { kind: JumpKind; t: number } | null = null;
@@ -403,7 +428,7 @@ export class WorldController {
     });
     // Auto quality: step down a tier when this device can't keep up
     this.timers.push(setInterval(() => this.watchFrameRate(), 1000));
-    this.updateNight();
+    this.updateNight(true);
 
     await this.join();
     if (this.stopped) return;
@@ -443,7 +468,7 @@ export class WorldController {
 
     void this.media.connect(s.livekitUrl, s.livekitToken, s.iceServers);
     this.timers.push(setInterval(() => this.superviseMedia(), 1000));
-    this.timers.push(setInterval(() => this.updateNight(), 60_000));
+    this.timers.push(setInterval(() => this.updateNight(), 1000));
   }
 
   private async join(reconnectToken?: string) {
@@ -496,9 +521,10 @@ export class WorldController {
       } else {
         this.remotes.set(sid, {
           level: p.level ?? 0,
-          buf: [{ t: performance.now(), x: p.x, y: p.y, z: p.z ?? 0 }],
-          d: p.d,
-          a: p.a,
+          buf: [sampleOf(p, performance.now())],
+          off: Number.NaN,
+          offAt: 0,
+          verbAt: 0,
           jumpKey: `${p.jump}|${p.jumpAt}`, // (a jump from before I came isn't played)
           track: new JumpTrack(),
         });
@@ -514,13 +540,21 @@ export class WorldController {
           r.level = p.level ?? 0;
           r.buf = [];
         }
+        // timed on their own clock (put on mine by the lowest gap seen, creeping up for drift):
+        // a message that came late is played when it was sent, not when it came
+        const now = performance.now();
         const last = r.buf[r.buf.length - 1];
-        if (!last || last.x !== p.x || last.y !== p.y || last.z !== p.z) {
-          r.buf.push({ t: performance.now(), x: p.x, y: p.y, z: p.z ?? 0 });
+        let t = now;
+        if (p.mt) {
+          r.off = Math.min(Number.isNaN(r.off) ? now : r.off + (now - r.offAt) * 0.002, now - p.mt);
+          r.offAt = now;
+          t = Math.max(p.mt + r.off, (last?.t ?? 0) + 1);
+        }
+        const s = sampleOf(p, t);
+        if (!last || ["x", "y", "z", "d", "a", "mv", "yaw"].some((k) => last[k as "x"] !== s[k as "x"])) {
+          r.buf.push(s);
           if (r.buf.length > 12) r.buf.shift();
         }
-        r.d = p.d;
-        r.a = p.a;
       });
     });
     $(room.state).players.onRemove((p: S, sid: string) => {
@@ -819,6 +853,7 @@ export class WorldController {
 
   stop() {
     this.stopped = true;
+    this.walker?.dispose();
     this.build?.dispose();
     this.slots?.dispose();
     this.tables?.dispose();
@@ -1329,6 +1364,9 @@ export class WorldController {
         y: this.me.y,
         d: this.me.d,
         a: this.me.a,
+        mv: this.lastMv,
+        verb: this.myVerb,
+        pitch: this.myPitch,
         ...this.myJump(now),
       };
       this.jumpEffects(localSid, st, 1);
@@ -1352,15 +1390,20 @@ export class WorldController {
     for (const [sid, r] of this.remotes) {
       const p = room.state.players.get(sid);
       if (!p) continue;
-      if (!r.buf.length) r.buf.push({ t: performance.now(), x: p.x, y: p.y, z: p.z ?? 0 });
+      if (!r.buf.length) r.buf.push(sampleOf(p, performance.now()));
       const pos = interpolate(r.buf, renderAt);
+      const at = pos.s;
       const here = (p.level ?? 0) === this.level;
       const st = {
         ...this.avatarState(p, false),
         x: pos.x,
         y: pos.y,
-        d: r.d,
-        a: r.a,
+        d: at.d,
+        a: at.a,
+        mv: at.mv,
+        // (their verb, if it's one: timed from when it shows, by the 3D people and iso)
+        verb: p.jump ? { kind: p.jump, t: 0, at: r.verbAt } : undefined,
+        pitch: p.pitch / 40,
         ...this.theirJump(r, p, pos, now),
       };
       this.jumpEffects(
@@ -1380,6 +1423,8 @@ export class WorldController {
           ...st,
           id: sid,
           level: p.level ?? 0,
+          // (their facing as they turned, not 8 ways: from the move's own senders)
+          angle: p.mt ? (at.yaw / 128) * Math.PI : undefined,
           typing: st.a === 2 && (st.busy === "computer" || engine.atWork(st.x, st.y)),
           reduced,
         });
@@ -1575,76 +1620,75 @@ export class WorldController {
       this.meAngle = ride.angle ?? this.meAngle;
       return;
     }
-    const k = this.keys;
-    const ix = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
-    const iy = (k.has("s") || k.has("arrowdown") ? 1 : 0) - (k.has("w") || k.has("arrowup") ? 1 : 0);
-    const pad = this.gamepad();
-    const running = k.has("shift") || pad.run;
-    // (outdoors deep snow holds you back, the open snow a little)
-    const speed = (running ? RUN_SPEED : WALK_SPEED) * this.grid.speedAt(this.me.x, this.me.y);
-    const start = { x: this.me.x, y: this.me.y };
+    // my body (docs/plan/29-the-move.md): the movement core on its fixed step, under the keys,
+    // the pad or a click-to-walk path (the input chunk: until it's here, I stand still)
+    const w = this.walker;
+    if (!w) return;
     const first = this.firstPerson();
-    let moved = false;
-    if (ix || iy || pad.x || pad.y) {
+    const lp = this.room?.state.players.get(this.room.sessionId);
+    const playing = !!this.games?.playing();
+    if (this.tp) this.tp.padFree = !playing;
+    const map = this.map;
+    const G = this.G;
+    const out = w.frame(dt, {
+      grid: this.grid,
+      // (outdoors on the land: snow, the trails, the pond's ice; else a floor)
+      footing: (x, y) =>
+        G && this.grid.onLand(x, y)
+          ? G.surfaceTileAt(Math.floor(x + (map.ox ?? 0)), Math.floor(y + (map.oy ?? 0)))
+          : "floor",
+      // (a car on the move is in the way)
+      blocked: this.level === 0 && this.cars ? (x, y) => !!this.cars?.blocks(x, y) : undefined,
+      camYaw: this.tp ? this.tp.yaw : ISO_UP,
+      faceLook: first,
+      canJump: !!lp && this.me.a !== ANIM.sit && !lp.busy && !lp.act && !playing,
+      // (aiming: outdoors — the land, the lot — in 3D; indoors the right button is a thing's menu)
+      canAim:
+        !!this.tp &&
+        (this.grid.onLand(this.me.x, this.me.y) || tileAt(map, Math.floor(this.me.x), Math.floor(this.me.y)) === "a"),
+      usePad: !playing,
+      path: this.path,
+      at: { x: this.me.x, y: this.me.y, z: this.height.z },
+    });
+    const now = performance.now();
+    if (out.manual) {
       this.actions.clear();
       this.path = null;
       this.pathTarget = null;
       hud.set({ following: null });
-      // third person: relative to where the camera looks (W = away from it)
-      const dir = this.tp
-        ? unit(this.tp.relative(-(iy || pad.y), ix || pad.x))
-        : screenInputToWorld(ix || pad.x, iy || pad.y);
-      let next = moveStep(this.grid, this.me, dir, speed, dt, this.height.z);
-      // (a car on the move is in the way: no walking through it)
-      if (this.level === 0 && this.cars?.blocks(next.x, next.y)) next = { x: this.me.x, y: this.me.y };
-      // (first person: I keep facing where I look — S walks backwards, A / D sideways)
-      if (!first) {
-        this.turnTowards(Math.atan2(dir.y, dir.x), dt);
-        this.me.d = dirFromDelta(dir.x, dir.y, this.me.d as 0);
-      }
-      this.me.x = next.x;
-      this.me.y = next.y;
-      moved = next.x !== start.x || next.y !== start.y;
-    } else if (this.path?.length) {
-      let budget = speed * dt;
-      while (budget > 0 && this.path.length) {
-        const wp = this.path[0];
-        const dx = wp.x - this.me.x;
-        const dy = wp.y - this.me.y;
-        const d = Math.hypot(dx, dy);
-        if (d <= budget) {
-          this.me.x = wp.x;
-          this.me.y = wp.y;
-          budget -= d;
-          this.path.shift();
-        } else {
-          this.me.x += (dx / d) * budget;
-          this.me.y += (dy / d) * budget;
-          budget = 0;
-        }
-        if (d > 0.001 && !first) {
-          this.me.d = dirFromDelta(dx, dy, this.me.d as 0);
-          this.turnTowards(Math.atan2(dy, dx), dt);
-        }
-      }
-      moved = true;
-      if (!this.path.length) {
-        this.path = null;
-        const target = this.pathTarget;
-        this.pathTarget = null;
-        if (target?.objectId) this.activateObject(target.objectId, false);
-      }
     }
-    // my feet: a jump leaves the ground after its crouch, then gravity — landing on
-    // whatever's under them (a desk, the floor); walking off the edge of something drops them
+    // (the pad's buttons: X uses, Y the camera, ↑ the torch)
+    if (out.presses.has("use")) this.interact();
+    if (out.presses.has("camera")) this.swapCamera();
+    if (out.presses.has("torch")) this.toggleTorch();
+    let moved = out.moved;
+    const turned = Math.abs(out.yaw - this.walkYaw) > 1e-4;
+    this.walkYaw = out.yaw;
+    this.me.x = out.x;
+    this.me.y = out.y;
     const hgt = this.height;
-    const jk = this.jumpTrack.kind;
-    if (jk && !this.launched && this.jumpTrack.since(performance.now()) >= jumpTimes(jk).crouch) {
-      hgt.vz = jumpSpeed(jk);
-      hgt.up = true;
-      this.launched = true;
+    hgt.z = out.z;
+    hgt.up = out.up;
+    hgt.vz = out.vz;
+    // (first person: I keep facing where I look — S walks backwards, A / D sideways)
+    if (!first && (moved || turned)) {
+      this.meAngle = out.yaw;
+      this.me.d = dirFromDelta(Math.cos(out.yaw), Math.sin(out.yaw), this.me.d as 0);
     }
-    stepHeight(this.grid, this.me.x, this.me.y, hgt, Math.min(dt, 0.05));
+    if (this.path && !this.path.length) {
+      this.path = null;
+      const target = this.pathTarget;
+      this.pathTarget = null;
+      if (target?.objectId) this.activateObject(target.objectId, false);
+    }
+    // a jump: the view's stages from its take-off; everyone else told (after where I am, below)
+    const jumped = out.jumped;
+    if (jumped) {
+      this.jumpTrack.begin(jumped, now - (jumpTimes(jumped).crouch - w.takeoff) * 1000);
+      void loadJumps();
+      this.activeAt = now;
+    }
+    const running = out.gait === "sprint";
     // the stairs: past a storey's band my feet are on the next floor up or down
     // (its frame is a storey off, its coords maybe shifted)
     // (only on the stairs: outdoors the ground itself rises and falls by storeys)
@@ -1654,6 +1698,7 @@ export class WorldController {
     if (change) {
       const from = this.level;
       const at = across(this.building, from, change.level, this.me);
+      w.shift(at.x - this.me.x, at.y - this.me.y, change.dz);
       this.me.x = at.x;
       this.me.y = at.y;
       hgt.z += change.dz;
@@ -1664,8 +1709,6 @@ export class WorldController {
       this.path = rest?.length ? rest : null;
       moved = true;
     }
-    if (this.jumpWanted && performance.now() - this.jumpWanted > JUMP_BUFFER_MS) this.jumpWanted = 0;
-    if (this.jumpWanted && !hgt.up) this.jump();
     // (up on something or in the air nobody sits down: a jump over a chair lands on its feet)
     const seat = hgt.up || hgt.z > 0 || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
     // (outdoors on the land: what's underfoot there — snow, the trail, the ice)
@@ -1717,15 +1760,23 @@ export class WorldController {
         this.meAngle = DIR_ANGLE[this.me.d] ?? this.meAngle;
     }
 
-    const now = performance.now();
     const changed =
       Math.abs(this.me.x - this.lastSent.x) > 0.01 ||
       Math.abs(this.me.y - this.lastSent.y) > 0.01 ||
       Math.abs(this.height.z - this.lastSent.z) > 0.01 ||
       this.level !== this.lastSent.l ||
       this.me.d !== this.lastSent.d ||
-      this.me.a !== this.lastSent.a;
-    if (changed && now - this.lastSent.t >= 1000 / TICK_HZ) {
+      this.me.a !== this.lastSent.a ||
+      out.mv !== this.lastMv ||
+      out.yawByte !== this.lastYaw ||
+      Math.round(this.myPitch * 40) !== this.lastPitch;
+    // (aiming: over the shoulder, the body and the torch where I look)
+    if (this.tp) this.tp.aim = out.aim;
+    this.myVerb = out.verb ?? undefined;
+    this.myPitch = out.aim && this.tp ? this.tp.aimPitch : 0;
+    const go = jumped ?? out.started?.kind;
+    // (a jump, a verb: where I took off from first, so the server sees my feet on the ground)
+    if ((changed && now - this.lastSent.t >= 1000 / TICK_HZ) || go) {
       const z = Math.round(this.height.z * 1000) / 1000;
       this.send("pos", {
         x: this.me.x,
@@ -1735,32 +1786,18 @@ export class WorldController {
         d: this.me.d,
         a: this.me.a,
         seq: ++this.seq,
+        mv: out.mv,
+        yaw: out.yawByte,
+        pitch: Math.round(this.myPitch * 40),
+        mt: Math.round(now) >>> 0,
       });
       this.lastSent = { ...this.me, z, t: now, l: this.level };
+      this.lastMv = out.mv;
+      this.lastYaw = out.yawByte;
+      this.lastPitch = Math.round(this.myPitch * 40);
     }
+    if (go) this.send("jump", { k: go, h: out.started?.h });
   }
-
-  private gamepad(): { x: number; y: number; run: boolean } {
-    // (playing a console: the pad's the game's — no walking away on its stick)
-    if (this.games?.playing()) {
-      this.padA = true;
-      if (this.tp) this.tp.padFree = false;
-      return { x: 0, y: 0, run: false };
-    }
-    if (this.tp) this.tp.padFree = true;
-    const p = activePad();
-    if (p) {
-      const x = Math.abs(p.axes[0]) > 0.25 ? p.axes[0] : 0;
-      const y = Math.abs(p.axes[1]) > 0.25 ? p.axes[1] : 0;
-      if (p.buttons[0]?.pressed && !this.padA) {
-        this.padA = true;
-        this.interact();
-      } else if (!p.buttons[0]?.pressed) this.padA = false;
-      return { x, y, run: !!p.buttons[1]?.pressed };
-    }
-    return { x: 0, y: 0, run: false };
-  }
-  private padA = false;
 
   walkTo(target: Point, objectId?: string, quiet = false): boolean {
     if (hud.get().build.on) return false;
@@ -2442,30 +2479,6 @@ export class WorldController {
   }
 
   // ── jumping ─────────────────────────────────────────────────────────────
-  /** Space: a hop — or, running, a front flip. Pressed on the way down, it goes as I land. */
-  jump() {
-    const lp = this.room?.state.players.get(this.room.sessionId);
-    if (!lp || this.me.a === ANIM.sit || lp.busy || lp.act || this.games?.playing()) return;
-    const now = performance.now();
-    // still up: pressed on the way down it goes as I land (a buffer); loading up: nothing
-    if (this.height.up) {
-      if (this.height.vz < 0 && !this.jumpWanted) this.jumpWanted = now;
-      return;
-    }
-    if (this.jumpTrack.kind && !this.launched) return;
-    this.jumpWanted = 0;
-    const k = this.keys;
-    const moving =
-      k.has("w") || k.has("a") || k.has("s") || k.has("d") || [...k].some((x) => x.startsWith("arrow")) || !!this.path;
-    const pad = this.gamepad();
-    const running = (k.has("shift") || pad.run) && (moving || !!pad.x || !!pad.y);
-    const kind: JumpKind = running && !prefs().reducedMotion ? "flip" : "hop";
-    this.jumpTrack.begin(kind, now);
-    this.launched = false;
-    void loadJumps();
-    this.activeAt = now;
-    this.send("jump", { k: kind });
-  }
 
   // my jump as the views show it, my feet's height and what's under them
   private myJump(now: number): { jump?: JumpNow; z: number; ground: number } {
@@ -2482,6 +2495,7 @@ export class WorldController {
     if (key !== r.jumpKey) {
       r.jumpKey = key;
       if (isJump(p.jump)) r.track.begin(p.jump, now + INTERP_MS);
+      r.verbAt = now + INTERP_MS;
       void loadJumps();
     }
     const ground = this.grid.groundAt(at.x, at.y, at.z);
@@ -2655,14 +2669,18 @@ export class WorldController {
     for (const f of this.wbListeners) f(objectId, items);
   }
 
-  // The light follows the local clock (art/daylight.ts: day, golden hour, dusk, night).
-  private updateNight() {
-    const now = new Date();
-    this.hour = now.getHours() + now.getMinutes() / 60;
+  // The light follows the world's hour (art/daylight.ts: day, golden hour, dusk,
+  // night): São Paulo's, held by the server (shared clock.ts), a minute at a
+  // time; round to one an admin sets at an hour a second.
+  private updateNight(first = false) {
+    const st = this.room?.state;
+    const d = (((st?.players.size ? st.hour : spHour(Date.now())) - this.hour + 36) % 24) - 12;
+    if (!first && Math.abs(d) < 1 / 60) return;
+    this.hour = (this.hour + Math.max(-1, Math.min(1, d)) + 24) % 24;
     this.engine?.setClock(this.hour);
     this.tp?.setHour(this.hour);
   }
-  private hour = 12;
+  private hour = spHour(Date.now());
 
   // ── third person (world/tp, its own chunk) ─────────────────────────────────
   // A per-player way of seeing the same world: the iso engine keeps running
@@ -2809,13 +2827,6 @@ export class WorldController {
       e.throughOverride = null;
       e.app.canvas.style.visibility = "";
     }
-  }
-
-  // ease my 3D facing towards an angle (radians)
-  private turnTowards(a: number, dt: number) {
-    let d = a - this.meAngle;
-    d = Math.atan2(Math.sin(d), Math.cos(d));
-    this.meAngle += d * Math.min(1, dt * 12);
   }
 
   // the floor outline of a thing (wall items: just in front of their wall)
@@ -3396,15 +3407,10 @@ export class WorldController {
       e.preventDefault();
       return;
     }
-    if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "shift"].includes(key)) {
-      this.keys.add(key);
-      if (key.startsWith("arrow")) e.preventDefault();
+    // moving and jumping: the keys by where they are on the keyboard (input/bindings.ts)
+    if (this.walker?.controls.world(e.code)) {
+      if (e.code !== "ShiftLeft" && e.code !== "ShiftRight") e.preventDefault();
       void mixer.resume();
-      return;
-    }
-    if (key === " ") {
-      e.preventDefault();
-      if (!e.repeat) this.jump();
       return;
     }
     if (e.repeat) return;
@@ -3412,7 +3418,7 @@ export class WorldController {
     else if (key === "m") void this.toggleMic();
     else if (key === "v") void this.toggleCam();
     else if (key === "t") setPrefs({ view: prefs().view === "iso" ? prefs().last3d : "iso" });
-    else if (key === "c") this.swapCamera();
+    else if (key === "y") this.swapCamera();
     else if (key === "z") this.toggleLook();
     else if (key === "p" && !hud.get().build.on) void this.togglePhone();
     else if (key === "f" && !hud.get().build.on) this.toggleTorch();
@@ -3424,17 +3430,21 @@ export class WorldController {
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
-    this.keys.delete(e.key.toLowerCase());
+    this.walker?.controls.up(e.code);
     this.cars?.key(e, false);
   };
   private onBlur = () => {
-    this.keys.clear();
+    this.walker?.clear();
     this.cars?.blur();
   };
   private onFirstGesture = () => void mixer.resume();
 
   private bindInput() {
     void loadJumps(); // (a jump's dust and sounds: small, fetched now so the first one has them)
+    // my body's controls and the movement core (docs/plan/29-the-move.md): a chunk of their own
+    void import("./input").then((m) => {
+      if (!this.stopped) this.walker ??= new m.Walker();
+    });
     // the land round the ground floor: the grid walks it once it's here
     void loadGrounds().then((G) => {
       this.G = G;
@@ -3600,21 +3610,28 @@ function objFromState(o: S): WorldObjectDef {
   return { id: o.id, kind: o.kind, x: o.x, y: o.y, rot: o.rot, refId: o.refId || null, props };
 }
 
-function interpolate<T extends { t: number; x: number; y: number; z?: number }>(
+// where someone was at `at` (between the samples round it; past the last, on the way they were
+// going a moment longer if they were walking), and the sample they were last at (their facing…)
+function interpolate<T extends { t: number; x: number; y: number; z?: number; a?: number }>(
   buf: T[],
   at: number,
-): { x: number; y: number; z: number } {
-  if (buf.length === 0) return { x: 0, y: 0, z: 0 };
-  const of = (p: T) => ({ x: p.x, y: p.y, z: p.z ?? 0 });
+): { x: number; y: number; z: number; s: T } {
+  const of = (p: T) => ({ x: p.x, y: p.y, z: p.z ?? 0, s: p });
+  if (!buf.length) return { x: 0, y: 0, z: 0, s: {} as T };
   if (at <= buf[0].t) return of(buf[0]);
   for (let i = buf.length - 1; i >= 0; i--) {
     const a = buf[i];
     if (a.t <= at) {
       const b = buf[i + 1];
+      const p0 = buf[i - 1];
+      if (!b && p0 && a.a === 1) {
+        const k = Math.min(at - a.t, 150) / Math.max(1, a.t - p0.t);
+        return { x: a.x + (a.x - p0.x) * k, y: a.y + (a.y - p0.y) * k, z: a.z ?? 0, s: a };
+      }
       if (!b) return of(a);
       const k = (at - a.t) / Math.max(1, b.t - a.t);
       const az = a.z ?? 0;
-      return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: az + ((b.z ?? 0) - az) * k };
+      return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: az + ((b.z ?? 0) - az) * k, s: a };
     }
   }
   return of(buf[buf.length - 1]);
@@ -3631,8 +3648,3 @@ const DIR_ANGLE = [
   [1, -1],
   [1, 0],
 ].map(([x, y]) => Math.atan2(y, x));
-
-function unit(p: Point): Point {
-  const l = Math.hypot(p.x, p.y) || 1;
-  return { x: p.x / l, y: p.y / l };
-}

@@ -9,6 +9,9 @@ import { ANA, enter, test, token, useWorld } from "./helpers";
 // Headless Chromium never grants a pointer lock, so the lock is stubbed: it
 // behaves as the browser's (the element, the change event, letting go).
 
+// (3D: the real GPU — headless software GL draws a frame in seconds, and the hints fade first)
+test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
+
 const looking = (page: Page) => page.evaluate(() => !!(window as any).__yutopia.tp?.looking);
 const locked = (page: Page) => page.evaluate(() => document.pointerLockElement?.tagName ?? null);
 const yaw = (page: Page) => page.evaluate(() => (window as any).__yutopia.tp.yaw as number);

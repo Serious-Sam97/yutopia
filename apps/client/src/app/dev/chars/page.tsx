@@ -12,6 +12,7 @@ import {
 } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import type { Moved, Verb } from "@/world/chars";
 
 // Dev-only review page for the 3D people (docs/plan/22-people-3d.md).
 //   /dev/chars                 four people in a row
@@ -23,7 +24,10 @@ import { useEffect, useRef, useState } from "react";
 //                              &back=1 from behind, &head=1 close on the heads,
 //                              &hair=long&top=hoodie… sets the rest of the look)
 //   /dev/chars?anim=base       people moving: base (walk, run, sit, type, sip),
-//                              busy, phone, social, emote (&t=1.2 frozen at 1.2 s)
+//                              busy, phone, social, emote (&t=1.2 frozen at 1.2 s);
+//                              the move (docs/plan/29-the-move.md): move (the gaits,
+//                              crouch, strafe, aim), run, sprint, land, vault, mantle,
+//                              roll (filmstrips)
 //   …&w=&h=&ink=2.4&spin=1
 const CAST: AvatarLayers[] = [
   {
@@ -102,6 +106,38 @@ type Act = {
   ringing?: boolean;
   jump?: JumpKind; // frozen jt s into a jump (a filmstrip: the same person, moment by moment)
   jt?: number;
+  // the move's poses (chars/moves.ts), posed straight on: `mp` is the cycle's phase (frozen),
+  // the verb's progress, or the landing's impact; a cycle without `mp` plays at `walk` tiles/s
+  mv?: MoveKind;
+  mp?: number;
+};
+type MoveKind =
+  | "jog"
+  | "run"
+  | "sprint"
+  | "crouch"
+  | "sneak"
+  | "strafe"
+  | "back"
+  | "land"
+  | "aim"
+  | "aimGun"
+  | "aimUp"
+  | "vault"
+  | "mantle"
+  | "roll"
+  | "slide";
+// a cycle or a verb as a filmstrip: n moments evenly through it
+const moveStrip = (mv: MoveKind, n: number): Act[] =>
+  Array.from({ length: n }, (_, i) => {
+    const cyc = mv === "jog" || mv === "run" || mv === "sprint";
+    const mp = mv === "land" ? (i + 1) / n : (i + (cyc ? 0 : 0.5)) / n;
+    return { label: `${mv} ${mp.toFixed(2)}`, mv, mp };
+  });
+// the top a vault or a mantle goes over / onto (tiles), and where it stands from the start
+const TOPS: Partial<Record<MoveKind, { h: number; at: number; len: number }>> = {
+  vault: { h: 0.6, at: 0.8, len: 0.3 },
+  mantle: { h: 1.1, at: 0.3, len: 0.75 },
 };
 // a jump as a filmstrip: n moments evenly through it
 const jumpStrip = (kind: JumpKind, n: number): Act[] =>
@@ -138,7 +174,78 @@ const ANIMS: Record<string, Act[]> = {
   emote: ["wave", "clap", "laugh", "heart", "question", "fire", "coffee", "tape"].map((e) => ({ label: e, emote: e })),
   hop: jumpStrip("hop", 10),
   flip: jumpStrip("flip", 12),
+  move: [
+    { label: "walk", walk: 2.2 },
+    { label: "jog", mv: "jog", walk: 4.2 },
+    { label: "run", mv: "run", walk: 5.6 },
+    { label: "sprint", mv: "sprint", walk: 6.8 },
+    { label: "crouch", mv: "crouch" },
+    { label: "sneak", mv: "sneak", walk: 1.6 },
+    { label: "strafe", mv: "strafe", walk: 2 },
+    { label: "back up", mv: "back", walk: 2 },
+    { label: "slide", mv: "slide", mp: 0.5 },
+    { label: "aim · torch", mv: "aim" },
+    { label: "aim · gun", mv: "aimGun" },
+    { label: "aim · up", mv: "aimUp" },
+  ],
+  jog: moveStrip("jog", 8),
+  run: moveStrip("run", 8),
+  sprint: moveStrip("sprint", 8),
+  land: moveStrip("land", 4),
+  vault: moveStrip("vault", 8),
+  mantle: moveStrip("mantle", 8),
+  roll: moveStrip("roll", 9),
+  slide: moveStrip("slide", 8),
+  // the verbs played over and over (for a recording)
+  verbs: [
+    { label: "vault", mv: "vault" },
+    { label: "mantle", mv: "mantle" },
+    { label: "roll", mv: "roll" },
+    { label: "slide", mv: "slide" },
+    { label: "land", mv: "land" },
+  ],
 };
+// how far apart each in a row stands
+const SPACING: Record<string, number> = { vault: 1.35, mantle: 1.5, roll: 1.35, land: 1.2, slide: 1.4, verbs: 2.2 };
+
+/** The pose for one of the move's acts (`at`: seconds in, for one playing live: a cycle at
+ *  `walk` tiles/s, a verb over and over with a pause between). */
+function movePose(C: typeof import("@/world/chars"), a: Act, at: number): Moved {
+  const cyc = (stride: number) => a.mp ?? ((at * (a.walk ?? 0)) / stride) % 1;
+  const breath = (at / 3.6) % 1;
+  switch (a.mv) {
+    case "jog":
+      return C.runPose(cyc(C.runStride(0)), 0);
+    case "run":
+      return C.runPose(cyc(C.runStride(0.5)), 0.5);
+    case "sprint":
+      return C.runPose(cyc(C.runStride(1)), 1);
+    case "crouch":
+      return C.crouchPose(breath);
+    case "sneak":
+      return C.crouchWalkPose(cyc(C.SNEAK_STRIDE));
+    case "strafe":
+      return C.strafePose(cyc(C.STRAFE_STRIDE), 1);
+    case "back":
+      return C.backpedalPose(cyc(C.BACK_STRIDE));
+    case "land":
+      return C.landPose(a.mp ?? Math.sin(Math.PI * Math.min(1, (at % 1.4) / 0.7)));
+    case "aim":
+      return C.aimPose(0, 0, false, breath);
+    case "aimGun":
+      return C.aimPose(0, 0, true, breath);
+    case "aimUp":
+      return C.aimPose(0.5, 0.35, false, breath);
+    default:
+      return C.verbPose(a.mv as Verb, verbAt(C, a, at));
+  }
+}
+/** How far through its verb an act is: frozen at `mp`, or played over and over. */
+function verbAt(C: typeof import("@/world/chars"), a: Act, at: number): number {
+  if (a.mp !== undefined) return a.mp;
+  const len = C.VERB_LEN[a.mv as Verb];
+  return Math.min(1, (at % (len + 0.7)) / len);
+}
 
 type Mode =
   | { kind: "row" }
@@ -236,14 +343,17 @@ function Sheet({ q }: { q: URLSearchParams }) {
       const back = q.get("back") === "1";
       const acts = mode.kind === "anim" ? ANIMS[mode.group] : [];
       const motions = acts.map((_, i) => new C.Motion3(i * 0.137 + 0.05));
+      const step = mode.kind === "anim" ? (SPACING[mode.group] ?? 0.95) : 0.82;
       if (mode.kind === "anim")
         acts.forEach((a, i) => {
           // (a jump's filmstrip: one person, side on, going left to right)
-          const look = withQuery({ ...CAST[a.jump ? 0 : i % CAST.length], accessory: "none" }, q);
+          const strip =
+            a.jump || a.mp !== undefined || ["vault", "mantle", "roll", "slide", "land"].includes(a.mv ?? "");
+          const look = withQuery({ ...CAST[strip ? 0 : i % CAST.length], accessory: "none" }, q);
           // (&yaw= turns everyone: π shows their backs)
           const turn = Number(q.get("yaw") ?? 0);
-          const yaw = a.jump ? Math.PI / 2 : a.walk ? Math.PI / 2 - 0.5 : 0.4;
-          add(look, 0, (i - (acts.length - 1) / 2) * 0.95, 0, yaw + turn);
+          const yaw = strip ? Math.PI / 2 : a.walk ? Math.PI / 2 - 0.5 : 0.4;
+          add(look, 0, (i - (acts.length - 1) / 2) * step, 0, yaw + turn);
         });
       // a stool for whoever sits (a lathe, like everything else)
       const stools: InstanceType<typeof T.Mesh>[] = [];
@@ -265,6 +375,19 @@ function Sheet({ q }: { q: URLSearchParams }) {
         m.position.set((i - (acts.length - 1) / 2) * 0.95, 0, 0.18);
         scene.add(m);
         stools.push(m);
+      });
+      // what a vault goes over and a mantle climbs onto (moved under the person: a treadmill)
+      if (acts.some((a) => a.mv && TOPS[a.mv])) scene.add(new T.HemisphereLight("#fff8ee", "#9a8b76", 2.2));
+      const tops: (InstanceType<typeof T.Mesh> | null)[] = acts.map((a, i) => {
+        const top = a.mv ? TOPS[a.mv] : undefined;
+        if (!top) return null;
+        const m = new T.Mesh(new T.BoxGeometry(top.len, top.h, 0.9), new T.MeshLambertMaterial({ color: "#9a8b76" }));
+        m.position.set((i - (acts.length - 1) / 2) * step, top.h / 2, 0);
+        m.castShadow = true;
+        m.receiveShadow = true;
+        scene.add(m);
+        stools.push(m);
+        return m;
       });
       const from = Number(q.get("from") ?? 0);
       const sheet = mode.kind === "sheet" ? sheetLooks(mode.field, q).slice(from, from + Number(q.get("n") ?? 99)) : [];
@@ -303,7 +426,7 @@ function Sheet({ q }: { q: URLSearchParams }) {
         cam.position.set(0, side * 1.2 + 2, side * 2.6 + 3);
         cam.lookAt(0, 0.5, 0);
       } else if (mode.kind === "anim") {
-        const span = acts.length * 0.95 + 0.6;
+        const span = acts.length * step + 0.6;
         cam.position.set(0, tall * 0.62 + 0.5, Math.max(6.6, span / (2 * Math.tan((10 * Math.PI) / 180) * (W / H))));
         cam.lookAt(0, tall * 0.5, 0);
       } else if (mode.kind === "sheet") {
@@ -322,7 +445,6 @@ function Sheet({ q }: { q: URLSearchParams }) {
         cam.lookAt(0, tall * 0.47, 0);
       }
       const labelled = mode.kind === "anim" ? acts.map((a) => a.label) : sheet.map((it) => it.label);
-      const step = mode.kind === "anim" ? 0.95 : 0.82;
       setLabels(
         labelled.map((text, i) => ({
           text,
@@ -335,6 +457,19 @@ function Sheet({ q }: { q: URLSearchParams }) {
       const animate = (dt: number, at: number) => {
         acts.forEach((a, i) => {
           const m = items[i].m;
+          if (a.mv) {
+            const mo = movePose(C, a, at);
+            const x = (i - (acts.length - 1) / 2) * step;
+            const verb = a.mv === "vault" || a.mv === "mantle" || a.mv === "roll" || a.mv === "slide" ? a.mv : null;
+            const top = a.mv ? TOPS[a.mv] : undefined;
+            const go = verb ? C.verbRoot(verb, verbAt(C, a, at), top?.h) : { ahead: 0, up: 0 };
+            m.root.position.y = go.up;
+            const box = tops[i];
+            if (box && top) box.position.x = x + top.at + top.len / 2 - go.ahead;
+            m.setPose(mo.pose, mo.lift);
+            m.setFace(0, 0);
+            return;
+          }
           const mo = motions[i].update(dt, {
             dist: a.walk ? a.walk * dt : 0,
             walking: !!a.walk,
@@ -367,11 +502,13 @@ function Sheet({ q }: { q: URLSearchParams }) {
       const props: { dispose: () => void }[] = [];
       const pendingProps: (() => boolean)[] = [];
       acts.forEach((a, i) => {
-        const kind = a.held ? "mug" : a.phone ? "phone" : null;
-        const hand = kind ? items[i].m.bone("wristR") : null;
+        // (aiming: the phone's torch in the left hand)
+        const wrist = a.mv?.startsWith("aim") ? "wristL" : "wristR";
+        const kind = a.held ? "mug" : a.phone || wrist === "wristL" ? "phone" : null;
+        const hand = kind ? items[i].m.bone(wrist) : null;
         if (!kind) return;
         const attach = () => {
-          const bone = items[i].m.bone("wristR");
+          const bone = items[i].m.bone(wrist);
           if (!bone) return false;
           const pr = C.buildProp(kind, kind === "mug" ? "#efe4cc" : "#3d4a5c", propMat);
           C.inHand(pr.root, kind);

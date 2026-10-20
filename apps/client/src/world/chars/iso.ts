@@ -30,6 +30,7 @@ import {
   togetherPose,
   walkPose,
 } from "./motion";
+import { crouchPose, crouchWalkPose, runPose, runStride, SNEAK_STRIDE, VERB_LEN, type Verb, verbPose } from "./moves";
 import { buildProp, inHand, keepUpright, type PropKind } from "./props";
 import type { Euler3, Pose } from "./rig";
 
@@ -91,11 +92,16 @@ export interface IsoIn {
   reduced?: boolean;
   act?: { what: string; t: number; len: number } | null;
   jump?: JumpNow | null; // jumping (shared/jump.ts): its stage
+  mv?: number; // the gait, crouching, aiming (shared/move packMv)
+  // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)
+  verb?: { kind: string; t: number; at?: number };
 }
 
 /** What a person's sprite remembers between frames (the walk's phase, the blinks…). */
 export interface IsoMem {
   phase?: number;
+  speed?: number; // eased (the cycle mustn't flicker between gaits)
+  gait?: "walk" | "jog" | "sprint";
   blinkAt?: number;
   blinkUntil?: number;
   mouthAt?: number;
@@ -107,7 +113,9 @@ export interface IsoMem {
 
 /** One drawn frame of a person. */
 export interface IsoState {
-  base: "stand" | "walk" | "run" | "sit" | "type" | JumpKind;
+  // the gaits (docs/plan/29-the-move.md M6): the walk, the jog and the sprint (runPose),
+  // crouched still and sneaking
+  base: "stand" | "walk" | "jog" | "sprint" | "crouch" | "sneak" | "sit" | "type" | JumpKind | Verb;
   bf: number; // the base's frame
   upper: string; // "" | hold | sip | busy:<use> | phone:<state>:<pose> | act:<what> | emote:<emote>
   uf: number; // its frame
@@ -158,19 +166,54 @@ export function jumpAtFrame(kind: JumpKind, f: number): JumpNow {
   return { kind, stage: "land", k: (f - JUMP_N.crouch - air + 0.5) / JUMP_N.land };
 }
 
+/** A verb as far as it's got (`at`: since when — someone else's — else its own `t`), or null
+ *  (not a verb, or over). */
+export function verbAt(
+  v: { kind: string; t: number; at?: number } | undefined,
+  now: number,
+): { kind: Verb; t: number } | null {
+  const len = v ? VERB_LEN[v.kind as Verb] : undefined;
+  if (!v || !len) return null;
+  const t = v.at !== undefined ? (now - v.at) / (len * 1000) : v.t;
+  return t >= 0 && t <= 1 ? { kind: v.kind as Verb, t } : null;
+}
+
 /** Boil this frame down to a drawable state (and step what it remembers). */
 export function isoState(m: IsoMem, p: IsoIn, now: number): IsoState {
   const t = now / 1000;
   const sitting = p.a === 2;
   const walking = p.a === 1 && !sitting;
-  const speed = p.dt > 0 ? p.dist / p.dt : 0;
-  const run = speed > 4.2;
-  m.phase = ((m.phase ?? 0) + p.dist / (STRIDE * (run ? 1.35 : 1))) % 1;
-  let base: IsoState["base"] = sitting ? (p.typing ? "type" : "sit") : walking ? (run ? "run" : "walk") : "stand";
+  // the gait by the speed (eased, and a little past a line before it changes)
+  const raw = p.dt > 0 ? p.dist / p.dt : 0;
+  m.speed = (m.speed ?? raw) + (raw - (m.speed ?? raw)) * Math.min(1, p.dt * 8);
+  const v = m.speed;
+  const was = m.gait ?? "walk";
+  const gait = v < (was === "walk" ? 3.0 : 2.6) ? "walk" : v < (was === "sprint" ? 5.2 : 5.6) ? "jog" : "sprint";
+  m.gait = gait;
+  const crouch = ((p.mv ?? 0) & 8) !== 0;
+  const stride = crouch ? SNEAK_STRIDE : gait === "walk" ? STRIDE : runStride(gait === "jog" ? 0 : 1);
+  m.phase = ((m.phase ?? 0) + p.dist / stride) % 1;
+  let base: IsoState["base"] = sitting
+    ? p.typing
+      ? "type"
+      : "sit"
+    : crouch
+      ? walking
+        ? "sneak"
+        : "crouch"
+      : walking
+        ? gait
+        : "stand";
   let bf = 0;
-  if (base === "walk" || base === "run") bf = Math.floor(m.phase * WALK_N) % WALK_N;
+  if (base === "walk" || base === "jog" || base === "sprint" || base === "sneak")
+    bf = Math.floor(m.phase * WALK_N) % WALK_N;
   else if (base === "type" && !p.reduced) bf = Math.floor(t * 5) % 2;
-  if (p.reduced && base === "run") base = "walk";
+  // a verb takes the body: its frames through it
+  const vt = verbAt(p.verb, now);
+  if (vt && !sitting) {
+    base = vt.kind;
+    bf = Math.min(WALK_N - 1, Math.floor(vt.t * WALK_N));
+  }
   // a jump takes the body (a flip with reduced motion: a hop's frames)
   if (p.jump && !sitting) {
     const kind = p.reduced ? "hop" : p.jump.kind;
@@ -252,8 +295,18 @@ export function isoPose(s: IsoState): {
   let lift: Euler3 = [0, 0, 0];
   const reach: Reach = {};
   let p: Pose;
-  if (s.base === "walk" || s.base === "run") {
-    const w = walkPose((s.bf + 0.5) / WALK_N, s.base === "run" ? 1.35 : 1);
+  if (s.base === "walk") {
+    const w = walkPose((s.bf + 0.5) / WALK_N, 1);
+    p = w.pose;
+    lift = [...w.lift];
+  } else if (s.base === "jog" || s.base === "sprint" || s.base === "sneak" || s.base === "crouch") {
+    const k = (s.bf + 0.5) / WALK_N;
+    const w =
+      s.base === "crouch"
+        ? crouchPose(0)
+        : s.base === "sneak"
+          ? crouchWalkPose(k)
+          : runPose(k, s.base === "jog" ? 0 : 1);
     p = w.pose;
     lift = [...w.lift];
   } else if (s.base === "sit" || s.base === "type") {
@@ -263,6 +316,10 @@ export function isoPose(s: IsoState): {
       p.wristR = [(p.wristR?.[0] ?? 0) + 0.1 * k, p.wristR?.[1] ?? 0, p.wristR?.[2] ?? 0];
       p.wristL = [(p.wristL?.[0] ?? 0) - 0.1 * k, p.wristL?.[1] ?? 0, p.wristL?.[2] ?? 0];
     }
+  } else if (s.base === "vault" || s.base === "mantle" || s.base === "roll" || s.base === "slide") {
+    const w = verbPose(s.base, (s.bf + 0.5) / WALK_N);
+    p = w.pose;
+    lift = [...w.lift];
   } else if (s.base === "hop" || s.base === "flip") {
     const j = jumpPose(jumpAtFrame(s.base, s.bf));
     p = blend(standPose(), j.pose, j.w);

@@ -64,6 +64,15 @@ export class Person3D {
   private motion: InstanceType<Chars["Motion3"]>;
   private turned: number | null = null;
   private last: { x: number; y: number } | null = null;
+  // how they've been moving (smoothed): the velocity, the speed and its change, the feet
+  private vx = 0;
+  private vy = 0;
+  private spd = 0;
+  private acc = 0;
+  private turnRate = 0;
+  private lastH = 0;
+  private vz = 0;
+  private wasUp = false;
   private sitW: number | null = null;
   private ring: Mesh;
   private shadow: Mesh;
@@ -131,7 +140,8 @@ export class Person3D {
     if (this.turned === null) this.turned = p.angle;
     let dA = p.angle - this.turned;
     dA = Math.atan2(Math.sin(dA), Math.cos(dA));
-    this.turned += dA * Math.min(1, dt * 14);
+    const turnBy = dA * Math.min(1, dt * 14);
+    this.turned += turnBy;
     // (my hands in first person are placed by hands1p.ts)
     if (this.part === "all") this.root.rotation.y = Math.PI / 2 - this.turned;
 
@@ -153,13 +163,34 @@ export class Person3D {
     this.ring.position.y = 0.006 + ground - h;
 
     // the motion: stepped every frame on screen, caught up when it comes back
-    let dist = this.last ? Math.hypot(p.x - this.last.x, p.y - this.last.y) : 0;
-    if (dist > 1.5) dist = 0;
+    let dx = this.last ? p.x - this.last.x : 0;
+    let dy = this.last ? p.y - this.last.y : 0;
+    let dist = Math.hypot(dx, dy);
+    if (dist > 1.5) dist = dx = dy = 0;
     this.last = { x: p.x, y: p.y };
+    // how they move (docs/plan/29-the-move.md M6), from where they've been: the velocity in
+    // their own frame, the turn, the speed's change, the feet leaving and meeting the ground
+    if (dt > 0) {
+      const a = 1 - Math.exp(-dt * 12);
+      this.vx += (dx / dt - this.vx) * a;
+      this.vy += (dy / dt - this.vy) * a;
+      const spd = Math.hypot(this.vx, this.vy);
+      this.acc += ((spd - this.spd) / dt - this.acc) * a;
+      this.spd = spd;
+      this.turnRate += (turnBy / dt - this.turnRate) * a;
+      this.vz += ((h - this.lastH) / dt - this.vz) * Math.min(1, dt * 20);
+    }
+    this.lastH = h;
+    const up = !!jump || h > ground + 0.03;
+    const landed = this.wasUp && !up ? Math.min(1, Math.max(0, -this.vz) / 10.5) : undefined;
+    this.wasUp = up;
     this.due += dt;
     if (!given && !seen.onScreen && this.due < 0.5) return;
     const step = Math.min(this.due, 0.1);
     this.due = 0;
+    const fc = Math.cos(this.turned);
+    const fs = Math.sin(this.turned);
+    const mv = p.mv ?? 0;
     const held =
       isHeld(p.held) && p.heldAt && !p.phone ? { kind: p.held as HeldKind, since: Date.now() - p.heldAt } : null;
     const mo =
@@ -167,7 +198,7 @@ export class Person3D {
       this.motion.update(step, {
         dist,
         walking: p.a === 1,
-        speed: step > 0 ? dist / step : 0,
+        speed: this.spd,
         sit: sitting,
         typing: !!p.typing && sitting,
         speaking: !!p.speaking,
@@ -178,6 +209,19 @@ export class Person3D {
         act: this.actOf(p),
         phone: p.phone || p.ringing ? { state: p.phone ?? "", pose: p.phonePose ?? "", ringing: !!p.ringing } : null,
         jump,
+        loco: {
+          ahead: this.vx * fc + this.vy * fs,
+          left: this.vx * fs - this.vy * fc,
+          crouch: (mv & 8) !== 0,
+          aim: (mv & 16) !== 0,
+          pitch: p.pitch ?? 0,
+          yaw: 0,
+          turn: this.turnRate,
+          accel: this.acc,
+          up,
+          landed,
+          verb: this.C.verbAt(p.verb, performance.now()),
+        },
       });
     this.motionOut = mo;
     const seatY = (SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX;

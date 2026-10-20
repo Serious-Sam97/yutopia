@@ -7,10 +7,13 @@ import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 // Ana at eye height and she isn't drawn; where she looks (mouse look) is
 // where she faces, and Bia sees her turn; S walks her backwards without
 // turning; a click (the crosshair) walks her there and the camera comes
-// along; sitting drops the eyes and turns the view the seat's way; C goes
+// along; sitting drops the eyes and turns the view the seat's way; Y goes
 // back to third person, T to iso and T again to first person.
 // Headless Chromium never grants a pointer lock, so the lock is stubbed as
 // in mouse-look.spec.ts.
+
+// (3D: the real GPU — headless software GL draws a frame in seconds, and the hints fade first)
+test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
 const shots = process.env.YUTOPIA_SHOTS;
 // the 8 facings as world angles (the controller's table)
@@ -218,11 +221,11 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
     await page.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), id);
   }
 
-  // C: third person (drawn again); T: iso; T: back to first person
-  await page.keyboard.press("c");
+  // Y: third person (drawn again); T: iso; T: back to first person
+  await page.keyboard.press("y");
   await expect.poll(async () => (await cam(page)).mode).toBe("chase");
   await expect.poll(() => myCardShown(page)).toBe(true);
-  await page.keyboard.press("c");
+  await page.keyboard.press("y");
   await expect.poll(async () => (await cam(page)).mode).toBe("first");
   await page.keyboard.press("t");
   await page.waitForFunction(

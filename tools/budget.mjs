@@ -38,6 +38,7 @@ const LAZY = {
   "yutopia-os": 15, // VortexOS on the computers' glass (docs/plan/19-vortexos.md)
   "yutopia-phone": 60, // the phone: Vortex Mobile's screens, calls, camera, sounds (docs/plan/21-cellphone.md)
   "yutopia-chars": 40, // the 3D people: the model builder, motion, iso sprites (docs/plan/22-people-3d.md)
+  "yutopia-input": 15, // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
   "yutopia-jumps": 10, // a jump's dust and sounds (shared/jump.ts)
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every
   // chunk that uses it — its own, the 3D view's, the dev mock pages' (~6 KB each), and the marker counts those

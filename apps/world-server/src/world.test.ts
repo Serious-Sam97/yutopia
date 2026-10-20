@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { ROOM_NAME } from "@yutopia/shared";
+import { ROOM_NAME, spHour } from "@yutopia/shared";
 import { Client, type Room } from "colyseus.js";
 
 process.env.YUTOPIA_OFFLINE = "1";
@@ -115,4 +115,33 @@ test("the weather and the flashlight: a storm called up reaches everyone at once
   await waitFor(() => b.state.players.get(a.sessionId)?.torch === true);
   a.send("phone:torch", { on: false });
   await waitFor(() => b.state.players.get(a.sessionId)?.torch === false);
+});
+
+test("the hour: São Paulo's, the same for everyone; an admin sets another, nobody else can", async () => {
+  const person = async (id: number, roles: string) => {
+    const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 9,
+      token: `dev:${id}:P${id}:${roles}`,
+    });
+    rooms.push(room);
+    await waitFor(() => !!room.state?.players?.get(room.sessionId));
+    return room;
+  };
+  const admin = await person(91, "member,admin");
+  const guest = await person(92, "member");
+  // (a second's tick apart at most, and an hour is 3,600 of them)
+  const near = (a: number, b: number) => Math.abs(((a - b + 36) % 24) - 12) < 2 / 3600;
+  await waitFor(() => guest.state.players.size === 2);
+  assert.ok(near(admin.state.hour, spHour(Date.now())), `${admin.state.hour} vs ${spHour(Date.now())}`);
+  assert.ok(near(guest.state.hour, admin.state.hour));
+  // not theirs to set
+  const was = guest.state.hour;
+  guest.send("mod:hour", { h: (was + 12) % 24 });
+  await sleep(300);
+  assert.ok(near(guest.state.hour, was), "a member can't set the hour");
+  // an admin's: the same night for both, running on from it; then São Paulo's again
+  admin.send("mod:hour", { h: 23.5 });
+  await waitFor(() => near(admin.state.hour, 23.5) && near(guest.state.hour, 23.5));
+  admin.send("mod:hour", { h: null });
+  await waitFor(() => near(guest.state.hour, spHour(Date.now())));
 });

@@ -1206,7 +1206,7 @@ registerFeature((room: WorldRoom) => {
     if (crowd > 4) noise = Math.max(noise, 0.3);
     return noise;
   };
-  const hourNow = () => new Date().getHours() + new Date().getMinutes() / 60;
+  const hourNow = () => room.state.hour; // (the world's: São Paulo's, shared clock.ts)
   const isTv = (o: WorldObjectDef) => o.kind.includes("tv") && o.props?.playing !== false;
 
   // ── its mind ─────────────────────────────────────────────────────────────

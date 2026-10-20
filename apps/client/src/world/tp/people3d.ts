@@ -141,6 +141,10 @@ export interface PersonIn {
   jump?: JumpNow; // jumping (shared/jump.ts): its stage
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them, tiles
+  mv?: number; // the gait, crouching, aiming (shared/move packMv)
+  // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)
+  verb?: { kind: string; t: number; at?: number };
+  pitch?: number; // aiming: up from level (radians)
 }
 
 // A phone in the hand: its case and the face this view sees

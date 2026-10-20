@@ -107,7 +107,7 @@ registerFeature((room: WorldRoom) => {
   });
 
   const pickMode = (now: number) => {
-    const hour = new Date().getHours();
+    const hour = room.state.hour; // (the world's: São Paulo's, shared clock.ts)
     if (hour >= 1 && hour < 6 && humans().length === 0) {
       mode = "sleep";
       go(HOME);
@@ -205,7 +205,7 @@ registerFeature((room: WorldRoom) => {
           ? "standup"
           : mode === "dance"
             ? "radio"
-            : new Date().getHours() >= 21
+            : room.state.hour >= 21
               ? "night"
               : "ambient";
         if (Math.random() < 0.7) void say(event);

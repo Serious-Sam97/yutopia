@@ -157,10 +157,10 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
     await ana.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
     await ana.waitForTimeout(4000);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/pool-3d-top.png` });
-    await ana.keyboard.press("c");
+    await ana.keyboard.press("y");
     await ana.waitForTimeout(2500);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/pool-3d-cue.png` });
-    await ana.keyboard.press("c");
+    await ana.keyboard.press("y");
     await ana.keyboard.press("t");
     await ana.waitForTimeout(1000);
 

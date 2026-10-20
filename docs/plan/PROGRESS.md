@@ -1015,3 +1015,15 @@ KB, by the user's call.
     (`car:shove`).
 - Tests: shared 157, world-server 72, client 20, e2e `car.spec` 2/2 on the GPU.
 
+
+## The move — phases 0–5 (2026-10-20)
+The user: "I want to improve a lot the gameplay … today we only jump and a misery run that is bad." Plan: `docs/plan/29-the-move.md` (decided: jog by default, Alt to walk, Shift to sprint; C crouches, a toggle; the camera key to Y; a slide).
+- **Phase 0** (approved): the controls table, the feel numbers, a pose sheet and camera diagrams in `design/screens/move/`.
+- **Phase 1** (the feel signed off by the user): a pure movement core in shared (`move/`: a fixed 1/120 s step with momentum, grip per surface (ice skates), coyote time, jump buffers, a tap-or-hold jump, a 40 ms take-off, steps walked up to 0.27; the verbs: vault, mantle, a ledge catch, roll, slide); the input chunk (`yutopia-input`: keys by position and rebindable, an analog pad with a round deadzone, rumble); `/dev/move` to play and tune it.
+- **Phase 2**: the world walks on it. The server checks a distance allowance per player instead of a speed per message, and the camera's diagonal spiral is fixed. New fields on the wire: `mv` (gait, crouch, aim), `yaw`, `pitch`, `mt`.
+- **Phase 3**: an animator-style keyframe engine (`chars/moves.ts`, `locomotion.ts`): walk, jog, run, sprint, crouch, sneak, strafe, backpedal, aim, landings and lean, the feet planted. Others are played back on their own clock and face the way they turned (not 8 ways). Iso gets jog, sprint, crouch and sneak sprites.
+- **Phase 4**: vault, climb, roll, crouch and slide in the world, and the server accepts them. Low outdoor things are data (benches 0.45, town cars 1.15, the lot's cars 1.43). An over-the-shoulder aim outdoors in 3D.
+- **Phase 5**: the checks — `pnpm perf`'s bots walk, jog and sprint on the server's own grid: 5 minutes, 60 bots, 0 put back, tick 0.097 ms; `Locomotion` for 50 people 0.2 ms a frame; a roll through a one-tile gap tested.
+- **Checked**: shared 185, world-server 73, client 20; typecheck everywhere; Biome on the touched files; e2e on the GPU, 10 of 11: `move.spec` (crouch, slide, a desk vaulted, an arcade climbed, a roll, no put-backs), `move-others` (seen by a second browser in step), `walk-angles`, `jump`, `first-person`, `mouse-look`, `people-3d`, `pool`; `controllers` was flaky in the disc console's analog step (2 of 4 runs): the walker's per-frame pad read took the emulator's one-read Analog combo (`activePad()` read the virtual pads). Fixed on branch `claude/funny-joliot-b4a4d9` (`activePad()` reads `realGamepads()`, plus a unit test), not merged yet.
+- **Budget**: world page **554.0 KB — exactly at 554**; `yutopia-input` 7.4 KB.
+- **Not checked**: Firefox (Playwright's Firefox won't start here; the pad's non-standard mapping in Firefox is the risk); the fixture-swapping e2e suites.

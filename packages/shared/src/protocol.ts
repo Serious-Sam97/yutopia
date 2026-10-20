@@ -5,6 +5,7 @@ import type { AvatarLayers } from "./avatar";
 import type { CarWire } from "./car/net.ts";
 import type { JumpKind } from "./jump.ts";
 import type { MediaItem } from "./media.ts";
+import type { VerbKind } from "./move/verbs.ts";
 import type { Command, Move, Needs, Species, Toy, Trick } from "./pets.ts";
 import type { CallEnd, CallInfo } from "./phone.ts";
 
@@ -29,10 +30,25 @@ export interface JoinOptions {
 // client → server
 export interface ClientMessages {
   // `l`: the floor (changes only on the stairs; elevators are the server's)
-  pos: { x: number; y: number; z?: number; l?: number; d: number; a: number; seq: number };
+  // `mv` the gait (shared/move packMv), `yaw` the facing and `pitch` the look (a byte each),
+  // `mt` the sender's own clock (ms) — docs/plan/29-the-move.md M7
+  pos: {
+    x: number;
+    y: number;
+    z?: number;
+    l?: number;
+    d: number;
+    a: number;
+    seq: number;
+    mv?: number;
+    yaw?: number;
+    pitch?: number;
+    mt?: number;
+  };
   emote: { e: Emote };
   // a jump (shared/jump.ts): a hop, or a flip on the run
-  jump: { k: JumpKind };
+  // or a verb (shared/move verbs.ts: vault, mantle, roll, slide), with the top it goes over (h)
+  jump: { k: JumpKind | VerbKind; h?: number };
   // take something to carry from a thing that hands it out (a mug from the coffee machine)
   "item:take": { id: string };
   "item:drop": Record<string, never>;
@@ -128,6 +144,8 @@ export interface ClientMessages {
   // the weather (shared weather.ts): a storm called up (1) or sent off (0), or
   // back to the schedule (null); `now`: at once, not over a minute
   "mod:storm": { storm: number | null; now?: boolean };
+  // the world's hour (shared clock.ts): set one (0–24; it runs on from there), or null: São Paulo's again
+  "mod:hour": { h: number | null };
   "mod:kick": { userId: number };
   "mod:lock": { area: string; locked: boolean };
   // map editing (builders); `level`: which floor of the building (levels.ts;

@@ -860,6 +860,13 @@ export function landAt(x: number, z: number): number {
 export function slopeAt(x: number, z: number): number {
   return Math.hypot(heightAt(x + 0.5, z) - heightAt(x - 0.5, z), heightAt(x, z + 0.5) - heightAt(x, z - 0.5));
 }
+/** What's low on a tile you can't walk, over the ground (tiles): the clearing's bench (its seat),
+ *  a town car (its roof) — to vault or climb onto (docs/plan/29-the-move.md M4); else NaN. */
+export function topTile(tx: number, tz: number): number {
+  if (tz === Math.floor(BENCH.z) && (tx === Math.floor(BENCH.x) || tx === Math.floor(BENCH.x) + 1)) return 0.45;
+  return onTownCar(tx + 0.5, tz + 0.5) ? 1.15 : Number.NaN;
+}
+
 /** Can you walk on tile (tx, tz) (building coords)? */
 export function walkableTile(tx: number, tz: number): boolean {
   const cx = Math.floor(tx / CHUNK);
@@ -877,9 +884,11 @@ export function outdoorsAt(
   height(x: number, y: number): number;
   speed(x: number, y: number): number;
   edge(dir: "h" | "v", x: number, y: number): boolean;
+  top(tx: number, ty: number): number;
 } {
   return {
     walkable: (tx, ty) => walkableTile(tx + ox, ty + oy),
+    top: (tx, ty) => topTile(tx + ox, ty + oy),
     height: (x, y) => heightAt(x + ox, y + oy),
     speed: (x, y) => speedOn(surfaceTileAt(Math.floor(x + ox), Math.floor(y + oy))),
     edge: (dir, x, y) => wallEdgeAt(dir, x + ox, y + oy),

@@ -32,6 +32,9 @@ export interface Outdoors {
   speed?(x: number, y: number): number;
   /** a wall on an edge past the floor's own (the town's buildings): h north of (x, y), v west */
   edge?(dir: "h" | "v", x: number, y: number): boolean;
+  /** something low on a tile you can't walk (the bench, a parked car): its top over the ground,
+   *  tiles — stood on, vaulted, climbed (docs/plan/29-the-move.md M4); none: not a number */
+  top?(tx: number, ty: number): number;
 }
 let outdoorsFor: ((map: MapDef) => Outdoors | null) | null = null;
 /** Who knows the land round a floor (the Grounds; set once they're loaded). */
@@ -191,11 +194,10 @@ export class Grid {
   standOn(px: number, py: number, up: number): number {
     const x = Math.floor(px);
     const y = Math.floor(py);
-    if (!this.inBounds(x, y))
-      return this.outside?.walkable(x, y) ? this.outside.height(px, py) : Number.NEGATIVE_INFINITY;
+    if (!this.inBounds(x, y)) return this.landTop(x, y, px, py, up, !!this.outside?.walkable(x, y));
     const i = this.idx(x, y);
-    // land: its height, whatever it is (ground, not something to climb)
-    if (this.land[i]) return this.walk[i] && this.outside ? this.outside.height(px, py) : Number.NEGATIVE_INFINITY;
+    // land: its height, whatever it is (ground, not something to climb) — or what's on it
+    if (this.land[i]) return this.landTop(x, y, px, py, up, this.walk[i] === 1);
     if (this.well[i]) {
       let best = Number.NEGATIVE_INFINITY;
       for (const r of this.ramps) {
@@ -208,7 +210,19 @@ export class Grid {
       return best;
     }
     const t = this.top[i];
-    return t <= up ? t : Number.NEGATIVE_INFINITY;
+    // (a hair over: tops are float32, so a 0.12 step on a 0.24 one isn't a step too far)
+    return t <= up + 1e-4 ? t : Number.NEGATIVE_INFINITY;
+  }
+
+  /** The land at (px, py): its height where it's walked, else the top of what's on it (no higher
+   *  than `up`), else nothing. */
+  private landTop(x: number, y: number, px: number, py: number, up: number, walk: boolean): number {
+    const o = this.outside;
+    if (!o) return Number.NEGATIVE_INFINITY;
+    if (walk) return o.height(px, py);
+    const t = o.top?.(x, y) ?? Number.NaN;
+    const h = o.height(px, py) + t;
+    return h <= up ? h : Number.NEGATIVE_INFINITY;
   }
 
   /** Is (x, y) on a staircase (its feet follow the treads)? */

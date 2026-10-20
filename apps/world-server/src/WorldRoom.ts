@@ -32,10 +32,8 @@ import {
   isFloor,
   isJump,
   isKind,
-  isLegalMove,
   isOpening,
   isV2,
-  jumpReady,
   jumpTimes,
   layoutFromMap,
   levelMap,
@@ -59,6 +57,7 @@ import {
   type Status,
   setAreasBeyond,
   setOutdoors,
+  spHour,
   splitAll,
   stormAt,
   studioV1,
@@ -75,6 +74,7 @@ import {
 import { monitorsToComputers } from "@yutopia/shared/computer";
 import { groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
+import { Allowance, isVerb, MOVE, speedCap } from "@yutopia/shared/move";
 import { ApiError, api, type PresenceEntry } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
@@ -102,6 +102,8 @@ interface ClientData {
   claims: WorldClaims;
   lastPosAt: number;
   zMax?: number; // how high their jump can take them (tiles)
+  allow: Allowance; // how far they may have moved since (docs/plan/29-the-move.md M7)
+  footAt: number; // when their feet were last on something (a jump starts from there)
   avatarAt?: number; // last look change (rate limit)
   hears: Set<string>; // sids this client can hear
   heardByKey: string; // last "heard by" list sent, to skip no-op updates
@@ -326,7 +328,15 @@ export class WorldRoom extends Room<WorldState> {
     const s = this.state.storm;
     this.state.storm = Math.abs(want - s) < 0.02 ? want : s + Math.sign(want - s) * Math.min(Math.abs(want - s), 0.02);
     this.state.wind = windAt(now);
+    this.clockTick(now);
   }
+  // the world's hour: São Paulo's (shared clock.ts), or the one an admin set
+  // running on from when they set it (for the next six hours)
+  private clockTick(now = Date.now()) {
+    if (this.hourSet && now > this.hourSet.at + 6 * 3_600_000) this.hourSet = null;
+    this.state.hour = this.hourSet ? (this.hourSet.h + (now - this.hourSet.at) / 3_600_000) % 24 : spHour(now);
+  }
+  private hourSet: { h: number; at: number } | null = null;
 
   async onAuth(_client: Client, options: { token?: string }, _ctx: AuthContext): Promise<WorldClaims> {
     const claims = await this.claimsFor(options);
@@ -373,6 +383,8 @@ export class WorldRoom extends Room<WorldState> {
     client.userData = {
       claims,
       lastPosAt: Date.now(),
+      allow: new Allowance(),
+      footAt: 0,
       hears: new Set(),
       heardByKey: "",
     };
@@ -481,12 +493,21 @@ export class WorldRoom extends Room<WorldState> {
         if (ud.zMax !== undefined) ud.zMax += level > p.level ? -STOREY : STOREY;
       }
       const grid = this.gridFor(p.uid, level);
-      const jumping = isJump(p.jump) && now - p.jumpAt < JUMP_AIR_MS;
-      let cap = jumping ? (ud.zMax ?? 0) : zFrom + STEP + 0.05;
+      // (a vault or a mantle goes up like a jump, as high as its top: docs/plan/29-the-move.md M4)
+      const climbing = (p.jump === "vault" || p.jump === "mantle") && now - p.jumpAt < 2000;
+      const jumping = (isJump(p.jump) && now - p.jumpAt < JUMP_AIR_MS) || climbing;
+      // (not jumping: a step up — shared/move stepUp — is walked, no jump)
+      let cap = jumping ? (ud.zMax ?? 0) : zFrom + Math.max(STEP, MOVE.stepUp) + 0.05;
       if (grid.onRamp(to.x, to.y)) cap = Math.max(cap, grid.groundAt(to.x, to.y, z) + 0.05);
       // outdoors: up the slope as far as the ground goes (a message carries a few frames' climb)
       else if (grid.onLand(to.x, to.y)) cap = Math.max(cap, grid.groundAt(to.x, to.y, z) + 0.3);
-      if (z > cap || !isLegalMove(grid, from, to, dt, z, zFrom)) return snap();
+      // where they say they are fits, the way there is clear, and it's no further than they could
+      // have gone since (an allowance: docs/plan/29-the-move.md M7)
+      if (z > cap || !grid.fitsAt(to.x, to.y, z, 0.05) || !grid.clear(from, to, 0.05, Math.max(z, zFrom)))
+        return snap();
+      // (a verb — a roll's burst, a slide — goes faster than feet for a moment)
+      ud.allow.grow(dt, speedCap(isVerb(p.jump) && now - p.jumpAt < 1500 ? p.jump : null));
+      if (!ud.allow.spend(Math.hypot(to.x - from.x, to.y - from.y))) return snap();
       const nextArea = areaAt(this.levelMap(level), to.x, to.y);
       if (nextArea && nextArea.key !== p.area && !this.mayEnter(p, nextArea.key)) {
         snap();
@@ -503,6 +524,12 @@ export class WorldRoom extends Room<WorldState> {
       p.z = z;
       p.d = (Math.max(0, Math.min(7, m.d | 0)) as number) ?? 0;
       p.a = m.a === ANIM.walk || m.a === ANIM.sit ? m.a : ANIM.idle;
+      if (Number.isFinite(m.mv)) p.mv = (m.mv as number) & 31;
+      if (Number.isFinite(m.yaw)) p.yaw = (m.yaw as number) & 255;
+      if (Number.isFinite(m.pitch)) p.pitch = Math.max(-127, Math.min(127, (m.pitch as number) | 0));
+      if (Number.isFinite(m.mt)) p.mt = (m.mt as number) >>> 0;
+      // (their feet on something: a jump may start from here a moment after)
+      if (z - grid.groundAt(to.x, to.y, z) < 0.06) ud.footAt = now;
       const area = nextArea?.key ?? "";
       if (area !== p.area) {
         const prev = p.area;
@@ -520,16 +547,24 @@ export class WorldRoom extends Room<WorldState> {
       p.emoteAt = Date.now();
     });
 
-    // a jump: standing on the floor (not seated, not at something), once the last one is coming down
+    // a jump or a verb (shared/move verbs.ts): not seated, not at something
     this.on("jump", (client, m) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p || !isJump(m?.k) || p.a === ANIM.sit || p.busy || p.act) return;
+      const k = m?.k;
+      if (!p || !(isJump(k) || isVerb(k)) || p.a === ANIM.sit || p.busy || p.act) return;
       const now = Date.now();
-      if (isJump(p.jump) && !jumpReady(p.jump, (now - p.jumpAt) / 1000 + 0.1)) return;
-      p.jump = m.k;
+      // from the ground, or just off it (coyote time, plus a message's lag) — a mantle also from
+      // the air (catching an edge on the way up); not twice at once
+      if ((isJump(p.jump) || isVerb(p.jump)) && now - p.jumpAt < 200) return;
+      const grid = this.gridFor(p.uid, p.level);
+      // (the feet a hair up already: the jump's first step can be in the last position sent)
+      const grounded = p.z - grid.groundAt(p.x, p.y, p.z) < 0.2;
+      if (!grounded && now - data(client).footAt > 350 && k !== "mantle") return;
+      p.jump = k;
       p.jumpAt = now;
-      // (how high it can take them: from where they stand)
-      data(client).zMax = p.z + jumpTimes(m.k).h + 0.2;
+      // (how high it can take them: from where they stand — a jump's apex, a climb's top)
+      const top = Math.max(0, Math.min(MOVE.mantle.high, Number(m.h) || 0));
+      data(client).zMax = p.z + (isJump(k) ? jumpTimes(k).h : top) + 0.2;
     });
 
     // a new look, saved in the API by the editor: validated, at most every 2 s
@@ -676,6 +711,14 @@ export class WorldRoom extends Room<WorldState> {
       const to = m.storm === null || m.storm === undefined ? null : Math.max(0, Math.min(1, Number(m.storm) || 0));
       this.stormSet = to === null ? null : { to, until: Date.now() + 20 * 60_000 };
       if (m.now) this.state.storm = to ?? stormAt(Date.now());
+    });
+    // the hour: set (0–24, then the clock runs on from it), or back to São Paulo's
+    // (null). Admins only, offline too: it's everyone's night
+    this.on("mod:hour", (client, m) => {
+      if (!owner(client)) return;
+      const h = m.h === null || m.h === undefined ? null : Number(m.h);
+      this.hourSet = h === null || !Number.isFinite(h) ? null : { h: ((h % 24) + 24) % 24, at: Date.now() };
+      this.clockTick();
     });
     const byUid = (uid: number) => [...this.state.players.values()].find((q) => q.uid === uid);
     this.on("mod:mute", (client, m) => {

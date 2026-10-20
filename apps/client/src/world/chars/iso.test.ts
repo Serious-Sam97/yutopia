@@ -19,16 +19,19 @@ function finite(s: ReturnType<typeof isoState>) {
 
 test("every state is a few frames, and each poses the rig", () => {
   const seen = new Set<string>();
-  const run = (p: Partial<IsoIn>, seconds = 3) => {
+  // (moving at `speed` tiles / s: the walk's, the jog's or the sprint's — docs/plan/29-the-move.md)
+  const run = (p: Partial<IsoIn>, seconds = 3, speed = 2.2) => {
     const m: IsoMem = {};
     for (let i = 0; i < seconds * 60; i++) {
-      const s = isoState(m, { ...base, ...p, dist: p.a === 1 ? 3.6 / 60 : 0 }, 1000 + i * (1000 / 60));
+      const s = isoState(m, { ...base, ...p, dist: p.a === 1 ? speed / 60 : 0 }, 1000 + i * (1000 / 60));
       seen.add(`${s.base}${s.bf}|${s.upper}${s.uf}`);
       finite(s);
     }
   };
   run({});
   run({ a: 1 });
+  run({ a: 1 }, 3, 4.2);
+  run({ a: 1 }, 3, 6.8);
   run({ a: 2 });
   run({ a: 2, typing: true });
   run({ held: "mug", heldAt: Date.now() - 2400 });
@@ -36,9 +39,11 @@ test("every state is a few frames, and each poses the rig", () => {
   for (const phone of ["text", "call", "video", "photo", "selfie"]) run({ phone }, 1);
   for (const what of [...SOCIAL, "take"]) run({ act: { what, t: 0.7, len: 1.5 } }, 1);
   for (const emote of EMOTES) run({ emote });
-  // a walk cycle is 8 frames, not one per frame
-  const walk = [...seen].filter((k) => k.startsWith("walk"));
-  assert.ok(walk.length <= 8 && walk.length >= 6, `walk frames: ${walk.length}`);
+  // a walk, a jog, a sprint cycle is 8 frames, not one per frame
+  for (const gait of ["walk", "jog", "sprint"]) {
+    const n = [...seen].filter((k) => k.startsWith(gait) && k.endsWith("|0")).length;
+    assert.ok(n <= 8 && n >= 6, `${gait} frames: ${n}`);
+  }
   assert.ok(seen.size < 600, `${seen.size} distinct frames`);
 });
 

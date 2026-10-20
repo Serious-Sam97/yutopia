@@ -1,5 +1,6 @@
 import { type HeldKind, heldState, type JumpNow } from "@yutopia/shared";
 import { Euler, Quaternion } from "three";
+import { type LocoIn, Locomotion } from "./locomotion";
 import type { Reach } from "./model";
 import { type Euler3, JOINTS, type JointName, type Pose, REST } from "./rig";
 
@@ -26,6 +27,9 @@ export interface MotionIn {
   act?: { what: string; t: number; len: number } | null; // with someone (shared SOCIAL, or "take")
   phone?: { state: string; pose: string; ringing: boolean } | null;
   jump?: JumpNow | null; // jumping (shared/jump.ts): its stage
+  /** how they move (docs/plan/29-the-move.md M6): the gaits, crouching, aiming, the jump's arc
+   *  and landings come from Locomotion (the old walk and jump layers otherwise) */
+  loco?: Omit<LocoIn, "dist" | "speed" | "jump" | "reduced">;
 }
 
 export interface MotionOut {
@@ -599,6 +603,7 @@ export class Motion3 {
   private phoneWhat = "";
   private seated: boolean | null = null;
   private settleT = 1;
+  private loco: Locomotion | null = null;
 
   constructor(seed: number) {
     this.r = rnd(seed);
@@ -674,18 +679,32 @@ export class Motion3 {
       this.look += (this.lookTo - this.look) * Math.min(1, dt * 5);
       add(p, "head", 0, this.look);
     }
-    // walking takes over the legs, the hips and the swing of the arms
-    if (this.walkW > 0) {
-      const w = walkPose(this.phase, k);
-      p = blend(p, w.pose, ease(this.walkW));
-      lifted(w.lift, ease(this.walkW));
-    }
-    // a jump takes the whole body (what's in the hands is laid back over it next)
-    if (m.jump && !m.sit) {
-      const j = jumpPose(m.jump, !m.reduced);
-      if (j.w > 0) {
-        p = blend(p, j.pose, j.w);
-        lift[1] = lift[1] * (1 - j.w) + j.lift[1] * j.w;
+    if (m.loco && !m.sit) {
+      // the move: standing (as above), walking, jogging, sprinting, crouched, aiming, in the air
+      this.loco ??= new Locomotion();
+      const lo = this.loco.update(
+        dt,
+        { ...m.loco, dist: m.dist, speed: m.speed, jump: m.jump ?? null, reduced: m.reduced },
+        { pose: p, lift: [lift[0], lift[1], lift[2]] },
+      );
+      p = lo.pose;
+      lift[0] = lo.lift[0];
+      lift[1] = lo.lift[1];
+      lift[2] = lo.lift[2];
+    } else {
+      // walking takes over the legs, the hips and the swing of the arms
+      if (this.walkW > 0) {
+        const w = walkPose(this.phase, k);
+        p = blend(p, w.pose, ease(this.walkW));
+        lifted(w.lift, ease(this.walkW));
+      }
+      // a jump takes the whole body (what's in the hands is laid back over it next)
+      if (m.jump && !m.sit) {
+        const j = jumpPose(m.jump, !m.reduced);
+        if (j.w > 0) {
+          p = blend(p, j.pose, j.w);
+          lift[1] = lift[1] * (1 - j.w) + j.lift[1] * j.w;
+        }
       }
     }
 

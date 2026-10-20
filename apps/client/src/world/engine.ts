@@ -27,6 +27,7 @@ import {
   type Ray,
   registerKinds,
   SOCIAL_MS,
+  spHour,
   surfaceAt,
   TILE_H,
   TILE_W,
@@ -165,6 +166,10 @@ export interface AvatarState {
   jump?: JumpNow; // jumping (shared/jump.ts): its stage (the controller tracks it)
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them (the floor: 0), tiles
+  mv?: number; // the gait, crouching, aiming (shared/move packMv)
+  // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)
+  verb?: { kind: string; t: number; at?: number };
+  pitch?: number; // aiming: up from level (radians)
 }
 
 // a tile of height in a person's own px (they're drawn at PERSON: their feet land right on a top)
@@ -2342,6 +2347,8 @@ export class WorldEngine {
         mugColor: MUG_COLORS[Math.floor(seedOf(s.name) * MUG_COLORS.length)],
         recording: s.recording,
         busy: s.busy,
+        mv: s.mv,
+        verb: s.verb,
         emote: s.emote,
         speaking: s.speaking,
         typing: sitting && (s.busy === "computer" || this.atWork(s.x, s.y)),
@@ -2455,8 +2462,9 @@ export class WorldEngine {
     return w;
   }
 
-  // Wall clocks tell the time where you are: hour, minute and a red second
-  // hand on the face's plane (the face is drawn by the clock's art at z 52).
+  // Wall clocks tell the world's time (setClock: São Paulo's, the server's):
+  // hour, minute and a red second hand on the face's plane (the face is drawn
+  // by the clock's art at z 52).
   private clockTick = -1;
   private drawClocks() {
     const now = new Date();
@@ -2466,8 +2474,9 @@ export class WorldEngine {
     const redraw = tick !== this.clockTick;
     this.clockTick = tick;
     const sec = now.getSeconds() + (this.reducedMotion ? 0 : Math.floor(now.getMilliseconds() / 100) / 10);
-    const min = now.getMinutes() + sec / 60;
-    const hr = (now.getHours() % 12) + min / 60;
+    const m = (((Math.floor(spHour(now.getTime()) * 60) + this.clockOff) % 1440) + 1440) % 1440; // (the minute of the day)
+    const min = (m % 60) + sec / 60;
+    const hr = (Math.floor(m / 60) % 12) + min / 60;
     for (const v of this.objectViews.values()) {
       const g = v.hands;
       if (!g) continue;
@@ -2539,6 +2548,7 @@ export class WorldEngine {
   // it; walls, items and people are tinted by it where they stand. Low quality
   // keeps flat light.
   private day: Daylight = daylight(12);
+  private clockOff = 0;
   private lightMap: LightMap | null = null;
   private lightDue = 0;
   private lightCanvas: HTMLCanvasElement | null = null;
@@ -2547,6 +2557,8 @@ export class WorldEngine {
 
   setClock(hour: number) {
     this.day = daylight(hour);
+    // (the wall clocks run on from it, by this machine's clock: how many minutes it's off São Paulo's)
+    this.clockOff = Math.round((hour - spHour(Date.now())) * 60);
     this.night = this.day.night;
     this.applyLight();
   }

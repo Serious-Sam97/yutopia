@@ -20,7 +20,8 @@
     "./pool-game": "./src/pool-game.ts",
     "./phone": "./src/phone.ts",
     "./grounds": "./src/grounds.ts",
-    "./car": "./src/car/index.ts"
+    "./car": "./src/car/index.ts",
+    "./move": "./src/move/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
