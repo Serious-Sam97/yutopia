@@ -730,38 +730,120 @@ export function upgradeCore(
 // something of: the floor grows to take them in (its corner stays where it
 // was, so nothing on it moves). Glass all round, a doorway, a sealed core
 // (their upper floors aren't open yet).
+// (Clear of a studio up to 64 × 48 with a 12-tile courtyard: they stood at
+// x 60 and y 48 — inside a studio grown past 60 wide, on one 48 deep;
+// moveBlocks takes a stored ground floor's from there to here.)
 export const BLOCKS = [
   {
     key: "east-block",
     name: "East block",
-    x0: 60,
+    x0: 76,
     y0: -10,
-    x1: 88,
+    x1: 100, // (the ground floor at most 160 wide: −60 … 100; map-edit LEVEL_MAX, the API's too)
     y1: 48,
-    door: { dir: "v" as const, at: 60, from: 16, to: 20 },
-    core: { x: 76, y: 14, w: 8, h: 7 },
+    door: { dir: "v" as const, at: 76, from: 16, to: 20 },
+    core: { x: 86, y: 14, w: 8, h: 7 },
   },
   {
     key: "south-block",
     name: "South block",
     x0: -4,
-    y0: 48,
+    y0: 60,
     x1: 50,
-    y1: 72,
-    door: { dir: "h" as const, at: 48, from: 22, to: 26 },
-    core: { x: 34, y: 58, w: 8, h: 7 },
+    y1: 84,
+    door: { dir: "h" as const, at: 60, from: 22, to: 26 },
+    core: { x: 34, y: 70, w: 8, h: 7 },
   },
 ];
+// where they stood first (2026-10-20): their cores, to clear them
+const OLD_CORES: Record<string, { x: number; y: number; w: number; h: number }> = {
+  "east-block": { x: 76, y: 14, w: 8, h: 7 },
+  "south-block": { x: 34, y: 58, w: 8, h: 7 },
+};
+
+/** A stored ground floor whose blocks stand where they first did: they go (their
+ *  floor, glass and core — not the studio's own outline), the things built in
+ *  them move with them, and upgradeGround puts them in again where they stand
+ *  now. Null: nothing to move. */
+export function moveBlocks(
+  map: MapDef,
+  objects: WorldObjectDef[],
+): { map: MapDef; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
+  const l0 = map.levels?.find((l) => l.index === 0);
+  if (!l0) return null;
+  const ox = l0.ox;
+  const oy = l0.oy;
+  const old = BLOCKS.flatMap((b) => {
+    const a = l0.areas.find((x) => x.key === b.key);
+    return a && (a.x !== b.x0 - ox || a.y !== b.y0 - oy) ? [{ b, a }] : [];
+  });
+  if (!old.length) return null;
+  const m: { hWalls: string[]; vWalls: string[] } = { hWalls: [...l0.hWalls], vWalls: [...l0.vWalls] };
+  const rows = l0.tiles.map((r) => [...r]);
+  // the studio's footprint in this floor's coords (its outline is the lobby's walls)
+  const sx0 = -ox;
+  const sy0 = -oy;
+  const sx1 = sx0 + map.width;
+  const sy1 = sy0 + map.height;
+  const inStudio = (x: number, y: number) => x >= sx0 && x < sx1 && y >= sy0 && y < sy1;
+  const onOutline = (e: Edge) =>
+    e.dir === "h"
+      ? (e.y === sy0 || e.y === sy1) && e.x >= sx0 && e.x < sx1
+      : (e.x === sx0 || e.x === sx1) && e.y >= sy0 && e.y < sy1;
+  const clear = (e: Edge) => {
+    if (!onOutline(e) && "gp".includes(edgeAt(l0 as unknown as MapDef, e))) setEdge(m, e, ".");
+  };
+  const moved: WorldObjectDef[] = [];
+  let out = objects;
+  for (const { b, a } of old) {
+    for (let y = a.y; y < a.y + a.h; y++)
+      for (let x = a.x; x < a.x + a.w; x++) if (rows[y]?.[x] === "_" && !inStudio(x, y)) rows[y][x] = " ";
+    for (let x = a.x; x < a.x + a.w; x++) for (const y of [a.y, a.y + a.h]) clear({ dir: "h", x, y });
+    for (let y = a.y; y < a.y + a.h; y++) for (const x of [a.x, a.x + a.w]) clear({ dir: "v", x, y });
+    const c0 = OLD_CORES[b.key];
+    const c = { x: c0.x - ox, y: c0.y - oy, w: c0.w, h: c0.h };
+    for (let x = c.x; x < c.x + c.w; x++) for (const y of [c.y, c.y + c.h]) clear({ dir: "h", x, y });
+    for (let y = c.y; y < c.y + c.h; y++) for (const x of [c.x, c.x + c.w]) clear({ dir: "v", x, y });
+    // what was built in it goes with it
+    const dx = b.x0 - ox - a.x;
+    const dy = b.y0 - oy - a.y;
+    out = out.map((o) => {
+      if (objLevel(o, map) !== 0 || inStudio(o.x, o.y)) return o;
+      if (o.x < a.x || o.y < a.y || o.x >= a.x + a.w || o.y >= a.y + a.h) return o;
+      const n = { ...o, x: o.x + dx, y: o.y + dy };
+      moved.push(n);
+      return n;
+    });
+  }
+  const keys = new Set(old.map((o) => o.b.key));
+  const level: LevelDef = {
+    ...l0,
+    tiles: rows.map((r) => r.join("")),
+    hWalls: m.hWalls,
+    vWalls: m.vWalls,
+    areas: l0.areas.filter((x) => !keys.has(x.key)),
+  };
+  const cleared = { ...map, levels: (map.levels ?? []).map((l) => (l.index === 0 ? level : l)) };
+  // (back in where they stand now; the other one, already there, stays)
+  const back = upgradeBlocks(cleared, keys);
+  return { map: back ?? cleared, objects: out, moved };
+}
 
 /** The ground floor with the blocks' ground floors in it (null: they're there,
  *  or it has no ground floor). */
 export function upgradeGround(map: MapDef): MapDef | null {
   const l0 = map.levels?.find((l) => l.index === 0);
   if (!l0 || l0.areas.some((a) => a.key === BLOCKS[0].key)) return null;
+  return upgradeBlocks(map, new Set(BLOCKS.map((b) => b.key)));
+}
+function upgradeBlocks(map: MapDef, which: Set<string>): MapDef | null {
+  const l0 = map.levels?.find((l) => l.index === 0);
+  if (!l0) return null;
+  const blocks = BLOCKS.filter((b) => which.has(b.key));
   const ox = l0.ox;
   const oy = l0.oy;
-  const W = Math.max(l0.width, ...BLOCKS.map((b) => b.x1 - ox));
-  const H = Math.max(l0.height, ...BLOCKS.map((b) => b.y1 - oy));
+  const W = Math.max(l0.width, ...blocks.map((b) => b.x1 - ox));
+  const H = Math.max(l0.height, ...blocks.map((b) => b.y1 - oy));
   const pad = (rows: string[], n: number, w: number, ch: string) => [
     ...rows.map((r) => r.padEnd(w, ch)),
     ...Array.from({ length: n - rows.length }, () => ch.repeat(w)),
@@ -778,7 +860,7 @@ export function upgradeGround(map: MapDef): MapDef | null {
   };
   const rows = m.tiles.map((r) => [...r]);
   const areas: AreaDef[] = [...l0.areas];
-  for (const b of BLOCKS) {
+  for (const b of blocks) {
     const x0 = b.x0 - ox;
     const y0 = b.y0 - oy;
     const x1 = b.x1 - ox;

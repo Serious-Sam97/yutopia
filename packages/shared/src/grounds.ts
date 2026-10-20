@@ -159,8 +159,8 @@ const W = 48;
 export const LOT = { x0: -56, z0: -8, x1: -10, z1: H + 12 };
 // the stored ground floor's rectangle (shared building.ts groundLevel and
 // upgradeGround: the lobby, the lot and the blocks, GROUND_OFFSET −60, −10,
-// 148 × 82): flat, at 0
-export const SITE = { x0: -60, z0: -10, x1: 88, z1: 72 };
+// 160 × 94): flat, at 0
+export const SITE = { x0: -60, z0: -10, x1: 100, z1: 84 };
 export const POND = { cx: -240, cz: -60, rx: 48, rz: 34 };
 export const TOWER = { x: -34, z: -96 };
 export const STATUE = { x: 420, z: -386 };
@@ -257,7 +257,7 @@ export const WAYS: Way[] = [
   // the courtyard: from the headquarters' east doors to the east block's
   way("court", "walk", "Courtyard", 4, [
     [W, 18],
-    [60, 18],
+    [76, 18],
   ]),
   // trails through the woods (packed snow)
   way(
@@ -367,8 +367,9 @@ const b = (
 export const BUILDINGS: Building[] = [
   b("hq", "hq", "Headquarters", 0, 0, W, H, 5, "w", { enter: true }),
   // (their ground floors are the ground floor's own: shared building.ts BLOCKS)
-  b("east", "block", "East block", 60, -10, 88, H + 12, 5, "w", { enter: true, stored: true }),
-  b("south", "block", "South block", -4, H + 12, W + 2, H + 36, 5, "n", { enter: true, stored: true }),
+  // (clear of a studio up to 64 × 48 across a 12-tile courtyard: building.ts BLOCKS)
+  b("east", "block", "East block", 76, -10, 100, 48, 5, "w", { enter: true, stored: true }),
+  b("south", "block", "South block", -4, 60, 50, 84, 5, "n", { enter: true, stored: true }),
   b("gatehouse", "gatehouse", "Gatehouse", -34, -367, -29, -361, 1, "w", { enter: true }),
   b("boathouse", "boathouse", "Boathouse", -262, -108, -248, -98, 1, "s"),
   b("shed", "shed", "Grounds shed", -162, 110, -148, 120, 1, "n"),

@@ -106,7 +106,7 @@ for (const view of ["3p", "iso"] as const)
     await open(page, view);
     await goTo(page, LOT);
     // round the headquarters, across the courtyard, in at the east block's doors
-    await walkTo(page, G(66, 18).x, G(66, 18).y, 90_000);
+    await walkTo(page, G(82, 18).x, G(82, 18).y, 90_000);
     const inside = await page.evaluate(() => {
       const c = (window as any).__yutopia;
       const m = c.meTile();

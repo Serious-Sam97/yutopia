@@ -43,6 +43,7 @@ import {
   lockedRooms,
   type MapDef,
   mapFromLayout,
+  moveBlocks,
   objLevel,
   onLevel,
   openingBlocker,
@@ -257,6 +258,19 @@ export class WorldRoom extends Room<WorldState> {
       console.log(`[building] the core: a row deeper (${upgraded.moved.length} things moved)`);
       if (!config.offline) {
         await saveAll(upgraded.moved, (o) => api.putObject(o));
+        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
+      }
+    }
+    // the courtyard's blocks moved out of a bigger studio's way (they stood in
+    // its wall): the old ones go, what was built in them goes with them
+    const shifted = config.building ? moveBlocks(this.map, objects) : null;
+    if (shifted) {
+      this.map = shifted.map;
+      objects = shifted.objects;
+      this.syncMapState();
+      console.log(`[building] the courtyard's blocks moved (${shifted.moved.length} things with them)`);
+      if (!config.offline) {
+        await saveAll(shifted.moved, (o) => api.putObject(o));
         await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
       }
     }

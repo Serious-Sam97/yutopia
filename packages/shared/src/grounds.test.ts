@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
-import { BLOCKS, campusBuilding, upgradeGround } from "./building.ts";
+import { BLOCKS, campusBuilding, moveBlocks, upgradeGround } from "./building.ts";
+import type { WorldObjectDef } from "./catalog.ts";
 import { Grid, moveStep, RUN_SPEED, setOutdoors } from "./grid.ts";
 import { GATE, groundsAreaAt, groundsOutdoors, heightAt, INSIDES, walkableTile } from "./grounds.ts";
 import { hearingGain } from "./hearing.ts";
 import { type Height, stepHeight } from "./jump.ts";
 import { levelMap } from "./levels.ts";
-import { areaAt, type MapDef, setAreasBeyond } from "./map.ts";
+import { areaAt, edgeAt, type LevelDef, type MapDef, setAreasBeyond, setEdge, tileAt } from "./map.ts";
 import { studio } from "./maps/studio.ts";
 import { openingsIntoWalls } from "./openings.ts";
 import { findPath } from "./path.ts";
@@ -119,11 +120,63 @@ test("the courtyard's blocks: their ground floors are the ground floor's own, an
     assert.ok(!grid.onLand(mid.x, mid.y), `${b.name}: the floor's own tiles`);
   }
   // from the lot, round the headquarters, across the courtyard, in at the east block's doors
-  const r = walk(grid, g0, L(g0, -30, 20), L(g0, 66, 18));
+  const r = walk(grid, g0, L(g0, -30, 20), L(g0, 82, 18));
   const at = B(g0, r.pos);
   assert.equal(areaAt(g0, r.pos.x, r.pos.y)?.key, "east-block", `inside (${at.x}, ${at.y})`);
   // its glass is a wall: straight through it from the courtyard, no
-  assert.ok(!grid.clear(L(g0, 56, 30), L(g0, 64, 30)));
+  assert.ok(!grid.clear(L(g0, 72, 30), L(g0, 80, 30)));
+});
+
+test("the blocks moved out of a bigger studio's way: a stored floor's old ones go, what was in them goes with them", () => {
+  const { map } = ground();
+  const l0 = map.levels?.find((l) => l.index === 0) as LevelDef;
+  const ox = l0.ox;
+  const oy = l0.oy;
+  // as a world from before: the blocks where they first stood (east x 60, south y 48)
+  const OLD: Record<string, { x0: number; y0: number; x1: number; y1: number }> = {
+    "east-block": { x0: 60, y0: -10, x1: 88, y1: 48 },
+    "south-block": { x0: -4, y0: 48, x1: 50, y1: 72 },
+  };
+  const tiles = l0.tiles.map((r) => [...r]);
+  const walls = { hWalls: [...l0.hWalls], vWalls: [...l0.vWalls] };
+  for (const b of BLOCKS) {
+    const n = { x: b.x0 - ox, y: b.y0 - oy, w: b.x1 - b.x0, h: b.y1 - b.y0 };
+    for (let y = n.y; y < n.y + n.h; y++) for (let x = n.x; x < n.x + n.w; x++) tiles[y][x] = " ";
+    for (let x = n.x; x <= n.x + n.w; x++)
+      for (const y of [n.y, n.y + n.h]) if (x < n.x + n.w) setEdge(walls, { dir: "h", x, y }, ".");
+    for (let y = n.y; y < n.y + n.h; y++) for (const x of [n.x, n.x + n.w]) setEdge(walls, { dir: "v", x, y }, ".");
+    const o = OLD[b.key];
+    const a = { x: o.x0 - ox, y: o.y0 - oy, w: o.x1 - o.x0, h: o.y1 - o.y0 };
+    for (let y = a.y; y < a.y + a.h; y++)
+      for (let x = a.x; x < a.x + a.w; x++) if (tiles[y][x] === " ") tiles[y][x] = "_";
+    for (let x = a.x; x < a.x + a.w; x++) for (const y of [a.y, a.y + a.h]) setEdge(walls, { dir: "h", x, y }, "g");
+    for (let y = a.y; y < a.y + a.h; y++) for (const x of [a.x, a.x + a.w]) setEdge(walls, { dir: "v", x, y }, "g");
+  }
+  const areas = l0.areas.map((a) => {
+    const o = OLD[a.key];
+    return o ? { ...a, x: o.x0 - ox, y: o.y0 - oy } : a;
+  });
+  const old: MapDef = {
+    ...map,
+    levels: (map.levels ?? []).map((l) =>
+      l.index === 0 ? { ...l, tiles: tiles.map((r) => r.join("")), ...walls, areas } : l,
+    ),
+  };
+  // a desk someone built in the old east block
+  const desk: WorldObjectDef = { id: "d1", kind: "desk", x: 70 - ox, y: 20 - oy, rot: 0, props: { level: 0 } };
+  const r = moveBlocks(old, [desk]);
+  assert.ok(r, "moved");
+  assert.equal(moveBlocks(r.map, r.objects), null, "once");
+  const g = levelMap(r.map, 0) as MapDef;
+  for (const b of BLOCKS) {
+    const a = g.areas.find((x) => x.key === b.key);
+    assert.deepEqual([a?.x, a?.y], [b.x0 - ox, b.y0 - oy], `${b.name} where it stands now`);
+  }
+  // the old east block's glass is gone (its west wall, in the courtyard), its floor is land
+  assert.equal(edgeAt(g, { dir: "v", x: 60 - ox, y: 30 - oy }), ".");
+  assert.equal(tileAt(g, 66 - ox, 30 - oy), " ");
+  // the desk went with it
+  assert.deepEqual([r.moved[0]?.x, r.moved[0]?.y], [86 - ox, 20 - oy]);
 });
 
 test("the town: into the bar by its door, never through its wall; inside, you hear each other, not the street", () => {

@@ -1295,6 +1295,7 @@ export class ThirdPersonView {
   setMode(m: CamMode) {
     if (m === this.mode) return;
     this.mode = m;
+    this.showCrosshair();
     if (m !== "first" && this.camera.fov !== FOV) {
       this.camera.fov = FOV;
       this.camera.updateProjectionMatrix();
@@ -2998,11 +2999,15 @@ export class ThirdPersonView {
     this.looking = on;
     this.drag = null;
     this.renderer.domElement.style.cursor = "";
-    if (this.crosshair) this.crosshair.style.display = on ? "block" : "none";
+    this.showCrosshair();
     this.aimKey = "";
     if (!on) this.events.aim?.(null);
     this.events.look?.(on);
   };
+  // the aim's dot: in first person only (in third person you see where you look)
+  private showCrosshair() {
+    if (this.crosshair) this.crosshair.style.display = this.looking && this.mode === "first" ? "block" : "none";
+  }
   private lockAsked = 0;
   private onLockError = () => {
     if (!this.lockAsked) return;

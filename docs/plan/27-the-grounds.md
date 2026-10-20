@@ -446,3 +446,13 @@ The user: "finish all phases". What's in, by phase, and what isn't.
   the visitor's car on the land in iso stand at the floor's level of detail
   (no pets on the land yet); the vehicles don't block walking (people walk
   through them); the guard is seen after dark only, by each viewer's clock.
+
+### The courtyard's blocks moved (2026-10-20)
+On the user's server the studio is 64 × 48: the east block (x 60) stood in its
+wall and the south block (y 48) right against its south one. They now stand
+clear of a studio up to 64 × 48 across a 12-tile courtyard: the east block at
+x 76–100 (24 wide: the ground floor stays within 160 tiles, the API's limit),
+the south block at y 60–84. `moveBlocks` (building.ts) takes a stored ground
+floor's old blocks away — their floor, glass and cores, never the studio's own
+outline — moves what was built in them along, and stamps them again where they
+stand now; the world server runs it at start (the dev world: done).

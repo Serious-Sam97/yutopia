@@ -1216,10 +1216,12 @@ export class Campus {
     }
     this.add(mergeGeometries(drifts, false), this.lambert(0xffffff), true);
     for (const g of drifts) g.dispose();
-    const snowTex = this.snowTexture(1, 1);
-    const roofMat = this.lambert(0xe9ecef, snowTex);
-    this.add(roofs.build(), roofMat);
-    this.add(plant.build(), this.lambert(0xffffff), true);
+    // (the blocks' roofs and plant: on the Grounds the blocks are theirs — grounds3d.ts — and stand elsewhere)
+    if (!this.walkable) {
+      const roofMat = this.lambert(0xe9ecef, this.snowTexture(1, 1));
+      this.add(roofs.build(), roofMat);
+      this.add(plant.build(), this.lambert(0xffffff), true);
+    }
     fake = this.root.children.length;
     // the glazed bridge from the studio's east wall to the east block
     const bz = Math.round(H / 2);
