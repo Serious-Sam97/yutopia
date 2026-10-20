@@ -508,7 +508,7 @@ export class IsoGrounds {
   >();
   /** Where they are (the building's coords, `a` the heading); `fx, fy` the focus (the floor's). */
   setVehicles(
-    list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean }[],
+    list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; variant?: number }[],
     fx: number,
     fy: number,
   ) {
@@ -540,7 +540,10 @@ export class IsoGrounds {
       let e = this.vehViews.get(v.id);
       if (!e || e.key !== key) {
         const lift = G.heightAt(v.x, v.z);
-        this.put({ id, kind: bus ? "gr_bus" : "car", x: bx, y: by, rot, props: bus ? {} : { variant: 2 } }, lift);
+        this.put(
+          { id, kind: bus ? "gr_bus" : "car", x: bx, y: by, rot, props: bus ? {} : { variant: v.variant ?? 2 } },
+          lift,
+        );
         e = { key, bx, by, fw, fh, lift, base: this.items.roots(id).map((r) => [r.x, r.y]) };
         this.vehViews.set(v.id, e);
       }

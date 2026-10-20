@@ -19,7 +19,8 @@
     "./tables": "./src/tables.ts",
     "./pool-game": "./src/pool-game.ts",
     "./phone": "./src/phone.ts",
-    "./grounds": "./src/grounds.ts"
+    "./grounds": "./src/grounds.ts",
+    "./car": "./src/car/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

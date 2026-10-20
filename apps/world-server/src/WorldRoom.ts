@@ -456,8 +456,8 @@ export class WorldRoom extends Room<WorldState> {
     this.on("pos", (client, m) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || !Number.isFinite(m.x) || !Number.isFinite(m.y)) return;
-      // (on the shuttle: it carries them — features/grounds-life.ts)
-      if (p.busy === "ride:shuttle") return;
+      // (on the shuttle, in a car: it carries them — features/grounds-life.ts, features/cars.ts)
+      if (p.busy.startsWith("ride:") || p.busy.startsWith("drive:")) return;
       const now = Date.now();
       const dt = (now - data(client).lastPosAt) / 1000;
       data(client).lastPosAt = now;
@@ -580,7 +580,8 @@ export class WorldRoom extends Room<WorldState> {
 
     this.on("teleport", (client, m) => {
       const p = this.state.players.get(client.sessionId);
-      if (!p) return;
+      // (in a car: out of it first — features/cars.ts)
+      if (!p || p.busy.startsWith("drive:") || p.busy.startsWith("ride:car:")) return;
       let target: Spot | null = null;
       if (m.to === "spawn") target = this.arrivalFor(p);
       else if (m.to === "desk") {

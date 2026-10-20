@@ -64,10 +64,17 @@ registerFeature((room: WorldRoom) => {
   let gPause = 0;
 
   // people out on the ground floor, in the building's coords
-  const outside = () =>
-    [...room.state.players.values()]
-      .filter((p) => p.level === 0 && p.busy !== RIDING)
+  // (and the cars people drive — features/cars.ts — along their length)
+  const outside = () => {
+    const out = [...room.state.players.values()]
+      .filter((p) => p.level === 0 && !p.busy.startsWith("ride:") && !p.busy.startsWith("drive:"))
       .map((p) => ({ x: p.x + off.x, z: p.y + off.y }));
+    room.state.vehicles.forEach((v) => {
+      if (v.kind !== "sedan" && v.kind !== "offroad") return;
+      for (const k of [-2.2, 0, 2.2]) out.push({ x: v.x + Math.cos(v.a) * k, z: v.z + Math.sin(v.a) * k });
+    });
+    return out;
+  };
   // someone in the way: just ahead of it (the way it's going)
   const blocked = (d: Drive, people: { x: number; z: number }[]) => {
     const { x, z } = d.veh;

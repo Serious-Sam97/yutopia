@@ -664,8 +664,14 @@ export class ThirdPersonView {
   // (z = height in tiles). The chase camera eases over to it and back.
   // (the phone's camera uses it too: `showMe` keeps you drawn — a selfie —
   // and `fov` is the lens)
-  gameCam: { eye: [number, number, number]; look: [number, number, number]; showMe?: boolean; fov?: number } | null =
-    null;
+  // (`snap`: no easing once it's over — a car's camera, which moves on its own)
+  gameCam: {
+    eye: [number, number, number];
+    look: [number, number, number];
+    showMe?: boolean;
+    fov?: number;
+    snap?: boolean;
+  } | null = null;
   private gcEye = new Vector3();
   private gcLook = new Vector3();
   private gcMix = 0; // 0 = the usual camera, 1 = the game's
@@ -1384,6 +1390,17 @@ export class ThirdPersonView {
 
   // Stereo pan of a sound at `src` for a listener at `ear`, as this camera sees
   // it (the iso view pans by screen x; here by the camera's right).
+  /** Where the Grounds' coords (the building's) sit in my floor's 3D frame: the scene's x, z are
+   *  theirs less (x, z); its height theirs plus y (docs/plan/28-the-car.md: the cars draw so). */
+  groundsFrame(): { x: number; z: number; y: number; visible: boolean } {
+    const off = offsetOf(this.building, this.level);
+    return { x: off.x, z: off.y, y: elevOf(0) - elevOf(this.level), visible: !!this.around.grounds };
+  }
+  /** The element the view is drawn into (an overlay goes in it). */
+  get hostEl(): HTMLElement | null {
+    return this.host;
+  }
+
   pan(ear: Point, src: Point): number {
     const rx = -Math.sin(this.yaw);
     const ry = Math.cos(this.yaw);
@@ -1494,9 +1511,10 @@ export class ThirdPersonView {
 
     // a game camera: ease over to it (and back when it lets go)
     const gc = this.gameCam;
-    this.gcMix += ((gc ? 1 : 0) - this.gcMix) * (1 - Math.exp(-dt * 5));
+    this.gcMix += ((gc ? 1 : 0) - this.gcMix) * (1 - Math.exp(-dt * (gc?.snap ? 9 : 5)));
+    if (gc?.snap && this.gcMix > 0.985) this.gcMix = 1;
     if (gc) {
-      const k = this.gcReady ? 1 - Math.exp(-dt * 7) : 1;
+      const k = this.gcReady && !gc.snap ? 1 - Math.exp(-dt * 7) : 1;
       this.gcEye.lerp(new Vector3(gc.eye[0], gc.eye[2], gc.eye[1]), k);
       this.gcLook.lerp(new Vector3(gc.look[0], gc.look[2], gc.look[1]), k);
       this.gcReady = true;

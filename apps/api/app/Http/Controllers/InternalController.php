@@ -367,8 +367,9 @@ class InternalController extends Controller
         $rules = [
             $p.'id' => ['required', 'string', 'max:64'],
             $p.'kind' => ['required', 'string', 'max:40'],
-            $p.'x' => ['required', 'integer', 'between:0,1000'],
-            $p.'y' => ['required', 'integer', 'between:0,1000'],
+            // (out on the Grounds round the ground floor too: a car left on the lawn — docs/plan/28)
+            $p.'x' => ['required', 'integer', 'between:-2000,2000'],
+            $p.'y' => ['required', 'integer', 'between:-2000,2000'],
             $p.'rot' => ['nullable', 'integer', 'between:0,3'],
             $p.'refId' => ['nullable', 'integer'],
             $p.'props' => ['nullable', 'array'],

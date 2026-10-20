@@ -31,6 +31,7 @@ export const RIDING = "ride:shuttle";
 export interface Car {
   id: string;
   kind: string;
+  variant?: number; // a driven lot car's colour (docs/plan/28)
   x: number; // the building's coords
   z: number;
   a: number;
@@ -47,6 +48,7 @@ interface VehicleIn {
   shown: boolean;
   stop: string;
   honkAt: number;
+  colour?: number;
 }
 interface Vehicles {
   forEach(f: (v: VehicleIn, id: string) => void): void;
@@ -80,7 +82,7 @@ export class GroundsLife {
     vehicles.forEach((v, id) => {
       let c = this.cars.get(id);
       if (!c || !c.shown) {
-        c = { id, kind: v.kind, x: v.x, z: v.z, a: v.a, v: v.v, shown: v.shown };
+        c = { id, kind: v.kind, x: v.x, z: v.z, a: v.a, v: v.v, shown: v.shown, variant: v.colour };
         this.cars.set(id, c);
       }
       c.x += (v.x - c.x) * k;

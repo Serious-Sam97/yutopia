@@ -1,6 +1,7 @@
 import { type AvatarLayers, DEFAULT_AVATAR } from "@yutopia/shared";
 import { groundAt, LAMPS, WAYS } from "@yutopia/shared/grounds";
 import type * as THREE_NS from "three";
+import type { CarIn } from "./car/stage";
 
 // The Grounds' stills — phase 0's mocks (docs/plan/27-the-grounds.md): each
 // one a spot on the Grounds at an hour, built by the prototype (grounds3d.ts)
@@ -18,6 +19,7 @@ interface Who {
   a: AvatarLayers;
   walk?: number; // a stride's phase (frames walked); none: standing
   light?: boolean; // the phone's flashlight on, in the right hand
+  push?: boolean; // leaning on something ahead with both hands (a stuck car's boot)
   sit?: number; // sitting: the seat's height
   y?: number; // standing on something
 }
@@ -32,6 +34,9 @@ interface Shot {
   snow?: number; // flakes
   prints?: [number, number][]; // footprints along this line
   inside?: "east-block";
+  cars?: CarIn[]; // the sedan (docs/plan/28-the-car.md)
+  storm?: boolean; // a blizzard after dark
+  near?: number; // the camera's near plane
 }
 
 const DARK = "#2b3138";
@@ -235,6 +240,7 @@ export function shots(): Record<string, Shot> {
       people: [{ x: 120.35, z: -249.72, to: [120.35, -240], a: GUARD, sit: 0.56 }],
       snow: 5000,
     },
+    ...carShots(lamp),
     "iso-lot-edge": {
       hour: "day",
       cam: [0, 0, 0],
@@ -250,6 +256,311 @@ export function shots(): Record<string, Shot> {
     },
   };
 }
+// ── the car's stills (docs/plan/28-the-car.md, phase 0) ──
+const SEDAN_RED = 0x6b2430;
+/** Circles clearing the trees along the line from the camera to what it looks at (the first 12 tiles). */
+function corridor(cam: V3, look: V3): { x: number; z: number; r: number }[] {
+  const dx = look[0] - cam[0];
+  const dz = look[2] - cam[2];
+  const l = Math.hypot(dx, dz) || 1;
+  const out: { x: number; z: number; r: number }[] = [];
+  for (let t = 0; t <= Math.min(12, l); t += 2.5)
+    out.push({ x: cam[0] + (dx / l) * t, z: cam[2] + (dz / l) * t, r: 6 });
+  return out;
+}
+/** A car's local point (model coords: nose −x, +z its left) in the world. */
+function local(c: { x: number; z: number; a: number; y?: number }, lx: number, ly: number, lz: number): V3 {
+  const th = Math.PI - c.a;
+  const y = c.y ?? groundAt(c.x, c.z);
+  return [c.x + lx * Math.cos(th) + lz * Math.sin(th), y + ly, c.z - lx * Math.sin(th) + lz * Math.cos(th)];
+}
+function carShots(lamp: { x: number; z: number }): Record<string, Shot> {
+  // the lot's west aisle, a car pulling out towards the north
+  const lot = { x: -20.85, z: 14, a: -Math.PI / 2 };
+  // the driveway: a car leaving, under a lamp; another, the lamp 22 tiles ahead
+  const d = on("driveway", [lamp.x, lamp.z], 0, 0);
+  const way = WAYS.find((w) => w.key === "driveway") as (typeof WAYS)[number];
+  const at = (n: number) => {
+    let bi = 0;
+    let bd = Number.POSITIVE_INFINITY;
+    way.line.forEach(([x, z], i) => {
+      const k = Math.hypot(x - d.x, z - d.z);
+      if (k < bd) {
+        bd = k;
+        bi = i;
+      }
+    });
+    const i = Math.max(1, Math.min(way.line.length - 4, bi + n));
+    const [x, z] = way.line[i];
+    const [x2, z2] = way.line[i + 3];
+    return { x, z, a: Math.atan2(z2 - z, x2 - x) };
+  };
+  const leave = at(5);
+  const chase = { x: leave.x + 0.9 * Math.sin(leave.a), z: leave.z - 0.9 * Math.cos(leave.a), a: leave.a };
+  const storm = at(-24);
+  const stormCar = { x: storm.x + 1.6 * Math.sin(storm.a), z: storm.z - 1.6 * Math.cos(storm.a), a: storm.a };
+  // the pond: sliding west, the nose swung out
+  const pond = { x: -236, z: -66, a: Math.PI - 1.0, y: POND_Y() + 0.04 };
+  // (in the car's frame: it came sliding in along its velocity, 1 rad right of its nose, curving)
+  const pondPath: [number, number][] = [];
+  for (let s = 16; s >= 0; s -= 0.8) {
+    const b = 1.0 - s * 0.035;
+    pondPath.push([0.9 + Math.cos(b) * s, Math.sin(b) * s + 0.02 * s * s]);
+  }
+  // the woods by the ravine's trail: off it, sunk in deep snow
+  const r = on("ravine", [-262.6, -204], 0, 0);
+  const deep = { x: r.x - r.tz * 6.5, z: r.z + r.tx * 6.5, a: Math.atan2(r.tz, r.tx) + 0.35 };
+  // (in the car's frame: from the rear wheels straight back, then bending off towards the trail)
+  const deepPath: [number, number][] = [];
+  for (let s = 12; s >= 0; s -= 0.5) deepPath.push([1.42 + s, -0.025 * s * s]);
+  const eye: V3 = [0.35, 1.19, 0.42];
+  return {
+    "car-lot-day": {
+      hour: "day",
+      cam: local(lot, -6.9, 1.5, 2.1),
+      look: local(lot, 0.3, 0.75, 0.2),
+      fov: 40,
+      people: [
+        {
+          x: local(lot, 0.6, 0, 1.8)[0],
+          z: local(lot, 0.6, 0, 1.8)[2],
+          to: [local(lot, 0.4, 0, 0.8)[0], local(lot, 0.4, 0, 0.8)[2]],
+          a: ANA,
+          walk: 18,
+        },
+      ],
+      cars: [{ ...lot, colour: SEDAN_RED, snowy: 0.55, doors: [1.05, 0, 0, 0], lights: { dash: 0.35 } }],
+      snow: 600,
+    },
+    "car-driveway-night": {
+      hour: "night",
+      cam: local(chase, 7.6, 2.25, -0.5),
+      look: local(chase, -11, 0.9, 0),
+      fov: 56,
+      people: [],
+      cars: [
+        {
+          ...chase,
+          colour: SEDAN_RED,
+          snowy: 0.25,
+          lights: { beams: "low", tail: true, dash: 1 },
+          exhaust: 0.7,
+          driver: CAI,
+          steer: 0.04,
+        },
+      ],
+      snow: 9000,
+    },
+    "car-cabin-blizzard": {
+      hour: "night",
+      storm: true,
+      cam: local(stormCar, ...eye),
+      look: local(stormCar, eye[0] - 20, -2.0, -0.6),
+      fov: 60,
+      near: 0.03,
+      people: [],
+      cars: [
+        {
+          ...stormCar,
+          colour: SEDAN_RED,
+          lights: { beams: "low", tail: true, dash: 1 },
+          driver: ANA,
+          cockpit: true,
+          steer: 0.012,
+          wipers: [1.95, 2.1],
+          screenSnow: 1,
+          cluster: {
+            kmh: 48,
+            rpm: 2350,
+            gear: "3",
+            clock: "23:14",
+            outside: -14,
+            temp: 0.62,
+            fuel: 0.58,
+            beams: "low",
+          },
+          radio: ["FM", 98.7, 3],
+          freshener: [0.05, 0.22],
+        },
+      ],
+      snow: 26000,
+    },
+    "car-cabin-day": {
+      hour: "overcast",
+      cam: local(lot, 0.42, 1.28, -0.5),
+      look: local(lot, -0.55, 0.88, 0.32),
+      fov: 62,
+      near: 0.03,
+      people: [],
+      cars: [
+        {
+          ...lot,
+          colour: SEDAN_RED,
+          snowy: 0.3,
+          lights: { dash: 0.45 },
+          driver: BIA,
+          cluster: { kmh: 0, rpm: 900, gear: "N", clock: "10:42", outside: -6, temp: 0.4, hand: true },
+          radio: ["FM", 98.7, 3],
+        },
+      ],
+      snow: 400,
+    },
+    "car-pond-drift": {
+      hour: "overcast",
+      cam: local(pond, -5.5, 2.7, 8.2),
+      look: local(pond, 2.6, 0.2, 1.4),
+      fov: 42,
+      people: [],
+      cars: [
+        {
+          ...pond,
+          colour: SEDAN_RED,
+          snowy: 0.15,
+          steer: -0.5,
+          roll: 0.04,
+          lights: { beams: "low", tail: true, dash: 0.8 },
+          driver: CAI,
+          tracks: { path: pondPath, kind: "ice", local: true },
+          spray: 0.45,
+          sprayTo: Math.PI * 0.08,
+        },
+      ],
+      snow: 2500,
+    },
+    "car-deep-snow": {
+      hour: "overcast",
+      cam: local({ ...deep }, 6.8, 1.55, -3.4),
+      look: local({ ...deep }, -0.6, 0.45, 0),
+      fov: 44,
+      people: [
+        {
+          x: local(deep, 3.12, 0, 0.35)[0],
+          z: local(deep, 3.12, 0, 0.35)[2],
+          to: [deep.x, deep.z],
+          a: DUDA,
+          push: true,
+        },
+      ],
+      cars: [
+        {
+          ...deep,
+          colour: SEDAN_RED,
+          snowy: 0.45,
+          sink: 0.2,
+          pitch: 0.035,
+          roll: -0.03,
+          lights: { tail: true, dash: 0.6 },
+          driver: CAI,
+          tracks: { path: deepPath, kind: "deep", local: true },
+          spray: 0.85,
+          exhaust: 0.9,
+        },
+      ],
+      snow: 1800,
+    },
+    "car-offroad-day": {
+      hour: "day",
+      cam: local(lot, -5.6, 1.35, 3.9),
+      look: local(lot, 0.3, 0.85, 0.2),
+      fov: 40,
+      people: [{ x: local(lot, 1.2, 0, 2.0)[0], z: local(lot, 1.2, 0, 2.0)[2], to: [lot.x, lot.z], a: CAI, walk: 6 }],
+      cars: [{ ...lot, kind: "offroad", colour: 0x2f4a3b, snowy: 0.5, doors: [0.9, 0, 0, 0], lights: { dash: 0.35 } }],
+      snow: 600,
+    },
+    // review stills: the flanks, the arches, the pillars (both bodies, from behind on the right)
+    ...Object.fromEntries(
+      (["sedan", "offroad"] as const).flatMap((kind) => {
+        const axle = kind === "sedan" ? 1.35 : 1.05;
+        const car: CarIn = {
+          ...lot,
+          kind,
+          colour: kind === "sedan" ? 0x1d1f22 : 0xa9abad,
+          snowy: 0.5,
+          lights: { dash: 0.35 },
+        };
+        return [
+          [
+            `car-check-${kind}`,
+            {
+              hour: "day",
+              cam: local(lot, 5.4, 2.2, -3.6),
+              look: local(lot, 0.2, 0.75, 0),
+              fov: 40,
+              people: [],
+              cars: [car],
+            },
+          ],
+          [
+            `car-check-${kind}-arch`,
+            {
+              hour: "day",
+              cam: local(lot, axle + 0.9, 0.55, -2.4),
+              look: local(lot, axle, 0.6, -0.5),
+              fov: 45,
+              people: [],
+              cars: [car],
+            },
+          ],
+          [
+            `car-check-${kind}-bench`,
+            {
+              hour: "day",
+              cam: local(lot, kind === "sedan" ? 0.85 : 0.98, kind === "sedan" ? 1.38 : 1.56, -0.1),
+              look: local(lot, kind === "sedan" ? 1.25 : 1.38, kind === "sedan" ? 0.45 : 0.63, 0.45),
+              fov: 70,
+              near: 0.05,
+              people: [],
+              cars: [car],
+            },
+          ],
+        ] as [string, Shot][];
+      }),
+    ),
+    "car-offroad-woods": {
+      hour: "overcast",
+      cam: local({ ...deep }, 6.0, 1.6, -3.6),
+      look: local({ ...deep }, -0.6, 0.7, 0),
+      fov: 44,
+      people: [],
+      cars: [
+        {
+          ...deep,
+          kind: "offroad",
+          colour: 0x6b2430,
+          snowy: 0.3,
+          sink: 0.1,
+          lights: { tail: true, dash: 0.6 },
+          driver: BIA,
+          tracks: { path: deepPath, kind: "deep", local: true },
+          spray: 0.5,
+          exhaust: 0.7,
+        },
+      ],
+      snow: 1800,
+    },
+    "car-iso": {
+      hour: "day",
+      cam: [0, 0, 0],
+      look: [-40, 0, 16],
+      iso: 8,
+      people: [{ x: -41.6, z: 11.2, to: [-39, 13], a: BIA, walk: 6 }],
+      cars: [
+        {
+          x: -38.55,
+          z: 17,
+          a: -Math.PI / 2 - 0.45,
+          colour: SEDAN_RED,
+          snowy: 0.3,
+          steer: 0.4,
+          exhaust: 0.5,
+          driver: ANA,
+        },
+      ],
+      snow: 0,
+    },
+  };
+}
+
 // the pond's ice (from the shared Grounds, read late: the module is lazy)
 let pondY = 0;
 const POND_Y = () => pondY;
@@ -376,7 +687,7 @@ export async function runShot(
   C.inkResolution(W, H);
 
   const scene = new T3.Scene();
-  scene.fog = new T3.FogExp2(P.fog, shot.iso !== undefined ? P.density * 0.12 : P.density);
+  scene.fog = new T3.FogExp2(P.fog, shot.iso !== undefined ? P.density * 0.12 : P.density * (shot.storm ? 1.7 : 1));
   scene.background = new T3.Color(P.horizon);
   // the sky: a gradient dome (overcast: no sun disc; night: a faint glow low down)
   const dome = new T3.Mesh(
@@ -394,6 +705,28 @@ export async function runShot(
   );
   dome.renderOrder = -2;
   scene.add(dome);
+  // the sky as an environment for the car's paint, chrome and glass
+  let env: THREE_NS.Texture | null = null;
+  if (shot.cars) {
+    const pm = new T3.PMREMGenerator(renderer);
+    const es = new T3.Scene();
+    es.add(new T3.Mesh(new T3.SphereGeometry(60, 32, 16), dome.material));
+    const gnd = new T3.Mesh(
+      new T3.CircleGeometry(80, 24).rotateX(-Math.PI / 2),
+      new T3.MeshBasicMaterial({ color: P.night > 0.5 ? "#0b1016" : shot.hour === "dusk" ? "#4a5260" : "#dfe5ea" }),
+    );
+    gnd.position.y = -1.5;
+    es.add(gnd);
+    if (P.night > 0.5)
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        const b = new T3.Mesh(new T3.SphereGeometry(0.9, 8, 6), new T3.MeshBasicMaterial({ color: "#ffd9a0" }));
+        b.position.set(Math.cos(a) * 40, 8 + (i % 3) * 3, Math.sin(a) * 40);
+        es.add(b);
+      }
+    env = pm.fromScene(es, 0.03, 0.1, 200).texture;
+    pm.dispose();
+  }
 
   // ── the Grounds round the shot ──
   const ortho = shot.iso !== undefined;
@@ -405,7 +738,12 @@ export async function runShot(
     cz: mid.z,
     radius: shot.radius ?? (ortho ? 120 : 380),
     near: ortho ? 120 : 130,
-    clear: ortho ? [] : [{ x: shot.cam[0], z: shot.cam[2], r: 5.5 }],
+    clear: [
+      ...(ortho ? [] : [{ x: shot.cam[0], z: shot.cam[2], r: 5.5 }]),
+      ...(shot.cars ?? []).map((c) => ({ x: c.x, z: c.z, r: 4.5 })),
+      // (and the way from the camera to a car: nothing between them)
+      ...(shot.cars && !ortho ? corridor(shot.cam, shot.look) : []),
+    ],
   });
   scene.add(grounds.root);
   grounds.setNight(P.night);
@@ -512,10 +850,34 @@ export async function runShot(
       return { p, prop };
     });
 
+  // ── the cars ──
+  const cars = shot.cars
+    ? (await import("./car/stage")).stageCars(T3, scene, shot.cars, {
+        night: P.night,
+        storm: !!shot.storm,
+        lit,
+        f,
+        C,
+        bodyMat,
+        flatMat,
+        env,
+      })
+    : null;
+  // (no flakes inside a car)
+  const inCar = (x: number, y: number, z: number) =>
+    (shot.cars ?? []).some((c) => {
+      const th = Math.PI - c.a;
+      const dx = x - c.x;
+      const dz = z - c.z;
+      const lx = dx * Math.cos(th) - dz * Math.sin(th);
+      const lz = dx * Math.sin(th) + dz * Math.cos(th);
+      return Math.abs(lx) < 2.9 && Math.abs(lz) < 1.4 && y - (c.y ?? groundAt(c.x, c.z)) < 1.8;
+    });
+
   // ── snow falling, footprints ──
   if (shot.snow) {
     const n = shot.snow;
-    const box = shot.hour === "blizzard" ? 46 : 60;
+    const box = shot.hour === "blizzard" || shot.storm ? 46 : 60;
     const pos = new Float32Array(n * 3);
     const rr = S.groundsRng(55);
     const fwd = new T3.Vector3(...shot.look).sub(camV).normalize();
@@ -526,6 +888,7 @@ export async function runShot(
       pos[i * 3] = camV.x + fwd.x * along + (rr() - 0.5) * box;
       pos[i * 3 + 1] = camV.y - 3 + rr() * 22;
       pos[i * 3 + 2] = camV.z + fwd.z * along + (rr() - 0.5) * box;
+      if (inCar(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2])) pos[i * 3 + 1] += 40;
     }
     const g = new T3.BufferGeometry();
     g.setAttribute("position", new T3.BufferAttribute(pos, 3));
@@ -542,7 +905,7 @@ export async function runShot(
     const pts = new T3.Points(
       g,
       new T3.PointsMaterial({
-        size: shot.hour === "blizzard" ? 0.16 : 0.11,
+        size: shot.hour === "blizzard" || shot.storm ? 0.16 : 0.11,
         map: flakeTex,
         transparent: true,
         depthWrite: false,
@@ -552,7 +915,7 @@ export async function runShot(
       }),
     );
     scene.add(pts);
-    if (shot.hour === "blizzard") {
+    if (shot.hour === "blizzard" || shot.storm) {
       // streaks: snow driven sideways
       const m = 9000;
       const lp = new Float32Array(m * 6);
@@ -560,12 +923,20 @@ export async function runShot(
         const x = camV.x + (rr() - 0.5) * 50 + fwd.x * rr() * 30;
         const y = camV.y - 2 + rr() * 14;
         const z = camV.z + (rr() - 0.5) * 50 + fwd.z * rr() * 30;
+        if (inCar(x, y, z) || inCar(x + 0.9, y - 0.25, z + 0.35)) continue;
         lp.set([x, y, z, x + 0.9, y - 0.25, z + 0.35], i * 6);
       }
       const lg = new T3.BufferGeometry();
       lg.setAttribute("position", new T3.BufferAttribute(lp, 3));
       scene.add(
-        new T3.LineSegments(lg, new T3.LineBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.55 })),
+        new T3.LineSegments(
+          lg,
+          new T3.LineBasicMaterial({
+            color: shot.storm ? "#aab6c8" : "#ffffff",
+            transparent: true,
+            opacity: shot.storm ? 0.35 : 0.55,
+          }),
+        ),
       );
     }
   }
@@ -619,7 +990,7 @@ export async function runShot(
     o.lookAt(tgt);
     cam = o;
   } else {
-    const p = new T3.PerspectiveCamera(shot.fov ?? 50, W / H, 0.1, 5000);
+    const p = new T3.PerspectiveCamera(shot.fov ?? 50, W / H, shot.near ?? 0.1, 5000);
     p.position.copy(camV);
     p.lookAt(new T3.Vector3(...shot.look));
     cam = p;
@@ -655,6 +1026,7 @@ export async function runShot(
     let ready = 0;
     for (const p of people) if (p.m.update()) ready++;
     if (ready < people.length) return;
+    if (cars && !cars.ready()) return;
     for (const p of people) {
       const walking = p.w.walk !== undefined;
       let mo = p.mo.update(1 / 60, {
@@ -694,6 +1066,19 @@ export async function runShot(
             reduced: false,
           });
       const pose = { ...mo.pose };
+      if (p.w.push) {
+        // bent forward into it, arms out, one leg back
+        pose.spine = [0.42, 0, 0];
+        pose.neck = [-0.2, 0, 0];
+        pose.shoulderL = [-1.35, 0, 0.18];
+        pose.shoulderR = [-1.35, 0, -0.18];
+        pose.elbowL = [-0.35, 0, 0];
+        pose.elbowR = [-0.35, 0, 0];
+        pose.thighL = [-0.45, 0, 0.04];
+        pose.kneeL = [0.5, 0, 0];
+        pose.thighR = [0.35, 0, -0.04];
+        pose.kneeR = [0.15, 0, 0];
+      }
       if (p.w.light) {
         // the phone held out ahead, low, lighting the way
         pose.shoulderR = [-1.05, 0, 0.12];
@@ -703,6 +1088,11 @@ export async function runShot(
       const drop = sit ? p.m.sitDrop(p.w.sit ?? 0.5) * mo.settle : 0;
       p.m.setPose(pose, [mo.lift[0], mo.lift[1] + drop, mo.lift[2]], mo.reach);
       p.m.setFace(1, 0);
+    }
+    cars?.pose();
+    if (cars?.eye(v) && cam instanceof T3.PerspectiveCamera) {
+      cam.position.copy(v);
+      cam.lookAt(new T3.Vector3(...shot.look));
     }
     for (const ph of phones) {
       const hand = ph.p.m.bone("wristR");
@@ -720,6 +1110,7 @@ export async function runShot(
       b.cone.position.copy(b.s.position);
       b.cone.lookAt(b.s.target.position);
     }
+    cars?.prerender(renderer);
     composer.render();
     if (++frames === 4) {
       (window as unknown as { __shot?: boolean }).__shot = true;
@@ -732,6 +1123,7 @@ export async function runShot(
   raf = requestAnimationFrame(frame);
   return () => {
     cancelAnimationFrame(raf);
+    cars?.dispose();
     grounds.dispose();
     renderer.dispose();
     renderer.domElement.remove();

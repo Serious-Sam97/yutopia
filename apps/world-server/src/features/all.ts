@@ -20,3 +20,4 @@ import "./lifts.ts";
 import "./computer.ts";
 import "./phone.ts";
 import "./grounds-life.ts";
+import "./cars.ts";

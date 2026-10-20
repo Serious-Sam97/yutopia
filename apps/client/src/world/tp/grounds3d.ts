@@ -14,6 +14,7 @@ import {
   insideOf,
   LAMPS,
   LOT,
+  lotBanks,
   type P,
   PLAZA,
   POND,
@@ -949,28 +950,9 @@ export class Grounds3 {
     }
     for (const s of [...solids, ...glass]) s.dispose();
     // the plough's banks round it (open where the driveway and the path go out)
-    const r = groundsRng(31);
-    const banks: BufferGeometry[] = [];
-    const bank = (x: number, z: number) => {
-      const s = 1.1 + r() * 1.5;
-      banks.push(
-        place(
-          tinted(new SphereGeometry(1, 9, 6).scale(s, s * 0.42, s * (0.7 + r() * 0.6)), 0xf6f8fa),
-          x,
-          -0.1,
-          z,
-          r() * Math.PI,
-        ),
-      );
-    };
-    for (let z = LOT.z0; z <= LOT.z1; z += 2.2) {
-      if (Math.abs(z - 22) > 3) bank(LOT.x0 - 1.2 + (r() - 0.5), z);
-      if (Math.abs(z - 18) > 6) bank(LOT.x1 + 1.2 + (r() - 0.5), z);
-    }
-    for (let x = LOT.x0; x <= LOT.x1; x += 2.2) {
-      if (Math.abs(x + 48) > 5) bank(x, LOT.z0 - 1.2 + (r() - 0.5));
-      bank(x, LOT.z1 + 1.2 + (r() - 0.5));
-    }
+    const banks: BufferGeometry[] = lotBanks().map((k) =>
+      place(tinted(new SphereGeometry(1, 9, 6).scale(k.s, k.s * 0.42, k.sz), 0xf6f8fa), k.x, -0.1, k.z, k.ry),
+    );
     this.add(mergeGeometries(banks, false), this.lambert());
     for (const b of banks) b.dispose();
     // (in the game the lot's lamp posts and its path are the ground floor's)

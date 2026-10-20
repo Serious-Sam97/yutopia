@@ -143,6 +143,23 @@ export class Grid {
         continue;
       }
       if (isOpening(o.kind)) continue;
+      // a car (docs/plan/28-the-car.md): out being driven, nowhere here; parked at any angle
+      // (props.a, its heading), the tiles under its body
+      if (o.kind === "car" && (o.props?.driven || typeof o.props?.a === "number")) {
+        if (o.props?.driven) continue;
+        const a = Number(o.props?.a);
+        const cx = o.x + w / 2 + (Number(o.props?.dx) || 0);
+        const cy = o.y + h / 2 + (Number(o.props?.dz) || 0);
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        for (let ty = Math.floor(cy - 3); ty <= Math.ceil(cy + 3); ty++)
+          for (let tx = Math.floor(cx - 3); tx <= Math.ceil(cx + 3); tx++) {
+            const dx = tx + 0.5 - cx;
+            const dy = ty + 0.5 - cy;
+            if (Math.abs(dx * ca + dy * sa) < 2.55 && Math.abs(-dx * sa + dy * ca) < 1.05) g.block(tx, ty);
+          }
+        continue;
+      }
       if (!e.solid || e.wall) continue;
       const stand = standHeight(o.kind);
       for (let dy = 0; dy < h; dy++)

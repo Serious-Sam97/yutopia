@@ -2,6 +2,7 @@
 
 import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
+import type { CarWire } from "./car/net.ts";
 import type { JumpKind } from "./jump.ts";
 import type { MediaItem } from "./media.ts";
 import type { Command, Move, Needs, Species, Toy, Trick } from "./pets.ts";
@@ -237,7 +238,15 @@ export interface ClientMessages {
   // the shuttle (docs/plan/27, phase 6): on at a stop, off at a stop
   "ride:board": Record<string, never>;
   "ride:leave": Record<string, never>;
+  // the car (docs/plan/28-the-car.md): into a seat (0 the driver's, 1 beside, 2 · 3 behind) of
+  // a parked car (its object's id) or a live one (its vehicle's id); its driver's state; out
+  "car:enter": { id: string; seat: number };
+  "car:leave": Record<string, never>;
+  "car:state": CarWire;
+  // a parked car I knocked, come to rest: where it ended up (the Grounds' coords, its middle)
+  "car:shove": { id: string; x: number; z: number; a: number };
   "mod:shuttle": Record<string, never>; // an admin: the shuttle to the headquarters' stop
+  "mod:cars": Record<string, never>; // an admin: every car back in its bay in the lot
   "phone:shot": Record<string, never>;
   "phone:pose": { pose: string }; // a pose for the photo (shared PHOTO_POSES)
   "phone:rec": { on: boolean }; // recording a video (a red light on the phone)
@@ -254,6 +263,9 @@ export interface ClientMessages {
 // server → client
 export interface ServerMessages {
   snap: { x: number; y: number; z?: number; level?: number };
+  // my car put back where the server has it (a state it couldn't believe)
+  "car:snap": CarWire & { id: string };
+  "car:no": { why: string };
   // my own arrival point here (on join and after I change it); null: the world's
   "spawn:mine": { at: { x: number; y: number } | null };
   // whom I may listen to (session ids) and who may listen to me (user ids)

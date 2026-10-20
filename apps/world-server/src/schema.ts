@@ -304,6 +304,29 @@ export class Vehicle extends Schema {
   @type("string") stop = ""; // at a stop (the shuttle): which
   @type("float64") honkAt = 0; // when it last honked (server ms)
   @type("uint8") riders = 0;
+  // a car someone drives (docs/plan/28-the-car.md; kind "sedan" | "offroad"): its centre of
+  // gravity's height, its turn, velocity and yaw rate, the road wheels, the engine, the gear,
+  // the lamps and switches (shared car/net.ts CAR_FLAGS), the most a tyre slides; the seats'
+  // people ("sid|sid|sid|sid": the driver first); the parked object it came from; its colour
+  @type("float32") y = 0;
+  @type("float32") qx = 0;
+  @type("float32") qy = 0;
+  @type("float32") qz = 0;
+  @type("float32") qw = 1;
+  @type("float32") vx = 0;
+  @type("float32") vy = 0;
+  @type("float32") vz = 0;
+  @type("float32") wy = 0;
+  @type("float32") steer = 0;
+  @type("uint16") rpm = 0;
+  @type("int8") gear = 0;
+  @type("uint16") fl = 0;
+  @type("float32") slip = 0;
+  @type("string") seats = "|||";
+  @type("string") obj = "";
+  @type("uint8") colour = 0;
+  @type("uint32") seq = 0;
+  @type("float64") at = 0; // when this state came in (server ms)
 }
 
 export class WorldState extends Schema {

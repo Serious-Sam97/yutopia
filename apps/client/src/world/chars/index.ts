@@ -18,7 +18,7 @@ export {
 } from "./iso";
 export type { Anchor } from "./kit";
 export { bodyMaterial, CharFactory, lookKey, PersonModel, type Reach } from "./model";
-export { blend, CONTACT, Motion3, type MotionIn, type MotionOut, STRIDE } from "./motion";
+export { blend, CONTACT, carPose, Motion3, type MotionIn, type MotionOut, STRIDE } from "./motion";
 export { BASE, LODS, type Lod, type Params, paramsFor } from "./params";
 export { buildProp, inHand, keepUpright, type PropKind } from "./props";
 export { JOINTS, type JointName, type Pose, REST } from "./rig";

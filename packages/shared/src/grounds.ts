@@ -590,6 +590,27 @@ export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
   return treeDensity(x, z) > 0.3 ? "deep" : "snow";
 }
 
+/** The plough's banks round the lot (open where the driveway and the path go out): where
+ *  each mound is, its size, its turn. The 3D view heaps them; a car (car/world.ts) ploughs into them. */
+export function lotBanks(): { x: number; z: number; s: number; sz: number; ry: number }[] {
+  const r = groundsRng(31);
+  const out: { x: number; z: number; s: number; sz: number; ry: number }[] = [];
+  const bank = (x: number, z: number) => {
+    const s = 1.1 + r() * 1.5;
+    const sz = s * (0.7 + r() * 0.6);
+    out.push({ x, z, s, sz, ry: r() * Math.PI });
+  };
+  for (let z = LOT.z0; z <= LOT.z1; z += 2.2) {
+    if (Math.abs(z - 22) > 3) bank(LOT.x0 - 1.2 + (r() - 0.5), z);
+    if (Math.abs(z - 18) > 6) bank(LOT.x1 + 1.2 + (r() - 0.5), z);
+  }
+  for (let x = LOT.x0; x <= LOT.x1; x += 2.2) {
+    if (Math.abs(x + 48) > 5) bank(x, LOT.z0 - 1.2 + (r() - 0.5));
+    bank(x, LOT.z1 + 1.2 + (r() - 0.5));
+  }
+  return out;
+}
+
 /** Inside the company's fence. */
 export function insideFence(x: number, z: number): boolean {
   return x > -400 && x < 220 && z > -360 && z < 170;
@@ -789,6 +810,15 @@ function walkable(x: number, z: number): boolean {
   if (Math.abs(td - 9) < 0.6 && !(z > TOWER.z && Math.abs(x - TOWER.x) < 1.5)) return false;
   if (Math.abs(x - STATUE.x) < 2.5 && Math.abs(z - STATUE.z) < 2.5) return false;
   return true;
+}
+/** A tile a car can't go into (docs/plan/28-the-car.md): the fence, the tower, the statue,
+ *  the world's edge — what's really there. Not the tiles people walk round (a tree's, a
+ *  lamp's, a steep one's: a car hits the trunk, climbs what it can) nor a town car's (its
+ *  own box). Buildings are boxes of their own. */
+export function carBlockedTile(tx: number, tz: number): boolean {
+  const x = tx + 0.5;
+  const z = tz + 0.5;
+  return !walkable(x, z) && !onTownCar(x, z);
 }
 /** On the company's fence line (not at the gate). */
 function onFence(x: number, z: number): boolean {

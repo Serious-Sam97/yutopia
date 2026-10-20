@@ -250,7 +250,7 @@ export const STATIONS = [
 
 const midi = (n: number) => 440 * 2 ** ((n - 69) / 12);
 
-class Radio {
+export class Radio {
   private timer: ReturnType<typeof setInterval> | null = null;
   private out: GainNode | null = null;
   private pan: StereoPannerNode | null = null;

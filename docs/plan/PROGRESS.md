@@ -961,3 +961,57 @@ The user: "finish all phases". Plan 27 has the details, by phase.
 - **Budget**: world page 552.5 KB ≤ 553 (raised from 552 by the user's call); `yutopia-grounds` 177 ≤ 180.
 - **Open**: Firefox not checked (Playwright's Firefox won't start here); the fixture-swapping e2e suites not run.
 
+
+## The car — phases 0–7 (2026-10-20)
+The user: "create a drivable car — really awesome and nice to drive, think the mechanics through, each part of the car; an awesome interior; each terrain different." Plan: `docs/plan/28-the-car.md` (decided: the lot's cars as a fleet; sim-lite with helps; an 80s RWD sedan, then a 4x4; 3D when you get in).
+- **Phase 0** (approved): the parted sedan and its cabin in code (`tp/car/`), seven stills in `design/screens/car/`.
+- **Phase 1**: the physics in shared (`car/`: body, suspension, tyres, drivetrain, helps, grounds, collisions; deterministic), tested against the plan's numbers; `/dev/car` to drive and tune it; the synthesized sound.
+- **Phase 2–3**: every lot car drawn with the new model; X at a door, the driver's seat yours; the driver's client runs the sim, the server checks it (`features/cars.ts`), carries the seats, rolls a driverless car to a stop, parks it where it stopped (saved), tows the lost ones back; others see it 110 ms behind; the shuttle and the visitor yield; parked cars at any angle block walking, moving ones too.
+- **Phase 4–5**: the live cockpit (cluster, hands on the wheel, wipers and the windscreen's snow, the mirror's real view, the lamps sweeping over the cabin, doors, the radio); tracks that fill in, spray, the exhaust's breath, snow blown off the roof, slush and black ice painted where the sim has them.
+- **Phase 6**: the 80s 4x4 (body, cabin fitted, 4WD with a lock and low range); two of the lot's cars are 4x4s.
+- **Checked**: shared 154, world-server 72, client 20; typecheck everywhere; Biome on the touched files; `car.spec` on the GPU (driving with a passenger, no frame over 100 ms, parked where it stopped); seen in the game headless (the lot, the lawn, the snowbank, the cockpit).
+- **Budget**: world page **553.6 KB — over 553 by 0.6** (the controller's car hooks and the grid's turned cars; the car is lazy: `yutopia-car` 13.6 KB, the rest in shared lazy chunks). The user raised the budget to 554.
+- **API**: object coordinates −2000…2000 (a car parked on the lawn was refused at 0…1000).
+- **Not done**: touch controls, mouse free-look in the cockpit, damage, fuel at the gas station, the plough, a wagon body. **Not checked**: Firefox; the fixture-swapping e2e suites.
+
+## The car's recorded engine (2026-10-20)
+
+- The engine is now Chippy569's 190E-16V on a dyno (CC0, Freesound pack 9658;
+  credits in `public/sfx/CREDITS.md`): 12 loops in `public/sfx/car/` at three
+  revs, full load and none, by the exhaust and in the engine bay, plus the
+  start. 400 KB, lazy.
+- Each loop is played at its measured revs and crossfaded by revs and load.
+  Out by the car you hear the exhaust mic, in the cockpit the bay. The synth is
+  the fallback.
+- Checked headless on `/dev/car`: all 12 loops and the start play, the pitch
+  follows the revs, no errors.
+- Details in plan 28, "The recorded engine".
+
+## The car's model fixes (2026-10-20)
+
+From the user's screenshots, in `tp/car/sedan.ts`:
+- the sedan's C-pillars painted outside;
+- the 4x4's flank behind its door;
+- nothing of the cabin in the rear arches: closed, trimmed tubs, the bench
+  between them;
+- the strips and cladding stop at the arches.
+
+Checked with new review stills (`car-check-*`). The world page budget is 554
+KB, by the user's call.
+
+## The car: trees, off-road, knocks (2026-10-20)
+
+- **Trees:** cars no longer hit the walking mask's tile walls (a tree's, a
+  lamp's, a steep tile's), only real solids, merged into rectangles.
+- **Off-road:** snow and deep snow have less drag, and the gearbox shifts up in
+  slippery snow. The sedan reaches 44 km/h in deep snow in 20 s (was 8); the
+  4x4 reaches 76.
+- **Knocks:**
+  - true contact points;
+  - impulses shared by mass;
+  - other drivers' cars hit where they are now;
+  - each model's own box;
+  - parked cars slide when knocked, and the server keeps where they stop
+    (`car:shove`).
+- Tests: shared 157, world-server 72, client 20, e2e `car.spec` 2/2 on the GPU.
+

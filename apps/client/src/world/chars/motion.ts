@@ -106,6 +106,20 @@ export function seatedPose(typing: boolean): Pose {
   return p;
 }
 
+/** In a car (docs/plan/28-the-car.md): reclined against the seat's back, the legs out to the
+ *  pedals; a driver's hands go on the rim afterwards (PersonModel.reachTo), a passenger's
+ *  rest on the lap. */
+export function carPose(driver: boolean): Pose {
+  const p: Pose = { spine: [driver ? -0.16 : -0.24, 0, 0], neck: [0.1, 0, 0], head: [0.08, 0, 0] };
+  both(p, "thigh", [-1.6, 0, driver ? 0.05 : 0.08]);
+  both(p, "knee", driver ? [1.1, 0, 0] : [1.35, 0, 0]);
+  both(p, "ankle", [driver ? -0.25 : -0.05, 0, 0]);
+  both(p, "shoulder", driver ? [-0.95, 0, 0.14] : [-0.5, 0, 0.12]);
+  both(p, "elbow", driver ? [-0.6, 0, 0] : [-1.05, 0, 0]);
+  both(p, "wrist", [0.05, 0, 0]);
+  return p;
+}
+
 /** The walk at `phase` (0..1, distance-driven); `k` scales the swing (running). */
 export function walkPose(phase: number, k = 1): { pose: Pose; lift: Euler3 } {
   const s = Math.sin(TAU * phase);

@@ -85,6 +85,7 @@ import { ApiError, type Session, yutopia } from "@/lib/api";
 import { lang, tr } from "@/lib/i18n";
 import { deviceQuality, prefs, type Quality, resolveQuality, setPrefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
+import { loadChars } from "./art/chars-load";
 import { loadPeople } from "./art/people-load";
 import { loadPets, pets as petsArt } from "./art/pets-load";
 import { loadItemArt } from "./art/scene";
@@ -141,6 +142,9 @@ const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
 const JUMP_BUFFER_MS = 220; // Space a moment before landing: the next jump goes as it lands
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
+
+// (a lot car out being driven: not where it was parked — docs/plan/28-the-car.md)
+const notDriven = (o: { kind: string; props?: Record<string, unknown> | null }) => o.kind !== "car" || !o.props?.driven;
 
 export class WorldController {
   engine: WorldEngine | null = null;
@@ -536,7 +540,9 @@ export class WorldController {
       const def = objFromState(o);
       this.objs.set(def.id, def);
       if (def.kind === "elevator") this.liftHeard(def);
-      if (objLevel(def, this.building) === this.level) engine.upsertObject(this.liftDrawn(def), false);
+      // (a lot car out being driven isn't where it was parked: the car itself is drawn)
+      if (objLevel(def, this.building) === this.level && notDriven(def))
+        engine.upsertObject(this.liftDrawn(def), false);
       else if (engine.getObject(def.id)) engine.removeObject(def.id, false);
       this.objectsDirty = true;
     };
@@ -819,6 +825,8 @@ export class WorldController {
     this.games?.dispose();
     this.screens?.dispose();
     this.os?.dispose();
+    this.cars?.dispose();
+    this.cars = null;
     cancelAnimationFrame(this.raf);
     for (const t of this.timers) clearInterval(t);
     if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
@@ -1243,7 +1251,11 @@ export class WorldController {
       engine.setMap(this.map);
     } else if (this.isoSwap === 1) {
       this.isoSwap = 0;
-      engine.setObjects(onLevel(this.objs.values(), this.map).map((o) => this.liftDrawn(o)));
+      engine.setObjects(
+        onLevel(this.objs.values(), this.map)
+          .filter(notDriven)
+          .map((o) => this.liftDrawn(o)),
+      );
       this.objectsDirty = true;
     }
     this.updateDoors();
@@ -1263,6 +1275,7 @@ export class WorldController {
     }
     this.syncView();
     this.driveVehicles(dt);
+    this.isolated("cars", () => this.cars?.frame(dt, now));
     this.moveLocal(dt);
     this.updateLift();
     if (!this.tp) this.liftsIso(now);
@@ -1320,8 +1333,11 @@ export class WorldController {
       };
       this.jumpEffects(localSid, st, 1);
       this.life?.print(localSid, st, now, this.map, this.grid.onLand(st.x, st.y));
-      engine.upsertAvatar(localSid, st, true);
-      if (tp)
+      const inCar = !!this.cars?.inCar();
+      if (inCar) {
+        if (engine.hasAvatar(localSid)) engine.removeAvatar(localSid);
+      } else engine.upsertAvatar(localSid, st, true);
+      if (tp && !inCar)
         bodies.push({
           ...st,
           id: localSid,
@@ -1353,11 +1369,13 @@ export class WorldController {
         here ? Math.max(0, 1 - Math.hypot(pos.x - this.me.x, pos.y - this.me.y) / JUMP_HEARD) : 0,
       );
       // iso shows my floor; 3D draws everyone where they are in the building
-      if (here) this.life?.print(sid, st, now, this.map, this.grid.onLand(st.x, st.y));
+      // (someone in a car: the car draws them, sitting in it)
+      const carried = !!this.cars?.seatedIds().has(sid);
+      if (here && !carried) this.life?.print(sid, st, now, this.map, this.grid.onLand(st.x, st.y));
       else this.life?.prints.forget(sid);
-      if (here) engine.upsertAvatar(sid, st);
+      if (here && !carried) engine.upsertAvatar(sid, st);
       else if (engine.hasAvatar(sid)) engine.removeAvatar(sid);
-      if (tp)
+      if (tp && !carried)
         bodies.push({
           ...st,
           id: sid,
@@ -1458,13 +1476,16 @@ export class WorldController {
         // (every floor's things: the 3D view draws the floors below mine too —
         // my floor's as the iso engine has them: a door swung open for someone
         // passing, a seat taken, a radio's display on live only there)
-        const all = [...this.objs.values()].map((o) => engine.getObject(o.id) ?? o);
+        // (the lot's cars: drawn by car/cars.ts once it's here)
+        const all = [...this.objs.values()]
+          .filter((o) => !this.cars || o.kind !== "car")
+          .map((o) => engine.getObject(o.id) ?? o);
         tp.update(this.building, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all, this.level);
       }
       tp.setLiveFrom({ engine, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
       tp.setTables(this.tables?.scene3d() ?? null);
-      tp.gameCam = this.photoCam() ?? this.tables?.gameCam() ?? this.liftCam(now) ?? null;
+      tp.gameCam = this.cars?.camera() ?? this.photoCam() ?? this.tables?.gameCam() ?? this.liftCam(now) ?? null;
       if (this.liftsDirty) {
         this.liftsDirty = false;
         tp.setLifts(
@@ -1542,6 +1563,8 @@ export class WorldController {
   private objectsDirty = false;
 
   private moveLocal(dt: number) {
+    // in a car: in my seat (the server says so too: world-server features/cars.ts)
+    if (this.cars?.carry(this)) return;
     // on the shuttle: it carries me (the server says where: world-server grounds-life.ts)
     const ride = this.life?.seat(this.room?.state.players.get(this.room.sessionId));
     if (ride) {
@@ -1571,7 +1594,9 @@ export class WorldController {
       const dir = this.tp
         ? unit(this.tp.relative(-(iy || pad.y), ix || pad.x))
         : screenInputToWorld(ix || pad.x, iy || pad.y);
-      const next = moveStep(this.grid, this.me, dir, speed, dt, this.height.z);
+      let next = moveStep(this.grid, this.me, dir, speed, dt, this.height.z);
+      // (a car on the move is in the way: no walking through it)
+      if (this.level === 0 && this.cars?.blocks(next.x, next.y)) next = { x: this.me.x, y: this.me.y };
       // (first person: I keep facing where I look — S walks backwards, A / D sideways)
       if (!first) {
         this.turnTowards(Math.atan2(dir.y, dir.x), dt);
@@ -1826,6 +1851,7 @@ export class WorldController {
   }
 
   private updatePrompt() {
+    if (this.cars?.prompt(hud)) return; // (a car: in by its door, or out — car/cars.ts)
     // the shuttle at its stop, near: on (or off, riding)
     const lp = this.room?.state.players.get(this.room.sessionId);
     const ride =
@@ -1858,9 +1884,14 @@ export class WorldController {
 
   interact() {
     const p = hud.get().prompt;
+    if (p && this.cars?.act(p.kind, p.objectId)) return;
     if (p?.kind === "ride" || p?.kind === "ride:leave") this.send(p.kind === "ride" ? "ride:board" : "ride:leave", {});
     else if (p) this.activateObject(p.objectId, false);
   }
+
+  // ── the lot's cars, driven (docs/plan/28-the-car.md; car/cars.ts, loaded on their own) ──
+  private cars: import("./car/cars").Cars | null = null;
+  private lifeCars: { id: string; kind: string; x: number; z: number; a: number; shown: boolean }[] = [];
 
   // ── life on the Grounds (docs/plan/27, phase 6; grounds-life.ts, loaded with them) ──
   private life: import("./grounds-life").GroundsLife | null = null;
@@ -1874,8 +1905,9 @@ export class WorldController {
       this.map.oy ?? 0,
       this.level === 0,
     );
+    this.lifeCars = list.filter((v) => v.kind !== "sedan" && v.kind !== "offroad");
     this.engine?.grounds?.setVehicles(list, this.me.x, this.me.y);
-    this.tp?.setVehicles(list);
+    this.tp?.setVehicles(this.lifeCars);
   }
 
   // Moves between people: a spark and its sound where the hands meet (one of
@@ -2662,7 +2694,8 @@ export class WorldController {
 
   private syncView() {
     if (!this.engine || !this.room) return;
-    const want = prefs().view === "iso" ? "iso" : "3d";
+    // (in a car: the 3D view, its camera the car's — back to iso on the way out)
+    const want = prefs().view === "iso" && !this.cars?.inCar() ? "iso" : "3d";
     this.tp?.setMode(this.camWanted());
     if (this.tp) {
       this.tp.lookSens = prefs().lookSens;
@@ -3160,7 +3193,11 @@ export class WorldController {
     else {
       this.isoSwap = 0;
       this.engine.setMap(this.map);
-      this.engine.setObjects(onLevel(this.objs.values(), this.map).map((o) => this.liftDrawn(o)));
+      this.engine.setObjects(
+        onLevel(this.objs.values(), this.map)
+          .filter(notDriven)
+          .map((o) => this.liftDrawn(o)),
+      );
     }
     this.rebuildGrid();
     this.path = null;
@@ -3337,6 +3374,11 @@ export class WorldController {
       return;
     }
     if (hud.get().panel.kind && e.key !== "Escape") return;
+    // in a car: its controls (docs/plan/28-the-car.md, car/controls.ts)
+    if (this.cars?.inCar() && !e.metaKey && !e.ctrlKey && this.cars.key(e, true)) {
+      e.preventDefault();
+      return;
+    }
     const key = e.key.toLowerCase();
     if (hud.get().build.on && (e.metaKey || e.ctrlKey) && key === "d") {
       e.preventDefault();
@@ -3381,8 +3423,14 @@ export class WorldController {
     else if (key === "-") this.engine?.setZoom((this.engine?.getZoom() ?? 1) / 1.15);
   };
 
-  private onKeyUp = (e: KeyboardEvent) => this.keys.delete(e.key.toLowerCase());
-  private onBlur = () => this.keys.clear();
+  private onKeyUp = (e: KeyboardEvent) => {
+    this.keys.delete(e.key.toLowerCase());
+    this.cars?.key(e, false);
+  };
+  private onBlur = () => {
+    this.keys.clear();
+    this.cars?.blur();
+  };
   private onFirstGesture = () => void mixer.resume();
 
   private bindInput() {
@@ -3399,6 +3447,12 @@ export class WorldController {
         this.life = new m.GroundsLife(G);
         this.engine?.setGrounds(G, this.life.prints);
         if (this.tp) this.tp.prints = this.life.prints;
+      });
+      // (the lot's cars, driven: docs/plan/28-the-car.md, in a chunk of their own)
+      void Promise.all([import("./car/cars"), loadChars()]).then(([m]) => {
+        if (!this.G || this.stopped || this.cars) return;
+        this.cars = m.attachCars(this, G);
+        this.objectsDirty = true;
       });
     });
     window.addEventListener("keydown", this.onKeyDown);

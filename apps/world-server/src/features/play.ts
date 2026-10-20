@@ -11,7 +11,7 @@ const NOTES_PER_SECOND = 24;
 registerFeature((room: WorldRoom) => {
   room.on("use", (client, m) => {
     const p = room.state.players.get(client.sessionId);
-    if (!p || p.busy === "ride:shuttle") return;
+    if (!p || p.busy.startsWith("ride:") || p.busy.startsWith("drive:")) return;
     const what = String(m?.what ?? "");
     p.busy = (USES as readonly string[]).includes(what) ? what : "";
   });

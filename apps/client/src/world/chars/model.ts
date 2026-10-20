@@ -304,6 +304,29 @@ export class PersonModel {
     }
   }
 
+  /** Put a hand on a point in the world (a steering wheel's rim), after `setPose`: two-bone IK
+   *  from the posed shoulder, the elbow pointing down and out by `pole` (the spine's space,
+   *  the right arm's; the left mirrors x). */
+  reachTo(side: "L" | "R", world: Vector3, w = 1, poleR: [number, number, number] = [-0.6, -1, -0.45]) {
+    const b = this.shown?.baked;
+    if (!b || !this.skeleton || w <= 0) return;
+    const spine = this.bones.spine;
+    spine.updateWorldMatrix(true, false);
+    target.copy(world);
+    spine.worldToLocal(target);
+    const sh = b.rest[`shoulder${side}`];
+    target.x -= sh[0];
+    target.y -= sh[1];
+    target.z -= sh[2];
+    pole.set(side === "L" ? -poleR[0] : poleR[0], poleR[1], poleR[2]);
+    solveArm(target, b.arm[0], b.arm[1], pole, ik);
+    const k = Math.min(1, w);
+    const shoulder = this.bones[`shoulder${side}`];
+    shoulder.quaternion.slerp(ik.shoulder, k);
+    const el = this.bones[`elbow${side}`];
+    el.rotation.set(el.rotation.x + (ik.elbow - el.rotation.x) * k, el.rotation.y * (1 - k), el.rotation.z * (1 - k));
+  }
+
   /** The face: eyes closed (0..1) and mouth open (0..1). */
   setFace(blink: number, talk: number) {
     this.face = [blink, talk];

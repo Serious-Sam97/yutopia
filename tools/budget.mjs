@@ -10,7 +10,8 @@ import { gzipSync } from "node:zlib";
 // (raised to 550 on 2026-10-19 by the user's call: floors without a hitch — docs/plan/26 — keep every floor ready)
 // (raised to 552 on 2026-10-20 by the user's call: the Grounds — docs/plan/27 — the grid's land, A*'s box, the engine's land hooks)
 // (raised to 553 on 2026-10-20 by the user's call: the Grounds' phases 2–6 — the night, the weather, the shuttle — their page hooks)
-const BUDGETS = { "/page": 553, "/login/page": 160 }; // KB gzip
+// (raised to 554 on 2026-10-20 by the user's call: the car's page hooks — the controller's, the grid's turned cars)
+const BUDGETS = { "/page": 554, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;
@@ -42,6 +43,8 @@ const LAZY = {
   // chunk that uses it — its own, the 3D view's, the dev mock pages' (~6 KB each), and the marker counts those
   // whole chunks (the 3D view's ~46 KB); raised from 120 on 2026-10-20 with phases 2–6 (the town, the night, life)
   "yutopia-grounds": 180,
+  // the lot's cars, driven (docs/plan/28-the-car.md): the sim, the models and their cabins, the sound, the fx
+  "yutopia-car": 120,
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {
