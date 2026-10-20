@@ -82,8 +82,9 @@ export function stepHeight(grid: Grid, x: number, y: number, h: Height, dt: numb
   const ground = grid.groundAt(x, y, h.z);
   if (!h.up) {
     if (ground < h.z - 0.01) {
-      // down the stairs: the feet follow the treads (no hop off each step)
-      if (grid.onRamp(x, y) && h.z - ground < 0.45) {
+      // down the stairs the feet follow the treads (no hop off each step), and
+      // downhill outdoors the ground
+      if ((grid.onRamp(x, y) && h.z - ground < 0.45) || (grid.onLand(x, y) && h.z - ground < 0.6)) {
         h.z = ground;
         return false;
       }

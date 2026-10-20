@@ -723,6 +723,104 @@ export function upgradeCore(
   return { map, objects: next, moved: [...moved.values()] };
 }
 
+// ── the courtyard's blocks (docs/plan/27-the-grounds.md, phase 2) ─────────────
+// The east and the south block stand on the Grounds across the courtyard from
+// the headquarters (shared grounds.ts BUILDINGS: the same rectangles). Their
+// ground floors are the ground floor's own — blank, for builders to make
+// something of: the floor grows to take them in (its corner stays where it
+// was, so nothing on it moves). Glass all round, a doorway, a sealed core
+// (their upper floors aren't open yet).
+export const BLOCKS = [
+  {
+    key: "east-block",
+    name: "East block",
+    x0: 60,
+    y0: -10,
+    x1: 88,
+    y1: 48,
+    door: { dir: "v" as const, at: 60, from: 16, to: 20 },
+    core: { x: 76, y: 14, w: 8, h: 7 },
+  },
+  {
+    key: "south-block",
+    name: "South block",
+    x0: -4,
+    y0: 48,
+    x1: 50,
+    y1: 72,
+    door: { dir: "h" as const, at: 48, from: 22, to: 26 },
+    core: { x: 34, y: 58, w: 8, h: 7 },
+  },
+];
+
+/** The ground floor with the blocks' ground floors in it (null: they're there,
+ *  or it has no ground floor). */
+export function upgradeGround(map: MapDef): MapDef | null {
+  const l0 = map.levels?.find((l) => l.index === 0);
+  if (!l0 || l0.areas.some((a) => a.key === BLOCKS[0].key)) return null;
+  const ox = l0.ox;
+  const oy = l0.oy;
+  const W = Math.max(l0.width, ...BLOCKS.map((b) => b.x1 - ox));
+  const H = Math.max(l0.height, ...BLOCKS.map((b) => b.y1 - oy));
+  const pad = (rows: string[], n: number, w: number, ch: string) => [
+    ...rows.map((r) => r.padEnd(w, ch)),
+    ...Array.from({ length: n - rows.length }, () => ch.repeat(w)),
+  ];
+  const m: MapDef = {
+    ...(levelMap(map, 0) as MapDef),
+    width: W,
+    height: H,
+    tiles: pad(l0.tiles, H, W, " "),
+    hWalls: pad(l0.hWalls, H + 1, W, "."),
+    vWalls: pad(l0.vWalls, H, W + 1, "."),
+    ...(l0.hBacks ? { hBacks: pad(l0.hBacks, H + 1, W, ".") } : {}),
+    ...(l0.vBacks ? { vBacks: pad(l0.vBacks, H, W + 1, ".") } : {}),
+  };
+  const rows = m.tiles.map((r) => [...r]);
+  const areas: AreaDef[] = [...l0.areas];
+  for (const b of BLOCKS) {
+    const x0 = b.x0 - ox;
+    const y0 = b.y0 - oy;
+    const x1 = b.x1 - ox;
+    const y1 = b.y1 - oy;
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (!isFloor(rows[y][x])) rows[y][x] = "_";
+    m.tiles = rows.map((r) => r.join(""));
+    // glass all round, the doorway open
+    const door = (e: Edge) =>
+      b.door.dir === e.dir &&
+      (e.dir === "v" ? e.x : e.y) === (e.dir === "v" ? b.door.at - ox : b.door.at - oy) &&
+      (e.dir === "v" ? e.y + oy : e.x + ox) >= b.door.from &&
+      (e.dir === "v" ? e.y + oy : e.x + ox) < b.door.to;
+    for (let x = x0; x < x1; x++)
+      for (const y of [y0, y1]) {
+        const e: Edge = { dir: "h", x, y };
+        setEdge(m, e, door(e) ? "." : "g");
+      }
+    for (let y = y0; y < y1; y++)
+      for (const x of [x0, x1]) {
+        const e: Edge = { dir: "v", x, y };
+        setEdge(m, e, door(e) ? "." : "g");
+      }
+    // the core: plaster walls round it, no way in
+    const c = { x: b.core.x - ox, y: b.core.y - oy, w: b.core.w, h: b.core.h };
+    for (let x = c.x; x < c.x + c.w; x++) for (const y of [c.y, c.y + c.h]) setEdge(m, { dir: "h", x, y }, "p");
+    for (let y = c.y; y < c.y + c.h; y++) for (const x of [c.x, c.x + c.w]) setEdge(m, { dir: "v", x, y }, "p");
+    areas.push({ key: b.key, name: b.name, kind: "open", x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+  }
+  const level: LevelDef = {
+    ...l0,
+    width: W,
+    height: H,
+    tiles: m.tiles,
+    hWalls: m.hWalls,
+    vWalls: m.vWalls,
+    ...(m.hBacks ? { hBacks: m.hBacks } : {}),
+    ...(m.vBacks ? { vBacks: m.vBacks } : {}),
+    areas,
+  };
+  return { ...map, levels: (map.levels ?? []).map((l) => (l.index === 0 ? level : l)) };
+}
+
 /** The whole building from a studio with no floors yet (null: it has them). */
 export function campusBuilding(
   home: MapDef,
@@ -745,5 +843,5 @@ export function campusBuilding(
     ...blanks.flatMap((b) => b.objects),
     ...coreThings(CAMPUS_HOME, { x: 0, y: 0 }, true, core),
   ].filter((o) => !have.has(o.id));
-  return { map, add, moved: studio.moved };
+  return { map: upgradeGround(map) ?? map, add, moved: studio.moved };
 }

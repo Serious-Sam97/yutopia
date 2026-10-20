@@ -124,6 +124,9 @@ export interface ClientMessages {
   "build:undo": Record<string, never>; // your own last build step (history.ts)
   "build:redo": Record<string, never>;
   "mod:mute": { userId: number; muted: boolean };
+  // the weather (shared weather.ts): a storm called up (1) or sent off (0), or
+  // back to the schedule (null); `now`: at once, not over a minute
+  "mod:storm": { storm: number | null; now?: boolean };
   "mod:kick": { userId: number };
   "mod:lock": { area: string; locked: boolean };
   // map editing (builders); `level`: which floor of the building (levels.ts;
@@ -230,6 +233,11 @@ export interface ClientMessages {
   // a photo taken (the flash others see)
   "phone:state": { state: string };
   "phone:prefs": { case: string; ringtone: string };
+  "phone:torch": { on: boolean };
+  // the shuttle (docs/plan/27, phase 6): on at a stop, off at a stop
+  "ride:board": Record<string, never>;
+  "ride:leave": Record<string, never>;
+  "mod:shuttle": Record<string, never>; // an admin: the shuttle to the headquarters' stop
   "phone:shot": Record<string, never>;
   "phone:pose": { pose: string }; // a pose for the photo (shared PHOTO_POSES)
   "phone:rec": { on: boolean }; // recording a video (a red light on the phone)

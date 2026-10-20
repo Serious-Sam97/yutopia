@@ -50,6 +50,8 @@ export class Player extends Schema {
   // a jump (shared/jump.ts): which, and when it started (server ms)
   @type("string") jump = "";
   @type("float64") jumpAt = 0;
+  // the phone's flashlight on (the Grounds at night: a beam everyone sees)
+  @type("boolean") torch = false;
 }
 
 export class WorldObject extends Schema {
@@ -73,6 +75,8 @@ export class Npc extends Schema {
   @type("string") say = "";
   @type("float64") sayAt = 0;
   @type("string") area = "";
+  // the floor they're on (shared levels.ts); -1: the studio's (Vortex's)
+  @type("int8") level = -1;
 }
 
 export class Standup extends Schema {
@@ -287,6 +291,21 @@ export class Toy extends Schema {
   @type("uint16") dur = 0;
 }
 
+// What drives on the Grounds (docs/plan/27, phase 6; shared grounds.ts VISITOR,
+// SHUTTLE): where it is in the building's coords, its heading, its speed.
+export class Vehicle extends Schema {
+  @type("string") id = "";
+  @type("string") kind = ""; // "visitor" | "shuttle"
+  @type("float32") x = 0;
+  @type("float32") z = 0;
+  @type("float32") a = 0; // heading (radians, atan2 of z, x)
+  @type("float32") v = 0; // tiles a second (backing: below 0)
+  @type("boolean") shown = false;
+  @type("string") stop = ""; // at a stop (the shuttle): which
+  @type("float64") honkAt = 0; // when it last honked (server ms)
+  @type("uint8") riders = 0;
+}
+
 export class WorldState extends Schema {
   @type("string") name = "";
   @type("string") mapKey = "studio";
@@ -307,9 +326,14 @@ export class WorldState extends Schema {
   // the building (shared levels.ts): the floor the map above is, and the others (LevelDef[], JSON)
   @type("uint8") floor = 0;
   @type("string") levels = "[]";
+  // the weather over the Grounds (shared weather.ts): 0 calm … 1 a blizzard, and
+  // where the wind blows from (radians)
+  @type("float32") storm = 0;
+  @type("float32") wind = 0;
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();
+  @type({ map: Vehicle }) vehicles = new MapSchema<Vehicle>();
   @type(Standup) standup = new Standup();
   @type({ map: "string" }) boothGuests = new MapSchema<string>();
   @type({ map: "string" }) locks = new MapSchema<string>(); // area → who locked it

@@ -26,6 +26,7 @@ import {
   wallCuts,
   wellsOf,
 } from "@yutopia/shared";
+import { LAMPS as GROUND_LAMPS } from "@yutopia/shared/grounds";
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -35,11 +36,16 @@ import {
   CatmullRomCurve3,
   CircleGeometry,
   Color,
+  ConeGeometry,
   DirectionalLight,
+  DoubleSide,
+  Float32BufferAttribute,
   Fog,
   Frustum,
   Group,
   HemisphereLight,
+  InstancedBufferAttribute,
+  InstancedMesh,
   LinearSRGBColorSpace,
   LineBasicMaterial,
   LineLoop,
@@ -56,10 +62,12 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   PointLight,
+  Quaternion,
   Raycaster,
   RingGeometry,
   Scene,
   Sphere,
+  SpotLight,
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
@@ -70,6 +78,7 @@ import {
   WebGLRenderer,
   WebGLRenderTarget,
 } from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { tr } from "@/lib/i18n";
 import { chars, loadChars } from "../art/chars-load";
 import { daylight } from "../art/daylight";
@@ -79,14 +88,17 @@ import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
 import type { PuffKind } from "../engine";
+import { type Footprints, printLeft } from "../footprints";
 import { activePad } from "../pads";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
+import { carGeometry } from "./campus";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
+import { CASTER_LAYER } from "./grounds-stream";
 import { Hands1P, handsDoing } from "./hands1p";
 import { zt } from "./kit3d";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
-import { Light3, litBalance } from "./light3d";
+import { Light3, landLight, litBalance, patchGrounds } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
 import { type Mats as CharMats, Person3D } from "./person3d";
@@ -161,6 +173,23 @@ export interface ViewEvents {
 
 const LAMPS = 10; // point lights in the pool (the nearest lamps get them)
 const LAMP_REACH = 16; // tiles from the camera's target a lamp gets one within
+// the Grounds' lamps after dark (docs/plan/27, the night): how high the head
+// hangs (tiles over the ground), how far and how hard it lights; the pool's
+// lights reach further out there (the road ahead lit, lamp to lamp)
+const GROUND_LAMP: Record<string, { h: number; radius: number; intensity: number }> = {
+  cobra: { h: 8.4, radius: 15, intensity: 26 },
+  town: { h: 4.4, radius: 10, intensity: 11 },
+  lone: { h: 4.4, radius: 10, intensity: 11 },
+  porch: { h: 2.2, radius: 6, intensity: 4 },
+};
+const GROUND_REACH = 44;
+const GROUND_POOL = 4; // their own point lights (High; fewer below)
+// the phones' flashlights: spot lights (always there, dark when off: no shader
+// changes), mine and the nearest other's; a beam you see in the snow and fog
+const TORCHES = 2;
+const PREP_LAYER = 30; // (things compiling: no camera draws it)
+const BEAM_LEN = 10;
+const BEAM_HALF = 0.36;
 const LAMP_FADE = 4; // …fading out over the last few
 const LAMP_GLOW = 3.5; // how strongly a lamp post's pool lights what's under it at night
 const CAM_ROOM = 2.2; // the least room in front of a wall for the camera to stand there (else it rises)
@@ -217,6 +246,7 @@ export class ThirdPersonView {
   private hemi = new HemisphereLight(0xffffff, 0x6b4a33, 1);
   private sun = new DirectionalLight(0xffffff, 2);
   private pool: PointLight[] = [];
+  private groundPool: PointLight[] = []; // the Grounds' lamps (groundLamps)
   private around: Surroundings;
   private host: HTMLElement | null = null;
   private ro: ResizeObserver | null = null;
@@ -261,6 +291,21 @@ export class ThirdPersonView {
   private drag: { x: number; y: number; id: number; x0: number; y0: number; t: number } | null = null;
   private tint = new Color(1, 1, 1);
   private personTint = new Color(1, 1, 1);
+  // the Grounds' mood (docs/plan/27): the weather, the flashlights, breath in the cold
+  private storm = 0;
+  private torch3: {
+    spot: SpotLight;
+    beam: Mesh;
+    mat: MeshBasicMaterial;
+    on: { x: number; y: number; a: number } | null;
+  }[] = [];
+  private breathAt = new Map<string, number>();
+  private stormFog = new Color();
+  /** The weather (shared weather.ts, eased by the controller). */
+  setWeather(storm: number, wind: number) {
+    this.storm = storm;
+    this.around.setWeather(storm, wind);
+  }
   private frustum = new Frustum();
   private projView = new Matrix4();
   private sphere = new Sphere(new Vector3(), 1.1);
@@ -322,6 +367,8 @@ export class ThirdPersonView {
     s.shadow.camera.bottom = -14;
     s.shadow.camera.near = 1;
     s.shadow.camera.far = 70;
+    // (the woods' near trees cast from their own layer: drawn for the shadow only)
+    s.shadow.camera.layers.enable(CASTER_LAYER);
     s.shadow.bias = -0.0004;
     s.shadow.normalBias = 0.02;
     this.scene.add(s, s.target);
@@ -330,10 +377,55 @@ export class ThirdPersonView {
       this.pool.push(l);
       this.scene.add(l);
     }
+    for (let i = 0; i < GROUND_POOL; i++) {
+      const l = new PointLight(0xffd29a, 0, 4, 1.4);
+      this.groundPool.push(l);
+      this.scene.add(l);
+    }
+    // the flashlights: a spot each and its beam (a cone of light in the air,
+    // brighter in the snow and fog), fading out along its length
+    const fadeAlong = document.createElement("canvas");
+    fadeAlong.width = 4;
+    fadeAlong.height = 64;
+    const fg = fadeAlong.getContext("2d") as CanvasRenderingContext2D;
+    const grd = fg.createLinearGradient(0, 0, 0, 64);
+    grd.addColorStop(0, "#ffffff");
+    grd.addColorStop(0.35, "#6a6a6a");
+    grd.addColorStop(1, "#000000");
+    fg.fillStyle = grd;
+    fg.fillRect(0, 0, 4, 64);
+    const along = new CanvasTexture(fadeAlong);
+    const cone = new ConeGeometry(Math.tan(BEAM_HALF) * BEAM_LEN, BEAM_LEN, 24, 1, true);
+    cone.translate(0, -BEAM_LEN / 2, 0);
+    cone.rotateX(-Math.PI / 2); // (its tip at the phone, opening along +z)
+    for (let i = 0; i < TORCHES; i++) {
+      const spot = new SpotLight(0xfff1dc, 0, BEAM_LEN * 1.6, BEAM_HALF * 1.25, 0.55, 1.3);
+      // (off: parked far under the ground, pointing down — at the origin with its
+      // target there too its direction was NaN, and a NaN blacked out High's frame)
+      spot.position.set(0, -500, 0);
+      spot.target.position.set(0, -501, 0);
+      this.scene.add(spot, spot.target);
+      const mat = new MeshBasicMaterial({
+        color: 0xfff3e0,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        blending: AdditiveBlending,
+        alphaMap: along,
+        side: DoubleSide,
+        toneMapped: false,
+      });
+      const beam = new Mesh(cone, mat);
+      beam.visible = false;
+      beam.renderOrder = 4;
+      this.scene.add(beam);
+      this.torch3.push({ spot, beam, mat, on: null });
+    }
     // what the studio stands in (clouds / city / snow), the sky by the hour
     const home = onLevel(all, building);
     this.winSig = cutsSig(home);
     this.around = new Surroundings(building, opts.themes, wallCuts(home));
+    this.prepareGrounds();
     this.scene.add(this.around.root);
     this.floors.set(this.level, { world: this.world, sig: `${layoutSig(map)}|${this.wellSig}`, lit: this.light });
     this.placeFloors(all);
@@ -396,6 +488,7 @@ export class ThirdPersonView {
     drag?: number; // slowing (1/s): dust thrown out that hangs
     grow?: number; // its size at the end, times its first
     size?: number;
+    op?: number; // its opacity, fresh (else 1, or 0.7 swelling)
   }[] = [];
   /** `lift`: px off the floor; `hard` (a jump's "land" / "kick"): how hard, 0..1 */
   puff(x: number, y: number, kind: PuffKind, lift = 0, hard = 1) {
@@ -483,7 +576,8 @@ export class ThirdPersonView {
       f.s.position.z += f.vy * dt;
       f.s.position.y = Math.max(0.01, f.s.position.y + f.vz * dt);
       if (f.grow && f.size) f.s.scale.setScalar(f.size * (1 + (f.grow - 1) * Math.min(1, f.t / f.life)));
-      (f.s.material as SpriteMaterial).opacity = Math.max(0, 1 - f.t / f.life) * (f.grow ? 0.7 : 1);
+      (f.s.material as SpriteMaterial).opacity =
+        Math.max(0, Math.min(1, 1 - f.t / f.life)) * (f.op ?? (f.grow ? 0.7 : 1));
       if (f.t >= f.life) {
         this.scene.remove(f.s);
         (f.s.material as SpriteMaterial).dispose();
@@ -783,6 +877,7 @@ export class ThirdPersonView {
     this.scene.remove(this.around.root);
     this.around.dispose();
     this.around = new Surroundings(building, this.opts.themes, wallCuts(home));
+    this.prepareGrounds();
     this.scene.add(this.around.root);
     this.placeAround();
     this.setHour(this.hour);
@@ -1424,10 +1519,14 @@ export class ThirdPersonView {
     this.stepFlashes(dt);
     this.fadeWalls(dt);
     this.around.campus.cutAbove(this.insideBelowHome(me) ? STOREY - 0.15 : null);
-    this.around.update(dt, this.camera.position, !me?.reduced);
+    this.around.update(dt, this.camera.position, !me?.reduced, this.target);
+    this.drawPrints(performance.now());
     this.drawCues(dt, !!me?.reduced);
     this.placeSun();
     this.assignLamps(dt);
+    this.weatherFrame();
+    this.torches(bodies, meId);
+    if (!me?.reduced) this.breathe(bodies, meId);
 
     // cards and people face back along the camera's view (all the same way)
     const face = this.yaw + Math.PI;
@@ -1497,6 +1596,7 @@ export class ThirdPersonView {
       }
       const angle = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
       this.personTint.setHex(this.light.tintAt(b.x, b.y));
+      if (this.onLand(b.x, b.y)) this.landTint(b.x, b.y, this.personTint);
       this.sphere.center.set(b.x, 0.9, b.y);
       // first person: you aren't drawn (the camera is inside you); the rig
       // keeps stepping so the other cameras find you as you left them
@@ -1889,6 +1989,39 @@ export class ThirdPersonView {
           if (t.y + sp * along > f.top + 0.1) continue; // (it looks over it)
           block(along, f.top);
         }
+        // the Grounds' buildings round the ground floor (the town's, the blocks')
+        const g = this.around.grounds;
+        if (g && this.level === 0) {
+          const off = offsetOf(this.building, 0);
+          for (const b of g.boxes) {
+            const x0 = b.x0 - off.x - 0.3;
+            const y0 = b.z0 - off.y - 0.3;
+            const x1 = b.x1 - off.x + 0.3;
+            const y1 = b.z1 - off.y + 0.3;
+            if (Math.max(x0 - t.x, 0, t.x - x1) + Math.max(y0 - t.z, 0, t.z - y1) > this.dist + 2) continue;
+            if (t.x > x0 && t.x < x1 && t.z > y0 && t.z < y1) continue; // (you're in it: its outside's gone)
+            const hit = segBox(t.x, t.z, cx, cz, x0, y0, x1, y1);
+            if (hit === null) continue;
+            const along = hit * this.dist;
+            if (t.y + sp * along > b.top + 0.1) continue;
+            block(along, b.top);
+          }
+        }
+        // the shuttle and the visitor's car (their box, square to the ground)
+        for (const m of this.veh3.values()) {
+          const big = m.userData.big as boolean;
+          const half = big ? 5.2 : 2.6;
+          const r = Math.abs(Math.cos(m.rotation.y)) * half + Math.abs(Math.sin(m.rotation.y)) * 1.3;
+          const q = Math.abs(Math.sin(m.rotation.y)) * half + Math.abs(Math.cos(m.rotation.y)) * 1.3;
+          const [x0, y0, x1, y1] = [m.position.x - r, m.position.z - q, m.position.x + r, m.position.z + q];
+          if (t.x > x0 && t.x < x1 && t.z > y0 && t.z < y1) continue;
+          const hit = segBox(t.x, t.z, cx, cz, x0, y0, x1, y1);
+          if (hit === null) continue;
+          const top = m.position.y + (big ? 3.1 : 1.6);
+          const along = hit * this.dist;
+          if (t.y + sp * along > top + 0.1) continue;
+          block(along, top);
+        }
       }
     }
     // eased: in quickly, back out gently (a zoom isn't: it's the distance itself)
@@ -2012,6 +2145,310 @@ export class ThirdPersonView {
       p.distance = n.l.radius * 1.4;
       p.intensity = n.l.intensity * k * fade * fade * (3 - 2 * fade) * n.w;
     });
+    this.groundLamps(d.night);
+  }
+
+  // the Grounds' lamps after dark (the ground floor's frame): a pool of their
+  // own (in the lot's they took its lamps' places and, as bright as they are,
+  // their fade at the pool's edge was a pop), the nearest lit, fading over 10 tiles
+  private groundLamps(night: number) {
+    const g = this.around.grounds;
+    const on = Math.min(1, Math.max(0, night * 1.3 - 0.1));
+    const n = this.quality === "high" ? GROUND_POOL : this.quality === "medium" ? 2 : 1;
+    const near: { x: number; y: number; h: number; c: (typeof GROUND_LAMP)[string]; d: number }[] = [];
+    if (g && this.level === 0 && on > 0) {
+      const off = offsetOf(this.building, 0);
+      const t = this.target;
+      for (const l of GROUND_LAMPS) {
+        const x = l.x - off.x;
+        const y = l.z - off.y;
+        const d = Math.hypot(x - t.x, y - t.z);
+        if (d < GROUND_REACH)
+          near.push({ x, y, h: g.heightAt(l.x, l.z) + GROUND_LAMP[l.kind].h, c: GROUND_LAMP[l.kind], d });
+      }
+      near.sort((a, b) => a.d - b.d);
+    }
+    const edge = Math.min(GROUND_REACH, near[n]?.d ?? GROUND_REACH);
+    this.groundPool.forEach((p, i) => {
+      const l = i < n ? near[i] : undefined;
+      const fade = l ? Math.min(1, Math.max(0, (edge - l.d) / 10)) : 0;
+      if (!l || fade <= 0) {
+        p.intensity = 0;
+        return;
+      }
+      p.position.set(l.x, l.h, l.y);
+      p.distance = l.c.radius * 1.4;
+      p.intensity = l.c.intensity * on * fade * fade * (3 - 2 * fade);
+    });
+  }
+
+  // ── the Grounds' mood (docs/plan/27) ──
+  // a storm: the fog closes in, white (as dark as the hour)
+  private weatherFrame() {
+    const f = fogFor();
+    const s = this.storm;
+    const fog = this.scene.fog as Fog;
+    fog.near = f.near + (4 - f.near) * s;
+    fog.far = f.far + (55 - f.far) * s;
+    const l = landLight.value;
+    this.stormFog.setRGB(
+      Math.min(1, l.r * 1.15) * 0.84,
+      Math.min(1, l.g * 1.15) * 0.88,
+      Math.min(1, l.b * 1.15) * 0.92,
+    );
+    fog.color.copy(this.around.horizon).lerp(this.stormFog, Math.min(1, s * 1.4));
+  }
+
+  // out on the land (the ground floor's frame, off its own tiles)
+  private onLand(x: number, y: number): boolean {
+    if (this.level !== 0 || !this.around.grounds) return false;
+    return !(
+      x >= 0 &&
+      y >= 0 &&
+      x < this.map.width &&
+      y < this.map.height &&
+      isFloor(tileAt(this.map, Math.floor(x), Math.floor(y)))
+    );
+  }
+
+  // the light on someone out on the land: the hour's, the lamps' near, a beam's
+  private landTint(x: number, y: number, out: Color) {
+    out.copy(landLight.value);
+    for (const p of [...this.pool, ...this.groundPool]) {
+      if (p.intensity <= 0) continue;
+      const d = Math.hypot(p.position.x - x, p.position.z - y) / (p.distance * 0.6);
+      if (d >= 1) continue;
+      const k = (1 - d) * (1 - d) * Math.min(1, p.intensity / 8) * 0.8;
+      out.r += k * p.color.r;
+      out.g += k * p.color.g;
+      out.b += k * p.color.b;
+    }
+    for (const t of this.torch3) {
+      if (!t.on) continue;
+      const dx = x - t.on.x;
+      const dy = y - t.on.y;
+      const d = Math.hypot(dx, dy);
+      if (d > BEAM_LEN || d < 0.3) continue;
+      const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - t.on.a), Math.cos(Math.atan2(dy, dx) - t.on.a)));
+      if (off > BEAM_HALF) continue;
+      const k = (1 - d / BEAM_LEN) * (1 - (off / BEAM_HALF) ** 2) * (0.2 + 0.9 * this.nightLevel);
+      out.r += k;
+      out.g += k * 0.97;
+      out.b += k * 0.9;
+    }
+    out.r = Math.min(1, out.r);
+    out.g = Math.min(1, out.g);
+    out.b = Math.min(1, out.b);
+  }
+
+  // ── what drives on the Grounds (docs/plan/27, phase 6): the visitor's car,
+  // the shuttle; lit as the land is (dark at night), headlamps glowing ──
+  private veh3 = new Map<string, Group>();
+  private vehMat: MeshLambertMaterial | null = null;
+  setVehicles(list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean }[]) {
+    const g = this.around.grounds;
+    const off = offsetOf(this.building, this.level);
+    const up = elevOf(0) - elevOf(this.level);
+    const seen = new Set<string>();
+    for (const v of list) {
+      if (!g || !v.shown) continue;
+      seen.add(v.id);
+      let m = this.veh3.get(v.id);
+      if (!m) {
+        m = v.kind === "shuttle" ? this.busModel() : this.carModel();
+        this.veh3.set(v.id, m);
+        this.scene.add(m);
+      }
+      m.position.set(v.x - off.x, g.heightAt(v.x, v.z) + up + 0.03, v.z - off.y);
+      // (the models' noses point −x: turned to the heading)
+      m.rotation.y = Math.PI - v.a;
+      const lit = m.userData.lamps as MeshBasicMaterial;
+      lit.opacity = Math.min(1, 0.25 + this.nightLevel * 1.2);
+    }
+    for (const [id, m] of this.veh3)
+      if (!seen.has(id)) {
+        this.scene.remove(m);
+        this.veh3.delete(id);
+      }
+  }
+  private vehicleMat(): MeshLambertMaterial {
+    if (!this.vehMat) {
+      this.vehMat = new MeshLambertMaterial({ vertexColors: true });
+      patchGrounds(this.vehMat);
+    }
+    return this.vehMat;
+  }
+  private lampsOf(xs: number, w: number, y: number): Mesh {
+    const lamps = new MeshBasicMaterial({ color: 0xfff1cc, transparent: true, toneMapped: false });
+    const geo = mergeGeometries(
+      [-1, 1].map((s) => new BoxGeometry(0.06, 0.18, 0.3).translate(xs, y, (s * w) / 2)),
+      false,
+    );
+    return new Mesh(geo, lamps);
+  }
+  private carModel(): Group {
+    const root = new Group();
+    const { solid, glass } = carGeometry(false, 0x4a5a73, false);
+    root.add(new Mesh(solid, this.vehicleMat()), new Mesh(glass, this.vehicleMat()));
+    const l = this.lampsOf(-2.52, 1.2, 0.55);
+    root.add(l);
+    root.userData.lamps = l.material;
+    for (const c of root.children) c.castShadow = true;
+    return root;
+  }
+  private busModel(): Group {
+    const root = new Group();
+    const part = (w: number, h: number, d: number, x: number, y: number, z: number, color: number) => {
+      const b = new BoxGeometry(w, h, d).translate(x, y, z);
+      const c = new Color(color);
+      const n = b.getAttribute("position").count;
+      b.setAttribute(
+        "color",
+        new Float32BufferAttribute(
+          Array.from({ length: n * 3 }, (_, i) => [c.r, c.g, c.b][i % 3]),
+          3,
+        ),
+      );
+      return b;
+    };
+    const body = mergeGeometries(
+      [
+        part(10, 1.2, 2.4, 0, 0.95, 0, 0xe6dccb),
+        part(10.04, 0.22, 2.44, 0, 1.4, 0, 0xa8432c),
+        part(10, 0.95, 2.36, 0, 2.0, 0, 0x262d33),
+        part(10, 0.45, 2.4, 0, 2.7, 0, 0xe6dccb),
+        part(9.4, 0.12, 2.1, 0, 2.98, 0, 0xeef2f4),
+        ...[-3.1, 3.1].flatMap((x) => [-1.15, 1.15].map((z) => part(1, 0.75, 0.3, x, 0.37, z, 0x1c1c1c))),
+      ],
+      false,
+    );
+    const mesh = new Mesh(body, this.vehicleMat());
+    mesh.castShadow = true;
+    root.add(mesh);
+    root.userData.big = true;
+    const l = this.lampsOf(-5.02, 1.7, 0.75);
+    root.add(l);
+    root.userData.lamps = l.material;
+    return root;
+  }
+
+  // the Grounds' new things: their shaders compiled off the frame (on a layer no
+  // camera draws), shown once ready
+  private prepareGrounds() {
+    const g = this.around.grounds;
+    if (!g) return;
+    g.prepare = (o) => {
+      const masks: [Object3D, number][] = [];
+      o.traverse((c) => {
+        masks.push([c, c.layers.mask]);
+        c.layers.set(PREP_LAYER);
+      });
+      void this.renderer.compileAsync(o, this.camera, this.scene).then(() => {
+        for (const [c, m] of masks) c.layers.mask = m;
+      });
+    };
+    // (and what comes and goes out there: a breath's puff, the cars, the shuttle)
+    const warm = new Group();
+    const puff = new Sprite(
+      new SpriteMaterial({ color: 0xf4f7fa, transparent: true, depthWrite: false, opacity: 0.32, toneMapped: false }),
+    );
+    warm.add(puff, this.carModel(), this.busModel());
+    void this.renderer.compileAsync(warm, this.camera, this.scene).then(() => puff.material.dispose());
+  }
+
+  // the flashlights on: mine first, then the nearest
+  private torches(bodies: Body3[], meId: string) {
+    const t = this.target;
+    const on = bodies
+      .filter((b) => b.torch)
+      .sort(
+        (a, b) =>
+          (a.id === meId ? -1 : b.id === meId ? 1 : 0) ||
+          Math.hypot(a.x - t.x, a.y - t.z) - Math.hypot(b.x - t.x, b.y - t.z),
+      );
+    const night = this.nightLevel;
+    for (const [i, tc] of this.torch3.entries()) {
+      const b = on[i];
+      tc.on = null;
+      if (!b) {
+        tc.spot.intensity = 0;
+        tc.spot.position.set(0, -500, 0);
+        tc.spot.target.position.set(0, -501, 0);
+        tc.spot.target.updateMatrixWorld();
+        tc.beam.visible = false;
+        continue;
+      }
+      const a = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const feet = b.z ?? b.ground ?? 0;
+      // (from the phone in the hand, at the chest, a little ahead; aimed down the way ahead)
+      const hx = b.x + ca * 0.32;
+      const hy = b.y + sa * 0.32;
+      tc.on = { x: b.x, y: b.y, a };
+      tc.spot.position.set(hx, feet + 1.2, hy);
+      tc.spot.target.position.set(b.x + ca * 7, feet + 0.1, b.y + sa * 7);
+      tc.spot.target.updateMatrixWorld();
+      tc.spot.intensity = 1.5 + 24 * night;
+      tc.beam.position.copy(tc.spot.position);
+      tc.beam.lookAt(tc.spot.target.position);
+      tc.mat.opacity = Math.min(0.5, (0.03 + 0.16 * night) * (1 + this.storm * 1.6));
+      tc.beam.visible = tc.mat.opacity > 0.01;
+    }
+  }
+
+  // breath in the cold: a little cloud now and then from everyone out on the land
+  private breathe(bodies: Body3[], meId: string) {
+    const now = this.time;
+    const cam = this.camera.position;
+    for (const b of bodies) {
+      if (
+        b.npc ||
+        b.pet ||
+        b.busy === "ride:shuttle" ||
+        !this.onLand(b.x, b.y) ||
+        Math.hypot(cam.x - b.x, cam.z - b.y) > 16
+      )
+        continue;
+      const next = this.breathAt.get(b.id) ?? now + (hashId(b.id) % 100) / 40;
+      if (now < next) {
+        this.breathAt.set(b.id, next);
+        continue;
+      }
+      // (quicker running)
+      this.breathAt.set(b.id, now + (b.a === 1 ? 1.6 : 2.8) + Math.random() * 0.6);
+      const a = b.id === meId && b.angle !== undefined ? b.angle : dirAngle(b.d);
+      const feet = b.z ?? b.ground ?? 0;
+      for (let i = 0; i < 3; i++) {
+        const s = new Sprite(
+          new SpriteMaterial({
+            color: 0xf4f7fa,
+            transparent: true,
+            depthWrite: false,
+            opacity: 0.32,
+            toneMapped: false,
+          }),
+        );
+        s.material.color.multiply(landLight.value).multiplyScalar(1.4);
+        s.scale.setScalar(0.08);
+        s.position.set(b.x + Math.cos(a) * 0.22, feet + 1.52, b.y + Math.sin(a) * 0.22);
+        this.scene.add(s);
+        const sp = 0.3 + Math.random() * 0.2;
+        this.fx.push({
+          s,
+          vx: Math.cos(a) * sp + (Math.random() - 0.5) * 0.1,
+          vy: Math.sin(a) * sp + (Math.random() - 0.5) * 0.1,
+          vz: 0.1 + Math.random() * 0.08,
+          t: -i * 0.06,
+          life: 1.3,
+          g: -0.05,
+          drag: 1.6,
+          grow: 4,
+          size: 0.08,
+          op: 0.3,
+        });
+      }
+    }
   }
 
   // screen position of a world point (tiles, h = height in tiles), or null behind the camera
@@ -2337,10 +2774,123 @@ export class ThirdPersonView {
     const o = this.ray.ray.origin;
     const dir = this.ray.ray.direction;
     if (dir.y >= -1e-4) return;
+    // out on the land (the ground floor): where the ray meets the ground
+    const land = this.landAt(o, dir);
+    if (land) return this.events.floor?.(land.x, land.y, mods);
     const t = -o.y / dir.y;
     const x = o.x + dir.x * t;
     const y = o.z + dir.z * t;
     if (x >= 0 && y >= 0 && x < this.map.width && y < this.map.height) this.events.floor?.(x, y, mods);
+  }
+
+  // ── footprints in the snow (world/footprints.ts): one instanced mesh, fading ──
+  prints: Footprints | null = null;
+  private printMesh: InstancedMesh | null = null;
+  private printLeftAttr: InstancedBufferAttribute | null = null;
+  private printVersion = -1;
+  private printFaded = 0;
+  private drawPrints(now: number) {
+    const f = this.prints;
+    if (!f) return;
+    const N = 1600;
+    // (made up front, its shader compiled then: not with the first print)
+    if (!this.printMesh) {
+      const c = document.createElement("canvas");
+      c.width = 32;
+      c.height = 20;
+      const g = c.getContext("2d") as CanvasRenderingContext2D;
+      const grd = g.createRadialGradient(16, 10, 0, 16, 10, 15);
+      grd.addColorStop(0, "rgba(255,255,255,1)");
+      grd.addColorStop(0.7, "rgba(255,255,255,0.8)");
+      grd.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = grd;
+      g.beginPath();
+      g.ellipse(16, 10, 15, 9, 0, 0, Math.PI * 2);
+      g.fill();
+      const tex = new CanvasTexture(c);
+      const mat = new MeshBasicMaterial({
+        color: 0x5f7290,
+        map: tex,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+      });
+      mat.onBeforeCompile = (sh) => {
+        sh.vertexShader = sh.vertexShader
+          .replace("#include <common>", "#include <common>\nattribute float aLeft;\nvarying float vLeft;")
+          .replace("#include <begin_vertex>", "#include <begin_vertex>\nvLeft = aLeft;");
+        sh.fragmentShader = sh.fragmentShader
+          .replace("#include <common>", "#include <common>\nvarying float vLeft;")
+          .replace("#include <opaque_fragment>", "diffuseColor.a *= vLeft;\n#include <opaque_fragment>");
+      };
+      const geo = new PlaneGeometry(0.2, 0.12).rotateX(-Math.PI / 2);
+      this.printLeftAttr = new InstancedBufferAttribute(new Float32Array(N), 1);
+      geo.setAttribute("aLeft", this.printLeftAttr);
+      this.printMesh = new InstancedMesh(geo, mat, N);
+      this.printMesh.frustumCulled = false;
+      this.printMesh.renderOrder = 1;
+      this.scene.add(this.printMesh);
+      this.printMesh.count = 1;
+      this.renderer.compile(this.printMesh, this.camera);
+      this.printMesh.count = 0;
+    }
+    const on = this.level === 0 && f.list.length > 0;
+    this.printMesh.visible = on;
+    if (!on) return;
+    const fade = now - this.printFaded > 1000;
+    if (f.version === this.printVersion && !fade) return;
+    this.printVersion = f.version;
+    this.printFaded = now;
+    const m = new Matrix4();
+    const q = new Quaternion();
+    const up = new Vector3(0, 1, 0);
+    const one = new Vector3(1, 1, 1);
+    const at = new Vector3();
+    const left = this.printLeftAttr as InstancedBufferAttribute;
+    const n = Math.min(N, f.list.length);
+    for (let i = 0; i < n; i++) {
+      const p = f.list[f.list.length - n + i];
+      m.compose(at.set(p.x, p.z + 0.035, p.y), q.setFromAxisAngle(up, -p.a), one);
+      this.printMesh.setMatrixAt(i, m);
+      left.setX(i, printLeft(p, now));
+    }
+    this.printMesh.count = n;
+    this.printMesh.instanceMatrix.needsUpdate = true;
+    left.needsUpdate = true;
+  }
+
+  /** Where a ray (my floor's coords) first meets the land round the ground floor, off
+   *  the floor's own tiles; null on any other floor, or when it meets the floor first. */
+  private landAt(o: Vector3, dir: Vector3): { x: number; y: number } | null {
+    const g = this.around.grounds;
+    if (this.level !== 0 || !g) return null;
+    const off = offsetOf(this.building, 0);
+    const below = (t: number) => o.y + dir.y * t <= g.heightAt(o.x + dir.x * t + off.x, o.z + dir.z * t + off.y);
+    let t0 = 0;
+    let t1 = -1;
+    for (let t = 0.5; t < 500; t += 0.5)
+      if (below(t)) {
+        t1 = t;
+        break;
+      } else t0 = t;
+    if (t1 < 0) return null;
+    for (let i = 0; i < 12; i++) {
+      const m = (t0 + t1) / 2;
+      if (below(m)) t1 = m;
+      else t0 = m;
+    }
+    const x = o.x + dir.x * t1;
+    const y = o.z + dir.z * t1;
+    // (on the floor's own tiles: the floor's, as before)
+    if (
+      x >= 0 &&
+      y >= 0 &&
+      x < this.map.width &&
+      y < this.map.height &&
+      isFloor(tileAt(this.map, Math.floor(x), Math.floor(y)))
+    )
+      return null;
+    return { x, y };
   }
 
   // pets' toys (shared/pets.ts): a mesh each, where it is (in the air too)

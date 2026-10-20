@@ -25,6 +25,7 @@ import {
   placedFootprint,
   Q,
   type Ray,
+  registerKinds,
   SOCIAL_MS,
   surfaceAt,
   TILE_H,
@@ -93,6 +94,7 @@ import {
   emoteTexture,
   itemsPending,
   itemTextureStats,
+  setItemUploader,
   vortexTexture,
 } from "./art/textures";
 import type { ThemeView } from "./art/themes";
@@ -159,6 +161,7 @@ export interface AvatarState {
   phonePose?: string;
   ringing?: boolean;
   recording?: boolean; // its camera recording (a red light)
+  torch?: boolean; // the phone's flashlight on (the Grounds at night)
   jump?: JumpNow; // jumping (shared/jump.ts): its stage (the controller tracks it)
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them (the floor: 0), tiles
@@ -266,7 +269,7 @@ function lightKey(o: WorldObjectDef | undefined): string {
 }
 
 function isFloorAt(map: MapDef, x: number, y: number): boolean {
-  return isFloor(tileAt(map, x, y));
+  return isFloor(tileAt(map, Math.floor(x), Math.floor(y)));
 }
 
 // Solid furniture darkens the floor around it (AO) and doors get a sill.
@@ -357,6 +360,14 @@ export class WorldEngine {
   private world = new Container();
   // what surrounds the studio (the snow campus): a backdrop + the building below the floor
   private theme: ThemeView | null = null;
+  // the land round the ground floor (docs/plan/27): the Grounds once loaded
+  grounds: import("./art/grounds-iso").IsoGrounds | null = null;
+  private groundsMod: {
+    G: typeof import("@yutopia/shared/grounds");
+    Iso: typeof import("./art/grounds-iso");
+    items: typeof import("./art/grounds-items");
+    things: import("./art/grounds-items").Thing[];
+  } | null = null;
   private themeKey = "";
   private backdropLayer = new Container();
   private shellBody = new Graphics();
@@ -444,6 +455,7 @@ export class WorldEngine {
       return;
     }
     this.app = app;
+    setItemUploader((t) => this.upload(t));
     host.appendChild(app.canvas);
     app.canvas.style.display = "block";
     app.canvas.setAttribute("aria-label", "Yutopia world");
@@ -549,6 +561,7 @@ export class WorldEngine {
 
   // ── the map (walls + floors) ─────────────────────────────────────────────
   private drawStatic() {
+    this.mountGrounds();
     this.floorLayer.clear();
     drawFloors(this.floorLayer, this.map);
     this.applyTheme();
@@ -1061,6 +1074,93 @@ export class WorldEngine {
     for (const v of this.objectViews.values()) if (v.def.kind === "radio" && v.def.props?.on) radio = true;
     life.update({ dt, time: this.time, people, radio, night: this.night, emits });
   }
+
+  // ── the Grounds (docs/plan/27): the land round the ground floor ─────────
+  /** The Grounds are loaded (the controller fetches them once): draw the land. */
+  setGrounds(G: typeof import("@yutopia/shared/grounds"), prints?: import("./footprints").Footprints) {
+    this.prints = prints ?? null;
+    void Promise.all([import("./art/grounds-iso"), import("./art/grounds-items"), loadItemArt()]).then(
+      ([Iso, Items, art]) => {
+        if (this.destroyed) return;
+        // the Grounds' things: kinds of their own, drawn as items
+        const { kinds, gens } = Items.groundKinds(G);
+        registerKinds(kinds);
+        (art as typeof import("./art/items")).registerItems(gens);
+        this.groundsMod = { G, Iso, items: Items, things: Items.groundThings(G) };
+        this.mountGrounds();
+      },
+    );
+  }
+
+  // ── the Grounds' things: items on the land round the camera (not the floor's:
+  // never picked, built, or baked into its floor, light or dressing) ──
+  private groundViews = new Map<string, ObjectView>();
+  private setGroundThing(o: WorldObjectDef, lift: number) {
+    this.dropGroundThing(o.id);
+    const dy = lift * ZPX_TILE;
+    const parts = objectParts(o).map((p) => this.mountPart({ ...p, y: p.y - dy }, this.sortLayer));
+    const shadow = this.mountFloorArt(o, objectShadow(o), this.shadowLayer);
+    if (shadow) shadow.root.y -= dy;
+    const v: ObjectView = { parts, def: o, displays: [], shadow, flat: null, flatReady: false, dropped: false };
+    this.groundViews.set(o.id, v);
+  }
+  /** Put a texture on the GPU now, not the frame it's first drawn. */
+  private upload(t: Texture) {
+    if (!this.destroyed && !t.destroyed) this.app.renderer.texture.initSource(t.source);
+  }
+  private dropGroundThing(id: string) {
+    const v = this.groundViews.get(id);
+    if (!v) return;
+    this.dropView(v);
+    this.groundViews.delete(id);
+  }
+  // the land's light by the hour: darker than the rooms' at night (off the lit
+  // ways the Grounds are truly dark: docs/plan/27, the mood)
+  private landAmbient(): [number, number, number] {
+    const k = 1 - 0.55 * this.day.night;
+    const a = this.day.ambient;
+    return [a[0] * k, a[1] * k, a[2] * k];
+  }
+
+  // the ground floor of a building: its land (made again if the floor moved);
+  // any other floor: none
+  private mountGrounds() {
+    const m = this.groundsMod;
+    const ground = floorOf(this.map) === 0 && !!this.map.levels?.length;
+    if (!m || !ground) {
+      this.grounds?.setVisible(false);
+      return;
+    }
+    const ox = this.map.ox ?? 0;
+    const oy = this.map.oy ?? 0;
+    if (this.grounds && (this.groundsAt.x !== ox || this.groundsAt.y !== oy)) {
+      this.grounds.destroy();
+      this.grounds = null;
+    }
+    if (!this.grounds) {
+      this.grounds = new m.Iso.IsoGrounds(m.G, ox, oy, (x, y) => isFloorAt(this.map, x, y), this.sortLayer, {
+        things: m.things,
+        add: (o, lift) => this.setGroundThing(o, lift),
+        remove: (id) => this.dropGroundThing(id),
+        insideThings: (i) => m.items.insideThings(m.G, i),
+        upload: (t) => this.upload(t),
+        roots: (id) => {
+          const v = this.groundViews.get(id);
+          return v ? [...v.parts, ...(v.shadow ? [v.shadow] : [])].map((p) => p.root) : [];
+        },
+      });
+      this.groundsAt = { x: ox, y: oy };
+      this.world.addChildAt(this.grounds.land, 0);
+      this.world.addChildAt(this.grounds.lights, this.world.getChildIndex(this.sortLayer));
+      this.world.addChildAt(this.grounds.weather.root, this.world.getChildIndex(this.overlay));
+      this.grounds.setAmbient(this.landAmbient());
+    }
+    this.grounds.setVisible(true);
+  }
+  private groundsAt = { x: 0, y: 0 };
+
+  // footprints in the snow (footprints.ts): a small sprite each, fading
+  private prints: import("./footprints").Footprints | null = null;
 
   // ── what's around the building ─────────────────────────────────────────
   // The backdrop loads in its own chunk; the shell is drawn once it's in.
@@ -1867,7 +1967,16 @@ export class WorldEngine {
     if (this.camPin) this.camFocus = { ...this.camPin };
     else if (local) {
       const p = toScreen(local.state.x, local.state.y);
-      this.camFocus = { x: p.x, y: p.y - 30 };
+      // (out on the land: the camera rides the ground's rise and fall)
+      const lift = isFloorAt(this.map, local.state.x, local.state.y) ? 0 : (local.state.ground ?? 0) * ZPX_TILE;
+      this.camFocus = { x: p.x, y: p.y - 30 - lift };
+    }
+    if (this.grounds?.land.visible) {
+      const f = local ? local.state : toWorld(this.camFocus.x, this.camFocus.y);
+      this.grounds.update(f.x, f.y, local ? local.state : null);
+      if (this.prints) this.grounds.drawPrints(this.prints, now);
+      // the night's light: the lamps, and whoever has a flashlight on
+      this.grounds.setNight(this.night, this.avatars.values(), f.x, f.y);
     }
     const k = this.reducedMotion ? 1 : 1 - Math.exp(-dt * 7);
     this.cam.x += (this.camFocus.x - this.cam.x) * k;
@@ -1879,6 +1988,7 @@ export class WorldEngine {
     // camera and the finish think the screen was half its size on 2× displays
     const { width: W, height: H } = this.app.renderer.screen;
     this.world.scale.set(this.zoom);
+    this.grounds?.weatherFrame(dt, W, H, this.zoom, this.cam, this.animated(), this.map, this.landAmbient());
     this.theme?.update(dt, W, H, this.cam.x, this.cam.y, this.zoom);
     this.post?.update(W, H, dt > 0 && !this.reducedMotion); // grain only moves while time does
     this.world.position.set(Math.round(W / 2 - this.cam.x * this.zoom), Math.round(H / 2 - this.cam.y * this.zoom));
@@ -2116,7 +2226,10 @@ export class WorldEngine {
     v.root.position.set(p.x, p.y);
     // (up on something: drawn over it — its slice under their feet sorts after where they stand)
     const depth = depthOf(s.x, s.y) + (sitting ? 0 : 0.01);
-    this.setDepth(v.root, ground > 0 ? Math.max(depth, this.topKey(s.x, s.y) + 0.02) : depth);
+    this.setDepth(
+      v.root,
+      ground > 0 && isFloorAt(this.map, s.x, s.y) ? Math.max(depth, this.topKey(s.x, s.y) + 0.02) : depth,
+    );
     // people take the light where they stand
     const tint = this.tintAt(s.x, s.y);
     v.sprite.tint = tint;
@@ -2483,6 +2596,8 @@ export class WorldEngine {
   // The light at a point (baked: lamps, windows). On Low everything is white
   // here and one flat multiply layer over the scene sets the hour instead.
   private tintAt(x: number, y: number): number {
+    // (out on the land: the Grounds' light, the lamps' and the flashlights')
+    if (this.grounds?.land.visible && !isFloorAt(this.map, x, y)) return this.grounds.lightAt(x, y);
     return this.lit() ? (this.lightMap as LightMap).tintAt(x, y, this.day.ambient, this.day.window) : 0xffffff;
   }
 
@@ -2532,6 +2647,7 @@ export class WorldEngine {
     this.theme?.setAnimate(this.animated());
     this.applyPost();
     this.theme?.setDay(this.day);
+    this.grounds?.setAmbient(this.landAmbient());
     const a = this.day.ambient;
     this.shellBody.tint = (Math.round(a[0] * 255) << 16) | (Math.round(a[1] * 255) << 8) | Math.round(a[2] * 255);
     this.shellLights.alpha = Math.min(1, this.day.night * 1.1);
@@ -3204,7 +3320,12 @@ export class WorldEngine {
   private handleTap(e: FederatedPointerEvent) {
     const gx = (e.global.x - this.world.position.x) / this.zoom;
     const gy = (e.global.y - this.world.position.y) / this.zoom;
-    const w = toWorld(gx, gy);
+    let w = toWorld(gx, gy);
+    // out on the land the ground rises: the point drawn there is that much higher
+    if (this.grounds?.land.visible && this.groundsMod && !isFloorAt(this.map, w.x, w.y)) {
+      const { x: ox, y: oy } = this.groundsAt;
+      for (let i = 0; i < 4; i++) w = toWorld(gx, gy + this.groundsMod.G.heightAt(w.x + ox, w.y + oy) * ZPX_TILE);
+    }
     const av = this.passAvatars ? null : this.pickAvatar(gx, gy);
     // clicking yourself is handled too (it opens your look)
     const at = { x: e.clientX, y: e.clientY };

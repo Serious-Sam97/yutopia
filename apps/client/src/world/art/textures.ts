@@ -111,23 +111,70 @@ const items = new Map<string, ItemEntry>();
 const ITEM_BUDGET = 64 * 1024 * 1024; // bytes of *unused* textures kept around
 let idleBytes = 0;
 
+// (an SVG is parsed and drawn on the main thread: a few at a time, else a
+// block of the town's together held a frame for 150 ms)
+const DECODING = 2;
+let decoding = 0;
+const toDecode: (() => void)[] = [];
 function decodeItem(key: string, e: ItemEntry, svg: string) {
-  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-  const img = new Image();
-  img.decoding = "async";
-  img.src = url;
-  img
-    .decode()
-    .then(() => {
-      if (items.get(key) !== e) return;
+  toDecode.push(() => {
+    if (items.get(key) !== e) return next();
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    const img = new Image();
+    img.decoding = "async";
+    img.src = url;
+    img
+      .decode()
+      // (drawn here, not when it's first put on the GPU: a big one was 50 ms in the frame)
+      .then(() => (items.get(key) === e ? createImageBitmap(img).catch(() => img) : null))
+      .then((bmp) => {
+        if (!bmp || items.get(key) !== e) return;
+        decoded.push({ key, e, img: bmp });
+        drain();
+      })
+      .catch(() => items.delete(key))
+      .finally(() => {
+        URL.revokeObjectURL(url);
+        next();
+      });
+  });
+  if (decoding < DECODING) next(true);
+}
+function next(fresh = false) {
+  if (!fresh) decoding--;
+  const f = toDecode.shift();
+  if (!f) return;
+  decoding++;
+  f();
+}
+
+// Decoded drawings go up to the GPU a few a frame (a block of the town's at
+// once was a 100 ms frame): `upload` (the engine's) puts one there now.
+let upload: ((t: Texture) => void) | null = null;
+export function setItemUploader(f: (t: Texture) => void) {
+  upload = f;
+}
+const decoded: { key: string; e: ItemEntry; img: HTMLImageElement | ImageBitmap }[] = [];
+let draining = false;
+function drain() {
+  if (draining) return;
+  draining = true;
+  const run = () => {
+    const t0 = performance.now();
+    while (decoded.length && performance.now() - t0 < 6) {
+      const { key, e, img } = decoded.shift() as (typeof decoded)[number];
+      if (items.get(key) !== e) continue;
       e.tex = new Texture({ source: new ImageSource({ resource: img, autoGenerateMipmaps: true }) });
       e.bytes = img.width * img.height * 5.3; // RGBA + mip chain
       if (!e.refs) idleBytes += e.bytes;
+      if (upload && e.refs) upload(e.tex);
       for (const cb of e.waiters.splice(0)) cb(e.tex);
       trimItems();
-    })
-    .catch(() => items.delete(key))
-    .finally(() => URL.revokeObjectURL(url));
+    }
+    if (decoded.length) requestAnimationFrame(run);
+    else draining = false;
+  };
+  requestAnimationFrame(run);
 }
 
 function trimItems() {

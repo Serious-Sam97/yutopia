@@ -56,7 +56,6 @@ class Heap {
 // A* over tiles (8-way, no corner cutting, never across a wall edge), then string-pulled into as few
 // straight segments as the body can actually walk. Returns waypoints after `from`.
 export function findPath(grid: Grid, from: Point, to: Point, maxNodes = 6000): Point[] | null {
-  const W = grid.width;
   let sx = Math.floor(from.x);
   let sy = Math.floor(from.y);
   let tx = Math.floor(to.x);
@@ -74,16 +73,32 @@ export function findPath(grid: Grid, from: Point, to: Point, maxNodes = 6000): P
     sx = Math.floor(near.x);
     sy = Math.floor(near.y);
   }
-  const start = sy * W + sx;
-  const goal = ty * W + tx;
-  const N = grid.width * grid.height;
+  // where to search: the floor; outdoors, a box round the two ends (the land
+  // goes on far past the floor's tiles)
+  let x0 = 0;
+  let y0 = 0;
+  let BW = grid.width;
+  let BH = grid.height;
+  if (grid.outside) {
+    const m = 40;
+    x0 = Math.min(sx, tx) - m;
+    y0 = Math.min(sy, ty) - m;
+    BW = Math.max(sx, tx) + m + 1 - x0;
+    BH = Math.max(sy, ty) + m + 1 - y0;
+    if (BW * BH > 640 * 640) return null; // (too far to walk to in one go)
+    maxNodes = Math.max(maxNodes, 40000);
+  }
+  const id = (x: number, y: number) => (y - y0) * BW + (x - x0);
+  const start = id(sx, sy);
+  const goal = id(tx, ty);
+  const N = BW * BH;
   const g = new Float64Array(N).fill(Number.POSITIVE_INFINITY);
   const f = new Float64Array(N).fill(Number.POSITIVE_INFINITY);
   const came = new Int32Array(N).fill(-1);
   const closed = new Uint8Array(N);
   const h = (n: number) => {
-    const dx = Math.abs((n % W) - tx);
-    const dy = Math.abs(Math.floor(n / W) - ty);
+    const dx = Math.abs((n % BW) + x0 - tx);
+    const dy = Math.abs(Math.floor(n / BW) + y0 - ty);
     return dx + dy + (SQRT2 - 2) * Math.min(dx, dy);
   };
   g[start] = 0;
@@ -97,13 +112,14 @@ export function findPath(grid: Grid, from: Point, to: Point, maxNodes = 6000): P
     if (closed[cur]) continue;
     closed[cur] = 1;
     if (++expanded > maxNodes) return null;
-    const cx = cur % W;
-    const cy = Math.floor(cur / W);
+    const cx = (cur % BW) + x0;
+    const cy = Math.floor(cur / BW) + y0;
     for (const [dx, dy, cost] of NEIGH) {
       const nx = cx + dx;
       const ny = cy + dy;
+      if (nx < x0 || ny < y0 || nx >= x0 + BW || ny >= y0 + BH) continue;
       if (!grid.step(cx, cy, nx, ny)) continue;
-      const n = ny * W + nx;
+      const n = id(nx, ny);
       const ng = g[cur] + cost;
       if (ng < g[n]) {
         g[n] = ng;
@@ -115,7 +131,8 @@ export function findPath(grid: Grid, from: Point, to: Point, maxNodes = 6000): P
   }
   if (start !== goal && came[goal] === -1) return null;
   const cells: Point[] = [];
-  for (let n = goal; n !== -1 && n !== start; n = came[n]) cells.push({ x: (n % W) + 0.5, y: Math.floor(n / W) + 0.5 });
+  for (let n = goal; n !== -1 && n !== start; n = came[n])
+    cells.push({ x: (n % BW) + x0 + 0.5, y: Math.floor(n / BW) + y0 + 0.5 });
   cells.reverse();
   // Exact click target when it's inside the goal tile and reachable.
   if (Math.floor(to.x) === tx && Math.floor(to.y) === ty && grid.fits(to.x, to.y)) {

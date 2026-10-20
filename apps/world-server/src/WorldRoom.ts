@@ -56,17 +56,23 @@ import {
   STEP,
   STOREY,
   type Status,
+  setAreasBeyond,
+  setOutdoors,
   splitAll,
+  stormAt,
   studioV1,
   TEMPLATES,
   TICK_HZ,
   tileAt,
   topCell,
   upgradeCore,
+  upgradeGround,
   validLayout,
   type WorldObjectDef,
+  windAt,
 } from "@yutopia/shared";
 import { monitorsToComputers } from "@yutopia/shared/computer";
+import { groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { ApiError, api, type PresenceEntry } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
@@ -75,6 +81,11 @@ import { type Feature, installFeatures } from "./features/index.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
 import { metrics } from "./metrics.ts";
 import { Player, WorldObject, WorldState } from "./schema.ts";
+
+// The ground floor stands on the Grounds (docs/plan/27-the-grounds.md): its
+// grids know the land round it (its tiles beyond the stored ones).
+setOutdoors(groundsOutdoors);
+setAreasBeyond(groundsAreaAt);
 
 // a jump lets a body up for this long (the longest one, falling to the floor from up high)
 const JUMP_AIR_MS = 3000;
@@ -249,6 +260,16 @@ export class WorldRoom extends Room<WorldState> {
         await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
       }
     }
+    // the Grounds (docs/plan/27): the courtyard's blocks' ground floors become
+    // the ground floor's own (it grows to take them in; nothing on it moves)
+    const grown = config.building ? upgradeGround(this.map) : null;
+    if (grown) {
+      this.map = grown;
+      this.syncMapState();
+      console.log("[building] the ground floor: the courtyard's blocks in it");
+      if (!config.offline)
+        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
+    }
     // nothing standing in front of the elevators' and the stairs' doors
     const fronts = clearCoreFronts(this.map, objects);
     if (fronts.length) {
@@ -277,6 +298,20 @@ export class WorldRoom extends Room<WorldState> {
     }, 1000 / TICK_HZ);
     this.clock.setInterval(() => this.hearingPass(), 1000 / HEARING_HZ);
     this.clock.setInterval(() => this.pushPresence(true), 60_000);
+    this.clock.setInterval(() => this.weather(), 1000);
+    this.weather();
+  }
+
+  // the storm over the Grounds, from the schedule (shared weather.ts) unless an
+  // admin called one up or sent it off (until the schedule's next change)
+  private stormSet: { to: number; until: number } | null = null;
+  private weather(now = Date.now()) {
+    if (this.stormSet && now > this.stormSet.until) this.stormSet = null;
+    const want = this.stormSet?.to ?? stormAt(now);
+    // (a called-up storm comes up as a scheduled one does, over a minute or so)
+    const s = this.state.storm;
+    this.state.storm = Math.abs(want - s) < 0.02 ? want : s + Math.sign(want - s) * Math.min(Math.abs(want - s), 0.02);
+    this.state.wind = windAt(now);
   }
 
   async onAuth(_client: Client, options: { token?: string }, _ctx: AuthContext): Promise<WorldClaims> {
@@ -407,6 +442,8 @@ export class WorldRoom extends Room<WorldState> {
     this.on("pos", (client, m) => {
       const p = this.state.players.get(client.sessionId);
       if (!p || !Number.isFinite(m.x) || !Number.isFinite(m.y)) return;
+      // (on the shuttle: it carries them — features/grounds-life.ts)
+      if (p.busy === "ride:shuttle") return;
       const now = Date.now();
       const dt = (now - data(client).lastPosAt) / 1000;
       data(client).lastPosAt = now;
@@ -414,7 +451,8 @@ export class WorldRoom extends Room<WorldState> {
       // the feet's height: up only in a jump (as high as it goes from where it
       // started), a step, or the stairs (as high as the tread under them; below
       // the floor going down them)
-      const z = Math.max(-STOREY, Math.min(12, Number(m.z) || 0));
+      // (outdoors the ground itself goes down into the ravine and up the hills)
+      const z = Math.max(-30, Math.min(60, Number(m.z) || 0));
       const ud = data(client);
       const snap = () => this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
       // another floor: only up or down the stairs, one at a time (the frame moves a storey)
@@ -432,6 +470,8 @@ export class WorldRoom extends Room<WorldState> {
       const jumping = isJump(p.jump) && now - p.jumpAt < JUMP_AIR_MS;
       let cap = jumping ? (ud.zMax ?? 0) : zFrom + STEP + 0.05;
       if (grid.onRamp(to.x, to.y)) cap = Math.max(cap, grid.groundAt(to.x, to.y, z) + 0.05);
+      // outdoors: up the slope as far as the ground goes (a message carries a few frames' climb)
+      else if (grid.onLand(to.x, to.y)) cap = Math.max(cap, grid.groundAt(to.x, to.y, z) + 0.3);
       if (z > cap || !isLegalMove(grid, from, to, dt, z, zFrom)) return snap();
       const nextArea = areaAt(this.levelMap(level), to.x, to.y);
       if (nextArea && nextArea.key !== p.area && !this.mayEnter(p, nextArea.key)) {
@@ -566,8 +606,10 @@ export class WorldRoom extends Room<WorldState> {
         const y = Number(m.to.y);
         const level = Number.isInteger(m.to.level) ? (m.to.level as number) : p.level;
         const lm = levelMap(this.map, level);
-        if (lm && Number.isFinite(x) && Number.isFinite(y) && x >= 0 && y >= 0 && x < lm.width && y < lm.height)
-          target = { x, y, level };
+        // (or out on the land round the ground floor)
+        const inside = x >= 0 && y >= 0 && lm && x < lm.width && y < lm.height;
+        const land = lm && !inside && this.gridFor(p.uid, level).ok(Math.floor(x), Math.floor(y));
+        if (lm && Number.isFinite(x) && Number.isFinite(y) && (inside || land)) target = { x, y, level };
       }
       if (!target) return;
       // never into a room you can't walk into (locked doors, sealed rooms): from
@@ -578,7 +620,10 @@ export class WorldRoom extends Room<WorldState> {
         target.level === p.level ? p : (this.levelEntry(target.level, p.uid) ?? landing ?? p);
       if (
         !landing ||
-        (!findPath(mine, startAt, landing)?.length && Math.hypot(landing.x - startAt.x, landing.y - startAt.y) > 0.5)
+        // (the land outdoors is all one place: no need to find the way there)
+        (!mine.onLand(landing.x, landing.y) &&
+          !findPath(mine, startAt, landing)?.length &&
+          Math.hypot(landing.x - startAt.x, landing.y - startAt.y) > 0.5)
       ) {
         this.send(client, "toast", { text: "Can't get there — the door is locked.", tone: "warn" });
         return;
@@ -595,11 +640,11 @@ export class WorldRoom extends Room<WorldState> {
       p.level = target.level;
       p.x = landing.x;
       p.y = landing.y;
-      p.z = 0;
+      p.z = mine.onLand(landing.x, landing.y) ? mine.groundAt(landing.x, landing.y, 0) : 0;
       p.a = seat ? ANIM.sit : ANIM.idle;
       if (seat) p.d = seatFacing(seat.rot);
       p.area = area?.key ?? "";
-      this.send(client, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
+      this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
       if (was !== p.level) for (const f of this.features) f.levelChange?.(client, p, was, p.level);
       this.pushPresence();
     });
@@ -610,6 +655,13 @@ export class WorldRoom extends Room<WorldState> {
 
     // ── moderation (admins) ──
     const owner = (client: WorldClient) => this.state.players.get(client.sessionId)?.admin === true;
+    // the weather: a storm called up (1), sent off (0), or back to the schedule (null)
+    this.on("mod:storm", (client, m) => {
+      if (!owner(client) && !config.offline) return;
+      const to = m.storm === null || m.storm === undefined ? null : Math.max(0, Math.min(1, Number(m.storm) || 0));
+      this.stormSet = to === null ? null : { to, until: Date.now() + 20 * 60_000 };
+      if (m.now) this.state.storm = to ?? stormAt(Date.now());
+    });
     const byUid = (uid: number) => [...this.state.players.values()].find((q) => q.uid === uid);
     this.on("mod:mute", (client, m) => {
       const target = byUid(Number(m.userId));
@@ -958,13 +1010,17 @@ export class WorldRoom extends Room<WorldState> {
         grids.set(p.level, g);
       }
       // (up on something that's still there, or on the stairs: they stay)
-      if ((isFloor(tileAt(lm, Math.floor(p.x), Math.floor(p.y))) || g.onRamp(p.x, p.y)) && g.fitsAt(p.x, p.y, p.z))
+      // (outdoors on the land: they stay too)
+      if (
+        (isFloor(tileAt(lm, Math.floor(p.x), Math.floor(p.y))) || g.onRamp(p.x, p.y) || g.onLand(p.x, p.y)) &&
+        g.fitsAt(p.x, p.y, p.z)
+      )
         continue;
       const to = g.nearestOpen(p.x, p.y, 2) ?? (p.level === this.home ? this.map.spawn : lm.spawn);
       p.x = to.x;
       p.y = to.y;
-      p.z = 0;
-      this.send(c, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
+      p.z = g.onLand(to.x, to.y) ? g.groundAt(to.x, to.y, 0) : 0;
+      this.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
     }
   }
 

@@ -52,6 +52,14 @@ export class Post3 {
     this.composer = new EffectComposer(renderer);
     this.composer.addPass(new RenderPass(scene, camera));
     this.bloom = new UnrealBloomPass(new Vector2(256, 256), 0, 0.62, 0.72);
+    // (a stray NaN pixel — a degenerate normal somewhere — blurred out by the
+    // bloom blacked out the whole frame after dark: the bloom never takes one in)
+    const hp = this.bloom.materialHighPassFilter;
+    hp.fragmentShader = hp.fragmentShader.replace(
+      "vec4 texel = texture2D( tDiffuse, vUv );",
+      "vec4 texel = texture2D( tDiffuse, vUv );\n\t\t\tif ( any( isnan( texel ) ) || any( isinf( texel ) ) ) texel = vec4( 0.0 );",
+    );
+    hp.needsUpdate = true;
     this.composer.addPass(this.bloom);
     this.finish = new ShaderPass(FINISH);
     this.composer.addPass(this.finish);

@@ -18,6 +18,27 @@ export const STEP = 0.12; // tiles: a body steps up this much, and lands on a to
 export const ZPX_TILE = 39.19; // iso px of height a tile (45.25 · cos 30°)
 const RAMP_REACH = 0.35; // tiles: how far up a stair tread the feet still find it
 
+// ── outdoors (docs/plan/27-the-grounds.md) ──────────────────────────────────
+// The ground floor of a building stands on the Grounds: past its stored tiles
+// (and on its empty ones) the land goes on — the generated terrain, its height
+// the ground's, its trees and steep rock in the way. Land is ground, never an
+// obstacle: whatever its height, a body on it stands on it.
+export interface Outdoors {
+  /** a tile you can stand on (the floor's own coords) */
+  walkable(tx: number, ty: number): boolean;
+  /** the ground's height at a point (tiles up from the floor's datum) */
+  height(x: number, y: number): number;
+  /** how fast you go on it there (1: as on a floor; deep snow less) */
+  speed?(x: number, y: number): number;
+  /** a wall on an edge past the floor's own (the town's buildings): h north of (x, y), v west */
+  edge?(dir: "h" | "v", x: number, y: number): boolean;
+}
+let outdoorsFor: ((map: MapDef) => Outdoors | null) | null = null;
+/** Who knows the land round a floor (the Grounds; set once they're loaded). */
+export function setOutdoors(f: ((map: MapDef) => Outdoors | null) | null): void {
+  outdoorsFor = f;
+}
+
 export class Grid {
   readonly walk: Uint8Array;
   readonly top: Float32Array; // what a body stands on in each tile, tiles up (Infinity: nothing)
@@ -28,6 +49,9 @@ export class Grid {
   // which have no floor of their own (only the treads)
   readonly ramps: Ramp[] = [];
   readonly well: Uint8Array;
+  // the floor's empty tiles that are land (outdoors), and the land beyond it
+  readonly land: Uint8Array;
+  outside: Outdoors | null = null;
 
   constructor(
     readonly width: number,
@@ -38,6 +62,7 @@ export class Grid {
     this.hBlock = new Uint8Array((height + 1) * width);
     this.vBlock = new Uint8Array(height * (width + 1));
     this.well = new Uint8Array(width * height);
+    this.land = new Uint8Array(width * height);
   }
 
   // `as` = whose grid: doors are a way through their wall, but locked ones are
@@ -57,11 +82,17 @@ export class Grid {
     const list = onLevel(all, map);
     objects = list;
     const W = map.width;
+    const out = outdoorsFor?.(map) ?? null;
+    g.outside = out;
     for (let y = 0; y < map.height; y++)
       for (let x = 0; x < W; x++) {
         const floor = isFloor(tileAt(map, x, y));
         g.walk[y * W + x] = floor ? 1 : 0;
         if (floor) g.top[y * W + x] = 0;
+        else if (out) {
+          g.land[y * W + x] = 1;
+          g.walk[y * W + x] = out.walkable(x, y) ? 1 : 0;
+        }
       }
     for (let y = 0; y <= map.height; y++)
       for (let x = 0; x < W; x++) if (isWallEdge(hWall(map, x, y))) g.hBlock[y * W + x] = 1;
@@ -143,8 +174,11 @@ export class Grid {
   standOn(px: number, py: number, up: number): number {
     const x = Math.floor(px);
     const y = Math.floor(py);
-    if (!this.inBounds(x, y)) return Number.NEGATIVE_INFINITY;
+    if (!this.inBounds(x, y))
+      return this.outside?.walkable(x, y) ? this.outside.height(px, py) : Number.NEGATIVE_INFINITY;
     const i = this.idx(x, y);
+    // land: its height, whatever it is (ground, not something to climb)
+    if (this.land[i]) return this.walk[i] && this.outside ? this.outside.height(px, py) : Number.NEGATIVE_INFINITY;
     if (this.well[i]) {
       let best = Number.NEGATIVE_INFINITY;
       for (const r of this.ramps) {
@@ -165,6 +199,19 @@ export class Grid {
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     return this.inBounds(tx, ty) && this.well[this.idx(tx, ty)] === 1;
+  }
+
+  /** How fast a body goes at (x, y) (1 on a floor; outdoors, what the ground lets it). */
+  speedAt(x: number, y: number): number {
+    return this.outside?.speed && this.onLand(x, y) ? this.outside.speed(x, y) : 1;
+  }
+
+  /** Is (x, y) on the land outdoors (the feet follow the ground's rise and fall)? */
+  onLand(x: number, y: number): boolean {
+    if (!this.outside) return false;
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    return !this.inBounds(tx, ty) || this.land[this.idx(tx, ty)] === 1;
   }
 
   /** Something solid on a tile: `stand` = its top (tiles up) when it can be stood on. */
@@ -200,15 +247,18 @@ export class Grid {
   }
 
   ok(x: number, y: number): boolean {
-    return this.inBounds(x, y) && this.walk[this.idx(x, y)] === 1;
+    if (!this.inBounds(x, y)) return !!this.outside?.walkable(x, y);
+    return this.walk[this.idx(x, y)] === 1;
   }
 
   hWallAt(x: number, y: number): boolean {
-    return x >= 0 && x < this.width && y >= 0 && y <= this.height && this.hBlock[y * this.width + x] === 1;
+    if (x >= 0 && x < this.width && y >= 0 && y <= this.height) return this.hBlock[y * this.width + x] === 1;
+    return !!this.outside?.edge?.("h", x, y);
   }
 
   vWallAt(x: number, y: number): boolean {
-    return y >= 0 && y < this.height && x >= 0 && x <= this.width && this.vBlock[y * (this.width + 1) + x] === 1;
+    if (y >= 0 && y < this.height && x >= 0 && x <= this.width) return this.vBlock[y * (this.width + 1) + x] === 1;
+    return !!this.outside?.edge?.("v", x, y);
   }
 
   // One step between neighbouring tiles (8-way): no wall on the way, and no
@@ -273,6 +323,22 @@ export class Grid {
   // any of it within a step of its feet (it stands on an edge, platform-style).
   groundAt(x: number, y: number, z: number, r = BODY_R): number {
     const up = z + STEP;
+    // on the land: the ground under the middle of you (a slope's uphill corner
+    // isn't a step to stand on), unless a floor or a top under you is higher
+    if (this.outside && this.onLand(x, y) && this.ok(Math.floor(x), Math.floor(y))) {
+      let g = this.outside.height(x, y);
+      for (const [cx, cy] of [
+        [x - r, y - r],
+        [x + r, y - r],
+        [x - r, y + r],
+        [x + r, y + r],
+      ])
+        if (!this.onLand(cx, cy)) {
+          const t = this.standOn(cx, cy, up);
+          if (t > g) g = t;
+        }
+      return g;
+    }
     // (stairs: the treads can be below the floor's level, down to the floor below)
     let g = this.ramps.length ? Number.NEGATIVE_INFINITY : 0;
     for (const [cx, cy] of [

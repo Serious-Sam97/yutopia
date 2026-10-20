@@ -40,6 +40,8 @@ const DOOR_H = 88; // a doorway's opening (DOOR_Z there)
 export const STUB_H = 10;
 
 export function piece(kind: string, props: Props, id = ""): Piece {
+  // the Grounds' things: their drawings only (no boxes while they load)
+  if (kind.startsWith("gr_")) return { boxes: [] };
   switch (kind) {
     case "desk":
       return {

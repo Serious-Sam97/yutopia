@@ -137,6 +137,7 @@ export interface PersonIn {
   phonePose?: string;
   ringing?: boolean;
   recording?: boolean;
+  torch?: boolean; // the phone's flashlight on
   jump?: JumpNow; // jumping (shared/jump.ts): its stage
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them, tiles

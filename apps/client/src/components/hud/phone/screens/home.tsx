@@ -50,6 +50,7 @@ export function Home() {
   );
   const room = useHud((h) => h.me?.areaName || h.worldName);
   const near = useHud((h) => h.heardBy.length);
+  const torch = useHud((h) => h.torch);
   const ph = w?.phone;
   if (!ph) return null;
   const badge: Partial<Record<AppId, number>> = { messages: unread, phone: missed, vortex: vortexUnread };
@@ -67,6 +68,18 @@ export function Home() {
             </span>
             {(near ? t("phNearby").replace("{n}", String(near)) : t("phNearbyNone")).replace("{room}", room)}
           </div>
+          {/* the flashlight (the Grounds at night: a beam everyone sees) */}
+          <button
+            type="button"
+            className={cx(s.torch, torch && s.on)}
+            data-nav
+            data-torch
+            aria-pressed={torch}
+            onClick={() => w?.toggleTorch()}
+          >
+            <Ic n="torch" size={14} />
+            {t("phTorch")}
+          </button>
         </div>
         <div className={s.grid} data-cols="3">
           {APPS.map((a) => (

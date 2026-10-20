@@ -441,7 +441,13 @@ export function isKind(k: string): k is ObjectKind {
 }
 
 export function entry(kind: string): CatalogEntry {
-  return isKind(kind) ? CATALOG[kind] : { label: kind, w: 1, h: 1, solid: true };
+  return isKind(kind) ? CATALOG[kind] : (extra.get(kind) ?? { label: kind, w: 1, h: 1, solid: true });
+}
+// Kinds a client adds at run time: the Grounds' things (docs/plan/27), drawn
+// in the iso view as items — never built, never stored.
+const extra = new Map<string, CatalogEntry>();
+export function registerKinds(kinds: Record<string, CatalogEntry>): void {
+  for (const [k, e] of Object.entries(kinds)) extra.set(k, e);
 }
 
 // What a body can stand on once it's jumped up there (shared/jump.ts): the top

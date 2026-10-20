@@ -22,6 +22,7 @@ export * from "./path.ts";
 export * from "./protocol.ts";
 export * from "./stairs.ts";
 export * from "./tops.ts";
+export * from "./weather.ts";
 
 import type { MapDef } from "./map.ts";
 import { studio, studioV1 } from "./maps/studio.ts";

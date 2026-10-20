@@ -92,6 +92,10 @@ export function landSound(kind: JumpKind, floor: Floor, gain = 1) {
     grate: [3200, 0.1],
     asphalt: [1500, 0.11],
     concrete: [1900, 0.06],
+    snow: [1600, 0.14],
+    deep: [800, 0.2],
+    path: [2100, 0.1],
+    ice: [3400, 0.04],
   };
   const [freq, len] = spec[floor];
   for (const dt of [0, 0.018]) {

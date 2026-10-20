@@ -8,7 +8,20 @@ import { mixer } from "./audio";
 //  · a procedural lo-fi radio, deterministic from (station, startedAt) so every
 //    client in the room plays the same bar at the same time.
 
-export type Floor = "wood" | "carpet" | "tile" | "felt" | "stage" | "grate" | "asphalt" | "concrete";
+export type Floor =
+  | "wood"
+  | "carpet"
+  | "tile"
+  | "felt"
+  | "stage"
+  | "grate"
+  | "asphalt"
+  | "concrete"
+  // the Grounds (docs/plan/27): fresh snow, deep snow, a packed trail, the ice
+  | "snow"
+  | "deep"
+  | "path"
+  | "ice";
 
 interface Tone {
   out: GainNode;
@@ -30,6 +43,8 @@ const TONES: Record<
   stage: { hiss: 0.014, hum: 0.008, humHz: 50 },
   "server-room": { hiss: 0.02, hum: 0.012, humHz: 41, fans: true, drone: true },
   standup: { hiss: 0.01, hum: 0.006, humHz: 60 },
+  // out on the Grounds: no hum (the wind is grounds-sound.ts's)
+  outdoors: { hiss: 0.003, hum: 0, humHz: 50 },
 };
 
 class Sound {
@@ -162,6 +177,11 @@ class Sound {
       // outdoors: slush on the lot crunches, the cleared path scuffs
       asphalt: [1500, 0.09, 0.09],
       concrete: [1900, 0.07, 0.04],
+      // the snow crunches (grains after the first), deep snow is a slower, softer sink
+      snow: [1800, 0.08, 0.11],
+      deep: [900, 0.1, 0.17],
+      path: [2300, 0.07, 0.07],
+      ice: [3600, 0.045, 0.025],
     };
     const [freq, gain, len] = spec[floor];
     const b = ctx.createBufferSource();
@@ -177,7 +197,12 @@ class Sound {
     b.connect(bp).connect(g).connect(mixer.buses.effects);
     b.start(at, Math.random() * 1.5);
     b.stop(at + len + 0.02);
+    // (the snow's crunch: its grains, the Grounds' sound — grounds-sound.ts)
+    if (floor === "snow" || floor === "deep" || floor === "path") this.onCrunch?.(ctx, at, len, gain);
   }
+
+  /** Set by the Grounds' sound: a snowy step's grains. */
+  onCrunch: ((ctx: AudioContext, at: number, len: number, gain: number) => void) | null = null;
 
   stopAll() {
     this.tone?.stop();

@@ -12,6 +12,7 @@ export const PHONE_STRINGS = {
   phPutAway: ["Put away", "Guardar"],
   phBack: ["Back", "Voltar"],
   phSoon: ["SOON", "EM BREVE"],
+  phTorch: ["Flashlight · F", "Lanterna · F"],
   phNotYet: ["Coming soon", "Em breve"],
   phOffline: ["No connection right now.", "Sem conexão agora."],
   phRetry: ["Try again", "Tentar de novo"],

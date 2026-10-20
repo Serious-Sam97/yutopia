@@ -247,7 +247,13 @@ export function areaAt(map: MapDef, x: number, y: number): AreaDef | null {
       if (!best || (a.priority ?? 0) > (best.priority ?? 0)) best = a;
     }
   }
-  return best;
+  return best ?? areasBeyond?.(map, x, y) ?? null;
+}
+// Rooms and places past a floor's own (the Grounds round the ground floor:
+// the town's bar, the woods…; docs/plan/27). Set once they're loaded.
+let areasBeyond: ((map: MapDef, x: number, y: number) => AreaDef | null) | null = null;
+export function setAreasBeyond(f: ((map: MapDef, x: number, y: number) => AreaDef | null) | null): void {
+  areasBeyond = f;
 }
 
 // Small builder so maps are written as rooms + doors instead of ASCII by hand.

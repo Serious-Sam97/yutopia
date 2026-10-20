@@ -59,6 +59,8 @@ import {
   SOCIAL_MS,
   STEP_LABELS,
   screenInputToWorld,
+  setAreasBeyond,
+  setOutdoors,
   socialFor,
   stairsDoor,
   stairsLocal,
@@ -92,6 +94,7 @@ import type { BuildController } from "./build/controller";
 import { type AvatarState, WorldEngine } from "./engine";
 import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
+import { loadGrounds } from "./grounds-load";
 import { jumps, loadJumps } from "./jumps-load";
 import { liftSound, loadLiftSounds, nearGain, stairStep } from "./lift-sound";
 import { Media } from "./media";
@@ -101,7 +104,7 @@ import { activePad } from "./pads";
 import type { PetView } from "./petview";
 import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
-import { radio, sound } from "./sound";
+import { type Floor, radio, sound } from "./sound";
 import { type ActTarget, type BattleView, hud, type Person, type PetInfo, toast } from "./store";
 import type { GameTables } from "./tables";
 import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
@@ -827,6 +830,7 @@ export class WorldController {
     void this.room?.leave(true).catch(() => {});
     void this.media.disconnect();
     sound.stopAll();
+    this.life?.sound.stop();
     this.engine?.destroy();
     this.engine = null;
   }
@@ -1258,6 +1262,7 @@ export class WorldController {
       hud.set((h) => ({ objectsVersion: h.objectsVersion + 1 }));
     }
     this.syncView();
+    this.driveVehicles(dt);
     this.moveLocal(dt);
     this.updateLift();
     if (!this.tp) this.liftsIso(now);
@@ -1288,6 +1293,13 @@ export class WorldController {
       hud.set({ held: lp?.held ? { kind: lp.held, at: lp.heldAt } : null });
     }
     if (!!lp?.focus !== hud.get().focus) hud.set({ focus: !!lp?.focus });
+    if (!!lp?.torch !== hud.get().torch) hud.set({ torch: !!lp?.torch });
+    // the weather (shared weather.ts): the server's storm, eased (grounds-life.ts)
+    if (this.life) {
+      [this.storm, this.wind] = this.life.weather(dt, room.state.storm, room.state.wind);
+      engine.grounds?.setWeather(this.storm, this.wind);
+      this.tp?.setWeather(this.storm, this.wind);
+    }
     // someone high-fives me, hands me something…: turn to them
     if (lp?.act && lp.actAt !== this.facedAct) {
       this.facedAct = lp.actAt;
@@ -1307,6 +1319,7 @@ export class WorldController {
         ...this.myJump(now),
       };
       this.jumpEffects(localSid, st, 1);
+      this.life?.print(localSid, st, now, this.map, this.grid.onLand(st.x, st.y));
       engine.upsertAvatar(localSid, st, true);
       if (tp)
         bodies.push({
@@ -1340,6 +1353,8 @@ export class WorldController {
         here ? Math.max(0, 1 - Math.hypot(pos.x - this.me.x, pos.y - this.me.y) / JUMP_HEARD) : 0,
       );
       // iso shows my floor; 3D draws everyone where they are in the building
+      if (here) this.life?.print(sid, st, now, this.map, this.grid.onLand(st.x, st.y));
+      else this.life?.prints.forget(sid);
       if (here) engine.upsertAvatar(sid, st);
       else if (engine.hasAvatar(sid)) engine.removeAvatar(sid);
       if (tp)
@@ -1370,10 +1385,17 @@ export class WorldController {
         );
       } else this.media.setVoice(String(p.uid), 0, 0);
     }
+    const night = engine.getDaylight().night;
     room.state.npcs.forEach((n: S, id: string) => {
       const pos = interpolate(this.npcBuf.get(id) ?? [{ t: 0, x: n.x, y: n.y }], renderAt);
-      const st = { ...this.npcState(n), x: pos.x, y: pos.y };
-      const home = floorOf(this.building);
+      const guard = n.kind === "guard" ? this.life?.guard(n) : null;
+      const st = { ...(guard ?? this.npcState(n)), x: pos.x, y: pos.y };
+      // (Vortex is the studio's; the night guard's out on the ground floor, after dark)
+      const home = (n.level ?? -1) < 0 ? floorOf(this.building) : n.level;
+      if (n.kind === "guard" && (night < 0.3 || !guard)) {
+        if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
+        return;
+      }
       if (this.level === home) engine.upsertAvatar(`npc:${id}`, st);
       else if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
       if (tp) bodies.push({ ...st, id: `npc:${id}`, reduced, level: home });
@@ -1520,11 +1542,23 @@ export class WorldController {
   private objectsDirty = false;
 
   private moveLocal(dt: number) {
+    // on the shuttle: it carries me (the server says where: world-server grounds-life.ts)
+    const ride = this.life?.seat(this.room?.state.players.get(this.room.sessionId));
+    if (ride) {
+      this.path = null;
+      this.actions.clear();
+      Object.assign(this.me, ride.me);
+      this.height.z = ride.z;
+      this.meAngle = ride.angle ?? this.meAngle;
+      return;
+    }
     const k = this.keys;
     const ix = (k.has("d") || k.has("arrowright") ? 1 : 0) - (k.has("a") || k.has("arrowleft") ? 1 : 0);
     const iy = (k.has("s") || k.has("arrowdown") ? 1 : 0) - (k.has("w") || k.has("arrowup") ? 1 : 0);
     const pad = this.gamepad();
-    const speed = k.has("shift") || pad.run ? RUN_SPEED : WALK_SPEED;
+    const running = k.has("shift") || pad.run;
+    // (outdoors deep snow holds you back, the open snow a little)
+    const speed = (running ? RUN_SPEED : WALK_SPEED) * this.grid.speedAt(this.me.x, this.me.y);
     const start = { x: this.me.x, y: this.me.y };
     const first = this.firstPerson();
     let moved = false;
@@ -1588,7 +1622,10 @@ export class WorldController {
     stepHeight(this.grid, this.me.x, this.me.y, hgt, Math.min(dt, 0.05));
     // the stairs: past a storey's band my feet are on the next floor up or down
     // (its frame is a storey off, its coords maybe shifted)
-    const change = floorChange(hgt.z, this.level, floorsOf(this.building));
+    // (only on the stairs: outdoors the ground itself rises and falls by storeys)
+    const change = this.grid.onRamp(this.me.x, this.me.y)
+      ? floorChange(hgt.z, this.level, floorsOf(this.building))
+      : null;
     if (change) {
       const from = this.level;
       const at = across(this.building, from, change.level, this.me);
@@ -1606,13 +1643,17 @@ export class WorldController {
     if (this.jumpWanted && !hgt.up) this.jump();
     // (up on something or in the air nobody sits down: a jump over a chair lands on its feet)
     const seat = hgt.up || hgt.z > 0 || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
-    const floor =
-      FLOORS[tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y)) as keyof typeof FLOORS] ?? "wood";
+    // (outdoors on the land: what's underfoot there — snow, the trail, the ice)
+    const land = this.grid.onLand(this.me.x, this.me.y);
+    const floor = land
+      ? this.landFloor()
+      : (FLOORS[tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y)) as keyof typeof FLOORS] ?? "wood");
+    this.life?.hear(dt, this.me, this.map, land && this.level === 0, this.engine?.getDaylight().night ?? 0, this.storm);
     // (on the stairs: a shoe on concrete treads, in the stairwell)
     if (this.grid.onRamp(this.me.x, this.me.y)) {
-      stairStep(dt, moved, speed === RUN_SPEED);
+      stairStep(dt, moved, running);
       sound.step(0, false, false, floor);
-    } else sound.step(dt, moved, speed === RUN_SPEED, floor);
+    } else sound.step(dt, moved, running, floor);
     if (moved) this.me.a = ANIM.walk;
     else if (seat) {
       this.me.a = ANIM.sit;
@@ -1785,6 +1826,23 @@ export class WorldController {
   }
 
   private updatePrompt() {
+    // the shuttle at its stop, near: on (or off, riding)
+    const lp = this.room?.state.players.get(this.room.sessionId);
+    const ride =
+      this.level === 0
+        ? (this.life?.prompt(
+            this.room?.state.vehicles,
+            lp?.busy === RIDING,
+            this.me,
+            this.map.ox ?? 0,
+            this.map.oy ?? 0,
+          ) ?? null)
+        : null;
+    if (ride) {
+      const cur = hud.get().prompt;
+      if (cur?.objectId !== ride.objectId || cur.label !== ride.label) hud.set({ prompt: ride });
+      return;
+    }
     // (in an elevator's car its panel is the way to use it: no "X" for it)
     const near = this.aimedObject() ?? this.nearestInteractable();
     const o = near?.kind === "elevator" && hud.get().lift ? null : near;
@@ -1800,7 +1858,24 @@ export class WorldController {
 
   interact() {
     const p = hud.get().prompt;
-    if (p) this.activateObject(p.objectId, false);
+    if (p?.kind === "ride" || p?.kind === "ride:leave") this.send(p.kind === "ride" ? "ride:board" : "ride:leave", {});
+    else if (p) this.activateObject(p.objectId, false);
+  }
+
+  // ── life on the Grounds (docs/plan/27, phase 6; grounds-life.ts, loaded with them) ──
+  private life: import("./grounds-life").GroundsLife | null = null;
+  private driveVehicles(dt: number) {
+    if (!this.life || !this.room) return;
+    const list = this.life.drive(
+      dt,
+      this.room.state.vehicles,
+      this.me,
+      this.map.ox ?? 0,
+      this.map.oy ?? 0,
+      this.level === 0,
+    );
+    this.engine?.grounds?.setVehicles(list, this.me.x, this.me.y);
+    this.tp?.setVehicles(list);
   }
 
   // Moves between people: a spark and its sound where the hands meet (one of
@@ -2392,7 +2467,9 @@ export class WorldController {
     const j = st.jump;
     if (!j) return;
     const hard = j.kind === "flip" ? 1 : 0.6;
-    const floor = FLOORS[tileAt(this.map, Math.floor(st.x), Math.floor(st.y)) as keyof typeof FLOORS] ?? "wood";
+    const floor = this.grid.onLand(st.x, st.y)
+      ? this.landFloor(st.x, st.y)
+      : (FLOORS[tileAt(this.map, Math.floor(st.x), Math.floor(st.y)) as keyof typeof FLOORS] ?? "wood");
     // (up on something the dust is on its top)
     const lift = (st.ground ?? 0) * ZPX_TILE;
     if (stage === "air" && was === "crouch") {
@@ -2618,6 +2695,7 @@ export class WorldController {
         themes,
         level: this.level,
       });
+      v.prints = this.life?.prints ?? null;
       v.events = {
         floor: (x, y, mods) => engine.events.onTileClick?.(x, y, mods),
         person: (id, at) => engine.events.onAvatarClick?.(id, at),
@@ -3073,6 +3151,7 @@ export class WorldController {
   setLevel(level: number) {
     if (level === this.level && floorOf(this.map) === level) return;
     this.level = level;
+    this.life?.prints.clear(); // (they're the ground floor's)
     if (!this.building || !this.engine) return;
     this.map = levelMap(this.building, level) ?? this.building;
     // in 3D the iso engine follows over the next two frames (its map, then its
@@ -3294,6 +3373,7 @@ export class WorldController {
     else if (key === "c") this.swapCamera();
     else if (key === "z") this.toggleLook();
     else if (key === "p" && !hud.get().build.on) void this.togglePhone();
+    else if (key === "f" && !hud.get().build.on) this.toggleTorch();
     else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
     else if ((key === "+" || key === "=") && this.tp) this.tp.zoomBy(1 / 1.15);
     else if (key === "-" && this.tp) this.tp.zoomBy(1.15);
@@ -3307,6 +3387,20 @@ export class WorldController {
 
   private bindInput() {
     void loadJumps(); // (a jump's dust and sounds: small, fetched now so the first one has them)
+    // the land round the ground floor: the grid walks it once it's here
+    void loadGrounds().then((G) => {
+      this.G = G;
+      setOutdoors(G.groundsOutdoors);
+      setAreasBeyond(G.groundsAreaAt);
+      this.rebuildGrid();
+      // (its life — footprints, vehicles, sound — in a chunk of its own)
+      void import("./grounds-life").then((m) => {
+        if (!this.G) return;
+        this.life = new m.GroundsLife(G);
+        this.engine?.setGrounds(G, this.life.prints);
+        if (this.tp) this.tp.prints = this.life.prints;
+      });
+    });
     window.addEventListener("keydown", this.onKeyDown);
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("blur", this.onBlur);
@@ -3326,6 +3420,20 @@ export class WorldController {
   private onFocus = () => {
     if (this.room && hud.get().phase === "ready") void this.syncLook();
   };
+
+  // the Grounds (docs/plan/27), once loaded: what's underfoot out there, its sound
+  private G: typeof import("@yutopia/shared/grounds") | null = null;
+  private landFloor(x = this.me.x, y = this.me.y): Floor {
+    return this.life?.floorAt(x, y, this.map) ?? "asphalt";
+  }
+
+  /** The phone's flashlight on or off (everyone sees its beam). */
+  toggleTorch() {
+    this.send("phone:torch", { on: !hud.get().torch });
+  }
+  /** How hard it's storming here (0…1, eased) and where the wind's from. */
+  storm = 0;
+  wind = 0;
 
   // ── helpers ──────────────────────────────────────────────────────────────
   private avatarState(p: S, _local: boolean): AvatarState {
@@ -3354,6 +3462,7 @@ export class WorldController {
       phonePose: p.phonePose,
       ringing: p.ringing,
       recording: p.recording,
+      torch: p.torch,
     };
   }
 
@@ -3374,6 +3483,9 @@ export class WorldController {
     };
   }
 }
+
+// riding the shuttle (docs/plan/27, phase 6: grounds-life.ts)
+const RIDING = "ride:shuttle";
 
 const VORTEX_LOOK = parseAvatar({
   body: "slim",

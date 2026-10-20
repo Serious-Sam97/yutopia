@@ -472,9 +472,11 @@ export function objectParts(o: WorldObjectDef, host?: WorldObjectDef): Part[] {
         const ref = { kind: o.kind, id: o.id, rot, props: o.props };
         const clipped = slices.length > 1 ? clip : null;
         const m = items as ItemsModule;
-        const akey = m.itemKey(ref, slices.length > 1 ? String(i) : "", group, artRes);
+        // (the Grounds' things are big — a water tower, a church: drawn at 1×)
+        const res = o.kind.startsWith("gr_") ? Math.min(artRes, 1) : artRes;
+        const akey = m.itemKey(ref, slices.length > 1 ? String(i) : "", group, res);
         const [ox, oy] = P(cx, cy);
-        art = { key: akey, get: memo(akey, () => m.itemArt(ref, clipped, group, artRes)), ox, oy };
+        art = { key: akey, get: memo(akey, () => m.itemArt(ref, clipped, group, res)), ox, oy };
       }
       // wall items: just in front of the wall slice behind them (just behind it
       // on its far face), fading with that wall

@@ -70,6 +70,7 @@ const IC = {
   bellOff: "M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0M4 4l16 16",
   keypad: "M6 5v.01M12 5v.01M18 5v.01M6 10v.01M12 10v.01M18 10v.01M6 15v.01M12 15v.01M18 15v.01M12 20v.01",
   leave: "M14 4H6v16h8M10 12h10M17 9l3 3-3 3",
+  torch: "M8.5 3h7v4l-2 3v11h-3V10l-2-3zM8.5 7h7M12 13.5v2",
 } as const;
 export type IconName = keyof typeof IC;
 

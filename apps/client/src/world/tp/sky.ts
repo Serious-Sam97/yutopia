@@ -1,4 +1,4 @@
-import type { MapDef, WallCut } from "@yutopia/shared";
+import { isFloor, levelMap, type MapDef, tileAt, type WallCut } from "@yutopia/shared";
 import {
   BackSide,
   BufferGeometry,
@@ -19,8 +19,9 @@ import {
   Vector3,
 } from "three";
 import type { Daylight } from "../art/daylight";
-import { Campus } from "./campus";
-import { patchOutdoors } from "./light3d";
+import { Campus, GROUND } from "./campus";
+import { GroundsStream } from "./grounds-stream";
+import { landLight, patchGrounds, patchOutdoors } from "./light3d";
 
 // the themes' drawings and skies: the same lazy chunk the iso view loads
 export type Themes = typeof import("../art/themes");
@@ -73,7 +74,10 @@ export class Surroundings {
   private domeMat: ShaderMaterial;
   private stars: Points;
   readonly campus: Campus;
+  /** the Grounds round a building with a ground floor (docs/plan/27) */
+  readonly grounds: GroundsStream | null = null;
   private local = new Vector3();
+  private tgt = new Vector3();
   private disposables: { dispose(): void }[] = [];
 
   // `cuts`: the walls' windows (shared wallCuts): the campus's façade opens there
@@ -158,6 +162,24 @@ export class Surroundings {
           patchOutdoors(x);
         }
     });
+    // the land all round, under the campus (its ground is the campus's GROUND);
+    // the ground floor's own tiles (lobby, lot) are its floor's to draw. (After
+    // the pass above: it patches its own materials, the trees' with more.)
+    const g0 = map.levels?.some((l) => l.index === 0) ? levelMap(map, 0) : null;
+    if (g0) {
+      const ox = g0.ox ?? 0;
+      const oy = g0.oy ?? 0;
+      const covered = (bx: number, bz: number) => {
+        const x = Math.floor(bx - ox);
+        const y = Math.floor(bz - oy);
+        return x >= 0 && y >= 0 && x < g0.width && y < g0.height && isFloor(tileAt(g0, x, y));
+      };
+      this.grounds = new GroundsStream(T, covered, patchGrounds);
+      this.grounds.root.position.y = GROUND;
+      this.campus.root.add(this.grounds.root);
+      // (the snow doesn't fall in the Grounds' buildings)
+      this.campus.roofs = this.grounds.boxes;
+    }
   }
 
   readonly horizon = new Color();
@@ -171,10 +193,22 @@ export class Surroundings {
     this.horizon.setHex(mid, SRGBColorSpace);
     (this.stars.material as PointsMaterial).opacity = Math.max(0, d.night * 1.1 - 0.1);
     this.campus.setDay(d, mid);
+    // the land's light (as the campus's things are tinted: the same by the hour)
+    const k = 1 - 0.75 * d.night;
+    landLight.value.setRGB(d.ambient[0] * k, d.ambient[1] * k, d.ambient[2] * k);
+    this.grounds?.setNight(d.night, landLight.value);
+  }
+
+  /** The weather (shared weather.ts): the snow and the sky follow it. */
+  setWeather(storm: number, wind: number) {
+    this.campus.weather.storm = storm;
+    this.campus.weather.wind = wind;
+    // (a storm's sky: the overcast thick and even)
+    this.domeMat.uniforms.cloudK.value = 1 - 0.7 * storm;
   }
 
   // the dome and the snow go with the camera; the overcast drifts
-  update(dt: number, cam: Vector3, animate: boolean) {
+  update(dt: number, cam: Vector3, animate: boolean, target?: Vector3) {
     this.dome.position.copy(cam);
     this.stars.position.copy(cam);
     if (animate) {
@@ -184,10 +218,18 @@ export class Surroundings {
     }
     // (the campus moves with the floor shown: the camera in its coords)
     this.campus.update(dt, this.local.copy(cam).sub(this.campus.root.position), animate);
+    if (this.grounds) {
+      this.local.y -= GROUND;
+      // (whose feet the camera looks at, in the Grounds' coords: trees between fade)
+      const t = this.tgt.copy(target ?? cam).sub(this.campus.root.position);
+      t.y -= GROUND;
+      this.grounds.update(t.x, t.z, this.local, t);
+    }
   }
 
   dispose() {
     for (const d of this.disposables) d.dispose();
+    this.grounds?.dispose();
     this.campus.dispose();
   }
 }

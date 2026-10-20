@@ -66,7 +66,7 @@ const WIN0 = 36 / 39.19; // the studio's windows, bottom and top (iso px → til
 const WIN1 = 88 / 39.19;
 
 // ── geometry builder: non-indexed triangles with position, normal, uv, colour ─
-class G {
+export class G {
   pos: number[] = [];
   nor: number[] = [];
   uv: number[] = [];
@@ -125,10 +125,10 @@ class G {
     return g;
   }
 }
-type V = [number, number, number];
+export type V = [number, number, number];
 
 // three's own geometries, coloured and merged (non-indexed, with colours)
-function tinted(g: BufferGeometry, hex: number): BufferGeometry {
+export function tinted(g: BufferGeometry, hex: number): BufferGeometry {
   const n = g.index ? g.toNonIndexed() : g;
   if (g.index) g.dispose();
   const c = new Color(hex);
@@ -142,7 +142,7 @@ function tinted(g: BufferGeometry, hex: number): BufferGeometry {
   n.setAttribute("color", new Float32BufferAttribute(col, 3));
   return n;
 }
-const place = (g: BufferGeometry, x: number, y: number, z: number, ry = 0, s = 1) => {
+export const place = (g: BufferGeometry, x: number, y: number, z: number, ry = 0, s = 1) => {
   const m = new Matrix4().compose(
     new Vector3(x, y, z),
     new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), ry),
@@ -198,7 +198,7 @@ const runLen = (r: Run) => Math.abs(r.x1 - r.x0) + Math.abs(r.z1 - r.z0);
 // The curtain wall: 4 bays × 4 storeys. Each storey: a concrete spandrel with
 // snow on its ledge, then mirrored glass in a grid of mullions. The lit offices
 // (night) are a second canvas, the emissive map.
-function facadeCanvases(T: Themes) {
+export function facadeCanvases(T: Themes) {
   const PX = 64; // px per tile
   const W = BAY * 4 * PX;
   const H = STOREY * 4 * PX;
@@ -272,7 +272,7 @@ function facadeCanvases(T: Themes) {
 }
 
 // Snow: a soft tileable field with drifts and blue hollows.
-function snowCanvas(T: Themes, size = 512, seed = 41): HTMLCanvasElement {
+export function snowCanvas(T: Themes, size = 512, seed = 41): HTMLCanvasElement {
   const { c, g } = T.canvas(size, size);
   g.fillStyle = "#f2f4f7";
   g.fillRect(0, 0, size, size);
@@ -299,7 +299,7 @@ function snowCanvas(T: Themes, size = 512, seed = 41): HTMLCanvasElement {
 
 // The parking lot, drawn in plan: ploughed asphalt, painted bays, islands,
 // tyre tracks, the slush where cars turn. `px` per tile.
-interface Lot {
+export interface Lot {
   x0: number;
   z0: number;
   x1: number;
@@ -310,7 +310,7 @@ interface Lot {
   bayL: number;
   bays: { x: number; z: number; dir: 1 | -1 }[];
 }
-function lotCanvas(T: Themes, lot: Lot, px: number): HTMLCanvasElement {
+export function lotCanvas(T: Themes, lot: Lot, px: number): HTMLCanvasElement {
   const W = Math.round((lot.x1 - lot.x0) * px);
   const H = Math.round((lot.z1 - lot.z0) * px);
   const { c, g } = T.canvas(W, H);
@@ -380,7 +380,7 @@ function lotCanvas(T: Themes, lot: Lot, px: number): HTMLCanvasElement {
 
 // A tileable strip of road: asphalt with two tyre tracks and snow at the
 // verges (u across, v along).
-function roadCanvas(T: Themes): HTMLCanvasElement {
+export function roadCanvas(T: Themes): HTMLCanvasElement {
   const W = 128;
   const H = 512;
   const { c, g } = T.canvas(W, H);
@@ -412,7 +412,7 @@ function roadCanvas(T: Themes): HTMLCanvasElement {
   return c;
 }
 
-function lettersCanvas(T: Themes, text: string): HTMLCanvasElement {
+export function lettersCanvas(T: Themes, text: string): HTMLCanvasElement {
   const { c, g } = T.canvas(1024, 160);
   g.fillStyle = "#f6eedb";
   g.font = "500 118px Georgia, 'Times New Roman', serif";
@@ -427,7 +427,7 @@ function lettersCanvas(T: Themes, text: string): HTMLCanvasElement {
   return c;
 }
 
-function poolCanvas(T: Themes): HTMLCanvasElement {
+export function poolCanvas(T: Themes): HTMLCanvasElement {
   const { c, g } = T.canvas(128, 128);
   const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
   grd.addColorStop(0, "rgba(225,238,255,0.6)");
@@ -529,7 +529,7 @@ function slushCanvas(T: Themes): HTMLCanvasElement {
 }
 
 // A bare winter tree in 3D: a trunk forking into branches, each a thin cone.
-function bareTree3(r: () => number): BufferGeometry {
+export function bareTree3(r: () => number): BufferGeometry {
   const parts: BufferGeometry[] = [];
   const up = new Vector3(0, 1, 0);
   const branch = (p: Vector3, dir: Vector3, len: number, rad: number, depth: number) => {
@@ -556,7 +556,7 @@ function bareTree3(r: () => number): BufferGeometry {
 }
 
 // A snow-laden conifer: tiers of dark cones, each with snow on its shoulders.
-function coniferGeometry(): BufferGeometry {
+export function coniferGeometry(): BufferGeometry {
   const parts: BufferGeometry[] = [];
   const base = new Color(0x24302b);
   const tip = new Color(0x3d4f46);
@@ -589,7 +589,7 @@ function coniferGeometry(): BufferGeometry {
 }
 
 // The light thrown ahead of a car's headlights, on the snow.
-function beamCanvas(T: Themes): HTMLCanvasElement {
+export function beamCanvas(T: Themes): HTMLCanvasElement {
   const { c, g } = T.canvas(128, 256);
   const grd = g.createLinearGradient(0, 0, 0, 256);
   grd.addColorStop(0, "rgba(255,246,220,0.9)");
@@ -640,7 +640,11 @@ function cabinProfile(wagon: boolean, o = 0): Shape {
 }
 const CHROME = 0xcdd1d5;
 const GLASS = 0x1a2228;
-function carGeometry(wagon: boolean, body: number, snowy = true): { solid: BufferGeometry; glass: BufferGeometry } {
+export function carGeometry(
+  wagon: boolean,
+  body: number,
+  snowy = true,
+): { solid: BufferGeometry; glass: BufferGeometry } {
   const parts: BufferGeometry[] = [];
   const glassParts: BufferGeometry[] = [];
   const ext = (sh: Shape, w: number, bevel: number) =>
@@ -728,6 +732,14 @@ function carGeometry(wagon: boolean, body: number, snowy = true): { solid: Buffe
 
 const CAR_COLOURS = [0xcbbd98, 0x6b2430, 0x4a5a73, 0xe8e6df, 0x1f2124, 0x6a4a35, 0x8b8f93, 0x2f4a3b, 0xb8702a];
 
+/** A roof the snow doesn't fall under (the campus's coords). */
+export interface Roof {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+}
+
 // A box of snowflakes that wraps round the camera: each flake keeps a position
 // in the box; where it shows is that position folded round the camera. Flakes
 // that would show over the studio's footprint go under the ground instead.
@@ -756,22 +768,46 @@ class Flakes {
     this.points = new Points(this.geo, this.material);
     this.points.frustumCulled = false;
   }
-  update(dt: number, cam: Vector3, animate: boolean, fx0: number, fz0: number, fx1: number, fz1: number) {
+  /** `storm` (0…1) drives them down faster and sideways with the wind (from
+   *  `wind`, radians); none fall under `roofs` (the Grounds' buildings). */
+  update(
+    dt: number,
+    cam: Vector3,
+    animate: boolean,
+    fx0: number,
+    fz0: number,
+    fx1: number,
+    fz1: number,
+    storm = 0,
+    wind = 0,
+    roofs: readonly Roof[] = [],
+  ) {
     const p = this.geo.getAttribute("position");
     const f = this.at;
     const B = this.box;
     const fold = (v: number, c: number, size: number) => c - size / 2 + ((((v - c) % size) + size) % size);
+    const fall = 1 + storm * 2.2;
+    const wx = Math.cos(wind) * storm * 7;
+    const wz = Math.sin(wind) * storm * 7;
+    // (the roofs near enough to matter)
+    const near = roofs.filter(
+      (r) => r.x1 > cam.x - B.x / 2 && r.x0 < cam.x + B.x / 2 && r.z1 > cam.z - B.z / 2 && r.z0 < cam.z + B.z / 2,
+    );
     for (let i = 0; i < p.count; i++) {
       if (animate) {
-        f[i * 3 + 1] -= dt * (0.8 + (i % 7) * 0.08);
+        f[i * 3 + 1] -= dt * (0.8 + (i % 7) * 0.08) * fall;
         if (f[i * 3 + 1] < 0) f[i * 3 + 1] += B.y;
-        f[i * 3] += Math.sin(f[i * 3 + 1] * 0.7 + i) * dt * 0.25;
+        f[i * 3] += Math.sin(f[i * 3 + 1] * 0.7 + i) * dt * 0.25 + wx * dt * (0.7 + (i % 5) * 0.12);
+        f[i * 3 + 2] += wz * dt * (0.7 + (i % 5) * 0.12);
       }
       let x = fold(f[i * 3], cam.x, B.x);
       let y = fold(f[i * 3 + 1], cam.y, B.y);
       const z = fold(f[i * 3 + 2], cam.z, B.z);
       if (y < GROUND) y += B.y;
-      if (x > fx0 && x < fx1 && z > fz0 && z < fz1) {
+      if (
+        (x > fx0 && x < fx1 && z > fz0 && z < fz1) ||
+        near.some((r) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1)
+      ) {
         x = cam.x;
         y = GROUND - 200;
       }
@@ -1096,6 +1132,10 @@ export class Campus {
     this.add(cap.build(), mainWhite);
     this.add(coping.build(), mainConcrete);
 
+    // (a world on the Grounds: the land, the woods, the other blocks, the
+    // driveway and all round are the Grounds' own, drawn from shared
+    // grounds.ts — the campus keeps the headquarters' own skin and entrance)
+    let fake = this.root.children.length;
     // ── two more blocks across a courtyard, with roofs, and a bridge ──
     const bSkin = new G();
     const bCap = new G();
@@ -1136,13 +1176,14 @@ export class Campus {
     this.add(bSkin.build(), this.facade);
     this.add(bCap.build(), white);
     this.add(bCoping.build(), concrete);
+    this.dropFake(fake);
     // snow drifted against the foot of every wall, and the wall's shadow on the snow
     const drifts: BufferGeometry[] = [];
     const rd = T.rng(67);
     const ezMain = H / 2;
     const allRuns = [
       ...mainRuns,
-      ...blocks.flatMap((b) =>
+      ...(this.walkable ? [] : blocks).flatMap((b) =>
         runs((x, z) => x >= b.x0 && x < b.x1 && z >= b.z0 && z < b.z1, b.x0 - 1, b.z0 - 1, b.x1 + 1, b.z1 + 1),
       ),
     ];
@@ -1179,6 +1220,7 @@ export class Campus {
     const roofMat = this.lambert(0xe9ecef, snowTex);
     this.add(roofs.build(), roofMat);
     this.add(plant.build(), this.lambert(0xffffff), true);
+    fake = this.root.children.length;
     // the glazed bridge from the studio's east wall to the east block
     const bz = Math.round(H / 2);
     const bridge = new G();
@@ -1204,6 +1246,8 @@ export class Campus {
     this.add(bridgeGlass.build(), bgMat);
     this.tinted.push([bgMat, new Color(1, 1, 1)]);
 
+    this.dropFake(fake);
+    fake = this.root.children.length;
     // ── the ground: an endless snowfield, with the site drawn nearer in ──
     const far = new Mesh(
       new PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2),
@@ -1401,6 +1445,7 @@ export class Campus {
     this.add(gate.build(), this.lambert(0xffffff), true);
     shadowAt(gx, gz, 2.2, 2.2);
 
+    this.dropFake(fake);
     // ── the entrance under the lobby's windows: canopy, glass vestibule, the name, a cleared path ──
     const west = mainRuns.filter((r) => r.nx === -1).sort((a, b) => runLen(b) - runLen(a))[0];
     if (west) {
@@ -1562,6 +1607,7 @@ export class Campus {
       this.letters = new MeshBasicMaterial();
     }
 
+    fake = this.root.children.length;
     // ── lamp posts: over the lot and down the driveway; pools of light at night ──
     const posts: BufferGeometry[] = [];
     const heads = new G().color(0xe9f2ff);
@@ -1651,6 +1697,8 @@ export class Campus {
     beacon.position.set(tx, GROUND + 37.8, tz);
     this.add(beacon);
 
+    this.dropFake(fake);
+    fake = this.root.children.length;
     // ── the horizon: conifers all round, groves nearer; bare trees in 3D near, as drawings far ──
     const conifer = coniferGeometry();
     this.disposables.push(conifer);
@@ -1763,6 +1811,8 @@ export class Campus {
       this.root.add(mesh);
     }
 
+    this.dropFake(fake);
+    fake = this.root.children.length;
     // ── life: a visitor's car now and then, steam off the east block's roof ──
     {
       const bay = lot.bays[visitorBay];
@@ -1824,6 +1874,12 @@ export class Campus {
       this.add(g.build(), m);
     }
 
+    this.dropFake(fake);
+    if (this.walkable) {
+      this.visitor?.dispose();
+      this.visitor = null;
+      this.steam = null;
+    }
     // ── snow: boxes of flakes that go with the camera (wrapping), never over the studio:
     // a near one of small flakes, a far sparser one so the field snows too ──
     const dot = T.canvas(32, 32);
@@ -1837,6 +1893,8 @@ export class Campus {
     for (const [box, count, size, op, seed] of [
       [new Vector3(36, 24, 36), 2600, 0.09, 0.9, 9],
       [new Vector3(150, 34, 150), 2400, 0.3, 0.55, 10],
+      // a storm's: thick and close, only in one (docs/plan/27, the weather)
+      [new Vector3(24, 16, 24), 6000, 0.11, 0.95, 11],
     ] as [Vector3, number, number, number, number][]) {
       const f = new Flakes(box, count, size, op, flake, T.rng(seed));
       this.flakes.push(f);
@@ -1957,6 +2015,11 @@ export class Campus {
     this.disposables.push(t);
     return t;
   }
+  /** On the Grounds: what was added since `from` goes (it was the scenery the Grounds now are). */
+  private dropFake(from: number) {
+    if (!this.walkable) return;
+    for (const o of this.root.children.slice(from)) this.root.remove(o);
+  }
   private add(g: BufferGeometry | Mesh, mat?: MeshLambertMaterial | MeshBasicMaterial, vertex = false): Mesh {
     if (g instanceof Mesh) {
       this.root.add(g);
@@ -1975,7 +2038,8 @@ export class Campus {
   // night, as the iso backdrop); the glass reflects the sky; lights come on.
   setDay(d: Daylight, skyMid: number) {
     const amb = new Color(d.ambient[0], d.ambient[1], d.ambient[2]);
-    const k = 1 - 0.58 * d.night;
+    // (as dark as the Grounds round it at night: sky.ts landLight)
+    const k = 1 - 0.75 * d.night;
     for (const [m, base] of this.tinted) m.color.copy(base).multiply(amb).multiplyScalar(k);
     this.glassTint.setHex(skyMid, SRGBColorSpace);
     // the facade: a little of the sky's colour in the glass, darker at night
@@ -2000,6 +2064,10 @@ export class Campus {
     this.night = d.night;
   }
   private night = 0;
+  /** The weather (shared weather.ts, eased): the snow follows it. */
+  readonly weather = { storm: 0, wind: 0 };
+  /** Roofs the snow doesn't fall under (the Grounds' buildings). */
+  roofs: Roof[] = [];
 
   /** Inside the building on a floor under the studio, the Sims rule: nothing of
    *  the main block above `y` (world height; null: all of it, seen from outside).
@@ -2022,7 +2090,16 @@ export class Campus {
     for (const t of this.trees) t.rotation.y = Math.atan2(cam.x - t.position.x, cam.z - t.position.z);
     // the tower's beacon blinks at night
     this.beacon.opacity = this.night > 0.1 ? (Math.sin(this.t * 2.2) > 0.3 ? this.night : 0.08) : 0;
-    for (const f of this.flakes) f.update(dt, cam, animate, this.fx0, this.fz0, this.fx1, this.fz1);
+    // (the storm's flakes come in with it)
+    const storm = this.weather.storm;
+    const heavy = this.flakes[2];
+    if (heavy) {
+      heavy.points.visible = storm > 0.02;
+      heavy.material.opacity = 0.95 * Math.min(1, storm * 1.3);
+    }
+    for (const f of this.flakes)
+      if (f.points.visible)
+        f.update(dt, cam, animate, this.fx0, this.fz0, this.fx1, this.fz1, storm, this.weather.wind, this.roofs);
     this.visitor?.update(dt, this.night, animate);
     this.steam?.update(dt, animate);
   }

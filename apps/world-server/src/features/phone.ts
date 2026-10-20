@@ -215,6 +215,11 @@ registerFeature((room: WorldRoom) => {
     const p = me(client);
     if (p && (PHOTO_POSES as readonly unknown[]).includes(m?.pose)) p.phonePose = m.pose;
   });
+  // the flashlight (the Grounds at night): on or off, seen by everyone
+  room.on("phone:torch", (client, m) => {
+    const p = me(client);
+    if (p) p.torch = !!m?.on;
+  });
   room.on("phone:prefs", (client, m) => {
     const p = me(client);
     if (!p) return;

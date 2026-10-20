@@ -1,6 +1,7 @@
 import { type MapDef, tileAt, type WorldObjectDef } from "@yutopia/shared";
 import {
   CanvasTexture,
+  Color,
   DataTexture,
   LinearFilter,
   type Material,
@@ -84,6 +85,33 @@ export function patchOutdoors(m: Material) {
       .replace("#include <opaque_fragment>", ROLL_OFF);
   };
   m.customProgramCacheKey = () => "yutopia-outdoors";
+  m.needsUpdate = true;
+}
+
+// The Grounds' land and all on it (docs/plan/27): out under the sky as the campus
+// is, and the hour's light on it (the sun or moon and the sky's fill: dark at
+// night off the lit ways) — the lamps and the flashlights stay as bright as they are
+export const landLight = { value: new Color(1, 1, 1) };
+export function patchGrounds(m: Material) {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.lmSunOut = litBalance.lmSunOut;
+    shader.uniforms.lmFillOut = litBalance.lmFillOut;
+    shader.uniforms.lmCap = litBalance.lmCap;
+    shader.uniforms.landLight = landLight;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmCap;\nuniform vec3 landLight;",
+      )
+      .replace(
+        "#include <lights_fragment_begin>",
+        balanced("1.0")
+          .replace("directLight.color *= lmSunK;", "directLight.color *= lmSunK * landLight;")
+          .replace("irradiance += lmFillK * getHemisphere", "irradiance += lmFillK * landLight * getHemisphere"),
+      )
+      .replace("#include <opaque_fragment>", ROLL_OFF);
+  };
+  m.customProgramCacheKey = () => "yutopia-grounds";
   m.needsUpdate = true;
 }
 

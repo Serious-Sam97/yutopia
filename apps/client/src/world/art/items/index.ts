@@ -50,7 +50,7 @@ export const ITEM_ART_CHUNK = "yutopia-item-art";
 // Illustrated items. `variants`: how many seeded looks an item has (the seed
 // picks one, so equal items share textures); `key`: the props that change the
 // drawing.
-interface ItemGen {
+export interface ItemGen {
   draw: (s: Sketch, props: Props) => void;
   variants: number;
   key?: (props: Props) => string;
@@ -198,6 +198,10 @@ function decorKey(p: Props): string {
 
 export function hasItemArt(kind: string): boolean {
   return Object.hasOwn(GENS, kind);
+}
+/** Drawings added at run time (the Grounds' things: art/grounds-items.ts). */
+export function registerItems(gens: Record<string, ItemGen>): void {
+  Object.assign(GENS, gens);
 }
 
 // The look: props.variant (chosen in build mode's Design tool), else seeded by id.

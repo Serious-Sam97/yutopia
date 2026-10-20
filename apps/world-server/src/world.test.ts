@@ -102,3 +102,17 @@ test("emotes show and expire on the player", async () => {
   await sleep(100);
   assert.equal(me(a).emote, "wave");
 });
+
+test("the weather and the flashlight: a storm called up reaches everyone at once; a beam is seen", async () => {
+  const [a, b] = rooms;
+  a.send("mod:storm", { storm: 1, now: true });
+  await waitFor(() => a.state.storm > 0.99 && b.state.storm > 0.99);
+  // sent off: it dies down (a scheduled storm's way, not at once)
+  a.send("mod:storm", { storm: 0 });
+  await waitFor(() => b.state.storm < 0.99);
+  a.send("mod:storm", { storm: null, now: true });
+  a.send("phone:torch", { on: true });
+  await waitFor(() => b.state.players.get(a.sessionId)?.torch === true);
+  a.send("phone:torch", { on: false });
+  await waitFor(() => b.state.players.get(a.sessionId)?.torch === false);
+});

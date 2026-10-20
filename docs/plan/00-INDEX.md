@@ -38,6 +38,7 @@
 19. [24-standalone.md](24-standalone.md) — Yutopia on its own (planned 2026-10-18): its own Laravel server in `apps/api`, one world for everyone instead of spaces, all data migrated from Yondra, Yondra integration later per office
 20. [25-building-floors.md](25-building-floors.md) — The building (delivered 2026-10-19): five real floors, stairs you walk and elevators, the lobby and the walkable parking lot of the snow campus; themes removed
 21. [26-floor-transitions.md](26-floor-transitions.md) — Elevators and stairs done properly (new look, motion, sound), floor changes without lag, then the whole campus walkable (proposed 2026-10-19, awaiting approval and mocks)
+22. [27-the-grounds.md](27-the-grounds.md) — The Grounds (delivered 2026-10-20): the fake scenery replaced by a real kilometre of snow — the campus, the woods and the company town, all walkable; enterable town buildings, truly dark nights and a flashlight, server-timed blizzards, the shuttle, the visitor's car and a night guard
 
 ## Workflow rules (inherited from Yondra)
 
