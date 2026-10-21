@@ -16,6 +16,8 @@
 // By day (docs/plan/31-the-day.md) they wait in nests instead:
 // 11. lurk     — asleep where it was put, crouched; what comes near enough wakes it (and its nest)
 // 12. home     — leashed: past 30 tiles from its nest, it walks back and sleeps again
+// Someone safe indoors (the lot too) can't be had, but keeps it from going: with nobody
+// to have it prowls round them at SHADE.watch, watching (stalk, no target).
 
 export const SHADE_STATES = [
   "dormant",
@@ -68,6 +70,9 @@ export const SHADE = {
   /** nobody near for this long (or the dawn): it goes */
   leave: 20,
   near: 70,
+  /** someone safe indoors (the lot too) and nobody to have: it prowls round them this far off,
+   *  watching (it can't step off the land — it paces the edge) — and doesn't go (2026-10-21) */
+  watch: 10,
   /** asleep in a nest by day: what wakes it — seen this close (crouching, half), a sprint
    *  heard, a shot heard — and how far from its nest it'll go after anyone */
   lurk: { see: 10, crouch: 0.5, hear: 14, shot: 30 },
@@ -99,6 +104,8 @@ export interface Shade {
   hp: number;
   /** a day's: its nest, where it sleeps and is leashed to (docs/plan/31-the-day.md) */
   home?: { x: number; y: number } | null;
+  /** where it stood last step, prowling (stuck at an edge or a corner: it turns back sooner) */
+  was?: { x: number; y: number } | null;
 }
 
 export interface Prey {
@@ -109,6 +116,9 @@ export interface Prey {
   sprinting: boolean;
   /** not to be had: in a lamp's pool or a flare's, down, away, do-not-disturb, indoors */
   hidden: boolean;
+  /** indoors (hidden too): safe, but they come and look — one with nobody to have prowls
+   *  round the nearest, and stays while they're near */
+  watch?: boolean;
 }
 
 export interface ShadeSense {
@@ -396,6 +406,19 @@ export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => numbe
         // out of the dark 25–45 tiles off, past what it sees: it comes in until it does)
         s.rushing = false;
         const drawn = s.seen ? null : nearestFree(s, sense);
+        // (nobody to have, someone safe indoors near: round them, watching)
+        const watched = s.seen || drawn ? null : nearestWatcher(s, sense);
+        if (watched) {
+          // (closing in as it goes round — kept off the floor, it slides along the edge; now and
+          // then it turns back: pacing)
+          const d = Math.hypot(watched.x - s.x, watched.y - s.y);
+          const moved = s.was ? Math.hypot(s.x - s.was.x, s.y - s.was.y) : 1;
+          s.was = { x: s.x, y: s.y };
+          if (rand() < dt / (moved < 0.01 ? 1.2 : 9)) s.orbit = s.orbit === 1 ? -1 : 1;
+          act.goal = around(s, watched, Math.max(SHADE.watch, d - 4), d > SHADE.watch + 3 ? 0.15 : 0.45);
+          act.speed = SHADE.speed.wander * slow;
+          break;
+        }
         act.goal = s.seen ? { x: s.seen.x, y: s.seen.y } : drawn;
         act.speed = (s.seen ? SHADE.speed.wander : SHADE.speed.stalk * 0.8) * slow;
         break;
@@ -434,6 +457,20 @@ function nearestFree(s: Shade, sense: ShadeSense): { x: number; y: number } | nu
     }
   }
   return best ? { x: best.x, y: best.y } : null;
+}
+
+// the nearest safe indoors, within SHADE.near (to prowl round)
+function nearestWatcher(s: Shade, sense: ShadeSense): { x: number; y: number } | null {
+  let best: Prey | null = null;
+  let bd: number = SHADE.near;
+  for (const p of sense.prey) {
+    const d = Math.hypot(p.x - s.x, p.y - s.y);
+    if (p.watch && d < bd) {
+      best = p;
+      bd = d;
+    }
+  }
+  return best;
 }
 
 // a point `r` from `p`, a little round from where `s` is (its way round): circling, flanking

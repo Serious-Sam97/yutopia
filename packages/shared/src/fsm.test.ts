@@ -197,3 +197,21 @@ test("in the light it flees out of it, burning; the dawn takes it; nobody near f
   const left = step(alone, 25);
   assert.equal(left?.gone, true, "nobody within 70 for 20 s");
 });
+
+test("someone safe indoors: never had, but it doesn't go — it prowls round them, watching", () => {
+  const w = world(30, 0, { hidden: true, watch: true });
+  const left = step(w, 40);
+  assert.equal(left?.gone, undefined, "still there after 40 s");
+  assert.equal(w.s.target, null, "never after her");
+  assert.notEqual(w.s.state, "windup");
+  // round her at the watching distance, moving
+  const d = dist(w);
+  assert.ok(Math.abs(d - SHADE.watch) < 2, `prowling ${d.toFixed(1)} off`);
+  const at = { x: w.s.x, y: w.s.y };
+  step(w, 4);
+  assert.ok(Math.hypot(w.s.x - at.x, w.s.y - at.y) > 1, "it paces round");
+  // gone in (past 70): it goes after 20 s as before
+  w.prey[0].x = 200;
+  const gone = step(w, 25);
+  assert.equal(gone?.gone, true);
+});

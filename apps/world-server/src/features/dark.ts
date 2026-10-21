@@ -461,9 +461,16 @@ registerFeature((room: WorldRoom) => {
       const dawn = mode === "peaceful" || (hour >= 5 && hour < 7.5);
       // who's out there (the ones the shadowed may have), and who isn't to be had
       const prey: (Prey & { yaw: number; level: number })[] = [];
+      // (and those safe indoors, the lot too: never had, but they keep the shadowed from going —
+      // with nobody to have, they prowl round them, watching; upstairs, over the ground floor)
+      const watchers: Prey[] = [];
       const beams: ReturnType<typeof beamOf>[] = [];
       for (const p of room.state.players.values()) {
-        if (!outside(p)) continue;
+        if (!outside(p)) {
+          const at = p.level === 0 ? p : across(room.map, p.level, 0, p);
+          watchers.push({ id: p.sid, x: at.x, y: at.y, crouch: false, sprinting: false, hidden: true, watch: true });
+          continue;
+        }
         const riding = p.busy.startsWith("ride:") || p.busy.startsWith("drive:");
         const hidden =
           riding || p.status === "away" || p.status === "dnd" || !!lampAt(p.x, p.y, night, dark) || p.hp <= 0;
@@ -531,10 +538,11 @@ registerFeature((room: WorldRoom) => {
       // their minds, their feet
       const t = clock;
       bodies = prey;
+      const sensed: readonly Prey[] = watchers.length ? [...prey, ...watchers] : prey;
       for (const [id, r] of shades) {
         const s = r.shade;
         let nearest = Number.POSITIVE_INFINITY;
-        for (const p of prey) nearest = Math.min(nearest, Math.hypot(p.x - s.x, p.y - s.y));
+        for (const p of sensed) nearest = Math.min(nearest, Math.hypot(p.x - s.x, p.y - s.y));
         // asleep in its nest with nobody near, nothing heard, its nest quiet: nothing to think
         const nestAt = nestOf.get(id);
         const heard = shots.filter((q) => clock - q.t < 0.5);
@@ -569,7 +577,7 @@ registerFeature((room: WorldRoom) => {
           burn,
           lit: !!light,
           light,
-          prey,
+          prey: sensed,
           shots: heard,
           // (a line of sight, kept a fifth of a second: 5 Hz is quicker than anyone notices)
           sees: (x, y) => {
