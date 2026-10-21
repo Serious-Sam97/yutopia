@@ -1163,6 +1163,23 @@ export class Grounds3 {
         case "desk":
           g.color(0x5a4636).box(x, y0, z, x + w, y0 + h, z + d);
           break;
+        case "locker":
+          // two doors, a gap between, louvres up top, a handle each
+          g.color(0x4f5a52).box(x, y0, z, x + w, y0 + h, z + d);
+          g.color(0x2b2f2c).box(x + w / 2 - 0.015, y0 + 0.05, z + d, x + w / 2 + 0.015, y0 + h - 0.05, z + d + 0.01);
+          for (let k = 0; k < 3; k++)
+            for (const u of [x + 0.1, x + w / 2 + 0.1])
+              g.color(0x3a423d).box(
+                u,
+                y0 + h - 0.35 + k * 0.07,
+                z + d,
+                u + w / 2 - 0.2,
+                y0 + h - 0.32 + k * 0.07,
+                z + d + 0.01,
+              );
+          for (const u of [x + w / 2 - 0.09, x + w / 2 + 0.06])
+            g.color(0xa7a9ad).box(u, y0 + 0.95, z + d, u + 0.03, y0 + 1.1, z + d + 0.03);
+          break;
         case "screens":
           glow.push([x, y0 + 0.85, z, x + 0.06, y0 + h, z + d, 0x9fd2c0]);
           break;

@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import type { Layout, WorldObjectDef } from "@yutopia/shared";
+import type { Inventory } from "@yutopia/shared/inventory";
 import type { PetRecord } from "@yutopia/shared/pets";
 import { config } from "./config.ts";
 import { metrics } from "./metrics.ts";
@@ -52,6 +53,17 @@ export interface WorldInfo {
   objects: WorldObjectDef[];
   layout?: unknown;
   playlists?: unknown; // the YouTube playlists played here (features/media.ts)
+  loot?: unknown; // the Grounds' loot: spots, the night's budget, drops (features/survival.ts)
+}
+
+// A survivor (docs/plan/30-the-dark.md, phase 2): what they carry, their vitals
+// (stamina always comes back: not kept), the pages they've found, whether the
+// gatehouse locker has given them their first (loaded) revolver.
+export interface SurvivorRecord {
+  inventory: Omit<Inventory, "pages">;
+  vitals: { hp: number; wm: number; bat: number };
+  pages: string[];
+  issued: boolean;
 }
 
 export interface PresenceEntry {
@@ -93,6 +105,10 @@ export const api = {
   savePet: (userId: number, petId: number, patch: Partial<PetRecord>) =>
     call<{ pet: PetRecord }>("PUT", `/pets/${userId}/${petId}`, patch),
   deletePet: (userId: number, petId: number) => call("DELETE", `/pets/${userId}/${petId}`),
+  // the dark: someone's pockets and vitals (null: never been out), saved; the Grounds' loot
+  survivor: (userId: number) => call<{ survivor: SurvivorRecord | null }>("GET", `/survivors/${userId}`),
+  saveSurvivor: (userId: number, s: SurvivorRecord) => call("PUT", `/survivors/${userId}`, s),
+  putLoot: (loot: unknown) => call("PUT", "/world/loot", { loot }),
   // a call that ended (features/phone.ts): written into the thread, for Recents and "missed"
   phoneCall: (c: { from: number; to: number[]; end: string; secs: number; video: boolean; answered: number[] }) =>
     call("POST", "/phone/calls", c),

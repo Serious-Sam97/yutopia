@@ -74,11 +74,14 @@ import {
 import { monitorsToComputers } from "@yutopia/shared/computer";
 import { groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
-import { Allowance, isVerb, MOVE, speedCap } from "@yutopia/shared/move";
+import { Allowance, isVerb, MOVE, MV_WINDED, speedCap } from "@yutopia/shared/move";
+import { DOWN } from "@yutopia/shared/vitals";
 import { ApiError, api, type PresenceEntry } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
+import type { DarkHooks } from "./features/dark.ts";
 import { type Feature, installFeatures } from "./features/index.ts";
+import type { SurvivalHooks } from "./features/survival.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
 import { metrics } from "./metrics.ts";
 import { Player, WorldObject, WorldState } from "./schema.ts";
@@ -139,6 +142,11 @@ export class WorldRoom extends Room<WorldState> {
   private lastPresence = "";
   // features that watch every message before it's handled (build history)
   readonly messageTaps: ((client: WorldClient, type: string) => void)[] = [];
+  // the Grounds' loot as the API kept it, for features/survival.ts to pick up; and that
+  // feature's answers for the move's checks (out of breath: a jog's allowance; a roll's cost)
+  savedLoot: unknown = null;
+  survival: SurvivalHooks | null = null;
+  dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
 
   send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {
     client.send(type, msg);
@@ -299,6 +307,7 @@ export class WorldRoom extends Room<WorldState> {
     if (this.migrated && config.saveMigrations) this.saveMigration();
 
     this.state.playlists = JSON.stringify(cleanPlaylists(info?.playlists ?? []));
+    this.savedLoot = info?.loot ?? null;
     this.registerMessages();
     this.features = installFeatures(this);
 
@@ -506,7 +515,13 @@ export class WorldRoom extends Room<WorldState> {
       if (z > cap || !grid.fitsAt(to.x, to.y, z, 0.05) || !grid.clear(from, to, 0.05, Math.max(z, zFrom)))
         return snap();
       // (a verb — a roll's burst, a slide — goes faster than feet for a moment)
-      ud.allow.grow(dt, speedCap(isVerb(p.jump) && now - p.jumpAt < 1500 ? p.jump : null));
+      // (out of breath: no faster than a jog — docs/plan/30-the-dark.md D2)
+      const winded = !!this.survival?.winded(client.sessionId);
+      // (down: a crawl — docs/plan/30-the-dark.md D7)
+      const fastest = p.downAt
+        ? DOWN.crawl * 1.4
+        : speedCap(isVerb(p.jump) && now - p.jumpAt < 1500 ? p.jump : null, MOVE, winded);
+      ud.allow.grow(dt, fastest);
       if (!ud.allow.spend(Math.hypot(to.x - from.x, to.y - from.y))) return snap();
       const nextArea = areaAt(this.levelMap(level), to.x, to.y);
       if (nextArea && nextArea.key !== p.area && !this.mayEnter(p, nextArea.key)) {
@@ -525,6 +540,8 @@ export class WorldRoom extends Room<WorldState> {
       p.d = (Math.max(0, Math.min(7, m.d | 0)) as number) ?? 0;
       p.a = m.a === ANIM.walk || m.a === ANIM.sit ? m.a : ANIM.idle;
       if (Number.isFinite(m.mv)) p.mv = (m.mv as number) & 31;
+      // (out of breath, they say: taken at their word — it only holds them back)
+      if (Number(m.mv) & MV_WINDED) this.survival?.breathless(client.sessionId);
       if (Number.isFinite(m.yaw)) p.yaw = (m.yaw as number) & 255;
       if (Number.isFinite(m.pitch)) p.pitch = Math.max(-127, Math.min(127, (m.pitch as number) | 0));
       if (Number.isFinite(m.mt)) p.mt = (m.mt as number) >>> 0;
@@ -551,7 +568,7 @@ export class WorldRoom extends Room<WorldState> {
     this.on("jump", (client, m) => {
       const p = this.state.players.get(client.sessionId);
       const k = m?.k;
-      if (!p || !(isJump(k) || isVerb(k)) || p.a === ANIM.sit || p.busy || p.act) return;
+      if (!p || !(isJump(k) || isVerb(k)) || p.a === ANIM.sit || p.busy || p.act || p.downAt) return;
       const now = Date.now();
       // from the ground, or just off it (coyote time, plus a message's lag) — a mantle also from
       // the air (catching an edge on the way up); not twice at once
@@ -560,6 +577,8 @@ export class WorldRoom extends Room<WorldState> {
       // (the feet a hair up already: the jump's first step can be in the last position sent)
       const grounded = p.z - grid.groundAt(p.x, p.y, p.z) < 0.2;
       if (!grounded && now - data(client).footAt > 350 && k !== "mantle") return;
+      // (a roll costs stamina outside; out of breath, none)
+      if (k === "roll" && this.survival && !this.survival.roll(client.sessionId)) return;
       p.jump = k;
       p.jumpAt = now;
       // (how high it can take them: from where they stand — a jump's apex, a climb's top)

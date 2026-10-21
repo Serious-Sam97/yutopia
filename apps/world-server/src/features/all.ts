@@ -21,3 +21,6 @@ import "./computer.ts";
 import "./phone.ts";
 import "./grounds-life.ts";
 import "./cars.ts";
+import "./survival.ts";
+import "./dark.ts";
+import "./arms.ts";

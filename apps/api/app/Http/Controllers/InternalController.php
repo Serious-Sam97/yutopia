@@ -37,6 +37,7 @@ class InternalController extends Controller
             'seeded' => $world->seeded_at !== null,
             'layout' => $world->layout,
             'playlists' => $world->settings['playlists'] ?? [],
+            'loot' => $world->settings['loot'] ?? null,
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld(),
         ]);
     }

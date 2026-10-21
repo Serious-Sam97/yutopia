@@ -1,4 +1,4 @@
-import { BUILDINGS, treeDensity } from "./grounds.ts";
+import { BUILDINGS, surfaceTileAt, treeDensity } from "./grounds.ts";
 
 // How dangerous it is out on the Grounds (docs/plan/30-the-dark.md, D1): what
 // the shadowed's director spends (phase 4) and what the drone rises with. By
@@ -49,6 +49,27 @@ export function dangerAt(a: DangerAt): number {
   const woods = 1 + 0.3 * Math.min(1, treeDensity(a.x, a.z) / 0.95);
   const doors = 0.5 + 0.5 * smooth(40, 50, Math.hypot(a.x - HQ_DOORS.x, a.z - HQ_DOORS.z));
   return Math.min(1, (base + storm) * woods * doors);
+}
+
+// ── how many of the shadowed: the director's sum (world-server features/dark.ts) ──
+// Per person out there, danger × PER_HEAD (night in the open: 4 each, the woods
+// 5), CAP in all. By day only those off the paths count (the roads, the trails,
+// the town's pavements and the lot are safe by day) and not near the HQ: there
+// the open snow gets about one each, the woods two.
+export const SHADOWED = { perHead: 5, cap: 60, dayHQ: 40 };
+const PATHS = new Set(["path", "asphalt", "walk", "floor"]);
+/** On a road, a trail, a pavement, the lot (building coords, tiles). */
+export function onPathAt(x: number, z: number): boolean {
+  return PATHS.has(surfaceTileAt(Math.floor(x), Math.floor(z)));
+}
+/** Is someone at (x, z) the director's by day? Off the paths, away from the HQ. */
+export function dayPrey(x: number, z: number): boolean {
+  return !onPathAt(x, z) && Math.hypot(x - HQ_DOORS.x, z - HQ_DOORS.z) >= SHADOWED.dayHQ;
+}
+/** How many a group may have round it: `people` of them counted (by day, those
+ *  that are `dayPrey`), the danger at the group. */
+export function shadowedWanted(people: number, danger: number): number {
+  return people > 0 ? Math.min(SHADOWED.cap, Math.ceil(people * SHADOWED.perHead * danger)) : 0;
 }
 
 // ── blackouts: every lamp on the Grounds out for a few minutes ───────────────

@@ -968,7 +968,8 @@ export type FitKind =
   | "jukebox"
   | "till"
   | "desk"
-  | "screens";
+  | "screens"
+  | "locker";
 export interface Fit {
   kind: FitKind;
   x: number;
@@ -1027,6 +1028,8 @@ function fitsOf(b: Building): { floor: string; fits: Fit[] } {
   if (b.kind === "gatehouse") {
     f("desk", x1 - 1.2, z0 + 0.8, 0.9, z1 - z0 - 1.6, 0.8);
     f("screens", x1 - 1.0, z0 + 1.6, 0.4, 2.4, 1.3, false);
+    // the guards' locker against the north wall (docs/plan/30-the-dark.md: a revolver in it)
+    f("locker", x0 + 1, z0 + 0.15, 1, 0.55, 1.9);
     return { floor: "#8f8b83", fits };
   }
   // the market: shelves in rows, the till by the door, the fridges down a side

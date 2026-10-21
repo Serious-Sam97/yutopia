@@ -9,8 +9,8 @@ import { PadState } from "./pad";
 // was pressed this frame.
 
 /** Pressed this frame (besides the body's own: jump, dodge, crouch). */
-export type Press = "use" | "torch" | "shoulder" | "camera" | "look";
-const PRESSES: Press[] = ["use", "torch", "shoulder", "camera", "look"];
+export type Press = "use" | "torch" | "shoulder" | "camera" | "look" | "aid" | "inventory";
+const PRESSES: Press[] = ["use", "torch", "shoulder", "camera", "look", "aid", "inventory"];
 // the actions the world takes from the keys here (the rest are still its own keys)
 const WORLD: Action[] = ["up", "down", "left", "right", "walk", "sprint", "jump", "crouch", "dodge", "aim"];
 

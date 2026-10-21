@@ -6,6 +6,7 @@ import { type Bonds, emptyMemory, type Memory, rollTraits, type Traits } from ".
 // clothes it wears, and battles with other pets. Pure functions, no state.
 
 import { CLOTH_COLORS } from "./avatar.ts";
+import { clamp100 as clamp, drain, fill } from "./needs.ts";
 
 export const SPECIES = ["dog", "cat", "rabbit", "platypus", "capybara", "parrot"] as const;
 export type Species = (typeof SPECIES)[number];
@@ -304,7 +305,6 @@ export const FULL_NEEDS: Needs = { food: 100, water: 100, energy: 100, fun: 100,
 // per hour, awake and with the owner around
 export const DECAY = { food: 4, water: 6, fun: 5, energy: 8, sleepGain: 25, hurt: 4, heal: 3 } as const;
 export const OFFLINE_RATE = 0.25;
-const clamp = (v: number) => Math.max(0, Math.min(100, v));
 
 // Where the needs are `hours` later. Food or water at zero hurt; both above
 // 30 heal. Asleep: energy comes back. Away from its owner: everything slower.
@@ -312,10 +312,10 @@ export function settleNeeds(n: Needs, hours: number, o: { asleep: boolean; onlin
   if (hours <= 0 || n.health <= 0) return { ...n };
   const k = o.online ? 1 : OFFLINE_RATE;
   const h = hours * k;
-  const food = clamp(n.food - DECAY.food * h);
-  const water = clamp(n.water - DECAY.water * h);
-  const fun = clamp(n.fun - DECAY.fun * h);
-  const energy = clamp(o.asleep ? n.energy + DECAY.sleepGain * h : n.energy - DECAY.energy * h);
+  const food = drain(n.food, DECAY.food, h);
+  const water = drain(n.water, DECAY.water, h);
+  const fun = drain(n.fun, DECAY.fun, h);
+  const energy = o.asleep ? fill(n.energy, DECAY.sleepGain, h) : drain(n.energy, DECAY.energy, h);
   // health follows what the hour ended with (good enough for the panel and the server's short ticks)
   let health = n.health;
   const empty = (food <= 0 ? 1 : 0) + (water <= 0 ? 1 : 0);

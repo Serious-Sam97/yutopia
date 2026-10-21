@@ -950,3 +950,125 @@ export function verbPose(verb: Verb, t: number, reduced = false): Moved {
 export function verbRoot(verb: Verb, t: number, h = 0.6): { ahead: number; up: number } {
   return verbPath(verb, t, h);
 }
+
+// ── the shadowed (docs/plan/30-the-dark.md D5): the upper body over their walk ──
+export type ShadeKind = "lurch" | "windup" | "strike" | "recoil" | "exposed";
+const UPPER = ["shoulderL", "shoulderR", "elbowL", "elbowR", "wristL", "wristR", "spine", "neck", "head"] as const;
+const smooth01 = (x: number) => {
+  const k = Math.max(0, Math.min(1, x));
+  return k * k * (3 - 2 * k);
+};
+/** Their arms, back and head (the legs stay the walk's): slumped and twitching as they come;
+ *  the arms going up overhead through the windup (`t` s into it) and down in the strike;
+ *  an arm over the face, turned away, under a focused beam; hunched, exposed. `seed` keeps
+ *  each one's twitches its own. */
+export function shadePose(kind: ShadeKind, t: number, seed = 0): Pose {
+  let c: Ch;
+  if (kind === "windup") {
+    const k = smooth01(t / 0.45);
+    c = {
+      sL: -0.4 - 2.3 * k,
+      sR: -0.4 - 2.3 * k,
+      eL: -0.3 - 0.6 * k,
+      eR: -0.3 - 0.6 * k,
+      oL: 0.13 + 0.25 * k,
+      oR: 0.13 + 0.25 * k,
+      sx: 0.25 - 0.4 * k,
+      dx: -0.15 * k,
+    };
+  } else if (kind === "strike") {
+    const k = smooth01(t / 0.12);
+    c = {
+      sL: -2.7 + 2.2 * k,
+      sR: -2.7 + 2.2 * k,
+      eL: -0.9 + 0.6 * k,
+      eR: -0.9 + 0.6 * k,
+      sx: -0.15 + 0.6 * k,
+      dx: 0.2 * k,
+    };
+  } else if (kind === "recoil") {
+    // (the arm across the face, the body twisting from the light; it shakes)
+    const shake = 0.04 * Math.sin(t * 47 + seed);
+    c = {
+      sL: -1.95,
+      eL: -2.1,
+      oL: -0.15,
+      wL: 0.3,
+      sR: 0.45,
+      eR: -0.5,
+      sx: -0.22 + shake,
+      sy: 0.28,
+      dy: 0.55,
+      dx: 0.12,
+    };
+  } else if (kind === "exposed") {
+    c = { sL: -0.85, sR: -0.85, eL: -1.7, eR: -1.7, oL: -0.1, oR: -0.1, sx: 0.32, dx: 0.35 };
+  } else {
+    // the lurch: slumped forward, the arms hanging ahead, the head down; now and then a twitch
+    const ph = t * 0.9 + seed * 7.13;
+    const twitch = Math.max(0, Math.sin(ph * 2.7) * Math.sin(ph * 1.3) - 0.85) * 6;
+    c = {
+      sL: -0.35 + 0.08 * Math.sin(ph * 4),
+      sR: -0.3 + 0.08 * Math.sin(ph * 4 + 2),
+      eL: -0.3,
+      eR: -0.25,
+      sx: 0.3,
+      sz: 0.08 * Math.sin(ph * 0.7),
+      dx: 0.32,
+      dy: twitch * (seed % 2 ? 0.5 : -0.5),
+      dz: 0.25 * twitch,
+    };
+  }
+  const p = body(c).pose;
+  const out: Pose = {};
+  for (const j of UPPER) out[j] = p[j];
+  return out;
+}
+
+// ── down (docs/plan/30-the-dark.md D7): on hands and knees, crawling; and the one by them,
+// kneeling, a hand on their back ──
+/** Crawling on hands and knees, `phase` 0..1 a cycle (distance-driven); standing still at 0. */
+export function crawlPose(phase: number): Moved {
+  const s = Math.sin(phase * TAU);
+  const c: Ch = {
+    up: -0.36,
+    hx: 1.05,
+    sx: 0.2,
+    nx: -0.5,
+    dx: -0.55,
+    // the knees under the hips, a step each in turn
+    tL: -1.25 + 0.25 * s,
+    tR: -1.25 - 0.25 * s,
+    kL: 1.95,
+    kR: 1.95,
+    fL: 0.9,
+    fR: 0.9,
+    // the hands down ahead, reaching in turn
+    sL: -1.25 - 0.3 * s,
+    sR: -1.25 + 0.3 * s,
+    eL: -0.25,
+    eR: -0.25,
+    wL: 0.6,
+    wR: 0.6,
+  };
+  return body(c);
+}
+/** Kneeling by someone down, a hand out on their back. */
+export function kneelPose(): Moved {
+  const c: Ch = {
+    up: -0.22,
+    tL: -1.45,
+    kL: 1.55,
+    fL: 0.1,
+    tR: 0.15,
+    kR: 1.9,
+    fR: 1.2,
+    sx: 0.35,
+    dx: 0.25,
+    sR: -1.1,
+    eR: -0.4,
+    sL: -0.2,
+    eL: -0.6,
+  };
+  return body(c);
+}

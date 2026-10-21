@@ -138,6 +138,9 @@ export interface PersonIn {
   ringing?: boolean;
   recording?: boolean;
   torch?: boolean; // the phone's flashlight on
+  focused?: boolean; // …focused: narrow and far (docs/plan/30-the-dark.md D4)
+  gun?: string; // the weapon in the hand (D6): "revolver", "shotgun"
+  down?: "down" | "kneel"; // down, crawling; kneeling by someone down (D7: world/dark says)
   jump?: JumpNow; // jumping (shared/jump.ts): its stage
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them, tiles
@@ -145,6 +148,18 @@ export interface PersonIn {
   // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)
   verb?: { kind: string; t: number; at?: number };
   pitch?: number; // aiming: up from level (radians)
+  // one of the shadowed (docs/plan/30-the-dark.md D5; world/dark gives them): its upper body's
+  // pose and how far in (s), its own twitches, how wrapped in the dark it is (0 bare … 1),
+  // and its state (shared dark/fsm.ts) for the shroud
+  shade?: {
+    pose: "lurch" | "windup" | "strike" | "recoil" | "exposed";
+    t: number;
+    seed: number;
+    dark: number;
+    state: string;
+    since: number; // (performance.now ms)
+    burn?: { x: number; y: number } | null; // a focused beam on it, from there
+  };
 }
 
 // A phone in the hand: its case and the face this view sees

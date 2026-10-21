@@ -19,6 +19,8 @@ export const ACTIONS = [
   "shoulder",
   "camera",
   "look",
+  "aid", // first aid from the pockets (docs/plan/30-the-dark.md): the pad's d-pad ↓
+  "inventory", // the pockets, all of them (the dark's inventory): I, the pad's Menu
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -41,6 +43,8 @@ export const DEFAULT_KEYS: KeyBindings = {
   shoulder: ["KeyV"],
   camera: ["KeyY"],
   look: ["KeyZ"],
+  aid: [],
+  inventory: ["KeyI"],
 };
 
 // the standard pad: 0 A/✕ 1 B/○ 2 X/□ 3 Y/△ 4 LB 5 RB 6 LT 7 RT 8 View 9 Menu 10 L3 11 R3 12–15 d-pad ↑↓←→
@@ -55,6 +59,8 @@ export const DEFAULT_PAD: PadBindings = {
   sprint: 10,
   shoulder: 11,
   torch: 12,
+  aid: 13,
+  inventory: 9,
 };
 
 const STORE = "yutopia.bindings";

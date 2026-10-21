@@ -26,7 +26,9 @@ import {
   wallCuts,
   wellsOf,
 } from "@yutopia/shared";
+import { BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
 import { LAMPS as GROUND_LAMPS } from "@yutopia/shared/grounds";
+import { MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -90,6 +92,7 @@ import type { PetModel } from "../art/pets3d";
 import type { PuffKind } from "../engine";
 import { type Footprints, printLeft } from "../footprints";
 import { activePad } from "../pads";
+import { Arms3 } from "./arms3d";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
 import { carGeometry } from "./campus";
@@ -103,6 +106,7 @@ import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
 import { type Mats as CharMats, Person3D } from "./person3d";
 import { Post3 } from "./post3d";
+import { Shroud3 } from "./shroud3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { type TableScene3, TablesIn3D } from "./tables3d";
@@ -182,14 +186,19 @@ const GROUND_LAMP: Record<string, { h: number; radius: number; intensity: number
   lone: { h: 4.4, radius: 10, intensity: 11 },
   porch: { h: 2.2, radius: 6, intensity: 4 },
 };
+// a flare burning on the snow (docs/plan/30-the-dark.md D6), lighting like a ground lamp, red
+const FLARE_LAMP = { h: 0.5, radius: 8, intensity: 6 };
 const GROUND_REACH = 44;
 const GROUND_POOL = 4; // their own point lights (High; fewer below)
 // the phones' flashlights: spot lights (always there, dark when off: no shader
 // changes), mine and the nearest other's; a beam you see in the snow and fog
 const TORCHES = 2;
 const PREP_LAYER = 30; // (things compiling: no camera draws it)
-const BEAM_LEN = 10;
-const BEAM_HALF = 0.36;
+// the cone's mesh is built wide (shared beam.ts BEAM.wide) and scaled down to a focused one
+const BEAM_LEN = BEAM.wide.len;
+const BEAM_HALF = BEAM.wide.half;
+const FOCUS_ALONG = BEAM.focus.len / BEAM_LEN;
+const FOCUS_ACROSS = (Math.tan(BEAM.focus.half) * BEAM.focus.len) / (Math.tan(BEAM_HALF) * BEAM_LEN);
 const LAMP_FADE = 4; // …fading out over the last few
 const LAMP_GLOW = 3.5; // how strongly a lamp post's pool lights what's under it at night
 const CAM_ROOM = 2.2; // the least room in front of a wall for the camera to stand there (else it rises)
@@ -307,7 +316,7 @@ export class ThirdPersonView {
     spot: SpotLight;
     beam: Mesh;
     mat: MeshBasicMaterial;
-    on: { x: number; y: number; a: number } | null;
+    on: Beam | null;
   }[] = [];
   private breathAt = new Map<string, number>();
   private stormFog = new Color();
@@ -399,7 +408,10 @@ export class ThirdPersonView {
     fadeAlong.height = 64;
     const fg = fadeAlong.getContext("2d") as CanvasRenderingContext2D;
     const grd = fg.createLinearGradient(0, 0, 0, 64);
-    grd.addColorStop(0, "#ffffff");
+    // (from nothing at the phone — the tip near the camera was a hard white blob — to its
+    // brightest a little way out, then fading along its length)
+    grd.addColorStop(0, "#000000");
+    grd.addColorStop(0.09, "#ffffff");
     grd.addColorStop(0.35, "#6a6a6a");
     grd.addColorStop(1, "#000000");
     fg.fillStyle = grd;
@@ -1431,8 +1443,23 @@ export class ThirdPersonView {
   }
 
   // One frame: people from the world's bodies (`me` = whose camera this is).
+  /** Bodies besides the room's people: the shadowed (world/dark, docs/plan/30-the-dark.md D5). */
+  extraBodies: (() => Body3[]) | null = null;
+  private shroud: Shroud3 | null = null;
+  /** Who's down (crawling) and who's kneeling by them getting them up (world/dark says; D7). */
+  downed = new Map<string, "down" | "kneel">();
+  /** Flares burning (world/dark gives them: the floor's coords, feet z, s lit): a red ground lamp each. */
+  flares: { x: number; y: number; z: number; t: number }[] = [];
+  private arms3: Arms3 | null = null;
+  /** Shots, sparks, flares in the air and on the snow (tp/arms3d.ts), made when first wanted. */
+  arms(): Arms3 {
+    this.arms3 ??= new Arms3(this.scene);
+    return this.arms3;
+  }
+
   frame(dt: number, bodies: Body3[], meId: string) {
     this.time += dt;
+    if (this.extraBodies) bodies = bodies.concat(this.extraBodies());
     this.warmUp(performance.now());
     this.syncLifts(performance.now());
     // everyone in my floor's frame: the floors below where they are, above not drawn
@@ -1531,7 +1558,10 @@ export class ThirdPersonView {
         this.target.y + up + Math.sin(v.pitch) * d,
         this.target.z - Math.sin(this.yaw) * d * vc + sz,
       );
-      if (cam.y < 0.25) cam.y = 0.25;
+      // (not under the ground I stand on: the floor's 0 indoors, the land's own height out on it —
+      // the pond lies 1.7 down, and a floor-high limit there kept the camera from looking up)
+      const floor = this.target.y - EYE;
+      if (cam.y < floor + 0.25) cam.y = floor + 0.25;
       this.camera.lookAt(this.target.x + sx, this.target.y + up, this.target.z + sz);
     }
 
@@ -1611,9 +1641,14 @@ export class ThirdPersonView {
         }
         this.sphere.center.set(b.x, 0.9, b.y);
         const seat3 = b.a === 2 ? this.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
-        p3.root.visible = !hidden3;
+        // (the shadowed: not there yet while the dark gathers, gone as it goes)
+        const sh = b.shade;
+        const shadeT = sh ? (performance.now() - sh.since) / 1000 : 0;
+        const notThere =
+          !!sh && ((sh.state === "emerge" && shadeT < 0.6) || (sh.state === "dissolve" && shadeT > 0.45));
+        p3.root.visible = !hidden3 && !notThere;
         if (b.id === meId) mySeat = seat3;
-        p3.update({ ...b, angle: angle3, seat: seat3 }, dt, {
+        p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id) }, dt, {
           camX: cam.x,
           camZ: cam.z,
           onScreen:
@@ -1679,6 +1714,34 @@ export class ThirdPersonView {
         p.dispose();
         this.people3.delete(id);
       }
+    // the shadowed's shroud (tp/shroud3d.ts): their smoke, and embers where a beam burns them
+    const shades = bodies.filter((b) => b.shade);
+    if (shades.length || this.shroud) {
+      this.shroud ??= new Shroud3(this.scene);
+      const now3 = performance.now();
+      const px = this.renderer.domElement.clientHeight / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
+      this.shroud.update(
+        shades.map((b) => {
+          const sh = b.shade as NonNullable<Body3["shade"]>;
+          return {
+            id: b.id,
+            x: b.x,
+            y: b.y,
+            z: b.z ?? 0,
+            dark: sh.dark,
+            state: sh.state,
+            t: (now3 - sh.since) / 1000,
+            burn: sh.burn ?? null,
+          };
+        }),
+        this.camera,
+        dt,
+        this.nightLevel,
+        1.8,
+        px,
+      );
+    }
+    if (this.arms3 || this.flares.length) this.arms().update(dt, this.flares);
     // first person: my hands, posed by my body's motion, framed in front of my eyes
     const C3 = this.chars();
     if (first && this.handsOn && me && !me.npc && C3 && this.charF && this.charMats && this.gcMix < 0.002) {
@@ -1765,6 +1828,9 @@ export class ThirdPersonView {
       this.charMats = {
         body,
         bodyAway,
+        // (the shadowed: near black, the clothes' colours only hinted)
+        shade: new MeshBasicMaterial({ vertexColors: true, color: 0x24262e }),
+        shadeInk: C.inkMaterial("#050506"),
         ink: C.inkMaterial(),
         inkAway: C.inkMaterial("#151515", 0.55),
         prop,
@@ -1875,6 +1941,7 @@ export class ThirdPersonView {
     const now = performance.now();
     const seen = new Set<string>();
     for (const b of bodies) {
+      if (b.shade) continue; // (the shadowed have no names)
       seen.add(b.id);
       let t = this.tagEls.get(b.id);
       if (!t) {
@@ -2201,7 +2268,21 @@ export class ThirdPersonView {
     const g = this.around.grounds;
     const on = Math.min(1, Math.max(0, night * 1.3 - 0.1));
     const n = this.quality === "high" ? GROUND_POOL : this.quality === "medium" ? 2 : 1;
-    const near: { x: number; y: number; h: number; c: (typeof GROUND_LAMP)[string]; d: number }[] = [];
+    const near: { x: number; y: number; h: number; c: (typeof GROUND_LAMP)[string]; d: number; flare?: boolean }[] = [];
+    // flares first, day or night: red, ~6 over 11 tiles (the mocks' 02-hud-night), flickering
+    if (this.level === 0)
+      for (const f of this.flares) {
+        const d = Math.hypot(f.x - this.target.x, f.y - this.target.z);
+        if (d < GROUND_REACH)
+          near.push({
+            x: f.x + 0.1,
+            y: f.y,
+            h: f.z + 0.5,
+            c: { ...FLARE_LAMP, intensity: FLARE_LAMP.intensity * (0.85 + 0.15 * Math.sin(this.time * 23 + f.t * 7)) },
+            d: -1,
+            flare: true,
+          });
+      }
     if (g && this.level === 0 && on > 0) {
       const off = offsetOf(this.building, 0);
       const t = this.target;
@@ -2224,7 +2305,8 @@ export class ThirdPersonView {
       }
       p.position.set(l.x, l.h, l.y);
       p.distance = l.c.radius * 1.4;
-      p.intensity = l.c.intensity * on * fade * fade * (3 - 2 * fade);
+      p.color.setHex(l.flare ? 0xff3a24 : 0xffd29a);
+      p.intensity = l.flare ? l.c.intensity : l.c.intensity * on * fade * fade * (3 - 2 * fade);
     });
   }
 
@@ -2271,13 +2353,9 @@ export class ThirdPersonView {
     }
     for (const t of this.torch3) {
       if (!t.on) continue;
-      const dx = x - t.on.x;
-      const dy = y - t.on.y;
-      const d = Math.hypot(dx, dy);
-      if (d > BEAM_LEN || d < 0.3) continue;
-      const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - t.on.a), Math.cos(Math.atan2(dy, dx) - t.on.a)));
-      if (off > BEAM_HALF) continue;
-      const k = (1 - d / BEAM_LEN) * (1 - (off / BEAM_HALF) ** 2) * (0.2 + 0.9 * this.nightLevel);
+      // (shared beam.ts: the same test iso and the server make; a focused beam is the brighter)
+      const k = beamAt(t.on, x, y) * (0.2 + 0.9 * this.nightLevel) * (t.on.focus ? 1.5 : 1);
+      if (k <= 0) continue;
       out.r += k;
       out.g += k * 0.97;
       out.b += k * 0.9;
@@ -2424,21 +2502,33 @@ export class ThirdPersonView {
         tc.beam.visible = false;
         continue;
       }
-      const a = b.angle ?? dirAngle(b.d);
-      const ca = Math.cos(a);
-      const sa = Math.sin(a);
-      const feet = b.z ?? b.ground ?? 0;
-      // (from the phone in the hand, at the chest, a little ahead; aimed down the way ahead)
-      const hx = b.x + ca * 0.32;
-      const hy = b.y + sa * 0.32;
-      tc.on = { x: b.x, y: b.y, a };
-      tc.spot.position.set(hx, feet + 1.2, hy);
-      tc.spot.target.position.set(b.x + ca * 7, feet + 0.1, b.y + sa * 7);
+      // where they look (as they turned, not 8 ways), up as they aim; focused: narrow and far
+      // (shared beam.ts: everyone draws the same beam from the same numbers)
+      const aiming = ((b.mv ?? 0) & MV_AIM) !== 0;
+      const beam = beamOf(
+        b.x,
+        b.y,
+        b.z ?? b.ground ?? 0,
+        b.angle ?? dirAngle(b.d),
+        aiming ? (b.pitch ?? 0) : null,
+        !!b.focused,
+      );
+      const cp = Math.cos(beam.pitch);
+      const dir = { x: Math.cos(beam.yaw) * cp, y: Math.sin(beam.pitch), z: Math.sin(beam.yaw) * cp };
+      const { len, half } = beam.focus ? BEAM.focus : BEAM.wide;
+      tc.on = beam;
+      tc.spot.position.set(beam.x, beam.z, beam.y);
+      tc.spot.target.position.set(beam.x + dir.x * 7, beam.z + dir.y * 7, beam.y + dir.z * 7);
       tc.spot.target.updateMatrixWorld();
-      tc.spot.intensity = 1.5 + 24 * night;
+      tc.spot.angle = half * 1.25;
+      tc.spot.distance = len * 1.6;
+      // (focused: a hard round spot where it lands — a teammate's focus is easy to read)
+      tc.spot.penumbra = beam.focus ? 0.22 : 0.55;
+      tc.spot.intensity = (1.5 + 24 * night) * (beam.focus ? 1.8 : 1);
       tc.beam.position.copy(tc.spot.position);
       tc.beam.lookAt(tc.spot.target.position);
-      tc.mat.opacity = Math.min(0.5, (0.03 + 0.16 * night) * (1 + this.storm * 1.6));
+      tc.beam.scale.set(beam.focus ? FOCUS_ACROSS : 1, beam.focus ? FOCUS_ACROSS : 1, beam.focus ? FOCUS_ALONG : 1);
+      tc.mat.opacity = Math.min(0.5, (0.03 + 0.16 * night) * (1 + this.storm * 1.6) * (beam.focus ? 1.35 : 1));
       tc.beam.visible = tc.mat.opacity > 0.01;
     }
   }
@@ -3080,6 +3170,8 @@ export class ThirdPersonView {
   }
 
   destroy() {
+    this.shroud?.dispose();
+    this.arms3?.dispose();
     const c = this.renderer.domElement;
     c.removeEventListener("pointerdown", this.onDown);
     c.removeEventListener("pointermove", this.onMove);

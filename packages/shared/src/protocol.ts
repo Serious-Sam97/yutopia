@@ -3,6 +3,8 @@
 import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
 import type { CarWire } from "./car/net.ts";
+import type { LootItem } from "./dark/loot.ts";
+import type { Inventory } from "./inventory.ts";
 import type { JumpKind } from "./jump.ts";
 import type { MediaItem } from "./media.ts";
 import type { VerbKind } from "./move/verbs.ts";
@@ -276,6 +278,34 @@ export interface ClientMessages {
   "call:end": { id: string };
   "call:add": { id: string; uid: number };
   "call:video": { id: string; on: boolean };
+  // the dark (docs/plan/30-the-dark.md, phase 2): the client's chunk is listening (send my
+  // pockets); search a spot (shared dark/loot.ts LOOT id, or "locker"); pick up something
+  // dropped; use a pocket (first aid, a battery); drop a pocket (0–5) or a weapon (6–7)
+  "dark:hello": Record<string, never>;
+  "dark:loot": { spot: string };
+  "dark:pick": { id: string; slot?: number }; // (slot: into that pocket first: the inventory's drag)
+  "dark:move": { from: number; to: number }; // a drag in the inventory (shared inventory.ts moveSlot)
+  "dark:use": { slot: number };
+  "dark:drop": { slot: number };
+  // an admin's own vitals full again (health, stamina, warmth, the battery): for trying things out
+  "mod:refill": { kit?: boolean; hp?: number; wm?: number };
+  // the shadowed (features/dark.ts), admins: off ("peaceful") or on ("normal"); `spawn`: that
+  // many out of the dark near me, to try the fight
+  "mod:dark": { mode?: "peaceful" | "normal" | "called"; spawn?: number };
+  // guns and flares (D6, features/arms.ts): a weapon in the hand (0, 1: the weapon slots;
+  // -1: none), a reload, a shot — from the muzzle, along the aim, the line's lag as I measured
+  // it (ms) and the pellets' seed — and a flare thrown along the aim
+  "arms:draw": { slot: number };
+  "arms:reload": Record<string, never>;
+  "arms:fire": { ox: number; oy: number; oz: number; yaw: number; pitch: number; lag: number; seed: number };
+  "arms:flare": { yaw: number; pitch: number };
+  // the line's round trip, measured (its lag goes with a shot)
+  "arms:ping": { t: number };
+  // down and up (D7): holding to get someone up (their session id; on: started, off: let go),
+  // holding my own first aid while I'm down; admins: down at once (to try it)
+  "dark:revive": { sid: string; on: boolean };
+  "dark:selfaid": { on: boolean };
+  "mod:down": Record<string, never>;
 }
 
 // server → client
@@ -328,6 +358,30 @@ export interface ServerMessages {
   "phone:live": { event: Record<string, unknown> };
   "call:update": CallInfo & { phase: "ringing" | "live" | "ended"; end?: CallEnd };
   "call:join": { id: string; url: string; token: string; room: string };
+  // the dark: what I carry and the torch's battery (only mine, on asking and on every
+  // change); what a search or a pick-up gave (full: my pockets couldn't take it all; gone:
+  // someone had already emptied it)
+  "dark:pockets": { inv: Inventory; bat: number };
+  "dark:found": { spot: string; got: LootItem[]; full: boolean; gone?: boolean };
+  // one of the shadowed struck me (how much health it took); I went down to nothing and woke
+  // at the office (docs/plan/30-the-dark.md D7: phase 6 puts the others' 30 s before it)
+  "dark:hit": { id: string; n: number };
+  "dark:awake": Record<string, never>;
+  // what my shot did (per one hit: a spark off a shield, a wound, one put down); someone's
+  // shot near me (their tracer, their flash: the same pellets from the seed); a flare thrown
+  "arms:hit": { id: string; kind: "spark" | "hurt" | "killed"; x: number; y: number; z: number };
+  "arms:shot": {
+    sid: string;
+    gun: string;
+    ox: number;
+    oy: number;
+    oz: number;
+    yaw: number;
+    pitch: number;
+    seed: number;
+  };
+  "arms:throw": { sid: string; x0: number; y0: number; z0: number; x: number; y: number; z: number; secs: number };
+  "arms:pong": { t: number };
 }
 
 // Things you can be busy with (shown on the body: hands on the controls…).

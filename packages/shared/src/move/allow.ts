@@ -6,9 +6,10 @@ import { rollSpeed, type VerbKind } from "./verbs.ts";
 // may go (its verb's, else a sprint's) over the time that passed, up to a
 // little slack, and every reported move spends it. Short of it: a snap back.
 
-/** The fastest a body may go, tiles / s, doing `verb` (null: on its feet). */
-export function speedCap(verb: VerbKind | null, spec: MoveSpec = MOVE): number {
-  const feet = spec.sprint * 1.15;
+/** The fastest a body may go, tiles / s, doing `verb` (null: on its feet);
+ *  `winded` (out of breath: docs/plan/30-the-dark.md D2), no sprint, a jog's. */
+export function speedCap(verb: VerbKind | null, spec: MoveSpec = MOVE, winded = false): number {
+  const feet = (winded ? spec.jog : spec.sprint) * 1.15;
   switch (verb) {
     case "roll":
       return Math.max(feet, rollSpeed(0, spec) * 1.1);

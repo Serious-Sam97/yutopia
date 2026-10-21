@@ -1,0 +1,705 @@
+import { ANIM, levelMap, tileAt } from "@yutopia/shared";
+import {
+  addItem,
+  addItemTo,
+  addStack,
+  addWeapon,
+  type Budget,
+  blackoutAt,
+  canFocus,
+  cleanInventory,
+  consume,
+  count,
+  DOWN,
+  DROP_MS,
+  emptyInventory,
+  FULL_VITALS,
+  freshClock,
+  hasWeapon,
+  hurt,
+  type Inventory,
+  type ItemId,
+  inLampPool,
+  isStack,
+  isWeapon,
+  LOCKER,
+  LOOT_REACH,
+  type LootItem,
+  lootSpot,
+  moveSlot,
+  nightBudget,
+  nightness,
+  nightOf,
+  REFILL_MIN,
+  removeSlot,
+  rollLoot,
+  spendRoll,
+  stepVitals,
+  takeStack,
+  type Vitals,
+  type VitalsClock,
+  vitalByte,
+  WEAPON_SLOT,
+  WEAPONS,
+} from "@yutopia/shared/dark";
+import { INSIDES } from "@yutopia/shared/grounds";
+import { GAITS, MOVE, MV_AIM } from "@yutopia/shared/move";
+import { api, type SurvivorRecord } from "../api.ts";
+import { config } from "../config.ts";
+import { Drop, type Player } from "../schema.ts";
+import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
+import { registerFeature } from "./index.ts";
+
+// Survival on the Grounds (docs/plan/30-the-dark.md, phase 2): everyone's
+// vitals settled every tick from what their body does (a sprint outside drains
+// stamina; the cold, warmth; the battery), what each person carries (sent only
+// to them), the loot spots and what's dropped on the snow, the gatehouse's
+// locker, and saving it all through the API — the people's (`survivors`),
+// debounced as the pets are, and the Grounds' loot (the world's settings).
+// The room asks it whether someone is winded (the allowance falls to a jog)
+// and to pay for a roll.
+
+// (YUTOPIA_LOOT_FAST: the tests' — refills in a moment, not minutes)
+const FAST = process.env.YUTOPIA_LOOT_FAST === "1";
+const SAVE_MS = 30_000;
+// (YUTOPIA_DARK_FAST: the tests' — down, a bleed in seconds)
+const FAST_DOWN = process.env.YUTOPIA_DARK_FAST === "1";
+const BLEED_MS = (FAST_DOWN ? 3 : DOWN.bleed) * 1000;
+const REVIVE_MS = DOWN.revive * 1000;
+const SELF_MS = DOWN.selfAid * 1000;
+const WINDED_GRACE_MS = 300; // the client stops sprinting a message's lag before we hear of it
+const SPRINT_SEEN = MOVE.jog * 1.25; // tiles / s over the last quarter second (for a second): no jog
+const SPRINT = GAITS.indexOf("sprint");
+const USABLE = ["aid", "battery"] as const;
+const MAX_DROPS = 300;
+
+interface Survivor {
+  uid: number;
+  bot: boolean;
+  v: Vitals;
+  c: VitalsClock;
+  inv: Inventory;
+  issued: boolean; // the locker's first revolver (loaded) given
+  loaded: boolean; // the saved record is in (until then nothing can be taken or used)
+  dirty: boolean;
+  savedAt: number;
+  windedAt: number; // when stamina ran out (0: not winded)
+  trail: { t: number; x: number; y: number }[]; // the last quarter second's positions
+  selfAt: number; // down, using their own first aid since (server ms; 0: not)
+  awayOut: number; // s away out on the land at night (D7: then down)
+  fastSince: number; // going faster than a jog since (0: not)
+  batSent: number;
+  batAt: number;
+  out: boolean; // outside (counted for the night's budget)
+}
+
+interface SpotState {
+  until: number; // empty until then (0: full)
+  left?: LootItem[]; // what didn't fit last time (found first next time)
+}
+interface LootSave {
+  spots: Record<string, SpotState>;
+  night: number;
+  people: number[];
+  spent: Budget;
+  drops: { id: string; item: string; n: number; loaded: number; x: number; y: number; at: number }[];
+}
+
+export interface SurvivalHooks {
+  /** out of breath for longer than a message's lag: the allowance is a jog's */
+  winded(sid: string): boolean;
+  /** a roll's stamina: false (refuse it) while winded */
+  roll(sid: string): boolean;
+  /** the client says it's out of breath (its own count reached 0 a moment before ours) */
+  breathless(sid: string): void;
+  /** a strike (features/dark.ts): `n` off health; at nothing, they go down */
+  hurt(sid: string, n: number): void;
+  /** down (D7): crawling, no jumps, no shots */
+  down(sid: string): boolean;
+  /** what they carry, to change in place (features/arms.ts: rounds, flares); null until loaded */
+  inventory(sid: string): Inventory | null;
+  /** …changed: sent to them and saved */
+  changed(sid: string): void;
+}
+
+const offlineSurvivors = new Map<number, SurvivorRecord>();
+
+registerFeature((room: WorldRoom) => {
+  const people = new Map<number, Survivor>(); // by user id
+  const hello = new Set<string>(); // sids whose chunk listens
+  const ground = () => levelMap(room.map, 0);
+  // building coords (the Grounds') of a ground-floor spot
+  const toB = (x: number, y: number) => ({ x: x + (ground()?.ox ?? 0), z: y + (ground()?.oy ?? 0) });
+  const onLand = (p: Player) => p.level === 0 && room.gridFor(p.uid, 0).onLand(p.x, p.y);
+  const inside = (bx: number, bz: number) =>
+    INSIDES.some((i) => bx >= i.b.x0 && bx < i.b.x1 && bz >= i.b.z0 && bz < i.b.z1);
+  const of = (sid: string) => {
+    const p = room.state.players.get(sid);
+    return p ? people.get(p.uid) : undefined;
+  };
+  const clientOf = (sid: string) => room.clients.getById(sid) as WorldClient | undefined;
+
+  // ── the people ─────────────────────────────────────────────────────────────
+  const recordOf = (s: Survivor): SurvivorRecord => ({
+    inventory: { weapons: s.inv.weapons, pockets: s.inv.pockets },
+    vitals: { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat },
+    pages: s.inv.pages,
+    issued: s.issued,
+  });
+  const save = async (s: Survivor, now = Date.now()) => {
+    if (s.bot || !s.loaded) return;
+    s.dirty = false;
+    s.savedAt = now;
+    const rec = recordOf(s);
+    if (config.offline) {
+      offlineSurvivors.set(s.uid, structuredClone(rec));
+      return;
+    }
+    await api.saveSurvivor(s.uid, rec).catch((e) => console.warn("[survival] save", (e as Error).message));
+  };
+  const adopt = (s: Survivor, rec: SurvivorRecord | null) => {
+    if (rec) {
+      s.inv = cleanInventory({ ...rec.inventory, pages: rec.pages });
+      const n = (x: unknown, d: number) => (Number.isFinite(Number(x)) ? Math.max(0, Math.min(100, Number(x))) : d);
+      s.v.hp = n(rec.vitals?.hp, 100);
+      s.v.wm = n(rec.vitals?.wm, 100);
+      s.v.bat = n(rec.vitals?.bat, 100);
+      s.issued = !!rec.issued;
+    }
+    s.loaded = true;
+    sendPockets(s);
+  };
+  const sendPockets = (s: Survivor) => {
+    for (const p of room.state.players.values()) {
+      if (p.uid !== s.uid || !hello.has(p.sid)) continue;
+      const c = clientOf(p.sid);
+      if (c) room.send(c, "dark:pockets", { inv: s.inv, bat: Math.round(s.v.bat) });
+      s.batSent = Math.round(s.v.bat);
+    }
+  };
+  const changed = (s: Survivor) => {
+    s.dirty = true;
+    sendPockets(s);
+  };
+
+  // ── the loot ───────────────────────────────────────────────────────────────
+  const loot: LootSave = { spots: {}, night: nightOf(Date.now()), people: [], spent: { r38: 0, shell: 0 }, drops: [] };
+  let lootDirty = false;
+  let lootSavedAt = 0;
+  {
+    const saved = room.savedLoot as Partial<LootSave> | null;
+    if (saved && typeof saved === "object") {
+      for (const [id, st] of Object.entries(saved.spots ?? {}))
+        if (lootSpot(id) && st && typeof st === "object")
+          loot.spots[id] = {
+            until: Number(st.until) || 0,
+            left: Array.isArray(st.left) && st.left.length ? cleanItems(st.left) : undefined,
+          };
+      if (saved.night === loot.night) {
+        loot.people = (saved.people ?? []).filter((u) => Number.isInteger(u));
+        loot.spent = { r38: Number(saved.spent?.r38) || 0, shell: Number(saved.spent?.shell) || 0 };
+      }
+      const now = Date.now();
+      for (const d of saved.drops ?? []) {
+        if (!(isStack(d.item) || isWeapon(d.item)) || now - d.at > DROP_MS) continue;
+        putDrop(d.item, d.n, d.loaded, d.x, d.y, d.at, d.id);
+      }
+    }
+  }
+  function putDrop(item: ItemId, n: number, loaded: number, x: number, y: number, at: number, id?: string) {
+    const d = new Drop();
+    d.id = id ?? `d${at.toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
+    d.item = item;
+    d.n = Math.max(1, Math.min(255, n | 0));
+    d.loaded = Math.max(0, Math.min(255, loaded | 0));
+    d.x = x;
+    d.y = y;
+    d.at = at;
+    room.state.drops.set(d.id, d);
+    // (the oldest go first past the cap)
+    if (room.state.drops.size > MAX_DROPS) {
+      const old = [...room.state.drops.values()].sort((a, b) => a.at - b.at)[0];
+      room.state.drops.delete(old.id);
+    }
+    lootDirty = true;
+  }
+  const budgetLeft = (): Budget => {
+    const b = nightBudget(loot.people.length);
+    return { r38: Math.max(0, b.r38 - loot.spent.r38), shell: Math.max(0, b.shell - loot.spent.shell) };
+  };
+  const newNight = (now: number) => {
+    const n = nightOf(now);
+    if (n === loot.night) return;
+    loot.night = n;
+    loot.people = [];
+    loot.spent = { r38: 0, shell: 0 };
+    lootDirty = true;
+  };
+  const saveLoot = (now = Date.now()) => {
+    lootDirty = false;
+    lootSavedAt = now;
+    if (config.offline) return;
+    loot.drops = [...room.state.drops.values()].map((d) => ({
+      id: d.id,
+      item: d.item,
+      n: d.n,
+      loaded: d.loaded,
+      x: d.x,
+      y: d.y,
+      at: d.at,
+    }));
+    void api.putLoot(loot).catch((e) => console.warn("[survival] loot save", (e as Error).message));
+  };
+  /** Into someone's pockets: what went in, what's left over. */
+  const take = (s: Survivor, items: LootItem[]) => {
+    const got: LootItem[] = [];
+    const left: LootItem[] = [];
+    for (const it of items) {
+      if (isWeapon(it.id)) {
+        const rest = addWeapon(s.inv, { id: it.id, loaded: it.loaded ?? 0 });
+        if (!rest) {
+          got.push(it);
+          continue;
+        }
+        // one of a kind already carried: its rounds come to the pockets, the gun stays
+        const rounds = (it.loaded ?? 0) - rest.loaded;
+        if (rounds > 0) got.push({ id: WEAPONS[it.id].ammo, n: rounds });
+        left.push({ id: it.id, n: 1, loaded: rest.loaded });
+        continue;
+      }
+      const n = addItem(s.inv, it);
+      if (n) got.push({ id: it.id, n });
+      if (n < it.n) left.push({ id: it.id, n: it.n - n });
+    }
+    return { got, left };
+  };
+  const found = (s: Survivor, sid: string, spot: string, got: LootItem[], full: boolean, gone = false) => {
+    const p = room.state.players.get(sid);
+    if (got.length && p) {
+      p.held = ""; // (picking something up puts the mug down)
+      p.heldAt = 0;
+    }
+    const c = clientOf(sid);
+    if (c) room.send(c, "dark:found", gone ? { spot, got, full, gone } : { spot, got, full });
+    if (got.length) changed(s);
+  };
+  const near = (p: Player, x: number, z: number) => {
+    const b = toB(p.x, p.y);
+    return Math.hypot(b.x - x, b.z - z) <= LOOT_REACH;
+  };
+  const ready = (client: WorldClient) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    if (!p || !s?.loaded || p.level !== 0 || p.busy || p.act || p.a === ANIM.sit || p.downAt) return null;
+    return { p, s };
+  };
+
+  room.on("dark:hello", (client) => {
+    hello.add(client.sessionId);
+    const s = of(client.sessionId);
+    if (s?.loaded) sendPockets(s);
+  });
+  room.on("dark:loot", (client, m) => {
+    const r = ready(client);
+    const id = String(m?.spot ?? "");
+    if (!r) return;
+    const { p, s } = r;
+    const now = Date.now();
+    if (id === "locker") {
+      if (!near(p, LOCKER.x, LOCKER.z)) return;
+      if (hasWeapon(s.inv, "revolver")) return found(s, client.sessionId, id, [], false, true);
+      const gun: LootItem = { id: "revolver", n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag };
+      const { got } = take(s, [gun]);
+      if (got.length) s.issued = true;
+      return found(s, client.sessionId, id, got, !got.length);
+    }
+    const spot = lootSpot(id);
+    if (!spot || !near(p, spot.x, spot.z)) return;
+    newNight(now);
+    loot.spots[id] ??= { until: 0 };
+    const st = loot.spots[id];
+    if (st.until > now) return found(s, client.sessionId, id, [], false, true);
+    let items = st.left;
+    if (!items) {
+      const b = budgetLeft();
+      const was = { ...b };
+      items = rollLoot(spot.place, Math.random, b);
+      loot.spent.r38 += was.r38 - b.r38;
+      loot.spent.shell += was.shell - b.shell;
+    }
+    const { got, left } = take(s, items);
+    if (left.length) st.left = left;
+    else {
+      const min = REFILL_MIN[spot.place] * (0.75 + Math.random() * 0.5);
+      st.until = now + (FAST ? min * 100 : min * 60_000);
+      st.left = undefined;
+    }
+    lootDirty = true;
+    found(s, client.sessionId, id, got, left.length > 0);
+  });
+  room.on("dark:pick", (client, m) => {
+    const r = ready(client);
+    const d = room.state.drops.get(String(m?.id ?? ""));
+    if (!r || !d) return;
+    if (Math.hypot(r.p.x - d.x, r.p.y - d.y) > LOOT_REACH) return;
+    const item = d.item as ItemId;
+    // (into the pocket it was dragged to, if it was and it fits there: the inventory's)
+    const slot = Number(m?.slot);
+    const into =
+      Number.isInteger(slot) &&
+      (isStack(item) || (isWeapon(item) && !hasWeapon(r.s.inv, item) && r.s.inv.weapons[slot - WEAPON_SLOT] === null));
+    let got: LootItem[];
+    let left: LootItem[];
+    if (into) {
+      const n = addItemTo(r.s.inv, slot, { id: item, n: d.n, loaded: d.loaded });
+      const all = isWeapon(item) ? 1 : d.n;
+      got = n ? [isWeapon(item) ? { id: item, n: 1, loaded: d.loaded } : { id: item, n }] : [];
+      left = n < all ? [{ id: item, n: all - n, loaded: d.loaded }] : [];
+    } else ({ got, left } = take(r.s, [{ id: item, n: d.n, loaded: d.loaded }]));
+    if (!left.length) room.state.drops.delete(d.id);
+    else {
+      d.n = left[0].n;
+      d.loaded = left[0].loaded ?? 0;
+    }
+    lootDirty = true;
+    found(r.s, client.sessionId, d.id, got, left.length > 0);
+  });
+  // a drag in the inventory: pocket to pocket, weapon slot to weapon slot (shared moveSlot)
+  room.on("dark:move", (client, m) => {
+    const s = of(client.sessionId);
+    if (s?.loaded && moveSlot(s.inv, Number(m?.from), Number(m?.to))) changed(s);
+  });
+  room.on("dark:use", (client, m) => {
+    const s = of(client.sessionId);
+    const slot = Number(m?.slot);
+    if (!s?.loaded || !Number.isInteger(slot)) return;
+    const used = consume(s.inv, slot, USABLE);
+    if (used === "aid") s.v.hp = 100;
+    if (used === "battery") s.v.bat = 100;
+    if (used) changed(s);
+  });
+  // ── down, up, awake (D7) ─────────────────────────────────────────────────
+  // down: crawling, bleeding out; the shadowed leave them alone (features/dark.ts: hp 0)
+  function goDown(p: Player, s: Survivor) {
+    s.v.hp = 0;
+    p.hp = 0;
+    p.downAt = Date.now();
+    p.revBy = "";
+    p.revAt = 0;
+    p.gun = "";
+    s.selfAt = 0;
+    s.dirty = true;
+  }
+  function stopRevive(p: Player) {
+    p.revBy = "";
+    p.revAt = 0;
+  }
+  function getUp(p: Player, s: Survivor, hp: number) {
+    p.downAt = 0;
+    stopRevive(p);
+    s.selfAt = 0;
+    s.v.hp = hp;
+    s.c.sinceHurt = 0;
+    p.hp = vitalByte(hp);
+    s.dirty = true;
+  }
+  // nobody came: at the office, 50 health, warm — what they carried, kept
+  function awake(p: Player, s: Survivor) {
+    getUp(p, s, DOWN.awakeHp);
+    s.v.wm = 100;
+    p.wm = 100;
+    s.awayOut = 0;
+    const c = clientOf(p.sid);
+    if (c) {
+      room.send(c, "dark:awake", {}); // (first: the move's snap that follows is no put-back)
+      room.moveTo(c, p, room.arrivalFor(p));
+    }
+  }
+  // someone holding to get them up: within reach, on their own feet
+  room.on("dark:revive", (client, m) => {
+    const me = room.state.players.get(client.sessionId);
+    const p = room.state.players.get(String(m?.sid ?? ""));
+    if (!me || !p || !p.downAt) return;
+    if (!m?.on) {
+      if (p.revBy === client.sessionId) stopRevive(p);
+      return;
+    }
+    if (me.downAt || me.level !== p.level || Math.hypot(me.x - p.x, me.y - p.y) > DOWN.reach || p.revBy) return;
+    p.revBy = client.sessionId;
+    p.revAt = Date.now();
+  });
+  // their own first aid, down: 5 s held
+  room.on("dark:selfaid", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    if (!p || !s?.loaded || !p.downAt) return;
+    s.selfAt = m?.on && count(s.inv, "aid") > 0 ? Date.now() : 0;
+  });
+  room.on("mod:down", (client) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    if (p?.admin && s && !p.downAt) goDown(p, s);
+  });
+
+  room.on("mod:refill", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    if (!p?.admin || !s) return;
+    Object.assign(s.v, FULL_VITALS);
+    s.c.winded = false;
+    s.windedAt = 0;
+    if (p.downAt) getUp(p, s, 100); // (and up, if down)
+    // (or set: health, warmth — to see the HUD at a level)
+    const lvl = (x: unknown) => Math.max(1, Math.min(100, Number(x)));
+    if (m?.hp !== undefined && Number.isFinite(Number(m.hp))) s.v.hp = lvl(m.hp);
+    if (m?.wm !== undefined && Number.isFinite(Number(m.wm))) s.v.wm = lvl(m.wm);
+    // `kit`: armed for trying the fight — both guns loaded, rounds, shells, flares, first aid, a battery
+    if (m?.kit) {
+      s.inv.weapons = [
+        { id: "revolver", loaded: WEAPONS.revolver.mag },
+        { id: "shotgun", loaded: WEAPONS.shotgun.mag },
+      ];
+      for (const [id, n] of [
+        ["r38", 24],
+        ["shell", 12],
+        ["flare", 3],
+        ["aid", 1],
+        ["battery", 1],
+      ] as const)
+        addStack(s.inv, id, n - count(s.inv, id));
+    }
+    changed(s);
+  });
+  room.on("dark:drop", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const s = p && people.get(p.uid);
+    const slot = Number(m?.slot);
+    // (onto the snow: out on the land only — the office isn't for leaving things lying about)
+    if (!p || !s?.loaded || !Number.isInteger(slot) || !onLand(p) || p.busy || p.downAt) return;
+    const it = removeSlot(s.inv, slot);
+    if (!it) return;
+    putDrop(it.id, "n" in it ? it.n : 1, "loaded" in it ? it.loaded : 0, p.x, p.y, Date.now());
+    changed(s);
+  });
+
+  room.survival = {
+    winded(sid) {
+      const s = of(sid);
+      return !!s && s.c.winded && s.windedAt > 0 && Date.now() - s.windedAt > WINDED_GRACE_MS;
+    },
+    roll(sid) {
+      const p = room.state.players.get(sid);
+      const s = p && people.get(p.uid);
+      if (!p || !s) return true;
+      // (a moment's grace, as for the sprint: the client's own stamina may be a message ahead)
+      if (s.c.winded && Date.now() - s.windedAt <= WINDED_GRACE_MS) return true;
+      const ok = spendRoll(s.v, s.c, onLand(p));
+      if (s.c.winded && !s.windedAt) s.windedAt = Date.now();
+      return ok;
+    },
+    hurt(sid, n) {
+      const p = room.state.players.get(sid);
+      const s = p && people.get(p.uid);
+      if (!p || !s || p.downAt) return;
+      hurt(s.v, s.c, n);
+      p.hp = vitalByte(s.v.hp);
+      s.dirty = true;
+      // (struck while getting someone up, or using first aid: that stops)
+      for (const q of room.state.players.values()) if (q.revBy === sid) stopRevive(q);
+      if (s.v.hp <= 0) goDown(p, s);
+    },
+    down(sid) {
+      return !!room.state.players.get(sid)?.downAt;
+    },
+    inventory(sid) {
+      const s = of(sid);
+      return s?.loaded ? s.inv : null;
+    },
+    changed(sid) {
+      const s = of(sid);
+      if (s) changed(s);
+    },
+    breathless(sid) {
+      const s = of(sid);
+      if (!s || s.c.winded) return;
+      s.c.winded = true;
+      s.windedAt = Date.now();
+    },
+  } satisfies SurvivalHooks;
+
+  // ── each tick ──────────────────────────────────────────────────────────────
+  let sweptAt = 0;
+  return {
+    join(client, p) {
+      hello.delete(client.sessionId);
+      let s = people.get(p.uid);
+      if (!s) {
+        s = {
+          uid: p.uid,
+          bot: p.bot,
+          v: { ...FULL_VITALS },
+          c: freshClock(),
+          inv: emptyInventory(),
+          issued: false,
+          loaded: p.bot,
+          dirty: false,
+          savedAt: Date.now(),
+          windedAt: 0,
+          trail: [],
+          selfAt: 0,
+          awayOut: 0,
+          fastSince: 0,
+          batSent: -1,
+          batAt: 0,
+          out: false,
+        };
+        people.set(p.uid, s);
+        const me = s;
+        if (!p.bot) {
+          if (config.offline) adopt(me, offlineSurvivors.get(p.uid) ?? null);
+          else
+            void api
+              .survivor(p.uid)
+              .then((r) => people.get(p.uid) === me && adopt(me, r.survivor))
+              .catch((e) => {
+                // (no record to be had: carry on with nothing, but don't overwrite what's saved)
+                console.warn("[survival] load", (e as Error).message);
+              });
+        }
+      }
+      p.hp = vitalByte(s.v.hp);
+      p.st = vitalByte(s.v.st);
+      p.wm = vitalByte(s.v.wm);
+    },
+    back(client) {
+      hello.delete(client.sessionId);
+    },
+    leave(client, p) {
+      hello.delete(client.sessionId);
+      const s = people.get(p.uid);
+      if (!s) return;
+      // (another tab of theirs still here: keep it)
+      if ([...room.state.players.values()].some((q) => q.uid === p.uid && q.sid !== p.sid)) return;
+      void save(s);
+      people.delete(p.uid);
+    },
+    tick(dt, now) {
+      const g = ground();
+      const hour = room.state.hour;
+      const night = nightness(hour);
+      const dark = blackoutAt(now, hour);
+      // one body a person: another tab of theirs, or the one kept for a reconnection, shares
+      // their vitals — settled once a tick, through the newest, the rest shown the same
+      const newest = new Map<number, Player>();
+      for (const p of room.state.players.values()) newest.set(p.uid, p);
+      for (const p of room.state.players.values()) {
+        const s = people.get(p.uid);
+        if (!s) continue;
+        if (newest.get(p.uid) !== p) {
+          p.hp = vitalByte(s.v.hp);
+          p.st = vitalByte(s.v.st);
+          p.wm = vitalByte(s.v.wm);
+          p.focused = false;
+          continue;
+        }
+        // down: someone getting them up (it holds the bleeding), their own first aid, else bleeding out
+        if (p.downAt) {
+          const by = p.revBy ? room.state.players.get(p.revBy) : undefined;
+          if (
+            p.revBy &&
+            (!by || by.downAt || by.level !== p.level || Math.hypot(by.x - p.x, by.y - p.y) > DOWN.reach + 0.3)
+          )
+            stopRevive(p);
+          if (p.revBy) p.downAt += dt * 1000;
+          if (p.revBy && now - p.revAt >= REVIVE_MS) getUp(p, s, DOWN.upHp);
+          else if (s.selfAt && now - s.selfAt >= SELF_MS) {
+            if (takeStack(s.inv, "aid", 1)) {
+              getUp(p, s, 100);
+              changed(s);
+            } else s.selfAt = 0;
+          } else if (!p.revBy && now - p.downAt >= BLEED_MS) awake(p, s);
+        }
+        const riding = p.busy.startsWith("ride:") || p.busy.startsWith("drive:");
+        const land = !riding && onLand(p);
+        // the speed it really went over the last quarter second (a teleport, a floor change: forgotten)
+        const tr = s.trail;
+        tr.push({ t: now, x: p.x, y: p.y });
+        while (tr.length > 2 && now - tr[1].t >= 250) tr.shift();
+        const span = (now - tr[0].t) / 1000;
+        const dist = Math.hypot(p.x - tr[0].x, p.y - tr[0].y);
+        if (dist > 4 || p.level !== 0) tr.splice(0, tr.length - 1);
+        const verb = p.jump !== "" && now - p.jumpAt < 1500 && p.jump !== "hop" && p.jump !== "flip";
+        // (a second of it: a sprint's momentum on the ice after letting go isn't a sprint)
+        const fast = span >= 0.2 && dist / span > SPRINT_SEEN && !verb;
+        s.fastSince = fast ? s.fastSince || now : 0;
+        const sprinting = land && ((p.mv & 7) === SPRINT || (s.fastSince > 0 && now - s.fastSince > 1000));
+        const b = toB(p.x, p.y);
+        const onLot = !land && p.level === 0 && !!g && tileAt(g, Math.floor(p.x), Math.floor(p.y)) === "a";
+        const warm =
+          riding || (!land && !onLot) || inside(b.x, b.z) || (land && !dark && night > 0.3 && inLampPool(b.x, b.z));
+        const was = s.c.winded;
+        const before = { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat };
+        // the torch focused: on, aiming (shared/move's mv bit), out on the land, battery left
+        // (and not run out and still coming back)
+        const focus = land && p.torch && (p.mv & MV_AIM) !== 0 && canFocus(s.v, s.c);
+        stepVitals(s.v, s.c, { sprinting, outside: land, night, storm: room.state.storm, warm, focus }, dt);
+        p.focused = focus && s.v.bat > 0;
+        if (s.c.winded && !was) s.windedAt = now;
+        if (!s.c.winded) s.windedAt = 0;
+        p.hp = vitalByte(s.v.hp);
+        p.st = vitalByte(s.v.st);
+        p.wm = vitalByte(s.v.wm);
+        if (!s.bot && (before.hp !== s.v.hp || before.wm !== s.v.wm || before.bat !== s.v.bat)) s.dirty = true;
+        // (the battery is mine only: told when it moves a whole percent, twice a second at most)
+        if (Math.round(s.v.bat) !== s.batSent && now - s.batAt >= 500) {
+          s.batAt = now;
+          sendPockets(s);
+        }
+        // away out on the land at night: down (the shadowed leave the away alone; this doesn't)
+        if (land && !p.downAt && p.status === "away" && night >= 0.5 && !s.bot && !room.dark?.peaceful) {
+          s.awayOut += dt;
+          if (s.awayOut >= (FAST_DOWN ? 1 : DOWN.awayOut)) goDown(p, s);
+        } else s.awayOut = 0;
+        // (out tonight: the ammo's budget grows by a person)
+        if (land && !s.bot && !s.out) {
+          newNight(now);
+          s.out = true;
+          if (!loot.people.includes(s.uid)) {
+            loot.people.push(s.uid);
+            lootDirty = true;
+          }
+        }
+        if (s.dirty && now - s.savedAt > SAVE_MS) void save(s, now);
+      }
+      // twice a minute: old drops gone, a new night's people counted afresh, the loot saved
+      if (now - sweptAt > 5000) {
+        sweptAt = now;
+        for (const d of [...room.state.drops.values()])
+          if (now - d.at > DROP_MS) {
+            room.state.drops.delete(d.id);
+            lootDirty = true;
+          }
+        if (nightOf(now) !== loot.night) {
+          newNight(now);
+          for (const s of people.values()) s.out = false;
+        }
+        if (lootDirty && now - lootSavedAt > SAVE_MS) saveLoot(now);
+      }
+    },
+    dispose() {
+      for (const s of people.values()) if (s.dirty) void save(s);
+      if (lootDirty) saveLoot();
+      room.survival = null;
+    },
+  };
+});
+
+function cleanItems(xs: unknown[]): LootItem[] {
+  const out: LootItem[] = [];
+  for (const x of xs) {
+    const o = x as Record<string, unknown>;
+    if (isWeapon(o?.id)) out.push({ id: o.id, n: 1, loaded: Math.max(0, Number(o.loaded) | 0) });
+    else if (isStack(o?.id) && Number(o.n) > 0) out.push({ id: o.id, n: Number(o.n) | 0 });
+  }
+  return out;
+}

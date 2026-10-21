@@ -1367,6 +1367,8 @@ export class WorldController {
         mv: this.lastMv,
         verb: this.myVerb,
         pitch: this.myPitch,
+        angle: this.meAngle,
+        focused: this.walker?.focus,
         ...this.myJump(now),
       };
       this.jumpEffects(localSid, st, 1);
@@ -1380,7 +1382,6 @@ export class WorldController {
           ...st,
           id: localSid,
           level: this.level,
-          angle: this.meAngle,
           typing: st.a === 2 && (st.busy === "computer" || engine.atWork(st.x, st.y)),
           reduced,
         });
@@ -1404,6 +1405,8 @@ export class WorldController {
         // (their verb, if it's one: timed from when it shows, by the 3D people and iso)
         verb: p.jump ? { kind: p.jump, t: 0, at: r.verbAt } : undefined,
         pitch: p.pitch / 40,
+        // (their facing as they turned, not 8 ways: from the move's own senders)
+        angle: p.mt ? (at.yaw / 128) * Math.PI : undefined,
         ...this.theirJump(r, p, pos, now),
       };
       this.jumpEffects(
@@ -1423,8 +1426,6 @@ export class WorldController {
           ...st,
           id: sid,
           level: p.level ?? 0,
-          // (their facing as they turned, not 8 ways: from the move's own senders)
-          angle: p.mt ? (at.yaw / 128) * Math.PI : undefined,
           typing: st.a === 2 && (st.busy === "computer" || engine.atWork(st.x, st.y)),
           reduced,
         });
@@ -1738,27 +1739,10 @@ export class WorldController {
       this.me.d = dirFromDelta(Math.cos(a), Math.sin(a), this.me.d as 0);
       this.meAngle = a;
     }
-    if (first && this.tp) {
-      // first person: I face where I look. Turned some other way (a seat,
-      // someone high-fiving me): the view turns there.
-      const v = this.tp;
-      if (this.me.d !== this.lookD && this.lookD >= 0) v.yaw = DIR_ANGLE[this.me.d] ?? v.yaw;
-      this.meAngle = v.yaw;
-      // my 8-way facing for everyone else: where I look, flipping only a
-      // little past a boundary (no flutter on it, no message spam)
-      const d8 = dirFromDelta(Math.cos(v.yaw), Math.sin(v.yaw), this.me.d as 0);
-      if (d8 !== this.me.d) {
-        let off = v.yaw - (DIR_ANGLE[this.me.d] ?? v.yaw);
-        off = Math.atan2(Math.sin(off), Math.cos(off));
-        if (Math.abs(off) > Math.PI / 8 + 0.1 || this.lookD < 0) this.me.d = d8;
-      }
-      this.lookD = this.me.d;
-    } else {
-      this.lookD = -1;
-      // turned some other way (a seat, someone high-fiving me…): face it in 3D too
-      if (!moved && dirFromDelta(Math.cos(this.meAngle), Math.sin(this.meAngle), this.me.d as 0) !== this.me.d)
-        this.meAngle = DIR_ANGLE[this.me.d] ?? this.meAngle;
-    }
+    // first person: I face where I look; else a seat, a high-five turns me (input/walker.ts)
+    const view = first ? this.tp : null;
+    this.meAngle = w.face(this.me, view, moved, this.lookD, this.meAngle, dirFromDelta);
+    this.lookD = view ? this.me.d : -1;
 
     const changed =
       Math.abs(this.me.x - this.lastSent.x) > 0.01 ||
@@ -3443,7 +3427,7 @@ export class WorldController {
     void loadJumps(); // (a jump's dust and sounds: small, fetched now so the first one has them)
     // my body's controls and the movement core (docs/plan/29-the-move.md): a chunk of their own
     void import("./input").then((m) => {
-      if (!this.stopped) this.walker ??= new m.Walker();
+      if (!this.stopped) this.walker ??= new m.Walker(this);
     });
     // the land round the ground floor: the grid walks it once it's here
     void loadGrounds().then((G) => {
@@ -3527,6 +3511,8 @@ export class WorldController {
       ringing: p.ringing,
       recording: p.recording,
       torch: p.torch,
+      focused: p.focused,
+      gun: p.gun,
     };
   }
 
@@ -3636,15 +3622,3 @@ function interpolate<T extends { t: number; x: number; y: number; z?: number; a?
   }
   return of(buf[buf.length - 1]);
 }
-
-// the 8 facings (shared/iso.ts) as world angles, for my 3D facing
-const DIR_ANGLE = [
-  [1, 1],
-  [0, 1],
-  [-1, 1],
-  [-1, 0],
-  [-1, -1],
-  [0, -1],
-  [1, -1],
-  [1, 0],
-].map(([x, y]) => Math.atan2(y, x));

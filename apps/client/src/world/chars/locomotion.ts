@@ -37,6 +37,8 @@ export interface LocoIn {
   aim: boolean;
   /** aiming: up (rad) and the look off the body's facing */
   pitch: number;
+  /** a gun in the right hand (docs/plan/30-the-dark.md D6): both arms out */
+  gun?: boolean;
   yaw: number;
   /** the facing's turn, rad / s, and the speed's change, tiles / s² */
   turn: number;
@@ -155,7 +157,7 @@ export class Locomotion {
       else legs = walkPose(this.walkPh, 0.85) as Moved;
       legs = mix(aimPose(0, 0, false, breath), legs, ease(clamp(sp / 0.7, 0, 1)));
       this.pitch += (m.pitch - this.pitch) * k(16);
-      const top = aimPose(this.pitch, m.yaw, false, breath);
+      const top = aimPose(this.pitch, m.yaw, !!m.gun, breath);
       const both: Moved = { pose: { ...legs.pose }, lift: legs.lift };
       for (const j of UPPER) if (top.pose[j]) both.pose[j] = top.pose[j];
       body = mix(body, both, ease(this.aimW));

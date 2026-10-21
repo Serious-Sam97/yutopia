@@ -69,3 +69,34 @@ Phase 0 approved. The open questions, decided by the user:
 | Inventory when you wake at the office | **Kept**: you keep everything you carried (as the plan proposed) |
 | Where the guns come from | **The gatehouse locker gives you a revolver**. The shotgun, and the ammo beyond what the plan allows, stay loot |
 | Town interiors | **Not safe**: danger applies inside the town's buildings too (the plan had proposed danger 0 there). Inside the HQ is still always safe |
+
+## Phase 2: the pockets (2026-10-20)
+
+Painted in HTML over two stills (`hud/mock.html?f=a|b`, the item icons in
+`hud/icons.js`, which the game's strip reuses). The first still is
+`/dev/grounds?shot=town-glovebox` at night.
+
+| | What |
+|---|---|
+| `05a-loot` | Ana at a parked car's driver door on Main Street. The prompt "Porta-luvas · E", whose ring fills over the search. The toast says what was found. The pockets strip shows for 3 s, the new stacks ringed in amber with "+6", "+1" |
+| `05b-pockets` | Tab held, so the strip stays open: the two weapon slots (1 · 2, the revolver with 4/6 loaded), the six pockets, a tooltip on the first aid kit (click: use · right click: drop), the hints. Ana is winded after a sprint: the stamina arc by her body is low and amber, "SEM FÔLEGO". A dropped shotgun lies on the snow: "Pegar espingarda · E" |
+
+## The inventory (2026-10-21, for approval)
+
+The user: "add inventory UI". Painted in HTML over `02-hud-night-clean`,
+blurred and dimmed (`hud/inventory.html?f=a|b`, the same icons). The Tab strip
+stays as the quick look; this is the full panel.
+
+| | What |
+|---|---|
+| `06a-inventory` | **I** opens "BOLSOS" over the world. Left, **Você**: health, stamina, warmth and battery with what brings each back, and what's in your hand. Middle: the two weapons (loaded / magazine, the spare ammo) and the six pockets (3 × 2, count / stack). Right, **Escolhido**: the first aid kit picked, what it does, "Usar" (E or click) and "Largar" (right click). Bottom, **No chão · ao alcance**: what lies on the snow within reach, "Pegar" to take it. The keys and the pad's at the foot |
+| `06b-inventory` | The shotgun picked: its numbers (loaded, shells in the pockets, damage, range), "Na mão" (2), "Recarregar" (R), "Largar". A battery dragged to the empty pocket. One of the shadowed is near: a red warning at the top, because **the world doesn't stop** while it's open |
+
+Proposed (yours to overrule):
+- **I** opens and closes it, **Esc** closes it; on the pad, **Menu**.
+- **It doesn't pause** (the world is shared). While it's open you stand
+  still, and can't aim or shoot. Open it somewhere safe.
+- **New on the server**: moving between pockets (drag) and taking from the
+  ground into a chosen pocket. Use, drop and pick up already exist.
+- **Inside the HQ** it opens too, with "No chão" empty. The vitals there are
+  full, since inside is safe.

@@ -21,7 +21,11 @@
     "./phone": "./src/phone.ts",
     "./grounds": "./src/grounds.ts",
     "./car": "./src/car/index.ts",
-    "./move": "./src/move/index.ts"
+    "./move": "./src/move/index.ts",
+    "./dark": "./src/dark/index.ts",
+    "./vitals": "./src/vitals.ts",
+    "./inventory": "./src/inventory.ts",
+    "./beam": "./src/beam.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

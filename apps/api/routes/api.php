@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BiosController;
+use App\Http\Controllers\DarkController;
 use App\Http\Controllers\E2eController;
 use App\Http\Controllers\GamesController;
 use App\Http\Controllers\InternalController;
@@ -120,6 +121,10 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::post('/world/seed', [InternalController::class, 'seed']);
     Route::put('/world/layout', [InternalController::class, 'layout']);
     Route::put('/world/playlists', [InternalController::class, 'playlists']);
+    // the dark (docs/plan/30-the-dark.md): the Grounds' loot, someone's pockets
+    Route::put('/world/loot', [DarkController::class, 'loot']);
+    Route::get('/survivors/{userId}', [DarkController::class, 'survivor'])->whereNumber('userId');
+    Route::put('/survivors/{userId}', [DarkController::class, 'saveSurvivor'])->whereNumber('userId');
     Route::put('/objects', [InternalController::class, 'upsertObject']);
     Route::delete('/objects/{uid}', [InternalController::class, 'deleteObject']);
     Route::post('/desk', [InternalController::class, 'desk']);

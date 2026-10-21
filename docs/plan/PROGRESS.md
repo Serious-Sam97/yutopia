@@ -1027,3 +1027,30 @@ The user: "I want to improve a lot the gameplay … today we only jump and a mis
 - **Checked**: shared 185, world-server 73, client 20; typecheck everywhere; Biome on the touched files; e2e on the GPU, 10 of 11: `move.spec` (crouch, slide, a desk vaulted, an arcade climbed, a roll, no put-backs), `move-others` (seen by a second browser in step), `walk-angles`, `jump`, `first-person`, `mouse-look`, `people-3d`, `pool`; `controllers` was flaky in the disc console's analog step (2 of 4 runs): the walker's per-frame pad read took the emulator's one-read Analog combo (`activePad()` read the virtual pads). Fixed: `activePad()` reads `realGamepads()`, with a unit test (`games/vpad.test.ts`).
 - **Budget**: world page **554.0 KB — exactly at 554**; `yutopia-input` 7.4 KB.
 - **Not checked**: Firefox (Playwright's Firefox won't start here; the pad's non-standard mapping in Firefox is the risk); the fixture-swapping e2e suites.
+
+## The dark — phases 0–6, 8, 9 (2026-10-20 → 21)
+The user: "Inside the building, the Sims-like mechanics continue. But outside I want a survival mystery: Alan Wake + Ruptura + a zombie game." Plan: `docs/plan/30-the-dark.md`. Decided: you keep what you carried when you wake at the office; the gatehouse locker gives a revolver; the shotgun and more ammo are loot; town interiors aren't safe, only the HQ is; the cold never kills; weapons can be dropped; the loot doesn't restart; the story's chapter (phase 7) comes later.
+- **Phase 0** (approved): mocks in `design/screens/dark/` (the woods at night with one of the shadowed under a focused beam, the HUD, the revive, a standoff at a lamp's edge) and the sound shortlist, rendered by `sounds/synth.mjs`.
+- **Phase 1**: one hour for everyone (São Paulo's, `spHour`) and the danger (`dangerAt`: night, storm, distance from the HQ, the lamps' pools). `mod:hour` sets it.
+- **Phase 2**: vitals (health, stamina, warmth, battery; `shared/vitals.ts`), six pockets and a weapon slot (`inventory.ts`), loot spots that refill by night and are taken once (`dark/loot.ts`), drops on the snow, the gatehouse locker. Stamina drains only outside, and the server's allowance falls to a jog when you're winded (`MV_WINDED`). Saved to the API's `survivors` table (Laravel model and controller); the loot is kept in the world's settings and survives a restart. The pockets strip was mocked first.
+- **Phase 3**: one shared beam (`beam.ts`): the torch aimed where you look, focus (narrower, longer, drains the battery), the same on every screen and in both views.
+- **Phase 4**: the shadowed. A shared mind (`dark/fsm.ts`, ten states). They come out of the dark, never in a lamp's pool, stalk, wind up and strike; you roll through the windup. A focused beam burns them to exposed, flares hold them off, they're gone at dawn. Only those within 70 tiles are sent to each player (a Colyseus `StateView`). The look: a shroud and dark figures. **The feel is waiting for the user's sign-off.**
+- **Phase 5**: guns and flares (`dark/arms.ts`): the revolver and shotgun. You aim and the server decides, rewinding the shadowed to where your screen saw them (up to 300 ms). Shots go through the crosshair (the camera's ray). Flares are thrown on an arc and burn red for 12 s. Shown in 3D: tracers, flashes, sparks, the sticks.
+- **Phase 6**: down, up, awake. At 0 health you go down and crawl, with 30 s to bleed out. Someone holds E for 3 s to get you up; alone, first aid held for 5 s. Bleed out and you wake at the office (your arrival point) with your pockets and 50 health.
+- **Phase 8**: the 19 sounds, made in a Web Worker (`dark/synth.ts`) and placed by where you look: the drone from calm to hunted, whispers, stings, the burn, the heartbeat, the guns and flares. The HUD's rest: a health vignette, frost as warmth goes, and the others' distance and health.
+- **Phase 9 (the checks)**:
+  - **The page**: 553.98 KB ≤ 554. **`yutopia-dark`**: 18.0 KB ≤ 80.
+  - **The frames**: new `dark-perf.spec`, on High, the woods at 23h, 20 shadowed, 4 flares, the torch on. 60.0 fps, p95 16.8 ms, worst 16.8.
+  - **`pnpm perf`**: 0 put back. With `DARK=1` (50 bots, 40 shadowed): tick 0.79 ms, the shadowed's share 3.6 KB/s.
+  - **Unit tests**: shared 215, world-server 92, client 21, Pest 71. Typecheck is clean everywhere.
+  - **The GPU run** (every dark spec and `grounds.spec`): 14 of 16. The 2 failures ran while the dev world-server was restarting on my edits; re-run, 5 of 5.
+- **More of them, and the day** (after phase 9, the user's call): up to 5 a person at night (`min(60, ⌈people × 5 × danger⌉)`, was 3 and 40). By day about 1 a person (2 in the woods), anywhere off the paths and 40+ tiles from the HQ; the roads, trails, pavements and lot stay safe by day. A land worker on the world-server makes the Grounds' chunks ahead of whoever's outside (one is ~6 ms), so the director's spawn spots no longer make long ticks: `DARK=1` perf with 60, tick 0.9 ms, max 3. Admins get `mod:dark {mode: "called"}` (only the ones called up).
+- **After phase 9, the user's asks**:
+  - **The focus at 0%**: it no longer blinks. Run out, and it's off until the battery is back to 25%.
+  - **The recharge**: 16 times faster (4% a second, to 40%).
+  - **One body a person**: a session kept for a reconnection made everyone's vitals run at double speed. Fixed.
+  - **The inventory**: I or the pad's Menu, approved from mocks 06a and 06b. Vitals, weapons, the 6 pockets, the picked item's details and buttons, the snow in reach. Drag between pockets or from the snow; the world doesn't stop and you stand still. New `dark:move`, and `dark:pick` takes a `slot`; e2e `inventory.spec`. The page is 553.98 KB; `yutopia-dark` 24.5 KB.
+- **Not checked**:
+  - **Firefox**: neither Playwright's Firefox nor the installed one starts on this Mac ("Could not find profile folder"). A read-through found nothing Chrome-only in the new code. The risk that stays is plan 29's: a pad Firefox reports as non-standard.
+  - **The sound by ear.**
+  - **The fight's feel** (the user's sign-off).

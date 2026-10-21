@@ -609,6 +609,10 @@ function fitPiece(s: Sketch, p: Props) {
     case "desk":
       s.box({ x, y, w, d, z: 0, h, mat: mat("#5a4636", "#6b5442") });
       break;
+    case "locker":
+      s.box({ x, y, w, d, z: 0, h, mat: mat("#4f5a52", "#5f6b62") });
+      s.box({ x: x + w / 2 - 0.02, y: y + d, w: 0.04, d: 0.02, z: 0.2 * P, h: h - 0.4 * P, mat: DARK });
+      break;
     case "screens":
       s.box({
         x,

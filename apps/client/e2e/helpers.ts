@@ -88,6 +88,12 @@ export async function enter(page: Page, tok: string, worldName?: World) {
     null,
     { timeout: 60_000 },
   );
+  // (the shadowed off: at the real hour it may be night on the Grounds, and a spec walking
+  // the land would be struck down and woken at the office. The dark's own specs turn them on.)
+  await page.evaluate(() => {
+    const w = (window as unknown as { __yutopia?: { room?: { send(t: string, m: unknown): void } } }).__yutopia;
+    w?.room?.send("mod:dark", { mode: "peaceful" });
+  });
   await page.waitForTimeout(800);
 }
 export const world = (page: Page, fn: (w: any, h: any) => unknown) =>

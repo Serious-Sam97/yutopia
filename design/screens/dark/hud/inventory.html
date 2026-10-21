@@ -1,0 +1,131 @@
+<!doctype html><html><head><meta charset="utf-8"><script src="icons.js"></script>
+<!-- The inventory (docs/plan/30-the-dark.md, after phase 9): a mock painted over
+     02-hud-night-clean, for approval. ?f=a first aid picked, the ground in reach;
+     ?f=b the shotgun picked, a battery dragged to another pocket. -->
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1600px;height:900px;overflow:hidden;font-family:-apple-system,"SF Pro Text","Helvetica Neue",sans-serif;color:#e9ecef;background:#000}
+#bg{position:absolute;inset:-12px;width:1624px;height:924px;filter:blur(4px) brightness(.42) saturate(.8)}
+.abs{position:absolute}
+.lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:rgba(233,236,239,.55);font-weight:700}
+.key{display:inline-block;min-width:16px;padding:0 4px;border:1px solid rgba(233,236,239,.5);border-radius:3px;font-size:10px;font-weight:700;text-align:center;line-height:14px;color:#e9ecef;margin:0 2px}
+.note{left:16px;top:12px;font-size:12px;color:rgba(255,255,255,.55);font-weight:600;letter-spacing:.04em}
+/* the panel */
+.inv{left:260px;top:96px;width:1080px;height:700px;border-radius:14px;background:rgba(12,15,21,.82);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(6px);box-shadow:0 20px 60px rgba(0,0,0,.6);display:grid;grid-template-columns:250px 1fr 300px;grid-template-rows:56px minmax(0,1fr) 150px}
+.head{grid-column:1/4;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid rgba(255,255,255,.09)}
+.head h1{font-size:15px;letter-spacing:.18em;font-weight:800}
+.head .r{font-size:12px;color:rgba(233,236,239,.6)}
+.col{padding:20px 22px}
+.col+.col{border-left:1px solid rgba(255,255,255,.07)}
+/* you */
+.vit{margin:14px 0 0}
+.vit .row{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:700}
+.vit .row span:last-child{font-size:12px;color:rgba(233,236,239,.75)}
+.vit .bar{height:6px;background:rgba(255,255,255,.12);border-radius:3px;margin-top:6px;overflow:hidden;position:relative}
+.vit .bar i{position:absolute;top:0;bottom:0;left:0;border-radius:3px}
+.vit small{display:block;font-size:11px;color:rgba(233,236,239,.5);margin-top:4px}
+.held{margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(233,236,239,.7)}
+.held b{display:block;font-size:14px;color:#e9ecef;margin-top:3px}
+/* slots */
+.ws{display:flex;gap:12px;margin:10px 0 24px}
+.slot{position:relative;border-radius:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14)}
+.slot.w{width:228px;height:96px}
+.slot.p{width:148px;height:100px}
+.slot svg{position:absolute;inset:12px 12px 22px 12px;width:calc(100% - 24px);height:calc(100% - 34px)}
+.slot .k{position:absolute;left:8px;top:6px;font-size:11px;font-weight:800;color:rgba(233,236,239,.55)}
+.slot .n{position:absolute;right:8px;bottom:5px;font-size:15px;font-weight:800;text-shadow:0 1px 2px #000}
+.slot .n small{font-size:11px;font-weight:600;color:rgba(233,236,239,.5)}
+.slot .sub{position:absolute;left:8px;bottom:6px;font-size:11px;color:rgba(233,236,239,.6);font-weight:600}
+.slot.empty{background:rgba(255,255,255,.02);border-style:dashed;border-color:rgba(255,255,255,.12)}
+.slot.inhand{border-color:rgba(233,236,239,.55)}
+.slot.inhand::after{content:"NA MÃO";position:absolute;right:8px;top:6px;font-size:9px;font-weight:800;letter-spacing:.08em;color:rgba(233,236,239,.75)}
+.slot.sel{border:1.5px solid #e9a33a;background:rgba(233,163,58,.09);box-shadow:0 0 16px rgba(233,163,58,.25)}
+.slot.drop{border:1.5px dashed #e9a33a;background:rgba(233,163,58,.06)}
+.slot.lift{opacity:.35}
+.grid{display:grid;grid-template-columns:repeat(3,148px);gap:12px;margin-top:10px}
+.ghost{width:96px;height:96px;transform:rotate(-5deg);filter:drop-shadow(0 8px 14px rgba(0,0,0,.6))}
+/* details */
+.big{height:110px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 55%,rgba(255,255,255,.07),transparent 70%);border-radius:10px;margin:10px 0 14px}
+.big svg{width:100px;height:100px}
+.big.wide svg{width:220px;height:90px}
+.det h2{font-size:19px;font-weight:800}
+.det p{font-size:13px;line-height:1.45;color:rgba(233,236,239,.72);margin:8px 0 12px}
+.stats{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-size:12px;color:rgba(233,236,239,.6);margin-bottom:16px}
+.stats b{color:#e9ecef;font-weight:700;text-align:right}
+.btns{display:flex;flex-direction:column;gap:8px}
+.btn{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:7px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);font-size:13px;font-weight:700}
+.btn.main{background:#e9a33a;color:#14110c;border-color:#e9a33a}
+.btn.main .key{color:#14110c;border-color:rgba(20,17,12,.55)}
+.btn span:last-child{font-size:11px;font-weight:600;opacity:.75}
+/* the ground */
+.ground{grid-column:1/4;border-top:1px solid rgba(255,255,255,.09);padding:16px 24px;display:flex;flex-direction:column}
+.gl{display:flex;gap:12px;margin-top:10px}
+.gi{width:190px;height:72px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;gap:10px;padding:0 12px;position:relative}
+.gi svg{width:46px;height:46px;flex:none}
+.gi.wide svg{width:64px;height:30px}
+.gi b{font-size:13px;display:block}
+.gi span{font-size:11px;color:rgba(233,236,239,.55)}
+.gi .take{position:absolute;right:10px;top:8px;font-size:10px;font-weight:800;color:#e9a33a;letter-spacing:.06em}
+.foot{font-size:11px;color:rgba(233,236,239,.55);margin-top:auto;text-align:right}
+.warn{left:50%;transform:translateX(-50%);top:46px;background:rgba(90,20,18,.8);border:1px solid rgba(255,120,110,.4);border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600}
+</style></head><body>
+<img id="bg" src="../02-hud-night-clean.png"><div id="ui"></div>
+<script>
+const f=new URLSearchParams(location.search).get("f")||"a";
+const ic=k=>ICON[k];
+const slot=o=>{const c=["slot",o.w?"w":"p",o.it?"":"empty",o.cls||""].join(" ");
+ return `<div class="${c}">${o.k?`<span class="k">${o.k}</span>`:""}${o.it?ic(o.it):""}${o.sub?`<span class="sub">${o.sub}</span>`:""}${o.n!=null?`<span class="n">${o.n}</span>`:""}</div>`};
+const vit=(name,v,col,txt,small)=>`<div class="vit"><div class="row"><span>${name}</span><span>${txt}</span></div><div class="bar"><i style="width:${v}%;background:${col}"></i></div>${small?`<small>${small}</small>`:""}</div>`;
+const you=`<div class="col"><div class="lbl">Você</div>
+ ${vit("Saúde",64,"#d9534f","64","volta a 60 sozinha")}
+ ${vit("Fôlego",80,"#e9ecef","80")}
+ ${vit("Calor",38,"#8fc6ec","38","esfriando · à noite, fora")}
+ ${vit("Bateria",46,"#d9dde2","46%","foco · recarrega até 40%")}
+ <div class="held">Na mão<b>Revólver · 4/6</b></div></div>`;
+const ground=(sel)=>`<div class="ground"><div class="lbl">No chão · ao alcance</div><div class="gl">
+ <div class="gi ${sel?"":""}">${ic("shell")}<div><b>Cartuchos</b><span>×4</span></div><span class="take">PEGAR</span></div>
+ <div class="gi">${ic("flare")}<div><b>Sinalizador</b><span>×1</span></div><span class="take">PEGAR</span></div>
+ </div><div class="foot"><span class="key">I</span> fechar · clique escolher · <span class="key">E</span> usar · botão direito largar · arraste para trocar de bolso · pad <span class="key">Menu</span> abrir · <span class="key">A</span> usar · <span class="key">X</span> largar</div></div>`;
+const ui=document.getElementById("ui");
+if(f==="a"){
+ ui.innerHTML=`<div class="abs inv">
+ <div class="head"><h1>BOLSOS</h1><span class="r">6 bolsos · 2 armas</span></div>
+ ${you}
+ <div class="col"><div class="lbl">Armas</div><div class="ws">
+  ${slot({w:1,k:"1",it:"revolver",n:"4/6",sub:"+9 .38",cls:"inhand"})}
+  ${slot({w:1,k:"2",it:"shotgun",n:"1/2",sub:"+3 cartuchos"})}
+ </div><div class="lbl">Bolsos</div><div class="grid">
+  ${slot({it:"r38",n:`9<small>/24</small>`})}${slot({it:"flare",n:`1<small>/3</small>`})}${slot({it:"aid",n:`1<small>/2</small>`,cls:"sel"})}${slot({it:"battery",n:`2<small>/2</small>`})}
+  ${slot({it:"shell",n:`3<small>/12</small>`})}${slot({it:"fuse",n:`1<small>/4</small>`})}
+ </div></div>
+ <div class="col det"><div class="lbl">Escolhido</div><div class="big">${ic("aid")}</div>
+  <h2>Kit médico</h2><p>Fecha as feridas: a saúde volta a 100. Caído, segure <span class="key">E</span> 5 s para se levantar sozinho.</p>
+  <div class="stats"><span>No bolso</span><b>1 de 2</b><span>Saúde agora</span><b>64 → 100</b></div>
+  <div class="btns"><div class="btn main"><span>Usar</span><span><span class="key">E</span> · clique</span></div><div class="btn"><span>Largar</span><span>botão direito</span></div></div>
+ </div>
+ ${ground()}
+ </div>
+ <div class="abs note">06a · I: the pockets open — the first aid picked; what lies in reach on the snow</div>`;
+}else{
+ ui.innerHTML=`<div class="abs warn">Um sombrio perto · cuidado: o mundo não para</div>
+ <div class="abs inv">
+ <div class="head"><h1>BOLSOS</h1><span class="r">6 bolsos · 2 armas</span></div>
+ ${you}
+ <div class="col"><div class="lbl">Armas</div><div class="ws">
+  ${slot({w:1,k:"1",it:"revolver",n:"4/6",sub:"+9 .38",cls:"inhand"})}
+  ${slot({w:1,k:"2",it:"shotgun",n:"1/2",sub:"+3 cartuchos",cls:"sel"})}
+ </div><div class="lbl">Bolsos</div><div class="grid">
+  ${slot({it:"r38",n:`9<small>/24</small>`})}${slot({it:"flare",n:`1<small>/3</small>`})}${slot({it:"aid",n:`1<small>/2</small>`})}${slot({it:"battery",n:`2<small>/2</small>`,cls:"lift"})}
+  ${slot({it:"shell",n:`3<small>/12</small>`})}${slot({cls:"drop"})}
+ </div></div>
+ <div class="col det"><div class="lbl">Escolhido</div><div class="big wide">${ic("shotgun")}</div>
+  <h2>Espingarda</h2><p>Oito chumbos de perto. Só ferem um sombrio já exposto pela luz.</p>
+  <div class="stats"><span>Carregada</span><b>1 de 2</b><span>Cartuchos no bolso</span><b>3</b><span>Dano</span><b>8 × 18</b><span>Alcance</span><b>14 m</b></div>
+  <div class="btns"><div class="btn main"><span>Na mão</span><span><span class="key">2</span></span></div><div class="btn"><span>Recarregar</span><span><span class="key">R</span></span></div><div class="btn"><span>Largar</span><span>botão direito</span></div></div>
+ </div>
+ ${ground()}
+ </div>
+ <div class="abs ghost" style="left:890px;top:470px">${ic("battery").replace("<svg","<svg width=96 height=96")}</div>
+ <div class="abs note">06b · the shotgun picked; a battery dragged to an empty pocket; one of the shadowed near: the world doesn't stop</div>`;
+}
+</script></body></html>

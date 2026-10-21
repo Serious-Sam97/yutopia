@@ -219,6 +219,18 @@ export function shots(): Record<string, Shot> {
       ],
       snow: 6000,
     },
+    // (docs/plan/30-the-dark.md phase 2: searching a parked car's glove box)
+    "town-glovebox": {
+      hour: "night",
+      cam: [376.6, gy(376.6, -403.6) + 2.0, -403.6],
+      look: [380.6, gy(380.6, -408.4) + 0.7, -408.4],
+      fov: 50,
+      people: [
+        { x: 379.2, z: -406.8, to: [379.6, -408.6], a: ANA },
+        { x: 386.5, z: -403.2, to: [395, -399], a: BIA, walk: 6 },
+      ],
+      snow: 3000,
+    },
     "blizzard-lawn": {
       hour: "blizzard",
       cam: [-4, gy(-4, -52) + 2.2, -52],

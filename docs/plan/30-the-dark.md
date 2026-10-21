@@ -132,7 +132,8 @@ Server-run (`features/dark.ts`), their mind pure and tested
   halves it; nobody in a pool is seen. **They hear** a sprint at 8 tiles, a shot
   at 40. They leave the downed, the away and the do-not-disturb alone.
 - **The director**, per group of players near each other: up to
-  `min(40, ⌈players × 3 × danger⌉)`; they come out of the dark 25–45 tiles
+  `min(60, ⌈players × 5 × danger⌉)` (raised from 40 and × 3 on 2026-10-21;
+  by day only those off the paths count — see "More of them, and the day"); they come out of the dark 25–45 tiles
   away, behind your beam if it can, never in a pool, a building or near the
   HQ; one per 4 s at most; a **tension** meter builds waves and gives quiet
   after a fight. Far for 20 s, or dawn: they go.
@@ -264,3 +265,1020 @@ is in.
 ## Still open
 
 - Shadowed animals (crows, dogs) as a second kind, later?
+
+## Phase 0 — mocks: delivered and approved (2026-10-20)
+
+In `design/screens/dark/` (its README has the details):
+
+- **Four stills**, each a render of the real Grounds at night with the game's
+  own people, lamps, shadows, snow and the torch as a spot light. The shroud,
+  the hand-set poses and the HUD are painted on top; they aren't engine art
+  yet. A throwaway `/dev/dark` page drew them and was then removed.
+  - `01-woods-burn`: a focused beam burning one's shroud on the ravine trail.
+  - `02-hud-night` (and `-clean`, without the HUD): the HUD. Bottom right:
+    the battery (FOCO), the revolver's cylinder with its spare rounds, the
+    flares. Health is a vignette, stamina an arc by the body, cold a frost at
+    the edges, and the team has tags.
+  - `03-revive`: a downed player, a reviver, "Segure X para levantar".
+  - `04-lamp-standoff`: three players in a lamp's pool, five shadowed at its
+    edge.
+- **The sound shortlist** (`sounds.md`): 19 synthesised WAVs made by
+  `sounds/synth.mjs`. They cover the drones, whispers, the emerge sting, the
+  focus, the burn, the shield breaking, the dissolve, the heartbeat, both guns,
+  the flare and a strike. Notes on the mix for phase 8 are there too.
+- **Seen while making them**, kept for phases 3, 4 and 8:
+  - The shroud reads only against light, so the emerge needs its sting.
+  - The smoke is drawn towards the eye.
+  - A beam's haze stops at what it hits.
+  - Players need a faint light of their own at night.
+  - Bloom's threshold goes up at night.
+  - A flare is a point light of about 6 over 11 tiles.
+- **Approved**. The user's answers are in the Decided table: you keep what you
+  carried when you wake at the office; the gatehouse locker gives a revolver;
+  the town's interiors are not safe.
+
+## Phase 1 — the hour and the danger: delivered (2026-10-20)
+
+- **`shared/clock.ts`** `spHour(ms)`: São Paulo's hour by arithmetic (UTC−3,
+  `SP_OFFSET_H`), defined before the epoch too.
+  - The world-server checks it against `Intl`'s `America/Sao_Paulo` at boot
+    and warns if they're more than a minute apart (`index.ts`), in case Brazil
+    brings daylight saving back.
+- **The server holds the hour**: `WorldState.hour` (float32) is set every
+  second, from the same 1 s timer as the weather (`clockTick`).
+  - `mod:hour {h}` (admins only, offline too) sets an hour. The clock runs on
+    from it for six hours, then it's São Paulo's again; `{h: null}` returns at
+    once.
+- **Everyone reads the server's hour**:
+  - **The client**: `controller.updateNight` follows `state.hour` once a second
+    (before joining, `spHour` of its own clock). A jump, such as an admin's
+    new hour, is taken at most an hour per second. The light, iso
+    (`engine.setClock`) and 3D (`tp.setHour`) take it.
+  - **The wall clocks** run on this machine's seconds, offset by however far
+    it is from the world's hour.
+  - **Vortex and the pets** read `room.state.hour` (they read the server
+    machine's clock before).
+- **`shared/danger.ts`** `dangerAt({hour, storm, x, z, lit, inHQ})` → 0..1, as
+  D1's table:
+  - `nightness(hour)` ramps over 5–7.5 h and 17.5–20.5 h, the same hours as
+    the light's dawn and dusk.
+  - The woods multiply by `treeDensity`. Near `HQ_DOORS` the danger is halved,
+    easing back over 40–50 tiles.
+  - It is 0 only in the HQ or in the light. The town's buildings count as
+    outside, as decided.
+  - **Blackouts**: `blackoutIn(window)` and `blackoutAt(ms, hour)`, hashed
+    per two-hour window like the storms. One window in ten has one; it lasts
+    3–6 minutes and happens only after dark.
+  - **Nothing in the game reads it yet.** The director (phase 4) and the drone
+    (phase 8) are its readers.
+- **Tests**:
+  - `clock.test.ts`: the offset, before the epoch, and a year against `Intl`
+    (summer and winter).
+  - `danger.test.ts`: day, the ramps, night, no step round the clock; storm,
+    woods, the doors; zero in the HQ and the light, but not in the diner; the
+    blackouts.
+  - `world.test.ts`: two clients see the same hour; a member can't set it; an
+    admin's hour reaches both, and `null` brings São Paulo's back.
+- **Not done: the exit test's two browsers in different time zones.** There
+  is no e2e with a Playwright `timezoneId` per context. The client takes its
+  light only from `state.hour`, and `world.test` shows two clients get the
+  same hour, so it should hold. The e2e should still be written.
+
+## Phase 2 — vitals, pockets, loot, saving: the shapes (decided 2026-10-20)
+
+The user's answers to the proposal:
+
+| Question | Decision |
+|---|---|
+| The pockets strip | **mocked first** (`05-pockets`) |
+| Stamina only outside | **yes**: the office's sprint stays free |
+| Dropping weapons | **weapons can be dropped**, like everything else |
+| Loot across a restart | **kept**: the spots, their timers, the night's budget and what lies on the ground are saved |
+
+### `shared/vitals.ts`
+
+```ts
+export interface Vitals { hp: number; st: number; wm: number; bat: number } // 0..100, floats
+export interface VitalsClock { sinceDrain: number; sinceHurt: number; winded: boolean } // s, s
+export interface VitalsIn {
+  gait: Gait;        // what the body did this tick (shared/move): sprint drains
+  outside: boolean;  // level 0 on the land or the lot
+  night: number;     // danger.ts nightness(hour), 0..1
+  storm: number;     // 0..1
+  warm: boolean;     // indoors (any building: the town's too), in a lamp's pool, in a car
+  focus: boolean;    // phase 3; false until then
+}
+export const VITALS = {
+  st: { sprint: 16, roll: 22, regen: 25, after: 0.7, unwind: 25 },
+  hp: { regen: 1, after: 8, upTo: 60 },
+  wm: { night: 0.6 / 60, storm: 2, warmUp: 20 / 60, coldRegen: 0.5 },
+  bat: { focus: 12, regen: 0.25, upTo: 40 },
+};
+export function stepVitals(v: Vitals, c: VitalsClock, i: VitalsIn, dt: number): void;
+export function spendRoll(v: Vitals, c: VitalsClock): boolean; // false when winded
+```
+
+- **Winded**: at 0 stamina you're winded until it's back to 25. While winded
+  the sprint is a jog and the roll is refused. Without that, holding Shift at
+  0 would flicker between sprint and jog every 0.7 s.
+- **A roll** needs you not to be winded, and takes 22 (down to 0 if you have
+  less).
+- **Stamina drains only outside**, as plan 29's M1 says. Indoors the office's
+  sprint stays free, and stamina comes back everywhere.
+- **Warmth** drains 0.6/min × nightness outside (×2 in a blizzard). A warm
+  place brings it back at 20/min. At 0, stamina comes back at half speed.
+- **The lamp pool** is a plain distance to `LAMPS` until phase 3's `poolAt`,
+  and it's out during a blackout.
+- **Shared with the pets**: `shared/needs.ts` gets `clamp100`,
+  `drain(v, rate, t)` and `fill(v, rate, t, upTo)`. `settleNeeds` uses them,
+  and `pets.test` stays as it is. The shared part is small: three helpers.
+
+### `shared/inventory.ts`
+
+```ts
+export const ITEMS = {
+  revolver: { weapon: true, mag: 6, ammo: "r38" },
+  shotgun:  { weapon: true, mag: 2, ammo: "shell" },
+  r38: { stack: 24 }, shell: { stack: 12 }, flare: { stack: 3 },
+  battery: { stack: 2 }, aid: { stack: 2 }, fuse: { stack: 4 },
+} as const;
+export type WeaponId = "revolver" | "shotgun";
+export type StackId = "r38" | "shell" | "flare" | "battery" | "aid" | "fuse";
+export interface Weapon { id: WeaponId; loaded: number }
+export interface Stack { id: StackId; n: number }
+export interface Inventory {
+  weapons: [Weapon | null, Weapon | null];
+  pockets: (Stack | null)[]; // 6
+  pages: string[];           // lore ids (phase 7): kept outside the pockets
+}
+export function addItem(inv: Inventory, id: WeaponId | StackId, n: number): number; // how many fitted
+export function useSlot(inv: Inventory, slot: number): StackId | null;
+export function count(inv: Inventory, id: StackId): number;
+export function cleanInventory(x: unknown): Inventory; // for what comes from the API or a client
+```
+
+- **Taking items**: stacks top up the ones you have first, then fill an empty
+  pocket. What doesn't fit stays in the spot.
+- **Weapons**: one of each kind. Finding a second one gives you its rounds
+  instead.
+- **Anything can be dropped** (`drop`), weapons too, loaded rounds and all.
+  It lies on the snow where you stand (`state.drops`) for anyone to take,
+  for two hours.
+- **Taking anything clears the mug** (`held`).
+
+### On the wire
+
+| Way | What |
+|---|---|
+| `Player` | `hp`, `st`, `wm`: uint8, rounded by the server (the team's HUD). About 1 byte a patch while you sprint |
+| server → you | `pockets {inv, bat}`: the whole inventory as JSON (under 300 B), on asking and on every change. The battery is private, so it rides here and not on `Player` |
+| server → you | `found {spot, got: Stack[], full: boolean}`: what a search gave ("Vazio" when someone was first) |
+| you → server | `loot {spot}` (within 1.5 tiles, outside, not busy) · `pick {drop}` · `use {slot}` (first aid, battery) · `drop {slot}` (a pocket 0–5, a weapon 6–7) · `pockets?` (sent by the chunk once it's listening, so nothing arrives before there's a handler) |
+
+### Stamina gates the move (both sides)
+
+- **The client**: the walker runs `stepVitals` for stamina from its own gait,
+  so the gate answers at once. When the server's `Player.st` is more than 10
+  off, it takes the server's value. Winded sets `MoveInput.tired`, which
+  already stops the sprint in `stepBody`, and it blocks `dodgePressed`.
+- **The server**: a `features/survival.ts` tick (20 Hz) settles everyone's
+  vitals.
+  - **The gait it counts** is the faster of what `mv` says and the speed it
+    measures over the last 0.25 s. A client that reports a jog while
+    sprinting still drains.
+  - **The allowance**: `speedCap(verb, spec, winded)` drops to jog × 1.15
+    while winded, after a 300 ms grace for the message lag.
+  - **The `jump` handler** spends a roll's 22 and refuses one while winded.
+- **The perf bots outside** sprint until they're winded, then jog, reading
+  their own `st`. `pnpm perf` stays at 0 put back with stamina in play.
+
+### Loot (`shared/dark/loot.ts`, `features/loot.ts`)
+
+```ts
+export type Place = "house" | "boathouse" | "shed" | "glovebox" | "diner" | "market" | "bar";
+export interface LootSpot { id: string; place: Place; x: number; z: number; refillMin: number }
+export const LOOT: LootSpot[];    // from BUILDINGS' doors, TOWN_CARS' driver doors, INSIDES' counters
+export const LOCKER: { x: number; z: number }; // the gatehouse's, a new "locker" fit
+export function rollLoot(place: Place, rng: () => number, ammoLeft: { r38: number; shell: number }): Stack[];
+export function nightOf(ms: number): number;    // São Paulo's night, 18:00–06:00, by its evening's date
+```
+
+- **The spots**: the 14 townhouses' doors, the boathouse's and the shed's,
+  the town cars' glove boxes, and a counter or shelf each in the diner, the
+  market and the bar. All of them outside, so none is safe.
+- **The locker** gives a revolver to anyone who carries none. The first one
+  a person ever gets comes with 6 loaded; after that it comes empty, so
+  dropping it and going back is no source of rounds (the survivor record
+  keeps `issued`).
+- **Each spot is full or empty.** What's in it is rolled when it's searched,
+  so the night's budget is spent at that moment.
+- **Refills**: on a timer by place (a glove box 30 min, the rest 15–20),
+  jittered ±25%.
+- **The ammo budget per night**: .38 rounds 24 + 8 × the people who went out
+  that night; shells 6 + 3 × the same. When it's spent, a search finds
+  everything but ammo.
+- **Kept across a restart**: the spots' timers, the night's budget and the
+  drops go to the API as the world's `settings.loot` (`PUT
+  /api/internal/world/loot`, debounced; `GET /world` gives it back).
+- **No spot state on the wire**: a search tells you. Drops are on the wire
+  (`state.drops`: id, x, y, level, item, n), since they must be seen. `YUTOPIA_LOOT_FAST` gives
+  the tests refills in seconds.
+
+### Saving: `survivors` (apps/api)
+
+- **Table**: `id`, `user_id` (unique, cascades), `inventory` json, `vitals`
+  json (`{hp, wm, bat}`: stamina always comes back, so it isn't saved),
+  `pages` json, timestamps.
+- **Internal routes** (signed, like the pets):
+  - `GET /api/internal/survivors/{userId}` → `{survivor: {...} | null}`
+  - `PUT /api/internal/survivors/{userId}` → an upsert. It's validated: known
+    ids, `n` within the stack caps, at most 2 weapons and 6 pockets, vitals
+    0..100, at most 200 page ids.
+- **The model** is `Survivor`, with casts. The world-server's `api.ts` gets
+  `survivor(uid)` and `saveSurvivor(uid, s)`.
+- **The client's `api.ts` needs nothing**: your pockets come from the room.
+- **Saving is debounced like the pets**: a dirty flag, at most every 30 s,
+  and once more on leave. Offline, an in-memory map stands in.
+- **Loading**: on join, for people (not bots). Until the record arrives,
+  `loot` and `use` are refused.
+- **Pest** (`SurvivorTest`):
+  - a PUT then a GET gives the same pockets back (they survive a restart);
+  - an unknown item or an overfull stack is a 422;
+  - an unsigned call is refused;
+  - deleting the user deletes the survivor.
+  - phpunit.xml already forces in-memory SQLite (`force="true"`, in env and
+    server), so the dev Postgres is safe.
+
+### The client: the `yutopia-dark` chunk
+
+- **Loading**: the input chunk imports it the first time you're outside, so
+  the page itself gains nothing. It registers its strings with `addStrings`
+  (PT and EN), its own room messages, and asks `pockets?`.
+- **The stamina arc** by the body (3D and iso), as in `02-hud-night`. It
+  shows only while stamina isn't full, and it's amber while winded.
+- **The search prompt** near a spot: "Revistar · E", then a toast with what
+  you found.
+- **The pockets strip**: two weapon slots and six pockets, bottom right.
+  **It isn't in the mocks**: `02-hud-night` shows the battery, the cylinder
+  and the flares, not the pockets. It needs a mock first: it shows for 3 s
+  after a pickup and while Tab is held; click to use or throw away; the pad's
+  d-pad ↓ uses first aid.
+
+### Tests
+
+- **`vitals.test`**: a sprint empties stamina in 6.25 s; regen starts after
+  0.7 s; winded until 25; a roll costs 22; the cold halves regen; the warmth
+  rates; health back to 60.
+- **`inventory.test`**: stacking, the caps, a second revolver gives rounds,
+  full pockets take only what fits, `cleanInventory`.
+- **`loot.test`**: every spot stands on walkable ground within reach; the
+  budget holds.
+- **`survival.test`** (world-server, `YUTOPIA_OFFLINE`):
+  - a sprint outside drains `st`;
+  - while winded a sprint-speed `pos` is put back and a jog passes;
+  - two clients search one spot and only the first gets anything;
+  - a refill comes back.
+- **Pest**: `SurvivorTest`.
+- **`pnpm perf`**: 0 put back.
+- **Budget**: the page stays at 554.0; `yutopia-dark` is well under 80.
+
+## Phase 2 — vitals, pockets, loot, saving: delivered (2026-10-20)
+
+The user approved the shapes ("approved go"), with weapons droppable and the
+loot kept across a restart. Built as decided above, with these differences:
+
+- **The mock first**: `05a-loot` and `05b-pockets` in `design/screens/dark/`
+  (painted in HTML over `/dev/grounds?shot=town-glovebox` and
+  `02-hud-night-clean`). The game's strip reuses the mock's icons
+  (`hud/icons.js` → `world/dark/icons.ts`).
+- **Shared** (subpath `@yutopia/shared/dark`; `vitals` and `inventory` have
+  their own subpaths, so the input chunk doesn't pull in the Grounds):
+  - `needs.ts`: `clamp100`, `drain` and `fill`. `settleNeeds` uses them, and
+    `pets.test` passes unchanged.
+  - `vitals.ts`: `stepVitals`, `spendRoll`, `hurt`, `vitalByte`.
+  - `inventory.ts`: `addItem` / `addStack` / `addWeapon`, `takeStack`,
+    `removeSlot`, `consume`, `cleanInventory`.
+  - `dark/loot.ts`:
+    - the spots: 14 townhouse doors, the boathouse, the shed, 32 glove boxes,
+      the diner, the market and the bar;
+    - `LOCKER`, which needed a new `locker` fit in the gatehouse, drawn in
+      both views;
+    - `rollLoot`, `nightBudget`, `nightOf`.
+  - `light.ts` `inLampPool`: the lamps' pools for warmth until phase 3.
+  - `MV_WINDED` (32) in `pos`'s `mv`. See below.
+- **The messages** are named `dark:*`:
+  - you → server: `dark:hello` (the chunk is listening), `dark:loot {spot}`
+    (a spot id, or `"locker"`), `dark:pick {id}`, `dark:use {slot}`,
+    `dark:drop {slot}`;
+  - server → you: `dark:pockets {inv, bat}`, `dark:found {spot, got, full,
+    gone?}` (`gone`: someone emptied it first).
+- **`features/survival.ts`** is a single feature: vitals, pockets, loot,
+  drops, the locker and saving. It gives the room `survival.winded`,
+  `.roll` and `.breathless`.
+  - **Drops** are `WorldState.drops` (`Drop`). They're allowed out on the land
+    only, and last two hours.
+  - **The loot is kept** in the world's `settings.loot` through `PUT
+    /api/internal/world/loot`: the spots' timers and leftovers, the night's
+    budget and who went out, the drops. It's saved at most every 30 s and
+    once more when the room closes. `GET /world` gives it back.
+- **Staying in step with the client** (found by the e2e):
+  - The client stops sprinting at exactly 0. The server's copy ends within
+    one tick's drain of that, about ±0.8, and at 0.5 it was never winded and
+    began to regenerate: the two disagreed.
+  - Now the client sends `MV_WINDED` while it's out of breath. The server
+    takes it at its word, because it only holds the player back.
+  - The server still keeps its own count: winded at its own 0, with 300 ms of
+    grace before the allowance falls to a jog.
+  - **Speed fallback**: a measured speed over a jog's counts as a sprint only
+    after a full second of it. A sprint's momentum on the ice after letting
+    go isn't one.
+- **The API**:
+  - `survivors` (migration, `Survivor`, `DarkController`);
+  - `GET`/`PUT /api/internal/survivors/{userId}`, validated: known ids, stacks
+    within caps, loaded rounds within the gun, vitals 0..100, page ids;
+  - `PUT /api/internal/world/loot`.
+  - The dev database is migrated (one new table).
+- **The client** is the `yutopia-dark` chunk (14.8 KB). The walker imports it
+  the first time you're on the land; the controller only hands the walker
+  itself (`new m.Walker(this)`).
+  - **The walker** runs stamina on its fixed step. Winded sets `tired` and
+    blocks the roll. When the server's `st` is more than 10 away, it takes
+    the server's value.
+  - **The chunk** draws:
+    - the arc, sized to the body as drawn;
+    - the prompt beside you, with a ring that fills over the 0.8 s search;
+    - the toast with the items' icons;
+    - the strip above the dock: 3 s after a pickup with "+n", while Tab is
+      held, click to use, right click to drop;
+    - drops as their icons on the snow (DOM, not meshes yet: phase 8).
+  - **Keys**: E (whatever "use" is bound to) near something searches; the
+    pad's X does too, and d-pad ↓ uses first aid (a new `aid` action).
+- **Budget**: the page **553.9 KB**. The pets' refactor cost 85 bytes there;
+  paying for it:
+  - First person's facing code (and `DIR_ANGLE`) moved into the walker
+    (`face`).
+  - **Trap**: the walker importing a *value* from `@yutopia/shared` (the
+    index) re-split the page's chunks: +156 bytes. `dirFromDelta` is passed
+    in instead.
+- **Tests**:
+  - **shared**: 198 (`vitals`, `inventory` and `loot` tests are new).
+  - **world-server**: 76, with `survival.test.ts`:
+    - a sprint across the pond drains `st`;
+    - while winded a sprint is put back, a roll is refused, and a jog passes;
+    - a spot's loot goes to the first to search it and comes back on its
+      timer;
+    - the locker's revolver comes loaded, is dropped, is picked up by
+      someone else, and comes empty the second time;
+    - pockets are kept across a rejoin.
+    - Two older tests failed once each under the full suite's load and pass
+      alone: rooms' Vortex "personal lines are private" (it fails on main
+      without these changes too), and the pets' "its mind" (a timeout).
+  - **Pest**: 71, with `SurvivorTest`: saved then read back as they were (a
+    restart loses nothing), what nobody could carry is refused, unsigned
+    calls are refused, deleting the user deletes the survivor, the loot is
+    kept in the world. The dev database had the same users before and after.
+  - **`pnpm perf`**: 60 bots, a sixth of them sprinting laps of the pond with
+    stamina; they ran out of breath 80 times in 30 s. **0 put back**, tick
+    0.19 ms.
+  - **e2e** (`dark.spec.ts`, iso; 3D with `YUTOPIA_VIEW=3p YUTOPIA_GPU=1`):
+    - Shift+W across the pond until out of breath: the walker and the server
+      both reach 0, the sprint becomes a jog, and the arc says so. Never put
+      back.
+    - A search at a townhouse door gives a toast; Tab shows the 8 slots.
+    - 6 of 6 runs green.
+    - With the GPU, the movement specs pass alongside it: `walk-angles`,
+      `jump`, `first-person`, `mouse-look`, `move`, `move-others`,
+      `controllers`. 10 passed.
+- **Not done**:
+  - Health has nothing to take it away yet (strikes are phase 4), and the
+    battery has nothing to drain it (focus is phase 3).
+  - Warmth runs but isn't shown: frost is phase 8's.
+  - The team's tags (`hp` on `Player`) are phase 8's.
+
+## Phase 3 — light, shared: delivered (2026-10-21)
+
+The user: "go".
+
+- **`shared/beam.ts`** (subpath `@yutopia/shared/beam`, pure: no Grounds in it,
+  so the views load it as is):
+  - `BEAM` holds the numbers: wide (10 tiles, half-angle 0.36) and focused
+    (14, 0.2). Not aiming, the beam tilts down 0.16 rad onto the snow ahead.
+    The phone is held at 1.2 tiles, or out at 1.35 while aiming.
+  - `beamOf(x, y, z, yaw, pitch | null, focus)` and `beamAt(beam, x, y, z?)`:
+    one cone test. With a height it's tested in 3D: aimed up, it passes over
+    the snow and lights a face. `beamReaches(grid, beam, x, y)` checks the line
+    of sight for the server in phase 4.
+  - `shared/light.ts` keeps the lamps' pools (`inLampPool`).
+- **Focus** happens when the torch is on, you're aiming (the right button or
+  LT, 3D, outdoors), you're out on the land and there's battery left.
+  - **The server** works it out each tick into a new `Player.focused`. The name
+    `focus` was taken: it's heads-down at a desk.
+  - **The battery** drains 12/s while focused and comes back to 40 at 0.25/s
+    otherwise (`stepVitals`). A full battery lasts about 8 s of focus.
+  - **The walker** predicts my own focus and battery, so the beam narrows the
+    moment I aim. The server's battery (through `dark:pockets`) wins when
+    they're more than 4 apart.
+- **Both views draw beams from the same numbers**:
+  - **3D** (`tp/view.ts` `torches`): the spot light and the haze cone point
+    by the person's `yaw` (as they turned, not 8 ways) and, while aiming, by
+    their `pitch`.
+    - Focused, the cone scales to 14 × 0.2. The spot narrows, gets a harder
+      edge (a round spot where it lands, as the mocks found) and is brighter.
+  - **Iso** (`art/grounds-iso.ts`): the beam sprite turns by the same angle.
+    It took the 8-way `d` before; now the people's states carry `angle`. The
+    sprite is longer and narrower when focused.
+  - **Who's lit** (3D `landTint`, iso `lightAt`) is `beamAt`, and brighter
+    for a focused beam.
+- **The HUD**: the FOCO bar from `02-hud-night`, bottom right under the
+  pockets, while the torch is on outside or the battery isn't full.
+  - What focusing eats shows in amber, and the bar turns red under 25%.
+- **`mod:refill`** (admins): your own vitals full again, for trying things
+  out (and for the e2e: the battery is kept between visits).
+- **The page**: `focused` and `angle` on the people's states. It stays at
+  554.0 KB (−46 bytes).
+- **Tests**:
+  - **shared**: 203, with `beam.test.ts`:
+    - the wide and focused cones' reach and width;
+    - in 3D, aimed up it lights a face and not the snow;
+    - it turns with yaw;
+    - a wall stops it.
+  - **world-server**: 77, with a new `survival.test.ts` case: aiming without
+    the torch isn't focus; with it, `focused` and the battery runs down; let
+    go, it stops.
+  - **e2e `beam.spec.ts`** (the exit test, two browsers, YUTOPIA_GPU=1). Ana
+    focuses on Bia, 6 tiles off at 0.3 rad (not one of the 8 ways).
+    - **The same beam on both screens**: from the same place within 0.15, the
+      same height, the same way within a byte (0.04), the same pitch, focused
+      on both.
+    - **Bia lit the same** on both: within 0.08, over 0.3.
+    - **Bia's iso** draws the same beam, focused.
+    - **The battery** runs flat: then no focus, wide again on both.
+    - 4 of 4 runs green.
+    - **Trap**: a real key press in one browser blurs the other, and a blur
+      lets go of everything held there (Ana's aim). Bia's T is sent into her
+      page instead.
+  - **`pnpm perf`**: 0 put back, tick 0.21 ms.
+  - **With the GPU, in one run: 21 passed.** That's `walk-angles`, `jump`,
+    `first-person`, `mouse-look`, `move`, `move-others`, `controllers`,
+    `people-3d`, `grounds`, `dark` and `beam`.
+- **Seen, not changed**:
+  - **The 3D chase view of the pond at night reads pale.** `nightLevel` is
+    0.98, but the moon on open snow from above is bright, much lighter than
+    iso. Over the shoulder (aiming) it reads as night. It's a tuning question
+    for phase 8 or 9.
+  - **Next to the phone the beam's start is a hard white blob** in 3D (the
+    cone's narrow end, added on). Phase 8 can soften it.
+
+## Phase 4 — the shadowed and damage: built (2026-10-21), awaiting the feel's sign-off
+
+The user: "start phase 4".
+
+- **The mind**, `shared/dark/fsm.ts` (pure): the ten states of D5, the numbers
+  as data (`SHADE`), `think(shade, sense, dt)` and `perceive`.
+  - **What it sees**: 20 tiles at night, 10 by day (×0.5 for someone
+    crouching), with a line of sight. **What it hears**: a sprint within 8, no
+    line needed.
+  - **Who it leaves alone**: whoever is in a pool, down, away or
+    do-not-disturb.
+  - **Stalking**: it closes to a circle 4–6 tiles out, coming round from the
+    side, and circles. Every 2.5–5 s it rushes in at 5 tiles/s, faster than a
+    jog and slower than a sprint.
+  - **The windup**: it starts at 1.2 tiles and lasts 0.55 s, a slow lunge (1.5
+    t/s). It's committed: a beam doesn't stop it. Roll, or step out of reach.
+  - **The strike**: 1.3 tiles reach, 25 health.
+  - **Burning**: 45 shield/s under a focused beam, at half speed, an arm over
+    its face. **Exposed** for 4 s: it backs off, then the shield grows back at
+    25/s.
+  - **The light**: inside a pool it flees out of it, burning.
+  - **The dawn**, or nobody near for 20 s: it goes.
+  - **Found by testing in the world**: one brought out 25–45 tiles away (past
+    the 20 it sees) just stood there. Never having seen anyone, it's now
+    **drawn to the living**: the nearest person within 70 tiles who isn't safe.
+  - `fsm.test.ts`: 6 tests.
+- **The server**, `features/dark.ts`:
+  - **The director** works per group of people out on the land (within 30
+    tiles of each other). It brings out up to `min(40, ⌈people × 3 ×
+    danger⌉)`, at most one per 4 s, 25–45 tiles away, behind the facing where
+    it can. Never in a pool, off the land, or within 45 tiles of the HQ's doors.
+    - **By day** there are only stragglers, in the deep woods or a storm.
+    - **The dawn** is 5:00–7:30: they go.
+    - **Tension** grows with strikes and close calls; past 0.7 it holds off for
+      25 s.
+  - **Walking**: straight with whiskers (0, ±0.6, ±1.2 rad, 0.7 ahead); A*
+    only when boxed in, at most 3 a tick, again after 1.5 s. Never into a pool
+    unless fleeing it. They keep 0.75 tiles off people and 0.7 off each other
+    (they walked through Ana). Full mind at 20 Hz within 40 tiles of someone,
+    4 Hz beyond.
+  - **Burning** comes from each focused torch (`Player.focused`,
+    `beamOf`/`beamAt`, with a line of sight). It meets the body low, at the
+    chest or the head: point-blank, the cone only meets it low.
+  - **Strikes** land within reach unless they're 0–350 ms into a roll as the
+    server heard it. The struck get `dark:hit`.
+  - **Down to nothing**: for now you wake at the office (`dark:awake`, 50
+    health, warm, your pockets kept). Phase 6 puts the others' 30 s before it.
+  - **On the wire**: a `Shadow` (id, x, y, facing byte, state, since, shield,
+    look) in `@view() shadows`. Each client gets a `StateView` at join, and
+    the shadowed within 70 tiles are added to it twice a second, for people
+    outside only. Positions go out at 10 Hz, the state on change. StateView
+    was proven first: only the client it's added to gets it.
+  - **Admins**: `mod:dark {mode: "peaceful" | "normal", spawn}` and
+    `mod:refill`.
+- **The look** (`yutopia-dark` 18.0 KB; the 3D view's and the chars' chunks):
+  - **The dark chunk** (`dark/shades.ts`) plays them back 150 ms late, as
+    office people (shirts, blazers, trousers, loafers, by their `look` seed).
+    In 3D they're the view's extra bodies; in iso, people drawn dark.
+  - **3D** (`tp/person3d.ts`): near black while the shield holds; their office
+    clothes, lit, when exposed.
+  - **Their upper body** (`chars/moves.ts` `shadePose`): a slumped lurch with
+    twitches, the arms going up through the windup and down in the strike, an
+    arm over the face turned from the light when burning, hunched when
+    exposed. The legs are the walk's.
+  - **The shroud** (`tp/shroud3d.ts`), two point clouds for all of them:
+    - smoke on the body, rising and thinning as the shield goes, drawn a
+      little towards the eye;
+    - it gathers in as one emerges and is blown out as one goes;
+    - embers thrown off the side a beam burns.
+  - **Iso**: dark people with no name tag; their own clothes when exposed.
+  - **On screen**: a red edge when struck; black with "Você acordou no
+    escritório" when you go down.
+  - **Admins get a ☾ button** (top right, outside): night, day, the real
+    hour, call 1, call 3, refill me, peaceful, normal.
+- **The page** carries only two iso lines (no name tag without a name; drawn
+  dark when `shaded`): 553.975 KB (−26 bytes).
+  - **Trap**: the dark chunk newly importing `@yutopia/shared/move` re-split
+    the page's chunks (+135 bytes). Three small helpers are copied in instead.
+- **Tests**:
+  - **shared**: 209.
+  - **world-server**: 82, with `dark.test.ts` (YUTOPIA_DARK_FAST):
+    - out of the dark 25–45 off, emerging, never in a pool or by the HQ, and
+      nobody indoors sees them;
+    - a strike lands on someone standing (25), and a roll through the windup
+      makes it miss;
+    - a focused beam burns the shield to exposed;
+    - nobody comes into a lamp's pool or strikes whoever stands in it;
+    - the dawn takes them, and peaceful keeps them away.
+  - **Flares** (the exit test's "a flare holds them off") come with phase 5's
+    throw. The pool test covers the light they share (`lit`, `light` in the
+    mind's sense).
+  - **`pnpm perf` with DARK=1**: 50 bots, 40 of them on the pond at night,
+    with 40 shadowed.
+    - Tick 0.76 ms average, 3 ms at most (budget 4), 0 put back.
+    - An outside client gets 3.97 KB/s more than an inside one: the
+      shadowed's share (budget 6). The inside one gets nothing of them.
+    - Before, the mind's lines of sight cost 19.6 ms a tick. Now perception
+      checks the nearest first, stops at the first it sees, and keeps a line
+      of sight for 0.2 s.
+  - **e2e `shades.spec.ts`** (YUTOPIA_GPU=1): three called up at night on the
+    pond:
+    - they emerge, are drawn in 3D, wind up, and strike (health under 100);
+    - under the focused torch one burns, then is exposed;
+    - in iso they're drawn.
+- **Sign-off (the user)**: go out at night (☾ → Night), call some up
+  (☾ → Call 3) and fight them.
+  - The shroud's look, the windup's tell, rolling through it, burning one
+    off, and the speeds (stalk 3.2, rush 5, you jog 4.2 and sprint 6.8) are
+    the numbers to tune (`SHADE`).
+  - **Sound** (the emerge's sting, whispers, the burn's sizzle) is phase 8's.
+    The mocks found the emerge hard to notice without it.
+
+## Phase 5 — guns and flares: built (2026-10-21)
+
+The user: "start phase 5" (phase 4's feel not signed off yet: both can be
+tried together).
+
+- **Shared** (`shared/dark/arms.ts`, pure):
+  - `ARMS`, the guns:
+
+    | | Between shots | Reload, a round | Damage | Range | Pellets | Spread |
+    |---|---|---|---|---|---|---|
+    | revolver | 0.42 s | 0.35 s | 50 | 40 | 1 | 0.006 |
+    | shotgun | 0.95 s | 0.6 s | 18 a pellet | 14 | 8 | 0.09 |
+
+  - `rayMeets`: a ray against a body's column (0.38 wide, 1.8 tall). It
+    misses one beside, behind, past the range or over the head.
+  - `pellets(gun, yaw, pitch, seed)`: the same spread on the server and in
+    everyone's tracers.
+  - `flareFlight`: an arc from the hand, stopped by walls.
+  - `FLARE`: 6 tiles, 12 s. `REWIND`, `MUZZLE_REACH`.
+  - The mind's `wound(shade, n)`: only an exposed one is hurt; a shielded one
+    sparks. At 0 (`SHADE.hp` 100: two revolver rounds) it dissolves, killed.
+- **The server** (`features/arms.ts`), **you aim, the server decides**:
+  - `arms:draw {slot}` sets `Player.gun`, which everyone sees.
+  - **A shot**, `arms:fire {ox, oy, oz, yaw, pitch, lag, seed}`, is checked:
+    the gun in the hand and loaded; the rate; aiming, out on the land, free;
+    the muzzle within a tile of where the server has you. A ray from
+    elsewhere is refused, and no round is spent.
+  - **The rewind**: each pellet is taken against the shadowed where you saw
+    them. `features/dark.ts` keeps a second of where each was, and the test
+    uses now − 150 ms (the playback) − your measured lag, ±60 ms and ±0.15
+    tiles.
+  - **A wall or trunk** on the way stops it.
+  - **What it met** comes back to you (`arms:hit {kind}`). Everyone within 60
+    tiles gets the shot (`arms:shot`) to draw.
+  - **No friendly fire**: players aren't targets.
+  - **A reload** (`arms:reload`) is a round at a time out of the pockets. A
+    shot or a change of weapon stops it.
+  - **A flare** (`arms:flare {yaw, pitch}`) takes one from the pockets. It flies
+    its arc (`arms:throw` to those near), then is lit where it lands
+    (`state.flares`, broadcast).
+  - **In a flare's light** nobody can be had, and the shadowed don't come in;
+    the ones inside burn and flee (it's `lit`, like a lamp's pool, day or
+    night).
+  - **Burning** (found by trying it): anywhere in a focused cone burns at
+    least 27/s, up to 45 close in. Scaled by the beam's falloff, one 10 tiles
+    off took 8 s.
+  - **Admins**: `mod:refill {kit: true}` gives both guns loaded, 24 rounds, 12
+    shells, 3 flares, first aid and a battery (☾ → "Me armar").
+- **The client**:
+  - **The dark chunk** (`dark/arms.ts`):
+    - 1 · 2 take a weapon out (again: put it away). In iso, a gun out
+      switches to 3D. Outside, they're not emotes.
+    - Aiming, the **left button fires**. It listens to `mousedown`: with the
+      right button held, a second button is no `pointerdown`.
+    - **The shot goes through the crosshair**: what's under it (or 30 tiles
+      out), from the gun in the right hand. Over the shoulder, the body's
+      line isn't the crosshair's.
+    - **R reloads, G throws a flare**. On the pad: RT fires, RB throws, Y
+      while aiming is the other weapon, X with nothing to use reloads.
+    - **The lag** is measured (`arms:ping` / `pong`) and sent with each shot.
+    - **The HUD** is the mock's: the cylinder (or the shells) with the spare
+      rounds, the flares, and a crosshair while aiming. The crosshair grows
+      on a hit: blue on a spark, red on a kill.
+  - **The 3D view's chunk** (`tp/arms3d.ts`):
+    - the flash and the tracers at once (the same pellets from the seed);
+    - sparks where one meets a shield;
+    - the flare's arc, and its red stick spitting sparks.
+    - **A flare's light** is the view's own ground lamp, red (6 over 11 tiles,
+      flickering, nearest first, day or night). No new lights: they'd
+      recompile every lit material.
+  - **The body**: aiming with a gun, `aimPose(…, gun)` holds both arms out. A
+    simple revolver or shotgun (a few boxes) is in the right hand.
+  - **Iso**: flares are red pools, and they light whoever is in them.
+  - **The page** carries only `gun` on the people's states: 553.983 KB (−17
+    bytes).
+- **Fixed on the way**:
+  - **The 3D camera was clamped at height 0.25 in the floor's frame.** On the
+    pond (1.7 down) it couldn't come down to look level or up, so the
+    crosshair and the aim's pitch parted. Now it's clamped 0.25 over the
+    ground under you.
+  - **Admin call-ups** try spots until they have as many as asked for.
+  - **The e2e** turns the dark off by default (`helpers.enter`: peaceful). At
+    the real hour it may be night on the Grounds, and `grounds.spec`'s walks
+    were struck down mid-way.
+- **Tests**:
+  - **shared**: 213, with `arms.test.ts`: rays, pellets, a flare's flight,
+    wounds.
+  - **world-server**: 86, with **`arms.test.ts`, the exit test**:
+    - A's focused torch exposes one, B shoots it: a spark while it's
+      shielded, then hurt, then killed.
+    - **The rewind**: a shot at where B saw it 300 ms ago, with B's lag at
+      150, hits though it had moved on. A muzzle 2.5 tiles from B is refused,
+      and no round is spent.
+    - A reload is a round each 0.35 s out of the pockets, and a shot stops it.
+    - A flare thrown lands 4–10 tiles ahead, lit for 12 s. Nobody comes into
+      it or strikes whoever stands in it.
+  - **`pnpm perf`**: 0 put back. DARK=1 (40 shadowed): tick 0.79 ms, the
+    shadowed's share 3.8 KB/s outside.
+  - **e2e `arms.spec.ts`** (YUTOPIA_GPU=1), Ana armed at night: G's flare
+    lands and burns; 1 takes the revolver out (the cylinder); aiming, the
+    torch burns one to exposed and the left button puts it down. 3 of 3.
+- **Left for phase 8**:
+  - the guns' and flares' sounds (the synth shortlist is ready);
+  - the shadowed's emerge sting and whispers;
+  - softening the beam's start at the hand.
+
+## Phase 6 — down, up, awake: built (2026-10-21)
+
+The user: "start phase 6".
+
+- **The numbers** (`shared/vitals.ts` `DOWN`):
+  - you bleed out in 30 s, and the time waits while someone holds by you;
+  - a teammate's hold is 3 s within 1.5 tiles, and you're up at 35;
+  - your own first aid is 5 s held, and you're up at 100;
+  - nobody came: the office, at 50;
+  - a crawl is 0.6 tiles/s;
+  - away outside at night for 30 s, and you go down.
+- **The server** (`features/survival.ts`):
+  - **At 0 health you go down**: `Player.downAt` (and `revBy`, `revAt`: who's
+    getting you up, since when), seen by everyone. The gun is put away.
+  - **While down**: the shadowed leave you alone (hp 0); the allowance is a
+    crawl's (0.84 tiles/s); no jumps or verbs, no shots, no searching or
+    dropping.
+  - **`dark:revive {sid, on}`**: someone on their feet within reach holds for
+    3 s and you're up at 35. Going out of reach, going down themselves, or
+    being struck (a strike on the one holding) stops it.
+  - **`dark:selfaid {on}`**: your own first aid, 5 s held. It uses a kit and
+    leaves you at 100. It's checked on its own, even while someone holds by
+    you (found by the tests: it was an `else`).
+  - **Awake**: no one came, so `dark:awake`, the office (your arrival), 50
+    health, warm, and what you carried, kept.
+  - **Away outside at night** for 30 s (the shadowed leave the away alone):
+    down, then the office. Peaceful (`mod:dark`) switches that off too: no
+    threat at all.
+  - **Admins**: `mod:down` puts you down (☾ → "Me derrubar"), and
+    `mod:refill` gets you up.
+- **The client**:
+  - **The walker** crawls while you're down: crouched at a 0.225 tilt (the
+    crouch's 1.6 there is 0.6), no sprint, aim, jump or roll.
+  - **Poses** (`chars/moves.ts`): `crawlPose`, on hands and knees with the
+    hands reaching in turn and paced by the distance, and `kneelPose` for
+    whoever is getting someone up. The dark chunk tells the 3D view who's
+    which (`tp.downed`), so the page doesn't grow.
+  - **The dark chunk** (`dark/down.ts`), as in the mock `03-revive`:
+    - over whoever's down within 40 tiles, a red cross with what's left of
+      their 30 s, and a ring while someone holds;
+    - by one, "Segure E para levantar {name}" (the pad's X), the ring filling
+      over 3 s;
+    - down yourself, red pulsing at the edges, "Caído · 0:28", and the first
+      aid's hint (or "someone's getting you up", or "wait");
+    - the use key (or the pad's button) held starts the hold, and letting go
+      stops it.
+  - **The page**: unchanged, 553.981 KB.
+- **Tests**:
+  - **world-server**: 91, with **`down.test.ts`, the exit test**:
+    - A down, B holds by her: going out of reach after a second stops it;
+      back, held the whole 3 s, A's up at 35, where she was.
+    - Alone: woken at the office, 50, the revolver still carried.
+    - Your own first aid: 5 s, up at 100, a kit used.
+    - Down: a crawl passes, a jog is put back, no jump.
+    - Away in the clearing lamp's pool at night: down, then the office.
+  - **`pnpm perf` DARK=1**: 0 put back. The bots wait while down; they were
+    put back 51 times crawling their laps.
+  - **e2e `down.spec.ts`** (YUTOPIA_GPU=1, two browsers):
+    - Ana down: her screen says so, she crawls (under 1.2 tiles in a second),
+      and Bia sees the cross over her.
+    - Bia by her holds E: Ana's up at ≥ 35, the red gone.
+    - Alone, down again: after 30 s, the office at 50.
+- **The GPU run** (every movement, Grounds and dark spec): 22 of 24 passed.
+  - `dark.spec` matched the down prompt as well as the search's: narrowed,
+    and it passes.
+  - One `grounds.spec` iso walk timed out in the long run, but all 9 pass on
+    their own. It has done this in long runs since phase 4 (twice when the
+    dev world server restarted mid-run on an edit, which turns the dark back
+    on). A flake to watch.
+- **Not covered by a test**: a strike stopping a hold is in the code (`hurt`
+  stops any hold the struck one has). There's no test that brings the
+  shadowed onto a reviver on demand.
+
+## Phase 8 — sound and the HUD: built (2026-10-21)
+
+The user: "Go".
+
+- **The sound** is the shortlist approved in phase 0, made in the game.
+  - **`dark/synth.ts`** is a typed port of `design/screens/dark/sounds/synth.mjs`
+    (the same DSP and the same 19 sounds). It renders at 22.05 kHz: the
+    highest in them, crackles to 7 kHz, is under half that.
+  - **Rendered in a Web Worker** (`dark/synth.worker.ts`), the drones first,
+    and handed back as channels (transferred). Nothing ships as a file. Keep
+    the two in step.
+  - **Why a worker**: rendered on the main thread, one at a time while idle, a
+    few of them (the whispers, the reverb tails) took longer than a frame.
+    `grounds.spec`'s first walk out onto the land had a 67 ms frame against
+    its 50 ms limit. In the worker it's 17 ms in both views.
+  - **Turbopack bundles it** (`new Worker(new URL(…), { type: "module" })`):
+    the synth is in the worker's chunk, not the dark chunk (18.0 KB).
+- **`dark/voices.ts` (`DarkSound`)** plays them on the mixer's buses:
+  - **Placed from where you look**: left or right of the 3D camera (iso: up the
+    screen), and quieter with distance.
+  - **The drone**: calm turning to hunted with the danger at your spot
+    (`dangerAt`) and how near the nearest one is.
+  - **Whispers** from the nearest stalking within 15 tiles, every 6.5–9.5 s.
+  - **One-shots**: the emerge sting within 30 tiles; the shield breaking on
+    exposed; the dissolve's burst when one is shot down.
+  - **The focus**: its "on" and hum, the hum sagging under 20% battery. The
+    burn's sizzle while one near burns.
+  - **The heartbeat** under 30 health: 70 a minute, racing at 120 under 15,
+    while down, or for 3 s after a strike.
+  - **The guns and flares**: revolver and shotgun shots (yours, and others'
+    out to 60 tiles), the dry click, a round's load, the shotgun's pump after
+    a shot and as a shell goes in, a flare's strike and its burning sputter.
+    A strike landing on you.
+  - **Only outside**: indoors is always safe, so silent.
+- **The HUD's rest** (`dark/vitals-hud.ts`), as `02-hud-night`:
+  - **Health** is a dark red vignette deepening under 60 and beating under 30.
+  - **The cold** is frost (branching hairlines, the same each time) growing in
+    from the corners as warmth goes under 50.
+  - **Both sit over the world and under the app's panels**: right after the
+    canvas's host, so the top bar and minimap stay readable. Fixed on the body
+    they covered them.
+  - **Teammates out here**: their distance and a health bar under their name,
+    within 60 tiles. Not your own other tab (an e2e left a ghost of Ana at
+    "0 m").
+- **Leftovers from phases 3 to 5**:
+  - **Drops in 3D are objects on the snow** (a shape each, its colour, a
+    glint). Iso keeps the icons.
+  - **The beam's start**: the haze cone fades in from nothing at the phone
+    (it was a hard white blob there).
+- **The page**: 553.982 KB (−18 bytes).
+  - **Trap**: the dark chunk importing `mixer` from `world/audio.ts`, a page
+    module, re-split the page (+48 bytes). It now reaches it through the
+    Grounds' sound, which already has it.
+- **Admins**: `mod:refill {hp, wm}` sets health and warmth, to see the HUD at
+  a level.
+- **Tests**:
+  - **shared**: 213. **world-server**: 91 (the rooms' Vortex "personal lines
+    are private" failed once, as it does on main).
+  - **`pnpm perf`**: 0 put back. DARK=1: tick 0.77–0.82 ms. A 10 ms worst
+    tick once, 3–4 on reruns: a pause, not the dark.
+  - **e2e `dark-hud.spec.ts`** (YUTOPIA_GPU=1, two browsers, 3 of 3): Ana at
+    night on the pond, hurt (22) and cold (15), armed and focusing on one,
+    Bia 4 tiles off.
+    - The vignette and the frost are up; the battery, the cylinder and the
+      crosshair are shown; Bia's tag gives her distance.
+    - Every one of the 19 sounds is made; the drone and the focus's hum play.
+    - Its shot matches the mock's layout.
+  - **Trap**: a new spec first went into `e2e/hud.spec.ts`, an existing test
+    (the main HUD's). It was put back from git, and this one is
+    `dark-hud.spec.ts`.
+- **The GPU run**: 23 of 25. The two that failed were the Grounds walk's
+  worst frame, fixed by the worker above (both views pass, 17 ms).
+- **Not checked by ear**: the e2e checks that each sound is made and the
+  loops run, not how they sound in the mix. That's for the user, outside at
+  night with sound on.
+
+## Phase 9 — the checks (2026-10-21)
+
+The user: "start phase 9".
+
+- **The page**: 567,279 bytes gzip. That's 553.98 KB, 17 bytes under 554
+  (`NEXT_DIST_DIR=.next-prod pnpm --filter @yutopia/client build`,
+  `node tools/budget.mjs`). **`yutopia-dark`**: 18.0 KB of 80. The synth is
+  in its worker's own chunk.
+- **The frames**: new e2e `dark-perf.spec.ts` (YUTOPIA_GPU=1).
+  - **The setup**: on High, in the third person, in the woods (−150, −6) at
+    23h with the torch on. 20 shadowed are called up round Ana
+    (`mod:dark spawn 10`, twice). 4 flares are thrown a quarter turn apart
+    (the kit's 3, a refill, one more). Health is refilled each second so she
+    stays up.
+  - **Result**: 6 s of frames at **60.0 fps**, p95 16.7–16.8 ms, worst
+    16.8 ms (two runs). That's the display's rate: no frame was missed. All
+    20 were in her view and the 4 flares were burning when it ended.
+  - The flares light through the ground lamps' pool (4 on High), so no new
+    lights and no shader recompiles.
+- **The server**:
+  - **`pnpm perf`**: 60 bots, tick 0.30 ms, 0 put back.
+  - **`DARK=1`**: 50 bots and up to 40 shadowed, tick 0.79 ms (max 4),
+    0 put back. 18.9 KB/s outside, of which the shadowed are 3.6; inside
+    15.3. The budget was ≤ 4 ms and ≤ 6 KB/s for the shadowed.
+- **Firefox: not run**.
+  - **Why**: neither Firefox will start on this Mac. Playwright's (1543,
+    Firefox 155) and the installed Firefox 158 both exit at launch with
+    "Could not find profile folder", even with a fresh profile and outside
+    the sandbox.
+  - **What was checked instead**: a read-through of what plans 30 and 29
+    added. Module workers (Firefox 114+), `StereoPannerNode`, `copyToChannel`,
+    22.05 kHz buffers, `setTargetAtTime`, `structuredClone`, the CSS (inset,
+    gradients, a filter animation, inline SVG) and `KeyboardEvent.code`
+    keys are all in current Firefox.
+  - **The fire button**: it's on `mousedown`, not `pointerdown`, because a
+    second button pressed while one is held fires no `pointerdown`. That's
+    the same in both browsers. The canvas blocks the context menu, so the
+    right button aims.
+  - **The risk that stays** is plan 29's: a gamepad Firefox reports with a
+    non-standard mapping. Its d-pad is often an axis there, so first aid
+    (pad 13) and the d-pad have no button. Try it with a pad in Firefox.
+- **Tests**:
+  - **Unit**: shared 213, world-server 91 (the Vortex flake passed this
+    time), client 21. Typecheck is clean in every package. Biome is clean on
+    the new spec.
+  - **Pest** wasn't run again: no API change since phase 2 (71).
+- **The GPU run** (every dark spec and `grounds.spec`): 14 of 16.
+  - **The two failures were mine**: `grounds` on High (a teleport timed out)
+    and `shades` (the burn). Both ran while I was editing the world-server,
+    and its dev container restarts on each edit.
+  - **Re-run** with the day change in (`shades`, `dark-perf`, `arms`, `down`,
+    `grounds` on High): 5 of 5. The Grounds on High was 59.9–60.2 fps at the
+    lot, the square and the woods, by day and at night.
+- **Still to do**:
+  - **The fight's feel** (phase 4) needs the user's sign-off.
+  - **Chapter 1** (phase 7) comes later.
+  - **By ear**: the sound in the mix, outside at night with sound on.
+  - **Firefox** on a machine where it starts.
+
+## More of them, and the day (2026-10-21)
+
+The user: "the day should have enemies too but less" — "yes, do it,
+everywhere off the paths. Increase the number of zombies at day and night".
+
+- **The numbers** (shared `danger.ts` `SHADOWED`, `shadowedWanted`): per
+  group, `min(60, ⌈people × 5 × danger⌉)`. Before it was `min(40, ⌈people ×
+  3 × danger⌉)`, and by day none outside the deep woods and storms.
+
+  | One person | Before | Now |
+  |---|---|---|
+  | Night, open | 3 | 4 |
+  | Night, woods | 3 | 5 |
+  | Day, open | 0 | 1 |
+  | Day, woods | 1 | 2 |
+  | Day, on a path | 0 | 0 |
+
+- **By day only those off the paths count** (`dayPrey`), and only 40 tiles
+  or more from the HQ's doors.
+  - **The paths**: the roads, trails, the town's pavements, the plaza, the
+    lot, the buildings' floors (`onPathAt`).
+  - **Where they come from**: by day, out of the snow and never a path.
+  - **Still the same**: a blizzard counts as night. Dawn sends them away.
+    They see 10 tiles by day, 20 at night.
+- **The land, made ahead** (`apps/world-server/src/land.ts`, `land.worker.ts`):
+  - **The problem**: a Grounds chunk takes ~6 ms to make the first time
+    anything asks about it. The director's tries 25–45 tiles out kept
+    reaching land nobody had walked, so with 60 the worst tick was 11–18 ms.
+  - **The fix**: a worker thread makes the land within 49 tiles of everyone
+    outside (once a second), and the main thread adopts it. The director
+    only tries spots on land already made.
+  - **Worst tick**: back to 3 ms. Players walking into new land gain from it
+    too.
+- **Admins**: `mod:dark {mode: "called"}` turns the director off, so only the
+  ones you call up come. The server tests that need a calm day use it, since
+  even the open ice by day now sends one.
+- **Tests**:
+  - **shared**: 215. New: the counts, and the paths by day (the pond trail,
+    the ice, the lot, by the HQ).
+  - **world-server**: new "by day, fewer": one comes out on the open ice,
+    out of the snow; none for someone on the pond trail.
+  - **`DARK=1 pnpm perf`**: up to 60 shadowed, tick 0.9 ms (max 3), 0 put
+    back. The shadowed's share is 5.1 KB/s outside (≤ 6).
+
+## Fixes: the focus at 0%, a faster recharge, one body a person (2026-10-21)
+
+The user: "When focus is 0% the light don't turn off, it keep blinking very
+fast" and "Make the focus recharge faster".
+
+- **The blinking**: at 0% the focus went off, the battery recharged a hair,
+  the focus came back on and drained it again, every step.
+  - **The fix is a latch**: run out, and no focus until the battery is back
+    to 25% (shared `vitals.ts`: `VitalsClock.drained`, `VITALS.bat.back`,
+    `canFocus`). The walker and the server run the same rule.
+  - While it's out the beam is the wide one, and the bar reads "RECHARGING"
+    with a mark at 25%.
+- **The recharge**: 4% a second up to 40% (it was 0.25: 160 s from empty,
+  now 10). Empty to focusing again takes about 6 s. A battery from the
+  pockets still fills it to 100.
+- **Found on the way: one body a person**.
+  - **The bug**: someone's vitals were settled once for each of their
+    Players. Closing a page without leaving keeps the old Player a while in
+    case they reconnect, so coming straight back made everything run at
+    double speed: recharge, drains, health, the down timers.
+  - **The fix**: now once a tick, through the newest Player; the others show
+    the same numbers (`features/survival.ts`).
+- **Tests**:
+  - **shared**: 216 (the latch: no focus below 25%; a battery clears it).
+  - **world-server**: a body kept for a reconnection, the battery recharging
+    at 4/s and not twice that (it fails on the old code, at 7.7/s).
+  - **e2e `beam.spec`**: a new test "run out", twice: off for 6.3 s, back at
+    25%, the server's focus never back on meanwhile. The old test now
+    expects the recharge under way.
+
+## The inventory: built (2026-10-21)
+
+The user approved the mock (`design/screens/dark/06a-inventory`,
+`06b-inventory`): "approved go".
+
+- **I opens it** (the pad's Menu), anywhere on foot: outside, and indoors
+  too. The walker loads the dark's chunk for it if you haven't been out
+  yet.
+  - **It doesn't open**: driving, at an arcade, or typing in a field.
+  - **It closes with**: I, Esc, the ✕, a click on the dimmed world, or the
+    pad's B.
+- **The world doesn't stop**. While it's open you stand still (the keys and
+  the pad's moves are held back, click-to-walk too) and can't aim or shoot.
+  When one of the shadowed is within 15 tiles, a red warning says so.
+- **The panel** (`world/dark/inventory.ts`, its own layer over the 3D name
+  tags), as the mock:
+  - **You**: health, stamina, warmth and battery, with what brings each
+    back ("comes back to 60 by itself", "cooling · outside at night",
+    "Recharging"), and what's in your hand.
+  - **Weapons**: loaded / magazine, the spare ammo, "IN HAND".
+  - **Pockets**: 3 × 2, each count / stack.
+  - **Picked**: its description and numbers (for a gun: damage and range
+    from `ARMS`), and its buttons: Use (E), Hold / Put away (1 · 2),
+    Reload (R, the gun in hand), Drop (right click; outside only).
+  - **On the ground · in reach**: what lies within 1.6 tiles. Take it (E,
+    or drag it into a pocket).
+- **The pointer**: a click picks, a right click drops, a drag moves.
+  Pocket to pocket swaps, or tops up the same stack to its cap. Weapon slot
+  to weapon slot swaps. From the snow, into the pocket it's dropped on.
+- **The pad**: the d-pad moves through weapons, pockets and the snow. A uses
+  or takes, X drops, B closes.
+- **New on the server**:
+  - **`dark:move {from, to}`**: shared `moveSlot`; pockets and weapon slots
+    don't mix.
+  - **`dark:pick {id, slot?}`**: shared `addItemTo`, the chosen pocket first
+    and the rest where it fits.
+- **The Tab strip** stays as the quick look; its hint now says "I
+  everything".
+- **The page**: 553.98 KB (19 bytes under). **`yutopia-dark`**: 24.5 KB.
+  **`yutopia-input`**: 10.1 KB.
+- **Tests**:
+  - **shared**: the drag and the chosen pocket.
+  - **world-server**: survival's "the inventory" test: a pocket dragged, the
+    flares dropped and taken back into the pocket they were dragged to,
+    weapons swapped.
+  - **e2e `inventory.spec.ts`**: I opens it, W held does nothing, the first
+    aid used with E (health 40 → 100), a drag between pockets, a right
+    click drops, a drag from the snow into a chosen pocket, 2 takes the
+    shotgun out, Esc and I close it, walking again after, and it opens
+    indoors.
+  - The test starts by dropping what Ana carried from earlier runs: her
+    pockets are saved.
+- **Not tested**: the pad's navigation in the panel (no pad in the e2e).

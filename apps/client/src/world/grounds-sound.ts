@@ -30,6 +30,9 @@ export class GroundsSound {
   private nextTick = 2;
   private nextDog = 30;
   private open = 1; // eased: how open it is round you (1 none of the woods)
+  /** the mixer, for the dark's sound (world/dark/voices.ts takes it from here: importing it
+   *  there split the world page's chunks — docs/plan/30-the-dark.md phase 2's trap) */
+  readonly mixer = mixer;
 
   constructor(private G: G) {
     // a step in the snow: grains crunching after the first (sound.ts step)

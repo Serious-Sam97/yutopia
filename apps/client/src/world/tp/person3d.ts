@@ -1,5 +1,6 @@
 import { type HeldKind, heldState, isHeld, isSocial, SOCIAL_MS } from "@yutopia/shared";
 import {
+  BoxGeometry,
   CircleGeometry,
   Group,
   type Material,
@@ -43,6 +44,9 @@ export interface Mats {
   prop: (color: string) => Material;
   /** a pet toy in the hand (the pets chunk makes those), when it's loaded */
   toy?: (kind: string) => Object3D | null;
+  /** the shadowed, wrapped in the dark (docs/plan/30-the-dark.md D5) */
+  shade?: Material;
+  shadeInk?: Material;
 }
 
 export interface Seen {
@@ -82,6 +86,9 @@ export class Person3D {
   private actSeen = 0;
   private due = 0; // motion time not stepped yet (off screen, far away)
   private away = false;
+  private dark = false;
+  private crawlPh = 0;
+  private downW = 0;
   private jumpH = 0; // off the floor (a jump), tiles
   private jumpOn = false;
   private headUp = 0; // the head's height standing as they last stood (the tag stays over it through a flip)
@@ -214,6 +221,7 @@ export class Person3D {
           left: this.vx * fs - this.vy * fc,
           crouch: (mv & 8) !== 0,
           aim: (mv & 16) !== 0,
+          gun: !!p.gun,
           pitch: p.pitch ?? 0,
           yaw: 0,
           turn: this.turnRate,
@@ -224,17 +232,33 @@ export class Person3D {
         },
       });
     this.motionOut = mo;
+    // one of the shadowed: its own arms, back and head over the walk
+    let pose = p.shade ? this.C.blend(mo.pose, this.C.shadePose(p.shade.pose, p.shade.t, p.shade.seed), 1) : mo.pose;
+    let lift = mo.lift;
+    // down: on hands and knees, crawling as they go; by someone down, kneeling (D7)
+    if (p.down) {
+      this.crawlPh = (this.crawlPh + dist / 0.45) % 1;
+      const m = p.down === "down" ? this.C.crawlPose(this.crawlPh) : this.C.kneelPose();
+      this.downW = Math.min(1, this.downW + step * 4);
+      pose = this.C.blend(pose, m.pose, this.downW);
+      lift = [lift[0] + (m.lift[0] - lift[0]) * this.downW, lift[1] + (m.lift[1] - lift[1]) * this.downW, lift[2]];
+    } else this.downW = 0;
     const seatY = (SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX;
     const drop = this.model.sitDrop(seatY) * w;
-    this.model.setPose(mo.pose, [mo.lift[0], mo.lift[1] + drop, mo.lift[2]], mo.reach);
+    this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], mo.reach);
     this.model.setFace(mo.blink, mo.talk);
 
     this.props(p, held, mo.sip);
     // away: faded, like iso
     const away = p.status === "away";
-    if (away !== this.away) {
+    // (the shadowed: dark while their shield holds; bare — their office clothes — exposed)
+    const dark = !!p.shade && p.shade.dark > 0.5 && !!this.mats.shade;
+    if (away !== this.away || dark !== this.dark) {
       this.away = away;
-      this.model.setMaterials(away ? this.mats.bodyAway : this.mats.body, away ? this.mats.inkAway : this.mats.ink);
+      this.dark = dark;
+      if (dark) this.model.setMaterials(this.mats.shade as Material, this.mats.shadeInk ?? this.mats.ink);
+      else
+        this.model.setMaterials(away ? this.mats.bodyAway : this.mats.body, away ? this.mats.inkAway : this.mats.ink);
     }
     // the blob shadow when the sun casts none; the speaking ring pulses
     this.shadow.visible = seen.lowQuality && !sitting && this.part === "all";
@@ -291,6 +315,7 @@ export class Person3D {
         this.phone = { key: phoneKey, prop };
       }
     }
+    this.gunFrame(p, hand);
     if (this.phone?.prop.rec)
       this.phone.prop.rec.visible = !!p.recording && Math.floor(performance.now() / 500) % 2 === 0;
   }
@@ -302,6 +327,40 @@ export class Person3D {
     this.held.toy?.removeFromParent();
     this.held = null;
   }
+  // the gun in the right hand (docs/plan/30-the-dark.md D6): a few boxes along the hand's
+  // way out of the fist (−y in the wrist's frame), the sights on its back
+  private gun: { key: string; root: Group } | null = null;
+  private gunFrame(p: PersonIn, hand: Object3D | null) {
+    const key = p.gun ?? "";
+    if ((this.gun?.key ?? "") === key) return;
+    if (this.gun) {
+      this.gun.root.removeFromParent();
+      for (const m of this.gun.root.children) (m as Mesh).geometry.dispose();
+      this.gun = null;
+    }
+    if (!key || !hand) return;
+    const root = new Group();
+    const metal = this.mats.prop("#2e3238");
+    const wood = this.mats.prop("#5b3a26");
+    const box = (w: number, h: number, d: number, x: number, y: number, z: number, m: Material) => {
+      const b = new Mesh(new BoxGeometry(w, h, d), m);
+      b.position.set(x, y, z);
+      root.add(b);
+    };
+    if (key === "shotgun") {
+      box(0.035, 0.62, 0.035, 0, -0.26, 0.05, metal); // the barrels
+      box(0.05, 0.2, 0.05, 0, -0.02, 0.045, wood); // the fore-end
+      box(0.05, 0.28, 0.07, 0, 0.16, 0.02, wood); // the stock, back along the arm
+    } else {
+      box(0.026, 0.16, 0.026, 0, -0.13, 0.05, metal); // the barrel
+      box(0.05, 0.055, 0.05, 0, -0.04, 0.05, metal); // the cylinder
+      box(0.03, 0.03, 0.09, 0, 0.0, 0.01, wood); // the grip, in the fist
+    }
+    root.position.set(0, -0.05, 0);
+    hand.add(root);
+    this.gun = { key, root };
+  }
+
   private dropPhone() {
     if (!this.phone) return;
     this.phone.prop.root.removeFromParent();

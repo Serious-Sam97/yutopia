@@ -163,6 +163,9 @@ export interface AvatarState {
   ringing?: boolean;
   recording?: boolean; // its camera recording (a red light)
   torch?: boolean; // the phone's flashlight on (the Grounds at night)
+  focused?: boolean; // …focused while aiming (docs/plan/30-the-dark.md D4)
+  gun?: string; // the weapon in the hand (D6)
+  angle?: number; // facing as they turned, world radians (not 8 ways): where a beam points
   jump?: JumpNow; // jumping (shared/jump.ts): its stage (the controller tracks it)
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them (the floor: 0), tiles
@@ -170,6 +173,7 @@ export interface AvatarState {
   // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)
   verb?: { kind: string; t: number; at?: number };
   pitch?: number; // aiming: up from level (radians)
+  shaded?: boolean; // one of the shadowed, wrapped in the dark (world/dark): drawn dark, no name
 }
 
 // a tile of height in a person's own px (they're drawn at PERSON: their feet land right on a top)
@@ -2236,7 +2240,7 @@ export class WorldEngine {
       ground > 0 && isFloorAt(this.map, s.x, s.y) ? Math.max(depth, this.topKey(s.x, s.y) + 0.02) : depth,
     );
     // people take the light where they stand
-    const tint = this.tintAt(s.x, s.y);
+    const tint = s.shaded ? 0x1d1e24 : this.tintAt(s.x, s.y);
     v.sprite.tint = tint;
     v.body.tint = tint;
     if (v.rig) for (const sp of v.rig.sprites.values()) sp.tint = tint;
@@ -2271,7 +2275,7 @@ export class WorldEngine {
     // name tag + bubble (overlay, scale-compensated so text stays crisp)
     const inv = 1 / Math.max(0.7, this.zoom * 0.85);
     v.tag.position.set(p.x, p.y + (-106 + lift) * PERSON);
-    v.tag.visible = !this.tagsHidden;
+    v.tag.visible = !this.tagsHidden && !!s.name;
     v.tag.scale.set(inv);
     this.setDepth(v.tag, v.local ? 1e6 : p.y);
     const dotColor = s.status === "dnd" ? C.rust : s.status === "away" ? C.alumDark : s.npc ? C.red : C.olive;

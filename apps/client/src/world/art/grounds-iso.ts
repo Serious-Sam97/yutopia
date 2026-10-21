@@ -1,4 +1,5 @@
 import { depthOf, type MapDef, TILE_H, TILE_W, type WorldObjectDef, ZPX_TILE } from "@yutopia/shared";
+import { BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import { type Container, Matrix, Mesh, MeshGeometry, Container as PixiContainer, Sprite, Texture } from "pixi.js";
 
@@ -24,9 +25,12 @@ const HH = TILE_H / 2;
 // the night's light: a lamp's pool (its radius, tiles, by kind); a flashlight's
 // beam (its reach, tiles; half its opening, radians; its drawing, px long)
 const POOL_R: Record<string, number> = { cobra: 7, town: 5.5, lone: 5, porch: 3.5 };
-const BEAM_LEN = 10;
-const BEAM_HALF = 0.36;
+// the beam's picture is drawn wide (shared beam.ts BEAM.wide) and scaled to a focused one
+const BEAM_LEN = BEAM.wide.len;
+const BEAM_HALF = BEAM.wide.half;
 const BEAM_PX = 160;
+const FLARE_R = 6; // a flare's light (shared dark/arms.ts FLARE.radius)
+const FOCUS_ACROSS = (Math.tan(BEAM.focus.half) * BEAM.focus.len) / (Math.tan(BEAM_HALF) * BEAM_LEN);
 
 const SURF: Record<string, [number, number, number]> = {
   snow: [236, 241, 246],
@@ -343,27 +347,39 @@ export class IsoGrounds {
   private night = 0;
   private pools = new Map<number, Sprite>();
   private beams: Sprite[] = [];
-  private torches: { x: number; y: number; a: number }[] = [];
+  /** Flares burning (world/dark gives them: the floor's coords): a red pool each, day or night. */
+  flares: { x: number; y: number }[] = [];
+  private flarePools: Sprite[] = [];
+  private torches: (Beam & { at: { x: number; y: number } })[] = [];
   private poolTex: Texture | null = null;
   private beamTex: Texture | null = null;
 
   /** How dark it is (0 day … 1 night); `torches`: flashlights on (the floor's
-   *  coords, `d` the way they face, shared DIRS), `fx, fy` the focus. */
+   *  coords; `angle` the way they face as they turned, else `d`, shared DIRS;
+   *  focused or not), `fx, fy` the focus. */
   setNight(
     night: number,
-    people: Iterable<{ state: { x: number; y: number; d: number; torch?: boolean } }>,
+    people: Iterable<{
+      state: { x: number; y: number; d: number; torch?: boolean; angle?: number; focused?: boolean; mv?: number };
+    }>,
     fx: number,
     fy: number,
   ) {
     this.night = night;
     // (a facing is a direction on screen: 0 down, clockwise; the beam's in the floor's x/y)
+    // the beam itself: shared beam.ts, as 3D and the server have it
     this.torches = [...people]
       .filter((p) => p.state.torch)
       .map(({ state: t }) => {
-        const ang = (t.d * Math.PI) / 4;
-        const sx = -Math.sin(ang) / HW;
-        const sy = Math.cos(ang) / HH;
-        return { x: t.x, y: t.y, a: Math.atan2(sy - sx, sx + sy) };
+        let a = t.angle;
+        if (a === undefined) {
+          const ang = (t.d * Math.PI) / 4;
+          const sx = -Math.sin(ang) / HW;
+          const sy = Math.cos(ang) / HH;
+          a = Math.atan2(sy - sx, sx + sy);
+        }
+        const aiming = ((t.mv ?? 0) & 16) !== 0;
+        return { ...beamOf(t.x, t.y, 0, a, aiming ? 0 : null, !!t.focused), at: { x: t.x, y: t.y } };
       });
     this.lights.blendMode = "add";
     const on = night > 0.05;
@@ -395,6 +411,25 @@ export class IsoGrounds {
       }
       sp.alpha = Math.min(1, night * 1.2) * 0.62;
     }
+    // flares: red pools, flickering (docs/plan/30-the-dark.md D6)
+    while (this.flarePools.length < this.flares.length) {
+      const sp = new Sprite(this.pool());
+      sp.anchor.set(0.5);
+      sp.tint = 0xff4030;
+      this.lights.addChild(sp);
+      this.flarePools.push(sp);
+    }
+    const t = performance.now() / 1000;
+    for (const [i, sp] of this.flarePools.entries()) {
+      const f = this.flares[i];
+      sp.visible = !!f;
+      if (!f) continue;
+      const R = FLARE_R;
+      sp.position.set((f.x - f.y) * HW, (f.x + f.y) * HH - this.G.heightAt(f.x + this.ox, f.y + this.oy) * ZPX_TILE);
+      sp.width = 2 * R * Math.SQRT2 * HW;
+      sp.height = 2 * R * Math.SQRT2 * HH;
+      sp.alpha = 0.75 + 0.2 * Math.sin(t * 23 + i);
+    }
     // the beams, from each torch along the ground the way it points
     while (this.beams.length < this.torches.length) {
       const sp = new Sprite(this.beam());
@@ -406,22 +441,25 @@ export class IsoGrounds {
       const t = this.torches[i];
       sp.visible = !!t;
       if (!t) continue;
-      const k = BEAM_LEN / BEAM_PX;
-      const c = Math.cos(t.a);
-      const sn = Math.sin(t.a);
-      const h = this.G.heightAt(t.x + this.ox, t.y + this.oy);
+      // (along it and across: focused, longer and narrower)
+      const ka = (t.focus ? BEAM.focus.len : BEAM_LEN) / BEAM_PX;
+      const kc = (BEAM_LEN / BEAM_PX) * (t.focus ? FOCUS_ACROSS : 1);
+      const c = Math.cos(t.yaw);
+      const sn = Math.sin(t.yaw);
+      const { x, y } = t.at;
+      const h = this.G.heightAt(x + this.ox, y + this.oy);
       // the plan's rotation and scale, then the iso projection
       sp.setFromMatrix(
         new Matrix(
-          (HW * c - HW * sn) * k,
-          (HH * c + HH * sn) * k,
-          (-HW * sn - HW * c) * k,
-          (-HH * sn + HH * c) * k,
-          (t.x - t.y) * HW,
-          (t.x + t.y) * HH - h * ZPX_TILE,
+          HW * ka * (c - sn),
+          HH * ka * (c + sn),
+          -HW * kc * (sn + c),
+          HH * kc * (c - sn),
+          (x - y) * HW,
+          (x + y) * HH - h * ZPX_TILE,
         ),
       );
-      sp.alpha = 0.25 + 0.6 * night;
+      sp.alpha = (0.25 + 0.6 * night) * (t.focus ? 1.25 : 1);
     }
   }
 
@@ -441,14 +479,18 @@ export class IsoGrounds {
         b += k * 0.62;
       }
     }
+    for (const f of this.flares) {
+      const d = Math.hypot(f.x - x, f.y - y) / FLARE_R;
+      if (d >= 1) continue;
+      const k = (1 - d * d) * 0.9;
+      r += k;
+      g += k * 0.3;
+      b += k * 0.22;
+    }
     for (const t of this.torches) {
-      const dx = x - t.x;
-      const dy = y - t.y;
-      const d = Math.hypot(dx, dy);
-      if (d > BEAM_LEN || d < 0.3) continue;
-      const off = Math.abs(Math.atan2(Math.sin(Math.atan2(dy, dx) - t.a), Math.cos(Math.atan2(dy, dx) - t.a)));
-      if (off > BEAM_HALF) continue;
-      const k = (1 - d / BEAM_LEN) * (1 - (off / BEAM_HALF) ** 2) * (0.2 + 0.9 * this.night);
+      // (shared beam.ts: the same test 3D and the server make; a focused beam is the brighter)
+      const k = beamAt(t, x, y) * (0.2 + 0.9 * this.night) * (t.focus ? 1.5 : 1);
+      if (k <= 0) continue;
       r += k;
       g += k * 0.97;
       b += k * 0.9;

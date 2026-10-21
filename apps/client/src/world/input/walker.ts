@@ -1,4 +1,4 @@
-import type { Grid, JumpKind, Point } from "@yutopia/shared";
+import type { dirFromDelta, Grid, JumpKind, Point } from "@yutopia/shared";
 import {
   type Body,
   type Footing,
@@ -7,8 +7,10 @@ import {
   MoveClock,
   type MoveEnv,
   type MoveSpec,
+  MV_WINDED,
   newBody,
   packMv,
+  STEP_DT,
   type StepEvents,
   speedOf,
   stepBody,
@@ -16,6 +18,9 @@ import {
   verbProgress,
   yawToByte,
 } from "@yutopia/shared/move";
+import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/vitals";
+import type { WorldController } from "../controller";
+import { actionOf } from "./bindings";
 import { afterFirstStep, MoveControls, type Press } from "./controls";
 
 // My body in the world (docs/plan/29-the-move.md, phase 2): the movement core
@@ -76,6 +81,18 @@ export interface WalkOut {
 
 const SPEC: MoveSpec = MOVE;
 
+// the 8 facings (shared/iso.ts) as world angles, for my 3D facing
+const DIR_ANGLE = [
+  [1, 1],
+  [0, 1],
+  [-1, 1],
+  [-1, 0],
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [1, 0],
+].map(([x, y]) => Math.atan2(y, x));
+
 /** A click-to-walk path, step by step: towards its next point (one passed counts as reached:
  *  no turning back for it), easing into the last; walked off as it goes. */
 function follow(b: Body, path: Point[], move: { x: number; y: number }) {
@@ -101,18 +118,124 @@ function follow(b: Body, path: Point[], move: { x: number; y: number }) {
   move.y = ((wp.y - b.y) / d) * mag;
 }
 
+/** What the dark's chunk (world/dark) is handed: it shows the stamina and claims a use press
+ *  near something to search or pick up. */
+export interface DarkHooks {
+  /** a use press (E is its own; this is the pad's X): taken (true) or left to the world */
+  use(): boolean;
+  /** first aid from the pockets (the pad's d-pad ↓) */
+  aid(): void;
+  /** the inventory opened or closed (I, the pad's Menu) */
+  inventory(): void;
+  /** the inventory open: I stand still, and don't aim */
+  frozen(): boolean;
+  /** the frame's pad presses, before the world has them: taken ones are deleted (Y while aiming
+   *  is the next weapon, not the camera) */
+  presses(p: Set<Press>, aiming: boolean): void;
+  dispose(): void;
+}
+
 export class Walker {
   readonly controls = new MoveControls();
+  // my stamina, run as the server runs it (shared/vitals.ts) so the sprint stops at once when
+  // it's out; the server's word (Player.st) taken when they drift apart
+  readonly vitals = { ...FULL_VITALS };
+  readonly breath = freshClock();
+  /** out on the land (stamina drains), as of the last frame */
+  outside = false;
+  /** my torch focused: on, aiming, out on the land, battery left (docs/plan/30-the-dark.md D4) */
+  focus = false;
+  /** aiming (the right button, LT): as of the last frame */
+  aiming = false;
+  /** down (docs/plan/30-the-dark.md D7): a crawl, no sprint, no jump, no aim */
+  down = false;
+  private torchOn = false;
+  private dark: DarkHooks | null = null;
+  private steppedAt = 0;
+  private onFoot = false;
+  private darkLoading = false;
   // the right button: aiming (the world says where it may: WalkCtx.canAim)
   private onDown = (e: PointerEvent) => e.button === 2 && this.controls.down("Mouse2");
   private onUp = (e: PointerEvent) => e.button === 2 && this.controls.up("Mouse2");
-  constructor() {
+  // the inventory's key (I): wherever I am — the dark's chunk loaded for it if it isn't yet
+  private onKey = (e: KeyboardEvent) => {
+    const el = e.target as HTMLElement | null;
+    if (
+      e.repeat ||
+      e.defaultPrevented ||
+      el?.isContentEditable ||
+      el?.tagName === "INPUT" ||
+      el?.tagName === "TEXTAREA"
+    )
+      return;
+    if (actionOf(this.controls.b, e.code) !== "inventory") return;
+    // (only on foot: not riding, driving, at an arcade — the walker steps only then)
+    if (!this.onFoot || performance.now() - this.steppedAt > 250) return;
+    e.preventDefault();
+    this.inventory();
+  };
+  constructor(readonly ctl?: WorldController) {
     window.addEventListener("pointerdown", this.onDown);
     window.addEventListener("pointerup", this.onUp);
+    if (ctl) window.addEventListener("keydown", this.onKey);
   }
   dispose(): void {
     window.removeEventListener("pointerdown", this.onDown);
     window.removeEventListener("pointerup", this.onUp);
+    window.removeEventListener("keydown", this.onKey);
+    this.dark?.dispose();
+    this.dark = null;
+  }
+  // the dark's chunk (its HUD, the loot, the pockets): the first time out on the land, or asked for
+  private loadDark(then?: () => void): void {
+    if (this.dark) {
+      then?.();
+      return;
+    }
+    if (this.darkLoading || !this.ctl) return;
+    this.darkLoading = true;
+    const ctl = this.ctl;
+    void import("../dark").then((m) => {
+      if (ctl.room) {
+        this.dark = m.startDark(ctl, this);
+        then?.();
+      } else this.darkLoading = false;
+    });
+  }
+  /** The inventory opened or closed (I, the pad's Menu). */
+  inventory(): void {
+    this.loadDark(() => this.dark?.inventory());
+  }
+  /** My 8-way facing (`me.d`) and drawn angle (returned) after a frame. First person (`view`): I face where I look — turned some other
+   *  way (a seat, someone high-fiving me) the view turns there — flipping 8-way only a
+   *  little past a boundary (no flutter on it, no message spam). Else, turned some other
+   *  way while standing, I face it in 3D too. */
+  face(
+    me: { d: number },
+    view: { yaw: number } | null,
+    moved: boolean,
+    lookD: number,
+    angle: number,
+    dir8: typeof dirFromDelta, // (the page's: importing it here splits the page's chunks)
+  ): number {
+    const dirFromDelta = dir8;
+    if (view) {
+      if (me.d !== lookD && lookD >= 0) view.yaw = DIR_ANGLE[me.d] ?? view.yaw;
+      const d8 = dirFromDelta(Math.cos(view.yaw), Math.sin(view.yaw), me.d as 0);
+      if (d8 !== me.d) {
+        let off = view.yaw - (DIR_ANGLE[me.d] ?? view.yaw);
+        off = Math.atan2(Math.sin(off), Math.cos(off));
+        if (Math.abs(off) > Math.PI / 8 + 0.1 || lookD < 0) me.d = d8;
+      }
+      return view.yaw;
+    }
+    if (!moved && dirFromDelta(Math.cos(angle), Math.sin(angle), me.d as 0) !== me.d) return DIR_ANGLE[me.d] ?? angle;
+    return angle;
+  }
+
+  /** where my body is (the floor's coords, feet height) */
+  where(): { x: number; y: number; z: number } {
+    return { x: this.last.x, y: this.last.y, z: this.last.z };
   }
   /** s from a jump's press to its take-off */
   readonly takeoff = SPEC.takeoff;
@@ -151,9 +274,28 @@ export class Walker {
       this.prev = { ...b0 };
     }
 
+    this.steppedAt = performance.now();
+    this.onFoot = c.usePad;
+    const crouched = this.controls.crouched;
     const { move, presses } = this.controls.read(c.camYaw, c.camYaw, c.usePad);
+    // the inventory open: standing still, no aim (the world doesn't stop), its own pad
+    const frozen = !!this.dark?.frozen();
+    if (frozen) {
+      move.x = 0;
+      move.y = 0;
+      move.sprint = false;
+      move.aim = false;
+      move.jump = false;
+      move.jumpPressed = false;
+      move.dodgePressed = false;
+      move.crouchPressed = false;
+      // (the pad's B closes it: not a crouch)
+      this.controls.crouched = crouched;
+      move.crouch = crouched;
+      for (const p of [...presses]) if (p !== "inventory") presses.delete(p);
+    }
     const manual = Math.hypot(move.x, move.y) > 0.05;
-    const path = manual ? null : c.path;
+    const path = manual || frozen ? null : c.path;
     move.faceLook = c.faceLook;
     move.look = c.camYaw;
     if (!c.canJump) {
@@ -164,6 +306,27 @@ export class Walker {
       move.dodgePressed = false;
     }
     if (!c.canAim) move.aim = false;
+    // out of breath (docs/plan/30-the-dark.md D2): no sprint, no roll
+    this.syncBreath();
+    move.tired = this.breath.winded;
+    if (this.breath.winded) move.dodgePressed = false;
+    // down: a crawl (crouched, slow: the crouch's 1.6 at this tilt is 0.6 tiles / s)
+    if (this.down) {
+      const m = Math.hypot(move.x, move.y);
+      if (m > 1e-3) {
+        move.x = (move.x / m) * 0.225;
+        move.y = (move.y / m) * 0.225;
+      }
+      move.crouch = true;
+      move.sprint = false;
+      move.aim = false;
+      move.jump = false;
+      move.jumpPressed = false;
+      move.dodgePressed = false;
+      move.crouchPressed = false;
+    }
+    // (run out, none until it's back to 25%: shared vitals.ts `drained`)
+    this.focus = move.aim && this.outside && this.torchOn && this.vitals.bat > 0 && !this.breath.drained;
 
     const env: MoveEnv = { grid: c.grid, footing: c.footing, blocked: c.blocked };
     const events: StepEvents[] = [];
@@ -171,13 +334,34 @@ export class Walker {
     const alpha = this.clock.advance(dt, () => {
       this.prev = { ...this.body };
       if (path?.length) follow(this.body, path, move);
-      events.push(stepBody(this.body, move, env, SPEC));
+      const ev = stepBody(this.body, move, env, SPEC);
+      events.push(ev);
+      const out = c.grid.onLand(this.body.x, this.body.y);
+      if (ev.verb === "roll") spendRoll(this.vitals, this.breath, out);
+      stepVitals(
+        this.vitals,
+        this.breath,
+        { sprinting: this.body.gait === "sprint", outside: out, night: 0, storm: 0, warm: true, focus: this.focus },
+        STEP_DT,
+      );
+      if (this.breath.winded) {
+        move.tired = true;
+        move.dodgePressed = false;
+      }
       if (first) {
         afterFirstStep(move);
         first = false;
       }
     });
     const b = this.body;
+    // first time out on the land: the dark's chunk (its HUD, the loot, the pockets)
+    this.outside = c.grid.onLand(b.x, b.y);
+    if (this.outside) this.loadDark();
+    if (presses.has("inventory")) this.inventory();
+    if (presses.has("use") && this.dark?.use()) presses.delete("use");
+    if (presses.has("aid")) this.dark?.aid();
+    this.aiming = move.aim;
+    this.dark?.presses(presses, move.aim);
     const p = this.prev;
     const x = p.x + (b.x - p.x) * alpha;
     const y = p.y + (b.y - p.y) * alpha;
@@ -213,7 +397,7 @@ export class Walker {
       verb: b.verb ? { kind: b.verb.kind, t: verbProgress(b.verb, SPEC) } : null,
       crouch: move.crouch,
       aim: move.aim,
-      mv: packMv(b.gait, move.crouch, move.aim),
+      mv: packMv(b.gait, move.crouch, move.aim) | (this.breath.winded ? MV_WINDED : 0),
       yawByte: yawToByte(b.yaw),
     };
   }
@@ -225,6 +409,21 @@ export class Walker {
       o.x += dx;
       o.y += dy;
       o.z += dz;
+    }
+  }
+
+  // the server's stamina (a byte) against mine: more than 10 apart, or out where I'm not, take its
+  private syncBreath(): void {
+    const room = this.ctl?.room;
+    const me = room?.state.players.get(room.sessionId);
+    this.torchOn = !!me?.torch;
+    this.down = (me?.downAt ?? 0) > 0;
+    const st = me?.st;
+    if (typeof st !== "number") return;
+    this.vitals.wm = me?.wm ?? 100; // (frozen: stamina comes back at half speed)
+    if (Math.abs(st - this.vitals.st) > 10 || (st === 0 && !this.breath.winded && this.vitals.st > 0)) {
+      this.vitals.st = st;
+      if (st === 0) this.breath.winded = true;
     }
   }
 

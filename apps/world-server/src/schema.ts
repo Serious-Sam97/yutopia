@@ -1,4 +1,4 @@
-import { ArraySchema, Encoder, MapSchema, Schema, type } from "@colyseus/schema";
+import { ArraySchema, Encoder, MapSchema, Schema, type, view } from "@colyseus/schema";
 
 // The whole world's state for someone joining: the building's five floors and
 // everything on them outgrow the default 8 KB buffer (it grows, with a warning,
@@ -58,6 +58,56 @@ export class Player extends Schema {
   @type("uint8") yaw = 0;
   @type("int8") pitch = 0;
   @type("uint32") mt = 0;
+  // the dark (docs/plan/30-the-dark.md D2): health, stamina, warmth, 0..100, for the team's HUD
+  @type("uint8") hp = 100;
+  @type("uint8") st = 100;
+  @type("uint8") wm = 100;
+  // the torch focused (D4): on, aiming, battery left, out on the land — narrow, far, burning
+  @type("boolean") focused = false;
+  // the weapon in the hand (docs/plan/30-the-dark.md D6): "", "revolver", "shotgun"
+  @type("string") gun = "";
+  // down (D7): since when (server ms; 0: on their feet), and who's getting them up, since when
+  @type("float64") downAt = 0;
+  @type("string") revBy = "";
+  @type("float64") revAt = 0;
+}
+
+// Something dropped on the snow (docs/plan/30-the-dark.md, phase 2): anyone may
+// pick it up, for two hours. Out on the land only (the ground floor's coords).
+export class Drop extends Schema {
+  @type("string") id = "";
+  @type("string") item = ""; // shared inventory.ts ItemId
+  @type("uint8") n = 1;
+  @type("uint8") loaded = 0; // a weapon's rounds in it
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float64") at = 0; // when (server ms)
+}
+
+// One of the shadowed (docs/plan/30-the-dark.md D5, features/dark.ts): where it
+// is (the ground floor's coords; its feet on the land), which way it faces (a
+// byte), its state (shared dark/fsm.ts SHADE_STATES) and since when (server ms),
+// what's left of its shield. Sent only to whoever is outside near it (StateView).
+export class Shadow extends Schema {
+  @type("string") id = "";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("uint8") a = 0;
+  @type("uint8") s = 0;
+  @type("float64") at = 0;
+  @type("uint8") sh = 100;
+  @type("uint8") look = 0; // which of the office's people it was (its clothes)
+  @type("boolean") k = false; // dissolving because it was shot down (a burst of light)
+}
+
+// A flare burning on the snow (D6): lit where it landed, out at `until` (server ms).
+export class Flare extends Schema {
+  @type("string") id = "";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") z = 0;
+  @type("float64") at = 0;
+  @type("float64") until = 0;
 }
 
 export class WorldObject extends Schema {
@@ -375,6 +425,10 @@ export class WorldState extends Schema {
   @type({ map: GameConsole }) consoles = new MapSchema<GameConsole>(); // console id → what it's playing
   @type({ map: Computer }) computers = new MapSchema<Computer>(); // computer id → who's at it
   @type({ map: Pet }) pets = new MapSchema<Pet>(); // pet id → the pet (while its owner is here)
+  @type({ map: Drop }) drops = new MapSchema<Drop>(); // things dropped on the snow (features/survival.ts)
+  // the shadowed: each client sees only those near it outside (features/dark.ts: client.view)
+  @view() @type({ map: Shadow }) shadows = new MapSchema<Shadow>();
+  @type({ map: Flare }) flares = new MapSchema<Flare>(); // flares burning (features/arms.ts)
   @type({ map: PetBattle }) battles = new MapSchema<PetBattle>();
   @type({ map: Toy }) toys = new MapSchema<Toy>();
   @type("string") playlists = "[]"; // YouTube playlists played here (shared/media.ts SavedPlaylist[], JSON)

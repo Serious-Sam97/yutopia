@@ -1,0 +1,83 @@
+<!doctype html><html><head><meta charset="utf-8"><script src="icons.js"></script>
+<style>
+*{box-sizing:border-box;margin:0}
+body{width:1600px;height:900px;overflow:hidden;font-family:-apple-system,"SF Pro Text","Helvetica Neue",sans-serif;color:#e9ecef;background:#000}
+#bg{position:absolute;inset:0;width:1600px;height:900px}
+.abs{position:absolute}
+.lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:rgba(233,236,239,.62);font-weight:600}
+/* the corner (as 02-hud-night) */
+.foco{right:40px;bottom:150px;width:170px}
+.foco .row{display:flex;justify-content:space-between;font-size:12px;font-weight:700}
+.foco .bar{height:5px;background:rgba(255,255,255,.18);border-radius:3px;margin-top:6px;overflow:hidden}
+.cyl{right:52px;bottom:52px;width:80px;height:80px;border-radius:50%;background:rgba(20,22,28,.75);border:2px solid rgba(220,224,230,.55)}
+.cyl i{position:absolute;width:22px;height:22px;border-radius:50%;}
+.spare{right:70px;bottom:14px;text-align:center;font-weight:700;font-size:15px}
+.spare small{display:block;font-size:11px;color:rgba(233,236,239,.6);font-weight:500}
+.fl{right:170px;bottom:30px;text-align:center}
+.fl .tubes{display:flex;gap:5px;justify-content:center;height:46px;align-items:flex-end}
+.fl .tubes b{width:9px;height:42px;border-radius:5px;background:rgba(255,255,255,.12)}
+.fl .tubes b.on{background:linear-gradient(#f4e2c2 0 6px,#c8322a 6px)}
+/* the pockets strip */
+.strip{display:flex;gap:6px;align-items:flex-end}
+.slot{position:relative;height:58px;border-radius:7px;background:rgba(12,15,21,.66);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(3px)}
+.slot.w{width:104px}.slot.p{width:58px}
+.slot svg{position:absolute;inset:6px 6px 10px 6px;width:calc(100% - 12px);height:calc(100% - 16px)}
+.slot .k{position:absolute;left:5px;top:3px;font-size:10px;font-weight:700;color:rgba(233,236,239,.55)}
+.slot .n{position:absolute;right:5px;bottom:2px;font-size:13px;font-weight:700;text-shadow:0 1px 2px #000}
+.slot .n.dim{color:rgba(233,236,239,.6);font-weight:600}
+.slot.empty{background:rgba(12,15,21,.38);border-style:dashed;border-color:rgba(255,255,255,.12)}
+.slot.held{border-color:rgba(233,236,239,.7)}
+.slot.new{border:1.5px solid #e9a33a;box-shadow:0 0 12px rgba(233,163,58,.45)}
+.slot .plus{position:absolute;left:50%;top:-20px;transform:translateX(-50%);font-size:12px;font-weight:800;color:#e9a33a;text-shadow:0 1px 3px #000}
+.slot.hover{border-color:#fff;background:rgba(40,46,56,.8)}
+.tip{position:absolute;bottom:68px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(10,12,16,.9);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:6px 9px;font-size:12px}
+.tip b{display:block;font-size:13px;margin-bottom:3px}
+.tip span{color:rgba(233,236,239,.7)}
+.hint{font-size:11px;color:rgba(233,236,239,.6);text-align:right;margin-top:6px;letter-spacing:.02em}
+.key{display:inline-block;min-width:16px;padding:0 4px;border:1px solid rgba(233,236,239,.5);border-radius:3px;font-size:10px;font-weight:700;text-align:center;line-height:14px;color:#e9ecef;margin:0 2px}
+.toast{left:50%;transform:translateX(-50%);top:84px;background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:9px 14px;font-size:14px;display:flex;gap:10px;align-items:center}
+.toast svg{width:26px;height:26px}
+.prompt{background:rgba(10,12,16,.72);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.ring{width:22px;height:22px}
+.note{left:16px;top:12px;font-size:12px;color:rgba(255,255,255,.55);font-weight:600;letter-spacing:.04em}
+</style></head><body>
+<img id="bg"><div id="hud"></div>
+<script>
+const f=new URLSearchParams(location.search).get("f")||"a";
+const ic=k=>ICON[k];
+const slot=(o)=>{const c=["slot",o.w?"w":"p",o.it?"":"empty",o.cls||""].join(" ");
+ return `<div class="${c}">${o.k?`<span class="k">${o.k}</span>`:""}${o.it?ic(o.it):""}${o.n!=null?`<span class="n ${o.dim?"dim":""}">${o.n}</span>`:""}${o.plus?`<span class="plus">${o.plus}</span>`:""}${o.tip||""}</div>`};
+const corner=(bat,loaded,spare,flares)=>{
+ const holes=[...Array(6)].map((_,i)=>{const a=-Math.PI/2+i*Math.PI/3;const x=40+24*Math.cos(a)-11,y=40+24*Math.sin(a)-11;
+  return `<i style="left:${x-2}px;top:${y-2}px;${i<loaded?"background:radial-gradient(#8a6c22 30%,#d8b04e 34%,#b88f33 70%)":"background:#0b0c0f;border:1.5px solid #555"}"></i>`}).join("");
+ return `<div class="abs foco"><div class="row"><span style="color:#e9a33a">FOCO</span><span style="color:rgba(233,236,239,.8)">${bat}%</span></div><div class="bar"><div style="width:${bat}%;height:100%;background:#d9dde2"></div></div></div>
+ <div class="abs fl"><div class="tubes">${[0,1,2].map(i=>`<b class="${i<flares?"on":""}"></b>`).join("")}</div><div style="font-weight:700;font-size:14px;margin-top:4px">${flares}</div><div class="lbl">Sinalizador</div></div>
+ <div class="abs cyl">${holes}</div><div class="abs spare">+${spare}<small>.38</small></div>`};
+const hud=document.getElementById("hud");
+if(f==="a"){
+ document.getElementById("bg").src="town-glovebox.png";
+ hud.innerHTML=`
+ <div class="abs prompt" style="left:840px;top:420px"><svg class="ring" viewBox="0 0 22 22"><circle cx="11" cy="11" r="9" stroke="rgba(255,255,255,.2)" stroke-width="2.5" fill="none"/><circle cx="11" cy="11" r="9" stroke="#e9ecef" stroke-width="2.5" fill="none" stroke-dasharray="56.5" stroke-dashoffset="0" transform="rotate(-90 11 11)"/></svg>Porta-luvas<span class="key">E</span></div>
+ <div class="abs toast">${ic("r38")}<span>Achou <b>6 balas .38</b> e <b>1 kit médico</b></span>${ic("aid")}</div>
+ <div class="abs" style="right:40px;bottom:205px"><div class="strip">
+  ${slot({w:1,k:"1",it:"revolver",n:"6/6",cls:"held"})}${slot({w:1,k:"2"})}
+  ${slot({it:"r38",n:"12",cls:"new",plus:"+6"})}${slot({it:"flare",n:"1"})}${slot({it:"aid",n:"1",cls:"new",plus:"+1"})}${slot({it:"battery",n:"1"})}${slot({})}${slot({})}
+ </div></div>
+ ${corner(82,6,12,1)}
+ <div class="abs note">05a · searching a glove box: the prompt, what was found, the pockets for 3 s</div>`;
+}else{
+ document.getElementById("bg").src="../02-hud-night-clean.png";
+ const tip=`<div class="tip"><b>Kit médico</b><span>clique · usar (saúde a 100)</span><br><span>botão direito · largar</span></div>`;
+ hud.innerHTML=`
+ <svg class="abs" style="left:440px;top:560px" width="80" height="120" viewBox="0 0 80 120"><path d="M58 104 A58 58 0 0 0 58 12" stroke="rgba(255,255,255,.14)" stroke-width="4" fill="none" stroke-linecap="round" transform="translate(-10 0)"/><path d="M58 104 A58 58 0 0 0 26 86" stroke="#e9a33a" stroke-width="4" fill="none" stroke-linecap="round" transform="translate(-10 0)"/></svg>
+ <div class="abs" style="left:398px;top:684px;font-size:11px;font-weight:700;color:#e9a33a;letter-spacing:.06em">SEM FÔLEGO</div>
+ <div class="abs" style="left:640px;top:808px;width:90px;height:34px;transform:rotate(-8deg);filter:drop-shadow(0 0 6px rgba(255,255,255,.35))">${ic("shotgun").replace("<svg","<svg width=90 height=34")}</div>
+ <div class="abs prompt" style="left:610px;top:764px">Pegar espingarda<span class="key">E</span></div>
+ <div class="abs" style="right:40px;bottom:205px"><div class="strip">
+  ${slot({w:1,k:"1",it:"revolver",n:"4/6",cls:"held"})}${slot({w:1,k:"2"})}
+  ${slot({it:"r38",n:"9"})}${slot({it:"flare",n:"1"})}${slot({it:"aid",n:"1",cls:"hover",tip})}${slot({it:"battery",n:"2"})}${slot({it:"fuse",n:"1"})}${slot({})}
+ </div><div class="hint"><span class="key">Tab</span> bolsos · <span class="key">1</span><span class="key">2</span> arma · pad <span class="key">↓</span> kit médico</div></div>
+ ${corner(46,4,9,1)}
+ <div class="abs note">05b · Tab held: the pockets open; winded after a sprint; a dropped shotgun on the snow</div>`;
+}
+</script></body></html>
