@@ -11,8 +11,9 @@ import { Client, type Room } from "colyseus.js";
 // The shadowed (docs/plan/30-the-dark.md, phase 4): out of the dark 25–45 tiles
 // off, never in a pool or by the HQ (by day they wait in nests: nests.test.ts); a strike lands on someone standing there,
 // and a roll through the windup gets out of it; a focused beam burns the shield
-// off (exposed); nobody comes into a lamp's pool; the dawn takes them; only
-// whoever is outside sees them.
+// off (exposed); nobody comes into a lamp's pool; the dawn takes them; whoever
+// is within 70 tiles sees them, indoors too (through the windows), but only
+// those outside are struck.
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_DARK_FAST = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
@@ -71,9 +72,9 @@ const hour = async (room: Room, h: number) => {
   await waitFor(() => Math.abs(room.state.hour - h) < 0.01 && room.state.storm < 0.05);
 };
 
-test("out of the dark: 25–45 tiles off, emerging, never in a pool or by the HQ; only those outside see them", async () => {
+test("out of the dark: 25–45 tiles off, emerging, never in a pool or by the HQ; only those near see them", async () => {
   const a = await person(501, 51);
-  const inside = await person(502, 51);
+  const far = await person(502, 51);
   await hour(a, 23);
   await standAt(a, POND.x, POND.z);
   await waitFor(() => shadows(a).length >= 3, 10_000);
@@ -89,8 +90,44 @@ test("out of the dark: 25–45 tiles off, emerging, never in a pool or by the HQ
     shadows(a).some((s) => s.s === code("emerge")),
     "they come out of the dark first",
   );
-  // the one indoors (the studio) sees none of them
-  assert.equal(shadows(inside).length, 0);
+  // the one in the studio, far over 70 tiles off, sees none of them
+  assert.equal(shadows(far).length, 0);
+});
+
+test("those indoors see them through the windows, and are never struck", async () => {
+  const hits: { n: number }[] = [];
+  const lobbyHits: { n: number }[] = [];
+  const studioHits: { n: number }[] = [];
+  const a = await person(591, 59, hits);
+  const lobby = await person(592, 59, lobbyHits);
+  const studio = await person(593, 59, studioHits);
+  await hour(a, 23);
+  a.send("mod:dark", { mode: "called" });
+  const stand = async (room: Room, x: number, y: number, level: number) => {
+    room.send("teleport", { to: { x, y, level } });
+    await waitFor(() => me(room).level === level && Math.hypot(me(room).x - x, me(room).y - y) < 1.5);
+  };
+  // in the lobby by its east wall (the ground floor's coords), and up in the studio (level 4: its
+  // own, its corner the building's — some 50 tiles off over the ground)
+  await stand(lobby, 105.5, 28.5, 0);
+  await stand(studio, 10.5, 22.5, 4);
+  // A out on the snow east of the HQ; one called up 8–14 tiles off
+  await standAt(a, 60, 18);
+  a.send("mod:dark", { spawn: 1 });
+  await waitFor(() => shadows(a).length === 1, 4000);
+  const id = shadows(a)[0].id;
+  await waitFor(() => shadows(lobby).length === 1 && shadows(studio).length === 1, 2000);
+  assert.equal(shadows(lobby)[0].id, id);
+  assert.equal(shadows(studio)[0].id, id);
+  // indoors nobody calls one up: they're no prey
+  lobby.send("mod:dark", { spawn: 1 });
+  await sleep(600);
+  assert.equal(shadows(a).length, 1, "none called up indoors");
+  // it comes for the one outside; those indoors are never struck
+  await waitFor(() => hits.length >= 1, 15_000);
+  assert.equal(lobbyHits.length + studioHits.length, 0, "indoors: never struck");
+  assert.equal(me(lobby).hp, 100);
+  assert.equal(me(studio).hp, 100);
 });
 
 test("a strike lands on someone standing there (15); rolled through, it misses", async () => {

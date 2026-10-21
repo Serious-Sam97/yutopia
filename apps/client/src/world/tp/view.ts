@@ -1736,7 +1736,10 @@ void main() {
         const sh = b.shade;
         const shadeT = sh ? (performance.now() - sh.since) / 1000 : 0;
         const notThere =
-          !!sh && ((sh.state === "emerge" && shadeT < 0.6) || (sh.state === "dissolve" && shadeT > 0.45));
+          !!sh &&
+          ((sh.state === "emerge" && shadeT < 0.6) ||
+            (sh.state === "dissolve" && shadeT > 0.45) ||
+            (sh.fade ?? 1) < 0.5);
         p3.root.visible = !hidden3 && !notThere;
         if (b.id === meId) mySeat = seat3;
         p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id) }, dt, {
@@ -1824,6 +1827,7 @@ void main() {
             t: (now3 - sh.since) / 1000,
             burn: sh.burn ?? null,
             h: sh.state === "lurk" ? 0.95 : undefined,
+            fade: sh.fade,
           };
         }),
         this.camera,

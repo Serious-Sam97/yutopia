@@ -6,10 +6,11 @@ import type { AvatarState } from "../engine";
 import type { Body3 } from "../tp/view";
 
 // The shadowed on my screen (docs/plan/30-the-dark.md D5): the server sends
-// those near me while I'm outside (StateView) — where they are ten times a
-// second, their state, their shield. Played back a moment late and smooth,
-// handed to the 3D view as bodies (dressed in the dark there: tp/person3d.ts,
-// tp/shroud3d.ts) and to iso as people drawn dark.
+// those near me, indoors too (through the windows; StateView) — where they are
+// ten times a second, their state, their shield. Played back a moment late and
+// smooth, handed to the 3D view as bodies (dressed in the dark there:
+// tp/person3d.ts, tp/shroud3d.ts) and to iso as people drawn dark. Coming into
+// range they fade in; out of it, they're drawn a moment more, fading out.
 
 // (the move's wire, shared move/spec.ts, by hand: importing that module here re-splits the
 // world page's chunks — docs/plan/30-the-dark.md, phase 2's budget trap)
@@ -33,6 +34,8 @@ const STATES = [
   "home", // (and back to it)
 ];
 const DELAY = 150; // ms behind: they're sent ten times a second
+const FADE_IN = 500; // ms: one come into range
+const FADE_OUT = 400; // ms: one gone out of it, still drawn
 
 interface Sample {
   t: number;
@@ -55,6 +58,10 @@ interface Seen {
   iso: boolean;
   /** shot down (its dissolve's a burst of light) */
   killed: boolean;
+  /** first seen (performance.now) */
+  born: number;
+  /** no longer sent (out of range, or gone): fading out since then */
+  gone: number | null;
 }
 
 // ── who they were: office people (a seed's worth of clothes) ─────────────────
@@ -155,6 +162,8 @@ export class Shades {
           speed: 0,
           iso: false,
           killed: false,
+          born: now,
+          gone: null,
         };
         this.seen.set(w.id, s);
       }
@@ -162,13 +171,18 @@ export class Shades {
         s.state = state;
         s.since = now;
       }
+      s.gone = null;
       s.sh = w.sh;
       s.killed = !!(w as { k?: boolean }).k;
       const last = s.buf[s.buf.length - 1];
       if (!last || last.x !== w.x || last.y !== w.y || last.a !== w.a) s.buf.push({ t: now, x: w.x, y: w.y, a: w.a });
       while (s.buf.length > 2 && s.buf[1].t < now - DELAY - 400) s.buf.shift();
     });
-    for (const id of [...this.seen.keys()]) if (!here.has(id)) this.seen.delete(id);
+    for (const [id, s] of this.seen)
+      if (!here.has(id)) {
+        s.gone ??= now;
+        if (now - s.gone >= FADE_OUT) this.seen.delete(id);
+      }
     // played back DELAY late, between the two samples round then
     const at = now - DELAY;
     for (const s of this.seen.values()) {
@@ -197,36 +211,49 @@ export class Shades {
     }
     const engine = ctl.engine;
     if (!engine) return;
-    for (const s of this.seen.values()) {
+    // (iso shows my floor: theirs is the ground's)
+    for (const s of ctl.level === 0 ? this.seen.values() : []) {
       const st = this.stateOf(s);
       engine.upsertAvatar(s.id, st);
       this.isoIds.add(s.id);
     }
     for (const id of [...this.isoIds])
-      if (!this.seen.has(id)) {
+      if (!this.seen.has(id) || ctl.level !== 0) {
         engine.removeAvatar(id);
         this.isoIds.delete(id);
       }
   }
 
-  /** All of them as drawn, their state (the sounds follow it). */
+  /** All of them still sent, their state (the sounds follow it). */
   list(): { id: string; x: number; y: number; state: string; killed: boolean }[] {
-    return [...this.seen.values()].map((s) => ({ id: s.id, x: s.x, y: s.y, state: s.state, killed: s.killed }));
+    return [...this.seen.values()]
+      .filter((s) => s.gone === null)
+      .map((s) => ({ id: s.id, x: s.x, y: s.y, state: s.state, killed: s.killed }));
   }
 
   /** Where they're drawn (the floor's coords, feet z): what a shot is aimed at. */
   drawn(): { id: string; x: number; y: number; z: number }[] {
+    // (upstairs a shot doesn't reach them: features/arms.ts)
+    if (this.ctl.level !== 0) return [];
     return [...this.seen.values()]
-      .filter((s) => s.state !== "dissolve")
+      .filter((s) => s.state !== "dissolve" && s.gone === null)
       .map((s) => ({ id: s.id, x: s.x, y: s.y, z: this.ground(s.x, s.y) }));
   }
 
+  // (their x / y are the ground floor's: upstairs, its corner isn't my floor's)
   private ground(x: number, y: number): number {
-    const map = this.ctl.map;
+    const ctl = this.ctl;
+    const map = ctl.level === 0 ? ctl.map : (ctl.building?.levels?.find((l) => l.index === 0) ?? ctl.building);
     return heightAt(x + (map?.ox ?? 0), y + (map?.oy ?? 0));
   }
 
-  private stateOf(s: Seen): AvatarState {
+  // 0..1: fading in as it comes into range, out as it goes
+  private fade(s: Seen, now: number): number {
+    const k = Math.min(1, (now - s.born) / FADE_IN);
+    return s.gone === null ? k : Math.min(k, Math.max(0, 1 - (now - s.gone) / FADE_OUT));
+  }
+
+  private stateOf(s: Seen, now = performance.now()): AvatarState {
     const moving = s.speed > 0.3 && s.state !== "windup" && s.state !== "emerge";
     return {
       name: "",
@@ -245,6 +272,7 @@ export class Shades {
       // (asleep: crouched, still — the move's crouch bit over "still")
       mv: s.state === "lurk" ? 8 : packMv(s.speed > 3.6 ? "jog" : "walk"),
       shaded: s.state !== "exposed" && s.sh > 50,
+      fade: this.fade(s, now),
     };
   }
 
@@ -275,7 +303,7 @@ export class Shades {
       // (anywhere on the body, as the server has it: features/dark.ts)
       const lit = torches.find((b) => [0.4, 0.9, 1.4].some((h) => beamAt(b, s.x, s.y, z + h) > 0));
       out.push({
-        ...this.stateOf(s),
+        ...this.stateOf(s, now),
         id: s.id,
         level: 0,
         angle: s.angle,
@@ -288,6 +316,7 @@ export class Shades {
           state: s.state,
           since: s.since,
           burn: lit ? { x: lit.x, y: lit.y } : null,
+          fade: this.fade(s, now),
         },
       });
     }

@@ -1,5 +1,5 @@
 import { StateView } from "@colyseus/schema";
-import { findPath, levelMap, type Point } from "@yutopia/shared";
+import { across, findPath, levelMap, type Point } from "@yutopia/shared";
 import { beamAt, beamOf } from "@yutopia/shared/beam";
 import {
   blackoutAt,
@@ -48,15 +48,15 @@ import { registerFeature } from "./index.ts";
 // dark 25–45 tiles off, behind your beam if it can, never in the light or by
 // the HQ — their mind is shared dark/fsm.ts, and this walks them (straight
 // while they see you, two whiskers; A* only when blocked, a few a tick) and
-// lands their strikes. They're sent only to whoever is outside near them
-// (StateView). An admin switches them off (mod:dark).
+// lands their strikes. They're sent only to whoever is near them, indoors
+// too, to see through the windows (StateView). An admin switches them off (mod:dark).
 
 // (YUTOPIA_DARK_FAST: the tests' — out of the dark at once, no quiet)
 const FAST = process.env.YUTOPIA_DARK_FAST === "1";
 const SPAWN_EVERY = FAST ? 300 : 4000; // ms, a group
 const SPAWN_AT = [25, 45] as const; // tiles from someone
 const CAP = SHADOWED.cap;
-const SEEN_RANGE = 70; // sent to whoever's outside within this
+const SEEN_RANGE = 70; // sent to whoever's within this, indoors or out
 const NEAR_HQ = 45; // none out of the dark nearer the HQ's doors than this
 const GROUP = 30; // people this close are one group (one director)
 const FAR_THINK = 0.25; // s: those with nobody within 40 tiles think at 4 Hz
@@ -627,15 +627,17 @@ registerFeature((room: WorldRoom) => {
       // flares burnt out
       for (const f of [...room.state.flares.values()]) if (now >= f.until) room.state.flares.delete(f.id);
 
-      // who sees which: everyone outside, those within 70 tiles (twice a second)
+      // who sees which: everyone, indoors too (through the windows), those
+      // within 70 tiles (twice a second)
       if (now - viewsAt >= 500) {
         viewsAt = now;
         for (const c of room.clients as WorldClient[]) {
           const p = room.state.players.get(c.sessionId);
           if (!c.view || !p) continue;
-          const out = outside(p);
+          // (upstairs: where that is over the ground floor — each floor has its own corner)
+          const at = p.level === 0 ? p : across(room.map, p.level, 0, p);
           for (const r of shades.values()) {
-            const near = out && Math.hypot(r.shade.x - p.x, r.shade.y - p.y) <= SEEN_RANGE;
+            const near = Math.hypot(r.shade.x - at.x, r.shade.y - at.y) <= SEEN_RANGE;
             const has = c.view.has(r.wire);
             if (near && !has) c.view.add(r.wire);
             else if (!near && has) c.view.remove(r.wire);
