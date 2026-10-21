@@ -92,13 +92,13 @@ test("it emerges for 1.2 s, closes to its circle, circles, then rushes in, winds
   assert.equal(w.s.state, "stalk", "it backs off and stalks again");
 });
 
-test("a focused beam burns the shield at 45/s and slows it; gone, it's exposed for 4 s and backs off", () => {
+test("a focused beam burns the shield and slows it; gone, it's exposed a good while, then grows back slowly", () => {
   const w = world(15, 0);
   step(w, 1.3);
   w.burn = 1;
   step(w, 0.5);
   assert.equal(w.s.state, "burning");
-  assert.ok(Math.abs(w.s.shield - (100 - 45 * 0.5)) < 3, `${w.s.shield}`);
+  assert.ok(Math.abs(w.s.shield - (100 - SHADE.burn * 0.5)) < 3, `${w.s.shield}`);
   const speeds = w.acts.slice(-5).map((a) => a.speed);
   assert.ok(
     speeds.every((v) => v <= SHADE.speed.rush * SHADE.burnSlow + 1e-9),
@@ -111,10 +111,26 @@ test("a focused beam burns the shield at 45/s and slows it; gone, it's exposed f
   w.burn = 0;
   step(w, 2);
   assert.ok(dist(w) > d0, "it backs off, exposed");
-  step(w, 2.1);
+  assert.equal(w.s.state, "exposed");
+  step(w, SHADE.exposed - 2 + 0.1);
   assert.equal(w.s.state, "stalk", "the shield grows back");
-  step(w, 1);
-  assert.ok(w.s.shield > 10 && w.s.shield < 100, `${w.s.shield}`);
+  // slowly: about 6 a second, so a few seconds on it's still well short of whole
+  step(w, 3);
+  assert.ok(w.s.shield > 5 && w.s.shield < 30, `${w.s.shield}`);
+});
+
+test("a beam off it for a moment: the shield doesn't grow back until 2 s after", () => {
+  const w = world(15, 0);
+  step(w, 1.3);
+  w.burn = 1;
+  step(w, 0.6);
+  const left = w.s.shield;
+  assert.ok(left > 0 && left < 100);
+  w.burn = 0;
+  step(w, SHADE.regrowAfter - 0.2);
+  assert.ok(Math.abs(w.s.shield - left) < 1e-6, `held at ${left}: ${w.s.shield}`);
+  step(w, 1.2);
+  assert.ok(w.s.shield > left, "then it comes back");
 });
 
 test("the windup is committed: a beam doesn't stop the strike (roll through it)", () => {

@@ -44,6 +44,18 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
     localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase", lang: "en" }));
+    // the pointer lock, as mouse-look.spec fakes it (headless has none)
+    let el: Element | null = null;
+    Object.defineProperty(Document.prototype, "pointerLockElement", { configurable: true, get: () => el });
+    Element.prototype.requestPointerLock = function (this: Element) {
+      el = this;
+      setTimeout(() => document.dispatchEvent(new Event("pointerlockchange")));
+      return Promise.resolve();
+    } as any;
+    Document.prototype.exitPointerLock = () => {
+      el = null;
+      setTimeout(() => document.dispatchEvent(new Event("pointerlockchange")));
+    };
   });
   await enter(page, await token(ANA));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {
@@ -137,6 +149,19 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await page.keyboard.up("KeyW");
   const p1 = await me(page);
   expect(Math.hypot(p1.x - p0.x, p1.y - p0.y), "walks once it's closed").toBeGreaterThan(0.5);
+
+  // mouse look (Z) on: opening shows the pointer (the lock let go), closing locks it again
+  await page.keyboard.press("KeyZ");
+  await expect.poll(() => page.evaluate(() => (window as any).__yutopia.tp.looking)).toBe(true);
+  await page.keyboard.press("KeyI");
+  await expect(page.locator(".dk-inv .panel")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.pointerLockElement === null)).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as any).__yutopia.tp.looking)).toBe(false);
+  await page.keyboard.press("KeyI");
+  await expect(page.locator(".dk-inv .panel")).toBeHidden();
+  await expect.poll(() => page.evaluate(() => (window as any).__yutopia.tp.looking)).toBe(true);
+  await page.keyboard.press("KeyZ");
+  await expect.poll(() => page.evaluate(() => (window as any).__yutopia.tp.looking)).toBe(false);
 
   // indoors (the studio): it opens, nothing on the ground
   await page.evaluate(() => (window as any).__yutopia.room.send("arms:draw", { slot: -1 }));

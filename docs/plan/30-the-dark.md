@@ -73,7 +73,7 @@ server from your gait and its tick. The decay helpers come out of the pets'
 
 | | Drains | Comes back |
 |---|---|---|
-| health | a strike: 25 | +1/s after 8 s unhurt, to 60; first aid to 100 |
+| health | a strike: 15 (25 until 2026-10-21) | +1/s after 8 s unhurt, to 60; first aid to 100 |
 | stamina | sprint 16/s, a roll 22 | +25/s after 0.7 s; at 0 the sprint is a jog |
 | warmth | 0.6/min outside at night (×2 in a storm) | lamps, indoors, a car's heater; at 0 stamina comes back at half — **cold never kills** |
 | battery | focusing 12/s | slowly to 40% unfocused; a battery fills it |
@@ -119,11 +119,11 @@ Server-run (`features/dark.ts`), their mind pure and tested
 1. **dormant** — not yet.
 2. **emerge** — 1.2 s of the dark gathering into a shape: the warning.
 3. **stalk** — closes, circles at 4–6 tiles, flanks.
-4. **windup** — 0.55 s, plain to see: **roll** through it.
+4. **windup** — 0.8 s (0.55 until 2026-10-21), plain to see: **roll** through it.
 5. **strike** — lands if you're within 1.3 tiles and not mid-roll.
 6. **recover**.
-7. **burning** — under a focused beam: the shield falls 45/s, it slows by half.
-8. **exposed** — shield gone for 4 s, then it grows back: only now do bullets
+7. **burning** — under a focused beam: the shield falls 60/s (45 until 2026-10-21), it slows by half.
+8. **exposed** — shield gone for 12 s (4 until 2026-10-21), then it grows back slowly: only now do bullets
    hurt.
 9. **flee** — from pools, flares, the dawn.
 10. **dissolve** — dead: a burst of light.
@@ -1282,3 +1282,41 @@ The user approved the mock (`design/screens/dark/06a-inventory`,
   - The test starts by dropping what Ana carried from earlier runs: her
     pockets are saved.
 - **Not tested**: the pad's navigation in the panel (no pad in the e2e).
+
+## Easier, a longer exposure, the cursor in the inventory (2026-10-21)
+
+The user: "the enemies are too hard"; "when you burn the corruption off with
+the torch, it comes back very fast, leave it much longer"; "if the mouse is
+hidden with Z, opening the inventory doesn't show it: show it, and hide it
+again after".
+
+- **Easier** (shared `dark/fsm.ts` `SHADE`):
+
+  | | Before | Now |
+  |---|---|---|
+  | A strike | 25 health | 15 (7 to put you down from full) |
+  | The windup | 0.55 s | 0.8 s (more time to roll or step out) |
+  | Between rushes | 2.5–5 s | 4–7 s |
+  | The rush | 5 tiles/s | 4.2 |
+  | A focused beam burns | 45/s | 60/s (exposed in under 2 s) |
+
+- **The shield stays off longer**:
+  - **Exposed**: 12 s, was 4.
+  - **Grows back**: 6/s, was 25 (from nothing to whole in about 17 s, was
+    4).
+  - **Only once no beam has been on it for 2 s**: a burn you let go of for
+    a moment isn't lost.
+- **The rest is unchanged**: how many come (`SHADOWED`), their sight,
+  their health (2 revolver rounds, 1 shotgun blast).
+- **The cursor**: with mouse look on (Z), opening the inventory lets go of
+  the pointer, and closing it locks it again.
+  - **No click needed to re-lock**: the release was by code, not the
+    player's Esc, so the browser allows it.
+- **Tests**:
+  - **shared**: the fsm's burn test reads the numbers, and a new one checks
+    the shield holds for 2 s after the beam leaves.
+  - **world-server**: the strike test uses `SHADE.strikeDamage`, and the
+    roll comes 0.55 s into the 0.8 s windup.
+  - **e2e `inventory.spec`**: mouse look on, I frees the pointer, I locks
+    it again. Headless has no pointer lock, so the spec fakes one as
+    `mouse-look.spec` does.

@@ -6,11 +6,11 @@
 // 1. dormant   — not yet
 // 2. emerge    — the dark gathering into a shape (1.2 s): the warning
 // 3. stalk     — closes in, circles at 4–6 tiles, flanks; now and then rushes in
-// 4. windup    — 0.55 s, plain to see, a slow lunge: roll through it, or step out of it
+// 4. windup    — 0.8 s, plain to see, a slow lunge: roll through it, or step out of it
 // 5. strike    — lands if you're within 1.3 tiles and not mid-roll (the server's call)
 // 6. recover   — backs off a moment
-// 7. burning   — under a focused beam: the shield falls 45/s, it goes at half speed
-// 8. exposed   — the shield gone for 4 s (only now do bullets hurt, phase 5); it backs off
+// 7. burning   — under a focused beam: the shield falls 60/s, it goes at half speed
+// 8. exposed   — the shield gone for 12 s (only now do bullets hurt, phase 5); it backs off
 // 9. flee      — from a pool, a flare, the dawn
 // 10. dissolve — gone (killed: a burst of light; or it just went)
 
@@ -32,10 +32,10 @@ export const shadeCode = (s: ShadeState) => SHADE_STATES.indexOf(s);
 /** Every number of them (seconds, tiles, tiles / s; the shield 0..100). */
 export const SHADE = {
   emerge: 1.2,
-  windup: 0.55,
+  windup: 0.8,
   strike: 0.15,
   recover: 0.7,
-  exposed: 4,
+  exposed: 12,
   dissolve: 1,
   /** a strike lands within this; the windup starts this close */
   reach: 1.3,
@@ -43,17 +43,19 @@ export const SHADE = {
   /** they circle at this far, until they rush in */
   circle: [4, 6] as const,
   /** between rushes (after the last, or after first seeing you) */
-  rushEvery: [2.5, 5] as const,
+  rushEvery: [4, 7] as const,
   see: { day: 10, night: 20, crouch: 0.5 },
   hear: { sprint: 8, shot: 40 },
   /** the windup's lunge is slow: a step away (or a roll) gets you out of it */
-  speed: { stalk: 3.2, rush: 5, windup: 1.5, flee: 5.5, back: 2.5, wander: 1.6 },
+  speed: { stalk: 3.2, rush: 4.2, windup: 1.5, flee: 5.5, back: 2.5, wander: 1.6 },
   /** under a focused beam (strength 1): shield per s; the speed, times */
-  burn: 45,
+  burn: 60,
   burnSlow: 0.5,
-  /** the shield grows back after being exposed, per s */
-  regrow: 25,
-  strikeDamage: 25,
+  /** the shield grows back, per s — once no beam has been on it for `regrowAfter` s
+   *  (eased 2026-10-21, the user: "it comes back too fast") */
+  regrow: 6,
+  regrowAfter: 2,
+  strikeDamage: 15,
   /** lost sight of everyone this long: it forgets where they were */
   forget: 10,
   /** what it takes to put one down, exposed (a revolver round is 50) */
@@ -279,7 +281,8 @@ export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => numbe
       const burning = t - s.burntAt < 0.3;
       if (burning && s.state === "stalk") go(s, "burning", t);
       if (!burning && s.state === "burning") go(s, "stalk", t);
-      if (s.state === "stalk" && s.shield < 100) s.shield = Math.min(100, s.shield + SHADE.regrow * dt);
+      if (s.state === "stalk" && s.shield < 100 && t - s.burntAt > SHADE.regrowAfter)
+        s.shield = Math.min(100, s.shield + SHADE.regrow * dt);
       const slow = s.state === "burning" ? SHADE.burnSlow : 1;
       if (!tgt) {
         // lost them: where they were last; never seen anyone, it's drawn to the living (it came

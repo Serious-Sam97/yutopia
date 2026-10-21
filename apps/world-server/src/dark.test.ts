@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
-import { HQ_DOORS, inLampPool, LAMP_POOL_R, onPathAt, SHADE_STATES } from "@yutopia/shared/dark";
+import { HQ_DOORS, inLampPool, LAMP_POOL_R, onPathAt, SHADE, SHADE_STATES } from "@yutopia/shared/dark";
 import { BENCH, heightAt, LAMPS, WAYS } from "@yutopia/shared/grounds";
 import { MV_AIM, packMv, yawToByte } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
@@ -111,7 +111,7 @@ test("by day, fewer: one out on the open ice (off the paths), none for someone o
   assert.equal(shadows(b).length, 0, "the paths are safe by day");
 });
 
-test("a strike lands on someone standing there (25); rolled through, it misses", async () => {
+test("a strike lands on someone standing there (15); rolled through, it misses", async () => {
   const hits: { n: number }[] = [];
   const a = await person(511, 52, hits);
   // the director off (out on the ice even the day sends some): one called up, to fight
@@ -123,17 +123,17 @@ test("a strike lands on someone standing there (25); rolled through, it misses",
   // the first rush: stand there and take it
   await waitFor(() => shadows(a)[0]?.s === code("windup"), 15_000);
   await waitFor(() => hits.length === 1, 2000);
-  assert.equal(hits[0].n, 25);
-  await waitFor(() => me(a).hp === 75);
-  // the next: roll as it swings (0.3 s into its 0.55 s windup)
+  assert.equal(hits[0].n, SHADE.strikeDamage);
+  await waitFor(() => me(a).hp === 100 - SHADE.strikeDamage);
+  // the next: roll as it swings (0.55 s into its 0.8 s windup: the strike lands in the roll's first 350 ms)
   await waitFor(() => shadows(a)[0]?.s === code("recover"), 2000);
   await waitFor(() => shadows(a)[0]?.s === code("windup"), 15_000);
-  await sleep(300);
+  await sleep(550);
   a.send("jump", { k: "roll" });
   await waitFor(() => shadows(a)[0]?.s === code("recover"), 2000);
   await sleep(200);
   assert.equal(hits.length, 1, "rolled through: missed");
-  assert.ok(me(a).hp >= 75);
+  assert.ok(me(a).hp >= 100 - SHADE.strikeDamage);
 });
 
 test("a focused beam burns its shield off: exposed", async () => {

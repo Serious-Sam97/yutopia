@@ -54,6 +54,8 @@ export class InventoryPanel {
   private ground: Lying[] = [];
   private shown = "";
   private vitalsAt = 0;
+  /** mouse look (Z) was on when it opened: the pointer's let go meanwhile, locked again after */
+  private relook = false;
 
   constructor(
     private readonly ctl: WorldController,
@@ -86,6 +88,10 @@ export class InventoryPanel {
     if (this.open) this.close();
     else {
       this.open = true;
+      // (mouse look on: the pointer shown while it's open — let go here, so the browser locks it
+      // again on closing without asking for a click)
+      this.relook = !!this.ctl.tp?.looking;
+      if (this.relook) this.ctl.tp?.setLook(false);
       this.el.style.display = "block";
       this.shown = "";
       this.render();
@@ -96,6 +102,8 @@ export class InventoryPanel {
     this.el.style.display = "none";
     this.warn.style.display = "none";
     this.endDrag();
+    if (this.relook) this.ctl.tp?.setLook(true);
+    this.relook = false;
   }
 
   /** A key down while open (the dark's capturing listener): true if it's taken. I isn't (the walker's). */
