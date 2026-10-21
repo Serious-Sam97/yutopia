@@ -1,4 +1,5 @@
 import { isHeld } from "@yutopia/shared";
+import { AIM_BLADE } from "@yutopia/shared/beam";
 import { Group, PerspectiveCamera as Lens, type PerspectiveCamera, Quaternion, Scene, Vector3 } from "three";
 import type { chars } from "../art/chars-load";
 import type { PersonIn } from "./people3d";
@@ -9,7 +10,7 @@ type MotionOut = NonNullable<Person3D["motionOut"]>;
 
 // My own hands in first person (docs/plan/22-people-3d.md, P5). The camera is
 // in my head and my body isn't drawn; when my hands are doing something —
-// the phone, a drink, typing, a use, a wave — my arms come up into view:
+// the phone, a drink, typing, a use, a wave, a gun, the flashlight — my arms come up into view:
 // shoulder to fingertips, my sleeves and skin, the same ink, holding the same
 // things. They're posed by the very motion that poses my body for everyone
 // else, seen from my eyes, and drawn in a pass of their own over the room
@@ -47,6 +48,11 @@ const FRAME: Record<string, Frame> = {
   "emote:fire": [0, 0.55, -0.2, -0.12],
   "act:wave": [0, 0.55, -0.2, -0.12],
   "act:highfive": [0, 0.55, -0.2, -0.12],
+  // a gun out (both arms out along the look, aiming) and the flashlight (the left forearm ahead):
+  // a little to the side, under the crosshair
+  gun: [0.12, 0.02, 0.06, 0.05],
+  torch: [0.36, 0.06, 0.3, 0.04], // (held low: raised into view)
+  "torch:aim": [0.3, 0.04, 0.14, 0.02], // (raised along the look: the forearm at the bottom, as it was)
 };
 const FRAME_ANY: Frame = [0.42, 0.06, 0.14, 0];
 // emotes that use the arms (laugh, coffee and tape are the face's or the body's)
@@ -54,7 +60,7 @@ const ARM_EMOTES = new Set(["wave", "heart", "clap", "fire", "question"]);
 
 /** What my hands are busy with right now ("" = nothing: they stay out of view). */
 export function handsDoing(
-  p: Pick<PersonIn, "phone" | "held" | "heldAt" | "typing" | "a" | "busy" | "act" | "emote">,
+  p: Pick<PersonIn, "phone" | "held" | "heldAt" | "typing" | "a" | "busy" | "act" | "emote" | "gun" | "torch" | "mv">,
 ): string {
   if (p.phone) return p.phone === "photo" || p.phone === "selfie" ? "" : p.phone;
   if (isHeld(p.held) && p.heldAt) return p.held === "mug" || p.held === "cup" || p.held === "soda" ? "drink" : "toy";
@@ -62,6 +68,8 @@ export function handsDoing(
   if (p.busy) return p.busy === "throw" ? "throw" : "use";
   if (p.act) return `act:${p.act}`;
   if (p.emote && ARM_EMOTES.has(p.emote)) return `emote:${p.emote}`;
+  if (p.gun) return "gun";
+  if (p.torch) return (p.mv ?? 0) & 16 ? "torch:aim" : "torch";
   return "";
 }
 
@@ -89,6 +97,20 @@ export class Hands1P {
     this.scene.add(this.rig);
     this.rig.add(this.tilt);
     this.tilt.add(this.person.root);
+  }
+
+  /** The flashlight's lens as the world's camera `cam` would show it where my hands' picture does:
+   *  at its depth in front of the eyes, across and up so it falls on the same spot of the screen
+   *  (my hands have a lens of their own). Null: none in my hands, or they're not shown. */
+  lensFor(cam: PerspectiveCamera, out: Vector3): Vector3 | null {
+    if (!this.shown || !this.person.torchLens(out)) return null;
+    this.camera.updateMatrixWorld();
+    this.camera.worldToLocal(out);
+    if (out.z > -0.05) return null;
+    const k = Math.tan((cam.fov * Math.PI) / 360) / Math.tan((this.camera.fov * Math.PI) / 360);
+    out.set(out.x * k, out.y * k, out.z);
+    cam.updateMatrixWorld();
+    return cam.localToWorld(out);
   }
 
   /** Anything to draw this frame. */
@@ -147,9 +169,12 @@ export class Hands1P {
     const k = 0.12;
     const tilt = k * Math.log(Math.exp(this.frame[0] / k) + Math.exp(pitch / k)); // (a smooth max)
     this.tilt.rotation.set(tilt, 0, 0);
-    // the arms face the way I look (the model faces +z; the camera looks down its −z)
+    // the arms face the way I look (the model faces +z; the camera looks down its −z) — aiming, the
+    // body's bladed right of it (shared beam.ts AIM_BLADE) and the shoulders twisted back most of
+    // the way (aimPose: the hips 0.15 of it, the spine 0.5): turned so the shoulders face the look,
+    // the arms in front of me as they were
     const root = this.person.root;
-    root.rotation.set(0, Math.PI, 0);
+    root.rotation.set(0, Math.PI - ((p.mv ?? 0) & 16 ? AIM_BLADE * 0.65 : 0), 0);
 
     // posed by my body's motion (what they hold stays upright to this frame's framing)
     this.person.update(p, dt, { camX: p.x, camZ: p.y, onScreen: true, lowQuality: low }, mo);

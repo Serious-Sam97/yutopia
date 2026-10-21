@@ -12,11 +12,16 @@
 // photo   raised in front, aiming (the camera)
 // selfie  arm out, the screen facing you
 // ring    in the pocket and ringing (a call coming in): heard by people near
-export const PHONE_STATES = ["", "text", "call", "video", "photo", "selfie", "ring"] as const;
+// bud     in the pocket on a voice call: an earbud in the ear, the hands free
+export const PHONE_STATES = ["", "text", "call", "video", "photo", "selfie", "ring", "bud"] as const;
 export type PhoneState = (typeof PHONE_STATES)[number];
 export function isPhoneState(s: unknown): s is PhoneState {
   return typeof s === "string" && (PHONE_STATES as readonly string[]).includes(s);
 }
+/** The phone out, in the hand (the body shows it): not in the pocket, ringing or on the earbud. */
+export const phoneInHand = (s?: string | null): boolean => !!s && s !== "bud" && s !== "ring";
+/** On a call, by the body: at the ear, held up, or on the earbud. */
+export const onCallState = (s?: string | null): boolean => s === "call" || s === "video" || s === "bud";
 
 // Poses for a photo (the free hand), everyone sees them; the eight emotes are
 // the world's own gestures.

@@ -1,4 +1,4 @@
-import { ANIM, levelMap, tileAt } from "@yutopia/shared";
+import { ANIM, levelMap, objLevel, tileAt } from "@yutopia/shared";
 import {
   addItem,
   addItemTo,
@@ -25,9 +25,12 @@ import {
   inLampPool,
   isStack,
   isWeapon,
+  KIT_SPOT,
   LOCKER,
+  LOCKER_KIT,
   LOOT_REACH,
   type LootItem,
+  lockerFront,
   lootSpot,
   moveSlot,
   type Nest,
@@ -52,13 +55,13 @@ import { GAITS, MOVE, MV_AIM } from "@yutopia/shared/move";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
 import { Cache as CacheWire, Drop, type Player } from "../schema.ts";
-import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Survival on the Grounds (docs/plan/30-the-dark.md, phase 2): everyone's
 // vitals settled every tick from what their body does (a sprint outside drains
 // stamina; the cold, warmth; the battery), what each person carries (sent only
-// to them), the loot spots and what's dropped on the snow, the gatehouse's
+// to them), the loot spots and what's dropped (on any floor), the gatehouse's
 // locker, and saving it all through the API — the people's (`survivors`),
 // debounced as the pets are, and the Grounds' loot (the world's settings).
 // The room asks it whether someone is winded (the allowance falls to a jog)
@@ -85,6 +88,7 @@ interface Survivor {
   c: VitalsClock;
   inv: Inventory;
   issued: boolean; // the locker's first revolver (loaded) given
+  kitDay: number; // the day (shared dayOf) the lobby's locker last gave its kit (-1: never)
   loaded: boolean; // the saved record is in (until then nothing can be taken or used)
   dirty: boolean;
   savedAt: number;
@@ -107,7 +111,7 @@ interface LootSave {
   night: number;
   people: number[];
   spent: Budget;
-  drops: { id: string; item: string; n: number; loaded: number; x: number; y: number; at: number }[];
+  drops: { id: string; item: string; n: number; loaded: number; x: number; y: number; at: number; level?: number }[];
   /** the day's caches (docs/plan/31-the-day.md): whose day, who's been out, what's left in each searched */
   cache?: { day: number; out: number[]; left: Record<string, LootItem[]> };
 }
@@ -130,6 +134,8 @@ export interface SurvivalHooks {
 }
 
 const offlineSurvivors = new Map<number, SurvivorRecord>();
+/** The lobby locker's clock, ahead by `shift` ms (the tests' next day). */
+export const kitClock = { shift: 0 };
 
 registerFeature((room: WorldRoom) => {
   const people = new Map<number, Survivor>(); // by user id
@@ -152,6 +158,7 @@ registerFeature((room: WorldRoom) => {
     vitals: { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat },
     pages: s.inv.pages,
     issued: s.issued,
+    kitDay: s.kitDay >= 0 ? s.kitDay : null,
   });
   const save = async (s: Survivor, now = Date.now()) => {
     if (s.bot || !s.loaded) return;
@@ -172,6 +179,7 @@ registerFeature((room: WorldRoom) => {
       s.v.wm = n(rec.vitals?.wm, 100);
       s.v.bat = n(rec.vitals?.bat, 100);
       s.issued = !!rec.issued;
+      s.kitDay = Number.isInteger(rec.kitDay) ? Number(rec.kitDay) : -1;
     }
     s.loaded = true;
     sendPockets(s);
@@ -225,11 +233,11 @@ registerFeature((room: WorldRoom) => {
         };
       for (const d of saved.drops ?? []) {
         if (!(isStack(d.item) || isWeapon(d.item)) || now - d.at > DROP_MS) continue;
-        putDrop(d.item, d.n, d.loaded, d.x, d.y, d.at, d.id);
+        putDrop(d.item, d.n, d.loaded, d.x, d.y, d.at, d.id, Number.isInteger(d.level) ? Number(d.level) : 0);
       }
     }
   }
-  function putDrop(item: ItemId, n: number, loaded: number, x: number, y: number, at: number, id?: string) {
+  function putDrop(item: ItemId, n: number, loaded: number, x: number, y: number, at: number, id?: string, level = 0) {
     const d = new Drop();
     d.id = id ?? `d${at.toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
     d.item = item;
@@ -238,6 +246,7 @@ registerFeature((room: WorldRoom) => {
     d.x = x;
     d.y = y;
     d.at = at;
+    d.level = Math.max(0, Math.min(255, level | 0));
     room.state.drops.set(d.id, d);
     // (the oldest go first past the cap)
     if (room.state.drops.size > MAX_DROPS) {
@@ -307,6 +316,7 @@ registerFeature((room: WorldRoom) => {
       x: d.x,
       y: d.y,
       at: d.at,
+      level: d.level,
     }));
     void api.putLoot(loot).catch((e) => console.warn("[survival] loot save", (e as Error).message));
   };
@@ -333,14 +343,22 @@ registerFeature((room: WorldRoom) => {
     }
     return { got, left };
   };
-  const found = (s: Survivor, sid: string, spot: string, got: LootItem[], full: boolean, gone = false) => {
+  const found = (
+    s: Survivor,
+    sid: string,
+    spot: string,
+    got: LootItem[],
+    full: boolean,
+    gone = false,
+    later = false,
+  ) => {
     const p = room.state.players.get(sid);
     if (got.length && p) {
       p.held = ""; // (picking something up puts the mug down)
       p.heldAt = 0;
     }
     const c = clientOf(sid);
-    if (c) room.send(c, "dark:found", gone ? { spot, got, full, gone } : { spot, got, full });
+    if (c) room.send(c, "dark:found", { spot, got, full, ...(gone ? { gone } : {}), ...(later ? { later } : {}) });
     if (got.length) changed(s);
   };
   const near = (p: Player, x: number, z: number) => {
@@ -350,7 +368,7 @@ registerFeature((room: WorldRoom) => {
   const ready = (client: WorldClient) => {
     const p = room.state.players.get(client.sessionId);
     const s = p && people.get(p.uid);
-    if (!p || !s?.loaded || p.level !== 0 || p.busy || p.act || p.a === ANIM.sit || p.downAt) return null;
+    if (!p || !s?.loaded || p.busy || p.act || p.a === ANIM.sit || p.downAt) return null;
     return { p, s };
   };
 
@@ -365,6 +383,31 @@ registerFeature((room: WorldRoom) => {
     if (!r) return;
     const { p, s } = r;
     const now = Date.now();
+    // a supply locker (put anywhere in build mode): a kit a day (what fits; the day's taken if
+    // anything was) — on its floor
+    if (id.startsWith(KIT_SPOT)) {
+      const o = room.state.objects.get(id.slice(KIT_SPOT.length));
+      if (o?.kind !== "locker" || objLevel(fromSchema(o), room.map) !== p.level) return;
+      const f = lockerFront(o);
+      if (Math.hypot(p.x - f.x, p.y - f.y) > LOOT_REACH) return;
+      const day = dayOf(now + kitClock.shift);
+      if (s.kitDay === day) return found(s, client.sessionId, id, [], false, false, true);
+      const gun = !hasWeapon(s.inv, "revolver");
+      const kit: LootItem[] = [
+        ...(gun ? [{ id: "revolver" as const, n: 1, loaded: s.issued ? 0 : WEAPONS.revolver.mag }] : []),
+        ...LOCKER_KIT,
+      ];
+      const { got, left } = take(s, kit);
+      if (!got.length) return found(s, client.sessionId, id, [], true);
+      s.kitDay = day;
+      if (gun && got.some((g) => g.id === "revolver")) s.issued = true;
+      found(s, client.sessionId, id, got, left.length > 0);
+      // (saved now: a restart mustn't hand out a second)
+      void save(s);
+      return;
+    }
+    // (the rest are all on the ground floor: the Grounds')
+    if (p.level !== 0) return;
     if (id === "locker") {
       if (!near(p, LOCKER.x, LOCKER.z)) return;
       if (hasWeapon(s.inv, "revolver")) return found(s, client.sessionId, id, [], false, true);
@@ -413,7 +456,7 @@ registerFeature((room: WorldRoom) => {
   room.on("dark:pick", (client, m) => {
     const r = ready(client);
     const d = room.state.drops.get(String(m?.id ?? ""));
-    if (!r || !d) return;
+    if (!r || !d || d.level !== r.p.level) return;
     if (Math.hypot(r.p.x - d.x, r.p.y - d.y) > LOOT_REACH) return;
     const item = d.item as ItemId;
     // (into the pocket it was dragged to, if it was and it fits there: the inventory's)
@@ -547,11 +590,11 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const s = p && people.get(p.uid);
     const slot = Number(m?.slot);
-    // (onto the snow: out on the land only — the office isn't for leaving things lying about)
-    if (!p || !s?.loaded || !Number.isInteger(slot) || !onLand(p) || p.busy || p.downAt) return;
+    // (onto the snow, or the floor they're on: anywhere, the office too)
+    if (!p || !s?.loaded || !Number.isInteger(slot) || p.busy || p.downAt) return;
     const it = removeSlot(s.inv, slot);
     if (!it) return;
-    putDrop(it.id, "n" in it ? it.n : 1, "loaded" in it ? it.loaded : 0, p.x, p.y, Date.now());
+    putDrop(it.id, "n" in it ? it.n : 1, "loaded" in it ? it.loaded : 0, p.x, p.y, Date.now(), undefined, p.level);
     changed(s);
   });
 
@@ -614,6 +657,7 @@ registerFeature((room: WorldRoom) => {
           c: freshClock(),
           inv: emptyInventory(),
           issued: false,
+          kitDay: -1,
           loaded: p.bot,
           dirty: false,
           savedAt: Date.now(),
@@ -712,9 +756,9 @@ registerFeature((room: WorldRoom) => {
           riding || (!land && !onLot) || inside(b.x, b.z) || (land && !dark && night > 0.3 && inLampPool(b.x, b.z));
         const was = s.c.winded;
         const before = { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat };
-        // the torch focused: on, aiming (shared/move's mv bit), out on the land, battery left
-        // (and not run out and still coming back)
-        const focus = land && p.torch && (p.mv & MV_AIM) !== 0 && canFocus(s.v, s.c);
+        // the torch focused: on, aiming (shared/move's mv bit), on foot (the land or indoors), battery
+        // left (and not run out and still coming back)
+        const focus = !riding && p.torch && (p.mv & MV_AIM) !== 0 && canFocus(s.v, s.c);
         stepVitals(s.v, s.c, { sprinting, outside: land, night, storm: room.state.storm, warm, focus }, dt);
         p.focused = focus && s.v.bat > 0;
         if (s.c.winded && !was) s.windedAt = now;

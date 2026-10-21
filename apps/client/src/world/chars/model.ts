@@ -356,6 +356,11 @@ export class PersonModel {
     return this.root.worldToLocal(out);
   }
 
+  /** The right ear in the head bone's space (an earbud hangs there), or null before it's shown. */
+  earPoint(): [number, number, number] | null {
+    return this.shown?.baked.ear ?? null;
+  }
+
   /** The bone to hang things on (a mug in the right hand, a phone). */
   bone(j: JointName): Bone | null {
     return this.skeleton ? this.bones[j] : null;

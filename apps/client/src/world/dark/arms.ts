@@ -5,16 +5,20 @@ import { prefs, setPrefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
 import type { Press } from "../input/controls";
 import type { Walker } from "../input/walker";
+import { hud } from "../store";
 import type { Shades } from "./shades";
 import type { DarkSound } from "./voices";
 
-// Guns and flares on my side (docs/plan/30-the-dark.md D6). 1 · 2 take a weapon
-// out (again: put it away; in iso, it switches to 3D — the fight is 3D); aiming
-// (the right button, LT), the left button (RT) fires: through the crosshair, from
-// the hand — the server decides what it met (features/arms.ts), the flash and the
-// tracers show at once. R (the pad's X with nothing to use) reloads a round at a
-// time; G (RB) throws a flare where you look; Y while aiming, the other weapon.
-// The cylinder or the shells and the flares, bottom right, as in 02-hud-night.
+// Guns and flares on my side (docs/plan/30-the-dark.md D6), anywhere — the snow,
+// the office. 1 · 2 take a weapon out (again: put it away; in iso, it switches to
+// 3D — the fight is 3D); aiming (the right button, LT), the left button (RT)
+// fires: through the crosshair, from the hand — the server decides what it met
+// (features/arms.ts: the shadowed, one of us), the flash and the tracers show at
+// once. R (the pad's X with nothing to use) reloads a round at a time; G (RB)
+// throws a flare where you look; Y while aiming, the other weapon. Indoors the
+// keys are only taken when there's something to do with them (1 · 2 are the
+// emotes else). The cylinder or the shells and the flares, bottom right, as in
+// 02-hud-night.
 
 const AMBER = "#e9a33a";
 const HAND = 1.35; // the gun's height in the hand, held out (shared beam.ts BEAM.held)
@@ -30,6 +34,8 @@ export class Arms {
   private markUntil = 0;
   private markKind = "";
   private lastLoaded = new Map<string, number>(); // the gun's rounds as last seen (a reload's tick)
+  private liftAt = 0; // the flashlight raised (aiming with no gun) since (performance.now; 0: not)
+  private lent = false; // …and switched on for it: off again when it's let go
 
   constructor(
     private readonly ctl: WorldController,
@@ -53,7 +59,7 @@ export class Arms {
     on("arms:hit", (m) => {
       this.ctl.tp?.arms().hit(m.x, m.y, m.z, m.kind);
       this.markKind = m.kind;
-      this.markUntil = performance.now() + (m.kind === "killed" ? 500 : 220);
+      this.markUntil = performance.now() + (m.kind === "killed" || m.kind === "downed" ? 500 : 220);
     });
     // someone else's: their flash and tracers (the same pellets, from their seed)
     on("arms:shot", (m) => {
@@ -72,16 +78,20 @@ export class Arms {
   // ── the keys (Dark's capturing keydown hands them here first) ─────────────
   /** Taken (true): the world doesn't get it. */
   key(e: KeyboardEvent): boolean {
-    if (!this.walker.outside) return false;
+    if (hud.get().build.on) return false;
+    const inv = this.inv();
     if (e.code === "Digit1" || e.code === "Digit2") {
-      this.draw(e.code === "Digit1" ? 0 : 1);
+      const slot = e.code === "Digit1" ? 0 : 1;
+      // (a weapon there, or one in the hand to put away: else the key's the world's)
+      if (!inv?.weapons[slot] && !this.me()?.gun) return false;
+      this.draw(slot);
       return true;
     }
     if (e.code === "KeyR" && this.gun()) {
       this.reload();
       return true;
     }
-    if (e.code === "KeyG") {
+    if (e.code === "KeyG" && inv?.pockets.some((s) => s?.id === "flare")) {
       this.flare();
       return true;
     }
@@ -89,14 +99,13 @@ export class Arms {
   }
   /** The left button: fires while aiming with a gun out (else the world's click). */
   click(e: MouseEvent): boolean {
-    if (e.button !== 0 || !this.walker.aiming || !this.walker.outside || !this.gun()) return false;
+    if (e.button !== 0 || !this.walker.aiming || !this.gun()) return false;
     this.fire();
     return true;
   }
   /** The pad: Y while aiming is the other weapon (not the camera); X with a gun out and
    *  nothing to use, a reload. */
   presses(p: Set<Press>, aiming: boolean): void {
-    if (!this.walker.outside) return;
     if (aiming && p.has("camera")) {
       p.delete("camera");
       const me = this.me();
@@ -197,6 +206,9 @@ export class Arms {
       const m = rayMeets(camRay, s.x, s.y, s.z, 60);
       if (m !== null && m < t) t = m + 0.2;
     }
+    // (or one of us)
+    const them = tp.personAlongLook();
+    if (them !== null && them + 0.2 < t) t = them + 0.2;
     const aim = { x: camRay.x + d.x * t, y: camRay.y + d.y * t, z: camRay.z + d.z * t };
     // from the gun in the right hand (the body faces where the camera looks)
     const me = this.walker.where();
@@ -224,6 +236,23 @@ export class Arms {
     const ctl = this.ctl;
     const room = ctl.room;
     const now = performance.now();
+    // a gun in my hand (3D): the right button aims anywhere, and the view's clicks don't pick
+    const armed = !!ctl.tp && !!this.me()?.gun;
+    this.walker.armed = armed;
+    if (ctl.tp) ctl.tp.armed = armed;
+    // no gun: the right button held raises the flashlight along the look and focuses it — on while
+    // it's held, if it was off (a quick click, a thing's menu, doesn't: a quarter second first)
+    const lift = this.walker.aiming && !!ctl.tp && !armed;
+    if (!lift) this.liftAt = 0;
+    else if (!this.liftAt) this.liftAt = now;
+    if (lift && !this.lent && now - this.liftAt >= 250 && !hud.get().torch) {
+      room?.send("phone:torch", { on: true });
+      this.lent = true;
+    }
+    if (!lift && this.lent) {
+      room?.send("phone:torch", { on: false });
+      this.lent = false;
+    }
     if (room && now - this.pingAt > 3000) {
       this.pingAt = now;
       room.send("arms:ping", { t: now });
@@ -233,15 +262,15 @@ export class Arms {
     const rt = pad.rt > 0.6;
     if (rt && !this.rtDown && this.walker.aiming && this.gun()) this.fire();
     this.rtDown = rt;
-    if (pad.pressed(5) && this.walker.outside) this.flare();
-    // flares burning: to whichever view is showing
+    if (pad.pressed(5)) this.flare();
+    // flares burning on my floor: to whichever view is showing (iso: the snow's only)
     const flares: { x: number; y: number; z: number; t: number }[] = [];
-    room?.state.flares?.forEach((f: { x: number; y: number; z: number; at: number }) => {
-      flares.push({ x: f.x, y: f.y, z: f.z, t: f.at / 1000 });
+    room?.state.flares?.forEach((f: { x: number; y: number; z: number; at: number; level?: number }) => {
+      if ((f.level ?? 0) === ctl.level) flares.push({ x: f.x, y: f.y, z: f.z, t: f.at / 1000 });
     });
     if (ctl.tp) ctl.tp.flares = flares;
     const g = ctl.engine?.grounds;
-    if (g) g.flares = ctl.tp ? [] : flares;
+    if (g) g.flares = ctl.tp || ctl.level !== 0 ? [] : flares;
     this.draws();
   }
 
@@ -249,8 +278,8 @@ export class Arms {
     const out = this.walker.outside;
     const inv = this.inv();
     const g = this.gun();
-    // the crosshair, aiming out here; a mark on it when a shot met one
-    const aiming = out && this.walker.aiming && !!this.ctl.tp;
+    // the crosshair, aiming (3D); a mark on it when a shot met one
+    const aiming = this.walker.aiming && !!this.ctl.tp;
     this.cross.style.display = aiming ? "block" : "none";
     if (aiming) {
       const marked = performance.now() < this.markUntil;
@@ -258,7 +287,8 @@ export class Arms {
     }
     // the cylinder (or the shells), the spare rounds, the flares
     const flares = inv?.pockets.reduce((n, s) => n + (s?.id === "flare" ? s.n : 0), 0) ?? 0;
-    const show = out && !!inv && (!!g || flares > 0);
+    // (out here, the flares too; indoors only with a gun out)
+    const show = !!inv && (out ? !!g || flares > 0 : !!g);
     this.hud.style.display = show ? "flex" : "none";
     if (!show || !inv) return;
     if (this.reloading && (!g || g.loaded >= WEAPONS[g.id].mag)) this.reloading = false;
@@ -322,4 +352,6 @@ export const ARMS_CSS = `
 .dk-cross.hit{border-color:#fff;transform:scale(1.25)}
 .dk-cross.hit.spark{border-color:#9ec5ff}
 .dk-cross.hit.killed{border-color:#ff5a4a;transform:scale(1.5)}
+.dk-cross.hit.person{border-color:#ffb02e}
+.dk-cross.hit.downed{border-color:#ff5a4a;transform:scale(1.5)}
 `;

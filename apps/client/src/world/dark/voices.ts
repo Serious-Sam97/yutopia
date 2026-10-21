@@ -276,18 +276,18 @@ export class DarkSound {
     const bat = this.walker.vitals.bat;
     this.loop("focus-hum", focus ? 0.35 : 0, 0, "effects", bat < 20 ? 0.85 + bat / 133 : 1);
 
-    // flares burning: the nearest's sputter
+    // flares burning on my floor: the nearest's sputter
     let flare: { x: number; y: number } | null = null;
     let fd = Number.POSITIVE_INFINITY;
-    room.state.flares?.forEach((f: { x: number; y: number }) => {
+    room.state.flares?.forEach((f: { x: number; y: number; level?: number }) => {
+      if ((f.level ?? 0) !== this.ctl.level) return;
       const d = Math.hypot(f.x - me.x, f.y - me.y);
       if (d < fd) {
         fd = d;
         flare = f;
       }
     });
-    const fp =
-      flare && out ? this.place((flare as { x: number }).x, (flare as { y: number }).y, 30) : { pan: 0, gain: 0 };
+    const fp = flare ? this.place((flare as { x: number }).x, (flare as { y: number }).y, 30) : { pan: 0, gain: 0 };
     this.loop("flare-burn", fp.gain * 0.7, fp.pan);
 
     // the heart: under 30 health; racing under 15, or just struck

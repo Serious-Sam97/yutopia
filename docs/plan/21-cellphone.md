@@ -258,3 +258,27 @@ files and can run in parallel sessions once P1 lands.
 - **Photo storage** grows: quota + JPEG cap; delete really deletes the file.
 - **Privacy:** photos of other people are visible to whoever you send them to;
   no public feed in v1.
+
+## The earbud (2026-10-21)
+
+On a voice call, putting the phone away doesn't leave a hand at the ear any
+more.
+
+- **What others see**: an earbud in the right ear, the hands free, the phone
+  in the pocket (`PHONE_STATES` gains `bud`).
+- **The client sends it** (`phone/index.ts` `pose()`): a live call with the
+  phone closed and no camera on. A Vortex call does the same, though the
+  server doesn't know those calls and so drops it, as it drops `call` today.
+- **The server** (`features/phone.ts`): `bud` is accepted only on a call,
+  like `call` and `video`, and goes back to `""` at a hang-up
+  (`onCallState`).
+- **Drawing it**:
+  - The 3D view and the iso sprites treat `bud` as no phone in the hand, plus
+    a bud on the head bone, at the ear point baked with each model
+    (`Baked.ear`, beside the earring's place).
+  - The name tag still shows the handset.
+- **Tests**:
+  - **world-server**: `bud` is refused off a call, others see it on one, and
+    it clears at the hang-up.
+  - **client**: on the earbud, the iso state has no phone and no hand at the
+    ear.

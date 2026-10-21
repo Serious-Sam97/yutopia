@@ -18,6 +18,7 @@ import {
   newShade,
   nightness,
   type Prey,
+  pastAt,
   type Ray,
   REWIND,
   rayDir,
@@ -83,8 +84,8 @@ export interface DarkHooks {
   /** A shot's ray from where the shooter saw the shadowed (`seenAt`, server ms): what it
    *  meets first along `range` (null: nothing), and what that did. */
   shoot(ray: Ray, range: number, seenAt: number, damage: number, now: number): ShotHit | null;
-  /** A flare lit at (x, y) on ground z, for FLARE.secs. */
-  light(x: number, y: number, z: number, now: number): void;
+  /** A flare lit at (x, y) on ground z on `level`, for FLARE.secs. */
+  light(x: number, y: number, z: number, level: number, now: number): void;
   /** the dark switched off (mod:dark peaceful): no threat at all */
   readonly peaceful: boolean;
 }
@@ -312,16 +313,7 @@ registerFeature((room: WorldRoom) => {
 
   // ── shots and flares (features/arms.ts asks) ──────────────────────────────
   // where it was at `t` (server ms): between the two samples round then
-  const whereAt = (r: Run, t: number) => {
-    const h = r.hist;
-    if (!h.length) return { x: r.shade.x, y: r.shade.y, z: r.z };
-    let i = h.length - 1;
-    while (i > 0 && h[i].t > t) i--;
-    const a = h[i];
-    const b = h[Math.min(h.length - 1, i + 1)];
-    const k = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 0;
-    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k };
-  };
+  const whereAt = (r: Run, t: number) => pastAt(r.hist, t) ?? { x: r.shade.x, y: r.shade.y, z: r.z };
   // the day's nests a tick: laid out at the day's start; out (asleep) when someone's within 64
   // tiles, put away when everyone's past 100 and they sleep; a dead one back after its 10 minutes
   // with nobody near; at the dusk, whoever's left leaves its nest — the night's then
@@ -438,12 +430,13 @@ registerFeature((room: WorldRoom) => {
       }
       return { id: best.r.wire.id, kind, ...hit };
     },
-    light(x, y, z, now) {
+    light(x, y, z, level, now) {
       const f = new Flare();
       f.id = `fl${(++flareSeq).toString(36)}`;
       f.x = x;
       f.y = y;
       f.z = z;
+      f.level = level;
       f.at = now;
       f.until = now + FLARE.secs * 1000;
       room.state.flares.set(f.id, f);

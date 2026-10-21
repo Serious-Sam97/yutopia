@@ -123,6 +123,8 @@ export const CATALOG = {
     paint: true,
   },
   cupboard: { label: "Cupboard", w: 1, h: 1, solid: true, buildable: true, surface: 26 },
+  // a supply locker (docs/plan/30-the-dark.md): a kit a day for anyone, wherever it's put
+  locker: { label: "Supply locker", w: 1, h: 1, solid: true, buildable: true },
   sofa: { label: "Sofa", w: 3, h: 1, solid: false, seat: true, buildable: true, variants: 3, paint: true },
   armchair: { label: "Armchair", w: 1, h: 1, solid: false, seat: true, buildable: true, variants: 2, paint: true },
   beanbag: { label: "Bean bag", w: 1, h: 1, solid: false, seat: true, buildable: true, paint: true },

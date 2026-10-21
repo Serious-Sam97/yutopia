@@ -14,6 +14,7 @@ import {
   SNEAK_STRIDE,
   STRAFE_STRIDE,
   strafePose,
+  torchPose,
   type Verb,
   verbPose,
 } from "./moves";
@@ -39,6 +40,8 @@ export interface LocoIn {
   pitch: number;
   /** a gun in the right hand (docs/plan/30-the-dark.md D6): both arms out */
   gun?: boolean;
+  /** the torch on, a flashlight in the left hand: its forearm out ahead (aiming: aimPose's own) */
+  torch?: boolean;
   yaw: number;
   /** the facing's turn, rad / s, and the speed's change, tiles / s² */
   turn: number;
@@ -78,6 +81,7 @@ export class Locomotion {
   private moveW = 0;
   private crouchW = 0;
   private aimW = 0;
+  private torchW = 0;
   private backW = 0;
   private sideW = 0;
   private airW = 0;
@@ -110,6 +114,7 @@ export class Locomotion {
     this.moveW += (clamp(m.speed / 0.7, 0, 1) - this.moveW) * k(12);
     this.crouchW += ((m.crouch ? 1 : 0) - this.crouchW) * k(10);
     this.aimW += ((m.aim ? 1 : 0) - this.aimW) * k(14);
+    this.torchW += ((m.torch && !m.aim ? 1 : 0) - this.torchW) * k(8);
     this.airW += ((m.up && !m.verb ? 1 : 0) - this.airW) * k(18);
 
     // a verb takes the whole body
@@ -146,6 +151,9 @@ export class Locomotion {
       const low = mix(crouchPose(breath), crouchWalkPose(this.sneakPh), ease(this.moveW));
       body = mix(body, low, ease(this.crouchW));
     }
+
+    // the torch on: the left forearm out ahead (over the arm's swing)
+    if (this.torchW > 0.01) body = { pose: blend(body.pose, torchPose(breath), ease(this.torchW)), lift: body.lift };
 
     // aiming: the legs step the way the body goes (ahead, aside, backing up), the top aims
     if (this.aimW > 0.01) {

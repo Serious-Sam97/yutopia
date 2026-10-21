@@ -109,3 +109,29 @@ test("a hand sent to the ear, the mouth, the chin gets there on the model", () =
   m.dispose();
   f.dispose();
 });
+
+test("the torch on: the left forearm out ahead; aiming, the aim's own; the phone out, the phone's", () => {
+  const loco = (torch: boolean, aim = false) => ({
+    ahead: 0,
+    left: 0,
+    crouch: false,
+    aim,
+    gun: false,
+    torch,
+    pitch: 0,
+    yaw: 0,
+    turn: 0,
+    accel: 0,
+    up: false,
+    verb: null,
+  });
+  const off = run({ loco: loco(false) }, 1).pose.shoulderL?.[0] ?? 0;
+  const lit = run({ loco: loco(true) }, 1).pose.shoulderL?.[0] ?? 0;
+  assert.ok(lit < off - 0.3, `the left arm raised ahead (${off.toFixed(2)} → ${lit.toFixed(2)})`);
+  const aim = run({ loco: loco(true, true) }, 1).pose.shoulderL?.[0] ?? 0;
+  assert.ok(aim < lit - 0.5, "aiming: held right out along the look");
+  // the earbud is no phone in the hand: nothing at the ear
+  const bud = run({ loco: loco(false) }, 1);
+  const call = run({ loco: loco(false), phone: { state: "call", pose: "", ringing: false } }, 1);
+  assert.notDeepEqual(bud.pose.shoulderR, call.pose.shoulderR);
+});

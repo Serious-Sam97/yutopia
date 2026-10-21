@@ -9,6 +9,7 @@ import {
   PerspectiveCamera,
   Scene,
   SRGBColorSpace,
+  Vector3,
   WebGLRenderer,
 } from "three";
 import { phoneColors } from "../art/phone-art";
@@ -30,8 +31,18 @@ import {
   togetherPose,
   walkPose,
 } from "./motion";
-import { crouchPose, crouchWalkPose, runPose, runStride, SNEAK_STRIDE, VERB_LEN, type Verb, verbPose } from "./moves";
-import { buildProp, inHand, keepUpright, type PropKind } from "./props";
+import {
+  crouchPose,
+  crouchWalkPose,
+  runPose,
+  runStride,
+  SNEAK_STRIDE,
+  torchPose,
+  VERB_LEN,
+  type Verb,
+  verbPose,
+} from "./moves";
+import { buildProp, inHand, keepUpright, type PropKind, pointAlong } from "./props";
 import type { Euler3, Pose } from "./rig";
 
 // The 3D people drawn for the iso view (docs/plan/22-people-3d.md, P6): each
@@ -82,7 +93,8 @@ export interface IsoIn {
   heldAt?: number;
   phone?: string;
   phonePose?: string;
-  phoneCase?: string;
+  phoneCase?: string; // (phone "bud": on a call, the phone put away — an earbud, no phone)
+  torch?: boolean; // the torch on: a flashlight in the left hand
   mugColor?: string;
   recording?: boolean;
   busy?: string;
@@ -122,6 +134,7 @@ export interface IsoState {
   face: 0 | 1 | 2; // open, eyes shut, mouth open
   held: string; // the thing in the hand (and the coffee's level, 0..4)
   phone: string; // the phone's case colour, and the REC light
+  extra: string; // "b": an earbud in; "t": a flashlight in the left hand
 }
 
 /** A pose for the HUD's pictures (a Motion3's output). */
@@ -226,7 +239,8 @@ export function isoState(m: IsoMem, p: IsoIn, now: number): IsoState {
   let held = "";
   let phone = "";
   let sipping = false;
-  if (p.phone) {
+  const bud = p.phone === "bud";
+  if (p.phone && !bud) {
     upper = `phone:${p.phone}:${p.phonePose ?? ""}`;
     phone = `${phoneColors(p.phoneCase)[0]}|${p.recording && Math.floor(t * 2) % 2 === 0 ? 1 : 0}`;
   } else if (isHeld(p.held) && p.heldAt) {
@@ -280,7 +294,9 @@ export function isoState(m: IsoMem, p: IsoIn, now: number): IsoState {
     }
     if (m.mouthOpen) face = 2;
   } else m.mouthOpen = false;
-  return { base, bf, upper, uf, face, held, phone };
+  // (the flashlight: not while the phone's out — both hands on it)
+  const extra = `${bud ? "b" : ""}${p.torch && (!p.phone || bud) && !sitting ? "t" : ""}`;
+  return { base, bf, upper, uf, face, held, phone, extra };
 }
 
 /** A drawn state as a pose — the 3D motion's own pose functions, at that frame. */
@@ -325,6 +341,8 @@ export function isoPose(s: IsoState): {
     p = blend(standPose(), j.pose, j.w);
     lift = [0, j.lift[1] * j.w, 0];
   } else p = standPose();
+  // the torch on: the left forearm out ahead, the flashlight in it
+  if (s.extra.includes("t")) p = blend(p, torchPose(), 1);
   let sip = 0;
   let blink = s.face === 1 ? 1 : 0;
   let talk = s.face === 2 ? 1 : 0;
@@ -361,7 +379,7 @@ export function isoPose(s: IsoState): {
 }
 
 const key = (look: string, dir: number, s: IsoState) =>
-  `${look}|${dir}|${s.base}${s.bf}|${s.upper}${s.uf}|${s.face}|${s.held}|${s.phone}`;
+  `${look}|${dir}|${s.base}${s.bf}|${s.upper}${s.uf}|${s.face}|${s.held}|${s.phone}|${s.extra}`;
 
 interface Look {
   model: PersonModel;
@@ -524,6 +542,23 @@ class IsoPeople {
     const hand = m.bone("wristR");
     for (const pr of l.props.values()) pr.root.visible = false;
     if (l.toy) l.toy.visible = false;
+    // the earbud in the right ear; the flashlight in the left fist
+    const head = m.bone("head");
+    const ear = m.earPoint();
+    if (st.extra.includes("b") && head && ear) {
+      const pr = this.prop(l, "bud", "#f4f2ec");
+      pr.root.visible = true;
+      if (pr.root.parent !== head) head.add(pr.root);
+      pr.root.position.set(ear[0], ear[1], ear[2]);
+    }
+    const left = m.bone("wristL");
+    if (st.extra.includes("t") && left) {
+      const pr = this.prop(l, "torch", "#2b2e33");
+      pr.root.visible = true;
+      if (pr.root.parent !== left) left.add(pr.root);
+      // ahead along the beam, tipped at the ground (shared beam.ts BEAM.tilt)
+      pointAlong(pr.root, new Vector3(0, Math.sin(-0.13), Math.cos(-0.13)).applyQuaternion(m.root.quaternion));
+    }
     if (!hand) return;
     const [kind, color = "", level = "4"] = st.held.split("|");
     if (st.phone) {

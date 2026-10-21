@@ -133,6 +133,7 @@ export interface PersonIn {
   seat?: string; // what they sit on (catalog kind), when `a` is 2
   // the phone (shared/phone.ts): in the hand, its case, a photo pose, ringing
   phone?: string;
+  bud?: boolean; // on a call, the phone put away: an earbud in the right ear
   phoneCase?: string;
   phonePose?: string;
   ringing?: boolean;

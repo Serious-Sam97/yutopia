@@ -154,7 +154,8 @@ Server-run (`features/dark.ts`), their mind pure and tested
   has you; it **rewinds** the shadowed to what you saw (a 1 s ring at 20 Hz,
   now − 110 ms − half the ping, ±0.5 tile) and casts the ray.
 - Only an exposed one is hurt; a shielded one throws a spark and a ricochet.
-  **No friendly fire.**
+  ~~No friendly fire.~~ One of us is a target too, at half the damage (see
+  "The office armed").
 - The flash and the tracer show at once on your screen; the hit comes back
   (`hit {id, n}`).
 - Flares: `Flare {id, x, y, until}`, lit on the land like a lamp.
@@ -234,7 +235,7 @@ is in.
 
 | Risk | Answer |
 |---|---|
-| The page's budget (~0.4 KB) | all of it in `yutopia-dark`, loaded outside only |
+| The page's budget (~0.4 KB) | all of it in `yutopia-dark`, loaded outside, or a few seconds in when the page is idle |
 | The server's tick (4 ms) | a spatial hash, distance before line of sight, 3 A* a tick, far ones at 4 Hz; `perf.mts` with bots outside at night |
 | Bandwidth | the shadowed, loot and flares through StateView; `Player` grows ~7 bytes |
 | StateView is new here | prove it first thing in phase 4; a capped broadcast behind it |
@@ -875,7 +876,8 @@ tried together).
   - **A wall or trunk** on the way stops it.
   - **What it met** comes back to you (`arms:hit {kind}`). Everyone within 60
     tiles gets the shot (`arms:shot`) to draw.
-  - **No friendly fire**: players aren't targets.
+  - ~~No friendly fire~~: players are targets now, at half (see "The office
+    armed").
   - **A reload** (`arms:reload`) is a round at a time out of the pockets. A
     shot or a change of weapon stops it.
   - **A flare** (`arms:flare {yaw, pitch}`) takes one from the pockets. It flies
@@ -1252,7 +1254,8 @@ The user approved the mock (`design/screens/dark/06a-inventory`,
   - **Pockets**: 3 × 2, each count / stack.
   - **Picked**: its description and numbers (for a gun: damage and range
     from `ARMS`), and its buttons: Use (E), Hold / Put away (1 · 2),
-    Reload (R, the gun in hand), Drop (right click; outside only).
+    Reload (R, the gun in hand), Drop (right click; anywhere, the office
+    too).
   - **On the ground · in reach**: what lies within 1.6 tiles. Take it (E,
     or drag it into a pocket).
 - **The pointer**: a click picks, a right click drops, a drag moves.
@@ -1320,3 +1323,176 @@ again after".
   - **e2e `inventory.spec`**: mouse look on, I frees the pointer, I locks
     it again. Headless has no pointer lock, so the spec fakes one as
     `mouse-look.spec` does.
+
+## The office armed (2026-10-21)
+
+What you carry works anywhere now, the HQ's floors included: drop it, pick it
+up, use it, take a gun out (1 · 2), reload, aim, fire, throw a flare. And
+**the others are targets**, everywhere: PvP.
+
+- **One of us shot** takes half what the shadowed would (shared
+  `pvpDamage`):
+  - the revolver 25 (four put someone down from full);
+  - a shotgun pellet 9.
+  - At nothing they go down, as from a strike (D7).
+- **Who can be hit**: someone else on the shooter's floor, on their feet.
+  - Not one who's down.
+  - Not one riding or driving.
+- **The rewind, for people**: `features/arms.ts` keeps a second or so of
+  where everyone was (each tick: x, y, z, the floor, crouched).
+  - A shot is taken against where its shooter saw them:
+    `now − REWIND.people (110 ms, the world's INTERP_MS) − lag`, ±60 ms.
+  - A crouched body is 1.25 tall.
+  - On the land, one of the shadowed nearer along the ray takes it instead.
+  - A wall on the shooter's floor stops it.
+  - The shooter gets `arms:hit {kind: "person" | "downed"}`. The one hit
+    gets `dark:hit {id: the shooter, n, shot: true}`: the red edge and the
+    struck sound.
+- **Indoors**:
+  - Height is the floor's own (0); on the land, the terrain's. That applies
+    to the muzzle check and to a flare's arc.
+  - Shots and throws go to the others on the same floor.
+  - The shadowed never come in, and the torch doesn't focus.
+- **Drops and flares** carry their floor (`Drop.level`, `Flare.level`).
+  - They are drawn, lit, heard and picked up on that floor only.
+  - A saved drop without one is the ground floor's.
+  - A flare's light keeps the shadowed out on the ground floor only.
+  - Loot spots stay the ground floor's.
+- **The client**:
+  - The dark's chunk loads on idle a few seconds in, indoors too.
+  - **Aiming with a gun**: with a gun in your hand, the right button aims
+    indoors, and doesn't open a thing's menu. In mouse look the left button
+    fires and doesn't pick (`tp.armed`).
+  - **Keys indoors**: 1 · 2 are taken only with a weapon in that slot (or
+    one in the hand to put away), else they're the emotes. R needs a gun
+    out, G a flare carried. None of them work in build mode.
+  - **The crosshair** converges on a person along the look.
+  - **The HUD**: indoors the ammo shows only with a gun out.
+  - **The inventory**: the ground list is my floor's, and Drop is always on.
+- **Tests**:
+  - **shared**: `pvpDamage`, `pastAt`, a crouched body, a flare's floor.
+  - **world-server**:
+    - 25 a round in the lobby and on the studio's floor, four down, then
+      nobody;
+    - the shotgun's pellets, 9 each;
+    - another floor missed, a wall in the way missed;
+    - a flare indoors on its floor;
+    - a drop on the studio's floor picked up there only, and no loot
+      searched off the ground floor.
+    - The shade tests wait till A is off B's line of fire.
+  - **e2e `inventory.spec`**: flares dropped indoors, lying there, taken
+    back.
+
+## The supply locker (2026-10-21)
+
+A green steel locker, built from the build menu (Tech, "Supply locker"):
+anyone who builds puts it where they like, on any floor, as many as they
+want. Nothing places one by itself.
+
+- **A kit a day for anyone**: E in front of one on your floor, a search's
+  ring, then what fits.
+  - The kit (shared `LOCKER_KIT`):
+    - 12 rounds of .38
+    - a first aid
+    - a battery
+    - 2 flares
+  - A revolver too, if you carry none. It follows the gatehouse's rule:
+    loaded only the first time ever.
+- **The day**: São Paulo's (`dayOf`), kept on the survivor (`kit_day`), across
+  every locker: one kit a day, whichever you open.
+  - It's taken as soon as anything went in, and saved at once.
+  - With pockets that take nothing, it isn't spent.
+  - Again the same day: "Taken today — come back tomorrow".
+- **Searched as a spot**: `kit:<the object's id>`. The server checks it's a
+  locker on your floor and that you're at its front.
+- **Tests**:
+  - **shared**: the kit fits a pocket each; a locker's front is out the way
+    it faces.
+  - **world-server**: one built on the studio's floor; the kit, then
+    "tomorrow"; kept across a rejoin; what fits; the next day another
+    (`kitClock`).
+  - **Pest**: `kitDay` round-trips and is validated.
+
+## The flashlight in the hand (2026-10-21)
+
+With the torch on (F, the pad, the phone's button), everyone holds a real
+flashlight. It's drawn only; it isn't an item.
+
+- **Where it is**: in the left fist (`props.ts` `torch`), pointing the way
+  a gun points.
+- **The arm** (`torchPose`, a layer in `locomotion.ts`): not aiming, the left
+  forearm is out ahead and a little down. Aiming, `aimPose` already holds it
+  out along the look.
+- **When it's hidden**: while the phone is in the hand (both hands are on
+  it), and seated in iso.
+- **The views**:
+  - 3P and the others' bodies (`person3d.ts`).
+  - The iso sprites (`IsoState.extra`).
+  - First person: `handsDoing` learns `torch`, and `gun` too, so a drawn gun
+    shows in 1P now.
+- **The beam starts in the left hand**, where the model has the lens (measured
+  on the model in `torchPose` and `aimPose`):
+  - low in the hand: 0.9 up, 0.5 ahead, 0.2 left, tipped down 0.13;
+  - aiming: 1.05 up, 0.72 ahead, 0.03 left.
+  - It's one function, so the views and the server's burn agree.
+- **The 3D view draws the light out of the lens** in the hand when that
+  person is drawn (`Person3D.torchLens`). The flashlight is turned each
+  frame to point along the beam (`pointAlong`), whatever the wrist is doing,
+  so the light always comes out of it. The light was cast from 0.3 tiles
+  above the hand before.
+- **The light**:
+  - The spot throws a texture: a hot core, the reflector's ring, the spill.
+  - On High, the first flashlight (mine) casts shadows (512², off while it's
+    off).
+  - The beam in the air is a shader: brightest along its middle, its edges
+    fading (no hard outline).
+  - The lens glints, and glares when it looks at the camera.
+- **The model**: tail cap and rubber switch, a knurled grip, the body flaring
+  into the head, a chrome bezel, the reflector, the LED and the lens (lit),
+  a side switch and a clip.
+- **Also**: the breath's puff in the cold was a sprite with no picture (a grey
+  square). It's a soft round puff now.
+- **The right button with no gun: the flashlight**, anywhere in 3D:
+  - Holding it raises the flashlight along the look and focuses it.
+  - It's switched on for as long as it's held, if it was off, after a
+    quarter second, so a quick right click on a thing is still its menu and
+    lights nothing.
+  - The focus works indoors too, on foot, draining the battery; nothing
+    burns in there.
+- **The light where the reticle is** (as in Alan Wake): aiming, the view finds
+  what the crosshair is on (`aimFrame`), within 16 tiles, past me: the first
+  standing wall, else the ground.
+  - The body turns a little (`lookYaw`, at most 0.35 rad) and the aim's pitch
+    is set (`aimPitch`) so the line from the lens in the hand goes there.
+  - Both go out as the body's facing and pitch, so everyone's beam, the
+    server's burn and the arms all follow it.
+  - Before, the beam ran parallel to the camera's line: from the left hand,
+    with the camera over the right shoulder and a 0.2 rad lift.
+- **Bladed, as Alan Wake stands** (shared `AIM_BLADE`, 0.45 rad): aiming, the
+  body turns that far right of the look. The shoulders and the arms twist
+  back along it (`aimPose`'s yaw), and the gun and the flashlight point
+  exactly along it.
+  - Over the right shoulder they're out beside the body, seen at any
+    distance. Before, far away, they pointed straight off behind the body.
+  - A body's facing is the look plus the blade; `beamOf` takes it off
+    aiming, so every view and the server's burn still beam along the look.
+  - The walker sets the facing, and in first person the hands rig and the
+    drawn facing follow too.
+- **First person**: my hands are drawn in a picture of their own (their own
+  lens), so the light can't simply come from the flashlight's place in the
+  world.
+  - `Hands1P.lensFor` puts the light's origin where the lens shows on the
+    screen, at its depth.
+  - Aiming, it goes from there onto what the crosshair is on.
+  - The hands' framing: held low, the flashlight is raised into view;
+    aiming, the forearm sits at the bottom, as before. The hands rig turns
+    so the twisted shoulders face the look.
+  - Fixed on the way: aiming in first person kept easing the look back to
+    level whenever the mouse was still (third person's "come up into the
+    aim").
+- **Also fixed**: a person's gun was never disposed when they left the view.
+- **Tests**:
+  - **shared**: the beam's origin is on the left.
+  - **client**:
+    - The torch raises the left arm, and aiming holds it further out.
+    - The iso state has the flashlight, but not with the phone out.

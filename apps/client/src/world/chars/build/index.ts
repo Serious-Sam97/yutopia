@@ -76,6 +76,9 @@ function anchors(k: Kit, b: Body, cover: number) {
   k.anchors.chin = at(new Vector3(-0.02 * hh, -0.2 * hh, chin.p.z + 0.06 * hh).add(head));
   const eyeY = f.eyeY * hh;
   k.eye = [0, eyeY, hs.front(0, eyeY).p.z - 0.02];
+  // (the right ear, −x, as the earrings sit: a little above the lobe, on whatever covers it)
+  const budY = (f.eyeY - 0.04) * hh - f.ears * hh * 0.3;
+  k.ear = [-(hs.R(budY) * k.p.head.width * 0.97 + 0.004 * hh + cover * 0.6), budY, 0];
   const chest = b.surf(0, 0.74 * b.T, 1.05);
   k.anchors.chest = at(new Vector3(-0.06 * hh, b.torsoBot + 0.74 * b.T - 0.1 * hh, chest.z + 0.12 * hh));
   const belly = b.surf(0, 0.45 * b.T, 1.05);

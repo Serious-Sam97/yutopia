@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
+import { AIM_BLADE } from "@yutopia/shared/beam";
 import { HQ_DOORS, inLampPool, LAMP_POOL_R, SHADE, SHADE_STATES } from "@yutopia/shared/dark";
 import { BENCH, heightAt, LAMPS } from "@yutopia/shared/grounds";
 import { MV_AIM, packMv, yawToByte } from "@yutopia/shared/move";
@@ -129,7 +130,8 @@ test("a focused beam burns its shield off: exposed", async () => {
   const aimAt = () => {
     const s = shadows(a)[0];
     if (!s) return;
-    const yaw = yawToByte(Math.atan2(s.y - me(a).y, s.x - me(a).x));
+    // (aiming, the body's bladed: its facing AIM_BLADE right of the look — shared beam.ts)
+    const yaw = yawToByte(Math.atan2(s.y - me(a).y, s.x - me(a).x) + AIM_BLADE);
     a.send("pos", {
       x: me(a).x,
       y: me(a).y,

@@ -129,8 +129,8 @@ export class InventoryPanel {
     const me = this.walker.where();
     const lying: Lying[] = [];
     this.ctl.room?.state.drops?.forEach(
-      (d: { id: string; item: string; n: number; loaded: number; x: number; y: number }) => {
-        if (this.walker.outside && Math.hypot(d.x - me.x, d.y - me.y) <= LOOT_REACH)
+      (d: { id: string; item: string; n: number; loaded: number; x: number; y: number; level?: number }) => {
+        if ((d.level ?? 0) === this.ctl.level && Math.hypot(d.x - me.x, d.y - me.y) <= LOOT_REACH)
           lying.push({ id: d.id, item: d.item as ItemId, n: d.n, loaded: d.loaded });
       },
     );
@@ -191,7 +191,7 @@ export class InventoryPanel {
   }
   private dropSel() {
     const s = this.sel;
-    if (s && "slot" in s && this.walker.outside) this.act.drop(s.slot);
+    if (s && "slot" in s) this.act.drop(s.slot);
   }
 
   // ── the pointer: click picks, right click drops, a drag moves ────────────
@@ -207,7 +207,7 @@ export class InventoryPanel {
     const pick: Pick =
       hit.dataset.slot !== undefined ? { slot: Number(hit.dataset.slot) } : { drop: hit.dataset.drop as string };
     if (e.button === 2) {
-      if ("slot" in pick && this.walker.outside) this.act.drop(pick.slot);
+      if ("slot" in pick) this.act.drop(pick.slot);
       return;
     }
     if (e.button !== 0) return;
@@ -325,7 +325,7 @@ export class InventoryPanel {
               `<div class="gi${isWeapon(d.item) ? " wide" : ""}${isSel({ drop: d.id })}" data-drop="${d.id}">${ICON[d.item]}<div><b>${t(`dark_item_${d.item}`)}</b><span>${isWeapon(d.item) ? `${d.loaded}/${WEAPONS[d.item].mag}` : `×${d.n}`}</span></div><span class="take">${t("dark_inv_take").toUpperCase()}</span></div>`,
           )
           .join("")
-      : `<span class="none">${t(out ? "dark_inv_ground_none" : "dark_inv_ground_inside")}</span>`;
+      : `<span class="none">${t("dark_inv_ground_none")}</span>`;
 
     const key = (k: string) => `<span class="dk-key">${k}</span>`;
     this.el.innerHTML = `<div class="dk-inv-bg" data-act="close"></div><div class="panel">
@@ -333,14 +333,14 @@ export class InventoryPanel {
       ${you}
       <div class="col"><div class="lbl">${t("dark_inv_weapons")}</div><div class="ws">${weapons}</div>
         <div class="lbl">${t("dark_inv_pockets")}</div><div class="grid">${pockets}</div></div>
-      <div class="col det">${this.details(inv, gun, hp, bat, out)}</div>
+      <div class="col det">${this.details(inv, gun, hp, bat)}</div>
       <div class="ground"><div class="lbl">${t("dark_inv_ground")}</div><div class="gl">${ground}</div>
         <div class="foot">${t("dark_inv_foot", { i: key("I"), e: key("E") })} · pad ${key("Menu")} ${key("A")} ${key("X")} ${key("B")}</div></div>
     </div>`;
     if (this.drag?.ghost) this.el.append(this.drag.ghost);
   }
 
-  private details(inv: Inventory | null, gun: string, hp: number, bat: number, out: boolean): string {
+  private details(inv: Inventory | null, gun: string, hp: number, bat: number): string {
     const t = this.t;
     const id = this.itemOf(this.sel);
     const head = `<div class="lbl">${t("dark_inv_picked")}</div>`;
@@ -349,9 +349,7 @@ export class InventoryPanel {
     const btn = (act: string, label: string, keys: string, main = false, off = false) =>
       `<div class="btn${main ? " main" : ""}${off ? " off" : ""}" ${off ? "" : `data-act="${act}"`}><span>${label}</span><span>${keys}</span></div>`;
     const stat = (a: string, b: string) => `<span>${a}</span><b>${b}</b>`;
-    const dropBtn = out
-      ? btn("drop", t("dark_inv_drop_btn"), t("dark_inv_right"))
-      : btn("drop", t("dark_inv_drop_btn"), t("dark_inv_outside"), false, true);
+    const dropBtn = btn("drop", t("dark_inv_drop_btn"), t("dark_inv_right"));
     let stats = "";
     let btns = "";
     if ("drop" in this.sel) {

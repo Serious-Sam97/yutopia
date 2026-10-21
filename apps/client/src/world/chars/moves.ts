@@ -466,6 +466,14 @@ export function landPose(impact: number): Moved {
   return body(steady(c));
 }
 
+/** The torch on, not aiming (docs/plan/30-the-dark.md): the flashlight in the left fist, the
+ *  forearm out ahead and a little down, lighting the way — the left arm only, swaying with the
+ *  breath (0..1); the rest of the body as it goes. */
+export function torchPose(breath = 0): Pose {
+  const b = 0.015 * Math.sin(TAU * breath);
+  return { shoulderL: [-0.42 + b, 0, 0.12], elbowL: [-1.05, 0, 0], wristL: [0.08, 0, -0.05] };
+}
+
 /** Aiming (plan 29 M4, plan 30 D4): bladed, the left foot ahead, knees soft, leaning in; the
  *  torch out in the left hand along the look, the right ready by the hip — or out beside it,
  *  both arms locked, with a gun (`gun`). `pitch` (radians, up > 0) and `yaw` (the look off the

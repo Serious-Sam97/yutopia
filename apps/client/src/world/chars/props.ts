@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   CanvasTexture,
   CircleGeometry,
   Float32BufferAttribute,
@@ -17,11 +18,12 @@ import { inkMaterial } from "./ink";
 import { arc, extrude, lathe, type Prof, smoothNormals, sweepTube } from "./shapes";
 
 // Things in the hand (docs/plan/22-people-3d.md, P4): the mug, the paper cup
-// and the soda can (shared/held.ts) and the phone, as small Ligne claire
-// models — lathes and bevelled extrusions, flat colour, the same ink line —
-// built standing up (+y), centred on where the fist holds them.
+// and the soda can (shared/held.ts), the phone and the flashlight, as small
+// Ligne claire models — lathes and bevelled extrusions, flat colour, the same
+// ink line — built standing up (+y), centred on where the fist holds them.
+// And the earbud (on a call, the phone put away), centred on the ear.
 
-export type PropKind = "mug" | "cup" | "soda" | "phone";
+export type PropKind = "mug" | "cup" | "soda" | "phone" | "torch" | "bud";
 
 interface Built {
   root: Group;
@@ -263,6 +265,88 @@ export function buildProp(kind: PropKind, color: string, mats: (color: string) =
       rec.visible = false;
       break;
     }
+    case "torch": {
+      // a flashlight: the tail cap and its rubber switch, a knurled grip, the body flaring into
+      // the head, a chrome bezel, the reflector's bowl behind the lens and the LED in it (lit),
+      // the side switch and a pocket clip. 22 cm, its lens at +y.
+      const r = 0.016;
+      const prof: Prof[] = [
+        [0, -0.115],
+        [r * 0.8, -0.115],
+        ...arc(r * 0.8, -0.111, 0.004, -Math.PI / 2, 0, 3).slice(1),
+        [r * 1.04, -0.104],
+        [r * 0.96, -0.101],
+      ];
+      // the grip: six grooves cut round it
+      for (let i = 0; i < 6; i++) {
+        const y = -0.094 + i * 0.012;
+        prof.push([r * 0.96, y - 0.002], [r * 1.05, y], [r * 1.05, y + 0.007], [r * 0.96, y + 0.009]);
+      }
+      prof.push([r, -0.018], [r, 0.03], [r * 1.25, 0.05], [r * 1.5, 0.068], [r * 1.6, 0.076], [0, 0.076]);
+      add(lathe(prof, SEG), color);
+      // the bezel, the reflector's bowl inside it
+      add(
+        lathe(
+          [
+            [r * 1.6, 0.075],
+            [r * 1.72, 0.078],
+            [r * 1.72, 0.097],
+            ...arc(r * 1.6, 0.098, 0.002, 0, Math.PI / 2, 2).slice(1),
+            [r * 1.42, 0.1],
+            [r * 1.4, 0.097],
+          ],
+          SEG,
+        ),
+        "#b9bec6",
+      );
+      add(
+        lathe(
+          [
+            [r * 1.4, 0.097],
+            [r * 0.9, 0.092],
+            [r * 0.35, 0.087],
+            [0, 0.087],
+          ],
+          SEG,
+        ),
+        "#e2e4e7",
+        false,
+      );
+      // the LED, lit; the lens over it, warm and a little see-through
+      const led = new MeshBasicMaterial({ color: "#ffffff" });
+      const glass = new MeshBasicMaterial({ color: "#fff1c9", transparent: true, opacity: 0.82, depthWrite: false });
+      own.push(led, glass);
+      add(new CircleGeometry(r * 0.32, 12).rotateX(-Math.PI / 2).translate(0, 0.0875, 0), led, false);
+      add(new CircleGeometry(r * 1.42, SEG).rotateX(-Math.PI / 2).translate(0, 0.0985, 0), glass, false);
+      // the tail's rubber switch; the side switch; the clip along the grip
+      const rubber = "#1a1c1f";
+      add(
+        lathe(arc(0, -0.115, r * 0.55, -Math.PI / 2, 0, 4), SEG)
+          .scale(1, 0.5, 1)
+          .translate(0, -0.057, 0),
+        rubber,
+      );
+      add(
+        lathe(arc(0, 0, 0.005, 0, Math.PI / 2, 3), 10)
+          .rotateX(Math.PI / 2)
+          .translate(0, 0.036, r * 1.02),
+        rubber,
+      );
+      add(new BoxGeometry(0.007, 0.07, 0.0025).translate(0, -0.06, r * 1.12), "#9aa0a8");
+      break;
+    }
+    case "bud": {
+      // an earbud: a little white bulb and its stem, down along the jaw
+      add(lathe(arc(0, 0, 0.009, -Math.PI / 2, Math.PI / 2, 5), 10), color);
+      add(
+        sweepTube([new Vector3(0, -0.004, 0.004), new Vector3(0, -0.02, 0.008)], () => [0.003, 0.003], {
+          segs: 4,
+          radial: 6,
+        }),
+        color,
+      );
+      break;
+    }
   }
   return {
     root,
@@ -282,7 +366,11 @@ export function buildProp(kind: PropKind, color: string, mats: (color: string) =
  *  on the thumb (the mitten's thumb reaches ~5.6 cm out along +z), its screen
  *  facing away from the hand — the face while texting, the ear on a call. */
 export function inHand(root: Group, kind: PropKind | "toy") {
-  if (kind === "phone") {
+  if (kind === "torch") {
+    // (the left fist: its head out past the fingers, along the wrist's −y, as a gun's barrel)
+    root.rotation.set(Math.PI, 0, 0);
+    root.position.set(0, -0.06, 0.03);
+  } else if (kind === "phone") {
     root.rotation.set(0, 0, Math.PI);
     root.position.set(0, -0.07, 0.064);
   } else if (kind === "toy") {
@@ -293,6 +381,18 @@ export function inHand(root: Group, kind: PropKind | "toy") {
     root.position.set(0, -0.06, 0.03);
   }
 }
+
+/** Turn a prop in its hand so its +y (a flashlight's lens) points along `dir` (world, unit). */
+export function pointAlong(root: Object3D, dir: Vector3) {
+  const hand = root.parent;
+  if (!hand) return;
+  hand.updateWorldMatrix(true, false);
+  hand.getWorldQuaternion(wq);
+  sw.setFromUnitVectors(Y, dir);
+  // the turn in the world, into the hand's space: L = W⁻¹ · S
+  root.quaternion.copy(wq.invert()).multiply(sw);
+}
+const Y = new Vector3(0, 1, 0);
 
 const wq = new Quaternion();
 const bq = new Quaternion();

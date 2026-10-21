@@ -1,5 +1,5 @@
 import type { ServerMessages } from "@yutopia/shared";
-import { LOCKER, LOOT, LOOT_REACH, type LootItem, SEARCH_MS } from "@yutopia/shared/dark";
+import { KIT_SPOT, LOCKER, LOOT, LOOT_REACH, type LootItem, lockerFront, SEARCH_MS } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import { type Inventory, type ItemId, POCKETS, WEAPON_SLOT, WEAPONS } from "@yutopia/shared/inventory";
 import { addStrings, trMaybe } from "@/lib/i18n";
@@ -102,6 +102,31 @@ class Dark implements DarkHooks {
   private batSeen = 0;
   private readonly drops = new Map<string, HTMLDivElement>();
   private hadLying = false;
+  // the supply lockers on my floor (looked for twice a second: they're built and moved rarely)
+  private lockers: { id: string; x: number; y: number; rot: number }[] = [];
+  private lockersAt = 0;
+  private lockersLevel = -1;
+  private lockersHere(now: number) {
+    const ctl = this.ctl;
+    if (now - this.lockersAt < 500 && this.lockersLevel === ctl.level) return this.lockers;
+    this.lockersAt = now;
+    this.lockersLevel = ctl.level;
+    const home = ctl.building?.home ?? ctl.building?.floor ?? 0;
+    const out: typeof this.lockers = [];
+    ctl.room?.state.objects?.forEach(
+      (o: { id: string; kind: string; x: number; y: number; rot: number; props: string }) => {
+        if (o.kind !== "locker") return;
+        let level = home;
+        try {
+          const l = JSON.parse(o.props || "{}").level;
+          if (typeof l === "number") level = l;
+        } catch {}
+        if (level === ctl.level) out.push({ id: o.id, x: o.x, y: o.y, rot: o.rot });
+      },
+    );
+    this.lockers = out;
+    return out;
+  }
   private stripUntil = 0;
   private tab = false;
   private fresh = new Map<number, string>(); // slot → "+n", for the strip's moment after a pickup
@@ -176,7 +201,7 @@ class Dark implements DarkHooks {
         if (typeof off === "function") this.offs.push(off as () => void);
       };
       on("dark:pockets", (m) => this.pockets(m.inv, m.bat));
-      on("dark:found", (m) => this.found(m.got, m.full, !!m.gone));
+      on("dark:found", (m) => this.found(m.got, m.full, !!m.gone, !!m.later));
       // struck: red at the edges a moment; down to nothing: black, and the office
       on("dark:hit", () => {
         this.voices.struck();
@@ -347,9 +372,10 @@ class Dark implements DarkHooks {
     this.render();
   }
 
-  private found(got: LootItem[], full: boolean, gone: boolean) {
+  private found(got: LootItem[], full: boolean, gone: boolean, later = false) {
     this.search = null;
-    if (!got.length) return this.toast(t(gone ? "dark_gone" : full ? "dark_full" : "dark_nothing"), []);
+    if (!got.length)
+      return this.toast(t(later ? "dark_tomorrow" : gone ? "dark_gone" : full ? "dark_full" : "dark_nothing"), []);
     const parts = got.map((g) =>
       WEAPONS[g.id as keyof typeof WEAPONS] ? itemName(g.id).toLowerCase() : `${g.n} ${itemName(g.id).toLowerCase()}`,
     );
@@ -442,15 +468,27 @@ class Dark implements DarkHooks {
     const me = this.walker.where();
     const ox = ctl.map?.ox ?? 0;
     const oy = ctl.map?.oy ?? 0;
+    // the ground at (x, y) on my floor: the snow's, out on it; the floor's indoors
+    const floorZ = (x: number, y: number) => (out && ctl.grid.onLand(x, y) ? heightAt(x + ox, y + oy) : 0);
     const at = (x: number, y: number, h: number) => {
       const c = ctl.clientAt(x, y, h * TPX);
       const r = ctl.engine?.app?.canvas?.getBoundingClientRect();
       return { x: c.x + (r?.left ?? 0), y: c.y + (r?.top ?? 0) };
     };
 
-    // in reach: a spot, the locker, something on the snow (the nearest)
+    // in reach: a spot, a locker, something lying about (the nearest)
     let best: Target | null = null;
     let bestD = LOOT_REACH;
+    // a supply locker on my floor (built anywhere): a kit a day
+    if (Number.isFinite(me.x))
+      for (const k of this.lockersHere(now)) {
+        const f = lockerFront(k);
+        const d = Math.hypot(f.x - me.x, f.y - me.y);
+        if (d <= bestD) {
+          bestD = d;
+          best = { kind: "spot", id: `${KIT_SPOT}${k.id}`, label: t("dark_place_kit"), x: f.x, y: f.y, z: me.z };
+        }
+      }
     if (out && Number.isFinite(me.x)) {
       const bx = me.x + ox;
       const bz = me.y + oy;
@@ -474,10 +512,10 @@ class Dark implements DarkHooks {
         };
       }
     }
-    // the drops: drawn within 30 tiles, the nearest in reach to pick up
+    // the drops on my floor: drawn within 30 tiles, the nearest in reach to pick up
     const seen = new Set<string>();
-    const drops = out ? ctl.room?.state.drops : null;
-    // (3D: things lying on the snow, tp/arms3d.ts; iso: their icons)
+    const drops = ctl.room?.state.drops;
+    // (3D: things lying about, tp/arms3d.ts; iso: their icons)
     const lying: { id: string; item: string; x: number; y: number; z: number }[] = [];
     // (one lying on the snow: the nearest in reach the target; 3D the view's, iso an icon)
     const lay = (id: string, item: string, icon: string, x: number, y: number, reach: number, target: () => Target) => {
@@ -488,7 +526,7 @@ class Dark implements DarkHooks {
         best = target();
       }
       if (ctl.tp) {
-        lying.push({ id, item, x, y, z: heightAt(x + ox, y + oy) });
+        lying.push({ id, item, x, y, z: floorZ(x, y) });
         return;
       }
       seen.add(id);
@@ -500,7 +538,7 @@ class Dark implements DarkHooks {
         this.drops.set(id, el);
         this.root.append(el);
       }
-      const p = at(x, y, heightAt(x + ox, y + oy) + 0.05);
+      const p = at(x, y, floorZ(x, y) + 0.05);
       const k = Math.max(0.35, Math.min(1, 4 / Math.max(1, dist)));
       el.style.left = `${p.x}px`;
       el.style.top = `${p.y}px`;
@@ -508,7 +546,8 @@ class Dark implements DarkHooks {
       const svgEl = el.firstElementChild as SVGElement | null;
       svgEl?.setAttribute("width", "100%");
     };
-    drops?.forEach((d: { id: string; item: string; n: number; x: number; y: number }) => {
+    drops?.forEach((d: { id: string; item: string; n: number; x: number; y: number; level?: number }) => {
+      if ((d.level ?? 0) !== ctl.level) return;
       lay(d.id, d.item, ICON[d.item as ItemId] ?? "", d.x, d.y, 30, () => ({
         kind: "drop",
         id: d.id,

@@ -33,6 +33,7 @@ class DarkController extends Controller
             'pages' => ['present', 'array', 'max:'.Survivor::PAGES_MAX],
             'pages.*' => ['string', 'regex:/^[a-z0-9-]{1,32}$/'],
             'issued' => ['sometimes', 'boolean'],
+            'kitDay' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:1000000'],
         ]);
         $inventory = [
             'weapons' => $this->weapons($data['inventory']['weapons']),
@@ -43,6 +44,7 @@ class DarkController extends Controller
             'vitals' => ['hp' => (float) $data['vitals']['hp'], 'wm' => (float) $data['vitals']['wm'], 'bat' => (float) $data['vitals']['bat']],
             'pages' => array_values(array_unique($data['pages'])),
             'issued' => (bool) ($data['issued'] ?? false),
+            'kit_day' => $data['kitDay'] ?? null,
         ]);
 
         return response()->json(['survivor' => $survivor->toWorld()]);

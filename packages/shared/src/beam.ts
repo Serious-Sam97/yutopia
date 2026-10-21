@@ -1,7 +1,7 @@
 // The torches' beams (docs/plan/30-the-dark.md, D4): one test for both views
 // and the server. Pure: nothing of the Grounds in it.
 //
-// The phone's flashlight: a cone from the hand along where you look. Wide when
+// The flashlight: a cone from the left hand along where you look. Wide when
 // you're just walking (tilted down at the ground ahead); focused while you aim
 // with it — narrower, further, and it drains the battery (vitals.ts) and burns
 // the shadowed's shield (phase 4).
@@ -9,10 +9,16 @@ export const BEAM = {
   wide: { len: 10, half: 0.36 },
   focus: { len: 14, half: 0.2 },
   /** not aiming, the beam points down at the ground a few tiles ahead (rad) */
-  tilt: -0.16,
-  /** where the phone is, tiles over the feet: in the hand at the chest; held out, aiming */
-  hand: 1.2,
-  held: 1.35,
+  tilt: -0.13,
+  /** where the flashlight's lens is (the left hand: the right one's the gun's), measured on the
+   *  model (world/chars torchPose, aimPose): tiles over the feet, ahead, to the left of the body's
+   *  line — low in the hand, and held out along the look, aiming */
+  hand: 0.9,
+  ahead: 0.5,
+  side: 0.2,
+  held: 1.05,
+  heldAhead: 0.72,
+  heldSide: 0.03,
 } as const;
 
 export interface Beam {
@@ -26,13 +32,24 @@ export interface Beam {
   focus: boolean;
 }
 
-/** The beam of someone at (x, y), feet at z, facing `yaw`; `pitch` while aiming
- *  (null: not aiming — tilted at the ground); focused (aiming, with battery left). */
-export function beamOf(x: number, y: number, z: number, yaw: number, pitch: number | null, focus: boolean): Beam {
+/** Aiming, the body stands bladed: turned this far (rad) to the right of where it looks, the
+ *  shoulders and the arms twisted back along the look (world/chars aimPose) — so over the right
+ *  shoulder the flashlight and the gun are out where they're seen, as Alan Wake holds them. A
+ *  body's facing (Player.yaw) is the look plus this; the beam goes along the look. */
+export const AIM_BLADE = 0.45;
+
+/** The beam of someone at (x, y), feet at z, facing `yaw` (their body: aiming, bladed — the beam's
+ *  AIM_BLADE left of it, along the look); `pitch` while aiming (null: not aiming — tilted at the
+ *  ground); focused (aiming, with battery left). */
+export function beamOf(x: number, y: number, z: number, facing: number, pitch: number | null, focus: boolean): Beam {
   const aiming = pitch !== null;
+  const yaw = aiming ? facing - AIM_BLADE : facing;
+  const ahead = aiming ? BEAM.heldAhead : BEAM.ahead;
+  const side = aiming ? BEAM.heldSide : BEAM.side;
   return {
-    x: x + Math.cos(yaw) * 0.32,
-    y: y + Math.sin(yaw) * 0.32,
+    // (left of the facing: (sin, −cos) — the right hand's (−sin, cos), world/dark/arms.ts)
+    x: x + Math.cos(yaw) * ahead + Math.sin(yaw) * side,
+    y: y + Math.sin(yaw) * ahead - Math.cos(yaw) * side,
     z: z + (aiming ? BEAM.held : BEAM.hand),
     yaw,
     pitch: aiming ? pitch : BEAM.tilt,

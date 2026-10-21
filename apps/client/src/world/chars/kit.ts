@@ -38,6 +38,8 @@ export class Kit {
   readonly anchors = {} as Record<Anchor, [number, number, number]>;
   /** between the eyes, a little inside the head (the head joint's space): where first person looks from */
   eye: [number, number, number] = [0, 0, 0];
+  /** the right ear's opening, on the head's side (the head joint's space): where an earbud sits */
+  ear: [number, number, number] = [0, 0, 0];
   head!: HeadSurface;
 
   constructor(

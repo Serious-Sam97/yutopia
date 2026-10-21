@@ -6,7 +6,8 @@ import { ANA, enter, test, token } from "./helpers";
 // 06b-inventory): I opens it, out on the pond with a kit — you stand still
 // while it's open; the first aid used from it; a pocket dragged to another;
 // the flares dropped on the snow and dragged back into a chosen pocket; Esc
-// and I close it; indoors it opens too. Review shots: YUTOPIA_SHOTS=<dir>.
+// and I close it; indoors it opens too, and the flares dropped there lie on its
+// floor and are taken back. Review shots: YUTOPIA_SHOTS=<dir>.
 
 const dir = process.env.YUTOPIA_SHOTS;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
@@ -163,14 +164,22 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await page.keyboard.press("KeyZ");
   await expect.poll(() => page.evaluate(() => (window as any).__yutopia.tp.looking)).toBe(false);
 
-  // indoors (the studio): it opens, nothing on the ground
+  // indoors (the studio): it opens, nothing on the ground; the flares dropped lie on its floor
   await page.evaluate(() => (window as any).__yutopia.room.send("arms:draw", { slot: -1 }));
   await page.evaluate(() => (window as any).__yutopia.teleport({ x: 10, y: 20, level: 0 }));
   await page.waitForFunction(() => !(window as any).__yutopia.walker.outside, null, { timeout: 20_000 });
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
   await expect(page.locator(".dk-inv .gl .none")).toBeVisible();
+  const flares = (await inv(page)).pockets.findIndex((s) => s?.id === "flare");
+  await slot(page, flares).click({ button: "right" });
+  await expect.poll(async () => (await inv(page)).pockets[flares]).toBe(null);
+  await expect(lying).toHaveCount(1);
   await shot(page, "inventory-inside");
+  await lying.click();
+  await page.keyboard.press("KeyE");
+  await expect.poll(async () => (await inv(page)).pockets.some((s) => s?.id === "flare")).toBe(true);
+  await expect(lying).toHaveCount(0);
   await page.keyboard.press("Escape");
   expect(errors).toEqual([]);
 });

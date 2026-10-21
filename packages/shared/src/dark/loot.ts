@@ -7,7 +7,8 @@ import type { ItemId, StackId } from "../inventory.ts";
 // cars' glove boxes, a counter in the diner, the market and the bar — each full
 // or empty, refilled on a timer; what's in one is rolled when it's searched.
 // Rounds and shells come out of a budget per night. The gatehouse's locker is
-// apart: a revolver for whoever carries none. Places are the building's coords.
+// apart: a revolver for whoever carries none; so are the supply lockers, a kit a day.
+// Places are the building's coords.
 
 export type Place =
   | "house"
@@ -109,6 +110,28 @@ export const LOCKER = (() => {
   const f = g?.fits.find((f) => f.kind === "locker");
   return f ? { x: f.x + f.w / 2, z: f.z + f.d + 0.6 } : { x: 0, z: 0 };
 })();
+
+/** A supply locker (the catalog's `locker`, put anywhere in build mode): a kit a day for anyone — a
+ *  revolver if they carry none (the gatehouse's rule: loaded the first time), and these. Searched
+ *  as a spot, `kit:<its object's id>`: the client's target, the server's handler. */
+export const KIT_SPOT = "kit:";
+export const LOCKER_KIT: LootItem[] = [
+  { id: "r38", n: 12 },
+  { id: "aid", n: 1 },
+  { id: "battery", n: 1 },
+  { id: "flare", n: 2 },
+];
+/** Where you open a thing from (its floor's coords): its tile's middle, a little out the way its
+ *  front faces (drawn on +y; turned clockwise: rot 1 −x, 2 −y, 3 +x — as a seat faces). */
+export function lockerFront(o: { x: number; y: number; rot?: number }): { x: number; y: number } {
+  const [dx, dy] = [
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+    [1, 0],
+  ][(o.rot ?? 0) & 3];
+  return { x: o.x + 0.5 + dx * 0.9, y: o.y + 0.5 + dy * 0.9 };
+}
 
 // ── what's in them ───────────────────────────────────────────────────────────
 type Roll = [weight: number, id: ItemId | null, lo?: number, hi?: number];

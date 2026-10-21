@@ -26,7 +26,7 @@ import {
   wallCuts,
   wellsOf,
 } from "@yutopia/shared";
-import { BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
+import { AIM_BLADE, BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
 import { LAMPS as GROUND_LAMPS } from "@yutopia/shared/grounds";
 import { MV_AIM } from "@yutopia/shared/move";
 import {
@@ -68,6 +68,7 @@ import {
   Raycaster,
   RingGeometry,
   Scene,
+  ShaderMaterial,
   Sphere,
   SpotLight,
   Sprite,
@@ -292,12 +293,25 @@ export class ThirdPersonView {
   private walkAt = { x: 0, y: 0 }; // where I was last frame (the chase camera follows where I go)
   /** aiming (docs/plan/29-the-move.md M5): over the shoulder (`shoulder` 1 the right, -1 the left) */
   aim = false;
+  /** a gun in my hand (the right button aims, not a thing's menu; the left fires, not picks) */
+  armed = false;
   shoulder = 1;
   private aimK = 0;
-  /** where I aim, up from level (radians), from the camera's pitch */
+  /** where I aim, up from level (radians): from the flashlight in my hand to what the crosshair is
+   *  on (aimFrame), else from the camera's pitch */
   get aimPitch(): number {
-    return Math.max(-0.9, Math.min(0.9, -(this.pitch - 0.2)));
+    return this.aimOn ? this.aimUp : Math.max(-0.9, Math.min(0.9, -(this.pitch - 0.2)));
   }
+  /** where I look round (radians): aiming, turned a little so the flashlight's line meets the
+   *  crosshair's (Alan Wake's: the light where the reticle is) */
+  get lookYaw(): number {
+    return this.yaw + (this.aimOn ? this.aimTurn : 0);
+  }
+  private aimOn = false;
+  private aimTurn = 0;
+  private aimUp = 0;
+  private aimDir = new Vector3();
+  private aimHit = new Vector3(); // what the crosshair is on (the view's coords), aiming
   private aheadFor = 0; // s I've been going roughly where it looks
   private eyeY = EYE_1P; // first person: the eyes' height (eases sitting down / getting up)
   private meId = "";
@@ -315,9 +329,11 @@ export class ThirdPersonView {
   private torch3: {
     spot: SpotLight;
     beam: Mesh;
-    mat: MeshBasicMaterial;
+    mat: ShaderMaterial;
+    glare: Sprite;
     on: Beam | null;
   }[] = [];
+  private lensAt = new Vector3();
   private breathAt = new Map<string, number>();
   private stormFog = new Color();
   /** The weather (shared weather.ts, eased by the controller). */
@@ -417,23 +433,75 @@ export class ThirdPersonView {
     fg.fillStyle = grd;
     fg.fillRect(0, 0, 4, 64);
     const along = new CanvasTexture(fadeAlong);
-    const cone = new ConeGeometry(Math.tan(BEAM_HALF) * BEAM_LEN, BEAM_LEN, 24, 1, true);
+    const cone = new ConeGeometry(Math.tan(BEAM_HALF) * BEAM_LEN, BEAM_LEN, 32, 1, true);
     cone.translate(0, -BEAM_LEN / 2, 0);
-    cone.rotateX(-Math.PI / 2); // (its tip at the phone, opening along +z)
+    cone.rotateX(-Math.PI / 2); // (its tip at the lens, opening along +z)
+    // what a flashlight throws (the spot's map): a hot core, the reflector's ring round it, the
+    // spill fading out — not a flat disc
+    const throwCv = document.createElement("canvas");
+    throwCv.width = throwCv.height = 128;
+    const tc = throwCv.getContext("2d") as CanvasRenderingContext2D;
+    const rg = tc.createRadialGradient(64, 64, 0, 64, 64, 64);
+    rg.addColorStop(0, "#ffffff");
+    rg.addColorStop(0.18, "#fffaf0");
+    rg.addColorStop(0.3, "#b8b2a6");
+    rg.addColorStop(0.4, "#d8d2c4");
+    rg.addColorStop(0.46, "#8a857c");
+    rg.addColorStop(0.75, "#2c2a27");
+    rg.addColorStop(1, "#000000");
+    tc.fillStyle = rg;
+    tc.fillRect(0, 0, 128, 128);
+    const throwMap = new CanvasTexture(throwCv);
+    throwMap.colorSpace = SRGBColorSpace;
+    // the glare of a lens looking at you
+    const glareCv = document.createElement("canvas");
+    glareCv.width = glareCv.height = 64;
+    const gc = glareCv.getContext("2d") as CanvasRenderingContext2D;
+    const gg = gc.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gg.addColorStop(0, "rgba(255,255,255,1)");
+    gg.addColorStop(0.12, "rgba(255,246,222,0.9)");
+    gg.addColorStop(0.4, "rgba(255,226,170,0.22)");
+    gg.addColorStop(1, "rgba(255,210,150,0)");
+    gc.fillStyle = gg;
+    gc.fillRect(0, 0, 64, 64);
+    const glareMap = new CanvasTexture(glareCv);
     for (let i = 0; i < TORCHES; i++) {
       const spot = new SpotLight(0xfff1dc, 0, BEAM_LEN * 1.6, BEAM_HALF * 1.25, 0.55, 1.3);
+      // (every torch has its map, always: a light's map coming or going recompiles every material)
+      spot.map = throwMap;
+      // (its shadows on High — setQuality — the first only: mine)
+      spot.shadow.mapSize.set(512, 512);
+      spot.shadow.camera.near = 0.05;
+      spot.shadow.bias = -0.0015;
+      spot.shadow.normalBias = 0.03;
+      spot.shadow.autoUpdate = false;
       // (off: parked far under the ground, pointing down — at the origin with its
       // target there too its direction was NaN, and a NaN blacked out High's frame)
       spot.position.set(0, -500, 0);
       spot.target.position.set(0, -501, 0);
       this.scene.add(spot, spot.target);
-      const mat = new MeshBasicMaterial({
-        color: 0xfff3e0,
+      // the beam in the air: brightest along its middle, soft at its edges (seen side on, a
+      // cone's skin fades out — no hard outline), fading along its length
+      const mat = new ShaderMaterial({
+        uniforms: { color: { value: new Color(0xfff3e0) }, opacity: { value: 0 }, along: { value: along } },
+        vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+void main() {
+  vUv = uv;
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vN = normalize(mat3(modelMatrix) * normal);
+  vV = normalize(cameraPosition - wp.xyz);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`,
+        fragmentShader: `uniform vec3 color; uniform float opacity; uniform sampler2D along;
+varying vec2 vUv; varying vec3 vN; varying vec3 vV;
+void main() {
+  float a = texture2D(along, vUv).r;
+  float edge = smoothstep(0.0, 0.7, abs(dot(normalize(vN), normalize(vV))));
+  gl_FragColor = vec4(color, a * edge * edge * opacity);
+}`,
         transparent: true,
-        opacity: 0,
         depthWrite: false,
         blending: AdditiveBlending,
-        alphaMap: along,
         side: DoubleSide,
         toneMapped: false,
       });
@@ -441,7 +509,20 @@ export class ThirdPersonView {
       beam.visible = false;
       beam.renderOrder = 4;
       this.scene.add(beam);
-      this.torch3.push({ spot, beam, mat, on: null });
+      const glare = new Sprite(
+        new SpriteMaterial({
+          map: glareMap,
+          color: 0xfff1d6,
+          transparent: true,
+          depthWrite: false,
+          blending: AdditiveBlending,
+          toneMapped: false,
+        }),
+      );
+      glare.visible = false;
+      glare.renderOrder = 5;
+      this.scene.add(glare);
+      this.torch3.push({ spot, beam, mat, glare, on: null });
     }
     // what the studio stands in (clouds / city / snow), the sky by the hour
     const home = onLevel(all, building);
@@ -1229,6 +1310,13 @@ export class ThirdPersonView {
       this.sun.shadow.map = null;
     }
     this.lamps = q === "high" ? LAMPS : q === "medium" ? 6 : 3;
+    // the first flashlight (mine) throws shadows on High — its shadow map drawn once now, so it's
+    // there even while it's off (a shadow-casting light with no map yet: every lit draw failed —
+    // "mismatch between texture format and sampler type" — and only the ink was left)
+    for (const [i, tc] of this.torch3.entries()) {
+      tc.spot.castShadow = q === "high" && i === 0;
+      if (tc.spot.castShadow) tc.spot.shadow.needsUpdate = true;
+    }
     this.pool.forEach((l, i) => {
       l.visible = i < this.lamps;
     });
@@ -1464,6 +1552,8 @@ export class ThirdPersonView {
     this.syncLifts(performance.now());
     // everyone in my floor's frame: the floors below where they are, above not drawn
     bodies = bodies.flatMap((b) => {
+      // (on the earbud — on a call, the phone put away: no phone in the hand, a bud in the ear)
+      if (b.phone === "bud") b = { ...b, phone: "", bud: true };
       const l = b.level ?? this.level;
       const o = this.offsetTo(l);
       if (l === this.level) return [b];
@@ -1531,7 +1621,8 @@ export class ThirdPersonView {
     }
     this.aimK += ((this.aim && !first ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * 10));
     // (into an aim the camera comes up to look ahead, near level — not at the ground at your feet)
-    if (this.aim && this.aimK < 0.95 && this.time - this.dragged > 0.3)
+    // (third person only: in first person the look is the look — it kept pulling it back level)
+    if (this.aim && !first && this.aimK < 0.95 && this.time - this.dragged > 0.3)
       this.pitch += (0.15 - this.pitch) * (1 - Math.exp(-dt * 10));
     this.clampCam();
     const cp = Math.cos(this.pitch);
@@ -1564,6 +1655,7 @@ export class ThirdPersonView {
       if (cam.y < floor + 0.25) cam.y = floor + 0.25;
       this.camera.lookAt(this.target.x + sx, this.target.y + up, this.target.z + sz);
     }
+    this.aimFrame(dt, me);
 
     // a game camera: ease over to it (and back when it lets go)
     const gc = this.gameCam;
@@ -1600,7 +1692,6 @@ export class ThirdPersonView {
     this.placeSun();
     this.assignLamps(dt);
     this.weatherFrame();
-    this.torches(bodies, meId);
     if (!me?.reduced) this.breathe(bodies);
 
     // cards and people face back along the camera's view (all the same way)
@@ -1762,6 +1853,8 @@ export class ThirdPersonView {
       this.hands.dispose();
       this.hands = null;
     }
+    // the flashlights: after the people and my hands (out of the lens in a hand where it is this frame)
+    this.torches(bodies, meId);
     // build what's waiting (nearest first), a few milliseconds a frame
     this.charF?.pump(4);
     for (const [id, e] of this.pets3)
@@ -2271,19 +2364,19 @@ export class ThirdPersonView {
     const n = this.quality === "high" ? GROUND_POOL : this.quality === "medium" ? 2 : 1;
     const near: { x: number; y: number; h: number; c: (typeof GROUND_LAMP)[string]; d: number; flare?: boolean }[] = [];
     // flares first, day or night: red, ~6 over 11 tiles (the mocks' 02-hud-night), flickering
-    if (this.level === 0)
-      for (const f of this.flares) {
-        const d = Math.hypot(f.x - this.target.x, f.y - this.target.z);
-        if (d < GROUND_REACH)
-          near.push({
-            x: f.x + 0.1,
-            y: f.y,
-            h: f.z + 0.5,
-            c: { ...FLARE_LAMP, intensity: FLARE_LAMP.intensity * (0.85 + 0.15 * Math.sin(this.time * 23 + f.t * 7)) },
-            d: -1,
-            flare: true,
-          });
-      }
+    // (my floor's: dark/arms.ts hands over only those)
+    for (const f of this.flares) {
+      const d = Math.hypot(f.x - this.target.x, f.y - this.target.z);
+      if (d < GROUND_REACH)
+        near.push({
+          x: f.x + 0.1,
+          y: f.y,
+          h: f.z + 0.5,
+          c: { ...FLARE_LAMP, intensity: FLARE_LAMP.intensity * (0.85 + 0.15 * Math.sin(this.time * 23 + f.t * 7)) },
+          d: -1,
+          flare: true,
+        });
+    }
     if (g && this.level === 0 && on > 0) {
       const off = offsetOf(this.building, 0);
       const t = this.target;
@@ -2475,13 +2568,21 @@ export class ThirdPersonView {
     // (and what comes and goes out there: a breath's puff, the cars, the shuttle)
     const warm = new Group();
     const puff = new Sprite(
-      new SpriteMaterial({ color: 0xf4f7fa, transparent: true, depthWrite: false, opacity: 0.32, toneMapped: false }),
+      new SpriteMaterial({
+        map: this.puffMap(),
+        color: 0xf4f7fa,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.32,
+        toneMapped: false,
+      }),
     );
     warm.add(puff, this.carModel(), this.busModel());
     void this.renderer.compileAsync(warm, this.camera, this.scene).then(() => puff.material.dispose());
   }
 
-  // the flashlights on: mine first, then the nearest
+  // the flashlights on: mine first, then the nearest — out of the lens of the one in their hand
+  // (where it's drawn; else where shared beam.ts has it), along the beam
   private torches(bodies: Body3[], meId: string) {
     const t = this.target;
     const on = bodies
@@ -2492,15 +2593,18 @@ export class ThirdPersonView {
           Math.hypot(a.x - t.x, a.y - t.z) - Math.hypot(b.x - t.x, b.y - t.z),
       );
     const night = this.nightLevel;
+    const cam = this.camera.position;
     for (const [i, tc] of this.torch3.entries()) {
       const b = on[i];
       tc.on = null;
       if (!b) {
         tc.spot.intensity = 0;
+        tc.spot.shadow.autoUpdate = false;
         tc.spot.position.set(0, -500, 0);
         tc.spot.target.position.set(0, -501, 0);
         tc.spot.target.updateMatrixWorld();
         tc.beam.visible = false;
+        tc.glare.visible = false;
         continue;
       }
       // where they look (as they turned, not 8 ways), up as they aim; focused: narrow and far
@@ -2518,20 +2622,69 @@ export class ThirdPersonView {
       const dir = { x: Math.cos(beam.yaw) * cp, y: Math.sin(beam.pitch), z: Math.sin(beam.yaw) * cp };
       const { len, half } = beam.focus ? BEAM.focus : BEAM.wide;
       tc.on = beam;
-      tc.spot.position.set(beam.x, beam.z, beam.y);
-      tc.spot.target.position.set(beam.x + dir.x * 7, beam.z + dir.y * 7, beam.y + dir.z * 7);
+      // (the lens in their hand, when they're drawn with one: the light comes out of it — mine in
+      // first person, the one in my hands' own picture, where it shows on the screen)
+      const mine1p = b.id === meId && this.mode === "first";
+      const lens = mine1p
+        ? (this.hands?.lensFor(this.camera, this.lensAt) ?? null)
+        : (this.people3.get(b.id)?.torchLens(this.lensAt) ?? null);
+      if (lens) tc.spot.position.copy(lens);
+      else tc.spot.position.set(beam.x, beam.z, beam.y);
+      const o = tc.spot.position;
+      // (mine, aiming: from there onto what the crosshair is on)
+      if (b.id === meId && aiming && this.aimOn) {
+        const dx = this.aimHit.x - o.x;
+        const dy = this.aimHit.y - o.y;
+        const dz = this.aimHit.z - o.z;
+        const l = Math.hypot(dx, dy, dz);
+        if (l > 0.5) {
+          dir.x = dx / l;
+          dir.y = dy / l;
+          dir.z = dz / l;
+        }
+      }
+      tc.spot.target.position.set(o.x + dir.x * 7, o.y + dir.y * 7, o.z + dir.z * 7);
       tc.spot.target.updateMatrixWorld();
       tc.spot.angle = half * 1.25;
       tc.spot.distance = len * 1.6;
+      tc.spot.shadow.camera.far = len * 1.6;
+      tc.spot.shadow.autoUpdate = tc.spot.castShadow;
       // (focused: a hard round spot where it lands — a teammate's focus is easy to read)
-      tc.spot.penumbra = beam.focus ? 0.22 : 0.55;
-      tc.spot.intensity = (1.5 + 24 * night) * (beam.focus ? 1.8 : 1);
-      tc.beam.position.copy(tc.spot.position);
+      tc.spot.penumbra = beam.focus ? 0.22 : 0.5;
+      tc.spot.intensity = (1.8 + 26 * night) * (beam.focus ? 1.8 : 1);
+      tc.beam.position.copy(o);
       tc.beam.lookAt(tc.spot.target.position);
       tc.beam.scale.set(beam.focus ? FOCUS_ACROSS : 1, beam.focus ? FOCUS_ACROSS : 1, beam.focus ? FOCUS_ALONG : 1);
-      tc.mat.opacity = Math.min(0.5, (0.03 + 0.16 * night) * (1 + this.storm * 1.6) * (beam.focus ? 1.35 : 1));
-      tc.beam.visible = tc.mat.opacity > 0.01;
+      const op = Math.min(0.5, (0.03 + 0.16 * night) * (1 + this.storm * 1.6) * (beam.focus ? 1.35 : 1));
+      tc.mat.uniforms.opacity.value = op;
+      tc.beam.visible = op > 0.01;
+      // the lens: a glint; looking into it, a glare
+      const dc = Math.hypot(cam.x - o.x, cam.y - o.y, cam.z - o.z) || 1;
+      const into = Math.max(0, (dir.x * (cam.x - o.x) + dir.y * (cam.y - o.y) + dir.z * (cam.z - o.z)) / dc);
+      const k = into ** 6;
+      tc.glare.position.copy(o);
+      tc.glare.scale.setScalar(0.07 + k * (0.5 + 0.6 * night) * (beam.focus ? 1.4 : 1));
+      (tc.glare.material as SpriteMaterial).opacity = Math.min(1, 0.55 + k * 0.6) * (0.4 + 0.6 * night);
+      // (not my own in first person: it's in my hands' own picture, hands1p.ts)
+      tc.glare.visible = !(b.id === meId && this.mode === "first");
     }
+  }
+
+  // a soft round puff (a sprite with no picture is a square)
+  private puffTex: CanvasTexture | null = null;
+  private puffMap(): CanvasTexture {
+    if (this.puffTex) return this.puffTex;
+    const c = document.createElement("canvas");
+    c.width = c.height = 32;
+    const g = c.getContext("2d") as CanvasRenderingContext2D;
+    const r = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    r.addColorStop(0, "rgba(255,255,255,1)");
+    r.addColorStop(0.5, "rgba(255,255,255,0.55)");
+    r.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = r;
+    g.fillRect(0, 0, 32, 32);
+    this.puffTex = new CanvasTexture(c);
+    return this.puffTex;
   }
 
   // breath in the cold: a little cloud now and then from everyone out on the land
@@ -2559,6 +2712,7 @@ export class ThirdPersonView {
       for (let i = 0; i < 3; i++) {
         const s = new Sprite(
           new SpriteMaterial({
+            map: this.puffMap(),
             color: 0xf4f7fa,
             transparent: true,
             depthWrite: false,
@@ -2640,7 +2794,7 @@ export class ThirdPersonView {
     this.activeAt = performance.now();
     // mouse look: a click uses what the crosshair is on
     if (this.looking) {
-      if (e.button === 0) {
+      if (e.button === 0 && !(this.aim && this.armed)) {
         const r = this.renderer.domElement.getBoundingClientRect();
         this.pick(r.left + r.width / 2, r.top + r.height / 2);
       }
@@ -2701,8 +2855,13 @@ export class ThirdPersonView {
     const d = this.drag;
     if (d?.id !== e.pointerId) return;
     this.drag = null;
-    // a click (not a drag): someone, or a spot on the floor
-    if (e.type === "pointerup" && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 6 && performance.now() - d.t < 600)
+    // a click (not a drag): someone, or a spot on the floor (armed, the right button only aims)
+    if (
+      e.type === "pointerup" &&
+      !(e.button === 2 && this.armed) &&
+      Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 6 &&
+      performance.now() - d.t < 600
+    )
       this.pick(e.clientX, e.clientY, { shift: e.shiftKey, right: e.button === 2 });
   };
 
@@ -2758,6 +2917,68 @@ export class ThirdPersonView {
     const r = this.renderer.domElement.getBoundingClientRect();
     const ndc = new Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(ndc, this.camera);
+  }
+
+  /** How far along the crosshair's line (from the camera, tiles) one of the others stands, or null. */
+  personAlongLook(): number | null {
+    this.ray.setFromCamera(new Vector2(0, 0), this.camera);
+    let best: number | null = null;
+    for (const [id, p] of this.people3) {
+      if (id === this.meId) continue;
+      const t = p.hitDistance(this.ray.ray);
+      if (t !== null && (best === null || t < best)) best = t;
+    }
+    return best;
+  }
+
+  // Aiming: what the crosshair is on — the first wall beyond me, else the ground (the land's or the
+  // floor's), within 16 tiles — and the turn and the pitch that point the flashlight in my hand
+  // (shared beam.ts, held out) at it. Eased: the crosshair crossing an edge doesn't snap the body.
+  private aimFrame(dt: number, me: Body3 | undefined) {
+    const was = this.aimOn;
+    this.aimOn = this.aim && !!me;
+    if (!this.aimOn || !me) return;
+    const cam = this.camera.position;
+    const d = this.camera.getWorldDirection(this.aimDir);
+    const L = 16;
+    // past me (the walls between the camera and me are faded, or behind me)
+    const near = Math.max(0, (me.x - cam.x) * d.x + (me.y - cam.z) * d.z) + 0.6;
+    let t = L;
+    const ex = cam.x + d.x * L;
+    const ez = cam.z + d.z * L;
+    for (const f of this.world.fades) {
+      if (f.item || f.alpha < 0.5) continue;
+      const k = segBox(cam.x, cam.z, ex, ez, f.x0, f.y0, f.x1, f.y1);
+      if (k === null) continue;
+      const at = k * L;
+      if (at > near && at < t && cam.y + d.y * at < f.top) t = at;
+    }
+    // the ground: a step at a time (the land rises and falls; a floor is 0)
+    const off = offsetOf(this.building, 0);
+    const g = this.around.grounds;
+    for (let s = near; s < t; s += 0.25) {
+      const x = cam.x + d.x * s;
+      const z = cam.z + d.z * s;
+      const floor = g && this.onLand(x, z) ? g.heightAt(x + off.x, z + off.y) : 0;
+      if (cam.y + d.y * s <= floor) {
+        t = s;
+        break;
+      }
+    }
+    const tx = cam.x + d.x * t;
+    const ty = cam.y + d.y * t;
+    const tz = cam.z + d.z * t;
+    this.aimHit.set(tx, ty, tz);
+    // from the lens (held out) to there — not nearer than 2.5
+    // (as the body faces: last frame's turn on the camera's)
+    const o = beamOf(me.x, me.y, me.z ?? me.ground ?? 0, this.yaw + (was ? this.aimTurn : 0) + AIM_BLADE, 0, false);
+    const flat = Math.max(2.5, Math.hypot(tx - o.x, tz - o.y));
+    let turn = Math.atan2(tz - o.y, tx - o.x) - this.yaw;
+    turn = Math.max(-0.35, Math.min(0.35, Math.atan2(Math.sin(turn), Math.cos(turn))));
+    const up = Math.max(-0.9, Math.min(0.9, Math.atan2(ty - o.z, flat)));
+    const k = was ? 1 - Math.exp(-dt * 14) : 1;
+    this.aimTurn += (turn - this.aimTurn) * k;
+    this.aimUp += (up - this.aimUp) * k;
   }
 
   // what's under the pointer: someone, or something to use

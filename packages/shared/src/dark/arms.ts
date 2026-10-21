@@ -16,11 +16,31 @@ export const ARMS = {
 } as const;
 export type GunId = keyof typeof ARMS;
 
+/** One of us hit by another's shot (the HQ armed, plan 30): half what the shadowed take. */
+export const PVP = 0.5;
+export const pvpDamage = (gun: GunId) => Math.round(ARMS[gun].damage * PVP);
+
 /** The shadowed as a target: a column this wide round where it stands, this tall. */
 export const BODY = { r: 0.38, h: 1.8 };
 /** A shot is taken against where the shooter saw them: the playback's delay (world/dark
  *  shades.ts) plus the line's lag, give or take this (ms), and this far (tiles). */
-export const REWIND = { delay: 150, maxLag: 300, slackMs: 60, slack: 0.15 };
+export const REWIND = { delay: 150, maxLag: 300, slackMs: 60, slack: 0.15, people: 110 };
+// (`people`: the others are drawn this far behind (the world's INTERP_MS), not the shadowed's 150)
+
+/** Where something was at `t` along its last second (`hist`, oldest first), between the two
+ *  samples round it; before the first, the first; past the last, the last. */
+export function pastAt<T extends { t: number; x: number; y: number; z: number }>(
+  hist: readonly T[],
+  t: number,
+): { x: number; y: number; z: number; at: T } | null {
+  if (!hist.length) return null;
+  let i = hist.length - 1;
+  while (i > 0 && hist[i].t > t) i--;
+  const a = hist[i];
+  const b = hist[Math.min(hist.length - 1, i + 1)];
+  const k = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 0;
+  return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k, at: a };
+}
 /** The muzzle the shooter says must be within this of where the server has them. */
 export const MUZZLE_REACH = 1;
 
@@ -51,8 +71,16 @@ export function rayDir(yaw: number, pitch: number): { x: number; y: number; z: n
 }
 
 /** How far along the ray it meets a body standing at (x, y) on ground `z0` (null: it
- *  doesn't, within `range`), the body `slack` wider. */
-export function rayMeets(r: Ray, x: number, y: number, z0: number, range: number, slack = 0): number | null {
+ *  doesn't, within `range`), the body `slack` wider; `h` tall (one of us crouched: less). */
+export function rayMeets(
+  r: Ray,
+  x: number,
+  y: number,
+  z0: number,
+  range: number,
+  slack = 0,
+  h: number = BODY.h,
+): number | null {
   const d = rayDir(r.yaw, r.pitch);
   const flat = Math.hypot(d.x, d.y);
   if (flat < 1e-6) return null;
@@ -75,7 +103,7 @@ export function rayMeets(r: Ray, x: number, y: number, z0: number, range: number
   const zEnd = r.z + d.z * (along + back);
   const lo = Math.min(z, zEnd);
   const hi = Math.max(z, zEnd);
-  if (hi < z0 - slack || lo > z0 + BODY.h + slack) return null;
+  if (hi < z0 - slack || lo > z0 + h + slack) return null;
   return t;
 }
 
@@ -132,6 +160,6 @@ export function flareFlight(
   return { x: px, y: py, z: ground(px, py), secs: FLARE.max };
 }
 
-/** In a flare's light at (x, y) (the floor's coords). */
-export const inFlare = (f: { x: number; y: number }, x: number, y: number) =>
-  Math.hypot(f.x - x, f.y - y) < FLARE.radius;
+/** In a flare's light at (x, y) (the floor's coords) on `level` (a flare's: 0 if it has none). */
+export const inFlare = (f: { x: number; y: number; level?: number }, x: number, y: number, level = 0) =>
+  (f.level ?? 0) === level && Math.hypot(f.x - x, f.y - y) < FLARE.radius;

@@ -157,7 +157,7 @@ export interface AvatarState {
   pet?: PetView; // a pet, not a person (world/petview.ts)
   // the phone (shared/phone.ts): what it's doing in the hand, its case, a photo
   // pose, ringing in the pocket
-  phone?: string;
+  phone?: string; // ("bud": on a call with it put away, an earbud in the ear)
   phoneCase?: string;
   phonePose?: string;
   ringing?: boolean;
@@ -2281,7 +2281,7 @@ export class WorldEngine {
     const dotColor = s.status === "dnd" ? C.rust : s.status === "away" ? C.alumDark : s.npc ? C.red : C.olive;
     const slash = !s.mic && !s.npc && !s.bot;
     // on a call: a little handset instead of the dot (so nobody waves at someone mid-call)
-    const onCall = s.phone === "call" || s.phone === "video";
+    const onCall = s.phone === "call" || s.phone === "video" || s.phone === "bud";
     const dotKey = `${dotColor}|${slash}|${onCall}`;
     if (v.dotKey !== dotKey) {
       v.dotKey = dotKey;
@@ -2348,6 +2348,7 @@ export class WorldEngine {
         phone: s.phone,
         phonePose: s.phonePose,
         phoneCase: s.phoneCase,
+        torch: s.torch,
         mugColor: MUG_COLORS[Math.floor(seedOf(s.name) * MUG_COLORS.length)],
         recording: s.recording,
         busy: s.busy,

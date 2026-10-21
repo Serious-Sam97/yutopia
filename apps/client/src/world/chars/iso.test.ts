@@ -48,8 +48,30 @@ test("every state is a few frames, and each poses the rig", () => {
 });
 
 test("a sip tips the drink to the mouth; a call puts the hand at the ear", () => {
-  const sip = isoPose({ base: "stand", bf: 0, upper: "sip", uf: 3, face: 1, held: "mug||4", phone: "" });
+  const sip = isoPose({ base: "stand", bf: 0, upper: "sip", uf: 3, face: 1, held: "mug||4", phone: "", extra: "" });
   assert.ok(sip.sip > 0.5 && (sip.reach.R?.w ?? 0) > 0.5 && sip.reach.R?.at === "mouth");
-  const call = isoPose({ base: "walk", bf: 2, upper: "phone:call:", uf: 0, face: 0, held: "", phone: "#000|0" });
+  const call = isoPose({
+    base: "walk",
+    bf: 2,
+    upper: "phone:call:",
+    uf: 0,
+    face: 0,
+    held: "",
+    phone: "#000|0",
+    extra: "",
+  });
   assert.equal(call.reach.R?.at, "ear");
+});
+
+test("on the earbud: no phone, no hand at the ear; the torch on: the left forearm out, not with the phone", () => {
+  const bud = isoState({}, { ...base, phone: "bud" }, 1000);
+  assert.equal(bud.upper, "");
+  assert.equal(bud.phone, "");
+  assert.equal(bud.extra, "b");
+  assert.equal(isoPose(bud).reach.R, undefined);
+  const lit = isoState({}, { ...base, torch: true }, 1000);
+  assert.equal(lit.extra, "t");
+  const still = isoPose(isoState({}, base, 1000)).pose.shoulderL?.[0] ?? 0;
+  assert.ok((finite(lit).pose.shoulderL?.[0] ?? 0) < still - 0.3, "the left arm raised ahead");
+  assert.equal(isoState({}, { ...base, torch: true, phone: "text" }, 1000).extra, "", "the phone out: both hands");
 });

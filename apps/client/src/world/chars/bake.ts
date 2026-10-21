@@ -19,6 +19,8 @@ export interface Baked {
   arm: [number, number];
   /** the eyes, in the head joint's space (first person looks from here) */
   eye: [number, number, number];
+  /** the right ear, in the head joint's space (an earbud there) */
+  ear: [number, number, number];
   /** only the arms, shoulder to fingertips (my own, in first person): made when first asked for */
   arms?: { body: BufferGeometry; ink: BufferGeometry };
   tris: number;
@@ -185,6 +187,7 @@ export function bake(k: Kit): Baked {
     anchors: k.anchors,
     arm: [-k.rest.elbowL[1], -k.rest.wristL[1]],
     eye: k.eye,
+    ear: k.ear,
     tris: bodyIdx.length / 3,
     tags,
   };

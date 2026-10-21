@@ -169,6 +169,15 @@ export function coffeeMachine(s: Sketch) {
 }
 
 // A cream cupboard with a walnut top: the coffee corner's counter.
+// The lobby's supply locker (docs/plan/30-the-dark.md), facing +y: the gatehouse's green steel
+// (tp/grounds3d.ts), two doors, their handles by the seam — a kit a day for anyone.
+export function locker(s: Sketch) {
+  s.box({ x: 0.1, y: 0.2, w: 0.8, d: 0.6, z: 0, h: 60, mat: { c: "#4f5a52", top: "#5f6b62" } }, (d) => {
+    d.poly("s", fr("s", 0.8, 0.49, 0.51, 3, 58), INK);
+    for (const u of [0.4, 0.58]) d.poly("s", fr("s", 0.8, u, u + 0.02, 26, 34), "#ccc");
+  });
+}
+
 export function cupboard(s: Sketch) {
   s.box({ x: 0.08, y: 0.14, w: 0.84, d: 0.72, z: 0, h: 24, mat: M.cream, faces: { s: { c: K.creamDark } } }, (d) => {
     d.poly("s", fr("s", 0.86, 0.12, 0.49, 3, 21), sh(K.cream, 0.95), { stroke: "#b8a985", sw: 0.5 });

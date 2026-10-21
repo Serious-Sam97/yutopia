@@ -96,7 +96,10 @@ test("a focused beam on someone: the same on both screens", async ({ page, brows
   expect(Math.abs(b.z - mine.z)).toBeLessThan(0.1);
   const turn = Math.abs(Math.atan2(Math.sin(b.yaw - mine.yaw), Math.cos(b.yaw - mine.yaw)));
   expect(turn, "pointing the same way (a byte's worth)").toBeLessThan(0.04);
-  expect(Math.abs(mine.yaw - YAW), "where she looks").toBeLessThan(0.06);
+  // where she looks: turned a little so the light from her hand meets the crosshair (tp.lookYaw)
+  const look = await page.evaluate(() => (window as any).__yutopia.tp.lookYaw as number);
+  expect(Math.abs(mine.yaw - look), "where she looks").toBeLessThan(0.06);
+  expect(Math.abs(look - YAW), "a little off the camera's line, no more").toBeLessThan(0.36);
   expect(Math.abs(b.pitch - mine.pitch), "up the same").toBeLessThan(0.04);
   // Bia lit by it the same on both screens
   const onA = beamAt(mine, ...(Object.values(await pos(page, biaSid)) as [number, number]));

@@ -1640,13 +1640,12 @@ export class WorldController {
           : "floor",
       // (a car on the move is in the way)
       blocked: this.level === 0 && this.cars ? (x, y) => !!this.cars?.blocks(x, y) : undefined,
-      camYaw: this.tp ? this.tp.yaw : ISO_UP,
+      camYaw: this.tp ? this.tp.lookYaw : ISO_UP,
       faceLook: first,
       canJump: !!lp && this.me.a !== ANIM.sit && !lp.busy && !lp.act && !playing,
-      // (aiming: outdoors — the land, the lot — in 3D; indoors the right button is a thing's menu)
-      canAim:
-        !!this.tp &&
-        (this.grid.onLand(this.me.x, this.me.y) || tileAt(map, Math.floor(this.me.x), Math.floor(this.me.y)) === "a"),
+      // (aiming, in 3D, anywhere: a gun, or the flashlight raised — world/dark/arms.ts; a quick
+      // right click on a thing is still its menu)
+      canAim: !!this.tp,
       usePad: !playing,
       path: this.path,
       at: { x: this.me.x, y: this.me.y, z: this.height.z },

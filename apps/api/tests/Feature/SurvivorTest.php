@@ -76,3 +76,16 @@ it('keeps the Grounds\' loot in the world', function () {
     internalCall($this, 'PUT', '/api/internal/world/loot', ['loot' => 'nope'])->assertUnprocessable();
     $this->putJson('/api/internal/world/loot', ['loot' => $loot])->assertUnauthorized();
 });
+
+it('keeps the day the lobby\'s locker last gave its kit', function () {
+    $ana = User::factory()->create();
+    $put = fn (array $body) => internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", $body);
+    $put(pockets())->assertOk();
+    expect(internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->json('survivor.kitDay'))->toBeNull();
+    $put(pockets(['kitDay' => 20382]))->assertOk();
+    expect(internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->json('survivor.kitDay'))->toBe(20382);
+    $put(pockets(['kitDay' => -1]))->assertUnprocessable();
+    $put(pockets(['kitDay' => 'x']))->assertUnprocessable();
+    $put(pockets(['kitDay' => null]))->assertOk();
+    expect(internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->json('survivor.kitDay'))->toBeNull();
+});

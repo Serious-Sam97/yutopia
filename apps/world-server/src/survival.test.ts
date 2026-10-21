@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
-import { LOCKER, LOOT, type LootItem } from "@yutopia/shared/dark";
+import { LOCKER, LOOT, type LootItem, lockerFront } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import type { Inventory } from "@yutopia/shared/inventory";
 import { MOVE, MV_AIM, packMv } from "@yutopia/shared/move";
@@ -44,7 +44,7 @@ interface Person {
   room: Room;
   bat: number;
   inv: Inventory | null;
-  found: { spot: string; got: LootItem[]; full: boolean; gone?: boolean }[];
+  found: { spot: string; got: LootItem[]; full: boolean; gone?: boolean; later?: boolean }[];
   snaps: number;
 }
 async function person(uid: number, roles = "member,builder"): Promise<Person> {
@@ -295,4 +295,107 @@ test("the inventory: a pocket dragged to another; something on the snow taken in
   const w0 = a.inv?.weapons[0]?.id;
   a.room.send("dark:move", { from: 6, to: 7 });
   await waitFor(() => a.inv?.weapons[1]?.id === w0);
+});
+
+test("indoors: dropped on the studio's floor, there; picked up on that floor only", async () => {
+  const a = await person(371, "member,builder,admin");
+  const b = await person(372, "member,builder,admin");
+  a.room.send("mod:refill", { kit: true });
+  await waitFor(() => !!a.inv?.pockets.some((s) => s?.id === "flare"));
+  const stand = async (p: Person, x: number, y: number, level: number) => {
+    p.room.send("teleport", { to: { x, y, level } });
+    await waitFor(() => me(p.room).level === level && Math.hypot(me(p.room).x - x, me(p.room).y - y) < 1.5);
+  };
+  await stand(a, 10.5, 22.5, 4);
+  const slot = a.inv?.pockets.findIndex((s) => s?.id === "flare") ?? -1;
+  a.room.send("dark:drop", { slot });
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const drop = (): any => [...a.room.state.drops.values()].find((d: { item: string }) => d.item === "flare");
+  await waitFor(() => !!drop());
+  assert.equal(drop().level, 4);
+  // B on the ground floor (out by its west wall, at those coords): not theirs to pick
+  await stand(b, drop().x, drop().y, 0);
+  b.room.send("dark:pick", { id: drop().id });
+  await sleep(400);
+  assert.ok(drop(), "still lying there");
+  // the lobby's locker is the ground floor's: not searched from upstairs
+  a.room.send("dark:loot", { spot: "locker" });
+  await sleep(300);
+  assert.equal(a.found.length, 0, "no search off the ground floor");
+  // B upstairs: picked up
+  await stand(b, drop().x, drop().y, 4);
+  b.room.send("dark:pick", { id: drop().id });
+  await waitFor(() => !drop());
+  assert.equal(b.inv?.pockets.find((s) => s?.id === "flare")?.n, 3);
+});
+
+test("a supply locker, built: a kit a day — what fits; tomorrow another; kept across a rejoin", async () => {
+  const { kitClock } = await import("./features/survival.ts");
+  const a = await person(381);
+  // built in the studio (level 4), by the reception
+  a.room.send("obj:put", { id: "kit-locker", kind: "locker", x: 8, y: 23, rot: 0, props: { level: 4 } });
+  await waitFor(() => !!a.room.state.objects.get("kit-locker"));
+  const f = lockerFront(a.room.state.objects.get("kit-locker"));
+  const open = async (p: Person) => {
+    p.room.send("teleport", { to: { x: f.x, y: f.y, level: 4 } });
+    await waitFor(() => me(p.room).level === 4 && Math.hypot(me(p.room).x - f.x, me(p.room).y - f.y) < 0.5);
+    const n = p.found.length;
+    p.room.send("dark:loot", { spot: "kit:kit-locker" });
+    await waitFor(() => p.found.length === n + 1);
+    return p.found[n];
+  };
+  const first = await open(a);
+  assert.deepEqual(first.got, [
+    { id: "revolver", n: 1, loaded: 6 },
+    { id: "r38", n: 12 },
+    { id: "aid", n: 1 },
+    { id: "battery", n: 1 },
+    { id: "flare", n: 2 },
+  ]);
+  assert.equal(first.full, false);
+  const again = await open(a);
+  assert.deepEqual([again.got, again.later], [[], true], "once a day");
+  // (B in the room meanwhile: an empty room goes, and the tests' builds aren't saved)
+  const b = await person(382, "member,builder,admin");
+  // gone and back: still today's
+  rooms.splice(rooms.indexOf(a.room), 1);
+  await a.room.leave(true);
+  await sleep(200);
+  const a2 = await person(381);
+  assert.equal((await open(a2)).later, true);
+  // pockets nearly full: what fits, the day taken
+  b.room.send("mod:refill", { kit: true });
+  await waitFor(() => b.inv?.weapons[0]?.id === "revolver" && !!b.inv?.pockets.some((s) => s?.id === "battery"));
+  const some = await open(b);
+  assert.deepEqual(
+    some.got.map((g) => g.id),
+    ["r38", "aid", "battery"],
+  );
+  assert.equal(some.full, true);
+  assert.equal((await open(b)).later, true);
+  // tomorrow: another (a revolver carried: none)
+  kitClock.shift = 86_400_000;
+  try {
+    const next = await open(a2);
+    assert.deepEqual(
+      next.got.map((g) => g.id),
+      ["r38", "aid", "battery", "flare"],
+    );
+  } finally {
+    kitClock.shift = 0;
+  }
+});
+
+test("the torch focused indoors too: on, aiming, on the studio's floor", async () => {
+  const a = await person(391, "member,builder,admin");
+  a.room.send("teleport", { to: { x: 10.5, y: 22.5, level: 4 } });
+  await waitFor(() => me(a.room).level === 4 && Math.hypot(me(a.room).x - 10.5, me(a.room).y - 22.5) < 1.5);
+  await sleep(300);
+  const p = { x: me(a.room).x, y: me(a.room).y };
+  a.room.send("phone:torch", { on: true });
+  a.room.send("pos", { x: p.x, y: p.y, z: 0, d: 2, a: 0, seq: 0, mv: packMv("still") | MV_AIM });
+  await waitFor(() => me(a.room).focused === true);
+  a.room.send("pos", { x: p.x, y: p.y, z: 0, d: 2, a: 0, seq: 0, mv: packMv("still") });
+  await waitFor(() => me(a.room).focused === false);
+  a.room.send("phone:torch", { on: false });
 });

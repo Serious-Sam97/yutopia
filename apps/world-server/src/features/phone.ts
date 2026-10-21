@@ -7,6 +7,7 @@ import {
   isCase,
   isPhoneState,
   isRingtone,
+  onCallState,
   PHOTO_POSES,
   RING_MS,
 } from "@yutopia/shared/phone";
@@ -123,7 +124,7 @@ function end(c: Call, why: CallEnd) {
     if (callOf.get(m.uid) === c.id) callOf.delete(m.uid);
     setRinging(m.uid, false);
     const x = playerOf(m.uid);
-    if (x && (x.p.phone === "call" || x.p.phone === "video")) x.p.phone = "";
+    if (x && onCallState(x.p.phone)) x.p.phone = "";
   }
   update(c, "ended", why);
   calls.delete(c.id);
@@ -148,7 +149,7 @@ function leave(c: Call, uid: number, why: "left" | "declined" | "missed") {
   if (callOf.get(uid) === c.id) callOf.delete(uid);
   setRinging(uid, false);
   const x = playerOf(uid);
-  if (x && (x.p.phone === "call" || x.p.phone === "video")) x.p.phone = "";
+  if (x && onCallState(x.p.phone)) x.p.phone = "";
   const live = inCount(c);
   const ringing = ringingCount(c);
   if (c.startedAt) return live >= 2 || (live === 1 && ringing > 0) ? update(c, "live") : end(c, "answered");
@@ -199,8 +200,8 @@ registerFeature((room: WorldRoom) => {
     const s = m?.state;
     if (!p || !isPhoneState(s) || s === "ring") return;
     const onCall = callOf.has(p.uid) && calls.get(callOf.get(p.uid) as string)?.members.get(p.uid)?.state === "in";
-    // at the ear / held up only while on a call; in the pocket or looking at it any time
-    if ((s === "call" || s === "video") && !onCall) return;
+    // at the ear / held up / the earbud only while on a call; in the pocket or looking at it any time
+    if (onCallState(s) && !onCall) return;
     p.phone = s;
     if (s !== "photo" && s !== "selfie") {
       p.phonePose = "";

@@ -109,15 +109,15 @@ export class Phone {
     this.pose();
   }
 
-  // what my body does with it (others see it)
+  // what my body does with it (others see it): on a voice call with it put away, an earbud
   pose() {
     const p = phone.get();
     const c = p.call;
     let s: PhoneState = "";
     if (p.camera) s = p.camera.mode === "selfie" ? "selfie" : "photo";
     else if (c && c.phase === "live" && !c.vortex)
-      s = c.camOn || c.video ? "video" : p.open && c.speaker ? "text" : "call";
-    else if (c && c.phase === "live") s = "call";
+      s = c.camOn || c.video ? "video" : !p.open ? "bud" : c.speaker ? "text" : "call";
+    else if (c && c.phase === "live") s = p.open ? "call" : "bud";
     else if (p.open) s = "text";
     if (this.lastPose === s) return;
     this.lastPose = s;

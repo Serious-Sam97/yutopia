@@ -16,7 +16,7 @@ class Survivor extends Model
 
     public const PAGES_MAX = 200;
 
-    protected $fillable = ['user_id', 'inventory', 'vitals', 'pages', 'issued'];
+    protected $fillable = ['user_id', 'inventory', 'vitals', 'pages', 'issued', 'kit_day'];
 
     protected function casts(): array
     {
@@ -25,6 +25,7 @@ class Survivor extends Model
             'vitals' => 'array',
             'pages' => 'array',
             'issued' => 'boolean',
+            'kit_day' => 'integer',
         ];
     }
 
@@ -36,6 +37,7 @@ class Survivor extends Model
             'vitals' => $this->vitals,
             'pages' => $this->pages,
             'issued' => $this->issued,
+            'kitDay' => $this->kit_day,
         ];
     }
 }

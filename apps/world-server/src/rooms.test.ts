@@ -1541,8 +1541,9 @@ test("the phone: calls ring across spaces, answer, the line, hang up; declined, 
   ana.room.send("phone:state", { state: "text" });
   await waitFor(() => caio.room.state.players.get(ana.room.sessionId)?.phone === "text");
   ana.room.send("phone:state", { state: "call" });
+  ana.room.send("phone:state", { state: "bud" });
   await sleep(150);
-  assert.equal(me(ana)?.phone, "text", "not on a call yet");
+  assert.equal(me(ana)?.phone, "text", "not on a call yet (nor on the earbud)");
 
   // Ana calls Bia (a different space): it rings there
   ana.room.send("call:start", { to: [81], video: false });
@@ -1559,7 +1560,10 @@ test("the phone: calls ring across spaces, answer, the line, hang up; declined, 
   // Caio calls Ana meanwhile: busy
   caio.room.send("call:start", { to: [80], video: false });
   await waitFor(() => last(caio, "call:update")?.end === "busy");
-  // Bia hangs up: it's over for both, phones back in the pocket
+  // Ana puts the phone away: the earbud, everyone sees it
+  ana.room.send("phone:state", { state: "bud" });
+  await waitFor(() => caio.room.state.players.get(ana.room.sessionId)?.phone === "bud");
+  // Bia hangs up: it's over for both, phones back in the pocket (the earbud out)
   bia.room.send("call:end", { id });
   await waitFor(() => last(ana, "call:update")?.phase === "ended" && last(ana, "call:update")?.end === "answered");
   await waitFor(() => me(ana)?.phone === "" && me(bia)?.phone === "");

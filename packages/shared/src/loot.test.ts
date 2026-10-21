@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { LOCKER, LOOT, nightBudget, nightOf, type Place, REFILL_MIN, rollLoot } from "./dark/loot.ts";
+import {
+  LOCKER,
+  LOCKER_KIT,
+  LOOT,
+  lockerFront,
+  nightBudget,
+  nightOf,
+  type Place,
+  REFILL_MIN,
+  rollLoot,
+} from "./dark/loot.ts";
 import { groundsRng, walkableTile } from "./grounds.ts";
+import { STACKS } from "./inventory.ts";
 
 test("every spot stands on walkable ground, ids unique, every place has some", () => {
   assert.equal(new Set(LOOT.map((s) => s.id)).size, LOOT.length);
@@ -38,4 +49,11 @@ test("a night runs 18:00 to 18:00 in São Paulo", () => {
   assert.equal(nightOf(at(20, 18)), nightOf(at(21, 5)));
   assert.equal(nightOf(at(20, 18)), nightOf(at(21, 17.9)));
   assert.equal(nightOf(at(20, 17.9)) + 1, nightOf(at(20, 18)));
+});
+
+test("the lobby locker's kit fits a pocket each; its front is out the way it faces", () => {
+  for (const it of LOCKER_KIT) assert.ok(it.n <= STACKS[it.id as keyof typeof STACKS], it.id);
+  assert.deepEqual(lockerFront({ x: 4, y: 4, rot: 0 }), { x: 4.5, y: 5.4 });
+  assert.deepEqual(lockerFront({ x: 4, y: 4, rot: 2 }), { x: 4.5, y: 3.6 });
+  assert.ok(lockerFront({ x: 4, y: 4, rot: 1 }).x < 4.5, "turned once: −x, as a seat");
 });

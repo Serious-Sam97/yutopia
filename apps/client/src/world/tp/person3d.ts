@@ -1,4 +1,5 @@
 import { type HeldKind, heldState, isHeld, isSocial, SOCIAL_MS } from "@yutopia/shared";
+import { AIM_BLADE, BEAM } from "@yutopia/shared/beam";
 import {
   BoxGeometry,
   CircleGeometry,
@@ -7,9 +8,10 @@ import {
   Mesh,
   MeshBasicMaterial,
   type Object3D,
+  Quaternion,
   type Ray,
   RingGeometry,
-  type Vector3,
+  Vector3,
 } from "three";
 import type { chars } from "../art/chars-load";
 import { MUG_COLORS } from "../art/held";
@@ -61,6 +63,10 @@ function hashSeed(s: string): number {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return ((h >>> 0) % 10000) / 10000;
 }
+
+const tq = new Quaternion();
+const tv = new Vector3();
+const tv2 = new Vector3();
 
 export class Person3D {
   readonly root = new Group();
@@ -222,8 +228,10 @@ export class Person3D {
           crouch: (mv & 8) !== 0,
           aim: (mv & 16) !== 0,
           gun: !!p.gun,
+          torch: !!p.torch && !p.phone && !p.shade,
           pitch: p.pitch ?? 0,
-          yaw: 0,
+          // (aiming, bladed: the shoulders and the arms twist back along the look, left of the body)
+          yaw: (mv & 16) !== 0 ? AIM_BLADE : 0,
           turn: this.turnRate,
           accel: this.acc,
           up,
@@ -322,6 +330,11 @@ export class Person3D {
       }
     }
     this.gunFrame(p, hand);
+    // aiming: the gun along the look too, whatever the wrist is doing (its barrel's −y)
+    if (this.gun && ((p.mv ?? 0) & 16) !== 0) this.C.pointAlong(this.gun.root, this.lookDir(p, tv2).negate());
+    else this.gun?.root.quaternion.identity();
+    this.budFrame(p);
+    this.torchFrame(p);
     if (this.phone?.prop.rec)
       this.phone.prop.rec.visible = !!p.recording && Math.floor(performance.now() / 500) % 2 === 0;
   }
@@ -339,11 +352,7 @@ export class Person3D {
   private gunFrame(p: PersonIn, hand: Object3D | null) {
     const key = p.gun ?? "";
     if ((this.gun?.key ?? "") === key) return;
-    if (this.gun) {
-      this.gun.root.removeFromParent();
-      for (const m of this.gun.root.children) (m as Mesh).geometry.dispose();
-      this.gun = null;
-    }
+    this.dropGun();
     if (!key || !hand) return;
     const root = new Group();
     const metal = this.mats.prop("#2e3238");
@@ -365,6 +374,79 @@ export class Person3D {
     root.position.set(0, -0.05, 0);
     hand.add(root);
     this.gun = { key, root };
+  }
+
+  private dropGun() {
+    if (!this.gun) return;
+    this.gun.root.removeFromParent();
+    for (const m of this.gun.root.children) (m as Mesh).geometry.dispose();
+    this.gun = null;
+  }
+
+  // on a call with the phone put away: an earbud in the right ear (the head's own space)
+  private bud: Prop | null = null;
+  private budFrame(p: PersonIn) {
+    const at = p.bud ? this.model.earPoint() : null;
+    const head = this.model.bone("head");
+    if (!!this.bud === !!(at && head)) return;
+    this.dropBud();
+    if (!at || !head) return;
+    this.bud = this.C.buildProp("bud", "#f4f2ec", this.mats.prop);
+    this.bud.root.position.set(at[0], at[1], at[2]);
+    head.add(this.bud.root);
+  }
+  private dropBud() {
+    if (!this.bud) return;
+    this.bud.root.removeFromParent();
+    this.bud.dispose();
+    this.bud = null;
+  }
+
+  // the torch on: a flashlight in the left hand (docs/plan/30-the-dark.md) — not while the
+  // phone's out (both hands on it)
+  private torch: Prop | null = null;
+  private torchFrame(p: PersonIn) {
+    const hand = this.model.bone("wristL");
+    const on = !!p.torch && !p.phone && !!hand;
+    if (!!this.torch !== on) {
+      this.dropTorch();
+      if (on && hand) {
+        this.torch = this.C.buildProp("torch", "#2b2e33", this.mats.prop);
+        this.C.inHand(this.torch.root, "torch");
+        // (no shadow of its own: the light comes out of it)
+        this.torch.root.traverse((o) => {
+          o.castShadow = false;
+        });
+        hand.add(this.torch.root);
+      }
+    }
+    if (!this.torch) return;
+    // along the beam (shared beam.ts): ahead, tipped at the ground — or up as they aim — whatever
+    // the wrist is doing, so the light comes out of it where it points
+    this.C.pointAlong(this.torch.root, this.lookDir(p, tv));
+  }
+  /** Where the beam goes, in the world (unit): ahead and tipped at the ground — or, aiming, along the
+   *  look (bladed: AIM_BLADE left of the body's facing) and up as they aim. */
+  private lookDir(p: PersonIn, out: Vector3): Vector3 {
+    const aiming = ((p.mv ?? 0) & 16) !== 0;
+    const pitch = aiming ? (p.pitch ?? 0) : BEAM.tilt;
+    const b = aiming ? AIM_BLADE : 0;
+    this.root.updateWorldMatrix(true, false);
+    this.root.getWorldQuaternion(tq);
+    const c = Math.cos(pitch);
+    return out.set(Math.sin(b) * c, Math.sin(pitch), Math.cos(b) * c).applyQuaternion(tq);
+  }
+  /** The flashlight's lens, in the world (the light comes out of it), or null: none in the hand. */
+  torchLens(out: Vector3): Vector3 | null {
+    if (!this.torch || !this.root.visible) return null;
+    this.torch.root.updateWorldMatrix(true, false);
+    return this.torch.root.localToWorld(out.set(0, 0.1, 0));
+  }
+  private dropTorch() {
+    if (!this.torch) return;
+    this.torch.root.removeFromParent();
+    this.torch.dispose();
+    this.torch = null;
   }
 
   private dropPhone() {
@@ -432,6 +514,9 @@ export class Person3D {
   dispose() {
     this.dropHeld();
     this.dropPhone();
+    this.dropGun();
+    this.dropBud();
+    this.dropTorch();
     this.model.dispose();
     this.shadow.geometry.dispose();
     (this.shadow.material as Material).dispose();

@@ -58,12 +58,14 @@ export interface WorldInfo {
 
 // A survivor (docs/plan/30-the-dark.md, phase 2): what they carry, their vitals
 // (stamina always comes back: not kept), the pages they've found, whether the
-// gatehouse locker has given them their first (loaded) revolver.
+// gatehouse locker has given them their first (loaded) revolver, the day (shared
+// dayOf) the lobby's locker last gave them its kit.
 export interface SurvivorRecord {
   inventory: Omit<Inventory, "pages">;
   vitals: { hp: number; wm: number; bat: number };
   pages: string[];
   issued: boolean;
+  kitDay?: number | null;
 }
 
 export interface PresenceEntry {

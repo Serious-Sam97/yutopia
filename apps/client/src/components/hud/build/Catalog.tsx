@@ -109,6 +109,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       "piano",
       "vending",
       "water_cooler",
+      "locker", // (a kit a day: docs/plan/30-the-dark.md)
       "mixing_desk",
       "speaker_cab",
       "mic_stand",

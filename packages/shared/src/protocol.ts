@@ -362,14 +362,15 @@ export interface ServerMessages {
   // change); what a search or a pick-up gave (full: my pockets couldn't take it all; gone:
   // someone had already emptied it)
   "dark:pockets": { inv: Inventory; bat: number };
-  "dark:found": { spot: string; got: LootItem[]; full: boolean; gone?: boolean };
+  "dark:found": { spot: string; got: LootItem[]; full: boolean; gone?: boolean; later?: boolean }; // (later: the lobby's kit, taken today)
   // one of the shadowed struck me (how much health it took); I went down to nothing and woke
   // at the office (docs/plan/30-the-dark.md D7: phase 6 puts the others' 30 s before it)
-  "dark:hit": { id: string; n: number };
+  "dark:hit": { id: string; n: number; shot?: boolean }; // (shot: one of us shot them — id, their sid)
   "dark:awake": Record<string, never>;
   // what my shot did (per one hit: a spark off a shield, a wound, one put down); someone's
   // shot near me (their tracer, their flash: the same pellets from the seed); a flare thrown
-  "arms:hit": { id: string; kind: "spark" | "hurt" | "killed"; x: number; y: number; z: number };
+  // (person, downed: one of us — id, their sid — hurt, or put down by it)
+  "arms:hit": { id: string; kind: "spark" | "hurt" | "killed" | "person" | "downed"; x: number; y: number; z: number };
   "arms:shot": {
     sid: string;
     gun: string;

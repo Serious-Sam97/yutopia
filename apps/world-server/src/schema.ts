@@ -72,8 +72,8 @@ export class Player extends Schema {
   @type("float64") revAt = 0;
 }
 
-// Something dropped on the snow (docs/plan/30-the-dark.md, phase 2): anyone may
-// pick it up, for two hours. Out on the land only (the ground floor's coords).
+// Something dropped (docs/plan/30-the-dark.md, phase 2): anyone on its floor may
+// pick it up, for two hours. On the snow or indoors (`level`'s coords).
 export class Drop extends Schema {
   @type("string") id = "";
   @type("string") item = ""; // shared inventory.ts ItemId
@@ -82,6 +82,7 @@ export class Drop extends Schema {
   @type("float32") x = 0;
   @type("float32") y = 0;
   @type("float64") at = 0; // when (server ms)
+  @type("uint8") level = 0;
 }
 
 // A cache in a day's nest (docs/plan/31-the-day.md, features/survival.ts): what one of
@@ -110,7 +111,8 @@ export class Shadow extends Schema {
   @type("boolean") k = false; // dissolving because it was shot down (a burst of light)
 }
 
-// A flare burning on the snow (D6): lit where it landed, out at `until` (server ms).
+// A flare burning (D6): lit where it landed, on the snow or indoors (`level`), out at
+// `until` (server ms).
 export class Flare extends Schema {
   @type("string") id = "";
   @type("float32") x = 0;
@@ -118,6 +120,7 @@ export class Flare extends Schema {
   @type("float32") z = 0;
   @type("float64") at = 0;
   @type("float64") until = 0;
+  @type("uint8") level = 0;
 }
 
 export class WorldObject extends Schema {

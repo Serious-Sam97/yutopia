@@ -80,6 +80,7 @@ export interface WalkOut {
 }
 
 const SPEC: MoveSpec = MOVE;
+const AIM_BLADE = 0.45; // (shared beam.ts AIM_BLADE: a copy — this chunk doesn't carry beam.ts)
 
 // the 8 facings (shared/iso.ts) as world angles, for my 3D facing
 const DIR_ANGLE = [
@@ -150,10 +151,13 @@ export class Walker {
   /** down (docs/plan/30-the-dark.md D7): a crawl, no sprint, no jump, no aim */
   down = false;
   private torchOn = false;
+  /** a gun in my hand, in 3D (world/dark/arms.ts says): aiming indoors too */
+  armed = false;
   private dark: DarkHooks | null = null;
   private steppedAt = 0;
   private onFoot = false;
   private darkLoading = false;
+  private darkIdle = 0; // when the dark's chunk comes anyway, indoors too (performance.now; 0: not yet set)
   // the right button: aiming (the world says where it may: WalkCtx.canAim)
   private onDown = (e: PointerEvent) => e.button === 2 && this.controls.down("Mouse2");
   private onUp = (e: PointerEvent) => e.button === 2 && this.controls.up("Mouse2");
@@ -186,7 +190,8 @@ export class Walker {
     this.dark?.dispose();
     this.dark = null;
   }
-  // the dark's chunk (its HUD, the loot, the pockets): the first time out on the land, or asked for
+  // the dark's chunk (its HUD, the loot, the pockets, the guns): the first time out on the land, or
+  // asked for, or a few seconds in, when the page is idle (the office is armed too)
   private loadDark(then?: () => void): void {
     if (this.dark) {
       then?.();
@@ -212,7 +217,7 @@ export class Walker {
    *  way while standing, I face it in 3D too. */
   face(
     me: { d: number },
-    view: { yaw: number } | null,
+    view: { yaw: number; lookYaw?: number } | null,
     moved: boolean,
     lookD: number,
     angle: number,
@@ -227,7 +232,8 @@ export class Walker {
         off = Math.atan2(Math.sin(off), Math.cos(off));
         if (Math.abs(off) > Math.PI / 8 + 0.1 || lookD < 0) me.d = d8;
       }
-      return view.yaw;
+      // (aiming: as the body stands — turned onto the crosshair, bladed: shared beam.ts AIM_BLADE)
+      return this.aiming ? (view.lookYaw ?? view.yaw) + AIM_BLADE : view.yaw;
     }
     if (!moved && dirFromDelta(Math.cos(angle), Math.sin(angle), me.d as 0) !== me.d) return DIR_ANGLE[me.d] ?? angle;
     return angle;
@@ -297,7 +303,6 @@ export class Walker {
     const manual = Math.hypot(move.x, move.y) > 0.05;
     const path = manual || frozen ? null : c.path;
     move.faceLook = c.faceLook;
-    move.look = c.camYaw;
     if (!c.canJump) {
       move.jump = false;
       move.jumpPressed = false;
@@ -305,7 +310,9 @@ export class Walker {
       move.crouchPressed = false;
       move.dodgePressed = false;
     }
-    if (!c.canAim) move.aim = false;
+    if (!c.canAim && !this.armed) move.aim = false;
+    // (aiming, the body stands bladed, turned right of the look: shared beam.ts AIM_BLADE)
+    move.look = c.camYaw + (move.aim ? AIM_BLADE : 0);
     // out of breath (docs/plan/30-the-dark.md D2): no sprint, no roll
     this.syncBreath();
     move.tired = this.breath.winded;
@@ -326,7 +333,7 @@ export class Walker {
       move.crouchPressed = false;
     }
     // (run out, none until it's back to 25%: shared vitals.ts `drained`)
-    this.focus = move.aim && this.outside && this.torchOn && this.vitals.bat > 0 && !this.breath.drained;
+    this.focus = move.aim && this.torchOn && this.vitals.bat > 0 && !this.breath.drained;
 
     const env: MoveEnv = { grid: c.grid, footing: c.footing, blocked: c.blocked };
     const events: StepEvents[] = [];
@@ -354,9 +361,17 @@ export class Walker {
       }
     });
     const b = this.body;
-    // first time out on the land: the dark's chunk (its HUD, the loot, the pockets)
+    // first time out on the land: the dark's chunk (its HUD, the loot, the pockets); indoors, a
+    // few seconds in, when the page has a moment
     this.outside = c.grid.onLand(b.x, b.y);
+    if (!this.darkIdle) this.darkIdle = now + 3000;
     if (this.outside) this.loadDark();
+    else if (!this.dark && now >= this.darkIdle) {
+      this.darkIdle = Number.POSITIVE_INFINITY;
+      const go = () => this.loadDark();
+      if (typeof requestIdleCallback === "function") requestIdleCallback(go, { timeout: 5000 });
+      else go();
+    }
     if (presses.has("inventory")) this.inventory();
     if (presses.has("use") && this.dark?.use()) presses.delete("use");
     if (presses.has("aid")) this.dark?.aid();

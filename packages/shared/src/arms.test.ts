@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ARMS, BODY, FLARE, flareFlight, pellets, rayMeets } from "./dark/arms.ts";
+import { ARMS, BODY, FLARE, flareFlight, inFlare, pastAt, pellets, pvpDamage, rayMeets } from "./dark/arms.ts";
 import { newShade, wound } from "./dark/fsm.ts";
 
 const at = (yaw: number, pitch = 0) => ({ x: 0, y: 0, z: 1.3, yaw, pitch });
@@ -70,4 +70,26 @@ test("only an exposed one is hurt; two revolver rounds put it down", () => {
   assert.equal(wound(s, ARMS.revolver.damage, 1.2), "killed");
   assert.equal(s.state, "dissolve");
   assert.equal(s.killed, true);
+});
+
+test("one of us shot: half the shadowed's; a crouched body is shorter; where one was a moment ago", () => {
+  assert.equal(pvpDamage("revolver"), 25);
+  assert.equal(pvpDamage("shotgun"), 9);
+  const r = { x: 0, y: 0, z: 1.5, yaw: 0, pitch: 0 };
+  assert.ok(rayMeets(r, 5, 0, 0, 40) !== null, "standing: at the chest");
+  assert.equal(rayMeets(r, 5, 0, 0, 40, 0, 1.25), null, "crouched: over its head");
+  const hist = [
+    { t: 0, x: 0, y: 0, z: 0 },
+    { t: 100, x: 1, y: 0, z: 0 },
+    { t: 200, x: 1, y: 2, z: 0.5 },
+  ];
+  assert.deepEqual(pastAt(hist, 50)?.x, 0.5);
+  assert.equal(pastAt(hist, 150)?.y, 1);
+  assert.equal(pastAt(hist, -10)?.x, 0, "before: the first");
+  assert.equal(pastAt(hist, 900)?.y, 2, "after: the last");
+  assert.equal(pastAt([], 0), null);
+  // a flare's light is its floor's
+  assert.ok(inFlare({ x: 0, y: 0 }, 1, 1));
+  assert.ok(!inFlare({ x: 0, y: 0, level: 4 }, 1, 1), "upstairs: not the snow's");
+  assert.ok(inFlare({ x: 0, y: 0, level: 4 }, 1, 1, 4));
 });

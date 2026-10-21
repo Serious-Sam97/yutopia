@@ -33,7 +33,7 @@ import { armchair, bench } from "./seating";
 import { slotTrack } from "./slotcar";
 import { sofa } from "./sofa";
 import { coffeeTable, meetingTable, reception } from "./tables";
-import { arcade, coffeeMachine, crtTerminal, cupboard, serverRack } from "./tech";
+import { arcade, coffeeMachine, crtTerminal, cupboard, locker, serverRack } from "./tech";
 import { acousticPanel, noticeBoard, poster, screenWall, whiteboard } from "./wall";
 import { column, post, WALL_HALF_T, type WallPart, wall } from "./walls";
 import { windowItem } from "./window";
@@ -117,6 +117,7 @@ const GENS: Record<string, ItemGen> = {
   coffee_machine: { draw: coffeeMachine, variants: 1 },
   side_table: { draw: sideTable, variants: 1 },
   cupboard: { draw: cupboard, variants: 1 },
+  locker: { draw: locker, variants: 1 },
   screen_wall: { draw: screenWall, variants: 1 },
   whiteboard: { draw: whiteboard, variants: 1 },
   notice_board: { draw: noticeBoard, variants: 3 },

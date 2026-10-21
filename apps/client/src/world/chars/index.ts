@@ -46,5 +46,5 @@ export {
   verbRoot,
 } from "./moves";
 export { BASE, LODS, type Lod, type Params, paramsFor } from "./params";
-export { buildProp, inHand, keepUpright, type PropKind } from "./props";
+export { buildProp, inHand, keepUpright, type PropKind, pointAlong } from "./props";
 export { JOINTS, type JointName, type Pose, REST } from "./rig";
