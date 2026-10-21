@@ -36,6 +36,8 @@ export interface ShroudIn {
   burn: { x: number; y: number } | null;
   /** how tall it is now, if not the standing height (asleep, squatting: docs/plan/31-the-day.md) */
   h?: number;
+  /** 0..1: coming into range, going out of it (world/dark/shades.ts) */
+  fade?: number;
 }
 
 interface Slot {
@@ -155,20 +157,22 @@ export class Shroud3 {
       const ez = (cz / cd) * 0.22;
       const emerging = s.state === "emerge" ? Math.min(1, s.t / 1.2) : 1;
       const going = s.state === "dissolve" ? Math.min(1, s.t / 1) : 0;
+      const there = s.fade ?? 1;
       for (let j = 0; j < PER; j++) {
         const i = k * PER + j;
         const life = 1.6 + h(i, 1) * 1.4;
         const age = ((t + h(i, 2) * life + slot.seed) % life) / life; // 0..1 through its rise
         const a0 = h(i, 3) * Math.PI * 2 + age * 1.3;
         // gathering in from wide as it emerges; blown out as it goes
-        const spread = (0.28 + 0.22 * h(i, 4) + age * 0.35) * (1 + 3 * (1 - emerging)) * (1 + 4 * going);
+        const spread =
+          (0.28 + 0.22 * h(i, 4) + age * 0.35) * (1 + 3 * (1 - emerging)) * (1 + 4 * going) * (1 + 1.5 * (1 - there));
         const up = age * (height + 0.5) * (0.6 + 0.4 * h(i, 5));
         sp[i * 3] = s.x + Math.cos(a0) * spread + ex;
         sp[i * 3 + 1] = s.z + 0.1 + up + going * 0.3;
         sp[i * 3 + 2] = s.y + Math.sin(a0) * spread + ez;
         // thinner as the shield goes; in and out over its rise
         const live = j / PER < s.dark ? 1 : 0;
-        const fade = Math.sin(age * Math.PI) * live * (0.35 + 0.65 * emerging) * (1 - going);
+        const fade = Math.sin(age * Math.PI) * live * (0.35 + 0.65 * emerging) * (1 - going) * there;
         st[i * 4] = shade;
         st[i * 4 + 1] = shade;
         st[i * 4 + 2] = shade * 1.25;
@@ -195,7 +199,7 @@ export class Shroud3 {
         et[i * 4] = 1;
         et[i * 4 + 1] = burst ? 0.95 : 0.55 + 0.3 * h(i, 12);
         et[i * 4 + 2] = burst ? 0.8 : 0.2;
-        et[i * 4 + 3] = on;
+        et[i * 4 + 3] = on * there;
         es[i] = burst ? 0.12 : 0.03 + 0.03 * h(i, 13);
       }
     }

@@ -174,6 +174,7 @@ export interface AvatarState {
   verb?: { kind: string; t: number; at?: number };
   pitch?: number; // aiming: up from level (radians)
   shaded?: boolean; // one of the shadowed, wrapped in the dark (world/dark): drawn dark, no name
+  fade?: number; // 0..1: how there it is (one of the shadowed coming into range, or going out of it)
 }
 
 // a tile of height in a person's own px (they're drawn at PERSON: their feet land right on a top)
@@ -2244,7 +2245,7 @@ export class WorldEngine {
     v.sprite.tint = tint;
     v.body.tint = tint;
     if (v.rig) for (const sp of v.rig.sprites.values()) sp.tint = tint;
-    v.root.alpha = s.status === "away" ? 0.55 : 1;
+    v.root.alpha = (s.status === "away" ? 0.55 : 1) * (s.fade ?? 1);
     if (this.seeThrough && this.inFrontOf(this.seeThrough, s.x, s.y)) v.root.alpha *= 0.28;
     v.shadow.visible = !sitting;
     const shrink = 1 / (1 + (z - ground) * 1.6);

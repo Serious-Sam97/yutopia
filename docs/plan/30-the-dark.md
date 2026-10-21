@@ -141,8 +141,9 @@ Server-run (`features/dark.ts`), their mind pure and tested
   open land); A* only when blocked, in a small box, **at most 3 a tick**, again
   every 1.5 s. Full mind at 20 Hz within 40 tiles of someone, 4 Hz beyond. The
   land only — never inside.
-- **Sent** only to whoever is outside within 70 tiles (Colyseus **StateView**;
-  a capped broadcast if that misbehaves).
+- **Sent** only to whoever is within 70 tiles, indoors too, to be seen through
+  the windows (Colyseus **StateView**; a capped broadcast if that misbehaves).
+  Only those outside are their prey or struck.
 - **Look** (`yutopia-dark`, lazy): the people model in office clothes, a
   shroud shader whose strength is the shield (dissolve noise, smoke), their own
   poses (a lurch, a twitch, the windup).
@@ -779,9 +780,10 @@ The user: "start phase 4".
     health, warm, your pockets kept). Phase 6 puts the others' 30 s before it.
   - **On the wire**: a `Shadow` (id, x, y, facing byte, state, since, shield,
     look) in `@view() shadows`. Each client gets a `StateView` at join, and
-    the shadowed within 70 tiles are added to it twice a second, for people
-    outside only. Positions go out at 10 Hz, the state on change. StateView
-    was proven first: only the client it's added to gets it.
+    the shadowed within 70 tiles are added to it twice a second, for
+    everyone, indoors too (upstairs measured over the ground floor).
+    Positions go out at 10 Hz, the state on change. StateView was proven
+    first: only the client it's added to gets it.
   - **Admins**: `mod:dark {mode: "peaceful" | "normal", spawn}` and
     `mod:refill`.
 - **The look** (`yutopia-dark` 18.0 KB; the 3D view's and the chars' chunks):
@@ -812,7 +814,8 @@ The user: "start phase 4".
   - **shared**: 209.
   - **world-server**: 82, with `dark.test.ts` (YUTOPIA_DARK_FAST):
     - out of the dark 25–45 off, emerging, never in a pool or by the HQ, and
-      nobody indoors sees them;
+      nobody more than 70 tiles off sees them (indoors near them does since
+      2026-10-21, never struck);
     - a strike lands on someone standing (25), and a roll through the windup
       makes it miss;
     - a focused beam burns the shield to exposed;
@@ -825,7 +828,9 @@ The user: "start phase 4".
     with 40 shadowed.
     - Tick 0.76 ms average, 3 ms at most (budget 4), 0 put back.
     - An outside client gets 3.97 KB/s more than an inside one: the
-      shadowed's share (budget 6). The inside one gets nothing of them.
+      shadowed's share (budget 6). The inside one gets nothing of them. (Since
+      2026-10-21 one indoors within 70 tiles of them gets the same share as
+      outside; the perf's inside bots are far from the pond, so this holds.)
     - Before, the mind's lines of sight cost 19.6 ms a tick. Now perception
       checks the nearest first, stops at the first it sees, and keeps a line
       of sight for 0.2 s.
@@ -1121,7 +1126,8 @@ The user: "start phase 9".
   - **`pnpm perf`**: 60 bots, tick 0.30 ms, 0 put back.
   - **`DARK=1`**: 50 bots and up to 40 shadowed, tick 0.79 ms (max 4),
     0 put back. 18.9 KB/s outside, of which the shadowed are 3.6; inside
-    15.3. The budget was ≤ 4 ms and ≤ 6 KB/s for the shadowed.
+    15.3 (far from them: indoors near them gets their share too, since
+    2026-10-21). The budget was ≤ 4 ms and ≤ 6 KB/s for the shadowed.
 - **Firefox: not run**.
   - **Why**: neither Firefox will start on this Mac. Playwright's (1543,
     Firefox 155) and the installed Firefox 158 both exit at launch with
@@ -1352,7 +1358,8 @@ up, use it, take a gun out (1 · 2), reload, aim, fire, throw a flare. And
   - Height is the floor's own (0); on the land, the terrain's. That applies
     to the muzzle check and to a flare's arc.
   - Shots and throws go to the others on the same floor.
-  - The shadowed never come in, and the torch doesn't focus.
+  - The shadowed never come in (they're seen through the windows: below),
+    and the torch doesn't focus.
 - **Drops and flares** carry their floor (`Drop.level`, `Flare.level`).
   - They are drawn, lit, heard and picked up on that floor only.
   - A saved drop without one is the ground floor's.
@@ -1496,3 +1503,31 @@ flashlight. It's drawn only; it isn't an item.
   - **client**:
     - The torch raises the left arm, and aiming holds it further out.
     - The iso state has the flashlight, but not with the phone out.
+
+## Seen through the windows (2026-10-21)
+
+Indoors is still safe, but no longer blind: the shadowed within 70 tiles are
+sent to everyone, indoors too, and stand out there past the glass.
+
+- **The server** (`features/dark.ts`): the visibility pass dropped its
+  "outside" condition. Upstairs, where you stand is measured over the ground
+  floor (`across`: each floor has its own corner), so the studio sees the
+  ones round the HQ, not ones 60 tiles off.
+- **Unchanged, outside only**: who they hunt (the prey list), strikes, the
+  director's spawns, the HQ's 45 clear tiles, and where they walk. The
+  sounds stay silent indoors, and the danger on the HUD reads outside only.
+- **Shots** (unchanged): from the ground floor a shot still finds them, as
+  before; from upstairs it doesn't, and the client aims at nobody there.
+- **Fading** (`dark/shades.ts`): one come into range fades in over 0.5 s; one
+  gone out of it (or gone) is drawn 0.4 s more, standing where it was last
+  seen, fading out. It leaves the sounds, the danger and the aim at once.
+  - 3D: the shroud's smoke thins and spreads with the fade, and the body is
+    drawn from halfway in (`shade.fade`); iso: the person's alpha (`fade`).
+  - Iso shows only my floor: upstairs, none are drawn there.
+  - Their height upstairs comes from the ground floor's corner, not mine.
+- **Bandwidth**: someone indoors near them now gets the same share as
+  someone outside (≤ 6 KB/s); far off, nothing, as before.
+- **Tests**: world-server `dark.test.ts`, "those indoors see them through the
+  windows, and are never struck": one in the lobby, one in the studio
+  (level 4), one called up by someone outside east of the HQ. Both indoors
+  see it, nobody indoors can call one up, and only the one outside is struck.
