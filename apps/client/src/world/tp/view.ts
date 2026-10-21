@@ -330,9 +330,22 @@ export class ThirdPersonView {
     spot: SpotLight;
     beam: Mesh;
     mat: ShaderMaterial;
+    core: Mesh;
+    coreMat: ShaderMaterial;
     glare: Sprite;
     on: Beam | null;
+    /** whose it is this frame (another's: their focus as it is, not eased from the last one's) */
+    who: string;
+    /** how far into focus (0 … 1): `ramp` linear, `f` eased; when the focus last came on (s) */
+    ramp: number;
+    f: number;
+    kickAt: number;
+    /** what it throws: wide, and focused (the crisper) */
+    wide: CanvasTexture;
+    crisp: CanvasTexture;
   }[] = [];
+  /** my torch's battery (0 … 100, the walker's vitals): low, it flickers */
+  battery = 100;
   private lensAt = new Vector3();
   private breathAt = new Map<string, number>();
   private stormFog = new Color();
@@ -453,6 +466,24 @@ export class ThirdPersonView {
     tc.fillRect(0, 0, 128, 128);
     const throwMap = new CanvasTexture(throwCv);
     throwMap.colorSpace = SRGBColorSpace;
+    // …and focused, a crisper one: a tight hot core, a thin ring, little spill (swapped in as the
+    // focus comes on: one map for another, never none, so nothing recompiles)
+    const crispCv = document.createElement("canvas");
+    crispCv.width = crispCv.height = 128;
+    const cc = crispCv.getContext("2d") as CanvasRenderingContext2D;
+    const cg = cc.createRadialGradient(64, 64, 0, 64, 64, 64);
+    cg.addColorStop(0, "#ffffff");
+    cg.addColorStop(0.1, "#fffcf4");
+    cg.addColorStop(0.22, "#c9c3b6");
+    cg.addColorStop(0.3, "#9a948a");
+    cg.addColorStop(0.34, "#e6dfd0");
+    cg.addColorStop(0.38, "#6e6a62");
+    cg.addColorStop(0.55, "#161514");
+    cg.addColorStop(1, "#000000");
+    cc.fillStyle = cg;
+    cc.fillRect(0, 0, 128, 128);
+    const crispMap = new CanvasTexture(crispCv);
+    crispMap.colorSpace = SRGBColorSpace;
     // the glare of a lens looking at you
     const glareCv = document.createElement("canvas");
     glareCv.width = glareCv.height = 64;
@@ -465,6 +496,48 @@ export class ThirdPersonView {
     gc.fillStyle = gg;
     gc.fillRect(0, 0, 64, 64);
     const glareMap = new CanvasTexture(glareCv);
+    // the beam in the air: brightest along its middle, soft at its edges (seen side on, a cone's
+    // skin fades out — no hard outline), fading along its length; motes drifting through it (snow,
+    // dust: value noise in the world's coords, quicker in a storm); one program for the beam and
+    // its hot core (`tight`: how fast its edges fall off)
+    const beamVert = `varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vW;
+void main() {
+  vUv = uv;
+  vec4 wp = modelMatrix * vec4(position, 1.0);
+  vW = wp.xyz;
+  vN = normalize(mat3(modelMatrix) * normal);
+  vV = normalize(cameraPosition - wp.xyz);
+  gl_Position = projectionMatrix * viewMatrix * wp;
+}`;
+    const beamFrag = `uniform vec3 color; uniform float opacity; uniform sampler2D along;
+uniform float time; uniform float storm; uniform float focus; uniform float tight;
+varying vec2 vUv; varying vec3 vN; varying vec3 vV; varying vec3 vW;
+float hash(vec3 p) {
+  p = fract(p * 0.3183099 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float noise(vec3 x) {
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash(i), hash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(hash(i + vec3(0.0, 1.0, 0.0)), hash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+    mix(mix(hash(i + vec3(0.0, 0.0, 1.0)), hash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(hash(i + vec3(0.0, 1.0, 1.0)), hash(i + vec3(1.0)), f.x), f.y),
+    f.z);
+}
+void main() {
+  float a = texture2D(along, vUv).r;
+  float face = abs(dot(normalize(vN), normalize(vV)));
+  float edge = pow(smoothstep(0.0, 0.7, face), tight);
+  float sp = 0.35 + 1.4 * storm;
+  vec3 drift = vec3(0.45 * storm + 0.08, 1.0, 0.25 * storm) * time * sp;
+  float haze = 0.85 + 0.3 * noise(vW * 1.2 + drift * 0.6);
+  // (only where the skin faces you: seen side on, a mote smears into a streak)
+  float m = smoothstep(0.86, 0.98, noise(vW * 11.0 + drift * 3.0)) * smoothstep(0.4, 0.9, face);
+  float motes = m * (0.4 + 1.4 * focus) * (0.8 + 0.6 * storm);
+  gl_FragColor = vec4(color, a * edge * edge * opacity * (haze + motes));
+}`;
     for (let i = 0; i < TORCHES; i++) {
       const spot = new SpotLight(0xfff1dc, 0, BEAM_LEN * 1.6, BEAM_HALF * 1.25, 0.55, 1.3);
       // (every torch has its map, always: a light's map coming or going recompiles every material)
@@ -480,35 +553,36 @@ export class ThirdPersonView {
       spot.position.set(0, -500, 0);
       spot.target.position.set(0, -501, 0);
       this.scene.add(spot, spot.target);
-      // the beam in the air: brightest along its middle, soft at its edges (seen side on, a
-      // cone's skin fades out — no hard outline), fading along its length
-      const mat = new ShaderMaterial({
-        uniforms: { color: { value: new Color(0xfff3e0) }, opacity: { value: 0 }, along: { value: along } },
-        vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV;
-void main() {
-  vUv = uv;
-  vec4 wp = modelMatrix * vec4(position, 1.0);
-  vN = normalize(mat3(modelMatrix) * normal);
-  vV = normalize(cameraPosition - wp.xyz);
-  gl_Position = projectionMatrix * viewMatrix * wp;
-}`,
-        fragmentShader: `uniform vec3 color; uniform float opacity; uniform sampler2D along;
-varying vec2 vUv; varying vec3 vN; varying vec3 vV;
-void main() {
-  float a = texture2D(along, vUv).r;
-  float edge = smoothstep(0.0, 0.7, abs(dot(normalize(vN), normalize(vV))));
-  gl_FragColor = vec4(color, a * edge * edge * opacity);
-}`,
-        transparent: true,
-        depthWrite: false,
-        blending: AdditiveBlending,
-        side: DoubleSide,
-        toneMapped: false,
-      });
+      const beamMat = (color: number, tight: number) =>
+        new ShaderMaterial({
+          uniforms: {
+            color: { value: new Color(color) },
+            opacity: { value: 0 },
+            along: { value: along },
+            time: { value: 0 },
+            storm: { value: 0 },
+            focus: { value: 0 },
+            tight: { value: tight },
+          },
+          vertexShader: beamVert,
+          fragmentShader: beamFrag,
+          transparent: true,
+          depthWrite: false,
+          blending: AdditiveBlending,
+          side: DoubleSide,
+          toneMapped: false,
+        });
+      const mat = beamMat(0xfff3e0, 1);
       const beam = new Mesh(cone, mat);
       beam.visible = false;
       beam.renderOrder = 4;
       this.scene.add(beam);
+      // (its hot core: narrower, whiter, its edges falling off fast — there as it focuses)
+      const coreMat = beamMat(0xffffff, 3);
+      const core = new Mesh(cone, coreMat);
+      core.visible = false;
+      core.renderOrder = 4;
+      this.scene.add(core);
       const glare = new Sprite(
         new SpriteMaterial({
           map: glareMap,
@@ -522,7 +596,21 @@ void main() {
       glare.visible = false;
       glare.renderOrder = 5;
       this.scene.add(glare);
-      this.torch3.push({ spot, beam, mat, glare, on: null });
+      this.torch3.push({
+        spot,
+        beam,
+        mat,
+        core,
+        coreMat,
+        glare,
+        on: null,
+        who: "",
+        ramp: 0,
+        f: 0,
+        kickAt: -1,
+        wide: throwMap,
+        crisp: crispMap,
+      });
     }
     // what the studio stands in (clouds / city / snow), the sky by the hour
     const home = onLevel(all, building);
@@ -1854,7 +1942,7 @@ void main() {
       this.hands = null;
     }
     // the flashlights: after the people and my hands (out of the lens in a hand where it is this frame)
-    this.torches(bodies, meId);
+    this.torches(bodies, meId, dt);
     // build what's waiting (nearest first), a few milliseconds a frame
     this.charF?.pump(4);
     for (const [id, e] of this.pets3)
@@ -2583,7 +2671,7 @@ void main() {
 
   // the flashlights on: mine first, then the nearest — out of the lens of the one in their hand
   // (where it's drawn; else where shared beam.ts has it), along the beam
-  private torches(bodies: Body3[], meId: string) {
+  private torches(bodies: Body3[], meId: string, dt: number) {
     const t = this.target;
     const on = bodies
       .filter((b) => b.torch)
@@ -2594,10 +2682,14 @@ void main() {
       );
     const night = this.nightLevel;
     const cam = this.camera.position;
+    // (the motes' clock, kept small: a float's precision)
+    const tm = this.time % 600;
     for (const [i, tc] of this.torch3.entries()) {
       const b = on[i];
       tc.on = null;
       if (!b) {
+        tc.who = "";
+        tc.core.visible = false;
         tc.spot.intensity = 0;
         tc.spot.shadow.autoUpdate = false;
         tc.spot.position.set(0, -500, 0);
@@ -2620,8 +2712,33 @@ void main() {
       );
       const cp = Math.cos(beam.pitch);
       const dir = { x: Math.cos(beam.yaw) * cp, y: Math.sin(beam.pitch), z: Math.sin(beam.yaw) * cp };
-      const { len, half } = beam.focus ? BEAM.focus : BEAM.wide;
       tc.on = beam;
+      // focusing eases in (~0.2 s) and out (~0.3 s), with a kick of brightness as it comes on;
+      // someone else's torch in this one now: as their focus is
+      const want = beam.focus ? 1 : 0;
+      if (tc.who !== b.id) {
+        tc.who = b.id;
+        tc.ramp = want;
+        tc.kickAt = -1;
+      } else {
+        if (want && tc.ramp === 0) tc.kickAt = this.time;
+        tc.ramp = want ? Math.min(1, tc.ramp + dt / 0.2) : Math.max(0, tc.ramp - dt / 0.3);
+      }
+      const f = tc.ramp * tc.ramp * (3 - 2 * tc.ramp);
+      tc.f = f;
+      const since = this.time - tc.kickAt;
+      const kick = tc.kickAt >= 0 && since < 0.12 ? 1 + 0.15 * Math.sin((since / 0.12) * Math.PI) : 1;
+      // (mine, the battery nearly out: a faint flicker — never anyone else's)
+      let flick = 1;
+      if (i === 0 && b.id === meId && this.battery < 15) {
+        const low = 1 - Math.max(0, this.battery) / 15;
+        const t = this.time;
+        const jitter = 0.5 + 0.5 * Math.sin(t * 31.7) * Math.sin(t * 13.3 + 1.1);
+        const dip = Math.max(0, Math.sin(t * 1.9) * Math.sin(t * 3.1 + 0.7) - 0.75) * 4;
+        flick = 1 - low * (0.08 * jitter + 0.3 * dip);
+      }
+      const len = BEAM.wide.len + (BEAM.focus.len - BEAM.wide.len) * f;
+      const half = BEAM.wide.half + (BEAM.focus.half - BEAM.wide.half) * f;
       // (the lens in their hand, when they're drawn with one: the light comes out of it — mine in
       // first person, the one in my hands' own picture, where it shows on the screen)
       const mine1p = b.id === meId && this.mode === "first";
@@ -2649,22 +2766,39 @@ void main() {
       tc.spot.distance = len * 1.6;
       tc.spot.shadow.camera.far = len * 1.6;
       tc.spot.shadow.autoUpdate = tc.spot.castShadow;
-      // (focused: a hard round spot where it lands — a teammate's focus is easy to read)
-      tc.spot.penumbra = beam.focus ? 0.22 : 0.5;
-      tc.spot.intensity = (1.8 + 26 * night) * (beam.focus ? 1.8 : 1);
+      // (focused: a hard round spot where it lands, crisper — a teammate's focus is easy to read;
+      // the map swapped, never taken off)
+      tc.spot.penumbra = 0.5 - 0.28 * f;
+      tc.spot.map = f > 0.5 ? tc.crisp : tc.wide;
+      tc.spot.intensity = (1.8 + 26 * night) * (1 + 0.8 * f) * kick * flick;
       tc.beam.position.copy(o);
       tc.beam.lookAt(tc.spot.target.position);
-      tc.beam.scale.set(beam.focus ? FOCUS_ACROSS : 1, beam.focus ? FOCUS_ACROSS : 1, beam.focus ? FOCUS_ALONG : 1);
-      const op = Math.min(0.5, (0.03 + 0.16 * night) * (1 + this.storm * 1.6) * (beam.focus ? 1.35 : 1));
+      const across = 1 + (FOCUS_ACROSS - 1) * f;
+      const along = 1 + (FOCUS_ALONG - 1) * f;
+      tc.beam.scale.set(across, across, along);
+      const op0 = Math.min(0.5, (0.03 + 0.16 * night) * (1 + this.storm * 1.6));
+      const op = Math.min(0.5, op0 * (1 + 0.35 * f) * kick) * flick;
+      for (const m of [tc.mat, tc.coreMat]) {
+        m.uniforms.time.value = tm;
+        m.uniforms.storm.value = this.storm;
+        m.uniforms.focus.value = f;
+      }
       tc.mat.uniforms.opacity.value = op;
       tc.beam.visible = op > 0.01;
+      // (its hot core, as it focuses)
+      tc.core.position.copy(o);
+      tc.core.quaternion.copy(tc.beam.quaternion);
+      tc.core.scale.set(across * 0.42, across * 0.42, along * 0.96);
+      const co = op0 * 0.3 * f * kick * flick;
+      tc.coreMat.uniforms.opacity.value = co;
+      tc.core.visible = co > 0.01;
       // the lens: a glint; looking into it, a glare
       const dc = Math.hypot(cam.x - o.x, cam.y - o.y, cam.z - o.z) || 1;
       const into = Math.max(0, (dir.x * (cam.x - o.x) + dir.y * (cam.y - o.y) + dir.z * (cam.z - o.z)) / dc);
       const k = into ** 6;
       tc.glare.position.copy(o);
-      tc.glare.scale.setScalar(0.07 + k * (0.5 + 0.6 * night) * (beam.focus ? 1.4 : 1));
-      (tc.glare.material as SpriteMaterial).opacity = Math.min(1, 0.55 + k * 0.6) * (0.4 + 0.6 * night);
+      tc.glare.scale.setScalar(0.07 + k * (0.5 + 0.6 * night) * (1 + 0.4 * f) * kick);
+      (tc.glare.material as SpriteMaterial).opacity = Math.min(1, 0.55 + k * 0.6) * (0.4 + 0.6 * night) * flick;
       // (not my own in first person: it's in my hands' own picture, hands1p.ts)
       tc.glare.visible = !(b.id === meId && this.mode === "first");
     }

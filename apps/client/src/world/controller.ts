@@ -1755,6 +1755,8 @@ export class WorldController {
       Math.round(this.myPitch * 40) !== this.lastPitch;
     // (aiming: over the shoulder, the body and the torch where I look)
     if (this.tp) this.tp.aim = out.aim;
+    // (my torch's battery: low, it flickers)
+    if (this.tp) this.tp.battery = w.vitals.bat;
     this.myVerb = out.verb ?? undefined;
     this.myPitch = out.aim && this.tp ? this.tp.aimPitch : 0;
     const go = jumped ?? out.started?.kind;
