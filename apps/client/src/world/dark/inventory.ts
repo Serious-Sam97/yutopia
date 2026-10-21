@@ -107,7 +107,7 @@ export class InventoryPanel {
     this.el.style.display = "none";
     this.warn.style.display = "none";
     this.endDrag();
-    if (this.relook) this.ctl.tp?.setLook(true);
+    if (this.relook) this.ctl.tp?.resumeLook();
     this.relook = false;
   }
 

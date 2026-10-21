@@ -78,6 +78,8 @@ export class Phone {
     const p = phone.get();
     if (p.open === open) return;
     if (open) {
+      // (mouse look on: the pointer shown while it's out — and locked again when it's put away)
+      this.relook = !!this.ctl.tp?.looking;
       this.ctl.tp?.setLook(false);
       void this.loadContacts();
       // an incoming call or a peeked text opens straight to it
@@ -105,6 +107,9 @@ export class Phone {
       phone.set({ open: false, peek: null });
       ui("close", 0.6);
       if (p.camera) this.camera.close();
+      const h = hud.get();
+      if (this.relook && !h.menu && !h.panel.kind && !h.build.on) this.ctl.tp?.resumeLook();
+      this.relook = false;
     }
     this.pose();
   }
@@ -124,6 +129,7 @@ export class Phone {
     this.ctl.send("phone:state", { state: s });
   }
   private lastPose: PhoneState | "?" = "?";
+  private relook = false; // mouse look was on when it came out
 
   // ── screens ──────────────────────────────────────────────────────────────
   go(s: Screen) {
