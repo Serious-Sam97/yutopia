@@ -61,6 +61,7 @@ import {
   SphereGeometry,
   SRGBColorSpace,
   type Texture,
+  TorusGeometry,
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -1074,8 +1075,11 @@ export class Grounds3 {
       [0, 1, 0],
     );
     // the walls from inside (the doorway open)
-    const wallC = b.sign === "BAR" ? 0x4a3426 : b.kind === "barn" ? 0x6a4a34 : 0xe6e0d4;
-    const H = 2.7;
+    const wallC =
+      b.sign === "BAR" ? 0x4a3426 : b.kind === "barn" ? 0x6a4a34 : b.kind === "farmhouse" ? 0xd8c9a8 : 0xe6e0d4;
+    // (the farm's: as tall as they are outside — under their roofs, not open to the sky)
+    const H = b.kind === "barn" ? 5.2 : b.kind === "farmhouse" ? 3.0 : 2.7;
+    const doorH = b.kind === "barn" ? 2.8 : 2.4; // (as high as the doorway outside: tp barn(), farmhouse())
     const e = 0.12;
     g.color(wallC);
     for (let x = b.x0; x < b.x1; x++) {
@@ -1089,6 +1093,59 @@ export class Grounds3 {
         g.quad([b.x0 + e, y0, z], [b.x0 + e, y0, z + 1], [b.x0 + e, y0 + H, z + 1], [b.x0 + e, y0 + H, z], [1, 0, 0]);
       if (wallEdgeAt("v", b.x1, z))
         g.quad([b.x1 - e, y0, z], [b.x1 - e, y0, z + 1], [b.x1 - e, y0 + H, z + 1], [b.x1 - e, y0 + H, z], [-1, 0, 0]);
+    }
+    // over the doorway, when the walls go higher than it
+    if (H > doorH + 0.2) {
+      const d = i.door;
+      for (let u = d.from; u < d.to; u++) {
+        if (d.dir === "h") {
+          const z = d.at === b.z0 ? b.z0 + e : b.z1 - e;
+          const n: V = d.at === b.z0 ? [0, 0, 1] : [0, 0, -1];
+          g.quad([u, y0 + doorH, z], [u + 1, y0 + doorH, z], [u + 1, y0 + H, z], [u, y0 + H, z], n);
+        } else {
+          const x = d.at === b.x0 ? b.x0 + e : b.x1 - e;
+          const n: V = d.at === b.x0 ? [1, 0, 0] : [-1, 0, 0];
+          g.quad([x, y0 + doorH, u], [x, y0 + doorH, u + 1], [x, y0 + H, u + 1], [x, y0 + H, u], n);
+        }
+      }
+    }
+    // the barn's roof from below: the underside of its slopes, its gable ends, the trusses (they
+    // face down: a camera above them still sees in). (The farmhouse has none: its room's too low for
+    // the camera over your shoulder to be under a ceiling — as the town's, it's open above.)
+    if (b.kind === "barn") {
+      const zm = (b.z0 + b.z1) / 2;
+      const top = y0 + H;
+      const ridge = top + 4.2;
+      g.color(0x5a3e2c);
+      g.quad([b.x1, top, b.z0 + e], [b.x0, top, b.z0 + e], [b.x0, ridge, zm], [b.x1, ridge, zm], [0, -1, 0.6]);
+      g.quad([b.x0, top, b.z1 - e], [b.x1, top, b.z1 - e], [b.x1, ridge, zm], [b.x0, ridge, zm], [0, -1, -0.6]);
+      g.color(wallC);
+      g.quad([b.x0 + e, top, b.z1], [b.x0 + e, top, b.z0], [b.x0 + e, ridge, zm], [b.x0 + e, ridge, zm], [1, 0, 0]);
+      g.quad([b.x1 - e, top, b.z0], [b.x1 - e, top, b.z1], [b.x1 - e, ridge, zm], [b.x1 - e, ridge, zm], [-1, 0, 0]);
+      // trusses: a tie beam across, two rafters up to the ridge, a king post
+      g.color(0x4a3426);
+      for (let x = b.x0 + 3; x < b.x1 - 1; x += 4) {
+        g.box(x - 0.1, top - 0.2, b.z0 + 0.1, x + 0.1, top, b.z1 - 0.1);
+        g.box(x - 0.08, top, zm - 0.08, x + 0.08, ridge - 0.1, zm + 0.08);
+        for (let k = 0; k < 8; k++) {
+          const u = (k + 0.5) / 8;
+          for (const [za, zb] of [
+            [b.z0 + 0.2, zm],
+            [b.z1 - 0.2, zm],
+          ]) {
+            const z = za + (zb - za) * u;
+            const y = top + (ridge - top) * u - 0.25;
+            g.box(x - 0.08, y - 0.12, z - 0.35, x + 0.08, y + 0.12, z + 0.35);
+          }
+        }
+      }
+      g.box(b.x0, ridge - 0.35, zm - 0.12, b.x1, ridge - 0.1, zm + 0.12);
+      // the hay loft over the east end: its floor, a ladder up to it
+      g.color(0x6d5a44).box(b.x1 - 6, top - 2.2, b.z0 + 0.15, b.x1 - 0.15, top - 2.0, b.z1 - 0.15);
+      g.color(0xc9a95a).box(b.x1 - 5.5, top - 2.0, b.z0 + 1, b.x1 - 0.5, top - 1.2, b.z0 + 6);
+      g.color(0x5a4636);
+      for (const dz of [-0.35, 0.35]) g.box(b.x1 - 6.4, y0, zm + dz - 0.05, b.x1 - 6.3, top - 2.0, zm + dz + 0.05);
+      for (let y = y0 + 0.4; y < top - 2.1; y += 0.4) g.box(b.x1 - 6.4, y, zm - 0.35, b.x1 - 6.3, y + 0.06, zm + 0.35);
     }
     // the furniture
     const glow: [number, number, number, number, number, number, number][] = [];
@@ -1205,6 +1262,99 @@ export class Grounds3 {
           for (let k = 0; k < 4; k++)
             g.color(0x7a5a3e).box(x, y0 + 0.15 + k * 0.3, z, x + w, y0 + 0.4 + k * 0.3, z + d);
           g.color(0x5a4636).box(x, y0, z, x + w, y0 + h, z + 0.12);
+          break;
+        // the farmhouse's
+        case "stove":
+          g.color(0x2b2a26).box(x, y0, z, x + w, y0 + h, z + d);
+          g.color(0x3a3a38).box(x - 0.02, y0 + h, z + 0.05, x + w - 0.05, y0 + h + 0.03, z + d - 0.05);
+          for (const [u, v] of [
+            [0.25, 0.25],
+            [0.25, 0.65],
+            [0.55, 0.25],
+            [0.55, 0.65],
+          ])
+            g.color(0x111111).box(x + u - 0.1, y0 + h + 0.03, z + v - 0.1, x + u + 0.1, y0 + h + 0.05, z + v + 0.1);
+          g.color(0x8a8f94).box(x - 0.03, y0 + 0.2, z + 0.1, x, y0 + h - 0.15, z + d - 0.1); // the oven's door
+          g.color(0x4a4a46).box(x + 0.25, y0 + h, z + d - 0.25, x + 0.35, y0 + h + 1.6, z + d - 0.15); // its pipe
+          break;
+        case "sofa":
+          g.color(0x6b4a3a).box(x, y0 + 0.15, z, x + w, y0 + 0.45, z + d);
+          g.color(0x6b4a3a).box(x, y0 + 0.45, z, x + 0.25, y0 + h, z + d);
+          g.color(0x5a3c2e).box(x, y0 + 0.45, z, x + w, y0 + 0.65, z + 0.2);
+          g.color(0x5a3c2e).box(x, y0 + 0.45, z + d - 0.2, x + w, y0 + 0.65, z + d);
+          for (let k = 0; k < 3; k++)
+            g.color(0x7d5844).box(
+              x + 0.3,
+              y0 + 0.45,
+              z + 0.25 + k * ((d - 0.5) / 3),
+              x + w - 0.05,
+              y0 + 0.55,
+              z + 0.2 + (k + 1) * ((d - 0.5) / 3),
+            );
+          g.color(0x2a2420).box(x + 0.05, y0, z + 0.05, x + w - 0.05, y0 + 0.15, z + d - 0.05);
+          g.color(0xb9a77a).box(x + 0.3, y0 + 0.55, z + 0.4, x + 0.55, y0 + 0.85, z + 0.9); // a cushion
+          break;
+        case "armchair":
+          g.color(0x2f4a3b).box(x, y0 + 0.15, z, x + w, y0 + 0.45, z + d);
+          g.color(0x2f4a3b).box(x, y0 + 0.45, z + d - 0.25, x + w, y0 + h, z + d);
+          g.color(0x27402f).box(x, y0 + 0.45, z, x + 0.2, y0 + 0.65, z + d);
+          g.color(0x27402f).box(x + w - 0.2, y0 + 0.45, z, x + w, y0 + 0.65, z + d);
+          g.color(0x2a2420).box(x + 0.05, y0, z + 0.05, x + w - 0.05, y0 + 0.15, z + d - 0.05);
+          break;
+        case "coffee":
+          g.color(0x6a4a34).box(x, y0 + h - 0.06, z, x + w, y0 + h, z + d);
+          for (const [u, v] of [
+            [0.08, 0.08],
+            [w - 0.14, 0.08],
+            [0.08, d - 0.14],
+            [w - 0.14, d - 0.14],
+          ])
+            g.color(0x4a3426).box(x + u, y0, z + v, x + u + 0.06, y0 + h - 0.06, z + v + 0.06);
+          g.color(0xe8e4dc).box(x + 0.3, y0 + h, z + 0.4, x + 0.6, y0 + h + 0.1, z + 0.7); // a mug
+          break;
+        case "rug":
+          g.color(0x8a3b2e).box(x, y0 + 0.03, z, x + w, y0 + 0.05, z + d);
+          g.color(0xc9a95a).box(x + 0.25, y0 + 0.05, z + 0.25, x + w - 0.25, y0 + 0.055, z + d - 0.25);
+          g.color(0x8a3b2e).box(x + 0.45, y0 + 0.055, z + 0.45, x + w - 0.45, y0 + 0.06, z + d - 0.45);
+          break;
+        case "fireplace":
+          g.color(0x8a6a5a).box(x, y0, z, x + w, y0 + h, z + d);
+          g.color(0x7a5a4a).box(x + 0.6, y0 + h, z + 0.15, x + w - 0.6, y0 + 3.0, z + d);
+          g.color(0x5a4636).box(x - 0.15, y0 + h - 0.05, z - 0.1, x + w + 0.15, y0 + h + 0.08, z + d); // the mantel
+          g.color(0x1a1412).box(x + 0.5, y0 + 0.1, z - 0.02, x + w - 0.5, y0 + 0.95, z + 0.1);
+          glow.push([x + 0.65, y0 + 0.12, z - 0.03, x + w - 0.65, y0 + 0.4, z - 0.01, 0xff7a2a]); // the embers
+          g.color(0x3a2a20).box(x + 0.7, y0 + 0.12, z + 0.05, x + w - 0.7, y0 + 0.25, z + 0.3); // the logs
+          g.color(0xc9b28a).box(x + 0.4, y0 + h + 0.08, z + 0.2, x + 0.6, y0 + h + 0.4, z + 0.4); // a candle
+          break;
+        case "bookshelf":
+          g.color(0x5a3e2c).box(x, y0, z, x + w, y0 + h, z + d);
+          for (let k = 0.15; k < h - 0.2; k += 0.45)
+            for (let u = x + 0.08; u < x + w - 0.12; u += 0.11) {
+              const r = Math.sin(u * 91.7 + k * 13.3) * 43758.5453;
+              const q = r - Math.floor(r);
+              if (q < 0.1) continue;
+              const c = [0x6b2430, 0x2f4a3b, 0x3d4a5c, 0xc39a4a, 0xe8e4dc, 0x5a3e2c][Math.floor(q * 6)];
+              g.color(c).box(u, y0 + k, z + d, u + 0.09, y0 + k + 0.28 + q * 0.08, z + d + 0.02);
+            }
+          break;
+        case "bed":
+          g.color(0x5a3e2c).box(x, y0, z, x + w, y0 + 0.35, z + d);
+          g.color(0xe8e4dc).box(x + 0.05, y0 + 0.35, z + 0.05, x + w - 0.05, y0 + 0.5, z + d - 0.05);
+          g.color(0x6b8aa8).box(x + 0.02, y0 + 0.5, z + 0.8, x + w - 0.02, y0 + 0.58, z + d - 0.02); // the quilt
+          for (const u of [0.25, w / 2 + 0.05])
+            g.color(0xf4f1ea).box(x + u, y0 + 0.5, z + 0.15, x + u + w / 2 - 0.35, y0 + 0.65, z + 0.65);
+          g.color(0x4a3426).box(x, y0, z - 0.1, x + w, y0 + 1.1, z + 0.05); // the headboard
+          break;
+        case "nightstand":
+          g.color(0x5a3e2c).box(x, y0, z, x + w, y0 + h, z + d);
+          g.color(0x3a2a20).box(x + 0.05, y0 + h * 0.5, z - 0.01, x + w - 0.05, y0 + h * 0.52, z);
+          g.color(0xe8d8b0).box(x + 0.15, y0 + h, z + 0.15, x + 0.35, y0 + h + 0.35, z + 0.35); // a lamp, unlit
+          break;
+        case "wardrobe":
+          g.color(0x5a3e2c).box(x, y0, z, x + w, y0 + h, z + d);
+          g.color(0x3a2a20).box(x + w / 2 - 0.01, y0 + 0.1, z - 0.01, x + w / 2 + 0.01, y0 + h - 0.1, z);
+          for (const u of [w / 2 - 0.12, w / 2 + 0.08])
+            g.color(0xc9a24a).box(x + u, y0 + 1.0, z - 0.03, x + u + 0.04, y0 + 1.2, z);
           break;
         case "bench":
           g.color(0x5a4636).box(x, y0 + h - 0.1, z, x + w, y0 + h, z + d);
@@ -1818,74 +1968,200 @@ export class Grounds3 {
     face("w", b.x0, b.z1, b.x0, b.z0, [-1, 0, 0]);
     face("e", b.x1, b.z0, b.x1, b.z1, [1, 0, 0]);
   }
+  // a window's white frame, its cross and sill, round dark glass (the glass: litWindow), on a face
+  // whose outward normal is (nx, nz); (x, z) its middle on the wall, y its foot
+  private frame(g: G, x: number, y: number, z: number, w: number, h: number, nx: number, nz: number, trim = 0xece6da) {
+    const tx = -nz;
+    const tz = nx;
+    const o = 0.06;
+    const bar = (u0: number, v0: number, u1: number, v1: number, t = 0.09) => {
+      const ax = x + tx * u0 + nx * o;
+      const az = z + tz * u0 + nz * o;
+      const bx = x + tx * u1 + nx * (o + t);
+      const bz = z + tz * u1 + nz * (o + t);
+      g.box(Math.min(ax, bx), y + v0, Math.min(az, bz), Math.max(ax, bx), y + v1, Math.max(az, bz));
+    };
+    g.color(trim);
+    bar(-w / 2 - 0.1, -0.1, w / 2 + 0.1, 0); // the sill
+    bar(-w / 2 - 0.1, h, w / 2 + 0.1, h + 0.12); // the head
+    bar(-w / 2 - 0.1, 0, -w / 2, h); // the sides
+    bar(w / 2, 0, w / 2 + 0.1, h);
+    bar(-0.03, 0, 0.03, h, 0.05); // the cross
+    bar(-w / 2, h / 2 - 0.03, w / 2, h / 2 + 0.03, 0.05);
+  }
   private barn(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
     const siding = this.keep(tex(sidingCanvas(this.T, "#8e2b20")));
     const H = 5.2;
+    const zm = (b.z0 + b.z1) / 2;
+    const K = 3.2; // the gambrel's knee: this far in from each side, 2.8 up
     const i = insideOf(b);
     const door = i?.door;
-    const g = new G();
-    // (the doorway: a wide one, the doors slid open either side)
     const dz0 = door ? door.from - 0.6 : 0;
     const dz1 = door ? door.to + 0.6 : 0;
-    this.walls(g, b, y0, H, door ? { face: "w", from: dz0, to: dz1, h: 3.4 } : undefined);
+    const g = new G();
+    this.walls(g, b, y0 + 0.6, H - 0.6, door ? { face: "w", from: dz0, to: dz1, h: 2.8 } : undefined);
+    // the gable ends: red pentagons (the gambrel's shape), siding on them too
+    const P = (x: number, y: number, z: number): V => [x, y, z];
+    for (const [x, nx] of [
+      [b.x0, -1],
+      [b.x1, 1],
+    ] as const) {
+      const n: V = [nx, 0, 0];
+      const a = P(x, y0 + H, b.z0);
+      const k0 = P(x, y0 + H + 2.8, b.z0 + K);
+      const r = P(x, y0 + H + 4.2, zm);
+      const k1 = P(x, y0 + H + 2.8, b.z1 - K);
+      const c = P(x, y0 + H, b.z1);
+      if (nx < 0) {
+        g.quad(c, a, k0, k1, n);
+        g.quad(k1, k0, r, r, n);
+      } else {
+        g.quad(a, c, k1, k0, n);
+        g.quad(k0, k1, r, r, n);
+      }
+    }
     this.add(g.build(), this.lambert(0xffffff, siding, false));
     const r = new G();
-    // the roof: a gambrel's look — steep low, shallow high — under snow; red gable ends
-    this.pitched(r, b.x0, b.z0, b.x1, b.z1, y0 + H, 4.2, true, 0x3d3a36, 0.6);
-    // white trim: corners, the doorway's frame, the X-braced doors slid open, the loft door
+    // the stone foundation (the doorway's gap kept)
+    r.color(0x8a8780);
+    r.box(b.x0 - 0.06, y0, b.z0 - 0.06, b.x1 + 0.06, y0 + 0.6, b.z0 + 0.3);
+    r.box(b.x0 - 0.06, y0, b.z1 - 0.3, b.x1 + 0.06, y0 + 0.6, b.z1 + 0.06);
+    r.box(b.x1 - 0.3, y0, b.z0, b.x1 + 0.06, y0 + 0.6, b.z1);
+    r.box(b.x0 - 0.06, y0, b.z0, b.x0 + 0.3, y0 + 0.6, door ? dz0 : b.z1);
+    if (door) r.box(b.x0 - 0.06, y0, dz1, b.x0 + 0.3, y0 + 0.6, b.z1);
+    const rs = groundsRng(b.x0 * 3 + 7);
+    r.color(0x77746d);
+    for (let k = 0; k < 40; k++) {
+      const u = rs();
+      const side = Math.floor(rs() * 2);
+      const x = b.x0 + u * (b.x1 - b.x0);
+      const z = side ? b.z0 - 0.08 : b.z1 + 0.02;
+      r.box(x, y0 + 0.08 + rs() * 0.35, z, x + 0.3 + rs() * 0.3, y0 + 0.22 + rs() * 0.3, z + 0.06);
+    }
+    // the gambrel roof: steep low, shallow high, overhanging; snow on it but its dark edge showing
+    const over = 0.6;
+    const prof: [number, number][] = [
+      [b.z0 - over, H - 0.35],
+      [b.z0 + K, H + 2.8],
+      [zm, H + 4.2],
+      [b.z1 - K, H + 2.8],
+      [b.z1 + over, H - 0.35],
+    ];
+    for (let k = 0; k < 4; k++) {
+      const [za, ya] = prof[k];
+      const [zb, yb] = prof[k + 1];
+      const dz = zb - za;
+      const dy = yb - ya;
+      const l = Math.hypot(dz, dy);
+      const n: V = [0, Math.abs(dz) / l, ((k < 2 ? -1 : 1) * Math.abs(dy)) / l];
+      r.color(0x3d3a36);
+      r.quad(
+        [b.x1 + over, y0 + ya, za],
+        [b.x0 - over, y0 + ya, za],
+        [b.x0 - over, y0 + yb, zb],
+        [b.x1 + over, y0 + yb, zb],
+        n,
+      );
+      r.color(0xf4f7fa);
+      r.quad(
+        [b.x1 + over - 0.15, y0 + ya + 0.16, za + (k < 2 ? 0.15 : -0.15)],
+        [b.x0 - over + 0.15, y0 + ya + 0.16, za + (k < 2 ? 0.15 : -0.15)],
+        [b.x0 - over + 0.15, y0 + yb + 0.16, zb],
+        [b.x1 + over - 0.15, y0 + yb + 0.16, zb],
+        n,
+      );
+    }
+    // white trim: the corners, the eaves' fascia, the gables' rake boards
     const t = 0xece6da;
+    r.color(t);
     for (const [x, z] of [
       [b.x0, b.z0],
       [b.x1, b.z0],
       [b.x0, b.z1],
       [b.x1, b.z1],
     ])
-      r.color(t).box(x - 0.14, y0, z - 0.14, x + 0.14, y0 + H, z + 0.14);
+      r.box(x - 0.16, y0 + 0.6, z - 0.16, x + 0.16, y0 + H, z + 0.16);
+    for (const z of [b.z0 - over, b.z1 + over])
+      r.box(b.x0 - over, y0 + H - 0.55, z - 0.06, b.x1 + over, y0 + H - 0.3, z + 0.06);
+    // the rake boards: a white band along the roof's edge at each gable end, under the snow's lip
+    for (const [x, nx] of [
+      [b.x0 - over, -1],
+      [b.x1 + over, 1],
+    ] as const)
+      for (let k = 0; k < 4; k++) {
+        const [za, ya] = prof[k];
+        const [zb, yb] = prof[k + 1];
+        r.quad(
+          [x, y0 + ya - 0.28, za],
+          [x, y0 + yb - 0.28, zb],
+          [x, y0 + yb + 0.02, zb],
+          [x, y0 + ya + 0.02, za],
+          [nx, 0, 0],
+        );
+      }
+    // the doors: the doorway's white frame, the X-braced doors slid open either side, their rail
     if (door) {
-      r.color(t).box(b.x0 - 0.12, y0 + 3.4, dz0 - 0.15, b.x0 + 0.05, y0 + 3.62, dz1 + 0.15);
+      r.color(t).box(b.x0 - 0.14, y0 + 2.8, dz0 - 0.2, b.x0 + 0.04, y0 + 3.05, dz1 + 0.2);
+      for (const z of [dz0 - 0.2, dz1]) r.color(t).box(b.x0 - 0.14, y0, z, b.x0 + 0.04, y0 + 2.8, z + 0.2);
       for (const [za, zb] of [
-        [dz0 - 3, dz0],
-        [dz1, dz1 + 3],
+        [dz0 - 3.2, dz0 - 0.2],
+        [dz1 + 0.2, dz1 + 3.2],
       ]) {
-        r.color(0x8e2b20).box(b.x0 - 0.22, y0 + 0.05, za, b.x0 - 0.12, y0 + 3.3, zb);
-        r.color(t).box(b.x0 - 0.28, y0 + 0.05, za, b.x0 - 0.2, y0 + 0.25, zb);
-        r.color(t).box(b.x0 - 0.28, y0 + 3.1, za, b.x0 - 0.2, y0 + 3.3, zb);
-        r.color(t).box(b.x0 - 0.28, y0 + 0.05, za, b.x0 - 0.2, y0 + 3.3, za + 0.2);
-        r.color(t).box(b.x0 - 0.28, y0 + 0.05, zb - 0.2, b.x0 - 0.2, y0 + 3.3, zb);
-        // the X: two thin boxes leaned across (as steps of short pieces)
-        for (let k = 0; k < 12; k++) {
-          const u = (k + 0.5) / 12;
-          const y = y0 + 0.25 + u * 2.85;
-          for (const zz of [za + 0.2 + u * (zb - za - 0.4), zb - 0.2 - u * (zb - za - 0.4)])
-            r.color(t).box(b.x0 - 0.29, y - 0.13, zz - 0.13, b.x0 - 0.21, y + 0.13, zz + 0.13);
+        r.color(0x8e2b20).box(b.x0 - 0.24, y0 + 0.08, za, b.x0 - 0.14, y0 + 2.75, zb);
+        for (let p = za + 0.25; p < zb - 0.1; p += 0.25)
+          r.color(0x7a2419).box(b.x0 - 0.25, y0 + 0.1, p, b.x0 - 0.24, y0 + 2.7, p + 0.02);
+        r.color(t);
+        r.box(b.x0 - 0.3, y0 + 0.08, za, b.x0 - 0.22, y0 + 0.28, zb);
+        r.box(b.x0 - 0.3, y0 + 2.55, za, b.x0 - 0.22, y0 + 2.75, zb);
+        r.box(b.x0 - 0.3, y0 + 0.08, za, b.x0 - 0.22, y0 + 2.75, za + 0.2);
+        r.box(b.x0 - 0.3, y0 + 0.08, zb - 0.2, b.x0 - 0.22, y0 + 2.75, zb);
+        r.box(b.x0 - 0.3, y0 + 1.33, za, b.x0 - 0.22, y0 + 1.5, zb);
+        for (let k = 0; k < 14; k++) {
+          const u = (k + 0.5) / 14;
+          const y = y0 + 0.28 + u * 2.27;
+          for (const z of [za + 0.2 + u * (zb - za - 0.4), zb - 0.2 - u * (zb - za - 0.4)])
+            r.box(b.x0 - 0.31, y - 0.11, z - 0.11, b.x0 - 0.23, y + 0.11, z + 0.11);
         }
       }
-      // the rail they hang from
-      r.color(0x3a3a3a).box(b.x0 - 0.3, y0 + 3.55, dz0 - 3.2, b.x0 - 0.18, y0 + 3.65, dz1 + 3.2);
+      r.color(0x2f2f2f).box(b.x0 - 0.34, y0 + 2.95, dz0 - 3.4, b.x0 - 0.22, y0 + 3.05, dz1 + 3.4);
+      // a lantern by them (unlit: nobody's here)
+      r.color(0x2a2a2a).box(b.x0 - 0.5, y0 + 3.2, dz1 + 0.8, b.x0 - 0.2, y0 + 3.6, dz1 + 1.1);
+      r.color(0xe8d8a8).box(b.x0 - 0.47, y0 + 3.25, dz1 + 0.83, b.x0 - 0.23, y0 + 3.5, dz1 + 1.07);
     }
-    // the hay loft's door in the west gable, shut
-    const zm = (b.z0 + b.z1) / 2;
-    r.color(t).box(b.x0 - 0.1, y0 + H + 0.6, zm - 1.1, b.x0 + 0.02, y0 + H + 2.4, zm + 1.1);
-    r.color(0x6d2018).box(b.x0 - 0.14, y0 + H + 0.75, zm - 0.95, b.x0 - 0.06, y0 + H + 2.25, zm + 0.95);
-    // a weathervane on the ridge: a rooster's dark shape
+    // the hay loft's door in the west gable, a pent hood over it with the hay hook's beam
+    r.color(t).box(b.x0 - 0.12, y0 + H + 0.3, zm - 1.2, b.x0 + 0.02, y0 + H + 2.5, zm + 1.2);
+    r.color(0x6d2018).box(b.x0 - 0.16, y0 + H + 0.45, zm - 1.05, b.x0 - 0.08, y0 + H + 2.35, zm + 1.05);
+    r.color(t).box(b.x0 - 0.2, y0 + H + 0.45, zm - 0.06, b.x0 - 0.14, y0 + H + 2.35, zm + 0.06);
+    r.color(0x5a4636).box(b.x0 - 1.0, y0 + H + 2.75, zm - 0.07, b.x0, y0 + H + 2.88, zm + 0.07);
+    r.color(0x8e2b20).box(b.x0 - 0.7, y0 + H + 2.88, zm - 1.25, b.x0, y0 + H + 2.98, zm + 1.25);
+    r.color(0xf4f7fa).box(b.x0 - 0.7, y0 + H + 2.98, zm - 1.25, b.x0, y0 + H + 3.08, zm + 1.25);
+    // the cupola on the ridge: louvred sides, a little pyramid roof, the weathervane
     const rx = (b.x0 + b.x1) / 2;
-    r.color(0x2a2a2a).box(rx - 0.04, y0 + H + 4.2, zm - 0.04, rx + 0.04, y0 + H + 5.6, zm + 0.04);
-    r.color(0x2a2a2a).box(rx - 0.5, y0 + H + 5.3, zm - 0.03, rx + 0.5, y0 + H + 5.65, zm + 0.03);
+    const ry = y0 + H + 4.2;
+    r.color(t).box(rx - 0.8, ry - 0.3, zm - 0.8, rx + 0.8, ry + 1.1, zm + 0.8);
+    r.color(0x8e2b20);
+    for (let y = ry; y < ry + 1.0; y += 0.18) {
+      r.box(rx - 0.82, y, zm - 0.6, rx - 0.78, y + 0.1, zm + 0.6);
+      r.box(rx + 0.78, y, zm - 0.6, rx + 0.82, y + 0.1, zm + 0.6);
+    }
     this.add(r.build(), this.lambert());
-    // the pitched() gable ends are pale: the barn's are red (over them, a hair out)
-    const ends = new G().color(0x8e2b20);
-    for (const [x, nx] of [
-      [b.x0 - 0.03, -1],
-      [b.x1 + 0.03, 1],
-    ] as const)
-      ends.quad([x, y0 + H, b.z0], [x, y0 + H, b.z1], [x, y0 + H + 4.2, zm], [x, y0 + H + 4.2, zm], [nx, 0, 0]);
-    this.add(ends.build(), this.lambert());
-    // dark windows down the sides
+    const cap = tinted(new ConeGeometry(1.25, 0.9, 4).rotateY(Math.PI / 4).translate(0, 0.45, 0), 0x3d3a36);
+    const capSnow = tinted(new ConeGeometry(1.1, 0.75, 4).rotateY(Math.PI / 4).translate(0, 0.62, 0), 0xf4f7fa);
+    const vane = tinted(new BoxGeometry(0.06, 1.2, 0.06).translate(0, 1.4, 0), 0x2a2a2a);
+    const arrow = tinted(new BoxGeometry(1.1, 0.08, 0.04).translate(0, 1.85, 0), 0x2a2a2a);
+    const bird = tinted(new BoxGeometry(0.5, 0.35, 0.04).translate(0.1, 2.15, 0), 0x2a2a2a);
+    this.add(place(mergeGeometries([cap, capSnow, vane, arrow, bird], false), rx, ry + 1.1, zm), this.lambert());
+    for (const q of [cap, capSnow, vane, arrow, bird]) q.dispose();
+    // framed windows down the long sides (dark: nobody's in)
+    const w = new G();
     for (let x = b.x0 + 4; x < b.x1 - 2; x += 6) {
       this.litWindow(x, y0 + 2.2, b.z0, 1, 1, 0, -1, true, 0);
       this.litWindow(x, y0 + 2.2, b.z1, 1, 1, 0, 1, true, 0);
+      this.frame(w, x, y0 + 2.2, b.z0, 1, 1, 0, -1);
+      this.frame(w, x, y0 + 2.2, b.z1, 1, 1, 0, 1);
     }
+    this.add(w.build(), this.lambert());
   }
   private silo(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
@@ -1894,25 +2170,59 @@ export class Grounds3 {
     const R = Math.min(b.x1 - b.x0, b.z1 - b.z0) / 2 - 0.2;
     const Hh = 13;
     const parts: BufferGeometry[] = [
-      tinted(new CylinderGeometry(R, R, Hh, 24, 1, true).translate(0, Hh / 2, 0), 0xa9aeb2),
+      // the concrete footing
+      tinted(new CylinderGeometry(R + 0.35, R + 0.45, 0.5, 28).translate(0, 0.25, 0), 0x9a968e),
+    ];
+    // the ribbed sheets, ring on ring, a shade apart; their bolted seams
+    for (let y = 0.5, k = 0; y < Hh; y += 0.5, k++)
+      parts.push(
+        tinted(new CylinderGeometry(R, R, 0.5, 28, 1, true).translate(0, y + 0.25, 0), k % 2 ? 0xaeb3b7 : 0xa2a7ab),
+      );
+    for (let y = 2.5; y < Hh; y += 2.5)
+      parts.push(tinted(new CylinderGeometry(R + 0.06, R + 0.06, 0.12, 28, 1, true).translate(0, y, 0), 0x7e8388));
+    // the dome, its snow, the vent on top, a railing round its rim
+    parts.push(
       tinted(
-        new SphereGeometry(R, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.55, 1).translate(0, Hh, 0),
+        new SphereGeometry(R + 0.05, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.5, 1).translate(0, Hh, 0),
         0x8f9499,
       ),
       tinted(
-        new SphereGeometry(R + 0.04, 24, 6, 0, Math.PI * 2, 0, Math.PI / 4)
-          .scale(1, 0.55, 1)
-          .translate(0, Hh + 0.05, 0),
+        new SphereGeometry(R + 0.12, 28, 6, 0, Math.PI * 2, 0, Math.PI / 3.2)
+          .scale(1, 0.5, 1)
+          .translate(0, Hh + 0.04, 0),
         0xf6f8fa,
       ),
-    ];
-    // bands round it, a ladder up its side
-    for (let y = 1.5; y < Hh; y += 2.2)
-      parts.push(tinted(new CylinderGeometry(R + 0.05, R + 0.05, 0.14, 24, 1, true).translate(0, y, 0), 0x7e8388));
+      tinted(new CylinderGeometry(0.45, 0.55, 0.7, 12).translate(0, Hh + R * 0.5 + 0.2, 0), 0x7e8388),
+      tinted(new ConeGeometry(0.7, 0.4, 12).translate(0, Hh + R * 0.5 + 0.75, 0), 0x6a6f74),
+      tinted(new CylinderGeometry(R + 0.4, R + 0.4, 0.06, 28, 1, true).translate(0, Hh + 0.9, 0), 0x5c6166),
+    );
+    for (let a = 0; a < Math.PI * 2; a += Math.PI / 8)
+      parts.push(
+        tinted(
+          new BoxGeometry(0.05, 0.9, 0.05).translate(Math.cos(a) * (R + 0.4), Hh + 0.45, Math.sin(a) * (R + 0.4)),
+          0x5c6166,
+        ),
+      );
+    // the caged ladder up its west side
     for (const dz of [-0.3, 0.3])
-      parts.push(tinted(new BoxGeometry(0.06, Hh, 0.06).translate(-R - 0.25, Hh / 2, dz), 0x5c6166));
-    for (let y = 0.5; y < Hh; y += 0.45)
+      parts.push(tinted(new BoxGeometry(0.06, Hh + 0.8, 0.06).translate(-R - 0.25, (Hh + 0.8) / 2, dz), 0x5c6166));
+    for (let y = 0.5; y < Hh + 0.6; y += 0.4)
       parts.push(tinted(new BoxGeometry(0.05, 0.05, 0.6).translate(-R - 0.25, y, 0), 0x5c6166));
+    for (let y = 2.4; y < Hh; y += 0.9)
+      parts.push(
+        tinted(
+          new TorusGeometry(0.5, 0.03, 4, 12, Math.PI)
+            .rotateX(Math.PI / 2)
+            .rotateY(Math.PI / 2)
+            .translate(-R - 0.25, y, 0),
+          0x5c6166,
+        ),
+      );
+    // the chute down to the barn's side
+    for (let k = 0; k < 7; k++)
+      parts.push(
+        tinted(new BoxGeometry(0.5, 0.5, 0.5).translate(-R - 0.6 - k * 0.55, Hh - 1 - k * 0.65, 1.6), 0x8a8f94),
+      );
     this.add(place(mergeGeometries(parts, false), cx, y0, cz), this.lambert());
     for (const p of parts) p.dispose();
   }
@@ -1920,39 +2230,100 @@ export class Grounds3 {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
     const siding = this.keep(tex(sidingCanvas(this.T, "#e3dccb")));
     const H = 6.2;
+    const door = insideOf(b)?.door;
     const g = new G();
-    this.walls(g, b, y0, H);
+    this.walls(
+      g,
+      b,
+      y0 + 0.45,
+      H - 0.45,
+      door ? { face: "n", from: door.from + 0.3, to: door.to - 0.3, h: 2.0 } : undefined,
+    );
     this.add(g.build(), this.lambert(0xffffff, siding, false));
     const r = new G();
-    this.pitched(r, b.x0, b.z0, b.x1, b.z1, y0 + H, 3, true, 0x3a3f45, 0.5);
-    // the porch along the front (north): its floor, posts, a roof under snow; the door
+    this.pitched(r, b.x0, b.z0, b.x1, b.z1, y0 + H, 3, true, 0x3a3f45, 0.55);
+    const t = 0xf2eee6;
     const z = b.z0;
-    r.color(0x8a7f6e).box(b.x0 + 1, y0, z - 2.2, b.x1 - 1, y0 + 0.45, z);
-    for (let x = b.x0 + 1.2; x <= b.x1 - 1; x += (b.x1 - b.x0 - 2.4) / 3)
-      r.color(0xe8e4da).box(x - 0.09, y0 + 0.45, z - 2.1, x + 0.09, y0 + 2.8, z - 1.92);
-    r.color(0x3a3f45).box(b.x0 + 0.8, y0 + 2.8, z - 2.4, b.x1 - 0.8, y0 + 2.95, z);
-    r.color(0xf4f7fa).box(b.x0 + 0.8, y0 + 2.95, z - 2.4, b.x1 - 0.8, y0 + 3.15, z);
     const xm = (b.x0 + b.x1) / 2;
-    r.color(0x4a3a2c).box(xm - 0.5, y0 + 0.45, z - 0.06, xm + 0.5, y0 + 2.5, z);
-    // a chimney
-    r.color(0x7a4a3a).box(b.x1 - 3, y0 + H, (b.z0 + b.z1) / 2 + 0.5, b.x1 - 2, y0 + H + 3.6, (b.z0 + b.z1) / 2 + 1.5);
-    r.color(0xf4f7fa).box(
-      b.x1 - 3.05,
-      y0 + H + 3.6,
-      (b.z0 + b.z1) / 2 + 0.45,
-      b.x1 - 1.95,
-      y0 + H + 3.8,
-      (b.z0 + b.z1) / 2 + 1.55,
-    );
-    this.add(r.build(), this.lambert());
-    // the windows dark: nobody's home
-    for (const dx of [-4, 4]) {
-      this.litWindow(xm + dx, y0 + 0.9, z, 1.3, 1.5, 0, -1, true, 0);
-      this.litWindow(xm + dx, y0 + 3.7, z, 1.2, 1.4, 0, -1, true, 0);
+    // the foundation, the corner boards, the gutters along the eaves
+    r.color(0x8a8780).box(b.x0 - 0.05, y0, b.z0 - 0.05, b.x1 + 0.05, y0 + 0.45, b.z1 + 0.05);
+    r.color(t);
+    for (const [x, zz] of [
+      [b.x0, b.z0],
+      [b.x1, b.z0],
+      [b.x0, b.z1],
+      [b.x1, b.z1],
+    ])
+      r.box(x - 0.13, y0 + 0.45, zz - 0.13, x + 0.13, y0 + H, zz + 0.13);
+    r.color(0x4a4f55);
+    for (const zz of [b.z0 - 0.65, b.z1 + 0.5]) r.box(b.x0 - 0.55, y0 + H - 0.2, zz, b.x1 + 0.55, y0 + H, zz + 0.15);
+    for (const x of [b.x0 - 0.45, b.x1 + 0.35]) r.box(x, y0 + 0.45, b.z0 - 0.65, x + 0.1, y0 + H - 0.2, b.z0 - 0.55);
+    // the porch along the front (north): its floor, steps, posts, railings, a roof under snow
+    r.color(0x8a7f6e).box(b.x0 + 1, y0 + 0.3, z - 2.2, b.x1 - 1, y0 + 0.5, z);
+    r.color(0x7a6f5e);
+    for (const [k, w] of [
+      [0, 1.8],
+      [1, 1.4],
+    ] as const)
+      r.box(xm - w / 2 - 0.4, y0 + k * 0.17, z - 2.2 - (2 - k) * 0.35, xm + w / 2 + 0.4, y0 + (k + 1) * 0.17, z - 2.2);
+    const posts: number[] = [];
+    for (let x = b.x0 + 1.2; x <= b.x1 - 1; x += (b.x1 - b.x0 - 2.4) / 3) posts.push(x);
+    r.color(t);
+    for (const x of posts) r.box(x - 0.1, y0 + 0.5, z - 2.1, x + 0.1, y0 + 2.9, z - 1.9);
+    for (const [xa, xb] of [
+      [b.x0 + 1.2, xm - 1.1],
+      [xm + 1.1, b.x1 - 1.2],
+    ]) {
+      r.box(xa, y0 + 1.35, z - 2.06, xb, y0 + 1.45, z - 1.94);
+      r.box(xa, y0 + 0.6, z - 2.04, xb, y0 + 0.66, z - 1.96);
+      for (let x = xa + 0.2; x < xb; x += 0.3) r.box(x - 0.03, y0 + 0.6, z - 2.03, x + 0.03, y0 + 1.35, z - 1.97);
     }
-    this.litWindow(xm, y0 + 3.7, z, 1.2, 1.4, 0, -1, true, 0);
+    r.color(0x3a3f45).box(b.x0 + 0.8, y0 + 2.9, z - 2.4, b.x1 - 0.8, y0 + 3.05, z);
+    r.color(0xf4f7fa).box(b.x0 + 0.8, y0 + 3.05, z - 2.4, b.x1 - 0.8, y0 + 3.25, z);
+    // the door: its frame, the door itself stood open into the room
+    if (door) {
+      r.color(t);
+      r.box(door.from + 0.15, y0 + 0.45, z - 0.08, door.from + 0.3, y0 + 2.55, z + 0.02);
+      r.box(door.to - 0.3, y0 + 0.45, z - 0.08, door.to - 0.15, y0 + 2.55, z + 0.02);
+      r.box(door.from + 0.15, y0 + 2.45, z - 0.08, door.to - 0.15, y0 + 2.6, z + 0.02);
+      r.color(0x4a3a2c).box(door.from + 0.3, y0 + 0.47, z + 0.05, door.from + 0.38, y0 + 2.43, z + 1.3);
+    }
+    // a brick chimney with its cap
+    const cz = (b.z0 + b.z1) / 2;
+    r.color(0x8a4a3a).box(b.x1 - 3, y0 + H - 1, cz + 0.5, b.x1 - 2, y0 + H + 3.6, cz + 1.5);
+    r.color(0x6f3a2e).box(b.x1 - 3.1, y0 + H + 3.4, cz + 0.4, b.x1 - 1.9, y0 + H + 3.6, cz + 1.6);
+    r.color(0xf4f7fa).box(b.x1 - 3.05, y0 + H + 3.6, cz + 0.45, b.x1 - 1.95, y0 + H + 3.78, cz + 1.55);
+    this.add(r.build(), this.lambert());
+    // the windows: dark (nobody's home), framed, with shutters
+    const w = new G();
+    const win = (x: number, y: number, zz: number, nx: number, nz: number, ww = 1.2, hh = 1.4) => {
+      this.litWindow(x, y, zz, ww, hh, nx, nz, true, 0);
+      this.frame(w, x, y, zz, ww, hh, nx, nz, t);
+      const tx = -nz;
+      const tz = nx;
+      w.color(0x2f4a3b);
+      for (const s of [-1, 1]) {
+        const ax = x + tx * s * (ww / 2 + 0.15) + nx * 0.05;
+        const az = zz + tz * s * (ww / 2 + 0.15) + nz * 0.05;
+        const bx = x + tx * s * (ww / 2 + 0.6) + nx * 0.1;
+        const bz = zz + tz * s * (ww / 2 + 0.6) + nz * 0.1;
+        w.box(Math.min(ax, bx), y - 0.05, Math.min(az, bz), Math.max(ax, bx), y + hh + 0.05, Math.max(az, bz));
+      }
+    };
+    for (const dx of [-4, 4]) {
+      win(xm + dx, y0 + 1.0, z, 0, -1);
+      win(xm + dx, y0 + 3.7, z, 0, -1);
+    }
+    win(xm, y0 + 3.7, z, 0, -1);
+    for (const dz of [-2.5, 2.5]) {
+      win(b.x0, y0 + 1.0, cz + dz, -1, 0, 1.1);
+      win(b.x1, y0 + 1.0, cz + dz, 1, 0, 1.1);
+      win(b.x0, y0 + 3.7, cz + dz, -1, 0, 1.1);
+      win(b.x1, y0 + 3.7, cz + dz, 1, 0, 1.1);
+    }
+    for (const dx of [-4, 0, 4]) win(xm + dx, y0 + 3.7, b.z1, 0, 1);
+    this.add(w.build(), this.lambert());
   }
-  // the farm's yard: the cornfield's dry stalks, the fence round it, the tractor, the scarecrows, hay bales
   /** The farm's yard a step at a time (the cornfield in bands of rows: all at once was a 100 ms frame). */
   private farmSteps(): (() => void)[] {
     if (!this.near((FARM.x0 + FARM.x1) / 2, (FARM.z0 + FARM.z1) / 2, 200)) return [];
@@ -2026,11 +2397,14 @@ export class Grounds3 {
   private cornMat: MeshLambertMaterial | null = null;
   // the rest of the yard: the fence round the field, the scarecrows, the tractor, hay bales
   private farm() {
-    // the fence round the field (the lane's side open): posts and two rails
-    const f = new G().color(0x5a4636);
+    const rr = groundsRng(4747);
+    // the fence round the field (the lane's side open at its gate): split rails on round-topped posts
+    const f = new G();
     const post = (x: number, z: number) => {
       const y = groundAt(x, z);
-      f.box(x - 0.07, y, z - 0.07, x + 0.07, y + 1.15, z + 0.07);
+      f.color(0x5a4636).box(x - 0.08, y, z - 0.08, x + 0.08, y + 1.15, z + 0.08);
+      f.color(0x4a3a2c).box(x - 0.06, y + 1.15, z - 0.06, x + 0.06, y + 1.22, z + 0.06);
+      f.color(0xf4f7fa).box(x - 0.08, y + 1.22, z - 0.08, x + 0.08, y + 1.27, z + 0.08);
     };
     const rail = (ax: number, az: number, bx: number, bz: number) => {
       const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 2.5));
@@ -2040,15 +2414,27 @@ export class Grounds3 {
         const x1 = ax + ((bx - ax) * (k + 1)) / n;
         const z1 = az + ((bz - az) * (k + 1)) / n;
         const y = groundAt((x0 + x1) / 2, (z0 + z1) / 2);
-        for (const hy of [0.55, 1.0])
+        for (const hy of [0.45, 0.8]) {
+          const wob = (rr() - 0.5) * 0.08;
+          f.color(rr() < 0.5 ? 0x6b5442 : 0x5f4a3a);
+          f.box(
+            Math.min(x0, x1) - 0.05,
+            y + hy + wob,
+            Math.min(z0, z1) - 0.05,
+            Math.max(x0, x1) + 0.05,
+            y + hy + wob + 0.11,
+            Math.max(z0, z1) + 0.05,
+          );
+          f.color(0xf4f7fa);
           f.box(
             Math.min(x0, x1) - 0.04,
-            y + hy,
+            y + hy + wob + 0.11,
             Math.min(z0, z1) - 0.04,
             Math.max(x0, x1) + 0.04,
-            y + hy + 0.1,
+            y + hy + wob + 0.15,
             Math.max(z0, z1) + 0.04,
           );
+        }
         post(x1, z1);
       }
       post(ax, az);
@@ -2057,77 +2443,157 @@ export class Grounds3 {
     rail(e.x0, e.z0, e.x1, e.z0);
     rail(e.x0, e.z1, e.x1, e.z1);
     rail(e.x0, e.z0, e.x0, e.z1);
-    // (the east side, along the lane: a gate's gap in the middle)
     const gm = (e.z0 + e.z1) / 2;
     rail(e.x1, e.z0, e.x1, gm - 3);
     rail(e.x1, gm + 3, e.x1, e.z1);
     this.add(f.build(), this.lambert());
-    // the scarecrows: a post, a crossbar, a coat, a sack's head, a hat — snow on the shoulders
+    // the scarecrows: a post and crossbar, a plaid shirt stuffed with straw, patched trousers, a
+    // burlap head with a stitched face, a hat; snow on the shoulders and the brim
     const crows: BufferGeometry[] = [];
-    for (const s of SCARECROWS) {
-      const y = groundAt(s.x, s.z);
+    for (const sc of SCARECROWS) {
+      const y = groundAt(sc.x, sc.z);
+      const shirt = 0x8a3b2e;
       const parts = [
-        tinted(new BoxGeometry(0.12, 2.5, 0.12).translate(0, 1.25, 0), 0x5a4636),
-        tinted(new BoxGeometry(1.8, 0.1, 0.1).translate(0, 1.85, 0), 0x5a4636),
-        tinted(new CylinderGeometry(0.3, 0.42, 1.1, 8).translate(0, 1.45, 0), 0x3b3328),
-        tinted(new BoxGeometry(1.5, 0.3, 0.28).translate(0, 1.85, 0), 0x3b3328),
-        tinted(new SphereGeometry(0.26, 10, 8).translate(0, 2.3, 0), 0xc9b48a),
-        tinted(new CylinderGeometry(0.32, 0.36, 0.06, 10).translate(0, 2.5, 0), 0x2a2620),
-        tinted(new CylinderGeometry(0.17, 0.2, 0.28, 10).translate(0, 2.65, 0), 0x2a2620),
-        tinted(new BoxGeometry(1.55, 0.06, 0.3).translate(0, 2.02, 0), 0xf4f7fa),
-        tinted(new ConeGeometry(0.12, 0.35, 5).rotateZ(Math.PI).translate(-0.8, 1.7, 0), 0xd8c08a), // straw at the cuffs
-        tinted(new ConeGeometry(0.12, 0.35, 5).rotateZ(Math.PI).translate(0.8, 1.7, 0), 0xd8c08a),
+        tinted(new BoxGeometry(0.12, 2.6, 0.12).translate(0, 1.3, 0), 0x5a4636),
+        tinted(new BoxGeometry(1.9, 0.1, 0.1).translate(0, 1.9, 0), 0x5a4636),
+        tinted(new CylinderGeometry(0.28, 0.36, 0.75, 10).translate(0, 1.55, 0), shirt), // the body
+        tinted(new BoxGeometry(1.55, 0.26, 0.26).translate(0, 1.9, 0), shirt), // the arms
+        tinted(new BoxGeometry(1.57, 0.04, 0.27).translate(0, 1.82, 0), 0x5e2620), // the plaid's lines
+        tinted(new BoxGeometry(0.05, 0.75, 0.37).translate(0.12, 1.55, 0), 0x5e2620),
+        tinted(new BoxGeometry(0.05, 0.75, 0.37).translate(-0.12, 1.55, 0), 0x5e2620),
+        tinted(new CylinderGeometry(0.13, 0.11, 0.85, 8).translate(-0.13, 0.95, 0), 0x3d4a5c), // the trousers
+        tinted(new CylinderGeometry(0.13, 0.11, 0.85, 8).translate(0.13, 0.95, 0), 0x3d4a5c),
+        tinted(new BoxGeometry(0.12, 0.14, 0.02).translate(0.13, 0.9, 0.12), 0x8a6a4a), // a patch
+        tinted(new SphereGeometry(0.27, 10, 8).scale(1, 1.1, 1).translate(0, 2.32, 0), 0xc9b48a), // burlap
+        tinted(new BoxGeometry(0.08, 0.05, 0.02).translate(-0.09, 2.38, 0.26), 0x2a2420), // the eyes
+        tinted(new BoxGeometry(0.08, 0.05, 0.02).translate(0.09, 2.38, 0.26), 0x2a2420),
+        tinted(new BoxGeometry(0.22, 0.03, 0.02).translate(0, 2.22, 0.26), 0x2a2420), // the stitched mouth
+        tinted(new CylinderGeometry(0.4, 0.42, 0.05, 12).translate(0, 2.55, 0), 0x3a3228), // the hat
+        tinted(new CylinderGeometry(0.2, 0.24, 0.3, 12).translate(0, 2.72, 0), 0x3a3228),
+        tinted(new CylinderGeometry(0.4, 0.4, 0.03, 12).translate(0, 2.59, 0), 0xf4f7fa),
+        tinted(new BoxGeometry(1.4, 0.06, 0.28).translate(0, 2.05, 0), 0xf4f7fa),
       ];
-      crows.push(place(mergeGeometries(parts, false), s.x, y, s.z, s.ry));
+      for (const [x, yy] of [
+        [-0.8, 1.88],
+        [0.8, 1.88],
+        [-0.13, 0.5],
+        [0.13, 0.5],
+        [0, 2.05],
+      ])
+        for (let k = 0; k < 3; k++)
+          parts.push(
+            tinted(
+              new ConeGeometry(0.05, 0.3, 4)
+                .rotateZ(Math.PI + (k - 1) * 0.5 + (x < 0 ? 0.3 : x > 0 ? -0.3 : 0))
+                .translate(x + (k - 1) * 0.05, yy - 0.1, 0),
+              0xd8c08a,
+            ),
+          );
+      crows.push(place(mergeGeometries(parts, false), sc.x, y, sc.z, sc.ry));
       for (const p of parts) p.dispose();
     }
     this.add(mergeGeometries(crows, false), this.lambert());
     for (const c of crows) c.dispose();
-    // the tractor: an old red one under snow (its length along x, turned as the shared one)
+    // the tractor: an old red one under snow, its length along x, turned as the shared one
     {
       const y = groundAt(TRACTOR.x, TRACTOR.z);
-      const red = 0x9b2a20;
-      const parts = [
-        tinted(new BoxGeometry(2.2, 0.9, 0.9).translate(0.6, 1.25, 0), red), // the hood
-        tinted(new BoxGeometry(1.3, 0.25, 1.9).translate(-0.9, 1.0, 0), 0x3a3a3a), // the floor
-        tinted(new BoxGeometry(0.08, 1.3, 0.08).translate(-0.3, 1.75, 0.8), 0x2a2a2a), // the cab's posts
-        tinted(new BoxGeometry(0.08, 1.3, 0.08).translate(-0.3, 1.75, -0.8), 0x2a2a2a),
-        tinted(new BoxGeometry(0.08, 1.3, 0.08).translate(-1.5, 1.75, 0.8), 0x2a2a2a),
-        tinted(new BoxGeometry(0.08, 1.3, 0.08).translate(-1.5, 1.75, -0.8), 0x2a2a2a),
-        tinted(new BoxGeometry(1.5, 0.1, 1.9).translate(-0.9, 2.42, 0), red), // the roof
-        tinted(new BoxGeometry(1.55, 0.18, 1.95).translate(-0.9, 2.55, 0), 0xf6f8fa), // snow on it
-        tinted(new BoxGeometry(2.0, 0.14, 0.85).translate(0.6, 1.77, 0), 0xf6f8fa), // and on the hood
-        tinted(new CylinderGeometry(0.07, 0.07, 0.9, 6).translate(1.3, 2.1, 0), 0x2a2a2a), // the exhaust
-        tinted(new BoxGeometry(0.4, 0.4, 0.4).translate(-0.9, 1.35, 0), 0x5a4636), // the seat
+      const red = 0xa52a20;
+      const dark = 0x1e1e1e;
+      const parts: BufferGeometry[] = [
+        // the hood: rounded along its top, the grille in front, the headlights
+        tinted(new BoxGeometry(2.1, 0.75, 0.86).translate(0.65, 1.2, 0), red),
+        tinted(
+          new CylinderGeometry(0.43, 0.43, 2.1, 14, 1, false, 0, Math.PI)
+            .rotateZ(Math.PI / 2)
+            .rotateX(Math.PI / 2)
+            .translate(0.65, 1.57, 0),
+          red,
+        ),
+        tinted(new BoxGeometry(0.06, 0.8, 0.7).translate(1.72, 1.25, 0), 0x2a2a2a),
+        tinted(new BoxGeometry(0.07, 0.04, 0.72).translate(1.74, 1.05, 0), 0x8a8f94),
+        tinted(new BoxGeometry(0.07, 0.04, 0.72).translate(1.74, 1.45, 0), 0x8a8f94),
+        tinted(new CylinderGeometry(0.1, 0.1, 0.08, 10).rotateZ(Math.PI / 2).translate(1.74, 1.7, 0.3), 0xe8e0c0),
+        tinted(new CylinderGeometry(0.1, 0.1, 0.08, 10).rotateZ(Math.PI / 2).translate(1.74, 1.7, -0.3), 0xe8e0c0),
+        tinted(new BoxGeometry(1.95, 0.12, 0.8).translate(0.65, 2.02, 0), 0xf6f8fa), // snow on it
+        // the engine's flank, the exhaust stack with its cap
+        tinted(new BoxGeometry(1.2, 0.4, 0.95).translate(0.6, 0.85, 0), 0x3a3a3a),
+        tinted(new CylinderGeometry(0.06, 0.07, 1.1, 8).translate(1.25, 2.4, 0.28), 0x2a2a2a),
+        tinted(new CylinderGeometry(0.1, 0.08, 0.06, 8).translate(1.25, 2.96, 0.28), 0x2a2a2a),
+        // the floor, the seat, the wheel on its column
+        tinted(new BoxGeometry(1.3, 0.2, 1.9).translate(-0.9, 1.05, 0), 0x3a3a3a),
+        tinted(new BoxGeometry(0.45, 0.12, 0.45).translate(-1.05, 1.5, 0), 0x2a2420),
+        tinted(new BoxGeometry(0.1, 0.5, 0.45).translate(-1.3, 1.75, 0), 0x2a2420),
+        tinted(new CylinderGeometry(0.04, 0.04, 0.7, 6).rotateZ(-0.6).translate(-0.4, 1.55, 0), 0x2a2a2a),
+        tinted(
+          new TorusGeometry(0.2, 0.03, 6, 14)
+            .rotateY(Math.PI / 2)
+            .rotateZ(0.95)
+            .translate(-0.6, 1.85, 0),
+          dark,
+        ),
+        // the cab's frame and roof, snow on it
+        tinted(new BoxGeometry(1.55, 0.1, 1.95).translate(-0.9, 2.55, 0), red),
+        tinted(new BoxGeometry(1.6, 0.2, 2.0).translate(-0.9, 2.7, 0), 0xf6f8fa),
       ];
-      for (const s of [-1, 1]) {
+      for (const [x, z] of [
+        [-0.25, 0.85],
+        [-0.25, -0.85],
+        [-1.55, 0.85],
+        [-1.55, -0.85],
+      ])
+        parts.push(tinted(new BoxGeometry(0.07, 1.45, 0.07).translate(x, 1.8, z), 0x2a2a2a));
+      for (const sd of [-1, 1]) {
+        // the big back wheels: tyre, lugs, the red hub; their fenders
         parts.push(
           tinted(
-            new CylinderGeometry(0.85, 0.85, 0.5, 14).rotateX(Math.PI / 2).translate(-0.9, 0.85, s * 1.05),
-            0x1e1e1e,
+            new CylinderGeometry(0.85, 0.85, 0.48, 18).rotateX(Math.PI / 2).translate(-0.9, 0.85, sd * 1.08),
+            dark,
           ),
+        );
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 9)
+          parts.push(
+            tinted(
+              new BoxGeometry(0.16, 0.1, 0.5)
+                .translate(Math.cos(a) * 0.86, Math.sin(a) * 0.86, 0)
+                .rotateZ(0)
+                .translate(-0.9, 0.85, sd * 1.08),
+              0x161616,
+            ),
+          );
+        parts.push(
+          tinted(new CylinderGeometry(0.42, 0.42, 0.5, 14).rotateX(Math.PI / 2).translate(-0.9, 0.85, sd * 1.09), red),
         );
         parts.push(
           tinted(
-            new CylinderGeometry(0.45, 0.45, 0.35, 12).rotateX(Math.PI / 2).translate(1.3, 0.45, s * 0.75),
-            0x1e1e1e,
+            new CylinderGeometry(1.0, 1.0, 0.55, 14, 1, true, Math.PI / 2, Math.PI)
+              .rotateX(Math.PI / 2)
+              .translate(-0.9, 0.85, sd * 1.08),
+            red,
           ),
         );
+        parts.push(tinted(new BoxGeometry(1.4, 0.08, 0.55).translate(-0.9, 1.88, sd * 1.08), 0xf6f8fa));
+        // the small front ones
         parts.push(
-          tinted(new CylinderGeometry(0.3, 0.3, 0.52, 10).rotateX(Math.PI / 2).translate(-0.9, 0.85, s * 1.06), red),
+          tinted(new CylinderGeometry(0.42, 0.42, 0.3, 14).rotateX(Math.PI / 2).translate(1.3, 0.42, sd * 0.72), dark),
+        );
+        parts.push(
+          tinted(new CylinderGeometry(0.2, 0.2, 0.32, 10).rotateX(Math.PI / 2).translate(1.3, 0.42, sd * 0.73), red),
         );
       }
+      parts.push(tinted(new BoxGeometry(0.12, 0.12, 1.5).translate(1.3, 0.42, 0), 0x3a3a3a)); // the front axle
       const tr = mergeGeometries(parts, false);
       for (const p of parts) p.dispose();
       this.add(place(tr, TRACTOR.x, y, TRACTOR.z, -TRACTOR.ry), this.lambert());
-      // the toolbox on its side (the loot spot's)
-      const tb = new G().color(0x2f5d8a);
+      // the toolbox on its side (the loot spot's), its handle
+      const tb = new G();
       const tx = TRACTOR.x - Math.sin(TRACTOR.ry) * 1.15;
       const tz = TRACTOR.z + Math.cos(TRACTOR.ry) * 1.15;
-      tb.box(tx - 0.3, y + 0.9, tz - 0.15, tx + 0.3, y + 1.2, tz + 0.15);
+      tb.color(0x2f5d8a).box(tx - 0.3, y + 0.95, tz - 0.15, tx + 0.3, y + 1.22, tz + 0.15);
+      tb.color(0x244a6e).box(tx - 0.31, y + 1.15, tz - 0.16, tx + 0.31, y + 1.18, tz + 0.16);
+      tb.color(0x8a8f94).box(tx - 0.12, y + 1.22, tz - 0.02, tx + 0.12, y + 1.28, tz + 0.02);
       this.add(tb.build(), this.lambert());
     }
-    // hay bales by the barn, snow on them; a trough
+    // round hay bales by the barn: their wrapped sides, their darker ends, snow on top
     const bales: BufferGeometry[] = [];
     for (const [x, z, rot] of [
       [437, -298, 0],
@@ -2138,19 +2604,31 @@ export class Grounds3 {
       const y = groundAt(x, z);
       bales.push(
         place(
-          tinted(new CylinderGeometry(0.6, 0.6, 1.1, 14).rotateX(Math.PI / 2).translate(0, 0.6, 0), 0xc9a95a),
+          tinted(new CylinderGeometry(0.62, 0.62, 1.1, 18).rotateX(Math.PI / 2).translate(0, 0.62, 0), 0xc9a95a),
           x,
           y,
           z,
           rot,
         ),
       );
-      bales.push(place(tinted(new BoxGeometry(0.8, 0.08, 1.0).translate(0, 1.2, 0), 0xf6f8fa), x, y, z, rot));
+      for (const sd of [-1, 1])
+        bales.push(
+          place(
+            tinted(
+              new CylinderGeometry(0.5, 0.5, 0.02, 16).rotateX(Math.PI / 2).translate(0, 0.62, sd * 0.56),
+              0xa88a44,
+            ),
+            x,
+            y,
+            z,
+            rot,
+          ),
+        );
+      bales.push(place(tinted(new BoxGeometry(0.75, 0.1, 1.05).translate(0, 1.22, 0), 0xf6f8fa), x, y, z, rot));
     }
     this.add(mergeGeometries(bales, false), this.lambert());
     for (const b of bales) b.dispose();
   }
-
   private shelter(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
     const g = new G();

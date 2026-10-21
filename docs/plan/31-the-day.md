@@ -320,3 +320,110 @@ The user: "approved, do all phases".
   - **The Grounds on High**: 60 fps at the lot, the square and the woods, by
     day and night.
   - **The night woods**, 20 shadowed and 4 flares: 60 fps.
+
+## After: more nests, the farm's insides, better models (2026-10-21)
+
+The user:
+1. "add more nests by day, we have few spots";
+2. "inside the barn the roof's invisible";
+3. "make the farm's models better, all of them";
+4. "make the farmhouse enterable, with all sorts of furniture";
+5. "make the things you pick up off the ground better — they're red or blue blocks".
+
+- **More nests** (shared `dark/nests.ts`):
+  - **New places**: the clearing's edge, along the river's ice, the woods by
+    the gatehouse and the bus shelter.
+  - **More spots**: round the farm (behind the silo, its edges, more of the
+    cornfield, round the barn's back) and the townhouses' back yards up
+    Church Street.
+  - **The day's share**:
+
+    | Place | Nests |
+    |---|---|
+    | Farm | 8 |
+    | Town | 6 |
+    | Ravine | 4 |
+    | River | 4 |
+    | Pond | 3 |
+    | Clearing | 2 |
+    | Gate | 2 |
+    | Bridge | 2 |
+    | Tower | 1 |
+    | Shed | 1 |
+
+  - **How many**: 50 nests a day (~100 shadowed), +4 per person out, up to
+    80 nests and 140 shadowed.
+  - **Spacing**: woods nests 30 tiles apart (was 40), named ones 18.
+  - **Speed**: a day's layout in 31 ms.
+- **The barn's roof from inside**:
+  - **Walls**: inside they're as tall as outside (5.2), with a lintel over
+    the doorway.
+  - **The roof's underside**, its trusses (tie beams, king posts,
+    rafters), the gables inside, a hay loft over the east end with a
+    ladder.
+  - **Seen from below only**: it all faces down, so a camera above still
+    sees in.
+- **The farmhouse, enterable**:
+  - **The door**: in its north wall, through the porch.
+  - **The room**:
+    - **The living room**: a bookshelf, a sofa, a rug, a low table, an
+      armchair, a fireplace with embers.
+    - **The kitchen**: a counter, a stove with its pipe, a fridge, a table
+      and chairs.
+    - **The bedroom corner**: a bed, a nightstand, a wardrobe.
+  - **The loot** is at the kitchen counter now.
+  - **No ceiling**: its room is too low for the camera over your shoulder.
+    Like the town's, it's open above. A ceiling there covered half the
+    view.
+- **Better models**:
+  - **The barn**:
+    - a real gambrel roof under snow;
+    - red gambrel gables;
+    - a stone foundation;
+    - white rake boards and fascia;
+    - framed windows;
+    - the doors with planks and X-braces on their rail, a lantern;
+    - the loft door with its hood and hay beam;
+    - a louvred cupola with a weathervane.
+  - **The silo**: ribbed sheets ring on ring, bands, a concrete footing, a
+    domed cap with snow and a vent, a railing, a caged ladder, a chute.
+  - **The farmhouse**:
+    - a foundation, corner boards, gutters and downpipes;
+    - a porch with steps, posts and railings;
+    - a door frame, the door stood open;
+    - framed windows with green shutters all round;
+    - a brick chimney.
+  - **The tractor**: a rounded hood with a grille and headlights, an
+    exhaust stack, lugged rear tyres with red hubs and fenders, front
+    wheels on an axle, a seat, a steering wheel, the cab's frame and roof
+    under snow.
+  - **The scarecrows**: a plaid shirt, patched trousers, straw at the
+    cuffs, a stitched burlap face, a hat.
+  - **The rest of the yard**: split-rail fence on round-topped posts, round
+    hay bales with darker ends.
+  - **Iso**: the barn gets the gambrel, a foundation and the cupola; the
+    farmhouse's furniture is drawn there too.
+- **What lies on the snow** (`tp/items3d.ts`): lit models instead of
+  coloured boxes, a little larger than life to read, with the glint.
+  - **From the pockets**: a revolver, a pump shotgun, a box of .38s with
+    rounds spilled, three red shells, a flare, a battery, a first aid case,
+    a glass fuse.
+  - **The caches**:
+    - a briefcase with clasps;
+    - a domed lunchbox;
+    - a red toolbox;
+    - a slumped hunting bag with a shell rolled out;
+    - a flare bag with flares standing in it;
+    - a torch still on.
+- **Tests**:
+  - **shared**: `farm.test`'s farmhouse is walked into and furnished
+    (round the sofa, the rug walked on); `nests.test` checks the new
+    numbers. 231 in all.
+  - **world-server**: 97.
+  - **`DAY=1` perf**: tick 0.67 ms, 0 put back.
+  - **e2e `farm.spec`**: into the farmhouse; the barn's roof shot from
+    inside in first person.
+  - **e2e `drops.spec`** (new, shots): one of each dropped in a row.
+- **The page**: 567,282 bytes (14 under). **`yutopia-grounds`**: 117.0 KB.
+- **The GPU run**: 22 of 22. The farm's worst frame is 17 ms in 3D and 33 ms in
+  iso; the night woods hold 60 fps.

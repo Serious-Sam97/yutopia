@@ -1,6 +1,7 @@
 import { SP_OFFSET_H } from "../clock.ts";
 import { HQ_DOORS, onPathAt } from "../danger.ts";
 import {
+  BENCH,
   BUILDINGS,
   CORN,
   FARM,
@@ -25,7 +26,18 @@ import type { StackId } from "../inventory.ts";
 // Each may keep a cache — what one of them carried — lying in the snow among
 // them. Building coords (tiles); pure.
 
-export type NestZone = "woods" | "farm" | "ravine" | "pond" | "tower" | "shed" | "bridge" | "town";
+export type NestZone =
+  | "woods"
+  | "farm"
+  | "ravine"
+  | "pond"
+  | "tower"
+  | "shed"
+  | "bridge"
+  | "town"
+  | "clearing"
+  | "river"
+  | "gate";
 export type CacheKind = "briefcase" | "lunchbox" | "toolbox" | "hunting" | "flares" | "torch";
 export interface Cache {
   id: string;
@@ -47,14 +59,14 @@ export interface Nest {
 
 export const NESTS = {
   /** a day's: the base and, for each person who went out that day, more (up to `max` nests) */
-  base: 30,
-  perPerson: 3,
-  max: 45,
+  base: 50,
+  perPerson: 4,
+  max: 80,
   /** shadowed in all, at most */
-  cap: 90,
+  cap: 140,
   /** apart (the named spots: closer) */
-  apart: 40,
-  apartNamed: 22,
+  apart: 30,
+  apartNamed: 18,
   /** clear of the paths, and of the HQ's doors */
   path: 6,
   hq: 60,
@@ -92,6 +104,12 @@ const NAMED: Record<Exclude<NestZone, "woods">, Spot[]> = {
     { x: 452, z: -244, r: 3 }, // behind the farmhouse
     { x: TRACTOR.x + 5, z: TRACTOR.z + 6, r: 3 },
     { x: 492, z: -222, r: 6 }, // the farm's far edge
+    { x: 482, z: -322, r: 3 }, // behind the silo
+    { x: 432, z: -330, r: 4 }, // the farm's north edge, by the trees
+    { x: 500, z: -262, r: 4 }, // its east edge
+    { x: CORN.x0 + 30, z: CORN.z0 + 60, r: 8 }, // more of the rows
+    { x: CORN.x1 - 8, z: CORN.z0 + 8, r: 5 },
+    { x: 452, z: -296, r: 2 }, // round the barn's back
   ],
   ravine: RAVINE_FLOOR,
   pond: [
@@ -114,17 +132,45 @@ const NAMED: Record<Exclude<NestZone, "woods">, Spot[]> = {
     { x: 466, z: -438, r: 2 }, // behind the bakery
     { x: 420, z: -562, r: 3 }, // behind the church
     { x: 302, z: -470, r: 5 }, // the woods at the town's west edge
+    { x: 398, z: -468, r: 2 }, // the townhouses' back yards up Church Street
+    { x: 442, z: -478, r: 2 },
+    { x: 398, z: -500, r: 2 },
+    { x: 442, z: -508, r: 2 },
+  ],
+  clearing: [0, 1, 2, 3].map((k) => ({
+    // round the clearing's edge, where the trees start
+    x: BENCH.x + Math.cos((k * Math.PI) / 2 + 0.4) * 19,
+    z: BENCH.z + Math.sin((k * Math.PI) / 2 + 0.4) * 19,
+    r: 3,
+  })),
+  river: [
+    // out on the river's ice, up and down it
+    { x: 256, z: -540, r: 3 },
+    { x: 266, z: -460, r: 3 },
+    { x: 252, z: -320, r: 3 },
+    { x: 262, z: -220, r: 3 },
+    { x: 250, z: -100, r: 3 },
+    { x: 258, z: 40, r: 3 },
+  ],
+  gate: [
+    // the woods by the gatehouse and the bus shelter
+    { x: -14, z: -382, r: 4 },
+    { x: -72, z: -386, r: 4 },
+    { x: -62, z: -340, r: 4 },
   ],
 };
 /** How many nests a day each named place gets (the rest: the woods). */
 const SHARE: [Exclude<NestZone, "woods">, number][] = [
-  ["farm", 5],
-  ["town", 4],
-  ["ravine", 2],
-  ["pond", 2],
+  ["farm", 8],
+  ["town", 6],
+  ["ravine", 4],
+  ["pond", 3],
+  ["river", 4],
+  ["clearing", 2],
+  ["gate", 2],
   ["tower", 1],
   ["shed", 1],
-  ["bridge", 1],
+  ["bridge", 2],
 ];
 
 const inBuilding = (x: number, z: number, m = 1) =>
@@ -165,6 +211,9 @@ const CACHES: Record<NestZone, CacheKind[]> = {
   shed: ["toolbox"],
   bridge: ["toolbox", "flares"],
   town: ["briefcase", "lunchbox"],
+  clearing: ["torch", "lunchbox", "briefcase"],
+  river: ["flares", "hunting"],
+  gate: ["briefcase", "toolbox"],
 };
 /** What a cache holds (a nest of 3–4 keeps twice as much). */
 export function cacheItems(kind: CacheKind, size: number, rand: () => number): { id: StackId; n: number }[] {
@@ -241,7 +290,12 @@ export function dayNests(day: number): Nest[] {
         const z = s.z + Math.sin(a) * d;
         if (!nestAllowed(x, z, true) || !far(x, z, NESTS.apartNamed)) continue;
         named.push({ zone, x, z });
-        add(zone, x, z, Math.min(zone === "tower" || zone === "bridge" || zone === "town" ? 2 : 4, size()));
+        add(
+          zone,
+          x,
+          z,
+          Math.min(zone === "tower" || zone === "bridge" || zone === "town" || zone === "river" ? 2 : 4, size()),
+        );
         took++;
         break;
       }

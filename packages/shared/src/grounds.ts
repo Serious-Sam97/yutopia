@@ -417,7 +417,7 @@ export const BUILDINGS: Building[] = [
   // the farm (docs/plan/31-the-day.md)
   b("barn", "barn", "Barn", 440, -320, 464, -302, 2, "w", { enter: true }),
   b("silo", "silo", "Silo", 468, -318, 476, -310, 4, "w"),
-  b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n"),
+  b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n", { enter: true }),
 ];
 // two rows of the same townhouse up Church Street
 for (let k = 0; k < 7; k++) {
@@ -1027,7 +1027,17 @@ export type FitKind =
   | "locker"
   | "hay"
   | "stall"
-  | "bench";
+  | "bench"
+  | "stove"
+  | "sofa"
+  | "armchair"
+  | "coffee"
+  | "rug"
+  | "fireplace"
+  | "bookshelf"
+  | "bed"
+  | "nightstand"
+  | "wardrobe";
 export interface Fit {
   kind: FitKind;
   x: number;
@@ -1091,6 +1101,28 @@ function fitsOf(b: Building): { floor: string; fits: Fit[] } {
     f("hay", x1 - 6.5, z0 + 1, 2.5, 2, 0.9);
     f("bench", x0 + 2, z0 + 0.5, 4, 1, 0.95);
     return { floor: "#6d5a44", fits };
+  }
+  if (b.kind === "farmhouse") {
+    // one room under the beams (the door in the north wall, middle): the living room west of the
+    // door — books by it, the sofa, a rug and a low table, an armchair, the fireplace on the south
+    // wall; the kitchen east — the counter and stove along the east wall, the fridge, a table and
+    // chairs; a bed, a nightstand and a wardrobe in the south-east corner
+    f("bookshelf", x0 + 0.4, z0 + 0.15, 2.8, 0.5, 2.0);
+    f("sofa", x0 + 0.2, z0 + 2.5, 1.0, 3.2, 0.85);
+    f("rug", x0 + 1.4, z0 + 2.2, 3.6, 4.6, 0.02, false);
+    f("coffee", x0 + 2.0, z0 + 3.3, 1.2, 1.6, 0.45);
+    f("armchair", x0 + 3.8, z0 + 6.4, 1.1, 1.1, 0.9);
+    f("fireplace", x0 + 1.3, z1 - 0.8, 2.4, 0.8, 1.6);
+    f("counter", x1 - 0.9, z0 + 1, 0.8, 4, 0.95);
+    f("stove", x1 - 0.9, z0 + 5, 0.8, 0.9, 0.95);
+    f("fridge", x1 - 1, z0 + 6.2, 0.9, 0.9, 2.0);
+    f("table", x0 + 8.5, z0 + 3, 1.6, 1.6, 0.8);
+    f("chair", x0 + 7.6, z0 + 3.45, 0.7, 0.7, 0.9, false);
+    f("chair", x0 + 10.3, z0 + 3.45, 0.7, 0.7, 0.9, false);
+    f("bed", x1 - 2.5, z1 - 3.1, 2.2, 2.9, 0.6);
+    f("nightstand", x1 - 3.1, z1 - 1.0, 0.5, 0.5, 0.6);
+    f("wardrobe", x0 + 8.4, z1 - 0.7, 1.6, 0.6, 2.0);
+    return { floor: "#8a6a4a", fits };
   }
   if (b.kind === "gatehouse") {
     f("desk", x1 - 1.2, z0 + 0.8, 0.9, z1 - z0 - 1.6, 0.8);

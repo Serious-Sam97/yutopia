@@ -18,7 +18,7 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_place_bar: ["Bar", "Balcão do bar"],
   dark_place_locker: ["Locker", "Armário"],
   dark_place_barn: ["Workbench", "Bancada"],
-  dark_place_farmhouse: ["Farmhouse door", "Porta da casa da fazenda"],
+  dark_place_farmhouse: ["Kitchen counter", "Balcão da cozinha"],
   dark_place_tractor: ["Tractor's toolbox", "Caixa de ferramentas do trator"],
   // the day's nests' caches (docs/plan/31-the-day.md)
   dark_cache_briefcase: ["Briefcase", "Pasta executiva"],

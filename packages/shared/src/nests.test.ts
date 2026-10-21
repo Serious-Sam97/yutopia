@@ -56,19 +56,19 @@ test("some at each place: the farm, the town's edges, the ravine, the pond — a
   for (const n of all) zones.set(n.zone, (zones.get(n.zone) ?? 0) + 1);
   for (const z of ["farm", "town", "ravine", "pond", "woods"]) assert.ok((zones.get(z) ?? 0) > 0, `none at the ${z}`);
   assert.ok((zones.get("woods") ?? 0) > all.length / 2, "mostly the woods");
-  assert.ok((zones.get("town") ?? 0) <= 4, "only a few round the town");
+  assert.ok((zones.get("town") ?? 0) <= 6, "only a few round the town");
   for (const n of all) assert.ok(n.n >= 1 && n.n <= 4);
   // the first 30 (a day nobody's been out) have the named places in them too
   const first = all.slice(0, NESTS.base);
   assert.ok(first.some((n) => n.zone === "farm") && first.some((n) => n.zone === "town"));
 });
 
-test("how many: 30 nests, ~60 shadowed; more with people out; never past 90", () => {
+test("how many: 50 nests, ~100 shadowed; more with people out; never past the cap", () => {
   const all = dayNests(day);
   const k0 = nestCount(all, 0);
   assert.equal(k0, NESTS.base);
   const s0 = all.slice(0, k0).reduce((a, n) => a + n.n, 0);
-  assert.ok(s0 >= 45 && s0 <= 80, `${s0} shadowed`);
+  assert.ok(s0 >= NESTS.base * 1.5 && s0 <= NESTS.base * 2.6, `${s0} shadowed`);
   const k5 = nestCount(all, 5);
   assert.ok(k5 > k0);
   const s5 = all.slice(0, k5).reduce((a, n) => a + n.n, 0);

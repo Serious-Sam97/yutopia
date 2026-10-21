@@ -61,7 +61,6 @@ export const LOOT: LootSpot[] = (() => {
   for (const b of BUILDINGS) {
     if (b.kind === "house") out.push({ id: b.key, place: "house", ...atDoor(b) });
     if (b.kind === "boathouse" || b.kind === "shed") out.push({ id: b.key, place: b.kind, ...atDoor(b) });
-    if (b.kind === "farmhouse") out.push({ id: b.key, place: "farmhouse", ...atDoor(b) });
   }
   // the driver's door: on the street's side (they're parked kerbside, the
   // road's middle at z −405), a little ahead of the middle
@@ -78,10 +77,17 @@ export const LOOT: LootSpot[] = (() => {
             ? "market"
             : ins.b.kind === "barn"
               ? "barn"
-              : null;
+              : ins.b.kind === "farmhouse"
+                ? "farmhouse"
+                : null;
     if (!place) continue;
     const f = ins.fits.find((f) => f.kind === (place === "market" ? "till" : place === "barn" ? "bench" : "counter"));
     if (!f) continue;
+    // (the farmhouse's counter runs along its east wall: in front of it is to the west)
+    if (place === "farmhouse") {
+      out.push({ id: ins.b.key, place, x: f.x - 0.7, z: f.z + f.d / 2 });
+      continue;
+    }
     const front = place === "market" || place === "barn" ? f.z + f.d + 0.7 : f.z - 0.7;
     out.push({ id: ins.b.key, place, x: f.x + f.w / 2, z: front });
   }

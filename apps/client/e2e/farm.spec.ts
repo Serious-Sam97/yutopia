@@ -70,6 +70,28 @@ for (const view of ["3p", "iso"] as const)
     await walkTo(page, inside.x, inside.y, 30_000);
     await expect.poll(() => area(page)).toBe("Barn");
     await shot(page, `farm-${view}-barn-inside`);
+    // (3D: looking up, the roof's underside and its trusses — not the sky)
+    if (view === "3p") {
+      // (first person, looking up: the chase camera's always looking down at you)
+      await page.keyboard.press("KeyY");
+      await page.waitForTimeout(600);
+      await page.evaluate(() => {
+        (window as any).__yutopia.tp.pitch = -0.7;
+      });
+      await page.waitForTimeout(800);
+      await shot(page, "farm-3p-barn-roof");
+      await page.keyboard.press("KeyY");
+      await page.waitForTimeout(600);
+    }
+    // the farmhouse: in by its front door, furnished
+    await walkTo(page, door.x, door.y, 30_000);
+    const porch = G(447, -264.5);
+    await walkTo(page, porch.x, porch.y, 40_000);
+    const room = G(447, -257);
+    await walkTo(page, room.x, room.y, 30_000);
+    await expect.poll(() => area(page)).toBe("Farmhouse");
+    await shot(page, `farm-${view}-farmhouse`);
+    await walkTo(page, porch.x, porch.y, 30_000);
     // out again, round to the field's gate (its east side, the lane's) and up a row
     await walkTo(page, door.x, door.y, 30_000);
     const gate = G(417, -267);

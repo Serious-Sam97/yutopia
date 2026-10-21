@@ -49,18 +49,48 @@ test("the farm: cleared, flat, the lane from the square to the barn and the farm
   assert.equal(placeAt(470, -240).name, "The farm");
 });
 
-test("the barn: walked into by its doors (west), round its stalls and hay; the silo and farmhouse shut", () => {
+test("the barn: walked into by its doors (west), round its stalls and hay; the silo shut", () => {
   const barn = BUILDINGS.find((b) => b.kind === "barn");
   assert.ok(barn);
   assert.ok(insideOf(barn), "you walk in");
   assert.ok(walk(barn.x0 - 1, -311) && walk(barn.x0 + 1, -311), "through the doors");
   assert.ok(wallEdgeAt("v", barn.x0, -316), "the wall beside them");
   assert.ok(!wallEdgeAt("v", barn.x0, -311), "the doorway");
-  for (const kind of ["silo", "farmhouse"] as const) {
-    const b = BUILDINGS.find((x) => x.kind === kind);
-    assert.ok(b && !insideOf(b));
-    assert.ok(!walk((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2), `the ${kind} is solid`);
-  }
+  const silo = BUILDINGS.find((x) => x.kind === "silo");
+  assert.ok(silo && !insideOf(silo));
+  assert.ok(!walk((silo.x0 + silo.x1) / 2, (silo.z0 + silo.z1) / 2), "the silo is solid");
+});
+
+test("the farmhouse: in by its front door (north), its rooms furnished — round the sofa, the bed, the stove", () => {
+  const h = BUILDINGS.find((b) => b.kind === "farmhouse");
+  assert.ok(h);
+  const ins = insideOf(h);
+  assert.ok(ins, "you walk in");
+  const xm = Math.round((h.x0 + h.x1) / 2);
+  assert.ok(!wallEdgeAt("h", xm, h.z0), "the doorway");
+  assert.ok(wallEdgeAt("h", h.x0 + 2, h.z0), "the wall beside it");
+  assert.ok(walk(xm, h.z0 - 1) && walk(xm, h.z0 + 1), "through the door");
+  const kinds = new Set(ins.fits.map((f) => f.kind));
+  for (const k of [
+    "sofa",
+    "armchair",
+    "fireplace",
+    "bookshelf",
+    "stove",
+    "fridge",
+    "counter",
+    "table",
+    "bed",
+    "wardrobe",
+    "rug",
+  ])
+    assert.ok(kinds.has(k as never), `a ${k}`);
+  // the furniture's in the way (the rug isn't), and the room between it is walked
+  const sofa = ins.fits.find((f) => f.kind === "sofa") as (typeof ins.fits)[number];
+  assert.ok(!walk(sofa.x + 0.5, sofa.z + 1));
+  const rug = ins.fits.find((f) => f.kind === "rug") as (typeof ins.fits)[number];
+  assert.ok(walk(rug.x + 3.2, rug.z + 0.5), "the rug's walked on");
+  assert.ok(walk(xm, (h.z0 + h.z1) / 2), "the middle of the room");
 });
 
 test("the cornfield is walked through; the tractor and scarecrows are in the way", () => {
@@ -74,7 +104,7 @@ test("the cornfield is walked through; the tractor and scarecrows are in the way
   for (const c of SCARECROWS) assert.ok(!walk(c.x, c.z), "a scarecrow");
 });
 
-test("the farm's loot: the barn's workbench, the farmhouse's door, the tractor's toolbox — all reached", () => {
+test("the farm's loot: the barn's workbench, the farmhouse's kitchen counter, the tractor's toolbox — all reached", () => {
   for (const id of ["barn", "farmhouse", "tractor"]) {
     const s = lootSpot(id);
     assert.ok(s, id);

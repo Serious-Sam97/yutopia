@@ -1076,3 +1076,10 @@ The user: "spawning and coming at you is great in a blizzard and at night, but b
   - **The other perf runs**: plain 0.44 ms; `DARK=1` 1.0 ms.
   - **Unit tests**: shared 230, world-server 97, client 21.
   - **The GPU run**: 22 of 22 (the farm's worst frame 17 ms in both views; 60 fps on High).
+- **After** (the user's asks):
+  - **More nests**: new places, more spots; 50 a day, up to 80 / 140 shadowed.
+  - **The barn's roof** seen from inside (its underside, trusses, a hay loft).
+  - **The farmhouse enterable and furnished**: a living room, kitchen and bedroom corner.
+  - **The farm's models redone**: a gambrel barn with a cupola, a ribbed silo, a farmhouse with shutters and a porch, a detailed tractor, plaid scarecrows, split-rail fence.
+  - **Real 3D models for whatever lies on the snow** (`tp/items3d.ts`), the caches included.
+  - **Checks**: shared 231, world-server 97; `DAY=1` perf 0.67 ms; the page 553.99 KB; GPU e2e 22 of 22.

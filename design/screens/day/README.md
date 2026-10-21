@@ -10,3 +10,5 @@ the river.
 | `02-nest-asleep-farm`, `02b-nest-close-farm` | **A nest at the farm by day** (from `e2e/day.spec.ts`), asleep: <br>• squatting, folded over their knees, the shroud drawn in close; <br>• its cache (a red flare bag) in the snow among them; <br>• seen from 9 tiles, crouched, they sleep on |
 | `03-nest-waking-farm` | **Walked into, it wakes**, all of it |
 | `*-woods` | **The same in the deep woods** (the trees crowd the camera) |
+| `farm-3p-…`, `farm-iso-…` | **The farm from `e2e/farm.spec.ts`**, in both views: <br>• at the barn's doors; <br>• inside it, with the roof's underside and trusses from first person (`farm-3p-barn-roof`); <br>• in the cornfield; <br>• inside the furnished farmhouse |
+| `drops-row` | **What lies on the snow** (`e2e/drops.spec.ts`, `tp/items3d.ts`): one of each of the pockets' things, as models |

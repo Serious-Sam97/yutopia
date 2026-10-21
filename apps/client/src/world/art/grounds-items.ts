@@ -321,6 +321,54 @@ const BARN_RED = mat("#8e2b20", "#9e3a2c", "#8e2b20", "#6e2018");
 const TRIM = mat("#ece6da", "#f6f2ea", "#e4ddd0", "#c9c2b5");
 const STRAW = mat("#c9a95a", "#d8bb70", "#c4a252", "#a88a44");
 const STALK = mat("#b59c6c", "#c4ad7f", "#a88d5c", "#8f7a52");
+/** The barn's gambrel roof (its ridge along x, as 3D draws it): steep low, shallow high, snow on
+ *  its slopes; the east gable end red, the shape of it. */
+function gambrel(s: Sketch, b: Bld, z: number, over = 0.6) {
+  const K = 3.2;
+  const ym = b.h / 2;
+  const prof: [number, number][] = [
+    [-over, z - 0.35 * P],
+    [K, z + 2.8 * P],
+    [ym, z + 4.2 * P],
+    [b.h - K, z + 2.8 * P],
+    [b.h + over, z - 0.35 * P],
+  ];
+  s.shape({ x: -over, y: -over, w: b.w + 2 * over, d: b.h + 2 * over, z: z - 0.35 * P, h: 4.6 * P }, (d) => {
+    const poly = (pts: V3[], fill: string) => {
+      const p = pts.map(([x, y, zz]) => d.m(x, y, zz));
+      d.raw(
+        `<path d="M${p.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join("L")}Z" fill="${fill}" stroke="#151819" stroke-width="1" stroke-linejoin="round"/>`,
+      );
+    };
+    const slope = (k: number, fill: string) => {
+      const [ya, za] = prof[k];
+      const [yb, zb] = prof[k + 1];
+      poly(
+        [
+          [-over, ya, za],
+          [b.w + over, ya, za],
+          [b.w + over, yb, zb],
+          [-over, yb, zb],
+        ],
+        fill,
+      );
+    };
+    slope(0, "#dfe6ec");
+    slope(1, "#e9eef2");
+    poly(
+      [
+        [b.w, 0, z],
+        [b.w, K, z + 2.8 * P],
+        [b.w, ym, z + 4.2 * P],
+        [b.w, b.h - K, z + 2.8 * P],
+        [b.w, b.h, z],
+      ],
+      "#7a2419",
+    );
+    slope(2, "#f4f7fa");
+    slope(3, "#f7fafc");
+  });
+}
 function barn(s: Sketch, b: Bld) {
   const H = 5.2 * P;
   s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: BARN_RED }, (d) => {
@@ -344,7 +392,20 @@ function barn(s: Sketch, b: Bld) {
     [b.w, b.h],
   ])
     s.box({ x: x - 0.12, y: y - 0.12, w: 0.24, d: 0.24, z: 0, h: H, mat: TRIM, line: 0.5 });
-  pitched(s, b, H, 4.2 * P, true, 0.6);
+  // a stone foundation round its foot
+  s.box({
+    x: -0.06,
+    y: -0.06,
+    w: b.w + 0.12,
+    d: b.h + 0.12,
+    z: 0,
+    h: 0.6 * P,
+    mat: mat("#8a8780", "#9a978f", "#8a8780", "#77746d"),
+  });
+  gambrel(s, b, H);
+  // the cupola on the ridge
+  s.box({ x: b.w / 2 - 0.8, y: b.h / 2 - 0.8, w: 1.6, d: 1.6, z: H + 4.0 * P, h: 1.3 * P, mat: TRIM });
+  s.cyl({ x: b.w / 2, y: b.h / 2, z: H + 5.3 * P, r: 1.2, r2: 0.05, h: 0.9 * P, mat: mat("#3d3a36", "#f4f7fa") });
   s.shadow(0, 0, b.w, b.h, 0.3, 0.1);
 }
 function silo(s: Sketch, b: Bld) {
@@ -777,6 +838,78 @@ function fitPiece(s: Sketch, p: Props) {
     case "stall":
       s.box({ x, y, w, d, z: 0.15 * P, h: h - 0.15 * P, mat: WOOD, line: 0.4 });
       break;
+    // the farmhouse's
+    case "stove":
+      s.box({ x, y, w, d, z: 0, h, mat: mat("#2b2a26", "#3a3a38") });
+      s.box({ x: x + 0.25, y: y + d - 0.25, w: 0.1, d: 0.1, z: h, h: 1.6 * P, mat: DARK });
+      break;
+    case "sofa": {
+      const C = mat("#6b4a3a", "#7d5844", "#6b4a3a", "#5a3c2e");
+      s.box({ x, y, w, d, z: 0.15 * P, h: 0.3 * P, mat: C });
+      s.box({ x, y, w: 0.25, d, z: 0.45 * P, h: h - 0.45 * P, mat: C });
+      s.box({ x, y, w, d: 0.2, z: 0.45 * P, h: 0.2 * P, mat: C });
+      s.box({ x, y: y + d - 0.2, w, d: 0.2, z: 0.45 * P, h: 0.2 * P, mat: C });
+      break;
+    }
+    case "armchair": {
+      const C = mat("#2f4a3b", "#3d5c4a", "#2f4a3b", "#27402f");
+      s.box({ x, y, w, d, z: 0.15 * P, h: 0.3 * P, mat: C });
+      s.box({ x, y: y + d - 0.25, w, d: 0.25, z: 0.45 * P, h: h - 0.45 * P, mat: C });
+      break;
+    }
+    case "coffee":
+      s.box({ x, y, w, d, z: h - 0.06 * P, h: 0.06 * P, mat: WOOD });
+      for (const [u, v] of [
+        [0.08, 0.08],
+        [w - 0.14, d - 0.14],
+      ])
+        s.box({ x: x + u, y: y + v, w: 0.06, d: 0.06, z: 0, h: h - 0.06 * P, mat: WOOD });
+      break;
+    case "rug":
+      s.box({ x, y, w, d, z: 0, h: 0.03 * P, mat: mat("#8a3b2e", "#9a4a3a"), line: 0.3 });
+      s.box({ x: x + 0.3, y: y + 0.3, w: w - 0.6, d: d - 0.6, z: 0.03 * P, h: 0.01 * P, mat: mat("#c9a95a"), line: 0 });
+      break;
+    case "fireplace":
+      s.box({ x, y, w, d, z: 0, h, mat: mat("#8a6a5a", "#9a7a6a", "#8a6a5a", "#6f5444") });
+      s.box({ x: x + 0.6, y, w: w - 1.2, d: d - 0.15, z: h, h: 3.0 * P - h, mat: mat("#7a5a4a", "#8a6a5a") });
+      s.box({
+        x: x + 0.6,
+        y: y - 0.02,
+        w: w - 1.2,
+        d: 0.1,
+        z: 0.1 * P,
+        h: 0.3 * P,
+        mat: { c: "#ff7a2a", top: "#ffb06a", flat: true },
+        glow: true,
+      });
+      break;
+    case "bookshelf":
+      s.box({ x, y, w, d, z: 0, h, mat: WOOD }, (dr) => {
+        for (let k = 0.2; k < f.h - 0.2; k += 0.45)
+          dr.poly("s", fr("s", d, 0.1, w - 0.1, (k + 0.02) * P, (k + 0.3) * P), "#6b2430");
+      });
+      break;
+    case "bed":
+      s.box({ x, y, w, d, z: 0, h: 0.35 * P, mat: WOOD });
+      s.box({
+        x: x + 0.05,
+        y: y + 0.05,
+        w: w - 0.1,
+        d: d - 0.1,
+        z: 0.35 * P,
+        h: 0.15 * P,
+        mat: mat("#e8e4dc", "#f4f1ea"),
+      });
+      s.box({ x, y: y + 0.8, w, d: d - 0.8, z: 0.5 * P, h: 0.08 * P, mat: mat("#6b8aa8", "#7d9bb8") });
+      s.box({ x, y: y - 0.1, w, d: 0.15, z: 0, h: 1.1 * P, mat: WOOD });
+      break;
+    case "nightstand":
+      s.box({ x, y, w, d, z: 0, h, mat: WOOD });
+      s.box({ x: x + 0.15, y: y + 0.15, w: 0.2, d: 0.2, z: h, h: 0.35 * P, mat: mat("#e8d8b0") });
+      break;
+    case "wardrobe":
+      s.box({ x, y, w, d, z: 0, h, mat: WOOD });
+      break;
     case "bench":
       for (const u of [x + 0.1, x + w - 0.2])
         s.box({ x: u, y: y + 0.1, w: 0.1, d: d - 0.2, z: 0, h: h - 0.1 * P, mat: WOOD });
@@ -789,7 +922,8 @@ function fitPiece(s: Sketch, p: Props) {
 export function insideThings(G: G, i: GroundsModule.Inside): Thing[] {
   const out: Thing[] = [];
   const { b } = i;
-  const c = b.sign === "BAR" ? "#4a3426" : b.kind === "barn" ? "#6a4a34" : "#e6e0d4";
+  const c =
+    b.sign === "BAR" ? "#4a3426" : b.kind === "barn" ? "#6a4a34" : b.kind === "farmhouse" ? "#d8c9a8" : "#e6e0d4";
   for (let x = b.x0; x < b.x1; x++)
     for (const z of [b.z0, b.z1])
       if (G.wallEdgeAt("h", x, z))
