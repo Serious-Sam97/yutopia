@@ -174,7 +174,7 @@ export class Walker {
       return;
     if (actionOf(this.controls.b, e.code) !== "inventory") return;
     // (only on foot: not riding, driving, at an arcade — the walker steps only then)
-    if (!this.onFoot || performance.now() - this.steppedAt > 250) return;
+    if (!this.stepping) return;
     e.preventDefault();
     this.inventory();
   };
@@ -206,6 +206,10 @@ export class Walker {
         then?.();
       } else this.darkLoading = false;
     });
+  }
+  /** On foot just now (the walker stepped this frame or so: not riding, driving, at an arcade). */
+  get stepping(): boolean {
+    return this.onFoot && performance.now() - this.steppedAt < 250;
   }
   /** The inventory opened or closed (I, the pad's Menu). */
   inventory(): void {

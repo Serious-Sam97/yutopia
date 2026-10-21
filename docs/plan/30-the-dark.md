@@ -82,7 +82,8 @@ On `Player`, for the team's HUD: `hp`, `st`, `wm` (uint8).
 
 ### D3 — What you carry
 
-`shared/inventory.ts`: **two weapons, six pockets**, stacks.
+`shared/inventory.ts`: **four quick slots, six pockets**, stacks. (It was two
+weapon slots until the quick slots, below.)
 
 | Item | Use |
 |---|---|
@@ -200,7 +201,7 @@ Server-run (`features/dark.ts`), their mind pure and tested
 | Fire | left mouse | RT |
 | Reload | R | X (when nothing to use) |
 | Flare | G | RB |
-| Weapon | 1 · 2 · wheel while aiming | Y |
+| Quick slot (a weapon out, a use, a flare) | 1 · 2 · 3 · 4 | Y while aiming: the next weapon |
 | First aid | — (from the pockets) | d-pad ↓ |
 | Revive | hold E · X | hold X |
 | Pages · objectives | J | View |
@@ -520,7 +521,7 @@ export function nightOf(ms: number): number;    // São Paulo's night, 18:00–0
   shows only while stamina isn't full, and it's amber while winded.
 - **The search prompt** near a spot: "Revistar · E", then a toast with what
   you found.
-- **The pockets strip**: two weapon slots and six pockets, bottom right.
+- **The pockets strip**: the four quick slots and six pockets, bottom right.
   **It isn't in the mocks**: `02-hud-night` shows the battery, the cylinder
   and the flares, not the pockets. It needs a mock first: it shows for 3 s
   after a pickup and while Tab is held; click to use or throw away; the pad's
@@ -1531,3 +1532,76 @@ sent to everyone, indoors too, and stand out there past the glass.
   windows, and are never struck": one in the lobby, one in the studio
   (level 4), one called up by someone outside east of the HQ. Both indoors
   see it, nobody indoors can call one up, and only the one outside is struck.
+||||||| Stash base
+
+## They wait at the edge (2026-10-21)
+
+Seeing them from indoors wasn't enough: with nobody out there to have, they gave
+up after 20 s (`SHADE.leave`) and dissolved. That included the parking lot,
+which counts as indoors: its asphalt is the ground floor's floor tiles.
+
+- **The rule:** the lot stays safe. They don't hunt or strike there, and they
+  can't step onto it. Everyone indoors, on any floor, is now in the shadowed's
+  senses as a **watcher** (`Prey.watch`, hidden).
+  - A watcher within 70 tiles keeps them from going, so they don't dissolve.
+  - With nobody to have, one prowls round the nearest watcher at
+    `SHADE.watch` (10 tiles), closing in as it circles.
+  - Kept off the floor, it slides along the edge. It turns back now and
+    then, and sooner when it's stuck.
+- **Still outside only:** who they go after, strikes, the director's spawns,
+  the day's nests waking, and the danger on the HUD.
+- **Tests:**
+  - **shared** `fsm.test`: someone safe is never had, the shadowed stays past
+    40 s and paces round at 10, and once they're gone past 70 it goes.
+  - **In the game:** spawned from the snow by the lot, then stepped onto it.
+    After 40 s all three were still there, pacing the lot's edge 15 tiles off,
+    and no hit landed.
+
+## The quick slots (2026-10-21)
+
+The two weapon slots became **four quick slots** that hold anything: a weapon
+or a stack. Keys 1–4 fire them, and a small bar of them is always on screen,
+bottom right.
+
+- **The model** (`shared/inventory.ts`):
+  - `Inventory.quick` (`QUICK = 4`) replaces `weapons`. Slots are pockets 0–5,
+    then quick 6–9 (`QUICK_SLOT`).
+  - A weapon lives only in a quick slot, and only one of each kind. A stack
+    can go in either a pocket or a quick slot, with the same cap.
+  - `moveSlot` merges two of the same stack, otherwise swaps, so long as a
+    weapon never lands in a pocket.
+  - `addStack` tops up matching stacks anywhere, then fills empty pockets, then
+    empty quick slots. `count`, `takeStack`, `consume` and `hasWeapon` look at
+    both.
+  - One `USABLE` list (`aid`, `battery`) replaces the three copies.
+  - `cleanInventory` reads an old save's `weapons` as the first two quick
+    slots. The API (`DarkController`) validates `inventory.quick`. The column
+    is JSON, so there's no migration.
+- **The server**:
+  - `arms:draw {slot}` takes 0–3. A stack there changes nothing, and -1 puts
+    the gun away.
+  - `dark:use`, `dark:move`, `dark:pick` and `dark:drop` take 0–9.
+  - The admin kit puts the guns in quick 1 and 2, and moves aside what was
+    there.
+- **The keys**: once the dark is loaded, 1–4 always belong to the quick slots,
+  on foot only (`Walker.stepping`). The emotes keep 5–8.
+  - A weapon is taken out, or put away if it's already in hand.
+  - First aid or a battery is used.
+  - A flare is thrown.
+  - Anything else, or an empty slot: the tile shakes.
+  - In the inventory, 1–4 and E on a quick slot do the same. On the pad, Y
+    while aiming switches to the next weapon in the quick slots.
+- **The HUD**: a column bottom right (`.dk-col`), bottom up: the cylinder and
+  flares, the quick bar (`.dk-quick`), the battery.
+  - The quick bar shows four small tiles with the key, the icon and a count
+    (rounds loaded for a gun). The gun in hand is outlined in amber, and a tile
+    pops when its key does something.
+  - The Tab strip, or the inventory being open, takes its place.
+- **Tests**:
+  - **shared**: moves between quick slots and pockets, the migration, ammo
+    taken from a quick slot.
+  - **world-server**: a stack's quick slot draws nothing, and a use from quick
+    slot 4. The supply locker's flares now fit in a free quick slot.
+  - **API**: validates quick slots; a gun in a pocket is refused.
+  - **e2e** (`inventory.spec`): flares dragged into quick 3, the bar shown, and
+    3 throws one.

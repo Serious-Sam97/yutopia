@@ -37,6 +37,8 @@ async function waitFor(fn: () => boolean, ms = 6000) {
     await sleep(20);
   }
 }
+// (the first quick slot's rounds: a gun there)
+const loaded0 = (p: { inv?: Inventory | null }) => (p.inv?.quick[0] as { loaded?: number } | null | undefined)?.loaded;
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const me = (room: Room): any => room.state.players.get(room.sessionId);
 
@@ -146,7 +148,7 @@ test("a spot's loot goes to whoever searches it first, and comes back on its tim
     assert.deepEqual(b.found[0].got, []);
     if (!a.found[0].got.length) continue;
     // what A found is in A's pockets
-    await waitFor(() => (a.inv?.pockets.some(Boolean) || a.inv?.weapons.some(Boolean)) ?? false);
+    await waitFor(() => (a.inv?.pockets.some(Boolean) || a.inv?.quick.some(Boolean)) ?? false);
     // refilled (YUTOPIA_LOOT_FAST: 20 min → 1.5–2.5 s)
     await sleep(2600);
     b.room.send("dark:loot", { spot: spot.id });
@@ -164,19 +166,19 @@ test("the locker's revolver: loaded the first time; dropped, picked up by someon
   a.room.send("dark:loot", { spot: "locker" });
   await waitFor(() => a.found.length === 1);
   assert.deepEqual(a.found[0].got, [{ id: "revolver", n: 1, loaded: 6 }]);
-  await waitFor(() => a.inv?.weapons[0]?.id === "revolver");
+  await waitFor(() => a.inv?.quick[0]?.id === "revolver");
   // out on the snow by the gate, dropped (a weapon's slot: 6)
   await goTo(a, LOCKER.x - 8, LOCKER.z);
   a.room.send("dark:drop", { slot: 6 });
-  await waitFor(() => a.room.state.drops.size === 1 && a.inv?.weapons[0] === null);
+  await waitFor(() => a.room.state.drops.size === 1 && a.inv?.quick[0] === null);
   // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
   const d: any = [...a.room.state.drops.values()][0];
   assert.equal(d.item, "revolver");
   assert.equal(d.loaded, 6);
   await goTo(b, d.x + OFF.x, d.y + OFF.y);
   b.room.send("dark:pick", { id: d.id });
-  await waitFor(() => b.inv?.weapons[0]?.id === "revolver");
-  assert.equal(b.inv?.weapons[0]?.loaded, 6);
+  await waitFor(() => b.inv?.quick[0]?.id === "revolver");
+  assert.equal(loaded0(b), 6);
   await waitFor(() => b.room.state.drops.size === 0);
   // back to the locker: another, empty this time
   await goTo(a, LOCKER.x, LOCKER.z);
@@ -188,8 +190,8 @@ test("the locker's revolver: loaded the first time; dropped, picked up by someon
   await a.room.leave(true);
   await sleep(200);
   const a2 = await person(321);
-  assert.equal(a2.inv?.weapons[0]?.id, "revolver");
-  assert.equal(a2.inv?.weapons[0]?.loaded, 0);
+  assert.equal(a2.inv?.quick[0]?.id, "revolver");
+  assert.equal(loaded0(a2), 0);
 });
 
 test("the torch focused: on, aiming, out on the land — the battery runs down; let go, it stops falling", async () => {
@@ -269,7 +271,7 @@ test("one body a person: one kept for a reconnection, the battery runs down at 1
   b.room.send("phone:torch", { on: false });
 });
 
-test("the inventory: a pocket dragged to another; something on the snow taken into the pocket it was dragged to", async () => {
+test("the inventory: a pocket dragged to another; something on the snow taken into the pocket it was dragged to; the quick slots", async () => {
   const a = await person(361, "member,builder,admin");
   await goTo(a, -250, -60);
   a.room.send("mod:refill", { kit: true });
@@ -291,10 +293,24 @@ test("the inventory: a pocket dragged to another; something on the snow taken in
   a.room.send("dark:pick", { id: drop.id, slot: aid });
   await waitFor(() => a.inv?.pockets[aid]?.id === "flare");
   assert.equal(a.inv?.pockets[aid]?.n, 3);
-  // weapons swap slots
-  const w0 = a.inv?.weapons[0]?.id;
+  // quick slots swap
+  const w0 = a.inv?.quick[0]?.id;
   a.room.send("dark:move", { from: 6, to: 7 });
-  await waitFor(() => a.inv?.weapons[1]?.id === w0);
+  await waitFor(() => a.inv?.quick[1]?.id === w0);
+  // the first aid into quick slot 4 (slot 9); a gun drawn from its slot
+  a.room.send("dark:move", { from: to, to: 9 });
+  await waitFor(() => a.inv?.quick[3]?.id === "aid" && a.inv?.pockets[to] === null);
+  a.room.send("arms:draw", { slot: 1 });
+  await waitFor(() => me(a.room).gun === w0);
+  // a stack's quick slot draws nothing (the gun stays out); a weapon never goes into a pocket
+  a.room.send("arms:draw", { slot: 3 });
+  a.room.send("dark:move", { from: 7, to });
+  // used from the quick slot, which empties
+  a.room.send("dark:use", { slot: 9 });
+  await waitFor(() => a.inv?.quick[3] === null);
+  assert.equal(me(a.room).gun, w0, "still in the hand");
+  assert.equal(a.inv?.quick[1]?.id, w0, "the gun stayed in its quick slot");
+  assert.equal(a.inv?.pockets[to], null);
 });
 
 test("indoors: dropped on the studio's floor, there; picked up on that floor only", async () => {
@@ -363,15 +379,16 @@ test("a supply locker, built: a kit a day — what fits; tomorrow another; kept 
   await sleep(200);
   const a2 = await person(381);
   assert.equal((await open(a2)).later, true);
-  // pockets nearly full: what fits, the day taken
+  // pockets nearly full: what fits (the flares in a free quick slot), the day taken
   b.room.send("mod:refill", { kit: true });
-  await waitFor(() => b.inv?.weapons[0]?.id === "revolver" && !!b.inv?.pockets.some((s) => s?.id === "battery"));
+  await waitFor(() => b.inv?.quick[0]?.id === "revolver" && !!b.inv?.pockets.some((s) => s?.id === "battery"));
   const some = await open(b);
   assert.deepEqual(
     some.got.map((g) => g.id),
-    ["r38", "aid", "battery"],
+    ["r38", "aid", "battery", "flare"],
   );
-  assert.equal(some.full, true);
+  assert.deepEqual(b.inv?.quick[2], { id: "flare", n: 2 });
+  assert.equal(some.full, false, "all of it fitted, with the quick slots");
   assert.equal((await open(b)).later, true);
   // tomorrow: another (a revolver carried: none)
   kitClock.shift = 86_400_000;

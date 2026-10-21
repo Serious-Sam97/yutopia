@@ -16,7 +16,7 @@ const shot = async (page: Page, name: string) => {
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
 };
 const inv = (page: Page) =>
-  page.evaluate(() => (window as any).__dark.inv as { pockets: ({ id: string; n: number } | null)[]; weapons: any[] });
+  page.evaluate(() => (window as any).__dark.inv as { pockets: ({ id: string; n: number } | null)[]; quick: any[] });
 const me = (page: Page) =>
   page.evaluate(() => {
     const y = (window as any).__yutopia;
@@ -69,12 +69,12 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   // and hurt (something to use)
   await page.evaluate(() => {
     const y = (window as any).__yutopia;
-    for (let i = 0; i < 8; i++) y.room.send("dark:drop", { slot: i });
+    for (let i = 0; i < 10; i++) y.room.send("dark:drop", { slot: i });
   });
   await expect
     .poll(async () => {
       const v = await inv(page);
-      return v.pockets.every((s) => !s) && v.weapons.every((w) => !w);
+      return v.pockets.every((s) => !s) && v.quick.every((w) => !w);
     })
     .toBe(true);
   await page.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), G(-250, -48));
@@ -87,10 +87,10 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await expect.poll(async () => (await inv(page)).pockets.some((s) => s?.id === "aid")).toBe(true);
   await expect.poll(async () => (await me(page)).hp).toBe(40);
 
-  // I: open — the weapons, six pockets, the snow in reach
+  // I: open — the four quick slots, six pockets, the snow in reach
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
-  await expect(page.locator(".dk-inv [data-slot]")).toHaveCount(8);
+  await expect(page.locator(".dk-inv [data-slot]")).toHaveCount(10);
   // standing still while it's open (W held a second)
   const before = await me(page);
   await page.keyboard.down("KeyW");
@@ -126,6 +126,10 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await expect.poll(async () => (await inv(page)).pockets[empty]?.id).toBe("flare");
   await expect(lying).toHaveCount(0);
 
+  // the flares into quick slot 3 (slot 8): anything goes in a quick slot
+  await drag(page, slot(page, empty), slot(page, 8));
+  await expect.poll(async () => (await inv(page)).quick[2]?.id).toBe("flare");
+
   // the weapons: 2 takes the shotgun out from here
   await page.keyboard.press("Digit2");
   await expect
@@ -136,8 +140,15 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
     )
     .toBe("shotgun");
 
-  // Esc closes; I opens and I closes
+  // Esc closes; the quick HUD bottom right: four slots, the shotgun's lit; 3 throws a flare
   await page.keyboard.press("Escape");
+  await expect(page.locator(".dk-quick .dk-q")).toHaveCount(4);
+  await expect(page.locator(".dk-quick .dk-q.on")).toHaveCount(1);
+  await shot(page, "inventory-quick");
+  const nFlares = (await inv(page)).quick[2]?.n as number;
+  await page.keyboard.press("Digit3");
+  await expect.poll(async () => (await inv(page)).quick[2]?.n ?? 0).toBe(nFlares - 1);
+
   await expect(page.locator(".dk-inv .panel")).toBeHidden();
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
@@ -171,9 +182,9 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
   await expect(page.locator(".dk-inv .gl .none")).toBeVisible();
-  const flares = (await inv(page)).pockets.findIndex((s) => s?.id === "flare");
-  await slot(page, flares).click({ button: "right" });
-  await expect.poll(async () => (await inv(page)).pockets[flares]).toBe(null);
+  // (the flares left in quick slot 3)
+  await slot(page, 8).click({ button: "right" });
+  await expect.poll(async () => (await inv(page)).quick[2]).toBe(null);
   await expect(lying).toHaveCount(1);
   await shot(page, "inventory-inside");
   await lying.click();

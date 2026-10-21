@@ -14,6 +14,9 @@ class Survivor extends Model
 
     public const POCKETS = 6;
 
+    // the quick slots (keys 1–4: a gun or a stack; shared/inventory.ts QUICK)
+    public const QUICK = 4;
+
     public const PAGES_MAX = 200;
 
     protected $fillable = ['user_id', 'inventory', 'vitals', 'pages', 'issued', 'kit_day'];

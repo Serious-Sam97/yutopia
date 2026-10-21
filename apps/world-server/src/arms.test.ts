@@ -43,6 +43,8 @@ async function waitFor(fn: () => boolean, ms = 8000) {
 }
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const me = (room: Room): any => room.state.players.get(room.sessionId);
+// (the first quick slot's rounds: a gun there)
+const loaded0 = (p: { inv?: Inventory | null }) => (p.inv?.quick[0] as { loaded?: number } | null | undefined)?.loaded;
 // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
 const shadows = (p: { room: Room }): any[] => [...(p.room.state.shadows?.values() ?? [])];
 const code = (s: (typeof SHADE_STATES)[number]) => SHADE_STATES.indexOf(s);
@@ -137,7 +139,7 @@ const setup = async (sandbox: number) => {
   await standAt(b, POND.x, POND.z + 3);
   // B armed: both guns loaded, rounds in the pockets
   b.room.send("mod:refill", { kit: true });
-  await waitFor(() => b.inv?.weapons[0]?.id === "revolver");
+  await waitFor(() => b.inv?.quick[0]?.id === "revolver");
   b.room.send("arms:draw", { slot: 0 });
   await waitFor(() => me(b.room).gun === "revolver");
   return { a, b };
@@ -182,7 +184,7 @@ test("A exposes it, B shoots it down: a shielded one sparks, an exposed one is h
   );
   await waitFor(() => shadows(b)[0]?.s === code("dissolve") || shadows(b).length === 0);
   // three rounds spent
-  await waitFor(() => b.inv?.weapons[0]?.loaded === 3);
+  await waitFor(() => loaded0(b) === 3);
 });
 
 test("the rewind: a late shot at where B saw it counts; a ray from somewhere B isn't doesn't", async () => {
@@ -199,7 +201,7 @@ test("the rewind: a late shot at where B saw it counts; a ray from somewhere B i
   fire(b, now.x, now.y, 0, { x: m.x + 2.5, y: m.y });
   await sleep(400);
   assert.equal(b.hits.length, 0, "a muzzle 2.5 tiles from where the server has me: no shot");
-  assert.equal(b.inv?.weapons[0]?.loaded, 6, "and no round spent");
+  assert.equal(loaded0(b), 6, "and no round spent");
   // where I saw it 300 ms ago, my line's lag (150 ms) said: a hit (a spark: it's shielded) — once
   // it was somewhere A isn't on the way to (A's a target too)
   const seen = b.seen.get(id) ?? [];
@@ -224,25 +226,25 @@ test("a reload: a round at a time out of the pockets, till full; a shot stops it
     await sleep(ARMS.revolver.rate * 1000 + 50);
     fire(b, me(b.room).x + 20, me(b.room).y);
   }
-  await waitFor(() => b.inv?.weapons[0]?.loaded === 3);
+  await waitFor(() => loaded0(b) === 3);
   const spare = b.inv?.pockets.find((s) => s?.id === "r38")?.n ?? 0;
   b.room.send("arms:reload", {});
   await sleep(ARMS.revolver.reload * 1000 + 120);
-  assert.equal(b.inv?.weapons[0]?.loaded, 4, "one round after 0.35 s");
-  await waitFor(() => b.inv?.weapons[0]?.loaded === 6, 2000);
+  assert.equal(loaded0(b), 4, "one round after 0.35 s");
+  await waitFor(() => loaded0(b) === 6, 2000);
   assert.equal(b.inv?.pockets.find((s) => s?.id === "r38")?.n, spare - 3, "out of the pockets");
   // a shot in the middle of a reload stops it
   aimAway();
   await sleep(ARMS.revolver.rate * 1000 + 50);
   fire(b, me(b.room).x + 20, me(b.room).y);
-  await waitFor(() => b.inv?.weapons[0]?.loaded === 5);
+  await waitFor(() => loaded0(b) === 5);
   b.room.send("arms:reload", {});
   await sleep(100);
   fire(b, me(b.room).x + 20, me(b.room).y);
   await sleep(ARMS.revolver.rate * 1000 + 600);
   fire(b, me(b.room).x + 20, me(b.room).y);
   await sleep(1000);
-  assert.ok((b.inv?.weapons[0]?.loaded ?? 9) < 6, "the reload stopped at the shot");
+  assert.ok((loaded0(b) ?? 9) < 6, "the reload stopped at the shot");
 });
 
 test("a flare thrown lands ahead, lit for 12 s: nobody comes into it", async () => {
@@ -295,7 +297,7 @@ const indoors = async (sandbox: number, level: number, ax: number, ay: number, b
   const at = await standIn(a, ax, ay, level);
   await standIn(b, bx, by, level);
   b.room.send("mod:refill", { kit: true });
-  await waitFor(() => b.inv?.weapons[0]?.id === "revolver");
+  await waitFor(() => b.inv?.quick[0]?.id === "revolver");
   b.room.send("arms:draw", { slot: 0 });
   await waitFor(() => me(b.room).gun === "revolver");
   aim(b, at.x, at.y);
@@ -314,7 +316,7 @@ test("the lobby: B's revolver hits A for half what one of the shadowed takes; A'
   assert.equal(pvpDamage("revolver"), 25);
   await waitFor(() => a.struck.length === 1);
   assert.deepEqual(a.struck[0], { id: b.room.sessionId, n: 25, shot: true });
-  await waitFor(() => b.inv?.weapons[0]?.loaded === 5);
+  await waitFor(() => loaded0(b) === 5);
 });
 
 test("the studio (level 4): a shot there counts too; four put one of us down, the fifth finds nobody", async () => {
@@ -360,7 +362,7 @@ test("another floor: nobody's hit; a wall on the way stops it", async () => {
   await standIn(a, at.x, at.y, 4);
   await sleep(ARMS.revolver.rate * 1000);
   shootAt(b, at.x, at.y, 8);
-  await waitFor(() => (b.inv?.weapons[0]?.loaded ?? 6) < 5, 3000);
+  await waitFor(() => (loaded0(b) ?? 6) < 5, 3000);
   await sleep(300);
   assert.equal(b.hits.length, 1, "on another floor: missed");
   assert.equal(me(a.room).hp, 75);
@@ -371,7 +373,7 @@ test("another floor: nobody's hit; a wall on the way stops it", async () => {
   aim(b, there.x, there.y);
   await sleep(ARMS.revolver.rate * 1000 + 50);
   shootAt(b, there.x, there.y, 9);
-  await waitFor(() => (b.inv?.weapons[0]?.loaded ?? 6) < 4, 3000);
+  await waitFor(() => (loaded0(b) ?? 6) < 4, 3000);
   await sleep(300);
   assert.equal(b.hits.length, 1, "through a wall: missed");
   assert.equal(me(a.room).hp, 75);

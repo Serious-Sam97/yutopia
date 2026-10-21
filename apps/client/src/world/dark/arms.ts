@@ -1,6 +1,6 @@
 import type { ServerMessages } from "@yutopia/shared";
 import { ARMS, type GunId, pellets, type Ray, rayMeets } from "@yutopia/shared/dark";
-import { type Inventory, STACKS, WEAPONS } from "@yutopia/shared/inventory";
+import { count, type Inventory, isUsable, isWeapon, QUICK_SLOT, STACKS, WEAPONS } from "@yutopia/shared/inventory";
 import { prefs, setPrefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
 import type { Press } from "../input/controls";
@@ -10,17 +10,19 @@ import type { Shades } from "./shades";
 import type { DarkSound } from "./voices";
 
 // Guns and flares on my side (docs/plan/30-the-dark.md D6), anywhere — the snow,
-// the office. 1 · 2 take a weapon out (again: put it away; in iso, it switches to
-// 3D — the fight is 3D); aiming (the right button, LT), the left button (RT)
+// the office. 1–4 are the quick slots: a weapon there taken out (again: put it
+// away; in iso, it switches to 3D — the fight is 3D), first aid or a battery used,
+// a flare thrown; aiming (the right button, LT), the left button (RT)
 // fires: through the crosshair, from the hand — the server decides what it met
 // (features/arms.ts: the shadowed, one of us), the flash and the tracers show at
 // once. R (the pad's X with nothing to use) reloads a round at a time; G (RB)
-// throws a flare where you look; Y while aiming, the other weapon. Indoors the
-// keys are only taken when there's something to do with them (1 · 2 are the
-// emotes else). The cylinder or the shells and the flares, bottom right, as in
+// throws a flare where you look; Y while aiming, the next weapon. 1–4 are always
+// the quick slots once the dark's loaded (the emotes keep 5–8); R and G only
+// when there's something to do with them. The cylinder or the shells and the flares, bottom right, as in
 // 02-hud-night.
 
 const AMBER = "#e9a33a";
+const QUICK_KEYS = ["Digit1", "Digit2", "Digit3", "Digit4"];
 const HAND = 1.35; // the gun's height in the hand, held out (shared beam.ts BEAM.held)
 
 export class Arms {
@@ -36,6 +38,8 @@ export class Arms {
   private lastLoaded = new Map<string, number>(); // the gun's rounds as last seen (a reload's tick)
   private liftAt = 0; // the flashlight raised (aiming with no gun) since (performance.now; 0: not)
   private lent = false; // …and switched on for it: off again when it's let go
+  /** a quick slot's key pressed (0–3), and whether it did anything (the quick HUD shows it) */
+  onQuick: ((n: number, ok: boolean) => void) | null = null;
 
   constructor(
     private readonly ctl: WorldController,
@@ -75,23 +79,27 @@ export class Arms {
     });
   }
 
+  /** the cylinder and flares (the dark puts it in its bottom-right column) */
+  get hudEl(): HTMLElement {
+    return this.hud;
+  }
+
   // ── the keys (Dark's capturing keydown hands them here first) ─────────────
   /** Taken (true): the world doesn't get it. */
   key(e: KeyboardEvent): boolean {
     if (hud.get().build.on) return false;
     const inv = this.inv();
-    if (e.code === "Digit1" || e.code === "Digit2") {
-      const slot = e.code === "Digit1" ? 0 : 1;
-      // (a weapon there, or one in the hand to put away: else the key's the world's)
-      if (!inv?.weapons[slot] && !this.me()?.gun) return false;
-      this.draw(slot);
+    const q = QUICK_KEYS.indexOf(e.code);
+    // (on foot: riding, driving, at an arcade the keys are theirs)
+    if (q >= 0 && this.walker.stepping) {
+      this.quick(q);
       return true;
     }
     if (e.code === "KeyR" && this.gun()) {
       this.reload();
       return true;
     }
-    if (e.code === "KeyG" && inv?.pockets.some((s) => s?.id === "flare")) {
+    if (e.code === "KeyG" && inv && count(inv, "flare") > 0) {
       this.flare();
       return true;
     }
@@ -103,15 +111,16 @@ export class Arms {
     this.fire();
     return true;
   }
-  /** The pad: Y while aiming is the other weapon (not the camera); X with a gun out and
-   *  nothing to use, a reload. */
+  /** The pad: Y while aiming is the next weapon in the quick slots (not the camera); X with
+   *  a gun out and nothing to use, a reload. */
   presses(p: Set<Press>, aiming: boolean): void {
     if (aiming && p.has("camera")) {
       p.delete("camera");
       const me = this.me();
-      const inv = this.inv();
-      const now = inv?.weapons.findIndex((w) => w?.id === me?.gun) ?? -1;
-      this.draw(now === 0 ? 1 : 0);
+      const guns = (this.inv()?.quick ?? []).flatMap((it, i) => (it && isWeapon(it.id) ? [i] : []));
+      const now = guns.findIndex((i) => this.inv()?.quick[i]?.id === me?.gun);
+      const next = guns[(now + 1) % guns.length];
+      if (next !== undefined && guns.length > (now >= 0 ? 1 : 0)) this.draw(next);
     }
     // (a use the dark took — a search, a pick-up — is gone from them by now)
     if (p.has("use") && this.gun()) {
@@ -128,15 +137,32 @@ export class Arms {
     const me = this.me();
     const inv = this.inv();
     if (!me?.gun || !inv) return null;
-    const slot = inv.weapons.findIndex((w) => w?.id === me.gun);
-    const w = inv.weapons[slot];
-    return w ? { id: w.id as GunId, loaded: w.loaded, slot } : null;
+    const slot = inv.quick.findIndex((w) => w?.id === me.gun);
+    const w = inv.quick[slot];
+    return w && "loaded" in w ? { id: w.id as GunId, loaded: w.loaded, slot } : null;
   }
 
-  /** A weapon slot (0, 1) in the hand; the one in it, or -1: put away. */
+  /** A quick slot (0–3, keys 1–4): a weapon taken out (again: away), first aid or a battery
+   *  used, a flare thrown. False (and nothing sent): nothing there to do. */
+  quick(n: number): boolean {
+    const it = this.inv()?.quick[n];
+    let ok = false;
+    if (it && isWeapon(it.id)) {
+      this.draw(n);
+      ok = true;
+    } else if (it && isUsable(it.id)) {
+      this.ctl.room?.send("dark:use", { slot: QUICK_SLOT + n });
+      ok = true;
+    } else if (it?.id === "flare") ok = this.flare();
+    this.onQuick?.(n, ok);
+    return ok;
+  }
+
+  /** A quick slot (0–3) with a weapon in the hand; the one in it, or -1: put away. */
   draw(slot: number) {
     const inv = this.inv();
-    const w = inv?.weapons[slot];
+    const it = inv?.quick[slot];
+    const w = it && isWeapon(it.id) ? it : null;
     const me = this.me();
     const putAway = !w || me?.gun === w.id;
     this.ctl.room?.send("arms:draw", { slot: putAway ? -1 : slot });
@@ -150,14 +176,15 @@ export class Arms {
     this.reloading = true;
     this.ctl.room?.send("arms:reload", {});
   }
-  private flare() {
+  private flare(): boolean {
     const inv = this.inv();
-    if (!inv?.pockets.some((s) => s?.id === "flare")) return;
+    if (!inv || count(inv, "flare") <= 0) return false;
     const tp = this.ctl.tp;
     // where I look (3D), else where I face
     const yaw = tp ? this.camYaw() : this.facing();
     const pitch = tp && this.walker.aiming ? this.camPitch() : 0;
     this.ctl.room?.send("arms:flare", { yaw, pitch });
+    return true;
   }
   private facing(): number {
     const me = this.me() as { yaw?: number } | undefined;
@@ -286,7 +313,7 @@ export class Arms {
       this.cross.className = `dk-cross${marked ? ` hit ${this.markKind}` : ""}`;
     }
     // the cylinder (or the shells), the spare rounds, the flares
-    const flares = inv?.pockets.reduce((n, s) => n + (s?.id === "flare" ? s.n : 0), 0) ?? 0;
+    const flares = inv ? count(inv, "flare") : 0;
     // (out here, the flares too; indoors only with a gun out)
     const show = !!inv && (out ? !!g || flares > 0 : !!g);
     this.hud.style.display = show ? "flex" : "none";
@@ -298,14 +325,14 @@ export class Arms {
       if (was !== undefined && g.loaded > was) this.voices.play(g.id === "shotgun" ? "shotgun-pump" : "revolver-load");
       this.lastLoaded.set(g.id, g.loaded);
     }
-    const key = `${g?.id}|${g?.loaded}|${flares}|${this.reloading}|${inv.pockets.map((s) => (s ? `${s.id}${s.n}` : "")).join()}`;
+    const key = `${g?.id}|${g?.loaded}|${flares}|${this.reloading}|${[...inv.pockets, ...inv.quick].map((s) => (s ? `${s.id}${"n" in s ? s.n : ""}` : "")).join()}`;
     if (this.hud.dataset.key === key) return;
     this.hud.dataset.key = key;
     let gunHtml = "";
     if (g) {
       const mag = WEAPONS[g.id].mag;
       const ammo = WEAPONS[g.id].ammo;
-      const spare = inv.pockets.reduce((n, s) => n + (s?.id === ammo ? s.n : 0), 0);
+      const spare = count(inv, ammo);
       if (g.id === "revolver") {
         const holes = Array.from({ length: mag }, (_, i) => {
           const a = -Math.PI / 2 + (i * 2 * Math.PI) / mag;

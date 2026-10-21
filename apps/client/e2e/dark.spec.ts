@@ -97,7 +97,7 @@ test("a sprint across the pond: out of breath, a jog; a search; the pockets", as
   // Tab: the pockets
   await page.keyboard.down("Tab");
   await expect(page.locator(".dk-strip")).toBeVisible();
-  await expect(page.locator(".dk-strip .dk-slot")).toHaveCount(8);
+  await expect(page.locator(".dk-strip .dk-slot")).toHaveCount(10);
   await shot(page, "dark-pockets");
   await page.keyboard.up("Tab");
   await expect(page.locator(".dk-strip")).toBeHidden();

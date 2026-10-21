@@ -38,16 +38,19 @@ import {
   nightBudget,
   nightness,
   nightOf,
+  QUICK_SLOT,
   REFILL_MIN,
   removeSlot,
   rollLoot,
+  type Stack,
+  slotAt,
   spendRoll,
   stepVitals,
   takeStack,
+  USABLE,
   type Vitals,
   type VitalsClock,
   vitalByte,
-  WEAPON_SLOT,
   WEAPONS,
 } from "@yutopia/shared/dark";
 import { INSIDES } from "@yutopia/shared/grounds";
@@ -78,7 +81,6 @@ const SELF_MS = DOWN.selfAid * 1000;
 const WINDED_GRACE_MS = 300; // the client stops sprinting a message's lag before we hear of it
 const SPRINT_SEEN = MOVE.jog * 1.25; // tiles / s over the last quarter second (for a second): no jog
 const SPRINT = GAITS.indexOf("sprint");
-const USABLE = ["aid", "battery"] as const;
 const MAX_DROPS = 300;
 
 interface Survivor {
@@ -154,7 +156,7 @@ registerFeature((room: WorldRoom) => {
 
   // ── the people ─────────────────────────────────────────────────────────────
   const recordOf = (s: Survivor): SurvivorRecord => ({
-    inventory: { weapons: s.inv.weapons, pockets: s.inv.pockets },
+    inventory: { quick: s.inv.quick, pockets: s.inv.pockets },
     vitals: { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat },
     pages: s.inv.pages,
     issued: s.issued,
@@ -459,11 +461,12 @@ registerFeature((room: WorldRoom) => {
     if (!r || !d || d.level !== r.p.level) return;
     if (Math.hypot(r.p.x - d.x, r.p.y - d.y) > LOOT_REACH) return;
     const item = d.item as ItemId;
-    // (into the pocket it was dragged to, if it was and it fits there: the inventory's)
+    // (into the slot it was dragged to, if it was and it fits there: the inventory's)
     const slot = Number(m?.slot);
+    const at = slotAt(r.s.inv, slot);
     const into =
-      Number.isInteger(slot) &&
-      (isStack(item) || (isWeapon(item) && !hasWeapon(r.s.inv, item) && r.s.inv.weapons[slot - WEAPON_SLOT] === null));
+      at !== undefined &&
+      (isStack(item) || (isWeapon(item) && !hasWeapon(r.s.inv, item) && at === null && slot >= QUICK_SLOT));
     let got: LootItem[];
     let left: LootItem[];
     if (into) {
@@ -480,7 +483,7 @@ registerFeature((room: WorldRoom) => {
     lootDirty = true;
     found(r.s, client.sessionId, d.id, got, left.length > 0);
   });
-  // a drag in the inventory: pocket to pocket, weapon slot to weapon slot (shared moveSlot)
+  // a drag in the inventory: any slot to any, a weapon only into a quick slot (shared moveSlot)
   room.on("dark:move", (client, m) => {
     const s = of(client.sessionId);
     if (s?.loaded && moveSlot(s.inv, Number(m?.from), Number(m?.to))) changed(s);
@@ -569,12 +572,17 @@ registerFeature((room: WorldRoom) => {
     const lvl = (x: unknown) => Math.max(1, Math.min(100, Number(x)));
     if (m?.hp !== undefined && Number.isFinite(Number(m.hp))) s.v.hp = lvl(m.hp);
     if (m?.wm !== undefined && Number.isFinite(Number(m.wm))) s.v.wm = lvl(m.wm);
-    // `kit`: armed for trying the fight — both guns loaded, rounds, shells, flares, first aid, a battery
+    // `kit`: armed for trying the fight — both guns loaded (quick 1 and 2; what was there put
+    // away), rounds, shells, flares, first aid, a battery
     if (m?.kit) {
-      s.inv.weapons = [
+      const was = s.inv.quick.filter((it): it is Stack => !!it && isStack(it.id));
+      s.inv.quick = [
         { id: "revolver", loaded: WEAPONS.revolver.mag },
         { id: "shotgun", loaded: WEAPONS.shotgun.mag },
+        null,
+        null,
       ];
+      for (const it of was) addStack(s.inv, it.id, it.n);
       for (const [id, n] of [
         ["r38", 24],
         ["shell", 12],

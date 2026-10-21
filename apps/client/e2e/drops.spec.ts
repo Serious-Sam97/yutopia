@@ -30,13 +30,13 @@ test("dropped on the snow: a model each", async ({ page }) => {
     y.room.send("mod:hour", { h: 13 });
     y.room.send("mod:refill", { kit: true });
   });
-  await expect.poll(async () => (await inv(page))?.weapons?.filter(Boolean).length ?? 0).toBe(2);
+  await expect.poll(async () => (await inv(page))?.quick?.filter(Boolean).length ?? 0).toBe(2);
   // (what lay here before: left alone — only ours are picked up at the end)
   const before = new Set(
     (await page.evaluate(() => [...(window as any).__yutopia.room.state.drops.keys()])) as string[],
   );
-  // each pocket and weapon dropped a step along
-  const slots = [6, 7, 0, 1, 2, 3, 4, 5];
+  // each pocket and quick slot dropped a step along
+  const slots = [6, 7, 8, 9, 0, 1, 2, 3, 4, 5];
   for (const [k, slot] of slots.entries()) {
     await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + p.k * 0.9, y: p.y, level: 0 }), {
       ...at,

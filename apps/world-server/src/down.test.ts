@@ -106,12 +106,12 @@ test("alone: woken at the office, 50 health, what they carried kept", async () =
   const c = await person(711, 72);
   await standAt(c, POND.x, POND.z);
   c.room.send("mod:refill", { kit: true });
-  await waitFor(() => c.inv?.weapons[0]?.id === "revolver");
+  await waitFor(() => c.inv?.quick[0]?.id === "revolver");
   await down(c);
   await waitFor(() => c.awake === 1, 8000);
   await waitFor(() => me(c.room).downAt === 0 && me(c.room).hp === DOWN.awakeHp);
   assert.notEqual(Math.round(me(c.room).x), Math.round(POND.x - OFF.x), "not on the pond any more");
-  assert.equal(c.inv?.weapons[0]?.id, "revolver", "what they carried, kept");
+  assert.equal(c.inv?.quick[0]?.id, "revolver", "what they carried, kept");
 });
 
 test("their own first aid: 5 s held, up at 100, one kit used", async () => {

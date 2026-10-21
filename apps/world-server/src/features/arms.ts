@@ -15,7 +15,7 @@ import {
   rayMeets,
 } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import { takeStack, WEAPONS } from "@yutopia/shared/inventory";
+import { isWeapon, QUICK, takeStack, WEAPONS, weaponIn } from "@yutopia/shared/inventory";
 import { MV_AIM, unpackMv } from "@yutopia/shared/move";
 import type { Player } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
@@ -71,8 +71,8 @@ registerFeature((room: WorldRoom) => {
   const inHand = (sid: string, p: Player) => {
     const inv = room.survival?.inventory(sid);
     if (!inv || !p.gun) return null;
-    const i = inv.weapons.findIndex((w) => w?.id === p.gun);
-    return i >= 0 ? { inv, w: inv.weapons[i] as { id: GunId; loaded: number } } : null;
+    const w = weaponIn(inv, p.gun);
+    return w ? { inv, w: w as { id: GunId; loaded: number } } : null;
   };
   // the others near (on the same floor, within HEARD): they see the shot and hear it
   const near = (p: Player, x: number, y: number) =>
@@ -114,9 +114,11 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const inv = room.survival?.inventory(client.sessionId);
     if (!p || !inv) return;
+    // (a quick slot 0–3 with a weapon in it; -1: put away; a stack there: nothing changes)
     const slot = Number(m?.slot);
-    const w = slot === 0 || slot === 1 ? inv.weapons[slot] : null;
-    p.gun = w ? w.id : "";
+    const it = Number.isInteger(slot) && slot >= 0 && slot < QUICK ? inv.quick[slot] : null;
+    if (it && !isWeapon(it.id)) return;
+    p.gun = it ? it.id : "";
     hand(client.sessionId).reloadAt = 0; // (a change of weapon stops a reload)
   });
 
@@ -256,7 +258,7 @@ registerFeature((room: WorldRoom) => {
         for (const p of room.state.players.values())
           if (p.gun) {
             const inv = room.survival?.inventory(p.sid);
-            if (inv && !inv.weapons.some((w) => w?.id === p.gun)) p.gun = "";
+            if (inv && !weaponIn(inv, p.gun)) p.gun = "";
           }
       }
     },

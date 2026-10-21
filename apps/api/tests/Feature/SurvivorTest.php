@@ -10,7 +10,7 @@ function pockets(array $over = []): array
 {
     return array_replace_recursive([
         'inventory' => [
-            'weapons' => [['id' => 'revolver', 'loaded' => 4], null],
+            'quick' => [['id' => 'revolver', 'loaded' => 4], null, ['id' => 'aid', 'n' => 1], null],
             'pockets' => [['id' => 'r38', 'n' => 9], ['id' => 'flare', 'n' => 1], null, ['id' => 'aid', 'n' => 2], null, null],
         ],
         'vitals' => ['hp' => 62.5, 'wm' => 40, 'bat' => 81],
@@ -26,7 +26,7 @@ it('keeps someone\'s pockets: saved, then read back as they were (a restart lose
     internalCall($this, 'PUT', "/api/internal/survivors/{$ana->id}", pockets())->assertOk();
     // (what a fresh world-server reads when she comes back in)
     $back = internalCall($this, 'GET', "/api/internal/survivors/{$ana->id}")->assertOk()->json('survivor');
-    expect($back['inventory']['weapons'])->toBe([['id' => 'revolver', 'loaded' => 4], null]);
+    expect($back['inventory']['quick'])->toBe([['id' => 'revolver', 'loaded' => 4], null, ['id' => 'aid', 'n' => 1], null]);
     expect($back['inventory']['pockets'][0])->toBe(['id' => 'r38', 'n' => 9]);
     expect($back['inventory']['pockets'][3])->toBe(['id' => 'aid', 'n' => 2]);
     expect($back['inventory']['pockets'][5])->toBeNull();
@@ -46,8 +46,13 @@ it('refuses what nobody could carry', function () {
     $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'laser', 'n' => 1]]]]))->assertUnprocessable();
     $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'r38', 'n' => 25]]]]))->assertUnprocessable();
     $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'r38', 'n' => 0]]]]))->assertUnprocessable();
-    $put(pockets(['inventory' => ['weapons' => [0 => ['id' => 'shotgun', 'loaded' => 3]]]]))->assertUnprocessable();
-    $put(pockets(['inventory' => ['weapons' => [1 => ['id' => 'revolver', 'loaded' => 1]]]]))->assertUnprocessable(); // two revolvers
+    $put(pockets(['inventory' => ['quick' => [0 => ['id' => 'shotgun', 'loaded' => 3]]]]))->assertUnprocessable();
+    $put(pockets(['inventory' => ['quick' => [1 => ['id' => 'revolver', 'loaded' => 1]]]]))->assertUnprocessable(); // two revolvers
+    $put(pockets(['inventory' => ['quick' => [1 => ['id' => 'aid', 'n' => 3]]]]))->assertUnprocessable();
+    $put(pockets(['inventory' => ['pockets' => [0 => ['id' => 'revolver', 'loaded' => 1]]]]))->assertUnprocessable(); // a gun in a pocket
+    $five = pockets();
+    $five['inventory']['quick'] = array_fill(0, 5, null);
+    $put($five)->assertUnprocessable();
     $put(pockets(['vitals' => ['hp' => 101]]))->assertUnprocessable();
     $put(pockets(['pages' => ['<script>']]))->assertUnprocessable();
     $seven = pockets();

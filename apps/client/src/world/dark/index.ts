@@ -1,7 +1,17 @@
 import type { ServerMessages } from "@yutopia/shared";
 import { KIT_SPOT, LOCKER, LOOT, LOOT_REACH, type LootItem, lockerFront, SEARCH_MS } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
-import { type Inventory, type ItemId, POCKETS, WEAPON_SLOT, WEAPONS } from "@yutopia/shared/inventory";
+import {
+  count,
+  findStack,
+  type Inventory,
+  type ItemId,
+  isUsable,
+  isWeapon,
+  POCKETS,
+  QUICK_SLOT,
+  WEAPONS,
+} from "@yutopia/shared/inventory";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import type { WorldController } from "../controller";
 import { actionOf } from "../input/bindings";
@@ -18,9 +28,9 @@ import { DarkSound } from "./voices";
 
 // The dark (docs/plan/30-the-dark.md), on the client: its own chunk, loaded by
 // the walker the first time I'm out on the land. Phase 2: my stamina as an arc
-// by my body (amber, out of breath), what I carry (a strip bottom right, for a
-// moment after a pickup and while Tab is held: click to use, right click to
-// drop), searching a spot (E or the pad's X near it: a ring fills, then the
+// by my body (amber, out of breath), the quick slots (keys 1–4) always bottom
+// right, all I carry (a strip there instead, for a moment after a pickup and
+// while Tab is held: click to use, right click to drop), searching a spot (E or the pad's X near it: a ring fills, then the
 // server says what was in it), what lies on the snow. As in
 // design/screens/dark/05a-loot and 05b-pockets.
 export const DARK_CHUNK = "yutopia-dark";
@@ -31,7 +41,6 @@ const t = (key: string, vars: Record<string, string> = {}) =>
 const itemName = (id: ItemId) => t(`dark_item_${id}`);
 const TPX = 39.19; // iso px a tile up (the views' clientAt)
 const AMBER = "#e9a33a";
-const USABLE = new Set<string>(["aid", "battery"]);
 
 type Target =
   | { kind: "spot"; id: string; label: string; x: number; y: number; z: number }
@@ -44,8 +53,21 @@ export function startDark(ctl: WorldController, walker: Walker): DarkHooks {
 const CSS = `
 .dk{position:fixed;inset:0;pointer-events:none;z-index:40;font-family:-apple-system,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;color:#e9ecef}
 .dk .abs{position:absolute}
-.dk-strip{display:flex;gap:6px;align-items:flex-end;right:24px;bottom:182px;transition:opacity .25s}
-.dk-bat{right:24px;bottom:140px;width:170px}
+.dk-col{position:absolute;right:24px;bottom:18px;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:14px}
+.dk-col>.abs{position:relative;right:auto;bottom:auto}
+.dk-strip{display:flex;gap:6px;align-items:flex-end;transition:opacity .25s}
+.dk-bat{width:170px}
+.dk-quick{display:flex;gap:5px;align-items:flex-end}
+.dk-q{position:relative;height:46px;width:46px;border-radius:7px;background:rgba(12,15,21,.62);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(3px);transition:transform .12s ease-out,border-color .12s,box-shadow .12s}
+.dk-q.w{width:78px}
+.dk-q svg{position:absolute;inset:6px 5px 10px 5px;width:calc(100% - 10px);height:calc(100% - 16px)}
+.dk-q .k{position:absolute;left:4px;top:2px;font-size:9px;font-weight:800;color:rgba(233,236,239,.6)}
+.dk-q .n{position:absolute;right:4px;bottom:1px;font-size:11px;font-weight:700;text-shadow:0 1px 2px #000}
+.dk-q.empty{background:rgba(12,15,21,.32);border-style:dashed;border-color:rgba(255,255,255,.12)}
+.dk-q.on{border:1.5px solid ${AMBER};box-shadow:0 0 10px rgba(233,163,58,.4)}
+.dk-q.go{transform:scale(1.12);border-color:#fff}
+.dk-q.no{animation:dknope .28s}
+@keyframes dknope{20%{transform:translateX(-3px)}60%{transform:translateX(3px)}}
 .dk-bat .row{display:flex;justify-content:space-between;font-size:12px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.8)}
 .dk-bat .bar{position:relative;height:5px;background:rgba(255,255,255,.18);border-radius:3px;margin-top:6px;overflow:hidden}
 .dk-bat .bar i{position:absolute;top:0;bottom:0;left:0}
@@ -84,6 +106,10 @@ class Dark implements DarkHooks {
   private inv: Inventory | null = null;
   private readonly root = document.createElement("div");
   private readonly strip = document.createElement("div");
+  private readonly col = document.createElement("div"); // bottom right, up from the guns: the quick slots or the strip, the battery
+  private readonly quickEl = document.createElement("div");
+  private quickKey = "";
+  private quickPulse: { n: number; ok: boolean; until: number } | null = null;
   private readonly prompt = document.createElement("div");
   private readonly toastEl = document.createElement("div");
   private readonly arc = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -151,11 +177,15 @@ class Dark implements DarkHooks {
     this.arc.setAttribute("class", "abs");
     this.arcLabel.className = "abs dk-arc-l";
     this.bat.className = "abs dk-bat";
+    this.quickEl.className = "abs dk-quick";
+    this.col.className = "dk-col";
     this.arcLabel.textContent = t("dark_winded");
-    for (const el of [this.strip, this.prompt, this.toastEl, this.arc, this.arcLabel, this.bat] as HTMLElement[]) {
+    for (const el of [this.prompt, this.toastEl, this.arc, this.arcLabel] as HTMLElement[]) {
       el.style.display = "none";
       this.root.append(el);
     }
+    for (const el of [this.quickEl, this.strip, this.bat]) el.style.display = "none";
+    this.root.append(this.col);
     this.hit.className = "dk-hit";
     this.awake.className = "dk-awake";
     this.awake.textContent = t("dark_awake");
@@ -165,7 +195,13 @@ class Dark implements DarkHooks {
     this.voices = new DarkSound(ctl, walker, this.shades);
     this.vitals = new VitalsHud(ctl, walker, this.root);
     this.arms = new Arms(ctl, walker, this.shades, () => this.inv, this.root, this.voices);
-    this.downs = new Down(ctl, walker, this.root, () => !!this.inv?.pockets.some((s) => s?.id === "aid"), t);
+    this.arms.onQuick = (n, ok) => {
+      this.quickPulse = { n, ok, until: performance.now() + (ok ? 160 : 280) };
+      this.quickKey = "";
+    };
+    // (the column, bottom up: the guns' cylinder and flares, the quick slots or the strip, the battery)
+    this.col.append(this.arms.hudEl, this.quickEl, this.strip, this.bat);
+    this.downs = new Down(ctl, walker, this.root, () => !!this.inv && count(this.inv, "aid") > 0, t);
     // the inventory (I, the pad's Menu): its asks go to the server, or to the guns
     this.panel = new InventoryPanel(
       ctl,
@@ -177,6 +213,7 @@ class Dark implements DarkHooks {
         move: (from, to) => ctl.room?.send("dark:move", { from, to }),
         pick: (id, slot) => ctl.room?.send("dark:pick", slot === undefined ? { id } : { id, slot }),
         draw: (slot) => this.arms.draw(slot),
+        quick: (n) => this.arms.quick(n),
         reload: () => this.arms.reload(),
       },
       t,
@@ -347,7 +384,7 @@ class Dark implements DarkHooks {
     this.arms.presses(p, aiming);
   }
   aid(): void {
-    const slot = this.inv?.pockets.findIndex((s) => s?.id === "aid") ?? -1;
+    const slot = this.inv ? findStack(this.inv, "aid") : -1;
     if (slot >= 0) this.ctl.room?.send("dark:use", { slot });
   }
 
@@ -365,8 +402,12 @@ class Dark implements DarkHooks {
       const gain = s ? s.n - (before?.id === s.id ? before.n : 0) : 0;
       if (gain > 0) this.fresh.set(i, `+${gain}`);
     });
-    inv.weapons.forEach((w, i) => {
-      if (w && was.weapons[i]?.id !== w.id) this.fresh.set(WEAPON_SLOT + i, "+1");
+    inv.quick.forEach((it, i) => {
+      const before = was.quick[i];
+      if (!it) return;
+      const had = before?.id === it.id ? before : null;
+      const gain = "n" in it ? it.n - (had && "n" in had ? had.n : 0) : had ? 0 : 1;
+      if (gain > 0) this.fresh.set(QUICK_SLOT + i, `+${gain}`);
     });
     if (this.fresh.size) this.stripUntil = performance.now() + 3000;
     this.render();
@@ -416,13 +457,16 @@ class Dark implements DarkHooks {
         el.append(tag("span", "n", n));
         const tip = tag("div", "dk-tip", "");
         tip.append(tag("b", "", itemName(id)));
-        if (USABLE.has(id)) {
+        if (isUsable(id)) {
           tip.append(tag("span", "", `${t("dark_use")} (${t(`dark_use_${id}`)})`));
           tip.append(document.createElement("br"));
         }
         tip.append(tag("span", "", t("dark_drop")));
         el.append(tip);
-        el.addEventListener("click", () => USABLE.has(id) && this.ctl.room?.send("dark:use", { slot: i }));
+        el.addEventListener("click", () => {
+          if (i >= QUICK_SLOT) this.arms.quick(i - QUICK_SLOT);
+          else if (isUsable(id)) this.ctl.room?.send("dark:use", { slot: i });
+        });
         el.addEventListener("contextmenu", (e) => {
           e.preventDefault();
           this.ctl.room?.send("dark:drop", { slot: i });
@@ -432,8 +476,14 @@ class Dark implements DarkHooks {
       if (plus && performance.now() < this.stripUntil) el.append(tag("span", "plus", plus));
       this.strip.append(el);
     };
-    for (const [i, w] of inv.weapons.entries())
-      slot(WEAPON_SLOT + i, w?.id ?? null, w ? `${w.loaded}/${WEAPONS[w.id].mag}` : "", true, String(i + 1));
+    for (const [i, it] of inv.quick.entries())
+      slot(
+        QUICK_SLOT + i,
+        it?.id ?? null,
+        !it ? "" : "loaded" in it ? `${it.loaded}/${WEAPONS[it.id].mag}` : String(it.n),
+        !!it && isWeapon(it.id),
+        String(i + 1),
+      );
     for (let i = 0; i < POCKETS; i++) {
       const s = inv.pockets[i];
       slot(i, s?.id ?? null, s ? String(s.n) : "", false);
@@ -449,6 +499,35 @@ class Dark implements DarkHooks {
         ` ${t("dark_aid_pad")}`,
       );
       this.strip.append(hint);
+    }
+  }
+
+  // ── the quick slots (1–4): always there, bottom right — but for the strip or the inventory ──
+  private quickHud(now: number) {
+    const inv = this.inv;
+    const show = !!inv && !this.panel.open && this.strip.style.display === "none";
+    this.quickEl.style.display = show ? "flex" : "none";
+    if (!show || !inv) return;
+    const room = this.ctl.room;
+    const gun = (room?.state.players.get(room.sessionId)?.gun as string) || "";
+    const pulse = this.quickPulse && now < this.quickPulse.until ? this.quickPulse : null;
+    if (!pulse) this.quickPulse = null;
+    const key = `${JSON.stringify(inv.quick)}|${gun}|${pulse ? `${pulse.n}${pulse.ok}` : ""}`;
+    if (key === this.quickKey) return;
+    this.quickKey = key;
+    this.quickEl.replaceChildren();
+    for (const [i, it] of inv.quick.entries()) {
+      const el = document.createElement("div");
+      const wide = !!it && isWeapon(it.id);
+      const on = !!it && it.id === gun;
+      const go = pulse?.n === i ? (pulse.ok ? " go" : " no") : "";
+      el.className = `dk-q${wide ? " w" : ""}${it ? "" : " empty"}${on ? " on" : ""}${go}`;
+      el.append(tag("span", "k", String(i + 1)));
+      if (it) {
+        el.append(svg(ICON[it.id]));
+        el.append(tag("span", "n", "loaded" in it ? `${it.loaded}/${WEAPONS[it.id].mag}` : String(it.n)));
+      }
+      this.quickEl.append(el);
     }
   }
 
@@ -651,6 +730,7 @@ class Dark implements DarkHooks {
       this.fresh.clear();
       this.render();
     }
+    this.quickHud(now);
     if (this.toastUntil && now > this.toastUntil) {
       this.toastUntil = 0;
       this.toastEl.style.display = "none";

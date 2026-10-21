@@ -24,7 +24,7 @@ class DarkController extends Controller
         User::findOrFail($userId);
         $data = $request->validate([
             'inventory' => ['required', 'array'],
-            'inventory.weapons' => ['present', 'array', 'max:2'],
+            'inventory.quick' => ['present', 'array', 'max:'.Survivor::QUICK],
             'inventory.pockets' => ['present', 'array', 'max:'.Survivor::POCKETS],
             'vitals' => ['required', 'array'],
             'vitals.hp' => ['required', 'numeric', 'between:0,100'],
@@ -36,7 +36,7 @@ class DarkController extends Controller
             'kitDay' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:1000000'],
         ]);
         $inventory = [
-            'weapons' => $this->weapons($data['inventory']['weapons']),
+            'quick' => $this->quick($data['inventory']['quick']),
             'pockets' => $this->pockets($data['inventory']['pockets']),
         ];
         $survivor = Survivor::updateOrCreate(['user_id' => $userId], [
@@ -62,28 +62,34 @@ class DarkController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    // two slots, a gun or nothing in each; one of a kind; loaded no more than it holds
-    private function weapons(array $slots): array
+    // four quick slots (keys 1–4), a gun, a stack or nothing in each; a gun one of a kind,
+    // loaded no more than it holds; no stack over its cap
+    private function quick(array $slots): array
     {
         $out = [];
         $seen = [];
-        foreach (array_values($slots) as $i => $w) {
-            if ($w === null) {
+        foreach (array_values($slots) as $i => $it) {
+            if ($it === null) {
                 $out[] = null;
 
                 continue;
             }
-            $id = is_array($w) ? ($w['id'] ?? null) : null;
-            $loaded = is_array($w) ? ($w['loaded'] ?? null) : null;
+            $id = is_array($it) ? ($it['id'] ?? null) : null;
+            if (is_string($id) && isset(Survivor::STACKS[$id])) {
+                $out[] = $this->stack($it, "inventory.quick.$i");
+
+                continue;
+            }
+            $loaded = is_array($it) ? ($it['loaded'] ?? null) : null;
             if (! is_string($id) || ! isset(Survivor::WEAPONS[$id]) || isset($seen[$id])
                 || ! is_int($loaded) || $loaded < 0 || $loaded > Survivor::WEAPONS[$id]) {
-                throw ValidationException::withMessages(["inventory.weapons.$i" => 'not a weapon we know, or loaded past its capacity']);
+                throw ValidationException::withMessages(["inventory.quick.$i" => 'not an item we know, or loaded past its capacity']);
             }
             $seen[$id] = true;
             $out[] = ['id' => $id, 'loaded' => $loaded];
         }
 
-        return array_pad($out, 2, null);
+        return array_pad($out, Survivor::QUICK, null);
     }
 
     // six pockets, a stack or nothing in each, no stack over its cap
@@ -96,14 +102,21 @@ class DarkController extends Controller
 
                 continue;
             }
-            $id = is_array($s) ? ($s['id'] ?? null) : null;
-            $n = is_array($s) ? ($s['n'] ?? null) : null;
-            if (! is_string($id) || ! isset(Survivor::STACKS[$id]) || ! is_int($n) || $n < 1 || $n > Survivor::STACKS[$id]) {
-                throw ValidationException::withMessages(["inventory.pockets.$i" => 'not an item we know, or more than a pocket holds']);
-            }
-            $out[] = ['id' => $id, 'n' => $n];
+            $out[] = $this->stack($s, "inventory.pockets.$i");
         }
 
         return array_pad($out, Survivor::POCKETS, null);
+    }
+
+    // a stack we know, 1 up to its cap
+    private function stack(mixed $s, string $key): array
+    {
+        $id = is_array($s) ? ($s['id'] ?? null) : null;
+        $n = is_array($s) ? ($s['n'] ?? null) : null;
+        if (! is_string($id) || ! isset(Survivor::STACKS[$id]) || ! is_int($n) || $n < 1 || $n > Survivor::STACKS[$id]) {
+            throw ValidationException::withMessages([$key => 'not an item we know, or more than a pocket holds']);
+        }
+
+        return ['id' => $id, 'n' => $n];
     }
 }
