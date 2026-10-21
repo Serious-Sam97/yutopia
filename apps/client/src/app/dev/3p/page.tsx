@@ -1,6 +1,6 @@
 "use client";
 
-import { Grid, openingsIntoWalls, screenInputToWorld, splitAll, studio } from "@yutopia/shared";
+import { avatarFromSeed, Grid, openingsIntoWalls, screenInputToWorld, splitAll, studio } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 // (static, like the world page: the lazy chunks it shares — themes, items,
@@ -13,7 +13,11 @@ import { WorldEngine } from "@/world/engine";
 // a build with NEXT_PUBLIC_YUTOPIA_SHOTS=1).
 //   /dev/3p?crowd=8&hour=12&cam=chase|free|first&view=3p|iso&x=&y=&yaw=&pitch=&dist=&frozen=1
 //   &me=phone:text|held:mug|type|busy:coffee|emote:wave|act:highfive  (what you're doing: first person's hands)
+//   &shade=1  one of the shadowed a few steps ahead, shot down every 6 s (its death);
+//             &shadeAt=<s> holds it that far into its death, &seed=<n> its own (odd: falls the other way),
+//             &face=<radians> turns it from facing you
 type Tp = typeof import("@/world/tp/view");
+type Body3 = import("@/world/tp/view").Body3;
 type Demo = typeof import("@/world/tp/demo");
 
 interface Hud {
@@ -210,6 +214,43 @@ export default function ThirdPersonDemo() {
         window.removeEventListener("keyup", onKey);
       });
 
+      // ?shade=1: one of the shadowed, standing, shot down, coming back (6 s round)
+      // (the chase camera is behind you, along your facing: it stands the other way, facing you)
+      const shadeDir = (demo.me.angle ?? 0) + 0.45;
+      const shadeAt = { x: demo.me.x - Math.cos(shadeDir) * 3.2, y: demo.me.y - Math.sin(shadeDir) * 3.2 };
+      const shadeLook = avatarFromSeed(11.3);
+      const shadeT0 = performance.now();
+      const shade = (): Body3 => {
+        const now = performance.now();
+        const still = q.get("shadeAt");
+        const tc = still !== null ? 1.4 + Number(still) : ((now - shadeT0) / 1000) % 6;
+        const [state, t0] = tc < 1.4 ? ["stalk", 0] : tc < 3.8 ? ["dissolve", 1.4] : ["emerge", 3.8];
+        return {
+          id: "shade",
+          name: "",
+          avatar: shadeLook,
+          ...shadeAt,
+          d: 0,
+          a: 0,
+          angle: shadeDir + Number(q.get("face") ?? 0),
+          status: "online",
+          speaking: false,
+          emote: "",
+          mic: false,
+          bot: true,
+          shade: {
+            pose: "lurch",
+            t: tc - t0,
+            seed: Number(q.get("seed") ?? 2),
+            dark: 1,
+            state: state as string,
+            since: now - (tc - t0) * 1000,
+            killed: true,
+          },
+        };
+      };
+      const withShade = q.get("shade") === "1";
+
       const frozen = q.get("frozen") === "1";
       let last = performance.now();
       let fpsT = 0;
@@ -225,7 +266,7 @@ export default function ThirdPersonDemo() {
           if (meState) Object.assign(demo.me, meState);
           // (an act plays again every 2.5 s, so there's always one to look at)
           if (meState?.act) Object.assign(demo.me, { actAt: Math.floor(Date.now() / 2500) * 2500 });
-          view.frame(dt, demo.all(), "me");
+          view.frame(dt, withShade ? [...demo.all(), shade()] : demo.all(), "me");
           for (const m of demo.said.splice(0)) view.say(m.id, m.text);
         } else {
           // iso: WASD is screen-relative, as in the real client

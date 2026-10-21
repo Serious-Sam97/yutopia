@@ -189,6 +189,8 @@ const GROUND_LAMP: Record<string, { h: number; radius: number; intensity: number
 };
 // a flare burning on the snow (docs/plan/30-the-dark.md D6), lighting like a ground lamp, red
 const FLARE_LAMP = { h: 0.5, radius: 8, intensity: 6 };
+// one of the shadowed shot down: the shot's flash through it, then the light it burns away in
+const DEATH_LAMP = { h: 1.1, radius: 9, intensity: 8 };
 const GROUND_REACH = 44;
 const GROUND_POOL = 4; // their own point lights (High; fewer below)
 // the phones' flashlights: spot lights (always there, dark when off: no shader
@@ -1626,6 +1628,7 @@ void main() {
   downed = new Map<string, "down" | "kneel">();
   /** Flares burning (world/dark gives them: the floor's coords, feet z, s lit): a red ground lamp each. */
   flares: { x: number; y: number; z: number; t: number }[] = [];
+  private deaths: { x: number; y: number; z: number; t: number }[] = [];
   private arms3: Arms3 | null = null;
   /** Shots, sparks, flares in the air and on the snow (tp/arms3d.ts), made when first wanted. */
   arms(): Arms3 {
@@ -1826,7 +1829,7 @@ void main() {
         const notThere =
           !!sh &&
           ((sh.state === "emerge" && shadeT < 0.6) ||
-            (sh.state === "dissolve" && shadeT > 0.45) ||
+            (sh.state === "dissolve" && shadeT > (sh.killed ? 1.95 : 0.45)) ||
             (sh.fade ?? 1) < 0.5);
         p3.root.visible = !hidden3 && !notThere;
         if (b.id === meId) mySeat = seat3;
@@ -1898,9 +1901,15 @@ void main() {
       }
     // the shadowed's shroud (tp/shroud3d.ts): their smoke, and embers where a beam burns them
     const shades = bodies.filter((b) => b.shade);
+    const now3 = performance.now();
+    this.deaths = [];
+    for (const b of shades) {
+      const sh = b.shade as NonNullable<Body3["shade"]>;
+      const t = (now3 - sh.since) / 1000;
+      if (sh.killed && sh.state === "dissolve" && t < 2) this.deaths.push({ x: b.x, y: b.y, z: b.z ?? 0, t });
+    }
     if (shades.length || this.shroud) {
       this.shroud ??= new Shroud3(this.scene);
-      const now3 = performance.now();
       const px = this.renderer.domElement.clientHeight / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
       this.shroud.update(
         shades.map((b) => {
@@ -1916,6 +1925,7 @@ void main() {
             burn: sh.burn ?? null,
             h: sh.state === "lurk" ? 0.95 : undefined,
             fade: sh.fade,
+            killed: sh.killed,
           };
         }),
         this.camera,
@@ -2454,7 +2464,34 @@ void main() {
     const g = this.around.grounds;
     const on = Math.min(1, Math.max(0, night * 1.3 - 0.1));
     const n = this.quality === "high" ? GROUND_POOL : this.quality === "medium" ? 2 : 1;
-    const near: { x: number; y: number; h: number; c: (typeof GROUND_LAMP)[string]; d: number; flare?: boolean }[] = [];
+    const near: {
+      x: number;
+      y: number;
+      h: number;
+      c: (typeof GROUND_LAMP)[string];
+      d: number;
+      flare?: boolean;
+      color?: number;
+    }[] = [];
+    // a death first of all (short, and the brightest thing there; the ground floor's)
+    for (const f of this.level === 0 ? this.deaths : []) {
+      const d = Math.hypot(f.x - this.target.x, f.y - this.target.z);
+      const smooth = (a: number, b: number) => {
+        const k = Math.max(0, Math.min(1, (f.t - a) / (b - a)));
+        return k * k * (3 - 2 * k);
+      };
+      const k = Math.max(Math.exp(-f.t * 9), 0.35 * smooth(0.45, 1.05) * (1 - smooth(1.15, 1.9)));
+      if (d < GROUND_REACH && k > 0.01)
+        near.push({
+          x: f.x,
+          y: f.y,
+          h: f.z + DEATH_LAMP.h,
+          c: { ...DEATH_LAMP, intensity: DEATH_LAMP.intensity * k },
+          d: -2,
+          flare: true,
+          color: f.t < 0.2 ? 0xfff4e6 : 0xffd08a,
+        });
+    }
     // flares first, day or night: red, ~6 over 11 tiles (the mocks' 02-hud-night), flickering
     // (my floor's: dark/arms.ts hands over only those)
     for (const f of this.flares) {
@@ -2491,7 +2528,7 @@ void main() {
       }
       p.position.set(l.x, l.h, l.y);
       p.distance = l.c.radius * 1.4;
-      p.color.setHex(l.flare ? 0xff3a24 : 0xffd29a);
+      p.color.setHex(l.color ?? (l.flare ? 0xff3a24 : 0xffd29a));
       p.intensity = l.flare ? l.c.intensity : l.c.intensity * on * fade * fade * (3 - 2 * fade);
     });
   }
@@ -3461,7 +3498,7 @@ void main() {
   private crosshair: HTMLDivElement | null = null;
   private aimKey = "";
   private aimDue = 0;
-  setLook(on: boolean) {
+  setLook(on: boolean, quiet = false) {
     const c = this.renderer.domElement;
     if (!on) {
       if (document.pointerLockElement === c) document.exitPointerLock();
@@ -3471,22 +3508,30 @@ void main() {
     // raw mouse movement where there is (Chrome); a plain lock elsewhere (Firefox)
     const lock = c.requestPointerLock as (o?: { unadjustedMovement?: boolean }) => Promise<void> | undefined;
     // a refusal: the promise says so (Chrome), or the error event (Firefox: no promise)
-    const refused = () => this.events.lookRefused?.();
+    const refused = () => {
+      if (!quiet) this.events.lookRefused?.();
+    };
     this.lockAsked = 0;
     try {
       const p = lock.call(c, { unadjustedMovement: true });
-      if (!p?.catch) this.lockAsked = 1;
+      if (!p?.catch) this.lockAsked = quiet ? 0 : 1;
       else
         p.catch(() => {
           if (document.pointerLockElement === c) return;
           const q = lock.call(c);
           if (q?.catch) q.catch(refused);
-          else this.lockAsked = 1;
+          else this.lockAsked = quiet ? 0 : 1;
         });
     } catch {
-      this.lockAsked = 1;
+      this.lockAsked = quiet ? 0 : 1;
       lock.call(c);
     }
+  }
+  // Back to mouse look after something borrowed the pointer (the phone, the bag).
+  // Chrome locks again without a click after letting go from code; where the
+  // browser says no, the pointer just stays out (no toast: nobody asked).
+  resumeLook() {
+    this.setLook(true, true);
   }
   private onLockChange = () => {
     const on = document.pointerLockElement === this.renderer.domElement;

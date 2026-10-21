@@ -161,6 +161,7 @@ export interface PersonIn {
     since: number; // (performance.now ms)
     burn?: { x: number; y: number } | null; // a focused beam on it, from there
     fade?: number; // 0..1: coming into range, going out of it (world/dark/shades.ts)
+    killed?: boolean; // shot down: its dissolve is its death (SHADE.dying long)
   };
 }
 

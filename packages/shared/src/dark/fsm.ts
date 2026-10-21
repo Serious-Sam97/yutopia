@@ -44,6 +44,8 @@ export const SHADE = {
   recover: 0.7,
   exposed: 12,
   dissolve: 1,
+  /** killed: the death plays out (it staggers, goes down, burns away in light) */
+  dying: 2.4,
   /** a strike lands within this; the windup starts this close */
   reach: 1.3,
   closeIn: 1.2,
@@ -272,7 +274,7 @@ export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => numbe
 
   // dissolving: then gone
   if (s.state === "dissolve") {
-    if (inState >= SHADE.dissolve) act.gone = true;
+    if (inState >= (s.killed ? SHADE.dying : SHADE.dissolve)) act.gone = true;
     return act;
   }
   // the dawn, or nobody near for long: it goes (back into the dark)

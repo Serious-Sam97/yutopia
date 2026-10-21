@@ -28,6 +28,7 @@ export {
   crawlPose,
   crouchPose,
   crouchWalkPose,
+  deathPose,
   HIP_H,
   kneelPose,
   landPose,

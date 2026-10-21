@@ -1049,6 +1049,127 @@ export function shadePose(kind: ShadeKind, t: number, seed = 0): Pose {
   return out;
 }
 
+/** One of the shadowed, shot down (`t` s into its death, SHADE.dying long): thrown back by the
+ *  shot, staggering with its arms up into the light, dropping to its knees, folding over onto
+ *  the snow — and lying there as it burns away. Odd `seed`s fall the other way round. */
+const DEATH: Key[] = [
+  { at: 0, c: { up: 0, sx: 0.3, dx: 0.32, sL: -0.35, sR: -0.3, eL: -0.3, eR: -0.25 } },
+  {
+    at: 0.1,
+    c: {
+      up: -0.01,
+      hx: -0.22,
+      sx: -0.3,
+      sy: 0.25,
+      nx: -0.25,
+      dx: -0.5,
+      sL: 0.55,
+      sR: 0.45,
+      oL: 0.75,
+      oR: 0.85,
+      eL: -0.4,
+      eR: -0.2,
+      wL: 0.4,
+      wR: 0.4,
+      tR: 0.35,
+      kR: 0.25,
+    },
+  },
+  {
+    at: 0.42,
+    c: {
+      up: -0.03,
+      hx: -0.12,
+      sx: -0.32,
+      sy: -0.1,
+      nx: -0.2,
+      dx: -0.6,
+      sL: -2.25,
+      sR: -1.95,
+      oL: 0.55,
+      oR: 0.6,
+      eL: -0.2,
+      eR: -0.35,
+      wL: 0.3,
+      wR: 0.2,
+      tL: -0.25,
+      kL: 0.5,
+      tR: -0.1,
+      kR: 0.6,
+    },
+  },
+  {
+    at: 0.82,
+    c: {
+      up: -0.33,
+      hx: 0.15,
+      sx: 0.25,
+      sy: 0.05,
+      dx: 0.5,
+      sL: -0.6,
+      sR: -0.45,
+      oL: 0.3,
+      oR: 0.3,
+      eL: -0.5,
+      eR: -0.4,
+      tL: -0.15,
+      kL: 1.65,
+      fL: 1.35,
+      tR: -0.15,
+      kR: 1.65,
+      fR: 1.35,
+    },
+  },
+  {
+    at: 1.3,
+    c: {
+      up: -0.34,
+      hx: 0.7,
+      sx: 0.55,
+      dx: 0.42,
+      sL: -0.2,
+      sR: -0.12,
+      oL: 0.22,
+      oR: 0.2,
+      eL: -0.25,
+      eR: -0.2,
+      tL: -0.75,
+      kL: 1.75,
+      fL: 1.3,
+      tR: -0.72,
+      kR: 1.75,
+      fR: 1.3,
+    },
+  },
+  {
+    at: 1.9,
+    c: {
+      up: -0.37,
+      hx: 1.15,
+      sx: 0.62,
+      nx: 0.2,
+      dx: 0.3,
+      dy: 0.35,
+      sL: 0.4,
+      sR: 0.3,
+      oL: 0.28,
+      oR: 0.22,
+      eL: -0.1,
+      eR: -0.15,
+      tL: -1.2,
+      kL: 1.9,
+      fL: 1.2,
+      tR: -1.15,
+      kR: 1.9,
+      fR: 1.2,
+    },
+  },
+];
+const DEATH_M = DEATH.map((k) => ({ at: k.at, c: mirror(k.c) }));
+export function deathPose(t: number, seed = 0): Moved {
+  return body(sample(Math.floor(seed) % 2 ? DEATH_M : DEATH, t, false));
+}
+
 // ── down (docs/plan/30-the-dark.md D7): on hands and knees, crawling; and the one by them,
 // kneeling, a hand on their back ──
 /** Crawling on hands and knees, `phase` 0..1 a cycle (distance-driven); standing still at 0. */

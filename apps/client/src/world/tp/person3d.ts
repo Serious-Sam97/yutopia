@@ -3,6 +3,7 @@ import { AIM_BLADE, BEAM } from "@yutopia/shared/beam";
 import {
   BoxGeometry,
   CircleGeometry,
+  Color,
   Group,
   type Material,
   Mesh,
@@ -64,6 +65,17 @@ function hashSeed(s: string): number {
   return ((h >>> 0) % 10000) / 10000;
 }
 
+// shot down, burning away (deathPose): the outline gone, the body lit from within
+const NO_INK = new MeshBasicMaterial({ visible: false });
+const DARK = new Color(0x0c0d10);
+const HOT = new Color(3, 2.9, 2.6); // the shot's flash, through it
+const BURN = new Color(1.3, 0.94, 0.54); // pale gold
+const ASH = new Color(0.62, 0.58, 0.54);
+const ramp = (x: number, a: number, b: number) => {
+  const k = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return k * k * (3 - 2 * k);
+};
+
 const tq = new Quaternion();
 const tv = new Vector3();
 const tv2 = new Vector3();
@@ -93,6 +105,7 @@ export class Person3D {
   private due = 0; // motion time not stepped yet (off screen, far away)
   private away = false;
   private dark = false;
+  private burning: MeshBasicMaterial | null = null;
   private crawlPh = 0;
   private downW = 0;
   private jumpH = 0; // off the floor (a jump), tiles
@@ -249,6 +262,13 @@ export class Person3D {
       pose = this.C.blend(pose, m.pose, 1);
       lift = m.lift;
     }
+    // shot down: it dies (staggers, drops to its knees, folds over onto the snow)
+    const dying = p.shade?.state === "dissolve" && p.shade.killed ? p.shade.t : -1;
+    if (p.shade && dying >= 0) {
+      const m = this.C.deathPose(dying, p.shade.seed);
+      pose = this.C.blend(mo.pose, m.pose, 1);
+      lift = m.lift;
+    }
     // down: on hands and knees, crawling as they go; by someone down, kneeling (D7)
     if (p.down) {
       this.crawlPh = (this.crawlPh + dist / 0.45) % 1;
@@ -267,7 +287,14 @@ export class Person3D {
     const away = p.status === "away";
     // (the shadowed: dark while their shield holds; bare — their office clothes — exposed)
     const dark = !!p.shade && p.shade.dark > 0.5 && !!this.mats.shade;
-    if (away !== this.away || dark !== this.dark) {
+    const burnt = dying >= 0 && !!this.mats.shade;
+    if (!burnt && this.burning) {
+      this.burning.dispose();
+      this.burning = null;
+      this.dark = !dark; // (its own materials back)
+    }
+    if (burnt) this.burn(dying);
+    else if (away !== this.away || dark !== this.dark) {
       this.away = away;
       this.dark = dark;
       if (dark) this.model.setMaterials(this.mats.shade as Material, this.mats.shadeInk ?? this.mats.ink);
@@ -281,6 +308,24 @@ export class Person3D {
       (this.ring.material as MeshBasicMaterial).opacity = p.reduced
         ? 0.7
         : 0.55 + Math.sin(performance.now() / 83) * 0.25;
+  }
+
+  // dying: white-hot as the shot goes through, dark again as it staggers, then lit from
+  // within, pale gold, as it goes down — and burning out to nothing on the snow
+  private burn(t: number) {
+    if (!this.burning) {
+      // (one colour all over, not the clothes': a figure of light, not someone lit)
+      const m = new MeshBasicMaterial({ transparent: true });
+      this.burning = m;
+    }
+    const m = this.burning;
+    const base = DARK;
+    const flash = 1 - ramp(t, 0, 0.18);
+    const glow = ramp(t, 0.45, 1.25);
+    const out = ramp(t, 1.15, 1.95);
+    m.color.copy(base).lerp(BURN, glow).lerp(ASH, out).lerp(HOT, flash);
+    m.opacity = 1 - out;
+    this.model.setMaterials(m, NO_INK);
   }
 
   // what's in the right hand: a drink (its level going down sip by sip), a toy, the phone
@@ -512,6 +557,7 @@ export class Person3D {
   }
 
   dispose() {
+    this.burning?.dispose();
     this.dropHeld();
     this.dropPhone();
     this.dropGun();

@@ -214,6 +214,9 @@ export class Shades {
     // (iso shows my floor: theirs is the ground's)
     for (const s of ctl.level === 0 ? this.seen.values() : []) {
       const st = this.stateOf(s);
+      // (shot down: its death plays in 3D; here it goes in a second)
+      if (s.killed && s.state === "dissolve")
+        st.fade = Math.min(st.fade ?? 1, Math.max(0, 1 - (performance.now() - s.since) / 1000));
       engine.upsertAvatar(s.id, st);
       this.isoIds.add(s.id);
     }
@@ -317,6 +320,7 @@ export class Shades {
           since: s.since,
           burn: lit ? { x: lit.x, y: lit.y } : null,
           fade: this.fade(s, now),
+          killed: s.killed,
         },
       });
     }
