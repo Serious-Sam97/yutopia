@@ -1732,6 +1732,7 @@ export class ThirdPersonView {
             state: sh.state,
             t: (now3 - sh.since) / 1000,
             burn: sh.burn ?? null,
+            h: sh.state === "lurk" ? 0.95 : undefined,
           };
         }),
         this.camera,

@@ -152,7 +152,7 @@ export interface PersonIn {
   // pose and how far in (s), its own twitches, how wrapped in the dark it is (0 bare … 1),
   // and its state (shared dark/fsm.ts) for the shroud
   shade?: {
-    pose: "lurch" | "windup" | "strike" | "recoil" | "exposed";
+    pose: "lurch" | "windup" | "strike" | "recoil" | "exposed" | "lurk";
     t: number;
     seed: number;
     dark: number;

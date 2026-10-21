@@ -18,7 +18,20 @@ const MV_AIM = 16;
 const packMv = (gait: "walk" | "jog") => (gait === "walk" ? 1 : 2); // (GAITS: still, walk, jog…)
 
 // the shadowed's states, by their number on the wire (shared dark/fsm.ts SHADE_STATES)
-const STATES = ["dormant", "emerge", "stalk", "windup", "strike", "recover", "burning", "exposed", "flee", "dissolve"];
+const STATES = [
+  "dormant",
+  "emerge",
+  "stalk",
+  "windup",
+  "strike",
+  "recover",
+  "burning",
+  "exposed",
+  "flee",
+  "dissolve",
+  "lurk", // (docs/plan/31-the-day.md: asleep in a day's nest)
+  "home", // (and back to it)
+];
 const DELAY = 150; // ms behind: they're sent ten times a second
 
 interface Sample {
@@ -97,6 +110,7 @@ function poseOf(state: string): NonNullable<Body3["shade"]>["pose"] {
   if (state === "strike") return "strike";
   if (state === "burning") return "recoil";
   if (state === "exposed") return "exposed";
+  if (state === "lurk") return "lurk";
   return "lurch";
 }
 
@@ -228,7 +242,8 @@ export class Shades {
       bot: true,
       angle: s.angle,
       z: this.ground(s.x, s.y),
-      mv: packMv(s.speed > 3.6 ? "jog" : "walk"),
+      // (asleep: crouched, still — the move's crouch bit over "still")
+      mv: s.state === "lurk" ? 8 : packMv(s.speed > 3.6 ? "jog" : "walk"),
       shaded: s.state !== "exposed" && s.sh > 50,
     };
   }
@@ -268,7 +283,8 @@ export class Shades {
           pose: poseOf(s.state),
           t: (now - s.since) / 1000,
           seed: s.seed,
-          dark: s.state === "exposed" ? 0 : s.sh / 100,
+          // (asleep: the shroud drawn in close)
+          dark: s.state === "exposed" ? 0 : (s.sh / 100) * (s.state === "lurk" ? 0.55 : 1),
           state: s.state,
           since: s.since,
           burn: lit ? { x: lit.x, y: lit.y } : null,

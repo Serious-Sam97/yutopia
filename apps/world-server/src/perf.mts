@@ -6,7 +6,8 @@
 // client does, and say so.
 //   pnpm --filter @yutopia/world-server perf
 import { ANIM, dirFromDelta, findPath, type Point, ROOM_NAME } from "@yutopia/shared";
-import { heightAt } from "@yutopia/shared/grounds";
+import { dayNests, dayOf, NESTS } from "@yutopia/shared/dark";
+import { heightAt, walkableTile } from "@yutopia/shared/grounds";
 import { type Gait, MOVE, MV_WINDED, packMv, yawToByte } from "@yutopia/shared/move";
 import { FULL_VITALS, freshClock, stepVitals } from "@yutopia/shared/vitals";
 import { Client } from "colyseus.js";
@@ -15,11 +16,14 @@ import { Client } from "colyseus.js";
 // the shadowed up to their 40 (brought out quickly); the bytes one outside and one inside
 // receive a second, against 6 KB/s outside and ~0 inside.
 const DARK = process.env.DARK === "1";
+// DAY=1 (docs/plan/31-the-day.md phase 4): 50 bots by day, 40 out — half of them stood ~30 tiles
+// from a nest each (its sleepers out), half sprinting laps of the pond (waking the nests there)
+const DAY = process.env.DAY === "1";
 if (DARK) process.env.YUTOPIA_DARK_FAST = "1";
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET ??= "perf";
 process.env.YUTOPIA_INTERNAL_SECRET ??= "perf";
-const BOTS = Number(process.env.BOTS ?? (DARK ? 50 : 60));
+const BOTS = Number(process.env.BOTS ?? (DARK || DAY ? 50 : 60));
 const SECONDS = Number(process.env.SECONDS ?? 15);
 const BUDGET_MS = 4;
 const PORT = 27600 + Math.floor(Math.random() * 200);
@@ -30,7 +34,19 @@ const { WorldRoom } = await import("./WorldRoom.ts");
 const timers: ReturnType<typeof setInterval>[] = [];
 let snaps = 0;
 const bytes = { out: 0, in: 0 }; // received by one bot outside, one inside (DARK)
-const outside = (i: number) => (DARK ? i % 5 !== 0 : i % 6 === 5);
+const outside = (i: number) => (DARK || DAY ? i % 5 !== 0 : i % 6 === 5);
+const nests = DAY ? dayNests(dayOf(Date.now())).slice(0, NESTS.base) : [];
+// a walkable spot ~30 tiles from a nest, clear of every nest by 20 (they sleep on)
+function by(n: { x: number; z: number }): { x: number; y: number } | null {
+  for (let k = 0; k < 48; k++) {
+    const a = (k / 48) * Math.PI * 2;
+    const x = Math.floor(n.x + Math.cos(a) * 30) + 0.5;
+    const z = Math.floor(n.z + Math.sin(a) * 30) + 0.5;
+    if (walkableTile(Math.floor(x), Math.floor(z)) && nests.every((m) => Math.hypot(m.x - x, m.z - z) > 20))
+      return { x: x + 60, y: z + 10 };
+  }
+  return null;
+}
 let winded = 0; // times an outdoor bot ran out of breath
 let awake = 0; // bots struck down (DARK)
 
@@ -84,20 +100,27 @@ for (let i = 0; i < BOTS; i++) {
     });
   }
   let placed = !out;
+  // (by day, half stand by a nest each)
+  const scout = DAY && out && i % 2 === 0 ? by(nests[Math.floor(i / 2) % nests.length]) : null;
   if (out) {
-    const lane = DARK ? -60 + ((i * 3) % 24) - 12 : -60 + ((i * 7) % 20) - 10;
-    const from = { x: -280 + 60, y: lane + 10 };
+    const lane = DARK || DAY ? -60 + ((i * 3) % 24) - 12 : -60 + ((i * 7) % 20) - 10;
+    const from = scout ?? { x: -280 + 60, y: lane + 10 };
     room.send("teleport", { to: { ...from, level: 0 } });
     await new Promise<void>((r) => room.onMessage("snap", () => r()));
     Object.assign(pos, from);
     placed = true;
     // (the night, for the dark's run; kept on their feet: the shadowed strike)
+    if (DAY && i === 1) {
+      room.send("mod:hour", { h: 12 });
+      room.send("mod:storm", { storm: 0, now: true });
+      room.send("mod:dark", { mode: "normal" });
+    }
     if (DARK && i === 1) {
       room.send("mod:hour", { h: 23 });
       room.send("mod:storm", { storm: 0, now: true });
       room.send("mod:dark", { mode: "normal" });
     }
-    if (DARK) timers.push(setInterval(() => room.send("mod:refill", {}), 2500));
+    if (DARK || DAY) timers.push(setInterval(() => room.send("mod:refill", {}), 2500));
   }
   const v = { ...FULL_VITALS };
   const breath = freshClock();
@@ -120,7 +143,7 @@ for (let i = 0; i < BOTS; i++) {
   });
   timers.push(
     setInterval(() => {
-      if (woken) return;
+      if (woken || scout) return;
       // (down: it waits for its refill to get it up — a crawl's no lap)
       if (room.state.players.get(room.sessionId)?.downAt) return;
       if (out) {
@@ -189,7 +212,12 @@ for (let i = 0; i < BOTS; i++) {
   );
 }
 
-// warm up, reset, measure (the dark: once the shadowed are out)
+// warm up, reset, measure (the dark: once the shadowed are out; the day: once the nests by the scouts are)
+if (DAY) {
+  const t0 = Date.now();
+  while ((WorldRoom.current?.state.shadows.size ?? 0) < 30 && Date.now() - t0 < 60_000)
+    await new Promise((r) => setTimeout(r, 200));
+}
 if (DARK) {
   const t0 = Date.now();
   while ((WorldRoom.current?.state.shadows.size ?? 0) < 35 && Date.now() - t0 < 60_000)
@@ -215,6 +243,10 @@ console.log(
 );
 const outKBs = bytes.out / 1024 / SECONDS;
 const inKBs = bytes.in / 1024 / SECONDS;
+if (DAY)
+  console.log(
+    `[perf] the day: ${shadowsMax} of the nests' out at most · received ${outKBs.toFixed(2)} KB/s outside, ${inKBs.toFixed(2)} KB/s inside · ${awake} struck down`,
+  );
 if (DARK)
   console.log(
     `[perf] the dark: ${shadowsMax} shadowed at most · received ${outKBs.toFixed(2)} KB/s outside, ${inKBs.toFixed(2)} KB/s inside (the shadowed's share outside: ${(outKBs - inKBs).toFixed(2)}) · ${awake} struck down`,

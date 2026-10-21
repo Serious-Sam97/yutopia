@@ -13,6 +13,9 @@
 // 8. exposed   — the shield gone for 12 s (only now do bullets hurt, phase 5); it backs off
 // 9. flee      — from a pool, a flare, the dawn
 // 10. dissolve — gone (killed: a burst of light; or it just went)
+// By day (docs/plan/31-the-day.md) they wait in nests instead:
+// 11. lurk     — asleep where it was put, crouched; what comes near enough wakes it (and its nest)
+// 12. home     — leashed: past 30 tiles from its nest, it walks back and sleeps again
 
 export const SHADE_STATES = [
   "dormant",
@@ -25,6 +28,8 @@ export const SHADE_STATES = [
   "exposed",
   "flee",
   "dissolve",
+  "lurk",
+  "home",
 ] as const;
 export type ShadeState = (typeof SHADE_STATES)[number];
 export const shadeCode = (s: ShadeState) => SHADE_STATES.indexOf(s);
@@ -63,6 +68,10 @@ export const SHADE = {
   /** nobody near for this long (or the dawn): it goes */
   leave: 20,
   near: 70,
+  /** asleep in a nest by day: what wakes it — seen this close (crouching, half), a sprint
+   *  heard, a shot heard — and how far from its nest it'll go after anyone */
+  lurk: { see: 10, crouch: 0.5, hear: 14, shot: 30 },
+  leash: 30,
 } as const;
 
 export interface Shade {
@@ -88,6 +97,8 @@ export interface Shade {
   killed?: boolean;
   /** what bullets can take, only while it's exposed (phase 5) */
   hp: number;
+  /** a day's: its nest, where it sleeps and is leashed to (docs/plan/31-the-day.md) */
+  home?: { x: number; y: number } | null;
 }
 
 export interface Prey {
@@ -115,6 +126,10 @@ export interface ShadeSense {
   prey: readonly Prey[];
   /** a clear line from it to (x, y) */
   sees(x: number, y: number): boolean;
+  /** shots fired just now (where from): one asleep within SHADE.lurk.shot wakes */
+  shots?: readonly { x: number; y: number }[];
+  /** one of its nest woke: it wakes too */
+  woken?: boolean;
 }
 
 export interface ShadeAct {
@@ -145,6 +160,25 @@ export function newShade(x: number, y: number, t: number, rand: () => number = M
     burntAt: -1,
     hp: SHADE.hp,
   };
+}
+
+/** One of a day's nest, asleep where it's put (docs/plan/31-the-day.md). */
+export function lurker(x: number, y: number, t: number, rand: () => number = Math.random): Shade {
+  const s = newShade(x, y, t, rand);
+  s.state = "lurk";
+  s.home = { x, y };
+  return s;
+}
+
+/** Woken: out of its sleep (the emerge's sting), after whoever woke it. */
+export function wake(s: Shade, t: number, by?: { id: string; x: number; y: number } | null): void {
+  if (s.state !== "lurk" && s.state !== "home") return;
+  go(s, "emerge", t);
+  s.rushAt = t + SHADE.emerge + 1;
+  if (by) {
+    s.target = by.id;
+    s.seen = { x: by.x, y: by.y, t };
+  }
 }
 
 /** A bullet's worth (docs/plan/30-the-dark.md D6): only an exposed one is hurt — a
@@ -184,6 +218,35 @@ export function perceive(s: Shade, sense: ShadeSense): Prey | null {
   return null;
 }
 
+/** What wakes one asleep: someone seen close (crouching, half as close), a sprint heard, a shot
+ *  heard (as whoever's nearest it). */
+function woke(s: Shade, sense: ShadeSense): Prey | null {
+  const L = SHADE.lurk;
+  let best: Prey | null = null;
+  let bd = Number.POSITIVE_INFINITY;
+  for (const p of sense.prey) {
+    if (p.hidden) continue;
+    const d = Math.hypot(p.x - s.x, p.y - s.y);
+    if (d >= bd) continue;
+    if ((p.sprinting && d <= L.hear) || (d <= L.see * (p.crouch ? L.crouch : 1) && sense.sees(p.x, p.y))) {
+      best = p;
+      bd = d;
+    }
+  }
+  if (best) return best;
+  if (sense.shots?.some((q) => Math.hypot(q.x - s.x, q.y - s.y) <= L.shot)) {
+    for (const p of sense.prey) {
+      const d = Math.hypot(p.x - s.x, p.y - s.y);
+      if (!p.hidden && d < bd) {
+        best = p;
+        bd = d;
+      }
+    }
+    return best;
+  }
+  return null;
+}
+
 /** One step of `dt` s. Changes `s`; says where to go and what it did. */
 export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => number = Math.random): ShadeAct {
   const t = sense.t;
@@ -203,7 +266,7 @@ export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => numbe
     return act;
   }
   // the dawn, or nobody near for long: it goes (back into the dark)
-  if (sense.dawn || t - s.nearAt > SHADE.leave) {
+  if (sense.dawn || (!s.home && t - s.nearAt > SHADE.leave)) {
     if (s.state !== "flee" || inState > 3) go(s, "dissolve", t);
     else act.goal = away(s, sense, 6);
     act.speed = SHADE.speed.flee;
@@ -215,6 +278,16 @@ export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => numbe
   if (s.shield <= 0 && s.state !== "exposed") {
     go(s, "exposed", t);
     s.rushing = false;
+  }
+
+  // asleep in its nest: still; what wakes it (a beam on it, one of its nest, seen close, a sprint
+  // or a shot heard) — else the shield comes back whole while it sleeps
+  if (s.state === "lurk") {
+    const by = woke(s, sense);
+    if (by || sense.burn > 0 || sense.woken) wake(s, t, by);
+    else if (s.shield < 100 && t - s.burntAt > SHADE.regrowAfter)
+      s.shield = Math.min(100, s.shield + SHADE.regrow * dt);
+    return done();
   }
 
   const prey = perceive(s, sense);
@@ -270,6 +343,24 @@ export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => numbe
         go(s, "stalk", t);
       }
       break;
+    case "home": {
+      // back to its nest, the shield growing back; anyone close again (within its leash) and it turns
+      const h = s.home as { x: number; y: number };
+      if (tgt && Math.hypot(tgt.x - h.x, tgt.y - h.y) <= SHADE.leash) {
+        go(s, "stalk", t);
+        break;
+      }
+      if (s.shield < 100 && t - s.burntAt > SHADE.regrowAfter) s.shield = Math.min(100, s.shield + SHADE.regrow * dt);
+      if (Math.hypot(s.x - h.x, s.y - h.y) <= 1.2) {
+        s.target = null;
+        s.seen = null;
+        go(s, "lurk", t);
+        break;
+      }
+      act.goal = h;
+      act.speed = SHADE.speed.back * 1.2;
+      break;
+    }
     case "stalk":
     case "burning": {
       if (sense.lit) {
@@ -284,6 +375,22 @@ export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => numbe
       if (s.state === "stalk" && s.shield < 100 && t - s.burntAt > SHADE.regrowAfter)
         s.shield = Math.min(100, s.shield + SHADE.regrow * dt);
       const slow = s.state === "burning" ? SHADE.burnSlow : 1;
+      // a day's, on its leash: too far from its nest (or whoever it's after is), or nobody to have —
+      // home (it isn't drawn to the living as the night's are)
+      if (s.home) {
+        const h = s.home;
+        const far = Math.hypot(s.x - h.x, s.y - h.y) > SHADE.leash;
+        const gone = tgt ? Math.hypot(tgt.x - h.x, tgt.y - h.y) > SHADE.leash + 6 : !s.seen;
+        if (far || gone) {
+          s.target = null;
+          s.seen = null;
+          s.rushing = false;
+          go(s, "home", t);
+          act.goal = h;
+          act.speed = SHADE.speed.back * 1.2;
+          break;
+        }
+      }
       if (!tgt) {
         // lost them: where they were last; never seen anyone, it's drawn to the living (it came
         // out of the dark 25–45 tiles off, past what it sees: it comes in until it does)

@@ -53,6 +53,7 @@ export class DarkSound {
   private prev = new Map<string, string>(); // a shadowed's last state, by id
   private wasFocus = false;
   private whisperAt = 0;
+  private sleepAt = 0;
   private worker: Worker | null = null;
   private struckUntil = 0;
 
@@ -204,8 +205,19 @@ export class DarkSound {
     // the drone: the danger here, turned towards hunted by how near the nearest is
     let near = Number.POSITIVE_INFINITY;
     let nearest: (typeof list)[number] | null = null;
+    // (the nearest asleep in a day's nest, for its breath: docs/plan/31-the-day.md)
+    let sleeper: (typeof list)[number] | null = null;
+    let sd = Number.POSITIVE_INFINITY;
     for (const s of list)
-      if (s.state !== "dissolve") {
+      if (s.state === "lurk") {
+        const d = Math.hypot(s.x - me.x, s.y - me.y);
+        if (d < sd) {
+          sd = d;
+          sleeper = s;
+        }
+      }
+    for (const s of list)
+      if (s.state !== "dissolve" && s.state !== "lurk") {
         const d = Math.hypot(s.x - me.x, s.y - me.y);
         if (d < near) {
           near = d;
@@ -233,6 +245,11 @@ export class DarkSound {
       this.play("whispers", nearest, 15, 0.7);
     }
 
+    // one asleep near: a breath of whisper now and then, low (you hear a nest before you see it)
+    if (sleeper && sd < 12 && now > this.sleepAt) {
+      this.sleepAt = now + 9000 + Math.random() * 4000;
+      this.play("whispers", sleeper, 12, 0.3, 0.8);
+    }
     // what they did: out of the dark, the shield gone, put down
     const seen = new Set<string>();
     for (const s of list) {

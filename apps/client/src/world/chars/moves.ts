@@ -952,7 +952,7 @@ export function verbRoot(verb: Verb, t: number, h = 0.6): { ahead: number; up: n
 }
 
 // ── the shadowed (docs/plan/30-the-dark.md D5): the upper body over their walk ──
-export type ShadeKind = "lurch" | "windup" | "strike" | "recoil" | "exposed";
+export type ShadeKind = "lurch" | "windup" | "strike" | "recoil" | "exposed" | "lurk";
 const UPPER = ["shoulderL", "shoulderR", "elbowL", "elbowR", "wristL", "wristR", "spine", "neck", "head"] as const;
 const smooth01 = (x: number) => {
   const k = Math.max(0, Math.min(1, x));
@@ -1003,6 +1003,22 @@ export function shadePose(kind: ShadeKind, t: number, seed = 0): Pose {
     };
   } else if (kind === "exposed") {
     c = { sL: -0.85, sR: -0.85, eL: -1.7, eR: -1.7, oL: -0.1, oR: -0.1, sx: 0.32, dx: 0.35 };
+  } else if (kind === "lurk") {
+    // asleep in a nest by day (docs/plan/31-the-day.md): folded over its knees, the arms wrapped
+    // round them, the head down — a slow breath, and now and then a shiver
+    const ph = t * 0.35 + seed * 3.1;
+    const shiver = Math.max(0, Math.sin(ph * 3.3) * Math.sin(ph * 1.7) - 0.9) * 4;
+    c = {
+      sL: -0.75,
+      sR: -0.7,
+      eL: -1.9,
+      eR: -1.85,
+      oL: 0.35,
+      oR: 0.35,
+      sx: 0.62 + 0.03 * Math.sin(ph * 2),
+      dx: 0.5,
+      dz: 0.04 * shiver * Math.sin(t * 40),
+    };
   } else {
     // the lurch: slumped forward, the arms hanging ahead, the head down; now and then a twitch
     const ph = t * 0.9 + seed * 7.13;
@@ -1054,6 +1070,34 @@ export function crawlPose(phase: number): Moved {
   return body(c);
 }
 /** Kneeling by someone down, a hand out on their back. */
+/** Asleep in a day's nest (docs/plan/31-the-day.md): squatting low, folded over the knees, the arms
+ *  round them, the head down; a slow breath, now and then a shiver (`t` s asleep, `seed` its own). */
+export function lurkPose(t: number, seed = 0): Moved {
+  const ph = t * 0.35 + seed * 3.1;
+  const breath = 0.04 * Math.sin(ph * 2);
+  const shiver = Math.max(0, Math.sin(ph * 3.3) * Math.sin(ph * 1.7) - 0.9) * 4;
+  const c: Ch = {
+    up: -0.5,
+    tL: -1.95,
+    kL: 2.35,
+    fL: 0.45,
+    tR: -1.85,
+    kR: 2.3,
+    fR: 0.5,
+    aL: 0.12,
+    aR: 0.12,
+    sx: 0.78 + breath,
+    dx: 0.5,
+    dz: 0.05 * shiver * Math.sin(t * 40),
+    sL: -0.95,
+    sR: -0.9,
+    eL: -1.7,
+    eR: -1.65,
+    oL: 0.3,
+    oR: 0.3,
+  };
+  return body(c);
+}
 export function kneelPose(): Moved {
   const c: Ch = {
     up: -0.22,

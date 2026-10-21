@@ -9,7 +9,7 @@ import type { Press } from "../input/controls";
 import type { DarkHooks, Walker } from "../input/walker";
 import { ARMS_CSS, Arms } from "./arms";
 import { DOWN_CSS, Down } from "./down";
-import { ICON } from "./icons";
+import { CACHE_ICON, ICON } from "./icons";
 import { INV_CSS, InventoryPanel } from "./inventory";
 import { Shades } from "./shades";
 import { STRINGS } from "./strings";
@@ -479,35 +479,57 @@ class Dark implements DarkHooks {
     const drops = out ? ctl.room?.state.drops : null;
     // (3D: things lying on the snow, tp/arms3d.ts; iso: their icons)
     const lying: { id: string; item: string; x: number; y: number; z: number }[] = [];
-    drops?.forEach((d: { id: string; item: string; n: number; x: number; y: number }) => {
-      const dist = Math.hypot(d.x - me.x, d.y - me.y);
-      if (dist > 30) return;
+    // (one lying on the snow: the nearest in reach the target; 3D the view's, iso an icon)
+    const lay = (id: string, item: string, icon: string, x: number, y: number, reach: number, target: () => Target) => {
+      const dist = Math.hypot(x - me.x, y - me.y);
+      if (dist > reach) return;
       if (dist <= bestD) {
         bestD = dist;
-        const name = itemName(d.item as ItemId);
-        best = { kind: "drop", id: d.id, label: t("dark_pick", { item: name.toLowerCase() }), x: d.x, y: d.y, z: me.z };
+        best = target();
       }
       if (ctl.tp) {
-        lying.push({ id: d.id, item: d.item, x: d.x, y: d.y, z: heightAt(d.x + ox, d.y + oy) });
+        lying.push({ id, item, x, y, z: heightAt(x + ox, y + oy) });
         return;
       }
-      seen.add(d.id);
-      let el = this.drops.get(d.id);
+      seen.add(id);
+      let el = this.drops.get(id);
       if (!el) {
         el = document.createElement("div");
         el.className = "abs dk-drop";
-        el.innerHTML = ICON[d.item as ItemId] ?? "";
-        this.drops.set(d.id, el);
+        el.innerHTML = icon;
+        this.drops.set(id, el);
         this.root.append(el);
       }
-      const p = at(d.x, d.y, heightAt(d.x + ox, d.y + oy) + 0.05);
+      const p = at(x, y, heightAt(x + ox, y + oy) + 0.05);
       const k = Math.max(0.35, Math.min(1, 4 / Math.max(1, dist)));
       el.style.left = `${p.x}px`;
       el.style.top = `${p.y}px`;
       el.style.width = `${64 * k}px`;
       const svgEl = el.firstElementChild as SVGElement | null;
       svgEl?.setAttribute("width", "100%");
+    };
+    drops?.forEach((d: { id: string; item: string; n: number; x: number; y: number }) => {
+      lay(d.id, d.item, ICON[d.item as ItemId] ?? "", d.x, d.y, 30, () => ({
+        kind: "drop",
+        id: d.id,
+        label: t("dark_pick", { item: itemName(d.item as ItemId).toLowerCase() }),
+        x: d.x,
+        y: d.y,
+        z: me.z,
+      }));
     });
+    // the day's nests' caches (docs/plan/31-the-day.md): searched as a spot (a ring, then the server)
+    if (out)
+      ctl.room?.state.caches?.forEach((c: { id: string; kind: string; x: number; y: number }) => {
+        lay(c.id, `cache:${c.kind}`, CACHE_ICON[c.kind] ?? "", c.x, c.y, 45, () => ({
+          kind: "spot",
+          id: c.id,
+          label: t(`dark_cache_${c.kind}`),
+          x: c.x,
+          y: c.y,
+          z: me.z,
+        }));
+      });
     if (ctl.tp && (lying.length || this.hadLying)) ctl.tp.arms().drops(lying);
     this.hadLying = lying.length > 0;
     for (const [id, el] of this.drops)

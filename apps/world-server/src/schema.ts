@@ -84,6 +84,16 @@ export class Drop extends Schema {
   @type("float64") at = 0; // when (server ms)
 }
 
+// A cache in a day's nest (docs/plan/31-the-day.md, features/survival.ts): what one of
+// the shadowed carried, lying in the snow among them — its kind (shared dark/nests.ts
+// CacheKind) and where (the ground floor's coords). Searched as a loot spot.
+export class Cache extends Schema {
+  @type("string") id = "";
+  @type("string") kind = "";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+}
+
 // One of the shadowed (docs/plan/30-the-dark.md D5, features/dark.ts): where it
 // is (the ground floor's coords; its feet on the land), which way it faces (a
 // byte), its state (shared dark/fsm.ts SHADE_STATES) and since when (server ms),
@@ -426,6 +436,7 @@ export class WorldState extends Schema {
   @type({ map: Computer }) computers = new MapSchema<Computer>(); // computer id → who's at it
   @type({ map: Pet }) pets = new MapSchema<Pet>(); // pet id → the pet (while its owner is here)
   @type({ map: Drop }) drops = new MapSchema<Drop>(); // things dropped on the snow (features/survival.ts)
+  @type({ map: Cache }) caches = new MapSchema<Cache>(); // the day's nests' caches (features/survival.ts)
   // the shadowed: each client sees only those near it outside (features/dark.ts: client.view)
   @view() @type({ map: Shadow }) shadows = new MapSchema<Shadow>();
   @type({ map: Flare }) flares = new MapSchema<Flare>(); // flares burning (features/arms.ts)

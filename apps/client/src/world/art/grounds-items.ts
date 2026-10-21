@@ -305,9 +305,141 @@ function building(s: Sketch, p: Props) {
       return smallHouse(s, b, RED_BOARD, true, 3.2 * P);
     case "shed":
       return smallHouse(s, b, mat("#9aa0a6", "#aab0b5", "#9aa0a6", "#80868c"), true, 4 * P);
+    case "barn":
+      return barn(s, b);
+    case "silo":
+      return silo(s, b);
+    case "farmhouse":
+      return farmhouse(s, b);
     default:
       return shop(s, b);
   }
+}
+
+// ── the farm (docs/plan/31-the-day.md) ──────────────────────────────────────
+const BARN_RED = mat("#8e2b20", "#9e3a2c", "#8e2b20", "#6e2018");
+const TRIM = mat("#ece6da", "#f6f2ea", "#e4ddd0", "#c9c2b5");
+const STRAW = mat("#c9a95a", "#d8bb70", "#c4a252", "#a88a44");
+const STALK = mat("#b59c6c", "#c4ad7f", "#a88d5c", "#8f7a52");
+function barn(s: Sketch, b: Bld) {
+  const H = 5.2 * P;
+  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: BARN_RED }, (d) => {
+    // the west doorway (dark: you walk in), its doors slid open either side, white X's
+    const zm = b.h / 2;
+    d.poly("w", fr("w", 0, zm - 1.6, zm + 1.6, 0, 3.4 * P), "#1b1410");
+    for (const [u0, u1] of [
+      [zm - 4.6, zm - 1.6],
+      [zm + 1.6, zm + 4.6],
+    ]) {
+      d.poly("w", fr("w", 0, u0, u1, 0.05 * P, 3.3 * P), "#ece6da");
+      d.poly("w", fr("w", 0, u0 + 0.2, u1 - 0.2, 0.25 * P, 3.1 * P), "#8e2b20");
+    }
+    for (const f of ["s", "n"] as const)
+      for (let x = 4; x < b.w - 2; x += 6) d.poly(f, fr(f, f === "s" ? b.h : 0, x, x + 1, 2.2 * P, 3.2 * P), "#2c3540");
+  });
+  for (const [x, y] of [
+    [0, 0],
+    [b.w, 0],
+    [0, b.h],
+    [b.w, b.h],
+  ])
+    s.box({ x: x - 0.12, y: y - 0.12, w: 0.24, d: 0.24, z: 0, h: H, mat: TRIM, line: 0.5 });
+  pitched(s, b, H, 4.2 * P, true, 0.6);
+  s.shadow(0, 0, b.w, b.h, 0.3, 0.1);
+}
+function silo(s: Sketch, b: Bld) {
+  const c = b.w / 2;
+  const r = Math.min(b.w, b.h) / 2 - 0.2;
+  s.cyl({ x: c, y: c, z: 0, r, h: 13 * P, mat: mat("#a9aeb2", "#c4c8cc") });
+  for (let z = 1.5; z < 13; z += 2.2) s.cyl({ x: c, y: c, z: z * P, r: r + 0.05, h: 0.14 * P, mat: STEEL });
+  s.cyl({ x: c, y: c, z: 13 * P, r, r2: 0.6, h: 2 * P, mat: mat("#8f9499", "#f6f8fa") });
+  s.shadow(c - r, c - r, 2 * r, 2 * r, 0.3, 0.5);
+}
+function farmhouse(s: Sketch, b: Bld) {
+  const H = 6.2 * P;
+  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: wallMat("#e3dccb") }, (d) => {
+    const xm = b.w / 2;
+    for (const dx of [-4, 4]) {
+      d.poly("n", fr("n", 0, xm + dx - 0.65, xm + dx + 0.65, 0.9 * P, 2.4 * P), GLASS);
+      d.poly("n", fr("n", 0, xm + dx - 0.6, xm + dx + 0.6, 3.7 * P, 5.1 * P), GLASS);
+    }
+    d.poly("n", fr("n", 0, xm - 0.5, xm + 0.5, 0.45 * P, 2.5 * P), "#4a3a2c");
+  });
+  pitched(s, b, H, 3 * P, true, 0.5);
+  // the porch along the front (north)
+  s.box({ x: 1, y: -2.2, w: b.w - 2, d: 2.2, z: 0, h: 0.45 * P, mat: WOOD });
+  for (let x = 1.2; x <= b.w - 1; x += (b.w - 2.4) / 3)
+    s.box({ x: x - 0.09, y: -2.1, w: 0.18, d: 0.18, z: 0.45 * P, h: 2.35 * P, mat: TRIM, line: 0.4 });
+  s.box({ x: 0.8, y: -2.4, w: b.w - 1.6, d: 2.4, z: 2.8 * P, h: 0.15 * P, mat: ROOF });
+  s.box({ x: 0.8, y: -2.4, w: b.w - 1.6, d: 2.4, z: 2.95 * P, h: 0.2 * P, mat: SNOW, line: 0.4 });
+  s.shadow(0, -2.2, b.w, b.h + 2.2, 0.3, 0.1);
+}
+/** A run of the cornfield: a row's dry stalks, `len` tiles of it (north–south). */
+function cornRow(s: Sketch, p: Props) {
+  const len = Number(p.len) || 10;
+  const r = rng(Number(p.seed) || 1);
+  for (let y = 0.2; y < len; y += 0.55 + r() * 0.3) {
+    if (r() < 0.1) continue;
+    const h = (r() < 0.14 ? 0.5 + r() * 0.4 : 1.5 + r() * 0.6) * P;
+    const x = 0.45 + (r() - 0.5) * 0.3;
+    s.box({ x, y, w: 0.08, d: 0.08, z: 0, h, mat: STALK, line: 0.3 });
+    if (h > P)
+      s.box({
+        x: x - 0.28,
+        y: y - 0.04,
+        w: 0.64,
+        d: 0.16,
+        z: h * (0.45 + r() * 0.3),
+        h: 0.04 * P,
+        mat: STALK,
+        line: 0.25,
+      });
+  }
+}
+function rail(s: Sketch, p: Props) {
+  const v = p.dir === "v";
+  const len = Number(p.len) || 3;
+  s.box({ x: 0, y: 0, w: 0.14, d: 0.14, z: 0, h: 1.15 * P, mat: WOOD, line: 0.5 });
+  for (const z of [0.55, 1.0])
+    s.box({ x: 0, y: 0, w: v ? 0.1 : len, d: v ? len : 0.1, z: z * P, h: 0.1 * P, mat: WOOD, line: 0.4 });
+}
+function tractor(s: Sketch) {
+  const RED = mat("#9b2a20", "#b03a2e", "#9b2a20", "#7a2018");
+  const TYRE = mat("#1e1e1e", "#2a2a2a");
+  // along x: the hood ahead (east), the cab behind, the big wheels at the back
+  for (const y of [0.05, 2.0]) {
+    s.cyl({ x: 1.1, y: y + 0.25, z: 0, r: 0.85, h: 0.5 * P, mat: TYRE });
+    s.cyl({ x: 3.3, y: y + 0.2, z: 0, r: 0.45, h: 0.35 * P, mat: TYRE });
+  }
+  s.box({ x: 2.0, y: 0.8, w: 2.2, d: 0.9, z: 0.8 * P, h: 0.9 * P, mat: RED });
+  s.box({ x: 2.1, y: 0.82, w: 2.0, d: 0.85, z: 1.7 * P, h: 0.14 * P, mat: SNOW, line: 0.3 });
+  s.box({ x: 0.45, y: 0.3, w: 1.3, d: 1.9, z: 0.9 * P, h: 0.25 * P, mat: DARK });
+  for (const [x, y] of [
+    [0.45, 0.35],
+    [1.65, 0.35],
+    [0.45, 2.1],
+    [1.65, 2.1],
+  ])
+    s.box({ x, y, w: 0.08, d: 0.08, z: 1.1 * P, h: 1.3 * P, mat: DARK, line: 0.3 });
+  s.box({ x: 0.4, y: 0.3, w: 1.4, d: 1.9, z: 2.4 * P, h: 0.12 * P, mat: RED });
+  s.box({ x: 0.38, y: 0.28, w: 1.44, d: 1.94, z: 2.52 * P, h: 0.18 * P, mat: SNOW, line: 0.3 });
+  s.box({ x: 1.2, y: 2.2, w: 0.6, d: 0.3, z: 0.9 * P, h: 0.3 * P, mat: mat("#2f5d8a", "#3d6f9e") }); // the toolbox
+  s.shadow(0.2, 0.1, 3.8, 2.6, 0.32, 0.2);
+}
+function scarecrow(s: Sketch) {
+  const COAT = mat("#3b3328", "#4a4034");
+  s.box({ x: 0.45, y: 0.45, w: 0.1, d: 0.1, z: 0, h: 2.5 * P, mat: WOOD, line: 0.4 });
+  s.box({ x: -0.3, y: 0.45, w: 1.6, d: 0.1, z: 1.8 * P, h: 0.1 * P, mat: WOOD, line: 0.4 });
+  s.cyl({ x: 0.5, y: 0.5, z: 0.9 * P, r: 0.4, r2: 0.3, h: 1.1 * P, mat: COAT });
+  s.box({ x: -0.25, y: 0.38, w: 1.5, d: 0.26, z: 1.72 * P, h: 0.28 * P, mat: COAT });
+  s.box({ x: -0.25, y: 0.38, w: 1.5, d: 0.26, z: 2.0 * P, h: 0.06 * P, mat: SNOW, line: 0.3 });
+  s.cyl({ x: 0.5, y: 0.5, z: 2.05 * P, r: 0.26, h: 0.45 * P, mat: mat("#c9b48a", "#d8c49a") });
+  s.cyl({ x: 0.5, y: 0.5, z: 2.5 * P, r: 0.36, h: 0.06 * P, mat: DARK });
+  s.cyl({ x: 0.5, y: 0.5, z: 2.56 * P, r: 0.2, h: 0.28 * P, mat: DARK });
+}
+function bale(s: Sketch) {
+  s.cyl({ x: 0.6, y: 0.6, z: 0, r: 0.6, h: 1.1 * P, mat: STRAW });
+  s.cyl({ x: 0.6, y: 0.6, z: 1.1 * P, r: 0.5, h: 0.1 * P, mat: SNOW });
 }
 
 // ── the rest ────────────────────────────────────────────────────────────────
@@ -486,6 +618,12 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_sign: { label: "Sign", w: 4, h: 1, solid: true },
     gr_dock: { label: "Dock", w: 3, h: 14, solid: false },
     gr_bus: { label: "Shuttle", w: 10, h: 3, solid: false },
+    gr_corn: { label: "Cornfield", w: 1, h: 10, solid: false },
+    gr_rail_h: { label: "Fence", w: 3, h: 1, solid: false },
+    gr_rail_v: { label: "Fence", w: 1, h: 3, solid: false },
+    gr_tractor: { label: "Tractor", w: 4, h: 3, solid: true },
+    gr_scarecrow: { label: "Scarecrow", w: 1, h: 1, solid: true },
+    gr_bale: { label: "Hay", w: 1, h: 1, solid: false },
   };
   const gens: Record<string, ItemGen> = {
     gr_tower: { draw: tower, variants: 1 },
@@ -499,6 +637,12 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_sign: { draw: sign, variants: 1, key: (p) => `${p.bg}|${p.fg}` },
     gr_dock: { draw: dock, variants: 1 },
     gr_bus: { draw: bus, variants: 1 },
+    gr_corn: { draw: cornRow, variants: 1, key: (p) => `${p.seed}|${p.len}` },
+    gr_rail_h: { draw: (s, p) => rail(s, { ...p, dir: "h" }), variants: 1, key: (p) => String(p.len) },
+    gr_rail_v: { draw: (s, p) => rail(s, { ...p, dir: "v" }), variants: 1, key: (p) => String(p.len) },
+    gr_tractor: { draw: tractor, variants: 1 },
+    gr_scarecrow: { draw: scarecrow, variants: 1 },
+    gr_bale: { draw: bale, variants: 1 },
   };
   kinds.gr_wall = { label: "Wall", w: 1, h: 1, solid: true };
   gens.gr_wall = { draw: wallPiece, variants: 1, key: (p) => `${p.dir}|${p.c}` };
@@ -625,13 +769,27 @@ function fitPiece(s: Sketch, p: Props) {
         glow: true,
       });
       break;
+    // the barn's: hay in bales, the stalls' boards, the workbench
+    case "hay":
+      for (let k = 0; k < f.h - 0.05; k += 0.5)
+        s.box({ x, y, w, d, z: k * P, h: Math.min(0.48, f.h - k) * P, mat: STRAW, line: 0.4 });
+      break;
+    case "stall":
+      s.box({ x, y, w, d, z: 0.15 * P, h: h - 0.15 * P, mat: WOOD, line: 0.4 });
+      break;
+    case "bench":
+      for (const u of [x + 0.1, x + w - 0.2])
+        s.box({ x: u, y: y + 0.1, w: 0.1, d: d - 0.2, z: 0, h: h - 0.1 * P, mat: WOOD });
+      s.box({ x, y, w, d, z: h - 0.1 * P, h: 0.1 * P, mat: WOOD });
+      s.box({ x: x + 1.6, y: y + 0.25, w: 0.7, d: 0.45, z: h, h: 0.25 * P, mat: mat("#2f5d8a", "#3d6f9e") });
+      break;
   }
 }
 /** A building's inside as iso items (its walls cut low, its furniture), building coords. */
 export function insideThings(G: G, i: GroundsModule.Inside): Thing[] {
   const out: Thing[] = [];
   const { b } = i;
-  const c = b.sign === "BAR" ? "#4a3426" : "#e6e0d4";
+  const c = b.sign === "BAR" ? "#4a3426" : b.kind === "barn" ? "#6a4a34" : "#e6e0d4";
   for (let x = b.x0; x < b.x1; x++)
     for (const z of [b.z0, b.z1])
       if (G.wallEdgeAt("h", x, z))
@@ -712,6 +870,33 @@ export function groundThings(G: G): Thing[] {
   put("closed", "gr_barrier", G.ROAD_CLOSED.x, G.ROAD_CLOSED.z - 4, 1, 8, { len: 8 }, 1);
   put("gate-sign", "gr_sign", -51.5, G.GATE.z + 4, 4, 1, { bg: "#e9e6dc", fg: "#1c2228" });
   put("dock", "gr_dock", -254, -98, 3, 14, { len: 14 });
+  // the farm (docs/plan/31-the-day.md): the cornfield in runs of rows, its fence, the tractor,
+  // the scarecrows, hay bales by the barn
+  const C = G.CORN;
+  for (let x = C.x0 + 1; x < C.x1; x += C.row)
+    for (let z = C.z0; z < C.z1; z += 10) {
+      const len = Math.min(10, C.z1 - z);
+      put(`corn${x},${z}`, "gr_corn", x - 0.5, z, 1, len, { len, seed: 1 + ((((x * 31 + z) % 5) + 5) % 5) }); // (5 looks, drawn once each)
+    }
+  const e = { x0: C.x0 - 2, z0: C.z0 - 2, x1: C.x1 + 1, z1: C.z1 + 1 };
+  for (let x = e.x0; x < e.x1; x += 3) {
+    put(`rail-n${x}`, "gr_rail_h", x, e.z0, 3, 1, { len: Math.min(3, e.x1 - x) });
+    put(`rail-s${x}`, "gr_rail_h", x, e.z1, 3, 1, { len: Math.min(3, e.x1 - x) });
+  }
+  const gm = (e.z0 + e.z1) / 2;
+  for (let z = e.z0; z < e.z1; z += 3) {
+    put(`rail-w${z}`, "gr_rail_v", e.x0, z, 1, 3, { len: Math.min(3, e.z1 - z) });
+    if (z + 3 < gm - 3 || z > gm + 3) put(`rail-e${z}`, "gr_rail_v", e.x1, z, 1, 3, { len: Math.min(3, e.z1 - z) });
+  }
+  put("tractor", "gr_tractor", G.TRACTOR.x - 2, G.TRACTOR.z - 1.5, 4, 3);
+  for (const [i, c] of G.SCARECROWS.entries()) put(`crow${i}`, "gr_scarecrow", c.x - 0.5, c.z - 0.5, 1, 1);
+  for (const [i, [x, z]] of [
+    [437, -298],
+    [437, -296.6],
+    [438.4, -297.4],
+    [466, -300],
+  ].entries())
+    put(`bale${i}`, "gr_bale", x - 0.5, z - 0.5, 1, 1);
   // the cars parked along Main Street (the lot's own kind, nosed east or west)
   for (const [i, c] of G.TOWN_CARS.entries())
     put(

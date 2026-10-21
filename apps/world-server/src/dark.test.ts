@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
-import { HQ_DOORS, inLampPool, LAMP_POOL_R, onPathAt, SHADE, SHADE_STATES } from "@yutopia/shared/dark";
-import { BENCH, heightAt, LAMPS, WAYS } from "@yutopia/shared/grounds";
+import { HQ_DOORS, inLampPool, LAMP_POOL_R, SHADE, SHADE_STATES } from "@yutopia/shared/dark";
+import { BENCH, heightAt, LAMPS } from "@yutopia/shared/grounds";
 import { MV_AIM, packMv, yawToByte } from "@yutopia/shared/move";
 import { Client, type Room } from "colyseus.js";
 
 // The shadowed (docs/plan/30-the-dark.md, phase 4): out of the dark 25–45 tiles
-// off, never in a pool or by the HQ; by day fewer, and none on the paths; a strike lands on someone standing there,
+// off, never in a pool or by the HQ (by day they wait in nests: nests.test.ts); a strike lands on someone standing there,
 // and a roll through the windup gets out of it; a focused beam burns the shield
 // off (exposed); nobody comes into a lamp's pool; the dawn takes them; only
 // whoever is outside sees them.
@@ -90,25 +90,6 @@ test("out of the dark: 25–45 tiles off, emerging, never in a pool or by the HQ
   );
   // the one indoors (the studio) sees none of them
   assert.equal(shadows(inside).length, 0);
-});
-
-test("by day, fewer: one out on the open ice (off the paths), none for someone on a trail", async () => {
-  const a = await person(551, 56);
-  await hour(a, 12);
-  await standAt(a, POND.x, POND.z);
-  await waitFor(() => shadows(a).length === 1, 10_000);
-  for (const s of shadows(a)) assert.equal(onPathAt(s.x + OFF.x, s.y + OFF.y), false, "out of the snow, not a path");
-  await sleep(2000);
-  assert.equal(shadows(a).length, 1, "by day, one for one out there");
-  // on the pond trail (halfway along): none come
-  const b = await person(552, 57);
-  await hour(b, 12);
-  const line = (WAYS.find((w) => w.key === "to-pond") as (typeof WAYS)[number]).line;
-  const [tx, tz] = line[Math.floor(line.length / 2)];
-  assert.ok(onPathAt(tx, tz));
-  await standAt(b, tx, tz);
-  await sleep(3000);
-  assert.equal(shadows(b).length, 0, "the paths are safe by day");
 });
 
 test("a strike lands on someone standing there (15); rolled through, it misses", async () => {

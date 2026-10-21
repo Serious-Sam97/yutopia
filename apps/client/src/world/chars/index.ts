@@ -31,6 +31,7 @@ export {
   HIP_H,
   kneelPose,
   landPose,
+  lurkPose,
   type Moved,
   runPose,
   runStride,

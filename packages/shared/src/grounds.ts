@@ -10,7 +10,7 @@ import type { AreaDef, MapDef } from "./map.ts";
 // east, z = map y south), the ground at y = 0 round the headquarters. A tile
 // is about a metre: the Grounds are a kilometre across.
 
-export const GROUNDS_VERSION = 1;
+export const GROUNDS_VERSION = 2; // (2: the farm, docs/plan/31-the-day.md)
 // Marks the chunk for `pnpm budget` (the client fetches it once the world starts).
 export const GROUNDS_CHUNK = "yutopia-grounds";
 export const CHUNK = 32;
@@ -125,7 +125,10 @@ export type BuildingKind =
   | "hotel"
   | "house"
   | "church"
-  | "gas";
+  | "gas"
+  | "barn"
+  | "silo"
+  | "farmhouse";
 export interface Building {
   key: string;
   kind: BuildingKind;
@@ -168,6 +171,18 @@ export const BENCH = { x: 120, z: -250 };
 export const GATE = { x: -40, z: -360 };
 export const TOWN = { x0: 296, z0: -560, x1: 536, z1: -366 };
 export const PLAZA = { x0: 400, z0: -398, x1: 440, z1: -370 };
+/** The farm (docs/plan/31-the-day.md): across the river, south of Main Street, a
+ *  lane down from the square — the barn (you walk in), the silo, the farmhouse,
+ *  a cornfield of dry stalks in the snow, a tractor, scarecrows. */
+export const FARM = { x0: 330, z0: -334, x1: 505, z1: -205 };
+/** The cornfield: rows running north–south, `CORN.row` tiles apart (the stalks
+ *  don't stop you: you walk between them, and so does what waits there). */
+export const CORN = { x0: 344, z0: -318, x1: 414, z1: -216, row: 2 };
+export const TRACTOR = { x: 476, z: -270, ry: 0.35 };
+export const SCARECROWS: { x: number; z: number; ry: number }[] = [
+  { x: 369.5, z: -281.5, ry: 0.4 },
+  { x: 397.5, z: -239.5, ry: -0.8 },
+];
 /** The cars parked along Main Street (z −405): kerbside both ways, none across
  *  the square's side or the crossing at x 420. `colour` indexes building.ts
  *  CAR_COLOURS; `dir` 1 noses east, −1 west. Both views draw them, they block. */
@@ -215,6 +230,7 @@ const CLEARING = { x: BENCH.x, z: BENCH.z, r: 15 };
 const FLATS = [
   { x: 10, z: 10, r0: 150, r1: 240, h: 0 },
   { x: 418, z: -450, r0: 120, r1: 190, h: 1.5 },
+  { x: 420, z: -268, r0: 95, r1: 135, h: 1.5 }, // the farm
 ];
 
 function way(key: string, kind: WayKind, name: string, w: number, pts: P[], closed = false): Way {
@@ -316,6 +332,15 @@ export const WAYS: Way[] = [
     [-248, 30],
     [-282, -12],
   ]),
+  // the farm's lane: down from the square, past the barn's doors, to the farmhouse
+  way("farm-lane", "trail", "Farm lane", 4, [
+    [420, -371],
+    [422, -346],
+    [432, -322],
+    [435, -304],
+    [440, -284],
+    [447, -265],
+  ]),
 ];
 
 export const RIVER = {
@@ -389,6 +414,10 @@ export const BUILDINGS: Building[] = [
   b("hotel", "hotel", "Hotel", 432, -434, 452, -412, 3, "s", { sign: "HOTEL" }),
   b("bakery", "shop", "Bakery", 458, -426, 472, -412, 2, "s", { sign: "BAKERY" }),
   b("church", "church", "Church", 410, -556, 430, -534, 1, "s"),
+  // the farm (docs/plan/31-the-day.md)
+  b("barn", "barn", "Barn", 440, -320, 464, -302, 2, "w", { enter: true }),
+  b("silo", "silo", "Silo", 468, -318, 476, -310, 4, "w"),
+  b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n"),
 ];
 // two rows of the same townhouse up Church Street
 for (let k = 0; k < 7; k++) {
@@ -446,6 +475,19 @@ function nearLines(x: number, z: number): Map<number, { d: number; i: number }> 
       }
     }
   return out;
+}
+/** How far (x, z) is from the nearest way's edge (tiles; 0 on one), the town's pavements and the
+ *  lot as ways too; past the index's reach (28+ tiles), Infinity. */
+export function wayClearance(x: number, z: number): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (const [f, n] of nearLines(x, z)) {
+    if (f >= WAYS.length) continue;
+    const w = WAYS[f];
+    best = Math.min(best, n.d - w.w / 2 - (w.kind === "street" ? 2.6 : 0));
+  }
+  if (x >= LOT.x0 - 1 && x < LOT.x1 + 1 && z >= LOT.z0 - 1 && z < LOT.z1 + 1) best = 0;
+  if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) best = 0;
+  return Math.max(0, best);
 }
 function nearBuildings(x: number, z: number): Building[] {
   return bCells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL))) ?? [];
@@ -637,6 +679,8 @@ export function treeDensity(x: number, z: number): number {
     const w = WAYS[f];
     if (n.d < w.w / 2 + (w.kind === "trail" ? 3.2 : 4.5)) return 0;
   }
+  // the farm: cleared (the fields, the yard)
+  if (x > FARM.x0 - 3 && x < FARM.x1 + 3 && z > FARM.z0 - 3 && z < FARM.z1 + 3) return 0;
   // the town: a yard tree here and there, none on the streets or the plaza
   if (x > TOWN.x0 && x < TOWN.x1 && z > TOWN.z0 && z < TOWN.z1)
     return x > PLAZA.x0 - 4 && x < PLAZA.x1 + 4 && z > PLAZA.z0 - 4 && z < PLAZA.z1 + 4 ? 0 : 0.04;
@@ -803,7 +847,8 @@ function walkable(x: number, z: number): boolean {
     if (bd.kind !== "hq" && x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1)
       // (inside one you walk into: its floor, round its furniture)
       return !!insideOf(bd) && !FIT_TILES.has(`${Math.floor(x)},${Math.floor(z)}`);
-  if (onFence(x, z) || onTownCar(x, z)) return false;
+  if (onFence(x, z) || onTownCar(x, z) || onTractor(x, z)) return false;
+  for (const c of SCARECROWS) if (Math.abs(x - c.x) < 0.5 && Math.abs(z - c.z) < 0.5) return false;
   // the water tower: its stem, and the fence round it (a gap to the south)
   const td = Math.hypot(x - TOWER.x, z - TOWER.z);
   if (td < 2.6) return false;
@@ -819,6 +864,15 @@ export function carBlockedTile(tx: number, tz: number): boolean {
   const x = tx + 0.5;
   const z = tz + 0.5;
   return !walkable(x, z) && !onTownCar(x, z);
+}
+/** On the farm's tractor (its 4 × 2.2 body, turned `ry`). */
+function onTractor(x: number, z: number): boolean {
+  const dx = x - TRACTOR.x;
+  const dz = z - TRACTOR.z;
+  if (Math.abs(dx) > 3 || Math.abs(dz) > 3) return false;
+  const c = Math.cos(TRACTOR.ry);
+  const s = Math.sin(TRACTOR.ry);
+  return Math.abs(dx * c + dz * s) < 2 && Math.abs(-dx * s + dz * c) < 1.1;
 }
 /** On the company's fence line (not at the gate). */
 function onFence(x: number, z: number): boolean {
@@ -864,6 +918,7 @@ export function slopeAt(x: number, z: number): number {
  *  a town car (its roof) — to vault or climb onto (docs/plan/29-the-move.md M4); else NaN. */
 export function topTile(tx: number, tz: number): number {
   if (tz === Math.floor(BENCH.z) && (tx === Math.floor(BENCH.x) || tx === Math.floor(BENCH.x) + 1)) return 0.45;
+  if (onTractor(tx + 0.5, tz + 0.5)) return 1.4;
   return onTownCar(tx + 0.5, tz + 0.5) ? 1.15 : Number.NaN;
 }
 
@@ -969,7 +1024,10 @@ export type FitKind =
   | "till"
   | "desk"
   | "screens"
-  | "locker";
+  | "locker"
+  | "hay"
+  | "stall"
+  | "bench";
 export interface Fit {
   kind: FitKind;
   x: number;
@@ -1024,6 +1082,15 @@ function fitsOf(b: Building): { floor: string; fits: Fit[] } {
       f("booth", bx, z0 + 1, 3.2, 3, 1.2);
     }
     return { floor: "#c9c2b2", fits };
+  }
+  if (b.kind === "barn") {
+    // stalls down the south side, hay stacked at the back, the workbench by the door
+    for (let x = x0 + 3; x + 3 <= x1 - 4; x += 4) f("stall", x, z1 - 4, 0.3, 4, 1.3);
+    f("hay", x1 - 3.5, z0 + 1, 2.5, 3, 1.6);
+    f("hay", x1 - 3.5, z0 + 4.5, 2.5, 2.5, 1.0);
+    f("hay", x1 - 6.5, z0 + 1, 2.5, 2, 0.9);
+    f("bench", x0 + 2, z0 + 0.5, 4, 1, 0.95);
+    return { floor: "#6d5a44", fits };
   }
   if (b.kind === "gatehouse") {
     f("desk", x1 - 1.2, z0 + 0.8, 0.9, z1 - z0 - 1.6, 0.8);
@@ -1080,6 +1147,8 @@ export function placeAt(x: number, z: number): { key: string; name: string; priv
   }
   const name = (): string => {
     if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) return "The square";
+    if (x >= CORN.x0 && x < CORN.x1 && z >= CORN.z0 && z < CORN.z1) return "The cornfield";
+    if (x >= FARM.x0 && x < FARM.x1 && z >= FARM.z0 && z < FARM.z1) return "The farm";
     if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1.4) return "The frozen pond";
     if (Math.hypot(x - CLEARING.x, z - CLEARING.z) < CLEARING.r) return "The clearing";
     const near = nearLines(x, z);

@@ -4,20 +4,25 @@ import { beamAt, beamOf } from "@yutopia/shared/beam";
 import {
   blackoutAt,
   dangerAt,
-  dayPrey,
+  dayNests,
+  dayOf,
   FLARE,
   HQ_DOORS,
   inFlare,
   inLampPool,
+  isDay,
   LAMP_POOL_R,
+  lurker,
+  type Nest,
+  nestCount,
   newShade,
   nightness,
-  onPathAt,
   type Prey,
   type Ray,
   REWIND,
   rayDir,
   rayMeets,
+  revive,
   SHADE,
   SHADOWED,
   type Shade,
@@ -25,6 +30,7 @@ import {
   shadeCode,
   shadowedWanted,
   think,
+  wake,
   wound,
 } from "@yutopia/shared/dark";
 import { heightAt, LAMPS } from "@yutopia/shared/grounds";
@@ -127,14 +133,28 @@ registerFeature((room: WorldRoom) => {
     return best;
   };
 
-  const spawn = (x: number, y: number, t: number) => {
+  // ── the day's nests (docs/plan/31-the-day.md): asleep where they're put, a new layout a day ──
+  interface NestRun {
+    nest: Nest;
+    alive: boolean[];
+    deadAt: number[];
+    /** its shadowed out now (run ids by slot; null: put away, or dead) */
+    runs: (string | null)[];
+  }
+  let today: { day: number; all: NestRun[]; count: number; out: Set<number> } | null = null;
+  let nestsAt = 0;
+  const nestOf = new Map<string, { n: NestRun; slot: number }>();
+  // shots just fired (where from, the clock): those asleep near enough hear them
+  const shots: { x: number; y: number; t: number }[] = [];
+
+  const spawn = (x: number, y: number, t: number, lurk = false) => {
     const id = `sh${(++seq).toString(36)}`;
     const wire = new Shadow();
     wire.id = id;
     wire.x = x;
     wire.y = y;
     wire.look = Math.floor(Math.random() * 256);
-    const shade = newShade(x, y, t);
+    const shade = lurk ? lurker(x, y, t) : newShade(x, y, t);
     wire.s = shadeCode(shade.state);
     wire.at = Date.now();
     room.state.shadows.set(id, wire);
@@ -157,6 +177,16 @@ registerFeature((room: WorldRoom) => {
   const remove = (id: string) => {
     const r = shades.get(id);
     if (!r) return;
+    // a day's: its nest's slot free (killed: dead until its respawn)
+    const at = nestOf.get(id);
+    if (at) {
+      nestOf.delete(id);
+      at.n.runs[at.slot] = null;
+      if (r.shade.killed) {
+        at.n.alive[at.slot] = false;
+        at.n.deadAt[at.slot] = Date.now();
+      }
+    }
     for (const c of room.clients) (c as WorldClient).view?.remove(r.wire);
     room.state.shadows.delete(id);
     shades.delete(id);
@@ -164,12 +194,7 @@ registerFeature((room: WorldRoom) => {
 
   // somewhere for one to come out of the dark: on the land, clear, in no light, not by the HQ,
   // `from` someone, behind their beam if it can
-  const spawnPoint = (
-    p: { x: number; y: number; yaw: number },
-    night: number,
-    dark: boolean,
-    day: boolean,
-  ): Point | null => {
+  const spawnPoint = (p: { x: number; y: number; yaw: number }, night: number, dark: boolean): Point | null => {
     const g = grid();
     const doorsX = HQ_DOORS.x - ox();
     const doorsY = HQ_DOORS.z - oy();
@@ -183,7 +208,6 @@ registerFeature((room: WorldRoom) => {
       if (!ready(x + ox(), y + oy()) || !g.onLand(x, y) || !g.fits(x, y, 0.35)) continue;
       if (Math.hypot(x - doorsX, y - doorsY) < NEAR_HQ) continue;
       if (lampAt(x, y, night, dark)) continue;
-      if (day && onPathAt(x + ox(), y + oy())) continue; // (by day, off the paths)
       return { x, y };
     }
     return null;
@@ -298,12 +322,95 @@ registerFeature((room: WorldRoom) => {
     const k = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 0;
     return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k };
   };
+  // the day's nests a tick: laid out at the day's start; out (asleep) when someone's within 64
+  // tiles, put away when everyone's past 100 and they sleep; a dead one back after its 10 minutes
+  // with nobody near; at the dusk, whoever's left leaves its nest — the night's then
+  const nestsTick = (now: number, prey: readonly { id: string; x: number; y: number }[], hour: number) => {
+    if (mode !== "normal" || !isDay(hour)) {
+      if (today) {
+        for (const nr of today.all)
+          for (const id of nr.runs) {
+            const r = id ? shades.get(id) : undefined;
+            if (!id || !r) continue;
+            // (the dark switched off, or called-only: they go; the dusk: they're the night's)
+            if (mode !== "normal") {
+              remove(id);
+              continue;
+            }
+            nestOf.delete(id);
+            r.shade.home = null;
+            wake(r.shade, clock);
+            r.wire.s = shadeCode(r.shade.state);
+            r.wire.at = now;
+          }
+        today = null;
+      }
+      return;
+    }
+    const d = dayOf(now);
+    if (!today || today.day !== d) {
+      if (today) for (const nr of today.all) for (const id of nr.runs) if (id) remove(id);
+      const all = dayNests(d).map((nest) => ({
+        nest,
+        alive: Array.from({ length: nest.n }, () => true),
+        deadAt: Array.from({ length: nest.n }, () => 0),
+        runs: Array.from({ length: nest.n }, () => null as string | null),
+      }));
+      today = { day: d, all, count: nestCount(dayNests(d), 0), out: new Set() };
+    }
+    // who's been out today: more nests for each
+    let grew = false;
+    for (const q of prey) {
+      const pl = room.state.players.get(q.id);
+      if (pl && !pl.bot && !today.out.has(pl.uid)) {
+        today.out.add(pl.uid);
+        grew = true;
+      }
+    }
+    if (grew) today.count = nestCount(dayNests(d), today.out.size);
+    if (now - nestsAt < 1000) return;
+    nestsAt = now;
+    const g = grid();
+    for (let i = 0; i < today.count; i++) {
+      const nr = today.all[i];
+      const nx = nr.nest.x - ox();
+      const ny = nr.nest.z - oy();
+      let near = Number.POSITIVE_INFINITY;
+      for (const q of prey) near = Math.min(near, Math.hypot(q.x - nx, q.y - ny));
+      revive(nr.alive, nr.deadAt, now, near);
+      if (near > 100) {
+        for (const id of nr.runs) {
+          const st = id ? shades.get(id)?.shade.state : undefined;
+          if (id && (st === "lurk" || st === "home")) remove(id);
+        }
+        continue;
+      }
+      if (near <= 64)
+        for (let k = 0; k < nr.alive.length; k++) {
+          if (!nr.alive[k] || nr.runs[k]) continue;
+          // somewhere round the nest (not where one fell: a fresh spot each time)
+          for (let tries = 0; tries < 10; tries++) {
+            const a = Math.random() * Math.PI * 2;
+            const rr = 1.5 + Math.random() * 3.5;
+            const x = nx + Math.cos(a) * rr;
+            const y = ny + Math.sin(a) * rr;
+            if (!ready(x + ox(), y + oy()) || !g.onLand(x, y) || !g.fits(x, y, 0.35)) continue;
+            const id = spawn(x, y, clock, true);
+            nr.runs[k] = id;
+            nestOf.set(id, { n: nr, slot: k });
+            break;
+          }
+        }
+    }
+  };
+
   let flareSeq = 0;
   room.dark = {
     get peaceful() {
       return mode === "peaceful";
     },
     shoot(ray, range, seenAt, damage, now) {
+      shots.push({ x: ray.x, y: ray.y, t: clock });
       let best: { r: Run; t: number } | null = null;
       for (const r of shades.values()) {
         if (r.shade.state === "dissolve") continue;
@@ -389,7 +496,7 @@ registerFeature((room: WorldRoom) => {
       // the land round those out there made ahead, as far as the shadowed come from (once a second)
       if (now - landAt >= 1000) {
         landAt = now;
-        for (const p of prey) prefetch(p.x + ox(), p.y + oy(), SPAWN_AT[1] + 4);
+        for (const p of prey) prefetch(p.x + ox(), p.y + oy(), 68); // (the day's nests come out at 64)
       }
 
       // the director: per group of people out there, as many as the danger buys
@@ -405,10 +512,9 @@ registerFeature((room: WorldRoom) => {
           const cy = g.reduce((a, p) => a + p.y, 0) / g.length;
           const b = toB(cx, cy);
           const danger = dangerAt({ hour, storm: room.state.storm, x: b.x, z: b.z, lit: false, inHQ: false });
-          // (by day, fewer: only for those off the paths and away from the HQ; a storm's the night's)
+          // (by day nobody comes out of the dark: they wait in the day's nests; a storm's the night's)
           const day = night < 0.3 && room.state.storm < 0.5;
-          const hunted = day ? g.filter((p) => dayPrey(p.x + ox(), p.y + oy())) : g;
-          const want = dawn ? 0 : shadowedWanted(hunted.length, danger);
+          const want = dawn || day ? 0 : shadowedWanted(g.length, danger);
           let here = 0;
           for (const r of shades.values()) if (Math.hypot(r.shade.x - cx, r.shade.y - cy) < SPAWN_AT[1] + 10) here++;
           const key = g[0].id;
@@ -418,14 +524,16 @@ registerFeature((room: WorldRoom) => {
             tension = 0.3;
             continue;
           }
-          const who = hunted[Math.floor(Math.random() * hunted.length)];
-          const at = spawnPoint(who, night, dark, day);
+          const who = g[Math.floor(Math.random() * g.length)];
+          const at = spawnPoint(who, night, dark);
           if (!at) continue;
           spawn(at.x, at.y, clock);
           lastSpawn.set(key, now);
         }
       }
       tension = Math.max(0, tension - 0.02 * dt);
+      nestsTick(now, prey, hour);
+      while (shots.length && clock - shots[0].t > 1) shots.shift();
 
       // their minds, their feet
       const t = clock;
@@ -434,6 +542,15 @@ registerFeature((room: WorldRoom) => {
         const s = r.shade;
         let nearest = Number.POSITIVE_INFINITY;
         for (const p of prey) nearest = Math.min(nearest, Math.hypot(p.x - s.x, p.y - s.y));
+        // asleep in its nest with nobody near, nothing heard, its nest quiet: nothing to think
+        const nestAt = nestOf.get(id);
+        const heard = shots.filter((q) => clock - q.t < 0.5);
+        if (
+          s.state === "lurk" &&
+          nearest > 20 &&
+          !heard.some((q) => Math.hypot(q.x - s.x, q.y - s.y) <= SHADE.lurk.shot)
+        )
+          continue;
         // (far from everyone: 4 Hz)
         const step = nearest < 40 ? dt : FAR_THINK;
         if (nearest >= 40 && t - r.thinkAt < FAR_THINK) continue;
@@ -460,6 +577,7 @@ registerFeature((room: WorldRoom) => {
           lit: !!light,
           light,
           prey,
+          shots: heard,
           // (a line of sight, kept a fifth of a second: 5 Hz is quicker than anyone notices)
           sees: (x, y) => {
             const k = `${Math.round(x * 2)},${Math.round(y * 2)}`;
@@ -471,7 +589,18 @@ registerFeature((room: WorldRoom) => {
             return v;
           },
         };
+        const wasAsleep = s.state === "lurk";
         const act = think(s, sense, step);
+        // (one of a nest woke: the rest of it wake with it, after the same one)
+        if (nestAt && wasAsleep && act.became === "emerge")
+          for (const mate of nestAt.n.runs) {
+            const m = mate && mate !== id ? shades.get(mate) : undefined;
+            if (!m || m.shade.state !== "lurk") continue;
+            const who = s.target ? prey.find((q) => q.id === s.target) : null;
+            wake(m.shade, clock, who ?? null);
+            m.wire.s = shadeCode(m.shade.state);
+            m.wire.at = now;
+          }
         if (act.gone) {
           remove(id);
           continue;

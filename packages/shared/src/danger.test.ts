@@ -7,7 +7,6 @@ import {
   DANGER_DAY,
   DANGER_NIGHT,
   dangerAt,
-  dayPrey,
   HQ_DOORS,
   onPathAt,
   SHADOWED,
@@ -77,25 +76,19 @@ test("blackouts: rare, a few minutes, only after dark", () => {
   assert.ok(n > 120 && n < 290, `${n} in 2000 windows`);
 });
 
-test("how many: 4 each at night in the open, 5 in the woods; by day 1, 2 in the woods", () => {
+test("how many: 4 each at night in the open, 5 in the woods", () => {
   assert.equal(shadowedWanted(1, DANGER_NIGHT), 4);
   assert.equal(shadowedWanted(1, 1), 5, "the woods at night (the danger tops out at 1)");
   assert.equal(shadowedWanted(3, DANGER_NIGHT), 12);
-  assert.equal(shadowedWanted(1, DANGER_DAY), 1);
-  assert.equal(shadowedWanted(1, DANGER_DAY * 1.3), 2);
-  assert.equal(shadowedWanted(0, DANGER_NIGHT), 0, "by day, nobody off the paths: none");
+  assert.equal(shadowedWanted(0, DANGER_NIGHT), 0, "nobody out: none");
   assert.equal(shadowedWanted(40, 1), SHADOWED.cap);
 });
 
-test("by day only off the paths and away from the HQ: the trails, the roads, the lot are safe", () => {
-  // the pond trail, halfway along; the pond's ice; the lot; by the HQ's doors
+test("on a path: the trails, the roads, the lot; not the ice or the snow", () => {
+  // the pond trail, halfway along; the pond's ice; the lot
   const line = (WAYS.find((w) => w.key === "to-pond") as (typeof WAYS)[number]).line;
   const [tx, tz] = line[Math.floor(line.length / 2)];
   assert.equal(onPathAt(tx, tz), true);
-  assert.equal(dayPrey(tx, tz), false);
   assert.equal(onPathAt(POND.cx, POND.cz), false);
-  assert.equal(dayPrey(POND.cx, POND.cz), true);
   assert.equal(onPathAt(-30, 20), true, "the lot");
-  const byDoors = { x: HQ_DOORS.x - 20, z: HQ_DOORS.z - 30 };
-  if (!onPathAt(byDoors.x, byDoors.z)) assert.equal(dayPrey(byDoors.x, byDoors.z), false, "near the HQ");
 });

@@ -235,6 +235,12 @@ export class Person3D {
     // one of the shadowed: its own arms, back and head over the walk
     let pose = p.shade ? this.C.blend(mo.pose, this.C.shadePose(p.shade.pose, p.shade.t, p.shade.seed), 1) : mo.pose;
     let lift = mo.lift;
+    // one of the day's, asleep in its nest: squatting, folded over its knees (docs/plan/31-the-day.md)
+    if (p.shade?.pose === "lurk") {
+      const m = this.C.lurkPose(p.shade.t, p.shade.seed);
+      pose = this.C.blend(pose, m.pose, 1);
+      lift = m.lift;
+    }
     // down: on hands and knees, crawling as they go; by someone down, kneeling (D7)
     if (p.down) {
       this.crawlPh = (this.crawlPh + dist / 0.45) % 1;

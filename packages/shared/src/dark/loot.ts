@@ -1,5 +1,5 @@
 import { SP_OFFSET_H } from "../clock.ts";
-import { BUILDINGS, type Building, INSIDES, TOWN_CARS } from "../grounds.ts";
+import { BUILDINGS, type Building, INSIDES, TOWN_CARS, TRACTOR } from "../grounds.ts";
 import type { ItemId, StackId } from "../inventory.ts";
 
 // Where things are found on the Grounds (docs/plan/30-the-dark.md, D3): spots by
@@ -9,7 +9,17 @@ import type { ItemId, StackId } from "../inventory.ts";
 // Rounds and shells come out of a budget per night. The gatehouse's locker is
 // apart: a revolver for whoever carries none. Places are the building's coords.
 
-export type Place = "house" | "boathouse" | "shed" | "glovebox" | "diner" | "market" | "bar";
+export type Place =
+  | "house"
+  | "boathouse"
+  | "shed"
+  | "glovebox"
+  | "diner"
+  | "market"
+  | "bar"
+  | "barn"
+  | "farmhouse"
+  | "tractor";
 export interface LootSpot {
   id: string;
   place: Place;
@@ -29,6 +39,9 @@ export const REFILL_MIN: Record<Place, number> = {
   diner: 20,
   market: 20,
   bar: 20,
+  barn: 20,
+  farmhouse: 20,
+  tractor: 25,
 };
 /** What's dropped lies on the snow this long. */
 export const DROP_MS = 2 * 60 * 60_000;
@@ -48,6 +61,7 @@ export const LOOT: LootSpot[] = (() => {
   for (const b of BUILDINGS) {
     if (b.kind === "house") out.push({ id: b.key, place: "house", ...atDoor(b) });
     if (b.kind === "boathouse" || b.kind === "shed") out.push({ id: b.key, place: b.kind, ...atDoor(b) });
+    if (b.kind === "farmhouse") out.push({ id: b.key, place: "farmhouse", ...atDoor(b) });
   }
   // the driver's door: on the street's side (they're parked kerbside, the
   // road's middle at z −405), a little ahead of the middle
@@ -56,13 +70,28 @@ export const LOOT: LootSpot[] = (() => {
   // a counter inside: in front of it, the side away from the wall
   for (const ins of INSIDES) {
     const place: Place | null =
-      ins.b.kind === "diner" ? "diner" : ins.b.sign === "BAR" ? "bar" : ins.b.sign === "MARKET" ? "market" : null;
+      ins.b.kind === "diner"
+        ? "diner"
+        : ins.b.sign === "BAR"
+          ? "bar"
+          : ins.b.sign === "MARKET"
+            ? "market"
+            : ins.b.kind === "barn"
+              ? "barn"
+              : null;
     if (!place) continue;
-    const f = ins.fits.find((f) => f.kind === (place === "market" ? "till" : "counter"));
+    const f = ins.fits.find((f) => f.kind === (place === "market" ? "till" : place === "barn" ? "bench" : "counter"));
     if (!f) continue;
-    const front = place === "market" ? f.z + f.d + 0.7 : f.z - 0.7;
+    const front = place === "market" || place === "barn" ? f.z + f.d + 0.7 : f.z - 0.7;
     out.push({ id: ins.b.key, place, x: f.x + f.w / 2, z: front });
   }
+  // the tractor's toolbox: by its side, on the south (the side away from the farmhouse's yard wall)
+  out.push({
+    id: "tractor",
+    place: "tractor",
+    x: TRACTOR.x - Math.sin(TRACTOR.ry) * 1.9,
+    z: TRACTOR.z + Math.cos(TRACTOR.ry) * 1.9,
+  });
   return out;
 })();
 const byId = new Map(LOOT.map((s) => [s.id, s]));
@@ -122,6 +151,26 @@ const TABLES: Record<Place, Roll[]> = {
     [2, "r38", 2, 4],
     [1, "aid"],
     [1, "flare"],
+    [2, null],
+  ],
+  // the farm (docs/plan/31-the-day.md): a hunter's shells in the barn, the farmhouse's drawer
+  barn: [
+    [3, "shell", 2, 5],
+    [2, "fuse"],
+    [2, "flare"],
+    [1, "shotgun"],
+    [1, null],
+  ],
+  farmhouse: [
+    [3, "aid"],
+    [2, "battery"],
+    [2, "r38", 3, 6],
+    [2, null],
+  ],
+  tractor: [
+    [3, "fuse"],
+    [3, "battery"],
+    [2, "flare"],
     [2, null],
   ],
 };

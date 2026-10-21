@@ -6,12 +6,15 @@ import {
   addWeapon,
   type Budget,
   blackoutAt,
+  type Cache,
   canFocus,
   cleanInventory,
   consume,
   count,
   DOWN,
   DROP_MS,
+  dayNests,
+  dayOf,
   emptyInventory,
   FULL_VITALS,
   freshClock,
@@ -27,6 +30,8 @@ import {
   type LootItem,
   lootSpot,
   moveSlot,
+  type Nest,
+  nestCount,
   nightBudget,
   nightness,
   nightOf,
@@ -46,7 +51,7 @@ import { INSIDES } from "@yutopia/shared/grounds";
 import { GAITS, MOVE, MV_AIM } from "@yutopia/shared/move";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
-import { Drop, type Player } from "../schema.ts";
+import { Cache as CacheWire, Drop, type Player } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
@@ -103,6 +108,8 @@ interface LootSave {
   people: number[];
   spent: Budget;
   drops: { id: string; item: string; n: number; loaded: number; x: number; y: number; at: number }[];
+  /** the day's caches (docs/plan/31-the-day.md): whose day, who's been out, what's left in each searched */
+  cache?: { day: number; out: number[]; left: Record<string, LootItem[]> };
 }
 
 export interface SurvivalHooks {
@@ -183,7 +190,14 @@ registerFeature((room: WorldRoom) => {
   };
 
   // ── the loot ───────────────────────────────────────────────────────────────
-  const loot: LootSave = { spots: {}, night: nightOf(Date.now()), people: [], spent: { r38: 0, shell: 0 }, drops: [] };
+  const loot: LootSave = {
+    spots: {},
+    night: nightOf(Date.now()),
+    people: [],
+    spent: { r38: 0, shell: 0 },
+    drops: [],
+    cache: { day: dayOf(Date.now()), out: [], left: {} },
+  };
   let lootDirty = false;
   let lootSavedAt = 0;
   {
@@ -200,6 +214,15 @@ registerFeature((room: WorldRoom) => {
         loot.spent = { r38: Number(saved.spent?.r38) || 0, shell: Number(saved.spent?.shell) || 0 };
       }
       const now = Date.now();
+      // (the day's caches: what's been taken today, kept across a restart)
+      if (saved.cache?.day === dayOf(now))
+        loot.cache = {
+          day: saved.cache.day,
+          out: (saved.cache.out ?? []).filter((u) => Number.isInteger(u)),
+          left: Object.fromEntries(
+            Object.entries(saved.cache.left ?? {}).map(([k, v]) => [k, Array.isArray(v) ? cleanItems(v) : []]),
+          ),
+        };
       for (const d of saved.drops ?? []) {
         if (!(isStack(d.item) || isWeapon(d.item)) || now - d.at > DROP_MS) continue;
         putDrop(d.item, d.n, d.loaded, d.x, d.y, d.at, d.id);
@@ -223,6 +246,43 @@ registerFeature((room: WorldRoom) => {
     }
     lootDirty = true;
   }
+  // ── the day's caches: the nests' (shared dark/nests.ts), laid out with them; what's taken kept ──
+  let nestsOf: { day: number; nests: Nest[] } | null = null;
+  const todays = (day: number) => {
+    if (nestsOf?.day !== day) nestsOf = { day, nests: dayNests(day) };
+    return nestsOf.nests;
+  };
+  const cacheOf = (id: string): Cache | null => {
+    const c = loot.cache;
+    if (!c) return null;
+    return todays(c.day).find((n) => n.cache?.id === id)?.cache ?? null;
+  };
+  // the caches out today: the nests that are (the base and more as people go out), not emptied
+  const cachesTick = (now: number) => {
+    const day = dayOf(now);
+    if (!loot.cache || loot.cache.day !== day) {
+      loot.cache = { day, out: [], left: {} };
+      lootDirty = true;
+    }
+    const c = loot.cache;
+    const all = todays(day);
+    const k = room.dark?.peaceful ? 0 : nestCount(all, c.out.length);
+    const want = new Set<string>();
+    const g = ground();
+    for (let i = 0; i < k; i++) {
+      const cache = all[i].cache;
+      if (!cache || c.left[cache.id]?.length === 0) continue;
+      want.add(cache.id);
+      if (room.state.caches.has(cache.id)) continue;
+      const w = new CacheWire();
+      w.id = cache.id;
+      w.kind = cache.kind;
+      w.x = cache.x - (g?.ox ?? 0);
+      w.y = cache.z - (g?.oy ?? 0);
+      room.state.caches.set(w.id, w);
+    }
+    for (const id of [...room.state.caches.keys()]) if (!want.has(id)) room.state.caches.delete(id);
+  };
   const budgetLeft = (): Budget => {
     const b = nightBudget(loot.people.length);
     return { r38: Math.max(0, b.r38 - loot.spent.r38), shell: Math.max(0, b.shell - loot.spent.shell) };
@@ -312,6 +372,19 @@ registerFeature((room: WorldRoom) => {
       const { got } = take(s, [gun]);
       if (got.length) s.issued = true;
       return found(s, client.sessionId, id, got, !got.length);
+    }
+    // a cache in a day's nest: what's in it (or what's left), once
+    if (id.startsWith("cache-")) {
+      const w = room.state.caches.get(id);
+      const cache = cacheOf(id);
+      if (!w || !cache || !loot.cache) return;
+      const b = toB(w.x, w.y);
+      if (!near(p, b.x, b.z)) return;
+      const { got, left } = take(s, loot.cache.left[id] ?? cache.items);
+      loot.cache.left[id] = left;
+      if (!left.length) room.state.caches.delete(id);
+      lootDirty = true;
+      return found(s, client.sessionId, id, got, left.length > 0);
     }
     const spot = lootSpot(id);
     if (!spot || !near(p, spot.x, spot.z)) return;
@@ -661,6 +734,11 @@ registerFeature((room: WorldRoom) => {
           if (s.awayOut >= (FAST_DOWN ? 1 : DOWN.awayOut)) goDown(p, s);
         } else s.awayOut = 0;
         // (out tonight: the ammo's budget grows by a person)
+        // (out today: more of the day's nests, and their caches)
+        if (land && !s.bot && loot.cache && !loot.cache.out.includes(s.uid)) {
+          loot.cache.out.push(s.uid);
+          lootDirty = true;
+        }
         if (land && !s.bot && !s.out) {
           newNight(now);
           s.out = true;
@@ -683,6 +761,7 @@ registerFeature((room: WorldRoom) => {
           newNight(now);
           for (const s of people.values()) s.out = false;
         }
+        cachesTick(now);
         if (lootDirty && now - lootSavedAt > SAVE_MS) saveLoot(now);
       }
     },

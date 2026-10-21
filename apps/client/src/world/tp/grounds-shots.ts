@@ -231,6 +231,31 @@ export function shots(): Record<string, Shot> {
       ],
       snow: 3000,
     },
+    // (docs/plan/31-the-day.md: the farm — over it by day, the barn's doors, between the rows)
+    "farm-day": {
+      hour: "day",
+      cam: [392, gy(392, -350) + 26, -350],
+      look: [432, gy(432, -280), -280],
+      fov: 55,
+      people: [{ x: 433, z: -318, to: [437, -311], a: ANA, walk: 4 }],
+      snow: 1500,
+    },
+    "farm-barn": {
+      hour: "day",
+      cam: [426, gy(426, -312) + 2.2, -306],
+      look: [440, gy(440, -311) + 2, -312],
+      fov: 55,
+      people: [{ x: 434, z: -309, to: [440, -311], a: ANA }],
+      snow: 1500,
+    },
+    "farm-corn": {
+      hour: "day",
+      cam: [377, gy(377, -300) + 1.7, -300],
+      look: [377, gy(377, -270) + 1.2, -270],
+      fov: 55,
+      people: [{ x: 377.4, z: -292, to: [377.4, -280], a: BIA, walk: 3 }],
+      snow: 1500,
+    },
     "blizzard-lawn": {
       hour: "blizzard",
       cam: [-4, gy(-4, -52) + 2.2, -52],

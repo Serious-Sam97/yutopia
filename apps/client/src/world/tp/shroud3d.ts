@@ -34,6 +34,8 @@ export interface ShroudIn {
   t: number;
   /** a focused beam on it now: from where (to throw the embers off the lit side) */
   burn: { x: number; y: number } | null;
+  /** how tall it is now, if not the standing height (asleep, squatting: docs/plan/31-the-day.md) */
+  h?: number;
 }
 
 interface Slot {
@@ -119,7 +121,7 @@ export class Shroud3 {
   }
 
   /** Every frame: the shadowed in view (their feet, their shroud), the camera, the night (0..1). */
-  update(list: ShroudIn[], cam: Camera, dt: number, night: number, height: number, px: number): void {
+  update(list: ShroudIn[], cam: Camera, dt: number, night: number, tall: number, px: number): void {
     this.time += dt;
     (this.smoke.material as ShaderMaterial).uniforms.scale.value = px;
     (this.embers.material as ShaderMaterial).uniforms.scale.value = px;
@@ -137,6 +139,7 @@ export class Shroud3 {
     // (smoke is near black; a touch lighter by day, or it reads as holes)
     const shade = 0.03 + 0.08 * (1 - night);
     for (const s of list) {
+      const height = s.h ?? tall;
       let k = this.slots.findIndex((x) => x?.id === s.id);
       if (k < 0) {
         k = this.slots.indexOf(null);

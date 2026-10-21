@@ -1054,3 +1054,25 @@ The user: "Inside the building, the Sims-like mechanics continue. But outside I 
   - **Firefox**: neither Playwright's Firefox nor the installed one starts on this Mac ("Could not find profile folder"). A read-through found nothing Chrome-only in the new code. The risk that stays is plan 29's: a pad Firefox reports as non-standard.
   - **The sound by ear.**
   - **The fight's feel** (the user's sign-off).
+
+## The day — phases 0–4 (2026-10-21)
+The user: "spawning and coming at you is great in a blizzard and at night, but by day it's strange — treat the day differently: random places, spread, some together, in specific places like the forest, near the farm". Plan: `docs/plan/31-the-day.md`. Decided: build the farm; fill the land well (~30 nests, ~60 shadowed a day, more as people go out, up to 90); a dead one back in 10 minutes; at dusk the day's become the night's; a few round the town's edges; caches, creatively.
+- **Phase 0**: the day's map over the real Grounds (`design/screens/day/01-day-map`). The rest were shot in the engine once built.
+- **Phase 1 — the farm**, across the river, south of Main Street:
+  - **What's there**: a lane from the square; a red barn you walk into (stalls, hay, a workbench); a silo; the farmhouse; a fenced cornfield of dry stalks you walk through, with scarecrows; a tractor under snow.
+  - **Loot spots**: the barn, the farmhouse and the tractor.
+  - **Both views**: the cornfield is built in bands (3D) and in 5 looks (iso), after 100+ ms frames.
+  - **Tests**: shared `farm.test`; e2e `farm.spec` in both views (worst frames 17 and 33 ms).
+- **Phase 2 — the nests**:
+  - **No more appearing by day.** A day's layout of nests, seeded by the day (shared `dark/nests.ts`): the deep woods, the farm, the ravine, the pond, the water tower, the shed, the river's ice by the bridge, the town's edges. Never on a path or within 6 of one, never near the HQ.
+  - **Asleep** (`lurk`) until someone's seen within 10 tiles (5 crouching), a sprint within 14, a shot within 30, or a beam on one. The whole nest wakes together.
+  - **Leashed** 30 tiles: past it they go `home` and sleep.
+  - **Cheap**: out only within 64 tiles of someone; a dead one back in 10 minutes; at dusk the night's.
+  - **Caches** (state `caches`, saved with the loot): a briefcase, lunchbox, toolbox, hunting bag, flare bag, or a torch still on. Twice as much in a big nest. Searched like loot.
+- **Phase 3 — the look**: a squatting, folded-over sleeping pose, the shroud drawn in and lower, a low whisper near one, the caches drawn in both views. e2e `day.spec` (GPU): woods and farm nests asleep, crept up on crouched, walked into and woken.
+- **Phase 4 — the checks**:
+  - **The page**: 553.98 KB. **`yutopia-dark`**: 25.5 KB.
+  - **`DAY=1 pnpm perf`** (new): 57 sleepers out, tick 0.56 ms, 0 put back.
+  - **The other perf runs**: plain 0.44 ms; `DARK=1` 1.0 ms.
+  - **Unit tests**: shared 230, world-server 97, client 21.
+  - **The GPU run**: 22 of 22 (the farm's worst frame 17 ms in both views; 60 fps on High).

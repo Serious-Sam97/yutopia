@@ -33,6 +33,13 @@ const DROP_LOOK: Record<string, [number, number, number, number]> = {
   battery: [0.07, 0.07, 0.14, 0x2b4f2f],
   aid: [0.2, 0.1, 0.15, 0xeceae4],
   fuse: [0.05, 0.05, 0.14, 0xcfe3ee],
+  // the day's nests' caches (docs/plan/31-the-day.md)
+  "cache:briefcase": [0.45, 0.12, 0.32, 0x3b2a20],
+  "cache:lunchbox": [0.3, 0.18, 0.2, 0x2f5d8a],
+  "cache:toolbox": [0.5, 0.22, 0.22, 0xb3302b],
+  "cache:hunting": [0.4, 0.26, 0.3, 0x4b5a34],
+  "cache:flares": [0.36, 0.2, 0.26, 0xc8322a],
+  "cache:torch": [0.08, 0.08, 0.32, 0x2a2a2a],
 };
 
 const MAX_TRACERS = 24;
@@ -197,8 +204,14 @@ export class Arms3 {
       o.mesh.position.set(d.x, d.z + o.mesh.scale.y / 2, d.y);
       o.glint.position.set(d.x, d.z + 0.12, d.y);
       const k = 0.5 + 0.5 * Math.sin(this.time * 3 + d.x);
-      o.glint.scale.setScalar(0.18 + 0.1 * k);
-      (o.glint.material as SpriteMaterial).opacity = 0.35 + 0.4 * k;
+      // (a torch left on: its light, steady and big — seen from far off as the day goes)
+      if (d.item === "cache:torch") {
+        o.glint.scale.setScalar(1.4);
+        (o.glint.material as SpriteMaterial).opacity = 0.75;
+      } else {
+        o.glint.scale.setScalar(0.18 + 0.1 * k);
+        (o.glint.material as SpriteMaterial).opacity = 0.35 + 0.4 * k;
+      }
     }
     for (const [id, o] of this.dropped)
       if (!seen.has(id)) {

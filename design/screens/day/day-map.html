@@ -1,0 +1,113 @@
+<!doctype html><meta charset=utf-8>
+<!-- The day's shadowed (docs/plan/31-the-day.md): where they lie in wait by day,
+     over the real Grounds (map.json from shared grounds.ts). A sample day's
+     nests, seeded. For approval. -->
+<style>
+body{margin:0;background:#0d1015;font-family:-apple-system,"SF Pro Text","Helvetica Neue",sans-serif;color:#e9ecef;display:flex}
+#side{width:380px;padding:22px 22px;box-sizing:border-box}
+h1{font-size:18px;margin:0 0 4px;letter-spacing:.06em}
+.sub{font-size:12px;color:rgba(233,236,239,.6);margin-bottom:16px;line-height:1.4}
+.z{display:flex;gap:10px;margin:9px 0;font-size:13px;line-height:1.35}
+.z i{flex:none;width:16px;height:16px;border-radius:4px;margin-top:2px}
+.z b{display:block}
+.z span{color:rgba(233,236,239,.65);font-size:12px}
+.k{margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1);font-size:12px;color:rgba(233,236,239,.7);line-height:1.6}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#5b2a86;border:2px solid #fff;vertical-align:-1px}
+</style>
+<body><canvas id=c></canvas><div id=side>
+<h1>O DIA · ONDE ELES ESPERAM</h1>
+<div class=sub>De dia ninguém surge perto de você. Ao amanhecer, os sombrios do dia ficam à espreita em lugares certos — espalhados, uns sozinhos, uns em grupo, em pontos diferentes a cada dia. Fora deles, o dia é calmo. Uma nevasca ainda traz os da noite.</div>
+<div class=z><i style="background:repeating-linear-gradient(45deg,rgba(120,60,170,.5) 0 3px,transparent 3px 6px);border:1px solid #8a5cc2"></i><div><b>Floresta funda</b><span>onde as árvores fecham (densidade ≥ 0,6), longe das trilhas</span></div></div>
+<div class=z><i style="background:#c9822f"></i><div><b>A fazenda (nova)</b><span>celeiro, silo, casa, milharal seco na neve — do outro lado do rio, ao sul da Main Street</span></div></div>
+<div class=z><i style="background:#3f8f8a"></i><div><b>A ravina</b><span>o fundo gelado, abaixo da vista: emboscada de cima</span></div></div>
+<div class=z><i style="background:#4a78b5"></i><div><b>O lago e a casa de barcos</b><span>sob o deque, nos juncos da margem de lá</span></div></div>
+<div class=z><i style="background:#9a4f4f"></i><div><b>A caixa d'água</b><span>dentro da cerca, uma só entrada</span></div></div>
+<div class=z><i style="background:#6f7d3a"></i><div><b>O galpão</b><span>no meio da mata do sul</span></div></div>
+<div class=z><i style="background:#7a6aa8"></i><div><b>Sob a ponte</b><span>no gelo do rio, debaixo da estrada</span></div></div>
+<div class=z><i style="background:#555c66"></i><div><b>A loja fechada e o fundo da igreja</b><span>o canto morto da cidade</span></div></div>
+<div class=k><span class=dot></span> um ninho de um dia de exemplo (o número: quantos)<br>
+Nunca: nas trilhas e estradas, a menos de 60 do QG, no gramado do campus, nas ruas da cidade.</div>
+</div>
+<script src="map.js"></script><script src="basemap.js"></script><script>
+const k = 1.45;
+const c = document.getElementById("c");
+c.width = M.cols * M.S * k;
+c.height = M.rows * M.S * k;
+const ctx = c.getContext("2d");
+const { X, Z } = drawGrounds(ctx, M, k);
+const HQ = { x: 0, z: 18 };
+// deep woods, off the paths, away from the HQ: hatched purple
+const deep = [];
+for (let j = 0; j < M.rows; j++)
+  for (let i = 0; i < M.cols; i++) {
+    const v = M.cells[j * M.cols + i];
+    const s = Math.floor(v / 1000), td = (v % 1000) / 100;
+    const x = M.G.x0 + i * M.S + 2, z = M.G.z0 + j * M.S + 2;
+    const edge = Math.min(x - M.G.x0, M.G.x1 - x, z - M.G.z0, M.G.z1 - z);
+    if ((s === 0 || s === 1) && td >= 0.6 && Math.hypot(x - HQ.x, z - HQ.z) > 60 && edge > 30) {
+      deep.push([x, z]);
+      if ((i + j) % 2 === 0) {
+        ctx.fillStyle = "rgba(120,60,170,.28)";
+        ctx.fillRect(X(x - 2), Z(z - 2), M.S * k, M.S * k);
+      }
+    }
+  }
+// the farm (new): fields, barn, silo, house, the lane from the plaza
+const F = { x0: 330, z0: -330, x1: 505, z1: -205 };
+ctx.fillStyle = "rgba(244,246,248,.92)";
+ctx.fillRect(X(F.x0), Z(F.z0), (F.x1 - F.x0) * k, (F.z1 - F.z0) * k);
+ctx.strokeStyle = "#c9822f"; ctx.lineWidth = 3;
+ctx.strokeRect(X(F.x0), Z(F.z0), (F.x1 - F.x0) * k, (F.z1 - F.z0) * k);
+ctx.strokeStyle = "rgba(201,130,47,.5)"; ctx.lineWidth = 1;
+for (let z = -320; z < -215; z += 6) { ctx.beginPath(); ctx.moveTo(X(345), Z(z)); ctx.lineTo(X(415), Z(z)); ctx.stroke(); }
+ctx.fillStyle = "#c9b79a"; ctx.fillRect(X(418), Z(-370), 5 * k, 150 * k);
+ctx.fillStyle = "#7a3b2a"; ctx.fillRect(X(440), Z(-300), 26 * k, 18 * k);
+ctx.fillStyle = "#8d8a86"; ctx.beginPath(); ctx.arc(X(474), Z(-291), 5 * k, 0, 7); ctx.fill();
+ctx.fillStyle = "#3b3f46"; ctx.fillRect(X(440), Z(-252), 16 * k, 12 * k);
+ctx.fillStyle = "#c9822f"; ctx.font = "bold 13px sans-serif";
+ctx.fillText("FAZENDA (nova)", X(F.x0) + 4, Z(F.z0) - 6);
+ctx.font = "11px sans-serif"; ctx.fillStyle = "#333";
+ctx.fillText("milharal", X(360), Z(-262)); ctx.fillText("celeiro", X(440), Z(-304)); ctx.fillText("silo", X(468), Z(-280)); ctx.fillText("casa", X(440), Z(-256));
+// the named spots
+const spot = (x, z, r, col, label) => {
+  ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.fillStyle = col + "44";
+  ctx.beginPath(); ctx.arc(X(x), Z(z), r * k, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#111"; ctx.font = "bold 12px sans-serif"; ctx.fillText(label, X(x) + r * k + 4, Z(z) + 4);
+};
+spot(-255, -100, 16, "#4a78b5", "casa de barcos"); spot(-285, -50, 14, "#4a78b5", "juncos");
+spot(-34, -96, 11, "#9a4f4f", "caixa d'água");
+spot(-155, 115, 15, "#6f7d3a", "galpão");
+spot(258, -400, 13, "#7a6aa8", "sob a ponte");
+spot(493, -391, 9, "#555c66", "loja fechada"); spot(420, -566, 12, "#555c66", "fundo da igreja");
+ctx.strokeStyle = "#3f8f8a"; ctx.lineWidth = 7; ctx.globalAlpha = .55; ctx.beginPath();
+M.ravine.forEach(([x, z], i) => (i ? ctx.lineTo(X(x), Z(z)) : ctx.moveTo(X(x), Z(z)))); ctx.stroke(); ctx.globalAlpha = 1;
+ctx.fillStyle = "#1f5f5a"; ctx.font = "bold 12px sans-serif"; ctx.fillText("ravina", X(-350), Z(-292));
+// no-go round the HQ
+ctx.setLineDash([6, 5]); ctx.strokeStyle = "#d33"; ctx.lineWidth = 2;
+ctx.beginPath(); ctx.arc(X(HQ.x), Z(HQ.z), 60 * k, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+ctx.fillStyle = "#d33"; ctx.font = "11px sans-serif"; ctx.fillText("nunca a menos de 60 do QG", X(-40), Z(-48));
+// a sample day: seeded nests, spread (≥ 40 apart), most 1–2, some 3–4
+let seed = 20261022;
+const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const nests = [];
+const far = (x, z) => nests.every((n) => Math.hypot(n.x - x, n.z - z) >= 40);
+const fixed = [[-255, -100], [-285, -52], [-34, -98], [-155, 112], [258, -400], [493, -391], [380, -300], [452, -292], [450, -246], [-300, -255], [-200, -205]];
+for (const [x, z] of fixed) if (r() < 0.65 && far(x, z)) nests.push({ x, z });
+for (let t = 0; t < 2000 && nests.length < 18; t++) {
+  const [x, z] = deep[Math.floor(r() * deep.length)];
+  if (far(x, z)) nests.push({ x, z });
+}
+let total = 0;
+for (const n of nests) {
+  const q = r();
+  n.n = q < 0.45 ? 1 : q < 0.75 ? 2 : q < 0.92 ? 3 : 4;
+  total += n.n;
+  ctx.fillStyle = "#5b2a86"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(X(n.x), Z(n.z), (4 + n.n * 1.6) * k, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#fff"; ctx.font = "bold 11px sans-serif"; ctx.textAlign = "center";
+  ctx.fillText(String(n.n), X(n.x), Z(n.z) + 4); ctx.textAlign = "left";
+}
+ctx.fillStyle = "rgba(13,16,21,.8)"; ctx.fillRect(10, c.height - 34, 330, 24);
+ctx.fillStyle = "#e9ecef"; ctx.font = "12px sans-serif";
+ctx.fillText(`um dia de exemplo: ${nests.length} ninhos, ${total} sombrios`, 18, c.height - 17);
+</script>
