@@ -1,7 +1,9 @@
 import { isHeld } from "@yutopia/shared";
 import { AIM_BLADE } from "@yutopia/shared/beam";
-import { Group, PerspectiveCamera as Lens, type PerspectiveCamera, Quaternion, Scene, Vector3 } from "three";
+import { MV_WINDED } from "@yutopia/shared/move";
+import { Group, PerspectiveCamera as Lens, Matrix4, type PerspectiveCamera, Quaternion, Scene, Vector3 } from "three";
 import type { chars } from "../art/chars-load";
+import type { GunFx } from "./guns3d";
 import type { PersonIn } from "./people3d";
 import { type Mats, Person3D } from "./person3d";
 
@@ -51,6 +53,8 @@ const FRAME: Record<string, Frame> = {
   // a gun out (both arms out along the look, aiming) and the flashlight (the left forearm ahead):
   // a little to the side, under the crosshair
   gun: [0.12, 0.02, 0.06, 0.05],
+  "gun:reload": [0.5, 0.1, 0.16, 0.04], // (brought up before the chest: raised into view)
+  "gun:carry": [0.4, 0.06, 0.16, 0.02], // (the double-barrel carried low in both hands: raised into view)
   torch: [0.36, 0.06, 0.3, 0.04], // (held low: raised into view)
   "torch:aim": [0.3, 0.04, 0.14, 0.02], // (raised along the look: the forearm at the bottom, as it was)
 };
@@ -75,6 +79,15 @@ export function handsDoing(
 
 const eye = new Vector3();
 const want = new Quaternion();
+const sr = new Vector3();
+const sf = new Vector3();
+const turnTo = new Quaternion();
+const turnFull = new Quaternion();
+const su = new Vector3();
+const sx = new Vector3();
+const rq = new Quaternion();
+const basis = new Matrix4();
+const none = new Quaternion();
 
 export class Hands1P {
   readonly scene = new Scene();
@@ -91,6 +104,8 @@ export class Hands1P {
   private bobW = 0;
   private last: { x: number; y: number } | null = null;
   private lagReady = false;
+  private adsK = 0; // down the sights: 0..1
+  private breath = 0; // s: a gun's sway
 
   constructor(C: Chars, factory: InstanceType<Chars["CharFactory"]>, mats: Mats, p: PersonIn) {
     this.person = new Person3D("hands1p", C, factory, mats, p, "arms");
@@ -113,6 +128,29 @@ export class Hands1P {
     return cam.localToWorld(out);
   }
 
+  /** What the gun in my hands is doing (world/dark/arms.ts): passed to my arms' person. */
+  set gunFx(fx: GunFx | null) {
+    this.person.gunFx = fx;
+  }
+  /** How far down the sights (0..1): the world's lens zooms in with it. */
+  get ads(): number {
+    return this.adsK;
+  }
+
+  /** My gun's muzzle as the world's camera `cam` would show it where my hands' picture does (as
+   *  lensFor); false: no gun. */
+  muzzleFor(cam: PerspectiveCamera, out: Vector3): boolean {
+    if (!this.shown || !this.person.gunMuzzle(out)) return false;
+    this.camera.updateMatrixWorld();
+    this.camera.worldToLocal(out);
+    if (out.z > -0.05) return false;
+    const k = Math.tan((cam.fov * Math.PI) / 360) / Math.tan((this.camera.fov * Math.PI) / 360);
+    out.set(out.x * k, out.y * k, out.z);
+    cam.updateMatrixWorld();
+    cam.localToWorld(out);
+    return true;
+  }
+
   /** Anything to draw this frame. */
   get shown(): boolean {
     return this.vis > 0.001 && this.person.ready;
@@ -132,7 +170,9 @@ export class Hands1P {
     off: boolean,
     low: boolean,
   ) {
-    const doing = off || !mo ? "" : handsDoing(p);
+    let doing = off || !mo ? "" : handsDoing(p);
+    if (doing === "gun" && (this.person.gunFx?.reload ?? 0) > 0.3) doing = "gun:reload";
+    else if (doing === "gun" && p.gun === "shotgun" && ((p.mv ?? 0) & 16) === 0) doing = "gun:carry";
     this.now = doing;
     if (doing) this.doing = doing;
     const reduced = !!p.reduced;
@@ -141,8 +181,11 @@ export class Hands1P {
     // the lens: where the room's camera is, its own field of view
     this.camera.position.copy(cam.position);
     this.camera.quaternion.copy(cam.quaternion);
-    if (this.camera.aspect !== cam.aspect) {
+    // (down the sights, my hands' lens closes in too: the gun a touch bigger)
+    const fov = FOV * (1 - 0.14 * this.adsK);
+    if (this.camera.aspect !== cam.aspect || Math.abs(this.camera.fov - fov) > 0.01) {
       this.camera.aspect = cam.aspect;
+      this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
     if (!this.shown && !doing) {
@@ -197,6 +240,62 @@ export class Hands1P {
       this.frame[2] - Math.abs(Math.sin(this.phase)) * BOB[1] * this.bobW - (1 - ease) * DROP,
       -this.frame[1],
     );
+    this.downSights(p, dt, reduced);
+    this.sway(p, dt, reduced);
+  }
+
+  // Down the sights (docs/plan/32-the-arms.md): a gun out and aiming, the arms (and the gun) turned
+  // about the eyes so the line over its sights runs straight ahead, then moved so it runs through
+  // the eye — the rear sight and the front one on the crosshair's point.
+  private downSights(p: PersonIn, dt: number, reduced: boolean) {
+    const want = this.doing.startsWith("gun") && ((p.mv ?? 0) & 16) !== 0 ? 1 : 0;
+    this.adsK = reduced ? want : this.adsK + (want - this.adsK) * (1 - Math.exp(-dt * 12));
+    if (this.adsK < 0.001) return;
+    this.rig.updateMatrixWorld(true);
+    if (!this.person.gunSights(sr, sf, su)) return;
+    this.rig.worldToLocal(sr);
+    this.rig.worldToLocal(sf);
+    // (its top, in the rig's frame: a direction, so turned only)
+    su.applyQuaternion(this.rig.getWorldQuaternion(rq).invert());
+    // the gun's frame here (ahead, up, right) — turned onto the eyes' (−z, +y, +x): level, not rolled
+    const fwd = sf.sub(sr).normalize();
+    const right = sx.crossVectors(fwd, su).normalize();
+    su.crossVectors(right, fwd);
+    basis.makeBasis(right, su, fwd.negate());
+    turnFull.setFromRotationMatrix(basis).invert();
+    turnTo.slerpQuaternions(none, turnFull, this.adsK);
+    this.tilt.quaternion.premultiply(turnTo);
+    this.tilt.position.applyQuaternion(turnTo);
+    this.rig.updateMatrixWorld(true);
+    this.person.gunSights(sr, sf);
+    this.rig.worldToLocal(sr);
+    this.rig.worldToLocal(sf);
+    const t = Math.abs(sf.z - sr.z) > 1e-5 ? -sr.z / (sf.z - sr.z) : 0;
+    this.tilt.position.x -= (sr.x + (sf.x - sr.x) * t) * this.adsK;
+    this.tilt.position.y -= (sr.y + (sf.y - sr.y) * t) * this.adsK;
+    // and along it, the rear sight as far from the eye as it's held: the revolver out at arm's
+    // length, the double-barrel at the shoulder (its stock under the cheek, out of sight)
+    const rear = p.gun === "shotgun" ? 0.34 : 0.46;
+    this.tilt.position.z += (-sr.z - rear) * this.adsK;
+  }
+
+  // A gun out: it breathes — a slow figure-eight, wider winded, smaller crouched and down the
+  // sights — and a shot kicks the arms back and the muzzle up (world/dark/arms.ts sets the kick).
+  private sway(p: PersonIn, dt: number, reduced: boolean) {
+    if (!this.doing.startsWith("gun") || reduced) return;
+    this.breath += dt;
+    const mv = p.mv ?? 0;
+    const k = (mv & MV_WINDED ? 2.6 : 1) * (mv & 8 ? 0.6 : 1) * (1 - 0.55 * this.adsK);
+    const t = this.breath * 1.3;
+    this.tilt.position.x += Math.sin(t) * 0.0035 * k;
+    this.tilt.position.y += Math.sin(t * 2) * 0.0022 * k;
+    const kick = this.person.gunFx?.kick ?? 0;
+    if (kick > 0) {
+      const shotgun = p.gun === "shotgun";
+      this.tilt.position.z += kick * (shotgun ? 0.07 : 0.045);
+      this.tilt.position.y += kick * (shotgun ? 0.012 : 0.02);
+      this.tilt.rotateX(kick * (shotgun ? 0.07 : 0.09));
+    }
   }
 
   /** Let go of the arms and what they hold. */

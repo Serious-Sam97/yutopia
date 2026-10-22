@@ -99,6 +99,7 @@ import { BuildLayer, type BuildLook } from "./build3d";
 import { carGeometry } from "./campus";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { CASTER_LAYER } from "./grounds-stream";
+import type { GunFx } from "./guns3d";
 import { Hands1P, handsDoing } from "./hands1p";
 import { zt } from "./kit3d";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
@@ -1420,6 +1421,69 @@ void main() {
     this.resize();
   }
 
+  // A gun (docs/plan/32-the-arms.md): what mine is doing (world/dark/arms.ts sets it: my body's and
+  // my hands' gun pose it), and a shot's kick on my look — most of it comes back by itself, the
+  // rest is mine to pull down.
+  myGun: GunFx | null = null;
+  private kickIn = { up: 0, side: 0 }; // (rad, still to come)
+  private kickOut = { up: 0, side: 0 }; // (rad, settling back)
+  kick(up: number, side: number, settle: number) {
+    this.kickIn.up += up;
+    this.kickIn.side += side;
+    this.kickOut.up += up * settle;
+    this.kickOut.side += side * settle;
+  }
+  // Everyone else's gun (plan 32, phase 4): their shots' kicks (by id, this view's time), and what
+  // their hands are doing, eased from what the server says (`arm`: drawing, reloading, open).
+  private gunKicks = new Map<string, number>();
+  private gunFxs = new Map<string, GunFx & { turnTo: number }>();
+  /** Where someone's gun's muzzle is drawn (the floor's coords, z up) — mine in first person where
+   *  my hands show it — or null: no gun drawn (the flash and the tracers come out of it). */
+  muzzleOf(id: string): { x: number; y: number; z: number } | null {
+    const v = new Vector3();
+    // (first person: my body isn't drawn; my hands are, by their own lens — where the world's
+    // camera would show that same spot)
+    if (id === this.meId && this.mode === "first") {
+      if (!this.hands?.muzzleFor(this.camera, v)) return null;
+    } else if (!this.people3.get(id)?.gunMuzzle(v)) return null;
+    return { x: v.x, y: v.z, z: v.y };
+  }
+
+  /** Someone else fired (`arms:shot`): their gun kicks, their hammer falls. */
+  gunShot(id: string) {
+    this.gunKicks.set(id, this.time);
+    const f = this.gunFxs.get(id);
+    if (f) f.turnTo += 1;
+  }
+  private otherGun(b: Body3, dt: number): GunFx | null {
+    if (!b.gun) {
+      this.gunFxs.delete(b.id);
+      return null;
+    }
+    let f = this.gunFxs.get(b.id);
+    if (!f) {
+      f = { kick: 0, cock: 0, turn: 0, turnTo: 0, open: 0, loaded: 6, trigger: 0, reload: 0 };
+      this.gunFxs.set(b.id, f);
+    }
+    const ease = (v: number, to: number, rate: number) => v + (to - v) * (1 - Math.exp(-dt * rate));
+    const since = this.time - (this.gunKicks.get(b.id) ?? -9);
+    const aiming = ((b.mv ?? 0) & MV_AIM) !== 0;
+    const loading = b.arm === 2 || b.arm === 3;
+    f.kick = since < 0.035 ? since / 0.035 : Math.exp(-(since - 0.035) * (b.gun === "shotgun" ? 9 : 13));
+    f.cock = ease(f.cock, aiming && since > 0.12 ? 1 : 0, 18);
+    f.turn = ease(f.turn, f.turnTo, 14);
+    f.open = ease(f.open, loading ? 1 : 0, 12);
+    f.reload = ease(f.reload, loading && !aiming ? 1 : 0, 8);
+    f.trigger = since < 0.08 ? 1 : 0;
+    return f;
+  }
+
+  /** How far down the sights (0..1), first person. */
+  get ads(): number {
+    return this.hands?.ads ?? 0;
+  }
+  private fov1p = FOV; // first person's own lens (the wheel zooms it), down the sights closer
+
   // The phone's camera in first person: its zoom (1 = the eye's lens). null lets go.
   lensFov: number | null = null;
   lens(zoom: number | null) {
@@ -1490,8 +1554,7 @@ void main() {
   zoomBy(k: number) {
     // (first person: the lens, not the distance)
     if (this.mode === "first") {
-      this.camera.fov = Math.max(40, Math.min(80, this.camera.fov * k));
-      this.camera.updateProjectionMatrix();
+      this.fov1p = Math.max(40, Math.min(80, this.fov1p * k));
       return;
     }
     this.dist *= k;
@@ -1715,6 +1778,17 @@ void main() {
     // (third person only: in first person the look is the look — it kept pulling it back level)
     if (this.aim && !first && this.aimK < 0.95 && this.time - this.dragged > 0.3)
       this.pitch += (0.15 - this.pitch) * (1 - Math.exp(-dt * 10));
+    // a shot's kick: up (pitch > 0 is down) and a little aside, fast; settling back slower
+    const kin = 1 - Math.exp(-dt * 38);
+    const kout = 1 - Math.exp(-dt * 7);
+    const ku = this.kickIn.up * kin - this.kickOut.up * kout;
+    const ks = this.kickIn.side * kin - this.kickOut.side * kout;
+    this.kickIn.up *= 1 - kin;
+    this.kickIn.side *= 1 - kin;
+    this.kickOut.up *= 1 - kout;
+    this.kickOut.side *= 1 - kout;
+    this.pitch -= ku;
+    this.yaw += ks;
     this.clampCam();
     const cp = Math.cos(this.pitch);
     const cam = this.camera.position;
@@ -1765,7 +1839,7 @@ void main() {
       this.camera.lookAt(look.lerp(this.gcLook, m));
     }
     // the lens: a game camera's own, or the photo zoom in first person
-    const fov = gc?.fov ?? (first ? (this.lensFov ?? this.camera.fov) : FOV - 8 * this.aimK);
+    const fov = gc?.fov ?? (first ? (this.lensFov ?? this.fov1p * (1 - 0.18 * this.ads)) : FOV - 8 * this.aimK);
     if (Math.abs(this.camera.fov - fov) > 0.05) {
       this.camera.fov += (fov - this.camera.fov) * (1 - Math.exp(-dt * 10));
       this.camera.updateProjectionMatrix();
@@ -1833,6 +1907,7 @@ void main() {
             (sh.fade ?? 1) < 0.5);
         p3.root.visible = !hidden3 && !notThere;
         if (b.id === meId) mySeat = seat3;
+        p3.gunFx = b.id === meId ? this.myGun : this.otherGun(b, dt);
         p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id) }, dt, {
           camX: cam.x,
           camZ: cam.z,
@@ -1941,6 +2016,7 @@ void main() {
     if (first && this.handsOn && me && !me.npc && C3 && this.charF && this.charMats && this.gcMix < 0.002) {
       const angle = me.angle ?? dirAngle(me.d);
       this.hands ??= new Hands1P(C3, this.charF, this.charMats, { ...me, angle });
+      this.hands.gunFx = this.myGun;
       this.hands.update(
         { ...me, angle, seat: mySeat },
         this.people3.get(me.id)?.motionOut ?? null,
@@ -2004,7 +2080,8 @@ void main() {
       const prop = (color: string) => {
         let m = this.propMats.get(color);
         if (!m) {
-          const mat = new MeshBasicMaterial({ color });
+          // ("vertex": its own colours, as the guns' models have — tp/guns3d.ts)
+          const mat = new MeshBasicMaterial(color === "vertex" ? { vertexColors: true } : { color });
           this.light.patch(mat);
           // (an unskinned basic material has no objectNormal for the light map to read)
           const lit = mat.onBeforeCompile;
@@ -3104,6 +3181,50 @@ void main() {
       if (t !== null && (best === null || t < best)) best = t;
     }
     return best;
+  }
+
+  /** Where a shot from (x, y, z) — the floor's coords, z up — going `yaw`, `pitch` stops within `max`:
+   *  the first wall (or anything solid this view fades), else the ground (the land's or the floor's);
+   *  null: neither (docs/plan/32-the-arms.md: tracers that stop where the shot did). */
+  rayStop(
+    x: number,
+    y: number,
+    z: number,
+    yaw: number,
+    pitch: number,
+    max: number,
+  ): { t: number; what: "wall" | "ground" } | null {
+    const c = Math.cos(pitch);
+    const dx = Math.cos(yaw) * c;
+    const dy = Math.sin(yaw) * c;
+    const dz = Math.sin(pitch);
+    let t = max;
+    let what: "wall" | "ground" | null = null;
+    const ex = x + dx * max;
+    const ey = y + dy * max;
+    for (const f of this.world.fades) {
+      if (f.item) continue;
+      const k = segBox(x, y, ex, ey, f.x0, f.y0, f.x1, f.y1);
+      if (k === null || k <= 0.01) continue;
+      const at = k * max;
+      if (at < t && z + dz * at < f.top) {
+        t = at;
+        what = "wall";
+      }
+    }
+    const off = offsetOf(this.building, 0);
+    const g = this.around.grounds;
+    for (let s = 0.3; s < t; s += 0.2) {
+      const px = x + dx * s;
+      const py = y + dy * s;
+      const floor = g && this.onLand(px, py) ? g.heightAt(px + off.x, py + off.y) : 0;
+      if (z + dz * s <= floor) {
+        t = s;
+        what = "ground";
+        break;
+      }
+    }
+    return what ? { t, what } : null;
   }
 
   // Aiming: what the crosshair is on — the first wall beyond me, else the ground (the land's or the

@@ -370,7 +370,15 @@ export interface ServerMessages {
   // what my shot did (per one hit: a spark off a shield, a wound, one put down); someone's
   // shot near me (their tracer, their flash: the same pellets from the seed); a flare thrown
   // (person, downed: one of us — id, their sid — hurt, or put down by it)
-  "arms:hit": { id: string; kind: "spark" | "hurt" | "killed" | "person" | "downed"; x: number; y: number; z: number };
+  // (head: it went in at the head — docs/plan/32-the-arms.md)
+  "arms:hit": {
+    id: string;
+    kind: "spark" | "hurt" | "killed" | "person" | "downed";
+    x: number;
+    y: number;
+    z: number;
+    head?: boolean;
+  };
   "arms:shot": {
     sid: string;
     gun: string;
@@ -380,6 +388,8 @@ export interface ServerMessages {
     yaw: number;
     pitch: number;
     seed: number;
+    /** rad: the spread the server shot it with (the same pellets from the seed) */
+    spread: number;
   };
   "arms:throw": { sid: string; x0: number; y0: number; z0: number; x: number; y: number; z: number; secs: number };
   "arms:pong": { t: number };

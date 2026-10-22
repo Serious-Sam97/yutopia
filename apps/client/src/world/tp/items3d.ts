@@ -1,6 +1,7 @@
 import { BoxGeometry, type BufferGeometry, ConeGeometry, CylinderGeometry, SphereGeometry, TorusGeometry } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { tinted } from "./campus";
+import { gunLying } from "./guns3d";
 
 // What lies on the snow, as small models (docs/plan/30-the-dark.md D3, 31-the-day.md): the
 // pockets' things dropped, and the day's nests' caches. Tiles as metres, a little larger than life
@@ -14,31 +15,8 @@ const box = (w: number, h: number, d: number, x: number, y: number, z: number, c
 const rod = (r: number, l: number, x: number, y: number, z: number, c: number, seg = 10, r2 = r): Part =>
   tinted(new CylinderGeometry(r, r2, l, seg).rotateZ(Math.PI / 2).translate(x, y, z), c);
 const BRASS = 0xc9a24a;
-const STEEL = 0x4a5058;
 const DARK = 0x2a2a2a;
 
-function revolver(): Part[] {
-  // on its side: barrel ahead (+x), the cylinder, the frame, the grip back and down
-  return [
-    rod(0.022, 0.2, 0.17, 0.03, 0, STEEL, 8),
-    box(0.06, 0.03, 0.04, 0.27, 0.03, 0, STEEL), // the ejector housing's end
-    rod(0.045, 0.07, 0.03, 0.045, 0, 0x3a3f46, 12),
-    box(0.16, 0.06, 0.03, 0.02, 0.02, 0, STEEL),
-    tinted(new BoxGeometry(0.05, 0.12, 0.035).rotateZ(0.5).translate(-0.09, 0.0, 0), 0x6b4a32),
-    tinted(new TorusGeometry(0.025, 0.006, 4, 10, Math.PI).rotateZ(Math.PI).translate(-0.01, -0.01, 0), STEEL),
-    box(0.02, 0.025, 0.012, -0.05, 0.07, 0, STEEL), // the hammer
-  ].map((p) => p.rotateX(Math.PI / 2).translate(0, 0.022, 0));
-}
-function shotgun(): Part[] {
-  return [
-    rod(0.022, 0.62, 0.3, 0.05, 0, 0x3a3f46, 8), // the barrel
-    rod(0.018, 0.45, 0.24, 0.015, 0, 0x4a5058, 8), // the magazine under it
-    box(0.1, 0.04, 0.05, 0.17, 0.015, 0, 0x6b4a32), // the pump
-    box(0.2, 0.08, 0.05, -0.05, 0.035, 0, STEEL), // the receiver
-    tinted(new BoxGeometry(0.34, 0.07, 0.045).rotateZ(-0.12).translate(-0.32, 0.0, 0), 0x6b4a32), // the stock
-    box(0.03, 0.11, 0.05, -0.49, -0.01, 0, 0x3a2a20), // its butt pad
-  ].map((p) => p.rotateX(Math.PI / 2).translate(0, 0.03, 0));
-}
 function r38(): Part[] {
   const out = [box(0.14, 0.05, 0.09, 0, 0.025, 0, 0x8a3b2e), box(0.141, 0.012, 0.091, 0, 0.045, 0, 0xe8e0c8)];
   // a few rounds spilled by it
@@ -203,8 +181,9 @@ function torch(): Part[] {
 }
 
 const MODELS: Record<string, () => Part[]> = {
-  revolver,
-  shotgun,
+  // (the guns: their own models, the ones in the hand — tp/guns3d.ts)
+  revolver: () => [gunLying("revolver")],
+  shotgun: () => [gunLying("shotgun")],
   r38,
   shell: shells,
   flare,
@@ -221,7 +200,7 @@ const MODELS: Record<string, () => Part[]> = {
 // (how much bigger than life, to read on the snow)
 const SCALE: Record<string, number> = {
   revolver: 1.8,
-  shotgun: 1.4,
+  shotgun: 1, // (a life-size double-barrel is long enough to read)
   r38: 1.8,
   shell: 2,
   flare: 1.6,

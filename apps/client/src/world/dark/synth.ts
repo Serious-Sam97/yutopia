@@ -184,6 +184,103 @@ function loop(b: Float32Array, sec: number, xf: number, lin = false) {
   return out;
 }
 const smooth = (t: number) => t * t * (3 - 2 * t);
+// a small mechanism's click at `at`: a few bright modes struck at once and a breath of noise
+function tick(b: Float32Array, at: number, hz: number[], a: number) {
+  for (const f of hz) add(b, mode(0.08, f * (0.98 + r() * 0.04), 0.012 + 40 / f / 1000, a / hz.length), at);
+  add(b, env(biquad(noise(0.012), "hp", 3000), 0.0002, 0.006), at, a * 0.5);
+}
+// driven: soft-clipped, louder in the middle, the peaks rounded (a shot's punch)
+function drive(b: Float32Array, k: number) {
+  const n = Math.tanh(k);
+  for (let i = 0; i < b.length; i++) b[i] = Math.tanh(k * b[i]) / n;
+  return b;
+}
+// a shot indoors: a hard room — a handful of quick reflections off the walls, a short dense tail
+function indoors(b: Float32Array) {
+  const out = buf(b.length / SR + 0.1);
+  out.set(b);
+  for (const [at, g] of [
+    [0.011, 0.45],
+    [0.017, 0.38],
+    [0.026, 0.3],
+    [0.034, 0.24],
+    [0.047, 0.16],
+  ])
+    add(out, biquad(b.slice(), "lp", 3500), at, g);
+  return room(out, 1.1, 1.1, 0.2, 0.7);
+}
+// far off: the crack gone (the air takes the highs), the boom softened
+function far(b: Float32Array) {
+  return biquad(biquad(b, "lp", 1300), "lp", 1600);
+}
+// the .38 dry: the hammer's fall, then the blast — its front (a pressure jump and a slower fall:
+// an N), the crack, the bark round 1.2 kHz, a body thumping down 140 → 45 Hz, a mid knock, the gas
+function revolverDry() {
+  const b = buf(0.55);
+  tick(b, 0, [3100, 5200], 0.22);
+  const t0 = 0.009;
+  const nw = buf(0.003);
+  for (let i = 0; i < nw.length; i++) nw[i] = 1 - (2 * i) / nw.length;
+  add(b, nw, t0, 1.2);
+  add(b, env(biquad(noise(0.02), "hp", 2200), 0.0001, 0.012), t0, 1);
+  add(b, env(biquad(noise(0.12), "bp", 1200, 0.7), 0.0003, 0.07), t0, 0.9);
+  add(
+    b,
+    env(
+      osc(0.45, (t) => 45 + 95 * Math.exp(-t * 25)),
+      0.0008,
+      0.2,
+    ),
+    t0,
+    1.15,
+  );
+  add(
+    b,
+    env(
+      osc(0.1, (t) => 90 + 220 * Math.exp(-t * 8)),
+      0.0005,
+      0.05,
+    ),
+    t0,
+    0.45,
+  );
+  add(b, env(biquad(noise(0.35), "lp", 900), 0.001, 0.22), t0, 0.45);
+  return drive(b, 2.2);
+}
+// the 12 gauge dry: bigger and lower — the crack, a wide bark at 700 Hz, the body 110 → 32 Hz for
+// longer, a low knock, a long rumble of gas
+function shotgunDry() {
+  const b = buf(0.85);
+  tick(b, 0, [1800, 2900], 0.12);
+  const t0 = 0.006;
+  const nw = buf(0.005);
+  for (let i = 0; i < nw.length; i++) nw[i] = 1 - (2 * i) / nw.length;
+  add(b, nw, t0, 1.4);
+  add(b, env(biquad(noise(0.03), "hp", 1600), 0.0001, 0.018), t0, 1);
+  add(b, env(biquad(noise(0.2), "bp", 700, 0.6), 0.0004, 0.12), t0, 1.1);
+  add(
+    b,
+    env(
+      osc(0.7, (t) => 32 + 78 * Math.exp(-t * 14)),
+      0.001,
+      0.36,
+    ),
+    t0,
+    1.45,
+  );
+  add(
+    b,
+    env(
+      osc(0.15, (t) => 70 + 170 * Math.exp(-t * 7)),
+      0.0006,
+      0.08,
+    ),
+    t0,
+    0.6,
+  );
+  add(b, env(biquad(noise(0.6), "lp", 500), 0.001, 0.42), t0, 0.65);
+  return drive(b, 2.6);
+}
 
 // ── the sounds ──────────────────────────────────────────────────────────────
 // Each returns a mono Float32Array, or [left, right].
@@ -429,90 +526,261 @@ export const SOUNDS: Record<string, () => Sound> = {
   // knock) — slow (70 a minute) and racing (120). Loops of 8 beats.
   "heartbeat-70": () => heart(70),
   "heartbeat-120": () => heart(120),
-  // The revolver (.38): the crack — a 1 ms click, a band of noise —, the body
-  // falling 95 → 42 Hz, then the treeline slapping it back and the woods' tail.
-  "revolver-shot": () => {
-    const b = buf(0.6);
-    add(b, env(biquad(noise(0.01), "hp", 2500), 0.0001, 0.006), 0, 1);
-    add(b, env(biquad(noise(0.15), "bp", 1600, 0.9), 0.0004, 0.06), 0, 0.9);
+  // ── the guns (docs/plan/32-the-arms.md) ─────────────────────────────────────
+  // A shot, three ways: where you are (out on the land: the treeline slapping it back and the woods'
+  // tail; indoors: a hard room's quick reflections), and far off (dulled, mostly tail). The dry shot
+  // under them: the hammer's fall, the blast's front, its bark, a body thumping down, the gas, driven.
+  "revolver-shot": () => peak(fadeOut(outdoors(revolverDry(), 2.6), 0.6), -1),
+  "revolver-shot-in": () => peak(fadeOut(indoors(revolverDry()), 0.3), -1),
+  "revolver-shot-far": () => peak(fadeOut(outdoors(far(revolverDry()), 3), 0.8), -2),
+  "shotgun-shot": () => peak(fadeOut(outdoors(shotgunDry(), 3.2), 0.8), -1),
+  "shotgun-shot-in": () => peak(fadeOut(indoors(shotgunDry()), 0.4), -1),
+  "shotgun-shot-far": () => peak(fadeOut(outdoors(far(shotgunDry()), 3.4), 0.9), -2),
+  // Cocking the single-action: the hammer's spring giving, the first notch, the cylinder turning
+  // and locking with the full cock — click-click.
+  "revolver-cock": () => {
+    const b = buf(0.3);
     add(
       b,
-      env(
-        osc(0.5, (t) => 42 + 53 * Math.exp(-t * 20)),
-        0.001,
-        0.22,
-      ),
+      mul(biquad(noise(0.06), "bp", 2400, 1.5), (t) => Math.sin((Math.PI * t) / 0.06)),
       0,
-      1.0,
+      0.12,
     );
-    add(b, env(biquad(noise(0.5), "lp", 700), 0.001, 0.25), 0, 0.6);
-    return peak(fadeOut(outdoors(b, 2.4), 0.6), -1);
+    tick(b, 0.035, [3600, 5300, 7100], 0.55);
+    add(
+      b,
+      mul(biquad(noise(0.05), "bp", 3200, 2), (t) => Math.sin((Math.PI * t) / 0.05)),
+      0.05,
+      0.08,
+    );
+    tick(b, 0.105, [4100, 6000, 8200], 0.8);
+    add(b, mode(0.15, 2200, 0.05, 0.12), 0.105);
+    return peak(room(b, 0.12, 0.5, 0.3, 0.1), -6);
   },
-  // Reloading one round (0.35 s each, plan D3): the cartridge's brass tick into
-  // the chamber, the cylinder's ratchet turning one notch.
-  "revolver-load": () => {
-    const b = buf(0.4);
-    add(b, mode(0.4, 3150, 0.05, 0.6), 0.02);
-    add(b, mode(0.4, 4720, 0.035, 0.4), 0.02);
-    add(b, env(biquad(noise(0.03), "bp", 2600, 2), 0.0005, 0.02), 0.02, 0.5);
-    for (const [t, a] of [
-      [0.2, 0.7],
-      [0.24, 0.45],
-    ]) {
-      add(b, mode(0.1, 5200, 0.012, a), t);
-      add(b, env(biquad(noise(0.02), "bp", 3800, 3), 0.0003, 0.008), t, a * 0.6);
-    }
-    return peak(room(b, 0.1, 0.6, 0.3, 0.12), -4);
-  },
-  // Empty: the hammer falling on nothing.
-  "revolver-dry": () => {
+  // The loading gate swung open (or shut): a small spring's click and its ring.
+  "revolver-gate": () => {
     const b = buf(0.25);
-    add(b, mode(0.25, 2400, 0.03, 0.8), 0);
-    add(b, mode(0.25, 3900, 0.02, 0.4), 0);
-    add(b, env(biquad(noise(0.02), "bp", 3000, 2), 0.0003, 0.01), 0, 0.6);
-    return peak(b, -6);
-  },
-  // The shotgun: wider and lower — the crack at 900 Hz, the body 75 → 32 Hz,
-  // more of it, the echoes longer.
-  "shotgun-shot": () => {
-    const b = buf(0.9);
-    add(b, env(biquad(noise(0.01), "hp", 1800), 0.0001, 0.008), 0, 1);
-    add(b, env(biquad(noise(0.3), "bp", 900, 0.7), 0.0005, 0.12), 0, 1.0);
+    tick(b, 0, [3300, 4900], 0.6);
+    add(b, mode(0.2, 2650, 0.06, 0.2), 0.004);
     add(
       b,
-      env(
-        osc(0.8, (t) => 32 + 43 * Math.exp(-t * 14)),
-        0.001,
-        0.4,
+      mul(biquad(noise(0.03), "bp", 4200, 2), (t) => Math.sin((Math.PI * t) / 0.03)),
+      0.01,
+      0.12,
+    );
+    return peak(room(b, 0.1, 0.5, 0.3, 0.1), -8);
+  },
+  // One round in: the spent case punched out (the ejector rod's slide, a tick), the round slid into
+  // the chamber, its rim seating, the cylinder's ratchet one notch on.
+  "revolver-load": () => {
+    const b = buf(0.45);
+    add(
+      b,
+      mul(
+        biquad(noise(0.05), "bp", (t) => 1800 + 2000 * (t / 0.05), 2),
+        (t) => Math.sin((Math.PI * t) / 0.05),
       ),
       0,
-      1.3,
+      0.14,
     );
-    add(b, env(biquad(noise(0.8), "lp", 450), 0.001, 0.5), 0, 0.8);
-    return peak(fadeOut(outdoors(b, 3), 0.8), -1);
-  },
-  // Racking it: the slide back (a scrape, a clack), forward (the clack home).
-  "shotgun-pump": () => {
-    const b = buf(0.7);
-    const clack = (t: number, a: number) => {
-      for (const f of [1150, 2630, 3920]) add(b, mode(0.2, f * (0.97 + r() * 0.06), 0.06, a / 3), t);
-      add(b, env(biquad(noise(0.04), "bp", 2200, 1.5), 0.0004, 0.025), t, a * 0.7);
-    };
+    tick(b, 0.05, [3900, 5600], 0.35);
     add(
       b,
-      mul(biquad(noise(0.12), "bp", 1800, 1.2), (t) => Math.sin((Math.PI * t) / 0.12)),
-      0.02,
+      mul(
+        biquad(noise(0.06), "bp", (t) => 2600 + 1600 * (t / 0.06), 1.6),
+        (t) => Math.sin((Math.PI * t) / 0.06),
+      ),
+      0.13,
       0.18,
     );
-    clack(0.14, 1);
+    add(b, mode(0.25, 3150, 0.05, 0.5), 0.19);
+    add(b, mode(0.25, 4720, 0.035, 0.32), 0.19);
+    tick(b, 0.3, [5200, 7400], 0.6);
+    return peak(room(b, 0.1, 0.6, 0.3, 0.12), -4);
+  },
+  // Empty: the hammer falling on nothing — a hard snap and its spring.
+  "revolver-dry": () => {
+    const b = buf(0.3);
+    tick(b, 0, [2400, 3900, 6100], 1);
+    add(b, mode(0.25, 1450, 0.05, 0.35), 0);
+    add(b, mode(0.25, 5600, 0.03, 0.2), 0.002);
+    return peak(room(b, 0.12, 0.5, 0.3, 0.12), -6);
+  },
+  // The double-barrel's empty: the tumbler inside, muffled in the wood.
+  "shotgun-dry": () => {
+    const b = buf(0.3);
+    tick(b, 0, [1700, 2900], 0.9);
+    add(b, mode(0.2, 640, 0.05, 0.4), 0);
+    return peak(room(b, 0.12, 0.6, 0.3, 0.12), -7);
+  },
+  // Broken open: the top lever's click, the barrels dropping on their hinge — a heavy clack with
+  // a ring in the steel.
+  "shotgun-break": () => {
+    const b = buf(0.6);
+    tick(b, 0, [2900, 4300, 6200], 0.45);
+    add(b, mode(0.15, 1900, 0.04, 0.15), 0.004);
     add(
       b,
-      mul(biquad(noise(0.1), "bp", 2100, 1.2), (t) => Math.sin((Math.PI * t) / 0.1)),
-      0.3,
-      0.15,
+      mul(biquad(noise(0.1), "bp", 900, 1), (t) => Math.sin((Math.PI * t) / 0.1)),
+      0.035,
+      0.22,
     );
-    clack(0.4, 0.9);
-    return peak(room(b, 0.2, 0.7, 0.3, 0.12), -3);
+    for (const f of [520, 1180, 2240, 3410]) add(b, mode(0.4, f * (0.97 + r() * 0.06), 0.14, 0.42), 0.13);
+    add(b, env(biquad(noise(0.05), "bp", 1500, 1.2), 0.0005, 0.04), 0.13, 0.7);
+    add(
+      b,
+      env(
+        osc(0.2, (t) => 140 * Math.exp(-t * 9) + 70),
+        0.001,
+        0.08,
+      ),
+      0.13,
+      0.6,
+    );
+    return peak(room(drive(b, 1.4), 0.25, 0.7, 0.3, 0.15), -3);
+  },
+  // The fired shells kicked out by the ejectors: two hollow plastic pops, near together.
+  "shotgun-eject": () => {
+    const b = buf(0.3);
+    for (const [t, a] of [
+      [0, 1],
+      [0.028, 0.8],
+    ]) {
+      add(b, env(biquad(noise(0.03), "bp", 650, 1.8), 0.0005, 0.02), t, a);
+      add(b, mode(0.08, 260 * (0.95 + r() * 0.1), 0.03, a * 0.5), t);
+      add(b, mode(0.06, 2900, 0.012, a * 0.15), t);
+    }
+    return peak(room(b, 0.12, 0.6, 0.3, 0.12), -6);
+  },
+  // A shell pushed into a chamber: the hull's slide, the brass rim seating with a dull thunk.
+  "shotgun-shell": () => {
+    const b = buf(0.35);
+    add(
+      b,
+      mul(
+        biquad(noise(0.08), "bp", (t) => 900 + 900 * (t / 0.08), 1.4),
+        (t) => Math.sin((Math.PI * t) / 0.08),
+      ),
+      0,
+      0.3,
+    );
+    add(b, mode(0.2, 400, 0.06, 0.6), 0.08);
+    add(b, mode(0.15, 1250, 0.03, 0.25), 0.08);
+    for (const f of [2600, 3900]) add(b, mode(0.15, f, 0.03, 0.22), 0.08);
+    return peak(room(b, 0.12, 0.6, 0.3, 0.12), -6);
+  },
+  // Snapped shut: the action's solid steel snap and its thump, the lever springing home after.
+  "shotgun-shut": () => {
+    const b = buf(0.45);
+    for (const f of [760, 1450, 2700, 3700]) add(b, mode(0.3, f * (0.97 + r() * 0.06), 0.09, 0.5), 0);
+    add(b, env(biquad(noise(0.04), "bp", 2000, 1.3), 0.0003, 0.03), 0, 0.8);
+    add(
+      b,
+      env(
+        osc(0.15, (t) => 180 * Math.exp(-t * 14) + 80),
+        0.001,
+        0.06,
+      ),
+      0,
+      0.8,
+    );
+    tick(b, 0.045, [3800, 5600], 0.35);
+    return peak(room(drive(b, 1.5), 0.2, 0.7, 0.3, 0.14), -3);
+  },
+  // A gun drawn: cloth, then the steel's slide out of it; put away, the other way round.
+  "gun-draw": () => {
+    const b = buf(0.4);
+    add(
+      b,
+      mul(biquad(noise(0.18), "bp", 1100, 0.7), (t) => Math.sin((Math.PI * t) / 0.18) ** 2),
+      0,
+      0.35,
+    );
+    add(
+      b,
+      mul(
+        biquad(noise(0.12), "bp", (t) => 2800 + 2500 * (t / 0.12), 2.2),
+        (t) => Math.sin((Math.PI * t) / 0.12),
+      ),
+      0.12,
+      0.16,
+    );
+    tick(b, 0.25, [3400, 5200], 0.25);
+    return peak(room(b, 0.1, 0.6, 0.3, 0.1), -9);
+  },
+  "gun-holster": () => {
+    const b = buf(0.4);
+    add(
+      b,
+      mul(
+        biquad(noise(0.1), "bp", (t) => 5000 - 2400 * (t / 0.1), 2.2),
+        (t) => Math.sin((Math.PI * t) / 0.1),
+      ),
+      0,
+      0.14,
+    );
+    add(
+      b,
+      mul(biquad(noise(0.2), "bp", 1000, 0.7), (t) => Math.sin((Math.PI * t) / 0.2) ** 2),
+      0.08,
+      0.35,
+    );
+    add(b, mode(0.12, 520, 0.04, 0.2), 0.24);
+    return peak(room(b, 0.1, 0.6, 0.3, 0.1), -10);
+  },
+  // Spent brass on the ground: a light tinkle, a bounce, still.
+  brass: () => {
+    const b = buf(0.4);
+    for (const [t, a] of [
+      [0, 1],
+      [0.09, 0.45],
+      [0.15, 0.2],
+    ])
+      for (const f of [4200, 6150, 7400]) add(b, mode(0.12, f * (0.98 + r() * 0.04), 0.03, (a * 0.35) / (f / 4200)), t);
+    return peak(b, -10);
+  },
+  // A spent shell landing: a hollow plastic tock, the brass head's ring, a bounce.
+  "shell-drop": () => {
+    const b = buf(0.45);
+    for (const [t, a] of [
+      [0, 1],
+      [0.12, 0.4],
+      [0.2, 0.15],
+    ]) {
+      add(b, env(biquad(noise(0.03), "bp", 1100, 1.6), 0.0004, 0.015), t, a * 0.6);
+      add(b, mode(0.08, 720 * (0.95 + r() * 0.1), 0.025, a * 0.4), t);
+      add(b, mode(0.1, 3900, 0.03, a * 0.12), t);
+    }
+    return peak(b, -11);
+  },
+  // A hit, in the ear (mine only): a dry tick; the head a brighter double; one put down a thud.
+  "hit-tick": () => {
+    const b = buf(0.08);
+    add(b, mode(0.08, 3300, 0.025, 0.8), 0);
+    add(b, env(biquad(noise(0.02), "hp", 4000), 0.0002, 0.008), 0, 0.4);
+    return peak(b, -8);
+  },
+  "hit-head": () => {
+    const b = buf(0.16);
+    add(b, mode(0.1, 2900, 0.03, 0.7), 0);
+    add(b, mode(0.1, 5200, 0.03, 0.5), 0.045);
+    add(b, env(biquad(noise(0.03), "bp", 2500, 1), 0.0002, 0.015), 0, 0.5);
+    return peak(b, -6);
+  },
+  "hit-kill": () => {
+    const b = buf(0.4);
+    add(
+      b,
+      env(
+        osc(0.35, (t) => 70 + 60 * Math.exp(-t * 18)),
+        0.001,
+        0.2,
+      ),
+      0,
+      1,
+    );
+    add(b, mode(0.1, 2400, 0.03, 0.4), 0);
+    return peak(b, -5);
   },
   // A flare lit: the cap's scratch, the ignition's whoosh opening up.
   "flare-strike": () => {

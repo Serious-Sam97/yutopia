@@ -165,6 +165,7 @@ export interface AvatarState {
   torch?: boolean; // the phone's flashlight on (the Grounds at night)
   focused?: boolean; // …focused while aiming (docs/plan/30-the-dark.md D4)
   gun?: string; // the weapon in the hand (D6)
+  arm?: number; // what the hand's doing with it (shared ARM: drawing, reloading, broken open)
   angle?: number; // facing as they turned, world radians (not 8 ways): where a beam points
   jump?: JumpNow; // jumping (shared/jump.ts): its stage (the controller tracks it)
   z?: number; // feet off the floor (up on something, in a jump), tiles

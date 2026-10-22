@@ -2,6 +2,7 @@ import { StateView } from "@colyseus/schema";
 import { across, findPath, levelMap, type Point } from "@yutopia/shared";
 import { beamAt, beamOf } from "@yutopia/shared/beam";
 import {
+  atHead,
   blackoutAt,
   dangerAt,
   dayNests,
@@ -78,12 +79,20 @@ interface Run {
   sight: Map<string, { v: boolean; t: number }>;
   /** where it was, the last second (server ms): a shot is taken against where the shooter saw it */
   hist: { t: number; x: number; y: number; z: number }[];
+  /** called up by an admin (mod:dark spawn): it stays at any hour — the dawn doesn't send it off */
+  called?: boolean;
 }
 
 export interface DarkHooks {
   /** A shot's ray from where the shooter saw the shadowed (`seenAt`, server ms): what it
    *  meets first along `range` (null: nothing), and what that did. */
-  shoot(ray: Ray, range: number, seenAt: number, damage: number, now: number): ShotHit | null;
+  shoot(
+    ray: Ray,
+    range: number,
+    seenAt: number,
+    damage: (t: number, head: boolean) => number,
+    now: number,
+  ): ShotHit | null;
   /** A flare lit at (x, y) on ground z on `level`, for FLARE.secs. */
   light(x: number, y: number, z: number, level: number, now: number): void;
   /** the dark switched off (mod:dark peaceful): no threat at all */
@@ -95,6 +104,8 @@ export interface ShotHit {
   x: number;
   y: number;
   z: number;
+  /** it went in at the head (docs/plan/32-the-arms.md) */
+  head: boolean;
 }
 
 registerFeature((room: WorldRoom) => {
@@ -148,7 +159,7 @@ registerFeature((room: WorldRoom) => {
   // shots just fired (where from, the clock): those asleep near enough hear them
   const shots: { x: number; y: number; t: number }[] = [];
 
-  const spawn = (x: number, y: number, t: number, lurk = false) => {
+  const spawn = (x: number, y: number, t: number, lurk = false, called = false) => {
     const id = `sh${(++seq).toString(36)}`;
     const wire = new Shadow();
     wire.id = id;
@@ -171,6 +182,7 @@ registerFeature((room: WorldRoom) => {
       sentAt: 0,
       sight: new Map(),
       hist: [],
+      called,
     });
     viewsAt = 0; // (show it to those near now)
     return id;
@@ -306,7 +318,7 @@ registerFeature((room: WorldRoom) => {
       const x = p.x + Math.cos(a) * r;
       const y = p.y + Math.sin(a) * r;
       if (!grid().onLand(x, y) || !grid().fits(x, y, 0.35)) continue;
-      spawn(x, y, clock);
+      spawn(x, y, clock, false, true);
       made++;
     }
   });
@@ -403,17 +415,21 @@ registerFeature((room: WorldRoom) => {
     },
     shoot(ray, range, seenAt, damage, now) {
       shots.push({ x: ray.x, y: ray.y, t: clock });
-      let best: { r: Run; t: number } | null = null;
+      let best: { r: Run; t: number; z: number } | null = null;
       for (const r of shades.values()) {
         if (r.shade.state === "dissolve") continue;
         // where the shooter saw it, give or take a little (the playback, the line's jitter)
         let t: number | null = null;
+        let z = 0;
         for (const dt of [-REWIND.slackMs, 0, REWIND.slackMs]) {
           const p = whereAt(r, seenAt + dt);
           const m = rayMeets(ray, p.x, p.y, p.z, range, REWIND.slack);
-          if (m !== null && (t === null || m < t)) t = m;
+          if (m !== null && (t === null || m < t)) {
+            t = m;
+            z = p.z;
+          }
         }
-        if (t !== null && (!best || t < best.t)) best = { r, t };
+        if (t !== null && (!best || t < best.t)) best = { r, t, z };
       }
       if (!best) return null;
       const d = rayDir(ray.yaw, ray.pitch);
@@ -421,14 +437,15 @@ registerFeature((room: WorldRoom) => {
       // (a wall or a trunk on the way: it stops there)
       if (!grid().clear({ x: ray.x, y: ray.y }, { x: hit.x, y: hit.y }, 0.02, Math.max(ray.z, hit.z))) return null;
       const s = best.r.shade;
-      const kind = wound(s, damage, clock);
+      const head = atHead(ray, best.t, best.z);
+      const kind = wound(s, damage(best.t, head), clock);
       if (kind === "killed") {
         best.r.wire.k = true;
         best.r.wire.s = shadeCode(s.state);
         best.r.wire.at = now;
         tension = Math.min(1, tension + 0.15);
       }
-      return { id: best.r.wire.id, kind, ...hit };
+      return { id: best.r.wire.id, kind, head, ...hit };
     },
     light(x, y, z, level, now) {
       const f = new Flare();
@@ -573,7 +590,8 @@ registerFeature((room: WorldRoom) => {
         const sense: ShadeSense = {
           t,
           night,
-          dawn,
+          // (one an admin called up stays through the dawn; the dark switched off, nobody does)
+          dawn: dawn && (mode === "peaceful" || !r.called),
           burn,
           lit: !!light,
           light,

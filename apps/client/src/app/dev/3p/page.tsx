@@ -12,7 +12,9 @@ import { WorldEngine } from "@/world/engine";
 // normal iso engine at the same spot, from the same people data. Dev only (or
 // a build with NEXT_PUBLIC_YUTOPIA_SHOTS=1).
 //   /dev/3p?crowd=8&hour=12&cam=chase|free|first&view=3p|iso&x=&y=&yaw=&pitch=&dist=&frozen=1
-//   &me=phone:text|held:mug|type|busy:coffee|emote:wave|act:highfive  (what you're doing: first person's hands)
+//   &me=phone:text|held:mug|type|busy:coffee|emote:wave|act:highfive|gun:revolver|gun:shotgun  (what you're doing:
+//   first person's hands; a gun aims, &aim=0 at the hip, &torch=1 the flashlight on too,
+//   &reload=1 reloading; &walk=1 / &run=1 round in a circle)
 //   &shade=1  one of the shadowed a few steps ahead, shot down every 6 s (its death);
 //             &shadeAt=<s> holds it that far into its death, &seed=<n> its own (odd: falls the other way),
 //             &face=<radians> turns it from facing you
@@ -127,9 +129,21 @@ export default function ThirdPersonDemo() {
                   ? { emote: what || "wave" }
                   : doing === "act"
                     ? { act: what || "wave", actAt: since }
-                    : null;
+                    : doing === "gun"
+                      ? // (a gun out, aiming: &aim=0 at the hip)
+                        {
+                          gun: what || "revolver",
+                          mv: q.get("aim") === "0" ? 0 : 16,
+                          pitch: Number(q.get("aimPitch") ?? 0),
+                          torch: q.get("torch") === "1",
+                        }
+                      : null;
       const view = new ThirdPersonView(map, objects, P, items, { themes });
       view.mount(tpHost.current);
+      // (a gun out: over the shoulder, aiming; &reload=1 reloading it — broken open, a round going in)
+      if (doing === "gun" && q.get("aim") !== "0") Object.assign(view, { aim: true, armed: true });
+      if (doing === "gun" && q.get("reload") === "1")
+        view.myGun = { kick: 0, cock: 0, turn: 0, open: 1, loaded: 1, trigger: 0, reload: 1 };
       cleanup.push(() => view.destroy());
       const st = view.world.stats;
       let state: Hud = {
@@ -262,8 +276,21 @@ export default function ThirdPersonDemo() {
         last = now;
         if (state.view === "3p") {
           const { move, run } = view.input();
-          demo.step(dt, move, run);
+          // (&walk=1, &run=1: round in a circle, to see a gait)
+          const circling = q.get("run") === "1" || q.get("walk") === "1";
+          const tc = now / 1000;
+          if (circling) demo.step(dt, { x: Math.cos(tc * 0.6), y: Math.sin(tc * 0.6) }, q.get("run") === "1");
+          else demo.step(dt, move, run);
           if (meState) Object.assign(demo.me, meState);
+          // (a gun out: the body turned onto the look, bladed — as the walker does; up as I aim)
+          // (&turn=<rad>: the body that much off the camera's look — to see it from the side)
+          if (meState?.gun && meState.mv)
+            Object.assign(demo.me, {
+              angle: (view.lookYaw ?? view.yaw) + 0.45 + Number(q.get("turn") ?? 0),
+              pitch: view.aimPitch,
+            });
+          else if (meState?.gun && q.get("turn") && !circling)
+            Object.assign(demo.me, { angle: view.yaw + Number(q.get("turn")) });
           // (an act plays again every 2.5 s, so there's always one to look at)
           if (meState?.act) Object.assign(demo.me, { actAt: Math.floor(Date.now() / 2500) * 2500 });
           view.frame(dt, withShade ? [...demo.all(), shade()] : demo.all(), "me");

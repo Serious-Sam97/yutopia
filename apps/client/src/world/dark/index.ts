@@ -163,10 +163,13 @@ class Dark implements DarkHooks {
   private raf = 0;
   private offs: (() => void)[] = [];
 
+  /** the room it listens to (its messages: the pockets, the shots) */
+  readonly room: unknown;
   constructor(
     private readonly ctl: WorldController,
     private readonly walker: Walker,
   ) {
+    this.room = ctl.room;
     const style = document.createElement("style");
     style.textContent = CSS + ARMS_CSS + DOWN_CSS + VITALS_CSS + INV_CSS;
     this.root.className = "dk";

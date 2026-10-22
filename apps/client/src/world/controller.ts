@@ -3514,6 +3514,7 @@ export class WorldController {
       torch: p.torch,
       focused: p.focused,
       gun: p.gun,
+      arm: p.arm,
     };
   }
 

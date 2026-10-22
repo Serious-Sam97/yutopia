@@ -1,7 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ARMS, BODY, FLARE, flareFlight, inFlare, pastAt, pellets, pvpDamage, rayMeets } from "./dark/arms.ts";
-import { newShade, wound } from "./dark/fsm.ts";
+import {
+  ARMS,
+  atHead,
+  BODY,
+  bloomCalm,
+  bloomShot,
+  damageAt,
+  FLARE,
+  falloff,
+  flareFlight,
+  HEAD,
+  inFlare,
+  pastAt,
+  pellets,
+  pvpDamage,
+  rayMeets,
+  spreadOf,
+} from "./dark/arms.ts";
+import { newShade, SHADE, wound } from "./dark/fsm.ts";
 
 const at = (yaw: number, pitch = 0) => ({ x: 0, y: 0, z: 1.3, yaw, pitch });
 
@@ -61,13 +78,17 @@ test("a flare thrown lands some tiles ahead on the ground, or drops at a wall", 
   assert.ok(wall.x <= 3 && wall.x > 2.5, `${wall.x}`);
 });
 
-test("only an exposed one is hurt; two revolver rounds put it down", () => {
+test("only an exposed one is hurt; five revolver rounds put it down (four at the head)", () => {
   const s = newShade(0, 0, 0);
   assert.equal(wound(s, ARMS.revolver.damage, 1), "spark");
-  assert.equal(s.hp, 100);
+  assert.equal(s.hp, SHADE.hp);
   s.state = "exposed";
-  assert.equal(wound(s, ARMS.revolver.damage, 1), "hurt");
-  assert.equal(wound(s, ARMS.revolver.damage, 1.2), "killed");
+  for (let i = 0; i < 4; i++) assert.equal(wound(s, ARMS.revolver.damage, 1 + i * 0.5), "hurt");
+  assert.equal(wound(s, ARMS.revolver.damage, 3.2), "killed");
+  const h = newShade(0, 0, 0);
+  h.state = "exposed";
+  for (let i = 0; i < 3; i++) assert.equal(wound(h, damageAt("revolver", ARMS.revolver.damage, 8, true), 1), "hurt");
+  assert.equal(wound(h, damageAt("revolver", ARMS.revolver.damage, 8, true), 1), "killed");
   assert.equal(s.state, "dissolve");
   assert.equal(s.killed, true);
 });
@@ -92,4 +113,50 @@ test("one of us shot: half the shadowed's; a crouched body is shorter; where one
   assert.ok(inFlare({ x: 0, y: 0 }, 1, 1));
   assert.ok(!inFlare({ x: 0, y: 0, level: 4 }, 1, 1), "upstairs: not the snow's");
   assert.ok(inFlare({ x: 0, y: 0, level: 4 }, 1, 1, 4));
+});
+
+// ── the feel's rules (docs/plan/32-the-arms.md) ──────────────────────────────
+test("falloff: the double-barrel full to 5 tiles, 40% at its 14; the revolver flat", () => {
+  assert.equal(falloff("shotgun", 3), 1);
+  assert.equal(falloff("shotgun", 5), 1);
+  assert.ok(Math.abs(falloff("shotgun", 9.5) - 0.7) < 1e-9);
+  assert.ok(Math.abs(falloff("shotgun", 14) - 0.4) < 1e-9);
+  assert.equal(falloff("revolver", 39), 1);
+  assert.equal(damageAt("shotgun", ARMS.shotgun.damage, 14, false), Math.round(18 * 0.4));
+});
+
+test("the head: the top of a body takes half again", () => {
+  const ray = (z: number, pitch = 0) => ({ x: 0, y: 0, z, yaw: 0, pitch });
+  const t = rayMeets(ray(1.7), 10, 0, 0, 40) ?? -1;
+  assert.ok(atHead(ray(1.7), t, 0), "level at 1.7 on a 1.8 body: the head");
+  assert.ok(!atHead(ray(1.0), t, 0), "at the chest: not");
+  assert.ok(atHead(ray(1.1), t, 0, 1.25), "one crouched, at 1.1: the head");
+  assert.equal(damageAt("revolver", 50, 10, true), 75);
+  assert.equal(damageAt("revolver", pvpDamage("revolver"), 10, true), Math.round(25 * HEAD.mult));
+  assert.equal(BODY.h * (1 - HEAD.share), 1.5);
+});
+
+test("the spread: its own still and aimed; more moving, from the hip, winded; less crouched", () => {
+  const still = { speed: 0, crouch: false, aim: true, winded: false };
+  assert.equal(spreadOf("revolver", 0, still), ARMS.revolver.spread);
+  assert.ok(spreadOf("revolver", 0, { ...still, speed: 1.4 }) > ARMS.revolver.spread);
+  assert.ok(spreadOf("revolver", 0, { ...still, speed: 6 }) > spreadOf("revolver", 0, { ...still, speed: 4 }) + 0.02);
+  assert.ok(spreadOf("revolver", 0, { ...still, crouch: true }) < ARMS.revolver.spread);
+  assert.ok(spreadOf("revolver", 0, { ...still, aim: false }) > ARMS.revolver.spread);
+  assert.ok(spreadOf("revolver", 0, { ...still, winded: true }) > ARMS.revolver.spread);
+  assert.ok(spreadOf("revolver", 0.02, still) > ARMS.revolver.spread + 0.019);
+});
+
+test("the bloom: each shot adds, to a cap; it calms", () => {
+  let b = 0;
+  for (let i = 0; i < 10; i++) b = bloomShot("revolver", bloomCalm("revolver", b, 0.1));
+  assert.ok(Math.abs(b - ARMS.revolver.bloomMax) < 1e-9, "capped");
+  assert.ok(bloomCalm("revolver", b, 1) < b * 0.2, "a second later, mostly gone");
+  assert.equal(bloomCalm("revolver", b, 0), b);
+});
+
+test("pellets: the spread given, not the gun's own", () => {
+  for (const p of pellets("shotgun", 0, 0, 5, 0.2)) assert.ok(Math.hypot(p.yaw, p.pitch) <= 0.2 + 1e-9);
+  const wide = pellets("shotgun", 0, 0, 5, 0.2).some((p) => Math.hypot(p.yaw, p.pitch) > ARMS.shotgun.spread);
+  assert.ok(wide, "some go wider than its own 0.09");
 });

@@ -141,6 +141,7 @@ export interface PersonIn {
   torch?: boolean; // the phone's flashlight on
   focused?: boolean; // …focused: narrow and far (docs/plan/30-the-dark.md D4)
   gun?: string; // the weapon in the hand (D6): "revolver", "shotgun"
+  arm?: number; // …what the hand's doing with it (shared ARM: drawing, reloading, broken open)
   down?: "down" | "kneel"; // down, crawling; kneeling by someone down (D7: world/dark says)
   jump?: JumpNow; // jumping (shared/jump.ts): its stage
   z?: number; // feet off the floor (up on something, in a jump), tiles

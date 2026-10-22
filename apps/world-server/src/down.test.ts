@@ -184,3 +184,17 @@ test("away outside at night: down, then woken at the office", async () => {
   await waitFor(() => me(g.room).downAt > 0, 4000);
   await waitFor(() => g.awake === 1, 8000);
 });
+
+test("saved while down (a restart, the line dropped): back on their feet, not standing at 0", async () => {
+  const e = await person(715, 76);
+  await standAt(e, POND.x, POND.z);
+  await down(e);
+  // gone while down (left: what they had saved) — and back
+  rooms.splice(rooms.indexOf(e.room), 1); // (left here: not again at the end)
+  await e.room.leave(true);
+  await sleep(300);
+  const back = await person(715, 76);
+  await waitFor(() => me(back.room).hp > 0, 4000);
+  assert.equal(me(back.room).hp, DOWN.awakeHp);
+  assert.equal(me(back.room).downAt, 0);
+});

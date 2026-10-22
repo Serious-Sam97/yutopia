@@ -228,3 +228,19 @@ test("the dawn takes them", async () => {
   assert.equal(shadows(a).length, 0);
   a.send("mod:dark", { mode: "normal" });
 });
+
+test("the ones an admin calls up stay through the dawn (to try the fight at any hour)", async () => {
+  const a = await person(542, 56);
+  await hour(a, 6);
+  await standAt(a, POND.x, POND.z);
+  a.send("mod:dark", { mode: "called", spawn: 2 });
+  await waitFor(() => shadows(a).length === 2, 4000);
+  // (the dawn would have them fleeing and gone by now)
+  await sleep(3000);
+  assert.equal(shadows(a).length, 2, "still out at 6:00");
+  for (const s of shadows(a)) assert.notEqual(s.s, code("flee"));
+  // and the dark switched off sends even them away
+  a.send("mod:dark", { mode: "peaceful" });
+  await waitFor(() => shadows(a).length === 0, 3000);
+  a.send("mod:dark", { mode: "normal" });
+});

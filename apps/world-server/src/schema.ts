@@ -66,6 +66,8 @@ export class Player extends Schema {
   @type("boolean") focused = false;
   // the weapon in the hand (docs/plan/30-the-dark.md D6): "", "revolver", "shotgun"
   @type("string") gun = "";
+  // what the hand's doing with it (docs/plan/32-the-arms.md), for everyone to see: ARM
+  @type("uint8") arm = 0;
   // down (D7): since when (server ms; 0: on their feet), and who's getting them up, since when
   @type("float64") downAt = 0;
   @type("string") revBy = "";

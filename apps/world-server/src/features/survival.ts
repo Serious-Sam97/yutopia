@@ -178,6 +178,9 @@ registerFeature((room: WorldRoom) => {
       s.inv = cleanInventory({ ...rec.inventory, pages: rec.pages });
       const n = (x: unknown, d: number) => (Number.isFinite(Number(x)) ? Math.max(0, Math.min(100, Number(x))) : d);
       s.v.hp = n(rec.vitals?.hp, 100);
+      // (saved while down — a restart, the line dropped — and being down isn't saved: back as if
+      // woken, not standing at 0 where nothing can be done, nor done to them)
+      if (s.v.hp <= 0) s.v.hp = DOWN.awakeHp;
       s.v.wm = n(rec.vitals?.wm, 100);
       s.v.bat = n(rec.vitals?.bat, 100);
       s.issued = !!rec.issued;
@@ -727,6 +730,8 @@ registerFeature((room: WorldRoom) => {
           p.focused = false;
           continue;
         }
+        // (at nothing and not down — however it came about: down)
+        if (!p.downAt && s.loaded && s.v.hp <= 0) goDown(p, s);
         // down: someone getting them up (it holds the bleeding), their own first aid, else bleeding out
         if (p.downAt) {
           const by = p.revBy ? room.state.players.get(p.revBy) : undefined;

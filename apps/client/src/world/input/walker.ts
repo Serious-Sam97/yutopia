@@ -122,6 +122,8 @@ function follow(b: Body, path: Point[], move: { x: number; y: number }) {
 /** What the dark's chunk (world/dark) is handed: it shows the stamina and claims a use press
  *  near something to search or pick up. */
 export interface DarkHooks {
+  /** the room it listens to: a rejoin (a world restart, the network) is another, and it's made again */
+  readonly room: unknown;
   /** a use press (E is its own; this is the pad's X): taken (true) or left to the world */
   use(): boolean;
   /** first aid from the pockets (the pad's d-pad ↓) */
@@ -368,6 +370,14 @@ export class Walker {
     // first time out on the land: the dark's chunk (its HUD, the loot, the pockets); indoors, a
     // few seconds in, when the page has a moment
     this.outside = c.grid.onLand(b.x, b.y);
+    // (rejoined — the world restarted, the line dropped — it's another room: the dark's chunk
+    // listening to the old one would keep the pockets as they were, a gun that never empties)
+    if (this.dark && this.ctl && this.dark.room !== this.ctl.room) {
+      this.dark.dispose();
+      this.dark = null;
+      this.darkLoading = false;
+      this.loadDark();
+    }
     if (!this.darkIdle) this.darkIdle = now + 3000;
     if (this.outside) this.loadDark();
     else if (!this.dark && now >= this.darkIdle) {

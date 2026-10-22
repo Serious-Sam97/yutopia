@@ -67,8 +67,9 @@ export const SHADE = {
   strikeDamage: 15,
   /** lost sight of everyone this long: it forgets where they were */
   forget: 10,
-  /** what it takes to put one down, exposed (a revolver round is 50) */
-  hp: 100,
+  /** what it takes to put one down, exposed: a revolver round is 50 (75 at the head) — five to the
+   *  body, four to the head; the double-barrel close, both barrels (the user's "hard", 2026-10-22) */
+  hp: 250,
   /** nobody near for this long (or the dawn): it goes */
   leave: 20,
   near: 70,

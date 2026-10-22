@@ -474,10 +474,25 @@ export function torchPose(breath = 0): Pose {
   return { shoulderL: [-0.42 + b, 0, 0.12], elbowL: [-1.05, 0, 0], wristL: [0.08, 0, -0.05] };
 }
 
+/** Reloading a gun, not aiming (docs/plan/32-the-arms.md): both forearms up before the chest, the
+ *  gun in the right fist tipped up, the left hand at it — the arms only, swaying with the breath. */
+export function reloadPose(breath = 0): Pose {
+  const b = 0.012 * Math.sin(TAU * breath);
+  return {
+    shoulderR: [-0.62 + b, 0, -0.12],
+    elbowR: [-1.45, 0, 0],
+    wristR: [0.15, 0, 0.1],
+    shoulderL: [-0.66 + b, 0, 0.3],
+    elbowL: [-1.6, 0, 0],
+    wristL: [0.1, 0, -0.25],
+  };
+}
+
 /** Aiming (plan 29 M4, plan 30 D4): bladed, the left foot ahead, knees soft, leaning in; the
  *  torch out in the left hand along the look, the right ready by the hip — or out beside it,
  *  both arms locked, with a gun (`gun`). `pitch` (radians, up > 0) and `yaw` (the look off the
  *  body's facing, left > 0) go to the arms and the spine, the head the rest. `breath` 0..1. */
+const ADS_UP = 0.55;
 export function aimPose(pitch = 0, yaw = 0, gun = false, breath = 0): Moved {
   const up = Math.max(-0.9, Math.min(0.9, pitch));
   const b = 0.012 * Math.sin(TAU * breath);
@@ -499,7 +514,16 @@ export function aimPose(pitch = 0, yaw = 0, gun = false, breath = 0): Moved {
     oL: -0.16,
     wL: 0.06 + up * 0.1,
   };
-  if (gun) Object.assign(c, { sR: -1.36 - up * 0.75, eR: -0.3, oR: -0.24, wR: -0.04 });
+  // (a gun: both arms up so its sights come to the eye — docs/plan/32-the-arms.md, down the sights)
+  if (gun)
+    Object.assign(c, {
+      sR: -1.36 - ADS_UP - up * 0.75,
+      eR: -0.55,
+      oR: -0.24,
+      wR: -0.04 - ADS_UP * 0.6,
+      sL: c.sL - ADS_UP,
+      eL: -0.45,
+    });
   else Object.assign(c, { sR: -0.36, eR: -1.15, oR: 0.1, wR: 0.22 });
   steady(c, -up * 0.25);
   c.dy += yaw * 0.25;

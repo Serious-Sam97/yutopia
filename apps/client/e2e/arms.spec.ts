@@ -100,7 +100,7 @@ test("armed at night: a flare, the revolver out, one burnt and shot down, a relo
     await page.waitForTimeout(100);
   }
   expect(exposed, "burnt to exposed").toBe(true);
-  // the left button, twice (a revolver round is 50; it takes 100)
+  // the left button, five times (a revolver round is 50; it takes 250)
   let killed = false;
   for (let i = 0; i < 12 && !killed; i++) {
     await face();

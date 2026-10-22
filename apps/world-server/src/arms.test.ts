@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
 import { AIM_BLADE } from "@yutopia/shared/beam";
-import { ARMS, FLARE, pvpDamage, SHADE_STATES } from "@yutopia/shared/dark";
+import { ARM, ARMS, BODY, damageAt, FLARE, pvpDamage, SHADE_STATES } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import type { Inventory } from "@yutopia/shared/inventory";
 import { MV_AIM, packMv, yawToByte } from "@yutopia/shared/move";
@@ -52,7 +52,8 @@ const code = (s: (typeof SHADE_STATES)[number]) => SHADE_STATES.indexOf(s);
 interface Person {
   room: Room;
   inv: Inventory | null;
-  hits: { id: string; kind: string }[];
+  hits: { id: string; kind: string; head?: boolean }[];
+  shots: { sid: string; spread: number }[];
   struck: { id: string; n: number; shot?: boolean }[];
   // where it saw each shadowed, and when (its own clock)
   seen: Map<string, { t: number; x: number; y: number }[]>;
@@ -63,11 +64,12 @@ async function person(uid: number, sandbox: number): Promise<Person> {
     token: `dev:${uid}:P${uid}:member,builder,admin`,
   });
   rooms.push(room);
-  const who: Person = { room, inv: null, hits: [], struck: [], seen: new Map() };
+  const who: Person = { room, inv: null, hits: [], shots: [], struck: [], seen: new Map() };
   room.onMessage("dark:pockets", (m: { inv: Inventory }) => {
     who.inv = m.inv;
   });
-  room.onMessage("arms:hit", (m: { id: string; kind: string }) => who.hits.push(m));
+  room.onMessage("arms:hit", (m: { id: string; kind: string; head?: boolean }) => who.hits.push(m));
+  room.onMessage("arms:shot", (m: { sid: string; spread: number }) => who.shots.push(m));
   room.onMessage("dark:hit", (m: Person["struck"][number]) => who.struck.push(m));
   room.onMessage("*", () => {});
   await waitFor(() => !!room.state?.players?.get(room.sessionId));
@@ -142,10 +144,11 @@ const setup = async (sandbox: number) => {
   await waitFor(() => b.inv?.quick[0]?.id === "revolver");
   b.room.send("arms:draw", { slot: 0 });
   await waitFor(() => me(b.room).gun === "revolver");
+  await sleep(ARMS.revolver.draw * 1000 + 50); // (up)
   return { a, b };
 };
 
-test("A exposes it, B shoots it down: a shielded one sparks, an exposed one is hurt, then killed", async () => {
+test("A exposes it, B shoots it down: a shielded one sparks, an exposed one is hurt (four times), then killed", async () => {
   const { a, b } = await setup(61);
   a.room.send("mod:dark", { spawn: 1 });
   await waitFor(() => shadows(a).length === 1 && shadows(b).length === 1, 4000);
@@ -169,8 +172,8 @@ test("A exposes it, B shoots it down: a shielded one sparks, an exposed one is h
     clearInterval(torch);
     a.room.send("phone:torch", { on: false });
   }
-  // B: two rounds into it
-  for (let i = 0; i < 2; i++) {
+  // B: five rounds into it (a round is 50 to the body; it takes SHADE.hp, 250)
+  for (let i = 0; i < 5; i++) {
     const s = shadows(b)[0];
     aim(b, s.x, s.y);
     await sleep(ARMS.revolver.rate * 1000 + 50);
@@ -180,11 +183,11 @@ test("A exposes it, B shoots it down: a shielded one sparks, an exposed one is h
   await waitFor(() => b.hits.some((h) => h.kind === "killed"), 3000);
   assert.deepEqual(
     b.hits.map((h) => h.kind),
-    ["spark", "hurt", "killed"],
+    ["spark", "hurt", "hurt", "hurt", "hurt", "killed"],
   );
   await waitFor(() => shadows(b)[0]?.s === code("dissolve") || shadows(b).length === 0);
-  // three rounds spent
-  await waitFor(() => loaded0(b) === 3);
+  // six rounds spent
+  await waitFor(() => loaded0(b) === 0);
 });
 
 test("the rewind: a late shot at where B saw it counts; a ray from somewhere B isn't doesn't", async () => {
@@ -283,11 +286,11 @@ async function standIn(p: Person, x: number, y: number, level: number) {
   return { x: me(p.room).x, y: me(p.room).y };
 }
 // a shot from my hand at someone standing at (x, y) (at their chest), as the client sends it
-function shootAt(p: Person, x: number, y: number, seed = 7) {
+function shootAt(p: Person, x: number, y: number, seed = 7, high = 1) {
   const m = me(p.room);
   const oz = m.z + 1.35;
   const yaw = Math.atan2(y - m.y, x - m.x);
-  const pitch = Math.atan2(m.z + 1 - oz, Math.hypot(x - m.x, y - m.y));
+  const pitch = Math.atan2(m.z + high - oz, Math.hypot(x - m.x, y - m.y));
   p.room.send("arms:fire", { ox: m.x, oy: m.y, oz, yaw, pitch, lag: 0, seed });
 }
 const indoors = async (sandbox: number, level: number, ax: number, ay: number, bx: number, by: number) => {
@@ -388,4 +391,89 @@ test("a flare thrown indoors lands on that floor, lit there", async () => {
   assert.equal(f.level, 4);
   assert.equal(f.z, 0, "on the floor");
   assert.ok(f.x > me(b.room).x, "ahead");
+});
+
+// ── the feel's rules (docs/plan/32-the-arms.md) ────────────────────────────
+test("a gun's up only after its draw: a shot before it isn't; Player.arm says drawing, then idle", async () => {
+  const { a, b, at } = await indoors(70, 0, 73.5, 27.5, 63.5, 27.5);
+  b.room.send("arms:draw", { slot: -1 });
+  await waitFor(() => me(b.room).gun === "");
+  b.room.send("arms:draw", { slot: 0 });
+  await waitFor(() => me(b.room).gun === "revolver");
+  await waitFor(() => me(b.room).arm === ARM.draw, 300);
+  shootAt(b, at.x, at.y);
+  await sleep(150);
+  assert.equal(loaded0(b), 6, "not up yet: no shot");
+  await waitFor(() => me(b.room).arm === ARM.idle, 2000);
+  shootAt(b, at.x, at.y);
+  await waitFor(() => loaded0(b) === 5, 2000);
+  await waitFor(() => me(a.room).hp < 100);
+});
+
+test("the head: a shot at A's head takes half again; the server's spread goes out with the shot", async () => {
+  const { a, b, at } = await indoors(71, 0, 73.5, 27.5, 63.5, 27.5);
+  shootAt(b, at.x, at.y, 7, 1.68);
+  await waitFor(() => b.hits.length === 1, 3000);
+  assert.equal(b.hits[0].head, true);
+  await waitFor(() => me(a.room).hp === 100 - damageAt("revolver", pvpDamage("revolver"), 9.6, true));
+  assert.equal(me(a.room).hp, 62);
+  // what A saw of it: the spread the server shot with — standing still, aimed, the first: its own
+  await waitFor(() => a.shots.length === 1);
+  assert.ok(Math.abs(a.shots[0].spread - ARMS.revolver.spread) < 1e-6, `${a.shots[0].spread}`);
+  // a second straight after: bloomed
+  await sleep(ARMS.revolver.rate * 1000 + 50);
+  shootAt(b, at.x, at.y, 8);
+  await waitFor(() => a.shots.length === 2);
+  assert.ok(a.shots[1].spread > ARMS.revolver.spread + 0.005, `${a.shots[1].spread}`);
+});
+
+test("the double-barrel at 10 tiles: each pellet that meets A takes less than at 3", async () => {
+  const { a, b, at } = await indoors(72, 0, 73.5, 27.5, 63.5, 27.5);
+  b.room.send("arms:draw", { slot: 1 });
+  await waitFor(() => me(b.room).gun === "shotgun");
+  await sleep(ARMS.shotgun.draw * 1000 + 50);
+  shootAt(b, at.x, at.y);
+  await waitFor(() => b.hits.length > 0, 3000);
+  await sleep(300);
+  const hits = b.hits.filter((h) => h.kind === "person" || h.kind === "downed");
+  const t = 10 - BODY.r;
+  const want = hits.reduce((n, h) => n + damageAt("shotgun", pvpDamage("shotgun"), t, !!h.head), 0);
+  assert.ok(damageAt("shotgun", pvpDamage("shotgun"), t, false) < pvpDamage("shotgun"));
+  await waitFor(() => me(a.room).hp === Math.max(0, 100 - want));
+});
+
+test("the double-barrel's reload: broken open, a shell at a time, shut; a shot while open snaps it shut", async () => {
+  const { b } = await indoors(73, 0, 73.5, 27.5, 63.5, 27.5);
+  b.room.send("arms:draw", { slot: 1 });
+  await waitFor(() => me(b.room).gun === "shotgun");
+  await sleep(ARMS.shotgun.draw * 1000 + 50);
+  const loaded1 = () => (b.inv?.quick[1] as { loaded?: number } | null | undefined)?.loaded;
+  const away = () => {
+    aim(b, me(b.room).x - 20, me(b.room).y);
+    shootAt(b, me(b.room).x - 20, me(b.room).y);
+  };
+  for (let i = 0; i < 2; i++) {
+    away();
+    await sleep(ARMS.shotgun.rate * 1000 + 60);
+  }
+  await waitFor(() => loaded1() === 0);
+  b.room.send("arms:reload", {});
+  await waitFor(() => me(b.room).arm === ARM.open, 1000);
+  const t0 = Date.now();
+  await waitFor(() => loaded1() === 1, 2000);
+  const first = Date.now() - t0;
+  assert.ok(first > (ARMS.shotgun.open + ARMS.shotgun.reload) * 1000 - 150, `the first shell after ${first} ms`);
+  await waitFor(() => loaded1() === 2, 2000);
+  await waitFor(() => me(b.room).arm === ARM.idle, 2000);
+  // spend one; open it again; a shot while it's open (a shell in): shut, nothing fired
+  away();
+  await waitFor(() => loaded1() === 1);
+  b.room.send("arms:reload", {});
+  await waitFor(() => me(b.room).arm === ARM.open, 1000);
+  shootAt(b, me(b.room).x - 20, me(b.room).y, 11);
+  await waitFor(() => me(b.room).arm === ARM.idle, 1500);
+  assert.equal(loaded1(), 1, "snapped shut: nothing loaded, nothing fired");
+  await sleep(ARMS.shotgun.rate * 1000);
+  away();
+  await waitFor(() => loaded1() === 0, 2000);
 });
