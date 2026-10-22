@@ -46,7 +46,12 @@ const SPOTS: Spot[] = [
   S("shed", [-150, 96], [-155, 115], 13, 0.12, 7),
   S("gatehouse", [-44, -338], [-32, -363], 13, 0.1, 7),
   S("gas", [302, -405], [317, -390], 13, 0.12, 7),
-  S("hq-door", [-14, 26], [0, 18], 13, 0.12, 7),
+  S("pond", [-212, -44], [-250, -78], 13, 0.15, 8),
+  S("shrubs", [-189, -40], [-194, -34], 13, 0.32, 5),
+  S("pond-trail", [-188, -34], [-200, -20], 13, 0.14, 6),
+  S("woods", [-188, -34], [-200, -20], 13, 0.45, 11),
+  S("ravine-rocks", [-258, -214], [-266, -234], 13, 0.3, 9),
+  S("woods-edge", [-30, -60], [-200, -120], 13, 0.02, 7),
 ];
 
 test("the look: review shots in the game", async ({ page }) => {
@@ -69,7 +74,9 @@ test("the look: review shots in the game", async ({ page }) => {
     await page.evaluate((p) => (window as any).__yutopia.teleport(p), s.at);
     if (s.at.level !== undefined)
       await page.waitForFunction((l) => (window as any).__yutopia.level === l, s.at.level, { timeout: 20_000 });
-    await page.waitForTimeout(3500);
+    // (the land round you is built nearest first, a step a frame: its full detail takes a while
+    // after a long jump)
+    await page.waitForTimeout(8000);
     await page.evaluate((p) => {
       const t = (window as any).__yutopia.tp;
       t.setHour(p.hour);

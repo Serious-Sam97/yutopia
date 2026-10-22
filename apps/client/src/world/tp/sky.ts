@@ -205,6 +205,8 @@ export class Surroundings {
     this.campus.weather.wind = wind;
     // (a storm's sky: the overcast thick and even)
     this.domeMat.uniforms.cloudK.value = 1 - 0.7 * storm;
+    // (the woods sway harder in it)
+    if (this.grounds) this.grounds.wind.value = 1 + 2.5 * storm;
   }
 
   // the dome and the snow go with the camera; the overcast drifts

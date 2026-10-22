@@ -115,3 +115,32 @@ farm and the sedan far above the town and the bus (E); 3D and iso drifting apart
   world page 553.9 KB.
 - **Not done**: iso draws none of it yet (phase 7); snow on the cars, people and
   props stays as it was (phase 6).
+
+## Phase 3 — the woods and the ground: delivered (2026-10-22)
+
+- **More spruces**: `pineGeometry(r, { tiers, H, width, snow })` — besides the
+  usual three, a young one (5 tiers, 6.5 tall), a tall thin one (9 tiers, 13.5)
+  and an old broad one heavy with snow; mixed 60 / 15 / 13 / 12 % by a hash of
+  where each stands.
+- **Each tree its own**: a lean of up to ±2.6°, girth ×0.9–1.1 on each axis (a
+  hash of its position: the same for everyone), on top of phase 1's shade.
+- **Wind**: the crowns sway in the vertex shader (by height², each tree in its
+  own time); harder in a storm (`sky.ts` → `GroundsStream.wind`).
+- **Far birches and bare trees** (`farBirchGeometry`, `farBareGeometry`): a
+  trunk and a few limbs past the near tier — they used to vanish there.
+- **Snow mounds** under birches and bare trees too; the mound a finer half-dome
+  (a coarse one, faceted, was a heap of shards).
+- **The woods' floor** (`tp/woods3d.ts`, per chunk from its own seed, near
+  you only): shrubs (green under snow, twigs poking out), stumps, fallen logs,
+  stones in deep snow; boulders and stones on the steep rock. Low or out of the
+  way: not in the walking grid (server and client agree without it).
+- **Trails trodden down**: a low berm either side (`bankAlong`, open where
+  another way crosses and on the footbridge).
+- **The pond**: the ice dark and smooth where the wind swept it, snow in long
+  drifts one way, white cracks (a new `iceCanvas`, rougher 0.38); a snow lip
+  all round its shore (but at the dock).
+- **Checked**: client 23; typecheck; Biome; `grounds.spec` 3D worst frame 17 ms;
+  High 60 fps at the lot, the square and the woods by day and at night;
+  `lighting.spec` no GL errors.
+- **Not done**: the steep rock is rare inside the fence (the ravine's walls,
+  the ridges), so boulders are few; the iso view has none of it (phase 7).

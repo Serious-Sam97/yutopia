@@ -32,8 +32,17 @@ import {
   Vector3,
 } from "three";
 import { bareTree3, snowCanvas, tinted } from "./campus";
-import { birchGeometry, farPineGeometry, Grounds3, pineGeometry, SURF } from "./grounds3d";
+import {
+  birchGeometry,
+  farBareGeometry,
+  farBirchGeometry,
+  farPineGeometry,
+  Grounds3,
+  pineGeometry,
+  SURF,
+} from "./grounds3d";
 import type { Themes } from "./sky";
+import { boulderGeometry, COVERS, coverIn, logGeometry, shrubGeometry, stoneGeometry, stumpGeometry } from "./woods3d";
 
 // The Grounds in the game's 3D view (docs/plan/27-the-grounds.md, phase 1):
 // the land and the woods streamed round you, the rest (the ways, the water,
@@ -83,7 +92,20 @@ export class GroundsStream {
   private casters: Pool[] = [];
   private castersAt = new Vector3(1e9, 0, 1e9);
   private poolsDirty = true;
-  private kinds: { pine: number[]; birch: number[]; bare: number[]; far: number; mound: number };
+  private kinds: {
+    pine: number[];
+    birch: number[];
+    bare: number[];
+    far: number;
+    mound: number;
+    farBirch: number;
+    farBare: number;
+    cover: Record<string, number>;
+  };
+  /** the woods' sway: the time, and how hard (sky.ts: harder in a storm) */
+  readonly wind = { value: 1 };
+  private windT = { value: 0 };
+  private casting = new Set<number>();
   private fade = { a: { value: new Vector3() }, b: { value: new Vector3() } };
 
   constructor(
@@ -109,10 +131,12 @@ export class GroundsStream {
       outdoors.call(treeMat, shader, r);
       shader.uniforms.fadeA = this.fade.a;
       shader.uniforms.fadeB = this.fade.b;
+      shader.uniforms.windT = this.windT;
+      shader.uniforms.windK = this.wind;
       shader.vertexShader = shader.vertexShader
         .replace(
           "#include <common>",
-          "#include <common>\nuniform vec3 fadeA;\nuniform vec3 fadeB;\nvarying float vFade;",
+          "#include <common>\nuniform vec3 fadeA;\nuniform vec3 fadeB;\nuniform float windT;\nuniform float windK;\nvarying float vFade;",
         )
         // each tree its own green and bark (docs/plan/33-the-look.md); the snow on it stays white
         .replace(
@@ -135,6 +159,17 @@ export class GroundsStream {
           "#include <begin_vertex>",
           `#include <begin_vertex>
 vFade = 1.0;
+#ifdef USE_INSTANCING
+{
+  // the wind: the crown sways, the foot stays (by its height squared), each tree in its own time
+  vec4 wo = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  float ph = wo.x * 0.37 + wo.z * 0.21;
+  float hk = max(transformed.y, 0.0);
+  float k = hk * hk * 0.0011 * windK;
+  transformed.x += (sin(windT * 1.3 + ph) + 0.4 * sin(windT * 3.1 + ph * 2.0)) * k;
+  transformed.z += sin(windT * 1.05 + ph * 1.3) * k * 0.6;
+}
+#endif
 #ifdef USE_INSTANCING
 {
   // how near its trunk is to the way from the camera to you (and to you)
@@ -162,19 +197,42 @@ if (vFade < 0.999) {
     };
     treeMat.customProgramCacheKey = () => "yutopia-outdoors-trees";
     const geos: BufferGeometry[] = [
+      // spruces: three of the usual, then a young one, a tall thin one, an old broad one heavy with snow
       ...[0, 1, 2].map(() => pineGeometry(r)),
+      pineGeometry(r, { tiers: 5, H: 6.5, width: 0.82, snow: 0.55 }),
+      pineGeometry(r, { tiers: 9, H: 13.5, width: 0.72, snow: 0.45 }),
+      pineGeometry(r, { tiers: 7, H: 11, width: 1.22, snow: 0.68 }),
       ...[0, 1, 2].map(() => birchGeometry(r)),
       ...[0, 1, 2].map(() => bareTree3(r)),
       farPineGeometry(),
-      tinted(new SphereGeometry(1, 7, 4), 0xf6f8fb),
+      // (finer than it was: faceted, a coarse one was a heap of shards)
+      tinted(new SphereGeometry(1, 16, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0xf6f8fb),
+      farBirchGeometry(),
+      farBareGeometry(),
+      // the woods' floor (woods3d.ts)
+      shrubGeometry(r),
+      stumpGeometry(r),
+      logGeometry(r),
+      stoneGeometry(r),
+      boulderGeometry(r),
     ];
-    this.kinds = { pine: [0, 1, 2], birch: [3, 4, 5], bare: [6, 7, 8], far: 9, mound: 10 };
+    this.kinds = {
+      pine: [0, 1, 2, 3, 4, 5],
+      birch: [6, 7, 8],
+      bare: [9, 10, 11],
+      far: 12,
+      mound: 13,
+      farBirch: 14,
+      farBare: 15,
+      cover: Object.fromEntries(COVERS.map((c, i) => [c, 16 + i])),
+    };
+    // (the near trees and the boulders cast the sun's shadow; the far ones, the mounds, the rest don't)
+    this.casting = new Set([...this.kinds.pine, ...this.kinds.birch, ...this.kinds.bare, this.kinds.cover.boulder]);
     for (const [i, g] of geos.entries()) {
       const p = new Pool(g, treeMat, false);
       this.pools.push(p);
       this.root.add(p.mesh);
-      // (the far pines and the mounds cast nothing)
-      const c = new Pool(g, treeMat, i < 9);
+      const c = new Pool(g, treeMat, this.casting.has(i));
       c.mesh.layers.set(CASTER_LAYER);
       this.casters.push(c);
       this.root.add(c.mesh);
@@ -228,6 +286,7 @@ if (vFade < 0.999) {
   /** Round (x, z) (building coords: whose feet the camera's on): what's wanted,
    *  built a little at a time, shown. `target`: those feet (trees in front of them fade). */
   update(x: number, z: number, cam: Vector3, target?: Vector3) {
+    this.windT.value = performance.now() / 1000;
     this.fade.a.value.copy(cam);
     this.fade.b.value.copy(target ?? cam);
     const want: string[] = [];
@@ -430,8 +489,25 @@ if (vFade < 0.999) {
     const m = new Matrix4();
     const q = new Quaternion();
     const up = new Vector3(0, 1, 0);
-    const put = (pool: number, t: Tree, s: number, sy = s, dy = -0.25) => {
-      m.compose(new Vector3(t.x, t.y + dy, t.z), q.setFromAxisAngle(up, t.ry), new Vector3(s, sy, s));
+    const tilt = new Quaternion();
+    const axis = new Vector3();
+    // each tree its own lean and girth (a hash of where it stands: the same for everyone)
+    const hash = (x: number, z: number, k: number) => {
+      const v = Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const put = (pool: number, t: Tree, s: number, sy = s, dy = -0.25, lean = true) => {
+      q.setFromAxisAngle(up, t.ry);
+      let sx = s;
+      let sz = s;
+      if (lean) {
+        const a = hash(t.x, t.z, 1) * Math.PI * 2;
+        axis.set(Math.cos(a), 0, Math.sin(a));
+        q.premultiply(tilt.setFromAxisAngle(axis, (hash(t.x, t.z, 2) - 0.5) * 0.09));
+        sx = s * (0.9 + 0.2 * hash(t.x, t.z, 3));
+        sz = s * (0.9 + 0.2 * hash(t.x, t.z, 4));
+      }
+      m.compose(new Vector3(t.x, t.y + dy, t.z), q, new Vector3(sx, sy, sz));
       const l = by.get(pool) ?? [];
       by.set(pool, l);
       l.push(...m.elements);
@@ -441,11 +517,20 @@ if (vFade < 0.999) {
       const v = Math.floor(t.ry * 10) % 3;
       const sy = 0.9 + (t.s % 0.2);
       if (t.kind === "pine") {
-        put(near ? K.pine[v] : K.far, t, t.s * 1.45, t.s * 1.45 * sy);
-        if (near) put(K.mound, t, 2.2 * t.s, 0.45, -0.2);
-      } else if (near)
+        // (mostly the usual three; now and then a young one, a tall one, an old broad one)
+        const h = hash(t.x, t.z, 5);
+        const pv = h < 0.6 ? v : h < 0.75 ? 3 : h < 0.88 ? 4 : 5;
+        put(near ? K.pine[pv] : K.far, t, t.s * 1.45, t.s * 1.45 * sy);
+        if (near) put(K.mound, t, 2.2 * t.s, 0.45, -0.2, false);
+      } else if (near) {
         put(t.kind === "birch" ? K.birch[v] : K.bare[v], t, t.s * (t.kind === "bare" ? 1.7 : 1), t.s * sy);
+        put(K.mound, t, 1.1 * t.s, 0.3, -0.2, false);
+      } else put(t.kind === "birch" ? K.farBirch : K.farBare, t, t.s * (t.kind === "bare" ? 1.7 : 1), t.s * sy);
     }
+    // the woods' floor, near you
+    if (near && chunk)
+      for (const c of coverIn(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK), trees))
+        put(K.cover[c.kind], { x: c.x, y: c.y, z: c.z, ry: c.ry, s: c.s, kind: "pine" } as Tree, c.s, c.s, 0, false);
     const blk: Block = { key: k, tier, x0, z0, mesh, trees: new Map(), shown: false };
     for (const [p, l] of by) blk.trees.set(p, new Float32Array(l));
     this.blocks.set(k, blk);
@@ -469,7 +554,7 @@ if (vFade < 0.999) {
   private fillCasters(x: number, z: number) {
     this.castersAt.set(x, 0, z);
     for (const [i, pool] of this.casters.entries()) {
-      if (i >= 9) continue;
+      if (!this.casting.has(i)) continue;
       const parts: Float32Array[] = [];
       for (const b of this.blocks.values()) {
         if (b.tier !== TIERS.length - 1 || !b.shown) continue;

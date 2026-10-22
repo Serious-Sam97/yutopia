@@ -81,7 +81,7 @@ import {
   type V,
 } from "./campus";
 import type { Themes } from "./sky";
-import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow } from "./snow3d";
+import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
 
 // The Grounds in 3D — phase 0's prototype (docs/plan/27-the-grounds.md): the
 // land, the ways, the water, the woods, every building and lamp, built from
@@ -186,43 +186,58 @@ function walkCanvas(T: Themes): HTMLCanvasElement {
 }
 // Ice under snow: mostly a white crust, wind-scoured patches of bare grey-blue
 // ice with white cracks in them.
+// Ice (docs/plan/33-the-look.md): dark and clear where the wind swept it, snow lying across it in
+// long drifts the wind laid down one way, white cracks; tileable.
 function iceCanvas(T: Themes): HTMLCanvasElement {
   const S = 512;
   const { c, g } = T.canvas(S, S);
   const r = T.rng(307);
-  g.fillStyle = "#dfe6ec";
+  g.fillStyle = "#7f93a4";
   g.fillRect(0, 0, S, S);
-  const blobs: [number, number, number, number][] = [];
-  for (let i = 0; i < 26; i++) blobs.push([r() * S, r() * S, 40 + r() * 80, 5 + r() * 9]);
-  for (const [x, y, w, h] of blobs)
+  // darker clear patches, lighter frosted ones
+  for (let i = 0; i < 30; i++) {
+    const x = r() * S;
+    const y = r() * S;
+    const w = 50 + r() * 90;
+    const dark = r() < 0.5;
     for (const ox of [-S, 0, S])
       for (const oy of [-S, 0, S]) {
         const grd = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, w);
-        grd.addColorStop(0, "rgba(160,181,198,0.6)");
-        grd.addColorStop(0.7, "rgba(172,192,207,0.35)");
-        grd.addColorStop(1, "rgba(200,214,226,0)");
+        grd.addColorStop(0, dark ? "rgba(84,104,122,0.55)" : "rgba(176,192,205,0.45)");
+        grd.addColorStop(1, "rgba(127,147,164,0)");
         g.fillStyle = grd;
         g.beginPath();
-        g.ellipse(x + ox, y + oy, w, h, -0.5, 0, Math.PI * 2);
+        g.ellipse(x + ox, y + oy, w, w * 0.55, -0.45, 0, Math.PI * 2);
         g.fill();
       }
-  // drifted snow in soft ridges across it
-  for (let i = 0; i < 40; i++) {
-    g.fillStyle = `rgba(246,249,251,${0.25 + r() * 0.35})`;
-    g.beginPath();
-    g.ellipse(r() * S, r() * S, 20 + r() * 50, 3 + r() * 6, -0.5, 0, Math.PI * 2);
-    g.fill();
   }
-  g.strokeStyle = "rgba(240,246,250,0.75)";
-  g.lineWidth = 1;
-  for (const [x0, y0] of blobs) {
-    let x = x0;
-    let y = y0;
+  // snow drifted across it, all one way
+  for (let i = 0; i < 46; i++) {
+    const x = r() * S;
+    const y = r() * S;
+    const w = 30 + r() * 90;
+    const h = 3 + r() * 9;
+    g.fillStyle = `rgba(238,243,247,${0.35 + r() * 0.45})`;
+    for (const ox of [-S, 0, S])
+      for (const oy of [-S, 0, S]) {
+        g.beginPath();
+        g.ellipse(x + ox, y + oy, w, h, -0.45, 0, Math.PI * 2);
+        g.fill();
+      }
+  }
+  // cracks: white, branching
+  g.lineWidth = 1.2;
+  for (let i = 0; i < 14; i++) {
+    let x = r() * S;
+    let y = r() * S;
+    let a = r() * Math.PI * 2;
+    g.strokeStyle = `rgba(232,240,246,${0.45 + r() * 0.35})`;
     g.beginPath();
     g.moveTo(x, y);
-    for (let k = 0; k < 5; k++) {
-      x += (r() - 0.5) * 40;
-      y += (r() - 0.5) * 30;
+    for (let k = 0; k < 9; k++) {
+      a += (r() - 0.5) * 0.9;
+      x += Math.cos(a) * (10 + r() * 16);
+      y += Math.sin(a) * (10 + r() * 16);
       g.lineTo(x, y);
     }
     g.stroke();
@@ -390,15 +405,21 @@ export function birchGeometry(r: () => number): BufferGeometry {
 }
 // A spruce near you: seven tiers of drooping boughs, their tips ragged, snow
 // lying on the top of each tier; the trunk showing under the lowest.
-export function pineGeometry(r: () => number): BufferGeometry {
+// Its shape by `o` (docs/plan/33-the-look.md: a wood of one tree read as a plantation): how many
+// tiers, how tall, how broad, how much of each tier the snow covers.
+export function pineGeometry(
+  r: () => number,
+  o: { tiers?: number; H?: number; width?: number; snow?: number } = {},
+): BufferGeometry {
   const parts: BufferGeometry[] = [];
-  const tiers = 7;
-  const H = 10.5;
+  const tiers = o.tiers ?? 7;
+  const H = o.H ?? 10.5;
+  const wide = o.width ?? 1;
   for (let t = 0; t < tiers; t++) {
     const k = t / (tiers - 1);
     const y0 = 1.1 + k * (H - 2.6);
-    const rad = 2.7 * (1 - k * 0.82) * (0.92 + r() * 0.16);
-    const h = 2.6 - k * 0.9;
+    const rad = 2.7 * wide * (1 - k * 0.82) * (0.92 + r() * 0.16);
+    const h = (2.6 - k * 0.9) * (H / 10.5) ** 0.5;
     const seg = 13;
     const g = new ConeGeometry(rad, h, seg, 2, true).translate(0, y0 + h / 2, 0).toNonIndexed();
     const pos = g.getAttribute("position");
@@ -427,7 +448,7 @@ export function pineGeometry(r: () => number): BufferGeometry {
     g.setAttribute("color", new Float32BufferAttribute(col, 3));
     parts.push(g);
     // the snow on it: a thinner cone over the upper part, a little ragged
-    const sh = h * 0.5;
+    const sh = h * (o.snow ?? 0.5);
     const sg = new ConeGeometry(rad * 0.72, sh, seg, 1, true).translate(0, y0 + h - sh / 2 + 0.06, 0).toNonIndexed();
     const sp = sg.getAttribute("position");
     for (let i = 0; i < sp.count; i++) {
@@ -454,6 +475,40 @@ export function farPineGeometry(): BufferGeometry {
     tinted(new ConeGeometry(1.25, 1.6, 6).translate(0, 9.0, 0), 0xe2e8ec),
     tinted(new CylinderGeometry(0.2, 0.3, 1.6, 4).translate(0, 0.8, 0), 0x3a2e26),
   ];
+  const m = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  return m;
+}
+
+// A far birch and a far bare tree: a trunk and a few limbs (the near ones' wire of twigs, at a
+// hundred tiles and more, is a few pixels; they went missing there instead).
+export function farBirchGeometry(): BufferGeometry {
+  const parts = [tinted(new CylinderGeometry(0.1, 0.18, 9, 4).translate(0, 4.5, 0), 0xe6e2da)];
+  for (const [a, y, l] of [
+    [0.4, 5.2, 2.2],
+    [2.5, 6.4, 2],
+    [4.4, 7.4, 1.6],
+  ]) {
+    const g = new CylinderGeometry(0.03, 0.06, l, 3).translate(0, l / 2, 0);
+    g.rotateZ(-0.9).rotateY(a).translate(0, y, 0);
+    parts.push(tinted(g, 0x4b3d36));
+  }
+  const m = mergeGeometries(parts, false);
+  for (const g of parts) g.dispose();
+  return m;
+}
+export function farBareGeometry(): BufferGeometry {
+  const parts = [tinted(new CylinderGeometry(0.12, 0.24, 5, 4).translate(0, 2.5, 0), 0x4a525c)];
+  for (const [a, y, l] of [
+    [0.3, 3.6, 2.6],
+    [2.2, 4.2, 2.4],
+    [4.1, 3.9, 2.5],
+    [5.4, 4.6, 1.8],
+  ]) {
+    const g = new CylinderGeometry(0.03, 0.08, l, 3).translate(0, l / 2, 0);
+    g.rotateZ(-0.7).rotateY(a).translate(0, y, 0);
+    parts.push(tinted(g, 0x4a525c));
+  }
   const m = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
   return m;
@@ -710,8 +765,18 @@ export class Grounds3 {
     const banks = new G();
     const r = groundsRng(77 + (only ? WAYS.indexOf(only) : 0));
     for (const w of only ? [only] : WAYS) {
-      if (w.kind === "trail") this.ribbon(w, w.w + 0.8, 0, 0.03, 9, trail);
-      else if (w.kind === "walk") this.ribbon(w, w.w, 0, 0.04, 6, walk);
+      if (w.kind === "trail") {
+        this.ribbon(w, w.w + 0.8, 0, 0.03, 9, trail);
+        // trodden down: the snow either side stands a little higher (a low berm, open where
+        // another way crosses and on the footbridge)
+        for (const side of [1, -1] as const)
+          bankAlong(banks, w.line, w.w / 2 + 0.75, side, groundAt, r, {
+            h: 0.2,
+            w: 1.1,
+            skip: (x, z, i) =>
+              w.bridged[i] || !this.near(x, z, 10) || WAYS.some((u) => u !== w && nearLine(u, x, z) < u.w / 2 + 1.2),
+          });
+      } else if (w.kind === "walk") this.ribbon(w, w.w, 0, 0.04, 6, walk);
       else {
         this.ribbon(w, w.w, 0, 0.05, 14, road);
         if (w.kind === "street") {
@@ -814,7 +879,7 @@ export class Grounds3 {
   // ── the pond and the river, frozen ──
   private water() {
     const ice = this.keep(
-      new MeshStandardMaterial({ map: this.ts.ice, roughness: 0.62, metalness: 0.0, color: 0xdde6ee }),
+      new MeshStandardMaterial({ map: this.ts.ice, roughness: 0.38, metalness: 0.0, color: 0xf2f6f9 }),
     );
     if (this.near(POND.cx, POND.cz, POND.rx)) {
       const g = new G();
@@ -833,6 +898,33 @@ export class Grounds3 {
         g.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], ps.map(U) as [number, number][]);
       }
       this.add(g.build(), ice, "receive");
+      // the shore: snow lying over the ice's edge all round (but where the dock goes out)
+      const shore = new G();
+      const rs = groundsRng(911);
+      const lump = wobble(rs, 6);
+      const st = Array.from({ length: 161 }, (_, i) => {
+        const a = (i / 160) * Math.PI * 2;
+        const x = POND.cx + Math.cos(a) * POND.rx;
+        const z = POND.cz + Math.sin(a) * POND.rz;
+        // (the ellipse's outward normal)
+        const nx0 = Math.cos(a) / POND.rx;
+        const nz0 = Math.sin(a) / POND.rz;
+        const l = Math.hypot(nx0, nz0);
+        const dock = x > -257 && x < -247 && z < -85;
+        return { x, z, nx: nx0 / l, nz: nz0 / l, k: dock ? 0 : 0.8 + 0.35 * lump(i * 1.4) };
+      });
+      ridge(
+        shore,
+        st,
+        [
+          [-1.6, -1],
+          [-0.7, 0.22],
+          [0.3, 0.4],
+          [1.4, -1],
+        ],
+        (x, z) => Math.max(groundAt(x, z), POND_LEVEL + 0.1),
+      );
+      this.add(shore.build(), this.lambert());
       // the dock: planks on posts, a canoe turned over under snow
       const d = new G();
       const dx0 = -253.5;
