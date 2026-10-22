@@ -26,6 +26,7 @@ import {
   ROAD_CLOSED,
   SCARECROWS,
   STATUE,
+  STREET,
   type Surface,
   TOWER,
   TOWN_CARS,
@@ -82,6 +83,7 @@ import {
 } from "./campus";
 import type { Themes } from "./sky";
 import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
+import { streetGeometry } from "./town3d";
 
 // The Grounds in 3D — phase 0's prototype (docs/plan/27-the-grounds.md): the
 // land, the ways, the water, the woods, every building and lamp, built from
@@ -1520,6 +1522,7 @@ export class Grounds3 {
   /** What settled round a building: drifts banked against its walls (but its front where it
    *  meets a pavement, a porch or the water, and its doors), its windows' sills. */
   private settle(b: Building) {
+    this.flushWindows();
     const g = this.trim;
     this.trim = new G();
     if (!["hq", "block", "silo", "shelter", "gas"].includes(b.kind)) {
@@ -1876,7 +1879,9 @@ export class Grounds3 {
           zb - (nz ? 0 : i),
         );
     }
-    const g = new G().color(0xffffff);
+    // (a building's windows are one mesh a kind of light: hundreds of little meshes, drawn
+    // the first time all at once, were a long frame on the way into the town)
+    const g = this.windows(warm, on);
     const tx = -nz;
     const tz = nx;
     const o = 0.04;
@@ -1887,10 +1892,47 @@ export class Grounds3 {
       [x - (tx * w) / 2 + nx * o, y + h, z - (tz * w) / 2 + nz * o],
       [nx, 0, nz],
     );
-    const m = this.keep(
-      new MeshLambertMaterial({ color: 0x2c3540, emissive: warm ? 0xffc87a : 0xbcd2ea, emissiveIntensity: 0 }),
-    );
-    this.add(g.build(), this.glows(m, on, "windows"), "none");
+  }
+  private winBatch = new Map<string, G>();
+  private windows(warm: boolean, on: number): G {
+    const k = `${warm}|${on}`;
+    let g = this.winBatch.get(k);
+    if (!g) {
+      g = new G().color(0xffffff);
+      this.winBatch.set(k, g);
+    }
+    return g;
+  }
+  private winMats = new Map<string, MeshLambertMaterial>();
+  private flushWindows() {
+    for (const [k, g] of this.winBatch) {
+      let m = this.winMats.get(k);
+      if (!m) {
+        const [warm, on] = k.split("|");
+        m = this.keep(
+          new MeshLambertMaterial({
+            color: 0x2c3540,
+            emissive: warm === "true" ? 0xffc87a : 0xbcd2ea,
+            emissiveIntensity: 0,
+          }),
+        );
+        this.glows(m, Number(on), "windows");
+        this.winMats.set(k, m);
+      }
+      if (!g.empty) this.add(g.build(), m, "none");
+    }
+    this.winBatch.clear();
+  }
+  /** A wall's picture, one per colour (the town's houses share theirs). */
+  private wallTex = new Map<string, Texture>();
+  private wallPic(kind: "siding" | "brick", hex: string, seed = 0): Texture {
+    const k = `${kind}|${hex}`;
+    let t = this.wallTex.get(k);
+    if (!t) {
+      t = this.keep(tex(kind === "brick" ? brickCanvas(this.T, hex, seed) : sidingCanvas(this.T, hex)));
+      this.wallTex.set(k, t);
+    }
+    return t;
   }
   private gatehouse(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
@@ -1972,6 +2014,7 @@ export class Grounds3 {
     bg = "#1d2226",
     fg = "#efe3c4",
     lit = false,
+    posts = true,
   ) {
     const y0 = groundAt(x, z);
     const c = signCanvas(this.T, text, 512, Math.round((512 * h) / w), bg, fg);
@@ -1995,15 +2038,16 @@ export class Grounds3 {
     board.rotation.y = ry;
     board.castShadow = true;
     this.root.add(board);
-    const posts = new G().color(0x3a3e44);
+    if (!posts) return;
+    const legs = new G().color(0x3a3e44);
     const tx = Math.cos(ry);
     const tz = -Math.sin(ry);
     for (const s of [-1, 1]) {
       const px = x + tx * s * (w / 2 - 0.2);
       const pz = z + tz * s * (w / 2 - 0.2);
-      posts.box(px - 0.06, y0, pz - 0.06, px + 0.06, y0 + up + h, pz + 0.06);
+      legs.box(px - 0.06, y0, pz - 0.06, px + 0.06, y0 + up + h, pz + 0.06);
     }
-    this.add(posts.build(), this.lambert());
+    this.add(legs.build(), this.lambert());
   }
   private boathouse(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
@@ -2864,86 +2908,180 @@ export class Grounds3 {
     this.add(gl.build(), m, "none");
     this.signBoard("BUS STOP", b.x1 + 1.2, b.z1 + 0.6, 0, 1.1, 0.5, 2.1, "#1d4a7a", "#f2f2f2");
   }
+  /** Four textured walls round a box, the face `tall` rising to `Hf` (a false front). */
+  private wallsUV(
+    g: G,
+    b: { x0: number; z0: number; x1: number; z1: number },
+    y0: number,
+    H: number,
+    k: number,
+    tall?: { side: "n" | "s" | "e" | "w"; Hf: number },
+  ) {
+    const { x0, z0, x1, z1 } = b;
+    const U = (a: number, y: number): [number, number] => [a / k, y / k];
+    const h = (s: string) => (tall && tall.side === s ? tall.Hf : H);
+    const fw = (a: V, bb: V, hh: number, n: V, len: number) =>
+      g.quad(a, bb, [bb[0], y0 + hh, bb[2]], [a[0], y0 + hh, a[2]], n, [U(0, 0), U(len, 0), U(len, hh), U(0, hh)]);
+    fw([x0, y0, z0], [x1, y0, z0], h("n"), [0, 0, -1], x1 - x0);
+    fw([x0, y0, z1], [x1, y0, z1], h("s"), [0, 0, 1], x1 - x0);
+    fw([x0, y0, z0], [x0, y0, z1], h("w"), [-1, 0, 0], z1 - z0);
+    fw([x1, y0, z0], [x1, y0, z1], h("e"), [1, 0, 0], z1 - z0);
+    // a false front's back, seen over the roof
+    if (tall) {
+      const s = tall.side;
+      const z = s === "n" ? z0 + 0.25 : z1 - 0.25;
+      const n: V = [0, 0, s === "n" ? 1 : -1];
+      g.quad([x0, y0 + H, z], [x1, y0 + H, z], [x1, y0 + tall.Hf, z], [x0, y0 + tall.Hf, z], n, [
+        U(0, H),
+        U(x1 - x0, H),
+        U(x1 - x0, tall.Hf),
+        U(0, tall.Hf),
+      ]);
+    }
+  }
+  /** The town's shops and their kin (docs/plan/33-the-look.md, phase 4): a façade kit — brick with
+   *  a dentilled cornice or clapboard with a false front, framed windows with stone heads on every
+   *  face, a shopfront of panes over a panelled base, a striped or plain awning; the town hall
+   *  columned under a pediment, the post office's flag, the diner's chrome and roof sign, the
+   *  hotel's marquee. */
   private shop(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
     const r = groundsRng(b.x0 * 31 + 7);
     const fh = 3.8;
     const H = b.floors * fh + 0.8;
-    const brick = r() < 0.6;
-    const wall = this.keep(
-      tex(
-        brick
-          ? brickCanvas(this.T, ["#7b3b2c", "#6c4436", "#8a5a42", "#5b4a44"][Math.floor(r() * 4)], b.x0)
-          : sidingCanvas(this.T, ["#c9c2b2", "#8d9a9c", "#b9a98b"][Math.floor(r() * 3)]),
-      ),
-    );
-    const g = new G();
-    const U = (a: number, y: number): [number, number] => [a / 4, y / 4];
+    const civic = b.key === "hall" || b.key === "post";
+    const diner = b.kind === "diner";
+    const brick = civic ? false : diner ? false : r() < 0.6;
+    const wallHex = civic
+      ? "#d9d3c4"
+      : diner
+        ? "#c9ced3"
+        : brick
+          ? ["#7b3b2c", "#6c4436", "#8a5a42", "#5b4a44"][Math.floor(r() * 4)]
+          : ["#c9c2b2", "#8d9a9c", "#b9a98b", "#a7b39a", "#c4a98d"][Math.floor(r() * 5)];
+    const wall = this.wallPic(brick ? "brick" : "siding", wallHex, b.x0);
     const { x0, z0, x1, z1 } = b;
-    g.quad(
-      [x0, y0, z0],
-      [x1, y0, z0],
-      [x1, y0 + H, z0],
-      [x0, y0 + H, z0],
-      [0, 0, -1],
-      [U(0, 0), U(x1 - x0, 0), U(x1 - x0, H), U(0, H)],
-    );
-    g.quad(
-      [x0, y0, z1],
-      [x1, y0, z1],
-      [x1, y0 + H, z1],
-      [x0, y0 + H, z1],
-      [0, 0, 1],
-      [U(0, 0), U(x1 - x0, 0), U(x1 - x0, H), U(0, H)],
-    );
-    g.quad(
-      [x0, y0, z0],
-      [x0, y0, z1],
-      [x0, y0 + H, z1],
-      [x0, y0 + H, z0],
-      [-1, 0, 0],
-      [U(0, 0), U(z1 - z0, 0), U(z1 - z0, H), U(0, H)],
-    );
-    g.quad(
-      [x1, y0, z0],
-      [x1, y0, z1],
-      [x1, y0 + H, z1],
-      [x1, y0 + H, z0],
-      [1, 0, 0],
-      [U(0, 0), U(z1 - z0, 0), U(z1 - z0, H), U(0, H)],
-    );
-    this.add(g.build(), this.lambert(0xffffff, wall, false));
-    // cornice and the roof's snow
-    const c = new G();
-    c.color(0x8c857a).box(x0 - 0.25, y0 + H - 0.5, z0 - 0.25, x1 + 0.25, y0 + H, z1 + 0.25);
-    flatSnow(c, x0 - 0.2, z0 - 0.2, x1 + 0.2, z1 + 0.2, y0 + H, 0.34, r);
-    {
-      // icicles off the cornice over the street
-      const ez = b.face === "n" ? z0 - 0.25 : z1 + 0.25;
-      icicles(c, [x0 - 0.2, y0 + H - 0.5, ez], [x1 + 0.2, y0 + H - 0.5, ez], r, 0.35);
-    }
-    this.add(c.build(), this.lambert());
-    // the front: towards the street
     const nz = b.face === "n" ? -1 : 1;
     const fz = b.face === "n" ? z0 : z1;
     const w = x1 - x0;
     const xm = (x0 + x1) / 2;
+    const trim = brick ? 0xcfc6b4 : civic ? 0xece6da : 0xe6e1d6;
+    // clapboard (and the one-storey ones, for their signs) get a false front
+    const falseFront = !civic && !diner && (!brick || b.floors === 1);
+    const Hf = falseFront ? H + 1.4 : H;
+    const g = new G();
+    this.wallsUV(g, b, y0, H, 4, falseFront ? { side: b.face, Hf } : undefined);
+    this.add(g.build(), this.lambert(0xffffff, wall, false));
+    const c = new G();
+    // the top: a cornice with dentils (brick), a capped false front with a raised middle (clapboard),
+    // a plain coping (civic, the diner)
+    if (falseFront) {
+      c.color(trim).box(
+        x0 - 0.15,
+        y0 + Hf - 0.3,
+        Math.min(fz, fz + nz * 0.3),
+        x1 + 0.15,
+        y0 + Hf,
+        Math.max(fz, fz + nz * 0.3),
+      );
+      c.color(trim).box(
+        xm - 1.6,
+        y0 + Hf,
+        Math.min(fz, fz + nz * 0.25),
+        xm + 1.6,
+        y0 + Hf + 0.7,
+        Math.max(fz, fz + nz * 0.25),
+      );
+      c.color(trim).box(
+        xm - 1.75,
+        y0 + Hf + 0.7,
+        Math.min(fz, fz + nz * 0.32),
+        xm + 1.75,
+        y0 + Hf + 0.9,
+        Math.max(fz, fz + nz * 0.32),
+      );
+      flatSnow(c, xm - 1.7, Math.min(fz, fz + nz * 0.3), xm + 1.7, Math.max(fz, fz + nz * 0.3), y0 + Hf + 0.9, 0.12, r);
+      flatSnow(c, x0 - 0.1, Math.min(fz, fz + nz * 0.28), x1 + 0.1, Math.max(fz, fz + nz * 0.28), y0 + Hf, 0.12, r);
+      // the plain roof behind it, a low coping round its other sides
+      c.color(0x8c857a).box(x0 - 0.1, y0 + H - 0.2, z0 - 0.1, x1 + 0.1, y0 + H, z1 + 0.1);
+    } else if (brick) {
+      c.color(0x8c857a).box(x0 - 0.3, y0 + H - 0.35, z0 - 0.3, x1 + 0.3, y0 + H, z1 + 0.3);
+      c.color(trim).box(x0 - 0.2, y0 + H - 0.75, z0 - 0.2, x1 + 0.2, y0 + H - 0.35, z1 + 0.2);
+      for (let x = x0 + 0.2; x < x1 - 0.1; x += 0.45)
+        c.color(0x8c857a).box(x, y0 + H - 0.95, fz + nz * 0.0, x + 0.22, y0 + H - 0.75, fz + nz * 0.18);
+      // a corbelled band over the shopfront
+      c.color(trim).box(x0, y0 + 3.7, Math.min(fz, fz + nz * 0.12), x1, y0 + 3.85, Math.max(fz, fz + nz * 0.12));
+    } else {
+      c.color(diner ? 0xb8bec4 : 0xbdb6a6).box(x0 - 0.2, y0 + H - 0.4, z0 - 0.2, x1 + 0.2, y0 + H, z1 + 0.2);
+    }
+    flatSnow(c, x0 - 0.2, z0 - 0.2, x1 + 0.2, z1 + 0.2, y0 + H, 0.34, r);
+    {
+      const ez = fz + nz * 0.3;
+      icicles(c, [x0 - 0.2, y0 + Hf - 0.3, ez], [x1 + 0.2, y0 + Hf - 0.3, ez], r, 0.3);
+    }
+    this.add(c.build(), this.lambert());
+    // upstairs windows, on the front and the sides: framed, a stone head over each
+    const head = new G();
+    const upper = (x: number, y: number, z: number, ww: number, hh: number, nx: number, nzz: number, lit: number) => {
+      this.litWindow(x, y, z, ww, hh, nx, nzz, true, lit);
+      this.frame(head, x, y, z, ww, hh, nx, nzz, trim);
+      const tx = -nzz;
+      const tz = nx;
+      const a = ww / 2 + 0.22;
+      const [hx0, hx1] = [x - tx * a, x + tx * a].sort((p, q) => p - q);
+      const [hz0, hz1] = [z - tz * a, z + tz * a].sort((p, q) => p - q);
+      head
+        .color(brick ? 0xcfc6b4 : trim)
+        .box(
+          Math.min(hx0, hx0 + nx * 0.18),
+          y + hh + 0.12,
+          Math.min(hz0, hz0 + nzz * 0.18),
+          Math.max(hx1, hx1 + nx * 0.18),
+          y + hh + 0.38,
+          Math.max(hz1, hz1 + nzz * 0.18),
+        );
+    };
+    for (let f = 1; f < b.floors; f++) {
+      const n = Math.max(2, Math.floor(w / 4));
+      for (let k = 0; k < n; k++) {
+        const x = x0 + (w / n) * (k + 0.5);
+        if (b.vacant) continue;
+        upper(x, y0 + f * fh + 1.3, fz, 1.3, 1.7, 0, nz, r() < 0.45 ? 0.8 : 0);
+      }
+      const d = z1 - z0;
+      for (const [sx, snx] of [
+        [x0, -1],
+        [x1, 1],
+      ] as const)
+        for (const t of d > 12 ? [0.3, 0.7] : [0.5])
+          upper(sx, y0 + f * fh + 1.3, z0 + d * t, 1.2, 1.6, snx, 0, r() < 0.3 ? 0.7 : 0);
+    }
+    this.add(head.build(), this.lambert());
     const front = new G();
     if (b.vacant) {
-      front.color(0xa48a6a).box(x0 + 1, y0 + 0.6, fz + nz * 0.02, x1 - 1, y0 + 3, fz + nz * 0.08);
+      // boarded: planks across the shopfront and the upstairs windows, snow banked at the door
+      for (let y = 0.7; y < 3; y += 0.32)
+        front
+          .color(r() < 0.5 ? 0xa48a6a : 0x96805f)
+          .box(x0 + 0.8 + r() * 0.3, y0 + y, fz + nz * 0.02, x1 - 0.8 - r() * 0.3, y0 + y + 0.26, fz + nz * 0.1);
       for (let f = 1; f < b.floors; f++)
         for (let k = 0; k < 3; k++) {
           const x = x0 + (w / 3) * (k + 0.5);
           front
-            .color(0x9a8264)
-            .box(x - 0.7, y0 + f * fh + 0.9, fz + nz * 0.02, x + 0.7, y0 + f * fh + 2.6, fz + nz * 0.08);
+            .color(0x2a2e33)
+            .box(x - 0.65, y0 + f * fh + 1.3, fz + nz * 0.01, x + 0.65, y0 + f * fh + 3, fz + nz * 0.03);
+          for (let y = 1.4; y < 2.9; y += 0.42)
+            front
+              .color(0x9a8264)
+              .box(x - 0.8, y0 + f * fh + y, fz + nz * 0.03, x + 0.8, y0 + f * fh + y + 0.3, fz + nz * 0.09);
         }
       this.add(front.build(), this.lambert());
       this.signBoard("FOR LEASE", xm, fz + nz * 0.3, b.face === "n" ? Math.PI : 0, 1.6, 0.5, 1.5, "#d8d2c2", "#7a2a22");
       return;
     }
-    // the shopfront: a frame, a big lit window either side of the door, an awning
-    const tone = b.sign === "BAR" ? "#c86a3c" : b.kind === "diner" ? "#f0d9a0" : "#e6b878";
+    if (civic) return this.civicFront(b, y0, fz, nz, xm, w, H, trim, r);
+    // the shopfront: a panelled base, panes over it, a transom, pilasters, the door
+    const tone = b.sign === "BAR" ? "#c86a3c" : diner ? "#f0d9a0" : "#e6b878";
     const wt = this.keep(tex(shopWindowCanvas(this.T, b.x0, tone), false));
     const win = this.glows(
       this.keep(
@@ -2958,43 +3096,132 @@ export class Grounds3 {
       0.95,
       "windows",
     );
+    const wy0 = diner ? 1.25 : 0.7;
+    const wy1 = diner ? 2.7 : 3.0;
     const wg = new G().color(0xffffff);
     const ww = w - 2;
     wg.quad(
-      [xm - (nz * ww) / 2, y0 + 0.6, fz + nz * 0.05],
-      [xm + (nz * ww) / 2, y0 + 0.6, fz + nz * 0.05],
-      [xm + (nz * ww) / 2, y0 + 3.0, fz + nz * 0.05],
-      [xm - (nz * ww) / 2, y0 + 3.0, fz + nz * 0.05],
+      [xm - (nz * ww) / 2, y0 + wy0, fz + nz * 0.05],
+      [xm + (nz * ww) / 2, y0 + wy0, fz + nz * 0.05],
+      [xm + (nz * ww) / 2, y0 + wy1, fz + nz * 0.05],
+      [xm - (nz * ww) / 2, y0 + wy1, fz + nz * 0.05],
       [0, 0, nz],
     );
     this.add(wg.build(), win, "none");
-    front.color(0x23292e);
-    front.box(x0 + 0.4, y0, fz + nz * 0.02, x0 + 1, y0 + 3.4, fz + nz * 0.2);
-    front.box(x1 - 1, y0, fz + nz * 0.02, x1 - 0.4, y0 + 3.4, fz + nz * 0.2);
-    front.box(x0 + 0.4, y0 + 3.0, fz + nz * 0.02, x1 - 0.4, y0 + 3.4, fz + nz * 0.2);
-    front.box(xm - 0.8, y0, fz + nz * 0.04, xm + 0.8, y0 + 2.6, fz + nz * 0.12); // the door
-    // the awning, snow on it
-    const aw = b.sign === "BAR" ? 0x5a1e1e : [0x2f4a3b, 0x6b2430, 0x2c3e55, 0x6a5a40][Math.floor(r() * 4)];
-    front.color(aw);
-    front.quad(
-      [x0 + 0.6, y0 + 3.5, fz],
-      [x1 - 0.6, y0 + 3.5, fz],
-      [x1 - 0.6, y0 + 2.9, fz + nz * 1.6],
-      [x0 + 0.6, y0 + 2.9, fz + nz * 1.6],
-      [0, 1, nz],
-    );
-    slopeSnow(
-      front,
-      [x0 + 0.7, y0 + 3.5, fz + nz * 0.02],
-      [x1 - 0.7, y0 + 3.5, fz + nz * 0.02],
-      [x0 + 0.7, y0 + 2.92, fz + nz * 1.55],
-      [x1 - 0.7, y0 + 2.92, fz + nz * 1.55],
-      0.13,
-      r,
-      0.45,
-    );
+    const dark = b.sign === "BAR" ? 0x2a1614 : 0x23292e;
+    const F = (xa: number, ya: number, xb: number, yb: number, d0: number, d1: number, col = dark) =>
+      front
+        .color(col)
+        .box(xa, y0 + ya, Math.min(fz + nz * d0, fz + nz * d1), xb, y0 + yb, Math.max(fz + nz * d0, fz + nz * d1));
+    if (diner) {
+      // chrome below and above the strip of windows, a red band, rounded-off corners as bars
+      F(x0 - 0.02, 0, x1 + 0.02, wy0 - 0.25, 0, 0.12, 0xb8bec4);
+      F(x0 - 0.02, wy0 - 0.25, x1 + 0.02, wy0, 0, 0.14, 0xa8322a);
+      F(x0 - 0.02, wy1, x1 + 0.02, wy1 + 0.18, 0, 0.14, 0xa8322a);
+      for (let x = x0 + 1; x < x1 - 0.5; x += 1.6) F(x - 0.04, wy0, x + 0.04, wy1, 0, 0.1, 0xd8dde2);
+      F(xm - 0.7, 0, xm + 0.7, 2.45, 0.04, 0.16, 0xc9ced3); // the door
+      F(xm - 0.3, 1.5, xm + 0.3, 2.1, 0.16, 0.18, 0xf0d9a0); // its round window, squared
+    } else {
+      F(x0 + 0.4, 0, x0 + 1, 3.4, 0.02, 0.24); // pilasters
+      F(x1 - 1, 0, x1 - 0.4, 3.4, 0.02, 0.24);
+      F(x0 + 0.4, 3.0, x1 - 0.4, 3.4, 0.02, 0.22); // the fascia under the awning
+      F(x0 + 1, 0, x1 - 1, wy0, 0.02, 0.14); // the panelled base
+      for (let x = x0 + 1.4; x < x1 - 1.2; x += 1.5) F(x, 0.15, x + 1.1, wy0 - 0.15, 0.14, 0.17, 0x353c42);
+      F(x0 + 1, 2.55, x1 - 1, 2.62, 0.05, 0.12); // the transom bar
+      for (let x = x0 + 1 + 1.7; x < x1 - 1.4; x += 1.7)
+        if (Math.abs(x - xm) > 1.1) F(x - 0.04, wy0, x + 0.04, wy1, 0.05, 0.11);
+      F(xm - 0.8, 0, xm + 0.8, 2.6, 0.04, 0.12); // the door: its frame…
+      F(xm - 0.6, 1.0, xm + 0.6, 2.4, 0.12, 0.13, 0x46525c); // …its glass
+      F(xm + 0.45, 1.1, xm + 0.52, 1.3, 0.13, 0.18, 0xc9a85a); // …its handle
+    }
+    // the awning (not the diner's, nor the hotel's: a marquee), striped on some
+    if (!diner && b.kind !== "hotel") {
+      const aw = b.sign === "BAR" ? 0x5a1e1e : [0x2f4a3b, 0x6b2430, 0x2c3e55, 0x6a5a40][Math.floor(r() * 4)];
+      const striped = b.sign !== "BAR" && r() < 0.5;
+      const n = Math.round((w - 1.2) / 0.6);
+      for (let i = 0; i < n; i++) {
+        const xa = x0 + 0.6 + ((w - 1.2) * i) / n;
+        const xb = x0 + 0.6 + ((w - 1.2) * (i + 1)) / n;
+        front.color(striped && i % 2 ? 0xe9e2d0 : aw);
+        face(
+          front,
+          [xa, y0 + 3.5, fz],
+          [xb, y0 + 3.5, fz],
+          [xb, y0 + 2.9, fz + nz * 1.6],
+          [xa, y0 + 2.9, fz + nz * 1.6],
+          [0, 1, nz],
+        );
+        // the valance hanging off its edge
+        face(
+          front,
+          [xa, y0 + 2.9, fz + nz * 1.6],
+          [xb, y0 + 2.9, fz + nz * 1.6],
+          [xb, y0 + 2.62, fz + nz * 1.6],
+          [xa, y0 + 2.62, fz + nz * 1.6],
+          [0, 0, nz],
+        );
+      }
+      // its ends
+      front.color(aw);
+      for (const x of [x0 + 0.6, x1 - 0.6])
+        face(
+          front,
+          [x, y0 + 3.5, fz],
+          [x, y0 + 2.9, fz + nz * 1.6],
+          [x, y0 + 2.62, fz + nz * 1.6],
+          [x, y0 + 2.9, fz],
+          [x < xm ? -1 : 1, 0, 0],
+        );
+      slopeSnow(
+        front,
+        [x0 + 0.7, y0 + 3.5, fz + nz * 0.02],
+        [x1 - 0.7, y0 + 3.5, fz + nz * 0.02],
+        [x0 + 0.7, y0 + 2.92, fz + nz * 1.55],
+        [x1 - 0.7, y0 + 2.92, fz + nz * 1.55],
+        0.13,
+        r,
+        0.45,
+      );
+    }
+    if (b.kind === "hotel") {
+      // the marquee over its door, lit underneath
+      front
+        .color(0x23292e)
+        .box(xm - 2.4, y0 + 3.1, Math.min(fz, fz + nz * 3), xm + 2.4, y0 + 3.45, Math.max(fz, fz + nz * 3));
+      flatSnow(
+        front,
+        xm - 2.35,
+        Math.min(fz, fz + nz * 2.95),
+        xm + 2.35,
+        Math.max(fz, fz + nz * 2.95),
+        y0 + 3.45,
+        0.18,
+        r,
+      );
+      for (const sx of [-2.2, 2.2])
+        front
+          .color(0xc9a85a)
+          .box(xm + sx - 0.06, y0, fz + nz * 2.85 - 0.06, xm + sx + 0.06, y0 + 3.1, fz + nz * 2.85 + 0.06);
+      const ug = new G().color(0xffffff);
+      ug.quad(
+        [xm - 2.3, y0 + 3.08, fz + nz * 0.1],
+        [xm + 2.3, y0 + 3.08, fz + nz * 0.1],
+        [xm + 2.3, y0 + 3.08, fz + nz * 2.9],
+        [xm - 2.3, y0 + 3.08, fz + nz * 2.9],
+        [0, -1, 0],
+      );
+      this.add(
+        ug.build(),
+        this.glows(
+          this.keep(new MeshLambertMaterial({ color: 0x5a5040, emissive: 0xffd9a0, emissiveIntensity: 0 })),
+          1.1,
+          "windows",
+        ),
+        "none",
+      );
+    }
     this.add(front.build(), this.lambert());
-    // the sign over the awning (lit), upstairs windows (some lit)
+    // the sign: over the awning (on the false front, for the low ones); the diner's up on its roof
     if (b.sign) {
       const st = this.keep(
         tex(
@@ -3003,184 +3230,450 @@ export class Grounds3 {
             b.sign,
             512,
             96,
-            b.sign === "BAR" ? "#2a0e0c" : "#1d2226",
-            b.sign === "BAR" ? "#ffb48a" : "#efe3c4",
+            b.sign === "BAR" ? "#2a0e0c" : diner ? "#a8322a" : "#1d2226",
+            b.sign === "BAR" ? "#ffb48a" : diner ? "#fff1d8" : "#efe3c4",
           ),
           false,
         ),
       );
       const sm = this.glows(
         this.keep(new MeshLambertMaterial({ map: st, emissive: 0xffffff, emissiveMap: st, emissiveIntensity: 0 })),
-        b.sign === "BAR" ? 1.4 : 0.7,
+        b.sign === "BAR" || diner ? 1.4 : 0.7,
         "sign",
       );
-      const sw = Math.min(w - 1.5, 8);
-      const plane = new Mesh(this.keep(new BoxGeometry(sw, sw * 0.1875, 0.1)), sm);
-      plane.position.set(xm, y0 + 4.3, fz + nz * 0.08);
+      const sw = diner ? Math.min(w - 2, 9) : Math.min(w - 1.5, 6.2);
+      const sh = sw * 0.1875;
+      const plane = new Mesh(this.keep(new BoxGeometry(sw, sh, 0.12)), sm);
+      const sy = diner ? y0 + H + 1.2 + sh / 2 : y0 + 3.72 + sh / 2;
+      plane.position.set(xm, sy, fz + nz * (diner ? 1.2 : 0.1));
       plane.rotation.y = nz > 0 ? 0 : Math.PI;
       this.root.add(plane);
-    }
-    for (let f = 1; f < b.floors; f++)
-      for (let k = 0; k < Math.max(2, Math.floor(w / 4)); k++) {
-        const n = Math.max(2, Math.floor(w / 4));
-        const x = x0 + (w / n) * (k + 0.5);
-        const lit = r() < 0.45;
-        this.litWindow(x, y0 + f * fh + 0.9, fz, 1.3, 1.8, 0, nz, true, lit ? 0.8 : 0);
+      if (diner) {
+        const legs = new G().color(0x3a3f45);
+        for (const sx of [-sw / 2 + 0.4, sw / 2 - 0.4])
+          legs.box(xm + sx - 0.07, y0 + H, fz + nz * 1.2 - 0.07, xm + sx + 0.07, sy - sh / 2, fz + nz * 1.2 + 0.07);
+        legs
+          .color(SNOW)
+          .box(xm - sw / 2, sy + sh / 2, fz + nz * 1.2 - 0.07, xm + sw / 2, sy + sh / 2 + 0.06, fz + nz * 1.2 + 0.07);
+        this.add(legs.build(), this.lambert());
       }
-    // the door's light on the pavement
+    }
     this.lights.push({ p: new Vector3(xm, y0 + 3.2, fz + nz * 1.2), kind: "porch", color: 0xffc98a, r: 5 });
     this.pool(xm, fz + nz * 2.4, 4.5, 0xffc98a);
     if (b.kind === "hotel")
       this.signBoard("HOTEL", x1 + 0.2, fz + nz * 1.2, Math.PI / 2, 1.2, 4, 3.5, "#1d2226", "#f2d6a2", true);
   }
+  /** The town hall and the post office: steps up to a double door, framed windows either side;
+   *  the hall's columns under a pediment with its clock, a flag over each. */
+  private civicFront(
+    b: Building,
+    y0: number,
+    fz: number,
+    nz: number,
+    xm: number,
+    w: number,
+    H: number,
+    trim: number,
+    r: () => number,
+  ) {
+    const g = new G();
+    const hall = b.key === "hall";
+    const Z = (d: number) => fz + nz * d;
+    const zz = (a: number, c: number) => [Math.min(Z(a), Z(c)), Math.max(Z(a), Z(c))] as const;
+    // a stone base course round the front
+    g.color(0xb7b0a2).box(b.x0 - 0.05, y0, zz(0, 0.12)[0], b.x1 + 0.05, y0 + 0.7, zz(0, 0.12)[1]);
+    // the steps
+    for (let k = 0; k < 3; k++) {
+      const [a, c] = zz(0, 1.6 - k * 0.45);
+      g.color(0xc9c3b6).box(xm - 2.6 + k * 0.2, y0, a, xm + 2.6 - k * 0.2, y0 + 0.2 * (k + 1), c);
+    }
+    // the double door, its frame and fanlight
+    {
+      const [a, c] = zz(0.02, 0.14);
+      g.color(trim).box(xm - 1.2, y0 + 0.6, a, xm + 1.2, y0 + 3.6, c);
+      g.color(0x3b2f27).box(
+        xm - 0.95,
+        y0 + 0.6,
+        Math.min(Z(0.12), Z(0.16)),
+        xm + 0.95,
+        y0 + 3.0,
+        Math.max(Z(0.12), Z(0.16)),
+      );
+      g.color(0x2a2e33).box(
+        xm - 0.02,
+        y0 + 0.6,
+        Math.min(Z(0.15), Z(0.17)),
+        xm + 0.02,
+        y0 + 3.0,
+        Math.max(Z(0.15), Z(0.17)),
+      );
+    }
+    this.litWindow(xm, y0 + 3.05, fz, 1.9, 0.45, 0, nz, true, 0.8, false);
+    // framed windows either side, on the ground floor
+    for (const sx of [-1, 1])
+      for (const k of hall ? [4.2, 8.4] : [3.6]) {
+        const x = xm + sx * k;
+        if (Math.abs(x - xm) > w / 2 - 1) continue;
+        this.litWindow(x, y0 + 1.2, fz, 1.3, 1.9, 0, nz, true, r() < 0.5 ? 0.7 : 0);
+        this.frame(g, x, y0 + 1.2, fz, 1.3, 1.9, 0, nz, trim);
+      }
+    if (hall) {
+      // four columns under a pediment, the clock in its gable
+      const cz = Z(2.2);
+      for (const sx of [-2.4, -0.8, 0.8, 2.4]) {
+        g.color(0xe6e1d6).box(xm + sx - 0.3, y0 + 0.6, cz - 0.3, xm + sx + 0.3, y0 + 0.8, cz + 0.3);
+        this.add(
+          place(tinted(new CylinderGeometry(0.2, 0.24, 3.4, 10), 0xece6da), xm + sx, y0 + 0.8 + 1.7, cz),
+          this.lambert(),
+        );
+        g.color(0xe6e1d6).box(xm + sx - 0.3, y0 + 4.2, cz - 0.3, xm + sx + 0.3, y0 + 4.35, cz + 0.3);
+      }
+      const [a, c] = zz(0, 2.6);
+      g.color(0xe6e1d6).box(xm - 3.2, y0 + 4.35, a, xm + 3.2, y0 + 4.8, c);
+      const pz = Z(2.6);
+      g.color(0xe6e1d6);
+      face(g, [xm - 3.3, y0 + 4.8, pz], [xm + 3.3, y0 + 4.8, pz], [xm, y0 + 6.3, pz], [xm, y0 + 6.3, pz], [0, 0, nz]);
+      for (const s of [-1, 1])
+        face(
+          g,
+          [xm + s * 3.3, y0 + 4.8, pz],
+          [xm + s * 3.3, y0 + 4.8, fz],
+          [xm, y0 + 6.3, fz],
+          [xm, y0 + 6.3, pz],
+          [s * 0.6, 1, 0],
+        );
+      slopeSnow(
+        g,
+        [xm, y0 + 6.3, fz],
+        [xm, y0 + 6.3, pz],
+        [xm - 3.3, y0 + 4.8, fz],
+        [xm - 3.3, y0 + 4.8, pz],
+        0.14,
+        r,
+        0.4,
+      );
+      slopeSnow(
+        g,
+        [xm, y0 + 6.3, pz],
+        [xm, y0 + 6.3, fz],
+        [xm + 3.3, y0 + 4.8, pz],
+        [xm + 3.3, y0 + 4.8, fz],
+        0.14,
+        r,
+        0.4,
+      );
+      // the clock
+      this.add(
+        place(
+          tinted(new CylinderGeometry(0.55, 0.55, 0.08, 16).rotateX(Math.PI / 2), 0xf2ead6),
+          xm,
+          y0 + 5.35,
+          Z(2.66),
+        ),
+        this.lambert(),
+      );
+      g.color(0x1f2124).box(
+        xm - 0.03,
+        y0 + 5.33,
+        Math.min(Z(2.7), Z(2.72)),
+        xm + 0.03,
+        y0 + 5.75,
+        Math.max(Z(2.7), Z(2.72)),
+      );
+      g.color(0x1f2124).box(
+        xm - 0.02,
+        y0 + 5.33,
+        Math.min(Z(2.7), Z(2.72)),
+        xm + 0.3,
+        y0 + 5.37,
+        Math.max(Z(2.7), Z(2.72)),
+      );
+    } else {
+      // a little flat canopy over the door
+      const [a, c] = zz(0, 1.4);
+      g.color(trim).box(xm - 1.6, y0 + 3.75, a, xm + 1.6, y0 + 3.95, c);
+      flatSnow(g, xm - 1.55, a, xm + 1.55, c, y0 + 3.95, 0.12, r);
+    }
+    // the flag on its pole, over the roof's corner
+    const fx = b.x0 + 1;
+    g.color(0xd8d6cc).box(fx - 0.05, y0 + H, fz - nz * 1 - 0.05, fx + 0.05, y0 + H + 4.2, fz - nz * 1 + 0.05);
+    g.color(0x2c3e55).box(fx + 0.05, y0 + H + 3.2, fz - nz * 1 - 0.02, fx + 1.5, y0 + H + 4.1, fz - nz * 1 + 0.02);
+    g.color(0xa8322a).box(fx + 0.05, y0 + H + 3.2, fz - nz * 1 - 0.025, fx + 1.5, y0 + H + 3.4, fz - nz * 1 + 0.025);
+    this.add(g.build(), this.lambert());
+    // its name: on the hall's entablature, over the post office's canopy
+    if (b.sign)
+      this.signBoard(
+        b.sign,
+        xm,
+        Z(hall ? 2.66 : 0.12),
+        nz > 0 ? 0 : Math.PI,
+        hall ? 4.4 : 3.6,
+        hall ? 0.4 : 0.55,
+        hall ? 4.38 : 4.05,
+        "#e8e2d2",
+        "#2a2e33",
+        false,
+        !hall,
+      );
+    this.lights.push({ p: new Vector3(xm, y0 + 3.4, Z(1.4)), kind: "porch", color: 0xffc98a, r: 5 });
+    this.pool(xm, Z(2.6), 4.5, 0xffc98a);
+  }
+  /** A townhouse (docs/plan/33-the-look.md, phase 4): one of three — two storeys under a side
+   *  gable, two under a gable to the street with a porch across the front, a storey and a half with
+   *  a dormer — in one of seven colours, shutters of another; framed windows on every face, a
+   *  chimney, the mailbox at the pavement. */
   private house(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, "#d8d2c4")));
-    const H = 6.4;
-    const g = new G();
-    const U = (a: number, y: number): [number, number] => [a / 3, y / 3];
+    const q = groundsRng(b.z0 * 17 + b.x0);
+    const kind = Math.floor(q() * 3);
+    const colours = ["#d8d2c4", "#b9c4c9", "#c9b48f", "#8f9e8b", "#c7a59a", "#e3dccb", "#9aa7b4"];
+    const hex = colours[Math.floor(q() * colours.length)];
+    const shutter = [0x2f4a3b, 0x6b2430, 0x2c3e55, 0x3a3f45, 0x5a4636][Math.floor(q() * 5)];
+    const trim = 0xece6da;
+    const siding = this.wallPic("siding", hex);
+    const H = kind === 2 ? 4.2 : 6.4;
     const { x0, z0, x1, z1 } = b;
-    g.quad(
-      [x0, y0, z0],
-      [x1, y0, z0],
-      [x1, y0 + H, z0],
-      [x0, y0 + H, z0],
-      [0, 0, -1],
-      [U(0, 0), U(x1 - x0, 0), U(x1 - x0, H), U(0, H)],
-    );
-    g.quad(
-      [x0, y0, z1],
-      [x1, y0, z1],
-      [x1, y0 + H, z1],
-      [x0, y0 + H, z1],
-      [0, 0, 1],
-      [U(0, 0), U(x1 - x0, 0), U(x1 - x0, H), U(0, H)],
-    );
-    g.quad(
-      [x0, y0, z0],
-      [x0, y0, z1],
-      [x0, y0 + H, z1],
-      [x0, y0 + H, z0],
-      [-1, 0, 0],
-      [U(0, 0), U(z1 - z0, 0), U(z1 - z0, H), U(0, H)],
-    );
-    g.quad(
-      [x1, y0, z0],
-      [x1, y0, z1],
-      [x1, y0 + H, z1],
-      [x1, y0 + H, z0],
-      [1, 0, 0],
-      [U(0, 0), U(z1 - z0, 0), U(z1 - z0, H), U(0, H)],
-    );
+    const g = new G();
+    this.wallsUV(g, b, y0, H, 3);
     this.add(g.build(), this.lambert(0xffffff, siding, false));
     const r = new G();
-    this.pitched(r, x0, z0, x1, z1, y0 + H, 2.6, false, 0x3a3f45, 0.45, 0xd8d2c4);
-    // the porch: steps, a small roof, the door
+    const wallHex = new Color(hex).getHex();
+    // the roof: along the street (a side gable) or end on to it (a front gable)
+    const front = kind === 1;
+    this.pitched(r, x0, z0, x1, z1, y0 + H, kind === 2 ? 4.4 : front ? 3.6 : 2.6, front, 0x3a3f45, 0.45, wallHex);
     const nx = b.face === "e" ? 1 : -1;
     const fx = b.face === "e" ? x1 : x0;
+    const bx = b.face === "e" ? x0 : x1;
     const zm = (z0 + z1) / 2;
-    r.color(0x9a948a).box(Math.min(fx, fx + nx * 1.6), y0, zm - 1.4, Math.max(fx, fx + nx * 1.6), y0 + 0.5, zm + 1.4);
-    slopeSnow(
-      r,
-      [fx + nx * 0.05, y0 + 2.9, zm - 1.55],
-      [fx + nx * 0.05, y0 + 2.9, zm + 1.55],
-      [fx + nx * 1.75, y0 + 2.9, zm - 1.55],
-      [fx + nx * 1.75, y0 + 2.9, zm + 1.55],
-      0.16,
-      groundsRng(Math.round(x0 * 3 + z0)),
-      0.5,
-    );
-    r.color(0x3a3f45).box(
-      Math.min(fx, fx + nx * 1.8),
-      y0 + 2.75,
-      zm - 1.6,
-      Math.max(fx, fx + nx * 1.8),
-      y0 + 2.9,
-      zm + 1.6,
-    );
-    for (const s of [-1.4, 1.4])
-      r.color(0xe8e4da).box(
-        fx + nx * 1.6 - 0.08,
-        y0 + 0.5,
-        zm + s - 0.08,
-        fx + nx * 1.6 + 0.08,
-        y0 + 2.75,
-        zm + s + 0.08,
+    const X = (d: number) => fx + nx * d;
+    const xx = (a: number, c: number) => [Math.min(X(a), X(c)), Math.max(X(a), X(c))] as const;
+    // the porch: steps, posts, a small roof (across the front for a front gable)
+    const pz0 = front ? z0 + 0.4 : zm - 1.6;
+    const pz1 = front ? z1 - 0.4 : zm + 1.6;
+    {
+      const [a, c] = xx(0, 1.6);
+      r.color(0x9a948a).box(a, y0, pz0 + 0.2, c, y0 + 0.5, pz1 - 0.2);
+      const [sa, sc] = xx(1.6, 2.1);
+      r.color(0x8c867c).box(sa, y0, zm - 0.7, sc, y0 + 0.25, zm + 0.7);
+      const [ra, rc] = xx(0, 1.8);
+      r.color(0x3a3f45).box(ra, y0 + 2.75, pz0, rc, y0 + 2.9, pz1);
+      slopeSnow(
+        r,
+        [X(0.05), y0 + 2.9, pz0 + 0.05],
+        [X(0.05), y0 + 2.9, pz1 - 0.05],
+        [X(1.75), y0 + 2.9, pz0 + 0.05],
+        [X(1.75), y0 + 2.9, pz1 - 0.05],
+        0.16,
+        q,
+        0.5,
       );
-    r.color(0x2f3a44).box(
-      Math.min(fx, fx + nx * 0.06),
-      y0 + 0.5,
-      zm - 0.5,
-      Math.max(fx, fx + nx * 0.06),
-      y0 + 2.6,
-      zm + 0.5,
-    );
-    // a mailbox by the street
-    r.color(0x3a3f45).box(fx + nx * 4.2 - 0.05, y0, z1 - 1.05, fx + nx * 4.2 + 0.05, y0 + 1.1, z1 - 0.95);
-    r.color(0x2a2e33).box(fx + nx * 4.2 - 0.25, y0 + 1.1, z1 - 1.2, fx + nx * 4.2 + 0.25, y0 + 1.4, z1 - 0.8);
+      const posts = front ? [pz0 + 0.2, zm - 1.2, zm + 1.2, pz1 - 0.2] : [pz0 + 0.2, pz1 - 0.2];
+      for (const z of posts) r.color(trim).box(X(1.6) - 0.08, y0 + 0.5, z - 0.08, X(1.6) + 0.08, y0 + 2.75, z + 0.08);
+      // a railing between the posts (not across the steps)
+      if (front)
+        for (const [za, zb] of [
+          [pz0 + 0.2, zm - 1.2],
+          [zm + 1.2, pz1 - 0.2],
+        ]) {
+          r.color(trim).box(X(1.6) - 0.05, y0 + 1.35, za, X(1.6) + 0.05, y0 + 1.45, zb);
+          for (let z = za + 0.25; z < zb; z += 0.3)
+            r.color(trim).box(X(1.6) - 0.03, y0 + 0.5, z - 0.03, X(1.6) + 0.03, y0 + 1.35, z + 0.03);
+        }
+    }
+    // the door, framed, a light over it
+    {
+      const [a, c] = xx(0, 0.1);
+      r.color(trim).box(a, y0 + 0.5, zm - 0.65, c, y0 + 2.75, zm + 0.65);
+      const [da, dc] = xx(0.08, 0.13);
+      r.color(new Color(shutter).getHex()).box(da, y0 + 0.5, zm - 0.5, dc, y0 + 2.6, zm + 0.5);
+    }
+    // windows: framed, shuttered at the front, a sill on the rest
+    const win = (
+      x: number,
+      y: number,
+      z: number,
+      ww: number,
+      hh: number,
+      wnx: number,
+      wnz: number,
+      lit: number,
+      shut: boolean,
+    ) => {
+      this.litWindow(x, y, z, ww, hh, wnx, wnz, true, lit);
+      this.frame(r, x, y, z, ww, hh, wnx, wnz, trim);
+      if (!shut) return;
+      const tx = -wnz;
+      const tz = wnx;
+      for (const s of [-1, 1]) {
+        const cx = x + tx * s * (ww / 2 + 0.38);
+        const cz = z + tz * s * (ww / 2 + 0.38);
+        const hw = 0.3;
+        r.color(shutter).box(
+          Math.min(cx - tx * hw, cx + tx * hw) + Math.min(0, wnx * 0.04),
+          y,
+          Math.min(cz - tz * hw, cz + tz * hw) + Math.min(0, wnz * 0.04),
+          Math.max(cx - tx * hw, cx + tx * hw) + Math.max(0, wnx * 0.1),
+          y + hh,
+          Math.max(cz - tz * hw, cz + tz * hw) + Math.max(0, wnz * 0.1),
+        );
+      }
+    };
+    for (const dz of [-2.7, 2.7]) win(fx, y0 + 0.9, zm + dz, 1.1, 1.5, nx, 0, q() < 0.4 ? 0.7 : 0, true);
+    if (kind === 2) {
+      // the dormer, out of the roof to the street
+      const dy = y0 + H + 0.6;
+      const [a, c] = xx(-2.6, 0.3);
+      r.color(wallHex).box(a, y0 + H, zm - 1.1, c, dy + 1.6, zm + 1.1);
+      this.pitched(
+        r,
+        Math.min(X(-2.6), X(0.3)),
+        zm - 1.1,
+        Math.max(X(-2.6), X(0.3)),
+        zm + 1.1,
+        dy + 1.6,
+        0.9,
+        true,
+        0x3a3f45,
+        0.2,
+        wallHex,
+      );
+      win(X(0.3), dy + 0.15, zm, 1, 1.2, nx, 0, q() < 0.3 ? 0.6 : 0, false);
+    } else for (const dz of [-2.7, 0, 2.7]) win(fx, y0 + 3.9, zm + dz, 1.0, 1.4, nx, 0, q() < 0.3 ? 0.6 : 0, true);
+    if (front) win(fx, y0 + H + 0.8, zm, 0.8, 1.0, nx, 0, q() < 0.3 ? 0.6 : 0, false); // the attic's, in the gable
+    // the back and the sides
+    for (const dz of [-2.4, 2.4]) win(bx, y0 + 0.9, zm + dz, 1, 1.3, -nx, 0, q() < 0.25 ? 0.6 : 0, false);
+    if (kind !== 2)
+      for (const dz of [-2.4, 2.4]) win(bx, y0 + 3.9, zm + dz, 1, 1.3, -nx, 0, q() < 0.25 ? 0.6 : 0, false);
+    const xc = (x0 + x1) / 2;
+    for (const [z, nzz] of [
+      [z0, -1],
+      [z1, 1],
+    ] as const) {
+      win(xc, y0 + 0.9, z, 1, 1.3, 0, nzz, q() < 0.2 ? 0.6 : 0, false);
+      if (kind !== 2) win(xc, y0 + 3.9, z, 1, 1.3, 0, nzz, q() < 0.2 ? 0.6 : 0, false);
+    }
+    // the chimney, at one end of the ridge
+    {
+      const cz = q() < 0.5 ? z0 + 1.6 : z1 - 1.6;
+      const cxx = front ? (q() < 0.5 ? x0 + 2 : x1 - 2) : xc;
+      const top = y0 + H + (kind === 2 ? 4.4 : front ? 3.6 : 2.6) + 0.8;
+      r.color(0x7b3b2c).box(cxx - 0.4, y0 + H, cz - 0.35, cxx + 0.4, top, cz + 0.35);
+      r.color(0x5b4a44).box(cxx - 0.48, top, cz - 0.43, cxx + 0.48, top + 0.15, cz + 0.43);
+      flatSnow(r, cxx - 0.46, cz - 0.41, cxx + 0.46, cz + 0.41, top + 0.15, 0.12, q);
+    }
+    // the mailbox at the pavement
+    const mz = z1 - 0.5;
+    r.color(0x3a3f45).box(X(1.9) - 0.05, y0, mz - 0.05, X(1.9) + 0.05, y0 + 1.1, mz + 0.05);
+    r.color(0x2a2e33).box(X(1.9) - 0.22, y0 + 1.1, mz - 0.25, X(1.9) + 0.22, y0 + 1.38, mz + 0.25);
+    r.color(0xa8322a).box(X(1.9) + 0.22, y0 + 1.2, mz + 0.1, X(1.9) + 0.25, y0 + 1.5, mz + 0.16); // its flag
+    r.color(SNOW).box(X(1.9) - 0.22, y0 + 1.38, mz - 0.25, X(1.9) + 0.22, y0 + 1.45, mz + 0.25);
     this.add(r.build(), this.lambert());
-    const q = groundsRng(b.z0 * 17 + b.x0);
-    for (const dz of [-2.6, 2.6]) this.litWindow(fx, y0 + 0.9, zm + dz, 1.2, 1.5, nx, 0, true, q() < 0.4 ? 0.7 : 0);
-    for (const dz of [-2.6, 0, 2.6]) this.litWindow(fx, y0 + 3.9, zm + dz, 1.1, 1.4, nx, 0, true, q() < 0.3 ? 0.6 : 0);
-    this.lights.push({ p: new Vector3(fx + nx * 1.2, y0 + 2.6, zm), kind: "porch", color: 0xffc98a, r: 3 });
-    this.pool(fx + nx * 2, zm, 3, 0xffc98a);
+    this.lights.push({ p: new Vector3(X(1.2), y0 + 2.6, zm), kind: "porch", color: 0xffc98a, r: 3 });
+    this.pool(X(2), zm, 3, 0xffc98a);
   }
+  /** A window with a pointed head (the church's), lit by the hour. */
+  private pointed(x: number, y: number, z: number, w: number, h: number, nx: number, nz: number, on: number) {
+    const g = this.windows(true, on);
+    const tx = -nz;
+    const tz = nx;
+    const o = 0.04;
+    const P = (u: number, v: number): V => [x + tx * u + nx * o, y + v, z + tz * u + nz * o];
+    face(g, P(-w / 2, 0), P(w / 2, 0), P(w / 2, h), P(-w / 2, h), [nx, 0, nz]);
+    // the arch: a fan of faces up to its point
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI;
+      const a1 = ((i + 1) / n) * Math.PI;
+      const pt = (a: number): V => {
+        const u = Math.cos(a) * (w / 2);
+        const v = Math.sin(a) * w * 0.75;
+        return P(u, h + v * (1 - 0.25 * Math.abs(Math.cos(a))));
+      };
+      face(g, P(0, h), pt(a0), pt(a1), pt(a1), [nx, 0, nz]);
+    }
+    // its frame: two jambs and a sill, and the snow on the sill
+    const fr = new G().color(0xe6e1d6);
+    const a = w / 2 + 0.1;
+    for (const s of [-1, 1]) {
+      const c0 = P(s * a, 0);
+      fr.box(c0[0] - 0.06, y, c0[2] - 0.06, c0[0] + 0.06 + nx * 0.06, y + h, c0[2] + 0.06 + nz * 0.06);
+    }
+    const s0 = P(-a, 0);
+    const s1 = P(a, 0);
+    fr.box(
+      Math.min(s0[0], s1[0]) - 0.05,
+      y - 0.12,
+      Math.min(s0[2], s1[2]) - 0.05,
+      Math.max(s0[0], s1[0]) + 0.05 + nx * 0.12,
+      y,
+      Math.max(s0[2], s1[2]) + 0.05 + nz * 0.12,
+    );
+    fr.color(SNOW).box(
+      Math.min(s0[0], s1[0]),
+      y,
+      Math.min(s0[2], s1[2]),
+      Math.max(s0[0], s1[0]) + nx * 0.1,
+      y + 0.06,
+      Math.max(s0[2], s1[2]) + nz * 0.1,
+    );
+    this.add(fr.build(), this.lambert());
+  }
+  /** The church: white clapboard, pointed windows, a door up steps under the steeple, its belfry
+   *  open (louvres in it), a cross on the spire. */
   private church(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
     const siding = this.keep(tex(sidingCanvas(this.T, "#ecebe5")));
     const H = 6;
-    const g = new G();
-    const U = (a: number, y: number): [number, number] => [a / 3, y / 3];
     const { x0, z0, x1, z1 } = b;
-    g.quad(
-      [x0, y0, z0],
-      [x1, y0, z0],
-      [x1, y0 + H, z0],
-      [x0, y0 + H, z0],
-      [0, 0, -1],
-      [U(0, 0), U(x1 - x0, 0), U(x1 - x0, H), U(0, H)],
-    );
-    g.quad(
-      [x0, y0, z1],
-      [x1, y0, z1],
-      [x1, y0 + H, z1],
-      [x0, y0 + H, z1],
-      [0, 0, 1],
-      [U(0, 0), U(x1 - x0, 0), U(x1 - x0, H), U(0, H)],
-    );
-    g.quad(
-      [x0, y0, z0],
-      [x0, y0, z1],
-      [x0, y0 + H, z1],
-      [x0, y0 + H, z0],
-      [-1, 0, 0],
-      [U(0, 0), U(z1 - z0, 0), U(z1 - z0, H), U(0, H)],
-    );
-    g.quad(
-      [x1, y0, z0],
-      [x1, y0, z1],
-      [x1, y0 + H, z1],
-      [x1, y0 + H, z0],
-      [1, 0, 0],
-      [U(0, 0), U(z1 - z0, 0), U(z1 - z0, H), U(0, H)],
-    );
+    const g = new G();
+    this.wallsUV(g, b, y0, H, 3);
     this.add(g.build(), this.lambert(0xffffff, siding, false));
     const r = new G();
     this.pitched(r, x0, z0, x1, z1, y0 + H, 6, false, 0x2f343a, 0.5, 0xecebe5);
-    // the steeple at the front
     const xm = (x0 + x1) / 2;
-    r.color(0xecebe5).box(xm - 2, y0, z1 - 1, xm + 2, y0 + 13, z1 + 2.5);
-    r.color(0x2f343a).box(xm - 2.2, y0 + 13, z1 - 1.2, xm + 2.2, y0 + 13.4, z1 + 2.7);
+    const sz0 = z1 - 1;
+    const sz1 = z1 + 2.5;
+    // the steeple: a tower, a belfry with open louvred sides, its cornices, the spire and a cross
+    r.color(0xecebe5).box(xm - 2, y0, sz0, xm + 2, y0 + 10, sz1);
+    r.color(0xe0ddd4).box(xm - 2.15, y0 + 10, sz0 - 0.15, xm + 2.15, y0 + 10.3, sz1 + 0.15);
+    for (const [px, pz] of [
+      [-1.75, sz0 + 0.25],
+      [1.75, sz0 + 0.25],
+      [-1.75, sz1 - 0.25],
+      [1.75, sz1 - 0.25],
+    ])
+      r.color(0xecebe5).box(xm + px - 0.25, y0 + 10.3, pz - 0.25, xm + px + 0.25, y0 + 12.8, pz + 0.25);
+    r.color(0x1a1d21).box(xm - 1.5, y0 + 10.3, sz0 + 0.5, xm + 1.5, y0 + 12.8, sz1 - 0.5); // the dark inside
+    for (let y = 10.6; y < 12.6; y += 0.32) {
+      r.color(0xd8d4ca).box(xm - 1.5, y0 + y, sz1 - 0.55, xm + 1.5, y0 + y + 0.08, sz1 - 0.35);
+      r.color(0xd8d4ca).box(xm - 1.5, y0 + y, sz0 + 0.35, xm + 1.5, y0 + y + 0.08, sz0 + 0.55);
+      r.color(0xd8d4ca).box(xm - 1.75, y0 + y, sz0 + 0.5, xm - 1.55, y0 + y + 0.08, sz1 - 0.5);
+      r.color(0xd8d4ca).box(xm + 1.55, y0 + y, sz0 + 0.5, xm + 1.75, y0 + y + 0.08, sz1 - 0.5);
+    }
+    r.color(0x2f343a).box(xm - 2.2, y0 + 12.8, sz0 - 0.2, xm + 2.2, y0 + 13.4, sz1 + 0.2);
+    flatSnow(r, xm - 2.15, sz0 - 0.15, xm + 2.15, sz1 + 0.15, y0 + 13.4, 0.15, groundsRng(b.x0));
+    r.color(0x8b8f93).box(xm - 0.05, y0 + 21.6, (sz0 + sz1) / 2 - 0.05, xm + 0.05, y0 + 23.2, (sz0 + sz1) / 2 + 0.05);
+    r.color(0x8b8f93).box(xm - 0.4, y0 + 22.5, (sz0 + sz1) / 2 - 0.05, xm + 0.4, y0 + 22.6, (sz0 + sz1) / 2 + 0.05);
+    // the door up steps on the steeple's face
+    r.color(0xe0ddd4).box(xm - 1.2, y0, sz1, xm + 1.2, y0 + 3.4, sz1 + 0.12);
+    r.color(0x5a2a22).box(xm - 0.85, y0 + 0.45, sz1 + 0.12, xm + 0.85, y0 + 2.9, sz1 + 0.18);
+    r.color(0x2a1a16).box(xm - 0.02, y0 + 0.45, sz1 + 0.18, xm + 0.02, y0 + 2.9, sz1 + 0.2);
+    for (let k = 0; k < 3; k++)
+      r.color(0xc9c3b6).box(xm - 2 + k * 0.15, y0, sz1, xm + 2 - k * 0.15, y0 + 0.15 * (k + 1), sz1 + 1.4 - k * 0.4);
     this.add(r.build(), this.lambert());
-    const spire = tinted(new ConeGeometry(2.1, 9, 4).rotateY(Math.PI / 4).translate(0, 4.5, 0), 0x2f343a);
-    this.add(place(spire, xm, y0 + 13.4, z1 + 0.75), this.lambert());
+    const spire = tinted(new ConeGeometry(2.1, 8.2, 4).rotateY(Math.PI / 4).translate(0, 4.1, 0), 0x2f343a);
+    this.add(place(spire, xm, y0 + 13.4, (sz0 + sz1) / 2), this.lambert());
+    const snowCap = tinted(new ConeGeometry(2.14, 1.2, 4, 1, true).rotateY(Math.PI / 4).translate(0, 0.6, 0), 0xf2f5f8);
+    this.add(place(snowCap, xm, y0 + 13.4, (sz0 + sz1) / 2), this.lambert());
     for (const z of [z0 + 4, z0 + 9, z0 + 14, z0 + 19])
       for (const [x, nx] of [
         [x0, -1],
         [x1, 1],
       ] as const)
-        this.litWindow(x, y0 + 1.4, z, 1.4, 3.2, nx, 0, true, 0.6);
-    this.litWindow(xm, y0 + 5.5, z1 + 2.5, 1.2, 2.4, 0, 1, true, 0.8);
+        this.pointed(x, y0 + 1.3, z, 1.3, 2.6, nx, 0, 0.6);
+    this.pointed(xm, y0 + 7.4, sz1, 0.9, 1.0, 0, 1, 0.8);
+    this.lights.push({ p: new Vector3(xm, y0 + 3.2, sz1 + 1.2), kind: "porch", color: 0xffc98a, r: 4 });
+    this.pool(xm, sz1 + 2.2, 4, 0xffc98a);
   }
   private gas(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
@@ -3572,6 +4065,10 @@ export class Grounds3 {
       this.add(mergeGeometries(glass, false), this.lambert(0x9aa6ae), "cast");
     }
     for (const g of [...solids, ...glass]) g.dispose();
+    // the street furniture (shared STREET: it stands in the way)
+    const parts = streetGeometry(STREET);
+    this.add(mergeGeometries(parts, false), this.lambert());
+    for (const p of parts) p.dispose();
   }
 
   // ── far ridges and mountains: the one painted thing (beyond everything you can reach) ──

@@ -664,6 +664,54 @@ function dock(s: Sketch, p: Props) {
   s.box({ x: 1.0, y: 4.5, w: 0.9, d: 4.6, z: 0.67 * P, h: 0.32 * P, mat: mat("#7a2f22", "#f4f7fa") });
 }
 
+// the town's street furniture (shared STREET; tp/town3d.ts in 3D)
+function hydrant(s: Sketch) {
+  const RED = mat("#a8352a", "#c04a3c");
+  s.cyl({ x: 0.5, y: 0.5, z: 0, r: 0.17, h: 0.08 * P, mat: RED });
+  s.cyl({ x: 0.5, y: 0.5, z: 0.08 * P, r: 0.12, h: 0.55 * P, mat: RED });
+  s.box({ x: 0.32, y: 0.45, w: 0.36, d: 0.1, z: 0.37 * P, h: 0.1 * P, mat: RED });
+  s.cyl({ x: 0.5, y: 0.5, z: 0.63 * P, r: 0.14, r2: 0.05, h: 0.14 * P, mat: SNOW });
+  s.shadowDot(0.5, 0.5, 0.2, 0.3);
+}
+function streetBin(s: Sketch) {
+  s.cyl({ x: 0.5, y: 0.5, z: 0, r: 0.27, h: 0.85 * P, mat: mat("#2f4a3b", "#3d5c4a") });
+  s.cyl({ x: 0.5, y: 0.5, z: 0.85 * P, r: 0.29, h: 0.1 * P, mat: SNOW });
+  s.shadowDot(0.5, 0.5, 0.3, 0.3);
+}
+function newsbox(s: Sketch) {
+  s.box({ x: 0.27, y: 0.3, w: 0.46, d: 0.4, z: 0.5 * P, h: 0.62 * P, mat: mat("#2c4f7a", "#3a6294") });
+  for (const [x, y] of [
+    [0.3, 0.33],
+    [0.64, 0.33],
+    [0.3, 0.62],
+    [0.64, 0.62],
+  ])
+    s.box({ x, y, w: 0.06, d: 0.06, z: 0, h: 0.5 * P, mat: DARK });
+  s.box({ x: 0.26, y: 0.29, w: 0.48, d: 0.42, z: 1.12 * P, h: 0.06 * P, mat: SNOW, line: 0.4 });
+}
+function pole(s: Sketch) {
+  const W = mat("#5a4434", "#6e5442");
+  s.cyl({ x: 0.5, y: 0.5, z: 0, r: 0.16, r2: 0.12, h: 8.6 * P, mat: W });
+  s.box({ x: 0.43, y: -0.7, w: 0.14, d: 2.4, z: 7.6 * P, h: 0.14 * P, mat: W });
+  s.box({ x: 0.42, y: -0.7, w: 0.16, d: 2.4, z: 7.74 * P, h: 0.05 * P, mat: SNOW, line: 0.3 });
+  s.shadowDot(0.5, 0.5, 0.25, 0.3);
+}
+function stopSign(s: Sketch) {
+  s.cyl({ x: 0.5, y: 0.5, z: 0, r: 0.04, h: 2.3 * P, mat: mat("#8b8f93") });
+  s.box({ x: 0.15, y: 0.55, w: 0.7, d: 0.05, z: 1.9 * P, h: 0.7 * P, mat: mat("#c8322a", "#e8e2d2") });
+}
+function streetSign(s: Sketch) {
+  const GREEN = mat("#2f5a3c", "#3d7050");
+  s.cyl({ x: 0.5, y: 0.5, z: 0, r: 0.04, h: 2.9 * P, mat: mat("#8b8f93") });
+  s.box({ x: 0.5, y: 0.47, w: 1.3, d: 0.05, z: 2.55 * P, h: 0.24 * P, mat: GREEN });
+  s.box({ x: 0.47, y: 0.5, w: 0.05, d: 1.3, z: 2.82 * P, h: 0.24 * P, mat: GREEN });
+}
+function postbox(s: Sketch) {
+  s.box({ x: 0.24, y: 0.25, w: 0.52, d: 0.5, z: 0.3 * P, h: 0.9 * P, mat: mat("#2b4d82", "#3a62a0") });
+  s.box({ x: 0.24, y: 0.25, w: 0.52, d: 0.5, z: 1.2 * P, h: 0.08 * P, mat: SNOW, line: 0.4 });
+  s.shadowDot(0.5, 0.5, 0.3, 0.3);
+}
+
 // ── the kinds and their drawings, the things ────────────────────────────────
 /** Every kind the Grounds' things use (one per building: its own footprint). */
 export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: Record<string, ItemGen> } {
@@ -685,6 +733,13 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_tractor: { label: "Tractor", w: 4, h: 3, solid: true },
     gr_scarecrow: { label: "Scarecrow", w: 1, h: 1, solid: true },
     gr_bale: { label: "Hay", w: 1, h: 1, solid: false },
+    gr_hydrant: { label: "Hydrant", w: 1, h: 1, solid: true },
+    gr_streetbin: { label: "Bin", w: 1, h: 1, solid: true },
+    gr_newsbox: { label: "Newspapers", w: 1, h: 1, solid: true },
+    gr_pole: { label: "Pole", w: 1, h: 1, solid: true },
+    gr_stop: { label: "Stop sign", w: 1, h: 1, solid: true },
+    gr_streetsign: { label: "Street sign", w: 1, h: 1, solid: true },
+    gr_postbox: { label: "Mailbox", w: 1, h: 1, solid: true },
   };
   const gens: Record<string, ItemGen> = {
     gr_tower: { draw: tower, variants: 1 },
@@ -693,6 +748,13 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_barrier: { draw: barrier, variants: 1 },
     gr_statue: { draw: statue, variants: 1 },
     gr_bench: { draw: bench, variants: 1 },
+    gr_hydrant: { draw: hydrant, variants: 1 },
+    gr_streetbin: { draw: streetBin, variants: 1 },
+    gr_newsbox: { draw: newsbox, variants: 1 },
+    gr_pole: { draw: pole, variants: 1 },
+    gr_stop: { draw: stopSign, variants: 1 },
+    gr_streetsign: { draw: streetSign, variants: 1 },
+    gr_postbox: { draw: postbox, variants: 1 },
     gr_lamp_town: { draw: townLamp, variants: 1 },
     gr_lamp_porch: { draw: porchLamp, variants: 1 },
     gr_sign: { draw: sign, variants: 1, key: (p) => `${p.bg}|${p.fg}` },
@@ -1000,6 +1062,19 @@ export function groundThings(G: G): Thing[] {
   put("tower", "gr_tower", G.TOWER.x - 9, G.TOWER.z - 9, 18, 18);
   put("statue", "gr_statue", G.STATUE.x - 2.5, G.STATUE.z - 2.5, 5, 5);
   put("bench", "gr_bench", G.BENCH.x - 1, G.BENCH.z, 2, 1);
+  // the town's street furniture
+  const SK: Record<string, string> = {
+    hydrant: "gr_hydrant",
+    bin: "gr_streetbin",
+    newsbox: "gr_newsbox",
+    pole: "gr_pole",
+    stop: "gr_stop",
+    streetsign: "gr_streetsign",
+    postbox: "gr_postbox",
+  };
+  for (const [i, t] of G.STREET.entries())
+    if (t.kind === "bench") put(`st${i}`, "gr_bench", Math.floor(t.x), Math.floor(t.z), 2, 1);
+    else put(`st${i}`, SK[t.kind], Math.floor(t.x), Math.floor(t.z), 1, 1);
   put("barrier", "gr_barrier", -44.5, G.GATE.z - 1, 8, 1, { len: 8 });
   put("closed", "gr_barrier", G.ROAD_CLOSED.x, G.ROAD_CLOSED.z - 4, 1, 8, { len: 8 }, 1);
   put("gate-sign", "gr_sign", -51.5, G.GATE.z + 4, 4, 1, { bg: "#e9e6dc", fg: "#1c2228" });

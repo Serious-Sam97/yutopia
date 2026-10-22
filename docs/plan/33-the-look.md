@@ -144,3 +144,45 @@ farm and the sedan far above the town and the bus (E); 3D and iso drifting apart
   `lighting.spec` no GL errors.
 - **Not done**: the steep rock is rare inside the fence (the ravine's walls,
   the ridges), so boulders are few; the iso view has none of it (phase 7).
+
+## Phase 4 — the town: delivered (2026-10-22)
+
+Footprints unchanged (the walking, the insides and the server's rooms are as
+they were).
+
+- **The façade kit** (`grounds3d.ts` `shop`, `wallsUV`): brick with a dentilled
+  cornice and a corbelled band over the shopfront, or clapboard with a false
+  front (capped, a raised middle; the one-storey shops get one for their
+  signs); framed upstairs windows with stone heads on the front **and the
+  sides**; a shopfront of panes over a panelled base, a transom, pilasters, a
+  glazed door; the awnings in strips (striped on half), a valance, closed ends.
+  Signs over the awning, never into the upstairs windows (those moved up).
+- **Their own**: the town hall columned under a pediment with its clock, its
+  name on the entablature, steps, a double door; the post office's canopy;
+  both flags on their roofs (`civicFront`). The diner in chrome with a red
+  band, a strip of windows and its sign up on the roof. The hotel's marquee,
+  lit underneath. The vacant shop boarded plank by plank.
+- **Townhouses**: three kinds (two storeys side-gabled; two storeys gable to
+  the street with a porch across the front and its railing; a storey and a
+  half with a dormer), seven colours, five shutter colours, by a hash of the
+  house; framed windows on every face, a chimney, a door in the shutters'
+  colour, the mailbox moved off the road onto the pavement (with its flag).
+- **The church**: pointed windows (`pointed`), a door up three steps under the
+  steeple, an open belfry with louvres, cornices, snow on the spire's foot, a
+  cross.
+- **Street furniture** (shared `STREET`, solid for everyone; `tp/town3d.ts` in
+  3D, `gr_*` kinds in iso): hydrants, bins, newspaper boxes along both kerbs
+  (off the doors, the lamps, the square and the gas station), nine wooden poles
+  down the north side with crossarms, insulators, a transformer now and then
+  and four sagging wires, benches and bins round the statue, the stop sign and
+  the street names at Church Street, the post office's box.
+- **Perf**: a building's windows are one mesh per kind of light (they were one
+  mesh each — hundreds of first draws on the way into town, a 50 ms frame);
+  wall pictures shared by colour. The town walk's worst frame back to 33 ms.
+- **Checked**: shared 242, client 23, world-server 111 + the vortex flake
+  (passes alone); typecheck; Biome; `grounds.spec` "the town" in 3D and iso
+  (worst 33 ms), High 60 fps at the lot, the square and the woods by day and
+  night, `lighting.spec` no GL errors; world page 553.9 KB.
+- **Not done**: the gas station's pumps, the statue and the square's paving are
+  the landmarks' (phase 5); iso shows the new street furniture but not the new
+  façades (phase 7).

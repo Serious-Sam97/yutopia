@@ -756,6 +756,65 @@ export const LAMPS: Lamp[] = [];
   LAMPS.push({ x: -13, z: -412, ry: 0, kind: "porch" }); // the bus shelter's
 }
 
+/** The town's street furniture (docs/plan/33-the-look.md, phase 4): hydrants, bins, newspaper
+ *  boxes along Main Street's kerbs, wooden poles carrying the wires down its north side, benches
+ *  and bins round the statue, a stop sign and the street names where Church Street meets Main,
+ *  the post office's box. Solid (a tile each, a bench two); `ry` turns its front (+z) to face. */
+export interface StreetThing {
+  kind: "hydrant" | "bin" | "newsbox" | "pole" | "bench" | "stop" | "streetsign" | "postbox";
+  x: number;
+  z: number;
+  ry: number;
+}
+export const STREET: StreetThing[] = [];
+{
+  const MZ = -405;
+  const doors = BUILDINGS.filter((b) => b.sign || b.vacant).map((b) => ({
+    x: (b.x0 + b.x1) / 2,
+    side: b.face === "n" ? 1 : -1,
+  }));
+  const lampNear = (x: number, z: number, d: number) => LAMPS.some((l) => Math.hypot(l.x - x, l.z - z) < d);
+  const clear = (x: number, side: number) =>
+    !doors.some((d) => d.side === side && Math.abs(d.x - x) < 3) &&
+    !(side > 0 && (x < 332 || (x > PLAZA.x0 - 2 && x < PLAZA.x1 + 2))) &&
+    !(side < 0 && Math.abs(x - 420) < 8);
+  // along both kerbs: a hydrant, a bin, a newspaper box, a bin…
+  const seq: StreetThing["kind"][] = ["hydrant", "bin", "newsbox", "bin"];
+  let k = 0;
+  for (const side of [1, -1])
+    for (let x = 314; x < 516; x += 9) {
+      const z = MZ + side * 5.7;
+      if (!clear(x, side) || lampNear(x, z, 2.5)) continue;
+      STREET.push({ kind: seq[k++ % seq.length], x, z, ry: side > 0 ? Math.PI : 0 });
+    }
+  // the poles down the north side, every 26 tiles or so
+  for (let x = 306; x < 520; x += 26) {
+    let px = x;
+    while (!clear(px, -1) || lampNear(px, MZ - 6, 3.5)) px += 2;
+    if (px < 524) STREET.push({ kind: "pole", x: px, z: MZ - 6, ry: 0 });
+  }
+  // round the statue: two benches facing it, a bin by each
+  for (const bx of [STATUE.x - 7, STATUE.x + 5]) {
+    STREET.push({ kind: "bench", x: bx, z: STATUE.z - 7, ry: 0 });
+    STREET.push({ kind: "bin", x: bx + (bx < STATUE.x ? -1.2 : 3.2), z: STATUE.z - 6.6, ry: 0 });
+  }
+  // where Church Street meets Main: its stop sign, the street names
+  STREET.push({ kind: "stop", x: 424.8, z: -413.4, ry: 0 });
+  STREET.push({ kind: "streetsign", x: 415.2, z: -413.4, ry: 0 });
+  STREET.push({ kind: "postbox", x: 349.6, z: MZ - 5.7, ry: 0 });
+}
+/** The tiles street furniture stands on. */
+function streetTiles(): [number, number][] {
+  return STREET.flatMap((t) =>
+    t.kind === "bench"
+      ? [
+          [Math.floor(t.x), Math.floor(t.z)],
+          [Math.floor(t.x) + 1, Math.floor(t.z)],
+        ]
+      : [[Math.floor(t.x), Math.floor(t.z)]],
+  );
+}
+
 /** Where the barrier closes the road at the edge of the world (east, past the town). */
 export const ROAD_CLOSED = { x: 528, z: -405 };
 
@@ -818,6 +877,7 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
   for (const l of LAMPS) if (l.kind !== "porch") shut(l.x, l.z);
   shut(BENCH.x, BENCH.z);
   shut(BENCH.x + 1, BENCH.z);
+  for (const [x, z] of streetTiles()) shut(x + 0.5, z + 0.5);
   for (let j = 0; j < CHUNK; j++)
     for (let i = 0; i < CHUNK; i++) {
       const x = x0 + i + 0.5;
