@@ -45,6 +45,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Daylight } from "../art/daylight";
 import type { Themes } from "./sky";
+import { driftAlong } from "./snow3d";
 
 // The snow theme's outside, in 3D: the studio is the top floor of a corporate
 // headquarters alone in the snow (docs/plan/18-snow-campus.md). The main block
@@ -1207,8 +1208,9 @@ export class Campus {
     this.add(bCap.build(), white);
     this.add(bCoping.build(), concrete);
     this.dropFake(fake);
-    // snow drifted against the foot of every wall, and the wall's shadow on the snow
-    const drifts: BufferGeometry[] = [];
+    // snow drifted against the foot of every wall (snow3d.ts: a ridge, open at the entrance),
+    // and the wall's shadow on the snow
+    const drifts = new G();
     const rd = T.rng(67);
     const ezMain = H / 2;
     const allRuns = [
@@ -1218,19 +1220,18 @@ export class Campus {
       ),
     ];
     for (const r of allRuns) {
-      const len = runLen(r);
-      const dx = r.nx === 0 ? 1 : 0;
-      const dz = r.nz === 0 ? 1 : 0;
-      for (let t = 0.8; t < len; t += 1.6 + rd() * 1.4) {
-        const sz = 0.9 + rd() * 1.5;
-        // (all of it outside the wall: the ground floor's rooms are behind it)
-        const out = SKIN + 0.12 + sz * 0.55;
-        const x = r.x0 + dx * t + r.nx * out;
-        const z = r.z0 + dz * t + r.nz * out;
-        if (r.nx === -1 && r.x0 === 0 && Math.abs(z - ezMain) < 6.5) continue; // the entrance
-        const g = new SphereGeometry(1, 9, 6).scale(sz * (dx ? 1.3 : 0.55), sz * 0.38, sz * (dz ? 1.3 : 0.55));
-        drifts.push(place(tinted(g, 0xf6f8fa), x, GROUND - 0.12, z));
-      }
+      // (all of it outside the wall: the ground floor's rooms are behind it)
+      const o = SKIN + 0.1;
+      const entrance = r.nx === -1 && r.x0 === 0;
+      driftAlong(
+        drifts,
+        [r.x0 + r.nx * o, r.z0 + r.nz * o],
+        [r.x1 + r.nx * o, r.z1 + r.nz * o],
+        [r.nx, r.nz],
+        () => GROUND,
+        rd,
+        { h: 0.6, w: 1.8, skip: entrance ? (_x, z) => Math.abs(z - ezMain) < 6.5 : undefined },
+      );
       const ax = r.x0 + r.nx * SKIN;
       const az = r.z0 + r.nz * SKIN;
       const bx = r.x1 + r.nx * SKIN;
@@ -1244,8 +1245,7 @@ export class Campus {
         [0, 1, 0],
       );
     }
-    this.add(mergeGeometries(drifts, false), this.lambert(0xffffff), true);
-    for (const g of drifts) g.dispose();
+    this.add(drifts.build(), this.lambert(0xffffff), true);
     // (the blocks' roofs and plant: on the Grounds the blocks are theirs — grounds3d.ts — and stand elsewhere)
     if (!this.walkable) {
       const roofMat = this.lambert(0xe9ecef, this.snowTexture(1, 1));

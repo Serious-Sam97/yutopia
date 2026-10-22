@@ -83,3 +83,35 @@ farm and the sedan far above the town and the bus (E); 3D and iso drifting apart
   woods, day and night (GPU); world page 553.9 ≤ 555 KB.
 - **Not done**: the flashlight's green halo and the lamp pool's hard edge were
   seen in the `/dev/grounds` stills only — to look for in the game in phase 2.
+
+## Phase 2 — snow that settles: delivered (2026-10-22)
+
+- **The kit** (`tp/snow3d.ts`), all faceted, lumpy by a smooth noise along its
+  run (`wobble`), standing on the ground where it is:
+  - `ridge` / `driftAlong` / `bankAlong`: a continuous ridge with a cross-section
+    — drifts banked against walls (tapered at the ends, open at doors), the
+    plough's banks along roads and streets (kerbside heaps with gaps on the
+    streets). In place of strings of squashed spheres.
+  - `slopeSnow`: snow on a slope with a thickness, lumps along the eave, a lip
+    curled over the edge and icicles under it — every pitched roof, the shops'
+    awnings, the porches.
+  - `flatSnow`: lumps on a 2-tile grid, lower at the edges — the shops', the
+    gatehouse's, the shed's, the bus shelter's, the gas station's tops.
+  - `icicles`: three-sided, odd lengths, now and then a long one.
+- **Roofs** (`pitched`): boards with an edge — a soffit under the overhang, a
+  fascia along the eaves, rake boards up the gables; the gables in their walls'
+  colour (they were beige on the red boathouse and the white church).
+- **Every building** (`settle`, but the blocks, the silo, the shelter and the
+  gas station): drifts round its walls except its front where it meets a
+  pavement, a porch or the water (the church and the barn keep theirs, open at
+  the door); its windows' sills, snow on them. The headquarters' and the
+  blocks' drifts are ridges too (`campus.ts`, `block`), open at the doors.
+- **The lot's banks**: ridges strung through `lotBanks()`'s positions along each
+  edge, broken where they're apart (the driveway, the path).
+- The roads' banks only take shadows (a long low ridge's own came out jagged).
+- **Checked**: client 23; typecheck; Biome; `grounds.spec` in 3D (the walk out,
+  the campus, the woods, the town: worst frame 17 ms), High 60 fps at the lot,
+  the square and the woods by day and at night, `lighting.spec` no GL errors;
+  world page 553.9 KB.
+- **Not done**: iso draws none of it yet (phase 7); snow on the cars, people and
+  props stays as it was (phase 6).
