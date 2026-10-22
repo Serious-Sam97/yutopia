@@ -86,6 +86,7 @@ import {
   type V,
 } from "./campus";
 import { beam, railing, truss } from "./landmarks3d";
+import { asphaltCanvas, crossingPaint, slabCanvas, snowPoles, wayDressing } from "./roads3d";
 import type { Themes } from "./sky";
 import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
 import { streetGeometry } from "./town3d";
@@ -529,11 +530,27 @@ export class Grounds3 {
   private night: { m: MeshBasicMaterial | MeshLambertMaterial | MeshStandardMaterial; on: number; kind: string }[] = [];
   private lambertCache = new Map<string, MeshLambertMaterial>();
   private trim = new G(); // a building's sills and such, added with it (settle)
+  private asphalts = new Map<string, Texture>();
+  /** A way's asphalt picture (its lanes by its width), one per way. */
+  private asphalt(w: Way): Texture {
+    let t = this.asphalts.get(w.key);
+    if (!t) {
+      t = this.keep(tex(asphaltCanvas(this.T, w)));
+      t.anisotropy = 8;
+      this.asphalts.set(w.key, t);
+    }
+    return t;
+  }
+  private roadCtx = {
+    near: (x: number, z: number, pad = 0) => this.near(x, z, pad),
+    yAt: (w: Way, i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] + 0.35 : groundAt(x, z)),
+  };
   private ts: {
     snow: CanvasTexture;
     road: CanvasTexture;
     trail: CanvasTexture;
     walk: CanvasTexture;
+    slabs: CanvasTexture;
     ice: CanvasTexture;
     pool: CanvasTexture;
     glow: CanvasTexture;
@@ -548,6 +565,7 @@ export class Grounds3 {
       road: this.keep(tex(roadCanvas(T))),
       trail: this.keep(tex(trailCanvas(T))),
       walk: this.keep(tex(walkCanvas(T))),
+      slabs: this.keep(tex(slabCanvas(T))),
       ice: this.keep(tex(iceCanvas(T))),
       pool: this.keep(tex(poolCanvas(T), false)),
       glow: this.keep(tex(glowCanvas(T), false)),
@@ -780,6 +798,8 @@ export class Grounds3 {
     const trail = new G();
     const walk = new G();
     const banks = new G();
+    const paint = new G();
+    const slabs = new G();
     const r = groundsRng(77 + (only ? WAYS.indexOf(only) : 0));
     for (const w of only ? [only] : WAYS) {
       if (w.kind === "trail") {
@@ -795,19 +815,17 @@ export class Grounds3 {
           });
       } else if (w.kind === "walk") this.ribbon(w, w.w, 0, 0.04, 6, walk);
       else {
-        this.ribbon(w, w.w, 0, 0.05, 14, road);
-        if (w.kind === "street") {
-          // pavements, a kerb up from the street
-          for (const s of [1, -1]) {
-            const g = new G();
-            this.ribbon(w, 2.6, s * (w.w / 2 + 1.3), 0.2, 6, g);
-            if (!g.empty) this.add(g.build(), this.lambert(0xffffff, this.ts.walk));
-          }
-        }
+        // the asphalt, its own picture by its width; the lines, verges, kerbs and pavements over it
+        // (roads3d.ts)
+        const ag = new G();
+        this.ribbon(w, w.w, 0, 0.05, 9, ag);
+        if (!ag.empty) this.add(ag.build(), this.lambert(0xffffff, this.asphalt(w)), "receive");
+        wayDressing(w, this.roadCtx, nearLine, paint, slabs);
         // the plough's banks along the verges: a ridge each side (none on a bridge, across
         // another way's mouth or the lot's, nor out of reach)
         for (const side of [1, -1] as const) {
-          const o = w.w / 2 + (w.kind === "street" ? 0.35 : 0.9);
+          // (a street's: heaped on the kerb's edge, clear of the parked cars; a road's: beyond its verge)
+          const o = w.w / 2 + (w.kind === "street" ? 0.55 : 1.2);
           bankAlong(banks, w.line, o, side, groundAt, r, {
             h: w.kind === "street" ? 0.32 : 0.55,
             w: w.kind === "street" ? 1.0 : 1.8,
@@ -822,11 +840,23 @@ export class Grounds3 {
       }
     }
     if (!road.empty) this.add(road.build(), this.lambert(0xffffff, this.ts.road), "receive");
+    if (!paint.empty) this.add(paint.build(), this.lambert(), "receive");
+    if (!slabs.empty) this.add(slabs.build(), this.lambert(0xffffff, this.ts.slabs), "receive");
     if (!trail.empty) this.add(trail.build(), this.lambert(0xffffff, this.ts.trail), "receive");
     if (!walk.empty) this.add(walk.build(), this.lambert(0xffffff, this.ts.walk), "receive");
     // (they only take shadows: a long low ridge's own came out jagged on the road)
     if (!banks.empty) this.add(banks.build(), this.lambert(), "receive");
     if (only && only !== WAYS[WAYS.length - 1]) return;
+    if (this.near(420, -405, 40)) {
+      const cw = new G();
+      crossingPaint(cw, groundAt);
+      this.add(cw.build(), this.lambert(), "receive");
+    }
+    const poles = snowPoles((x, z, p) => this.near(x, z, p), groundAt);
+    if (poles.length) {
+      this.add(mergeGeometries(poles, false), this.lambert());
+      for (const p of poles) p.dispose();
+    }
     // bridges: the road's steel one over the river, the trail's timber footbridge over the ravine
     for (const w of WAYS) {
       const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
@@ -4275,7 +4305,7 @@ export class Grounds3 {
       // two sawhorse barricades across the road: striped boards on A-frame legs, a lamp on each
       const g = new G();
       const X = ROAD_CLOSED.x;
-      for (const zc of [ROAD_CLOSED.z - 2.6, ROAD_CLOSED.z + 2.6]) {
+      for (const zc of [ROAD_CLOSED.z - 4.6, ROAD_CLOSED.z, ROAD_CLOSED.z + 4.6]) {
         for (const dz of [-1.9, 1.9])
           for (const dx of [-0.35, 0.35]) beam(g, [X, y + 1.25, zc + dz], [X + dx, y, zc + dz], 0.08, 0xe9e6dc);
         for (const yy of [0.55, 1.05])
@@ -4293,7 +4323,7 @@ export class Grounds3 {
       }
       this.add(g.build(), this.lambert());
       const lamps = new G().color(0xffffff);
-      for (const zc of [ROAD_CLOSED.z - 2.6, ROAD_CLOSED.z + 2.6])
+      for (const zc of [ROAD_CLOSED.z - 4.6, ROAD_CLOSED.z, ROAD_CLOSED.z + 4.6])
         lamps.box(X - 0.27, y + 1.47, zc + 1.72, X - 0.08, y + 1.62, zc + 1.88);
       this.add(
         lamps.build(),

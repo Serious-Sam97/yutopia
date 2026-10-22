@@ -176,7 +176,7 @@ for (const view of ["3p", "iso"] as const)
         for (let x = m.x - 60; x < m.x + 60; x++) for (const y of rows) if (!c.grid.ok(x, y)) return { x, y };
         return null;
       },
-      [G(0, -402).y, G(0, -409).y],
+      [G(0, -400).y, G(0, -411).y],
     );
     expect(car, "a parked car along the kerb").not.toBeNull();
     // into the bar (its door on the north face, at x 455..457)

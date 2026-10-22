@@ -111,6 +111,8 @@ export interface Way {
   h: number[];
   /** per sample: on a bridge (the land under it isn't flattened) */
   bridged: boolean[];
+  /** a street's pavements, each side (0: none) */
+  pave: number;
 }
 export type BuildingKind =
   | "hq"
@@ -166,11 +168,11 @@ export const LOT = { x0: -56, z0: -8, x1: -10, z1: H + 12 };
 export const SITE = { x0: -60, z0: -10, x1: 100, z1: 84 };
 export const POND = { cx: -240, cz: -60, rx: 48, rz: 34 };
 export const TOWER = { x: -34, z: -96 };
-export const STATUE = { x: 420, z: -386 };
+export const STATUE = { x: 420, z: -384 };
 export const BENCH = { x: 120, z: -250 };
 export const GATE = { x: -40, z: -360 };
 export const TOWN = { x0: 296, z0: -560, x1: 536, z1: -366 };
-export const PLAZA = { x0: 400, z0: -398, x1: 440, z1: -370 };
+export const PLAZA = { x0: 400, z0: -396, x1: 440, z1: -368 };
 /** The farm (docs/plan/31-the-day.md): across the river, south of Main Street, a
  *  lane down from the square — the barn (you walk in), the silo, the farmhouse,
  *  a cornfield of dry stalks in the snow, a tractor, scarecrows. */
@@ -201,18 +203,19 @@ export const TOWN_CARS: {
     for (const s of [1, -1] as const) {
       if (r() < 0.45) continue;
       if (x > PLAZA.x0 - 3 && x < PLAZA.x1 + 3 && s > 0) continue;
-      if (Math.abs(x - 420) < 6) continue;
+      if (Math.abs(x - 420) < 10.5) continue; // (the crossing and its crosswalks)
       const wagon = r() < 0.3;
       const colour = Math.floor(r() * 9); // (all nine CAR_COLOURS: the orange never came up)
       const snowy = r() < 0.7;
-      out.push({ x, z: -405 + s * 3.6, dir: s, wagon, colour, snowy, tilt: (r() - 0.5) * 0.03 });
+      // (in the parking lane: the kerb 7 out, the car's middle 1.3 in from it)
+      out.push({ x, z: -405 + s * 5.7, dir: s, wagon, colour, snowy, tilt: (r() - 0.5) * 0.03 });
     }
   }
   return out;
 })();
 /** On a parked car in town (its 5 × 2 body). */
 function onTownCar(x: number, z: number): boolean {
-  if (z < -411 || z > -399 || x < 300 || x > 526) return false;
+  if (z < -413 || z > -397 || x < 300 || x > 526) return false;
   for (const c of TOWN_CARS) if (Math.abs(x - c.x) < 2.5 && Math.abs(z - c.z) < 1) return true;
   return false;
 }
@@ -233,13 +236,14 @@ const FLATS = [
   { x: 420, z: -268, r0: 95, r1: 135, h: 1.5 }, // the farm
 ];
 
-function way(key: string, kind: WayKind, name: string, w: number, pts: P[], closed = false): Way {
-  return { key, kind, name, w, pts, closed, line: dense(pts, closed), h: [], bridged: [] };
+function way(key: string, kind: WayKind, name: string, w: number, pts: P[], closed = false, pave = 0): Way {
+  return { key, kind, name, w, pts, closed, line: dense(pts, closed), h: [], bridged: [], pave };
 }
 
 export const WAYS: Way[] = [
   // from the lot's mouth up through the woods to the gatehouse
-  way("driveway", "driveway", "Driveway", 7, [
+  // (widths, docs/plan/33-the-look.md: two cars pass; Main Street parks both kerbs as well)
+  way("driveway", "driveway", "Driveway", 8, [
     [-48, -9],
     [-40, -50],
     [-14, -100],
@@ -251,7 +255,7 @@ export const WAYS: Way[] = [
     [-40, -366],
   ]),
   // the public road: out of the gate, east, over the river to the town
-  way("road", "road", "County road", 8, [
+  way("road", "road", "County road", 9, [
     [-40, -366],
     [-40, -392],
     [-26, -404],
@@ -260,16 +264,32 @@ export const WAYS: Way[] = [
     [230, -404],
     [300, -405],
   ]),
-  way("main", "street", "Main Street", 10, [
-    [300, -405],
-    [420, -405],
-    [536, -405],
-  ]),
-  way("church-st", "street", "Church Street", 8, [
-    [420, -410],
-    [420, -470],
-    [420, -524],
-  ]),
+  way(
+    "main",
+    "street",
+    "Main Street",
+    14,
+    [
+      [300, -405],
+      [420, -405],
+      [536, -405],
+    ],
+    false,
+    2.6,
+  ),
+  way(
+    "church-st",
+    "street",
+    "Church Street",
+    8,
+    [
+      [420, -412],
+      [420, -470],
+      [420, -524],
+    ],
+    false,
+    1.6,
+  ),
   // the courtyard: from the headquarters' east doors to the east block's
   way("court", "walk", "Courtyard", 4, [
     [W, 18],
@@ -400,19 +420,19 @@ export const BUILDINGS: Building[] = [
   b("shed", "shed", "Grounds shed", -162, 110, -148, 120, 1, "n"),
   b("shelter", "shelter", "Bus shelter", -16, -417, -10, -413, 1, "s"),
   // the town: Main Street, south side
-  b("gas", "gas", "Gas station", 306, -396, 328, -380, 1, "n", { sign: "GAS" }),
-  b("diner", "diner", "Diner", 336, -398, 354, -384, 1, "n", { enter: true, sign: "DINER" }),
-  b("market", "shop", "Market", 358, -398, 374, -382, 2, "n", { enter: true, sign: "MARKET" }),
-  b("books", "shop", "Bookshop", 378, -398, 392, -384, 2, "n", { sign: "BOOKS" }),
-  b("bar", "bar", "Bar", 448, -398, 464, -382, 2, "n", { enter: true, sign: "BAR" }),
-  b("hardware", "shop", "Hardware", 468, -398, 482, -384, 2, "n", { sign: "HARDWARE" }),
-  b("vacant", "shop", "Shut shop", 486, -398, 500, -384, 2, "n", { vacant: true }),
+  b("gas", "gas", "Gas station", 306, -394, 328, -378, 1, "n", { sign: "GAS" }),
+  b("diner", "diner", "Diner", 336, -396, 354, -382, 1, "n", { enter: true, sign: "DINER" }),
+  b("market", "shop", "Market", 358, -396, 374, -380, 2, "n", { enter: true, sign: "MARKET" }),
+  b("books", "shop", "Bookshop", 378, -396, 392, -382, 2, "n", { sign: "BOOKS" }),
+  b("bar", "bar", "Bar", 448, -396, 464, -380, 2, "n", { enter: true, sign: "BAR" }),
+  b("hardware", "shop", "Hardware", 468, -396, 482, -382, 2, "n", { sign: "HARDWARE" }),
+  b("vacant", "shop", "Shut shop", 486, -396, 500, -382, 2, "n", { vacant: true }),
   // north side
-  b("post", "shop", "Post office", 338, -428, 354, -412, 1, "s", { sign: "POST OFFICE" }),
-  b("laundry", "shop", "Laundromat", 358, -426, 372, -412, 1, "s", { sign: "LAUNDRY" }),
-  b("hall", "shop", "Town hall", 378, -432, 404, -412, 2, "s", { sign: "TOWN HALL" }),
-  b("hotel", "hotel", "Hotel", 432, -434, 452, -412, 3, "s", { sign: "HOTEL" }),
-  b("bakery", "shop", "Bakery", 458, -426, 472, -412, 2, "s", { sign: "BAKERY" }),
+  b("post", "shop", "Post office", 338, -430, 354, -414, 1, "s", { sign: "POST OFFICE" }),
+  b("laundry", "shop", "Laundromat", 358, -428, 372, -414, 1, "s", { sign: "LAUNDRY" }),
+  b("hall", "shop", "Town hall", 378, -434, 404, -414, 2, "s", { sign: "TOWN HALL" }),
+  b("hotel", "hotel", "Hotel", 432, -436, 452, -414, 3, "s", { sign: "HOTEL" }),
+  b("bakery", "shop", "Bakery", 458, -428, 472, -414, 2, "s", { sign: "BAKERY" }),
   b("church", "church", "Church", 410, -556, 430, -534, 1, "s"),
   // the farm (docs/plan/31-the-day.md)
   b("barn", "barn", "Barn", 440, -320, 464, -302, 2, "w", { enter: true }),
@@ -422,8 +442,8 @@ export const BUILDINGS: Building[] = [
 // two rows of the same townhouse up Church Street
 for (let k = 0; k < 7; k++) {
   const z1 = -440 - k * 10;
-  BUILDINGS.push(b(`house-w${k}`, "house", "Townhouse", 404, z1 - 8, 414, z1, 2, "e"));
-  BUILDINGS.push(b(`house-e${k}`, "house", "Townhouse", 426, z1 - 8, 436, z1, 2, "w"));
+  BUILDINGS.push(b(`house-w${k}`, "house", "Townhouse", 402, z1 - 8, 412, z1, 2, "e"));
+  BUILDINGS.push(b(`house-e${k}`, "house", "Townhouse", 428, z1 - 8, 438, z1, 2, "w"));
 }
 
 // ── the index: the lines' samples by cell, for "what's near here" ────────────
@@ -483,7 +503,7 @@ export function wayClearance(x: number, z: number): number {
   for (const [f, n] of nearLines(x, z)) {
     if (f >= WAYS.length) continue;
     const w = WAYS[f];
-    best = Math.min(best, n.d - w.w / 2 - (w.kind === "street" ? 2.6 : 0));
+    best = Math.min(best, n.d - w.w / 2 - w.pave);
   }
   if (x >= LOT.x0 - 1 && x < LOT.x1 + 1 && z >= LOT.z0 - 1 && z < LOT.z1 + 1) best = 0;
   if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) best = 0;
@@ -620,7 +640,7 @@ export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
     if (n.d < w.w / 2) {
       const s: Surface = w.kind === "trail" ? "path" : w.kind === "walk" ? "walk" : "asphalt";
       if (!on || s === "asphalt") on = s;
-    } else if (w.kind === "street" && n.d < w.w / 2 + 2.6 && !on) on = "walk"; // the town's pavements
+    } else if (n.d < w.w / 2 + w.pave && !on) on = "walk"; // the town's pavements
   }
   if (on) return on;
   if (x >= LOT.x0 && x < LOT.x1 && z >= LOT.z0 && z < LOT.z1) return "asphalt";
@@ -783,15 +803,15 @@ export const STREET: StreetThing[] = [];
   let k = 0;
   for (const side of [1, -1])
     for (let x = 314; x < 516; x += 9) {
-      const z = MZ + side * 5.7;
+      const z = MZ + side * 7.7;
       if (!clear(x, side) || lampNear(x, z, 2.5)) continue;
       STREET.push({ kind: seq[k++ % seq.length], x, z, ry: side > 0 ? Math.PI : 0 });
     }
   // the poles down the north side, every 26 tiles or so
   for (let x = 306; x < 520; x += 26) {
     let px = x;
-    while (!clear(px, -1) || lampNear(px, MZ - 6, 3.5)) px += 2;
-    if (px < 524) STREET.push({ kind: "pole", x: px, z: MZ - 6, ry: 0 });
+    while (!clear(px, -1) || lampNear(px, MZ - 8, 3.5)) px += 2;
+    if (px < 524) STREET.push({ kind: "pole", x: px, z: MZ - 8, ry: 0 });
   }
   // round the statue: two benches facing it, a bin by each
   for (const bx of [STATUE.x - 7, STATUE.x + 5]) {
@@ -799,9 +819,9 @@ export const STREET: StreetThing[] = [];
     STREET.push({ kind: "bin", x: bx + (bx < STATUE.x ? -1.2 : 3.2), z: STATUE.z - 6.6, ry: 0 });
   }
   // where Church Street meets Main: its stop sign, the street names
-  STREET.push({ kind: "stop", x: 424.8, z: -413.4, ry: 0 });
-  STREET.push({ kind: "streetsign", x: 415.2, z: -413.4, ry: 0 });
-  STREET.push({ kind: "postbox", x: 349.6, z: MZ - 5.7, ry: 0 });
+  STREET.push({ kind: "stop", x: 424.8, z: -415.6, ry: 0 });
+  STREET.push({ kind: "streetsign", x: 415.2, z: -415.6, ry: 0 });
+  STREET.push({ kind: "postbox", x: 349.6, z: MZ - 7.7, ry: 0 });
 }
 /** The tiles street furniture stands on. */
 function streetTiles(): [number, number][] {
@@ -813,6 +833,37 @@ function streetTiles(): [number, number][] {
         ]
       : [[Math.floor(t.x), Math.floor(t.z)]],
   );
+}
+
+/** Snow poles along the driveway and the county road (docs/plan/33-the-look.md): an orange
+ *  stake with a reflector each side every 25 tiles or so, out in the plough's bank — where the
+ *  road's edge is when it's all white. Only to look at (thin; not in the walking). */
+export const SNOW_POLES: { x: number; z: number; ry: number }[] = [];
+{
+  for (const key of ["driveway", "road"]) {
+    const w = WAYS.find((u) => u.key === key) as Way;
+    const L = w.line;
+    for (let i = 8; i < L.length - 8; i += 25)
+      for (const s of [1, -1]) {
+        const [px, pz] = L[i - 1];
+        const [qx, qz] = L[i + 1];
+        const l = Math.hypot(qx - px, qz - pz) || 1;
+        const nx = (-(qz - pz) / l) * s;
+        const nz = ((qx - px) / l) * s;
+        const x = L[i][0] + nx * (w.w / 2 + 1.5);
+        const z = L[i][1] + nz * (w.w / 2 + 1.5);
+        // (not on a bridge, across another way, in the lot or by a lamp)
+        if (w.bridged[i] || w.bridged[i - 3] || w.bridged[i + 3]) continue;
+        const crossing = [...nearLines(x, z)].some(([f, n]) => {
+          const u = WAYS[f];
+          return !!u && u !== w && u.kind !== "trail" && n.d < u.w / 2 + 2;
+        });
+        if (crossing) continue;
+        if (x > LOT.x0 - 3 && x < LOT.x1 + 3 && z > LOT.z0 - 3 && z < LOT.z1 + 3) continue;
+        if (LAMPS.some((m) => Math.hypot(m.x - x, m.z - z) < 3)) continue;
+        SNOW_POLES.push({ x, z, ry: Math.atan2(nx, nz) });
+      }
+  }
 }
 
 /** Where the barrier closes the road at the edge of the world (east, past the town). */
@@ -1402,7 +1453,7 @@ export const SHUTTLE = (() => {
   const pieces: [P[], number][] = [
     [wayLine("driveway").slice(14), LANE],
     [wayLine("road").slice(1), LANE],
-    [main.slice(1, to + 1), 1.4],
+    [main.slice(1, to + 1), 1.75], // (its lane's middle: clear of the parked cars)
   ];
   const there = routeOf(pieces.flatMap(([l, by]) => keepRight(l, by)));
   const back = routeOf(

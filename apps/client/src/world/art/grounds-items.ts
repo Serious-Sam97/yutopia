@@ -1062,6 +1062,12 @@ function postbox(s: Sketch) {
   s.shadowDot(0.5, 0.5, 0.3, 0.3);
 }
 
+/** A snow pole by the road: an orange stake, its reflector, a cap of snow. */
+function snowPole(s: Sketch) {
+  s.box({ x: 0.47, y: 0.47, w: 0.06, d: 0.06, z: 0, h: 1.7 * P, mat: mat("#d2601e", "#e07030"), line: 0.5 });
+  s.box({ x: 0.46, y: 0.46, w: 0.08, d: 0.08, z: 1.35 * P, h: 0.2 * P, mat: mat("#e8eef2"), line: 0.4 });
+  s.box({ x: 0.46, y: 0.46, w: 0.08, d: 0.08, z: 1.7 * P, h: 0.05 * P, mat: SNOW, line: 0.3 });
+}
 /** A sawhorse barricade across the road (along y, `len` long), a lamp on it. */
 function sawhorse(s: Sketch, p: Props) {
   const n = Number(p.len) || 4.4;
@@ -1141,6 +1147,7 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_scarecrow: { label: "Scarecrow", w: 1, h: 1, solid: true },
     gr_bale: { label: "Hay", w: 1, h: 1, solid: false },
     gr_sawhorse: { label: "Road closed", w: 1, h: 5, solid: true },
+    gr_snowpole: { label: "Snow pole", w: 1, h: 1, solid: false },
     gr_truss: { label: "Bridge", w: 33, h: 1, solid: false },
     gr_railing: { label: "Railing", w: 1, h: 22, solid: false },
     gr_hydrant: { label: "Hydrant", w: 1, h: 1, solid: true },
@@ -1177,6 +1184,7 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_scarecrow: { draw: scarecrow, variants: 1 },
     gr_bale: { draw: bale, variants: 1 },
     gr_sawhorse: { draw: sawhorse, variants: 1 },
+    gr_snowpole: { draw: snowPole, variants: 1 },
     gr_truss: { draw: truss, variants: 1, key: (p) => `${p.len}|${p.z0}` },
     gr_railing: { draw: railing, variants: 1, key: (p) => `${p.len}|${p.z0}` },
   };
@@ -1477,6 +1485,7 @@ export function groundThings(G: G): Thing[] {
   put("tower", "gr_tower", G.TOWER.x - 9, G.TOWER.z - 9, 18, 18);
   put("statue", "gr_statue", G.STATUE.x - 2.5, G.STATUE.z - 2.5, 5, 5);
   put("bench", "gr_bench", G.BENCH.x - 1, G.BENCH.z, 2, 1);
+  for (const [i, p] of G.SNOW_POLES.entries()) put(`pole-snow${i}`, "gr_snowpole", p.x - 0.5, p.z - 0.5, 1, 1);
   // the town's street furniture
   const SK: Record<string, string> = {
     hydrant: "gr_hydrant",
@@ -1491,7 +1500,7 @@ export function groundThings(G: G): Thing[] {
     if (t.kind === "bench") put(`st${i}`, "gr_bench", Math.floor(t.x), Math.floor(t.z), 2, 1);
     else put(`st${i}`, SK[t.kind], Math.floor(t.x), Math.floor(t.z), 1, 1);
   put("barrier", "gr_barrier", -44.5, G.GATE.z - 1, 8, 1, { len: 8 });
-  for (const dz of [-2.6, 2.6])
+  for (const dz of [-4.6, 0, 4.6])
     put(`closed${dz}`, "gr_sawhorse", G.ROAD_CLOSED.x - 0.5, G.ROAD_CLOSED.z + dz - 2.2, 1, 4.4, { len: 4.4 });
   // the bridges' sides (their decks are the land's picture): the road's steel truss, the
   // footbridge's railings (both run along an axis)

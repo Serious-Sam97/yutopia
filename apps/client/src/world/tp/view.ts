@@ -73,6 +73,7 @@ import {
   Sprite,
   SpriteMaterial,
   SRGBColorSpace,
+  type Texture,
   TubeGeometry,
   Vector2,
   Vector3,
@@ -2792,10 +2793,19 @@ void main() {
     if (!g) return;
     g.prepare = (o) => {
       const masks: [Object3D, number][] = [];
+      const maps = new Set<Texture>();
       o.traverse((c) => {
         masks.push([c, c.layers.mask]);
         c.layers.set(PREP_LAYER);
+        // (its pictures up to the GPU now, not the first frame they're seen: the roads' asphalt,
+        // a shop's wall)
+        const m = (c as Mesh).material as Material | Material[] | undefined;
+        for (const x of Array.isArray(m) ? m : m ? [m] : []) {
+          const t = (x as MeshLambertMaterial).map;
+          if (t) maps.add(t);
+        }
       });
+      for (const t of maps) this.renderer.initTexture(t);
       void this.renderer.compileAsync(o, this.camera, this.scene).then(() => {
         for (const [c, m] of masks) c.layers.mask = m;
       });

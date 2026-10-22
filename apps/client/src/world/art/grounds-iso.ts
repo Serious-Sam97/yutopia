@@ -750,11 +750,13 @@ export class IsoGrounds {
     g.globalCompositeOperation = "source-over";
     // the ways
     const inChunk = (x: number, z: number, m: number) => x > x0 - m && x < x0 + C + m && z > z0 - m && z < z0 + C + m;
-    for (const w of G.WAYS) {
+    // (in passes: the verges and pavements under every way, then the asphalt, then the paint —
+    // where Church Street meets Main, Main's paint stays whole; docs/plan/33-the-look.md)
+    const roadish = (w: (typeof G.WAYS)[number]) => w.kind !== "trail" && w.kind !== "walk";
+    const pathOf = (w: (typeof G.WAYS)[number]) => {
       const m = w.w + 6;
-      const pts = w.line.filter(([x, z]) => inChunk(x, z, m));
-      if (pts.length < 2) continue;
-      const path = () => {
+      if (!w.line.some(([x, z]) => inChunk(x, z, m))) return null;
+      return () => {
         g.beginPath();
         let started = false;
         for (const [i, [x, z]] of w.line.entries()) {
@@ -769,13 +771,34 @@ export class IsoGrounds {
           started = true;
         }
       };
-      g.lineCap = "round";
-      g.lineJoin = "round";
+    };
+    const stroke = (path: () => void, colour: string, width: number, dash?: number[]) => {
+      path();
+      g.strokeStyle = colour;
+      g.lineWidth = width * PX;
+      if (dash) g.setLineDash(dash.map((d) => d * PX));
+      g.stroke();
+      if (dash) g.setLineDash([]);
+    };
+    const ASPHALT = "rgb(74,79,87)";
+    g.lineJoin = "round";
+    // 1: the verges' packed snow, the streets' pavements and kerbs
+    g.lineCap = "butt";
+    for (const w of G.WAYS) {
+      const path = pathOf(w);
+      if (!path || !roadish(w)) continue;
+      if (w.kind === "street") {
+        stroke(path, "rgb(190,189,184)", w.w + 2 * w.pave);
+        stroke(path, "rgb(150,151,154)", w.w + 0.56);
+      } else stroke(path, "rgb(214,220,226)", w.w + 2);
+    }
+    // 2: the asphalt, and the trails and walks
+    for (const w of G.WAYS) {
+      const path = pathOf(w);
+      if (!path) continue;
+      g.lineCap = w.kind === "street" ? "butt" : "round";
       if (w.kind === "trail") {
-        path();
-        g.strokeStyle = "rgba(205,201,193,0.95)";
-        g.lineWidth = (w.w + 0.4) * PX;
-        g.stroke();
+        stroke(path, "rgba(205,201,193,0.95)", w.w + 0.4);
         // boot prints down the middle
         g.fillStyle = "rgba(150,148,142,0.35)";
         for (let i = 0; i < w.line.length; i += 1) {
@@ -799,25 +822,55 @@ export class IsoGrounds {
         }
         continue;
       }
-      if (w.kind === "street") {
-        path();
-        g.strokeStyle = "rgb(196,195,190)";
-        g.lineWidth = (w.w + 5.2) * PX;
-        g.stroke();
+      if (w.kind === "walk") {
+        stroke(path, "rgb(196,195,190)", w.w);
+        continue;
       }
-      path();
-      g.strokeStyle = w.kind === "walk" ? "rgb(196,195,190)" : "rgb(78,82,89)";
-      g.lineWidth = w.w * PX;
-      g.stroke();
-      if (w.kind === "walk") continue;
-      // a faded centre line
-      path();
-      g.strokeStyle = "rgba(230,220,160,0.4)";
-      g.lineWidth = 0.18 * PX;
-      g.setLineDash([PX * 1.5, PX * 2]);
-      g.stroke();
-      g.setLineDash([]);
+      stroke(path, ASPHALT, w.kind === "street" ? w.w : w.w - 0.6);
+      // the wheel paths, worn darker, two a lane
+      for (const lane of [-1, 1])
+        for (const o of [-0.78, 0.78]) {
+          const at = lane * (w.kind === "street" && w.w >= 13 ? 1.75 : w.w / 4) + o;
+          stroke(path, "rgba(30,32,36,0.18)", 2 * Math.abs(at) + 0.5);
+          stroke(path, ASPHALT, Math.max(0, 2 * Math.abs(at) - 0.5));
+        }
+      stroke(path, ASPHALT, 0.9);
     }
+    // 3: the paint (lines either side of the middle: a wide stroke, the asphalt over its middle)
+    g.lineCap = "butt";
+    for (const w of G.WAYS) {
+      const path = pathOf(w);
+      if (!path || !roadish(w)) continue;
+      const e = w.kind === "street" ? (w.w >= 13 ? 3.5 : 0) : w.w / 2 - 0.75;
+      if (e > 0) {
+        stroke(path, "rgba(232,234,236,0.9)", 2 * e + 0.14);
+        stroke(path, ASPHALT, 2 * e - 0.14);
+      }
+      if (w.kind === "street") {
+        stroke(path, "rgba(216,184,74,0.95)", 0.38);
+        stroke(path, ASPHALT, 0.18);
+      } else stroke(path, "rgba(216,184,74,0.9)", 0.14, [3, 6]);
+    }
+    // the crossing: crosswalks either side of Church Street's mouth and across it, its stop line
+    {
+      const main = G.WAYS.find((u) => u.key === "main");
+      const church = G.WAYS.find((u) => u.key === "church-st");
+      if (main && church && inChunk(church.line[0][0], main.line[0][1], 20)) {
+        const mz = main.line[0][1];
+        const cx = church.line[0][0];
+        const hm = main.w / 2;
+        const hc = church.w / 2;
+        g.fillStyle = "rgba(232,234,236,0.95)";
+        const bar = (ax: number, az: number, bx: number, bz: number) =>
+          g.fillRect((ax - x0) * PX, (az - z0) * PX, (bx - ax) * PX, (bz - az) * PX);
+        for (const xa of [cx - hc - 3.6, cx + hc + 0.6])
+          for (let z = mz - hm + 0.4; z < mz + hm - 0.5; z += 1.1) bar(xa, z, xa + 3, z + 0.55);
+        const zc = mz - hm - main.pave - 0.6;
+        for (let x = cx - hc + 0.3; x < cx + hc - 0.4; x += 1.1) bar(x, zc - 3, x + 0.55, zc);
+        bar(cx - hc + 0.2, zc - 3.9, cx - 0.2, zc - 3.45);
+      }
+    }
+    g.lineCap = "round";
     // the floors of the buildings you walk into
     for (const ins of G.INSIDES) {
       const b = ins.b;

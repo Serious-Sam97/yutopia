@@ -312,3 +312,35 @@ they were).
 - Not done: a review shot of the guard leaving the gatehouse (the teleport near
   the gate lands in the woods; his walk checked by the server test and by his
   positions in the game).
+
+## The roads (2026-10-22)
+
+Ask: "investigate the road's quality — the look and the size: two cars don't pass side by
+side, the town above all." Main Street was 10 wide with cars parked at both kerbs: 5.1
+between the rows for both ways (the sedan is 1.86 wide, the shuttle 2.4).
+
+- **Sizes** (shared `grounds.ts`): Main Street 10 → **14** (two 3.5 lanes, 2.5 parking each
+  side, the parked cars at ±5.7, clear of the crossing ±10.5); its buildings, the square
+  and the statue moved out 2 (their insides with them: they're the building's own
+  coords); the county road 8 → 9; the driveway 7 → 8; Church Street stays 8, its
+  townhouses set back 2 (its pavement went through their porches) and its pavements
+  1.6 (`Way.pave`). The shuttle keeps to its lane's middle (1.75).
+- **The look** (`tp/roads3d.ts`): the asphalt its own picture per way (its lanes' tyre
+  tracks, salt grey in the parking lanes, a crack — no snow painted in, nothing that
+  shows a repeat); as geometry: white edge lines (the roads') and the parking lanes'
+  lines, the yellow middle (dashed on the roads, doubled in town), worn away here and
+  there; the verges' packed snow with a ragged edge by distance (no repeat); in town the
+  gutters' slush, kerbs with a face and a top, the pavements' concrete slabs, snow along
+  the buildings' side; crosswalks either side of Church Street's mouth and across it,
+  its stop line; Main's paint and kerbs open where Church Street meets it. Snow poles
+  (shared `SNOW_POLES`, 56) along the driveway and the county road.
+- **Iso** paints the same in passes (pavements and verges, asphalt and wheel paths, the
+  lines, the crossing) and draws the snow poles; three sawhorses close the wider road.
+- **Perf**: the dressing's "is another way crossing here" worked out once a way (asked
+  per sample per strip it was a 130 ms frame building Main Street); the Grounds' new
+  pictures uploaded to the GPU while they're prepared, not the frame they're first seen.
+- **Checked**: shared 242, client 23, world-server 112 + the vortex flake; typecheck;
+  Biome; `grounds.spec` 3D and iso (the town's worst frame 17–33 ms), High 60 fps,
+  `lighting.spec` no GL errors; `town.spec` (the shuttle there and back) 2 of 3 — the
+  third a 67 ms frame, as the code before this had (33 / 50 / 50-fail: the two-browser
+  stall); world page 553.9 KB, the Grounds' chunk 161.5 of 180.
