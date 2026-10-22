@@ -254,3 +254,42 @@ they were).
 - **Not done**: snow building up on people's shoulders and on parked cars over
   time (it's a fixed amount); the guard still appears at dusk rather than walking
   in; the iso view's vehicles are as they were (phase 7).
+
+## Phase 7 — iso parity: delivered (2026-10-22)
+
+- **One look, two views** (`world/grounds-look.ts`, no three.js in it): a shop's
+  wall (brick or clapboard, its colour), trim, false front, awning colour and
+  stripes, which upstairs windows are lit; a townhouse's kind, colour, shutters,
+  roof and chimney — decided once from the building (its own seed, no drawing
+  order in it). `grounds3d.ts` and `grounds-items.ts` both read it (the 3D
+  shops' and houses' colours changed a little doing so).
+- **Found and fixed**: in iso, everything drawn on a big building's walls as a
+  `shape` was clipped to the one slice its middle fell in — the town's windows
+  came out as stray lines on blank walls (since phase 2 of plan 27). They're
+  drawn by the walls' own box now, slice by slice.
+- **Iso shops**: their walls' look, false fronts with a raised middle, framed
+  windows with stone heads, the shopfront's panes, base and door, awnings in
+  strips, **signs with their names** (`faceText`: SVG text in the face's slant),
+  the diner's chrome and roof sign, the hotel's marquee, the vacant shop's
+  boards; the town hall's columns, pediment, clock and name, the post office's
+  canopy and name, both up their steps.
+- **Iso townhouses**: the three kinds, colours, shuttered street windows and a
+  door in the shutters' colour, framed windows on every face we see, chimneys,
+  the dormer, the porch across the front gable; gables in the walls' colour.
+- **Iso church**: pointed lit windows, the steeple's door up its steps, the open
+  belfry with louvres, the spire and its cross.
+- **Iso landmarks**: the water tower on its braced legs, the bowl, walkway and
+  roof; the road bridge's steel trusses and the footbridge's railings (on the
+  land's picture, where iso paints the way); sawhorse barricades where the road
+  closes (it was the gate's barrier turned); the shed flat-roofed as in 3D, its
+  corrugation; the gas pumps red with lit dials.
+- **The farm**: hay bales lying on their sides, the scarecrows in red plaid and
+  blue trousers — as 3D has them.
+- Review shots of the iso view: `e2e/iso-shots.spec.ts`.
+- **Checked**: client 23; typecheck; Biome; `grounds.spec` in iso (the walk out,
+  the campus, the woods, the town: worst frame 17 ms — the town was 33),
+  `lighting.spec` no GL errors; world page 553.9 KB, the Grounds' chunk 160.3 of
+  180.
+- **Not done**: iso has no settled-snow shapes (drifts, banks, roof lips), no
+  woods floor (shrubs, stones) and no ink line — it's drawn in its own inked
+  style; the vehicles in iso still turn in four steps.

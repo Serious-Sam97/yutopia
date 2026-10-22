@@ -69,6 +69,7 @@ import {
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { hexOf, houseLook, shopLook } from "../grounds-look";
 import {
   bareTree3,
   carGeometry,
@@ -3028,25 +3029,18 @@ export class Grounds3 {
     const r = groundsRng(b.x0 * 31 + 7);
     const fh = 3.8;
     const H = b.floors * fh + 0.8;
-    const civic = b.key === "hall" || b.key === "post";
-    const diner = b.kind === "diner";
-    const brick = civic ? false : diner ? false : r() < 0.6;
-    const wallHex = civic
-      ? "#d9d3c4"
-      : diner
-        ? "#c9ced3"
-        : brick
-          ? ["#7b3b2c", "#6c4436", "#8a5a42", "#5b4a44"][Math.floor(r() * 4)]
-          : ["#c9c2b2", "#8d9a9c", "#b9a98b", "#a7b39a", "#c4a98d"][Math.floor(r() * 5)];
-    const wall = this.wallPic(brick ? "brick" : "siding", wallHex, b.x0);
+    // (what it looks like: decided with the iso view's — world/grounds-look.ts)
+    const L = shopLook(b);
+    const { civic, diner, brick } = L;
+    const wall = this.wallPic(brick ? "brick" : "siding", L.wall, b.x0);
     const { x0, z0, x1, z1 } = b;
     const nz = b.face === "n" ? -1 : 1;
     const fz = b.face === "n" ? z0 : z1;
     const w = x1 - x0;
     const xm = (x0 + x1) / 2;
-    const trim = brick ? 0xcfc6b4 : civic ? 0xece6da : 0xe6e1d6;
+    const trim = hexOf(L.trim);
     // clapboard (and the one-storey ones, for their signs) get a false front
-    const falseFront = !civic && !diner && (!brick || b.floors === 1);
+    const falseFront = L.falseFront;
     const Hf = falseFront ? H + 1.4 : H;
     const g = new G();
     this.wallsUV(g, b, y0, H, 4, falseFront ? { side: b.face, Hf } : undefined);
@@ -3120,12 +3114,14 @@ export class Grounds3 {
           Math.max(hz1, hz1 + nzz * 0.18),
         );
     };
+    const lit = L.lit(64);
+    let li = 0;
     for (let f = 1; f < b.floors; f++) {
       const n = Math.max(2, Math.floor(w / 4));
       for (let k = 0; k < n; k++) {
         const x = x0 + (w / n) * (k + 0.5);
         if (b.vacant) continue;
-        upper(x, y0 + f * fh + 1.3, fz, 1.3, 1.7, 0, nz, r() < 0.45 ? 0.8 : 0);
+        upper(x, y0 + f * fh + 1.3, fz, 1.3, 1.7, 0, nz, lit[li++ % 64] ? 0.8 : 0);
       }
       const d = z1 - z0;
       for (const [sx, snx] of [
@@ -3133,7 +3129,7 @@ export class Grounds3 {
         [x1, 1],
       ] as const)
         for (const t of d > 12 ? [0.3, 0.7] : [0.5])
-          upper(sx, y0 + f * fh + 1.3, z0 + d * t, 1.2, 1.6, snx, 0, r() < 0.3 ? 0.7 : 0);
+          upper(sx, y0 + f * fh + 1.3, z0 + d * t, 1.2, 1.6, snx, 0, lit[li++ % 64] ? 0.7 : 0);
     }
     this.add(head.build(), this.lambert());
     const front = new G();
@@ -3215,8 +3211,8 @@ export class Grounds3 {
     }
     // the awning (not the diner's, nor the hotel's: a marquee), striped on some
     if (!diner && b.kind !== "hotel") {
-      const aw = b.sign === "BAR" ? 0x5a1e1e : [0x2f4a3b, 0x6b2430, 0x2c3e55, 0x6a5a40][Math.floor(r() * 4)];
-      const striped = b.sign !== "BAR" && r() < 0.5;
+      const aw = hexOf(L.awning);
+      const striped = L.striped;
       const n = Math.round((w - 1.2) / 0.6);
       for (let i = 0; i < n; i++) {
         const xa = x0 + 0.6 + ((w - 1.2) * i) / n;
@@ -3503,14 +3499,14 @@ export class Grounds3 {
    *  chimney, the mailbox at the pavement. */
   private house(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+    // (what it looks like: decided with the iso view's — world/grounds-look.ts)
+    const L = houseLook(b);
     const q = groundsRng(b.z0 * 17 + b.x0);
-    const kind = Math.floor(q() * 3);
-    const colours = ["#d8d2c4", "#b9c4c9", "#c9b48f", "#8f9e8b", "#c7a59a", "#e3dccb", "#9aa7b4"];
-    const hex = colours[Math.floor(q() * colours.length)];
-    const shutter = [0x2f4a3b, 0x6b2430, 0x2c3e55, 0x3a3f45, 0x5a4636][Math.floor(q() * 5)];
+    const { kind, H } = L;
+    const hex = L.wall;
+    const shutter = hexOf(L.shutter);
     const trim = 0xece6da;
     const siding = this.wallPic("siding", hex);
-    const H = kind === 2 ? 4.2 : 6.4;
     const { x0, z0, x1, z1 } = b;
     const g = new G();
     this.wallsUV(g, b, y0, H, 3);
@@ -3519,7 +3515,7 @@ export class Grounds3 {
     const wallHex = new Color(hex).getHex();
     // the roof: along the street (a side gable) or end on to it (a front gable)
     const front = kind === 1;
-    this.pitched(r, x0, z0, x1, z1, y0 + H, kind === 2 ? 4.4 : front ? 3.6 : 2.6, front, 0x3a3f45, 0.45, wallHex);
+    this.pitched(r, x0, z0, x1, z1, y0 + H, L.rise, front, 0x3a3f45, 0.45, wallHex);
     const nx = b.face === "e" ? 1 : -1;
     const fx = b.face === "e" ? x1 : x0;
     const bx = b.face === "e" ? x0 : x1;
@@ -3633,9 +3629,9 @@ export class Grounds3 {
     }
     // the chimney, at one end of the ridge
     {
-      const cz = q() < 0.5 ? z0 + 1.6 : z1 - 1.6;
+      const cz = L.chimneyEnd ? z0 + 1.6 : z1 - 1.6;
       const cxx = front ? (q() < 0.5 ? x0 + 2 : x1 - 2) : xc;
-      const top = y0 + H + (kind === 2 ? 4.4 : front ? 3.6 : 2.6) + 0.8;
+      const top = y0 + H + L.rise + 0.8;
       r.color(0x7b3b2c).box(cxx - 0.4, y0 + H, cz - 0.35, cxx + 0.4, top, cz + 0.35);
       r.color(0x5b4a44).box(cxx - 0.48, top, cz - 0.43, cxx + 0.48, top + 0.15, cz + 0.43);
       flatSnow(r, cxx - 0.46, cz - 0.41, cxx + 0.46, cz + 0.41, top + 0.15, 0.12, q);

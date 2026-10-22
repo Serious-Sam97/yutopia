@@ -1,7 +1,8 @@
 import type { CatalogEntry, WorldObjectDef } from "@yutopia/shared";
 import type * as GroundsModule from "@yutopia/shared/grounds";
+import { type HouseLook, houseLook, type ShopLook, shopLook } from "../grounds-look";
 import type { ItemGen } from "./items";
-import type { Face, Mat, Sketch, V3 } from "./items/kit";
+import type { Draw, Face, Mat, Sketch, V3 } from "./items/kit";
 
 // The Grounds' things in the iso view (docs/plan/27-the-grounds.md, phase 2):
 // the other buildings, the lamps, the fence, the gate's barrier, the tower,
@@ -33,8 +34,6 @@ const RED_BOARD = mat("#6e2a22", "#7d342a", "#73302a", "#5a2119");
 const BRONZE = mat("#4a4338", "#5d554a", "#514a3e", "#3b352c");
 const GLASS = "#2c3a44";
 const LIT = "#ffcf8a";
-const BRICKS = ["#7b3b2c", "#6c4436", "#8a5a42", "#5b4a44"];
-const SIDINGS = ["#c9c2b2", "#8d9a9c", "#b9a98b", "#d8d2c4"];
 const shade = (hex: string, k: number) => {
   const n = Number.parseInt(hex.slice(1), 16);
   const c = (v: number) =>
@@ -80,28 +79,10 @@ interface Bld {
   sign?: string;
   vacant?: boolean;
   seed: number;
-}
-// a row of windows on a face (s: along x at y = h; e: along y at x = w), some lit
-function windows(s: Sketch, b: Bld, f: "s" | "e", z0: number, z1: number, every: number, lit: number) {
-  const r = rng(b.seed * 31 + (f === "s" ? 1 : 2));
-  const len = f === "s" ? b.w : b.h;
-  const plane = f === "s" ? b.h : b.w;
-  const n = Math.max(1, Math.floor(len / every));
-  s.shape({ x: 0, y: 0, w: b.w, d: b.h, z: z0, h: z1 - z0 }, (d) => {
-    for (let i = 0; i < n; i++) {
-      const u = ((i + 0.5) * len) / n;
-      const ww = Math.min(1.3, every * 0.42);
-      const on = !b.vacant && r() < lit;
-      d.poly(f, fr(f, plane, u - ww / 2, u + ww / 2, z0, z1), on ? LIT : GLASS, {
-        stroke: "#1b1f22",
-        sw: 0.6,
-        glow: on,
-      });
-    }
-  });
+  look?: ShopLook | HouseLook;
 }
 // a pitched roof over the footprint (ridge along x or y), snow on it
-function pitched(s: Sketch, b: Bld, z: number, rise: number, alongX: boolean, over = 0.4) {
+function pitched(s: Sketch, b: Bld, z: number, rise: number, alongX: boolean, over = 0.4, gable = "#b8b0a2") {
   const x0 = -over;
   const y0 = -over;
   const x1 = b.w + over;
@@ -132,7 +113,7 @@ function pitched(s: Sketch, b: Bld, z: number, rise: number, alongX: boolean, ov
           [b.w, b.h, z],
           [b.w, ym, z + rise],
         ],
-        "#b8b0a2",
+        gable,
       );
       poly(
         [
@@ -159,7 +140,7 @@ function pitched(s: Sketch, b: Bld, z: number, rise: number, alongX: boolean, ov
           [b.w, b.h, z],
           [xm, b.h, z + rise],
         ],
-        "#b8b0a2",
+        gable,
       );
       poly(
         [
@@ -173,73 +154,395 @@ function pitched(s: Sketch, b: Bld, z: number, rise: number, alongX: boolean, ov
     }
   });
 }
+/** Text painted on a face (s: along x at y = plane; e: along y at x = plane), centred at u, its
+ *  middle z px up, `size` tiles tall — in the face's own slant. */
+function faceText(
+  d: Draw,
+  f: "s" | "e",
+  plane: number,
+  u: number,
+  z: number,
+  text: string,
+  size: number,
+  fill: string,
+) {
+  const at = (uu: number, zz: number) => (f === "s" ? d.m(uu, plane, zz) : d.m(plane, uu, zz));
+  const o = at(u, z);
+  const ex = at(u + 1, z);
+  const ey = at(u, z + P);
+  const m = [ex[0] - o[0], ex[1] - o[1], o[0] - ey[0], o[1] - ey[1], o[0], o[1]].map((v) => v.toFixed(2)).join(" ");
+  const esc = text.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  d.raw(
+    `<text transform="matrix(${m})" x="0" y="0" font-family="Georgia, 'Times New Roman', serif" font-weight="700" font-size="${size}" text-anchor="middle" dominant-baseline="central" fill="${fill}">${esc}</text>`,
+  );
+}
+/** A window with its frame and a cross (the look's trim), lit or not. */
+function framed(
+  d: Draw,
+  f: "s" | "e",
+  plane: number,
+  u: number,
+  z0: number,
+  w: number,
+  h: number,
+  on: boolean,
+  trim: string,
+) {
+  d.poly(f, fr(f, plane, u - w / 2 - 0.12, u + w / 2 + 0.12, z0 - 0.1 * P, z0 + h + 0.12 * P), trim);
+  d.poly(f, fr(f, plane, u - w / 2, u + w / 2, z0, z0 + h), on ? LIT : GLASS, { glow: on });
+  d.poly(f, fr(f, plane, u - 0.03, u + 0.03, z0, z0 + h), trim);
+  d.poly(f, fr(f, plane, u - w / 2, u + w / 2, z0 + h / 2 - 1.2, z0 + h / 2 + 1.2), trim);
+}
 function shop(s: Sketch, b: Bld) {
-  const r = rng(b.seed);
+  const L = b.look as ShopLook;
   const fh = 3.8 * P;
   const H = b.floors * fh + 0.8 * P;
-  const brick = r() < 0.6;
-  const c = brick ? BRICKS[Math.floor(r() * 4)] : SIDINGS[Math.floor(r() * 4)];
-  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: wallMat(c) });
-  // cornice and the snow on the roof
-  s.box({ x: -0.25, y: -0.25, w: b.w + 0.5, d: b.h + 0.5, z: H - 0.5 * P, h: 0.5 * P, mat: mat("#8c857a", "#9d968b") });
+  const Hf = L.falseFront ? H + 1.4 * P : H;
+  const trim = L.trim;
+  // (everything on its walls drawn by the walls' own box, slice by slice: a big shape is drawn
+  // only in the slice its middle is in)
+  const art: ((d: Draw) => void)[] = [];
+  const onWalls = (f: (d: Draw) => void) => art.push(f);
+  // the top: a cornice (brick), a plain coping (the rest); the snow on the roof
+  s.box({
+    x: -0.25,
+    y: -0.25,
+    w: b.w + 0.5,
+    d: b.h + 0.5,
+    z: H - 0.45 * P,
+    h: 0.45 * P,
+    mat: mat(L.brick ? "#8c857a" : shade(L.wall, 0.85), L.brick ? "#9d968b" : shade(L.wall, 0.95)),
+  });
   s.box({ x: -0.2, y: -0.2, w: b.w + 0.4, d: b.h + 0.4, z: H, h: 0.3 * P, mat: SNOW });
-  // the visible faces: a shopfront where it faces (s or e), upstairs windows
+  // the false front over its street side, its raised middle
+  if (L.falseFront) {
+    const along = b.face === "n" || b.face === "s";
+    const ff =
+      b.face === "n"
+        ? { x: 0, y: 0, w: b.w, d: 0.3 }
+        : b.face === "s"
+          ? { x: 0, y: b.h - 0.3, w: b.w, d: 0.3 }
+          : b.face === "w"
+            ? { x: 0, y: 0, w: 0.3, d: b.h }
+            : { x: b.w - 0.3, y: 0, w: 0.3, d: b.h };
+    s.box({ ...ff, z: H, h: Hf - H, mat: wallMat(L.wall) });
+    const mid = along ? { x: b.w / 2 - 1.6, y: ff.y, w: 3.2, d: 0.3 } : { x: ff.x, y: b.h / 2 - 1.6, w: 0.3, d: 3.2 };
+    s.box({ ...mid, z: Hf, h: 0.7 * P, mat: mat(trim) });
+    s.box({ ...mid, z: Hf + 0.7 * P, h: 0.15 * P, mat: SNOW, line: 0.4 });
+  }
+  const lit = L.lit(64);
+  let li = 0;
   for (const f of ["s", "e"] as const) {
-    const front = (b.face === "s" && f === "s") || (b.face === "e" && f === "e");
-    if (front && !b.vacant) {
+    const front = b.face === f;
+    const len = f === "s" ? b.w : b.h;
+    const plane = f === "s" ? b.h : b.w;
+    if (front && b.vacant) {
+      onWalls((d) => {
+        for (let z = 0.7 * P; z < 3 * P; z += 0.32 * P)
+          d.poly(f, fr(f, plane, 0.9, len - 0.9, z, z + 0.26 * P), "#a48a6a", { stroke: "#5a4636", sw: 0.5 });
+      });
+    } else if (front && L.civic) {
+      // a double door between framed windows (its columns, pediment and name: civicFront)
+      onWalls((d) => {
+        d.poly(f, fr(f, plane, 0, len, 0, 0.7 * P), "#b7b0a2");
+        d.poly(f, fr(f, plane, len / 2 - 1.2, len / 2 + 1.2, 0.6 * P, 3.6 * P), L.trim);
+        d.poly(f, fr(f, plane, len / 2 - 0.95, len / 2 + 0.95, 0.6 * P, 3.0 * P), "#3b2f27");
+        for (const k of b.sign === "TOWN HALL" ? [4.2, 8.4] : [3.6])
+          for (const sd of [-1, 1]) {
+            const u = len / 2 + sd * k;
+            if (u < 1 || u > len - 1) continue;
+            framed(d, f, plane, u, 1.2 * P, 1.3, 1.9 * P, lit[li++ % 64], L.trim);
+          }
+      });
+      if (b.sign === "POST OFFICE")
+        onWalls((d) => {
+          d.poly(f, fr(f, plane + 0.1, len / 2 - 1.8, len / 2 + 1.8, 4.05 * P, 4.6 * P), "#e8e2d2", {
+            stroke: "#151819",
+            sw: 1,
+          });
+          faceText(d, f, plane + 0.1, len / 2, 4.32 * P, "POST OFFICE", 0.34, "#2a2e33");
+        });
+    } else if (front) {
+      onWalls((d) => {
+        if (L.diner) {
+          d.poly(f, fr(f, plane, 0, len, 0, 1.0 * P), "#b8bec4");
+          d.poly(f, fr(f, plane, 0, len, 1.0 * P, 1.25 * P), "#a8322a");
+          d.poly(f, fr(f, plane, 0.3, len - 0.3, 1.25 * P, 2.7 * P), "#f0d9a0", {
+            stroke: "#d8dde2",
+            sw: 1,
+            glow: true,
+          });
+          for (let u = 1; u < len - 0.5; u += 1.6)
+            d.poly(f, fr(f, plane, u - 0.04, u + 0.04, 1.25 * P, 2.7 * P), "#d8dde2");
+          d.poly(f, fr(f, plane, 0, len, 2.7 * P, 2.88 * P), "#a8322a");
+        } else {
+          // pilasters, a panelled base, the panes, the door
+          d.poly(f, fr(f, plane, 0.4, len - 0.4, 0, 3.4 * P), "#23292e");
+          d.poly(f, fr(f, plane, 1, len - 1, 0.7 * P, 2.55 * P), b.sign === "BAR" ? "#e08a50" : "#f0c886", {
+            glow: true,
+          });
+          d.poly(f, fr(f, plane, 1, len - 1, 2.62 * P, 3.0 * P), b.sign === "BAR" ? "#e08a50" : "#f0c886", {
+            glow: true,
+          });
+          for (let u = 2.7; u < len - 1.4; u += 1.7)
+            if (Math.abs(u - len / 2) > 1.1) d.poly(f, fr(f, plane, u - 0.05, u + 0.05, 0.7 * P, 3.0 * P), "#23292e");
+          d.poly(f, fr(f, plane, len / 2 - 0.8, len / 2 + 0.8, 0, 2.6 * P), "#23292e");
+          d.poly(f, fr(f, plane, len / 2 - 0.6, len / 2 + 0.6, 1.0 * P, 2.4 * P), "#46525c");
+        }
+      });
+      // the awning in strips (not the diner's), snow on it
+      if (!L.diner && b.kind !== "hotel") {
+        const n = Math.max(2, Math.round((len - 1.2) / 0.6));
+        for (let i = 0; i < n; i++) {
+          const u0 = 0.6 + ((len - 1.2) * i) / n;
+          const w = (len - 1.2) / n;
+          const c = L.striped && i % 2 ? "#e9e2d0" : L.awning;
+          if (f === "s")
+            s.box({
+              x: u0,
+              y: b.h,
+              w,
+              d: 1.5,
+              z: 2.9 * P,
+              h: 0.5 * P,
+              mat: mat(c, "#f4f7fa"),
+              line: i === 0 || i === n - 1 ? 1.2 : 0.4,
+            });
+          else
+            s.box({
+              x: b.w,
+              y: u0,
+              w: 1.5,
+              d: w,
+              z: 2.9 * P,
+              h: 0.5 * P,
+              mat: mat(c, "#f4f7fa"),
+              line: i === 0 || i === n - 1 ? 1.2 : 0.4,
+            });
+        }
+      }
+      if (b.kind === "hotel") {
+        if (f === "s")
+          s.box({ x: b.w / 2 - 2.4, y: b.h, w: 4.8, d: 3, z: 3.1 * P, h: 0.35 * P, mat: mat("#23292e", "#f4f7fa") });
+        else s.box({ x: b.w, y: b.h / 2 - 2.4, w: 3, d: 4.8, z: 3.1 * P, h: 0.35 * P, mat: mat("#23292e", "#f4f7fa") });
+      }
+      // the sign over the awning (the diner's on its roof), its name in it
+      if (b.sign) {
+        const sw = L.diner ? Math.min(len - 2, 9) : Math.min(len - 1.5, 6.2);
+        const sh = sw * 0.1875;
+        const zc = L.diner ? H + 1.2 * P + (sh * P) / 2 : 3.72 * P + (sh * P) / 2;
+        const bg = b.sign === "BAR" ? "#2a0e0c" : L.diner ? "#a8322a" : "#1d2226";
+        const fg = b.sign === "BAR" ? "#ffb48a" : L.diner ? "#fff1d8" : "#efe3c4";
+        onWalls((d) => {
+          d.poly(f, fr(f, plane + 0.1, len / 2 - sw / 2, len / 2 + sw / 2, zc - (sh * P) / 2, zc + (sh * P) / 2), bg, {
+            stroke: "#151819",
+            sw: 1,
+            glow: b.sign === "BAR" || L.diner,
+          });
+          faceText(d, f, plane + 0.1, len / 2, zc, b.sign ?? "", sh * 0.62, fg);
+        });
+      }
+    } else if (b.floors === 1 || !front)
+      onWalls((d) => {
+        const n = Math.max(1, Math.floor(len / 3.4));
+        for (let i = 0; i < n; i++)
+          framed(d, f, plane, ((i + 0.5) * len) / n, 0.9 * P, 1.2, 1.7 * P, lit[li++ % 64], trim);
+      });
+    // upstairs: framed windows with stone heads
+    onWalls((d) => {
+      for (let k = 1; k < b.floors; k++) {
+        const n = Math.max(2, Math.floor(len / 4));
+        for (let i = 0; i < n; i++) {
+          const u = ((i + 0.5) * len) / n;
+          if (b.vacant && front) {
+            d.poly(f, fr(f, plane, u - 0.8, u + 0.8, k * fh + 1.3 * P, k * fh + 3 * P), "#9a8264", {
+              stroke: "#5a4636",
+              sw: 0.6,
+            });
+            continue;
+          }
+          framed(d, f, plane, u, k * fh + 1.3 * P, 1.3, 1.7 * P, lit[li++ % 64], trim);
+          d.poly(f, fr(f, plane, u - 0.87, u + 0.87, k * fh + 3.12 * P, k * fh + 3.38 * P), L.brick ? "#cfc6b4" : trim);
+        }
+      }
+    });
+  }
+  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: wallMat(L.wall) }, (d) => {
+    for (const f of art) f(d);
+  });
+  s.shadow(0, 0, b.w, b.h, 0.3, 0.1);
+  if (L.civic && b.face === "s") civicFront(s, b, L);
+}
+/** The town hall's columns under a pediment and its clock; the post office's canopy. */
+function civicFront(s: Sketch, b: Bld, L: ShopLook) {
+  const xm = b.w / 2;
+  const hall = b.sign === "TOWN HALL";
+  for (let k = 0; k < 3; k++)
+    s.box({
+      x: xm - 2.6 + k * 0.2,
+      y: b.h,
+      w: 5.2 - k * 0.4,
+      d: 1.6 - k * 0.45,
+      z: k * 0.2 * P,
+      h: 0.2 * P,
+      mat: CONCRETE,
+      line: 0.6,
+    });
+  if (!hall) {
+    s.box({ x: xm - 1.6, y: b.h, w: 3.2, d: 1.4, z: 3.75 * P, h: 0.2 * P, mat: mat(L.trim, "#f4f7fa") });
+    return;
+  }
+  for (const dx of [-2.4, -0.8, 0.8, 2.4])
+    s.cyl({ x: xm + dx, y: b.h + 2.2, z: 0.6 * P, r: 0.22, h: 3.6 * P, mat: mat("#ece6da", "#f6f2ea") });
+  s.box({ x: xm - 3.2, y: b.h, w: 6.4, d: 2.6, z: 4.2 * P, h: 0.6 * P, mat: mat("#e6e1d6", "#f4f7fa") });
+  s.shape({ x: xm - 3.3, y: b.h, w: 6.6, d: 2.7, z: 4.8 * P, h: 1.5 * P }, (d) => {
+    const p = [d.m(xm - 3.3, b.h + 2.6, 4.8 * P), d.m(xm + 3.3, b.h + 2.6, 4.8 * P), d.m(xm, b.h + 2.6, 6.3 * P)];
+    d.raw(
+      `<path d="M${p.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join("L")}Z" fill="#e6e1d6" stroke="#151819" stroke-width="1"/>`,
+    );
+    const r = [
+      d.m(xm + 3.3, b.h, 4.8 * P),
+      d.m(xm + 3.3, b.h + 2.6, 4.8 * P),
+      d.m(xm, b.h + 2.6, 6.3 * P),
+      d.m(xm, b.h, 6.3 * P),
+    ];
+    d.raw(
+      `<path d="M${r.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join("L")}Z" fill="#f4f7fa" stroke="#151819" stroke-width="1"/>`,
+    );
+    const c = d.m(xm, b.h + 2.65, 5.35 * P);
+    d.raw(
+      `<ellipse cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" rx="9" ry="10" fill="#f2ead6" stroke="#1f2124" stroke-width="1"/>`,
+    );
+    faceText(d, "s", b.h + 2.65, xm, 4.5 * P, "TOWN HALL", 0.32, "#2a2e33");
+  });
+}
+function house(s: Sketch, b: Bld) {
+  const L = b.look as HouseLook;
+  const H = L.H * P;
+  const trim = "#ece6da";
+  const lit = L.lit(32);
+  let li = 0;
+  const frontE = b.face === "e";
+  // windows on the two faces we see: framed; shuttered where it's the street side
+  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: wallMat(L.wall) }, (d) => {
+    for (const f of ["s", "e"] as const) {
       const len = f === "s" ? b.w : b.h;
       const plane = f === "s" ? b.h : b.w;
-      s.shape({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: 3.4 * P }, (d) => {
-        d.poly(f, fr(f, plane, 0.6, len - 0.6, 0.6 * P, 3.0 * P), b.sign === "BAR" ? "#e08a50" : "#f0c886", {
-          stroke: "#23292e",
-          sw: 1.2,
-          glow: true,
-        });
-        d.poly(f, fr(f, plane, len / 2 - 0.8, len / 2 + 0.8, 0, 2.6 * P), "#23292e");
-      });
-      // the awning
-      const aw = b.sign === "BAR" ? "#5a1e1e" : ["#2f4a3b", "#6b2430", "#2c3e55"][Math.floor(r() * 3)];
-      if (f === "s") s.box({ x: 0.6, y: b.h, w: b.w - 1.2, d: 1.4, z: 3.0 * P, h: 0.5 * P, mat: mat(aw, "#f4f7fa") });
-      else s.box({ x: b.w, y: 0.6, w: 1.4, d: b.h - 1.2, z: 3.0 * P, h: 0.5 * P, mat: mat(aw, "#f4f7fa") });
-    } else if (f === "s" || f === "e") windows(s, b, f, 0.9 * P, 2.6 * P, 3.4, 0.3);
-    for (let k = 1; k < b.floors; k++) windows(s, b, f, k * fh + 0.9 * P, k * fh + 2.7 * P, 3.4, 0.4);
+      const street = f === "e" && frontE;
+      const us = street ? [len / 2 - 2.7, len / 2 + 2.7] : [len / 2];
+      for (const zz of L.kind === 2 ? [0.9] : [0.9, 3.9])
+        for (const u of street && zz > 1 ? [len / 2 - 2.7, len / 2, len / 2 + 2.7] : us) {
+          framed(d, f, plane, u, zz * P, 1.05, 1.45 * P, lit[li++ % 32], trim);
+          if (street)
+            for (const sd of [-1, 1])
+              d.poly(f, fr(f, plane, u + sd * 0.83 - 0.3, u + sd * 0.83 + 0.3, zz * P, zz * P + 1.45 * P), L.shutter);
+        }
+      if (street)
+        d.poly(f, fr(f, plane, len / 2 - 0.5, len / 2 + 0.5, 0.5 * P, 2.6 * P), L.shutter, { stroke: trim, sw: 1.5 });
+    }
+  });
+  pitchedG(s, b, H, L.rise * P, L.kind === 1, 0.45, shade(L.wall, 0.9));
+  // the chimney
+  const cy = L.chimneyEnd ? 1.6 : b.h - 1.6;
+  const cx = L.kind === 1 ? 2 : b.w / 2;
+  s.box({
+    x: cx - 0.4,
+    y: cy - 0.35,
+    w: 0.8,
+    d: 0.7,
+    z: H + L.rise * 0.4 * P,
+    h: (L.rise * 0.6 + 0.8) * P,
+    mat: mat("#7b3b2c", "#8a4a3a"),
+  });
+  s.box({ x: cx - 0.48, y: cy - 0.43, w: 0.96, d: 0.86, z: H + (L.rise + 0.8) * P, h: 0.2 * P, mat: SNOW, line: 0.5 });
+  // the porch on its street side (across the front for a front gable)
+  const py0 = L.kind === 1 ? 0.4 : b.h / 2 - 1.6;
+  const pd = L.kind === 1 ? b.h - 0.8 : 3.2;
+  const px = frontE ? b.w : -1.8;
+  s.box({ x: frontE ? b.w : -1.6, y: py0 + 0.2, w: 1.6, d: pd - 0.4, z: 0, h: 0.5 * P, mat: CONCRETE });
+  s.box({ x: px, y: py0, w: 1.8, d: pd, z: 2.75 * P, h: 0.2 * P, mat: ROOF });
+  s.box({ x: px, y: py0, w: 1.8, d: pd, z: 2.95 * P, h: 0.2 * P, mat: SNOW, line: 0.5 });
+  for (const yy of [py0 + 0.2, py0 + pd - 0.2])
+    s.box({
+      x: (frontE ? b.w + 1.6 : -1.6) - 0.08,
+      y: yy - 0.08,
+      w: 0.16,
+      d: 0.16,
+      z: 0.5 * P,
+      h: 2.25 * P,
+      mat: mat(trim),
+    });
+  if (L.kind === 2) {
+    // the dormer out of the roof to the street
+    const dx = frontE ? b.w - 2.9 : -0.3;
+    s.box({ x: dx, y: b.h / 2 - 1.1, w: 3.2, d: 2.2, z: H, h: 2.2 * P, mat: wallMat(L.wall) }, (d) => {
+      if (frontE) framed(d, "e", dx + 3.2, b.h / 2, H + 0.75 * P, 1, 1.2 * P, lit[3], trim);
+    });
+    s.box({ x: dx - 0.2, y: b.h / 2 - 1.3, w: 3.6, d: 2.6, z: H + 2.2 * P, h: 0.3 * P, mat: SNOW });
   }
   s.shadow(0, 0, b.w, b.h, 0.3, 0.1);
 }
-function house(s: Sketch, b: Bld) {
-  const H = 6.4 * P;
-  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: wallMat("#d8d2c4") });
-  windows(s, b, "s", 0.9 * P, 2.4 * P, 3.2, 0.35);
-  windows(s, b, "e", 0.9 * P, 2.4 * P, 3.2, 0.35);
-  windows(s, b, "s", 3.9 * P, 5.3 * P, 3.2, 0.3);
-  windows(s, b, "e", 3.9 * P, 5.3 * P, 3.2, 0.3);
-  pitched(s, b, H, 2.6 * P, false);
-  // the porch on its street side
-  const e = b.face === "e";
-  if (e) {
-    s.box({ x: b.w, y: b.h / 2 - 1.4, w: 1.6, d: 2.8, z: 0, h: 0.5 * P, mat: CONCRETE });
-    s.box({ x: b.w, y: b.h / 2 - 1.6, w: 1.8, d: 3.2, z: 2.75 * P, h: 0.35 * P, mat: SNOW });
-  } else {
-    s.box({ x: -1.6, y: b.h / 2 - 1.4, w: 1.6, d: 2.8, z: 0, h: 0.5 * P, mat: CONCRETE });
-    s.box({ x: -1.8, y: b.h / 2 - 1.6, w: 1.8, d: 3.2, z: 2.75 * P, h: 0.35 * P, mat: SNOW });
-  }
-  s.shadow(0, 0, b.w, b.h, 0.3, 0.1);
+/** A pitched roof with its gables in the walls' colour. */
+function pitchedG(s: Sketch, b: Bld, z: number, rise: number, alongX: boolean, over: number, gable: string) {
+  pitched(s, b, z, rise, alongX, over, gable);
 }
 function church(s: Sketch, b: Bld) {
   const H = 6 * P;
-  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: wallMat("#ecebe5") });
-  windows(s, b, "e", 1.4 * P, 4.6 * P, 5, 0.6);
-  pitched(s, b, H, 6 * P, false);
-  // the steeple at the front (south), its spire
-  const xm = b.w / 2;
-  s.box({ x: xm - 2, y: b.h - 1, w: 4, d: 3.5, z: 0, h: 13 * P, mat: wallMat("#ecebe5") }, (d) => {
-    d.poly("s", fr("s", b.h + 2.5, xm - 0.6, xm + 0.6, 5.5 * P, 7.9 * P), LIT, {
-      stroke: "#1b1f22",
-      sw: 0.8,
-      glow: true,
-    });
+  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: wallMat("#ecebe5") }, (d) => {
+    // the pointed windows along the east side
+    for (const y of [4, 9, 14, 19]) {
+      const z0 = 1.3 * P;
+      const z1 = 3.9 * P;
+      const pts: V3[] = [
+        [b.w, y - 0.65, z0],
+        [b.w, y + 0.65, z0],
+        [b.w, y + 0.65, z1],
+        [b.w, y, z1 + 0.95 * P],
+        [b.w, y - 0.65, z1],
+      ];
+      d.poly("e", pts, LIT, { stroke: "#e6e1d6", sw: 1.6, glow: true });
+    }
   });
-  s.cyl({ x: xm, y: b.h + 0.75, z: 13.4 * P, r: 2.2, r2: 0.05, h: 9 * P, mat: ROOF });
+  pitched(s, b, H, 6 * P, false, 0.5, "#e6e3dc");
+  // the steeple at the front (south): its tower, the open belfry, the spire, the cross
+  const xm = b.w / 2;
+  const sy0 = b.h - 1;
+  s.box({ x: xm - 2, y: sy0, w: 4, d: 3.5, z: 0, h: 10 * P, mat: wallMat("#ecebe5") }, (d) => {
+    d.poly("s", fr("s", sy0 + 3.5, xm - 1.2, xm + 1.2, 0, 3.4 * P), "#e0ddd4");
+    d.poly("s", fr("s", sy0 + 3.5, xm - 0.85, xm + 0.85, 0.45 * P, 2.9 * P), "#5a2a22");
+    const pts: V3[] = [
+      [xm - 0.45, sy0 + 3.5, 7.4 * P],
+      [xm + 0.45, sy0 + 3.5, 7.4 * P],
+      [xm + 0.45, sy0 + 3.5, 8.4 * P],
+      [xm, sy0 + 3.5, 8.9 * P],
+      [xm - 0.45, sy0 + 3.5, 8.4 * P],
+    ];
+    d.poly("s", pts, LIT, { stroke: "#e6e1d6", sw: 1.4, glow: true });
+  });
+  s.box({ x: xm - 2.15, y: sy0 - 0.15, w: 4.3, d: 3.8, z: 10 * P, h: 0.3 * P, mat: mat("#e0ddd4") });
+  s.box({ x: xm - 2, y: sy0, w: 4, d: 3.5, z: 10.3 * P, h: 2.5 * P, mat: wallMat("#ecebe5") }, (d) => {
+    for (const f of ["s", "e"] as const) {
+      const plane = f === "s" ? sy0 + 3.5 : xm + 2;
+      const [u0, u1] = f === "s" ? [xm - 1.5, xm + 1.5] : [sy0 + 0.5, sy0 + 3];
+      d.poly(f, fr(f, plane, u0, u1, 10.3 * P, 12.8 * P), "#1a1d21");
+      for (let z = 10.6; z < 12.6; z += 0.32) d.poly(f, fr(f, plane, u0, u1, z * P, (z + 0.08) * P), "#d8d4ca");
+    }
+  });
+  s.box({ x: xm - 2.2, y: sy0 - 0.2, w: 4.4, d: 3.9, z: 12.8 * P, h: 0.6 * P, mat: ROOF });
+  s.cyl({ x: xm, y: sy0 + 1.75, z: 13.4 * P, r: 2.1, r2: 0.05, h: 8.2 * P, mat: ROOF });
+  s.box({ x: xm - 0.05, y: sy0 + 1.7, w: 0.1, d: 0.1, z: 21.6 * P, h: 1.6 * P, mat: STEEL, line: 0.5 });
+  s.box({ x: xm - 0.4, y: sy0 + 1.7, w: 0.8, d: 0.1, z: 22.5 * P, h: 0.1 * P, mat: STEEL, line: 0.5 });
+  for (let k = 0; k < 3; k++)
+    s.box({
+      x: xm - 2 + k * 0.15,
+      y: sy0 + 3.5,
+      w: 4 - k * 0.3,
+      d: 1.4 - k * 0.4,
+      z: k * 0.15 * P,
+      h: 0.15 * P,
+      mat: CONCRETE,
+      line: 0.5,
+    });
   s.shadow(0, 0, b.w, b.h + 2.5, 0.3, 0.1);
 }
 function gas(s: Sketch, b: Bld) {
@@ -252,7 +555,15 @@ function gas(s: Sketch, b: Bld) {
     for (const y of [2, 8]) s.box({ x: x - 0.25, y: y - 0.25, w: 0.5, d: 0.5, z: 0, h: 4.6 * P, mat: mat("#e9e9e6") });
   for (const x of [7, b.w - 7]) {
     s.box({ x: x - 0.6, y: 3.5, w: 1.2, d: 3, z: 0, h: 0.25 * P, mat: CONCRETE });
-    s.box({ x: x - 0.35, y: 4.2, w: 0.7, d: 0.6, z: 0.25 * P, h: 1.45 * P, mat: mat("#d6d2c8") });
+    for (const y of [4.2, 5.2]) {
+      s.box({ x: x - 0.35, y, w: 0.7, d: 0.6, z: 0.25 * P, h: 1.0 * P, mat: mat("#b8322a", "#c8473a") });
+      s.box(
+        { x: x - 0.37, y: y - 0.02, w: 0.74, d: 0.64, z: 1.25 * P, h: 0.6 * P, mat: mat("#e9e6dc", "#f4f7fa") },
+        (d) => {
+          d.poly("e", fr("e", x + 0.37, y + 0.12, y + 0.52, 1.38 * P, 1.72 * P), "#9ff0b0", { glow: true });
+        },
+      );
+    }
   }
   s.box({ x: 1, y: 0, w: b.w - 2, d: 10, z: 4.6 * P, h: 0.8 * P, mat: mat("#b8322a", "#f4f7fa") });
   s.shadow(1, 0, b.w - 2, 10, 0.25, 0.1);
@@ -260,6 +571,15 @@ function gas(s: Sketch, b: Bld) {
 function smallHouse(s: Sketch, b: Bld, wall: Mat, alongX: boolean, H: number) {
   s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: wall });
   pitched(s, b, H, 2.4 * P, alongX, 0.5);
+  s.shadow(0, 0, b.w, b.h, 0.3, 0.1);
+}
+function shed(s: Sketch, b: Bld) {
+  const H = 4 * P;
+  s.box({ x: 0, y: 0, w: b.w, d: b.h, z: 0, h: H, mat: mat("#9aa0a6", "#aab0b5", "#9aa0a6", "#80868c") }, (d) => {
+    for (let x = 0.5; x < b.w; x += 0.5) d.poly("s", fr("s", b.h, x - 0.03, x + 0.03, 0, H), "#868c92");
+  });
+  s.box({ x: -0.4, y: -0.4, w: b.w + 0.8, d: b.h + 0.8, z: H, h: 0.2 * P, mat: mat("#5d6267") });
+  s.box({ x: -0.38, y: -0.38, w: b.w + 0.76, d: b.h + 0.76, z: H + 0.2 * P, h: 0.4 * P, mat: SNOW });
   s.shadow(0, 0, b.w, b.h, 0.3, 0.1);
 }
 function gatehouse(s: Sketch, b: Bld) {
@@ -304,7 +624,7 @@ function building(s: Sketch, p: Props) {
     case "boathouse":
       return smallHouse(s, b, RED_BOARD, true, 3.2 * P);
     case "shed":
-      return smallHouse(s, b, mat("#9aa0a6", "#aab0b5", "#9aa0a6", "#80868c"), true, 4 * P);
+      return shed(s, b);
     case "barn":
       return barn(s, b);
     case "silo":
@@ -488,7 +808,10 @@ function tractor(s: Sketch) {
   s.shadow(0.2, 0.1, 3.8, 2.6, 0.32, 0.2);
 }
 function scarecrow(s: Sketch) {
-  const COAT = mat("#3b3328", "#4a4034");
+  // (a red plaid shirt over blue trousers, as 3D dresses him)
+  const COAT = mat("#8a3b2e", "#9a4a3c", "#8a3b2e", "#6e2f25");
+  s.cyl({ x: 0.37, y: 0.5, z: 0.5 * P, r: 0.12, h: 0.85 * P, mat: mat("#3d4a5c") });
+  s.cyl({ x: 0.63, y: 0.5, z: 0.5 * P, r: 0.12, h: 0.85 * P, mat: mat("#3d4a5c") });
   s.box({ x: 0.45, y: 0.45, w: 0.1, d: 0.1, z: 0, h: 2.5 * P, mat: WOOD, line: 0.4 });
   s.box({ x: -0.3, y: 0.45, w: 1.6, d: 0.1, z: 1.8 * P, h: 0.1 * P, mat: WOOD, line: 0.4 });
   s.cyl({ x: 0.5, y: 0.5, z: 0.9 * P, r: 0.4, r2: 0.3, h: 1.1 * P, mat: COAT });
@@ -499,8 +822,9 @@ function scarecrow(s: Sketch) {
   s.cyl({ x: 0.5, y: 0.5, z: 2.56 * P, r: 0.2, h: 0.28 * P, mat: DARK });
 }
 function bale(s: Sketch) {
-  s.cyl({ x: 0.6, y: 0.6, z: 0, r: 0.6, h: 1.1 * P, mat: STRAW });
-  s.cyl({ x: 0.6, y: 0.6, z: 1.1 * P, r: 0.5, h: 0.1 * P, mat: SNOW });
+  // lying on its side (as 3D lays them): the wrapped round, its darker end, snow on top
+  s.box({ x: 0, y: 0.05, w: 1.24, d: 1.1, z: 0, h: 1.2 * P, mat: STRAW, puff: 8, faces: { s: mat("#a88a44") } });
+  s.box({ x: 0.25, y: 0.05, w: 0.75, d: 1.05, z: 1.2 * P, h: 0.1 * P, mat: SNOW, line: 0.4 });
 }
 
 // ── the rest ────────────────────────────────────────────────────────────────
@@ -513,17 +837,43 @@ function tower(s: Sketch) {
     if (y > c && Math.abs(x - c) < 1.5) continue;
     s.box({ x: x - 0.05, y: y - 0.05, w: 0.1, d: 0.1, z: 0, h: 1.8 * P, mat: STEEL, line: 0.6 });
   }
-  s.cyl({ x: c, y: c, z: 0, r: 2.1, r2: 1.7, h: 24 * P, mat: mat("#dadde0", "#e4e6e8") });
-  s.cyl({ x: c, y: c, z: 24 * P, r: 1.7, r2: 4.2, h: 4 * P, mat: mat("#cfd3d7") });
-  s.cyl({ x: c, y: c, z: 28 * P, r: 7.4, h: 1.2 * P, mat: mat("#b9bec4") });
-  s.cyl({ x: c, y: c, z: 29.2 * P, r: 7.2, r2: 6.2, h: 2.2 * P, mat: mat("#e6e8ea") });
-  s.cyl({ x: c, y: c, z: 31.4 * P, r: 6.2, r2: 2.4, h: 3 * P, mat: mat("#e6e8ea", "#f4f7fa") });
-  s.cyl({ x: c, y: c, z: 34.4 * P, r: 2.4, r2: 0.6, h: 1.4 * P, mat: mat("#f4f7fa") });
-  s.cyl({ x: c, y: c, z: 35.8 * P, r: 0.5, h: 2 * P, mat: mat("#b9bec4") });
+  // four legs splayed from its foot to under the bowl, braced (tp/grounds3d.ts: the same)
+  s.shape({ x: c - 5, y: c - 5, w: 10, d: 10, z: 0, h: 25 * P }, (d) => {
+    const leg = (k: number, z: number): [number, number, number] => {
+      const a = Math.PI / 4 + (k * Math.PI) / 2;
+      const r = 2.3 + (z / 24) * 2.6;
+      return [c + Math.cos(a) * r, c + Math.sin(a) * r, z * P];
+    };
+    const seg = (a: [number, number, number], b2: [number, number, number], w: number, col: string) => {
+      const p = d.m(...a);
+      const q = d.m(...b2);
+      d.raw(
+        `<line x1="${p[0].toFixed(1)}" y1="${p[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`,
+      );
+    };
+    seg([c, c, 0], [c, c, 24.5 * P], 6, "#7d848b");
+    for (let k = 0; k < 4; k++) {
+      for (const [z0, z1] of [
+        [1, 8],
+        [8, 16],
+        [16, 24],
+      ]) {
+        seg(leg(k, z0), leg(k + 1, z1), 1.2, "#6f767d");
+        seg(leg(k, z1), leg(k + 1, z0), 1.2, "#6f767d");
+        seg(leg(k, z1), leg(k + 1, z1), 2, "#8e959c");
+      }
+      seg(leg(k, 0), leg(k, 24.2), 4, "#8e959c");
+    }
+  });
+  s.cyl({ x: c, y: c, z: 24.3 * P, r: 4.4, r2: 6.6, h: 2.6 * P, mat: mat("#c9ced3") });
+  s.cyl({ x: c, y: c, z: 26.8 * P, r: 7.6, h: 0.2 * P, mat: mat("#6f767d", "#f4f7fa") });
+  s.cyl({ x: c, y: c, z: 27 * P, r: 6.6, h: 6.4 * P, mat: mat("#dadde0", "#e6e8ea") });
+  s.cyl({ x: c, y: c, z: 33.3 * P, r: 7.1, r2: 0.3, h: 3.6 * P, mat: mat("#e9eef2", "#f4f7fa") });
+  s.cyl({ x: c, y: c, z: 36.8 * P, r: 0.35, h: 1.6 * P, mat: mat("#8e959c") });
   s.cyl({
     x: c,
     y: c,
-    z: 37.8 * P,
+    z: 38.4 * P,
     r: 0.45,
     h: 0.6 * P,
     mat: { c: "#ff2a1a", top: "#ff6a4a", flat: true },
@@ -712,6 +1062,63 @@ function postbox(s: Sketch) {
   s.shadowDot(0.5, 0.5, 0.3, 0.3);
 }
 
+/** A sawhorse barricade across the road (along y, `len` long), a lamp on it. */
+function sawhorse(s: Sketch, p: Props) {
+  const n = Number(p.len) || 4.4;
+  for (const y of [0.2, n - 0.2])
+    s.box({ x: 0.15, y: y - 0.05, w: 0.7, d: 0.1, z: 0, h: 1.25 * P, mat: mat("#e9e6dc"), line: 0.6 });
+  for (const z of [0.55, 1.05])
+    s.box({ x: 0.45, y: 0, w: 0.06, d: n, z: z * P, h: 0.22 * P, mat: mat("#c8322a") }, (d) => {
+      for (let y = 0.55; y < n; y += 1.1) d.poly("e", fr("e", 0.51, y, y + 0.55, z * P, (z + 0.22) * P), "#f2f2f2");
+    });
+  s.box({ x: 0.43, y: 0, w: 0.1, d: n, z: 1.27 * P, h: 0.05 * P, mat: SNOW, line: 0.3 });
+  s.box({
+    x: 0.4,
+    y: n - 0.5,
+    w: 0.15,
+    d: 0.18,
+    z: 1.3 * P,
+    h: 0.15 * P,
+    mat: { c: "#ffb02a", top: "#ffd27a", flat: true },
+    glow: true,
+    line: 0.5,
+  });
+}
+/** A steel truss's side along x (`len` long, its deck z0 px up): chords, verticals, diagonals. */
+function truss(s: Sketch, p: Props) {
+  const n = Number(p.len) || 32;
+  const z0 = Number(p.z0) || 0;
+  const H = 5.2 * P;
+  const bays = Math.max(2, Math.round(n / 4));
+  s.shape({ x: 0, y: 0, w: n, d: 0.4, z: z0, h: H }, (d) => {
+    const seg = (a: [number, number], b2: [number, number], w: number) => {
+      const p0 = d.m(a[0], 0.2, z0 + a[1]);
+      const q = d.m(b2[0], 0.2, z0 + b2[1]);
+      d.raw(
+        `<line x1="${p0[0].toFixed(1)}" y1="${p0[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}" stroke="#3d4650" stroke-width="${w}" stroke-linecap="round"/>`,
+      );
+    };
+    const b = n / bays;
+    seg([0, 0], [n, 0], 4);
+    seg([0, 0], [b, H], 3.5);
+    seg([b, H], [n - b, H], 3.5);
+    seg([n - b, H], [n, 0], 3.5);
+    for (let k = 1; k < bays; k++) {
+      seg([k * b, 0], [k * b, H], 2);
+      if (k < bays - 1) seg(k % 2 ? [k * b, 0] : [k * b, H], k % 2 ? [(k + 1) * b, H] : [(k + 1) * b, 0], 1.5);
+    }
+    seg([0, 0.75 * P], [n, 0.75 * P], 1.5);
+  });
+}
+/** A railing along y (`len` long, its deck z0 px up): posts and two rails. */
+function railing(s: Sketch, p: Props) {
+  const n = Number(p.len) || 20;
+  const z0 = Number(p.z0) || 0;
+  for (let y = 0; y <= n; y += 1.5) s.box({ x: 0, y, w: 0.12, d: 0.12, z: z0, h: 1.1 * P, mat: WOOD, line: 0.5 });
+  s.box({ x: 0, y: 0, w: 0.1, d: n, z: z0 + 1.0 * P, h: 0.1 * P, mat: mat("#5a4636", "#f4f7fa"), line: 0.5 });
+  s.box({ x: 0, y: 0, w: 0.08, d: n, z: z0 + 0.5 * P, h: 0.08 * P, mat: WOOD, line: 0.4 });
+}
+
 // ── the kinds and their drawings, the things ────────────────────────────────
 /** Every kind the Grounds' things use (one per building: its own footprint). */
 export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: Record<string, ItemGen> } {
@@ -733,6 +1140,9 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_tractor: { label: "Tractor", w: 4, h: 3, solid: true },
     gr_scarecrow: { label: "Scarecrow", w: 1, h: 1, solid: true },
     gr_bale: { label: "Hay", w: 1, h: 1, solid: false },
+    gr_sawhorse: { label: "Road closed", w: 1, h: 5, solid: true },
+    gr_truss: { label: "Bridge", w: 33, h: 1, solid: false },
+    gr_railing: { label: "Railing", w: 1, h: 22, solid: false },
     gr_hydrant: { label: "Hydrant", w: 1, h: 1, solid: true },
     gr_streetbin: { label: "Bin", w: 1, h: 1, solid: true },
     gr_newsbox: { label: "Newspapers", w: 1, h: 1, solid: true },
@@ -766,6 +1176,9 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_tractor: { draw: tractor, variants: 1 },
     gr_scarecrow: { draw: scarecrow, variants: 1 },
     gr_bale: { draw: bale, variants: 1 },
+    gr_sawhorse: { draw: sawhorse, variants: 1 },
+    gr_truss: { draw: truss, variants: 1, key: (p) => `${p.len}|${p.z0}` },
+    gr_railing: { draw: railing, variants: 1, key: (p) => `${p.len}|${p.z0}` },
   };
   kinds.gr_wall = { label: "Wall", w: 1, h: 1, solid: true };
   gens.gr_wall = { draw: wallPiece, variants: 1, key: (p) => `${p.dir}|${p.c}` };
@@ -796,6 +1209,8 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
       sign: b.sign,
       vacant: b.vacant,
       seed: i * 7 + 3,
+      // (what it looks like: decided with the 3D view's — world/grounds-look.ts)
+      look: b.kind === "house" ? houseLook(b) : shopLook(b),
     };
     gens[k] = { draw: (s) => building(s, props), variants: 1 };
   }
@@ -1076,7 +1491,36 @@ export function groundThings(G: G): Thing[] {
     if (t.kind === "bench") put(`st${i}`, "gr_bench", Math.floor(t.x), Math.floor(t.z), 2, 1);
     else put(`st${i}`, SK[t.kind], Math.floor(t.x), Math.floor(t.z), 1, 1);
   put("barrier", "gr_barrier", -44.5, G.GATE.z - 1, 8, 1, { len: 8 });
-  put("closed", "gr_barrier", G.ROAD_CLOSED.x, G.ROAD_CLOSED.z - 4, 1, 8, { len: 8 }, 1);
+  for (const dz of [-2.6, 2.6])
+    put(`closed${dz}`, "gr_sawhorse", G.ROAD_CLOSED.x - 0.5, G.ROAD_CLOSED.z + dz - 2.2, 1, 4.4, { len: 4.4 });
+  // the bridges' sides (their decks are the land's picture): the road's steel truss, the
+  // footbridge's railings (both run along an axis)
+  for (const w of G.WAYS) {
+    const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
+    if (idx.length < 2) continue;
+    const a = w.line[idx[0]];
+    const b = w.line[idx[idx.length - 1]];
+    const along = Math.abs(b[0] - a[0]) > Math.abs(b[1] - a[1]);
+    const len = Math.abs(along ? b[0] - a[0] : b[1] - a[1]);
+    const lo = along ? Math.min(a[0], b[0]) : Math.min(a[1], b[1]);
+    const mid = along ? (a[1] + b[1]) / 2 : (a[0] + b[0]) / 2;
+    const half = w.w / 2 + (w.kind === "trail" ? 0.2 : 0.7);
+    // (on the land's picture: iso paints the way there, under the deck's true height)
+    const deck = 0;
+    for (const sd of [-1, 1]) {
+      const id = `bridge-${w.key}${sd}`;
+      if (along && w.kind !== "trail")
+        put(id, "gr_truss", lo, mid + sd * half, len, 1, {
+          len: Math.round(len),
+          z0: Math.round(Math.max(0, deck) * P),
+        });
+      else if (!along)
+        put(id, "gr_railing", mid + sd * half, lo, 1, len, {
+          len: Math.round(len),
+          z0: Math.round(Math.max(0, deck) * P),
+        });
+    }
+  }
   put("gate-sign", "gr_sign", -51.5, G.GATE.z + 4, 4, 1, { bg: "#e9e6dc", fg: "#1c2228" });
   put("dock", "gr_dock", -254, -98, 3, 14, { len: 14 });
   // the farm (docs/plan/31-the-day.md): the cornfield in runs of rows, its fence, the tractor,
