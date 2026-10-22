@@ -14,6 +14,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  MultiplyBlending,
   Object3D,
   PerspectiveCamera,
   PlaneGeometry,
@@ -32,6 +33,7 @@ import {
 } from "three";
 import type { Sedan } from "../tp/car/sedan";
 import { windscreenSnow } from "../tp/car/textures";
+import { patchGrounds } from "../tp/light3d";
 
 // What the cars leave and throw (docs/plan/28-the-car.md, phase 5) and what
 // their cabins show (phase 4): tyre tracks in the snow that fill back in over
@@ -263,7 +265,10 @@ export class Spray {
   }
 }
 
-/** The roads' slush and black ice, laid on the asphalt where shared patchAt says (rebuilt as it gets colder). */
+/** The roads' slush and black ice, laid on the asphalt where shared patchAt says (rebuilt as it gets colder).
+ *  Soft, lumpy blobs scattered over the patch (no grid). The slush darkens what's under it (multiplied:
+ *  wet, and lit as the asphalt is — the floor's light map, the lamps' pools, the night); the ice is
+ *  lit as the land is (light3d patchGrounds). */
 export class RoadPatches {
   private mesh: Object3D | null = null;
   private cold = -1;
@@ -276,14 +281,31 @@ export class RoadPatches {
     if (band === this.cold) return;
     this.cold = band;
     this.dispose();
-    const slush: number[] = [];
-    const ice: number[] = [];
-    const quad = (out: number[], x: number, z: number, s: number, a: number) => {
+    const slush: number[][] = [[], []];
+    const ice: number[][] = [[], []];
+    // a blob about (x, z): jittered, its size, shape and turn its own (the same every build)
+    const blob = (out: number[][], x: number, z: number, s: number, a: number) => {
+      const h = (k: number) => {
+        const v = Math.sin(x * 127.1 + z * 311.7 + k * 74.7) * 43758.5453;
+        return v - Math.floor(v);
+      };
+      x += (h(1) - 0.5) * 1.2;
+      z += (h(2) - 0.5) * 1.2;
+      a += h(3) * Math.PI * 2;
+      const su = s * (0.8 + h(4) * 0.6);
+      const sv = su * (0.55 + h(5) * 0.4);
       const y = this.G.heightAt(x, z) + 0.025;
-      const ca = Math.cos(a) * s;
-      const sa = Math.sin(a) * s;
-      const P = (u: number, v: number) => [x + ca * u - sa * v, y, z + sa * u + ca * v];
-      out.push(...P(-1, -0.8), ...P(1, 0.8), ...P(1, -0.8), ...P(-1, -0.8), ...P(-1, 0.8), ...P(1, 0.8));
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const P = (u: number, v: number) => [x + ca * u * su - sa * v * sv, y, z + sa * u * su + ca * v * sv];
+      // (one of the texture's four blobs, flipped or not)
+      const q = Math.floor(h(6) * 4);
+      const u0 = (q % 2) * 0.5;
+      const v0 = Math.floor(q / 2) * 0.5;
+      const f = h(7) < 0.5;
+      const U = (u: number) => u0 + (f ? 1 - u : u) * 0.5;
+      out[0].push(...P(-1, -1), ...P(1, 1), ...P(1, -1), ...P(-1, -1), ...P(-1, 1), ...P(1, 1));
+      out[1].push(U(0), v0, U(1), v0 + 0.5, U(1), v0, U(0), v0, U(0), v0 + 0.5, U(1), v0 + 0.5);
     };
     const c = [0.4, 0.62, 0.85][band];
     for (const w of this.G.WAYS) {
@@ -296,51 +318,56 @@ export class RoadPatches {
           const px = x - Math.sin(a) * off;
           const pz = z + Math.cos(a) * off;
           const p = patchAt(px, pz, c);
-          if (p === "slush") quad(slush, px, pz, 1.1, a);
-          else if (p === "blackice") quad(ice, px, pz, 1.25, a);
+          if (p === "slush") blob(slush, px, pz, 1.5, a);
+          else if (p === "blackice") blob(ice, px, pz, 1.6, a);
         }
       }
     }
     // the lot's asphalt too
     const L = this.G.LOT;
     for (let x = L.x0 + 1; x < L.x1 - 1; x += 2)
-      for (let z = L.z0 + 1; z < L.z1 - 1; z += 2) if (patchAt(x, z, c) === "slush") quad(slush, x, z, 1.1, 0);
+      for (let z = L.z0 + 1; z < L.z1 - 1; z += 2) if (patchAt(x, z, c) === "slush") blob(slush, x, z, 1.5, 0);
     const g = new Object3D();
-    const add = (pos: number[], mat: MeshStandardMaterial) => {
-      if (!pos.length) return;
+    const add = (pos: number[][], mat: MeshBasicMaterial | MeshStandardMaterial) => {
+      if (!pos[0].length) return;
       const geo = new BufferGeometry();
-      geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
+      geo.setAttribute("position", new Float32BufferAttribute(pos[0], 3));
+      geo.setAttribute("uv", new Float32BufferAttribute(pos[1], 2));
       geo.computeVertexNormals();
       const m = new Mesh(geo, mat);
       m.receiveShadow = true;
       m.renderOrder = 1;
       g.add(m);
     };
+    // dst × mix(1, colour, alpha): darker where it lies, never brighter (premultiplied: three's MultiplyBlending)
     add(
       slush,
-      new MeshStandardMaterial({
-        color: 0x8b847a,
-        roughness: 0.55,
+      new MeshBasicMaterial({
+        color: 0x8f8a84,
+        map: slushTex(),
         transparent: true,
-        opacity: 0.55,
+        premultipliedAlpha: true,
+        blending: MultiplyBlending,
         depthWrite: false,
+        toneMapped: false,
+        fog: false,
         polygonOffset: true,
         polygonOffsetFactor: -2,
       }),
     );
-    add(
-      ice,
-      new MeshStandardMaterial({
-        color: 0x1b2128,
-        roughness: 0.06,
-        metalness: 0.3,
-        transparent: true,
-        opacity: 0.5,
-        depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -2,
-      }),
-    );
+    const iceMat = new MeshStandardMaterial({
+      color: 0x1b2128,
+      roughness: 0.06,
+      metalness: 0.3,
+      alphaMap: slushTex(),
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    });
+    patchGrounds(iceMat);
+    add(ice, iceMat);
     this.mesh = g;
     this.root.add(g);
   }
@@ -482,4 +509,56 @@ function soft(): CanvasTexture {
   g.fillRect(0, 0, 64, 64);
   softTex = new CanvasTexture(cv);
   return softTex;
+}
+
+// four lumpy blobs, one a quarter, white with a soft alpha: a few discs, a ragged edge
+let slushT: CanvasTexture | null = null;
+function slushTex(): CanvasTexture {
+  if (slushT) return slushT;
+  const S = 256;
+  const Q = S / 2;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = S;
+  const g = cv.getContext("2d") as CanvasRenderingContext2D;
+  let seed = 11;
+  const r = () => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
+  for (let q = 0; q < 4; q++) {
+    const ox = (q % 2) * Q;
+    const oy = Math.floor(q / 2) * Q;
+    g.save();
+    g.beginPath();
+    g.rect(ox, oy, Q, Q);
+    g.clip();
+    for (let i = 0; i < 9; i++) {
+      // (towards the middle, smaller further out: nothing reaches the quarter's edge)
+      const d = r() * 0.24 * Q;
+      const t = r() * Math.PI * 2;
+      const x = ox + Q / 2 + Math.cos(t) * d;
+      const y = oy + Q / 2 + Math.sin(t) * d;
+      const w = (0.16 + r() * 0.12) * Q;
+      const grd = g.createRadialGradient(x, y, 0, x, y, w);
+      grd.addColorStop(0, "rgba(255,255,255,0.42)");
+      grd.addColorStop(0.55, "rgba(255,255,255,0.3)");
+      grd.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = grd;
+      g.beginPath();
+      g.arc(x, y, w, 0, Math.PI * 2);
+      g.fill();
+    }
+    // the ragged edge: flecks scattered round it
+    for (let i = 0; i < 70; i++) {
+      const d = (0.18 + r() * 0.2) * Q;
+      const t = r() * Math.PI * 2;
+      g.fillStyle = `rgba(255,255,255,${0.08 + r() * 0.18})`;
+      g.beginPath();
+      g.arc(ox + Q / 2 + Math.cos(t) * d, oy + Q / 2 + Math.sin(t) * d, 1.5 + r() * 4, 0, Math.PI * 2);
+      g.fill();
+    }
+    g.restore();
+  }
+  slushT = new CanvasTexture(cv);
+  return slushT;
 }
