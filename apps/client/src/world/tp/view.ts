@@ -1920,6 +1920,7 @@ void main() {
             (b.id === meId && first && this.handsOn && handsDoing(b) !== ""),
           lowQuality: this.quality === "low",
         });
+        this.snowFall(b, p3, dt, hidden3);
         if (p3.ready) {
           // (its drawing stood in until now)
           const old = this.people.get(b.id);
@@ -2631,6 +2632,30 @@ void main() {
     fog.color.copy(this.around.horizon).lerp(this.stormFog, Math.min(1, s * 1.4));
   }
 
+  // Snow settling on people out under the sky (docs/plan/33-the-look.md): their shoulders and
+  // heads white after six minutes or so out (a minute and a half in a storm), gone again in a
+  // minute and a half indoors (or in a car, on the shuttle). Each viewer keeps its own count.
+  private snowOn = new Map<string, number>();
+  private snowFall(b: Body3, p3: Person3D, dt: number, hidden: boolean) {
+    if (!Person3D.snowMat) {
+      Person3D.snowMat = new MeshLambertMaterial({ color: 0xf2f5f8 });
+      patchGrounds(Person3D.snowMat);
+    }
+    const sheltered = !!b.busy && (b.busy.startsWith("ride:") || b.busy.startsWith("drive:"));
+    const out = !sheltered && this.underSky(b.x, b.y);
+    const was = this.snowOn.get(b.id) ?? 0;
+    const k = Math.max(0, Math.min(1, was + (out ? ((1 + 3 * this.storm) * dt) / 360 : -dt / 90)));
+    this.snowOn.set(b.id, k);
+    p3.snowK = hidden ? 0 : k;
+    p3.updateSnow();
+  }
+  // out under the open sky: on the land, or the lot's open tiles (asphalt, concrete)
+  private underSky(x: number, y: number): boolean {
+    if (this.level !== 0) return false;
+    if (this.onLand(x, y)) return true;
+    const ch = tileAt(this.map, Math.floor(x), Math.floor(y));
+    return ch === "a" || ch === "c";
+  }
   // out on the land (the ground floor's frame, off its own tiles)
   private onLand(x: number, y: number): boolean {
     if (this.level !== 0 || !this.around.grounds) return false;

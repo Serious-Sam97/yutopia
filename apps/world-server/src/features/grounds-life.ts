@@ -1,4 +1,5 @@
 import { ANIM, dirFromDelta, GROUND_OFFSET, levelMap } from "@yutopia/shared";
+import { nightness } from "@yutopia/shared/dark";
 import { along, GUARD_ROUND, heightAt, type Route, SHUTTLE, VISITOR } from "@yutopia/shared/grounds";
 import { config } from "../config.ts";
 import { Npc, type Player, Vehicle } from "../schema.ts";
@@ -22,7 +23,7 @@ const VISITOR_V = 7;
 const LOT_V = 3;
 const STOP_MS = FAST ? 2500 : 25_000; // the shuttle at a stop
 const BOARD_REACH = 6;
-const GUARD_V = 1.25;
+const GUARD_V = FAST ? 40 : 1.25;
 export const RIDING = "ride:shuttle";
 
 interface Drive {
@@ -60,8 +61,39 @@ registerFeature((room: WorldRoom) => {
   guard.kind = "guard";
   guard.level = 0;
   room.state.npcs.set("guard", guard);
-  let gS = Math.random() * GUARD_ROUND.len;
+  let gS = 0;
   let gPause = 0;
+  // his shift (docs/plan/33-the-look.md): by day at his post in the gatehouse; as it gets dark he
+  // comes out of its door and walks to the fence, and does his rounds; as it gets light he walks
+  // back the shorter way round, in at the door, to his post. Never popping in or out.
+  const POST = { x: -31.5, z: -364 }; // at the desk, by its glass
+  const DOOR = { x: -36, z: -364 }; // just outside its door (west)
+  const GATE = { x: -36, z: GUARD_ROUND.pts[0][1] }; // where his round passes it
+  const gateS = GATE.x - GUARD_ROUND.pts[0][0]; // (the round starts at its north-west corner, east)
+  let shift: "post" | "out" | "round" | "home" | "in" = "post";
+  let leg: { x: number; z: number }[] = [];
+  let homeDir: 1 | -1 = 1;
+  Object.assign(guard, { x: POST.x - off.x, y: POST.z - off.y, a: ANIM.idle });
+  // walks him towards the next point of `leg` (true: there)
+  const walkLeg = (dt: number): boolean => {
+    const t = leg[0];
+    if (!t) return true;
+    const gx = guard.x + off.x;
+    const gz = guard.y + off.y;
+    const d = Math.hypot(t.x - gx, t.z - gz);
+    const step = GUARD_V * dt;
+    guard.a = ANIM.walk;
+    if (d <= step) {
+      guard.x = t.x - off.x;
+      guard.y = t.z - off.y;
+      leg.shift();
+      return leg.length === 0;
+    }
+    guard.x += ((t.x - gx) / d) * step;
+    guard.y += ((t.z - gz) / d) * step;
+    guard.d = dirFromDelta((t.x - gx) / d, (t.z - gz) / d, guard.d as 0);
+    return false;
+  };
 
   // people out on the ground floor, in the building's coords
   // (and the cars people drive — features/cars.ts — along their length)
@@ -218,19 +250,59 @@ registerFeature((room: WorldRoom) => {
         else riders.delete(sid);
       });
       v.riders = riders.size;
-      // ── the guard: round the fence, a look out now and then ──
-      if (gPause > 0) {
-        gPause -= dt;
-        guard.a = ANIM.idle;
-      } else {
-        gS = (gS + GUARD_V * dt) % GUARD_ROUND.len;
-        guard.a = ANIM.walk;
-        if (Math.random() < dt / 150) gPause = 6 + Math.random() * 6;
+      // ── the guard: his shift (out at dusk, home at dawn), round the fence at night ──
+      const night = nightness(room.state.hour);
+      if (shift === "post" && night > 0.3) {
+        shift = "out";
+        leg = [{ ...DOOR }, { ...GATE }];
+      } else if (shift === "round" && night < 0.2) {
+        shift = "home";
+        const ahead = (gateS - gS + GUARD_ROUND.len) % GUARD_ROUND.len;
+        homeDir = ahead <= GUARD_ROUND.len / 2 ? 1 : -1;
       }
-      const g = along(GUARD_ROUND, gS);
-      guard.x = g.x - off.x;
-      guard.y = g.z - off.y;
-      guard.d = dirFromDelta(Math.cos(g.a), Math.sin(g.a), guard.d as 0);
+      if (shift === "post") {
+        guard.a = ANIM.idle;
+        guard.d = dirFromDelta(-1, 0, guard.d as 0); // looking out at the road
+      } else if (shift === "out") {
+        if (walkLeg(dt)) {
+          shift = "round";
+          gS = gateS;
+        }
+      } else if (shift === "in") {
+        if (walkLeg(dt)) {
+          shift = "post";
+          guard.a = ANIM.idle;
+        }
+      } else {
+        if (gPause > 0 && shift === "round") {
+          gPause -= dt;
+          guard.a = ANIM.idle;
+        } else {
+          const dir = shift === "home" ? homeDir : 1;
+          const before = gS;
+          gS = (gS + dir * GUARD_V * dt + GUARD_ROUND.len) % GUARD_ROUND.len;
+          guard.a = ANIM.walk;
+          if (shift === "round" && Math.random() < dt / 150) gPause = 6 + Math.random() * 6;
+          // home: past the gate's point this step — off the round, in at the door
+          const passed =
+            (dir > 0
+              ? (gateS - before + GUARD_ROUND.len) % GUARD_ROUND.len
+              : (before - gateS + GUARD_ROUND.len) % GUARD_ROUND.len) <=
+            GUARD_V * dt + 1e-6;
+          if (shift === "home" && passed) {
+            gS = gateS;
+            shift = "in";
+            leg = [{ ...DOOR }, { ...POST }];
+          }
+        }
+        if (shift === "round" || shift === "home") {
+          const g = along(GUARD_ROUND, gS);
+          guard.x = g.x - off.x;
+          guard.y = g.z - off.y;
+          const k = shift === "home" ? homeDir : 1;
+          guard.d = dirFromDelta(Math.cos(g.a) * k, Math.sin(g.a) * k, guard.d as 0);
+        }
+      }
     },
     leave(client) {
       if (riders.delete(client.sessionId)) shuttle.veh.riders = riders.size;

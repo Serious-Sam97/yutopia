@@ -206,6 +206,13 @@ export class PersonModel {
   get height() {
     return this.shown?.baked.height ?? 1.7;
   }
+  /** How far the top of the head (its hair or hat) is above the head joint, standing. */
+  get crown(): number {
+    const b = this.shown?.baked;
+    if (!b) return 0.3;
+    const r = b.rest;
+    return b.height - (r.hips[1] + r.spine[1] + r.neck[1] + r.head[1]);
+  }
   /** How far to lower the person so a seated pose rests on a seat `seatY` high. */
   sitDrop(seatY: number): number {
     const b = this.shown?.baked;

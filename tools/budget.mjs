@@ -27,7 +27,7 @@ for (const [page, budget] of Object.entries(BUDGETS)) {
 }
 // Lazy chunks (not in the page's files): found by a marker string in their code.
 const LAZY = {
-  "yutopia-item-art": 40,
+  "yutopia-item-art": 45, // (raised from 40 on 2026-10-22 by the user's call: it sat at 40.0, the next item would tip it)
   "yutopia-themes": 30,
   "yutopia-build": 40,
   "yutopia-people": 40,

@@ -12,6 +12,7 @@ import {
   Quaternion,
   type Ray,
   RingGeometry,
+  SphereGeometry,
   Vector3,
 } from "three";
 import type { chars } from "../art/chars-load";
@@ -23,6 +24,11 @@ import type { PersonIn } from "./people3d";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
 type Model = InstanceType<Chars["PersonModel"]>;
+const snowA = new Vector3();
+const snowB = new Vector3();
+const snowC = new Vector3();
+const snowQ = new Quaternion();
+const snowQ2 = new Quaternion();
 type Prop = ReturnType<Chars["buildProp"]>;
 type MotionOut = ReturnType<InstanceType<Chars["Motion3"]>["update"]>;
 
@@ -730,6 +736,48 @@ export class Person3D {
     return out.set(Math.sin(b) * c, Math.sin(pitch), Math.cos(b) * c).applyQuaternion(tq);
   }
   /** The flashlight's lens, in the world (the light comes out of it), or null: none in the hand. */
+  // ── snow settling on them outside (docs/plan/33-the-look.md): on the shoulders and the top of
+  // the head, as deep as `snowK` (0..1; the view keeps it, by how long they've been out) ──
+  static snowMat: Material | null = null;
+  snowK = 0;
+  private snow: { pad: Mesh; cap: Mesh } | null = null;
+  updateSnow() {
+    const k = this.snowK;
+    const m = this.model;
+    if (k < 0.03 || !m.ready || !Person3D.snowMat || this.part !== "all") {
+      if (this.snow) this.snow.pad.visible = this.snow.cap.visible = false;
+      return;
+    }
+    if (!this.snow) {
+      const dome = new SphereGeometry(1, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+      const pad = new Mesh(dome, Person3D.snowMat);
+      const cap = new Mesh(dome, Person3D.snowMat);
+      this.root.add(pad, cap);
+      this.snow = { pad, cap };
+    }
+    const sL = m.bone("shoulderL");
+    const sR = m.bone("shoulderR");
+    const head = m.bone("head");
+    const spine = m.bone("spine");
+    if (!sL || !sR || !head || !spine) return;
+    this.root.updateWorldMatrix(true, true);
+    const a = sL.getWorldPosition(snowA);
+    const b = sR.getWorldPosition(snowB);
+    const { pad, cap } = this.snow;
+    // across the shoulders: a low drift over them and the yoke between
+    pad.visible = true;
+    pad.position.copy(this.root.worldToLocal(snowC.copy(a).add(b).multiplyScalar(0.5)));
+    pad.position.y += 0.07;
+    this.root.getWorldQuaternion(snowQ).invert();
+    pad.quaternion.copy(snowQ).multiply(spine.getWorldQuaternion(snowQ2));
+    pad.scale.set(a.distanceTo(b) / 2 + 0.08, 0.02 + 0.06 * k, 0.1);
+    // a cap on the crown, tilting with the head
+    cap.visible = true;
+    cap.position.copy(this.root.worldToLocal(head.localToWorld(snowC.set(0, m.crown - 0.04, 0))));
+    this.root.getWorldQuaternion(snowQ).invert();
+    cap.quaternion.copy(snowQ).multiply(head.getWorldQuaternion(snowQ2));
+    cap.scale.set(0.1 + 0.05 * k, 0.015 + 0.045 * k, 0.1 + 0.05 * k);
+  }
   torchLens(out: Vector3): Vector3 | null {
     if (!this.torch || !this.root.visible) return null;
     this.torch.root.updateWorldMatrix(true, false);

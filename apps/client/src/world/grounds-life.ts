@@ -1,6 +1,6 @@
 "use client";
 
-import { floorOf, type MapDef, parseAvatar } from "@yutopia/shared";
+import { floorOf, GROUND_OFFSET, type MapDef, parseAvatar } from "@yutopia/shared";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import type { AvatarState } from "./engine";
@@ -179,7 +179,11 @@ export class GroundsLife {
 
   /** The night guard: a dark uniform and a cap, a flashlight; he says nothing. (A bot, not
    *  Vortex — `npc` is his —, so no muted mic shown.) */
-  guard(n: { x: number; y: number; d: number; a: number }): AvatarState {
+  guard(n: { x: number; y: number; d: number; a: number }, night = 1): AvatarState {
+    // (his flashlight: on outside after dark, off at his post in the gatehouse)
+    const gx = n.x + GROUND_OFFSET.x;
+    const gz = n.y + GROUND_OFFSET.y;
+    const atPost = gx > -34 && gx < -29 && gz > -367 && gz < -361;
     return {
       name: t("nightGuard"),
       avatar: GUARD_LOOK,
@@ -192,8 +196,7 @@ export class GroundsLife {
       emote: "",
       mic: false,
       bot: true,
-      // (his flashlight on, sweeping ahead of him: he's only out after dark — docs/plan/33-the-look.md)
-      torch: true,
+      torch: night > 0.3 && !atPost,
     };
   }
 }

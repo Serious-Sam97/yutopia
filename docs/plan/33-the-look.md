@@ -293,3 +293,22 @@ they were).
 - **Not done**: iso has no settled-snow shapes (drifts, banks, roof lips), no
   woods floor (shrubs, stones) and no ink line — it's drawn in its own inked
   style; the vehicles in iso still turn in four steps.
+
+## After — snow on people, the guard's shift (2026-10-22)
+
+- **Snow settles on people** out under the sky (the land, the lot's open tiles):
+  a drift across the shoulders following the spine, a cap on the crown tilting
+  with the head (`Person3D.updateSnow`, lit as the land). Full after about six
+  minutes out, a minute and a half in a storm; gone in a minute and a half
+  indoors, in a car or on the shuttle. Each viewer counts it (no server state).
+  Review shot: `e2e/snow-shots.spec.ts`.
+- **The night guard keeps a shift** (server, `features/grounds-life.ts`): by day
+  at his post in the gatehouse; as it gets dark (nightness > 0.3) out of its door
+  and up to the fence, then his rounds; as it gets light (< 0.2) home the
+  shorter way round, in at the door. The client no longer hides him by the hour,
+  and his flashlight is on outside after dark, off at his post. Test:
+  `grounds-life.test.ts` "the guard's shift".
+- Budget: `yutopia-item-art` 40 → 45 KB (it sat at 40.0).
+- Not done: a review shot of the guard leaving the gatehouse (the teleport near
+  the gate lands in the woods; his walk checked by the server test and by his
+  positions in the game).

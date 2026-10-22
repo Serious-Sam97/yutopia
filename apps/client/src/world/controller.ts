@@ -1452,11 +1452,12 @@ export class WorldController {
     const night = engine.getDaylight().night;
     room.state.npcs.forEach((n: S, id: string) => {
       const pos = interpolate(this.npcBuf.get(id) ?? [{ t: 0, x: n.x, y: n.y }], renderAt);
-      const guard = n.kind === "guard" ? this.life?.guard(n) : null;
+      const guard = n.kind === "guard" ? this.life?.guard(n, night) : null;
       const st = { ...(guard ?? this.npcState(n)), x: pos.x, y: pos.y };
-      // (Vortex is the studio's; the night guard's out on the ground floor, after dark)
+      // (Vortex is the studio's; the night guard's on the ground floor — at his post in the
+      // gatehouse by day, walking out to the fence after dark: the server walks him)
       const home = (n.level ?? -1) < 0 ? floorOf(this.building) : n.level;
-      if (n.kind === "guard" && (night < 0.3 || !guard)) {
+      if (n.kind === "guard" && !guard) {
         if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
         return;
       }

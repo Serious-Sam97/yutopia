@@ -72,3 +72,31 @@ test("the guard walks his round; the visitor's car is kept off the lot till it c
   assert.ok(Math.hypot(g().x - x0, g().y - y0) > 0.5 || g().a === 0, "he walks (or stops to look out)");
   assert.ok(a.state.vehicles.get("visitor"));
 });
+
+test("the guard's shift: at his post by day, out of the gatehouse's door to the fence after dark, back in at dawn", async () => {
+  const a = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 7,
+    token: "dev:92:P92:member,admin",
+  });
+  rooms.push(a);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const g = (): any => a.state.npcs.get("guard");
+  const at = () => ({ x: g().x + OFF.x, z: g().y + OFF.y });
+  const inGatehouse = () => at().x > -34 && at().x < -29 && at().z > -367 && at().z < -361;
+  await waitFor(() => !!a.state.npcs?.get("guard"));
+  // midday: at his post, standing
+  a.send("mod:hour", { h: 12 });
+  await waitFor(() => inGatehouse(), 30_000);
+  await sleep(400);
+  assert.ok(inGatehouse(), `at his post by day: ${JSON.stringify(at())}`);
+  // night: out of the door (walking past it, not appearing on the round)
+  a.send("mod:hour", { h: 22 });
+  await waitFor(() => !inGatehouse(), 5000);
+  const first = at();
+  assert.ok(Math.hypot(first.x - -36, first.z - -364) < 4, `out by the door first: ${JSON.stringify(first)}`);
+  await waitFor(() => Math.abs(at().z - -357) < 0.5 && Math.abs(at().x - -36) > 3, 10_000);
+  // morning: home the shorter way, in at the door, to his post
+  a.send("mod:hour", { h: 9 });
+  await waitFor(() => inGatehouse(), 60_000);
+  a.send("mod:hour", { h: null });
+});
