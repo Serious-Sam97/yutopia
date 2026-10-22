@@ -35,6 +35,7 @@ import {
   PointsMaterial,
   Quaternion,
   RepeatWrapping,
+  RingGeometry,
   Shape,
   SphereGeometry,
   Sprite,
@@ -45,7 +46,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Daylight } from "../art/daylight";
 import type { Themes } from "./sky";
-import { driftAlong } from "./snow3d";
+import { driftAlong, flatSnow } from "./snow3d";
 
 // The snow theme's outside, in 3D: the studio is the top floor of a corporate
 // headquarters alone in the snow (docs/plan/18-snow-campus.md). The main block
@@ -724,10 +725,24 @@ export function carGeometry(
   }
   box(0.02, 0.12, 0.34, -0.085, 0.46, 0, 0xf0ead6);
   box(0.02, 0.12, 0.34, 5.085, 0.46, 0, 0xf0ead6);
+  // the plates (cream, a dark band of letters), the grey of road salt and slush along the sills
+  for (const x of [-0.09, 5.09]) {
+    box(0.02, 0.15, 0.5, x, 0.72 - (x < 0 ? 0.26 : 0.04), 0, 0xe8e2c8);
+    box(0.025, 0.05, 0.36, x, 0.72 - (x < 0 ? 0.26 : 0.04), 0, 0x2a2e33);
+  }
+  for (const side of [-1, 1]) box(4.9, 0.14, 0.02, 2.5, 0.42, side * (CAR_W / 2 + 0.006), 0x8a8d8f);
   // wheels: tyre, hubcap, a dark well behind
   for (const x of [0.95, 4.05])
     for (const side of [-1, 1]) {
       const z = side * (CAR_W / 2 - 0.13);
+      // the arch round the tyre: dark, packed with slush at its top (a ring, not over the tyre)
+      const ring = (r0: number, r1: number, t0: number, tl: number, hex: number, dz: number) => {
+        const g = new RingGeometry(r0, r1, 14, 1, t0, tl);
+        if (side < 0) g.rotateY(Math.PI);
+        parts.push(tinted(g.translate(x, 0.36, side * (CAR_W / 2 + dz)), hex));
+      };
+      ring(0.37, 0.47, 0, Math.PI, 0x15171a, 0.004);
+      ring(0.4, 0.47, Math.PI * 0.3, Math.PI * 0.4, 0xdfe4e8, 0.008);
       parts.push(
         tinted(new CylinderGeometry(0.36, 0.36, 0.26, 16).rotateX(Math.PI / 2).translate(x, 0.36, z), 0x1b1d20),
       );
@@ -745,13 +760,25 @@ export function carGeometry(
       );
     }
   if (snowy) {
-    // snow on the roof, the hood, the trunk and the foot of the windscreen
+    // snow settled on the roof, the hood, the trunk and the foot of the windscreen: lumps with
+    // rounded edges (snow3d.ts), a little overhang off the roof's edge
+    const r = (() => {
+      let k = Math.round(body % 9973) + (wagon ? 7 : 3);
+      return () => {
+        k = (k * 16807) % 2147483647;
+        return k / 2147483647;
+      };
+    })();
+    const g = new G();
     const roofL = wagon ? 2.3 : 1.15;
     const roofX = wagon ? 3.5 : 2.95;
-    box(roofL, 0.1, CAR_W - 0.4, roofX, 1.56, 0, 0xffffff);
-    box(1.25, 0.07, CAR_W - 0.5, 1.05, 0.99, 0, 0xffffff);
-    box(0.3, 0.06, CAR_W - 0.6, 2.28, 1.03, 0, 0xffffff);
-    if (!wagon) box(0.5, 0.06, CAR_W - 0.5, 4.6, 1.0, 0, 0xffffff);
+    flatSnow(g, roofX - roofL / 2 - 0.05, -CAR_W / 2 + 0.18, roofX + roofL / 2 + 0.05, CAR_W / 2 - 0.18, 1.5, 0.16, r);
+    flatSnow(g, 0.45, -CAR_W / 2 + 0.25, 1.75, CAR_W / 2 - 0.25, 0.95, 0.09, r);
+    flatSnow(g, 2.12, -CAR_W / 2 + 0.3, 2.42, CAR_W / 2 - 0.3, 0.99, 0.08, r);
+    if (!wagon) flatSnow(g, 4.35, -CAR_W / 2 + 0.25, 4.95, CAR_W / 2 - 0.25, 0.96, 0.08, r);
+    g.color(0xdfe4e8);
+    const sm = g.build();
+    parts.push(sm);
   }
   const solid = mergeGeometries(parts, false);
   const glass = mergeGeometries(glassParts, false);

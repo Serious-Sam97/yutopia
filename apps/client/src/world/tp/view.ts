@@ -41,7 +41,6 @@ import {
   ConeGeometry,
   DirectionalLight,
   DoubleSide,
-  Float32BufferAttribute,
   Fog,
   Frustum,
   Group,
@@ -112,6 +111,7 @@ import { Shroud3 } from "./shroud3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { type TableScene3, TablesIn3D } from "./tables3d";
+import { busModel } from "./vehicles3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
 
@@ -2683,15 +2683,26 @@ void main() {
       seen.add(v.id);
       let m = this.veh3.get(v.id);
       if (!m) {
-        m = v.kind === "shuttle" ? this.busModel() : this.carModel();
+        m = v.kind === "shuttle" ? this.busModel() : this.carModel(v.id);
         this.veh3.set(v.id, m);
         this.scene.add(m);
       }
-      m.position.set(v.x - off.x, g.heightAt(v.x, v.z) + up + 0.03, v.z - off.y);
+      const px = v.x - off.x;
+      const pz = v.z - off.y;
+      // its wheels turn by how far it went (the shuttle's)
+      const wheels = m.userData.wheels as Group[] | undefined;
+      if (wheels && m.userData.at) {
+        const [ax, az] = m.userData.at as [number, number];
+        const d = Math.hypot(px - ax, pz - az);
+        if (d < 5) for (const w of wheels) w.rotation.z -= d / 0.5;
+      }
+      m.userData.at = [px, pz];
+      m.position.set(px, g.heightAt(v.x, v.z) + up + 0.03, pz);
       // (the models' noses point −x: turned to the heading)
       m.rotation.y = Math.PI - v.a;
-      const lit = m.userData.lamps as MeshBasicMaterial;
-      lit.opacity = Math.min(1, 0.25 + this.nightLevel * 1.2);
+      const n = this.nightLevel;
+      for (const l of m.userData.glow as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.25 + n * 1.2);
+      for (const l of m.userData.tail as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.35 + n * 1.1);
     }
     for (const [id, m] of this.veh3)
       if (!seen.has(id)) {
@@ -2714,50 +2725,39 @@ void main() {
     );
     return new Mesh(geo, lamps);
   }
-  private carModel(): Group {
+  /** The visitor's car: one of the town's colours and shapes (by its id), snow on it from the
+   *  drive in, headlamps and tail lamps. */
+  private carModel(id: string): Group {
     const root = new Group();
-    const { solid, glass } = carGeometry(false, 0x4a5a73, false);
+    let h = 0;
+    for (const c of id) h = (h * 31 + c.charCodeAt(0)) | 0;
+    const colours = [0x4a5a73, 0x6b2430, 0x2f4a3b, 0xcbbd98, 0x1f2124, 0x6a4a35];
+    const { solid, glass } = carGeometry((h & 4) !== 0, colours[Math.abs(h) % colours.length], true);
     root.add(new Mesh(solid, this.vehicleMat()), new Mesh(glass, this.vehicleMat()));
     const l = this.lampsOf(-2.52, 1.2, 0.55);
     root.add(l);
-    root.userData.lamps = l.material;
+    const tail = new MeshBasicMaterial({ color: 0xff3a24, transparent: true, toneMapped: false });
+    root.add(
+      new Mesh(
+        mergeGeometries(
+          [-1, 1].map((s) => new BoxGeometry(0.05, 0.14, 0.5).translate(2.53, 0.68, s * 0.62)),
+          false,
+        ),
+        tail,
+      ),
+    );
+    root.userData.glow = [l.material];
+    root.userData.tail = [tail];
     for (const c of root.children) c.castShadow = true;
     return root;
   }
   private busModel(): Group {
-    const root = new Group();
-    const part = (w: number, h: number, d: number, x: number, y: number, z: number, color: number) => {
-      const b = new BoxGeometry(w, h, d).translate(x, y, z);
-      const c = new Color(color);
-      const n = b.getAttribute("position").count;
-      b.setAttribute(
-        "color",
-        new Float32BufferAttribute(
-          Array.from({ length: n * 3 }, (_, i) => [c.r, c.g, c.b][i % 3]),
-          3,
-        ),
-      );
-      return b;
-    };
-    const body = mergeGeometries(
-      [
-        part(10, 1.2, 2.4, 0, 0.95, 0, 0xe6dccb),
-        part(10.04, 0.22, 2.44, 0, 1.4, 0, 0xa8432c),
-        part(10, 0.95, 2.36, 0, 2.0, 0, 0x262d33),
-        part(10, 0.45, 2.4, 0, 2.7, 0, 0xe6dccb),
-        part(9.4, 0.12, 2.1, 0, 2.98, 0, 0xeef2f4),
-        ...[-3.1, 3.1].flatMap((x) => [-1.15, 1.15].map((z) => part(1, 0.75, 0.3, x, 0.37, z, 0x1c1c1c))),
-      ],
-      false,
-    );
-    const mesh = new Mesh(body, this.vehicleMat());
-    mesh.castShadow = true;
-    root.add(mesh);
-    root.userData.big = true;
-    const l = this.lampsOf(-5.02, 1.7, 0.75);
-    root.add(l);
-    root.userData.lamps = l.material;
-    return root;
+    const b = busModel(this.vehicleMat());
+    b.root.userData.big = true;
+    b.root.userData.glow = [b.lamps, b.sign];
+    b.root.userData.tail = [b.tail];
+    b.root.userData.wheels = b.wheels;
+    return b.root;
   }
 
   // the Grounds' new things: their shaders compiled off the frame (on a layer no
@@ -2787,7 +2787,7 @@ void main() {
         toneMapped: false,
       }),
     );
-    warm.add(puff, this.carModel(), this.busModel());
+    warm.add(puff, this.carModel("visitor"), this.busModel());
     void this.renderer.compileAsync(warm, this.camera, this.scene).then(() => puff.material.dispose());
   }
 

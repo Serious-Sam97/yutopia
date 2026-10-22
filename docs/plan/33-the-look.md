@@ -225,3 +225,32 @@ they were).
   square and the woods by day and night, `lighting.spec` no GL errors; world
   page 553.9 KB.
 - **Not done**: the iso view's landmarks are as they were (phase 7).
+
+## Phase 6 — vehicles and life: delivered (2026-10-22)
+
+- **The parked and far cars** (`campus.ts` `carGeometry`: the town's, the lot's
+  past 38 tiles, the visitor's): plates front and back, grey road salt along the
+  sills, the wheel arches dark rings round the tyres with slush packed at their
+  tops, the snow on the roof, the hood, the trunk and the windscreen's foot
+  settled in lumps (`flatSnow`) instead of slabs.
+- **The visitor's car**: a colour and a shape (sedan or wagon) by its id, snow on
+  it, **tail lamps** (only headlamps before).
+- **The shuttle** (`tp/vehicles3d.ts`, same 10 × 2.4 footprint): cream over a
+  rust stripe, a band of windows with pillars you see the riders through, the
+  windscreen and wipers, the folding door on the kerb side, mirrors on their
+  arms, rounded roof edges and a vent, snow on the roof, a lit destination sign,
+  red tail lamps, dark arches — and its **wheels turn** by how far it went (they
+  were four square boxes).
+- **The night guard carries a flashlight** (`grounds-life.ts`: `torch: true`):
+  the beam everyone's flashlights use, its pool and its light on what he walks
+  past.
+- Review shots of what moves: `e2e/life-shots.spec.ts` (calls the shuttle to the
+  headquarters' stop, pins the hour while it runs, then lets it go).
+- **Checked**: client 23; typecheck; Biome; High 60 fps at the lot, the square and
+  the woods by day and night; `town.spec` (two ride the shuttle there and back) —
+  passes, and fails now and then on a long frame (50–117 ms) **on phase 5's code
+  too** (83 ms): the two-browser stall already noted, not this phase; world page
+  553.9 KB.
+- **Not done**: snow building up on people's shoulders and on parked cars over
+  time (it's a fixed amount); the guard still appears at dusk rather than walking
+  in; the iso view's vehicles are as they were (phase 7).

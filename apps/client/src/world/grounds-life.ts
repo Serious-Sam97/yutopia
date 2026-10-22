@@ -177,7 +177,7 @@ export class GroundsLife {
     return { objectId: SHUTTLE_ID, kind: "ride", label: t(bus.stop === "hq" ? "rideToTown" : "rideToHq") };
   }
 
-  /** The night guard: a dark uniform and a cap; he says nothing. (A bot, not
+  /** The night guard: a dark uniform and a cap, a flashlight; he says nothing. (A bot, not
    *  Vortex — `npc` is his —, so no muted mic shown.) */
   guard(n: { x: number; y: number; d: number; a: number }): AvatarState {
     return {
@@ -192,6 +192,8 @@ export class GroundsLife {
       emote: "",
       mic: false,
       bot: true,
+      // (his flashlight on, sweeping ahead of him: he's only out after dark — docs/plan/33-the-look.md)
+      torch: true,
     };
   }
 }
