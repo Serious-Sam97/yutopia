@@ -13,6 +13,7 @@ import {
   groundSurfaceAt,
   groundsRng,
   type Inside,
+  insideFence,
   insideOf,
   LAMPS,
   LOT,
@@ -60,6 +61,8 @@ import {
   Quaternion,
   RepeatWrapping,
   SphereGeometry,
+  Sprite,
+  SpriteMaterial,
   SRGBColorSpace,
   type Texture,
   TorusGeometry,
@@ -81,6 +84,7 @@ import {
   tinted,
   type V,
 } from "./campus";
+import { beam, railing, truss } from "./landmarks3d";
 import type { Themes } from "./sky";
 import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
 import { streetGeometry } from "./town3d";
@@ -623,6 +627,16 @@ export class Grounds3 {
     return m;
   }
 
+  private beacon: { m: MeshBasicMaterial; halo: SpriteMaterial } | null = null;
+  /** The water tower's beacon: a second on, a second and a half off, after dark. */
+  tick(t: number) {
+    if (!this.beacon) return;
+    const on = t % 2.5 < 1 ? 1 : 0.06;
+    const k = Math.min(1, this.lastNight * 1.4);
+    this.beacon.m.opacity = k * on;
+    this.beacon.halo.opacity = k * on * 0.9;
+  }
+
   /** 0 = day, 1 = full night: the lamps, the windows, the signs. */
   setNight(k: number) {
     this.lastNight = k;
@@ -822,57 +836,64 @@ export class Grounds3 {
       const g = new G();
       const L = w.line;
       const timber = w.kind === "trail";
+      const deck = (i: number): V => [L[i][0], w.h[i] + 0.05, L[i][1]];
+      if (timber) {
+        // the footbridge: a stringer either side under the deck, a railing on posts along both
+        for (const s of [1, -1]) {
+          const off = (i: number): V => {
+            const [px, pz] = L[Math.max(a, i - 1)];
+            const [qx, qz] = L[Math.min(b, i + 1)];
+            const l = Math.hypot(qx - px, qz - pz) || 1;
+            const p = deck(i);
+            return [p[0] - ((qz - pz) / l) * s * (w.w / 2 + 0.2), p[1], p[2] + ((qx - px) / l) * s * (w.w / 2 + 0.2)];
+          };
+          for (let i = a; i < b; i += 3) {
+            const j = Math.min(b, i + 3);
+            const p = off(i);
+            const q = off(j);
+            beam(g, [p[0], p[1] - 0.3, p[2]], [q[0], q[1] - 0.3, q[2]], 0.32, 0x4a3b2e);
+            railing(g, p, q, 1.05, 1.5, 0x5a4636);
+          }
+        }
+      } else {
+        // the road's: a steel through truss, its guard rails, the deck's edge girders
+        truss(g, deck(a), deck(b), w.w / 2 + 0.7, 5.2, 4, 0x56606a);
+      }
+      // the deck's underside
       for (let i = a; i < b; i++) {
         const [ax, az] = L[i];
         const [bx, bz] = L[i + 1];
         const l = Math.hypot(bx - ax, bz - az) || 1;
         const nx = -(bz - az) / l;
         const nz = (bx - ax) / l;
-        const y0 = w.h[i] + 0.35;
-        const y1 = w.h[i + 1] + 0.35;
-        for (const s of [1, -1]) {
-          const o = w.w / 2 + 0.15;
-          const P = (x: number, z: number, y: number): V => [x + nx * s * o, y, z + nz * s * o];
-          // the girder / the rail
-          g.color(timber ? 0x5a4636 : 0x4d555c);
-          const top = timber ? 1.05 : 1.3;
-          g.quad(P(ax, az, y0 - 0.5), P(bx, bz, y1 - 0.5), P(bx, bz, y1 + top), P(ax, az, y0 + top), [
-            nx * s,
-            0,
-            nz * s,
-          ]);
-          g.quad(P(ax, az, y0 - 0.5), P(bx, bz, y1 - 0.5), P(bx, bz, y1 + top), P(ax, az, y0 + top), [
-            -nx * s,
-            0,
-            -nz * s,
-          ]);
-          // snow along its top
-          g.color(0xf2f5f8);
-          const P2 = (x: number, z: number, y: number, e: number): V => [x + nx * s * (o + e), y, z + nz * s * (o + e)];
-          g.quad(
-            P2(ax, az, y0 + top + 0.04, -0.12),
-            P2(bx, bz, y1 + top + 0.04, -0.12),
-            P2(bx, bz, y1 + top + 0.04, 0.12),
-            P2(ax, az, y0 + top + 0.04, 0.12),
-            [0, 1, 0],
-          );
-        }
-        // the deck's underside
         g.color(timber ? 0x4a3b2e : 0x3d4247);
-        const o = w.w / 2 + 0.15;
+        const o = w.w / 2 + 0.3;
         g.quad(
-          [ax + nx * o, w.h[i] - 0.2, az + nz * o],
-          [bx + nx * o, w.h[i + 1] - 0.2, bz + nz * o],
-          [bx - nx * o, w.h[i + 1] - 0.2, bz - nz * o],
-          [ax - nx * o, w.h[i] - 0.2, az - nz * o],
+          [ax + nx * o, w.h[i] - 0.25, az + nz * o],
+          [bx + nx * o, w.h[i + 1] - 0.25, bz + nz * o],
+          [bx - nx * o, w.h[i + 1] - 0.25, bz - nz * o],
+          [ax - nx * o, w.h[i] - 0.25, az - nz * o],
           [0, -1, 0],
         );
+        // its edges, seen from the side
+        for (const s of [1, -1])
+          face(
+            g,
+            [ax + nx * s * o, w.h[i] - 0.25, az + nz * s * o],
+            [bx + nx * s * o, w.h[i + 1] - 0.25, bz + nz * s * o],
+            [bx + nx * s * o, w.h[i + 1] + 0.06, bz + nz * s * o],
+            [ax + nx * s * o, w.h[i] + 0.06, az + nz * s * o],
+            [nx * s, 0, nz * s],
+          );
       }
       // the steel bridge's piers on the ice
       if (!timber)
         for (const k of [a + Math.round((b - a) * 0.33), a + Math.round((b - a) * 0.66)]) {
           const [x, z] = L[k];
-          g.color(0x6a6f75).box(x - 1, terrainAt(x, z) - 1, z - 4.4, x + 1, w.h[k] - 0.2, z + 4.4);
+          g.color(0x6a6f75).box(x - 1, terrainAt(x, z) - 1, z - 4.4, x + 1, w.h[k] - 0.6, z + 4.4);
+          g.color(0x7a7f85).box(x - 1.3, w.h[k] - 0.6, z - 4.9, x + 1.3, w.h[k] - 0.25, z + 4.9); // its cap
+          // ice heaped against it upstream
+          g.color(0xe6eef4).box(x - 1.4, terrainAt(x, z) - 0.2, z - 4.6, x - 0.9, terrainAt(x, z) + 0.5, z + 4.6);
         }
       this.add(g.build(), this.lambert());
     }
@@ -936,8 +957,15 @@ export class Grounds3 {
         d.color(z % 0.9 < 0.45 ? 0x6b5442 : 0x5e4a3b).box(dx0, y, z, dx1, y + 0.12, z + 0.4);
       d.color(0xf1f4f7).box(dx0 + 0.15, y + 0.12, -97.8, dx1 - 0.15, y + 0.2, -84.4);
       for (const z of [-97, -92, -87, -84.4])
-        for (const x of [dx0 + 0.15, dx1 - 0.15])
-          d.color(0x3f342c).box(x - 0.14, POND_LEVEL - 0.3, z - 0.14, x + 0.14, y, z + 0.14);
+        for (const x of [dx0 + 0.15, dx1 - 0.15]) {
+          d.color(0x3f342c).box(x - 0.14, POND_LEVEL - 0.3, z - 0.14, x + 0.14, y + 0.55, z + 0.14);
+          d.color(0xf1f4f7).box(x - 0.16, y + 0.55, z - 0.16, x + 0.16, y + 0.66, z + 0.16); // snow capping it
+        }
+      // a ladder down to the ice at its end, a mooring cleat
+      for (const x of [dx0 + 1, dx1 - 1]) d.color(0x3f342c).box(x - 0.04, POND_LEVEL, -84.5, x + 0.04, y + 0.12, -84.4);
+      for (let yy = POND_LEVEL + 0.2; yy < y; yy += 0.3)
+        d.color(0x3f342c).box(dx0 + 1, yy, -84.48, dx1 - 1, yy + 0.05, -84.42);
+      d.color(0x2a2e33).box(dx0 + 0.3, y + 0.12, -90.2, dx0 + 0.7, y + 0.22, -90.0);
       this.add(d.build(), this.lambert());
       const canoe = tinted(
         new SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.45, 0.32, 2.3),
@@ -1949,6 +1977,25 @@ export class Grounds3 {
     g.color(0xd8d4cb).box(b.x0 - 0.6, y0 + 2.6, b.z0 - 0.6, b.x1 + 0.6, y0 + 2.95, b.z1 + 0.6);
     flatSnow(g, b.x0 - 0.58, b.z0 - 0.58, b.x1 + 0.58, b.z1 + 0.58, y0 + 2.95, 0.3, groundsRng(b.x0 * 3 + 1));
     icicles(g, [b.x0 - 0.6, y0 + 2.6, b.z1 + 0.6], [b.x1 + 0.6, y0 + 2.6, b.z1 + 0.6], groundsRng(b.z0 * 3), 0.6);
+    // a fascia round the roof, mullions at the corners and halfway along, the door on the west
+    // face, a camera on the roof's corner, a floodlight on a pole
+    g.color(0x3a4048).box(b.x0 - 0.62, y0 + 2.55, b.z0 - 0.62, b.x1 + 0.62, y0 + 2.75, b.z1 + 0.62);
+    const xm = (b.x0 + b.x1) / 2;
+    const zm = (b.z0 + b.z1) / 2;
+    g.color(0x2a3036);
+    for (const x of [xm]) {
+      g.box(x - 0.05, y0 + 1, b.z0 - 0.04, x + 0.05, y0 + 2.6, b.z0 + 0.04);
+      g.box(x - 0.05, y0 + 1, b.z1 - 0.04, x + 0.05, y0 + 2.6, b.z1 + 0.04);
+    }
+    for (const z of [zm - 1.5, zm + 1.5]) g.box(b.x1 - 0.04, y0 + 1, z - 0.05, b.x1 + 0.04, y0 + 2.6, z + 0.05);
+    g.color(0x2a3036).box(b.x0 - 0.06, y0, zm - 0.6, b.x0 + 0.04, y0 + 2.4, zm + 0.6); // the door
+    g.color(0xc9a85a).box(b.x0 - 0.1, y0 + 1.05, zm + 0.35, b.x0 - 0.06, y0 + 1.15, zm + 0.45);
+    for (let k = 0; k < 2; k++)
+      g.color(0xb7b0a2).box(b.x0 - 0.9 + k * 0.3, y0, zm - 0.8, b.x0, y0 + 0.18 * (k + 1), zm + 0.8);
+    g.color(0x2a2e33).box(b.x0 - 0.3, y0 + 2.95, b.z0 - 0.3, b.x0 + 0.1, y0 + 3.25, b.z0 + 0.1);
+    g.color(0x2a2e33).box(b.x0 - 0.75, y0 + 3.0, b.z0 - 0.45, b.x0 - 0.1, y0 + 3.25, b.z0 - 0.2); // the camera
+    beam(g, [b.x1 + 1.2, y0, b.z0 - 1.2], [b.x1 + 1.2, y0 + 5.5, b.z0 - 1.2], 0.14, 0x5d6268);
+    g.color(0x2a2e33).box(b.x1 + 0.9, y0 + 5.3, b.z0 - 1.6, b.x1 + 1.5, y0 + 5.7, b.z0 - 1.0);
     // the desk, a monitor inside
     g.color(0x5a4636).box(b.x0 + 0.2, y0 + 1.0, b.z0 + 0.4, b.x0 + 1.0, y0 + 1.05, b.z1 - 0.4);
     this.add(g.build(), this.lambert());
@@ -1983,13 +2030,37 @@ export class Grounds3 {
     const px = -36;
     const pz = GATE.z - 0.5;
     const py = groundAt(px, pz);
-    bar.color(0x8e9399).box(px - 0.3, py, pz - 0.3, px + 0.3, py + 1.1, pz + 0.3);
+    // its housing on a plinth, the pivot, the counterweight behind it
+    bar.color(0x9a9690).box(px - 0.45, py - 0.1, pz - 0.45, px + 0.45, py + 0.15, pz + 0.45);
+    bar.color(0xd8a62a).box(px - 0.3, py + 0.15, pz - 0.3, px + 0.3, py + 1.1, pz + 0.3);
+    bar.color(0x2a2e33).box(px - 0.32, py + 0.6, pz - 0.32, px + 0.32, py + 0.68, pz + 0.32);
+    bar.color(0x3a3e44).box(px - 0.12, py + 0.95, pz - 0.38, px + 0.12, py + 1.15, pz + 0.38);
+    bar.color(0x3a3e44).box(px + 0.3, py + 0.9, pz - 0.15, px + 0.9, py + 1.2, pz + 0.15);
+    flatSnow(bar, px - 0.3, pz - 0.3, px + 0.3, pz + 0.3, py + 1.1, 0.1, groundsRng(7));
+    // the boom: red and white, a skirt hanging under it, the rest post at its end
     for (let k = 0; k < 8; k++)
       bar
         .color(k % 2 ? 0xf2f2f2 : 0xc8322a)
-        .box(px - 0.3 - (k + 1) * 0.95, py + 0.95, pz - 0.07, px - 0.3 - k * 0.95, py + 1.12, pz + 0.07);
-    bar.color(0x8e9399).box(-44.6, py, pz - 0.12, -44.2, py + 0.95, pz + 0.12);
+        .box(px - 0.3 - (k + 1) * 0.95, py + 0.98, pz - 0.06, px - 0.3 - k * 0.95, py + 1.1, pz + 0.06);
+    bar.color(0xf4f7fa).box(px - 7.9, py + 1.1, pz - 0.05, px - 0.4, py + 1.15, pz + 0.05);
+    for (let x = px - 1; x > px - 7.9; x -= 0.35)
+      bar.color(0xe9e6dc).box(x - 0.02, py + 0.55, pz - 0.015, x + 0.02, py + 0.98, pz + 0.015);
+    bar.color(0x8e9399).box(-44.6, py, pz - 0.12, -44.2, py + 0.85, pz + 0.12);
+    bar.color(0x8e9399).box(-44.6, py + 0.85, pz - 0.22, -44.2, py + 1.0, pz - 0.12);
+    bar.color(0x8e9399).box(-44.6, py + 0.85, pz + 0.12, -44.2, py + 1.0, pz + 0.22);
     this.add(bar.build(), this.lambert());
+    // its warning light, lit after dark
+    const wl = new G().color(0xffffff);
+    wl.box(px - 0.1, py + 1.15, pz - 0.1, px + 0.1, py + 1.3, pz + 0.1);
+    this.add(
+      wl.build(),
+      this.glows(
+        this.keep(new MeshLambertMaterial({ color: 0x5a1a14, emissive: 0xff3a1a, emissiveIntensity: 0 })),
+        1.2,
+        "lamp",
+      ),
+      "none",
+    );
     // the sign by the road
     this.signBoard(
       "PRIVATE PROPERTY\nAUTHORISED VEHICLES ONLY\nALL VISITORS REPORT TO THE GATEHOUSE",
@@ -2142,7 +2213,15 @@ export class Grounds3 {
     r.color(0x5d6267).box(b.x0 - 0.4, y0 + H - 0.05, b.z0 - 0.4, b.x1 + 0.4, y0 + H + 0.15, b.z1 + 0.4);
     flatSnow(r, b.x0 - 0.38, b.z0 - 0.38, b.x1 + 0.38, b.z1 + 0.38, y0 + H + 0.15, 0.4, groundsRng(b.x0 * 5 + 2));
     icicles(r, [b.x0 - 0.4, y0 + H - 0.05, b.z0 - 0.4], [b.x1 + 0.4, y0 + H - 0.05, b.z0 - 0.4], groundsRng(b.z1), 0.5);
-    r.color(0x9aa0a6).box(b.x0 + 2, y0, b.z0 - 0.06, b.x0 + 7, y0 + 3.2, b.z0 + 0.02); // the roll-up door
+    // the roll-up door: its slats, its frame, the drum's box over it; a lamp; a side door
+    r.color(0x9aa0a6).box(b.x0 + 2, y0, b.z0 - 0.06, b.x0 + 7, y0 + 3.2, b.z0 + 0.02);
+    for (let y = 0.2; y < 3.2; y += 0.22)
+      r.color(0x868c92).box(b.x0 + 2, y0 + y, b.z0 - 0.09, b.x0 + 7, y0 + y + 0.04, b.z0 - 0.06);
+    r.color(0x5d6267).box(b.x0 + 1.8, y0, b.z0 - 0.12, b.x0 + 2, y0 + 3.4, b.z0 + 0.02);
+    r.color(0x5d6267).box(b.x0 + 7, y0, b.z0 - 0.12, b.x0 + 7.2, y0 + 3.4, b.z0 + 0.02);
+    r.color(0x5d6267).box(b.x0 + 1.8, y0 + 3.2, b.z0 - 0.4, b.x0 + 7.2, y0 + 3.7, b.z0);
+    r.color(0x6b4a3a).box(b.x0 + 9, y0, b.z0 - 0.06, b.x0 + 10, y0 + 2.2, b.z0 + 0.02);
+    r.color(0x2a2e33).box(b.x0 + 9.3, y0 + 3.0, b.z0 - 0.35, b.x0 + 9.7, y0 + 3.2, b.z0); // its lamp
     r.color(0x6b6f74).box(b.x1 - 4, y0, b.z0 - 3.4, b.x1 - 1, y0 + 0.9, b.z0 - 1.4); // the plough blade
     r.color(0xd8d0c0);
     const salt = tinted(new ConeGeometry(1.6, 1.5, 9).translate(0, 0.75, 0), 0xcfc7b8);
@@ -3686,12 +3765,43 @@ export class Grounds3 {
     g.color(0xb8322a).box(b.x0 + 1, y0 + 4.6, b.z0, b.x1 - 1, y0 + 5.4, b.z0 + 10);
     flatSnow(g, b.x0 + 0.95, b.z0 - 0.05, b.x1 - 0.95, b.z0 + 10.05, y0 + 5.4, 0.32, groundsRng(b.x1 + 5));
     icicles(g, [b.x0 + 1, y0 + 4.6, b.z0 - 0.02], [b.x1 - 1, y0 + 4.6, b.z0 - 0.02], groundsRng(b.z0 + 5), 0.4);
+    // the islands: a kerb, two pumps each (a red body, a white head with its dials, a hose
+    // hanging to the nozzle in its holster), a bin and a squeegee bucket at the end
+    const dials = new G().color(0xffffff);
     for (const x of [b.x0 + 7, b.x1 - 7]) {
-      g.color(0x9a948a).box(x - 0.6, y0, b.z0 + 3.5, x + 0.6, y0 + 0.25, b.z0 + 6.5);
-      g.color(0xd6d2c8).box(x - 0.35, y0 + 0.25, b.z0 + 4.2, x + 0.35, y0 + 1.7, b.z0 + 4.8);
-      g.color(0xd6d2c8).box(x - 0.35, y0 + 0.25, b.z0 + 5.2, x + 0.35, y0 + 1.7, b.z0 + 5.8);
+      g.color(0x9a948a).box(x - 0.6, y0, b.z0 + 3.2, x + 0.6, y0 + 0.25, b.z0 + 6.8);
+      g.color(0xd8a62a).box(x - 0.62, y0 + 0.25, b.z0 + 3.18, x + 0.62, y0 + 0.3, b.z0 + 3.4);
+      for (const z of [b.z0 + 4.5, b.z0 + 5.5]) {
+        g.color(0xb8322a).box(x - 0.35, y0 + 0.25, z - 0.3, x + 0.35, y0 + 1.25, z + 0.3);
+        g.color(0xe9e6dc).box(x - 0.37, y0 + 1.25, z - 0.32, x + 0.37, y0 + 1.85, z + 0.32);
+        g.color(0x2a2e33).box(x - 0.37, y0 + 1.85, z - 0.32, x + 0.37, y0 + 1.92, z + 0.32);
+        flatSnow(g, x - 0.36, z - 0.31, x + 0.36, z + 0.31, y0 + 1.92, 0.08, groundsRng(Math.round(x * 3 + z)));
+        for (const s of [-1, 1]) {
+          dials.quad(
+            [x + s * 0.375, y0 + 1.38, z - 0.2],
+            [x + s * 0.375, y0 + 1.38, z + 0.2],
+            [x + s * 0.375, y0 + 1.72, z + 0.2],
+            [x + s * 0.375, y0 + 1.72, z - 0.2],
+            [s, 0, 0],
+          );
+          g.color(0x2a2e33).box(x + s * 0.36, y0 + 0.75, z + 0.05, x + s * 0.46, y0 + 1.05, z + 0.17); // the nozzle
+          beam(g, [x + s * 0.4, y0 + 1.6, z - 0.1], [x + s * 0.55, y0 + 0.5, z - 0.05], 0.05, 0x1f2124);
+          beam(g, [x + s * 0.55, y0 + 0.5, z - 0.05], [x + s * 0.42, y0 + 0.95, z + 0.1], 0.05, 0x1f2124);
+        }
+      }
+      g.color(0x2f4a3b).box(x - 0.22, y0 + 0.25, b.z0 + 6.2, x + 0.22, y0 + 1.0, b.z0 + 6.6);
+      g.color(0x3a6b8a).box(x - 0.18, y0 + 0.25, b.z0 + 3.5, x + 0.18, y0 + 0.75, b.z0 + 3.85);
     }
     this.add(g.build(), this.lambert());
+    this.add(
+      dials.build(),
+      this.glows(
+        this.keep(new MeshLambertMaterial({ color: 0x1d2a22, emissive: 0x9ff0b0, emissiveIntensity: 0 })),
+        0.9,
+        "sign",
+      ),
+      "none",
+    );
     // the canopy's lit underside
     const u = new G().color(0xffffff);
     u.quad(
@@ -3859,8 +3969,13 @@ export class Grounds3 {
         const z2 = az + tz * Math.min(len, t + 3);
         const y = terrainAt(x, z);
         const y2 = terrainAt(x2, z2);
-        posts.box(x - 0.05, y - 0.2, z - 0.05, x + 0.05, y + 2.6, z + 0.05);
-        // the arm leaning out at the top, three strands
+        posts.box(x - 0.05, y - 0.2, z - 0.05, x + 0.05, y + 2.45, z + 0.05);
+        // which way is out (the arms lean out over it)
+        const mx = (x + x2) / 2;
+        const mz = (z + z2) / 2;
+        const out = insideFence(mx - tz * 2, mz + tx * 2) ? -1 : 1;
+        const ox = -tz * out;
+        const oz = tx * out;
         mesh.quad(
           [x, y + 0.05, z],
           [x2, y2 + 0.05, z2],
@@ -3874,27 +3989,37 @@ export class Grounds3 {
             [0, 2.4],
           ],
         );
-        for (const k of [2.6, 2.8, 3.0])
-          wire.box(
-            Math.min(x, x2) - 0.012,
-            (y + y2) / 2 + k - 0.012,
-            Math.min(z, z2) - 0.012,
-            Math.max(x, x2) + 0.012,
-            (y + y2) / 2 + k + 0.012,
-            Math.max(z, z2) + 0.012,
+        // the top rail; the arm leaning out at the top, three strands along the arms
+        beam(posts, [x, y + 2.4, z], [x2, y2 + 2.4, z2], 0.06, 0x5d6268, true);
+        beam(posts, [x, y + 2.4, z], [x + ox * 0.45, y + 2.95, z + oz * 0.45], 0.05, 0x5d6268);
+        for (const k of [0.15, 0.5, 0.85])
+          beam(
+            wire,
+            [x + ox * 0.45 * k, y + 2.4 + 0.55 * k, z + oz * 0.45 * k],
+            [x2 + ox * 0.45 * k, y2 + 2.4 + 0.55 * k, z2 + oz * 0.45 * k],
+            0.025,
+            0x3a3e44,
           );
-        posts.box(x - 0.03, y + 2.6, z - 0.03, x + 0.03, y + 3.05, z + 0.03);
-        // snow caught on the mesh's foot
-        posts
-          .color(0xf4f7fa)
-          .box(
-            Math.min(x, x2) - 0.25,
-            y - 0.1,
-            Math.min(z, z2) - 0.25,
-            Math.max(x, x2) + 0.25,
-            y + 0.35,
-            Math.max(z, z2) + 0.25,
-          );
+        // snow caught on the mesh's foot, following the ground
+        posts.color(0xf4f7fa);
+        face(posts, [x, y - 0.05, z], [x2, y2 - 0.05, z2], [x2, y2 + 0.32, z2], [x, y + 0.38, z], [ox, 0, oz]);
+        face(
+          posts,
+          [x, y + 0.38, z],
+          [x2, y2 + 0.32, z2],
+          [x2 + ox * 0.6, y2 - 0.05, z2 + oz * 0.6],
+          [x + ox * 0.6, y - 0.05, z + oz * 0.6],
+          [ox, 1, oz],
+        );
+        face(posts, [x, y - 0.05, z], [x2, y2 - 0.05, z2], [x2, y2 + 0.25, z2], [x, y + 0.3, z], [-ox, 0, -oz]);
+        face(
+          posts,
+          [x, y + 0.3, z],
+          [x2, y2 + 0.25, z2],
+          [x2 - ox * 0.45, y2 - 0.05, z2 - oz * 0.45],
+          [x - ox * 0.45, y - 0.05, z - oz * 0.45],
+          [-ox, 1, -oz],
+        );
         posts.color(0x5d6268);
         if (++n % 20 === 7)
           this.signBoard(
@@ -3923,77 +4048,216 @@ export class Grounds3 {
   // ── the tower, the statue, the bench, the road's end ──
   private landmarks() {
     if (this.near(TOWER.x, TOWER.z, 60)) {
+      // the water tower: four legs splayed out from its foot (inside the ring nobody walks in)
+      // to under the tank, braced in X at three levels, a riser up the middle, a ladder, a
+      // walkway round the tank with its rail, the tank and its roof under snow, the beacon
       const { x: tx, z: tz } = TOWER;
       const y = terrainAt(tx, tz);
-      const tower: BufferGeometry[] = [];
-      tower.push(place(tinted(new CylinderGeometry(1.7, 2.1, 24, 18).translate(0, 12, 0), 0xdadde0), tx, y, tz));
-      tower.push(place(tinted(new CylinderGeometry(4.2, 1.7, 4, 18).translate(0, 26, 0), 0xcfd3d7), tx, y, tz));
-      tower.push(
-        place(tinted(new SphereGeometry(7.4, 24, 16).scale(1, 0.72, 1).translate(0, 30.5, 0), 0xe6e8ea), tx, y, tz),
-      );
-      tower.push(
+      const g = new G();
+      const steel = 0x8e959c;
+      const leg = (k: number, yy: number): V => {
+        const a = Math.PI / 4 + (k * Math.PI) / 2;
+        const r = 2.3 + ((yy - y) / 24) * 2.6;
+        return [tx + Math.cos(a) * r, yy, tz + Math.sin(a) * r];
+      };
+      for (let k = 0; k < 4; k++) {
+        beam(g, leg(k, y), leg(k, y + 24.2), 0.5, steel);
+        g.color(0x9a9690).box(
+          leg(k, y)[0] - 0.5,
+          y - 0.3,
+          leg(k, y)[2] - 0.5,
+          leg(k, y)[0] + 0.5,
+          y + 0.35,
+          leg(k, y)[2] + 0.5,
+        );
+        for (const [y0, y1] of [
+          [y + 1, y + 8],
+          [y + 8, y + 16],
+          [y + 16, y + 24],
+        ]) {
+          beam(g, leg(k, y0), leg(k + 1, y1), 0.12, 0x6f767d);
+          beam(g, leg(k, y1), leg(k + 1, y0), 0.12, 0x6f767d);
+          beam(g, leg(k, y1), leg(k + 1, y1), 0.2, steel, true);
+        }
+      }
+      beam(g, [tx, y, tz], [tx, y + 24.5, tz], 0.9, 0x7d848b);
+      // the ladder up the south leg (the gate's side)
+      {
+        const p0 = leg(0, y + 0.3);
+        const p1 = leg(0, y + 24);
+        for (const o of [-0.25, 0.25])
+          beam(g, [p0[0] + o, p0[1], p0[2] + 0.45], [p1[0] + o, p1[1], p1[2] + 0.45], 0.05, 0x5d6268);
+        for (let t = 0.02; t < 1; t += 0.03) {
+          const p: V = [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t, p0[2] + (p1[2] - p0[2]) * t + 0.45];
+          beam(g, [p[0] - 0.25, p[1], p[2]], [p[0] + 0.25, p[1], p[2]], 0.04, 0x5d6268);
+        }
+      }
+      this.add(g.build(), this.lambert());
+      const tank: BufferGeometry[] = [];
+      tank.push(place(tinted(new CylinderGeometry(6.6, 4.4, 2.6, 24, 1).translate(0, 25.6, 0), 0xc9ced3), tx, y, tz)); // its bowl
+      tank.push(place(tinted(new CylinderGeometry(6.6, 6.6, 6.4, 24, 3).translate(0, 30.1, 0), 0xdadde0), tx, y, tz));
+      tank.push(place(tinted(new CylinderGeometry(6.65, 6.65, 0.35, 24).translate(0, 28.2, 0), 0xb9bec4), tx, y, tz)); // seams
+      tank.push(place(tinted(new CylinderGeometry(6.65, 6.65, 0.35, 24).translate(0, 31.4, 0), 0xb9bec4), tx, y, tz));
+      tank.push(place(tinted(new ConeGeometry(7.1, 3.6, 24, 1).translate(0, 35.1, 0), 0xb4b9bf), tx, y, tz));
+      tank.push(
         place(
           tinted(
-            new SphereGeometry(7.5, 24, 8, 0, Math.PI * 2, 0, Math.PI / 5).scale(1, 0.72, 1).translate(0, 30.6, 0),
-            0xf6f8fa,
+            new ConeGeometry(7.15, 3.65, 24, 1, true, 0, Math.PI * 2).translate(0, 35.2, 0).scale(1, 1, 1),
+            0xf2f5f8,
           ),
           tx,
           y,
           tz,
         ),
       );
-      tower.push(place(tinted(new CylinderGeometry(7.6, 7.6, 0.5, 24).translate(0, 29.4, 0), 0xb9bec4), tx, y, tz));
-      tower.push(place(tinted(new CylinderGeometry(0.5, 0.5, 2.2, 8).translate(0, 36.5, 0), 0xb9bec4), tx, y, tz));
-      this.add(mergeGeometries(tower, false), this.lambert());
-      for (const t of tower) t.dispose();
-      const beacon = this.glows(
-        this.keep(new MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false, transparent: true, opacity: 0 })),
-        1,
-        "lamp",
+      tank.push(place(tinted(new CylinderGeometry(0.35, 0.35, 1.6, 8).translate(0, 37.6, 0), 0x8e959c), tx, y, tz));
+      // the walkway round the bowl and its rail
+      tank.push(
+        place(tinted(new CylinderGeometry(7.6, 7.6, 0.18, 28, 1, false).translate(0, 26.9, 0), 0x6f767d), tx, y, tz),
       );
-      const bm = new Mesh(this.keep(new SphereGeometry(0.55, 10, 8)), beacon);
-      bm.position.set(tx, y + 37.8, tz);
-      this.root.add(bm);
-      this.glowCards.push({ x: tx, y: y + 37.8, z: tz, s: 5, c: 0xff3a2a });
-      // its fence
-      const f = new G().color(0x5d6268);
-      for (let a = 0; a < Math.PI * 2; a += Math.PI / 18)
-        f.box(
-          tx + Math.cos(a) * 9 - 0.05,
-          y,
-          tz + Math.sin(a) * 9 - 0.05,
-          tx + Math.cos(a) * 9 + 0.05,
-          y + 1.8,
-          tz + Math.sin(a) * 9 + 0.05,
+      tank.push(place(tinted(new CylinderGeometry(7.55, 7.55, 0.08, 28).translate(0, 27.03, 0), 0xf2f5f8), tx, y, tz));
+      tank.push(
+        place(tinted(new CylinderGeometry(7.6, 7.6, 0.06, 28, 1, true).translate(0, 28.0, 0), 0x5d6268), tx, y, tz),
+      );
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 14)
+        tank.push(
+          place(
+            tinted(new BoxGeometry(0.05, 1, 0.05).translate(0, 27.5, 0), 0x5d6268),
+            tx + Math.cos(a) * 7.58,
+            y,
+            tz + Math.sin(a) * 7.58,
+          ),
         );
-      this.add(f.build(), this.lambert());
+      this.add(mergeGeometries(tank, false), this.lambert());
+      for (const t of tank) t.dispose();
+      // the beacon: it blinks (tick)
+      const beacon = this.keep(
+        new MeshBasicMaterial({ color: 0xff2a1a, toneMapped: false, transparent: true, opacity: 0 }),
+      );
+      const bm = new Mesh(this.keep(new SphereGeometry(0.5, 10, 8)), beacon);
+      bm.position.set(tx, y + 38.7, tz);
+      this.root.add(bm);
+      const halo = new Sprite(
+        this.keep(
+          new SpriteMaterial({
+            map: this.ts.glow,
+            color: 0xff3a2a,
+            blending: AdditiveBlending,
+            depthWrite: false,
+            transparent: true,
+            opacity: 0,
+          }),
+        ),
+      );
+      halo.position.copy(bm.position);
+      halo.scale.setScalar(6);
+      this.root.add(halo);
+      this.beacon = { m: beacon, halo: halo.material };
+      // its fence: chain-link between posts, a gate to the south
+      const chain = this.keep(tex(chainCanvas(this.T)));
+      const posts = new G().color(0x5d6268);
+      const mesh = new G().color(0xffffff);
+      const step = Math.PI / 12;
+      for (let a = 0; a < Math.PI * 2 - 1e-6; a += step) {
+        const P = (an: number): V => [
+          tx + Math.cos(an) * 9,
+          terrainAt(tx + Math.cos(an) * 9, tz + Math.sin(an) * 9),
+          tz + Math.sin(an) * 9,
+        ];
+        const p = P(a);
+        const q = P(a + step);
+        posts.box(p[0] - 0.05, p[1] - 0.2, p[2] - 0.05, p[0] + 0.05, p[1] + 2, p[2] + 0.05);
+        // (the gap to the south: x within 1.5 of the middle, z past it)
+        if ((p[2] > tz && Math.abs(p[0] - tx) < 1.6) || (q[2] > tz && Math.abs(q[0] - tx) < 1.6)) continue;
+        const L = Math.hypot(q[0] - p[0], q[2] - p[2]);
+        mesh.quad(
+          [p[0], p[1] + 0.05, p[2]],
+          [q[0], q[1] + 0.05, q[2]],
+          [q[0], q[1] + 1.9, q[2]],
+          [p[0], p[1] + 1.9, p[2]],
+          [Math.cos(a), 0, Math.sin(a)],
+          [
+            [0, 0],
+            [L, 0],
+            [L, 1.9],
+            [0, 1.9],
+          ],
+        );
+        beam(posts, [p[0], p[1] + 1.95, p[2]], [q[0], q[1] + 1.95, q[2]], 0.06, 0x5d6268, true);
+      }
+      this.add(posts.build(), this.lambert());
+      this.add(
+        mesh.build(),
+        this.keep(new MeshLambertMaterial({ map: chain, transparent: true, alphaTest: 0.35, side: DoubleSide })),
+        "cast",
+      );
+      this.signBoard("DANGER\nNO CLIMBING", tx + 2.2, tz + 9.15, 0, 1.2, 0.7, 0.9, "#e9e6dc", "#8b2a22", false, false);
     }
     if (this.near(STATUE.x, STATUE.z, 40)) {
-      // the plaza, the pedestal, the founder pointing the way, snow on him
+      // the plaza paved in slabs (the joints between them dark), snow along its edges; the
+      // pedestal in three steps with a cornice and a bronze plaque; the founder in his long
+      // coat and hat, pointing the way, green where the weather's had him, snow on him
       const y = groundAt(STATUE.x, STATUE.z);
       const p = new G();
-      p.color(0xbcb8b0).quad(
-        [PLAZA.x0, y + 0.06, PLAZA.z0],
-        [PLAZA.x1, y + 0.06, PLAZA.z0],
-        [PLAZA.x1, y + 0.06, PLAZA.z1],
-        [PLAZA.x0, y + 0.06, PLAZA.z1],
+      const rp = groundsRng(4242);
+      p.color(0x6f6c66).quad(
+        [PLAZA.x0, y + 0.05, PLAZA.z0],
+        [PLAZA.x1, y + 0.05, PLAZA.z0],
+        [PLAZA.x1, y + 0.05, PLAZA.z1],
+        [PLAZA.x0, y + 0.05, PLAZA.z1],
         [0, 1, 0],
       );
-      p.color(0x8f8b83).box(STATUE.x - 2.4, y, STATUE.z - 2.4, STATUE.x + 2.4, y + 0.5, STATUE.z + 2.4);
-      p.color(0x9d988f).box(STATUE.x - 1.4, y + 0.5, STATUE.z - 1.4, STATUE.x + 1.4, y + 3.2, STATUE.z + 1.4);
-      p.color(0xf4f7fa).box(STATUE.x - 1.5, y + 3.2, STATUE.z - 1.5, STATUE.x + 1.5, y + 3.4, STATUE.z + 1.5);
+      for (let x = PLAZA.x0; x < PLAZA.x1; x += 2)
+        for (let z = PLAZA.z0; z < PLAZA.z1; z += 2) {
+          const v = rp();
+          // (snowed over, now and then, more towards the edges)
+          const edge = Math.min(x - PLAZA.x0, PLAZA.x1 - x - 2, z - PLAZA.z0, PLAZA.z1 - z - 2);
+          const snowy = rp() < (edge < 3 ? 0.55 : 0.12);
+          p.color(snowy ? 0xe9eef2 : v < 0.33 ? 0xb4b0a8 : v < 0.66 ? 0xbcb8b0 : 0xa9a59d).quad(
+            [x + 0.05, y + 0.07, z + 0.05],
+            [x + 1.95, y + 0.07, z + 0.05],
+            [x + 1.95, y + 0.07, z + 1.95],
+            [x + 0.05, y + 0.07, z + 1.95],
+            [0, 1, 0],
+          );
+        }
+      const X = STATUE.x;
+      const Z = STATUE.z;
+      p.color(0x8f8b83).box(X - 2.4, y, Z - 2.4, X + 2.4, y + 0.3, Z + 2.4);
+      p.color(0x97938b).box(X - 2.0, y + 0.3, Z - 2.0, X + 2.0, y + 0.6, Z + 2.0);
+      p.color(0x9d988f).box(X - 1.4, y + 0.6, Z - 1.4, X + 1.4, y + 2.9, Z + 1.4);
+      p.color(0xa8a39a).box(X - 1.6, y + 2.9, Z - 1.6, X + 1.6, y + 3.2, Z + 1.6);
+      p.color(0x5f6b5a).box(X - 0.7, y + 1.3, Z - 1.42, X + 0.7, y + 2.1, Z - 1.38); // the plaque (north, to the street)
+      flatSnow(p, X - 2.35, Z - 2.35, X + 2.35, Z + 2.35, y + 0.3, 0.12, rp);
+      flatSnow(p, X - 1.55, Z - 1.55, X + 1.55, Z + 1.55, y + 3.2, 0.18, rp);
       this.add(p.build(), this.lambert(), "both");
-      const bronze = 0x3e3a33;
+      const bronze = 0x47423a;
+      const verd = 0x5f7a6c;
       const fig: BufferGeometry[] = [
-        tinted(new CylinderGeometry(0.45, 0.75, 2.4, 10).translate(0, 1.2, 0), bronze), // the long coat
-        tinted(new CylinderGeometry(0.42, 0.45, 0.9, 10).translate(0, 2.8, 0), bronze),
-        tinted(new SphereGeometry(0.34, 12, 10).translate(0, 3.55, 0), bronze),
-        tinted(new CylinderGeometry(0.11, 0.13, 1.4, 6).rotateZ(-1.2).translate(0.75, 3.25, 0), bronze), // the arm, pointing
-        tinted(new CylinderGeometry(0.11, 0.13, 1.1, 6).rotateZ(0.25).translate(-0.5, 2.3, 0), bronze),
-        tinted(new SphereGeometry(0.35, 10, 6, 0, Math.PI * 2, 0, Math.PI / 3).translate(0, 3.62, 0), 0xf4f7fa), // snow on his head
-        tinted(new CylinderGeometry(0.44, 0.46, 0.08, 10).translate(0, 3.26, 0), 0xf4f7fa), // and shoulders
+        tinted(new BoxGeometry(0.3, 0.14, 0.18).translate(0.06, 0.07, 0.17), bronze), // his shoes
+        tinted(new BoxGeometry(0.3, 0.14, 0.18).translate(0.06, 0.07, -0.17), bronze),
+        tinted(new CylinderGeometry(0.12, 0.13, 0.8, 8).translate(0, 0.54, 0.16), bronze),
+        tinted(new CylinderGeometry(0.12, 0.13, 0.8, 8).translate(0, 0.54, -0.16), bronze),
+        tinted(new CylinderGeometry(0.42, 0.62, 1.8, 12, 1, true).translate(0, 1.45, 0), bronze), // the long coat
+        tinted(new CylinderGeometry(0.4, 0.42, 0.65, 12).translate(0, 2.68, 0), bronze),
+        tinted(new CylinderGeometry(0.43, 0.43, 0.14, 12).translate(0, 3.05, 0), verd), // the collar
+        tinted(new CylinderGeometry(0.13, 0.15, 0.22, 8).translate(0, 3.17, 0), bronze),
+        tinted(new SphereGeometry(0.28, 12, 9).translate(0, 3.42, 0), bronze),
+        tinted(new CylinderGeometry(0.46, 0.46, 0.05, 14).translate(0, 3.6, 0), verd), // the hat's brim
+        tinted(new CylinderGeometry(0.25, 0.28, 0.32, 12).translate(0, 3.78, 0), verd),
+        // the arm, out and up the way he points; the hand
+        tinted(new CylinderGeometry(0.1, 0.13, 1.25, 7).rotateZ(-1.15).translate(0.6, 3.05, -0.38), verd),
+        tinted(new SphereGeometry(0.09, 7, 5).translate(1.17, 3.33, -0.38), bronze),
+        // the other at his side, a hat-less hand on a cane
+        tinted(new CylinderGeometry(0.1, 0.13, 1.05, 7).rotateZ(0.12).translate(-0.06, 2.4, 0.46), bronze),
+        tinted(new CylinderGeometry(0.035, 0.035, 1.9, 6).rotateZ(0.12).translate(-0.12, 0.95, 0.52), 0x2f2c27),
+        // snow: on his hat, his shoulders, his arm
+        tinted(new CylinderGeometry(0.24, 0.26, 0.07, 12).translate(0, 3.97, 0), SNOW),
+        tinted(new CylinderGeometry(0.47, 0.47, 0.04, 14, 1, true).translate(0, 3.645, 0), SNOW),
+        tinted(new CylinderGeometry(0.44, 0.44, 0.05, 12).translate(0, 3.12, 0), SNOW),
+        tinted(new BoxGeometry(0.9, 0.04, 0.14).rotateZ(0.42).translate(0.6, 3.21, -0.38), SNOW),
       ];
-      this.add(place(mergeGeometries(fig, false), STATUE.x, y + 3.4, STATUE.z, -Math.PI / 2, 1.05), this.lambert());
+      this.add(place(mergeGeometries(fig, false), STATUE.x, y + 3.2, STATUE.z, Math.PI / 2, 1.05), this.lambert());
       for (const f of fig) f.dispose();
     }
     if (this.near(BENCH.x, BENCH.z, 20)) {
@@ -4012,26 +4276,38 @@ export class Grounds3 {
     }
     if (this.near(ROAD_CLOSED.x, ROAD_CLOSED.z, 30)) {
       const y = groundAt(ROAD_CLOSED.x, ROAD_CLOSED.z);
+      // two sawhorse barricades across the road: striped boards on A-frame legs, a lamp on each
       const g = new G();
-      for (let k = 0; k < 6; k++)
-        g.color(k % 2 ? 0xf2f2f2 : 0xc8322a).box(
-          ROAD_CLOSED.x - 0.15,
-          y + 0.9,
-          ROAD_CLOSED.z - 5 + k * 1.7,
-          ROAD_CLOSED.x + 0.15,
-          y + 1.2,
-          ROAD_CLOSED.z - 3.3 + k * 1.7,
-        );
-      for (const dz of [-4.8, 4.8])
-        g.color(0x3a3e44).box(
-          ROAD_CLOSED.x - 0.08,
-          y,
-          ROAD_CLOSED.z + dz - 0.08,
-          ROAD_CLOSED.x + 0.08,
-          y + 1.2,
-          ROAD_CLOSED.z + dz + 0.08,
-        );
+      const X = ROAD_CLOSED.x;
+      for (const zc of [ROAD_CLOSED.z - 2.6, ROAD_CLOSED.z + 2.6]) {
+        for (const dz of [-1.9, 1.9])
+          for (const dx of [-0.35, 0.35]) beam(g, [X, y + 1.25, zc + dz], [X + dx, y, zc + dz], 0.08, 0xe9e6dc);
+        for (const yy of [0.55, 1.05])
+          for (let k = 0; k < 8; k++)
+            g.color(k % 2 ? 0xf2f2f2 : 0xc8322a).box(
+              X - 0.2,
+              y + yy,
+              zc - 2.2 + k * 0.55,
+              X - 0.16,
+              y + yy + 0.22,
+              zc - 1.65 + k * 0.55,
+            );
+        g.color(SNOW).box(X - 0.22, y + 1.27, zc - 2.2, X - 0.14, y + 1.31, zc + 2.2);
+        g.color(0x2a2e33).box(X - 0.25, y + 1.27, zc + 1.7, X - 0.1, y + 1.47, zc + 1.9);
+      }
       this.add(g.build(), this.lambert());
+      const lamps = new G().color(0xffffff);
+      for (const zc of [ROAD_CLOSED.z - 2.6, ROAD_CLOSED.z + 2.6])
+        lamps.box(X - 0.27, y + 1.47, zc + 1.72, X - 0.08, y + 1.62, zc + 1.88);
+      this.add(
+        lamps.build(),
+        this.glows(
+          this.keep(new MeshLambertMaterial({ color: 0x5a4014, emissive: 0xffb02a, emissiveIntensity: 0 })),
+          1.2,
+          "lamp",
+        ),
+        "none",
+      );
       const drift = tinted(new SphereGeometry(1, 12, 7).scale(4, 1.8, 7), 0xf4f7fa);
       this.add(place(drift, ROAD_CLOSED.x + 5, y - 0.3, ROAD_CLOSED.z), this.lambert());
       this.signBoard(

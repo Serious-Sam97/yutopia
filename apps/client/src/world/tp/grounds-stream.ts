@@ -287,6 +287,7 @@ if (vFade < 0.999) {
    *  built a little at a time, shown. `target`: those feet (trees in front of them fade). */
   update(x: number, z: number, cam: Vector3, target?: Vector3) {
     this.windT.value = performance.now() / 1000;
+    this.statics.tick(this.windT.value);
     this.fade.a.value.copy(cam);
     this.fade.b.value.copy(target ?? cam);
     const want: string[] = [];

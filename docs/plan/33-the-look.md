@@ -186,3 +186,42 @@ they were).
 - **Not done**: the gas station's pumps, the statue and the square's paving are
   the landmarks' (phase 5); iso shows the new street furniture but not the new
   façades (phase 7).
+
+## Phase 5 — the landmarks: delivered (2026-10-22)
+
+- **Beams** (`tp/landmarks3d.ts`): a square beam between any two points (snow on
+  its top when it's near level), a Warren through truss along a deck, a railing.
+- **The road bridge**: a steel through truss (chords, verticals, diagonals, struts
+  across the top, the end posts sloping down), a guard rail inside, the deck's
+  edges seen from the side; the piers capped, ice heaped against them. **The
+  footbridge**: stringers under the deck, a railing on posts both sides. (They
+  were solid walls.)
+- **The water tower** on four splayed lattice legs braced in X at three levels,
+  a riser, a ladder up the south leg, a bowl, the tank with its seams, a roof
+  under snow, a walkway with its rail; the beacon **blinks** (a second on, a
+  second and a half off; `Grounds3.tick`), a halo with it. Its fence chain-link
+  between posts with a top rail (it was a ring of sticks), the gap kept, a
+  "DANGER / NO CLIMBING" sign.
+- **The company fence**: a top rail, the arms leaning **out** with the three
+  strands on them (they were straight up), the snow at its foot following the
+  ground both sides (a box at the start post's height floated on slopes).
+- **The gatehouse**: a fascia, mullions, a door up two steps, a camera, a
+  floodlight on a pole. **The barrier**: a yellow housing on a plinth, the pivot,
+  a counterweight, a skirt under the boom, a forked rest post, a warning light
+  lit at night.
+- **The square**: paved in slabs with dark joints, snow lying on some (more at
+  the edges); the pedestal in three steps with a cornice and a plaque; the
+  founder in a long coat and a hat, his shoes, a cane, his arm out, green where
+  the weather's had him, snow on his hat, shoulders and arm — turned to face the
+  street (he had his back to it).
+- **The gas station's pumps**: a red body, a white head with lit dials, hoses to
+  the nozzles in their holsters, the islands' kerbs, a bin and a bucket.
+- **The road closed**: two sawhorse barricades (striped boards on A-frame legs, a
+  lamp each, lit at night) in place of a bar of boxes. **The shed**: a slatted
+  roll-up door in its frame under the drum's box, a side door, a lamp. **The
+  dock**: snow capping its posts, a ladder down to the ice, a cleat.
+- **Checked**: client 23; typecheck; Biome; `grounds.spec` 3D (the walk out, the
+  campus, the woods, the town: worst frame 17 ms), High 60 fps at the lot, the
+  square and the woods by day and night, `lighting.spec` no GL errors; world
+  page 553.9 KB.
+- **Not done**: the iso view's landmarks are as they were (phase 7).
