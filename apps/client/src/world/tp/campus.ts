@@ -379,32 +379,62 @@ export function lotCanvas(T: Themes, lot: Lot, px: number): HTMLCanvasElement {
 }
 
 // A tileable strip of road: asphalt with two tyre tracks and snow at the
-// verges (u across, v along).
+// verges (u across, v along). Every line that runs along it wanders by sines
+// that wrap round the tile (it repeats with no seam): the verge's ragged edge
+// (it was a row of flat ellipses — a comb of teeth down every road), the
+// tracks a little off straight.
 export function roadCanvas(T: Themes): HTMLCanvasElement {
   const W = 128;
   const H = 512;
   const { c, g } = T.canvas(W, H);
   const r = T.rng(23);
+  const wave = (y: number, ph: number[], amp: number[]) =>
+    amp.reduce((a, A, i) => a + A * Math.sin(((2 * Math.PI * y) / H) * [3, 7, 17][i] + ph[i]), 0);
   g.fillStyle = "#454950";
   g.fillRect(0, 0, W, H);
-  g.fillStyle = "#f0f3f6";
-  g.fillRect(0, 0, 14, H);
-  g.fillRect(W - 14, 0, 14, H);
-  g.fillStyle = "rgba(240,243,246,0.5)";
-  for (let i = 0; i < 70; i++) {
-    const y = r() * H;
-    const w = 6 + r() * 14;
+  // slush along the verges, then the snow pushed up against them
+  for (const side of [0, 1]) {
+    const ph = [r() * 6, r() * 6, r() * 6];
+    const edge = (y: number) => 13 + wave(y, ph, [3.5, 2, 1]);
+    const at = (x: number) => (side ? W - x : x);
+    g.fillStyle = "rgba(196,203,212,0.35)";
     g.beginPath();
-    g.ellipse(r() < 0.5 ? 10 + r() * 12 : W - 10 - r() * 12, y, w * 0.6, 3 + r() * 4, 0, 0, Math.PI * 2);
+    g.moveTo(at(0), 0);
+    for (let y = 0; y <= H; y += 4) g.lineTo(at(edge(y) + 7 + wave(y, ph, [1.5, 1.5, 0.8])), y);
+    g.lineTo(at(0), H);
+    g.fill();
+    g.fillStyle = "#f0f3f6";
+    g.beginPath();
+    g.moveTo(at(0), 0);
+    for (let y = 0; y <= H; y += 4) g.lineTo(at(edge(y)), y);
+    g.lineTo(at(0), H);
     g.fill();
   }
-  g.strokeStyle = "rgba(18,20,24,0.6)";
-  g.lineWidth = 7;
-  for (const x of [38, 90]) {
+  // a few small patches of slush out on the asphalt
+  g.fillStyle = "rgba(210,216,224,0.28)";
+  for (let i = 0; i < 16; i++) {
     g.beginPath();
-    g.moveTo(x, 0);
-    g.lineTo(x, H);
-    g.stroke();
+    g.ellipse(18 + r() * (W - 36), r() * H, 2 + r() * 3, 3 + r() * 6, r() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  // the tyre tracks, worn dark
+  g.lineCap = "round";
+  for (const x of [38, 90]) {
+    const ph = [r() * 6, r() * 6, r() * 6];
+    for (const [w, a] of [
+      [11, 0.18],
+      [6, 0.42],
+    ]) {
+      g.strokeStyle = `rgba(18,20,24,${a})`;
+      g.lineWidth = w;
+      g.beginPath();
+      for (let y = 0; y <= H; y += 8) {
+        const px = x + wave(y, ph, [1.6, 0.8, 0.3]);
+        if (y === 0) g.moveTo(px, y);
+        else g.lineTo(px, y);
+      }
+      g.stroke();
+    }
   }
   // a centre line, faded under slush
   g.fillStyle = "rgba(230,220,160,0.35)";

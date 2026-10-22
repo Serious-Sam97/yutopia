@@ -92,22 +92,41 @@ export function patchOutdoors(m: Material) {
 // is, and the hour's light on it (the sun or moon and the sky's fill: dark at
 // night off the lit ways) — the lamps and the flashlights stay as bright as they are
 export const landLight = { value: new Color(1, 1, 1) };
+// …and what the snow throws back up is cold (docs/plan/33-the-look.md): the
+// hemisphere's ground half there is the sky's light this colour, not the rooms'
+// warm floor (a brown bounce turned all the snow beige)
+export const landBounce = { value: new Color(0.68, 0.77, 0.92) };
 export function patchGrounds(m: Material) {
+  // the look (docs/plan/33-the-look.md): each face one tone
+  (m as Material & { flatShading?: boolean }).flatShading = true;
   m.onBeforeCompile = (shader) => {
     shader.uniforms.lmSunOut = litBalance.lmSunOut;
     shader.uniforms.lmFillOut = litBalance.lmFillOut;
     shader.uniforms.lmCap = litBalance.lmCap;
     shader.uniforms.landLight = landLight;
+    shader.uniforms.landBounce = landBounce;
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmCap;\nuniform vec3 landLight;",
+        `#include <common>
+uniform float lmSunOut;
+uniform float lmFillOut;
+uniform float lmCap;
+uniform vec3 landLight;
+uniform vec3 landBounce;`,
       )
       .replace(
         "#include <lights_fragment_begin>",
         balanced("1.0")
           .replace("directLight.color *= lmSunK;", "directLight.color *= lmSunK * landLight;")
-          .replace("irradiance += lmFillK * getHemisphere", "irradiance += lmFillK * landLight * getHemisphere"),
+          .replace(
+            "irradiance += lmFillK * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );",
+            `{
+			HemisphereLight lmH = hemisphereLights[ i ];
+			lmH.groundColor = lmH.skyColor * landBounce;
+			irradiance += lmFillK * landLight * getHemisphereLightIrradiance( lmH, geometryNormal );
+		}`,
+          ),
       )
       .replace("#include <opaque_fragment>", ROLL_OFF);
   };

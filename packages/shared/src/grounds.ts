@@ -203,7 +203,7 @@ export const TOWN_CARS: {
       if (x > PLAZA.x0 - 3 && x < PLAZA.x1 + 3 && s > 0) continue;
       if (Math.abs(x - 420) < 6) continue;
       const wagon = r() < 0.3;
-      const colour = Math.floor(r() * 8);
+      const colour = Math.floor(r() * 9); // (all nine CAR_COLOURS: the orange never came up)
       const snowy = r() < 0.7;
       out.push({ x, z: -405 + s * 3.6, dir: s, wagon, colour, snowy, tilt: (r() - 0.5) * 0.03 });
     }

@@ -748,7 +748,8 @@ export class Grounds3 {
     if (!road.empty) this.add(road.build(), this.lambert(0xffffff, this.ts.road), "receive");
     if (!trail.empty) this.add(trail.build(), this.lambert(0xffffff, this.ts.trail), "receive");
     if (!walk.empty) this.add(walk.build(), this.lambert(0xffffff, this.ts.walk), "receive");
-    if (banks.length) this.add(mergeGeometries(banks, false), this.lambert());
+    // (a string of beads cast a comb of shadows along every road: they only take shadows)
+    if (banks.length) this.add(mergeGeometries(banks, false), this.lambert(), "receive");
     for (const g of banks) g.dispose();
     if (only && only !== WAYS[WAYS.length - 1]) return;
     // bridges: the road's steel one over the river, the trail's timber footbridge over the ravine
@@ -959,7 +960,7 @@ export class Grounds3 {
     const banks: BufferGeometry[] = lotBanks().map((k) =>
       place(tinted(new SphereGeometry(1, 9, 6).scale(k.s, k.s * 0.42, k.sz), 0xf6f8fa), k.x, -0.1, k.z, k.ry),
     );
-    this.add(mergeGeometries(banks, false), this.lambert());
+    this.add(mergeGeometries(banks, false), this.lambert(), "receive");
     for (const b of banks) b.dispose();
     // (in the game the lot's lamp posts and its path are the ground floor's)
     if (this.o.stream) return;
@@ -1597,18 +1598,29 @@ export class Grounds3 {
       this.root.add(plane);
     }
   }
-  /** A glass bridge across the courtyard at the studio's level. */
+  /** A glass bridge across the courtyard at the studio's level: the headquarters' east wall
+   *  to the east block's west one (it stopped in mid-air when the block moved east). */
   private courtyardBridge() {
-    if (!this.near(54, 18, 30)) return;
+    const east = BUILDINGS.find((b) => b.key === "east");
+    const hq = BUILDINGS.find((b) => b.key === "hq");
+    if (!east || !hq) return;
+    const a = hq.x1 + 0.1;
+    const b = east.x0 - 0.1;
+    if (!this.near((a + b) / 2, 18, 30)) return;
     const y = 14;
     const g = new G();
-    g.color(0xe3e6ea).box(48.1, y + 2.9, 16.4, 59.9, y + 3.15, 19.6);
-    g.color(0xf6f8fa).box(48.1, y + 3.15, 16.4, 59.9, y + 3.35, 19.6);
-    g.color(0xd3d6da).box(48.1, y - 0.35, 16.4, 59.9, y, 19.6);
+    g.color(0xe3e6ea).box(a, y + 2.9, 16.4, b, y + 3.15, 19.6);
+    g.color(0xf6f8fa).box(a, y + 3.15, 16.4, b, y + 3.35, 19.6);
+    g.color(0xd3d6da).box(a, y - 0.35, 16.4, b, y, 19.6);
+    // mullions every 2 tiles along both sides
+    for (let x = a + 2; x < b - 0.5; x += 2) {
+      g.color(0x9aa3ad).box(x - 0.06, y, 16.38, x + 0.06, y + 2.9, 16.5);
+      g.color(0x9aa3ad).box(x - 0.06, y, 19.5, x + 0.06, y + 2.9, 19.62);
+    }
     this.add(g.build(), this.lambert());
     const gl = new G().color(0x7f95a6);
-    gl.quad([48.1, y, 16.45], [59.9, y, 16.45], [59.9, y + 2.9, 16.45], [48.1, y + 2.9, 16.45], [0, 0, -1]);
-    gl.quad([48.1, y, 19.55], [59.9, y, 19.55], [59.9, y + 2.9, 19.55], [48.1, y + 2.9, 19.55], [0, 0, 1]);
+    gl.quad([a, y, 16.45], [b, y, 16.45], [b, y + 2.9, 16.45], [a, y + 2.9, 16.45], [0, 0, -1]);
+    gl.quad([a, y, 19.55], [b, y, 19.55], [b, y + 2.9, 19.55], [a, y + 2.9, 19.55], [0, 0, 1]);
     const m = this.keep(
       new MeshLambertMaterial({
         vertexColors: true,
@@ -2117,11 +2129,19 @@ export class Grounds3 {
         r.box(b.x0 - 0.3, y0 + 0.08, za, b.x0 - 0.22, y0 + 2.75, za + 0.2);
         r.box(b.x0 - 0.3, y0 + 0.08, zb - 0.2, b.x0 - 0.22, y0 + 2.75, zb);
         r.box(b.x0 - 0.3, y0 + 1.33, za, b.x0 - 0.22, y0 + 1.5, zb);
-        for (let k = 0; k < 14; k++) {
-          const u = (k + 0.5) / 14;
-          const y = y0 + 0.28 + u * 2.27;
-          for (const z of [za + 0.2 + u * (zb - za - 0.4), zb - 0.2 - u * (zb - za - 0.4)])
-            r.box(b.x0 - 0.31, y - 0.11, z - 0.11, b.x0 - 0.23, y + 0.11, z + 0.11);
+        // the X: two straight boards corner to corner (14 little cubes a diagonal read as stairs)
+        const xf = b.x0 - 0.31;
+        const yl = y0 + 0.28;
+        const yh = y0 + 2.55;
+        const h = 0.12;
+        for (const [z0, z1] of [
+          [za + 0.2, zb - 0.2],
+          [zb - 0.2, za + 0.2],
+        ]) {
+          r.quad([xf, yl - h, z0], [xf, yh - h, z1], [xf, yh + h, z1], [xf, yl + h, z0], [-1, 0, 0]);
+          // its edges, so it stands proud of the boards
+          r.quad([xf, yl + h, z0], [xf, yh + h, z1], [xf + 0.08, yh + h, z1], [xf + 0.08, yl + h, z0], [0, 1, 0]);
+          r.quad([xf, yl - h, z0], [xf, yh - h, z1], [xf + 0.08, yh - h, z1], [xf + 0.08, yl - h, z0], [0, -1, 0]);
         }
       }
       r.color(0x2f2f2f).box(b.x0 - 0.34, y0 + 2.95, dz0 - 3.4, b.x0 - 0.22, y0 + 3.05, dz1 + 3.4);
@@ -3357,7 +3377,7 @@ export class Grounds3 {
       const y = groundAt(c.x, c.z);
       const ry = c.dir > 0 ? 0 : Math.PI;
       solids.push(place(solid, c.x, y + 0.03, c.z, ry + c.tilt));
-      glass.push(place(gl, c.x, y + 0.03, c.z, ry));
+      glass.push(place(gl, c.x, y + 0.03, c.z, ry + c.tilt)); // (turned with its body)
     }
     if (solids.length) {
       this.add(mergeGeometries(solids, false), this.lambert());

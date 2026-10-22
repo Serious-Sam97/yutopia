@@ -1411,8 +1411,12 @@ void main() {
     this.pool.forEach((l, i) => {
       l.visible = i < this.lamps;
     });
-    if (q === "high") {
-      this.post ??= new Post3(this.renderer, this.scene, this.camera);
+    if (q !== "low") {
+      if (this.post && this.post.lite !== (q === "medium")) {
+        this.post.dispose();
+        this.post = null;
+      }
+      this.post ??= new Post3(this.renderer, this.scene, this.camera, q === "medium");
       this.post.setNight(this.nightLevel);
     } else {
       this.post?.dispose();

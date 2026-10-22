@@ -22,6 +22,7 @@ import {
   Matrix4,
   Mesh,
   MeshLambertMaterial,
+  MeshStandardMaterial,
   type Object3D,
   Quaternion,
   RepeatWrapping,
@@ -112,6 +113,23 @@ export class GroundsStream {
         .replace(
           "#include <common>",
           "#include <common>\nuniform vec3 fadeA;\nuniform vec3 fadeB;\nvarying float vFade;",
+        )
+        // each tree its own green and bark (docs/plan/33-the-look.md); the snow on it stays white
+        .replace(
+          "#include <color_vertex>",
+          `#include <color_vertex>
+#if defined(USE_INSTANCING) && defined(USE_COLOR)
+{
+  vec2 ip = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
+  float h1 = fract(sin(dot(ip, vec2(12.9898, 78.233))) * 43758.5453);
+  float h2 = fract(sin(dot(ip, vec2(39.3468, 11.135))) * 24634.6345);
+  float v = 0.84 + 0.26 * h1;
+  float warm = (h2 - 0.5) * 0.14;
+  vec3 t = vec3(v * (1.0 + warm), v * (1.0 + warm * 0.3), v * (1.0 - warm * 0.8));
+  float l = dot(vColor.rgb, vec3(0.299, 0.587, 0.114));
+  vColor.rgb *= mix(t, vec3(1.0), smoothstep(0.6, 0.85, l));
+}
+#endif`,
         )
         .replace(
           "#include <begin_vertex>",
@@ -291,8 +309,9 @@ if (vFade < 0.999) {
       for (const o of added) {
         o.traverse((c) => {
           const m = (c as Mesh).material;
+          // (the ice too: unpatched, it stayed as bright as day after dark)
           for (const x of Array.isArray(m) ? m : m ? [m] : [])
-            if (x instanceof MeshLambertMaterial && !this.patched.has(x)) {
+            if ((x instanceof MeshLambertMaterial || x instanceof MeshStandardMaterial) && !this.patched.has(x)) {
               this.patched.add(x);
               this.patch(x);
             }
