@@ -753,13 +753,14 @@ export class IsoGrounds {
     // (in passes: the verges and pavements under every way, then the asphalt, then the paint —
     // where Church Street meets Main, Main's paint stays whole; docs/plan/33-the-look.md)
     const roadish = (w: (typeof G.WAYS)[number]) => w.kind !== "trail" && w.kind !== "walk";
-    const pathOf = (w: (typeof G.WAYS)[number]) => {
+    const pathOf = (w: (typeof G.WAYS)[number], from = 0) => {
       const m = w.w + 6;
       if (!w.line.some(([x, z]) => inChunk(x, z, m))) return null;
       return () => {
         g.beginPath();
         let started = false;
         for (const [i, [x, z]] of w.line.entries()) {
+          if (i < from) continue;
           if (!inChunk(x, z, m + 2)) {
             started = false;
             continue;
@@ -781,15 +782,48 @@ export class IsoGrounds {
       if (dash) g.setLineDash([]);
     };
     const ASPHALT = "rgb(74,79,87)";
+    // a way's sample i: its line's normal there
+    const nrm = (w: (typeof G.WAYS)[number], i: number): [number, number] => {
+      const L = w.line;
+      const [px, pz] = L[Math.max(0, i - 1)];
+      const [qx, qz] = L[Math.min(L.length - 1, i + 1)];
+      const l = Math.hypot(qx - px, qz - pz) || 1;
+      return [-(qz - pz) / l, (qx - px) / l];
+    };
+    // where a way flares (Main Street from the county road): from its start to `n` a band as
+    // wide as it is there (`half(i)` out either side), the strokes from `n` on
+    const flareTo = (w: (typeof G.WAYS)[number]) => (w.flare ? Math.min(w.line.length - 1, w.flare.n) : 0);
+    const band = (w: (typeof G.WAYS)[number], half: (i: number) => number, colour: string) => {
+      const n = flareTo(w);
+      if (!n || !w.line.slice(0, n + 1).some(([x, z]) => inChunk(x, z, w.w + 6))) return;
+      g.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const [nx, nz] = nrm(w, i);
+        const [x, z] = w.line[i];
+        const p = [(x + nx * half(i) - x0) * PX, (z + nz * half(i) - z0) * PX] as const;
+        if (i === 0) g.moveTo(...p);
+        else g.lineTo(...p);
+      }
+      for (let i = n; i >= 0; i--) {
+        const [nx, nz] = nrm(w, i);
+        const [x, z] = w.line[i];
+        g.lineTo((x - nx * half(i) - x0) * PX, (z - nz * half(i) - z0) * PX);
+      }
+      g.closePath();
+      g.fillStyle = colour;
+      g.fill();
+    };
     g.lineJoin = "round";
     // 1: the verges' packed snow, the streets' pavements and kerbs
     g.lineCap = "butt";
     for (const w of G.WAYS) {
-      const path = pathOf(w);
+      const path = pathOf(w, flareTo(w));
       if (!path || !roadish(w)) continue;
       if (w.kind === "street") {
         stroke(path, "rgb(190,189,184)", w.w + 2 * w.pave);
         stroke(path, "rgb(150,151,154)", w.w + 0.56);
+        band(w, (i) => G.wayHalf(w, i) + G.wayPave(w, i), "rgb(190,189,184)");
+        band(w, (i) => G.wayHalf(w, i) + 0.28 * Math.min(1, G.wayPave(w, i) / 0.8), "rgb(150,151,154)");
       } else stroke(path, "rgb(214,220,226)", w.w + 2);
     }
     // 2: the asphalt, and the trails and walks
@@ -826,7 +860,10 @@ export class IsoGrounds {
         stroke(path, "rgb(196,195,190)", w.w);
         continue;
       }
-      stroke(path, ASPHALT, w.kind === "street" ? w.w : w.w - 0.6);
+      if (w.flare) {
+        stroke(pathOf(w, flareTo(w)) ?? path, ASPHALT, w.w);
+        band(w, (i) => G.wayHalf(w, i), ASPHALT);
+      } else stroke(path, ASPHALT, w.kind === "street" ? w.w : w.w - 0.6);
       // the wheel paths, worn darker, two a lane
       for (const lane of [-1, 1])
         for (const o of [-0.78, 0.78]) {
@@ -843,13 +880,140 @@ export class IsoGrounds {
       if (!path || !roadish(w)) continue;
       const e = w.kind === "street" ? (w.w >= 13 ? 3.5 : 0) : w.w / 2 - 0.75;
       if (e > 0) {
-        stroke(path, "rgba(232,234,236,0.9)", 2 * e + 0.14);
-        stroke(path, ASPHALT, 2 * e - 0.14);
+        // (the parking lanes' lines: from where it's done flaring)
+        const ep = pathOf(w, w.flare ? w.flare.n + 2 : 0) ?? path;
+        stroke(ep, "rgba(232,234,236,0.9)", 2 * e + 0.14);
+        stroke(ep, ASPHALT, 2 * e - 0.14);
       }
       if (w.kind === "street") {
         stroke(path, "rgba(216,184,74,0.95)", 0.38);
         stroke(path, ASPHALT, 0.18);
       } else stroke(path, "rgba(216,184,74,0.9)", 0.14, [3, 6]);
+    }
+    // 4: the carriageway's cover over its paint (tp/roads3d.ts roadCover, without the weather's
+    // fresh snow): packed snow by the way's kind in blotches by where it is, the asphalt showing
+    // in the wheel ruts, whiter at the edges, slush by the kerbs; eased halfway into the next
+    // way's at a join
+    {
+      const BASE: Record<string, number> = { street: 0.1, driveway: 0.38, road: 0.5 };
+      const hash = (x: number, z: number) => {
+        const h = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+        return h - Math.floor(h);
+      };
+      const vnoise = (x: number, z: number) => {
+        const ix = Math.floor(x);
+        const iz = Math.floor(z);
+        let fx = x - ix;
+        let fz = z - iz;
+        fx = fx * fx * (3 - 2 * fx);
+        fz = fz * fz * (3 - 2 * fz);
+        const a = hash(ix, iz) + (hash(ix + 1, iz) - hash(ix, iz)) * fx;
+        const b = hash(ix, iz + 1) + (hash(ix + 1, iz + 1) - hash(ix, iz + 1)) * fx;
+        return a + (b - a) * fz;
+      };
+      const sm = (a: number, b: number, v: number) => {
+        const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
+        return t * t * (3 - 2 * t);
+      };
+      // (a pixel a quarter tile, stretched smooth over the chunk: each pixel the nearest way's)
+      const Q = 4;
+      const N = C * Q;
+      const cc = document.createElement("canvas");
+      cc.width = N;
+      cc.height = N;
+      const cg = cc.getContext("2d") as CanvasRenderingContext2D;
+      const im = cg.createImageData(N, N);
+      let any = false;
+      for (const w of G.WAYS) {
+        if (!roadish(w) || !pathOf(w)) continue;
+        const base0 = BASE[w.kind] ?? 0.3;
+        const ends = [w.line[0], w.line[w.line.length - 1]];
+        const joins = G.WAYS.flatMap((o) =>
+          o === w || !roadish(o)
+            ? []
+            : ends
+                .filter((p) =>
+                  [o.line[0], o.line[o.line.length - 1]].some((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1.5),
+                )
+                .map((p) => ({ p, base: BASE[o.kind] ?? 0.3 })),
+        );
+        const lane = w.kind === "street" && w.w >= 13 ? 1.75 : w.w / 4;
+        const parkAt = w.kind === "street" && w.w >= 13 ? 3.5 : 99;
+        // its samples in reach, and over the pixels about each the nearest one's across-offset
+        const near: number[] = [];
+        for (let i = 0; i < w.line.length; i++) if (inChunk(w.line[i][0], w.line[i][1], w.w)) near.push(i);
+        if (!near.length) continue;
+        // (only the pixels about them)
+        const r = w.w / 2 + 1.5;
+        const lo = (v: number) => Math.max(0, Math.floor(v * Q));
+        const hi = (v: number) => Math.min(N, Math.ceil(v * Q));
+        const ax = lo(Math.min(...near.map((i) => w.line[i][0])) - r - x0);
+        const bx = hi(Math.max(...near.map((i) => w.line[i][0])) + r - x0);
+        const az = lo(Math.min(...near.map((i) => w.line[i][1])) - r - z0);
+        const bz = hi(Math.max(...near.map((i) => w.line[i][1])) + r - z0);
+        // (the nearest sample walked to from the last pixel's: a pixel or two moves it a sample)
+        const i0 = near[0];
+        const i1 = near[near.length - 1];
+        const d2 = (i: number, x: number, z: number) => (w.line[i][0] - x) ** 2 + (w.line[i][1] - z) ** 2;
+        let bi = i0;
+        for (let py = az; py < bz; py++)
+          for (let px = ax; px < bx; px++) {
+            const x = x0 + (px + 0.5) / Q;
+            const z = z0 + (py + 0.5) / Q;
+            if (px === ax) for (const i of near) if (d2(i, x, z) < d2(bi, x, z)) bi = i;
+            let bd = d2(bi, x, z);
+            for (let moved = true; moved; ) {
+              moved = false;
+              for (const j of [bi - 1, bi + 1])
+                if (j >= i0 && j <= i1) {
+                  const d = d2(j, x, z);
+                  if (d < bd) {
+                    bd = d;
+                    bi = j;
+                    moved = true;
+                  }
+                }
+            }
+            const hw = G.wayHalf(w, bi);
+            if (bd > (hw + 1.5) ** 2) continue;
+            const [nx, nz] = nrm(w, bi);
+            const m = (x - w.line[bi][0]) * nx + (z - w.line[bi][1]) * nz;
+            if (Math.abs(m) >= hw) continue;
+            // (not past its ends: the next way's own there)
+            const along = (x - w.line[bi][0]) * nz - (z - w.line[bi][1]) * nx;
+            if ((bi === 0 && along < 0) || (bi === w.line.length - 1 && along > 0)) continue;
+            const fl = w.flare ? sm(0, w.flare.n, bi) : 1;
+            let base = base0;
+            for (const j of joins) base += 0.5 * (j.base - base0) * (1 - sm(0, 25, Math.hypot(x - j.p[0], z - j.p[1])));
+            const fine = vnoise(x * 0.8, z * 0.8);
+            const wob = (vnoise(x * 0.09, z * 0.09) - 0.5) * 0.35;
+            let rut = 0;
+            for (const c of [-lane - 0.78, -lane + 0.78, lane - 0.78, lane + 0.78])
+              rut = Math.max(rut, 1 - sm(0, 0.95, Math.abs(m - c - wob)));
+            const edge = sm(hw - 1.7, hw - 0.15, Math.abs(m));
+            const park = sm(parkAt - 0.2, parkAt + 0.6, Math.abs(m)) * fl;
+            const big = 0.65 * vnoise(x * 0.07, z * 0.07) + 0.35 * vnoise(x * 0.16 + 11, z * 0.16 + 11);
+            let cover = Math.min(1, Math.max(0, base + (big - 0.5) * 0.8 + park * 0.18));
+            // (the ruts broad and soft: the picture's seen shrunk, a sharp line steps)
+            cover *= 1 - rut * 0.75;
+            cover = Math.max(cover, edge * 0.5 * sm(0.25, 0.6, fine + 0.2));
+            const a = sm(0.08, 0.55, cover) * 0.95;
+            const o = (py * N + px) * 4;
+            if (a <= im.data[o + 3] / 255) continue;
+            const k = 0.52 + 0.22 * fine;
+            const dirty = Math.min(1, edge * 0.8 + park * 0.5);
+            const slush = dirty > 0 ? dirty * sm(0.35, 0.75, vnoise(x * 0.4 + 5, z * 0.4 + 5)) * 0.65 : 0;
+            im.data[o] = 255 * (k + (0.3 - k) * slush);
+            im.data[o + 1] = 255 * (k + 0.03 + (0.27 - k - 0.03) * slush);
+            im.data[o + 2] = 255 * (k + 0.07 + (0.23 - k - 0.07) * slush);
+            im.data[o + 3] = 255 * a;
+            any = true;
+          }
+      }
+      if (any) {
+        cg.putImageData(im, 0, 0);
+        g.drawImage(cc, 0, 0, S, S);
+      }
     }
     // the crossing: crosswalks either side of Church Street's mouth and across it, its stop line
     {

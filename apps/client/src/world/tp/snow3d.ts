@@ -24,11 +24,14 @@ export function face(g: G, a: V, b: V, c: V, d: V, out: V = [0, 1, 0]) {
   g.quad(a, b, c, d, n);
 }
 
-/** Smooth noise along a run, −1..1: random knots every `step`, eased between (t ≥ 0). */
+/** Smooth noise along a run, −1..1: random knots every `step`, eased between (mirrored before
+ *  0: a negative t once eased out past its first knot, metres off — a street's slush flung
+ *  across the county road where Main Street begins). */
 export function wobble(r: Rng, step = 2.5): (t: number) => number {
   const knots: number[] = [];
-  return (t) => {
-    const i = Math.max(0, Math.floor(t / step));
+  return (t0) => {
+    const t = Math.abs(t0);
+    const i = Math.floor(t / step);
     while (knots.length <= i + 1) knots.push(r() * 2 - 1);
     const f = t / step - i;
     const e = f * f * (3 - 2 * f);

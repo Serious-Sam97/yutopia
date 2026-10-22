@@ -301,3 +301,34 @@ test("into another car: the knock shared by weight — square on, no spin; on it
   const corner = knock(2.6);
   assert.ok(corner.yaw > 0.2, `on its corner: yaw ${corner.yaw.toFixed(2)} rad/s`);
 });
+
+test("over the river's bridge at 50 km/h: no lip to hit, it keeps its speed and its wheels down", async () => {
+  const { heightAt, WAYS } = await import("./grounds.ts");
+  const road = WAYS.find((u) => u.key === "road");
+  assert.ok(road);
+  const idx = road.line.map((_, i) => i).filter((i) => road.bridged[i]);
+  const [x0, z0] = road.line[idx[0] - 14];
+  const [x1] = road.line[idx[idx.length - 1] + 8];
+  const w = groundsWorld();
+  const s = warm(createCar(SEDAN, x0, heightAt(x0, z0) + 0.4, z0 + 2.2, 0));
+  settle(s, w);
+  const v = 50 / 3.6;
+  s.v.x = v;
+  for (const wh of s.wheels) wh.w = v / SEDAN.wheel.r;
+  s.gear = 3;
+  s.rpm = 3000;
+  let slowest = Number.POSITIVE_INFINITY;
+  let tilt = 0;
+  for (let t = 0; s.p.x < x1 && t < 20; t += STEP) {
+    // (holding 50 on the throttle, steering back to its lane)
+    const kmh = readout(s).kmh;
+    const steer = Math.max(-0.3, Math.min(0.3, (s.p.z - (z0 + 2.2)) * 0.15));
+    stepCar(s, { ...NONE, up: kmh < 50 ? 0.6 : 0, steer }, w);
+    slowest = Math.min(slowest, kmh);
+    const up = 1 - 2 * (s.q.x * s.q.x + s.q.z * s.q.z);
+    tilt = Math.max(tilt, Math.acos(Math.max(-1, Math.min(1, up))));
+  }
+  assert.ok(s.p.x >= x1, `across: ${s.p.x.toFixed(1)} of ${x1.toFixed(1)}`);
+  assert.ok(slowest > 40, `it keeps its speed: down to ${slowest.toFixed(0)} km/h`);
+  assert.ok(tilt < 0.25, `its wheels down: tipped ${tilt.toFixed(2)} rad`);
+});

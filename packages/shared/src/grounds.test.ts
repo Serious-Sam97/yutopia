@@ -203,3 +203,73 @@ test("the town: into the bar by its door, never through its wall; inside, you he
   assert.equal(hearingGain(map, a, out), 0, "the street can't hear the bar");
   assert.equal(hearingGain(map, out, a), 0);
 });
+
+test("the bridges: their decks flush with the way (no lip), their sides closed", async () => {
+  const { WAYS, deckAt, onBridgeRail } = await import("./grounds.ts");
+  for (const w of WAYS) {
+    const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
+    if (idx.length < 2) continue;
+    const a = idx[0];
+    const b = idx[idx.length - 1];
+    // walking along its line from the land before it to the land after: no step over 0.05
+    let last = heightAt(...w.line[a - 6]);
+    for (let i = a - 6; i < b + 6; i++)
+      for (let k = 0; k < 4; k++) {
+        const [x0, z0] = w.line[i];
+        const [x1, z1] = w.line[i + 1];
+        const h = heightAt(x0 + ((x1 - x0) * k) / 4, z0 + ((z1 - z0) * k) / 4);
+        assert.ok(Math.abs(h - last) < 0.05, `${w.key}: a step of ${(h - last).toFixed(2)} at sample ${i}`);
+        last = h;
+      }
+    // across it, mid-span: the deck to the rail, then blocked
+    const m = Math.floor((a + b) / 2);
+    const [px, pz] = w.line[m - 1];
+    const [qx, qz] = w.line[m + 1];
+    const l = Math.hypot(qx - px, qz - pz);
+    const nx = -(qz - pz) / l;
+    const nz = (qx - px) / l;
+    const [x, z] = w.line[m];
+    for (const s of [1, -1]) {
+      assert.notEqual(
+        deckAt(x + nx * s * (w.w / 2 - 0.2), z + nz * s * (w.w / 2 - 0.2)),
+        null,
+        `${w.key}: its deck to its edge`,
+      );
+      const o = w.w / 2 + 1;
+      assert.ok(onBridgeRail(x + nx * s * o, z + nz * s * o), `${w.key}: past its rail`);
+      assert.equal(
+        walkableTile(Math.floor(x + nx * s * o), Math.floor(z + nz * s * o)),
+        false,
+        `${w.key}: nobody walks off it`,
+      );
+    }
+  }
+});
+
+test("where two ways meet the ground doesn't step: the gatehouse, the town's edge, Church Street", async () => {
+  const { WAYS } = await import("./grounds.ts");
+  const W = (k: string) => WAYS.find((u) => u.key === k) as (typeof WAYS)[number];
+  for (const [a, b] of [
+    ["driveway", "road"],
+    ["road", "main"],
+  ]) {
+    const [x, z] = W(a).line[W(a).line.length - 1];
+    assert.ok(Math.abs(W(a).h[W(a).h.length - 1] - W(b).h[0]) < 0.02, `${a} → ${b}: their heights meet`);
+    // across the join along the way's line, every 0.25: no step
+    const L = [...W(a).line.slice(-8), ...W(b).line.slice(1, 8)];
+    let last = heightAt(...L[0]);
+    for (let i = 0; i + 1 < L.length; i++)
+      for (let k = 1; k <= 4; k++) {
+        const h = heightAt(L[i][0] + ((L[i + 1][0] - L[i][0]) * k) / 4, L[i][1] + ((L[i + 1][1] - L[i][1]) * k) / 4);
+        assert.ok(Math.abs(h - last) < 0.05, `${a} → ${b}: a step of ${(h - last).toFixed(2)} near ${x}, ${z}`);
+        last = h;
+      }
+  }
+  const church = W("church-st");
+  const main = W("main");
+  const j = main.line.reduce(
+    (bi, p, i) => (Math.abs(p[0] - church.line[0][0]) < Math.abs(main.line[bi][0] - church.line[0][0]) ? i : bi),
+    0,
+  );
+  assert.ok(Math.abs(church.h[0] - main.h[j]) < 0.02, "Church Street starts at Main Street's height");
+});

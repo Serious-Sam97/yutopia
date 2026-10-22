@@ -1456,7 +1456,11 @@ export class WorldController {
     room.state.npcs.forEach((n: S, id: string) => {
       const pos = interpolate(this.npcBuf.get(id) ?? [{ t: 0, x: n.x, y: n.y }], renderAt);
       const guard = n.kind === "guard" ? this.life?.guard(n, night) : null;
-      const st = { ...(guard ?? this.npcState(n)), x: pos.x, y: pos.y };
+      const st: AvatarState & { z?: number; ground?: number } = {
+        ...(guard ?? this.npcState(n)),
+        x: pos.x,
+        y: pos.y,
+      };
       // (Vortex is the studio's; the night guard's on the ground floor — at his post in the
       // gatehouse by day, walking out to the fence after dark: the server walks him)
       const home = (n.level ?? -1) < 0 ? floorOf(this.building) : n.level;
@@ -1464,6 +1468,8 @@ export class WorldController {
         if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
         return;
       }
+      // (out on the land his feet are on it: the ground's not at 0 by the gatehouse)
+      if (guard && this.level === home) st.z = st.ground = this.grid.groundAt(pos.x, pos.y, 0);
       if (this.level === home) engine.upsertAvatar(`npc:${id}`, st);
       else if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
       if (tp) bodies.push({ ...st, id: `npc:${id}`, reduced, level: home });

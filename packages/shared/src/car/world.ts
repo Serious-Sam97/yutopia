@@ -27,7 +27,8 @@ import type { CarWorld, Solid } from "./sim.ts";
  *  in the shaded hollows. The same everywhere — both views paint them from this. */
 export function patchAt(x: number, z: number, cold = 0.5): "slush" | "blackice" | null {
   const n = fbm(x / 11, z / 11, 2, 77);
-  if (deckAt(x, z) !== null && cold > 0.35) return fbm(x / 6, z / 6, 1, 78) > -0.2 ? "blackice" : null;
+  // (a bridge freezes first: patches of black ice on its deck, not the whole of it)
+  if (deckAt(x, z) !== null && cold > 0.35) return fbm(x / 6, z / 6, 1, 78) > 0.35 ? "blackice" : null;
   if (cold > 0.6 && fbm(x / 23, z / 23, 2, 79) > 0.55) return "blackice";
   if (n > 0.42) return "slush";
   return null;

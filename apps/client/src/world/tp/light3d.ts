@@ -129,8 +129,11 @@ uniform vec3 landBounce;`,
           ),
       )
       .replace("#include <opaque_fragment>", ROLL_OFF);
+    // (and what else the material asks for: a road's snow cover — roads3d.ts)
+    const extra = m.userData.grounds as { patch: (s: typeof shader) => void; key: string } | undefined;
+    extra?.patch(shader);
   };
-  m.customProgramCacheKey = () => "yutopia-grounds";
+  m.customProgramCacheKey = () => `yutopia-grounds${(m.userData.grounds as { key?: string } | undefined)?.key ?? ""}`;
   m.needsUpdate = true;
 }
 

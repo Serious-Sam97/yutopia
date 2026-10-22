@@ -113,6 +113,18 @@ export interface Way {
   bridged: boolean[];
   /** a street's pavements, each side (0: none) */
   pave: number;
+  /** it opens out from `w0` wide (and no pavements) at its start to its width over `n` samples
+   *  (Main Street from the county road: docs/plan/33-the-look.md) */
+  flare?: { n: number; w0: number };
+}
+/** A way's half-width and its pavements' at sample i (a flared start narrower). */
+export function wayHalf(w: Way, i: number): number {
+  if (!w.flare || i >= w.flare.n) return w.w / 2;
+  return lerp(w.flare.w0 / 2, w.w / 2, smooth(0, w.flare.n, i));
+}
+export function wayPave(w: Way, i: number): number {
+  if (!w.flare || i >= w.flare.n) return w.pave;
+  return w.pave * smooth(w.flare.n * 0.3, w.flare.n, i);
 }
 export type BuildingKind =
   | "hq"
@@ -199,7 +211,7 @@ export const TOWN_CARS: {
 }[] = (() => {
   const r = groundsRng(4242);
   const out: (typeof TOWN_CARS)[number][] = [];
-  for (let x = 306; x < 520; x += 6.5 + r() * 8) {
+  for (let x = 318; x < 520; x += 6.5 + r() * 8) {
     for (const s of [1, -1] as const) {
       if (r() < 0.45) continue;
       if (x > PLAZA.x0 - 3 && x < PLAZA.x1 + 3 && s > 0) continue;
@@ -236,14 +248,24 @@ const FLATS = [
   { x: 420, z: -268, r0: 95, r1: 135, h: 1.5 }, // the farm
 ];
 
-function way(key: string, kind: WayKind, name: string, w: number, pts: P[], closed = false, pave = 0): Way {
-  return { key, kind, name, w, pts, closed, line: dense(pts, closed), h: [], bridged: [], pave };
+function way(
+  key: string,
+  kind: WayKind,
+  name: string,
+  w: number,
+  pts: P[],
+  closed = false,
+  pave = 0,
+  flare?: Way["flare"],
+): Way {
+  return { key, kind, name, w, pts, closed, line: dense(pts, closed), h: [], bridged: [], pave, flare };
 }
 
 export const WAYS: Way[] = [
   // from the lot's mouth up through the woods to the gatehouse
-  // (widths, docs/plan/33-the-look.md: two cars pass; Main Street parks both kerbs as well)
-  way("driveway", "driveway", "Driveway", 8, [
+  // (widths, docs/plan/33-the-look.md: two cars pass; the driveway as wide as the road it runs
+  // into, so their lanes and lines meet; Main Street parks both kerbs as well)
+  way("driveway", "driveway", "Driveway", 9, [
     [-48, -9],
     [-40, -50],
     [-14, -100],
@@ -276,6 +298,7 @@ export const WAYS: Way[] = [
     ],
     false,
     2.6,
+    { n: 18, w0: 9 },
   ),
   way(
     "church-st",
@@ -503,7 +526,7 @@ export function wayClearance(x: number, z: number): number {
   for (const [f, n] of nearLines(x, z)) {
     if (f >= WAYS.length) continue;
     const w = WAYS[f];
-    best = Math.min(best, n.d - w.w / 2 - w.pave);
+    best = Math.min(best, n.d - wayHalf(w, n.i) - wayPave(w, n.i));
   }
   if (x >= LOT.x0 - 1 && x < LOT.x1 + 1 && z >= LOT.z0 - 1 && z < LOT.z1 + 1) best = 0;
   if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) best = 0;
@@ -544,20 +567,63 @@ function base(x: number, z: number): number {
   return macro(x, z) + micro(x, z) * microWeight(x, z);
 }
 
-// the ways' heights: the land under them, smoothed along them
-for (const w of WAYS) {
-  const raw = w.line.map(([x, z]) => macro(x, z));
-  const n = raw.length;
-  w.h = raw.map((_, i) => {
-    let s = 0;
-    let c = 0;
-    for (let j = Math.max(0, i - 10); j <= Math.min(n - 1, i + 10); j++) {
-      s += raw[j];
-      c++;
-    }
-    return s / c;
+// the ways' heights: the land under them, smoothed along them — and on through a way that goes
+// on from either end, so two that meet agree where they meet (the driveway's end and the road's
+// start were 0.17 apart: a step across the road at the gatehouse)
+{
+  const raws = WAYS.map((w) => w.line.map(([x, z]) => macro(x, z)));
+  const at = (p: P, q: P) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1.5;
+  WAYS.forEach((w, f) => {
+    const raw = raws[f];
+    const n = raw.length;
+    const first = w.line[0];
+    const last = w.line[n - 1];
+    let pre: number[] = [];
+    let post: number[] = [];
+    WAYS.forEach((u, g) => {
+      if (g === f || u.closed || w.closed) return;
+      const r = raws[g];
+      const ul = u.line;
+      if (at(ul[ul.length - 1], first)) pre = r.slice(-11, -1);
+      else if (at(ul[0], first)) pre = r.slice(1, 11).reverse();
+      if (at(ul[0], last)) post = r.slice(1, 11);
+      else if (at(ul[ul.length - 1], last)) post = r.slice(-11, -1).reverse();
+    });
+    const ext = [...pre, ...raw, ...post];
+    const o = pre.length;
+    w.h = raw.map((_, i) => {
+      let sum = 0;
+      let c = 0;
+      for (let j = Math.max(0, i + o - 10); j <= Math.min(ext.length - 1, i + o + 10); j++) {
+        sum += ext[j];
+        c++;
+      }
+      return sum / c;
+    });
+    w.bridged = w.line.map(() => false);
   });
-  w.bridged = w.line.map(() => false);
+  // a way that starts (or ends) on another's middle — Church Street off Main — eases from that
+  // one's height over its first (last) tiles
+  for (const w of WAYS) {
+    if (w.closed) continue;
+    for (const end of [0, w.line.length - 1]) {
+      const [x, z] = w.line[end];
+      let best: { u: Way; j: number; d: number } | null = null;
+      for (const u of WAYS) {
+        if (u === w || u.kind === "trail" || u.kind === "walk") continue;
+        for (let j = 2; j < u.line.length - 2; j++) {
+          const d = Math.hypot(u.line[j][0] - x, u.line[j][1] - z);
+          if (d < u.w / 2 + 3 && (!best || d < best.d)) best = { u, j, d };
+        }
+      }
+      if (!best) continue;
+      const hj = best.u.h[best.j];
+      for (let k = 0; k < Math.min(12, w.line.length); k++) {
+        const i = end === 0 ? k : w.line.length - 1 - k;
+        w.h[i] = lerp(hj, w.h[i], smooth(0, 12, k));
+      }
+    }
+  }
 }
 RIVER.h = RIVER.line.map(([x, z]) => macro(x, z) - 2.6);
 // bridges: where a way crosses the river or the ravine
@@ -594,7 +660,7 @@ export function terrainAt(x: number, z: number): number {
     if (f >= WAYS.length) continue;
     const w = WAYS[f];
     if (w.bridged[n.i]) continue;
-    const r0 = w.w / 2 + 1.2;
+    const r0 = wayHalf(w, n.i) + 1.2;
     const k = smooth(r0, r0 + (w.kind === "trail" ? 3 : 8), n.d);
     if (k < best) {
       best = k;
@@ -637,10 +703,10 @@ export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
   for (const [f, n] of near) {
     if (f >= WAYS.length) continue;
     const w = WAYS[f];
-    if (n.d < w.w / 2) {
+    if (n.d < wayHalf(w, n.i)) {
       const s: Surface = w.kind === "trail" ? "path" : w.kind === "walk" ? "walk" : "asphalt";
       if (!on || s === "asphalt") on = s;
-    } else if (n.d < w.w / 2 + w.pave && !on) on = "walk"; // the town's pavements
+    } else if (n.d < wayHalf(w, n.i) + wayPave(w, n.i) && !on) on = "walk"; // the town's pavements
   }
   if (on) return on;
   if (x >= LOT.x0 && x < LOT.x1 && z >= LOT.z0 && z < LOT.z1) return "asphalt";
@@ -802,7 +868,7 @@ export const STREET: StreetThing[] = [];
   const seq: StreetThing["kind"][] = ["hydrant", "bin", "newsbox", "bin"];
   let k = 0;
   for (const side of [1, -1])
-    for (let x = 314; x < 516; x += 9) {
+    for (let x = 322; x < 516; x += 9) {
       const z = MZ + side * 7.7;
       if (!clear(x, side) || lampNear(x, z, 2.5)) continue;
       STREET.push({ kind: seq[k++ % seq.length], x, z, ry: side > 0 ? Math.PI : 0 });
@@ -958,7 +1024,7 @@ function walkable(x: number, z: number): boolean {
     if (bd.kind !== "hq" && x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1)
       // (inside one you walk into: its floor, round its furniture)
       return !!insideOf(bd) && !FIT_TILES.has(`${Math.floor(x)},${Math.floor(z)}`);
-  if (onFence(x, z) || onTownCar(x, z) || onTractor(x, z)) return false;
+  if (onFence(x, z) || onTownCar(x, z) || onTractor(x, z) || onBridgeRail(x, z)) return false;
   for (const c of SCARECROWS) if (Math.abs(x - c.x) < 0.5 && Math.abs(z - c.z) < 0.5) return false;
   // the water tower: its stem, and the fence round it (a gap to the south)
   const td = Math.hypot(x - TOWER.x, z - TOWER.z);
@@ -1091,32 +1157,80 @@ export function groundsOutdoors(map: MapDef): ReturnType<typeof outdoorsAt> | nu
 }
 
 // the bridges' decks: the bridged samples of the ways, boxed for a quick "not here"
-const DECKS = WAYS.flatMap((w) => {
+/** The bridges' decks (docs/plan/33-the-look.md, "Bugs on the ways"): flush with their way —
+ *  no lip to hit, its height along the line interpolated —, as wide as to their guard rails,
+ *  from the first bridged sample to the last. Past the rails, a strip nobody walks or drives on
+ *  (you fell off into the river). */
+interface Deck {
+  w: Way;
+  a: number;
+  b: number;
+  half: number;
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+}
+const RAIL = 1.6; // the blocked strip's width past the deck
+const DECKS: Deck[] = WAYS.flatMap((w) => {
   const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
   if (!idx.length) return [];
   const xs = idx.map((i) => w.line[i][0]);
   const zs = idx.map((i) => w.line[i][1]);
-  const m = w.w / 2 + 0.5;
-  return [{ w, x0: Math.min(...xs) - m, x1: Math.max(...xs) + m, z0: Math.min(...zs) - m, z1: Math.max(...zs) + m }];
+  const half = w.w / 2 + (w.kind === "trail" ? 0.2 : 0.35);
+  const m = half + RAIL + 0.5;
+  // (a segment more each end: onto the land flattened to the way, no gap over the bank)
+  return [
+    {
+      w,
+      a: Math.max(0, idx[0] - 1),
+      b: Math.min(w.line.length - 1, idx[idx.length - 1] + 1),
+      half,
+      x0: Math.min(...xs) - m,
+      x1: Math.max(...xs) + m,
+      z0: Math.min(...zs) - m,
+      z1: Math.max(...zs) + m,
+    },
+  ];
 });
+/** Where (x, z) falls along a deck: the segment and how far along it, how far off its line,
+ *  and whether that's within the bridge's span (not past either end). */
+function alongDeck(d: Deck, x: number, z: number): { i: number; u: number; off: number; within: boolean } {
+  const L = d.w.line;
+  let best = { i: d.a, u: 0, off: Number.POSITIVE_INFINITY, within: false };
+  for (let i = d.a; i < d.b; i++) {
+    const [ax, az] = L[i];
+    const [bx, bz] = L[i + 1];
+    const dx = bx - ax;
+    const dz = bz - az;
+    const l2 = dx * dx + dz * dz || 1;
+    const raw = ((x - ax) * dx + (z - az) * dz) / l2;
+    const u = Math.min(1, Math.max(0, raw));
+    const off = Math.hypot(x - (ax + dx * u), z - (az + dz * u));
+    if (off < best.off) {
+      const within = (i > d.a || raw >= 0) && (i < d.b - 1 || raw <= 1);
+      best = { i, u, off, within };
+    }
+  }
+  return best;
+}
 /** A bridge's deck height at (x, z), or null (not on one). */
 export function deckAt(x: number, z: number): number | null {
   for (const d of DECKS) {
     if (x < d.x0 || x > d.x1 || z < d.z0 || z > d.z1) continue;
-    const { w } = d;
-    let best = -1;
-    let bd = Number.POSITIVE_INFINITY;
-    for (let i = 0; i < w.line.length; i++) {
-      if (!w.bridged[i]) continue;
-      const dd = Math.hypot(w.line[i][0] - x, w.line[i][1] - z);
-      if (dd < bd) {
-        bd = dd;
-        best = i;
-      }
-    }
-    if (best >= 0 && bd < w.w / 2) return w.h[best] + 0.35;
+    const p = alongDeck(d, x, z);
+    if (p.within && p.off < d.half) return d.w.h[p.i] + (d.w.h[p.i + 1] - d.w.h[p.i]) * p.u;
   }
   return null;
+}
+/** Just past a bridge's guard rail (along its span): nobody walks or drives there. */
+export function onBridgeRail(x: number, z: number): boolean {
+  for (const d of DECKS) {
+    if (x < d.x0 || x > d.x1 || z < d.z0 || z > d.z1) continue;
+    const p = alongDeck(d, x, z);
+    if (p.within && p.off >= d.half && p.off < d.half + RAIL) return true;
+  }
+  return false;
 }
 
 // ── inside: the town's bar, diner and market, the gatehouse (phase 4) ────────

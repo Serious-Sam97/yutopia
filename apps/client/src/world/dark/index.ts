@@ -689,7 +689,10 @@ class Dark implements DarkHooks {
     const st = this.walker.vitals.st;
     const winded = this.walker.breath.winded;
     if (st < 99.5 || winded) this.arcSeen = now;
-    const showArc = out && now - this.arcSeen < 800;
+    // (not in a car or on the shuttle: no body of mine walking there to hang it by)
+    const busy = String(ctl.room?.state.players.get(ctl.room.sessionId)?.busy ?? "");
+    const aboard = busy.startsWith("drive:") || busy.startsWith("ride:");
+    const showArc = out && !aboard && now - this.arcSeen < 800;
     this.arc.style.display = showArc ? "block" : "none";
     this.arcLabel.style.display = showArc && winded ? "block" : "none";
     if (showArc) {

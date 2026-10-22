@@ -65,6 +65,12 @@ const SPOTS: Spot[] = [
   S("road-county", [100, -403], [60, -408], 13, 0.25, 10),
   S("road-county-top", [100, -403], [60, -408], 13, 1.3, 30),
   S("road-driveway-bend", [-20, -150], [-60, -200], 13, 0.9, 30),
+  S("bug-gate", [-40, -364], [-40, -380], 13, 1.25, 22),
+  S("bug-gate-late", [-40, -364], [-40, -380], 16.5, 1.25, 22),
+  S("bug-lot", [-46, -16], [-46, 4], 13, 0.9, 20),
+  S("bug-town-edge", [300, -405], [280, -405], 13, 1.25, 26),
+  S("bug-town-kerb", [304, -410], [304, -398], 13, 0.6, 9),
+  S("bug-bridge", [252, -404], [262, -404], 13, 1.25, 22),
   S("shrubs", [-189, -40], [-194, -34], 13, 0.32, 5),
   S("pond-trail", [-188, -34], [-200, -20], 13, 0.14, 6),
   S("woods", [-188, -34], [-200, -20], 13, 0.45, 11),
@@ -95,13 +101,22 @@ test("the look: review shots in the game", async ({ page }) => {
     // (the land round you is built nearest first, a step a frame: its full detail takes a while
     // after a long jump)
     await page.waitForTimeout(8000);
-    await page.evaluate((p) => {
-      const t = (window as any).__yutopia.tp;
-      t.setHour(p.hour);
-      t.yaw = Math.atan2(p.look.y - p.at.y, p.look.x - p.at.x);
-      t.pitch = p.pitch;
-      t.dist = p.dist;
-    }, s);
+    await page.evaluate(
+      (p) => {
+        const t = (window as any).__yutopia.tp;
+        t.setHour(p.hour);
+        t.yaw = Math.atan2(p.look.y - p.at.y, p.look.x - p.at.x);
+        t.pitch = p.pitch;
+        t.dist = p.dist;
+        // (the roads' snow: as it is, or after a storm — YUTOPIA_ROAD_SNOW=0..1)
+        const rs = (window as any).__roadSnow;
+        if (rs && p.roadSnow !== undefined) rs.value = p.roadSnow;
+      },
+      {
+        ...s,
+        roadSnow: process.env.YUTOPIA_ROAD_SNOW === undefined ? undefined : Number(process.env.YUTOPIA_ROAD_SNOW),
+      },
+    );
     await page.waitForTimeout(3000);
     await page.screenshot({ path: `${dir}/${s.name}.png` });
   }

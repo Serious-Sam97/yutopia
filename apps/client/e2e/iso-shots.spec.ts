@@ -22,6 +22,9 @@ const SPOTS: { name: string; at: [number, number] }[] = [
   { name: "road-closed", at: [520, -405] },
   { name: "shed", at: [-150, 126] },
   { name: "farm", at: [436, -300] },
+  { name: "road-town-edge", at: [300, -405] },
+  { name: "road-gate", at: [-40, -366] },
+  { name: "road-county", at: [120, -390] },
 ];
 
 test("the look: review shots in iso", async ({ page }) => {

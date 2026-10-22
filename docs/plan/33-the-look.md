@@ -344,3 +344,85 @@ between the rows for both ways (the sedan is 1.86 wide, the shuttle 2.4).
   `lighting.spec` no GL errors; `town.spec` (the shuttle there and back) 2 of 3 — the
   third a 67 ms frame, as the code before this had (33 / 50 / 50-fail: the two-browser
   stall); world page 553.9 KB, the Grounds' chunk 161.5 of 180.
+
+## The roads, worn (plan — decided 2026-10-22)
+
+Ask: "the street is too clean: the snow in the corners is missing, the wear of use."
+
+| Question | Answer |
+| --- | --- |
+| How much snow on the carriageway | **By the way**: the town ploughed and salted but dirty at its edges; the county road packed snow with deep wheel ruts; the driveway between |
+| With the weather | **Yes**: whiter during and after a blizzard, clearing over about an hour — from the shared weather, the same for everyone |
+| The car's grip | **Look only** for now |
+
+1. **Mocks**: Main Street by day and dusk, the county road, the crossing from above, the
+   driveway, iso — stills from the game, approved before the rest.
+2. **The carriageway's cover** (a shader on the asphalt, no repeat): packed snow
+   blended over it by a world-space noise and the way's kind, the asphalt showing in
+   two wheel ruts a lane, a pale ridge between them and over the middle line; the paint
+   under it (dimmed, worn where wheels cross it); a `roadSnow` uniform from the weather
+   (shared `weather.ts`: how long since the last storm).
+3. **The wear**: slush brown-grey at the edges and out of the parking bays, salt
+   crusts drying white, dark wet patches with a sheen, grit at the crossing, spray
+   fanned into the verges' snow, the crosswalks scuffed where the wheels run.
+4. **The corners** (geometry, `snow3d.ts`): the plough's windrow along each kerb,
+   ragged and dirty; the empty parking bays snowed in, a bare patch where a car is
+   (shared `TOWN_CARS`); heaps at the crossing's corners and the pavements' ends.
+5. **Iso**: the same on the land's picture.
+6. **Checks**: shots, `grounds.spec` 3D/iso, High 60 fps, budget.
+
+### Bugs on the ways (found 2026-10-22, plan)
+
+The user's shots: a "hole" where the driveway meets the lot, a bump on the road at the
+gatehouse, a hard straight line where the county road becomes Main Street, and the bridge
+by the town (a lip at its entry flips the car, the car crawls on it, nothing stops you
+falling off its sides). Investigated:
+
+| | Cause |
+| --- | --- |
+| Lot mouth | Not a dip (the land is 0 there): the lot's asphalt is the ground floor's own material, with none of the roads' cover, framed by the driveway's verges and banks — it reads as a pit |
+| Gatehouse | A real 0.17 step: each way's heights are smoothed on their own, so the driveway's last and the road's first differ, and the land takes the nearest way's; the two ways' verges overlap there too |
+| Town edge | The road (9, packed snow) and Main Street (14, nearly clear, kerbs) swap on one straight line at x 300 |
+| Bridge | The deck is the way's height + 0.35 from 3 samples before the bridge: a 0.35–0.43 step (the wheel's radius is 0.317); the deck's height is the nearest sample's (stairs); `patchAt` makes most of a deck black ice; the deck ends 4.5 out but the truss is at 5.2 — between, the ground drops 2.8 to the river and is walkable. The footbridge shares the code |
+
+Decided: small black-ice patches on the decks (bridges freeze first); the worn roads'
+mocks approved as they are.
+
+1. **Bridges**: the deck flush with the way (no lift), its height along the line
+   interpolated, from where the bridge starts to its guard rail; a blocked strip just past
+   the rail (people and cars: `walkable` → `carBlockedTile`); black ice in patches. Tests:
+   the height continuous (no step > 0.05), the sides blocked, a car across at speed.
+2. **Joins**: the ways' heights smoothed as one chain where they meet (driveway → road →
+   Main Street); a way's verges stop where another begins.
+3. **Into town**: the road's last ~15 tiles widen 9 → 14, the cover blends from road to
+   town over ~25, the kerbs and pavements start with a taper.
+4. **The lot**: its asphalt takes the roads' cover; the driveway's ribbon and verges stop at
+   its edge.
+5. **The worn roads**: iso, perf (with the above).
+6. **Checks**: shots of each spot, `grounds.spec` 3D/iso, the car's e2e, High 60 fps, budget.
+
+### Delivered (2026-10-22)
+
+- **The cover** (`tp/roads3d.ts roadCover`): packed snow over each way's asphalt by its kind
+  (street 0.1, driveway 0.38, road 0.5) and a noise in the Grounds' own coords, the asphalt
+  in two wheel ruts a lane, whiter and slushy towards the edges and the parking lanes, salt
+  and wet patches on the bare; the paint dimmed under it; `roadSnow` from the shared weather
+  (whiter in a blizzard, clearing over the hour after). Where two ways run end to end the
+  cover, the ruts' lanes and the edge ease halfway into the other's over 25 tiles.
+- **The corners** (`streetCorners`, `crossingHeaps`): the windrow along Main's kerbs, the
+  empty bays snowed in, lower where a car's dug out; heaps at the crossing.
+- **The lot**: a see-through layer of the same weather over the ground floor's asphalt.
+- **Joins**: the ways' heights smoothed as one chain (the gatehouse's 0.17 step gone); the
+  driveway 9 like the road (their lanes meet); the road's verges narrow to nothing over its
+  last 10 tiles into Main Street, whose kerbs' windrow rises with its pavement.
+- **Into town**: Main Street flares 9 → 14 over its first 18 samples (`Way.flare`, shared
+  `wayHalf`/`wayPave`: the land, the walkable, the ribbon, the kerbs and the cover follow).
+- **Bridges**: the deck flush with the way and interpolated along it (no lip — the car keeps
+  50 km/h and its wheels down), a blocked strip past each guard rail, black ice in patches.
+- **Found on the way**: the snow's ragged-edge noise (`snow3d.ts wobble`) eased out without
+  bound before its start — Main's north gutter slush was a sheet flung 270 tiles across
+  the county road (the "straight line" at the town's edge); mirrored now, and a test keeps
+  every way's dressing by its line. The cover's join distances were measured in world
+  space while the joins are in the Grounds' — they never blended.
+- **Iso**: Main's flare drawn as bands; the cover rastered an eighth of a tile a pixel and
+  stretched smooth over the paint (soft ruts: the land's picture is seen shrunk, unmipmapped).

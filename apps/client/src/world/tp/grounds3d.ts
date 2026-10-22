@@ -38,6 +38,7 @@ import {
   WAYS,
   type Way,
   wallEdgeAt,
+  wayHalf,
 } from "@yutopia/shared/grounds";
 import {
   AdditiveBlending,
@@ -86,7 +87,18 @@ import {
   type V,
 } from "./campus";
 import { beam, railing, truss } from "./landmarks3d";
-import { asphaltCanvas, crossingPaint, slabCanvas, snowPoles, wayDressing } from "./roads3d";
+import {
+  asphaltCanvas,
+  crossingHeaps,
+  crossingPaint,
+  lotCover,
+  paintCover,
+  roadCover,
+  slabCanvas,
+  snowPoles,
+  streetCorners,
+  wayDressing,
+} from "./roads3d";
 import type { Themes } from "./sky";
 import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
 import { streetGeometry } from "./town3d";
@@ -531,6 +543,17 @@ export class Grounds3 {
   private lambertCache = new Map<string, MeshLambertMaterial>();
   private trim = new G(); // a building's sills and such, added with it (settle)
   private asphalts = new Map<string, Texture>();
+  private paintMats = new Map<string, MeshLambertMaterial>();
+  /** The lines' material for a kind of way: worn and snowed over with it (roads3d.ts). */
+  private paintMat(kind: string): MeshLambertMaterial {
+    let m = this.paintMats.get(kind);
+    if (!m) {
+      m = this.keep(new MeshLambertMaterial({ vertexColors: true }));
+      paintCover(m, kind);
+      this.paintMats.set(kind, m);
+    }
+    return m;
+  }
   /** A way's asphalt picture (its lanes by its width), one per way. */
   private asphalt(w: Way): Texture {
     let t = this.asphalts.get(w.key);
@@ -543,7 +566,7 @@ export class Grounds3 {
   }
   private roadCtx = {
     near: (x: number, z: number, pad = 0) => this.near(x, z, pad),
-    yAt: (w: Way, i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] + 0.35 : groundAt(x, z)),
+    yAt: (w: Way, i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] : groundAt(x, z)),
   };
   private ts: {
     snow: CanvasTexture;
@@ -753,10 +776,12 @@ export class Grounds3 {
     into: G,
     from = 0,
     to = w.line.length - 1,
+    widthAt?: (i: number) => number,
   ) {
     let v = 0;
     const L = w.line;
-    const yAt = (i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] + 0.35 : groundAt(x, z)) + lift;
+    // (a bridge's deck: flush with the way — shared deckAt)
+    const yAt = (i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] : groundAt(x, z)) + lift;
     for (let i = from; i < to; i++) {
       const [ax, az] = L[i];
       const [bx, bz] = L[i + 1];
@@ -771,11 +796,14 @@ export class Grounds3 {
       const [bnx, bnz] = tn(i + 1);
       const len = Math.hypot(bx - ax, bz - az);
       const v1 = v + len / texLen;
+      const wk = (k: number) => (widthAt ? widthAt(k) : width);
       const P = (x: number, z: number, nx: number, nz: number, s: number, k: number): V => {
-        const px = x + nx * (off + s * width * 0.5);
-        const pz = z + nz * (off + s * width * 0.5);
+        const px = x + nx * (off + s * wk(k) * 0.5);
+        const pz = z + nz * (off + s * wk(k) * 0.5);
         return [px, yAt(k, px, pz), pz];
       };
+      // (narrower: the picture's middle, so across it still counts the way's own tiles)
+      const U = (s: number, k: number) => 0.5 + (s * wk(k)) / (2 * width);
       into.quad(
         P(ax, az, anx, anz, -1, i),
         P(ax, az, anx, anz, 1, i),
@@ -783,10 +811,10 @@ export class Grounds3 {
         P(bx, bz, bnx, bnz, -1, i + 1),
         [0, 1, 0],
         [
-          [0, v],
-          [1, v],
-          [1, v1],
-          [0, v1],
+          [U(-1, i), v],
+          [U(1, i), v],
+          [U(1, i + 1), v1],
+          [U(-1, i + 1), v1],
         ],
       );
       v = v1;
@@ -800,6 +828,7 @@ export class Grounds3 {
     const banks = new G();
     const paint = new G();
     const slabs = new G();
+    let lines = new G();
     const r = groundsRng(77 + (only ? WAYS.indexOf(only) : 0));
     for (const w of only ? [only] : WAYS) {
       if (w.kind === "trail") {
@@ -818,25 +847,31 @@ export class Grounds3 {
         // the asphalt, its own picture by its width; the lines, verges, kerbs and pavements over it
         // (roads3d.ts)
         const ag = new G();
-        this.ribbon(w, w.w, 0, 0.05, 9, ag);
-        if (!ag.empty) this.add(ag.build(), this.lambert(0xffffff, this.asphalt(w)), "receive");
-        wayDressing(w, this.roadCtx, nearLine, paint, slabs);
-        // the plough's banks along the verges: a ridge each side (none on a bridge, across
-        // another way's mouth or the lot's, nor out of reach)
-        for (const side of [1, -1] as const) {
-          // (a street's: heaped on the kerb's edge, clear of the parked cars; a road's: beyond its verge)
-          const o = w.w / 2 + (w.kind === "street" ? 0.55 : 1.2);
-          bankAlong(banks, w.line, o, side, groundAt, r, {
-            h: w.kind === "street" ? 0.32 : 0.55,
-            w: w.kind === "street" ? 1.0 : 1.8,
-            skip: (x, z, i) =>
-              w.bridged[i] ||
-              !this.near(x, z, 10) ||
-              (w.kind === "street" && Math.sin(i * 0.23 + side * 1.7) > 0.4) || // (kerbside heaps, gaps between)
-              WAYS.some((u) => u !== w && u.kind !== "trail" && nearLine(u, x, z) < u.w / 2 + 1.5) ||
-              (x > LOT.x0 - 2 && x < LOT.x1 + 2 && z > LOT.z0 - 2 && z < LOT.z1 + 2),
-          });
+        this.ribbon(w, w.w, 0, 0.05, 9, ag, 0, w.line.length - 1, w.flare ? (i) => 2 * wayHalf(w, i) : undefined);
+        if (!ag.empty) {
+          const am = this.lambert(0xffffff, this.asphalt(w));
+          roadCover(am, w);
+          this.add(ag.build(), am, "receive");
         }
+        wayDressing(w, this.roadCtx, nearLine, paint, slabs, lines);
+        streetCorners(w, this.roadCtx, nearLine, banks);
+        if (!lines.empty) {
+          this.add(lines.build(), this.paintMat(w.kind), "receive");
+          lines = new G();
+        }
+        // the plough's banks beyond a road's verges: a ridge each side (none on a bridge, across
+        // another way's mouth or the lot's, nor out of reach; a street's kerbs: streetCorners)
+        if (w.kind !== "street")
+          for (const side of [1, -1] as const)
+            bankAlong(banks, w.line, w.w / 2 + 1.2, side, groundAt, r, {
+              h: 0.55,
+              w: 1.8,
+              skip: (x, z, i) =>
+                w.bridged[i] ||
+                !this.near(x, z, 10) ||
+                WAYS.some((u) => u !== w && u.kind !== "trail" && nearLine(u, x, z) < u.w / 2 + 1.5) ||
+                (x > LOT.x0 - 2 && x < LOT.x1 + 2 && z > LOT.z0 - 2 && z < LOT.z1 + 2),
+            });
       }
     }
     if (!road.empty) this.add(road.build(), this.lambert(0xffffff, this.ts.road), "receive");
@@ -850,7 +885,10 @@ export class Grounds3 {
     if (this.near(420, -405, 40)) {
       const cw = new G();
       crossingPaint(cw, groundAt);
-      this.add(cw.build(), this.lambert(), "receive");
+      this.add(cw.build(), this.paintMat("street"), "receive");
+      const heaps = crossingHeaps(groundAt);
+      this.add(mergeGeometries(heaps, false), this.lambert(), "receive");
+      for (const h of heaps) h.dispose();
     }
     const poles = snowPoles((x, z, p) => this.near(x, z, p), groundAt);
     if (poles.length) {
@@ -1059,6 +1097,14 @@ export class Grounds3 {
   // ── the parking lot: its asphalt, cars and lamps as the game has them ──
   private lot() {
     if (!this.near((LOT.x0 + LOT.x1) / 2, (LOT.z0 + LOT.z1) / 2, 40)) return;
+    // the roads' weather over its asphalt (roads3d.ts lotCover)
+    {
+      const c = new G().color(0xffffff);
+      c.quad([LOT.x0, 0.12, LOT.z0], [LOT.x1, 0.12, LOT.z0], [LOT.x1, 0.12, LOT.z1], [LOT.x0, 0.12, LOT.z1], [0, 1, 0]);
+      const m = this.keep(new MeshLambertMaterial({ color: 0xffffff }));
+      lotCover(m);
+      this.add(c.build(), m, "receive");
+    }
     const lay = campusLot(36);
     const lot: Lot = {
       ...LOT,

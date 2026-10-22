@@ -1,4 +1,5 @@
 import { isFloor, levelMap, type MapDef, tileAt, type WallCut } from "@yutopia/shared";
+import { stormAt } from "@yutopia/shared/weather";
 import {
   BackSide,
   BufferGeometry,
@@ -22,6 +23,7 @@ import type { Daylight } from "../art/daylight";
 import { Campus, GROUND } from "./campus";
 import { GroundsStream } from "./grounds-stream";
 import { landLight, patchGrounds, patchOutdoors } from "./light3d";
+import { stepRoadSnow } from "./roads3d";
 
 // the themes' drawings and skies: the same lazy chunk the iso view loads
 export type Themes = typeof import("../art/themes");
@@ -207,6 +209,8 @@ export class Surroundings {
     this.domeMat.uniforms.cloudK.value = 1 - 0.7 * storm;
     // (the woods sway harder in it)
     if (this.grounds) this.grounds.wind.value = 1 + 2.5 * storm;
+    // (and the roads go white in it, and clear after: roads3d.ts)
+    stepRoadSnow(storm, stormAt);
   }
 
   // the dome and the snow go with the camera; the overcast drifts
