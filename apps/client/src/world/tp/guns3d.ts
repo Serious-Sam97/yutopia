@@ -636,6 +636,60 @@ export function gunModel(kind: GunKind, mat: Material, detail: Detail = "near"):
   return kind === "shotgun" ? shotgun(mat, detail) : revolver(mat, detail);
 }
 
+/** The pool cue off a table, held as a gun (features/pballs.ts on the server: it fires the balls;
+ *  the user's ask, 2026-10-22). In the double-barrel's frame — so it's carried and shouldered
+ *  the same, two-handed — its butt at the shoulder, the right fist round it a hand behind the
+ *  breech's place, the left under it further on; its tip, the muzzle the balls come out of.
+ *  A two-piece cue: the rubber bumper, the dark butt with its rings, the brass joint, a long maple
+ *  shaft, the ivory ferrule and the blue chalked tip. */
+export function cueModel(mat: Material, detail: Detail = "near"): GunModel {
+  const seg = detail === "near" ? 16 : 8;
+  const root = new Group();
+  const y = -0.035; // the stick's axis (the fist round it)
+  const x0 = -0.36; // the butt
+  const x1 = 0.86; // the tip
+  const L = x1 - x0;
+  const at = (f: number) => x0 + L * f;
+  const r = (f: number) => 0.0155 + (0.0062 - 0.0155) * f;
+  const piece = (f0: number, f1: number, hex: number, wear = 0) =>
+    paint(
+      turned(
+        [
+          [0.0001, at(f0)],
+          [r(f0), at(f0)],
+          [r(f1), at(f1)],
+          [0.0001, at(f1)],
+        ],
+        y,
+        0,
+        seg,
+      ),
+      hex,
+      wear,
+      0xd8c9a8,
+      0.25,
+    );
+  part(root, mat, [
+    piece(0, 0.015, 0x111111),
+    piece(0.015, 0.08, 0x1c1a17),
+    piece(0.08, 0.36, 0x5b2a1c, 0.2),
+    piece(0.36, 0.37, 0xf4efe2),
+    piece(0.37, 0.45, 0x2a1810),
+    piece(0.45, 0.465, BRASS),
+    piece(0.465, 0.975, 0xe6cf9c),
+    piece(0.975, 0.993, 0xf4efe2),
+    piece(0.993, 1, 0x3d6fa8),
+  ]);
+  return {
+    root,
+    parts: {},
+    rounds: [],
+    sight: { rear: [-0.05, y + 0.016, 0], front: [x1 - 0.02, y + 0.008, 0] },
+    muzzle: [x1 + 0.01, y, 0],
+    grip: { at: [-0.084, y - 0.01, 0], rake: 0 },
+  };
+}
+
 /** What a gun in the hand is doing this moment (docs/plan/32-the-arms.md): poseGun's parts, and
  *  `kick` (0..1: a shot's jolt, back and up, settling) and `reload` (0..1: tipped up and turned in
  *  to load it). */

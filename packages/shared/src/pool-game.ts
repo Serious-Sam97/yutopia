@@ -29,7 +29,8 @@ import {
 //  · Fouls (ball in hand anywhere for the other player): the cue ball potted,
 //    nothing hit, the wrong ball hit first (the 8 first on an open table too),
 //    no cushion after the contact with nothing potted, the shot clock.
-//    A scratch on the break: ball in hand behind the head string.
+//    A scratch on the break too: the other player puts the cue ball anywhere
+//    (the user's call, 2026-10-22 — only the break itself is from the kitchen).
 //  · The 8: once your group is down you call a pocket. In it on a legal shot:
 //    you win. Early, in another pocket, or with a foul: you lose.
 
@@ -105,7 +106,7 @@ function respot8(balls: PoolBall[]) {
 }
 
 // The cue ball out of the pocket, waiting to be placed (somewhere legal).
-function cueBack(balls: PoolBall[], kitchen: boolean) {
+function cueBack(balls: PoolBall[]) {
   const cue = balls.find((b) => b.id === 0) as PoolBall;
   for (const [x, y] of [
     [HEAD_STRING - 0.25, 0],
@@ -116,7 +117,7 @@ function cueBack(balls: PoolBall[], kitchen: boolean) {
     [0, 0.3],
     [0, -0.3],
   ]) {
-    if (placeOk(balls, x, y, kitchen)) {
+    if (placeOk(balls, x, y)) {
       Object.assign(cue, newBall(0, x, y));
       return;
     }
@@ -145,13 +146,13 @@ export function judge(
     v.outcome = outcome;
     return v;
   };
-  const pass = (foul: Foul | null, kitchen = false) => {
+  const pass = (foul: Foul | null) => {
     v.foul = foul;
     next.turn = opp;
     if (foul) {
-      next.inHand = kitchen ? "kitchen" : "anywhere";
+      next.inHand = "anywhere";
       const cue = balls.find((b) => b.id === 0) as PoolBall;
-      if (cue.down >= 0) cueBack(balls, kitchen);
+      if (cue.down >= 0) cueBack(balls);
     }
     return v;
   };
@@ -177,7 +178,7 @@ export function judge(
       respot8(balls);
       v.respotted = true;
     }
-    if (scratch) return pass("scratch", true);
+    if (scratch) return pass("scratch");
     if (!legalBreak) return pass("badBreak");
     // the table stays open; potting anything (but the 8) keeps the breaker on
     v.keeps = objectPots.some((id) => id !== 8);

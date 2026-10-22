@@ -1,5 +1,14 @@
 import { TILE_H, TILE_W, toScreen, type WorldObjectDef } from "@yutopia/shared";
-import { BALL_R, HEAD_STRING, type PoolBall, type PoolShot, PoolSim, placeOk } from "@yutopia/shared/pool";
+import {
+  BALL_R,
+  HEAD_STRING,
+  POOL_L,
+  POOL_W,
+  type PoolBall,
+  type PoolShot,
+  PoolSim,
+  placeOk,
+} from "@yutopia/shared/pool";
 import {
   aimGuide,
   groupOf,
@@ -9,6 +18,7 @@ import {
   unpackBalls,
   unpackGame,
 } from "@yutopia/shared/pool-game";
+import { OFF_TABLE } from "@yutopia/shared/pool-throw";
 import {
   standFor,
   TABLES,
@@ -67,6 +77,57 @@ const HEAR = 12; // tiles
 const AIM_MS = 100;
 const SETTLE_MS = 420; // the aim holds still this long: the shooter walks round to it
 
+// ── a ball going down ────────────────────────────────────────────────────────
+// The physics drops a ball the moment it's past the pocket's drop line (and
+// puts it at the hole's centre). On screen it goes on from where it was: over
+// the lip into the mouth, down the hole, a moment at the bottom of the pocket,
+// then off down the return to the tray. A ring of its colour opens out of the
+// pocket as it drops (you see at a glance which went where).
+interface Drop {
+  pocket: number;
+  at: number; // ms
+  from: Pt;
+  speed: number; // m/s
+}
+// how deep the pockets are (m below the cloth; the 3D table's holes are this deep)
+export const POCKET_DEPTH = 0.085;
+// a hole's radius, m (the item's art: 0.105 / 0.098 tiles at 1.55 tiles a metre)
+const holeR = (side: boolean) => (side ? 0.098 : 0.105) / G.tpm;
+const DROP_FALL = 0.3; // s down the hole
+const DROP_REST = 0.45; // s at the bottom, then down the return
+function dropAt(d: Drop, now: number): { x: number; y: number; sink: number; flash: number; done: boolean } {
+  const pk = POOL_POCKETS[d.pocket];
+  const u = (now - d.at) / 1000;
+  const dist = Math.hypot(pk.x - d.from.x, pk.y - d.from.y);
+  const ts = Math.max(0.04, Math.min(0.16, dist / Math.max(0.5, d.speed)));
+  // the hole's lip: the ball tips over it on its way in
+  if (u < ts) {
+    const k = u / ts;
+    return {
+      x: d.from.x + (pk.x - d.from.x) * k,
+      y: d.from.y + (pk.y - d.from.y) * k,
+      sink: k * k * BALL_R * 0.5,
+      flash: -1,
+      done: false,
+    };
+  }
+  const tf = u - ts;
+  // falling (a little slower than true, so it's seen), then resting deep in the pocket
+  const sink = Math.min(
+    POCKET_DEPTH,
+    BALL_R * 0.5 + 0.5 * 2.2 * tf * tf * (1 / (DROP_FALL * DROP_FALL)) * POCKET_DEPTH,
+  );
+  const flash = tf < 0.5 ? tf / 0.5 : -1;
+  return { x: pk.x, y: pk.y, sink, flash, done: tf > DROP_FALL + DROP_REST };
+}
+const BALL_HEX = [0xf4efe2, 0xf2b21c, 0x1f4ea8, 0xc8322b, 0x56307f, 0xe8691b, 0x1d7748, 0x7b2331, 0x2a2a2a];
+const flashColor = (id: number) => (id === 8 ? 0xf4ecd8 : BALL_HEX[id > 8 ? id - 8 : id]);
+// a grey tint (darker the lower k)
+const dim = (k: number) => {
+  const c = Math.round(255 * Math.max(0, Math.min(1, k)));
+  return (c << 16) | (c << 8) | c;
+};
+
 export interface PoolInfo {
   id: string;
   phase: string; // lobby / play / done
@@ -80,6 +141,7 @@ export interface PoolInfo {
   onEight: boolean;
   called: number;
   inHand: string;
+  placing: boolean; // the cue ball is in my hand, following the pointer
   rolling: boolean;
   winner: number;
   clock: number;
@@ -99,6 +161,7 @@ export interface PoolInfo {
   spinX: number;
   spinY: number;
   cam: "top" | "cue";
+  holding: "ball" | "cue" | ""; // a ball or the cue of a table's in my hand (tables/pballs.ts)
   vortexThinking: boolean;
   record: { last: { w: string; l: string; how: string }[]; wins: Record<string, number> } | null;
 }
@@ -131,13 +194,20 @@ interface View {
   evSeen: number;
   seenNo: number;
   born: boolean;
-  drops: Map<number, { pocket: number; at: number }>;
+  drops: Map<number, Drop>;
+  last: Map<number, Pt>; // where each ball on the cloth was last frame (a drop starts there)
+  masks: Map<number, Graphics>; // iso: a falling ball cut off at the pocket's near rim
   strikeAt: number;
   strike: (PoolShot & { seat: number }) | null;
   dirty: boolean;
 }
 
 const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
+// a point kept on the cloth (a ball's whole width inside the cushions)
+const onCloth = (p: Pt): Pt => ({
+  x: Math.max(-POOL_L / 2 + BALL_R, Math.min(POOL_L / 2 - BALL_R, p.x)),
+  y: Math.max(-POOL_W / 2 + BALL_R, Math.min(POOL_W / 2 - BALL_R, p.y)),
+});
 
 export class PoolTables {
   private views = new Map<string, View>();
@@ -151,6 +221,12 @@ export class PoolTables {
   private called = -1;
   private press: { x: number; y: number; angle: number } | null = null;
   private drag: Pt | null = null; // the cue ball in my hand (table metres)
+  // ball in hand after a foul: the cue ball comes up into my hand by itself
+  // and follows the pointer (no button held) until a click puts it down
+  private hover = false;
+  private swallowUp = false; // that click's release isn't a shot
+  private handFor = -1; // the shot whose foul put it in my hand
+  private warnedAt = 0;
   private fine: { at: number; angle: number } | null = null;
   private sentAt = 0;
   private sentSig = "";
@@ -238,6 +314,8 @@ export class PoolTables {
       seenNo: 0,
       born: false,
       drops: new Map(),
+      last: new Map(),
+      masks: new Map(),
       strikeAt: 0,
       strike: null,
       dirty: true,
@@ -317,7 +395,7 @@ export class PoolTables {
   charge(on: boolean, cancel = false) {
     const id = this.focus;
     if (on) {
-      if (id && this.myTurn(id) && this.chargeAt === null && !this.press && !this.drag) {
+      if (id && this.myTurn(id) && this.chargeAt === null && !this.press && !this.drag && !this.hover) {
         this.chargeAt = performance.now();
         this.power = 0;
       }
@@ -373,6 +451,7 @@ export class PoolTables {
       onEight: !!g && g.broken && onTheEight(g),
       called: this.called,
       inHand: g?.inHand ?? "",
+      placing: this.focus === id && !!this.drag,
       rolling: this.rolling(v),
       winner: g?.winner ?? -1,
       clock,
@@ -384,9 +463,16 @@ export class PoolTables {
       spinX: this.spinX,
       spinY: this.spinY,
       cam: this.cam,
+      holding: this.held(),
       vortexThinking: !!level && t?.phase === "play" && !this.rolling(v),
       record,
     };
+  }
+
+  // a ball or the cue in my hand (shared/pool-throw.ts)
+  private held(): "ball" | "cue" | "" {
+    const me = this.host.room.state.players.get(this.host.room.sessionId);
+    return /^pball:/.test(me?.held ?? "") ? "ball" : me?.gun === "cue" ? "cue" : "";
   }
 
   // ── the pointer (the panel's overlay hands it over) ────────────────────────
@@ -409,6 +495,7 @@ export class PoolTables {
     if (!id || !v || !this.myTurn(id)) {
       this.press = null;
       this.drag = null;
+      this.hover = false;
       return;
     }
     const g = v.game as PoolGame;
@@ -417,11 +504,18 @@ export class PoolTables {
     if (type === "cancel") {
       this.press = null;
       this.drag = null;
+      this.hover = false;
       this.power = 0;
       return;
     }
     if (type === "down") {
       if (!p || !cue) return;
+      if (this.hover) {
+        // it follows the pointer: this click puts it down
+        this.swallowUp = true;
+        this.place(id, g, cue, onCloth(p));
+        return;
+      }
       if (g.inHand && Math.hypot(p.x - cue.x, p.y - cue.y) < BALL_R * 2.6) {
         this.drag = { x: cue.x, y: cue.y };
         return;
@@ -438,13 +532,14 @@ export class PoolTables {
       return;
     }
     if (type === "up") {
-      if (this.drag) {
-        const d = this.drag;
-        this.drag = null;
-        if (placeOk(g.balls, d.x, d.y, g.inHand === "kitchen")) {
-          this.host.send("pool:place", { id, x: d.x, y: d.y });
-          if (cue) Object.assign(cue, { x: d.x, y: d.y });
-        }
+      if (this.swallowUp) {
+        this.swallowUp = false;
+        return;
+      }
+      if (this.drag && cue) {
+        // dragged and let go: down there, if it may go there (else back in my hand)
+        this.hover = true;
+        this.place(id, g, cue, this.drag);
         return;
       }
       if (this.press) {
@@ -457,7 +552,7 @@ export class PoolTables {
     // move
     if (!p || !cue) return;
     if (this.drag) {
-      this.drag = { x: p.x, y: p.y };
+      this.drag = onCloth(p);
       return;
     }
     if (this.press) {
@@ -487,6 +582,23 @@ export class PoolTables {
       this.angle = want;
     }
     this.movedAt = performance.now();
+  }
+
+  // the cue ball in my hand put down at `d` (where it may go)
+  private place(id: string, g: PoolGame, cue: PoolBall, d: Pt) {
+    if (!placeOk(g.balls, d.x, d.y, g.inHand === "kitchen")) {
+      this.drag = d;
+      if (this.now - this.warnedAt > 1500) {
+        this.warnedAt = this.now;
+        toast("The cue ball can't go there.", "warn");
+      }
+      return;
+    }
+    this.host.send("pool:place", { id, x: d.x, y: d.y });
+    Object.assign(cue, { x: d.x, y: d.y });
+    this.drag = null;
+    this.hover = false;
+    chalk(0.18);
   }
 
   private shoot(id: string) {
@@ -552,6 +664,10 @@ export class PoolTables {
     this.power = 0;
     this.called = -1;
     this.walkedTo = "";
+    this.handFor = -1;
+    this.topSide = null;
+    this.hover = false;
+    this.swallowUp = false;
     if (was && !focus) {
       const t = this.table(was);
       if (t && this.mySeat(t) >= 0 && t.phase !== "play") this.leave(was);
@@ -602,8 +718,25 @@ export class PoolTables {
     if (!v?.game || !t) return;
     const g = v.game;
     const cue = this.cueBall(v);
-    if (!this.myTurn(id) || !cue) return;
+    if (!this.myTurn(id) || !cue) {
+      if (this.hover) {
+        this.hover = false;
+        this.drag = null;
+      }
+      return;
+    }
     const now = this.now;
+    // ball in hand after a foul: it comes up into my hand at once (the break's
+    // own placing, behind the line, starts with it already down)
+    const no = num(t.shotNo);
+    if (g.inHand && g.shots > 0 && this.handFor !== no) {
+      this.handFor = no;
+      this.drag = { x: cue.x, y: cue.y };
+      this.hover = true;
+      this.press = null;
+      this.chargeAt = null;
+      this.power = 0;
+    }
     // stream the aim
     const aim: Record<string, unknown> = {
       id,
@@ -678,6 +811,7 @@ export class PoolTables {
     const heard = Math.max(0, 1 - dist / HEAR);
     const pan = this.panOf(v, me);
     if (v.sim) {
+      for (const b of v.shown) if (b.down < 0) v.last.set(b.id, { x: b.x, y: b.y });
       v.sim.step(dt);
       for (; v.evSeen < v.sim.events.length; v.evSeen++) {
         const e = v.sim.events[v.evSeen];
@@ -687,7 +821,8 @@ export class PoolTables {
         else if (e.k === "rail" || e.k === "jaw") cushion(e.speed, gain * 0.8, pan);
         else if (e.k === "pocket") {
           pocketDrop(e.speed, gain, pan);
-          v.drops.set(e.a, { pocket: e.b ?? 0, at: now });
+          const pk = POOL_POCKETS[e.b ?? 0];
+          v.drops.set(e.a, { pocket: e.b ?? 0, at: now, from: v.last.get(e.a) ?? pk, speed: e.speed });
         }
       }
       v.shown = v.sim.balls;
@@ -697,7 +832,8 @@ export class PoolTables {
       }
     }
     if (!v.sim) {
-      v.shown = v.game?.balls ?? [];
+      // (out of a game, balls taken off the table aren't on it: tables/pballs.ts has them)
+      v.shown = (v.game?.balls ?? []).filter((b) => b.down !== OFF_TABLE);
       // the cue ball in someone's hand, where they hold it
       const aim = this.aimOf(t);
       const mineNow = this.focus === id && this.drag;
@@ -758,32 +894,33 @@ export class PoolTables {
     let anyNew = false;
     const live = new Set<number>();
     const tray: PoolBall[] = [];
+    const falling = new Set<number>();
     for (const b of v.shown) {
-      const drop = v.drops.get(b.id);
-      const fall = drop ? Math.min(1, (now - drop.at) / 260) : 1;
-      if (b.down >= 0 && (!drop || fall >= 1)) {
+      const drop = b.down >= 0 ? v.drops.get(b.id) : undefined;
+      const f = drop ? dropAt(drop, now) : null;
+      if (b.down >= 0 && (!f || f.done)) {
         tray.push(b);
         continue;
       }
-      let x = b.x;
-      let y = b.y;
-      let alpha = 1;
-      let shrink = 1;
-      if (b.down >= 0 && drop) {
-        const pk = POOL_POCKETS[drop.pocket];
-        x = pk.x;
-        y = pk.y;
-        alpha = 1 - fall;
-        shrink = 1 - 0.35 * fall;
-      }
+      const x = f ? f.x : b.x;
+      const y = f ? f.y : b.y;
+      const sinkPx = f ? f.sink * G.tpm * ZPX : 0;
+      // (sinking into the hole, it goes into the pocket's dark)
+      const alpha = 1;
+      const shrink = 1;
       live.add(b.id);
-      const p = sc(x, y, BALL_Z - fall * (b.down >= 0 ? 4 : 0));
+      const p = sc(x, y, BALL_Z - sinkPx);
       const slice = v.slices[sliceOf(p.wx, p.wy)];
-      // its shadow on the cloth
+      // its shadow on the cloth (none once it's in the hole)
       const sh = sc(x, y, CLOTH_Z);
-      slice.under
-        .ellipse(sh.x + 0.4, sh.y + 0.3, rPx * 1.02, rPx * 0.52)
-        .fill({ color: 0x0c0806, alpha: 0.36 * alpha });
+      if (!f || f.sink <= 0)
+        slice.under
+          .ellipse(sh.x + 0.4, sh.y + 0.3, rPx * 1.02, rPx * 0.52)
+          .fill({ color: 0x0c0806, alpha: 0.36 * alpha });
+      if (f && drop) {
+        if (f.flash >= 0) this.flashIso(v, sc, drop.pocket, b.id, f.flash);
+        if (f.sink > 0) falling.add(b.id);
+      }
       anyNew = this.paint(v, b, rot) || anyNew;
       let sp = v.sprites.get(b.id);
       if (!sp) {
@@ -797,7 +934,39 @@ export class PoolTables {
       sp.zIndex = p.wx + p.wy;
       sp.width = sp.height = ((CELL * rPx) / (CELL / 2 - 1)) * shrink;
       sp.alpha = alpha;
+      // in the hole: darker the deeper, and only what shows through the hole's mouth
+      sp.tint = f && f.sink > 0 ? dim(1 - 0.75 * Math.min(1, f.sink / POCKET_DEPTH)) : 0xffffff;
+      if (f && drop && f.sink > 0) {
+        let m = v.masks.get(b.id);
+        if (!m) {
+          m = new Graphics();
+          v.masks.set(b.id, m);
+        }
+        if (m.parent !== slice.balls) slice.balls.addChild(m);
+        m.clear();
+        const pk = POOL_POCKETS[drop.pocket];
+        const c = sc(pk.x, pk.y, CLOTH_Z);
+        const ring: number[] = [];
+        for (let k = 0; k < 24; k++) {
+          const a = (k / 24) * Math.PI * 2;
+          const q = sc(pk.x + Math.cos(a) * holeR(pk.side), pk.y + Math.sin(a) * holeR(pk.side), CLOTH_Z);
+          ring.push(q.x, q.y);
+        }
+        // the mouth, and everything over the cloth above it
+        m.poly(ring).fill(0xffffff);
+        m.rect(c.x - rPx * 6, c.y - rPx * 12, rPx * 12, rPx * 12).fill(0xffffff);
+        sp.mask = m;
+      }
     }
+    // the masks of balls that have fallen out of sight
+    for (const [bid, m] of v.masks)
+      if (!falling.has(bid)) {
+        const sp = v.sprites.get(bid);
+        if (sp && sp.mask === m) sp.mask = null;
+        m.removeFromParent();
+        m.destroy();
+        v.masks.delete(bid);
+      }
     // the tray at the foot end: the potted ones in a row, first down nearest
     tray.sort((a, b) => (a.down === b.down ? a.id - b.id : 0));
     tray.forEach((b, i) => {
@@ -899,6 +1068,25 @@ export class PoolTables {
     this.drawWaiting(v, t, sc);
     // the lamp over the table (see-through while I play at it in iso)
     this.drawLamp(v, sc, this.focus === id && !this.host.threeD());
+  }
+
+  // a ball just down: a ring of its colour opening out of the pocket's mouth
+  private flashIso(
+    v: View,
+    sc: (mx: number, my: number, z: number) => { x: number; y: number },
+    pocket: number,
+    id: number,
+    k: number,
+  ) {
+    const pk = POOL_POCKETS[pocket];
+    const r = holeR(pk.side) * (1.05 + 0.9 * k);
+    const pts: number[] = [];
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * Math.PI * 2;
+      const q = sc(pk.x + Math.cos(a) * r, pk.y + Math.sin(a) * r, CLOTH_Z + 0.3);
+      pts.push(q.x, q.y);
+    }
+    v.overG.poly(pts).stroke({ width: 1.6 * (1 - k) + 0.4, color: flashColor(id), alpha: 0.95 * (1 - k) });
   }
 
   // where the cue ball was hit from (the replay's start)
@@ -1259,22 +1447,34 @@ export class PoolTables {
       const t = this.table(id);
       let trayI = 0;
       for (const b of v.shown) {
-        const drop = v.drops.get(b.id);
-        const fall = drop ? Math.min(1, (this.now - drop.at) / 260) : 1;
+        const drop = b.down >= 0 ? v.drops.get(b.id) : undefined;
+        const f = drop ? dropAt(drop, this.now) : null;
         let wx: number;
         let wy: number;
         let z = BALL_Z;
-        let alpha = 1;
-        if (b.down >= 0 && (!drop || fall >= 1)) {
+        const alpha = 1;
+        if (b.down >= 0 && (!f || f.done)) {
           const [tx, ty] = tableTurn(G.w - 0.13, 0.66 + trayI++ * (2 * R_T + 0.004), rot, G.w, G.h);
           wx = o.x + tx;
           wy = o.y + ty;
           z = 19.4 + R_T * ZPX;
-        } else if (b.down >= 0 && drop) {
-          const pk = POOL_POCKETS[drop.pocket];
-          ({ x: wx, y: wy } = toWorld(o, pk.x, pk.y));
-          z = BALL_Z - fall * 6;
-          alpha = 1 - fall;
+        } else if (f && drop) {
+          // into the pocket: over the lip and down the hole (the 3D table's are real holes)
+          ({ x: wx, y: wy } = toWorld(o, f.x, f.y));
+          z = BALL_Z - f.sink * G.tpm * ZPX;
+          if (f.flash >= 0) {
+            const pk = POOL_POCKETS[drop.pocket];
+            const w = toWorld(o, pk.x, pk.y);
+            into.rings.push({
+              key: `${id}:flash${b.id}`,
+              x: w.x,
+              y: w.y,
+              z: zt(CLOTH_Z) + 0.006,
+              r: holeR(pk.side) * G.tpm * (1.05 + 0.9 * f.flash),
+              color: flashColor(b.id),
+              alpha: 0.95 * (1 - f.flash),
+            });
+          }
         } else ({ x: wx, y: wy } = toWorld(o, b.x, b.y));
         into.balls.push({
           key: `${id}:${b.id}`,
@@ -1376,13 +1576,15 @@ export class PoolTables {
         if (mine && !v.sim && g.inHand) {
           const c = this.drag ?? cueBall;
           const w = toWorld(o, c.x, c.y);
+          const ok = !this.drag || placeOk(g.balls, c.x, c.y, g.inHand === "kitchen");
+          const pulse = this.drag ? 0.5 + 0.5 * Math.sin(this.now / 160) : 0;
           into.rings.push({
             key: `${id}:hand`,
             x: w.x,
             y: w.y,
             z: zt(CLOTH_Z + 0.3),
-            r: R_T * 2.3,
-            color: 0xf4ecd8,
+            r: R_T * (2.3 + pulse * 0.35),
+            color: ok ? 0xf4ecd8 : 0xd8553a,
             alpha: 0.8,
           });
         }
@@ -1408,6 +1610,7 @@ export class PoolTables {
   }
 
   // The game camera (3D): over the table, or down the cue.
+  private topSide: { id: string; side: number } | null = null;
   gameCam(): { eye: [number, number, number]; look: [number, number, number] } | null {
     const v = this.focus ? this.views.get(this.focus) : undefined;
     if (!v) return null;
@@ -1427,12 +1630,17 @@ export class PoolTables {
       const dy = Math.sin(h);
       return { eye: [w.x - dx * 1.25, w.y - dy * 1.25, zTop + 0.62], look: [w.x + dx * 1.1, w.y + dy * 1.1, zTop] };
     }
-    // over the table, the long side across the picture; from the side I'm on
+    // over the table, the long side across the picture; from the side I was on
+    // when I came to it — picked once: I walk round the table to every shot,
+    // and following me there turned the whole picture round
     const h = tableHeading(0, o.rot ?? 0);
     const px = -Math.sin(h);
     const py = Math.cos(h);
-    const me = this.host.room.state.players.get(this.host.room.sessionId);
-    const side = me && (me.x - c.x) * px + (me.y - c.y) * py < 0 ? -1 : 1;
+    if (this.topSide?.id !== o.id) {
+      const me = this.host.room.state.players.get(this.host.room.sessionId);
+      this.topSide = { id: o.id, side: me && (me.x - c.x) * px + (me.y - c.y) * py < 0 ? -1 : 1 };
+    }
+    const side = this.topSide.side;
     return {
       eye: [c.x + px * side * 1.05, c.y + py * side * 1.05, zTop + 3.6],
       look: [c.x + px * side * 0.12, c.y + py * side * 0.12, zTop],

@@ -78,6 +78,14 @@ export interface ClientMessages {
   "pool:place": { id: string; x: number; y: number };
   "pool:shot": { id: string; angle: number; power: number; spinX: number; spinY: number; called: number };
   "pool:concede": { id: string };
+  // pool balls out of a game (shared/pool-throw.ts): a ball or the cue off a table not being
+  // played; a ball off the floor; thrown (yaw, pitch: its way out); the cue fired from its tip;
+  // the ball in the hand put back on its table, the cue put back (arms:draw -1 too)
+  "pball:take": { id: string; what: "ball" | "cue" };
+  "pball:pick": { key: string };
+  "pball:throw": { yaw: number; pitch: number };
+  "pball:fire": { ox: number; oy: number; oz: number; yaw: number; pitch: number };
+  "pball:back": Record<string, never>;
   // the ping-pong table (pong.ts): seats (0: the −x end, 1: the +x end), Vortex
   // at the other end, start (points to win, best of), my racket as it moves
   // (t: server ms), the toss (serving), a hit I made (on flight `seq`, at `t`,

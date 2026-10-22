@@ -97,9 +97,18 @@ registerFeature((room: WorldRoom) => {
     void save({ ...def, props: { ...props, record: { last, wins } } });
   };
 
-  const toLobby = (t: PoolTable) => {
+  // a table nobody's playing: the balls racked on it (out of a game they can be taken and
+  // thrown — features/pballs.ts — and any still out come back now)
+  const rack = (id: string, t: PoolTable) => {
+    t.game = packGame(newGame(Math.floor(Math.random() * 2 ** 31), (t.breaker & 1) as 0 | 1));
+    t.before = "";
+    t.shot = "";
+    room.pballs?.recall(id);
+  };
+  const toLobby = (id: string, t: PoolTable) => {
     t.phase = "lobby";
     t.aim = "";
+    rack(id, t);
   };
 
   // A shot: from the layout everyone has, through the physics, judged.
@@ -152,7 +161,7 @@ registerFeature((room: WorldRoom) => {
         t.phase = "done";
         t.until = Date.now();
         record(id, nameIn(t, other), "", "left");
-      } else toLobby(t);
+      } else toLobby(id, t);
     }
     // nobody but Vortex: he goes too
     if ([...t.seats.values()].every((s) => s.vortex)) t.seats.clear();
@@ -183,7 +192,7 @@ registerFeature((room: WorldRoom) => {
     s.uid = p.uid;
     s.name = p.name;
     t.seats.set(String(seat), s);
-    if (t.phase === "done") toLobby(t);
+    if (t.phase === "done") toLobby(id, t);
   });
 
   room.on("pool:leave", (client, m) => {
@@ -211,7 +220,7 @@ registerFeature((room: WorldRoom) => {
     s.name = "Vortex";
     s.vortex = m.level;
     t.seats.set(other, s);
-    if (t.phase === "done") toLobby(t);
+    if (t.phase === "done") toLobby(id, t);
   });
 
   room.on("pool:start", (client, m) => {
@@ -235,6 +244,8 @@ registerFeature((room: WorldRoom) => {
     t.phase = "play";
     t.by = room.state.players.get(client.sessionId)?.name ?? "";
     minds.delete(id);
+    // (balls taken off it, the cue: all back for the game)
+    room.pballs?.recall(id);
   });
 
   const myTurn = (client: WorldClient, id: string): { t: PoolTable; g: PoolGame } | null => {
@@ -351,8 +362,22 @@ registerFeature((room: WorldRoom) => {
     }
   };
 
+  let rackedAt = 0;
   return {
     tick(_dt, now) {
+      // every table has its balls on it, played or not
+      if (now - rackedAt > 1000) {
+        rackedAt = now;
+        for (const [id, o] of room.state.objects) {
+          if (o.kind !== "pool_table") continue;
+          let t = room.state.pool.get(id);
+          if (!t) {
+            t = new PoolTable();
+            room.state.pool.set(id, t);
+          }
+          if (t.phase === "lobby" && !t.game) rack(id, t);
+        }
+      }
       for (const [id, t] of room.state.pool) {
         if (!table(id)) {
           room.state.pool.delete(id);
@@ -364,15 +389,15 @@ registerFeature((room: WorldRoom) => {
           if (s.vortex) continue;
           if (!room.state.players.has(s.sid) || away(id, s.sid) > TABLE_WALK_AWAY) leaveSeat(id, t, Number(k));
         }
-        if (t.phase === "done" && now - t.until > RESULT_MS && !t.seats.size) toLobby(t);
+        if (t.phase === "done" && now - t.until > RESULT_MS && !t.seats.size) toLobby(id, t);
         if (t.phase !== "play") continue;
         const g = gameOf(t);
         if (!g) {
-          toLobby(t);
+          toLobby(id, t);
           continue;
         }
         if (now - t.turnAt > MAX_GAME_MS) {
-          toLobby(t);
+          toLobby(id, t);
           continue;
         }
         const level = vortexIn(t, g.turn);

@@ -143,6 +143,9 @@ export interface PersonIn {
   gun?: string; // the weapon in the hand (D6): "revolver", "shotgun"
   arm?: number; // …what the hand's doing with it (shared ARM: drawing, reloading, broken open)
   down?: "down" | "kneel"; // down, crawling; kneeling by someone down (D7: world/dark says)
+  fell?: number; // knocked down by a pool ball: s since (tp/view.ts times it from when it's seen)
+  fellAt?: number; // …the server's, since when (0: on their feet), and the way the ball went
+  fellYaw?: number;
   jump?: JumpNow; // jumping (shared/jump.ts): its stage
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them, tiles

@@ -1,4 +1,5 @@
 import { entry, footprint, HELD, type HeldKind, heldState, isHeld } from "@yutopia/shared";
+import { heldBall } from "@yutopia/shared/pool-throw";
 import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
@@ -37,8 +38,9 @@ registerFeature((room: WorldRoom) => {
     tick(_dt, now) {
       if (now - at < 500) return;
       at = now;
+      // (a pool ball off a table is features/pballs.ts')
       for (const p of room.state.players.values())
-        if (p.held && (!isHeld(p.held) || heldState(p.held, now - p.heldAt).done)) {
+        if (p.held && heldBall(p.held) < 0 && (!isHeld(p.held) || heldState(p.held, now - p.heldAt).done)) {
           p.held = "";
           p.heldAt = 0;
         }

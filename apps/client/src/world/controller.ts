@@ -1254,6 +1254,9 @@ export class WorldController {
         },
         threeD: () => !!this.tp,
         worldHttp: () => this.worldHttp,
+        where: () => this.walker?.where() ?? { ...this.me, z: 0 },
+        aiming: () => !!this.walker?.aiming,
+        level: () => this.level,
       });
       this.tables.refresh();
     });
@@ -3516,6 +3519,8 @@ export class WorldController {
       focused: p.focused,
       gun: p.gun,
       arm: p.arm,
+      fellAt: p.fellAt,
+      fellYaw: p.fellYaw,
     };
   }
 

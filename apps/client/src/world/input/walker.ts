@@ -152,6 +152,8 @@ export class Walker {
   aiming = false;
   /** down (docs/plan/30-the-dark.md D7): a crawl, no sprint, no jump, no aim */
   down = false;
+  /** knocked down (a pool ball): no moving, no aim, no jump till up */
+  fell = false;
   private torchOn = false;
   /** a gun in my hand, in 3D (world/dark/arms.ts says): aiming indoors too */
   armed = false;
@@ -291,7 +293,8 @@ export class Walker {
     const crouched = this.controls.crouched;
     const { move, presses } = this.controls.read(c.camYaw, c.camYaw, c.usePad);
     // the inventory open: standing still, no aim (the world doesn't stop), its own pad
-    const frozen = !!this.dark?.frozen();
+    // (knocked down by a pool ball: where they fell till they're up — shared/pool-throw.ts KNOCK)
+    const frozen = !!this.dark?.frozen() || this.fell;
     if (frozen) {
       move.x = 0;
       move.y = 0;
@@ -447,6 +450,7 @@ export class Walker {
     const me = room?.state.players.get(room.sessionId);
     this.torchOn = !!me?.torch;
     this.down = (me?.downAt ?? 0) > 0;
+    this.fell = (me?.fellAt ?? 0) > 0;
     const st = me?.st;
     if (typeof st !== "number") return;
     this.vitals.wm = me?.wm ?? 100; // (frozen: stamina comes back at half speed)

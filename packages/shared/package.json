@@ -18,6 +18,7 @@
     "./pong": "./src/pong.ts",
     "./tables": "./src/tables.ts",
     "./pool-game": "./src/pool-game.ts",
+    "./pool-throw": "./src/pool-throw.ts",
     "./phone": "./src/phone.ts",
     "./grounds": "./src/grounds.ts",
     "./car": "./src/car/index.ts",
@@ -25,7 +26,8 @@
     "./dark": "./src/dark/index.ts",
     "./vitals": "./src/vitals.ts",
     "./inventory": "./src/inventory.ts",
-    "./beam": "./src/beam.ts"
+    "./beam": "./src/beam.ts",
+    "./weather": "./src/weather.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

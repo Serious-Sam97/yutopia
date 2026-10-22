@@ -75,12 +75,14 @@ import { monitorsToComputers } from "@yutopia/shared/computer";
 import { groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { Allowance, isVerb, MOVE, MV_WINDED, speedCap } from "@yutopia/shared/move";
+import { KNOCK } from "@yutopia/shared/pool-throw";
 import { DOWN } from "@yutopia/shared/vitals";
 import { ApiError, api, type PresenceEntry } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
 import type { DarkHooks } from "./features/dark.ts";
 import { type Feature, installFeatures } from "./features/index.ts";
+import type { PballHooks } from "./features/pballs.ts";
 import type { SurvivalHooks } from "./features/survival.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
 import { metrics } from "./metrics.ts";
@@ -147,6 +149,7 @@ export class WorldRoom extends Room<WorldState> {
   savedLoot: unknown = null;
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
+  pballs: PballHooks | null = null; // features/pballs.ts: pool balls out of a game
 
   send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {
     client.send(type, msg);
@@ -518,9 +521,13 @@ export class WorldRoom extends Room<WorldState> {
       // (out of breath: no faster than a jog — docs/plan/30-the-dark.md D2)
       const winded = !!this.survival?.winded(client.sessionId);
       // (down: a crawl — docs/plan/30-the-dark.md D7)
-      const fastest = p.downAt
-        ? DOWN.crawl * 1.4
-        : speedCap(isVerb(p.jump) && now - p.jumpAt < 1500 ? p.jump : null, MOVE, winded);
+      // (knocked down by a pool ball: where they fell — shared/pool-throw.ts KNOCK)
+      const fastest =
+        p.fellAt && now - p.fellAt < KNOCK.still * 1000
+          ? 0.3
+          : p.downAt
+            ? DOWN.crawl * 1.4
+            : speedCap(isVerb(p.jump) && now - p.jumpAt < 1500 ? p.jump : null, MOVE, winded);
       ud.allow.grow(dt, fastest);
       if (!ud.allow.spend(Math.hypot(to.x - from.x, to.y - from.y))) return snap();
       const nextArea = areaAt(this.levelMap(level), to.x, to.y);
@@ -568,7 +575,7 @@ export class WorldRoom extends Room<WorldState> {
     this.on("jump", (client, m) => {
       const p = this.state.players.get(client.sessionId);
       const k = m?.k;
-      if (!p || !(isJump(k) || isVerb(k)) || p.a === ANIM.sit || p.busy || p.act || p.downAt) return;
+      if (!p || !(isJump(k) || isVerb(k)) || p.a === ANIM.sit || p.busy || p.act || p.downAt || p.fellAt) return;
       const now = Date.now();
       // from the ground, or just off it (coyote time, plus a message's lag) — a mantle also from
       // the air (catching an edge on the way up); not twice at once

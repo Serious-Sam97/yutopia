@@ -86,7 +86,7 @@ registerFeature((room: WorldRoom) => {
     g.onLand(x, y) ? heightAt(x + ox(), y + oy()) : 0;
   // where everyone was, the last second or so (a shot is taken against where its shooter saw them)
   const trails = new Map<string, Was[]>();
-  const free = (p: Player) => !p.busy && !p.act && p.a !== ANIM.sit && p.hp > 0;
+  const free = (p: Player) => !p.busy && !p.act && p.a !== ANIM.sit && p.hp > 0 && !p.fellAt;
   // the weapon in the hand: its slot in what they carry
   const inHand = (sid: string, p: Player) => {
     const inv = room.survival?.inventory(sid);
@@ -360,7 +360,8 @@ registerFeature((room: WorldRoom) => {
       if (now - checkedAt > 500) {
         checkedAt = now;
         for (const p of room.state.players.values())
-          if (p.gun) {
+          if (p.gun && p.gun !== "cue") {
+            // (the cue's off a pool table, not out of the pockets: features/pballs.ts)
             const inv = room.survival?.inventory(p.sid);
             if (inv && !weaponIn(inv, p.gun)) p.gun = "";
           }

@@ -18,7 +18,7 @@ import {
 import type { chars } from "../art/chars-load";
 import { MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
-import { type GunFx, type GunKind, type GunModel, gunModel, poseGun, shellGeometry } from "./guns3d";
+import { cueModel, type GunFx, type GunKind, type GunModel, gunModel, poseGun, shellGeometry } from "./guns3d";
 import { ZPX } from "./kit3d";
 import type { PersonIn } from "./people3d";
 
@@ -54,6 +54,8 @@ export interface Mats {
   prop: (color: string) => Material;
   /** a pet toy in the hand (the pets chunk makes those), when it's loaded */
   toy?: (kind: string) => Object3D | null;
+  /** a pool ball in the hand (shared/pool-throw.ts held "pball:<n>") */
+  pball?: (n: number) => Object3D;
   /** the shadowed, wrapped in the dark (docs/plan/30-the-dark.md D5) */
   shade?: Material;
   shadeInk?: Material;
@@ -303,6 +305,18 @@ export class Person3D {
       pose = this.C.blend(pose, m.pose, this.downW);
       lift = [lift[0] + (m.lift[0] - lift[0]) * this.downW, lift[1] + (m.lift[1] - lift[1]) * this.downW, lift[2]];
     } else this.downW = 0;
+    // knocked down by a pool ball: thrown back onto the floor, up again (chars FALL_LEN)
+    if (p.fell !== undefined && p.fell < this.C.FALL_LEN) {
+      const m = this.C.fellPose(p.fell);
+      this.fellW = Math.min(1, this.fellW + step * 14);
+      pose = this.C.blend(pose, m.pose, this.fellW);
+      const k = this.fellW;
+      lift = [
+        lift[0] + (m.lift[0] - lift[0]) * k,
+        lift[1] + (m.lift[1] - lift[1]) * k,
+        lift[2] + (m.lift[2] - lift[2]) * k,
+      ];
+    } else this.fellW = 0;
     const seatY = (SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX;
     const drop = this.model.sitDrop(seatY) * w;
     this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], mo.reach);
@@ -402,6 +416,7 @@ export class Person3D {
       }
     }
     this.gunFrame(p, hand);
+    this.ballFrame(p, hand);
     // aiming: the gun along the look too, whatever the wrist is doing (its barrel's −y)
     // (held in both hands — the hands placed by gunHands: the gun along the way it set)
     if (this.gun && this.gunDirOn && this.gunHandsW > 0.3) this.aimGun(this.gun.root, this.gunDir);
@@ -413,6 +428,21 @@ export class Person3D {
     this.torchFrame(p);
     if (this.phone?.prop.rec)
       this.phone.prop.rec.visible = !!p.recording && Math.floor(performance.now() / 500) % 2 === 0;
+  }
+
+  // a pool ball off a table, in the right hand to throw (shared/pool-throw.ts)
+  private ball: { n: number; o: Object3D } | null = null;
+  private ballFrame(p: PersonIn, hand: Object3D | null) {
+    const m = /^pball:(\d{1,2})$/.exec(p.held ?? "");
+    const n = m ? Number(m[1]) : -1;
+    if ((this.ball?.n ?? -1) === n) return;
+    this.ball?.o.removeFromParent();
+    this.ball = null;
+    const o = n >= 0 && hand ? this.mats.pball?.(n) : undefined;
+    if (!o || !hand) return;
+    this.C.inHand(o as Group, "toy");
+    hand.add(o);
+    this.ball = { n, o };
   }
 
   private dropHeld() {
@@ -434,8 +464,11 @@ export class Person3D {
     const root = new Group();
     const kind: GunKind = key === "shotgun" ? "shotgun" : "revolver";
     // (in front of my eyes: every bevel; anyone else's, a few thousand triangles)
-    const model = gunModel(kind, this.mats.prop("vertex"), this.part === "arms" ? "near" : "far");
-    poseGun(model, kind, { cock: 1 });
+    // (the pool cue taken down: a gun that fires the balls — carried and shouldered like the double-barrel)
+    const detail = this.part === "arms" ? "near" : "far";
+    const cue = key === "cue";
+    const model = cue ? cueModel(this.mats.prop("vertex"), detail) : gunModel(kind, this.mats.prop("vertex"), detail);
+    if (!cue) poseGun(model, kind, { cock: 1 });
     const inner = model.root;
     inner.quaternion.setFromRotationMatrix(GUN_IN_WRIST);
     inner.position
@@ -446,7 +479,7 @@ export class Person3D {
     root.add(inner);
     root.position.set(0, -0.05, 0);
     // (a little larger than life, as our people's hands are)
-    root.scale.setScalar(kind === "shotgun" ? 1.2 : 1.4);
+    root.scale.setScalar(kind === "shotgun" || cue ? 1.2 : 1.4);
     hand.add(root);
     this.gun = { key, root, model };
   }
@@ -456,9 +489,9 @@ export class Person3D {
    *  reloading, tipped up and turned in. Without it, at rest — cocked while aiming. */
   gunFx: GunFx | null = null;
   private gunMoves(gun: { key: string; root: Group; model: GunModel }) {
-    const kind: GunKind = gun.key === "shotgun" ? "shotgun" : "revolver";
+    const kind: GunKind = gun.key === "shotgun" || gun.key === "cue" ? "shotgun" : "revolver";
     const fx = this.gunFx;
-    poseGun(gun.model, kind, fx ?? { cock: 1 });
+    if (gun.key !== "cue") poseGun(gun.model, kind, fx ?? { cock: 1 });
     gun.root.position.set(0, -0.05, 0);
     if (!fx) return;
     if (fx.kick > 0) {
@@ -485,6 +518,7 @@ export class Person3D {
   //   pocket for a shell and back to the breech, one after another.
   // The gun's way (`L` rad left of the body's facing, `P` up) and the butt's drop below the right
   // shoulder are eased between them.
+  private fellW = 0;
   private gunHandsW = 0;
   private gunWay = { L: 0, P: 0, drop: 0, fwd: 0, in: 0, turn: 0 };
   private gunDir = new Vector3();
@@ -495,9 +529,10 @@ export class Person3D {
   private gunHands(p: PersonIn, dt: number) {
     const gun = this.gun;
     const aiming = !!p.gun && ((p.mv ?? 0) & 16) !== 0;
-    const shotgun = p.gun === "shotgun";
-    const loading = shotgun && !aiming && (this.gunFx?.reload ?? 0) > 0.3;
-    const want = gun && (shotgun || aiming) && !p.down ? 1 : 0;
+    // (the pool cue: held as the double-barrel is, in both hands)
+    const shotgun = p.gun === "shotgun" || p.gun === "cue";
+    const loading = p.gun === "shotgun" && !aiming && (this.gunFx?.reload ?? 0) > 0.3;
+    const want = gun && (shotgun || aiming) && !p.down && p.fell === undefined ? 1 : 0;
     this.gunHandsW += (want - this.gunHandsW) * (1 - Math.exp(-dt * 14));
     const w = this.gunHandsW;
     this.loadT = loading ? this.loadT + dt : 0;

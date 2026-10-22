@@ -32,10 +32,20 @@ const DOT: V3 = [196, 48, 43];
 const COS_DISC = Math.cos(0.43);
 const SIN_DISC = Math.sin(0.43);
 const COS_DOT = Math.cos(0.16);
+const STRIPE = 0.47; // |z| past this: the stripe's white caps
+// edges are blended over this much of the surface (a pixel or so of the 3D
+// texture, of the iso sprite): no stair-steps round the stripe, discs, dots
+const SOFT = 0.012;
+const smooth = (e: number) => Math.max(0, Math.min(1, 0.5 + e / SOFT));
+const mix = (a: V3, b: V3, k: number): V3 => [
+  a[0] + (b[0] - a[0]) * k,
+  a[1] + (b[1] - a[1]) * k,
+  a[2] + (b[2] - a[2]) * k,
+];
 
-// the numbers, as little masks (drawn once by the browser's own font)
+// the numbers, as masks (drawn once by the browser's own font, read smoothly)
 const masks = new Map<number, Float32Array>();
-const MASK = 40;
+const MASK = 96;
 function mask(id: number): Float32Array | null {
   if (typeof document === "undefined") return null;
   const have = masks.get(id);
@@ -48,10 +58,11 @@ function mask(id: number): Float32Array | null {
     g.fillStyle = "#000";
     g.textAlign = "center";
     g.textBaseline = "middle";
-    g.font = `700 ${id > 9 ? 22 : 28}px "Inter", "Helvetica Neue", Arial, sans-serif`;
-    g.fillText(String(id), MASK / 2, MASK / 2 + 1.5);
+    const k = MASK / 40;
+    g.font = `700 ${(id > 9 ? 22 : 28) * k}px "Inter", "Helvetica Neue", Arial, sans-serif`;
+    g.fillText(String(id), MASK / 2, MASK / 2 + 1.5 * k);
     // a 6 and a 9 get their underline
-    if (id === 6 || id === 9) g.fillRect(MASK / 2 - 6, MASK / 2 + 12, 12, 2.5);
+    if (id === 6 || id === 9) g.fillRect(MASK / 2 - 6 * k, MASK / 2 + 12 * k, 12 * k, 2.5 * k);
     const d = g.getImageData(0, 0, MASK, MASK).data;
     for (let i = 0; i < out.length; i++) out[i] = d[i * 4 + 3] / 255;
   }
@@ -59,40 +70,40 @@ function mask(id: number): Float32Array | null {
   return out;
 }
 
+// the number mask read between its pixels (u, v: 0..1 across it)
+function inkAt(mk: Float32Array, u: number, v: number): number {
+  const fx = Math.max(0, Math.min(MASK - 1.001, u * MASK - 0.5));
+  const fy = Math.max(0, Math.min(MASK - 1.001, v * MASK - 0.5));
+  const x0 = Math.floor(fx);
+  const y0 = Math.floor(fy);
+  const ax = fx - x0;
+  const ay = fy - y0;
+  const a = mk[y0 * MASK + x0];
+  const b = mk[y0 * MASK + x0 + 1];
+  const c = mk[(y0 + 1) * MASK + x0];
+  const d = mk[(y0 + 1) * MASK + x0 + 1];
+  return (a * (1 - ax) + b * ax) * (1 - ay) + (c * (1 - ax) + d * ax) * ay;
+}
+
 // The ball's colour (0..255) in local direction n (unit).
 export function ballRGB(id: number, nx: number, ny: number, nz: number): V3 {
   if (id === 0) {
     // ivory, with a red dot on each axis
     const m = Math.max(Math.abs(nx), Math.abs(ny), Math.abs(nz));
-    return m > COS_DOT ? DOT : IVORY;
+    return mix(IVORY, DOT, smooth(m - COS_DOT));
   }
   const stripe = id > 8;
-  let base: V3 = rgb(ballHex(id));
-  if (stripe && Math.abs(nz) > 0.47) base = IVORY;
+  const colour = rgb(ballHex(id));
+  const base: V3 = stripe ? mix(colour, IVORY, smooth(Math.abs(nz) - STRIPE)) : colour;
   // the number discs on +x and −x
   const ax = Math.abs(nx);
-  if (ax > COS_DISC) {
+  if (ax > COS_DISC - SOFT) {
     const u = (nx > 0 ? ny : -ny) / SIN_DISC; // −1..1 across the disc
     const v = -nz / SIN_DISC;
     const mk = mask(id);
-    let ink = 0;
-    if (mk) {
-      const px = Math.min(MASK - 1, Math.max(0, Math.floor((u * 0.5 + 0.5) * MASK)));
-      const py = Math.min(MASK - 1, Math.max(0, Math.floor((v * 0.5 + 0.5) * MASK)));
-      ink = mk[py * MASK + px];
-    }
-    // a soft edge on the disc
-    const edge = Math.min(1, (ax - COS_DISC) / 0.012);
-    const disc: V3 = [
-      IVORY[0] + (INK[0] - IVORY[0]) * ink,
-      IVORY[1] + (INK[1] - IVORY[1]) * ink,
-      IVORY[2] + (INK[2] - IVORY[2]) * ink,
-    ];
-    return [
-      base[0] + (disc[0] - base[0]) * edge,
-      base[1] + (disc[1] - base[1]) * edge,
-      base[2] + (disc[2] - base[2]) * edge,
-    ];
+    const ink = mk ? inkAt(mk, u * 0.5 + 0.5, v * 0.5 + 0.5) : 0;
+    const disc = mix(IVORY, INK, ink);
+    return mix(base, disc, smooth(ax - COS_DISC));
   }
   return base;
 }
@@ -190,7 +201,7 @@ export function paintIso(img: ImageData, cell: number, id: number, q: Q) {
 
 // ── 3D texture ───────────────────────────────────────────────────────────────
 // An equirectangular map for three's SphereGeometry (u round from −x, v from +y).
-export function paintSphere(id: number, w = 256, h = 128): HTMLCanvasElement {
+export function paintSphere(id: number, w = 512, h = 256): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.width = w;
   c.height = h;

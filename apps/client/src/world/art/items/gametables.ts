@@ -203,7 +203,12 @@ export function poolTable(s: Sketch) {
     const bw = p.side ? 2 * RG : p.x < PCX ? x0 - 0.02 - ox0 : ox1 - (x1 + 0.02);
     const bd = p.side ? RW : p.y < PCY ? y0 - 0.02 - oy0 : oy1 - (y1 + 0.02);
     s.shape({ x: p.x - p.r, y: p.y - p.r, w: 2 * p.r, d: 2 * p.r, z: PT, h: 0.06 }, (d) => {
-      d.poly("t", te(PT + 0.03, p.x, p.y, p.r, 20), "#0f0b09");
+      // a hole, not a black disc: the far wall inside it lit (leather), going
+      // down into the dark towards the near rim, which catches a little light
+      const k = p.r * Math.SQRT1_2;
+      const inside = s.gradAt("#5a3825", "#070505", d.m(p.x - k, p.y - k, PT), d.m(p.x + k * 0.2, p.y + k * 0.2, PT));
+      d.poly("t", te(PT + 0.03, p.x, p.y, p.r, 24), inside, { stroke: "#1a110c", sw: 0.4 });
+      d.poly("t", te(PT + 0.035, p.x + k * 0.18, p.y + k * 0.18, p.r * 0.78, 20), "#070505", { op: 0.55 });
     });
     pocketBlock(s, bx, by, bw, bd, p, PT, RAIL_TOP);
   }

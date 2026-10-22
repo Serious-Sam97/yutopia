@@ -34,6 +34,8 @@ import {
 import {
   crouchPose,
   crouchWalkPose,
+  FALL_LEN,
+  fellPose,
   runPose,
   runStride,
   SNEAK_STRIDE,
@@ -77,6 +79,13 @@ const DIR_VEC: [number, number][] = [
   [1, -1],
   [1, 0],
 ];
+// the facing (0..7) nearest a heading
+const dirOf = (a: number) => {
+  let best = 0;
+  for (let d = 1; d < 8; d++)
+    if (Math.abs(Math.sin((a - dirAngle(d)) / 2)) < Math.abs(Math.sin((a - dirAngle(best)) / 2))) best = d;
+  return best;
+};
 const dirAngle = (d: number) => {
   const [x, y] = DIR_VEC[((d % 8) + 8) % 8];
   return Math.atan2(y, x);
@@ -107,6 +116,9 @@ export interface IsoIn {
   mv?: number; // the gait, crouching, aiming (shared/move packMv)
   // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)
   verb?: { kind: string; t: number; at?: number };
+  // knocked down by a pool ball (shared/pool-throw.ts): the server's since when, the ball's way
+  fellAt?: number;
+  fellYaw?: number;
 }
 
 /** What a person's sprite remembers between frames (the walk's phase, the blinks…). */
@@ -120,6 +132,8 @@ export interface IsoMem {
   mouthOpen?: boolean;
   emote?: string;
   emoteAt?: number;
+  fellAt?: number; // the fall being drawn (its server time), from when it showed up here
+  fellT0?: number;
   last?: IsoSprite;
 }
 
@@ -127,7 +141,7 @@ export interface IsoMem {
 export interface IsoState {
   // the gaits (docs/plan/29-the-move.md M6): the walk, the jog and the sprint (runPose),
   // crouched still and sneaking
-  base: "stand" | "walk" | "jog" | "sprint" | "crouch" | "sneak" | "sit" | "type" | JumpKind | Verb;
+  base: "stand" | "walk" | "jog" | "sprint" | "crouch" | "sneak" | "sit" | "type" | "fell" | JumpKind | Verb;
   bf: number; // the base's frame
   upper: string; // "" | hold | sip | busy:<use> | phone:<state>:<pose> | act:<what> | emote:<emote>
   uf: number; // its frame
@@ -162,6 +176,7 @@ const EMOTE_N = 8;
 const EMOTE_LEN = 3.2; // s (Motion3's)
 // a jump's frames: the crouch, the air (a flip turns a whole way round in it), the landing
 const JUMP_N = { crouch: 2, air: { hop: 9, flip: 16 }, land: 3 };
+const FELL_N = 16; // knocked down: thrown back, on the floor, up again
 
 /** Which of a jump's frames its stage falls on. */
 export function jumpFrame(j: JumpNow): number {
@@ -233,6 +248,18 @@ export function isoState(m: IsoMem, p: IsoIn, now: number): IsoState {
     base = kind;
     bf = jumpFrame({ ...p.jump, kind });
   }
+  // knocked down by a pool ball: the fall's frames, timed from when it's seen
+  if (p.fellAt) {
+    if (m.fellAt !== p.fellAt) {
+      m.fellAt = p.fellAt;
+      m.fellT0 = t;
+    }
+    const ft = t - (m.fellT0 ?? t);
+    if (ft < FALL_LEN) {
+      base = "fell";
+      bf = Math.min(FELL_N - 1, Math.floor((ft / FALL_LEN) * FELL_N));
+    }
+  } else m.fellAt = 0;
 
   let upper = "";
   let uf = 0;
@@ -334,6 +361,10 @@ export function isoPose(s: IsoState): {
     }
   } else if (s.base === "vault" || s.base === "mantle" || s.base === "roll" || s.base === "slide") {
     const w = verbPose(s.base, (s.bf + 0.5) / WALK_N);
+    p = w.pose;
+    lift = [...w.lift];
+  } else if (s.base === "fell") {
+    const w = fellPose(((s.bf + 0.5) / FELL_N) * FALL_LEN);
     p = w.pose;
     lift = [...w.lift];
   } else if (s.base === "hop" || s.base === "flip") {
@@ -479,7 +510,8 @@ class IsoPeople {
     }
     const st = isoState(mem, p, now);
     const lk = lookKey(p.avatar);
-    const dir = ((p.dir % 8) + 8) % 8;
+    // (fallen: facing back the way the ball came)
+    const dir = st.base === "fell" ? dirOf((p.fellYaw ?? 0) + Math.PI) : ((p.dir % 8) + 8) % 8;
     const k = key(lk, dir, st);
     const have = this.sprites.get(k);
     if (have) {

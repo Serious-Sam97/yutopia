@@ -72,6 +72,10 @@ export class Player extends Schema {
   @type("float64") downAt = 0;
   @type("string") revBy = "";
   @type("float64") revAt = 0;
+  // knocked down by a pool ball (shared/pool-throw.ts KNOCK): since when (server ms; 0: on
+  // their feet), and the way the ball was going (they fall away from it), radians
+  @type("float64") fellAt = 0;
+  @type("float32") fellYaw = 0;
 }
 
 // Something dropped (docs/plan/30-the-dark.md, phase 2): anyone on its floor may
@@ -214,6 +218,30 @@ export class PoolTable extends Schema {
   @type("string") guide = "short"; // the guideline: long / short / pro
   @type("uint8") breaker = 0; // who breaks the next game
   @type("string") by = "";
+}
+
+// A pool ball out of a game (features/pballs.ts, shared/pool-throw.ts): thrown or shot from the
+// cue, flying, then lying on the floor (anyone may pick it up) till it goes back on its table.
+// Everyone draws its flight from the launch; when it stops, where and how it lies.
+export class PoolBallOut extends Schema {
+  @type("uint8") n = 0; // which ball (0 the cue ball … 15)
+  @type("uint8") level = 0;
+  @type("string") table = ""; // the table it came off ("": the cue fired it — it goes)
+  @type("string") by = ""; // who sent it (session id)
+  @type("float32") x0 = 0;
+  @type("float32") y0 = 0;
+  @type("float32") z0 = 0;
+  @type("float32") vx = 0;
+  @type("float32") vy = 0;
+  @type("float32") vz = 0;
+  @type("float32") t1 = -1; // s into the flight it stopped (−1: still going)
+  @type("float32") x1 = 0; // where it stopped
+  @type("float32") y1 = 0;
+  @type("float32") z1 = 0;
+  @type("float32") rx = 0; // where it lies
+  @type("float32") ry = 0;
+  @type("float32") rz = 0;
+  @type("string") hit = ""; // whom it knocked down
 }
 
 // A ping-pong table's match (features/pong.ts). The ball's flight is one event
@@ -447,5 +475,6 @@ export class WorldState extends Schema {
   @type({ map: Flare }) flares = new MapSchema<Flare>(); // flares burning (features/arms.ts)
   @type({ map: PetBattle }) battles = new MapSchema<PetBattle>();
   @type({ map: Toy }) toys = new MapSchema<Toy>();
+  @type({ map: PoolBallOut }) pballs = new MapSchema<PoolBallOut>(); // pool balls out of a game (features/pballs.ts)
   @type("string") playlists = "[]"; // YouTube playlists played here (shared/media.ts SavedPlaylist[], JSON)
 }

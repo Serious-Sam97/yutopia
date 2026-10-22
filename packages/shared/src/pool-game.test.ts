@@ -73,7 +73,7 @@ test("the 8: early loses, wrong pocket loses, with a scratch loses, called and c
   );
 });
 
-test("the break: a weak one is a foul, the 8 comes back, a scratch gives ball in hand in the kitchen", () => {
+test("the break: a weak one is a foul, the 8 comes back, a scratch gives ball in hand anywhere", () => {
   const g = newGame(4, 0);
   const weak = judge(g, g.balls, [ev("cue", 0), ev("ball", 0, 1), ev("rail", 3, 2), ev("rail", 5, 2)], -1);
   assert.equal(weak.foul, "badBreak");
@@ -84,7 +84,8 @@ test("the break: a weak one is a foul, the 8 comes back, a scratch gives ball in
   assert.equal(eight.outcome, null);
   const scr = judge(g, sunk(g, [0, 3]), [ev("cue", 0), ev("ball", 0, 1), ev("pocket", 3, 0), ev("pocket", 0, 1)], -1);
   assert.equal(scr.foul, "scratch");
-  assert.equal(scr.game.inHand, "kitchen");
+  assert.equal(scr.game.inHand, "anywhere");
+  assert.equal(scr.game.turn, 1);
   // a real break, through the physics
   const real = simulate(g.balls, vortexBreak("hard", 1, g.balls[0]));
   const v = judge(g, real.balls, real.events, -1);

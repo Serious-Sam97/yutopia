@@ -54,6 +54,7 @@ import { piece, WALL_H } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
 import { type Geo, MeshSketch, type Opts3, Out, zt } from "./kit3d";
+import { poolTable3 } from "./pooltable3d";
 
 // the item drawings: the same lazy chunk the iso engine loads (art/scene.ts)
 export type Items = typeof import("../art/items");
@@ -457,7 +458,10 @@ export class World3 {
       const ref = { kind: o.kind, id: o.id, rot, props: o.props };
       const at = anchorOf(o);
       const lift = e.onSurface ? Number(o.props?.z) || 0 : e.wall ? hangOf(o).lift : 0;
-      if (hasItemArt(o.kind)) {
+      if (o.kind === "pool_table") {
+        // its own model in 3D: real pockets to drop the balls into (tp/pooltable3d.ts)
+        poolTable3(out, { x: o.x, y: o.y }, rot, itemSketchOpts(ref).seed);
+      } else if (hasItemArt(o.kind)) {
         // things on a surface are drawn around the middle of a 1×1 tile
         const s = new MeshSketch({ ...itemSketchOpts(ref), ...(e.onSurface ? { w: 1, h: 1 } : {}), at, lift, out });
         drawItem(s, ref);

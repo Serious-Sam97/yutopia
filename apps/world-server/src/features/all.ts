@@ -11,6 +11,7 @@ import "./play.ts";
 import "./social.ts";
 import "./slotcar.ts";
 import "./pool.ts";
+import "./pballs.ts";
 import "./pong.ts";
 import "./games.ts";
 import "./media.ts";

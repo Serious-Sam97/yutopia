@@ -111,7 +111,7 @@ import { Post3 } from "./post3d";
 import { Shroud3 } from "./shroud3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
-import { type TableScene3, TablesIn3D } from "./tables3d";
+import { heldPoolBall, type TableScene3, TablesIn3D } from "./tables3d";
 import { busModel } from "./vehicles3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
@@ -860,6 +860,20 @@ void main() {
   // (the phone's camera uses it too: `showMe` keeps you drawn — a selfie —
   // and `fov` is the lens)
   // (`snap`: no easing once it's over — a car's camera, which moves on its own)
+  // knocked down (shared/pool-throw.ts): when each fall was first seen here (performance.now)
+  private falls = new Map<string, { at: number; t0: number }>();
+  private fellT(b: { id: string; fellAt?: number }): number | undefined {
+    if (!b.fellAt) {
+      this.falls.delete(b.id);
+      return undefined;
+    }
+    let f = this.falls.get(b.id);
+    if (!f || f.at !== b.fellAt) {
+      f = { at: b.fellAt, t0: performance.now() };
+      this.falls.set(b.id, f);
+    }
+    return (performance.now() - f.t0) / 1000;
+  }
   gameCam: {
     eye: [number, number, number];
     look: [number, number, number];
@@ -1887,7 +1901,9 @@ void main() {
         continue;
       }
       seen.add(b.id);
-      const angle3 = b.angle ?? dirAngle(b.d);
+      // (knocked down by a pool ball: facing back the way it came, timed from when it's seen here)
+      const fell = this.fellT(b);
+      const angle3 = fell !== undefined ? (b.fellYaw ?? 0) + Math.PI : (b.angle ?? dirAngle(b.d));
       const hidden3 =
         ((first || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) && b.id === meId) ||
         this.byLens(b);
@@ -1913,7 +1929,7 @@ void main() {
         p3.root.visible = !hidden3 && !notThere;
         if (b.id === meId) mySeat = seat3;
         p3.gunFx = b.id === meId ? this.myGun : this.otherGun(b, dt);
-        p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id) }, dt, {
+        p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id), fell }, dt, {
           camX: cam.x,
           camZ: cam.z,
           onScreen:
@@ -2117,6 +2133,7 @@ void main() {
           const P = petsArt();
           return P ? P.toyMesh(kind, (c) => prop(`#${new Color(c).getHexString()}`)) : null;
         },
+        pball: (n) => heldPoolBall(n, (m) => this.light.patch(m)),
       };
       const r = this.renderer.domElement.getBoundingClientRect();
       C.inkResolution(r.width || 1, r.height || 1);

@@ -45,6 +45,24 @@ export interface TableScene3 {
 }
 
 const CUE_TIP_R = 0.0065; // m (× tpm on the way in: tiles)
+
+// A pool ball in someone's hand (shared/pool-throw.ts: taken off a table to throw): its own
+// painted sphere, a little larger than a table's (a hand's held a touch big, as our people's are).
+const heldMats = new Map<number, MeshPhongMaterial>();
+const heldGeo = new SphereGeometry(0.055, 20, 14);
+export function heldPoolBall(n: number, patch: (m: Material) => void): Mesh {
+  let m = heldMats.get(n);
+  if (!m) {
+    const tex = new CanvasTexture(paintSphere(n, 256, 128));
+    tex.colorSpace = SRGBColorSpace;
+    m = new MeshPhongMaterial({ map: tex, shininess: 140, specular: 0x8a8a8a });
+    patch(m);
+    heldMats.set(n, m);
+  }
+  const mesh = new Mesh(heldGeo, m);
+  mesh.castShadow = true;
+  return mesh;
+}
 const CUE_BUTT_R = 0.015;
 
 export class TablesIn3D {
@@ -60,7 +78,7 @@ export class TablesIn3D {
   private pongShadows = new Map<string, Mesh>();
   private pongTrails = new Map<string, Group>();
   private ballMats = new Map<number, MeshPhongMaterial>();
-  private ballGeo = new SphereGeometry(1, 28, 18);
+  private ballGeo = new SphereGeometry(1, 48, 32);
 
   constructor(private patch: (m: Material) => void) {}
 
@@ -69,8 +87,10 @@ export class TablesIn3D {
     if (!m) {
       const tex = new CanvasTexture(paintSphere(id));
       tex.colorSpace = SRGBColorSpace;
-      tex.anisotropy = 4;
-      m = new MeshPhongMaterial({ map: tex, shininess: 90, specular: 0x5a5a5a, transparent: true });
+      tex.anisotropy = 8;
+      // polished phenolic: a tight bright highlight (the lamp in it), opaque — a
+      // ball going down a pocket is hidden by the hole's own walls, not faded
+      m = new MeshPhongMaterial({ map: tex, shininess: 140, specular: 0x8a8a8a });
       this.patch(m);
       this.ballMats.set(id, m);
     }

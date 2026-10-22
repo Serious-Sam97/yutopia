@@ -40,6 +40,10 @@ const T = {
   stripes: ["Stripes", "Listradas"],
   onEight: ["On the 8 — call a pocket", "Na 8 — escolha a caçapa"],
   inHand: ["Ball in hand — drag the cue ball", "Bola na mão — arraste a branca"],
+  placing: [
+    "Ball in hand — put the cue ball anywhere on the table, click to set it down",
+    "Bola na mão — coloque a branca onde quiser na mesa e clique para soltar",
+  ],
   kitchen: ["Ball in hand behind the line", "Bola na mão atrás da linha"],
   spin: ["Spin", "Efeito"],
   power: ["Power", "Força"],
@@ -74,6 +78,11 @@ const T = {
   conceded: ["GAVE UP", "DESISTIU"],
   miscue: ["MISCUE!", "ESPIRRO!"],
   eightBack: ["8 back on the spot", "8 volta ao ponto"],
+  // out of a game: a ball off the table to throw at people, the cue a gun that fires them
+  loose: ["No game on:", "Sem jogo:"],
+  takeBall: ["Take a ball", "Pegar uma bola"],
+  takeCue: ["Take the cue", "Pegar o taco"],
+  putBack: ["Put it back (B)", "Devolver (B)"],
 } as const;
 type K = keyof typeof T;
 const LEVELS = [
@@ -232,6 +241,7 @@ export function PoolPanel({ objectId }: { objectId: string }) {
     if (info.rolling) return t("rolling");
     if (info.vortexThinking) return t("thinking");
     if (info.myTurn) {
+      if (info.placing) return t("placing");
       if (info.inHand === "kitchen") return t("kitchen");
       if (info.inHand) return t("inHand");
       if (info.onEight) return t("onEight");
@@ -342,7 +352,7 @@ export function PoolPanel({ objectId }: { objectId: string }) {
           role="application"
           aria-label={t("hint")}
           className="fixed inset-0 pointer-events-auto touch-none"
-          style={{ cursor: info.inHand ? "grab" : "crosshair" }}
+          style={{ cursor: info.placing ? "grabbing" : info.inHand ? "grab" : "crosshair" }}
           onPointerMove={(e) => pool?.pointer("move", e.clientX, e.clientY, { shift: e.shiftKey || e.buttons === 2 })}
           onPointerDown={(e) => {
             if (e.button === 2) return;
@@ -418,6 +428,40 @@ export function PoolPanel({ objectId }: { objectId: string }) {
             </button>
           </header>
 
+          {!playing ? (
+            <div className="mt-2 flex gap-1.5 items-center flex-wrap">
+              <span className="mono text-[10px]" style={{ color: "var(--muted)" }}>
+                {t("loose")}
+              </span>
+              <button
+                type="button"
+                className="deck-btn"
+                style={{ height: 26, fontSize: 11 }}
+                onClick={() => {
+                  w?.tables?.balls.take(objectId, "ball");
+                  close();
+                }}
+              >
+                🎱 {t("takeBall")}
+              </button>
+              <button
+                type="button"
+                className="deck-btn"
+                style={{ height: 26, fontSize: 11 }}
+                onClick={() => {
+                  w?.tables?.balls.take(objectId, "cue");
+                  close();
+                }}
+              >
+                {t("takeCue")}
+              </button>
+              {info?.holding ? (
+                <button type="button" className="ghost-btn text-xs" onClick={() => w?.tables?.balls.putBack()}>
+                  {t("putBack")}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mt-2 flex flex-col sm:flex-row gap-2 sm:gap-3 items-stretch">
             <div className="flex gap-2 flex-1 min-w-0">
               {plate(0)}
