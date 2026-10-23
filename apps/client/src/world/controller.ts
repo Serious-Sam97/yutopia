@@ -1553,7 +1553,9 @@ export class WorldController {
       tp.setGames(this.games?.scene3d() ?? null);
       // (a hidden tab: nothing to draw for)
       tp.tagsHidden = !!hud.get().panel.kind || !!this.photo;
-      if (!document.hidden) tp.frame(dt, bodies, localSid);
+      // (in a car I'm not in `bodies` — the car draws me — but the view still follows me)
+      const seat = this.cars?.mySeat();
+      if (!document.hidden) tp.frame(dt, bodies, localSid, seat ? { ...seat, level: 0 } : undefined);
     } else if (!document.hidden) engine.render();
     for (const cb of this.hudFrames) cb();
     this.checkCable();

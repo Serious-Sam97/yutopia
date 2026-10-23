@@ -342,8 +342,9 @@ export class Cars {
     }
     return true;
   }
-  /** Where I am, in my seat (the ground floor's coords), facing: for the controller's own state. */
-  mySeat(): { x: number; y: number; a: number } | null {
+  /** Where I am, in my seat (the ground floor's coords), facing, and the ground's height under
+   *  the car: for the controller's own state, and the 3D view's (it follows me, not drawn). */
+  mySeat(): { x: number; y: number; a: number; ground: number } | null {
     const m = this.mine;
     const l = m ? this.live.get(m.vid) : null;
     if (!m || !l) return null;
@@ -352,7 +353,12 @@ export class Cars {
     const [lx, lz] = SEATS[m.seat];
     const ca = Math.cos(a);
     const sa = Math.sin(a);
-    return { x: p.x + ca * lx - sa * lz - this.host.ox(), y: p.z + sa * lx + ca * lz - this.host.oy(), a };
+    return {
+      x: p.x + ca * lx - sa * lz - this.host.ox(),
+      y: p.z + sa * lx + ca * lz - this.host.oy(),
+      a,
+      ground: p.y - SPECS[l.kind].cog,
+    };
   }
   /** A key for the car (in it): handled. */
   key(e: KeyboardEvent, down: boolean): boolean {

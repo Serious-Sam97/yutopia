@@ -1718,7 +1718,9 @@ void main() {
     return this.arms3;
   }
 
-  frame(dt: number, bodies: Body3[], meId: string) {
+  /** `seat`: where I am when I'm not among `bodies` (in a car, which draws me — world/car/cars.ts):
+   *  what the camera's target follows (the land streamed round it, the shadows, the lamps). */
+  frame(dt: number, bodies: Body3[], meId: string, seat?: { x: number; y: number; ground: number; level: number }) {
     this.time += dt;
     if (this.extraBodies) bodies = bodies.concat(this.extraBodies());
     this.warmUp(performance.now());
@@ -1791,6 +1793,14 @@ void main() {
           this.targetReady = true;
         } else this.target.lerp(want, 1 - Math.exp(-dt * 12));
       }
+    } else if (seat && (seat.level ?? this.level) <= this.level) {
+      // not drawn (in a car): the target's still where I am — it stayed where I got in, and the
+      // land, the sun's shadows and the lamps all stayed round there (the town went bare and white)
+      const o = this.offsetTo(seat.level);
+      this.meAt = { x: seat.x + o.x, y: seat.y + o.y };
+      this.walkAt = { ...this.meAt };
+      this.target.set(seat.x + o.x, EYE - 0.3 + seat.ground + o.h, seat.y + o.y);
+      this.targetReady = true;
     }
     this.aimK += ((this.aim && !first ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * 10));
     // (into an aim the camera comes up to look ahead, near level — not at the ground at your feet)
