@@ -88,6 +88,7 @@ export async function enter(page: Page, tok: string, worldName?: World) {
     null,
     { timeout: 60_000 },
   );
+  await loaded(page);
   // (the shadowed off: at the real hour it may be night on the Grounds, and a spec walking
   // the land would be struck down and woken at the office. The dark's own specs turn them on.)
   await page.evaluate(() => {
@@ -95,6 +96,15 @@ export async function enter(page: Page, tok: string, worldName?: World) {
     w?.room?.send("mod:dark", { mode: "peaceful" });
   });
   await page.waitForTimeout(800);
+}
+// The loading screen gone (docs/plan/35-the-loading.md): the world built, the keys live
+// again. After entering, and after a change between iso and 3D.
+export async function loaded(page: Page, timeout = 60_000) {
+  await page.waitForFunction(
+    () => (window as unknown as { __hud?: { get(): { loading: { on: boolean } } } }).__hud?.get().loading.on === false,
+    null,
+    { timeout },
+  );
 }
 export const world = (page: Page, fn: (w: any, h: any) => unknown) =>
   page.evaluate(fn as never, null as never) as Promise<unknown>;

@@ -158,6 +158,11 @@ const MEDIA_SLEEP_MS = 5 * 60_000; // quiet this long: the voice line sleeps
 const MEDIA_NEAR = HEAR_RADIUS + 4; // someone this close (tiles) keeps it awake
 const LIVEKIT_TOKEN_FRESH_MS = 5 * 3600_000; // LiveKit tokens last 6 h (apps/api Tokens)
 const IDLE_MS = 3000; // nothing moved for this long: frames at 30/s
+// the loading screen (docs/plan/35-the-loading.md): down once it's all built and this
+// many frames in a row have come this steadily — or after the cap, whatever's left
+const STEADY_FRAMES = 10;
+const STEADY_MS = 50;
+const LOAD_CAP_MS = 15_000;
 const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
 const ISO_UP = (-3 * Math.PI) / 4; // iso: W goes up the screen, the world's north-west (shared iso.ts)
@@ -433,6 +438,7 @@ export class WorldController {
     await this.join();
     if (this.stopped) return;
     this.bindInput();
+    this.holdLoading("enter");
     this.lastFrame = performance.now();
     this.lastTick = this.lastFrame;
     this.activeAt = this.lastFrame;
@@ -1566,6 +1572,7 @@ export class WorldController {
     }
     this.follow(now);
     this.updateAudioScene();
+    this.watchLoading(now);
   }
 
   // Room tone follows my area. Each radio and record player plays its own
@@ -2720,8 +2727,15 @@ export class WorldController {
     }
     if (want === this.viewNow) return;
     this.viewNow = want;
-    if (want === "3d") void this.openTp();
-    else this.closeTp();
+    const go = () => {
+      if (this.stopped || this.viewNow !== want) return;
+      if (want === "3d") void this.openTp();
+      else this.closeTp();
+    };
+    // the loading screen up first, painted, then the work behind it (entering, it's up already)
+    if (hud.get().loading.on) return go();
+    this.holdLoading("view");
+    requestAnimationFrame(() => requestAnimationFrame(go));
   }
 
   private async openTp() {
@@ -2793,6 +2807,7 @@ export class WorldController {
       v.lookInvert = prefs().lookInvert;
       v.handsOn = prefs().hands1p;
       v.setHour(this.hour);
+      v.warming = hud.get().loading.on;
       v.yaw = this.meAngle; // start behind me
       engine.app.canvas.style.visibility = "hidden";
       engine.onPuff = (x, y, kind, lift, hard) => v.puff(x, y, kind, lift, hard);
@@ -2999,17 +3014,75 @@ export class WorldController {
   // The other floors' things drawn ahead, once, a few seconds after arriving
   // (engine.prewarm): the first visit to a floor then has its art ready.
   private prewarmed = false;
+  private prewarmDone = false;
   private prewarmFloors() {
     if (this.prewarmed || this.objs.size === 0 || !this.building) return;
     this.prewarmed = true;
-    setTimeout(async () => {
-      for (const f of floorsOf(this.building)) {
-        if (this.stopped) return;
-        const lm = levelMap(this.building, f);
-        if (!lm || f === this.level) continue;
-        await this.engine?.prewarm(onLevel(this.objs.values(), lm), lm);
-      }
-    }, 2500);
+    // (behind the loading screen: at once — it waits for them)
+    setTimeout(
+      async () => {
+        for (const f of floorsOf(this.building)) {
+          if (this.stopped) return;
+          const lm = levelMap(this.building, f);
+          if (!lm || f === this.level) continue;
+          await this.engine?.prewarm(onLevel(this.objs.values(), lm), lm);
+        }
+        this.prewarmDone = true;
+      },
+      hud.get().loading.on ? 0 : 2500,
+    );
+  }
+
+  // ── the loading screen (docs/plan/35-the-loading.md) ──────────────────
+  // Up on entering and on every change between iso and 3D, until what that
+  // view shows is all built (and the other floors with it) and a few frames in
+  // a row have come steadily; never longer than LOAD_CAP_MS.
+  private loadFrom = 0; // when it went up (0: it's down)
+  private loadSteady = 0; // steady frames in a row, everything built
+  private loadLast = 0;
+  private loadArt = 0; // the most iso drawings seen on their way (its share done)
+  private holdLoading(why: "enter" | "view") {
+    this.loadFrom = performance.now();
+    this.loadLast = 0;
+    this.loadSteady = 0;
+    this.loadArt = 0;
+    hud.set({ loading: { on: true, progress: why === "enter" ? hud.get().loading.progress : 0, why } });
+    if (this.tp) this.tp.warming = true;
+  }
+  private watchLoading(now: number) {
+    if (!this.loadFrom) return;
+    const gap = this.loadLast ? now - this.loadLast : 0;
+    this.loadLast = now;
+    const r = this.readiness();
+    const built = r.done >= r.of;
+    this.loadSteady = built && gap > 0 && gap < STEADY_MS ? this.loadSteady + 1 : 0;
+    if ((built && this.loadSteady >= STEADY_FRAMES) || now - this.loadFrom > LOAD_CAP_MS) {
+      if (!built) console.warn("[world] loading: let in before it was all built", r, this.tp?.readiness());
+      this.loadFrom = 0;
+      if (this.tp) this.tp.warming = false;
+      hud.set((h) => ({ loading: { ...h.loading, on: false, progress: 1 } }));
+      return;
+    }
+    // (never backwards: a part found late adds to what's left, not to what's shown)
+    const p = Math.min(0.98, r.done / Math.max(1, r.of));
+    const l = hud.get().loading;
+    if (p > l.progress + 0.01) hud.set({ loading: { ...l, progress: p } });
+  }
+  // what's built: each part 0..1 — what both views need, then this view's own
+  // (the 3D view's: its parts, tp/view.ts readiness)
+  private readiness(): { done: number; of: number } {
+    const e = this.engine;
+    const G = !!this.G;
+    const parts = [+G, +(!!this.life || !G), +(!!this.cars || !G)];
+    if (this.viewNow === "3d") {
+      const v = this.tp?.readiness() ?? { done: 0, of: 9 };
+      return { done: parts[0] + parts[1] + parts[2] + v.done, of: 3 + v.of };
+    }
+    const left = e?.artLeft() ?? 1;
+    this.loadArt = Math.max(this.loadArt, left);
+    // the drawings, the land's, the other floors' (prewarmFloors); no 3D view left over
+    parts.push(this.loadArt ? 1 - left / this.loadArt : 1, +(!G || !!e?.groundsDrawn), +this.prewarmDone, +!this.tp);
+    return { done: parts.reduce((a, b) => a + b, 0), of: parts.length };
   }
 
   // ── the stairs (shared stairs.ts) ─────────────────────────────────────
@@ -3356,6 +3429,8 @@ export class WorldController {
   // ── input ────────────────────────────────────────────────────────────────
   private onKeyDown = (e: KeyboardEvent) => {
     this.activeAt = performance.now();
+    // (the world's still being built behind the loading screen: nothing to do yet)
+    if (hud.get().loading.on) return;
     const t = e.target as HTMLElement;
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))
       return;

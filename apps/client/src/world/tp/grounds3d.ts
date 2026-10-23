@@ -612,6 +612,10 @@ export class Grounds3 {
     run(() => this.ridges());
   }
   private pending: (() => void)[] = [];
+  /** steps still to build (`step()`) */
+  get left(): number {
+    return this.pending.length;
+  }
   // the stored blocks' storeys above their ground floor (gone while you're in one)
   private cuts = new Map<string, { b: Building; parts: Object3D[] }>();
   private cutKey = "";

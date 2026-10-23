@@ -3525,6 +3525,19 @@ export class WorldEngine {
     );
   }
 
+  /** Drawings still on their way, their box art showing (the loading screen waits for
+   *  them: docs/plan/35-the-loading.md). */
+  artLeft(): number {
+    let n = 0;
+    for (const views of [this.objectViews, this.groundViews])
+      for (const v of views.values()) for (const p of v.parts) if (p.art && !p.ready) n++;
+    return n;
+  }
+  /** The Grounds' art is here (setGrounds). */
+  get groundsDrawn(): boolean {
+    return !!this.groundsMod;
+  }
+
   stats() {
     return {
       fps: this.fpsNow || (this.app?.ticker.FPS ?? 0),

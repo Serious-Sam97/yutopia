@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
+import { ANA, BIA, enter, loaded, test, token, useWorld } from "./helpers";
 
 // First person, live: Ana sees the Lab from her own eyes (the 3D view's
 // "first" camera, a per-player setting), Bia in iso. The camera stands on
@@ -231,6 +231,7 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   await page.waitForFunction(
     () => !(window as any).__yutopia.tp && (window as any).__yutopia.engine.app.canvas.style.visibility !== "hidden",
   );
+  await loaded(page); // (the keys are held while the loading screen's up)
   await page.keyboard.press("t");
   await page.waitForFunction(() => (window as any).__yutopia.tp?.mode === "first", null, { timeout: 30_000 });
 

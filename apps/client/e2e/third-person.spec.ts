@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
+import { ANA, BIA, enter, loaded, test, token, useWorld } from "./helpers";
 
 // Third person, live: Ana sees the Lab in third person (a per-player setting),
 // Bia in iso, in the same room at the same time. Each sees the other where
@@ -135,8 +135,10 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   await page.waitForFunction(
     () => !(window as any).__yutopia.tp && (window as any).__yutopia.engine.app.canvas.style.visibility !== "hidden",
   );
+  await loaded(page); // (the keys are held while the loading screen's up)
   await page.keyboard.press("t");
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
+  await loaded(page);
   await waitNear(() => drawnIn3d(page, biaSid), b1.x, b1.y, 15_000);
 
   // leave her setting as it was for the other specs

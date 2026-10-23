@@ -205,6 +205,9 @@ export interface WallPanel {
 export interface HudState {
   phase: "loading" | "connecting" | "ready" | "reconnecting" | "failed" | "kicked" | "removed";
   error: string;
+  // the world being built behind the loading screen (docs/plan/35-the-loading.md): on
+  // entering, and on every change between iso and 3D; progress 0..1
+  loading: { on: boolean; progress: number; why: "enter" | "view" };
   worldName: string; // the one world's name (the API's YUTOPIA_WORLD_NAME)
   canBuild: boolean; // everyone, with a real account
   isAdmin: boolean; // mutes, kicks, locks
@@ -316,6 +319,7 @@ export interface HudState {
 const initial: HudState = {
   phase: "loading",
   error: "",
+  loading: { on: true, progress: 0, why: "enter" },
   worldName: "",
   canBuild: false,
   isAdmin: false,

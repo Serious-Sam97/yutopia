@@ -69,6 +69,7 @@ const TIERS = [
 ];
 const RADIUS = 440; // land out to here (the fog has it all by then)
 const BUDGET_MS = 6; // building a frame
+const BOOST_MS = 40; // …and behind the loading screen, where a long frame doesn't show
 const CASTERS_R = 34; // trees this near cast the sun's shadow
 export const CASTER_LAYER = 1; // (seen by the sun's shadow camera only)
 
@@ -107,6 +108,10 @@ export class GroundsStream {
   private windT = { value: 0 };
   private casting = new Set<number>();
   private fade = { a: { value: new Vector3() }, b: { value: new Vector3() } };
+  /** behind the loading screen (docs/plan/35): build with a much bigger budget a frame */
+  boost = false;
+  /** what's still to build: land blocks wanted and missing, and the rest's steps */
+  readonly left = { blocks: 0, statics: 0 };
 
   constructor(
     T: Themes,
@@ -318,9 +323,11 @@ if (vFade < 0.999) {
     // build the nearest missing, a few ms a frame
     const missing = want.filter((k) => !this.blocks.get(k)?.mesh);
     missing.sort((a, b) => distTo(a, x, z) - distTo(b, x, z));
+    this.left.blocks = missing.length;
+    const budget = this.boost ? BOOST_MS : BUDGET_MS;
     const t0 = performance.now();
     for (const k of missing) {
-      if (performance.now() - t0 > BUDGET_MS) break;
+      if (performance.now() - t0 > budget) break;
       // a near block reads its chunk's land and, for its slopes, the
       // neighbours': made a chunk at a time (~7 ms each) before it
       const [tier, x0, z0] = parse(k);
@@ -328,10 +335,17 @@ if (vFade < 0.999) {
         const need = missingLand(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK));
         if (need) {
           groundsChunk(need[0], need[1]);
-          break;
+          if (!this.boost) break;
+          // (covered by the loading screen: all it needs now, then the block)
+          let more = missingLand(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK));
+          while (more) {
+            groundsChunk(more[0], more[1]);
+            more = missingLand(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK));
+          }
         }
       }
       this.build(k);
+      this.left.blocks--;
     }
     // show: each wanted block, or while it isn't built what covers it
     const wanted = new Set(want);
@@ -363,7 +377,7 @@ if (vFade < 0.999) {
     if (target) this.statics.cutAt(target.x, target.z);
     // the rest of the Grounds (the ways, the buildings, the lamps…), a few ms a frame
     const s0 = performance.now();
-    while (performance.now() - s0 < 4) {
+    while (performance.now() - s0 < (this.boost ? BOOST_MS : 4)) {
       const added = this.statics.step();
       if (!added) break;
       for (const o of added) {
@@ -379,6 +393,7 @@ if (vFade < 0.999) {
         this.prepare?.(o);
       }
     }
+    this.left.statics = this.statics.left;
     if (Math.hypot(x - this.castersAt.x, z - this.castersAt.z) > 6) this.fillCasters(x, z);
     this.statics.faceCards(cam);
   }

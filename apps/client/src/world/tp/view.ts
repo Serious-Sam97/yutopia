@@ -213,6 +213,7 @@ const EYE = 1.15; // tiles: what the camera looks at, above your feet
 const EYE_1P = 1.7;
 const EYE_1P_SEATED = 1.2;
 const FOV = 50;
+const VEIL_MS = 150; // into or out of first person: the dip to dark, and back (setMode)
 
 const LIMITS: Record<CamMode, { pitch: [number, number]; dist: [number, number] }> = {
   chase: { pitch: [0.35, 1.0], dist: [2.6, 9] },
@@ -254,6 +255,7 @@ export class ThirdPersonView {
   charsChunk = "";
   // first person: my own arms when they're doing something (hands1p.ts; Settings can turn them off)
   private hands: Hands1P | null = null;
+  private handsSpare: Hands1P | null = null; // (made ahead, or put by out of first person)
   handsOn = true;
   // pets: real models (art/pets3d.ts), lit by the room, turned to where they walk
   private pets3 = new Map<string, { model: PetModel; key: string; turned: number }>();
@@ -1008,6 +1010,10 @@ void main() {
       "transition:transform .12s,background .12s";
     host.appendChild(x);
     this.crosshair = x;
+    const veil = document.createElement("div");
+    veil.style.cssText = `position:absolute;inset:0;background:#0b0907;opacity:0;pointer-events:none;transition:opacity ${VEIL_MS}ms ease`;
+    host.appendChild(veil);
+    this.veil = veil;
     if (this.opts.keys !== false) {
       window.addEventListener("keydown", this.onKey);
       window.addEventListener("keyup", this.onKey);
@@ -1256,7 +1262,8 @@ void main() {
     // (not before the sun's shadow map is made: drawn without it — the warm-up
     // keeps it from updating — every lit thing's draw failed, a burst of GL errors)
     if (this.sun.castShadow && !this.sun.shadow.map) return;
-    this.warmAt = now + 600;
+    // (behind the loading screen: one after another, a frame apart)
+    this.warmAt = now + (this.warm ? 0 : 600);
     const f = floorsOf(this.building).find((l) => !this.floors.has(l));
     if (f === undefined) {
       // last: the building's glass cut above a floor (campus.cutAbove) — its
@@ -1321,6 +1328,72 @@ void main() {
     this.warmDraw(c);
     // (shown only if it's below mine)
     world.root.visible = f < this.level;
+  }
+
+  // ── ready (docs/plan/35-the-loading.md) ──
+  // Behind the loading screen everything is built as fast as it goes (a long
+  // frame doesn't show there): the other floors one after another, the land and
+  // the people with bigger budgets a frame. The screen goes when it's all built
+  // and every shader in the scene is compiled.
+  private warm = false;
+  private drawn = 0; // frames drawn
+  private preparing = 0; // the Grounds' new things whose shaders are compiling
+  private compiled: "no" | "going" | "done" = "no";
+  private most = { blocks: 0, statics: 0 };
+  get warming(): boolean {
+    return this.warm;
+  }
+  set warming(on: boolean) {
+    this.warm = on;
+    if (this.around.grounds) this.around.grounds.boost = on;
+    if (on) this.warmAt = 0;
+  }
+  /** How built this view is: its parts' shares done (each 0..1) of how many. Ready when
+   *  done === of. */
+  readiness(): { done: number; of: number } {
+    const parts: number[] = [];
+    // (a few frames first: the people and the land are only asked for by a frame)
+    parts.push(Math.min(1, this.drawn / 3));
+    // the sun's shadow map (made by the first frame drawn: the floors wait for it)
+    parts.push(!this.sun.castShadow || this.sun.shadow.map ? 1 : 0);
+    // every floor built and drawn once, and the building's cut (warmUp)
+    const all = floorsOf(this.building).length;
+    parts.push(this.cutWarm ? 1 : Math.min(0.95, this.floors.size / Math.max(1, all)));
+    // the land, the rest of the Grounds, their shaders
+    const g = this.around.grounds;
+    if (g) {
+      this.most.blocks = Math.max(this.most.blocks, g.left.blocks);
+      this.most.statics = Math.max(this.most.statics, g.left.statics);
+      parts.push(this.most.blocks ? 1 - g.left.blocks / this.most.blocks : 1);
+      parts.push(this.most.statics ? 1 - g.left.statics / this.most.statics : 1);
+      parts.push(this.preparing ? 0 : 1);
+    }
+    // the people (their chunk, then everyone's model)
+    parts.push(!this.charF ? 0 : this.charF.pending ? 0.5 : 1);
+    // last: every shader in the scene (and my hands') compiled, once all the rest is in it
+    const rest = parts.every((p) => p >= 1);
+    if (rest && this.compiled === "no") this.compileAll();
+    parts.push(this.compiled === "done" ? 1 : 0);
+    return { done: parts.reduce((a, b) => a + b, 0), of: parts.length };
+  }
+  // (into the target the frame draws to, so they're the programs it uses: High's
+  // finish draws the scene into a linear buffer — as warmDraw)
+  private compileAll() {
+    this.compiled = "going";
+    const r = this.renderer;
+    if (this.post) {
+      this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
+      r.setRenderTarget(this.warmTarget);
+    }
+    const jobs = [r.compileAsync(this.scene, this.camera)];
+    const h = this.hands ?? this.handsSpare;
+    if (h) jobs.push(r.compileAsync(h.scene, h.camera));
+    r.setRenderTarget(null);
+    void Promise.all(jobs)
+      .catch(() => {})
+      .then(() => {
+        this.compiled = "done";
+      });
   }
 
   // One draw of the warm-up, as the screen draws (so the shaders compiled are the
@@ -1580,7 +1653,36 @@ void main() {
     this.clampCam();
   }
 
+  // Into or out of my head the screen dips to dark and the camera changes there,
+  // unseen (the jump from behind me to my eyes: docs/plan/35-the-loading.md).
+  private modeNext: CamMode | null = null;
+  private veil: HTMLDivElement | null = null;
+  private veilT = 0;
   setMode(m: CamMode) {
+    if (m === (this.modeNext ?? this.mode)) return;
+    const across = (m === "first") !== (this.mode === "first");
+    if (across && this.veil && this.drawn > 0 && !this.warm) {
+      this.modeNext = m;
+      if (this.veilT) return; // (already dipping: it takes the latest at the bottom)
+      this.veil.style.opacity = "1";
+      this.veilT = window.setTimeout(() => {
+        this.veilT = 0;
+        const next = this.modeNext;
+        this.modeNext = null;
+        if (next) this.applyMode(next);
+        // (lifted once a frame or two are drawn the new way)
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (this.veil) this.veil.style.opacity = "0";
+          }),
+        );
+      }, VEIL_MS);
+      return;
+    }
+    this.modeNext = null;
+    this.applyMode(m);
+  }
+  private applyMode(m: CamMode) {
     if (m === this.mode) return;
     this.mode = m;
     this.showCrosshair();
@@ -2047,6 +2149,10 @@ void main() {
     const C3 = this.chars();
     if (first && this.handsOn && me && !me.npc && C3 && this.charF && this.charMats && this.gcMix < 0.002) {
       const angle = me.angle ?? dirAngle(me.d);
+      if (!this.hands && this.handsSpare) {
+        this.hands = this.handsSpare;
+        this.handsSpare = null;
+      }
       this.hands ??= new Hands1P(C3, this.charF, this.charMats, { ...me, angle });
       this.hands.gunFx = this.myGun;
       this.hands.update(
@@ -2060,13 +2166,19 @@ void main() {
         this.quality === "low",
       );
     } else if (this.hands) {
-      this.hands.dispose();
+      // (out of first person: put by, ready for the next time)
+      this.handsSpare?.dispose();
+      this.handsSpare = this.hands;
       this.hands = null;
+    } else if (this.warm && !this.handsSpare && this.handsOn && me && !me.npc && C3 && this.charF && this.charMats) {
+      // made ahead behind the loading screen: the first time into first person built them in
+      // one frame (a hitch)
+      this.handsSpare = new Hands1P(C3, this.charF, this.charMats, { ...me, angle: me.angle ?? dirAngle(me.d) });
     }
     // the flashlights: after the people and my hands (out of the lens in a hand where it is this frame)
     this.torches(bodies, meId, dt);
     // build what's waiting (nearest first), a few milliseconds a frame
-    this.charF?.pump(4);
+    this.charF?.pump(this.warm ? 30 : 4);
     for (const [id, e] of this.pets3)
       if (!seenPets.has(id)) {
         this.scene.remove(e.model.root);
@@ -2090,6 +2202,7 @@ void main() {
       }
       this.drawTags(bodies);
     }
+    this.drawn++;
     const now = performance.now();
     if (this.lastFrameAt) this.fps += (1000 / Math.max(1, now - this.lastFrameAt) - this.fps) * 0.05;
     this.lastFrameAt = now;
@@ -2845,7 +2958,9 @@ void main() {
         }
       });
       for (const t of maps) this.renderer.initTexture(t);
+      this.preparing++;
       void this.renderer.compileAsync(o, this.camera, this.scene).then(() => {
+        this.preparing--;
         for (const [c, m] of masks) c.layers.mask = m;
       });
     };
@@ -3787,6 +3902,8 @@ void main() {
     document.removeEventListener("pointerlockerror", this.onLockError);
     if (document.pointerLockElement === c) document.exitPointerLock();
     this.crosshair?.remove();
+    clearTimeout(this.veilT);
+    this.veil?.remove();
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("keyup", this.onKey);
     window.removeEventListener("blur", this.onBlur);
@@ -3801,6 +3918,7 @@ void main() {
     for (const p of this.people.values()) p.dispose();
     for (const p of this.people3.values()) p.dispose();
     this.hands?.dispose();
+    this.handsSpare?.dispose();
     this.charF?.dispose();
     for (const m of this.propMats.values()) m.dispose();
     (this.charMats?.body as Material | undefined)?.dispose();

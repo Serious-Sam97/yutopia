@@ -84,6 +84,8 @@ const D = {
   join: ["Walk in", "Entrar"],
   loading: ["Loading…", "Carregando…"],
   connecting: ["Tuning in…", "Sintonizando…"],
+  buildingWorld: ["Building the world…", "Construindo o mundo…"],
+  changingView: ["Changing the view…", "Mudando a vista…"],
   reconnecting: ["Signal lost — reconnecting…", "Sinal perdido — reconectando…"],
   kicked: ["You opened Yutopia in another tab.", "Você abriu o Yutopia em outra aba."],
   removed: ["An admin removed you from the studio for a while.", "Um admin te tirou do estúdio por um tempo."],

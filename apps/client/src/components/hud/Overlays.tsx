@@ -352,30 +352,62 @@ export function VideoBubbles() {
   );
 }
 
+// Connecting, then the world built behind the screen (docs/plan/35-the-loading.md):
+// it stays until what's shown is all built, then fades away. Again on every change
+// between iso and 3D. (Over everything: the 3D view's tags stack by depth, up to
+// the thousands.)
+const LOAD_CELLS = 24;
 export function ConnectionOverlay() {
   const t = useTr();
   const phase = useHud((s) => s.phase);
   const error = useHud((s) => s.error);
-  if (phase === "ready") return null;
+  const loading = useHud((s) => s.loading);
+  const up = phase !== "ready" || loading.on;
+  // (gone: faded out first)
+  const [shown, setShown] = useState(up);
+  useEffect(() => {
+    if (up) return setShown(true);
+    const id = setTimeout(() => setShown(false), FADE_MS);
+    return () => clearTimeout(id);
+  }, [up]);
+  if (!up && !shown) return null;
+  const building = phase === "ready";
   const msg =
     phase === "loading" || phase === "connecting"
       ? t("connecting")
-      : phase === "reconnecting"
-        ? t("reconnecting")
-        : phase === "kicked"
-          ? t("kicked")
-          : phase === "removed"
-            ? t("removed")
-            : error || t("failed");
+      : building
+        ? t(loading.why === "view" ? "changingView" : "buildingWorld")
+        : phase === "reconnecting"
+          ? t("reconnecting")
+          : phase === "kicked"
+            ? t("kicked")
+            : phase === "removed"
+              ? t("removed")
+              : error || t("failed");
   const blocking = phase !== "reconnecting";
+  // (connecting and building: nothing behind it seen until it's ready)
+  const solid = phase === "loading" || phase === "connecting" || building;
+  const lit = building ? Math.round(loading.progress * LOAD_CELLS) : 0;
   return (
     <div
-      className={`absolute inset-0 flex items-center justify-center ${blocking ? "bg-[#17110dcc]" : "pointer-events-none"}`}
+      className={`absolute inset-0 z-[30000] flex items-center justify-center ${solid ? "bg-[#17110d]" : blocking ? "bg-[#17110dcc]" : "pointer-events-none"}`}
+      style={{ opacity: up ? 1 : 0, transition: `opacity ${FADE_MS}ms ease`, pointerEvents: up ? undefined : "none" }}
       aria-live="polite"
+      aria-busy={solid}
     >
-      <div className="cabinet p-6 text-center rise max-w-sm">
+      <div className={`cabinet p-6 text-center max-w-sm ${loading.why === "view" && building ? "" : "rise"}`}>
         <div className="vfd-window px-4 py-3">
           <p className="lcd text-2xl">{msg}</p>
+          {solid && (
+            // (VFD cells: the lit ones over the dim ones, as far as it's got)
+            <div
+              className="mt-3 h-2.5 load-cells"
+              role="progressbar"
+              aria-valuenow={Math.round(loading.progress * 100)}
+            >
+              <i style={{ clipPath: `inset(0 ${100 - (lit / LOAD_CELLS) * 100}% 0 0)` }} />
+            </div>
+          )}
         </div>
         {(phase === "failed" || phase === "kicked" || phase === "removed") && (
           <div className="flex gap-2 justify-center mt-4">
@@ -391,6 +423,7 @@ export function ConnectionOverlay() {
     </div>
   );
 }
+const FADE_MS = 300;
 
 // The studio from above: rooms labelled, the one you're in outlined, people as
 // dots (amber: you can hear them), you in red. Click to walk there; ± zooms the

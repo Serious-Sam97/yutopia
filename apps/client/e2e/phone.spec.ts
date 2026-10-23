@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
+import { ANA, BIA, enter, loaded, test, token, useWorld } from "./helpers";
 
 // The phone (docs/plan/21-cellphone.md): P brings it out (it boots once), the
 // home grid with the keyboard, you keep walking with it out, others see it in
@@ -132,7 +132,8 @@ test("the camera: a selfie in iso and in 3D, saved to the Gallery", async ({ pag
   await page.keyboard.press("Escape");
   await page.keyboard.press("t");
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
-  await page.waitForTimeout(2500);
+  await loaded(page);
+  await page.waitForTimeout(500);
   await page.evaluate(() => (window as any).__yutopia.phone.camera.open("selfie"));
   await page.waitForTimeout(2000);
   await shot(page, "phone-selfie-3d");

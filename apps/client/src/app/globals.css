@@ -380,6 +380,26 @@ body {
     }
   }
 
+  /* the loading screen's bar: 24 VFD cells, dim; the lit ones over them, clipped to how far it's got */
+  .load-cells,
+  .load-cells > i {
+    background: repeating-linear-gradient(
+      90deg,
+      var(--c, rgba(255, 179, 92, 0.12)) 0 calc(100% / 24 - 3px),
+      transparent 0 calc(100% / 24)
+    );
+  }
+  .load-cells {
+    position: relative;
+  }
+  .load-cells > i {
+    position: absolute;
+    inset: 0;
+    --c: var(--vfd);
+    filter: drop-shadow(0 0 3px rgba(255, 166, 48, 0.6));
+    transition: clip-path 200ms;
+  }
+
   @keyframes rise {
     from {
       opacity: 0;

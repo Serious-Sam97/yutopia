@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { BIA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { BIA, enter, loaded, test, token, useWorld, walkTo } from "./helpers";
 
 // A pet off exploring (docs/plan/13-pets.md, "Explore"), in the Lab: "Go
 // explore" from its ring sends it round the place on its own; "Call my pets
@@ -116,7 +116,8 @@ test("explore: the dog tours the place, comes back when called, and runs after m
     // the 3D view: at my heels there too
     await page.keyboard.press("t");
     await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-    await page.waitForTimeout(2500);
+    await loaded(page);
+    await page.waitForTimeout(500);
     await shot("followed-3d");
   } finally {
     await send(page, "pet:release", { id });
