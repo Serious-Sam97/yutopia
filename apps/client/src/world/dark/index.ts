@@ -17,6 +17,7 @@ import type { WorldController } from "../controller";
 import { actionOf } from "../input/bindings";
 import type { Press } from "../input/controls";
 import type { DarkHooks, Walker } from "../input/walker";
+import { hud } from "../store";
 import { ARMS_CSS, Arms } from "./arms";
 import { DOWN_CSS, Down } from "./down";
 import { CACHE_ICON, ICON } from "./icons";
@@ -737,6 +738,9 @@ class Dark implements DarkHooks {
       this.render();
     }
     this.quickHud(now);
+    // (the phone out sits where the column is: the guns, the quick slots, the battery go under it)
+    const phone = hud.get().phone;
+    this.col.style.visibility = phone.open || phone.camera ? "hidden" : "";
     if (this.toastUntil && now > this.toastUntil) {
       this.toastUntil = 0;
       this.toastEl.style.display = "none";
