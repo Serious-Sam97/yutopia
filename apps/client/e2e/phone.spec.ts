@@ -1,12 +1,27 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, loaded, test, token, useWorld } from "./helpers";
+import { ANA, BIA, CAI, enter, loaded, test, token, useWorld } from "./helpers";
 
 // The phone (docs/plan/21-cellphone.md): P brings it out (it boots once), the
 // home grid with the keyboard, you keep walking with it out, others see it in
 // your hand; texts between two people arrive live (the peek); a call rings,
 // is answered and hung up; the camera takes a photo into the Gallery.
 // YUTOPIA_SHOTS=<dir> saves screenshots along the way.
+// With the real GPU (headless's software GL makes every frame slow):
+// YUTOPIA_GPU=1 npx playwright test phone
+if (process.env.YUTOPIA_GPU)
+  test.use({
+    launchOptions: {
+      args: [
+        "--use-angle=metal",
+        "--enable-gpu",
+        "--ignore-gpu-blocklist",
+        "--use-fake-ui-for-media-stream",
+        "--use-fake-device-for-media-stream",
+        "--autoplay-policy=no-user-gesture-required",
+      ],
+    },
+  });
 const SHOTS = process.env.YUTOPIA_SHOTS;
 const shot = async (page: Page, name: string) => {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
@@ -110,6 +125,88 @@ test("texts arrive live (the phone peeks up), and a call rings, is answered and 
   await bia.close();
 });
 
+// A call of three (docs/plan/37-the-gps.md § 1): everyone hears everyone. Ana
+// has her world mic on and then muted (a muted mic is a disabled track, and the
+// call's copy of it was silent); Cai answers a moment after Bia.
+test("a call of three: everyone on the line hears the other two", async ({ page, browser }) => {
+  test.setTimeout(240_000); // (three worlds loading at once)
+  const space = await useWorld("demo");
+  await enter(page, await token(ANA), space);
+  const bia = await browser.newPage();
+  await enter(bia, await token(BIA), space);
+  const cai = await browser.newPage();
+  await enter(cai, await token(CAI), space);
+  const all = [page, bia, cai];
+  for (const p of all) await p.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 60_000 });
+  const [anaUid, biaUid, caiUid] = (await Promise.all(all.map((p) => world(p, (w) => w.myUid())))) as number[];
+  // Ana's world mic: on, then muted (the line stays up, the track disabled)
+  await world(page, (w) => w.toggleMic());
+  await page.waitForFunction(() => (window as any).__hud.get().media.mic, null, { timeout: 15_000 });
+  await world(page, (w) => w.toggleMic());
+  await page.waitForFunction(() => !(window as any).__hud.get().media.mic, null, { timeout: 15_000 });
+
+  await page.evaluate((u) => (window as any).__yutopia.phone.calls.start(u), [biaUid, caiUid]);
+  await expect(bia.locator("[data-call-answer]")).toBeVisible({ timeout: 10_000 });
+  await expect(cai.locator("[data-call-answer]")).toBeVisible({ timeout: 10_000 });
+  // (answered through the phone, not a click: three worlds at once draw few
+  // frames, and a click waits for them)
+  const answer = (p: Page) => p.evaluate(() => (window as any).__yutopia.phone.calls.answer());
+  await answer(bia);
+  // live for Ana and Bia; Cai's phone still rings (it took the others' "live"
+  // for its own: no ring, no line, and Answer did nothing)
+  await expect.poll(async () => (await ph(page))?.call?.phase, { timeout: 15_000 }).toBe("live");
+  await cai.waitForTimeout(400);
+  expect((await ph(cai))?.call?.phase).toBe("incoming");
+  await answer(cai);
+
+  const line = (p: Page) => p.evaluate(() => (window as any).__yutopia.phone.calls.lineInfo());
+  const others = (uid: number) => [anaUid, biaUid, caiUid].filter((u) => u !== uid).sort();
+  const each = [
+    [page, anaUid],
+    [bia, biaUid],
+    [cai, caiUid],
+  ] as const;
+  // on the line, my mic live and on, the other two's voices coming in
+  await Promise.all(
+    each.map(([p, uid]) =>
+      expect
+        .poll(
+          async () => {
+            const l = await line(p);
+            return { on: l.on, mic: l.mic, far: l.far.map((f: { uid: number }) => f.uid).sort() };
+          },
+          { timeout: 60_000 },
+        )
+        .toEqual({ on: true, mic: { enabled: true, live: true }, far: others(uid) }),
+    ),
+  );
+  // and heard: the fake mic's beep reaches each of them from both others —
+  // sound, not the trickle a silent line sends (~1 KB/s; speech is ~10)
+  const bytesIn = () =>
+    Promise.all(each.map(([p]) => p.evaluate(() => (window as any).__yutopia.phone.calls.heard()))) as Promise<
+      Record<number, number>[]
+    >;
+  const b0 = await bytesIn();
+  await page.waitForTimeout(4000);
+  const b1 = await bytesIn();
+  // (a count that went down started again: a voice resubscribed meanwhile)
+  const grew = (a = 0, b = 0) => (b >= a ? b - a : b);
+  for (const [i, [, uid]] of each.entries())
+    for (const o of others(uid)) expect(grew(b0[i][o], b1[i][o]), `${uid} hears ${o}`).toBeGreaterThan(16_000);
+  // the screen shows the other two
+  await expect(page.locator("[data-call-people] [data-call-peer]")).toHaveCount(2);
+  await shot(page, "phone-call-three");
+  const hangup = (p: Page) => p.evaluate(() => (window as any).__yutopia.phone.calls.hangup());
+  await hangup(page);
+  // Ana's gone: Bia and Cai go on
+  await bia.waitForTimeout(800);
+  expect((await ph(bia))?.call?.phase).toBe("live");
+  await hangup(bia);
+  await expect.poll(async () => (await ph(cai))?.call?.phase ?? "none", { timeout: 10_000 }).not.toBe("live");
+  await bia.close();
+  await cai.close();
+});
+
 test("the camera: a selfie in iso and in 3D, saved to the Gallery", async ({ page }) => {
   const tok = await token(ANA);
   const space = await useWorld("demo");
@@ -142,6 +239,72 @@ test("the camera: a selfie in iso and in 3D, saved to the Gallery", async ({ pag
   await shot(page, "phone-photo-3d");
   await page.keyboard.press("Escape");
   await page.keyboard.press("t");
+});
+
+// A photo in a chat (docs/plan/37-the-gps.md § 2): + slides the latest photos
+// up over the composer; one tap sends it, and the chat stays.
+test("the photo tray: + shows the latest photos, a tap sends one, the chat stays", async ({ page, browser }) => {
+  const space = await useWorld("demo");
+  await enter(page, await token(ANA), space);
+  const bia = await browser.newPage();
+  await enter(bia, await token(BIA), space);
+  for (const p of [page, bia])
+    await p.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
+  const biaUid = (await world(bia, (w) => w.myUid())) as number;
+  const anaUid = (await world(page, (w) => w.myUid())) as number;
+  await page.evaluate((u) => (window as any).__yutopia.phone.addContact(u), biaUid);
+  await world(page, (w) => w.togglePhone(true));
+  await page.waitForTimeout(2200);
+  // a photo to send
+  await page.evaluate(() => (window as any).__yutopia.phone.camera.open("photo"));
+  await expect(page.locator("[data-shutter]")).toBeVisible();
+  await page.waitForTimeout(800);
+  const n0 = ((await ph(page)).photos ?? []).filter((x: { id: number }) => x.id > 0).length;
+  await page.locator("[data-shutter]").click();
+  await expect
+    .poll(async () => ((await ph(page)).photos ?? []).filter((x: { id: number }) => x.id > 0).length, {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(n0);
+  await page.evaluate(() => (window as any).__yutopia.phone.camera.close());
+  // the chat with Bia, the tray (Ana's page in front: a page behind draws no
+  // frames, and a click waits for one)
+  await page.bringToFront();
+  await page.evaluate((u) => (window as any).__yutopia.phone.openThreadWith([u]), biaUid);
+  await expect(page.locator("[data-composer]")).toBeVisible();
+  await page.locator("[data-photo-add]").click();
+  await expect(page.locator("[data-photo-tray]")).toBeVisible();
+  await expect(page.locator("[data-tray-photo]").first()).toBeVisible({ timeout: 10_000 });
+  await shot(page, "phone-photo-tray");
+  // Back closes the tray, not the chat
+  await page.locator("[data-composer]").blur();
+  await page.keyboard.press("Backspace");
+  await expect(page.locator("[data-photo-tray]")).toHaveCount(0);
+  await expect(page.locator("[data-composer]")).toBeVisible();
+  // open it again and send the newest
+  await page.locator("[data-photo-add]").click();
+  const pick = page.locator("[data-tray-photo]").first();
+  const pid = Number(await pick.getAttribute("data-tray-photo"));
+  await pick.click();
+  await expect(page.locator("[data-photo-tray]")).toHaveCount(0);
+  // in the thread, from me, that photo; and still in the chat
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ([pid, me]) =>
+            Object.values((window as any).__phone.get().msgs as Record<number, any[]>)
+              .flat()
+              .some((m) => m.kind === "photo" && m.photo?.id === pid && m.from === me),
+          [pid, anaUid],
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+  expect((await ph(page)).stack.at(-1).app).toBe("messages");
+  // and it reaches Bia (her phone peeks up)
+  await expect(bia.locator("[data-phone-peek]")).toBeVisible({ timeout: 10_000 });
+  await bia.close();
 });
 
 // Every screen, for the review sheet (only with YUTOPIA_SHOTS).

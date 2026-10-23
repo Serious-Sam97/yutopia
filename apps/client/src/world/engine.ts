@@ -3433,6 +3433,12 @@ export class WorldEngine {
   mountLive(c: Container) {
     this.sortLayer.addChild(c);
   }
+  /** A drawing on the ground, under people and things (the GPS's route); the caller destroys it. */
+  groundDrawing(): Graphics {
+    const g = new Graphics();
+    this.world.addChildAt(g, this.world.getChildIndex(this.markerG));
+    return g;
+  }
   // the draw order of a thing's front-most piece (a live picture goes just over it)
   frontKey(id: string): number | null {
     const v = this.objectViews.get(id);

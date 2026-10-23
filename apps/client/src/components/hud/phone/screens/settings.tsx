@@ -119,10 +119,21 @@ export function Settings() {
             {row("moon", "linear-gradient(150deg,#5a4bd8,#241a6a)", t("phSleep"), <Toggle on={dnd} />, () =>
               w?.setStatus(dnd ? "online" : "dnd"),
             )}
+            {/* the GPS: my contacts see me on their map (off unless I turn it on) */}
+            {row(
+              "maps",
+              "linear-gradient(150deg,#41f3d9,#1a6aa8)",
+              t("gpsShare"),
+              <Toggle on={st.shareLocation} />,
+              () => ph.setSettings({ shareLocation: !st.shareLocation }),
+            )}
             {row("info", "#2c2840", t("phAbout"), chev(""), () => ph.go({ app: "settings", view: "about" }))}
           </div>
           <p className={s.sub} style={{ whiteSpace: "normal", fontSize: 11, margin: "8px 6px", lineHeight: 1.4 }}>
             {t("phSleepHint")}
+          </p>
+          <p className={s.sub} style={{ whiteSpace: "normal", fontSize: 11, margin: "0 6px 8px", lineHeight: 1.4 }}>
+            {t("gpsShareHint")}
           </p>
         </div>
       </div>
@@ -452,42 +463,6 @@ export function Store() {
               </div>
             ))}
           </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-export function Maps() {
-  const t = useTr();
-  const w = useWorld();
-  const ph = w?.phone;
-  const st = usePhone((p) => p.settings);
-  if (!ph) return null;
-  return (
-    <>
-      <Wallpaper id={st.wallpaper} dim />
-      <div className={s.content}>
-        <Head title={t("app_maps")} ph={ph} />
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            flex: 1,
-            gap: 14,
-          }}
-        >
-          <span className={cx(s.tile, s.t_maps)} style={{ width: 84, height: 84, borderRadius: 26 }}>
-            <Ic n="maps" size={40} />
-          </span>
-          <span className={s.soon} style={{ position: "static" }}>
-            {t("phSoon")}
-          </span>
-          <p className={s.empty} style={{ padding: "0 18px" }}>
-            {t("phMapsSoon")}
-          </p>
         </div>
       </div>
     </>

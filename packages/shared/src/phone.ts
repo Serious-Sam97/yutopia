@@ -97,6 +97,7 @@ export interface PhoneSettings {
   vibrate: boolean;
   favourites: number[]; // user ids (0: Vortex)
   installed: string[]; // apps from the Store (built-ins aren't listed)
+  shareLocation: boolean; // the GPS: my contacts see me on their map (off unless I turn it on)
 }
 
 export const DEFAULT_PHONE: PhoneSettings = {
@@ -111,6 +112,7 @@ export const DEFAULT_PHONE: PhoneSettings = {
   vibrate: true,
   favourites: [],
   installed: [],
+  shareLocation: false,
 };
 
 // Anything from storage or the wire, made safe (unknown fields dropped, bad values defaulted).
@@ -137,7 +139,22 @@ export function parsePhoneSettings(x: unknown): PhoneSettings {
     installed: Array.isArray(o.installed)
       ? o.installed.filter((s): s is string => typeof s === "string" && /^[a-z0-9-]{1,32}$/.test(s)).slice(0, 40)
       : [],
+    shareLocation: o.shareLocation === true,
   };
+}
+
+// The GPS (docs/plan/37-the-gps.md § 6): a contact sharing where they are, as
+// my map shows them. x, z: the Grounds' coords; h: facing (0 north, clockwise);
+// where: their room's name.
+export interface GpsFriend {
+  uid: number;
+  name: string;
+  avatar: string;
+  x: number;
+  z: number;
+  h: number;
+  level: number;
+  where: string;
 }
 
 // Limits

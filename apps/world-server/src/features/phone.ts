@@ -46,6 +46,7 @@ interface Call {
   members: Map<number, Member>;
   startedAt: number; // answered (server ms), 0 while ringing
   ringUntil: Map<number, number>; // who's ringing, until when
+  lined: Set<number>; // who's been given the line (once each: a second token for the same person cut them off)
   ended: boolean;
 }
 const calls = new Map<string, Call>();
@@ -104,7 +105,11 @@ async function token(c: Call, uid: number): Promise<string> {
   return at.toJwt();
 }
 async function join(c: Call, uid: number) {
-  tell(uid, "call:join", { id: c.id, url: "", token: await token(c, uid), room: `call-${c.id}` });
+  if (c.lined.has(uid)) return;
+  c.lined.add(uid);
+  const tok = await token(c, uid);
+  if (c.ended || c.members.get(uid)?.state !== "in") return c.lined.delete(uid);
+  tell(uid, "call:join", { id: c.id, url: "", token: tok, room: `call-${c.id}` });
 }
 
 function inCount(c: Call) {
@@ -146,10 +151,13 @@ function leave(c: Call, uid: number, why: "left" | "declined" | "missed") {
   if (!m || m.state === "left") return;
   m.state = "left";
   c.ringUntil.delete(uid);
+  c.lined.delete(uid);
   if (callOf.get(uid) === c.id) callOf.delete(uid);
   setRinging(uid, false);
   const x = playerOf(uid);
   if (x && onCallState(x.p.phone)) x.p.phone = "";
+  // a ring that ran out while the call goes on: that phone stops ringing too
+  if (why === "missed") tell(uid, "call:update", { ...info(c), phase: "ended", end: "missed" });
   const live = inCount(c);
   const ringing = ringingCount(c);
   if (c.startedAt) return live >= 2 || (live === 1 && ringing > 0) ? update(c, "live") : end(c, "answered");
@@ -252,6 +260,7 @@ registerFeature((room: WorldRoom) => {
       ]),
       startedAt: 0,
       ringUntil: new Map(),
+      lined: new Set(),
       ended: false,
     };
     calls.set(c.id, c);

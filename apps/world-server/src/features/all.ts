@@ -20,6 +20,7 @@ import "./pets.ts";
 import "./lifts.ts";
 import "./computer.ts";
 import "./phone.ts";
+import "./gps.ts";
 import "./grounds-life.ts";
 import "./cars.ts";
 import "./survival.ts";

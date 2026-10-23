@@ -101,7 +101,6 @@ export function Home() {
               </span>
               {t(`app_${a.id}` as Key)}
               {(badge[a.id] ?? 0) > 0 && <span className={s.badge}>{badge[a.id]}</span>}
-              {a.id === "maps" && <span className={s.soon}>{t("phSoon")}</span>}
             </button>
           ))}
         </div>

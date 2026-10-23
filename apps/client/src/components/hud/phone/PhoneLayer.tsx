@@ -7,11 +7,12 @@ import { useHud } from "@/world/store";
 import { useWorld } from "../ctx";
 import s from "./phone.module.css";
 import { CallScreen } from "./screens/call";
+import { Gps, GpsHud } from "./screens/gps";
 import { Boot, Home } from "./screens/home";
 import { Messages, NewThread, Thread } from "./screens/messages";
 import { AddContact, ContactCard, Contacts, PhoneApp, VortexCard } from "./screens/people";
 import { Gallery, PhotoView, SendTo, Viewfinder } from "./screens/photos";
-import { About, CasePick, Maps, Settings, Sounds, Store, Wallpapers } from "./screens/settings";
+import { About, CasePick, Settings, Sounds, Store, Wallpapers } from "./screens/settings";
 import { caseVars, cx, Ic, PFace, StatusBar, secs, useNav, VxFace } from "./ui";
 
 // Vortex Mobile on screen (docs/plan/21-cellphone.md): the phone slides up
@@ -60,6 +61,7 @@ function PhoneLayerInner() {
       data-phone
     >
       {camera ? <Viewfinder /> : open ? <PhoneDock /> : <Peek />}
+      {!camera && <GpsHud />}
       {!open && <CallPill />}
       <FlashFx />
     </div>
@@ -142,7 +144,7 @@ function Route() {
     case "store":
       return <Store />;
     case "maps":
-      return <Maps />;
+      return <Gps />;
     case "vortex":
       return <VortexCard />;
     default:

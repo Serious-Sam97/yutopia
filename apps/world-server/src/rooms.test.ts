@@ -61,6 +61,7 @@ async function person(id: number, sandbox: number, roles = "member"): Promise<Pe
     "phone:live",
     "call:update",
     "call:join",
+    "gps:friends",
   ])
     room.onMessage(t, (m) => {
       if (!p.msgs[t]) p.msgs[t] = [];
@@ -1693,6 +1694,106 @@ test("the phone: a dropped line ends the call; a blip doesn't; a group call lose
   } finally {
     phoneHub.dropMs = was;
   }
+});
+
+// A call of three (docs/plan/37-the-gps.md § 1): everyone on it gets the line
+// once — two answering at the same moment as well (a second line for the same
+// person tore the first down halfway and cut them off), and one added mid-call.
+test("the phone: a call of three — each on it gets the line exactly once", async (t) => {
+  // (real tokens: minting one takes a while, which is when a second answer comes in)
+  const { config } = await import("./config.ts");
+  const was = { ...config.livekit };
+  Object.assign(config.livekit, { key: "test-key", secret: "test-secret-test-secret-test-secret" });
+  t.after(() => Object.assign(config.livekit, was));
+  const ana = await person(94, ++space);
+  const bia = await person(95, ++space);
+  const cai = await person(96, ++space);
+  const dan = await person(97, ++space);
+  const joins = (p: Person) => (p.msgs["call:join"] ?? []) as { room: string }[];
+  const lastUp = (p: Person) =>
+    p.msgs["call:update"]?.at(-1) as { phase: string; members: { uid: number; state: string }[] } | undefined;
+  const ins = (p: Person) => lastUp(p)?.members.filter((m) => m.state === "in").length ?? 0;
+  const ringId = async (p: Person) => {
+    await waitFor(() => (p.msgs["call:ring"]?.length ?? 0) > 0);
+    return (p.msgs["call:ring"]?.at(-1) as { id: string }).id;
+  };
+
+  // Ana calls Bia and Cai; both answer at once
+  ana.room.send("call:start", { to: [95, 96], video: false });
+  const id = await ringId(bia);
+  await ringId(cai);
+  bia.room.send("call:answer", { id });
+  cai.room.send("call:answer", { id });
+  await waitFor(() => ins(ana) === 3 && ins(bia) === 3 && ins(cai) === 3);
+  await sleep(300);
+  for (const p of [ana, bia, cai]) {
+    assert.equal(joins(p).length, 1, "one line each");
+    assert.equal(joins(p)[0]?.room, `call-${id}`);
+  }
+
+  // Bia adds Dan: Dan gets the line, nobody already on gets another
+  bia.room.send("call:add", { id, uid: 97 });
+  dan.room.send("call:answer", { id: await ringId(dan) });
+  await waitFor(() => ins(ana) === 4 && ins(dan) === 4);
+  await sleep(300);
+  assert.equal(joins(dan).length, 1);
+  assert.equal(joins(dan)[0]?.room, `call-${id}`);
+  for (const p of [ana, bia, cai]) assert.equal(joins(p).length, 1, "no second line for the ones already on");
+
+  // Ana hangs up: the other three go on
+  ana.room.send("call:end", { id });
+  await waitFor(() => ins(bia) === 3);
+  assert.equal(lastUp(bia)?.phase, "live");
+  for (const p of [bia, cai, dan]) p.room.send("call:end", { id });
+  await waitFor(() => lastUp(ana)?.phase === "ended" || lastUp(bia)?.phase === "ended");
+});
+
+// The GPS's friends (docs/plan/37-the-gps.md § 6): someone sharing is seen by
+// the people in their phone book only — where they are on the Grounds' coords —
+// and by nobody while in focus mode or once they stop sharing.
+test("the GPS: a contact sharing shows on my map; nobody else does, nor in focus mode, nor once it's off", async (t) => {
+  const { gpsHub } = await import("./features/gps.ts");
+  const was = gpsHub.contactsOf;
+  gpsHub.contactsOf = async (uid) => (uid === 120 ? [121] : []); // Ana's phone book: Bia
+  t.after(() => {
+    gpsHub.contactsOf = was;
+  });
+  const s = ++space;
+  const ana = await person(120, s);
+  const bia = await person(121, s);
+  const cai = await person(122, s);
+  type F = { friends: { uid: number; x: number; z: number; where: string }[] };
+  const ask = async (p: Person) => {
+    const n = p.msgs["gps:friends"]?.length ?? 0;
+    await sleep(450); // (one ask in ASK_MS)
+    p.room.send("gps:friends", {});
+    await waitFor(() => (p.msgs["gps:friends"]?.length ?? 0) > n);
+    return (p.msgs["gps:friends"]?.at(-1) as F).friends;
+  };
+  // not sharing: nothing
+  assert.deepEqual(await ask(bia), []);
+  ana.room.send("gps:share", { on: true });
+  await waitFor(() => gpsHub.sharing.has(120));
+  // Bia (in Ana's book) sees her, on the Grounds' coords
+  const seen = await ask(bia);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].uid, 120);
+  assert.ok(Number.isFinite(seen[0].x) && Number.isFinite(seen[0].z));
+  assert.ok(typeof seen[0].where === "string" && seen[0].where.length > 0);
+  // Cai isn't in her book: nothing; Ana herself: nothing of her own
+  assert.deepEqual(await ask(cai), []);
+  assert.deepEqual(await ask(ana), []);
+  // focus mode: nobody sees her
+  ana.room.send("status", { status: "dnd" });
+  await waitFor(() => ana.room.state.players.get(ana.room.sessionId)?.status === "dnd");
+  assert.deepEqual(await ask(bia), []);
+  ana.room.send("status", { status: "online" });
+  await waitFor(() => ana.room.state.players.get(ana.room.sessionId)?.status === "online");
+  assert.equal((await ask(bia)).length, 1);
+  // off: gone
+  ana.room.send("gps:share", { on: false });
+  await waitFor(() => !gpsHub.sharing.has(120));
+  assert.deepEqual(await ask(bia), []);
 });
 
 // The API's live phone events (apps/api Push) reach the person through the world.

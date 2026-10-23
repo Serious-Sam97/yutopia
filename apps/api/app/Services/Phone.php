@@ -24,7 +24,7 @@ class Phone
     public const DEFAULTS = [
         'case' => 'walnut', 'wallpaper' => 'portal', 'lockWallpaper' => 'portal', 'ringtone' => 'citypop',
         'textTone' => 'pop', 'tones' => [], 'theme' => 'dark', 'textSize' => 'normal', 'vibrate' => true,
-        'favourites' => [], 'installed' => [],
+        'favourites' => [], 'installed' => [], 'shareLocation' => false,
     ];
 
     private const CASES = ['walnut', 'cream', 'rust', 'olive', 'graphite', 'brass', 'vortex'];
@@ -81,6 +81,7 @@ class Phone
             'vibrate' => is_bool($in['vibrate'] ?? null) ? $in['vibrate'] : $d['vibrate'],
             'favourites' => $ids($in['favourites'] ?? [], 12),
             'installed' => array_slice(array_values(array_filter((array) ($in['installed'] ?? []), fn ($s) => is_string($s) && preg_match('/^[a-z0-9-]{1,32}$/', $s))), 0, 40),
+            'shareLocation' => ($in['shareLocation'] ?? null) === true,
         ];
     }
 

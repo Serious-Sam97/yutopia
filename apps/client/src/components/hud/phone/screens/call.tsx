@@ -91,6 +91,22 @@ export function CallScreen() {
         <div className={s.callWh} style={live ? { color: "var(--cya)" } : undefined} data-call-status>
           {c.phase === "incoming" ? (main?.space ?? "") : status}
         </div>
+        {/* a call of three or more: everyone on it, lit while they speak */}
+        {!c.vortex && peers.length > 1 && (
+          <div className={s.callPeople} data-call-people>
+            {peers.map((p) => (
+              <span
+                key={p.uid}
+                className={cx(s.callP, p.state === "ringing" && s.ringing, c.talk?.includes(p.uid) && s.talking)}
+                data-call-peer={p.uid}
+                data-talking={c.talk?.includes(p.uid) ? "" : undefined}
+              >
+                <PFace avatar={p.avatar} name={p.name} size={34} />
+                {p.name.split(" ")[0]}
+              </span>
+            ))}
+          </div>
+        )}
         {live && <Wave level={c.level} />}
         {c.vortex?.line && live && <div className={s.subt}>“{c.vortex.line}”</div>}
 

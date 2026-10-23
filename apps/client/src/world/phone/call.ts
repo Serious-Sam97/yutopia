@@ -46,6 +46,7 @@ export class Calls {
   private relay: MediaStreamAudioDestinationNode | null = null;
   private relayTrack: LocalAudioTrack | null = null;
   private clearTimer: ReturnType<typeof setTimeout> | null = null;
+  private line = ""; // the LiveKit room I'm on (or getting on): a second call:join for it is the same line
   private levelBuf = new Uint8Array(256);
   version = 0; // bumps when a video comes or goes (the call screen redraws)
   private videoSubs = new Set<() => void>();
@@ -92,6 +93,7 @@ export class Calls {
       },
     });
     this.showCall();
+    void mixer.resume(); // (a click: the far voices play through Web Audio)
     ctl.send("call:start", { to: uids, video });
   }
 
@@ -100,6 +102,7 @@ export class Calls {
     if (!c || c.phase !== "incoming") return;
     if (c.vortex) return this.ph.vortex.answer();
     this.stopSounds();
+    void mixer.resume();
     this.ph.ctl.send("call:answer", { id: c.id });
     this.set({ phase: "live", startedAt: Date.now(), camOn: c.video });
     ui("connect", 0.6);
@@ -194,6 +197,10 @@ export class Calls {
     const me = phone.get().me.uid;
     const peers = m.members.filter((p) => p.uid !== me);
     if (m.phase === "ended") return this.ended(m.end ?? "answered", peers);
+    // still ringing here while the others talk (a call of three, or I was added):
+    // it's live for them, not for me — it keeps ringing until I answer
+    // (docs/plan/37-the-gps.md § 1)
+    if (c.phase === "incoming") return this.set({ id: m.id, peers });
     if (m.phase === "ringing" && c.phase === "dialing") {
       this.tone?.stop();
       this.tone = new LineTone("ringback");
@@ -206,7 +213,7 @@ export class Calls {
     this.set({
       id: m.id,
       peers,
-      phase: live ? "live" : c.phase === "incoming" ? "incoming" : "ringing",
+      phase: live ? "live" : "ringing",
       startedAt: live ? c.startedAt || Date.now() : 0,
     });
   }
@@ -215,7 +222,12 @@ export class Calls {
     const c = phone.get().call;
     const s = this.ph.ctl.session;
     if (!c || c.id !== m.id || !s || !m.token) return;
-    await this.hangupLocal();
+    // already on this line (or getting on): another token for it would put me on
+    // twice, and LiveKit drops one of the two (docs/plan/37-the-gps.md § 1)
+    if (this.line === m.room) return;
+    this.line = m.room;
+    await this.hangupLocal(true);
+    if (this.line !== m.room) return; // (hung up meanwhile)
     const ctx = mixer.ensure();
     const room = new Room({
       adaptiveStream: true,
@@ -240,11 +252,17 @@ export class Calls {
         m.token,
         s.iceServers?.length ? { rtcConfig: { iceServers: s.iceServers } } : {},
       );
-      // my mic on the line: the same microphone the world hears (a copy of it)
+      // my mic on the line: the same microphone the world hears (a copy of it).
+      // A muted world mic is a disabled track (it's never stopped on mute), and
+      // its copy starts disabled too — silence on the call. The copy is on.
       const mine = this.ph.ctl.media.room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track;
-      const track = mine?.mediaStreamTrack
-        ? new LocalAudioTrack(mine.mediaStreamTrack.clone(), undefined, false)
-        : await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true });
+      let track: LocalAudioTrack;
+      if (mine?.mediaStreamTrack?.readyState === "live") {
+        const copy = mine.mediaStreamTrack.clone();
+        copy.enabled = true;
+        track = new LocalAudioTrack(copy, undefined, false);
+      } else track = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true });
+      if (this.room !== room) return void track.stop(); // (hung up meanwhile)
       await room.localParticipant.publishTrack(track, { source: Track.Source.Microphone });
       if (c.muted) await room.localParticipant.setMicrophoneEnabled(false);
       if (phone.get().call?.camOn) await this.publishCam(true);
@@ -423,7 +441,7 @@ export class Calls {
     this.tone = null;
   }
 
-  private async hangupLocal() {
+  private async hangupLocal(keepLine = false) {
     await this.setRelay(false);
     this.camTrack?.stop();
     this.camTrack = null;
@@ -436,6 +454,7 @@ export class Calls {
     this.videos.clear();
     const r = this.room;
     this.room = null;
+    if (!keepLine) this.line = "";
     if (r) await r.disconnect().catch(() => {});
     this.bump();
   }
@@ -454,14 +473,55 @@ export class Calls {
     const c = phone.get().call;
     if (!c || c.phase !== "live" || c.vortex) return;
     let lvl = 0;
-    for (const ch of this.chains.values()) {
-      ch.an.getByteTimeDomainData(this.levelBuf);
-      let peak = 0;
-      for (const v of this.levelBuf) peak = Math.max(peak, Math.abs(v - 128));
-      lvl = Math.max(lvl, peak / 128);
+    const talk: number[] = [];
+    for (const [uid, ch] of this.chains) {
+      const peak = this.peakOf(ch);
+      lvl = Math.max(lvl, peak);
+      if (peak > 0.04) talk.push(Number(uid));
     }
+    talk.sort((a, b) => a - b);
     const level = Math.round(Math.min(1, lvl * 2.5) * 10) / 10;
-    if (level !== c.level) phone.set({ call: { ...c, level } });
+    const was = c.talk ?? [];
+    if (level !== c.level || talk.length !== was.length || talk.some((u, i) => u !== was[i]))
+      phone.set({ call: { ...c, level, talk } });
+  }
+  private peakOf(ch: Chain): number {
+    ch.an.getByteTimeDomainData(this.levelBuf);
+    let peak = 0;
+    for (const v of this.levelBuf) peak = Math.max(peak, Math.abs(v - 128));
+    return peak / 128;
+  }
+
+  // for tests: the audio that's come in from each far voice so far, in bytes
+  // (WebRTC's own count: a level read now and then misses a short sound, and
+  // its audio energy is only counted for sound it plays itself, not ours)
+  async heard(): Promise<Record<number, number>> {
+    const out: Record<number, number> = {};
+    for (const [uid, ch] of this.chains) {
+      const stats = await ch.track.receiver?.getStats().catch(() => null);
+      stats?.forEach((r: { type: string; kind?: string; bytesReceived?: number }) => {
+        if (r.type === "inbound-rtp" && r.kind === "audio") out[Number(uid)] = r.bytesReceived ?? 0;
+      });
+    }
+    return out;
+  }
+
+  // for tests: am I on the line, who do I hear (and how loud), is my mic live
+  lineInfo() {
+    const room = this.room;
+    const mic = room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack;
+    return {
+      on: room?.state === "connected",
+      line: this.line,
+      far: [...this.chains.entries()].map(([uid, ch]) => ({ uid: Number(uid), peak: this.peakOf(ch) })),
+      mic: mic ? { enabled: mic.enabled, live: mic.readyState === "live" } : null,
+      people: room
+        ? [...room.remoteParticipants.values()].map((p) => ({
+            id: p.identity,
+            tracks: [...p.trackPublications.values()].map((t) => `${t.source}:${t.isSubscribed ? "sub" : "-"}`),
+          }))
+        : [],
+    };
   }
 }
 

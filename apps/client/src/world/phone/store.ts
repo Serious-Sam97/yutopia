@@ -1,6 +1,7 @@
 "use client";
 
-import { DEFAULT_PHONE, type PhoneSettings } from "@yutopia/shared/phone";
+import { DEFAULT_PHONE, type GpsFriend, type PhoneSettings } from "@yutopia/shared/phone";
+import type { Route, RouteMode } from "@yutopia/shared/route";
 import { useRef, useSyncExternalStore } from "react";
 
 // The phone's own state (Vortex Mobile, docs/plan/21-cellphone.md): its
@@ -92,6 +93,7 @@ export interface CallView {
   speaker: boolean;
   camOn: boolean;
   level: number; // the far voice's level (the waveform), 0..1
+  talk?: number[]; // who's speaking right now (a call of three or more lights them up)
   vortex?: { line: string; mood: string }; // a call with Vortex: what he's saying
 }
 
@@ -150,6 +152,28 @@ export interface PhoneState {
   camera: CameraState | null;
   vortexTyping: boolean; // he's writing back
   note: string; // a short line at the bottom of the phone ("Saved", "Couldn't send"…)
+  gps: GpsView;
+}
+
+// The GPS (docs/plan/37-the-gps.md, world/phone/gps.ts): where I'm going, the
+// route there and how far along it I am, the contacts sharing where they are.
+export interface GpsTarget {
+  key: string; // a place's key (shared route.ts gpsPlaces), or "f:<uid>" for a friend
+  name: string;
+  p: [number, number]; // the Grounds' coords
+  friend?: number;
+}
+export interface GpsView {
+  target: GpsTarget | null;
+  mode: RouteMode;
+  route: Route | null;
+  at: number; // m along the route I've come
+  next: number; // the next step (route.steps index)
+  rerouting: boolean;
+  noRoute: boolean;
+  arrived: number; // when I got there (ms; "You've arrived" for a moment), 0
+  friends: GpsFriend[];
+  northUp: boolean;
 }
 
 const initial: PhoneState = {
@@ -176,6 +200,18 @@ const initial: PhoneState = {
   camera: null,
   vortexTyping: false,
   note: "",
+  gps: {
+    target: null,
+    mode: "foot",
+    route: null,
+    at: 0,
+    next: 1,
+    rerouting: false,
+    noRoute: false,
+    arrived: 0,
+    friends: [],
+    northUp: false,
+  },
 };
 
 let state: PhoneState = initial;

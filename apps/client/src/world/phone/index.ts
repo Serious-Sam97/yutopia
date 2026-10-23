@@ -9,6 +9,7 @@ import { hud } from "../store";
 import { Calls } from "./call";
 import { Camera } from "./camera";
 import { liveOf, phoneApi } from "./data";
+import { Gps } from "./gps";
 import { Ringer, textTone, ui } from "./sounds";
 import { type AppId, type Msg, type PhotoRef, phone, type Screen, type Thread, top } from "./store";
 import { VortexLine } from "./vortex";
@@ -29,6 +30,7 @@ export class Phone {
   readonly calls: Calls;
   readonly camera: Camera;
   readonly vortex: VortexLine;
+  readonly gps: Gps;
   private ringers = new Map<string, Ringer>(); // other people's phones ringing near me
   private shots = new Map<string, number>(); // sid → the last flash seen
   private navs = new Set<(n: Nav) => void>();
@@ -44,6 +46,7 @@ export class Phone {
     this.calls = new Calls(this);
     this.camera = new Camera(this);
     this.vortex = new VortexLine(this);
+    this.gps = new Gps(this);
     // the HUD's summary of it (the dock's key, the badge)
     this.offs.push(
       phone.subscribe(() => {
@@ -69,6 +72,7 @@ export class Phone {
     for (const r of this.ringers.values()) r.stop();
     this.ringers.clear();
     this.calls.destroy();
+    this.gps.destroy();
     this.camera.close();
     if (this.contactsTimer) clearInterval(this.contactsTimer);
   }
@@ -145,9 +149,18 @@ export class Phone {
     if (app === "home") return this.home();
     this.go({ app });
   }
+  // something on the screen that Back closes first (a chat's photo tray)
+  private backFirst: (() => boolean) | null = null;
+  interceptBack(f: () => boolean) {
+    this.backFirst = f;
+    return () => {
+      if (this.backFirst === f) this.backFirst = null;
+    };
+  }
   back() {
     const p = phone.get();
     if (p.camera) return this.camera.close();
+    if (this.backFirst?.()) return;
     if (p.stack.length <= 1 || top(p).app === "boot") return this.setOpen(false);
     if (top(p).app === "call" && p.call && p.call.phase !== "ended") {
       // the call goes on behind; back to where I was
@@ -276,6 +289,7 @@ export class Phone {
     try {
       const c = await phoneApi.addContact(uid);
       phone.set((s) => ({ contacts: [...s.contacts.filter((x) => x.uid !== c.uid), c] }));
+      this.gps.contactsChanged();
       ui("connect", 0.5);
       return true;
     } catch {
@@ -285,7 +299,10 @@ export class Phone {
   }
   async removeContact(uid: number) {
     phone.set((s) => ({ contacts: s.contacts.filter((x) => x.uid !== uid) }));
-    phoneApi.removeContact(uid).catch(() => this.note(tr("phOffline")));
+    phoneApi
+      .removeContact(uid)
+      .then(() => this.gps.contactsChanged())
+      .catch(() => this.note(tr("phOffline")));
   }
 
   // ── threads and texts ────────────────────────────────────────────────────
@@ -642,6 +659,7 @@ export class Phone {
         this.ringers.delete(sid);
       }
     this.calls.frame();
+    this.gps.frame();
   }
 }
 

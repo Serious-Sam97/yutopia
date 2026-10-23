@@ -378,6 +378,14 @@ class PhoneController extends Controller
     }
 
     // ── from the world-server (signed): a call that ended ───────────────────
+    // The GPS (docs/plan/37-the-gps.md § 6), for the world-server: the people in
+    // someone's phone book — the only ones who see them on the map when they share
+    // where they are.
+    public function contactIds(int $userId): JsonResponse
+    {
+        return response()->json(['ids' => Contact::where('user_id', $userId)->pluck('contact_id')->map(fn ($id) => (int) $id)->values()]);
+    }
+
     public function callLog(Request $request): JsonResponse
     {
         $data = $request->validate([

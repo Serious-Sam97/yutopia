@@ -9,7 +9,7 @@ import type { JumpKind } from "./jump.ts";
 import type { MediaItem } from "./media.ts";
 import type { VerbKind } from "./move/verbs.ts";
 import type { Command, Move, Needs, Species, Toy, Trick } from "./pets.ts";
-import type { CallEnd, CallInfo } from "./phone.ts";
+import type { CallEnd, CallInfo, GpsFriend } from "./phone.ts";
 
 export const ROOM_NAME = "world";
 export const TICK_HZ = 20;
@@ -296,6 +296,10 @@ export interface ClientMessages {
   "call:end": { id: string };
   "call:add": { id: string; uid: number };
   "call:video": { id: string; on: boolean };
+  // the GPS (docs/plan/37-the-gps.md § 6): my contacts may see where I am (or not);
+  // where the contacts sharing with me are
+  "gps:share": { on: boolean };
+  "gps:friends": Record<string, never>;
   // the dark (docs/plan/30-the-dark.md, phase 2): the client's chunk is listening (send my
   // pockets); search a spot (shared dark/loot.ts LOOT id, or "locker"); pick up something
   // dropped; use a pocket (first aid, a battery); drop a pocket (0–5) or a weapon (6–7)
@@ -378,6 +382,7 @@ export interface ServerMessages {
   "phone:live": { event: Record<string, unknown> };
   "call:update": CallInfo & { phase: "ringing" | "live" | "ended"; end?: CallEnd };
   "call:join": { id: string; url: string; token: string; room: string };
+  "gps:friends": { friends: GpsFriend[] };
   // the dark: what I carry and the torch's battery (only mine, on asking and on every
   // change); what a search or a pick-up gave (full: my pockets couldn't take it all; gone:
   // someone had already emptied it)

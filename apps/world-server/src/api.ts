@@ -119,4 +119,6 @@ export const api = {
   // a call that ended (features/phone.ts): written into the thread, for Recents and "missed"
   phoneCall: (c: { from: number; to: number[]; end: string; secs: number; video: boolean; answered: number[] }) =>
     call("POST", "/phone/calls", c),
+  // the GPS: someone's phone book (only they see where someone sharing is)
+  phoneContacts: (userId: number) => call<{ ids: number[] }>("GET", `/phone/contacts/${userId}`),
 };

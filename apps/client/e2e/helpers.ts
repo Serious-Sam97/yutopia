@@ -27,6 +27,7 @@ export const API = process.env.YUTOPIA_E2E_API ?? "http://localhost:8100";
 // Demo accounts from the API's DemoSeeder (local dev only); Ana is an admin.
 export const ANA = { email: "ana@yutopia.test", password: process.env.YUTOPIA_DEMO_PASSWORD ?? "yutopia-demo" };
 export const BIA = { email: "bia@yutopia.test", password: process.env.YUTOPIA_DEMO_PASSWORD ?? "yutopia-demo" };
+export const CAI = { email: "cai@yutopia.test", password: process.env.YUTOPIA_DEMO_PASSWORD ?? "yutopia-demo" };
 
 // One login per account per run: the API rate-limits /api/login (throttle:auth).
 const tokens = new Map<string, Promise<string>>();

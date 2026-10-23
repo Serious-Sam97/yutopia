@@ -776,6 +776,7 @@ export class WorldController {
       "call:join",
       (m: ServerMessages["call:join"]) => void this.ensurePhone().then((ph) => ph?.calls.onJoin(m)),
     );
+    room.onMessage("gps:friends", (m: ServerMessages["gps:friends"]) => this.phone?.gps.onFriends(m));
     room.onMessage("vortex:say", (m: ServerMessages["vortex:say"]) => {
       this.say("npc:vortex", m.text, 7000);
       // his personal lines also land in his thread on the phone
@@ -3580,6 +3581,17 @@ export class WorldController {
   private G: typeof import("@yutopia/shared/grounds") | null = null;
   private landFloor(x = this.me.x, y = this.me.y): Floor {
     return this.life?.floorAt(x, y, this.map) ?? "asphalt";
+  }
+
+  /** The GPS (docs/plan/37-the-gps.md): where I am on the Grounds' coords (my
+   *  floor's corner is somewhere in them), facing (0: north, clockwise), my floor. */
+  gpsWhere(): { x: number; z: number; h: number; level: number } {
+    return {
+      x: this.me.x + (this.map.ox ?? 0),
+      z: this.me.y + (this.map.oy ?? 0),
+      h: this.meAngle + Math.PI / 2,
+      level: this.level,
+    };
   }
 
   /** The phone's flashlight on or off (everyone sees its beam). */

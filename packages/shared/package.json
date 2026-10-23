@@ -21,6 +21,7 @@
     "./pool-throw": "./src/pool-throw.ts",
     "./phone": "./src/phone.ts",
     "./grounds": "./src/grounds.ts",
+    "./route": "./src/route.ts",
     "./car": "./src/car/index.ts",
     "./move": "./src/move/index.ts",
     "./dark": "./src/dark/index.ts",

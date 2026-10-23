@@ -136,6 +136,8 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::post('/vortex', [InternalController::class, 'vortex']);
     Route::get('/games/{gameId}', [InternalController::class, 'game'])->whereNumber('gameId');
     Route::post('/phone/calls', [PhoneController::class, 'callLog']);
+    // the GPS: who someone's contacts are (only they see where someone sharing is)
+    Route::get('/phone/contacts/{userId}', [PhoneController::class, 'contactIds'])->whereNumber('userId');
     // pets belong to a person
     Route::prefix('pets/{userId}')->whereNumber('userId')->group(function () {
         Route::get('/', [InternalController::class, 'pets']);

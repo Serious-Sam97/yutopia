@@ -232,3 +232,15 @@ it('texts Vortex: he answers in character, and keeps what he says in the world',
     expect($call->json('line'))->toBeString()->and($call->json('hangup'))->toBeBool();
     $this->actingAs($ana)->postJson('/api/phone/vortex/call', ['said' => ['a', 'b']])->assertOk()->assertJsonPath('hangup', true);
 });
+
+it('keeps the GPS sharing setting (off by default) and tells the world-server whose contacts are whose', function () {
+    [$ana, $bia, $caio, $stranger] = phonePeople(); // (Ana has Bia and Caio, Bia has Ana)
+    expect($this->actingAs($ana)->getJson('/api/phone')->json('settings.shareLocation'))->toBeFalse();
+    $this->actingAs($ana)->putJson('/api/phone', ['settings' => ['shareLocation' => true]])->assertJsonPath('settings.shareLocation', true);
+    $this->actingAs($ana)->putJson('/api/phone', ['settings' => ['shareLocation' => 'yes']])->assertJsonPath('settings.shareLocation', false);
+
+    internalCall($this, 'GET', "/api/internal/phone/contacts/{$ana->id}")->assertOk()->assertExactJson(['ids' => [$bia->id, $caio->id]]);
+    internalCall($this, 'GET', "/api/internal/phone/contacts/{$bia->id}")->assertOk()->assertExactJson(['ids' => [$ana->id]]);
+    internalCall($this, 'GET', "/api/internal/phone/contacts/{$stranger->id}")->assertOk()->assertExactJson(['ids' => []]);
+    $this->getJson("/api/internal/phone/contacts/{$ana->id}")->assertStatus(401);
+});

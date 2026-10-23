@@ -166,6 +166,7 @@ export function Thread({ id }: { id: number }) {
   const [text, setText] = useState("");
   const [reply, setReply] = useState<Msg | null>(null);
   const [reacting, setReacting] = useState<number | null>(null);
+  const [tray, setTray] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const label = useThreadLabel();
@@ -441,6 +442,7 @@ export function Thread({ id }: { id: number }) {
             </button>
           </div>
         )}
+        {tray && !vortex && <PhotoTray thread={id} onClose={() => setTray(false)} />}
         <form
           className={s.comp}
           onSubmit={(e) => {
@@ -453,10 +455,16 @@ export function Thread({ id }: { id: number }) {
               type="button"
               className={s.round}
               data-nav
-              aria-label={t("app_gallery")}
-              onClick={() => ph.go({ app: "gallery", view: "send", arg: `thread:${id}` })}
+              data-photo-add
+              aria-label={t("phAddPhoto")}
+              aria-expanded={tray}
+              onClick={() => setTray((o) => !o)}
             >
-              <Ic n="camera" size={16} />
+              <span
+                style={{ display: "grid", transition: "transform .15s", transform: tray ? "rotate(45deg)" : "none" }}
+              >
+                <Ic n="plus" size={16} />
+              </span>
             </button>
           )}
           <input
@@ -487,6 +495,69 @@ export function Thread({ id }: { id: number }) {
         </form>
       </div>
     </>
+  );
+}
+
+// ── the photo tray: the latest photos over the composer, one tap sends ─────
+// (docs/plan/37-the-gps.md § 2) — the chat stays where it is.
+function PhotoTray({ thread, onClose }: { thread: number; onClose: () => void }) {
+  const t = useTr();
+  const w = useWorld();
+  const ph = w?.phone;
+  const all = usePhone((p) => p.photos);
+  const loaded = usePhone((p) => p.photosLoaded);
+  const photos = useMemo(() => all.filter((x) => x.id > 0).slice(0, 30), [all]);
+  useEffect(() => {
+    void ph?.loadPhotos();
+  }, [ph]);
+  // Back closes the tray, not the chat
+  useEffect(
+    () =>
+      ph?.interceptBack(() => {
+        onClose();
+        return true;
+      }),
+    [ph, onClose],
+  );
+  if (!ph) return null;
+  return (
+    <div className={s.tray} data-photo-tray>
+      <button type="button" className={s.trayEnd} data-nav data-tray-camera onClick={() => ph.camera.open()}>
+        <Ic n="camera" size={18} />
+        {t("app_camera")}
+      </button>
+      {photos.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          className={s.trayPic}
+          data-nav
+          data-tray-photo={p.id}
+          onClick={() => {
+            void ph.send(thread, "", { photoId: p.id });
+            ph.markSent(p.id);
+            onClose();
+          }}
+        >
+          <Thumb p={p} />
+        </button>
+      ))}
+      {loaded && !photos.length && <span className={s.trayNone}>{t("phTrayNone")}</span>}
+      {photos.length > 0 && (
+        <button
+          type="button"
+          className={s.trayEnd}
+          data-nav
+          onClick={() => {
+            onClose();
+            ph.go({ app: "gallery", view: "send", arg: `thread:${thread}` });
+          }}
+        >
+          <Ic n="gallery" size={18} />
+          {t("phAllPhotos")}
+        </button>
+      )}
+    </div>
   );
 }
 
