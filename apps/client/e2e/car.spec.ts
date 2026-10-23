@@ -6,11 +6,14 @@ import { ANA, BIA, enter, test, token } from "./helpers";
 // lot car (3D, the car's camera) and drives it out of its bay with Bia in the
 // seat beside her (iso: she sees it go by, her people in it not drawn
 // standing); stopped, both get out and it stays where it was left, for both.
-// Its frames measured on the machine's GPU with YUTOPIA_GPU=1. It needs only
-// the building, so no fixture is put back; `mod:cars` puts the lot back first.
+// Always on the machine's GPU: in software GL the 3D world draws at ~2 fps, the
+// car's sim (a quarter second caught up a frame at most) crawls and a second
+// browser's 3D view takes a minute to build. Its frames held to 100 ms only with
+// YUTOPIA_GPU=1. It needs only the building, so no fixture is put back;
+// `mod:cars` puts the lot back first.
 const GPU = process.env.YUTOPIA_GPU === "1";
 const dir = process.env.YUTOPIA_SHOTS;
-if (GPU || dir) test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
+test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
 async function open(page: Page, who: typeof ANA, view: "3p" | "iso") {
   await page.addInitScript((v) => {
@@ -137,10 +140,34 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
     .toBe(true);
   const parked = await b.evaluate((id) => {
     const o = (window as any).__yutopia.room.state.objects.get(id);
-    return JSON.parse(o.props);
+    return { ...JSON.parse(o.props), rot: o.rot };
   }, car.id);
-  expect(typeof parked.a, "parked at its own heading").toBe("number");
+  // (at its own heading where it stopped — or, stopped roughly in a free bay, put square in it)
+  if (typeof parked.a !== "number") expect(parked.dx !== undefined, "squared into a bay").toBe(true);
   expect(parked.driven).toBeFalsy();
+  // solid again for both, to the skin of its body: not walked into, room right beside it
+  for (const pg of [a, b])
+    await expect
+      .poll(
+        () =>
+          pg.evaluate((id) => {
+            const c = (window as any).__yutopia;
+            const o = c.room.state.objects.get(id);
+            const p = JSON.parse(o.props);
+            const w = o.rot % 2 ? 2 : 5;
+            const h = o.rot % 2 ? 5 : 2;
+            const x = o.x + w / 2 + (p.dx ?? 0);
+            const y = o.y + h / 2 + (p.dz ?? 0);
+            // (the sedan: 4.9 long, its middle 0.13 behind its CoG, 1.86 wide; squared in a bay, its turn's heading)
+            const A = typeof p.a === "number" ? p.a : Math.PI + (o.rot % 4) * (Math.PI / 2);
+            const mx = x - Math.cos(A) * 0.13;
+            const my = y - Math.sin(A) * 0.13;
+            const side = (d: number) => c.grid.fits(mx - Math.sin(A) * d, my + Math.cos(A) * d);
+            return [c.grid.fits(mx, my), side(0.93 + 0.12), side(-0.93 - 0.12), side(0.93 + 0.3)];
+          }, car.id),
+        { timeout: 10_000 },
+      )
+      .toEqual([false, false, false, true]);
   // the lot back as it was
   await a.evaluate(() => (window as any).__yutopia.room.send("mod:cars", {}));
 });

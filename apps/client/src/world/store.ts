@@ -305,6 +305,7 @@ export interface HudState {
   vortex: { x: number; y: number; say: string; sayAt: number; mood: string } | null;
   pets: PetInfo[]; // every pet in the room (mine first)
   myPetsAt: { x: number; y: number }[]; // where my pets are (the minimap: one off exploring)
+  myCarAt: { x: number; y: number } | null; // the car I last drove (the minimap; world/car/cars.ts)
   petFocus: string | null; // the pet the panel shows (null: my first)
   battle: BattleView | null; // the battle one of my pets is in
   challenge: { battle: string; fromName: string; pet: string; mine: string } | null; // a battle proposed to me
@@ -391,6 +392,7 @@ const initial: HudState = {
   vortex: null,
   pets: [],
   myPetsAt: [],
+  myCarAt: null,
   petFocus: null,
   battle: null,
   challenge: null,

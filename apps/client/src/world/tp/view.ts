@@ -112,7 +112,7 @@ import { Shroud3 } from "./shroud3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { heldPoolBall, type TableScene3, TablesIn3D } from "./tables3d";
-import { busModel } from "./vehicles3d";
+import { busModel, ploughModel } from "./vehicles3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
 
@@ -2736,7 +2736,7 @@ void main() {
       seen.add(v.id);
       let m = this.veh3.get(v.id);
       if (!m) {
-        m = v.kind === "shuttle" ? this.busModel() : this.carModel(v.id);
+        m = v.kind === "shuttle" ? this.busModel() : v.kind === "plough" ? this.ploughModel() : this.carModel(v.id);
         this.veh3.set(v.id, m);
         this.scene.add(m);
       }
@@ -2756,6 +2756,9 @@ void main() {
       const n = this.nightLevel;
       for (const l of m.userData.glow as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.25 + n * 1.2);
       for (const l of m.userData.tail as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.35 + n * 1.1);
+      // (the plough's beacon: turning — a flash twice a second)
+      const b = m.userData.beacon as MeshBasicMaterial | undefined;
+      if (b) b.opacity = 0.35 + 0.65 * Math.max(0, Math.sin(performance.now() / 160)) ** 4;
     }
     for (const [id, m] of this.veh3)
       if (!seen.has(id)) {
@@ -2803,6 +2806,15 @@ void main() {
     root.userData.tail = [tail];
     for (const c of root.children) c.castShadow = true;
     return root;
+  }
+  private ploughModel(): Group {
+    const b = ploughModel(this.vehicleMat());
+    b.root.userData.big = true;
+    b.root.userData.glow = [b.lamps];
+    b.root.userData.tail = [b.tail];
+    b.root.userData.beacon = b.beacon;
+    b.root.userData.wheels = b.wheels;
+    return b.root;
   }
   private busModel(): Group {
     const b = busModel(this.vehicleMat());

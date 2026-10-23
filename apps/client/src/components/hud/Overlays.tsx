@@ -403,6 +403,7 @@ export function Minimap() {
   const me = useHud((s) => s.me);
   const vortex = useHud((s) => s.vortex);
   const petsAt = useHud((s) => s.myPetsAt);
+  const carAt = useHud((s) => s.myCarAt);
   const phase = useHud((s) => s.phase);
   const mapVersion = useHud((s) => s.mapVersion);
   const building = useHud((s) => s.build.on);
@@ -478,6 +479,16 @@ export function Minimap() {
       x.fill();
       x.stroke();
     }
+    // the car I last drove: an amber car (off the map: at its edge, the way to it)
+    if (carAt) {
+      const cx = Math.max(6, Math.min(c.width - 6, carAt.x * S));
+      const cy = Math.max(5, Math.min(c.height - 5, carAt.y * S));
+      x.fillStyle = "#ffb24a";
+      x.strokeStyle = "#1a120c";
+      x.lineWidth = 1.5;
+      x.fillRect(cx - 6, cy - 4, 12, 8);
+      x.strokeRect(cx - 6, cy - 4, 12, 8);
+    }
     if (vortex) {
       x.fillStyle = "#ff2d95";
       x.beginPath();
@@ -497,7 +508,7 @@ export function Minimap() {
       x.fill();
       x.stroke();
     }
-  }, [w, people, me, vortex, petsAt, phase, mapVersion]);
+  }, [w, people, me, vortex, petsAt, carAt, phase, mapVersion]);
 
   const zoom = (f: number) => w?.engine?.setZoom((w.engine?.getZoom() ?? 1) * f);
   return (

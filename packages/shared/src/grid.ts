@@ -1,3 +1,4 @@
+import { parkedBody } from "./car/park.ts";
 import { entry, footprint, standHeight, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
 import type { Point } from "./iso.ts";
@@ -42,6 +43,20 @@ export function setOutdoors(f: ((map: MapDef) => Outdoors | null) | null): void 
   outdoorsFor = f;
 }
 
+/** Something solid not on the tiles: a box at any angle, anywhere (in the floor or out on the
+ *  land past it) — a parked car (docs/plan/28-the-car.md). (x, y) its middle, hx its half
+ *  length along its heading a, hy across; it stands on `base` and is `top` high (tiles). */
+export interface SolidBox {
+  x: number;
+  y: number;
+  hx: number;
+  hy: number;
+  a: number;
+  base: number;
+  top: number;
+}
+type Box = SolidBox & { ca: number; sa: number; r: number };
+
 export class Grid {
   readonly walk: Uint8Array;
   readonly top: Float32Array; // what a body stands on in each tile, tiles up (Infinity: nothing)
@@ -55,6 +70,7 @@ export class Grid {
   // the floor's empty tiles that are land (outdoors), and the land beyond it
   readonly land: Uint8Array;
   outside: Outdoors | null = null;
+  readonly boxes: Box[] = [];
 
   constructor(
     readonly width: number,
@@ -146,21 +162,14 @@ export class Grid {
         continue;
       }
       if (isOpening(o.kind)) continue;
-      // a car (docs/plan/28-the-car.md): out being driven, nowhere here; parked at any angle
-      // (props.a, its heading), the tiles under its body
-      if (o.kind === "car" && (o.props?.driven || typeof o.props?.a === "number")) {
+      // a car (docs/plan/28-the-car.md): out being driven, nowhere here; parked, its body
+      // exactly (not the tiles under it: at any angle, its model's size, past the floor too),
+      // its roof a top to climb onto
+      if (o.kind === "car") {
         if (o.props?.driven) continue;
-        const a = Number(o.props?.a);
-        const cx = o.x + w / 2 + (Number(o.props?.dx) || 0);
-        const cy = o.y + h / 2 + (Number(o.props?.dz) || 0);
-        const ca = Math.cos(a);
-        const sa = Math.sin(a);
-        for (let ty = Math.floor(cy - 3); ty <= Math.ceil(cy + 3); ty++)
-          for (let tx = Math.floor(cx - 3); tx <= Math.ceil(cx + 3); tx++) {
-            const dx = tx + 0.5 - cx;
-            const dy = ty + 0.5 - cy;
-            if (Math.abs(dx * ca + dy * sa) < 2.55 && Math.abs(-dx * sa + dy * ca) < 1.05) g.block(tx, ty);
-          }
+        const b = parkedBody(o);
+        const base = b.h ?? (out && g.onLand(b.x, b.y) ? out.height(b.x, b.y) : 0);
+        g.addBox({ ...b, base, top: (standHeight("car") ?? 0) / ZPX_TILE });
         continue;
       }
       if (!e.solid || e.wall) continue;
@@ -171,6 +180,44 @@ export class Grid {
     if (opts.dressing !== false)
       for (const d of dressItems(map, list)) if (d.solid && d.tile) g.block(d.tile[0], d.tile[1]);
     return g;
+  }
+
+  addBox(b: SolidBox): void {
+    this.boxes.push({ ...b, ca: Math.cos(b.a), sa: Math.sin(b.a), r: Math.hypot(b.hx, b.hy) });
+  }
+
+  /** How far (x, y) is outside a box (0: in it). */
+  private boxGap(b: Box, x: number, y: number): number {
+    const dx = x - b.x;
+    const dy = y - b.y;
+    const u = Math.abs(dx * b.ca + dy * b.sa) - b.hx;
+    const v = Math.abs(-dx * b.sa + dy * b.ca) - b.hy;
+    return Math.hypot(Math.max(u, 0), Math.max(v, 0));
+  }
+
+  /** The top of the highest box under (px, py) no higher than `up` (−Infinity: none). */
+  private boxTop(px: number, py: number, up: number): number {
+    let best = Number.NEGATIVE_INFINITY;
+    for (const b of this.boxes) {
+      const t = b.base + b.top;
+      if (t > best && t <= up + 1e-4 && this.boxGap(b, px, py) === 0) best = t;
+    }
+    return best;
+  }
+
+  /** Is tile (x, y) under a box (its middle in it, or nearly: as solid as a thing on it)? */
+  boxOn(x: number, y: number): boolean {
+    return this.boxes.length > 0 && this.inBox(x + 0.5, y + 0.5, 0.3);
+  }
+
+  /** Is a body r round (x, y), its feet z up, into a box it isn't up on top of? */
+  private inBox(x: number, y: number, r: number, z = Number.NEGATIVE_INFINITY): boolean {
+    for (const b of this.boxes) {
+      if (Math.abs(x - b.x) > b.r + r || Math.abs(y - b.y) > b.r + r) continue;
+      if (b.base + b.top <= z + STEP + 1e-4) continue;
+      if (this.boxGap(b, x, y) < r) return true;
+    }
+    return false;
   }
 
   idx(x: number, y: number): number {
@@ -192,6 +239,11 @@ export class Grid {
 
   /** What's under a point to stand on, no higher than `up` (tiles; −Infinity: nothing). */
   standOn(px: number, py: number, up: number): number {
+    const t = this.tileOn(px, py, up);
+    return this.boxes.length ? Math.max(t, this.boxTop(px, py, up)) : t;
+  }
+
+  private tileOn(px: number, py: number, up: number): number {
     const x = Math.floor(px);
     const y = Math.floor(py);
     if (!this.inBounds(x, y)) return this.landTop(x, y, px, py, up, !!this.outside?.walkable(x, y));
@@ -296,6 +348,7 @@ export class Grid {
   // cutting a corner past a wall or a blocked tile.
   step(x: number, y: number, nx: number, ny: number): boolean {
     if (!this.ok(nx, ny)) return false;
+    if (this.boxes.length && this.inBox(nx + 0.5, ny + 0.5, BODY_R)) return false;
     const dx = nx - x;
     const dy = ny - y;
     const across = (ax: number, ay: number, bx: number, by: number) =>
@@ -331,6 +384,7 @@ export class Grid {
       !this.ok(Math.floor(x + r), Math.floor(y + r))
     )
       return false;
+    if (this.boxes.length && this.inBox(x, y, r)) return false;
     return this.clearOfWalls(x, y, r);
   }
 
@@ -347,6 +401,7 @@ export class Grid {
       this.standOn(x + r, y + r, up) === none
     )
       return false;
+    if (this.boxes.length && this.inBox(x, y, r, z)) return false;
     return this.clearOfWalls(x, y, r);
   }
 
@@ -363,11 +418,10 @@ export class Grid {
         [x + r, y - r],
         [x - r, y + r],
         [x + r, y + r],
-      ])
-        if (!this.onLand(cx, cy)) {
-          const t = this.standOn(cx, cy, up);
-          if (t > g) g = t;
-        }
+      ]) {
+        const t = this.onLand(cx, cy) ? this.boxTop(cx, cy, up) : this.standOn(cx, cy, up);
+        if (t > g) g = t;
+      }
       return g;
     }
     // (stairs: the treads can be below the floor's level, down to the floor below)
@@ -428,12 +482,22 @@ export const RUN_SPEED = 7;
 // Slide along walls: try the full move, then each axis on its own.
 // Slide along walls (and the sides of things higher than the feet, z up): try
 // the full move, then each axis on its own.
-export function moveStep(grid: Grid, pos: Point, dir: Point, speed: number, dt: number, z = 0): Point {
+// (`blocked`: something else in the way, not on the grid — a car on the move)
+export function moveStep(
+  grid: Grid,
+  pos: Point,
+  dir: Point,
+  speed: number,
+  dt: number,
+  z = 0,
+  blocked?: (x: number, y: number) => boolean,
+): Point {
   const nx = pos.x + dir.x * speed * dt;
   const ny = pos.y + dir.y * speed * dt;
-  if (grid.fitsAt(nx, ny, z)) return { x: nx, y: ny };
-  if (grid.fitsAt(nx, pos.y, z)) return { x: nx, y: pos.y };
-  if (grid.fitsAt(pos.x, ny, z)) return { x: pos.x, y: ny };
+  const fits = (x: number, y: number) => grid.fitsAt(x, y, z) && !blocked?.(x, y);
+  if (fits(nx, ny)) return { x: nx, y: ny };
+  if (fits(nx, pos.y)) return { x: nx, y: pos.y };
+  if (fits(pos.x, ny)) return { x: pos.x, y: ny };
   return pos;
 }
 

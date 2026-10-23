@@ -162,6 +162,9 @@ export interface Building {
   vacant?: boolean;
   /** its ground floor is the stored ground floor's (shared building.ts BLOCKS) */
   stored?: boolean;
+  /** the part of its plot that's built (the rest open ground: the gas station's forecourt under
+   *  its canopy, driven in and walked); none: all of it */
+  built?: { x0: number; z0: number; x1: number; z1: number };
 }
 export interface Lamp {
   x: number;
@@ -198,7 +201,7 @@ export const SCARECROWS: { x: number; z: number; ry: number }[] = [
   { x: 397.5, z: -239.5, ry: -0.8 },
 ];
 /** The cars parked along Main Street (z −405): kerbside both ways, none across
- *  the square's side or the crossing at x 420. `colour` indexes building.ts
+ *  the square's side, the crossing at x 420 or the gas station's way in. `colour` indexes building.ts
  *  CAR_COLOURS; `dir` 1 noses east, −1 west. Both views draw them, they block. */
 export const TOWN_CARS: {
   x: number;
@@ -219,8 +222,11 @@ export const TOWN_CARS: {
       const wagon = r() < 0.3;
       const colour = Math.floor(r() * 9); // (all nine CAR_COLOURS: the orange never came up)
       const snowy = r() < 0.7;
+      const tilt = (r() - 0.5) * 0.03;
+      // (none across the gas station's way in: x 306–328, its side of the street)
+      if (s > 0 && x - 2.5 < 331) continue;
       // (in the parking lane: the kerb 7 out, the car's middle 1.3 in from it)
-      out.push({ x, z: -405 + s * 5.7, dir: s, wagon, colour, snowy, tilt: (r() - 0.5) * 0.03 });
+      out.push({ x, z: -405 + s * 5.7, dir: s, wagon, colour, snowy, tilt });
     }
   }
   return out;
@@ -443,7 +449,11 @@ export const BUILDINGS: Building[] = [
   b("shed", "shed", "Grounds shed", -162, 110, -148, 120, 1, "n"),
   b("shelter", "shelter", "Bus shelter", -16, -417, -10, -413, 1, "s"),
   // the town: Main Street, south side
-  b("gas", "gas", "Gas station", 306, -394, 328, -378, 1, "n", { sign: "GAS" }),
+  // (built: the kiosk at the back — the forecourt before it is open, its pumps under the canopy)
+  b("gas", "gas", "Gas station", 306, -394, 328, -378, 1, "n", {
+    sign: "GAS",
+    built: { x0: 308, z0: -384, x1: 318, z1: -378 },
+  }),
   b("diner", "diner", "Diner", 336, -396, 354, -382, 1, "n", { enter: true, sign: "DINER" }),
   b("market", "shop", "Market", 358, -396, 374, -380, 2, "n", { enter: true, sign: "MARKET" }),
   b("books", "shop", "Bookshop", 378, -396, 392, -382, 2, "n", { sign: "BOOKS" }),
@@ -462,6 +472,40 @@ export const BUILDINGS: Building[] = [
   b("silo", "silo", "Silo", 468, -318, 476, -310, 4, "w"),
   b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n", { enter: true }),
 ];
+
+/** The gas station's pump islands (as tp/grounds3d.ts builds them: two, a kerb each, along z under
+ *  the canopy): their middles. A car stopped beside one, either side, is at the pump. */
+export const PUMPS: { x: number; z: number }[] = (() => {
+  const g = BUILDINGS.find((b) => b.key === "gas") as Building;
+  return [g.x0 + 7, g.x1 - 7].map((x) => ({ x, z: g.z0 + 5 }));
+})();
+/** Is a car whose middle is at (x, z) at a pump: in any lane under the canopy — beside an island,
+ *  either side, or in the middle one between them (the hose reaches) — not past either end? */
+export const atPump = (x: number, z: number) =>
+  PUMPS.some((p) => Math.abs(x - p.x) > 0.9 && Math.abs(x - p.x) < 4.4 && Math.abs(z - p.z) < 3.8);
+/** The forecourt's solid bits (as tp/grounds3d.ts builds them): each island's kerb with its pumps,
+ *  and the canopy's four posts. */
+export const FORECOURT: {
+  islands: { x: number; z: number; hx: number; hz: number }[];
+  posts: { x: number; z: number }[];
+} = (() => {
+  const g = BUILDINGS.find((b) => b.key === "gas") as Building;
+  return {
+    islands: PUMPS.map((p) => ({ x: p.x, z: p.z, hx: 0.62, hz: 1.82 })),
+    posts: [g.x0 + 3, g.x1 - 3].flatMap((x) => [g.z0 + 2, g.z0 + 8].map((z) => ({ x, z }))),
+  };
+})();
+/** Is (x, z) in what's built of a building (its whole plot, but for one with open ground in it)? */
+export const inBuilt = (bd: Building, x: number, z: number) => {
+  const r = bd.built ?? bd;
+  return x >= r.x0 && x < r.x1 && z >= r.z0 && z < r.z1;
+};
+/** On the forecourt's islands or posts (a body a little round them)? */
+function onForecourt(x: number, z: number, pad = 0): boolean {
+  for (const i of FORECOURT.islands) if (Math.abs(x - i.x) < i.hx + pad && Math.abs(z - i.z) < i.hz + pad) return true;
+  for (const p of FORECOURT.posts) if (Math.hypot(x - p.x, z - p.z) < 0.3 + pad) return true;
+  return false;
+}
 // two rows of the same townhouse up Church Street
 for (let k = 0; k < 7; k++) {
   const z1 = -440 - k * 10;
@@ -697,7 +741,8 @@ export function groundAt(x: number, z: number): number {
 
 /** What the ground is at (x, z). `rough`: no rock (its slope needs the chunk underfoot: far off, don't). */
 export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
-  for (const bd of nearBuildings(x, z)) if (x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1) return "floor";
+  for (const bd of nearBuildings(x, z))
+    if (x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1) return inBuilt(bd, x, z) ? "floor" : "walk";
   const near = nearLines(x, z);
   let on: Surface | null = null;
   for (const [f, n] of near) {
@@ -836,6 +881,8 @@ export const LAMPS: Lamp[] = [];
   along(byKey("driveway"), 30, false, "cobra", 70);
   along(byKey("main"), 22, true, "town", 6);
   along(byKey("church-st"), 22, true, "town", 12);
+  // (none in the gas station's way in, x 306–328: to its corner)
+  for (const l of LAMPS) if (l.kind === "town" && l.x > 305 && l.x < 329 && l.z > -399 && l.z < -394) l.x = 329.5;
   LAMPS.push({ x: BENCH.x + 2.2, z: BENCH.z - 1.4, ry: Math.PI, kind: "lone" });
   LAMPS.push({ x: -36, z: -370, ry: Math.PI, kind: "cobra" }); // the gate's
   LAMPS.push({ x: -255, z: -97.4, ry: 0, kind: "porch" }); // the boathouse's
@@ -1022,8 +1069,10 @@ function walkable(x: number, z: number): boolean {
   if (beyond(x, z) > 24) return false;
   for (const bd of nearBuildings(x, z))
     if (bd.kind !== "hq" && x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1)
-      // (inside one you walk into: its floor, round its furniture)
-      return !!insideOf(bd) && !FIT_TILES.has(`${Math.floor(x)},${Math.floor(z)}`);
+      // (inside one you walk into: its floor, round its furniture; its open ground: round what's on it)
+      return inBuilt(bd, x, z)
+        ? !!insideOf(bd) && !FIT_TILES.has(`${Math.floor(x)},${Math.floor(z)}`)
+        : !onForecourt(x, z, 0.2);
   if (onFence(x, z) || onTownCar(x, z) || onTractor(x, z) || onBridgeRail(x, z)) return false;
   for (const c of SCARECROWS) if (Math.abs(x - c.x) < 0.5 && Math.abs(z - c.z) < 0.5) return false;
   // the water tower: its stem, and the fence round it (a gap to the south)

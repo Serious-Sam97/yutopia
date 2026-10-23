@@ -143,7 +143,7 @@ export class CarSound {
     ibp: BiquadFilterNode;
   };
   private tyre: {
-    sq: OscillatorNode[];
+    sq: BiquadFilterNode[];
     sqg: GainNode;
     roll: GainNode;
     rlp: BiquadFilterNode;
@@ -247,23 +247,23 @@ export class CarSound {
     isrc.connect(ibp).connect(intake).connect(this.outside);
     this.eng = { o, g: eg, lp, am, amo, ng, nbp, intake, ibp };
     // ── the tyres
+    // a squeal: rubber stick-slipping on the road — noise rung through two narrow resonances that
+    // jump about at random, its level chattering (update). Not a held note: two tones with a
+    // vibrato, sliding in pitch as the slide grew, it wailed like a ghost.
     const sqg = c.createGain();
     sqg.gain.value = 0;
-    const sq: OscillatorNode[] = [];
-    for (const f of [820, 1185]) {
-      const os = c.createOscillator();
-      os.type = "triangle";
-      os.frequency.value = f;
-      const vib = c.createOscillator();
-      vib.frequency.value = 7 + Math.random() * 3;
-      const vg = c.createGain();
-      vg.gain.value = f * 0.04;
-      vib.connect(vg).connect(os.frequency);
-      vib.start();
-      os.connect(sqg);
-      os.start();
-      this.keep(vib);
-      sq.push(this.keep(os));
+    const sq: BiquadFilterNode[] = [];
+    const qsrc = this.keep(loopNoise(c));
+    for (const [f, q] of [
+      [1300, 9],
+      [2250, 12],
+    ]) {
+      const bp = c.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = f;
+      bp.Q.value = q;
+      qsrc.connect(bp).connect(sqg);
+      sq.push(bp);
     }
     sqg.connect(this.outside);
     const rsrc = this.keep(loopNoise(c));
@@ -440,8 +440,11 @@ export class CarSound {
       if (w.ground === "slush") splash += 0.25 * clamp(r.speed / 10);
       rough += 0.25 * g.rough;
     }
-    this.tyre.sqg.gain.setTargetAtTime(0.05 * squeal, t, 0.05);
-    for (const o of this.tyre.sq) o.detune.setTargetAtTime(-200 * (1 - squeal), t, 0.1);
+    // (its chatter: louder and softer at random, the resonances jumping a little, every frame)
+    this.tyre.sqg.gain.setTargetAtTime(0.5 * squeal * (0.55 + 0.45 * Math.random()), t, 0.015);
+    this.tyre.sq.forEach((bp, i) => {
+      bp.frequency.setTargetAtTime((i ? 2250 : 1300) * (1 + 0.12 * squeal) * (0.93 + 0.14 * Math.random()), t, 0.02);
+    });
     this.tyre.roll.gain.setTargetAtTime(clamp(r.speed / 25) * (0.05 + rough * 8), t, tc);
     this.tyre.rlp.frequency.setTargetAtTime(120 + r.speed * 18, t, tc);
     this.tyre.crunch.gain.setTargetAtTime(0.045 * crunch, t, tc);

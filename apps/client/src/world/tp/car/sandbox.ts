@@ -282,6 +282,9 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     renderer,
     helps,
     place,
+    get model() {
+      return model;
+    },
   };
   return () => {
     cancelAnimationFrame(raf);

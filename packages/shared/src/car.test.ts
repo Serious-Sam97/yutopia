@@ -1,15 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { campusLot } from "./building.ts";
 import {
+  bayFor,
+  boxHits,
   type CarState,
+  type CarWire,
   type CarWorld,
   type Controls,
   createCar,
   flatWorld,
+  freeSpot,
   type Ground,
   groundsWorld,
   HELPS,
   type Helps,
+  headingQuat,
+  implausible,
   NO_HELPS,
   OFFROAD,
   readout,
@@ -20,7 +27,7 @@ import {
   settle,
   stepCar,
 } from "./car/index.ts";
-import { treesIn } from "./grounds.ts";
+import { atPump, heightAt, PUMPS, treesIn, walkableTile } from "./grounds.ts";
 
 // The car's physics against the numbers of docs/plan/28-the-car.md (phase 1).
 
@@ -331,4 +338,206 @@ test("over the river's bridge at 50 km/h: no lip to hit, it keeps its speed and 
   assert.ok(s.p.x >= x1, `across: ${s.p.x.toFixed(1)} of ${x1.toFixed(1)}`);
   assert.ok(slowest > 40, `it keeps its speed: down to ${slowest.toFixed(0)} km/h`);
   assert.ok(tilt < 0.25, `its wheels down: tipped ${tilt.toFixed(2)} rad`);
+});
+
+test("dry, the engine coughs out and won't start again; a person hit is told who and how fast", () => {
+  const s = rolling("asphalt", 40);
+  s.fuel = 0.02;
+  run(s, flatWorld("asphalt"), 30, () => ({ ...NONE, up: 1 }));
+  assert.equal(s.fuel, 0);
+  assert.equal(s.rpm, 0, "out");
+  setEngine(s, true);
+  assert.equal(s.rpm, 0, "no starting it dry");
+  s.fuel = 10;
+  setEngine(s, true);
+  assert.ok(s.rpm > 500, "filled: it starts");
+  // someone in the road
+  const p = rolling("asphalt", 25);
+  const w: CarWorld = {
+    ...flatWorld("asphalt"),
+    solids: (_x, _z, _r, out) =>
+      out.push({ kind: "circle", x: 12, z: 0, r: 0.38, soft: true, what: "person", id: "sid-7" }),
+  };
+  let hit: CarState["hit"] = null;
+  run(p, w, 3, (c) => {
+    if (c.hit?.what === "person" && !hit) hit = { ...c.hit };
+    return NONE;
+  });
+  const h = hit as CarState["hit"];
+  assert.equal(h?.id, "sid-7");
+  assert.ok((h?.v ?? 0) > 5, `met at ${h?.v}`);
+});
+
+test("left in a bay of the lot, nosed or backed in and roughly square: that bay; else none", () => {
+  const { bays } = campusLot(36);
+  const b = bays[5];
+  const nose = b.dir > 0 ? Math.PI : 0;
+  assert.deepEqual(bayFor(bays, b.x + 0.8, b.z - 0.4, nose + 0.2), { i: 5, a: nose });
+  assert.deepEqual(bayFor(bays, b.x - 0.5, b.z + 0.3, nose + Math.PI - 0.15), { i: 5, a: nose + Math.PI });
+  assert.equal(bayFor(bays, b.x, b.z, nose + 0.8), null, "across it");
+  assert.equal(bayFor(bays, b.x, b.z + 1.4, nose), null, "between two");
+  assert.equal(bayFor(bays, b.x + 4, b.z, nose), null, "out in the aisle");
+});
+
+test("the gas station's pumps: beside an island is at one, on it or away isn't", () => {
+  assert.equal(PUMPS.length, 2);
+  for (const p of PUMPS) {
+    assert.ok(atPump(p.x + 1.8, p.z + 1) && atPump(p.x - 1.8, p.z - 1));
+    assert.ok(atPump(p.x + 4, p.z + 2), "the middle lane, between the islands");
+    assert.ok(!atPump(p.x, p.z), "on the island");
+    assert.ok(!atPump(p.x + 1.8, p.z + 6), "past it");
+  }
+});
+
+test("into a wall at 90 km/h: it crumples and stops there — it isn't thrown back across the road", () => {
+  const s = rolling("snow", 90);
+  const w: CarWorld = {
+    ...flatWorld("snow"),
+    solids: (_x, _z, _r, out) => out.push({ kind: "box", x: 25, z: 0, hx: 1, hz: 60, what: "wall" }),
+  };
+  let back = 0;
+  let after = -1;
+  run(s, w, 6, (c, t) => {
+    if (c.hit && after < 0) after = t;
+    if (after >= 0) back = Math.max(back, -readout(c).kmh / 3.6);
+    return { ...NONE, up: t < 3 ? 1 : 0 };
+  });
+  assert.ok(after > 0, "it hit");
+  assert.ok(back < 2, `thrown back at ${back.toFixed(1)} m/s`);
+  assert.ok(s.p.x > 18, `it stayed by the wall: x ${s.p.x.toFixed(1)}`);
+});
+
+test("into trees at speed: a knock turns it, never sets it spinning like a top; a trunk is never let inside it", () => {
+  // a stand of trunks, a few metres apart
+  const trunks: Solid[] = [];
+  for (let i = 0; i < 60; i++)
+    trunks.push({
+      kind: "circle",
+      x: 15 + (i % 10) * 2.6 + ((i * 7) % 3) * 0.4,
+      z: -6 + Math.floor(i / 10) * 2.4 + ((i * 5) % 3) * 0.5,
+      r: 0.3,
+      what: "tree",
+    });
+  const w: CarWorld = { ...flatWorld("snow"), solids: (_x, _z, _r, out) => out.push(...trunks) };
+  for (const [kmh, a, steer] of [
+    [90, 0.1, 0],
+    [110, -0.2, 0.8],
+    [70, 0.35, -1],
+  ]) {
+    const s = rolling("snow", kmh);
+    const q = headingQuat(a);
+    s.q = { x: q.x, y: q.y, z: q.z, w: q.w };
+    s.v.x = Math.cos(a) * (kmh / 3.6);
+    s.v.z = Math.sin(a) * (kmh / 3.6);
+    let spin = 0;
+    let inside = 0;
+    const b = SEDAN.body;
+    run(s, w, 8, (c) => {
+      spin = Math.max(spin, Math.abs(c.w.y));
+      const h = Math.atan2(2 * (c.q.x * c.q.z - c.q.w * c.q.y), 1 - 2 * (c.q.y * c.q.y + c.q.z * c.q.z));
+      const off = (b.ahead - b.behind) / 2;
+      for (const o of trunks)
+        if (
+          boxHits(
+            c.p.x + Math.cos(h) * off,
+            c.p.z + Math.sin(h) * off,
+            (b.ahead + b.behind) / 2 - 0.3,
+            b.width / 2 - 0.3,
+            h,
+            { ...o, r: 0 },
+          )
+        )
+          inside++;
+      return { ...NONE, up: 1, steer, digital: false };
+    });
+    assert.ok(spin <= 3.0001, `${kmh} km/h: spinning at ${spin.toFixed(2)} rad/s`);
+    assert.equal(inside, 0, `${kmh} km/h: a trunk inside it`);
+  }
+});
+
+test("dug into deep snow, floored without traction control: backed out with the helps on", () => {
+  const w = flatWorld("deep");
+  const s = warm(createCar(SEDAN, 0, 0, 0, 0));
+  run(s, w, 2, () => NONE);
+  run(s, w, 12, () => ({ ...NONE, up: 1 }), { ...HELPS, tcs: false });
+  assert.ok(readout(s).kmh < 3, "dug in");
+  const x0 = s.p.x;
+  run(s, w, 10, () => ({ ...NONE, down: 1 }));
+  assert.ok(x0 - s.p.x > 3, `backed out ${(x0 - s.p.x).toFixed(1)} m`);
+});
+
+test("pulled out: the nearest spot it fits clear of everything, on firm ground before deep snow", () => {
+  // deep snow; a path along z = 20; trunks all round the car
+  const trunks: Solid[] = [];
+  for (let x = -8; x <= 8; x += 2.2)
+    for (let z = -6; z <= 6; z += 2.2)
+      if (Math.hypot(x, z) > 1.5) trunks.push({ kind: "circle", x, z, r: 0.3, what: "tree" });
+  const w: CarWorld = {
+    ...flatWorld("deep"),
+    ground: (_x, z) => (Math.abs(z - 20) < 3 ? "path" : "deep"),
+    solids: (x, z, r, out) => {
+      for (const t of trunks) if (Math.abs(t.x - x) < r + 1 && Math.abs(t.z - z) < r + 1) out.push(t);
+    },
+  };
+  const spot = freeSpot(w, SEDAN, 0, 0, 0);
+  assert.ok(spot, "somewhere");
+  const p = spot as { x: number; z: number; a: number };
+  assert.ok(Math.abs(p.z - 20) < 3, `on the path: ${p.x.toFixed(1)}, ${p.z.toFixed(1)}`);
+  const b = SEDAN.body;
+  const off = (b.ahead - b.behind) / 2;
+  assert.ok(!trunks.some((t) => boxHits(p.x + Math.cos(p.a) * off, p.z + Math.sin(p.a) * off, 2.45, 0.93, p.a, t)));
+});
+
+test("the server believes a crash (stopped dead in one packet), not a car flung faster", () => {
+  const q = headingQuat(0);
+  const at = (vx: number, x = 0): CarWire => ({
+    seq: 1,
+    x,
+    y: 0.5,
+    z: 0,
+    qx: q.x,
+    qy: q.y,
+    qz: q.z,
+    qw: q.w,
+    vx,
+    vy: 0,
+    vz: 0,
+    wy: 0,
+    steer: 0,
+    rpm: 2000,
+    gear: 3,
+    fl: 0,
+    slip: 0,
+    fuel: 30,
+  });
+  const ground = () => 0;
+  assert.equal(implausible(at(25), at(-1.2, 1.2), 0.05, ground), null, "a crash");
+  assert.equal(implausible(at(25), at(0, 1.2), 0.05, ground), null, "stopped dead");
+  assert.equal(implausible(at(5), at(28, 0.3), 0.05, ground), "accelerated");
+});
+
+test("the gas station: driven in off Main Street to beside either pump, either side; walked round its islands", () => {
+  const w = groundsWorld();
+  for (const x of [311, 315, 319, 323]) {
+    const s = createCar(SEDAN, x, heightAt(x, -406), -406, Math.PI / 2);
+    settle(s, w);
+    warm(s);
+    let hit = "";
+    run(s, w, 12, (c) => {
+      if (c.hit && !hit) hit = `${c.hit.what} at ${c.hit.x.toFixed(1)}, ${c.hit.z.toFixed(1)}`;
+      const left = -389 - c.p.z;
+      return {
+        ...NONE,
+        up: left > 3 ? 0.35 : 0,
+        down: left <= 3 && readout(c).kmh > 0.5 ? 1 : 0,
+        hand: left <= 3 ? 1 : 0,
+      };
+    });
+    assert.equal(hit, "", `from x ${x}: hit`);
+    assert.ok(atPump(s.p.x, s.p.z), `from x ${x}: at a pump (${s.p.x.toFixed(1)}, ${s.p.z.toFixed(1)})`);
+  }
+  assert.ok(
+    walkableTile(314, -389) && !walkableTile(313, -389) && !walkableTile(312, -380),
+    "round the islands, not into the kiosk",
+  );
 });

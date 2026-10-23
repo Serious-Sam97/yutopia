@@ -128,6 +128,8 @@ export interface Hit {
   z: number;
   what: Solid["what"] | "ground";
   at: number; // sim time
+  id?: string; // what it hit (a person: their session)
+  v?: number; // how fast the two met (m/s)
 }
 
 export interface CarState {
@@ -337,7 +339,7 @@ function mul(a: Quat, b: Quat): Quat {
 
 /** The engine on (idling) or off. */
 export function setEngine(s: CarState, on: boolean) {
-  s.rpm = on ? s.spec.engine.idle + 400 * (1 - s.temp / 0.55) : 0;
+  s.rpm = on && s.fuel > 0 ? s.spec.engine.idle + 400 * (1 - s.temp / 0.55) : 0;
 }
 
 // scratch
@@ -729,9 +731,11 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
     // rolling resistance and the snow it ploughs (and the wheel digging itself in)
     const rr = (g.crr + g.plough * Math.min(Math.abs(vx), 12)) * N * Math.tanh(vx / 0.3);
     const target = g.sink * (1 - 0.4 * smooth(4, 14, Math.abs(vx)));
-    // (a spinning wheel digs itself in; rolling packs its rut back down: rocking gets you out)
+    // (a spinning wheel digs itself in; rolling packs its rut back down, and so, slowly, does not
+    // spinning it — dug in, nothing got it out again: easing it, rocking it, gets you out)
     if (g.sink > 0.04 && Math.abs(kappa) > 0.5) wh.dig = Math.min(g.sink * 0.5, wh.dig + 0.03 * Math.abs(kappa) * dt);
     else if (Math.abs(vx) > 0.4 && Math.abs(kappa) < 0.3) wh.dig = Math.max(-g.sink * 0.35, wh.dig - 0.05 * dt);
+    else if (Math.abs(wh.w * R - vx) < 1.1) wh.dig = Math.max(0, wh.dig - 0.02 * dt);
     if (g.sink < 0.01) wh.dig = 0;
     wh.sink = toward(wh.sink, target + wh.dig, 0.4, 0.4, dt);
     // the forces at the contact (the side force up at the roll centre)
@@ -775,7 +779,7 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
     const pvz = s.v.z + tmp2.z;
     const fn = (soft ? 50000 : 300000) * pen + (soft ? 2500 : 9000) * Math.max(0, -pvy);
     const hv = Math.hypot(pvx, pvz);
-    const fr = (soft ? 0.65 : 0.35) * fn * Math.min(1, hv / 0.2);
+    const fr = (soft ? 0.4 : 0.35) * fn * Math.min(1, hv / 0.2);
     addForce(px, py, pz, hv > 1e-6 ? (-pvx / hv) * fr : 0, fn, hv > 1e-6 ? (-pvz / hv) * fr : 0);
     if (!soft && pen > 0.02 && -pvy > 0.6 && !s.hit)
       s.hit = { j: spec.mass * -pvy * 0.3, x: px, z: pz, what: "ground", at: s.t };
@@ -838,7 +842,10 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
   }
   // warming up, fuel, the odometer
   s.temp = Math.min(0.55, s.temp + (running ? (0.00055 + s.rpm * 0.0000004 + thr * 0.0006) * dt : -0.0002 * dt));
-  if (running) s.fuel = Math.max(0, s.fuel - 1.45e-6 * s.rpm * (0.25 + thr) * dt);
+  // (three times a real one's thirst: a tank's an hour or so of driving — the gas station's a
+  // place to go; dry, the engine coughs out and stays out)
+  if (running) s.fuel = Math.max(0, s.fuel - 4.35e-6 * s.rpm * (0.25 + thr) * dt);
+  if (running && s.fuel <= 0) s.rpm = 0;
   s.odo += (Math.abs(vf) * dt) / 1000;
 }
 
@@ -889,6 +896,8 @@ function collide(s: CarState, world: CarWorld) {
   const cz = s.p.z + az * off;
   solids.length = 0;
   world.solids(cx, cz, hx + 2, solids);
+  let touched = false;
+  let hardest = 0;
   for (const o of solids) {
     let depth = 0;
     let px = 0;
@@ -912,10 +921,15 @@ function collide(s: CarState, world: CarWorld) {
         nv = -ev / d;
         depth = r - d;
       } else {
-        // inside the box: out the nearest side
+        // inside the box: out the side it came in by — where it was a step ago, the car moving on
+        // (a trunk met at speed is past the bumper before it's seen: out the nearest side, the car
+        // slid on along it onto the trunk, impaled for good) — else the nearest side
+        const pu = lu + (s.v.x * ax + s.v.z * az) * STEP;
+        const pv = lv + (-s.v.x * az + s.v.z * ax) * STEP;
+        const wasOut = Math.abs(pu) > hx - 0.05 || Math.abs(pv) > hz - 0.05;
         const du = hx - Math.abs(lu);
         const dv = hz - Math.abs(lv);
-        if (du < dv) {
+        if (wasOut ? Math.abs(pu) - hx > Math.abs(pv) - hz : du < dv) {
           nu = -Math.sign(lu);
           nv = 0;
           depth = du + r;
@@ -1020,6 +1034,12 @@ function collide(s: CarState, world: CarWorld) {
     const out = Math.max(0, depth - 0.005) * push;
     s.p.x += nrm.x * out;
     s.p.z += nrm.z * out;
+    // (the tyres held where they stood move with it: they'd pull it straight back into it)
+    for (const w of s.wheels)
+      if (w.hold) {
+        w.hx += nrm.x * out;
+        w.hz += nrm.z * out;
+      }
     // the impulse at the contact (at the CoG's height: no roll or pitch from a wall)
     const rx = px - s.p.x;
     const rz = pz - s.p.z;
@@ -1030,9 +1050,11 @@ function collide(s: CarState, world: CarWorld) {
     const rvx = s.v.x - s.w.y * rz - ((o.vx ?? 0) - ow * qz);
     const rvz = s.v.z + s.w.y * rx - ((o.vz ?? 0) + ow * qx);
     const vn = rvx * nrm.x + rvz * nrm.z;
+    touched = true;
     if (vn >= 0) continue;
-    // (a knock bounces a little; a lean, a slow push, doesn't)
-    const e = o.soft ? 0 : 0.22 * smooth(0.6, 3, -vn);
+    hardest = Math.max(hardest, -vn);
+    // (a knock bounces a little; a lean, a slow push, doesn't; a crash crumples, it hardly bounces)
+    const e = o.soft ? 0 : 0.22 * smooth(0.6, 3, -vn) * (1 - 0.75 * smooth(4, 12, -vn));
     const rn = rx * nrm.z - rz * nrm.x; // (r × n)·y
     const iy = s.spec.inertia[1];
     // the other's share: its mass, and its turning about its middle (a box's)
@@ -1054,11 +1076,20 @@ function collide(s: CarState, world: CarWorld) {
     const jz = nrm.z * j + tz * jt;
     s.v.x += jx / s.spec.mass;
     s.v.z += jz / s.spec.mass;
-    s.w.y += (rz * jx - rx * jz) / iy;
+    // (a knock turns it, but no one knock sets it spinning: the bodywork gives, the tyres drag)
+    s.w.y += clamp((rz * jx - rx * jz) / iy, -1.2, 1.2);
     o.shove?.(-jx, -jz, px, pz);
     s.still = 0;
     if (!s.hit || j > s.hit.j)
-      s.hit = { j, x: px, z: pz, what: o.what ?? (o.kind === "box" ? "wall" : "post"), at: s.t };
+      s.hit = { j, x: px, z: pz, what: o.what ?? (o.kind === "box" ? "wall" : "post"), at: s.t, id: o.id, v: -vn };
+  }
+  // against things (wedged among trunks, along a wall): never spinning like a top — each contact's
+  // turn added to the last one's pumped it up and up
+  if (touched) s.w.y = clamp(s.w.y, -3, 3);
+  // a crash: the wheels stop with it (not still turning at the speed it hit at, driving it on)
+  if (hardest > 4) {
+    const vf = s.v.x * fx + s.v.z * fz;
+    for (const w of s.wheels) if (w.contact) w.w = vf / fl / s.spec.wheel.r;
   }
 }
 

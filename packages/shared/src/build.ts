@@ -31,7 +31,7 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
       const tx = o.x + dx;
       const ty = o.y + dy;
       if (!floor.ok(tx, ty)) return false;
-      if (e.solid && !base.ok(tx, ty)) return false;
+      if (e.solid && (!base.ok(tx, ty) || base.boxOn(tx, ty))) return false;
       // never straddling a wall
       if (dx > 0 && wallBetween(map, tx - 1, ty, tx, ty) !== ".") return false;
       if (dy > 0 && wallBetween(map, tx, ty - 1, tx, ty) !== ".") return false;

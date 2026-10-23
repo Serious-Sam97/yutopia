@@ -99,14 +99,18 @@ export function implausible(
   const h = ground(b.x, b.z);
   if (b.y < h - 0.8 || b.y > h + 8) return "off the ground";
   // inside a building (a few tiles in: a bumper over a wall's edge is a knock, not a cheat)
-  for (const bd of BUILDINGS)
-    if (b.x > bd.x0 + 1.2 && b.x < bd.x1 - 1.2 && b.z > bd.z0 + 1.2 && b.z < bd.z1 - 1.2) return "in a building";
+  for (const bd of BUILDINGS) {
+    const r = bd.built ?? bd;
+    if (b.x > r.x0 + 1.2 && b.x < r.x1 - 1.2 && b.z > r.z0 + 1.2 && b.z < r.z1 - 1.2) return "in a building";
+  }
   if (!a) return null;
   const t = Math.max(0.03, Math.min(1.5, dt));
   const moved = Math.hypot(b.x - a.x, b.z - a.z);
   // (a late packet carries the time it was late: the slack grows with it)
   if (moved > VMAX * t + 2) return "jumped";
+  // (a crash stops it dead, or throws it back a little, in one packet: slower is always believable)
   const dv = Math.hypot(b.vx - a.vx, b.vz - a.vz);
-  if (dv > AMAX * t + 4) return "accelerated";
+  const faster = Math.hypot(b.vx, b.vz) - Math.hypot(a.vx, a.vz);
+  if (dv > AMAX * t + 4 && faster > AMAX * t + 1) return "accelerated";
   return null;
 }

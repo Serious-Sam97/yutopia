@@ -27,6 +27,7 @@ import {
   TorusGeometry,
   Vector2,
   Vector3,
+  Vector4,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import * as T from "./textures";
@@ -458,6 +459,9 @@ export interface Sedan {
   setRadio(band: "FM" | "AM" | "TAPE", f: number, preset: number): void;
   setScreenSnow(t: Texture | null): void;
   setEnv(t: Texture | null): void;
+  /** its wear: the road's dirt up its sides (0..1), its dents (front, rear, left, right: 0..1) —
+   *  the panels crumpled where it was hit; a front badly hit, a headlamp cracked (dim) */
+  setWear(grime: number, dmg: readonly number[]): void;
   dispose(): void;
 }
 
@@ -615,6 +619,15 @@ export function buildSedan(o: SedanOpts): Sedan {
     headLens,
     snowMat,
   ];
+  // its wear (setWear): one set of numbers for every outside panel, so they crumple together
+  const wear = {
+    uGrime: { value: 0 },
+    uDmg: { value: new Vector4(0, 0, 0, 0) },
+    uEnds: { value: new Vector3(-L / 2, L / 2, W / 2) },
+  };
+  for (const m of [paint, chrome, satin, rubber, headLens, red, amberL, amberR, reverse, plateMat])
+    wearable(m, wear, m === paint);
+  let lampK = 1;
   const interior: (MeshStandardMaterial | MeshPhysicalMaterial)[] = [
     wood,
     cloth,
@@ -1557,7 +1570,8 @@ export function buildSedan(o: SedanOpts): Sedan {
     steering.rotation.z = road * SEDAN.steerRatio; // (anticlockwise as the driver sees it: left)
   };
   const setLights = (l: Lights) => {
-    const head = l.beams === "off" ? 0 : l.beams === "low" ? 2.2 : 3.4;
+    lastLights = l;
+    const head = (l.beams === "off" ? 0 : l.beams === "low" ? 2.2 : 3.4) * lampK;
     headLens.emissiveIntensity = head;
     const tl = l.tail || l.beams !== "off" ? 0.9 : 0;
     red.emissiveIntensity = Math.max(tl, l.brake * 3.2);
@@ -1591,7 +1605,17 @@ export function buildSedan(o: SedanOpts): Sedan {
       m.needsUpdate = true;
     }
   };
-  setLights({ beams: "off", tail: false, brake: 0, reverse: false, ind: 0, dash: 0, dome: false });
+  let lastLights: Lights = { beams: "off", tail: false, brake: 0, reverse: false, ind: 0, dash: 0, dome: false };
+  const setWear = (grime: number, dmg: readonly number[]) => {
+    wear.uGrime.value = Math.max(0, Math.min(1, grime));
+    wear.uDmg.value.set(dmg[0] ?? 0, dmg[1] ?? 0, dmg[2] ?? 0, dmg[3] ?? 0);
+    const k = (dmg[0] ?? 0) > 0.6 ? 0.35 : 1;
+    if (k !== lampK) {
+      lampK = k;
+      setLights(lastLights);
+    }
+  };
+  setLights(lastLights);
   setCluster({
     kmh: 0,
     rpm: 0,
@@ -1630,6 +1654,7 @@ export function buildSedan(o: SedanOpts): Sedan {
     setRadio,
     setScreenSnow,
     setEnv,
+    setWear,
     dispose: () => {
       for (const d of disposables) d.dispose();
       root.traverse((x) => {
@@ -1688,4 +1713,58 @@ function bowed(
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
+}
+
+/** A material worn as the car is (setWear's uniforms): its panels pushed in where it was hit (a
+ *  crumple, not a smooth dent: noise in the push and in the light), and — the paint — the road's
+ *  grey dirt up from the sills. The model's coords: the nose −x, the left +z, the ground y 0. */
+function wearable(
+  m: MeshStandardMaterial | MeshPhysicalMaterial,
+  u: { uGrime: { value: number }; uDmg: { value: Vector4 }; uEnds: { value: Vector3 } },
+  dirt: boolean,
+) {
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, u);
+    const decl = `uniform vec4 uDmg; uniform vec3 uEnds;
+float wearN(vec3 p) { return 0.55 + 0.45 * sin(dot(p, vec3(13.1, 7.7, 11.3))) * sin(dot(p, vec3(5.3, 17.9, 3.1))); }
+vec3 wearPush(vec3 p) {
+  float n = wearN(p);
+  float f = uDmg.x * smoothstep(0.8, 0.0, p.x - uEnds.x);
+  float r = uDmg.y * smoothstep(0.8, 0.0, uEnds.y - p.x);
+  float l = uDmg.z * smoothstep(0.3, 0.0, uEnds.z - p.z) * step(0.0, p.z);
+  float g = uDmg.w * smoothstep(0.3, 0.0, uEnds.z + p.z) * step(p.z, 0.0);
+  return n * vec3(0.11 * f - 0.11 * r, -0.03 * (f + r), -0.045 * l + 0.045 * g);
+}
+`;
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", `#include <common>\n${decl}varying vec3 vCarPos;`)
+      .replace(
+        "#include <beginnormal_vertex>",
+        `#include <beginnormal_vertex>
+        { float e = 0.04; vec3 q = position;
+          vec3 d = vec3(length(wearPush(q + vec3(e, 0.0, 0.0))) - length(wearPush(q - vec3(e, 0.0, 0.0))),
+                        length(wearPush(q + vec3(0.0, e, 0.0))) - length(wearPush(q - vec3(0.0, e, 0.0))),
+                        length(wearPush(q + vec3(0.0, 0.0, e))) - length(wearPush(q - vec3(0.0, 0.0, e))));
+          objectNormal = normalize(objectNormal + d * 9.0); }`,
+      )
+      .replace(
+        "#include <begin_vertex>",
+        "#include <begin_vertex>\ntransformed += wearPush(position);\nvCarPos = position;",
+      );
+    if (dirt)
+      sh.fragmentShader = sh.fragmentShader
+        .replace("#include <common>", "#include <common>\nuniform float uGrime; varying vec3 vCarPos;")
+        .replace(
+          "#include <color_fragment>",
+          `#include <color_fragment>
+          float grime = uGrime * (1.0 - smoothstep(0.25, 0.95, vCarPos.y)) * (0.8 + 0.2 * sin(vCarPos.x * 9.0 + vCarPos.z * 5.0));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.085, 0.075, 0.06), grime * 0.8);`,
+        )
+        .replace(
+          "#include <roughnessmap_fragment>",
+          "#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.95, grime);",
+        );
+    else sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vCarPos;");
+  };
+  m.customProgramCacheKey = () => (dirt ? "car-wear-dirt" : "car-wear");
 }

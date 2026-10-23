@@ -100,3 +100,26 @@ test("the guard's shift: at his post by day, out of the gatehouse's door to the 
   await waitFor(() => inGatehouse(), 60_000);
   a.send("mod:hour", { h: null });
 });
+
+test("a storm: the snow plough comes out, runs to the headquarters and back, and goes home after it", async () => {
+  const a = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 8,
+    token: "dev:33:P33:member,builder",
+  });
+  rooms.push(a);
+  await waitFor(() => a.state.players?.size > 0 && !!a.state.vehicles?.get("plough"));
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const pl = (): any => a.state.vehicles.get("plough");
+  a.send("mod:storm", { storm: 0, now: true });
+  await sleep(300);
+  assert.equal(pl().shown, false, "no storm: home");
+  a.send("mod:storm", { storm: 1, now: true });
+  await waitFor(() => pl().shown, 15_000);
+  // out at the town square's end, along the road towards the headquarters (west)
+  const x0 = pl().x;
+  await waitFor(() => pl().x < x0 - 100, 15_000);
+  // the storm over: it finishes its round and goes home
+  a.send("mod:storm", { storm: 0, now: true });
+  await waitFor(() => !pl().shown, 30_000);
+  a.send("mod:storm", { storm: null, now: true });
+});

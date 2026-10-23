@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Grid } from "./grid.ts";
+import { parkAt, parkedBody, SPECS } from "./car/index.ts";
+import { BODY_R, Grid, moveStep, setOutdoors } from "./grid.ts";
 import { BENCH, outdoorsAt } from "./grounds.ts";
+import type { MapDef } from "./map.ts";
 import {
   Allowance,
   type Body,
@@ -488,3 +490,73 @@ test("the server's allowance lets an honest sprint by and stops a fast one", () 
   // a burst (a roll) has its own ceiling
   assert.ok(speedCap("roll") > cap);
 });
+
+test("a parked car is solid to the skin of its body: either model, any angle, on the floor or out past it", () => {
+  // a 6 × 6 floor with flat land all round it
+  const map: MapDef = {
+    key: "t",
+    name: "t",
+    width: 6,
+    height: 6,
+    tiles: Array.from({ length: 6 }, () => ".".repeat(6)),
+    hWalls: Array.from({ length: 7 }, () => ".".repeat(6)),
+    vWalls: Array.from({ length: 6 }, () => ".".repeat(7)),
+    spawn: { x: 1, y: 1 },
+    areas: [],
+    objects: [],
+  };
+  setOutdoors(() => ({ walkable: () => true, height: () => 0 }));
+  try {
+    for (const model of ["sedan", "offroad"] as const)
+      for (const [x, y] of [
+        [3, 3], // on the floor (the lot)
+        [40, 30], // out past it (driven off and left there)
+      ])
+        for (const car of [
+          { id: "c", kind: "car", ...parkAt(x, y, 0.6, 0, { model }) },
+          { id: "c", kind: "car", x: x - 1, y: y - 2.5, rot: 1, props: { model, dx: 0.37, dz: -0.21 } },
+        ]) {
+          const g = Grid.from(map, [car], undefined, { dressing: false });
+          const b = parkedBody(car);
+          const spec = SPECS[model].body;
+          assert.ok(Math.abs(b.hx - (spec.ahead + spec.behind) / 2) < 1e-9 && Math.abs(b.hy - spec.width / 2) < 1e-9);
+          const ca = Math.cos(b.a);
+          const sa = Math.sin(b.a);
+          // along it (u) and across it (v) from its middle
+          const at = (u: number, v: number) => ({ x: b.x + ca * u - sa * v, y: b.y + sa * u + ca * v });
+          const where = `${model} at ${x}, ${y}, ${car.rot === undefined ? "angled" : "square"}`;
+          for (const [u, v] of [
+            [0, 1],
+            [0, -1],
+            [1, 0],
+            [-1, 0],
+            [0.7, 0.7],
+          ]) {
+            const skin = (d: number) => at(u * (b.hx + d), v * (b.hy + d));
+            const into = skin(BODY_R - 0.05);
+            const clear = skin(BODY_R + 0.05);
+            assert.ok(!g.fits(into.x, into.y), `${where}: a body's into it at ${u}, ${v}`);
+            if (u === 0 || v === 0) assert.ok(g.fits(clear.x, clear.y), `${where}: room beside it at ${u}, ${v}`);
+          }
+          // walked into from beside it: stopped at its side
+          const p = at(0, b.hy + 2);
+          let pos = { x: p.x, y: p.y };
+          for (let i = 0; i < 120; i++) pos = moveStepTo(g, pos, { x: sa, y: -ca });
+          const gap = -(pos.x - b.x) * sa + (pos.y - b.y) * ca - b.hy;
+          assert.ok(gap >= BODY_R - 1e-6 && gap < BODY_R + 0.1, `${where}: stopped ${gap} from its side`);
+          // its roof: something to stand on
+          const roof = g.groundAt(b.x, b.y, 2);
+          assert.ok(roof > 1.3 && roof < 1.5 && g.fitsAt(b.x, b.y, roof), `${where}: its roof ${roof}`);
+          // driven off: nothing there
+          const gone = Grid.from(map, [{ ...car, props: { ...car.props, driven: 1 } }], undefined, { dressing: false });
+          assert.ok(gone.fits(b.x, b.y), `${where}: driven off`);
+        }
+  } finally {
+    setOutdoors(null);
+  }
+});
+
+/** A walk's 1/60 s step in direction d (as the walker's moveStep takes it). */
+function moveStepTo(g: Grid, pos: { x: number; y: number }, d: { x: number; y: number }) {
+  return moveStep(g, pos, d, 4.2, 1 / 60);
+}

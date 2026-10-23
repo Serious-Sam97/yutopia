@@ -450,6 +450,12 @@ export class CabinLight {
     if (this.light.parent !== model.body) model.body.add(this.light);
     this.light.position.set(0.1, 1.42, 0);
   }
+  /** Out of the car: dark, kept in the scene (`home`) — a light leaving it recompiles every material. */
+  park(home: Object3D) {
+    this.light.intensity = 0;
+    if (this.light.parent !== home) home.add(this.light);
+    this.light.position.set(0, -500, 0);
+  }
   dispose() {
     this.light.removeFromParent();
   }

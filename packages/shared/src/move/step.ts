@@ -309,18 +309,15 @@ function move(b: Body, grid: Grid, dt: number, stepUp = 0, blocked?: (x: number,
   if (s < 1e-6) return;
   const tx = b.x + b.vx * dt;
   const ty = b.y + b.vy * dt;
-  const p = moveStep(grid, { x: b.x, y: b.y }, { x: b.vx / s, y: b.vy / s }, s, dt, b.z);
-  if (blocked?.(p.x, p.y)) {
-    b.vx = 0;
-    b.vy = 0;
-    return;
-  }
+  // (a car on the move: slid along like a wall — one that came onto me, walked out of)
+  const by = blocked?.(b.x, b.y) ? undefined : blocked;
+  const p = moveStep(grid, { x: b.x, y: b.y }, { x: b.vx / s, y: b.vy / s }, s, dt, b.z, by);
   // stopped by something knee-high with room on top (a step, a kerb): onto it, no jump
   if (stepUp > 0 && (Math.abs(p.x - tx) > 1e-9 || Math.abs(p.y - ty) > 1e-9)) {
     const reach = b.z + stepUp;
     if (grid.fitsAt(tx, ty, reach)) {
       const g = grid.groundAt(tx, ty, reach);
-      if (g > b.z + 1e-3 && g <= reach + 1e-6 && grid.fitsAt(tx, ty, g)) {
+      if (g > b.z + 1e-3 && g <= reach + 1e-6 && grid.fitsAt(tx, ty, g) && !by?.(tx, ty)) {
         b.x = tx;
         b.y = ty;
         b.z = g;

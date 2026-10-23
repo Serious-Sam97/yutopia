@@ -426,6 +426,12 @@ export class Vehicle extends Schema {
   @type("uint8") colour = 0;
   @type("uint32") seq = 0;
   @type("float64") at = 0; // when this state came in (server ms)
+  // what it carries from drive to drive (saved on its object): the tank (0..1), the dirt on it
+  // (0..1), its dents ("front,rear,left,right", each 0..1); being filled at a pump
+  @type("float32") fuel = 0.7;
+  @type("float32") grime = 0;
+  @type("string") dmg = "";
+  @type("boolean") filling = false;
 }
 
 export class WorldState extends Schema {

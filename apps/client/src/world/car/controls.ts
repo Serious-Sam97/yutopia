@@ -14,8 +14,13 @@ import type { Controls } from "@yutopia/shared/car";
 //   indicators , .  hazards /  d-pad ← → ↓
 //   wipers     V               B / ○
 //   radio      R               —
+//   fill up    F               —           (stopped at a pump)
+//   pull out   T               —           (stuck: to the nearest clear spot)
 //   camera     C  look back B  Y / △  right stick press
+//   look round the mouse (dragged, or the view's mouse look) · the right stick (car/cars.ts)
 //   get out    X               X / □
+//
+// A phone has neither: the screen's own wheel and pedals (car/cars.ts) set `touch`.
 
 export type Switch =
   | "lights"
@@ -29,7 +34,9 @@ export type Switch =
   | "up"
   | "down"
   | "diff"
-  | "range";
+  | "range"
+  | "fill"
+  | "unstick";
 
 const KEY_SWITCH: Record<string, Switch> = {
   KeyL: "lights",
@@ -38,6 +45,8 @@ const KEY_SWITCH: Record<string, Switch> = {
   Slash: "hazard",
   KeyV: "wipers",
   KeyR: "radio",
+  KeyF: "fill",
+  KeyT: "unstick",
   KeyC: "camera",
   KeyX: "exit",
   KeyE: "up",
@@ -65,6 +74,12 @@ export class CarInput {
   pad = false;
   horn = false;
   lookBack = false;
+  /** the screen's wheel and pedals (a phone): what's held now */
+  touch = { on: false, up: 0, down: 0, steer: 0, hand: 0, horn: false };
+  /** a button on the screen pressed */
+  press(sw: Switch) {
+    this.pressed.push(sw);
+  }
 
   keyDown(code: string): boolean {
     const known = code in KEY_SWITCH || DRIVE_KEYS.has(code) || code === "KeyH" || code === "KeyB";
@@ -80,6 +95,7 @@ export class CarInput {
   clear() {
     this.keys.clear();
     this.pressed = [];
+    Object.assign(this.touch, { up: 0, down: 0, steer: 0, hand: 0, horn: false });
   }
 
   /** This frame's controls and the switches pressed since the last read. */
@@ -95,6 +111,18 @@ export class CarInput {
     let digital = true;
     const switches = this.pressed;
     this.pressed = [];
+    const tc = this.touch;
+    if (tc.on) {
+      up = Math.max(up, tc.up);
+      down = Math.max(down, tc.down);
+      hand = Math.max(hand, tc.hand);
+      this.horn ||= tc.horn;
+      // (the wheel's analog: dragged, as far as it's turned)
+      if (tc.steer !== 0) {
+        steer = tc.steer;
+        digital = false;
+      }
+    }
     if (pad) {
       const b = (i: number) => pad.buttons[i]?.value ?? 0;
       const x = pad.axes[0] ?? 0;

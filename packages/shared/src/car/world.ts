@@ -5,6 +5,7 @@ import {
   CHUNK,
   carBlockedTile,
   deckAt,
+  FORECOURT,
   fbm,
   GROUNDS,
   heightAt,
@@ -16,6 +17,7 @@ import {
 } from "../grounds.ts";
 import type { Ground } from "./grip.ts";
 import type { CarWorld, Solid } from "./sim.ts";
+import type { CarSpec } from "./specs.ts";
 
 // Where the cars drive (docs/plan/28-the-car.md, M7–M8): the Grounds as the
 // sim sees them — their heights, what each spot is (with the roads' slush and
@@ -65,8 +67,10 @@ function chunkSolids(cx: number, cz: number): Solid[] {
   for (const l of lotLamps)
     if (l.x >= x0 && l.x < x1 && l.z >= z0 && l.z < z1)
       out.push({ kind: "circle", x: l.x, z: l.z, r: 0.15, what: "post" });
-  // the buildings: whole footprints (no car goes in)
-  for (const b of BUILDINGS)
+  // the buildings: whole footprints (no car goes in) — what's built of them: the gas station's
+  // forecourt is driven onto, round its islands and the canopy's posts
+  for (const bd of BUILDINGS) {
+    const b = bd.built ?? bd;
     if (b.x1 > x0 && b.x0 < x1 && b.z1 > z0 && b.z0 < z1) {
       const bx0 = Math.max(b.x0, x0);
       const bx1 = Math.min(b.x1, x1);
@@ -81,6 +85,13 @@ function chunkSolids(cx: number, cz: number): Solid[] {
         what: "wall",
       });
     }
+  }
+  for (const i of FORECOURT.islands)
+    if (i.x >= x0 && i.x < x1 && i.z >= z0 && i.z < z1)
+      out.push({ kind: "box", x: i.x, z: i.z, hx: i.hx, hz: i.hz, what: "wall" });
+  for (const p of FORECOURT.posts)
+    if (p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1)
+      out.push({ kind: "circle", x: p.x, z: p.z, r: 0.27, what: "post" });
   // the plough's banks round the lot: soft, the car ploughs into them and stops
   for (const k of lotBanks())
     if (k.x >= x0 && k.x < x1 && k.z >= z0 && k.z < z1)
@@ -232,4 +243,90 @@ export function padWorld(extra?: Solid[]): CarWorld {
 /** A flat world of one surface (the tests). */
 export function flatWorld(g: Ground, slope = 0): CarWorld {
   return { height: (_x, z) => -z * slope, ground: () => g, solids: () => {} };
+}
+
+/** Does a car's box (its middle, half length and width, heading) overlap a solid? (2D.) */
+export function boxHits(x: number, z: number, hx: number, hz: number, a: number, o: Solid): boolean {
+  const ax = Math.cos(a);
+  const az = Math.sin(a);
+  if (o.kind === "circle") {
+    const dx = o.x - x;
+    const dz = o.z - z;
+    const u = dx * ax + dz * az;
+    const v = -dx * az + dz * ax;
+    const qu = Math.max(-hx, Math.min(hx, u));
+    const qv = Math.max(-hz, Math.min(hz, v));
+    return Math.hypot(u - qu, v - qv) < (o.r ?? 0.2);
+  }
+  const bx = Math.cos(o.a ?? 0);
+  const bz = Math.sin(o.a ?? 0);
+  const ox = o.hx ?? 0.5;
+  const oz = o.hz ?? 0.5;
+  for (const [ux, uz] of [
+    [ax, az],
+    [-az, ax],
+    [bx, bz],
+    [-bz, bx],
+  ]) {
+    const ra = hx * Math.abs(ux * ax + uz * az) + hz * Math.abs(-ux * az + uz * ax);
+    const rb = ox * Math.abs(ux * bx + uz * bz) + oz * Math.abs(-ux * bz + uz * bx);
+    if (Math.abs((o.x - x) * ux + (o.z - z) * uz) >= ra + rb) return false;
+  }
+  return true;
+}
+
+/** A stuck car pulled out (the tow rope, docs/plan/28): the nearest spot within `reach` m of
+ *  where it is (its CoG, heading `a`) its body fits clear of everything with room round it, on
+ *  ground it can drive off — a road or a path before packed snow, packed snow before deep; its
+ *  heading kept, or turned round. Null: nowhere. */
+export function freeSpot(
+  world: CarWorld,
+  spec: CarSpec,
+  x: number,
+  z: number,
+  a: number,
+  reach = 30,
+): { x: number; z: number; a: number } | null {
+  const b = spec.body;
+  const hx = (b.ahead + b.behind) / 2 + 0.4;
+  const hz = b.width / 2 + 0.4;
+  const off = (b.ahead - b.behind) / 2;
+  const near: Solid[] = [];
+  const cost: Partial<Record<Ground, number>> = { deep: 30, snow: 8, ice: 12, rock: 40, floor: 60 };
+  let best: { x: number; z: number; a: number } | null = null;
+  let bestCost = Number.POSITIVE_INFINITY;
+  for (let r = 3; r <= reach; r += 1.5) {
+    if (r > bestCost) break; // (no farther spot can beat it)
+    const n = Math.max(8, Math.round((2 * Math.PI * r) / 1.5));
+    for (let k = 0; k < n; k++) {
+      const t = (k / n) * 2 * Math.PI;
+      const px = x + Math.cos(t) * r;
+      const pz = z + Math.sin(t) * r;
+      for (const [h, turned] of [
+        [a, 0],
+        [a + Math.PI, 3],
+      ] as const) {
+        const c = cost[world.ground(px, pz)] ?? 0;
+        if (r + c + turned >= bestCost) continue;
+        const cx = px + Math.cos(h) * off;
+        const cz = pz + Math.sin(h) * off;
+        // (level enough under it)
+        const ys = [-1, 1].flatMap((su) =>
+          [-1, 1].map((sv) =>
+            world.height(
+              cx + Math.cos(h) * hx * su - Math.sin(h) * hz * sv,
+              cz + Math.sin(h) * hx * su + Math.cos(h) * hz * sv,
+            ),
+          ),
+        );
+        if (Math.max(...ys) - Math.min(...ys) > 0.9) continue;
+        near.length = 0;
+        world.solids(cx, cz, hx + 1, near);
+        if (near.some((o) => boxHits(cx, cz, hx, hz, h, o))) continue;
+        best = { x: px, z: pz, a: Math.atan2(Math.sin(h), Math.cos(h)) };
+        bestCost = r + c + turned;
+      }
+    }
+  }
+  return best;
 }

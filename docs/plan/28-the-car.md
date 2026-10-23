@@ -493,11 +493,8 @@ Phases 4 and 5 are independent once 3 lands.
 
 ## Still open
 
-- **Fuel**: a working gauge, and filling up at the town's gas station (hold X at
-  the pump)? It gives the gas station a use; it's also a chore.
-- **Cosmetic damage** (dents per panel, a cracked lamp) later?
-- **Touch** controls (a wheel and pedals on screen) for the phone layout.
-- A **snow plough** on the roads after a storm (an AI truck, like the shuttle)?
+- ~~Fuel~~, ~~cosmetic damage~~, ~~touch controls~~, ~~a snow plough~~: done
+  (2026-10-22, "Improvements" below).
 - Driving on the pavements and the plaza: allowed (as now planned) or kept off?
 
 ## Phase 0 — delivered for review (2026-10-20)
@@ -772,3 +769,139 @@ off the road, and hits on other cars and things feel weird.
   - e2e `car.spec`: backing across the aisle into a parked car, which slides,
     stops, and is in the same place for both browsers.
 
+## Improvements (2026-10-22)
+
+Two bugs first, then ten improvements.
+
+- **Collision.**
+  - A parked car is solid to the skin of its body (shared `grid.ts`
+    `Grid.boxes`, `car/park.ts` `parkedBody`): an exact box at any angle, its
+    model's own size, wherever it was left. Before, it blocked the tiles whose
+    middles it covered: you could walk ~0.5 m into it, and past the ground
+    floor's own tiles (off the lot) it blocked nothing at all.
+  - Its roof is still a top to climb onto; build mode and paths keep clear of it.
+  - A car that parks or is shoved onto someone moves them out (`rescue`).
+  - A car on the move blocks walking by its own size, and you slide along it.
+    So do the shuttle, the plough and the visitor's car (before: walked through).
+- **Fuel.**
+  - Each car keeps its tank (`props.fuel`, 0..1; a lot car starts at 70 %).
+  - The driver's sim burns it at three times a real car's rate: about an hour
+    of driving.
+  - The server only ever takes it down from the driver.
+  - Dry, the engine coughs out and won't start. A dry car left out is towed
+    after 10 minutes, not 2 h.
+- **Bay snap.** Left within ~1.6 m of a free bay's middle, nosed or backed in,
+  within 20° of square: put square in the bay.
+- **The gas station.**
+  - Stopped beside one of its two pump islands (shared `PUMPS`, `atPump`): F
+    (⛽ on a phone) fills it, empty to full in 8 s, and washes it.
+  - Driving off stops it.
+- **Touch.**
+  - On a coarse pointer: a wheel to drag, gas, brake and handbrake, a horn.
+  - The switches sit in a row under the top bar (a passenger gets camera, radio
+    and door).
+- **Knocked down.**
+  - A car meeting someone at over ~2 m/s knocks them down (`fellAt`, as a pool
+    ball does), never hurt.
+  - The driver's client says who (the sim's `Hit` carries `id` and `v`). The
+    server checks its speed, the distance, and a 4 s cooldown.
+- **The snow plough.**
+  - In a storm (over 0.45) it comes out at the town square's end, runs the
+    shuttle's roads to the headquarters and back, and goes round again while
+    it's still snowing (over 0.25). Then it's home for 10 minutes.
+  - It and the shuttle queue behind each other.
+  - 3D: an orange cab, a yellow blade throwing the road's snow off to its
+    right, a salt hopper, an amber beacon. Iso: `gr_plough`.
+- **Wear.**
+  - Dirt (`props.grime`) builds up off the roads: slush most, then deep snow,
+    paths and snow.
+  - Dents (`props.dmg`, front, rear, left and right) come from knocks over
+    2500 N·s.
+  - Both are counted by the driver's client (`car:wear`, only ever more) and
+    drawn by one shader patch on every outside panel: a crumple pushed in, and
+    the grime up from the sills. A badly hit front cracks a headlamp (dim).
+  - The tow and `mod:cars` clean and repair it.
+- **Find my car.** The car you last drove is an amber car on the minimap (at its
+  edge, the way to it, when it's off it).
+- **A passenger's radio.** R (📻) changes the station; the driver's client keeps
+  it, so the server tells it.
+- **Tests.**
+  - shared:
+    - a parked car solid to its skin (both models, any angle, past the floor);
+    - running dry;
+    - a person's hit;
+    - `bayFor`;
+    - the pumps.
+  - world-server:
+    - the tank only down from the driver, wear capped, no fill away from a pump;
+    - a passenger's radio;
+    - a knock;
+    - tank and wear kept when parked;
+    - the plough out in a storm and home after.
+
+
+## Crashes, the woods, getting in (2026-10-22)
+
+The user reported four problems:
+- a car that hits a wall is thrown back strangely;
+- pressing X to get in freezes the game for seconds;
+- a car that goes into the woods fast can't get out;
+- hard or repeated knocks set it spinning fast, without stopping.
+
+- **Thrown back.**
+  - The server's check took a crash for a cheat. More than ~5 m/s of change in
+    one packet was "accelerated", so a 60 km/h wall hit was rewound to before
+    it, hit again, and rewound again.
+  - Now only a car made faster than it could be is refused (`implausible`);
+    stopped dead or thrown back a little is believed.
+  - In the sim, a crash crumples: the bounce falls to a quarter at 12 m/s and
+    up. The wheels stop with the car instead of driving it on at the speed it
+    hit at.
+  - 90 km/h into a wall: it rebounds about 1 m/s and stops; it used to roll
+    back at 5 m/s for seconds.
+- **Spinning.**
+  - No one knock adds more than 1.2 rad/s of turn.
+  - Against anything, the car never turns faster than 3 rad/s. Wedged among
+    trunks, each contact's turn added to the last one's.
+  - 90 km/h into a trunk: 1.3 rad/s at most; it was 4.6.
+- **Stuck in the woods.**
+  - Wheels spun in a crash dug the sedan's ruts deeper than its clearance.
+    High-centred, it could only pack them down again by rolling, which it
+    couldn't do.
+  - A rut now packs down slowly whenever its wheel isn't spinning hard, so
+    easing off and backing out gets you out. Floored without traction control
+    it still digs in, as designed.
+  - Soft snow drags the belly less.
+  - A trunk met at speed, already past the bumper when it's seen, is put back
+    out the side it came in through, not the nearest one. Before, the car slid
+    on along it and was impaled.
+  - A push out of something takes the tyres' standing hold with it.
+- **Pulled out.**
+  - Stuck anyway (stopped, pressing on, going nowhere for 3 s), the HUD says
+    "T · pull it out" (🪝 on a phone).
+  - The server picks the nearest spot within 30 m where the body fits clear
+    of everything, with room round it, level enough, and firm ground before
+    deep snow (shared `freeSpot`). It moves the car there and snaps the driver
+    to it. Not again for 10 s.
+- **The freeze getting in.**
+  - Getting in added the cabin's light to the scene, and at night the two
+    headlamps. A light coming or going recompiles every material in the
+    scene: a freeze that grows with the world. Getting out did it again.
+  - The three lights are now in the scene from the start, dark and parked
+    under the ground when unused. The first headlamp casts shadows on High
+    (its map drawn once at the start, as the flashlight's).
+  - Measured getting in at night: the worst frame was 317 ms, now 100–150 ms
+    (what's left: the exhaust's sprite, the seated driver's outline, the land
+    streaming in round the new camera).
+- **Getting in, animated.** You slide in from outside the open door into your
+  seat, and the camera eases over from where it was (0.7 s) before it's held
+  to the car.
+- **Tests.**
+  - shared:
+    - 90 km/h into a wall, not thrown back;
+    - three runs into a stand of trees: no spin past 3 rad/s, no trunk inside;
+    - dug in, backed out with the helps;
+    - `freeSpot` finds the path through a ring of trunks;
+    - the server believes a crash, not a car flung faster.
+  - world-server: pulled out 3–30 m, the car there for everyone, not again
+    straight after.

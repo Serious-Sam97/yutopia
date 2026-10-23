@@ -1,4 +1,5 @@
 import { footprint } from "../catalog.ts";
+import { CAR_BODY } from "./body.ts";
 
 // A parked car as a world object (docs/plan/28-the-car.md, Together): the
 // lot's cars are objects of kind `car`, 5 × 2 tiles at a quarter turn (rot 0:
@@ -31,6 +32,29 @@ export function parkedPose(o: ParkedObj): { x: number; y: number; a: number; h: 
   };
 }
 
+/** A parked car's body: the box round it (the floor's coords), its half length along its
+ *  heading and half width across — each model its own size (body.ts). */
+export function parkedBody(o: ParkedObj): {
+  x: number;
+  y: number;
+  hx: number;
+  hy: number;
+  a: number;
+  h: number | null;
+} {
+  const pose = parkedPose(o);
+  const b = CAR_BODY[o.props?.model === "offroad" ? "offroad" : "sedan"];
+  const off = (b.ahead - b.behind) / 2;
+  return {
+    x: pose.x + Math.cos(pose.a) * off,
+    y: pose.y + Math.sin(pose.a) * off,
+    hx: (b.ahead + b.behind) / 2,
+    hy: b.width / 2,
+    a: pose.a,
+    h: pose.h,
+  };
+}
+
 /** A car left at (x, y) (the floor's coords) facing `a`: its object's place and props. */
 export function parkAt(
   x: number,
@@ -50,4 +74,25 @@ export function parkAt(
   out.a = Math.round(Math.atan2(Math.sin(a), Math.cos(a)) * 1000) / 1000;
   out.hy = Math.round(height * 100) / 100;
   return { x: ox, y: oy, rot, props: out };
+}
+
+/** A car left near a bay of the lot (`bays`: the lot's, building coords; `x, z` its middle there,
+ *  `a` its heading): the bay it's in — nosed in or backed in, square enough and close enough to
+ *  its middle — to be put square in it. Else null. */
+export function bayFor(
+  bays: { x: number; z: number; dir: number }[],
+  x: number,
+  z: number,
+  a: number,
+): { i: number; a: number } | null {
+  for (let i = 0; i < bays.length; i++) {
+    const b = bays[i];
+    if (Math.abs(x - b.x) > 1.6 || Math.abs(z - b.z) > 0.9) continue;
+    // (its two ways in: nose first, or backed in)
+    for (const h of [b.dir > 0 ? Math.PI : 0, b.dir > 0 ? 0 : Math.PI]) {
+      const d = Math.atan2(Math.sin(a - h), Math.cos(a - h));
+      if (Math.abs(d) < 0.35) return { i, a: h };
+    }
+  }
+  return null;
 }

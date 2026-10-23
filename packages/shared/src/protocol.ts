@@ -273,6 +273,16 @@ export interface ClientMessages {
   "car:state": CarWire;
   // a parked car I knocked, come to rest: where it ended up (the Grounds' coords, its middle)
   "car:shove": { id: string; x: number; z: number; a: number };
+  // my car's dirt (0..1) and dents (front, rear, left, right: 0..1), as my sim has counted them
+  "car:wear": { grime: number; dmg: number[] };
+  // at a pump, stopped: filling it (on), or not
+  "car:fill": { on: boolean };
+  // my car hit someone at speed (their session): knocked down
+  "car:knock": { sid: string };
+  // a passenger's radio button (the driver's client changes the station)
+  "car:radio": Record<string, never>;
+  // my car stuck (stopped): pulled out to the nearest clear spot (features/cars.ts; shared freeSpot)
+  "car:unstick": Record<string, never>;
   "mod:shuttle": Record<string, never>; // an admin: the shuttle to the headquarters' stop
   "mod:cars": Record<string, never>; // an admin: every car back in its bay in the lot
   "phone:shot": Record<string, never>;
@@ -322,6 +332,8 @@ export interface ServerMessages {
   // my car put back where the server has it (a state it couldn't believe)
   "car:snap": CarWire & { id: string };
   "car:no": { why: string };
+  // (to the driver) a passenger changed the radio's station
+  "car:radio": Record<string, never>;
   // my own arrival point here (on join and after I change it); null: the world's
   "spawn:mine": { at: { x: number; y: number } | null };
   // whom I may listen to (session ids) and who may listen to me (user ids)

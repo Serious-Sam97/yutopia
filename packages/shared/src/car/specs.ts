@@ -1,3 +1,5 @@
+import { CAR_BODY } from "./body.ts";
+
 // The cars' numbers (docs/plan/28-the-car.md, M1–M5): every part as data, so
 // a second car is a new spec and a new model, not new physics.
 //
@@ -61,7 +63,7 @@ export const SEDAN: CarSpec = {
   front: 1.37, // 52 % of the weight on the front wheels
   track: 1.52,
   clearance: 0.16,
-  body: { ahead: 2.32, behind: 2.58, width: 1.86, height: 1.53 },
+  body: CAR_BODY.sedan,
   wheel: { r: 0.317, width: 0.195, inertia: 1.1 },
   axles: [
     { k: 32000, bump: 2900, rebound: 4300, travel: 0.13, droop: 0.09, arb: 15000, roll: 0.08, brake: 1700 },
@@ -106,7 +108,7 @@ export const OFFROAD: CarSpec = {
   front: 1.0,
   track: 1.42,
   clearance: 0.24,
-  body: { ahead: 1.9, behind: 2.0, width: 1.7, height: 1.66 },
+  body: CAR_BODY.offroad,
   wheel: { r: 0.36, width: 0.185, inertia: 1.4 },
   axles: [
     { k: 26000, bump: 2600, rebound: 3800, travel: 0.17, droop: 0.13, arb: 9000, roll: 0.14, brake: 1500 },

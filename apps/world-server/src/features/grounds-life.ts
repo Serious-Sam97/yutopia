@@ -11,7 +11,9 @@ import { registerFeature } from "./index.ts";
 // then, parks in its bay by the doors and leaves (it stops for whoever's in
 // its way, and honks); the shuttle runs between the headquarters and the town
 // square — get on at a stop, ride it, get off at the other; a night guard walks
-// the fence and says nothing. Positions are the building's coords (shared
+// the fence and says nothing. In a storm the snow plough comes out: from the
+// town square to the headquarters and back along the shuttle's roads, again
+// while it's still snowing, then home. Positions are the building's coords (shared
 // grounds.ts); people's are the ground floor's (the building's less GROUND_OFFSET).
 
 // (YUTOPIA_LIFE_FAST: the tests' — a trip in seconds, not minutes)
@@ -24,6 +26,10 @@ const LOT_V = 3;
 const STOP_MS = FAST ? 2500 : 25_000; // the shuttle at a stop
 const BOARD_REACH = 6;
 const GUARD_V = FAST ? 40 : 1.25;
+const PLOUGH_V = FAST ? 120 : 8;
+const PLOUGH_OUT = 0.45; // the storm this strong: the plough comes out
+const PLOUGH_ON = 0.25; // …and keeps going round while it's still this strong
+const PLOUGH_REST_MS = 10 * 60 * 1000; // home a while after a storm
 export const RIDING = "ride:shuttle";
 
 interface Drive {
@@ -46,6 +52,9 @@ registerFeature((room: WorldRoom) => {
   };
   const visitor: Drive = { veh: make("visitor", "visitor"), route: VISITOR.in, s: 0, dir: 1, blockedFor: 0 };
   const shuttle: Drive = { veh: make("shuttle", "shuttle"), route: SHUTTLE.there, s: 0, dir: 1, blockedFor: 0 };
+  const plough: Drive = { veh: make("plough", "plough"), route: SHUTTLE.back, s: 0, dir: 1, blockedFor: 0 };
+  let pPhase: "away" | "in" | "out" = "away";
+  let pRestUntil = 0;
   let vPhase: "away" | "in" | "park" | "back" | "out" = "away";
   let vUntil = Date.now() + 30_000;
   let sUntil = Date.now() + STOP_MS;
@@ -105,6 +114,14 @@ registerFeature((room: WorldRoom) => {
       if (v.kind !== "sedan" && v.kind !== "offroad") return;
       for (const k of [-2.2, 0, 2.2]) out.push({ x: v.x + Math.cos(v.a) * k, z: v.z + Math.sin(v.a) * k });
     });
+    return out;
+  };
+  // the other big ones on the road (the shuttle and the plough queue, not drive through each other)
+  const along3 = (d: Drive) => {
+    const out: { x: number; z: number }[] = [];
+    if (!d.veh.shown) return out;
+    for (const k of [-4, -2, 0, 2, 4])
+      out.push({ x: d.veh.x + Math.cos(d.veh.a) * k, z: d.veh.z + Math.sin(d.veh.a) * k });
     return out;
   };
   // someone in the way: just ahead of it (the way it's going)
@@ -237,7 +254,7 @@ registerFeature((room: WorldRoom) => {
           v.stop = "";
           Object.assign(shuttle, { route: v.x > 100 ? SHUTTLE.back : SHUTTLE.there, s: 0, dir: 1 });
         }
-      } else if (drive(shuttle, SHUTTLE_V, dt, now, people)) {
+      } else if (drive(shuttle, SHUTTLE_V, dt, now, [...people, ...along3(plough)])) {
         v.stop = shuttle.route === SHUTTLE.there ? "town" : "hq";
         sUntil = now + STOP_MS;
         [...riders].forEach((sid, i) => {
@@ -250,6 +267,30 @@ registerFeature((room: WorldRoom) => {
         else riders.delete(sid);
       });
       v.riders = riders.size;
+      // ── the plough: out in a storm, round the shuttle's roads, home after it ──
+      const storm = Number(room.state.storm) || 0;
+      plough.veh.shown = pPhase !== "away";
+      if (pPhase === "away") {
+        // (out from the town square's end, once the shuttle's not standing there)
+        const start = along(SHUTTLE.back, 0);
+        if (storm > PLOUGH_OUT && now > pRestUntil && Math.hypot(v.x - start.x, v.z - start.z) > 20) {
+          pPhase = "in";
+          Object.assign(plough, { route: SHUTTLE.back, s: 0, dir: 1 });
+          Object.assign(plough.veh, { x: start.x, z: start.z, a: start.a, v: 0 });
+        }
+      } else if (drive(plough, PLOUGH_V, dt, now, [...people, ...along3(shuttle)])) {
+        if (pPhase === "in") {
+          pPhase = "out";
+          Object.assign(plough, { route: SHUTTLE.there, s: 0, dir: 1 });
+        } else if (storm > PLOUGH_ON) {
+          pPhase = "in";
+          Object.assign(plough, { route: SHUTTLE.back, s: 0, dir: 1 });
+        } else {
+          pPhase = "away";
+          plough.veh.v = 0;
+          pRestUntil = now + PLOUGH_REST_MS;
+        }
+      }
       // ── the guard: his shift (out at dusk, home at dawn), round the fence at night ──
       const night = nightness(room.state.hour);
       if (shift === "post" && night > 0.3) {

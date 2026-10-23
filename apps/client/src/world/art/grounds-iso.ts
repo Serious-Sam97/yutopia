@@ -572,7 +572,8 @@ export class IsoGrounds {
       let rot = 0;
       for (let r = 1; r < 4; r++) if (dot(r) > dot(rot)) rot = r;
       const bus = v.kind === "shuttle";
-      const [w, h] = bus ? [10, 3] : [5, 2];
+      const plough = v.kind === "plough";
+      const [w, h] = bus ? [10, 3] : plough ? [9, 3] : [5, 2];
       const fw = rot % 2 ? h : w;
       const fh = rot % 2 ? w : h;
       const bx = Math.floor(cx - fw / 2);
@@ -583,7 +584,14 @@ export class IsoGrounds {
       if (!e || e.key !== key) {
         const lift = G.heightAt(v.x, v.z);
         this.put(
-          { id, kind: bus ? "gr_bus" : "car", x: bx, y: by, rot, props: bus ? {} : { variant: v.variant ?? 2 } },
+          {
+            id,
+            kind: bus ? "gr_bus" : plough ? "gr_plough" : "car",
+            x: bx,
+            y: by,
+            rot,
+            props: bus || plough ? {} : { variant: v.variant ?? 2 },
+          },
           lift,
         );
         e = { key, bx, by, fw, fh, lift, base: this.items.roots(id).map((r) => [r.x, r.y]) };

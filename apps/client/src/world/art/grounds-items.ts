@@ -945,6 +945,31 @@ function bus(s: Sketch) {
     s.box({ x: 9.98, y, w: 0.06, d: 0.25, z: 0.7 * P, h: 0.18 * P, mat: mat("#c8322a", "#d8553f"), line: 0 });
   }
 }
+// the snow plough, as 3D builds it (tp/vehicles3d.ts): the blade at the nose (x 0), the orange
+// cab, the grey salt hopper behind, a beacon on the cab
+function plough(s: Sketch) {
+  const ORANGE = mat("#d8692a", "#e57a3a", "#d8692a", "#b0521f");
+  const TYRE = mat("#1c1c1c", "#2a2a2a");
+  for (const x of [2.1, 5.3, 6.7])
+    for (const y of [0.3, 2.4]) s.box({ x, y, w: 1.1, d: 0.35, z: 0, h: 1.1 * P, mat: TYRE });
+  s.box({ x: 0.1, y: 0, w: 0.25, d: 3, z: 0.15 * P, h: 0.9 * P, mat: mat("#e0b12a", "#edc240"), line: 0.6 });
+  s.box({ x: 0.9, y: 0.35, w: 6.9, d: 2.3, z: 0.5 * P, h: 0.5 * P, mat: DARK });
+  s.box({ x: 1.0, y: 0.3, w: 2.4, d: 2.4, z: 0.9 * P, h: 1.5 * P, mat: ORANGE, line: 0.8 });
+  s.box({ x: 1.0, y: 0.3, w: 1.6, d: 2.4, z: 1.75 * P, h: 0.5 * P, mat: mat("#262d33", "#323a41"), line: 0.5 });
+  s.box({ x: 3.5, y: 0.35, w: 3.8, d: 2.3, z: 1.0 * P, h: 1.6 * P, mat: mat("#8d8a84", "#a09c95"), line: 0.8 });
+  s.box({ x: 3.6, y: 0.45, w: 3.6, d: 2.1, z: 2.6 * P, h: 0.12 * P, mat: SNOW, line: 0.4 });
+  s.box({
+    x: 1.9,
+    y: 1.35,
+    w: 0.3,
+    d: 0.3,
+    z: 2.4 * P,
+    h: 0.25 * P,
+    mat: mat("#ffa020", "#ffc060"),
+    glow: true,
+    line: 0,
+  });
+}
 function statue(s: Sketch) {
   s.box({ x: 0, y: 0, w: 5, d: 5, z: 0, h: 0.5 * P, mat: mat("#8f8b83", "#a39f97") });
   s.box({ x: 1.1, y: 1.1, w: 2.8, d: 2.8, z: 0.5 * P, h: 2.7 * P, mat: mat("#9d988f", "#b0aba2") });
@@ -1140,6 +1165,7 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_sign: { label: "Sign", w: 4, h: 1, solid: true },
     gr_dock: { label: "Dock", w: 3, h: 14, solid: false },
     gr_bus: { label: "Shuttle", w: 10, h: 3, solid: false },
+    gr_plough: { label: "Snow plough", w: 9, h: 3, solid: false },
     gr_corn: { label: "Cornfield", w: 1, h: 10, solid: false },
     gr_rail_h: { label: "Fence", w: 3, h: 1, solid: false },
     gr_rail_v: { label: "Fence", w: 1, h: 3, solid: false },
@@ -1177,6 +1203,7 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_sign: { draw: sign, variants: 1, key: (p) => `${p.bg}|${p.fg}` },
     gr_dock: { draw: dock, variants: 1 },
     gr_bus: { draw: bus, variants: 1 },
+    gr_plough: { draw: plough, variants: 1 },
     gr_corn: { draw: cornRow, variants: 1, key: (p) => `${p.seed}|${p.len}` },
     gr_rail_h: { draw: (s, p) => rail(s, { ...p, dir: "h" }), variants: 1, key: (p) => String(p.len) },
     gr_rail_v: { draw: (s, p) => rail(s, { ...p, dir: "v" }), variants: 1, key: (p) => String(p.len) },

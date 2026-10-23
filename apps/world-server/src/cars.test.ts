@@ -156,7 +156,163 @@ test("into a lot car, driven, a passenger beside, out — and it's parked where 
   );
   assert.ok(!props(parked).driven);
   assert.equal(typeof props(parked).a, "number");
-  // the lot put back (an admin's)
+  // the lot put back (an admin's): each car in its own bay, as it was
   a.send("mod:cars", {});
   await waitFor(() => typeof props(a.state.objects.get(o.id)).a !== "number");
+  for (const [c, was] of [
+    [o, pose],
+    [hit, before],
+  ] as const) {
+    const now = poseOf(a.state.objects.get(c.id));
+    assert.ok(Math.hypot(now.x - was.x, now.y - was.y) < 0.02 && now.a === was.a, `${c.id} back in its own bay`);
+  }
+});
+
+test("its tank and its wear: only down from the driver, kept when parked; a passenger's radio; someone knocked down", async () => {
+  const join = async (uid: number) => {
+    const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 9,
+      token: `dev:${uid}:P${uid}:member,builder`,
+    });
+    rooms.push(r);
+    await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+    return r;
+  };
+  const a = await join(43);
+  const b = await join(44);
+  a.send("mod:cars", {});
+  await sleep(300);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const o: any = [...a.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[1];
+  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  const door = { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4 };
+  for (const r of [a, b]) r.send("teleport", { to: { ...door, level: 0 } });
+  await waitFor(() => me(a).level === 0 && me(b).level === 0);
+  a.send("car:enter", { id: o.id, seat: 0 });
+  const vid = `car:${o.id}`;
+  await waitFor(() => me(a).busy === `drive:${vid}`);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const v = (): any => a.state.vehicles.get(vid);
+  assert.ok(Math.abs(v().fuel - 0.7) < 1e-6, "a lot car's tank: 70 %");
+  let x = v().x;
+  let z = v().z;
+  const ca = Math.cos(v().a);
+  const sa = Math.sin(v().a);
+  const q = headingQuat(v().a);
+  let seq = 0;
+  const state = (speed: number, fuel: number): CarWire => ({
+    seq: ++seq,
+    x,
+    y: heightAt(x, z) + 0.52,
+    z,
+    qx: q.x,
+    qy: q.y,
+    qz: q.z,
+    qw: q.w,
+    vx: ca * speed,
+    vy: 0,
+    vz: sa * speed,
+    wy: 0,
+    steer: 0,
+    rpm: 1500,
+    gear: 1,
+    fl: 1024,
+    slip: 0,
+    fuel,
+  });
+  // the tank: down as the driver burns it (30 of the sedan's 60 litres), never up
+  a.send("car:state", state(0, 30));
+  await waitFor(() => Math.abs(v().fuel - 0.5) < 1e-3);
+  await sleep(80);
+  a.send("car:state", state(0, 55));
+  await sleep(200);
+  assert.ok(Math.abs(v().fuel - 0.5) < 1e-3, "the driver can't fill it");
+  // its wear: up, a little at a time
+  a.send("car:wear", { grime: 0.6, dmg: [0.2, 0, 0, 0.9] });
+  await waitFor(() => v().grime > 0);
+  assert.ok(Math.abs(v().grime - 0.1) < 1e-3, "the dirt: no more than 0.1 at once");
+  assert.equal(v().dmg, "0.2,0,0,0.5");
+  // not at a pump: no filling
+  let why = "";
+  a.onMessage("car:no", (m: { why: string }) => {
+    why = m.why;
+  });
+  a.send("car:fill", { on: true });
+  await waitFor(() => why === "pump");
+  assert.equal(v().filling, false);
+  // a passenger's radio button: the driver's told
+  b.send("car:enter", { id: vid, seat: 1 });
+  await waitFor(() => me(b).busy === `ride:car:${vid}`);
+  let told = 0;
+  a.onMessage("car:radio", () => {
+    told++;
+  });
+  b.send("car:radio", {});
+  await waitFor(() => told === 1);
+  b.send("car:leave", {});
+  await waitFor(() => me(b).busy === "");
+  // on the move, into her: knocked down (once)
+  for (let i = 0; i < 3; i++) {
+    x += ca * 0.25;
+    z += sa * 0.25;
+    a.send("car:state", state(5, 29.9));
+    await sleep(60);
+  }
+  a.send("car:knock", { sid: b.sessionId });
+  await waitFor(() => me(b).fellAt > 0);
+  // stopped, out: parked with its tank and its wear
+  a.send("car:state", state(0, 29.9));
+  await sleep(80);
+  a.send("car:leave", {});
+  await waitFor(() => !a.state.vehicles.get(vid), 8000);
+  const p = props(a.state.objects.get(o.id));
+  assert.ok(Math.abs(Number(p.fuel) - 29.9 / 60) < 2e-3, `its tank kept: ${p.fuel}`);
+  assert.equal(p.grime, 0.1);
+  assert.equal(p.dmg, "0.2,0,0,0.5");
+  // the lot put back: fresh
+  a.send("mod:cars", {});
+  await waitFor(() => props(a.state.objects.get(o.id)).fuel === undefined);
+  assert.equal(props(a.state.objects.get(o.id)).dmg, undefined);
+});
+
+test("stuck: pulled out to a clear spot near by (the server's pick), not again straight after", async () => {
+  const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 9,
+    token: "dev:45:P45:member,builder",
+  });
+  rooms.push(r);
+  await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+  r.send("mod:cars", {});
+  await sleep(300);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const o: any = [...r.state.objects.values()].filter((c: any) => c.kind === "car" && !props(c).driven)[2];
+  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  const door = { x: pose.x + Math.cos(pose.a) * 3.4, y: pose.y + Math.sin(pose.a) * 3.4 };
+  r.send("teleport", { to: { ...door, level: 0 } });
+  await waitFor(() => me(r).level === 0);
+  r.send("car:enter", { id: o.id, seat: 0 });
+  const vid = `car:${o.id}`;
+  await waitFor(() => me(r).busy === `drive:${vid}`);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const v = (): any => r.state.vehicles.get(vid);
+  const from = { x: v().x, z: v().z };
+  let snap: { x: number; z: number } | null = null;
+  let why = "";
+  r.onMessage("car:snap", (m: { x: number; z: number }) => {
+    snap = m;
+  });
+  r.onMessage("car:no", (m: { why: string }) => {
+    why = m.why;
+  });
+  r.send("car:unstick", {});
+  await waitFor(() => !!snap);
+  const to = snap as unknown as { x: number; z: number };
+  const d = Math.hypot(to.x - from.x, to.z - from.z);
+  assert.ok(d > 2.9 && d <= 30, `pulled ${d.toFixed(1)} m`);
+  await waitFor(() => Math.hypot(v().x - to.x, v().z - to.z) < 0.01); // (the car there for everyone)
+  r.send("car:unstick", {});
+  await waitFor(() => why === "soon");
+  r.send("car:leave", {});
+  await waitFor(() => me(r).busy === "");
+  r.send("mod:cars", {});
 });

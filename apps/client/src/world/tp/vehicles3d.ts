@@ -14,6 +14,84 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { G, tinted } from "./campus";
 import { flatSnow } from "./snow3d";
 
+// The snow plough (docs/plan/28-the-car.md, improvements): the town's truck out in a storm — an
+// orange cab, a yellow blade angled ahead of it, the salt hopper on its back, an amber beacon
+// turning on the cab's roof; 8.6 long with its blade, its nose to −x as the shuttle's.
+export interface Plough {
+  root: Group;
+  wheels: Group[];
+  lamps: MeshBasicMaterial;
+  tail: MeshBasicMaterial;
+  beacon: MeshBasicMaterial;
+}
+export function ploughModel(body: Material): Plough {
+  const root = new Group();
+  const ORANGE = 0xd8692a;
+  const YELLOW = 0xe0b12a;
+  const solid: BufferGeometry[] = [
+    // the chassis, the cab, its glass band, the hopper behind it
+    part(6.6, 0.45, 2.3, 0.5, 0.75, 0, DARK),
+    part(2.0, 1.5, 2.4, -2.0, 1.7, 0, ORANGE),
+    part(2.02, 0.5, 2.42, -2.05, 2.15, 0, 0x2a3a44),
+    part(0.4, 0.9, 2.4, -3.1, 1.25, 0, ORANGE), // the nose
+    part(3.8, 1.6, 2.3, 1.4, 1.8, 0, 0x8d8a84),
+    part(3.9, 0.12, 2.4, 1.4, 2.66, 0, 0x6b6862),
+    part(0.2, 0.3, 2.5, 3.55, 0.6, 0, DARK),
+    // the blade: angled across, ahead of the nose, on its arms
+    tinted(new BoxGeometry(0.18, 0.9, 3.0).rotateY(0.35).translate(-4.05, 0.62, 0), YELLOW),
+    part(0.8, 0.12, 0.12, -3.6, 0.7, 0.6, DARK),
+    part(0.8, 0.12, 0.12, -3.6, 0.7, -0.6, DARK),
+    // the beacon's base
+    part(0.3, 0.1, 0.3, -2.0, 2.5, 0, DARK),
+  ];
+  const g = new G();
+  const r = (() => {
+    let k = 911;
+    return () => {
+      k = (k * 16807) % 2147483647;
+      return k / 2147483647;
+    };
+  })();
+  flatSnow(g, -0.4, -1.1, 3.2, 1.1, 2.72, 0.14, r);
+  solid.push(g.build());
+  const m = new Mesh(mergeGeometries(solid, false), body);
+  for (const p of solid) p.dispose();
+  m.castShadow = true;
+  root.add(m);
+  const lamps = new MeshBasicMaterial({ color: 0xfff1cc, transparent: true, toneMapped: false });
+  const tail = new MeshBasicMaterial({ color: 0xff3a24, transparent: true, toneMapped: false });
+  const beacon = new MeshBasicMaterial({ color: 0xffa020, transparent: true, toneMapped: false });
+  root.add(
+    new Mesh(
+      mergeGeometries(
+        [1, -1].map((s) => new BoxGeometry(0.06, 0.2, 0.3).translate(-3.32, 1.35, s * 0.85)),
+        false,
+      ),
+      lamps,
+    ),
+    new Mesh(
+      mergeGeometries(
+        [1, -1].map((s) => new BoxGeometry(0.06, 0.25, 0.2).translate(3.67, 1.0, s * 1.0)),
+        false,
+      ),
+      tail,
+    ),
+    new Mesh(new CylinderGeometry(0.13, 0.15, 0.22, 10).translate(-2.0, 2.66, 0), beacon),
+  );
+  const wheels: Group[] = [];
+  const tyre = new MeshLambertMaterial({ color: 0x1b1d20 });
+  for (const x of [-2.2, 1.0, 2.4])
+    for (const s of [1, -1]) {
+      const w = new Group();
+      w.position.set(x, 0.55, s * 1.08);
+      w.add(new Mesh(new CylinderGeometry(0.55, 0.55, 0.4, 14).rotateX(Math.PI / 2), tyre));
+      w.add(new Mesh(new BoxGeometry(0.46, 0.06, 0.42), tyre));
+      root.add(w);
+      wheels.push(w);
+    }
+  return { root, wheels, lamps, tail, beacon };
+}
+
 // The shuttle (docs/plan/33-the-look.md, phase 6): a small town bus, 10 long and 2.4 wide as
 // before (its nose to −x). Cream over a rust stripe, a band of windows you see the riders
 // through, the windscreen, the folding door on the kerb side (+z), mirrors on their arms, the
