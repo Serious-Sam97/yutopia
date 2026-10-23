@@ -16,6 +16,11 @@ const KIND_COLOR: Record<string, string> = {
   standup: "#5d6a2f",
   stage: "#4a3324",
 };
+const KINDS: [string, Key][] = [
+  ["private", "buildKindPrivate"],
+  ["open", "buildKindOpen"],
+  ["booth", "buildKindBooth"],
+];
 const DRESSINGS: [string, Key][] = [
   ["", "buildBare"],
   ["tidy", "buildTidy"],
@@ -138,6 +143,20 @@ function RoomCard({
                 </option>
               ))}
             </select>
+          </Row>
+          <Row label={t("buildSound")}>
+            <div className="seg flex-1">
+              {KINDS.map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={room.kind === k}
+                  onClick={() => w?.send("map:room:update", { key: room.key, kind: k })}
+                >
+                  {t(label)}
+                </button>
+              ))}
+            </div>
           </Row>
           <Row label={t("buildDressing")}>
             <div className="seg flex-1">
