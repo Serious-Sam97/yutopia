@@ -231,12 +231,6 @@ export const TOWN_CARS: {
   }
   return out;
 })();
-/** On a parked car in town (its 5 × 2 body). */
-function onTownCar(x: number, z: number): boolean {
-  if (z < -413 || z > -397 || x < 300 || x > 526) return false;
-  for (const c of TOWN_CARS) if (Math.abs(x - c.x) < 2.5 && Math.abs(z - c.z) < 1) return true;
-  return false;
-}
 /** The company's fence (a closed line; the gate where the driveway goes through). */
 export const FENCE: P[] = [
   [-400, -360],
@@ -1073,7 +1067,9 @@ function walkable(x: number, z: number): boolean {
       return inBuilt(bd, x, z)
         ? !!insideOf(bd) && !FIT_TILES.has(`${Math.floor(x)},${Math.floor(z)}`)
         : !onForecourt(x, z, 0.2);
-  if (onFence(x, z) || onTownCar(x, z) || onTractor(x, z) || onBridgeRail(x, z)) return false;
+  // (the town's parked cars and the farm's tractor are vehicles now — shared car/homes.ts: their
+  // own boxes)
+  if (onFence(x, z) || onBridgeRail(x, z)) return false;
   for (const c of SCARECROWS) if (Math.abs(x - c.x) < 0.5 && Math.abs(z - c.z) < 0.5) return false;
   // the water tower: its stem, and the fence round it (a gap to the south)
   const td = Math.hypot(x - TOWER.x, z - TOWER.z);
@@ -1084,21 +1080,10 @@ function walkable(x: number, z: number): boolean {
 }
 /** A tile a car can't go into (docs/plan/28-the-car.md): the fence, the tower, the statue,
  *  the world's edge — what's really there. Not the tiles people walk round (a tree's, a
- *  lamp's, a steep one's: a car hits the trunk, climbs what it can) nor a town car's (its
- *  own box). Buildings are boxes of their own. */
+ *  lamp's, a steep one's: a car hits the trunk, climbs what it can). Buildings are boxes of
+ *  their own. */
 export function carBlockedTile(tx: number, tz: number): boolean {
-  const x = tx + 0.5;
-  const z = tz + 0.5;
-  return !walkable(x, z) && !onTownCar(x, z);
-}
-/** On the farm's tractor (its 4 × 2.2 body, turned `ry`). */
-function onTractor(x: number, z: number): boolean {
-  const dx = x - TRACTOR.x;
-  const dz = z - TRACTOR.z;
-  if (Math.abs(dx) > 3 || Math.abs(dz) > 3) return false;
-  const c = Math.cos(TRACTOR.ry);
-  const s = Math.sin(TRACTOR.ry);
-  return Math.abs(dx * c + dz * s) < 2 && Math.abs(-dx * s + dz * c) < 1.1;
+  return !walkable(tx + 0.5, tz + 0.5);
 }
 /** On the company's fence line (not at the gate). */
 function onFence(x: number, z: number): boolean {
@@ -1140,12 +1125,12 @@ export function landAt(x: number, z: number): number {
 export function slopeAt(x: number, z: number): number {
   return Math.hypot(heightAt(x + 0.5, z) - heightAt(x - 0.5, z), heightAt(x, z + 0.5) - heightAt(x, z - 0.5));
 }
-/** What's low on a tile you can't walk, over the ground (tiles): the clearing's bench (its seat),
- *  a town car (its roof) — to vault or climb onto (docs/plan/29-the-move.md M4); else NaN. */
+/** What's low on a tile you can't walk, over the ground (tiles): the clearing's bench (its seat) —
+ *  to vault or climb onto (docs/plan/29-the-move.md M4); else NaN. (The town's cars and the farm's
+ *  tractor are vehicles now: their tops are their boxes' — shared grid.ts.) */
 export function topTile(tx: number, tz: number): number {
   if (tz === Math.floor(BENCH.z) && (tx === Math.floor(BENCH.x) || tx === Math.floor(BENCH.x) + 1)) return 0.45;
-  if (onTractor(tx + 0.5, tz + 0.5)) return 1.4;
-  return onTownCar(tx + 0.5, tz + 0.5) ? 1.15 : Number.NaN;
+  return Number.NaN;
 }
 
 /** Can you walk on tile (tx, tz) (building coords)? */

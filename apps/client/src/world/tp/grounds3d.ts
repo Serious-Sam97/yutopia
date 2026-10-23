@@ -1,4 +1,4 @@
-import { CAR_COLOURS, campusLot } from "@yutopia/shared";
+import { campusLot } from "@yutopia/shared";
 import {
   BENCH,
   BUILDINGS,
@@ -30,7 +30,6 @@ import {
   STREET,
   type Surface,
   TOWER,
-  TOWN_CARS,
   TRACTOR,
   type Tree,
   terrainAt,
@@ -2891,103 +2890,16 @@ export class Grounds3 {
     }
     this.add(mergeGeometries(crows, false), this.lambert());
     for (const c of crows) c.dispose();
-    // the tractor: an old red one under snow, its length along x, turned as the shared one
+    // the tractor's toolbox (the loot spot's), on the ground where the tractor parks (the tractor
+    // itself is a vehicle now — shared car/homes.ts — drawn by world/car/cars.ts)
     {
       const y = groundAt(TRACTOR.x, TRACTOR.z);
-      const red = 0xa52a20;
-      const dark = 0x1e1e1e;
-      const parts: BufferGeometry[] = [
-        // the hood: rounded along its top, the grille in front, the headlights
-        tinted(new BoxGeometry(2.1, 0.75, 0.86).translate(0.65, 1.2, 0), red),
-        tinted(
-          new CylinderGeometry(0.43, 0.43, 2.1, 14, 1, false, 0, Math.PI)
-            .rotateZ(Math.PI / 2)
-            .rotateX(Math.PI / 2)
-            .translate(0.65, 1.57, 0),
-          red,
-        ),
-        tinted(new BoxGeometry(0.06, 0.8, 0.7).translate(1.72, 1.25, 0), 0x2a2a2a),
-        tinted(new BoxGeometry(0.07, 0.04, 0.72).translate(1.74, 1.05, 0), 0x8a8f94),
-        tinted(new BoxGeometry(0.07, 0.04, 0.72).translate(1.74, 1.45, 0), 0x8a8f94),
-        tinted(new CylinderGeometry(0.1, 0.1, 0.08, 10).rotateZ(Math.PI / 2).translate(1.74, 1.7, 0.3), 0xe8e0c0),
-        tinted(new CylinderGeometry(0.1, 0.1, 0.08, 10).rotateZ(Math.PI / 2).translate(1.74, 1.7, -0.3), 0xe8e0c0),
-        tinted(new BoxGeometry(1.95, 0.12, 0.8).translate(0.65, 2.02, 0), 0xf6f8fa), // snow on it
-        // the engine's flank, the exhaust stack with its cap
-        tinted(new BoxGeometry(1.2, 0.4, 0.95).translate(0.6, 0.85, 0), 0x3a3a3a),
-        tinted(new CylinderGeometry(0.06, 0.07, 1.1, 8).translate(1.25, 2.4, 0.28), 0x2a2a2a),
-        tinted(new CylinderGeometry(0.1, 0.08, 0.06, 8).translate(1.25, 2.96, 0.28), 0x2a2a2a),
-        // the floor, the seat, the wheel on its column
-        tinted(new BoxGeometry(1.3, 0.2, 1.9).translate(-0.9, 1.05, 0), 0x3a3a3a),
-        tinted(new BoxGeometry(0.45, 0.12, 0.45).translate(-1.05, 1.5, 0), 0x2a2420),
-        tinted(new BoxGeometry(0.1, 0.5, 0.45).translate(-1.3, 1.75, 0), 0x2a2420),
-        tinted(new CylinderGeometry(0.04, 0.04, 0.7, 6).rotateZ(-0.6).translate(-0.4, 1.55, 0), 0x2a2a2a),
-        tinted(
-          new TorusGeometry(0.2, 0.03, 6, 14)
-            .rotateY(Math.PI / 2)
-            .rotateZ(0.95)
-            .translate(-0.6, 1.85, 0),
-          dark,
-        ),
-        // the cab's frame and roof, snow on it
-        tinted(new BoxGeometry(1.55, 0.1, 1.95).translate(-0.9, 2.55, 0), red),
-        tinted(new BoxGeometry(1.6, 0.2, 2.0).translate(-0.9, 2.7, 0), 0xf6f8fa),
-      ];
-      for (const [x, z] of [
-        [-0.25, 0.85],
-        [-0.25, -0.85],
-        [-1.55, 0.85],
-        [-1.55, -0.85],
-      ])
-        parts.push(tinted(new BoxGeometry(0.07, 1.45, 0.07).translate(x, 1.8, z), 0x2a2a2a));
-      for (const sd of [-1, 1]) {
-        // the big back wheels: tyre, lugs, the red hub; their fenders
-        parts.push(
-          tinted(
-            new CylinderGeometry(0.85, 0.85, 0.48, 18).rotateX(Math.PI / 2).translate(-0.9, 0.85, sd * 1.08),
-            dark,
-          ),
-        );
-        for (let a = 0; a < Math.PI * 2; a += Math.PI / 9)
-          parts.push(
-            tinted(
-              new BoxGeometry(0.16, 0.1, 0.5)
-                .translate(Math.cos(a) * 0.86, Math.sin(a) * 0.86, 0)
-                .rotateZ(0)
-                .translate(-0.9, 0.85, sd * 1.08),
-              0x161616,
-            ),
-          );
-        parts.push(
-          tinted(new CylinderGeometry(0.42, 0.42, 0.5, 14).rotateX(Math.PI / 2).translate(-0.9, 0.85, sd * 1.09), red),
-        );
-        parts.push(
-          tinted(
-            new CylinderGeometry(1.0, 1.0, 0.55, 14, 1, true, Math.PI / 2, Math.PI)
-              .rotateX(Math.PI / 2)
-              .translate(-0.9, 0.85, sd * 1.08),
-            red,
-          ),
-        );
-        parts.push(tinted(new BoxGeometry(1.4, 0.08, 0.55).translate(-0.9, 1.88, sd * 1.08), 0xf6f8fa));
-        // the small front ones
-        parts.push(
-          tinted(new CylinderGeometry(0.42, 0.42, 0.3, 14).rotateX(Math.PI / 2).translate(1.3, 0.42, sd * 0.72), dark),
-        );
-        parts.push(
-          tinted(new CylinderGeometry(0.2, 0.2, 0.32, 10).rotateX(Math.PI / 2).translate(1.3, 0.42, sd * 0.73), red),
-        );
-      }
-      parts.push(tinted(new BoxGeometry(0.12, 0.12, 1.5).translate(1.3, 0.42, 0), 0x3a3a3a)); // the front axle
-      const tr = mergeGeometries(parts, false);
-      for (const p of parts) p.dispose();
-      this.add(place(tr, TRACTOR.x, y, TRACTOR.z, -TRACTOR.ry), this.lambert());
-      // the toolbox on its side (the loot spot's), its handle
       const tb = new G();
-      const tx = TRACTOR.x - Math.sin(TRACTOR.ry) * 1.15;
-      const tz = TRACTOR.z + Math.cos(TRACTOR.ry) * 1.15;
-      tb.color(0x2f5d8a).box(tx - 0.3, y + 0.95, tz - 0.15, tx + 0.3, y + 1.22, tz + 0.15);
-      tb.color(0x244a6e).box(tx - 0.31, y + 1.15, tz - 0.16, tx + 0.31, y + 1.18, tz + 0.16);
-      tb.color(0x8a8f94).box(tx - 0.12, y + 1.22, tz - 0.02, tx + 0.12, y + 1.28, tz + 0.02);
+      const tx = TRACTOR.x - Math.sin(TRACTOR.ry) * 1.9;
+      const tz = TRACTOR.z + Math.cos(TRACTOR.ry) * 1.9;
+      tb.color(0x2f5d8a).box(tx - 0.3, y, tz - 0.15, tx + 0.3, y + 0.27, tz + 0.15);
+      tb.color(0x244a6e).box(tx - 0.31, y + 0.2, tz - 0.16, tx + 0.31, y + 0.23, tz + 0.16);
+      tb.color(0x8a8f94).box(tx - 0.12, y + 0.27, tz - 0.02, tx + 0.12, y + 0.33, tz + 0.02);
       this.add(tb.build(), this.lambert());
     }
     // round hay bales by the barn: their wrapped sides, their darker ends, snow on top
@@ -4396,23 +4308,9 @@ export class Grounds3 {
     }
   }
 
-  // ── the town: parked cars along Main Street ──
+  // ── the town: its street furniture (its parked cars are cars like the lot's: world/car/cars.ts) ──
   private town() {
     if (!this.near(420, -405, 160)) return;
-    const solids: BufferGeometry[] = [];
-    const glass: BufferGeometry[] = [];
-    for (const c of TOWN_CARS) {
-      const { solid, glass: gl } = carGeometry(c.wagon, CAR_COLOURS[c.colour], c.snowy);
-      const y = groundAt(c.x, c.z);
-      const ry = c.dir > 0 ? 0 : Math.PI;
-      solids.push(place(solid, c.x, y + 0.03, c.z, ry + c.tilt));
-      glass.push(place(gl, c.x, y + 0.03, c.z, ry + c.tilt)); // (turned with its body)
-    }
-    if (solids.length) {
-      this.add(mergeGeometries(solids, false), this.lambert());
-      this.add(mergeGeometries(glass, false), this.lambert(0x9aa6ae), "cast");
-    }
-    for (const g of [...solids, ...glass]) g.dispose();
     // the street furniture (shared STREET: it stands in the way)
     const parts = streetGeometry(STREET);
     this.add(mergeGeometries(parts, false), this.lambert());

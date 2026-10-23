@@ -60,9 +60,12 @@ export class CarCamera {
       const d = Math.atan2(Math.sin(want - this.yaw), Math.cos(want - this.yaw));
       this.yaw += d * (1 - Math.exp(-dt * (back ? 12 : 3.2)));
       const yaw = this.yaw + this.look.yaw;
-      const dist = 6.4 + Math.min(1.2, speed * 0.03);
-      const h = 2.0 + this.look.pitch * -3;
-      const target = v.copy(at).addScaledVector(up, 0.9);
+      // (sized to the vehicle: the sedan's 1; the plough truck's further back and up, a sled's close)
+      const b = s.spec.body;
+      const k = Math.max(0.6, Math.min(1.8, ((b.ahead + b.behind) / 4.9 + b.height / 1.53) / 2));
+      const dist = (6.4 + Math.min(1.2, speed * 0.03)) * k;
+      const h = 2.0 * k + this.look.pitch * -3;
+      const target = v.copy(at).addScaledVector(up, 0.9 * k);
       const want3 = new Vector3(target.x - Math.cos(yaw) * dist, target.y + h, target.z - Math.sin(yaw) * dist);
       if (!this.ready) this.pos.copy(want3);
       this.pos.lerp(want3, 1 - Math.exp(-dt * 9));
@@ -76,7 +79,18 @@ export class CarCamera {
       cam.fov += (62 + 10 * Math.min(1, Math.max(0, (speed - 8) / 30)) - cam.fov) * (1 - Math.exp(-dt * 2));
     } else {
       // the cockpit: the driver's eyes, swaying with the car's g; the hood: over the bonnet
-      const eye = this.mode === "cockpit" ? rig.model.eye.clone() : new Vector3(-1.05, 1.18, 0);
+      // (the hood's: the cars' own spot over their bonnet; the others', ahead of the driver's eyes)
+      const kind = rig.model.dims.kind;
+      const car = kind === "sedan" || kind === "offroad" || kind === "pickup";
+      const eye =
+        this.mode === "cockpit"
+          ? rig.model.eye.clone()
+          : car
+            ? new Vector3(-1.05, 1.18, 0)
+            : rig.model.eye
+                .clone()
+                .add(new Vector3(-0.9, -0.15, 0))
+                .setZ(0);
       if (this.mode === "cockpit") {
         // a sprung head: forward g tips it forward, sideways g leans it out
         const gx = this.reduced ? 0 : rig.g.x;

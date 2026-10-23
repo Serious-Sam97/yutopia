@@ -46,6 +46,7 @@ export const CAR_FLAGS = {
   dome: 8192,
   radio1: 16384, // the radio's station: (fl >> 14) & 3, 0 off
   radio2: 32768,
+  siren: 65536, // the police car's (its light bar flashing)
 } as const;
 
 export const CAR_HZ = 20;

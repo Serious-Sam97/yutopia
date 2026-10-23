@@ -177,6 +177,11 @@ export class CarSound {
   constructor(
     private ctx: AudioContext,
     dest: AudioNode,
+    /** whose engine: the recorded four (the sedan, the 4x4); synthesized, the pickup's V8 (a
+     *  deep, lumpy burble — four firings a turn, the crossplane's uneven beat at half of it), the
+     *  snowmobile's two-stroke twin (a high, ringing buzz, two firings a turn at its high revs),
+     *  the snowcat's diesel six (a low clatter, three a turn) */
+    private voice: "four" | "v8" | "two" | "diesel" = "four",
   ) {
     const c = ctx;
     this.out = c.createGain();
@@ -375,11 +380,44 @@ export class CarSound {
         this.burst(0.25, 160, 3, this.crank, "starter");
       }
     };
-    if (recReady) go(recReady);
+    if (this.voice !== "four") go(null);
+    else if (recReady) go(recReady);
     else {
       setTimeout(() => go(recReady), 500);
       void preloadEngine(this.ctx).then(go);
     }
+  }
+
+  /** The police car's siren: a two-tone wail (a sawtooth swept up and down every 3.6 s). */
+  private sirenNode: { g: GainNode } | null = null;
+  siren(on: boolean) {
+    if (this.dead) return;
+    const c = this.ctx;
+    if (!this.sirenNode) {
+      if (!on) return;
+      const o = c.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.value = 950;
+      const lfo = c.createOscillator();
+      lfo.type = "triangle";
+      lfo.frequency.value = 1 / 3.6;
+      const lg = c.createGain();
+      lg.gain.value = 380;
+      lfo.connect(lg).connect(o.frequency);
+      const bp = c.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 1100;
+      bp.Q.value = 0.9;
+      const g = c.createGain();
+      g.gain.value = 0;
+      o.connect(bp).connect(g).connect(this.outside);
+      o.start();
+      lfo.start();
+      this.keep(o);
+      this.keep(lfo);
+      this.sirenNode = { g };
+    }
+    this.sirenNode.g.gain.setTargetAtTime(on ? 0.11 : 0, c.currentTime, 0.05);
   }
 
   update(s: CarState, h: Hearing, dt: number, blinkOn: boolean, inCar: boolean) {
@@ -395,20 +433,35 @@ export class CarSound {
     this.outside.frequency.setTargetAtTime(h.inside ? 1100 : 18000, t, 0.1);
     this.inside = h.inside;
     // the engine
-    const f = Math.max(10, s.rpm / 30); // a four's firings a second (two a turn)
+    const v8 = this.voice === "v8";
+    const two = this.voice === "two";
+    const diesel = this.voice === "diesel";
+    // its firings a second: a four's two a turn, a twin two-stroke's two, a V8's four, a six's three
+    const f = Math.max(10, s.rpm / (v8 ? 15 : diesel ? 20 : 30));
     const load = clamp(s.thr * (s.clutch > 0.5 ? 1 : 0.55));
-    const R = recReady;
+    const R = this.voice === "four" ? recReady : null;
     const syn = R ? 0 : 1; // (the synth's engine only till the recordings are in)
     if (R) this.recorded(s, h, R, run, load, dt);
     for (const o of this.eng.o) o.frequency.setTargetAtTime(f * (o as unknown as { mul: number }).mul, t, 0.02);
-    this.eng.amo.frequency.setTargetAtTime(f, t, 0.02);
-    this.eng.lp.frequency.setTargetAtTime(180 + s.rpm * 0.28 + load * 1400, t, tc);
-    let eg = run ? 0.1 + 0.18 * load + 0.04 * (s.rpm / 6000) : 0;
+    this.eng.amo.frequency.setTargetAtTime(v8 ? f / 2 : f, t, 0.02);
+    this.eng.lp.frequency.setTargetAtTime(
+      v8
+        ? 110 + s.rpm * 0.2 + load * 900
+        : two
+          ? 700 + s.rpm * 0.32 + load * 1800
+          : diesel
+            ? 90 + s.rpm * 0.18 + load * 500
+            : 180 + s.rpm * 0.28 + load * 1400,
+      t,
+      tc,
+    );
+    let eg = run ? (0.1 + 0.18 * load + 0.04 * (s.rpm / 6000)) * (v8 ? 1.35 : two ? 0.8 : diesel ? 1.4 : 1) : 0;
     // the limiter's stutter
     if (run && s.rpm > s.spec.engine.limit - 80) eg *= 0.35 + 0.65 * (Math.sin(t * 95) > 0 ? 1 : 0);
     this.eng.g.gain.setTargetAtTime(syn * eg * (h.inside ? 1.15 : 1), t, 0.02);
-    this.eng.nbp.frequency.setTargetAtTime(f * 3, t, tc);
-    this.eng.ng.gain.setTargetAtTime(run ? syn * (0.05 + 0.08 * load) : 0, t, tc);
+    this.eng.nbp.frequency.setTargetAtTime(f * (diesel ? 6 : 3), t, tc);
+    // (a two-stroke's and a diesel's rattle: more of the noise in their firing)
+    this.eng.ng.gain.setTargetAtTime(run ? syn * (0.05 + 0.08 * load) * (two ? 1.8 : diesel ? 2.2 : 1) : 0, t, tc);
     this.eng.ibp.frequency.setTargetAtTime(400 + s.rpm * 0.22, t, tc);
     this.eng.intake.gain.setTargetAtTime(run ? syn * 0.07 * load * (s.rpm / 6000) : 0, t, tc);
     // pops: a lift at high revs

@@ -170,3 +170,80 @@ export function blend(a: Grip, b: Grip, k: number): Grip {
     trace: k > 0.5 ? b.trace : a.trace,
   };
 }
+
+/** What a car stands on, axle by axle (docs/plan/34-the-vehicles.md, wave 2): tyres, a pair of
+ *  skis (the snowmobile's front), or a track (its back; both of the snowcat's). */
+export type Foot = "tyre" | "ski" | "track" | "lug" | "runner";
+
+// A ski's and a track's take on each ground, in place of a tyre's: the friction's peak and what it
+// costs to slide or roll over it. A ski glides on snow and carves into it; on bare ground it
+// scrapes, slow. A track floats on deep snow and grips it best of all; on a road it grinds (on
+// the roads, slowly: docs/plan/34's decision). Both sink far less than a tyre, plough less.
+const FEET: Record<"ski" | "track" | "lug" | "runner", Record<Ground, [mu: number, crr: number]>> = {
+  // a toboggan's wooden runners: they slide, but snow drags at them (and bare ground stops them)
+  runner: {
+    snow: [0.3, 0.07],
+    deep: [0.3, 0.12],
+    path: [0.3, 0.06],
+    slush: [0.25, 0.1],
+    ice: [0.12, 0.02],
+    blackice: [0.1, 0.02],
+    asphalt: [0.4, 0.4],
+    walk: [0.4, 0.4],
+    floor: [0.4, 0.4],
+    rock: [0.4, 0.5],
+  },
+  // a tractor's big lugged tyre: it bites snow and mud as no road tyre does
+  lug: {
+    deep: [0.55, 0.06],
+    snow: [0.6, 0.03],
+    path: [0.6, 0.025],
+    slush: [0.5, 0.03],
+    ice: [0.15, 0.01],
+    blackice: [0.13, 0.01],
+    asphalt: [0.8, 0.02],
+    walk: [0.75, 0.02],
+    floor: [0.75, 0.02],
+    rock: [0.65, 0.03],
+  },
+  ski: {
+    snow: [0.5, 0.006],
+    deep: [0.45, 0.012],
+    path: [0.45, 0.008],
+    slush: [0.35, 0.02],
+    ice: [0.25, 0.003],
+    blackice: [0.2, 0.004],
+    asphalt: [0.3, 0.12],
+    walk: [0.3, 0.12],
+    floor: [0.3, 0.12],
+    rock: [0.3, 0.15],
+  },
+  track: {
+    deep: [0.8, 0.02],
+    snow: [0.75, 0.015],
+    path: [0.7, 0.015],
+    slush: [0.55, 0.025],
+    // (studded: a track bites into ice as no tyre can)
+    ice: [0.6, 0.01],
+    blackice: [0.55, 0.01],
+    asphalt: [0.5, 0.09],
+    walk: [0.5, 0.09],
+    floor: [0.5, 0.09],
+    rock: [0.55, 0.07],
+  },
+};
+/** A foot's grip on a ground (a tyre's: `base`, the ground's own). */
+export function footGrip(foot: Foot, g: Ground, base: Grip): Grip {
+  if (foot === "tyre") return base;
+  const [mu, crr] = FEET[foot][g];
+  return {
+    ...base,
+    mu,
+    crr,
+    kappa: foot === "track" ? 0.25 : foot === "lug" ? Math.max(base.kappa, 0.2) : base.kappa,
+    alpha: foot === "ski" || foot === "runner" ? 0.2 : Math.max(base.alpha, 0.18),
+    slide: foot === "track" ? 0.9 : Math.max(base.slide, 0.8),
+    sink: base.sink * (foot === "lug" ? 0.6 : 0.2),
+    plough: base.plough * (foot === "track" ? 0.1 : foot === "lug" ? 0.5 : 0.15),
+  };
+}

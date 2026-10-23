@@ -351,7 +351,38 @@ function carShots(lamp: { x: number; z: number }): Record<string, Shot> {
   const deepPath: [number, number][] = [];
   for (let s = 12; s >= 0; s -= 0.5) deepPath.push([1.42 + s, -0.025 * s * s]);
   const eye: V3 = [0.35, 1.19, 0.42];
+  // every kind of vehicle on its own in the lot's aisle by day, from its front and its back
+  // (docs/plan/34-the-vehicles.md: `veh-<kind>-f|r`)
+  const KINDS: [NonNullable<CarIn["kind"]>, number, number, number][] = [
+    ["sedan", 4.9, 1.5, SEDAN_RED],
+    ["offroad", 4.4, 1.8, 0x2f4a3b],
+    ["pickup", 5.1, 1.8, 0x2f4a6b],
+    ["snowmobile", 3.0, 1.2, 0xb8282a],
+    ["snowcat", 4.6, 2.7, 0xd8661a],
+    ["ploughtruck", 6.6, 3.0, 0xd8661a],
+    ["tractor", 3.3, 2.5, 0xa8231e],
+    ["toboggan", 1.8, 0.5, 0xa8231e],
+  ];
+  const vehicles: Record<string, Shot> = {};
+  for (const [kind, len, h, colour] of KINDS)
+    for (const [v, sx, sz] of [
+      ["f", -1, 1],
+      ["r", 1, -1],
+      ["s", 0.15, 1.25],
+    ] as const) {
+      const d = Math.max(3.2, len * 0.95);
+      vehicles[`veh-${kind}-${v}`] = {
+        hour: "day",
+        cam: local(lot, sx * d, h * 0.55 + 0.9, sz * d * 0.8),
+        look: local(lot, 0, h * 0.42, 0),
+        fov: 40,
+        people: [],
+        cars: [{ ...lot, y: groundAt(lot.x, lot.z) + 0.08, colour, kind, snowy: 0.25 }],
+        snow: 300,
+      };
+    }
   return {
+    ...vehicles,
     "car-lot-day": {
       hour: "day",
       cam: local(lot, -6.9, 1.5, 2.1),

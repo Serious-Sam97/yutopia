@@ -31,7 +31,9 @@ import {
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import * as T from "./textures";
+import { buildSnowcat, buildSnowmobile } from "./tracked";
 import { type Cluster, drawCluster, drawRadio } from "./vfd";
+import { buildPloughTruck, buildToboggan, buildTractor } from "./work";
 
 // The sedan (docs/plan/28-the-car.md): an 80s rear-wheel-drive saloon, in
 // parts — the sprung body (it rolls and pitches on its springs), four doors on
@@ -61,7 +63,7 @@ export const SEDAN = {
 // set to the body being built (the builder below is synchronous).
 type P2 = [number, number];
 type V3 = [number, number, number];
-export type BodyKind = "sedan" | "offroad";
+export type BodyKind = "sedan" | "offroad" | "pickup";
 interface Body {
   kind: BodyKind;
   L: number;
@@ -112,6 +114,18 @@ const OFF_TOP: P2[] = [
   [1.18, 1.1],
   [1.3, 1.12],
   [3.76, 1.12],
+];
+// (the pickup: the hood and the cab's beltline, then down at the cab's back to the bed's floor)
+const PICK_TOP: P2[] = [
+  [0.0, 0.8],
+  [0.04, 0.86],
+  [0.12, 0.9],
+  [0.4, 0.93],
+  [1.2, 0.99],
+  [1.62, 1.015],
+  [3.32, 1.02],
+  [3.36, 0.86],
+  [5.2, 0.86],
 ];
 const SHAPES: Record<BodyKind, Body> = {
   sedan: {
@@ -186,6 +200,44 @@ const SHAPES: Record<BodyKind, Body> = {
     R1: [3.71, 1.715],
     cabin: { dx: 1.24 - 1.66 + (4.9 - 3.8) / 2, dy: 0.18, sz: 1.7 / 1.86 },
   },
+  // the 80s pickup (wave 1): a two-door cab, its back just behind the front seats' headrests, an
+  // open bed behind it with low walls and a tailgate (built on in buildSedan)
+  pickup: {
+    kind: "pickup",
+    L: 5.2,
+    W: 1.88,
+    axleF: 0.95,
+    axleR: 4.1,
+    wheelR: 0.34,
+    track: 0.77,
+    belt: 1.02,
+    roof: 1.6,
+    XF: 1.66,
+    XB: 2.81,
+    XR: 3.32,
+    HB: 0.89,
+    HR: 0.75,
+    arch: 0.45,
+    archY: 0.36,
+    lower: [
+      [0.03, 0.36],
+      [0.5, 0.34],
+      ...arc(0.95, 0.36, 0.45, Math.PI, 0, 18),
+      [1.42, 0.3],
+      [3.63, 0.3],
+      ...arc(4.1, 0.36, 0.45, Math.PI, 0, 18),
+      [4.57, 0.34],
+      [5.16, 0.36],
+      [5.2, 0.45],
+      [5.21, 0.86],
+      ...PICK_TOP.slice().reverse(),
+      [0.0, 0.48],
+    ],
+    top: PICK_TOP,
+    A1: [2.33, 1.58],
+    R1: [3.29, 1.59],
+    cabin: { dx: 1.66 - 5.2 / 2 - (1.66 - 4.9 / 2), dy: 0.06, sz: 1 },
+  },
 };
 let S: Body = SHAPES.sedan;
 let L = S.L;
@@ -198,7 +250,7 @@ let HR = S.HR;
 let BELT = S.belt;
 let ROOF = S.roof;
 let LOWER: P2[] = S.lower;
-function useShape(k: BodyKind): Body {
+function takeShape(k: BodyKind): Body {
   S = SHAPES[k];
   ({ L, W, XF, XB, XR, HB, HR } = S);
   BELT = S.belt;
@@ -392,11 +444,14 @@ class Parts {
 
 export interface SedanOpts {
   colour: number;
-  /** which body (the 80s 4x4's: "offroad") */
-  kind?: BodyKind;
+  /** which body (the 80s 4x4's: "offroad"; the tracked ones, built by tracked.ts) */
+  kind?: BodyKind | "snowmobile" | "snowcat" | "ploughtruck" | "tractor" | "toboggan";
   /** snow lying on it, 0..1 */
   snowy?: number;
   plate?: string;
+  /** its role (shared car/homes.ts): the taxi's yellow and roof sign, the police car's black and
+   *  white and light bar */
+  role?: string;
 }
 export interface Lights {
   beams: "off" | "low" | "high";
@@ -414,6 +469,9 @@ export interface Wheel {
   front: boolean;
   side: 1 | -1;
   rest: Vector3; // its centre at rest (model coords)
+  /** how much it turns for the sim's wheel (a drawn tyre bigger or smaller than the sim's turns
+   *  less or more); 1 if left out */
+  turnK?: number;
 }
 export interface Door {
   group: Group; // its hinge; rotation.y opens it (`open(a)`)
@@ -444,7 +502,7 @@ export interface Sedan {
   /** the driver's eyes (model coords, sitting back) */
   eye: Vector3;
   /** the body: its length, where its front axle is (the profile's u), which */
-  dims: { L: number; axleF: number; kind: BodyKind };
+  dims: { L: number; axleF: number; kind: NonNullable<SedanOpts["kind"]> };
   /** the lamps (model coords): headlamps' centres and their aim; tail lamps */
   lamps: { head: Vector3[]; tail: Vector3[]; exhaust: Vector3 };
   /** the rear-view mirror's glass (model coords: it faces +x, the driver) */
@@ -459,6 +517,8 @@ export interface Sedan {
   setRadio(band: "FM" | "AM" | "TAPE", f: number, preset: number): void;
   setScreenSnow(t: Texture | null): void;
   setEnv(t: Texture | null): void;
+  /** its role's light: the taxi's sign lit (free), the police car's bar flashing (`t` seconds) */
+  setBeacon(on: boolean, t: number): void;
   /** its wear: the road's dirt up its sides (0..1), its dents (front, rear, left, right: 0..1) —
    *  the panels crumpled where it was hit; a front badly hit, a headlamp cracked (dim) */
   setWear(grime: number, dmg: readonly number[]): void;
@@ -466,8 +526,22 @@ export interface Sedan {
 }
 
 export function buildSedan(o: SedanOpts): Sedan {
-  const sh = useShape(o.kind ?? "sedan");
-  const off = sh.kind === "offroad";
+  // (the snowmobile and the snowcat: their own builders, the same parts)
+  if (o.kind === "snowmobile") return buildSnowmobile(o);
+  if (o.kind === "snowcat") return buildSnowcat(o);
+  if (o.kind === "ploughtruck") return buildPloughTruck(o);
+  if (o.kind === "tractor") return buildTractor(o);
+  if (o.kind === "toboggan") return buildToboggan(o);
+  return buildBody(o, o.kind ?? "sedan");
+}
+
+function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
+  const sh = takeShape(kind);
+  const pick = sh.kind === "pickup";
+  // (the 4x4 and the pickup: two doors, square-cut ends, black bumpers)
+  const off = sh.kind === "offroad" || pick;
+  const police = o.role === "police";
+  const taxi = o.role === "taxi";
   const dy = sh.cabin.dy; // (the floor's height above the sedan's)
   const disposables: { dispose(): void }[] = [];
   const keep = <X extends { dispose(): void }>(x: X): X => {
@@ -477,7 +551,7 @@ export function buildSedan(o: SedanOpts): Sedan {
   // ── materials ──
   const paint = keep(
     new MeshPhysicalMaterial({
-      color: o.colour,
+      color: taxi ? 0xe2b42a : o.colour,
       roughness: 0.42,
       metalness: 0.05,
       clearcoat: 0.55,
@@ -610,8 +684,12 @@ export function buildSedan(o: SedanOpts): Sedan {
   const domeMat = keep(
     new MeshStandardMaterial({ color: "#e8e2d2", roughness: 0.4, emissive: "#fff1d0", emissiveIntensity: 0 }),
   );
+  // (the police car's doors white on its black)
+  const doorPaint = police ? keep(paint.clone()) : paint;
+  if (police) doorPaint.color.set("#ecebe6");
   const exterior: (MeshStandardMaterial | MeshPhysicalMaterial)[] = [
     paint,
+    ...(police ? [doorPaint] : []),
     chrome,
     glass,
     mirror,
@@ -627,6 +705,13 @@ export function buildSedan(o: SedanOpts): Sedan {
   };
   for (const m of [paint, chrome, satin, rubber, headLens, red, amberL, amberR, reverse, plateMat])
     wearable(m, wear, m === paint);
+  if (police) wearable(doorPaint, wear, true);
+  // its role's light: the taxi's sign, the police car's bar (red one end, blue the other)
+  const beacon = [
+    keep(new MeshStandardMaterial({ color: "#f3e0a0", emissive: "#ffcf5a", emissiveIntensity: 0, roughness: 0.4 })),
+    keep(new MeshStandardMaterial({ color: "#7a1412", emissive: "#ff2a20", emissiveIntensity: 0, roughness: 0.3 })),
+    keep(new MeshStandardMaterial({ color: "#14306e", emissive: "#2a62ff", emissiveIntensity: 0, roughness: 0.3 })),
+  ];
   let lampK = 1;
   const interior: (MeshStandardMaterial | MeshPhysicalMaterial)[] = [
     wood,
@@ -710,14 +795,14 @@ export function buildSedan(o: SedanOpts): Sedan {
     B.add(reverse, cube(L + 0.02, L + 0.032, 0.66, 0.72, -0.12, 0.12));
     B.add(plateMat, new PlaneGeometry(0.5, 0.115).rotateY(Math.PI / 2).translate(ux(L + 0.024), 0.86, 0));
     B.add(plateMat, new PlaneGeometry(0.5, 0.115).rotateY(-Math.PI / 2).translate(ux(-0.076), 0.555, 0));
-    // the roof rack: two rails on feet, three bars across
-    for (const sd of [1, -1]) {
+    // the roof rack: two rails on feet, three bars across (the 4x4's)
+    for (const sd of pick ? [] : [1, -1]) {
       const z = sd * (HR - 0.04);
       B.add(satin, beam(U(sh.A1[0] + 0.1, ROOF + 0.09, z), U(sh.R1[0] - 0.06, ROOF + 0.09, z), 0.03, 0.03, [0, 1, 0]));
       for (const u of [sh.A1[0] + 0.15, (sh.A1[0] + sh.R1[0]) / 2, sh.R1[0] - 0.12])
         B.add(satin, cube(u - 0.03, u + 0.03, ROOF, ROOF + 0.09, z - 0.025, z + 0.025));
     }
-    for (const u of [sh.A1[0] + 0.25, (sh.A1[0] + sh.R1[0]) / 2, sh.R1[0] - 0.2])
+    for (const u of pick ? [] : [sh.A1[0] + 0.25, (sh.A1[0] + sh.R1[0]) / 2, sh.R1[0] - 0.2])
       B.add(satin, beam(U(u, ROOF + 0.1, -HR + 0.04), U(u, ROOF + 0.1, HR - 0.04), 0.03, 0.02, [1, 0, 0]));
     // mud flaps behind the wheels, black cladding along the sills
     for (const sd of [1, -1]) {
@@ -783,6 +868,25 @@ export function buildSedan(o: SedanOpts): Sedan {
     B.add(plateMat, new PlaneGeometry(0.5, 0.115).rotateY(Math.PI / 2).translate(ux(4.937), 0.68, 0));
     B.add(plateMat, new PlaneGeometry(0.5, 0.115).rotateY(-Math.PI / 2).translate(ux(-0.088), 0.445, 0));
     B.add(chrome, cube(4.88, 4.93, 0.875, 0.89, -0.88, 0.88));
+  }
+  if (pick) {
+    // the bed: a ribbed floor, low walls each side with a rail along their top, the tailgate; the
+    // cab's back over the bed's front
+    const fl = 0.86;
+    const rail = 1.08;
+    B.add(satin, cube(XR + 0.04, L - 0.06, fl, fl + 0.012, -W / 2 + 0.06, W / 2 - 0.06));
+    for (let z = -0.7; z <= 0.71; z += 0.2)
+      B.add(satin, cube(XR + 0.06, L - 0.08, fl + 0.012, fl + 0.026, z - 0.02, z + 0.02));
+    for (const sd of [1, -1]) {
+      const zo = sd > 0 ? W / 2 - 0.06 : -W / 2;
+      B.add(paint, cube(XR + 0.02, L, fl, rail, zo, zo + 0.06));
+      B.add(chrome, cube(XR + 0.02, L, rail, rail + 0.016, sd * (W / 2 - 0.065), sd * (W / 2 + 0.004)));
+      // (the wheel arch inside the bed: a hump to sit on)
+      B.add(satin, cube(sh.axleR - 0.5, sh.axleR + 0.5, fl, fl + 0.14, sd * (W / 2 - 0.36), sd * (W / 2 - 0.06)));
+    }
+    B.add(paint, cube(L - 0.06, L, fl - 0.24, rail, -W / 2, W / 2));
+    B.add(chrome, cube(L - 0.065, L + 0.004, rail, rail + 0.016, -W / 2, W / 2));
+    B.add(paint, cube(XR, XR + 0.05, fl, BELT, -W / 2 + 0.02, W / 2 - 0.02));
   }
   // shut lines: the hood, the boot lid, the fuel flap
   const shut = (a: V3, b: V3) => B.add(under, beam(a, b, 0.008, 0.004, [0, 1, 0]));
@@ -854,6 +958,14 @@ export function buildSedan(o: SedanOpts): Sedan {
         [0, 1, 0],
       ),
     );
+    if (off && pick) {
+      // the pickup: the cab's corner pillar behind the door, down to the beltline
+      B.add(
+        paint,
+        beam(onSide(R1[0] - 0.08, BELT, s, 0.02), onSide(R1[0] - 0.06, ROOF - 0.01, s, 0.02), 0.2, 0.05, [1, 0, 0]),
+      );
+      continue;
+    }
     if (off) {
       // the 4x4: a fixed window behind the door, the D-pillar, the cargo bay's liner
       const q: P2[] = [
@@ -935,6 +1047,15 @@ export function buildSedan(o: SedanOpts): Sedan {
       0.022,
     ),
   );
+  if (taxi || police) {
+    const um = (A1[0] + R1[0]) / 2;
+    if (taxi) B.add(beacon[0], cube(um - 0.16, um + 0.16, ROOF + 0.02, ROOF + 0.17, -0.3, 0.3));
+    else {
+      B.add(satin, cube(um - 0.1, um + 0.1, ROOF + 0.015, ROOF + 0.04, -0.62, 0.62));
+      B.add(beacon[1], cube(um - 0.09, um + 0.09, ROOF + 0.04, ROOF + 0.13, 0.04, 0.6));
+      B.add(beacon[2], cube(um - 0.09, um + 0.09, ROOF + 0.04, ROOF + 0.13, -0.6, -0.04));
+    }
+  }
   // the windscreen: bowed, its foot under the cowl; the rear window
   const screen = {
     u0: A0[0] + 0.02,
@@ -969,9 +1090,11 @@ export function buildSedan(o: SedanOpts): Sedan {
   snowScreen.visible = false;
   snowScreen.renderOrder = 3;
   body.add(snowScreen);
-  const rearGeo = off
-    ? bowed(R1[0] + 0.035, ROOF - 0.035, HR - 0.08, L - 0.035, BELT + 0.07, HB - 0.08, 0.012)
-    : bowed(3.45, ROOF - 0.023, HR - 0.12, 3.945, 0.99, HB - 0.165, 0.03);
+  const rearGeo = pick
+    ? bowed(R1[0] + 0.03, ROOF - 0.04, HR - 0.1, R1[0] + 0.05, BELT + 0.06, HB - 0.12, 0.004)
+    : off
+      ? bowed(R1[0] + 0.035, ROOF - 0.035, HR - 0.08, L - 0.035, BELT + 0.07, HB - 0.08, 0.012)
+      : bowed(3.45, ROOF - 0.023, HR - 0.12, 3.945, 0.99, HB - 0.165, 0.03);
   const rear = new Mesh(rearGeo, glass);
   rear.renderOrder = 2;
   keep(rearGeo);
@@ -1012,7 +1135,7 @@ export function buildSedan(o: SedanOpts): Sedan {
       body.add(group);
       const P = new Parts();
       const zo = s > 0 ? W / 2 - DOOR_T : -W / 2;
-      P.add(paint, slab(clipU(LOWER, u0, u1), zo, zo + DOOR_T, bs));
+      P.add(doorPaint, slab(clipU(LOWER, u0, u1), zo, zo + DOOR_T, bs));
       // the door card: cream vinyl, a walnut strip, the armrest, the crank, a speaker
       const zi = s * (W / 2 - DOOR_T - 0.012);
       const top = BELT - 0.01;
@@ -1116,15 +1239,17 @@ export function buildSedan(o: SedanOpts): Sedan {
   // (where the rear tubs start, and their inner wall, in the cabin's own coords: nothing goes in them)
   const tubU = sh.axleR - sh.arch - 0.06 + SHAPES.sedan.L / 2 - sh.cabin.dx - sh.L / 2;
   const tubZ = (sh.track - TUB - 0.012) / sh.cabin.sz;
-  useShape("sedan");
+  takeShape("sedan");
   const cabin = new Group();
   cabin.position.set(sh.cabin.dx, dy, 0);
   cabin.scale.set(1, 1, sh.cabin.sz);
   body.add(cabin);
   const I = new Parts();
   // floor, tunnel, kick plates, the footwell's carpeted firewall
-  I.add(carpet, cube(XF, tubU, 0.3, 0.31, -W / 2 + DOOR_T, W / 2 - DOOR_T));
-  I.add(carpet, cube(tubU, XR, 0.3, 0.31, -tubZ, tubZ));
+  // (the pickup's cab ends just behind the front seats: nothing of the sedan's behind them)
+  const cabBack = pick ? 3.3 : Number.POSITIVE_INFINITY;
+  I.add(carpet, cube(XF, Math.min(tubU, cabBack), 0.3, 0.31, -W / 2 + DOOR_T, W / 2 - DOOR_T));
+  if (!pick) I.add(carpet, cube(tubU, XR, 0.3, 0.31, -tubZ, tubZ));
   I.add(carpet, cube(XF, 2.95, 0.31, 0.47, -0.15, 0.15));
   I.add(carpet, cube(XF + 0.005, XF + 0.02, 0.3, 0.6, -W / 2 + DOOR_T, W / 2 - DOOR_T));
   for (const s of [1, -1]) I.add(vinyl, cube(XF, tubU, 0.3, 0.4, s * (W / 2 - DOOR_T - 0.06), s * (W / 2 - DOOR_T)));
@@ -1323,27 +1448,29 @@ export function buildSedan(o: SedanOpts): Sedan {
     [3.62, 0.46],
     [3.66, 0.36],
   ];
-  if (tubU > 3.25) I.add(cloth, slab(clipU(cushion, 3.2, tubU), -0.78, 0.78, 0.035));
-  I.add(cloth, slab(clipU(cushion, Math.max(3.2, tubU), 3.66), -tubZ, tubZ, 0.035));
-  I.add(
-    cloth,
-    slab(
-      [
-        [3.6, 0.46],
-        [3.7, 1.0],
-        [3.76, 0.99],
-        [3.73, 0.43],
-      ],
-      -tubZ,
-      tubZ,
-      0.03,
-    ),
-  );
-  for (const s of [1, -1] as const) seats.push({ hip: new Vector3(ux(3.47), 0.46, s * 0.45), side: s, front: false });
-  // the parcel shelf with its speakers
-  I.add(vinyl, cube(3.74, 3.97, 0.955, 0.975, -0.82, 0.82));
-  for (const s of [1, -1])
-    I.add(switchMat, new CircleGeometry(0.06, 16).rotateX(-Math.PI / 2).translate(ux(3.86), 0.977, s * 0.5));
+  if (!pick) {
+    if (tubU > 3.25) I.add(cloth, slab(clipU(cushion, 3.2, tubU), -0.78, 0.78, 0.035));
+    I.add(cloth, slab(clipU(cushion, Math.max(3.2, tubU), 3.66), -tubZ, tubZ, 0.035));
+    I.add(
+      cloth,
+      slab(
+        [
+          [3.6, 0.46],
+          [3.7, 1.0],
+          [3.76, 0.99],
+          [3.73, 0.43],
+        ],
+        -tubZ,
+        tubZ,
+        0.03,
+      ),
+    );
+    for (const s of [1, -1] as const) seats.push({ hip: new Vector3(ux(3.47), 0.46, s * 0.45), side: s, front: false });
+    // the parcel shelf with its speakers
+    I.add(vinyl, cube(3.74, 3.97, 0.955, 0.975, -0.82, 0.82));
+    for (const s of [1, -1])
+      I.add(switchMat, new CircleGeometry(0.06, 16).rotateX(-Math.PI / 2).translate(ux(3.86), 0.977, s * 0.5));
+  }
   // the headliner, the visors, the dome lamp, the rear-view mirror
   I.add(
     liner,
@@ -1426,7 +1553,10 @@ export function buildSedan(o: SedanOpts): Sedan {
     p.y += dy;
     p.z *= sh.cabin.sz;
   }
-  useShape(sh.kind);
+  takeShape(sh.kind);
+  // the pickup's two behind: in the bed, sitting on its floor against the wheel humps
+  if (pick)
+    for (const s of [1, -1] as const) seats.push({ hip: new Vector3(ux(3.95), 0.98, s * 0.48), side: s, front: false });
 
   // ── the wipers ──
   const slope = new Vector3(screen.u1 - screen.u0, screen.y1 - screen.y0, 0).normalize();
@@ -1606,6 +1736,15 @@ export function buildSedan(o: SedanOpts): Sedan {
     }
   };
   let lastLights: Lights = { beams: "off", tail: false, brake: 0, reverse: false, ind: 0, dash: 0, dome: false };
+  const setBeacon = (on: boolean, t: number) => {
+    if (taxi) beacon[0].emissiveIntensity = on ? 1.6 : 0.15;
+    else if (police) {
+      // (red, then blue, twice a second each)
+      const red = Math.floor(t * 4) % 2 === 0;
+      beacon[1].emissiveIntensity = on && red ? 4 : 0.1;
+      beacon[2].emissiveIntensity = on && !red ? 4 : 0.1;
+    }
+  };
   const setWear = (grime: number, dmg: readonly number[]) => {
     wear.uGrime.value = Math.max(0, Math.min(1, grime));
     wear.uDmg.value.set(dmg[0] ?? 0, dmg[1] ?? 0, dmg[2] ?? 0, dmg[3] ?? 0);
@@ -1654,6 +1793,7 @@ export function buildSedan(o: SedanOpts): Sedan {
     setRadio,
     setScreenSnow,
     setEnv,
+    setBeacon,
     setWear,
     dispose: () => {
       for (const d of disposables) d.dispose();
@@ -1718,7 +1858,7 @@ function bowed(
 /** A material worn as the car is (setWear's uniforms): its panels pushed in where it was hit (a
  *  crumple, not a smooth dent: noise in the push and in the light), and — the paint — the road's
  *  grey dirt up from the sills. The model's coords: the nose −x, the left +z, the ground y 0. */
-function wearable(
+export function wearable(
   m: MeshStandardMaterial | MeshPhysicalMaterial,
   u: { uGrime: { value: number }; uDmg: { value: Vector4 }; uEnds: { value: Vector3 } },
   dirt: boolean,

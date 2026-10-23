@@ -1,4 +1,5 @@
 import {
+  type CarKind,
   type CarSpec,
   type CarState,
   type CarWorld,
@@ -9,13 +10,12 @@ import {
   HELPS,
   type Helps,
   headingOf,
-  OFFROAD,
   PAD,
   padGround,
   padHeight,
   padWorld,
   readout,
-  SEDAN,
+  SPECS,
   STEP,
   setEngine,
   settle,
@@ -52,7 +52,7 @@ export interface SandboxOpts {
   world: "pad" | "grounds";
   at?: string; // on the Grounds: where to start
   night?: boolean;
-  spec?: "sedan" | "offroad";
+  spec?: CarKind;
 }
 
 export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() => void> {
@@ -114,7 +114,7 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
   }
 
   // ── the car ──
-  let spec: CarSpec = structuredClone(o.spec === "offroad" ? OFFROAD : SEDAN);
+  let spec: CarSpec = structuredClone(SPECS[o.spec ?? "sedan"]);
   let car: CarState;
   let model: Sedan;
   let rig: CarRig;
@@ -185,7 +185,7 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     helps,
     teleport: (x, z, a) => place(x, z, a),
     swap: (k) => {
-      spec = structuredClone(k === "offroad" ? OFFROAD : SEDAN);
+      spec = structuredClone(SPECS[k]);
       place(car.p.x, car.p.z, headingOf(car.q));
     },
   });
@@ -387,7 +387,7 @@ interface PanelCtx {
   setSpec: (s: CarSpec) => void;
   helps: Helps;
   teleport: (x: number, z: number, a: number) => void;
-  swap: (k: "sedan" | "offroad") => void;
+  swap: (k: CarKind) => void;
 }
 function panel(host: HTMLElement, ctx: PanelCtx) {
   const tele = document.createElement("canvas");
@@ -456,10 +456,12 @@ function panel(host: HTMLElement, ctx: PanelCtx) {
     },
   );
   // the car's numbers
-  row("<br><b>Car</b> <button data-k='sedan'>sedan</button> <button data-k='offroad'>4x4</button>")
+  row(
+    "<br><b>Car</b> <button data-k='sedan'>sedan</button> <button data-k='offroad'>4x4</button> <button data-k='pickup'>pickup</button>",
+  )
     .querySelectorAll("button")
     .forEach((b) => {
-      b.onclick = () => ctx.swap(b.dataset.k as "sedan" | "offroad");
+      b.onclick = () => ctx.swap(b.dataset.k as CarKind);
     });
   const sp = (
     label: string,
@@ -599,7 +601,7 @@ function panel(host: HTMLElement, ctx: PanelCtx) {
     0.05,
     (s) => s.engine.curve[3][1] / 185,
     (s, v) => {
-      const base = (ctx.spec().kind === "offroad" ? OFFROAD : SEDAN).engine.curve;
+      const base = SPECS[ctx.spec().kind].engine.curve;
       s.engine.curve = base.map(([r, n]) => [r, n * v]);
     },
   );

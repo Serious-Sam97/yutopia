@@ -97,7 +97,7 @@ export class CarRig {
       const mw = m.wheels[i];
       mw.steer.position.y = mw.rest.y + (w.c - this.c0[i]);
       mw.steer.rotation.y = -w.steer;
-      mw.spin.rotation.z = w.turn;
+      mw.spin.rotation.z = w.turn * (mw.turnK ?? 1);
     }
     m.steering.rotation.z = -s.str * s.spec.steer.ratio;
     // the lamps

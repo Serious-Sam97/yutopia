@@ -16,6 +16,7 @@ import type { Controls } from "@yutopia/shared/car";
 //   radio      R               —
 //   fill up    F               —           (stopped at a pump)
 //   pull out   T               —           (stuck: to the nearest clear spot)
+//   siren      G               —           (the police car's)
 //   camera     C  look back B  Y / △  right stick press
 //   look round the mouse (dragged, or the view's mouse look) · the right stick (car/cars.ts)
 //   get out    X               X / □
@@ -36,7 +37,8 @@ export type Switch =
   | "diff"
   | "range"
   | "fill"
-  | "unstick";
+  | "unstick"
+  | "siren";
 
 const KEY_SWITCH: Record<string, Switch> = {
   KeyL: "lights",
@@ -47,6 +49,7 @@ const KEY_SWITCH: Record<string, Switch> = {
   KeyR: "radio",
   KeyF: "fill",
   KeyT: "unstick",
+  KeyG: "siren",
   KeyC: "camera",
   KeyX: "exit",
   KeyE: "up",

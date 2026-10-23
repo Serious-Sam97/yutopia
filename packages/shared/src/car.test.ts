@@ -3,11 +3,13 @@ import { test } from "node:test";
 import { campusLot } from "./building.ts";
 import {
   bayFor,
+  bladeCells,
   boxHits,
   type CarState,
   type CarWire,
   type CarWorld,
   type Controls,
+  coverAfter,
   createCar,
   flatWorld,
   freeSpot,
@@ -15,17 +17,28 @@ import {
   groundsWorld,
   HELPS,
   type Helps,
+  HOME_CARS,
   headingQuat,
   implausible,
   NO_HELPS,
   OFFROAD,
+  PICKUP,
+  PLOUGHED_MS,
+  PLOUGHTRUCK,
+  ploughCell,
   readout,
+  SEATS_OF,
   SEDAN,
+  SNOWCAT,
+  SNOWMOBILE,
   type Solid,
+  SPECS,
   STEP,
   setEngine,
   settle,
   stepCar,
+  TOBOGGAN,
+  TRACTOR,
 } from "./car/index.ts";
 import { atPump, heightAt, PUMPS, treesIn, walkableTile } from "./grounds.ts";
 
@@ -540,4 +553,157 @@ test("the gas station: driven in off Main Street to beside either pump, either s
     walkableTile(314, -389) && !walkableTile(313, -389) && !walkableTile(312, -380),
     "round the islands, not into the kiosk",
   );
+});
+
+test("the cars that live away from the lot: each home clear of everything, level, on ground it can drive off", () => {
+  const w = groundsWorld();
+  assert.ok(HOME_CARS.length >= 20, `${HOME_CARS.length} homes`);
+  assert.equal(HOME_CARS.filter((h) => h.role === "police").length, 1, "one police car");
+  assert.equal(HOME_CARS.filter((h) => h.role === "taxi").length, 2, "two taxis");
+  assert.ok(
+    HOME_CARS.some((h) => h.model === "pickup"),
+    "the farm's pickup",
+  );
+  const ids = new Set(HOME_CARS.map((h) => h.id));
+  assert.equal(ids.size, HOME_CARS.length, "every id its own");
+  for (const h of HOME_CARS) {
+    const b = SPECS[h.model].body;
+    const off = (b.ahead - b.behind) / 2;
+    const cx = h.x + Math.cos(h.a) * off;
+    const cz = h.z + Math.sin(h.a) * off;
+    const near: Solid[] = [];
+    w.solids(cx, cz, 5, near);
+    const hit = near.find((o) => boxHits(cx, cz, (b.ahead + b.behind) / 2 + 0.1, b.width / 2 + 0.1, h.a, o));
+    assert.ok(!hit, `${h.id}: into a ${hit?.what} at ${hit?.x.toFixed(0)}, ${hit?.z.toFixed(0)}`);
+    const ys = [-2, 2].flatMap((u) =>
+      [-0.8, 0.8].map((v) =>
+        heightAt(cx + Math.cos(h.a) * u - Math.sin(h.a) * v, cz + Math.sin(h.a) * u + Math.cos(h.a) * v),
+      ),
+    );
+    assert.ok(Math.max(...ys) - Math.min(...ys) < 0.5, `${h.id}: level`);
+  }
+  // …and clear of each other (a box each, a little room round it)
+  const box = (h: (typeof HOME_CARS)[number]): Solid => {
+    const b = SPECS[h.model].body;
+    const off = (b.ahead - b.behind) / 2;
+    return {
+      kind: "box",
+      x: h.x + Math.cos(h.a) * off,
+      z: h.z + Math.sin(h.a) * off,
+      hx: (b.ahead + b.behind) / 2 + 0.2,
+      hz: b.width / 2 + 0.2,
+      a: h.a,
+      what: h.id,
+    } as Solid;
+  };
+  for (const a of HOME_CARS)
+    for (const b of HOME_CARS) {
+      if (a.id >= b.id || Math.hypot(a.x - b.x, a.z - b.z) > 12) continue;
+      const o = box(b);
+      const s = box(a);
+      assert.ok(!boxHits(s.x, s.z, s.hx ?? 0, s.hz ?? 0, a.a, o), `${a.id} into ${b.id}`);
+    }
+});
+
+test("the pickup: its V8 climbs through all four gears (never held on its limiter in first); its bed seats behind", () => {
+  const s = warm(createCar(PICKUP, 0, 0, 0, 0));
+  settle(s, flatWorld("asphalt"));
+  let top = 0;
+  run(s, flatWorld("asphalt"), 30, (c) => {
+    top = Math.max(top, c.gear);
+    return { ...NONE, up: 1 };
+  });
+  assert.ok(top >= 3 && readout(s).kmh > 130, `gear ${top}, ${readout(s).kmh.toFixed(0)} km/h in 30 s`);
+  // its two behind the cab: in the bed, further back and higher than the sedan's rear seats
+  const p = SEATS_OF.pickup;
+  assert.ok(p.at[2][0] < SEATS_OF.sedan.at[2][0] && p.hip[2] > 0.9);
+});
+
+test("the snowmobile: at home on snow and deep snow, slow on a road; the snowcat climbs what nothing else can", () => {
+  const top = (spec: typeof SEDAN, g: Ground, secs = 20) => {
+    const w = flatWorld(g);
+    const s = warm(createCar(spec, 0, 0, 0, 0));
+    settle(s, w);
+    run(s, w, secs, () => ({ ...NONE, up: 1 }));
+    return readout(s).kmh;
+  };
+  const deep = top(SNOWMOBILE, "deep");
+  assert.ok(deep > 100, `snowmobile, deep snow: ${deep.toFixed(0)} km/h`);
+  assert.ok(deep > top(SEDAN, "deep") * 2, "far quicker than a car through deep snow");
+  const road = top(SNOWMOBILE, "asphalt");
+  assert.ok(road < 40, `snowmobile, asphalt: ${road.toFixed(0)} km/h (slow on the roads)`);
+  const cat = top(SNOWCAT, "snow");
+  assert.ok(cat > 25 && cat < 45, `snowcat, flat out: ${cat.toFixed(0)} km/h`);
+  // up a 50 % slope of deep snow: only the snowcat gets anywhere
+  const climb = (spec: typeof SEDAN) => {
+    const w = flatWorld("deep", 0.5);
+    const s = warm(createCar(spec, 0, 0, 0, -Math.PI / 2));
+    settle(s, w);
+    run(s, w, 15, () => ({ ...NONE, up: 1 }));
+    return -s.p.z;
+  };
+  assert.ok(climb(SNOWCAT) > 10, `the snowcat climbed ${climb(SNOWCAT).toFixed(0)} m`);
+  for (const spec of [SEDAN, OFFROAD, SNOWMOBILE]) assert.ok(climb(spec) < 5, `${spec.kind} up the 50 %`);
+  // seats: one on the snowmobile, four in the snowcat
+  assert.equal(SEATS_OF.snowmobile.at.length, 1);
+  assert.equal(SEATS_OF.snowcat.at.length, 4);
+});
+
+test("the plough truck: heavy but quick on a road; the tractor slow and sure on snow, through its gears; two seats and one", () => {
+  const top = (spec: typeof SEDAN, g: Ground, secs = 30) => {
+    const w = flatWorld(g);
+    const s = warm(createCar(spec, 0, 0, 0, 0));
+    settle(s, w);
+    let gear = 0;
+    run(s, w, secs, (c) => {
+      gear = Math.max(gear, c.gear);
+      return { ...NONE, up: 1 };
+    });
+    return { kmh: readout(s).kmh, gear };
+  };
+  const truck = top(PLOUGHTRUCK, "asphalt", 40);
+  assert.ok(truck.kmh > 75, `plough truck, asphalt: ${truck.kmh.toFixed(0)} km/h`);
+  const tractor = top(TRACTOR, "snow");
+  assert.ok(tractor.kmh > 22 && tractor.kmh < 45, `tractor, snow: ${tractor.kmh.toFixed(0)} km/h`);
+  assert.ok(tractor.gear >= 2, `the tractor shifts up (gear ${tractor.gear})`);
+  assert.equal(SEATS_OF.ploughtruck.at.length, 2);
+  assert.equal(SEATS_OF.tractor.at.length, 1);
+});
+
+test("the toboggan: no engine — it runs down a hill on its own; on the flat, pushed at a walk; three on it", () => {
+  const down = flatWorld("snow", 0.15);
+  const s = warm(createCar(TOBOGGAN, 0, 0, 0, Math.PI / 2));
+  settle(s, down);
+  run(s, down, 12, () => NONE);
+  assert.ok(readout(s).kmh > 15, `down a 15 % slope: ${readout(s).kmh.toFixed(0)} km/h`);
+  const flat = flatWorld("snow");
+  const p = warm(createCar(TOBOGGAN, 0, 0, 0, 0));
+  const fuel = p.fuel;
+  settle(p, flat);
+  run(p, flat, 10, () => ({ ...NONE, up: 1 }));
+  const kmh = readout(p).kmh;
+  assert.ok(kmh > 3.5 && kmh < 7, `pushed on the flat: ${kmh.toFixed(1)} km/h (a walk)`);
+  assert.equal(p.fuel, fuel, "nothing burnt");
+  assert.equal(SEATS_OF.toboggan.at.length, 3);
+});
+
+test("a plough's blade: the road's fresh snow gone where it's been, so a car stops shorter there; back over ten minutes", () => {
+  const stop = (w: CarWorld) => {
+    const s = rolling("asphalt", 50);
+    const x0 = s.p.x;
+    for (let t = 0; readout(s).kmh > 0.5 && t < 40; t += STEP) stepCar(s, { ...NONE, down: 1 }, w, HELPS);
+    return s.p.x - x0;
+  };
+  const snowed = stop({ ...flatWorld("asphalt"), cover: 0.8 });
+  const cleared = stop({
+    ...flatWorld("asphalt"),
+    cover: 0.8,
+    coverAt: (x, z) => coverAfter(0.8, ploughCell(x, z) ? 1000 : 0, 1000),
+  });
+  assert.ok(cleared < snowed * 0.9, `cleared ${cleared.toFixed(1)} m, snowed ${snowed.toFixed(1)} m`);
+  assert.equal(coverAfter(0.8, undefined, 5), 0.8);
+  assert.equal(coverAfter(0.8, 1, 1 + PLOUGHED_MS / 2), 0.4, "half back after five minutes");
+  // the blade's cells: across it, ahead of the truck
+  const cells = bladeCells(0, 0, 0, 3, 3);
+  assert.ok(cells.includes(ploughCell(3, 0)) && cells.length <= 2, cells.join(" "));
 });

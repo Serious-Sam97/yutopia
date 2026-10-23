@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
-import { type CarWire, headingQuat, parkedPose } from "@yutopia/shared/car";
+import { type CarWire, HOME_CARS, headingQuat, parkedPose } from "@yutopia/shared/car";
 import { heightAt } from "@yutopia/shared/grounds";
 import { Client, type Room } from "colyseus.js";
 
@@ -315,4 +315,136 @@ test("stuck: pulled out to a clear spot near by (the server's pick), not again s
   r.send("car:leave", {});
   await waitFor(() => me(r).busy === "");
   r.send("mod:cars", {});
+});
+
+test("the cars that live away from the lot: made where they live; the pickup's bed; put back home, not in the lot", async () => {
+  const join = async (uid: number) => {
+    const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 9,
+      token: `dev:${uid}:P${uid}:member,builder`,
+    });
+    rooms.push(r);
+    await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+    return r;
+  };
+  const a = await join(46);
+  const b = await join(47);
+  await waitFor(() => !!a.state.objects.get("farm-pickup") && !!a.state.objects.get("town-car-3"));
+  const home = (id: string) => HOME_CARS.find((h) => h.id === id) as (typeof HOME_CARS)[number];
+  const poseOf = (id: string) => {
+    const o = a.state.objects.get(id);
+    return parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  };
+  // where they live, with their roles
+  for (const id of ["farm-pickup", "town-car-3", "gas-rental"]) {
+    const p = poseOf(id);
+    assert.ok(Math.hypot(p.x + OFF.x - home(id).x, p.y + OFF.y - home(id).z) < 0.05, `${id} at home`);
+  }
+  assert.equal(props(a.state.objects.get("town-car-3")).role, "police");
+  assert.equal(props(a.state.objects.get("farm-pickup")).model, "pickup");
+  // into the pickup: the driver in the cab, someone in the bed (higher, further back)
+  await a.send("mod:cars", {});
+  await sleep(300);
+  const p0 = poseOf("farm-pickup");
+  const door = { x: p0.x - Math.sin(p0.a) * 2.2, y: p0.y + Math.cos(p0.a) * 2.2 };
+  for (const r of [a, b]) {
+    r.send("teleport", { to: { x: 30, y: 20, level: 0 } });
+    await waitFor(() => me(r).level === 0);
+    r.send("teleport", { to: { ...door, level: 0 } });
+    await waitFor(() => Math.hypot(me(r).x - door.x, me(r).y - door.y) < 3);
+  }
+  a.send("car:enter", { id: "farm-pickup", seat: 0 });
+  const vid = "car:farm-pickup";
+  await waitFor(() => me(a).busy === `drive:${vid}`);
+  // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+  const v = (): any => a.state.vehicles.get(vid);
+  assert.equal(v().kind, "pickup");
+  b.send("car:enter", { id: vid, seat: 2 });
+  await waitFor(() => me(b).busy === `ride:car:${vid}`);
+  await sleep(150);
+  assert.ok(me(b).z - me(a).z > 0.4, `in the bed: ${me(b).z.toFixed(2)} over the cab's ${me(a).z.toFixed(2)}`);
+  // driven 6 m on, left: parked there — then the lot put back: home again
+  let x = v().x;
+  let z = v().z;
+  const ca = Math.cos(v().a);
+  const sa = Math.sin(v().a);
+  const q = headingQuat(v().a);
+  for (let i = 1; i <= 24; i++) {
+    x += ca * 0.25;
+    z += sa * 0.25;
+    const st: CarWire = {
+      seq: i,
+      x,
+      y: heightAt(x, z) + 0.62,
+      z,
+      qx: q.x,
+      qy: q.y,
+      qz: q.z,
+      qw: q.w,
+      vx: i < 24 ? ca * 5 : 0,
+      vy: 0,
+      vz: i < 24 ? sa * 5 : 0,
+      wy: 0,
+      steer: 0,
+      rpm: 1500,
+      gear: 1,
+      fl: 1024,
+      slip: 0,
+      fuel: 50,
+    };
+    a.send("car:state", st);
+    await sleep(55);
+  }
+  await sleep(100);
+  for (const r of [a, b]) r.send("car:leave", {});
+  await waitFor(() => !a.state.vehicles.get(vid), 8000);
+  const moved = poseOf("farm-pickup");
+  assert.ok(
+    Math.hypot(moved.x + OFF.x - home("farm-pickup").x, moved.y + OFF.y - home("farm-pickup").z) > 4,
+    "left where it stopped",
+  );
+  a.send("mod:cars", {});
+  await waitFor(() => {
+    const p = poseOf("farm-pickup");
+    return Math.hypot(p.x + OFF.x - home("farm-pickup").x, p.y + OFF.y - home("farm-pickup").z) < 0.05;
+  });
+});
+
+test("a snowmobile: its one rider, no more", async () => {
+  const join = async (uid: number) => {
+    const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 9,
+      token: `dev:${uid}:P${uid}:member,builder`,
+    });
+    rooms.push(r);
+    await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+    return r;
+  };
+  const a = await join(48);
+  const b = await join(49);
+  a.send("mod:cars", {});
+  await waitFor(() => !!a.state.objects.get("pond-sled-0"));
+  await sleep(300);
+  const o = a.state.objects.get("pond-sled-0");
+  const p = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  assert.equal(props(o).model, "snowmobile");
+  const by = { x: p.x, y: p.y + 1.6 };
+  for (const r of [a, b]) {
+    r.send("teleport", { to: { x: 30, y: 20, level: 0 } });
+    await waitFor(() => me(r).level === 0);
+    r.send("teleport", { to: { ...by, level: 0 } });
+    await waitFor(() => Math.hypot(me(r).x - by.x, me(r).y - by.y) < 3);
+  }
+  a.send("car:enter", { id: "pond-sled-0", seat: 0 });
+  await waitFor(() => me(a).busy === "drive:car:pond-sled-0");
+  assert.equal(a.state.vehicles.get("car:pond-sled-0").kind, "snowmobile");
+  let why = "";
+  b.onMessage("car:no", (m: { why: string }) => {
+    why = m.why;
+  });
+  b.send("car:enter", { id: "car:pond-sled-0", seat: 1 });
+  await waitFor(() => why === "taken");
+  assert.equal(me(b).busy, "");
+  a.send("car:leave", {});
+  await waitFor(() => me(a).busy === "");
 });

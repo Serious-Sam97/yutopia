@@ -26,7 +26,11 @@ export default function CarDev() {
         world: q.get("world") === "grounds" ? "grounds" : "pad",
         at: q.get("at") ?? undefined,
         night: q.get("night") === "1",
-        spec: q.get("car") === "offroad" ? "offroad" : "sedan",
+        spec: (["offroad", "pickup", "snowmobile", "snowcat", "ploughtruck", "tractor", "toboggan"].includes(
+          q.get("car") ?? "",
+        )
+          ? q.get("car")
+          : "sedan") as "sedan",
       });
     })();
     return () => {

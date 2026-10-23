@@ -2,10 +2,13 @@ import { BODY_R, CAR_COLOURS, dirFromDelta, parseAvatar, type WorldObjectDef } f
 import {
   CAR_FLAGS,
   CAR_HZ,
+  type CarKind,
   type CarSpec,
   type CarState,
   type CarWire,
   type CarWorld,
+  carKindOf,
+  coverAfter,
   createCar,
   GRIP,
   type Ground,
@@ -13,8 +16,11 @@ import {
   HELPS,
   type Helps,
   headingOf,
+  isCarKind,
   parkedPose,
+  ploughCell,
   readout,
+  SEATS_OF,
   type Solid,
   SPECS,
   STEP,
@@ -78,6 +84,10 @@ addStrings(
     carHints: [
       "W/S go · brake · A/D steer · Space handbrake · L lights · V wipers · H horn · C camera · X out",
       "W/S acelerar · frear · A/D virar · Espaço freio de mão · L faróis · V limpador · H buzina · C câmera · X sair",
+    ],
+    sledHints: [
+      "W push off · S back · A/D lean · Space drag your feet · C camera · X off",
+      "W empurrar · S para trás · A/D inclinar · Espaço frear com os pés · C câmera · X descer",
     ],
     carNo_far: ["Too far from it", "Longe demais"],
     carNo_taken: ["That seat's taken", "Esse lugar está ocupado"],
@@ -144,7 +154,7 @@ interface Sample {
 }
 interface LiveView {
   id: string;
-  kind: "sedan" | "offroad";
+  kind: CarKind;
   model: Sedan;
   buf: Sample[];
   seq: number;
@@ -161,11 +171,12 @@ interface LiveView {
   doorUntil: number[];
   prevSeats: string[];
   fast: number;
+  role: string; // shared car/homes.ts: "police", "taxi", "rental" or none
   exhaustAt: number;
 }
 interface ParkedView {
   key: string;
-  kind: "sedan" | "offroad";
+  kind: CarKind;
   full: Sedan | null;
   far: Mesh | null;
   pose: { x: number; z: number; a: number; y: number };
@@ -231,13 +242,25 @@ function overlaps(x: number, z: number, hx: number, hz: number, a: number, o: So
   return true;
 }
 
-const SEATS: [number, number][] = [
-  [-0.48, -0.42],
-  [-0.48, 0.42],
-  [-1.15, -0.45],
-  [-1.15, 0.45],
-];
 const FAR = 38; // past this, a parked car is the simple model
+/** Each kind's engine (car/sound.ts CarSound's voice; the toboggan has none). */
+const VOICE: Record<CarKind, "four" | "v8" | "two" | "diesel" | null> = {
+  sedan: "four",
+  offroad: "four",
+  pickup: "v8",
+  snowmobile: "two",
+  snowcat: "diesel",
+  ploughtruck: "diesel",
+  tractor: "diesel",
+  toboggan: null,
+};
+/** A kind's engine heard (none for the toboggan). */
+function soundOf(ctx: AudioContext, kind: CarKind): CarSound | null {
+  const v = VOICE[kind];
+  return v ? new CarSound(ctx, mixer.buses.effects, v) : null;
+}
+/** The kinds the far model (a wagon's or a sedan's outline) can't stand in for: always drawn whole. */
+const OWN_SHAPE = new Set<CarKind>(["snowmobile", "snowcat", "ploughtruck", "tractor", "toboggan"]);
 const ENTER_S = 0.7; // s: getting in (sliding in from the door; the camera easing to the car's)
 const RENDER_BEHIND = 110;
 const v3 = new Vector3();
@@ -346,6 +369,7 @@ export class Cars {
   private beams: "off" | "low" | "high" = "off";
   private ind: -1 | 0 | 1 = 0;
   private hazard = false;
+  private siren = false; // (a police car's: G)
   private wipers: 0 | 1 | 2 | 3 = 0;
   private time = 0;
   private hud: HTMLDivElement | null = null;
@@ -373,6 +397,13 @@ export class Cars {
     this.world = groundsWorld({
       cold: () => Math.min(1, 0.35 + 0.5 * this.host.night() + 0.3 * this.host.storm()),
       cover: () => Math.max(0, this.host.storm() - 0.2) * 0.9,
+      // (less where a plough's blade has been through: the server's cells)
+      coverAt: (x, z) =>
+        coverAfter(
+          Math.max(0, this.host.storm() - 0.2) * 0.9,
+          this.host.room()?.state.ploughed?.get(ploughCell(x, z)),
+          Date.now(),
+        ),
       extra: (x, z, r, out) => this.solidsNear(x, z, r, out),
     });
     const room = host.room();
@@ -433,7 +464,7 @@ export class Cars {
     if (!m || !l) return null;
     const p = l.pose.p;
     const a = headingFromQ(l.pose.q);
-    const [lx, lz] = SEATS[m.seat];
+    const [lx, lz] = SEATS_OF[l.kind].at[m.seat];
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     return {
@@ -668,7 +699,8 @@ export class Cars {
     // the car I'm in: the snow on its windscreen, the lamps over its cabin, its mirror
     const mine = this.mine;
     const l = mine ? this.live.get(mine.vid) : null;
-    if (l && mine) {
+    // (a toboggan has none of them)
+    if (l && mine && !SPECS[l.kind].pushed) {
       if (this.screen?.vid !== mine.vid) {
         this.screen?.s.dispose();
         this.screen = { vid: mine.vid, s: new ScreenSnow(l.model) };
@@ -715,6 +747,19 @@ export class Cars {
       const bz = v.z + sx * 4.6 + cx * 1.2;
       this.spray.throw(bx, this.G.heightAt(bx, bz) + 0.3, bz, -sx, cx, Math.min(1, Math.abs(v.v ?? 0) / 8), false);
     }
+    // …and the plough truck's, driven (in a storm: fresh snow to throw)
+    if (this.host.storm() > 0.25)
+      for (const l of this.live.values()) {
+        const sp = Math.hypot(l.pose.v.x, l.pose.v.z);
+        if (l.kind !== "ploughtruck" || sp < 1.5) continue;
+        if (Math.hypot(l.pose.p.x - me.x - this.host.ox(), l.pose.p.z - me.y - this.host.oy()) > 90) continue;
+        const a = headingFromQ(l.pose.q);
+        const cx = Math.cos(a);
+        const sx = Math.sin(a);
+        const bx = l.pose.p.x + cx * 3.2 - sx * 1.5;
+        const bz = l.pose.p.z + sx * 3.2 + cx * 1.5;
+        this.spray.throw(bx, this.G.heightAt(bx, bz) + 0.3, bz, -sx, cx, Math.min(1, sp / 8), false);
+      }
     this.tracks.fade(t, night);
     this.spray.step(dt, night);
   }
@@ -791,8 +836,8 @@ export class Cars {
           a = sh.a;
         }
       }
-      const kind = o.props?.model === "offroad" ? "offroad" : "sedan";
-      const key = `${kind}|${o.props?.variant}|${o.props?.snowy}|${o.props?.wagon}`;
+      const kind = carKindOf(o.props?.model);
+      const key = `${kind}|${o.props?.variant}|${o.props?.snowy}|${o.props?.wagon}|${o.props?.role}`;
       let p = this.parked.get(o.id);
       if (!p || p.key !== key) {
         this.dropParked(p);
@@ -816,13 +861,14 @@ export class Cars {
       const camD = camAt
         ? Math.hypot(P.x - (camAt.x - this.root.position.x), P.z - (camAt.z - this.root.position.z))
         : Math.hypot(P.x - mx, P.z - mz);
-      const near = camD < FAR;
+      const near = camD < FAR || OWN_SHAPE.has(kind);
       if (near && !p.full) {
         const colour = colourOf(o);
         p.full = buildSedan({
           colour,
           snowy: o.props?.snowy ? 0.7 : 0.15,
-          kind: o.props?.model === "offroad" ? "offroad" : "sedan",
+          kind,
+          role: typeof o.props?.role === "string" ? o.props.role : undefined,
         });
         p.full.setEnv(this.env);
         placeModel(p.full.root, P.x, y, P.z, P.a);
@@ -831,11 +877,7 @@ export class Cars {
       }
       if (!near && !p.far) {
         const colour = colourOf(o);
-        const { solid, glass } = carGeometry(
-          !!o.props?.wagon || o.props?.model === "offroad",
-          colour,
-          !!o.props?.snowy,
-        );
+        const { solid, glass } = carGeometry(!!o.props?.wagon || kind !== "sedan", colour, !!o.props?.snowy);
         const g = new Group();
         g.add(new Mesh(solid, this.farMat(0xffffff)), new Mesh(glass, this.farMat(0x9aa6ae)));
         placeModel(g, P.x, y + 0.03, P.z, P.a);
@@ -845,7 +887,10 @@ export class Cars {
       }
       if (p.full) {
         p.full.root.visible = near;
-        if (near) p.full.setWear(Number(o.props?.grime) || 0, dmgOf(o.props?.dmg));
+        if (near) {
+          p.full.setWear(Number(o.props?.grime) || 0, dmgOf(o.props?.dmg));
+          if (o.props?.role === "taxi") p.full.setBeacon(this.host.night() > 0.2, this.time);
+        }
       }
       if (p.far) p.far.visible = !near;
     }
@@ -948,21 +993,22 @@ export class Cars {
     const mySid = room.sessionId;
     let mine: { vid: string; seat: number } | null = null;
     room.state.vehicles.forEach((v: VehWire, id: string) => {
-      if (v.kind !== "sedan" && v.kind !== "offroad") return;
+      if (!isCarKind(v.kind)) return;
       seen.add(id);
       let l = this.live.get(id);
       if (!l) {
         const model = buildSedan({
           colour: CAR_COLOURS[v.colour % CAR_COLOURS.length] ?? 0x6b2430,
           snowy: 0.1,
-          kind: v.kind === "offroad" ? "offroad" : "sedan",
+          kind: v.kind,
+          role: v.role || undefined,
         });
         model.setEnv(this.env);
         castAll(model.root);
         this.root.add(model.root);
         l = {
           id,
-          kind: v.kind === "offroad" ? "offroad" : "sedan",
+          kind: v.kind,
           model,
           buf: [],
           seq: -1,
@@ -973,6 +1019,7 @@ export class Cars {
           doors: [0, 0, 0, 0],
           doorUntil: [0, 0, 0, 0],
           prevSeats: String(v.seats ?? "|||").split("|"),
+          role: v.role ?? "",
           fast: 0,
           exhaustAt: 0,
         };
@@ -1144,7 +1191,7 @@ export class Cars {
     l.spin += (sp / spec.wheel.r) * dt;
     const steer = s1.steer;
     for (const w of m.wheels) {
-      w.spin.rotation.z = l.spin;
+      w.spin.rotation.z = l.spin * (w.turnK ?? 1);
       if (w.front) w.steer.rotation.y = -steer;
     }
     m.steering.rotation.z = -steer * spec.steer.ratio;
@@ -1161,6 +1208,7 @@ export class Cars {
       dash: fl & CAR_FLAGS.engine ? 0.8 : 0,
       dome: false,
     });
+    this.beaconOf(l, !!(fl & CAR_FLAGS.siren));
     this.hearRemote(l, s1, sp, dt);
   }
 
@@ -1169,7 +1217,7 @@ export class Cars {
     const me = this.host.me();
     const d = Math.hypot(l.pose.p.x - (me.x + this.host.ox()), l.pose.p.z - (me.y + this.host.oy()));
     const on = d < 70 && !!(s.fl & CAR_FLAGS.engine) && mixer.ctx?.state === "running";
-    if (on && !l.sound && mixer.ctx) l.sound = new CarSound(mixer.ctx, mixer.buses.effects);
+    if (on && !l.sound && mixer.ctx) l.sound = soundOf(mixer.ctx, l.kind);
     if (!on && l.sound) {
       l.sound.dispose();
       l.sound = null;
@@ -1180,7 +1228,7 @@ export class Cars {
       rpm: s.rpm,
       thr: Math.min(1, Math.max(0, (s.rpm - 1200) / 4000)),
       clutch: 1,
-      spec: SPECS.sedan,
+      spec: SPECS[l.kind],
       wheels: [0, 1, 2, 3].map(() => ({ contact: true, ground: g, used: s.slip > 1 ? 1.3 : 0.4, slip: s.slip })),
       hit: null,
       v: { x: l.pose.v.x, y: l.pose.v.y, z: l.pose.v.z },
@@ -1202,6 +1250,7 @@ export class Cars {
     }
     l.sound.update(fake, { inside: false, gain: Math.max(0, 1 - d / 70) ** 1.5, pan }, dt, false, false);
     l.sound.horn(!!(s.fl & CAR_FLAGS.horn) && d < 70);
+    l.sound.siren(!!(s.fl & CAR_FLAGS.siren) && d < 70);
     void sp;
   }
 
@@ -1240,7 +1289,7 @@ export class Cars {
       if (now.seat === 0) {
         const room = this.host.room();
         const v = room?.state.vehicles.get(now.vid) as VehWire;
-        const spec = SPECS[v.kind === "offroad" ? "offroad" : "sedan"];
+        const spec = SPECS[isCarKind(v.kind) ? v.kind : "sedan"];
         const sim = createCar(spec, v.x, v.y - spec.cog, v.z, headingFromQ(new Quaternion(v.qx, v.qy, v.qz, v.qw)));
         // (its tank and its wear: as it was left)
         sim.fuel = Math.max(0, Math.min(1, v.fuel ?? 0.7)) * spec.fuel.litres;
@@ -1262,11 +1311,12 @@ export class Cars {
         sim.temp = 0.1 + 0.3 * (1 - this.host.night());
         this.mine.sim = sim;
         this.mine.rig = new CarRig(l.model, sim);
-        this.beams = this.host.night() > 0.4 ? "low" : "off";
+        this.beams = this.host.night() > 0.4 && !sim.spec.pushed ? "low" : "off";
         this.wipers = this.host.storm() > 0.4 ? 2 : 0;
       }
       this.cam.mode = "chase";
       this.enteredAt = this.time;
+      this.siren = false;
       this.showHud();
     }
   }
@@ -1305,8 +1355,8 @@ export class Cars {
         m.dry = false;
         setEngine(s, true);
         if (mixer.ctx && s.rpm > 0) {
-          m.sound ??= new CarSound(mixer.ctx, mixer.buses.effects);
-          m.sound.start(1 - s.temp / 0.55);
+          m.sound ??= soundOf(mixer.ctx, l.kind);
+          m.sound?.start(1 - s.temp / 0.55);
         }
       }
       if (s.fuel <= 0 && !m.dry) {
@@ -1354,6 +1404,8 @@ export class Cars {
         true,
       );
       m.sound?.horn(this.input.horn);
+      m.sound?.siren(this.siren);
+      this.beaconOf(l, this.siren);
       const slip = s.wheels.reduce((a, w) => Math.max(a, w.slip), 0);
       this.input.rumble(
         pad,
@@ -1397,7 +1449,7 @@ export class Cars {
     let r = this.passengerRigs.get(l.id);
     if (!r) {
       // (a rig only for the camera's sake: the model is posed from the samples)
-      const fake = createCar(SPECS.sedan, l.pose.p.x, l.pose.p.y, l.pose.p.z, 0);
+      const fake = createCar(SPECS[l.kind], l.pose.p.x, l.pose.p.y, l.pose.p.z, 0);
       r = new CarRig(l.model, fake);
       this.passengerRigs.set(l.id, r);
     }
@@ -1405,11 +1457,16 @@ export class Cars {
   }
 
   private switch(sw: Switch) {
-    if (sw === "lights") this.beams = this.beams === "off" ? "low" : this.beams === "low" ? "high" : "off";
-    else if (sw === "left") this.ind = this.ind === -1 ? 0 : -1;
+    if (sw === "lights") {
+      if (!this.mine?.sim?.spec.pushed)
+        this.beams = this.beams === "off" ? "low" : this.beams === "low" ? "high" : "off";
+    } else if (sw === "left") this.ind = this.ind === -1 ? 0 : -1;
     else if (sw === "right") this.ind = this.ind === 1 ? 0 : 1;
     else if (sw === "hazard") this.hazard = !this.hazard;
-    else if (sw === "wipers") this.wipers = ((this.wipers + 1) % 4) as 0 | 1 | 2 | 3;
+    else if (sw === "siren") {
+      const l = this.mine ? this.live.get(this.mine.vid) : null;
+      if (l?.role === "police" && this.mine?.seat === 0) this.siren = !this.siren;
+    } else if (sw === "wipers") this.wipers = ((this.wipers + 1) % 4) as 0 | 1 | 2 | 3;
     else if (sw === "camera") this.cam.cycle();
     else if (sw === "exit") this.act("car:leave", this.mine?.vid ?? "");
     else if (sw === "radio") {
@@ -1440,8 +1497,18 @@ export class Cars {
     if (this.wipers & 2) f |= CAR_FLAGS.wipers2;
     if (s.rpm > 50) f |= CAR_FLAGS.engine;
     if (s.hb > 0.5) f |= CAR_FLAGS.hand;
+    if (this.siren) f |= CAR_FLAGS.siren;
     f |= (this.station & 3) << 14;
     return f;
+  }
+
+  /** A car's role light: the police car's bar flashing with its siren; the taxi's sign lit at
+   *  night while it's free (no one behind the driver). */
+  private beaconOf(l: LiveView, siren: boolean) {
+    if (l.role === "police") l.model.setBeacon(siren, this.time);
+    else if (l.kind === "ploughtruck" || l.kind === "snowcat") l.model.setBeacon(!!l.prevSeats[0], this.time);
+    else if (l.role === "taxi")
+      l.model.setBeacon(l.prevSeats.slice(1).every((x) => !x) && this.host.night() > 0.2, this.time);
   }
 
   /** My car hit something this step: someone (at speed: knocked down), or a dent where it hit. */
@@ -1694,7 +1761,13 @@ export class Cars {
     const speed = d.querySelector("[data-speed]") as HTMLElement;
     if (hint.dataset.v !== String(m.seat)) {
       hint.dataset.v = String(m.seat);
-      hint.textContent = this.pads ? "" : m.seat === 0 ? t("carHints") : t("carPassenger");
+      hint.textContent = this.pads
+        ? ""
+        : m.seat !== 0
+          ? t("carPassenger")
+          : m.sim?.spec.pushed
+            ? t("sledHints")
+            : t("carHints");
       this.hintAt = this.time;
     }
     // (the keys a while after getting in, then out of the way — gone, not taking the room)
@@ -1709,7 +1782,8 @@ export class Cars {
       const v = this.host.room()?.state.vehicles.get(m.vid) as VehWire | undefined;
       const stopped = l ? Math.hypot(l.pose.v.x, l.pose.v.z) < 0.4 : false;
       const full = m.sim.fuel / m.sim.spec.fuel.litres;
-      if (v?.filling) say = `${t("carFilling")} ${Math.round((v.fuel ?? 0) * 100)}%`;
+      if (m.sim.spec.pushed) say = this.stuckFor > 3 ? t("carStuck") : "";
+      else if (v?.filling) say = `${t("carFilling")} ${Math.round((v.fuel ?? 0) * 100)}%`;
       else if (stopped && l && this.atPumpNow(l) && (full < 0.98 || m.grime > 0.05)) say = t("carFill");
       else if (this.stuckFor > 3) say = t("carStuck");
       else if (full < 0.12) say = `${t("carLow")} ${Math.round(full * 100)}%`;
@@ -1723,11 +1797,13 @@ export class Cars {
     if (m.sim && this.cam.mode !== "cockpit") {
       const r = readout(m.sim);
       const gear = r.gear === -1 ? "R" : r.gear === 0 ? "N" : String(r.gear);
-      speed.textContent = `${Math.abs(Math.round(r.kmh))} km/h · ${gear}`;
+      speed.textContent = m.sim.spec.pushed
+        ? `${Math.abs(Math.round(r.kmh))} km/h`
+        : `${Math.abs(Math.round(r.kmh))} km/h · ${gear}`;
       const full = m.sim.fuel / m.sim.spec.fuel.litres;
       const v = this.host.room()?.state.vehicles.get(m.vid) as VehWire | undefined;
       const pct = Math.round((v?.filling ? (v.fuel ?? full) : full) * 100);
-      fuel.textContent = `⛽ ${pct}%`;
+      fuel.textContent = m.sim.spec.pushed ? "" : `⛽ ${pct}%`;
       fuel.style.color = pct < 15 ? "#ff6a4a" : "#ffb24a";
     } else {
       speed.textContent = "";
@@ -1748,7 +1824,7 @@ export class Cars {
     const bx = me.x + this.host.ox();
     const bz = me.y + this.host.oy();
     let best: { id: string; seat: number; d: number } | null = null;
-    const consider = (id: string, x: number, z: number, a: number, taken: string[]) => {
+    const consider = (id: string, x: number, z: number, a: number, taken: string[], kind: CarKind) => {
       const dx = bx - x;
       const dz = bz - z;
       const d = Math.hypot(dx, dz);
@@ -1766,20 +1842,22 @@ export class Cars {
           : w < 0
             ? [2, 0, 3, 1]
             : [3, 1, 2, 0];
-      const seat = order.find((s) => !taken[s]);
+      // (only the seats it has: the snowmobile's one)
+      const seats = SEATS_OF[kind].at.length;
+      const seat = order.find((s) => s < seats && !taken[s]);
       if (seat === undefined) return;
       best = { id, seat, d };
     };
     for (const o of this.host.objects()) {
       if (o.kind !== "car" || o.props?.driven || (Number(o.props?.level ?? 0) | 0) !== 0) continue;
       const p = this.parked.get(o.id);
-      if (p) consider(o.id, p.pose.x, p.pose.z, p.pose.a, []);
+      if (p) consider(o.id, p.pose.x, p.pose.z, p.pose.a, [], p.kind);
     }
     const room = this.host.room();
     for (const [id, l] of this.live) {
       if (Math.hypot(l.pose.v.x, l.pose.v.z) > 2) continue;
       const v = room?.state.vehicles.get(id) as VehWire | undefined;
-      consider(id, l.pose.p.x, l.pose.p.z, headingFromQ(l.pose.q), String(v?.seats ?? "|||").split("|"));
+      consider(id, l.pose.p.x, l.pose.p.z, headingFromQ(l.pose.q), String(v?.seats ?? "|||").split("|"), l.kind);
     }
     if (this.wanted && performance.now() - this.wantedAt < 1500) return null;
     const b = best as { id: string; seat: number } | null;
@@ -1833,6 +1911,7 @@ interface VehWire {
   dmg?: string;
   filling?: boolean;
   obj?: string;
+  role?: string;
 }
 
 function headingFromQ(q: { x: number; y: number; z: number; w: number }): number {
@@ -1853,6 +1932,8 @@ function castAll(o: TGroup | Mesh) {
 }
 function colourOf(o: WorldObjectDef): number {
   if (typeof o.props?.color === "string") return Number.parseInt(String(o.props.color).slice(1), 16);
+  // (the taxi's yellow, as its model paints it)
+  if (o.props?.role === "taxi") return 0xe2b42a;
   const v = Number.isInteger(o.props?.variant) ? Number(o.props?.variant) : 0;
   return CAR_COLOURS[v % CAR_COLOURS.length];
 }
@@ -1937,6 +2018,7 @@ function touchControls(input: CarInput, driver: boolean): HTMLDivElement {
     col(3, "⛽", "fill");
     col(4, "💡", "lights");
     col(5, "🪝", "unstick");
+    col(6, "🚨", "siren");
   } else {
     col(0, "🚪", "exit");
     col(1, "📻", "radio");

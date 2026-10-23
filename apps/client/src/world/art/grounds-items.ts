@@ -1577,7 +1577,7 @@ export function groundThings(G: G): Thing[] {
     put(`rail-w${z}`, "gr_rail_v", e.x0, z, 1, 3, { len: Math.min(3, e.z1 - z) });
     if (z + 3 < gm - 3 || z > gm + 3) put(`rail-e${z}`, "gr_rail_v", e.x1, z, 1, 3, { len: Math.min(3, e.z1 - z) });
   }
-  put("tractor", "gr_tractor", G.TRACTOR.x - 2, G.TRACTOR.z - 1.5, 4, 3);
+  // (the tractor is a vehicle now: shared car/homes.ts)
   for (const [i, c] of G.SCARECROWS.entries()) put(`crow${i}`, "gr_scarecrow", c.x - 0.5, c.z - 0.5, 1, 1);
   for (const [i, [x, z]] of [
     [437, -298],
@@ -1586,23 +1586,6 @@ export function groundThings(G: G): Thing[] {
     [466, -300],
   ].entries())
     put(`bale${i}`, "gr_bale", x - 0.5, z - 0.5, 1, 1);
-  // the cars parked along Main Street (the lot's own kind, nosed east or west)
-  for (const [i, c] of G.TOWN_CARS.entries())
-    put(
-      `car${i}`,
-      "car",
-      c.x - 2.5,
-      c.z - 1,
-      5,
-      2,
-      {
-        variant: c.colour,
-        wagon: c.wagon ? 1 : 0,
-        snowy: c.snowy ? 1 : 0,
-        dx: Math.round((c.x - 2.5 - Math.floor(c.x - 2.5)) * 100) / 100,
-        dz: Math.round((c.z - 1 - Math.floor(c.z - 1)) * 100) / 100,
-      },
-      c.dir > 0 ? 0 : 2,
-    );
+  // (the cars parked along Main Street are cars like the lot's: world objects, shared car/homes.ts)
   return out;
 }

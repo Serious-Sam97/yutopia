@@ -1,10 +1,12 @@
 import { ANIM, dirFromDelta, GROUND_OFFSET, levelMap } from "@yutopia/shared";
+import { isCarKind } from "@yutopia/shared/car";
 import { nightness } from "@yutopia/shared/dark";
 import { along, GUARD_ROUND, heightAt, type Route, SHUTTLE, VISITOR } from "@yutopia/shared/grounds";
 import { config } from "../config.ts";
 import { Npc, type Player, Vehicle } from "../schema.ts";
 import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
+import { ploughAt } from "./ploughed.ts";
 
 // Life on the Grounds (docs/plan/27-the-grounds.md, phase 6), driven here so
 // everyone sees the same: the visitor's car comes down the driveway now and
@@ -111,7 +113,7 @@ registerFeature((room: WorldRoom) => {
       .filter((p) => p.level === 0 && !p.busy.startsWith("ride:") && !p.busy.startsWith("drive:"))
       .map((p) => ({ x: p.x + off.x, z: p.y + off.y }));
     room.state.vehicles.forEach((v) => {
-      if (v.kind !== "sedan" && v.kind !== "offroad") return;
+      if (!isCarKind(v.kind)) return;
       for (const k of [-2.2, 0, 2.2]) out.push({ x: v.x + Math.cos(v.a) * k, z: v.z + Math.sin(v.a) * k });
     });
     return out;
@@ -291,6 +293,9 @@ registerFeature((room: WorldRoom) => {
           pRestUntil = now + PLOUGH_REST_MS;
         }
       }
+      // (its blade clears the road behind it: every car grips better there for a while)
+      if (pPhase !== "away" && Math.abs(plough.veh.v) > 1)
+        ploughAt(room.state, plough.veh.x, plough.veh.z, plough.veh.a, 4.6, 3.2, now);
       // ── the guard: his shift (out at dusk, home at dawn), round the fence at night ──
       const night = nightness(room.state.hour);
       if (shift === "post" && night > 0.3) {

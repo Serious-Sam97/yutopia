@@ -1,4 +1,4 @@
-import { blend, curve, GRIP, type Grip, type Ground } from "./grip.ts";
+import { blend, curve, footGrip, GRIP, type Grip, type Ground } from "./grip.ts";
 import { type CarSpec, torqueAt } from "./specs.ts";
 
 // The car's physics (docs/plan/28-the-car.md, M0–M8): a rigid body on four
@@ -58,6 +58,8 @@ export interface CarWorld {
   ground(x: number, z: number): Ground;
   /** fresh snow on the roads (a storm): 0..1 */
   cover?: number;
+  /** …here: less where a plough's been through (wave 3); none: `cover` everywhere */
+  coverAt?(x: number, z: number): number;
   solids(x: number, z: number, r: number, out: Solid[]): void;
 }
 
@@ -339,7 +341,8 @@ function mul(a: Quat, b: Quat): Quat {
 
 /** The engine on (idling) or off. */
 export function setEngine(s: CarState, on: boolean) {
-  s.rpm = on && s.fuel > 0 ? s.spec.engine.idle + 400 * (1 - s.temp / 0.55) : 0;
+  s.rpm =
+    on && (s.fuel > 0 || s.spec.pushed) ? s.spec.engine.idle + (s.spec.pushed ? 60 : 400 * (1 - s.temp / 0.55)) : 0;
 }
 
 // scratch
@@ -353,13 +356,21 @@ const T = v3();
 const solids: Solid[] = [];
 
 /** The grip under a wheel: its ground, the road under a storm's fresh snow. */
-function gripOf(world: CarWorld, g: Ground): Grip {
-  const k = world.cover ?? 0;
+function gripOf(world: CarWorld, g: Ground, x?: number, z?: number): Grip {
+  const k = world.coverAt && x !== undefined && z !== undefined ? world.coverAt(x, z) : (world.cover ?? 0);
   if (k > 0 && (g === "asphalt" || g === "walk" || g === "slush")) return blend(GRIP[g], GRIP.path, k * 0.85);
   return GRIP[g];
 }
+/** Wheel i's grip (0, 1 the front axle's): its ground, and what it stands on (a ski, a track). */
+function gripAt(world: CarWorld, spec: CarSpec, i: number, g: Ground, x?: number, z?: number): Grip {
+  const foot = spec.feet?.[i < 2 ? 0 : 1] ?? "tyre";
+  const base = gripOf(world, g, x, z);
+  return foot === "tyre" ? base : footGrip(foot, g, base);
+}
 
 /** One step of `STEP` seconds. */
+const PUSH_N = 650; // N: a shove off the snow
+const PUSH_V = 1.5; // m/s: as fast as feet push it (a brisk walk)
 export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Helps = HELPS) {
   const dt = STEP;
   const spec = s.spec;
@@ -397,7 +408,7 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
   }
   // the steering: limited by speed so the front tyres stay near their peak (keys), and the
   // countersteer helper leaning into a slide
-  const front = gripOf(world, s.wheels[0].ground);
+  const front = gripAt(world, spec, 0, s.wheels[0].ground, s.wheels[0].px, s.wheels[0].pz);
   let maxSteer = spec.steer.max;
   if (helps.steer) {
     const lat = (spec.wheelbase * front.mu * G) / Math.max(1, vf * vf);
@@ -431,7 +442,7 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
     let worst = Number.POSITIVE_INFINITY;
     for (const i of driven) {
       const wh = s.wheels[i];
-      const g = gripOf(world, wh.ground);
+      const g = gripAt(world, spec, i, wh.ground, wh.px, wh.pz);
       // (spinning the way it's driven: forwards, or backwards in reverse)
       const dir = s.gear === -1 ? -1 : 1;
       const over = dir * (wh.w * spec.wheel.r - wh.vx) - Math.max(0.3, g.kappa * 1.3 * Math.abs(wh.vx));
@@ -493,7 +504,11 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
   if (s.shiftT <= 0 && s.gear !== 0 && running) {
     const rin = (Math.abs(win) * 60) / TAU;
     if (rin > idleRpm + 120) want = 1;
-    else want = s.thr > 0.02 ? clamp((s.rpm - idleRpm - 80) / 900, 0, 1) : 0;
+    // (biting from just over idle — a sedan's — or, a belt drive's, up where its engine makes its power)
+    else {
+      const [from, span] = spec.engage ?? [idleRpm + 80, 900];
+      want = s.thr > 0.02 ? clamp((s.rpm - from) / span, 0, 1) : 0;
+    }
   }
   // (and the engine's braking locking the driven wheels on ice: the clutch lets go)
   if (helps.tcs && want > 0 && thr < 0.05) {
@@ -522,6 +537,24 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
     for (const i of driven) drive[i] = (tc * ratio * spec.efficiency) / n;
     if (s.clutch > 0.95 && Math.abs(we - win) < 3) s.locked = true;
   }
+  // pushed (the toboggan): no engine at the wheels — they run free; W (S: back) is a shove off the
+  // ground with the feet (on the body, not through the runners), as hard as a person pushes, up to
+  // walking pace and no more (on ice the feet slip)
+  const shoveF = v3();
+  if (spec.pushed) {
+    s.locked = false;
+    reflect = 0;
+    drive.fill(0);
+    const back = s.gear === -1 ? -1 : 1;
+    const f = rot(s.q, v3(1, 0, 0), v3());
+    const vf = (s.v.x * f.x + s.v.z * f.z) * back;
+    const g = s.wheels[0].ground;
+    const feet = g === "ice" || g === "blackice" ? 0.35 : 1;
+    const shove =
+      s.gear === 0 || !s.wheels.some((w) => w.contact) ? 0 : s.thr * PUSH_N * feet * clamp((PUSH_V - vf) / 0.3, 0, 1);
+    shoveF.x = f.x * shove * back;
+    shoveF.z = f.z * shove * back;
+  }
   // the gearbox shifting itself
   if (helps.auto && s.shiftT <= 0 && s.sinceShift > 0.7 && s.gear >= 1) {
     const rin = (Math.abs(win) * 60) / TAU;
@@ -529,13 +562,14 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
     let peak = 0;
     for (const i of driven) {
       spin += s.wheels[i].kappa;
-      peak += gripOf(world, s.wheels[i].ground).kappa;
+      peak += gripAt(world, spec, i, s.wheels[i].ground, s.wheels[i].px, s.wheels[i].pz).kappa;
     }
     spin /= n;
     peak /= n;
     const ground = s.wheels[2].contact || s.wheels[3].contact;
-    const up = 2300 + 3300 * s.thr;
-    const down = 1100 + 1900 * s.thr;
+    // (shifting up short of its limiter: the pickup's V8 runs out of revs at 5000; down well below that)
+    const up = spec.shiftAt ?? Math.min(2300 + 3300 * s.thr, spec.engine.limit - 250);
+    const down = Math.min(1100 + 1900 * s.thr, up * 0.55);
     // (not while it's spinning up — past what the ground's grip peaks at, or the traction control's)
     if (rin > up && s.gear < spec.gears.length - 2 && spin < Math.max(0.3, peak * 1.6) && ground) shift(s, s.gear + 1);
     else if (rin < down && s.gear > 1) {
@@ -641,7 +675,8 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
     // the brakes on this wheel
     let tb = s.brk * ax.brake + escBrake[i] + tcsBrake[i];
     if (!isFront) tb += s.hb * spec.hand;
-    if (helps.hold && Math.abs(vf) < 0.25 && s.thr < 0.02 && speed < 0.4) tb = Math.max(tb, ax.brake * 0.4);
+    if (helps.hold && !spec.pushed && Math.abs(vf) < 0.25 && s.thr < 0.02 && speed < 0.4)
+      tb = Math.max(tb, ax.brake * 0.4);
     const inertia = spec.wheel.inertia + (driven.includes(i) ? reflect : 0);
     if (!wh.contact || N <= 0) {
       // in the air: it spins on under drive and brakes
@@ -670,7 +705,7 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
     const vx = vpx * W.x + vpy * W.y + vpz * W.z;
     const vy = vpx * S.x + vpy * S.y + vpz * S.z;
     wh.vx = vx;
-    const g = gripOf(world, wh.ground);
+    const g = gripAt(world, spec, i, wh.ground, px, pz);
     const mu = g.mu * clamp((N / 3200) ** -0.1, 0.8, 1.25);
     const R = spec.wheel.r;
     const vden = Math.max(Math.abs(vx), VLOW);
@@ -791,6 +826,8 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
   F.x -= ad * s.v.x;
   F.y -= ad * s.v.y;
   F.z -= ad * s.v.z;
+  F.x += shoveF.x;
+  F.z += shoveF.z;
 
   // ── integrate (asleep at rest: the holds keep it there) ──
   const resting = speed < 0.05 && Math.hypot(s.w.x, s.w.y, s.w.z) < 0.05 && s.thr < 0.01 && Math.abs(raw.steer) < 0.01;
@@ -844,8 +881,8 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
   s.temp = Math.min(0.55, s.temp + (running ? (0.00055 + s.rpm * 0.0000004 + thr * 0.0006) * dt : -0.0002 * dt));
   // (three times a real one's thirst: a tank's an hour or so of driving — the gas station's a
   // place to go; dry, the engine coughs out and stays out)
-  if (running) s.fuel = Math.max(0, s.fuel - 4.35e-6 * s.rpm * (0.25 + thr) * dt);
-  if (running && s.fuel <= 0) s.rpm = 0;
+  if (running && !spec.pushed) s.fuel = Math.max(0, s.fuel - 4.35e-6 * s.rpm * (0.25 + thr) * dt);
+  if (running && s.fuel <= 0 && !spec.pushed) s.rpm = 0;
   s.odo += (Math.abs(vf) * dt) / 1000;
 }
 

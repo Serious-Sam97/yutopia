@@ -1939,7 +1939,8 @@ export class WorldController {
       this.map.oy ?? 0,
       this.level === 0,
     );
-    this.lifeCars = list.filter((v) => v.kind !== "sedan" && v.kind !== "offroad");
+    // (the Grounds' own: the drivable ones are the car module's)
+    this.lifeCars = list.filter((v) => /^(shuttle|plough|visitor)$/.test(v.kind));
     this.engine?.grounds?.setVehicles(list, this.me.x, this.me.y);
     this.tp?.setVehicles(this.lifeCars);
   }

@@ -112,13 +112,21 @@ export function elevator(s: Sketch, props: Record<string, unknown>) {
 
 // An 80s sedan or wagon parked in a bay, its nose to −x (rot 0), snow on the
 // roof and the hood (props.snowy). props.variant: its colour (shared
-// CAR_COLOURS); dx / dz: where exactly it stands in its bay.
+// CAR_COLOURS); dx / dz: where exactly it stands in its bay. props.model
+// "pickup": a short cab and an open bed; props.role (shared car/homes.ts): the
+// taxi's yellow and sign, the police car's white doors and light bar.
 export function car(s: Sketch, props: Record<string, unknown>) {
   const v = Number.isInteger(props.variant) ? (props.variant as number) : Math.floor(s.seed * CAR_COLOURS.length);
+  const role = props.role;
   const colour =
-    typeof props.color === "string" ? Number.parseInt(props.color.slice(1), 16) : CAR_COLOURS[v % CAR_COLOURS.length];
+    role === "taxi"
+      ? 0xe2b42a
+      : typeof props.color === "string"
+        ? Number.parseInt(props.color.slice(1), 16)
+        : CAR_COLOURS[v % CAR_COLOURS.length];
   const body = paint(colour);
-  const wagon = !!props.wagon;
+  const pickup = props.model === "pickup";
+  const wagon = !!props.wagon && !pickup;
   const snowy = props.snowy !== 0 && props.snowy !== false;
   const ox = Math.max(-0.4, Math.min(0.4, Number(props.dx) || 0));
   const oy = Math.max(-0.4, Math.min(0.4, Number(props.dz) || 0));
@@ -135,6 +143,70 @@ export function car(s: Sketch, props: Record<string, unknown>) {
   const TYRE: Mat = { c: "#1c1c1c", top: "#2a2a2a", flat: true };
   const GLASS: Mat = { c: "#2a3036", top: "#3a434b", left: "#323a41", right: "#262c31" };
   const SNOW: Mat = { c: "#eef2f4", top: "#f8fafb", left: "#e2e8ec", right: "#d3dbe0" };
+  // the tracked ones (docs/plan/34, wave 2), as 3D builds them (tp/car/tracked.ts)
+  if (props.model === "snowmobile") {
+    // two skis, the hood and its windshield, the saddle, the track under the tunnel
+    for (const y of [0.42, 1.42]) b(0.0, y, 1.35, 0.14, 0, 2, TYRE, { line: 0.6 });
+    b(1.4, 0.75, 1.55, 0.5, 0, 12, TYRE, { line: 0.7 });
+    b(0.05, 0.55, 1.1, 0.9, 10, 20, body, { line: 0.9 });
+    b(1.0, 0.65, 0.08, 0.7, 30, 10, GLASS, { line: 0.6 });
+    b(1.1, 0.7, 1.85, 0.6, 15, 6, body, { line: 0.8 });
+    b(1.3, 0.76, 1.15, 0.48, 21, 8, { c: "#2a221e", top: "#3a302a" }, { line: 0.7 });
+    b(0.0, 0.85, 0.05, 0.3, 22, 4, { c: "#fff4cc", top: "#fffbe8", flat: true }, { glow: true, line: 0 });
+    s.shadow(0.1 + ox, 0.4 + oy, 3.0, 1.2, 0.4, 0.4);
+    return;
+  }
+  if (props.model === "snowcat") {
+    // two long tracks, the cab between and over them, its windows; the blade in front, a beacon
+    for (const y of [-0.2, 1.6]) b(0.35, y, 3.9, 0.6, 0, 22, TYRE, { line: 0.9 });
+    b(-0.25, -0.3, 0.12, 2.6, 2, 22, body, { line: 0.8 });
+    b(0.3, -0.15, 4.0, 2.3, 22, 7, body, { line: 0.9 });
+    b(0.7, 0.05, 2.8, 1.9, 29, 32, GLASS, { line: 0.9 });
+    b(0.64, 0.0, 2.92, 2.0, 61, 4, body, { line: 0.9 });
+    b(3.5, 0.2, 0.8, 1.6, 29, 13, body, { line: 0.8 });
+    b(2.0, 0.9, 0.2, 0.2, 65, 4, { c: "#ff9a2a", top: "#ffc060", flat: true }, { glow: true, line: 0 });
+    if (snowy) b(0.75, 0.1, 2.7, 1.8, 65, 2, SNOW, { line: 0.5 });
+    s.shadow(0.1 + ox, -0.2 + oy, 4.6, 2.5, 0.4, 0.4);
+    return;
+  }
+  // the wave 3 ones (docs/plan/34): the plough truck, the tractor, the toboggan
+  if (props.model === "ploughtruck") {
+    // big tyres; the yellow blade in front, the cab and its windows, the grey hopper, the beacon
+    for (const x of [1.4, 5.0]) for (const y of [-0.25, 1.95]) b(x, y, 0.9, 0.3, 0, 26, TYRE, { line: 0.8 });
+    b(-0.45, -0.5, 0.18, 2.9, 2, 24, { c: "#e0b12a", top: "#f0c84a" }, { line: 0.9 });
+    b(0.3, -0.2, 6.0, 2.3, 14, 12, body, { line: 0.9 });
+    b(0.3, -0.15, 1.3, 2.2, 26, 18, body, { line: 0.9 });
+    b(1.6, -0.2, 1.5, 2.3, 26, 22, GLASS, { line: 0.9 });
+    b(1.55, -0.25, 1.6, 2.4, 48, 5, body, { line: 0.9 });
+    b(3.3, -0.15, 2.9, 2.2, 26, 28, { c: "#8d8a84", top: "#a3a09a", left: "#97948e", right: "#7d7a74" }, { line: 0.9 });
+    b(2.3, 0.85, 0.24, 0.24, 53, 5, { c: "#ff9a2a", top: "#ffc060", flat: true }, { glow: true, line: 0 });
+    if (snowy) b(3.4, -0.05, 2.7, 2.0, 54, 2, SNOW, { line: 0.5 });
+    s.shadow(0.2 + ox, -0.3 + oy, 6.8, 2.8, 0.4, 0.4);
+    return;
+  }
+  if (props.model === "tractor") {
+    // big back wheels, small front ones; the narrow hood, the open seat, the roll bar, the stack
+    for (const y of [-0.2, 1.65]) b(2.2, y, 1.5, 0.45, 0, 34, TYRE, { line: 0.8 });
+    for (const y of [0.15, 1.45]) b(0.2, y, 0.8, 0.3, 0, 18, TYRE, { line: 0.7 });
+    b(0.05, 0.55, 1.75, 0.8, 16, 18, body, { line: 0.9 });
+    for (const y of [-0.25, 1.6]) b(2.05, y, 1.4, 0.55, 34, 3, body, { line: 0.8 });
+    b(2.5, 0.65, 0.5, 0.6, 26, 16, { c: "#2a221e", top: "#3a302a" }, { line: 0.7 });
+    b(2.95, 0.0, 0.08, 1.8, 26, 40, { c: "#3a3d40", top: "#4a4e52", flat: true }, { line: 0.6 });
+    b(1.0, 1.1, 0.1, 0.1, 34, 22, M.aluminium, { line: 0.4 });
+    if (snowy) b(0.1, 0.6, 1.6, 0.7, 34, 2, SNOW, { line: 0.5 });
+    s.shadow(0.1 + ox, -0.2 + oy, 3.5, 2.3, 0.4, 0.4);
+    return;
+  }
+  if (props.model === "toboggan") {
+    // the slatted board, its curled front, the ropes along its sides
+    b(0.3, 0.0, 1.5, 0.6, 1, 2, body, { line: 0.7 });
+    b(0.05, 0.0, 0.25, 0.6, 3, 10, body, { line: 0.7 });
+    for (const y of [-0.02, 0.6])
+      b(0.1, y, 1.65, 0.03, 4, 1, { c: "#c8b48a", top: "#d8c49a", flat: true }, { line: 0.3 });
+    if (snowy) b(0.5, 0.05, 1.1, 0.5, 3, 1, SNOW, { line: 0.3 });
+    s.shadow(0.05 + ox, -0.05 + oy, 1.9, 0.75, 0.4, 0.4);
+    return;
+  }
   // wheels, under the body's sills
   for (const x of [0.75, 3.6]) for (const y of [0.06, 1.74]) b(x, y, 0.62, 0.2, 0, 21, TYRE, { line: 0.7 });
   // the lower body, bumpers and lights
@@ -145,15 +217,32 @@ export function car(s: Sketch, props: Record<string, unknown>) {
     b(0.04, y, 0.06, 0.3, 21, 4, { c: "#fff4cc", top: "#fffbe8", flat: true }, { glow: true, line: 0 });
     b(4.92, y, 0.05, 0.3, 21, 4, { c: K.red, top: "#d8553f", flat: true }, { line: 0 });
   }
-  // the cabin: dark glass, the roof in the body's colour (a wagon's runs to the back)
+  // the police car's doors white on its black
+  if (role === "police") b(1.6, 0.11, 2.2, 1.78, 12, 17, paint(0xecebe6), { line: 0.8 });
+  // the cabin: dark glass, the roof in the body's colour (a wagon's runs to the back, a pickup's
+  // stops behind its front seats: its bed open behind, low walls round it)
   const c0 = 1.55;
-  const c1 = wagon ? 4.7 : 3.95;
+  const c1 = pickup ? 2.95 : wagon ? 4.7 : 3.95;
   b(c0, 0.3, c1 - c0, 1.4, 31, 20, GLASS, { line: 0.9 });
   b(c0 + 0.12, 0.34, c1 - c0 - 0.2, 1.32, 51, 4, body, { line: 0.9 });
+  if (pickup) {
+    const BED: Mat = { c: "#2a2d30", top: "#34383c", flat: true };
+    b(c1 + 0.1, 0.24, 4.7 - c1 - 0.1, 1.52, 31, 1, BED, { line: 0.5 });
+    for (const y of [0.14, 1.72]) b(c1 + 0.05, y, 4.8 - c1, 0.14, 31, 7, body, { line: 0.7 });
+    b(4.74, 0.14, 0.12, 1.72, 31, 7, body, { line: 0.7 });
+  }
+  // a role's light on the roof: the taxi's sign, the police car's bar (red one end, blue the other)
+  const mid = (c0 + c1) / 2;
+  if (role === "taxi")
+    b(mid - 0.18, 0.62, 0.36, 0.76, 55, 7, { c: "#f6dc8c", top: "#fff2c4", flat: true }, { glow: true, line: 0.6 });
+  if (role === "police") {
+    b(mid - 0.1, 0.25, 0.2, 0.7, 55, 5, { c: K.red, top: "#e05a46", flat: true }, { glow: true, line: 0.5 });
+    b(mid - 0.1, 0.95, 0.2, 0.7, 55, 5, { c: "#2a52c8", top: "#4a72e8", flat: true }, { glow: true, line: 0.5 });
+  }
   if (snowy) {
-    b(c0 + 0.2, 0.42, c1 - c0 - 0.4, 1.16, 55, 3, SNOW, { line: 0.6 });
+    if (!role) b(c0 + 0.2, 0.42, c1 - c0 - 0.4, 1.16, 55, 3, SNOW, { line: 0.6 });
     b(0.25, 0.3, 1.1, 1.4, 31, 2, SNOW, { line: 0.5 });
-    if (!wagon) b(c1 + 0.15, 0.3, 4.75 - c1 - 0.2, 1.4, 31, 2, SNOW, { line: 0.5 });
+    if (!wagon && !pickup) b(c1 + 0.15, 0.3, 4.75 - c1 - 0.2, 1.4, 31, 2, SNOW, { line: 0.5 });
   }
   s.shadow(0.1 + ox, 0.1 + oy, 4.8, 1.8, 0.4, 0.4);
 }

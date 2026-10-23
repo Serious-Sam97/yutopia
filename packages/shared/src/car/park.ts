@@ -1,5 +1,5 @@
 import { footprint } from "../catalog.ts";
-import { CAR_BODY } from "./body.ts";
+import { CAR_BODY, carKindOf } from "./body.ts";
 
 // A parked car as a world object (docs/plan/28-the-car.md, Together): the
 // lot's cars are objects of kind `car`, 5 × 2 tiles at a quarter turn (rot 0:
@@ -43,7 +43,7 @@ export function parkedBody(o: ParkedObj): {
   h: number | null;
 } {
   const pose = parkedPose(o);
-  const b = CAR_BODY[o.props?.model === "offroad" ? "offroad" : "sedan"];
+  const b = CAR_BODY[carKindOf(o.props?.model)];
   const off = (b.ahead - b.behind) / 2;
   return {
     x: pose.x + Math.cos(pose.a) * off,

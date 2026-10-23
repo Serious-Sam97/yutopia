@@ -1,7 +1,7 @@
 import type { AvatarLayers } from "@yutopia/shared";
 import { groundAt } from "@yutopia/shared/grounds";
 import type * as THREE_NS from "three";
-import { buildSedan, type Lights, type Sedan } from "./sedan";
+import { buildSedan, type Lights, type Sedan, type SedanOpts } from "./sedan";
 import { windscreenSnow } from "./textures";
 import type { Cluster } from "./vfd";
 
@@ -20,7 +20,7 @@ export interface CarIn {
   a: number;
   y?: number;
   colour: number;
-  kind?: "sedan" | "offroad";
+  kind?: SedanOpts["kind"];
   snowy?: number;
   sink?: number; // sunk into deep snow
   roll?: number; // leaning to its right (+), radians

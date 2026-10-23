@@ -416,3 +416,87 @@ export function windscreenSnow(
   }
   return tex(c);
 }
+
+/** Checker plate (the steps, the footplates, the running boards): raised diamonds on steel. */
+export function diamond(): CanvasTexture {
+  const [c, g] = canvas(128, 128);
+  g.fillStyle = "#8d9399";
+  g.fillRect(0, 0, 128, 128);
+  for (let y = 0; y < 128; y += 16)
+    for (let x = 0; x < 128; x += 16) {
+      const flip = ((x + y) / 16) % 2 === 0;
+      g.save();
+      g.translate(x + 8, y + 8);
+      g.rotate(flip ? Math.PI / 4 : -Math.PI / 4);
+      g.fillStyle = "#c3c8cd";
+      g.fillRect(-7, -1.6, 14, 3.2);
+      g.fillStyle = "#5e6368";
+      g.fillRect(-7, 1.6, 14, 1.2);
+      g.restore();
+    }
+  const t = tex(c, true, true);
+  t.repeat.set(3, 3);
+  return t;
+}
+
+/** A dash's gauges: four dials, white on black, their needles low (the dash lit at night). */
+export function gauges(): CanvasTexture {
+  const [c, g] = canvas(512, 128);
+  g.fillStyle = "#121314";
+  g.fillRect(0, 0, 512, 128);
+  for (let i = 0; i < 4; i++) {
+    const cx = 64 + i * 128;
+    const r = i === 1 || i === 2 ? 54 : 44;
+    g.fillStyle = "#050505";
+    g.beginPath();
+    g.arc(cx, 64, r, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = "#9aa0a5";
+    g.lineWidth = 3;
+    g.stroke();
+    for (let k = 0; k <= 10; k++) {
+      const a = Math.PI * 0.75 + (k / 10) * Math.PI * 1.5;
+      g.strokeStyle = k > 8 && i === 1 ? "#e04a2a" : "#f2efe6";
+      g.lineWidth = k % 2 ? 1.5 : 3;
+      g.beginPath();
+      g.moveTo(cx + Math.cos(a) * r * 0.72, 64 + Math.sin(a) * r * 0.72);
+      g.lineTo(cx + Math.cos(a) * r * 0.9, 64 + Math.sin(a) * r * 0.9);
+      g.stroke();
+    }
+    const a = Math.PI * 0.75 + (0.15 + 0.2 * i) * Math.PI * 1.5;
+    g.strokeStyle = "#ff8a3a";
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(cx, 64);
+    g.lineTo(cx + Math.cos(a) * r * 0.8, 64 + Math.sin(a) * r * 0.8);
+    g.stroke();
+  }
+  return tex(c);
+}
+
+/** Varnished ash (the toboggan's boards): pale, a straight grain along u, a few knots. */
+export function ash(): CanvasTexture {
+  const [c, g] = canvas(512, 128);
+  const r = rng(77);
+  g.fillStyle = "#c99a5e";
+  g.fillRect(0, 0, 512, 128);
+  for (let i = 0; i < 70; i++) {
+    const y = r() * 128;
+    g.strokeStyle = `rgba(${90 + r() * 40},${55 + r() * 20},${25},${0.12 + r() * 0.2})`;
+    g.lineWidth = 0.6 + r() * 1.8;
+    g.beginPath();
+    g.moveTo(0, y);
+    for (let x = 0; x <= 512; x += 32) g.lineTo(x, y + Math.sin(x * 0.01 + i) * 2.5 + (r() - 0.5));
+    g.stroke();
+  }
+  for (let k = 0; k < 3; k++) {
+    const x = 60 + r() * 400;
+    const y = 20 + r() * 88;
+    const grd = g.createRadialGradient(x, y, 1, x, y, 9);
+    grd.addColorStop(0, "rgba(70,40,18,0.85)");
+    grd.addColorStop(1, "rgba(70,40,18,0)");
+    g.fillStyle = grd;
+    g.fillRect(x - 12, y - 12, 24, 24);
+  }
+  return tex(c, true, true);
+}

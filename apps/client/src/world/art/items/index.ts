@@ -154,7 +154,8 @@ const GENS: Record<string, ItemGen> = {
   car: {
     draw: car,
     variants: 9,
-    key: (p) => `${p.variant ?? ""}|${p.wagon ? "w" : ""}${p.snowy ? "s" : ""}|${p.dx ?? 0}|${p.dz ?? 0}|${painted(p)}`,
+    key: (p) =>
+      `${p.variant ?? ""}|${p.wagon ? "w" : ""}${p.snowy ? "s" : ""}|${p.dx ?? 0}|${p.dz ?? 0}|${painted(p)}|${p.model ?? ""}|${p.role ?? ""}`,
   },
   lamp_post: { draw: lampPost, variants: 1 },
   sofa: { draw: sofa, variants: 3, key: painted },

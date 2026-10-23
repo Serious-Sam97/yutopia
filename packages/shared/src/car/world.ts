@@ -12,7 +12,6 @@ import {
   LAMPS,
   lotBanks,
   surfaceTileAt,
-  TOWN_CARS,
   treesIn,
 } from "../grounds.ts";
 import type { Ground } from "./grip.ts";
@@ -96,10 +95,6 @@ function chunkSolids(cx: number, cz: number): Solid[] {
   for (const k of lotBanks())
     if (k.x >= x0 && k.x < x1 && k.z >= z0 && k.z < z1)
       out.push({ kind: "circle", x: k.x, z: k.z, r: Math.min(k.s, k.sz) * 0.85, soft: true, what: "bank" });
-  // the town's parked cars
-  for (const c of TOWN_CARS)
-    if (c.x >= x0 && c.x < x1 && c.z >= z0 && c.z < z1)
-      out.push({ kind: "box", x: c.x, z: c.z, hx: 2.45, hz: 1.0, a: c.tilt, what: "car" });
   // the bench in the clearing
   if (BENCH.x + 1 >= x0 && BENCH.x + 1 < x1 && BENCH.z >= z0 && BENCH.z < z1)
     out.push({ kind: "box", x: BENCH.x + 1, z: BENCH.z + 0.5, hx: 1, hz: 0.35, what: "wall" });
@@ -147,6 +142,8 @@ export interface GroundsWorldOpts {
   cold?: () => number;
   /** fresh snow on the roads, 0..1 */
   cover?: () => number;
+  /** …at a point (where a plough's been through, less: wave 3) */
+  coverAt?: (x: number, z: number) => number;
   /** what moves or is placed: the lot's parked cars, the other cars, people */
   extra?: (x: number, z: number, r: number, out: Solid[]) => void;
 }
@@ -171,6 +168,7 @@ export function groundsWorld(o: GroundsWorldOpts = {}): CarWorld {
     },
   };
   Object.defineProperty(w, "cover", { get: () => o.cover?.() ?? 0 });
+  if (o.coverAt) w.coverAt = o.coverAt;
   return w;
 }
 
@@ -329,4 +327,26 @@ export function freeSpot(
     }
   }
   return best;
+}
+
+// ── ploughed roads (docs/plan/34-the-vehicles.md, wave 3) ───────────────────────
+// A plough (the town's, or the drivable truck) clears the road's fresh snow where its blade goes:
+// the server keeps those 4 m cells and when (WorldState.ploughed), and a storm covers them again
+// over ten minutes.
+export const PLOUGH_CELL = 4;
+export const PLOUGHED_MS = 10 * 60 * 1000;
+export const ploughCell = (x: number, z: number) => `${Math.floor(x / PLOUGH_CELL)},${Math.floor(z / PLOUGH_CELL)}`;
+/** The cells under a blade `ahead` of a middle (x, z) heading `a`, `width` across. */
+export function bladeCells(x: number, z: number, a: number, ahead: number, width: number): string[] {
+  const out = new Set<string>();
+  const bx = x + Math.cos(a) * ahead;
+  const bz = z + Math.sin(a) * ahead;
+  for (let t = -width / 2; t <= width / 2 + 1e-6; t += PLOUGH_CELL / 2)
+    out.add(ploughCell(bx - Math.sin(a) * t, bz + Math.cos(a) * t));
+  return [...out];
+}
+/** How much of a storm's fresh snow lies at a point: none just after a plough, back over ten minutes. */
+export function coverAfter(cover: number, ploughedAt: number | undefined, now: number): number {
+  if (!ploughedAt || cover <= 0) return cover;
+  return cover * Math.max(0, Math.min(1, (now - ploughedAt) / PLOUGHED_MS));
 }

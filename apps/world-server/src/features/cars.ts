@@ -5,13 +5,17 @@ import {
   CAR_HZ,
   type CarSpec,
   type CarWire,
+  carKindOf,
   freeSpot,
   groundsWorld,
+  HOME_CARS,
+  type HomeCar,
   headingQuat,
   implausible,
   parkAt,
   parkedBody,
   parkedPose,
+  SEATS_OF,
   type Solid,
   SPECS,
 } from "@yutopia/shared/car";
@@ -21,6 +25,7 @@ import { config } from "../config.ts";
 import { type Player, Vehicle } from "../schema.ts";
 import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
+import { ploughAt, ploughedSweep } from "./ploughed.ts";
 
 // The lot's cars, driven (docs/plan/28-the-car.md, Together). Any free one is
 // anyone's: X at a door takes that door's seat (0 the driver's). The driver's
@@ -39,6 +44,11 @@ import { registerFeature } from "./index.ts";
 // knocks leave (the driver's client counts them: `car:wear`, only ever more).
 // Hit at speed, someone is knocked down (never hurt); a passenger can change the
 // radio's station (the driver's client keeps it: told).
+//
+// Not every car lives in the lot (wave 1, docs/plan/34-the-vehicles.md): Main Street's parked
+// cars, the farm's pickup, the Church Street pair, the boathouse's 4x4 and the gas station's
+// rental (shared car/homes.ts) are made once and kept, each with its home spot — the tow brings
+// it back there, and putting the lot back puts each at its own.
 
 const REACH = 4.2; // from its middle to whoever gets in
 const OUT_V = 2.5; // m/s: slower than this to get in or out
@@ -52,38 +62,6 @@ const FILL_S = 8; // s: empty to full at a pump (a wash in the time)
 const KNOCK_V = 2; // m/s: as fast as a car must be going to knock someone down
 const KNOCK_REACH = 4; // m: them this near its middle
 const UNSTICK_MS = 10_000; // a car pulled out: not again for this long
-// the seats (car-local from the CoG: x forward, z to the right): the driver's on the left
-const SEAT_AT: [number, number][] = [
-  [-0.48, -0.42],
-  [-0.48, 0.42],
-  [-1.15, -0.45],
-  [-1.15, 0.45],
-];
-const SEAT_HIP = 0.47; // above the ground at rest
-// out of the seat's door, then the other side's, then the boot
-const DOOR_OUT: [number, number][][] = [
-  [
-    [-0.35, -1.7],
-    [-0.35, 1.7],
-    [-3.4, 0],
-  ],
-  [
-    [-0.35, 1.7],
-    [-0.35, -1.7],
-    [-3.4, 0],
-  ],
-  [
-    [-1.3, -1.7],
-    [-1.3, 1.7],
-    [-3.4, 0],
-  ],
-  [
-    [-1.3, 1.7],
-    [-1.3, -1.7],
-    [-3.4, 0],
-  ],
-];
-
 interface Live {
   veh: Vehicle;
   spec: CarSpec;
@@ -134,10 +112,11 @@ registerFeature((room: WorldRoom) => {
   const seatsStr = (l: Live) => l.seats.join("|");
   const place = (p: Player, l: Live, i: number) => {
     const v = l.veh;
-    const s = at(v, SEAT_AT[i][0], SEAT_AT[i][1]);
+    const seats = SEATS_OF[l.spec.kind];
+    const s = at(v, seats.at[i][0], seats.at[i][1]);
     p.x = s.x - off.x;
     p.y = s.z - off.y;
-    p.z = v.y - l.spec.cog + SEAT_HIP;
+    p.z = v.y - l.spec.cog + seats.hip[i];
     p.level = 0;
     p.a = ANIM.sit;
     p.d = dirFromDelta(Math.cos(v.a), Math.sin(v.a), p.d as 0);
@@ -157,7 +136,7 @@ registerFeature((room: WorldRoom) => {
       if (def.props?.driven) return no(client, "busy");
       const pose = parkedPose(def);
       if (Math.hypot(p.x - pose.x, p.y - pose.y) > REACH) return no(client, "far");
-      const kind = def.props?.model === "offroad" ? "offroad" : "sedan";
+      const kind = carKindOf(def.props?.model);
       const spec = SPECS[kind];
       const v = new Vehicle();
       v.id = `car:${o.id}`;
@@ -175,6 +154,7 @@ registerFeature((room: WorldRoom) => {
       v.fuel = clamp01(num(def.props?.fuel, 0.7));
       v.grime = clamp01(num(def.props?.grime, 0));
       v.dmg = typeof def.props?.dmg === "string" ? def.props.dmg : "";
+      v.role = typeof def.props?.role === "string" ? def.props.role : "";
       l = { veh: v, spec, seats: ["", "", "", ""], last: null, lastAt: Date.now(), still: 0, strikes: 0, sp: 0 };
       live.set(v.id, l);
       room.state.vehicles.set(v.id, v);
@@ -185,7 +165,8 @@ registerFeature((room: WorldRoom) => {
       if (Math.hypot(p.x + off.x - l.veh.x, p.y + off.y - l.veh.z) > REACH) return no(client, "far");
       if (Math.hypot(l.veh.vx, l.veh.vz) > OUT_V) return no(client, "moving");
     }
-    if (l.seats[seat]) return no(client, "taken");
+    // (only the seats it has: the snowmobile's one)
+    if (l.seats[seat] || seat >= SEATS_OF[l.spec.kind].at.length) return no(client, "taken");
     l.seats[seat] = client.sessionId;
     l.veh.seats = seatsStr(l);
     l.veh.riders = l.seats.filter(Boolean).length;
@@ -258,7 +239,7 @@ registerFeature((room: WorldRoom) => {
       steer: m.steer,
       rpm: Math.max(0, Math.min(65535, m.rpm | 0)),
       gear: m.gear | 0,
-      fl: m.fl & 0xffff,
+      fl: (Number(m.fl) >>> 0) & 0x1ffff,
       slip: m.slip,
       seq,
       at: now,
@@ -458,7 +439,8 @@ registerFeature((room: WorldRoom) => {
     // out of the door on their side, else the other's, else round the back
     const g = room.gridFor(p.uid, 0);
     let spot: { x: number; y: number } | null = null;
-    for (const [lx, lz] of DOOR_OUT[i]) {
+    const ways = SEATS_OF[l.spec.kind].out[i];
+    for (const [lx, lz] of ways) {
       const s = at(l.veh, lx, lz);
       const x = s.x - off.x;
       const y = s.z - off.y;
@@ -468,7 +450,7 @@ registerFeature((room: WorldRoom) => {
       }
     }
     if (!spot) {
-      const s = at(l.veh, DOOR_OUT[i][0][0], DOOR_OUT[i][0][1]);
+      const s = at(l.veh, ways[0][0], ways[0][1]);
       spot = g.nearestOpen(s.x - off.x, s.z - off.y, 6) ?? { x: s.x - off.x, y: s.z - off.y };
     }
     p.x = spot.x;
@@ -534,7 +516,8 @@ registerFeature((room: WorldRoom) => {
   // seeds car-i in the lot's cars[i]), so the lot put back is the lot as it was, not reshuffled
   const home = (all: boolean) => {
     const lot = campusLot(36);
-    const cars = [...room.state.objects.values()].filter((o) => o.kind === "car");
+    // (the cars that live away from the lot: to their own homes, not the lot's bays)
+    const cars = [...room.state.objects.values()].filter((o) => o.kind === "car" && !homeCar(o, all));
     const own = (id: string) => {
       const c = lot.cars[Number(/^car-(\d+)$/.exec(id)?.[1] ?? -1)];
       const bay = c ? lot.bays.findIndex((b) => b.x === c.x && Math.abs(b.z - c.z) < 1) : -1;
@@ -633,7 +616,7 @@ registerFeature((room: WorldRoom) => {
     const cars = [...room.state.objects.values()].filter((o) => o.kind === "car");
     if (cars.length < 6) return;
     fleet = true;
-    if (cars.some((o) => fromSchema(o).props?.model === "offroad")) return;
+    if (cars.some((o) => /^car-\d+$/.test(o.id) && fromSchema(o).props?.model === "offroad")) return;
     for (const id of ["car-3", "car-11"]) {
       const o = room.state.objects.get(id);
       if (!o) continue;
@@ -646,10 +629,80 @@ registerFeature((room: WorldRoom) => {
     }
   };
 
+  // the cars that live away from the lot: made once (each where it lives), kept
+  const homeOf = new Map(HOME_CARS.map((h) => [h.id, h]));
+  const homeProps = (h: HomeCar, was: Record<string, unknown> = {}) => {
+    const props: Record<string, unknown> = { ...was, level: 0, variant: h.colour, home: 1 };
+    if (h.model !== "sedan") props.model = h.model;
+    if (h.wagon) props.wagon = 1;
+    if (h.snowy) props.snowy = 1;
+    if (h.role) props.role = h.role;
+    return props;
+  };
+  const putHome = (h: HomeCar, was?: Record<string, unknown>, fresh = false) => {
+    const props = homeProps(h, was);
+    delete props.parkedAt;
+    if (fresh) {
+      delete props.fuel;
+      delete props.grime;
+      delete props.dmg;
+    } else props.fuel = Math.max(0.3, num(props.fuel, 0.7));
+    const spot = parkAt(h.x - off.x, h.z - off.y, h.a, heightAt(h.x, h.z), props);
+    const next = { id: h.id, kind: "car", ...spot };
+    room.state.objects.set(h.id, toSchema(next));
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] home", e.message));
+  };
+  let homesMade = false;
+  const makeHomes = () => {
+    const cars = [...room.state.objects.values()].filter((o) => o.kind === "car");
+    if (cars.length < 6) return;
+    homesMade = true;
+    let made = 0;
+    for (const h of HOME_CARS)
+      if (!room.state.objects.get(h.id)) {
+        putHome(h, undefined, true);
+        made++;
+      }
+    if (made) room.rebuildGrid();
+  };
+  /** A car that lives away from the lot, left away from its home: towed back there (or, `all`, put back). */
+  const homeCar = (o: { id: string }, all: boolean): boolean => {
+    const h = homeOf.get(o.id);
+    if (!h) return false;
+    const def = fromSchema(o as Parameters<typeof fromSchema>[0]);
+    if (def.props?.driven) return true;
+    const pose = parkedPose(def);
+    const bx = pose.x + off.x;
+    const bz = pose.y + off.y;
+    const away = Math.hypot(bx - h.x, bz - h.z) > 1.5;
+    if (all) {
+      putHome(h, def.props ?? {}, true);
+      return true;
+    }
+    if (!away) return true;
+    const parkedAt = Number(def.props?.parkedAt) || 0;
+    const dry = num(def.props?.fuel, 1) <= 0.01;
+    if (Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS)) return true;
+    const near = [...room.state.players.values()].some(
+      (p) =>
+        p.level === 0 &&
+        (Math.hypot(p.x + off.x - bx, p.y + off.y - bz) < TOW_NEAR ||
+          Math.hypot(p.x + off.x - h.x, p.y + off.y - h.z) < TOW_NEAR),
+    );
+    if (near) return true;
+    const props = { ...(def.props ?? {}) };
+    delete props.grime;
+    delete props.dmg;
+    putHome(h, props);
+    return true;
+  };
+
   let towAt = Date.now() + 60_000;
+  let sweepAt = 0;
   return {
     tick(dt, now) {
       if (!fleet) makeFleet();
+      if (!homesMade) makeHomes();
       for (const l of [...live.values()]) {
         const v = l.veh;
         // its people in their seats (and out of them, if something else took them away)
@@ -694,9 +747,16 @@ registerFeature((room: WorldRoom) => {
             if (v.fuel >= 1 && v.grime <= 0) v.filling = false;
           }
         }
+        // the plough truck's blade, down as it goes: the road cleared behind it
+        if (l.veh.kind === "ploughtruck" && Math.hypot(v.vx, v.vz) > 1)
+          ploughAt(room.state, v.x, v.z, v.a, 3.1, 3.0, now);
         const empty = !l.seats.some(Boolean);
         l.still = empty && Math.hypot(v.vx, v.vz) < 0.3 ? l.still + dt : 0;
         if (l.still > 2) park(l);
+      }
+      if (now > sweepAt) {
+        sweepAt = now + 5000;
+        ploughedSweep(room.state, now);
       }
       if (now > towAt) {
         towAt = now + 60_000;

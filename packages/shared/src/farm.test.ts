@@ -11,7 +11,6 @@ import {
   placeAt,
   SCARECROWS,
   TRACTOR,
-  topTile,
   treeDensity,
   treesIn,
   walkableTile,
@@ -93,14 +92,13 @@ test("the farmhouse: in by its front door (north), its rooms furnished — round
   assert.ok(walk(xm, (h.z0 + h.z1) / 2), "the middle of the room");
 });
 
-test("the cornfield is walked through; the tractor and scarecrows are in the way", () => {
+test("the cornfield is walked through; the scarecrows are in the way (the tractor's a vehicle now: parked, the grid's)", () => {
   for (let x = CORN.x0 + 1; x < CORN.x1 - 1; x += 7)
     for (let z = CORN.z0 + 1; z < CORN.z1 - 1; z += 9) {
       if (SCARECROWS.some((c) => Math.abs(c.x - x) < 1 && Math.abs(c.z - z) < 1)) continue;
       assert.ok(walk(x, z), `the field at ${x}, ${z}`);
     }
-  assert.ok(!walk(TRACTOR.x, TRACTOR.z), "the tractor");
-  assert.equal(topTile(Math.floor(TRACTOR.x), Math.floor(TRACTOR.z)), 1.4);
+  assert.ok(walk(TRACTOR.x, TRACTOR.z), "where the tractor parks: the land itself");
   for (const c of SCARECROWS) assert.ok(!walk(c.x, c.z), "a scarecrow");
 });
 
