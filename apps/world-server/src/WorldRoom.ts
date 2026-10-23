@@ -113,6 +113,7 @@ interface ClientData {
   hears: Set<string>; // sids this client can hear
   heardByKey: string; // last "heard by" list sent, to skip no-op updates
   kicked?: boolean; // replaced by a newer tab
+  bye?: boolean; // their page said goodbye (WorldRoom.bye): leaving, not dropped
 }
 
 export type WorldClient = Client<ClientData, WorldClaims>;
@@ -128,6 +129,9 @@ export class WorldRoom extends Room<WorldState> {
   maxClients = WorldRoom.CAPACITY + 50;
   // Reconnects (network blips, laptop sleep) keep your avatar for this long.
   static RECONNECT_SECONDS = 20;
+  // Everyone comes back where they were when they left, however long ago
+  // (docs/plan/36-the-ghost.md); off, everyone arrives at the arrival point (tests).
+  static comeBack = true;
   // the live world (the API's pushes reach people through it, server.ts)
   static current: WorldRoom | null = null;
   // the API is replacing the world's data (server.ts /internal/hold): no opening it meanwhile
@@ -137,6 +141,15 @@ export class WorldRoom extends Room<WorldState> {
   grid!: Grid;
   readonly livekitRoom = "world";
   private features: Feature[] = [];
+  // the seats kept for a reconnection, by person: a new join of theirs ends the wait
+  private waiting = new Map<number, { sid: string; token: string; end: () => void }>();
+  // the rooms open in this process (offline sandboxes: several), for a page's goodbye (bye)
+  static live = new Set<WorldRoom>();
+  // where each person was when they left, saved in the API (last-spots) and kept
+  // here till they're back: fresher than the API's for a quick return (its save may
+  // still be on the way), and by the server, not the room — the last one out closes
+  // the room (autoDispose), and they come back to a new one
+  private static lastSpot = new Map<number, Spot & { d: number }>();
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
   private removedUntil = new Map<number, number>();
   // the arrival points people picked for themselves (user id → tile centre, its floor)
@@ -178,6 +191,7 @@ export class WorldRoom extends Room<WorldState> {
     if (WorldRoom.held) throw new Error("The world is being reset — try again in a moment");
     if (WorldRoom.current && !config.offline) throw new Error("The world is already open");
     WorldRoom.current = this;
+    WorldRoom.live.add(this);
     this.setState(new WorldState());
     this.autoDispose = true;
 
@@ -326,6 +340,7 @@ export class WorldRoom extends Room<WorldState> {
     }, 1000 / TICK_HZ);
     this.clock.setInterval(() => this.hearingPass(), 1000 / HEARING_HZ);
     this.clock.setInterval(() => this.pushPresence(true), 60_000);
+    this.clock.setInterval(() => this.saveSpots([...this.state.players.values()]), 60_000);
     this.clock.setInterval(() => this.weather(), 1000);
     this.weather();
   }
@@ -417,42 +432,120 @@ export class WorldRoom extends Room<WorldState> {
       const seats = [...this.state.objects.values()].filter((o) => entry(o.kind).seat && safeJson(o.props).desk);
       const owned = seats.find((o) => safeJson(o.props).ownerId === claims.userId);
       const free = seats.filter((o) => safeJson(o.props).ownerId == null).map((o) => o.id);
-      const [desk, mine] = await Promise.all([
+      const [desk, mine, last] = await Promise.all([
         owned ? { desk: owned.id } : api.desk(claims.userId, free, false).catch(() => ({ desk: null })),
         api.spawn(claims.userId).catch(() => ({ spawn: undefined })),
+        api.lastSpot(claims.userId).catch(() => ({ spot: null })),
       ]);
+      if (last.spot && !WorldRoom.lastSpot.has(claims.userId)) WorldRoom.lastSpot.set(claims.userId, last.spot);
       if (desk.desk && this.state.objects.get(desk.desk)) p.desk = desk.desk;
       if (mine.spawn) this.mySpawns.set(claims.userId, { ...mine.spawn, level: mine.spawn.level ?? undefined });
       else if (mine.spawn === null) this.mySpawns.delete(claims.userId);
     }
-    const at = p.bot ? this.homeSpot() : this.arrivalFor(p);
+    // back (a reload, the tab opened again, the next day): where they were
+    const back = p.bot ? null : this.comeBack(p, client.sessionId);
+    const at = back ?? (p.bot ? this.homeSpot() : this.arrivalFor(p));
     const g = this.gridFor(p.uid, at.level);
     const open = g.fits(at.x, at.y) ? at : (g.nearestOpen(at.x, at.y) ?? this.map.spawn);
     p.level = at.level;
     p.x = open.x;
     p.y = open.y;
+    if (back) p.d = back.d;
     p.area = this.areaOf(p)?.key ?? "";
     this.state.players.set(client.sessionId, p);
     metrics.inc("joins_total");
     for (const f of this.features) f.join?.(client, p);
+    // their old line's seat, still kept for a reconnection: given up now, so the old one goes at
+    // once — with this one already here, as when a second tab takes over (no ghost of themselves)
+    const kept = this.waiting.get(p.uid);
+    if (kept && kept.sid !== client.sessionId) kept.end();
     this.pushPresence();
+  }
+
+  // Where someone coming back arrives: where their last session is (kept for a
+  // reconnection, or a tab being put out), or where they were when they last left —
+  // on the nearest open tile if that one's taken now; not if the floor's gone, or the
+  // walls have changed round it (walled in, a room shut to them now), as for their own
+  // arrival point: the arrival point then (also for anyone the first time).
+  private comeBack(p: Player, sid: string): (Spot & { d: number }) | null {
+    const old = [...this.state.players.values()].find((q) => q.uid === p.uid && q.sid !== sid);
+    const last = WorldRoom.lastSpot.get(p.uid);
+    WorldRoom.lastSpot.delete(p.uid);
+    const was = old ? { level: old.level, x: old.x, y: old.y, d: old.d } : last;
+    if (!WorldRoom.comeBack || !was || !levelMap(this.map, was.level)) return null;
+    const g = this.gridFor(p.uid, was.level);
+    // (out on the land: it's all one place)
+    if (g.onLand(was.x, was.y)) return was;
+    const open = g.fits(was.x, was.y) ? was : g.nearestOpen(was.x, was.y);
+    if (!open) return null;
+    const at = { x: open.x, y: open.y, level: was.level };
+    if (this.arrivalProblem(p, at, this.homeSpot())) return null;
+    return { ...at, d: was.d };
+  }
+
+  // Where everyone is, saved (as each leaves, and everyone a minute apart: a server
+  // stopped without its goodbyes loses no more than that).
+  private saveSpots(players: Player[]) {
+    if (config.offline) return;
+    const spots = players
+      .filter((p) => !p.bot)
+      .map((p) => ({ user_id: p.uid, x: p.x, y: p.y, level: p.level, d: p.d }));
+    if (spots.length) void api.putLastSpots(spots).catch(() => {});
+  }
+
+  // A page's goodbye on its way out (server.ts /bye: a beacon, which the browser sends
+  // however the page goes — its socket's own close doesn't always get out before the
+  // page is gone, and without a goodbye the room keeps a faded body for a
+  // reconnection: docs/plan/36-the-ghost.md). `token`: the session's reconnection
+  // token, its proof. The line still open: closed as a consented leave; already
+  // dropped: its kept seat given up.
+  static bye(token: string): boolean {
+    const t = token.slice(token.lastIndexOf(":") + 1);
+    if (!t) return false;
+    for (const room of WorldRoom.live) {
+      const c = room.clients.find((x) => x.reconnectionToken === t);
+      if (c) {
+        // (cut at once: a close would wait for the page's answer, and the page is gone)
+        if (c.userData) (c.userData as ClientData).bye = true;
+        (c as unknown as { ref?: { terminate?(): void } }).ref?.terminate?.();
+        return true;
+      }
+      for (const w of room.waiting.values())
+        if (w.token === t) {
+          w.end();
+          return true;
+        }
+    }
+    return false;
   }
 
   async onLeave(client: WorldClient, consented: boolean) {
     const p = this.state.players.get(client.sessionId);
     const replaced =
       client.userData?.kicked || this.clients.some((c) => c !== client && c.auth?.userId === client.auth?.userId);
-    if (p && !consented && !replaced) {
+    if (p && !consented && !replaced && !client.userData?.bye) {
       p.status = "away";
       for (const f of this.features) f.drop?.(client, p);
+      const seat = this.allowReconnection(client, WorldRoom.RECONNECT_SECONDS);
+      this.waiting.set(p.uid, {
+        sid: client.sessionId,
+        token: client.reconnectionToken,
+        end: () => seat.reject(new Error("gone")),
+      });
       try {
-        const again = (await this.allowReconnection(client, WorldRoom.RECONNECT_SECONDS)) as WorldClient;
+        const again = (await seat) as WorldClient;
         p.status = "online";
         for (const f of this.features) f.back?.(again, p);
         return;
       } catch {
-        // timed out — fall through and remove
+        // timed out, or they're back in a new session (onJoin) — fall through and remove
+      } finally {
+        if (this.waiting.get(p.uid)?.sid === client.sessionId) this.waiting.delete(p.uid);
       }
+    }
+    if (p && !p.bot) {
+      WorldRoom.lastSpot.set(p.uid, { level: p.level, x: p.x, y: p.y, d: p.d });
+      this.saveSpots([p]);
     }
     if (p) for (const f of this.features) f.leave?.(client, p);
     this.state.players.delete(client.sessionId);
@@ -465,6 +558,7 @@ export class WorldRoom extends Room<WorldState> {
 
   async onDispose() {
     if (WorldRoom.current === this) WorldRoom.current = null;
+    WorldRoom.live.delete(this);
     if (this.presenceTimer) clearTimeout(this.presenceTimer);
     // an edit still waiting on its debounce (e.g. a deploy right after a resize)
     if (this.layoutTimer) {

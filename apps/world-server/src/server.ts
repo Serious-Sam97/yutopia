@@ -103,6 +103,17 @@ export async function startWorldServer(port: number): Promise<Server> {
       return;
     }
     if (req.url?.startsWith("/media/") && (await handleMedia(req, res))) return;
+    // a page's goodbye on its way out (a beacon: WorldRoom.bye)
+    if (req.url === "/bye" && req.method === "POST") {
+      let body = "";
+      for await (const chunk of req) {
+        body += chunk;
+        if (body.length > 200) break;
+      }
+      WorldRoom.bye(body.trim());
+      res.writeHead(204, { "Access-Control-Allow-Origin": "*" }).end();
+      return;
+    }
     if (req.url === "/internal/push") return void (await handlePush(req, res));
     if (req.url === "/internal/hold") return void (await handleHold(req, res));
     if (req.url === "/health") {

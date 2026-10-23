@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Game;
+use App\Models\LastSpot;
 use App\Models\Pet;
 use App\Models\Spawn;
 use App\Models\User;
@@ -111,6 +112,48 @@ class InternalController extends Controller
         Spawn::updateOrCreate(['user_id' => $userId], $at);
 
         return response()->json(['spawn' => $at]);
+    }
+
+    // Where someone was when they last left (null: never been in): they come back there.
+    public function lastSpot(int $userId): JsonResponse
+    {
+        $row = LastSpot::where('user_id', $userId)->first();
+
+        return response()->json(['spot' => $row ? $row->only(['x', 'y', 'level', 'd']) : null]);
+    }
+
+    // Where people are, from the world-server: as each leaves, and everyone now and
+    // then (a server that stops without goodbyes loses no more than that).
+    public function putLastSpots(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'spots' => ['present', 'array', 'max:600'],
+            'spots.*.user_id' => ['required', 'integer'],
+            'spots.*.x' => ['required', 'numeric', 'between:-2000,2000'],
+            'spots.*.y' => ['required', 'numeric', 'between:-2000,2000'],
+            'spots.*.level' => ['required', 'integer', 'between:0,12'],
+            'spots.*.d' => ['required', 'integer', 'between:0,7'],
+        ]);
+        $known = User::whereIn('id', array_column($data['spots'], 'user_id'))->pluck('id')->flip();
+        $now = Carbon::now();
+        $rows = [];
+        foreach ($data['spots'] as $s) {
+            if (! isset($known[$s['user_id']])) {
+                continue;
+            }
+            $rows[] = [
+                'user_id' => (int) $s['user_id'],
+                'x' => (float) $s['x'],
+                'y' => (float) $s['y'],
+                'level' => (int) $s['level'],
+                'd' => (int) $s['d'],
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        LastSpot::upsert($rows, ['user_id'], ['x', 'y', 'level', 'd', 'updated_at']);
+
+        return response()->json(['saved' => count($rows)]);
     }
 
     // A cartridge someone uploaded, for the world-server to check one put in a console.

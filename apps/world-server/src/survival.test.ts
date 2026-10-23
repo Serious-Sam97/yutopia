@@ -230,8 +230,8 @@ test("one body a person: one kept for a reconnection, the battery runs down at 1
   rooms.splice(rooms.indexOf(a.room), 1);
   await a.room.leave(false);
   const b = await person(341);
-  const mine = [...b.room.state.players.values()].filter((p) => p.uid === 341);
-  assert.equal(mine.length, 2, "the kept one and the new one");
+  // (the kept one goes as the new one comes: docs/plan/36-the-ghost.md)
+  await waitFor(() => [...b.room.state.players.values()].filter((p) => p.uid === 341).length === 1);
   await goTo(b, -250, -60);
   const aim = (on: boolean) =>
     b.room.send("pos", {

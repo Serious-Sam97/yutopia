@@ -89,6 +89,26 @@ export async function enter(page: Page, tok: string, worldName?: World) {
     { timeout: 60_000 },
   );
   await loaded(page);
+  // at the arrival point, as the specs were written: people come back where they last
+  // left (docs/plan/36-the-ghost.md), and a spec before left them anywhere
+  await page.evaluate(() => {
+    const w = (window as unknown as { __yutopia?: { room?: { send(t: string, m: unknown): void } } }).__yutopia;
+    w?.room?.send("teleport", { to: "spawn" });
+  });
+  await page
+    .waitForFunction(
+      () => {
+        const w = (window as any).__yutopia;
+        const h = (window as any).__hud.get();
+        const s = w.room.state;
+        const me = s.players.get(w.room.sessionId);
+        const at = h.mySpawn ?? { x: s.spawnX, y: s.spawnY };
+        return !!me && Math.hypot(me.x - at.x, me.y - at.y) < 1.5;
+      },
+      null,
+      { timeout: 10_000 },
+    )
+    .catch(() => {});
   // (the shadowed off: at the real hour it may be night on the Grounds, and a spec walking
   // the land would be struck down and woken at the office. The dark's own specs turn them on.)
   await page.evaluate(() => {

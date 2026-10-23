@@ -97,6 +97,11 @@ export const api = {
     call<{ spawn: { x: number; y: number; level?: number | null } | null }>("GET", `/spawn/${userId}`),
   putSpawn: (userId: number, spawn: { x: number; y: number; level?: number } | null) =>
     call("PUT", `/spawn/${userId}`, { spawn }),
+  // where someone was when they last left (they come back there: docs/plan/36-the-ghost.md)
+  lastSpot: (userId: number) =>
+    call<{ spot: { x: number; y: number; level: number; d: number } | null }>("GET", `/last-spot/${userId}`),
+  putLastSpots: (spots: { user_id: number; x: number; y: number; level: number; d: number }[]) =>
+    call("PUT", "/last-spots", { spots }),
   // who's in the world and where (the phone's contacts show it)
   presence: (people: PresenceEntry[]) => call("POST", "/presence", { people }),
   vortexLine: (context: { event: string; user_id: number | null }) =>

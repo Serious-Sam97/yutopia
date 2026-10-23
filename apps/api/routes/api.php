@@ -130,6 +130,8 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::post('/desk', [InternalController::class, 'desk']);
     Route::get('/spawn/{userId}', [InternalController::class, 'spawn'])->whereNumber('userId');
     Route::put('/spawn/{userId}', [InternalController::class, 'putSpawn'])->whereNumber('userId');
+    Route::get('/last-spot/{userId}', [InternalController::class, 'lastSpot'])->whereNumber('userId');
+    Route::put('/last-spots', [InternalController::class, 'putLastSpots']);
     Route::post('/presence', [InternalController::class, 'presence']);
     Route::post('/vortex', [InternalController::class, 'vortex']);
     Route::get('/games/{gameId}', [InternalController::class, 'game'])->whereNumber('gameId');

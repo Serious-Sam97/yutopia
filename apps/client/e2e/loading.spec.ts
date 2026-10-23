@@ -47,7 +47,7 @@ test("the loading screen: entering, iso ↔ 3D, third ↔ first", async ({ page 
   await useWorld("demo");
   const warns: string[] = [];
   page.on("console", (m) => {
-    if (m.type() === "warning" && m.text().includes("loading:")) warns.push(m.text());
+    if (m.type() === "warning" && m.text().includes("loading cut short")) warns.push(m.text());
     if (m.type() === "error" && m.text().includes("GL_INVALID")) warns.push(m.text());
   });
   await page.addInitScript((t) => {

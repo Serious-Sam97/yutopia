@@ -2,6 +2,7 @@
 
 use App\Models\Desk;
 use App\Models\Game;
+use App\Models\LastSpot;
 use App\Models\Spawn;
 use App\Models\User;
 use App\Models\World;
@@ -134,6 +135,28 @@ it('keeps each person\'s own arrival point, and forgets it on reset', function (
     internalCall($this, 'PUT', $url($ana), ['spawn' => ['x' => 500, 'y' => 1]])->assertStatus(422);
     internalCall($this, 'PUT', $url($ana), ['spawn' => null])->assertOk();
     expect(internalCall($this, 'GET', $url($ana))->json('spawn'))->toBeNull();
+});
+
+it('keeps where each person last was, out on the Grounds too, for coming back there', function () {
+    $ana = User::factory()->create();
+    $bia = User::factory()->create();
+    $get = fn (User $u) => internalCall($this, 'GET', "/api/internal/last-spot/{$u->id}")->assertOk()->json('spot');
+    $put = fn (array $spots) => internalCall($this, 'PUT', '/api/internal/last-spots', ['spots' => $spots]);
+
+    expect($get($ana))->toBeNull();
+    $put([['user_id' => $ana->id, 'x' => 12.5, 'y' => 7.5, 'level' => 4, 'd' => 3]])->assertOk();
+    expect($get($ana))->toEqual(['x' => 12.5, 'y' => 7.5, 'level' => 4, 'd' => 3]);
+    // everyone at once (now and then), out on the land, someone unknown skipped; the newest wins
+    $put([
+        ['user_id' => $ana->id, 'x' => -310.5, 'y' => -88.25, 'level' => 0, 'd' => 6],
+        ['user_id' => $bia->id, 'x' => 30.5, 'y' => 20.5, 'level' => 2, 'd' => 0],
+        ['user_id' => 999999, 'x' => 1, 'y' => 1, 'level' => 0, 'd' => 0],
+    ])->assertOk()->assertJson(['saved' => 2]);
+    expect($get($ana))->toEqual(['x' => -310.5, 'y' => -88.25, 'level' => 0, 'd' => 6])
+        ->and($get($bia))->toEqual(['x' => 30.5, 'y' => 20.5, 'level' => 2, 'd' => 0])
+        ->and(LastSpot::count())->toBe(2);
+    $put([['user_id' => $ana->id, 'x' => 5000, 'y' => 1, 'level' => 0, 'd' => 0]])->assertStatus(422);
+    $put([['user_id' => $ana->id, 'x' => 1, 'y' => 1, 'level' => 0, 'd' => 9]])->assertStatus(422);
 });
 
 it('keeps who is in the world for the phone', function () {

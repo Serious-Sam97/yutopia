@@ -13,7 +13,8 @@ import { gzipSync } from "node:zlib";
 // (raised to 554 on 2026-10-20 by the user's call: the car's page hooks — the controller's, the grid's turned cars)
 // (raised to 555 on 2026-10-21 by the user's call: the HQ armed, the lobby's locker, the earbud, the flashlight)
 // (raised to 556 on 2026-10-23 by the user's call: the loading screen — docs/plan/35 — the controller's readiness and the screen)
-const BUDGETS = { "/page": 556, "/login/page": 160 }; // KB gzip
+// (raised to 557 on 2026-10-23 by the user's call: no ghosts — docs/plan/36 — the page's goodbye, a beacon and the socket's close)
+const BUDGETS = { "/page": 557, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;

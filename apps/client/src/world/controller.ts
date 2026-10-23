@@ -3057,7 +3057,7 @@ export class WorldController {
     const built = r.done >= r.of;
     this.loadSteady = built && gap > 0 && gap < STEADY_MS ? this.loadSteady + 1 : 0;
     if ((built && this.loadSteady >= STEADY_FRAMES) || now - this.loadFrom > LOAD_CAP_MS) {
-      if (!built) console.warn("[world] loading: let in before it was all built", r, this.tp?.readiness());
+      if (!built) console.warn("loading cut short", r);
       this.loadFrom = 0;
       if (this.tp) this.tp.warming = false;
       hud.set((h) => ({ loading: { ...h.loading, on: false, progress: 1 } }));
@@ -3543,14 +3543,32 @@ export class WorldController {
     window.addEventListener("blur", this.onBlur);
     window.addEventListener("pointerdown", this.onFirstGesture);
     window.addEventListener("focus", this.onFocus);
+    window.addEventListener("pagehide", this.onPage);
+    window.addEventListener("pageshow", this.onPage);
   }
 
+  // On the way out (a reload, the tab closed, another page): a goodbye, so the room
+  // lets me go at once — without one it keeps a faded me for a reconnection, a ghost
+  // (docs/plan/36-the-ghost.md). Twice, as neither always gets out before the page is
+  // gone: a beacon (the room cuts my line as a leave, or gives up the seat kept for it)
+  // and the socket's own consented close; my voice goes with it. Stopped with it;
+  // back from the back/forward cache (pageshow): gone from the room, so in again anew.
+  private onPage = (e: PageTransitionEvent) => {
+    if (e.type === "pageshow") return e.persisted && location.reload();
+    this.stopped = true;
+    const r = this.room;
+    if (!r) return;
+    navigator.sendBeacon(`${this.session?.worldUrl.replace(/^ws/, "http")}/bye`, r.reconnectionToken);
+    r.connection.close(4000); // (and the socket's own: a consented leave — whichever gets there)
+  };
   private unbindInput() {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("blur", this.onBlur);
     window.removeEventListener("pointerdown", this.onFirstGesture);
     window.removeEventListener("focus", this.onFocus);
+    window.removeEventListener("pagehide", this.onPage);
+    window.removeEventListener("pageshow", this.onPage);
   }
 
   // back from another tab (maybe the lobby's avatar editor): pick up a saved look

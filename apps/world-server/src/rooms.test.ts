@@ -1028,7 +1028,18 @@ test("the arrival point: builders move it to open floor, and that's where people
   assert.ok(Math.hypot(p.x - (to.x + 0.5), p.y - (to.y + 0.5)) < 1.01, `arrived at ${p.x},${p.y}`);
 });
 
-test("your own arrival point: pick a spot you can walk to, arrive there, go back to it, reset it", async () => {
+// Coming in as the first time, at the arrival point (anyone else comes back where
+// they were: docs/plan/36-the-ghost.md) — for the test's leaves and joins in a row.
+async function longGone(t: { after(fn: () => void): void }) {
+  const { WorldRoom } = await import("./WorldRoom.ts");
+  WorldRoom.comeBack = false;
+  t.after(() => {
+    WorldRoom.comeBack = true;
+  });
+}
+
+test("your own arrival point: pick a spot you can walk to, arrive there, go back to it, reset it", async (t) => {
+  await longGone(t);
   const s = ++space;
   const ana = await person(54, s);
   const bia = await person(55, s); // keeps the room alive while Ana comes back
@@ -1077,7 +1088,8 @@ test("your own arrival point: pick a spot you can walk to, arrive there, go back
   await waitFor(() => Math.hypot(me(again).x - sp.x, me(again).y - sp.y) < 1.5);
 });
 
-test("your own arrival point in a booth: fine while it's free, the space's while someone's talking in it", async () => {
+test("your own arrival point in a booth: fine while it's free, the space's while someone's talking in it", async (t) => {
+  await longGone(t);
   const s = ++space;
   const ana = await person(56, s);
   const bia = await person(57, s);
@@ -1102,6 +1114,28 @@ test("your own arrival point in a booth: fine while it's free, the space's while
   again = await person(56, s);
   assert.ok(Math.hypot(me(again).x - sp.x, me(again).y - sp.y) < 1.5, `arrived at ${me(again).x},${me(again).y}`);
   assert.deepEqual(mine(again)?.at, spot, "the spot is kept");
+});
+
+test("back where they left, unless it's shut to them now: a booth someone's talking in", async () => {
+  const s = ++space;
+  const ana = await person(58, s);
+  const bia = await person(59, s);
+  const sp = { x: ana.room.state.spawnX, y: ana.room.state.spawnY };
+  // Ana leaves from inside the booth: back in it while it's free
+  await walk(ana, { x: 31.5, y: 16.5 });
+  assert.equal(me(ana).area, "booth-1");
+  const was = { x: me(ana).x, y: me(ana).y };
+  rooms.splice(rooms.indexOf(ana.room), 1);
+  await ana.room.leave(true);
+  let again = await person(58, s);
+  assert.ok(Math.hypot(me(again).x - was.x, me(again).y - was.y) < 0.6, `arrived at ${me(again).x},${me(again).y}`);
+  // gone again; Bia takes the booth for a call: Ana comes in at the space's arrival point
+  rooms.splice(rooms.indexOf(again.room), 1);
+  await again.room.leave(true);
+  await walk(bia, { x: 31.5, y: 17.5 });
+  assert.equal(me(bia).area, "booth-1");
+  again = await person(58, s);
+  assert.ok(Math.hypot(me(again).x - sp.x, me(again).y - sp.y) < 1.5, `arrived at ${me(again).x},${me(again).y}`);
 });
 
 test("game room: a console moved to another TV (a media one too), or unplugged, leaves the old TV's input", async () => {
