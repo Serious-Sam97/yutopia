@@ -4,14 +4,17 @@ import {
   CatmullRomCurve3,
   Group,
   type Material,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  type Object3D,
   SphereGeometry,
   TubeGeometry,
   Vector3,
 } from "three";
 import { zt } from "./kit3d";
+import { mergeWith } from "./merge-static";
 import { type PadLook, ps1Pad } from "./pads3d";
 
 // The game room in 3D (world/games/room.ts draws the same in iso): consoles'
@@ -67,6 +70,16 @@ export class GamesIn3D {
   private pads = new Map<string, { g: Group; system: string }>();
   private leds: Mesh[] = [];
   private ledGeo = new SphereGeometry(0.012, 8, 6);
+  // What stands still — the cables, the pads at rest with their cords, the LEDs — drawn
+  // merged, a mesh per material (docs/plan/38-the-lag.md, round 4), made again only when
+  // any of it changes; the pieces wait out of the scene (`held`) or, inside a pad partly
+  // merged, hidden. A pad in someone's hands, and its cord, are drawn themselves.
+  private stillKey = "";
+  private stillMerged: Mesh[] = [];
+  private stillOut: Object3D[] = []; // (moved to `held`)
+  private stillHidden: Mesh[] = []; // (merged, inside a pad still in the scene)
+  private held = new Group();
+  private unmerged = false;
 
   constructor(private patch: (m: Material) => void) {
     this.dark = this.lit(0x15120f);
@@ -82,7 +95,11 @@ export class GamesIn3D {
   // drawn); `face`: the way the camera looks (held pads turn to it, as people do).
   set(s: GameScene3, hand: (id: string, port: number, sitting: boolean) => Vector3 | null, face: number) {
     let n = 0;
-    const tube = (pts: Vector3[], r: number) => {
+    const still: string[] = [];
+    const stillTubes: Tube[] = [];
+    const moving: Object3D[] = [];
+    const restPads: Group[] = [];
+    const tube = (pts: Vector3[], r: number, moves = false) => {
       const key = `${r}|${pts.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`).join(";")}`;
       let t = this.tubes[n++];
       if (!t) {
@@ -92,6 +109,11 @@ export class GamesIn3D {
         this.tubes.push(t);
       }
       t.mesh.visible = true;
+      if (moves) moving.push(t.mesh);
+      else {
+        stillTubes.push(t);
+        still.push(key);
+      }
       if (t.key === key) return;
       t.key = key;
       t.mesh.geometry.dispose();
@@ -114,7 +136,7 @@ export class GamesIn3D {
       seen.add(p.key);
       let v = this.pads.get(p.key);
       if (!v || v.system !== p.system) {
-        if (v) this.root.remove(v.g);
+        if (v) this.dropPad(v.g);
         v = { g: this.padMesh(p.system), system: p.system };
         this.pads.set(p.key, v);
         this.root.add(v.g);
@@ -127,16 +149,23 @@ export class GamesIn3D {
         v.g.rotation.set(0.5, Math.PI / 2 - face, 0, "YXZ"); // to the camera, tipped up, as held
         // the cord: down to the floor near their feet, back to the console
         const feet = { x: at.x, y: at.z };
-        tube([floor(p.cord, 0.03), floor(mix(p.cord, feet, 0.85)), new Vector3(at.x, at.y * 0.35, at.z), at], CORD);
+        tube(
+          [floor(p.cord, 0.03), floor(mix(p.cord, feet, 0.85)), new Vector3(at.x, at.y * 0.35, at.z), at],
+          CORD,
+          true,
+        );
+        moving.push(v.g);
       } else {
         v.g.position.set(p.rest.x, 0.012, p.rest.y);
         v.g.rotation.set(0, 0, 0);
         tube([floor(p.cord, 0.03), floor(mix(p.cord, p.rest, 0.5), 0.008), floor(p.rest, 0.015)], CORD);
+        restPads.push(v.g);
+        still.push(`${p.key}|${p.system}|${p.rest.x},${p.rest.y}|${!!p.analog}`);
       }
     }
     for (const [k, v] of this.pads)
       if (!seen.has(k)) {
-        this.root.remove(v.g);
+        this.dropPad(v.g);
         this.pads.delete(k);
       }
     for (let i = n; i < this.tubes.length; i++) this.tubes[i].mesh.visible = false;
@@ -152,8 +181,85 @@ export class GamesIn3D {
       m.visible = true;
       m.material = l.color === 0x7dff7a ? this.green : this.red;
       m.position.set(l.x, l.h ?? 0.045, l.y);
+      still.push(`L${l.x},${l.y},${l.h},${l.color}`);
     });
     for (let i = s.leds.length; i < this.leds.length; i++) this.leds[i].visible = false;
+
+    const key = still.join(";");
+    if (key !== this.stillKey) {
+      this.stillKey = key;
+      this.restill(
+        stillTubes.map((t) => t.mesh),
+        restPads,
+        this.leds.slice(0, s.leds.length),
+      );
+    }
+    // (what moves is drawn itself: back in the scene if it was merged a moment ago)
+    for (const o of moving) if (o.parent !== this.root) this.root.add(o);
+  }
+
+  // the still pieces merged again: everything back first, then merged and put away
+  private restill(tubes: Mesh[], pads: Group[], leds: Mesh[]) {
+    this.showAll();
+    for (const m of this.stillMerged) {
+      m.removeFromParent();
+      m.geometry.dispose();
+    }
+    const xf = new Map<Mesh, Matrix4>();
+    const list: Mesh[] = [];
+    for (const m of [...tubes, ...leds]) {
+      m.updateMatrix();
+      xf.set(m, m.matrix);
+      list.push(m);
+    }
+    for (const g of pads) {
+      g.updateMatrix();
+      for (const c of g.children)
+        if ((c as Mesh).isMesh) {
+          c.updateMatrix();
+          xf.set(c as Mesh, new Matrix4().multiplyMatrices(g.matrix, c.matrix));
+          list.push(c as Mesh);
+        }
+    }
+    const { meshes, used } = mergeWith(list, this.root, (m) => xf.get(m) as Matrix4);
+    this.stillMerged = meshes;
+    const gone = new Set(used);
+    this.stillOut = [...tubes, ...leds].filter((m) => gone.has(m));
+    this.stillHidden = [];
+    for (const g of pads) {
+      const kids = g.children.filter((c) => (c as Mesh).isMesh) as Mesh[];
+      if (kids.every((c) => gone.has(c))) this.stillOut.push(g);
+      else for (const c of kids) if (gone.has(c)) this.stillHidden.push(c);
+    }
+    this.hideStill();
+  }
+
+  // a pad gone (or a new console's): out of the scene, and out of what's merged
+  private dropPad(g: Group) {
+    g.removeFromParent();
+    this.stillOut = this.stillOut.filter((o) => o !== g);
+    for (const c of g.children) this.stillHidden = this.stillHidden.filter((m) => m !== c);
+    this.stillKey = ""; // (merged again on this frame's end)
+  }
+
+  private showAll() {
+    for (const o of this.stillOut) this.root.add(o);
+    for (const m of this.stillHidden) m.visible = true;
+    for (const m of this.stillMerged) m.visible = false;
+  }
+
+  private hideStill() {
+    if (this.unmerged) return;
+    for (const o of this.stillOut) this.held.add(o);
+    for (const m of this.stillHidden) m.visible = false;
+    for (const m of this.stillMerged) m.visible = true;
+  }
+
+  /** (tests) Drawn the old way, piece by piece, or merged: the same picture. */
+  setUnmerged(on: boolean) {
+    this.unmerged = on;
+    if (on) this.showAll();
+    else this.hideStill();
   }
 
   // a pad: its body, a dark strip, two red buttons (a stick on the 2600's)
@@ -190,6 +296,7 @@ export class GamesIn3D {
   }
 
   dispose() {
+    for (const o of this.stillOut) this.root.add(o);
     this.root.traverse((o) => {
       if (o instanceof Mesh && o.geometry !== this.ledGeo) o.geometry.dispose();
     });

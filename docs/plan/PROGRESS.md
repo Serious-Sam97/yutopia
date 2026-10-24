@@ -1145,3 +1145,9 @@ The user: "a lag that takes me back to a point behind, as if my ping were huge" 
 - The server measured moves by arrival time: any hiccup over ~0.3 s (Wi-Fi, the tunnel, the server busy or stopped) put the player back, once per message already on its way (1 s held: 13 snaps). Now a move counts the client's own clock (`mt`, bounded by the server's: a fast clock gains ≤ 250 ms), one snap lets the in-flight messages go, and every stall over 250 ms is logged with whose work and whether the process was busy or stopped.
 - On the dev stack the big freezes were `next dev` leaking ~150 MB per recompile until the Docker VM ran out of memory (101 restarts).
 - **Checked**: Bia's held messages 0.15–2 s: 1–31 snaps → 0; world-server `snap.test.ts` 5, `metrics.test.ts` 2 (suite 135); shared `sent-clock.test.ts` 7 (suite 280); types; Biome.
+
+## The lag — round 4: the floor as few meshes (2026-10-24, plan `38-the-lag.md`)
+The user, in prod: 38–42 fps in their office (Firefox). Measured on prod's own world (offline world-server with `YUTOPIA_WORLD_FILE`): 8,578 objects walked by three every frame, ~1,850 draws — every wall run, tall thing, glass pane, ink outline and card its own mesh.
+- Floors drawn merged an area at a time (fading done in the shader, the faded pieces drawn themselves as before); glass and ink merged too (the user's call: an outline over glass a few levels off); what stays apart grouped per area and left out when out of view; parked cars out of view off per render; the games' still pieces merged; floors above out of the scene.
+- Prod's office 3D frame 12.8 → 7.6 ms (draws 1,848 → 965); dev Tracking Room 8.1 → 5.9 ms.
+- **Checked**: `e2e/merge-ab.spec.ts` (same-frame A/B, only draw-order ties differ with glass/ink apart; bounded with them merged) on the dev world, and 80 cameras on prod's; client 25, shared 280, world-server 134 + 1 flaky under load (nests, passes alone); types; Biome; build + budget (page 557.0).

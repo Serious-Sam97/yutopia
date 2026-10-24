@@ -396,6 +396,32 @@ export class ThirdPersonView {
     const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
     this.wellSig = wellsKey(wells);
     this.renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    // every render of the scene (mine, a car's mirror, the warm-up's): each floor's loose
+    // pieces left out an area at a time when out of that camera's view (World3.cullLoose)
+    this.scene.onBeforeRender = (_r, _s, cam) => {
+      const f = this.looseFrustum;
+      this.looseM.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      f.setFromProjectionMatrix(this.looseM);
+      for (const b of this.floors.values()) if (b.world.root.parent) b.world.cullLoose(f);
+      // the parked cars (still, a box each) out of this camera's view: off for this render
+      // only — the shadow pass has them on again (they cast), and after it they're as they
+      // were (the cars' own code shows and hides their models every frame)
+      if (this.viewCull)
+        for (const top of this.scene.children)
+          if (top.userData.cullKids && top.visible)
+            for (const o of top.children) {
+              if (!o.userData.still || !o.visible) continue;
+              const b = this.stillBox(o);
+              if (b && !f.intersectsBox(b)) {
+                o.visible = false;
+                this.viewHid.push(o);
+              }
+            }
+    };
+    this.scene.onAfterRender = () => {
+      for (const o of this.viewHid) o.visible = true;
+      this.viewHid.length = 0;
+    };
     // (the shadow pass sees what's left out: three tests a caster's layers against the view's
     // camera there, not the light's — so for that pass the camera takes the hidden layer too)
     {
@@ -408,6 +434,7 @@ export class ThirdPersonView {
         const mask = camera.layers.mask;
         camera.layers.enable(HIDDEN_LAYER);
         this.below3.shadowPass(true);
+        for (const o of this.viewHid) o.visible = true;
         for (const root of PROXIED) {
           if (!root.parent) {
             PROXIED.delete(root);
@@ -424,6 +451,7 @@ export class ThirdPersonView {
         } finally {
           camera.layers.mask = mask;
           this.below3.shadowPass(false);
+          for (const o of this.viewHid) o.visible = false;
           for (const c of off) c.visible = true;
           off.length = 0;
         }
@@ -1177,15 +1205,18 @@ void main() {
       if (f === this.level) {
         const b = this.floors.get(f);
         if (b) {
+          if (!b.world.root.parent) this.scene.add(b.world.root);
           b.world.root.visible = true;
           b.world.root.position.set(0, 0, 0);
+          b.world.root.updateMatrix(); // (World3: its matrix made when it moves)
           b.world.setFading(true);
         }
         continue;
       }
       let b = this.floors.get(f);
       if (f > this.level) {
-        if (b) b.world.root.visible = false;
+        // (out of the scene, not just hidden: three would still walk it every frame)
+        if (b) this.scene.remove(b.world.root);
         continue;
       }
       const lm = levelMap(this.building, f);
@@ -1218,9 +1249,11 @@ void main() {
         b.world.setLight((m) => lit.patch(m));
         b.lit = lit;
       }
+      if (!b.world.root.parent) this.scene.add(b.world.root);
       b.world.root.position.set(o.x, o.h, o.y);
+      b.world.root.updateMatrix();
       b.world.root.visible = true;
-      b.world.setFading(false); // (a floor below never fades: its walls merged)
+      b.world.setFading(false); // (a floor below never fades)
     }
     this.placeAround();
   }
@@ -1364,6 +1397,7 @@ void main() {
     this.floors.set(f, { world, sig: `${layoutSig(lm)}|${wellsKey(wells)}`, lit });
     this.scene.add(world.root);
     world.root.position.set(o.x, o.h, o.y);
+    world.root.updateMatrix();
     // drawn once, from above, all of it in view (warmDraw)
     const c = this.warmCam;
     const r = Math.max(lm.width, lm.height) / 2 + 2;
@@ -1376,8 +1410,9 @@ void main() {
     c.updateProjectionMatrix();
     // (lit by a light map as every floor is, mine or one below: one set of shaders)
     this.warmDraw(c);
-    // (shown only if it's below mine)
-    world.root.visible = f < this.level;
+    // (kept only if it's below mine: one above waits out of the scene)
+    if (f > this.level) this.scene.remove(world.root);
+    else world.root.visible = f < this.level;
   }
 
   // ── ready (docs/plan/35-the-loading.md) ──
@@ -2303,6 +2338,21 @@ void main() {
   private eyeAt = new Vector3();
   /** (tests: nothing left out — the same picture, the long way) */
   noCull = false;
+  private looseFrustum = new Frustum();
+  private viewHid: Object3D[] = []; // (parked cars out of the current render's view)
+  private looseM = new Matrix4();
+  /** (tests: every floor drawn the old way, piece by piece — the same picture: World3) */
+  setUnmerged(on: boolean) {
+    this.viewCull = !on;
+    for (const b of this.floors.values()) b.world.setUnmerged(on);
+    this.games3?.setUnmerged(on);
+  }
+  private viewCull = true;
+  /** Glass and ink merged too (World3.setMergeClear: a few overlapping see-through pixels
+   *  blend in another order). */
+  setMergeClear(on: boolean) {
+    for (const b of this.floors.values()) b.world.setMergeClear(on);
+  }
   private cullBelow() {
     const slab = this.noCull ? null : this.world.slab();
     this.below3.setSlab(slab?.slab ?? null, slab?.key ?? null);
@@ -2320,14 +2370,19 @@ void main() {
     };
     // the floors below mine: each thing built on them (a still mesh, an area, a card…)
     for (const [f, b] of this.floors) {
-      if (f >= this.level || !b.world.root.visible) continue;
+      if (f >= this.level || !b.world.root.visible || !b.world.root.parent) continue;
       const at = b.world.root.position;
       for (const c of b.world.root.children) {
         const u = unit();
         // (a still piece's box kept while its floor stays where it is; cards turn: every frame)
         const had = this.belowBoxes.get(c);
         if (had && !c.matrixAutoUpdate && had.at.equals(at)) u.box.copy(had.box);
-        else {
+        else if (c.userData.loose) {
+          // (an area's loose pieces: their bounds, kept by the floor while they don't change)
+          const lb = b.world.looseBox(c);
+          if (!lb) continue;
+          u.box.copy(lb).translate(at);
+        } else {
           if (!boxInParent(c as Mesh, u.box)) continue;
           u.box.translate(at);
           if (!c.matrixAutoUpdate) this.belowBoxes.set(c, { at: at.clone(), box: u.box.clone() });
@@ -2813,6 +2868,7 @@ void main() {
       f.alpha += (want - f.alpha) * Math.min(1, dt * 10);
       if (Math.abs(f.alpha - want) < 0.01) f.alpha = want;
       applyFade(f, this.world.materials);
+      this.world.faded(f); // (its pieces drawn themselves while faded: World3)
     }
   }
 

@@ -34,11 +34,14 @@ import {
 } from "@yutopia/shared";
 import {
   BackSide,
+  Box3,
   BufferGeometry,
   CanvasTexture,
+  DataTexture,
   DoubleSide,
   Float32BufferAttribute,
   FrontSide,
+  type Frustum,
   Group,
   LineBasicMaterial,
   LineSegments,
@@ -46,18 +49,20 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  NearestFilter,
   type Object3D,
   PlaneGeometry,
+  RedFormat,
   SRGBColorSpace,
   Texture,
+  UnsignedByteType,
 } from "three";
 import { FloorBake } from "../art/floors";
 import { piece, WALL_H } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
-import type { Slab } from "./below-cull";
+import { boxInParent, type Slab } from "./below-cull";
 import { type Geo, MeshSketch, type Opts3, Out, zt } from "./kit3d";
-import { mergeMeshes } from "./merge-static";
 import { poolTable3 } from "./pooltable3d";
 
 // the item drawings: the same lazy chunk the iso engine loads (art/scene.ts)
@@ -78,6 +83,16 @@ export type Items = typeof import("../art/items");
 const AREA = 6; // tiles per merged area side
 const TALL = 1.25; // tiles: furniture taller than this can fade
 const RUN = 4; // wall edges per fade group
+// the merged meshes' fade flags: a slot per fade group, 255 drawn, 0 dropped (World3.faded)
+const FLAG_W = 256;
+function flagTexture(data: Uint8Array, rows: number): DataTexture {
+  const t = new DataTexture(data, FLAG_W, rows, RedFormat, UnsignedByteType);
+  t.magFilter = NearestFilter;
+  t.minFilter = NearestFilter;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  return t;
+}
 // props that change nothing drawn (what plays, how loud)
 const QUIET_PROPS = new Set(["media", "radio", "volume", "playlists"]);
 
@@ -92,6 +107,7 @@ export interface FadeGroup {
   own?: Map<Material, Material>; // per-group see-through copies, made on the first fade
   item?: boolean; // a tall piece of furniture (not a wall run)
   wall?: boolean; // …that hangs on a wall (it goes with its wall)
+  index?: number; // its slot in the merged meshes' fade flags (World3.faded)
 }
 
 // Something you can click: its 3D bounds (tiles; z = height).
@@ -146,7 +162,30 @@ export class World3 {
   private cutSig = "";
   // a floor that isn't mine never fades: its walls' solid parts drawn merged (setFading)
   private fading = true;
-  private stillWalls: Mesh[] = [];
+  // ── drawn merged (docs/plan/38-the-lag.md, round 4) ──
+  // Every opaque piece — the walls' low parts and runs, each area's things, the tall
+  // things — is drawn merged an area (AREA tiles) at a time, one mesh per material; the
+  // pieces themselves wait out of the scene (`held`): three walks every object in the scene
+  // every frame, and on a big furnished floor that walk cost more than the drawing. Each
+  // merged point carries its fade group (`aFade`, 0: none). A group that fades has its
+  // points dropped by the merged mesh's shader (`flags`) and its own pieces put back in the
+  // scene, faded as before (view.ts applyFade): what's faded is drawn exactly as it was.
+  private held = new Group();
+  private chunks = new Map<string, { meshes: Set<Mesh>; merged: Mesh[]; dirty: boolean }>();
+  private chunkOf = new Map<Mesh, string>();
+  private fadeOfMesh = new Map<Mesh, FadeGroup>();
+  private fadeMeshes = new Map<FadeGroup, Mesh[]>();
+  private fadeFree: number[] = [];
+  private fadeN = 0;
+  private flagRows = 4;
+  private flagData = new Uint8Array(FLAG_W * 4).fill(255);
+  private flagsU = { value: flagTexture(this.flagData, 4) };
+  private unmergedNow = false;
+  // the pieces that aren't merged (glass, ink, cards, decals: see-through, or each its own
+  // texture) in a group an area, so a whole area out of view is left out with one test
+  // instead of three testing each of its pieces (cullLoose) — none of them casts a shadow
+  private loose = new Map<string, { group: Group; box: Box3; dirty: boolean; world: Box3; at: number[] }>();
+  private looseHid = new Set<Group>();
 
   // `light`: how lit materials take the room's light (the iso light map)
   constructor(
@@ -160,7 +199,14 @@ export class World3 {
     private wells: { floor: Set<string>; ceiling: Set<string> } = { floor: new Set(), ceiling: new Set() },
   ) {
     const t0 = performance.now();
+    // (the floor is moved by the view, which makes its matrix then: not every frame)
+    this.root.matrixAutoUpdate = false;
     this.lightFn = light;
+    // (the shared materials read the fade flags: World3.faded — a piece itself has no
+    // `aFade`, reads 0, and is drawn)
+    for (const m of [this.materials.lit, this.materials.clearBack, this.materials.clearFront]) m.userData.fade = true;
+    this.withFade(this.materials.glow);
+    this.withFade(this.materials.ink);
     this.light(this.materials.lit);
     this.light(this.materials.clear);
     this.light(this.materials.clearBack);
@@ -263,12 +309,14 @@ export class World3 {
           : runOf("v", X, isWallEdge(s) ? Y : Y - 1, zt(height));
       post(sketch({ w: 1, h: 1, at: [X, Y], out: run.out }), height, "high", ch);
     }
-    for (const out of low.values()) this.walls.push(this.mount(out));
+    for (const [k, out] of low) this.walls.push(this.mount(out, k));
     this.buildCeiling();
     for (const r of runs.values()) {
-      const b = this.mount(r.out);
+      const b = this.mount(r.out, areaKey((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2));
       this.walls.push(b);
-      this.wallFades.push({ x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, top: r.top, objects: b.objs, alpha: 1 });
+      const f: FadeGroup = { x0: r.x0, y0: r.y0, x1: r.x1, y1: r.y1, top: r.top, objects: b.objs, alpha: 1 };
+      this.wallFades.push(f);
+      this.tagFade(b, f);
     }
   }
 
@@ -323,7 +371,6 @@ export class World3 {
       this.walls = [];
       this.wallFades = [];
       this.buildWalls();
-      this.restill();
       rewalled = true;
     }
     const byArea = new Map<string, { objs: WorldObjectDef[]; dress: DressItem[]; sig: string[] }>();
@@ -374,7 +421,7 @@ export class World3 {
         append(out, one);
       }
       if (had) this.unmount(had.built);
-      const built = this.mount(out);
+      const built = this.mount(out, k);
       built.picks = picks;
       // a tall thing found while drawing changes this area's list: keep it from redrawing next time
       const left = a.objs.filter((o) => !this.tallIds.has(o.id)).map(objectSig);
@@ -394,7 +441,7 @@ export class World3 {
       changed = true;
       if (had) this.unmount(had.built);
       const one = this.drawObject(t.o);
-      const built = this.mount(one.out);
+      const built = this.mount(one.out, areaKey(...anchorOf(t.o)));
       if (one.pick) built.picks = [one.pick];
       // a wall item: the strip along its face of the wall, and the wall's thickness;
       // a window: its stretch of the wall line
@@ -415,6 +462,7 @@ export class World3 {
         wall: hang,
       };
       this.tall.set(id, { sig: t.sig, built, fade });
+      this.tagFade(built, fade);
     }
     for (const [id, had] of this.tall)
       if (!tallNow.has(id)) {
@@ -423,6 +471,7 @@ export class World3 {
         this.tallIds.delete(id);
         changed = true;
       }
+    this.rechunk();
     if (!changed && !rewalled && this.floor) return;
     this.collect();
     this.bakeFloor();
@@ -476,34 +525,298 @@ export class World3 {
     };
   }
 
-  /** Does this floor's walls fade (mine: they turn see-through when they'd hide me)? A
-   *  floor that doesn't has its walls' solid parts drawn as a few merged meshes — the same
-   *  triangles where they were, hundreds of draws fewer (docs/plan/38-the-lag.md). */
+  /** Does this floor fade (mine: walls and tall things turn see-through when they'd hide
+   *  me)? A floor that doesn't (below mine) has every fade put back to whole. */
   setFading(on: boolean) {
     if (on === this.fading) return;
     this.fading = on;
-    this.restill();
+    if (on) return;
+    for (const f of this.fades) {
+      if (f.alpha >= 0.999) continue;
+      f.alpha = 1;
+      for (const o of f.objects) {
+        const m = o as Mesh;
+        if (m.userData.base) m.material = m.userData.base as Material;
+      }
+      this.faded(f);
+    }
   }
 
-  private restill() {
-    for (const m of this.stillWalls) {
-      m.removeFromParent();
-      m.geometry.dispose();
+  // what a built piece can be merged as: solid (lit, glow — always), or see-through (glass,
+  // ink — only with `mergeClear`: merged, overlapping ones blend in another order); null: not
+  private kindOf(o: Object3D): "solid" | "clear" | null {
+    const m = o as Mesh;
+    const base = (m.userData.base as Material | undefined) ?? (m.material as Material);
+    const M = this.materials;
+    if (m.isMesh && (base === M.lit || base === M.glow)) return "solid";
+    if (
+      (m.isMesh || (m as unknown as LineSegments).isLineSegments) &&
+      (base === M.clearBack || base === M.clearFront || base === M.ink)
+    )
+      return "clear";
+    return null;
+  }
+
+  /** Glass and ink merged an area at a time too (fewer draws; where two see-through pieces
+   *  overlap they blend in the merged order, not three's back-to-front: an outline behind
+   *  glass a few levels lighter or darker — chosen by the user, 2026-10-24, for ~40% of the
+   *  3D frame on a big furnished floor: docs/plan/38-the-lag.md, round 4). */
+  private mergeClear = true;
+  private clearPieces = new Set<Mesh>();
+  setMergeClear(on: boolean) {
+    if (on === this.mergeClear) return;
+    this.mergeClear = on;
+    for (const m of this.clearPieces) {
+      const k = m.userData.chunk as string;
+      if (on) this.register(m, k);
+      else this.unregister(m);
+      this.place(m);
+      this.looseOf(k).dirty = true;
     }
-    this.stillWalls = [];
-    const { lit, glow } = this.materials;
-    const solid: Mesh[] = [];
-    for (const b of this.walls)
-      for (const o of b.objs) {
-        const m = o as Mesh;
-        if (m.isMesh && (m.material === lit || m.material === glow)) solid.push(m);
+    this.rechunk();
+  }
+
+  private register(m: Mesh, k: string) {
+    this.chunkOf.set(m, k);
+    getOr(this.chunks, k, () => ({ meshes: new Set<Mesh>(), merged: [], dirty: true })).meshes.add(m);
+    this.dirty(k);
+  }
+
+  private unregister(m: Mesh) {
+    const k = this.chunkOf.get(m);
+    if (k === undefined) return;
+    this.chunks.get(k)?.meshes.delete(m);
+    this.dirty(k);
+    this.chunkOf.delete(m);
+  }
+
+  // a fade group's solid pieces: their slot in the flags, so the merged mesh can drop them
+  private tagFade(b: Built, f: FadeGroup) {
+    const list = b.objs.filter((o): o is Mesh => !!this.kindOf(o) && o.userData.chunk !== undefined);
+    if (!list.length) return;
+    let i = this.fadeFree.pop();
+    if (i === undefined) {
+      i = ++this.fadeN;
+      if (i >= FLAG_W * this.flagRows) this.growFlags();
+    }
+    f.index = i;
+    this.flagData[i] = 255;
+    this.flagsU.value.needsUpdate = true;
+    this.fadeMeshes.set(f, list);
+    for (const m of list) {
+      this.fadeOfMesh.set(m, f);
+      this.dirty(m.userData.chunk as string);
+    }
+  }
+
+  private growFlags() {
+    const rows = this.flagRows * 2;
+    const data = new Uint8Array(FLAG_W * rows).fill(255);
+    data.set(this.flagData);
+    this.flagData = data;
+    this.flagRows = rows;
+    this.flagsU.value.dispose();
+    this.flagsU.value = flagTexture(data, rows);
+  }
+
+  private dirty(k: string) {
+    const c = getOr(this.chunks, k, () => ({ meshes: new Set<Mesh>(), merged: [], dirty: true }));
+    c.dirty = true;
+  }
+
+  /** A fade group's alpha changed (view.ts fadeWalls, after applyFade): faded, its own
+   *  pieces are drawn (with their faded materials) and its part of the merged mesh isn't;
+   *  whole again, the merged mesh draws it. Its shadow: the merged mesh casts it all along
+   *  (the shadow's depth pass doesn't read the flags), as a faded piece's always did. */
+  faded(f: FadeGroup) {
+    const i = f.index;
+    const list = i ? this.fadeMeshes.get(f) : undefined;
+    if (!i || !list) return;
+    const on = f.alpha < 0.999;
+    if (on === (this.flagData[i] === 0)) return;
+    this.flagData[i] = on ? 0 : 255;
+    this.flagsU.value.needsUpdate = true;
+    for (const m of list) this.place(m);
+  }
+
+  // where a piece belongs now: drawn itself (not merged, faded, or the old way for tests) in
+  // its own place — the floor's root (solid), its area's loose group (see-through) — or held
+  private place(m: Mesh) {
+    const f = this.fadeOfMesh.get(m);
+    const faded = !!f?.index && this.flagData[f.index] === 0;
+    const home = m.userData.home as Object3D;
+    if (!this.chunkOf.has(m) || this.unmergedNow || faded) {
+      if (m.parent !== home) home.add(m);
+      // (faded: the merged mesh casts its shadow already)
+      m.castShadow = this.unmergedNow || !this.chunkOf.has(m) ? (m.userData.cast as boolean) : false;
+    } else if (m.parent !== this.held) this.held.add(m);
+  }
+
+  private looseOf(k: string) {
+    let l = this.loose.get(k);
+    if (!l) {
+      const group = new Group();
+      group.matrixAutoUpdate = false;
+      group.userData.loose = true;
+      group.userData.looseKey = k;
+      this.root.add(group);
+      l = { group, box: new Box3(), dirty: true, world: new Box3(), at: [] };
+      this.loose.set(k, l);
+    }
+    return l;
+  }
+
+  /** An area's loose pieces' bounds, in the floor's space (cards: round their turn); null if
+   *  one can't be bounded (never left out). For below-cull.ts too. */
+  looseBox(g: Object3D): Box3 | null {
+    const l = this.loose.get(g.userData.looseKey as string);
+    if (!l || l.group !== g) return null;
+    if (l.dirty) {
+      l.dirty = false;
+      l.box.makeEmpty();
+      const one = new Box3();
+      for (const c of l.group.children) {
+        const b = boxInParent(c as Mesh, one);
+        if (!b) {
+          l.box.min.setScalar(Number.NEGATIVE_INFINITY);
+          l.box.max.setScalar(Number.POSITIVE_INFINITY);
+          break;
+        }
+        l.box.union(b);
       }
-    // (only the solid parts: glass and ink merged would blend in another order where they
-    // overlap — a hair different — docs/plan/38-the-lag.md)
-    if (!this.fading) this.stillWalls = mergeMeshes(solid, this.root);
-    for (const m of this.stillWalls) still(m);
-    const merged = new Set(this.stillWalls.map((m) => m.material));
-    for (const m of solid) m.visible = this.fading || !merged.has(m.material as Material);
+      l.at = [];
+    }
+    return Number.isFinite(l.box.min.x) ? l.box : null;
+  }
+
+  /** Before a render (any camera: the view's, a car's mirror, the warm-up's): each area's
+   *  loose pieces left out if their bounds are out of `frustum` — what three would find
+   *  piece by piece. Only what this hid is shown again. */
+  cullLoose(frustum: Frustum) {
+    const m = this.root.matrixWorld.elements;
+    for (const [k, l] of this.loose) {
+      l.group.userData.looseKey = k;
+      const box = this.unmergedNow ? null : this.looseBox(l.group);
+      let inView = true;
+      if (box) {
+        if (l.at.length !== 16 || l.at.some((v, i) => v !== m[i])) {
+          l.world.copy(box).applyMatrix4(this.root.matrixWorld);
+          l.at = [...m];
+        }
+        inView = frustum.intersectsBox(l.world);
+      }
+      if (!inView && l.group.visible) {
+        l.group.visible = false;
+        this.looseHid.add(l.group);
+      } else if (inView && this.looseHid.has(l.group)) {
+        l.group.visible = true;
+        this.looseHid.delete(l.group);
+      }
+    }
+  }
+
+  /** (tests) Drawn the old way — every piece on its own, nothing merged — or not: the same
+   *  picture either way (e2e/merge-ab.spec.ts renders a frame both ways). */
+  setUnmerged(on: boolean) {
+    if (on === this.unmergedNow) return;
+    this.unmergedNow = on;
+    if (on) for (const g of this.looseHid) g.visible = true;
+    this.looseHid.clear();
+    for (const c of this.chunks.values()) {
+      for (const m of c.merged) m.visible = !on;
+      for (const m of c.meshes) this.place(m);
+    }
+  }
+
+  // the areas whose pieces changed: merged again
+  private rechunk() {
+    for (const [k, c] of this.chunks) {
+      if (!c.dirty) continue;
+      c.dirty = false;
+      for (const m of c.merged) {
+        m.removeFromParent();
+        m.geometry.dispose();
+      }
+      c.merged = this.merge([...c.meshes]);
+      for (const m of c.merged) {
+        m.visible = !this.unmergedNow;
+        (m.userData.home as Object3D).add(m);
+        still(m);
+      }
+      if (this.loose.has(k)) (this.loose.get(k) as { dirty: boolean }).dirty = true;
+      if (!c.meshes.size) this.chunks.delete(k);
+    }
+  }
+
+  // one mesh per material and shadow settings: their points one after another, as they
+  // were (the pieces sit in the floor's own space), each with its fade group's slot
+  private merge(list: Mesh[]): Mesh[] {
+    const groups = new Map<string, Mesh[]>();
+    for (const m of list) {
+      const base = (m.userData.base as Material | undefined) ?? (m.material as Material);
+      const k = `${base.uuid}|${m.userData.cast}|${m.receiveShadow}|${m.renderOrder}`;
+      getOr(groups, k, () => []).push(m);
+    }
+    const out: Mesh[] = [];
+    for (const g of groups.values()) {
+      let n = 0;
+      for (const m of g) n += m.geometry.getAttribute("position").count;
+      const lines = !!(g[0] as unknown as LineSegments).isLineSegments;
+      const pos = new Float32Array(n * 3);
+      const nor = new Float32Array(lines ? 0 : n * 3);
+      const col = new Float32Array(n * 4);
+      const fade = new Float32Array(n);
+      let at = 0;
+      for (const m of g) {
+        const geo = m.geometry;
+        const c = geo.getAttribute("position").count;
+        pos.set((geo.getAttribute("position").array as Float32Array).subarray(0, c * 3), at * 3);
+        if (!lines) nor.set((geo.getAttribute("normal").array as Float32Array).subarray(0, c * 3), at * 3);
+        col.set((geo.getAttribute("color").array as Float32Array).subarray(0, c * 4), at * 4);
+        fade.fill(this.fadeOfMesh.get(m)?.index ?? 0, at, at + c);
+        at += c;
+      }
+      const geo = new BufferGeometry();
+      geo.setAttribute("position", new Float32BufferAttribute(pos, 3));
+      if (!lines) geo.setAttribute("normal", new Float32BufferAttribute(nor, 3));
+      geo.setAttribute("color", new Float32BufferAttribute(col, 4));
+      geo.setAttribute("aFade", new Float32BufferAttribute(fade, 1));
+      geo.computeBoundingSphere();
+      const first = g[0];
+      const base = (first.userData.base as Material | undefined) ?? (first.material as Material);
+      // (the shared material itself: drawn in the same order among the rest as its pieces
+      // were — three sorts by material — and the pieces, with no `aFade`, read 0: kept)
+      const mesh = lines ? (new LineSegments(geo, base) as unknown as Mesh) : new Mesh(geo, base);
+      mesh.userData.home = first.userData.home;
+      mesh.castShadow = first.userData.cast as boolean;
+      mesh.receiveShadow = first.receiveShadow;
+      mesh.renderOrder = first.renderOrder;
+      mesh.name = "merged";
+      out.push(mesh);
+    }
+    return out;
+  }
+
+  // (chained after whatever patched it before — the room's light map, light3d.ts)
+  private withFade(m: Material) {
+    const inner = m.onBeforeCompile;
+    const key = m.customProgramCacheKey;
+    m.onBeforeCompile = (sh, r) => {
+      inner.call(m, sh, r);
+      sh.uniforms.fadeFlags = this.flagsU;
+      sh.vertexShader = sh.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute float aFade;\nuniform sampler2D fadeFlags;")
+        .replace(
+          "#include <project_vertex>",
+          `#include <project_vertex>
+  if (aFade > 0.5) {
+    int fi = int(aFade + 0.5);
+    if (texelFetch(fadeFlags, ivec2(fi % ${FLAG_W}, fi / ${FLAG_W}), 0).r < 0.5) gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+  }`,
+        );
+    };
+    m.customProgramCacheKey = () => `${key.call(m)}|fade`;
+    m.needsUpdate = true;
   }
 
   // what clicks, fades, cards and lights see: everything built, gathered
@@ -600,7 +913,7 @@ export class World3 {
   }
 
   // ── meshes ─────────────────────────────────────────────────────────────────
-  private mount(out: Out): Built {
+  private mount(out: Out, chunk?: string): Built {
     const { lit, glow, clearBack, clearFront, ink } = this.materials;
     const built: Built = { objs: [], cards: [], soft: out.soft, picks: [], dispose: [] };
     const tri = (g: Geo, mat: Material | [Material, Material], shadow: boolean) => {
@@ -702,9 +1015,28 @@ export class World3 {
       });
     }
     for (const m of built.objs) {
-      this.root.add(m);
       // (nothing built here moves but the cards, turned to the camera: their matrices made once)
       if (!built.cards.includes(m)) still(m);
+      const kind = chunk ? this.kindOf(m) : null;
+      if (chunk && kind) {
+        // drawn merged with its area's (rechunk), held out of the scene meanwhile — glass and
+        // ink only with mergeClear: until then in its area's loose group, as anything loose
+        m.userData.cast = m.castShadow;
+        m.userData.chunk = chunk;
+        m.userData.home = kind === "solid" ? this.root : this.looseOf(chunk).group;
+        if (kind === "clear") {
+          this.clearPieces.add(m as Mesh);
+          m.userData.loose = chunk;
+          this.looseOf(chunk).dirty = true;
+        }
+        if (kind === "solid" || this.mergeClear) this.register(m as Mesh, chunk);
+        this.place(m as Mesh);
+      } else if (chunk) {
+        const l = this.looseOf(chunk);
+        m.userData.loose = chunk;
+        l.group.add(m);
+        l.dirty = true;
+      } else this.root.add(m);
     }
     this.stats.triangles += built.objs.reduce((n, m) => n + ((m.userData.tris as number) ?? 0), 0);
     this.stats.meshes += built.objs.length;
@@ -714,8 +1046,31 @@ export class World3 {
 
   private unmount(b: Built) {
     for (const m of b.objs) {
-      this.root.remove(m);
+      m.removeFromParent();
+      const lk = m.userData.loose as string | undefined;
+      if (lk !== undefined) {
+        const l = this.loose.get(lk);
+        if (l) {
+          l.dirty = true;
+          if (!l.group.children.length) {
+            l.group.removeFromParent();
+            this.looseHid.delete(l.group);
+            this.loose.delete(lk);
+          }
+        }
+      }
       this.stats.triangles -= (m.userData.tris as number) ?? 0;
+      this.clearPieces.delete(m as Mesh);
+      this.unregister(m as Mesh);
+      if (m.userData.chunk !== undefined) {
+        const f = this.fadeOfMesh.get(m as Mesh);
+        this.fadeOfMesh.delete(m as Mesh);
+        if (f && this.fadeMeshes.delete(f) && f.index) {
+          this.flagData[f.index] = 255;
+          this.fadeFree.push(f.index);
+          f.index = undefined;
+        }
+      }
     }
     this.stats.meshes -= b.objs.length;
     this.stats.cards -= b.cards.length;
@@ -821,6 +1176,7 @@ export class World3 {
   private light(m: Material) {
     this.litMats.add(m);
     this.lightFn(m);
+    if (m.userData.fade) this.withFade(m);
   }
   setLight(fn: ((m: Material) => void) | null) {
     this.lightFn = fn ?? (() => {});
@@ -831,17 +1187,20 @@ export class World3 {
         m.customProgramCacheKey = () => "";
         m.needsUpdate = true;
       }
+      if (m.userData.fade) this.withFade(m);
     }
   }
 
   dispose() {
-    for (const m of this.stillWalls) m.geometry.dispose();
     for (const b of this.walls) this.unmount(b);
     for (const a of this.areas.values()) this.unmount(a.built);
     for (const t of this.tall.values()) this.unmount(t.built);
     for (const f of [...this.wallFades, ...[...this.tall.values()].map((t) => t.fade)])
       for (const m of f.own?.values() ?? []) m.dispose();
     this.dropFloor();
+    for (const c of this.chunks.values()) for (const m of c.merged) m.geometry.dispose();
+    this.chunks.clear();
+    this.flagsU.value.dispose();
     for (const m of Object.values(this.materials)) m.dispose();
   }
 }

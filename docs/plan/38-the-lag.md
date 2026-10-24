@@ -226,3 +226,66 @@ hitting it shows up on `/admin/perf`'s data.
   1× load with the same cameras: 15 identical, one 4 px by 1 level (live outdoors).
 - **Not covered**: the iso view (Pixi, `engine.ts`) reads its ratio once the same way;
   its code is page code, and the page has 7 bytes of budget left — the user's call.
+
+## Round 4 — the floor as few meshes (2026-10-24)
+
+The user, in prod: 38–42 fps in their office on floor 4 (Firefox), 56–60 outdoors. Prod's
+world was measured here as it is: the API's `/internal/world` saved on the server and served
+by an offline world-server (`YUTOPIA_WORLD_FILE`, apps/world-server/src/config.ts), the
+session rewritten to it, standing in the Serious Office (Chromium, 2560×1273, 1×).
+
+**What it was.** Floor 4 there is 64×48 with 798 objects (~245 wall pieces, 253 windows). The
+scene held **8,578 objects**, ~7,100 of them visible to three, which walks every one every
+frame (world matrix, frustum test, lists) to draw ~700: ~5 ms before any draw; then ~1,850
+draws (~2,570 with the shadow). The 3D view made every piece that could fade (each 4-edge
+wall run, each tall thing) or turn to the camera (cards) a mesh of its own, fading by
+swapping in a cloned material; only the floors below had their walls' solid parts merged,
+with the originals left in the scene hidden. Most of a furnished floor's meshes are see-
+through (glass back and front, ink outlines, cards, decals).
+
+**What changed** (build.ts World3, view.ts, games3d.ts, merge-static.ts):
+- Every floor drawn merged an area (6×6 tiles) at a time, one mesh per material, the pieces
+  held out of the scene. Each merged point carries its fade group (`aFade`); a group that
+  fades has its points dropped by the shared material's shader (a flags texture) and its own
+  pieces put back, faded exactly as before; whole again, merged again. The merged meshes use
+  the shared materials themselves (the same draw order among the rest).
+- **Glass and ink merged too** (`setMergeClear`, on — the user's call, 2026-10-24): where two
+  see-through pieces overlap they blend in the merged order. An outline crossing glass a few
+  levels lighter or darker.
+- The pieces that stay apart (cards, decals; glass and ink if not merged) in a group an area,
+  left out with one test when the area is out of the rendering camera's view
+  (`scene.onBeforeRender`: the view's, a car's mirror, the warm-up's). None casts a shadow.
+- Parked cars out of the rendering camera's view off for that render only (back on for the
+  shadow pass: they cast; back after: the cars' code shows and hides their models).
+- The games' still pieces (cables, pads at rest and their cords, LEDs) merged, again when one
+  changes; a held pad and its cord drawn themselves.
+- Floors above mine out of the scene (were hidden: still walked); a floor's root matrix made
+  when it moves.
+
+**Numbers** (3D frame CPU per frame, the same page alternating old and new, Chromium):
+
+| World | Before | Exact changes | + glass and ink merged |
+|---|---|---|---|
+| Prod, the Serious Office | 12.8 ms, 1,848 draws | 10.7 ms, 1,305 | **7.6 ms, 965** |
+| Dev, the Tracking Room | 8.1 ms, 1,221 | 6.9 ms, 955 | **5.9 ms, 790** |
+
+Objects three walks: 8,578 → 5,120 (visible to it: 7,138 → 3,114).
+
+**Same picture.** `e2e/merge-ab.spec.ts` (YUTOPIA_GPU=1, as Bia): every camera drawn both
+ways in one frame (`tp.setUnmerged`), 7 spots × 10 cameras (chase with fades, free, noon and
+night). With glass and ink apart, a pixel may differ only where the old picture itself
+changes when its own ties are broken another way (two opaque faces in one plane — a window's
+frame flush with its wall: whichever three drew last won, by the camera); with them merged,
+<1 % of pixels and <0.02 % far off. Measured on prod's world as well (80 cameras): exact
+parts only ties; the games' pads ≤4 levels at their edges (their places baked into the merged
+points); glass and ink merged: 0.1–0.5 % of a frame's pixels, mostly ≤16 levels, a few dozen
+up to ~200 where a dark outline crosses glass over something bright.
+
+**Playing prod's world here**: `node tools/prod-world.mjs <world.json[.gz]> [uid] [name]` — an
+offline world-server on :2667 loaded from the saved world and a Chromium window pointed at it
+(signed in as Ana, in that world `uid`, default 1: Sam); closing the window stops both.
+
+**Found on the way** (not changed): the round-2 below-floor cull leaves out 1 px in 1 of 70
+cameras on prod's world (both before and after this round); a faded wall or tall thing loses
+the lamps' light map (its cloned material drops the light patch); the 3D view's own chunk
+(~77.5 KB gzip) is under no budget (`yutopia-grounds` counts other files).

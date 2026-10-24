@@ -18,6 +18,9 @@ export const config = {
   },
   // Lets tests and the bot swarm run without the API (bots get synthetic tokens).
   offline: process.env.YUTOPIA_OFFLINE === "1",
+  // Dev only, offline: the world from a file — what the API's /internal/world answers, saved
+  // from another server (prod's world to measure here: docs/plan/38-the-lag.md)
+  worldFile: process.env.YUTOPIA_OFFLINE === "1" ? (process.env.YUTOPIA_WORLD_FILE ?? "") : "",
   // Dev only: accept "bot:<id>:<name>" tokens next to real people (perf swarm).
   allowBots: process.env.YUTOPIA_OFFLINE === "1" || process.env.YUTOPIA_ALLOW_BOTS === "1",
   // Map v2 (walls on edges): spaces saved as v1 are converted when they load.

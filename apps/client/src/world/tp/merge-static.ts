@@ -111,6 +111,18 @@ export function mergeStatic(root: Object3D, keep: Iterable<Object3D> = []): numb
   return used.length;
 }
 
+/** The given meshes drawn as one mesh per material and shadow settings in `into`'s space
+ *  (`xf`: a mesh's matrix into it), added to `into`; the originals are left as they are —
+ *  `used` says which went in (hide them). See-through ones, and ones alone with their
+ *  material, aren't merged. */
+export function mergeWith(meshes: Mesh[], into: Object3D, xf: (m: Mesh) => Matrix4): { meshes: Mesh[]; used: Mesh[] } {
+  return mergeGroups(
+    meshes.filter((m) => mergeable(m, into)),
+    into,
+    xf,
+  );
+}
+
 /** The given meshes (each `into`'s own child) drawn as one mesh per material and shadow
  *  settings, added to `into`; the originals are left as they are (hide them). See-through
  *  ones (merged, they'd blend in another order), and ones alone with their material,

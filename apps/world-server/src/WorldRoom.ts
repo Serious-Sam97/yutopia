@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { type AuthContext, type Client, Room } from "@colyseus/core";
 import {
   ANIM,
@@ -77,7 +78,7 @@ import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { Allowance, isVerb, MOVE, MV_WINDED, SentClock, speedCap } from "@yutopia/shared/move";
 import { KNOCK } from "@yutopia/shared/pool-throw";
 import { DOWN } from "@yutopia/shared/vitals";
-import { ApiError, api, type PresenceEntry } from "./api.ts";
+import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
 import type { DarkHooks } from "./features/dark.ts";
@@ -218,7 +219,9 @@ export class WorldRoom extends Room<WorldState> {
     this.autoDispose = true;
 
     const info = config.offline
-      ? null
+      ? config.worldFile
+        ? (JSON.parse(readFileSync(config.worldFile, "utf8")) as WorldInfo)
+        : null
       : await api.world().catch((e) => {
           WorldRoom.current = null;
           throw e;
