@@ -117,6 +117,7 @@ export class GroundsStream {
     T: Themes,
     private covered: Covered,
     patch: (m: Material) => void,
+    hqEast?: number, // (the studio's own width: Grounds3's courtyard bridge starts past it)
   ) {
     this.snowTex = new CanvasTexture(snowCanvas(T, 512, 43));
     this.snowTex.colorSpace = SRGBColorSpace;
@@ -248,6 +249,7 @@ if (vFade < 0.999) {
       cz: (GROUNDS.z0 + GROUNDS.z1) / 2,
       radius: 900,
       stream: true,
+      hqEast,
     });
     this.root.add(this.statics.root);
     this.patch = patch;

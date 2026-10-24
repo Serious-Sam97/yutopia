@@ -176,7 +176,7 @@ export class Surroundings {
         const y = Math.floor(bz - oy);
         return x >= 0 && y >= 0 && x < g0.width && y < g0.height && isFloor(tileAt(g0, x, y));
       };
-      this.grounds = new GroundsStream(T, covered, patchGrounds);
+      this.grounds = new GroundsStream(T, covered, patchGrounds, map.width);
       this.grounds.root.position.y = GROUND;
       this.campus.root.add(this.grounds.root);
       // (the snow doesn't fall in the Grounds' buildings)

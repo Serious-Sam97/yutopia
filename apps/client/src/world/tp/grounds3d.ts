@@ -131,6 +131,9 @@ export interface GroundsOpts {
   /** in the game (grounds-stream.ts): the land and the woods are streamed by
    *  chunk, the headquarters is the campus's, the lot is the ground floor's own */
   stream?: boolean;
+  /** the studio's east wall (its map's width): a bigger studio than the Grounds' own 48
+   *  pushes it east, and the courtyard bridge starts there, not inside the studio */
+  hqEast?: number;
 }
 
 export const SURF: Record<Surface, number> = {
@@ -1858,9 +1861,9 @@ export class Grounds3 {
     const east = BUILDINGS.find((b) => b.key === "east");
     const hq = BUILDINGS.find((b) => b.key === "hq");
     if (!east || !hq) return;
-    const a = hq.x1 + 0.1;
+    const a = Math.max(hq.x1, this.o.hqEast ?? hq.x1) + 0.1;
     const b = east.x0 - 0.1;
-    if (!this.near((a + b) / 2, 18, 30)) return;
+    if (b - a < 1 || !this.near((a + b) / 2, 18, 30)) return;
     const y = 14;
     const g = new G();
     g.color(0xe3e6ea).box(a, y + 2.9, 16.4, b, y + 3.15, 19.6);
