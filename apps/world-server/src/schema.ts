@@ -434,6 +434,8 @@ export class Vehicle extends Schema {
   @type("boolean") filling = false;
   // its role (shared car/homes.ts): "police" (a light bar, a siren), "taxi" (a roof sign), "rental"
   @type("string") role = "";
+  // someone's own (docs/plan/43-the-spot.md): its plate
+  @type("string") plate = "";
 }
 
 export class WorldState extends Schema {

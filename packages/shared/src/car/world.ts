@@ -9,6 +9,7 @@ import {
   GROUNDS,
   heightAt,
   LAMPS,
+  MOTORS,
   surfaceTileAt,
   treesIn,
 } from "../grounds.ts";
@@ -100,6 +101,27 @@ function chunkSolids(cx: number, cz: number): Solid[] {
   for (const p of FORECOURT.posts)
     if (p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1)
       out.push({ kind: "circle", x: p.x, z: p.z, r: 0.27, what: "post" });
+  // the car dealer's forecourt (docs/plan/43-the-spot.md): its posts, its rail
+  const inChunk = (x: number, z: number) => x >= x0 && x < x1 && z >= z0 && z < z1;
+  for (const [x, z] of [...MOTORS.signPosts, ...MOTORS.floods])
+    if (inChunk(x, z)) out.push({ kind: "circle", x, z, r: 0.12, what: "post" });
+  // (in lengths of 3 at most: each found from the chunk its middle is in)
+  for (const [ax, az, bx, bz] of MOTORS.rails) {
+    const n = Math.ceil(Math.hypot(bx - ax, bz - az) / 3);
+    for (let i = 0; i < n; i++) {
+      const x = ax + ((bx - ax) * (i + 0.5)) / n;
+      const z = az + ((bz - az) * (i + 0.5)) / n;
+      if (inChunk(x, z))
+        out.push({
+          kind: "box",
+          x,
+          z,
+          hx: Math.abs(bx - ax) / n / 2 + 0.05,
+          hz: Math.abs(bz - az) / n / 2 + 0.05,
+          what: "wall",
+        });
+    }
+  }
   // the plough's banks round the lot: soft, the car ploughs into them and stops
   lot ??= lotLayout();
   banks ??= lotBanksOf(lot);

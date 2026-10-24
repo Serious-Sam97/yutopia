@@ -21,6 +21,7 @@ export interface CarIn {
   y?: number;
   colour: number;
   kind?: SedanOpts["kind"];
+  plate?: string;
   snowy?: number;
   sink?: number; // sunk into deep snow
   roll?: number; // leaning to its right (+), radians
@@ -75,7 +76,7 @@ export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: 
   const extra: THREE_NS.Object3D[] = [];
   const disposables: { dispose(): void }[] = [];
   for (const c of cars) {
-    const s = buildSedan({ colour: c.colour, snowy: c.snowy ?? 0, kind: c.kind });
+    const s = buildSedan({ colour: c.colour, snowy: c.snowy ?? 0, kind: c.kind, plate: c.plate });
     const [x, y, z] = carToWorld(c, 0, 0, 0);
     s.root.position.set(x, y, z);
     s.root.rotation.y = Math.PI - c.a;

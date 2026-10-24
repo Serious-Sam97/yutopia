@@ -59,6 +59,7 @@ export type PanelKind =
   | "avatar"
   | "pets"
   | "computer"
+  | "motors" // the car dealer's (car/cars.ts registers it: docs/plan/43-the-spot.md)
   | null;
 
 // A pet in the room (shared/pets.ts), as the panel and the menus see it.
@@ -202,6 +203,13 @@ export interface WallPanel {
   side: 1 | -1;
 }
 
+/** Where a car is (the building's coords, the GPS's) and what the place is called (the phone's GPS). */
+export interface CarAt {
+  id: string;
+  x: number;
+  z: number;
+  where: string;
+}
 export interface HudState {
   phase: "loading" | "connecting" | "ready" | "reconnecting" | "failed" | "kicked" | "removed";
   error: string;
@@ -303,6 +311,12 @@ export interface HudState {
   } | null;
   objectsVersion: number; // bumps when furniture arrives, moves or goes
   following: number | null;
+  /** my own bay of the lot (docs/plan/43-the-spot.md), its label ("D-05"), or null */
+  myBay: string | null;
+  /** my own car (docs/plan/43-the-spot.md): its object, plate, model, who holds its keys */
+  myCar: (CarAt & { plate: string; model: string; lentTo: number; lentName: string }) | null;
+  /** someone's car keys I hold today: whose, its plate, where it is */
+  keys: (CarAt & { from: string; plate: string }) | null;
   inspect: number | null;
   locks: Record<string, string>;
   vortex: { x: number; y: number; say: string; sayAt: number; mood: string } | null;
@@ -391,6 +405,9 @@ const initial: HudState = {
   lift: null,
   objectsVersion: 0,
   following: null,
+  myBay: null,
+  myCar: null,
+  keys: null,
   inspect: null,
   locks: {},
   vortex: null,

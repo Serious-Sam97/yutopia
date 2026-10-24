@@ -268,3 +268,68 @@ export function lampPost(s: Sketch) {
   });
   s.shadowDot(0.5, 0.5, 0.2, 0.35);
 }
+
+// ── someone's own bay (docs/plan/43-the-spot.md, shared spot.ts) ──
+// The name board at a claimed bay's head: a pine plank at head height on a post, a cap of snow,
+// the bay's enamel tag under it. The post stands at (ox, oy) in its tile; the face looks along x
+// into the bay (`face` ±1). The pair's two share a post, half each (`half`); row D's has a plank on
+// the pavement's side too (`back`). The name is painted on in 3D (`picture`); iso has its label.
+const PINE: Mat = { c: "#c49660", top: "#d6ab76", left: "#b98a55", right: "#9c7346" };
+const POST: Mat = { c: "#6e5a44", top: "#7d6750", left: "#6e5a44", right: "#5a4836" };
+const SNOWCAP: Mat = { c: "#eef2f5", top: "#f8fafc", left: "#e3e8ed", right: "#d6dde3", flat: true };
+const esc = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+function nameSvg(name: string): string {
+  const text = esc(name.toUpperCase());
+  const size = Math.round(Math.min(96, 470 / Math.max(1, name.length * 0.68)));
+  const tx = `<text x="256" y="${96 + size * 0.02}" text-anchor="middle" dominant-baseline="middle" font-family="Rockwell, 'Roboto Slab', Georgia, serif" font-weight="700" font-size="${size}"`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="168" viewBox="0 0 512 168"><defs><filter id="b" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="4"/></filter></defs>${tx} fill="#6b3a18" opacity="0.8" filter="url(#b)">${text}</text>${tx} fill="#2a170c">${text}</text><circle cx="22" cy="84" r="7" fill="#4a3a2a"/><circle cx="490" cy="84" r="7" fill="#4a3a2a"/></svg>`;
+}
+function tagSvg(label: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="80" viewBox="0 0 160 80"><rect x="0" y="0" width="160" height="80" rx="12" fill="#e9edf1"/><rect x="6" y="6" width="148" height="68" rx="9" fill="#1f3554"/><text x="80" y="42" text-anchor="middle" dominant-baseline="middle" font-family="'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="46" fill="#e9edf1">${esc(label)}</text></svg>`;
+}
+export function bayBoard(s: Sketch, p: Record<string, unknown>) {
+  const ox = Number(p.ox ?? 0.5);
+  const oy = Number(p.oy ?? 0.5);
+  const f = Number(p.face) < 0 ? -1 : 1;
+  const half = !!p.half;
+  const name = String(p.ownerName ?? "").split(" ")[0] || "?";
+  const bay = String(p.bay ?? "").toUpperCase();
+  const span = (a: number, b: number) => ({ x: Math.min(a, b), w: Math.abs(b - a) });
+  // the post (half of it, the pair's: its own plank's side)
+  const post = half ? span(ox, ox + f * 0.045) : span(ox - 0.045, ox + 0.045);
+  s.box({ ...post, y: oy - 0.045, d: 0.09, z: 0, h: 1.9 * P, mat: POST, line: 0.6 });
+  s.box({ ...post, y: oy - 0.055, d: 0.11, z: 1.9 * P, h: 2, mat: SNOWCAP, line: 0 });
+  // the planks: the face's, and row D's back one
+  for (const side of p.back ? [f, -f] : [f]) {
+    const pl = span(ox + side * 0.045, ox + side * 0.075);
+    s.box({ ...pl, y: oy - 0.55, d: 1.1, z: 1.45 * P, h: 0.36 * P, mat: PINE, line: 0.7 });
+    s.box({ x: pl.x - 0.012, w: pl.w + 0.024, y: oy - 0.56, d: 1.12, z: 1.81 * P, h: 1.8, mat: SNOWCAP, line: 0 });
+    const x = ox + side * 0.075;
+    const l = oy + side * 0.55; // (its left end, seen from in front)
+    s.picture(
+      nameSvg(name),
+      [
+        [x, l, 1.45 * P],
+        [x, oy - side * 0.55, 1.45 * P],
+        [x, oy - side * 0.55, 1.81 * P],
+        [x, l, 1.81 * P],
+      ],
+      [side, 0],
+    );
+  }
+  // the tag, on the post's face under the plank
+  const tg = span(ox + f * 0.045, ox + f * 0.052);
+  s.box({ ...tg, y: oy - 0.13, d: 0.26, z: 1.2 * P, h: 0.14 * P, mat: { c: "#1f3554", flat: true }, line: 0.4 });
+  const tx = ox + f * 0.052;
+  s.picture(
+    tagSvg(bay),
+    [
+      [tx, oy + f * 0.13, 1.2 * P],
+      [tx, oy - f * 0.13, 1.2 * P],
+      [tx, oy - f * 0.13, 1.34 * P],
+      [tx, oy + f * 0.13, 1.34 * P],
+    ],
+    [f, 0],
+  );
+  s.shadowDot(ox, oy, 0.08, 0.3);
+}

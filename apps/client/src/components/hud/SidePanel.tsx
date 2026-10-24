@@ -139,6 +139,8 @@ function PeopleTab() {
   const me = useHud((s) => s.me);
   const people = useHud((s) => s.people);
   const following = useHud((s) => s.following);
+  const myBay = useHud((s) => s.myBay);
+  const keys = useHud((s) => s.keys);
   const heardBy = useHud((s) => s.heardBy);
   const rows = people.filter((p) => !p.bot);
   const bots = people.length - rows.length;
@@ -204,6 +206,27 @@ function PeopleTab() {
           <Icon name="desk" size={15} />
           {t("myDesk")}
         </button>
+        {myBay && (
+          <button
+            type="button"
+            className="ghost-btn flex items-center gap-1.5 whitespace-nowrap"
+            title={t("myBay")}
+            onClick={() => w?.teleport("bay")}
+          >
+            <Icon name="bay" size={15} />
+            {myBay}
+          </button>
+        )}
+        {keys && (
+          <span
+            className="ghost-btn flex items-center gap-1.5 whitespace-nowrap"
+            title={t("keysOf").replace("{who}", keys.from)}
+            data-keys-held
+          >
+            <Icon name="key" size={15} />
+            {keys.plate}
+          </span>
+        )}
         <button type="button" className="ghost-btn flex items-center gap-1.5" onClick={() => w?.pickArrival(true)}>
           <Icon name="pin" size={15} />
           {t("myArrival")}

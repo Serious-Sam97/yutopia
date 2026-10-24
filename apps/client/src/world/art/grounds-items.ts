@@ -1650,6 +1650,21 @@ export function groundThings(G: G, lot?: LotIso): Thing[] {
     }
   }
   put("gate-sign", "gr_sign", -51.5, G.GATE.z + 4, 4, 1, { bg: "#e9e6dc", fg: "#1c2228" });
+  // the car dealer's forecourt (docs/plan/43-the-spot.md): its pole sign, flood lamps and rail (the
+  // concrete is the land's picture, the vehicles on show cars)
+  const M = G.MOTORS;
+  put("motors-sign", "gr_sign", M.sign.x - 2, M.sign.z, 4, 1, { bg: "#24382d", fg: "#efe3c4" });
+  for (const [i, [x, z]] of M.floods.entries()) put(`motors-flood${i}`, "gr_lamp_town", x - 0.5, z - 0.5, 1, 1);
+  for (const [k, [x0, z0, x1, z1]] of M.rails.entries()) {
+    const along = Math.abs(x1 - x0) > Math.abs(z1 - z0);
+    const lo = along ? Math.min(x0, x1) : Math.min(z0, z1);
+    const len = Math.abs(along ? x1 - x0 : z1 - z0);
+    for (let t = 0; t < len; t += 3) {
+      const n = Math.min(3, len - t);
+      if (along) put(`motors-rail${k}-${t}`, "gr_rail_h", lo + t, z0 - 0.5, 3, 1, { len: Math.round(n) });
+      else put(`motors-rail${k}-${t}`, "gr_rail_v", x0 - 0.5, lo + t, 1, 3, { len: Math.round(n) });
+    }
+  }
   put("dock", "gr_dock", -254, -98, 3, 14, { len: 14 });
   // the farm (docs/plan/31-the-day.md): the cornfield in runs of rows, its fence, the tractor,
   // the scarecrows, hay bales by the barn

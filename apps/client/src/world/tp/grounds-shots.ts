@@ -1,7 +1,9 @@
 import { type AvatarLayers, DEFAULT_AVATAR } from "@yutopia/shared";
-import { groundAt, LAMPS, WAYS } from "@yutopia/shared/grounds";
+import { groundAt, LAMPS, MOTORS, WAYS } from "@yutopia/shared/grounds";
+import { bayById, bayLabel, boardOf, type LotBay, lotLayout } from "@yutopia/shared/lot";
 import type * as THREE_NS from "three";
 import type { CarIn } from "./car/stage";
+import * as S3 from "./spot3d";
 
 export { drawLotPlans } from "../lot-plan";
 
@@ -39,6 +41,10 @@ interface Shot {
   cars?: CarIn[]; // the sedan (docs/plan/28-the-car.md)
   storm?: boolean; // a blizzard after dark
   near?: number; // the camera's near plane
+  /** claimed bays (docs/plan/43-the-spot.md): [bay id, the name on its board] */
+  boards?: [string, string][];
+  /** MOTORS' forecourt on Main Street, its vehicles on show */
+  motors?: boolean;
 }
 
 const DARK = "#2b3138";
@@ -281,6 +287,7 @@ export function shots(): Record<string, Shot> {
     },
     ...carShots(lamp),
     ...lotShots(),
+    ...spotShots(),
     "iso-lot-edge": {
       hour: "day",
       cam: [0, 0, 0],
@@ -371,6 +378,196 @@ function lotShots(): Record<string, Shot> {
         { x: -11.6, z: 20, to: [-11.6, 40], a: CAI, walk: 4 },
       ],
       snow: 0,
+    },
+  };
+}
+// ── someone's own bay, the dealer (docs/plan/43-the-spot.md, phase 0) ──
+/** Someone's own car in a bay of the lot, nosed to its head. */
+function own(b: { x: number; z: number; dir: 1 | -1 }, kind: CarIn["kind"], colour: number, plate?: string): CarIn {
+  const a = b.dir > 0 ? Math.PI : 0;
+  return { x: b.x, z: b.z, a, y: 0.03, colour, kind, snowy: 0.2, plate };
+}
+/** A bay of the lot, by its id (lot.ts: "d-03"). */
+function bay(id: string): LotBay {
+  const b = bayById(lotLayout(18), id);
+  if (!b) throw new Error(`no bay ${id}`);
+  return b;
+}
+const NAMES: [string, string][] = [
+  ["d-01", "Rafa"],
+  ["d-02", "Bia"],
+  ["d-03", "Ana"],
+  ["d-04", "Cai"],
+  ["d-13", "Marta"],
+  ["d-15", "Joel"],
+  ["c-04", "Duda"],
+  ["c-05", "Lia"],
+  ["b-04", "Tomás"],
+  ["b-05", "Noor"],
+  ["c-13", "Iris"],
+  ["a-07", "Pedro"],
+];
+const ownCars = (): CarIn[] => [
+  own(bay("d-02"), "pickup", 0x2f4a6b, "BIA·77"),
+  own(bay("d-03"), "sedan", 0x6b2430, "ANA·86"),
+  own(bay("d-15"), "offroad", 0xcbbd98, "JOEL"),
+  own(bay("b-04"), "offroad", 0x2f4a3b, "TOMÁS·1"),
+  own(bay("b-05"), "sedan", 0x4a5a73, "NOOR"),
+  own(bay("c-05"), "snowmobile", 0xb8282a),
+];
+/** The dealer's vehicles on show, swept clean. */
+function motorsShow(): CarIn[] {
+  const col: Record<string, number> = {
+    sedan: 0xe8e6df,
+    offroad: 0x6b2430,
+    pickup: 0xb8702a,
+    snowmobile: 0x2f4a6b,
+    ploughtruck: 0xd8661a,
+    snowcat: 0xd8661a,
+    tractor: 0xa8231e,
+    toboggan: 0x2f4a3b,
+  };
+  return MOTORS.show.map((v) => ({
+    x: v.x,
+    z: v.z,
+    a: v.a,
+    y: groundAt(v.x, v.z) + 0.05,
+    colour: col[v.model] ?? 0x8b8f93,
+    kind: v.model as CarIn["kind"],
+    snowy: 0,
+  }));
+}
+function spotShots(): Record<string, Shot> {
+  const c = MOTORS.collect;
+  return {
+    // walking to your car down aisle E: row D's boards by the doors
+    "spot-arrive": {
+      hour: "day",
+      cam: [-23.6, 1.75, 0.4],
+      look: [-14.5, 0.9, 10.5],
+      fov: 50,
+      boards: NAMES,
+      cars: ownCars(),
+      people: [
+        { x: -20.4, z: 6.2, to: [-17.5, 9.4], a: ANA, walk: 9 },
+        { x: -22.6, z: 17, to: [-22.6, 30], a: DUDA, walk: 3 },
+      ],
+      snow: 500,
+    },
+    // close: Ana's board from the pavement, her car's nose behind it
+    "spot-board": {
+      hour: "overcast",
+      cam: [-10.75, 1.75, 7.45],
+      look: [-12.95, 1.45, 9.25],
+      fov: 42,
+      boards: NAMES,
+      cars: ownCars(),
+      people: [],
+      snow: 700,
+      near: 0.05,
+    },
+    // the pair: one post for two facing bays (Duda's empty, Tomás's 4x4 nosed in behind)
+    "spot-pair": {
+      hour: "day",
+      cam: [-25.2, 1.65, 9.6],
+      look: [-31.4, 0.95, 12.6],
+      fov: 46,
+      boards: NAMES,
+      cars: ownCars(),
+      people: [{ x: -27.4, z: 16.4, to: [-30, 14.8], a: BIA, walk: 5 }],
+      snow: 400,
+    },
+    // after dark: row D's boards under the island's lamp, Ana's flashlight on hers
+    "spot-night": {
+      hour: "dusk",
+      cam: [-23.4, 1.8, 2.2],
+      look: [-13.5, 1.4, 9.4],
+      fov: 50,
+      boards: NAMES,
+      cars: ownCars(),
+      people: [{ x: -19.8, z: 7.6, to: [-12.9, 9.4], a: ANA, walk: 3 }],
+      snow: 2500,
+    },
+    // from above: the lot's east half, the regulars' bays by name
+    "spot-row": {
+      hour: "day",
+      cam: [-4, 13, -10],
+      look: [-24, 0, 20],
+      fov: 52,
+      boards: NAMES,
+      cars: ownCars(),
+      people: [{ x: -22.4, z: 10, to: [-22.4, 20], a: CAI, walk: 7 }],
+      snow: 0,
+    },
+    // standing in a free bay (D-05): where the HUD offers to claim it
+    "spot-claim": {
+      hour: "overcast",
+      cam: [-23.2, 2.3, 12.2],
+      look: [-14.2, 0.9, 15.2],
+      fov: 48,
+      boards: NAMES,
+      cars: ownCars(),
+      people: [{ x: -16.4, z: 14.8, to: [-13, 14.8], a: CAI }],
+      snow: 600,
+    },
+    // the iso angle
+    "spot-iso": {
+      hour: "day",
+      cam: [0, 0, 0],
+      look: [-30, 0, 13],
+      iso: 15,
+      boards: NAMES,
+      cars: ownCars(),
+      people: [
+        { x: -20.4, z: 6.2, to: [-17.5, 9.4], a: ANA, walk: 9 },
+        { x: -11.6, z: 16, to: [-11.6, 30], a: CAI, walk: 4 },
+      ],
+      snow: 0,
+    },
+    // MOTORS from across Main Street
+    "motors-day": {
+      hour: "day",
+      cam: [502.5, 4.4, -406.2],
+      look: [513, 0.9, -388.5],
+      fov: 56,
+      motors: true,
+      people: [
+        { x: 510.8, z: -393.4, to: [509.6, -390.6], a: BIA },
+        { x: 495, z: -397.2, to: [505, -397.2], a: CAI, walk: 11 },
+      ],
+      snow: 300,
+    },
+    // after dark: the flood lamps, the sign lit
+    "motors-night": {
+      hour: "night",
+      cam: [502, 3.4, -412.5],
+      look: [513.5, 1.6, -388],
+      fov: 54,
+      motors: true,
+      people: [{ x: 515.4, z: -393.6, to: [514, -390.5], a: DUDA }],
+      snow: 2200,
+    },
+    // a new car waiting in the collection bay: Ana's, by its open door
+    "motors-new": {
+      hour: "day",
+      cam: [518.6, gy(518.6, -394.2) + 1.75, -394.2],
+      look: [523.6, gy(523.6, -389.4) + 0.9, -389.4],
+      fov: 46,
+      motors: true,
+      cars: [
+        {
+          x: c.x,
+          z: c.z,
+          a: c.a,
+          y: groundAt(c.x, c.z) + 0.05,
+          colour: SEDAN_RED,
+          snowy: 0,
+          plate: "ANA·86",
+          doors: [0.9, 0, 0, 0],
+        },
+      ],
+      people: [{ x: 522.3, z: -389.2, to: [523.4, -389.6], a: ANA }],
+      snow: 200,
     },
   };
 }
@@ -821,6 +1018,7 @@ export async function runShot(
     hour: (q.get("hour") as Hour) ?? base.hour,
     people: q.get("people") === "0" ? [] : base.people,
   };
+  if (shot.motors) shot.cars = [...(shot.cars ?? []), ...motorsShow()];
   const P = PRESETS[shot.hour];
   const t0 = performance.now();
 
@@ -893,9 +1091,31 @@ export async function runShot(
       // (and the way from the camera to a car: nothing between them)
       ...(shot.cars && !ortho ? corridor(shot.cam, shot.look) : []),
     ],
+    parked: (shot.cars ?? []).filter((c) => c.x < -10 && c.x > -56 && c.z > -8 && c.z < 60),
   });
   scene.add(grounds.root);
   grounds.setNight(P.night);
+  // ── the claimed bays' boards, the dealer (docs/plan/43-the-spot.md) ──
+  const spot = shot.boards ? S3 : null;
+  if (spot && shot.boards) {
+    const l = lotLayout(18);
+    const posts = new Set<string>();
+    const list = shot.boards.flatMap(([id, name]) => {
+      const b = bayById(l, id);
+      if (!b) throw new Error(`no bay ${id}`);
+      const w = boardOf(l, b);
+      const k = `${w.x},${w.z}`;
+      const post = !posts.has(k);
+      posts.add(k);
+      // (on the kerbs: rows A and D; the pair's post on the asphalt between their noses)
+      const y = 0.03 + (b.row === "w" || b.row === "e" ? 0.15 : 0);
+      const one = { x: w.x, z: w.z, ry: w.ry, y, name, label: bayLabel(b), post };
+      // (row D's read from the pavement too: a second plank on the post's back)
+      return b.row === "e" ? [one, { ...one, ry: w.ry + Math.PI, post: false }] : [one];
+    });
+    scene.add(spot.boards(Themes, list));
+  }
+
   // the far ridges take the horizon's colour, a little darker
   {
     const hz = new T3.Color(P.horizon);

@@ -17,6 +17,7 @@ import {
   insideOf,
   LAMPS,
   LOT,
+  MOTORS,
   type P,
   PLAZA,
   POND,
@@ -99,6 +100,7 @@ import {
 } from "./roads3d";
 import type { Themes } from "./sky";
 import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
+import { motorsForecourt } from "./spot3d";
 import { streetGeometry } from "./town3d";
 
 // The Grounds in 3D — phase 0's prototype (docs/plan/27-the-grounds.md): the
@@ -133,6 +135,8 @@ export interface GroundsOpts {
   /** the studio's east wall (its map's width): a bigger studio than the Grounds' own 48
    *  pushes it east, and the courtyard bridge starts there, not inside the studio */
   hqEast?: number;
+  /** a still's own cars parked in the lot's bays, besides the seeded ones (no snow under them) */
+  parked?: { x: number; z: number }[];
 }
 
 export const SURF: Record<Surface, number> = {
@@ -608,6 +612,7 @@ export class Grounds3 {
     run(() => this.fence());
     run(() => this.landmarks());
     run(() => this.town());
+    run(() => this.motors());
     for (const f of this.farmSteps()) run(f);
     // (last: they gather every light and glow the steps before added)
     run(() => this.lamps());
@@ -1133,7 +1138,7 @@ export class Grounds3 {
     }
     // its kerbs, islands, pavement, snow and sign (the game's cars come and go: no snow in its
     // empty bays there yet)
-    const d = lotDressing(l, this.o.stream ? null : l.cars);
+    const d = lotDressing(l, this.o.stream ? null : [...l.cars, ...(this.o.parked ?? [])]);
     this.add(d.solid, this.lambert());
     this.add(d.snow, this.lambert());
     const st = this.keep(tex(lotSignCanvas(this.T), false));
@@ -3778,6 +3783,28 @@ export class Grounds3 {
     this.pool((b.x0 + b.x1) / 2, b.z0 + 5, 9, 0xe8f0ff);
     this.litWindow(b.x0 + 7, y0 + 0.4, b.z1 - 6, 6, 2.2, 0, -1, true, 0.9);
     this.signBoard("GAS\n1.19", b.x0 + 0.5, b.z0 - 1, Math.PI, 1.6, 2.2, 3.4, "#f2f2ee", "#a5281c", true);
+  }
+
+  // ── the car dealer's forecourt (docs/plan/43-the-spot.md, tp/spot3d.ts): its concrete, kerb,
+  // rail, signs, bunting and flood lamps; the vehicles on show are cars (shared car/homes.ts) ──
+  private motors() {
+    const { yard } = MOTORS;
+    if (!this.near((yard.x0 + yard.x1) / 2, (yard.z0 + yard.z1) / 2, 40)) return;
+    const m = motorsForecourt(this.T, groundAt(512, -389));
+    m.root.traverse((o) => {
+      if (!(o instanceof Mesh)) return;
+      this.keep(o.geometry);
+      for (const mat of Array.isArray(o.material) ? o.material : [o.material]) {
+        this.keep(mat);
+        if ((mat as MeshLambertMaterial).map) this.keep((mat as MeshLambertMaterial).map as Texture);
+      }
+    });
+    this.root.add(m.root);
+    for (const l of m.lit) this.glows(l.m, l.on, l.m.map ? "sign" : "lamp");
+    for (const p of m.floods) {
+      this.lights.push({ p, kind: "porch", color: 0xfff1d6, r: 9 });
+      this.pool(p.x, p.z, 7, 0xfff1d6);
+    }
   }
 
   // ── lamps: posts, heads lit at night, pools of light on the snow ──

@@ -1,4 +1,4 @@
-import { BODY_R, CAR_COLOURS, dirFromDelta, parseAvatar, type WorldObjectDef } from "@yutopia/shared";
+import { BODY_R, CAR_COLOURS, dirFromDelta, GROUND_OFFSET, parseAvatar, type WorldObjectDef } from "@yutopia/shared";
 import {
   CAR_FLAGS,
   CAR_HZ,
@@ -17,6 +17,7 @@ import {
   type Helps,
   headingOf,
   isCarKind,
+  mayDrive,
   parkedPose,
   ploughCell,
   readout,
@@ -49,6 +50,8 @@ import {
   type Group as TGroup,
   Vector3,
 } from "three";
+import { DealerPanel } from "@/components/hud/DealerPanel";
+import { extraPanels } from "@/components/hud/panels";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import { prefs } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
@@ -64,6 +67,12 @@ import type { ThirdPersonView } from "../tp/view";
 import { CarInput, type Switch } from "./controls";
 import { BaySnow, CabinLight, Mirror, RoadPatches, ScreenSnow, Spray, Tracks } from "./fx";
 import { CarSound, preloadEngine } from "./sound";
+import { type SpotPrompt, Spots, spotNo } from "./spot";
+
+// MOTORS' panel, with the cars (the world page's panels are full): docs/plan/43-the-spot.md
+extraPanels.motors = DealerPanel;
+// (the showroom's door: Main Street's side of the old shut shop, its middle)
+const MOTORS_DOOR = { x: 493, z: -396.6 };
 
 // The lot's cars in the world, the client's side (docs/plan/28-the-car.md;
 // the server: world-server features/cars.ts). Every lot car drawn with the
@@ -105,6 +114,24 @@ addStrings(
     carPassenger: ["C camera · R radio · X out", "C câmera · R rádio · X sair"],
     carStuck: ["Stuck? T · pull it out", "Preso? T · puxar para fora"],
     carNo_soon: ["Wait a moment", "Espere um pouco"],
+    carNo_show: ["It's on show: pick yours at the door", "Está em exposição: escolha o seu na porta"],
+    carNo_model: ["MOTORS doesn't sell that", "A MOTORS não vende esse"],
+    carNo_owned: ["It's {who}'s: get in beside", "É de {who}: entre ao lado"],
+    carNo_nocar: ["You've no car: MOTORS on Main Street has them", "Você não tem carro: a MOTORS na Main Street tem"],
+    carOf: ["{who}'s car", "carro de {who}"],
+    carKeysLent: ["{who} lent you their car keys · {plate}", "{who} emprestou a chave do carro · {plate}"],
+    carKeysBack_taken: ["{who} took their car keys back", "{who} pegou a chave do carro de volta"],
+    carKeysBack_home: [
+      "{who}'s car is home: the keys are back with them",
+      "O carro de {who} está na vaga: a chave voltou",
+    ],
+    carKeysBack_day: [
+      "The day's over: {who}'s car keys are back with them",
+      "O dia acabou: a chave do carro de {who} voltou",
+    ],
+    carNo_full: ["No room for it here: try again by the forecourt", "Sem espaço aqui: tente de novo perto do pátio"],
+    motorsPrompt: ["MOTORS · pick yours", "MOTORS · escolha o seu"],
+    motorsBought: ["It's yours: in the collection bay", "É seu: na vaga de retirada"],
     carNo_nowhere: ["Nowhere clear near to pull it to", "Nenhum lugar livre perto"],
     carGas: ["GAS", "ACEL"],
     carBrake: ["BRAKE", "FREIO"],
@@ -128,6 +155,8 @@ export interface CarsHost {
   oy(): number;
   level(): number;
   me(): { x: number; y: number };
+  /** my user id (my own bay: car/spot.ts) */
+  uid(): number;
   tp(): ThirdPersonView | null;
   objects(): Iterable<WorldObjectDef>;
   night(): number;
@@ -278,6 +307,7 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
       oy: () => c.map.oy ?? 0,
       level: () => c.level,
       me: () => c.me,
+      uid: () => c.myUid(),
       tp: () => c.tp,
       objects: () => c.objs.values(),
       night: () => c.engine?.getDaylight().night ?? 0,
@@ -415,9 +445,23 @@ export class Cars {
     if (room) {
       this.offMsg.push(
         room.onMessage("car:snap", (m: CarWire & { id: string }) => this.snapped(m)),
-        room.onMessage("car:no", (m: { why: string }) => {
+        room.onMessage("car:no", (m: { why: string; who?: string }) => {
           this.wanted = "";
-          host.toast(t(`carNo_${m.why}`));
+          host.toast(t(`carNo_${m.why}`).replace("{who}", (m.who ?? "").split(" ")[0]));
+        }),
+        // someone's car keys lent me, or back with them (docs/plan/43-the-spot.md)
+        room.onMessage("car:keys", (m: { from: string; plate: string; lent: boolean; why?: string }) =>
+          toast(
+            t(m.lent ? "carKeysLent" : `carKeysBack_${m.why ?? "taken"}`)
+              .replace("{who}", m.from.split(" ")[0])
+              .replace("{plate}", m.plate),
+            "info",
+          ),
+        ),
+        room.onMessage("spot:no", (m: { why: string }) => host.toast(spotNo(m.why))),
+        room.onMessage("car:bought", () => {
+          if (hud.get().panel.kind === "motors") hud.set({ panel: { kind: null } });
+          toast(t("motorsBought"), "info");
         }),
         room.onMessage("car:radio", () => {
           if (this.mine?.seat === 0) this.station = (this.station + 1) % 4;
@@ -496,7 +540,33 @@ export class Cars {
   }
   /** The HUD's "X" prompt by a car or in one (none while it moves): set, and true; false if there's none. */
   prompt(h: typeof hud): boolean {
-    const car = this.promptNow();
+    // (the bays' boards: who's claimed what, their posts for the sim)
+    this.spots.refresh(
+      () => this.host.objects(),
+      this.host.uid(),
+      { x: this.host.ox(), y: this.host.oy() },
+      performance.now(),
+      (o) => {
+        // (driven: where it is now; parked: its object, on the ground floor)
+        const l = this.live.get(`car:${o.id}`);
+        const q = l ? null : parkedPose(o);
+        const x = l ? l.pose.p.x : (q?.x ?? 0) + GROUND_OFFSET.x;
+        const z = l ? l.pose.p.z : (q?.y ?? 0) + GROUND_OFFSET.y;
+        return { x, z, where: this.G.placeAt(x, z).name };
+      },
+    );
+    // (standing in a bay of the lot, its claim before a car in the next bay: a neighbour's door is
+    // in reach from most of a bay; a car in this very bay — mine, say — before it)
+    const near = this.promptNow();
+    const spot = this.mine ? null : this.spotNow();
+    const inBay = (id: string) => {
+      const p = this.parked.get(id)?.pose;
+      const me = this.host.me();
+      return !!p && this.spots.sameBay(me.x + this.host.ox(), me.y + this.host.oy(), p.x, p.z);
+    };
+    // (by its door — within 2.2 of its middle — the car's, though)
+    const carWins = !!near && (near.kind !== "car" || inBay(near.objectId) || this.nearD < 2.2);
+    const car = (spot && !carWins ? spot : near) ?? this.motorsNow();
     if (!car) return false;
     // (by a car: its engine's recordings fetched before it's started)
     if (car.kind === "car" && mixer.ctx) void preloadEngine(mixer.ctx);
@@ -519,11 +589,52 @@ export class Cars {
     if (this.host.level() !== 0) return null;
     const hit = this.nearest();
     if (!hit) return null;
-    return { objectId: hit.id, kind: "car", label: hit.seat === 0 ? t("carDrive") : t("carIn") };
+    this.nearD = hit.d;
+    const label = hit.seat === 0 ? t("carDrive") : t("carIn");
+    // (someone's own: whose)
+    return {
+      objectId: hit.id,
+      kind: "car",
+      label: hit.owner ? `${label} · ${t("carOf").replace("{who}", hit.owner.split(" ")[0])}` : label,
+    };
   }
-  /** X pressed on the prompt: true if it was a car's. */
+  /** Standing in a bay of the lot, on foot: claim it, or give it up (car/spot.ts). */
+  private spots = new Spots();
+  /** how far the car the prompt offers is (its middle) */
+  private nearD = 0;
+  private spotNow(): SpotPrompt | null {
+    if (this.host.level() !== 0) return null;
+    const me = this.host.me();
+    return this.spots.prompt(me.x + this.host.ox(), me.y + this.host.oy(), this.host.uid());
+  }
+  /** By MOTORS' door or a vehicle on show, on foot: the dealer's prompt (docs/plan/43-the-spot.md). */
+  private motorsNow(): { objectId: string; kind: string; label: string } | null {
+    if (this.host.level() !== 0) return null;
+    const me = this.host.me();
+    const x = me.x + this.host.ox();
+    const z = me.y + this.host.oy();
+    const M = this.G.MOTORS;
+    if (x < M.yard.x0 - 20 || x > M.yard.x1 + 2 || z < M.yard.z0 - 4 || z > M.yard.z1 + 2) return null;
+    const door = Math.hypot(x - MOTORS_DOOR.x, z - MOTORS_DOOR.z) < 2.6;
+    const show = M.show.some((v) => Math.hypot(x - v.x, z - v.z) < 4);
+    return door || show ? { objectId: "motors", kind: "motors", label: t("motorsPrompt") } : null;
+  }
+  /** X pressed on the prompt: true if it was a car's (or a bay's, or the dealer's). */
   act(kind: string, id: string): boolean {
     const room = this.host.room();
+    if (kind === "motors") {
+      // (the one I have now: the panel starts from its looks)
+      const uid = this.host.uid();
+      let mine = "";
+      for (const o of this.host.objects())
+        if (o.kind === "car" && Number(o.props?.ownerId) === uid && !o.props?.retire) mine = o.id;
+      hud.set({ panel: { kind: "motors", objectId: mine } });
+      return true;
+    }
+    if (kind === "spot:claim" || kind === "spot:free") {
+      room?.send(kind, { bay: id.replace(/^bay-/, "") });
+      return true;
+    }
     if (kind !== "car" && kind !== "car:leave") return false;
     if (!room) return true;
     if (kind === "car:leave") {
@@ -881,6 +992,7 @@ export class Cars {
           snowy: o.props?.snowy ? 0.7 : 0.15,
           kind,
           role: typeof o.props?.role === "string" ? o.props.role : undefined,
+          plate: typeof o.props?.plate === "string" ? o.props.plate : undefined,
         });
         p.full.setEnv(this.env);
         placeModel(p.full.root, P.x, y, P.z, P.a);
@@ -1027,6 +1139,7 @@ export class Cars {
           snowy: 0.1,
           kind: v.kind,
           role: v.role || undefined,
+          plate: v.plate || undefined,
         });
         model.setEnv(this.env);
         castAll(model.root);
@@ -1679,6 +1792,9 @@ export class Cars {
   private solidsNear(x: number, z: number, r: number, out: Solid[]) {
     const room = this.host.room();
     const near = (sx: number, sz: number, ext: number) => Math.abs(sx - x) < r + ext && Math.abs(sz - z) < r + ext;
+    // the bays' name boards: a post, its planks along the bay's head (shared spot.ts)
+    for (const p of this.spots.posts)
+      if (near(p.x, p.z, 0.6)) out.push({ kind: "box", x: p.x, z: p.z, hx: 0.08, hz: 0.55, what: "post" });
     // the parked cars: each its own size; knocked, they move (I drive them: only I shove them)
     const driving = this.mine?.seat === 0;
     for (const [id, p] of this.parked) {
@@ -1847,12 +1963,27 @@ export class Cars {
   }
 
   /** The car (and its seat) X would get me into: the nearest within reach, by the door I'm at. */
-  private nearest(): { id: string; seat: number } | null {
+  private nearest(): { id: string; seat: number; owner: string; d: number } | null {
     const me = this.host.me();
     const bx = me.x + this.host.ox();
     const bz = me.y + this.host.oy();
-    let best: { id: string; seat: number; d: number } | null = null;
-    const consider = (id: string, x: number, z: number, a: number, taken: string[], kind: CarKind) => {
+    let best: { id: string; seat: number; d: number; owner: string } | null = null;
+    // (someone's own: whose, and whether its wheel's mine — theirs, or their keys lent me today)
+    const uid = this.host.uid();
+    const now = Date.now();
+    const owned = new Map<string, { owner: string; wheel: boolean }>();
+    for (const o of this.host.objects())
+      if (o.kind === "car" && o.props?.ownerId && Number(o.props.ownerId) !== uid)
+        owned.set(o.id, { owner: String(o.props.owner ?? ""), wheel: mayDrive(o.props, uid, now) });
+    const consider = (
+      id: string,
+      x: number,
+      z: number,
+      a: number,
+      taken: string[],
+      kind: CarKind,
+      own?: { owner: string; wheel: boolean },
+    ) => {
       const dx = bx - x;
       const dz = bz - z;
       const d = Math.hypot(dx, dz);
@@ -1872,24 +2003,34 @@ export class Cars {
             : [3, 1, 2, 0];
       // (only the seats it has: the snowmobile's one)
       const seats = SEATS_OF[kind].at.length;
-      const seat = order.find((s) => s < seats && !taken[s]);
+      const seat = order.find((s) => s < seats && !taken[s] && (s > 0 || !own || own.wheel));
       if (seat === undefined) return;
-      best = { id, seat, d };
+      best = { id, seat, d, owner: own ? own.owner : "" };
     };
     for (const o of this.host.objects()) {
       if (o.kind !== "car" || o.props?.driven || (Number(o.props?.level ?? 0) | 0) !== 0) continue;
+      // (MOTORS' on show: its prompt is the dealer's; a retired one: going)
+      if (o.props?.role === "show" || o.props?.retire) continue;
       const p = this.parked.get(o.id);
-      if (p) consider(o.id, p.pose.x, p.pose.z, p.pose.a, [], p.kind);
+      if (p) consider(o.id, p.pose.x, p.pose.z, p.pose.a, [], p.kind, owned.get(o.id));
     }
     const room = this.host.room();
     for (const [id, l] of this.live) {
       if (Math.hypot(l.pose.v.x, l.pose.v.z) > 2) continue;
       const v = room?.state.vehicles.get(id) as VehWire | undefined;
-      consider(id, l.pose.p.x, l.pose.p.z, headingFromQ(l.pose.q), String(v?.seats ?? "|||").split("|"), l.kind);
+      consider(
+        id,
+        l.pose.p.x,
+        l.pose.p.z,
+        headingFromQ(l.pose.q),
+        String(v?.seats ?? "|||").split("|"),
+        l.kind,
+        owned.get(String(v?.obj ?? "")),
+      );
     }
     if (this.wanted && performance.now() - this.wantedAt < 1500) return null;
-    const b = best as { id: string; seat: number } | null;
-    return b ? { id: b.id, seat: b.seat } : null;
+    const b = best as { id: string; seat: number; owner: string; d: number } | null;
+    return b ? { id: b.id, seat: b.seat, owner: b.owner, d: b.d } : null;
   }
 
   dispose() {
@@ -1942,6 +2083,7 @@ interface VehWire {
   filling?: boolean;
   obj?: string;
   role?: string;
+  plate?: string;
 }
 
 function headingFromQ(q: { x: number; y: number; z: number; w: number }): number {

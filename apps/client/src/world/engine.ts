@@ -673,7 +673,9 @@ export class WorldEngine {
     for (const v of this.objectViews.values()) {
       const name = v.def.props?.ownerName;
       if (typeof name !== "string" || !name) continue;
-      plate(name.split(" ")[0], v.def.x + 0.5, v.def.y + 0.5, 68, false);
+      // (a name board's at its post: shared spot.ts)
+      const p = v.def.props ?? {};
+      plate(name.split(" ")[0], v.def.x + Number(p.ox ?? 0.5), v.def.y + Number(p.oy ?? 0.5), 68, false);
     }
   }
 

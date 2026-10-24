@@ -6,6 +6,7 @@ import {
   GROUNDS,
   LAMPS,
   LOT_ROWS,
+  MOTORS,
   type P,
   PLAZA,
   POND,
@@ -223,6 +224,9 @@ export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin
   g.strokeStyle = "#8e8e88";
   g.lineWidth = 1;
   g.strokeRect(X(PLAZA.x0), Z(PLAZA.z0), (PLAZA.x1 - PLAZA.x0) * px, (PLAZA.z1 - PLAZA.z0) * px);
+  // the car dealer's forecourt (docs/plan/43-the-spot.md)
+  const M = MOTORS.yard;
+  g.strokeRect(X(M.x0), Z(M.z0), (M.x1 - M.x0) * px, (M.z1 - M.z0) * px);
 
   // ── landmarks ──
   const mark = (x: number, z: number, r: number, fill: string) => {

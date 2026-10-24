@@ -1,8 +1,10 @@
-import { ANIM, CAR_COLOURS, dirFromDelta, GROUND_OFFSET, levelMap, lotLayout } from "@yutopia/shared";
+import { ANIM, bayId, CAR_COLOURS, dirFromDelta, GROUND_OFFSET, levelMap, lotLayout } from "@yutopia/shared";
 import {
+  BUYABLE,
   bayFor,
   CAR_FLAGS,
   CAR_HZ,
+  type CarKind,
   type CarSpec,
   type CarWire,
   carKindOf,
@@ -12,14 +14,18 @@ import {
   type HomeCar,
   headingQuat,
   implausible,
+  keysDay,
+  mayDrive,
   parkAt,
   parkedBody,
   parkedPose,
+  plateOf,
   SEATS_OF,
   type Solid,
   SPECS,
 } from "@yutopia/shared/car";
-import { atPump, BUILDINGS, GROUNDS, heightAt, inBuilt, LOT } from "@yutopia/shared/grounds";
+import { atPump, BUILDINGS, GROUNDS, heightAt, inBuilt, LOT, MOTORS } from "@yutopia/shared/grounds";
+import { BOARD_KIND, boardOfOwner, boardsOf, postOf } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { type Player, Vehicle } from "../schema.ts";
@@ -122,6 +128,10 @@ registerFeature((room: WorldRoom) => {
     p.d = dirFromDelta(Math.cos(v.a), Math.sin(v.a), p.d as 0);
   };
 
+  /** Someone's own, and its keys aren't theirs: whose it is. */
+  const notYours = (c: WorldClient, props: Record<string, unknown> | undefined) =>
+    room.send(c, "car:no", { why: "owned", who: String(props?.owner ?? "") });
+
   room.on("car:enter", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     const seat = Number(m?.seat) | 0;
@@ -134,6 +144,10 @@ registerFeature((room: WorldRoom) => {
       if (!o || o.kind !== "car") return no(client, "gone");
       const def = fromSchema(o);
       if (def.props?.driven) return no(client, "busy");
+      // (MOTORS' vehicles on show are looked at; a car on its way out, gone soon: docs/plan/43)
+      if (def.props?.role === "show") return no(client, "show");
+      if (def.props?.retire) return no(client, "gone");
+      if (seat === 0 && !mayDrive(def.props, p.uid, Date.now())) return notYours(client, def.props);
       const pose = parkedPose(def);
       if (Math.hypot(p.x - pose.x, p.y - pose.y) > REACH) return no(client, "far");
       const kind = carKindOf(def.props?.model);
@@ -155,6 +169,7 @@ registerFeature((room: WorldRoom) => {
       v.grime = clamp01(num(def.props?.grime, 0));
       v.dmg = typeof def.props?.dmg === "string" ? def.props.dmg : "";
       v.role = typeof def.props?.role === "string" ? def.props.role : "";
+      v.plate = typeof def.props?.plate === "string" ? def.props.plate : "";
       l = { veh: v, spec, seats: ["", "", "", ""], last: null, lastAt: Date.now(), still: 0, strikes: 0, sp: 0 };
       live.set(v.id, l);
       room.state.vehicles.set(v.id, v);
@@ -164,6 +179,11 @@ registerFeature((room: WorldRoom) => {
     } else {
       if (Math.hypot(p.x + off.x - l.veh.x, p.y + off.y - l.veh.z) > REACH) return no(client, "far");
       if (Math.hypot(l.veh.vx, l.veh.vz) > OUT_V) return no(client, "moving");
+      if (seat === 0) {
+        const od = room.state.objects.get(l.veh.obj);
+        const props = od ? fromSchema(od).props : undefined;
+        if (!mayDrive(props, p.uid, Date.now())) return notYours(client, props);
+      }
     }
     // (only the seats it has: the snowmobile's one)
     if (l.seats[seat] || seat >= SEATS_OF[l.spec.kind].at.length) return no(client, "taken");
@@ -302,6 +322,13 @@ registerFeature((room: WorldRoom) => {
   const carWorld = groundsWorld({
     extra: (x, z, r, out: Solid[]) => {
       for (const o of room.state.objects.values()) {
+        // (the bays' name boards: a post, its planks along the bay's head — shared spot.ts)
+        if (o.kind === BOARD_KIND) {
+          const p = postOf(fromSchema(o), off);
+          if (Math.abs(p.x - x) < r + 0.6 && Math.abs(p.z - z) < r + 0.6)
+            out.push({ kind: "box", x: p.x, z: p.z, hx: 0.08, hz: 0.55, what: "post" });
+          continue;
+        }
         if (o.kind !== "car") continue;
         const def = fromSchema(o);
         if (def.props?.driven) continue;
@@ -490,6 +517,11 @@ registerFeature((room: WorldRoom) => {
     const lot = lotLayout();
     const bay = bayFor(lot.bays, v.x, v.z, v.a);
     const b = bay ? lot.bays[bay.i] : null;
+    // (lent, left in its owner's own bay: the keys are back with them)
+    if (props.lentTo && b) {
+      const home = boardOfOwner([...room.state.objects.values()].map(fromSchema), Number(props.ownerId));
+      if (home?.props?.bay === bayId(b)) keysBack(props, "home");
+    }
     const free =
       b &&
       ![...room.state.objects.values()].some((x) => {
@@ -523,9 +555,22 @@ registerFeature((room: WorldRoom) => {
       const bay = c ? lot.bays.findIndex((b) => b.x === c.x && Math.abs(b.z - c.z) < 1) : -1;
       return c && bay >= 0 ? { c, bay } : null;
     };
-    const taken = new Set<number>();
+    // (someone's own bays, docs/plan/43-the-spot.md: a pool car never parked into one, and one
+    // left there towed out; by owner)
+    const claimed = new Map<number, number>();
+    for (const [id, bd] of boardsOf([...room.state.objects.values()].map(fromSchema))) {
+      const i = lot.bays.findIndex((b) => bayId(b) === id);
+      if (i >= 0) claimed.set(i, Number(bd.props?.ownerId) || 0);
+    }
+    const taken = new Set<number>(claimed.keys());
     const bayOf = (x: number, y: number) =>
       lot.bays.findIndex((b) => Math.abs(b.x - (x + off.x)) < 1.6 && Math.abs(b.z - (y + off.y)) < 1.2);
+    /** In someone's own bay, not theirs to be in. */
+    const intruding = (def: ReturnType<typeof fromSchema>) => {
+      const pose = parkedPose(def);
+      const owner = claimed.get(bayOf(pose.x, pose.y));
+      return owner !== undefined && Number(def.props?.ownerId) !== owner;
+    };
     for (const o of cars) {
       const def = fromSchema(o);
       // (all put back: each lot car's own bay is its)
@@ -553,30 +598,34 @@ registerFeature((room: WorldRoom) => {
     };
     for (const o of cars) {
       const def = fromSchema(o);
-      if (def.props?.driven) continue;
+      // (someone's own is never towed: it stays where it's left, their GPS shows it)
+      if (def.props?.driven || def.props?.ownerId) continue;
       const mine = own(o.id);
       const pose = parkedPose(def);
-      if (all && mine) {
+      const out = intruding(def);
+      if (all && mine && !claimed.has(mine.bay)) {
         // (already there: left as it is, but for its wear)
         const square = typeof def.props?.a !== "number" && o.rot === (mine.c.dir > 0 ? 0 : 2);
         if (!square || Math.hypot(pose.x + off.x - mine.c.x, pose.y + off.y - mine.c.z) > 0.02)
           put(def, mine.c.x, mine.c.z, mine.c.dir);
         continue;
       }
-      if (typeof def.props?.a !== "number") continue;
+      if (typeof def.props?.a !== "number" && !out && !(all && mine)) continue;
       const parkedAt = Number(def.props?.parkedAt) || 0;
       const bx = pose.x + off.x;
       const bz = pose.y + off.y;
       const inLot = bx > LOT.x0 && bx < LOT.x1 && bz > LOT.z0 && bz < LOT.z1;
       if (!all) {
         const dry = num(def.props?.fuel, 1) <= 0.01;
-        if (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS)) continue;
+        // (in someone's bay: out the next time nobody's near, however long it's been there)
+        if (!out && (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS))) continue;
         const near = [...room.state.players.values()].some(
           (p) => p.level === 0 && Math.hypot(p.x + off.x - bx, p.y + off.y - bz) < TOW_NEAR,
         );
         if (near) continue;
       }
       // (a towed stranger: into a plain bay, never the visitors' or the accessible ones)
+      // (and never into someone's own)
       const i =
         mine && !taken.has(mine.bay) ? mine.bay : lot.bays.findIndex((b, k) => b.kind === "plain" && !taken.has(k));
       if (i < 0) continue;
@@ -632,6 +681,146 @@ registerFeature((room: WorldRoom) => {
   };
 
   // the cars that live away from the lot: made once (each where it lives), kept
+  // ── your own, from the dealer (docs/plan/43-the-spot.md, phase 2) ──
+  // At MOTORS someone picks a vehicle, its colour and plate (`car:buy`): it's there beside them,
+  // in the collection bay (or the nearest free spot), a full tank, theirs. One each: the old one is
+  // retired (no one gets in it) and goes the next time nobody's near it.
+  const BUY_NEAR = 16; // m from the forecourt
+  room.on("car:buy", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    if (!p || !p.uid || !has() || p.level !== 0) return;
+    if (/^(drive|ride):/.test(p.busy)) return no(client, "busy");
+    const bx = p.x + off.x;
+    const bz = p.y + off.y;
+    const Y = MOTORS.yard;
+    if (bx < Y.x0 - BUY_NEAR - 14 || bx > Y.x1 + BUY_NEAR || bz < Y.z0 - BUY_NEAR || bz > Y.z1 + BUY_NEAR)
+      return no(client, "far");
+    const model = String(m?.model ?? "");
+    if (!BUYABLE.includes(model as CarKind)) return no(client, "model");
+    const colour = Number(m?.colour);
+    if (!Number.isInteger(colour) || colour < 0 || colour >= CAR_COLOURS.length) return no(client, "model");
+    const plate = plateOf(String(m?.plate ?? ""), p.name);
+    const spec = SPECS[model as CarKind];
+    // the collection bay, if nothing's in it; else the nearest free spot by them
+    const c = MOTORS.collect;
+    const inBay = [...room.state.objects.values()].some((o) => {
+      if (o.kind !== "car") return false;
+      const b = parkedBody(fromSchema(o));
+      return Math.hypot(b.x + off.x - c.x, b.y + off.y - c.z) < 2.6;
+    });
+    const at = inBay ? freeSpot(carWorld, spec, bx, bz, c.a, 24) : { x: c.x, z: c.z, a: c.a };
+    if (!at) return no(client, "full");
+    // (the old one: retired, gone when nobody's looking — the minute's tick)
+    for (const o of room.state.objects.values()) {
+      if (o.kind !== "car") continue;
+      const def = fromSchema(o);
+      if (Number(def.props?.ownerId) !== p.uid || def.props?.retire) continue;
+      const next = { ...def, props: { ...(def.props ?? {}), retire: 1 } };
+      room.state.objects.set(o.id, toSchema(next));
+      if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] retire", e.message));
+    }
+    const props: Record<string, unknown> = {
+      level: 0,
+      variant: colour,
+      plate,
+      ownerId: p.uid,
+      // (not `ownerName`: the iso view labels whatever has one — a desk, a name board)
+      owner: p.name,
+      fuel: 1,
+    };
+    if (model !== "sedan") props.model = model;
+    const id = `own-${p.uid}-${Date.now().toString(36)}`;
+    const next = { id, kind: "car", ...parkAt(at.x - off.x, at.z - off.y, at.a, heightAt(at.x, at.z), props) };
+    room.state.objects.set(id, toSchema(next));
+    room.rebuildGrid();
+    room.rescue();
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] buy", e.message));
+    room.send(client, "car:bought", { id });
+  });
+  // ── lending the keys (docs/plan/43-the-spot.md, phase 3) ──
+  // The owner, on someone's card: `car:lend` with their uid (one at a time), or null to take them
+  // back. They come back by themselves when the car's left in the owner's bay, and at the world's
+  // day's end. Taken back mid-drive, the borrower finishes it: the wheel's checked getting in.
+  /** Someone in the room by their uid. */
+  const clientOfUid = (uid: number) =>
+    room.clients.find((c) => room.state.players.get(c.sessionId)?.uid === uid) ?? null;
+  /** A car's keys back with its owner (its props changed here: the caller saves them). */
+  const keysBack = (props: Record<string, unknown>, why: "taken" | "home" | "day") => {
+    const to = clientOfUid(Number(props.lentTo));
+    if (to)
+      room.send(to, "car:keys", {
+        from: String(props.owner ?? ""),
+        plate: String(props.plate ?? ""),
+        lent: false,
+        why,
+      });
+    delete props.lentTo;
+    delete props.lentName;
+    delete props.lentDay;
+  };
+  const ownCar = (uid: number) =>
+    [...room.state.objects.values()].find((o) => {
+      if (o.kind !== "car") return false;
+      const pr = fromSchema(o).props;
+      return Number(pr?.ownerId) === uid && !pr?.retire;
+    });
+  room.on("car:lend", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    if (!p?.uid) return;
+    const o = ownCar(p.uid);
+    if (!o) return no(client, "nocar");
+    const def = fromSchema(o);
+    const props: Record<string, unknown> = { ...(def.props ?? {}) };
+    const to = m?.to == null ? null : Number(m.to);
+    if (to === null) {
+      if (!props.lentTo) return;
+      keysBack(props, "taken");
+    } else {
+      const q = [...room.state.players.values()].find((x) => x.uid === to && !x.bot);
+      if (!q || to === p.uid) return no(client, "gone");
+      if (props.lentTo && Number(props.lentTo) !== to) keysBack(props, "taken");
+      props.lentTo = to;
+      props.lentName = q.name;
+      props.lentDay = keysDay(Date.now());
+      const c = clientOfUid(to);
+      if (c) room.send(c, "car:keys", { from: p.name, plate: String(props.plate ?? ""), lent: true });
+    }
+    const next = { ...def, props };
+    room.state.objects.set(o.id, toSchema(next));
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] keys", e.message));
+  });
+  /** Keys lent on a day that's over: back with their owners. */
+  const keysAtDayEnd = () => {
+    const today = keysDay(Date.now());
+    for (const o of [...room.state.objects.values()]) {
+      if (o.kind !== "car") continue;
+      const def = fromSchema(o);
+      if (!def.props?.lentTo || Number(def.props.lentDay) === today) continue;
+      const props = { ...def.props };
+      keysBack(props, "day");
+      const next = { ...def, props };
+      room.state.objects.set(o.id, toSchema(next));
+      if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] keys", e.message));
+    }
+  };
+
+  /** The retired cars nobody's near: gone. */
+  const retire = () => {
+    for (const o of [...room.state.objects.values()]) {
+      if (o.kind !== "car") continue;
+      const def = fromSchema(o);
+      if (!def.props?.retire || def.props?.driven) continue;
+      const pose = parkedPose(def);
+      const near = [...room.state.players.values()].some(
+        (q) => q.level === 0 && Math.hypot(q.x - pose.x, q.y - pose.y) < TOW_NEAR,
+      );
+      if (near) continue;
+      room.state.objects.delete(o.id);
+      if (!config.offline) void api.deleteObject(o.id).catch((e) => console.warn("[cars] retired", e.message));
+    }
+    room.rebuildGrid();
+  };
+
   const homeOf = new Map(HOME_CARS.map((h) => [h.id, h]));
   const homeProps = (h: HomeCar, was: Record<string, unknown> = {}) => {
     const props: Record<string, unknown> = { ...was, level: 0, variant: h.colour, home: 1 };
@@ -763,6 +952,8 @@ registerFeature((room: WorldRoom) => {
       if (now > towAt) {
         towAt = now + 60_000;
         home(false);
+        retire();
+        keysAtDayEnd();
       }
     },
     leave(client) {

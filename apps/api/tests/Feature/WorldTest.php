@@ -362,3 +362,13 @@ it('keeps someone\'s pets for the world-server: create, read, update, delete, at
     expect(internalCall($this, 'GET', $url)->json('pets'))->toHaveCount(2);
     $this->getJson($url)->assertStatus(401);
 });
+
+it('lists everyone with an account for the world server (what is left of anyone gone comes down)', function () {
+    $a = User::factory()->create();
+    $b = User::factory()->create();
+    $this->getJson('/api/internal/members')->assertUnauthorized();
+    $ids = internalCall($this, 'GET', '/api/internal/members')->assertOk()->json('ids');
+    expect($ids)->toContain($a->id)->toContain($b->id);
+    $b->delete();
+    expect(internalCall($this, 'GET', '/api/internal/members')->json('ids'))->not->toContain($b->id);
+});

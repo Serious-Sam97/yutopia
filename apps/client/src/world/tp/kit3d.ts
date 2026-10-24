@@ -744,6 +744,38 @@ export class MeshSketch extends Sketch {
     else target.quad(A, D, C, B, n, col);
   }
 
+  override picture(svg: string, q: [V3, V3, V3, V3], n: Pt) {
+    // (turned as the sketch is: a point as rp, a way as its 90° steps)
+    let [nx, ny] = n;
+    for (let i = 0; i < this.rot; i++) [nx, ny] = [-ny, nx];
+    const N: V3 = [nx, 0, ny];
+    const lift = 0.004;
+    const w = q.map(([x, y, z]) => {
+      const [X, Y] = this.rp(x, y);
+      const p = this.wp(X, Y, z);
+      return [p[0] + nx * lift, p[1], p[2] + ny * lift] as V3;
+    });
+    const uv: Pt[] = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ];
+    const d: Decal = { svg, pos: [], nor: [], uv: [], glow: false };
+    for (const tri of [
+      [0, 1, 2],
+      [0, 2, 3],
+    ]) {
+      const ok = dot(cross(sub(w[tri[1]], w[tri[0]]), sub(w[tri[2]], w[tri[0]])), N) >= 0;
+      for (const i of ok ? tri : [tri[0], tri[2], tri[1]]) {
+        d.pos.push(...w[i]);
+        d.nor.push(...N);
+        d.uv.push(...uv[i]);
+      }
+    }
+    this.out.decals.push(d);
+  }
+
   // raw SVG drawn while a box's / cylinder's details run (null otherwise)
   private onFace: { svg: string; glow: boolean }[] | null = null;
 

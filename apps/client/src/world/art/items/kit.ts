@@ -524,6 +524,11 @@ export class Sketch {
   }
 
   // Contact shadow footprint (soft, drawn on the floor under the item).
+  /** A picture (`svg`, its own width and height) over a flat upright face: `q` its corners at rot 0
+   *  (local tiles, iso px up), bottom-left, bottom-right, top-right, top-left as seen from `n` (the
+   *  face's way out, local x and y). Meshes only (tp/kit3d.ts): the iso view leaves it out, its
+   *  drawing too small for it (a name board's name: the engine's label says it there). */
+  picture(_svg: string, _q: [V3, V3, V3, V3], _n: Pt) {}
   shadow(x: number, y: number, w: number, d: number, op = 0.38, round = 0.25) {
     const r = this.rrect(x, y, w, d);
     const p = [

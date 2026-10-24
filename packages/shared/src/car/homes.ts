@@ -1,4 +1,4 @@
-import { BUILDINGS, TOWN_CARS, TRACTOR } from "../grounds.ts";
+import { BUILDINGS, MOTORS, TOWN_CARS, TRACTOR } from "../grounds.ts";
 import type { CarKind } from "./specs.ts";
 
 // The cars that live away from the lot (docs/plan/34-the-vehicles.md, wave 1): every car parked
@@ -8,7 +8,8 @@ import type { CarKind } from "./specs.ts";
 // not to the lot. A few have a role: a police car by the town hall, two taxis by the hotel.
 // Positions are the Grounds' (the building's coords), `a` its heading (atan2 of z, x).
 
-export type CarRole = "police" | "taxi" | "rental";
+// (`show`: one of MOTORS' vehicles on its forecourt — docs/plan/43-the-spot.md — looked at, never driven)
+export type CarRole = "police" | "taxi" | "rental" | "show";
 export interface HomeCar {
   id: string;
   x: number;
@@ -67,5 +68,26 @@ export const HOME_CARS: HomeCar[] = (() => {
     { id: "farm-tractor", x: TRACTOR.x, z: TRACTOR.z, a: TRACTOR.ry, model: "tractor", colour: 1, snowy: true },
     { id: "pond-toboggan", x: -306, z: -54, a: 0, model: "toboggan", colour: 5 },
   );
+  // (wave 4) the car dealer's forecourt: one of each, swept clean (docs/plan/43-the-spot.md)
+  const SHOW: Record<string, number> = {
+    sedan: 3,
+    offroad: 1,
+    pickup: 8,
+    snowmobile: 2,
+    ploughtruck: 8,
+    snowcat: 8,
+    tractor: 1,
+    toboggan: 7,
+  };
+  for (const v of MOTORS.show)
+    out.push({
+      id: `motors-${v.model}`,
+      x: v.x,
+      z: v.z,
+      a: v.a,
+      model: v.model as CarKind,
+      colour: SHOW[v.model] ?? 6,
+      role: "show",
+    });
   return out;
 })();

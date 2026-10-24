@@ -1182,3 +1182,20 @@ The user: "the parking lot has an old design, it does not connect right with the
 - e2e on the GPU (the dev world saved first and put back after `floors.spec`'s fixture). Fixed on the way: an empty bay-snow geometry (a GL error a frame), a passenger's chase camera crashing every frame (since plan 34: the stand-in state had no spec), the iso cover's long frame, `floors.spec` reading a car's roof the old way.
 - **Green**: car, grounds (but iso town), lighting, town, floors (but stairs by a click), client 25, budget. **Red on main too**: the iso town walk's frames (50–117 ms) and the stairs by a click (0.73 off), with HEAD's client as well.
 
+
+## The spot — phase 0: the mocks (2026-10-24, plan `43-the-spot.md`)
+- Shared: the bays' labels (A–D west to east, `D-05`) and the boards' spots at the bays' heads (`lot.ts` `bayLabel`, `bayId`, `boardOf`); the shut shop opened again as MOTORS with its forecourt (`grounds.ts` `MOTORS`).
+- Stills of the board (day, dusk, the pair's shared post, from above) and of MOTORS (day, night, a new car in the collection bay); HUD mocks in the game's own classes (claim, the dealer's panel, the keys, the GPS in the game). `design/screens/spot/`.
+
+## The spot — phase 1: the bays (2026-10-24, plan `43-the-spot.md`)
+- Standing in a free plain bay, X claims it: a `bayboard` object with your name at its head, both views (the name painted on in 3D: the kit's new `picture`; iso's label). One each; given up in your own; an admin takes any down. The tow never parks in a claimed bay and moves a pool car out of one. "My bay" in the side panel.
+- **Checked**: shared, world-server, client, types, Biome, e2e in the game. Page 558.5 / 558.5.
+
+## The spot — phase 2: the dealer (2026-10-24, plan `43-the-spot.md`)
+- MOTORS' forecourt for real: concrete, no trees, its posts and rail solid; drawn in 3D (game and stills) and iso; its eight vehicles on show are home cars nobody drives. The dealer's panel (with the cars' chunk): every drivable vehicle, nine colours, a plate; your new one in the collection bay; one each (the old retired, gone when nobody's near). The plate on your car.
+- **Checked**: shared, world-server, client, types, Biome, e2e in the game. Page 558.5 / 558.5 (10 bytes spare).
+
+## The spot — phase 3: the keys and the GPS (2026-10-24, plan `43-the-spot.md`)
+- Page budget raised by the user's call: 559 KB.
+- Only the owner (and whoever holds their keys today) takes the wheel of someone's own; anyone rides. Lending from someone's card; the keys back on taking, in the owner's bay, at the day's end. Someone's own is never towed (that also fixed a phase-2 bug: a bought car went to the lot at the next sweep). "My car" and a lent car on the GPS. The boards and cars of people gone come down at a start (the API's new `/internal/members`).
+- **Checked**: shared 295, world-server 140, client 25, Pest 19, types, Biome; e2e spot 3/3 (two browsers for the keys), gps; prod's saved world offline. **Red, also with HEAD's client**: `car.spec`'s "no frame over 100 ms while driving" (133–150 ms) in today's dev world. Page 558.8 / 559.

@@ -6,6 +6,7 @@ import { useTr } from "@/lib/i18n";
 import { emoteUrl } from "@/world/art/emotes";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
+import { Icon } from "./icons";
 
 // Click someone in the world → who they are, where, and what you can do with them.
 export function PersonCard() {
@@ -15,6 +16,7 @@ export function PersonCard() {
   const p = useHud((s) => s.people.find((x) => x.uid === s.inspect));
   const following = useHud((s) => s.following);
   const canModerate = useHud((s) => s.isAdmin);
+  const myCar = useHud((s) => s.myCar);
   if (!uid || !p) return null;
   const avatar = parseAvatar(w?.personByUid(uid)?.avatar);
   const close = () => hud.set({ inspect: null });
@@ -68,6 +70,26 @@ export function PersonCard() {
           <img alt="" src={emoteUrl("wave")} className="w-6 h-6" draggable={false} />
         </button>
       </div>
+      {myCar && (
+        <div className="mt-2 pt-2" style={{ borderTop: "1px solid var(--edge)" }}>
+          <button
+            type="button"
+            className="deck-btn w-full flex items-center justify-center gap-2"
+            style={{ height: 36 }}
+            data-keys
+            onClick={() => w?.send("car:lend", { to: myCar.lentTo === uid ? null : uid })}
+          >
+            <Icon name="key" size={16} />
+            {t(myCar.lentTo === uid ? "keysBack" : "keysLend")}
+          </button>
+          <p className="mono text-[11px] mt-1.5" style={{ color: "var(--muted)" }}>
+            {myCar.plate}
+            {myCar.lentTo && myCar.lentTo !== uid
+              ? ` · ${t("keysWith").replace("{who}", myCar.lentName.split(" ")[0])}`
+              : ""}
+          </p>
+        </div>
+      )}
       {canModerate && (
         <div className="flex gap-2 mt-2 pt-2" style={{ borderTop: "1px solid var(--edge)" }}>
           <button

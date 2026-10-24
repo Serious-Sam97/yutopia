@@ -22,6 +22,7 @@
     "./phone": "./src/phone.ts",
     "./grounds": "./src/grounds.ts",
     "./lot": "./src/lot.ts",
+    "./spot": "./src/spot.ts",
     "./route": "./src/route.ts",
     "./car": "./src/car/index.ts",
     "./move": "./src/move/index.ts",

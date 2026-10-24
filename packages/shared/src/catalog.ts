@@ -367,6 +367,9 @@ export const CATALOG = {
   stairs: { label: "Staircase", w: 4, h: 7, solid: false, buildable: true },
   elevator: { label: "Elevator", w: 2, h: 2, solid: false, interact: "lift", buildable: true },
   car: { label: "Car", w: 5, h: 2, solid: true, buildable: true, variants: 9, paint: true },
+  // someone's own bay of the lot (docs/plan/43-the-spot.md, shared spot.ts): the board with their
+  // name at its head, put up and taken down by claiming it (never built)
+  bayboard: { label: "Name board", w: 1, h: 1, solid: true },
   lamp_post: {
     label: "Lamp post",
     w: 1,

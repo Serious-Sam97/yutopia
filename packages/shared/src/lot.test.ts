@@ -8,7 +8,20 @@ import {
   groundSurfaceAt,
   WAYS,
 } from "./grounds.ts";
-import { LOT, LOT_MOUTH, type LotLayout, type LotRect, lotBanksOf, lotLayout, lotStripes } from "./lot.ts";
+import {
+  bayById,
+  bayId,
+  bayLabel,
+  boardOf,
+  claimable,
+  LOT,
+  LOT_MOUTH,
+  type LotLayout,
+  type LotRect,
+  lotBanksOf,
+  lotLayout,
+  lotStripes,
+} from "./lot.ts";
 
 // The lot (docs/plan/42-the-lot.md): a car can get from the driveway to every
 // bay and back, nothing stands where cars park or drive, and the geometry is
@@ -181,4 +194,32 @@ test("the lot: the Grounds' copy of it agrees (grounds.ts keeps its own: it's la
   }
   assert.ok(Math.abs(G_ROWS.z0 - l.cross[0].z1) < 1e-6 && Math.abs(G_ROWS.z1 - l.cross[1].z0) < 1e-6);
   assert.equal(G_ROWS.bay, l.bayW);
+});
+
+test("the claimed bays: a label each, boards at their heads clear of a parked car", () => {
+  const l = lotLayout();
+  const labels = new Set(l.bays.map(bayLabel));
+  assert.equal(labels.size, l.bays.length, "every bay its own label");
+  for (const b of l.bays) {
+    assert.match(bayLabel(b), /^[A-D]-\d\d$/);
+    assert.equal(bayById(l, bayId(b)), b);
+    const w = boardOf(l, b);
+    // at the head's end, never inside the 4.9 a car takes in the middle of its bay
+    const fromMid = (w.x - b.x) * -b.dir;
+    assert.ok(fromMid > 4.9 / 2 + 0.2, `${bayLabel(b)}: the board ${fromMid.toFixed(2)} from its middle`);
+    // its face looks into the bay
+    assert.ok(Math.sin(w.ry) * (b.x - w.x) > 0, `${bayLabel(b)} faces its bay`);
+    // off every island and aisle, and out of every other bay
+    for (const o of l.bays)
+      if (o !== b) assert.ok(!(Math.abs(w.x - o.x) < 4.9 / 2 && Math.abs(w.z - o.z) < l.bayW / 2));
+  }
+  // the pair share a post: C-03's board stands where B-03's does
+  const b3 = bayById(l, "b-03");
+  const c3 = bayById(l, "c-03");
+  assert.ok(b3 && c3);
+  assert.deepEqual([boardOf(l, b3).x, boardOf(l, b3).z], [boardOf(l, c3).x, boardOf(l, c3).z]);
+  assert.ok(boardOf(l, b3).shared);
+  // only the plain bays are anyone's
+  assert.ok(l.bays.filter(claimable).every((b) => b.kind === "plain"));
+  assert.ok(l.bays.some((b) => !claimable(b)));
 });

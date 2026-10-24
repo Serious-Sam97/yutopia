@@ -29,6 +29,13 @@ class InternalController extends Controller
         return response()->json(['ok' => true, 'time' => time()]);
     }
 
+    /** Everyone with an account (their ids): the world server takes down what's left of anyone gone — their
+     *  bay's board, their own car (docs/plan/43-the-spot.md). */
+    public function members(): JsonResponse
+    {
+        return response()->json(['ids' => User::orderBy('id')->pluck('id')]);
+    }
+
     public function world(): JsonResponse
     {
         $world = World::current();

@@ -3,6 +3,7 @@ export * from "./body.ts";
 export * from "./grip.ts";
 export * from "./homes.ts";
 export * from "./net.ts";
+export * from "./own.ts";
 export * from "./park.ts";
 export * from "./sim.ts";
 export * from "./specs.ts";

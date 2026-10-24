@@ -481,7 +481,8 @@ export const BUILDINGS: Building[] = [
   b("books", "shop", "Bookshop", 378, -396, 392, -382, 2, "n", { sign: "BOOKS" }),
   b("bar", "bar", "Bar", 448, -396, 464, -380, 2, "n", { enter: true, sign: "BAR" }),
   b("hardware", "shop", "Hardware", 468, -396, 482, -382, 2, "n", { sign: "HARDWARE" }),
-  b("vacant", "shop", "Shut shop", 486, -396, 500, -382, 2, "n", { vacant: true }),
+  // (the shut shop, opened again as the car dealer: docs/plan/43-the-spot.md; its forecourt is MOTORS)
+  b("motors", "shop", "Motors", 486, -396, 500, -382, 2, "n", { sign: "MOTORS" }),
   // north side
   b("post", "shop", "Post office", 338, -430, 354, -414, 1, "s", { sign: "POST OFFICE" }),
   b("laundry", "shop", "Laundromat", 358, -428, 372, -414, 1, "s", { sign: "LAUNDRY" }),
@@ -494,6 +495,63 @@ export const BUILDINGS: Building[] = [
   b("silo", "silo", "Silo", 468, -318, 476, -310, 4, "w"),
   b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n", { enter: true }),
 ];
+
+/** The car dealer's forecourt (docs/plan/43-the-spot.md): east of its showroom (Main Street's
+ *  old shut shop) to where the street's closed. Its way in is at the east end, the one gap in
+ *  the kerb's parked cars and lamps; the collection bay by it, where a new car waits; one of
+ *  each vehicle on show, the cars nosed to the street, the big ones side-on along the back.
+ *  `a`: the nose's heading, atan2(dz, dx), as the server's vehicles. */
+export const MOTORS = {
+  yard: { x0: 501.5, z0: -395.4, x1: 526, z1: -382 },
+  way: { x0: 522, x1: 526 },
+  collect: { x: 523.8, z: -389.6, a: -Math.PI / 2 },
+  sign: { x: 520.6, z: -395 },
+  /** the pole sign's two posts */
+  signPosts: [
+    [518.94, -395],
+    [522.26, -395],
+  ] as [number, number][],
+  /** the flood lamps' poles: two in the back corners, one between, one on the east side */
+  floods: [
+    [502.1, -382.6],
+    [512.75, -382.5],
+    [525.5, -382.6],
+    [525.5, -392],
+  ] as [number, number][],
+  /** the low white rail along the back and the east side: [x0, z0, x1, z1] */
+  rails: [
+    [501.8, -382.2, 525.8, -382.2],
+    [525.8, -392.2, 525.8, -382.2],
+  ] as [number, number, number, number][],
+  /** the collection bay's sign */
+  collectSign: { x: 525.75, z: -387.1 },
+  show: [
+    { model: "sedan", x: 505.2, z: -390.2, a: -Math.PI / 2 + 0.28 },
+    { model: "offroad", x: 509.6, z: -390.6, a: -Math.PI / 2 + 0.28 },
+    { model: "pickup", x: 514.0, z: -390.0, a: -Math.PI / 2 + 0.28 },
+    { model: "snowmobile", x: 518.4, z: -391.4, a: -Math.PI / 2 + 0.5 },
+    { model: "ploughtruck", x: 505.6, z: -384.2, a: 0 },
+    { model: "snowcat", x: 513.0, z: -384.3, a: 0 },
+    { model: "tractor", x: 518.6, z: -384.4, a: 0 },
+    { model: "toboggan", x: 522.8, z: -384.2, a: 0 },
+  ] as { model: string; x: number; z: number; a: number }[],
+};
+
+/** On the car dealer's forecourt (`pad` round it)? */
+export const inMotors = (x: number, z: number, pad = 0) =>
+  x >= MOTORS.yard.x0 - pad && x < MOTORS.yard.x1 + pad && z >= MOTORS.yard.z0 - pad && z < MOTORS.yard.z1 + pad;
+/** The forecourt's posts (the sign's, the flood lamps', the collection sign's) and the tiles its
+ *  rail runs along: what a body can't walk through. */
+export function motorsTiles(): [number, number][] {
+  const out: [number, number][] = [];
+  const posts = [...MOTORS.signPosts, ...MOTORS.floods, [MOTORS.collectSign.x, MOTORS.collectSign.z]];
+  for (const [x, z] of posts) out.push([Math.floor(x), Math.floor(z)]);
+  for (const [x0, z0, x1, z1] of MOTORS.rails) {
+    const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0));
+    for (let i = 0; i <= n; i++) out.push([Math.floor(x0 + ((x1 - x0) * i) / n), Math.floor(z0 + ((z1 - z0) * i) / n)]);
+  }
+  return out;
+}
 
 /** The gas station's pump islands (as tp/grounds3d.ts builds them: two, a kerb each, along z under
  *  the canopy): their middles. A car stopped beside one, either side, is at the pump. */
@@ -778,6 +836,8 @@ export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
   if (on) return on;
   if (x >= LOT.x0 && x < LOT.x1 && z >= LOT.z0 && z < LOT.z1) return x >= LOT_PAVE ? "walk" : "asphalt";
   if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) return "walk";
+  // (the car dealer's forecourt: concrete, docs/plan/43-the-spot.md)
+  if (inMotors(x, z)) return "walk";
   if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1) return "ice";
   const r = near.get(RIVER_F);
   if (r && r.d < RIVER.w / 2) return "ice";
@@ -811,6 +871,8 @@ export function treeDensity(x: number, z: number): number {
     const w = WAYS[f];
     if (n.d < w.w / 2 + (w.kind === "trail" ? 3.2 : 4.5)) return 0;
   }
+  // the car dealer's forecourt, and a little round it
+  if (inMotors(x, z, 2.5)) return 0;
   // the farm: cleared (the fields, the yard)
   if (x > FARM.x0 - 3 && x < FARM.x1 + 3 && z > FARM.z0 - 3 && z < FARM.z1 + 3) return 0;
   // the town: a yard tree here and there, none on the streets or the plaza
@@ -1043,6 +1105,7 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
   shut(BENCH.x, BENCH.z);
   shut(BENCH.x + 1, BENCH.z);
   for (const [x, z] of streetTiles()) shut(x + 0.5, z + 0.5);
+  for (const [x, z] of motorsTiles()) shut(x + 0.5, z + 0.5);
   for (let j = 0; j < CHUNK; j++)
     for (let i = 0; i < CHUNK; i++) {
       const x = x0 + i + 0.5;

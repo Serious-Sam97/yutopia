@@ -2,7 +2,7 @@
 
 import type { GpsFriend } from "@yutopia/shared/phone";
 import { gpsPlaces, type Place, type Route, routeOver, type Step } from "@yutopia/shared/route";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type Key, useTr } from "@/lib/i18n";
 import type { WorldController } from "@/world/controller";
 import { loadGrounds } from "@/world/grounds-load";
@@ -222,13 +222,25 @@ interface MapProps {
   small?: boolean;
   friends?: GpsFriend[];
   onFriend?: (f: GpsFriend) => void;
+  /** my car, a car whose keys I hold: a pin each (docs/plan/43-the-spot.md) */
+  cars?: GpsCar[];
+  onCar?: (c: GpsCar) => void;
 }
-function MapCanvas({ w, follow, setFollow, center, small, friends, onFriend }: MapProps) {
+/** A car on the map: mine, or one whose keys I hold. */
+interface GpsCar {
+  key: string;
+  name: string;
+  x: number;
+  z: number;
+  where: string;
+}
+function MapCanvas({ w, follow, setFollow, center, small, friends, onFriend, cars, onCar }: MapProps) {
   const img = usePlan();
   const cv = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const view = useRef<View>({ cx: 0, cz: 0, zoom: small ? 1.6 : 2.2, rot: 0 });
   const [pos, setPos] = useState<Record<number, [number, number]>>({});
+  const [carPos, setCarPos] = useState<Record<string, [number, number]>>({});
   const drag = useRef<{ x: number; y: number } | null>(null);
   // (a place picked: the map goes there, once)
   useEffect(() => {
@@ -270,16 +282,19 @@ function MapCanvas({ w, follow, setFollow, center, small, friends, onFriend }: M
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       paint(ctx, W, H, v, img, me, gps.route, gps.at, gps.target?.p ?? null);
       // the friends' faces (DOM, over the map), a few times a second
-      if (friends && now - lastFriends > 120) {
+      if ((friends || cars) && now - lastFriends > 120) {
         lastFriends = now;
         const next: Record<number, [number, number]> = {};
-        for (const f of friends) next[f.uid] = toScreen(v, W, H, f.x, f.z);
+        for (const f of friends ?? []) next[f.uid] = toScreen(v, W, H, f.x, f.z);
         setPos(next);
+        const nc: Record<string, [number, number]> = {};
+        for (const c of cars ?? []) nc[c.key] = toScreen(v, W, H, c.x, c.z);
+        setCarPos(nc);
       }
     };
     loop();
     return () => cancelAnimationFrame(raf);
-  }, [w, img, follow, center, friends, small]);
+  }, [w, img, follow, center, friends, cars, small]);
   return (
     <div
       ref={wrap}
@@ -331,6 +346,31 @@ function MapCanvas({ w, follow, setFollow, center, small, friends, onFriend }: M
           </button>
         );
       })}
+      {cars?.map((c) => {
+        const p = carPos[c.key];
+        if (!p) return null;
+        return (
+          <button
+            key={c.key}
+            type="button"
+            className={s.gpsFriend}
+            style={{ left: p[0], top: p[1] }}
+            data-gps-car={c.key}
+            title={`${c.name} · ${c.where}`}
+            onClick={() => onCar?.(c)}
+          >
+            <svg viewBox="0 0 30 38" width={small ? 18 : 26} height={small ? 23 : 33} aria-hidden="true">
+              <path
+                d="M15 37C6 25 2 20 2 13a13 13 0 0 1 26 0c0 7-4 12-13 24z"
+                fill="#b5562f"
+                stroke="#fff"
+                strokeWidth="2"
+              />
+              <path d="M8 16l2-5h10l2 5v4H8z" fill="#fff" />
+            </svg>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -358,8 +398,29 @@ export function Gps() {
       live = false;
     };
   }, []);
+  const myCar = useHud((h) => h.myCar);
+  const held = useHud((h) => h.keys);
+  // (the same list while they stay put: the map's loop restarts on a new one)
+  const cars = useMemo<GpsCar[]>(
+    () => [
+      ...(myCar ? [{ key: "car:mine", name: t("gpsMyCar"), x: myCar.x, z: myCar.z, where: myCar.where }] : []),
+      ...(held
+        ? [
+            {
+              key: "car:keys",
+              name: t("gpsKeysCar").replace("{who}", held.from.split(" ")[0]),
+              x: held.x,
+              z: held.z,
+              where: held.where,
+            },
+          ]
+        : []),
+    ],
+    [myCar, held, t],
+  );
   if (!ph || !w) return null;
   const me = w.gpsWhere();
+  const carPlace = (c: GpsCar): Place => ({ key: c.key, name: c.name, kind: "landmark", p: [c.x, c.z], c: [c.x, c.z] });
   const dist = (p: [number, number]) => Math.hypot(p[0] - me.x, p[1] - me.z);
   const ql = q.trim().toLowerCase();
   const match = (n: string) => !ql || n.toLowerCase().includes(ql);
@@ -367,6 +428,17 @@ export function Gps() {
     title: string;
     rows: { key: string; name: string; d: number; pick: () => void; avatar?: string }[];
   }[] = [
+    {
+      title: t("gpsMine"),
+      rows: cars
+        .filter((c) => match(c.name) || match(c.where))
+        .map((c) => ({
+          key: c.key,
+          name: `${c.name} · ${c.where}`,
+          d: dist([c.x, c.z]),
+          pick: () => setPicked({ place: carPlace(c) }),
+        })),
+    },
     {
       title: t("gpsFriends"),
       rows: gps.friends
@@ -402,6 +474,8 @@ export function Gps() {
         center={picked ? pickedP : null}
         friends={gps.friends}
         onFriend={(f) => setPicked({ friend: f })}
+        cars={cars}
+        onCar={(c) => setPicked({ place: carPlace(c) })}
       />
 
       {/* on my way: the next turn */}
@@ -544,6 +618,9 @@ export function Gps() {
               <span>
                 {distLabel(t, dist(picked.place?.p ?? [picked.friend?.x ?? 0, picked.friend?.z ?? 0]))}
                 {picked.friend ? ` · ${picked.friend.where}` : ""}
+                {picked.place?.key.startsWith("car:")
+                  ? ` · ${cars.find((c) => c.key === picked.place?.key)?.where ?? ""}`
+                  : ""}
               </span>
             </div>
             <button type="button" className={s.round} aria-label={t("phBack")} data-nav onClick={() => setPicked(null)}>

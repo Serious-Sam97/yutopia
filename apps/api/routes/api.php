@@ -123,6 +123,7 @@ Route::post('/internal/vortexos/handoff', [VortexOSController::class, 'redeem'])
 Route::middleware('internal')->prefix('internal')->group(function () {
     Route::get('/ping', [InternalController::class, 'ping']);
     Route::get('/world', [InternalController::class, 'world']);
+    Route::get('/members', [InternalController::class, 'members']);
     Route::post('/world/seed', [InternalController::class, 'seed']);
     Route::put('/world/layout', [InternalController::class, 'layout']);
     Route::put('/world/playlists', [InternalController::class, 'playlists']);

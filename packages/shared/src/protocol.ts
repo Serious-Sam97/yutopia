@@ -177,7 +177,8 @@ export interface ClientMessages {
   admit: { userId: number; area: string };
   follow: { userId: number | null };
   // { x, y, level }: a spot on that floor (build mode's "Go there"; level: the floor shown)
-  teleport: { to: "desk" | "spawn" | { userId: number } | { x: number; y: number; level?: number } };
+  // ("bay": my own bay of the lot, docs/plan/43-the-spot.md)
+  teleport: { to: "desk" | "spawn" | "bay" | { userId: number } | { x: number; y: number; level?: number } };
   // where I arrive (a tile I can walk to); null: the world's arrival point
   "spawn:mine": { at: { x: number; y: number } | null };
   "obj:put": {
@@ -321,7 +322,14 @@ export interface ClientMessages {
   "ride:leave": Record<string, never>;
   // the car (docs/plan/28-the-car.md): into a seat (0 the driver's, 1 beside, 2 · 3 behind) of
   // a parked car (its object's id) or a live one (its vehicle's id); its driver's state; out
+  // someone's own bay of the lot (docs/plan/43-the-spot.md): claimed standing in it, given up
+  "spot:claim": { bay: string };
+  "spot:free": { bay: string };
   "car:enter": { id: string; seat: number };
+  // your own, from the dealer (docs/plan/43-the-spot.md): car/own.ts BUYABLE, a CAR_COLOURS index
+  "car:buy": { model: string; colour: number; plate: string };
+  // the owner lends their own's keys to someone (their uid), or takes them back (null)
+  "car:lend": { to: number | null };
   "car:leave": Record<string, never>;
   "car:state": CarWire;
   // a parked car I knocked, come to rest: where it ended up (the Grounds' coords, its middle)
@@ -393,7 +401,11 @@ export interface ServerMessages {
   snap: { x: number; y: number; z?: number; level?: number };
   // my car put back where the server has it (a state it couldn't believe)
   "car:snap": CarWire & { id: string };
-  "car:no": { why: string };
+  "car:no": { why: string; who?: string }; // (who: whose it is, "owned")
+  "spot:no": { why: string };
+  "car:bought": { id: string };
+  // someone's car keys lent to me, or back with them (why: "taken", "home", "day")
+  "car:keys": { from: string; plate: string; lent: boolean; why?: string };
   // (to the driver) a passenger changed the radio's station
   "car:radio": Record<string, never>;
   // my own arrival point here (on join and after I change it); null: the world's

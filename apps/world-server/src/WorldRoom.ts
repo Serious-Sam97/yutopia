@@ -6,6 +6,7 @@ import {
   areaAt,
   atLevel,
   avatarFromSeed,
+  bayById,
   CATALOG,
   type ClientMessages,
   campusBuilding,
@@ -23,6 +24,7 @@ import {
   entry,
   findPath,
   floorsOf,
+  GROUND_OFFSET,
   Grid,
   getMap,
   HEARING_HZ,
@@ -40,6 +42,7 @@ import {
   levelMap,
   liftFront,
   lockedRooms,
+  lotLayout,
   type MapDef,
   mapFromLayout,
   moveBlocks,
@@ -78,6 +81,7 @@ import { groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { Allowance, isVerb, MOVE, MV_WINDED, SentClock, speedCap } from "@yutopia/shared/move";
 import { KNOCK } from "@yutopia/shared/pool-throw";
+import { boardOfOwner } from "@yutopia/shared/spot";
 import { DOWN } from "@yutopia/shared/vitals";
 import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
@@ -810,6 +814,11 @@ export class WorldRoom extends Room<WorldState> {
       else if (m.to === "desk") {
         const seat = p.desk ? this.state.objects.get(p.desk) : undefined;
         target = seat ? { x: seat.x + 0.5, y: seat.y + 0.5, level: objLevel(fromSchema(seat), this.map) } : null;
+      } else if (m.to === "bay") {
+        // my own bay of the lot (docs/plan/43-the-spot.md): in it, by the aisle
+        const board = boardOfOwner([...this.state.objects.values()].map(fromSchema), p.uid);
+        const b = board ? bayById(lotLayout(), String(board.props?.bay)) : null;
+        if (b) target = { x: b.x + b.dir * 1.6 - GROUND_OFFSET.x, y: b.z - GROUND_OFFSET.y, level: 0 };
       } else if (typeof m.to === "object" && m.to && "userId" in m.to) {
         const userId = m.to.userId;
         const other = [...this.state.players.values()].find((q) => q.uid === userId);

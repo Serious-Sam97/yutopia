@@ -307,3 +307,37 @@ export function lotBanksOf(l: LotLayout): { x: number; z: number; s: number; sz:
   }
   return out;
 }
+
+// ── the claimed bays (docs/plan/43-the-spot.md) ──
+// Someone's own bay: a wooden board with their name stands at its head. The rows are lettered
+// west to east (A row W, B and C the back-to-back pair, D row E by the doors), a bay numbered by
+// its slot north to south (the islands' slots are never a bay, so no D-00 or D-09).
+
+const ROW_LETTER: Record<LotRow["key"], string> = { w: "A", "mid-w": "B", "mid-e": "C", e: "D" };
+/** A bay's name on its board's tag and in the HUD: "D-07". */
+export const bayLabel = (b: LotBay) => `${ROW_LETTER[b.row]}-${String(b.slot).padStart(2, "0")}`;
+/** A bay's id, as its board object's (`bay-d-07`) and the server's messages. */
+export const bayId = (b: LotBay) => bayLabel(b).toLowerCase();
+/** The bay with that id, if there's one. */
+export const bayById = (l: LotLayout, id: string) => l.bays.find((b) => bayId(b) === id);
+/** Whether someone may claim it: a plain bay (never a visitors' or an accessible one). */
+export const claimable = (b: LotBay) => b.kind === "plain";
+
+export interface BayBoard {
+  /** the post's foot */
+  x: number;
+  z: number;
+  /** which way the board's face looks (radians about y, 0 = +z): into its bay */
+  ry: number;
+  /** another bay's board shares this post (the pair: their heads meet on one line) */
+  shared: boolean;
+}
+/** Where a bay's board stands: on the line at its head, the end its nose points to — on the dump's
+ *  kerb (row A), on the pavement's kerb (row D), between the pair's facing bays (B and C, one post
+ *  for both). A parked car is 4.9 at most in a 5.6 bay: the post and its boards keep to ±0.08. */
+export function boardOf(l: LotLayout, b: LotBay): BayBoard {
+  const head = r6(b.x - (b.dir * l.bayL) / 2);
+  // (the kerbs are 0.25 wide, from the asphalt's edge outwards: the post stands on them)
+  const x = b.row === "w" ? r6(head - 0.12) : b.row === "e" ? r6(head + 0.12) : head;
+  return { x, z: b.z, ry: b.dir > 0 ? Math.PI / 2 : -Math.PI / 2, shared: b.row === "mid-w" || b.row === "mid-e" };
+}

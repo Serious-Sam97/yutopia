@@ -23,6 +23,7 @@ import "./phone.ts";
 import "./gps.ts";
 import "./grounds-life.ts";
 import "./cars.ts";
+import "./spot.ts";
 import "./survival.ts";
 import "./dark.ts";
 import "./arms.ts";

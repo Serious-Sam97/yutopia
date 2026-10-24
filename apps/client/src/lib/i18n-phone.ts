@@ -272,6 +272,10 @@ export const PHONE_STRINGS = {
   gpsWays: ["Streets & paths", "Ruas e caminhos"],
   gpsSpots: ["Landmarks", "Pontos de referência"],
   gpsFriends: ["Friends", "Amigos"],
+  // your own car, a car whose keys you hold (docs/plan/43-the-spot.md)
+  gpsMine: ["Mine", "Meus"],
+  gpsMyCar: ["My car", "Meu carro"],
+  gpsKeysCar: ["{who}'s car", "Carro de {who}"],
   gpsNone: ["Nothing by that name", "Nada com esse nome"],
   gpsFloor: ["Floor {n}", "Andar {n}"],
   gpsIn: ["In {space}", "Em {space}"],

@@ -15,7 +15,8 @@ import { gzipSync } from "node:zlib";
 // (raised to 556 on 2026-10-23 by the user's call: the loading screen — docs/plan/35 — the controller's readiness and the screen)
 // (raised to 557 on 2026-10-23 by the user's call: no ghosts — docs/plan/36 — the page's goodbye, a beacon and the socket's close)
 // (raised to 558.5 on 2026-10-24 by the user's call: the lot — docs/plan/42 — the floor paints its bays from the shared layout)
-const BUDGETS = { "/page": 558.5, "/login/page": 160 }; // KB gzip
+// (raised to 559 on 2026-10-24 by the user's call: the spot — docs/plan/43 — my bay, the keys on someone's card)
+const BUDGETS = { "/page": 559, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;

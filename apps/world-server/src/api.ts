@@ -78,6 +78,8 @@ export interface PresenceEntry {
 
 export const api = {
   world: () => call<WorldInfo>("GET", "/world"),
+  // everyone with an account (features/spot.ts: what's left of anyone gone comes down)
+  members: () => call<{ ids: number[] }>("GET", "/members"),
   seed: (objects: WorldObjectDef[]) => call<{ objects: WorldObjectDef[] }>("POST", "/world/seed", { objects }),
   putLayout: (layout: Layout) => call("PUT", "/world/layout", layout),
   putPlaylists: (playlists: unknown[]) => call("PUT", "/world/playlists", { playlists }),
