@@ -3,6 +3,8 @@ import { groundAt, LAMPS, WAYS } from "@yutopia/shared/grounds";
 import type * as THREE_NS from "three";
 import type { CarIn } from "./car/stage";
 
+export { drawLotPlans } from "../lot-plan";
+
 // The Grounds' stills — phase 0's mocks (docs/plan/27-the-grounds.md): each
 // one a spot on the Grounds at an hour, built by the prototype (grounds3d.ts)
 // round it, with the game's own 3D people. /dev/grounds?shot=<name>.
@@ -278,6 +280,7 @@ export function shots(): Record<string, Shot> {
       snow: 5000,
     },
     ...carShots(lamp),
+    ...lotShots(),
     "iso-lot-edge": {
       hour: "day",
       cam: [0, 0, 0],
@@ -286,8 +289,86 @@ export function shots(): Record<string, Shot> {
       people: [
         { x: -103, z: 13.2, to: [-130, 5], a: ANA, walk: 9 },
         { x: -66, z: 18.4, to: [-90, 15], a: DUDA, walk: 4 },
-        { x: -48, z: 26.5, to: [-60, 22], a: CAI, walk: 19 },
+        { x: -53, z: 22.4, to: [-60, 22], a: CAI, walk: 19 },
         { x: -40, z: 6.3, to: [-35, 6.3], a: BIA },
+      ],
+      snow: 0,
+    },
+  };
+}
+// ── the lot's stills (docs/plan/42-the-lot.md, phase 0) ──
+function lotShots(): Record<string, Shot> {
+  return {
+    // from above: the whole lot, the driveway coming in at the top
+    "lot-top": {
+      hour: "day",
+      cam: [-30, 92, 24.6],
+      look: [-30, 0, 24.5],
+      fov: 52,
+      people: [],
+      snow: 0,
+      radius: 160,
+    },
+    // walking down the driveway into it
+    "lot-mouth": {
+      hour: "day",
+      cam: [-39.2, gy(-39.2, -34) + 2.0, -34],
+      look: [-36, 0.8, 6],
+      fov: 50,
+      people: [
+        { x: -38.2, z: -20, to: [-40, 0], a: CAI, walk: 6 },
+        { x: -24, z: -3.6, to: [-30, -3.6], a: BIA, walk: 13 },
+      ],
+      snow: 600,
+    },
+    // from the pavement by the doors: the marked bays, the island, the aisle
+    "lot-doors": {
+      hour: "overcast",
+      cam: [-11.4, 1.75, 9],
+      look: [-17, 0.6, 27],
+      fov: 52,
+      people: [
+        { x: -11.6, z: 15.5, to: [-11.6, 30], a: ANA, walk: 3 },
+        { x: -20.5, z: 30.6, to: [-12, 30.6], a: DUDA, walk: 11 },
+      ],
+      snow: 900,
+    },
+    // down aisle E towards the mouth
+    "lot-aisle": {
+      hour: "day",
+      cam: [-23.2, 1.8, 50],
+      look: [-26, 1.0, 5],
+      fov: 50,
+      people: [{ x: -22.4, z: 40, to: [-22.4, 20], a: BIA, walk: 7 }],
+      snow: 400,
+    },
+    // the west edge: the plough's dump, the pond trail going out through it
+    "lot-dump": {
+      hour: "overcast",
+      cam: [-43.5, 2.1, 57.5],
+      look: [-54, 0.8, 26],
+      fov: 52,
+      people: [{ x: -56.5, z: 22.2, to: [-75, 19], a: CAI, walk: 9 }],
+      snow: 900,
+    },
+    // at night: the lamps on their islands
+    "lot-night": {
+      hour: "night",
+      cam: [-8, 16, -14],
+      look: [-30, 0, 20],
+      fov: 55,
+      people: [{ x: -22.2, z: 10, to: [-22.2, 30], a: ANA, walk: 4, light: true }],
+      snow: 2500,
+    },
+    // the iso angle
+    "lot-iso": {
+      hour: "day",
+      cam: [0, 0, 0],
+      look: [-30, 0, 18],
+      iso: 34,
+      people: [
+        { x: -22.2, z: 12, to: [-22.2, 30], a: ANA, walk: 9 },
+        { x: -11.6, z: 20, to: [-11.6, 40], a: CAI, walk: 4 },
       ],
       snow: 0,
     },
@@ -312,8 +393,8 @@ function local(c: { x: number; z: number; a: number; y?: number }, lx: number, l
   return [c.x + lx * Math.cos(th) + lz * Math.sin(th), y + ly, c.z - lx * Math.sin(th) + lz * Math.cos(th)];
 }
 function carShots(lamp: { x: number; z: number }): Record<string, Shot> {
-  // the lot's west aisle, a car pulling out towards the north
-  const lot = { x: -20.85, z: 14, a: -Math.PI / 2 };
+  // the lot's aisle E, a car pulling out towards the north
+  const lot = { x: -22.2, z: 14, a: -Math.PI / 2 };
   // the driveway: a car leaving, under a lamp; another, the lamp 22 tiles ahead
   const d = on("driveway", [lamp.x, lamp.z], 0, 0);
   const way = WAYS.find((w) => w.key === "driveway") as (typeof WAYS)[number];
@@ -614,7 +695,7 @@ function carShots(lamp: { x: number; z: number }): Record<string, Shot> {
       people: [{ x: -41.6, z: 11.2, to: [-39, 13], a: BIA, walk: 6 }],
       cars: [
         {
-          x: -38.55,
+          x: -40.6,
           z: 17,
           a: -Math.PI / 2 - 0.45,
           colour: SEDAN_RED,

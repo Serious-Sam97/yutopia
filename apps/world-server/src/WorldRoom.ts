@@ -68,6 +68,7 @@ import {
   topCell,
   upgradeCore,
   upgradeGround,
+  upgradeLot,
   validLayout,
   type WorldObjectDef,
   windAt,
@@ -335,6 +336,19 @@ export class WorldRoom extends Room<WorldState> {
       console.log("[building] the ground floor: the courtyard's blocks in it");
       if (!config.offline)
         await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
+    }
+    // the lot (docs/plan/42-the-lot.md): the old one stamped again as today's — its pavement, the
+    // lamps on the islands, every car on it squared into a bay
+    const relot = config.building ? upgradeLot(this.map, objects) : null;
+    if (relot) {
+      this.map = relot.map;
+      objects = relot.objects;
+      this.syncMapState();
+      console.log(`[building] the lot: today's (${relot.moved.length} things moved)`);
+      if (!config.offline) {
+        await saveAll(relot.moved, (o) => api.putObject(o));
+        await api.putLayout(layoutFromMap(this.map)).catch((e) => console.warn("[building] layout", e.message));
+      }
     }
     // nothing standing in front of the elevators' and the stairs' doors
     const fronts = clearCoreFronts(this.map, objects);

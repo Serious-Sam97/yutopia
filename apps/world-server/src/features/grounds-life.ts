@@ -1,7 +1,7 @@
-import { ANIM, dirFromDelta, GROUND_OFFSET, levelMap } from "@yutopia/shared";
+import { ANIM, dirFromDelta, entranceZOf, GROUND_OFFSET, levelMap, lotLayout } from "@yutopia/shared";
 import { isCarKind } from "@yutopia/shared/car";
 import { nightness } from "@yutopia/shared/dark";
-import { along, GUARD_ROUND, heightAt, type Route, SHUTTLE, VISITOR } from "@yutopia/shared/grounds";
+import { along, GUARD_ROUND, heightAt, LOT, type Route, SHUTTLE, visitorRoute } from "@yutopia/shared/grounds";
 import { config } from "../config.ts";
 import { Npc, type Player, Vehicle } from "../schema.ts";
 import type { WorldRoom } from "../WorldRoom.ts";
@@ -52,7 +52,23 @@ registerFeature((room: WorldRoom) => {
     room.state.vehicles.set(id, v);
     return v;
   };
-  const visitor: Drive = { veh: make("visitor", "visitor"), route: VISITOR.in, s: 0, dir: 1, blockedFor: 0 };
+  // the visitor's way round the lot to the visitors' bay by this studio's doors (made once the
+  // building is: till then, a studio 36 deep's)
+  let visit: ReturnType<typeof visitorRoute> | null = null;
+  const visits = () => {
+    visit ??= visitorRoute(lotLayout(entranceZOf(room.map)));
+    return visit;
+  };
+  const visitor: Drive = {
+    veh: make("visitor", "visitor"),
+    route: visitorRoute(lotLayout()).in,
+    s: 0,
+    dir: 1,
+    blockedFor: 0,
+  };
+  // (at a walk on the lot and just off it: its mouth, its loop)
+  const inLot = (d: Drive) =>
+    d.veh.x > LOT.x0 - 3 && d.veh.x < LOT.x1 + 3 && d.veh.z > LOT.z0 - 12 && d.veh.z < LOT.z1 + 3;
   const shuttle: Drive = { veh: make("shuttle", "shuttle"), route: SHUTTLE.there, s: 0, dir: 1, blockedFor: 0 };
   const plough: Drive = { veh: make("plough", "plough"), route: SHUTTLE.back, s: 0, dir: 1, blockedFor: 0 };
   let pPhase: "away" | "in" | "out" = "away";
@@ -224,21 +240,18 @@ registerFeature((room: WorldRoom) => {
       // ── the visitor's car ──
       if (vPhase === "away" && now > vUntil) {
         vPhase = "in";
-        Object.assign(visitor, { route: VISITOR.in, s: 0, dir: 1 });
-      } else if (
-        vPhase === "in" &&
-        drive(visitor, visitor.s > VISITOR.in.len - 70 ? LOT_V : VISITOR_V, dt, now, people)
-      ) {
+        Object.assign(visitor, { route: visits().in, s: 0, dir: 1 });
+      } else if (vPhase === "in" && drive(visitor, inLot(visitor) ? LOT_V : VISITOR_V, dt, now, people)) {
         vPhase = "park";
         visitor.veh.v = 0;
         vUntil = now + 60_000 + Math.random() * 90_000;
       } else if (vPhase === "park" && now > vUntil) {
         vPhase = "back";
-        Object.assign(visitor, { route: VISITOR.back, s: 0, dir: 1 });
+        Object.assign(visitor, { route: visits().back, s: 0, dir: 1 });
       } else if (vPhase === "back" && drive(visitor, 1.5, dt, now, people)) {
         vPhase = "out";
-        Object.assign(visitor, { route: VISITOR.out, s: 0, dir: 1 });
-      } else if (vPhase === "out" && drive(visitor, visitor.s < 40 ? LOT_V : VISITOR_V, dt, now, people)) {
+        Object.assign(visitor, { route: visits().out, s: 0, dir: 1 });
+      } else if (vPhase === "out" && drive(visitor, inLot(visitor) ? LOT_V : VISITOR_V, dt, now, people)) {
         vPhase = "away";
         visitor.veh.v = 0;
         vUntil = now + 60_000 + Math.random() * 120_000;

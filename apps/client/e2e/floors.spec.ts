@@ -120,7 +120,8 @@ test("the lot: out through the glass doors, a car to jump up on", async ({ page 
   const car = await page.evaluate(() => {
     const c = (window as any).__yutopia;
     const o = [...c.objs.values()].find((x: any) => x.kind === "car" && x.props.level === 0);
-    return { x: o.x, y: o.y, fits: c.grid.fits(o.x + 2.5, o.y + 1), top: c.grid.topAt(o.x + 2, o.y + 1) };
+    // (a parked car is a box of its own in the grid — docs/plan/28: its roof what's stood on there)
+    return { x: o.x, y: o.y, fits: c.grid.fits(o.x + 2.5, o.y + 1), top: c.grid.standOn(o.x + 2.5, o.y + 1, 10) };
   });
   expect(car.fits).toBe(false);
   expect(car.top).toBeGreaterThan(1.2);

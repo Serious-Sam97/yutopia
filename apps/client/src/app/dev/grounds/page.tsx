@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 // with NEXT_PUBLIC_YUTOPIA_SHOTS=1).
 //
 //   /dev/grounds?shot=plan            the site plan
+//   /dev/grounds?shot=lot-plan        the lot, today and proposed (docs/plan/42-the-lot.md)
 //   /dev/grounds?shot=<still>         a still (see SHOTS in world/tp/grounds-shots.ts)
 //   &w=&h=                            the canvas' size (default 1600 × 900)
 //
@@ -27,6 +28,18 @@ export default function GroundsDev() {
     void (async () => {
       const el = host.current;
       if (!el) return;
+      if (shot === "lot-plan") {
+        // (through the stills' module: an import of its own split the Grounds' chunks — docs/plan/42)
+        const { drawLotPlans } = await import("@/world/tp/grounds-shots");
+        const c = document.createElement("canvas");
+        drawLotPlans(c);
+        c.style.width = "100%";
+        el.appendChild(c);
+        setStatus(`lot plan ${c.width}×${c.height}`);
+        (window as unknown as { __shot?: boolean }).__shot = true;
+        cleanup = () => c.remove();
+        return;
+      }
       if (shot === "plan") {
         const { drawSitePlan } = await import("@/world/grounds-plan");
         const c = document.createElement("canvas");

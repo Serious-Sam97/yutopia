@@ -62,7 +62,7 @@ import { CarRig } from "../tp/car/rig";
 import { buildSedan, type Sedan } from "../tp/car/sedan";
 import type { ThirdPersonView } from "../tp/view";
 import { CarInput, type Switch } from "./controls";
-import { CabinLight, Mirror, RoadPatches, ScreenSnow, Spray, Tracks } from "./fx";
+import { BaySnow, CabinLight, Mirror, RoadPatches, ScreenSnow, Spray, Tracks } from "./fx";
 import { CarSound, preloadEngine } from "./sound";
 
 // The lot's cars in the world, the client's side (docs/plan/28-the-car.md;
@@ -920,7 +920,11 @@ export class Cars {
         this.dropParked(p);
         this.parked.delete(id);
       }
+    // the lot's empty bays snowed in (only where no car stands)
+    if (!this.baySnow.mesh.parent) this.root.add(this.baySnow.mesh);
+    this.baySnow.set([...this.parked.values()].map((p) => p.pose));
   }
+  private baySnow = new BaySnow();
   private farMat(hex: number): Material {
     let m = this.farMats.get(hex);
     if (!m) {
@@ -1443,7 +1447,10 @@ export class Cars {
       cam.fov = tp.camera.fov;
       cam.aspect = tp.camera.aspect;
       // (the rig's model sits in `root`: its world matrix is the scene's)
-      const sim = m.sim ?? ({ v: { x: l.pose.v.x, y: l.pose.v.y, z: l.pose.v.z }, str: 0 } as unknown as CarState);
+      // (a passenger's: no sim of their own — the car's spec still sizes the chase camera)
+      const sim =
+        m.sim ??
+        ({ v: { x: l.pose.v.x, y: l.pose.v.y, z: l.pose.v.z }, str: 0, spec: SPECS[l.kind] } as unknown as CarState);
       const rigFor = m.rig ?? this.passengerRig(l);
       const rough = m.sim ? m.sim.wheels.reduce((a, w) => a + GRIP[w.ground].rough, 0) * 2.5 : 0.02;
       this.cam.update(cam, rigFor, sim, dt, this.input.lookBack, rough);
@@ -1886,6 +1893,7 @@ export class Cars {
   }
 
   dispose() {
+    this.baySnow.dispose();
     this.unlistenMouse();
     for (const off of this.offMsg) off();
     for (const p of this.parked.values()) this.dropParked(p);

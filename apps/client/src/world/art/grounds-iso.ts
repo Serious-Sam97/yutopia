@@ -11,7 +11,7 @@ import { type Container, Matrix, Mesh, MeshGeometry, Container as PixiContainer,
 // kept; a chunk is made a few milliseconds a frame, nearest first.
 
 import { type Footprints, printLeft } from "../footprints";
-import type { Thing } from "./grounds-items";
+import type { LotIso, Thing } from "./grounds-items";
 import { IsoWeather } from "./weather-iso";
 
 type G = typeof GroundsModule;
@@ -124,6 +124,151 @@ export class IsoGrounds {
       for (const t of ch.trees) t.tint = this.tint;
     }
     for (const id of this.shownIds) for (const r of this.items.roots(id)) r.tint = this.tint;
+    if (this.coverMesh) this.coverMesh.tint = this.tint;
+  }
+
+  // ── the lot's snow (docs/plan/42-the-lot.md): over the floor's asphalt as the roads have theirs
+  // (tp/roads3d.ts lotCover, without the weather's fresh snow) — packed snow in blotches, worn
+  // round the aisles' loop and down the tyres' tracks — and the marks the floor doesn't paint:
+  // the accessible bays' blue and hatching, VISITOR. Drawn once; the engine sets it over the floor ──
+  readonly cover = new PixiContainer();
+  private coverMesh: Mesh | null = null;
+  setLot(lot: LotIso) {
+    if (this.coverMesh || this.coverDue) return;
+    this.coverDue = true;
+    void this.buildCover(lot);
+  }
+  private coverDue = false;
+  private gone = false;
+  /** (a few ms at a time, off the frame the Grounds come in on: all at once it was a long one) */
+  private async buildCover({ l }: LotIso) {
+    const later = () => new Promise((r) => setTimeout(r, 16));
+    let t0 = performance.now();
+    // (the snow worked out at 5 px a tile and stretched smooth; the marks drawn at 10)
+    const Q = 10;
+    const N = 5;
+    const [x0, x1, z0, z1] = [l.dump.x1, l.pavement.x0, l.z0, l.z1];
+    const W = Math.round((x1 - x0) * N);
+    const H = Math.round((z1 - z0) * N);
+    const sc = document.createElement("canvas");
+    sc.width = W;
+    sc.height = H;
+    const sg = sc.getContext("2d") as CanvasRenderingContext2D;
+    const im = sg.createImageData(W, H);
+    const hash = (x: number, z: number) => {
+      const h = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
+      return h - Math.floor(h);
+    };
+    const vn = (x: number, z: number) => {
+      const ix = Math.floor(x);
+      const iz = Math.floor(z);
+      const fx = (x - ix) ** 2 * (3 - 2 * (x - ix));
+      const fz = (z - iz) ** 2 * (3 - 2 * (z - iz));
+      const a = hash(ix, iz) + (hash(ix + 1, iz) - hash(ix, iz)) * fx;
+      const b = hash(ix, iz + 1) + (hash(ix + 1, iz + 1) - hash(ix, iz + 1)) * fx;
+      return a + (b - a) * fz;
+    };
+    const fbm = (x: number, z: number) =>
+      0.55 * vn(x, z) + 0.3 * vn(x * 2.3 + 11, z * 2.3 + 11) + 0.15 * vn(x * 5.1 + 3, z * 5.1 + 3);
+    const sm = (a: number, b: number, v: number) => {
+      const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    };
+    const [aw, ae] = l.aisles;
+    const zs = [(l.cross[0].z0 + l.cross[0].z1) / 2, (l.cross[1].z0 + l.cross[1].z1) / 2];
+    for (let py = 0; py < H; py++) {
+      if (performance.now() - t0 > 4) {
+        await later();
+        if (this.gone) return;
+        t0 = performance.now();
+      }
+      for (let px = 0; px < W; px++) {
+        const x = x0 + (px + 0.5) / N;
+        const z = z0 + (py + 0.5) / N;
+        const inA = Math.max(1 - sm(2.8, 3.6, Math.abs(x - aw)), 1 - sm(2.8, 3.6, Math.abs(x - ae)));
+        const dz = Math.min(Math.abs(z - zs[0]), Math.abs(z - zs[1]));
+        const inZ = x > aw - 3.6 && x < ae + 3.6 ? 1 - sm(2.8, 3.6, dz) : 0;
+        const aisle = Math.max(inA, inZ);
+        const t = Math.min(
+          Math.abs(Math.abs(x - aw) - 0.9),
+          Math.abs(Math.abs(x - ae) - 0.9),
+          inZ > 0 ? Math.abs(dz - 0.9) : 9,
+        );
+        const tracks = 1 - sm(0.25, 0.6, t + (vn(x * 0.5, z * 0.5) - 0.5) * 0.3);
+        const cover =
+          0.3 +
+          (fbm(x * 0.07, z * 0.07) - 0.5) * 0.9 +
+          (fbm(x * 0.6, z * 0.6) - 0.5) * 0.25 -
+          aisle * 0.06 -
+          tracks * aisle * 0.3;
+        const k = fbm(x * 0.8, z * 0.8);
+        const i = (py * W + px) * 4;
+        im.data[i] = 133 + k * 61;
+        im.data[i + 1] = 140 + k * 61;
+        im.data[i + 2] = 150 + k * 62;
+        im.data[i + 3] = sm(0.08, 0.55, cover) * 215;
+      }
+    }
+    await later();
+    if (this.gone) return;
+    sg.putImageData(im, 0, 0);
+    const c = document.createElement("canvas");
+    c.width = W * 2;
+    c.height = H * 2;
+    const g = c.getContext("2d") as CanvasRenderingContext2D;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(sc, 0, 0, W * 2, H * 2);
+    // the marks over it (lot.ts): the accessible bays' blue and their figure's wheel, the hatching,
+    // VISITOR
+    const X = (x: number) => (x - x0) * Q;
+    const Z = (z: number) => (z - z0) * Q;
+    for (const b of l.bays) {
+      if (b.kind === "plain") continue;
+      const [bx, bz] = [X(b.x - l.bayL / 2 + 0.2), Z(b.z - l.bayW / 2 + 0.15)];
+      if (b.kind === "accessible") {
+        g.fillStyle = "rgba(47,95,158,0.85)";
+        g.fillRect(bx, bz, (l.bayL - 0.4) * Q, (l.bayW - 0.3) * Q);
+        g.strokeStyle = "rgba(240,242,244,0.9)";
+        g.lineWidth = Q * 0.14;
+        g.beginPath();
+        g.arc(X(b.x), Z(b.z), Q * 0.45, 0, Math.PI * 2);
+        g.stroke();
+      } else {
+        // (along the bay: it fits there, read from the aisle's side)
+        g.fillStyle = "rgba(238,240,242,0.85)";
+        g.font = `700 ${Math.round(Q * 0.8)}px Arial, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText("VISITOR", X(b.x), Z(b.z));
+      }
+    }
+    g.strokeStyle = "rgba(238,240,242,0.85)";
+    g.lineWidth = Math.max(1, Q * 0.1);
+    for (const h of l.hatches) {
+      g.save();
+      g.beginPath();
+      g.rect(X(h.x0), Z(h.z0), (h.x1 - h.x0) * Q, (h.z1 - h.z0) * Q);
+      g.clip();
+      for (let d = -(h.z1 - h.z0); d < h.x1 - h.x0; d += 0.6) {
+        g.moveTo(X(h.x0 + d), Z(h.z1));
+        g.lineTo(X(h.x0 + d + (h.z1 - h.z0)), Z(h.z0));
+      }
+      g.stroke();
+      g.restore();
+    }
+    await later();
+    if (this.gone) return;
+    const tex = Texture.from(c);
+    this.items.upload(tex);
+    const iso = (x: number, z: number) => [(x - this.ox - (z - this.oy)) * HW, (x - this.ox + (z - this.oy)) * HH];
+    const geometry = new MeshGeometry({
+      positions: new Float32Array([...iso(x0, z0), ...iso(x1, z0), ...iso(x1, z1), ...iso(x0, z1)]),
+      uvs: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]),
+      indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
+    });
+    this.coverMesh = new Mesh({ geometry, texture: tex });
+    this.coverMesh.tint = this.tint;
+    this.cover.addChild(this.coverMesh);
   }
 
   // a thing on the land drawn (the engine's), in the hour's light; and taken away
@@ -143,6 +288,7 @@ export class IsoGrounds {
     this.shown = true;
     this.land.visible = on;
     this.lights.visible = on;
+    this.cover.visible = on;
     for (const ch of this.chunks.values()) {
       for (const t of ch.trees) t.visible = on;
       this.showThings(ch.key, on);
@@ -1073,10 +1219,13 @@ export class IsoGrounds {
   }
 
   destroy() {
+    this.gone = true;
     for (const ch of [...this.chunks.values()]) this.drop(ch);
     for (const t of this.treeTex.values()) t.destroy(true);
     this.land.destroy({ children: true });
     this.lights.destroy({ children: true });
+    this.coverMesh?.texture.destroy(true);
+    this.cover.destroy({ children: true });
     this.weather.destroy();
     this.poolTex?.destroy(true);
     this.printTex?.destroy(true);

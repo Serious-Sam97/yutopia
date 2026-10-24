@@ -14,7 +14,7 @@ if (GPU || dir) test.use({ launchOptions: { args: ["--use-angle=metal", "--enabl
 
 // the ground floor's corner is at (-60, -10) in the studio's coords
 const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
-const LOT = { ...G(-30, 20), level: 0 };
+const LOT = { ...G(-22, 20), level: 0 }; // (aisle E: docs/plan/42-the-lot.md)
 
 async function open(page: Page, view: "3p" | "iso") {
   await page.addInitScript((v) => {

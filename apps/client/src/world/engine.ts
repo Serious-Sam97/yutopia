@@ -21,6 +21,8 @@ import {
   isOpening,
   isSocial,
   type JumpNow,
+  lotBanksOf,
+  lotLayout,
   type MapDef,
   placedFootprint,
   Q,
@@ -380,6 +382,7 @@ export class WorldEngine {
     Iso: typeof import("./art/grounds-iso");
     items: typeof import("./art/grounds-items");
     things: import("./art/grounds-items").Thing[];
+    lot: import("./art/grounds-items").LotIso;
   } | null = null;
   private themeKey = "";
   private backdropLayer = new Container();
@@ -1101,10 +1104,13 @@ export class WorldEngine {
       ([Iso, Items, art]) => {
         if (this.destroyed) return;
         // the Grounds' things: kinds of their own, drawn as items
-        const { kinds, gens } = Items.groundKinds(G);
+        // (the lot handed in: lot.ts is the page's — docs/plan/42-the-lot.md)
+        const l = lotLayout();
+        const lot = { l, banks: lotBanksOf(l) };
+        const { kinds, gens } = Items.groundKinds(G, lot);
         registerKinds(kinds);
         (art as typeof import("./art/items")).registerItems(gens);
-        this.groundsMod = { G, Iso, items: Items, things: Items.groundThings(G) };
+        this.groundsMod = { G, Iso, items: Items, things: Items.groundThings(G, lot), lot };
         this.mountGrounds();
       },
     );
@@ -1170,6 +1176,9 @@ export class WorldEngine {
       this.groundsAt = { x: ox, y: oy };
       this.world.addChildAt(this.grounds.land, 0);
       this.world.addChildAt(this.grounds.lights, this.world.getChildIndex(this.sortLayer));
+      // (the lot's snow over the floor's asphalt, under the shadows and the marks)
+      this.grounds.setLot(m.lot);
+      this.world.addChildAt(this.grounds.cover, this.world.getChildIndex(this.floorArt) + 1);
       this.world.addChildAt(this.grounds.weather.root, this.world.getChildIndex(this.overlay));
       this.grounds.setAmbient(this.landAmbient());
     }

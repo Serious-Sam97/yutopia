@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { campusLot } from "./building.ts";
 import {
   bayFor,
   bladeCells,
@@ -41,6 +40,7 @@ import {
   TRACTOR,
 } from "./car/index.ts";
 import { atPump, heightAt, PUMPS, treesIn, walkableTile } from "./grounds.ts";
+import { lotLayout } from "./lot.ts";
 
 // The car's physics against the numbers of docs/plan/28-the-car.md (phase 1).
 
@@ -382,11 +382,12 @@ test("dry, the engine coughs out and won't start again; a person hit is told who
 });
 
 test("left in a bay of the lot, nosed or backed in and roughly square: that bay; else none", () => {
-  const { bays } = campusLot(36);
+  const { bays } = lotLayout();
   const b = bays[5];
   const nose = b.dir > 0 ? Math.PI : 0;
   assert.deepEqual(bayFor(bays, b.x + 0.8, b.z - 0.4, nose + 0.2), { i: 5, a: nose });
-  assert.deepEqual(bayFor(bays, b.x - 0.5, b.z + 0.3, nose + Math.PI - 0.15), { i: 5, a: nose + Math.PI });
+  // (backed in: the other way, as bayFor gives it — 0 or π)
+  assert.deepEqual(bayFor(bays, b.x - 0.5, b.z + 0.3, nose + Math.PI - 0.15), { i: 5, a: nose ? 0 : Math.PI });
   assert.equal(bayFor(bays, b.x, b.z, nose + 0.8), null, "across it");
   assert.equal(bayFor(bays, b.x, b.z + 1.4, nose), null, "between two");
   assert.equal(bayFor(bays, b.x + 4, b.z, nose), null, "out in the aisle");

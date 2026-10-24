@@ -3,6 +3,7 @@ import { entry, placedFootprint, type WorldObjectDef } from "./catalog.ts";
 import { convertV1 } from "./convert.ts";
 import type { Point } from "./iso.ts";
 import { floorOf, floorsOf, levelMap, objLevel, offsetOf } from "./levels.ts";
+import { LOT, lotLayout } from "./lot.ts";
 import {
   type AreaDef,
   type Edge,
@@ -93,108 +94,30 @@ export function seeded(seed: number): () => number {
   };
 }
 
-// ── the parking lot (the campus's: tp/campus.ts draws the same) ──────────────
-export interface LotLayout {
-  x0: number;
-  z0: number;
-  x1: number;
-  z1: number;
-  bayW: number;
-  bayL: number;
-  cols: { x: number; dir: number }[];
-  aisles: number[];
-  bays: { x: number; z: number; dir: number }[];
-  // where the campus parks its cars (a seeded pick, the visitor's bay kept free)
-  cars: { x: number; z: number; dir: number; wagon: boolean; colour: number; snowy: boolean; tilt: number }[];
-  visitorBay: number;
-  lamps: { x: number; z: number }[];
-  // the cleared path from the lot to the doors (z of its middle)
-  entranceZ: number;
+// ── the parking lot: one layout for every world (lot.ts, docs/plan/42-the-lot.md; the index
+// exports it itself — passed on from here, the bundler kept all of this module on the page) ──
+
+/** A car parked square in a bay (`c`: its middle in the building's coords, `dir` which way it
+ *  noses) as an object's place on the ground floor (`bx, by`: the building's corner there): a car
+ *  is 5 × 2 (rot 0: its nose to −x), exactly where by props.dx / dz. */
+function bayPlace(c: { x: number; z: number; dir: number }, bx: number, by: number) {
+  const x = Math.round(c.x - 2.5);
+  const z = Math.round(c.z - 1);
+  return {
+    x: x + bx,
+    y: z + by,
+    rot: c.dir > 0 ? 0 : 2,
+    dx: Math.round((c.x - 2.5 - x) * 100) / 100,
+    dz: Math.round((c.z - 1 - z) * 100) / 100,
+  };
 }
 
-export const CAR_COLOURS = [0xcbbd98, 0x6b2430, 0x4a5a73, 0xe8e6df, 0x1f2124, 0x6a4a35, 0x8b8f93, 0x2f4a3b, 0xb8702a];
-
-/** The lot west of a studio `H` tiles deep (building coords, map y → z). */
-export function campusLot(H: number, entranceZ = H / 2): LotLayout {
-  const lot = { x0: -56, z0: -8, x1: -10, z1: H + 12, bayW: 2.8, bayL: 5.6 };
-  const c0 = lot.x1 - 2 - lot.bayL;
-  const c1 = c0 - 6.5;
-  const c2 = c1 - 2 * lot.bayL;
-  const c3 = c2 - 6.5;
-  const c4 = c3 - 2 * lot.bayL;
-  const cols = [
-    { x: c0, dir: -1 }, // by the building: noses to the wall
-    { x: c1, dir: 1 },
-    { x: c2, dir: -1 },
-    { x: c3, dir: 1 },
-    { x: c4, dir: -1 },
-  ];
-  const bays: LotLayout["bays"] = [];
-  for (const col of cols)
-    for (let z = lot.z0 + 3; z + lot.bayW <= lot.z1 - 3; z += lot.bayW)
-      bays.push({ x: col.x - (col.dir * lot.bayL) / 2, z: z + lot.bayW / 2, dir: col.dir });
-  let visitorBay = 0;
-  for (let i = 0; i < bays.length; i++)
-    if (
-      bays[i].dir === -1 &&
-      bays[i].x > lot.x1 - 9 &&
-      Math.abs(bays[i].z - (H / 2 + 6)) < Math.abs(bays[visitorBay].z - (H / 2 + 6))
-    )
-      visitorBay = i;
-  const taken = new Set([visitorBay]);
-  const rc = seeded(123);
-  const cars: LotLayout["cars"] = [];
-  for (let tries = 0; cars.length < 16 && tries < 200; tries++) {
-    const i = Math.floor(rc() ** 1.7 * bays.length);
-    if (taken.has(i)) continue;
-    taken.add(i);
-    const b = bays[i];
-    const wagon = rc() < 0.3;
-    const colour = Math.floor(rc() * CAR_COLOURS.length);
-    const snowy = rc() > 0.2;
-    const tilt = (rc() - 0.5) * 0.04;
-    const z = b.z + (rc() - 0.5) * 0.3;
-    cars.push({ x: b.x, z, dir: b.dir, wagon, colour, snowy, tilt });
-  }
-  const lamps: { x: number; z: number }[] = [];
-  for (const x of [c2, c4]) for (const z of [lot.z0 + 9, lot.z0 + 23, lot.z0 + 37]) lamps.push({ x, z });
-  lamps.push({ x: lot.x1 - 1, z: lot.z0 + 4 }, { x: lot.x1 - 1, z: lot.z1 - 4 });
-  return { ...lot, cols, aisles: [c0 - 3.25, c2 - 3.25], bays, cars, visitorBay, lamps, entranceZ };
-}
-
-/** The paint on a lot (`lot`: its asphalt's rectangle, any coords): each bay's
- *  sides and its far end, as thin rectangles [x, y, w, h] in the same coords. */
-export function lotStripes(lot: {
-  x0: number;
-  z0: number;
-  x1: number;
-  z1: number;
-}): [number, number, number, number][] {
-  const bayW = 2.8;
-  const bayL = 5.6;
-  const t = 0.09;
-  const c0 = lot.x1 - 2 - bayL;
-  const c1 = c0 - 6.5;
-  const c2 = c1 - 2 * bayL;
-  const c3 = c2 - 6.5;
-  const c4 = c3 - 2 * bayL;
-  const out: [number, number, number, number][] = [];
-  for (const [x, dir] of [
-    [c0, -1],
-    [c1, 1],
-    [c2, -1],
-    [c3, 1],
-    [c4, -1],
-  ]) {
-    const far = x - dir * bayL;
-    const a = Math.min(x, far);
-    let z = lot.z0 + 3;
-    for (; z + bayW <= lot.z1 - 3; z += bayW) out.push([a, z - t / 2, bayL, t]);
-    out.push([a, z - t / 2, bayL, t]);
-    // the bays' far end (back to back: one line between the two columns)
-    out.push([far - t / 2, lot.z0 + 3, t, z - (lot.z0 + 3)]);
-  }
-  return out;
+/** The lot's tiles into a ground floor's rows (`bx, by`: the building's corner there): asphalt,
+ *  and the pavement along the building concrete. */
+function stampLot(rows: string[][], bx: number, by: number) {
+  const pave = Math.round(lotLayout().pavement.x0);
+  for (let z = LOT.z0; z < LOT.z1; z++)
+    for (let x = LOT.x0; x < LOT.x1; x++) rows[z + by][x + bx] = x >= pave ? "c" : "a";
 }
 
 /** The middle of the studio's longest run of floor on its west side (where
@@ -452,16 +375,16 @@ export function groundLevel(
   const bx = -off.x; // the building's corner in this floor's coords
   const by = -off.y;
   const W = bx + home.width;
-  const H = by + home.height + 14;
+  // (deep enough for the lot, whatever the studio: lot.ts)
+  const H = Math.max(by + home.height + 14, by + LOT.z1);
   const ez = entranceZOf(home);
-  const lot = campusLot(home.height, ez);
+  const lot = lotLayout(ez);
   const designed = home.width === 48 && home.height === 36 && home.tiles.every((r) => !r.includes(" "));
   const inside = designed ? lobbyRooms() : null;
 
   // tiles: the lot (asphalt), the cleared path (concrete), the building
   const rows: string[][] = Array.from({ length: H }, () => Array.from({ length: W }, () => " "));
-  for (let y = Math.ceil(lot.z0) + by; y < Math.floor(lot.z1) + by; y++)
-    for (let x = Math.ceil(lot.x0) + bx; x < Math.floor(lot.x1) + bx; x++) rows[y][x] = "a";
+  stampLot(rows, bx, by);
   const p0 = Math.round(ez - 2);
   for (let y = p0 + by; y < p0 + 4 + by; y++) for (let x = Math.floor(lot.x1) + bx; x < bx; x++) rows[y][x] = "c";
   for (let y = 0; y < home.height; y++)
@@ -547,23 +470,21 @@ export function groundLevel(
     return true;
   };
   for (const [i, c] of lot.cars.entries()) {
-    // a car is 5 × 2 (rot 0: its nose to −x); where exactly it stands in its bay is art
-    const x = Math.round(c.x - 2.5);
-    const z = Math.round(c.z - 1);
-    if (!take(x + bx, z + by, 5, 2)) continue;
+    const at = bayPlace(c, bx, by);
+    if (!take(at.x, at.y, 5, 2)) continue;
     objects.push({
       id: `car-${i}`,
       kind: "car",
-      x: x + bx,
-      y: z + by,
-      rot: c.dir > 0 ? 0 : 2,
+      x: at.x,
+      y: at.y,
+      rot: at.rot,
       props: {
         level: 0,
         variant: c.colour,
         ...(c.wagon ? { wagon: 1 } : {}),
         ...(c.snowy ? { snowy: 1 } : {}),
-        dx: Math.round((c.x - 2.5 - x) * 100) / 100,
-        dz: Math.round((c.z - 1 - z) * 100) / 100,
+        dx: at.dx,
+        dz: at.dz,
       },
     });
   }
@@ -571,7 +492,7 @@ export function groundLevel(
     const x = Math.floor(l.x) + bx;
     const y = Math.floor(l.z) + by;
     if (!take(x, y, 1, 1)) continue;
-    objects.push({ id: `lamp-post-${i}`, kind: "lamp_post", x, y, rot: 0, props: { level: 0 } });
+    objects.push({ id: `lamp-post-${i}`, kind: "lamp_post", x, y, rot: l.rot, props: { level: 0 } });
   }
   const front = (e: Edge) => e.dir === "v" && e.x === bx;
   objects.push(...outerWindows(m, 0, front));
@@ -901,6 +822,97 @@ function upgradeBlocks(map: MapDef, which: Set<string>): MapDef | null {
     areas,
   };
   return { ...map, levels: (map.levels ?? []).map((l) => (l.index === 0 ? level : l)) };
+}
+
+/** A stored ground floor with the old lot (docs/plan/42-the-lot.md, null: it has today's, or no
+ *  ground floor): the lot stamped again where it was — its asphalt, the pavement along the building
+ *  (how it knows: no concrete there yet), its area — the lamp posts moved onto the islands, each
+ *  seeded car (car-i) into its own bay and any other car parked on it into the free bay nearest
+ *  it. Cars being driven, the ones that live elsewhere and everything off the lot stay as they are. */
+export function upgradeLot(
+  map: MapDef,
+  objects: WorldObjectDef[],
+): { map: MapDef; objects: WorldObjectDef[]; moved: WorldObjectDef[] } | null {
+  const l0 = map.levels?.find((l) => l.index === 0);
+  if (!l0) return null;
+  const bx = -l0.ox;
+  const by = -l0.oy;
+  const l = lotLayout(entranceZOf(map));
+  const pave = Math.round(l.pavement.x0);
+  if (l0.tiles[30 + by]?.[pave + 1 + bx] === "c") return null;
+  // the rows: down to the lot's south edge, whatever the studio
+  const H = Math.max(l0.height, LOT.z1 + by);
+  const W = l0.width;
+  const pad = (rows: string[], n: number, ch: string) => [
+    ...rows,
+    ...Array.from({ length: Math.max(0, n - rows.length) }, () => ch.repeat(rows[0]?.length ?? W)),
+  ];
+  const rows = pad(l0.tiles, H, " ").map((r) => [...r]);
+  stampLot(rows, bx, by);
+  const level: LevelDef = {
+    ...l0,
+    height: H,
+    tiles: rows.map((r) => r.join("")),
+    hWalls: pad(l0.hWalls, H + 1, "."),
+    vWalls: pad(l0.vWalls, H, "."),
+    ...(l0.hBacks ? { hBacks: pad(l0.hBacks, H + 1, ".") } : {}),
+    ...(l0.vBacks ? { vBacks: pad(l0.vBacks, H, ".") } : {}),
+    areas: l0.areas.map((a) =>
+      a.key === "lot" ? { ...a, x: LOT.x0 + bx, y: LOT.z0 + by, w: -LOT.x0, h: LOT.z1 - LOT.z0 } : a,
+    ),
+  };
+  const next = { ...map, levels: (map.levels ?? []).map((x) => (x.index === 0 ? level : x)) };
+
+  const moved = new Map<string, WorldObjectDef>();
+  const onGround = (o: WorldObjectDef) => objLevel(o, map) === 0;
+  // the lamp posts: onto the islands, reaching over the aisles
+  for (const [i, m] of l.lamps.entries()) {
+    const o = objects.find((x) => x.id === `lamp-post-${i}`);
+    if (!o || !onGround(o)) continue;
+    moved.set(o.id, { ...o, x: Math.floor(m.x) + bx, y: Math.floor(m.z) + by, rot: m.rot });
+  }
+  // the cars on the lot (their middles; the building's coords)
+  const middle = (o: WorldObjectDef) => {
+    const { w, h } = placedFootprint(o);
+    return { x: o.x + w / 2 + (Number(o.props?.dx) || 0) - bx, z: o.y + h / 2 + (Number(o.props?.dz) || 0) - by };
+  };
+  const square = (o: WorldObjectDef, c: { x: number; z: number; dir: number }) => {
+    const at = bayPlace(c, bx, by);
+    const props: Record<string, unknown> = { ...(o.props ?? {}), dx: at.dx, dz: at.dz };
+    delete props.a;
+    delete props.hy;
+    delete props.parkedAt;
+    moved.set(o.id, { ...o, x: at.x, y: at.y, rot: at.rot, props });
+  };
+  const seededOf = (id: string) => l.cars[Number(/^car-(\d+)$/.exec(id)?.[1] ?? -1)];
+  const bayOf = (c: { x: number; z: number }) => l.bays.findIndex((b) => b.x === c.x && Math.abs(b.z - c.z) < 1);
+  // (every seeded car's bay kept for it, wherever it is now: the tow brings it back there)
+  const taken = new Set(l.cars.map(bayOf));
+  const parked = objects.filter((o) => {
+    if (o.kind !== "car" || !onGround(o) || o.props?.driven || o.props?.home) return false;
+    const c = middle(o);
+    return c.x > LOT.x0 && c.x < LOT.x1 && c.z > LOT.z0 && c.z < LOT.z1;
+  });
+  for (const o of parked) {
+    const c = seededOf(o.id);
+    if (c) square(o, c);
+  }
+  for (const o of parked) {
+    if (seededOf(o.id)) continue;
+    const at = middle(o);
+    let best = -1;
+    for (const [i, b] of l.bays.entries())
+      if (
+        b.kind === "plain" &&
+        !taken.has(i) &&
+        (best < 0 || Math.hypot(b.x - at.x, b.z - at.z) < Math.hypot(l.bays[best].x - at.x, l.bays[best].z - at.z))
+      )
+        best = i;
+    if (best < 0) continue;
+    taken.add(best);
+    square(o, l.bays[best]);
+  }
+  return { map: next, objects: objects.map((o) => moved.get(o.id) ?? o), moved: [...moved.values()] };
 }
 
 /** The whole building from a studio with no floors yet (null: it has them). */

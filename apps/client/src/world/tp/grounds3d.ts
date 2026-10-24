@@ -1,4 +1,4 @@
-import { campusLot } from "@yutopia/shared";
+import { CAR_COLOURS } from "@yutopia/shared";
 import {
   BENCH,
   BUILDINGS,
@@ -17,7 +17,6 @@ import {
   insideOf,
   LAMPS,
   LOT,
-  lotBanks,
   type P,
   PLAZA,
   POND,
@@ -39,6 +38,7 @@ import {
   wallEdgeAt,
   wayHalf,
 } from "@yutopia/shared/grounds";
+import { lotLayout } from "@yutopia/shared/lot";
 import {
   AdditiveBlending,
   BoxGeometry,
@@ -75,9 +75,7 @@ import {
   carGeometry,
   facadeCanvases,
   G,
-  type Lot,
   lettersCanvas,
-  lotCanvas,
   place,
   poolCanvas,
   roadCanvas,
@@ -86,6 +84,7 @@ import {
   type V,
 } from "./campus";
 import { beam, railing, truss } from "./landmarks3d";
+import { lotDressing, lotPaintCanvas, lotSignCanvas } from "./lot3d";
 import {
   asphaltCanvas,
   crossingHeaps,
@@ -786,8 +785,10 @@ export class Grounds3 {
   ) {
     let v = 0;
     const L = w.line;
-    // (a bridge's deck: flush with the way — shared deckAt)
-    const yAt = (i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] : groundAt(x, z)) + lift;
+    // (a bridge's deck: flush with the way — shared deckAt; the driveway's last two tiles eased
+    // down to the lot's own asphalt, so where they meet is no step for the ink to outline)
+    const ease = (x: number, z: number) => (x > LOT.x0 && x < LOT.x1 ? Math.min(1, Math.max(0, (LOT.z0 - z) / 2)) : 1);
+    const yAt = (i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] : groundAt(x, z)) + lift * ease(x, z);
     for (let i = from; i < to; i++) {
       const [ax, az] = L[i];
       const [bx, bz] = L[i + 1];
@@ -869,7 +870,7 @@ export class Grounds3 {
         // another way's mouth or the lot's, nor out of reach; a street's kerbs: streetCorners)
         if (w.kind !== "street")
           for (const side of [1, -1] as const)
-            bankAlong(banks, w.line, w.w / 2 + 1.2, side, groundAt, r, {
+            bankAlong(banks, w.line, (i) => wayHalf(w, i) + 1.2, side, groundAt, r, {
               h: 0.55,
               w: 1.8,
               skip: (x, z, i) =>
@@ -1100,33 +1101,56 @@ export class Grounds3 {
     if (!k.empty) this.add(k.build(), ice, "receive");
   }
 
-  // ── the parking lot: its asphalt, cars and lamps as the game has them ──
+  // ── the parking lot (docs/plan/42-the-lot.md): the stills draw the new one whole from the
+  // shared layout; the game (stream) the ground floor's own, with its banks and cover ──
   private lot() {
-    if (!this.near((LOT.x0 + LOT.x1) / 2, (LOT.z0 + LOT.z1) / 2, 40)) return;
-    // the roads' weather over its asphalt (roads3d.ts lotCover)
+    const l = lotLayout(18);
+    if (!this.near((l.x0 + l.x1) / 2, (l.z0 + l.z1) / 2, 40)) return;
+    // (in the game the ground floor draws its asphalt, its cars and lamp posts: stills only)
+    if (!this.o.stream) this.lotFloor(l);
+    // the roads' weather over the driven asphalt (not the dump's strip nor the pavement)
     {
       const c = new G().color(0xffffff);
-      c.quad([LOT.x0, 0.12, LOT.z0], [LOT.x1, 0.12, LOT.z0], [LOT.x1, 0.12, LOT.z1], [LOT.x0, 0.12, LOT.z1], [0, 1, 0]);
+      const [x0, x1] = [l.dump.x1, l.pavement.x0];
+      // (a little past the lot's north and south edges: up over the floor, seen at a slant its edge
+      // parted from the floor's and a strip of bare asphalt showed, a dark line; east and west the
+      // kerbs cover it)
+      const [z0, z1] = [l.z0 - 0.4, l.z1 + 0.4];
+      c.quad([x0, 0.12, z0], [x1, 0.12, z0], [x1, 0.12, z1], [x0, 0.12, z1], [0, 1, 0]);
       const m = this.keep(new MeshLambertMaterial({ color: 0xffffff }));
-      lotCover(m);
+      lotCover(m, {
+        aisles: l.aisles,
+        cross: [(l.cross[0].z0 + l.cross[0].z1) / 2, (l.cross[1].z0 + l.cross[1].z1) / 2],
+      });
+      // (its weather is a Grounds patch: the game's view.ts puts every one on — light3d.ts
+      // patchGrounds; a still has this one put on by itself, unlit by the land's light)
+      if (!this.o.stream) {
+        const own = m.userData.grounds as { patch: (sh: unknown) => void };
+        m.onBeforeCompile = (sh) => own.patch(sh);
+        m.customProgramCacheKey = () => "yutopia-lot-cover-still";
+      }
       this.add(c.build(), m, "receive");
     }
-    const lay = campusLot(36);
-    const lot: Lot = {
-      ...LOT,
-      cols: lay.cols as Lot["cols"],
-      aisles: lay.aisles,
-      bayW: lay.bayW,
-      bayL: lay.bayL,
-      bays: lay.bays as Lot["bays"],
-    };
-    const t = this.keep(tex(lotCanvas(this.T, lot, 20), false));
-    const g = new G();
-    g.quad(
-      [LOT.x0, 0.03, LOT.z0],
-      [LOT.x1, 0.03, LOT.z0],
-      [LOT.x1, 0.03, LOT.z1],
-      [LOT.x0, 0.03, LOT.z1],
+    // its kerbs, islands, pavement, snow and sign (the game's cars come and go: no snow in its
+    // empty bays there yet)
+    const d = lotDressing(l, this.o.stream ? null : l.cars);
+    this.add(d.solid, this.lambert());
+    this.add(d.snow, this.lambert());
+    const st = this.keep(tex(lotSignCanvas(this.T), false));
+    this.add(d.sign, this.lambert(0xffffff, st, false), "none");
+  }
+
+  /** The lot's floor as a still draws it (the game's is the ground floor's own): the asphalt
+   *  painted, the seeded cars under snow, the lamps, the path to the doors. */
+  private lotFloor(l: ReturnType<typeof lotLayout>) {
+    // the asphalt, painted
+    const t = this.keep(tex(lotPaintCanvas(this.T, l, 20), false));
+    const a = new G();
+    a.quad(
+      [l.x0, 0.03, l.z0],
+      [l.x1, 0.03, l.z0],
+      [l.x1, 0.03, l.z1],
+      [l.x0, 0.03, l.z1],
       [0, 1, 0],
       [
         [0, 1],
@@ -1135,81 +1159,23 @@ export class Grounds3 {
         [0, 0],
       ],
     );
-    if (!this.o.stream) this.add(g.build(), this.lambert(0xffffff, t, false), "receive");
-    // the cars, nose-in, under snow
+    this.add(a.build(), this.lambert(0xffffff, t, false), "receive");
+    // the cars, under snow
     const solids: BufferGeometry[] = [];
     const glass: BufferGeometry[] = [];
-    for (const c of lay.cars) {
-      const { solid, glass: gl } = carGeometry(
-        c.wagon,
-        [0xcbbd98, 0x6b2430, 0x4a5a73, 0xe8e6df, 0x1f2124, 0x6a4a35, 0x8b8f93, 0x2f4a3b, 0xb8702a][c.colour],
-        c.snowy,
-      );
+    for (const c of l.cars) {
+      const { solid, glass: gl } = carGeometry(c.wagon, CAR_COLOURS[c.colour], c.snowy);
       const ry = (c.dir > 0 ? 0 : Math.PI) + c.tilt;
       solids.push(place(solid, c.x, 0.03, c.z, ry));
       glass.push(place(gl, c.x, 0.03, c.z, ry));
     }
-    if (!this.o.stream) {
-      this.add(mergeGeometries(solids, false), this.lambert());
-      this.add(mergeGeometries(glass, false), this.lambert(0x9aa6ae), "cast");
-    }
-    for (const s of [...solids, ...glass]) s.dispose();
-    // the plough's banks round it (open where the driveway and the path go out): ridges strung
-    // through the shared positions (lotBanks) along each edge, broken where they're apart
-    const bg = new G();
-    const rb = groundsRng(31);
-    const beads = lotBanks();
-    const edges: { pts: typeof beads; nx: number; nz: number; along: "x" | "z" }[] = [
-      { pts: beads.filter((k) => k.x < LOT.x0), nx: -1, nz: 0, along: "z" },
-      { pts: beads.filter((k) => k.x > LOT.x1), nx: 1, nz: 0, along: "z" },
-      { pts: beads.filter((k) => k.x >= LOT.x0 && k.x <= LOT.x1 && k.z < LOT.z0), nx: 0, nz: -1, along: "x" },
-      { pts: beads.filter((k) => k.x >= LOT.x0 && k.x <= LOT.x1 && k.z > LOT.z1), nx: 0, nz: 1, along: "x" },
-    ];
-    for (const e of edges) {
-      const pts = [...e.pts].sort((a, b) => (e.along === "z" ? a.z - b.z : a.x - b.x));
-      let run: typeof beads = [];
-      const flush = () => {
-        if (run.length < 2) return;
-        const st = run.map((k) => ({ x: k.x, z: k.z, nx: e.nx, nz: e.nz, k: 0.7 + k.s * 0.35 }));
-        // (tapered off at both ends of a run)
-        st.unshift({
-          ...st[0],
-          x: st[0].x - (e.along === "x" ? 1.4 : 0),
-          z: st[0].z - (e.along === "z" ? 1.4 : 0),
-          k: 0,
-        });
-        const l = st[st.length - 1];
-        st.push({ ...l, x: l.x + (e.along === "x" ? 1.4 : 0), z: l.z + (e.along === "z" ? 1.4 : 0), k: 0 });
-        ridge(
-          bg,
-          st.map((q) => ({ ...q, k: q.k * (0.85 + rb() * 0.3) })),
-          [
-            [-1.3, -1],
-            [-0.7, 0.5],
-            [0, 0.7],
-            [0.8, 0.45],
-            [1.6, -1],
-          ],
-          () => 0,
-        );
-      };
-      for (const k of pts) {
-        const last = run[run.length - 1];
-        if (last && Math.hypot(k.x - last.x, k.z - last.z) > 3.2) {
-          flush();
-          run = [];
-        }
-        run.push(k);
-      }
-      flush();
-    }
-    this.add(bg.build(), this.lambert());
-    // (in the game the lot's lamp posts and its path are the ground floor's)
-    if (this.o.stream) return;
-    for (const l of lay.lamps) this.lampAt(l.x, l.z, l.x > LOT.x1 - 3 ? Math.PI : Math.PI / 2, "cobra");
-    // the cleared path from the lot to the doors, and the canopy over them
+    this.add(mergeGeometries(solids, false), this.lambert());
+    this.add(mergeGeometries(glass, false), this.lambert(0x9aa6ae), "cast");
+    for (const g of [...solids, ...glass]) g.dispose();
+    for (const m of l.lamps) this.lampAt(m.x, m.z, m.rot === 0 ? 0 : Math.PI, "cobra");
+    // the cleared path from the pavement to the doors
     const p = new G().color(0xbab9b4);
-    p.quad([LOT.x1, 0.035, 16], [0, 0.035, 16], [0, 0.035, 20], [LOT.x1, 0.035, 20], [0, 1, 0]);
+    p.quad([l.pavement.x1, 0.035, 16], [0, 0.035, 16], [0, 0.035, 20], [l.pavement.x1, 0.035, 20], [0, 1, 0]);
     this.add(p.build(), this.lambert(), "receive");
   }
 

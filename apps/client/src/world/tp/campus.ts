@@ -5,6 +5,8 @@ import {
   isFloor,
   isWindow,
   isWindowKind,
+  lotBanksOf,
+  lotLayout,
   type MapDef,
   tileAt,
   vWall,
@@ -1145,7 +1147,9 @@ export class Campus {
       shadows.quad(P(-rx, -rz), P(rx, -rz), P(rx, rz), P(-rx, rz), [0, 1, 0]);
     };
     // the ground's shape: flat under the lot, the blocks, the building and the tower
-    const lotRect: Rect = { x0: -56, z0: -8, x1: -10, z1: H + 12 };
+    // (the lot: the shared layout, lot.ts — docs/plan/42-the-lot.md)
+    const lay = lotLayout(H / 2);
+    const lotRect: Rect = { x0: lay.x0, z0: lay.z0, x1: lay.x1, z1: lay.z1 };
     const blocks: Rect[] = [
       { x0: W + 12, z0: -30, x1: W + 40, z1: H + 12 },
       { x0: -4, z0: H + 12, x1: W + 2, z1: H + 36 },
@@ -1324,34 +1328,15 @@ export class Campus {
     site.position.set(this.cx, GROUND, this.cz);
     this.add(site);
 
-    // ── the parking lot, west of the building ──
+    // ── the parking lot, west of the building (lot.ts: its rows, cars and banks) ──
     const lot: Lot = {
       ...lotRect,
-      cols: [],
-      aisles: [],
-      bayW: 2.8,
-      bayL: 5.6,
-      bays: [],
+      cols: lay.rows.map((r) => ({ x: r.aisle, dir: Math.sign(r.aisle - r.back) as 1 | -1 })),
+      aisles: lay.aisles,
+      bayW: lay.bayW,
+      bayL: lay.bayL,
+      bays: lay.bays,
     };
-    // columns of bays, nose-in, either side of two aisles (x of the aisle's edge, the nose direction)
-    // columns of bays, nose-in, either side of two aisles (x of the aisle's
-    // edge; the bay runs the other way from `dir`, and so does the car's nose)
-    const c0 = lot.x1 - 2 - lot.bayL;
-    const c1 = c0 - 6.5;
-    const c2 = c1 - 2 * lot.bayL;
-    const c3 = c2 - 6.5;
-    const c4 = c3 - 2 * lot.bayL;
-    lot.cols = [
-      { x: c0, dir: -1 }, // by the building: noses to the wall
-      { x: c1, dir: 1 },
-      { x: c2, dir: -1 },
-      { x: c3, dir: 1 },
-      { x: c4, dir: -1 },
-    ];
-    lot.aisles = [c0 - 3.25, c2 - 3.25];
-    for (const col of lot.cols)
-      for (let z = lot.z0 + 3; z + lot.bayW <= lot.z1 - 3; z += lot.bayW)
-        lot.bays.push({ x: col.x - (col.dir * lot.bayL) / 2, z: z + lot.bayW / 2, dir: col.dir });
     const lotTex = new CanvasTexture(lotCanvas(T, lot, 20));
     lotTex.colorSpace = SRGBColorSpace;
     lotTex.anisotropy = 8;
@@ -1361,45 +1346,20 @@ export class Campus {
       this.lambert(0xffffff, lotTex),
     );
     lotMesh.position.set((lot.x0 + lot.x1) / 2, GROUND + 0.02, (lot.z0 + lot.z1) / 2);
-    // (walkable: the ground floor's asphalt is the lot)
+    // (walkable: the ground floor's asphalt is the lot, its cars things on it)
     if (!this.walkable) this.add(lotMesh);
     else {
       lotMesh.geometry.dispose();
       (lotMesh.material as MeshLambertMaterial).dispose();
     }
-    // cars in the bays nearest the building most often
-    const rc = T.rng(123);
-    const taken = new Set<number>();
-    // the visitor's bay: in the row by the building, a little south of the entrance
-    let visitorBay = 0;
-    for (let i = 0; i < lot.bays.length; i++)
-      if (
-        lot.bays[i].dir === -1 &&
-        lot.bays[i].x > lot.x1 - 9 &&
-        Math.abs(lot.bays[i].z - (H / 2 + 6)) < Math.abs(lot.bays[visitorBay].z - (H / 2 + 6))
-      )
-        visitorBay = i;
-    taken.add(visitorBay);
     const solids: BufferGeometry[] = [];
     const glasses: BufferGeometry[] = [];
-    let n = 0;
-    for (let tries = 0; n < 16 && tries < 200; tries++) {
-      const i = Math.floor(rc() ** 1.7 * lot.bays.length);
-      if (taken.has(i)) continue;
-      taken.add(i);
-      n++;
-      const b = lot.bays[i];
-      const wagon = rc() < 0.3;
-      const colour = CAR_COLOURS[Math.floor(rc() * CAR_COLOURS.length)];
-      const snowy = rc() > 0.2;
-      const ry = (b.dir > 0 ? 0 : Math.PI) + (rc() - 0.5) * 0.04;
-      const z = b.z + (rc() - 0.5) * 0.3;
-      // (walkable: the cars are things on the ground floor, drawn there)
-      if (this.walkable) continue;
-      const { solid, glass } = carGeometry(wagon, colour, snowy);
-      solids.push(place(solid, b.x, GROUND + 0.02, z, ry));
-      glasses.push(place(glass, b.x, GROUND + 0.02, z, ry));
-      shadowAt(b.x, z, 3.1, 1.7, ry, GROUND + 0.03);
+    for (const c of this.walkable ? [] : lay.cars) {
+      const ry = (c.dir > 0 ? 0 : Math.PI) + c.tilt;
+      const { solid, glass } = carGeometry(c.wagon, CAR_COLOURS[c.colour], c.snowy);
+      solids.push(place(solid, c.x, GROUND + 0.02, c.z, ry));
+      glasses.push(place(glass, c.x, GROUND + 0.02, c.z, ry));
+      shadowAt(c.x, c.z, 3.1, 1.7, ry, GROUND + 0.03);
     }
     const carMat = this.lambert(0xffffff, undefined, true);
     if (solids.length) this.add(mergeGeometries(solids, false), carMat);
@@ -1408,30 +1368,22 @@ export class Campus {
     if (glasses.length) this.add(mergeGeometries(glasses, false), carGlass);
     this.tinted.push([carGlass, new Color(1, 1, 1)]);
     for (const s of glasses) s.dispose();
-    // ploughed snow heaped along the lot's edges
-    const banks: BufferGeometry[] = [];
-    const rb = T.rng(31);
-    const bank = (x: number, z: number) => {
-      const s = 1.1 + rb() * 1.6;
-      const g = new SphereGeometry(1, 10, 7).scale(s, s * 0.42, s * (0.7 + rb() * 0.6));
-      banks.push(place(tinted(g, 0xf7f9fb), x, ground(x, z) - 0.1, z, rb() * Math.PI));
-    };
-    for (let z = lot.z0; z <= lot.z1; z += 2.2) {
-      bank(lot.x0 - 1.2 + (rb() - 0.5), z + (rb() - 0.5));
-      if (z < H / 2 - 5 || z > H / 2 + 5) bank(lot.x1 + 1.2 + (rb() - 0.5), z + (rb() - 0.5));
-    }
-    for (let x = lot.x0; x <= lot.x1; x += 2.2) {
-      if (x > lot.x0 + 4 && x < lot.x0 + 12) continue; // the driveway's mouth
-      bank(x + (rb() - 0.5), lot.z0 - 1.2 + (rb() - 0.5));
-      bank(x + (rb() - 0.5), lot.z1 + 1.2 + (rb() - 0.5));
-    }
-    // the banks' far side, down the driveway
+    // the plough's banks and its dump
+    const banks = lotBanksOf(lay).map((k) =>
+      place(
+        tinted(new SphereGeometry(1, 10, 7).scale(k.s, k.s * 0.42, k.sz), 0xf7f9fb),
+        k.x,
+        ground(k.x, k.z) - 0.1,
+        k.z,
+        k.ry,
+      ),
+    );
     this.add(mergeGeometries(banks, false), this.lambert(0xffffff), true);
     for (const b of banks) b.dispose();
 
     // ── the driveway: from the lot's corner, curving away to the horizon ──
     const road = new G();
-    const A = { x: lot.x0 + 8, z: lot.z0 - 1 };
+    const A = { x: lay.mouth.x, z: lot.z0 - 1 };
     const P1 = { x: lot.x0 - 30, z: lot.z0 - 90 };
     const P2 = { x: lot.x0 - 190, z: lot.z0 - 160 };
     const B = { x: lot.x0 - 330, z: lot.z0 - 330 };
@@ -1482,16 +1434,16 @@ export class Campus {
     // the lot's mouth onto the driveway
     const mouth = new G();
     mouth.quad(
-      [lot.x0 + 4, GROUND + 0.012, lot.z0 - 1.5],
-      [lot.x0 + 12, GROUND + 0.012, lot.z0 - 1.5],
-      [lot.x0 + 12, GROUND + 0.012, lot.z0 + 0.3],
-      [lot.x0 + 4, GROUND + 0.012, lot.z0 + 0.3],
+      [lay.mouth.x - 4.5, GROUND + 0.012, lot.z0 - 1.5],
+      [lay.mouth.x + 4.5, GROUND + 0.012, lot.z0 - 1.5],
+      [lay.mouth.x + 4.5, GROUND + 0.012, lot.z0 + 0.3],
+      [lay.mouth.x - 4.5, GROUND + 0.012, lot.z0 + 0.3],
       [0, 1, 0],
     );
     this.add(mouth.build(), this.lambert(0x3f4348));
     // a gatehouse by the mouth, with its barrier up
     const gate = new G();
-    const gx = lot.x0 + 13.5;
+    const gx = lay.mouth.x + lay.mouth.w / 2 + 1.5;
     const gz = lot.z0 - 0.5;
     gate.color(0xd8d4cb).box(gx - 1.2, GROUND, gz - 1.2, gx + 1.2, GROUND + 2.6, gz + 1.2);
     gate.color(0x2c3a40).box(gx - 1.25, GROUND + 1.2, gz - 0.9, gx + 1.25, GROUND + 2.1, gz + 0.9);
@@ -1708,10 +1660,7 @@ export class Campus {
     };
     // (walkable: the lot's lamp posts are things on the ground floor, their light too)
     const lotPost = !this.walkable;
-    for (const x of [c2, c4])
-      for (const z of [lot.z0 + 9, lot.z0 + 23, lot.z0 + 37]) lampAt(x, z, Math.PI / 2, lotPost);
-    lampAt(lot.x1 - 1, lot.z0 + 4, Math.PI, lotPost);
-    lampAt(lot.x1 - 1, lot.z1 - 4, Math.PI, lotPost);
+    for (const m of lay.lamps) lampAt(m.x, m.z, m.rot === 0 ? 0 : Math.PI, lotPost);
     for (let i = 8; i < roadPts.length; i += 12) {
       const p = roadPts[i];
       const side = (i / 12) % 2 === 0 ? 1 : -1;
@@ -1874,12 +1823,14 @@ export class Campus {
     fake = this.root.children.length;
     // ── life: a visitor's car now and then, steam off the east block's roof ──
     {
-      const bay = lot.bays[visitorBay];
-      const aisle = lot.aisles[0];
+      // (round the north cross aisle and down aisle E to the visitors' bay: lot.ts)
+      const bay = lay.bays[lay.visitorBay];
+      const aisle = lay.aisles[1];
+      const zN = (lay.cross[0].z0 + lay.cross[0].z1) / 2 + 1;
       const route: { x: number; z: number; v: number }[] = [];
       for (let i = roadPts.length - 1; i >= 0; i -= 2) route.push({ x: roadPts[i].x, z: roadPts[i].z, v: 7 });
-      route.push({ x: lot.x0 + 8, z: lot.z0 + 1.6, v: 3 });
-      route.push({ x: aisle - 0.4, z: lot.z0 + 1.6, v: 3 });
+      route.push({ x: lay.mouth.x - 1.8, z: zN, v: 3 });
+      route.push({ x: aisle - 0.4, z: zN, v: 3 });
       route.push({ x: aisle - 0.4, z: bay.z - 2.2, v: 2.2 });
       route.push({ x: aisle + 1.6, z: bay.z - 0.3, v: 1.6 });
       route.push({ x: bay.x, z: bay.z, v: 1.2 });

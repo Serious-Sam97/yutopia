@@ -732,26 +732,50 @@ export function crossingHeaps(yAt: (x: number, z: number) => number): BufferGeom
 }
 
 /** The lot's asphalt (the ground floor's own, drawn by the floor) under the same weather as the
- *  roads: packed snow and slush over it in patches, thinner along the aisles where cars run —
- *  a see-through layer over it (it read as a pit beside the snowed-over driveway). */
-export function lotCover(m: { userData: Record<string, unknown>; transparent: boolean; depthWrite: boolean }) {
+ *  roads: packed snow and slush over it in patches — a see-through layer over it (it read as a pit
+ *  beside the snowed-over driveway). Given the lot's layout (docs/plan/42-the-lot.md), as the
+ *  driveway's: the paint showing through, the tyres' tracks worn clear round the aisles' loop and
+ *  more left in the bays. */
+export function lotCover(
+  m: { userData: Record<string, unknown>; transparent: boolean; depthWrite: boolean },
+  lot?: { aisles: [number, number]; cross: [number, number] },
+) {
   m.transparent = true;
   m.depthWrite = false;
-  const u = { rdSnow: roadSnow };
+  const u: Record<string, { value: unknown }> = { rdSnow: roadSnow };
+  if (lot) {
+    u.lotA = { value: lot.aisles };
+    u.lotZ = { value: lot.cross };
+  }
+  const worn = lot
+    ? `
+  // round the loop: the aisles (x) and the cross aisles (z) between them; the tyres' two tracks
+  float inA = max(1.0 - smoothstep(2.8, 3.6, abs(P.x - lotA.x)), 1.0 - smoothstep(2.8, 3.6, abs(P.x - lotA.y)));
+  float inZ = (1.0 - smoothstep(2.8, 3.6, min(abs(P.y - lotZ.x), abs(P.y - lotZ.y)))) * step(lotA.x - 3.6, P.x) * step(P.x, lotA.y + 3.6);
+  float aisle = max(inA, inZ);
+  float tA = min(min(abs(abs(P.x - lotA.x) - 0.9), abs(abs(P.x - lotA.y) - 0.9)), 9.0);
+  float tZ = min(abs(abs(P.y - lotZ.x) - 0.9), abs(abs(P.y - lotZ.y) - 0.9)) + (1.0 - inZ) * 9.0;
+  float tracks = 1.0 - smoothstep(0.25, 0.6, min(tA, tZ) + (rdNoise(P * 0.5) - 0.5) * 0.3);
+  cover += 0.3 - 0.5 - aisle * 0.06 - tracks * aisle * 0.3;`
+    : "";
   m.userData.grounds = {
-    key: "-lot",
+    key: lot ? "-lot2" : "-lot",
     patch: (sh: { uniforms: Record<string, unknown>; vertexShader: string; fragmentShader: string }) => {
       Object.assign(sh.uniforms, u);
       VARY(sh);
       sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", `#include <common>\nvarying vec3 vRdW;\nuniform float rdSnow;\n${NOISE}`)
+        .replace(
+          "#include <common>",
+          `#include <common>\nvarying vec3 vRdW;\nuniform float rdSnow;\n${lot ? "uniform vec2 lotA;\nuniform vec2 lotZ;\n" : ""}${NOISE}`,
+        )
         .replace(
           "#include <color_fragment>",
           `#include <color_fragment>
 {
   vec2 P = vRdW.xz;
   float snow = max(rdSnow, 0.0);
-  float cover = clamp(0.5 + snow * 0.6 + (rdFbm(P * 0.07) - 0.5) * 0.9 + (rdFbm(P * 0.6) - 0.5) * 0.25, 0.0, 1.0);
+  float cover = clamp(0.5 + snow * 0.6 + (rdFbm(P * 0.07) - 0.5) * 0.9 + (rdFbm(P * 0.6) - 0.5) * 0.25, 0.0, 1.0);${worn}
+  cover = clamp(cover, 0.0, 1.0);
   vec3 packed = mix(vec3(0.52, 0.55, 0.59), vec3(0.76, 0.79, 0.83), rdFbm(P * 0.8));
   float slush = smoothstep(0.45, 0.8, rdNoise(P * 0.35 + 5.0)) * (1.0 - snow * 0.6);
   packed = mix(packed, vec3(0.30, 0.27, 0.23), slush * 0.5);

@@ -5,7 +5,7 @@ import {
   GATE,
   GROUNDS,
   LAMPS,
-  LOT,
+  LOT_ROWS,
   type P,
   PLAZA,
   POND,
@@ -141,13 +141,17 @@ export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin
     g.lineWidth = 2.2 * px;
     g.stroke();
   }
-  // the lot's bays
+  // the lot's rows of bays (the Grounds' copy of lot.ts: the lot module itself here split the
+  // Grounds' chunks — docs/plan/42-the-lot.md)
   g.strokeStyle = "rgba(235,235,230,0.7)";
   g.lineWidth = 1;
-  for (let x = LOT.x0 + 2; x < LOT.x1; x += 6) {
+  for (const [x0, x1] of LOT_ROWS.xs) {
+    g.strokeRect(X(x0), Z(LOT_ROWS.z0), (x1 - x0) * px, (LOT_ROWS.z1 - LOT_ROWS.z0) * px);
     g.beginPath();
-    g.moveTo(X(x), Z(LOT.z0 + 3));
-    g.lineTo(X(x), Z(LOT.z1 - 3));
+    for (let z = LOT_ROWS.z0 + LOT_ROWS.bay; z < LOT_ROWS.z1; z += LOT_ROWS.bay) {
+      g.moveTo(X(x0), Z(z));
+      g.lineTo(X(x1), Z(z));
+    }
     g.stroke();
   }
 

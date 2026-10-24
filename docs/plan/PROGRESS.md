@@ -1158,3 +1158,27 @@ The user: entering, stutters and 47–50 fps for ~10 s, then 60; iso → 3D the 
 - Entering prod's world in 3D: 30–39 fps for 18 s → 50–54 for 3 s, then 60 (frames over 30 ms 450 → 37); programs linked after the screen 10 → 0.
 - **Checked**: prod's world as Bia (fps, uploads, links, screens' uploads), the screen rule in the page; client 25; types; Biome; build + budget (page 556.999).
 - Then a quality change mid-game (prod's worst freeze, 5.3 s in Firefox, followed auto quality's High → Medium): the new quality's shaders compiled first, a few a frame against stand-ins for its lights, then switched — prod's office in Chromium 791 ms → 112 ms worst frame (→ Low 722 → 106).
+
+## The lot — phase 0: the mocks (2026-10-24, plan `42-the-lot.md`)
+The user: "the parking lot has an old design, it does not connect right with the main road and it's a little weird". Measured: the driveway lands on the back of two rows (cars in its mouth), no cross aisle (a 3-tile strip), the west row facing nothing, lamps in bay mouths, no entrance, and prod's lot 12 tiles deeper than the code thinks.
+- Decided with the user: keep the size, a pavement and marked bays by the doors, the full dressing. The layout is shared `lot.ts`: a dump, four rows, two aisles looping through cross aisles, kerbed islands with the lamps, the pavement; the driveway ends flush on aisle W through a bellmouth.
+- Stills in `design/screens/lot/` (the plan today vs proposed, from above, the mouth, the doors, an aisle, the dump, night, the iso angle); the game keeps today's lot until they're approved.
+- **Checked**: shared `lot.test.ts` 4 (every bay driven to from the mouth; nothing in a bay or an aisle; the driveway lands on aisle W; the doors move only the visitor's bay); shared suite; types; Biome.
+
+## The lot — phase 1: the lot for real (2026-10-24, plan `42-the-lot.md`)
+- `lot.ts` is the one lot: a new world stamps it; a stored one is made today's once by `upgradeLot`. That covers the tiles, the pavement, the lamps on the islands, `car-i` into its own bay and any other car on the lot into the nearest free plain one; what's driven or off the lot is left. The dev world: 24 things moved.
+- The car sim, the server's parking and tow, and the visitor's loop come from it. The game's 3D lot has the kerbs, islands, pavement, windrows, dump, sign and worn cover; the floor paints the bays from it.
+- **Checked**: shared 288 (`lot.test.ts`, `lot-upgrade.test.ts`), world-server 135 (+1 known flake, passes alone), types, Biome, the game after the migration.
+- **Budget**: page 558.1 KB (HEAD 557.1, budget 557), Grounds lazy 186.3 KB (HEAD 183.1, budget 186). Three chunk splits found and undone on the way (the shared index passing on `lot.ts`; the site plan, the dev lot plan and the stills importing across the Grounds' boundary). The raise is the user's call.
+
+## The lot — phase 2: the dressing in the game (2026-10-24, plan `42-the-lot.md`)
+- Budgets raised by the user's call: page 558.5 KB, Grounds' lazy 187 KB.
+- Iso: the lot's islands, the plough's heaps and the sign as items; the lot's worn snow cover over the floor with the accessible bays' blue, the hatching and VISITOR (the page hands the layout in).
+- 3D: snow in the empty bays following the parked cars; the driveway's banks follow the bellmouth and taper where they stop (every way's now); the dark line where the lot meets the snow gone (the cover's edge parted from the floor's at a slant: it reaches past it now); the old painted campus draws the shared lot.
+- **Checked**: the game in both views, client 25, types, Biome, `/dev/shots`; budget page 558.2, Grounds 186.3.
+
+## The lot — phase 3: the checks (2026-10-24, plan `42-the-lot.md`)
+- Prod's saved world migrated offline: 28 things moved (8 lamps, 16 seeded cars, the user's 4 own cars), 20 cars each in a bay of its own, tiles 2,924 asphalt + 204 pavement; once only; the game without errors in both views.
+- e2e on the GPU (the dev world saved first and put back after `floors.spec`'s fixture). Fixed on the way: an empty bay-snow geometry (a GL error a frame), a passenger's chase camera crashing every frame (since plan 34: the stand-in state had no spec), the iso cover's long frame, `floors.spec` reading a car's roof the old way.
+- **Green**: car, grounds (but iso town), lighting, town, floors (but stairs by a click), client 25, budget. **Red on main too**: the iso town walk's frames (50–117 ms) and the stairs by a click (0.73 off), with HEAD's client as well.
+

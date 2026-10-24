@@ -1,3 +1,4 @@
+import type { LotLayout } from "./lot.ts";
 import type { AreaDef, MapDef } from "./map.ts";
 
 // The Grounds (docs/plan/27-the-grounds.md): the land round the headquarters
@@ -175,8 +176,25 @@ export interface Lamp {
 
 const H = 36; // the studio's depth (the campus's own numbers: tp/campus.ts)
 const W = 48;
-// the parking lot (shared building.ts campusLot): x −56..−10, z −8..H + 12
-export const LOT = { x0: -56, z0: -8, x1: -10, z1: H + 12 };
+// the parking lot (lot.ts, docs/plan/42-the-lot.md): its rectangle, the driveway's mouth on its
+// north edge, its pavement along the building from x −13. A copy of lot.ts's own (lot.test.ts
+// checks they agree): this module is lazy on the client, and one it shared with the page would
+// be copied into every chunk that uses either (+7 KB on the page, +90 KB of the Grounds')
+export const LOT = { x0: -56, z0: -8, x1: -10, z1: 60 };
+export const LOT_MOUTH = { x: -40.6, z: -8, w: 9 };
+export const LOT_PAVE = -13;
+/** Its parked rows (their x spans, the pair as one) and where they run (z), a bay every 2.8:
+ *  the site plan's drawing of it. */
+export const LOT_ROWS = {
+  xs: [
+    [-49.8, -44.2],
+    [-37, -25.8],
+    [-18.6, -13],
+  ] as [number, number][],
+  z0: -0.8,
+  z1: 52.8,
+  bay: 2.8,
+};
 // the stored ground floor's rectangle (shared building.ts groundLevel and
 // upgradeGround: the lobby, the lot and the blocks, GROUND_OFFSET −60, −10,
 // 160 × 94): flat, at 0
@@ -265,17 +283,27 @@ export const WAYS: Way[] = [
   // from the lot's mouth up through the woods to the gatehouse
   // (widths, docs/plan/33-the-look.md: two cars pass; the driveway as wide as the road it runs
   // into, so their lanes and lines meet; Main Street parks both kerbs as well)
-  way("driveway", "driveway", "Driveway", 9, [
-    [-48, -9],
-    [-40, -50],
-    [-14, -100],
-    [-20, -150],
-    [-60, -200],
-    [-70, -250],
-    [-50, -300],
-    [-40, -340],
-    [-40, -366],
-  ]),
+  // (it lands on the lot's aisle W, opening out into a bellmouth: lot.ts, docs/plan/42-the-lot.md)
+  way(
+    "driveway",
+    "driveway",
+    "Driveway",
+    9,
+    [
+      [LOT_MOUTH.x, LOT_MOUTH.z],
+      [-40, -50],
+      [-14, -100],
+      [-20, -150],
+      [-60, -200],
+      [-70, -250],
+      [-50, -300],
+      [-40, -340],
+      [-40, -366],
+    ],
+    false,
+    0,
+    { n: 8, w0: 17 },
+  ),
   // the public road: out of the gate, east, over the river to the town
   way("road", "road", "County road", 9, [
     [-40, -366],
@@ -748,34 +776,13 @@ export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
     } else if (n.d < wayHalf(w, n.i) + wayPave(w, n.i) && !on) on = "walk"; // the town's pavements
   }
   if (on) return on;
-  if (x >= LOT.x0 && x < LOT.x1 && z >= LOT.z0 && z < LOT.z1) return "asphalt";
+  if (x >= LOT.x0 && x < LOT.x1 && z >= LOT.z0 && z < LOT.z1) return x >= LOT_PAVE ? "walk" : "asphalt";
   if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) return "walk";
   if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1) return "ice";
   const r = near.get(RIVER_F);
   if (r && r.d < RIVER.w / 2) return "ice";
   if (!rough && slopeAt(x, z) > 0.85) return "rock";
   return treeDensity(x, z) > 0.3 ? "deep" : "snow";
-}
-
-/** The plough's banks round the lot (open where the driveway and the path go out): where
- *  each mound is, its size, its turn. The 3D view heaps them; a car (car/world.ts) ploughs into them. */
-export function lotBanks(): { x: number; z: number; s: number; sz: number; ry: number }[] {
-  const r = groundsRng(31);
-  const out: { x: number; z: number; s: number; sz: number; ry: number }[] = [];
-  const bank = (x: number, z: number) => {
-    const s = 1.1 + r() * 1.5;
-    const sz = s * (0.7 + r() * 0.6);
-    out.push({ x, z, s, sz, ry: r() * Math.PI });
-  };
-  for (let z = LOT.z0; z <= LOT.z1; z += 2.2) {
-    if (Math.abs(z - 22) > 3) bank(LOT.x0 - 1.2 + (r() - 0.5), z);
-    if (Math.abs(z - 18) > 6) bank(LOT.x1 + 1.2 + (r() - 0.5), z);
-  }
-  for (let x = LOT.x0; x <= LOT.x1; x += 2.2) {
-    if (Math.abs(x + 48) > 5) bank(x, LOT.z0 - 1.2 + (r() - 0.5));
-    bank(x, LOT.z1 + 1.2 + (r() - 0.5));
-  }
-  return out;
 }
 
 /** Inside the company's fence. */
@@ -1555,42 +1562,50 @@ const nearestOn = (line: P[], x: number, z: number) => {
   return best;
 };
 
-/** The visitor's car: in from the county road, through the gate, down the
- *  driveway, across the lot's top and down its first aisle into the bay by the
- *  doors (shared building.ts campusLot: its visitorBay, nosed east), and out
- *  the way it came (backed out of the bay first). */
-export const VISITOR = (() => {
+/** The visitor's car (`l`: the lot, its visitors' bay by the doors — lot.ts lotLayout; the
+ *  server's, by its own doors): in from
+ *  the county road, through the gate and down the driveway, keeping right round the lot's loop
+ *  (along the north cross aisle, down aisle E) into its bay nosed east; backed out into the aisle,
+ *  then on round (aisle E, the south cross aisle, up aisle W) and away the way it came. */
+export function visitorRoute(l: LotLayout) {
   const road = wayLine("road");
   const from = nearestOn(road, -26, -404);
   const down = [...road.slice(0, from + 1).reverse(), ...wayLine("driveway").slice().reverse()];
-  const bay = { x: -14.8, z: 24.4 }; // campusLot(36).bays[visitorBay]
-  const aisle = -20.85; // the first aisle (campusLot(36).aisles[0])
-  const lot = straight([
-    [-48, -9],
-    [-40, -6.5],
-    [aisle, -6.5],
-    [aisle, bay.z],
-    [bay.x, bay.z],
+  const b = l.bays[l.visitorBay];
+  const bay = { x: b.x, z: b.z };
+  const [aw, ae] = l.aisles;
+  const zN = (l.cross[0].z0 + l.cross[0].z1) / 2;
+  const zS = (l.cross[1].z0 + l.cross[1].z1) / 2;
+  // (in the aisles, on the right as on the roads: half a lane over)
+  const inn = routeOf([
+    ...keepRight(down, LANE),
+    ...straight([
+      [aw - LANE, l.z0 + 1],
+      [aw - LANE, zN + LANE],
+      [ae - LANE, zN + LANE],
+      [ae - LANE, bay.z],
+      [bay.x, bay.z],
+    ]).slice(1),
   ]);
-  const inn = routeOf([...keepRight(down, LANE), ...lot.slice(1)]);
-  // out: backed out to the aisle, then up the aisle and away the same roads
+  // out: backed into aisle E (its middle: clear of the bays across it), then round
   const back = routeOf(
     straight([
       [bay.x, bay.z],
-      [aisle, bay.z],
+      [ae + 0.2, bay.z],
     ]),
   );
   const up = [
     ...straight([
-      [aisle, bay.z],
-      [aisle, -6.5],
-      [-40, -6.5],
+      [ae + 0.2, bay.z],
+      [ae - LANE, bay.z + 4],
+      [ae - LANE, zS - LANE],
+      [aw + LANE, zS - LANE],
+      [aw + LANE, l.z0 + 1],
     ]),
-    ...keepRight([...wayLine("driveway"), ...road.slice(1, from + 1)], LANE),
+    ...keepRight([...wayLine("driveway"), ...road.slice(1, from + 1)], LANE).slice(1),
   ];
   return { in: inn, back, out: routeOf(up), bay };
-})();
-
+}
 /** The shuttle: the headquarters' stop (the lot's mouth) to the town square's
  *  (Main Street, by the statue) and back; `stops` are how far along each way. */
 export const SHUTTLE = (() => {

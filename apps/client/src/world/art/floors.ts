@@ -5,6 +5,7 @@ import {
   isDoorKind,
   isFloor,
   isWallEdge,
+  lotLayout,
   lotStripes,
   type MapDef,
   tileAt,
@@ -475,17 +476,12 @@ export class FloorBake {
     }
     const st = map.areas.find((a) => a.kind === "stage");
     if (st) this.stage = [st.x, st.y + st.h - 0.04, st.w, 0.08];
-    // a parking lot (the asphalt): its bays painted on
-    const lot = this.byMat.get("a");
-    if (lot?.length) {
-      const xs = lot.map(([x]) => x);
-      const ys = lot.map(([, y]) => y);
-      this.stripes = lotStripes({
-        x0: Math.min(...xs),
-        z0: Math.min(...ys),
-        x1: Math.max(...xs) + 1,
-        z1: Math.max(...ys) + 1,
-      });
+    // the ground floor's lot: its bays painted on (lot.ts, in the building's coords: the floor's
+    // corner is at ox, oy there)
+    if (this.byMat.get("a")?.length && map.ox !== undefined) {
+      const ox = map.ox;
+      const oy = map.oy ?? 0;
+      this.stripes = lotStripes(lotLayout()).map(([x, z, w, h]) => [x - ox, z - oy, w, h]);
     }
     this.ao = aoCanvas(map, objects);
     // screen bounds of the floor, cut into chunks of `chunkPx` device px

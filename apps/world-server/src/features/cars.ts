@@ -1,4 +1,4 @@
-import { ANIM, CAR_COLOURS, campusLot, dirFromDelta, GROUND_OFFSET, levelMap } from "@yutopia/shared";
+import { ANIM, CAR_COLOURS, dirFromDelta, GROUND_OFFSET, levelMap, lotLayout } from "@yutopia/shared";
 import {
   bayFor,
   CAR_FLAGS,
@@ -487,7 +487,7 @@ registerFeature((room: WorldRoom) => {
     };
     if (!v.grime) delete props.grime;
     if (!v.dmg) delete props.dmg;
-    const lot = campusLot(36);
+    const lot = lotLayout();
     const bay = bayFor(lot.bays, v.x, v.z, v.a);
     const b = bay ? lot.bays[bay.i] : null;
     const free =
@@ -515,7 +515,7 @@ registerFeature((room: WorldRoom) => {
   // every car back in a bay of the lot (an admin; the tests): its own first (building.ts
   // seeds car-i in the lot's cars[i]), so the lot put back is the lot as it was, not reshuffled
   const home = (all: boolean) => {
-    const lot = campusLot(36);
+    const lot = lotLayout();
     // (the cars that live away from the lot: to their own homes, not the lot's bays)
     const cars = [...room.state.objects.values()].filter((o) => o.kind === "car" && !homeCar(o, all));
     const own = (id: string) => {
@@ -576,7 +576,9 @@ registerFeature((room: WorldRoom) => {
         );
         if (near) continue;
       }
-      const i = mine && !taken.has(mine.bay) ? mine.bay : lot.bays.findIndex((_, k) => !taken.has(k));
+      // (a towed stranger: into a plain bay, never the visitors' or the accessible ones)
+      const i =
+        mine && !taken.has(mine.bay) ? mine.bay : lot.bays.findIndex((b, k) => b.kind === "plain" && !taken.has(k));
       if (i < 0) continue;
       taken.add(i);
       const b = lot.bays[i];

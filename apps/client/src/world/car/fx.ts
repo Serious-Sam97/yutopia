@@ -1,4 +1,4 @@
-import { campusLot } from "@yutopia/shared";
+import { lotLayout } from "@yutopia/shared";
 import { GRIP, type Ground, patchAt } from "@yutopia/shared/car";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import {
@@ -13,6 +13,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   MeshStandardMaterial,
   MultiplyBlending,
   Object3D,
@@ -34,6 +35,7 @@ import {
 import type { Sedan } from "../tp/car/sedan";
 import { windscreenSnow } from "../tp/car/textures";
 import { patchGrounds } from "../tp/light3d";
+import { baySnow } from "../tp/lot3d";
 
 // What the cars leave and throw (docs/plan/28-the-car.md, phase 5) and what
 // their cabins show (phase 4): tyre tracks in the snow that fill back in over
@@ -435,7 +437,7 @@ export class CabinLight {
   readonly light = new PointLight(0xffd9a0, 0, 2.6, 1.6);
   private lamps: { x: number; z: number }[];
   constructor(G: typeof GroundsModule) {
-    this.lamps = [...G.LAMPS.map((l) => ({ x: l.x, z: l.z })), ...campusLot(36).lamps];
+    this.lamps = [...G.LAMPS.map((l) => ({ x: l.x, z: l.z })), ...lotLayout().lamps];
   }
   step(model: Sedan, night: number) {
     model.root.updateMatrixWorld();
@@ -567,4 +569,33 @@ function slushTex(): CanvasTexture {
   }
   slushT = new CanvasTexture(cv);
   return slushT;
+}
+
+/** The snow the plough left in the lot's empty bays (docs/plan/42-the-lot.md, tp/lot3d.ts): made
+ *  again only when a car takes a bay or leaves one. */
+export class BaySnow {
+  readonly mesh: Mesh;
+  private key = "";
+  private lot = lotLayout();
+  constructor() {
+    const m = new MeshLambertMaterial({ vertexColors: true });
+    patchGrounds(m);
+    // (a geometry from the first: an empty one, no position, is a GL error every draw)
+    this.mesh = new Mesh(baySnow(this.lot, []), m);
+    this.mesh.receiveShadow = true;
+  }
+  /** `cars`: where the parked ones stand (the building's coords). */
+  set(cars: { x: number; z: number }[]) {
+    const key = this.lot.bays
+      .map((b) => (cars.some((c) => Math.abs(c.x - b.x) < 1.6 && Math.abs(c.z - b.z) < 1.2) ? 1 : 0))
+      .join("");
+    if (key === this.key) return;
+    this.key = key;
+    this.mesh.geometry.dispose();
+    this.mesh.geometry = baySnow(this.lot, cars);
+  }
+  dispose() {
+    this.mesh.geometry.dispose();
+    (this.mesh.material as MeshLambertMaterial).dispose();
+  }
 }

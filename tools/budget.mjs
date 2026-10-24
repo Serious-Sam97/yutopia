@@ -14,7 +14,8 @@ import { gzipSync } from "node:zlib";
 // (raised to 555 on 2026-10-21 by the user's call: the HQ armed, the lobby's locker, the earbud, the flashlight)
 // (raised to 556 on 2026-10-23 by the user's call: the loading screen — docs/plan/35 — the controller's readiness and the screen)
 // (raised to 557 on 2026-10-23 by the user's call: no ghosts — docs/plan/36 — the page's goodbye, a beacon and the socket's close)
-const BUDGETS = { "/page": 557, "/login/page": 160 }; // KB gzip
+// (raised to 558.5 on 2026-10-24 by the user's call: the lot — docs/plan/42 — the floor paints its bays from the shared layout)
+const BUDGETS = { "/page": 558.5, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;
@@ -47,7 +48,7 @@ const LAZY = {
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every
   // chunk that uses it — its own, the 3D view's, the dev mock pages' (~6 KB each), and the marker counts those
   // whole chunks (the 3D view's ~46 KB); raised from 120 on 2026-10-20 with phases 2–6 (the town, the night, life)
-  "yutopia-grounds": 186, // (raised from 180 on 2026-10-24 by the user's call: the lag's culling — docs/plan/38 — put it at 183.1)
+  "yutopia-grounds": 187, // (raised from 180 on 2026-10-24 by the user's call: the lag's culling — docs/plan/38 — put it at 183.1; to 187 the same day, the user's call: the lot's 3D dressing — docs/plan/42 — put it at 186.3)
   // the lot's cars, driven (docs/plan/28-the-car.md): the sim, the models and their cabins, the sound, the fx
   "yutopia-car": 120,
 }; // KB gzip

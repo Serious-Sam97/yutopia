@@ -112,7 +112,7 @@ export function driftAlong(
 export function bankAlong(
   g: G,
   line: [number, number][],
-  off: number,
+  off: number | ((i: number) => number),
   side: 1 | -1,
   yAt: YAt,
   r: Rng,
@@ -129,10 +129,19 @@ export function bankAlong(
     const nx = (-(qz - pz) / l) * side;
     const nz = ((qx - px) / l) * side;
     if (i > 0) t += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
-    const x = line[i][0] + nx * off;
-    const z = line[i][1] + nz * off;
+    const d = typeof off === "number" ? off : off(i);
+    const x = line[i][0] + nx * d;
+    const z = line[i][1] + nz * d;
     const k = o.skip?.(x, z, i) ? 0 : Math.max(0, 0.75 + 0.35 * big(t) + 0.15 * small(t));
     st.push({ x, z, nx, nz, k });
+  }
+  // (eased down over three tiles where it stops — a way's mouth, the lot: no square end)
+  for (let i = 0; i < st.length; i++) {
+    if (st[i].k <= 0) continue;
+    let near = 4;
+    for (let j = Math.max(0, i - 3); j <= Math.min(st.length - 1, i + 3); j++)
+      if (st[j].k <= 0) near = Math.min(near, Math.abs(i - j));
+    if (near < 4) st[i].k *= near / 4;
   }
   ridge(
     g,

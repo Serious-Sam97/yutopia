@@ -95,7 +95,7 @@ export async function runSandbox(el: HTMLElement, o: SandboxOpts): Promise<() =>
     const Themes = await import("../../art/themes");
     const { Grounds3 } = await import("../grounds3d");
     const spots: Record<string, { x: number; z: number; a: number }> = {
-      lot: { x: -20.85, z: 30, a: -Math.PI / 2 },
+      lot: { x: -22.2, z: 30, a: -Math.PI / 2 },
       pond: { x: -215, z: -60, a: Math.PI },
       driveway: { x: -40, z: -60, a: -Math.PI / 2 },
       woods: { x: -250, z: -190, a: -Math.PI / 2 },

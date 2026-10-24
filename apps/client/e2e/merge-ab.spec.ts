@@ -36,7 +36,7 @@ const SPOTS = [
   { x: 30.5, y: 20.5, level: 2 },
   { x: 11.5, y: 27.5, level: 2 },
   { x: 30.5, y: 20.5, level: 0 },
-  { ...G(-30, 20), level: 0 }, // the car park (the parked cars)
+  { ...G(-22, 20), level: 0 }, // the car park (the parked cars; aisle E)
 ];
 
 interface Cam {

@@ -1,4 +1,4 @@
-import type { CatalogEntry, WorldObjectDef } from "@yutopia/shared";
+import type { CatalogEntry, LotLayout, WorldObjectDef } from "@yutopia/shared";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import { type HouseLook, houseLook, type ShopLook, shopLook } from "../grounds-look";
 import type { ItemGen } from "./items";
@@ -1093,6 +1093,39 @@ function snowPole(s: Sketch) {
   s.box({ x: 0.46, y: 0.46, w: 0.08, d: 0.08, z: 1.35 * P, h: 0.2 * P, mat: mat("#e8eef2"), line: 0.4 });
   s.box({ x: 0.46, y: 0.46, w: 0.08, d: 0.08, z: 1.7 * P, h: 0.05 * P, mat: SNOW, line: 0.3 });
 }
+/** One of the lot's islands (docs/plan/42-the-lot.md): a concrete kerb round a bed of snow, at
+ *  (ox, oz) in its footprint, w × d. */
+function island(s: Sketch, p: Props) {
+  const [x, y, w, d] = [Number(p.ox), Number(p.oz), Number(p.w), Number(p.d)];
+  s.box({ x, y, w, d, z: 0, h: 0.15 * P, mat: CONCRETE, line: 0.6 });
+  s.box({
+    x: x + 0.22,
+    y: y + 0.22,
+    w: w - 0.44,
+    d: d - 0.44,
+    z: 0.15 * P,
+    h: 0.22 * P,
+    mat: SNOW,
+    puff: 5,
+    line: 0.5,
+  });
+}
+/** A heap of ploughed snow at (ox, oz) in its footprint, a × b its half-sizes, h tall. */
+function heap(s: Sketch, p: Props) {
+  const [x, y, a, b, h] = [Number(p.ox), Number(p.oz), Number(p.a), Number(p.b), Number(p.h)];
+  s.box({ x: x - a, y: y - b, w: 2 * a, d: 2 * b, z: 0, h: h * 0.55 * P, mat: SNOW, puff: 7, line: 0.6 });
+  s.box({
+    x: x - a * 0.6,
+    y: y - b * 0.6,
+    w: a * 1.2,
+    d: b * 1.2,
+    z: h * 0.5 * P,
+    h: h * 0.45 * P,
+    mat: SNOW,
+    puff: 7,
+    line: 0.6,
+  });
+}
 /** A sawhorse barricade across the road (along y, `len` long), a lamp on it. */
 function sawhorse(s: Sketch, p: Props) {
   const n = Number(p.len) || 4.4;
@@ -1152,7 +1185,16 @@ function railing(s: Sketch, p: Props) {
 
 // ── the kinds and their drawings, the things ────────────────────────────────
 /** Every kind the Grounds' things use (one per building: its own footprint). */
-export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: Record<string, ItemGen> } {
+/** The lot as the page hands it in (its layout and the plough's banks: lot.ts — a lazy chunk
+ *  importing it would split the page's chunks). */
+export interface LotIso {
+  l: LotLayout;
+  banks: { x: number; z: number; s: number; sz: number }[];
+}
+export function groundKinds(
+  G: G,
+  lot?: LotIso,
+): { kinds: Record<string, CatalogEntry>; gens: Record<string, ItemGen> } {
   const kinds: Record<string, CatalogEntry> = {
     gr_tower: { label: "Water tower", w: 18, h: 18, solid: true },
     gr_fence_h: { label: "Fence", w: 3, h: 1, solid: true },
@@ -1215,6 +1257,15 @@ export function groundKinds(G: G): { kinds: Record<string, CatalogEntry>; gens: 
     gr_truss: { draw: truss, variants: 1, key: (p) => `${p.len}|${p.z0}` },
     gr_railing: { draw: railing, variants: 1, key: (p) => `${p.len}|${p.z0}` },
   };
+  // the lot's islands and the plough's heaps (lotThings): a kind a footprint's size
+  for (const t of lot ? lotThings(lot) : []) {
+    kinds[t.kind] ??= { label: t.kind.startsWith("gr_heap") ? "Snow" : "Island", w: t.w, h: t.h, solid: false };
+    gens[t.kind] ??= {
+      draw: t.kind.startsWith("gr_heap") ? heap : island,
+      variants: 1,
+      key: (p) => `${p.ox}|${p.oz}|${p.w}|${p.d}|${p.a}|${p.b}|${p.h}`,
+    };
+  }
   kinds.gr_wall = { label: "Wall", w: 1, h: 1, solid: true };
   gens.gr_wall = { draw: wallPiece, variants: 1, key: (p) => `${p.dir}|${p.c}` };
   for (const ins of G.INSIDES)
@@ -1480,10 +1531,51 @@ export function insideThings(G: G, i: GroundsModule.Inside): Thing[] {
 }
 
 /** The things on the Grounds (building coords), each with its middle for the ground's height. */
-export function groundThings(G: G): Thing[] {
+/** The lot's islands and the plough's heaps round it (lot.ts) as things: each a footprint whole
+ *  tiles round it, drawn at its own place in it. */
+function lotThings({ l, banks }: LotIso) {
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  const out: { id: string; kind: string; x: number; y: number; w: number; h: number; props: Props }[] = [];
+  for (const [i, k] of l.islands.entries()) {
+    const x = Math.floor(k.x0);
+    const y = Math.floor(k.z0);
+    const w = Math.ceil(k.x1) - x;
+    const h = Math.ceil(k.z1) - y;
+    const props = {
+      ox: r2(k.x0 + 0.08 - x),
+      oz: r2(k.z0 + 0.1 - y),
+      w: r2(k.x1 - k.x0 - 0.16),
+      d: r2(k.z1 - k.z0 - 0.2),
+    };
+    out.push({ id: `island${i}`, kind: `gr_island_${w}x${h}`, x, y, w, h, props });
+  }
+  for (const [i, k] of banks.entries()) {
+    const a = r2(k.s * 0.8);
+    const b = r2(k.sz * 0.8);
+    const n = Math.min(7, Math.ceil(2 * Math.max(a, b) + 0.5));
+    const x = Math.floor(k.x - n / 2);
+    const y = Math.floor(k.z - n / 2);
+    out.push({
+      id: `heap${i}`,
+      kind: `gr_heap_${n}`,
+      x,
+      y,
+      w: n,
+      h: n,
+      props: { ox: r2(k.x - x), oz: r2(k.z - y), a, b, h: r2(k.s * 0.62) },
+    });
+  }
+  return out;
+}
+export function groundThings(G: G, lot?: LotIso): Thing[] {
   const out: Thing[] = [];
   const put = (id: string, kind: string, x: number, y: number, w: number, h: number, props: Props = {}, rot = 0) =>
     out.push({ id: `gr:${id}`, kind, x: Math.floor(x), y: Math.floor(y), rot, props, cx: x + w / 2, cz: y + h / 2 });
+  // the lot's islands, heaps and sign (docs/plan/42-the-lot.md)
+  if (lot) {
+    for (const t of lotThings(lot)) put(t.id, t.kind, t.x, t.y, t.w, t.h, t.props);
+    put("lot-sign", "gr_sign", lot.l.sign.x - 2, lot.l.sign.z, 4, 1, { bg: "#1f3554", fg: "#e9edf1" });
+  }
   for (const b of G.BUILDINGS)
     if (!b.stored && b.kind !== "hq") put(b.key, `gr_b_${b.key}`, b.x0, b.z0, b.x1 - b.x0, b.z1 - b.z0);
   // the lamps (the cobra-heads are the lot's own kind; its arm turned to the road)

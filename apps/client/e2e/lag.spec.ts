@@ -27,7 +27,7 @@ test.use({
 });
 
 const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 }); // (the Grounds' offset, grounds.spec)
-const LOT = { ...G(-30, 20), level: 0 };
+const LOT = { ...G(-22, 20), level: 0 }; // (aisle E: docs/plan/42-the-lot.md)
 const LAWN = G(-80, 22);
 
 type View = "3p" | "iso";

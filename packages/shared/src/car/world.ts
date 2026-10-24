@@ -1,4 +1,3 @@
-import { campusLot } from "../building.ts";
 import {
   BENCH,
   BUILDINGS,
@@ -10,10 +9,10 @@ import {
   GROUNDS,
   heightAt,
   LAMPS,
-  lotBanks,
   surfaceTileAt,
   treesIn,
 } from "../grounds.ts";
+import { lotBanksOf, lotLayout } from "../lot.ts";
 import type { Ground } from "./grip.ts";
 import type { CarWorld, Solid } from "./sim.ts";
 import type { CarSpec } from "./specs.ts";
@@ -45,7 +44,8 @@ export function groundAt(x: number, z: number, cold = 0.5): Ground {
 // the static solids, a chunk at a time
 const chunks = new Map<number, Solid[]>();
 const key = (cx: number, cz: number) => (cx + 4096) * 8192 + (cz + 4096);
-let lotLamps: { x: number; z: number }[] | null = null;
+let lot: ReturnType<typeof lotLayout> | null = null;
+let banks: ReturnType<typeof lotBanksOf> | null = null;
 function chunkSolids(cx: number, cz: number): Solid[] {
   const k = key(cx, cz);
   const hit = chunks.get(k);
@@ -62,10 +62,19 @@ function chunkSolids(cx: number, cz: number): Solid[] {
   for (const l of LAMPS)
     if (l.x >= x0 && l.x < x1 && l.z >= z0 && l.z < z1)
       out.push({ kind: "circle", x: l.x, z: l.z, r: 0.14, what: "post" });
-  lotLamps ??= campusLot(36).lamps;
-  for (const l of lotLamps)
-    if (l.x >= x0 && l.x < x1 && l.z >= z0 && l.z < z1)
-      out.push({ kind: "circle", x: l.x, z: l.z, r: 0.15, what: "post" });
+  // the lot's (lot.ts): its lamp posts where their objects stand (a tile's middle), its islands' kerbs
+  lot ??= lotLayout();
+  for (const l of lot.lamps) {
+    const x = Math.floor(l.x) + 0.5;
+    const z = Math.floor(l.z) + 0.5;
+    if (x >= x0 && x < x1 && z >= z0 && z < z1) out.push({ kind: "circle", x, z, r: 0.15, what: "post" });
+  }
+  for (const i of lot.islands) {
+    const x = (i.x0 + i.x1) / 2;
+    const z = (i.z0 + i.z1) / 2;
+    if (x >= x0 && x < x1 && z >= z0 && z < z1)
+      out.push({ kind: "box", x, z, hx: (i.x1 - i.x0) / 2 - 0.08, hz: (i.z1 - i.z0) / 2 - 0.1, what: "wall" });
+  }
   // the buildings: whole footprints (no car goes in) — what's built of them: the gas station's
   // forecourt is driven onto, round its islands and the canopy's posts
   for (const bd of BUILDINGS) {
@@ -92,7 +101,9 @@ function chunkSolids(cx: number, cz: number): Solid[] {
     if (p.x >= x0 && p.x < x1 && p.z >= z0 && p.z < z1)
       out.push({ kind: "circle", x: p.x, z: p.z, r: 0.27, what: "post" });
   // the plough's banks round the lot: soft, the car ploughs into them and stops
-  for (const k of lotBanks())
+  lot ??= lotLayout();
+  banks ??= lotBanksOf(lot);
+  for (const k of banks)
     if (k.x >= x0 && k.x < x1 && k.z >= z0 && k.z < z1)
       out.push({ kind: "circle", x: k.x, z: k.z, r: Math.min(k.s, k.sz) * 0.85, soft: true, what: "bank" });
   // the bench in the clearing
