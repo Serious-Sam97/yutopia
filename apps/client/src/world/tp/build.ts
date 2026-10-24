@@ -33,10 +33,12 @@ import {
   wallCuts,
 } from "@yutopia/shared";
 import {
+  BackSide,
   BufferGeometry,
   CanvasTexture,
   DoubleSide,
   Float32BufferAttribute,
+  FrontSide,
   Group,
   LineBasicMaterial,
   LineSegments,
@@ -53,7 +55,9 @@ import { FloorBake } from "../art/floors";
 import { piece, WALL_H } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
+import type { Slab } from "./below-cull";
 import { type Geo, MeshSketch, type Opts3, Out, zt } from "./kit3d";
+import { mergeMeshes } from "./merge-static";
 import { poolTable3 } from "./pooltable3d";
 
 // the item drawings: the same lazy chunk the iso engine loads (art/scene.ts)
@@ -118,6 +122,9 @@ export class World3 {
     lit: new MeshLambertMaterial({ vertexColors: true }),
     glow: new MeshBasicMaterial({ vertexColors: true, toneMapped: false }),
     clear: new MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide }),
+    // the glass as two meshes, its back faces then its front faces (twoSided, below)
+    clearBack: new MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: BackSide }),
+    clearFront: new MeshLambertMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: FrontSide }),
     ink: new LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }),
   };
   picks: Pick3[] = [];
@@ -137,6 +144,9 @@ export class World3 {
   private posts = new Set<string>(); // "x,y" of every wall post (doors stop at them too)
   private cuts = new Map<string, WallCut>(); // doors' and windows' holes, by edge
   private cutSig = "";
+  // a floor that isn't mine never fades: its walls' solid parts drawn merged (setFading)
+  private fading = true;
+  private stillWalls: Mesh[] = [];
 
   // `light`: how lit materials take the room's light (the iso light map)
   constructor(
@@ -153,6 +163,8 @@ export class World3 {
     this.lightFn = light;
     this.light(this.materials.lit);
     this.light(this.materials.clear);
+    this.light(this.materials.clearBack);
+    this.light(this.materials.clearFront);
     this.cuts = wallCuts(objects);
     this.cutSig = cutsSig(objects);
     this.buildWalls();
@@ -294,6 +306,7 @@ export class World3 {
     const mesh = new Mesh(geo, mat);
     mesh.name = "ceiling";
     this.root.add(mesh);
+    still(mesh);
     this.walls.push({ objs: [mesh], cards: [], soft: { rects: [], dots: [] }, picks: [], dispose: [geo, mat] });
   }
 
@@ -310,6 +323,7 @@ export class World3 {
       this.walls = [];
       this.wallFades = [];
       this.buildWalls();
+      this.restill();
       rewalled = true;
     }
     const byArea = new Map<string, { objs: WorldObjectDef[]; dress: DressItem[]; sig: string[] }>();
@@ -414,6 +428,84 @@ export class World3 {
     this.bakeFloor();
   }
 
+  /** The floor's slab for below-cull.ts: the tiles its floor is drawn on (opaque, at the
+   *  floor's level), and a key that changes when it's baked again. Null until it's baked. */
+  slab(): { slab: Slab; key: unknown } | null {
+    if (!this.floor?.meshes.length) return null;
+    const map = this.map;
+    const wells = this.wells.floor;
+    return {
+      key: this.floor,
+      slab: {
+        at: this.root.position,
+        w: map.width,
+        h: map.height,
+        covers: (x, y) => isFloor(tileAt(map, x, y)) && !wells.has(`${x},${y}`),
+      },
+    };
+  }
+
+  /** The floor's walls for below-cull.ts: the tiles a sight line could leave the floor by
+   *  below the walls' top — a well, or an edge between floor and not-floor that isn't a
+   *  solid full wall (a window, a door, glass, a half wall, no wall) — and that top (tiles).
+   *  `key` changes when the walls are built again. */
+  shell(): { bad: (x: number, y: number) => boolean; top: number; key: unknown } {
+    const map = this.map;
+    const inside = (x: number, y: number) => isFloor(tileAt(map, x, y));
+    const solid = (dir: "h" | "v", x: number, y: number) => {
+      const ch = dir === "h" ? hWall(map, x, y) : vWall(map, x, y);
+      return (
+        isWallEdge(ch) &&
+        ch === ch.toLowerCase() &&
+        ch !== "g" &&
+        ch !== HALF_WALL &&
+        !this.cuts.has(edgeKey({ dir, x, y }))
+      );
+    };
+    // an edge between inside and outside that a line can pass
+    const gap = (dir: "h" | "v", x: number, y: number) => {
+      const [ax, ay] = dir === "h" ? [x, y - 1] : [x - 1, y];
+      return inside(ax, ay) !== inside(x, y) && !solid(dir, x, y);
+    };
+    const wells = this.wells.floor;
+    return {
+      top: zt(WALL_H),
+      key: this.walls,
+      bad: (x, y) =>
+        wells.has(`${x},${y}`) || gap("h", x, y) || gap("h", x, y + 1) || gap("v", x, y) || gap("v", x + 1, y),
+    };
+  }
+
+  /** Does this floor's walls fade (mine: they turn see-through when they'd hide me)? A
+   *  floor that doesn't has its walls' solid parts drawn as a few merged meshes — the same
+   *  triangles where they were, hundreds of draws fewer (docs/plan/38-the-lag.md). */
+  setFading(on: boolean) {
+    if (on === this.fading) return;
+    this.fading = on;
+    this.restill();
+  }
+
+  private restill() {
+    for (const m of this.stillWalls) {
+      m.removeFromParent();
+      m.geometry.dispose();
+    }
+    this.stillWalls = [];
+    const { lit, glow } = this.materials;
+    const solid: Mesh[] = [];
+    for (const b of this.walls)
+      for (const o of b.objs) {
+        const m = o as Mesh;
+        if (m.isMesh && (m.material === lit || m.material === glow)) solid.push(m);
+      }
+    // (only the solid parts: glass and ink merged would blend in another order where they
+    // overlap — a hair different — docs/plan/38-the-lag.md)
+    if (!this.fading) this.stillWalls = mergeMeshes(solid, this.root);
+    for (const m of this.stillWalls) still(m);
+    const merged = new Set(this.stillWalls.map((m) => m.material));
+    for (const m of solid) m.visible = this.fading || !merged.has(m.material as Material);
+  }
+
   // what clicks, fades, cards and lights see: everything built, gathered
   private collect() {
     const all = [
@@ -509,9 +601,9 @@ export class World3 {
 
   // ── meshes ─────────────────────────────────────────────────────────────────
   private mount(out: Out): Built {
-    const { lit, glow, clear, ink } = this.materials;
+    const { lit, glow, clearBack, clearFront, ink } = this.materials;
     const built: Built = { objs: [], cards: [], soft: out.soft, picks: [], dispose: [] };
-    const tri = (g: Geo, mat: Material, shadow: boolean) => {
+    const tri = (g: Geo, mat: Material | [Material, Material], shadow: boolean) => {
       if (g.empty) return;
       const geo = new BufferGeometry();
       geo.setAttribute("position", new Float32BufferAttribute(g.pos, 3));
@@ -519,15 +611,16 @@ export class World3 {
       geo.setAttribute("color", new Float32BufferAttribute(g.col, 4));
       geo.computeBoundingSphere();
       built.dispose.push(geo);
-      const m = new Mesh(geo, mat);
-      m.castShadow = shadow;
-      m.receiveShadow = shadow;
-      m.userData.tris = g.pos.length / 9;
-      built.objs.push(m);
+      for (const m of twoSided(geo, mat)) {
+        m.castShadow = shadow;
+        m.receiveShadow = shadow;
+        m.userData.tris = g.pos.length / 9;
+        built.objs.push(m);
+      }
     };
     tri(out.lit, lit, true);
     tri(out.glow, glow, false);
-    tri(out.clear, clear, false);
+    tri(out.clear, [clearBack, clearFront], false);
     if (out.lines.length) {
       const geo = new BufferGeometry();
       geo.setAttribute("position", new Float32BufferAttribute(out.lines, 3));
@@ -572,33 +665,47 @@ export class World3 {
       // when you look along it, so each stands a hair nearer or further
       geo.translate((c.u0 + c.u1) / 2, (c.v0 + c.v1) / 2, (this.cardN++ % 8) * 0.0015);
       // (a glow card stands where its lit card does: drawn a hair nearer, or the two flicker)
-      const mat = c.glow
-        ? new MeshBasicMaterial({
-            transparent: true,
-            depthWrite: false,
-            toneMapped: false,
-            side: DoubleSide,
-            polygonOffset: true,
-            polygonOffsetFactor: -1,
-            polygonOffsetUnits: -4,
-          })
-        : new MeshLambertMaterial({ transparent: true, alphaTest: 0.04, side: DoubleSide });
-      if (!c.glow) this.light(mat);
-      built.dispose.push(geo, mat);
-      const m = new Mesh(geo, mat);
-      m.position.set(c.x, c.z, c.y);
-      m.visible = false;
-      m.renderOrder = c.glow ? 2 : 1;
-      built.cards.push(m);
-      built.objs.push(m);
+      const card = (side: typeof BackSide | typeof FrontSide) => {
+        const mat = c.glow
+          ? new MeshBasicMaterial({
+              transparent: true,
+              depthWrite: false,
+              toneMapped: false,
+              side,
+              polygonOffset: true,
+              polygonOffsetFactor: -1,
+              polygonOffsetUnits: -4,
+            })
+          : new MeshLambertMaterial({ transparent: true, alphaTest: 0.04, side });
+        if (!c.glow) this.light(mat);
+        return mat;
+      };
+      // (two-sided and see-through: its back faces, then its front faces — twoSided)
+      const mats = [card(BackSide), card(FrontSide)];
+      built.dispose.push(geo, ...mats);
+      const meshes = twoSided(geo, [mats[0], mats[1]]);
+      meshes[0].userData.cardBack = true; // (the 3D view leaves it out while the card's front faces it)
+      for (const m of meshes) {
+        m.position.set(c.x, c.z, c.y);
+        m.visible = false;
+        m.renderOrder = c.glow ? 2 : 1;
+        built.cards.push(m);
+        built.objs.push(m);
+      }
       cardTexture(c.svg).then((t) => {
         if (!t || !built.objs.length) return;
-        mat.map = t;
-        mat.needsUpdate = true;
-        m.visible = true;
+        for (const mat of mats) {
+          mat.map = t;
+          mat.needsUpdate = true;
+        }
+        for (const m of meshes) m.visible = true;
       });
     }
-    for (const m of built.objs) this.root.add(m);
+    for (const m of built.objs) {
+      this.root.add(m);
+      // (nothing built here moves but the cards, turned to the camera: their matrices made once)
+      if (!built.cards.includes(m)) still(m);
+    }
     this.stats.triangles += built.objs.reduce((n, m) => n + ((m.userData.tris as number) ?? 0), 0);
     this.stats.meshes += built.objs.length;
     this.stats.cards += built.cards.length;
@@ -689,6 +796,7 @@ export class World3 {
         mesh.receiveShadow = true;
         mesh.name = "floor";
         this.root.add(mesh);
+        still(mesh);
         meshes.push(mesh);
       }
     this.floor = { meshes, sig };
@@ -727,6 +835,7 @@ export class World3 {
   }
 
   dispose() {
+    for (const m of this.stillWalls) m.geometry.dispose();
     for (const b of this.walls) this.unmount(b);
     for (const a of this.areas.values()) this.unmount(a.built);
     for (const t of this.tall.values()) this.unmount(t.built);
@@ -929,4 +1038,24 @@ export function cardTexture(svg: string): Promise<Texture | null> {
     cardCache.set(svg, p);
   }
   return p;
+}
+
+// A see-through, two-sided surface as two meshes: its back faces, then its front faces.
+// three.js draws such a material in two passes itself, flipping its side between them —
+// and every flip marks the material changed, so each pass looks its shader up again (on
+// every glass mesh and card, every frame: a third of an indoor 3D frame,
+// docs/plan/38-the-lag.md). Two meshes made one after the other, each with its side fixed,
+// draw in that same order (the same depth, the next id) with the same shaders: the same
+// picture, no lookups. A single material: one mesh, as before.
+function twoSided(geo: BufferGeometry, mat: Material | [Material, Material]): Mesh[] {
+  if (!Array.isArray(mat)) return [new Mesh(geo, mat)];
+  const back = new Mesh(geo, mat[0]);
+  const front = new Mesh(geo, mat[1]);
+  return [back, front];
+}
+
+// A mesh that won't move: its matrix made now, not again every frame.
+function still(o: Object3D) {
+  o.updateMatrix();
+  o.matrixAutoUpdate = false;
 }

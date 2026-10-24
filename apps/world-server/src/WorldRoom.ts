@@ -114,6 +114,7 @@ interface ClientData {
   heardByKey: string; // last "heard by" list sent, to skip no-op updates
   kicked?: boolean; // replaced by a newer tab
   bye?: boolean; // their page said goodbye (WorldRoom.bye): leaving, not dropped
+  snaps?: number; // times the server put them back (features/perf.ts reports it)
 }
 
 export type WorldClient = Client<ClientData, WorldClaims>;
@@ -165,6 +166,9 @@ export class WorldRoom extends Room<WorldState> {
   pballs: PballHooks | null = null; // features/pballs.ts: pool balls out of a game
 
   send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {
+    // (put back: counted for their performance reports — features/perf.ts)
+    if (type === "snap" && client.userData)
+      (client.userData as ClientData).snaps = ((client.userData as ClientData).snaps ?? 0) + 1;
     client.send(type, msg);
   }
 
@@ -176,6 +180,7 @@ export class WorldRoom extends Room<WorldState> {
     this.onMessage(type, (client: WorldClient, msg: unknown) => {
       if (!msg || typeof msg !== "object") return;
       metrics.inc("messages_total");
+      const t0 = performance.now();
       try {
         for (const tap of this.messageTaps) tap(client, type as string);
         fn(client, msg as ClientMessages[K]);
@@ -183,7 +188,16 @@ export class WorldRoom extends Room<WorldState> {
         metrics.inc("message_errors_total");
         console.warn(`[world] ${String(type)} failed:`, (e as Error).message);
       }
+      metrics.message(type as string, performance.now() - t0);
     });
+  }
+
+  // (timed: the state's patch, encoded for every client — metrics.ts)
+  override broadcastPatch(): boolean {
+    const t0 = performance.now();
+    const sent = super.broadcastPatch();
+    metrics.time("patch", performance.now() - t0);
+    return sent;
   }
 
   async onCreate() {
@@ -332,13 +346,18 @@ export class WorldRoom extends Room<WorldState> {
     let last = Date.now();
     this.setSimulationInterval(() => {
       const now = Date.now();
+      const t0 = performance.now();
       const dt = (now - last) / 1000;
       last = now;
       for (const f of this.features) f.tick?.(dt, now);
       for (const p of this.state.players.values()) if (p.emote && now - p.emoteAt > 3500) p.emote = "";
-      metrics.tick(Date.now() - now);
+      metrics.tick(performance.now() - t0);
     }, 1000 / TICK_HZ);
-    this.clock.setInterval(() => this.hearingPass(), 1000 / HEARING_HZ);
+    this.clock.setInterval(() => {
+      const t0 = performance.now();
+      this.hearingPass();
+      metrics.time("hearing", performance.now() - t0);
+    }, 1000 / HEARING_HZ);
     this.clock.setInterval(() => this.pushPresence(true), 60_000);
     this.clock.setInterval(() => this.saveSpots([...this.state.players.values()]), 60_000);
     this.clock.setInterval(() => this.weather(), 1000);

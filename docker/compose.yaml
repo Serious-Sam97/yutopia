@@ -145,9 +145,11 @@ services:
       - -c
       # (the emulator cores and built-in cartridges aren't in git: fetched here
       # when missing — bsdtar opens the 2600 core's 7z; offline, it starts without)
+      # (git: the client's version, 0.1.<commits>-dev — docs/plan/40-the-version.md)
       - >-
         corepack enable && corepack prepare pnpm@12.6.0 --activate && pnpm install --frozen-lockfile && {
         command -v bsdtar >/dev/null || apk add --no-cache libarchive-tools >/dev/null;
+        command -v git >/dev/null || apk add --no-cache git >/dev/null; git config --global --add safe.directory /app;
         node tools/emu-assets.mjs || echo "[emu] couldn't fetch the emulator cores; the consoles stay dark until: node tools/emu-assets.mjs";
         pnpm --filter @yutopia/client exec next dev -p 3100 -H 0.0.0.0; }
     environment:

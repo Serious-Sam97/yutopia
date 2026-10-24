@@ -29,6 +29,59 @@ export interface JoinOptions {
   token: string;
 }
 
+// A player's performance over a window of play (docs/plan/39-the-telemetry.md). Frame times
+// in ms; percentiles over the window's frames; stage averages per frame drawn.
+export interface PerfReport {
+  session: string; // one page load
+  client: { version: string; commit: string }; // the build it runs (docs/plan/40-the-version.md)
+  secs: number; // the window's length
+  hidden: number; // share of it the tab was hidden (0…1)
+  frames: {
+    fps: number;
+    med: number;
+    p95: number;
+    worst: number;
+    gapP95: number;
+    gapWorst: number;
+    over33: number;
+    over50: number;
+  };
+  long: { n: number; worst: number }; // long tasks (>50 ms)
+  stages: Record<string, number>; // stage → average ms a frame
+  draws: number | null; // 3D draw calls in a sampled frame (null in iso)
+  culled: number | null; // things left out of that frame (3D)
+  where: {
+    level: number;
+    area: string;
+    x: number;
+    y: number;
+    view: string;
+    quality: string;
+    qualityPref: string;
+    maxFps: number;
+    hour: number;
+    near: number;
+    inCar: boolean;
+  };
+  machine: {
+    browser: string;
+    os: string;
+    gpu: string;
+    screen: [number, number];
+    canvas: [number, number];
+    dpr: number;
+    cores: number;
+    memory: number | null;
+    // the 3D view's pixel ratio now, what it started with (and the screen's then), how
+    // often it was put right since (null in iso) — docs/plan/38-the-lag.md, round 3
+    ratio: number | null;
+    ratioAtStart: number | null;
+    dprAtStart: number | null;
+    ratioFixes: number | null;
+  };
+  net: { pingMed: number | null; pingP95: number | null; reconnects: number };
+}
+
 // client → server
 export interface ClientMessages {
   // `l`: the floor (changes only on the stairs; elevators are the server's)
@@ -323,6 +376,11 @@ export interface ClientMessages {
   "arms:flare": { yaw: number; pitch: number };
   // the line's round trip, measured (its lag goes with a shot)
   "arms:ping": { t: number };
+  // how the game runs for this player (docs/plan/39-the-telemetry.md): a 30 s window, every
+  // ~30 s; the server adds who and its own snap count, and stores it for the admins
+  "perf:report": PerfReport;
+  // a round trip to the world-server, timed by the client (the report's ping)
+  "perf:ping": { t: number };
   // down and up (D7): holding to get someone up (their session id; on: started, off: let go),
   // holding my own first aid while I'm down; admins: down at once (to try it)
   "dark:revive": { sid: string; on: boolean };
@@ -418,6 +476,7 @@ export interface ServerMessages {
   };
   "arms:throw": { sid: string; x0: number; y0: number; z0: number; x: number; y: number; z: number; secs: number };
   "arms:pong": { t: number };
+  "perf:pong": { t: number };
 }
 
 // Things you can be busy with (shown on the body: hands on the controls…).

@@ -320,7 +320,9 @@ class Dark implements DarkHooks {
     this.strip.addEventListener("contextmenu", (e) => e.preventDefault());
     const loop = () => {
       this.raf = requestAnimationFrame(loop);
+      const t = performance.now();
       this.frame();
+      this.ctl.framePerf.lap("dark (own)", t);
     };
     this.raf = requestAnimationFrame(loop);
   }

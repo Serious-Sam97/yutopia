@@ -410,6 +410,8 @@ export class WorldEngine {
   // when something last happened here (pointer, a person moving, a bubble):
   // the controller drops to a low frame rate while nothing does
   activeAt = 0;
+  /** goes up whenever a thing is set, changed or removed (the 3D view skips work while it doesn't) */
+  objRev = 0;
   private noteActivity = () => {
     this.activeAt = performance.now();
   };
@@ -877,6 +879,7 @@ export class WorldEngine {
 
   // ── objects ──────────────────────────────────────────────────────────────
   setObjects(objects: WorldObjectDef[]) {
+    this.objRev++;
     for (const id of [...this.objectViews.keys()]) this.removeObject(id);
     this.flatLayer.clear();
     // surfaces before what stands on them (it sorts against its host)
@@ -886,6 +889,7 @@ export class WorldEngine {
   }
 
   upsertObject(o: WorldObjectDef, redrawFlat = true) {
+    this.objRev++;
     this.workCache.clear();
     // A changed object (door swinging, someone sitting) keeps its old drawing
     // until the new one has decoded, so it never flashes back to box art.
@@ -963,6 +967,7 @@ export class WorldEngine {
   }
 
   removeObject(id: string, redrawFlat = true) {
+    this.objRev++;
     this.workCache.clear();
     const v = this.objectViews.get(id);
     if (!v) return;

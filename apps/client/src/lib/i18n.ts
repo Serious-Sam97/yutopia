@@ -174,6 +174,7 @@ const D = {
     "Fewer frames run cooler and quieter. Drops to 30 while nothing moves.",
     "Menos quadros esquentam menos e gastam menos. Cai para 30 enquanto nada se move.",
   ],
+  perfStats: ["Show frame stats", "Mostrar estatísticas de quadros"],
   view: ["View", "Visão"],
   viewIso: ["Isometric", "Isométrica"],
   view3p: ["Third person (beta)", "Terceira pessoa (beta)"],

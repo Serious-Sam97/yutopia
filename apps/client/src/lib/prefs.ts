@@ -25,6 +25,8 @@ export interface Prefs {
   hands1p: boolean;
   // frames per second, at most (0 = as many as the screen shows); 30 once nothing moves
   maxFps: MaxFps;
+  // the frame's numbers in a corner (fps, where each frame's time goes: docs/plan/38-the-lag.md)
+  perfStats: boolean;
 }
 
 export type Quality = "high" | "medium" | "low";
@@ -67,6 +69,7 @@ const DEFAULTS: Prefs = {
   lookInvert: false,
   hands1p: true,
   maxFps: 60,
+  perfStats: false,
 };
 
 let cache: Prefs | null = null;
@@ -85,6 +88,7 @@ export function prefs(): Prefs {
     if (cache && !(cache.lookSens >= 0.25 && cache.lookSens <= 3)) cache.lookSens = 1;
     if (cache) cache.lookInvert = cache.lookInvert === true;
     if (cache) cache.hands1p = cache.hands1p !== false;
+    if (cache) cache.perfStats = cache.perfStats === true;
     if (
       cache &&
       typeof window !== "undefined" &&

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\UploadsController;
+use App\Models\PerfReport;
 use App\Models\Upload;
 use App\Models\User;
 use App\Services\WorldSnapshot;
@@ -34,6 +35,16 @@ Artisan::command('yutopia:prune-uploads {--hours=24}', function () {
 })->purpose('Drop game uploads left unfinished');
 
 Schedule::command('yutopia:prune-uploads')->hourly();
+
+// How the game ran for everyone (docs/plan/39-the-telemetry.md): kept 30 days.
+Artisan::command('yutopia:prune-perf {--days=30}', function () {
+    $gone = PerfReport::where('at', '<', now()->subDays((int) $this->option('days')))->delete();
+    $this->info("Dropped {$gone} performance reports.");
+
+    return 0;
+})->purpose('Drop performance reports older than 30 days');
+
+Schedule::command('yutopia:prune-perf')->daily();
 
 // php artisan yutopia:world export world.json · yutopia:world import world.json [--clear-spawns]
 Artisan::command('yutopia:world {action : export | import} {file} {--clear-spawns}', function (WorldSnapshot $snapshots, string $action, string $file) {

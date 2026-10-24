@@ -394,6 +394,8 @@ export class Cars {
   ) {
     this.G = G;
     this.root.name = "cars";
+    // (its parked cars, marked `still`, are looked at by the 3D view's culling: tp/below-cull.ts)
+    this.root.userData.cullKids = true;
     this.world = groundsWorld({
       cold: () => Math.min(1, 0.35 + 0.5 * this.host.night() + 0.3 * this.host.storm()),
       cover: () => Math.max(0, this.host.storm() - 0.2) * 0.9,
@@ -873,6 +875,10 @@ export class Cars {
         p.full.setEnv(this.env);
         placeModel(p.full.root, P.x, y, P.z, P.a);
         castAll(p.full.root);
+        p.full.root.userData.still = true; // (parked: the 3D view may leave it out when hidden, tp/below-cull.ts)
+        // (nothing on a parked car moves — a driven car gets a model of its own —: the 3D view
+        // draws it as a still model, fewer draws; done once the 3D view is there)
+        p.full.root.userData.stillDue = true;
         this.root.add(p.full.root);
       }
       if (!near && !p.far) {
@@ -882,8 +888,13 @@ export class Cars {
         g.add(new Mesh(solid, this.farMat(0xffffff)), new Mesh(glass, this.farMat(0x9aa6ae)));
         placeModel(g, P.x, y + 0.03, P.z, P.a);
         castAll(g);
+        g.userData.still = true;
         p.far = g as unknown as Mesh;
         this.root.add(g);
+      }
+      if (p.full?.root.userData.stillDue && tp) {
+        p.full.root.userData.stillDue = false;
+        tp.stillModel(p.full.root);
       }
       if (p.full) {
         p.full.root.visible = near;

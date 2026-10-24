@@ -1,6 +1,12 @@
 # client (Next.js). NEXT_PUBLIC_* are baked in at build time.
 #   docker build -f apps/client/Dockerfile -t yutopia-client .
 # NEXT_PUBLIC_API empty (the default here) = the API on the client's own origin, under /api.
+
+# The repository's .git, for the client's version (docs/plan/40-the-version.md): compose
+# hands it in as the `git` build context (docker/prod/compose.yaml), which takes this
+# stage's place; a plain `docker build` gets this empty stage, and the version says "dev".
+FROM scratch AS git
+
 FROM node:24-alpine AS build
 WORKDIR /app
 # the same pnpm as the dev stack (an unpinned corepack fetches the newest)
@@ -17,7 +23,9 @@ COPY apps/client apps/client
 # fetched from their releases (bsdtar opens the 2600 core's 7z)
 COPY tools/emu-assets.mjs tools/emu-cores.json tools/emu-games.json tools/
 RUN apk add --no-cache libarchive-tools && node tools/emu-assets.mjs && node tools/emu-assets.mjs --check
-RUN pnpm --filter @yutopia/client build
+# (git reads the version off .git, mounted for the build only: it never lands in the image)
+RUN apk add --no-cache git && git config --global --add safe.directory /app
+RUN --mount=type=bind,from=git,target=/app/.git pnpm --filter @yutopia/client build
 
 FROM node:24-alpine
 COPY --from=build /app /app

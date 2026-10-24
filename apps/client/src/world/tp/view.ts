@@ -18,6 +18,7 @@ import {
   onLevel,
   type Point,
   placedFootprint,
+  STAIRS_D,
   STOREY,
   tileAt,
   WANTS,
@@ -31,6 +32,7 @@ import { LAMPS as GROUND_LAMPS } from "@yutopia/shared/grounds";
 import { MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   type Camera,
@@ -94,6 +96,7 @@ import type { PuffKind } from "../engine";
 import { type Footprints, printLeft } from "../footprints";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
+import { BelowCull, boxInParent, HIDDEN_LAYER } from "./below-cull";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
 import { carGeometry } from "./campus";
@@ -105,6 +108,7 @@ import { zt } from "./kit3d";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
 import { Light3, landLight, litBalance, patchGrounds } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
+import { mergeStill, PROXIED, shadowProxy } from "./merge-static";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
 import { type Mats as CharMats, Person3D } from "./person3d";
 import { Post3 } from "./post3d";
@@ -276,6 +280,16 @@ export class ThirdPersonView {
   private lamps = LAMPS;
   private nightLevel = 0;
   fps = 60; // measured (auto quality steps down on it)
+  // The pixel ratio, kept to the screen's (docs/plan/38-the-lag.md, round 3): a browser can
+  // say 2 while this view starts and 1 a moment later (Firefox did, on a 1× monitor: 4× the
+  // pixels until a reload), a window moves to another screen, a zoom: checked about once a
+  // second, on the screen's density changing, and on every resize. What it started with and
+  // how often it was put right go in the performance reports (world/telemetry.ts).
+  ratioAtStart = 0;
+  dprAtStart = 0;
+  ratioFixes = 0;
+  private ratioIn = 1; // (s to the next check)
+  private dprQuery: MediaQueryList | null = null;
   private lastFrameAt = 0;
   // on the floor, as in iso: the nearest usable thing's outline, where you
   // clicked to walk, how far your voice carries
@@ -382,11 +396,44 @@ export class ThirdPersonView {
     const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
     this.wellSig = wellsKey(wells);
     this.renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    // (the shadow pass sees what's left out: three tests a caster's layers against the view's
+    // camera there, not the light's — so for that pass the camera takes the hidden layer too)
+    {
+      const sm = this.renderer.shadowMap;
+      const render = sm.render.bind(sm);
+      // (and what the main pass left out is on again for it — below-cull.ts —, while the parts
+      // of models whose shadow a proxy casts are off: nothing there to draw into it)
+      const off: Object3D[] = [];
+      sm.render = (lights: unknown, scene: unknown, camera: Camera) => {
+        const mask = camera.layers.mask;
+        camera.layers.enable(HIDDEN_LAYER);
+        this.below3.shadowPass(true);
+        for (const root of PROXIED) {
+          if (!root.parent) {
+            PROXIED.delete(root);
+            continue;
+          }
+          for (const c of root.userData.shadowSkip as Object3D[])
+            if (c.visible) {
+              c.visible = false;
+              off.push(c);
+            }
+        }
+        try {
+          (render as (l: unknown, s: unknown, c: Camera) => void)(lights, scene, camera);
+        } finally {
+          camera.layers.mask = mask;
+          this.below3.shadowPass(false);
+          for (const c of off) c.visible = true;
+          off.length = 0;
+        }
+      };
+    }
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.localClippingEnabled = true; // (the building cut above my floor: campus.cutAbove)
     this.renderer.shadowMap.type = PCFShadowMap;
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    this.renderer.setPixelRatio(this.ratioFor("high"));
     this.light.update(map, objects);
     this.indexSeats(map, objects);
     this.world = new World3(
@@ -994,6 +1041,7 @@ void main() {
     host.appendChild(c);
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
+    this.watchDpr();
     this.resize();
     c.addEventListener("pointerdown", this.onDown);
     c.addEventListener("pointermove", this.onMove);
@@ -1131,6 +1179,7 @@ void main() {
         if (b) {
           b.world.root.visible = true;
           b.world.root.position.set(0, 0, 0);
+          b.world.setFading(true);
         }
         continue;
       }
@@ -1171,6 +1220,7 @@ void main() {
       }
       b.world.root.position.set(o.x, o.h, o.y);
       b.world.root.visible = true;
+      b.world.setFading(false); // (a floor below never fades: its walls merged)
     }
     this.placeAround();
   }
@@ -1462,8 +1512,30 @@ void main() {
     this.around.campus.skinAlways = this.level < home;
   }
 
+  // the ratio a fresh load picks on this screen at this quality
+  private ratioFor(q: "high" | "medium" | "low"): number {
+    const dpr = window.devicePixelRatio || 1;
+    return q === "high" ? Math.min(2, dpr) : q === "medium" ? Math.min(1.5, dpr) : 1;
+  }
+
+  // the screen's density changed (a moved window, a zoom): to the new one at once
+  private onDpr = () => {
+    this.watchDpr();
+    if (this.ratioFor(this.quality) !== this.renderer.getPixelRatio()) this.resize();
+  };
+  private watchDpr() {
+    this.dprQuery?.removeEventListener("change", this.onDpr);
+    this.dprQuery = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`) ?? null;
+    this.dprQuery?.addEventListener("change", this.onDpr);
+  }
+
   private resize() {
     if (!this.host) return;
+    const ratio = this.ratioFor(this.quality);
+    if (ratio !== this.renderer.getPixelRatio()) {
+      this.renderer.setPixelRatio(ratio);
+      this.ratioFixes++;
+    }
     const w = this.host.clientWidth || 1;
     const h = this.host.clientHeight || 1;
     this.renderer.setSize(w, h, false);
@@ -1479,8 +1551,11 @@ void main() {
   // finish; Low: no shadows, fewer lamps, 1× pixels.
   setQuality(q: "high" | "medium" | "low") {
     this.quality = q;
-    const dpr = window.devicePixelRatio || 1;
-    this.renderer.setPixelRatio(q === "high" ? Math.min(2, dpr) : q === "medium" ? Math.min(1.5, dpr) : 1);
+    this.renderer.setPixelRatio(this.ratioFor(q));
+    if (!this.ratioAtStart && this.host) {
+      this.ratioAtStart = this.renderer.getPixelRatio();
+      this.dprAtStart = window.devicePixelRatio || 1;
+    }
     this.sun.castShadow = q !== "low";
     const size = q === "high" ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== size) {
@@ -1735,7 +1810,9 @@ void main() {
     for (const l of this.below.values()) l.setHour(h);
     // glass (windows, glass walls and doors) shows the night outside: darker after dark
     const g = 1 - 0.62 * d.night;
-    this.world.materials.clear.color.setRGB(g * 0.92, g * 0.95, g, SRGBColorSpace);
+    const glass = this.world.materials;
+    for (const m of [glass.clear, glass.clearBack, glass.clearFront])
+      m.color.setRGB(g * 0.92, g * 0.95, g, SRGBColorSpace);
   }
 
   // Your input as a world direction (camera-relative) and whether you run.
@@ -1824,6 +1901,11 @@ void main() {
    *  what the camera's target follows (the land streamed round it, the shadows, the lamps). */
   frame(dt: number, bodies: Body3[], meId: string, seat?: { x: number; y: number; ground: number; level: number }) {
     this.time += dt;
+    this.ratioIn -= dt;
+    if (this.ratioIn <= 0) {
+      this.ratioIn = 1;
+      if (this.ratioFor(this.quality) !== this.renderer.getPixelRatio()) this.resize();
+    }
     if (this.extraBodies) bodies = bodies.concat(this.extraBodies());
     this.warmUp(performance.now());
     this.syncLifts(performance.now());
@@ -2189,16 +2271,22 @@ void main() {
 
     if (!document.hidden) {
       const hands = this.hands?.shown ? this.hands : null;
-      if (this.post) this.post.render(dt > 0 && !me?.reduced, hands);
-      else {
-        this.renderer.render(this.scene, this.camera);
-        if (hands) {
-          // over the room, its depth cleared: the hands never sink into a wall or a desk
-          this.renderer.autoClear = false;
-          this.renderer.clearDepth();
-          this.renderer.render(hands.scene, hands.camera);
-          this.renderer.autoClear = true;
+      // (what my floor hides from this camera left out of this one render: below-cull.ts)
+      this.cullBelow();
+      try {
+        if (this.post) this.post.render(dt > 0 && !me?.reduced, hands);
+        else {
+          this.renderer.render(this.scene, this.camera);
+          if (hands) {
+            // over the room, its depth cleared: the hands never sink into a wall or a desk
+            this.renderer.autoClear = false;
+            this.renderer.clearDepth();
+            this.renderer.render(hands.scene, hands.camera);
+            this.renderer.autoClear = true;
+          }
         }
+      } finally {
+        this.below3.end();
       }
       this.drawTags(bodies);
     }
@@ -2206,6 +2294,138 @@ void main() {
     const now = performance.now();
     if (this.lastFrameAt) this.fps += (1000 / Math.max(1, now - this.lastFrameAt) - this.fps) * 0.05;
     this.lastFrameAt = now;
+  }
+
+  // ── what my floor hides (below-cull.ts) ─────────────────────────────────────
+  private below3 = new BelowCull();
+  private cullUnits: { obj: Object3D; box: Box3 }[] = [];
+  private belowBoxes = new WeakMap<Object3D, { at: Vector3; box: Box3 }>();
+  private eyeAt = new Vector3();
+  /** (tests: nothing left out — the same picture, the long way) */
+  noCull = false;
+  private cullBelow() {
+    const slab = this.noCull ? null : this.world.slab();
+    this.below3.setSlab(slab?.slab ?? null, slab?.key ?? null);
+    if (!slab) return;
+    // (and its walls: solid ones hide what's outside below their top — not while faded)
+    const shell = this.world.shell();
+    const map = this.world.map;
+    this.below3.setShell(shell, shell.key, (x, y) => !isFloor(tileAt(map, x, y)));
+    this.below3.faded = this.world.fades.filter((f) => f.alpha < 0.999 && (!f.item || f.wall));
+    const units = this.cullUnits;
+    let n = 0;
+    const unit = () => {
+      units[n] ??= { obj: this.scene, box: new Box3() };
+      return units[n];
+    };
+    // the floors below mine: each thing built on them (a still mesh, an area, a card…)
+    for (const [f, b] of this.floors) {
+      if (f >= this.level || !b.world.root.visible) continue;
+      const at = b.world.root.position;
+      for (const c of b.world.root.children) {
+        const u = unit();
+        // (a still piece's box kept while its floor stays where it is; cards turn: every frame)
+        const had = this.belowBoxes.get(c);
+        if (had && !c.matrixAutoUpdate && had.at.equals(at)) u.box.copy(had.box);
+        else {
+          if (!boxInParent(c as Mesh, u.box)) continue;
+          u.box.translate(at);
+          if (!c.matrixAutoUpdate) this.belowBoxes.set(c, { at: at.clone(), box: u.box.clone() });
+        }
+        u.obj = c;
+        n++;
+      }
+    }
+    // the stairwells and lift stops below: round their footprint, a storey (and a bit) high
+    const around = (o: Object3D, r: number, top: number) => {
+      if (!o.visible || o.position.y > -0.01) return;
+      const u = unit();
+      const p = o.position;
+      u.box.min.set(p.x - r, p.y - 0.5, p.z - r);
+      u.box.max.set(p.x + r, p.y + top, p.z + r);
+      u.obj = o;
+      n++;
+    };
+    // things that stand still outside: the parked cars, the campus (boxes made when they move)
+    const still = (o: Object3D) => {
+      const b = this.stillBox(o);
+      if (!b) return;
+      const u = unit();
+      u.box.copy(b);
+      u.obj = o;
+      n++;
+    };
+    for (const top of this.scene.children)
+      if (top.userData.cullKids) for (const o of top.children) if (o.userData.still && o.visible) still(o);
+    // (the campus mesh by mesh: its groups move inside it — with my floor — so a group's box
+    // can't be kept by its own place; each mesh's can, by its own world matrix)
+    const eye = this.camera.getWorldPosition(this.eyeAt);
+    this.around.root.traverseVisible((o) => {
+      const d = o as Mesh & { isLine?: boolean };
+      if (d.isMesh || d.isLine) still(o);
+    });
+    for (const o of this.stairs3.root.children) around(o, STAIRS_D / 2 + 1, STOREY + 1.5);
+    for (const o of this.lifts3?.root.children ?? []) around(o, 2, STOREY + 0.5);
+    units.length = n;
+    this.below3.begin(this.camera, units);
+    // my floor's cards: a card is flat, so only one side of it faces the camera — with its
+    // front toward the camera, its back mesh draws nothing (left out: a draw fewer each)
+    for (const c of this.world.cards) {
+      if (!c.userData.cardBack || !c.visible) continue;
+      const g = (c as Mesh).geometry;
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      const p0 = (g.boundingSphere as Sphere).center;
+      const ry = c.rotation.y;
+      const sn = Math.sin(ry);
+      const cs = Math.cos(ry);
+      const at = this.world.root.position;
+      const px = at.x + c.position.x + p0.x * cs + p0.z * sn;
+      const pz = at.z + c.position.z - p0.x * sn + p0.z * cs;
+      // (its front's normal: +z turned about y; the eye on that side of its plane)
+      if (sn * (eye.x - px) + cs * (eye.z - pz) > 1e-6 && !c.rotation.x && !c.rotation.z) this.below3.hideAlso(c);
+    }
+  }
+
+  /** A model that stands still from now on (a parked car: nothing on it moves): the pieces at
+   *  its origin drawn merged, a material each, its shadow in a draw or two (merge-static.ts),
+   *  its parts' own matrices made once (the model itself may still be slid by a knock). */
+  stillModel(root: Object3D) {
+    mergeStill(root);
+    shadowProxy(root, HIDDEN_LAYER);
+    root.traverse((o) => {
+      if (o === root) return;
+      o.updateMatrix();
+      o.matrixAutoUpdate = false;
+    });
+  }
+
+  // A still thing's world box, made again only when it moves; null if its bounds can't be
+  // trusted (anything three itself doesn't cull by its box: particles, sprites, instances,
+  // skinned or unculled meshes — their points move without the box knowing).
+  private stillBoxes = new WeakMap<Object3D, { m: Matrix4; box: Box3 | null }>();
+  private stillBox(o: Object3D): Box3 | null {
+    o.updateWorldMatrix(true, false);
+    const had = this.stillBoxes.get(o);
+    if (had?.m.equals(o.matrixWorld)) return had.box;
+    let ok = true;
+    o.traverse((x) => {
+      const d = x as Mesh & {
+        isPoints?: boolean;
+        isSprite?: boolean;
+        isInstancedMesh?: boolean;
+        isSkinnedMesh?: boolean;
+        isLine?: boolean;
+      };
+      if (d.isPoints || d.isSprite || d.isInstancedMesh || d.isSkinnedMesh) ok = false;
+      else if ((d.isMesh || d.isLine) && !d.frustumCulled) ok = false;
+    });
+    const box = ok ? new Box3().setFromObject(o) : null;
+    if (box?.isEmpty()) {
+      this.stillBoxes.set(o, { m: o.matrixWorld.clone(), box: null });
+      return null;
+    }
+    this.stillBoxes.set(o, { m: o.matrixWorld.clone(), box });
+    return box;
   }
 
   // The 3D people's chunk, its factory and materials (lit by the room); null while it loads.
@@ -3908,6 +4128,7 @@ void main() {
     window.removeEventListener("keyup", this.onKey);
     window.removeEventListener("blur", this.onBlur);
     this.ro?.disconnect();
+    this.dprQuery?.removeEventListener("change", this.onDpr);
     this.tagLayer?.remove();
     this.live.dispose();
     this.builder.dispose();
@@ -3981,7 +4202,8 @@ function applyFade(f: FadeGroup, shared: World3["materials"]) {
       f.own.set(base, own);
     }
     // the shared glass is already see-through: scale it
-    own.opacity = (base === shared.clear ? 1 : base.opacity) * f.alpha;
+    own.opacity =
+      (base === shared.clear || base === shared.clearBack || base === shared.clearFront ? 1 : base.opacity) * f.alpha;
     m.material = own;
   }
 }

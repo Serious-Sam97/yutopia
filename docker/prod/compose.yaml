@@ -132,6 +132,10 @@ services:
     build:
       context: ../..
       dockerfile: apps/client/Dockerfile
+      # the repository's history, for the client's version (0.1.<commits>, docs/plan/40-the-version.md):
+      # read during the build, not copied into the image
+      additional_contexts:
+        git: ../../.git
       args:
         # empty: the API is on the client's own origin, under /api
         NEXT_PUBLIC_API: ""

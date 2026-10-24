@@ -1093,3 +1093,49 @@ The user: "Lets improve Bilhar" — the pockets hard to read (a strange black), 
 - **Balls out of a game** (`shared/pool-throw.ts`, `features/pballs.ts`, `tables/pballs.ts`): a table nobody's playing keeps its balls racked. Its console: *Take a ball* / *Take the cue*. A ball in hand: click someone (in 3D aimed, through the crosshair) — thrown on an arc. The cue: carried and shouldered like the double-barrel, fires balls fast. The server flies each ball tick by tick against where everyone is; whoever it reaches is **knocked down** (`Player.fellAt`, 3.6 s: thrown back, flat on the floor, up again — both views) and drops what ball they held. A ball lies where it stopped (E picks it up) and goes back on its table after 20 s; the cue's go after 7. B puts the ball or the cue back. A game starting calls them all back.
 - **Checks**: shared 249 (pool-throw 4 new), world-server `pballs.test` 2 new (a throw knocks A down, the ball's picked up and put back; the cue; nothing off a table mid-game); e2e `pool-balls.spec` (GPU; iso throw, 3D cue, a break) green; typecheck; Biome on the touched files; the page 554.2 KB (budget 555), `yutopia-tables` 27.2 KB.
 - **Not checked**: `pool.spec` — another session's e2e logged in as Ana and swapped the dev world mid-run (twice); Firefox. Furniture doesn't stop a flying ball (walls do).
+
+## The lag — round 1 (2026-10-23, plan `38-the-lag.md`)
+The user: "me and my friends are feeling some lag… optimize without changing anything related to behaviour or look"; asked about WebAssembly (answer in the plan: not for this — the cost was draws and three.js internals, not compute).
+- **Measuring** (`world/perf.ts`): the frame in stages, `await __yutopia.perf()`, an overlay switched on in Settings → Graphics → Show frame stats (`prefs.perfStats`, off by default); `e2e/lag.spec.ts` (YUTOPIA_GPU=1: 3D/iso × indoors idle/walking/outdoors, two people; Chrome's own busy share, stepped frames, draw calls; CPU profiles with YUTOPIA_LAG_PROFILE; never puts a fixture back); world-server `/metrics`: message handlers by type, hearing, patch encode, event-loop delay.
+- **Found**: the 3D view indoors, ~28 ms of main thread a frame and 4,800 draws (outdoors 6 ms). A third of it three.js re-checking shaders on every glass pane and card (two-sided see-through materials flip side twice a draw).
+- **Fixed, same pixels** (stills before/after, 0 px indoors): glass and cards as back + front meshes; stairwells, lift cars and the solid walls of floors below mine merged per material (`tp/merge-static.ts`); World3's matrices made once. 3D indoors 30–32 → 36–42 fps, frame 29 → 22 ms, draws −30 %.
+- **GPS**: the first open froze the world ~4 s → the land and trees in a worker; map identical.
+- **Not done, the user's call**: merging the floors below's glass and ink (−1,400 draws, −3–6 ms) changes a few blended pixels.
+- **Checked**: types everywhere; Biome on the touched files; shared 273, client 25, world-server 127; build + budget (page 556.8 ≤ 557; grounds 179.7 ≤ 180 — the GPS worker's own copy of the Grounds, fetched only when the map opens).
+
+## The lag — round 2: what my floor hides (2026-10-23, plan `38-the-lag.md`)
+The user: "I'm on a Mac M4 Pro and getting less than 50 fps on High."
+- **`tp/below-cull.ts`**: things on the floors below that my floor's slab hides from the camera (exact: their boxes projected from the camera onto my floor's level land only on slab tiles) are left out of the main pass; the shadow pass keeps them (three tests casters' layers against the view's camera — hooked so it sees them there).
+- **3D indoors walking: 36 → 60 fps** (frame 26 → 14.6 ms, draws 3,255 → 2,138). Same picture: 26 fixed and 650 random cameras rendered culled and not in the same frame, 0 px different.
+- **Settings → Graphics → Show frame stats** shows the frame overlay (was a localStorage flag).
+- **Found, pre-existing**: entering on the ground floor in 3D throws ~1,300–1,800 WebGL errors while loading (original code too); `CASTER_LAYER` trees cast no shadow in three r186.
+- **Checked**: types; Biome on touched files; shared 273, client 25, world-server 127; GPU `lighting.spec` 4/4 (from floor 4); build + budget (page 556.9 ≤ 557, grounds 179.7 ≤ 180).
+
+## The lag — round 2b: the user's own view (2026-10-23)
+The user: "I'm in the Tracking Room with 38 fps." At their view, hour and window size the parked cars were half the draws.
+- The below-floor cull takes the parked cars and the campus too, and my floor's solid walls join the slab as occluders (exact; 750 more random cameras, 0 px). `tp.update` is skipped while nothing it reads changed (`engine.objRev`).
+- Tracking Room worst angle 21.6 → ~14 ms (Chromium, 4000 × 2000, evening).
+- The overlay's stages merged (logic / iso / tp.update / tp.frame / hud) and its long-task watch loaded with the report: the page back at 557.0 ≤ 557.
+- The user plays in **Firefox**, whose WebGL costs more per draw; not measured here (Playwright's Firefox can't start in the agent's sandbox).
+
+## The lag — round 2c: Firefox (2026-10-23)
+The user, in Firefox: 44 fps in the Tracking Room.
+- Still models' shadows (parked cars, lift stops) cast by one proxy mesh each; the shadow pass's draws ~1,086 → ~410. Culled things hidden by visibility (whole subtrees skipped by three) and on again for the shadow pass. Parked cars merged at their origin and their matrices frozen; campus culled per mesh; card backs left out when facing away.
+- Same picture: same-frame A/B over 1,200+ more cameras, 0 px. Types, tests (273/25/127), page 557.0 ≤ 557.
+- **Open**: the 3D chunk counted as "grounds" is 183.1 KB > 180 — the user decides (raise, or split the cull out).
+
+## The telemetry — how it runs for each player (2026-10-23, plan `39-the-telemetry.md`)
+The user: "Create a logging metric that records the metrics for each user" — so the lag work targets what friends actually hit.
+- Every player's browser reports its last ~30 s of play: frames (fps, median/p95/worst, gaps, over 33/50 ms, long tasks, stage costs, draws), where and how (floor, area, view, quality, hour, people near, car), machine and browser (GPU name, screen, dpr, cores), ping and reconnects. The world-server checks every field, adds snaps, and batches to the API each minute; rows kept 30 days.
+- **`/admin/perf`** (Settings → Performance, admins only): players slowest first, a player's fps over time, their places and stage costs, the slow places for everyone.
+- **Checked**: Pest 3 (internal batch, validation, admin shapes, member 403, prune; dev users 3 before and after); world-server `perf.test.ts` (pong, clamping, unknown stages dropped, rate limit, snaps); types; Biome; Pint; shared 273, client 25, world-server 128; build + budget (page 557.0 ≤ 557). End to end as Bia: 3 windows (3p, iso) in Postgres with sane numbers; the page renders for Ana (admin) and refuses Bia.
+
+## The version (2026-10-23, plan `40-the-version.md`)
+The user: "every push generates a new version; show it in Settings; record it in the metrics".
+- `0.1.<commits>` + commit + date, from git, baked in by `next.config.ts`; the prod image's build gets `.git` as a second build context (the compose file; mounted for the build only), so the usual `docker compose … up -d --build` carries it; the dev container installs git on start.
+- Settings shows it at the bottom; each performance report records it; `/admin/perf` has a Version column and a **By version** table to compare pushes.
+- **Checked**: Pest (with a report from an older world-server, no version, still kept); world-server perf test; the prod image built with the deploy's own compose command; page 557.0 ≤ 557; as Bia on the dev stack: Settings "Version dev · c0c258d", the report in Postgres with `dev` / `c0c258d`; the admin page's By version table.
+
+## The lag — round 3: the pixel ratio (2026-10-24, plan `38-the-lag.md`)
+Found by the performance reports on the user's own play: the first load drew the 3D view at 2× on a 1× monitor (29.5 fps in the Tracking Room; 57 after a reload). The 3D view now keeps the ratio a fresh load would pick — checked about once a second, on the screen's density changing and on resize — in any browser; reports carry the ratio, what it started with and how often it was put right.
+- **Checked**: the user's case reproduced (2× at start → 1× within ~1 s; before: 2× for good) on High/Medium/Low; 16 stills vs a fresh 1× load: identical (one 4 px by 1 level outdoors); the new report fields in Postgres; world-server perf test (kept, clamped); types; Biome; shared 273, client 25, world-server 128; build + budget (page 557.0 ≤ 557; grounds 183.1, unchanged and still over). Not run: `lag.spec` (it signs in as Ana).

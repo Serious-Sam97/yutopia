@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Game;
 use App\Models\LastSpot;
+use App\Models\PerfReport;
 use App\Models\Pet;
 use App\Models\Spawn;
 use App\Models\User;
@@ -152,6 +153,89 @@ class InternalController extends Controller
             ];
         }
         LastSpot::upsert($rows, ['user_id'], ['x', 'y', 'level', 'd', 'updated_at']);
+
+        return response()->json(['saved' => count($rows)]);
+    }
+
+    // How the game ran for the players (docs/plan/39-the-telemetry.md): the world-server's
+    // batch, a minute of reports at a time (each player's own window, its snaps added).
+    public function perfReports(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'reports' => ['present', 'array', 'max:500'],
+            'reports.*.user_id' => ['required', 'integer'],
+            'reports.*.at' => ['required', 'integer', 'min:0'],
+            'reports.*.session' => ['required', 'string', 'max:40'],
+            'reports.*.version' => ['nullable', 'string', 'max:40'],
+            'reports.*.secs' => ['required', 'numeric', 'between:0,600'],
+            'reports.*.view' => ['required', 'string', 'max:8'],
+            'reports.*.quality' => ['required', 'string', 'max:8'],
+            'reports.*.level' => ['required', 'integer', 'between:-5,20'],
+            'reports.*.area' => ['present', 'string', 'max:40'],
+            'reports.*.x' => ['required', 'numeric', 'between:-3000,3000'],
+            'reports.*.y' => ['required', 'numeric', 'between:-3000,3000'],
+            'reports.*.fps' => ['required', 'numeric', 'between:0,1000'],
+            'reports.*.frame_med' => ['required', 'numeric', 'between:0,60000'],
+            'reports.*.frame_p95' => ['required', 'numeric', 'between:0,60000'],
+            'reports.*.frame_worst' => ['required', 'numeric', 'between:0,60000'],
+            'reports.*.gap_p95' => ['required', 'numeric', 'between:0,60000'],
+            'reports.*.over33' => ['required', 'integer', 'between:0,1000000'],
+            'reports.*.over50' => ['required', 'integer', 'between:0,1000000'],
+            'reports.*.long_tasks' => ['required', 'integer', 'between:0,1000000'],
+            'reports.*.draws' => ['nullable', 'integer', 'between:0,1000000'],
+            'reports.*.ping_med' => ['nullable', 'numeric', 'between:0,60000'],
+            'reports.*.ping_p95' => ['nullable', 'numeric', 'between:0,60000'],
+            'reports.*.snaps' => ['required', 'integer', 'between:0,1000000'],
+            'reports.*.browser' => ['present', 'string', 'max:60'],
+            'reports.*.gpu' => ['present', 'string', 'max:120'],
+            'reports.*.stages' => ['present', 'array', 'max:20'],
+            'reports.*.stages.*' => ['numeric', 'between:0,60000'],
+            'reports.*.machine' => ['present', 'array', 'max:20'],
+            'reports.*.context' => ['present', 'array', 'max:30'],
+        ]);
+        $known = User::whereIn('id', array_column($data['reports'], 'user_id'))->pluck('id')->flip();
+        $now = Carbon::now();
+        $rows = [];
+        foreach ($data['reports'] as $r) {
+            if (! isset($known[$r['user_id']])) {
+                continue;
+            }
+            $rows[] = [
+                'user_id' => (int) $r['user_id'],
+                'session' => $r['session'],
+                'version' => $r['version'] ?? '',
+                'at' => Carbon::createFromTimestampMs((int) $r['at']),
+                'secs' => (float) $r['secs'],
+                'view' => $r['view'],
+                'quality' => $r['quality'],
+                'level' => (int) $r['level'],
+                'area' => $r['area'],
+                'x' => (float) $r['x'],
+                'y' => (float) $r['y'],
+                'fps' => (float) $r['fps'],
+                'frame_med' => (float) $r['frame_med'],
+                'frame_p95' => (float) $r['frame_p95'],
+                'frame_worst' => (float) $r['frame_worst'],
+                'gap_p95' => (float) $r['gap_p95'],
+                'over33' => (int) $r['over33'],
+                'over50' => (int) $r['over50'],
+                'long_tasks' => (int) $r['long_tasks'],
+                'draws' => isset($r['draws']) ? (int) $r['draws'] : null,
+                'ping_med' => isset($r['ping_med']) ? (float) $r['ping_med'] : null,
+                'ping_p95' => isset($r['ping_p95']) ? (float) $r['ping_p95'] : null,
+                'snaps' => (int) $r['snaps'],
+                'browser' => $r['browser'],
+                'gpu' => $r['gpu'],
+                'stages' => json_encode((object) $r['stages']),
+                'machine' => json_encode((object) $r['machine']),
+                'context' => json_encode((object) $r['context']),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        foreach (array_chunk($rows, 100) as $chunk) {
+            PerfReport::insert($chunk);
+        }
 
         return response()->json(['saved' => count($rows)]);
     }

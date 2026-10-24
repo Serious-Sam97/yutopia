@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getToken } from "@/lib/api";
+import { prefs, subscribePrefs } from "@/lib/prefs";
 import { mixer } from "@/world/audio";
 import { WorldController } from "@/world/controller";
 import { radio, sound } from "@/world/sound";
@@ -88,7 +89,28 @@ export function WorldView({ to }: { to?: string | null }) {
     void c.start();
     // handy for debugging and the e2e/perf tools
     Object.assign(window as object, { __yutopia: c, __hud: hud, __audio: { mixer, radio, sound } });
+    // the frame's stages in a corner, while Settings → Graphics → Show frame stats is on
+    let offPerf: (() => void) | null = null;
+    let gone = false;
+    let want = false;
+    const syncPerf = () => {
+      if (prefs().perfStats === want) return;
+      want = prefs().perfStats;
+      if (!want) {
+        offPerf?.();
+        offPerf = null;
+        return;
+      }
+      void import("@/world/perf-overlay").then((m) => {
+        if (!gone && want && !offPerf) offPerf = m.mountPerfOverlay(c);
+      });
+    };
+    syncPerf();
+    const offPrefs = subscribePrefs(syncPerf);
     return () => {
+      gone = true;
+      offPrefs();
+      offPerf?.();
       c.stop();
       setCtrl(null);
     };

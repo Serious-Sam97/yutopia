@@ -119,6 +119,40 @@ export const api = {
   // a call that ended (features/phone.ts): written into the thread, for Recents and "missed"
   phoneCall: (c: { from: number; to: number[]; end: string; secs: number; video: boolean; answered: number[] }) =>
     call("POST", "/phone/calls", c),
+  // how the game ran for the players (features/perf.ts): a minute's reports at a time
+  perfReports: (reports: PerfRow[]) => call<{ saved: number }>("POST", "/perf-reports", { reports }),
   // the GPS: someone's phone book (only they see where someone sharing is)
   phoneContacts: (userId: number) => call<{ ids: number[] }>("GET", `/phone/contacts/${userId}`),
 };
+
+// One player's report as the API keeps it (docs/plan/39-the-telemetry.md)
+export interface PerfRow {
+  user_id: number;
+  at: number; // ms
+  session: string;
+  version: string; // the client's build (docs/plan/40-the-version.md)
+  secs: number;
+  view: string;
+  quality: string;
+  level: number;
+  area: string;
+  x: number;
+  y: number;
+  fps: number;
+  frame_med: number;
+  frame_p95: number;
+  frame_worst: number;
+  gap_p95: number;
+  over33: number;
+  over50: number;
+  long_tasks: number;
+  draws: number | null;
+  ping_med: number | null;
+  ping_p95: number | null;
+  snaps: number;
+  browser: string;
+  gpu: string;
+  stages: Record<string, number>;
+  machine: Record<string, unknown>;
+  context: Record<string, unknown>;
+}

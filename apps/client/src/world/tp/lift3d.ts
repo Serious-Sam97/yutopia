@@ -10,6 +10,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  type Object3D,
   PlaneGeometry,
   PMREMGenerator,
   PointLight,
@@ -22,7 +23,9 @@ import {
   Vector3,
   type WebGLRenderer,
 } from "three";
+import { HIDDEN_LAYER } from "./below-cull";
 import type { Pick3 } from "./build";
+import { mergeStatic, shadowProxy } from "./merge-static";
 
 // The elevator, made properly (docs/plan/26-floor-transitions.md, phase 0):
 // one stop of a car on a floor, in tiles (1 tile ≈ 1 m), three.js axes —
@@ -409,6 +412,11 @@ export class LiftLanding {
     this.setDoors(0);
   }
 
+  /** What moves or lights here (the rest may be merged: merge-static.ts). */
+  moving(): Object3D[] {
+    return [...this.leaves, this.up, this.down, this.callUp, this.callDown];
+  }
+
   /** 0 shut … 1 open (the leaves slide into the wall either side). */
   setDoors(open: number) {
     const k = Math.max(0, Math.min(1, open));
@@ -575,6 +583,11 @@ export class LiftCar {
     this.setDoors(0);
   }
 
+  /** What moves or lights here (the rest may be merged: merge-static.ts). */
+  moving(): Object3D[] {
+    return [...this.leaves, ...this.buttons.values(), this.light, this.spill, this.spill.target];
+  }
+
   /** 0 shut … 1 open. */
   setDoors(open: number) {
     const k = Math.max(0, Math.min(1, open));
@@ -690,6 +703,13 @@ export class Lifts3 {
         inner.position.set(-1, 0, -1);
         const landing = new LiftLanding(liftMats(), { floor: s.floor });
         const car = new LiftCar(s.floors, liftCarMats(), { lights: false });
+        // (the car's still pieces one mesh a material: a hundred-odd draws fewer. Not the
+        // landing's: its frame and the wall round it lie in one plane, and merged they meet
+        // differently there — docs/plan/38-the-lag.md)
+        mergeStatic(car.root, car.moving());
+        // (their shadows in a draw or two each — not what moves: the doors)
+        shadowProxy(landing.root, HIDDEN_LAYER, landing.moving());
+        shadowProxy(car.root, HIDDEN_LAYER, car.moving());
         inner.add(landing.root, car.root);
         outer.add(inner);
         this.root.add(outer);

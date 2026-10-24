@@ -11,6 +11,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  type Object3D,
   PlaneGeometry,
   PointLight,
   RepeatWrapping,
@@ -18,6 +19,7 @@ import {
   TubeGeometry,
   Vector3,
 } from "three";
+import { mergeStatic } from "./merge-static";
 
 // The stairwell, made properly (docs/plan/26-floor-transitions.md, phase 0):
 // shared stairs.ts's switchback (4 × 6 tiles, the door on v = 0), in tiles,
@@ -331,6 +333,11 @@ export class Stairwell {
     wallRail(0.08, T, L, F, y0 + STOREY);
   }
 
+  /** What moves or lights here (the rest may be merged: merge-static.ts). */
+  moving(): Object3D[] {
+    return [...this.doors, this.light];
+  }
+
   /** The fire door: 0 shut … 1 open (it swings into the well). */
   setDoor(open: number) {
     const k = Math.max(0, Math.min(1, open));
@@ -382,6 +389,8 @@ export class Stairs3 {
       if (!v) {
         const outer = new Group();
         const well = new Stairwell({ floor: s.floor, next: s.next, walls: [], lights: false });
+        // (its still pieces one mesh a material: a hundred-odd draws fewer)
+        mergeStatic(well.root, well.moving());
         well.root.position.set(-2, 0, -STAIRS_D / 2);
         outer.add(well.root);
         this.root.add(outer);

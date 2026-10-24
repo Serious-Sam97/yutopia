@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { type Key, useTr } from "@/lib/i18n";
 import type { WorldController } from "@/world/controller";
 import { loadGrounds } from "@/world/grounds-load";
+import type { PlanData } from "@/world/grounds-plan-data";
 import { phone, usePhone } from "@/world/phone/store";
 import { useHud } from "@/world/store";
 import { useWorld } from "../../ctx";
@@ -33,18 +34,41 @@ interface Plan {
   small: HTMLCanvasElement;
 }
 let plan: Promise<Plan> | null = null;
-function sitePlan(): Promise<Plan> {
-  plan ??= Promise.all([import("@/world/grounds-plan"), loadGrounds()]).then(([{ drawSitePlan }, g]) => {
-    X0 = g.GROUNDS.x0;
-    Z0 = g.GROUNDS.z0;
-    const full = document.createElement("canvas");
-    drawSitePlan(full, { px: PX, margin: MARGIN });
-    const small = document.createElement("canvas");
-    small.width = Math.ceil(full.width / 4);
-    small.height = Math.ceil(full.height / 4);
-    small.getContext("2d")?.drawImage(full, 0, 0, small.width, small.height);
-    return { full, small };
+// the plan's land and trees worked out in a worker: on the main thread they froze the world
+// for ~4 s the first time the map opened (docs/plan/38-the-lag.md). No worker: worked out here.
+function planInWorker(): Promise<PlanData | null> {
+  return new Promise((done) => {
+    let w: Worker;
+    try {
+      w = new Worker(new URL("../../../../world/grounds-plan.worker.ts", import.meta.url), { type: "module" });
+    } catch {
+      return done(null);
+    }
+    w.onmessage = (e: MessageEvent<PlanData>) => {
+      w.terminate();
+      done(e.data);
+    };
+    w.onerror = () => {
+      w.terminate();
+      done(null);
+    };
+    w.postMessage(null);
   });
+}
+function sitePlan(): Promise<Plan> {
+  plan ??= Promise.all([import("@/world/grounds-plan"), loadGrounds(), planInWorker()]).then(
+    ([{ drawSitePlan }, g, data]) => {
+      X0 = g.GROUNDS.x0;
+      Z0 = g.GROUNDS.z0;
+      const full = document.createElement("canvas");
+      drawSitePlan(full, { px: PX, margin: MARGIN }, data ?? undefined);
+      const small = document.createElement("canvas");
+      small.width = Math.ceil(full.width / 4);
+      small.height = Math.ceil(full.height / 4);
+      small.getContext("2d")?.drawImage(full, 0, 0, small.width, small.height);
+      return { full, small };
+    },
+  );
   return plan;
 }
 function usePlan(): Plan | null {

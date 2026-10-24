@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { LangSwitch } from "@/components/LangSwitch";
-import { useTr } from "@/lib/i18n";
+import { useLang, useTr } from "@/lib/i18n";
 import { MAX_FPS, type Prefs, setPrefs, usePrefs } from "@/lib/prefs";
+import { VERSION } from "@/lib/version";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
 import { Invites } from "./Invites";
@@ -11,6 +12,7 @@ import { Panel } from "./Panel";
 
 export function SettingsPanel() {
   const t = useTr();
+  const lang = useLang();
   const w = useWorld();
   const p = usePrefs();
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -211,6 +213,7 @@ export function SettingsPanel() {
           <p className="text-[11px] leading-snug" style={{ color: "var(--muted)" }}>
             {t("maxFpsHelp")}
           </p>
+          {toggle(t("perfStats"), p.perfStats, (v) => setPrefs({ perfStats: v }))}
         </section>
         <section className="space-y-2">
           <h3 className="mono text-xs uppercase tracking-widest" style={{ color: "var(--vfd)" }}>
@@ -281,6 +284,14 @@ export function SettingsPanel() {
           <LangSwitch />
         </section>
         {isAdmin && <Invites />}
+        {isAdmin && (
+          <section className="flex items-center justify-between">
+            <span>{lang === "pt" ? "Como está rodando para todos" : "How it runs for everyone"}</span>
+            <a href="/admin/perf" target="_blank" rel="noopener" className="ghost-btn">
+              {lang === "pt" ? "Desempenho" : "Performance"}
+            </a>
+          </section>
+        )}
         <section>
           <h3 className="mono text-xs uppercase tracking-widest mb-1" style={{ color: "var(--vfd)" }}>
             {t("controls")}
@@ -289,6 +300,11 @@ export function SettingsPanel() {
             {t("controlsHelp")}
           </p>
         </section>
+        <p className="mono text-xs" style={{ color: "var(--muted)" }} title={VERSION.commit}>
+          {lang === "pt" ? "Versão" : "Version"} {VERSION.version}
+          {VERSION.commit && ` · ${VERSION.commit}`}
+          {VERSION.date && ` · ${VERSION.date}`}
+        </p>
       </div>
     </Panel>
   );

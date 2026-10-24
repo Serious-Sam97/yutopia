@@ -1,11 +1,9 @@
 import {
   BENCH,
   BUILDINGS,
-  CHUNK,
   FENCE,
   GATE,
   GROUNDS,
-  groundSurfaceAt,
   LAMPS,
   LOT,
   type P,
@@ -16,8 +14,6 @@ import {
   ROAD_CLOSED,
   STATUE,
   TOWER,
-  terrainAt,
-  treesIn,
   WAYS,
 } from "@yutopia/shared/grounds";
 
@@ -25,17 +21,11 @@ import {
 // drawn from the shared Grounds themselves — the land shaded, the woods
 // stippled, the ways, the water, the buildings (the ones you can walk into
 // ringed), the fence, the names. The same drawing becomes the phone's Maps.
+import { LAND_PAL, type PlanData, planData, TREE_KINDS } from "./grounds-plan-data";
 
 const PAL = {
   paper: "#e8ebee",
-  snow: [236, 240, 244],
-  deep: [212, 222, 217],
-  rock: [150, 156, 162],
-  ice: [178, 197, 211],
-  path: [205, 198, 186],
-  asphalt: [72, 77, 84],
-  walk: [196, 196, 192],
-  floor: [42, 46, 52],
+  ...LAND_PAL,
   ink: "#1f252b",
   dim: "#5d6873",
   fence: "#8b3a2f",
@@ -50,7 +40,8 @@ export interface PlanOpts {
   margin: number;
 }
 
-export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin: 90 }) {
+/** `data`: the land and trees already worked out (in a worker: the GPS), or here. */
+export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin: 90 }, data: PlanData = planData()) {
   const { px, margin } = o;
   const GW = GROUNDS.x1 - GROUNDS.x0;
   const GH = GROUNDS.z1 - GROUNDS.z0;
@@ -63,33 +54,8 @@ export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin
   const X = (x: number) => margin + (x - GROUNDS.x0) * px;
   const Z = (z: number) => margin + (z - GROUNDS.z0) * px;
 
-  // ── the land: surface colours, shaded from the north-west ──
-  const img = new ImageData(GW, GH);
-  const hs = new Float32Array((GW + 1) * (GH + 1));
-  for (let j = 0; j <= GH; j++)
-    for (let i = 0; i <= GW; i++) hs[j * (GW + 1) + i] = terrainAt(GROUNDS.x0 + i, GROUNDS.z0 + j);
-  for (let j = 0; j < GH; j++)
-    for (let i = 0; i < GW; i++) {
-      const x = GROUNDS.x0 + i + 0.5;
-      const z = GROUNDS.z0 + j + 0.5;
-      const s = groundSurfaceAt(x, z);
-      const col = PAL[s] as number[];
-      const h00 = hs[j * (GW + 1) + i];
-      const h10 = hs[j * (GW + 1) + i + 1];
-      const h01 = hs[(j + 1) * (GW + 1) + i];
-      const dx = h10 - h00;
-      const dz = h01 - h00;
-      // light from the north-west, up high
-      const shade = Math.max(0.42, Math.min(1.14, 1 + (-dx * 0.7 - dz * 0.7) * 0.5 - 0.04));
-      // contours every 2 tiles (thin, on the land only)
-      const h = h00;
-      const cont = s !== "floor" && s !== "asphalt" && Math.floor(h / 2) !== Math.floor(h10 / 2) ? 0.9 : 1;
-      const k = (j * GW + i) * 4;
-      img.data[k] = col[0] * shade * cont;
-      img.data[k + 1] = col[1] * shade * cont;
-      img.data[k + 2] = col[2] * shade * cont;
-      img.data[k + 3] = 255;
-    }
+  // ── the land: surface colours, shaded from the north-west (grounds-plan-data.ts) ──
+  const img = new ImageData(data.land as ImageDataArray, GW, GH);
   const land = document.createElement("canvas");
   land.width = GW;
   land.height = GH;
@@ -99,14 +65,14 @@ export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin
   g.drawImage(land, margin, margin, GW * px, GH * px);
 
   // ── the woods: a dot a tree ──
-  for (let cz = Math.floor(GROUNDS.z0 / CHUNK); cz < GROUNDS.z1 / CHUNK; cz++)
-    for (let cx = Math.floor(GROUNDS.x0 / CHUNK); cx < GROUNDS.x1 / CHUNK; cx++)
-      for (const t of treesIn(cx, cz)) {
-        g.fillStyle = PAL[t.kind];
-        g.beginPath();
-        g.arc(X(t.x), Z(t.z), (t.kind === "pine" ? 0.85 : 0.65) * px * t.s, 0, Math.PI * 2);
-        g.fill();
-      }
+  const tr = data.trees;
+  for (let n = 0; n < tr.length; n += 4) {
+    const kind = TREE_KINDS[tr[n + 3]];
+    g.fillStyle = PAL[kind];
+    g.beginPath();
+    g.arc(X(tr[n]), Z(tr[n + 1]), (kind === "pine" ? 0.85 : 0.65) * px * tr[n + 2], 0, Math.PI * 2);
+    g.fill();
+  }
 
   // ── the ways ──
   const line = (pts: P[], closed = false) => {

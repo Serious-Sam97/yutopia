@@ -7,6 +7,7 @@ use App\Http\Controllers\E2eController;
 use App\Http\Controllers\GamesController;
 use App\Http\Controllers\InternalController;
 use App\Http\Controllers\InviteController;
+use App\Http\Controllers\PerfController;
 use App\Http\Controllers\PhoneController;
 use App\Http\Controllers\SessionController;
 use App\Http\Controllers\UploadsController;
@@ -68,6 +69,10 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/e2e/world', [E2eController::class, 'world']);
 
     Route::middleware('admin')->prefix('admin')->group(function () {
+        // how the game runs for everyone (docs/plan/39-the-telemetry.md)
+        Route::get('/perf/summary', [PerfController::class, 'summary']);
+        Route::get('/perf/player/{user}', [PerfController::class, 'player'])->whereNumber('user');
+        Route::get('/perf/spots', [PerfController::class, 'spots']);
         Route::get('/invites', [InviteController::class, 'index']);
         Route::post('/invites', [InviteController::class, 'store']);
         Route::delete('/invites/{invite}', [InviteController::class, 'destroy']);
@@ -132,6 +137,7 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::put('/spawn/{userId}', [InternalController::class, 'putSpawn'])->whereNumber('userId');
     Route::get('/last-spot/{userId}', [InternalController::class, 'lastSpot'])->whereNumber('userId');
     Route::put('/last-spots', [InternalController::class, 'putLastSpots']);
+    Route::post('/perf-reports', [InternalController::class, 'perfReports']);
     Route::post('/presence', [InternalController::class, 'presence']);
     Route::post('/vortex', [InternalController::class, 'vortex']);
     Route::get('/games/{gameId}', [InternalController::class, 'game'])->whereNumber('gameId');

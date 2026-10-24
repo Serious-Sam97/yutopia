@@ -96,6 +96,8 @@ import { liftSound, loadLiftSounds, nearGain, stairStep } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import type { OsRoom } from "./os/room";
+import { FramePerf } from "./perf";
+import type { PerfReport } from "./perf-report";
 import type { PetView } from "./petview";
 import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
@@ -216,6 +218,12 @@ export class WorldController {
   private lastTick = 0;
   private tick = 0;
   private rafGap = 1000 / 60; // how often the screen asks for a frame (ms, smoothed)
+  /** where each frame's time goes (perf.ts; `__yutopia.perf()`) */
+  readonly framePerf = new FramePerf();
+  private objsRev = 0; // the things changed (tp.update is skipped while nothing it reads has)
+  private tpKey: string | null = null;
+  private tpBuilt: unknown = null;
+  private tpFor: unknown = null;
   private activeAt = 0;
   private hudFrames = new Set<() => void>();
   private stopped = false;
@@ -437,6 +445,9 @@ export class WorldController {
 
     await this.join();
     if (this.stopped) return;
+    // how the game runs here, reported (docs/plan/39-the-telemetry.md; its own chunk, which
+    // stops itself once this stops)
+    void import("./telemetry").then((m) => m.startTelemetry(this));
     this.bindInput();
     this.holdLoading("enter");
     this.lastFrame = performance.now();
@@ -579,6 +590,7 @@ export class WorldController {
     const putObj = (o: S) => {
       const def = objFromState(o);
       this.objs.set(def.id, def);
+      this.objsRev++;
       if (def.kind === "elevator") this.liftHeard(def);
       // (a lot car out being driven isn't where it was parked: the car itself is drawn)
       if (objLevel(def, this.building) === this.level && notDriven(def))
@@ -592,6 +604,7 @@ export class WorldController {
     });
     $(room.state).objects.onRemove((o: S) => {
       this.objs.delete(o.id);
+      this.objsRev++;
       engine.removeObject(o.id, false);
       this.objectsDirty = true;
     });
@@ -858,7 +871,13 @@ export class WorldController {
     }
   }
 
+  /** The frame's stages over the last ~10 s (docs/plan/38-the-lag.md); `reset` starts a fresh window. */
+  async perf(reset = false): Promise<PerfReport> {
+    return (await import("./perf-report")).report(this.framePerf, reset);
+  }
+
   stop() {
+    this.framePerf.dispose();
     this.stopped = true;
     this.walker?.dispose();
     this.build?.dispose();
@@ -1287,6 +1306,8 @@ export class WorldController {
     const engine = this.engine;
     const room = this.room;
     if (!engine || !room?.state?.players) return;
+    const perf = this.framePerf;
+    let lap = perf.begin();
     if (this.mapDirty) {
       this.mapDirty = false;
       this.applyMapFromState();
@@ -1527,7 +1548,9 @@ export class WorldController {
       if (tp) bodies.push({ ...st, id: `pet:${id}`, reduced, level: pet.floor ?? 0 });
     });
     this.watchActs();
+    lap = perf.lap("logic", lap); // (doors, things, moving, the tables and screens, the people)
     engine.update(dt);
+    lap = perf.lap("iso.update", lap);
     if (tp) {
       // the room as it is (doors swinging, seats taken, edits): only what changed is redrawn
       // build mode: what it shows (ghosts, previews, outlines); things in hand are left out of the room
@@ -1536,15 +1559,25 @@ export class WorldController {
       if (now >= this.tpDue || (look && look.hidden.size !== this.tpHidden)) {
         this.tpDue = now + 200;
         this.tpHidden = look?.hidden.size ?? 0;
-        // (every floor's things: the 3D view draws the floors below mine too —
-        // my floor's as the iso engine has them: a door swung open for someone
-        // passing, a seat taken, a radio's display on live only there)
-        // (the lot's cars: drawn by car/cars.ts once it's here)
-        const all = [...this.objs.values()]
-          .filter((o) => !this.cars || o.kind !== "car")
-          .map((o) => engine.getObject(o.id) ?? o);
-        tp.update(this.building, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all, this.level);
+        // (nothing it's made from changed — the things, as the engine has them, my floor, the
+        // map — : the same floors again, not worked out again. Build mode: every time)
+        const key = look ? null : `${this.objsRev}|${engine.objRev}|${this.level}|${this.cars ? 1 : 0}`;
+        const same = key !== null && key === this.tpKey && this.building === this.tpBuilt && tp === this.tpFor;
+        this.tpKey = key;
+        this.tpBuilt = this.building;
+        this.tpFor = tp;
+        if (!same) {
+          // (every floor's things: the 3D view draws the floors below mine too —
+          // my floor's as the iso engine has them: a door swung open for someone
+          // passing, a seat taken, a radio's display on live only there)
+          // (the lot's cars: drawn by car/cars.ts once it's here)
+          const all = [...this.objs.values()]
+            .filter((o) => !this.cars || o.kind !== "car")
+            .map((o) => engine.getObject(o.id) ?? o);
+          tp.update(this.building, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all, this.level);
+        }
       }
+      lap = perf.lap("tp.update", lap);
       tp.setLiveFrom({ engine, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
       tp.setTables(this.tables?.scene3d() ?? null);
@@ -1563,7 +1596,11 @@ export class WorldController {
       // (in a car I'm not in `bodies` — the car draws me — but the view still follows me)
       const seat = this.cars?.mySeat();
       if (!document.hidden) tp.frame(dt, bodies, localSid, seat ? { ...seat, level: 0 } : undefined);
-    } else if (!document.hidden) engine.render();
+      lap = perf.lap("tp.frame", lap);
+    } else if (!document.hidden) {
+      engine.render();
+      lap = perf.lap("iso.render", lap);
+    }
     for (const cb of this.hudFrames) cb();
     this.checkCable();
     this.updatePrompt();
@@ -1574,6 +1611,8 @@ export class WorldController {
     this.follow(now);
     this.updateAudioScene();
     this.watchLoading(now);
+    perf.lap("hud", lap);
+    perf.end();
   }
 
   // Room tone follows my area. Each radio and record player plays its own
@@ -2279,8 +2318,9 @@ export class WorldController {
       else people.push(row);
     });
     people.sort((a, b) => Number(b.hearing) - Number(a.hearing) || a.name.localeCompare(b.name));
-    const st = this.engine?.stats();
-    hud.set({ me, people, fps: Math.round(st?.fps ?? 0) });
+    // (in 3D the iso engine isn't drawing: the 3D view's own rate)
+    const fps = this.tp ? this.tp.fps : (this.engine?.stats().fps ?? 0);
+    hud.set({ me, people, fps: Math.round(fps) });
     const vx = room.state.npcs.get("vortex");
     hud.set({ vortex: vx ? { x: vx.x, y: vx.y, say: vx.say, sayAt: vx.sayAt, mood: vx.mood } : null });
     const petsAt: { x: number; y: number }[] = [];

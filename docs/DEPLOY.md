@@ -64,6 +64,10 @@ git pull
 docker compose -f docker/prod/compose.yaml --env-file .env up -d --build
 ```
 
+The client's version (0.1.<commits>, the commit and its date: docs/plan/40-the-version.md)
+is read from the checkout's `.git` while the image builds (the compose file hands it in), so
+a full clone is needed — not a shallow one, whose commit count would be wrong.
+
 (or `pnpm prod:up`; `pnpm prod:logs`, `pnpm prod:down`. The `docker:*` scripts are the
 **dev** stack — bind-mounted source and watchers — never run them on the server.)
 
