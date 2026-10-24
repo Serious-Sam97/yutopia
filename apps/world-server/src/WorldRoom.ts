@@ -74,14 +74,14 @@ import {
 import { monitorsToComputers } from "@yutopia/shared/computer";
 import { groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
-import { Allowance, isVerb, MOVE, MV_WINDED, speedCap } from "@yutopia/shared/move";
+import { Allowance, isVerb, MOVE, MV_WINDED, SentClock, speedCap } from "@yutopia/shared/move";
 import { KNOCK } from "@yutopia/shared/pool-throw";
 import { DOWN } from "@yutopia/shared/vitals";
 import { ApiError, api, type PresenceEntry } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
 import type { DarkHooks } from "./features/dark.ts";
-import { type Feature, installFeatures } from "./features/index.ts";
+import { type Feature, featureNames, installFeatures } from "./features/index.ts";
 import type { PballHooks } from "./features/pballs.ts";
 import type { SurvivalHooks } from "./features/survival.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
@@ -95,6 +95,8 @@ setAreasBeyond(groundsAreaAt);
 
 // a jump lets a body up for this long (the longest one, falling to the floor from up high)
 const JUMP_AIR_MS = 3000;
+// after a snap, what they sent before it reached them (a round trip, over a slow line too)
+const SNAP_QUIET_MS = 1000;
 
 // A spot in the building: a floor (shared levels.ts) and where on it.
 export interface Spot {
@@ -108,6 +110,8 @@ interface ClientData {
   lastPosAt: number;
   zMax?: number; // how high their jump can take them (tiles)
   allow: Allowance; // how far they may have moved since (docs/plan/29-the-move.md M7)
+  clock: SentClock; // how much time their moves may count: their clock, not arrival (docs/plan/41-the-snap.md)
+  snapAt?: number; // when they were last put back (a snap): what they sent before it reached them is let go
   footAt: number; // when their feet were last on something (a jump starts from there)
   avatarAt?: number; // last look change (rate limit)
   hears: Set<string>; // sids this client can hear
@@ -166,9 +170,13 @@ export class WorldRoom extends Room<WorldState> {
   pballs: PballHooks | null = null; // features/pballs.ts: pool balls out of a game
 
   send<K extends keyof ServerMessages>(client: Client, type: K, msg: ServerMessages[K]): void {
-    // (put back: counted for their performance reports — features/perf.ts)
-    if (type === "snap" && client.userData)
-      (client.userData as ClientData).snaps = ((client.userData as ClientData).snaps ?? 0) + 1;
+    // (put back: counted for their performance reports — features/perf.ts — and when, for
+    // what they sent before it reached them: the pos handler lets that go)
+    if (type === "snap" && client.userData) {
+      const ud = client.userData as ClientData;
+      ud.snaps = (ud.snaps ?? 0) + 1;
+      ud.snapAt = Date.now();
+    }
     client.send(type, msg);
   }
 
@@ -349,9 +357,25 @@ export class WorldRoom extends Room<WorldState> {
       const t0 = performance.now();
       const dt = (now - last) / 1000;
       last = now;
-      for (const f of this.features) f.tick?.(dt, now);
+      // (each feature timed: a slow tick says whose — metrics.ts logs it)
+      let worst = 0;
+      let worstAt = -1;
+      for (let i = 0; i < this.features.length; i++) {
+        const f = this.features[i];
+        if (!f.tick) continue;
+        const a = performance.now();
+        f.tick(dt, now);
+        const d = performance.now() - a;
+        if (d > worst) {
+          worst = d;
+          worstAt = i;
+        }
+      }
       for (const p of this.state.players.values()) if (p.emote && now - p.emoteAt > 3500) p.emote = "";
-      metrics.tick(performance.now() - t0);
+      metrics.tick(
+        performance.now() - t0,
+        worstAt >= 0 ? `${featureNames[worstAt] ?? worstAt} ${worst.toFixed(0)} ms` : "",
+      );
     }, 1000 / TICK_HZ);
     this.clock.setInterval(() => {
       const t0 = performance.now();
@@ -430,6 +454,7 @@ export class WorldRoom extends Room<WorldState> {
       claims,
       lastPosAt: Date.now(),
       allow: new Allowance(),
+      clock: new SentClock(),
       footAt: 0,
       hears: new Set(),
       heardByKey: "",
@@ -596,7 +621,9 @@ export class WorldRoom extends Room<WorldState> {
       // (on the shuttle, in a car: it carries them — features/grounds-life.ts, features/cars.ts)
       if (p.busy.startsWith("ride:") || p.busy.startsWith("drive:")) return;
       const now = Date.now();
-      const dt = (now - data(client).lastPosAt) / 1000;
+      // (the time on their clock since their last move: messages a hiccup held back and handed
+      // over at once still carry their real spacing — shared/move SentClock)
+      const dt = data(client).clock.step(m.mt, (now - data(client).lastPosAt) / 1000);
       data(client).lastPosAt = now;
       const to = { x: m.x, y: m.y };
       // the feet's height: up only in a jump (as high as it goes from where it
@@ -605,7 +632,12 @@ export class WorldRoom extends Room<WorldState> {
       // (outdoors the ground itself goes down into the ravine and up the hills)
       const z = Math.max(-30, Math.min(60, Number(m.z) || 0));
       const ud = data(client);
-      const snap = () => this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
+      // put back — once: what they sent before the last snap reached them (a second or so) is
+      // let go quietly instead of each putting them back again (docs/plan/41-the-snap.md)
+      const snap = () => {
+        if (now - (ud.snapAt ?? 0) < SNAP_QUIET_MS) return;
+        this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
+      };
       // another floor: only up or down the stairs, one at a time (the frame moves a storey)
       const level = Number.isInteger(m.l) ? (m.l as number) : p.level;
       let from: { x: number; y: number } = p;

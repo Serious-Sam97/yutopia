@@ -47,7 +47,7 @@ const LAZY = {
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every
   // chunk that uses it — its own, the 3D view's, the dev mock pages' (~6 KB each), and the marker counts those
   // whole chunks (the 3D view's ~46 KB); raised from 120 on 2026-10-20 with phases 2–6 (the town, the night, life)
-  "yutopia-grounds": 180,
+  "yutopia-grounds": 186, // (raised from 180 on 2026-10-24 by the user's call: the lag's culling — docs/plan/38 — put it at 183.1)
   // the lot's cars, driven (docs/plan/28-the-car.md): the sim, the models and their cabins, the sound, the fx
   "yutopia-car": 120,
 }; // KB gzip

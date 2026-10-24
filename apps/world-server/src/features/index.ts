@@ -19,9 +19,14 @@ export interface Feature {
 
 type Installer = (room: WorldRoom) => Feature;
 const installers: Installer[] = [];
+/** Each feature's name (its file's), in install order: a slow tick says whose (metrics.ts). */
+export const featureNames: string[] = [];
 
 export function registerFeature(i: Installer) {
   installers.push(i);
+  // (the file that registered it, off the call's stack)
+  const at = /features\/([\w-]+)\.ts/.exec(new Error().stack?.split("\n").slice(2).join("\n") ?? "")?.[1];
+  featureNames.push(at ?? `feature ${installers.length}`);
 }
 
 export function installFeatures(room: WorldRoom): Feature[] {

@@ -1139,3 +1139,9 @@ The user: "every push generates a new version; show it in Settings; record it in
 ## The lag — round 3: the pixel ratio (2026-10-24, plan `38-the-lag.md`)
 Found by the performance reports on the user's own play: the first load drew the 3D view at 2× on a 1× monitor (29.5 fps in the Tracking Room; 57 after a reload). The 3D view now keeps the ratio a fresh load would pick — checked about once a second, on the screen's density changing and on resize — in any browser; reports carry the ratio, what it started with and how often it was put right.
 - **Checked**: the user's case reproduced (2× at start → 1× within ~1 s; before: 2× for good) on High/Medium/Low; 16 stills vs a fresh 1× load: identical (one 4 px by 1 level outdoors); the new report fields in Postgres; world-server perf test (kept, clamped); types; Biome; shared 273, client 25, world-server 128; build + budget (page 557.0 ≤ 557; grounds 183.1, unchanged and still over). Not run: `lag.spec` (it signs in as Ana).
+
+## The snap — put back only for real (2026-10-24, plan `41-the-snap.md`)
+The user: "a lag that takes me back to a point behind, as if my ping were huge" — dev and prod.
+- The server measured moves by arrival time: any hiccup over ~0.3 s (Wi-Fi, the tunnel, the server busy or stopped) put the player back, once per message already on its way (1 s held: 13 snaps). Now a move counts the client's own clock (`mt`, bounded by the server's: a fast clock gains ≤ 250 ms), one snap lets the in-flight messages go, and every stall over 250 ms is logged with whose work and whether the process was busy or stopped.
+- On the dev stack the big freezes were `next dev` leaking ~150 MB per recompile until the Docker VM ran out of memory (101 restarts).
+- **Checked**: Bia's held messages 0.15–2 s: 1–31 snaps → 0; world-server `snap.test.ts` 5, `metrics.test.ts` 2 (suite 135); shared `sent-clock.test.ts` 7 (suite 280); types; Biome.
