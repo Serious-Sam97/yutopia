@@ -289,3 +289,53 @@ offline world-server on :2667 loaded from the saved world and a Chromium window 
 cameras on prod's world (both before and after this round); a faded wall or tall thing loses
 the lamps' light map (its cloned material drops the light patch); the 3D view's own chunk
 (~77.5 KB gzip) is under no budget (`yutopia-grounds` counts other files).
+
+## Round 5 — the first seconds (2026-10-24)
+
+The user: entering, a few stutters, 47–50 fps, then 60 after ~10 s; starting in iso and
+switching to 3D, the same for a few seconds. The loading screen was meant to take all that.
+Measured entering prod's world (offline :2667, as Bia, 2560×1273, Chromium, a CPU profile
+and every GL upload and program link counted from the screen going):
+
+- **The iso view's item drawings** kept decoding (SVG → bitmap → Pixi upload, a few a
+  frame) for ~15 s after entering in 3D, where none of them is drawn.
+- **The first look round** put ~35 MB of buffers and ~20 MB of textures on the GPU in a
+  second or two: the loading screen compiled every shader (`compileAsync`) but three
+  uploads a mesh's buffers and textures only when it first draws it, and only what was in
+  the first camera's view had been drawn.
+- **Shaders linked after the screen**: the see-through copies a wall or tall thing takes
+  when it first fades (`applyFade` — a clone, so its own program), and every 20 s the
+  parked cars' reflections (`Cars.updateEnv`: a new PMREM generator and dome each time,
+  disposed after — four programs linked again each renewal, for as long as you play).
+- **The 3D screens** (TVs, computers, consoles: `LiveSurfaces`) were uploaded every frame
+  when near (`version: -1`), ~9 MB/s, though their canvases are redrawn far less (a TV once
+  a second, a computer every 80 ms, a console per video frame).
+
+What changed (the picture is the same — what's uploaded, when; nothing drawn differently):
+
+- `art/textures.ts` `holdItems`: while a 3D view is up the drawings' queue waits (what
+  already started finishes); the 3D view's teardown lets it go, behind the iso view's loading
+  screen, which already waits for the drawings (`artLeft`).
+- `tp/view.ts` `drawAll`: once every shader is compiled, the whole scene drawn once from
+  above, off screen (the warm-up's tiny target), every piece in view — its buffers and
+  textures go up behind the screen. `fadeSamples`: one see-through copy of each kind of
+  piece my floor fades, compiled with the rest and kept.
+- `car/cars.ts`: the reflections' generator and dome kept from one renewal to the next
+  (same output; its shaders stay linked).
+- Each screen's canvas counts its redraws (`version`: media/room.ts, os/room.ts,
+  games/room.ts) and the 3D view uploads it when that moves (far ones keep their last frame,
+  as before). A console's TV copies its video only when a new video frame came
+  (`nextFrame`): a paused or between-frames copy was the same picture.
+
+**Numbers** (prod's world, the same machine, the dev server warm):
+
+| | Before | After |
+|---|---|---|
+| Entering in 3D: fps by second | 30–39 for 18 s, then 60 | 50–54 for 3 s, then 60 |
+| …frames over 30 ms in 25 s | 450 | 37 |
+| iso → 3D: programs linked after the screen | 10 (+4 every 20 s) | 0 |
+| iso → 3D: uploads in the first look round | ~35 MB in 1.5 s | ~2 MB/s steady (the people, the land streaming) |
+| Floor 4's 11 TVs and screens, standing still | uploaded every frame when near | 0 uploads in 4 s |
+
+Checked in the page: a 3D screen near and redrawn is uploaded on each redraw, not otherwise;
+far, a live one keeps its last frame; boards whenever they change.

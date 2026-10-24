@@ -116,10 +116,17 @@ let idleBytes = 0;
 const DECODING = 2;
 let decoding = 0;
 const toDecode: (() => void)[] = [];
-function decodeItem(key: string, e: ItemEntry, svg: string) {
+// (the 3D view showing: none of them is drawn there — they wait for the iso view, its
+// loading screen up: tp/view.ts)
+let held = 0; // (3D views up)
+export function holdItems(on: boolean) {
+  held += on ? 1 : -1;
+  while (!held && decoding < DECODING && toDecode.length) next(true);
+}
+function decodeItem(key: string, e: ItemEntry, svg: () => string) {
   toDecode.push(() => {
     if (items.get(key) !== e) return next();
-    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    const url = URL.createObjectURL(new Blob([svg()], { type: "image/svg+xml" }));
     const img = new Image();
     img.decoding = "async";
     img.src = url;
@@ -142,6 +149,7 @@ function decodeItem(key: string, e: ItemEntry, svg: string) {
 }
 function next(fresh = false) {
   if (!fresh) decoding--;
+  if (held) return;
   const f = toDecode.shift();
   if (!f) return;
   decoding++;
@@ -199,7 +207,7 @@ export function acquireItem(key: string, svg: () => string, ready: (t: Texture) 
   } else {
     e = { tex: null, refs: 0, bytes: 0, waiters: [] };
     items.set(key, e);
-    decodeItem(key, e, svg());
+    decodeItem(key, e, svg);
   }
   const entry = e;
   if (!entry.refs && entry.tex) idleBytes -= entry.bytes;

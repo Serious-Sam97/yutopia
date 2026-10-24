@@ -42,6 +42,7 @@ interface Screen {
   onAt: number;
   offAt: number;
   drawnAt: number;
+  ver: number; // counts its paints (the 3D view uploads it only when this moves)
 }
 
 const FRONT: [number, number][] = [
@@ -101,6 +102,7 @@ export class OsRoom {
       onAt: 0,
       offAt: 0,
       drawnAt: 0,
+      ver: 0,
     };
   }
 
@@ -205,6 +207,7 @@ export class OsRoom {
         else if (warm !== null) paintTube(s.g, warm, true);
         else if (s.view) paintOs(s.g, s.view, now);
         s.tex.source.update();
+        s.ver++;
       }
       // its light on the desk in front of it, at night
       if (s.view && night > 0.05 && facing) {
@@ -223,10 +226,11 @@ export class OsRoom {
       def: WorldObjectDef;
       canvas: HTMLCanvasElement;
       at: { tl: [number, number]; tr: [number, number]; zTop: number; zBot: number };
+      version: number;
     }[] = [];
     for (const s of this.screens.values()) {
       const at = computerGlass(s.def);
-      if (at) out.push({ def: s.def, canvas: s.canvas, at });
+      if (at) out.push({ def: s.def, canvas: s.canvas, at, version: s.ver });
     }
     return out;
   }

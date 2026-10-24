@@ -76,6 +76,8 @@ interface LcdView {
   frame: HTMLCanvasElement;
   source: HTMLVideoElement | HTMLCanvasElement | null;
   at: Corners | null; // (shown: where, for the 3D view)
+  ver: number; // counts its copies (the 3D view uploads it only when this moves)
+  seen: number[]; // the video frame copied last (nextFrame)
 } // a remote press lasts at least this (a few emulator frames)
 const PAD_Z_STAND = 30; // px: where hands are, standing / sitting
 const PAD_Z_SIT = 21;
@@ -126,8 +128,22 @@ interface TvView {
   // a TV's picture is copied into this canvas each frame (Pixi's video textures
   // don't refresh on the engine's own loop; the 3D view reads only this one)
   frame: HTMLCanvasElement;
+  ver: number; // counts its copies (the 3D view uploads it only when this moves)
+  seen: number[]; // the video frame copied last (nextFrame)
   avg: number; // the picture's average colour (for the glow)
   avgAt: number;
+}
+
+// The video moved on to another picture since the one copied last (`seen`, kept up):
+// paused or between its frames, a copy would be the same picture. (The emulator's own
+// canvas: a new one each frame.)
+function nextFrame(src: HTMLVideoElement | HTMLCanvasElement, seen: number[]): boolean {
+  if (!(src instanceof HTMLVideoElement)) return true;
+  const n = src.getVideoPlaybackQuality?.().totalVideoFrames ?? 0;
+  if (n === seen[0] && src.currentTime === seen[1]) return false;
+  seen[0] = n;
+  seen[1] = src.currentTime;
+  return true;
 }
 
 export class GameRoom {
@@ -267,7 +283,21 @@ export class GameRoom {
     const frame = document.createElement("canvas");
     frame.width = 320;
     frame.height = 240;
-    return { def, root, glow, pic, noise, scan, label, source: null, frame, avg: 0x6080a0, avgAt: 0 };
+    return {
+      def,
+      root,
+      glow,
+      pic,
+      noise,
+      scan,
+      label,
+      source: null,
+      frame,
+      ver: 0,
+      seen: [-1, -1],
+      avg: 0x6080a0,
+      avgAt: 0,
+    };
   }
 
   // ── every frame ──────────────────────────────────────────────────────────
@@ -704,14 +734,17 @@ export class GameRoom {
       }
       if (src !== v.source) {
         v.source = src;
+        v.seen = [-1, -1];
         v.pic.texture = !src ? Texture.EMPTY : Texture.from(src instanceof HTMLVideoElement ? v.frame : src);
       }
       // (my emulator's picture too: the 3D view takes the 2D copy, never the
       // emulator's WebGL canvas itself — Firefox showed nothing on a 3D TV from that)
-      if (src && (!(src instanceof HTMLVideoElement) || src.readyState >= 2))
+      if (src && (!(src instanceof HTMLVideoElement) || src.readyState >= 2) && nextFrame(src, v.seen)) {
         v.frame.getContext("2d")?.drawImage(src, 0, 0, v.frame.width, v.frame.height);
-      // the engine draws on its own loop (not Pixi's ticker): push each new frame up
-      if (src) v.pic.texture.source.update();
+        v.ver++;
+        // the engine draws on its own loop (not Pixi's ticker): push each new frame up
+        v.pic.texture.source.update();
+      }
       const on = !!shows;
       v.root.visible = on && facing;
       v.glow.visible = false;
@@ -812,15 +845,19 @@ export class GameRoom {
         const frame = document.createElement("canvas");
         frame.width = 320;
         frame.height = 240;
-        v = { root, pic, frame, source: null, at: null };
+        v = { root, pic, frame, source: null, at: null, ver: 0, seen: [-1, -1] };
         this.lcds.set(o.id, v);
       }
       if (src !== v.source) {
         v.source = src;
+        v.seen = [-1, -1];
         v.pic.texture = Texture.from(v.frame);
       }
-      v.frame.getContext("2d")?.drawImage(src, 0, 0, v.frame.width, v.frame.height);
-      v.pic.texture.source.update();
+      if (nextFrame(src, v.seen)) {
+        v.frame.getContext("2d")?.drawImage(src, 0, 0, v.frame.width, v.frame.height);
+        v.ver++;
+        v.pic.texture.source.update();
+      }
       // its glass, turned with the console
       const rot = o.rot ?? 0;
       const a = turnLocal(LCD.x0, LCD.y, rot, 1, 1);
@@ -1160,13 +1197,13 @@ export class GameRoom {
   }
 
   // for the third-person view: what each TV shows now (the console's picture)
-  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; at?: Corners }[] {
-    const out: { def: WorldObjectDef; canvas: HTMLCanvasElement; at?: Corners }[] = [];
-    for (const v of this.tvs.values()) if (v.source) out.push({ def: v.def, canvas: v.frame });
+  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; at?: Corners; version: number }[] {
+    const out: { def: WorldObjectDef; canvas: HTMLCanvasElement; at?: Corners; version: number }[] = [];
+    for (const v of this.tvs.values()) if (v.source) out.push({ def: v.def, canvas: v.frame, version: v.ver });
     // the slim consoles' own screens (their glass isn't a TV's: its corners come along)
     for (const [id, v] of this.lcds) {
       const def = this.obj(id);
-      if (def && v.at) out.push({ def, canvas: v.frame, at: v.at });
+      if (def && v.at) out.push({ def, canvas: v.frame, at: v.at, version: v.ver });
     }
     return out;
   }

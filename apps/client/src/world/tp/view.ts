@@ -92,6 +92,7 @@ import type { LightSource } from "../art/light";
 import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
+import { holdItems } from "../art/textures";
 import type { PuffKind } from "../engine";
 import { type Footprints, printLeft } from "../footprints";
 import { activePad } from "../pads";
@@ -745,6 +746,7 @@ void main() {
     this.scene.add(this.highlight, this.marker, this.earshotRing, this.live.root, this.builder.root);
     this.setHour(12);
     this.setQuality("high");
+    holdItems(true); // (the iso view's drawings wait for it: destroy)
   }
 
   // Little bursts, as iso's `puff`: warm sparks, confetti over a head (a card
@@ -1470,15 +1472,55 @@ void main() {
       this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
       r.setRenderTarget(this.warmTarget);
     }
-    const jobs = [r.compileAsync(this.scene, this.camera)];
+    const jobs = [r.compileAsync(this.scene, this.camera), r.compileAsync(this.fadeSamples(), this.camera, this.scene)];
     const h = this.hands ?? this.handsSpare;
     if (h) jobs.push(r.compileAsync(h.scene, h.camera));
     r.setRenderTarget(null);
     void Promise.all(jobs)
       .catch(() => {})
       .then(() => {
+        if (!this.gone) this.drawAll();
         this.compiled = "done";
       });
+  }
+  // The see-through copies my floor's pieces take when they fade (applyFade), one of each
+  // kind, kept: their shaders compiled too — else the first wall to fade linked one then
+  private fadeKept: Material[] = [];
+  private fadeSamples(): Scene {
+    const s = new Scene();
+    const seen = new Set<string>();
+    for (const f of this.world.fades)
+      for (const m of f.objects) {
+        if (!(m instanceof Mesh || m instanceof LineSegments)) continue;
+        const base = (m.userData.base ?? m.material) as Material;
+        const a = m.geometry.attributes;
+        const k = `${base.uuid}|${m.type}|${Object.keys(a).map((n) => n + a[n].itemSize)}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const own = base.clone();
+        own.transparent = true;
+        own.depthWrite = false;
+        this.fadeKept.push(own);
+        s.add(m instanceof LineSegments ? new LineSegments(m.geometry, own) : new Mesh(m.geometry, own));
+      }
+    return s;
+  }
+  // …and all of it drawn once, every piece in view (from above, off screen): each mesh's
+  // buffers and each texture go up to the GPU behind the screen — else the first look
+  // round put them up then, tens of MB in a second or two
+  private drawAll() {
+    const box = new Box3().setFromObject(this.scene);
+    if (box.isEmpty()) return;
+    const c = this.warmCam;
+    const r = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2 + 2;
+    const x = (box.min.x + box.max.x) / 2;
+    const z = (box.min.z + box.max.z) / 2;
+    Object.assign(c, { left: -r, right: r, top: r, bottom: -r, far: box.max.y - box.min.y + 20 });
+    c.position.set(x, box.max.y + 10, z);
+    c.lookAt(x, box.min.y, z);
+    c.updateProjectionMatrix();
+    this.warmDraw(c);
+    c.far = 400;
   }
 
   // One draw of the warm-up, as the screen draws (so the shaders compiled are the
@@ -4164,7 +4206,10 @@ void main() {
     this.events.aim?.(person ? { person } : object ? { object } : null);
   }
 
+  private gone = false;
   destroy() {
+    this.gone = true;
+    holdItems(false);
     this.shroud?.dispose();
     this.arms3?.dispose();
     const c = this.renderer.domElement;
@@ -4206,6 +4251,7 @@ void main() {
     this.stairs3.dispose();
     for (const b of this.floors.values()) b.world.dispose();
     this.warmTarget?.dispose();
+    for (const m of this.fadeKept) m.dispose();
     this.around.dispose();
     this.renderer.dispose();
     c.remove();

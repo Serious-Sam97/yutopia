@@ -304,6 +304,9 @@ export class Cars {
   private live = new Map<string, LiveView>();
   private farMats = new Map<number, Material>();
   private env: Texture | null = null;
+  // (kept from one renewal to the next: a new generator and dome each time linked
+  // their shaders again, a hitch every 20 s)
+  private envMake: { pm: PMREMGenerator; for: ThirdPersonView["renderer"]; scene: Scene; dome: Mesh } | null = null;
   private envAt = -1e9;
   private envNight = -1;
   // mine
@@ -780,35 +783,42 @@ export class Cars {
     if (this.time - this.envAt < 20 && Math.abs(n - this.envNight) < 0.15) return;
     this.envAt = this.time;
     this.envNight = n;
-    const pm = new PMREMGenerator(tp.renderer);
-    const s = new Scene();
-    const top = new Color("#8f9ca8").lerp(new Color("#04070c"), n);
-    const hor = new Color("#d5dbe0").lerp(new Color("#141c27"), n);
-    const dome = new Mesh(
-      new SphereGeometry(50, 24, 12),
-      new ShaderMaterial({
-        side: BackSide,
-        uniforms: {
-          top: { value: top },
-          hor: { value: hor },
-          low: { value: new Color("#dfe5ea").lerp(new Color("#0b1016"), n) },
-        },
-        vertexShader:
-          "varying vec3 p; void main(){ p = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
-        fragmentShader:
-          "uniform vec3 top; uniform vec3 hor; uniform vec3 low; varying vec3 p; void main(){ vec3 c = p.y > 0.0 ? mix(hor, top, smoothstep(0.0, 0.5, p.y)) : mix(hor, low, smoothstep(0.0, 0.15, -p.y)); gl_FragColor = vec4(c, 1.0); }",
-      }),
-    );
-    s.add(dome);
-    const next = pm.fromScene(s, 0.04, 0.1, 100).texture;
-    pm.dispose();
-    dome.geometry.dispose();
-    (dome.material as ShaderMaterial).dispose();
+    if (this.envMake?.for !== tp.renderer) {
+      this.dropEnvMake();
+      const scene = new Scene();
+      const dome = new Mesh(
+        new SphereGeometry(50, 24, 12),
+        new ShaderMaterial({
+          side: BackSide,
+          uniforms: { top: { value: new Color() }, hor: { value: new Color() }, low: { value: new Color() } },
+          vertexShader:
+            "varying vec3 p; void main(){ p = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+          fragmentShader:
+            "uniform vec3 top; uniform vec3 hor; uniform vec3 low; varying vec3 p; void main(){ vec3 c = p.y > 0.0 ? mix(hor, top, smoothstep(0.0, 0.5, p.y)) : mix(hor, low, smoothstep(0.0, 0.15, -p.y)); gl_FragColor = vec4(c, 1.0); }",
+        }),
+      );
+      scene.add(dome);
+      this.envMake = { pm: new PMREMGenerator(tp.renderer), for: tp.renderer, scene, dome };
+    }
+    const { pm, scene, dome } = this.envMake;
+    const u = (dome.material as ShaderMaterial).uniforms;
+    u.top.value.set("#8f9ca8").lerp(new Color("#04070c"), n);
+    u.hor.value.set("#d5dbe0").lerp(new Color("#141c27"), n);
+    u.low.value.set("#dfe5ea").lerp(new Color("#0b1016"), n);
+    const next = pm.fromScene(scene, 0.04, 0.1, 100).texture;
     const old = this.env;
     this.env = next;
     for (const p of this.parked.values()) p.full?.setEnv(next);
     for (const l of this.live.values()) l.model.setEnv(next);
     old?.dispose();
+  }
+  private dropEnvMake() {
+    const m = this.envMake;
+    if (!m) return;
+    m.pm.dispose();
+    m.dome.geometry.dispose();
+    (m.dome.material as ShaderMaterial).dispose();
+    this.envMake = null;
   }
 
   // ── the parked cars: the lot's (and wherever they were left) ───────────────
@@ -1893,6 +1903,7 @@ export class Cars {
     this.radio.stop();
     this.root.removeFromParent();
     this.env?.dispose();
+    this.dropEnvMake();
     this.hideHud();
   }
 }

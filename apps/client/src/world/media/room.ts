@@ -64,6 +64,7 @@ interface Glassed {
   offAt: number; // … went off (the collapse)
   img: { url: string; el: HTMLImageElement; ok: boolean } | null;
   drawn: string; // what's on the canvas now
+  ver: number; // counts its paints (the 3D view uploads it only when this moves)
   avg: number; // the picture's colour (its light at night)
   avgAt: number;
 }
@@ -232,6 +233,7 @@ export class MediaRoom {
       offAt: 0,
       img: null,
       drawn: "",
+      ver: 0,
       avg: 0x6080a0,
       avgAt: 0,
     };
@@ -359,6 +361,7 @@ export class MediaRoom {
       if (s.offAt && t - s.offAt < OFF_MS && s.roots.length) {
         this.paintOff(s, (t - s.offAt) / OFF_MS);
         s.tex.source.update();
+        s.ver++;
         s.drawn = "";
         return;
       }
@@ -414,6 +417,7 @@ export class MediaRoom {
       s.drawn = key;
       this.paint(s, live ?? (s.img?.ok ? s.img.el : null), m, pos, loading, warm);
       s.tex.source.update();
+      s.ver++;
     }
     // its light on the floor in front of it, at night (one soft sprite)
     if (night > 0.05) {
@@ -878,8 +882,8 @@ export class MediaRoom {
   }
 
   // for the third-person view: every display's canvas (what the iso view maps onto its glass)
-  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean }[] {
-    return [...this.screens.values()].map((s) => ({ def: s.def, canvas: s.canvas, on: s.wasOn }));
+  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean; version: number }[] {
+    return [...this.screens.values()].map((s) => ({ def: s.def, canvas: s.canvas, on: s.wasOn, version: s.ver }));
   }
 
   dispose() {

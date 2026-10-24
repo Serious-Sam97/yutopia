@@ -1151,3 +1151,9 @@ The user, in prod: 38–42 fps in their office (Firefox). Measured on prod's own
 - Floors drawn merged an area at a time (fading done in the shader, the faded pieces drawn themselves as before); glass and ink merged too (the user's call: an outline over glass a few levels off); what stays apart grouped per area and left out when out of view; parked cars out of view off per render; the games' still pieces merged; floors above out of the scene.
 - Prod's office 3D frame 12.8 → 7.6 ms (draws 1,848 → 965); dev Tracking Room 8.1 → 5.9 ms.
 - **Checked**: `e2e/merge-ab.spec.ts` (same-frame A/B, only draw-order ties differ with glass/ink apart; bounded with them merged) on the dev world, and 80 cameras on prod's; client 25, shared 280, world-server 134 + 1 flaky under load (nests, passes alone); types; Biome; build + budget (page 557.0).
+
+## The lag — round 5: the first seconds (2026-10-24, plan `38-the-lag.md`)
+The user: entering, stutters and 47–50 fps for ~10 s, then 60; iso → 3D the same. Behind it: the iso view's drawings decoding in 3D, the first look round uploading ~35 MB, shaders linked after the loading screen (fading copies; the cars' reflections every 20 s), the 3D screens uploaded every frame.
+- The iso drawings wait while the 3D view is up; the loading screen ends with the whole scene drawn once off screen (buffers and textures up) and the fading copies' shaders compiled; the cars' reflection generator kept; screens uploaded only when redrawn, consoles' video copied only on a new frame.
+- Entering prod's world in 3D: 30–39 fps for 18 s → 50–54 for 3 s, then 60 (frames over 30 ms 450 → 37); programs linked after the screen 10 → 0.
+- **Checked**: prod's world as Bia (fps, uploads, links, screens' uploads), the screen rule in the page; client 25; types; Biome; build + budget (page 556.999).

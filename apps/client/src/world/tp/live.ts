@@ -30,7 +30,8 @@ export interface Live {
   tr: [number, number];
   zTop: number; // iso px
   zBot: number;
-  version: number; // what's on the canvas (redrawn when it changes); -1 = every frame
+  version: number; // what's on the canvas (counts its redraws; uploaded when it moves)
+  live?: boolean; // redrawn as it plays: further than NEAR it keeps its last frame
   glow: boolean; // a screen (its own light) or not (paper, cork)
   fit?: number; // fit this aspect inside (a video with its own shape)
 }
@@ -89,9 +90,13 @@ export class LiveSurfaces {
         s.place = place;
         placeQuad(s.mesh, l);
       }
-      // what: canvases when they change, videos and live canvases every frame (near enough)
+      // what: canvases when they're redrawn (live ones only near enough, after their first)
       const near = Math.hypot((l.tl[0] + l.tr[0]) / 2 - camX, (l.tl[1] + l.tr[1]) / 2 - camY) < NEAR;
-      if (!(l.src instanceof HTMLVideoElement) && (l.version !== s.version || (l.version < 0 && near))) {
+      if (
+        !(l.src instanceof HTMLVideoElement) &&
+        l.version !== s.version &&
+        (!l.live || near || Number.isNaN(s.version))
+      ) {
         s.version = l.version;
         s.tex.needsUpdate = true;
       }
@@ -151,12 +156,14 @@ function placeQuad(mesh: Mesh, l: Live) {
 // room's screens, the game room's TVs.
 export interface LiveSources {
   engine: Pick<WorldEngine, "livePanels" | "getObject" | "shareVideo" | "panelCanvas">;
-  screens: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean }[] } | null;
+  // (each picture's `version` counts its redraws)
+  screens: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean; version: number }[] } | null;
   games: {
     pictures(): {
       def: WorldObjectDef;
       canvas: HTMLCanvasElement;
       at?: { tl: [number, number]; tr: [number, number]; zTop: number; zBot: number };
+      version: number;
     }[];
   } | null;
   // computers someone's at (world/os): VortexOS's picture on their glass
@@ -165,6 +172,7 @@ export interface LiveSources {
       def: WorldObjectDef;
       canvas: HTMLCanvasElement;
       at: { tl: [number, number]; tr: [number, number]; zTop: number; zBot: number };
+      version: number;
     }[];
   } | null;
 }
@@ -181,7 +189,7 @@ export class LiveFeed {
     const out: Live[] = [];
     const taken = new Set<string>();
     for (const p of os?.pictures() ?? [])
-      out.push({ key: `o:${p.def.id}`, src: p.canvas, ...p.at, version: -1, glow: true });
+      out.push({ key: `o:${p.def.id}`, src: p.canvas, ...p.at, version: p.version, live: true, glow: true });
     const panels = engine.livePanels();
     for (const p of games?.pictures() ?? []) {
       const c = p.at ?? glassCorners(p.def); // (a slim console's own screen brings its corners)
@@ -190,7 +198,8 @@ export class LiveFeed {
         key: `g:${p.def.id}`,
         src: p.canvas,
         ...c,
-        version: -1,
+        version: p.version,
+        live: true,
         glow: true,
         fit: p.at ? undefined : wide(p.def),
       });
@@ -200,7 +209,7 @@ export class LiveFeed {
       if (taken.has(p.def.id) || (!p.on && panels.has(p.def.id))) continue;
       const c = glassCorners(p.def);
       if (!c) continue;
-      out.push({ key: `m:${p.def.id}`, src: p.canvas, ...c, version: -1, glow: true });
+      out.push({ key: `m:${p.def.id}`, src: p.canvas, ...c, version: p.version, live: true, glow: true });
       taken.add(p.def.id);
     }
     for (const [id, p] of panels) {
@@ -217,7 +226,7 @@ export class LiveFeed {
       const video = engine.shareVideo(id);
       if (video) {
         const fit = (video.videoWidth || 16) / (video.videoHeight || 9);
-        out.push({ key: `v:${id}`, src: video, ...at, version: -1, glow: true, fit });
+        out.push({ key: `v:${id}`, src: video, ...at, version: 0, glow: true, fit });
         continue;
       }
       let c = this.cache.get(id);
