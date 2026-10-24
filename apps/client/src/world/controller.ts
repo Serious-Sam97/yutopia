@@ -436,7 +436,7 @@ export class WorldController {
     this.offLook = hud.subscribe(this.watchLook);
     this.offPrefs = subscribePrefs(() => {
       this.engine?.setQuality(this.qualityNow(), prefs().reducedMotion);
-      if (this.tp && this.tp.quality !== this.qualityNow()) this.tp.setQuality(this.qualityNow());
+      if (this.tp && this.tp.quality !== this.qualityNow()) this.tp.toQuality(this.qualityNow());
       this.syncView();
     });
     // Auto quality: step down a tier when this device can't keep up
@@ -3460,7 +3460,7 @@ export class WorldController {
     this.slowFor = 0;
     this.autoTier = this.autoTier === "high" ? "medium" : "low";
     e.setQuality(this.autoTier, prefs().reducedMotion);
-    this.tp?.setQuality(this.autoTier);
+    this.tp?.toQuality(this.autoTier);
   }
 
   meTile() {

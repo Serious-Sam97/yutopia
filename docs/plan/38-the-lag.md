@@ -339,3 +339,25 @@ What changed (the picture is the same — what's uploaded, when; nothing drawn d
 
 Checked in the page: a 3D screen near and redrawn is uploaded on each redraw, not otherwise;
 far, a live one keeps its last frame; boards whenever they change.
+
+### Round 5b — a quality change mid-game (2026-10-24)
+
+Prod's reports (the server's Claude, 0.1.121): the worst freeze, 5.3 s in Firefox, came right
+after auto quality stepped High → Medium. A change of quality changes how many lamps light
+the scene (10 → 6 → 3) and which lights cast shadows (the sun off on Low, my flashlight on
+High only), and that changes every lit material's shader: all of what's in view linked in
+the one frame after (here, prod's office: 30 programs, a 791 ms frame; → Low 41, 722 ms).
+
+`TpView.toQuality` (auto quality and Settings use it): the shaders the new quality needs
+compiled first, against stand-ins for the scene's lights as that quality has them (cloned,
+lit or not as it would; the scene itself drawn as before meanwhile), one of each kind of thing
+drawn, a few a frame (4 ms), each lot ready before the next, into the target the frame draws
+to (Medium and High's linear buffer, Low's screen); then switched. Same picture.
+
+| Prod's office, Chromium | Before | After |
+|---|---|---|
+| High → Medium, the first time | 30 programs at once, a 791 ms frame | 95 in the background, worst frame 112 ms |
+| → Low, the first time | 41 at once, 722 ms | 94 in the background, 106 ms |
+| back to one already used | ~90 ms | ~90 ms (the finish's buffers and the shadow map made again) |
+
+The switch itself waits for the compiling (a second or two here, longer in Firefox).

@@ -1626,8 +1626,79 @@ void main() {
 
   // High: shadows in detail, bloom and the finish; Medium: softer shadows, no
   // finish; Low: no shadows, fewer lamps, 1× pixels.
+  // A change mid-game (auto quality, Settings): every shader the new one needs (the lamps
+  // lit, the shadows cast change them all) compiled first, a few a frame, against stand-ins
+  // for the scene's lights — the scene drawn as it was meanwhile — then switched. At once,
+  // every lit thing's shader was linked in one frame: 0.8 s here, seconds in Firefox.
+  private qualityTo: "high" | "medium" | "low" | null = null;
+  toQuality(q: "high" | "medium" | "low") {
+    if (q === (this.qualityTo ?? this.quality)) return;
+    this.qualityTo = q;
+    void this.compileFor(q).then(() => {
+      if (!this.gone && this.qualityTo === q) this.setQuality(q);
+    });
+  }
+  private async compileFor(q: "high" | "medium" | "low") {
+    const r = this.renderer;
+    // the lights as `q` has them (setQuality): how many lamps, which cast shadows
+    const stand = new Scene();
+    stand.fog = this.scene.fog;
+    stand.environment = this.scene.environment;
+    const lamps = q === "high" ? LAMPS : q === "medium" ? 6 : 3;
+    const torches = this.torch3.map((t) => t.spot as Object3D);
+    const shown = (o: Object3D) => {
+      for (let x: Object3D | null = o; x; x = x.parent) if (!x.visible) return false;
+      return true;
+    };
+    this.scene.traverse((o) => {
+      if (!(o as PointLight).isLight) return;
+      const lamp = this.pool.indexOf(o as PointLight);
+      if (lamp >= 0 ? lamp >= lamps || !(o.parent && shown(o.parent)) : !shown(o)) return;
+      const l = o.clone(false);
+      l.visible = true; // (a lamp `q` lights that's off now)
+      if (o === this.sun) l.castShadow = q !== "low";
+      const t = torches.indexOf(o);
+      if (t >= 0) l.castShadow = q === "high" && t === 0;
+      stand.add(l);
+    });
+    // one of each kind of thing drawn (its materials, what its geometry carries)
+    const reps: Object3D[] = [];
+    const kinds = new Set<string>();
+    this.scene.traverseVisible((o) => {
+      const m = (o as Mesh).material as Material | Material[] | undefined;
+      if (!m || (o as PointLight).isLight) return;
+      const g = (o as Mesh).geometry as BufferGeometry | undefined;
+      const a = g?.attributes ?? {};
+      const k = `${(Array.isArray(m) ? m : [m]).map((x) => x.uuid)}|${o.type}|${Object.keys(a).map((n) => n + a[n].itemSize)}|${Object.keys(g?.morphAttributes ?? {})}`;
+      if (kinds.has(k)) return;
+      kinds.add(k);
+      let lit = false;
+      o.traverse((x) => {
+        lit ||= !!(x as PointLight).isLight;
+      });
+      if (!lit) reps.push(o); // (one holding a light: compiled when it's switched, as before)
+    });
+    // a few a frame, each lot ready before the next — into what the frame draws to (Medium
+    // and High: their finish's linear buffer, as compileAll; Low: the screen)
+    for (let i = 0; i < reps.length; ) {
+      if (this.gone || this.qualityTo !== q) return;
+      const t0 = performance.now();
+      const lot: Promise<unknown>[] = [];
+      const to = r.getRenderTarget();
+      if (q !== "low") {
+        this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
+        r.setRenderTarget(this.warmTarget);
+      } else r.setRenderTarget(null);
+      while (i < reps.length && performance.now() - t0 < 4) lot.push(r.compileAsync(reps[i++], this.camera, stand));
+      r.setRenderTarget(to);
+      await Promise.all(lot).catch(() => {});
+      await new Promise((done) => requestAnimationFrame(done));
+    }
+  }
+
   setQuality(q: "high" | "medium" | "low") {
     this.quality = q;
+    this.qualityTo = null;
     this.renderer.setPixelRatio(this.ratioFor(q));
     if (!this.ratioAtStart && this.host) {
       this.ratioAtStart = this.renderer.getPixelRatio();
