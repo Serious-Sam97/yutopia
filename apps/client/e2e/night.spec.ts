@@ -95,3 +95,112 @@ test("the mood: the same storm for both at once; A's flashlight lights B at nigh
     });
   }
 });
+
+// ── the pitch dark (docs/plan/44-the-night.md, phase 5) ──
+// In 3D, on the machine's GPU: what the view draws, measured from its own renderer.
+const open3 = async (page: Page, who: typeof ANA) => {
+  await page.addInitScript(() => {
+    const k = "yutopia:prefs";
+    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase" }));
+  });
+  await enter(page, await token(who));
+  await page.waitForFunction(() => !!(window as any).__yutopia?.tp, null, { timeout: 60_000 });
+};
+/** The clock held (its 1 s timer would set it back), no storm. */
+const hold = (page: Page, h: number) =>
+  page.evaluate((hh) => {
+    const c = (window as any).__yutopia;
+    c.updateNight = () => {};
+    c.hour = hh;
+    c.engine.setClock(hh);
+    c.tp?.setHour(hh);
+    if (c.life) c.life.weather = () => [0, 0];
+  }, h);
+/** The mean luminance (0 … 1) of a frame drawn from a camera of my own (the floor's coords; the
+ *  3D view's renderer, no post), over the frame's middle half. */
+const meanFrom = (page: Page, from: number[], to: number[]) =>
+  page.evaluate(
+    async ([f, a]) => {
+      const tp = (window as any).__yutopia.tp;
+      const cam = tp.camera.clone();
+      cam.position.set(f[0], f[1], f[2]);
+      cam.lookAt(a[0], a[1], a[2]);
+      cam.updateMatrixWorld();
+      tp.renderer.render(tp.scene, cam);
+      const img = new Image();
+      img.src = tp.renderer.domElement.toDataURL("image/png");
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = 160;
+      c.height = 90;
+      const g = c.getContext("2d") as CanvasRenderingContext2D;
+      g.drawImage(img, 0, 0, 160, 90);
+      const d = g.getImageData(40, 22, 80, 46).data;
+      let s = 0;
+      for (let i = 0; i < d.length; i += 4) s += d[i] * 0.3 + d[i + 1] * 0.55 + d[i + 2] * 0.15;
+      return s / (d.length / 4) / 255;
+    },
+    [from, to],
+  );
+
+test("the pitch dark: black off every light, lit in a beam; a name only in the light", async ({ page, browser }) => {
+  test.skip(process.env.YUTOPIA_GPU !== "1", "needs the GPU: YUTOPIA_GPU=1");
+  test.setTimeout(240_000);
+  const a = page;
+  await open3(a, ANA);
+  await hold(a, 23);
+  // the lawn, the floor's (-40, -30): nothing lit round it
+  await a.evaluate(() => (window as any).__yutopia.teleport({ x: -40, y: -30, level: 0 }));
+  await a.waitForFunction(() => (window as any).__yutopia.engine?.grounds?.land.visible, null, { timeout: 60_000 });
+  await hold(a, 23);
+  await a.waitForTimeout(3000);
+  // the snow 15 tiles off, looked at from above it: as good as black
+  const off = await meanFrom(a, [-55, 3, -45], [-62, 0, -52]);
+  expect(off, "off every light: under 3%").toBeLessThan(0.03);
+  // her torch on: the snow it lands on, from behind her
+  await a.evaluate(() => (window as any).__yutopia.toggleTorch());
+  const b = await (await browser.newContext()).newPage();
+  try {
+    await a.waitForTimeout(1500);
+    const beam = (await a.evaluate(() => {
+      const c = (window as any).__yutopia;
+      const t = c.tp.torch3.find((x: any) => x.on && x.who === c.room.sessionId);
+      return t ? { x: t.on.x, y: t.on.y, yaw: t.on.yaw } : null;
+    })) as { x: number; y: number; yaw: number } | null;
+    expect(beam, "her torch on").toBeTruthy();
+    const B = beam as { x: number; y: number; yaw: number };
+    const along = (k: number, side: number) => ({
+      x: B.x + Math.cos(B.yaw) * k - Math.sin(B.yaw) * side,
+      y: B.y + Math.sin(B.yaw) * k + Math.cos(B.yaw) * side,
+    });
+    const behind = along(-3, 0);
+    const spot = along(5, 0);
+    const lit = await meanFrom(a, [behind.x, 2.4, behind.y], [spot.x, 0, spot.y]);
+    expect(lit, "the beam's snow: lit").toBeGreaterThan(Math.max(0.06, off * 2.5));
+    // Bia off the beam, then in it: her name only in the light
+    await open3(b, BIA);
+    await hold(b, 23);
+    const bid = await b.evaluate(() => (window as any).__yutopia.room.sessionId as string);
+    const named = () =>
+      a.evaluate((id) => {
+        const tp = (window as any).__yutopia.tp;
+        const t = tp.tagEls.get(id);
+        const pill = t?.name.parentElement as HTMLElement | undefined;
+        return {
+          unseen: tp.isUnseen(id),
+          name: !!pill && pill.style.display !== "none" && t.root.style.display !== "none",
+        };
+      }, bid);
+    await b.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), along(6, 8));
+    await expect.poll(named, { timeout: 10_000 }).toEqual({ unseen: true, name: false });
+    await b.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), along(6, 0));
+    await expect.poll(named, { timeout: 10_000 }).toEqual({ unseen: false, name: true });
+  } finally {
+    await a.evaluate(() => {
+      const c = (window as any).__yutopia;
+      if (c.room?.state.players.get(c.room.sessionId)?.torch) c.toggleTorch();
+    });
+    await b.context().close();
+  }
+});

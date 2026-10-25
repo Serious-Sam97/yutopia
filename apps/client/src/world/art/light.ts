@@ -189,6 +189,9 @@ export class LightMap {
   // daylight through windows, as a single strength per sample: coloured by the
   // hour (sun / moon) when composited, so the time of day never needs a re-bake
   readonly win: Float32Array;
+  // per sample: under the open sky (the lot's asphalt and concrete), which takes
+  // the outside's ambient (in the dark: next to none) rather than the rooms'
+  readonly open: Uint8Array;
   private block: Uint8Array; // per tile: 1 = blocks light (no floor)
   private hBlk: Uint8Array; // walls on north edges that block light (glass and half walls don't)
   private vBlk: Uint8Array; // … on west edges
@@ -203,6 +206,14 @@ export class LightMap {
     this.h = H * PX;
     this.light = new Float32Array(this.w * this.h * 3);
     this.win = new Float32Array(this.w * this.h);
+    this.open = new Uint8Array(this.w * this.h);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        const ch = tileAt(map, x, y);
+        if (ch !== "a" && ch !== "c") continue;
+        for (let sy = 0; sy < PX; sy++)
+          this.open.fill(1, (y * PX + sy) * this.w + x * PX, (y * PX + sy) * this.w + x * PX + PX);
+      }
     this.block = new Uint8Array(W * H);
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!isFloor(tileAt(map, x, y))) this.block[y * W + x] = 1;
     this.hBlk = new Uint8Array((H + 1) * W);
@@ -322,8 +333,9 @@ export class LightMap {
       }
   }
 
-  // ambient + light, clamped to 1, as a canvas (plan space, PX per tile)
-  composite(ambient: RGB, win: RGB, into?: HTMLCanvasElement): HTMLCanvasElement {
+  // ambient + light, clamped to 1, as a canvas (plan space, PX per tile); `out`:
+  // the ambient under the open sky (the rooms' when not given)
+  composite(ambient: RGB, win: RGB, into?: HTMLCanvasElement, out: RGB = ambient): HTMLCanvasElement {
     const c = into ?? document.createElement("canvas");
     c.width = this.w;
     c.height = this.h;
@@ -331,19 +343,21 @@ export class LightMap {
     const img = g.createImageData(this.w, this.h);
     const L = this.light;
     const Wn = this.win;
+    const O = this.open;
     for (let i = 0, j = 0, k = 0; i < L.length; i += 3, j += 4, k++) {
       const w = Math.min(1, Wn[k]);
-      img.data[j] = Math.min(255, (ambient[0] + L[i] + win[0] * w) * 255);
-      img.data[j + 1] = Math.min(255, (ambient[1] + L[i + 1] + win[1] * w) * 255);
-      img.data[j + 2] = Math.min(255, (ambient[2] + L[i + 2] + win[2] * w) * 255);
+      const a = O[k] ? out : ambient;
+      img.data[j] = Math.min(255, (a[0] + L[i] + win[0] * w) * 255);
+      img.data[j + 1] = Math.min(255, (a[1] + L[i + 1] + win[1] * w) * 255);
+      img.data[j + 2] = Math.min(255, (a[2] + L[i + 2] + win[2] * w) * 255);
       img.data[j + 3] = 255;
     }
     g.putImageData(img, 0, 0);
     return c;
   }
 
-  // Light at a world point (bilinear), ambient included, as a 0xRRGGBB tint.
-  tintAt(x: number, y: number, ambient: RGB, win: RGB = [0, 0, 0]): number {
+  // Light at a world point (bilinear), ambient included (`out` under the open sky), as a 0xRRGGBB tint.
+  tintAt(x: number, y: number, ambient: RGB, win: RGB = [0, 0, 0], out: RGB = ambient): number {
     const fx = Math.max(0, Math.min(this.w - 1.001, x * PX - 0.5));
     const fy = Math.max(0, Math.min(this.h - 1.001, y * PX - 0.5));
     const ix = Math.floor(fx);
@@ -361,16 +375,17 @@ export class LightMap {
         wat(ix, iy + 1) * (1 - tx) * ty +
         wat(ix + 1, iy + 1) * tx * ty,
     );
-    let out = 0;
+    const o = this.open[Math.round(fy) * this.w + Math.round(fx)]; // (the nearest sample's)
+    let rgb = 0;
     for (let k = 0; k < 3; k++) {
       const v =
         at(ix, iy, k) * (1 - tx) * (1 - ty) +
         at(ix + 1, iy, k) * tx * (1 - ty) +
         at(ix, iy + 1, k) * (1 - tx) * ty +
         at(ix + 1, iy + 1, k) * tx * ty;
-      out = (out << 8) | Math.round(Math.min(1, ambient[k] + v + win[k] * w) * 255);
+      rgb = (rgb << 8) | Math.round(Math.min(1, (o ? out : ambient)[k] + v + win[k] * w) * 255);
     }
-    return out;
+    return rgb;
   }
 }
 

@@ -8,17 +8,19 @@ import { canvas, css, keyed, outerEdges, rng, type ThemeView } from "./common";
 // building's mirrored glass curtain wall, snow on every ledge; a few offices
 // lit cold white at night.
 
-// hour, sky top, sky horizon, land tint
+// hour, sky top, sky horizon, land tint. After dusk, the pitch dark (docs/plan/44-the-night.md):
+// an overcast with nothing over it, all but black (the 3D view's fog takes the horizon)
 export const SKY: [number, string, string, string][] = [
-  [0, "#141a28", "#2a3346", "#4a5670"],
-  [5, "#18202f", "#303a4e", "#55607a"],
+  [0, "#030406", "#05070a", "#07090d"],
+  [5, "#030406", "#05070a", "#07090d"],
   [7, "#6e7486", "#b9b1b4", "#b9bccb"],
   [9, "#aeb8c4", "#e3e7ea", "#f4f6f8"],
   [16, "#a9b4c1", "#e1e5e8", "#ffffff"],
   [17.5, "#8d93a6", "#d8c6c0", "#e8dfe0"],
   [19, "#4d5470", "#9d8f98", "#8f93ac"],
-  [20.5, "#1a2132", "#323c52", "#55607c"],
-  [24, "#141a28", "#2a3346", "#4a5670"],
+  [20.5, "#0e1320", "#1a2232", "#2a3348"],
+  [21.5, "#05070b", "#080a0f", "#0a0d13"],
+  [24, "#030406", "#05070a", "#07090d"],
 ];
 
 const W_LAYER = 1600;

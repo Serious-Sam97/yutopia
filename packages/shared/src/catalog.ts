@@ -376,7 +376,7 @@ export const CATALOG = {
     h: 1,
     solid: true,
     buildable: true,
-    light: { color: 0xdfe8ff, radius: 9, intensity: 0.7 },
+    light: { color: 0xdfe8ff, radius: 11, intensity: 1 },
   },
   server_rack: {
     label: "Server rack",

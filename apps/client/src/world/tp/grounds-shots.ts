@@ -12,7 +12,7 @@ export { drawLotPlans } from "../lot-plan";
 // round it, with the game's own 3D people. /dev/grounds?shot=<name>.
 
 type THREE = typeof THREE_NS;
-type Hour = "day" | "overcast" | "dusk" | "night" | "blizzard";
+type Hour = "day" | "overcast" | "dusk" | "night" | "blizzard" | "pitch";
 type V3 = [number, number, number];
 
 interface Who {
@@ -26,6 +26,7 @@ interface Who {
   push?: boolean; // leaning on something ahead with both hands (a stuck car's boot)
   sit?: number; // sitting: the seat's height
   y?: number; // standing on something
+  me?: boolean; // the one you play: always drawn faintly in the dark (docs/plan/44-the-night.md)
 }
 interface Shot {
   hour: Hour;
@@ -45,6 +46,8 @@ interface Shot {
   boards?: [string, string][];
   /** MOTORS' forecourt on Main Street, its vehicles on show */
   motors?: boolean;
+  /** the pitch dark (docs/plan/44-the-night.md): how adjusted your eyes are, 0..1 */
+  eyes?: number;
 }
 
 const DARK = "#2b3138";
@@ -286,6 +289,7 @@ export function shots(): Record<string, Shot> {
       snow: 5000,
     },
     ...carShots(lamp),
+    ...nightShots(lamp),
     ...lotShots(),
     ...spotShots(),
     "iso-lot-edge": {
@@ -303,6 +307,75 @@ export function shots(): Record<string, Shot> {
     },
   };
 }
+// ── the pitch dark's stills (docs/plan/44-the-night.md, phase 0) ──
+function nightShots(lamp: { x: number; z: number }): Record<string, Shot> {
+  // the driveway halfway between two lamps: a car coming with its low beams, Ana on the verge in them
+  const l = on("driveway", [lamp.x, lamp.z], 0, 0);
+  const d = on("driveway", l.ahead(18), 4, 0.7);
+  const side = (p: [number, number], k: number): [number, number] => [p[0] - d.tz * k, p[1] + d.tx * k];
+  const [cx, cz] = d.ahead(13);
+  const ca = Math.atan2(-d.tz, -d.tx); // (its nose towards the camera)
+  const car = { x: cx + 1.6 * Math.sin(ca), z: cz - 1.6 * Math.cos(ca), a: ca };
+  const [ax, az] = side(d.ahead(6), -3.2);
+  // the ravine trail: you (Cai) a few steps ahead of the camera, the torch the only light
+  const r = on("ravine", [-262.6, -204], 7, -1.3);
+  const rs = (n: number, k: number): [number, number] => {
+    const [x, z] = r.ahead(n);
+    return [x - r.tz * k, z + r.tx * k];
+  };
+  const woods = (bia: [number, number] | null): Shot => ({
+    hour: "pitch",
+    cam: [r.bx, gy(r.bx, r.bz) + 2.5, r.bz],
+    look: [r.ahead(16)[0], gy(r.x, r.z) + 0.9, r.ahead(16)[1]],
+    fov: 50,
+    people: [
+      { x: r.x, z: r.z, to: r.ahead(10), a: CAI, walk: 17, light: true, me: true },
+      ...(bia ? [{ x: bia[0], z: bia[1], to: [r.x, r.z] as [number, number], a: BIA }] : []),
+    ],
+    snow: 7000,
+    prints: [
+      [r.x, r.z],
+      [r.bx, r.bz],
+    ],
+  });
+  return {
+    "night-driveway": {
+      hour: "pitch",
+      cam: [d.bx, gy(d.bx, d.bz) + 1.9, d.bz],
+      look: [d.ahead(16)[0], gy(d.x, d.z) + 1.2, d.ahead(16)[1]],
+      fov: 52,
+      people: [{ x: ax, z: az, to: [d.bx, d.bz], a: ANA, walk: 23 }],
+      cars: [
+        {
+          ...car,
+          colour: SEDAN_RED,
+          snowy: 0.2,
+          lights: { beams: "low", tail: true, dash: 1 },
+          exhaust: 0.5,
+          driver: BIA,
+        },
+      ],
+      snow: 9000,
+    },
+    "night-woods": woods(null),
+    // (Bia off the beam, then in it: what you see of someone in the dark)
+    "night-names-out": woods(rs(9, 3.6)),
+    "night-names-in": woods(rs(9, 0.3)),
+    // the clearing's lamp: the guard on the bench in its pool; Bia stands just past its edge
+    "night-lamp": {
+      hour: "pitch",
+      cam: [121.5, gy(121.5, -237.5) + 1.9, -237.5],
+      look: [121.5, gy(120, -250) + 1.5, -251],
+      fov: 50,
+      people: [
+        { x: 120.35, z: -249.72, to: [120.35, -240], a: GUARD, sit: 0.56 },
+        { x: 128.5, z: -258, to: [121.5, -237.5], a: BIA },
+      ],
+      snow: 5000,
+    },
+  };
+}
+
 // ── the lot's stills (docs/plan/42-the-lot.md, phase 0) ──
 function lotShots(): Record<string, Shot> {
   return {
@@ -972,6 +1045,20 @@ const PRESETS: Record<Hour, Preset> = {
     exposure: 1.1,
     tint: 0.12,
   },
+  // the pitch dark (docs/plan/44-the-night.md): no moon, no sky's fill — what's lit is lit by a
+  // lamp, a beam, headlights or a window, and the rest is black (the eyes put a little back)
+  pitch: {
+    top: "#010102",
+    horizon: "#020203",
+    fog: "#000000",
+    density: 0.0115,
+    hemi: ["#33405a", "#05070a", 0.0],
+    sun: ["#a9bddc", 0.0, [0.3, 0.7, -0.5]],
+    night: 1,
+    bloom: [0.55, 0.45, 0.82],
+    exposure: 1.1,
+    tint: 0.04,
+  },
   blizzard: {
     top: "#b6bec6",
     horizon: "#cbd2d8",
@@ -1010,16 +1097,21 @@ export async function runShot(
     status(`no shot "${name}": ${Object.keys(all).join(", ")}`);
     return () => {};
   }
-  // overrides while looking: &snow=0 &hour=night &people=0
+  // overrides while looking: &snow=0 &hour=night &people=0 (and the pitch dark's &eyes=0..1 &storm=1)
   const q = new URLSearchParams(location.search);
   const shot: Shot = {
     ...base,
     snow: q.has("snow") ? Number(q.get("snow")) : base.snow,
     hour: (q.get("hour") as Hour) ?? base.hour,
     people: q.get("people") === "0" ? [] : base.people,
+    eyes: q.has("eyes") ? Number(q.get("eyes")) : base.eyes,
+    storm: q.has("storm") ? q.get("storm") === "1" : base.storm,
   };
+  const pitch = shot.hour === "pitch";
+  const eyes = shot.eyes ?? 0.6;
   if (shot.motors) shot.cars = [...(shot.cars ?? []), ...motorsShow()];
   const P = PRESETS[shot.hour];
+  const dark = shot.hour === "night" || pitch;
   const t0 = performance.now();
 
   const renderer = new T3.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -1124,13 +1216,14 @@ export async function runShot(
       hz
         .clone()
         .lerp(fg, 0.5)
-        .multiplyScalar(shot.hour === "night" ? 0.7 : 0.86),
+        .multiplyScalar(pitch ? 0.25 : shot.hour === "night" ? 0.7 : 0.86),
     );
     if (shot.hour === "blizzard") grounds.ridgeMat.visible = false;
   }
 
   // ── light ──
-  scene.add(new T3.HemisphereLight(P.hemi[0], P.hemi[1], P.hemi[2]));
+  // (the pitch dark: only what the eyes give back, a little, cold)
+  scene.add(new T3.HemisphereLight(P.hemi[0], P.hemi[1], pitch ? 0.02 + 0.6 * eyes : P.hemi[2]));
   const sun = new T3.DirectionalLight(P.sun[0], P.sun[1]);
   const sd = new T3.Vector3(...P.sun[2]).normalize();
   const focus = ortho ? new T3.Vector3(tx, 0, tz) : new T3.Vector3(mid.x, shot.cam[1], mid.z);
@@ -1174,11 +1267,14 @@ export async function runShot(
 
   // ── the people ──
   const f = new C.CharFactory();
-  const bodyMat = new T3.MeshLambertMaterial({ vertexColors: true, emissive: "#10141b" });
+  // (the pitch dark: nobody gives off light of their own — only you, faintly)
+  const bodyMat = new T3.MeshLambertMaterial({ vertexColors: true, emissive: pitch ? "#000000" : "#10141b" });
+  const meMat = new T3.MeshLambertMaterial({ vertexColors: true, emissive: "#07090d" });
   const flatMat = new T3.MeshBasicMaterial({ vertexColors: true, color: new T3.Color(P.tint, P.tint, P.tint) });
-  const lit = shot.hour === "night" || shot.hour === "dusk";
+  const lit = dark || shot.hour === "dusk";
   const people = shot.people.map((w) => {
-    const m = new C.PersonModel(f, w.a, 0, { body: lit ? bodyMat : flatMat, ink: C.inkMaterial() });
+    const body = lit ? (pitch && w.me ? meMat : bodyMat) : flatMat;
+    const m = new C.PersonModel(f, w.a, 0, { body, ink: C.inkMaterial() });
     const y = w.y ?? groundAt(w.x, w.z);
     m.root.position.set(w.x, y, w.z);
     m.root.rotation.y = Math.atan2(w.to[0] - w.x, w.to[1] - w.z);
@@ -1204,8 +1300,7 @@ export async function runShot(
         uniforms: { len: { value: L } },
         vertexShader:
           "varying float d; varying vec3 n; varying vec3 v; void main(){ d = -position.z; vec4 mv = modelViewMatrix * vec4(position,1.0); v = normalize(-mv.xyz); n = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mv; }",
-        fragmentShader:
-          "uniform float len; varying float d; varying vec3 n; varying vec3 v; void main(){ float k = 1.0 - smoothstep(0.0, len, d); float edge = pow(abs(dot(n, v)), 1.4); gl_FragColor = vec4(vec3(1.0, 0.95, 0.86) * 0.12 * k * edge, 1.0); }",
+        fragmentShader: `uniform float len; varying float d; varying vec3 n; varying vec3 v; void main(){ float k = 1.0 - smoothstep(0.0, len, d); float edge = pow(abs(dot(n, v)), 1.4); gl_FragColor = vec4(vec3(1.0, 0.95, 0.86) * ${pitch ? "0.035" : "0.12"} * k * edge, 1.0); }`,
       }),
     );
     scene.add(cone);
@@ -1270,7 +1365,7 @@ export async function runShot(
     cg.fillStyle = grd;
     cg.fillRect(0, 0, 32, 32);
     const flakeTex = new T3.CanvasTexture(cv);
-    const night = shot.hour === "night";
+    const night = dark;
     const pts = new T3.Points(
       g,
       new T3.PointsMaterial({
@@ -1278,7 +1373,8 @@ export async function runShot(
         map: flakeTex,
         transparent: true,
         depthWrite: false,
-        color: night ? "#c9d4e4" : "#ffffff",
+        // (the pitch dark: a flake shows in a light only; here, as dark as what's behind it)
+        color: pitch ? "#1a1e24" : night ? "#c9d4e4" : "#ffffff",
         opacity: night ? 0.75 : 0.9,
         fog: true,
       }),
@@ -1301,7 +1397,7 @@ export async function runShot(
         new T3.LineSegments(
           lg,
           new T3.LineBasicMaterial({
-            color: shot.storm ? "#aab6c8" : "#ffffff",
+            color: pitch ? "#14181e" : shot.storm ? "#aab6c8" : "#ffffff",
             transparent: true,
             opacity: shot.storm ? 0.35 : 0.55,
           }),
@@ -1332,7 +1428,7 @@ export async function runShot(
     }
     g.setAttribute("position", new T3.Float32BufferAttribute(pos, 3));
     const fm = new T3.MeshBasicMaterial({
-      color: shot.hour === "night" ? "#2d3a4f" : "#8494a8",
+      color: dark ? "#2d3a4f" : "#8494a8",
       transparent: true,
       opacity: 0.5,
       depthWrite: false,
@@ -1382,7 +1478,7 @@ export async function runShot(
   );
   composer.addPass(new UnrealBloomPass(new T3.Vector2(W, H), P.bloom[0], P.bloom[1], P.bloom[2]));
   composer.addPass(new OutputPass());
-  (window as unknown as { __g?: unknown }).__g = { scene, cam, grounds, renderer, composer };
+  (window as unknown as { __g?: unknown }).__g = { scene, cam, grounds, renderer, composer, people: shot.people };
   status(`${name}: built in ${Math.round(performance.now() - t0)} ms`);
 
   // ── draw once the people are in ──

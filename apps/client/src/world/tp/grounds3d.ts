@@ -1123,6 +1123,9 @@ export class Grounds3 {
       const [z0, z1] = [l.z0 - 0.4, l.z1 + 0.4];
       c.quad([x0, 0.12, z0], [x1, 0.12, z0], [x1, 0.12, z1], [x0, 0.12, z1], [0, 1, 0]);
       const m = this.keep(new MeshLambertMaterial({ color: 0xffffff }));
+      // (it lies on the ground floor's asphalt: lit as that is, by its light map — its lamps' pools
+      // — not the land's: the game's view sees to it, sky.ts)
+      m.userData.onFloor = true;
       lotCover(m, {
         aisles: l.aisles,
         cross: [(l.cross[0].z0 + l.cross[0].z1) / 2, (l.cross[1].z0 + l.cross[1].z1) / 2],
@@ -3812,11 +3815,32 @@ export class Grounds3 {
   private headGeo = new G();
   private glowCards: { x: number; y: number; z: number; s: number; c: number }[] = [];
   private pools = new G();
+  // (draped over the ground a cell at a time: one flat quad at the lamp's own height sank under
+  // the land's rolls and the road's camber round it, and most of a pool went unseen)
   private pool(x: number, z: number, r: number, c = 0xdce8ff) {
     if (!this.near(x, z, 10)) return;
-    const y = groundAt(x, z) + 0.06;
     this.pools.color(c);
-    this.pools.quad([x - r, y, z - r], [x + r, y, z - r], [x + r, y, z + r], [x - r, y, z + r], [0, 1, 0]);
+    const N = Math.max(2, Math.ceil(r / 1.5));
+    const y = (px: number, pz: number) => groundAt(px, pz) + 0.1;
+    for (let j = 0; j < N; j++)
+      for (let i = 0; i < N; i++) {
+        const [x0, x1] = [x - r + (2 * r * i) / N, x - r + (2 * r * (i + 1)) / N];
+        const [z0, z1] = [z - r + (2 * r * j) / N, z - r + (2 * r * (j + 1)) / N];
+        const [u0, u1, v0, v1] = [i / N, (i + 1) / N, j / N, (j + 1) / N];
+        this.pools.quad(
+          [x0, y(x0, z0), z0],
+          [x1, y(x1, z0), z0],
+          [x1, y(x1, z1), z1],
+          [x0, y(x0, z1), z1],
+          [0, 1, 0],
+          [
+            [u0, v0],
+            [u1, v0],
+            [u1, v1],
+            [u0, v1],
+          ],
+        );
+      }
   }
   private lampAt(x: number, z: number, ry: number, kind: LampLight["kind"]) {
     if (!this.near(x, z, 20)) return;
@@ -3887,7 +3911,7 @@ export class Grounds3 {
           depthWrite: false,
         }),
       ),
-      0.5,
+      0.85,
       "pool",
     );
     if (!this.pools.empty) {

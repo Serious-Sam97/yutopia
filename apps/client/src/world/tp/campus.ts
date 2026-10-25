@@ -461,6 +461,17 @@ export function lettersCanvas(T: Themes, text: string): HTMLCanvasElement {
   return c;
 }
 
+// a window's light on the snow: bright at the wall (v 0), fanning out and fading (v 1)
+function spillCanvas(T: Themes): HTMLCanvasElement {
+  const { c, g } = T.canvas(64, 64);
+  const grd = g.createRadialGradient(32, 64, 2, 32, 64, 64);
+  grd.addColorStop(0, "rgba(255,255,255,0.9)");
+  grd.addColorStop(0.5, "rgba(255,255,255,0.3)");
+  grd.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 64, 64);
+  return c;
+}
 export function poolCanvas(T: Themes): HTMLCanvasElement {
   const { c, g } = T.canvas(128, 128);
   const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -1080,6 +1091,7 @@ export class Campus {
   private glassTint = new Color();
   private lamps: MeshBasicMaterial; // lamp heads, the entrance, lit at night
   private pools: MeshBasicMaterial;
+  private spill: MeshBasicMaterial; // the windows' light on the snow (night)
   private letters: MeshBasicMaterial;
   private beacon: MeshBasicMaterial;
   private flakes: Flakes[] = [];
@@ -1193,6 +1205,41 @@ export class Campus {
     this.topSkin = this.add(topSkin.build(), this.mainFacade);
     this.add(cap.build(), mainWhite);
     this.add(coping.build(), mainConcrete);
+    // ── the windows' light on the snow under them at night (docs/plan/44-the-night.md N2):
+    // a soft fan out from the facade a tile at a time, as the offices above are lit or not
+    // (hashed: some dark, the rest brighter or dimmer) ──
+    const spill = new G();
+    for (const r of mainRuns)
+      for (let i = 0; i < runLen(r); i++) {
+        const [ax, az] = r.nz !== 0 ? [r.x0 + i, r.z0] : [r.x0, r.z0 + i];
+        const h = (((Math.sin(ax * 12.9898 + az * 78.233) * 43758.5453) % 1) + 1) % 1;
+        if (h < 0.35) continue;
+        const k = 0.35 + (h - 0.35);
+        const [bx, bz] = r.nz !== 0 ? [ax + 1, az] : [ax, az + 1];
+        const [ox, oz] = [r.nx * 3.4, r.nz * 3.4];
+        // (over the lot's own floor and the pavement's kerb along the building)
+        const y = (x: number, z: number) => ground(x, z) + 0.19;
+        spill.color(new Color(k, k, k).getHex());
+        spill.quad(
+          [ax, y(ax, az), az],
+          [bx, y(bx, bz), bz],
+          [bx + ox, y(bx + ox, bz + oz), bz + oz],
+          [ax + ox, y(ax + ox, az + oz), az + oz],
+          [0, 1, 0],
+        );
+      }
+    const spillTex = new CanvasTexture(spillCanvas(T));
+    this.disposables.push(spillTex);
+    this.spill = new MeshBasicMaterial({
+      color: 0xffe9c8,
+      map: spillTex,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0,
+      blending: AdditiveBlending,
+      depthWrite: false,
+    });
+    this.add(spill.build(), this.spill).renderOrder = 1;
 
     // (a world on the Grounds: the land, the woods, the other blocks, the
     // driveway and all round are the Grounds' own, drawn from shared
@@ -1649,12 +1696,13 @@ export class Campus {
       // (a lot lamp on the walkable ground floor: its pool is that floor's light
       // map's — one drawn here as well lay right on its asphalt and flickered)
       if (!post) return;
+      // (over the pavement's kerb: at the ground's own height a pool by the lot lay under it)
       const R = 10.5;
       pools.quad(
-        [hx - R, GROUND + 0.03, hz - R],
-        [hx + R, GROUND + 0.03, hz - R],
-        [hx + R, GROUND + 0.03, hz + R],
-        [hx - R, GROUND + 0.03, hz + R],
+        [hx - R, GROUND + 0.19, hz - R],
+        [hx + R, GROUND + 0.19, hz - R],
+        [hx + R, GROUND + 0.19, hz + R],
+        [hx - R, GROUND + 0.19, hz + R],
         [0, 1, 0],
       );
     };
@@ -2046,10 +2094,11 @@ export class Campus {
 
   // The hour: everything outside takes the ambient (and goes blue-dark at
   // night, as the iso backdrop); the glass reflects the sky; lights come on.
-  setDay(d: Daylight, skyMid: number) {
+  /** `dark`: what's left of the sky's light in the pitch dark (sky.ts: as the land's) */
+  setDay(d: Daylight, skyMid: number, dark = 1) {
     const amb = new Color(d.ambient[0], d.ambient[1], d.ambient[2]);
     // (as dark as the Grounds round it at night: sky.ts landLight)
-    const k = 1 - 0.75 * d.night;
+    const k = (1 - 0.75 * d.night) * dark;
     for (const [m, base] of this.tinted) m.color.copy(base).multiply(amb).multiplyScalar(k);
     this.glassTint.setHex(skyMid, SRGBColorSpace);
     // the facade: a little of the sky's colour in the glass, darker at night
@@ -2065,11 +2114,12 @@ export class Campus {
     this.lamps.opacity = on * 0.85;
     this.headMat.opacity = on;
     this.pools.opacity = on;
+    this.spill.opacity = on * 0.6;
     this.letters.color.setRGB(1, 1, 1).multiplyScalar(0.7 + 0.3 * on);
     this.treeTint.copy(amb).multiplyScalar(k);
     for (const t of this.trees) (t.material as MeshBasicMaterial).color.copy(this.treeTint);
     if (this.bollards) this.bollards.opacity = on;
-    this.steamTint.copy(amb).multiplyScalar(0.6 + 0.4 * k);
+    this.steamTint.copy(amb).multiplyScalar((0.6 + 0.4 * k) * dark);
     this.steam?.setTint(this.steamTint);
     this.night = d.night;
   }

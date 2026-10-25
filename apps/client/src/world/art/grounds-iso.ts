@@ -10,6 +10,7 @@ import { type Container, Matrix, Mesh, MeshGeometry, Container as PixiContainer,
 // sprites sorted with everything else. Only the chunks round the camera are
 // kept; a chunk is made a few milliseconds a frame, nearest first.
 
+import { nearLift } from "../eyes";
 import { type Footprints, printLeft } from "../footprints";
 import type { LotIso, Thing } from "./grounds-items";
 import { IsoWeather } from "./weather-iso";
@@ -30,6 +31,12 @@ const BEAM_LEN = BEAM.wide.len;
 const BEAM_HALF = BEAM.wide.half;
 const BEAM_PX = 160;
 const FLARE_R = 6; // a flare's light (shared dark/arms.ts FLARE.radius)
+// a car's headlamps on the snow ahead (docs/plan/44-the-night.md N2): how far, half how wide
+const CAR_BEAM = { len: 13, half: 0.42 };
+const LAMPS_ON = 1 | 2; // shared car/net.ts CAR_FLAGS.low | high (its module is the car's whole sim)
+const BRAKE = 4; // CAR_FLAGS.brake
+// the torch's light spills on past its reach (shared beam.ts: what it burns), fading
+const SPILL = 1.3;
 const FOCUS_ACROSS = (Math.tan(BEAM.focus.half) * BEAM.focus.len) / (Math.tan(BEAM_HALF) * BEAM_LEN);
 
 const SURF: Record<string, [number, number, number]> = {
@@ -124,7 +131,8 @@ export class IsoGrounds {
       for (const t of ch.trees) t.tint = this.tint;
     }
     for (const id of this.shownIds) for (const r of this.items.roots(id)) r.tint = this.tint;
-    if (this.coverMesh) this.coverMesh.tint = this.tint;
+    // (the prints are shadows in the snow: as dark as it, so none show in the pitch dark)
+    this.printLayer.tint = this.tint;
   }
 
   // ── the lot's snow (docs/plan/42-the-lot.md): over the floor's asphalt as the roads have theirs
@@ -267,7 +275,8 @@ export class IsoGrounds {
       indices: new Uint32Array([0, 1, 2, 0, 2, 3]),
     });
     this.coverMesh = new Mesh({ geometry, texture: tex });
-    this.coverMesh.tint = this.tint;
+    // (untinted: it lies on the floor, under the floor's light map — tinted with the land's light
+    // as well, the lamps' pools on the lot went twice as dark, and at night none showed)
     this.cover.addChild(this.coverMesh);
   }
 
@@ -497,6 +506,13 @@ export class IsoGrounds {
   flares: { x: number; y: number }[] = [];
   private flarePools: Sprite[] = [];
   private torches: (Beam & { at: { x: number; y: number } })[] = [];
+  /** Vehicles out with their lamps on (setVehicles; the floor's coords, heading as a +x angle). */
+  private carLamps: { x: number; y: number; a: number; half: number; brake: boolean }[] = [];
+  private focus = { x: 0, y: 0 }; // where I am (setNight's fx, fy)
+  /** How dark it is out under the sky (daylight.ts), for what's seen right round me (eyes.ts). */
+  dark = 0;
+  private carBeams: Sprite[] = [];
+  private carTails: Sprite[] = [];
   private poolTex: Texture | null = null;
   private beamTex: Texture | null = null;
 
@@ -512,6 +528,8 @@ export class IsoGrounds {
     fy: number,
   ) {
     this.night = night;
+    this.focus.x = fx;
+    this.focus.y = fy;
     // (a facing is a direction on screen: 0 down, clockwise; the beam's in the floor's x/y)
     // the beam itself: shared beam.ts, as 3D and the server have it
     this.torches = [...people]
@@ -587,8 +605,8 @@ export class IsoGrounds {
       const t = this.torches[i];
       sp.visible = !!t;
       if (!t) continue;
-      // (along it and across: focused, longer and narrower)
-      const ka = (t.focus ? BEAM.focus.len : BEAM_LEN) / BEAM_PX;
+      // (along it and across: focused, longer and narrower; its light on past its reach)
+      const ka = ((t.focus ? BEAM.focus.len : BEAM_LEN) / BEAM_PX) * SPILL;
       const kc = (BEAM_LEN / BEAM_PX) * (t.focus ? FOCUS_ACROSS : 1);
       const c = Math.cos(t.yaw);
       const sn = Math.sin(t.yaw);
@@ -607,12 +625,61 @@ export class IsoGrounds {
       );
       sp.alpha = (0.25 + 0.6 * night) * (t.focus ? 1.25 : 1);
     }
+    // cars' headlamps on the snow ahead, their tail lamps red behind (after dark only)
+    const cars = night > 0.25 ? this.carLamps : [];
+    while (this.carBeams.length < cars.length) {
+      const b = new Sprite(this.beam());
+      b.anchor.set(0, 0.5);
+      b.tint = 0xfff2da;
+      const t = new Sprite(this.pool());
+      t.anchor.set(0.5);
+      t.tint = 0xff2a14;
+      this.lights.addChild(b, t);
+      this.carBeams.push(b);
+      this.carTails.push(t);
+    }
+    for (const [i, sp] of this.carBeams.entries()) {
+      const c = cars[i];
+      const tail = this.carTails[i];
+      sp.visible = tail.visible = !!c;
+      if (!c) continue;
+      const ux = Math.cos(c.a);
+      const uy = Math.sin(c.a);
+      const h = this.G.heightAt(c.x + this.ox, c.y + this.oy) * ZPX_TILE;
+      const nx = c.x + ux * c.half;
+      const ny = c.y + uy * c.half;
+      const ka = CAR_BEAM.len / BEAM_PX;
+      const kc = ka * (Math.tan(CAR_BEAM.half) / Math.tan(BEAM_HALF));
+      sp.setFromMatrix(
+        new Matrix(
+          HW * ka * (ux - uy),
+          HH * ka * (ux + uy),
+          -HW * kc * (uy + ux),
+          HH * kc * (ux - uy),
+          (nx - ny) * HW,
+          (nx + ny) * HH - h,
+        ),
+      );
+      sp.alpha = Math.min(1, night * 1.2);
+      // (the red behind it: a small pool, brighter braking)
+      const tx = c.x - ux * (c.half + 1.2);
+      const ty = c.y - uy * (c.half + 1.2);
+      tail.position.set((tx - ty) * HW, (tx + ty) * HH - h);
+      tail.width = 2 * 2.2 * Math.SQRT2 * HW;
+      tail.height = 2 * 2.2 * Math.SQRT2 * HH;
+      tail.alpha = (c.brake ? 0.7 : 0.35) * Math.min(1, night * 1.2);
+    }
   }
 
   /** The light on someone or something at (x, y) (the floor's coords) out on
-   *  the land: the hour's, a lamp's pool, a beam (0xRRGGBB). */
-  lightAt(x: number, y: number): number {
+   *  the land: the hour's, a lamp's pool, a beam (0xRRGGBB; `own`: not a torch held there). */
+  lightAt(x: number, y: number, own = false): number {
     let [r, g, b] = this.amb;
+    // (in the dark: right round me faintly seen — myself, someone a step away; eyes.ts)
+    const near = nearLift(Math.hypot(x - this.focus.x, y - this.focus.y), this.dark);
+    r += near;
+    g += near;
+    b += near * 1.1;
     if (this.night > 0.05) {
       for (const i of this.pools.keys()) {
         const l = this.G.LAMPS[i];
@@ -633,7 +700,25 @@ export class IsoGrounds {
       g += k * 0.3;
       b += k * 0.22;
     }
+    // a car's headlamps: a cone from its nose, fading out ahead
+    if (this.night > 0.25)
+      for (const c of this.carLamps) {
+        const ux = Math.cos(c.a);
+        const uy = Math.sin(c.a);
+        const dx = x - (c.x + ux * c.half);
+        const dy = y - (c.y + uy * c.half);
+        const along = dx * ux + dy * uy;
+        if (along <= 0 || along >= CAR_BEAM.len) continue;
+        const side = Math.abs(dx * uy - dy * ux);
+        const half = 0.7 + along * Math.tan(CAR_BEAM.half);
+        if (side >= half) continue;
+        const k = (1 - along / CAR_BEAM.len) ** 2 * (1 - (side / half) ** 2) * 1.1;
+        r += k;
+        g += k * 0.95;
+        b += k * 0.85;
+      }
     for (const t of this.torches) {
+      if (own && Math.hypot(t.at.x - x, t.at.y - y) < 0.4) continue;
       // (shared beam.ts: the same test 3D and the server make; a focused beam is the brighter)
       const k = beamAt(t, x, y) * (0.2 + 0.9 * this.night) * (t.focus ? 1.5 : 1);
       if (k <= 0) continue;
@@ -696,12 +781,23 @@ export class IsoGrounds {
   >();
   /** Where they are (the building's coords, `a` the heading); `fx, fy` the focus (the floor's). */
   setVehicles(
-    list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; variant?: number }[],
+    list: {
+      id: string;
+      kind: string;
+      x: number;
+      z: number;
+      a: number;
+      shown: boolean;
+      variant?: number;
+      fl?: number;
+      v?: number;
+    }[],
     fx: number,
     fy: number,
   ) {
     const G = this.G;
     const seen = new Set<string>();
+    this.carLamps = [];
     // the way its nose points: rot 0 −x, 1 −y, 2 +x, 3 +y (the items' turns)
     const noses: [number, number][] = [
       [-1, 0],
@@ -720,6 +816,10 @@ export class IsoGrounds {
       const bus = v.kind === "shuttle";
       const plough = v.kind === "plough";
       const [w, h] = bus ? [10, 3] : plough ? [9, 3] : [5, 2];
+      // (its lamps: the Grounds' own on the move after dark, a driven car's when they're switched on)
+      const fl = v.fl ?? 0;
+      if (((bus || plough || v.kind === "visitor") && Math.abs(v.v ?? 0) > 0.2) || fl & LAMPS_ON)
+        this.carLamps.push({ x: cx, y: cy, a: v.a, half: w / 2, brake: (fl & BRAKE) !== 0 });
       const fw = rot % 2 ? h : w;
       const fh = rot % 2 ? w : h;
       const bx = Math.floor(cx - fw / 2);

@@ -1,6 +1,8 @@
 // Time of day from the local clock: the ambient light every surface is
-// multiplied by, the sun (colour + direction, for windows and the sky), and how
-// "night" it is (lamps, screens and bloom take over as it gets dark).
+// multiplied by, the sun (colour + direction, for windows and the sky), how
+// "night" it is (lamps, screens and bloom take over as it gets dark), and how
+// dark it is out under the sky (docs/plan/44-the-night.md: indoors keeps
+// `ambient`; outside, after dusk, only what a light lights is seen).
 
 export type Phase = "night" | "dawn" | "morning" | "day" | "golden" | "dusk";
 export type RGB = [number, number, number];
@@ -12,6 +14,7 @@ export interface Daylight {
   sun: { color: RGB; elevation: number; azimuth: number }; // radians; elevation < 0 = below the horizon
   night: number; // 0 day … 1 deep night
   window: RGB; // what windows add at full strength: sunlight by day, a little moonlight at night
+  dark: number; // out under the sky: 0 by day … 1 pitch dark (21:30–5:00)
 }
 
 // [hour, ambient, sun colour, phase]
@@ -50,7 +53,42 @@ export function daylight(hour: number): Daylight {
   const up = Math.max(0, Math.sin(Math.max(0, day) * Math.PI));
   const k = elevation > 0 ? 0.16 + 0.22 * (1 - up) : 0.07;
   const window = color.map((v) => v * k) as RGB;
-  return { hour: h, phase: t < 0.5 ? p0 : p1, ambient, sun: { color, elevation, azimuth }, night, window };
+  return {
+    hour: h,
+    phase: t < 0.5 ? p0 : p1,
+    ambient,
+    sun: { color, elevation, azimuth },
+    night,
+    window,
+    dark: darkAt(h),
+  };
+}
+
+// The pitch dark: coming down over dusk (19:00–21:30), gone again over dawn (5:00–7:00) —
+// slower than dusk and dawn themselves, or the two together were a jump.
+function darkAt(h: number): number {
+  if (h >= 21.5 || h < 5) return 1;
+  if (h >= 19) return smooth((h - 19) / 2.5);
+  if (h < 7) return smooth((7 - h) / 2);
+  return 0;
+}
+
+// What's left of the sky's light outside at full dark, as a share of the night's
+// before it (lamps, beams, headlights and lit windows aren't the sky's: they stay):
+// the land and what's on it in 3D (linear — 1% on white snow is still plainly grey
+// on screen), the lot's ambient in the light map (both views), the land in iso.
+export const DARK_LEFT = { land3: 0.035, lot: 0.03, land2: 0.06 };
+// …and what eyes adjusted to it (eyes.ts, 0 … 1) put back on top: the nearest shapes come back,
+// grey (the lot's in 3D as a fill of its own: light3d.ts lmEyes, linear)
+export const EYES_LIFT = { land3: 0.085, lot: 0.06, land2: 0.1, lot3: 0.006 };
+/** The sky's light outside, by how dark it is: 1 → `left` (geometric, so it falls
+ *  evenly, not all at the end). */
+export const darkK = (dark: number, left: number) => left ** dark;
+/** The lot's ambient (its open tiles, in the light map): the hour's, gone in the dark (`eyes`:
+ *  how adjusted to it, eyes.ts). */
+export function outAmbient(d: Daylight, eyes = 0): RGB {
+  const k = darkK(d.dark, DARK_LEFT.lot + EYES_LIFT.lot * eyes);
+  return [d.ambient[0] * k, d.ambient[1] * k, d.ambient[2] * k];
 }
 
 // The brightest a lit surface gets (3D, linear; its highlights roll off towards

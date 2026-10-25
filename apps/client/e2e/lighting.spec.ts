@@ -106,7 +106,10 @@ test("the lot's lamps fade in and out as you walk by at night, never pop", async
   // went in it: a fade (over a few tiles) changes with the walking; a lamp
   // switched on or off whole was its full strength (~0.8) at once, however
   // little you'd moved (a slow software GPU walks further a frame)
-  const sum = (f: number[]) => f.reduce((a, b) => a + b, 0);
+  // (in a lamp's full strengths: the lamps grew brighter in the pitch dark — docs/plan/44 — and a
+  // fade's steps with them; what's measured is a whole lamp at once against a step of its fade)
+  const full = Math.max(...frames.flatMap((f) => f.on)) / 0.8;
+  const sum = (f: number[]) => f.reduce((a, b) => a + b, 0) / full;
   let over = 0;
   for (let i = 1; i < frames.length; i++) {
     const moved = Math.hypot(frames[i].at[0] - frames[i - 1].at[0], frames[i].at[1] - frames[i - 1].at[1]);

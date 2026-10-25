@@ -14,6 +14,7 @@ import {
 } from "@yutopia/shared/inventory";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import type { WorldController } from "../controller";
+import { eyesOf, glareOf, stepEyes, unseen } from "../eyes";
 import { actionOf } from "../input/bindings";
 import type { Press } from "../input/controls";
 import type { DarkHooks, Walker } from "../input/walker";
@@ -538,6 +539,40 @@ class Dark implements DarkHooks {
   }
 
   // ── every frame: what's in reach, the arc, the drops ─────────────────────
+  // the eyes (docs/plan/44-the-night.md N3): seconds adjusted to the dark, and when last stepped
+  private eyesT = 0;
+  private eyesAt = performance.now();
+  private eyes(out: boolean, x: number, y: number) {
+    const ctl = this.ctl;
+    const now = performance.now();
+    const dt = Math.min(0.25, (now - this.eyesAt) / 1000);
+    this.eyesAt = now;
+    const dark = ctl.engine?.getDaylight().dark ?? 0;
+    // (indoors, and nowhere yet: the rooms' light)
+    const lum =
+      !out || !Number.isFinite(x)
+        ? 1
+        : ctl.tp
+          ? ctl.tp.glareAt(x, y, ctl.room?.sessionId ?? "")
+          : (ctl.engine?.glareAt(x, y) ?? 1);
+    this.eyesT = stepEyes(this.eyesT, dt, glareOf(lum), dark);
+    const e = eyesOf(this.eyesT);
+    ctl.tp?.setEyes(e);
+    const eng = ctl.engine;
+    if (!eng) return;
+    eng.setEyes(e);
+    // seen and unseen in iso (N4; the 3D view's is its own): what's right round me, and whoever's
+    // out of every light — no name, no emote
+    if (eng.grounds) eng.grounds.dark = dark;
+    eng.unseen ??= (px, py, tint) => {
+      const ch = ctl.map?.tiles[Math.floor(py)]?.[Math.floor(px)] ?? " ";
+      if (ch !== " " && ch !== "a" && ch !== "c") return false; // (indoors)
+      const lum = (((tint >> 16) & 255) * 0.3 + ((tint >> 8) & 255) * 0.55 + (tint & 255) * 0.15) / 255;
+      const me = this.walker.where();
+      return unseen(lum, Math.hypot(px - me.x, py - me.y), eng.getDaylight().dark);
+    };
+  }
+
   private frame() {
     this.panel.frame();
     this.shades.frame();
@@ -551,6 +586,7 @@ class Dark implements DarkHooks {
     const now = performance.now();
     const out = ctl.level === 0 && !!ctl.room;
     const me = this.walker.where();
+    this.eyes(out, me.x, me.y);
     const ox = ctl.map?.ox ?? 0;
     const oy = ctl.map?.oy ?? 0;
     // the ground at (x, y) on my floor: the snow's, out on it; the floor's indoors

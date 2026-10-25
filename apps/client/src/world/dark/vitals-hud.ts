@@ -82,6 +82,9 @@ export class VitalsHud {
           if (p.sid === room.sessionId || p.uid === myUid || p.level !== 0 || p.bot) return;
           const d = Math.hypot(p.x - me.x, p.y - me.y);
           if (d > TEAM || !ctl.grid.onLand(p.x, p.y)) return;
+          // (out of every light in the dark, unseen: no tag over them either — docs/plan/44 N4)
+          const eng = ctl.engine;
+          if (ctl.tp ? ctl.tp.isUnseen(p.sid) : eng?.unseen?.(p.x, p.y, eng.liveTint(p.x, p.y))) return;
           seen.add(p.sid);
           let el = this.tags.get(p.sid);
           if (!el) {

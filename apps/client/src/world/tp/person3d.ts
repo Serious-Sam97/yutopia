@@ -887,7 +887,34 @@ export class Person3D {
     return this.root.localToWorld(v);
   }
 
+  // Out on the land, past the floor's light map (it lights only the floor), the light on them as
+  // a tint of their own (view.ts: the lamps', the beams', the headlamps', what's seen round me;
+  // docs/plan/44-the-night.md): the body's materials copied for them, the same shader.
+  private own = new Map<Material, MeshBasicMaterial>();
+  setTint(c: Color | null) {
+    if (!c && !this.own.size) return;
+    const swap = new Map<Material, Material>();
+    for (const shared of [this.mats.body, this.mats.bodyAway]) {
+      let mine = this.own.get(shared);
+      if (c && !mine) {
+        mine = (shared as MeshBasicMaterial).clone();
+        mine.onBeforeCompile = shared.onBeforeCompile;
+        mine.customProgramCacheKey = shared.customProgramCacheKey;
+        this.own.set(shared, mine);
+      }
+      if (!mine) continue;
+      if (c) mine.color.copy(c);
+      swap.set(c ? shared : mine, c ? mine : shared);
+    }
+    this.root.traverse((o) => {
+      const m = o as Mesh;
+      const to = m.isMesh ? swap.get(m.material as Material) : undefined;
+      if (to) m.material = to;
+    });
+  }
+
   dispose() {
+    for (const m of this.own.values()) m.dispose();
     this.burning?.dispose();
     this.dropHeld();
     this.dropPhone();

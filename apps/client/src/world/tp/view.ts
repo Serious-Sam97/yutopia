@@ -86,7 +86,7 @@ import {
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { tr } from "@/lib/i18n";
 import { chars, loadChars } from "../art/chars-load";
-import { daylight } from "../art/daylight";
+import { daylight, EYES_LIFT } from "../art/daylight";
 import { emoteUrl } from "../art/emotes";
 import type { LightSource } from "../art/light";
 import type { people } from "../art/people-load";
@@ -94,6 +94,7 @@ import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
 import { holdItems } from "../art/textures";
 import type { PuffKind } from "../engine";
+import { nearLift, unseen } from "../eyes";
 import { type Footprints, printLeft } from "../footprints";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
@@ -117,6 +118,7 @@ import { Shroud3 } from "./shroud3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { heldPoolBall, type TableScene3, TablesIn3D } from "./tables3d";
+import { tailPatch } from "./tail-glow";
 import { busModel, ploughModel } from "./vehicles3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
@@ -280,6 +282,7 @@ export class ThirdPersonView {
   quality: "high" | "medium" | "low" = "high";
   private lamps = LAMPS;
   private nightLevel = 0;
+  private dark = 0; // out under the sky: daylight.ts `dark`
   fps = 60; // measured (auto quality steps down on it)
   // The pixel ratio, kept to the screen's (docs/plan/38-the-lag.md, round 3): a browser can
   // say 2 while this view starts and 1 a moment later (Firefox did, on a 1× monitor: 4× the
@@ -698,6 +701,7 @@ void main() {
     const home = onLevel(all, building);
     this.winSig = cutsSig(home);
     this.around = new Surroundings(building, opts.themes, wallCuts(home));
+    this.around.floorLit = (m) => this.light.patch(m);
     this.prepareGrounds();
     this.scene.add(this.around.root);
     this.floors.set(this.level, { world: this.world, sig: `${layoutSig(map)}|${this.wellSig}`, lit: this.light });
@@ -1176,6 +1180,7 @@ void main() {
     this.scene.remove(this.around.root);
     this.around.dispose();
     this.around = new Surroundings(building, this.opts.themes, wallCuts(home));
+    this.around.floorLit = (m) => this.light.patch(m);
     this.prepareGrounds();
     this.scene.add(this.around.root);
     this.placeAround();
@@ -1940,7 +1945,10 @@ void main() {
     litBalance.lmSunOut.value = 1 + 0.6 * k;
     litBalance.lmFillOut.value = 1 - 0.4 * k;
     // …and the lamp posts' pools come up after dark (light3d.ts: stored halved)
-    litBalance.lmGlowK.value = 2 * LAMP_GLOW * Math.min(1, Math.max(0, (d.night - 0.1) / 0.4));
+    // (five times as strong in the pitch dark: islands on the dark asphalt — docs/plan/44-the-night.md N2)
+    litBalance.lmGlowK.value = 2 * LAMP_GLOW * Math.min(1, Math.max(0, (d.night - 0.1) / 0.4)) * (1 + 4 * d.dark);
+    litBalance.lmDark.value = d.dark;
+    this.dark = d.dark;
     // …and the sun's shadows (a soft moon at night)
     const [sr, sg, sb] = d.sun.color;
     this.sun.color.setRGB(sr, sg, sb, SRGBColorSpace);
@@ -2234,6 +2242,7 @@ void main() {
     const seen = new Set<string>();
     const seenPets = new Set<string>();
     let mySeat: string | undefined;
+    this.unseen.clear();
     for (const b of bodies) {
       if (b.pet) {
         seenPets.add(b.id);
@@ -2269,6 +2278,10 @@ void main() {
             (sh.state === "dissolve" && shadeT > (sh.killed ? 1.95 : 0.45)) ||
             (sh.fade ?? 1) < 0.5);
         p3.root.visible = !hidden3 && !notThere;
+        // (the light on them; out on the land, past the floor's light map, as a tint of their own)
+        const c = this.lightOn(b, me);
+        const L = landLight.value;
+        p3.setTint(this.onLand(b.x, b.y) ? this.ownTint.setRGB(c.r / L.r, c.g / L.g, c.b / L.b) : null);
         if (b.id === meId) mySeat = seat3;
         p3.gunFx = b.id === meId ? this.myGun : this.otherGun(b, dt);
         p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id), fell }, dt, {
@@ -2299,8 +2312,7 @@ void main() {
         this.scene.add(p.root);
       }
       const angle = b.angle ?? dirAngle(b.d);
-      this.personTint.setHex(this.light.tintAt(b.x, b.y));
-      if (this.onLand(b.x, b.y)) this.landTint(b.x, b.y, this.personTint);
+      this.lightOn(b, me);
       this.sphere.center.set(b.x, 0.9, b.y);
       // first person: you aren't drawn (the camera is inside you); the rig
       // keeps stepping so the other cameras find you as you left them
@@ -2750,6 +2762,7 @@ void main() {
     for (const b of bodies) {
       if (b.shade) continue; // (the shadowed have no names)
       seen.add(b.id);
+      const dark = this.unseen.has(b.id);
       let t = this.tagEls.get(b.id);
       if (!t) {
         t = makeTag();
@@ -2779,9 +2792,14 @@ void main() {
           : "";
       if (t.emoteKey !== emote) {
         t.emoteKey = emote;
-        t.emote.style.display = emote ? "" : "none";
         if (emote) t.emote.src = emoteUrl(emote);
       }
+      // (out in the dark, unseen: no name, no emote — the bubble still: they're heard)
+      const showEmote = emote && !dark ? "" : "none";
+      if (t.emote.style.display !== showEmote) t.emote.style.display = showEmote;
+      const pill = t.name.parentElement as HTMLElement;
+      const showName = dark ? "none" : "";
+      if (pill.style.display !== showName) pill.style.display = showName;
       if (t.bubbleUntil && now > t.bubbleUntil) {
         t.bubbleUntil = 0;
         t.bubble.style.display = "none";
@@ -3053,7 +3071,9 @@ void main() {
     all.sort((a, b) => a.d - b.d);
     const near = all.slice(0, this.lamps);
     const edge = Math.min(LAMP_REACH, all[this.lamps]?.d ?? LAMP_REACH);
-    const k = 0.15 + 1.1 * d.night; // (the light map has their pools; this lights what stands up)
+    // (the light map has their pools; this lights what stands up — in the pitch dark, all of it: a
+    // lamp post's people and cars as lit as its pool, docs/plan/44-the-night.md)
+    const k = (0.15 + 1.1 * d.night) * (1 + 7 * d.dark);
     this.pool.forEach((p, i) => {
       const n = near[i];
       const fade = n ? Math.min(1, Math.max(0, (edge - n.d) / LAMP_FADE)) : 0;
@@ -3139,7 +3159,8 @@ void main() {
         return;
       }
       p.position.set(l.x, l.h, l.y);
-      p.distance = l.c.radius * 1.4;
+      // (a little wider in the pitch dark: an island of snow — docs/plan/44-the-night.md N2)
+      p.distance = l.c.radius * (1.4 + 0.35 * this.dark);
       p.color.setHex(l.color ?? (l.flare ? 0xff3a24 : 0xffd29a));
       p.intensity = l.flare ? l.c.intensity : l.c.intensity * on * fade * fade * (3 - 2 * fade);
     });
@@ -3198,8 +3219,9 @@ void main() {
     );
   }
 
-  // the light on someone out on the land: the hour's, the lamps' near, a beam's
-  private landTint(x: number, y: number, out: Color) {
+  // the light on someone out on the land: the hour's, the lamps' near, a beam's (`skip`: not
+  // this one's own torch)
+  private landTint(x: number, y: number, out: Color, skip?: string) {
     out.copy(landLight.value);
     for (const p of [...this.pool, ...this.groundPool]) {
       if (p.intensity <= 0) continue;
@@ -3211,7 +3233,7 @@ void main() {
       out.b += k * p.color.b;
     }
     for (const t of this.torch3) {
-      if (!t.on) continue;
+      if (!t.on || (skip && t.who === skip)) continue;
       // (shared beam.ts: the same test iso and the server make; a focused beam is the brighter)
       const k = beamAt(t.on, x, y) * (0.2 + 0.9 * this.nightLevel) * (t.on.focus ? 1.5 : 1);
       if (k <= 0) continue;
@@ -3224,11 +3246,78 @@ void main() {
     out.b = Math.min(1, out.b);
   }
 
+  // ── the eyes (docs/plan/44-the-night.md N3; world/eyes.ts, run by the dark's chunk) ──
+  private glareTint = new Color();
+  private ownTint = new Color();
+  // The light on someone (the people's tint): the floor's light map; out on the land the land's own
+  // (its lamps, the beams); headlamps; and in the dark what's seen right round me (myself too).
+  // Out under the sky after dark, whoever's out of all of it and further off is unseen: no name,
+  // no emote (docs/plan/44-the-night.md N4).
+  private lightOn(b: Body3, me: Body3 | undefined): Color {
+    const c = this.personTint.setHex(this.light.tintAt(b.x, b.y));
+    if (this.onLand(b.x, b.y)) this.landTint(b.x, b.y, c);
+    if (this.underSky(b.x, b.y)) {
+      this.headlampTint(b.x, b.y, c);
+      const d = me ? Math.hypot(b.x - me.x, b.y - me.y) : 0;
+      const k = nearLift(d, this.dark);
+      c.setRGB(Math.min(1, c.r + k), Math.min(1, c.g + k), Math.min(1, c.b + k * 1.1));
+      if (unseen(c.r * 0.3 + c.g * 0.55 + c.b * 0.15, d, this.dark)) this.unseen.add(b.id);
+    }
+    return c;
+  }
+  private unseen = new Set<string>(); // out in the dark, unseen this frame (N4: no name, no emote)
+  /** Out in the dark and unseen this frame (no name, no emote; the dark's HUD hides its tag too). */
+  isUnseen(id: string): boolean {
+    return this.unseen.has(id);
+  }
+  /** How bright it is where `id` stands at (x, y), 0 … 1 (the people's tint's luminance): the
+   *  rooms, a lamp's pool, headlamps or someone's torch on them — not their own torch. */
+  glareAt(x: number, y: number, id: string): number {
+    if (!this.underSky(x, y)) return 1;
+    const c = this.glareTint.setHex(this.light.tintAt(x, y));
+    if (this.onLand(x, y)) this.landTint(x, y, c, id);
+    this.headlampTint(x, y, c);
+    return c.r * 0.3 + c.g * 0.55 + c.b * 0.15;
+  }
+  /** How adjusted my eyes are to the dark (0 … 1): the land, the campus, the cars and the lot
+   *  lift a little. */
+  setEyes(e: number) {
+    this.around.setEyes(e);
+    litBalance.lmEyes.value = EYES_LIFT.lot3 * e * this.dark;
+  }
+
+  /** The real headlamps (car/cars.ts gives them: the nearest lit car's), for the tint of
+   *  whoever stands in them (docs/plan/44-the-night.md N2). */
+  carBeams: SpotLight[] = [];
+  private beamDir = new Vector3();
+  private beamAt = new Vector3();
+  // the light on someone out under the sky from those headlamps: a cone from each, fading ahead
+  private headlampTint(x: number, y: number, out: Color) {
+    for (const s of this.carBeams) {
+      if (s.intensity <= 0) continue;
+      // (in the scene: they hang off the car module's own group)
+      const at = s.getWorldPosition(this.beamAt);
+      const d = s.target.getWorldPosition(this.beamDir).sub(at).setY(0).normalize();
+      const px = x - at.x;
+      const py = y - at.z;
+      const along = px * d.x + py * d.z;
+      const reach = s.distance * 0.6;
+      if (along <= 0 || along >= reach) continue;
+      const side = Math.abs(px * d.z - py * d.x);
+      const half = 0.6 + along * Math.tan(s.angle);
+      if (side >= half) continue;
+      const k = (1 - along / reach) ** 2 * (1 - (side / half) ** 2) * (s.intensity / 120) * 0.6;
+      out.r = Math.min(1, out.r + k);
+      out.g = Math.min(1, out.g + k * 0.95);
+      out.b = Math.min(1, out.b + k * 0.86);
+    }
+  }
+
   // ── what drives on the Grounds (docs/plan/27, phase 6): the visitor's car,
   // the shuttle; lit as the land is (dark at night), headlamps glowing ──
   private veh3 = new Map<string, Group>();
   private vehMat: MeshLambertMaterial | null = null;
-  setVehicles(list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean }[]) {
+  setVehicles(list: { id: string; kind: string; x: number; z: number; a: number; v?: number; shown: boolean }[]) {
     const g = this.around.grounds;
     const off = offsetOf(this.building, this.level);
     const up = elevOf(0) - elevOf(this.level);
@@ -3239,6 +3328,15 @@ void main() {
       let m = this.veh3.get(v.id);
       if (!m) {
         m = v.kind === "shuttle" ? this.busModel() : v.kind === "plough" ? this.ploughModel() : this.carModel(v.id);
+        // (its headlamps, for car/cars.ts's real light: either side of its nose, −x)
+        const box = new Box3().setFromObject(m);
+        const w = (box.max.z - box.min.z) * 0.36;
+        const y = m.userData.big ? 1.1 : 0.55;
+        m.userData.heads = [new Vector3(box.min.x, y, -w), new Vector3(box.min.x, y, w)];
+        // (and its tail lamps' red on the snow behind)
+        const tail = tailPatch(box.max.x);
+        m.add(tail);
+        m.userData.tailGlow = tail;
         this.veh3.set(v.id, m);
         this.scene.add(m);
       }
@@ -3252,12 +3350,17 @@ void main() {
         if (d < 5) for (const w of wheels) w.rotation.z -= d / 0.5;
       }
       m.userData.at = [px, pz];
+      // (on the move: its headlamps a real light — car/cars.ts; parked, just their glow)
+      m.userData.moving = Math.abs(v.v ?? 0) > 0.2;
       m.position.set(px, g.heightAt(v.x, v.z) + up + 0.03, pz);
       // (the models' noses point −x: turned to the heading)
       m.rotation.y = Math.PI - v.a;
       const n = this.nightLevel;
       for (const l of m.userData.glow as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.25 + n * 1.2);
       for (const l of m.userData.tail as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.35 + n * 1.1);
+      const tg = m.userData.tailGlow as Mesh<PlaneGeometry, MeshBasicMaterial>;
+      tg.material.opacity = 0.35 * n;
+      tg.visible = n > 0.2;
       // (the plough's beacon: turning — a flash twice a second)
       const b = m.userData.beacon as MeshBasicMaterial | undefined;
       if (b) b.opacity = 0.35 + 0.65 * Math.max(0, Math.sin(performance.now() / 160)) ** 4;
@@ -3267,6 +3370,22 @@ void main() {
         this.scene.remove(m);
         this.veh3.delete(id);
       }
+  }
+  /** The Grounds' own vehicles' headlamps (their lamps are on after dark), in the scene:
+   *  car/cars.ts gives the nearest a real light. */
+  vehicleLamps(): { a: Vector3; b: Vector3; fwd: Vector3 }[] {
+    const out: { a: Vector3; b: Vector3; fwd: Vector3 }[] = [];
+    for (const m of this.veh3.values()) {
+      const h = m.userData.heads as Vector3[] | undefined;
+      if (!h || !m.visible || !m.userData.moving) continue;
+      m.updateMatrixWorld();
+      out.push({
+        a: h[0].clone().applyMatrix4(m.matrixWorld),
+        b: h[1].clone().applyMatrix4(m.matrixWorld),
+        fwd: new Vector3(-1, 0, 0).transformDirection(m.matrixWorld),
+      });
+    }
+    return out;
   }
   private vehicleMat(): MeshLambertMaterial {
     if (!this.vehMat) {
@@ -3476,7 +3595,9 @@ void main() {
       const across = 1 + (FOCUS_ACROSS - 1) * f;
       const along = 1 + (FOCUS_ALONG - 1) * f;
       tc.beam.scale.set(across, across, along);
-      const op0 = Math.min(0.5, (0.03 + 0.16 * night) * (1 + this.storm * 1.6));
+      // (a third as thick in the pitch dark: on a black night the haze hid what the beam lit —
+      // docs/plan/44-the-night.md; a storm's snow still thickens it)
+      const op0 = Math.min(0.5, (0.03 + 0.16 * night) * (1 - 0.65 * this.dark) * (1 + this.storm * 1.6));
       const op = Math.min(0.5, op0 * (1 + 0.35 * f) * kick) * flick;
       for (const m of [tc.mat, tc.coreMat]) {
         m.uniforms.time.value = tm;
@@ -4073,6 +4194,8 @@ void main() {
     const on = this.level === 0 && f.list.length > 0;
     this.printMesh.visible = on;
     if (!on) return;
+    // (a print is a shadow in the snow: in the pitch dark, as dark as what's round it)
+    (this.printMesh.material as MeshBasicMaterial).color.setHex(0x5f7290).multiplyScalar(litBalance.lmSkyLeft.value);
     const fade = now - this.printFaded > 1000;
     if (f.version === this.printVersion && !fade) return;
     this.printVersion = f.version;

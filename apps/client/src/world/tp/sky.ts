@@ -19,10 +19,10 @@ import {
   SRGBColorSpace,
   Vector3,
 } from "three";
-import type { Daylight } from "../art/daylight";
+import { DARK_LEFT, type Daylight, darkK, EYES_LIFT } from "../art/daylight";
 import { Campus, GROUND } from "./campus";
 import { GroundsStream } from "./grounds-stream";
-import { landLight, patchGrounds, patchOutdoors } from "./light3d";
+import { landLight, litBalance, patchGrounds, patchOutdoors } from "./light3d";
 import { stepRoadSnow } from "./roads3d";
 
 // the themes' drawings and skies: the same lazy chunk the iso view loads
@@ -176,7 +176,13 @@ export class Surroundings {
         const y = Math.floor(bz - oy);
         return x >= 0 && y >= 0 && x < g0.width && y < g0.height && isFloor(tileAt(g0, x, y));
       };
-      this.grounds = new GroundsStream(T, covered, patchGrounds, map.width);
+      // (what lies on the ground floor — the lot's snow — lit as the floor is: `floorLit`, view.ts)
+      this.grounds = new GroundsStream(
+        T,
+        covered,
+        (m) => (m.userData.onFloor && this.floorLit ? this.floorLit(m) : patchGrounds(m)),
+        map.width,
+      );
       this.grounds.root.position.y = GROUND;
       this.campus.root.add(this.grounds.root);
       // (the snow doesn't fall in the Grounds' buildings)
@@ -185,18 +191,38 @@ export class Surroundings {
   }
 
   readonly horizon = new Color();
+  /** The ground floor's light (its light map, view.ts Light3.patch), for what lies on it. */
+  floorLit: ((m: Material) => void) | null = null;
+  private day: Daylight | null = null;
+  private eyes = 0;
+  private eyesSet = 0;
+
+  /** How adjusted my eyes are to the dark (eyes.ts, 0 … 1): the land's light lifts a little. */
+  setEyes(e: number) {
+    this.eyes = e;
+    // (a step at a time: setDay walks the campus's materials)
+    if (Math.abs(e - this.eyesSet) < 0.02 && (e > 0 || this.eyesSet === 0)) return;
+    this.eyesSet = e;
+    if (this.day) this.setDay(this.day);
+  }
 
   setDay(d: Daylight) {
+    this.day = d;
     const [top, mid, bot] = this.T.keyed(this.T.SNOW_SKY, d.hour);
     const u = this.domeMat.uniforms;
     (u.top.value as Color).setHex(top, SRGBColorSpace);
     (u.mid.value as Color).setHex(mid, SRGBColorSpace);
     (u.bot.value as Color).setHex(bot, SRGBColorSpace);
     this.horizon.setHex(mid, SRGBColorSpace);
-    (this.stars.material as PointsMaterial).opacity = Math.max(0, d.night * 1.1 - 0.1);
-    this.campus.setDay(d, mid);
-    // the land's light (as the campus's things are tinted: the same by the hour)
-    const k = 1 - 0.75 * d.night;
+    // (no stars in the pitch dark: the overcast — docs/plan/44-the-night.md)
+    const over = Math.min(1, Math.max(0, (d.dark - 0.2) / 0.4));
+    (this.stars.material as PointsMaterial).opacity = Math.max(0, d.night * 1.1 - 0.1) * (1 - over);
+    // the land's light (as the campus's things are tinted: the same by the hour), and in
+    // the pitch dark next to none: the sky's light goes, the lamps' and the beams' stay
+    const dk = darkK(d.dark, DARK_LEFT.land3 + EYES_LIFT.land3 * this.eyes);
+    this.campus.setDay(d, mid, dk);
+    litBalance.lmSkyLeft.value = dk;
+    const k = (1 - 0.75 * d.night) * dk;
     landLight.value.setRGB(d.ambient[0] * k, d.ambient[1] * k, d.ambient[2] * k);
     this.grounds?.setNight(d.night, landLight.value);
   }

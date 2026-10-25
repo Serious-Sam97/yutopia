@@ -143,6 +143,39 @@ export class DarkSound {
     return e ? Math.atan2(-e[10], -e[8]) : -Math.PI * 0.75;
   }
 
+  private stepAt = new Map<string, { x: number; y: number }>();
+  private crunchBuf: AudioBuffer | null = null;
+  // a step in the snow at (x, y): a burst of noise, banded as the snow crunches (sound.ts step)
+  private crunch(x: number, y: number) {
+    const ctx = this.ctx();
+    if (!ctx) return;
+    const { pan, gain } = this.place(x, y, 22);
+    if (gain <= 0.02) return;
+    if (!this.crunchBuf) {
+      const n = Math.round(ctx.sampleRate * 0.12);
+      this.crunchBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const d = this.crunchBuf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 2;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this.crunchBuf;
+    src.playbackRate.value = 0.85 + Math.random() * 0.3;
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1500 + Math.random() * 500;
+    bp.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.value = gain * 0.35 * FX;
+    const p = ctx.createStereoPanner();
+    p.pan.value = pan;
+    src
+      .connect(bp)
+      .connect(g)
+      .connect(p)
+      .connect((this.mixer as Mixer).buses.effects);
+    src.start();
+  }
+
   /** A one-shot, from (x, y) (or here), `range` tiles heard. */
   play(name: Name, at?: { x: number; y: number }, range = 40, volume = 1, rate = 1): void {
     const ctx = this.ctx();
@@ -280,6 +313,19 @@ export class DarkSound {
       }
     }
     for (const id of [...this.prev.keys()]) if (!seen.has(id)) this.prev.delete(id);
+    // their steps in the snow, from where they are: in the dark you hear them before you see them
+    // (docs/plan/44-the-night.md N4)
+    for (const s of list) {
+      const last = this.stepAt.get(s.id);
+      if (!last || s.state === "lurk" || s.state === "dissolve") {
+        this.stepAt.set(s.id, { x: s.x, y: s.y });
+        continue;
+      }
+      if (Math.hypot(s.x - last.x, s.y - last.y) < 0.75) continue;
+      this.stepAt.set(s.id, { x: s.x, y: s.y });
+      this.crunch(s.x, s.y);
+    }
+    for (const id of [...this.stepAt.keys()]) if (!seen.has(id)) this.stepAt.delete(id);
     // the burn: any near burning, louder the nearer
     let burn = 0;
     for (const s of list)

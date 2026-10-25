@@ -32,6 +32,7 @@ export interface Car {
   id: string;
   kind: string;
   variant?: number; // a driven lot car's colour (docs/plan/28)
+  fl?: number; // a driven car's lamps and switches (shared car/net.ts CAR_FLAGS)
   x: number; // the building's coords
   z: number;
   a: number;
@@ -49,6 +50,7 @@ interface VehicleIn {
   stop: string;
   honkAt: number;
   colour?: number;
+  fl?: number;
 }
 interface Vehicles {
   forEach(f: (v: VehicleIn, id: string) => void): void;
@@ -89,6 +91,7 @@ export class GroundsLife {
       c.z += (v.z - c.z) * k;
       c.a += Math.atan2(Math.sin(v.a - c.a), Math.cos(v.a - c.a)) * k;
       c.v = v.v;
+      c.fl = v.fl;
       c.shown = v.shown;
       const was = this.honks.get(id) ?? v.honkAt;
       this.honks.set(id, v.honkAt);

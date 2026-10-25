@@ -160,6 +160,8 @@ export interface CarsHost {
   tp(): ThirdPersonView | null;
   objects(): Iterable<WorldObjectDef>;
   night(): number;
+  /** out under the sky: 0 … 1 pitch dark (daylight.ts) */
+  dark(): number;
   storm(): number;
   reduced(): boolean;
   quality(): "high" | "medium" | "low";
@@ -311,6 +313,7 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
       tp: () => c.tp,
       objects: () => c.objs.values(),
       night: () => c.engine?.getDaylight().night ?? 0,
+      dark: () => c.engine?.getDaylight().dark ?? 0,
       storm: () => Math.max(0, c.storm),
       reduced: () => prefs().reducedMotion,
       quality: () => c.qualityNow(),
@@ -339,6 +342,7 @@ export class Cars {
   private envMake: { pm: PMREMGenerator; for: ThirdPersonView["renderer"]; scene: Scene; dome: Mesh } | null = null;
   private envAt = -1e9;
   private envNight = -1;
+  private envDark = -1;
   // mine
   private mine: {
     vid: string;
@@ -891,7 +895,10 @@ export class Cars {
   private updateEnv(tp: ThirdPersonView | null) {
     if (!tp) return;
     const n = this.host.night();
-    if (this.time - this.envAt < 20 && Math.abs(n - this.envNight) < 0.15) return;
+    const dark = this.host.dark();
+    if (this.time - this.envAt < 20 && Math.abs(n - this.envNight) < 0.15 && Math.abs(dark - this.envDark) < 0.15)
+      return;
+    this.envDark = dark;
     this.envAt = this.time;
     this.envNight = n;
     if (this.envMake?.for !== tp.renderer) {
@@ -916,6 +923,8 @@ export class Cars {
     u.top.value.set("#8f9ca8").lerp(new Color("#04070c"), n);
     u.hor.value.set("#d5dbe0").lerp(new Color("#141c27"), n);
     u.low.value.set("#dfe5ea").lerp(new Color("#0b1016"), n);
+    // (in the pitch dark, nothing up there to shine in the paint)
+    for (const c of [u.top.value, u.hor.value, u.low.value]) c.multiplyScalar(1 - 0.92 * dark);
     const next = pm.fromScene(scene, 0.04, 0.1, 100).texture;
     const old = this.env;
     this.env = next;
@@ -1744,12 +1753,18 @@ export class Cars {
     this.mine?.rig?.snap();
   }
 
-  /** My car's headlamps as real lights (the view's tier says how many cars get them). Always the
-   *  same two in the scene, off (dark, parked under the ground) when not wanted: a light coming or
-   *  going recompiles every material — a freeze getting in and out of a car at night. The first
-   *  casts shadows on High (its map drawn once at the start, as the flashlight's must be). */
+  /** Headlamps as real lights (docs/plan/44-the-night.md, N2): my car's while I drive with them
+   *  on, else the nearest other car with its lights on (another's, or the Grounds' own: the
+   *  visitor's car, the shuttle, the plough) — the view's tier says how many lamps get them.
+   *  Always the same two in the scene, off (dark, parked under the ground) when not wanted: a
+   *  light coming or going recompiles every material — a freeze getting in and out of a car at
+   *  night. The first casts shadows on High (its map drawn once at the start, as the
+   *  flashlight's must be). */
   private beamLights: SpotLight[] = [];
   private beamShadow: boolean | null = null;
+  private lampA = new Vector3();
+  private lampB = new Vector3();
+  private lampFwd = new Vector3();
   private headlamps(l: LiveView | null, beams: "off" | "low" | "high") {
     const q = this.host.quality();
     if (!this.beamLights.length)
@@ -1761,6 +1776,9 @@ export class Cars {
         this.root.add(s, s.target);
         this.beamLights.push(s);
       }
+    // (whoever stands in them takes their light: the view's tint)
+    const tp = this.host.tp();
+    if (tp && tp.carBeams !== this.beamLights) tp.carBeams = this.beamLights;
     const shadow = q === "high";
     if (shadow !== this.beamShadow) {
       // (only when the tier changes: that recompiles anyway)
@@ -1769,23 +1787,66 @@ export class Cars {
       this.beamLights[0].shadow.needsUpdate = true;
     }
     const night = this.host.night() > 0.25;
-    const want = !l || beams === "off" || !night ? 0 : q !== "low" ? 2 : 1;
-    const m = l?.model;
-    m?.root.updateMatrixWorld();
+    const [A, B, F] = [this.lampA, this.lampB, this.lampFwd];
+    let lit: "off" | "low" | "high" = "off";
+    if (night && l && beams !== "off") {
+      const m = l.model;
+      m.root.updateMatrixWorld();
+      A.copy(m.lamps.head[0]).applyMatrix4(m.root.matrix);
+      B.copy(m.lamps.head[1] ?? m.lamps.head[0]).applyMatrix4(m.root.matrix);
+      F.set(-1, 0, 0).transformDirection(m.root.matrix);
+      lit = beams;
+    } else if (night && !l) lit = this.nearestLit(A, B, F);
+    const want = lit === "off" ? 0 : q !== "low" ? 2 : 1;
     this.beamLights.forEach((s, i) => {
       s.shadow.autoUpdate = i < want;
-      if (i >= want || !m) {
+      if (i >= want) {
         s.intensity = 0;
         s.position.set(0, -500, 0);
         s.target.position.set(0, -501, 0);
         return;
       }
-      const h = want === 1 ? new Vector3(m.lamps.head[0].x, m.lamps.head[0].y, 0) : m.lamps.head[i];
-      s.intensity = beams === "high" ? 220 : 120;
-      s.angle = beams === "high" ? 0.36 : 0.5;
-      s.position.copy(h).applyMatrix4(m.root.matrix);
-      s.target.position.set(h.x - 30, h.y - (beams === "high" ? 0.4 : 1.3), h.z).applyMatrix4(m.root.matrix);
+      // (one light only: from between the two lamps)
+      const at = want === 1 ? A.clone().add(B).multiplyScalar(0.5) : i === 0 ? A : B;
+      s.intensity = lit === "high" ? 220 : 120;
+      s.angle = lit === "high" ? 0.36 : 0.5;
+      s.position.copy(at);
+      s.target.position.copy(at).addScaledVector(F, 30);
+      s.target.position.y -= lit === "high" ? 0.4 : 1.3;
     });
+  }
+  /** The nearest car with its lamps on, to the camera (within 80 tiles): its two headlamps and
+   *  which way they shine, into `a`, `b`, `fwd`. */
+  private nearestLit(a: Vector3, b: Vector3, fwd: Vector3): "off" | "low" | "high" {
+    const tp = this.host.tp();
+    if (!tp) return "off";
+    const cam = tp.camera.position;
+    let best = 80;
+    let lit: "off" | "low" | "high" = "off";
+    // (the car I ride in too: as a passenger, its lamps light my way)
+    for (const l of this.live.values()) {
+      const fl = l.buf[l.buf.length - 1]?.fl ?? 0;
+      if (!(fl & (CAR_FLAGS.low | CAR_FLAGS.high))) continue;
+      const m = l.model;
+      const d = cam.distanceTo(m.root.position);
+      if (d >= best) continue;
+      best = d;
+      m.root.updateMatrixWorld();
+      a.copy(m.lamps.head[0]).applyMatrix4(m.root.matrix);
+      b.copy(m.lamps.head[1] ?? m.lamps.head[0]).applyMatrix4(m.root.matrix);
+      fwd.set(-1, 0, 0).transformDirection(m.root.matrix);
+      lit = fl & CAR_FLAGS.high ? "high" : "low";
+    }
+    for (const v of tp.vehicleLamps()) {
+      const d = cam.distanceTo(v.a);
+      if (d >= best) continue;
+      best = d;
+      a.copy(v.a);
+      b.copy(v.b);
+      fwd.copy(v.fwd);
+      lit = "low";
+    }
+    return lit;
   }
 
   // ── what a car can hit besides the Grounds ─────────────────────────────────

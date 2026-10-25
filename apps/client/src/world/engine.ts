@@ -67,7 +67,7 @@ import {
 import type { Quality } from "@/lib/prefs";
 import type { Motion } from "./art/avatar-motion";
 import { chars, loadChars } from "./art/chars-load";
-import { type Daylight, daylight, hourForNight } from "./art/daylight";
+import { DARK_LEFT, type Daylight, darkK, daylight, EYES_LIFT, hourForNight, outAmbient } from "./art/daylight";
 import { FloorBake, floorRes } from "./art/floors";
 import { WALL_H } from "./art/furniture";
 import { MUG_COLORS } from "./art/held";
@@ -1143,7 +1143,8 @@ export class WorldEngine {
   // the land's light by the hour: darker than the rooms' at night (off the lit
   // ways the Grounds are truly dark: docs/plan/27, the mood)
   private landAmbient(): [number, number, number] {
-    const k = 1 - 0.55 * this.day.night;
+    // (and in the pitch dark, next to none: docs/plan/44-the-night.md)
+    const k = (1 - 0.55 * this.day.night) * darkK(this.day.dark, DARK_LEFT.land2 + EYES_LIFT.land2 * this.eyesLand);
     const a = this.day.ambient;
     return [a[0] * k, a[1] * k, a[2] * k];
   }
@@ -2282,9 +2283,10 @@ export class WorldEngine {
       v.ringOn = false;
     }
 
-    // emote
+    // emote (none over someone unseen out in the dark: world/dark)
+    const hid = !v.local && !!this.unseen?.(s.x, s.y, tint);
     const emoteTex = s.emote && isEmote(s.emote) ? emoteTexture(s.emote) : null;
-    if (emoteTex) {
+    if (emoteTex && !hid) {
       v.emote.texture = emoteTex;
       v.emote.width = EMOTE_PX;
       v.emote.height = EMOTE_PX;
@@ -2295,7 +2297,7 @@ export class WorldEngine {
     // name tag + bubble (overlay, scale-compensated so text stays crisp)
     const inv = 1 / Math.max(0.7, this.zoom * 0.85);
     v.tag.position.set(p.x, p.y + (-106 + lift) * PERSON);
-    v.tag.visible = !this.tagsHidden && !!s.name;
+    v.tag.visible = !this.tagsHidden && !!s.name && !hid;
     v.tag.scale.set(inv);
     this.setDepth(v.tag, v.local ? 1e6 : p.y);
     const dotColor = s.status === "dnd" ? C.rust : s.status === "away" ? C.alumDark : s.npc ? C.red : C.olive;
@@ -2575,6 +2577,31 @@ export class WorldEngine {
   // it; walls, items and people are tinted by it where they stand. Low quality
   // keeps flat light.
   private day: Daylight = daylight(12);
+  private outAmb = this.day.ambient; // the lot's (under the open sky): gone in the dark
+  // how adjusted my eyes are to the dark (world/eyes.ts): the land's, and the lot's a quarter at
+  // a time (its light map composited again)
+  /** (world/dark: out in the dark and out of every light — no name, no emote; docs/plan/44 N4) */
+  unseen: ((x: number, y: number, tint: number) => boolean) | null = null;
+  private eyesLand = 0;
+  private eyesLot = 0;
+  setEyes(e: number) {
+    if (Math.abs(e - this.eyesLand) >= 0.03 || (e === 0 && this.eyesLand > 0)) {
+      this.eyesLand = e;
+      this.grounds?.setAmbient(this.landAmbient());
+    }
+    const lot = Math.round(e * 4) / 4;
+    if (lot !== this.eyesLot) {
+      this.eyesLot = lot;
+      this.outAmb = outAmbient(this.day, lot);
+      this.applyLight();
+    }
+  }
+  /** How bright it is at (x, y) (0 … 1): the rooms', a lamp's, a beam's — not a torch held there. */
+  glareAt(x: number, y: number): number {
+    const c =
+      this.grounds?.land.visible && !isFloorAt(this.map, x, y) ? this.grounds.lightAt(x, y, true) : this.tintAt(x, y);
+    return (((c >> 16) & 255) * 0.3 + ((c >> 8) & 255) * 0.55 + (c & 255) * 0.15) / 255;
+  }
   private clockOff = 0;
   private lightMap: LightMap | null = null;
   private lightDue = 0;
@@ -2584,6 +2611,7 @@ export class WorldEngine {
 
   setClock(hour: number) {
     this.day = daylight(hour);
+    this.outAmb = outAmbient(this.day, this.eyesLot);
     // (the wall clocks run on from it, by this machine's clock: how many minutes it's off São Paulo's)
     this.clockOff = Math.round((hour - spHour(Date.now())) * 60);
     this.night = this.day.night;
@@ -2637,7 +2665,9 @@ export class WorldEngine {
   private tintAt(x: number, y: number): number {
     // (out on the land: the Grounds' light, the lamps' and the flashlights')
     if (this.grounds?.land.visible && !isFloorAt(this.map, x, y)) return this.grounds.lightAt(x, y);
-    return this.lit() ? (this.lightMap as LightMap).tintAt(x, y, this.day.ambient, this.day.window) : 0xffffff;
+    return this.lit()
+      ? (this.lightMap as LightMap).tintAt(x, y, this.day.ambient, this.day.window, this.outAmb)
+      : 0xffffff;
   }
 
   private tintObject(v: ObjectView) {
@@ -2660,6 +2690,7 @@ export class WorldEngine {
         this.day.ambient,
         this.day.window,
         fresh ? undefined : (this.lightCanvas ?? undefined),
+        this.outAmb,
       );
       if (fresh || this.floorLight.texture === Texture.EMPTY) {
         this.floorLight.texture?.destroy(true);
@@ -2687,8 +2718,10 @@ export class WorldEngine {
     this.applyPost();
     this.theme?.setDay(this.day);
     this.grounds?.setAmbient(this.landAmbient());
-    const a = this.day.ambient;
-    this.shellBody.tint = (Math.round(a[0] * 255) << 16) | (Math.round(a[1] * 255) << 8) | Math.round(a[2] * 255);
+    // (the building's outside: as dark as the land in the pitch dark; its lit windows stay)
+    const sk = darkK(this.day.dark, DARK_LEFT.land2);
+    const a = this.day.ambient.map((v) => Math.round(v * sk * 255));
+    this.shellBody.tint = (a[0] << 16) | (a[1] << 8) | a[2];
     this.shellLights.alpha = Math.min(1, this.day.night * 1.1);
     this.shellLights.visible = this.day.night > 0.05;
     // Low: nothing baked — one multiply layer in the hour's ambient colour over everything

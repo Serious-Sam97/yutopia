@@ -496,7 +496,10 @@ export function Minimap() {
       x.lineWidth = 3;
       x.strokeRect(mine.x * S + 1.5, mine.y * S + 1.5, mine.w * S - 3, mine.h * S - 3);
     }
+    // (after dark, nobody out under the sky is seen from afar — docs/plan/44-the-night.md N4)
+    const dark = (w?.engine?.getDaylight().dark ?? 0) > 0.5;
     for (const p of people) {
+      if (dark && "ac".includes(map.tiles[Math.floor(p.y)]?.[Math.floor(p.x)] || "x")) continue;
       x.fillStyle = p.bot ? "#a39d8c" : p.hearing ? "#ffa630" : "#efe4cc";
       x.beginPath();
       x.arc(p.x * S, p.y * S, 4, 0, Math.PI * 2);

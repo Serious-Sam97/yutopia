@@ -15,10 +15,12 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   type Object3D,
   PlaneGeometry,
+  ShaderChunk,
   Shape,
   ShapeUtils,
   SphereGeometry,
@@ -30,6 +32,8 @@ import {
   Vector4,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { skyLeft } from "../sky-left";
+import { tailPatch } from "../tail-glow";
 import * as T from "./textures";
 import { buildSnowcat, buildSnowmobile } from "./tracked";
 import { type Cluster, drawCluster, drawRadio } from "./vfd";
@@ -527,12 +531,64 @@ export interface Sedan {
 
 export function buildSedan(o: SedanOpts): Sedan {
   // (the snowmobile and the snowcat: their own builders, the same parts)
-  if (o.kind === "snowmobile") return buildSnowmobile(o);
-  if (o.kind === "snowcat") return buildSnowcat(o);
-  if (o.kind === "ploughtruck") return buildPloughTruck(o);
-  if (o.kind === "tractor") return buildTractor(o);
-  if (o.kind === "toboggan") return buildToboggan(o);
-  return buildBody(o, o.kind ?? "sedan");
+  const s =
+    o.kind === "snowmobile"
+      ? buildSnowmobile(o)
+      : o.kind === "snowcat"
+        ? buildSnowcat(o)
+        : o.kind === "ploughtruck"
+          ? buildPloughTruck(o)
+          : o.kind === "tractor"
+            ? buildTractor(o)
+            : o.kind === "toboggan"
+              ? buildToboggan(o)
+              : buildBody(o, o.kind ?? "sedan");
+  // (all of it out under the sky: in the pitch dark only what's left of its light)
+  s.root.traverse((x) => {
+    const m = (x as Mesh).material;
+    for (const k of Array.isArray(m) ? m : m ? [m] : []) skyLit(k);
+  });
+  tailGlow(s);
+  return s;
+}
+
+function tailGlow(s: Sedan) {
+  const patch = tailPatch(s.dims.L / 2);
+  s.root.add(patch);
+  const set = s.setLights;
+  s.setLights = (l) => {
+    set(l);
+    patch.material.opacity = (l.tail ? 0.35 : 0) + 0.45 * l.brake;
+    patch.visible = patch.material.opacity > 0.01;
+  };
+}
+
+// the light chunk with the scene's sun and the sky's fill scaled by what's left of them
+const SKY_LIT = ShaderChunk.lights_fragment_begin
+  .replace(
+    "getDirectionalLightInfo( directionalLight, directLight );",
+    "getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= skyLeft;",
+  )
+  .replace(
+    "irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );",
+    "irradiance += skyLeft * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );",
+  );
+/** A lit material of a vehicle: in the pitch dark only what's left of the sky's sun and fill
+ *  (sky-left.ts); the lamps', the headlights' and the torches' light stay. On top of what it
+ *  has (the wear). */
+function skyLit(m: Material) {
+  if (m.userData.skyLit || !(m instanceof MeshStandardMaterial || m instanceof MeshLambertMaterial)) return;
+  m.userData.skyLit = true;
+  const prev = m.onBeforeCompile;
+  const key = m.customProgramCacheKey;
+  m.onBeforeCompile = (sh, r) => {
+    prev.call(m, sh, r);
+    sh.uniforms.skyLeft = skyLeft;
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float skyLeft;")
+      .replace("#include <lights_fragment_begin>", SKY_LIT);
+  };
+  m.customProgramCacheKey = () => `${key.call(m)}|sky`;
 }
 
 function buildBody(o: SedanOpts, kind: BodyKind): Sedan {

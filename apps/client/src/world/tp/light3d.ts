@@ -10,8 +10,9 @@ import {
   SRGBColorSpace,
   Vector2,
 } from "three";
-import { daylight, litCap } from "../art/daylight";
+import { daylight, litCap, outAmbient } from "../art/daylight";
 import { headlights, type LightMap, type LightSource, lightMapFor, lightSig, lightSources } from "../art/light";
+import { skyLeft } from "./sky-left";
 
 // The iso view's light, in 3D: the same baked light map (lamps and windows
 // ray-marched across the tiles, walls and shut doors blocking them) plus the
@@ -38,6 +39,9 @@ export const litBalance = {
   lmFillOut: { value: 1 },
   lmCap: { value: 1 },
   lmGlowK: { value: 0 }, // the lamp posts' glow (0 by day)
+  lmSkyLeft: skyLeft, // what's left of the sky's light on the campus outside (the pitch dark: sky.ts)
+  lmDark: { value: 0 }, // how dark it is out under the sky (daylight.ts `dark`)
+  lmEyes: { value: 0 }, // what eyes adjusted to it put back on the lot (eyes.ts; linear)
 };
 
 // The lamp posts' pools at night, over and above the light map's: its light
@@ -70,18 +74,28 @@ const balanced = (k: string) =>
     )
     .replace(/^/, `float lmSunK = mix( 1.0, lmSunOut, ${k} );\nfloat lmFillK = mix( 1.0, lmFillOut, ${k} );\n`);
 
-/** A material that's out under the sky everywhere (the campus): the open sky's balance. */
+/** A material that's out under the sky everywhere (the campus): the open sky's balance,
+ *  and in the pitch dark only what's left of the sky's sun and fill (lmSkyLeft). */
 export function patchOutdoors(m: Material) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.lmSunOut = litBalance.lmSunOut;
     shader.uniforms.lmFillOut = litBalance.lmFillOut;
     shader.uniforms.lmCap = litBalance.lmCap;
+    shader.uniforms.lmSkyLeft = litBalance.lmSkyLeft;
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmCap;",
+        "#include <common>\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmCap;\nuniform float lmSkyLeft;",
       )
-      .replace("#include <lights_fragment_begin>", balanced("1.0"))
+      .replace(
+        "#include <lights_fragment_begin>",
+        balanced("1.0")
+          .replace("directLight.color *= lmSunK;", "directLight.color *= lmSunK * lmSkyLeft;")
+          .replace(
+            "irradiance += lmFillK * getHemisphereLightIrradiance(",
+            "irradiance += lmFillK * lmSkyLeft * getHemisphereLightIrradiance(",
+          ),
+      )
       .replace("#include <opaque_fragment>", ROLL_OFF);
   };
   m.customProgramCacheKey = () => "yutopia-outdoors";
@@ -292,7 +306,7 @@ export class Light3 {
     // (lit things kept under the bloom after dark: daylight.ts litCap)
     litBalance.lmCap.value = litCap(d.night);
     const w = this.canvas.width;
-    this.lm.composite(d.ambient, d.window, this.canvas);
+    this.lm.composite(d.ambient, d.window, this.canvas, outAmbient(d));
     if (w !== this.canvas.width) {
       // a new size needs a new GPU texture
       this.tex.dispose();
@@ -309,7 +323,7 @@ export class Light3 {
   tintAt(x: number, y: number): number {
     if (!this.lm) return 0xffffff;
     const d = daylight(this.hour);
-    return this.lm.tintAt(x, y, d.ambient, d.window);
+    return this.lm.tintAt(x, y, d.ambient, d.window, outAmbient(d));
   }
 
   // Make a material take this light (Lambert: its lit colour is multiplied).
@@ -325,31 +339,49 @@ export class Light3 {
       shader.uniforms.lmGlowK = litBalance.lmGlowK;
       shader.uniforms.lmSunOut = litBalance.lmSunOut;
       shader.uniforms.lmFillOut = litBalance.lmFillOut;
+      shader.uniforms.lmDark = litBalance.lmDark;
+      shader.uniforms.lmEyes = litBalance.lmEyes;
+      shader.uniforms.landLight = landLight;
       shader.vertexShader = shader.vertexShader
         .replace(
           "#include <common>",
-          "#include <common>\nuniform vec2 lmSize;\nuniform vec2 lmOff;\nvarying vec2 vLmUv;",
+          "#include <common>\nuniform vec2 lmSize;\nuniform vec2 lmOff;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
         )
         .replace(
           "#include <project_vertex>",
           `#include <project_vertex>
           vec4 lmW = modelMatrix * vec4( transformed, 1.0 );
           vec3 lmN = normalize( mat3( modelMatrix ) * objectNormal );
-          vLmUv = ( lmW.xz - lmOff + lmN.xz * 0.22 ) / lmSize;`,
+          vLmUv = ( lmW.xz - lmOff + lmN.xz * 0.22 ) / lmSize;
+          vLmUp = lmN.y;`,
         );
       shader.fragmentShader = shader.fragmentShader
         .replace(
           "#include <common>",
-          "#include <common>\nuniform sampler2D lmTex;\nuniform sampler2D lmSky;\nuniform sampler2D lmGlow;\nuniform float lmGlowK;\nuniform float lmCap;\nuniform float lmSunOut;\nuniform float lmFillOut;\nvarying vec2 vLmUv;",
+          "#include <common>\nuniform sampler2D lmTex;\nuniform sampler2D lmSky;\nuniform sampler2D lmGlow;\nuniform float lmGlowK;\nuniform float lmCap;\nuniform float lmSunOut;\nuniform float lmFillOut;\nuniform float lmDark;\nuniform float lmEyes;\nuniform vec3 landLight;\nvarying vec2 vLmUv;\nvarying float vLmUp;",
         )
         .replace("#include <lights_fragment_begin>", balanced("texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r"))
         .replace(
           "#include <opaque_fragment>",
-          `outgoingLight *= texture2D( lmTex, clamp( vLmUv, 0.0, 1.0 ) ).rgb;
-          outgoingLight += diffuseColor.rgb * texture2D( lmGlow, clamp( vLmUv, 0.0, 1.0 ) ).rgb * lmGlowK;${ROLL_OFF}`,
+          `// (out under the sky in the dark, what's lit is lit by lamps hung high: a face turned
+          // up takes their light, one standing (a pole, a car's side) next to none of it)
+          // (their pools — lmGlow — on faces turned up only)
+          // (past the floor's edge — a wall's outer face, someone out on the land — the land's light:
+          // landLight; a person's own tint on top, view.ts)
+          vec2 lmIn = step( vec2( 0.0 ), vLmUv ) * step( vLmUv, vec2( 1.0 ) );
+          float lmOn = lmIn.x * lmIn.y;
+          float lmOut = texture2D( lmSky, clamp( vLmUv, 0.0, 1.0 ) ).r * lmDark * lmOn;
+          float lmUp = clamp( vLmUp, 0.0, 1.0 );
+          // (and on the lot, what eyes adjusted to the dark see: a faint fill of its own)
+          outgoingLight *= mix( landLight, texture2D( lmTex, clamp( vLmUv, 0.0, 1.0 ) ).rgb, lmOn ) * mix( 1.0, 0.08 + 0.92 * lmUp, lmOut ) + lmEyes * lmOut;
+          outgoingLight += diffuseColor.rgb * texture2D( lmGlow, clamp( vLmUv, 0.0, 1.0 ) ).rgb * lmGlowK * mix( 1.0, lmUp, lmOut ) * lmOn;${ROLL_OFF}`,
         );
+      // (and what else the material asks for: the lot's snow cover — roads3d.ts lotCover)
+      const extra = m.userData.grounds as { patch: (s: typeof shader) => void; key: string } | undefined;
+      extra?.patch(shader);
     };
-    m.customProgramCacheKey = () => "yutopia-lightmap";
+    m.customProgramCacheKey = () =>
+      `yutopia-lightmap${(m.userData.grounds as { key?: string } | undefined)?.key ?? ""}`;
     m.needsUpdate = true;
   }
 
