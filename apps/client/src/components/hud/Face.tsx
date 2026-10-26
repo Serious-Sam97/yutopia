@@ -32,7 +32,7 @@ function portrait(P: People, seed: string): string {
   return url;
 }
 
-export const STATUS_COLOR: Record<string, string> = { online: "#8aa04a", dnd: "#b5562f", away: "#a39d8c" };
+export const STATUS_COLOR: Record<string, string> = { online: "var(--good)", dnd: "var(--rust)", away: "var(--muted)" };
 
 export function Face({
   avatar,
@@ -58,8 +58,8 @@ export function Face({
       style={{
         width: size,
         height: size,
-        background: "radial-gradient(circle at 40% 30%, #6b4a33, #3b281b)",
-        border: "2px solid #2a1c13",
+        background: "radial-gradient(circle at 40% 30%, var(--face-hi), var(--panel-top))",
+        border: "2px solid var(--panel-raised)",
         boxShadow: ring ? `0 0 0 2px ${ring}` : undefined,
       }}
       title={name}
@@ -75,7 +75,7 @@ export function Face({
             width: Math.max(8, size * 0.32),
             height: Math.max(8, size * 0.32),
             background: STATUS_COLOR[status] ?? STATUS_COLOR.online,
-            border: "2px solid #2a1c13",
+            border: "2px solid var(--panel-raised)",
           }}
         />
       )}

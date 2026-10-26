@@ -47,7 +47,10 @@ export function RoomsPanel({ members }: { members: Member[] }) {
         <button
           type="button"
           className="deck-btn w-full"
-          style={{ background: "linear-gradient(180deg,#ffc274,#e8952d)", boxShadow: "0 3px 0 #9a5c17" }}
+          style={{
+            background: "linear-gradient(180deg,var(--amber-hi),var(--amber-lo))",
+            boxShadow: "0 3px 0 var(--amber-shade)",
+          }}
           onClick={() => toast(t("buildDrawRoomHint"))}
         >
           <Icon name="plus" size={16} /> {t("buildDrawRoom")}
@@ -96,7 +99,11 @@ function RoomCard({
   return (
     <div
       className="well"
-      style={open ? { borderColor: "var(--vfd)", boxShadow: "0 0 0 3px rgba(255,166,48,.12)" } : undefined}
+      style={
+        open
+          ? { borderColor: "var(--vfd)", boxShadow: "0 0 0 3px color-mix(in srgb, var(--amber) 12%, transparent)" }
+          : undefined
+      }
     >
       <button
         type="button"
@@ -198,7 +205,7 @@ function RoomCard({
             <button
               type="button"
               className="ghost-btn flex-1"
-              style={{ borderStyle: "dashed", borderColor: "#9e4a2e", color: "#e79a7c" }}
+              style={{ borderStyle: "dashed", borderColor: "var(--danger-dashed)", color: "var(--error)" }}
               onClick={() => {
                 if (window.confirm(t("buildRemoveRoom").replace("{name}", room.name)))
                   w?.send("map:room:remove", { key: room.key });

@@ -57,21 +57,24 @@ const CSS = `
 .dk .abs{position:absolute}
 .dk-col{position:absolute;right:24px;bottom:18px;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:14px}
 .dk-col>.abs{position:relative;right:auto;bottom:auto}
+@media (max-width:639px){.dk-col{right:12px;left:12px;bottom:92px;align-items:center}}
 .dk-strip{display:flex;gap:6px;align-items:flex-end;transition:opacity .25s}
 .dk-bat{width:170px}
 .dk-quick{display:flex;gap:5px;align-items:flex-end}
-.dk-q{position:relative;height:46px;width:46px;border-radius:7px;background:rgba(12,15,21,.62);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(3px);transition:transform .12s ease-out,border-color .12s,box-shadow .12s}
+.dk-quick{padding:7px;border:5px solid transparent;border-radius:6px;background:linear-gradient(var(--panel),var(--panel)) padding-box,var(--wood) 0 0/600px 240px border-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.55),0 12px 30px rgba(0,0,0,.5)}
+.dk-q{position:relative;height:46px;width:46px;border-radius:6px;background:rgba(255,255,255,.04);border:1px solid color-mix(in srgb,var(--amber) 16%,transparent);transition:transform .12s ease-out,border-color .12s,box-shadow .12s}
 .dk-q.w{width:78px}
 .dk-q svg{position:absolute;inset:6px 5px 10px 5px;width:calc(100% - 10px);height:calc(100% - 16px)}
-.dk-q .k{position:absolute;left:4px;top:2px;font-size:9px;font-weight:800;color:rgba(233,236,239,.6)}
+.dk-q .k{position:absolute;left:4px;top:3px;font:400 10px/1 var(--font-mono);color:var(--cream-dim)}
 .dk-q .n{position:absolute;right:4px;bottom:1px;font-size:11px;font-weight:700;text-shadow:0 1px 2px #000}
-.dk-q.empty{background:rgba(12,15,21,.32);border-style:dashed;border-color:rgba(255,255,255,.12)}
-.dk-q.on{border:1.5px solid ${AMBER};box-shadow:0 0 10px rgba(233,163,58,.4)}
-.dk-q.go{transform:scale(1.12);border-color:#fff}
+.dk-q.empty{background:transparent;border-style:dashed;border-color:color-mix(in srgb,var(--amber) 14%,transparent)}
+.dk-q.on{border:1px solid var(--amber);box-shadow:0 0 0 2px color-mix(in srgb,var(--amber) 30%,transparent),0 0 12px color-mix(in srgb,var(--amber) 35%,transparent)}
+.dk-q.go{transform:scale(1.12);border-color:var(--cream)}
 .dk-q.no{animation:dknope .28s}
 @keyframes dknope{20%{transform:translateX(-3px)}60%{transform:translateX(3px)}}
-.dk-bat .row{display:flex;justify-content:space-between;font-size:12px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.8)}
-.dk-bat .bar{position:relative;height:5px;background:rgba(255,255,255,.18);border-radius:3px;margin-top:6px;overflow:hidden}
+.dk-bat{padding:8px 10px 9px;border:5px solid transparent;border-radius:6px;background:linear-gradient(var(--panel),var(--panel)) padding-box,var(--wood) 0 0/600px 240px border-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.55)}
+.dk-bat .row{display:flex;justify-content:space-between;font:400 11.5px/1 var(--font-mono);letter-spacing:.04em}
+.dk-bat .bar{position:relative;height:4px;background:var(--track);border-radius:2px;margin-top:7px;overflow:hidden}
 .dk-bat .bar i{position:absolute;top:0;bottom:0;left:0}
 .dk-slot{position:relative;height:58px;width:58px;border-radius:7px;background:rgba(12,15,21,.66);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(3px)}
 .dk-slot.w{width:104px}
@@ -762,12 +765,12 @@ class Dark implements DarkHooks {
       const low = bat < 25;
       const pct = Math.round(bat);
       const eat = focus ? Math.min(bat, 12) : 0;
-      const fill = low ? "#d9534f" : "#d9dde2";
+      const fill = low ? "var(--rust)" : "var(--amber)";
       // run out: no focus until it's back to 25% (shared vitals.ts) — said, and the mark it's coming back to
       const drained = this.walker.breath.drained;
       const label = drained ? t("dark_recharging") : t("dark_focus");
       const mark = drained ? `<i style="left:25%;width:2px;background:${AMBER}"></i>` : "";
-      this.bat.innerHTML = `<div class="row"><span style="color:${AMBER}">${label.toUpperCase()}</span><span style="color:${low ? "#ff8a80" : "rgba(233,236,239,.85)"}">${pct}%</span></div><div class="bar"><i style="width:${bat - eat}%;background:${fill}"></i><i style="left:${bat - eat}%;width:${eat}%;background:${AMBER}"></i>${mark}</div>`;
+      this.bat.innerHTML = `<div class="row"><span style="color:var(--amber)">${label.toUpperCase()}</span><span style="color:${low ? "var(--error)" : "var(--cream)"}">${pct}%</span></div><div class="bar"><i style="width:${bat - eat}%;background:${fill}"></i><i style="left:${bat - eat}%;width:${eat}%;background:var(--amber);opacity:.4"></i>${mark}</div>`;
     }
     // the strip's moment, the toast's
     if (this.stripUntil && now > this.stripUntil) {

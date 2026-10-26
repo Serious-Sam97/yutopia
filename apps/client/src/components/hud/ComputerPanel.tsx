@@ -162,7 +162,7 @@ export function ComputerPanel({ objectId }: { objectId: string }) {
   const led = saving ? "#f4a52a" : loaded ? "#7fe07a" : "#f4a52a";
   return (
     <div
-      className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-[#0d0906d0] sm:p-3"
+      className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-[color:var(--scrim-heavy)] sm:p-3"
       onPointerDown={(e) => e.target === e.currentTarget && standUp()}
     >
       <style>{CSS}</style>

@@ -44,7 +44,10 @@ const fill = (s: string, v: Record<string, string | number>) =>
   Object.entries(v).reduce((t, [k, x]) => t.replace(`{${k}}`, String(x)), s);
 type Tab = "status" | "play" | "tricks" | "style" | "battles";
 const TABS: Tab[] = ["status", "play", "tricks", "style", "battles"];
-const ON = { border: "1px solid var(--vfd)", boxShadow: "inset 0 0 20px rgba(255,166,48,.12)" } as const;
+const ON = {
+  border: "1px solid var(--vfd)",
+  boxShadow: "inset 0 0 20px color-mix(in srgb, var(--amber) 12%, transparent)",
+} as const;
 const SEGS = Array.from({ length: 20 }, (_, i) => i + 1);
 const faceOf = (pet: PetInfo) => {
   if (!pet.alive) return "closed" as const;
@@ -154,7 +157,7 @@ function RackRow({ pet, on, onPick, t }: { pet: PetInfo; on: boolean; onPick: ()
     >
       <span
         className="w-9 h-9 rounded-full overflow-hidden grid place-items-center shrink-0"
-        style={{ background: "#120d09" }}
+        style={{ background: "var(--pit-2)" }}
       >
         <PetFace species={pet.species} look={pet.look} outfit={pet.outfit} face={faceOf(pet)} size={36} />
       </span>
@@ -172,7 +175,7 @@ function RackRow({ pet, on, onPick, t }: { pet: PetInfo; on: boolean; onPick: ()
   );
 }
 
-const ledFor = (v: number) => (v < 25 ? "var(--rust)" : v < 50 ? "var(--amber)" : "#8aa04a");
+const ledFor = (v: number) => (v < 25 ? "var(--rust)" : v < 50 ? "var(--amber)" : "var(--good)");
 function Led({ color }: { color: string }) {
   return <i className="w-2 h-2 rounded-full shrink-0" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />;
 }
@@ -186,7 +189,10 @@ function Stand({ pet, t }: { pet: PetInfo; t: Tr }) {
       <div className="vfd-window relative overflow-hidden" style={{ aspectRatio: "1 / 1.05" }}>
         <div
           className="absolute left-1/2 -translate-x-1/2 bottom-[16%] w-[70%] h-[10%] rounded-[50%]"
-          style={{ background: "radial-gradient(ellipse at center, rgba(255,166,48,.35), rgba(255,166,48,0) 70%)" }}
+          style={{
+            background:
+              "radial-gradient(ellipse at center, color-mix(in srgb, var(--amber) 35%, transparent), transparent 70%)",
+          }}
         />
         <div className="absolute inset-0 grid place-items-center">
           <PetTurntable
@@ -206,10 +212,13 @@ function Stand({ pet, t }: { pet: PetInfo; t: Tr }) {
         </div>
       </div>
       <div className="faceplate px-3 py-2">
-        <div className="lcd text-2xl leading-none truncate" style={{ color: "#5b3a26", textShadow: "none" }}>
+        <div className="lcd text-2xl leading-none truncate" style={{ color: "var(--walnut)", textShadow: "none" }}>
           {pet.name.toUpperCase()}
         </div>
-        <div className="mono text-[10px] uppercase tracking-wide mt-1 truncate" style={{ color: "#6b5a44" }}>
+        <div
+          className="mono text-[10px] uppercase tracking-wide mt-1 truncate"
+          style={{ color: "var(--faceplate-dim)" }}
+        >
           {pet.alive ? `${t(`feel_${f}` as TrKey)} · ${t(`mode_${pet.mode}` as TrKey)}` : t("petGone")}
           {!pet.mine && ` · ${fill(t("petOwner"), { name: pet.owner.split(" ")[0] })}`}
         </div>
@@ -235,7 +244,7 @@ function MiniBar({ label, value, color, right }: { label: string; value: number;
   return (
     <div className="flex items-center gap-2 mono text-[10px] uppercase" style={{ color: "var(--muted)" }}>
       <span className="w-14 truncate">{label}</span>
-      <span className="flex-1 h-[6px] rounded overflow-hidden" style={{ background: "#0d0906" }}>
+      <span className="flex-1 h-[6px] rounded overflow-hidden" style={{ background: "var(--pit)" }}>
         <span
           className="block h-full"
           style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, background: color }}
@@ -265,7 +274,7 @@ function Meter({ label, value, action }: { label: string; value: number; action?
             key={n}
             className="flex-1 h-3 rounded-[2px]"
             style={{
-              background: n <= lit ? color : "#2b1f16",
+              background: n <= lit ? color : "var(--track)",
               boxShadow: n <= lit ? `0 0 5px ${color}` : "none",
               opacity: n <= lit ? 1 : 0.6,
             }}
@@ -286,7 +295,7 @@ function Dial({ label, value }: { label: string; value: number }) {
     <div className="well flex flex-col items-center py-2 px-1">
       <svg viewBox="0 0 64 40" width={72} height={45} role="img" aria-label={`${label} ${value}`}>
         <title>{`${label} ${value}`}</title>
-        <path d="M6 36 A26 26 0 0 1 58 36" fill="none" stroke="#2b1f16" strokeWidth="7" strokeLinecap="round" />
+        <path d="M6 36 A26 26 0 0 1 58 36" fill="none" stroke="var(--track)" strokeWidth="7" strokeLinecap="round" />
         <path
           d="M6 36 A26 26 0 0 1 58 36"
           fill="none"
@@ -294,7 +303,7 @@ function Dial({ label, value }: { label: string; value: number }) {
           strokeWidth="7"
           strokeLinecap="round"
           strokeDasharray={`${c * k} ${c}`}
-          style={{ filter: "drop-shadow(0 0 4px rgba(255,166,48,.6))" }}
+          style={{ filter: "drop-shadow(0 0 4px color-mix(in srgb, var(--amber) 60%, transparent))" }}
         />
         <text x="32" y="34" textAnchor="middle" fontSize="15" fill="var(--vfd)" fontFamily="var(--font-lcd)">
           {value}
@@ -559,7 +568,7 @@ function PlayTab({ pet, t }: { pet: PetInfo; t: Tr }) {
               <div className="flex items-center gap-2.5">
                 <span
                   className="w-12 h-12 rounded-lg grid place-items-center shrink-0"
-                  style={{ background: "#120d09" }}
+                  style={{ background: "var(--pit-2)" }}
                 >
                   {/* biome-ignore lint/performance/noImgElement: generated SVG */}
                   <img src={toyPic(toy)} alt="" width={40} height={46} />
@@ -630,13 +639,13 @@ function Ring({ value, done }: { value: number; done: boolean }) {
   return (
     <svg viewBox="0 0 40 40" width={40} height={40} role="img" aria-label={done ? "learned" : `${Math.round(value)}%`}>
       <title>{done ? "learned" : `${Math.round(value)}%`}</title>
-      <circle cx="20" cy="20" r={r} fill="none" stroke="#2b1f16" strokeWidth="5" />
+      <circle cx="20" cy="20" r={r} fill="none" stroke="var(--track)" strokeWidth="5" />
       <circle
         cx="20"
         cy="20"
         r={r}
         fill="none"
-        stroke={done ? "#8aa04a" : "var(--vfd)"}
+        stroke={done ? "var(--good)" : "var(--vfd)"}
         strokeWidth="5"
         strokeLinecap="round"
         strokeDasharray={`${c * Math.min(1, value / 100)} ${c}`}
@@ -648,7 +657,7 @@ function Ring({ value, done }: { value: number; done: boolean }) {
         y="24"
         textAnchor="middle"
         fontSize="11"
-        fill={done ? "#8aa04a" : "var(--vfd)"}
+        fill={done ? "var(--good)" : "var(--vfd)"}
         fontFamily="var(--font-lcd)"
       >
         {done ? "✓" : Math.round(value)}
@@ -1063,7 +1072,7 @@ function Swatches({
           style={{
             background: c,
             border: c === value ? "2px solid var(--vfd)" : "1px solid var(--edge)",
-            boxShadow: c === value ? "0 0 6px rgba(255,166,48,.5)" : "none",
+            boxShadow: c === value ? "0 0 6px color-mix(in srgb, var(--amber) 50%, transparent)" : "none",
           }}
           onClick={() => onPick(c)}
         />

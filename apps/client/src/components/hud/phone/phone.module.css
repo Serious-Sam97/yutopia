@@ -13,6 +13,17 @@
   --dim: #b9b0d6;
   --mute: #8f86b0;
   --holo: linear-gradient(110deg, #ff2d95 0%, #a23cf0 48%, #00e5d0 100%);
+  /* the house's tokens it reads (.seg, .grp, its type), held as they were: the HUD's
+     new look (docs/plan/45-the-ui.md) leaves the phone as it is */
+  --font-mono: var(--font-share-tech), "Share Tech Mono", ui-monospace, monospace;
+  --font-lcd: var(--font-vt323), "VT323", ui-monospace, monospace;
+  --cream-dim: #d9cba9;
+  --vfd: #ffb35c;
+  --amber: #ffa630;
+  --focus: #ffb35c;
+  --ink: #2a2420;
+  --field: #140e0a;
+  --edge-2: #5c4330;
   position: absolute;
   inset: 0;
   pointer-events: none;

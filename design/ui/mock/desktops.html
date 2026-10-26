@@ -1,0 +1,412 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia HUD mock, classic desktops</title>
+<style>
+/* Classic Desktop, six eras. ?d=j|k|l|m|n|o (system fonts: Tahoma, Geneva, Lucida Grande, Verdana, Helvetica, Trebuchet) */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { background: #c9ced6 url(bg-courtyard.png) center / cover no-repeat; position: relative; -webkit-font-smoothing: antialiased; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.abs { position: absolute; }
+.row { display: flex; align-items: center; }
+.grow { flex: 1; min-width: 0; }
+.face { width: 28px; height: 28px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 12px; position: relative; flex: none; }
+.face .dot { position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; background: #31b452; border: 1px solid #000; }
+.face .dot.away { background: #f0b429; } .face .dot.dnd { background: #e5533d; }
+.person { gap: 9px; padding: 4px 6px; }
+.person .n { font-weight: 700; } .person .grow { line-height: 1.25; }
+
+/* ═════════ J — VortexOS / Windows 98: the computers' own OS ═════════ */
+html[data-d="j"] body { font: 12px/1.2 Tahoma, Verdana, sans-serif; color: #000; }
+html[data-d="j"] .bev { background: #c0c0c0; box-shadow: inset -1px -1px 0 #000, inset 1px 1px 0 #fff, inset -2px -2px 0 #808080, inset 2px 2px 0 #dfdfdf; }
+html[data-d="j"] .sunk { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff, inset 2px 2px 0 #000, inset -2px -2px 0 #dfdfdf; background: #fff; }
+html[data-d="j"] .tray { box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; }
+html[data-d="j"] .win { padding: 3px; }
+html[data-d="j"] .tb { height: 20px; padding: 0 3px 0 4px; gap: 4px; background: linear-gradient(90deg, #000080, #1084d0); color: #fff; font-weight: 700; }
+html[data-d="j"] .tb.off { background: linear-gradient(90deg, #808080, #b5b5b5); color: #d4d0c8; }
+html[data-d="j"] .tbtn { width: 16px; height: 14px; display: grid; place-items: center; color: #000; font: 700 10px/1 Tahoma; }
+html[data-d="j"] .wbody { padding: 8px; }
+html[data-d="j"] .taskbar { left: 0; right: 0; bottom: 0; height: 40px; padding: 4px 4px; gap: 4px; box-shadow: inset 0 1px 0 #dfdfdf, inset 0 2px 0 #fff; background: #c0c0c0; }
+html[data-d="j"] .start { height: 32px; padding: 0 8px 0 5px; gap: 5px; font: 700 13px/1 Tahoma; }
+html[data-d="j"] .flag { width: 20px; height: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; transform: skewY(-6deg); }
+html[data-d="j"] .flag i:nth-child(1) { background: #e5533d; } html[data-d="j"] .flag i:nth-child(2) { background: #31b452; } html[data-d="j"] .flag i:nth-child(3) { background: #2a62d6; } html[data-d="j"] .flag i:nth-child(4) { background: #f0b429; }
+html[data-d="j"] .grip { width: 3px; height: 28px; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #808080; margin: 0 2px; }
+html[data-d="j"] .ql { width: 34px; height: 32px; display: grid; place-items: center; position: relative; }
+html[data-d="j"] .ql.on { box-shadow: inset 1px 1px 0 #000, inset -1px -1px 0 #fff, inset 2px 2px 0 #808080; background: repeating-conic-gradient(#c0c0c0 0 25%, #fff 0 50%) 0 0 / 2px 2px; }
+html[data-d="j"] .ql.red { color: #c00000; }
+html[data-d="j"] .badge { position: absolute; top: 0; right: 0; background: #c00000; color: #fff; font: 700 9px/1 Tahoma; padding: 2px 3px; border: 1px solid #000; }
+html[data-d="j"] .addr { height: 32px; gap: 6px; padding: 0 4px; }
+html[data-d="j"] .addr .f { height: 22px; padding: 0 6px; gap: 5px; width: 300px; }
+html[data-d="j"] .task { height: 32px; width: 150px; padding: 0 6px; gap: 6px; font-weight: 400; }
+html[data-d="j"] .task.on { font-weight: 700; box-shadow: inset 1px 1px 0 #000, inset -1px -1px 0 #fff, inset 2px 2px 0 #808080; background: repeating-conic-gradient(#c0c0c0 0 25%, #fff 0 50%) 0 0 / 2px 2px; }
+html[data-d="j"] .trayb { height: 32px; padding: 0 10px; gap: 10px; margin-left: auto; }
+html[data-d="j"] .bars { display: flex; align-items: flex-end; gap: 1px; height: 12px; } html[data-d="j"] .bars i { width: 3px; background: #008000; }
+html[data-d="j"] .side { top: 16px; right: 16px; width: 300px; }
+html[data-d="j"] .side .list { padding: 4px; }
+html[data-d="j"] .side h5 { font: 700 11px/1 Tahoma; color: #000080; margin: 8px 4px 4px; }
+html[data-d="j"] .person.hl { background: #000080; color: #fff; }
+html[data-d="j"] .face { border: 1px solid #000; }
+html[data-d="j"] .btn9 { height: 23px; padding: 0 10px; font: 12px/1 Tahoma; color: #000; display: grid; place-items: center; }
+html[data-d="j"] .status { padding: 2px 4px; gap: 3px; }
+html[data-d="j"] .status span { padding: 2px 6px; box-shadow: inset 1px 1px 0 #808080, inset -1px -1px 0 #fff; flex: 1; }
+html[data-d="j"] .mapw { left: 16px; bottom: 56px; width: 220px; }
+html[data-d="j"] .mapw .m { height: 140px; margin: 4px; }
+html[data-d="j"] .pocket { left: 252px; bottom: 56px; }
+html[data-d="j"] .pocket .wbody { display: flex; gap: 4px; padding: 6px; }
+html[data-d="j"] .slot { width: 40px; height: 40px; display: grid; place-items: center; position: relative; }
+html[data-d="j"] .slot.sel { outline: 1px dotted #000; outline-offset: -5px; background: #000080; color: #fff; }
+html[data-d="j"] .slot sup { position: absolute; top: 3px; left: 4px; font: 9px/1 Tahoma; color: #808080; }
+html[data-d="j"] .slot.sel sup { color: #c0c0ff; }
+html[data-d="j"] .balloon { right: 8px; bottom: 50px; width: 270px; background: #ffffe1; border: 1px solid #000; border-radius: 8px; padding: 8px 10px; box-shadow: 2px 2px 0 rgba(0,0,0,.25); }
+html[data-d="j"] .balloon::after { content: ""; position: absolute; right: 60px; bottom: -12px; border: 12px solid transparent; border-top-color: #000; border-bottom: 0; border-right-width: 0; }
+html[data-d="j"] .balloon b { display: block; margin-bottom: 4px; }
+html[data-d="j"] .tip { left: 50%; bottom: 150px; transform: translateX(-50%); background: #ffffe1; border: 1px solid #000; padding: 6px 9px; gap: 7px; box-shadow: 2px 2px 0 rgba(0,0,0,.3); font-size: 13px; }
+html[data-d="j"] .tip .k { padding: 2px 6px; font-weight: 700; }
+
+/* ═════════ K — Mac OS 9 Platinum ═════════ */
+html[data-d="k"] body { font: 12px/1.25 Geneva, Verdana, sans-serif; color: #000; }
+html[data-d="k"] .menubar { top: 0; left: 0; right: 0; height: 22px; background: linear-gradient(#f2f2f2, #d8d8d8); border-bottom: 1px solid #000; padding: 0 10px; gap: 18px; font: 700 12px/1 Geneva, sans-serif; }
+html[data-d="k"] .menubar .r { margin-left: auto; gap: 16px; font-weight: 400; }
+html[data-d="k"] .appsw { gap: 6px; padding: 0 10px; height: 22px; border-left: 1px solid #999; font-weight: 700; }
+html[data-d="k"] .logo { width: 16px; height: 16px; border-radius: 50%; background: conic-gradient(#e5533d 0 25%, #f0b429 0 50%, #31b452 0 75%, #2a62d6 0); }
+html[data-d="k"] .win { background: #dddddd; border: 1px solid #000; border-radius: 5px 5px 0 0; box-shadow: 1px 1px 0 #000, 3px 3px 6px rgba(0,0,0,.35); overflow: hidden; }
+html[data-d="k"] .tb { height: 20px; padding: 0 5px; gap: 6px; background: repeating-linear-gradient(180deg, #e8e8e8 0 1px, #b4b4b4 1px 2px); border-bottom: 1px solid #777; }
+html[data-d="k"] .tb b { background: #dddddd; padding: 0 8px; margin: 0 auto; font: 700 12px/20px Geneva; }
+html[data-d="k"] .box { width: 13px; height: 13px; border: 1px solid #555; background: linear-gradient(135deg, #fff, #aaa); box-shadow: inset -1px -1px 0 #888; flex: none; }
+html[data-d="k"] .wbody { margin: 5px; background: #fff; border: 1px solid #777; box-shadow: inset 1px 1px 0 #ccc; padding: 6px; }
+html[data-d="k"] .side { top: 40px; right: 18px; width: 300px; }
+html[data-d="k"] .side h5 { font: 700 11px/1 Geneva; color: #555; margin: 8px 4px 4px; }
+html[data-d="k"] .person.hl { background: #ccccff; }
+html[data-d="k"] .face { border-radius: 4px; border: 1px solid #333; }
+html[data-d="k"] .face .dot { border-radius: 50%; }
+html[data-d="k"] .btn9 { height: 22px; padding: 0 12px; border: 1px solid #000; border-radius: 4px; background: linear-gradient(#fbfbfb, #d0d0d0); font: 12px/20px Geneva; box-shadow: inset -1px -1px 0 #999; }
+html[data-d="k"] .strip { left: 0; bottom: 18px; height: 54px; padding: 4px 26px 4px 4px; gap: 3px; background: linear-gradient(#e6e6e6, #c8c8c8); border: 1px solid #000; border-left: 0; border-radius: 0 27px 27px 0; box-shadow: 2px 2px 6px rgba(0,0,0,.35); }
+html[data-d="k"] .strip::after { content: ""; position: absolute; right: 8px; top: 12px; width: 8px; height: 28px; border-radius: 4px; background: repeating-linear-gradient(180deg, #888 0 1px, #eee 1px 3px); }
+html[data-d="k"] .cs { width: 46px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid transparent; border-radius: 5px; position: relative; font: 9.5px/1 Geneva; }
+html[data-d="k"] .cs.on { background: linear-gradient(#b8b8ff, #8a8ae6); border-color: #444; }
+html[data-d="k"] .cs.red { color: #c0281e; }
+html[data-d="k"] .cdiv { width: 1px; height: 38px; background: #999; box-shadow: 1px 0 0 #fff; margin: 0 3px; }
+html[data-d="k"] .badge { position: absolute; top: 1px; right: 4px; background: #d33; color: #fff; font: 700 9px/14px Geneva; min-width: 14px; height: 14px; border-radius: 7px; text-align: center; border: 1px solid #000; }
+html[data-d="k"] .mapw { left: 18px; top: 40px; width: 210px; }
+html[data-d="k"] .mapw .wbody { height: 130px; padding: 0; overflow: hidden; }
+html[data-d="k"] .pocket { right: 18px; bottom: 18px; }
+html[data-d="k"] .pocket .wbody { display: flex; gap: 6px; }
+html[data-d="k"] .slot { width: 42px; height: 42px; display: grid; place-items: center; position: relative; border: 1px solid #aaa; border-radius: 4px; background: #f6f6f6; }
+html[data-d="k"] .slot.sel { background: #ccccff; border: 2px solid #33f; }
+html[data-d="k"] .slot sup { position: absolute; top: 2px; left: 3px; font: 9px/1 Geneva; color: #777; }
+html[data-d="k"] .alert { top: 40px; left: 50%; transform: translateX(-50%); width: 340px; background: #dddddd; border: 1px solid #000; box-shadow: 1px 1px 0 #000, 3px 3px 6px rgba(0,0,0,.35); padding: 3px; }
+html[data-d="k"] .alert .in { border: 2px solid #fff; outline: 1px solid #888; padding: 10px 12px; gap: 12px; font: 12px/1.3 Geneva; }
+html[data-d="k"] .balloon { left: 50%; bottom: 140px; transform: translateX(-50%); background: #ffffd2; border: 1px solid #000; border-radius: 12px; padding: 9px 13px; gap: 9px; font: 13px/1 Geneva; box-shadow: 2px 2px 4px rgba(0,0,0,.35); }
+html[data-d="k"] .balloon .k { border: 1px solid #000; border-radius: 3px; padding: 2px 6px; background: #fff; font-weight: 700; }
+
+/* ═════════ L — Aqua (Mac OS X 10.0–10.4) ═════════ */
+html[data-d="l"] body { font: 13px/1.25 "Lucida Grande", "Lucida Sans", sans-serif; color: #000; }
+html[data-d="l"] .menubar { top: 0; left: 0; right: 0; height: 22px; background: linear-gradient(rgba(255,255,255,.95), rgba(232,232,232,.92)); border-bottom: 1px solid rgba(0,0,0,.25); padding: 0 14px; gap: 20px; font: 13px/1 "Lucida Grande"; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+html[data-d="l"] .menubar b { font-weight: 700; }
+html[data-d="l"] .menubar .r { margin-left: auto; gap: 16px; }
+html[data-d="l"] .logo { width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff 0 10%, transparent 30%), conic-gradient(#e5533d 0 25%, #f0b429 0 50%, #31b452 0 75%, #2a62d6 0); }
+html[data-d="l"] .win { border-radius: 6px 6px 4px 4px; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,.28), 0 14px 32px rgba(0,0,0,.4); background: repeating-linear-gradient(180deg, #f3f3f3 0 2px, #e9e9e9 2px 4px); }
+html[data-d="l"] .tb { height: 23px; padding: 0 8px; gap: 7px; background: linear-gradient(#e9e9e9, #c9c9c9); border-bottom: 1px solid #8f8f8f; position: relative; }
+html[data-d="l"] .tb b { position: absolute; left: 0; right: 0; text-align: center; font: 13px/23px "Lucida Grande"; pointer-events: none; }
+html[data-d="l"] .tl { width: 13px; height: 13px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35), inset 0 3px 3px rgba(255,255,255,.75); }
+html[data-d="l"] .tl.r { background: radial-gradient(circle at 50% 70%, #ff8a7a, #d8261c); } html[data-d="l"] .tl.y { background: radial-gradient(circle at 50% 70%, #ffe27a, #d89b0c); } html[data-d="l"] .tl.g { background: radial-gradient(circle at 50% 70%, #9fe27a, #3c9c1c); }
+html[data-d="l"] .wbody { padding: 10px; }
+html[data-d="l"] .side { top: 40px; right: 20px; width: 310px; }
+html[data-d="l"] .side .wbody { background: #fff; margin: 0; padding: 4px 0; }
+html[data-d="l"] .side h5 { font: 700 11px/1 "Lucida Grande"; color: #6b6b6b; margin: 8px 12px 4px; text-transform: uppercase; }
+html[data-d="l"] .person { padding: 5px 12px; }
+html[data-d="l"] .person:nth-of-type(even) { background: #edf3fe; }
+html[data-d="l"] .person.hl { background: linear-gradient(#5d94e6, #3473d6); color: #fff; }
+html[data-d="l"] .face { border-radius: 6px; box-shadow: inset 0 8px 8px rgba(255,255,255,.3), 0 1px 2px rgba(0,0,0,.4); }
+html[data-d="l"] .face .dot { border-radius: 50%; border: 1px solid #fff; }
+html[data-d="l"] .gel { height: 22px; padding: 0 13px; border-radius: 11px; font: 12px/22px "Lucida Grande"; color: #000; background: linear-gradient(#cde2ff 0%, #8ab6f2 45%, #6aa0ec 50%, #b6d9ff 100%); box-shadow: inset 0 0 0 1px rgba(0,40,120,.4), 0 1px 2px rgba(0,0,0,.25); }
+html[data-d="l"] .dock { left: 50%; bottom: 0; transform: translateX(-50%); height: 78px; padding: 6px 14px 0; gap: 8px; align-items: flex-start; background: linear-gradient(rgba(255,255,255,.55), rgba(255,255,255,.3)); border: 1px solid rgba(255,255,255,.7); border-bottom: 0; border-radius: 6px 6px 0 0; box-shadow: 0 -2px 18px rgba(0,0,0,.18); backdrop-filter: blur(6px); }
+html[data-d="l"] .app { width: 56px; height: 56px; border-radius: 13px; display: grid; place-items: center; color: #fff; position: relative; box-shadow: 0 2px 4px rgba(0,0,0,.35), inset 0 -2px 6px rgba(0,0,0,.2); }
+html[data-d="l"] .app::before { content: ""; position: absolute; left: 4px; right: 4px; top: 3px; height: 45%; border-radius: 10px 10px 40% 40%; background: linear-gradient(rgba(255,255,255,.75), rgba(255,255,255,.08)); }
+html[data-d="l"] .app svg { width: 28px; height: 28px; stroke-width: 2.2; filter: drop-shadow(0 1px 1px rgba(0,0,0,.4)); position: relative; }
+html[data-d="l"] .app.big { width: 72px; height: 72px; margin-top: -16px; }
+html[data-d="l"] .app.big svg { width: 36px; height: 36px; }
+html[data-d="l"] .app .run { position: absolute; bottom: -10px; left: 50%; margin-left: -4px; border: 4px solid transparent; border-bottom: 5px solid #222; border-top: 0; }
+html[data-d="l"] .app .lbl { position: absolute; top: -34px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.7); color: #fff; font: 700 13px/1 "Lucida Grande"; padding: 5px 10px; border-radius: 12px; white-space: nowrap; }
+html[data-d="l"] .ddiv { width: 1px; height: 60px; margin: 0 4px; background: repeating-linear-gradient(180deg, rgba(0,0,0,.35) 0 3px, transparent 3px 5px); }
+html[data-d="l"] .badge { position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; border-radius: 11px; background: radial-gradient(circle at 50% 30%, #ff7a6a, #d21f12); color: #fff; font: 700 11px/20px "Lucida Grande"; text-align: center; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+html[data-d="l"] .slot { width: 56px; height: 56px; border-radius: 13px; display: grid; place-items: center; position: relative; background: rgba(255,255,255,.55); border: 1px solid rgba(0,0,0,.15); color: #333; }
+html[data-d="l"] .slot.sel { box-shadow: 0 0 0 3px #6aa0ec, 0 0 10px #6aa0ec; }
+html[data-d="l"] .slot sup { position: absolute; top: 4px; left: 6px; font: 10px/1 "Lucida Grande"; color: #777; }
+html[data-d="l"] .hudw { left: 20px; bottom: 96px; width: 220px; border-radius: 8px; background: rgba(20,20,20,.78); color: #fff; box-shadow: 0 10px 26px rgba(0,0,0,.35); overflow: hidden; }
+html[data-d="l"] .hudw .tb2 { height: 20px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font: 11px/1 "Lucida Grande"; color: #ddd; position: relative; }
+html[data-d="l"] .hudw .tb2 b { position: absolute; left: 0; right: 0; text-align: center; font-weight: 400; }
+html[data-d="l"] .hudw .m { height: 136px; margin: 0 6px 6px; border-radius: 4px; overflow: hidden; }
+html[data-d="l"] .growl { top: 40px; left: 50%; transform: translateX(-50%); width: 320px; border-radius: 10px; background: rgba(0,0,0,.72); color: #fff; padding: 12px 14px; gap: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.3); font: 13px/1.3 "Lucida Grande"; }
+html[data-d="l"] .growl b { display: block; }
+html[data-d="l"] .pill { left: 50%; bottom: 112px; transform: translateX(-50%); height: 30px; border-radius: 15px; padding: 0 14px 0 5px; gap: 9px; font: 13px/1 "Lucida Grande"; background: linear-gradient(#fdfdfd, #dcdcdc); box-shadow: 0 0 0 1px rgba(0,0,0,.3), 0 4px 12px rgba(0,0,0,.25); }
+html[data-d="l"] .pill .k { height: 22px; min-width: 22px; border-radius: 11px; display: grid; place-items: center; font: 700 11px/1 "Lucida Grande"; color: #fff; background: linear-gradient(#8ab6f2, #3473d6); }
+
+/* ═════════ M — BeOS: yellow tabs and the Deskbar ═════════ */
+html[data-d="m"] body { font: 12px/1.25 Verdana, sans-serif; color: #000; }
+html[data-d="m"] .bwin { position: absolute; }
+html[data-d="m"] .ytab { display: inline-flex; align-items: center; gap: 8px; height: 22px; padding: 0 10px 0 5px; background: linear-gradient(#ffe46a, #ffcb00); border: 1px solid #8a6d00; border-bottom: 0; font: 700 12px/1 Verdana; box-shadow: inset 1px 1px 0 #fff6b0; }
+html[data-d="m"] .ytab .box { width: 12px; height: 12px; border: 1px solid #8a6d00; background: linear-gradient(135deg, #fff7c0, #e0b400); }
+html[data-d="m"] .frame { background: #d8d8d8; border: 1px solid #555; padding: 4px; box-shadow: inset 1px 1px 0 #fff, 3px 3px 0 rgba(0,0,0,.25); }
+html[data-d="m"] .frame .in { background: #fff; border: 1px solid #888; padding: 6px; }
+html[data-d="m"] .deskbar { top: 10px; right: 10px; width: 200px; background: #d8d8d8; border: 1px solid #555; box-shadow: inset 1px 1px 0 #fff, 3px 3px 0 rgba(0,0,0,.25); }
+html[data-d="m"] .db-top { height: 36px; padding: 0 10px; gap: 8px; font: 700 14px/1 Verdana; border-bottom: 1px solid #999; background: linear-gradient(#ececec, #cfcfcf); }
+html[data-d="m"] .leaf { width: 20px; height: 20px; background: conic-gradient(#e5533d 0 25%, #f0b429 0 50%, #31b452 0 75%, #2a62d6 0); border-radius: 0 50% 0 50%; border: 1px solid #333; }
+html[data-d="m"] .db-tray { padding: 6px 8px; gap: 8px; border-bottom: 1px solid #999; box-shadow: inset 1px 1px 0 #999, inset -1px -1px 0 #fff; margin: 4px; background: #e2e2e2; font-size: 11.5px; }
+html[data-d="m"] .db-item { height: 30px; padding: 0 10px; gap: 9px; border-top: 1px solid #f0f0f0; border-bottom: 1px solid #b4b4b4; position: relative; }
+html[data-d="m"] .db-item.on { background: #b4c4e4; font-weight: 700; }
+html[data-d="m"] .db-item.red { color: #b0261b; }
+html[data-d="m"] .db-item .k { margin-left: auto; color: #777; font-size: 10.5px; }
+html[data-d="m"] .db-head { padding: 4px 10px; font: 700 10px/1.4 Verdana; color: #555; background: #c8c8c8; }
+html[data-d="m"] .badge { margin-left: auto; background: #d33; color: #fff; font: 700 10px/1 Verdana; padding: 2px 5px; border-radius: 7px; }
+html[data-d="m"] .side { top: 24px; left: 20px; width: 290px; }
+html[data-d="m"] .side h5 { font: 700 11px/1 Verdana; color: #555; margin: 8px 4px 4px; }
+html[data-d="m"] .person.hl { background: #b4c4e4; }
+html[data-d="m"] .face { border: 1px solid #333; }
+html[data-d="m"] .btn9 { height: 22px; padding: 0 10px; border: 1px solid #555; background: linear-gradient(#fafafa, #cfcfcf); font: 11.5px/20px Verdana; box-shadow: inset 1px 1px 0 #fff; }
+html[data-d="m"] .mapw { left: 20px; bottom: 20px; width: 220px; }
+html[data-d="m"] .mapw .in { height: 130px; padding: 0; overflow: hidden; }
+html[data-d="m"] .pocket { right: 10px; bottom: 20px; }
+html[data-d="m"] .pocket .in { display: flex; gap: 5px; padding: 5px; }
+html[data-d="m"] .slot { width: 42px; height: 42px; display: grid; place-items: center; position: relative; border: 1px solid #aaa; background: #f4f4f4; }
+html[data-d="m"] .slot.sel { background: #b4c4e4; border: 2px solid #2a4a9a; }
+html[data-d="m"] .slot sup { position: absolute; top: 2px; left: 3px; font: 9px/1 Verdana; color: #777; }
+html[data-d="m"] .alert { top: 20px; left: 50%; transform: translateX(-50%); }
+html[data-d="m"] .alert .in { gap: 10px; width: 300px; font-size: 12.5px; }
+html[data-d="m"] .tip { left: 50%; bottom: 130px; transform: translateX(-50%); }
+html[data-d="m"] .tip .in { gap: 9px; font-size: 13px; }
+html[data-d="m"] .tip .k { border: 1px solid #555; padding: 2px 6px; background: linear-gradient(#fafafa, #cfcfcf); font-weight: 700; }
+
+/* ═════════ N — NeXTSTEP: greys, black title bars, the tile dock ═════════ */
+html[data-d="n"] body { font: 12.5px/1.25 Helvetica, Arial, sans-serif; color: #000; }
+html[data-d="n"] .nwin { background: #aaaaaa; border: 1px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,.4); }
+html[data-d="n"] .ntb { height: 22px; background: #000; color: #fff; padding: 0 3px; gap: 4px; font: 700 12.5px/1 Helvetica; border-bottom: 1px solid #555; }
+html[data-d="n"] .ntb b { margin: 0 auto; }
+html[data-d="n"] .nbox { width: 16px; height: 16px; background: #aaa; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #555; display: grid; place-items: center; color: #000; font: 700 11px/1 Helvetica; }
+html[data-d="n"] .nin { margin: 4px; background: #fff; box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #fff; padding: 6px; }
+html[data-d="n"] .menu { top: 12px; left: 12px; width: 170px; }
+html[data-d="n"] .mi { height: 24px; padding: 0 8px; background: #aaa; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #555; justify-content: space-between; }
+html[data-d="n"] .mi.sel { background: #fff; }
+html[data-d="n"] .mi .arr { font-size: 10px; }
+html[data-d="n"] .tiles { top: 0; right: 0; width: 70px; gap: 0; display: flex; flex-direction: column; }
+html[data-d="n"] .tile { width: 70px; height: 64px; background: linear-gradient(135deg, #c8c8c8, #8a8a8a); box-shadow: inset 1px 1px 0 #eee, inset -1px -1px 0 #333; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; position: relative; font: 700 9.5px/1 Helvetica; color: #111; }
+html[data-d="n"] .tile svg { width: 26px; height: 26px; stroke-width: 1.8; }
+html[data-d="n"] .tile.on::after { content: ""; position: absolute; left: 6px; bottom: 6px; width: 7px; height: 3px; background: #000; box-shadow: 0 -3px 0 #000; }
+html[data-d="n"] .tile.logo { background: radial-gradient(circle at 35% 30%, #555, #111); color: #fff; }
+html[data-d="n"] .tile.red { color: #a8180c; }
+html[data-d="n"] .badge { position: absolute; top: 5px; right: 6px; background: #c00; color: #fff; font: 700 10px/1 Helvetica; padding: 2px 4px; border: 1px solid #000; }
+html[data-d="n"] .side { top: 12px; right: 90px; width: 290px; }
+html[data-d="n"] .side h5 { font: 700 11px/1 Helvetica; color: #555; margin: 8px 4px 4px; }
+html[data-d="n"] .person.hl { background: #555; color: #fff; }
+html[data-d="n"] .face { border: 1px solid #000; }
+html[data-d="n"] .btn9 { height: 22px; padding: 0 10px; background: #aaa; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #333; font: 700 11.5px/22px Helvetica; color: #000; }
+html[data-d="n"] .mapw { left: 12px; bottom: 12px; width: 220px; }
+html[data-d="n"] .mapw .nin { height: 130px; padding: 0; overflow: hidden; }
+html[data-d="n"] .pocket { right: 90px; bottom: 12px; }
+html[data-d="n"] .pocket .nin { display: flex; gap: 5px; padding: 5px; }
+html[data-d="n"] .slot { width: 42px; height: 42px; display: grid; place-items: center; position: relative; background: #ddd; box-shadow: inset 1px 1px 0 #555, inset -1px -1px 0 #fff; }
+html[data-d="n"] .slot.sel { background: #fff; outline: 2px solid #000; }
+html[data-d="n"] .slot sup { position: absolute; top: 2px; left: 3px; font: 9px/1 Helvetica; color: #555; }
+html[data-d="n"] .panel { top: 12px; left: 50%; transform: translateX(-50%); width: 330px; }
+html[data-d="n"] .panel .nin { gap: 10px; font-size: 13px; }
+html[data-d="n"] .tip { left: 50%; bottom: 120px; transform: translateX(-50%); }
+html[data-d="n"] .tip .nin { gap: 9px; font-size: 13.5px; }
+html[data-d="n"] .tip .k { background: #aaa; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #333; padding: 3px 7px; font-weight: 700; }
+
+/* ═════════ O — Windows XP Luna ═════════ */
+html[data-d="o"] body { font: 12px/1.25 Tahoma, Verdana, sans-serif; color: #000; }
+html[data-d="o"] .xwin { border-radius: 8px 8px 0 0; background: #0831d9; padding: 0 3px 3px; box-shadow: 2px 3px 10px rgba(0,0,0,.4); }
+html[data-d="o"] .xtb { height: 28px; padding: 0 4px 0 8px; gap: 6px; border-radius: 7px 7px 0 0; background: linear-gradient(180deg, #0997ff 0%, #0053ee 8%, #0050ee 40%, #06f 88%, #0053ee 100%); color: #fff; font: 700 13px/1 "Trebuchet MS", Tahoma; text-shadow: 1px 1px 0 #0f1089; margin: 0 -3px; }
+html[data-d="o"] .xb { width: 21px; height: 21px; border-radius: 3px; border: 1px solid #fff; display: grid; place-items: center; background: linear-gradient(135deg, #3c8cff, #1660e0); color: #fff; font: 700 11px/1 Tahoma; }
+html[data-d="o"] .xb.x { background: linear-gradient(135deg, #e89a7e, #d5411e); }
+html[data-d="o"] .xin { background: #ece9d8; padding: 8px; }
+html[data-d="o"] .xin .w { background: #fff; border: 1px solid #7f9db9; padding: 4px; }
+html[data-d="o"] .taskbar { left: 0; right: 0; bottom: 0; height: 40px; background: linear-gradient(180deg, #3168d5 0%, #4993e6 6%, #2157d7 12%, #2663e0 90%, #1941a5 100%); gap: 6px; }
+html[data-d="o"] .xstart { height: 40px; padding: 0 22px 0 10px; gap: 6px; border-radius: 0 12px 12px 0; background: linear-gradient(180deg, #3c9e3c, #5ec85e 12%, #3b9c3b 80%, #2f7d2f); color: #fff; font: italic 700 19px/1 "Trebuchet MS", Tahoma; text-shadow: 1px 1px 1px #1b4d1b; box-shadow: inset -2px 0 3px rgba(0,0,0,.25); }
+html[data-d="o"] .flag { width: 22px; height: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; transform: skewY(-6deg); }
+html[data-d="o"] .flag i:nth-child(1) { background: #e5533d; } html[data-d="o"] .flag i:nth-child(2) { background: #31b452; } html[data-d="o"] .flag i:nth-child(3) { background: #2a62d6; } html[data-d="o"] .flag i:nth-child(4) { background: #f0b429; }
+html[data-d="o"] .ql { width: 34px; height: 32px; display: grid; place-items: center; color: #fff; border-radius: 3px; position: relative; }
+html[data-d="o"] .ql.on { background: rgba(0,0,0,.22); box-shadow: inset 1px 1px 2px rgba(0,0,0,.4); }
+html[data-d="o"] .ql.red { color: #ffb0a0; }
+html[data-d="o"] .qsep { width: 2px; height: 28px; background: linear-gradient(90deg, #1c48b5, #5f9df0); margin: 0 3px; }
+html[data-d="o"] .badge { position: absolute; top: -1px; right: -1px; background: #e0301e; color: #fff; font: 700 9px/1 Tahoma; padding: 2px 3px; border-radius: 6px; border: 1px solid #fff; }
+html[data-d="o"] .task { height: 30px; min-width: 160px; white-space: nowrap; padding: 0 8px; gap: 6px; color: #fff; border-radius: 3px; background: linear-gradient(#3c81f3, #2a6ae0); box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+html[data-d="o"] .task.on { background: linear-gradient(#1e52b7, #1b4bab); box-shadow: inset 1px 1px 3px rgba(0,0,0,.4); font-weight: 700; }
+html[data-d="o"] .xtray { margin-left: auto; height: 40px; padding: 0 14px; gap: 10px; color: #fff; background: linear-gradient(180deg, #0c59b9, #139ee9 6%, #18b5f2 12%, #139beb 90%, #1290e8); border-left: 1px solid #092e92; box-shadow: inset 1px 0 1px #18bbff; }
+html[data-d="o"] .side { top: 16px; right: 16px; width: 300px; }
+html[data-d="o"] .side h5 { font: 700 11px/1 Tahoma; color: #215dc6; margin: 8px 4px 4px; }
+html[data-d="o"] .person.hl { background: #316ac5; color: #fff; }
+html[data-d="o"] .face { border-radius: 3px; border: 1px solid #7f9db9; }
+html[data-d="o"] .face .dot { border-radius: 50%; border-color: #fff; }
+html[data-d="o"] .btn9 { height: 23px; padding: 0 12px; border: 1px solid #003c74; border-radius: 3px; background: linear-gradient(#fff, #ecebe6 85%, #d6d0c5); font: 11.5px/21px Tahoma; color: #000; }
+html[data-d="o"] .mapw { left: 16px; bottom: 56px; width: 224px; }
+html[data-d="o"] .mapw .w { height: 128px; padding: 0 !important; overflow: hidden; }
+html[data-d="o"] .pocket { left: 256px; bottom: 56px; }
+html[data-d="o"] .pocket .w { display: flex; gap: 5px; padding: 5px; }
+html[data-d="o"] .slot { width: 42px; height: 42px; display: grid; place-items: center; position: relative; border: 1px solid #c3c3c3; border-radius: 3px; background: #fbfbf9; }
+html[data-d="o"] .slot.sel { background: #dbe7fb; border: 1px solid #316ac5; box-shadow: inset 0 0 0 1px #316ac5; }
+html[data-d="o"] .slot sup { position: absolute; top: 2px; left: 3px; font: 9px/1 Tahoma; color: #888; }
+html[data-d="o"] .balloon { right: 10px; bottom: 50px; width: 280px; background: #ffffe1; border: 1px solid #000; border-radius: 7px; padding: 9px 11px; box-shadow: 2px 3px 6px rgba(0,0,0,.3); }
+html[data-d="o"] .balloon b { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+html[data-d="o"] .balloon::after { content: ""; position: absolute; right: 70px; bottom: -12px; border: 12px solid transparent; border-top-color: #000; border-bottom: 0; border-right-width: 0; }
+html[data-d="o"] .tip { left: 50%; bottom: 140px; transform: translateX(-50%); background: #ffffe1; border: 1px solid #000; padding: 6px 9px; gap: 7px; font-size: 13px; box-shadow: 2px 2px 4px rgba(0,0,0,.3); }
+html[data-d="o"] .tip .k { border: 1px solid #003c74; border-radius: 3px; padding: 2px 6px; font-weight: 700; background: linear-gradient(#fff, #d6d0c5); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="mic-off" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="video-off" viewBox="0 0 24 24"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><path d="m9 10 3-3 3 3"/><path d="M12 13V7"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></symbol>
+  <symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="hammer" viewBox="0 0 24 24"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/></symbol>
+  <symbol id="paw" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></symbol>
+  <symbol id="cog" viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="mug" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
+  <symbol id="torch" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><line x1="6" x2="18" y1="6" y2="6"/><line x1="12" x2="12" y1="12" y2="12"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+  <symbol id="snow" viewBox="0 0 24 24"><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="door" viewBox="0 0 24 24"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+</svg>
+<div id="app"></div>
+<script>
+const d = new URLSearchParams(location.search).get("d") || "j";
+document.documentElement.dataset.d = d;
+const I = (id, sz) => `<svg class="i"${sz ? ` style="width:${sz}px;height:${sz}px"` : ""}><use href="#${id}"/></svg>`;
+const P = { bia: ["B", "#c8423a"], ana: ["A", "#3f7d5a"], cai: ["C", "#2f4a78"], dee: ["D", "#b07a2c"], eli: ["E", "#6b4f8a"] };
+const F = (k, dot = "", sz) => `<span class="face" style="background:${P[k][1]}${sz ? `;width:${sz}px;height:${sz}px` : ""}">${P[k][0]}${dot === null ? "" : `<span class="dot ${dot}"></span>`}</span>`;
+const people = (btn) => `
+  <h5>Can hear you · 2</h5>
+  <div class="row person">${F("ana")}<div class="grow"><div class="n">Ana</div><div class="p">Talking · 3 m away</div></div><span style="color:#31b452">${I("mic", 15)}</span></div>
+  <div class="row person">${F("cai")}<div class="grow"><div class="n">Cai</div><div class="p">5 m away</div></div></div>
+  <h5>Elsewhere · 2</h5>
+  <div class="row person hl">${F("dee", "away")}<div class="grow"><div class="n">Dee</div><div class="p">Lobby · floor 1</div></div>${btn}</div>
+  <div class="row person">${F("eli", "dnd")}<div class="grow"><div class="n">Eli</div><div class="p">Focus · Booth 2</div></div></div>`;
+function minimap(c) {
+  return `<svg viewBox="0 0 180 120" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+    <rect width="180" height="120" fill="${c.snow}"/>
+    <path d="M0 100 L180 92" stroke="${c.road}" stroke-width="10"/>
+    <rect x="22" y="14" width="44" height="70" fill="${c.bld}" stroke="${c.ink}" stroke-width="1.2"/>
+    <rect x="114" y="14" width="44" height="70" fill="${c.bld}" stroke="${c.ink}" stroke-width="1.2"/>
+    <rect x="66" y="22" width="48" height="8" fill="${c.bld}" stroke="${c.ink}" stroke-width="1"/>
+    <circle cx="80" cy="64" r="3.5" fill="${P.ana[1]}"/><circle cx="101" cy="62" r="3.5" fill="${P.cai[1]}"/>
+    <g transform="translate(90 74)"><circle r="9" fill="${c.me}" opacity=".25"/><path d="M0 -6 L4.5 5 L0 2.5 L-4.5 5 Z" fill="${c.me}"/></g>
+  </svg>`;
+}
+const slots = () => `
+  <span class="slot sel"><sup>1</sup>${I("mug", 22)}</span>
+  <span class="slot"><sup>2</sup>${I("torch", 22)}</span>
+  <span class="slot"><sup>3</sup>${I("key", 22)}</span>
+  <span class="slot"><sup>4</sup></span>`;
+const CTL = [["mic-off", "Mic", "red"], ["video-off", "Camera"], ["share", "Share"], 0, ["smile", "Emote"], ["phone", "Phone", "", "9+"], ["users", "People", "on"], 0, ["hammer", "Build"], ["paw", "Pets"], ["cog", "Settings"]];
+
+const V = {
+  j: () => `
+  <section class="abs win bev side"><div class="row tb"><span class="grow">People — 5 online</span><span class="tbtn bev">_</span><span class="tbtn bev">□</span><span class="tbtn bev">×</span></div>
+    <div class="sunk list" style="margin:3px 2px">${people('<span class="btn9 bev">Go to</span>')}</div>
+    <div class="row status"><span>5 people</span><span>2 can hear you</span></div></section>
+  <section class="abs win bev mapw"><div class="row tb off"><span class="grow">Map — Grounds</span><span class="tbtn bev">×</span></div><div class="sunk m">${minimap({ snow: "#fff", road: "#dfdfdf", bld: "#c0c0c0", ink: "#000", me: "#000080" })}</div></section>
+  <section class="abs win bev pocket"><div class="row tb off"><span class="grow">Pocket</span><span class="tbtn bev">×</span></div><div class="wbody">${slots().replaceAll('class="slot', 'class="bev slot')}</div></section>
+  <div class="abs row tip"><span class="k bev">E</span>Open the lobby door</div>
+  <div class="abs balloon"><b>Cai walked in</b>Cai walked into the Courtyard.</div>
+  <footer class="abs row taskbar">
+    <span class="row start bev"><span class="flag"><i></i><i></i><i></i><i></i></span>Yutopia</span>
+    <span class="grip"></span>
+    ${CTL.map((c) => (c ? `<span class="ql ${c[2] ?? ""}" title="${c[1]}">${I(c[0], 18)}${c[3] ? `<span class="badge">${c[3]}</span>` : ""}</span>` : `<span class="grip"></span>`)).join("")}
+    <span class="grip"></span>
+    <span class="row addr">Address <span class="row f sunk">${I("pin", 13)} Snow Campus\\Ground floor\\Courtyard</span></span>
+    <span class="row task bev on">${I("users", 14)} People</span>
+    <span class="row trayb tray">${I("snow", 14)} −4° <span class="bars"><i style="height:4px"></i><i style="height:8px"></i><i style="height:12px"></i></span>${F("bia", "", 18)}<b>13:05</b></span>
+  </footer>`,
+
+  k: () => `
+  <div class="abs row menubar"><span class="logo"></span><span>File</span><span>World</span><span>View</span><span>People</span><span>Pets</span>
+    <span class="row r">${I("snow", 13)} −4° <span>5 online</span><span>Courtyard · ground floor</span><span>13:05</span><span class="row appsw"><span class="logo" style="width:14px;height:14px"></span>Yutopia</span></span></div>
+  <div class="abs alert"><div class="row in">${F("cai", null, 34)}<span><b>Cai</b> walked into the Courtyard.</span></div></div>
+  <section class="abs win side"><div class="row tb"><span class="box"></span><b>People</b><span class="box"></span><span class="box"></span></div>
+    <div class="wbody">${people('<span class="btn9">Go to</span>')}</div></section>
+  <section class="abs win mapw"><div class="row tb"><span class="box"></span><b>Map</b><span class="box"></span></div><div class="wbody">${minimap({ snow: "#fff", road: "#e2e2e2", bld: "#d6d6ff", ink: "#333", me: "#33f" })}</div></section>
+  <div class="abs row balloon"><span class="k">E</span>Open the lobby door</div>
+  <nav class="abs row strip">${CTL.map((c) => (c ? `<span class="cs ${c[2] ?? ""}">${I(c[0], 20)}${c[1]}${c[3] ? `<span class="badge">${c[3]}</span>` : ""}</span>` : `<span class="cdiv"></span>`)).join("")}</nav>
+  <section class="abs win pocket"><div class="row tb"><span class="box"></span><b>Pocket</b></div><div class="wbody">${slots()}</div></section>`,
+
+  l: () => {
+    const col = { "mic-off": "#e0503f", "video-off": "#7d8fa6", share: "#4a8bdc", smile: "#f0b429", phone: "#3fae5a", users: "#3c7be0", hammer: "#c07a3a", paw: "#9a62d0", cog: "#8a8f99" };
+    return `
+  <div class="abs row menubar"><span class="logo"></span><b>Yutopia</b><span>World</span><span>View</span><span>People</span><span>Window</span><span>Help</span>
+    <span class="row r">${I("snow", 14)} −4° <span>5 online</span><span>Courtyard</span><span>Sun 1:05 PM</span></span></div>
+  <div class="abs row growl">${F("cai", null, 40)}<div><b>Cai</b>walked into the Courtyard</div></div>
+  <section class="abs win side"><div class="row tb"><span class="tl r"></span><span class="tl y"></span><span class="tl g"></span><b>People — 5</b></div>
+    <div class="wbody">${people('<span class="gel">Go to</span>')}</div></section>
+  <section class="abs hudw"><div class="tb2"><span class="tl r" style="width:10px;height:10px"></span><b>Map</b></div><div class="m">${minimap({ snow: "#2a2d33", road: "#3a3e46", bld: "#4a5262", ink: "#8a96ad", me: "#6aa0ec" })}</div></section>
+  <div class="abs row pill"><span class="k">E</span>Open the lobby door</div>
+  <nav class="abs row dock">
+    ${CTL.filter(Boolean).slice(0, 6).map((c) => `<span class="app ${c[0] === "phone" ? "big" : ""}" style="background:linear-gradient(${col[c[0]]}, ${col[c[0]]}cc)">${I(c[0])}${c[3] ? `<span class="badge">${c[3]}</span>` : ""}${c[2] === "on" ? `<span class="run"></span>` : ""}${c[0] === "phone" ? `<span class="lbl">Phone</span>` : ""}</span>`).join("")}
+    ${CTL.filter(Boolean).slice(6).map((c) => `<span class="app" style="background:linear-gradient(${col[c[0]]}, ${col[c[0]]}cc)">${I(c[0])}</span>`).join("")}
+    <span class="ddiv"></span>${slots()}
+  </nav>`;
+  },
+
+  m: () => `
+  <aside class="abs deskbar">
+    <div class="row db-top"><span class="leaf"></span>Yutopia</div>
+    <div class="row db-tray">${I("snow", 13)} −4° <span style="margin-left:auto">5 online</span><b>13:05</b></div>
+    <div class="row db-item" style="font-weight:700">${I("pin", 15)} Courtyard</div>
+    <div class="db-head">Me</div>
+    ${CTL.filter(Boolean).map((c) => `<div class="row db-item ${c[2] ?? ""}">${I(c[0], 16)} ${c[1]}${c[3] ? `<span class="badge">${c[3]}</span>` : ""}</div>`).join("")}
+  </aside>
+  <div class="bwin alert"><span class="ytab"><span class="box"></span>Cai</span><div class="frame"><div class="row in">${F("cai", null, 32)}<span><b>Cai</b> walked into the Courtyard.</span></div></div></div>
+  <div class="bwin side"><span class="ytab"><span class="box"></span>People</span><div class="frame"><div class="in">${people('<span class="btn9">Go to</span>')}</div></div></div>
+  <div class="bwin mapw"><span class="ytab"><span class="box"></span>Map</span><div class="frame"><div class="in">${minimap({ snow: "#fff", road: "#e2e2e2", bld: "#cfd8ea", ink: "#333", me: "#2a4a9a" })}</div></div></div>
+  <div class="bwin tip"><div class="frame"><div class="row in"><span class="k">E</span>Open the lobby door</div></div></div>
+  <div class="bwin pocket" style="right:224px"><span class="ytab"><span class="box"></span>Pocket</span><div class="frame"><div class="in">${slots()}</div></div></div>`,
+
+  n: () => `
+  <section class="abs nwin menu"><div class="row ntb"><b>Yutopia</b></div>
+    <div class="row mi"><span>Courtyard</span><span class="arr">▸</span></div>
+    <div class="row mi"><span>Ground floor · 13:05</span></div>
+    <div class="row mi"><span>${"5 online"}</span><span class="arr">▸</span></div>
+    <div class="row mi sel"><span>People</span><span class="arr">▸</span></div>
+    <div class="row mi"><span>Pets</span><span class="arr">▸</span></div>
+    <div class="row mi"><span>Settings…</span></div>
+    <div class="row mi"><span>Sign out</span></div></section>
+  <section class="abs nwin panel"><div class="row ntb"><b>Notice</b></div><div class="row nin">${F("cai", null, 32)}<span><b>Cai</b> walked into the Courtyard.</span></div></section>
+  <section class="abs nwin side"><div class="row ntb"><span class="nbox">–</span><b>People</b><span class="nbox">×</span></div><div class="nin">${people('<span class="btn9">Go to</span>')}</div></section>
+  <section class="abs nwin mapw"><div class="row ntb"><span class="nbox">–</span><b>Map</b><span class="nbox">×</span></div><div class="nin">${minimap({ snow: "#fff", road: "#ddd", bld: "#bbb", ink: "#000", me: "#000" })}</div></section>
+  <section class="abs nwin tip"><div class="row nin"><span class="k">E</span>Open the lobby door</div></section>
+  <section class="abs nwin pocket"><div class="row ntb"><b>Pocket</b></div><div class="nin">${slots()}</div></section>
+  <nav class="abs tiles"><span class="tile logo"><span style="font:800 26px/1 Helvetica">Y</span></span>
+    ${CTL.filter(Boolean).map((c) => `<span class="tile ${c[2] ?? ""}">${I(c[0])}${c[1]}${c[3] ? `<span class="badge">${c[3]}</span>` : ""}</span>`).join("")}</nav>`,
+
+  o: () => `
+  <section class="abs xwin side"><div class="row xtb">${I("users", 16)}<span class="grow">People — 5 online</span><span class="xb">_</span><span class="xb">□</span><span class="xb x">×</span></div>
+    <div class="xin"><div class="w">${people('<span class="btn9">Go to</span>')}</div></div></section>
+  <section class="abs xwin mapw"><div class="row xtb">${I("pin", 15)}<span class="grow">Map</span><span class="xb x">×</span></div><div class="xin"><div class="w">${minimap({ snow: "#fff", road: "#e6e3d6", bld: "#cfe0fb", ink: "#316ac5", me: "#e0301e" })}</div></div></section>
+  <section class="abs xwin pocket"><div class="row xtb"><span class="grow">Pocket</span><span class="xb x">×</span></div><div class="xin"><div class="w">${slots()}</div></div></section>
+  <div class="abs row tip"><span class="k">E</span>Open the lobby door</div>
+  <div class="abs balloon"><b>${F("cai", null, 18)} Cai walked in</b>Cai walked into the Courtyard.</div>
+  <footer class="abs row taskbar">
+    <span class="row xstart"><span class="flag"><i></i><i></i><i></i><i></i></span>yutopia</span>
+    ${CTL.map((c) => (c ? `<span class="ql ${c[2] ?? ""}">${I(c[0], 18)}${c[3] ? `<span class="badge">${c[3]}</span>` : ""}</span>` : `<span class="qsep"></span>`)).join("")}
+    <span class="qsep"></span>
+    <span class="row task on">${I("pin", 14)} Courtyard · ground floor</span>
+    <span class="row task">${I("users", 14)} People</span>
+    <span class="row xtray">${I("snow", 14)} −4° ${I("users", 14)} 5 ${F("bia", "", 20)}<b>1:05 PM</b></span>
+  </footer>`,
+};
+document.getElementById("app").innerHTML = V[d]();
+</script>
+</body>
+</html>

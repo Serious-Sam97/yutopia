@@ -232,8 +232,8 @@ export function SlotPanel({ objectId }: { objectId: string }) {
           style={{
             fontSize: call.tone === "flag" ? 40 : 64,
             animationDuration: call.tone === "flag" ? "3.5s" : undefined,
-            color: call.tone === "off" ? "#ff6a3a" : call.tone === "go" ? "#d4e4a6" : "#ffb35c",
-            textShadow: `0 0 18px ${call.tone === "off" ? "#ff4a2a" : call.tone === "go" ? "#a8b98a" : "#ffa630"}, 0 3px 0 #15120f`,
+            color: call.tone === "off" ? "var(--bad)" : call.tone === "go" ? "var(--lcd-good)" : "var(--vfd)",
+            textShadow: `0 0 18px ${call.tone === "off" ? "var(--bad-glow)" : call.tone === "go" ? "var(--lcd-good-glow)" : "var(--amber)"}, 0 3px 0 #15120f`,
           }}
         >
           {call.text}
@@ -255,8 +255,8 @@ export function SlotPanel({ objectId }: { objectId: string }) {
                   style={{
                     width: 14,
                     height: 14,
-                    background: on ? "#ff5a36" : "#3a1712",
-                    boxShadow: on ? "0 0 10px #ff5a36" : "inset 0 1px 2px #000",
+                    background: on ? "var(--hot)" : "#3a1712",
+                    boxShadow: on ? "0 0 10px var(--hot)" : "inset 0 1px 2px #000",
                     border: "1px solid #15120f",
                   }}
                 />
@@ -289,8 +289,8 @@ export function SlotPanel({ objectId }: { objectId: string }) {
                 key={lane}
                 className="rounded-md px-2 py-1.5 min-w-0"
                 style={{
-                  background: "#1a1410",
-                  border: `1px solid ${l?.mine ? SLOT_COLORS[lane] : "#3a2c1f"}`,
+                  background: "var(--well)",
+                  border: `1px solid ${l?.mine ? SLOT_COLORS[lane] : "var(--well-edge)"}`,
                   boxShadow: l?.mine ? `0 0 0 1px ${SLOT_COLORS[lane]}` : undefined,
                 }}
               >
@@ -308,7 +308,7 @@ export function SlotPanel({ objectId }: { objectId: string }) {
                   {l?.pos ? (
                     <span
                       className="lcd text-sm ml-auto"
-                      style={{ color: l.place ? "#ffb35c" : l.pos === 1 ? "#d4e4a6" : undefined }}
+                      style={{ color: l.place ? "var(--vfd)" : l.pos === 1 ? "var(--lcd-good)" : undefined }}
                     >
                       {l.place ? "🏁 " : ""}P{l.pos}
                     </span>
@@ -387,14 +387,14 @@ export function SlotPanel({ objectId }: { objectId: string }) {
                     <p className="mono text-[10px]" style={{ color: "var(--muted)" }}>
                       {t("slotThrottle")}
                     </p>
-                    <div className="h-2 rounded-full overflow-hidden mt-1" style={{ background: "#0d0906" }}>
+                    <div className="h-2 rounded-full overflow-hidden mt-1" style={{ background: "var(--pit)" }}>
                       <div ref={gauge} className="h-full" style={{ width: 0, background: SLOT_COLORS[mine] }} />
                     </div>
                     {racingOn !== "free" ? (
                       <span
                         ref={slip}
                         className="mono text-[10px] font-bold mt-1 inline-block"
-                        style={{ color: "#ff6a3a", opacity: 0.12 }}
+                        style={{ color: "var(--bad)", opacity: 0.12 }}
                       >
                         ◆ SLIDE
                       </span>
@@ -420,7 +420,7 @@ export function SlotPanel({ objectId }: { objectId: string }) {
                 aria-valuenow={0}
                 tabIndex={0}
                 className="relative rounded-lg select-none touch-none overflow-hidden"
-                style={{ width: 72, minHeight: 104, background: "#0d0906", border: "1px solid #3a2c1f" }}
+                style={{ width: 72, minHeight: 104, background: "var(--pit)", border: "1px solid var(--well-edge)" }}
                 onPointerDown={(e) => {
                   e.currentTarget.setPointerCapture(e.pointerId);
                   padAt(e);
@@ -463,9 +463,9 @@ export function SlotPanel({ objectId }: { objectId: string }) {
                   disabled={!canPick}
                   title={SLOT_TRACKS[id].blurb[pt ? 1 : 0]}
                   style={{
-                    background: on ? "#2a2016" : "#1a1410",
-                    border: `1px solid ${on ? "#ffb35c" : "#3a2c1f"}`,
-                    boxShadow: on ? "0 0 0 1px #ffb35c" : undefined,
+                    background: on ? "var(--well-on)" : "var(--well)",
+                    border: `1px solid ${on ? "var(--vfd)" : "var(--well-edge)"}`,
+                    boxShadow: on ? "0 0 0 1px var(--vfd)" : undefined,
                     opacity: canPick || on ? 1 : 0.55,
                   }}
                   onClick={() => w?.slots?.setTrack(objectId, id)}
@@ -473,7 +473,7 @@ export function SlotPanel({ objectId }: { objectId: string }) {
                   <TrackPlan id={id} />
                   <span
                     className="block mono text-[10px] mt-0.5 truncate"
-                    style={{ color: on ? "#ffb35c" : "var(--cream-dim)", maxWidth: 56 }}
+                    style={{ color: on ? "var(--vfd)" : "var(--cream-dim)", maxWidth: 56 }}
                   >
                     {SLOT_TRACKS[id].name[pt ? 1 : 0]}
                   </span>

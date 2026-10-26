@@ -1,0 +1,18 @@
+{
+  "app/layout.tsx": 1,
+  "components/AvatarEditor.tsx": 11,
+  "components/hud/ComputerPanel.tsx": 28,
+  "components/hud/GamePanel.tsx": 52,
+  "components/hud/LiftPanel.tsx": 23,
+  "components/hud/LoungePanels.tsx": 2,
+  "components/hud/Overlays.tsx": 19,
+  "components/hud/PianoPanel.tsx": 9,
+  "components/hud/PongPanel.tsx": 11,
+  "components/hud/PoolPanel.tsx": 25,
+  "components/hud/SlotPanel.tsx": 10,
+  "components/hud/WhiteboardPanel.tsx": 13,
+  "components/hud/build/BuildMode.tsx": 2,
+  "components/hud/build/DesksPanel.tsx": 8,
+  "components/hud/build/RoomsPanel.tsx": 6,
+  "components/hud/build/WallsPanel.tsx": 38
+}

@@ -1,0 +1,439 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia HUD mock, round 2</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=Fredoka:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;800&family=VT323&family=Silkscreen:wght@400;700&family=Space+Grotesk:wght@400;500;600;700&display=block" rel="stylesheet">
+<style>
+/* Round 2: six looks, the HUD only. ?d=d|e|f|g|h|i */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { background: #c9ced6 url(bg-courtyard.png) center / cover no-repeat; position: relative; -webkit-font-smoothing: antialiased; }
+svg.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.abs { position: absolute; }
+.row { display: flex; align-items: center; }
+.grow { flex: 1; min-width: 0; }
+.face { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px; position: relative; flex: none; }
+.face .dot { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; background: #3fbf6f; border: 2px solid #fff; }
+.face .dot.away { background: #f0b429; } .face .dot.dnd { background: #e5533d; }
+
+/* ═════════ D — Cozy: a pocket game, round and soft ═════════ */
+html[data-d="d"] body { font-family: Fredoka, Nunito, sans-serif; color: #6b4f3a; }
+html[data-d="d"] .card { background: #fffbec; border-radius: 26px; box-shadow: 0 5px 0 #e9dfc3, 0 14px 28px rgba(40, 60, 80, .18); }
+html[data-d="d"] .clock { top: 18px; left: 18px; padding: 10px 22px 12px 18px; }
+html[data-d="d"] .clock .t { font: 600 40px/1 Fredoka; color: #6b4f3a; letter-spacing: -.01em; }
+html[data-d="d"] .clock .t small { font-size: 18px; margin-left: 4px; color: #b39478; }
+html[data-d="d"] .clock .s { font: 500 15px/1 Fredoka; color: #b39478; margin-top: 4px; display: flex; gap: 6px; align-items: center; }
+html[data-d="d"] .placepill { top: 104px; left: 26px; height: 38px; padding: 0 16px 0 10px; gap: 8px; font: 600 16px/1 Fredoka; border-radius: 20px; background: #57b88a; color: #fff; box-shadow: 0 4px 0 #3f9a70; }
+html[data-d="d"] .who { top: 18px; right: 18px; height: 64px; padding: 0 10px 0 16px; gap: 12px; border-radius: 34px; }
+html[data-d="d"] .face { box-shadow: 0 0 0 3px #fffbec; }
+html[data-d="d"] .stack .face { margin-left: -10px; } html[data-d="d"] .stack .face:first-child { margin-left: 0; }
+html[data-d="d"] .who b { font: 600 16px/1 Fredoka; }
+html[data-d="d"] .toast { top: 22px; left: 50%; transform: translateX(-50%); height: 50px; padding: 0 20px 0 8px; gap: 10px; font: 500 16px/1 Fredoka; border-radius: 26px; }
+html[data-d="d"] .toast::after { content: ""; position: absolute; left: 34px; bottom: -9px; border: 10px solid transparent; border-top-color: #fffbec; border-bottom: 0; }
+html[data-d="d"] .side { top: 100px; right: 18px; width: 330px; padding: 16px; }
+html[data-d="d"] .side h4 { font: 600 20px/1 Fredoka; color: #6b4f3a; margin: 2px 4px 12px; display: flex; justify-content: space-between; }
+html[data-d="d"] .side h5 { font: 600 13px/1 Fredoka; color: #b39478; margin: 14px 6px 8px; }
+html[data-d="d"] .person { gap: 12px; padding: 9px 10px; border-radius: 18px; background: #f6efd9; margin-bottom: 6px; }
+html[data-d="d"] .person .n { font: 600 16px/1.1 Fredoka; } html[data-d="d"] .person .p { font: 400 13.5px/1.2 Fredoka; color: #a88a6e; }
+html[data-d="d"] .person .go { font: 600 13px/1 Fredoka; padding: 8px 12px; border-radius: 14px; background: #6ec3e8; color: #fff; box-shadow: 0 3px 0 #4aa3c9; }
+html[data-d="d"] .prompt { left: 50%; bottom: 140px; transform: translateX(-50%); height: 48px; padding: 0 20px 0 8px; gap: 10px; font: 600 17px/1 Fredoka; border-radius: 26px; }
+html[data-d="d"] .prompt .k { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #ffd166; color: #6b4f3a; font: 700 16px/1 Fredoka; box-shadow: 0 3px 0 #e0ae3e; }
+html[data-d="d"] .dock { left: 50%; bottom: 20px; transform: translateX(-50%); padding: 10px 14px; gap: 10px; border-radius: 44px; }
+html[data-d="d"] .b { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; color: #fff; position: relative; box-shadow: 0 4px 0 rgba(0,0,0,.14); }
+html[data-d="d"] .b svg { width: 26px; height: 26px; stroke-width: 2.3; }
+html[data-d="d"] .b .lbl { position: absolute; bottom: -22px; font: 600 12px/1 Fredoka; color: #a88a6e; white-space: nowrap; }
+html[data-d="d"] .dock { padding-bottom: 28px; }
+html[data-d="d"] .badge { position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; border-radius: 11px; background: #ff7a6b; color: #fff; font: 700 12px/22px Fredoka; text-align: center; box-shadow: 0 0 0 3px #fffbec; }
+html[data-d="d"] .map { left: 18px; bottom: 20px; width: 168px; height: 168px; border-radius: 50%; padding: 8px; }
+html[data-d="d"] .map .m { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
+html[data-d="d"] .hands { right: 18px; bottom: 20px; padding: 10px; gap: 10px; border-radius: 40px; }
+html[data-d="d"] .slot { width: 54px; height: 54px; border-radius: 50%; background: #f6efd9; display: grid; place-items: center; color: #6b4f3a; position: relative; }
+html[data-d="d"] .slot.sel { background: #ffd166; box-shadow: 0 3px 0 #e0ae3e; }
+html[data-d="d"] .slot sup { position: absolute; top: -3px; left: -1px; width: 20px; height: 20px; border-radius: 50%; background: #fffbec; font: 600 11px/20px Fredoka; text-align: center; color: #b39478; }
+
+/* ═════════ E — Pixel: a pixel-art game, frosty ═════════ */
+html[data-d="e"] body { font-family: VT323, monospace; color: #fff; }
+html[data-d="e"] .card { background: #2c3e63; box-shadow: 0 -4px 0 #0f1a2e, 0 4px 0 #0f1a2e, -4px 0 0 #0f1a2e, 4px 0 0 #0f1a2e, inset 4px 4px 0 #4a6496, inset -4px -4px 0 #1f2d4a, 8px 8px 0 rgba(15,26,46,.35); }
+html[data-d="e"] .px { box-shadow: 0 -3px 0 #0f1a2e, 0 3px 0 #0f1a2e, -3px 0 0 #0f1a2e, 3px 0 0 #0f1a2e, inset 3px 3px 0 #fff6, inset -3px -3px 0 #0003; }
+html[data-d="e"] .where { top: 20px; left: 20px; padding: 12px 18px; gap: 14px; }
+html[data-d="e"] .where .t { font: 700 19px/1 Silkscreen; text-shadow: 2px 2px 0 #0f1a2e; }
+html[data-d="e"] .where .s { font: 400 20px/1 VT323; color: #a9c1e8; margin-top: 5px; }
+html[data-d="e"] .where .clk { font: 400 26px/1 Silkscreen; color: #f7c548; text-shadow: 2px 2px 0 #0f1a2e; }
+html[data-d="e"] .mk { width: 36px; height: 36px; background: #e5533d; display: grid; place-items: center; font: 700 20px/1 Silkscreen; }
+html[data-d="e"] .face { border-radius: 0; box-shadow: 0 -2px 0 #0f1a2e, 0 2px 0 #0f1a2e, -2px 0 0 #0f1a2e, 2px 0 0 #0f1a2e; font-family: Silkscreen; font-size: 14px; }
+html[data-d="e"] .face .dot { border-radius: 0; border: 2px solid #0f1a2e; }
+html[data-d="e"] .who { top: 20px; right: 20px; padding: 12px 14px; gap: 14px; font: 400 22px/1 VT323; }
+html[data-d="e"] .stack { gap: 8px; }
+html[data-d="e"] .toast { top: 24px; left: 50%; transform: translateX(-50%); padding: 10px 16px 10px 10px; gap: 12px; font: 400 22px/1 VT323; }
+html[data-d="e"] .side { top: 100px; right: 20px; width: 330px; padding: 16px; }
+html[data-d="e"] .side h4 { font: 700 17px/1 Silkscreen; display: flex; justify-content: space-between; margin-bottom: 12px; text-shadow: 2px 2px 0 #0f1a2e; }
+html[data-d="e"] .side h5 { font: 400 12px/1 Silkscreen; color: #f7c548; margin: 14px 0 8px; }
+html[data-d="e"] .person { gap: 12px; padding: 7px 6px; }
+html[data-d="e"] .person.hl { background: #3b5383; }
+html[data-d="e"] .person .n { font: 400 23px/1.1 VT323; } html[data-d="e"] .person .p { font: 400 19px/1.2 VT323; color: #a9c1e8; }
+html[data-d="e"] .person .go { font: 400 11px/1 Silkscreen; padding: 8px 10px; background: #f7c548; color: #0f1a2e; }
+html[data-d="e"] .prompt { left: 50%; bottom: 128px; transform: translateX(-50%); padding: 10px 16px 10px 10px; gap: 12px; font: 400 24px/1 VT323; }
+html[data-d="e"] .prompt .k { width: 30px; height: 30px; background: #f7c548; color: #0f1a2e; display: grid; place-items: center; }
+html[data-d="e"] .dock { left: 50%; bottom: 22px; transform: translateX(-50%); padding: 12px 14px; gap: 12px; }
+html[data-d="e"] .b { width: 50px; height: 50px; background: #4a6496; display: grid; place-items: center; color: #fff; position: relative; }
+html[data-d="e"] .b svg { stroke-linecap: square; stroke-linejoin: miter; stroke-width: 2.4; }
+html[data-d="e"] .b.on { background: #f7c548; color: #0f1a2e; }
+html[data-d="e"] .b.red { background: #e5533d; }
+html[data-d="e"] .badge { position: absolute; top: -8px; right: -8px; padding: 3px 5px; background: #e5533d; font: 400 11px/1 Silkscreen; box-shadow: 0 0 0 2px #0f1a2e; }
+html[data-d="e"] .map { left: 20px; bottom: 22px; width: 190px; height: 160px; padding: 10px; }
+html[data-d="e"] .map .m { width: 100%; height: 100%; image-rendering: pixelated; }
+html[data-d="e"] .hands { right: 20px; bottom: 22px; padding: 12px; gap: 10px; }
+html[data-d="e"] .slot { width: 50px; height: 50px; background: #1f2d4a; display: grid; place-items: center; position: relative; box-shadow: inset 3px 3px 0 #0f1a2e; }
+html[data-d="e"] .slot.sel { background: #4a6496; box-shadow: 0 0 0 3px #f7c548; }
+html[data-d="e"] .slot sup { position: absolute; top: 3px; left: 4px; font: 400 17px/1 VT323; color: #a9c1e8; }
+
+/* ═════════ F — No chrome: words and marks on the world, a compass ═════════ */
+html[data-d="f"] body { font-family: Barlow, sans-serif; color: #fff; }
+html[data-d="f"] body::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15,22,32,.45) 0%, rgba(15,22,32,0) 18%, rgba(15,22,32,0) 72%, rgba(15,22,32,.55) 100%); }
+html[data-d="f"] .sh { text-shadow: 0 1px 2px rgba(0,0,0,.55), 0 0 18px rgba(0,0,0,.35); }
+html[data-d="f"] .where { top: 26px; left: 34px; flex-direction: column; align-items: flex-start; }
+html[data-d="f"] .where .t { font: 600 34px/1 "Barlow Condensed"; letter-spacing: .14em; text-transform: uppercase; }
+html[data-d="f"] .where .s { font: 500 15px/1 Barlow; letter-spacing: .06em; opacity: .85; margin-top: 8px; display: flex; gap: 10px; align-items: center; }
+html[data-d="f"] .where .s i { width: 4px; height: 4px; border-radius: 50%; background: #fff; opacity: .7; }
+html[data-d="f"] .compass { top: 26px; left: 50%; transform: translateX(-50%); width: 560px; height: 46px; }
+html[data-d="f"] .who { top: 30px; right: 34px; gap: 14px; font: 600 15px/1 Barlow; }
+html[data-d="f"] .who .face { box-shadow: 0 0 0 2px rgba(255,255,255,.9); }
+html[data-d="f"] .stack .face { margin-left: -8px; } html[data-d="f"] .stack .face:first-child { margin-left: 0; }
+html[data-d="f"] .toast { top: 92px; left: 50%; transform: translateX(-50%); gap: 10px; font: 500 16px/1 Barlow; }
+html[data-d="f"] .toast .face { width: 28px; height: 28px; box-shadow: 0 0 0 2px #fff; }
+html[data-d="f"] .side { top: 110px; right: 34px; width: 260px; }
+html[data-d="f"] .side h5 { font: 600 12.5px/1 "Barlow Condensed"; letter-spacing: .16em; text-transform: uppercase; opacity: .75; margin: 16px 0 10px; display: flex; gap: 10px; align-items: center; }
+html[data-d="f"] .side h5::after { content: ""; flex: 1; height: 1px; background: rgba(255,255,255,.4); }
+html[data-d="f"] .person { gap: 12px; padding: 6px 0; justify-content: flex-end; flex-direction: row-reverse; text-align: right; }
+html[data-d="f"] .person .face { width: 30px; height: 30px; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+html[data-d="f"] .person .n { font: 600 17px/1.1 Barlow; } html[data-d="f"] .person .p { font: 500 13.5px/1.2 Barlow; opacity: .78; }
+html[data-d="f"] .person .go { display: none; }
+html[data-d="f"] .prompt { left: 50%; bottom: 150px; transform: translateX(-50%); gap: 12px; font: 600 19px/1 Barlow; }
+html[data-d="f"] .prompt .k { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #fff; display: grid; place-items: center; font: 700 15px/1 Barlow; background: rgba(0,0,0,.25); }
+html[data-d="f"] .dock { left: 50%; bottom: 26px; transform: translateX(-50%); gap: 26px; align-items: flex-end; }
+html[data-d="f"] .b { display: flex; flex-direction: column; align-items: center; gap: 7px; position: relative; opacity: .92; }
+html[data-d="f"] .b svg { width: 26px; height: 26px; filter: drop-shadow(0 1px 3px rgba(0,0,0,.6)); }
+html[data-d="f"] .b .lbl { font: 600 11.5px/1 "Barlow Condensed"; letter-spacing: .14em; text-transform: uppercase; }
+html[data-d="f"] .b .kk { font: 600 10px/1 Barlow; border: 1px solid rgba(255,255,255,.6); border-radius: 3px; padding: 2px 4px; opacity: .8; }
+html[data-d="f"] .b.red { color: #ff7a6b; }
+html[data-d="f"] .b.on { color: #ffd36b; }
+html[data-d="f"] .badge { position: absolute; top: -8px; right: -10px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff5a4a; font: 700 11px/18px Barlow; text-align: center; color: #fff; text-shadow: none; }
+html[data-d="f"] .vsep { width: 1px; height: 44px; background: rgba(255,255,255,.35); }
+html[data-d="f"] .hands { right: 34px; bottom: 30px; gap: 10px; }
+html[data-d="f"] .slot { width: 46px; height: 46px; border-radius: 50%; border: 2px solid rgba(255,255,255,.55); display: grid; place-items: center; position: relative; background: rgba(0,0,0,.18); }
+html[data-d="f"] .slot.sel { border-color: #fff; background: rgba(255,255,255,.18); box-shadow: 0 0 0 4px rgba(255,255,255,.18); }
+html[data-d="f"] .slot sup { position: absolute; bottom: -16px; font: 600 11px/1 Barlow; opacity: .8; }
+html[data-d="f"] .status { left: 34px; bottom: 30px; gap: 12px; font: 600 15px/1 Barlow; }
+
+/* ═════════ G — Team app: docked like a work tool ═════════ */
+html[data-d="g"] body { font-family: Inter, sans-serif; color: #1d1f24; background-position: 62% center; }
+html[data-d="g"] .sidebar { top: 0; left: 0; bottom: 0; width: 300px; background: #fff; border-right: 1px solid #e6e7eb; display: flex; flex-direction: column; }
+html[data-d="g"] .ws { height: 64px; padding: 0 16px; gap: 10px; border-bottom: 1px solid #eef0f3; }
+html[data-d="g"] .ws .mk { width: 32px; height: 32px; border-radius: 9px; background: #5b5bd6; color: #fff; display: grid; place-items: center; font: 700 16px/1 Inter; }
+html[data-d="g"] .ws b { font: 700 15px/1.1 Inter; display: block; } html[data-d="g"] .ws small { font: 500 12.5px/1.2 Inter; color: #6b7080; }
+html[data-d="g"] .search { margin: 12px 14px 4px; height: 36px; border-radius: 9px; background: #f3f4f7; color: #8b90a0; font: 500 13.5px/36px Inter; padding: 0 12px; display: flex; gap: 8px; align-items: center; }
+html[data-d="g"] .sb { padding: 6px 10px; overflow: hidden; flex: 1; }
+html[data-d="g"] .sb h5 { font: 600 12px/1 Inter; color: #6b7080; margin: 14px 8px 6px; display: flex; justify-content: space-between; }
+html[data-d="g"] .person { gap: 10px; padding: 7px 8px; border-radius: 8px; }
+html[data-d="g"] .person.hl { background: #f0f0fd; }
+html[data-d="g"] .person .face { width: 30px; height: 30px; font-size: 12px; }
+html[data-d="g"] .person .n { font: 600 14px/1.15 Inter; } html[data-d="g"] .person .p { font: 500 12.5px/1.2 Inter; color: #6b7080; }
+html[data-d="g"] .person .go { font: 600 12.5px/1 Inter; padding: 7px 10px; border-radius: 7px; background: #5b5bd6; color: #fff; }
+html[data-d="g"] .roomrow { gap: 10px; padding: 8px; border-radius: 8px; font: 500 14px/1 Inter; color: #3a3e48; }
+html[data-d="g"] .roomrow.on { background: #f0f0fd; color: #3c3cb0; font-weight: 600; }
+html[data-d="g"] .roomrow .c { margin-left: auto; font: 600 12px/1 Inter; color: #8b90a0; }
+html[data-d="g"] .tiles { top: 16px; left: 50%; margin-left: 150px; transform: translateX(-50%); gap: 10px; }
+html[data-d="g"] .tile { width: 168px; height: 100px; border-radius: 12px; position: relative; overflow: hidden; box-shadow: 0 6px 18px rgba(20,30,50,.25); }
+html[data-d="g"] .tile.talk { box-shadow: 0 0 0 3px #3fbf6f, 0 6px 18px rgba(20,30,50,.25); }
+html[data-d="g"] .tile .nm { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,.55); color: #fff; font: 600 12px/1 Inter; padding: 5px 8px; border-radius: 6px; display: flex; gap: 5px; align-items: center; }
+html[data-d="g"] .tile .big { position: absolute; inset: 0; display: grid; place-items: center; font: 700 30px/1 Inter; color: rgba(255,255,255,.9); }
+html[data-d="g"] .mapcard { top: 16px; right: 16px; width: 200px; height: 150px; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 6px 18px rgba(20,30,50,.22); }
+html[data-d="g"] .prompt { left: calc(50% + 150px); bottom: 96px; transform: translateX(-50%); height: 40px; padding: 0 14px 0 6px; gap: 10px; font: 600 14px/1 Inter; background: #fff; border-radius: 10px; box-shadow: 0 6px 18px rgba(20,30,50,.22); }
+html[data-d="g"] .prompt .k { min-width: 28px; height: 28px; border-radius: 6px; background: #f3f4f7; border: 1px solid #dcdfe6; display: grid; place-items: center; font: 600 12.5px/1 Inter; }
+html[data-d="g"] .bar { left: 300px; right: 0; bottom: 0; height: 72px; background: #fff; border-top: 1px solid #e6e7eb; padding: 0 18px; gap: 10px; }
+html[data-d="g"] .bar .me b { font: 600 14px/1.1 Inter; display: block; } html[data-d="g"] .bar .me small { font: 500 12.5px/1.2 Inter; color: #3a9a5b; }
+html[data-d="g"] .b { height: 44px; min-width: 44px; padding: 0 12px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #f3f4f7; color: #3a3e48; font: 600 13px/1 Inter; position: relative; }
+html[data-d="g"] .b.red { background: #fde8e6; color: #c9372c; }
+html[data-d="g"] .b.on { background: #5b5bd6; color: #fff; }
+html[data-d="g"] .b.icon { padding: 0; width: 44px; }
+html[data-d="g"] .badge { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; border-radius: 9px; background: #e5533d; color: #fff; font: 700 11px/18px Inter; text-align: center; box-shadow: 0 0 0 2px #fff; }
+html[data-d="g"] .slot { width: 44px; height: 44px; border-radius: 10px; border: 1.5px dashed #d4d7df; display: grid; place-items: center; color: #3a3e48; position: relative; }
+html[data-d="g"] .slot.full { border: 1px solid #dcdfe6; background: #fafbfc; }
+html[data-d="g"] .slot.sel { border: 2px solid #5b5bd6; background: #f0f0fd; }
+html[data-d="g"] .slot sup { position: absolute; top: 2px; left: 4px; font: 600 9.5px/1 Inter; color: #8b90a0; }
+html[data-d="g"] .toast { top: 132px; left: calc(50% + 150px); transform: translateX(-50%); height: 40px; padding: 0 14px 0 6px; gap: 9px; font: 500 13.5px/1 Inter; background: #1d1f24; color: #fff; border-radius: 20px; }
+html[data-d="g"] .toast .face { width: 28px; height: 28px; font-size: 11px; }
+
+/* ═════════ H — Classic desktop: a menu bar and little windows ═════════ */
+html[data-d="h"] body { font-family: "IBM Plex Sans", sans-serif; color: #111; }
+html[data-d="h"] .menubar { top: 0; left: 0; right: 0; height: 30px; background: #ececec; border-bottom: 1px solid #111; padding: 0 12px; gap: 20px; font: 600 14px/1 "IBM Plex Sans"; box-shadow: 0 1px 0 #fff inset; }
+html[data-d="h"] .menubar .mk { width: 18px; height: 18px; border-radius: 4px; background: conic-gradient(#e5533d 0 25%, #f0b429 0 50%, #3fbf6f 0 75%, #3a7bd5 0); border: 1px solid #111; }
+html[data-d="h"] .menubar .r { margin-left: auto; gap: 18px; font-weight: 500; }
+html[data-d="h"] .menubar .sel { background: #111; color: #fff; padding: 7px 10px; margin: 0 -10px; }
+html[data-d="h"] .win { background: #ececec; border: 1px solid #111; box-shadow: 2px 2px 0 rgba(0,0,0,.55); }
+html[data-d="h"] .tb { height: 22px; display: flex; align-items: center; gap: 8px; padding: 0 6px; border-bottom: 1px solid #111; background: repeating-linear-gradient(180deg, #ececec 0 2px, #9a9a9a 2px 3px); }
+html[data-d="h"] .tb .cb { width: 13px; height: 13px; border: 1px solid #111; background: #ececec; box-shadow: inset 1px 1px 0 #fff; flex: none; }
+html[data-d="h"] .tb b { font: 700 13px/1 "IBM Plex Sans"; background: #ececec; padding: 0 8px; margin: 0 auto; }
+html[data-d="h"] .wb { padding: 10px; background: #fff; border: 1px solid #111; margin: 6px; box-shadow: inset 1px 1px 0 #999; }
+html[data-d="h"] .side { top: 54px; right: 20px; width: 310px; }
+html[data-d="h"] .side h5 { font: 700 12px/1 "IBM Plex Sans"; margin: 10px 2px 6px; color: #555; }
+html[data-d="h"] .person { gap: 10px; padding: 5px 4px; }
+html[data-d="h"] .person.hl { background: #2a52be; color: #fff; }
+html[data-d="h"] .person.hl .p { color: #dfe6ff; }
+html[data-d="h"] .person .face { width: 28px; height: 28px; border-radius: 3px; border: 1px solid #111; font-size: 12px; }
+html[data-d="h"] .person .face .dot { border-radius: 0; border: 1px solid #111; width: 9px; height: 9px; }
+html[data-d="h"] .person .n { font: 600 14px/1.15 "IBM Plex Sans"; } html[data-d="h"] .person .p { font: 400 12.5px/1.2 "IBM Plex Sans"; color: #555; }
+html[data-d="h"] .btn9 { height: 26px; padding: 0 12px; border: 1px solid #111; border-radius: 6px; background: #ececec; font: 600 12.5px/24px "IBM Plex Sans"; color: #111; box-shadow: inset -1px -1px 0 #999, inset 1px 1px 0 #fff; }
+html[data-d="h"] .mapw { left: 20px; bottom: 20px; width: 210px; }
+html[data-d="h"] .mapw .wb { height: 132px; padding: 0; overflow: hidden; }
+html[data-d="h"] .ctl { left: 50%; bottom: 20px; transform: translateX(-50%); }
+html[data-d="h"] .ctl .wb { display: flex; gap: 6px; padding: 6px; background: #ececec; box-shadow: none; border: 0; margin: 0; }
+html[data-d="h"] .b { width: 50px; height: 50px; border: 1px solid #111; border-radius: 6px; background: #ececec; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; box-shadow: inset -2px -2px 0 #9a9a9a, inset 2px 2px 0 #fff; position: relative; font: 500 10px/1 "IBM Plex Sans"; }
+html[data-d="h"] .b svg { width: 19px; height: 19px; stroke-width: 1.8; }
+html[data-d="h"] .b.on { background: #c9c9c9; box-shadow: inset 2px 2px 0 #8a8a8a, inset -1px -1px 0 #fff; }
+html[data-d="h"] .b.red { color: #c9372c; }
+html[data-d="h"] .vsep { width: 1px; background: #999; margin: 4px 3px; box-shadow: 1px 0 0 #fff; }
+html[data-d="h"] .badge { position: absolute; top: -7px; right: -7px; height: 18px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: #e5533d; color: #fff; border: 1px solid #111; font: 700 10.5px/16px "IBM Plex Sans"; text-align: center; }
+html[data-d="h"] .pocket { right: 20px; bottom: 20px; }
+html[data-d="h"] .pocket .wb { display: flex; gap: 6px; padding: 6px; }
+html[data-d="h"] .slot { width: 44px; height: 44px; border: 1px solid #999; display: grid; place-items: center; position: relative; background: #fafafa; }
+html[data-d="h"] .slot.sel { border: 2px solid #2a52be; background: #e8eeff; }
+html[data-d="h"] .slot sup { position: absolute; top: 2px; left: 3px; font: 500 9.5px/1 "IBM Plex Sans"; color: #777; }
+html[data-d="h"] .balloon { left: 50%; bottom: 128px; transform: translateX(-50%); background: #ffffd2; border: 1px solid #111; border-radius: 14px; padding: 10px 14px; gap: 10px; font: 500 14.5px/1 "IBM Plex Sans"; box-shadow: 2px 2px 0 rgba(0,0,0,.5); }
+html[data-d="h"] .balloon::after { content: ""; position: absolute; left: 50%; bottom: -10px; width: 16px; height: 16px; background: #ffffd2; border-right: 1px solid #111; border-bottom: 1px solid #111; transform: translateX(-50%) rotate(45deg) skew(10deg, 10deg); }
+html[data-d="h"] .balloon .k { border: 1px solid #111; border-radius: 4px; padding: 3px 7px; background: #fff; font: 700 12px/1 "IBM Plex Sans"; box-shadow: inset -1px -1px 0 #999; }
+html[data-d="h"] .alert { top: 48px; left: 50%; transform: translateX(-50%); width: 330px; }
+html[data-d="h"] .alert .wb { display: flex; gap: 10px; align-items: center; font: 500 14px/1.2 "IBM Plex Sans"; margin: 0; border: 0; box-shadow: none; background: #ececec; }
+
+/* ═════════ I — Neon Vortex: the phone's purple, glowing ═════════ */
+html[data-d="i"] body { font-family: "Space Grotesk", sans-serif; color: #f2eaff; }
+html[data-d="i"] .card { background: rgba(16, 10, 34, .84); border-radius: 16px; border: 1px solid rgba(255, 79, 216, .45); box-shadow: 0 0 0 1px rgba(122, 92, 255, .25) inset, 0 0 26px rgba(255, 79, 216, .22), 0 12px 30px rgba(8, 4, 20, .45); }
+html[data-d="i"] .where { top: 18px; left: 18px; height: 64px; padding: 0 18px 0 12px; gap: 14px; }
+html[data-d="i"] .mk { width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, #ff4fd8, #7a5cff); display: grid; place-items: center; font: 800 18px/1 Orbitron; color: #fff; box-shadow: 0 0 16px rgba(255,79,216,.6); }
+html[data-d="i"] .where .t { font: 600 18px/1.1 "Space Grotesk"; } html[data-d="i"] .where .s { font: 500 13px/1.2 "Space Grotesk"; color: #b9a8e6; margin-top: 3px; }
+html[data-d="i"] .clk { font: 600 24px/1 Orbitron; color: #5ef1ff; text-shadow: 0 0 10px rgba(94, 241, 255, .8); letter-spacing: .04em; }
+html[data-d="i"] .vl { width: 1px; height: 32px; background: linear-gradient(#ff4fd800, #ff4fd8aa, #ff4fd800); }
+html[data-d="i"] .who { top: 18px; right: 18px; height: 64px; padding: 0 12px 0 16px; gap: 14px; font: 600 14px/1 "Space Grotesk"; }
+html[data-d="i"] .face { box-shadow: 0 0 0 2px #10091f; }
+html[data-d="i"] .face .dot { border-color: #10091f; } html[data-d="i"] .face .dot:not(.away):not(.dnd) { background: #5ef1a0; }
+html[data-d="i"] .stack .face { margin-left: -9px; } html[data-d="i"] .stack .face:first-child { margin-left: 0; }
+html[data-d="i"] .toast { top: 22px; left: 50%; transform: translateX(-50%); height: 50px; padding: 0 18px 0 9px; gap: 10px; font: 500 15px/1 "Space Grotesk"; }
+html[data-d="i"] .side { top: 100px; right: 18px; width: 340px; padding: 16px; }
+html[data-d="i"] .side h4 { font: 700 18px/1 "Space Grotesk"; margin: 0 4px 10px; display: flex; justify-content: space-between; }
+html[data-d="i"] .side h5 { font: 600 11.5px/1 Orbitron; letter-spacing: .12em; color: #ff8be6; margin: 14px 4px 8px; }
+html[data-d="i"] .person { gap: 12px; padding: 8px 6px; border-radius: 11px; }
+html[data-d="i"] .person.hl { background: rgba(122, 92, 255, .18); }
+html[data-d="i"] .person.talk .face { box-shadow: 0 0 0 2px #10091f, 0 0 0 4px #5ef1ff, 0 0 14px #5ef1ff; }
+html[data-d="i"] .person .n { font: 600 15px/1.15 "Space Grotesk"; } html[data-d="i"] .person .p { font: 400 13px/1.2 "Space Grotesk"; color: #b9a8e6; }
+html[data-d="i"] .person .go { font: 600 13px/1 "Space Grotesk"; padding: 8px 12px; border-radius: 9px; background: linear-gradient(135deg, #ff4fd8, #7a5cff); color: #fff; }
+html[data-d="i"] .prompt { left: 50%; bottom: 128px; transform: translateX(-50%); height: 46px; padding: 0 18px 0 8px; gap: 10px; font: 600 15px/1 "Space Grotesk"; }
+html[data-d="i"] .prompt .k { width: 30px; height: 30px; border-radius: 8px; border: 1px solid #5ef1ff; color: #5ef1ff; display: grid; place-items: center; font: 600 13px/1 Orbitron; box-shadow: 0 0 10px rgba(94,241,255,.5); }
+html[data-d="i"] .dock { left: 50%; bottom: 18px; transform: translateX(-50%); padding: 10px 12px; gap: 8px; }
+html[data-d="i"] .b { width: 50px; height: 50px; border-radius: 13px; display: grid; place-items: center; background: rgba(255,255,255,.06); border: 1px solid rgba(185,168,230,.2); color: #e4d9ff; position: relative; }
+html[data-d="i"] .b.on { background: linear-gradient(135deg, #ff4fd8, #7a5cff); border-color: transparent; color: #fff; box-shadow: 0 0 18px rgba(255,79,216,.55); }
+html[data-d="i"] .b.red { color: #ff6b8a; border-color: rgba(255,107,138,.5); box-shadow: 0 0 12px rgba(255,107,138,.3) inset; }
+html[data-d="i"] .vsep { width: 1px; height: 34px; background: rgba(185,168,230,.25); margin: 0 4px; }
+html[data-d="i"] .badge { position: absolute; top: -7px; right: -7px; min-width: 20px; height: 20px; border-radius: 10px; background: #ff4fd8; color: #fff; font: 700 11px/20px "Space Grotesk"; text-align: center; box-shadow: 0 0 10px #ff4fd8; }
+html[data-d="i"] .status { height: 50px; border-radius: 13px; padding: 0 14px; gap: 8px; font: 600 14px/1 "Space Grotesk"; background: rgba(255,255,255,.06); border: 1px solid rgba(185,168,230,.2); }
+html[data-d="i"] .status .d { width: 9px; height: 9px; border-radius: 50%; background: #5ef1a0; box-shadow: 0 0 8px #5ef1a0; }
+html[data-d="i"] .map { left: 18px; bottom: 18px; width: 200px; height: 166px; padding: 8px; }
+html[data-d="i"] .map .m { width: 100%; height: 100%; border-radius: 10px; overflow: hidden; }
+html[data-d="i"] .hands { right: 18px; bottom: 18px; padding: 10px; gap: 8px; }
+html[data-d="i"] .slot { width: 50px; height: 50px; border-radius: 13px; background: rgba(255,255,255,.05); border: 1px dashed rgba(185,168,230,.3); display: grid; place-items: center; position: relative; color: #e4d9ff; }
+html[data-d="i"] .slot.full { border-style: solid; }
+html[data-d="i"] .slot.sel { border: 1px solid #5ef1ff; box-shadow: 0 0 14px rgba(94,241,255,.5), inset 0 0 10px rgba(94,241,255,.2); color: #5ef1ff; }
+html[data-d="i"] .slot sup { position: absolute; top: 3px; left: 5px; font: 600 9.5px/1 Orbitron; color: #b9a8e6; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="mic-off" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="video-off" viewBox="0 0 24 24"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><path d="m9 10 3-3 3 3"/><path d="M12 13V7"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></symbol>
+  <symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="hammer" viewBox="0 0 24 24"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/></symbol>
+  <symbol id="paw" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></symbol>
+  <symbol id="cog" viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="mug" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
+  <symbol id="torch" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><line x1="6" x2="18" y1="6" y2="6"/><line x1="12" x2="12" y1="12" y2="12"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+  <symbol id="snow" viewBox="0 0 24 24"><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="door" viewBox="0 0 24 24"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+</svg>
+<div id="app"></div>
+<script>
+const d = new URLSearchParams(location.search).get("d") || "d";
+document.documentElement.dataset.d = d;
+const I = (id, sz) => `<svg class="i"${sz ? ` style="width:${sz}px;height:${sz}px"` : ""}><use href="#${id}"/></svg>`;
+const P = { bia: ["B", "#c8423a"], ana: ["A", "#3f7d5a"], cai: ["C", "#2f4a78"], dee: ["D", "#b07a2c"], eli: ["E", "#6b4f8a"] };
+const F = (k, dot = "", sz) => `<span class="face" style="background:${P[k][1]}${sz ? `;width:${sz}px;height:${sz}px` : ""}">${P[k][0]}${dot === null ? "" : `<span class="dot ${dot}"></span>`}</span>`;
+const people = (go = "Go to") => `
+  <h5>Can hear you · 2</h5>
+  <div class="row person talk">${F("ana")}<div class="grow"><div class="n">Ana</div><div class="p">Talking · 3 m away</div></div></div>
+  <div class="row person">${F("cai")}<div class="grow"><div class="n">Cai</div><div class="p">5 m away</div></div></div>
+  <h5>Elsewhere · 2</h5>
+  <div class="row person hl">${F("dee", "away")}<div class="grow"><div class="n">Dee</div><div class="p">Lobby · floor 1</div></div><span class="go">${go}</span></div>
+  <div class="row person">${F("eli", "dnd")}<div class="grow"><div class="n">Eli</div><div class="p">Focus · Booth 2</div></div></div>`;
+function minimap(c) {
+  return `<svg viewBox="0 0 180 140" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+    <rect width="180" height="140" fill="${c.snow}"/>
+    <path d="M0 112 L180 104" stroke="${c.road}" stroke-width="12"/>
+    <rect x="22" y="22" width="44" height="72" rx="${c.r ?? 3}" fill="${c.bld}" stroke="${c.ink}" stroke-width="${c.sw ?? 1.5}"/>
+    <rect x="114" y="22" width="44" height="72" rx="${c.r ?? 3}" fill="${c.bld}" stroke="${c.ink}" stroke-width="${c.sw ?? 1.5}"/>
+    <rect x="66" y="30" width="48" height="9" fill="${c.bld}" stroke="${c.ink}" stroke-width="${c.sw ?? 1.2}"/>
+    <circle cx="80" cy="74" r="4" fill="${P.ana[1]}"/><circle cx="101" cy="72" r="4" fill="${P.cai[1]}"/>
+    <g transform="translate(90 84)"><circle r="10" fill="${c.me}" opacity=".25"/><path d="M0 -6.5 L5 5.5 L0 3 L-5 5.5 Z" fill="${c.me}"/></g>
+  </svg>`;
+}
+const hands = (cls = "") => `
+  <span class="slot full sel"><sup>1</sup>${I("mug", 22)}</span>
+  <span class="slot full"><sup>2</sup>${I("torch", 22)}</span>
+  <span class="slot full"><sup>3</sup>${I("key", 22)}</span>
+  <span class="slot"><sup>4</sup></span>`;
+
+const V = {
+  // D — Cozy
+  d: () => `
+  <div class="abs card clock"><div class="t">1:05<small>PM</small></div><div class="s">Sunday, Oct 25 · ${I("snow", 15)} −4°</div></div>
+  <div class="abs row placepill">${I("pin", 18)} Courtyard</div>
+  <div class="abs row card who"><span class="row stack">${F("ana", null)}${F("cai", null)}${F("dee", null)}</span><b>5 here</b>${F("bia", "", 44)}</div>
+  <div class="abs row card toast">${F("cai", null, 34)}<span><b>Cai</b> came to say hi!</span></div>
+  <aside class="abs card side"><h4>Friends nearby <span style="color:#b39478">${I("x", 20)}</span></h4>${people("Visit")}</aside>
+  <div class="abs row card prompt"><span class="k">E</span>Open the lobby door</div>
+  <div class="abs card map"><div class="m">${minimap({ snow: "#e8f4ec", road: "#d9ccb0", bld: "#bfe0f0", ink: "#8fb7c9", me: "#ff7a6b", r: 10, sw: 2 })}</div></div>
+  <nav class="abs row card dock">
+    <span class="b" style="background:#ff8f7a">${I("mic-off")}<span class="lbl">Mic</span></span>
+    <span class="b" style="background:#9fb4c4">${I("video-off")}<span class="lbl">Camera</span></span>
+    <span class="b" style="background:#ffc94d">${I("smile")}<span class="lbl">Emote</span></span>
+    <span class="b" style="background:#57b88a">${I("phone")}<span class="badge">9+</span><span class="lbl">Phone</span></span>
+    <span class="b" style="background:#6ec3e8">${I("users")}<span class="lbl">People</span></span>
+    <span class="b" style="background:#b58ee0">${I("paw")}<span class="lbl">Pets</span></span>
+    <span class="b" style="background:#e0a36b">${I("hammer")}<span class="lbl">Build</span></span>
+    <span class="b" style="background:#c4b5a2">${I("cog")}<span class="lbl">Settings</span></span>
+  </nav>
+  <div class="abs row card hands">${hands()}</div>`,
+
+  // E — Pixel
+  e: () => `
+  <header class="abs row card where"><span class="mk px">Y</span><div><div class="t">Courtyard</div><div class="s">Snow Campus · ground</div></div><span class="clk">13:05</span></header>
+  <div class="abs row card who"><span class="row stack">${F("ana", null, 30)}${F("cai", null, 30)}${F("dee", null, 30)}</span>5 online ${F("bia", "", 34)}</div>
+  <div class="abs row card toast">${F("cai", null, 30)}<span>Cai walked in!</span></div>
+  <aside class="abs card side"><h4>People ${I("x", 20)}</h4>${people()}</aside>
+  <div class="abs row card prompt"><span class="k px">E</span>Open the lobby door</div>
+  <div class="abs card map"><div class="m">${minimap({ snow: "#dfe9f7", road: "#a9b8cf", bld: "#7f9cc9", ink: "#0f1a2e", me: "#e5533d", r: 0, sw: 3 })}</div></div>
+  <nav class="abs row card dock">
+    <span class="b px red">${I("mic-off")}</span><span class="b px">${I("video-off")}</span><span class="b px">${I("share")}</span>
+    <span class="b px">${I("smile")}</span><span class="b px">${I("phone")}<span class="badge">9+</span></span><span class="b px on">${I("users")}</span>
+    <span class="b px">${I("hammer")}</span><span class="b px">${I("paw")}</span><span class="b px">${I("cog")}</span>
+  </nav>
+  <div class="abs row card hands">${hands()}</div>`,
+
+  // F — No chrome
+  f: () => {
+    const marks = [["NW", 40], ["N", 140], ["NE", 240], ["E", 340], ["SE", 440], ["S", 540]];
+    const ticks = Array.from({ length: 29 }, (_, i) => `<line x1="${i * 20}" x2="${i * 20}" y1="${i % 5 ? 16 : 12}" y2="${i % 5 ? 22 : 24}" stroke="#fff" stroke-opacity=".7" stroke-width="1.5"/>`).join("");
+    return `
+  <header class="abs where sh"><div class="t">Courtyard</div><div class="s">Snow Campus <i></i> ground floor <i></i> 13:05 <i></i> ${I("snow", 14)} −4°</div></header>
+  <div class="abs compass sh"><svg width="560" height="46" viewBox="0 0 560 46" style="overflow:visible;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))">
+    <line x1="0" x2="560" y1="22" y2="22" stroke="#fff" stroke-opacity=".5"/>${ticks}
+    ${marks.map(([t, x]) => `<text x="${x}" y="42" fill="#fff" font-family="Barlow Condensed" font-weight="700" font-size="${t.length > 1 ? 12 : 16}" text-anchor="middle" letter-spacing="1">${t}</text>`).join("")}
+    <circle cx="214" cy="9" r="6" fill="${P.ana[1]}" stroke="#fff" stroke-width="1.5"/><circle cx="318" cy="9" r="6" fill="${P.cai[1]}" stroke="#fff" stroke-width="1.5"/>
+    <g transform="translate(410 2)"><rect x="-7" y="0" width="14" height="14" rx="2" fill="none" stroke="#ffd36b" stroke-width="2"/><text x="0" y="-3" fill="#ffd36b" font-family="Barlow" font-weight="600" font-size="10" text-anchor="middle">Lobby 24 m</text></g>
+    <path d="M280 26 l-6 -9 h12 z" fill="#fff"/>
+  </svg></div>
+  <div class="abs row who sh">5 here <span class="row stack">${F("ana", null, 28)}${F("cai", null, 28)}${F("dee", null, 28)}</span></div>
+  <div class="abs row toast sh">${F("cai", null)}<span><b>Cai</b> walked into the Courtyard</span></div>
+  <aside class="abs side sh">${people()}</aside>
+  <div class="abs row prompt sh"><span class="k">E</span>Open the lobby door</div>
+  <div class="abs row status sh">${F("bia", "", 38)}<div><div>Bia</div><div style="font-weight:500;font-size:13px;opacity:.8">Available</div></div></div>
+  <nav class="abs row dock sh">
+    <span class="b red">${I("mic-off")}<span class="lbl">Muted</span><span class="kk">M</span></span>
+    <span class="b">${I("video-off")}<span class="lbl">Camera</span><span class="kk">V</span></span>
+    <span class="vsep"></span>
+    <span class="b">${I("smile")}<span class="lbl">Emote</span><span class="kk">1–8</span></span>
+    <span class="b">${I("phone")}<span class="badge">9+</span><span class="lbl">Phone</span><span class="kk">P</span></span>
+    <span class="b on">${I("users")}<span class="lbl">People</span><span class="kk">Tab</span></span>
+    <span class="vsep"></span>
+    <span class="b">${I("hammer")}<span class="lbl">Build</span><span class="kk">B</span></span>
+    <span class="b">${I("paw")}<span class="lbl">Pets</span><span class="kk">J</span></span>
+    <span class="b">${I("cog")}<span class="lbl">Settings</span><span class="kk">Esc</span></span>
+  </nav>
+  <div class="abs row hands sh">${hands()}</div>`;
+  },
+
+  // G — Team app
+  g: () => `
+  <aside class="abs sidebar">
+    <div class="row ws"><span class="mk">Y</span><div class="grow"><b>Yutopia</b><small>Snow Campus</small></div>${I("down", 18)}</div>
+    <div class="search">${I("search", 16)} Find someone or a room</div>
+    <div class="sb">
+      <h5>Rooms</h5>
+      <div class="row roomrow on">${I("hash", 16)} Courtyard <span class="c">3</span></div>
+      <div class="row roomrow">${I("hash", 16)} Lobby <span class="c">1</span></div>
+      <div class="row roomrow">${I("lock", 16)} Booth 2 <span class="c">1</span></div>
+      <div class="row roomrow">${I("hash", 16)} War room <span class="c"></span></div>
+      ${people("Join")}
+    </div>
+  </aside>
+  <div class="abs row tiles">
+    <div class="tile talk" style="background:linear-gradient(135deg,#4e9a6f,#2e6a4a)"><span class="big">A</span><span class="nm">${I("mic", 12)} Ana</span></div>
+    <div class="tile" style="background:linear-gradient(135deg,#3f5f96,#22385e)"><span class="big">C</span><span class="nm">Cai</span></div>
+  </div>
+  <div class="abs mapcard">${minimap({ snow: "#f6f7f9", road: "#e3e5ea", bld: "#dcdff8", ink: "#9aa0c8", me: "#5b5bd6" })}</div>
+  <div class="abs row toast">${F("cai", null)}<span><b>Cai</b> joined the Courtyard</span></div>
+  <div class="abs row prompt"><span class="k">E</span>Open the lobby door</div>
+  <footer class="abs row bar">
+    <div class="row me" style="gap:10px;width:200px">${F("bia", "", 36)}<div><b>Bia</b><small>● Available</small></div></div>
+    <div class="row grow" style="justify-content:center;gap:8px">
+      <span class="b red">${I("mic-off", 18)} Unmute</span><span class="b">${I("video-off", 18)} Camera</span><span class="b">${I("share", 18)} Share</span>
+      <span class="b icon">${I("smile", 18)}</span><span class="b icon">${I("phone", 18)}<span class="badge">9+</span></span>
+    </div>
+    <div class="row" style="gap:6px">${hands()}<span style="width:8px"></span><span class="b icon">${I("hammer", 18)}</span><span class="b icon">${I("paw", 18)}</span><span class="b icon">${I("cog", 18)}</span></div>
+  </footer>`,
+
+  // H — Classic desktop
+  h: () => `
+  <div class="abs row menubar"><span class="mk"></span><b>Yutopia</b><span>World</span><span>View</span><span class="sel">People</span><span>Pets</span><span>Help</span>
+    <span class="row r">${I("snow", 15)} −4° <span>5 online</span><span>Courtyard · ground floor</span><b>Sun 13:05</b></span></div>
+  <div class="abs win alert"><div class="tb"><span class="cb"></span></div><div class="wb">${F("cai", null, 32)}<span><b>Cai</b> walked into the Courtyard.</span></div></div>
+  <section class="abs win side"><div class="tb"><span class="cb"></span><b>People — 5</b></div>
+    <div class="wb">${people().replace('<span class="go">Go to</span>', '<span class="btn9" style="color:#111">Go to</span>')}</div></section>
+  <div class="abs row balloon"><span class="k">E</span>Open the lobby door</div>
+  <section class="abs win mapw"><div class="tb"><span class="cb"></span><b>Map</b></div><div class="wb">${minimap({ snow: "#fff", road: "#ddd", bld: "#e8e8e8", ink: "#111", me: "#2a52be", r: 0, sw: 1 })}</div></section>
+  <section class="abs win ctl"><div class="tb"><span class="cb"></span><b>Controls</b></div><div class="wb">
+    <span class="b red">${I("mic-off")}Mic</span><span class="b">${I("video-off")}Cam</span><span class="b">${I("share")}Share</span><span class="vsep"></span>
+    <span class="b">${I("smile")}Emote</span><span class="b">${I("phone")}Phone<span class="badge">9+</span></span><span class="b on">${I("users")}People</span><span class="vsep"></span>
+    <span class="b">${I("hammer")}Build</span><span class="b">${I("paw")}Pets</span><span class="b">${I("cog")}Prefs</span></div></section>
+  <section class="abs win pocket"><div class="tb"><span class="cb"></span><b>Pocket</b></div><div class="wb">${hands()}</div></section>`,
+
+  // I — Neon Vortex
+  i: () => `
+  <header class="abs row card where"><span class="mk">Y</span><div><div class="t">Courtyard</div><div class="s">Snow Campus · ground floor</div></div><span class="vl"></span><span class="clk">13:05</span></header>
+  <div class="abs row card who"><span class="row stack">${F("ana", null, 30)}${F("cai", null, 30)}${F("dee", null, 30)}</span>5 online ${F("bia", "", 36)}</div>
+  <div class="abs row card toast">${F("cai", null, 32)}<span><b>Cai</b> walked into the Courtyard</span></div>
+  <aside class="abs card side"><h4>People <span style="color:#b9a8e6">${I("x", 18)}</span></h4>${people()}</aside>
+  <div class="abs row card prompt"><span class="k">E</span>Open the lobby door</div>
+  <div class="abs card map"><div class="m">${minimap({ snow: "#1a1233", road: "#2a2050", bld: "#2c2160", ink: "#7a5cff", me: "#5ef1ff" })}</div></div>
+  <nav class="abs row card dock">
+    <span class="b red">${I("mic-off")}</span><span class="b">${I("video-off")}</span><span class="b">${I("share")}</span><span class="vsep"></span>
+    <span class="b">${I("smile")}</span><span class="b">${I("phone")}<span class="badge">9+</span></span><span class="b on">${I("users")}</span><span class="vsep"></span>
+    <span class="row status"><span class="d"></span>Available ${I("down", 15)}</span><span class="vsep"></span>
+    <span class="b">${I("hammer")}</span><span class="b">${I("paw")}</span><span class="b">${I("cog")}</span>
+  </nav>
+  <div class="abs row card hands">${hands()}</div>`,
+};
+document.getElementById("app").innerHTML = V[d]();
+</script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia HUD mock, small-town mystery</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Caveat:wght@600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Oswald:wght@400;500;600&family=Permanent+Marker&family=Special+Elite&family=Yellowtail&display=block" rel="stylesheet">
+<style>
+/* Small-town mystery: five takes. ?d=aw|rr|dn|mb|ot */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { background: #c9ced6 url(bg-courtyard.png) center / cover no-repeat; position: relative; -webkit-font-smoothing: antialiased; }
+svg.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.abs { position: absolute; }
+.row { display: flex; align-items: center; }
+.grow { flex: 1; min-width: 0; }
+.grade { position: absolute; inset: 0; pointer-events: none; }
+.face { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 12px/1 Georgia; flex: none; }
+
+/* ═════════ AW — the manuscript: chapter cards, typed pages, the torch ═════════ */
+html[data-d="aw"] body { background-image: url(bg-lot.png); font-family: "Cormorant Garamond", serif; color: #f1ece2; }
+html[data-d="aw"] .grade { background: radial-gradient(120% 90% at 50% 55%, rgba(8,14,24,.25) 0%, rgba(4,8,14,.82) 100%), linear-gradient(rgba(10,22,40,.5), rgba(10,22,40,.5)); }
+html[data-d="aw"] .sh { text-shadow: 0 1px 2px rgba(0,0,0,.8), 0 0 20px rgba(0,0,0,.6); }
+html[data-d="aw"] .chapter { top: 40px; left: 48px; }
+html[data-d="aw"] .chapter .ep { font: 600 14px/1 "Cormorant Garamond"; letter-spacing: .5em; text-transform: uppercase; color: #c9bfae; display: flex; align-items: center; gap: 14px; }
+html[data-d="aw"] .chapter .ep::after { content: ""; width: 80px; height: 1px; background: #c9bfae; }
+html[data-d="aw"] .chapter .t { font: 600 46px/1 "Cormorant Garamond"; letter-spacing: .16em; text-transform: uppercase; margin-top: 12px; }
+html[data-d="aw"] .chapter .s { font: italic 500 19px/1.3 "Cormorant Garamond"; color: #d8d0c2; margin-top: 8px; }
+html[data-d="aw"] .obj { top: 186px; left: 48px; gap: 12px; font: 600 18px/1 "Cormorant Garamond"; letter-spacing: .04em; }
+html[data-d="aw"] .obj .dia { width: 12px; height: 12px; border: 1.5px solid #f1ece2; transform: rotate(45deg); }
+html[data-d="aw"] .obj small { font: italic 500 15px/1 "Cormorant Garamond"; color: #b9b0a2; margin-left: 6px; }
+html[data-d="aw"] .page { top: 34px; right: 40px; width: 330px; padding: 22px 26px 26px; background: #ece5d3; color: #222; transform: rotate(2.2deg); box-shadow: 0 16px 40px rgba(0,0,0,.6); font: 400 14.5px/1.55 "Special Elite"; }
+html[data-d="aw"] .page::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 80% 10%, rgba(120,90,40,.12), transparent 40%), radial-gradient(circle at 10% 90%, rgba(120,90,40,.1), transparent 40%); }
+html[data-d="aw"] .page .pn { display: flex; justify-content: space-between; font-size: 12px; color: #776; margin-bottom: 12px; }
+html[data-d="aw"] .page p + p { margin-top: 8px; }
+html[data-d="aw"] .near { top: 312px; right: 48px; width: 280px; text-align: right; }
+html[data-d="aw"] .near h5 { font: 600 13px/1 "Cormorant Garamond"; letter-spacing: .4em; text-transform: uppercase; color: #a89f90; margin-bottom: 12px; }
+html[data-d="aw"] .nr { font: 600 22px/1.15 "Cormorant Garamond"; margin-bottom: 10px; }
+html[data-d="aw"] .nr small { display: block; font: italic 500 15px/1.2 "Cormorant Garamond"; color: #bdb4a6; }
+html[data-d="aw"] .nr.talk { color: #fff7d6; }
+html[data-d="aw"] .nr.talk small { color: #e8d79a; }
+html[data-d="aw"] .prompt { left: 50%; bottom: 168px; transform: translateX(-50%); gap: 16px; font: italic 600 22px/1 "Cormorant Garamond"; }
+html[data-d="aw"] .prompt .k { width: 36px; height: 36px; border: 1.5px solid #f1ece2; border-radius: 50%; display: grid; place-items: center; font: 600 17px/1 "Cormorant Garamond"; font-style: normal; }
+html[data-d="aw"] .prompt::before, html[data-d="aw"] .prompt::after { content: ""; width: 60px; height: 1px; background: linear-gradient(90deg, transparent, #f1ece2); }
+html[data-d="aw"] .prompt::after { background: linear-gradient(90deg, #f1ece2, transparent); }
+html[data-d="aw"] .torch { left: 48px; bottom: 40px; gap: 18px; align-items: flex-end; }
+html[data-d="aw"] .ring { width: 92px; height: 92px; position: relative; display: grid; place-items: center; }
+html[data-d="aw"] .ring svg.r { position: absolute; inset: 0; }
+html[data-d="aw"] .ring .ic { color: #fff7d6; filter: drop-shadow(0 0 10px rgba(255,240,180,.8)); }
+html[data-d="aw"] .ring .ic svg { width: 34px; height: 34px; }
+html[data-d="aw"] .inv { gap: 14px; padding-bottom: 10px; }
+html[data-d="aw"] .inv span { display: flex; flex-direction: column; align-items: center; gap: 6px; font: 600 13px/1 "Cormorant Garamond"; color: #a89f90; letter-spacing: .12em; }
+html[data-d="aw"] .inv svg { width: 24px; height: 24px; color: #d8d0c2; stroke-width: 1.6; }
+html[data-d="aw"] .ctl { right: 48px; bottom: 44px; gap: 26px; align-items: flex-end; }
+html[data-d="aw"] .c { display: flex; flex-direction: column; align-items: center; gap: 8px; font: 600 12px/1 "Cormorant Garamond"; letter-spacing: .22em; text-transform: uppercase; color: #c9bfae; position: relative; }
+html[data-d="aw"] .c svg { width: 24px; height: 24px; stroke-width: 1.6; color: #f1ece2; }
+html[data-d="aw"] .c.red svg { color: #ff8f7a; }
+html[data-d="aw"] .c.on svg { color: #fff7d6; filter: drop-shadow(0 0 8px rgba(255,240,180,.9)); }
+html[data-d="aw"] .c.on { color: #fff7d6; }
+html[data-d="aw"] .c .b { position: absolute; top: -8px; right: -4px; font: 700 12px/1 "Cormorant Garamond"; color: #ff8f7a; letter-spacing: 0; }
+
+/* ═════════ RR — the red room: velvet curtains, the zigzag floor ═════════ */
+html[data-d="rr"] body { font-family: "Libre Baskerville", serif; color: #f3e6cf; }
+html[data-d="rr"] .grade { background: linear-gradient(rgba(60,10,10,.18), rgba(60,10,10,.18)); }
+html[data-d="rr"] .velvet { background: repeating-linear-gradient(90deg, #4a070b 0, #8a161c 13px, #a51f25 18px, #6a0d12 26px, #4a070b 34px); box-shadow: 0 14px 34px rgba(30,0,0,.55), inset 0 0 40px rgba(0,0,0,.45); }
+html[data-d="rr"] .zig { height: 16px; background-color: #f2ede2; background-image: linear-gradient(135deg, #111 25%, transparent 25%), linear-gradient(225deg, #111 25%, transparent 25%), linear-gradient(315deg, #111 25%, transparent 25%), linear-gradient(45deg, #111 25%, transparent 25%); background-size: 16px 16px; background-position: -8px 0, -8px 0, 0 0, 0 0; }
+html[data-d="rr"] .title { top: 22px; left: 22px; width: 330px; }
+html[data-d="rr"] .title .in { padding: 18px 22px 16px; }
+html[data-d="rr"] .title .t { font: italic 400 32px/1 "Libre Baskerville"; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+html[data-d="rr"] .title .s { font: 400 13px/1.4 "Libre Baskerville"; letter-spacing: .14em; text-transform: uppercase; color: #e2b9a2; margin-top: 10px; }
+html[data-d="rr"] .title .tm { position: absolute; right: 20px; top: 18px; font: 700 22px/1 "Libre Baskerville"; color: #f3e6cf; }
+html[data-d="rr"] .card { top: 26px; left: 50%; transform: translateX(-50%); background: #f2ede2; color: #2a0a0b; padding: 12px 22px; font: italic 400 16px/1 "Libre Baskerville"; box-shadow: 0 8px 20px rgba(30,0,0,.4); border: 1px solid #2a0a0b; outline: 4px solid #f2ede2; outline-offset: 0; }
+html[data-d="rr"] .side { top: 22px; right: 22px; width: 340px; }
+html[data-d="rr"] .side .in { padding: 16px 20px 14px; }
+html[data-d="rr"] .side h4 { font: 400 12px/1 "Libre Baskerville"; letter-spacing: .3em; text-transform: uppercase; color: #e2b9a2; margin: 6px 0 10px; text-align: center; }
+html[data-d="rr"] .pp { gap: 12px; padding: 8px 0; border-top: 1px solid rgba(243,230,207,.18); }
+html[data-d="rr"] .pp .n { font: 700 16px/1.2 "Libre Baskerville"; }
+html[data-d="rr"] .pp .w { font: italic 400 13px/1.2 "Libre Baskerville"; color: #e2b9a2; }
+html[data-d="rr"] .pp .face { border: 2px solid #f2ede2; }
+html[data-d="rr"] .pp.hl .n { text-decoration: underline; text-underline-offset: 4px; }
+html[data-d="rr"] .prompt { left: 50%; bottom: 150px; transform: translateX(-50%); gap: 12px; background: #f2ede2; color: #2a0a0b; padding: 10px 20px 10px 10px; font: italic 400 17px/1 "Libre Baskerville"; box-shadow: 0 8px 20px rgba(30,0,0,.4); }
+html[data-d="rr"] .prompt .k { width: 32px; height: 32px; background: #8a161c; color: #f2ede2; display: grid; place-items: center; font: 700 15px/1 "Libre Baskerville"; font-style: normal; }
+html[data-d="rr"] .floor { left: 0; right: 0; bottom: 0; height: 64px; }
+html[data-d="rr"] .floor .zz { position: absolute; inset: 0; background-color: #f2ede2; background-image: linear-gradient(135deg, #111 25%, transparent 25%), linear-gradient(225deg, #111 25%, transparent 25%), linear-gradient(315deg, #111 25%, transparent 25%), linear-gradient(45deg, #111 25%, transparent 25%); background-size: 32px 32px; background-position: -16px 0, -16px 0, 0 0, 0 0; box-shadow: 0 -10px 30px rgba(0,0,0,.35); }
+html[data-d="rr"] .dock { left: 50%; bottom: 18px; transform: translateX(-50%); padding: 10px 14px; gap: 10px; }
+html[data-d="rr"] .b { width: 56px; height: 56px; border-radius: 50%; background: #f2ede2; color: #5a0a0e; display: grid; place-items: center; position: relative; box-shadow: 0 3px 0 #2a0a0b, inset 0 0 0 2px #2a0a0b; }
+html[data-d="rr"] .b.on { background: #f3c86a; }
+html[data-d="rr"] .b.red { background: #2a0a0b; color: #ff9a8a; }
+html[data-d="rr"] .b .bd { position: absolute; top: -4px; right: -4px; background: #2a0a0b; color: #f2ede2; font: 700 11px/1 "Libre Baskerville"; padding: 4px 5px; border-radius: 10px; }
+html[data-d="rr"] .vs { width: 1px; height: 40px; background: rgba(243,230,207,.35); }
+html[data-d="rr"] .pocket { right: 22px; bottom: 18px; padding: 10px; gap: 8px; }
+html[data-d="rr"] .slot { width: 52px; height: 52px; background: rgba(0,0,0,.25); border: 1px solid rgba(243,230,207,.35); display: grid; place-items: center; position: relative; color: #f3e6cf; }
+html[data-d="rr"] .slot.sel { background: #f2ede2; color: #5a0a0e; }
+html[data-d="rr"] .slot sup { position: absolute; top: 3px; left: 5px; font: 400 10px/1 "Libre Baskerville"; opacity: .7; }
+html[data-d="rr"] .map { left: 22px; bottom: 18px; width: 210px; height: 150px; padding: 10px; }
+html[data-d="rr"] .map .m { width: 100%; height: 100%; }
+
+/* ═════════ DN — the diner: letter boards, a guest check, neon ═════════ */
+html[data-d="dn"] body { font-family: "Oswald", sans-serif; color: #fff; }
+html[data-d="dn"] .grade { background: linear-gradient(rgba(60,30,10,.12), rgba(60,30,10,.12)); }
+html[data-d="dn"] .lb { background: repeating-linear-gradient(180deg, #1d1d1d 0 3px, #111 3px 7px); border: 10px solid #6b3f1f; border-image: linear-gradient(135deg, #8a5630, #5a3317, #8a5630) 1; box-shadow: 0 14px 30px rgba(0,0,0,.45); padding: 12px 16px; font: 500 22px/1.35 "Oswald"; letter-spacing: .12em; text-transform: uppercase; color: #f5f3ee; }
+html[data-d="dn"] .lb .sm { font-size: 16px; color: #e8e2d6; }
+html[data-d="dn"] .lb .rd { color: #ff6a5a; } html[data-d="dn"] .lb .yl { color: #ffd36b; } html[data-d="dn"] .lb .gr { color: #7fe0a0; }
+html[data-d="dn"] .today { top: 18px; left: 18px; width: 360px; }
+html[data-d="dn"] .who { top: 18px; right: 18px; width: 330px; }
+html[data-d="dn"] .who .ln { display: flex; justify-content: space-between; }
+html[data-d="dn"] .check { top: 24px; left: 50%; margin-left: -40px; width: 230px; background: #e9f2e2; color: #1d3a24; padding: 10px 14px 14px; transform: rotate(-2deg); box-shadow: 0 10px 22px rgba(0,0,0,.35); background-image: repeating-linear-gradient(180deg, transparent 0 25px, rgba(200,60,60,.35) 25px 26px); }
+html[data-d="dn"] .check .hd { display: flex; justify-content: space-between; font: 600 12px/1 "Archivo Narrow"; letter-spacing: .14em; color: #a8322a; border-bottom: 2px solid #a8322a; padding-bottom: 6px; margin-bottom: 6px; }
+html[data-d="dn"] .check .hw { font: 700 23px/26px Caveat; color: #1f3f9a; }
+html[data-d="dn"] .neon { left: 50%; bottom: 150px; transform: translateX(-50%); gap: 16px; padding: 14px 26px 16px 16px; background: rgba(18,10,14,.82); border-radius: 10px; border: 2px solid #3a2a30; font: 400 38px/1 Yellowtail; color: #ffd9e0; text-shadow: 0 0 4px #fff, 0 0 10px #ff3b5c, 0 0 22px #ff3b5c, 0 0 40px #ff3b5c; }
+html[data-d="dn"] .neon .k { font: 600 22px/1 "Oswald"; width: 44px; height: 44px; border: 2px solid #ffd9e0; border-radius: 8px; display: grid; place-items: center; box-shadow: 0 0 10px #ff3b5c, inset 0 0 10px #ff3b5c; text-shadow: inherit; }
+html[data-d="dn"] .counter { left: 0; right: 0; bottom: 0; height: 22px; background: linear-gradient(#d8dde3, #9aa3ad 40%, #e8ecf0 60%, #8a939c); box-shadow: 0 -4px 14px rgba(0,0,0,.3); }
+html[data-d="dn"] .stools { left: 50%; bottom: 22px; transform: translateX(-50%); gap: 14px; align-items: flex-end; }
+html[data-d="dn"] .stool { display: flex; flex-direction: column; align-items: center; position: relative; }
+html[data-d="dn"] .stool .top { width: 62px; height: 62px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #ff6a5a, #c42a20 60%, #8a1610); border: 4px solid #d8dde3; box-shadow: 0 0 0 2px #6a737c, 0 6px 10px rgba(0,0,0,.35), inset 0 -4px 8px rgba(0,0,0,.3); display: grid; place-items: center; color: #fff; }
+html[data-d="dn"] .stool .top svg { width: 26px; height: 26px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.5)); }
+html[data-d="dn"] .stool.on .top { background: radial-gradient(circle at 40% 35%, #ffe28a, #f0b429 60%, #b07a10); color: #3a2a08; }
+html[data-d="dn"] .stool.red .top { background: radial-gradient(circle at 40% 35%, #555, #222 60%, #111); color: #ff8a7a; }
+html[data-d="dn"] .stool .post { width: 8px; height: 14px; background: linear-gradient(90deg, #8a939c, #e8ecf0, #8a939c); }
+html[data-d="dn"] .stool .lbl { position: absolute; top: -22px; font: 600 12px/1 "Oswald"; letter-spacing: .14em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8); white-space: nowrap; }
+html[data-d="dn"] .stool .bd { position: absolute; top: -4px; right: -6px; background: #fff; color: #c42a20; font: 600 12px/1 "Oswald"; padding: 3px 5px; border-radius: 9px; border: 2px solid #c42a20; }
+html[data-d="dn"] .tray { right: 18px; bottom: 30px; padding: 10px; gap: 8px; background-color: #fff; background-image: linear-gradient(45deg, #111 25%, transparent 25%, transparent 75%, #111 75%), linear-gradient(45deg, #111 25%, transparent 25%, transparent 75%, #111 75%); background-size: 20px 20px; background-position: 0 0, 10px 10px; border: 4px solid #d8dde3; border-radius: 8px; box-shadow: 0 8px 18px rgba(0,0,0,.35); }
+html[data-d="dn"] .slot { width: 50px; height: 50px; border-radius: 50%; background: #fffdf6; display: grid; place-items: center; position: relative; color: #3a2a18; box-shadow: 0 2px 4px rgba(0,0,0,.4); }
+html[data-d="dn"] .slot.sel { background: #ffd36b; }
+html[data-d="dn"] .slot sup { position: absolute; top: -4px; left: -2px; width: 18px; height: 18px; border-radius: 50%; background: #c42a20; color: #fff; font: 600 10px/18px "Oswald"; text-align: center; }
+html[data-d="dn"] .mat { left: 18px; bottom: 30px; width: 230px; height: 160px; background: #fffdf6; padding: 8px; border: 1px solid #c9b48a; box-shadow: 0 8px 18px rgba(0,0,0,.35); transform: rotate(-1.5deg); }
+html[data-d="dn"] .mat::before { content: "WELCOME TO SNOW CAMPUS"; position: absolute; top: -1px; left: 0; right: 0; text-align: center; font: 600 10px/16px "Oswald"; letter-spacing: .2em; color: #c42a20; }
+html[data-d="dn"] .mat .m { width: 100%; height: 100%; padding-top: 10px; border: 2px dashed #c42a20; }
+
+/* ═════════ MB — the case board: cork, polaroids, red string, a tape recorder ═════════ */
+html[data-d="mb"] body { font-family: "Special Elite", monospace; color: #222; }
+html[data-d="mb"] .cork { top: 18px; right: 18px; width: 380px; height: 400px; background-color: #b98a52; background-image: radial-gradient(rgba(80,50,20,.35) 1px, transparent 1.5px), radial-gradient(rgba(255,230,190,.25) 1px, transparent 1.5px); background-size: 6px 6px, 9px 9px; border: 12px solid #5e3d22; box-shadow: 0 14px 34px rgba(0,0,0,.45), inset 0 0 30px rgba(60,30,10,.4); }
+html[data-d="mb"] .pol { position: absolute; width: 112px; padding: 8px 8px 30px; background: #f7f4ec; box-shadow: 0 4px 10px rgba(0,0,0,.35); }
+html[data-d="mb"] .pol .ph { height: 92px; display: grid; place-items: center; color: #fff; font: 700 38px/1 Georgia; filter: sepia(.25) contrast(1.05); position: relative; overflow: hidden; }
+html[data-d="mb"] .pol .ph::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 40%, transparent 40%, rgba(0,0,0,.35)); }
+html[data-d="mb"] .pol .cap { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font: 400 17px/1 "Permanent Marker"; color: #222; }
+html[data-d="mb"] .pin { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff8a7a, #b0161a); box-shadow: 0 2px 3px rgba(0,0,0,.5); z-index: 3; }
+html[data-d="mb"] .idx { position: absolute; width: 150px; padding: 10px 10px 12px; background: #fffef7; background-image: repeating-linear-gradient(180deg, transparent 0 17px, #c9d8ea 17px 18px); box-shadow: 0 4px 10px rgba(0,0,0,.3); font: 400 12.5px/18px "Special Elite"; border-top: 3px solid #e05a5a; }
+html[data-d="mb"] .board-title { position: absolute; top: -12px; left: -12px; right: -12px; height: 0; }
+html[data-d="mb"] .folder { top: 18px; left: 18px; width: 330px; }
+html[data-d="mb"] .folder .tab { width: 140px; height: 26px; background: #e2c58e; border-radius: 6px 6px 0 0; padding: 7px 12px; font: 400 12px/1 "Special Elite"; color: #5a4320; }
+html[data-d="mb"] .folder .body { background: #e2c58e; padding: 14px 16px 16px; box-shadow: 0 12px 26px rgba(0,0,0,.4); border-radius: 0 6px 6px 6px; position: relative; }
+html[data-d="mb"] .folder .t { font: 400 26px/1.1 "Special Elite"; color: #2a2010; }
+html[data-d="mb"] .folder .s { font: 400 14px/1.4 "Special Elite"; color: #5a4320; margin-top: 6px; }
+html[data-d="mb"] .stamp { position: absolute; right: 14px; top: 14px; transform: rotate(-10deg); border: 3px solid #b0161a; color: #b0161a; padding: 5px 8px; font: 700 14px/1 "Archivo Narrow"; letter-spacing: .14em; opacity: .85; border-radius: 4px; }
+html[data-d="mb"] .memo { top: 160px; left: 18px; width: 300px; background: #fffef7; padding: 12px 14px; box-shadow: 0 8px 18px rgba(0,0,0,.35); transform: rotate(-1.2deg); font: 400 14px/1.45 "Special Elite"; border-left: 4px solid #b0161a; }
+html[data-d="mb"] .memo b { display: block; font: 400 12px/1 "Special Elite"; color: #888; margin-bottom: 6px; }
+html[data-d="mb"] .rec { left: 50%; bottom: 14px; transform: translateX(-50%); padding: 14px 18px 12px; border-radius: 14px; background: linear-gradient(#3b3d42, #1e1f22); box-shadow: 0 14px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12); gap: 16px; }
+html[data-d="mb"] .cass { width: 120px; height: 66px; border-radius: 6px; background: #121316; box-shadow: inset 0 0 0 2px #45484e; position: relative; display: flex; align-items: center; justify-content: space-around; padding: 0 14px; }
+html[data-d="mb"] .cass i { width: 26px; height: 26px; border-radius: 50%; border: 5px dotted #c9ccd2; }
+html[data-d="mb"] .cass .lab { position: absolute; left: 8px; right: 8px; top: 5px; height: 14px; background: #efe6c8; font: 400 9px/14px "Special Elite"; text-align: center; color: #333; border-radius: 2px; }
+html[data-d="mb"] .cass .cnt { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); background: #000; color: #ff9a5a; font: 400 11px/1 "Special Elite"; padding: 2px 5px; }
+html[data-d="mb"] .keys { display: flex; gap: 3px; align-items: flex-start; }
+html[data-d="mb"] .key { width: 58px; height: 64px; border-radius: 3px 3px 7px 7px; background: linear-gradient(#f0f1f3, #b8bcc3); box-shadow: 0 4px 0 #6a6e75, inset 0 1px 0 #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #222; font: 400 10.5px/1 "Special Elite"; text-transform: uppercase; position: relative; }
+html[data-d="mb"] .key.red { background: linear-gradient(#e2554a, #a8221a); color: #fff; box-shadow: 0 4px 0 #5a0e0a, inset 0 1px 0 rgba(255,255,255,.4); }
+html[data-d="mb"] .key.on { transform: translateY(3px); box-shadow: 0 1px 0 #6a6e75, inset 0 2px 4px rgba(0,0,0,.25); background: linear-gradient(#d6d8dc, #a8acb3); }
+html[data-d="mb"] .key .bd { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: #ff4a3a; box-shadow: 0 0 6px #ff4a3a; }
+html[data-d="mb"] .bags { right: 18px; bottom: 18px; gap: 8px; align-items: flex-end; }
+html[data-d="mb"] .bag { width: 62px; height: 80px; border-radius: 3px; background: rgba(240,245,250,.55); border: 1px solid rgba(255,255,255,.8); box-shadow: 0 4px 10px rgba(0,0,0,.25), inset 0 0 12px rgba(255,255,255,.5); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #333; }
+html[data-d="mb"] .bag::before { content: ""; position: absolute; top: 6px; left: 4px; right: 4px; height: 3px; background: #d84a3a; border-radius: 2px; }
+html[data-d="mb"] .bag .tg { position: absolute; bottom: 5px; left: 5px; right: 5px; background: #fff; font: 400 9.5px/1.2 "Special Elite"; padding: 2px 3px; text-align: center; }
+html[data-d="mb"] .bag.sel { outline: 3px solid #ffd36b; }
+html[data-d="mb"] .bag.empty { opacity: .5; }
+html[data-d="mb"] .mapc { left: 18px; bottom: 18px; width: 230px; height: 170px; background: #f2ecd8; padding: 6px; box-shadow: 0 10px 22px rgba(0,0,0,.4); transform: rotate(1.5deg); }
+html[data-d="mb"] .prompt { left: 50%; bottom: 150px; transform: translateX(-50%) rotate(-1deg); background: #fffef7; padding: 9px 16px 9px 10px; gap: 10px; font: 400 16px/1 "Special Elite"; box-shadow: 0 6px 14px rgba(0,0,0,.35); }
+html[data-d="mb"] .prompt .k { border: 2px solid #222; padding: 4px 8px; }
+
+/* ═════════ OT — the opening titles: green serif in the fog ═════════ */
+html[data-d="ot"] body { background-image: url(bg-lot.png); font-family: "Libre Baskerville", serif; color: #eef4ee; }
+html[data-d="ot"] .grade { background: linear-gradient(180deg, rgba(16,40,30,.55) 0%, rgba(16,40,30,.1) 35%, rgba(16,40,30,.1) 70%, rgba(8,20,14,.7) 100%), linear-gradient(rgba(60,90,70,.18), rgba(60,90,70,.18)), linear-gradient(90deg, transparent 72%, rgba(8,20,14,.5)); }
+html[data-d="ot"] .gl { color: #8fe3a4; text-shadow: 0 0 6px rgba(80,220,130,.7), 0 0 22px rgba(60,200,110,.45), 0 2px 2px rgba(0,0,0,.5); }
+html[data-d="ot"] .sh { text-shadow: 0 1px 3px rgba(0,0,0,.7), 0 0 16px rgba(0,0,0,.4); }
+html[data-d="ot"] .title { top: 36px; left: 46px; }
+html[data-d="ot"] .title .t { font: 400 58px/1 "Libre Baskerville"; letter-spacing: .02em; }
+html[data-d="ot"] .title .s { font: italic 400 17px/1.3 "Libre Baskerville"; margin-top: 12px; color: #d6e6da; }
+html[data-d="ot"] .credit { top: 230px; left: 50%; transform: translateX(-50%); text-align: center; }
+html[data-d="ot"] .credit .c1 { font: italic 400 15px/1 "Libre Baskerville"; color: #c6dacb; }
+html[data-d="ot"] .credit .c2 { font: 400 34px/1.2 "Libre Baskerville"; margin-top: 6px; }
+html[data-d="ot"] .cast { top: 40px; right: 46px; width: 300px; text-align: right; }
+html[data-d="ot"] .cast h5 { font: 400 12px/1 "Libre Baskerville"; letter-spacing: .4em; text-transform: uppercase; margin-bottom: 14px; }
+html[data-d="ot"] .cr { margin-bottom: 12px; }
+html[data-d="ot"] .cr .n { font: 400 21px/1.15 "Libre Baskerville"; }
+html[data-d="ot"] .cr .w { font: italic 400 13.5px/1.3 "Libre Baskerville"; color: #c6dacb; }
+html[data-d="ot"] .cr.talk .n { color: #8fe3a4; text-shadow: 0 0 10px rgba(80,220,130,.6); }
+html[data-d="ot"] .dia { display: inline-block; width: 6px; height: 6px; background: #8fe3a4; transform: rotate(45deg); margin: 0 11px; box-shadow: 0 0 8px rgba(80,220,130,.8); vertical-align: middle; }
+html[data-d="ot"] .prompt { left: 50%; bottom: 160px; transform: translateX(-50%); gap: 14px; font: italic 400 21px/1 "Libre Baskerville"; }
+html[data-d="ot"] .prompt .k { font: 400 20px/1 "Libre Baskerville"; font-style: normal; width: 38px; height: 38px; border: 1px solid #8fe3a4; display: grid; place-items: center; box-shadow: 0 0 12px rgba(80,220,130,.4), inset 0 0 8px rgba(80,220,130,.3); }
+html[data-d="ot"] .menu { left: 50%; bottom: 40px; transform: translateX(-50%); font: 400 15px/1 "Libre Baskerville"; white-space: nowrap; align-items: center; }
+html[data-d="ot"] .menu span { display: inline-flex; align-items: center; gap: 8px; position: relative; }
+html[data-d="ot"] .menu svg { width: 18px; height: 18px; stroke-width: 1.6; }
+html[data-d="ot"] .menu .on { color: #8fe3a4; text-shadow: 0 0 10px rgba(80,220,130,.6); }
+html[data-d="ot"] .menu .red { color: #ff9a8a; }
+html[data-d="ot"] .menu sup { font: italic 400 12px/1 "Libre Baskerville"; color: #ff9a8a; }
+html[data-d="ot"] .carry { right: 46px; bottom: 36px; gap: 12px; }
+html[data-d="ot"] .slot { width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(238,244,238,.55); display: grid; place-items: center; position: relative; }
+html[data-d="ot"] .slot.sel { border-color: #8fe3a4; color: #8fe3a4; box-shadow: 0 0 14px rgba(80,220,130,.45), inset 0 0 10px rgba(80,220,130,.25); }
+html[data-d="ot"] .slot svg { stroke-width: 1.6; }
+html[data-d="ot"] .slot sup { position: absolute; bottom: -18px; font: italic 400 12px/1 "Libre Baskerville"; color: #c6dacb; }
+html[data-d="ot"] .compass { left: 46px; bottom: 36px; gap: 14px; font: italic 400 15px/1.35 "Libre Baskerville"; }
+html[data-d="ot"] .compass .ro { width: 62px; height: 62px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="mic-off" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="video-off" viewBox="0 0 24 24"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><path d="m9 10 3-3 3 3"/><path d="M12 13V7"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></symbol>
+  <symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="hammer" viewBox="0 0 24 24"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/></symbol>
+  <symbol id="paw" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></symbol>
+  <symbol id="cog" viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="mug" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
+  <symbol id="torch" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><line x1="6" x2="18" y1="6" y2="6"/><line x1="12" x2="12" y1="12" y2="12"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+  <symbol id="snow" viewBox="0 0 24 24"><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="door" viewBox="0 0 24 24"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+</svg>
+<div class="grade"></div>
+<div id="app"></div>
+<script>
+const d = new URLSearchParams(location.search).get("d") || "aw";
+document.documentElement.dataset.d = d;
+const I = (id, sz) => `<svg class="i"${sz ? ` style="width:${sz}px;height:${sz}px"` : ""}><use href="#${id}"/></svg>`;
+const P = { bia: ["B", "#c8423a"], ana: ["A", "#3f7d5a"], cai: ["C", "#2f4a78"], dee: ["D", "#b07a2c"], eli: ["E", "#6b4f8a"] };
+const F = (k, sz) => `<span class="face" style="background:${P[k][1]}${sz ? `;width:${sz}px;height:${sz}px` : ""}">${P[k][0]}</span>`;
+function minimap(c) {
+  return `<svg viewBox="0 0 180 120" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+    <rect width="180" height="120" fill="${c.snow}"/>
+    <path d="M0 100 L180 92" stroke="${c.road}" stroke-width="10"/>
+    ${c.trees ? Array.from({ length: 9 }, (_, i) => `<path d="M${8 + i * 20} 118 l5 -12 l5 12 z" fill="${c.ink}" opacity=".5"/>`).join("") : ""}
+    <rect x="22" y="14" width="44" height="70" fill="${c.bld}" stroke="${c.ink}" stroke-width="1.3"/>
+    <rect x="114" y="14" width="44" height="70" fill="${c.bld}" stroke="${c.ink}" stroke-width="1.3"/>
+    <rect x="66" y="22" width="48" height="8" fill="${c.bld}" stroke="${c.ink}" stroke-width="1.1"/>
+    <circle cx="80" cy="64" r="3.5" fill="${P.ana[1]}"/><circle cx="101" cy="62" r="3.5" fill="${P.cai[1]}"/>
+    <g transform="translate(90 74)"><circle r="9" fill="${c.me}" opacity=".25"/><path d="M0 -6 L4.5 5 L0 2.5 L-4.5 5 Z" fill="${c.me}"/></g>
+  </svg>`;
+}
+const S4 = (sel = 0) => [["mug", 1], ["torch", 2], ["key", 3], [null, 4]].map(([ic, n], i) => `<span class="slot ${i === sel ? "sel" : ""}"><sup>${n}</sup>${ic ? I(ic, 22) : ""}</span>`).join("");
+const CTL = [["mic-off", "Muted", "red"], ["video-off", "Camera"], ["share", "Share"], 0, ["smile", "Emote"], ["phone", "Phone", "", "9+"], ["users", "People", "on"], 0, ["hammer", "Build"], ["paw", "Pets"], ["cog", "Settings"]];
+
+const V = {
+  aw: () => `
+  <header class="abs chapter sh"><div class="ep">Episode 3</div><div class="t">The Courtyard</div><div class="s">Snow Campus. Five past one, and the snow hasn't stopped. −4°.</div></header>
+  <div class="abs row obj sh"><span class="dia"></span>Find Dee in the Lobby <small>24 m</small></div>
+  <div class="abs page"><div class="pn"><span>— 214 —</span><span>MANUSCRIPT</span></div>
+    <p>Cai walked into the courtyard and didn't look back.</p>
+    <p>Ana was talking, three metres away, and in the cold her voice carried further than it should have.</p></div>
+  <aside class="abs near sh"><h5>Nearby</h5>
+    <div class="nr talk">Ana<small>talking · 3 m</small></div>
+    <div class="nr">Cai<small>5 m, quiet</small></div>
+    <div class="nr" style="opacity:.75">Dee<small>the Lobby, alone</small></div>
+    <div class="nr" style="opacity:.6">Eli<small>Booth 2 · not to be disturbed</small></div></aside>
+  <div class="abs row prompt sh"><span class="k">E</span>Open the lobby door</div>
+  <div class="abs row torch sh">
+    <div class="ring"><svg class="r" viewBox="0 0 92 92"><circle cx="46" cy="46" r="40" fill="rgba(0,0,0,.25)" stroke="rgba(241,236,226,.2)" stroke-width="5"/>
+      <circle cx="46" cy="46" r="40" fill="none" stroke="#fff7d6" stroke-width="5" stroke-dasharray="${2 * Math.PI * 40 * 0.68} 999" transform="rotate(-90 46 46)" style="filter:drop-shadow(0 0 6px rgba(255,240,180,.9))"/></svg>
+      <span class="ic">${I("torch")}</span></div>
+    <div class="row inv"><span>${I("mug")}I</span><span>${I("key")}III</span><span style="opacity:.4">${I("x")}IV</span></div>
+  </div>
+  <nav class="abs row ctl sh">${CTL.filter(Boolean).map((c) => `<span class="c ${c[2] ?? ""}">${I(c[0])}${c[1]}${c[3] ? `<span class="b">${c[3]}</span>` : ""}</span>`).join("")}</nav>`,
+
+  rr: () => `
+  <header class="abs velvet title"><div class="zig"></div><div class="in"><div class="t">The Courtyard</div><div class="s">Snow Campus · ground floor · −4°</div><span class="tm">1:05</span></div></header>
+  <div class="abs card">Cai has come into the courtyard.</div>
+  <aside class="abs velvet side"><div class="zig"></div><div class="in"><h4>Those present</h4>
+    <div class="row pp">${F("ana")}<div class="grow"><div class="n">Ana</div><div class="w">is speaking, three metres away</div></div></div>
+    <div class="row pp">${F("cai")}<div class="grow"><div class="n">Cai</div><div class="w">five metres away</div></div></div>
+    <div class="row pp hl">${F("dee")}<div class="grow"><div class="n">Dee</div><div class="w">waits in the Lobby</div></div></div>
+    <div class="row pp">${F("eli")}<div class="grow"><div class="n">Eli</div><div class="w">Booth 2 — do not disturb</div></div></div></div></aside>
+  <div class="abs row prompt"><span class="k">E</span>Open the lobby door</div>
+  <div class="abs floor"><div class="zz"></div></div>
+  <div class="abs velvet map"><div class="m">${minimap({ snow: "#f2ede2", road: "#ddd3c2", bld: "#e8dccb", ink: "#2a0a0b", me: "#a51f25" })}</div></div>
+  <nav class="abs row velvet dock">${CTL.map((c) => (c ? `<span class="b ${c[2] ?? ""}">${I(c[0])}${c[3] ? `<span class="bd">${c[3]}</span>` : ""}</span>` : `<span class="vs"></span>`)).join("")}</nav>
+  <div class="abs row velvet pocket">${S4()}</div>`,
+
+  dn: () => `
+  <header class="abs lb today"><div>Today · <span class="yl">The Courtyard</span></div><div class="sm">Snow Campus · 1:05 PM · −4° · Snowing</div><div class="sm">Pie of the day: <span class="rd">cherry</span></div></header>
+  <aside class="abs lb who"><div class="yl" style="margin-bottom:4px">Who's in · 5</div>
+    <div class="ln"><span>Ana</span><span class="gr sm">talking · 3 m</span></div>
+    <div class="ln"><span>Cai</span><span class="sm">here · 5 m</span></div>
+    <div class="ln"><span>Dee</span><span class="sm">lobby → go</span></div>
+    <div class="ln"><span>Eli</span><span class="rd sm">booth 2 · busy</span></div></aside>
+  <div class="abs check"><div class="hd"><span>GUEST CHECK</span><span>No 0042</span></div><div class="hw">Cai — just walked in</div><div class="hw">1 coffee, black ☕</div><div class="hw" style="color:#a8322a">13:05</div></div>
+  <div class="abs row neon"><span class="k">E</span>Open the lobby door</div>
+  <div class="abs mat"><div class="m">${minimap({ snow: "#fffdf6", road: "#f1e6cf", bld: "#fbe9e4", ink: "#c42a20", me: "#c42a20", trees: 1 })}</div></div>
+  <div class="abs counter"></div>
+  <nav class="abs row stools">${CTL.filter(Boolean).map((c) => `<span class="stool ${c[2] ?? ""}"><span class="lbl">${c[1]}</span><span class="top">${I(c[0])}</span><span class="post"></span>${c[3] ? `<span class="bd">${c[3]}</span>` : ""}</span>`).join("")}</nav>
+  <div class="abs row tray">${S4()}</div>`,
+
+  mb: () => `
+  <div class="abs folder"><div class="tab">FILE 03 — CAMPUS</div><div class="body"><div class="t">The Courtyard</div><div class="s">Snow Campus, ground floor<br>13:05 · −4° · snow falling</div><span class="stamp">OPEN</span></div></div>
+  <div class="abs memo"><b>TAPE · 13:05</b>Cai just walked into the courtyard. Ana is talking. Dee is still in the Lobby — I should go see her.</div>
+  <aside class="abs cork">
+    <svg width="356" height="376" style="position:absolute;inset:0;z-index:2;pointer-events:none"><g stroke="#c4161c" stroke-width="2" fill="none" style="filter:drop-shadow(0 1px 1px rgba(0,0,0,.4))">
+      <path d="M70 22 Q 130 70 236 30"/><path d="M70 22 Q 90 120 92 200"/><path d="M92 200 Q 170 230 252 214"/><path d="M252 214 Q 300 260 270 316"/></g></svg>
+    <div class="pol" style="left:14px;top:20px;transform:rotate(-4deg)"><div class="ph" style="background:${P.ana[1]}">A</div><span class="cap">Ana · talking</span></div>
+    <div class="pol" style="left:180px;top:28px;transform:rotate(3deg)"><div class="ph" style="background:${P.cai[1]}">C</div><span class="cap">Cai · 5 m</span></div>
+    <div class="pol" style="left:36px;top:196px;transform:rotate(2deg)"><div class="ph" style="background:${P.dee[1]}">D</div><span class="cap">Dee · Lobby?</span></div>
+    <div class="pol" style="left:196px;top:210px;transform:rotate(-3deg);opacity:.92"><div class="ph" style="background:${P.eli[1]}">E</div><span class="cap">Eli · busy</span></div>
+    <span class="pin" style="left:62px;top:14px"></span><span class="pin" style="left:228px;top:22px"></span><span class="pin" style="left:84px;top:192px"></span><span class="pin" style="left:244px;top:206px"></span>
+    <div class="idx" style="left:150px;top:150px;transform:rotate(-2deg);z-index:2;width:120px">WHO'S IN: 5<br>near me: 2</div>
+  </aside>
+  <div class="abs mapc">${minimap({ snow: "#f2ecd8", road: "#e0d6bb", bld: "#efe6cc", ink: "#5a4320", me: "#c4161c", trees: 1 })}<span class="pin" style="left:104px;top:96px"></span></div>
+  <div class="abs row prompt"><span class="k">E</span>Open the lobby door</div>
+  <nav class="abs row rec">
+    <div class="cass"><span class="lab">SIDE A — 25 OCT</span><i></i><i></i><span class="cnt">0042</span></div>
+    <div class="keys">${CTL.filter(Boolean).map((c) => `<span class="key ${c[2] ?? ""}">${I(c[0], 18)}${c[0] === "mic-off" ? "Rec" : c[1]}${c[3] ? `<span class="bd"></span>` : ""}</span>`).join("")}</div>
+  </nav>
+  <div class="abs row bags">${[["mug", "No.1 mug"], ["torch", "No.2 torch"], ["key", "No.3 key"], [null, "No.4"]].map(([ic, t], i) => `<span class="bag ${i === 0 ? "sel" : ""} ${ic ? "" : "empty"}">${ic ? I(ic, 24) : ""}<span class="tg">${t}</span></span>`).join("")}</div>`,
+
+  ot: () => `
+  <header class="abs title"><div class="t gl">The Courtyard</div><div class="s sh">Snow Campus <span class="dia"></span> five past one <span class="dia"></span> −4°, snowing</div></header>
+  <div class="abs credit sh"><div class="c1">and walking in,</div><div class="c2 gl">Cai</div></div>
+  <aside class="abs cast sh"><h5 class="gl">Nearby</h5>
+    <div class="cr talk"><div class="n">Ana</div><div class="w">talking, three metres away</div></div>
+    <div class="cr"><div class="n">Cai</div><div class="w">five metres away</div></div>
+    <div class="cr" style="opacity:.8"><div class="n">Dee</div><div class="w">in the Lobby</div></div>
+    <div class="cr" style="opacity:.65"><div class="n">Eli</div><div class="w">Booth 2, not to be disturbed</div></div></aside>
+  <div class="abs row prompt sh"><span class="k gl">E</span>Open the lobby door</div>
+  <div class="abs row compass sh"><svg class="ro" viewBox="0 0 62 62"><circle cx="31" cy="31" r="28" fill="rgba(0,0,0,.2)" stroke="#8fe3a4" stroke-opacity=".6"/><path d="M31 8 L36 31 L31 27 L26 31 Z" fill="#8fe3a4" style="filter:drop-shadow(0 0 4px rgba(80,220,130,.8))"/><text x="31" y="56" fill="#eef4ee" font-family="Libre Baskerville" font-size="8" text-anchor="middle">S</text></svg><div>The Lobby<br><span style="color:#c6dacb">24 m, north-east</span></div></div>
+  <nav class="abs row menu sh">${CTL.filter(Boolean).map((c, i) => `${i ? `<span class="dia"></span>` : ""}<span class="${c[2] ?? ""}">${c[1]}${c[3] ? `<sup>${c[3]}</sup>` : ""}</span>`).join("")}</nav>
+  <div class="abs row carry sh">${S4(1)}</div>`,
+};
+document.getElementById("app").innerHTML = V[d]();
+</script>
+</body>
+</html>

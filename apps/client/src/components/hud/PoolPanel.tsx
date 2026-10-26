@@ -276,9 +276,11 @@ export function PoolPanel({ objectId }: { objectId: string }) {
       <div
         className="rounded-md px-2 py-1.5 min-w-0 flex-1"
         style={{
-          background: "#1a1410",
-          border: `1px solid ${turn ? "#ffb35c" : "#3a2c1f"}`,
-          boxShadow: turn ? "0 0 0 1px #ffb35c, 0 0 14px rgba(255,166,48,.25)" : undefined,
+          background: "var(--well)",
+          border: `1px solid ${turn ? "var(--vfd)" : "var(--well-edge)"}`,
+          boxShadow: turn
+            ? "0 0 0 1px var(--vfd), 0 0 14px color-mix(in srgb, var(--amber) 25%, transparent)"
+            : undefined,
         }}
       >
         <div className="flex items-center gap-1.5 min-w-0">
@@ -287,8 +289,8 @@ export function PoolPanel({ objectId }: { objectId: string }) {
             style={{
               width: 8,
               height: 8,
-              background: turn ? "#ffb35c" : "#3a2c1f",
-              boxShadow: turn ? "0 0 8px #ffa630" : undefined,
+              background: turn ? "var(--vfd)" : "var(--well-edge)",
+              boxShadow: turn ? "0 0 8px var(--amber)" : undefined,
             }}
           />
           <span className="text-xs font-semibold truncate" style={{ color: s ? "var(--cream)" : "var(--muted)" }}>
@@ -316,7 +318,7 @@ export function PoolPanel({ objectId }: { objectId: string }) {
                   <span
                     key={n}
                     className="inline-block rounded-full"
-                    style={{ width: 18, height: 18, background: "#0d0906", border: "1px solid #2a2016" }}
+                    style={{ width: 18, height: 18, background: "var(--pit)", border: "1px solid var(--well-on)" }}
                   />
                 ))}
             <span className="ml-1">
@@ -378,8 +380,8 @@ export function PoolPanel({ objectId }: { objectId: string }) {
             className="pool-call lcd absolute left-1/2 -translate-x-1/2 bottom-full mb-6 pointer-events-none whitespace-nowrap"
             style={{
               fontSize: call.tone === "win" ? 48 : 40,
-              color: call.tone === "foul" ? "#ff6a3a" : call.tone === "good" ? "#d4e4a6" : "#ffb35c",
-              textShadow: `0 0 18px ${call.tone === "foul" ? "#ff4a2a" : call.tone === "good" ? "#a8b98a" : "#ffa630"}, 0 3px 0 #15120f`,
+              color: call.tone === "foul" ? "var(--bad)" : call.tone === "good" ? "var(--lcd-good)" : "var(--vfd)",
+              textShadow: `0 0 18px ${call.tone === "foul" ? "var(--bad-glow)" : call.tone === "good" ? "var(--lcd-good-glow)" : "var(--amber)"}, 0 3px 0 #15120f`,
             }}
           >
             {call.text}
@@ -400,7 +402,7 @@ export function PoolPanel({ objectId }: { objectId: string }) {
             {playing && info?.clock ? (
               <span
                 className="lcd text-base tabular-nums"
-                style={{ color: (info.clockLeft ?? 99) < 8 ? "#ff6a3a" : undefined }}
+                style={{ color: (info.clockLeft ?? 99) < 8 ? "var(--bad)" : undefined }}
                 title={t("clock")}
               >
                 {Math.ceil(info.clockLeft)}s
@@ -525,7 +527,7 @@ export function PoolPanel({ objectId }: { objectId: string }) {
                     aria-valuenow={Math.round((info?.power ?? 0) * 100)}
                     tabIndex={0}
                     className="relative rounded-md touch-none cursor-ns-resize flex flex-col-reverse gap-px p-1"
-                    style={{ width: 26, height: 64, background: "#0d0906", border: "1px solid #3a2c1f" }}
+                    style={{ width: 26, height: 64, background: "var(--pit)", border: "1px solid var(--well-edge)" }}
                     onPointerDown={(e) => {
                       e.currentTarget.setPointerCapture(e.pointerId);
                       powerAt(e);
@@ -534,13 +536,16 @@ export function PoolPanel({ objectId }: { objectId: string }) {
                   >
                     {Array.from({ length: 12 }, (_, i) => {
                       const on = (info?.power ?? 0) * 12 > i;
-                      const col = i > 9 ? "#ff5a36" : i > 6 ? "#ffb35c" : "#d4e4a6";
+                      const col = i > 9 ? "var(--hot)" : i > 6 ? "var(--vfd)" : "var(--lcd-good)";
                       return (
                         <span
                           // biome-ignore lint/suspicious/noArrayIndexKey: fixed LEDs
                           key={i}
                           className="block rounded-[1px] flex-1"
-                          style={{ background: on ? col : "#1e1712", boxShadow: on ? `0 0 5px ${col}` : undefined }}
+                          style={{
+                            background: on ? col : "var(--meter-off)",
+                            boxShadow: on ? `0 0 5px ${col}` : undefined,
+                          }}
                         />
                       );
                     })}
@@ -641,7 +646,10 @@ export function PoolPanel({ objectId }: { objectId: string }) {
 
           {/* the chalkboard: the last games here, and who wins most */}
           {!playing && record?.last?.length ? (
-            <div className="mt-2 rounded-md px-2 py-1.5" style={{ background: "#1e2a22", border: "1px solid #3a2c1f" }}>
+            <div
+              className="mt-2 rounded-md px-2 py-1.5"
+              style={{ background: "#1e2a22", border: "1px solid var(--well-edge)" }}
+            >
               <p className="mono text-[10px]" style={{ color: "#c9d6c0" }}>
                 {t("record").toUpperCase()} ·{" "}
                 {Object.entries(record.wins)

@@ -1,0 +1,135 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia login and avatar mock</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600&family=Inter:wght@400;500;600&family=Special+Elite&display=block" rel="stylesheet">
+<style>
+/* ?s=login|avatar|avatar-mobile — the look of the HUD (docs/plan/45-the-ui.md) on the two pages outside the world */
+:root { --wood: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27600%27%20height=%27240%27%3E%3Cfilter%20id=%27g%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.006%200.22%27%20numOctaves=%273%27%20seed=%277%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%200.55%200%200%200%200%200.36%200%200%200%200%200.2%201.1%200%200%200%20-0.35%27/%3E%3C/filter%3E%3Crect%20width=%27600%27%20height=%27240%27%20fill=%27%234e301b%27/%3E%3Crect%20width=%27600%27%20height=%27240%27%20filter=%27url(%23g)%27/%3E%3C/svg%3E"); --panel: #17181d; --cream: #ece6da; --dim: #a7a094; --amber: #f1d79a; --edge: #3a3631; --well: #2f2d2a; --ink: #1a1a1e; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { font-family: Inter, sans-serif; color: var(--cream); background: #111216; position: relative; -webkit-font-smoothing: antialiased; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.frame { border: 5px solid transparent; border-radius: 6px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--wood) 0 0 / 600px 240px border-box; box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.55), 0 20px 50px rgba(0,0,0,.55); }
+.title { font: 600 26px/1.05 "Cormorant Garamond"; letter-spacing: .14em; text-transform: uppercase; }
+.zig { height: 6px; width: 150px; background-image: linear-gradient(135deg, var(--amber) 25%, transparent 25%), linear-gradient(225deg, var(--amber) 25%, transparent 25%); background-size: 8px 6px; opacity: .55; }
+.mono { font-family: "Special Elite", monospace; }
+.lab { font: 400 11.5px/1 "Special Elite"; letter-spacing: .06em; text-transform: uppercase; color: var(--amber); }
+.field { width: 100%; height: 44px; border-radius: 4px; background: #121318; border: 1px solid var(--well); color: var(--cream); padding: 0 12px; font: 15px Inter; display: flex; align-items: center; }
+.field.ph { color: #6f6a62; }
+.key { height: 44px; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 400 13px "Special Elite"; background: rgba(255,255,255,.04); border: 1px solid rgba(241,215,154,.16); color: var(--cream); }
+.key.on { background: var(--amber); color: var(--ink); border-color: transparent; box-shadow: 0 0 14px rgba(241,215,154,.35); }
+.link { font-size: 12.5px; color: var(--dim); text-decoration: underline; text-underline-offset: 3px; }
+.mark { color: var(--amber); }
+/* login */
+.bg { position: absolute; inset: 0; background: url(bg-courtyard.png) center / cover; }
+.bg::after { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 100% at 50% 50%, rgba(10,14,22,.2) 20%, rgba(4,7,12,.85) 100%), linear-gradient(rgba(14,24,40,.4), rgba(14,24,40,.4)); }
+.login { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 380px; padding: 26px 26px 22px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand b { font: 600 34px/1 "Cormorant Garamond"; letter-spacing: .2em; }
+.tag { font: italic 500 14px "Inter"; color: var(--dim); margin-top: 10px; }
+.foot { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; font: 400 12px "Special Elite"; color: rgba(236,230,218,.55); letter-spacing: .04em; }
+/* avatar */
+.page { max-width: 1060px; margin: 0 auto; padding: 28px 32px; height: 100%; display: flex; flex-direction: column; }
+.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+.ghost { height: 34px; padding: 0 12px; display: flex; align-items: center; gap: 6px; border-radius: 4px; border: 1px solid rgba(241,215,154,.2); color: var(--dim); font: 400 13px "Special Elite"; }
+.cols { display: grid; grid-template-columns: 360px 1fr; gap: 26px; flex: 1; min-height: 0; }
+.prev { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.stage { flex: 1; border-radius: 4px; background: radial-gradient(70% 60% at 50% 70%, #2a2b31, #121318 75%); border: 1px solid var(--well); display: grid; place-items: center; position: relative; overflow: hidden; }
+.stage img { height: 92%; object-fit: contain; }
+.stage .turn { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+.stage .turn span { width: 34px; height: 30px; border-radius: 4px; display: grid; place-items: center; background: rgba(255,255,255,.05); border: 1px solid rgba(241,215,154,.16); color: var(--dim); }
+.btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.opts { padding: 22px 24px; display: flex; flex-direction: column; min-height: 0; }
+.tabs { display: flex; gap: 4px; margin-top: 18px; border-bottom: 1px solid var(--edge); }
+.tab { padding: 10px 14px 12px; font: 500 14px Inter; color: var(--dim); position: relative; }
+.tab.on { color: var(--amber); }
+.tab.on::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--amber); box-shadow: 0 0 8px rgba(241,215,154,.8); }
+.row { margin-top: 20px; }
+.row .lab { margin-bottom: 10px; display: block; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { height: 34px; padding: 0 14px; border-radius: 4px; display: flex; align-items: center; font: 400 13px "Special Elite"; background: rgba(255,255,255,.04); border: 1px solid rgba(241,215,154,.14); color: var(--cream); }
+.pill.on { background: var(--amber); color: var(--ink); border-color: transparent; }
+.sw { width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(0,0,0,.4); }
+.sw.on { outline: 2px solid var(--amber); outline-offset: 3px; }
+.sws { display: flex; gap: 10px; flex-wrap: wrap; }
+html[data-s="avatar-mobile"] .page { padding: 16px 14px; }
+html[data-s="avatar-mobile"] .cols { grid-template-columns: 1fr; grid-template-rows: 300px 1fr; gap: 14px; }
+html[data-s="avatar-mobile"] .prev { padding: 12px; }
+html[data-s="avatar-mobile"] .opts { padding: 16px; }
+html[data-s="avatar-mobile"] .title { font-size: 22px; }
+html[data-s="avatar-mobile"] .tab { padding: 8px 9px 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="mic-off" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="video-off" viewBox="0 0 24 24"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><path d="m9 10 3-3 3 3"/><path d="M12 13V7"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></symbol>
+  <symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="hammer" viewBox="0 0 24 24"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/></symbol>
+  <symbol id="paw" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></symbol>
+  <symbol id="cog" viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="mug" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
+  <symbol id="torch" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><line x1="6" x2="18" y1="6" y2="6"/><line x1="12" x2="12" y1="12" y2="12"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+  <symbol id="snow" viewBox="0 0 24 24"><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="door" viewBox="0 0 24 24"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+</svg>
+<div id="app"></div>
+<script>
+const s = new URLSearchParams(location.search).get("s") || "login";
+document.documentElement.dataset.s = s;
+const I = (id, sz) => `<svg class="i"${sz ? ` style="width:${sz}px;height:${sz}px"` : ""}><use href="#${id}"/></svg>`;
+const LAMP = (n = 38) => `<svg viewBox="0 0 46 46" width="${n}" height="${n}" class="mark"><path d="M23 6 V40" stroke="currentColor" stroke-width="1.8"/><path d="M23 9 H33 L35 13 H25" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M27 13 L22 30 H44 L37 13" fill="currentColor" fill-opacity=".16"/></svg>`;
+const SKIN = ["#f3d2b8", "#e6b48f", "#c98d66", "#a8683f", "#7a4a2c", "#4e2e1c"];
+const HAIRC = ["#1c1714", "#3a2a1f", "#6a4128", "#a8672f", "#d9b06a", "#e8e2d6", "#b5462a", "#5f7a3a"];
+const pills = (xs, on) => `<div class="pills">${xs.map((x) => `<span class="pill ${x === on ? "on" : ""}">${x}</span>`).join("")}</div>`;
+const sws = (xs, on) => `<div class="sws">${xs.map((c, i) => `<span class="sw ${i === on ? "on" : ""}" style="background:${c}"></span>`).join("")}</div>`;
+if (s === "login") document.getElementById("app").innerHTML = `
+  <div class="bg"></div>
+  <form class="frame login">
+    <div class="brand">${LAMP()}<b>YUTOPIA</b></div>
+    <p class="tag">Your team's studio, up in the snow. Walk in.</p>
+    <div class="zig" style="margin:18px 0 20px"></div>
+    <p class="lab" style="margin-bottom:12px">Sign in</p>
+    <div class="field ph" style="margin-bottom:10px">Email</div>
+    <div class="field ph" style="margin-bottom:14px">Password</div>
+    <div class="key on" style="width:100%">Walk in</div>
+    <div style="display:flex;justify-content:space-between;margin-top:16px"><span class="link">Forgot your password?</span><span class="link">Make an account</span></div>
+  </form>
+  <p class="foot">Snow Campus</p>`;
+else document.getElementById("app").innerHTML = `
+  <div class="page">
+    <div class="top"><div class="brand">${LAMP(30)}<b style="font-size:24px">YUTOPIA</b></div><span class="ghost">← Back</span></div>
+    <div class="cols">
+      <section class="frame prev">
+        <div class="stage"><img src="avatar-preview.png"></div>
+        <div class="btns"><span class="key">⟳ Shuffle</span><span class="key">▶ Walk</span></div>
+        <span class="key on">Save my look</span>
+      </section>
+      <section class="frame opts">
+        <h1 class="title">My look</h1>
+        <div class="zig" style="margin-top:12px"></div>
+        <div class="tabs"><span class="tab on">Body</span><span class="tab">Hair</span><span class="tab">Clothes</span><span class="tab">Extras</span></div>
+        <div class="row"><span class="lab">Gender</span>${pills(["Neutral", "Feminine", "Masculine"], "Neutral")}</div>
+        <div class="row"><span class="lab">Body</span>${pills(["regular", "broad", "slim"], "regular")}</div>
+        <div class="row"><span class="lab">Skin</span>${sws(SKIN, 2)}</div>
+        ${s === "avatar" ? `<div class="row"><span class="lab">Hair colour · on the Hair tab</span>${sws(HAIRC, 1)}</div>` : ""}
+      </section>
+    </div>
+  </div>`;
+</script>
+</body>
+</html>

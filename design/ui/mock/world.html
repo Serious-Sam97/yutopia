@@ -1,0 +1,464 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia HUD mock, real-world looks</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,700;1,800&family=Bebas+Neue&family=Caveat:wght@500;700&family=Courier+Prime:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&family=Kalam:wght@400;700&display=block" rel="stylesheet">
+<style>
+/* Six looks from things in the world, not computers. ?d=p|q|r|s|t|u */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { background: #c9ced6 url(bg-courtyard.png) center / cover no-repeat; position: relative; -webkit-font-smoothing: antialiased; }
+svg.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.abs { position: absolute; }
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.grow { flex: 1; min-width: 0; }
+.face { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 12px/1 Inter; flex: none; position: relative; }
+
+/* ═════════ P — Wayfinding: the campus's own signs ═════════ */
+html[data-d="p"] body { font-family: Inter, sans-serif; color: #fff; }
+html[data-d="p"] .sign { background: #17283a; border-radius: 6px; box-shadow: 0 6px 18px rgba(10,20,35,.3); }
+html[data-d="p"] .picto { width: 44px; height: 44px; border-radius: 4px; background: #fff; color: #17283a; display: grid; place-items: center; flex: none; }
+html[data-d="p"] .picto svg { width: 26px; height: 26px; stroke-width: 2.4; }
+html[data-d="p"] .here { top: 18px; left: 18px; padding: 12px 18px 12px 12px; gap: 14px; }
+html[data-d="p"] .here .t { font: 800 30px/1 Inter; letter-spacing: -.01em; }
+html[data-d="p"] .here .s { font: 500 14px/1 Inter; color: #a8bdd3; margin-top: 6px; }
+html[data-d="p"] .time { background: #ffcc00; color: #17283a; border-radius: 4px; padding: 10px 12px; font: 800 26px/1 Inter; font-variant-numeric: tabular-nums; margin-left: 10px; }
+html[data-d="p"] .dirs { top: 100px; left: 18px; width: 340px; overflow: hidden; }
+html[data-d="p"] .dir { height: 46px; padding: 0 14px 0 8px; gap: 12px; font: 700 17px/1 Inter; border-top: 1px solid #2c4258; }
+html[data-d="p"] .dir:first-child { border-top: 0; }
+html[data-d="p"] .dir .arr { width: 30px; height: 30px; border-radius: 3px; background: #ffcc00; color: #17283a; display: grid; place-items: center; }
+html[data-d="p"] .dir .arr svg { stroke-width: 3; }
+html[data-d="p"] .dir .m { margin-left: auto; font: 600 14px/1 Inter; color: #a8bdd3; font-variant-numeric: tabular-nums; }
+html[data-d="p"] .board { top: 18px; right: 18px; width: 380px; background: #0d0f12; border-radius: 6px; padding: 14px 16px; box-shadow: 0 6px 18px rgba(0,0,0,.3); }
+html[data-d="p"] .board h4 { font: 800 13px/1 Inter; letter-spacing: .12em; text-transform: uppercase; color: #ffcc00; display: flex; justify-content: space-between; margin-bottom: 10px; }
+html[data-d="p"] .board .r { display: grid; grid-template-columns: 22px 1fr 1.2fr 70px; align-items: center; gap: 10px; height: 34px; border-top: 1px solid #23272e; font: 600 14.5px/1 Inter; }
+html[data-d="p"] .board .r.hd { height: 22px; border: 0; font: 600 10.5px/1 Inter; letter-spacing: .1em; text-transform: uppercase; color: #7b8494; }
+html[data-d="p"] .board .r .w { color: #c5ccd6; font-weight: 500; }
+html[data-d="p"] .board .st { font: 700 11px/1 Inter; letter-spacing: .06em; text-transform: uppercase; text-align: right; }
+html[data-d="p"] .board .face { width: 22px; height: 22px; font-size: 10px; border-radius: 3px; }
+html[data-d="p"] .arrive { top: 18px; left: 50%; transform: translateX(-50%); padding: 8px 16px 8px 8px; gap: 10px; font: 600 15px/1 Inter; }
+html[data-d="p"] .arrive .picto { width: 32px; height: 32px; background: #3fbf6f; color: #fff; }
+html[data-d="p"] .arrive .picto svg { width: 20px; height: 20px; }
+html[data-d="p"] .prompt { left: 50%; bottom: 150px; transform: translateX(-50%); background: #ffcc00; color: #17283a; border-radius: 4px; padding: 8px 18px 8px 8px; gap: 12px; font: 800 18px/1 Inter; box-shadow: 0 6px 18px rgba(10,20,35,.3); }
+html[data-d="p"] .prompt .k { width: 34px; height: 34px; border-radius: 3px; background: #17283a; color: #ffcc00; display: grid; place-items: center; font: 800 17px/1 Inter; }
+html[data-d="p"] .line { left: 18px; bottom: 18px; width: 340px; padding: 14px 18px 16px; }
+html[data-d="p"] .line h5 { font: 700 11px/1 Inter; letter-spacing: .12em; text-transform: uppercase; color: #a8bdd3; margin-bottom: 14px; }
+html[data-d="p"] .dock { left: 50%; bottom: 18px; transform: translateX(-50%); padding: 10px; gap: 8px; }
+html[data-d="p"] .key { width: 64px; display: flex; flex-direction: column; align-items: center; gap: 6px; font: 700 10.5px/1 Inter; letter-spacing: .06em; text-transform: uppercase; color: #a8bdd3; position: relative; }
+html[data-d="p"] .key .picto { width: 46px; height: 46px; }
+html[data-d="p"] .key.on .picto { background: #ffcc00; }
+html[data-d="p"] .key.on { color: #ffcc00; }
+html[data-d="p"] .key.red .picto { background: #e4572e; color: #fff; }
+html[data-d="p"] .key.red { color: #ff9a7a; }
+html[data-d="p"] .key .b { position: absolute; top: -6px; right: 4px; background: #e4572e; color: #fff; font: 800 11px/1 Inter; padding: 3px 5px; border-radius: 3px; }
+html[data-d="p"] .vs { width: 1px; height: 52px; background: #2c4258; margin: 0 2px; }
+html[data-d="p"] .pocket { right: 18px; bottom: 18px; padding: 10px; gap: 8px; }
+html[data-d="p"] .slot { width: 46px; height: 46px; border-radius: 4px; border: 2px dashed #3a536c; display: grid; place-items: center; position: relative; color: #17283a; }
+html[data-d="p"] .slot.full { background: #fff; border: 0; }
+html[data-d="p"] .slot.sel { background: #ffcc00; }
+html[data-d="p"] .slot sup { position: absolute; top: -8px; left: -6px; width: 18px; height: 18px; border-radius: 50%; background: #17283a; color: #fff; font: 700 10px/18px Inter; text-align: center; border: 2px solid #fff; }
+
+/* ═════════ Q — Office stationery: badge, notes, label tape ═════════ */
+html[data-d="q"] body { font-family: "Courier Prime", monospace; color: #222; }
+html[data-d="q"] .badge { top: 0; left: 26px; width: 220px; }
+html[data-d="q"] .strap { width: 34px; height: 30px; margin: 0 auto; background: repeating-linear-gradient(90deg, #c8423a 0 6px, #a8332c 6px 7px); }
+html[data-d="q"] .clip { width: 48px; height: 14px; margin: -2px auto 0; border-radius: 3px; background: linear-gradient(#e6e8eb, #9aa1aa); box-shadow: 0 1px 2px rgba(0,0,0,.4); position: relative; z-index: 1; }
+html[data-d="q"] .card { margin-top: -6px; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 22px rgba(0,0,0,.28); transform: rotate(-1.5deg); }
+html[data-d="q"] .card .top { background: #c8423a; color: #fff; padding: 12px 14px 10px; font: 900 15px/1 Archivo; letter-spacing: .2em; display: flex; justify-content: space-between; }
+html[data-d="q"] .card .top small { font: 700 10px/1 Archivo; letter-spacing: .1em; opacity: .8; align-self: center; }
+html[data-d="q"] .card .mid { padding: 12px 14px; gap: 12px; }
+html[data-d="q"] .card .ph { width: 58px; height: 70px; border-radius: 4px; background: #c8423a; display: grid; place-items: center; color: #fff; font: 800 26px/1 Archivo; box-shadow: inset 0 0 0 3px #fff, 0 0 0 1px #ddd; }
+html[data-d="q"] .card .nm { font: 800 21px/1 Archivo; color: #111; }
+html[data-d="q"] .card .rl { font: 400 13px/1.3 "Courier Prime"; color: #555; margin-top: 4px; }
+html[data-d="q"] .card .bot { border-top: 1px dashed #ccc; padding: 9px 14px 11px; font: 700 13px/1.2 "Courier Prime"; display: flex; justify-content: space-between; }
+html[data-d="q"] .card .bot .t { font: 700 20px/1 "Courier Prime"; }
+html[data-d="q"] .sticky { top: 22px; left: 50%; margin-left: -110px; width: 230px; padding: 16px 16px 18px; background: #ffe866; transform: rotate(1.8deg); box-shadow: 0 8px 14px rgba(0,0,0,.2); font: 700 22px/1.15 Caveat; color: #2a2a2a; }
+html[data-d="q"] .sticky::before { content: ""; position: absolute; top: -10px; left: 50%; margin-left: -40px; width: 80px; height: 22px; background: rgba(255,255,255,.55); transform: rotate(-3deg); }
+html[data-d="q"] .board { top: 18px; right: 22px; width: 330px; }
+html[data-d="q"] .cb { background: #b98a52; border-radius: 12px; padding: 30px 12px 12px; box-shadow: 0 10px 22px rgba(0,0,0,.3); position: relative; background-image: radial-gradient(rgba(0,0,0,.06) 1px, transparent 1px); background-size: 4px 4px; }
+html[data-d="q"] .cb .metal { position: absolute; top: -10px; left: 50%; margin-left: -60px; width: 120px; height: 40px; border-radius: 8px 8px 4px 4px; background: linear-gradient(#f2f3f5, #9aa1aa); box-shadow: 0 2px 4px rgba(0,0,0,.35); }
+html[data-d="q"] .sheet { background: #fbfaf5; padding: 14px 14px 10px; background-image: repeating-linear-gradient(180deg, transparent 0 33px, #d6e2f0 33px 34px); }
+html[data-d="q"] .sheet h4 { font: 800 15px/1 Archivo; letter-spacing: .08em; text-transform: uppercase; border-bottom: 2px solid #222; padding-bottom: 7px; margin-bottom: 4px; }
+html[data-d="q"] .entry { height: 34px; gap: 10px; font: 400 14.5px/1 "Courier Prime"; }
+html[data-d="q"] .entry .face { width: 24px; height: 24px; font-size: 10px; }
+html[data-d="q"] .entry .hw { margin-left: auto; font: 700 19px/1 Caveat; color: #1f4fa0; }
+html[data-d="q"] .entry .hw.r { color: #c8423a; }
+html[data-d="q"] .entry.hl { background: rgba(255, 232, 102, .55); margin: 0 -6px; padding: 0 6px; }
+html[data-d="q"] .entry b { font-weight: 700; }
+html[data-d="q"] .map { left: 22px; bottom: 22px; width: 220px; height: 170px; background: #f3efe2; transform: rotate(1.2deg); box-shadow: 0 8px 18px rgba(0,0,0,.3); overflow: hidden; }
+html[data-d="q"] .map::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 49.5%, rgba(0,0,0,.12) 50%, transparent 50.5%), linear-gradient(180deg, transparent 49.5%, rgba(0,0,0,.08) 50%, transparent 50.5%); }
+html[data-d="q"] .tape { left: 268px; bottom: 24px; gap: 8px; align-items: flex-end; }
+html[data-d="q"] .dymo { height: 36px; padding: 0 10px; gap: 6px; display: flex; align-items: center; border-radius: 3px; background: linear-gradient(#2a2a2a, #111); color: #f4f4f4; font: 700 12.5px/1 Archivo; letter-spacing: .13em; text-shadow: 0 -1px 0 #000, 0 1px 0 rgba(255,255,255,.25); box-shadow: 0 3px 6px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.12); position: relative; }
+html[data-d="q"] .dymo:nth-child(odd) { transform: rotate(-1deg); } html[data-d="q"] .dymo:nth-child(3n) { transform: rotate(1.2deg); }
+html[data-d="q"] .dymo.red { background: linear-gradient(#d4473e, #a92f27); }
+html[data-d="q"] .dymo.on { background: linear-gradient(#2c5fb8, #1d4590); }
+html[data-d="q"] .dymo .n { background: #ffe866; color: #222; text-shadow: none; font: 700 11px/1 Archivo; letter-spacing: 0; padding: 3px 5px; border-radius: 2px; margin-left: 2px; }
+html[data-d="q"] .tags { right: 22px; bottom: 22px; gap: 8px; align-items: flex-end; }
+html[data-d="q"] .tag { width: 58px; height: 76px; background: #d9b88a; border-radius: 4px 4px 4px 4px; clip-path: polygon(0 18%, 50% 0, 100% 18%, 100% 100%, 0 100%); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 8px; gap: 6px; color: #3a2a18; position: relative; box-shadow: 0 4px 8px rgba(0,0,0,.25); font: 700 18px/1 Caveat; }
+html[data-d="q"] .tag::before { content: ""; position: absolute; top: 11px; left: 50%; margin-left: -5px; width: 10px; height: 10px; border-radius: 50%; background: #c9ced6; box-shadow: inset 0 0 0 2px #b0905f; }
+html[data-d="q"] .tag.sel { background: #ffe866; transform: translateY(-8px); }
+html[data-d="q"] .tag.empty { opacity: .55; }
+html[data-d="q"] .strip { left: 50%; bottom: 140px; transform: translateX(-50%) rotate(-.8deg); background: #fff; padding: 10px 18px; gap: 10px; font: 400 16px/1 "Courier Prime"; box-shadow: 0 6px 14px rgba(0,0,0,.25); clip-path: polygon(0 4%, 4% 0, 9% 5%, 15% 0, 22% 4%, 30% 0, 38% 5%, 46% 0, 54% 4%, 62% 0, 70% 5%, 78% 0, 86% 4%, 94% 0, 100% 3%, 100% 100%, 0 100%); }
+html[data-d="q"] .strip .k { border: 2px solid #222; border-radius: 4px; padding: 3px 7px; font-weight: 700; }
+
+/* ═════════ R — Swiss print: type and hairlines, one red ═════════ */
+html[data-d="r"] body { font-family: Archivo, sans-serif; color: #111; }
+html[data-d="r"] .blk { background: #fff; }
+html[data-d="r"] .head { top: 0; left: 0; padding: 18px 24px 16px; gap: 28px; align-items: flex-end; }
+html[data-d="r"] .head .t { font: 800 44px/.9 Archivo; letter-spacing: -.035em; }
+html[data-d="r"] .head .s { font: 500 13px/1.3 Archivo; color: #666; }
+html[data-d="r"] .head .tm { font: 300 44px/.9 Archivo; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+html[data-d="r"] .head .red { width: 14px; height: 14px; background: #e30613; align-self: flex-start; margin-top: 4px; }
+html[data-d="r"] .people { top: 0; right: 0; width: 360px; padding: 18px 22px 14px; }
+html[data-d="r"] .people h4 { font: 800 13px/1 Archivo; letter-spacing: .02em; display: flex; justify-content: space-between; border-bottom: 2px solid #111; padding-bottom: 8px; }
+html[data-d="r"] .pr { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid #ddd; }
+html[data-d="r"] .pr .no { font: 500 12px/1 Archivo; color: #999; font-variant-numeric: tabular-nums; }
+html[data-d="r"] .pr .n { font: 700 17px/1.1 Archivo; letter-spacing: -.01em; }
+html[data-d="r"] .pr .w { font: 400 13px/1.2 Archivo; color: #666; margin-top: 2px; }
+html[data-d="r"] .pr .st { font: 700 11px/1 Archivo; letter-spacing: .06em; text-transform: uppercase; }
+html[data-d="r"] .pr.hl .n { color: #e30613; }
+html[data-d="r"] .sub { font: 600 11px/1 Archivo; letter-spacing: .08em; text-transform: uppercase; color: #999; margin: 14px 0 0; }
+html[data-d="r"] .note { top: 98px; left: 0; gap: 10px; font: 500 15px/1.3 Archivo; }
+html[data-d="r"] .note .bar { width: 3px; align-self: stretch; background: #e30613; }
+html[data-d="r"] .nav { left: 0; right: 0; bottom: 0; height: 64px; padding: 0 24px; gap: 0; }
+html[data-d="r"] .nav .it { height: 64px; padding: 0 18px; display: flex; align-items: center; gap: 8px; font: 600 15px/1 Archivo; border-left: 1px solid #ddd; }
+html[data-d="r"] .nav .it:first-child { border-left: 0; padding-left: 0; }
+html[data-d="r"] .nav .it.red { color: #e30613; }
+html[data-d="r"] .nav .it.on { background: #111; color: #fff; }
+html[data-d="r"] .nav .it sup { font: 700 11px/1 Archivo; color: #e30613; }
+html[data-d="r"] .nav .it kbd { font: 500 11px/1 Archivo; color: #aaa; }
+html[data-d="r"] .nav .it.on kbd { color: #888; }
+html[data-d="r"] .nav .sp { margin-left: auto; }
+html[data-d="r"] .nav .pk { font: 500 14px/1 Archivo; gap: 14px; }
+html[data-d="r"] .nav .pk span { display: flex; gap: 5px; align-items: baseline; color: #666; }
+html[data-d="r"] .nav .pk span b { font: 700 11px/1 Archivo; color: #999; }
+html[data-d="r"] .nav .pk span.sel { color: #111; font-weight: 700; border-bottom: 3px solid #e30613; padding-bottom: 3px; }
+html[data-d="r"] .map { left: 24px; bottom: 88px; width: 200px; height: 140px; padding: 10px; }
+html[data-d="r"] .prompt { left: 50%; bottom: 100px; transform: translateX(-50%); padding: 12px 18px; gap: 12px; font: 600 17px/1 Archivo; }
+html[data-d="r"] .prompt .k { font: 800 17px/1 Archivo; color: #e30613; }
+
+/* ═════════ S — Blueprint: the architect's drawing ═════════ */
+html[data-d="s"] body { font-family: "IBM Plex Mono", monospace; color: #e8f1ff; }
+html[data-d="s"] .bp { background: rgba(22, 64, 128, .9); border: 1.5px solid #cfe2ff; background-image: linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px); background-size: 12px 12px; box-shadow: 0 8px 22px rgba(10, 30, 70, .35); }
+html[data-d="s"] .tblock { top: 18px; left: 18px; display: grid; grid-template-columns: auto auto auto; }
+html[data-d="s"] .tblock > div { padding: 8px 14px; border-right: 1px solid #cfe2ff; }
+html[data-d="s"] .tblock > div:last-child { border-right: 0; }
+html[data-d="s"] .tblock .k { font: 500 9.5px/1 "IBM Plex Mono"; letter-spacing: .14em; text-transform: uppercase; color: #9fc0ef; }
+html[data-d="s"] .tblock .v { font: 600 20px/1.1 "IBM Plex Mono"; margin-top: 5px; }
+html[data-d="s"] .tblock .v.sm { font-size: 14px; }
+html[data-d="s"] .sched { top: 18px; right: 18px; width: 360px; }
+html[data-d="s"] .sched h4 { font: 600 12px/1 "IBM Plex Mono"; letter-spacing: .14em; text-transform: uppercase; padding: 9px 12px; border-bottom: 1.5px solid #cfe2ff; display: flex; justify-content: space-between; }
+html[data-d="s"] .sr { display: grid; grid-template-columns: 34px 1fr 1fr 44px; border-bottom: 1px solid rgba(207,226,255,.45); font: 400 13px/1 "IBM Plex Mono"; }
+html[data-d="s"] .sr > * { padding: 9px 8px; border-right: 1px solid rgba(207,226,255,.45); }
+html[data-d="s"] .sr > *:last-child { border-right: 0; text-align: center; }
+html[data-d="s"] .sr.hd { font: 500 9.5px/1 "IBM Plex Mono"; letter-spacing: .12em; color: #9fc0ef; text-transform: uppercase; }
+html[data-d="s"] .sr .tag { display: grid; place-items: center; }
+html[data-d="s"] .sr .tag i { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #e8f1ff; display: grid; place-items: center; font: 600 11px/1 "IBM Plex Mono"; font-style: normal; }
+html[data-d="s"] .sr.hl { background: rgba(255, 210, 90, .18); }
+html[data-d="s"] .sr b { font-weight: 600; }
+html[data-d="s"] .plan { left: 18px; bottom: 18px; width: 300px; height: 210px; }
+html[data-d="s"] .note { top: 104px; left: 18px; gap: 10px; font: 500 14px/1.2 "IBM Plex Mono"; padding: 9px 14px 9px 9px; }
+html[data-d="s"] .callouts { left: 50%; bottom: 22px; transform: translateX(-50%); gap: 10px; padding: 12px 16px; }
+html[data-d="s"] .co { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; font: 500 10px/1 "IBM Plex Mono"; letter-spacing: .08em; text-transform: uppercase; color: #cfe2ff; width: 58px; }
+html[data-d="s"] .co .c { width: 46px; height: 46px; border-radius: 50%; border: 1.5px solid #e8f1ff; display: grid; place-items: center; position: relative; }
+html[data-d="s"] .co .c::after { content: ""; position: absolute; left: -1.5px; right: -1.5px; top: 50%; height: 0; border-top: 1px solid rgba(232,241,255,.35); }
+html[data-d="s"] .co.on .c { background: #ffd25a; color: #163f80; border-color: #ffd25a; }
+html[data-d="s"] .co.red .c { border-color: #ff8a7a; color: #ff8a7a; }
+html[data-d="s"] .co .b { position: absolute; top: -4px; right: 2px; background: #ff8a7a; color: #163f80; font: 600 10px/1 "IBM Plex Mono"; padding: 3px 4px; }
+html[data-d="s"] .vs { width: 0; height: 56px; border-left: 1px dashed #cfe2ff; margin: 0 4px; opacity: .6; }
+html[data-d="s"] .kit { right: 18px; bottom: 18px; padding: 10px 12px 12px; }
+html[data-d="s"] .kit h5 { font: 500 9.5px/1 "IBM Plex Mono"; letter-spacing: .14em; color: #9fc0ef; text-transform: uppercase; margin-bottom: 8px; }
+html[data-d="s"] .kit .sl { gap: 8px; }
+html[data-d="s"] .slot { width: 46px; height: 46px; border: 1.5px dashed #cfe2ff; display: grid; place-items: center; position: relative; }
+html[data-d="s"] .slot.full { border-style: solid; }
+html[data-d="s"] .slot.sel { border-color: #ffd25a; color: #ffd25a; box-shadow: 0 0 0 3px rgba(255,210,90,.25); }
+html[data-d="s"] .slot sup { position: absolute; top: 2px; left: 4px; font: 500 9px/1 "IBM Plex Mono"; color: #9fc0ef; }
+html[data-d="s"] .prompt { left: 50%; bottom: 150px; transform: translateX(-50%); gap: 12px; padding: 9px 16px 9px 9px; font: 500 15px/1 "IBM Plex Mono"; }
+html[data-d="s"] .prompt .k { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid #ffd25a; color: #ffd25a; display: grid; place-items: center; font-weight: 600; }
+
+/* ═════════ T — Broadcast: live TV graphics ═════════ */
+html[data-d="t"] body { font-family: "Barlow Condensed", sans-serif; color: #fff; }
+html[data-d="t"] .bug { top: 22px; left: 22px; height: 46px; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+html[data-d="t"] .bug .lg { width: 52px; height: 46px; display: grid; place-items: center; background: #e11d2e; font: 800 italic 26px/1 "Barlow Condensed"; }
+html[data-d="t"] .bug .pl { height: 46px; padding: 0 16px; display: flex; flex-direction: column; justify-content: center; background: linear-gradient(#1c2a4a, #0f1830); }
+html[data-d="t"] .bug .pl b { font: 800 22px/1 "Barlow Condensed"; letter-spacing: .04em; text-transform: uppercase; }
+html[data-d="t"] .bug .pl small { font: 600 13px/1.1 "Barlow Condensed"; letter-spacing: .08em; color: #9fb3d8; text-transform: uppercase; }
+html[data-d="t"] .bug .tm { height: 46px; padding: 0 14px; display: flex; align-items: center; gap: 8px; background: #fff; color: #0f1830; font: 800 26px/1 "Barlow Condensed"; font-variant-numeric: tabular-nums; }
+html[data-d="t"] .bug .live { height: 46px; padding: 0 12px; display: flex; align-items: center; gap: 6px; background: #0f1830; font: 700 14px/1 "Barlow Condensed"; letter-spacing: .12em; }
+html[data-d="t"] .bug .live i { width: 8px; height: 8px; border-radius: 50%; background: #e11d2e; box-shadow: 0 0 8px #e11d2e; }
+html[data-d="t"] .roster { top: 22px; right: 22px; width: 320px; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+html[data-d="t"] .roster h4 { height: 36px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; background: #e11d2e; font: 800 italic 18px/1 "Barlow Condensed"; letter-spacing: .06em; text-transform: uppercase; }
+html[data-d="t"] .rr { height: 44px; display: flex; align-items: center; gap: 10px; padding-right: 12px; background: linear-gradient(90deg, rgba(15,24,48,.94), rgba(28,42,74,.94)); border-top: 1px solid rgba(255,255,255,.08); }
+html[data-d="t"] .rr .pos { width: 34px; height: 44px; display: grid; place-items: center; background: rgba(255,255,255,.08); font: 800 18px/1 "Barlow Condensed"; color: #9fb3d8; }
+html[data-d="t"] .rr .nm { font: 700 19px/1 "Barlow Condensed"; text-transform: uppercase; letter-spacing: .03em; }
+html[data-d="t"] .rr .wh { font: 600 14px/1 "Barlow Condensed"; color: #9fb3d8; text-transform: uppercase; letter-spacing: .05em; margin-left: auto; text-align: right; }
+html[data-d="t"] .rr .face { width: 28px; height: 28px; border-radius: 3px; font-family: "Barlow Condensed"; font-size: 15px; }
+html[data-d="t"] .rr.talk { background: linear-gradient(90deg, #12623a, #1c8a52); }
+html[data-d="t"] .rr.talk .wh { color: #bff5d6; }
+html[data-d="t"] .rr.hl { box-shadow: inset 4px 0 0 #ffc629; }
+html[data-d="t"] .rr .bar { height: 20px; display: flex; align-items: center; padding: 0 12px; background: rgba(0,0,0,.55); font: 700 12px/1 "Barlow Condensed"; letter-spacing: .14em; color: #9fb3d8; }
+html[data-d="t"] .sec { height: 22px; display: flex; align-items: center; padding: 0 12px; background: rgba(0,0,0,.72); font: 700 12px/1 "Barlow Condensed"; letter-spacing: .14em; color: #ffc629; text-transform: uppercase; }
+html[data-d="t"] .lower { left: 22px; bottom: 150px; height: 64px; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+html[data-d="t"] .lower .ac { width: 10px; background: #ffc629; }
+html[data-d="t"] .lower .ph { width: 64px; height: 64px; display: grid; place-items: center; background: #2f4a78; font: 800 28px/1 "Barlow Condensed"; }
+html[data-d="t"] .lower .tx { padding: 0 22px 0 16px; display: flex; flex-direction: column; justify-content: center; background: linear-gradient(90deg, #fff, #e8ecf4); color: #0f1830; }
+html[data-d="t"] .lower .tx b { font: 800 28px/1 "Barlow Condensed"; text-transform: uppercase; letter-spacing: .02em; }
+html[data-d="t"] .lower .tx small { font: 600 16px/1.2 "Barlow Condensed"; color: #4a5a7a; text-transform: uppercase; letter-spacing: .05em; }
+html[data-d="t"] .prompt { left: 50%; bottom: 150px; transform: translateX(-50%); height: 44px; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+html[data-d="t"] .prompt .k { width: 44px; display: grid; place-items: center; background: #ffc629; color: #0f1830; font: 800 22px/1 "Barlow Condensed"; }
+html[data-d="t"] .prompt .tx { padding: 0 18px; display: flex; align-items: center; background: #0f1830; font: 700 20px/1 "Barlow Condensed"; text-transform: uppercase; letter-spacing: .04em; }
+html[data-d="t"] .ticker { left: 0; right: 0; bottom: 0; height: 74px; display: flex; box-shadow: 0 -4px 16px rgba(0,0,0,.3); }
+html[data-d="t"] .ctl { display: flex; align-items: stretch; background: linear-gradient(#1c2a4a, #0f1830); }
+html[data-d="t"] .cb { width: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; border-right: 1px solid rgba(255,255,255,.08); font: 700 12px/1 "Barlow Condensed"; letter-spacing: .1em; text-transform: uppercase; color: #9fb3d8; position: relative; }
+html[data-d="t"] .cb svg { width: 24px; height: 24px; color: #fff; }
+html[data-d="t"] .cb.red { background: #e11d2e; color: #ffd9dd; }
+html[data-d="t"] .cb.on { background: #ffc629; color: #0f1830; } html[data-d="t"] .cb.on svg { color: #0f1830; }
+html[data-d="t"] .cb .b { position: absolute; top: 8px; right: 12px; background: #e11d2e; font: 800 11px/1 "Barlow Condensed"; padding: 2px 4px; color: #fff; }
+html[data-d="t"] .news { flex: 1; display: flex; align-items: center; background: #fff; color: #0f1830; overflow: hidden; }
+html[data-d="t"] .news .lb { height: 100%; padding: 0 14px; display: flex; align-items: center; background: #e11d2e; color: #fff; font: 800 italic 18px/1 "Barlow Condensed"; letter-spacing: .06em; }
+html[data-d="t"] .news .sc { padding: 0 18px; white-space: nowrap; font: 700 19px/1 "Barlow Condensed"; text-transform: uppercase; letter-spacing: .03em; }
+html[data-d="t"] .news .sc i { color: #e11d2e; font-style: normal; margin: 0 12px; }
+html[data-d="t"] .slots { display: flex; background: #0f1830; padding: 0 10px; gap: 6px; align-items: center; }
+html[data-d="t"] .slot { width: 46px; height: 46px; display: grid; place-items: center; background: rgba(255,255,255,.08); position: relative; }
+html[data-d="t"] .slot.sel { background: #ffc629; color: #0f1830; }
+html[data-d="t"] .slot sup { position: absolute; top: 3px; left: 4px; font: 700 11px/1 "Barlow Condensed"; color: #9fb3d8; }
+html[data-d="t"] .slot.sel sup { color: #0f1830; }
+html[data-d="t"] .mini { right: 22px; bottom: 96px; width: 220px; height: 150px; border: 3px solid #fff; box-shadow: 0 6px 16px rgba(0,0,0,.35); }
+html[data-d="t"] .mini .lb { position: absolute; left: 0; top: 0; background: #e11d2e; font: 800 italic 13px/1 "Barlow Condensed"; padding: 4px 8px; letter-spacing: .06em; }
+
+/* ═════════ U — Ski resort: trail signs, lift ticket, piste map ═════════ */
+html[data-d="u"] body { font-family: "Barlow Condensed", sans-serif; color: #111; }
+html[data-d="u"] .post { top: 0; left: 40px; width: 270px; }
+html[data-d="u"] .pole { position: absolute; left: 50%; margin-left: -6px; top: 0; width: 12px; height: 210px; background: linear-gradient(90deg, #6a4a2c, #8a6a44, #5a3c22); }
+html[data-d="u"] .plank { position: relative; margin-top: 14px; background: #fff; border: 3px solid #111; border-radius: 4px; padding: 8px 12px; display: flex; align-items: center; gap: 10px; box-shadow: 0 5px 10px rgba(0,0,0,.25); }
+html[data-d="u"] .plank:first-child { margin-top: 18px; }
+html[data-d="u"] .plank.title { background: #d62b2b; color: #fff; border-color: #111; }
+html[data-d="u"] .plank.title b { font: 400 34px/1 "Bebas Neue"; letter-spacing: .04em; }
+html[data-d="u"] .plank.title small { font: 600 14px/1.1 "Barlow Condensed"; letter-spacing: .08em; text-transform: uppercase; opacity: .85; }
+html[data-d="u"] .plank .nm { font: 700 20px/1 "Barlow Condensed"; text-transform: uppercase; letter-spacing: .03em; }
+html[data-d="u"] .plank .m { margin-left: auto; font: 700 16px/1 "Barlow Condensed"; color: #555; }
+html[data-d="u"] .plank.r { clip-path: polygon(0 0, 88% 0, 100% 50%, 88% 100%, 0 100%); padding-right: 34px; }
+html[data-d="u"] .plank.l { clip-path: polygon(12% 0, 100% 0, 100% 100%, 12% 100%, 0 50%); padding-left: 34px; }
+html[data-d="u"] .diff { width: 22px; height: 22px; flex: none; }
+html[data-d="u"] .diff.g { border-radius: 50%; background: #2e9a4a; } html[data-d="u"] .diff.b { background: #2563c9; } html[data-d="u"] .diff.k { background: #111; transform: rotate(45deg) scale(.8); }
+html[data-d="u"] .ticket { top: 20px; right: 24px; width: 240px; transform: rotate(3deg); }
+html[data-d="u"] .ticket .wire { width: 2px; height: 26px; background: #888; margin: 0 auto; }
+html[data-d="u"] .ticket .tk { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 18px rgba(0,0,0,.28); border: 1px solid #ddd; }
+html[data-d="u"] .ticket .hd { background: #2563c9; color: #fff; padding: 9px 12px; font: 400 22px/1 "Bebas Neue"; letter-spacing: .08em; display: flex; justify-content: space-between; align-items: center; }
+html[data-d="u"] .ticket .hd small { font: 700 12px/1 "Barlow Condensed"; letter-spacing: .1em; }
+html[data-d="u"] .ticket .bd { padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
+html[data-d="u"] .ticket .ph { width: 46px; height: 54px; border-radius: 4px; background: #c8423a; display: grid; place-items: center; color: #fff; font: 400 26px/1 "Bebas Neue"; }
+html[data-d="u"] .ticket .nm { font: 400 26px/1 "Bebas Neue"; letter-spacing: .03em; }
+html[data-d="u"] .ticket .st { font: 700 14px/1.1 "Barlow Condensed"; color: #2e9a4a; text-transform: uppercase; letter-spacing: .06em; }
+html[data-d="u"] .ticket .bc { height: 26px; margin: 0 12px 10px; background: repeating-linear-gradient(90deg, #111 0 2px, transparent 2px 4px, #111 4px 5px, transparent 5px 8px, #111 8px 11px, transparent 11px 12px); }
+html[data-d="u"] .ticket .ft { display: flex; justify-content: space-between; padding: 0 12px 10px; font: 700 14px/1 "Barlow Condensed"; color: #555; text-transform: uppercase; letter-spacing: .06em; }
+html[data-d="u"] .lift { top: 250px; right: 24px; width: 300px; background: #111; color: #fff; border-radius: 6px; padding: 12px 14px; box-shadow: 0 6px 16px rgba(0,0,0,.3); }
+html[data-d="u"] .lift h4 { font: 400 22px/1 "Bebas Neue"; letter-spacing: .08em; color: #ffd13b; margin-bottom: 8px; display: flex; justify-content: space-between; }
+html[data-d="u"] .lr { height: 36px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #2a2a2a; font: 700 18px/1 "Barlow Condensed"; text-transform: uppercase; letter-spacing: .03em; }
+html[data-d="u"] .lr .wh { margin-left: auto; font: 600 15px/1 "Barlow Condensed"; color: #aaa; }
+html[data-d="u"] .lr .open { font: 700 13px/1 "Barlow Condensed"; padding: 4px 7px; border-radius: 3px; letter-spacing: .08em; }
+html[data-d="u"] .lr .open.g { background: #2e9a4a; } html[data-d="u"] .lr .open.y { background: #ffd13b; color: #111; } html[data-d="u"] .lr .open.r { background: #d62b2b; }
+html[data-d="u"] .lr.hl { background: #222; margin: 0 -14px; padding: 0 14px; }
+html[data-d="u"] .piste { left: 24px; bottom: 24px; width: 240px; height: 180px; border: 3px solid #111; border-radius: 6px; overflow: hidden; box-shadow: 0 6px 16px rgba(0,0,0,.3); }
+html[data-d="u"] .markers { left: 50%; bottom: 22px; transform: translateX(-50%); gap: 14px; align-items: flex-end; }
+html[data-d="u"] .mk { display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; font: 700 13px/1 "Barlow Condensed"; letter-spacing: .08em; text-transform: uppercase; color: #111; text-shadow: 0 0 6px #fff, 0 0 2px #fff; }
+html[data-d="u"] .mk .disc { width: 54px; height: 54px; border-radius: 50%; background: #fff; border: 3px solid #111; display: grid; place-items: center; box-shadow: 0 4px 8px rgba(0,0,0,.25); }
+html[data-d="u"] .mk .disc svg { width: 24px; height: 24px; stroke-width: 2.4; }
+html[data-d="u"] .mk.red .disc { background: #d62b2b; color: #fff; }
+html[data-d="u"] .mk.on .disc { background: #ffd13b; }
+html[data-d="u"] .mk .b { position: absolute; top: -4px; right: -4px; background: #d62b2b; color: #fff; font: 700 12px/1 "Barlow Condensed"; padding: 3px 5px; border-radius: 10px; border: 2px solid #111; text-shadow: none; }
+html[data-d="u"] .pole2 { width: 8px; height: 30px; background: repeating-linear-gradient(180deg, #ff6a1a 0 8px, #111 8px 12px); margin-top: -4px; border-radius: 0 0 2px 2px; }
+html[data-d="u"] .gear { right: 24px; bottom: 24px; gap: 8px; padding: 10px; background: #fff; border: 3px solid #111; border-radius: 6px; box-shadow: 0 6px 16px rgba(0,0,0,.3); }
+html[data-d="u"] .slot { width: 46px; height: 46px; border-radius: 4px; border: 2px dashed #bbb; display: grid; place-items: center; position: relative; }
+html[data-d="u"] .slot.full { border: 2px solid #111; }
+html[data-d="u"] .slot.sel { background: #ffd13b; }
+html[data-d="u"] .slot sup { position: absolute; top: 2px; left: 4px; font: 700 11px/1 "Barlow Condensed"; color: #777; }
+html[data-d="u"] .prompt { left: 50%; bottom: 140px; transform: translateX(-50%); gap: 0; box-shadow: 0 5px 10px rgba(0,0,0,.25); }
+html[data-d="u"] .prompt .k { width: 44px; height: 44px; display: grid; place-items: center; background: #ff6a1a; color: #fff; font: 400 26px/1 "Bebas Neue"; border: 3px solid #111; border-right: 0; border-radius: 4px 0 0 4px; }
+html[data-d="u"] .prompt .tx { height: 44px; padding: 0 16px; display: flex; align-items: center; background: #fff; border: 3px solid #111; border-radius: 0 4px 4px 0; font: 700 20px/1 "Barlow Condensed"; text-transform: uppercase; letter-spacing: .03em; }
+html[data-d="u"] .flag { top: 22px; left: 50%; transform: translateX(-50%); background: #ffd13b; border: 3px solid #111; border-radius: 4px; padding: 8px 16px 8px 8px; gap: 10px; font: 700 18px/1 "Barlow Condensed"; text-transform: uppercase; letter-spacing: .03em; box-shadow: 0 5px 10px rgba(0,0,0,.25); }
+html[data-d="u"] .flag .face { border-radius: 4px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="mic-off" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="video-off" viewBox="0 0 24 24"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><path d="m9 10 3-3 3 3"/><path d="M12 13V7"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></symbol>
+  <symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="hammer" viewBox="0 0 24 24"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/></symbol>
+  <symbol id="paw" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></symbol>
+  <symbol id="cog" viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="mug" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
+  <symbol id="torch" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><line x1="6" x2="18" y1="6" y2="6"/><line x1="12" x2="12" y1="12" y2="12"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+  <symbol id="snow" viewBox="0 0 24 24"><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="door" viewBox="0 0 24 24"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+</svg>
+<div id="app"></div>
+<script>
+const d = new URLSearchParams(location.search).get("d") || "p";
+document.documentElement.dataset.d = d;
+const I = (id, sz) => `<svg class="i"${sz ? ` style="width:${sz}px;height:${sz}px"` : ""}><use href="#${id}"/></svg>`;
+const P = { bia: ["B", "#c8423a"], ana: ["A", "#3f7d5a"], cai: ["C", "#2f4a78"], dee: ["D", "#b07a2c"], eli: ["E", "#6b4f8a"] };
+const F = (k, sz) => `<span class="face" style="background:${P[k][1]}${sz ? `;width:${sz}px;height:${sz}px` : ""}">${P[k][0]}</span>`;
+const arrow = (r) => `<svg class="i" style="transform:rotate(${r}deg)"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>`;
+function minimap(c) {
+  return `<svg viewBox="0 0 180 120" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+    <rect width="180" height="120" fill="${c.snow}"/>
+    ${c.grid ? `<g stroke="${c.ink}" stroke-opacity=".15">${Array.from({ length: 19 }, (_, i) => `<line x1="${i * 10}" x2="${i * 10}" y1="0" y2="120"/>`).join("")}${Array.from({ length: 13 }, (_, i) => `<line y1="${i * 10}" y2="${i * 10}" x1="0" x2="180"/>`).join("")}</g>` : ""}
+    <path d="M0 100 L180 92" stroke="${c.road}" stroke-width="10"/>
+    <rect x="22" y="14" width="44" height="70" fill="${c.bld}" stroke="${c.ink}" stroke-width="${c.sw ?? 1.4}"/>
+    <rect x="114" y="14" width="44" height="70" fill="${c.bld}" stroke="${c.ink}" stroke-width="${c.sw ?? 1.4}"/>
+    <rect x="66" y="22" width="48" height="8" fill="${c.bld}" stroke="${c.ink}" stroke-width="${c.sw ?? 1.2}"/>
+    ${c.dims ? `<g stroke="${c.ink}" fill="${c.ink}" font-family="IBM Plex Mono" font-size="6"><line x1="22" x2="66" y1="9" y2="9"/><line x1="22" x2="22" y1="6" y2="12"/><line x1="66" x2="66" y1="6" y2="12"/><text x="44" y="6" text-anchor="middle" stroke="none">22.0</text><text x="90" y="56" text-anchor="middle" stroke="none" opacity=".7">COURTYARD</text></g>` : ""}
+    <circle cx="80" cy="66" r="3.5" fill="${P.ana[1]}"/><circle cx="101" cy="64" r="3.5" fill="${P.cai[1]}"/>
+    <g transform="translate(90 76)"><circle r="9" fill="${c.me}" opacity=".25"/><path d="M0 -6 L4.5 5 L0 2.5 L-4.5 5 Z" fill="${c.me}"/></g>
+  </svg>`;
+}
+const S4 = (wrap = (x) => x) => [["mug", 1], ["torch", 2], ["key", 3], [null, 4]].map(([ic, n], i) => wrap(`<span class="slot ${ic ? "full" : ""} ${i === 0 ? "sel" : ""}"><sup>${n}</sup>${ic ? I(ic, 22) : ""}</span>`)).join("");
+const CTL = [["mic-off", "Muted", "red"], ["video-off", "Camera"], ["share", "Share"], 0, ["smile", "Emote"], ["phone", "Phone", "", "9+"], ["users", "People", "on"], 0, ["hammer", "Build"], ["paw", "Pets"], ["cog", "Settings"]];
+
+const V = {
+  p: () => `
+  <header class="abs row sign here"><span class="picto">${I("pin")}</span><div><div class="t">Courtyard</div><div class="s">Snow Campus · Ground floor · ${I("snow", 13)} −4°</div></div><span class="time">13:05</span></header>
+  <nav class="abs sign dirs">
+    <div class="row dir"><span class="arr">${arrow(-45)}</span>Lobby<span class="m">24 m</span></div>
+    <div class="row dir"><span class="arr">${arrow(90)}</span>Parking lot<span class="m">80 m</span></div>
+    <div class="row dir"><span class="arr">${arrow(0)}</span>Main Street<span class="m">1.2 km</span></div>
+  </nav>
+  <div class="abs row sign arrive"><span class="picto">${I("users")}</span><span><b>Cai</b> has arrived</span></div>
+  <aside class="abs board"><h4><span>Who's around</span><span style="color:#7b8494">5</span></h4>
+    <div class="r hd"><span></span><span>Name</span><span>Where</span><span style="text-align:right">Status</span></div>
+    <div class="r">${F("ana")}<span>Ana</span><span class="w">Here · 3 m</span><span class="st" style="color:#3fbf6f">Talking</span></div>
+    <div class="r">${F("cai")}<span>Cai</span><span class="w">Here · 5 m</span><span class="st" style="color:#c5ccd6">Near</span></div>
+    <div class="r" style="background:#1a1e25;margin:0 -16px;padding:0 16px">${F("dee")}<span>Dee</span><span class="w">Lobby · fl 1</span><span class="st" style="color:#ffcc00">Away</span></div>
+    <div class="r">${F("eli")}<span>Eli</span><span class="w">Booth 2</span><span class="st" style="color:#ff7a5a">Focus</span></div>
+  </aside>
+  <div class="abs row prompt"><span class="k">E</span>Open the lobby door ${arrow(90)}</div>
+  <div class="abs sign line"><h5>You are here · Ground floor</h5>
+    <svg width="304" height="70" viewBox="-14 0 332 70"><line x1="12" x2="292" y1="22" y2="22" stroke="#ffcc00" stroke-width="6" stroke-linecap="round"/>
+    ${[["Lot", 12], ["Courtyard", 110, 1], ["Lobby", 200], ["Bridge", 292]].map(([t, x, me]) => `<circle cx="${x}" cy="22" r="${me ? 11 : 8}" fill="${me ? "#ffcc00" : "#17283a"}" stroke="${me ? "#fff" : "#ffcc00"}" stroke-width="${me ? 4 : 4}"/><text x="${x}" y="58" fill="${me ? "#fff" : "#a8bdd3"}" font-family="Inter" font-weight="${me ? 800 : 600}" font-size="13" text-anchor="middle">${t}</text>`).join("")}</svg></div>
+  <nav class="abs row sign dock">${CTL.map((c) => (c ? `<span class="key ${c[2] ?? ""}"><span class="picto">${I(c[0])}</span>${c[1]}${c[3] ? `<span class="b">${c[3]}</span>` : ""}</span>` : `<span class="vs"></span>`)).join("")}</nav>
+  <div class="abs row sign pocket">${S4()}</div>`,
+
+  q: () => `
+  <div class="abs badge"><div class="strap"></div><div class="clip"></div>
+    <div class="card"><div class="top">YUTOPIA <small>STAFF</small></div>
+      <div class="row mid"><span class="ph">B</span><div><div class="nm">Bia</div><div class="rl">Courtyard<br>Ground floor</div></div></div>
+      <div class="bot"><span>● AVAILABLE</span><span class="t">13:05</span></div></div></div>
+  <div class="abs sticky">Cai just walked into the Courtyard! ☺<br><span style="font-size:17px;color:#7a6a2a">5 people in today</span></div>
+  <aside class="abs board"><div class="cb"><span class="metal"></span><div class="sheet"><h4>Who's in today</h4>
+    <div class="row entry">${F("ana")}<span><b>Ana</b> — here</span><span class="hw">talking!</span></div>
+    <div class="row entry">${F("cai")}<span><b>Cai</b> — here</span><span class="hw">5 m away</span></div>
+    <div class="row entry hl">${F("dee")}<span><b>Dee</b> — Lobby</span><span class="hw">back soon</span></div>
+    <div class="row entry">${F("eli")}<span><b>Eli</b> — Booth 2</span><span class="hw r">do not disturb</span></div>
+    <div class="row entry" style="color:#999">( ${" "}call · go to · wave ${" "})</div>
+  </div></div></aside>
+  <div class="abs map">${minimap({ snow: "#f3efe2", road: "#e2d9c2", bld: "#e9e2cc", ink: "#5a4a3a", me: "#c8423a" })}</div>
+  <div class="abs row strip">Press <span class="k">E</span> to open the lobby door</div>
+  <nav class="abs row tape">
+    <span class="dymo red">MUTED</span><span class="dymo">CAMERA</span><span class="dymo">SHARE</span><span class="dymo">EMOTE</span>
+    <span class="dymo">PHONE<span class="n">9+</span></span><span class="dymo on">PEOPLE</span><span class="dymo">BUILD</span><span class="dymo">PETS</span><span class="dymo">SETTINGS</span>
+  </nav>
+  <div class="abs row tags">${[["mug", "1 mug"], ["torch", "2 torch"], ["key", "3 key"], [null, "4"]].map(([ic, t], i) => `<span class="tag ${i === 0 ? "sel" : ""} ${ic ? "" : "empty"}">${ic ? I(ic, 22) : ""}${t}</span>`).join("")}</div>`,
+
+  r: () => `
+  <header class="abs row blk head"><span class="red"></span><div><div class="t">Courtyard</div><div class="s" style="margin-top:8px">Snow Campus, ground floor</div></div>
+    <div><div class="tm">13:05</div><div class="s" style="margin-top:8px">Sunday 25 October, −4° snow</div></div></header>
+  <div class="abs row blk note" style="padding:10px 14px 10px 0"><span class="bar"></span><span><b>Cai</b> walked into the Courtyard.</span></div>
+  <aside class="abs blk people"><h4><span>People</span><span>5</span></h4>
+    <div class="sub">Can hear you</div>
+    <div class="pr"><span class="no">01</span><div><div class="n">Ana</div><div class="w">3 m away</div></div><span class="st" style="color:#1a9a52">Talking</span></div>
+    <div class="pr"><span class="no">02</span><div><div class="n">Cai</div><div class="w">5 m away</div></div><span class="st" style="color:#999">Muted</span></div>
+    <div class="sub">Elsewhere</div>
+    <div class="pr hl"><span class="no">03</span><div><div class="n">Dee →</div><div class="w">Lobby, floor 1</div></div><span class="st">Away</span></div>
+    <div class="pr" style="border:0"><span class="no">04</span><div><div class="n">Eli</div><div class="w">Booth 2</div></div><span class="st" style="color:#e30613">Focus</span></div>
+  </aside>
+  <div class="abs blk map">${minimap({ snow: "#fff", road: "#eee", bld: "#fff", ink: "#111", me: "#e30613", sw: 1 })}</div>
+  <div class="abs row blk prompt"><span class="k">E</span>Open the lobby door</div>
+  <nav class="abs row blk nav">
+    <span class="it red">Muted <kbd>M</kbd></span><span class="it">Camera <kbd>V</kbd></span><span class="it">Share</span><span class="it">Emote <kbd>1–8</kbd></span>
+    <span class="it">Phone <sup>9+</sup> <kbd>P</kbd></span><span class="it on">People <kbd>Tab</kbd></span><span class="it">Build</span><span class="it">Pets</span><span class="it">Settings</span>
+    <span class="sp"></span><span class="row pk"><span class="sel"><b>1</b>Mug</span><span><b>2</b>Torch</span><span><b>3</b>Key</span><span><b>4</b>—</span></span>
+  </nav>`,
+
+  s: () => `
+  <header class="abs bp tblock"><div><div class="k">Sheet</div><div class="v">COURTYARD</div></div><div><div class="k">Project · Level</div><div class="v sm">Snow Campus · L0</div></div><div><div class="k">Time · Temp</div><div class="v sm">13:05 · −4°C</div></div></header>
+  <div class="abs row bp note">${I("users", 18)} REV. 14 — Cai walked into the Courtyard</div>
+  <aside class="abs bp sched"><h4><span>Occupant schedule</span><span>5</span></h4>
+    <div class="sr hd"><span>Tag</span><span>Name</span><span>Location</span><span>Ok</span></div>
+    <div class="sr"><span class="tag"><i>A</i></span><b>Ana</b><span>Here · 3.0 m</span><span style="color:#7fe0a0">●</span></div>
+    <div class="sr"><span class="tag"><i>C</i></span><b>Cai</b><span>Here · 5.0 m</span><span style="color:#7fe0a0">●</span></div>
+    <div class="sr hl"><span class="tag"><i>D</i></span><b>Dee</b><span>Lobby · L1</span><span style="color:#ffd25a">◐</span></div>
+    <div class="sr"><span class="tag"><i>E</i></span><b>Eli</b><span>Booth 2</span><span style="color:#ff8a7a">✕</span></div>
+  </aside>
+  <div class="abs bp plan">${minimap({ snow: "transparent", road: "rgba(207,226,255,.15)", bld: "rgba(207,226,255,.08)", ink: "#e8f1ff", me: "#ffd25a", dims: 1, sw: 1 })}</div>
+  <div class="abs row bp prompt"><span class="k">E</span>Open the lobby door</div>
+  <nav class="abs row bp callouts">${CTL.map((c, i) => (c ? `<span class="co ${c[2] ?? ""}"><span class="c">${I(c[0])}</span>${c[1]}${c[3] ? `<span class="b">${c[3]}</span>` : ""}</span>` : `<span class="vs"></span>`)).join("")}</nav>
+  <div class="abs bp kit"><h5>Carried · 3 of 4</h5><div class="row sl">${S4()}</div></div>`,
+
+  t: () => `
+  <header class="abs row bug"><span class="lg">Y</span><div class="pl"><b>Courtyard</b><small>Snow Campus · ground floor</small></div><span class="tm">13:05</span><span class="live"><i></i>LIVE</span></header>
+  <aside class="abs roster"><h4><span>On campus</span><span>5</span></h4>
+    <div class="sec">Can hear you</div>
+    <div class="rr talk"><span class="pos">1</span>${F("ana")}<span class="nm">Ana</span><span class="wh">Talking · 3 m</span></div>
+    <div class="rr"><span class="pos">2</span>${F("cai")}<span class="nm">Cai</span><span class="wh">5 m</span></div>
+    <div class="sec">Elsewhere</div>
+    <div class="rr hl"><span class="pos">3</span>${F("dee")}<span class="nm">Dee</span><span class="wh">Lobby · Fl 1</span></div>
+    <div class="rr"><span class="pos">4</span>${F("eli")}<span class="nm">Eli</span><span class="wh" style="color:#ff8a95">Focus · Booth 2</span></div>
+  </aside>
+  <div class="abs row lower"><span class="ac"></span><span class="ph">C</span><div class="tx"><b>Cai</b><small>Walked into the Courtyard</small></div></div>
+  <div class="abs row prompt" style="left:auto;right:22px;transform:none;bottom:270px"><span class="k">E</span><span class="tx">Open the lobby door</span></div>
+  <div class="abs mini">${minimap({ snow: "#e8ecf4", road: "#c9d2e3", bld: "#b7c4dd", ink: "#0f1830", me: "#e11d2e" })}<span class="lb">MAP</span></div>
+  <footer class="abs ticker">
+    <div class="ctl">${CTL.filter(Boolean).map((c) => `<span class="cb ${c[2] ?? ""}">${I(c[0])}${c[1]}${c[3] ? `<span class="b">${c[3]}</span>` : ""}</span>`).join("")}</div>
+    <div class="news"><span class="lb">NOW</span><span class="sc">Dee is in the Lobby<i>■</i>Eli focusing in Booth 2<i>■</i>−4° and snowing<i>■</i>The Diner opens at 14:00</span></div>
+    <div class="slots">${S4()}</div>
+  </footer>`,
+
+  u: () => `
+  <div class="abs post"><span class="pole"></span>
+    <div class="plank title"><div><b>Courtyard</b><br><small>Snow Campus · base level · 13:05</small></div></div>
+    <div class="plank l"><span class="diff g"></span><span class="nm">Lobby</span><span class="m">24 m</span></div>
+    <div class="plank r"><span class="diff b"></span><span class="nm">Parking lot</span><span class="m">80 m</span></div>
+    <div class="plank r"><span class="diff k"></span><span class="nm">The woods</span><span class="m">400 m</span></div>
+  </div>
+  <div class="abs row flag">${F("cai")}Cai just arrived</div>
+  <div class="abs ticket"><div class="wire"></div><div class="tk">
+    <div class="hd">Day pass <small>OCT 25</small></div>
+    <div class="bd"><span class="ph">B</span><div><div class="nm">Bia</div><div class="st">● On the hill</div></div><span style="margin-left:auto;font:400 22px/1 'Bebas Neue';color:#2563c9">−4°</span></div>
+    <div class="bc"></div><div class="ft"><span>5 on the hill</span><span>No. 0042</span></div></div></div>
+  <aside class="abs lift"><h4><span>Lift line</span><span style="color:#fff">5</span></h4>
+    <div class="lr">${F("ana")}Ana<span class="wh">here · 3 m</span><span class="open g">Talking</span></div>
+    <div class="lr">${F("cai")}Cai<span class="wh">here · 5 m</span><span class="open g">Near</span></div>
+    <div class="lr hl">${F("dee")}Dee<span class="wh">lobby</span><span class="open y">Away</span></div>
+    <div class="lr">${F("eli")}Eli<span class="wh">booth 2</span><span class="open r">Closed</span></div>
+  </aside>
+  <div class="abs piste"><svg viewBox="0 0 240 180" width="100%" height="100%"><rect width="240" height="180" fill="#f4f7fb"/>
+    <path d="M0 140 L240 120" stroke="#cfd7e2" stroke-width="14"/>
+    <path d="M40 0 C60 40 70 80 120 120" stroke="#2e9a4a" stroke-width="4" fill="none"/><path d="M200 0 C170 50 160 90 120 120" stroke="#2563c9" stroke-width="4" fill="none"/><path d="M120 0 L120 120" stroke="#111" stroke-width="4" stroke-dasharray="10 6" fill="none"/>
+    <rect x="30" y="56" width="50" height="50" fill="#dfe6f0" stroke="#111" stroke-width="2"/><rect x="160" y="56" width="50" height="50" fill="#dfe6f0" stroke="#111" stroke-width="2"/>
+    <circle cx="104" cy="116" r="5" fill="${P.ana[1]}" stroke="#fff" stroke-width="2"/><circle cx="134" cy="112" r="5" fill="${P.cai[1]}" stroke="#fff" stroke-width="2"/>
+    <g transform="translate(120 132)"><circle r="12" fill="#d62b2b" opacity=".25"/><path d="M0 -8 L6 6 L0 3 L-6 6 Z" fill="#d62b2b" stroke="#111" stroke-width="1.5"/></g>
+    <rect x="0" y="0" width="70" height="22" fill="#111"/><text x="8" y="16" fill="#fff" font-family="Bebas Neue" font-size="16" letter-spacing="1">TRAIL MAP</text></svg></div>
+  <div class="abs row prompt"><span class="k">E</span><span class="tx">Open the lobby door</span></div>
+  <nav class="abs row markers">${CTL.filter(Boolean).map((c) => `<span class="mk ${c[2] ?? ""}"><span class="disc">${I(c[0])}</span><span class="pole2"></span>${c[1]}${c[3] ? `<span class="b">${c[3]}</span>` : ""}</span>`).join("")}</nav>
+  <div class="abs row gear">${S4()}</div>`,
+};
+document.getElementById("app").innerHTML = V[d]();
+</script>
+</body>
+</html>

@@ -106,6 +106,7 @@ test("controllers: rebind on a fake pad, the analog switch, pad 2's stick throug
   try {
     // Controllers from Settings
     await ana.evaluate(() => (window as any).__hud.set({ panel: { kind: "settings" } }));
+    await ana.getByRole("tab", { name: "Controls" }).click();
     await ana.getByRole("button", { name: /Controllers/ }).click();
     await expect(ana.getByTestId("controllers")).toBeVisible();
     await ana.evaluate(() => (window as any).__press(5, true)); // (a press shows the pad)

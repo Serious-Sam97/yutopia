@@ -48,7 +48,11 @@ export function ItemThumb({
     return (
       <span
         className={`block rounded-md ${className ?? ""}`}
-        style={{ background: "linear-gradient(180deg,#5a412f,#3b281b)", width: "45%", aspectRatio: "1" }}
+        style={{
+          background: "linear-gradient(180deg,var(--edge-cabinet),var(--panel-top))",
+          width: "45%",
+          aspectRatio: "1",
+        }}
         aria-hidden
       />
     );

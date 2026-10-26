@@ -27,7 +27,7 @@ export function RoomDialog({
     hud.set((s) => ({ build: { ...s.build, roomDraft: null } }));
   };
   return (
-    <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-[#0d0906aa] p-3">
+    <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-[color:var(--scrim)] p-3">
       <form
         className="cabinet p-4 w-full max-w-sm space-y-3 rise"
         aria-label="New room"
@@ -106,7 +106,7 @@ export function RoomDialog({
             type="checkbox"
             checked={walls}
             onChange={(e) => setWalls(e.target.checked)}
-            className="h-5 w-5 accent-[#ffa630]"
+            className="h-5 w-5 accent-[color:var(--amber)]"
           />
         </label>
         {walls && (
@@ -156,7 +156,7 @@ export function DeskDialog({ seatId, members }: { seatId: string; members: Membe
   const [owner, setOwner] = useState<number | null>((seat?.props?.ownerId as number) ?? null);
   const close = () => hud.set((s) => ({ build: { ...s.build, deskDraft: null } }));
   return (
-    <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-[#0d0906aa] p-3">
+    <div className="pointer-events-auto absolute inset-0 flex items-center justify-center bg-[color:var(--scrim)] p-3">
       <form
         className="cabinet p-4 w-full max-w-xs space-y-3 rise"
         aria-label="Assign desk"

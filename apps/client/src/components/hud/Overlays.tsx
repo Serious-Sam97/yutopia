@@ -25,17 +25,20 @@ export function Prompt() {
     <button
       type="button"
       onClick={() => w?.interact()}
-      className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[88px] cabinet rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 rise max-w-[calc(100vw-24px)]"
+      className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[176px] sm:bottom-[112px] cabinet rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 rise max-w-[calc(100vw-24px)]"
     >
       <span
         className="w-9 h-9 rounded-full grid place-items-center shrink-0 p-1"
-        style={{ background: "radial-gradient(#4a3324,#241912)", border: "1px solid var(--edge)" }}
+        style={{ background: "radial-gradient(var(--tile-hi),var(--panel))", border: "1px solid var(--edge)" }}
         aria-hidden
       >
         {o && <ItemThumb kind={o.kind} props={o.props} />}
       </span>
       {!touch && (
-        <kbd className="keycap" style={{ color: "var(--cream)", opacity: 1, height: 20, minWidth: 20, fontSize: 11 }}>
+        <kbd
+          className="keycap"
+          style={{ color: "var(--amber)", opacity: 1, height: 26, minWidth: 26, fontSize: 12, borderRadius: 5 }}
+        >
           X
         </kbd>
       )}
@@ -93,11 +96,11 @@ export function CableChip() {
   if (!cable) return null;
   return (
     <div
-      className={`pointer-events-auto absolute left-1/2 -translate-x-1/2 ${held ? "bottom-[184px]" : "bottom-[136px]"} cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise max-w-[calc(100vw-24px)]`}
+      className={`pointer-events-auto absolute left-1/2 -translate-x-1/2 ${held ? "bottom-[272px] sm:bottom-[208px]" : "bottom-[224px] sm:bottom-[160px]"} cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise max-w-[calc(100vw-24px)]`}
     >
       <span
         className="w-8 h-8 rounded-full grid place-items-center shrink-0"
-        style={{ background: "radial-gradient(#4a3324,#241912)", border: "1px solid var(--edge)" }}
+        style={{ background: "radial-gradient(var(--tile-hi),var(--panel))", border: "1px solid var(--edge)" }}
         aria-hidden
       >
         🔌
@@ -134,10 +137,10 @@ export function HeldChip() {
     const points = kind === "laser";
     const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgDoc(heldSvg(kind, "", 4), HELD_BOX, 3))}`;
     return (
-      <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[136px] cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise">
+      <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[224px] sm:bottom-[160px] cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise">
         <span
           className="w-8 h-8 rounded-full grid place-items-center shrink-0"
-          style={{ background: "radial-gradient(#4a3324,#241912)", border: "1px solid var(--edge)" }}
+          style={{ background: "radial-gradient(var(--tile-hi),var(--panel))", border: "1px solid var(--edge)" }}
           aria-hidden
         >
           {/* biome-ignore lint/performance/noImgElement: generated SVG data URI */}
@@ -175,10 +178,10 @@ export function HeldChip() {
   const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgDoc(heldSvg(held.kind, color, level), HELD_BOX, 3))}`;
   const label: Key = held.kind === "cup" ? "heldCup" : held.kind === "soda" ? "heldSoda" : "heldMug";
   return (
-    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[136px] cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise">
+    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[224px] sm:bottom-[160px] cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise">
       <span
         className="w-8 h-8 rounded-full grid place-items-center shrink-0"
-        style={{ background: "radial-gradient(#4a3324,#241912)", border: "1px solid var(--edge)" }}
+        style={{ background: "radial-gradient(var(--tile-hi),var(--panel))", border: "1px solid var(--edge)" }}
         aria-hidden
       >
         {/* biome-ignore lint/performance/noImgElement: generated SVG data URI */}
@@ -191,8 +194,8 @@ export function HeldChip() {
             key={i}
             className="w-[7px] h-3 rounded-[2px]"
             style={{
-              background: i < level ? "var(--vfd)" : "#3a2c1f",
-              boxShadow: i < level ? "0 0 6px rgba(255,179,92,.5)" : "none",
+              background: i < level ? "var(--vfd)" : "var(--well-edge)",
+              boxShadow: i < level ? "0 0 6px var(--lamp-glow)" : "none",
             }}
           />
         ))}
@@ -236,6 +239,7 @@ export function Knocks() {
   );
 }
 
+// Notices: plain chips at the top, a dot in their tone (docs/plan/45-the-ui.md).
 export function Toasts() {
   const toasts = useHud((s) => s.toasts);
   return (
@@ -244,17 +248,7 @@ export function Toasts() {
       aria-live="polite"
     >
       {toasts.map((x) => (
-        <div
-          key={x.id}
-          className="cabinet px-4 py-2 text-sm rise max-w-[90vw]"
-          style={
-            x.tone === "vortex"
-              ? { borderColor: "#7a2a1e", color: "#ffb35c" }
-              : x.tone === "warn"
-                ? { borderColor: "#8a4a2a" }
-                : {}
-          }
-        >
+        <div key={x.id} className="toast rise" data-tone={x.tone}>
           {x.text}
         </div>
       ))}
@@ -325,7 +319,7 @@ export function VideoBubbles() {
           style={{
             width: 120,
             height: 90,
-            border: `2px solid ${e.speaking ? "var(--amber)" : "#5a412f"}`,
+            border: `2px solid ${e.speaking ? "var(--amber)" : "var(--edge-cabinet)"}`,
             boxShadow: "0 8px 24px #0009",
             background: "#000",
           }}
@@ -390,7 +384,7 @@ export function ConnectionOverlay() {
   const lit = building ? Math.round(loading.progress * LOAD_CELLS) : 0;
   return (
     <div
-      className={`absolute inset-0 z-[30000] flex items-center justify-center ${solid ? "bg-[#17110d]" : blocking ? "bg-[#17110dcc]" : "pointer-events-none"}`}
+      className={`absolute inset-0 z-[30000] flex items-center justify-center ${solid ? "bg-[color:var(--bg)]" : blocking ? "bg-[color:var(--bg-veil)]" : "pointer-events-none"}`}
       style={{ opacity: up ? 1 : 0, transition: `opacity ${FADE_MS}ms ease`, pointerEvents: up ? undefined : "none" }}
       aria-live="polite"
       aria-busy={solid}
@@ -428,6 +422,8 @@ const FADE_MS = 300;
 // The studio from above: rooms labelled, the one you're in outlined, people as
 // dots (amber: you can hear them), you in red. Click to walk there; ± zooms the
 // world camera. Bottom left (bottom right while building: the catalog is left).
+// Only in the parking lot and inside the building, any floor (docs/plan/45-the-ui.md):
+// out on the rest of the grounds it's gone.
 export function Minimap() {
   const t = useTr();
   const w = useWorld();
@@ -498,6 +494,8 @@ export function Minimap() {
     }
     // (after dark, nobody out under the sky is seen from afar — docs/plan/44-the-night.md N4)
     const dark = (w?.engine?.getDaylight().dark ?? 0) > 0.5;
+    // (and the map itself dimmed: its paper shouldn't glare in the pitch dark)
+    c.style.filter = dark ? "brightness(.5) saturate(.8)" : "";
     for (const p of people) {
       if (dark && "ac".includes(map.tiles[Math.floor(p.y)]?.[Math.floor(p.x)] || "x")) continue;
       x.fillStyle = p.bot ? "#a39d8c" : p.hearing ? "#ffa630" : "#efe4cc";
@@ -547,6 +545,8 @@ export function Minimap() {
   }, [w, people, me, vortex, petsAt, carAt, phase, mapVersion]);
 
   const zoom = (f: number) => w?.engine?.setZoom((w.engine?.getZoom() ?? 1) * f);
+  const shown = building || !me || me.area === "lot" || !w?.grid?.onLand(me.x, me.y);
+  if (!shown) return null;
   return (
     <div
       className={`pointer-events-auto absolute bottom-3 cabinet p-2 hidden lg:block w-[208px] ${building ? "right-3" : "left-3"}`}
@@ -554,7 +554,7 @@ export function Minimap() {
       <button
         type="button"
         className="block w-full rounded-lg overflow-hidden"
-        style={{ background: "#1a120c" }}
+        style={{ background: "var(--well)" }}
         aria-label={t("minimap")}
         onClick={(e) => {
           const r = (e.currentTarget.firstChild as HTMLCanvasElement).getBoundingClientRect();
@@ -568,7 +568,12 @@ export function Minimap() {
         <canvas ref={canvas} className="block w-full max-h-[150px] object-contain" />
       </button>
       <div className="flex items-center justify-between gap-2 pt-1.5 px-0.5">
-        <span className="lcd text-base leading-none truncate">{(me?.areaName || t("hallway")).toUpperCase()}</span>
+        <span
+          className="mono text-[11px] uppercase tracking-[.08em] leading-none truncate"
+          style={{ color: "var(--amber)" }}
+        >
+          {me?.areaName || t("hallway")}
+        </span>
         <span className="flex gap-1 shrink-0">
           {(
             [

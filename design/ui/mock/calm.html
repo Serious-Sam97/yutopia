@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia HUD mock, balanced mystery</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Special+Elite&display=block" rel="stylesheet">
+<style>
+/* Small-town mystery, toned down: one layout, five skins. ?d=l|r|p|f|m */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { background: #c9ced6 url(bg-lot.png) center / cover no-repeat; position: relative; -webkit-font-smoothing: antialiased; font-family: var(--body); color: var(--text); }
+.grade { position: absolute; inset: 0; pointer-events: none; background: var(--grade, none); }
+svg.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.abs { position: absolute; }
+.row { display: flex; align-items: center; }
+.grow { flex: 1; min-width: 0; }
+
+/* the skins */
+html[data-d="l"] { /* Lodge: pine green, brass hairlines */
+  --panel: rgba(28, 40, 33, .93); --edge: 1px solid #a8885a; --inner: inset 0 0 0 4px rgba(28,40,33,.93), inset 0 0 0 5px rgba(201,164,106,.35);
+  --shadow: 0 12px 30px rgba(8, 14, 10, .45); --r: 6px;
+  --text: #efe6d2; --dim: #b9b29e; --label: #c9a46a; --accent: #c9a46a; --good: #9cc98a; --well: rgba(255,255,255,.05); --div: rgba(201,164,106,.28);
+  --head: "Cormorant Garamond", serif; --headw: 600; --body: Inter, sans-serif; --lab: Inter, sans-serif;
+  --btn: rgba(255,255,255,.04); --btn-edge: 1px solid rgba(201,164,106,.3); --on: #c9a46a; --on-text: #1c2821; --red: #d9826a;
+  --grade: linear-gradient(rgba(20,30,25,.12), rgba(20,30,25,.12));
+}
+html[data-d="r"] { /* Ranger station: khaki paper, olive, faint contour lines */
+  --panel: #ebe6d6; --edge: 1px solid #77745a; --inner: none;
+  --shadow: 0 10px 24px rgba(30, 32, 20, .3); --r: 4px;
+  --text: #2a2c21; --dim: #66654f; --label: #5f7038; --accent: #4f6a2e; --good: #4f8a3e; --well: rgba(80,90,50,.08); --div: rgba(80,80,50,.22);
+  --head: "Barlow Condensed", sans-serif; --headw: 700; --body: Inter, sans-serif; --lab: "Barlow Condensed", sans-serif;
+  --btn: #f4f0e3; --btn-edge: 1px solid #a7a386; --on: #4f6a2e; --on-text: #f4f0e3; --red: #b5492f;
+}
+html[data-d="p"] { /* Postcard: cream, teal, a stamp */
+  --panel: #f5f0e4; --edge: 1px solid #d6cdb6; --inner: inset 0 0 0 5px #f5f0e4, inset 0 0 0 6px rgba(47,111,115,.35);
+  --shadow: 0 10px 26px rgba(30, 40, 45, .28); --r: 3px;
+  --text: #24302f; --dim: #6a716b; --label: #2f6f73; --accent: #2f6f73; --good: #3f8a5a; --well: rgba(47,111,115,.07); --div: rgba(47,111,115,.22);
+  --head: "Libre Baskerville", serif; --headw: 400; --body: Inter, sans-serif; --lab: Inter, sans-serif;
+  --btn: #fbf8f0; --btn-edge: 1px solid #d6cdb6; --on: #2f6f73; --on-text: #f5f0e4; --red: #b5562f;
+}
+html[data-d="f"] { /* Fog: dark green glass, a thin zigzag, soft green serif */
+  --panel: rgba(16, 24, 21, .82); --edge: 1px solid rgba(160, 214, 176, .22); --inner: none;
+  --shadow: 0 12px 30px rgba(5, 12, 9, .4); --r: 10px;
+  --text: #e8efe9; --dim: #a5b6aa; --label: #9fd2ad; --accent: #9fd2ad; --good: #9fd2ad; --well: rgba(255,255,255,.05); --div: rgba(160,214,176,.16);
+  --head: "Libre Baskerville", serif; --headw: 400; --body: Inter, sans-serif; --lab: Inter, sans-serif;
+  --btn: rgba(255,255,255,.05); --btn-edge: 1px solid rgba(160,214,176,.18); --on: #9fd2ad; --on-text: #12201a; --red: #e7907c;
+  --grade: linear-gradient(rgba(30,60,45,.18), rgba(30,60,45,.18));
+}
+html[data-d="m"] { /* Manuscript: ink panels, a paper card, lamp light */
+  --panel: rgba(18, 20, 25, .86); --edge: 1px solid rgba(241, 215, 154, .18); --inner: none;
+  --shadow: 0 12px 30px rgba(0, 0, 0, .45); --r: 4px;
+  --text: #ece6da; --dim: #a7a094; --label: #d9c08a; --accent: #f1d79a; --good: #e9d18f; --well: rgba(255,255,255,.04); --div: rgba(241,215,154,.14);
+  --head: "Cormorant Garamond", serif; --headw: 600; --body: Inter, sans-serif; --lab: "Special Elite", monospace;
+  --btn: rgba(255,255,255,.04); --btn-edge: 1px solid rgba(241,215,154,.16); --on: #f1d79a; --on-text: #1a1a1e; --red: #e7907c;
+  --grade: linear-gradient(rgba(14,24,40,.32), rgba(14,24,40,.32));
+}
+
+.panel { background: var(--panel); border: var(--edge); box-shadow: var(--inner), var(--shadow); border-radius: var(--r); }
+.head { font-family: var(--head); font-weight: var(--headw); }
+.lab { font: 600 11px/1 var(--lab); letter-spacing: .14em; text-transform: uppercase; color: var(--label); }
+html[data-d="r"] .lab { font-size: 13px; letter-spacing: .1em; }
+html[data-d="m"] .lab { font-weight: 400; letter-spacing: .08em; font-size: 11.5px; }
+.dim { color: var(--dim); }
+
+/* motifs */
+html[data-d="r"] .panel { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='160'%3E%3Cg fill='none' stroke='%236b6a4a' stroke-opacity='.11'%3E%3Cpath d='M-10 120 C40 90 80 140 130 110 S200 60 260 90'/%3E%3Cpath d='M-10 100 C40 70 80 120 130 90 S200 40 260 70'/%3E%3Cpath d='M-10 80 C40 50 80 100 130 70 S200 20 260 50'/%3E%3Cpath d='M-10 60 C40 30 80 80 130 50 S200 0 260 30'/%3E%3Cpath d='M-10 140 C40 110 80 160 130 130 S200 80 260 110'/%3E%3C/g%3E%3C/svg%3E"); }
+.zig { height: 6px; margin: 10px 0 2px; background-image: linear-gradient(135deg, rgba(232,239,233,.55) 25%, transparent 25%), linear-gradient(225deg, rgba(232,239,233,.55) 25%, transparent 25%); background-size: 8px 6px; opacity: .6; }
+.pines { height: 10px; margin: 10px 0 2px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='10'%3E%3Cpath d='M8 0 L12 10 H4 Z' fill='%23c9a46a' fill-opacity='.45'/%3E%3C/svg%3E") repeat-x; }
+.rule { height: 3px; margin: 10px 0 2px; border-top: 1px solid var(--div); border-bottom: 1px solid var(--div); }
+
+/* place */
+.place { top: 22px; left: 22px; padding: 14px 18px 14px 14px; gap: 14px; min-width: 380px; }
+.emb { width: 46px; height: 46px; flex: none; display: grid; place-items: center; color: var(--accent); }
+.place .t { font-size: 27px; line-height: 1.05; }
+html[data-d="r"] .place .t { font-size: 30px; text-transform: uppercase; letter-spacing: .02em; }
+html[data-d="m"] .place .t { text-transform: uppercase; letter-spacing: .14em; font-size: 24px; }
+html[data-d="f"] .place .t { color: #b6e2c2; }
+.place .s { font-size: 13px; margin-top: 5px; }
+.place .tm { margin-left: auto; padding-left: 16px; border-left: 1px solid var(--div); text-align: right; }
+.place .tm b { display: block; font: var(--headw) 24px/1 var(--head); font-variant-numeric: tabular-nums; }
+html[data-d="m"] .place .tm b { font: 400 20px/1 "Special Elite"; }
+.place .tm small { font-size: 12px; color: var(--dim); display: block; margin-top: 4px; }
+.obj { top: 118px; left: 22px; padding: 9px 14px; gap: 10px; font-size: 13.5px; }
+.obj .dia { width: 9px; height: 9px; border: 1.5px solid var(--accent); transform: rotate(45deg); }
+
+/* toast */
+.note { top: 22px; left: 50%; transform: translateX(-50%); padding: 10px 16px 10px 10px; gap: 10px; font-size: 14px; max-width: 360px; }
+html[data-d="m"] .note { background: #ece5d3; color: #222; border: 0; font: 400 13.5px/1.45 "Special Elite"; box-shadow: 0 10px 24px rgba(0,0,0,.4); }
+.face { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 600 12px/1 Inter; flex: none; position: relative; }
+.face .dot { position: absolute; right: -2px; bottom: -2px; width: 10px; height: 10px; border-radius: 50%; background: var(--good); border: 2px solid var(--panel); }
+.face .dot.away { background: #d8b45a; } .face .dot.dnd { background: var(--red); }
+html[data-d="r"] .face, html[data-d="p"] .face { border-radius: 4px; }
+
+/* people */
+.people { top: 22px; right: 22px; width: 330px; padding: 16px 16px 12px; }
+.people .hd { display: flex; justify-content: space-between; align-items: baseline; }
+.people .hd .head { font-size: 19px; }
+html[data-d="r"] .people .hd .head { text-transform: uppercase; font-size: 21px; }
+html[data-d="m"] .people .hd .head { text-transform: uppercase; letter-spacing: .12em; font-size: 17px; }
+.sec { margin: 12px 0 4px; }
+.pr { gap: 11px; padding: 7px 4px; border-radius: 6px; }
+.pr.hl { background: var(--well); }
+.pr .n { font: 600 14.5px/1.2 var(--body); }
+.pr .w { font-size: 12.5px; color: var(--dim); margin-top: 1px; }
+.pr .go { font: 600 12px/1 var(--body); padding: 7px 10px; border-radius: 5px; border: var(--btn-edge); background: var(--btn); }
+.wave { display: flex; gap: 2px; align-items: center; height: 14px; color: var(--good); }
+.wave i { width: 2.5px; border-radius: 2px; background: currentColor; }
+
+/* prompt */
+.prompt { left: 50%; bottom: 150px; transform: translateX(-50%); padding: 8px 18px 8px 8px; gap: 12px; font-size: 15px; font-weight: 500; }
+.prompt .k { width: 30px; height: 30px; border-radius: 5px; border: 1px solid var(--accent); color: var(--accent); display: grid; place-items: center; font: 600 13px/1 var(--body); }
+
+/* map */
+.map { left: 22px; bottom: 22px; width: 220px; padding: 10px; }
+.map .m { height: 128px; border-radius: 3px; overflow: hidden; margin-top: 8px; border: 1px solid var(--div); }
+.map .hd { display: flex; justify-content: space-between; align-items: center; }
+
+/* dock */
+.dock { left: 50%; bottom: 22px; transform: translateX(-50%); padding: 10px 12px 8px; gap: 6px; align-items: flex-start; }
+.b { width: 60px; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; font: 500 11px/1 var(--body); color: var(--dim); }
+html[data-d="r"] .b { font: 600 12.5px/1 "Barlow Condensed"; letter-spacing: .06em; text-transform: uppercase; }
+html[data-d="m"] .b { font: 400 11px/1 "Special Elite"; }
+.b .k { width: 44px; height: 40px; border-radius: 6px; display: grid; place-items: center; background: var(--btn); border: var(--btn-edge); color: var(--text); }
+.b.on .k { background: var(--on); color: var(--on-text); border-color: transparent; }
+.b.on { color: var(--text); }
+.b.red .k { color: var(--red); border-color: var(--red); }
+.b .bd { position: absolute; top: -5px; right: 4px; font: 600 10.5px/1 Inter; padding: 3px 5px; border-radius: 8px; background: var(--red); color: #fff; }
+.vs { width: 1px; height: 40px; background: var(--div); margin: 0 4px; }
+
+/* pocket */
+.pocket { right: 22px; bottom: 22px; padding: 10px 12px; }
+.pocket .sl { gap: 8px; margin-top: 8px; }
+.slot { width: 46px; height: 46px; border-radius: 6px; display: grid; place-items: center; position: relative; background: var(--btn); border: var(--btn-edge); }
+.slot.empty { background: transparent; border-style: dashed; }
+.slot.sel { border: 1px solid var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+html[data-d="m"] .slot.sel { box-shadow: 0 0 14px rgba(241,215,154,.45); color: var(--accent); }
+.slot sup { position: absolute; top: 3px; left: 5px; font: 500 9.5px/1 Inter; color: var(--dim); }
+.ring { position: absolute; inset: -4px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="mic-off" viewBox="0 0 24 24"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="video-off" viewBox="0 0 24 24"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.248-3.062A.5.5 0 0 1 22 7.87v8.196"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><path d="m9 10 3-3 3 3"/><path d="M12 13V7"/><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M12 17v4"/><path d="M8 21h8"/></symbol>
+  <symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="hammer" viewBox="0 0 24 24"><path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/><path d="m18 15 4-4"/><path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5"/></symbol>
+  <symbol id="paw" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></symbol>
+  <symbol id="cog" viewBox="0 0 24 24"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/><path d="M12 2v2"/><path d="M12 22v-2"/><path d="m17 20.66-1-1.73"/><path d="M11 10.27 7 3.34"/><path d="m20.66 17-1.73-1"/><path d="m3.34 7 1.73 1"/><path d="M14 12h8"/><path d="M2 12h2"/><path d="m20.66 7-1.73 1"/><path d="m3.34 17 1.73-1"/><path d="m17 3.34-1 1.73"/><path d="m11 13.73-4 6.93"/></symbol>
+  <symbol id="down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="mug" viewBox="0 0 24 24"><path d="M10 2v2"/><path d="M14 2v2"/><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/><path d="M6 2v2"/></symbol>
+  <symbol id="torch" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><line x1="6" x2="18" y1="6" y2="6"/><line x1="12" x2="12" y1="12" y2="12"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></symbol>
+  <symbol id="snow" viewBox="0 0 24 24"><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/><path d="m20 16-4-4 4-4"/><path d="m4 8 4 4-4 4"/><path d="m16 4-4 4-4-4"/><path d="m8 20 4-4 4 4"/></symbol>
+  <symbol id="pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="door" viewBox="0 0 24 24"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M10 12v.01"/><path d="M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="hash" viewBox="0 0 24 24"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+</svg>
+<div class="grade"></div>
+<div id="app"></div>
+<script>
+const d = new URLSearchParams(location.search).get("d") || "l";
+document.documentElement.dataset.d = d;
+const I = (id, sz) => `<svg class="i"${sz ? ` style="width:${sz}px;height:${sz}px"` : ""}><use href="#${id}"/></svg>`;
+const P = { bia: ["B", "#c8423a"], ana: ["A", "#3f7d5a"], cai: ["C", "#2f4a78"], dee: ["D", "#b07a2c"], eli: ["E", "#6b4f8a"] };
+const F = (k, dot = "") => `<span class="face" style="background:${P[k][1]}">${P[k][0]}${dot === null ? "" : `<span class="dot ${dot}"></span>`}</span>`;
+const motif = { l: "pines", r: "rule", p: "rule", f: "zig", m: "rule" }[d];
+const EMB = {
+  l: `<svg viewBox="0 0 46 46" width="46" height="46"><circle cx="23" cy="23" r="21" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="23" cy="23" r="17.5" fill="none" stroke="currentColor" stroke-opacity=".45"/><path d="M23 10 L30 22 H26 L32 31 H14 L20 22 H16 Z" fill="currentColor"/><rect x="21.5" y="31" width="3" height="5" fill="currentColor"/></svg>`,
+  r: `<svg viewBox="0 0 46 46" width="46" height="46"><path d="M23 3 L40 9 V22 C40 33 32 40 23 43 C14 40 6 33 6 22 V9 Z" fill="#4f6a2e" stroke="#2a2c21" stroke-width="1.2"/><path d="M23 12 L29 23 H26 L31 31 H15 L20 23 H17 Z" fill="#ebe6d6"/></svg>`,
+  p: `<svg viewBox="0 0 46 46" width="46" height="46"><rect x="3" y="3" width="40" height="40" fill="#2f6f73" stroke="#f5f0e4" stroke-width="3" stroke-dasharray="3 2.2"/><path d="M8 34 L17 20 L23 28 L29 18 L38 34 Z" fill="#f5f0e4" fill-opacity=".9"/><circle cx="33" cy="12" r="3.5" fill="#e9c27a"/></svg>`,
+  f: `<svg viewBox="0 0 46 46" width="46" height="46"><path d="M6 36 L16 18 L22 27 L29 14 L40 36 Z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M4 40 H42" stroke="currentColor" stroke-opacity=".5"/><path d="M8 30 H38" stroke="currentColor" stroke-opacity=".25" stroke-dasharray="2 3"/></svg>`,
+  m: `<svg viewBox="0 0 46 46" width="46" height="46"><rect x="10" y="5" width="26" height="36" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M15 13 H31 M15 18 H31 M15 23 H27 M15 28 H31 M15 33 H24" stroke="currentColor" stroke-opacity=".6"/></svg>`,
+}[d];
+function minimap() {
+  const c = {
+    l: { snow: "#26332b", road: "#334139", bld: "#2f3d34", ink: "#c9a46a", me: "#efe6d2" },
+    r: { snow: "#f4f0e3", road: "#ddd8c4", bld: "#e3dec9", ink: "#4f6a2e", me: "#b5492f" },
+    p: { snow: "#fbf8f0", road: "#e9e2d0", bld: "#e2eeee", ink: "#2f6f73", me: "#b5562f" },
+    f: { snow: "#18231e", road: "#22302a", bld: "#1f2c26", ink: "#9fd2ad", me: "#e8efe9" },
+    m: { snow: "#1c1f25", road: "#262a31", bld: "#23262d", ink: "#a7a094", me: "#f1d79a" },
+  }[d];
+  return `<svg viewBox="0 0 200 128" width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+    <rect width="200" height="128" fill="${c.snow}"/>
+    <path d="M0 106 L200 98" stroke="${c.road}" stroke-width="12"/>
+    ${Array.from({ length: 10 }, (_, i) => `<path d="M${6 + i * 20} 126 l5 -11 l5 11 z" fill="${c.ink}" opacity=".35"/>`).join("")}
+    <rect x="26" y="14" width="50" height="72" fill="${c.bld}" stroke="${c.ink}" stroke-width="1.1"/>
+    <rect x="124" y="14" width="50" height="72" fill="${c.bld}" stroke="${c.ink}" stroke-width="1.1"/>
+    <rect x="76" y="22" width="48" height="8" fill="${c.bld}" stroke="${c.ink}" stroke-width="1"/>
+    <circle cx="90" cy="66" r="3.5" fill="${P.ana[1]}"/><circle cx="111" cy="64" r="3.5" fill="${P.cai[1]}"/>
+    <g transform="translate(100 76)"><circle r="9" fill="${c.me}" opacity=".2"/><path d="M0 -6 L4.5 5 L0 2.5 L-4.5 5 Z" fill="${c.me}"/></g>
+  </svg>`;
+}
+const CTL = [["mic-off", "Muted", "red"], ["video-off", "Camera"], ["share", "Share"], 0, ["smile", "Emote"], ["phone", "Phone", "", "9+"], ["users", "People", "on"], 0, ["hammer", "Build"], ["paw", "Pets"], ["cog", "Settings"]];
+const note = d === "m"
+  ? `Cai walked into the courtyard. Ana was talking, three metres away.`
+  : `<b>Cai</b>&nbsp;<span class="dim">walked into the Courtyard</span>`;
+
+document.getElementById("app").innerHTML = `
+  <header class="abs row panel place"><span class="emb">${EMB}</span>
+    <div><div class="t head">The Courtyard</div><div class="s dim">Snow Campus · ground floor</div></div>
+    <div class="tm"><b>${d === "r" ? "13:05" : "1:05 pm"}</b><small>${I("snow", 12)} −4°, snowing</small></div></header>
+  <div class="abs row panel obj"><span class="dia"></span>Dee is waiting in the Lobby <span class="dim">· 24 m</span></div>
+  <div class="abs row panel note">${d === "m" ? "" : F("cai", null)}<span>${note}</span></div>
+  <aside class="abs panel people">
+    <div class="hd"><span class="head">People nearby</span><span class="dim" style="font-size:13px">5 in</span></div>
+    <div class="${motif}"></div>
+    <div class="lab sec">Can hear you</div>
+    <div class="row pr">${F("ana")}<div class="grow"><div class="n">Ana</div><div class="w">Talking · 3 m</div></div><span class="wave"><i style="height:5px"></i><i style="height:11px"></i><i style="height:8px"></i><i style="height:13px"></i><i style="height:6px"></i></span></div>
+    <div class="row pr">${F("cai")}<div class="grow"><div class="n">Cai</div><div class="w">5 m away</div></div></div>
+    <div class="lab sec">Elsewhere</div>
+    <div class="row pr hl">${F("dee", "away")}<div class="grow"><div class="n">Dee</div><div class="w">Lobby · floor 1</div></div><span class="go">Go to</span></div>
+    <div class="row pr">${F("eli", "dnd")}<div class="grow"><div class="n">Eli</div><div class="w">Booth 2 · do not disturb</div></div></div>
+  </aside>
+  <div class="abs row panel prompt"><span class="k">E</span>Open the lobby door</div>
+  <div class="abs panel map"><div class="hd"><span class="lab">The grounds</span><span class="dim" style="font-size:12px">N ↑</span></div><div class="m">${minimap()}</div></div>
+  <nav class="abs row panel dock">${CTL.map((c) => (c ? `<span class="b ${c[2] ?? ""}"><span class="k">${I(c[0])}</span>${c[1]}${c[3] ? `<span class="bd">${c[3]}</span>` : ""}</span>` : `<span class="vs"></span>`)).join("")}</nav>
+  <div class="abs panel pocket"><span class="lab">Carrying</span><div class="row sl">
+    ${[["mug", 1], ["torch", 2], ["key", 3], [null, 4]].map(([ic, n], i) => `<span class="slot ${ic ? "" : "empty"} ${i === (d === "m" ? 1 : 0) ? "sel" : ""}"><sup>${n}</sup>${ic ? I(ic, 22) : ""}</span>`).join("")}</div></div>`;
+</script>
+</body>
+</html>

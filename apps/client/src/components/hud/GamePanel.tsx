@@ -407,7 +407,7 @@ function ConsoleControls({
           <h2 className="lcd text-lg">{SYSTEMS[system].label.toUpperCase()}</h2>
         </div>
         {v.on ? (
-          <span className="mono text-xs" style={{ color: v.live ? "#d4e4a6" : "var(--cream-dim)" }}>
+          <span className="mono text-xs" style={{ color: v.live ? "var(--lcd-good)" : "var(--cream-dim)" }}>
             {v.host
               ? v.hostMe
                 ? v.live
@@ -424,7 +424,10 @@ function ConsoleControls({
 
       <div className="grid sm:grid-cols-3 gap-2">
         {/* the cable */}
-        <div className="rounded-md px-2.5 py-2" style={{ background: "#1a1410", border: "1px solid #3a2c1f" }}>
+        <div
+          className="rounded-md px-2.5 py-2"
+          style={{ background: "var(--well)", border: "1px solid var(--well-edge)" }}
+        >
           <p className="text-xs font-semibold" style={{ color: v.tv ? "var(--cream)" : "var(--muted)" }}>
             {v.tv ? `🔌 ${t("plugged")}` : t("unplugged")}
           </p>
@@ -459,7 +462,10 @@ function ConsoleControls({
           )}
         </div>
         {/* the cartridge */}
-        <div className="rounded-md px-2.5 py-2" style={{ background: "#1a1410", border: "1px solid #3a2c1f" }}>
+        <div
+          className="rounded-md px-2.5 py-2"
+          style={{ background: "var(--well)", border: "1px solid var(--well-edge)" }}
+        >
           <p className="text-[11px]" style={{ color: "var(--muted)" }}>
             {t(disc ? "disc" : "cart")}
           </p>
@@ -501,7 +507,7 @@ function ConsoleControls({
         {/* power */}
         <div
           className="rounded-md px-2.5 py-2 flex flex-col gap-1.5"
-          style={{ background: "#1a1410", border: "1px solid #3a2c1f" }}
+          style={{ background: "var(--well)", border: "1px solid var(--well-edge)" }}
         >
           <button
             type="button"
@@ -576,7 +582,7 @@ function ConsoleControls({
               // biome-ignore lint/suspicious/noArrayIndexKey: pads are fixed ports
               key={i}
               className="rounded-md px-2.5 py-1.5 flex items-center gap-2"
-              style={{ background: "#1a1410", border: `1px solid ${p.me ? "#f0a12c" : "#3a2c1f"}` }}
+              style={{ background: "var(--well)", border: `1px solid ${p.me ? "#f0a12c" : "var(--well-edge)"}` }}
             >
               <span className="lcd text-sm">P{i + 1}</span>
               {p.name ? (
@@ -908,7 +914,7 @@ function CartList({
                 <li
                   key={g.id}
                   className="rounded-md px-2 py-1.5 flex items-center gap-2"
-                  style={{ background: "#1a1410", border: "1px solid #3a2c1f" }}
+                  style={{ background: "var(--well)", border: "1px solid var(--well-edge)" }}
                 >
                   {isDiscSystem(g.system) ? (
                     // a jewel case: its cover's colour, the disc showing through
@@ -1040,7 +1046,10 @@ function Upload({
       .finally(() => setBusy(false));
   };
   return (
-    <details className="rounded-md px-2.5 py-2" style={{ background: "#120d0a", border: "1px dashed #3a2c1f" }}>
+    <details
+      className="rounded-md px-2.5 py-2"
+      style={{ background: "var(--pit-2)", border: "1px dashed var(--well-edge)" }}
+    >
       <summary className="text-xs font-semibold cursor-pointer" style={{ color: "var(--cream)" }}>
         + {t(discs ? "bringDisc" : "bring")}
       </summary>
@@ -1141,10 +1150,10 @@ function Upload({
         </label>
         {disc && sent ? (
           <div className="sm:col-span-2 flex flex-col gap-1" data-testid="upload-progress">
-            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#2a1f16" }}>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--track)" }}>
               <div
                 className="h-full"
-                style={{ width: `${(100 * sent[0]) / Math.max(1, sent[1])}%`, background: "var(--amber, #ffa630)" }}
+                style={{ width: `${(100 * sent[0]) / Math.max(1, sent[1])}%`, background: "var(--amber)" }}
               />
             </div>
             <span className="mono text-[11px]" style={{ color: "var(--cream-dim)" }}>
@@ -1172,7 +1181,7 @@ function Upload({
             </button>
           )}
           {files.length && why ? (
-            <span className="text-[11px]" style={{ color: "#e79a7c" }}>
+            <span className="text-[11px]" style={{ color: "var(--error)" }}>
               {why}
             </span>
           ) : null}
@@ -1195,7 +1204,7 @@ function Bios({ t }: { t: TFn }) {
   return (
     <div
       className="rounded-md px-2.5 py-2 flex flex-col gap-1.5"
-      style={{ background: "#120d0a", border: "1px solid #3a2c1f" }}
+      style={{ background: "var(--pit-2)", border: "1px solid var(--well-edge)" }}
     >
       <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--muted)" }}>
         {t("bios")}
@@ -1222,7 +1231,7 @@ function Bios({ t }: { t: TFn }) {
           ))}
         </ul>
       ) : list ? (
-        <p className="text-[11px]" style={{ color: "#e79a7c" }}>
+        <p className="text-[11px]" style={{ color: "var(--error)" }}>
           {t("needsBios")}
         </p>
       ) : null}

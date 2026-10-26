@@ -38,9 +38,9 @@ export function SidePanel() {
             style={
               side === x.key
                 ? {
-                    background: "rgba(255,179,92,.14)",
+                    background: "color-mix(in srgb, var(--vfd) 14%, transparent)",
                     color: "var(--vfd)",
-                    boxShadow: "inset 0 0 0 1px rgba(255,179,92,.35)",
+                    boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--vfd) 35%, transparent)",
                   }
                 : { color: "var(--cream-dim)" }
             }
@@ -151,7 +151,7 @@ function PeopleTab() {
       <li
         key={p.sid}
         className="rounded-[10px] p-2"
-        style={{ background: p.hearing ? "rgba(255,166,48,0.07)" : "transparent" }}
+        style={{ background: p.hearing ? "color-mix(in srgb, var(--amber) 7%, transparent)" : "transparent" }}
       >
         <div className="flex items-center gap-2.5">
           <Face
@@ -159,7 +159,7 @@ function PeopleTab() {
             name={p.name}
             size={34}
             status={p.status}
-            ring={p.speaking ? "rgba(255,166,48,.8)" : undefined}
+            ring={p.speaking ? "color-mix(in srgb, var(--amber) 80%, transparent)" : undefined}
           />
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-medium truncate">
@@ -295,7 +295,7 @@ function RoomTab() {
             <span
               key={p.sid}
               className="flex items-center gap-1.5 rounded-full pl-0.5 pr-2.5 py-0.5 text-xs"
-              style={{ background: "#2a1c13", border: "1px solid var(--edge)" }}
+              style={{ background: "var(--panel-raised)", border: "1px solid var(--edge)" }}
             >
               <Face avatar={p.avatar} name={p.name} size={22} status={p.status} />
               {p.sid === me.sid ? t("you") : p.name.split(" ")[0]}
@@ -311,7 +311,7 @@ function RoomTab() {
               <button
                 key={o.id}
                 type="button"
-                className="well flex items-center gap-2 p-1.5 text-left hover:border-[#8a6440]"
+                className="well flex items-center gap-2 p-1.5 text-left hover:border-[color:var(--edge-hover)]"
                 onClick={() => w?.walkTo({ x: o.x + 0.5, y: o.y + 1.5 }, o.id)}
                 title={t("roomGo")}
               >

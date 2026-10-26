@@ -76,7 +76,10 @@ export function DealerPanel({ objectId }: { objectId: string }) {
                 className="w-full flex items-center gap-3 text-left rounded-lg px-2 py-1.5"
                 style={
                   k === model
-                    ? { background: "rgba(232,163,61,.14)", boxShadow: "inset 0 0 0 1px #e8a33d" }
+                    ? {
+                        background: "color-mix(in srgb, var(--warn) 14%, transparent)",
+                        boxShadow: "inset 0 0 0 1px var(--warn)",
+                      }
                     : { boxShadow: "inset 0 0 0 1px transparent" }
                 }
                 aria-pressed={k === model}
@@ -88,7 +91,7 @@ export function DealerPanel({ objectId }: { objectId: string }) {
                   style={{
                     width: 84,
                     height: 48,
-                    background: "radial-gradient(#4a3324,#241912)",
+                    background: "radial-gradient(var(--tile-hi),var(--panel))",
                     border: "1px solid var(--edge)",
                   }}
                 >
@@ -107,7 +110,7 @@ export function DealerPanel({ objectId }: { objectId: string }) {
         <div className="flex flex-col gap-4 flex-1 min-w-0">
           <div
             className="vfd-window grid place-items-center rounded-xl"
-            style={{ height: 220, background: "radial-gradient(#4a3324,#1a120c)" }}
+            style={{ height: 220, background: "radial-gradient(var(--tile-hi),var(--well))" }}
           >
             <ItemThumb kind="car" props={{ model, variant: colour }} className="w-[70%]" />
           </div>
@@ -129,7 +132,7 @@ export function DealerPanel({ objectId }: { objectId: string }) {
                     width: 30,
                     height: 30,
                     background: hex(c),
-                    boxShadow: `0 0 0 2px #1a120c${i === colour ? ", 0 0 0 4px #e8a33d" : ""}`,
+                    boxShadow: `0 0 0 2px var(--well)${i === colour ? ", 0 0 0 4px var(--warn)" : ""}`,
                   }}
                 />
               ))}

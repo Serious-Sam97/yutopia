@@ -175,7 +175,7 @@ export function ActionQueueBar() {
           <button
             type="button"
             className="w-6 h-6 rounded-full grid place-items-center text-[13px] opacity-70 hover:opacity-100"
-            style={{ background: "#241912", border: "1px solid var(--edge)" }}
+            style={{ background: "var(--panel)", border: "1px solid var(--edge)" }}
             aria-label={`${t("actCancel")}: ${t(`act_${q.act}` as Key)}`}
             onClick={() => w?.actions.cancel(q.key)}
           >
@@ -194,7 +194,7 @@ export function FocusChip() {
   const focus = useHud((s) => s.focus);
   if (!focus) return null;
   return (
-    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[184px] cabinet rounded-full pl-3 pr-1.5 py-1 flex items-center gap-2.5 rise">
+    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[272px] sm:bottom-[208px] cabinet rounded-full pl-3 pr-1.5 py-1 flex items-center gap-2.5 rise">
       <span className="text-sm">{t("focusing")}</span>
       <button
         type="button"
@@ -216,7 +216,7 @@ export function ArrivalChip() {
   const mine = useHud((s) => s.mySpawn);
   if (!on) return null;
   return (
-    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[184px] cabinet rounded-full pl-3 pr-1.5 py-1 flex items-center gap-2.5 rise">
+    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[272px] sm:bottom-[208px] cabinet rounded-full pl-3 pr-1.5 py-1 flex items-center gap-2.5 rise">
       <Icon name="pin" size={15} />
       <span className="text-sm">{t("arrivalPick")}</span>
       {mine && (
@@ -250,7 +250,7 @@ function Thumb({ target, size }: { target: ActTarget; size: number }) {
   const disc = {
     width: size,
     height: size,
-    background: "radial-gradient(#4a3324,#241912)",
+    background: "radial-gradient(var(--tile-hi),var(--panel))",
     border: "1px solid var(--edge)",
   };
   if (target.type === "object") {

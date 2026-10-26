@@ -11,8 +11,10 @@ import { Icon } from "./icons";
 
 const STATUSES = ["online", "dnd", "away"] as const;
 
-// The deck: media (mic with a live meter, camera, screen) · social (emotes,
-// the phone, people) · me (status) · tools (build, settings).
+// (its menus over the dark's quick slots, z 40, which sit just above the dock on a phone)
+// The deck, in groups: talk (mic with a live meter, camera, screen) · social
+// (emotes, the phone, people) · me (status) · make (build, pets, settings); each
+// key named under it (docs/plan/45-the-ui.md).
 export function Dock() {
   const t = useTr();
   const w = useWorld();
@@ -21,7 +23,7 @@ export function Dock() {
   const side = useHud((s) => s.side);
   const phone = useHud((s) => s.phone);
   const canBuild = useHud((s) => s.canBuild);
-  const [menu, setMenu] = useState<"emotes" | "status" | null>(null);
+  const [menu, setMenu] = useState<"emotes" | "status" | "more" | null>(null);
   const toggleSide = (tab: SideTab) => hud.set((s) => ({ side: s.side === tab ? null : tab }));
   const ready = media.ready || media.offline;
 
@@ -45,10 +47,14 @@ export function Dock() {
     <nav
       aria-label={t("controls")}
       data-dock
-      className="pointer-events-auto absolute bottom-3 left-1/2 -translate-x-1/2 max-w-[calc(100vw-24px)]"
+      className="pointer-events-auto absolute bottom-3 left-3 right-3 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 sm:max-w-[calc(100vw-24px)]"
     >
       {menu === "emotes" && (
-        <div className="cabinet p-1.5 mb-2 flex gap-0.5 justify-center rise" role="menu" aria-label={t("emote")}>
+        <div
+          className="cabinet relative z-[41] p-1.5 mb-2 flex gap-0.5 justify-center rise"
+          role="menu"
+          aria-label={t("emote")}
+        >
           {EMOTES.map((e, i) => (
             <button
               key={e}
@@ -68,8 +74,12 @@ export function Dock() {
           ))}
         </div>
       )}
-      {menu === "status" && (
-        <div className="cabinet p-1.5 mb-2 ml-auto w-56 rise" role="menu" aria-label={t("status")}>
+      {(menu === "status" || menu === "more") && (
+        <div
+          className="cabinet relative z-[41] p-1.5 mb-2 ml-auto w-56 rise"
+          role="menu"
+          aria-label={menu === "more" ? t("more") : t("status")}
+        >
           {STATUSES.map((s) => (
             <button
               key={s}
@@ -77,7 +87,7 @@ export function Dock() {
               role="menuitemradio"
               aria-checked={status === s}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left hover:bg-white/10"
-              style={status === s ? { background: "rgba(255,179,92,.12)", color: "var(--vfd)" } : undefined}
+              style={status === s ? { background: "var(--lamp-tint)", color: "var(--vfd)" } : undefined}
               onClick={() => {
                 w?.setStatus(s);
                 setMenu(null);
@@ -87,143 +97,237 @@ export function Dock() {
               {t(`status_${s}`)}
             </button>
           ))}
+          {/* on a phone, "more": the status, then the keys the dock has no room for */}
+          {menu === "more" && (
+            <>
+              <div className="my-1 h-px" style={{ background: "var(--edge)" }} aria-hidden />
+              {(
+                [
+                  ["pets", "paw"],
+                  ["settings", "gear"],
+                ] as const
+              ).map(([kind, icon]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  role="menuitem"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left hover:bg-white/10"
+                  onClick={() => {
+                    setMenu(null);
+                    hud.set(kind === "pets" ? { panel: { kind }, petFocus: null } : { panel: { kind } });
+                  }}
+                >
+                  <Icon name={icon} size={16} />
+                  {t(kind)}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       )}
-      <div className="cabinet p-2 flex items-center gap-1.5 overflow-x-auto scroll-thin">
-        <button
-          type="button"
-          className={`deck-btn ${media.mic ? "" : "danger"}`}
-          aria-pressed={media.mic}
-          onClick={() => void w?.toggleMic()}
-          title={media.asleep ? `${t("mic")} (M) — ${t("voiceAsleep")}` : `${t("mic")} (M)`}
-          aria-label={t("mic")}
-          disabled={!ready}
-          data-voice-asleep={media.asleep || undefined}
-        >
-          <Icon name={media.mic ? "mic" : "micOff"} size={20} />
-          {media.mic && <MicMeter />}
-          {media.asleep && (
-            <span
-              className="absolute -top-1.5 -right-1.5 h-5 px-1 rounded-full text-[10px] font-semibold flex items-center"
-              style={{ background: "#2a1c13", color: "var(--cream-dim)", border: "1px solid var(--edge)" }}
-              aria-hidden
-            >
-              zz
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          className="deck-btn"
-          aria-pressed={media.cam}
-          onClick={() => void w?.toggleCam()}
-          title={`${t("cam")} (V)`}
-          aria-label={t("cam")}
-          disabled={!ready}
-        >
-          <Icon name={media.cam ? "cam" : "camOff"} size={20} />
-        </button>
-        <button
-          type="button"
-          className="deck-btn hidden sm:inline-flex"
-          aria-pressed={media.screen}
-          onClick={() => void w?.toggleScreen()}
-          title={t("screen")}
-          aria-label={t("screen")}
-          disabled={!media.ready}
-        >
-          <Icon name="screen" size={20} />
-        </button>
-        <span className="hidden sm:block w-px h-8 mx-1 shrink-0" style={{ background: "var(--edge)" }} aria-hidden />
-        <button
-          type="button"
-          className="deck-btn"
-          aria-pressed={menu === "emotes"}
-          onClick={() => setMenu((m) => (m === "emotes" ? null : "emotes"))}
-          title={`${t("emote")} (1–8)`}
-          aria-label={t("emote")}
-        >
-          {/* biome-ignore lint/performance/noImgElement: inline SVG data URL */}
-          <img alt="" src={emoteUrl("laugh")} className="w-7 h-7" draggable={false} />
-        </button>
-        <button
-          type="button"
-          className={`deck-btn ${phone.open || phone.ringing ? "lit" : ""} ${phone.ringing ? "ringing" : ""}`}
-          aria-pressed={phone.open}
-          onClick={() => void w?.togglePhone()}
-          title={`${t("phone")} (P)`}
-          aria-label={t("phone")}
-          data-phone-key
-        >
-          <Icon name="phone" size={20} />
-          {phone.badge > 0 && (
-            <span
-              className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full text-[11px] font-semibold flex items-center justify-center"
-              style={{ background: "var(--rust)", color: "var(--cream)", border: "2px solid #2a1c13" }}
-            >
-              {phone.badge}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          className="deck-btn hidden sm:inline-flex"
-          aria-pressed={side === "people"}
-          onClick={() => toggleSide("people")}
-          title={t("people")}
-          aria-label={t("people")}
-        >
-          <Icon name="people" size={20} />
-        </button>
-        <span className="hidden sm:block w-px h-8 mx-1 shrink-0" style={{ background: "var(--edge)" }} aria-hidden />
-        <button
-          type="button"
-          className="h-11 rounded-[10px] px-3 flex items-center gap-2 mono text-xs uppercase tracking-wide shrink-0"
-          style={{ background: "rgba(0,0,0,.25)", border: "1px solid var(--edge)", color: "var(--cream)" }}
-          aria-haspopup="menu"
-          aria-expanded={menu === "status"}
-          onClick={() => setMenu((m) => (m === "status" ? null : "status"))}
-          title={t("status")}
-        >
-          <i
-            className="w-2.5 h-2.5 rounded-full"
-            style={{ background: STATUS_COLOR[status], boxShadow: `0 0 6px ${STATUS_COLOR[status]}` }}
-          />
-          <span className="hidden md:inline">{t(`status_${status}` as "status_online").split(" ")[0]}</span>
-          <Icon name="chev" size={14} />
-        </button>
-        <span className="hidden sm:block w-px h-8 mx-1 shrink-0" style={{ background: "var(--edge)" }} aria-hidden />
-        {canBuild && (
+      <div className="cabinet px-2 pt-2 pb-1.5 flex items-start justify-between sm:justify-start gap-1 overflow-x-auto scroll-thin">
+        <Key label={media.mic ? t("mic") : t("muted")} on={media.mic}>
           <button
             type="button"
-            className="deck-btn hidden sm:inline-flex"
-            onClick={() => hud.set((s) => ({ build: { ...s.build, on: true, mode: "hand" } }))}
-            title={t("build")}
-            aria-label={t("build")}
+            className={`deck-btn ${media.mic ? "" : "danger"}`}
+            aria-pressed={media.mic}
+            onClick={() => void w?.toggleMic()}
+            title={media.asleep ? `${t("mic")} (M) — ${t("voiceAsleep")}` : `${t("mic")} (M)`}
+            aria-label={t("mic")}
+            disabled={!ready}
+            data-voice-asleep={media.asleep || undefined}
           >
-            <Icon name="hammer" size={20} />
+            <Icon name={media.mic ? "mic" : "micOff"} size={20} />
+            {media.mic && <MicMeter />}
+            {media.asleep && (
+              <span
+                className="absolute -top-1.5 -right-1.5 h-5 px-1 rounded-full text-[10px] font-semibold flex items-center"
+                style={{
+                  background: "var(--panel-raised)",
+                  color: "var(--cream-dim)",
+                  border: "1px solid var(--edge)",
+                }}
+                aria-hidden
+              >
+                zz
+              </span>
+            )}
           </button>
+        </Key>
+        <Key label={t("cam")} on={media.cam}>
+          <button
+            type="button"
+            className="deck-btn"
+            aria-pressed={media.cam}
+            onClick={() => void w?.toggleCam()}
+            title={`${t("cam")} (V)`}
+            aria-label={t("cam")}
+            disabled={!ready}
+          >
+            <Icon name={media.cam ? "cam" : "camOff"} size={20} />
+          </button>
+        </Key>
+        <Key label={t("screenShort")} on={media.screen} className="hidden sm:flex">
+          <button
+            type="button"
+            className="deck-btn"
+            aria-pressed={media.screen}
+            onClick={() => void w?.toggleScreen()}
+            title={t("screen")}
+            aria-label={t("screen")}
+            disabled={!media.ready}
+          >
+            <Icon name="screen" size={20} />
+          </button>
+        </Key>
+        <Rule />
+        <Key label={t("emote")} on={menu === "emotes"}>
+          <button
+            type="button"
+            className="deck-btn"
+            aria-pressed={menu === "emotes"}
+            onClick={() => setMenu((m) => (m === "emotes" ? null : "emotes"))}
+            title={`${t("emote")} (1–8)`}
+            aria-label={t("emote")}
+          >
+            {/* biome-ignore lint/performance/noImgElement: inline SVG data URL */}
+            <img alt="" src={emoteUrl("laugh")} className="w-7 h-7" draggable={false} />
+          </button>
+        </Key>
+        <Key label={t("phone")} on={phone.open || phone.ringing}>
+          <button
+            type="button"
+            className={`deck-btn ${phone.open || phone.ringing ? "lit" : ""} ${phone.ringing ? "ringing" : ""}`}
+            aria-pressed={phone.open}
+            onClick={() => void w?.togglePhone()}
+            title={`${t("phone")} (P)`}
+            aria-label={t("phone")}
+            data-phone-key
+          >
+            <Icon name="phone" size={20} />
+            {phone.badge > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full text-[11px] font-semibold flex items-center justify-center"
+                style={{ background: "var(--rust)", color: "var(--cream)", border: "2px solid var(--panel)" }}
+              >
+                {phone.badge > 9 ? "9+" : phone.badge}
+              </span>
+            )}
+          </button>
+        </Key>
+        <Key label={t("people")} on={side === "people"}>
+          <button
+            type="button"
+            className="deck-btn"
+            aria-pressed={side === "people"}
+            onClick={() => toggleSide("people")}
+            title={t("people")}
+            aria-label={t("people")}
+          >
+            <Icon name="people" size={20} />
+          </button>
+        </Key>
+        <Rule />
+        <Key label={t("status")} on={menu === "status"} className="hidden sm:flex">
+          <button
+            type="button"
+            className="deck-btn shrink-0 gap-2"
+            aria-haspopup="menu"
+            aria-expanded={menu === "status"}
+            onClick={() => setMenu((m) => (m === "status" ? null : "status"))}
+            title={t("status")}
+          >
+            <i
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ background: STATUS_COLOR[status], boxShadow: `0 0 6px ${STATUS_COLOR[status]}` }}
+            />
+            <span className="hidden md:inline">{t(`status_${status}` as "status_online").split(" ")[0]}</span>
+            <Icon name="chev" size={14} />
+          </button>
+        </Key>
+        <Rule />
+        {canBuild && (
+          <Key label={t("build")} className="hidden sm:flex">
+            <button
+              type="button"
+              className="deck-btn"
+              onClick={() => hud.set((s) => ({ build: { ...s.build, on: true, mode: "hand" } }))}
+              title={t("build")}
+              aria-label={t("build")}
+            >
+              <Icon name="hammer" size={20} />
+            </button>
+          </Key>
         )}
-        <button
-          type="button"
-          className="deck-btn"
-          onClick={() => hud.set({ panel: { kind: "pets" }, petFocus: null })}
-          title={t("pets")}
-          aria-label={t("pets")}
-        >
-          <Icon name="paw" size={20} />
-        </button>
-        <button
-          type="button"
-          className="deck-btn"
-          onClick={() => hud.set({ panel: { kind: "settings" } })}
-          title={t("settings")}
-          aria-label={t("settings")}
-        >
-          <Icon name="gear" size={20} />
-        </button>
+        <Key label={t("pets")} className="hidden sm:flex">
+          <button
+            type="button"
+            className="deck-btn"
+            onClick={() => hud.set({ panel: { kind: "pets" }, petFocus: null })}
+            title={t("pets")}
+            aria-label={t("pets")}
+          >
+            <Icon name="paw" size={20} />
+          </button>
+        </Key>
+        <Key label={t("settings")} className="hidden sm:flex">
+          <button
+            type="button"
+            className="deck-btn"
+            onClick={() => hud.set({ panel: { kind: "settings" } })}
+            title={t("settings")}
+            aria-label={t("settings")}
+          >
+            <Icon name="gear" size={20} />
+          </button>
+        </Key>
+        <Key label={t("more")} on={menu === "more"} className="flex sm:hidden">
+          <button
+            type="button"
+            className="deck-btn text-lg"
+            aria-haspopup="menu"
+            aria-expanded={menu === "more"}
+            onClick={() => setMenu((m) => (m === "more" ? null : "more"))}
+            aria-label={t("more")}
+          >
+            ⋯
+          </button>
+        </Key>
       </div>
     </nav>
+  );
+}
+
+// A key and its name under it (the name from sm up: on a phone the keys alone).
+function Key({
+  label,
+  on = false,
+  className = "flex",
+  children,
+}: {
+  label: string;
+  on?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`${className} flex-col items-center gap-1 shrink-0`}>
+      {children}
+      <span
+        className="hidden sm:block mono text-[10.5px] leading-none whitespace-nowrap"
+        style={{ color: on ? "var(--cream)" : "var(--cream-dim)" }}
+        aria-hidden
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// The line between the dock's groups.
+function Rule() {
+  return (
+    <span className="hidden sm:block w-px h-9 mx-1.5 mt-1 shrink-0" style={{ background: "var(--edge)" }} aria-hidden />
   );
 }
 
@@ -243,14 +347,14 @@ function MicMeter() {
       if (n === lit) return;
       lit = n;
       Array.from(el.children).forEach((b, i) => {
-        (b as HTMLElement).style.background = i < n ? "#6b3b10" : "#d9cba9";
+        (b as HTMLElement).style.background = i < n ? "var(--meter-lit)" : "var(--cream-dim)";
       });
     });
   }, [w]);
   return (
     <span ref={bars} className="flex items-end gap-[2px] h-[18px]" aria-hidden>
       {[5, 8, 11, 14, 17].map((h) => (
-        <span key={h} className="w-[3px] rounded-[1px]" style={{ height: h, background: "#d9cba9" }} />
+        <span key={h} className="w-[3px] rounded-[1px]" style={{ height: h, background: "var(--cream-dim)" }} />
       ))}
     </span>
   );

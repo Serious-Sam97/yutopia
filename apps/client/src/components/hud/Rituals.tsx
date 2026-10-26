@@ -33,7 +33,7 @@ export function Rituals() {
             🎙 {mine ? t("standupYours") : `${person?.name ?? "…"}${t("standupTurn")}`}
           </p>
         </div>
-        <span className="lcd text-3xl" style={{ color: left < 10 ? "#ff6a4d" : "var(--vfd)" }}>
+        <span className="lcd text-3xl" style={{ color: left < 10 ? "var(--bad)" : "var(--vfd)" }}>
           {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
         </span>
       </div>

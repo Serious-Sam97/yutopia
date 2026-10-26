@@ -84,8 +84,8 @@ export function AvatarCanvas({
           width: size * 0.5,
           height: size * 0.1,
           borderRadius: "50%",
-          background: "#3e2718",
-          boxShadow: "0 0 0 2px rgba(255,166,48,.55)",
+          background: "var(--walnut-dark)",
+          boxShadow: "0 0 0 2px var(--lamp-ring)",
         }}
       />
       {!gl ? (

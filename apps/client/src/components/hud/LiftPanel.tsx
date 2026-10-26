@@ -153,21 +153,15 @@ export function LiftPanel() {
   );
 }
 
-// Which floor I'm on, beside where I am (only in a building of more than one).
+// Which floor I'm on, in the line under where I am (only in a building of more than one).
 export function FloorChip() {
   const t = useTr();
   const floor = useHud((s) => s.floor);
   const many = useHud((s) => s.floors.length > 1);
   if (!many) return null;
   return (
-    <div
-      className="vfd-window hidden sm:flex flex-col items-center justify-center px-2.5 h-10 shrink-0"
-      data-testid="floor-chip"
-    >
-      <span className="mono text-[9px] leading-none" style={{ color: "var(--cream-dim)" }}>
-        {t("floor").toUpperCase()}
-      </span>
-      <span className="lcd text-[24px] leading-none">{floorLabel(floor)}</span>
-    </div>
+    <span className="whitespace-nowrap" data-testid="floor-chip">
+      {` · ${t("floor")} ${floorLabel(floor)}`}
+    </span>
   );
 }

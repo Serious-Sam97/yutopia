@@ -48,7 +48,7 @@ export function MapPanel() {
                   width: `calc((100% - 24px) * ${s.width / largest.width})`,
                   height: `calc((100% - 24px) * ${s.height / largest.height})`,
                   border: picked ? "2px solid var(--vfd)" : "1px dashed rgba(203,189,156,.35)",
-                  background: isCur ? "rgba(255,166,48,.10)" : "transparent",
+                  background: isCur ? "color-mix(in srgb, var(--amber) 10%, transparent)" : "transparent",
                 }}
               >
                 <span
@@ -68,7 +68,7 @@ export function MapPanel() {
             <label
               key={k}
               className="flex-1 flex items-center justify-between rounded-[9px] px-2.5 h-10"
-              style={{ background: "#140e0a", border: "1px solid var(--edge)" }}
+              style={{ background: "var(--field)", border: "1px solid var(--edge)" }}
             >
               <span className="mono text-[10px] uppercase" style={{ color: "var(--muted)" }}>
                 {t(k === "width" ? "buildWidth" : "buildHeight")}
@@ -112,13 +112,13 @@ export function MapPanel() {
           {pickSpawn ? t("buildArrivalPick") : t("buildArrival")}
         </button>
         <div className="flex-1" />
-        <h3 className="grp" style={{ color: "#e79a7c" }}>
+        <h3 className="grp" style={{ color: "var(--error)" }}>
           {t("buildDanger")}
         </h3>
         <button
           type="button"
           className="ghost-btn w-full"
-          style={{ height: 40, borderStyle: "dashed", borderColor: "#9e4a2e", color: "#e79a7c" }}
+          style={{ height: 40, borderStyle: "dashed", borderColor: "var(--danger-dashed)", color: "var(--error)" }}
           onClick={() => {
             if (window.confirm(t("buildBlankConfirm").replace("{size}", sizeText))) w?.send("map:new", size);
           }}

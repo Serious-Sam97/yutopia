@@ -20,9 +20,11 @@ test("HUD: who hears you, emotes, the phone key, people, room, status, minimap",
   const at = await ana.evaluate(() => (window as any).__yutopia.meTile());
   await walkTo(bia, at.x + 1.5, at.y + 0.5, 25_000);
 
-  // top bars: where I am (people come in at the arrival point), who's in
+  // top bars: where I am — the room's name, who's here under it (people come in at the arrival point) — who's in
   const here = await ana.evaluate(() => (window as any).__hud.get().me?.areaName as string);
-  await expect(ana.getByText(new RegExp(`${here} · \\d+ here`))).toBeVisible();
+  const where = ana.locator("header").first();
+  await expect(where.getByText(here, { exact: true })).toBeVisible();
+  await expect(where.getByText(/\d+ here/)).toBeVisible();
   await expect(ana.getByText(/\d+ online/)).toBeVisible();
 
   // the people panel: who can hear me (the chat's gone — texts are on the phone)

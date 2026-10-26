@@ -230,7 +230,9 @@ export function ControllersPanel({ start, onClose }: { start?: GameSystem; onClo
                   {t("raw")}: {raw.held.length ? raw.held.map((i) => `#${i}`).join(" ") : "—"} · {t("sticksRaw")}{" "}
                   {raw.axes.map((v) => v.toFixed(2)).join(" ")} · {t("mapping")} {raw.mapping} · {t("reading")}{" "}
                   {raw.index + 1}/{raw.of} ·{" "}
-                  <span style={{ color: raw.fresh ? "#7fa34a" : "#e79a7c" }}>{raw.fresh ? t("live") : t("stale")}</span>
+                  <span style={{ color: raw.fresh ? "var(--good)" : "var(--error)" }}>
+                    {raw.fresh ? t("live") : t("stale")}
+                  </span>
                 </p>
               ) : null}
               <div className="flex flex-col gap-1">
@@ -298,9 +300,9 @@ export function ControllersPanel({ start, onClose }: { start?: GameSystem; onClo
                       <span
                         className="mono inline-block rounded px-1.5 py-0.5"
                         style={{
-                          background: on(c) ? "var(--amber, #ffa630)" : "#1a1410",
-                          color: on(c) ? "#15100c" : "var(--cream)",
-                          border: "1px solid #3a2c1f",
+                          background: on(c) ? "var(--amber)" : "var(--well)",
+                          color: on(c) ? "var(--on-amber)" : "var(--cream)",
+                          border: "1px solid var(--well-edge)",
                           minWidth: 46,
                         }}
                       >

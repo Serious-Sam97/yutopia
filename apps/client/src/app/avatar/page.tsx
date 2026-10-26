@@ -30,7 +30,7 @@ export default function AvatarPage() {
 
   return (
     <main className="h-full overflow-y-auto scroll-thin">
-      <div className="mx-auto max-w-4xl p-4 sm:p-8">
+      <div className="mx-auto max-w-[1060px] p-4 sm:p-8">
         <header className="flex items-center justify-between mb-6">
           <Brand small />
           <Link href="/" className="ghost-btn">

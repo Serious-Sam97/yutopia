@@ -238,6 +238,7 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   // Settings → View: the three choices, first person pressed; a click on
   // Third person takes the chase camera back
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("tab", { name: "View" }).click();
   const first = page.getByRole("button", { name: "First person (beta)" });
   await expect(first).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Isometric" })).toHaveAttribute("aria-pressed", "false");
@@ -282,6 +283,7 @@ test("first person: my hands come up with the phone, and Settings can hide them"
 
   // Settings: the switch is there in first person, on; off, the phone comes out with no hands
   await page.evaluate(() => (window as any).__hud.set({ panel: { kind: "settings" } }));
+  await page.getByRole("tab", { name: "View" }).click();
   const row = page.locator("label", { hasText: "Show my hands in first person" }).getByRole("button");
   await expect(row).toHaveAttribute("aria-pressed", "true");
   await row.click();

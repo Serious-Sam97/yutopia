@@ -102,7 +102,7 @@ export function PersonCard() {
           <button
             type="button"
             className="ghost-btn flex-1"
-            style={{ color: "#ff8a66" }}
+            style={{ color: "var(--alert)" }}
             onClick={() => {
               if (window.confirm(`${t("remove")} ${p.name}?`)) {
                 w?.send("mod:kick", { userId: uid });

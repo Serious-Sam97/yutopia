@@ -111,7 +111,7 @@ function BuildTopBar() {
   return (
     <header
       className="pointer-events-auto cabinet absolute top-3 left-3 right-3 h-[52px] flex items-center gap-2 sm:gap-2.5 pl-3 pr-2 overflow-hidden"
-      style={{ borderColor: "rgba(255,166,48,.55)" }}
+      style={{ borderColor: "var(--lamp-ring)" }}
     >
       <span className="hazard absolute inset-x-0 bottom-0 h-[3px] opacity-80" aria-hidden />
       <span className="hidden sm:block">
@@ -121,7 +121,7 @@ function BuildTopBar() {
       <div className="vfd-window flex items-center gap-2.5 px-3 py-1.5 min-w-0">
         <span
           className="w-[9px] h-[9px] rounded-full shrink-0"
-          style={{ background: "#ff5a2a", boxShadow: "0 0 8px #ff7a3a" }}
+          style={{ background: "var(--hot)", boxShadow: "0 0 8px var(--hot-glow)" }}
           aria-hidden
         />
         <h2 className="lcd text-lg sm:text-[22px] leading-none whitespace-nowrap truncate">
@@ -140,7 +140,7 @@ function BuildTopBar() {
         disabled={!micReady}
         onClick={() => void w?.toggleMic()}
         title={`${t("mic")} (M)`}
-        style={mic ? { color: "var(--vfd)", borderColor: "#7a5636" } : undefined}
+        style={mic ? { color: "var(--vfd)", borderColor: "var(--edge-strong)" } : undefined}
       >
         <Icon name={mic ? "mic" : "micOff"} size={15} />
       </button>
@@ -170,7 +170,11 @@ function BuildTopBar() {
       <button
         type="button"
         className="deck-btn"
-        style={{ height: 38, background: "linear-gradient(180deg,#ffc274,#e8952d)", boxShadow: "0 3px 0 #9a5c17" }}
+        style={{
+          height: 38,
+          background: "linear-gradient(180deg,var(--amber-hi),var(--amber-lo))",
+          boxShadow: "0 3px 0 var(--amber-shade)",
+        }}
         onClick={() => hud.set((s) => ({ build: { ...s.build, on: false, mode: "hand", props: null } }))}
       >
         <Icon name="check" size={16} />
@@ -193,13 +197,13 @@ function SaveState() {
     save.state === "saving"
       ? [t("buildSaving"), "var(--vfd)"]
       : save.state === "failed"
-        ? [t("buildSaveFailed"), "#e79a7c"]
+        ? [t("buildSaveFailed"), "var(--error)"]
         : save.state === "rejected"
-          ? [t("buildSaveRejected"), "#e79a7c"]
+          ? [t("buildSaveRejected"), "var(--error)"]
           : save.state === "saved"
             ? [
                 `${t("buildSaved")} · ${mins < 1 ? t("buildJustNow") : t("buildMinAgo").replace("{n}", String(mins))}`,
-                "#8aa04a",
+                "var(--good)",
               ]
             : [t("buildAutoSave"), "var(--muted)"];
   return (
@@ -400,7 +404,7 @@ function ActionBar() {
             <span
               className="w-[58px] h-[46px] rounded-lg hidden sm:flex items-center justify-center p-1 shrink-0"
               style={{
-                background: "radial-gradient(90% 70% at 50% 62%,#4a3324,#241912 72%)",
+                background: "radial-gradient(90% 70% at 50% 62%,var(--tile-hi),var(--panel) 72%)",
                 border: "1px solid var(--edge)",
               }}
             >
@@ -416,7 +420,7 @@ function ActionBar() {
               </span>
               <span
                 className="mono text-[11px] uppercase whitespace-nowrap"
-                style={{ color: b.fits ? "#a9c25a" : "#e79a7c" }}
+                style={{ color: b.fits ? "var(--good-bright)" : "var(--error)" }}
               >
                 ● {t(b.fits ? "buildFits" : "buildBlocked")}
                 <span className="hidden sm:inline">
@@ -472,7 +476,7 @@ function ActionBar() {
             placeholder={t("buildSetupName")}
             aria-label={t("buildSetupName")}
             className="h-9 w-[min(240px,40vw)] rounded-lg px-2.5 text-sm outline-none"
-            style={{ background: "#140e0a", border: "1px solid var(--edge)", color: "var(--cream)" }}
+            style={{ background: "var(--field)", border: "1px solid var(--edge)", color: "var(--cream)" }}
           />
           <button type="submit" className="deck-btn" disabled={!naming.trim()}>
             <Icon name="check" size={18} />
@@ -591,12 +595,14 @@ function HoverTag() {
       className="pointer-events-none fixed left-0 top-0 z-10 rounded-md px-2 py-1 mono text-[11px] whitespace-nowrap"
       style={{
         background: "rgba(30,23,18,.92)",
-        border: `1px solid ${hover.by ? "#c7452d" : "#7a5636"}`,
+        border: `1px solid ${hover.by ? "var(--danger-edge)" : "var(--edge-strong)"}`,
         color: "var(--cream)",
       }}
     >
       {hover.label}
-      {hover.by && <span style={{ color: "#ff9a7a" }}> · {t("buildHeldTag").replace("{name}", hover.by)}</span>}
+      {hover.by && (
+        <span style={{ color: "var(--danger-text)" }}> · {t("buildHeldTag").replace("{name}", hover.by)}</span>
+      )}
       {hover.of && hover.of.n > 1 && (
         <span style={{ color: "var(--muted)" }}>
           {" "}
@@ -641,13 +647,13 @@ function WallTagChip() {
       className="pointer-events-none fixed left-0 top-0 z-10 rounded-md px-2 py-1 mono text-[11px] whitespace-nowrap"
       style={{
         background: "rgba(30,23,18,.94)",
-        border: `1px solid ${bad ? "#c7452d" : "#7a5636"}`,
+        border: `1px solid ${bad ? "var(--danger-edge)" : "var(--edge-strong)"}`,
         color: "var(--cream)",
       }}
     >
       {tag.kind === "face" ? (
         <>
-          <span style={{ color: tag.far ? "#ffcf8a" : "var(--vfd)" }}>
+          <span style={{ color: tag.far ? "var(--vfd-pale)" : "var(--vfd)" }}>
             {t(tag.far ? "wallFarSide" : "wallThisSide")}
           </span>
           {" · "}
@@ -675,7 +681,7 @@ function WallTagChip() {
       ) : (
         <>
           {tag.w && tag.h ? `${tag.w} × ${tag.h} · ` : ""}
-          <span style={{ color: tag.remove ? "#ff9a7a" : "var(--vfd)" }}>
+          <span style={{ color: tag.remove ? "var(--danger-text)" : "var(--vfd)" }}>
             {t(tag.remove ? "wallRunRemove" : "wallRun").replace("{n}", String(tag.n))}
           </span>
           {tag.skipped > 0 && (
@@ -684,7 +690,7 @@ function WallTagChip() {
         </>
       )}
       {tag.why && (
-        <div style={{ color: bad ? "#ff9a7a" : "var(--muted)" }} className="mt-0.5">
+        <div style={{ color: bad ? "var(--danger-text)" : "var(--muted)" }} className="mt-0.5">
           {tag.why}
         </div>
       )}
@@ -750,7 +756,7 @@ function WallInspector() {
     <button
       type="button"
       className="mono text-[11px] uppercase tracking-wide px-2 h-8 rounded-md hover:bg-white/10"
-      style={{ color: danger ? "#ff9a7a" : "var(--cream)", border: "1px solid var(--edge)" }}
+      style={{ color: danger ? "var(--danger-text)" : "var(--cream)", border: "1px solid var(--edge)" }}
       onClick={() => w?.build?.wallAction(a)}
     >
       {t(label)}
@@ -957,7 +963,7 @@ function FloorPicker() {
           onClick={() => w.goToFloor(f)}
           style={
             f === floor
-              ? { background: "linear-gradient(180deg,#ffc477,#ffa630)", color: "#2a1a12" }
+              ? { background: "linear-gradient(180deg,var(--amber-hi),var(--amber))", color: "var(--on-amber)" }
               : { border: "1px solid var(--edge)", color: "var(--cream)" }
           }
         >

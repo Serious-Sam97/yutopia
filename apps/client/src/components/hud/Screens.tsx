@@ -51,7 +51,7 @@ export function ScreenTray() {
   return (
     <>
       <ul
-        className={`pointer-events-auto absolute bottom-[88px] flex flex-col-reverse gap-2 rise ${side ? "right-3 sm:right-[392px]" : "right-3"}`}
+        className={`pointer-events-auto absolute bottom-[176px] sm:bottom-[112px] flex flex-col-reverse gap-2 rise ${side ? "right-3 sm:right-[392px]" : "right-3"}`}
         aria-label={t("screensShared")}
       >
         {tiles.map((x) => (
@@ -75,7 +75,7 @@ export function ScreenTray() {
               )}
               <span
                 className="absolute top-1 left-1 mono text-[10px] px-1.5 rounded"
-                style={{ background: "#c4402b", color: "#fff" }}
+                style={{ background: "var(--danger-edge)", color: "#fff" }}
               >
                 ● LIVE
               </span>

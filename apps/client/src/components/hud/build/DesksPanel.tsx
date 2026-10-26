@@ -26,7 +26,7 @@ export function Face({ id, name, size = 26 }: { id: number; name: string; size?:
         fontSize: size * 0.38,
         background: FACE_COLORS[id % FACE_COLORS.length],
         color: "var(--ink)",
-        border: "2px solid #2a1c13",
+        border: "2px solid var(--panel-raised)",
       }}
       aria-hidden
     >
@@ -145,7 +145,10 @@ export function DesksPanel({ members }: { members: Member[] }) {
                   e.dataTransfer.effectAllowed = "move";
                 }}
                 className="flex items-center gap-1.5 rounded-full pl-0.5 pr-2.5 py-0.5 text-[12px] cursor-grab active:cursor-grabbing"
-                style={{ background: "#2a1c13", border: "1px dashed rgba(255,179,92,.5)" }}
+                style={{
+                  background: "var(--panel-raised)",
+                  border: "1px dashed var(--lamp-glow)",
+                }}
               >
                 <Face id={m.id} name={m.name} size={20} />
                 {m.name}

@@ -336,7 +336,7 @@ export function Catalog() {
       </header>
       <label
         className="mx-3 flex items-center gap-2 rounded-[9px] px-2.5 h-9 focus-within:border-[var(--amber)]"
-        style={{ background: "#140e0a", border: "1px solid var(--edge)", color: "var(--muted)" }}
+        style={{ background: "var(--field)", border: "1px solid var(--edge)", color: "var(--muted)" }}
       >
         <Icon name="search" size={16} />
         <input
@@ -452,7 +452,7 @@ function Details({ item }: { item: Item }) {
       <span
         className="w-[64px] h-[52px] rounded-lg flex items-center justify-center p-1 shrink-0"
         style={{
-          background: "radial-gradient(90% 70% at 50% 62%,#4a3324,#241912 72%)",
+          background: "radial-gradient(90% 70% at 50% 62%,var(--tile-hi),var(--panel) 72%)",
           border: "1px solid var(--edge)",
         }}
       >
@@ -480,9 +480,9 @@ function SellBin() {
       data-build-bin
       className="m-3 mt-0 rounded-xl flex items-center justify-center gap-2 h-[60px] transition-colors"
       style={{
-        border: `2px dashed ${over ? "#e7714f" : "#7a5636"}`,
+        border: `2px dashed ${over ? "var(--danger-hot)" : "var(--edge-strong)"}`,
         background: over ? "rgba(199,69,45,.22)" : "rgba(0,0,0,.18)",
-        color: over ? "#ffb39a" : "var(--cream-dim)",
+        color: over ? "var(--danger-soft)" : "var(--cream-dim)",
       }}
       onPointerEnter={() => {
         setOver(true);

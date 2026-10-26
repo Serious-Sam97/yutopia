@@ -236,8 +236,8 @@ export function PongPanel({ objectId }: { objectId: string }) {
             style={{
               width: 8,
               height: 8,
-              background: serving ? "#ffb35c" : "#3a2c1f",
-              boxShadow: serving ? "0 0 8px #ffa630" : undefined,
+              background: serving ? "var(--vfd)" : "var(--well-edge)",
+              boxShadow: serving ? "0 0 8px var(--amber)" : undefined,
             }}
             title="serve"
           />
@@ -253,7 +253,10 @@ export function PongPanel({ objectId }: { objectId: string }) {
           <div className="flex items-end gap-1">
             <Card n={score?.points[seat] ?? 0} lit={serving} />
             {(score?.bestOf ?? 1) > 1 ? (
-              <span className="lcd text-base px-1.5 rounded" style={{ background: "#0d0906", color: "#d4e4a6" }}>
+              <span
+                className="lcd text-base px-1.5 rounded"
+                style={{ background: "var(--pit)", color: "var(--lcd-good)" }}
+              >
                 {score?.games[seat] ?? 0}
               </span>
             ) : null}
@@ -312,9 +315,9 @@ export function PongPanel({ objectId }: { objectId: string }) {
                 className="lcd px-3 py-1 rounded-md text-lg"
                 style={{
                   background: "rgba(13,9,6,.82)",
-                  color: info.coming === "reach" ? "#a8e07a" : "#ffb35c",
-                  border: `1px solid ${info.coming === "reach" ? "#a8e07a" : "#ffb35c"}`,
-                  textShadow: `0 0 10px ${info.coming === "reach" ? "#a8e07a" : "#ffa630"}`,
+                  color: info.coming === "reach" ? "var(--good-glow)" : "var(--vfd)",
+                  border: `1px solid ${info.coming === "reach" ? "var(--good-glow)" : "var(--vfd)"}`,
+                  textShadow: `0 0 10px ${info.coming === "reach" ? "var(--good-glow)" : "var(--amber)"}`,
                 }}
               >
                 {t(info.coming === "reach" ? "reach" : info.coming === "left" ? "moveL" : "moveR")}
@@ -324,8 +327,8 @@ export function PongPanel({ objectId }: { objectId: string }) {
               className="lcd px-2 py-1 rounded-md text-sm self-center"
               style={{
                 background: "rgba(13,9,6,.82)",
-                color: info?.shot === "smash" ? "#ff5a36" : info?.shot === "chop" ? "#6fb3ff" : "#ffb35c",
-                border: "1px solid #3a2c1f",
+                color: info?.shot === "smash" ? "var(--hot)" : info?.shot === "chop" ? "#6fb3ff" : "var(--vfd)",
+                border: "1px solid var(--well-edge)",
               }}
             >
               {t(info?.shot ?? "drive")}
@@ -339,8 +342,8 @@ export function PongPanel({ objectId }: { objectId: string }) {
             className="pong-call lcd absolute left-1/2 -translate-x-1/2 bottom-full mb-16 pointer-events-none whitespace-nowrap"
             style={{
               fontSize: call.tone === "win" ? 48 : 38,
-              color: call.tone === "foul" ? "#ff6a3a" : call.tone === "good" ? "#d4e4a6" : "#ffb35c",
-              textShadow: `0 0 18px ${call.tone === "foul" ? "#ff4a2a" : call.tone === "good" ? "#a8b98a" : "#ffa630"}, 0 3px 0 #15120f`,
+              color: call.tone === "foul" ? "var(--bad)" : call.tone === "good" ? "var(--lcd-good)" : "var(--vfd)",
+              textShadow: `0 0 18px ${call.tone === "foul" ? "var(--bad-glow)" : call.tone === "good" ? "var(--lcd-good-glow)" : "var(--amber)"}, 0 3px 0 #15120f`,
             }}
           >
             {call.text}
@@ -388,7 +391,7 @@ export function PongPanel({ objectId }: { objectId: string }) {
                   ? `${t("points")} ${score?.to ?? 11}${(score?.bestOf ?? 1) > 1 ? ` · ${t("bestOf")} ${score?.bestOf}` : ""}`
                   : ""}
               </span>
-              <span className="lcd text-xl tabular-nums" style={{ color: "#ffb35c" }}>
+              <span className="lcd text-xl tabular-nums" style={{ color: "var(--vfd)" }}>
                 {info?.speed ? `${info.speed}` : "--"}
                 <span className="text-[10px] ml-1" style={{ color: "var(--muted)" }}>
                   {t("speed")}
@@ -398,7 +401,7 @@ export function PongPanel({ objectId }: { objectId: string }) {
               <div className="flex gap-px mt-0.5" aria-hidden="true">
                 {Array.from({ length: 14 }, (_, i) => {
                   const on = (info?.speed ?? 0) / 10 > i;
-                  const col = i > 10 ? "#ff5a36" : i > 7 ? "#ffb35c" : "#d4e4a6";
+                  const col = i > 10 ? "var(--hot)" : i > 7 ? "var(--vfd)" : "var(--lcd-good)";
                   return (
                     <span
                       // biome-ignore lint/suspicious/noArrayIndexKey: fixed LEDs
@@ -407,7 +410,7 @@ export function PongPanel({ objectId }: { objectId: string }) {
                       style={{
                         width: 5,
                         height: 9,
-                        background: on ? col : "#1e1712",
+                        background: on ? col : "var(--meter-off)",
                         boxShadow: on ? `0 0 4px ${col}` : undefined,
                       }}
                     />
@@ -498,7 +501,10 @@ export function PongPanel({ objectId }: { objectId: string }) {
           ) : null}
 
           {!playing && info?.record?.last?.length ? (
-            <div className="mt-2 rounded-md px-2 py-1.5" style={{ background: "#1e2a22", border: "1px solid #3a2c1f" }}>
+            <div
+              className="mt-2 rounded-md px-2 py-1.5"
+              style={{ background: "#1e2a22", border: "1px solid var(--well-edge)" }}
+            >
               <p className="mono text-[10px]" style={{ color: "#c9d6c0" }}>
                 {Object.entries(info.record.wins)
                   .sort((a, b) => b[1] - a[1])
@@ -520,7 +526,7 @@ export function PongPanel({ objectId }: { objectId: string }) {
             ) : null}
           </div>
           {!threeD && prefs().view === "iso" && me >= 0 ? (
-            <p className="mono text-[10px] mt-0.5" style={{ color: "#ffb35c" }}>
+            <p className="mono text-[10px] mt-0.5" style={{ color: "var(--vfd)" }}>
               {t("tip3d")}
             </p>
           ) : null}

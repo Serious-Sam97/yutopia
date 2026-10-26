@@ -124,7 +124,7 @@ function Swatch({
       onClick={onClick}
       className="rounded-[9px] px-1 py-1.5 flex flex-col items-center gap-1"
       style={{
-        background: on ? "rgba(255,166,48,0.10)" : "#1a120c",
+        background: on ? "color-mix(in srgb, var(--amber) 10%, transparent)" : "var(--well)",
         border: on ? "2px solid var(--vfd)" : "1px solid var(--edge)",
       }}
     >

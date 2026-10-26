@@ -93,7 +93,7 @@ function BattleBar() {
     );
   };
   return (
-    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[184px] cabinet p-3 rise w-[min(520px,calc(100vw-24px))]">
+    <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[272px] sm:bottom-[208px] cabinet p-3 rise w-[min(520px,calc(100vw-24px))]">
       <div className="flex items-center justify-between mb-2">
         <span className="mono text-[11px] uppercase tracking-wide" style={{ color: "var(--vfd)" }}>
           {t("petBattle")} · {fill(t("petRound"), { n: b.round })}
