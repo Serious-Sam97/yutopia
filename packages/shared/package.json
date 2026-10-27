@@ -25,6 +25,7 @@
     "./spot": "./src/spot.ts",
     "./route": "./src/route.ts",
     "./car": "./src/car/index.ts",
+    "./kart": "./src/kart/index.ts",
     "./move": "./src/move/index.ts",
     "./dark": "./src/dark/index.ts",
     "./vitals": "./src/vitals.ts",

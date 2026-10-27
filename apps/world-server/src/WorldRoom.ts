@@ -171,6 +171,7 @@ export class WorldRoom extends Room<WorldState> {
   // the Grounds' loot as the API kept it, for features/survival.ts to pick up; and that
   // feature's answers for the move's checks (out of breath: a jog's allowance; a roll's cost)
   savedLoot: unknown = null;
+  savedKarts: unknown = null; // the Kart Park's record (features/karts.ts)
   survival: SurvivalHooks | null = null;
   dark: DarkHooks | null = null; // features/dark.ts: shots and flares (features/arms.ts)
   pballs: PballHooks | null = null; // features/pballs.ts: pool balls out of a game
@@ -368,6 +369,7 @@ export class WorldRoom extends Room<WorldState> {
 
     this.state.playlists = JSON.stringify(cleanPlaylists(info?.playlists ?? []));
     this.savedLoot = info?.loot ?? null;
+    this.savedKarts = info?.karts ?? null;
     this.registerMessages();
     this.features = installFeatures(this);
 

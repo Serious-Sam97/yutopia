@@ -372,3 +372,15 @@ it('lists everyone with an account for the world server (what is left of anyone 
     $b->delete();
     expect(internalCall($this, 'GET', '/api/internal/members')->json('ids'))->not->toContain($b->id);
 });
+
+it('keeps the Kart Park\'s record', function () {
+    $record = ['best' => ['t' => 33450, 'name' => 'Ana Demo'], 'last' => [['at' => 1, 'mode' => 'gp', 'top' => ['Vortex', 'Ana Demo', 'Vortex']]], 'wins' => ['Vortex' => 2]];
+    internalCall($this, 'PUT', '/api/internal/world/karts', ['record' => $record])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('karts'))->toBe($record);
+    // a best lap needs its time and whose it is; ten races kept at most
+    internalCall($this, 'PUT', '/api/internal/world/karts', ['record' => ['best' => ['name' => 'x'], 'last' => [], 'wins' => []]])->assertUnprocessable();
+    internalCall($this, 'PUT', '/api/internal/world/karts', ['record' => ['best' => null, 'last' => array_fill(0, 11, ['at' => 1]), 'wins' => []]])->assertUnprocessable();
+    // (the playlists beside it untouched, and it beside them)
+    internalCall($this, 'PUT', '/api/internal/world/playlists', ['playlists' => [['list' => 'PL1']]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('karts.best.t'))->toBe(33450);
+});

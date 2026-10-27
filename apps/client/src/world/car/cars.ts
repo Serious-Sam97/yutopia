@@ -166,9 +166,13 @@ export interface CarsHost {
   reduced(): boolean;
   quality(): "high" | "medium" | "low";
   /** the Grounds' own vehicles (the shuttle, the visitor's car), eased */
-  ai(): { id: string; kind: string; x: number; z: number; a: number; shown: boolean; v?: number }[];
+  ai(): { id: string; kind: string; x: number; z: number; a: number; shown: boolean; v?: number; h?: number }[];
   toast(text: string): void;
   chars(): typeof import("../chars") | null;
+  /** the iso view's karts (the Kart Park: kart/karts.ts) */
+  isoKarts(
+    list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; variant?: number; h?: number }[],
+  ): void;
 }
 
 // a sample of someone else's car
@@ -320,6 +324,7 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
       ai: () => c.lifeCars,
       toast: (text) => toast(text, "warn"),
       chars: () => charsMod(),
+      isoKarts: (list) => c.engine?.grounds?.setKarts?.(list),
     },
     G,
   );
@@ -484,18 +489,46 @@ export class Cars {
   // ── what the controller asks ───────────────────────────────────────────────
   /** Am I in a car (the driver or a passenger)? */
   inCar(): boolean {
-    return !!this.mine;
+    return !!this.mine || !!this.karts?.inKart();
+  }
+  // ── the Kart Park's karts (docs/plan/46-the-karts.md; kart/karts.ts, loaded near the park) ──
+  private karts: import("../kart/karts").Karts | null = null;
+  private kartsLoading = false;
+  private kartsFrame(dt: number) {
+    const room = this.host.room();
+    // the Kart Park's layout raced (docs/plan/47-the-track-changer.md): what's asphalt there
+    // follows it (the park's land made again), near the park or not
+    const park = room?.state.karts?.get("park");
+    if (park) this.G.setParkLayout(String(park.layout ?? "eight"), park.reverse === true);
+    // (the change's show: how far the ploughs are — the views draw the new circuit behind them)
+    this.G.setKartShow(park?.showing ? Number(park.show ?? 0) : -1);
+    if (!this.karts) {
+      const me = this.host.me();
+      const near =
+        this.host.level() === 0 &&
+        Math.hypot(me.x + this.host.ox() - this.G.KART_PARK.x, me.y + this.host.oy() - this.G.KART_PARK.z) < 420;
+      if ((near || room?.state.karts?.get("park")?.karts.size) && !this.kartsLoading) {
+        this.kartsLoading = true;
+        void import("../kart/karts").then((m) => {
+          this.karts = new m.Karts({ ...this.host, iso: (l) => this.host.isoKarts(l) });
+        });
+      }
+      return;
+    }
+    this.karts.frame(dt);
   }
   driving(): boolean {
     return !!this.mine && this.mine.seat === 0;
   }
   /** People seated in cars (drawn here, not as people standing about). */
   seatedIds(): Set<string> {
+    this.karts?.seated(this.seated);
     return this.seated;
   }
   /** In a car: the controller's me carried in my seat (it walks nowhere). */
   // biome-ignore lint/suspicious/noExplicitAny: the controller's private state
   carry(c: any): boolean {
+    if (this.karts?.carry(c)) return true;
     if (!this.mine) return false;
     const s = this.mySeat();
     c.path = null;
@@ -512,6 +545,7 @@ export class Cars {
   /** Where I am, in my seat (the ground floor's coords), facing, and the ground's height under
    *  the car: for the controller's own state, and the 3D view's (it follows me, not drawn). */
   mySeat(): { x: number; y: number; a: number; ground: number } | null {
+    if (this.karts?.inKart()) return this.karts.mySeat();
     const m = this.mine;
     const l = m ? this.live.get(m.vid) : null;
     if (!m || !l) return null;
@@ -529,6 +563,7 @@ export class Cars {
   }
   /** A key for the car (in it): handled. */
   key(e: KeyboardEvent, down: boolean): boolean {
+    if (this.karts?.inKart()) return this.karts.key(e, down);
     if (!this.mine) return false;
     if (!down) {
       this.input.keyUp(e.code);
@@ -540,10 +575,22 @@ export class Cars {
     return used;
   }
   blur() {
+    this.karts?.blur();
     this.input.clear();
   }
   /** The HUD's "X" prompt by a car or in one (none while it moves): set, and true; false if there's none. */
   prompt(h: typeof hud): boolean {
+    // (the Kart Park: in a kart, nothing to press; by its desk, take one)
+    if (this.karts?.inKart()) {
+      if (h.get().prompt) h.set({ prompt: null });
+      return true;
+    }
+    const kp = this.karts?.promptNow();
+    if (kp) {
+      const cur = h.get().prompt;
+      if (cur?.objectId !== kp.objectId || cur.label !== kp.label) h.set({ prompt: kp });
+      return true;
+    }
     // (the bays' boards: who's claimed what, their posts for the sim)
     this.spots.refresh(
       () => this.host.objects(),
@@ -625,6 +672,7 @@ export class Cars {
   }
   /** X pressed on the prompt: true if it was a car's (or a bay's, or the dealer's). */
   act(kind: string, id: string): boolean {
+    if (this.karts?.act(kind)) return true;
     const room = this.host.room();
     if (kind === "motors") {
       // (the one I have now: the panel starts from its looks)
@@ -657,7 +705,7 @@ export class Cars {
   }
   /** The car's camera (in one, the view uses it). */
   camera(): ThirdPersonView["gameCam"] {
-    return this.camNow;
+    return this.karts?.camera() ?? this.camNow;
   }
   private camNow: ThirdPersonView["gameCam"] = null;
   /** Something that blocks walking: a live car's body, its model's size, a body round (x, y)
@@ -715,6 +763,7 @@ export class Cars {
     this.findMine(room, now);
     this.effects(dt);
     this.drawHud();
+    this.kartsFrame(dt);
   }
 
   // ── what they leave, throw and show ────────────────────────────────────────
@@ -865,7 +914,9 @@ export class Cars {
       if (Math.hypot(v.x - me.x - this.host.ox(), v.z - me.y - this.host.oy()) > 90) continue;
       const bx = v.x + cx * 4.6 - sx * 1.2;
       const bz = v.z + sx * 4.6 + cx * 1.2;
-      this.spray.throw(bx, this.G.heightAt(bx, bz) + 0.3, bz, -sx, cx, Math.min(1, Math.abs(v.v ?? 0) / 8), false);
+      // (at its own height when it says: the Kart Park's, under the bridge's span or up its ramps)
+      const by = v.h ?? this.G.heightAt(bx, bz);
+      this.spray.throw(bx, by + 0.3, bz, -sx, cx, Math.min(1, Math.abs(v.v ?? 0) / 8), false);
     }
     // …and the plough truck's, driven (in a storm: fresh snow to throw)
     if (this.host.storm() > 0.25)
@@ -2095,6 +2146,7 @@ export class Cars {
   }
 
   dispose() {
+    this.karts?.dispose();
     this.baySnow.dispose();
     this.unlistenMouse();
     for (const off of this.offMsg) off();

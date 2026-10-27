@@ -2209,8 +2209,8 @@ export class WorldEngine {
     const { view, mirror } = viewFor(v.shownDir);
     // off the floor (in a jump, up on something): the body up, the shadow on what's under
     // them, smaller the higher they are over it
-    const z = sitting ? 0 : (s.z ?? 0);
-    const ground = sitting ? 0 : Math.min(z, s.ground ?? 0);
+    const z = s.z ?? 0;
+    const ground = sitting ? z : Math.min(z, s.ground ?? 0);
     const air = z * JUMP_PX;
     const lift = (sitting ? 12 : 0) - air; // the drawing sits its hips on the seat
     const look = JSON.stringify(s.avatar);
@@ -2255,7 +2255,8 @@ export class WorldEngine {
     }
     v.root.position.set(p.x, p.y);
     // (up on something: drawn over it — its slice under their feet sorts after where they stand)
-    const depth = depthOf(s.x, s.y) + (sitting ? 0 : 0.01);
+    // (sat out on the land — a bench, a stand's row; a floor's seats are at 0 —: over the seat)
+    const depth = depthOf(s.x, s.y) + (sitting ? (Math.abs(z) > 0.05 ? 1.6 : 0) : 0.01);
     this.setDepth(
       v.root,
       ground > 0 && isFloorAt(this.map, s.x, s.y) ? Math.max(depth, this.topKey(s.x, s.y) + 0.02) : depth,
@@ -2400,7 +2401,7 @@ export class WorldEngine {
     v.sprite.anchor.set(sp.anchorX, sp.anchorY);
     v.sprite.scale.set(sp.scale, sp.scale);
     v.sprite.rotation = 0;
-    v.sprite.position.set(0, s.a === 2 ? 0 : -(s.z ?? 0) * JUMP_PX);
+    v.sprite.position.set(0, -(s.z ?? 0) * JUMP_PX);
     return true;
   }
 

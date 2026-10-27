@@ -59,6 +59,11 @@ export class MoveControls {
     this.since.clear();
   }
 
+  /** A way held on the keys or the stick, without reading the frame's input (sat: walk off?). */
+  moving(): boolean {
+    return (["up", "down", "left", "right"] as Action[]).some((a) => this.held.has(a)) || this.pad.leftNow() > 0;
+  }
+
   /** This frame's input. `camYaw`: where the camera faces on the floor (atan2 in floor
    *  coords: up on the stick or W goes that way); `look`: where it looks (aiming faces it);
    *  `usePad` false: the pad's someone else's for now (a console being played). */

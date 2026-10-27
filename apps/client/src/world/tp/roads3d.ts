@@ -1,4 +1,14 @@
-import { groundsRng, SNOW_POLES, TOWN_CARS, WAYS, type Way, wayHalf, wayPave } from "@yutopia/shared/grounds";
+import {
+  groundsRng,
+  KART_LAND,
+  KART_TURN,
+  SNOW_POLES,
+  TOWN_CARS,
+  WAYS,
+  type Way,
+  wayHalf,
+  wayPave,
+} from "@yutopia/shared/grounds";
 import { BoxGeometry, type BufferGeometry, CylinderGeometry, IcosahedronGeometry } from "three";
 import { type G, place, tinted, type V } from "./campus";
 import type { Themes } from "./sky";
@@ -237,6 +247,17 @@ function intoStreet(w: Way): number[] {
   }
   return out;
 }
+/** Per sample, how far a way is from running into the Kart Park's turning circle (0 at its edge,
+ *  1 from 8 m out): its verges taper away and its paint stops, the circle's mouth over it
+ *  (tp/kart/park3d.ts carMouth). */
+function intoTurn(w: Way): number[] {
+  const T = KART_TURN;
+  return w.line.map(([x, z]) => {
+    if (!KART_LAND) return 1;
+    const e = Math.min(1, Math.max(0, (Math.hypot(x - T.x, z - T.z) - T.r) / 8));
+    return e * e * (3 - 2 * e);
+  });
+}
 
 /** The lines, the verges, the kerbs and pavements of one way: into `paint` (vertex coloured),
  *  `slabs` (the pavements' picture). */
@@ -267,9 +288,11 @@ export function wayDressing(
   const vB = (i: number, s: number) => worldWob(...sideAt(i, s), 1 / 1.3, 7);
   const crossedAt = crossedAll(w, 0.5, nearLine);
   const open = (i: number) => !crossedAt[i];
-  // ── the paint: a little faded, gone here and there under the slush ──
+  const turn = intoTurn(w);
+  // ── the paint: a little faded, gone here and there under the slush (and short of the turning
+  // circle: its mouth's asphalt) ──
   const worn = wobble(r, 7);
-  const painted = (i: number) => open(i) && worn(i) > -0.75;
+  const painted = (i: number) => open(i) && worn(i) > -0.75 && turn[i] > 0.6;
   const C = 0.06;
   lines.color(0xe6e8ea);
   for (const e of lanes.edge)
@@ -309,7 +332,8 @@ export function wayDressing(
     // ── the verges: packed grey snow from inside the edge out to the plough's bank, its inner
     // edge ragged (by distance along: no repeat) ──
     paint.color(0xd9dfe5);
-    const ease = intoStreet(w);
+    const street = intoStreet(w);
+    const ease = street.map((e, i) => Math.min(e, turn[i]));
     for (const s of [1, -1]) {
       const inner = (_t: number, i: number) =>
         s * (half - (0.15 + 0.3 * (0.5 + 0.5 * vA(i, s)) + 0.12 * vB(i, s)) * ease[i]);

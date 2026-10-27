@@ -54,6 +54,7 @@ export interface WorldInfo {
   layout?: unknown;
   playlists?: unknown; // the YouTube playlists played here (features/media.ts)
   loot?: unknown; // the Grounds' loot: spots, the night's budget, drops (features/survival.ts)
+  karts?: unknown; // the Kart Park's record (features/karts.ts)
 }
 
 // A survivor (docs/plan/30-the-dark.md, phase 2): what they carry, their vitals
@@ -83,6 +84,7 @@ export const api = {
   seed: (objects: WorldObjectDef[]) => call<{ objects: WorldObjectDef[] }>("POST", "/world/seed", { objects }),
   putLayout: (layout: Layout) => call("PUT", "/world/layout", layout),
   putPlaylists: (playlists: unknown[]) => call("PUT", "/world/playlists", { playlists }),
+  putKarts: (record: unknown) => call("PUT", "/world/karts", { record }),
   putObject: (o: WorldObjectDef) => call<{ object: WorldObjectDef }>("PUT", "/objects", o),
   deleteObject: (uid: string) => call("DELETE", `/objects/${encodeURIComponent(uid)}`),
   // a cartridge someone uploaded (game room)

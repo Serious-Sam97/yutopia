@@ -144,6 +144,8 @@ export class Npc extends Schema {
   @type("string") kind = "";
   @type("float32") x = 0;
   @type("float32") y = 0;
+  // how high they're drawn (0: on the ground under them; the Kart Park's folk sitting: their seat's)
+  @type("float32") z = 0;
   @type("uint8") d = 0;
   @type("uint8") a = 0;
   @type("string") mood = "idle";
@@ -438,6 +440,84 @@ export class Vehicle extends Schema {
   @type("string") plate = "";
 }
 
+// The Kart Park (docs/plan/46-the-karts.md, features/karts.ts): its karts (a slot "0".."7" → who's in
+// it, where it is as its driver last said, its race), what's flying, the crates.
+export class KartSlot extends Schema {
+  @type("string") sid = ""; // its driver ("" a Vortex)
+  @type("string") name = "";
+  @type("string") vortex = ""; // his level, when it's Vortex's
+  @type("uint8") colour = 0; // shared kart/net.ts KART_COLOURS
+  @type("boolean") ready = false;
+  // where it is (its driver's last report; the server's own for Vortex)
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") z = 0;
+  @type("float32") a = 0;
+  @type("float32") vx = 0;
+  @type("float32") vz = 0;
+  @type("float32") steer = 0;
+  @type("int8") drift = 0;
+  @type("uint8") tier = 0;
+  @type("boolean") boost = false;
+  @type("boolean") air = false;
+  @type("boolean") trick = false; // flipping off the jump
+  @type("float32") rev = 0; // on the grid: its engine's revs (0..1; minus: flooded — shared gridRevs)
+  @type("uint32") seq = 0;
+  // the race: laps done, the next checkpoint, its place, when it finished (race ms; 0 not yet), its best lap
+  @type("uint8") lap = 0;
+  @type("uint8") next = 1;
+  @type("uint8") place = 0;
+  @type("float64") done = 0;
+  @type("float64") best = 0;
+  @type("uint16") score = 0; // a battle's smashes
+  // what it holds (shared kart/items.ts), how many, rolling till (server ms)
+  @type("string") item = "";
+  @type("uint8") itemN = 0;
+  @type("float64") rolling = 0;
+  // spun out / smashed till, the umbrella up till, ploughing till, blinking (nobody can hit it) till
+  @type("float64") spinTo = 0;
+  @type("float64") smashTo = 0;
+  @type("float64") shieldTo = 0;
+  @type("float64") ploughTo = 0;
+  @type("float64") blinkTo = 0;
+}
+export class KartShot extends Schema {
+  @type("string") kind = ""; // snowball, staple, ice, fax, blast, drone
+  @type("string") by = ""; // the slot that threw it
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") z = 0;
+  @type("float32") vx = 0;
+  @type("float32") vz = 0;
+  @type("float32") a = 0;
+  @type("float64") at = 0; // server ms
+  // (server only) how far back to look for what it hits: the thrower's view, ms
+  lag = 0;
+}
+export class KartPark extends Schema {
+  // lobby (free laps) → lights → race → done (results) → lobby
+  @type("string") phase = "lobby";
+  @type("string") mode = "gp"; // gp · battle
+  @type("uint8") laps = 3;
+  @type("boolean") fill = true; // Vortex karts fill the grid
+  @type("string") level = "medium";
+  @type("float64") goAt = 0; // the lights go out (server ms)
+  @type("float64") startAt = 0; // lights on (server ms)
+  @type("float64") endAt = 0; // a battle's end; the results' end
+  @type("float64") autoAt = 0; // the lobby: someone's ready, it starts on its own then (0: no one is)
+  @type({ map: KartSlot }) karts = new MapSchema<KartSlot>();
+  @type({ map: KartShot }) shots = new MapSchema<KartShot>();
+  @type("string") crates = ""; // a char a crate: "1" there, "0" taken (the circuit's 16, then the bowl's 10)
+  @type("string") results = ""; // the last race's (JSON)
+  @type("string") record = ""; // the park's record (JSON: best lap, the last races, wins)
+  @type("string") seats = ""; // the seats taken (shared kartSeats' indices, comma-separated: features/park-life.ts)
+  @type("string") layout = "eight"; // the layout raced (shared KART_LAYOUTS: docs/plan/47-the-track-changer.md)
+  @type("boolean") reverse = false; // …the other way round
+  // the change's show (shared KART_SHOW): on, and how far the ploughs are (0..1)
+  @type("boolean") showing = false;
+  @type("float32") show = 0;
+}
+
 export class WorldState extends Schema {
   @type("string") name = "";
   @type("string") mapKey = "studio";
@@ -488,4 +568,5 @@ export class WorldState extends Schema {
   @type({ map: PoolBallOut }) pballs = new MapSchema<PoolBallOut>(); // pool balls out of a game (features/pballs.ts)
   @type("string") playlists = "[]"; // YouTube playlists played here (shared/media.ts SavedPlaylist[], JSON)
   @type({ map: "float64" }) ploughed = new MapSchema<number>(); // plough cell → when a blade last cleared it (shared car/world.ts)
+  @type({ map: KartPark }) karts = new MapSchema<KartPark>(); // "park" → the Kart Park (features/karts.ts)
 }

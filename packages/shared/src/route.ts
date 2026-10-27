@@ -388,7 +388,7 @@ export function doorOf(b: Building, out = 2): P {
 
 /** The Grounds' landmarks: where a route to each ends. */
 export function landmarks(): { key: string; name: string; p: P }[] {
-  const { LOT, PLAZA, POND, TOWER, STATUE, GATE, FARM } = g();
+  const { LOT, PLAZA, POND, TOWER, STATUE, GATE, FARM, KART_DESK } = g();
   return [
     { key: "lot", name: "The lot", p: [(LOT.x0 + LOT.x1) / 2, (LOT.z0 + LOT.z1) / 2] },
     { key: "square", name: "The square", p: [(PLAZA.x0 + PLAZA.x1) / 2, (PLAZA.z0 + PLAZA.z1) / 2] },
@@ -397,6 +397,8 @@ export function landmarks(): { key: string; name: string; p: P }[] {
     { key: "statue", name: "The statue", p: [STATUE.x, STATUE.z] },
     { key: "gate", name: "The gate", p: [GATE.x, GATE.z] },
     { key: "farm", name: "The farm", p: [(FARM.x0 + FARM.x1) / 2, (FARM.z0 + FARM.z1) / 2] },
+    // (its desk, where you take a kart: docs/plan/46-the-karts.md)
+    { key: "karts", name: "Yutopia Kart Park", p: [KART_DESK.x + 2 * KART_DESK.face, KART_DESK.z] },
   ];
 }
 

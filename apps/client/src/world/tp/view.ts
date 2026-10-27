@@ -28,7 +28,7 @@ import {
   wellsOf,
 } from "@yutopia/shared";
 import { AIM_BLADE, BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
-import { LAMPS as GROUND_LAMPS } from "@yutopia/shared/grounds";
+import { LAMPS as GROUND_LAMPS, KART_LAND, standLights } from "@yutopia/shared/grounds";
 import { MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
@@ -195,7 +195,9 @@ const GROUND_LAMP: Record<string, { h: number; radius: number; intensity: number
   town: { h: 4.4, radius: 10, intensity: 11 },
   lone: { h: 4.4, radius: 10, intensity: 11 },
   porch: { h: 2.2, radius: 6, intensity: 4 },
+  flood: { h: 12.8, radius: 30, intensity: 70 },
 };
+const STAND_LIGHTS = KART_LAND ? standLights() : [];
 // a flare burning on the snow (docs/plan/30-the-dark.md D6), lighting like a ground lamp, red
 const FLARE_LAMP = { h: 0.5, radius: 8, intensity: 6 };
 // one of the shadowed shot down: the shot's flash through it, then the light it burns away in
@@ -2120,14 +2122,14 @@ void main() {
         // floats); only the eyes' height eases, sitting down and getting up
         const eye = me.a === 2 ? EYE_1P_SEATED : EYE_1P;
         this.eyeY = this.targetReady ? this.eyeY + (eye - this.eyeY) * (1 - Math.exp(-dt * 8)) : eye;
-        this.target.set(me.x, this.eyeY + (me.a === 2 ? 0 : (me.z ?? 0)) + jumpDip(me), me.y);
+        this.target.set(me.x, this.eyeY + (me.z ?? 0) + jumpDip(me), me.y);
         this.targetReady = true;
       } else {
         const eye = me.a === 2 ? EYE - 0.3 : EYE;
         // up on something the camera's up there with you; in a jump it rides some of the
         // way (you see yourself go up)
-        const ground = me.a === 2 ? 0 : (me.ground ?? 0);
-        const want = new Vector3(me.x, eye + ground + ((me.a === 2 ? 0 : (me.z ?? 0)) - ground) * 0.55, me.y);
+        const ground = me.a === 2 ? (me.z ?? 0) : (me.ground ?? 0);
+        const want = new Vector3(me.x, eye + ground + ((me.z ?? 0) - ground) * 0.55, me.y);
         if (!this.targetReady) {
           this.target.copy(want);
           this.targetReady = true;
@@ -3148,6 +3150,13 @@ void main() {
         if (d < GROUND_REACH)
           near.push({ x, y, h: g.heightAt(l.x, l.z) + GROUND_LAMP[l.kind].h, c: GROUND_LAMP[l.kind], d });
       }
+      // (the Kart Park's stands: lamps under their roofs, floods over the straight — not posts)
+      for (const l of STAND_LIGHTS) {
+        const x = l.x - off.x;
+        const y = l.z - off.y;
+        const d = Math.hypot(x - t.x, y - t.z);
+        if (d < GROUND_REACH) near.push({ x, y, h: g.heightAt(l.x, l.z) + l.h, c: l, d, color: 0xffe6bc });
+      }
       near.sort((a, b) => a.d - b.d);
     }
     const edge = Math.min(GROUND_REACH, near[n]?.d ?? GROUND_REACH);
@@ -3317,7 +3326,9 @@ void main() {
   // the shuttle; lit as the land is (dark at night), headlamps glowing ──
   private veh3 = new Map<string, Group>();
   private vehMat: MeshLambertMaterial | null = null;
-  setVehicles(list: { id: string; kind: string; x: number; z: number; a: number; v?: number; shown: boolean }[]) {
+  setVehicles(
+    list: { id: string; kind: string; x: number; z: number; a: number; v?: number; shown: boolean; h?: number }[],
+  ) {
     const g = this.around.grounds;
     const off = offsetOf(this.building, this.level);
     const up = elevOf(0) - elevOf(this.level);
@@ -3352,7 +3363,7 @@ void main() {
       m.userData.at = [px, pz];
       // (on the move: its headlamps a real light — car/cars.ts; parked, just their glow)
       m.userData.moving = Math.abs(v.v ?? 0) > 0.2;
-      m.position.set(px, g.heightAt(v.x, v.z) + up + 0.03, pz);
+      m.position.set(px, (v.h ?? g.heightAt(v.x, v.z)) + up + 0.03, pz);
       // (the models' noses point −x: turned to the heading)
       m.rotation.y = Math.PI - v.a;
       const n = this.nightLevel;

@@ -15,6 +15,17 @@ import {
   type Inside,
   insideFence,
   insideOf,
+  KART_CROWD,
+  KART_GATE,
+  KART_LAND,
+  KART_PARK,
+  KART_SHOW,
+  KART_TURN,
+  kartBridged,
+  kartFloods,
+  kartLayoutNow,
+  kartShowNow,
+  kartTrack,
   LAMPS,
   LOT,
   MOTORS,
@@ -29,10 +40,12 @@ import {
   STATUE,
   STREET,
   type Surface,
+  standLights,
   TOWER,
   TRACTOR,
   type Tree,
   terrainAt,
+  trackAt,
   treesIn,
   WAYS,
   type Way,
@@ -61,6 +74,7 @@ import {
   Object3D,
   Quaternion,
   RepeatWrapping,
+  type Sphere,
   SphereGeometry,
   Sprite,
   SpriteMaterial,
@@ -102,6 +116,15 @@ import type { Themes } from "./sky";
 import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
 import { motorsForecourt } from "./spot3d";
 import { streetGeometry } from "./town3d";
+
+// the change's show: the old circuit whitens to the snow's colour (docs/plan/47-the-track-changer.md)
+const SHOW_SNOW = new Color("#eef2f5");
+// (how far the park's bridge sinks to be gone: its deck, 5.6 m up, and its parapets under the snow)
+const BRIDGE_SINK = 8;
+
+/** The Kart Park's 3D (karts3d.ts), loaded from here only: the game's scenery, the stills and the
+ *  sandbox share this one import, so the build makes one chunk of it, not one for each. */
+export const loadKarts = () => import("./karts3d");
 
 // The Grounds in 3D — phase 0's prototype (docs/plan/27-the-grounds.md): the
 // land, the ways, the water, the woods, every building and lamp, built from
@@ -614,6 +637,11 @@ export class Grounds3 {
     run(() => this.town());
     run(() => this.motors());
     for (const f of this.farmSteps()) run(f);
+    // the Kart Park (the game's: the stills and the sandbox stage it themselves)
+    if (o.stream && KART_LAND) {
+      run(() => this.kartParkLamps());
+      run(() => this.kartPark());
+    }
     // (last: they gather every light and glow the steps before added)
     run(() => this.lamps());
     run(() => this.ridges());
@@ -682,6 +710,8 @@ export class Grounds3 {
   private beacon: { m: MeshBasicMaterial; halo: SpriteMaterial } | null = null;
   /** The water tower's beacon: a second on, a second and a half off, after dark. */
   tick(t: number) {
+    this.kartCircuit();
+    this.kartShow(t);
     if (!this.beacon) return;
     const on = t % 2.5 < 1 ? 1 : 0.06;
     const k = Math.min(1, this.lastNight * 1.4);
@@ -882,7 +912,8 @@ export class Grounds3 {
                 w.bridged[i] ||
                 !this.near(x, z, 10) ||
                 WAYS.some((u) => u !== w && u.kind !== "trail" && nearLine(u, x, z) < u.w / 2 + 1.5) ||
-                (x > LOT.x0 - 2 && x < LOT.x1 + 2 && z > LOT.z0 - 2 && z < LOT.z1 + 2),
+                (x > LOT.x0 - 2 && x < LOT.x1 + 2 && z > LOT.z0 - 2 && z < LOT.z1 + 2) ||
+                (KART_LAND && Math.hypot(x - KART_TURN.x, z - KART_TURN.z) < KART_TURN.r + 7),
             });
       }
     }
@@ -3788,6 +3819,260 @@ export class Grounds3 {
     this.signBoard("GAS\n1.19", b.x0 + 0.5, b.z0 - 1, Math.PI, 1.6, 2.2, 3.4, "#f2f2ee", "#a5281c", true);
   }
 
+  // ── the Kart Park (docs/plan/46-the-karts.md): its floodlights and the gate's lamps among the
+  // lamps, their pools on the ground; the park itself (tp/karts3d.ts, a chunk of its own, loaded
+  // when the steps get here: the step waits for it) ──
+  private parkMod: {
+    m: typeof import("./karts3d");
+    T3: typeof import("three");
+    items: typeof import("../art/items");
+  } | null = null;
+  private parkLoading = false;
+  private kartParkLamps() {
+    for (const f of kartFloods()) {
+      const y = groundAt(f.x, f.z);
+      this.lights.push({ p: new Vector3(f.x, y + 12.8, f.z), kind: "porch", color: 0xfff0d6, r: 16 });
+      this.pool(f.x + Math.cos(f.ry) * 12, f.z + Math.sin(f.ry) * 12, 11, 0xfff0d6);
+    }
+    // the stands' lights (shared standLights; the game's are the view's — tp/view.ts) and the
+    // floods' pools on the straight
+    for (const l of standLights()) {
+      const y = groundAt(l.x, l.z);
+      this.lights.push({ p: new Vector3(l.x, y + l.h, l.z), kind: "porch", color: 0xffe6bc, r: l.radius });
+      if (l.pz !== l.z) this.pool(l.x, l.pz, l.pool, 0xfff0d6);
+    }
+    const gy = groundAt(KART_GATE.x, KART_GATE.z);
+    this.lights.push({ p: new Vector3(KART_GATE.x, gy + 6.6, KART_GATE.z + 1), kind: "porch", color: 0xffd9a0, r: 8 });
+    this.pool(KART_GATE.x, KART_GATE.z + 3, 6, 0xffd9a0);
+  }
+  private kartPark() {
+    if (!this.parkMod) {
+      if (!this.parkLoading) {
+        this.parkLoading = true;
+        // (and the item art: the fire's benches are the office's — kart/park3d.ts)
+        void Promise.all([loadKarts(), import("three"), import("../art/items")]).then(([m, T3, items]) => {
+          this.parkMod = { m, T3, items };
+        });
+      }
+      this.pending.push(() => this.kartPark());
+      return;
+    }
+    const { m, T3, items } = this.parkMod;
+    const g = new Group();
+    const park = m.stageKarts(
+      T3,
+      g,
+      // (the stands' painted crowd: their seats; the rest are for people: shared kartSeats)
+      { karts: [], rack: true, crowd: KART_CROWD, lap: "—", order: [], noCrates: true, circuit: false },
+      { night: 0, lit: false, cam: new Vector3(KART_PARK.x, 0, KART_PARK.z), items },
+    );
+    for (const x of park.glows) this.glows(x.m, x.on);
+    this.root.add(g);
+    this.disposables.push(park);
+    this.parkBuilt = true;
+    this.kartCircuit();
+  }
+
+  // ── the circuit raced (docs/plan/47-the-track-changer.md): built a part a step, and again when
+  // the layout changes — the new one swapped in for the old in one step, nothing missing between ──
+  private parkBuilt = false;
+  private circuitWant = "";
+  private circuit: { id: string; g: Group; dispose(): void } | null = null;
+  /** circuits being built (their parts so far), and old ones waiting a step to go: freed with the
+   *  Grounds if they're still about */
+  private circuitBuilds = new Set<{ dispose(): void }[]>();
+  private circuitGone = new Set<{ dispose(): void }>();
+  /** The layout raced drawn (now or a few steps on). Asked every frame (tick): cheap. */
+  private kartCircuit() {
+    if (!this.parkMod || !this.parkBuilt) return;
+    const now = kartLayoutNow();
+    const id = `${now.key}${now.reverse ? "-r" : ""}`;
+    if (id === this.circuitWant) return;
+    this.circuitWant = id;
+    // (a change before this client saw the last one's show out: that one's done now)
+    this.showEnd();
+    const { m, T3 } = this.parkMod;
+    const g = new Group();
+    g.name = "kart-circuit";
+    const made: { dispose(): void }[] = [];
+    this.circuitBuilds.add(made);
+    const keep = <T extends { dispose(): void }>(d: T): T => {
+      made.push(d);
+      return d;
+    };
+    const parts = m.buildCircuit(T3, kartTrack(now.key, now.reverse), g, 0, keep);
+    const step = () => {
+      // (wanted no more: another layout since)
+      if (this.circuitWant !== id) {
+        for (const d of made) d.dispose();
+        this.circuitBuilds.delete(made);
+        return;
+      }
+      if (!parts.next().done) {
+        this.pending.push(step);
+        return;
+      }
+      this.circuitBuilds.delete(made);
+      // (the new one in first: what this step added is what gets the Grounds' light — step())
+      this.root.add(g);
+      // the gantry over the line (the park's): its lights to the grid, whichever way it's raced
+      const gantry = this.root.getObjectByName("kart-gantry");
+      if (gantry) {
+        const p = trackAt(kartTrack(now.key, now.reverse), 0);
+        gantry.position.x = p.x;
+        gantry.position.z = p.z;
+        gantry.rotation.y = -p.a;
+      }
+      const old = this.circuit;
+      this.circuit = {
+        id,
+        g,
+        dispose: () => {
+          for (const d of made) d.dispose();
+          g.removeFromParent();
+        },
+      };
+      // the bridge (the park's: there for a layout over it), sunk under the snow or risen out of it
+      // as the ploughs go
+      const bridge = this.root.getObjectByName("kart-bridge");
+      const has = kartBridged(now.key);
+      if (kartShowNow() >= 0) {
+        // (the change's show on: the new one drawn behind the ploughs, the old drifting over)
+        this.showBegin(g, kartTrack(now.key, now.reverse), old);
+        if (this.shown && bridge && bridge.visible !== has) this.shown.bridge = { o: bridge, has };
+      } else {
+        if (bridge) bridge.visible = has;
+        // (the old one gone a step on: removed in this one, what this step added would come back
+        // short — step() — and the new one go unlit)
+        if (old) {
+          this.circuitGone.add(old);
+          this.pending.push(() => {
+            this.circuitGone.delete(old);
+            old.dispose();
+          });
+        }
+      }
+    };
+    this.pending.push(step);
+  }
+
+  // ── the change's show (docs/plan/47-the-track-changer.md, phase 6): the new circuit drawn behind
+  // the ploughs (its sweeps to the ploughs' phase — karts3d.ts makeSweep —, the rest as a plough
+  // passes), lifted a little over the old; the old one whitening under the snow, gone at the end ──
+  private shown: {
+    g: Group;
+    parts: { o: Mesh; ph: number[]; n: number[] }[];
+    bits: { o: Object3D; ph: number }[];
+    old: { dispose(): void } | null;
+    mats: { m: MeshStandardMaterial; c: Color; e: number }[];
+    /** the old's parts a colour can't whiten (a map, vertex colours): hidden once the rest's white */
+    painted: Object3D[];
+    /** the bridge, going (`has` false) or coming */
+    bridge?: { o: Object3D; has: boolean };
+    f: number;
+    t: number;
+  } | null = null;
+  private showBegin(g: Group, t: ReturnType<typeof kartTrack>, old: { g: Group; dispose(): void } | null) {
+    this.showEnd();
+    const q = t.len / KART_SHOW.ploughs;
+    const parts: NonNullable<typeof this.shown>["parts"] = [];
+    const bits: NonNullable<typeof this.shown>["bits"] = [];
+    const at = new Vector3();
+    g.traverse((o) => {
+      if (!(o instanceof Mesh)) return;
+      const rv = o.userData.reveal as { ph: number[]; n: number[] } | undefined;
+      if (rv) {
+        parts.push({ o, ph: rv.ph, n: rv.n });
+        o.geometry.setDrawRange(0, 0);
+        return;
+      }
+      // (a thing on its own: shown as the plough gets to the nearest of the circuit)
+      // (an instanced one's spread is its instances')
+      let sp: Sphere | null;
+      if (o instanceof InstancedMesh) {
+        o.computeBoundingSphere();
+        sp = o.boundingSphere;
+      } else {
+        o.geometry.computeBoundingSphere();
+        sp = o.geometry.boundingSphere;
+      }
+      // (in the circuit's own frame, the Grounds' coords: each is the circuit's child)
+      o.updateMatrix();
+      at.copy(sp?.center ?? at.set(0, 0, 0)).applyMatrix4(o.matrix);
+      let best = 0;
+      let bd = Number.POSITIVE_INFINITY;
+      for (const p of t.pts) {
+        const d = (p.x - at.x) ** 2 + (p.z - at.z) ** 2;
+        if (d < bd) {
+          bd = d;
+          best = p.s;
+        }
+      }
+      bits.push({ o, ph: (best % q) / q });
+      o.visible = false;
+    });
+    g.position.y = 0.02;
+    const mats: NonNullable<typeof this.shown>["mats"] = [];
+    const painted: Object3D[] = [];
+    if (old) {
+      old.g.position.y = -0.02;
+      const seen = new Set<MeshStandardMaterial>();
+      old.g.traverse((o) => {
+        if (!(o instanceof Mesh)) return;
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+          if ((m as MeshStandardMaterial).map || (m as MeshStandardMaterial).vertexColors) painted.push(o);
+          if (m instanceof MeshStandardMaterial && !seen.has(m)) {
+            seen.add(m);
+            mats.push({ m, c: m.color.clone(), e: m.emissiveIntensity });
+          }
+        }
+      });
+    }
+    this.shown = { g, parts, bits, old, mats, painted, f: Math.max(0, kartShowNow()), t: -1 };
+  }
+  private kartShow(t: number) {
+    const sh = this.shown;
+    if (!sh) return;
+    const dt = sh.t < 0 ? 0 : Math.min(0.1, t - sh.t);
+    sh.t = t;
+    const want = kartShowNow();
+    if (want < 0 || sh.g.parent !== this.root) return this.showEnd();
+    // (the server's a few times a second: run on between, never far ahead of it)
+    const run = 1000 / (KART_SHOW.to - KART_SHOW.from);
+    sh.f = Math.max(want, Math.min(sh.f + dt * run, want + 0.04));
+    for (const p of sh.parts) {
+      let i = 0;
+      while (i < p.ph.length && p.ph[i] <= sh.f) i++;
+      p.o.geometry.setDrawRange(0, i ? p.n[i - 1] : 0);
+    }
+    for (const b of sh.bits) b.o.visible = b.ph <= sh.f;
+    // the old: white over, its lights out
+    const w = Math.min(1, sh.f / 0.6);
+    for (const m of sh.mats) {
+      m.m.color.copy(m.c).lerp(SHOW_SNOW, w);
+      m.m.emissiveIntensity = m.e * (1 - w);
+    }
+    for (const o of sh.painted) o.visible = w < 1;
+    if (sh.bridge) {
+      const up = sh.bridge.has ? sh.f : 1 - sh.f;
+      sh.bridge.o.visible = up > 0;
+      sh.bridge.o.position.y = -BRIDGE_SINK * (1 - up);
+    }
+  }
+  private showEnd() {
+    const sh = this.shown;
+    if (!sh) return;
+    this.shown = null;
+    for (const p of sh.parts) p.o.geometry.setDrawRange(0, Number.POSITIVE_INFINITY);
+    for (const b of sh.bits) b.o.visible = true;
+    sh.g.position.y = 0;
+    if (sh.bridge) {
+      sh.bridge.o.visible = sh.bridge.has;
+      sh.bridge.o.position.y = 0;
+    }
+    sh.old?.dispose();
+  }
+
   // ── the car dealer's forecourt (docs/plan/43-the-spot.md, tp/spot3d.ts): its concrete, kerb,
   // rail, signs, bunting and flood lamps; the vehicles on show are cars (shared car/homes.ts) ──
   private motors() {
@@ -3890,7 +4175,8 @@ export class Grounds3 {
     }
   }
   private lamps() {
-    for (const l of LAMPS) this.lampAt(l.x, l.z, l.ry, l.kind);
+    // (the Kart Park's floods are its own masts: karts3d.ts, their pools kartParkLamps)
+    for (const l of LAMPS) if (l.kind !== "flood") this.lampAt(l.x, l.z, l.ry, l.kind);
     if (this.lampGeo.length) this.add(mergeGeometries(this.lampGeo, false), this.lambert());
     for (const g of this.lampGeo) g.dispose();
     const head = this.glows(
@@ -3899,7 +4185,9 @@ export class Grounds3 {
       "lamp",
     );
     if (!this.headGeo.empty) this.add(this.headGeo.build(), head, "none");
-    // the pools: added light on the ground
+    // the pools: added light on the ground — over whatever's painted on it (the paddock's paint, a
+    // circuit's lines: pulled to the camera by their polygon offset, at a glancing look they came
+    // in front of the pool and hid it, a straight edge across the ground past some distance)
     const pm = this.glows(
       this.keep(
         new MeshBasicMaterial({
@@ -3909,6 +4197,9 @@ export class Grounds3 {
           opacity: 0,
           blending: AdditiveBlending,
           depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -10,
+          polygonOffsetUnits: -4,
         }),
       ),
       0.85,
@@ -4372,6 +4663,10 @@ export class Grounds3 {
   }
 
   dispose() {
+    this.showEnd();
+    this.circuit?.dispose();
+    for (const o of this.circuitGone) o.dispose();
+    for (const made of this.circuitBuilds) for (const d of made) d.dispose();
     for (const d of this.disposables) d.dispose();
     this.root.removeFromParent();
   }

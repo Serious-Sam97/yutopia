@@ -6,6 +6,7 @@ import type { CarWire } from "./car/net.ts";
 import type { LootItem } from "./dark/loot.ts";
 import type { Inventory } from "./inventory.ts";
 import type { JumpKind } from "./jump.ts";
+import type { KartWire } from "./kart/net.ts";
 import type { MediaItem } from "./media.ts";
 import type { VerbKind } from "./move/verbs.ts";
 import type { Command, Move, Needs, Species, Toy, Trick } from "./pets.ts";
@@ -332,6 +333,23 @@ export interface ClientMessages {
   "car:lend": { to: number | null };
   "car:leave": Record<string, never>;
   "car:state": CarWire;
+  // the Kart Park (docs/plan/46-the-karts.md): take a kart at the desk (its colour), give it back;
+  // the next race's setup (anyone in a kart, between races); ready; start; my kart's state; an item
+  "kart:take": { colour?: number };
+  // the Kart Park's seats (shared kart/park.ts kartSeats): sit on one in reach, get up
+  "park:sit": { i: number };
+  "park:stand": { walk?: boolean };
+  "kart:leave": Record<string, never>;
+  "kart:setup": { mode?: "gp" | "battle"; laps?: number; fill?: boolean; level?: "easy" | "medium" | "hard" };
+  // the track changer (docs/plan/47-the-track-changer.md): a layout of KART_LAYOUTS, either way round
+  "kart:layout": { layout: string; reverse?: boolean };
+  "kart:ready": { on: boolean };
+  "kart:colour": { colour: number };
+  // an admin's: an item in my kart now (testing the items)
+  "mod:kart-item": { item: string };
+  "kart:start": Record<string, never>;
+  "kart:state": KartWire;
+  "kart:use": { back?: boolean; lag?: number }; // (lag: half my ping, ms: hits judged where I saw them)
   // a parked car I knocked, come to rest: where it ended up (the Grounds' coords, its middle)
   "car:shove": { id: string; x: number; z: number; a: number };
   // my car's dirt (0..1) and dents (front, rear, left, right: 0..1), as my sim has counted them
@@ -402,6 +420,12 @@ export interface ServerMessages {
   // my car put back where the server has it (a state it couldn't believe)
   "car:snap": CarWire & { id: string };
   "car:no": { why: string; who?: string }; // (who: whose it is, "owned")
+  // the Kart Park: my kart put where the server has it (a grid slot, a spawn, a state it couldn't
+  // believe); I was hit (spun out, or smashed in a battle); a coffee or the plough's boost is mine
+  "kart:snap": { x: number; y: number; z: number; a: number; still?: boolean };
+  "kart:hit": { by: string; item: string; smash: boolean };
+  "kart:boost": { secs: number; top?: number };
+  "kart:no": { why: string };
   "spot:no": { why: string };
   "car:bought": { id: string };
   // someone's car keys lent to me, or back with them (why: "taken", "home", "day")

@@ -205,8 +205,9 @@ export class Person3D {
     const back = -SEAT_BACK * w;
     // off the floor (in a jump, up on something): the shadow and the ring stay on what's under them
     const jump = !sitting ? (p.jump ?? null) : null;
-    const h = sitting ? 0 : (p.z ?? 0);
-    const ground = Math.min(h, sitting ? 0 : (p.ground ?? 0));
+    // (a sitter's at the seat's height: 0 on a floor's chair, up a stand's row out on the land)
+    const h = p.z ?? 0;
+    const ground = sitting ? h : Math.min(h, p.ground ?? 0);
     if (this.part === "all")
       this.root.position.set(p.x + Math.cos(this.turned) * back, h, p.y + Math.sin(this.turned) * back);
     this.jumpH = h;

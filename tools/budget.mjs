@@ -18,7 +18,8 @@ import { gzipSync } from "node:zlib";
 // (raised to 559 on 2026-10-24 by the user's call: the spot — docs/plan/43 — my bay, the keys on someone's card)
 // (raised to 559.5 on 2026-10-25 by the user's call: the night — docs/plan/44 — the dark curve, the light map's open sky, the engine's dark)
 // (raised to 560.5 on 2026-10-26 by the user's call: the UI — docs/plan/45 — the top bar's me menu, the dock's named keys, the place card)
-const BUDGETS = { "/page": 560.5, "/login/page": 160 }; // KB gzip
+// (raised to 561 on 2026-10-26 by the user's call: the Kart Park's land — docs/plan/46 — the Grounds' chunks split anew, their file lists on the page)
+const BUDGETS = { "/page": 561, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;
@@ -54,6 +55,12 @@ const LAZY = {
   "yutopia-grounds": 187, // (raised from 180 on 2026-10-24 by the user's call: the lag's culling — docs/plan/38 — put it at 183.1; to 187 the same day, the user's call: the lot's 3D dressing — docs/plan/42 — put it at 186.3)
   // the lot's cars, driven (docs/plan/28-the-car.md): the sim, the models and their cabins, the sound, the fx
   "yutopia-car": 120,
+  // the Kart Park in 3D (docs/plan/46-the-karts.md), loaded once the Grounds get to it: one ~16 KB file a
+  // browser loads; the build makes a copy for each group that reaches it (the game, /dev/karts, /dev/kart),
+  // and this counts them all, as the Grounds' own line does
+  "yutopia-karts": 60,
+  // the karts in play (docs/plan/46-the-karts.md, phases 2–6): your kart, the HUD and lobby, everyone's karts, what flies
+  "yutopia-kart-play": 40,
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {

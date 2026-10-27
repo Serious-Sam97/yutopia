@@ -13,6 +13,7 @@ import { type Container, Matrix, Mesh, MeshGeometry, Container as PixiContainer,
 import { nearLift } from "../eyes";
 import { type Footprints, printLeft } from "../footprints";
 import type { LotIso, Thing } from "./grounds-items";
+import { drawKartPark, kartLook } from "./kart-iso";
 import { IsoWeather } from "./weather-iso";
 
 type G = typeof GroundsModule;
@@ -25,7 +26,7 @@ const HH = TILE_H / 2;
 
 // the night's light: a lamp's pool (its radius, tiles, by kind); a flashlight's
 // beam (its reach, tiles; half its opening, radians; its drawing, px long)
-const POOL_R: Record<string, number> = { cobra: 7, town: 5.5, lone: 5, porch: 3.5 };
+const POOL_R: Record<string, number> = { cobra: 7, town: 5.5, lone: 5, porch: 3.5, flood: 14 };
 // the beam's picture is drawn wide (shared beam.ts BEAM.wide) and scaled to a focused one
 const BEAM_LEN = BEAM.wide.len;
 const BEAM_HALF = BEAM.wide.half;
@@ -130,6 +131,7 @@ export class IsoGrounds {
       ch.mesh.tint = this.tint;
       for (const t of ch.trees) t.tint = this.tint;
     }
+    for (const b of this.bridge ?? []) b.m.tint = this.tint;
     for (const id of this.shownIds) for (const r of this.items.roots(id)) r.tint = this.tint;
     // (the prints are shadows in the snow: as dark as it, so none show in the pitch dark)
     this.printLayer.tint = this.tint;
@@ -302,6 +304,7 @@ export class IsoGrounds {
       for (const t of ch.trees) t.visible = on;
       this.showThings(ch.key, on);
     }
+    for (const b of this.bridge ?? []) b.m.visible = on && this.bridgeLevel > 0;
   }
   private shown = false;
 
@@ -364,6 +367,70 @@ export class IsoGrounds {
       if (need) this.G.groundsChunk(need[0], need[1]);
       else this.chunks.set(k, this.build(cx, cz));
     }
+    // (the park's bridge, once its land's about)
+    if (!step && !this.bridge && [...this.chunks.keys()].some((k) => this.overPark(k))) {
+      step = true;
+      this.parkBridge();
+    }
+    // the Kart Park's layout changed (docs/plan/47-the-track-changer.md): its chunks' pictures
+    // painted again, one a frame, the old one shown till its new is
+    const lay = this.G.kartLayoutNow();
+    const id = `${lay.key}${lay.reverse ? "-r" : ""}`;
+    if (id !== this.parkLayout) {
+      // (the first layout seen: the bridge as it is, not faded from what was never drawn)
+      const first = !this.parkLayout;
+      this.parkLayout = id;
+      this.bridgeWas = first ? this.G.kartBridged() : this.bridgeHas;
+      this.bridgeHas = this.G.kartBridged();
+      // (painted with the layout raced already, the first)
+      if (!first) for (const ch of this.chunks.values()) if (this.overPark(ch.key)) this.parkStale.add(ch.key);
+    }
+    // (in the change's show, a chunk's painted again as a plough gets to it; the rest at its end)
+    const show = this.G.kartShowNow();
+    // the bridge comes and goes with the layout (there for one raced over it): in the show, faded
+    // in or out as the ploughs go
+    this.bridgeLevel =
+      show >= 0 && this.bridgeWas !== this.bridgeHas ? (this.bridgeHas ? show : 1 - show) : this.bridgeHas ? 1 : 0;
+    if (show >= 0 && this.parkStale.size) {
+      const t = this.G.kartTrackNow();
+      const C = this.G.CHUNK;
+      for (let i = 0; i < this.G.KART_SHOW.ploughs; i++) {
+        const p = this.G.kartPloughAt(t, i, show);
+        for (const [dx, dz] of [
+          [0, 0],
+          [6, 0],
+          [-6, 0],
+          [0, 6],
+          [0, -6],
+        ]) {
+          const k = `${Math.floor((p.x + dx) / C)},${Math.floor((p.z + dz) / C)}`;
+          if (this.parkStale.has(k)) this.parkDue.add(k);
+        }
+      }
+    }
+    const due = this.parkDue.values().next().value ?? (show < 0 ? this.parkStale.values().next().value : undefined);
+    if (!step && due) {
+      step = true;
+      const k = due as string;
+      this.parkStale.delete(k);
+      this.parkDue.delete(k);
+      const ch = this.chunks.get(k);
+      if (ch) {
+        const C = this.G.CHUNK;
+        const [cx, cz] = k.split(",").map(Number);
+        const tex = Texture.from(this.picture(cx * C, cz * C, this.G.groundsChunk(cx, cz)));
+        this.items.upload(tex);
+        const old = ch.tex;
+        ch.mesh.texture = tex;
+        ch.tex = tex;
+        old.destroy(true);
+        // (its things again too: the board of the circuits shows the layout raced)
+        if (this.land.visible) {
+          this.showThings(k, false);
+          this.showThings(k, true);
+        }
+      }
+    }
     // (a chunk made this frame: its things wait for the next)
     if (!step) this.showSome(t0);
     // the furthest go once there are too many
@@ -373,10 +440,10 @@ export class IsoGrounds {
     }
     // buildings and trees whose drawing covers you (and are in front of you): see-through
     if (me) this.fadeBuildings(me);
+    const mx = me ? (me.x - me.y) * HW : 0;
+    const my = me ? (me.x + me.y) * HH - (me.z ?? 0) * ZPX_TILE - 40 : 0;
+    const md = me ? depthOf(me.x, me.y) : 0;
     if (me) {
-      const mx = (me.x - me.y) * HW;
-      const my = (me.x + me.y) * HH - (me.z ?? 0) * ZPX_TILE - 40;
-      const md = depthOf(me.x, me.y);
       for (const ch of this.chunks.values()) {
         if (ch.used !== this.frame) continue;
         for (const t of ch.trees) {
@@ -386,6 +453,12 @@ export class IsoGrounds {
           t.alpha = over ? 0.25 : 1;
         }
       }
+    }
+    // (the bridge too, as much of it as there is)
+    for (const b of this.bridge ?? []) {
+      const over = !!me && b.m.zIndex > md && mx > b.x0 && mx < b.x1 && my > b.y0 && my < b.y1;
+      b.m.visible = this.land.visible && this.bridgeLevel > 0;
+      b.m.alpha = this.bridgeLevel * (over ? 0.35 : 1);
     }
   }
 
@@ -419,18 +492,44 @@ export class IsoGrounds {
 
   // a building's drawing over you: what of it is in front of your middle and head
   private faded = new Set<string>();
+  // what's tall enough to hide you behind it: the buildings, and the Kart Park's stands, tower and gate
+  private tall: { id: string; x0: number; z0: number; x1: number; z1: number; H: number }[] | null = null;
   private fadeBuildings(me: { x: number; y: number; z?: number }) {
     const now = new Set<string>();
     const d = me.x - me.y;
-    for (const b of this.G.BUILDINGS) {
-      if (b.stored || b.kind === "hq" || !this.items.things.length) continue;
+    if (!this.tall) {
+      const G = this.G;
+      this.tall = G.BUILDINGS.filter((b) => !b.stored && b.kind !== "hq").map((b) => ({
+        id: `gr:${b.key}`,
+        x0: b.x0,
+        z0: b.z0,
+        x1: b.x1,
+        z1: b.z1,
+        H: b.floors * 3.8 + 1.5,
+      }));
+      for (const [i, st] of G.KART_STANDS.entries())
+        this.tall.push({
+          id: `gr:k-stand${i}`,
+          x0: Math.min(st.x0, st.x1),
+          z0: st.z,
+          x1: Math.max(st.x0, st.x1),
+          z1: st.z + st.rows + 2,
+          H: 5.6,
+        });
+      const T = G.KART_TOWER;
+      this.tall.push({ id: "gr:k-tower", x0: T.x - 1.5, z0: T.z - 1, x1: T.x + 1.5, z1: T.z + 1, H: 12 });
+      const K = G.KART_GATE;
+      this.tall.push({ id: "gr:k-gate", x0: K.x - 7, z0: K.z, x1: K.x + 7, z1: K.z + 1, H: 7.5 });
+    }
+    for (const b of this.tall) {
+      if (!this.items.things.length) break;
       const x0 = b.x0 - this.ox;
       const x1 = b.x1 - this.ox;
       const y0 = b.z0 - this.oy;
       const y1 = b.z1 - this.oy;
       // (quick out: well away from it)
       if (me.x < x0 - 40 || me.y < y0 - 40 || me.x > x1 + 2 || me.y > y1 + 2) continue;
-      const H = b.floors * 3.8 + 1.5;
+      const H = b.H;
       const ground = this.G.heightAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
       const hit = [0.4, 1.6].some((up) => {
         // the column of the building's box that this point of you is drawn over:
@@ -442,7 +541,7 @@ export class IsoGrounds {
         // in front of you: deeper (nearer the viewer) than you stand
         return sHi >= sLo && sHi > me.x + me.y + 0.5;
       });
-      if (hit) now.add(`gr:${b.key}`);
+      if (hit) now.add(b.id);
     }
     for (const id of this.faded) if (!now.has(id)) this.fade(id, 1);
     for (const id of now) if (!this.faded.has(id)) this.fade(id, 0.3);
@@ -777,8 +876,36 @@ export class IsoGrounds {
   // turns or moves a tile, slid between ──
   private vehViews = new Map<
     string,
-    { key: string; bx: number; by: number; fw: number; fh: number; lift: number; base: [number, number][] }
+    {
+      key: string;
+      bx: number;
+      by: number;
+      fw: number;
+      fh: number;
+      lift: number;
+      base: [number, number][];
+      /** its parts' places in the sort, as put */
+      z: number[];
+    }
   >();
+  /** The Kart Park's karts (kart/karts.ts): drawn with the vehicles, the next time they are. */
+  private karts: {
+    id: string;
+    kind: string;
+    x: number;
+    z: number;
+    a: number;
+    shown: boolean;
+    variant?: number;
+    fl?: number;
+    v?: number;
+    h?: number;
+  }[] = [];
+  setKarts(
+    list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; variant?: number; h?: number }[],
+  ) {
+    this.karts = list;
+  }
   /** Where they are (the building's coords, `a` the heading); `fx, fy` the focus (the floor's). */
   setVehicles(
     list: {
@@ -791,6 +918,9 @@ export class IsoGrounds {
       variant?: number;
       fl?: number;
       v?: number;
+      /** the height it's at, when not the land's (a kart, the Kart Park's ploughs: on the bridge or
+       *  under it) */
+      h?: number;
     }[],
     fx: number,
     fy: number,
@@ -805,7 +935,7 @@ export class IsoGrounds {
       [1, 0],
       [0, 1],
     ];
-    for (const v of list) {
+    for (const v of [...list, ...this.karts]) {
       const cx = v.x - this.ox;
       const cy = v.z - this.oy;
       if (!this.land.visible || !v.shown || Math.hypot(cx - fx, cy - fy) > 90) continue;
@@ -815,7 +945,8 @@ export class IsoGrounds {
       for (let r = 1; r < 4; r++) if (dot(r) > dot(rot)) rot = r;
       const bus = v.kind === "shuttle";
       const plough = v.kind === "plough";
-      const [w, h] = bus ? [10, 3] : plough ? [9, 3] : [5, 2];
+      const kart = v.kind === "kart";
+      const [w, h] = bus ? [10, 3] : plough ? [9, 3] : kart ? [2, 2] : [5, 2];
       // (its lamps: the Grounds' own on the move after dark, a driven car's when they're switched on)
       const fl = v.fl ?? 0;
       if (((bus || plough || v.kind === "visitor") && Math.abs(v.v ?? 0) > 0.2) || fl & LAMPS_ON)
@@ -828,28 +959,36 @@ export class IsoGrounds {
       const id = `veh:${v.id}`;
       let e = this.vehViews.get(v.id);
       if (!e || e.key !== key) {
-        const lift = G.heightAt(v.x, v.z);
+        const lift = v.h ?? G.heightAt(v.x, v.z);
         this.put(
           {
             id,
-            kind: bus ? "gr_bus" : plough ? "gr_plough" : "car",
+            kind: bus ? "gr_bus" : plough ? "gr_plough" : kart ? "gr_k_kart" : "car",
             x: bx,
             y: by,
-            rot,
-            props: bus || plough ? {} : { variant: v.variant ?? 2 },
+            // (a kart's drawn nosed +x: its turns two on from a car's)
+            rot: kart ? (rot + 2) % 4 : rot,
+            props: bus || plough ? {} : kart ? kartLook(v.variant ?? 0) : { variant: v.variant ?? 2 },
           },
           lift,
         );
-        e = { key, bx, by, fw, fh, lift, base: this.items.roots(id).map((r) => [r.x, r.y]) };
+        const roots = this.items.roots(id);
+        e = { key, bx, by, fw, fh, lift, base: roots.map((r) => [r.x, r.y]), z: roots.map((r) => r.zIndex) };
         this.vehViews.set(v.id, e);
       }
       // slid from its tile to where it is, up or down with the ground
       const dx = cx - fw / 2 - e.bx;
       const dy = cy - fh / 2 - e.by;
-      const dz = (G.heightAt(v.x, v.z) - e.lift) * ZPX_TILE;
+      const dz = ((v.h ?? G.heightAt(v.x, v.z)) - e.lift) * ZPX_TILE;
       const b = e.base;
+      // (under the Kart Park's bridge — a kart, a plough on the road under its span: behind its
+      // pieces, sorted by their far corners — parkBridge)
+      const deck = v.h === undefined ? null : G.deckAt(v.x, v.z);
+      const under = deck !== null && v.h !== undefined && v.h < deck - 1.5;
+      const z = e.z;
       this.items.roots(id).forEach((r, i) => {
         if (b[i]) r.position.set(b[i][0] + (dx - dy) * HW, b[i][1] + (dx + dy) * HH - dz);
+        if (z[i] !== undefined) r.zIndex = z[i] - (under ? 30 : 0);
       });
     }
     for (const id of [...this.vehViews.keys()])
@@ -857,6 +996,140 @@ export class IsoGrounds {
         this.take(`veh:${id}`);
         this.vehViews.delete(id);
       }
+  }
+
+  // the park's chunks to paint again (its layout changed), and the layout they show
+  private parkStale = new Set<string>();
+  private parkDue = new Set<string>();
+  private parkLayout = "";
+  /** the bridge there for the layout raced (and for the one before it: the show fades between) */
+  private bridgeHas = true;
+  private bridgeWas = true;
+  /** how much of the bridge shows (0..1) */
+  private bridgeLevel = 1;
+  private overPark(key: string): boolean {
+    const C = this.G.CHUNK;
+    const F = this.G.KART_FENCE;
+    const [cx, cz] = key.split(",").map(Number);
+    return (cx + 1) * C > F.x0 - 40 && cx * C < F.x1 + 40 && (cz + 1) * C > F.z0 - 40 && cz * C < F.z1 + 40;
+  }
+
+  // ── the Kart Park's bridge (docs/plan/47-the-track-changer.md, phase 5): walked on, so drawn
+  // up at its height (the land's picture keeps its shadow): a piece every ~1.5 m of it — its road,
+  // centre line, parapets, the walls down to the ground on the camera's side (under the span, the
+  // deck's edge: open below) —, each sorted with people and things by its far corner: whoever's on
+  // it drawn over it, whoever's behind it (past its guard strip, as wide as a piece) under it ──
+  private bridge: { m: Mesh; x0: number; x1: number; y0: number; y1: number }[] | null = null;
+  private bridgeTex: Texture | null = null;
+  private parkBridge() {
+    const G = this.G;
+    const t = G.kartTrack();
+    const H = G.TRACK_W / 2;
+    const up = t.pts.filter((p) => p.y > 0.05);
+    const r0 = up[0].s;
+    const r1 = up[up.length - 1].s;
+    const span = (s: number) => {
+      const p = G.trackAt(t, s);
+      return t.pts.some(
+        (q) =>
+          Math.min(Math.abs(q.s - s), t.len - Math.abs(q.s - s)) > 60 &&
+          Math.hypot(q.x - p.x, q.z - p.z) < G.TRACK_W + 3,
+      );
+    };
+    // the swatches: road, line, parapet's top, wall lit, wall shaded, the deck's edge
+    const SW = ["#5a6068", "#e6d69a", "#e2dccd", "#cfc8b8", "#aaa396", "#8f8a80"];
+    const c = document.createElement("canvas");
+    c.width = SW.length * 8;
+    c.height = 8;
+    const g = c.getContext("2d") as CanvasRenderingContext2D;
+    for (const [i, col] of SW.entries()) {
+      g.fillStyle = col;
+      g.fillRect(i * 8, 0, 8, 8);
+    }
+    const tex = Texture.from(c);
+    this.bridgeTex = tex;
+    this.items.upload(tex);
+    const out: NonNullable<typeof this.bridge> = [];
+    const STEP = 1.5;
+    for (let a = r0; a < r1; a += STEP) {
+      const b = Math.min(r1, a + STEP);
+      const ss = [a, (a + b) / 2, b];
+      const ps = ss.map((s) => G.trackAt(t, s));
+      const pos: number[] = [];
+      const uv: number[] = [];
+      const idx: number[] = [];
+      let depth = Number.POSITIVE_INFINITY;
+      // a point `off` across, `dy` over the road (or on the ground: `ground`)
+      const at = (p: (typeof ps)[number], off: number, dy: number, ground = false): [number, number] => {
+        const x = p.x + Math.sin(p.a) * off;
+        const z = p.z - Math.cos(p.a) * off;
+        const lx = x - this.ox;
+        const ly = z - this.oy;
+        depth = Math.min(depth, lx + ly);
+        const h = G.terrainAt(x, z) + (ground ? 0 : p.y + 0.05 + dy);
+        return [(lx - ly) * HW, (lx + ly) * HH - h * ZPX_TILE];
+      };
+      // a strip along the piece between two edges (each: across, over the road or on the ground),
+      // one swatch
+      type Edge = [number, number, boolean?];
+      const strip = (e0: Edge, e1: Edge, sw: number) => {
+        const n0 = pos.length / 2;
+        for (const p of ps) {
+          pos.push(...at(p, e0[0], e0[1], e0[2]), ...at(p, e1[0], e1[1], e1[2]));
+          const u = (sw * 8 + 4) / c.width;
+          uv.push(u, 0.5, u, 0.5);
+        }
+        for (let i = 0; i < ps.length - 1; i++) {
+          const q = n0 + i * 2;
+          idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2);
+        }
+      };
+      // which side the camera sees (its walls): the one towards the viewer (depth up)
+      const m = ps[1];
+      const near = Math.sin(m.a) - Math.cos(m.a) > 0 ? 1 : -1;
+      const open = span((a + b) / 2);
+      const PE = H + 0.35;
+      const PT = H + 0.6;
+      const high = m.y >= 0.4;
+      // the far parapet, the road and its line, the near parapet and wall
+      const lit = near > 0 ? 3 : 4;
+      if (high) strip([-near * PE, 0.9], [-near * PE, 0], 3);
+      if (high) strip([-near * PT, 0.9], [-near * PE, 0.9], 2);
+      // (to the parapets' feet: past them it'd cover the far one of the piece behind)
+      strip(high ? [-PE, 0] : [-PT, 0], high ? [PE, 0] : [PT, 0], 0);
+      if ((a - r0) % 8 < 3) strip([-0.08, 0.01], [0.08, 0.01], 1);
+      if (open) strip([near * PT, 0], [near * PT, -0.8], 5);
+      else strip([near * PT, 0], [near * PT, 0, true], lit);
+      if (high) strip([near * PE, 0.9], [near * PT, 0.9], 2);
+      if (high) strip([near * PT, 0.9], [near * PT, 0], lit);
+      // where the span starts or ends: the ramp's end wall, if it faces the camera
+      if (!open && (span(a - STEP) || span(b + STEP))) {
+        const end = span(a - STEP) ? ps[0] : ps[2];
+        const facing = span(a - STEP) ? -1 : 1;
+        if (facing * (Math.cos(end.a) + Math.sin(end.a)) > 0) {
+          const n0 = pos.length / 2;
+          pos.push(...at(end, -PT, 0), ...at(end, PT, 0), ...at(end, -PT, 0, true), ...at(end, PT, 0, true));
+          const u = (4 * 8 + 4) / c.width;
+          uv.push(u, 0.5, u, 0.5, u, 0.5, u, 0.5);
+          idx.push(n0, n0 + 1, n0 + 2, n0 + 1, n0 + 3, n0 + 2);
+        }
+      }
+      const geometry = new MeshGeometry({
+        positions: new Float32Array(pos),
+        uvs: new Float32Array(uv),
+        indices: new Uint32Array(idx),
+      });
+      const mesh = new Mesh({ geometry, texture: tex });
+      mesh.zIndex = depth - 0.01;
+      mesh.tint = this.tint;
+      mesh.visible = this.land.visible && this.bridgeLevel > 0;
+      mesh.alpha = this.bridgeLevel;
+      this.sortLayer.addChild(mesh);
+      const xs = pos.filter((_, i) => i % 2 === 0);
+      const ys = pos.filter((_, i) => i % 2 === 1);
+      out.push({ m: mesh, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) });
+    }
+    this.bridge = out;
   }
 
   private inGrounds(cx: number, cz: number): boolean {
@@ -1007,14 +1280,14 @@ export class IsoGrounds {
     // (in passes: the verges and pavements under every way, then the asphalt, then the paint —
     // where Church Street meets Main, Main's paint stays whole; docs/plan/33-the-look.md)
     const roadish = (w: (typeof G.WAYS)[number]) => w.kind !== "trail" && w.kind !== "walk";
-    const pathOf = (w: (typeof G.WAYS)[number], from = 0) => {
+    const pathOf = (w: (typeof G.WAYS)[number], from = 0, to = w.line.length - 1) => {
       const m = w.w + 6;
       if (!w.line.some(([x, z]) => inChunk(x, z, m))) return null;
       return () => {
         g.beginPath();
         let started = false;
         for (const [i, [x, z]] of w.line.entries()) {
-          if (i < from) continue;
+          if (i < from || i > to) continue;
           if (!inChunk(x, z, m + 2)) {
             started = false;
             continue;
@@ -1068,10 +1341,17 @@ export class IsoGrounds {
       g.fill();
     };
     g.lineJoin = "round";
-    // 1: the verges' packed snow, the streets' pavements and kerbs
+    // 1: the verges' packed snow, the streets' pavements and kerbs (short of the Kart Park's
+    // turning circle: its mouth's asphalt there, as the 3D's — tp/roads3d.ts intoTurn)
     g.lineCap = "butt";
+    const T = G.KART_TURN;
+    const shortOfTurn = (w: (typeof G.WAYS)[number]) => {
+      let to = w.line.length - 1;
+      while (to > 0 && Math.hypot(w.line[to][0] - T.x, w.line[to][1] - T.z) < T.r + 4) to--;
+      return to;
+    };
     for (const w of G.WAYS) {
-      const path = pathOf(w, flareTo(w));
+      const path = pathOf(w, flareTo(w), shortOfTurn(w));
       if (!path || !roadish(w)) continue;
       if (w.kind === "street") {
         stroke(path, "rgb(190,189,184)", w.w + 2 * w.pave);
@@ -1304,6 +1584,8 @@ export class IsoGrounds {
         g.stroke();
       }
     }
+    // the Kart Park, flat on its land (docs/plan/46-the-karts.md)
+    drawKartPark(g, G, x0, z0, PX, C);
     return c;
   }
 
@@ -1330,6 +1612,9 @@ export class IsoGrounds {
     this.poolTex?.destroy(true);
     this.printTex?.destroy(true);
     this.beamTex?.destroy(true);
+    for (const b of this.bridge ?? []) b.m.destroy();
+    this.bridgeTex?.destroy(true);
+    this.bridge = null;
   }
 }
 

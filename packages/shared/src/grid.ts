@@ -411,8 +411,9 @@ export class Grid {
     const up = z + STEP;
     // on the land: the ground under the middle of you (a slope's uphill corner
     // isn't a step to stand on), unless a floor or a top under you is higher
-    if (this.outside && this.onLand(x, y) && this.ok(Math.floor(x), Math.floor(y))) {
-      let g = this.outside.height(x, y);
+    const out = this.outside && this.onLand(x, y) ? this.outside : null;
+    if (out && this.ok(Math.floor(x), Math.floor(y))) {
+      let g = out.height(x, y);
       for (const [cx, cy] of [
         [x - r, y - r],
         [x + r, y - r],
@@ -435,6 +436,8 @@ export class Grid {
       const t = this.standOn(cx, cy, up);
       if (t > g) g = t;
     }
+    // (posed where nobody walks on the land — a seat on a bench, a stand's row —: at least the land)
+    if (out) return Math.max(g, out.height(x, y));
     return g === Number.NEGATIVE_INFINITY ? -2 * STOREY : g;
   }
 

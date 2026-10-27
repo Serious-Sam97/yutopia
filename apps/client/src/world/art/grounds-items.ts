@@ -1225,6 +1225,27 @@ export function groundKinds(
     gr_stop: { label: "Stop sign", w: 1, h: 1, solid: true },
     gr_streetsign: { label: "Street sign", w: 1, h: 1, solid: true },
     gr_postbox: { label: "Mailbox", w: 1, h: 1, solid: true },
+    // the Kart Park (docs/plan/46-the-karts.md)
+    gr_k_tower: { label: "The tower", w: 3, h: 2, solid: true },
+    gr_k_gate: { label: "Yutopia Kart Park", w: 14, h: 1, solid: false },
+    gr_k_flood: { label: "Floodlight", w: 1, h: 1, solid: true },
+    gr_k_kart: { label: "Kart", w: 2, h: 2, solid: true },
+    gr_k_desk: { label: "The desk", w: 1, h: 4, solid: true },
+    gr_k_wall: { label: "The shed", w: 1, h: 9, solid: true },
+    gr_k_front: { label: "The shed", w: 1, h: 9, solid: false },
+    gr_k_hut: { label: "Race control", w: 4, h: 7, solid: true },
+    gr_k_board: { label: "Lap records", w: 3, h: 1, solid: true },
+    gr_k_circuits: { label: "The circuits", w: 3, h: 1, solid: true },
+    gr_k_fire: { label: "A fire barrel", w: 1, h: 1, solid: true },
+    gr_k_stand: { label: "A kart on its stand", w: 3, h: 2, solid: true },
+    gr_k_tools: { label: "Tool chest", w: 1, h: 1, solid: true },
+    gr_k_tyres: { label: "Spare tyres", w: 1, h: 1, solid: true },
+    gr_k_podium: { label: "The podium", w: 8, h: 3, solid: true },
+    gr_k_cocoa: { label: "Hot cocoa", w: 3, h: 2, solid: true },
+    gr_k_plinth: { label: "Kart No. 1", w: 3, h: 2, solid: true },
+    gr_k_billboard: { label: "Yutopia Kart Park", w: 9, h: 2, solid: true },
+    gr_k_finger: { label: "Kart Park", w: 1, h: 2, solid: true },
+    gr_k_psign: { label: "Parking", w: 1, h: 1, solid: true },
   };
   const gens: Record<string, ItemGen> = {
     gr_tower: { draw: tower, variants: 1 },
@@ -1256,7 +1277,42 @@ export function groundKinds(
     gr_snowpole: { draw: snowPole, variants: 1 },
     gr_truss: { draw: truss, variants: 1, key: (p) => `${p.len}|${p.z0}` },
     gr_railing: { draw: railing, variants: 1, key: (p) => `${p.len}|${p.z0}` },
+    gr_k_tower: { draw: kartTower, variants: 1 },
+    gr_k_gate: { draw: kartGate, variants: 1 },
+    gr_k_flood: { draw: kartFlood, variants: 1 },
+    gr_k_kart: { draw: kartIso, variants: 1, key: (p) => `${p.c}|${p.t}` },
+    gr_k_desk: { draw: kartDesk, variants: 1 },
+    gr_k_wall: { draw: shedWall, variants: 1 },
+    gr_k_front: { draw: shedFront, variants: 1 },
+    gr_k_hut: { draw: kartHut, variants: 1 },
+    gr_k_board: { draw: lapBoard, variants: 1 },
+    // (its face the layout raced: drawn again when it changes — grounds-iso.ts repaints the park)
+    gr_k_circuits: {
+      draw: (s) => circuitsBoard(s, G),
+      variants: 1,
+      key: () => {
+        const n = G.kartLayoutNow();
+        return `${n.key}${n.reverse ? "-r" : ""}`;
+      },
+    },
+    gr_k_fire: { draw: fireBarrel, variants: 1 },
+    gr_k_stand: { draw: kartStand3, variants: 1 },
+    gr_k_tools: { draw: toolChest, variants: 1 },
+    gr_k_tyres: { draw: tyreStack, variants: 1 },
+    gr_k_podium: { draw: kartPodium, variants: 1 },
+    gr_k_cocoa: { draw: cocoaCart, variants: 1 },
+    gr_k_plinth: { draw: kartPlinth, variants: 1 },
+    gr_k_billboard: { draw: billboard, variants: 1 },
+    gr_k_finger: { draw: fingerpost, variants: 1 },
+    gr_k_psign: { draw: parkingSign, variants: 1 },
   };
+  // the stands: a kind a length (their footprints differ)
+  for (const st of G.KART_STANDS) {
+    const len = Math.round(Math.abs(st.x1 - st.x0));
+    const kind = `gr_k_stand${len}`;
+    kinds[kind] ??= { label: "The stands", w: len, h: st.rows + 2 + STAND_IN, solid: true };
+    gens[kind] ??= { draw: (sk) => kartStand(sk, G, st), variants: 1 };
+  }
   // the lot's islands and the plough's heaps (lotThings): a kind a footprint's size
   for (const t of lot ? lotThings(lot) : []) {
     kinds[t.kind] ??= { label: t.kind.startsWith("gr_heap") ? "Snow" : "Island", w: t.w, h: t.h, solid: false };
@@ -1580,6 +1636,7 @@ export function groundThings(G: G, lot?: LotIso): Thing[] {
     if (!b.stored && b.kind !== "hq") put(b.key, `gr_b_${b.key}`, b.x0, b.z0, b.x1 - b.x0, b.z1 - b.z0);
   // the lamps (the cobra-heads are the lot's own kind; its arm turned to the road)
   for (const [i, l] of G.LAMPS.entries()) {
+    if (l.kind === "flood") continue; // (the Kart Park's: its own masts, gr_k_flood)
     if (l.kind === "cobra") {
       const dx = Math.cos(l.ry);
       const dz = -Math.sin(l.ry);
@@ -1650,6 +1707,7 @@ export function groundThings(G: G, lot?: LotIso): Thing[] {
     }
   }
   put("gate-sign", "gr_sign", -51.5, G.GATE.z + 4, 4, 1, { bg: "#e9e6dc", fg: "#1c2228" });
+  kartThings(G, put);
   // the car dealer's forecourt (docs/plan/43-the-spot.md): its pole sign, flood lamps and rail (the
   // concrete is the land's picture, the vehicles on show cars)
   const M = G.MOTORS;
@@ -1695,4 +1753,608 @@ export function groundThings(G: G, lot?: LotIso): Thing[] {
     put(`bale${i}`, "gr_bale", x - 0.5, z - 0.5, 1, 1);
   // (the cars parked along Main Street are cars like the lot's: world objects, shared car/homes.ts)
   return out;
+}
+
+// ── the Kart Park (docs/plan/46-the-karts.md): what stands up in it (the circuit, the bowl and the
+// paddock are the land's picture: kart-iso.ts) ──
+function kartThings(
+  G: G,
+  put: (id: string, kind: string, x: number, y: number, w: number, h: number, props?: Props, rot?: number) => void,
+) {
+  for (const [i, st] of G.KART_STANDS.entries()) {
+    const len = Math.round(Math.abs(st.x1 - st.x0));
+    put(`k-stand${i}`, `gr_k_stand${len}`, Math.min(st.x0, st.x1), st.z - STAND_IN, len, st.rows + 2 + STAND_IN);
+  }
+  put("k-tower", "gr_k_tower", G.KART_TOWER.x - 1.5, G.KART_TOWER.z - 1, 3, 2);
+  put("k-gate", "gr_k_gate", G.KART_GATE.x - 7, G.KART_GATE.z, 14, 1);
+  for (const [i, f] of G.kartFloods().entries()) put(`k-flood${i}`, "gr_k_flood", f.x - 0.5, f.z - 0.5, 1, 1);
+  const R = G.KART_RACK;
+  const cols: [string, string][] = [
+    ["#b5562f", "#f3ead6"],
+    ["#2f4a3b", "#e8a33d"],
+    ["#e8a33d", "#2a2018"],
+    ["#3d4a5c", "#f3ead6"],
+    ["#6b2430", "#e8a33d"],
+    ["#cdbf9f", "#b5562f"],
+    ["#4a5a73", "#f3ead6"],
+    ["#20262c", "#e8a33d"],
+  ];
+  for (let i = 0; i < R.n; i++)
+    put(`k-kart${i}`, "gr_k_kart", R.x - 1, R.z0 + i * R.dz - 1, 2, 2, { c: cols[i % 8][0], t: cols[i % 8][1] });
+  put("k-desk", "gr_k_desk", G.KART_DESK.x - 0.5, G.KART_DESK.z - 2, 1, 4);
+  // the shed: its back wall and its front's posts, a piece a pair of bays (no roof: its karts seen)
+  const S = G.KART_SHED;
+  for (let i = 0; i < R.n / 2; i++) {
+    const z = S.z0 + i * 2 * R.dz;
+    put(`k-wall${i}`, "gr_k_wall", Math.floor(S.x0), z, 1, 9);
+    put(`k-front${i}`, "gr_k_front", Math.floor(S.x1), z, 1, 9);
+  }
+  // what stands about the paddock
+  const at: Record<string, [string, number, number]> = {
+    hut: ["gr_k_hut", 4, 7],
+    board: ["gr_k_board", 3, 1],
+    circuits: ["gr_k_circuits", 3, 1],
+    fire: ["gr_k_fire", 1, 1],
+    stand: ["gr_k_stand", 3, 2],
+    tools: ["gr_k_tools", 1, 1],
+    tyres: ["gr_k_tyres", 1, 1],
+    podium: ["gr_k_podium", 8, 3],
+    cocoa: ["gr_k_cocoa", 3, 2],
+  };
+  for (const [i, t] of G.KART_THINGS.entries()) {
+    if (t.kind === "bench") {
+      // (the office's bench, as the 3D's: tp/kart/park3d.ts)
+      put(`k-bench${i}`, "bench", t.x - t.hx, t.z - t.hz, t.hx * 2, t.hz * 2, {}, t.hz > t.hx ? 1 : 0);
+      continue;
+    }
+    const [kind, w, h] = at[t.kind];
+    put(`k-${t.kind}${i}`, kind, Math.round(t.x - w / 2), Math.round(t.z - h / 2), w, h);
+  }
+  // outside: the island's kart on its plinth, the P sign, the billboard and the fingerpost
+  put("k-plinth", "gr_k_plinth", Math.round(G.KART_TURN.x - 1.5), Math.round(G.KART_TURN.z - 1), 3, 2);
+  const C = G.KART_CARPARK;
+  put("k-psign", "gr_k_psign", Math.floor(C.bx + C.bays * 2.7 + 0.5), Math.floor(C.aisle[0] - 1.7), 1, 1);
+  put("k-billboard", "gr_k_billboard", Math.round(G.KART_SIGN.x - 4.5), Math.round(G.KART_SIGN.z - 3), 9, 2);
+  put("k-finger", "gr_k_finger", Math.floor(G.KART_SIGN.fx), Math.floor(G.KART_SIGN.fz - 1.5), 1, 2);
+  // the fence: a rail panel every 3 tiles, the gate open
+  const F = G.KART_FENCE;
+  for (let x = F.x0; x < F.x1; x += 3)
+    for (const z of [F.z0, F.z1]) {
+      if (z === F.z1 && x + 3 > G.KART_GATE.x - G.KART_GATE.w / 2 && x < G.KART_GATE.x + G.KART_GATE.w / 2) continue;
+      put(`k-fence-h${x}-${z}`, "gr_rail_h", x, z, 3, 1, { len: Math.min(3, F.x1 - x) });
+    }
+  for (let z = F.z0; z < F.z1; z += 3)
+    for (const x of [F.x0, F.x1]) put(`k-fence-v${x}-${z}`, "gr_rail_v", x, z, 1, 3, { len: Math.min(3, F.z1 - z) });
+}
+const K_WOOD = mat("#7a5534", "#8a6440", "#7d5836", "#5e4128");
+const K_ROOF = mat("#2f4a3b", "#3b5a48", "#33503f", "#264034");
+const K_CROWD = ["#6b2430", "#2f4a3b", "#3d4a5c", "#b5562f", "#e8a33d", "#4a5a73", "#8b8f93", "#cdbf9f", "#20262c"];
+const K_SKIN = ["#f3d2b3", "#e4b48e", "#c68a5e", "#a8693f", "#7c4a2b"];
+/** The stands along x (`len`), facing north (−y): six tiers stepping up south, the painted crowd
+ *  on them (`crowd`: a seat's, as the 3D's: shared kartSeats), a back wall, a roof. */
+const STAND_IN = 2;
+/** The stands, as the 3D's (tp/kart/park3d.ts stands3d, tp/kart/crowd3d.ts): each row a footwell
+ *  and a ledge with its plank, the aisles' stairs, stepped side walls, the back wall's boards, the
+ *  roof with its snow and fascia; the crowd on its seats (shared kartSeats: the iso sees their
+ *  backs — hair, beanies, caps, scarves; an arm or a flag up). */
+function kartStand(s: Sketch, G: typeof GroundsModule, st: (typeof GroundsModule.KART_STANDS)[number]) {
+  const len = Math.round(Math.abs(st.x1 - st.x0));
+  const rows = st.rows;
+  // (drawn 2 tiles in: the roof reaches out over the front — its footprint starts there)
+  const O = STAND_IN;
+  const CONC = mat("#b6b0a3", "#cbc5b8", "#bdb7aa", "#9c968a");
+  const STAIR = mat("#cdc7ba", "#ddd8cc", "#d2ccc0", "#b2ac9f");
+  const PLANK = mat("#8a5a34", "#9c6a40", "#8f5e37", "#6e472a");
+  const WALNUT = mat("#4a3324", "#5a4030", "#4f372a", "#3b2a1e");
+  const GREEN = mat("#2f4a3b", "#3b5a48", "#33503f", "#264034");
+  const half = G.STAND_AISLE / 2;
+  const aisles = G.standAisles(st).map((a) => a - st.x0);
+  const cuts = [0, ...aisles.flatMap((a) => [a - half, a + half]), len];
+  const spans: [number, number][] = [];
+  for (let i = 0; i < cuts.length; i += 2) spans.push([cuts[i], cuts[i + 1]]);
+  // the front wall (its boards face the track: the iso sees its back)
+  for (const [a, c] of spans)
+    s.box({ x: a, y: O - 0.05, w: c - a, d: G.STAND_WALL, z: 0, h: 1.0 * P, mat: GREEN, line: 0.4 });
+  // who sits where (the crowd's seats), back to front so the nearer rows draw over
+  const people = G.kartSeats().filter(
+    (q) => q.stand !== undefined && G.KART_STANDS[q.stand] === st && G.crowdDraw(q.x, q.row ?? 0) <= G.KART_CROWD,
+  );
+  for (let r = 0; r < rows; r++) {
+    const y = r * 1.2;
+    const top = 0.45 * (r + 1);
+    for (const [a, c] of spans) {
+      if (r > 0) s.box({ x: a, y, w: c - a, d: 0.5, z: 0, h: 0.45 * r * P, mat: CONC, line: 0.3 });
+      s.box({ x: a, y: O + y + 0.5, w: c - a, d: 0.7, z: 0, h: (top - 0.06) * P, mat: CONC, line: 0.3 });
+      s.box({
+        x: a + 0.02,
+        y: O + y + 0.52,
+        w: c - a - 0.04,
+        d: 0.46,
+        z: (top - 0.06) * P,
+        h: 0.06 * P,
+        mat: PLANK,
+        line: 0.3,
+      });
+    }
+    for (const a of aisles) {
+      s.box({ x: a - half, y, w: G.STAND_AISLE, d: 0.6, z: 0, h: (0.45 * r + 0.225) * P, mat: STAIR, line: 0.3 });
+      s.box({ x: a - half, y: O + y + 0.6, w: G.STAND_AISLE, d: 0.6, z: 0, h: top * P, mat: STAIR, line: 0.3 });
+    }
+    for (const q of people) {
+      if (q.row !== r) continue;
+      const x = q.x - st.x0;
+      let h = Math.sin(q.x * 12.9898 + r * 78.233) * 43758.5453;
+      const rnd = () => {
+        h = (h * 9301 + 49297) % 233280;
+        return Math.abs(h) / 233280;
+      };
+      const kid = rnd() < 0.18 ? 0.76 : 1;
+      const shirt = K_CROWD[Math.floor(rnd() * K_CROWD.length)];
+      const skin = K_SKIN[Math.floor(rnd() * K_SKIN.length)];
+      const top2 = rnd();
+      const wool = ["#b5562f", "#e8a33d", "#2f4a3b", "#f3ead6", "#6b2430", "#3d4a5c"][Math.floor(rnd() * 6)];
+      const hair = ["#2a1d14", "#5a3a20", "#c99a5a", "#1a1a1a", "#8a4a2a", "#d8d2c4"][Math.floor(rnd() * 6)];
+      const z0 = top * P;
+      const zy = y + 0.75;
+      // the knees forward over the footwell, the back, the head, its hair or hat, maybe an arm up
+      s.box({
+        x: x - 0.15 * kid,
+        y: O + zy - 0.42 * kid,
+        w: 0.3 * kid,
+        d: 0.4 * kid,
+        z: z0,
+        h: 0.13 * kid * P,
+        mat: mat("#2b2f36", "#3a3f47"),
+        line: 0.3,
+      });
+      s.box({
+        x: x - 0.19 * kid,
+        y: O + zy - 0.12 * kid,
+        w: 0.38 * kid,
+        d: 0.26 * kid,
+        z: z0,
+        h: 0.5 * kid * P,
+        mat: mat(shirt, shade(shirt, 1.12)),
+        line: 0.35,
+      });
+      s.cyl({ x, y: O + zy, z: z0 + 0.52 * kid * P, r: 0.13 * kid, h: 0.27 * kid * P, mat: mat(skin), line: 0.35 });
+      if (top2 < 0.38)
+        s.cyl({
+          x,
+          y: O + zy,
+          z: z0 + 0.66 * kid * P,
+          r: 0.145 * kid,
+          r2: 0.06 * kid,
+          h: 0.2 * kid * P,
+          mat: mat(wool, shade(wool, 1.1)),
+          line: 0.35,
+        });
+      else if (top2 < 0.55)
+        s.cyl({
+          x,
+          y: O + zy,
+          z: z0 + 0.7 * kid * P,
+          r: 0.14 * kid,
+          h: 0.08 * kid * P,
+          mat: mat(wool, shade(wool, 1.1)),
+          line: 0.35,
+        });
+      else
+        s.cyl({
+          x,
+          y: O + zy + 0.02,
+          z: z0 + 0.66 * kid * P,
+          r: 0.14 * kid,
+          r2: 0.1 * kid,
+          h: 0.14 * kid * P,
+          mat: mat(hair, shade(hair, 1.15)),
+          line: 0.35,
+        });
+      if (rnd() < 0.4)
+        s.cyl({
+          x,
+          y: O + zy,
+          z: z0 + 0.46 * kid * P,
+          r: 0.15 * kid,
+          h: 0.07 * kid * P,
+          mat: mat(wool, shade(wool, 1.1)),
+          line: 0.3,
+        });
+      const up = rnd();
+      if (up < 0.22)
+        s.box({
+          x: x + 0.17 * kid,
+          y: O + zy - 0.04,
+          w: 0.08,
+          d: 0.08,
+          z: z0 + 0.5 * kid * P,
+          h: 0.48 * kid * P,
+          mat: mat(shirt, shade(shirt, 1.12)),
+          line: 0.3,
+        });
+      if (up < 0.08)
+        s.box({
+          x: x + 0.2,
+          y: O + zy - 0.06,
+          w: 0.3,
+          d: 0.02,
+          z: z0 + 0.82 * kid * P,
+          h: 0.2 * P,
+          mat: mat(wool, shade(wool, 1.1)),
+          line: 0.3,
+        });
+    }
+  }
+  // the side walls, stepped with the rows
+  for (const x of [-0.16, len])
+    for (let r = 0; r < rows; r++)
+      s.box({ x, y: O + r * 1.2, w: 0.16, d: 1.2, z: 0, h: (0.45 * (r + 1) + 1.0) * P, mat: WALNUT, line: 0.4 });
+  // the back wall (its boards to the paddock), the posts behind it
+  const R = G.standRoof(st);
+  s.box({ x: -0.16, y: O + rows * 1.2, w: len + 0.32, d: 0.2, z: 0, h: R.back * P, mat: WALNUT, line: 0.5 }, (d) => {
+    for (let i = 0.5; i < len; i += 0.9)
+      d.line(
+        "s",
+        [i, O + rows * 1.2 + 0.2, 0.2 * P],
+        [i, O + rows * 1.2 + 0.2, (R.back - 0.2) * P],
+        "rgba(0,0,0,0.25)",
+        0.6,
+      );
+  });
+  for (let i = 0; i <= 4; i++)
+    s.box({
+      x: (len * i) / 4 - 0.13,
+      y: O + rows * 1.2 + 0.22,
+      w: 0.26,
+      d: 0.26,
+      z: 0,
+      h: (R.back + 0.1) * P,
+      mat: STEEL,
+    });
+  // the roof (flat here, at its middle's height), its snow, the fascia on the front
+  const rz = ((R.back + R.front) / 2) * P;
+  s.box({
+    x: -0.45,
+    y: O + R.zFront - st.z,
+    w: len + 0.9,
+    d: R.zBack - R.zFront,
+    z: rz,
+    h: 0.22 * P,
+    mat: K_ROOF,
+    line: 0.7,
+  });
+  s.box({
+    x: -0.4,
+    y: O + R.zFront - st.z + 0.05,
+    w: len + 0.8,
+    d: R.zBack - R.zFront - 0.1,
+    z: rz + 0.22 * P,
+    h: 0.08 * P,
+    mat: SNOW,
+    line: 0.3,
+  });
+  s.box({
+    x: -0.45,
+    y: O + R.zFront - st.z - 0.1,
+    w: len + 0.9,
+    d: 0.14,
+    z: (R.front - 0.55) * P,
+    h: 0.7 * P,
+    mat: WALNUT,
+    line: 0.6,
+  });
+}
+/** The tower: four legs, the order's VFD board facing north, a walnut cap. */
+function kartTower(s: Sketch) {
+  for (const x of [0.2, 2.6])
+    for (const y of [0.3, 1.5]) s.box({ x, y, w: 0.18, d: 0.18, z: 0, h: 7.5 * P, mat: DARK });
+  s.box({ x: -0.1, y: 0.4, w: 3.2, d: 0.6, z: 7.3 * P, h: 4.2 * P, mat: DARK, line: 0.6 });
+  s.box({
+    x: 0.1,
+    y: 0.32,
+    w: 2.8,
+    d: 0.08,
+    z: 7.6 * P,
+    h: 3.6 * P,
+    mat: { c: "#3a2a12", top: "#3a2a12", flat: true },
+    glow: true,
+  });
+  s.box({ x: -0.3, y: 0.25, w: 3.6, d: 0.9, z: 11.5 * P, h: 0.35 * P, mat: K_WOOD, line: 0.5 });
+}
+/** The gate's arch across x: two chequered posts, the sign's walnut beam, its lamps. */
+function kartGate(s: Sketch) {
+  const BLK = mat("#151515", "#262626");
+  const CRM = mat("#f3ead6", "#fbf5e8");
+  for (const x of [0.7, 12.7])
+    for (let k = 0; k < 8; k++)
+      s.box({ x, y: 0.2, w: 0.6, d: 0.6, z: k * 0.78 * P, h: 0.78 * P, mat: k % 2 ? CRM : BLK, line: 0.3 });
+  s.box({ x: 0.4, y: 0.25, w: 13.2, d: 0.5, z: 4.8 * P, h: 1.6 * P, mat: mat("#4a3324", "#5a4030"), line: 0.8 });
+  s.box({
+    x: 1.0,
+    y: 0.2,
+    w: 12,
+    d: 0.06,
+    z: 5.0 * P,
+    h: 1.2 * P,
+    mat: { c: "#e8d9b8", top: "#e8d9b8", flat: true },
+    glow: true,
+  });
+  for (const x of [3, 7, 11])
+    s.box({
+      x,
+      y: 0.4,
+      w: 0.25,
+      d: 0.25,
+      z: 6.5 * P,
+      h: 0.25 * P,
+      mat: { c: LIT, top: "#fff2d0", flat: true },
+      glow: true,
+    });
+}
+/** A floodlight: its mast, its head of four lamps. */
+function kartFlood(s: Sketch) {
+  s.cyl({ x: 0.5, y: 0.5, z: 0, r: 0.2, r2: 0.13, h: 13 * P, mat: STEEL });
+  s.box({ x: 0.05, y: 0.15, w: 0.9, d: 0.7, z: 12.6 * P, h: 1.1 * P, mat: DARK, line: 0.6 });
+  s.box({
+    x: 0.1,
+    y: 0.1,
+    w: 0.8,
+    d: 0.08,
+    z: 12.75 * P,
+    h: 0.8 * P,
+    mat: { c: "#fff4dc", top: "#fff4dc", flat: true },
+    glow: true,
+  });
+  s.shadowDot(0.5, 0.5, 0.25, 0.3);
+}
+/** A kart nosed east (+x): its tyres, the pods in its colour, the seat, the wing in its trim. */
+function kartIso(s: Sketch, p: Props) {
+  const c = String(p.c ?? "#b5562f");
+  const t = String(p.t ?? "#f3ead6");
+  const BODY = mat(c, shade(c, 1.15), shade(c, 1.05), shade(c, 0.8));
+  const TRIM = mat(t, shade(t, 1.1), t, shade(t, 0.82));
+  const TYRE = mat("#1a1b1d", "#2a2b2d");
+  for (const [x, y, w] of [
+    [0.2, 0.25, 0.42],
+    [0.2, 1.45, 0.42],
+    [1.35, 0.3, 0.32],
+    [1.35, 1.4, 0.32],
+  ] as [number, number, number][])
+    s.box({ x, y, w, d: 0.3, z: 0, h: 0.4 * P, mat: TYRE, line: 0.4 });
+  s.box({ x: 0.15, y: 0.55, w: 1.75, d: 0.9, z: 0.08 * P, h: 0.06 * P, mat: DARK });
+  s.box({ x: 0.55, y: 0.35, w: 0.75, d: 0.25, z: 0.12 * P, h: 0.22 * P, mat: BODY, line: 0.4 });
+  s.box({ x: 0.55, y: 1.4, w: 0.75, d: 0.25, z: 0.12 * P, h: 0.22 * P, mat: BODY, line: 0.4 });
+  s.box({ x: 1.45, y: 0.7, w: 0.45, d: 0.6, z: 0.12 * P, h: 0.24 * P, mat: BODY, line: 0.4 });
+  s.box({ x: 0.55, y: 0.75, w: 0.4, d: 0.5, z: 0.12 * P, h: 0.5 * P, mat: DARK, line: 0.3 });
+  s.box({ x: 0.0, y: 0.45, w: 0.3, d: 1.1, z: 0.7 * P, h: 0.06 * P, mat: TRIM, line: 0.4 });
+  // the driver: a helmet in the kart's colour over the seat
+  s.cyl({ x: 0.75, y: 1, z: 0.7 * P, r: 0.2, r2: 0.2, h: 0.35 * P, mat: mat("#3a3a40", "#4a4a52") });
+  s.cyl({ x: 0.75, y: 1, z: 1.05 * P, r: 0.26, r2: 0.14, h: 0.28 * P, mat: BODY });
+  s.shadowDot(1, 1, 0.9, 0.3);
+}
+// the paddock's things, the car park's, the billboard on the corner (docs/plan/46: "the way in")
+const K_WALNUT = mat("#4a3324", "#5a4030", "#4f372a", "#3b2a1e");
+const K_GREEN = mat("#2f4a3b", "#3b5a48", "#34513f", "#264034");
+const K_CREAM = mat("#f3ead6", "#fbf5e8", "#ece2cc", "#ddd2ba");
+const K_RUST = mat("#b5562f", "#c5663f", "#ad5029", "#9a4524");
+const K_AMBER = mat("#e8a33d", "#f0b350", "#e09a35", "#c98a2e");
+const K_RED = mat("#a5281c", "#b8382a", "#9c2519", "#851f15");
+const K_TYRE = mat("#1a1b1d", "#2a2b2d");
+/** A piece of the shed's back wall: green boards, the post at its north end. */
+function shedWall(s: Sketch) {
+  s.box({ x: 0.2, y: 0, w: 0.15, d: 9.2, z: 0, h: 2.9 * P, mat: K_GREEN, line: 0.6 });
+  s.box({ x: 0.15, y: 0, w: 0.25, d: 0.25, z: 0, h: 3.0 * P, mat: K_WALNUT, line: 0.4 });
+  s.box({ x: 0.1, y: 0, w: 0.4, d: 9.2, z: 2.95 * P, h: 0.12 * P, mat: SNOW, line: 0.3 });
+}
+/** A piece of the shed's front: its post, the beam, the striped valance under it. */
+function shedFront(s: Sketch) {
+  s.box({ x: 0.85, y: 0, w: 0.2, d: 0.2, z: 0, h: 3.6 * P, mat: K_WALNUT, line: 0.4 });
+  s.box({ x: 0.8, y: 0, w: 0.15, d: 9.2, z: 3.3 * P, h: 0.5 * P, mat: K_WALNUT, line: 0.5 }, (d) => {
+    for (let y = 0; y < 9.2; y += 1) d.poly("e", fr("e", 0.95, y, y + 0.5, 3.0 * P, 3.3 * P), "#f3ead6");
+  });
+  s.box({ x: 0.8, y: 0, w: 0.15, d: 9.2, z: 3.0 * P, h: 0.3 * P, mat: K_RUST, line: 0.3 });
+}
+/** Race control: a green hut, its window lit to the east over the desk, a red roof under snow. */
+function kartHut(s: Sketch) {
+  s.box({ x: 0.4, y: 0.1, w: 3.2, d: 6.8, z: 0, h: 2.6 * P, mat: K_GREEN, line: 0.8 }, (d) => {
+    d.poly("e", fr("e", 3.6, 0.7, 6.2, 1.25 * P, 2.25 * P), LIT, { glow: true });
+  });
+  s.box({ x: 0.2, y: -0.1, w: 3.6, d: 7.2, z: 2.6 * P, h: 0.5 * P, mat: mat("#6b2430", "#7d3040"), line: 0.6 });
+  s.box({ x: 0.7, y: 0, w: 2.6, d: 7.0, z: 3.1 * P, h: 0.5 * P, mat: SNOW, puff: 4, line: 0.5 });
+  s.box({ x: 3.65, y: 2, w: 0.08, d: 3.2, z: 2.75 * P, h: 0.6 * P, mat: K_WALNUT, line: 0.4 });
+}
+/** The lap records: a chalkboard on two posts, facing south. */
+function lapBoard(s: Sketch) {
+  for (const x of [0.2, 2.7]) s.box({ x, y: 0.4, w: 0.12, d: 0.12, z: 0, h: 2.5 * P, mat: K_WALNUT });
+  s.box({ x: 0.1, y: 0.35, w: 2.8, d: 0.08, z: 0.8 * P, h: 1.5 * P, mat: mat("#24302a", "#2e3b34") }, (d) => {
+    for (let i = 0; i < 4; i++)
+      d.poly("s", fr("s", 0.43, 0.5, 2.5 - (i ? 0.6 : 0), (1.9 - i * 0.3) * P, (1.96 - i * 0.3) * P), "#e9e3d6");
+  });
+}
+/** The board of the circuits (as tp/kart/park3d.ts circuits): walnut posts, a dark face with the
+ *  layout raced drawn on it in cream (the fence's box, the start line in amber), a snowy cap (its
+ *  face to the south, the way in). */
+function circuitsBoard(s: Sketch, G: typeof GroundsModule) {
+  for (const x of [0.2, 2.68]) s.box({ x, y: 0.4, w: 0.14, d: 0.14, z: 0, h: 2.7 * P, mat: K_WALNUT });
+  s.box({ x: 0.15, y: 0.42, w: 2.7, d: 0.12, z: 0.66 * P, h: 1.78 * P, mat: K_WALNUT, line: 0.5 });
+  s.box({ x: 0.22, y: 0.54, w: 2.56, d: 0.02, z: 0.74 * P, h: 1.62 * P, mat: mat("#1d2a23", "#26352c") }, (d) => {
+    // the map: the park's box on the face (north up), the circuit, its line
+    const F = G.KART_FENCE;
+    const [u0, u1, h0, h1] = [0.32, 2.68, 0.86 * P, 2.24 * P];
+    const k = Math.min((u1 - u0) / (F.x1 - F.x0), (h1 - h0) / P / (F.z1 - F.z0));
+    const um = (u0 + u1) / 2 - ((F.x1 - F.x0) * k) / 2;
+    const hm = (h0 + h1) / 2 + ((F.z1 - F.z0) * k * P) / 2;
+    const at = (x: number, z: number): V3 => [um + (x - F.x0) * k, 0.56, hm - (z - F.z0) * k * P];
+    const corners: V3[] = [at(F.x0, F.z0), at(F.x1, F.z0), at(F.x1, F.z1), at(F.x0, F.z1), at(F.x0, F.z0)];
+    for (let i = 1; i < corners.length; i++) d.line("s", corners[i - 1], corners[i], "rgba(243,234,214,0.35)", 0.8);
+    const t = G.kartTrackNow();
+    let prev: V3 | null = null;
+    for (let i = 0; i <= t.len; i += 8) {
+      const p = t.pts[i % t.len];
+      const q = at(p.x, p.z);
+      if (prev) d.line("s", prev, q, "#f3ead6", 2.4);
+      prev = q;
+    }
+    const s0 = t.pts[0];
+    d.line("s", at(s0.x, s0.z - 4), at(s0.x, s0.z + 4), "#e8a33d", 2);
+  });
+  s.box({ x: 0.05, y: 0.3, w: 2.9, d: 0.42, z: 2.45 * P, h: 0.1 * P, mat: K_WALNUT });
+  s.box({ x: 0.07, y: 0.32, w: 2.86, d: 0.38, z: 2.55 * P, h: 0.06 * P, mat: SNOW, line: 0.3 });
+}
+/** The fire barrel: a rusty drum, its fire. */
+function fireBarrel(s: Sketch) {
+  s.cyl({ x: 0.5, y: 0.5, z: 0, r: 0.34, h: 0.9 * P, mat: mat("#6b3a22", "#7a4a2a") });
+  s.cyl({
+    x: 0.5,
+    y: 0.5,
+    z: 0.9 * P,
+    r: 0.22,
+    r2: 0.04,
+    h: 0.6 * P,
+    mat: { c: "#ffb347", top: "#ffd27a", flat: true },
+    glow: true,
+  });
+  s.shadowDot(0.5, 0.5, 0.4, 0.3);
+}
+/** A kart (as kartIso) at (ox, oy) in a footprint, `lift` metres up. */
+function kartAt(s: Sketch, ox: number, oy: number, lift: number, c: string, t: string) {
+  const BODY = mat(c, shade(c, 1.15), shade(c, 1.05), shade(c, 0.8));
+  const TRIM = mat(t, shade(t, 1.1), t, shade(t, 0.82));
+  const z = lift * P;
+  for (const [x, y, w] of [
+    [0.2, 0.25, 0.42],
+    [0.2, 1.45, 0.42],
+    [1.35, 0.3, 0.32],
+    [1.35, 1.4, 0.32],
+  ] as [number, number, number][])
+    s.box({ x: ox + x, y: oy + y, w, d: 0.3, z, h: 0.4 * P, mat: K_TYRE, line: 0.4 });
+  s.box({ x: ox + 0.15, y: oy + 0.55, w: 1.75, d: 0.9, z: z + 0.08 * P, h: 0.06 * P, mat: DARK });
+  s.box({ x: ox + 0.55, y: oy + 0.35, w: 0.75, d: 0.25, z: z + 0.12 * P, h: 0.22 * P, mat: BODY, line: 0.4 });
+  s.box({ x: ox + 0.55, y: oy + 1.4, w: 0.75, d: 0.25, z: z + 0.12 * P, h: 0.22 * P, mat: BODY, line: 0.4 });
+  s.box({ x: ox + 1.45, y: oy + 0.7, w: 0.45, d: 0.6, z: z + 0.12 * P, h: 0.24 * P, mat: BODY, line: 0.4 });
+  s.box({ x: ox + 0.55, y: oy + 0.75, w: 0.4, d: 0.5, z: z + 0.12 * P, h: 0.5 * P, mat: DARK, line: 0.3 });
+  s.box({ x: ox, y: oy + 0.45, w: 0.3, d: 1.1, z: z + 0.7 * P, h: 0.06 * P, mat: TRIM, line: 0.4 });
+}
+/** A kart up on its red stand, a wheel off beside it. */
+function kartStand3(s: Sketch) {
+  s.box({ x: 0.6, y: 0.5, w: 1.8, d: 1, z: 0, h: 0.55 * P, mat: K_RED, line: 0.5 });
+  kartAt(s, 0.5, 0, 0.55, "#3d4a5c", "#e8a33d");
+  s.cyl({ x: 0.3, y: 1.6, z: 0, r: 0.15, h: 0.3 * P, mat: K_TYRE });
+}
+/** The tool chest: red drawers, on castors. */
+function toolChest(s: Sketch) {
+  s.box({ x: 0.1, y: 0.22, w: 0.8, d: 0.56, z: 0.08 * P, h: 0.95 * P, mat: K_RED, line: 0.5 }, (d) => {
+    for (let i = 0; i < 4; i++)
+      d.poly("s", fr("s", 0.78, 0.2, 0.8, (0.3 + i * 0.2) * P, (0.33 + i * 0.2) * P), "#c9ccd1");
+  });
+}
+/** Spare tyres, stacked, snow on top. */
+function tyreStack(s: Sketch) {
+  for (let i = 0; i < 4; i++) s.cyl({ x: 0.5, y: 0.5, z: i * 0.21 * P, r: 0.38, h: 0.21 * P, mat: K_TYRE, line: 0.4 });
+  s.cyl({ x: 0.5, y: 0.5, z: 0.84 * P, r: 0.3, h: 0.05 * P, mat: SNOW, line: 0.3 });
+}
+/** The podium: second, first, third, west to east, facing south; the backdrop behind. */
+function kartPodium(s: Sketch) {
+  s.box({ x: 0.2, y: 0.1, w: 7.6, d: 0.1, z: 1.4 * P, h: 2.4 * P, mat: K_WALNUT, line: 0.6 }, (d) => {
+    d.poly("s", fr("s", 0.2, 0.4, 7.4, 3.2 * P, 3.6 * P), "#f3ead6");
+    d.poly("s", fr("s", 0.2, 0.4, 7.4, 1.5 * P, 1.75 * P), "#f3ead6");
+  });
+  for (const x of [0.1, 7.7]) s.box({ x, y: 0.05, w: 0.2, d: 0.2, z: 0, h: 4 * P, mat: K_WALNUT });
+  for (const [x, h, m] of [
+    [1.8, 0.7, mat("#c9ccd1", "#e2e5e9")],
+    [2.9, 1.05, K_AMBER],
+    [4.0, 0.45, mat("#c07a42", "#d08a52")],
+  ] as [number, number, Mat][])
+    s.box({ x: x - 0.9 + 0.1, y: 1.0, w: 1.1, d: 1.6, z: 0, h: h * P, mat: K_CREAM, line: 0.6 }, (d) =>
+      d.poly("s", fr("s", 2.6, x - 0.55, x - 0.05, h * 0.3 * P, h * 0.75 * P), m.c),
+    );
+}
+/** The cocoa cart: green, on two wheels, a striped awning, its board. */
+function cocoaCart(s: Sketch) {
+  s.box({ x: 0.4, y: 0.5, w: 2.2, d: 1.2, z: 0.35 * P, h: 0.9 * P, mat: K_GREEN, line: 0.6 });
+  s.cyl({ x: 1.0, y: 1.75, z: 0, r: 0.42, h: 0.1 * P, mat: K_WALNUT });
+  for (const x of [0.5, 2.5]) s.box({ x, y: 0.55, w: 0.06, d: 0.06, z: 1.25 * P, h: 1.2 * P, mat: STEEL });
+  s.box({ x: 0.2, y: 0.3, w: 2.6, d: 1.6, z: 2.4 * P, h: 0.1 * P, mat: K_RUST, line: 0.5 }, (d) => {
+    for (let x = 0.2; x < 2.8; x += 0.5)
+      d.poly(
+        "t",
+        [
+          [x, 0.3, 2.5 * P],
+          [x + 0.25, 0.3, 2.5 * P],
+          [x + 0.25, 1.9, 2.5 * P],
+          [x, 1.9, 2.5 * P],
+        ],
+        "#f3ead6",
+      );
+  });
+  s.box({ x: 2.75, y: 0.7, w: 0.05, d: 0.8, z: 1.9 * P, h: 0.5 * P, mat: K_CREAM, line: 0.4 });
+}
+/** Kart No. 1 on its walnut plinth in the turning circle, facing the way in. */
+function kartPlinth(s: Sketch) {
+  s.box({ x: 0.2, y: 0.2, w: 2.6, d: 1.6, z: 0, h: 1.0 * P, mat: K_WALNUT, line: 0.6 });
+  kartAt(s, 0.5, 0, 1.0, "#b5562f", "#f3ead6");
+  s.box({ x: 2.9, y: 0.1, w: 0.06, d: 0.06, z: 0, h: 5.5 * P, mat: STEEL });
+}
+/** The billboard: its face to the road (south), the arrow's amber panel at its east end, the kart
+ *  and the name on the dusk; its posts and lamps. */
+function billboard(s: Sketch) {
+  for (const x of [1.5, 7.5]) s.box({ x, y: 0.6, w: 0.3, d: 0.3, z: 0, h: 6.4 * P, mat: STEEL });
+  s.box({ x: 0.3, y: 1.0, w: 8.4, d: 0.15, z: 3.0 * P, h: 3.4 * P, mat: mat("#3a2638", "#4a3348"), line: 0.8 }, (d) => {
+    d.poly("s", fr("s", 1.15, 6.7, 8.5, 3.15 * P, 6.25 * P), "#e8a33d");
+    d.poly("s", fr("s", 1.15, 0.6, 5.2, 5.1 * P, 5.7 * P), "#f3ead6");
+    d.poly("s", fr("s", 1.15, 0.6, 3.6, 4.7 * P, 4.85 * P), "#f6d9a8");
+    d.poly("s", fr("s", 1.15, 3.6, 6.0, 3.6 * P, 4.1 * P), "#b5562f");
+    d.poly("s", fr("s", 1.15, 0.5, 6.7, 3.15 * P, 3.4 * P), "#e9e3d6");
+    d.poly("s", fr("s", 1.15, 7.3, 7.9, 4.5 * P, 5.5 * P), "#4a3324");
+  });
+  s.box({ x: 0.3, y: 0.9, w: 8.4, d: 0.3, z: 6.4 * P, h: 0.12 * P, mat: SNOW, line: 0.4 });
+  for (const x of [2.2, 6.6])
+    s.box({
+      x,
+      y: 0.2,
+      w: 0.5,
+      d: 0.3,
+      z: 6.5 * P,
+      h: 0.15 * P,
+      mat: { c: LIT, top: "#fff2d0", flat: true },
+      glow: true,
+    });
+}
+/** The fingerpost: KART PARK, pointing up the road in. */
+function fingerpost(s: Sketch) {
+  s.box({ x: 0.43, y: 1.6, w: 0.14, d: 0.14, z: 0, h: 2.7 * P, mat: mat("#6e5a44", "#7d6450") });
+  s.box({ x: 0.47, y: 0.0, w: 0.06, d: 1.9, z: 2.05 * P, h: 0.42 * P, mat: K_WALNUT, line: 0.5 }, (d) =>
+    d.poly("e", fr("e", 0.53, 0.3, 1.6, 2.15 * P, 2.35 * P), "#f3ead6"),
+  );
+}
+/** The car park's sign: a blue P over KART PARK. */
+function parkingSign(s: Sketch) {
+  s.box({ x: 0.46, y: 0.46, w: 0.08, d: 0.08, z: 0, h: 3 * P, mat: STEEL });
+  s.box({ x: 0.5, y: 0.1, w: 0.06, d: 0.8, z: 2.3 * P, h: 0.8 * P, mat: mat("#2d5fa8", "#3a6cb8"), line: 0.5 }, (d) =>
+    d.poly("e", fr("e", 0.56, 0.35, 0.55, 2.45 * P, 2.95 * P), "#f3f0e8"),
+  );
+  s.box({ x: 0.5, y: 0.1, w: 0.06, d: 0.8, z: 1.8 * P, h: 0.4 * P, mat: K_WALNUT, line: 0.4 });
+}
+/** The lobby's desk: a walnut counter, its VFD strip on the east face. */
+function kartDesk(s: Sketch) {
+  s.box({
+    x: 0,
+    y: 0.2,
+    w: 1,
+    d: 3.6,
+    z: 0,
+    h: 1.05 * P,
+    mat: mat("#5a3a28", "#3b2414", "#5a3a28", "#4a2e1f"),
+    line: 0.5,
+  });
+  s.box({
+    x: 0.98,
+    y: 0.4,
+    w: 0.05,
+    d: 3.2,
+    z: 0.5 * P,
+    h: 0.5 * P,
+    mat: { c: "#ffb347", top: "#ffb347", flat: true },
+    glow: true,
+  });
 }

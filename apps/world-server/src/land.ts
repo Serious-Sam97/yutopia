@@ -1,5 +1,14 @@
 import { Worker } from "node:worker_threads";
-import { adoptChunk, CHUNK, GROUNDS, type GroundsChunk, hasChunk } from "@yutopia/shared/grounds";
+import {
+  adoptChunk,
+  CHUNK,
+  GROUNDS,
+  type GroundsChunk,
+  hasChunk,
+  layoutVersion,
+  setParkLayout,
+} from "@yutopia/shared/grounds";
+import { kartLayoutNow } from "@yutopia/shared/kart";
 
 // The Grounds' land is made a chunk at a time when first asked (shared
 // grounds.ts), ~6 ms each: on the tick that's a long one. So land round the
@@ -13,9 +22,12 @@ const key = (cx: number, cz: number) => (cx + 2048) * 4096 + (cz + 2048);
 function start(): Worker {
   const w = new Worker(new URL("./land.worker.ts", import.meta.url));
   w.unref();
-  w.on("message", (c: GroundsChunk) => {
-    adoptChunk(c);
-    asked.delete(key(c.cx, c.cz));
+  // (the Kart Park's layout raced, first: docs/plan/47-the-track-changer.md)
+  const n = kartLayoutNow();
+  w.postMessage({ layout: [n.key, n.reverse], v: layoutVersion });
+  w.on("message", (m: { c: GroundsChunk; v: number }) => {
+    if (m.v === layoutVersion) adoptChunk(m.c);
+    asked.delete(key(m.c.cx, m.c.cz));
   });
   w.on("error", (e) => {
     console.error("[land] worker", e);
@@ -51,4 +63,12 @@ export function stopLand(): void {
   void worker?.terminate();
   worker = null;
   asked.clear();
+}
+
+/** The Kart Park's layout to race (docs/plan/47-the-track-changer.md): the park's land made again
+ *  here and in the worker. True if it changed. */
+export function landLayout(layout: string, reverse: boolean): boolean {
+  if (!setParkLayout(layout, reverse)) return false;
+  worker?.postMessage({ layout: [kartLayoutNow().key, reverse], v: layoutVersion });
+  return true;
 }

@@ -1199,3 +1199,68 @@ The user: "the parking lot has an old design, it does not connect right with the
 - Page budget raised by the user's call: 559 KB.
 - Only the owner (and whoever holds their keys today) takes the wheel of someone's own; anyone rides. Lending from someone's card; the keys back on taking, in the owner's bay, at the day's end. Someone's own is never towed (that also fixed a phase-2 bug: a bought car went to the lot at the next sweep). "My car" and a lent car on the GPS. The boards and cars of people gone come down at a start (the API's new `/internal/members`).
 - **Checked**: shared 295, world-server 140, client 25, Pest 19, types, Biome; e2e spot 3/3 (two browsers for the keys), gps; prod's saved world offline. **Red, also with HEAD's client**: `car.spec`'s "no frame over 100 ms while driving" (133–150 ms) in today's dev world. Page 558.8 / 559.
+
+## The karts — phases 0–7 (2026-10-26, plan `46-the-karts.md`)
+- **The Kart Park**: a clearing in the woods north of the county road, ~270 m up a road off it, the Grounds grown north to fit (`GROUNDS_VERSION` 3). A figure-eight circuit with a bridge, the battle bowl, stands, the tower, the paddock with the rack and the desk, floodlights (lit as the Grounds' lamps), both views.
+- **The kart**: an arcade sim in shared (`kart/sim.ts`: the drift-hop, three tiers of mini-turbo, boosts, the jump, surfaces), `/dev/kart` to tune it.
+- **In the game**: X at the desk takes a kart; free laps; a Grand Prix or a battle with Vortex karts at three levels; the lights, places, the flag, results, the park's record; eight items flown by the server; Follow the race from the stands. The karts' code is the car chunk's (`yutopia-kart-play` 22 KB): the page didn't grow.
+- **Checked**: shared 310, world-server karts 6, e2e `kart-play` 4 and `kart-park` 2 on the GPU (a night race with eight karts at 60 fps, worst frame 33 ms). Page 560.5 / 561 (raised by the user's call for the park's land).
+- **After playing it** (the user's word): Space hops and drifts, Shift/E the item; the lobby's colour and Ready countdown; the circuit's map and a fanfare; Vortex's drone fishes you back onto the road; phone buttons; the park's record saved through the API; the park on the GPS. Checked: shared 310, world-server karts 7, Pest WorldTest 20, e2e kart-play 5 + kart-park 2.
+- **The last of the plan**: lag-fair hits (a 1.2 s trail per kart, throws judged where the thrower saw them; tested against a kart driving off, and through the banks), the items' sounds, Vortex glitching in, everyone's smash, skid marks, Vortex's levels measured (Easy 39.2 s, Hard 30.4 s; 0.11 ms a tick for seven). Firefox config added; not runnable here. Checked: shared 311, world-server karts 9, e2e kart-play 5 + kart-park 2.
+
+- **The quality pass** (the user's "improve everything"):
+  - **Models**: the kart rebuilt (a lofted nose and side pods with decals, a chassis of tubes, a bucket seat, a butterfly wheel, the engine with its exhaust and silencer, a ducktail wing, a whip flag that waves, treaded tyres on five-spoke rims) and a proper helmet. The items and crates are models now (`tp/kart/items3d.ts`).
+  - **Effects**: one particle system (`tp/kart/fx.ts`: glowing sparks stretched along their flight, smoke, chips) for drift sparks by tier, tier pops, turbo flames, exhaust smoke, snow spray, landings, wall scrapes, blasts, confetti, snowball trails, crates shattering. The stills use it too.
+  - **The park**: a start gantry over the line whose five lights follow the race; a crowd that bobs and waves; boost-pad chevrons that run.
+  - **Mechanics**: slipstream (1.1 s in a kart's wake near the top speed → a boost; Vortex drafts too); a barrel roll for a trick off the jump; a squash on landing.
+  - **Logic**: a WRONG WAY warning; a podium in the results; no item twice running and one plough at a time; Vortex's rubber band by level (Hard never eases off); Vortex drives your lap of honour after the flag; speed lines on a boost.
+  - **Checked**: shared 314, world-server karts 9, e2e kart-play 5 + kart-park 2 on the GPU (night race 59.5 fps, worst frame 33 ms). Budget: page 560.5 / 561, `yutopia-karts` 51.7 / 60, `yutopia-kart-play` 16.9 / 40.
+- **The sounds** (the user's "improve the kart sounds"): the engine is a two-stroke now (a buzzy wave through a soft clip, the exhaust's resonance and the chamber's howl climbing with the revs; it stutters off the throttle and crackles lifting off at speed), the tyres by surface (asphalt's hum, snow's crunch, the kerb's brrr), the wind by speed, a louder drift squeal with a screech and the sparks' fizz; a chime per tier, the turbo's fwoomp, a hop, landings, thuds with a scrape, the slipstream's rush; others' karts in stereo with a Doppler shift as they pass; every item redone and levelled; the crowd cheers at the go and the flag. `/dev/kart-sound` plays each scene or saves it as a WAV; `kart-sound.spec.ts` renders them offline (audible, no NaN, peaks −7 to −25 dB). Checked: e2e kart-sound 1 + kart-play 5; budget page 560.5 / 561, `yutopia-kart-play` 17.2 / 40.
+- **The way in** (the user's asks: a sign on the corner, a better car park and paddock):
+  - **The billboard**: a V on the county road's corner, a face to each way's traffic (NEXT RIGHT
+    from the town, TURN LEFT from the campus), lit at night, on a verge cleared to be seen; a
+    fingerpost and a lamp on the corner.
+  - **The car park**: the road in ends in a turning circle with kart No. 1 on a plinth. The car
+    park off it has one aisle, 28 bays (two blue), kerbs, islands, wheel stops, heaps, lamps, a P
+    sign and a footway to the gate.
+  - **The paddock**: painted concrete (joints, tyre marks, an amber walk to the desk); a real
+    shed for the rack (numbered fascia, valance, lamps); race control's hut behind the desk; the
+    lap records; a fire barrel with benches; a kart on its stand with tools and tyres; a podium;
+    a cocoa cart; bunting.
+  - Both views; walked round in shared.
+  - **Checked**: shared 316, server karts 9, e2e kart-park 2 (now via the car park and the
+    paddock) + kart-play 5 + kart-sound 1. Page 560.5 / 561, `yutopia-karts` 18.1 / 60.
+- **The park's people and seats**:
+  - **Folk**, walked by the server (`features/park-life.ts`): Rosa at race control, Joe the
+    mechanic, Lia at the cocoa cart, and four visitors who go between the cocoa, the fire's
+    benches, the rack, the stands and the podium, sitting down. They say a line now and then.
+  - **The crowd**: 30% of the stands' seats, both views.
+  - **Seats**: the stands' free seats and the fire's benches. X to sit or get up; the server
+    holds you there, one a seat. In the stands during a race you get the leader's camera.
+  - **The fire's benches are the office's** (both views): walked onto and sat on, walked off;
+    only the barrel is walked round. The paddock's lamps moved to its east edge.
+  - **The dark edge across the ground** (moving with the camera): the lamps' light pools were
+    hidden past some distance by the paint under them (its polygon offset); the pools now lie over
+    any paint.
+  - **The views**: sitters now drawn at their seat's height (3D, iso, the camera); in iso,
+    above their seat.
+  - **The track changer** (`47-the-track-changer.md`): phases 1–6 done — four layouts as data,
+    the layout in the park's state and on the ground, the board in the paddock and its panel, the
+    park redrawn live in both views (the circuit swapped in over frames; worst frame 50 ms in 3D,
+    33 ms in iso), one set of 18 floodlight masts for every layout, the change open to everyone
+    in the quiet lobby. Phase 5: reversed layouts' gantry and grid right, no snow seam at the
+    bridge's feet; the bridge a deck walked over in both views (raised in iso), not under. Phase 6:
+    the 10 s show (four ploughs cut the new circuit, the old snows over, the park shut), the plan
+    sheets and stills, a race on each layout in e2e. Then the bridge only for a layout over it
+    (the Figure Eight, the Long Way): on the Oval and the Switchback it's gone, the land walked
+    where it stood; in the show it sinks (3D) or fades (iso). Done.
+  - **The start, as Mario Kart's** (`46-the-karts.md`): the lights out a second after the fifth,
+    always; the throttle down on the fourth or fifth light, a rocket start (after it, a good one;
+    before the fourth, flooded); the engine revs on the grid where it stands (heard, its smoke, its
+    body shuddering; everyone else's too, Vortex's by his level).
+  - **Checked**: shared 317, server park-life 3 + karts 9, client unit 36, e2e park-life 2.
+- **The stands** (2026-10-27): real stands (footwells and plank seats, aisles with stairs and rails,
+  a front wall of boards, stepped sides, a roof held from the back with the park's name, lamps and
+  floods); a crowd drawn as the game's people (faces, ink, hats, scarves, kids, flags, signs,
+  cocoa) that gets up at the go and the flag and in a wave as karts go by, heads turned to them;
+  lit after dark in the game (`standLights`). Both views. `docs/plan/46-the-karts.md`, "The stands".

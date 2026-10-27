@@ -3,8 +3,29 @@ import { groundAt, LAMPS, MOTORS, WAYS } from "@yutopia/shared/grounds";
 import { bayById, bayLabel, boardOf, type LotBay, lotLayout } from "@yutopia/shared/lot";
 import type * as THREE_NS from "three";
 import type { CarIn } from "./car/stage";
+import {
+  BENCH_TOP,
+  chaseOf,
+  KART_BOWL,
+  KART_CARPARK,
+  KART_DESK,
+  KART_GATE,
+  KART_PADDOCK,
+  KART_PARK,
+  KART_RACK,
+  KART_SIGN,
+  KART_STANDS,
+  KART_TURN,
+  lapHeading,
+  nearLap,
+  onLap,
+  turnOf,
+} from "./kart/shots";
+import type { KartScene } from "./karts3d";
 import * as S3 from "./spot3d";
 
+export { drawSitePlan } from "../grounds-plan";
+export { drawParkOnSitePlan, drawParkPlan } from "../kart-plan";
 export { drawLotPlans } from "../lot-plan";
 
 // The Grounds' stills — phase 0's mocks (docs/plan/27-the-grounds.md): each
@@ -48,6 +69,11 @@ interface Shot {
   motors?: boolean;
   /** the pitch dark (docs/plan/44-the-night.md): how adjusted your eyes are, 0..1 */
   eyes?: number;
+  /** the fog thinned (an aerial view): its density × this */
+  haze?: number;
+  /** the Kart Park (docs/plan/46-the-karts.md): its karts, what flies about; the park is drawn
+   *  with them (the new land must be on: /dev/karts) */
+  karts?: KartScene;
 }
 
 const DARK = "#2b3138";
@@ -292,6 +318,7 @@ export function shots(): Record<string, Shot> {
     ...nightShots(lamp),
     ...lotShots(),
     ...spotShots(),
+    ...kartShots(),
     "iso-lot-edge": {
       hour: "day",
       cam: [0, 0, 0],
@@ -307,6 +334,447 @@ export function shots(): Record<string, Shot> {
     },
   };
 }
+// ── the Kart Park's stills (docs/plan/46-the-karts.md, phase 0): /dev/karts?shot=kart-… ──
+const LU = A({
+  top: "sweater",
+  topColor: "#e8a33d",
+  bottom: "jeans",
+  hair: "bob",
+  hairColor: "#c25a2c",
+  skin: "#f3d2b3",
+  gender: "feminine",
+});
+const TOMAS = A({
+  top: "jacket",
+  topColor: "#20262c",
+  bottom: "trousers",
+  bottomColor: "#3a2c22",
+  hair: "afro",
+  hairColor: "#1c1410",
+  skin: "#7a4a2a",
+  gender: "masculine",
+  beard: "full",
+});
+function kartShots(): Record<string, Shot> {
+  // (read late: the park's layout from shared, the land on before it: /dev/karts)
+  const B = KART_BOWL;
+  const D = KART_DESK;
+  const R = KART_RACK;
+  const G = KART_GATE;
+  const C0 = KART_PARK;
+  const f = D.face; // (the desk's customers' side: the rack's open side, east or west)
+  // (on the road in, ~36 m short of the gate)
+  const roadIn = WAYS.find((w) => w.key === "kart-road")?.line ?? [[G.x, G.z + 36]];
+  const gateCam = roadIn[Math.max(0, roadIn.length - 37)];
+  const tr = turnOf(733); // (the last corner's way: the drifts lean into it)
+  // (which side of the start straight the stands are: +1 its left; the close-up keeps them behind)
+  const st = Math.sign((KART_STANDS[0].z - onLap(0)[2]) * -Math.cos(lapHeading(0)));
+  const bowlY = gy(B.x, B.z);
+  const race = chaseOf(733, -0.8, 5.6, 2.1, 14);
+  const grid0 = onLap(-2.2, 2.6);
+  return {
+    // Ana in her kart on the grid, close: the kart and its driver, Bia's behind
+    "kart-close": {
+      hour: "day",
+      cam: nearLap(-2.2, 3.4, 2.6 - 2.6 * st, 1.25),
+      look: nearLap(-2.2, -0.1, 2.6, 0.62),
+      fov: 38,
+      radius: 200,
+      people: [{ ...xz(nearLap(-2.2, -2.5, 2.6 + 4.6 * st)), to: [grid0[0], grid0[2]], a: CAI }],
+      snow: 0,
+      karts: {
+        karts: [
+          { s: -2.2, off: 2.6, colour: "#b5562f", number: 1, driver: ANA, steer: 0.18 },
+          { s: -5.7, off: -2.6, colour: "#2f4a3b", trim: "#e8a33d", number: 2, driver: BIA },
+          { s: -9.2, off: 2.6, colour: "#3d4a5c", number: 3, driver: DUDA },
+        ],
+        crowd: 0.7,
+        lap: "1/3",
+      },
+    },
+    // a review sheet of the kart: three-quarter front, close, by day (docs/plan/46: the model's quality pass)
+    "kart-model": {
+      hour: "day",
+      cam: nearLap(-2.2, 2.6, 2.6 - 2.1, 1.0),
+      look: nearLap(-2.2, 0, 2.6, 0.45),
+      fov: 32,
+      radius: 160,
+      people: [],
+      snow: 0,
+      karts: { karts: [{ s: -2.2, off: 2.6, colour: "#b5562f", number: 1, driver: ANA, steer: 0.25 }], crowd: 0.5 },
+    },
+    "kart-model-back": {
+      hour: "day",
+      cam: nearLap(-2.2, -2.8, 2.6 + 1.6, 1.3),
+      look: nearLap(-2.2, 0, 2.6, 0.5),
+      fov: 32,
+      radius: 160,
+      people: [],
+      snow: 0,
+      karts: {
+        karts: [
+          { s: -2.2, off: 2.6, colour: "#2f4a3b", trim: "#e8a33d", number: 2, driver: BIA, sparks: 3, boost: true },
+        ],
+        crowd: 0.5,
+      },
+    },
+    // the grid from behind the back row: the gantry's lights (the stills' are off: the game lights them)
+    "kart-gantry": {
+      hour: "dusk",
+      cam: nearLap(-16, 0, 1.2, 2.2),
+      look: nearLap(2, 0, 0, 4.4),
+      fov: 55,
+      radius: 220,
+      people: [],
+      snow: 0,
+      karts: {
+        karts: [
+          { s: -2.2, off: 2.6, colour: "#b5562f", number: 1, driver: ANA },
+          { s: -5.7, off: -2.6, colour: "#2f4a3b", trim: "#e8a33d", number: 2, driver: BIA },
+          { s: -9.2, off: 2.6, colour: "#3d4a5c", number: 3, driver: DUDA },
+        ],
+        crowd: 0.8,
+        gantry: 4,
+      },
+    },
+    // the paddock: the rack of karts in its shed, the lobby's desk and race control behind it
+    "kart-rack": {
+      hour: "day",
+      cam: [D.x + 7 * f, gy(D.x + 7 * f, D.z + 12) + 1.8, D.z + 12],
+      look: [R.x + 2 * f, gy(R.x, R.z0 + 2) + 0.9, R.z0 + 2],
+      fov: 50,
+      radius: 220,
+      people: [
+        { x: D.x - 1.3 * f, z: D.z - 0.5, to: [D.x + 5 * f, D.z + 2], a: CAI },
+        { x: D.x + 2.4 * f, z: D.z + 1.8, to: [D.x - 0.4 * f, D.z], a: ANA },
+        { x: R.x + 2.8 * f, z: R.z0 + 8.7, to: [R.x, R.z0 + 8.7], a: DUDA },
+      ],
+      snow: 0,
+      karts: { karts: [], rack: true, crowd: 0.4 },
+    },
+    // the race, from behind Ana: into the last corner in a purple drift, a snowball off at Bia, the
+    // stands, the tower and the bridge ahead
+    "kart-race": {
+      hour: "day",
+      cam: race.cam,
+      look: race.look,
+      fov: 60,
+      radius: 260,
+      people: [],
+      snow: 0,
+      karts: {
+        karts: [
+          {
+            s: 733,
+            off: -0.8,
+            colour: "#b5562f",
+            number: 1,
+            driver: ANA,
+            yaw: 0.42 * tr,
+            steer: -0.38 * tr,
+            roll: -0.07 * tr,
+            sparks: 3,
+            skid: 14,
+          },
+          {
+            s: 745,
+            off: 2.2,
+            colour: "#2f4a3b",
+            trim: "#e8a33d",
+            number: 2,
+            driver: BIA,
+            yaw: 0.22 * tr,
+            steer: -0.2 * tr,
+            sparks: 1,
+          },
+          { s: 757, off: -2.2, colour: "#3d4a5c", number: 3, driver: CAI, boost: true },
+          { s: 772, off: 1.5, colour: "#e8a33d", trim: "#2a2018", number: 5, driver: LU, dizzy: true, yaw: 1.9 },
+          { s: 786, off: -3, colour: "#20262c", trim: "#e8a33d", number: 8, driver: TOMAS },
+        ],
+        fx: [
+          { kind: "snowball", ...xyz(onLap(739, 0.6, 0.55)), a: lapHeading(739), trail: 3.4 },
+          { kind: "ice", ...xz(onLap(764, 2.8)), r: 1.5 },
+        ],
+        crowd: 0.8,
+        order: ["TOMÁS", "LU", "CAI", "BIA", "ANA", "DUDA", "VORTEX", "RAFA"],
+      },
+    },
+    // the bowl mid-battle, from up on its terrace
+    "kart-battle": {
+      hour: "day",
+      cam: [B.x - 15, bowlY + 9.5, B.z + 18],
+      look: [B.x + 2.5, bowlY + 0.5, B.z - 3],
+      fov: 56,
+      radius: 220,
+      people: [
+        { x: B.x - 20.5, z: B.z + 19.5, y: bowlY + 3.2, to: [B.x, B.z], a: TOMAS },
+        { x: B.x - 26.5, z: B.z + 4, y: bowlY + 3.2, to: [B.x, B.z], a: GUARD },
+        { x: B.x + 6, z: B.z + 28, y: bowlY + 3.2, to: [B.x, B.z], a: DUDA },
+      ],
+      snow: 0,
+      karts: {
+        karts: [
+          { x: B.x - 6, z: B.z + 6, a: -0.65, colour: "#b5562f", number: 1, driver: ANA, steer: 0.1 },
+          {
+            x: B.x + 3.5,
+            z: B.z - 1.5,
+            a: 2.2,
+            colour: "#2f4a3b",
+            trim: "#e8a33d",
+            number: 2,
+            driver: BIA,
+            dizzy: true,
+          },
+          { x: B.x - 6, z: B.z - 8, a: 0.3, colour: "#3d4a5c", number: 3, driver: CAI, umbrella: true },
+          {
+            x: B.x + 17.6,
+            z: B.z - 8.5,
+            y: 0.9,
+            a: Math.PI / 2 + 0.7,
+            roll: -0.7,
+            colour: "#e8a33d",
+            trim: "#2a2018",
+            number: 5,
+            driver: LU,
+            boost: true,
+          },
+          {
+            x: B.x + 9,
+            z: B.z + 6.5,
+            y: 1.6,
+            a: 2.6,
+            roll: 1.2,
+            pitch: 0.6,
+            colour: "#20262c",
+            trim: "#e8a33d",
+            number: 8,
+            driver: TOMAS,
+          },
+        ],
+        fx: [
+          { kind: "staples", x: B.x - 4.2, y: bowlY + 0.6, z: B.z + 4.6, a: -0.65, n: 6 },
+          { kind: "smash", x: B.x + 9, z: B.z + 6.5, colour: "#20262c" },
+          { kind: "blast", x: B.x + 8.5, z: B.z + 6, r: 3 },
+          { kind: "drone", x: B.x - 9.5, y: bowlY + 2.4, z: B.z - 3, a: -0.9 },
+          { kind: "ice", x: B.x + 2, z: B.z + 10, r: 1.7 },
+          { kind: "fax", x: B.x - 12, z: B.z + 1, a: 0.4 },
+          { kind: "boxes", x: B.x, z: B.z, n: 10, r: B.floor },
+        ],
+        crowd: 0.4,
+      },
+    },
+    // the whole park from over the fields, its south-west corner
+    "kart-park": {
+      hour: "day",
+      cam: [C0.x + 138, 70, C0.z + 142],
+      look: [C0.x + 8, 2, C0.z + 2],
+      fov: 52,
+      radius: 420,
+      haze: 0.3,
+      people: [],
+      snow: 0,
+      karts: {
+        karts: [
+          { s: 40, off: 1.5, colour: "#b5562f", number: 1, driver: ANA },
+          { s: 52, off: -2, colour: "#2f4a3b", number: 2, driver: BIA },
+          { s: 300, off: 0, colour: "#3d4a5c", number: 3, driver: CAI },
+          { s: 520, off: 1, colour: "#e8a33d", number: 5, driver: LU },
+        ],
+        rack: true,
+        crowd: 0.7,
+      },
+    },
+    // a night race: down the floodlit start straight, the bridge ahead, the stands lit
+    "kart-night": {
+      hour: "night",
+      cam: onLap(-17, 3.2, 1.7),
+      look: onLap(22, -1.5, 1.6),
+      fov: 58,
+      radius: 240,
+      people: [],
+      snow: 0,
+      karts: {
+        karts: [
+          { s: -9, off: 1.2, colour: "#b5562f", number: 1, driver: ANA, boost: true },
+          { s: -1, off: -2.6, colour: "#e8a33d", trim: "#2a2018", number: 5, driver: LU },
+          { s: 86, off: 2.2, colour: "#2f4a3b", trim: "#e8a33d", number: 2, driver: BIA },
+          { s: 80, off: -2.2, colour: "#3d4a5c", number: 3, driver: CAI },
+        ],
+        crowd: 0.7,
+        lap: "3/3",
+      },
+    },
+    // arriving: on the Kart Park road at dusk, the gate's sign lit
+    "kart-gate": {
+      hour: "dusk",
+      cam: [gateCam[0] - 1.5, gy(gateCam[0] - 1.5, gateCam[1]) + 1.7, gateCam[1]],
+      look: [G.x + 1, gy(G.x, G.z) + 3.6, G.z - 4],
+      fov: 55,
+      radius: 260,
+      people: [
+        { x: G.x - 1, z: G.z + 13, to: [G.x - 1, G.z], a: ANA, walk: 12 },
+        { x: G.x + 1.4, z: G.z + 11.4, to: [G.x + 1.4, G.z], a: BIA, walk: 30 },
+      ],
+      cars: [{ x: KART_CARPARK.x1 - 4, z: KART_CARPARK.z0 + 3.2, a: -Math.PI / 2, colour: 0x6b2430, snowy: 0.2 }],
+      snow: 250,
+      karts: { karts: [], crowd: 0.5 },
+    },
+    // the way in (docs/plan/46: "the way in"): the billboard on the county road's corner, from the
+    // town's side over the bridge (its east face) and the campus's (its west face)
+    "kart-sign": {
+      hour: "day",
+      cam: [266, gy(266, -404.5) + 1.5, -404.5],
+      look: [KART_SIGN.x, gy(KART_SIGN.x, KART_SIGN.z) + 3.8, KART_SIGN.z - 3],
+      fov: 50,
+      radius: 220,
+      people: [],
+      cars: [{ x: 244, z: -402.4, a: Math.PI, colour: 0x2f4a3b, snowy: 0.2 }],
+      snow: 0,
+      karts: { karts: [] },
+    },
+    "kart-sign-west": {
+      hour: "dusk",
+      cam: [170, gy(170, -401.5) + 1.5, -401.5],
+      look: [KART_SIGN.x, gy(KART_SIGN.x, KART_SIGN.z) + 3.8, KART_SIGN.z - 3],
+      fov: 50,
+      radius: 220,
+      people: [{ x: KART_SIGN.fx - 1.5, z: KART_SIGN.fz + 1.2, to: [KART_SIGN.fx, KART_SIGN.fz - 4], a: BIA }],
+      snow: 120,
+      karts: { karts: [] },
+    },
+    // the car park, the turning circle and its kart on the plinth, the gate beyond
+    "kart-carpark": {
+      hour: "day",
+      cam: [KART_TURN.x + 16, gy(KART_TURN.x, KART_TURN.z) + 9, KART_TURN.z + 22],
+      look: [KART_CARPARK.x0 + 26, gy(KART_TURN.x, KART_TURN.z), KART_TURN.z - 4],
+      fov: 55,
+      radius: 220,
+      people: [
+        { x: KART_CARPARK.x1 - 8, z: KART_CARPARK.walk[0] + 1.2, to: [KART_GATE.x, KART_GATE.z], a: ANA, walk: 12 },
+        { x: KART_CARPARK.x1 - 6.5, z: KART_CARPARK.walk[0] + 1.6, to: [KART_GATE.x, KART_GATE.z], a: CAI, walk: 30 },
+      ],
+      cars: [
+        { x: KART_CARPARK.bx + 2.7 * 9.5, z: KART_CARPARK.z0 + 2.6, a: -Math.PI / 2, colour: 0x6b2430, snowy: 0.3 },
+        { x: KART_CARPARK.bx + 2.7 * 5.5, z: KART_CARPARK.z1 - 2.6, a: Math.PI / 2, colour: 0x3d4a5c, snowy: 0.6 },
+        { x: KART_CARPARK.bx + 2.7 * 2.5, z: KART_CARPARK.z0 + 2.6, a: -Math.PI / 2, colour: 0xcdbf9f, snowy: 0.8 },
+      ],
+      snow: 0,
+      karts: { karts: [], rack: true },
+    },
+    // the paddock from the way in: the podium, the fire, the shed and its karts, race control
+    "kart-paddock": {
+      hour: "day",
+      cam: [KART_PADDOCK.x1 - 1, gy(KART_PADDOCK.x1, KART_PADDOCK.z1) + 6.5, KART_PADDOCK.z1 + 6],
+      look: [KART_RACK.x + 6, gy(KART_RACK.x, KART_RACK.z0) + 0.5, KART_RACK.z0 + 12],
+      fov: 58,
+      radius: 220,
+      people: [
+        { x: KART_GATE.x, z: KART_GATE.z - 6, to: [KART_GATE.x, KART_DESK.z], a: ANA, walk: 8 },
+        {
+          x: KART_PARK.x + 168.5,
+          z: KART_PARK.z + 45.5,
+          to: [KART_PARK.x + 170.5, KART_PARK.z + 45.5],
+          a: BIA,
+          sit: BENCH_TOP,
+        },
+        {
+          x: KART_PARK.x + 172.5,
+          z: KART_PARK.z + 44.5,
+          to: [KART_PARK.x + 170.5, KART_PARK.z + 44.5],
+          a: TOMAS,
+          sit: BENCH_TOP,
+        },
+        { x: KART_PARK.x + 173.8, z: KART_PARK.z + 30, to: [KART_PARK.x + 175, KART_PARK.z + 29], a: LU },
+        { x: KART_DESK.x - 1.3 * f, z: KART_DESK.z - 0.5, to: [KART_DESK.x + 5 * f, KART_DESK.z + 2], a: CAI },
+      ],
+      snow: 60,
+      karts: { karts: [], rack: true, crowd: 0.3 },
+    },
+    // in among it: the fire and its benches, the shed's karts, race control and its desk
+    "kart-paddock-mid": {
+      hour: "day",
+      cam: [KART_PADDOCK.x1 - 2, gy(KART_PADDOCK.x1, KART_PARK.z + 54) + 3, KART_PARK.z + 54],
+      look: [KART_RACK.x + 7, gy(KART_RACK.x, KART_RACK.z0) + 1.1, KART_RACK.z0 + 4],
+      fov: 55,
+      radius: 220,
+      people: [
+        { x: KART_PARK.x + 169.6, z: KART_PARK.z + 46.4, to: [KART_PARK.x + 170.5, KART_PARK.z + 44.5], a: BIA },
+        { x: KART_PARK.x + 171.6, z: KART_PARK.z + 46.3, to: [KART_PARK.x + 170.5, KART_PARK.z + 44.5], a: TOMAS },
+        { x: KART_PARK.x + 174, z: KART_PARK.z + 30.2, to: [KART_PARK.x + 175, KART_PARK.z + 29], a: LU },
+        { x: KART_DESK.x - 1.3 * f, z: KART_DESK.z - 0.5, to: [KART_DESK.x + 5 * f, KART_DESK.z + 2], a: CAI },
+        { x: KART_DESK.x + 2.2 * f, z: KART_DESK.z + 1.4, to: [KART_DESK.x, KART_DESK.z], a: ANA },
+      ],
+      snow: 40,
+      karts: { karts: [], rack: true },
+    },
+    "kart-paddock-night": {
+      hour: "night",
+      cam: [KART_PADDOCK.x1 - 1, gy(KART_PADDOCK.x1, KART_PADDOCK.z1) + 6.5, KART_PADDOCK.z1 + 6],
+      look: [KART_RACK.x + 6, gy(KART_RACK.x, KART_RACK.z0) + 0.5, KART_RACK.z0 + 12],
+      fov: 58,
+      radius: 220,
+      people: [
+        {
+          x: KART_PARK.x + 168.5,
+          z: KART_PARK.z + 45.5,
+          to: [KART_PARK.x + 170.5, KART_PARK.z + 45.5],
+          a: BIA,
+          sit: BENCH_TOP,
+        },
+        {
+          x: KART_PARK.x + 172.5,
+          z: KART_PARK.z + 44.5,
+          to: [KART_PARK.x + 170.5, KART_PARK.z + 44.5],
+          a: TOMAS,
+          sit: BENCH_TOP,
+        },
+      ],
+      snow: 60,
+      karts: { karts: [], rack: true },
+    },
+    // iso: the paddock, the gate, the car park and the circle; the billboard on the corner
+    "kart-iso-paddock": {
+      hour: "day",
+      cam: [0, 0, 0],
+      look: [KART_GATE.x - 6, 0, KART_GATE.z - 22],
+      iso: 30,
+      people: [{ x: KART_GATE.x, z: KART_GATE.z - 8, to: [KART_GATE.x, KART_DESK.z], a: ANA }],
+      snow: 0,
+      karts: { karts: [], rack: true },
+    },
+    "kart-iso-sign": {
+      hour: "day",
+      cam: [0, 0, 0],
+      look: [KART_SIGN.x - 6, 0, KART_SIGN.z + 4],
+      iso: 16,
+      people: [],
+      snow: 0,
+      karts: { karts: [] },
+    },
+    // iso: the start straight, the stands, the tower
+    "kart-iso": {
+      hour: "day",
+      cam: [0, 0, 0],
+      look: [C0.x + 80, 0, C0.z + 48],
+      iso: 26,
+      people: [{ x: C0.x + 90, z: C0.z + 66, to: [C0.x + 90, C0.z + 50], a: CAI }],
+      snow: 0,
+      karts: {
+        karts: [
+          { s: -2.2, off: 2.6, colour: "#b5562f", number: 1, driver: ANA },
+          { s: -5.7, off: -2.6, colour: "#2f4a3b", number: 2, driver: BIA },
+          { s: -9.2, off: 2.6, colour: "#3d4a5c", number: 3, driver: DUDA },
+          { s: -12.7, off: -2.6, colour: "#e8a33d", number: 5, driver: LU },
+        ],
+        crowd: 0.8,
+        lap: "1/3",
+      },
+    },
+  };
+}
+const xyz = ([x, y, z]: [number, number, number]) => ({ x, y, z });
+const xz = ([x, , z]: [number, number, number]) => ({ x, z });
+
 // ── the pitch dark's stills (docs/plan/44-the-night.md, phase 0) ──
 function nightShots(lamp: { x: number; z: number }): Record<string, Shot> {
   // the driveway halfway between two lamps: a car coming with its low beams, Ana on the verge in them
@@ -1126,7 +1594,10 @@ export async function runShot(
   C.inkResolution(W, H);
 
   const scene = new T3.Scene();
-  scene.fog = new T3.FogExp2(P.fog, shot.iso !== undefined ? P.density * 0.12 : P.density * (shot.storm ? 1.7 : 1));
+  scene.fog = new T3.FogExp2(
+    P.fog,
+    (shot.iso !== undefined ? P.density * 0.12 : P.density * (shot.storm ? 1.7 : 1)) * (shot.haze ?? 1),
+  );
   scene.background = new T3.Color(P.horizon);
   // the sky: a gradient dome (overcast: no sun disc; night: a faint glow low down)
   const dome = new T3.Mesh(
@@ -1327,6 +1798,18 @@ export async function runShot(
         env,
       })
     : null;
+  // ── the Kart Park (docs/plan/46-the-karts.md) ──
+  const karts = shot.karts
+    ? (await (await import("./grounds3d")).loadKarts()).stageKarts(T3, scene, shot.karts, {
+        night: P.night,
+        lit,
+        f,
+        C,
+        bodyMat,
+        flatMat,
+        cam: camV,
+      })
+    : null;
   // (no flakes inside a car)
   const inCar = (x: number, y: number, z: number) =>
     (shot.cars ?? []).some((c) => {
@@ -1492,6 +1975,7 @@ export async function runShot(
     for (const p of people) if (p.m.update()) ready++;
     if (ready < people.length) return;
     if (cars && !cars.ready()) return;
+    if (karts && !karts.ready()) return;
     for (const p of people) {
       const walking = p.w.walk !== undefined;
       let mo = p.mo.update(1 / 60, {
@@ -1555,6 +2039,7 @@ export async function runShot(
       p.m.setFace(1, 0);
     }
     cars?.pose();
+    karts?.pose();
     if (cars?.eye(v) && cam instanceof T3.PerspectiveCamera) {
       cam.position.copy(v);
       cam.lookAt(new T3.Vector3(...shot.look));
@@ -1589,6 +2074,7 @@ export async function runShot(
   return () => {
     cancelAnimationFrame(raf);
     cars?.dispose();
+    karts?.dispose();
     grounds.dispose();
     renderer.dispose();
     renderer.domElement.remove();

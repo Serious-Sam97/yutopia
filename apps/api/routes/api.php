@@ -127,6 +127,8 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::post('/world/seed', [InternalController::class, 'seed']);
     Route::put('/world/layout', [InternalController::class, 'layout']);
     Route::put('/world/playlists', [InternalController::class, 'playlists']);
+    // the Kart Park's record (docs/plan/46-the-karts.md): best lap, the last races, wins
+    Route::put('/world/karts', [InternalController::class, 'karts']);
     // the dark (docs/plan/30-the-dark.md): the Grounds' loot, someone's pockets
     Route::put('/world/loot', [DarkController::class, 'loot']);
     Route::get('/survivors/{userId}', [DarkController::class, 'survivor'])->whereNumber('userId');

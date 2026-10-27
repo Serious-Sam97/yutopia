@@ -1,3 +1,51 @@
+import {
+  KART_CARPARK,
+  KART_CLEARING,
+  KART_FENCE,
+  KART_GATE,
+  KART_GROUND,
+  KART_PARK,
+  KART_ROAD,
+  KART_TURN,
+  KART_VERGE,
+  kartSignPosts,
+} from "./kart/land.ts";
+import { kartCarBlocked, kartDeckAt, kartFloods, kartSurfaceAt, kartWalkBlocked, setKartLayout } from "./kart/park.ts";
+
+// (what the game's 3D scenery needs of the park: from here, so the Grounds' chunks don't take the karts' whole module)
+export { KART_CARPARK, KART_FENCE, KART_GATE, KART_PARK, KART_SIGN, KART_TURN, kartSignWings } from "./kart/land.ts";
+export {
+  crowdDraw,
+  KART_BOWL,
+  KART_CROWD,
+  KART_DESK,
+  KART_FOLK,
+  KART_PADDOCK,
+  KART_RACK,
+  KART_SHED,
+  KART_SHOW,
+  KART_STANDS,
+  KART_THINGS,
+  KART_TOWER,
+  kartBridged,
+  kartFloods,
+  kartLayoutNow,
+  kartPloughAt,
+  kartPloughed,
+  kartSeats,
+  kartShowNow,
+  kartTrack,
+  kartTrackNow,
+  STAND_AISLE,
+  STAND_WALL,
+  setKartShow,
+  standAisles,
+  standLights,
+  standRoof,
+  TRACK_W,
+  trackAt,
+} from "./kart/park.ts";
+
 import type { LotLayout } from "./lot.ts";
 import type { AreaDef, MapDef } from "./map.ts";
 
@@ -11,11 +59,15 @@ import type { AreaDef, MapDef } from "./map.ts";
 // east, z = map y south), the ground at y = 0 round the headquarters. A tile
 // is about a metre: the Grounds are a kilometre across.
 
-export const GROUNDS_VERSION = 2; // (2: the farm, docs/plan/31-the-day.md)
+export const GROUNDS_VERSION = 3; // (2: the farm, docs/plan/31-the-day.md; 3: the Kart Park, docs/plan/46-the-karts.md)
 // Marks the chunk for `pnpm budget` (the client fetches it once the world starts).
 export const GROUNDS_CHUNK = "yutopia-grounds";
 export const CHUNK = 32;
-export const GROUNDS = { x0: -480, z0: -624, x1: 544, z1: 208 };
+/** The Kart Park's ground (docs/plan/46-the-karts.md): a clearing in the woods north of the county
+ *  road, the land opened north past where it ended to fit it, the road in, the park on it. On in the
+ *  game since 2026-10-26 (it was the stills' and the sandbox's only, behind a switch, till then). */
+export const KART_LAND = true;
+export const GROUNDS = { x0: -480, z0: KART_LAND ? -960 : -624, x1: 544, z1: 208 };
 
 export type P = [number, number];
 export type Surface = "snow" | "deep" | "path" | "asphalt" | "walk" | "ice" | "floor" | "rock";
@@ -171,7 +223,7 @@ export interface Lamp {
   x: number;
   z: number;
   ry: number; // which way its arm reaches (radians about y; 0 = +x)
-  kind: "cobra" | "town" | "lone" | "porch";
+  kind: "cobra" | "town" | "lone" | "porch" | "flood"; // (flood: the Kart Park's masts, drawn by the park)
 }
 
 const H = 36; // the studio's depth (the campus's own numbers: tp/campus.ts)
@@ -413,10 +465,14 @@ export const WAYS: Way[] = [
     [447, -265],
   ]),
 ];
+// the road in to the Kart Park, off the county road by the river (docs/plan/46-the-karts.md)
+if (KART_LAND) WAYS.push(way("kart-road", "road", "Kart Park road", 9, KART_ROAD));
 
 export const RIVER = {
   w: 22,
   pts: [
+    // (on north past where the land ended, under the Kart Park's ground: docs/plan/46-the-karts.md)
+    ...(KART_LAND ? ([[258, -990]] as P[]) : []),
     [262, -624],
     [256, -540],
     [266, -460],
@@ -661,15 +717,49 @@ function nearBuildings(x: number, z: number): Building[] {
 }
 const rectDist = (r: { x0: number; z0: number; x1: number; z1: number }, x: number, z: number) =>
   Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
+/** The Kart Park's ground outside its gate, levelled as one: the car park, its footway, the
+ *  turning circle, the gate's paving (docs/plan/46-the-karts.md). */
+const KART_APRON = {
+  x0: KART_CARPARK.x0,
+  z0: KART_FENCE.z1,
+  x1: KART_TURN.x + KART_TURN.r,
+  z1: Math.max(KART_CARPARK.z1, KART_TURN.z + KART_TURN.r),
+};
+/** How far (x, z) is off the Kart Park's level ground: its fence's rectangle or its apron (the
+ *  apron's reach mostly south, down the road in: across, twice as far — not out to the river). */
+const kartPadDist = (x: number, z: number) => {
+  const A = KART_APRON;
+  const apron = Math.hypot(2 * Math.max(A.x0 - x, 0, x - A.x1), Math.max(A.z0 - z, 0, z - A.z1));
+  return Math.min(rectDist(KART_FENCE, x, z), apron);
+};
+/** What's underfoot there: the circle's and the car park's asphalt, the footway's and the gate's
+ *  paving (the circle's island: the snow it is). */
+function kartApronAt(x: number, z: number): Surface | null {
+  if (rectDist(KART_APRON, x, z) > 0) return null;
+  const C = KART_CARPARK;
+  const t = Math.hypot(x - KART_TURN.x, z - KART_TURN.z);
+  if (t < KART_TURN.r) return t < KART_TURN.island ? null : "asphalt";
+  if (rectDist(C, x, z) === 0) return "asphalt";
+  if (z >= C.walk[0] && z < C.walk[1] && x < KART_TURN.x) return "walk";
+  if (z < C.walk[1] && Math.abs(x - KART_GATE.x) < KART_GATE.w / 2 + 1) return "walk";
+  return null;
+}
 
 // ── the land ─────────────────────────────────────────────────────────────────
 /** How far (x, z) is beyond the land you can reach: the ridges rise there. */
 function beyond(x: number, z: number): number {
-  return Math.max(-400 - x, z - 172, -580 - z, x - 528, 0);
+  const o = Math.max(-400 - x, z - 172, -580 - z, x - 528, 0);
+  if (!KART_LAND || o === 0) return o;
+  // (and the Kart Park's ground, opened north of where the land ended)
+  const F = KART_GROUND;
+  return Math.min(o, Math.max(F.x0 - x, x - F.x1, F.z0 - z, z - F.z1, 0));
 }
 function macro(x: number, z: number): number {
   let m = 6 * fbm(x / 170, z / 170, 2, 11);
   for (const f of FLATS) m = f.h + (m - f.h) * smooth(f.r0, f.r1, Math.hypot(x - f.x, z - f.z));
+  // the Kart Park's pad, levelled out to its fence — and its apron outside the gate (the car park,
+  // the turning circle: the road in climbs to them, not into a step) — and eased into the woods
+  if (KART_LAND) m = KART_PARK.h + (m - KART_PARK.h) * smooth(4, 44, kartPadDist(x, z));
   const o = beyond(x, z);
   if (o > 0) m += 40 * (1 - Math.exp(-((o / 60) ** 2))) * (0.7 + 0.6 * vnoise(x / 70, z / 70, 41));
   return m;
@@ -681,7 +771,9 @@ function inLawn(x: number, z: number): number {
 function microWeight(x: number, z: number): number {
   const lawn = 0.35 + 0.65 * smooth(0.7, 1.2, inLawn(x, z));
   const town = smooth(100, 170, Math.hypot(x - 418, z + 450));
-  return lawn * (0.15 + 0.85 * town);
+  // (the Kart Park's pad: levelled flat for the circuit)
+  const park = KART_LAND ? smooth(4, 44, kartPadDist(x, z)) : 1;
+  return lawn * (0.15 + 0.85 * town) * park;
 }
 function micro(x: number, z: number): number {
   return 1.5 * fbm(x / 38, z / 38, 3, 21) + 0.3 * fbm(x / 9, z / 9, 1, 31);
@@ -799,6 +891,8 @@ export function terrainAt(x: number, z: number): number {
   if (x > SITE.x0 - 12 && x < SITE.x1 + 12 && z > SITE.z0 - 12 && z < SITE.z1 + 12) pads.push({ ...SITE, h: 0 });
   if (x > PLAZA.x0 - 8 && x < PLAZA.x1 + 8 && z > PLAZA.z0 - 8 && z < PLAZA.z1 + 8)
     pads.push({ ...PLAZA, h: macro(STATUE.x, STATUE.z) });
+  // (the Kart Park's car park, its footway and the turning circle: one level pad)
+  if (KART_LAND && rectDist(KART_APRON, x, z) < 8) pads.push({ ...KART_APRON, h: KART_PARK.h });
   for (const p of pads) {
     const k = smooth(0.5, 7, rectDist(p, x, z));
     if (k < best) {
@@ -823,6 +917,10 @@ export function groundAt(x: number, z: number): number {
 export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
   for (const bd of nearBuildings(x, z))
     if (x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1) return inBuilt(bd, x, z) ? "floor" : "walk";
+  if (KART_LAND) {
+    const ks = kartSurfaceAt(x, z) ?? kartApronAt(x, z);
+    if (ks) return ks;
+  }
   const near = nearLines(x, z);
   let on: Surface | null = null;
   for (const [f, n] of near) {
@@ -873,6 +971,12 @@ export function treeDensity(x: number, z: number): number {
   }
   // the car dealer's forecourt, and a little round it
   if (inMotors(x, z, 2.5)) return 0;
+  // the Kart Park's clearing, its car park
+  if (
+    KART_LAND &&
+    (rectDist(KART_FENCE, x, z) < KART_CLEARING || rectDist(KART_APRON, x, z) < 6 || rectDist(KART_VERGE, x, z) === 0)
+  )
+    return 0;
   // the farm: cleared (the fields, the yard)
   if (x > FARM.x0 - 3 && x < FARM.x1 + 3 && z > FARM.z0 - 3 && z < FARM.z1 + 3) return 0;
   // the town: a yard tree here and there, none on the streets or the plaza
@@ -950,6 +1054,26 @@ export const LAMPS: Lamp[] = [];
   LAMPS.push({ x: -36, z: -370, ry: Math.PI, kind: "cobra" }); // the gate's
   LAMPS.push({ x: -255, z: -97.4, ry: 0, kind: "porch" }); // the boathouse's
   LAMPS.push({ x: -13, z: -412, ry: 0, kind: "porch" }); // the bus shelter's
+  // the Kart Park's floodlights (docs/plan/46-the-karts.md): their light and pools as any lamp's
+  if (KART_LAND) for (const f of kartFloods()) LAMPS.push({ x: f.x, z: f.z, ry: f.ry, kind: "flood" });
+  // and its others: the road in's corner, the turning circle, the car park's row ends and footway,
+  // the paddock's
+  if (KART_LAND) {
+    const C = KART_CARPARK;
+    const g = KART_GATE.x;
+    const z1 = KART_FENCE.z1;
+    for (const [x, z, ry] of [
+      [g + 5.8, -410.4, -2.36],
+      [KART_TURN.x + KART_TURN.r + 2, KART_TURN.z, Math.PI],
+      [C.x0 + 1.5, (C.z0 + C.aisle[0]) / 2, 0],
+      [C.x0 + 1.5, (C.aisle[1] + C.z1) / 2, 0],
+      [(C.x0 + C.x1) / 2, C.walk[0] + 0.4, -Math.PI / 2],
+      [(C.x0 + C.x1) / 2, C.z1 + 1.2, Math.PI / 2],
+    ])
+      LAMPS.push({ x, z, ry, kind: "cobra" });
+    // the paddock's: down its east edge by the fence, out of the walk from the gate (the user's call)
+    for (const dz of [52, 38, 24, 10]) LAMPS.push({ x: g + 12.5, z: z1 - dz, ry: 0, kind: "lone" });
+  }
 }
 
 /** The town's street furniture (docs/plan/33-the-look.md, phase 4): hydrants, bins, newspaper
@@ -1016,7 +1140,7 @@ function streetTiles(): [number, number][] {
  *  road's edge is when it's all white. Only to look at (thin; not in the walking). */
 export const SNOW_POLES: { x: number; z: number; ry: number }[] = [];
 {
-  for (const key of ["driveway", "road"]) {
+  for (const key of ["driveway", "road", ...(KART_LAND ? ["kart-road"] : [])]) {
     const w = WAYS.find((u) => u.key === key) as Way;
     const L = w.line;
     for (let i = 8; i < L.length - 8; i += 25)
@@ -1072,6 +1196,24 @@ export function groundsChunk(cx: number, cz: number): GroundsChunk {
   chunks.set(k, c);
   return c;
 }
+/** The Kart Park's layout to race (docs/plan/47-the-track-changer.md): what's asphalt there
+ *  follows it, and the bridge (there for a layout over it: its deck walked, its guard strips not),
+ *  so the park's chunks are dropped, to be made again. True if it changed. */
+export function setParkLayout(key: string, reverse: boolean): boolean {
+  if (!setKartLayout(key, reverse)) return false;
+  layoutVersion++;
+  const F = KART_FENCE;
+  const over = (cx: number, cz: number) =>
+    cx * CHUNK + CHUNK > F.x0 - 4 && cx * CHUNK < F.x1 + 4 && cz * CHUNK + CHUNK > F.z0 - 4 && cz * CHUNK < F.z1 + 4;
+  for (const [k, c] of chunks) if (over(c.cx, c.cz)) chunks.delete(k);
+  // (and the tiles' surfaces kept for walking)
+  for (let cz = Math.floor((F.z0 - 4) / CHUNK); cz <= Math.floor((F.z1 + 4) / CHUNK); cz++)
+    for (let cx = Math.floor((F.x0 - 4) / CHUNK); cx <= Math.floor((F.x1 + 4) / CHUNK); cx++)
+      surfaces.delete(chunkKey(cx, cz));
+  return true;
+}
+/** How many times the park's layout changed here (a chunk made elsewhere before: not taken). */
+export let layoutVersion = 0;
 /** A chunk made elsewhere (a worker) put in the cache. */
 export function adoptChunk(c: GroundsChunk): void {
   chunks.set(chunkKey(c.cx, c.cz), c);
@@ -1146,6 +1288,11 @@ function walkable(x: number, z: number): boolean {
   if (td < 2.6) return false;
   if (Math.abs(td - 9) < 0.6 && !(z > TOWER.z && Math.abs(x - TOWER.x) < 1.5)) return false;
   if (Math.abs(x - STATUE.x) < 2.5 && Math.abs(z - STATUE.z) < 2.5) return false;
+  // the Kart Park: its fence, stands, tower, bowl, the bridge's ramps (kart/park.ts)
+  if (KART_LAND && kartWalkBlocked(x, z)) return false;
+  // (and outside it: the turning circle's island, the billboard's and the fingerpost's posts)
+  if (KART_LAND && Math.hypot(x - KART_TURN.x, z - KART_TURN.z) < KART_TURN.island - 0.3) return false;
+  if (KART_LAND && kartSignPosts().some(([px, pz]) => Math.abs(x - px) < 0.6 && Math.abs(z - pz) < 0.6)) return false;
   return true;
 }
 /** A tile a car can't go into (docs/plan/28-the-car.md): the fence, the tower, the statue,
@@ -1153,7 +1300,8 @@ function walkable(x: number, z: number): boolean {
  *  lamp's, a steep one's: a car hits the trunk, climbs what it can). Buildings are boxes of
  *  their own. */
 export function carBlockedTile(tx: number, tz: number): boolean {
-  return !walkable(tx + 0.5, tz + 0.5);
+  // (and the Kart Park, its gate too: the karts are the park's, the cars stay out)
+  return !walkable(tx + 0.5, tz + 0.5) || (KART_LAND && kartCarBlocked(tx + 0.5, tz + 0.5));
 }
 /** On the company's fence line (not at the gate). */
 function onFence(x: number, z: number): boolean {
@@ -1320,6 +1468,11 @@ function alongDeck(d: Deck, x: number, z: number): { i: number; u: number; off: 
 }
 /** A bridge's deck height at (x, z), or null (not on one). */
 export function deckAt(x: number, z: number): number | null {
+  // (the Kart Park's bridge: kart/park.ts)
+  if (KART_LAND) {
+    const k = kartDeckAt(x, z);
+    if (k !== null) return terrainAt(x, z) + k;
+  }
   for (const d of DECKS) {
     if (x < d.x0 || x > d.x1 || z < d.z0 || z > d.z1) continue;
     const p = alongDeck(d, x, z);
@@ -1512,6 +1665,10 @@ export function placeAt(x: number, z: number): { key: string; name: string; priv
     if (x >= FARM.x0 && x < FARM.x1 && z >= FARM.z0 && z < FARM.z1) return "The farm";
     if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1.4) return "The frozen pond";
     if (Math.hypot(x - CLEARING.x, z - CLEARING.z) < CLEARING.r) return "The clearing";
+    if (KART_LAND && x >= KART_FENCE.x0 && x < KART_FENCE.x1 && z >= KART_FENCE.z0 && z < KART_FENCE.z1)
+      return "Yutopia Kart Park";
+    if (KART_LAND && (rectDist(KART_CARPARK, x, z) < 2 || Math.hypot(x - KART_TURN.x, z - KART_TURN.z) < KART_TURN.r))
+      return "The Kart Park's car park";
     const near = nearLines(x, z);
     const r = near.get(RIVER_F);
     if (r && r.d < RIVER.w / 2 + 2) return "The river";

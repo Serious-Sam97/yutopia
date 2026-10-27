@@ -1483,7 +1483,8 @@ export class WorldController {
     const night = engine.getDaylight().night;
     room.state.npcs.forEach((n: S, id: string) => {
       const pos = interpolate(this.npcBuf.get(id) ?? [{ t: 0, x: n.x, y: n.y }], renderAt);
-      const guard = n.kind === "guard" ? this.life?.guard(n, night) : null;
+      // (the guard, the Kart Park's folk: people of the Grounds' life, not Vortex)
+      const guard = n.kind === "guard" ? this.life?.guard(n, night) : n.kind === "folk" ? this.life?.folk(n) : null;
       const st: AvatarState & { z?: number; ground?: number } = {
         ...(guard ?? this.npcState(n)),
         x: pos.x,
@@ -1492,12 +1493,16 @@ export class WorldController {
       // (Vortex is the studio's; the night guard's on the ground floor — at his post in the
       // gatehouse by day, walking out to the fence after dark: the server walks him)
       const home = (n.level ?? -1) < 0 ? floorOf(this.building) : n.level;
-      if (n.kind === "guard" && !guard) {
+      if ((n.kind === "guard" || n.kind === "folk") && !guard) {
         if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
         return;
       }
       // (out on the land his feet are on it: the ground's not at 0 by the gatehouse)
-      if (guard && this.level === home) st.z = st.ground = this.grid.groundAt(pos.x, pos.y, 0);
+      // (sat on a seat, the server says how high)
+      if (guard && this.level === home) {
+        st.ground = this.grid.groundAt(pos.x, pos.y, 0);
+        st.z = Math.max(st.ground, n.z ?? 0);
+      }
       if (this.level === home) engine.upsertAvatar(`npc:${id}`, st);
       else if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
       if (tp) bodies.push({ ...st, id: `npc:${id}`, reduced, level: home });
@@ -1972,7 +1977,7 @@ export class WorldController {
 
   // ── the lot's cars, driven (docs/plan/28-the-car.md; car/cars.ts, loaded on their own) ──
   private cars: import("./car/cars").Cars | null = null;
-  private lifeCars: { id: string; kind: string; x: number; z: number; a: number; shown: boolean }[] = [];
+  private lifeCars: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; h?: number }[] = [];
 
   // ── life on the Grounds (docs/plan/27, phase 6; grounds-life.ts, loaded with them) ──
   private life: import("./grounds-life").GroundsLife | null = null;

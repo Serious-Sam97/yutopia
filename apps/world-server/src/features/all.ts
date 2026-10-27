@@ -24,6 +24,8 @@ import "./gps.ts";
 import "./grounds-life.ts";
 import "./cars.ts";
 import "./spot.ts";
+import "./karts.ts";
+import "./park-life.ts";
 import "./survival.ts";
 import "./dark.ts";
 import "./arms.ts";

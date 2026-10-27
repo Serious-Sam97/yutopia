@@ -50,6 +50,11 @@ export class PadState {
     this.down = p.buttons.map((b, i) => (i === 6 || i === 7 ? b.value > 0.4 : b.pressed));
     if (this.left.mag > 0 || this.right.mag > 0 || this.down.some(Boolean)) this.live = true;
   }
+  /** The left stick's tilt now, read without polling (a seat's wanting to know if I walk off). */
+  leftNow(): number {
+    const p = activePad();
+    return p ? stick(p.axes[0] ?? 0, p.axes[1] ?? 0).mag : 0;
+  }
   /** Read as if nothing were pressed or moved (the pad's busy elsewhere this frame). */
   mute(): void {
     this.down = [];

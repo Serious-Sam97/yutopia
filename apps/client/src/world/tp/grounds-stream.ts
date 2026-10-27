@@ -5,6 +5,7 @@ import {
   groundSurfaceAt,
   groundsChunk,
   heightAt,
+  KART_FENCE,
   missingLand,
   type Tree,
   terrainAt,
@@ -81,6 +82,18 @@ interface Block {
   mesh: Mesh | null;
   trees: Map<number, Float32Array>; // pool → its instances' matrices
   shown: boolean;
+}
+
+// a vertex of the land's colour: its surface's, the snow a little blue in long waves. (The Kart Park's
+// asphalt is its circuit's own meshes': under them the land's snow — its layout changes, the land's
+// made once — docs/plan/47-the-track-changer.md)
+const BLUE = new Color(0xdbe5f0);
+function landColour(x: number, z: number, near: boolean, c: Color) {
+  const F = KART_FENCE;
+  const g = groundSurfaceAt(x, z, !near);
+  const s = g === "asphalt" && x > F.x0 && x < F.x1 && z > F.z0 && z < F.z1 ? "snow" : g;
+  c.setHex(SURF[s]);
+  if (s === "snow" || s === "deep") c.lerp(BLUE, 0.35 + 0.35 * Math.sin(x * 0.05 + z * 0.031));
 }
 
 export class GroundsStream {
@@ -441,16 +454,13 @@ if (vFade < 0.999) {
     const uv: number[] = [];
     const idx: number[] = [];
     const c = new Color();
-    const blue = new Color(0xdbe5f0);
     // near: the walking chunk's own heights (the same the feet are on)
     const chunk = near ? groundsChunk(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK)) : null;
     const height = (i: number, j: number) =>
       chunk ? chunk.h[j * 2 * (CHUNK * 2 + 1) + i * 2] : terrainAt(x0 + i * step, z0 + j * step);
     const vert = (x: number, y: number, z: number) => {
       pos.push(x - x0, y, z - z0);
-      const s = groundSurfaceAt(x, z, !near);
-      c.setHex(SURF[s]);
-      if (s === "snow" || s === "deep") c.lerp(blue, 0.35 + 0.35 * Math.sin(x * 0.05 + z * 0.031));
+      landColour(x, z, near, c);
       col.push(c.r, c.g, c.b);
       uv.push(x / 14, z / 14);
     };

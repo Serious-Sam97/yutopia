@@ -20,6 +20,9 @@ addStrings(
     rideToHq: ["Shuttle · to HQ", "Ônibus · para a sede"],
     rideLeave: ["Get off the shuttle", "Descer do ônibus"],
     nightGuard: ["Night guard", "Vigia"],
+    folkControl: ["Race control", "Direção de prova"],
+    folkMechanic: ["Mechanic", "Mecânico"],
+    folkCocoa: ["Hot cocoa", "Chocolate quente"],
   },
   "yutopia-grounds-life",
 );
@@ -38,6 +41,8 @@ export interface Car {
   a: number;
   v: number;
   shown: boolean;
+  /** the height it's at, when the server says (the Kart Park's ploughs: on its bridge or under it) */
+  h?: number;
 }
 // (the room's state, as much of it as this reads)
 interface VehicleIn {
@@ -51,6 +56,7 @@ interface VehicleIn {
   honkAt: number;
   colour?: number;
   fl?: number;
+  y?: number;
 }
 interface Vehicles {
   forEach(f: (v: VehicleIn, id: string) => void): void;
@@ -92,6 +98,9 @@ export class GroundsLife {
       c.a += Math.atan2(Math.sin(v.a - c.a), Math.cos(v.a - c.a)) * k;
       c.v = v.v;
       c.fl = v.fl;
+      // (the Kart Park's ploughs, the change's show, say their height — features/karts.ts showTick)
+      if (id.startsWith("kart-plough") && v.y !== undefined) c.h = c.h === undefined ? v.y : c.h + (v.y - c.h) * k;
+      else c.h = undefined;
       c.shown = v.shown;
       const was = this.honks.get(id) ?? v.honkAt;
       this.honks.set(id, v.honkAt);
@@ -180,6 +189,33 @@ export class GroundsLife {
     return { objectId: SHUTTLE_ID, kind: "ride", label: t(bus.stop === "hq" ? "rideToTown" : "rideToHq") };
   }
 
+  /** The Kart Park's folk (shared KART_FOLK; world-server features/park-life.ts walks them): by
+   *  their name, the staff's with what they do. */
+  folk(n: { id: string; x: number; y: number; d: number; a: number }): AvatarState | null {
+    const f = this.G.KART_FOLK.find((k) => `folk-${k.id}` === n.id);
+    if (!f) return null;
+    let look = this.folkLooks.get(f.id);
+    if (!look) {
+      look = parseAvatar(f.look);
+      this.folkLooks.set(f.id, look);
+    }
+    const role = FOLK_ROLE[f.role];
+    return {
+      name: role ? `${f.name} · ${t(role)}` : f.name,
+      avatar: look,
+      x: n.x,
+      y: n.y,
+      d: n.d,
+      a: n.a,
+      status: "online",
+      speaking: false,
+      emote: "",
+      mic: false,
+      bot: true,
+    };
+  }
+  private folkLooks = new Map<string, ReturnType<typeof parseAvatar>>();
+
   /** The night guard: a dark uniform and a cap, a flashlight; he says nothing. (A bot, not
    *  Vortex — `npc` is his —, so no muted mic shown.) */
   guard(n: { x: number; y: number; d: number; a: number }, night = 1): AvatarState {
@@ -203,6 +239,8 @@ export class GroundsLife {
     };
   }
 }
+
+const FOLK_ROLE: Record<string, string> = { control: "folkControl", mechanic: "folkMechanic", cocoa: "folkCocoa" };
 
 const GUARD_LOOK = parseAvatar({
   body: "broad",

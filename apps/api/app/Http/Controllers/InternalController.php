@@ -47,6 +47,7 @@ class InternalController extends Controller
             'layout' => $world->layout,
             'playlists' => $world->settings['playlists'] ?? [],
             'loot' => $world->settings['loot'] ?? null,
+            'karts' => $world->settings['karts'] ?? null,
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld(),
         ]);
     }
@@ -410,6 +411,27 @@ class InternalController extends Controller
         abort_if(strlen((string) json_encode($playlists)) > 400_000, 422, 'too many playlists');
         $world = World::current();
         $world->settings = array_merge($world->settings ?? [], ['playlists' => $playlists]);
+        $world->save();
+
+        return response()->json(['ok' => true]);
+    }
+
+    // The Kart Park's record (docs/plan/46-the-karts.md): its best lap, the last ten races' top
+    // three, wins by name — kept as the world-server sends it (it's the one that counts them).
+    public function karts(Request $request): JsonResponse
+    {
+        $request->validate([
+            'record' => ['present', 'array'],
+            'record.best' => ['nullable', 'array'],
+            'record.best.t' => ['required_with:record.best', 'integer', 'min:1'],
+            'record.best.name' => ['required_with:record.best', 'string', 'max:120'],
+            'record.last' => ['present', 'array', 'max:10'],
+            'record.wins' => ['present', 'array', 'max:500'],
+        ]);
+        $record = $request->input('record');
+        abort_if(strlen((string) json_encode($record)) > 40_000, 422, 'record too big');
+        $world = World::current();
+        $world->settings = array_merge($world->settings ?? [], ['karts' => $record]);
         $world->save();
 
         return response()->json(['ok' => true]);
