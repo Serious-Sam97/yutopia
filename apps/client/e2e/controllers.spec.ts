@@ -133,7 +133,7 @@ test("controllers: rebind on a fake pad, the analog switch, pad 2's stick throug
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       const busy = await ana.evaluate(
         (a) =>
-          (window as any).__yutopia.engine
+          (window as any).__yutopia.model
             .allObjects()
             .some((o: any) => o.x >= a.x - 1 && o.x <= a.x + 3 && o.y >= a.y - 1 && o.y <= a.y + 3),
         p,

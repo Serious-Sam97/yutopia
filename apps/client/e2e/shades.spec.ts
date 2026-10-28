@@ -6,7 +6,7 @@ import { ANA, enter, test, token } from "./helpers";
 // pond, three called up out of the dark come at Ana — drawn in 3D as office
 // people wrapped in smoke, the windup's arms up, a strike's red at the edges;
 // under her focused torch one burns (embers, the arm over its face) and is
-// exposed (its office clothes); in iso they're people drawn dark. 3D: the GPU
+// exposed (its office clothes). The GPU
 // (YUTOPIA_GPU=1). Review shots: YUTOPIA_SHOTS=<dir>.
 
 const GPU = process.env.YUTOPIA_GPU === "1";
@@ -33,7 +33,7 @@ test("the shadowed: out of the dark, at you, burnt under a focused torch", async
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase", reducedMotion: false }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", reducedMotion: false }));
   });
   await enter(page, await token(ANA));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {
@@ -117,22 +117,6 @@ test("the shadowed: out of the dark, at you, burnt under a focused torch", async
   await shot(page, "shades-exposed");
   await page.mouse.up({ button: "right" });
 
-  // iso: people drawn dark
-  await page.evaluate(() => {
-    for (const type of ["keydown", "keyup"]) window.dispatchEvent(new KeyboardEvent(type, { key: "t", code: "KeyT" }));
-  });
-  await page.waitForFunction(() => !(window as any).__yutopia.tp, null, { timeout: 20_000 });
-  await page.waitForTimeout(1200);
-  const iso = await page.evaluate(() => {
-    const w = (window as any).__yutopia;
-    let n = 0;
-    w.room.state.shadows?.forEach((s: any) => {
-      if (w.engine.hasAvatar(s.id)) n++;
-    });
-    return n;
-  });
-  expect(iso, "drawn in iso").toBeGreaterThan(0);
-  await shot(page, "shades-iso");
   await page.evaluate(() => {
     const w = (window as any).__yutopia;
     w.room.send("mod:hour", { h: null });

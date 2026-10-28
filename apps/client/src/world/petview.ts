@@ -1,8 +1,8 @@
 import type { PetFeeling, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
 
-// A pet as the views draw it (iso engine and the 3D people): what the server
-// says about it. The drawing and the little animation its act plays live in
-// the pets chunk (art/pets.ts), shared by both views so a trick looks the same.
+// A pet as the view draws it (the 3D people): what the server says about it.
+// The drawing and the little animation its act plays live in the pets chunk
+// (art/pets.ts).
 
 export interface PetView {
   id: string;

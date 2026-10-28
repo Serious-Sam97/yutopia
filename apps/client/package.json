@@ -17,7 +17,6 @@
     "livekit-client": "2.22.3",
     "next": "15.5.7",
     "nostalgist": "0.22.0",
-    "pixi.js": "^8.13.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "three": "0.186.1"

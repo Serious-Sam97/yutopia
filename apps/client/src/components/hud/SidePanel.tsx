@@ -271,7 +271,7 @@ function RoomTab() {
   const here = [me, ...people.filter((p) => !p.bot && p.area === area.key)];
   const inside = (o: { x: number; y: number }) =>
     o.x >= area.x && o.x < area.x + area.w && o.y >= area.y && o.y < area.y + area.h;
-  const things = (w?.engine?.allObjects() ?? [])
+  const things = (w?.model?.allObjects() ?? [])
     .filter((o) => entry(o.kind).interact && !isOpening(o.kind) && inside(o))
     .slice(0, 8);
   return (

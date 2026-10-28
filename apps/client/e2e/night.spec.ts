@@ -1,10 +1,10 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, holdHour, test, token, walkTo } from "./helpers";
 
 // The Grounds' mood (docs/plan/27-the-grounds.md, phase 5), with two people:
 // the same storm at the same moment for both (the server times it), and at
-// night A's flashlight lights B out in the woods. It needs only the building
+// night A's flashlight drawn in B's view out in the woods. It needs only the building
 // (every world has it), so no fixture is put back; the storm goes back to the
 // schedule at the end.
 
@@ -15,14 +15,16 @@ async function open(page: Page, who: typeof ANA) {
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p" }));
   });
   await enter(page, await token(who));
 }
 // (out on the land: the Grounds are mounted on the ground floor)
 const goTo = async (page: Page, at: { x: number; y: number }) => {
   await page.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), at);
-  await page.waitForFunction(() => (window as any).__yutopia.engine?.grounds?.land.visible, null, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as any).__yutopia.tp?.around?.grounds?.left.blocks === 0, null, {
+    timeout: 60_000,
+  });
   await page.waitForTimeout(2500);
 };
 const storm = (page: Page) =>
@@ -31,7 +33,7 @@ const storm = (page: Page) =>
     return { server: c.room.state.storm as number, here: c.storm as number };
   });
 
-test("the mood: the same storm for both at once; A's flashlight lights B at night", async ({ page, browser }) => {
+test("the mood: the same storm for both at once; A's flashlight in B's view at night", async ({ page, browser }) => {
   test.setTimeout(180_000);
   const a = page;
   const b = await (await browser.newContext()).newPage();
@@ -52,27 +54,16 @@ test("the mood: the same storm for both at once; A's flashlight lights B at nigh
     await b.waitForFunction(() => (window as any).__yutopia.room.state.storm < 0.01, null, { timeout: 10_000 });
 
     // ── night in the woods: A a few steps from B, turned to her, the flashlight on ──
-    // (along a screen axis — iso faces eight ways on screen: B straight below A)
     await goTo(b, G(-150, 6));
     await goTo(a, G(-155, 1));
     await walkTo(a, G(-154, 2).x, G(-154, 2).y, 20_000);
-    for (const p of [a, b])
-      await p.evaluate(() => {
-        const c = (window as any).__yutopia;
-        c.updateNight = () => {};
-        c.engine.setClock(23);
-      });
-    const lightOnB = () =>
+    for (const p of [a, b]) await holdHour(p, 23);
+    const beamInB = () =>
       b.evaluate(() => {
         const c = (window as any).__yutopia;
-        const m = c.meTile();
-        const g = c.engine.grounds;
-        // her light, and the light a few steps to her side (off the beam)
-        return { on: g.lightAt(m.x + 0.5, m.y + 0.5), off: g.lightAt(m.x + 0.5, m.y + 6.5) };
+        return c.tp.torch3.some((t: any) => t.on && t.who !== c.room.sessionId);
       });
-    const lum = (c: number) => ((c >> 16) & 255) * 0.3 + ((c >> 8) & 255) * 0.55 + (c & 255) * 0.15;
-    const dark = await lightOnB();
-    expect(lum(dark.on), "no beam: she's in the dark as the woods round her").toBeLessThan(lum(dark.off) + 4);
+    expect(await beamInB(), "no torch on yet").toBe(false);
     await a.evaluate(() => (window as any).__yutopia.toggleTorch());
     await b.waitForFunction(
       () => {
@@ -82,10 +73,8 @@ test("the mood: the same storm for both at once; A's flashlight lights B at nigh
       null,
       { timeout: 10_000 },
     );
-    await b.waitForTimeout(500);
-    const lit = await lightOnB();
-    expect(lum(lit.on), "A's beam lights her").toBeGreaterThan(lum(dark.on) + 40);
-    expect(lum(lit.off), "beside the beam: still dark").toBeLessThan(lum(dark.off) + 4);
+    // (B's view draws A's beam)
+    await expect.poll(beamInB, { timeout: 10_000 }).toBe(true);
     if (process.env.YUTOPIA_SHOTS) await b.screenshot({ path: `${process.env.YUTOPIA_SHOTS}/night-beam.png` });
   } finally {
     await a.evaluate(() => {
@@ -113,7 +102,7 @@ const hold = (page: Page, h: number) =>
     const c = (window as any).__yutopia;
     c.updateNight = () => {};
     c.hour = hh;
-    c.engine.setClock(hh);
+    c.model.setClock(hh);
     c.tp?.setHour(hh);
     if (c.life) c.life.weather = () => [0, 0];
   }, h);
@@ -152,7 +141,9 @@ test("the pitch dark: black off every light, lit in a beam; a name only in the l
   await hold(a, 23);
   // the lawn, the floor's (-40, -30): nothing lit round it
   await a.evaluate(() => (window as any).__yutopia.teleport({ x: -40, y: -30, level: 0 }));
-  await a.waitForFunction(() => (window as any).__yutopia.engine?.grounds?.land.visible, null, { timeout: 60_000 });
+  await a.waitForFunction(() => (window as any).__yutopia.tp?.around?.grounds?.left.blocks === 0, null, {
+    timeout: 60_000,
+  });
   await hold(a, 23);
   await a.waitForTimeout(3000);
   // the snow 15 tiles off, looked at from above it: as good as black

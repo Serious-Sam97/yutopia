@@ -6,7 +6,22 @@ import { test as base, expect, type Page, request } from "@playwright/test";
 // `test` for specs that open extra people (browser.newContext): whatever
 // contexts a test opened are closed when it ends — live worlds left behind
 // keep rendering and slow every test after them.
+// With YUTOPIA_GPU=1 every browser draws on the machine's GPU: the world is 3D only now, and
+// two 3D pages on headless Chromium's software GL crawl (the other one's loading stalls this
+// one's frames past every timeout).
+const GPU_ARGS = ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"];
 export const test = base.extend<{ closeExtraContexts: undefined }>({
+  launchOptions: [
+    async ({ launchOptions }, use) => {
+      const args = launchOptions.args ?? [];
+      await use(
+        process.env.YUTOPIA_GPU === "1"
+          ? { ...launchOptions, args: [...args, ...GPU_ARGS.filter((a) => !args.includes(a))] }
+          : launchOptions,
+      );
+    },
+    { scope: "worker" },
+  ],
   closeExtraContexts: [
     async ({ browser }, use) => {
       const before = new Set(browser.contexts());
@@ -75,6 +90,7 @@ export async function useWorld(name: World = "demo"): Promise<World> {
 }
 
 export async function enter(page: Page, tok: string, worldName?: World) {
+  // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
   if (worldName) await useWorld(worldName);
   await page.addInitScript((t) => {
     localStorage.setItem("yutopia:token", t);
@@ -119,7 +135,7 @@ export async function enter(page: Page, tok: string, worldName?: World) {
   await page.waitForTimeout(800);
 }
 // The loading screen gone (docs/plan/35-the-loading.md): the world built, the keys live
-// again. After entering, and after a change between iso and 3D.
+// again. After entering, and after a change of view.
 export async function loaded(page: Page, timeout = 60_000) {
   await page.waitForFunction(
     () => (window as unknown as { __hud?: { get(): { loading: { on: boolean } } } }).__hud?.get().loading.on === false,
@@ -129,6 +145,52 @@ export async function loaded(page: Page, timeout = 60_000) {
 }
 export const world = (page: Page, fn: (w: any, h: any) => unknown) =>
   page.evaluate(fn as never, null as never) as Promise<unknown>;
+
+// A world point on the page (client px) as the 3D camera sees it: tiles, `z` iso px up
+// (39.19 a tile, as the build code measures). Off screen / behind the camera: far off.
+export const screenAt = (page: Page, x: number, y: number, z = 0) =>
+  page.evaluate(
+    ([tx, ty, tz]) => {
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
+      return { x: r.left + s.x, y: r.top + s.y };
+    },
+    [x, y, z],
+  );
+
+// The 3D camera held (iso's pinCamera, gone with iso): free, not swinging in behind me, looking
+// `yaw` (radians; north-west, where iso looked, by default) from `dist` tiles, `pitch` down. Round
+// me — or, given `at` (tiles), pinned there: it stays put while I walk (null lets it follow again).
+export const holdCamera = (
+  page: Page,
+  v: { at?: { x: number; y: number } | null; yaw?: number; pitch?: number; dist?: number } = {},
+) =>
+  page.evaluate((c) => {
+    const t = (window as any).__yutopia.tp;
+    t.mode = "free";
+    t.yaw = c.yaw ?? -Math.PI * 0.75;
+    t.pitch = c.pitch ?? 0.9;
+    t.dist = c.dist ?? 9;
+    t.dragged = 1e12;
+    // (the view moves its target to me every frame: pinned, the target's own setters do nothing)
+    const T = t.target;
+    for (const k of ["set", "copy", "lerp", "add"]) delete T[k];
+    if (c.at) {
+      T.set(c.at.x, 1.2, c.at.y);
+      for (const k of ["set", "copy", "lerp", "add"]) T[k] = () => T;
+    }
+  }, v);
+
+// The hour held in both the model and the 3D view (the controller's 1 s timer would set it back).
+export const holdHour = (page: Page, h: number) =>
+  page.evaluate((hh) => {
+    const c = (window as any).__yutopia;
+    c.updateNight = () => {};
+    c.hour = hh;
+    c.model.setClock(hh);
+    c.tp?.setHour(hh);
+  }, h);
 
 export async function walkTo(page: Page, x: number, y: number, ms = 12_000) {
   await page.evaluate(

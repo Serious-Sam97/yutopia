@@ -1,0 +1,3 @@
+# the scenes (gen-scene.ts makes them) and the browser bundle
+*.json
+dist/

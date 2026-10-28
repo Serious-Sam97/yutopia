@@ -473,8 +473,6 @@ function SellBin() {
   const t = useTr();
   const w = useWorld();
   const [over, setOver] = useState(false);
-  // it unmounts as soon as the hand is empty, maybe under the pointer
-  useEffect(() => () => w?.build?.setOverBin(false), [w]);
   return (
     <footer
       data-build-bin
@@ -486,15 +484,12 @@ function SellBin() {
       }}
       onPointerEnter={() => {
         setOver(true);
-        w?.build?.setOverBin(true);
       }}
       onPointerLeave={() => {
         setOver(false);
-        w?.build?.setOverBin(false);
       }}
       onPointerUp={() => {
         setOver(false);
-        w?.build?.setOverBin(false);
         w?.build?.remove();
       }}
     >

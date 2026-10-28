@@ -7,6 +7,7 @@ import {
   heightAt,
   KART_FENCE,
   missingLand,
+  pineVariant,
   type Tree,
   terrainAt,
   treesIn,
@@ -123,6 +124,10 @@ export class GroundsStream {
   private fade = { a: { value: new Vector3() }, b: { value: new Vector3() } };
   /** behind the loading screen (docs/plan/35): build with a much bigger budget a frame */
   boost = false;
+  /** Lowest (a weak CPU): built one frame in three, in half the time (what covers the ground
+   *  meanwhile — a coarser block — stays) */
+  lite = false;
+  private turn = 0;
   /** what's still to build: land blocks wanted and missing, and the rest's steps */
   readonly left = { blocks: 0, statics: 0 };
 
@@ -310,6 +315,14 @@ if (vFade < 0.999) {
     this.statics.tick(this.windT.value);
     this.fade.a.value.copy(cam);
     this.fade.b.value.copy(target ?? cam);
+    // (Lowest: what's wanted, built and shown worked out one frame in three — the land two frames
+    // behind at most, what covers it there meanwhile)
+    this.turn = (this.turn + 1) % 3;
+    if (this.lite && !this.boost && this.turn) {
+      if (target) this.statics.cutAt(target.x, target.z);
+      this.statics.faceCards(cam);
+      return;
+    }
     const want: string[] = [];
     const visit = (tier: number, x0: number, z0: number) => {
       const T = TIERS[tier];
@@ -339,7 +352,7 @@ if (vFade < 0.999) {
     const missing = want.filter((k) => !this.blocks.get(k)?.mesh);
     missing.sort((a, b) => distTo(a, x, z) - distTo(b, x, z));
     this.left.blocks = missing.length;
-    const budget = this.boost ? BOOST_MS : BUDGET_MS;
+    const budget = this.boost ? BOOST_MS : this.lite ? BUDGET_MS / 2 : BUDGET_MS;
     const t0 = performance.now();
     for (const k of missing) {
       if (performance.now() - t0 > budget) break;
@@ -392,7 +405,7 @@ if (vFade < 0.999) {
     if (target) this.statics.cutAt(target.x, target.z);
     // the rest of the Grounds (the ways, the buildings, the lamps…), a few ms a frame
     const s0 = performance.now();
-    while (performance.now() - s0 < (this.boost ? BOOST_MS : 4)) {
+    while (performance.now() - s0 < (this.boost ? BOOST_MS : this.lite ? 2 : 4)) {
       const added = this.statics.step();
       if (!added) break;
       for (const o of added) {
@@ -546,8 +559,8 @@ if (vFade < 0.999) {
       const sy = 0.9 + (t.s % 0.2);
       if (t.kind === "pine") {
         // (mostly the usual three; now and then a young one, a tall one, an old broad one)
-        const h = hash(t.x, t.z, 5);
-        const pv = h < 0.6 ? v : h < 0.75 ? 3 : h < 0.88 ? 4 : 5;
+        // (shared grounds.ts: its trunk's height is the same choice — docs/plan/50-the-volume.md)
+        const pv = pineVariant(t);
         put(near ? K.pine[pv] : K.far, t, t.s * 1.45, t.s * 1.45 * sy);
         if (near) put(K.mound, t, 2.2 * t.s, 0.45, -0.2, false);
       } else if (near) {

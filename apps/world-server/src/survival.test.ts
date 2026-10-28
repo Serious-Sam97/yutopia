@@ -75,7 +75,7 @@ async function goTo(p: Person, bx: number, bz: number) {
   await waitFor(() => me(p.room).level === 0 && Math.hypot(me(p.room).x - to.x, me(p.room).y - to.y) < 0.5);
 }
 
-test("a sprint across the pond drains stamina; out of breath the allowance is a jog's, and no roll", async () => {
+test("a sprint across the pond drains stamina; out of breath, no roll — and nobody put back", async () => {
   const a = await person(301);
   assert.equal(me(a.room).st, 100);
   // the pond's ice, flat and clear along z −60 from x −285
@@ -106,14 +106,14 @@ test("a sprint across the pond drains stamina; out of breath the allowance is a 
   );
   assert.equal(a.snaps, 0, "an honest sprint is never put back");
   await waitFor(() => me(a.room).st === 0, 1500);
-  // still sprinting, out of breath: put back once the grace and the slack run out
+  // still sprinting, out of breath: taken as sent (no put-backs — the user's call, 2026-10-28)
   const sent = a.snaps;
-  for (let i = 0; i < 30 && a.snaps === sent; i++) {
+  for (let i = 0; i < 10; i++) {
     bx += MOVE.sprint * 0.05;
     send("sprint");
     await sleep(50);
   }
-  assert.ok(a.snaps > sent, "a sprint while winded is put back");
+  assert.equal(a.snaps, sent, "a sprint while winded isn't put back");
   // where the server has me; a roll refused
   await sleep(100);
   bx = me(a.room).x + OFF.x;

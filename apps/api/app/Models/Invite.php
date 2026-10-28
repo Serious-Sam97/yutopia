@@ -30,6 +30,11 @@ class Invite extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'used_by');
+    }
+
     public function isOpenFor(?string $email = null): bool
     {
         return $this->used_at === null
@@ -45,6 +50,7 @@ class Invite extends Model
             'email' => $this->email,
             'url' => rtrim(config('yutopia.client_url'), '/').'/register?invite='.$this->code,
             'usedAt' => $this->used_at?->toIso8601String(),
+            'usedBy' => $this->user?->name,
             'expiresAt' => $this->expires_at->toIso8601String(),
         ];
     }

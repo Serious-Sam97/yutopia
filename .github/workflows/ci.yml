@@ -24,12 +24,10 @@ jobs:
       - run: pnpm contrast
       - run: pnpm perf
 
-  # Screenshot regression + budgets (texture memory, logic and render time with
-  # 50 people) against /dev/shots — the Studio rendered offline, clock frozen.
-  # Baselines are per platform (apps/client/visual/__screenshots__/*-linux.png):
-  # a run without them writes them (`missing`) and uploads them; commit that
-  # artifact once to start comparing.
-  visual:
+  # Jolt (docs/plan/50, guardrails 3–4) on x86-64: the bench's 8 behaviour checks, its hashes
+  # against the recorded ones (tools/physics-bench/RESULTS.md) and its heap over a long session.
+  # A hash that differs means Jolt isn't deterministic here: build it with CROSS_PLATFORM_DETERMINISTIC.
+  physics:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,16 +37,5 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @yutopia/client exec playwright install --with-deps chromium
-      - run: VISUAL_SERVE=1 pnpm visual --update-snapshots=missing
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: visual-baselines-linux
-          path: apps/client/visual/__screenshots__/*-linux.png
-          if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: visual-diffs
-          path: apps/client/test-results/
+      - run: pnpm physics
+

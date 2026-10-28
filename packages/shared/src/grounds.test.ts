@@ -3,7 +3,7 @@ import { after, test } from "node:test";
 import { BLOCKS, campusBuilding, moveBlocks, upgradeGround } from "./building.ts";
 import type { WorldObjectDef } from "./catalog.ts";
 import { Grid, moveStep, RUN_SPEED, setOutdoors } from "./grid.ts";
-import { GATE, groundsAreaAt, groundsOutdoors, heightAt, INSIDES, walkableTile } from "./grounds.ts";
+import { GATE, groundsAreaAt, groundsOutdoors, heightAt, INSIDES, walkableTile, wallEdgeAt } from "./grounds.ts";
 import { hearingGain } from "./hearing.ts";
 import { type Height, stepHeight } from "./jump.ts";
 import { levelMap } from "./levels.ts";
@@ -89,22 +89,26 @@ test("the Grounds: up the driveway to the gate, the floor never changing", () =>
   const { g0, grid } = ground();
   const r = walk(grid, g0, L(g0, -48, -6), L(g0, -40, -330));
   assert.ok(r.hi > 2.9, `climbed (the driveway's top ${r.hi.toFixed(2)} — a storey's band, but it's the land)`);
-  // the gate lets you through; the fence either side doesn't
-  assert.ok(walkableTile(Math.floor(GATE.x), Math.floor(GATE.z)));
-  assert.ok(!walkableTile(Math.floor(GATE.x) + 20, Math.floor(GATE.z)));
+  // the gate lets you through; the fence either side doesn't (a wall on the tiles' edge: thin as
+  // it's drawn — docs/plan/50-the-volume.md)
+  assert.ok(!wallEdgeAt("h", Math.floor(GATE.x), GATE.z));
+  assert.ok(wallEdgeAt("h", Math.floor(GATE.x) + 20, GATE.z));
   const through = walk(grid, g0, L(g0, -40, -330), L(g0, -40, -380));
   assert.ok(B(g0, through.pos).y < -375, "out past the gate");
 });
 
 test("the Grounds: the fence and the ridges are the edge", () => {
   const { g0, grid } = ground();
-  for (const [x, z] of [
-    [-400, 0],
-    [0, 170],
-    [220, -100],
+  // the fence: a wall on the tiles' edges (thin as it's drawn), stepped across nowhere
+  for (const [x, z, dx, dz] of [
+    [-400, 0, -1, 0],
+    [0, 170, 0, 1],
+    [220, -100, 1, 0],
   ]) {
-    const p = L(g0, x, z);
-    assert.ok(!grid.ok(Math.floor(p.x), Math.floor(p.y)), `the fence at ${x},${z}`);
+    const p = L(g0, x - (dx > 0 ? 1 : 0), z - (dz > 0 ? 1 : 0));
+    const [tx, ty] = [Math.floor(p.x), Math.floor(p.y)];
+    assert.ok(grid.ok(tx, ty), `inside the fence at ${x},${z}`);
+    assert.ok(!grid.step(tx, ty, tx + dx, ty + dz), `the fence at ${x},${z}`);
   }
   // far out on the ridges: nothing to stand on
   const p = L(g0, -470, -100);

@@ -254,7 +254,7 @@ function Thumb({ target, size }: { target: ActTarget; size: number }) {
     border: "1px solid var(--edge)",
   };
   if (target.type === "object") {
-    const o = w?.engine?.getObject(target.id);
+    const o = w?.model?.getObject(target.id);
     return (
       <span className="rounded-full grid place-items-center shrink-0 p-1" style={disc}>
         {o && <ItemThumb kind={o.kind} props={o.props} />}

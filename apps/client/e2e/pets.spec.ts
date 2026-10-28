@@ -82,12 +82,12 @@ test("adopt a platypus, its actions, a sound, and a battle with a friend's cat",
     const back = await me(page);
     expect(Math.hypot((ball?.x ?? 99) - back.x, (ball?.y ?? 99) - back.y)).toBeLessThan(1.6);
 
-    // the ring on the pet (its drawing is wide and low), then "Speak!"
+    // the ring on the pet (it's low), then "Speak!"
     const p = await page.evaluate((id) => {
-      const e = (window as any).__yutopia.engine;
-      const a = e.avatarAt(`pet:${id}`);
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(a.x, a.y, 6);
+      const w = (window as any).__yutopia;
+      const a = w.model.avatarAt(`pet:${id}`);
+      const r = w.hostRect();
+      const s = w.model.worldToClient(a.x, a.y, 6);
       return { x: r.left + s.x, y: r.top + s.y };
     }, perry.id);
     await page.mouse.click(p.x, p.y);

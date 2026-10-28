@@ -21,13 +21,13 @@ import { WALL_H } from "../art/furniture";
 import { cardTexture, type Pick3, type World3 } from "./build";
 import { zt } from "./kit3d";
 
-// Build mode in third person: what the iso engine shows while you build
-// (engine.buildLook) drawn in 3D — the things in your hand as see-through
-// ghosts (green where they fit, red where not, lifted with a bob), their spot
-// on the floor, a wall or a door about to go on an edge, a room being drawn,
-// outlines round what you point at and what's selected, the tile grid, the
-// arrival pin. The build controller itself is the iso one: it works in world
-// tiles, and the view hands it the floor under the pointer.
+// Build mode in 3D: what it shows (the model's buildLook) — the things in your
+// hand as see-through ghosts (green where they fit, red where not, lifted with a
+// bob), their spot on the floor, a wall or a door about to go on an edge, a room
+// being drawn, outlines round what you point at and what's selected, the tile
+// grid, the arrival pin; and my own arrival pin, outside build mode too. The
+// build controller works in world tiles, and the view hands it the floor under
+// the pointer.
 
 export interface BuildLook {
   ghosts: { def: WorldObjectDef; ok: boolean }[];
@@ -43,6 +43,8 @@ export interface BuildLook {
   wallView: "up" | "cut" | "down" | null;
   rect: { x: number; y: number; w: number; h: number; ok: boolean } | null;
   spawn: { at: { x: number; y: number }; pick: { x: number; y: number; ok: boolean } | null } | null;
+  // my own arrival point (olive), and the tile I'm picking (at far off while only picking)
+  mine: { at: { x: number; y: number }; pick: { x: number; y: number; ok: boolean } | null } | null;
   outlines: { id: string; dress?: boolean; color: number; fill?: number }[];
   hidden: Set<string>;
   grid: boolean;
@@ -52,6 +54,7 @@ const OK = 0x6e7b3a; // olive
 const BAD = 0xb5562f; // rust
 const VFD = 0xffb35c;
 const AMBER = 0xffa630;
+const CREAM = 0xefe4cc;
 // a wall material's face colour (the Walls tool's preview)
 const MAT_COLOR: Record<string, number> = { p: 0xefe4cc, w: 0x6b4430, f: 0x9e4a36, b: 0x9a4a30, k: 0xc49a6c };
 
@@ -161,7 +164,7 @@ export class BuildLayer {
   // ── edges, rooms, the arrival pin, outlines ────────────────────────────────
   private setCues(look: BuildLook | null, world: World3) {
     const sig = look
-      ? JSON.stringify([look.edges, look.faces, look.rect, look.spawn, look.outlines, world.picks.length])
+      ? JSON.stringify([look.edges, look.faces, look.rect, look.spawn, look.mine, look.outlines, world.picks.length])
       : "";
     if (sig === this.cueSig) return;
     this.cueSig = sig;
@@ -242,25 +245,40 @@ export class BuildLayer {
       rim.position.copy(m.position);
       this.cues.add(m, rim);
     }
+    // a tile on the floor (an outline round it when asked)
+    const tile = (x: number, y: number, color: number, o: number, rim?: number) => {
+      const m = new Mesh(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), cue(color, o));
+      m.position.set(Math.floor(x) + 0.5, 0.016, Math.floor(y) + 0.5);
+      this.cues.add(m);
+      if (rim === undefined) return;
+      const r = new LineSegments(new EdgesGeometry(m.geometry), new LineBasicMaterial({ color: rim }));
+      r.position.copy(m.position);
+      this.cues.add(r);
+    };
+    // a pin on a tile: a pole and a head
+    const pin = (x: number, y: number, color: number) => {
+      const pole = new Mesh(new CylinderGeometry(0.025, 0.025, 0.8, 8), new MeshLambertMaterial({ color: 0x2a1a12 }));
+      pole.position.set(Math.floor(x) + 0.5, 0.4, Math.floor(y) + 0.5);
+      const head = new Mesh(new SphereGeometry(0.16, 16, 12), new MeshBasicMaterial({ color, toneMapped: false }));
+      head.position.set(pole.position.x, 0.92, pole.position.z);
+      this.cues.add(pole, head);
+    };
     if (look.spawn) {
-      const tile = (x: number, y: number, color: number, o: number) => {
-        const m = new Mesh(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), cue(color, o));
-        m.position.set(Math.floor(x) + 0.5, 0.016, Math.floor(y) + 0.5);
-        this.cues.add(m);
-      };
       const pk = look.spawn.pick;
       if (pk) tile(pk.x, pk.y, ok(pk.ok), 0.35);
       const s = look.spawn.at;
-      tile(s.x, s.y, 0xffa630, 0.25);
-      // the pin: a pole and an amber head
-      const pole = new Mesh(new CylinderGeometry(0.025, 0.025, 0.8, 8), new MeshLambertMaterial({ color: 0x2a1a12 }));
-      pole.position.set(Math.floor(s.x) + 0.5, 0.4, Math.floor(s.y) + 0.5);
-      const head = new Mesh(
-        new SphereGeometry(0.16, 16, 12),
-        new MeshBasicMaterial({ color: 0xffa630, toneMapped: false }),
-      );
-      head.position.set(pole.position.x, 0.92, pole.position.z);
-      this.cues.add(pole, head);
+      tile(s.x, s.y, AMBER, 0.25);
+      pin(s.x, s.y, AMBER);
+    }
+    // mine: an olive tile ringed in cream, an olive pin
+    if (look.mine) {
+      const pk = look.mine.pick;
+      if (pk) tile(pk.x, pk.y, ok(pk.ok), 0.35);
+      const s = look.mine.at;
+      if (s.x > -1e3) {
+        tile(s.x, s.y, OK, 0.25, CREAM);
+        pin(s.x, s.y, OK);
+      }
     }
     // outlines: the hovered / selected things' boxes, in their colour (a floor fill when asked)
     for (const o of look.outlines) {

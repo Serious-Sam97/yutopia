@@ -14,9 +14,9 @@ const EVERY_MS = 20_000; // a client's reports, at most this often
 const FLUSH_MS = 60_000; // to the API
 const KEEP = 2_000; // waiting at most (the API down: the oldest go)
 // the frame's stages a client may report (world/perf.ts in the client)
-const STAGES = new Set(["logic", "iso.update", "tp.update", "tp.frame", "iso.render", "hud", "dark (own)"]);
-const VIEWS = new Set(["iso", "3p", "1p"]);
-const QUALITIES = new Set(["high", "medium", "low", "auto"]);
+const STAGES = new Set(["logic", "tp.update", "tp.frame", "hud", "dark (own)"]);
+const VIEWS = new Set(["3p", "1p"]);
+const QUALITIES = new Set(["high", "medium", "low", "lowest", "auto"]);
 
 /** Where the reports go (tests swap it; offline: nowhere). */
 export const perfSink = {

@@ -4,7 +4,7 @@ import { expect, type Page } from "@playwright/test";
 import { ANA, BIA, enter, test, token } from "./helpers";
 
 // Someone's own bay (docs/plan/43-the-spot.md, phase 1): Ana stands in a free bay of the lot, the
-// prompt offers it, X claims it, the board goes up with her name (3D and iso), the side panel has
+// prompt offers it, X claims it, the board goes up with her name, the side panel has
 // her bay; in it again, she gives it up. The dev world is left as it was (her claim taken down).
 // YUTOPIA_SHOTS=<dir> saves pictures along the way. On the machine's GPU.
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
@@ -12,7 +12,7 @@ const SHOTS = process.env.YUTOPIA_SHOTS;
 // D-05 (shared lot.ts): row D's fifth slot, in the building's coords; its board on the pavement's kerb
 const BAY = { id: "d-05", label: "D-05", x: -15.8, z: 14.8, post: -12.88 };
 
-async function open(page: Page, view: "3p" | "iso", who: typeof ANA = ANA) {
+async function open(page: Page, view: "3p" | "1p", who: typeof ANA = ANA) {
   await page.addInitScript((v) => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
@@ -108,21 +108,14 @@ test("a bay claimed standing in it, the board up with the name, given up again",
   await page.waitForTimeout(600);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/game-side-panel.png` });
   await page.evaluate(() => (window as any).__hud.set({ side: null }));
-  // in iso: the board, its label
-  await page.close();
-  const iso = await page.context().newPage();
-  await open(iso, "iso");
-  await into(iso, -2.2);
-  await iso.waitForTimeout(4000);
-  if (SHOTS) await iso.screenshot({ path: `${SHOTS}/game-iso.png` });
   // given up: in it, X
-  await into(iso);
-  await iso.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "spot:free", null, {
+  await into(page);
+  await page.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "spot:free", null, {
     timeout: 20_000,
   });
-  await iso.evaluate(() => (window as any).__yutopia.interact());
-  await expect.poll(() => board(iso), { timeout: 10_000 }).toBeNull();
-  await expect.poll(() => iso.evaluate(() => (window as any).__hud.get().myBay)).toBeNull();
+  await page.evaluate(() => (window as any).__yutopia.interact());
+  await expect.poll(() => board(page), { timeout: 10_000 }).toBeNull();
+  await expect.poll(() => page.evaluate(() => (window as any).__hud.get().myBay)).toBeNull();
 });
 
 test("MOTORS: by a car on show, the dealer's panel, one taken — beside her in the collection bay", async ({ page }) => {
@@ -192,13 +185,6 @@ test("MOTORS: by a car on show, the dealer's panel, one taken — beside her in 
   await look(page, [503, gy + 4.6, -406.5], [513, gy + 1.0, -388.5], "game-motors-3d");
   await look(page, [519.4, gy + 1.8, -397.2], [523.8, gy + 1.0, -389.6], "game-motors-new");
   await look(page, [523.4, gy + 1.0, -396.4], [523.8, gy + 0.7, -392], "game-motors-plate");
-  // in iso
-  await page.close();
-  const iso = await page.context().newPage();
-  await open(iso, "iso");
-  await iso.evaluate(() => (window as any).__yutopia.teleport({ x: 515 + 60, y: -394 + 10, level: 0 }));
-  await iso.waitForTimeout(5000);
-  if (SHOTS) await iso.screenshot({ path: `${SHOTS}/game-motors-iso.png` });
 });
 
 test("the keys, two people: Bia only beside in Ana's car; lent, she drives it, has it on her GPS; taken back", async ({
@@ -219,7 +205,7 @@ test("the keys, two people: Bia only beside in Ana's car; lent, she drives it, h
   await expect.poll(mine, { timeout: 15_000 }).not.toBe(was);
   // (her keys with nobody to begin with)
   await a.evaluate(() => (window as any).__yutopia.room.send("car:lend", { to: null }));
-  await open(b, "iso", BIA);
+  await open(b, "3p", BIA);
   const biaUid = await b.evaluate(() => (window as any).__yutopia.myUid());
   // Bia by its side, on the ground floor
   const side = await a.evaluate(() => {
@@ -238,7 +224,7 @@ test("the keys, two people: Bia only beside in Ana's car; lent, she drives it, h
   });
   await b.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x, y: p.y, level: 0 }), side);
   await b.waitForFunction(() => /^car/.test((window as any).__hud.get().prompt?.kind ?? ""), null, { timeout: 30_000 });
-  // (her iso view drawn round her: a second browser loads slowly)
+  // (her view drawn round her: a second browser loads slowly)
   await b.waitForTimeout(8000);
   // not hers: in beside
   expect(await b.evaluate(() => (window as any).__hud.get().prompt.label)).toMatch(/^Get in · Ana/);
@@ -286,7 +272,7 @@ test("row D: a free bay beside a parked car offers its claim; a bay with a pool 
   page,
 }) => {
   test.setTimeout(240_000);
-  await open(page, "iso");
+  await open(page, "3p");
   // row D's plain bays (shared lot.ts: x −15.8, slots 2.8 apart from z −0.6), which have a pool car
   const D = [1, 2, 3, 4, 5, 13, 14, 15, 16, 17];
   const zOf = (s: number) => -0.6 + (s + 0.5) * 2.8;

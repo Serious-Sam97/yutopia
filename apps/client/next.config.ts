@@ -67,7 +67,11 @@ const nextConfig = (phase: string): NextConfig => ({
   allowedDevOrigins: ["yutopia.yondra.net"],
   // production builds go to their own folder so they never clobber `next dev`
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
-  webpack(config, { dev, isServer }) {
+  webpack(config, { dev, isServer, webpack }) {
+    // Jolt (jolt-physics, docs/plan/50-the-volume.md) reaches for `node:module` only when it runs
+    // under Node; webpack (the docker stack's `next dev`) can't read `node:` at all — Turbopack
+    // (`next build`) leaves it be
+    if (!isServer) config.plugins.push(new webpack.IgnorePlugin({ resourceRegExp: /^node:module$/ }));
     // `next dev` names lazy chunks `static/chunks/<name>.js` with no hash, so a
     // browser that holds on to an old copy keeps running it after a rebuild
     // (seen with Firefox: a stale games/room chunk next to fresh page code).

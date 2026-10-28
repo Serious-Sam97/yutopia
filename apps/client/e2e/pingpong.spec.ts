@@ -54,13 +54,14 @@ test("ping-pong: serve to Vortex with the mouse, he plays it back — seen from 
   const bia = await (await browser.newContext(ctx)).newPage();
   const id = `e2e-pong-${Date.now().toString(36)}`;
   try {
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     // tables an earlier, interrupted run left behind
     await ana.evaluate(() => {
       const w = (window as any).__yutopia;
-      w.room.state.objects.forEach((o: any, k: string) => {
+      w.room.state.objects.forEach((_o: any, k: string) => {
         if (k.startsWith("e2e-pool") || k.startsWith("e2e-pong")) w.send("obj:remove", { id: k });
       });
     });
@@ -111,8 +112,12 @@ test("ping-pong: serve to Vortex with the mouse, he plays it back — seen from 
     // table metres → the screen, at a height over the table (m)
     const screen = (mx: number, my: number, mz: number) =>
       ana.evaluate(
-        ([o, x, y, z]) =>
-          (window as any).__yutopia.engine.worldToClient(o.x + 2 + x * 1.26, o.y + 1 - y * 1.26, 24 + z * 1.26 * 39.19),
+        ([o, x, y, z]) => {
+          const w = (window as any).__yutopia;
+          const r = w.hostRect();
+          const p = w.model.worldToClient(o.x + 2 + x * 1.26, o.y + 1 - y * 1.26, 24 + z * 1.26 * 39.19);
+          return { x: r.left + p.x, y: r.top + p.y };
+        },
         [T, mx, my, mz] as const,
       );
     const HL = 1.37;
@@ -287,16 +292,14 @@ test("ping-pong: serve to Vortex with the mouse, he plays it back — seen from 
       (await seen()).some((s) => s === "hit:1" || s === "serve:1"),
       "Vortex hit the ball",
     ).toBe(true);
-    // a match starts in the 3D view, behind Ana's end; T goes to iso and back
-    expect(await ana.evaluate(() => !!(window as any).__yutopia.tp), "the match switched to 3D").toBe(true);
+    // the match in the 3D view, behind Ana's end; the bot plays on a while
+    expect(await ana.evaluate(() => !!(window as any).__yutopia.tp), "the match in 3D").toBe(true);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/pong-3d.png` });
-    await ana.keyboard.press("t");
-    await ana.waitForFunction(() => !(window as any).__yutopia.tp, null, { timeout: 30_000 });
     await ana.evaluate(() => Object.assign(window as any, { __pongBot: true }));
     await ana.waitForTimeout(3000);
     if (SHOTS)
       for (let i = 0; i < 3; i++) {
-        await ana.screenshot({ path: `${SHOTS}/pong-iso-${i}.png` });
+        await ana.screenshot({ path: `${SHOTS}/pong-bot-${i}.png` });
         await ana.waitForTimeout(400);
       }
     await ana.evaluate(() => Object.assign(window as any, { __pongBot: false }));

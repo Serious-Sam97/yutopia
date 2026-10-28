@@ -11,7 +11,7 @@ import { Panel } from "./Panel";
 export function DoorPanel({ objectId }: { objectId: string }) {
   const w = useWorld();
   useHud((s) => s.mapVersion); // re-render when the map (rooms/owners) changes
-  const door = w?.engine?.getObject(objectId);
+  const door = w?.model?.getObject(objectId);
   const isAdmin = useHud((s) => s.isAdmin);
   if (!w || !door) return null;
   const room = doorRoom(w.map, door);

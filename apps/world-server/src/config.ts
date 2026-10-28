@@ -30,6 +30,9 @@ export const config = {
   // The building (docs/plan/25-building-floors.md): a world with one floor
   // becomes the top of five, once. Off: it stays as it is (tests of other things).
   building: process.env.YUTOPIA_BUILDING !== "0",
+  // The physics world (docs/plan/50-the-volume.md): Jolt, built at start. Off: none (tests of
+  // other things; nothing needs it before phase 3).
+  physics: process.env.YUTOPIA_PHYSICS !== "0",
   // Media on TVs (docs/plan/10-media.md). Jellyfin: the server, an API key
   // (never leaves this process) and the Jellyfin user whose libraries Yutopia
   // shows (default: the first administrator). YouTube: a Data API key for

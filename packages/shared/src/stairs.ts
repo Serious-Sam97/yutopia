@@ -1,7 +1,7 @@
 import type { WorldObjectDef } from "./catalog.ts";
 import type { Point } from "./iso.ts";
-import { across, floorOf, objLevel, STOREY } from "./levels.ts";
-import type { Edge, MapDef } from "./map.ts";
+import { across, elevOf, floorOf, floorsOf, levelMap, objLevel, STOREY } from "./levels.ts";
+import { type Edge, isFloor, type MapDef, tileAt } from "./map.ts";
 
 // A staircase (the catalog's `stairs`): a switchback in a 4 × 6 well from its
 // floor to the one above (docs/plan/25-building-floors.md). Local coords (rot
@@ -155,6 +155,45 @@ export function floorChange(z: number, level: number, floors: number[]): { level
   if (z > FLOOR_BAND[1] && floors.includes(level + 1)) return { level: level + 1, dz: -STOREY };
   if (z < FLOOR_BAND[0] && floors.includes(level - 1)) return { level: level - 1, dz: STOREY };
   return null;
+}
+
+/** The floor a body's feet are on, from their height, anywhere in the building (docs/plan/50 D:
+ *  one building — the stairs, a flier through a ceiling): past a storey's band, the next floor up
+ *  or down where that floor has a floor under them; as many as it's gone past. Over the top
+ *  floor's roof, or out through a wall up a floor, outdoors: the ground floor's frame (the land's).
+ *  Null: the floor it was. `m` the building, `p` in floor `level`'s coords. */
+export function floorAt(
+  m: MapDef,
+  level: number,
+  p: Point,
+  z: number,
+): { level: number; dz: number; at: Point } | null {
+  const floors = floorsOf(m);
+  const has = (l: number) => {
+    if (!floors.includes(l)) return false;
+    const lm = levelMap(m, l);
+    const q = across(m, level, l, p);
+    return !!lm && isFloor(tileAt(lm, Math.floor(q.x), Math.floor(q.y)));
+  };
+  const outdoors = () =>
+    level === 0 || !floors.includes(0) ? null : { level: 0, dz: elevOf(level) - elevOf(0), at: across(m, level, 0, p) };
+  // (up a floor with none under me — out through its wall: outdoors)
+  if (level !== 0 && !has(level)) return outdoors();
+  if (z <= FLOOR_BAND[1] && z >= FLOOR_BAND[0]) return null;
+  let l = level;
+  let dz = 0;
+  while (z + dz > FLOOR_BAND[1] && has(l + 1)) {
+    l++;
+    dz -= STOREY;
+  }
+  while (z + dz < FLOOR_BAND[0] && has(l - 1)) {
+    l--;
+    dz += STOREY;
+  }
+  // (still over a band with no floor above: over the roof, outdoors)
+  if (z + dz > FLOOR_BAND[1]) return outdoors();
+  if (l === level) return null;
+  return { level: l, dz, at: across(m, level, l, p) };
 }
 
 /** The tiles of a floor open to another, as "x,y": "floor" — where the stairs

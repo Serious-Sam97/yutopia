@@ -8,7 +8,6 @@ import { MAX_FPS, type Prefs, setPrefs, usePrefs } from "@/lib/prefs";
 import { VERSION } from "@/lib/version";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "./ctx";
-import { Invites } from "./Invites";
 import { Icon, type IconName } from "./icons";
 import { Panel } from "./Panel";
 
@@ -28,21 +27,18 @@ const W = {
   ],
   setGraphicsSub: ["How it draws on this computer.", "Como ele desenha neste computador."],
   setControlsSub: ["Keys, pads and controllers.", "Teclas, pads e controles."],
-  setTeam: ["Team", "Equipe"],
-  setTeamSub: ["Invites, and how it runs for everyone.", "Convites, e como está rodando para todos."],
   version: ["Version", "Versão"],
 } as const;
 type Word = keyof typeof W;
 
-type Page = "me" | "sound" | "camera" | "view" | "graphics" | "controls" | "team";
-const PAGES: { id: Page; label: Key | Word; sub: Word; icon: IconName; admin?: boolean }[] = [
+type Page = "me" | "sound" | "camera" | "view" | "graphics" | "controls";
+const PAGES: { id: Page; label: Key | Word; sub: Word; icon: IconName }[] = [
   { id: "me", label: "setMe", sub: "setMeSub", icon: "people" },
   { id: "sound", label: "setSound", sub: "setSoundSub", icon: "mic" },
   { id: "camera", label: "camera", sub: "setCameraSub", icon: "cam" },
   { id: "view", label: "view", sub: "setViewSub", icon: "follow" },
   { id: "graphics", label: "quality", sub: "setGraphicsSub", icon: "screen" },
   { id: "controls", label: "controls", sub: "setControlsSub", icon: "gamepad" },
-  { id: "team", label: "setTeam", sub: "setTeamSub", icon: "key", admin: true },
 ];
 
 // a word of this panel's own, or the house's
@@ -54,16 +50,14 @@ function useWords() {
 
 export function SettingsPanel() {
   const t = useWords();
-  const isAdmin = useHud((s) => s.isAdmin);
   const [page, setPage] = useState<Page>("me");
-  const pages = PAGES.filter((p) => !p.admin || isAdmin);
-  const at = pages.find((p) => p.id === page) ?? pages[0];
+  const at = PAGES.find((p) => p.id === page) ?? PAGES[0];
   return (
     <Panel title={t("settings")} size="max-w-4xl h-[min(660px,90vh)]">
       <div className="flex flex-col sm:flex-row h-full min-h-0 gap-3 sm:gap-6">
         <div className="flex sm:flex-col gap-0.5 sm:w-52 shrink-0 overflow-x-auto sm:overflow-visible scroll-thin pb-1 sm:pb-0">
           <div className="flex sm:flex-col gap-0.5" role="tablist" aria-label={t("settings")}>
-            {pages.map((p) => (
+            {PAGES.map((p) => (
               <button
                 key={p.id}
                 type="button"
@@ -103,7 +97,6 @@ export function SettingsPanel() {
             {at.id === "view" && <ViewPage />}
             {at.id === "graphics" && <GraphicsPage />}
             {at.id === "controls" && <ControlsPage />}
-            {at.id === "team" && <TeamPage />}
           </div>
         </section>
       </div>
@@ -430,17 +423,15 @@ function ViewPage() {
     <>
       <Card>
         <Choice
-          options={["iso", "3p", "1p"] as const}
+          options={["3p", "1p"] as const}
           value={p.view}
-          cols={3}
-          label={(v) => t(v === "iso" ? "viewIso" : v === "3p" ? "view3p" : "view1p")}
-          onPick={(v) => setPrefs(v === "iso" ? { view: v } : { view: v, last3d: v })}
+          cols={2}
+          label={(v) => t(v === "3p" ? "view3p" : "view1p")}
+          onPick={(v) => setPrefs({ view: v })}
         />
-        {p.view !== "iso" && (
-          <p className="text-[12.5px] leading-snug mt-2.5" style={{ color: "var(--cream-dim)" }}>
-            {t("view1pHelp")}
-          </p>
-        )}
+        <p className="text-[12.5px] leading-snug mt-2.5" style={{ color: "var(--cream-dim)" }}>
+          {t("view1pHelp")}
+        </p>
         {p.view === "3p" && (
           <div className="mt-2.5">
             <Choice
@@ -453,23 +444,21 @@ function ViewPage() {
           </div>
         )}
       </Card>
-      {p.view !== "iso" && (
-        <Card label={t("mouseLook")}>
-          <Slider
-            label={t("lookSpeed")}
-            value={p.lookSens}
-            min={0.25}
-            max={3}
-            step={0.05}
-            shown={p.lookSens.toFixed(1)}
-            onChange={(v) => setPrefs({ lookSens: v })}
-          />
-          <Toggle label={t("lookInvert")} value={p.lookInvert} onChange={(v) => setPrefs({ lookInvert: v })} />
-          {p.view === "1p" && (
-            <Toggle label={t("hands1p")} value={p.hands1p} onChange={(v) => setPrefs({ hands1p: v })} />
-          )}
-        </Card>
-      )}
+      <Card label={t("mouseLook")}>
+        <Slider
+          label={t("lookSpeed")}
+          value={p.lookSens}
+          min={0.25}
+          max={3}
+          step={0.05}
+          shown={p.lookSens.toFixed(1)}
+          onChange={(v) => setPrefs({ lookSens: v })}
+        />
+        <Toggle label={t("lookInvert")} value={p.lookInvert} onChange={(v) => setPrefs({ lookInvert: v })} />
+        {p.view === "1p" && (
+          <Toggle label={t("hands1p")} value={p.hands1p} onChange={(v) => setPrefs({ hands1p: v })} />
+        )}
+      </Card>
     </>
   );
 }
@@ -481,7 +470,7 @@ function GraphicsPage() {
     <>
       <Card>
         <Choice
-          options={["auto", "high", "medium", "low"] as const}
+          options={["auto", "high", "medium", "low", "lowest"] as const}
           value={p.quality}
           cols={2}
           label={(q) =>
@@ -492,7 +481,9 @@ function GraphicsPage() {
                   ? "qualityHigh"
                   : q === "medium"
                     ? "qualityMedium"
-                    : "qualityLow",
+                    : q === "low"
+                      ? "qualityLow"
+                      : "qualityLowest",
             )
           }
           onPick={(q) => setPrefs({ quality: q })}
@@ -537,27 +528,6 @@ function ControlsPage() {
         <p className="text-[14px] leading-relaxed" style={{ color: "var(--cream-dim)" }}>
           {t("controlsHelp")}
         </p>
-      </Card>
-    </>
-  );
-}
-
-function TeamPage() {
-  const lang = useLang();
-  return (
-    <>
-      <Card>
-        <Invites />
-      </Card>
-      <Card>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[14.5px]">
-            {lang === "pt" ? "Como está rodando para todos" : "How it runs for everyone"}
-          </span>
-          <a href="/admin/perf" target="_blank" rel="noopener" className="ghost-btn">
-            {lang === "pt" ? "Desempenho" : "Performance"}
-          </a>
-        </div>
       </Card>
     </>
   );

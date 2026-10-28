@@ -78,7 +78,13 @@ export interface Height {
 
 /** One step of the feet at (x, y): in the air they fall and land on the highest
  *  top they clear; on something, walking off its edge drops them. True on landing. */
-export function stepHeight(grid: Grid, x: number, y: number, h: Height, dt: number): boolean {
+export function stepHeight(
+  grid: Pick<Grid, "groundAt" | "onRamp" | "onLand">,
+  x: number,
+  y: number,
+  h: Height,
+  dt: number,
+): boolean {
   const ground = grid.groundAt(x, y, h.z);
   if (!h.up) {
     if (ground < h.z - 0.01) {

@@ -619,6 +619,7 @@ export interface LiftStop3 {
   shown: boolean; // drawn (the floors above mine are kept, hidden: ready for going up)
   inside: boolean; // I'm in its car (it's here, whatever the props still say)
   sway: number; // the car swaying as it travels (tiles)
+  rise: number; // the car I'm in, up from this floor on its way up the shaft (tiles)
 }
 
 interface StopView {
@@ -728,7 +729,7 @@ export class Lifts3 {
       // (the car I'm in is here: arriving, the server's word may be a moment behind me)
       const here = motion.here || s.inside;
       v.car.root.visible = here;
-      v.car.root.position.y = here ? s.sway : 0;
+      v.car.root.position.y = here ? s.sway + s.rise : 0;
       v.car.setDoors(motion.doors);
       v.car.display.set(shown);
       v.car.setLit(

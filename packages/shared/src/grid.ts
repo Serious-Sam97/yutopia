@@ -487,7 +487,7 @@ export const RUN_SPEED = 7;
 // the full move, then each axis on its own.
 // (`blocked`: something else in the way, not on the grid — a car on the move)
 export function moveStep(
-  grid: Grid,
+  grid: Pick<Grid, "fitsAt">,
   pos: Point,
   dir: Point,
   speed: number,

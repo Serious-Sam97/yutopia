@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLang, useTr } from "@/lib/i18n";
-import { prefs, setPrefs } from "@/lib/prefs";
 import { hud } from "@/world/store";
 import type { PongInfo } from "@/world/tables/pong";
 import { useWorld } from "./ctx";
@@ -44,7 +43,6 @@ const T = {
   drive: ["DRIVE", "DRIVE"],
   smash: ["SMASH", "CORTADA"],
   chop: ["CHOP", "CORTE"],
-  tip3d: ["Ping-pong plays best in 3D — press T", "Pingue-pongue fica melhor em 3D — aperte T"],
   speed: ["km/h", "km/h"],
   game: ["GAME", "GAME"],
   match: ["MATCH", "PARTIDA"],
@@ -169,8 +167,7 @@ export function PongPanel({ objectId }: { objectId: string }) {
       } else if (e.key === " ") {
         e.preventDefault();
         if (!e.repeat) w?.tables?.pong.key("serve", true);
-      } else if (e.key.toLowerCase() === "t" && !e.repeat)
-        setPrefs({ view: prefs().view === "iso" ? prefs().last3d : "iso" });
+      }
     };
     const onUp = (e: KeyboardEvent) => {
       const d = dir(e);
@@ -189,24 +186,6 @@ export function PongPanel({ objectId }: { objectId: string }) {
   const playing = phase === "play";
   const vortexSeat = info?.seats.findIndex((s) => s?.vortex) ?? -1;
   const score = info?.score;
-  const threeD = !!w?.tp;
-  // a match of mine starts in iso: over to the 3D view (behind my end), and
-  // back to how it was when I'm done here
-  const fromIso = useRef(false);
-  useEffect(() => {
-    // (the latency e2e keeps two pages in the light iso view: window.__pongStayIso)
-    const stay = typeof window !== "undefined" && (window as unknown as { __pongStayIso?: boolean }).__pongStayIso;
-    if (playing && me >= 0 && prefs().view === "iso" && !fromIso.current && !stay) {
-      fromIso.current = true;
-      setPrefs({ view: prefs().last3d });
-    }
-  }, [playing, me]);
-  useEffect(
-    () => () => {
-      if (fromIso.current) setPrefs({ view: "iso" });
-    },
-    [],
-  );
   const status = (() => {
     if (!info) return t("pick");
     if (phase === "done") {
@@ -525,11 +504,6 @@ export function PongPanel({ objectId }: { objectId: string }) {
               </button>
             ) : null}
           </div>
-          {!threeD && prefs().view === "iso" && me >= 0 ? (
-            <p className="mono text-[10px] mt-0.5" style={{ color: "var(--vfd)" }}>
-              {t("tip3d")}
-            </p>
-          ) : null}
         </div>
       </section>
     </>

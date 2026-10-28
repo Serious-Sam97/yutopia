@@ -4,8 +4,7 @@ import { ANA, BIA, enter, test, token } from "./helpers";
 
 // The lot's cars, driven (docs/plan/28-the-car.md, phase 7): Ana gets into a
 // lot car (3D, the car's camera) and drives it out of its bay with Bia in the
-// seat beside her (iso: she sees it go by, her people in it not drawn
-// standing); stopped, both get out and it stays where it was left, for both.
+// seat beside her; stopped, both get out and it stays where it was left, for both.
 // Always on the machine's GPU: in software GL the 3D world draws at ~2 fps, the
 // car's sim (a quarter second caught up a frame at most) crawls and a second
 // browser's 3D view takes a minute to build. Its frames held to 100 ms only with
@@ -15,11 +14,11 @@ const GPU = process.env.YUTOPIA_GPU === "1";
 const dir = process.env.YUTOPIA_SHOTS;
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
-async function open(page: Page, who: typeof ANA, view: "3p" | "iso") {
-  await page.addInitScript((v) => {
+async function open(page: Page, who: typeof ANA) {
+  await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: v, cam3p: "chase" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase" }));
     const W = window as any;
     W.__worst = 0;
     let last = performance.now();
@@ -29,7 +28,7 @@ async function open(page: Page, who: typeof ANA, view: "3p" | "iso") {
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  }, view);
+  });
   await enter(page, await token(who));
   await page.waitForFunction(() => !!(window as any).__yutopia.cars, null, { timeout: 60_000 });
 }
@@ -74,8 +73,8 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
   test.setTimeout(240_000);
   const a = page;
   const b = await (await browser.newContext()).newPage();
-  await open(a, ANA, "3p");
-  await open(b, BIA, "iso");
+  await open(a, ANA);
+  await open(b, BIA);
   // the lot as it should be (an admin's)
   await a.evaluate(() => (window as any).__yutopia.room.send("mod:cars", {}));
   await a.waitForTimeout(800);
@@ -90,7 +89,7 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
   const vid = `car:${car.id}`;
   const seats = await a.evaluate((id) => (window as any).__yutopia.room.state.vehicles.get(id)?.seats, vid);
   expect(String(seats).split("|").filter(Boolean)).toHaveLength(2);
-  // (in the car Bia's view turns 3D too: let it finish loading — on one machine its building
+  // (Bia's view in the car: let it finish loading — on one machine its building
   // would stall Ana's frames)
   await b.waitForFunction(() => !!(window as any).__yutopia.tp?.gameCam, null, { timeout: 30_000 });
   await b.waitForTimeout(4000);
@@ -115,7 +114,7 @@ test("a lot car: driven out with a passenger, left where it stopped", async ({ p
   // (read before the screenshots: taking one stalls the page)
   const hitch = await worst(a);
   if (dir) await a.screenshot({ path: `${dir}/car-driven-3p.png` });
-  if (dir) await b.screenshot({ path: `${dir}/car-driven-iso.png` });
+  if (dir) await b.screenshot({ path: `${dir}/car-driven-passenger.png` });
   if (GPU) expect(hitch, "no frame over 100 ms while driving").toBeLessThan(100);
   // stopped (the handbrake), both out; it parks where it stopped
   await a.keyboard.down("Space");
@@ -176,8 +175,8 @@ test("a parked car knocked: it slides, stops, and stays there for everyone", asy
   test.setTimeout(240_000);
   const a = page;
   const b = await (await browser.newContext()).newPage();
-  await open(a, ANA, "3p");
-  await open(b, BIA, "iso");
+  await open(a, ANA);
+  await open(b, BIA);
   await a.evaluate(() => (window as any).__yutopia.room.send("mod:cars", {}));
   await a.waitForTimeout(800);
   // a sedan with another car straight across the aisle behind it (it backs into it)
@@ -241,5 +240,90 @@ test("a parked car knocked: it slides, stops, and stays there for everyone", asy
   await a.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "car:leave", null, { timeout: 10_000 });
   await a.evaluate(() => (window as any).__yutopia.interact());
   await expect.poll(async () => (await me(a)).busy, { timeout: 10_000 }).toBe("");
+  await a.evaluate(() => (window as any).__yutopia.room.send("mod:cars", {}));
+});
+
+// One world in 3D (docs/plan/50-the-volume.md, phase 8): a car passes under a flier — over its roof
+// nobody's in its way or knocked down — and stops for someone standing there.
+test("a car passes under a flier 3 m up; for someone on the ground it stops", async ({ page, browser }) => {
+  test.setTimeout(240_000);
+  const a = page;
+  const b = await (await browser.newContext()).newPage();
+  await open(a, ANA);
+  await open(b, BIA);
+  await a.evaluate(() => {
+    const r = (window as any).__yutopia.room;
+    r.send("mod:cars", {});
+    for (const k of ["fly", "clip", "fast", "hidden"]) r.send("mod:power", { power: k, on: false });
+  });
+  await a.waitForTimeout(800);
+  const car = await aCar(a);
+  expect(car, "a car in its bay").toBeTruthy();
+  const ahead = (d: number) => ({ x: car.x + Math.cos(car.a) * d, y: car.y + Math.sin(car.a) * d });
+  // how far along its heading the car's got (from its middle in the bay)
+  const along = (pg: Page) =>
+    pg.evaluate(
+      ([id, x0, y0, h]) => {
+        const c = (window as any).__yutopia;
+        const v = c.room.state.vehicles.get(id);
+        if (!v) return 0;
+        const dx = v.x - c.map.ox - (x0 as number);
+        const dy = v.z - c.map.oy - (y0 as number);
+        return dx * Math.cos(h as number) + dy * Math.sin(h as number);
+      },
+      [`car:${car.id}`, car.x, car.y, car.a],
+    );
+  const drive = async (ms: number) => {
+    await b.keyboard.down("KeyW");
+    await b.waitForTimeout(ms);
+    await b.keyboard.up("KeyW");
+    await b.keyboard.down("Space");
+    await b.waitForTimeout(1500);
+    await b.keyboard.up("Space");
+  };
+  // Ana 3 m up over the aisle, 5 m ahead of its nose's bay
+  const over = ahead(5);
+  await a.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), over);
+  await a.waitForTimeout(2000);
+  await a.evaluate(() => (window as any).__yutopia.room.send("mod:power", { power: "fly", on: true }));
+  await a.waitForTimeout(800);
+  const z0 = await a.evaluate(() => (window as any).__yutopia.walker.body.z as number);
+  await a.keyboard.down("Space");
+  await expect
+    .poll(() => a.evaluate(() => (window as any).__yutopia.walker.body.z as number), { timeout: 10_000 })
+    .toBeGreaterThan(z0 + 3);
+  await a.keyboard.up("Space");
+  // Bia in from beside its nose (2.7 m: further, the free bay across claims the prompt) and on
+  await getIn(b, ahead(2.7), /^drive:car:/);
+  await b.waitForFunction(() => !!(window as any).__yutopia.tp?.gameCam?.snap, null, { timeout: 30_000 });
+  await b.waitForTimeout(2500); // (the engine started)
+  await drive(2600);
+  const passed = await along(b);
+  expect(passed, `on under her (${passed.toFixed(1)} m on)`).toBeGreaterThan(5.5);
+  expect(
+    await a.evaluate(
+      () => (window as any).__yutopia.room.state.players.get((window as any).__yutopia.room.sessionId).fellAt,
+    ),
+  ).toBe(0);
+  // back into its bay's mouth; Ana down on the ground in its way, 5 m ahead again
+  await b.keyboard.down("KeyS");
+  await expect.poll(() => along(b), { timeout: 15_000 }).toBeLessThan(1.5);
+  await b.keyboard.up("KeyS");
+  await b.keyboard.down("Space");
+  await b.waitForTimeout(1500);
+  await b.keyboard.up("Space");
+  const from = await along(b);
+  await a.evaluate(() => (window as any).__yutopia.room.send("mod:power", { power: "fly", on: false }));
+  await a.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), ahead(from + 4.5));
+  await a.waitForTimeout(2500);
+  await drive(2600);
+  const stopped = await along(b);
+  expect(
+    stopped,
+    `stopped short of her (${stopped.toFixed(1)} m on, she's at ${(from + 4.5).toFixed(1)})`,
+  ).toBeLessThan(from + 4.5 - 1);
+  // out; the lot back as it was
+  await b.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "car:leave", null, { timeout: 10_000 });
+  await b.evaluate(() => (window as any).__yutopia.interact());
   await a.evaluate(() => (window as any).__yutopia.room.send("mod:cars", {}));
 });

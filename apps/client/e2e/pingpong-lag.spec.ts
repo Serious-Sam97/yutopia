@@ -16,7 +16,7 @@ const SECONDS = Number(process.env.PONG_SECONDS ?? 50);
 test(`ping-pong: two people, one ${LAG} ms away — hits taken, no jumps, real rallies`, async ({ browser }) => {
   test.setTimeout(300_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
-  // small and Low: two WebGL pages share one software renderer here
+  // small and Lowest: two 3D pages at once (both swing by frames)
   const ctx = { viewport: { width: 760, height: 520 } };
   const anaCtx = await browser.newContext(ctx);
   const biaCtx = await browser.newContext(ctx);
@@ -24,9 +24,7 @@ test(`ping-pong: two people, one ${LAG} ms away — hits taken, no jumps, real r
     await x.addInitScript(() => {
       const k = "yutopia:prefs";
       const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-      localStorage.setItem(k, JSON.stringify({ ...p, quality: "low", maxFps: 0, view: "iso" }));
-      // (two 3D views at once are too slow to time hits in here: stay in iso)
-      (window as any).__pongStayIso = true;
+      localStorage.setItem(k, JSON.stringify({ ...p, quality: "lowest", maxFps: 0, view: "3p" }));
     });
   // Bia far away: everything she says to the world server and hears back goes
   // through a relay here that holds each chunk LAG ms (her socket and her
@@ -82,13 +80,14 @@ test(`ping-pong: two people, one ${LAG} ms away — hits taken, no jumps, real r
     await p.waitForFunction(() => !!(window as any).__yutopia.tables?.pong, null, { timeout: 15_000 });
   };
   try {
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     // tables an earlier, interrupted run left behind
     await ana.evaluate(() => {
       const w = (window as any).__yutopia;
-      w.room.state.objects.forEach((o: any, k: string) => {
+      w.room.state.objects.forEach((_o: any, k: string) => {
         if (k.startsWith("e2e-pool") || k.startsWith("e2e-pong")) w.send("obj:remove", { id: k });
       });
     });
@@ -118,7 +117,7 @@ test(`ping-pong: two people, one ${LAG} ms away — hits taken, no jumps, real r
     }
     expect(at, "room for the table").not.toBeNull();
     const T = at as { x: number; y: number };
-    await expect.poll(() => bia.evaluate((i) => !!(window as any).__yutopia.engine.getObject(i), id)).toBe(true);
+    await expect.poll(() => bia.evaluate((i) => !!(window as any).__yutopia.model.getObject(i), id)).toBe(true);
     await open(ana, { x: T.x - 0.7, y: T.y + 1 });
     await open(bia, { x: T.x + 4.7, y: T.y + 1 });
     await ana.getByRole("button", { name: "Take this end" }).first().click();

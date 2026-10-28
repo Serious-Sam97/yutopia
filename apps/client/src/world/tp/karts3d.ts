@@ -5,6 +5,7 @@ import {
   KART_CROWD,
   KART_DESK,
   KART_FENCE,
+  KART_FENCE_H,
   KART_GATE,
   KART_NAME,
   KART_PADDOCK,
@@ -985,10 +986,10 @@ export function stageKarts(T3: THREE, scene: THREE_NS.Object3D, k: KartScene, ct
         if (!gate(x2, z2) && !gate(x, z)) rails.push([x, z, x2, z2]);
       }
     }
-    const pm = new T3.InstancedMesh(keep(new T3.BoxGeometry(0.14, 1.4, 0.14)), std("#6e5a44"), posts.length);
+    const pm = new T3.InstancedMesh(keep(new T3.BoxGeometry(0.14, KART_FENCE_H, 0.14)), std("#6e5a44"), posts.length);
     const m4 = new T3.Matrix4();
     posts.forEach(([x, z], i) => {
-      m4.makeTranslation(x, padY(x, z) + 0.7, z);
+      m4.makeTranslation(x, padY(x, z) + KART_FENCE_H / 2, z);
       pm.setMatrixAt(i, m4);
     });
     root.add(pm);
@@ -997,7 +998,7 @@ export function stageKarts(T3: THREE, scene: THREE_NS.Object3D, k: KartScene, ct
     const sc = new T3.Vector3();
     let j = 0;
     for (const [x, z, x2, z2] of rails)
-      for (const h of [0.6, 1.15]) {
+      for (const h of [KART_FENCE_H * 0.45, KART_FENCE_H - 0.1]) {
         q.setFromAxisAngle(new T3.Vector3(0, 1, 0), -Math.atan2(z2 - z, x2 - x));
         sc.set(Math.hypot(x2 - x, z2 - z), 1, 1);
         m4.compose(new T3.Vector3((x + x2) / 2, padY(x, z) + h, (z + z2) / 2), q, sc);

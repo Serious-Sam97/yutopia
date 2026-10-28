@@ -2,7 +2,7 @@
 import { expect, type Page } from "@playwright/test";
 import { ANA, enter, test, token, walkTo } from "./helpers";
 
-// The farm (docs/plan/31-the-day.md, phase 1): in both views, down the lane
+// The farm (docs/plan/31-the-day.md, phase 1): in 3D, down the lane
 // from the square, in at the barn's doors and out again, then up a row of
 // the cornfield — the land streamed in with no long frame (the machine's GPU:
 // YUTOPIA_GPU=1). Review shots: YUTOPIA_SHOTS=<dir>.
@@ -13,11 +13,11 @@ test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignor
 // the ground floor's corner is at (-60, -10) in the building's coords
 const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
 
-async function open(page: Page, view: "3p" | "iso") {
+async function open(page: Page, view: "3p" | "1p") {
   await page.addInitScript((v) => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: v, last3d: "3p", cam3p: "chase" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: v, cam3p: "chase" }));
     const W = window as any;
     W.__worst = 0;
     let last = performance.now();
@@ -29,7 +29,7 @@ async function open(page: Page, view: "3p" | "iso") {
     requestAnimationFrame(tick);
   }, view);
   await enter(page, await token(ANA));
-  if (view === "3p") await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   await page.evaluate(() => {
     const y = (window as any).__yutopia;
     y.updateNight = () => {};
@@ -49,7 +49,7 @@ const worst = (page: Page) =>
 // where the HUD says I am (the Grounds' rooms: shared grounds.ts placeAt)
 const area = (page: Page) => page.evaluate(() => (window as any).__hud.get().me?.areaName as string | undefined);
 
-for (const view of ["3p", "iso"] as const)
+for (const view of ["3p"] as const)
   test(`the farm in ${view}: down the lane, into the barn and out, up a row of the corn`, async ({ page }) => {
     test.setTimeout(240_000);
     await open(page, view);

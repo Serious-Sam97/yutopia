@@ -30,7 +30,7 @@ const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 }); // (the Grounds'
 const LOT = { ...G(-22, 20), level: 0 }; // (aisle E: docs/plan/42-the-lot.md)
 const LAWN = G(-80, 22);
 
-type View = "3p" | "iso";
+type View = "3p" | "1p";
 const results: Record<string, unknown> = {};
 
 async function open(ctx: BrowserContext, who: typeof ANA, view: View): Promise<Page> {
@@ -43,7 +43,6 @@ async function open(ctx: BrowserContext, who: typeof ANA, view: View): Promise<P
       JSON.stringify({
         ...p,
         view: v,
-        last3d: v === "iso" ? (p.last3d ?? "3p") : v,
         cam3p: "chase",
         quality: "high",
         maxFps: 60,
@@ -52,10 +51,9 @@ async function open(ctx: BrowserContext, who: typeof ANA, view: View): Promise<P
     );
   }, view);
   await enter(page, await token(who));
-  if (view !== "iso")
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {
-      timeout: 60_000,
-    });
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {
+    timeout: 60_000,
+  });
   return page;
 }
 
@@ -133,7 +131,7 @@ async function holdClock(page: Page) {
     c.updateNight = () => {};
     if (c.life) c.life.weather = () => [0, 0];
     c.hour = h;
-    c.engine?.setClock(h);
+    c.model.setClock(h);
     c.tp?.setHour(h);
   }, HOUR);
 }
@@ -184,7 +182,7 @@ async function measure(name: string, page: Page, seconds = SECONDS) {
     }
     // the whole frame stepped by hand, the GPU waited on each time (no vsync, no other loop
     // between): what a frame costs, steadier than the live window
-    const gl = c.tp ? c.tp.renderer.getContext() : c.engine.app.renderer.gl;
+    const gl = c.tp.renderer.getContext();
     const ms: number[] = [];
     for (let i = 0; i < 100; i++) {
       const t0 = performance.now();
@@ -240,38 +238,36 @@ test.describe
       if (OUT) writeFileSync(OUT, `${JSON.stringify(results, null, 1)}\n`);
     });
 
-    for (const view of ["3p", "iso"] as const) {
-      test(`${view}: indoors, idle and walking`, async ({ browser }) => {
-        test.skip(!want(`${view}-indoors-idle`) && !want(`${view}-indoors-walk`));
-        const ctx = await browser.newContext();
-        const page = await open(ctx, ANA, view);
-        await page.waitForTimeout(3000);
-        if (want(`${view}-indoors-idle`)) {
-          await page.waitForTimeout(3500); // (idle: frames drop to 30/s after 3 s)
-          await measure(`${view}-indoors-idle`, page);
-        }
-        if (want(`${view}-indoors-walk`)) {
-          await pace(page);
-          await page.waitForTimeout(1000);
-          await measure(`${view}-indoors-walk`, page);
-          await stopPace(page);
-        }
-        await ctx.close();
-      });
-
-      test(`${view}: outdoors, walking the lot and the lawn`, async ({ browser }) => {
-        test.skip(!want(`${view}-outdoors-walk`));
-        const ctx = await browser.newContext();
-        const page = await open(ctx, ANA, view);
-        await goTo(page, LOT);
-        await page.waitForTimeout(5000); // (the land streamed in)
-        await pace(page, LAWN);
+    test("3p: indoors, idle and walking", async ({ browser }) => {
+      test.skip(!want("3p-indoors-idle") && !want("3p-indoors-walk"));
+      const ctx = await browser.newContext();
+      const page = await open(ctx, ANA, "3p");
+      await page.waitForTimeout(3000);
+      if (want("3p-indoors-idle")) {
+        await page.waitForTimeout(3500); // (idle: frames drop to 30/s after 3 s)
+        await measure("3p-indoors-idle", page);
+      }
+      if (want("3p-indoors-walk")) {
+        await pace(page);
         await page.waitForTimeout(1000);
-        await measure(`${view}-outdoors-walk`, page, SECONDS + 4);
+        await measure("3p-indoors-walk", page);
         await stopPace(page);
-        await ctx.close();
-      });
-    }
+      }
+      await ctx.close();
+    });
+
+    test("3p: outdoors, walking the lot and the lawn", async ({ browser }) => {
+      test.skip(!want("3p-outdoors-walk"));
+      const ctx = await browser.newContext();
+      const page = await open(ctx, ANA, "3p");
+      await goTo(page, LOT);
+      await page.waitForTimeout(5000); // (the land streamed in)
+      await pace(page, LAWN);
+      await page.waitForTimeout(1000);
+      await measure("3p-outdoors-walk", page, SECONDS + 4);
+      await stopPace(page);
+      await ctx.close();
+    });
 
     test("3p: indoors walking, with Bia walking beside", async ({ browser }) => {
       test.skip(!want("3p-indoors-two"));

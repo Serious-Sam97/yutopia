@@ -4,6 +4,11 @@
 /** The step the body is simulated at, s (a fixed step: the same at any frame rate). */
 export const STEP_DT = 1 / 120;
 
+/** Feet more than this many tiles over whatever's under them: aloft (docs/plan/49-the-height.md) —
+ *  the 3D camera follows them all the way up, and the client's prompts (the page's: no shapes there)
+ *  go. Reach itself is three-dimensional now (shared reach.ts: docs/plan/50-the-volume.md E). */
+export const ALOFT = 2;
+
 export const GAITS = ["still", "walk", "jog", "sprint", "crouch", "aim"] as const;
 export type Gait = (typeof GAITS)[number];
 

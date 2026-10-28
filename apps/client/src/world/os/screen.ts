@@ -773,12 +773,3 @@ export function paintTube(g: G, k: number, opening: boolean) {
     g.fill();
   }
 }
-
-// Its light on the desk: the picture's rough colour per phase / era.
-export function glowColor(v: ComputerView): number {
-  if (v.phase === "boot" || v.phase === "saver") return 0x8ea4c8;
-  if (v.era === "vortex") return 0xd05ac8;
-  if (v.era === "winxp") return 0x6ca6e8;
-  if (v.era === "dos") return 0x9a9a9a;
-  return 0x5aa6b0;
-}

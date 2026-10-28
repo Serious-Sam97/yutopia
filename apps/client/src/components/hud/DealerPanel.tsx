@@ -57,7 +57,7 @@ export function DealerPanel({ objectId }: { objectId: string }) {
   const w = useWorld();
   const me = useHud((s) => s.me);
   // (the one I have now, if any: its looks to start from)
-  const mine = objectId ? w?.engine?.getObject(objectId) : null;
+  const mine = objectId ? w?.model?.getObject(objectId) : null;
   const [model, setModel] = useState<string>(String(mine?.props?.model ?? "sedan"));
   const [colour, setColour] = useState<number>(Number(mine?.props?.variant ?? 1) || 0);
   const [plate, setPlate] = useState<string>(String(mine?.props?.plate ?? plateOf("", me?.name ?? "")));

@@ -8,12 +8,12 @@ import {
   type CarSpec,
   type CarWire,
   carKindOf,
+  finiteState,
   freeSpot,
   groundsWorld,
   HOME_CARS,
   type HomeCar,
   headingQuat,
-  implausible,
   keysDay,
   mayDrive,
   parkAt,
@@ -57,6 +57,7 @@ import { ploughAt, ploughedSweep } from "./ploughed.ts";
 // it back there, and putting the lot back puts each at its own.
 
 const REACH = 4.2; // from its middle to whoever gets in
+const CAR_H = 1.5; // a car's height (m): what its door and its knock reach up to
 const OUT_V = 2.5; // m/s: slower than this to get in or out
 const TOW_MS = 2 * 60 * 60 * 1000;
 const TOW_NEAR = 30;
@@ -75,7 +76,6 @@ interface Live {
   last: CarWire | null;
   lastAt: number;
   still: number;
-  strikes: number;
   sp: number; // the most it was going over its last two states (m/s)
 }
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
@@ -149,7 +149,8 @@ registerFeature((room: WorldRoom) => {
       if (def.props?.retire) return no(client, "gone");
       if (seat === 0 && !mayDrive(def.props, p.uid, Date.now())) return notYours(client, def.props);
       const pose = parkedPose(def);
-      if (Math.hypot(p.x - pose.x, p.y - pose.y) > REACH) return no(client, "far");
+      // (in three dimensions: shared reach.ts — a car's 1.5 tall)
+      if (Math.hypot(p.x - pose.x, p.y - pose.y, room.upOff(p, pose, CAR_H)) > REACH) return no(client, "far");
       const kind = carKindOf(def.props?.model);
       const spec = SPECS[kind];
       const v = new Vehicle();
@@ -170,14 +171,15 @@ registerFeature((room: WorldRoom) => {
       v.dmg = typeof def.props?.dmg === "string" ? def.props.dmg : "";
       v.role = typeof def.props?.role === "string" ? def.props.role : "";
       v.plate = typeof def.props?.plate === "string" ? def.props.plate : "";
-      l = { veh: v, spec, seats: ["", "", "", ""], last: null, lastAt: Date.now(), still: 0, strikes: 0, sp: 0 };
+      l = { veh: v, spec, seats: ["", "", "", ""], last: null, lastAt: Date.now(), still: 0, sp: 0 };
       live.set(v.id, l);
       room.state.vehicles.set(v.id, v);
       // its object: out, being driven (no longer in anyone's way where it stood)
       room.state.objects.set(o.id, toSchema({ ...def, props: { ...(def.props ?? {}), driven: 1 } }));
       room.rebuildGrid();
     } else {
-      if (Math.hypot(p.x + off.x - l.veh.x, p.y + off.y - l.veh.z) > REACH) return no(client, "far");
+      const at = { x: l.veh.x - off.x, y: l.veh.z - off.y };
+      if (Math.hypot(p.x - at.x, p.y - at.y, room.upOff(p, at, CAR_H)) > REACH) return no(client, "far");
       if (Math.hypot(l.veh.vx, l.veh.vz) > OUT_V) return no(client, "moving");
       if (seat === 0) {
         const od = room.state.objects.get(l.veh.obj);
@@ -209,35 +211,9 @@ registerFeature((room: WorldRoom) => {
     // too often: dropped (a stuck loop)
     if (now - l.lastAt < 1000 / (CAR_HZ * 2)) return;
     const v = l.veh;
-    // its first state from this driver: it starts where the car is
-    const prev: CarWire = l.last ?? {
-      seq: 0,
-      x: v.x,
-      y: v.y,
-      z: v.z,
-      qx: v.qx,
-      qy: v.qy,
-      qz: v.qz,
-      qw: v.qw,
-      vx: v.vx,
-      vy: v.vy,
-      vz: v.vz,
-      wy: 0,
-      steer: 0,
-      rpm: 0,
-      gear: 0,
-      fl: 0,
-      slip: 0,
-      fuel: 0,
-    };
-    const why = implausible(prev, m, (now - l.lastAt) / 1000, (x, z) => heightAt(x, z));
-    if (why) {
-      l.strikes++;
-      room.send(client, "car:snap", { ...prev, id: v.id });
-      if (l.strikes > 40) console.warn(`[cars] ${v.id}: ${why} (${l.strikes})`);
-      return;
-    }
-    l.strikes = Math.max(0, l.strikes - 1);
+    // where the driver says it is, it is: nothing put back for its pace or its place (the user's
+    // call, 2026-10-28: no anticheat for now) — only a state that isn't numbers is let go
+    if (!finiteState(m)) return;
     if (m.fl & CAR_FLAGS.horn && !(v.fl & CAR_FLAGS.horn)) v.honkAt = now;
     // its tank: only ever down from the driver (a pump fills it here, not them)
     const fuel = Number(m.fuel) / l.spec.fuel.litres;
@@ -310,7 +286,10 @@ registerFeature((room: WorldRoom) => {
     if (q.level !== 0 || q.fellAt || q.downAt || q.hp <= 0 || q.busy.startsWith("ride:") || q.busy.startsWith("drive:"))
       return;
     if (now - (knockedAt.get(sid) ?? 0) < 4000 || l.sp < KNOCK_V) return;
-    if (Math.hypot(q.x + off.x - v.x, q.y + off.y - v.z) > KNOCK_REACH) return;
+    // (high over the car: it passes under them — docs/plan/49-the-height.md)
+    // (its body against theirs: over a car's roof, nobody's knocked — shared reach.ts)
+    const at = { x: v.x - off.x, y: v.z - off.y };
+    if (Math.hypot(q.x - at.x, q.y - at.y, room.upOff(q, at, CAR_H)) > KNOCK_REACH) return;
     knockedAt.set(sid, now);
     q.fellAt = now;
     q.fellYaw = Math.atan2(v.vz, v.vx);
@@ -654,6 +633,7 @@ registerFeature((room: WorldRoom) => {
   room.on("mod:cars", (client) => {
     const p = room.state.players.get(client.sessionId);
     if (!p?.admin && !config.offline) return;
+    if (p?.admin) room.adminLog(p, "cars", null, "every car home");
     for (const l of [...live.values()]) {
       for (const sid of l.seats) if (sid) leaveSeat(sid, true);
       park(l);
@@ -737,6 +717,77 @@ registerFeature((room: WorldRoom) => {
     if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] buy", e.message));
     room.send(client, "car:bought", { id });
   });
+  // ── an admin's (docs/plan/48-the-admin.md): a vehicle spawned in front of them, any of the
+  // kinds, anyone's to drive; gone when they clear what they spawned, or at the day's end
+  // (retired: gone once nobody's near it, as a sold car goes) ──
+  room.on("mod:spawn-car", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    if (!p?.admin || !has() || p.level !== 0) return;
+    if (/^(drive|ride):/.test(p.busy)) return no(client, "busy");
+    const model = String(m?.model ?? "");
+    if (!Object.hasOwn(SPECS, model)) return no(client, "model");
+    const colour = Number(m?.colour);
+    if (!Number.isInteger(colour) || colour < 0 || colour >= CAR_COLOURS.length) return no(client, "model");
+    const spec = SPECS[model as CarKind];
+    // a few metres ahead, facing my way (the world's x, z: off the floor's by GROUND_OFFSET)
+    const yaw = (p.yaw / 256) * Math.PI * 2;
+    const bx = p.x + off.x + Math.cos(yaw) * 5;
+    const bz = p.y + off.y + Math.sin(yaw) * 5;
+    const at = freeSpot(carWorld, spec, bx, bz, yaw, 14);
+    if (!at) return no(client, "full");
+    const props: Record<string, unknown> = {
+      level: 0,
+      variant: colour,
+      plate: plateOf(String(m?.plate ?? ""), p.name),
+      fuel: 1,
+      spawnedBy: p.uid,
+      spawnDay: keysDay(Date.now()),
+    };
+    if (model !== "sedan") props.model = model;
+    const id = `adm-${p.uid}-${Date.now().toString(36)}`;
+    const next = { id, kind: "car", ...parkAt(at.x - off.x, at.z - off.y, at.a, heightAt(at.x, at.z), props) };
+    room.state.objects.set(id, toSchema(next));
+    room.rebuildGrid();
+    room.rescue();
+    if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] spawn", e.message));
+    room.adminLog(p, "spawn", null, `a ${model}`);
+  });
+  /** Spawned cars (one admin's, or every one from before today): retired, gone once nobody's near. */
+  const retireSpawned = (uid: number | null) => {
+    const today = keysDay(Date.now());
+    let n = 0;
+    for (const o of [...room.state.objects.values()]) {
+      if (o.kind !== "car") continue;
+      const def = fromSchema(o);
+      const by = Number(def.props?.spawnedBy);
+      if (!by || def.props?.retire) continue;
+      if (uid === null ? Number(def.props?.spawnDay) === today : by !== uid) continue;
+      const next = { ...def, props: { ...(def.props ?? {}), retire: 1 } };
+      room.state.objects.set(o.id, toSchema(next));
+      if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] unspawn", e.message));
+      n++;
+    }
+    if (n) retire();
+    return n;
+  };
+  room.on("mod:clear", (client) => {
+    const p = room.state.players.get(client.sessionId);
+    if (!p?.admin) return;
+    const n = retireSpawned(p.uid);
+    room.send(client, "toast", {
+      text: n ? `Cleared: ${n} vehicle${n > 1 ? "s" : ""}.` : "Nothing of yours to clear.",
+    });
+    if (n) room.adminLog(p, "clear", null, `${n} vehicle${n > 1 ? "s" : ""}`);
+  });
+  // someone out of their car (as getting out does: by their door)
+  room.on("mod:unseat", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const target = [...room.state.players.values()].find((q) => q.uid === Number(m?.userId));
+    if (!p?.admin || !target || !bySid.has(target.sid)) return;
+    leaveSeat(target.sid, true);
+    room.adminLog(p, "unseat", target);
+  });
+
   // ── lending the keys (docs/plan/43-the-spot.md, phase 3) ──
   // The owner, on someone's card: `car:lend` with their uid (one at a time), or null to take them
   // back. They come back by themselves when the car's left in the owner's bay, and at the world's
@@ -952,6 +1003,7 @@ registerFeature((room: WorldRoom) => {
       if (now > towAt) {
         towAt = now + 60_000;
         home(false);
+        retireSpawned(null);
         retire();
         keysAtDayEnd();
       }

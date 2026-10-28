@@ -31,6 +31,14 @@ const PORT = 27600 + Math.floor(Math.random() * 200);
 const { startWorldServer } = await import("./server.ts");
 const server = await startWorldServer(PORT);
 const { WorldRoom } = await import("./WorldRoom.ts");
+// (the physics world's land built first, as a live server's is long before anyone's on it: till a
+// chunk's in, moves there are the grid's word, then Jolt's — docs/plan/50-the-volume.md)
+const chunks = async () =>
+  Number(
+    /^yutopia_physics_ground_chunks ([\d.]+)$/m.exec(
+      await (await fetch(`http://localhost:${PORT}/metrics`)).text(),
+    )?.[1] ?? NaN,
+  );
 const timers: ReturnType<typeof setInterval>[] = [];
 let snaps = 0;
 const bytes = { out: 0, in: 0 }; // received by one bot outside, one inside (DARK)
@@ -50,6 +58,17 @@ function by(n: { x: number; z: number }): { x: number; y: number } | null {
 let winded = 0; // times an outdoor bot ran out of breath
 let awake = 0; // bots struck down (DARK)
 
+if (process.env.YUTOPIA_PHYSICS !== "0") {
+  // (the room and its physics world are made with the first one in)
+  const first = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 1,
+    token: "bot:799999:B",
+  });
+  const t0 = Date.now();
+  while (!((await chunks()) >= 1184) && Date.now() - t0 < 120_000) await new Promise((r) => setTimeout(r, 300));
+  // (it stays, standing: an empty room would go, its physics world with it)
+  first.onMessage("*", () => {});
+}
 for (let i = 0; i < BOTS; i++) {
   const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
     sandbox: 1,
@@ -141,8 +160,14 @@ for (let i = 0; i < BOTS; i++) {
     Object.assign(pos, { x: m.x, y: m.y });
     path = [];
   });
+  // (each step as far as the time since the last says, as a client's: a bot's timer held up and
+  // then run twice at once — 200 bots share the server's thread — mustn't look like a dash)
+  let lastAt = performance.now();
   timers.push(
     setInterval(() => {
+      const now = performance.now();
+      const dt = Math.min(0.25, (now - lastAt) / 1000);
+      lastAt = now;
       if (woken || scout) return;
       // (down: it waits for its refill to get it up — a crawl's no lap)
       if (room.state.players.get(room.sessionId)?.downAt) return;
@@ -154,10 +179,10 @@ for (let i = 0; i < BOTS; i++) {
           v,
           breath,
           { sprinting: g === "sprint", outside: true, night: 0, storm: 0, warm: false, focus: false },
-          0.05,
+          dt,
         );
         if (breath.winded && !was) winded++;
-        pos.x += (east ? 1 : -1) * MOVE[g] * 0.05;
+        pos.x += (east ? 1 : -1) * MOVE[g] * dt;
         if (pos.x > -200 + 60) east = false;
         if (pos.x < -280 + 60) east = true;
         yaw = east ? 0 : Math.PI;
@@ -170,7 +195,7 @@ for (let i = 0; i < BOTS; i++) {
           seq: ++seq,
           mv: packMv(g) | (breath.winded ? MV_WINDED : 0),
           yaw: yawToByte(yaw),
-          mt: Math.round(performance.now()) >>> 0,
+          mt: Math.round(now) >>> 0,
         });
         return;
       }
@@ -178,7 +203,7 @@ for (let i = 0; i < BOTS; i++) {
         const a = areas[Math.floor(Math.random() * areas.length)];
         path = findPath(grid, pos, { x: a.x + Math.random() * a.w, y: a.y + Math.random() * a.h }) ?? [];
       }
-      let budget = speed * 0.05;
+      let budget = speed * dt;
       let d = 0;
       while (budget > 0 && path.length) {
         const wp = path[0];
@@ -206,7 +231,7 @@ for (let i = 0; i < BOTS; i++) {
         seq: ++seq,
         mv: packMv(moving ? gait : "still"),
         yaw: yawToByte(yaw),
-        mt: Math.round(performance.now()) >>> 0,
+        mt: Math.round(now) >>> 0,
       });
     }, 50),
   );
@@ -229,17 +254,33 @@ let shadowsMax = 0;
 const watch = setInterval(() => {
   shadowsMax = Math.max(shadowsMax, WorldRoom.current?.state.shadows.size ?? 0);
 }, 200);
+// the server's own work on the messages (each type timed: metrics.ts — since the last scrape, so
+// the second one's are the run's)
+const handled = (text: string) => {
+  let ms = 0;
+  let n = 0;
+  for (const m of text.matchAll(/^yutopia_message_ms_sum\{type="([^"]+)"\} ([\d.]+)$/gm)) ms += Number(m[2]);
+  for (const m of text.matchAll(/^yutopia_message_count\{type="pos"\} (\d+)$/gm)) n += Number(m[1]);
+  const pos = Number(/^yutopia_message_ms_sum\{type="pos"\} ([\d.]+)$/m.exec(text)?.[1] ?? 0);
+  return { ms, n, pos };
+};
 await fetch(`http://localhost:${PORT}/metrics`);
 const cpu0 = process.cpuUsage();
 await new Promise((r) => setTimeout(r, SECONDS * 1000));
 const cpu = process.cpuUsage(cpu0);
 const text = await (await fetch(`http://localhost:${PORT}/metrics`)).text();
+const after = handled(text);
 const avg = Number(/yutopia_tick_ms_avg ([\d.]+)/.exec(text)?.[1] ?? "NaN");
 const max = Number(/yutopia_tick_ms_max ([\d.]+)/.exec(text)?.[1] ?? "NaN");
 const cpuPct = ((cpu.user + cpu.system) / 1000 / (SECONDS * 1000)) * 100;
 clearInterval(watch);
 console.log(
   `[perf] ${BOTS} bots · tick avg ${avg} ms · max ${max} ms · process CPU ${cpuPct.toFixed(0)}% (incl. the bots themselves) · ${snaps} put back · out of breath ${winded} times outside`,
+);
+// (the moves checked on Jolt: what each costs, and the server's share of a core for every message)
+const moves = after.n;
+console.log(
+  `[perf] messages: ${(after.ms / SECONDS / 10).toFixed(1)}% of a core · ${(moves / SECONDS).toFixed(0)} moves a second, ${moves ? ((after.pos / moves) * 1000).toFixed(0) : "—"} µs each`,
 );
 const outKBs = bytes.out / 1024 / SECONDS;
 const inKBs = bytes.in / 1024 / SECONDS;

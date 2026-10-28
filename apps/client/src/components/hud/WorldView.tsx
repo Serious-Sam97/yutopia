@@ -49,6 +49,8 @@ function PhoneLayer() {
 
 // A battle proposed to me, or one going on: their chunk loads when there is one.
 const PetOverlaysLazy = dynamic(() => import("./PetOverlays").then((m) => m.PetOverlays), { ssr: false });
+// the admins' own HUD (docs/plan/48-the-admin.md): their powers' strip, the ` quick box — an admin's only
+const AdminHud = dynamic(() => import("./admin/AdminHud").then((m) => m.AdminHud), { ssr: false });
 function PetOverlays() {
   const on = useHud((s) => !!s.challenge || !!s.battle);
   return on ? <PetOverlaysLazy /> : null;
@@ -61,6 +63,7 @@ export function WorldView({ to }: { to?: string | null }) {
   const phase = useHud((s) => s.phase);
   // build mode takes over the screen (its own top bar, panels and bottom bar)
   const building = useHud((s) => s.build.on && s.canBuild);
+  const admin = useHud((s) => s.isAdmin);
   const side = useHud((s) => s.side);
   // the phone's camera: the screen is the viewfinder, the HUD steps aside
   const camera = useHud((s) => s.phone.camera);
@@ -148,6 +151,7 @@ export function WorldView({ to }: { to?: string | null }) {
           {building && <BuildMode />}
           {!racing && <Minimap />}
           {!building && !racing && <Dock />}
+          {admin && !building && <AdminHud />}
           <PanelHost />
           {!building && <ActionMenu />}
         </div>

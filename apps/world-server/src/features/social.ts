@@ -1,4 +1,5 @@
 import { ANIM, answerOf, CONTACT, isHeld, isSocial, SOCIAL_MS, SOCIAL_REACH, socialFor } from "@yutopia/shared";
+import { between } from "@yutopia/shared/reach";
 import type { Player } from "../schema.ts";
 import type { WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -32,7 +33,10 @@ registerFeature((room: WorldRoom) => {
     const now = Date.now();
     // one at a time, and not while either of you is still in one
     if (now - (last.get(client.sessionId) ?? 0) < 800 || a.act || b.act) return;
-    if (Math.hypot(a.x - b.x, a.y - b.y) > SOCIAL_REACH[act]) return;
+    // (body to body, each its whole height: hands don't meet across a gap up or down; a wave reaches
+    // across it — shared reach.ts)
+    const d = act === "wave" ? Math.hypot(a.x - b.x, a.y - b.y) : between(a, b);
+    if (d > SOCIAL_REACH[act]) return;
     if (!socialFor({ held: a.held, status: a.status }, { held: b.held, status: b.status }).includes(act)) return;
     last.set(client.sessionId, now);
     a.act = act;

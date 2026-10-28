@@ -176,11 +176,12 @@ test("booths: entering an occupied booth knocks; admitted guests get in", async 
   // host walks spawn → hall → booth 1 (door at 31,14)
   await walk(host, { x: 31.5, y: 16.5 });
   assert.equal(me(host).area, "booth-1");
-  // guest follows to the door and tries to walk in
-  await walk(guest, { x: 31.5, y: 16.5 });
-  assert.notEqual(me(guest).area, "booth-1", "can't walk in uninvited");
+  // guest follows to the door and knocks (their browser stops them at its edge and knocks for
+  // them — input/walker.ts; the server puts nobody back: the user's call, 2026-10-28)
+  await walk(guest, { x: 31.5, y: 13.4 });
+  assert.notEqual(me(guest).area, "booth-1", "at the door, outside");
+  guest.room.send("knock", { area: "booth-1" });
   await waitFor(() => (host.msgs.knock?.length ?? 0) > 0);
-  assert.ok(guest.msgs.snap?.length, "guest was snapped back at the door");
   // nobody outside hears the booth
   assert.ok(!guest.hear.ids.includes(host.room.sessionId));
   host.room.send("admit", { userId: 6, area: "booth-1" });
@@ -409,8 +410,10 @@ test("moderation: admins mute, lock rooms and remove people; builders and member
   await walk(owner, { x: 36.5, y: 3.5 });
   owner.room.send("mod:lock", { area: "war-room", locked: true });
   await waitFor(() => owner.room.state.locks.has("war-room"));
-  await walk(guest, { x: 36.5, y: 8.5 });
+  // (at its door in the hall: their browser stops them at its edge and knocks — input/walker.ts)
+  await walk(guest, { x: 36.5, y: 13.5 });
   assert.notEqual(me(guest).area, "war-room");
+  guest.room.send("knock", { area: "war-room" });
   await waitFor(() => (owner.msgs.knock?.length ?? 0) > 0);
 
   // remove: kicked now and can't come straight back
@@ -419,7 +422,7 @@ test("moderation: admins mute, lock rooms and remove people; builders and member
   await assert.rejects(() => person(26, s));
 });
 
-test("map editing: builders paint floors and walls on edges, nobody gets walled in, members can't", async () => {
+test("map editing: builders paint floors and walls on edges, members can't; nobody's moved by a wall", async () => {
   const s = ++space;
   const member = await person(27, s);
   const owner = await person(28, s, "member,builder");
@@ -441,13 +444,15 @@ test("map editing: builders paint floors and walls on edges, nobody gets walled 
   await waitFor(() => hw()[3][10] === "b" && tiles()[3][11] === ",");
   assert.equal(vw()[6][4], ".", "not through the desk");
   await waitFor(() => (owner.msgs.toast?.length ?? 0) > 0);
-  // a wall built right through someone moves them aside
+  // a wall built right through someone: the server doesn't move them (their own browser's physics
+  // steps them out of it — no put-backs, the user's call 2026-10-28)
   await walk(member, { x: 10.5, y: 6.2 });
   assert.ok(Math.abs(me(member).y - 6.2) < 0.05, "standing just past the y = 6 line");
   const snaps = member.msgs.snap?.length ?? 0;
   owner.room.send("map:walls", { edges: [{ x: 10, y: 6, dir: "h", ch: "p" }] });
-  await waitFor(() => (member.msgs.snap?.length ?? 0) > snaps);
-  await waitFor(() => Math.abs(me(member).y - 6) >= 0.32); // off the wall
+  await waitFor(() => hw()[6][10] === "p");
+  await sleep(250);
+  assert.equal(member.msgs.snap?.length ?? 0, snaps, "not put anywhere");
 });
 
 test("two-faced walls: each face its own material; wall items hang on either face, anywhere on it", async () => {
@@ -549,16 +554,8 @@ test("rooms + doors: an owned room with walls, locked so only its owner gets in 
   // bia can't walk in, can't teleport to ana
   await walk(bia, { x: 6.5, y: 5.5 });
   assert.ok(me(bia).y > 8, "bia stays outside");
-  // a tampered client pushing raw moves into the doorway gets snapped back
-  await walk(bia, { x: 6.5, y: 9.5 });
-  const snaps = bia.msgs.snap?.length ?? 0;
-  // (the door is a thin edge at y = 8: push well across it)
-  for (let i = 1; i <= 9; i++) {
-    bia.room.send("pos", { x: 6.5, y: 9.5 - i * 0.2, d: 4, a: 1, seq: 9000 + i });
-    await sleep(55);
-  }
-  await waitFor(() => (bia.msgs.snap?.length ?? 0) > snaps);
-  assert.ok(me(bia).y > 8.1, "the server keeps the doorway shut");
+  // (a client pushing raw moves through the locked door isn't put back: the door holds in the
+  // browser, on Jolt — no anticheat, the user's call 2026-10-28)
   bia.room.send("teleport", { to: { userId: 30 } });
   await sleep(300);
   assert.ok(me(bia).y > 8, "no teleporting in");
@@ -2003,25 +2000,16 @@ test("elevators: two ride; the doors wait for whoever's in the car or the doorwa
     { ...out, z: 0, l: 0 },
   ]);
   assert.ok(Math.abs(me(a).y - out.y) < 0.2, "a walked out on the ground floor");
-  // up on the studio's floor the car's gone: its shaft is nowhere to step into
-  await stepTo(b, [{ x: 9.4, y: 28.8, z: 0, l: 4 }]);
-  await stepTo(b, [
-    { x: 9.4, y: 29.2, z: 0, l: 4 },
-    { x: 9.4, y: 29.6, z: 0, l: 4 },
-  ]);
-  assert.ok(me(b).y < 29, "no stepping into the empty shaft");
+  // (up on the studio's floor the car's gone: its shut doors hold in the browser, on Jolt — the
+  // server puts nobody back, the user's call 2026-10-28)
 });
 
-test("stairs: walked up a floor (the server follows the treads); never two floors at once", async () => {
+test("stairs: walked up a floor (the server follows the treads)", async () => {
   const s = ++space;
   const a = await person(82, s, "member,builder");
   const foot = G(13, 30.5);
   a.room.send("teleport", { to: { ...foot, level: 0 } });
   await waitFor(() => me(a).level === 0 && Math.abs(me(a).x - foot.x) < 0.3);
-  // a cheat first: straight to floor 2
-  a.room.send("pos", { x: 11, y: 30.5, z: 0, l: 2, d: 0, a: 1, seq: 1 });
-  await sleep(250);
-  assert.equal(me(a).level, 0, "two floors at once: no");
   // up flight A (east half, away from the door), the landing, flight B, onto floor 1
   const path: { x: number; y: number; z: number; l: number }[] = [];
   for (let v = 0.6; v <= 4.2; v += 0.2) {
@@ -2040,6 +2028,33 @@ test("stairs: walked up a floor (the server follows the treads); never two floor
   assert.equal(me(a).level, 1, "on floor 1");
   assert.ok(Math.abs(me(a).y - 30.6) < 0.3);
   assert.ok(Math.abs(me(a).z) < 0.15);
+});
+
+test("stairs: the last treads and the step onto the landing in one message (a long frame) — not put back", async () => {
+  const s = ++space;
+  const a = await person(240, s, "member,builder");
+  // the stairwell (x 10–14, y 29–36: the landing y 29–31, flight B up from y 34 to 31 at x 10–12)
+  const foot = G(13, 30.5);
+  a.room.send("teleport", { to: { ...foot, level: 0 } });
+  await waitFor(() => me(a).level === 0 && Math.abs(me(a).x - foot.x) < 0.3);
+  await sleep(1100); // (the teleport's snap: what was on its way is let go a second)
+  const path: { x: number; y: number; z: number; l: number }[] = [];
+  for (let y = 30.6; y <= 34.4; y += 0.2) path.push({ ...G(13, y), z: Math.max(0, ((y - 31) / 3) * 1.75), l: 0 });
+  for (let x = 13; x >= 11; x -= 0.25) path.push({ ...G(x, 34.6), z: 1.75, l: 0 });
+  for (let y = 34.2; y >= 32.2; y -= 0.2) {
+    const h = 1.75 + ((34 - Math.min(34, y)) / 3) * 1.75;
+    path.push(h > 2.9 ? { x: 11, y, z: h - 3.5, l: 1 } : { ...G(11, y), z: h, l: 0 });
+  }
+  // up the treads to half a step below floor 1 (y 31.9, its frame), then a tile on: off them
+  // onto the landing in the same message
+  path.push({ x: 11, y: 31.9, z: -0.53, l: 1 });
+  await stepTo(a, path);
+  await sleep(300); // (a walk's pace)
+  a.room.send("pos", { x: 11, y: 30.9, z: 0, l: 1, d: 0, a: 1, seq: path.length + 1 });
+  await sleep(150);
+  assert.equal(me(a).level, 1, "on floor 1");
+  assert.ok(Math.abs(me(a).y - 30.9) < 0.05, `on the landing (at ${me(a).y.toFixed(2)})`);
+  assert.equal(me(a).z, 0);
 });
 
 test("teleport to someone on another floor lands you on theirs; other floors don't hear you", async () => {

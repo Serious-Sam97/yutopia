@@ -12,7 +12,7 @@ import { Panel } from "./Panel";
 export function ScreenPanel({ objectId }: { objectId: string }) {
   const t = useTr();
   const w = useWorld();
-  const source = w?.engine?.getObject(objectId)?.props?.source;
+  const source = w?.model?.getObject(objectId)?.props?.source;
   const screens = useHud((s) => s.screens);
   const people = useHud((s) => s.people);
   const host = useRef<HTMLDivElement>(null);
@@ -69,7 +69,7 @@ function ScreenTabs({
   const t = useTr();
   const w = useWorld();
   const pt = useLang() === "pt";
-  const hasMedia = !!mediaOf(w?.engine?.getObject(objectId));
+  const hasMedia = !!mediaOf(w?.model?.getObject(objectId));
   const [tab, setTab] = useState<"share" | "tv">(!share && hasMedia ? "tv" : "share");
   if (stage)
     return (

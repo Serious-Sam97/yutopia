@@ -3,7 +3,7 @@ import { config } from "../config.ts";
 
 // The key for the media routes (/media/…): who (the user) and until when,
 // signed with the world secret. Handed out on joining (media:key); it goes in
-// the path, since <img>, Pixi and hls.js fetch without our headers.
+// the path, since <img>, three.js and hls.js fetch without our headers.
 const TTL_MS = 12 * 3600_000;
 
 const sign = (body: string) => createHmac("sha256", config.worldSecret()).update(`media.${body}`).digest("base64url");

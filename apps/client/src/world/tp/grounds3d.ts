@@ -7,6 +7,7 @@ import {
   CORN,
   FARM,
   FENCE,
+  FENCE_H,
   GATE,
   GROUNDS,
   groundAt,
@@ -4246,12 +4247,12 @@ export class Grounds3 {
     this.cards.instanceMatrix.needsUpdate = true;
   }
 
-  // ── the company's fence: chain-link, posts, barbed wire, signs ──
+  // ── the company's fence: chain-link to 1.2 m (FENCE_H), posts, signs — low enough to fly over
+  // (docs/plan/50-the-volume.md; it was 2.45 m with barbed-wire arms to 2.95 m) ──
   private fence() {
     const chain = this.keep(tex(chainCanvas(this.T)));
     const posts = new G().color(0x5d6268);
     const mesh = new G().color(0xffffff);
-    const wire = new G().color(0x3a3e44);
     let n = 0;
     for (let i = 0; i < FENCE.length; i++) {
       const [ax, az] = FENCE[i];
@@ -4268,37 +4269,29 @@ export class Grounds3 {
         const z2 = az + tz * Math.min(len, t + 3);
         const y = terrainAt(x, z);
         const y2 = terrainAt(x2, z2);
-        posts.box(x - 0.05, y - 0.2, z - 0.05, x + 0.05, y + 2.45, z + 0.05);
-        // which way is out (the arms lean out over it)
+        posts.box(x - 0.05, y - 0.2, z - 0.05, x + 0.05, y + FENCE_H, z + 0.05);
+        // which way is out (the snow drifts against that side)
         const mx = (x + x2) / 2;
         const mz = (z + z2) / 2;
         const out = insideFence(mx - tz * 2, mz + tx * 2) ? -1 : 1;
         const ox = -tz * out;
         const oz = tx * out;
+        const top = FENCE_H - 0.05;
         mesh.quad(
           [x, y + 0.05, z],
           [x2, y2 + 0.05, z2],
-          [x2, y2 + 2.4, z2],
-          [x, y + 2.4, z],
+          [x2, y2 + top, z2],
+          [x, y + top, z],
           [-tz, 0, tx],
           [
             [0, 0],
             [3, 0],
-            [3, 2.4],
-            [0, 2.4],
+            [3, top],
+            [0, top],
           ],
         );
-        // the top rail; the arm leaning out at the top, three strands along the arms
-        beam(posts, [x, y + 2.4, z], [x2, y2 + 2.4, z2], 0.06, 0x5d6268, true);
-        beam(posts, [x, y + 2.4, z], [x + ox * 0.45, y + 2.95, z + oz * 0.45], 0.05, 0x5d6268);
-        for (const k of [0.15, 0.5, 0.85])
-          beam(
-            wire,
-            [x + ox * 0.45 * k, y + 2.4 + 0.55 * k, z + oz * 0.45 * k],
-            [x2 + ox * 0.45 * k, y2 + 2.4 + 0.55 * k, z2 + oz * 0.45 * k],
-            0.025,
-            0x3a3e44,
-          );
+        // the top rail
+        beam(posts, [x, y + top, z], [x2, y2 + top, z2], 0.06, 0x5d6268, true);
         // snow caught on the mesh's foot, following the ground
         posts.color(0xf4f7fa);
         face(posts, [x, y - 0.05, z], [x2, y2 - 0.05, z2], [x2, y2 + 0.32, z2], [x, y + 0.38, z], [ox, 0, oz]);
@@ -4327,15 +4320,14 @@ export class Grounds3 {
             z - tx * 0.2 + tz * 1.5,
             Math.atan2(-tz, tx) + Math.PI,
             1.2,
-            0.7,
-            1.2,
+            0.6,
+            0.35,
             "#e9e6dc",
             "#8b2a22",
           );
       }
     }
     if (!posts.empty) this.add(posts.build(), this.lambert());
-    if (!wire.empty) this.add(wire.build(), this.lambert(), "none");
     if (!mesh.empty) {
       const m = this.keep(
         new MeshLambertMaterial({ map: chain, transparent: true, alphaTest: 0.35, side: DoubleSide }),

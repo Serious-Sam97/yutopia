@@ -54,7 +54,9 @@ test("two people join the world and see each other; offline sandboxes are separa
   assert.ok(a.state.objects.size > 100, "map objects are in state");
 });
 
-test("legal moves are accepted, wall-hacks get snapped back", async () => {
+// (no anticheat for now, the user's call 2026-10-28: the server takes where a client says it is —
+// walls hold in the browser, on Jolt)
+test("moves are taken as sent: a step, and straight through the walls — nobody put back", async () => {
   const a = rooms[0];
   const start = { x: me(a).x, y: me(a).y };
   const snaps: { x: number; y: number }[] = [];
@@ -63,8 +65,8 @@ test("legal moves are accepted, wall-hacks get snapped back", async () => {
   await waitFor(() => Math.abs(me(a).x - (start.x + 0.2)) < 0.01);
   await sleep(60);
   a.send("pos", { x: 40.5, y: 5.5, d: 6, a: 1, seq: 2 }); // straight into the War Room
-  await waitFor(() => snaps.length > 0);
-  assert.ok(Math.abs(me(a).x - (start.x + 0.2)) < 0.01);
+  await waitFor(() => Math.abs(me(a).x - 40.5) < 0.01);
+  assert.equal(snaps.length, 0);
 });
 
 test("hearing: neighbours hear each other, far away people don't", async () => {

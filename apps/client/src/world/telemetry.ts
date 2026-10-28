@@ -25,7 +25,7 @@ interface Ctl {
   level: number;
   hour: number;
   me: { x: number; y: number };
-  viewNow: "iso" | "3d";
+  viewNow: "none" | "3d";
   cars: { inCar(): boolean } | null;
   tp: {
     renderer: {
@@ -39,7 +39,6 @@ interface Ctl {
     dprAtStart: number;
     ratioFixes: number;
   } | null;
-  engine: { app?: { canvas?: HTMLCanvasElement; renderer?: { gl?: WebGLRenderingContext } } } | null;
   qualityNow(): string;
   onFrame(cb: () => void): () => void;
 }
@@ -231,10 +230,10 @@ export function startTelemetry(controller: WorldController): () => void {
 
   let machine: PerfReport["machine"] | null = null;
   const machineNow = (): PerfReport["machine"] => {
-    const canvas = c.tp?.renderer.domElement ?? c.engine?.app?.canvas;
+    const canvas = c.tp?.renderer.domElement;
     const base = machine ?? {
       ...browserOf(navigator.userAgent),
-      gpu: gpuOf(c.tp?.renderer.getContext() ?? c.engine?.app?.renderer?.gl),
+      gpu: gpuOf(c.tp?.renderer.getContext()),
       screen: [screen.width, screen.height] as [number, number],
       canvas: [0, 0] as [number, number],
       dpr: devicePixelRatio,
@@ -245,7 +244,7 @@ export function startTelemetry(controller: WorldController): () => void {
       dprAtStart: null,
       ratioFixes: null,
     };
-    if (!base.gpu) base.gpu = gpuOf(c.tp?.renderer.getContext() ?? c.engine?.app?.renderer?.gl);
+    if (!base.gpu) base.gpu = gpuOf(c.tp?.renderer.getContext());
     machine = base;
     const tp = c.tp;
     return {
@@ -310,7 +309,7 @@ export function startTelemetry(controller: WorldController): () => void {
         area: h.me?.area ?? "",
         x: r1(c.me.x),
         y: r1(c.me.y),
-        view: c.viewNow === "iso" ? "iso" : p.view === "1p" ? "1p" : "3p",
+        view: c.viewNow === "none" ? "none" : p.view,
         quality: c.qualityNow(),
         qualityPref: p.quality,
         maxFps: p.maxFps,

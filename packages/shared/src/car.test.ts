@@ -10,6 +10,7 @@ import {
   type Controls,
   coverAfter,
   createCar,
+  finiteState,
   flatWorld,
   freeSpot,
   type Ground,
@@ -18,7 +19,6 @@ import {
   type Helps,
   HOME_CARS,
   headingQuat,
-  implausible,
   NO_HELPS,
   OFFROAD,
   PICKUP,
@@ -502,7 +502,7 @@ test("pulled out: the nearest spot it fits clear of everything, on firm ground b
   assert.ok(!trunks.some((t) => boxHits(p.x + Math.cos(p.a) * off, p.z + Math.sin(p.a) * off, 2.45, 0.93, p.a, t)));
 });
 
-test("the server believes a crash (stopped dead in one packet), not a car flung faster", () => {
+test("the server takes any state that is all numbers (no put-back), not one that isn't", () => {
   const q = headingQuat(0);
   const at = (vx: number, x = 0): CarWire => ({
     seq: 1,
@@ -524,10 +524,9 @@ test("the server believes a crash (stopped dead in one packet), not a car flung 
     slip: 0,
     fuel: 30,
   });
-  const ground = () => 0;
-  assert.equal(implausible(at(25), at(-1.2, 1.2), 0.05, ground), null, "a crash");
-  assert.equal(implausible(at(25), at(0, 1.2), 0.05, ground), null, "stopped dead");
-  assert.equal(implausible(at(5), at(28, 0.3), 0.05, ground), "accelerated");
+  assert.ok(finiteState(at(25)), "fast");
+  assert.ok(finiteState(at(90)), "faster than any car goes");
+  assert.ok(!finiteState({ ...at(5), x: Number.NaN }), "not a place");
 });
 
 test("the gas station: driven in off Main Street to beside either pump, either side; walked round its islands", () => {

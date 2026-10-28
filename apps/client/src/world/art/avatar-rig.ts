@@ -6,7 +6,7 @@
 // Everything is in board units (the 120×180 figure board, feet on y = 168).
 // A part is an SVG fragment plus the box it's cropped to; a pose is a few
 // angles and offsets; `bones()` turns a pose into one affine per part, used by
-// the engine (Pixi sprites) and by `composeSvg` (portraits, the dev sheet).
+// by the 3D people and by `composeSvg` (portraits, the dev sheet).
 
 export type Face = "open" | "blink" | "talk";
 export type Box = [number, number, number, number]; // x, y, w, h

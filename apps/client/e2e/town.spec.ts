@@ -3,30 +3,33 @@ import { expect, type Page } from "@playwright/test";
 import { ANA, BIA, enter, test, token } from "./helpers";
 
 // Life on the Grounds (docs/plan/27-the-grounds.md, phase 6): two people ride
-// the shuttle from the headquarters' stop to the town square and back — one
-// in 3D (its frames measured on the machine's GPU with YUTOPIA_GPU=1), one in
-// iso. It needs only the building, so no fixture is put back.
+// the shuttle from the headquarters' stop to the town square and back — both
+// in 3D (the first one's frames measured on the machine's GPU with YUTOPIA_GPU=1). It needs only the building, so no fixture is put back.
 const GPU = process.env.YUTOPIA_GPU === "1";
 const dir = process.env.YUTOPIA_SHOTS;
 if (GPU || dir) test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
 
 const OFF = { x: -60, y: -10 }; // the ground floor's corner in the studio's coords
 
-async function open(page: Page, who: typeof ANA, view: "3p" | "iso") {
-  await page.addInitScript((v) => {
-    const k = "yutopia:prefs";
-    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: v, cam3p: "chase" }));
-    const W = window as any;
-    W.__worst = 0;
-    let last = performance.now();
-    const tick = (t: number) => {
-      W.__worst = Math.max(W.__worst, t - last);
-      last = t;
+// (`quality`: the second rider on Lowest — her browser streaming the town in stalls the first's frames)
+async function open(page: Page, who: typeof ANA, view: "3p" | "1p", quality = "high") {
+  await page.addInitScript(
+    ([v, q]) => {
+      const k = "yutopia:prefs";
+      const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+      localStorage.setItem(k, JSON.stringify({ ...p, view: v, cam3p: "chase", quality: q }));
+      const W = window as any;
+      W.__worst = 0;
+      let last = performance.now();
+      const tick = (t: number) => {
+        W.__worst = Math.max(W.__worst, t - last);
+        last = t;
+        requestAnimationFrame(tick);
+      };
       requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }, view);
+    },
+    [view, quality],
+  );
   await enter(page, await token(who));
   if (view === "3p") await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
 }
@@ -72,7 +75,7 @@ test("the shuttle: two ride from the headquarters to the town square and back", 
   const a = page;
   const b = await (await browser.newContext()).newPage();
   await open(a, ANA, "3p");
-  await open(b, BIA, "iso");
+  await open(b, BIA, "3p", "lowest");
   // (an admin calls it to the headquarters' stop: no waiting on its timetable)
   await a.evaluate(() => (window as any).__yutopia.room.send("mod:shuttle", {}));
   await a.waitForFunction(() => (window as any).__yutopia.room.state.vehicles.get("shuttle")?.stop === "hq", null, {
@@ -111,7 +114,7 @@ test("the shuttle: two ride from the headquarters to the town square and back", 
     }
     if (dir) {
       await a.screenshot({ path: `${dir}/shuttle-${there}-3p.png` });
-      await b.screenshot({ path: `${dir}/shuttle-${there}-iso.png` });
+      await b.screenshot({ path: `${dir}/shuttle-${there}-bia.png` });
     }
     // (it waits at the stop for the way back)
     expect((await bus(a)).stop).toBe(there);

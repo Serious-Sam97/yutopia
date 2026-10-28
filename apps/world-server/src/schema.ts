@@ -29,6 +29,10 @@ export class Player extends Schema {
   @type("boolean") admin = false; // mutes, kicks, locks (everyone builds)
   @type("boolean") bot = false;
   @type("boolean") muted = false; // by an owner: LiveKit publish permission revoked
+  // an admin's powers on themselves (shared admin.ts POWERS: fly, through walls, fast, hidden,
+  // unhurt), and held still by an admin until this time (docs/plan/48-the-admin.md)
+  @type("uint8") powers = 0;
+  @type("float64") frozenUntil = 0;
   @type("string") held = ""; // what they carry (shared/held.ts), "" for nothing
   @type("float64") heldAt = 0; // when they took it (server ms): its sips follow from this
   @type("string") busy = ""; // using something (shared USES): the body shows it
@@ -544,6 +548,13 @@ export class WorldState extends Schema {
   @type("float32") wind = 0;
   // the world's hour, 0..24: São Paulo's (shared clock.ts) unless an admin set one
   @type("float32") hour = 12;
+  // who set the hour and when; who called the weather, to what (-1: the schedule's) and till when
+  // (the admins' panel says so: docs/plan/48-the-admin.md)
+  @type("string") hourBy = "";
+  @type("float64") hourAt = 0;
+  @type("string") stormBy = "";
+  @type("float32") stormTo = -1;
+  @type("float64") stormUntil = 0;
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();

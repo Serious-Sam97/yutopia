@@ -1,23 +1,6 @@
-import { TILE_H, TILE_W, toScreen, type WorldObjectDef } from "@yutopia/shared";
-import {
-  BALL_R,
-  HEAD_STRING,
-  POOL_L,
-  POOL_W,
-  type PoolBall,
-  type PoolShot,
-  PoolSim,
-  placeOk,
-} from "@yutopia/shared/pool";
-import {
-  aimGuide,
-  groupOf,
-  onTheEight,
-  POOL_POCKETS,
-  type PoolGame,
-  unpackBalls,
-  unpackGame,
-} from "@yutopia/shared/pool-game";
+import { toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { BALL_R, POOL_L, POOL_W, type PoolBall, type PoolShot, PoolSim, placeOk } from "@yutopia/shared/pool";
+import { aimGuide, onTheEight, POOL_POCKETS, type PoolGame, unpackBalls, unpackGame } from "@yutopia/shared/pool-game";
 import { OFF_TABLE } from "@yutopia/shared/pool-throw";
 import {
   standFor,
@@ -31,11 +14,10 @@ import {
   toTable,
   toWorld,
 } from "@yutopia/shared/tables";
-import { Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
-import type { WorldEngine } from "../engine";
+import type { WorldModel } from "../model";
 import { hud, toast } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
-import { ATLAS_COLS, ballQuat, CELL, paintIso, type Q } from "./ballart";
+import { ballQuat, type Q } from "./ballart";
 import { chalk, clack, cueTip, cushion, pocketDrop } from "./sound";
 
 // Pool tables, live (world/tables, a lazy chunk loaded once a space has a game
@@ -44,8 +26,8 @@ import { chalk, clack, cueTip, cushion, pocketDrop } from "./sound";
 // through the same physics, from the same layout) — the shooter's cue as they
 // aim (everyone sees it move), the other players' cues by their sides, the
 // billiard lamp, the potted balls in the return tray, the sounds from where
-// the table is. At a table's controls: the camera leans in (iso) or takes a
-// game camera (3D), and the pointer aims, pulls back and shoots.
+// the table is. At a table's controls: a game camera takes over (gameCam), and
+// the pointer aims, pulls back and shoots.
 
 // biome-ignore lint/suspicious/noExplicitAny: colyseus schema instances
 type S = any;
@@ -53,7 +35,7 @@ type Send = (type: string, msg: Record<string, unknown>) => void;
 type Pt = { x: number; y: number };
 
 export interface TableHost {
-  engine: WorldEngine;
+  model: WorldModel;
   // biome-ignore lint/suspicious/noExplicitAny: a server message's body
   room: { state: S; sessionId: string; onMessage?: (type: string, cb: (m: any) => void) => unknown };
   send: Send;
@@ -61,14 +43,12 @@ export interface TableHost {
   face(x: number, y: number): void;
   // put me right here (no path: ping-pong's footwork follows the racket)
   stand(x: number, y: number): void;
-  threeD(): boolean;
   worldHttp(): string;
 }
 
 const K = "pool_table" as const;
 const G = TABLES[K];
-const LPX = 45.25; // iso px per tile of horizontal length
-const ZPX = LPX * Math.cos(Math.PI / 6);
+const ZPX = 45.25 * Math.cos(Math.PI / 6); // iso px of height per tile (tablePx's unit)
 const R_T = BALL_R * G.tpm; // a ball's radius, tiles
 const BALL_Z = tablePx(K, BALL_R); // px: a ball's centre
 const CLOTH_Z = G.top;
@@ -122,11 +102,6 @@ function dropAt(d: Drop, now: number): { x: number; y: number; sink: number; fla
 }
 const BALL_HEX = [0xf4efe2, 0xf2b21c, 0x1f4ea8, 0xc8322b, 0x56307f, 0xe8691b, 0x1d7748, 0x7b2331, 0x2a2a2a];
 const flashColor = (id: number) => (id === 8 ? 0xf4ecd8 : BALL_HEX[id > 8 ? id - 8 : id]);
-// a grey tint (darker the lower k)
-const dim = (k: number) => {
-  const c = Math.round(255 * Math.max(0, Math.min(1, k)));
-  return (c << 16) | (c << 8) | c;
-};
 
 export interface PoolInfo {
   id: string;
@@ -166,25 +141,8 @@ export interface PoolInfo {
   record: { last: { w: string; l: string; how: string }[]; wins: Record<string, number> } | null;
 }
 
-interface Slice {
-  root: Container;
-  under: Graphics;
-  balls: Container;
-  over: Graphics;
-}
-
 interface View {
   def: WorldObjectDef;
-  slices: Slice[];
-  front: Container;
-  lampG: Graphics;
-  overG: Graphics;
-  atlas: HTMLCanvasElement;
-  img: ImageData;
-  base: Texture;
-  frames: Texture[];
-  sprites: Map<number, Sprite>;
-  painted: Map<number, string>;
   shown: PoolBall[];
   gameSig: string;
   game: PoolGame | null;
@@ -196,7 +154,6 @@ interface View {
   born: boolean;
   drops: Map<number, Drop>;
   last: Map<number, Pt>; // where each ball on the cloth was last frame (a drop starts there)
-  masks: Map<number, Graphics>; // iso: a falling ball cut off at the pocket's near rim
   strikeAt: number;
   strike: (PoolShot & { seat: number }) | null;
   dirty: boolean;
@@ -232,14 +189,13 @@ export class PoolTables {
   private sentSig = "";
   private movedAt = 0;
   private walkedTo = "";
-  private zoomBack = 0;
   private now = 0;
 
   constructor(private host: TableHost) {}
 
   // ── tables in the room ───────────────────────────────────────────────────
   refresh() {
-    const defs = this.host.engine.allObjects().filter((o) => o.kind === K);
+    const defs = this.host.model.allObjects().filter((o) => o.kind === K);
     const keep = new Set<string>();
     for (const def of defs) {
       keep.add(def.id);
@@ -255,55 +211,8 @@ export class PoolTables {
   }
 
   private makeView(def: WorldObjectDef): View {
-    const engine = this.host.engine;
-    const slices: Slice[] = [];
-    for (let i = 0; i < 4; i++) {
-      const root = new Container();
-      root.zIndex = def.x + def.y + i + 1 + 0.004;
-      root.sortableChildren = true;
-      const under = new Graphics();
-      under.zIndex = 0;
-      const balls = new Container();
-      balls.zIndex = 1;
-      balls.sortableChildren = true;
-      const over = new Graphics();
-      over.zIndex = 2;
-      root.addChild(under, balls, over);
-      engine.mountLive(root);
-      slices.push({ root, under, balls, over });
-    }
-    // over everything on the table: the cue being aimed, the lamp
-    const front = new Container();
-    front.zIndex = def.x + def.y + 4 + 0.006;
-    const overG = new Graphics();
-    const lampG = new Graphics();
-    front.addChild(overG, lampG);
-    engine.mountLive(front);
-    const atlas = document.createElement("canvas");
-    atlas.width = atlas.height = CELL * ATLAS_COLS;
-    const ctx = atlas.getContext("2d") as CanvasRenderingContext2D;
-    const img = ctx.createImageData(atlas.width, atlas.height);
-    const base = Texture.from(atlas);
-    const frames: Texture[] = [];
-    for (let i = 0; i < 16; i++)
-      frames.push(
-        new Texture({
-          source: base.source,
-          frame: new Rectangle((i % ATLAS_COLS) * CELL, Math.floor(i / ATLAS_COLS) * CELL, CELL, CELL),
-        }),
-      );
     return {
       def,
-      slices,
-      front,
-      lampG,
-      overG,
-      atlas,
-      img,
-      base,
-      frames,
-      sprites: new Map(),
-      painted: new Map(),
       shown: [],
       gameSig: "",
       game: null,
@@ -315,7 +224,6 @@ export class PoolTables {
       born: false,
       drops: new Map(),
       last: new Map(),
-      masks: new Map(),
       strikeAt: 0,
       strike: null,
       dirty: true,
@@ -325,11 +233,8 @@ export class PoolTables {
   private drop(id: string) {
     const v = this.views.get(id);
     if (!v) return;
-    for (const s of v.slices) s.root.destroy({ children: true });
-    v.front.destroy({ children: true });
-    v.base.destroy(true);
     this.views.delete(id);
-    if (this.focus === id) this.lean(null);
+    if (this.focus === id) this.setFocus(null);
   }
 
   private table(id: string): S | undefined {
@@ -478,8 +383,8 @@ export class PoolTables {
   // ── the pointer (the panel's overlay hands it over) ────────────────────────
   // where the pointer is on the table, in metres (at a ball's height)
   private tablePoint(v: View, cx: number, cy: number): Pt | null {
-    const ray = this.host.engine.rayAt(cx, cy);
-    if (ray.d.z >= -1e-6) return null;
+    const ray = this.host.model.rayAt(cx, cy);
+    if (!ray || ray.d.z >= -1e-6) return null;
     const t = (BALL_Z - ray.o.z) / ray.d.z;
     const wx = ray.o.x + ray.d.x * t;
     const wy = ray.o.y + ray.d.y * t;
@@ -557,11 +462,11 @@ export class PoolTables {
     }
     if (this.press) {
       // pulling back: the pointer's way from the press, against the aim, on screen
-      const engine = this.host.engine;
+      const model = this.host.model;
       const a = toWorld(v.def, cue.x, cue.y);
       const b = toWorld(v.def, cue.x + Math.cos(this.angle) * 0.2, cue.y + Math.sin(this.angle) * 0.2);
-      const sa = engine.worldToClient(a.x, a.y, BALL_Z);
-      const sb = engine.worldToClient(b.x, b.y, BALL_Z);
+      const sa = model.worldToClient(a.x, a.y, BALL_Z);
+      const sb = model.worldToClient(b.x, b.y, BALL_Z);
       const dl = Math.hypot(sb.x - sa.x, sb.y - sa.y) || 1;
       const ux = (sb.x - sa.x) / dl;
       const uy = (sb.y - sa.y) / dl;
@@ -634,14 +539,7 @@ export class PoolTables {
     this.now = performance.now();
     const pk = hud.get().panel;
     const want = pk.kind === "pool" && pk.objectId && this.views.has(pk.objectId) ? pk.objectId : null;
-    if (want !== this.focus) this.lean(want);
-    // (coming back to iso from 3D: lean in again)
-    const td = this.host.threeD();
-    if (td !== this.wasThreeD) {
-      this.wasThreeD = td;
-      this.leanSig = "";
-    }
-    if (this.focus && !td) this.relean();
+    if (want !== this.focus) this.setFocus(want);
     if (this.chargeAt !== null) {
       if (!this.focus || !this.myTurn(this.focus)) this.chargeAt = null;
       else {
@@ -654,9 +552,9 @@ export class PoolTables {
     if (this.focus) this.mine(this.focus, me);
   }
 
-  // The camera leans in over the table (iso), people in front go see-through.
-  private lean(focus: string | null) {
-    const engine = this.host.engine;
+  // The table whose console is open (the 3D view's game camera follows it); closing it
+  // before a game gives the seat back.
+  private setFocus(focus: string | null) {
     const was = this.focus;
     this.focus = focus;
     this.press = null;
@@ -672,43 +570,6 @@ export class PoolTables {
       const t = this.table(was);
       if (t && this.mySeat(t) >= 0 && t.phase !== "play") this.leave(was);
     }
-    if (focus) {
-      if (!was) this.zoomBack = engine.getZoom();
-      this.relean(true);
-    } else {
-      engine.pinCamera(null);
-      engine.seeThrough = null;
-      if (this.zoomBack) engine.setZoom(this.zoomBack);
-    }
-  }
-  private leanSig = "";
-  private wasThreeD = false;
-  private relean(force = false) {
-    const v = this.focus ? this.views.get(this.focus) : undefined;
-    if (!v) return;
-    const sig = `${v.def.id}|${window.innerWidth}x${window.innerHeight}`;
-    if (!force && sig === this.leanSig) return;
-    this.leanSig = sig;
-    const o = v.def;
-    const rot = o.rot ?? 0;
-    const [w, h] = rot % 2 ? [G.h, G.w] : [G.w, G.h];
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const panel = Math.min(200, vh * 0.32);
-    // the table fills the view above the console (its rails, a little room round it)
-    const zoom = Math.min(
-      ((vw - 24) * 0.94) / ((w + h) * (TILE_W / 2)),
-      ((vh - panel - 40) * 0.95) / ((w + h) * (TILE_H / 2) + 30),
-    );
-    this.host.engine.pinCamera({
-      x: o.x + w / 2,
-      y: o.y + h / 2,
-      z: G.top - panel / 2 / Math.max(0.5, zoom),
-      zoom,
-      ease: true,
-      zoomMax: 6,
-    });
-    this.host.engine.seeThrough = { x: o.x, y: o.y, w, h };
   }
 
   // my side of it: walking round to the shot, sending my aim
@@ -843,7 +704,6 @@ export class PoolTables {
       else if (cue && aim?.drag && aim.cx != null && aim.cy != null && this.mySeat(t) !== v.game?.turn)
         v.shown = v.shown.map((b) => (b.id === 0 ? { ...b, x: aim.cx as number, y: aim.cy as number } : b));
     }
-    this.draw(id, v, t, now);
   }
 
   private aimOf(
@@ -864,231 +724,6 @@ export class PoolTables {
     return Math.max(-0.8, Math.min(0.8, (a.x - b.x) / 300));
   }
 
-  // ── drawing (iso) ────────────────────────────────────────────────────────
-  private draw(id: string, v: View, t: S | undefined, now: number) {
-    const o = v.def;
-    const rot = o.rot ?? 0;
-    const cols = rot % 2 === 0;
-    const sliceOf = (wx: number, wy: number) => Math.max(0, Math.min(3, Math.floor(cols ? wx - o.x : wy - o.y)));
-    for (const s of v.slices) {
-      s.under.clear();
-      s.over.clear();
-    }
-    v.overG.clear();
-    const engine = this.host.engine;
-    const tint = engine.liveTint(tableCentre(o).x, tableCentre(o).y);
-    for (const s of v.slices) {
-      s.under.tint = tint;
-      s.balls.tint = tint;
-      s.over.tint = tint;
-    }
-    v.overG.tint = tint;
-    const sc = (mx: number, my: number, z: number) => {
-      const w = toWorld(o, mx, my);
-      const p = toScreen(w.x, w.y);
-      return { x: p.x, y: p.y - z, wx: w.x, wy: w.y };
-    };
-    const rPx = R_T * LPX;
-
-    // the balls: on the cloth, falling into a pocket, or in the return tray
-    let anyNew = false;
-    const live = new Set<number>();
-    const tray: PoolBall[] = [];
-    const falling = new Set<number>();
-    for (const b of v.shown) {
-      const drop = b.down >= 0 ? v.drops.get(b.id) : undefined;
-      const f = drop ? dropAt(drop, now) : null;
-      if (b.down >= 0 && (!f || f.done)) {
-        tray.push(b);
-        continue;
-      }
-      const x = f ? f.x : b.x;
-      const y = f ? f.y : b.y;
-      const sinkPx = f ? f.sink * G.tpm * ZPX : 0;
-      // (sinking into the hole, it goes into the pocket's dark)
-      const alpha = 1;
-      const shrink = 1;
-      live.add(b.id);
-      const p = sc(x, y, BALL_Z - sinkPx);
-      const slice = v.slices[sliceOf(p.wx, p.wy)];
-      // its shadow on the cloth (none once it's in the hole)
-      const sh = sc(x, y, CLOTH_Z);
-      if (!f || f.sink <= 0)
-        slice.under
-          .ellipse(sh.x + 0.4, sh.y + 0.3, rPx * 1.02, rPx * 0.52)
-          .fill({ color: 0x0c0806, alpha: 0.36 * alpha });
-      if (f && drop) {
-        if (f.flash >= 0) this.flashIso(v, sc, drop.pocket, b.id, f.flash);
-        if (f.sink > 0) falling.add(b.id);
-      }
-      anyNew = this.paint(v, b, rot) || anyNew;
-      let sp = v.sprites.get(b.id);
-      if (!sp) {
-        sp = new Sprite(v.frames[b.id]);
-        sp.anchor.set(0.5);
-        v.sprites.set(b.id, sp);
-      }
-      if (sp.parent !== slice.balls) slice.balls.addChild(sp);
-      sp.visible = true;
-      sp.position.set(p.x, p.y);
-      sp.zIndex = p.wx + p.wy;
-      sp.width = sp.height = ((CELL * rPx) / (CELL / 2 - 1)) * shrink;
-      sp.alpha = alpha;
-      // in the hole: darker the deeper, and only what shows through the hole's mouth
-      sp.tint = f && f.sink > 0 ? dim(1 - 0.75 * Math.min(1, f.sink / POCKET_DEPTH)) : 0xffffff;
-      if (f && drop && f.sink > 0) {
-        let m = v.masks.get(b.id);
-        if (!m) {
-          m = new Graphics();
-          v.masks.set(b.id, m);
-        }
-        if (m.parent !== slice.balls) slice.balls.addChild(m);
-        m.clear();
-        const pk = POOL_POCKETS[drop.pocket];
-        const c = sc(pk.x, pk.y, CLOTH_Z);
-        const ring: number[] = [];
-        for (let k = 0; k < 24; k++) {
-          const a = (k / 24) * Math.PI * 2;
-          const q = sc(pk.x + Math.cos(a) * holeR(pk.side), pk.y + Math.sin(a) * holeR(pk.side), CLOTH_Z);
-          ring.push(q.x, q.y);
-        }
-        // the mouth, and everything over the cloth above it
-        m.poly(ring).fill(0xffffff);
-        m.rect(c.x - rPx * 6, c.y - rPx * 12, rPx * 12, rPx * 12).fill(0xffffff);
-        sp.mask = m;
-      }
-    }
-    // the masks of balls that have fallen out of sight
-    for (const [bid, m] of v.masks)
-      if (!falling.has(bid)) {
-        const sp = v.sprites.get(bid);
-        if (sp && sp.mask === m) sp.mask = null;
-        m.removeFromParent();
-        m.destroy();
-        v.masks.delete(bid);
-      }
-    // the tray at the foot end: the potted ones in a row, first down nearest
-    tray.sort((a, b) => (a.down === b.down ? a.id - b.id : 0));
-    tray.forEach((b, i) => {
-      const [tx, ty] = tableTurn(G.w - 0.13, 0.66 + i * (2 * R_T + 0.004), rot, G.w, G.h);
-      const wx = o.x + tx;
-      const wy = o.y + ty;
-      if (i >= 15) return;
-      const p = toScreen(wx, wy);
-      live.add(b.id);
-      const slice = v.slices[sliceOf(wx, wy)];
-      anyNew = this.paint(v, b, rot) || anyNew;
-      let sp = v.sprites.get(b.id);
-      if (!sp) {
-        sp = new Sprite(v.frames[b.id]);
-        sp.anchor.set(0.5);
-        v.sprites.set(b.id, sp);
-      }
-      if (sp.parent !== slice.balls) slice.balls.addChild(sp);
-      sp.visible = true;
-      sp.alpha = 1;
-      sp.position.set(p.x, p.y - 19.4 - rPx * 0.9);
-      sp.zIndex = wx + wy;
-      sp.width = sp.height = (CELL * rPx) / (CELL / 2 - 1);
-    });
-    for (const [bid, sp] of v.sprites) if (!live.has(bid)) sp.visible = false;
-    if (anyNew) v.base.source.update();
-
-    // the cues: the shooter's along the aim, the strike's follow-through
-    const g = v.game;
-    const phase: string = t?.phase ?? "lobby";
-    const aim = this.aimOf(t);
-    const mine = this.focus === id && g && this.mySeat(t) === g.turn;
-    const cueBall = v.shown.find((b) => b.id === 0 && b.down < 0);
-    if (phase === "play" && g && cueBall) {
-      let a: number | null = null;
-      let pull = 0;
-      let sx = 0;
-      let sy = 0;
-      if (v.sim && v.strike && now - v.strikeAt < 260) {
-        // the stroke: the cue drives through and stays a moment
-        const k = (now - v.strikeAt) / 260;
-        a = v.strike.angle;
-        pull = -0.06 * Math.min(1, k * 4);
-        sx = v.strike.spinX;
-        sy = v.strike.spinY;
-        // (from where the cue ball was struck)
-        const start = v.sim.balls.find((b) => b.id === 0);
-        void start;
-      } else if (!v.sim && mine && !this.drag) {
-        a = this.angle;
-        pull = this.power;
-        sx = this.spinX;
-        sy = this.spinY;
-      } else if (!v.sim && aim && !aim.drag) {
-        a = aim.a;
-        pull = aim.p;
-        sx = aim.sx;
-        sy = aim.sy;
-      }
-      if (a != null) {
-        const from = v.sim && v.strike ? (this.strikeFrom(v) ?? cueBall) : cueBall;
-        this.drawCue(v.overG, sc, from.x, from.y, a, pull, sx, sy);
-      }
-      // the guideline (mine only)
-      if (mine && !v.sim && !this.drag && t?.guide !== "pro") this.drawGuide(v, sc, g, cueBall, t?.guide === "long");
-      // calling the 8: the pockets glow, the called one lit
-      if (mine && !v.sim && onTheEight(g))
-        POOL_POCKETS.forEach((pk, i) => {
-          const p = sc(pk.x, pk.y, CLOTH_Z + 0.5);
-          const lit = this.called === i;
-          const pulse = 0.5 + 0.5 * Math.sin(now / 220);
-          v.overG.ellipse(p.x, p.y, rPx * 2.6, rPx * 1.3).stroke({
-            width: lit ? 1.4 : 0.9,
-            color: lit ? 0xffa630 : 0xf4ecd8,
-            alpha: lit ? 0.95 : 0.35 + 0.35 * pulse,
-          });
-        });
-      // ball in hand: a dashed ring round the cue ball
-      if (mine && !v.sim && g.inHand) {
-        const c = this.drag ?? cueBall;
-        const p = sc(c.x, c.y, CLOTH_Z);
-        const ok = !this.drag || placeOk(g.balls, c.x, c.y, g.inHand === "kitchen");
-        for (let k = 0; k < 12; k++) {
-          const a0 = (k / 12) * Math.PI * 2 + now / 900;
-          const a1 = a0 + Math.PI / 14;
-          v.overG
-            .moveTo(p.x + Math.cos(a0) * rPx * 2.4, p.y + Math.sin(a0) * rPx * 1.2)
-            .lineTo(p.x + Math.cos(a1) * rPx * 2.4, p.y + Math.sin(a1) * rPx * 1.2)
-            .stroke({ width: 1, color: ok ? 0xf4ecd8 : 0xd8553a, alpha: 0.85 });
-        }
-        if (g.inHand === "kitchen") {
-          const a = sc(HEAD_STRING, -G.wid / 2, CLOTH_Z + 0.2);
-          const b = sc(HEAD_STRING, G.wid / 2, CLOTH_Z + 0.2);
-          v.overG.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: 0.8, color: 0xf4ecd8, alpha: 0.5 });
-        }
-      }
-    }
-    // the players waiting with their cues standing beside them
-    this.drawWaiting(v, t, sc);
-    // the lamp over the table (see-through while I play at it in iso)
-    this.drawLamp(v, sc, this.focus === id && !this.host.threeD());
-  }
-
-  // a ball just down: a ring of its colour opening out of the pocket's mouth
-  private flashIso(
-    v: View,
-    sc: (mx: number, my: number, z: number) => { x: number; y: number },
-    pocket: number,
-    id: number,
-    k: number,
-  ) {
-    const pk = POOL_POCKETS[pocket];
-    const r = holeR(pk.side) * (1.05 + 0.9 * k);
-    const pts: number[] = [];
-    for (let i = 0; i < 28; i++) {
-      const a = (i / 28) * Math.PI * 2;
-      const q = sc(pk.x + Math.cos(a) * r, pk.y + Math.sin(a) * r, CLOTH_Z + 0.3);
-      pts.push(q.x, q.y);
-    }
-    v.overG.poly(pts).stroke({ width: 1.6 * (1 - k) + 0.4, color: flashColor(id), alpha: 0.95 * (1 - k) });
-  }
-
   // where the cue ball was hit from (the replay's start)
   private strikeFrom(v: View): Pt | null {
     if (!v.sim) return null;
@@ -1100,19 +735,6 @@ export class PoolTables {
     } catch {
       return null;
     }
-  }
-
-  // repaint a ball's sprite when it has turned
-  private paint(v: View, b: PoolBall, rot: number): boolean {
-    const sig = b.q.map((n) => n.toFixed(3)).join(",");
-    if (v.painted.get(b.id) === sig) return false;
-    v.painted.set(b.id, sig);
-    paintIso(v.img, b.id, b.id, ballQuat(b.q as Q, rot));
-    const ctx = v.atlas.getContext("2d") as CanvasRenderingContext2D;
-    const x0 = (b.id % ATLAS_COLS) * CELL;
-    const y0 = Math.floor(b.id / ATLAS_COLS) * CELL;
-    ctx.putImageData(v.img, 0, 0, x0, y0, CELL, CELL);
-    return true;
   }
 
   private cuePoints(cx: number, cy: number, a: number, pull: number, sx: number, sy: number) {
@@ -1133,117 +755,6 @@ export class PoolTables {
     return { tip: [tipX, tipY, tipZ] as const, butt: [buttX, buttY, buttZ] as const };
   }
 
-  private drawCue(
-    g: Graphics,
-    sc: (mx: number, my: number, z: number) => { x: number; y: number },
-    cx: number,
-    cy: number,
-    a: number,
-    pull: number,
-    sx: number,
-    sy: number,
-  ) {
-    const { tip, butt } = this.cuePoints(cx, cy, a, pull, sx, sy);
-    const at = (f: number) =>
-      sc(tip[0] + (butt[0] - tip[0]) * f, tip[1] + (butt[1] - tip[1]) * f, tablePx(K, tip[2] + (butt[2] - tip[2]) * f));
-    const A = at(0);
-    const B = at(1);
-    const len = Math.hypot(B.x - A.x, B.y - A.y) || 1;
-    const nx = -(B.y - A.y) / len;
-    const ny = (B.x - A.x) / len;
-    const w0 = 0.0065 * G.tpm * LPX;
-    const w1 = 0.015 * G.tpm * LPX;
-    const seg = (f0: number, f1: number, color: number) => {
-      const p = at(f0);
-      const q = at(f1);
-      const r0 = w0 + (w1 - w0) * f0;
-      const r1 = w0 + (w1 - w0) * f1;
-      g.poly([
-        p.x + nx * r0,
-        p.y + ny * r0,
-        q.x + nx * r1,
-        q.y + ny * r1,
-        q.x - nx * r1,
-        q.y - ny * r1,
-        p.x - nx * r0,
-        p.y - ny * r0,
-      ]).fill(color);
-    };
-    // its shadow first, on the cloth (soft, under the shaft)
-    const s0 = sc(tip[0], tip[1], CLOTH_Z);
-    const s1 = sc(tip[0] + (butt[0] - tip[0]) * 0.45, tip[1] + (butt[1] - tip[1]) * 0.45, CLOTH_Z);
-    g.moveTo(s0.x, s0.y + 1)
-      .lineTo(s1.x, s1.y + 1)
-      .stroke({ width: w1 * 1.6, color: 0x0c0806, alpha: 0.18, cap: "round" });
-    seg(0, 0.008, 0x3d6fa8);
-    seg(0.008, 0.026, 0xf4efe2);
-    seg(0.026, 0.5, 0xe6cf9c);
-    seg(0.5, 0.515, 0xc39a4a);
-    seg(0.515, 0.6, 0x2a1810);
-    seg(0.6, 0.61, 0xf4efe2);
-    seg(0.61, 0.92, 0x5b2a1c);
-    seg(0.92, 1, 0x1c1a17);
-    // the ink line along its length (the kit's hand)
-    g.moveTo(A.x + nx * w0, A.y + ny * w0)
-      .lineTo(B.x + nx * w1, B.y + ny * w1)
-      .stroke({ width: 0.35, color: 0x2a1a12, alpha: 0.6 });
-    g.moveTo(A.x - nx * w0, A.y - ny * w0)
-      .lineTo(B.x - nx * w1, B.y - ny * w1)
-      .stroke({ width: 0.35, color: 0x2a1a12, alpha: 0.6 });
-    // a gloss streak on the shaft
-    const h0 = at(0.05);
-    const h1 = at(0.45);
-    g.moveTo(h0.x - nx * w0 * 0.4, h0.y - ny * w0 * 0.4)
-      .lineTo(h1.x - nx * w1 * 0.3, h1.y - ny * w1 * 0.3)
-      .stroke({ width: 0.4, color: 0xffffff, alpha: 0.35 });
-  }
-
-  private drawGuide(
-    v: View,
-    sc: (mx: number, my: number, z: number) => { x: number; y: number },
-    g: PoolGame,
-    cue: PoolBall,
-    long: boolean,
-  ) {
-    const gd = aimGuide(g.balls, this.angle);
-    const gr = v.overG;
-    const z = BALL_Z;
-    const dash = (ax: number, ay: number, bx: number, by: number, color: number, alpha: number) => {
-      const len = Math.hypot(bx - ax, by - ay);
-      const n = Math.max(1, Math.floor(len / 0.025));
-      for (let i = 0; i < n; i += 2) {
-        const p = sc(ax + ((bx - ax) * i) / n, ay + ((by - ay) * i) / n, z);
-        const q = sc(ax + ((bx - ax) * Math.min(n, i + 1)) / n, ay + ((by - ay) * Math.min(n, i + 1)) / n, z);
-        gr.moveTo(p.x, p.y).lineTo(q.x, q.y).stroke({ width: 0.7, color, alpha });
-      }
-    };
-    const rPx = R_T * LPX;
-    if (!gd.dist) return;
-    dash(cue.x, cue.y, gd.gx, gd.gy, 0xf4ecd8, 0.8);
-    const gp = sc(gd.gx, gd.gy, z);
-    const legal =
-      gd.hit < 0 ||
-      (g.groups[g.turn] ? groupOf(gd.hit) === g.groups[g.turn] || (gd.hit === 8 && onTheEight(g)) : gd.hit !== 8);
-    gr.circle(gp.x, gp.y, rPx).stroke({ width: 0.8, color: legal ? 0xf4ecd8 : 0xd8553a, alpha: 0.9 });
-    if (gd.hit >= 0) {
-      const ob = g.balls.find((b) => b.id === gd.hit) as PoolBall;
-      const L = long ? 0.7 : 0.22;
-      const p = sc(ob.x, ob.y, z);
-      const q = sc(ob.x + gd.ox * L, ob.y + gd.oy * L, z);
-      gr.moveTo(p.x, p.y)
-        .lineTo(q.x, q.y)
-        .stroke({ width: 0.9, color: legal ? 0xf4ecd8 : 0xd8553a, alpha: 0.85 });
-      if (gd.cx || gd.cy) {
-        const Lc = long ? 0.3 : 0.1;
-        const c = sc(gd.gx + gd.cx * Lc, gd.gy + gd.cy * Lc, z);
-        gr.moveTo(gp.x, gp.y).lineTo(c.x, c.y).stroke({ width: 0.6, color: 0xbfd4ff, alpha: 0.7 });
-      }
-    } else if (long) {
-      const c = sc(gd.gx + gd.cx * 0.35, gd.gy + gd.cy * 0.35, z);
-      gr.moveTo(gp.x, gp.y).lineTo(c.x, c.y).stroke({ width: 0.6, color: 0xf4ecd8, alpha: 0.5 });
-    }
-  }
-
   // the seated players who aren't shooting hold their cues upright
   private waitingSpots(v: View, t: S | undefined): { seat: number; x: number; y: number }[] {
     const out: { seat: number; x: number; y: number }[] = [];
@@ -1262,80 +773,6 @@ export class PoolTables {
     }
     return out;
   }
-  private drawWaiting(v: View, t: S | undefined, _sc: unknown) {
-    const g = v.overG;
-    for (const w of this.waitingSpots(v, t)) {
-      // a little to the side of them, tip up
-      const p = toScreen(w.x + 0.18, w.y + 0.12);
-      const h = 70;
-      g.moveTo(p.x, p.y)
-        .lineTo(p.x + 3, p.y - h)
-        .stroke({ width: 1.6, color: 0x5b2a1c, cap: "round" });
-      g.moveTo(p.x + 1.4, p.y - h * 0.4)
-        .lineTo(p.x + 3, p.y - h)
-        .stroke({ width: 0.9, color: 0xe6cf9c, cap: "round" });
-      g.moveTo(p.x + 2.9, p.y - h)
-        .lineTo(p.x + 3, p.y - h - 1)
-        .stroke({ width: 0.9, color: 0x3d6fa8 });
-    }
-  }
-
-  // The billiard lamp: three green shades on a walnut bar, hanging on two chains.
-  private drawLamp(v: View, sc: (mx: number, my: number, z: number) => { x: number; y: number }, ghost: boolean) {
-    const g = v.lampG;
-    g.clear();
-    g.alpha = ghost ? 0.16 : 1;
-    const Z = CLOTH_Z + 50;
-    const span = 0.62; // m between the shades
-    const tint = this.host.engine.liveTint(tableCentre(v.def).x, tableCentre(v.def).y);
-    g.tint = tint;
-    // chains up out of sight
-    for (const k of [-1.2, 1.2]) {
-      const p = sc(k * span, 0, Z + 8);
-      g.moveTo(p.x, p.y)
-        .lineTo(p.x, p.y - 70)
-        .stroke({ width: 0.8, color: 0xc39a4a, alpha: 0.9 });
-    }
-    // the bar
-    const a = sc(-span * 1.3, 0, Z + 8);
-    const b = sc(span * 1.3, 0, Z + 8);
-    g.moveTo(a.x, a.y).lineTo(b.x, b.y).stroke({ width: 2.6, color: 0x3e2718, cap: "round" });
-    g.moveTo(a.x, a.y - 0.8)
-      .lineTo(b.x, b.y - 0.8)
-      .stroke({ width: 0.7, color: 0x7a5236, cap: "round" });
-    // the shades (drawn back to front), lit inside
-    const shades = [-1, 0, 1].map((k) => sc(k * span, 0, Z));
-    shades.sort((p, q) => p.y - q.y);
-    for (const p of shades) {
-      const top = 3.2;
-      const bot = 10;
-      const hgt = 7;
-      g.poly([p.x - top, p.y - hgt + 1, p.x + top, p.y - hgt + 1, p.x + bot, p.y + 1, p.x - bot, p.y + 1])
-        .fill(0x2f6a4c)
-        .stroke({ width: 0.7, color: 0x2a1a12 });
-      g.poly([
-        p.x - top * 0.6,
-        p.y - hgt + 1.6,
-        p.x - 0.3,
-        p.y - hgt + 1.6,
-        p.x - bot * 0.55,
-        p.y + 0.4,
-        p.x - bot * 0.85,
-        p.y + 0.4,
-      ]).fill({
-        color: 0x5fa07a,
-        alpha: 0.5,
-      });
-      g.ellipse(p.x, p.y + 1, bot, 2.4)
-        .fill(0xffe3b0)
-        .stroke({ width: 0.6, color: 0x2a1a12 });
-      g.rect(p.x - 1.2, p.y - hgt - 1.6, 2.4, 2.6).fill(0xc39a4a);
-      g.moveTo(p.x, p.y - hgt - 1.6)
-        .lineTo(p.x, p.y - 8 - hgt + 0.5)
-        .stroke({ width: 0.7, color: 0xc39a4a });
-    }
-  }
-
   // where Vortex stands: behind his shot when it's his turn (once he's drawing
   // the cue back; while he thinks, behind the cue ball looking down the table),
   // else at the foot end
@@ -1658,7 +1095,7 @@ export class PoolTables {
   }
 
   dispose() {
-    this.lean(null);
+    this.setFocus(null);
     for (const id of [...this.views.keys()]) this.drop(id);
   }
 }

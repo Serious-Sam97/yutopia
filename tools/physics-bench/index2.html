@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>physics round 2</title><pre id="out">…</pre>
+<script type="module">
+const q = new URLSearchParams(location.search);
+if (q.get("ccd")) globalThis.CCD = true;
+const m = await import(`./dist/${q.get("engine")}.js`);
+const scene = await (await fetch(`./${q.get("scene")}.json`)).json();
+const test = q.get("test");
+const r = test === "chars" ? await m.run(m.engine(), scene, { players: 50, seconds: 60, chunk: 32 }) : await m.R2[test](m.engine(), scene);
+window.__result = r;
+document.getElementById("out").textContent = JSON.stringify(r);
+</script>

@@ -14,14 +14,14 @@ import {
 } from "@yutopia/shared/inventory";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import type { WorldController } from "../controller";
-import { eyesOf, glareOf, stepEyes, unseen } from "../eyes";
+import { eyesOf, glareOf, stepEyes } from "../eyes";
 import { actionOf } from "../input/bindings";
 import type { Press } from "../input/controls";
 import type { DarkHooks, Walker } from "../input/walker";
 import { hud } from "../store";
 import { ARMS_CSS, Arms } from "./arms";
 import { DOWN_CSS, Down } from "./down";
-import { CACHE_ICON, ICON } from "./icons";
+import { ICON } from "./icons";
 import { INV_CSS, InventoryPanel } from "./inventory";
 import { Shades } from "./shades";
 import { STRINGS } from "./strings";
@@ -94,15 +94,8 @@ const CSS = `
 .dk-prompt{background:rgba(10,12,16,.72);border-radius:6px;padding:6px 10px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;transform:translate(36px,-50%);white-space:nowrap}
 .dk-toast{left:50%;top:84px;transform:translateX(-50%);background:rgba(10,12,16,.72);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:9px 14px;font-size:14px;display:flex;gap:10px;align-items:center;transition:opacity .3s}
 .dk-toast svg{width:26px;height:26px}
-.dk-drop{transform:translate(-50%,-50%) rotate(-8deg);filter:drop-shadow(0 0 6px rgba(255,255,255,.35))}
 .dk-hit{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(120,0,0,0) 40%,rgba(150,10,10,.55) 100%);opacity:0;transition:opacity .45s ease-out}
 .dk-awake{position:fixed;inset:0;pointer-events:none;background:#000;display:flex;align-items:center;justify-content:center;font-size:20px;letter-spacing:.04em;color:#d9dde2;opacity:0;transition:opacity .9s}
-.dk-tools{right:24px;top:84px;pointer-events:auto;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
-.dk-tools>button{width:34px;height:34px;border-radius:17px;border:1px solid rgba(255,255,255,.2);background:rgba(10,12,16,.72);color:#e9ecef;font-size:16px;cursor:pointer}
-.dk-tools .menu{display:none;flex-direction:column;gap:4px;background:rgba(10,12,16,.85);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px}
-.dk-tools.open .menu{display:flex}
-.dk-tools .menu b{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(233,236,239,.6);margin-bottom:2px}
-.dk-tools .menu button{font-size:12px;padding:4px 10px;border-radius:5px;border:1px solid rgba(255,255,255,.15);background:rgba(40,46,56,.8);color:#e9ecef;cursor:pointer;text-align:left}
 .dk-arc-l{font-size:11px;font-weight:700;color:${AMBER};letter-spacing:.06em;text-transform:uppercase;transform:translateX(-50%);white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.8)}
 .dk svg.abs{filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
 `;
@@ -131,7 +124,6 @@ class Dark implements DarkHooks {
   /** the use key held (a hold to get someone up, my own first aid) */
   private useKey: string | null = null;
   private batSeen = 0;
-  private readonly drops = new Map<string, HTMLDivElement>();
   private hadLying = false;
   // the supply lockers on my floor (looked for twice a second: they're built and moved rarely)
   private lockers: { id: string; x: number; y: number; rot: number }[] = [];
@@ -235,7 +227,6 @@ class Dark implements DarkHooks {
         return d;
       },
     );
-    this.tools();
     // (the e2e reads it)
     (window as unknown as { __dark?: unknown }).__dark = this;
 
@@ -341,39 +332,6 @@ class Dark implements DarkHooks {
     this.voices.dispose();
     this.vitals.dispose();
     this.root.remove();
-  }
-
-  // an admin's tools for trying the fight (docs/plan/30-the-dark.md phase 4: the user signs off
-  // the feel): the hour, calling some up, a refill, off and on
-  private tools() {
-    const room = this.ctl.room;
-    const me = room?.state.players.get(room.sessionId);
-    if (!room || !me?.admin) return;
-    const box = tag("div", "abs dk-tools", "");
-    const open = document.createElement("button");
-    open.textContent = "☾";
-    open.title = t("dark_tools");
-    const menu = tag("div", "menu", "");
-    menu.append(tag("b", "", t("dark_tools")));
-    const item = (key: string, send: () => void) => {
-      const b = document.createElement("button");
-      b.textContent = t(key);
-      b.addEventListener("click", send);
-      menu.append(b);
-    };
-    item("dark_t_night", () => room.send("mod:hour", { h: 23 }));
-    item("dark_t_day", () => room.send("mod:hour", { h: 12 }));
-    item("dark_t_clock", () => room.send("mod:hour", { h: null }));
-    item("dark_t_one", () => room.send("mod:dark", { mode: "normal", spawn: 1 }));
-    item("dark_t_three", () => room.send("mod:dark", { mode: "normal", spawn: 3 }));
-    item("dark_t_refill", () => room.send("mod:refill", {}));
-    item("dark_t_kit", () => room.send("mod:refill", { kit: true }));
-    item("dark_t_down", () => room.send("mod:down", {}));
-    item("dark_t_peace", () => room.send("mod:dark", { mode: "peaceful" }));
-    item("dark_t_normal", () => room.send("mod:dark", { mode: "normal" }));
-    open.addEventListener("click", () => box.classList.toggle("open"));
-    box.append(open, menu);
-    this.root.append(box);
   }
 
   // ── what the walker hands on ─────────────────────────────────────────────
@@ -550,30 +508,11 @@ class Dark implements DarkHooks {
     const now = performance.now();
     const dt = Math.min(0.25, (now - this.eyesAt) / 1000);
     this.eyesAt = now;
-    const dark = ctl.engine?.getDaylight().dark ?? 0;
-    // (indoors, and nowhere yet: the rooms' light)
-    const lum =
-      !out || !Number.isFinite(x)
-        ? 1
-        : ctl.tp
-          ? ctl.tp.glareAt(x, y, ctl.room?.sessionId ?? "")
-          : (ctl.engine?.glareAt(x, y) ?? 1);
+    const dark = ctl.model?.getDaylight().dark ?? 0;
+    // (indoors, nowhere yet, and no 3D view yet: the rooms' light)
+    const lum = !out || !Number.isFinite(x) || !ctl.tp ? 1 : ctl.tp.glareAt(x, y, ctl.room?.sessionId ?? "");
     this.eyesT = stepEyes(this.eyesT, dt, glareOf(lum), dark);
-    const e = eyesOf(this.eyesT);
-    ctl.tp?.setEyes(e);
-    const eng = ctl.engine;
-    if (!eng) return;
-    eng.setEyes(e);
-    // seen and unseen in iso (N4; the 3D view's is its own): what's right round me, and whoever's
-    // out of every light — no name, no emote
-    if (eng.grounds) eng.grounds.dark = dark;
-    eng.unseen ??= (px, py, tint) => {
-      const ch = ctl.map?.tiles[Math.floor(py)]?.[Math.floor(px)] ?? " ";
-      if (ch !== " " && ch !== "a" && ch !== "c") return false; // (indoors)
-      const lum = (((tint >> 16) & 255) * 0.3 + ((tint >> 8) & 255) * 0.55 + (tint & 255) * 0.15) / 255;
-      const me = this.walker.where();
-      return unseen(lum, Math.hypot(px - me.x, py - me.y), eng.getDaylight().dark);
-    };
+    ctl.tp?.setEyes(eyesOf(this.eyesT));
   }
 
   private frame() {
@@ -596,18 +535,20 @@ class Dark implements DarkHooks {
     const floorZ = (x: number, y: number) => (out && ctl.grid.onLand(x, y) ? heightAt(x + ox, y + oy) : 0);
     const at = (x: number, y: number, h: number) => {
       const c = ctl.clientAt(x, y, h * TPX);
-      const r = ctl.engine?.app?.canvas?.getBoundingClientRect();
-      return { x: c.x + (r?.left ?? 0), y: c.y + (r?.top ?? 0) };
+      const r = ctl.hostRect();
+      return { x: c.x + r.left, y: c.y + r.top };
     };
 
-    // in reach: a spot, a locker, something lying about (the nearest)
+    // in reach: a spot, a locker, something lying about (the nearest) — across, and up or down to
+    // it (a flier over it doesn't reach it: shared reach.ts, as the server asks)
+    const far = (dx: number, dy: number, x: number, y: number) => Math.hypot(dx, dy, ctl.offAt(floorZ(x, y)));
     let best: Target | null = null;
     let bestD = LOOT_REACH;
     // a supply locker on my floor (built anywhere): a kit a day
     if (Number.isFinite(me.x))
       for (const k of this.lockersHere(now)) {
         const f = lockerFront(k);
-        const d = Math.hypot(f.x - me.x, f.y - me.y);
+        const d = far(f.x - me.x, f.y - me.y, f.x, f.y);
         if (d <= bestD) {
           bestD = d;
           best = { kind: "spot", id: `${KIT_SPOT}${k.id}`, label: t("dark_place_kit"), x: f.x, y: f.y, z: me.z };
@@ -617,13 +558,13 @@ class Dark implements DarkHooks {
       const bx = me.x + ox;
       const bz = me.y + oy;
       for (const s of LOOT) {
-        const d = Math.hypot(s.x - bx, s.z - bz);
+        const d = far(s.x - bx, s.z - bz, s.x - ox, s.z - oy);
         if (d <= bestD) {
           bestD = d;
           best = { kind: "spot", id: s.id, label: t(`dark_place_${s.place}`), x: s.x - ox, y: s.z - oy, z: me.z };
         }
       }
-      const dl = Math.hypot(LOCKER.x - bx, LOCKER.z - bz);
+      const dl = far(LOCKER.x - bx, LOCKER.z - bz, LOCKER.x - ox, LOCKER.z - oy);
       if (dl <= bestD) {
         bestD = dl;
         best = {
@@ -636,43 +577,24 @@ class Dark implements DarkHooks {
         };
       }
     }
-    // the drops on my floor: drawn within 30 tiles, the nearest in reach to pick up
-    const seen = new Set<string>();
+    // the drops on my floor: drawn within 30 tiles (the 3D view's, tp/arms3d.ts), the nearest in
+    // reach to pick up
     const drops = ctl.room?.state.drops;
-    // (3D: things lying about, tp/arms3d.ts; iso: their icons)
     const lying: { id: string; item: string; x: number; y: number; z: number }[] = [];
-    // (one lying on the snow: the nearest in reach the target; 3D the view's, iso an icon)
-    const lay = (id: string, item: string, icon: string, x: number, y: number, reach: number, target: () => Target) => {
+    // (one lying on the snow: the nearest in reach the target)
+    const lay = (id: string, item: string, x: number, y: number, reach: number, target: () => Target) => {
       const dist = Math.hypot(x - me.x, y - me.y);
       if (dist > reach) return;
-      if (dist <= bestD) {
-        bestD = dist;
+      const d = far(x - me.x, y - me.y, x, y);
+      if (d <= bestD) {
+        bestD = d;
         best = target();
       }
-      if (ctl.tp) {
-        lying.push({ id, item, x, y, z: floorZ(x, y) });
-        return;
-      }
-      seen.add(id);
-      let el = this.drops.get(id);
-      if (!el) {
-        el = document.createElement("div");
-        el.className = "abs dk-drop";
-        el.innerHTML = icon;
-        this.drops.set(id, el);
-        this.root.append(el);
-      }
-      const p = at(x, y, floorZ(x, y) + 0.05);
-      const k = Math.max(0.35, Math.min(1, 4 / Math.max(1, dist)));
-      el.style.left = `${p.x}px`;
-      el.style.top = `${p.y}px`;
-      el.style.width = `${64 * k}px`;
-      const svgEl = el.firstElementChild as SVGElement | null;
-      svgEl?.setAttribute("width", "100%");
+      lying.push({ id, item, x, y, z: floorZ(x, y) });
     };
     drops?.forEach((d: { id: string; item: string; n: number; x: number; y: number; level?: number }) => {
       if ((d.level ?? 0) !== ctl.level) return;
-      lay(d.id, d.item, ICON[d.item as ItemId] ?? "", d.x, d.y, 30, () => ({
+      lay(d.id, d.item, d.x, d.y, 30, () => ({
         kind: "drop",
         id: d.id,
         label: t("dark_pick", { item: itemName(d.item as ItemId).toLowerCase() }),
@@ -684,7 +606,7 @@ class Dark implements DarkHooks {
     // the day's nests' caches (docs/plan/31-the-day.md): searched as a spot (a ring, then the server)
     if (out)
       ctl.room?.state.caches?.forEach((c: { id: string; kind: string; x: number; y: number }) => {
-        lay(c.id, `cache:${c.kind}`, CACHE_ICON[c.kind] ?? "", c.x, c.y, 45, () => ({
+        lay(c.id, `cache:${c.kind}`, c.x, c.y, 45, () => ({
           kind: "spot",
           id: c.id,
           label: t(`dark_cache_${c.kind}`),
@@ -695,11 +617,6 @@ class Dark implements DarkHooks {
       });
     if (ctl.tp && (lying.length || this.hadLying)) ctl.tp.arms().drops(lying);
     this.hadLying = lying.length > 0;
-    for (const [id, el] of this.drops)
-      if (!seen.has(id)) {
-        el.remove();
-        this.drops.delete(id);
-      }
     this.target = best;
 
     // a search under way: the ring fills, then ask; walked off, it stops

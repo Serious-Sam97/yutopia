@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { ANA, BIA, enter, holdCamera, test, token, useWorld, walkTo } from "./helpers";
 
 const SHOTS = "../../design/screens";
 
@@ -40,9 +40,7 @@ test("two people see each other in the one world", async ({ browser }) => {
   );
   // (from the arrival point: a longer walk than from a desk)
   await walkTo(a, 4.5, 2.5, 30_000);
-  await a.evaluate(() =>
-    (window as never as { __yutopia: { engine: { setZoom(z: number): void } } }).__yutopia.engine.setZoom(1.8),
-  );
+  await holdCamera(a, { dist: 6 });
   await a.waitForTimeout(700);
   await a.screenshot({ path: `${SHOTS}/03-board-wall.png` });
 });
@@ -61,7 +59,6 @@ test("vortex wanders and answers when poked", async ({ page }) => {
       c.send("vortex:poke", {});
       await new Promise((r) => setTimeout(r, 1500));
     }
-    c.engine.setZoom(2);
     return out;
   });
   expect(said.length).toBeGreaterThan(0);

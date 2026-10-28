@@ -14,7 +14,7 @@ import {
   entry,
   FLOORS,
   findPath,
-  floorChange,
+  floorAt,
   floorOf,
   floorsOf,
   Grid,
@@ -54,7 +54,10 @@ import {
   type ServerMessages,
   SOCIAL,
   SOCIAL_MS,
+  STAIRS_D,
+  STAIRS_W,
   STEP_LABELS,
+  STOREY,
   setAreasBeyond,
   setOutdoors,
   socialFor,
@@ -66,28 +69,28 @@ import {
   THROWN,
   TICK_HZ,
   tileAt,
+  V_FLIGHT,
   type WbItem,
   type WorldObjectDef,
-  wellsOf,
   ZPX_TILE,
 } from "@yutopia/shared";
 import { COMPUTER_REACH, computerAway, isComputer } from "@yutopia/shared/computer";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { type BattleEvent, type PetLook, type PetOutfit, type Species, toyAt } from "@yutopia/shared/pets";
+import { offBand, spanOf } from "@yutopia/shared/reach";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
 import { lang, tr } from "@/lib/i18n";
 import { deviceQuality, prefs, type Quality, resolveQuality, setPrefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
 import { loadChars } from "./art/chars-load";
+import { loadItemArt } from "./art/items-load";
 import { loadPeople } from "./art/people-load";
 import { loadPets, pets as petsArt } from "./art/pets-load";
-import { loadItemArt } from "./art/scene";
 import { loadThemes } from "./art/themes-load";
 import { mixer } from "./audio";
 import type { BuildController } from "./build/controller";
-import { type AvatarState, WorldEngine } from "./engine";
 import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
 import { loadGrounds } from "./grounds-load";
@@ -95,6 +98,7 @@ import { jumps, loadJumps } from "./jumps-load";
 import { liftSound, loadLiftSounds, nearGain, stairStep } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
+import { type AvatarState, WorldModel } from "./model";
 import type { OsRoom } from "./os/room";
 import { FramePerf } from "./perf";
 import type { PerfReport } from "./perf-report";
@@ -167,25 +171,24 @@ const STEADY_MS = 50;
 const LOAD_CAP_MS = 15_000;
 const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
-const ISO_UP = (-3 * Math.PI) / 4; // iso: W goes up the screen, the world's north-west (shared iso.ts)
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 
 // (a lot car out being driven: not where it was parked — docs/plan/28-the-car.md)
 const notDriven = (o: { kind: string; props?: Record<string, unknown> | null }) => o.kind !== "car" || !o.props?.driven;
 
 export class WorldController {
-  engine: WorldEngine | null = null;
+  model: WorldModel | null = null;
   room: Room<S> | null = null;
   media: Media;
   session: Session | null = null;
   map!: MapDef; // the floor I'm on (shared levels.ts)
   grid!: Grid;
   // the building: its home map with every floor, the floor I'm on, and the
-  // things on every floor (the iso engine only has my floor's)
+  // things on every floor (the model only has my floor's)
   building!: MapDef;
   level = 0;
   readonly objs = new Map<string, WorldObjectDef>();
-  private host: HTMLElement;
+  readonly host: HTMLElement;
   // my body (docs/plan/29-the-move.md): the movement core under the keys and the pad (input chunk)
   private walker: import("./input").Walker | null = null;
   private walkYaw = 0;
@@ -245,7 +248,7 @@ export class WorldController {
         this.me.d = d;
       },
       grid: () => this.grid,
-      object: (id) => this.engine?.getObject(id),
+      object: (id) => this.model?.getObject(id),
       person: (sid) => {
         const p = this.room?.state.players.get(sid);
         if (!p) return undefined;
@@ -374,16 +377,11 @@ export class WorldController {
     this.building = this.map;
     this.grid = Grid.from(this.map, this.map.objects);
 
-    const engine = new WorldEngine(this.map);
-    this.engine = engine;
+    const model = new WorldModel(this.map);
+    this.model = model;
     this.autoTier = deviceQuality();
-    await engine.init(this.host, {
-      quality: this.qualityNow(),
-      reducedMotion: prefs().reducedMotion,
-      autoStart: false,
-    });
-    if (this.stopped) return engine.destroy();
-    engine.events = {
+    model.setQuality(this.qualityNow(), prefs().reducedMotion);
+    model.events = {
       onTileClick: (x, y, mods) => {
         if (hud.get().build.on) return this.buildClick(x, y);
         if (hud.get().pickArrival) return this.setArrival({ x, y });
@@ -410,7 +408,7 @@ export class WorldController {
         // a button on an elevator car's own panel (3D): a floor, open, close
         const btn = id.split("|btn|");
         if (btn.length === 2) return this.pressLiftButton(btn[0], btn[1]);
-        const o = this.engine?.getObject(id);
+        const o = this.model?.getObject(id);
         const b = hud.get().build;
         if (b.on && o && b.tool === "walls") return; // walls/floors paint by dragging
         if (b.on && o) return this.buildClick(o.x + 0.5, o.y + 0.5);
@@ -427,7 +425,6 @@ export class WorldController {
         }
         if (!this.openMenu({ type: "object", id }, at)) this.activateObject(id, true);
       },
-      onHoverObject: () => {},
       onPointerWorld: (x, y) => (hud.get().pickArrival ? this.hoverArrival(x, y) : this.buildHover(x, y)),
       onPointerDown: (x, y) => this.buildDown(x, y),
       onPointerUp: (x, y) => this.buildUp(x, y),
@@ -435,7 +432,7 @@ export class WorldController {
     };
     this.offLook = hud.subscribe(this.watchLook);
     this.offPrefs = subscribePrefs(() => {
-      this.engine?.setQuality(this.qualityNow(), prefs().reducedMotion);
+      this.model?.setQuality(this.qualityNow(), prefs().reducedMotion);
       if (this.tp && this.tp.quality !== this.qualityNow()) this.tp.toQuality(this.qualityNow());
       this.syncView();
     });
@@ -520,10 +517,10 @@ export class WorldController {
 
   private wireRoom(room: Room<S>) {
     const $ = getStateCallbacks(room);
-    const engine = this.engine as WorldEngine;
+    const model = this.model as WorldModel;
     this.remotes.clear();
     // a fresh session (not a resume) has new session ids: drop old avatars
-    engine.clearAvatars();
+    model.clearAvatars();
     this.uidToSid.clear();
 
     $(room.state).players.onAdd((p: S, sid: string) => {
@@ -534,7 +531,7 @@ export class WorldController {
         this.height = { z: p.z ?? 0, vz: 0, up: false };
         this.setLevel(p.level ?? 0);
         this.lastSent = { ...this.me, z: this.height.z, t: 0, l: this.level };
-        engine.localId = sid;
+        model.localId = sid;
       } else {
         this.remotes.set(sid, {
           level: p.level ?? 0,
@@ -547,7 +544,7 @@ export class WorldController {
         });
         if (hud.get().phase === "ready" && !p.bot) mixer.blip("join");
       }
-      engine.upsertAvatar(sid, this.avatarState(p, local), local);
+      model.upsertAvatar(sid, this.avatarState(p, local));
       $(p).onChange(() => {
         if (sid === room.sessionId) return;
         const r = this.remotes.get(sid);
@@ -575,7 +572,7 @@ export class WorldController {
       });
     });
     $(room.state).players.onRemove((p: S, sid: string) => {
-      engine.removeAvatar(sid);
+      model.removeAvatar(sid);
       this.remotes.delete(sid);
       if (this.uidToSid.get(p.uid) === sid) this.uidToSid.delete(p.uid);
       if (!p.bot) mixer.blip("leave");
@@ -585,17 +582,16 @@ export class WorldController {
     $(room.state).listen("mapVersion", () => {
       this.mapDirty = true;
     });
-    engine.setObjects([]);
-    // every floor's things kept; the engine draws mine
+    model.setObjects([]);
+    // every floor's things kept; the model has mine
     const putObj = (o: S) => {
       const def = objFromState(o);
       this.objs.set(def.id, def);
       this.objsRev++;
       if (def.kind === "elevator") this.liftHeard(def);
       // (a lot car out being driven isn't where it was parked: the car itself is drawn)
-      if (objLevel(def, this.building) === this.level && notDriven(def))
-        engine.upsertObject(this.liftDrawn(def), false);
-      else if (engine.getObject(def.id)) engine.removeObject(def.id, false);
+      if (objLevel(def, this.building) === this.level && notDriven(def)) model.upsertObject(this.liftDrawn(def));
+      else if (model.getObject(def.id)) model.removeObject(def.id);
       this.objectsDirty = true;
     };
     $(room.state).objects.onAdd((o: S) => {
@@ -605,12 +601,12 @@ export class WorldController {
     $(room.state).objects.onRemove((o: S) => {
       this.objs.delete(o.id);
       this.objsRev++;
-      engine.removeObject(o.id, false);
+      model.removeObject(o.id);
       this.objectsDirty = true;
     });
 
     $(room.state).npcs.onAdd((n: S, id: string) => {
-      engine.upsertAvatar(`npc:${id}`, this.npcState(n));
+      model.upsertAvatar(`npc:${id}`, this.npcState(n));
       let lastSay = n.sayAt;
       this.npcBuf.set(id, [{ t: performance.now(), x: n.x, y: n.y }]);
       $(n).onChange(() => {
@@ -627,13 +623,13 @@ export class WorldController {
         this.say(`npc:${id}`, n.say, 7000);
       });
     });
-    $(room.state).npcs.onRemove((_n: S, id: string) => engine.removeAvatar(`npc:${id}`));
+    $(room.state).npcs.onRemove((_n: S, id: string) => model.removeAvatar(`npc:${id}`));
 
     // pets (features/pets.ts): drawn like people, with their sounds near me
     $(room.state).pets.onAdd((pet: S, id: string) => {
       this.petBuf.set(id, [{ t: performance.now(), x: pet.x, y: pet.y }]);
       void loadPets(); // its drawing, animation, sounds and strings
-      if (pet.alive) engine.upsertAvatar(`pet:${id}`, this.petState(pet));
+      if (pet.alive) model.upsertAvatar(`pet:${id}`, this.petState(pet));
       let lastSay = pet.sayAt;
       let floor = pet.floor ?? 0;
       $(pet).onChange(() => {
@@ -648,7 +644,7 @@ export class WorldController {
           buf.push({ t: performance.now(), x: pet.x, y: pet.y });
           if (buf.length > 12) buf.shift();
         }
-        if (!pet.alive && engine.hasAvatar(`pet:${id}`)) engine.removeAvatar(`pet:${id}`);
+        if (!pet.alive && model.hasAvatar(`pet:${id}`)) model.removeAvatar(`pet:${id}`);
         if (pet.sayAt === lastSay || !pet.say) return;
         lastSay = pet.sayAt;
         const d = Math.hypot(pet.x - this.me.x, pet.y - this.me.y);
@@ -662,7 +658,7 @@ export class WorldController {
       this.publishPets();
     });
     $(room.state).pets.onRemove((_pet: S, id: string) => {
-      engine.removeAvatar(`pet:${id}`);
+      model.removeAvatar(`pet:${id}`);
       this.petBuf.delete(id);
       this.publishPets();
     });
@@ -734,6 +730,8 @@ export class WorldController {
       if (area) this.walkTo({ x: area.x + area.w / 2, y: area.y + area.h / 2 });
     });
     room.onMessage("toast", (m: ServerMessages["toast"]) => toast(m.text, m.tone ?? "info"));
+    // (to admins) who's removed, till when: the admins' panel (docs/plan/48-the-admin.md)
+    room.onMessage("admin:removed", (m: ServerMessages["admin:removed"]) => hud.set({ removed: m.list }));
     // the computer I sat down at is mine (its panel boots VortexOS), or it went off under me
     room.onMessage("computer:ok", (m: ServerMessages["computer:ok"]) => {
       this.computerId = m.id;
@@ -749,7 +747,7 @@ export class WorldController {
     room.onMessage("spawn:mine", (m: ServerMessages["spawn:mine"]) => {
       const was = hud.get().mySpawn;
       hud.set({ mySpawn: m.at });
-      if (hud.get().pickArrival) return this.engine?.showMine(m.at);
+      if (hud.get().pickArrival) return this.model?.showMine(m.at);
       // just set: show where for a moment
       if (m.at && (m.at.x !== was?.x || m.at.y !== was?.y) && this.arrivalAsked) this.flashArrival();
     });
@@ -847,8 +845,8 @@ export class WorldController {
     try {
       this.session = await yutopia.session();
       this.sessionAt = Date.now();
-      this.engine?.setObjects([]);
-      for (const sid of [...this.remotes.keys()]) this.engine?.removeAvatar(sid);
+      this.model?.setObjects([]);
+      for (const sid of [...this.remotes.keys()]) this.model?.removeAvatar(sid);
       await this.join();
     } catch {
       hud.set({ phase: "failed", error: tr("failed") });
@@ -900,8 +898,7 @@ export class WorldController {
     void this.media.disconnect();
     sound.stopAll();
     this.life?.sound.stop();
-    this.engine?.destroy();
-    this.engine = null;
+    this.model = null;
   }
 
   private heldShown = "";
@@ -926,7 +923,7 @@ export class WorldController {
   private checkCable() {
     const c = hud.get().cable;
     if (!c) return;
-    const o = this.engine?.getObject(c.consoleId);
+    const o = this.model?.getObject(c.consoleId);
     if (!o) return this.dropCable();
     if (typeof o.props?.tv === "string") {
       mixer.blip("pop");
@@ -937,10 +934,10 @@ export class WorldController {
     if (gap({ x: o.x, y: o.y, w, h }, me) > CABLE_REACH + 2) this.dropCable(tr("cableTooFar"));
   }
 
-  // the cable from the console to my hands (for the 3D view; iso draws its own)
+  // the cable from the console to my hands (the 3D view draws it)
   private cableEnds(): { from: Point; to: Point } | null {
     const c = hud.get().cable;
-    const o = c ? this.engine?.getObject(c.consoleId) : undefined;
+    const o = c ? this.model?.getObject(c.consoleId) : undefined;
     if (!o) return null;
     return { from: { x: o.x + 0.5, y: o.y + 0.3 }, to: { x: this.me.x, y: this.me.y } };
   }
@@ -1000,9 +997,9 @@ export class WorldController {
       "console_ps1_slim",
       "disc_rack",
     ]);
-    if (this.gamesLoading || !this.engine?.allObjects().some((o) => kinds.has(o.kind))) return;
+    if (this.gamesLoading || !this.model?.allObjects().some((o) => kinds.has(o.kind))) return;
     this.gamesLoading = import("./games/room").then((m) => {
-      if (this.stopped || !this.engine || !this.room) return;
+      if (this.stopped || !this.model || !this.room) return;
       this.games = new m.GameRoom(this);
       this.games.refresh();
     });
@@ -1018,7 +1015,7 @@ export class WorldController {
   }
   private screensChanged() {
     if (this.screens) return this.screens.refresh();
-    const on = !!this.engine
+    const on = !!this.model
       ?.allObjects()
       .some(
         (o) =>
@@ -1030,7 +1027,7 @@ export class WorldController {
   }
   ensureScreens(): Promise<void> {
     this.screensLoading ??= import("./media/room").then((m) => {
-      if (this.stopped || !this.engine || !this.room) return;
+      if (this.stopped || !this.model || !this.room) return;
       this.screens = new m.MediaRoom(this);
       this.screens.refresh();
     });
@@ -1048,7 +1045,7 @@ export class WorldController {
   }
   ensureOs(): Promise<void> {
     this.osLoading ??= import("./os/room").then((m) => {
-      if (this.stopped || !this.engine || !this.room) return;
+      if (this.stopped || !this.model || !this.room) return;
       this.os = new m.OsRoom(this);
     });
     return this.osLoading;
@@ -1117,27 +1114,20 @@ export class WorldController {
   }
 
   // ── the phone's camera (world/phone/camera.ts): the view becomes the viewfinder ──
-  // 3D: Photo is your eyes (first person, the lens zooms), Selfie a camera at
-  // arm's length in front of you (Q / E walk it round you). Iso: Photo is the
-  // view as it is, Selfie leans in on you (you turn to face it).
+  // Photo is your eyes (first person, the lens zooms), Selfie a camera at
+  // arm's length in front of you (Q / E walk it round you).
   private photo: {
     mode: "photo" | "selfie";
     angle: number; // the selfie camera, round me (world radians)
     tilt: number;
     zoom: number;
-    was: { cam: CamMode | null; isoZoom: number; yaw: number; pitch: number };
+    was: { cam: CamMode | null; yaw: number; pitch: number };
   } | null = null;
   photoMode(mode: "photo" | "selfie" | null) {
     const tp = this.tp;
-    const e = this.engine;
     if (!mode) {
       const was = this.photo?.was;
       this.photo = null;
-      if (e) {
-        e.tagsHidden = false;
-        e.pinCamera(null);
-        if (was) e.setZoom(was.isoZoom);
-      }
       if (tp) {
         tp.lens(null);
         tp.setMode(this.camWanted());
@@ -1150,13 +1140,11 @@ export class WorldController {
     }
     const was = this.photo?.was ?? {
       cam: tp ? (this.tp?.mode ?? null) : null,
-      isoZoom: e?.getZoom() ?? 1,
       yaw: tp?.yaw ?? 0,
       pitch: tp?.pitch ?? 0,
     };
     this.photo = { mode, angle: this.meAngle, tilt: 0, zoom: 1, was };
     tp?.setLook(false);
-    if (e) e.tagsHidden = true;
     if (tp) {
       tp.lens(mode === "photo" ? 1 : null);
       if (mode === "photo") {
@@ -1164,26 +1152,12 @@ export class WorldController {
         tp.yaw = this.meAngle;
         tp.pitch = 0.04;
       } else tp.setMode("chase");
-    } else if (e) {
-      if (mode === "selfie") {
-        const z = Math.min(5.2, was.isoZoom * 2.4);
-        e.pinCamera({ x: this.me.x, y: this.me.y, zoom: z, ease: true, z: 34, zoomMax: z });
-      } else {
-        e.pinCamera(null);
-        e.setZoom(was.isoZoom);
-      }
     }
   }
   photoZoom(z: number) {
     if (!this.photo) return;
     this.photo.zoom = z;
-    if (this.tp) this.tp.lens(this.photo.mode === "photo" ? z : null);
-    else {
-      const base = this.photo.was.isoZoom * (this.photo.mode === "selfie" ? 2.4 : 1);
-      if (this.photo.mode === "selfie")
-        this.engine?.pinCamera({ x: this.me.x, y: this.me.y, zoom: base * z, ease: true, z: 34, zoomMax: base * z });
-      else this.engine?.setZoom(base * z);
-    }
+    this.tp?.lens(this.photo.mode === "photo" ? z : null);
   }
   photoTurn(dir: number) {
     if (!this.photo) return;
@@ -1211,24 +1185,17 @@ export class WorldController {
     };
   }
   // the canvas the world is drawn on right now (the phone records it)
-  viewCanvas(): HTMLCanvasElement {
-    return this.tp ? this.tp.renderer.domElement : (this.engine?.app.canvas as HTMLCanvasElement);
+  viewCanvas(): HTMLCanvasElement | null {
+    return this.tp?.renderer.domElement ?? null;
   }
   snapshot(): HTMLCanvasElement | null {
-    return this.tp ? this.tp.snapshot() : (this.engine?.snapshot() ?? null);
+    return this.tp?.snapshot() ?? null;
   }
-  // a selfie in iso: the box round me on the canvas (px), for the crop
-  selfieFrame(): { x: number; y: number; w: number; h: number } | null {
-    if (this.tp || !this.engine) return null;
-    const dpr = this.engine.app.renderer.resolution;
-    const feet = this.engine.worldToClient(this.me.x, this.me.y, 0);
-    const head = this.engine.worldToClient(this.me.x, this.me.y, 110);
-    const r = this.engine.app.canvas.getBoundingClientRect();
-    const h = (feet.y - head.y) * 2.1;
-    return { x: (feet.x - r.left - h * 0.4) * dpr, y: (head.y - r.top - h * 0.25) * dpr, w: h * 0.8 * dpr, h: h * dpr };
+  // the world's host on the page (client px): the view's canvas fills it
+  hostRect(): DOMRect {
+    return this.host.getBoundingClientRect();
   }
   flashPerson(sid: string) {
-    this.engine?.flash(sid);
     this.tp?.flash(sid);
   }
 
@@ -1237,11 +1204,11 @@ export class WorldController {
   private slotsLoading: Promise<void> | null = null;
   private slotsChanged() {
     if (this.slots) return this.slots.refresh();
-    if (this.slotsLoading || !this.engine?.allObjects().some((o) => o.kind === "slot_track")) return;
+    if (this.slotsLoading || !this.model?.allObjects().some((o) => o.kind === "slot_track")) return;
     this.slotsLoading = import("./slots").then((m) => {
       const room = this.room;
-      if (this.stopped || !this.engine || !room) return;
-      this.slots = new m.SlotTracks(this.engine, room, (type, msg) => this.send(type as never, msg as never));
+      if (this.stopped || !this.model || !room) return;
+      this.slots = new m.SlotTracks(this.model, room, (type, msg) => this.send(type as never, msg as never));
       this.slots.refresh();
     });
   }
@@ -1254,15 +1221,15 @@ export class WorldController {
     if (this.tables) return this.tables.refresh();
     if (
       this.tablesLoading ||
-      !this.engine?.allObjects().some((o) => o.kind === "pool_table" || o.kind === "pingpong_table")
+      !this.model?.allObjects().some((o) => o.kind === "pool_table" || o.kind === "pingpong_table")
     )
       return;
     this.tablesLoading = import("./tables").then((m) => {
       const room = this.room;
-      const engine = this.engine;
-      if (this.stopped || !engine || !room) return;
+      const model = this.model;
+      if (this.stopped || !model || !room) return;
       this.tables = new m.GameTables({
-        engine,
+        model,
         room,
         send: (type, msg) => this.send(type as never, msg as never),
         walkTo: (p) => {
@@ -1278,7 +1245,6 @@ export class WorldController {
           this.me.x = x;
           this.me.y = y;
         },
-        threeD: () => !!this.tp,
         worldHttp: () => this.worldHttp,
         where: () => this.walker?.where() ?? { ...this.me, z: 0 },
         aiming: () => !!this.walker?.aiming,
@@ -1303,34 +1269,19 @@ export class WorldController {
   }
 
   private frame(dt: number, now: number) {
-    const engine = this.engine;
+    const model = this.model;
     const room = this.room;
-    if (!engine || !room?.state?.players) return;
+    if (!model || !room?.state?.players) return;
     const perf = this.framePerf;
     let lap = perf.begin();
     if (this.mapDirty) {
       this.mapDirty = false;
       this.applyMapFromState();
     }
-    if (this.isoSwap === 2) {
-      this.isoSwap = 1;
-      engine.setMap(this.map);
-    } else if (this.isoSwap === 1) {
-      this.isoSwap = 0;
-      engine.setObjects(
-        onLevel(this.objs.values(), this.map)
-          .filter(notDriven)
-          .map((o) => this.liftDrawn(o)),
-      );
-      this.objectsDirty = true;
-    }
     this.updateDoors();
     if (this.objectsDirty) {
       // batched: hundreds of objects arrive in the first patch
       this.objectsDirty = false;
-      this.prewarmFloors();
-      engine.refreshFlat();
-      engine.setWells(wellsOf(this.map, this.objs.values()));
       this.rebuildGrid();
       this.build?.checkPending();
       this.slotsChanged();
@@ -1344,7 +1295,6 @@ export class WorldController {
     this.isolated("cars", () => this.cars?.frame(dt, now));
     this.moveLocal(dt);
     this.updateLift();
-    if (!this.tp) this.liftsIso(now);
     this.stairsDoors();
     if (hud.get().build.on) {
       this.actions.clear();
@@ -1354,8 +1304,7 @@ export class WorldController {
     // don't go by distance)
     const here = areaAt(this.map, this.me.x, this.me.y);
     const open = !isPrivate(here) && here?.kind !== "stage";
-    engine.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
-    if (this.tp) this.tp.earshot = engine.earshot;
+    if (this.tp) this.tp.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
     this.isolated("slots", () => this.slots?.frame(dt, this.me));
     this.isolated("tables", () => this.tables?.frame(dt, this.me));
     this.isolated("games", () => this.games?.frame(dt, this.me));
@@ -1376,7 +1325,6 @@ export class WorldController {
     // the weather (shared weather.ts): the server's storm, eased (grounds-life.ts)
     if (this.life) {
       [this.storm, this.wind] = this.life.weather(dt, room.state.storm, room.state.wind);
-      engine.grounds?.setWeather(this.storm, this.wind);
       this.tp?.setWeather(this.storm, this.wind);
     }
     // someone high-fives me, hands me something…: turn to them
@@ -1406,14 +1354,14 @@ export class WorldController {
       this.life?.print(localSid, st, now, this.map, this.grid.onLand(st.x, st.y));
       const inCar = !!this.cars?.inCar();
       if (inCar) {
-        if (engine.hasAvatar(localSid)) engine.removeAvatar(localSid);
-      } else engine.upsertAvatar(localSid, st, true);
+        if (model.hasAvatar(localSid)) model.removeAvatar(localSid);
+      } else model.upsertAvatar(localSid, st);
       if (tp && !inCar)
         bodies.push({
           ...st,
           id: localSid,
           level: this.level,
-          typing: st.a === 2 && (st.busy === "computer" || engine.atWork(st.x, st.y)),
+          typing: st.a === 2 && (st.busy === "computer" || model.atWork(st.x, st.y)),
           reduced,
         });
     }
@@ -1426,14 +1374,19 @@ export class WorldController {
       const pos = interpolate(r.buf, renderAt);
       const at = pos.s;
       const here = (p.level ?? 0) === this.level;
+      // an admin who's hidden (docs/plan/48-the-admin.md; shared admin.ts POWERS.hidden): not
+      // drawn, not heard — but by another admin, faded
+      const hidden = (p.powers & 8) !== 0;
+      const unseen = hidden && !lp?.admin;
       const st = {
         ...this.avatarState(p, false),
+        ...(hidden ? { status: "away" } : null),
         x: pos.x,
         y: pos.y,
         d: at.d,
         a: at.a,
         mv: at.mv,
-        // (their verb, if it's one: timed from when it shows, by the 3D people and iso)
+        // (their verb, if it's one: timed from when it shows, by the 3D people)
         verb: p.jump ? { kind: p.jump, t: 0, at: r.verbAt } : undefined,
         pitch: p.pitch / 40,
         // (their facing as they turned, not 8 ways: from the move's own senders)
@@ -1445,23 +1398,23 @@ export class WorldController {
         st,
         here ? Math.max(0, 1 - Math.hypot(pos.x - this.me.x, pos.y - this.me.y) / JUMP_HEARD) : 0,
       );
-      // iso shows my floor; 3D draws everyone where they are in the building
+      // the model keeps my floor's; 3D draws everyone where they are in the building
       // (someone in a car: the car draws them, sitting in it)
-      const carried = !!this.cars?.seatedIds().has(sid);
+      const carried = !!this.cars?.seatedIds().has(sid) || unseen;
       if (here && !carried) this.life?.print(sid, st, now, this.map, this.grid.onLand(st.x, st.y));
       else this.life?.prints.forget(sid);
-      if (here && !carried) engine.upsertAvatar(sid, st);
-      else if (engine.hasAvatar(sid)) engine.removeAvatar(sid);
+      if (here && !carried) model.upsertAvatar(sid, st);
+      else if (model.hasAvatar(sid)) model.removeAvatar(sid);
       if (tp && !carried)
         bodies.push({
           ...st,
           id: sid,
           level: p.level ?? 0,
-          typing: st.a === 2 && (st.busy === "computer" || engine.atWork(st.x, st.y)),
+          typing: st.a === 2 && (st.busy === "computer" || model.atWork(st.x, st.y)),
           reduced,
         });
       // voice: volume + stereo from where they are relative to me
-      if (this.hear.has(sid)) {
+      if (this.hear.has(sid) && !unseen) {
         const ear = {
           x: this.me.x,
           y: this.me.y,
@@ -1480,7 +1433,7 @@ export class WorldController {
         );
       } else this.media.setVoice(String(p.uid), 0, 0);
     }
-    const night = engine.getDaylight().night;
+    const night = model.getDaylight().night;
     room.state.npcs.forEach((n: S, id: string) => {
       const pos = interpolate(this.npcBuf.get(id) ?? [{ t: 0, x: n.x, y: n.y }], renderAt);
       // (the guard, the Kart Park's folk: people of the Grounds' life, not Vortex)
@@ -1494,7 +1447,7 @@ export class WorldController {
       // gatehouse by day, walking out to the fence after dark: the server walks him)
       const home = (n.level ?? -1) < 0 ? floorOf(this.building) : n.level;
       if ((n.kind === "guard" || n.kind === "folk") && !guard) {
-        if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
+        if (model.hasAvatar(`npc:${id}`)) model.removeAvatar(`npc:${id}`);
         return;
       }
       // (out on the land his feet are on it: the ground's not at 0 by the gatehouse)
@@ -1503,8 +1456,8 @@ export class WorldController {
         st.ground = this.grid.groundAt(pos.x, pos.y, 0);
         st.z = Math.max(st.ground, n.z ?? 0);
       }
-      if (this.level === home) engine.upsertAvatar(`npc:${id}`, st);
-      else if (engine.hasAvatar(`npc:${id}`)) engine.removeAvatar(`npc:${id}`);
+      if (this.level === home) model.upsertAvatar(`npc:${id}`, st);
+      else if (model.hasAvatar(`npc:${id}`)) model.removeAvatar(`npc:${id}`);
       if (tp) bodies.push({ ...st, id: `npc:${id}`, reduced, level: home });
     });
     // Vortexes at the game tables (a Vortex for every game)
@@ -1523,10 +1476,10 @@ export class WorldController {
         x: v.x,
         y: v.y,
       };
-      engine.upsertAvatar(id, st);
+      model.upsertAvatar(id, st);
       if (tp) bodies.push({ ...st, id, reduced, level: this.level });
     }
-    for (const id of this.tableVortexes) if (!tv.has(id)) engine.removeAvatar(id);
+    for (const id of this.tableVortexes) if (!tv.has(id)) model.removeAvatar(id);
     this.tableVortexes = tv;
     // toys in the air and on the floor (shared/pets.ts): where each is right now
     const toyList: { id: string; kind: string; x: number; y: number; z: number }[] = [];
@@ -1536,7 +1489,6 @@ export class WorldController {
       const at = toyAt({ fromX: t.fromX, fromY: t.fromY, toX: t.x, toY: t.y, at: t.at, dur: t.dur }, wall);
       toyList.push({ id: t.id, kind: t.kind, x: at.x, y: at.y, z: at.z });
     });
-    engine.setToys(toyList);
     if (tp) tp.setToys(toyList);
     // walking over to pick a toy up
     if (this.toyPick && !this.path) {
@@ -1548,42 +1500,43 @@ export class WorldController {
       if (!pet.alive) return;
       const pos = interpolate(this.petBuf.get(id) ?? [{ t: 0, x: pet.x, y: pet.y }], renderAt);
       const st = { ...this.petState(pet), x: pos.x, y: pos.y };
-      if ((pet.floor ?? 0) === this.level) engine.upsertAvatar(`pet:${id}`, st);
-      else if (engine.hasAvatar(`pet:${id}`)) engine.removeAvatar(`pet:${id}`);
+      if ((pet.floor ?? 0) === this.level) model.upsertAvatar(`pet:${id}`, st);
+      else if (model.hasAvatar(`pet:${id}`)) model.removeAvatar(`pet:${id}`);
       if (tp) bodies.push({ ...st, id: `pet:${id}`, reduced, level: pet.floor ?? 0 });
     });
     this.watchActs();
     lap = perf.lap("logic", lap); // (doors, things, moving, the tables and screens, the people)
-    engine.update(dt);
-    lap = perf.lap("iso.update", lap);
     if (tp) {
       // the room as it is (doors swinging, seats taken, edits): only what changed is redrawn
-      // build mode: what it shows (ghosts, previews, outlines); things in hand are left out of the room
-      const look = hud.get().build.on ? engine.buildLook() : null;
-      tp.setBuild(look);
+      // build mode: what it shows (ghosts, previews, outlines); things in hand are left out of the
+      // room — and my arrival pin while I pick one, outside it too
+      const building = hud.get().build.on;
+      const look = building || model.minePin() ? model.buildLook() : null;
+      tp.setBuild(look, building);
+      tp.floorHover = hud.get().pickArrival;
       if (now >= this.tpDue || (look && look.hidden.size !== this.tpHidden)) {
         this.tpDue = now + 200;
         this.tpHidden = look?.hidden.size ?? 0;
-        // (nothing it's made from changed — the things, as the engine has them, my floor, the
+        // (nothing it's made from changed — the things, as the model has them, my floor, the
         // map — : the same floors again, not worked out again. Build mode: every time)
-        const key = look ? null : `${this.objsRev}|${engine.objRev}|${this.level}|${this.cars ? 1 : 0}`;
+        const key = look ? null : `${this.objsRev}|${model.objRev}|${this.level}|${this.cars ? 1 : 0}`;
         const same = key !== null && key === this.tpKey && this.building === this.tpBuilt && tp === this.tpFor;
         this.tpKey = key;
         this.tpBuilt = this.building;
         this.tpFor = tp;
         if (!same) {
           // (every floor's things: the 3D view draws the floors below mine too —
-          // my floor's as the iso engine has them: a door swung open for someone
+          // my floor's as the model has them: a door swung open for someone
           // passing, a seat taken, a radio's display on live only there)
           // (the lot's cars: drawn by car/cars.ts once it's here)
           const all = [...this.objs.values()]
             .filter((o) => !this.cars || o.kind !== "car")
-            .map((o) => engine.getObject(o.id) ?? o);
+            .map((o) => model.getObject(o.id) ?? o);
           tp.update(this.building, look?.hidden.size ? all.filter((o) => !look.hidden.has(o.id)) : all, this.level);
         }
       }
       lap = perf.lap("tp.update", lap);
-      tp.setLiveFrom({ engine, screens: this.screens, games: this.games, os: this.os });
+      tp.setLiveFrom({ model, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
       tp.setTables(this.tables?.scene3d() ?? null);
       tp.gameCam = this.cars?.camera() ?? this.photoCam() ?? this.tables?.gameCam() ?? this.liftCam(now) ?? null;
@@ -1602,9 +1555,6 @@ export class WorldController {
       const seat = this.cars?.mySeat();
       if (!document.hidden) tp.frame(dt, bodies, localSid, seat ? { ...seat, level: 0 } : undefined);
       lap = perf.lap("tp.frame", lap);
-    } else if (!document.hidden) {
-      engine.render();
-      lap = perf.lap("iso.render", lap);
     }
     for (const cb of this.hudFrames) cb();
     this.checkCable();
@@ -1632,7 +1582,7 @@ export class WorldController {
     let pan = 0;
     let loud: { o: WorldObjectDef; r: RadioState } | null = null;
     let near: { o: WorldObjectDef; r: RadioState; d: number } | null = null;
-    for (const box of this.engine?.allObjects() ?? []) {
+    for (const box of this.model?.allObjects() ?? []) {
       if (!isRadio(box.kind)) continue;
       const r = radioOf(box);
       if (!r.playing) continue;
@@ -1685,6 +1635,8 @@ export class WorldController {
       this.meAngle = ride.angle ?? this.meAngle;
       return;
     }
+    // in a lift's car on the move: it carries me (the server too: world-server features/lifts.ts)
+    if (this.liftCarry(performance.now())) return;
     // my body (docs/plan/29-the-move.md): the movement core on its fixed step, under the keys,
     // the pad or a click-to-walk path (the input chunk: until it's here, I stand still)
     const w = this.walker;
@@ -1704,7 +1656,7 @@ export class WorldController {
           : "floor",
       // (a car on the move is in the way)
       blocked: this.level === 0 && this.cars ? (x, y) => !!this.cars?.blocks(x, y) : undefined,
-      camYaw: this.tp ? this.tp.lookYaw : ISO_UP,
+      camYaw: this.tp?.lookYaw ?? 0,
       faceLook: first,
       canJump: !!lp && this.me.a !== ANIM.sit && !lp.busy && !lp.act && !playing,
       // (aiming, in 3D, anywhere: a gun, or the flashlight raised — world/dark/arms.ts; a quick
@@ -1753,15 +1705,14 @@ export class WorldController {
       this.activeAt = now;
     }
     const running = out.gait === "sprint";
-    // the stairs: past a storey's band my feet are on the next floor up or down
-    // (its frame is a storey off, its coords maybe shifted)
-    // (only on the stairs: outdoors the ground itself rises and falls by storeys)
-    const change = this.grid.onRamp(this.me.x, this.me.y)
-      ? floorChange(hgt.z, this.level, floorsOf(this.building))
-      : null;
+    // one building (docs/plan/50 D): past a storey's band my feet are on the next floor up or down
+    // where it has a floor under them — up the stairs, or a flier through a ceiling (its frame is a
+    // storey off, its coords maybe shifted; beside the building the land rises and falls as it
+    // likes)
+    const change = floorAt(this.building, this.level, this.me, hgt.z);
     if (change) {
       const from = this.level;
-      const at = across(this.building, from, change.level, this.me);
+      const at = change.at;
       w.shift(at.x - this.me.x, at.y - this.me.y, change.dz);
       this.me.x = at.x;
       this.me.y = at.y;
@@ -1780,7 +1731,7 @@ export class WorldController {
     const floor = land
       ? this.landFloor()
       : (FLOORS[tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y)) as keyof typeof FLOORS] ?? "wood");
-    this.life?.hear(dt, this.me, this.map, land && this.level === 0, this.engine?.getDaylight().night ?? 0, this.storm);
+    this.life?.hear(dt, this.me, this.map, land && this.level === 0, this.model?.getDaylight().night ?? 0, this.storm);
     // (on the stairs: a shoe on concrete treads, in the stairwell)
     if (this.grid.onRamp(this.me.x, this.me.y)) {
       stairStep(dt, moved, running);
@@ -1852,16 +1803,12 @@ export class WorldController {
     if (hud.get().build.on) return false;
     const path = findPath(this.grid, this.me, target);
     if (!path) {
-      if (!quiet) {
-        this.engine?.showMarker(target.x, target.y);
-        this.tp?.showMarker(target.x, target.y);
-      }
+      if (!quiet) this.tp?.showMarker(target.x, target.y);
       return false;
     }
     this.path = path;
     this.pathTarget = objectId ? { objectId } : null;
     const end = path[path.length - 1] ?? target;
-    this.engine?.showMarker(end.x, end.y);
     this.tp?.showMarker(end.x, end.y);
     return true;
   }
@@ -1878,14 +1825,14 @@ export class WorldController {
 
   // ── interactions ─────────────────────────────────────────────────────────
   private nearestInteractable(): WorldObjectDef | null {
-    if (!this.engine) return null;
+    if (!this.model) return null;
     let best: WorldObjectDef | null = null;
     let bestD = INTERACT_RANGE;
     const cable = !!hud.get().cable; // a cable in hand: only what it plugs into
-    for (const o of this.engine.allObjects()) {
+    for (const o of this.model.allObjects()) {
       const e = entry(o.kind);
       if (!e.interact || (cable && !isGameTv(o.kind))) continue;
-      const d = reachOf(o, this.me);
+      const d = this.reach(o);
       if (d < bestD) {
         bestD = d;
         best = o;
@@ -1908,9 +1855,9 @@ export class WorldController {
   // press, mouse look starts at once (half the mode without it).
   private swapCamera() {
     const v = this.tp;
-    if (!v || prefs().view === "iso") return;
+    if (!v) return;
     const view = prefs().view === "1p" ? "3p" : "1p";
-    setPrefs({ view, last3d: view });
+    setPrefs({ view });
     v.setMode(this.camWanted());
     if (view === "1p" && !hud.get().build.on && !window.matchMedia?.("(pointer: coarse)").matches) v.setLook(true);
   }
@@ -1932,8 +1879,28 @@ export class WorldController {
   // something to use), else the nearest
   private aimedObject(): WorldObjectDef | null {
     if (!this.aimId || !this.tp?.looking || hud.get().cable) return null;
-    const o = this.engine?.getObject(this.aimId);
+    const o = this.model?.getObject(this.aimId);
     return o && entry(o.kind).interact ? o : null;
+  }
+
+  // How far up or down a thing is out of my hands' band (shared reach.ts, as the server
+  // measures: what it stands on, its shapes' height) — 0 within it; a flier over the lot reaches
+  // nothing down there.
+  /** How far my hands are up or down from something lying at height `g` on my floor (shared
+   *  reach.ts: 0 within their band) — the dark's drops and spots ask it. */
+  offAt(g: number): number {
+    return offBand(this.height.z, g, g);
+  }
+  private offBand(o: WorldObjectDef): number {
+    const g = this.grid.onLand(o.x, o.y) ? (this.grid.outside?.height(o.x, o.y) ?? 0) : 0;
+    const [y0, y1] = spanOf(o);
+    return offBand(this.height.z, g + y0, g + y1);
+  }
+  // …and how far my hands are from it: across the floor to it, and that
+  private reach(o: WorldObjectDef): number {
+    const across = reachOf(o, this.me);
+    const off = this.offBand(o);
+    return off ? Math.hypot(across, off) : across;
   }
 
   private updatePrompt() {
@@ -1961,7 +1928,6 @@ export class WorldController {
     const cur = hud.get().prompt;
     const kind = !o ? "" : hud.get().cable ? "plug" : (entry(o.kind).interact as string);
     if ((o?.id ?? null) === (cur?.objectId ?? null) && kind === (cur?.kind ?? "")) return;
-    this.engine?.setHighlight(o?.id ?? null);
     this.tp?.setHighlight(this.footprintOf(o?.id));
     hud.set({
       prompt: o ? { objectId: o.id, kind, label: kind === "plug" ? tr("cablePlug") : entry(o.kind).label } : null,
@@ -1993,7 +1959,6 @@ export class WorldController {
     );
     // (the Grounds' own: the drivable ones are the car module's)
     this.lifeCars = list.filter((v) => /^(shuttle|plough|visitor)$/.test(v.kind));
-    this.engine?.grounds?.setVehicles(list, this.me.x, this.me.y);
     this.tp?.setVehicles(this.lifeCars);
   }
 
@@ -2017,7 +1982,7 @@ export class WorldController {
         if (!a || !b) return;
         const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         const d = Math.hypot(mid.x - this.me.x, mid.y - this.me.y);
-        this.engine?.puff(mid.x, mid.y, "spark", act === "highfive" ? 66 : 44);
+        this.model?.puff(mid.x, mid.y, "spark", act === "highfive" ? 66 : 44);
         socialSound(act, Math.max(0, 1 - d / 9));
       }, SOCIAL_MS[act] * CONTACT);
     });
@@ -2087,7 +2052,7 @@ export class WorldController {
       items.push({ act: "follow", ok: true }, { act: "profile", ok: true });
       return { title: p.name, subtitle: p.focus ? tr("focusing") : undefined, items };
     }
-    const o = this.engine?.getObject(target.id);
+    const o = this.model?.getObject(target.id);
     if (!o) return null;
     // someone else's desk: whose (and who they are, when they're here)
     const owner = Number(o.props?.ownerId);
@@ -2129,7 +2094,7 @@ export class WorldController {
     hud.set({ menu: null });
     // looking things up happens at once (no need to walk over)
     const t = m.target;
-    const desk = t.type === "object" ? this.engine?.getObject(t.id) : undefined;
+    const desk = t.type === "object" ? this.model?.getObject(t.id) : undefined;
     const owner = Number(desk?.props?.ownerId);
     if (act === "profile" && desk) return hud.set({ inspect: owner });
     if (act === "profile" && t.type === "person") {
@@ -2166,8 +2131,8 @@ export class WorldController {
   }
 
   activateObject(id: string, walkIfFar: boolean) {
-    const o = this.engine?.getObject(id);
-    if (!o) return;
+    const o = this.model?.getObject(id);
+    if (!o || this.offBand(o) > 0) return;
     const e = entry(o.kind);
     if (!e.interact) return;
     const { w, h } = placedFootprint(o);
@@ -2286,7 +2251,7 @@ export class WorldController {
     const plugged =
       e.interact === "media" &&
       isGameTv(o.kind) &&
-      !!this.engine?.allObjects().some((x) => isConsole(x.kind) && x.props?.tv === id);
+      !!this.model?.allObjects().some((x) => isConsole(x.kind) && x.props?.tv === id);
     this.onOpenPanel(plugged ? "tv" : e.interact, id);
   }
 
@@ -2296,8 +2261,11 @@ export class WorldController {
     if (!room) return;
     const people: Person[] = [];
     let me: Person | null = null;
+    const admin = !!room.state.players.get(room.sessionId)?.admin;
     room.state.players.forEach((p: S, sid: string) => {
       const local = sid === room.sessionId;
+      // (a hidden admin: on no one's list but the admins' — shared admin.ts POWERS.hidden)
+      if (!local && p.powers & 8 && !admin) return;
       const x = local ? this.me.x : p.x;
       const y = local ? this.me.y : p.y;
       const area = areaAt(this.map, x, y);
@@ -2323,8 +2291,7 @@ export class WorldController {
       else people.push(row);
     });
     people.sort((a, b) => Number(b.hearing) - Number(a.hearing) || a.name.localeCompare(b.name));
-    // (in 3D the iso engine isn't drawing: the 3D view's own rate)
-    const fps = this.tp ? this.tp.fps : (this.engine?.stats().fps ?? 0);
+    const fps = this.tp?.fps ?? 0;
     hud.set({ me, people, fps: Math.round(fps) });
     const vx = room.state.npcs.get("vortex");
     hud.set({ vortex: vx ? { x: vx.x, y: vx.y, say: vx.say, sayAt: vx.sayAt, mood: vx.mood } : null });
@@ -2459,7 +2426,7 @@ export class WorldController {
         const pet = this.room?.state.pets.get(hit);
         if (pet) {
           const d = Math.hypot(pet.x - this.me.x, pet.y - this.me.y);
-          this.engine?.puff(pet.x, pet.y, "spark", 40);
+          this.model?.puff(pet.x, pet.y, "spark", 40);
           socialSound("fistbump", Math.max(0, 1 - d / 10));
         }
       }, at);
@@ -2570,10 +2537,10 @@ export class WorldController {
     // (up on something the dust is on its top)
     const lift = (st.ground ?? 0) * ZPX_TILE;
     if (stage === "air" && was === "crouch") {
-      this.engine?.puff(st.x, st.y, "kick", lift, hard);
+      this.model?.puff(st.x, st.y, "kick", lift, hard);
       if (near > 0) jumps()?.jumpSound(j.kind, near);
     } else if (stage === "land") {
-      this.engine?.puff(st.x, st.y, "land", lift, hard);
+      this.model?.puff(st.x, st.y, "land", lift, hard);
       if (near > 0) jumps()?.landSound(j.kind, st.ground ? "wood" : floor, near);
     }
   }
@@ -2597,7 +2564,7 @@ export class WorldController {
     hud.set({ pickArrival: on, menu: null });
     if (on) this.actions.clear();
     if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
-    this.engine?.showMine(on ? hud.get().mySpawn : null);
+    this.model?.showMine(on ? hud.get().mySpawn : null);
   }
 
   // here (a tile), or null: back to the space's arrival point
@@ -2611,14 +2578,14 @@ export class WorldController {
     const tx = Math.floor(x);
     const ty = Math.floor(y);
     const ok = this.grid.ok(tx, ty) && this.grid.fits(tx + 0.5, ty + 0.5);
-    this.engine?.showMine(hud.get().mySpawn, { x: tx, y: ty, ok });
+    this.model?.showMine(hud.get().mySpawn, { x: tx, y: ty, ok });
   }
 
   private flashArrival() {
     if (this.arrivalFlash) clearTimeout(this.arrivalFlash);
-    this.engine?.showMine(hud.get().mySpawn);
+    this.model?.showMine(hud.get().mySpawn);
     this.arrivalFlash = setTimeout(() => {
-      if (!hud.get().pickArrival) this.engine?.showMine(null);
+      if (!hud.get().pickArrival) this.model?.showMine(null);
     }, 2500);
   }
 
@@ -2672,17 +2639,17 @@ export class WorldController {
 
   // The stage screen shows whoever is sharing from the stage (if I can hear them).
   private syncStageScreen() {
-    const engine = this.engine;
+    const model = this.model;
     const room = this.room;
-    if (!engine || !room) return;
+    if (!model || !room) return;
     const screens = hud.get().screens;
     let video: HTMLVideoElement | null = null;
     room.state.players.forEach((p: S) => {
       const a = areaAt(this.map, p.x, p.y);
       if (a?.kind === "stage" && screens[String(p.uid)]) video = screens[String(p.uid)];
     });
-    const stageScreen = engine.allObjects().find((o) => o.kind === "screen_wall" && o.props?.source === "stage");
-    if (stageScreen) engine.setScreenVideo(stageScreen.id, video);
+    const stageScreen = model.allObjects().find((o) => o.kind === "screen_wall" && o.props?.source === "stage");
+    if (stageScreen) model.setScreenVideo(stageScreen.id, video);
   }
 
   private vortexListeners = new Set<(text: string) => void>();
@@ -2710,13 +2677,13 @@ export class WorldController {
   }
 
   private persistedScene(objectId: string): WbItem[] {
-    const scene = this.engine?.getObject(objectId)?.props?.scene;
+    const scene = this.model?.getObject(objectId)?.props?.scene;
     return Array.isArray(scene) ? [...(scene as WbItem[])] : [];
   }
 
   private emitWb(objectId: string) {
     const items = this.whiteboardItems(objectId);
-    this.engine?.setWhiteboard(objectId, items);
+    this.model?.setWhiteboard(objectId, items);
     for (const f of this.wbListeners) f(objectId, items);
   }
 
@@ -2728,16 +2695,15 @@ export class WorldController {
     const d = (((st?.players.size ? st.hour : spHour(Date.now())) - this.hour + 36) % 24) - 12;
     if (!first && Math.abs(d) < 1 / 60) return;
     this.hour = (this.hour + Math.max(-1, Math.min(1, d)) + 24) % 24;
-    this.engine?.setClock(this.hour);
+    this.model?.setClock(this.hour);
     this.tp?.setHour(this.hour);
   }
   private hour = spHour(Date.now());
 
   // ── third person (world/tp, its own chunk) ─────────────────────────────────
-  // A per-player way of seeing the same world: the iso engine keeps running
-  // (it's what everything else asks about the room) but stops drawing, and a
-  // three.js view behind you draws the same people and things. Build mode
-  // always opens in iso.
+  // The only view (iso retired: docs/plan/50-the-volume.md, phase 7): a three.js
+  // view draws the people and the things the model has, and answers it what's
+  // on the screen where.
   tp: ThirdPersonView | null = null;
   private tpHost: HTMLDivElement | null = null;
   private tpLoading = false;
@@ -2745,7 +2711,7 @@ export class WorldController {
   private tpHidden = 0;
   private meAngle = 0; // my facing in 3D (free; others see the nearest of 8)
   private lookD = -1; // first person: the 8-way facing I last set from where I look
-  private viewNow: "iso" | "3d" = "iso";
+  private viewNow: "none" | "3d" = "none"; // (none: before the 3D view has opened, or if it failed)
 
   // the 3D camera the prefs ask for (first person steps back out to the
   // chase camera while build mode is on: placing things from inside your
@@ -2762,21 +2728,17 @@ export class WorldController {
   }
 
   private syncView() {
-    if (!this.engine || !this.room) return;
-    // (in a car: the 3D view, its camera the car's — back to iso on the way out)
-    const want = prefs().view === "iso" && !this.cars?.inCar() ? "iso" : "3d";
+    if (!this.model || !this.room) return;
     this.tp?.setMode(this.camWanted());
     if (this.tp) {
       this.tp.lookSens = prefs().lookSens;
       this.tp.lookInvert = prefs().lookInvert;
       this.tp.handsOn = prefs().hands1p;
     }
-    if (want === this.viewNow) return;
-    this.viewNow = want;
+    if (this.viewNow === "3d") return;
+    this.viewNow = "3d";
     const go = () => {
-      if (this.stopped || this.viewNow !== want) return;
-      if (want === "3d") void this.openTp();
-      else this.closeTp();
+      if (!this.stopped) void this.openTp();
     };
     // the loading screen up first, painted, then the work behind it (entering, it's up already)
     if (hud.get().loading.on) return go();
@@ -2794,8 +2756,8 @@ export class WorldController {
         loadItemArt() as Promise<typeof import("./art/items")>,
         loadThemes(),
       ]);
-      const engine = this.engine;
-      if (this.stopped || this.viewNow !== "3d" || !engine) return;
+      const model = this.model;
+      if (this.stopped || this.viewNow !== "3d" || !model) return;
       const host = document.createElement("div");
       host.style.cssText = "position:absolute;inset:0";
       this.host.appendChild(host);
@@ -2803,23 +2765,23 @@ export class WorldController {
         keys: false,
         themes,
         level: this.level,
+        quality: this.qualityNow(),
       });
       v.prints = this.life?.prints ?? null;
       v.events = {
-        floor: (x, y, mods) => engine.events.onTileClick?.(x, y, mods),
-        person: (id, at) => engine.events.onAvatarClick?.(id, at),
-        toy: (id) => engine.events.onToyClick?.(id),
-        object: (id, at) => engine.events.onObjectClick?.(id, at),
-        // build mode: the iso build controller, fed the floor under the 3D pointer
+        floor: (x, y, mods) => model.events.onTileClick?.(x, y, mods),
+        person: (id, at) => model.events.onAvatarClick?.(id, at),
+        toy: (id) => model.events.onToyClick?.(id),
+        object: (id, at) => model.events.onObjectClick?.(id, at),
+        // build mode: the build controller, fed the floor under the pointer (client px: drags
+        // measure by it)
         buildMove: (x, y, at) => {
-          // (canvas px, as the iso engine keeps it: drags measure by it)
-          const r = engine.app.canvas.getBoundingClientRect();
-          engine.pointerAt = { gx: at.x - r.left, gy: at.y - r.top };
-          engine.events.onPointerWorld?.(x, y);
+          model.pointerAt = { x: at.x, y: at.y };
+          model.events.onPointerWorld?.(x, y);
         },
-        buildDown: (x, y) => engine.events.onPointerDown?.(x, y),
-        buildUp: (x, y) => engine.events.onPointerUp?.(x, y),
-        wheel: (dy) => engine.events.onWheel?.(dy) ?? false,
+        buildDown: (x, y) => model.events.onPointerDown?.(x, y),
+        buildUp: (x, y) => model.events.onPointerUp?.(x, y),
+        wheel: (dy) => model.events.onWheel?.(dy) ?? false,
         look: (on) => {
           hud.set({ look: on });
           if (!on) this.aimId = null;
@@ -2831,21 +2793,24 @@ export class WorldController {
         },
       };
       // what's under the pointer and where things are on screen: as this camera sees them
-      engine.picksOverride = (filter) =>
-        v
-          .picksAtPointer()
-          .filter((p) => {
-            if (p.dress) return true;
-            const o = engine.getObject(p.id);
-            return !!o && !!entry(o.kind).buildable && (!filter || filter(o));
-          })
-          .map((p) =>
-            p.dress ? { id: p.id, dress: true as const, kind: p.kind ?? "" } : { id: p.id, dress: false as const },
-          );
-      engine.clientOverride = (x, y, z) => v.project(x, y, z / 39.19) ?? { x: -9999, y: -9999 };
-      engine.floorOverride = (cx, cy, z) => v.floorAt(cx, cy, z / 39.19) ?? { x: -1, y: -1 };
-      engine.rayOverride = (cx, cy) => v.rayAt(cx, cy);
-      engine.throughOverride = () => v.lookedThrough();
+      model.view = {
+        picks: (filter) =>
+          v
+            .picksAtPointer()
+            .filter((p) => {
+              if (p.dress) return true;
+              const o = model.getObject(p.id);
+              return !!o && !!entry(o.kind).buildable && (!filter || filter(o));
+            })
+            .map((p) =>
+              p.dress ? { id: p.id, dress: true as const, kind: p.kind ?? "" } : { id: p.id, dress: false as const },
+            ),
+        project: (x, y, z) => v.project(x, y, z),
+        floorAt: (cx, cy, z) => v.floorAt(cx, cy, z),
+        rayAt: (cx, cy) => v.rayAt(cx, cy),
+        lookedThrough: () => v.lookedThrough(),
+        puff: (x, y, kind, lift, hard) => v.puff(x, y, kind, lift, hard),
+      };
       v.mount(host);
       v.setQuality(this.qualityNow());
       v.setMode(this.camWanted());
@@ -2855,15 +2820,13 @@ export class WorldController {
       v.setHour(this.hour);
       v.warming = hud.get().loading.on;
       v.yaw = this.meAngle; // start behind me
-      engine.app.canvas.style.visibility = "hidden";
-      engine.onPuff = (x, y, kind, lift, hard) => v.puff(x, y, kind, lift, hard);
       this.tp = v;
       this.tpHost = host;
       v.setHighlight(this.footprintOf(hud.get().prompt?.objectId));
     } catch (e) {
       console.error("third person", e);
       toast(tr("failed"));
-      setPrefs({ view: "iso" });
+      this.viewNow = "none"; // (tried again on the next prefs change)
     } finally {
       this.tpLoading = false;
     }
@@ -2876,21 +2839,12 @@ export class WorldController {
     this.tp = null;
     this.tpHost?.remove();
     this.tpHost = null;
-    const e = this.engine;
-    if (e) {
-      e.onPuff = null;
-      e.picksOverride = null;
-      e.clientOverride = null;
-      e.floorOverride = null;
-      e.rayOverride = null;
-      e.throughOverride = null;
-      e.app.canvas.style.visibility = "";
-    }
+    if (this.model) this.model.view = null;
   }
 
   // the floor outline of a thing (wall items: just in front of their wall)
   private footprintOf(id: string | undefined): { x: number; y: number; w: number; h: number } | null {
-    const o = id ? this.engine?.getObject(id) : undefined;
+    const o = id ? this.model?.getObject(id) : undefined;
     if (!o) return null;
     if (entry(o.kind).wall) {
       const r = hangStrip(o, 0.6);
@@ -2900,17 +2854,15 @@ export class WorldController {
     return { x: o.x - 0.08, y: o.y - 0.08, w: w + 0.16, h: h + 0.16 };
   }
 
-  // A speech bubble over someone (Vortex, a pet), in both views (switching keeps it).
+  // A speech bubble over someone (Vortex, a pet).
   private say(id: string, text: string, ms?: number) {
-    this.engine?.say(id, text, ms);
     this.tp?.say(id, text, ms);
   }
 
-  // Where a world point is on screen (canvas px), in whichever view is showing.
-  // `z`: iso px above the floor (as the iso engine measures).
+  // Where a world point is on screen (px from the world canvas's top-left; hostRect() for client
+  // px). `z`: iso px above the floor (as the shared hang code measures).
   clientAt(x: number, y: number, z: number): { x: number; y: number } {
-    if (this.tp) return this.tp.project(x, y, z / 39.19) ?? { x: -9999, y: -9999 };
-    return this.engine?.worldToClient(x, y, z) ?? { x: -9999, y: -9999 };
+    return this.model?.worldToClient(x, y, z) ?? { x: -9999, y: -9999 };
   }
 
   // ── build mode: its own chunk (world/build), loaded when an owner opens it ──
@@ -2962,7 +2914,7 @@ export class WorldController {
   // ── build mode support ───────────────────────────────────────────────────
   // My walk grid: locked doors of my own rooms let me through.
   rebuildGrid() {
-    if (!this.engine) return;
+    if (!this.model) return;
     // (every floor's things: the stairs up from the floor below count here)
     this.grid = Grid.from(this.map, [...this.objs.values()], { uid: this.myUid() || null });
   }
@@ -2972,13 +2924,13 @@ export class WorldController {
   private liftShown = "";
   private updateLift() {
     let at: WorldObjectDef | null = null;
-    for (const o of this.engine?.allObjects() ?? []) {
+    for (const o of this.model?.allObjects() ?? []) {
       if (o.kind !== "elevator") continue;
       const { w, h } = placedFootprint(o);
       if (this.me.x >= o.x && this.me.x < o.x + w && this.me.y >= o.y && this.me.y < o.y + h) at = o;
     }
     const pr = at?.props ?? {};
-    const key = at ? `${at.id}|${hud.get().floors.join()}|${pr.ph}|${pr.at}|${pr.to}` : "";
+    const key = at ? `${at.id}|${hud.get().floors.join()}|${pr.ph}|${pr.at}|${pr.to}|${this.level}` : "";
     if (key === this.liftShown) return;
     this.liftShown = key;
     if (!at) {
@@ -2996,7 +2948,8 @@ export class WorldController {
       lift: {
         id: at.id,
         floors: floors.map((level) => ({ level, name: this.floorName(level) })),
-        at: typeof live.at === "number" ? live.at : this.level,
+        // (on the way, the floor it's passing: mine, as it carries me)
+        at: live.ph !== "moving" && typeof live.at === "number" ? live.at : this.level,
         to: typeof live.to === "number" ? live.to : this.level,
         phase: String(live.ph ?? (live.door === "open" ? "open" : "shut")),
       },
@@ -3055,43 +3008,16 @@ export class WorldController {
     return levelMap(this.building, level)?.name ?? `${tr("floor")} ${level}`;
   }
 
-  // To another floor (the stairs, a ride, a teleport): the iso view, my walk
-  // grid and the HUD show that floor now.
-  // The other floors' things drawn ahead, once, a few seconds after arriving
-  // (engine.prewarm): the first visit to a floor then has its art ready.
-  private prewarmed = false;
-  private prewarmDone = false;
-  private prewarmFloors() {
-    if (this.prewarmed || this.objs.size === 0 || !this.building) return;
-    this.prewarmed = true;
-    // (behind the loading screen: at once — it waits for them)
-    setTimeout(
-      async () => {
-        for (const f of floorsOf(this.building)) {
-          if (this.stopped) return;
-          const lm = levelMap(this.building, f);
-          if (!lm || f === this.level) continue;
-          await this.engine?.prewarm(onLevel(this.objs.values(), lm), lm);
-        }
-        this.prewarmDone = true;
-      },
-      hud.get().loading.on ? 0 : 2500,
-    );
-  }
-
   // ── the loading screen (docs/plan/35-the-loading.md) ──────────────────
-  // Up on entering and on every change between iso and 3D, until what that
-  // view shows is all built (and the other floors with it) and a few frames in
+  // Up on entering, until what the view shows is all built and a few frames in
   // a row have come steadily; never longer than LOAD_CAP_MS.
   private loadFrom = 0; // when it went up (0: it's down)
   private loadSteady = 0; // steady frames in a row, everything built
   private loadLast = 0;
-  private loadArt = 0; // the most iso drawings seen on their way (its share done)
   private holdLoading(why: "enter" | "view") {
     this.loadFrom = performance.now();
     this.loadLast = 0;
     this.loadSteady = 0;
-    this.loadArt = 0;
     hud.set({ loading: { on: true, progress: why === "enter" ? hud.get().loading.progress : 0, why } });
     if (this.tp) this.tp.warming = true;
   }
@@ -3114,21 +3040,12 @@ export class WorldController {
     const l = hud.get().loading;
     if (p > l.progress + 0.01) hud.set({ loading: { ...l, progress: p } });
   }
-  // what's built: each part 0..1 — what both views need, then this view's own
-  // (the 3D view's: its parts, tp/view.ts readiness)
+  // what's built: each part 0..1 — the Grounds, their life, the cars, then the 3D view's own
+  // parts (tp/view.ts readiness)
   private readiness(): { done: number; of: number } {
-    const e = this.engine;
     const G = !!this.G;
-    const parts = [+G, +(!!this.life || !G), +(!!this.cars || !G)];
-    if (this.viewNow === "3d") {
-      const v = this.tp?.readiness() ?? { done: 0, of: 9 };
-      return { done: parts[0] + parts[1] + parts[2] + v.done, of: 3 + v.of };
-    }
-    const left = e?.artLeft() ?? 1;
-    this.loadArt = Math.max(this.loadArt, left);
-    // the drawings, the land's, the other floors' (prewarmFloors); no 3D view left over
-    parts.push(this.loadArt ? 1 - left / this.loadArt : 1, +(!G || !!e?.groundsDrawn), +this.prewarmDone, +!this.tp);
-    return { done: parts.reduce((a, b) => a + b, 0), of: parts.length };
+    const v = this.tp?.readiness() ?? { done: 0, of: 9 };
+    return { done: +G + +(!!this.life || !G) + +(!!this.cars || !G) + v.done, of: 3 + v.of };
   }
 
   // ── the stairs (shared stairs.ts) ─────────────────────────────────────
@@ -3143,7 +3060,8 @@ export class WorldController {
       if (l !== this.level && l !== this.level - 1) continue;
       const p = across(this.building, this.level, l, { x, y });
       const { u, v } = stairsLocal(o, p.x, p.y);
-      if (u < 0 || u > 4 || v < 1 || v > 6) continue;
+      // (its flights and half landing: the landing by the door is floor, walked to)
+      if (u < 0 || u > STAIRS_W || v < V_FLIGHT || v > STAIRS_D) continue;
       if (l === this.level) up = o;
       else down = o;
     }
@@ -3169,7 +3087,6 @@ export class WorldController {
     this.path = [...lead, ...pts.slice(1)];
     this.pathTarget = null;
     const end = pts[pts.length - 1];
-    this.engine?.showMarker(end.x, end.y);
     this.tp?.showMarker(end.x, end.y);
     return true;
   }
@@ -3243,28 +3160,13 @@ export class WorldController {
     }
   }
 
-  /** An elevator stop as the iso view draws it now (its doors' step, the car
+  /** An elevator stop as it stands now (its doors' step, the car
    *  there or not); anything else as it is. */
   private liftDrawn(o: WorldObjectDef): WorldObjectDef {
     if (o.kind !== "elevator") return o;
     const now = performance.now();
     const m = liftMotion(o, objLevel(o, this.building), (now - (this.liftSince.get(o.id) ?? now)) / 1000);
     return { ...o, props: { ...(o.props ?? {}), anim: Math.round(m.doors * 5) / 5, here: m.here } };
-  }
-
-  // Iso: the doors on my floor slide in steps (six, each one's art cached once),
-  // the inside shown where the car is
-  private liftsIso(now: number) {
-    const engine = this.engine;
-    if (!engine) return;
-    for (const o of this.objs.values()) {
-      if (o.kind !== "elevator" || objLevel(o, this.building) !== this.level) continue;
-      const m = liftMotion(o, this.level, (now - (this.liftSince.get(o.id) ?? now)) / 1000);
-      const anim = Math.round(m.doors * 5) / 5;
-      const shown = engine.getObject(o.id);
-      if (!shown || (shown.props?.anim === anim && shown.props?.here === m.here)) continue;
-      engine.upsertObject(this.liftDrawn(o));
-    }
   }
 
   /** The car I'm standing in on my floor (and its motion), if I am. */
@@ -3276,21 +3178,57 @@ export class WorldController {
     return null;
   }
 
+  // In a lift's car on the move: up (or down) the shaft with it, the building's one space
+  // (docs/plan/50-the-volume.md, D) — my height its floor's, my floor the one it's passing (its
+  // frame a storey up each: shared floorAt); my walk waits for the doors.
+  private liftCarry(now: number): boolean {
+    const at = this.myLift(now);
+    if (!at || at.m.phase !== "moving") return false;
+    this.path = null;
+    this.actions.clear();
+    const h = this.height;
+    h.z = (at.m.car - this.level) * STOREY;
+    h.vz = 0;
+    h.up = false;
+    const ch = floorAt(this.building, this.level, this.me, h.z);
+    if (ch) {
+      const from = this.level;
+      this.me.x = ch.at.x;
+      this.me.y = ch.at.y;
+      h.z += ch.dz;
+      if (this.tp) this.tp.carryFrom = from; // (the 3D camera keeps its place in the building)
+      this.setLevel(ch.level);
+    }
+    return true;
+  }
+
   // In the car (3D), the camera rides in it with you: high in its back corner,
   // over your shoulder to the doors and the panel; it sways a hair on the way.
-  private liftCam(
-    now: number,
-  ): { eye: [number, number, number]; look: [number, number, number]; showMe: boolean; fov: number } | null {
+  private liftCam(now: number): {
+    eye: [number, number, number];
+    look: [number, number, number];
+    showMe: boolean;
+    fov: number;
+    snap: boolean;
+  } | null {
     const at = this.myLift(now);
     if (this.tp) this.tp.liftIn = at?.o.id ?? null;
     if (!at) {
-      if (this.tp) this.tp.liftSway = 0;
+      if (this.tp) {
+        this.tp.liftSway = 0;
+        this.tp.liftRise = 0;
+      }
       return null;
     }
     const { o, m } = at;
     const moving = m.phase === "moving";
     const sway = moving ? Math.sin((now / 1000) * 31) * 0.002 + Math.sin((now / 1000) * 7.3) * 0.003 : 0;
-    if (this.tp) this.tp.liftSway = sway;
+    // (and on the way up the shaft its floor's under my feet, between this floor and the next)
+    const rise = moving ? this.height.z : 0;
+    if (this.tp) {
+      this.tp.liftSway = sway;
+      this.tp.liftRise = rise;
+    }
     // the car's own frame: doors on its local −y side (rot 0), turned with it
     const r = (o.rot ?? 0) & 3;
     const turn = (u: number, v: number): [number, number] => {
@@ -3305,28 +3243,31 @@ export class WorldController {
     // (the keys follow this camera — W towards the doors — and so does the one
     // behind me as I walk out)
     if (this.tp) this.tp.yaw = Math.atan2(ly - ey, lx - ex);
-    return { eye: [ex, ey, 2.2 + sway], look: [lx, ly, 1.15 + sway], showMe: true, fov: 74 };
+    // (on the way, held to the car: eased, it'd lag out through its ceiling — and each floor passed
+    // moves the frame a storey under it)
+    return {
+      eye: [ex, ey, 2.2 + sway + rise],
+      look: [lx, ly, 1.15 + sway + rise],
+      showMe: true,
+      fov: 74,
+      snap: moving,
+    };
   }
 
-  private isoSwap = 0; // (3D: the iso engine's floor change, spread over frames)
+  // To another floor (the stairs, a ride, a teleport): my walk grid, the model
+  // and the HUD that floor's now.
   setLevel(level: number) {
     if (level === this.level && floorOf(this.map) === level) return;
     this.level = level;
     this.life?.prints.clear(); // (they're the ground floor's)
-    if (!this.building || !this.engine) return;
+    if (!this.building || !this.model) return;
     this.map = levelMap(this.building, level) ?? this.building;
-    // in 3D the iso engine follows over the next two frames (its map, then its
-    // things), so no one frame carries the whole change; in iso, at once
-    if (this.tp) this.isoSwap = 2;
-    else {
-      this.isoSwap = 0;
-      this.engine.setMap(this.map);
-      this.engine.setObjects(
-        onLevel(this.objs.values(), this.map)
-          .filter(notDriven)
-          .map((o) => this.liftDrawn(o)),
-      );
-    }
+    this.model.setMap(this.map);
+    this.model.setObjects(
+      onLevel(this.objs.values(), this.map)
+        .filter(notDriven)
+        .map((o) => this.liftDrawn(o)),
+    );
     this.rebuildGrid();
     this.path = null;
     this.objectsDirty = true;
@@ -3337,7 +3278,7 @@ export class WorldController {
   // The map lives in room state (per-space layout): rebuild walls/floors on change.
   private applyMapFromState() {
     const st = this.room?.state;
-    if (!st?.tiles || !this.engine || !st.width) return;
+    if (!st?.tiles || !this.model || !st.width) return;
     let areas = [];
     try {
       areas = JSON.parse(st.areas || "[]");
@@ -3366,7 +3307,7 @@ export class WorldController {
     const lm = levelMap(this.building, this.level);
     if (!lm) this.level = floorOf(this.building);
     this.map = lm ?? this.building;
-    this.engine.setMap(this.map);
+    this.model.setMap(this.map);
     this.rebuildGrid();
     hud.set((h) => ({ mapVersion: h.mapVersion + 1, floor: this.level, floors: floorsOf(this.building) }));
   }
@@ -3376,25 +3317,25 @@ export class WorldController {
   // in them; the radio's display lights while it plays.
   private passing = new Map<string, boolean>();
   private updateDoors() {
-    const engine = this.engine;
+    const model = this.model;
     const room = this.room;
-    if (!engine || !room) return;
+    if (!model || !room) return;
     const sitting = new Set<string>();
     if (this.me.a === ANIM.sit) sitting.add(`${Math.floor(this.me.x)},${Math.floor(this.me.y)}`);
     room.state.players.forEach((p: S, sid: string) => {
       if (sid !== room.sessionId && p.a === ANIM.sit && (p.level ?? 0) === this.level)
         sitting.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     });
-    for (const o of engine.allObjects()) {
+    for (const o of model.allObjects()) {
       if (o.kind === "chair" || o.kind === "armchair" || o.kind === "beanbag") {
         const occupied = sitting.has(`${o.x},${o.y}`);
-        if (!!o.props?.occupied !== occupied) engine.upsertObject({ ...o, props: { ...(o.props ?? {}), occupied } });
+        if (!!o.props?.occupied !== occupied) model.upsertObject({ ...o, props: { ...(o.props ?? {}), occupied } });
         continue;
       }
       if (isRadio(o.kind)) {
         // its display lights while it plays (its own state)
         const playing = radioOf(o).playing;
-        if (!!o.props?.on !== playing) engine.upsertObject({ ...o, props: { ...(o.props ?? {}), on: playing } });
+        if (!!o.props?.on !== playing) model.upsertObject({ ...o, props: { ...(o.props ?? {}), on: playing } });
         continue;
       }
       if (!isDoorKind(o.kind) || !doorLeaves(o.kind)) continue;
@@ -3420,7 +3361,7 @@ export class WorldController {
         });
       if ((this.passing.get(o.id) ?? false) !== occupied) {
         this.passing.set(o.id, occupied);
-        engine.upsertObject({ ...o, props: { ...(o.props ?? {}), passing: occupied } });
+        model.upsertObject({ ...o, props: { ...(o.props ?? {}), passing: occupied } });
       }
     }
   }
@@ -3439,10 +3380,9 @@ export class WorldController {
   private fpsCap(now: number): number {
     const cap = prefs().maxFps;
     if (!cap) return 0;
-    const e = this.engine;
-    const last = Math.max(this.activeAt, e?.activeAt ?? 0, this.tp?.activeAt ?? 0);
+    const last = Math.max(this.activeAt, this.model?.activeAt ?? 0, this.tp?.activeAt ?? 0);
     const h = hud.get();
-    const idle = now - last > IDLE_MS && !h.build.on && !h.menu && !this.path && !e?.busy();
+    const idle = now - last > IDLE_MS && !h.build.on && !h.menu && !this.path;
     return idle ? Math.min(30, cap) : cap;
   }
 
@@ -3453,17 +3393,16 @@ export class WorldController {
   }
 
   private watchFrameRate() {
-    const e = this.engine;
-    if (!e || prefs().quality !== "auto" || Date.now() - this.startedAt < 8000 || document.hidden) return;
-    // (third person: its own frame rate — the iso engine isn't drawing)
-    const fps = this.tp ? this.tp.fps : e.stats().fps;
+    const e = this.model;
+    if (!e || !this.tp || prefs().quality !== "auto" || Date.now() - this.startedAt < 8000 || document.hidden) return;
+    const fps = this.tp.fps;
     // (under the cap, or 30 when idle: slow is well under what's asked for)
     const cap = this.fpsCap(performance.now());
     const floor = cap ? Math.min(40, cap * 0.7) : 40;
     this.slowFor = fps > 0 && fps < floor ? this.slowFor + 1 : 0;
-    if (this.slowFor < 6 || this.autoTier === "low") return;
+    if (this.slowFor < 6 || this.autoTier === "lowest") return;
     this.slowFor = 0;
-    this.autoTier = this.autoTier === "high" ? "medium" : "low";
+    this.autoTier = this.autoTier === "high" ? "medium" : this.autoTier === "medium" ? "low" : "lowest";
     e.setQuality(this.autoTier, prefs().reducedMotion);
     this.tp?.toQuality(this.autoTier);
   }
@@ -3536,16 +3475,13 @@ export class WorldController {
     if (key === "x" || key === "e") this.interact();
     else if (key === "m") void this.toggleMic();
     else if (key === "v") void this.toggleCam();
-    else if (key === "t") setPrefs({ view: prefs().view === "iso" ? prefs().last3d : "iso" });
     else if (key === "y") this.swapCamera();
     else if (key === "z") this.toggleLook();
     else if (key === "p" && !hud.get().build.on) void this.togglePhone();
     else if (key === "f" && !hud.get().build.on) this.toggleTorch();
     else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
-    else if ((key === "+" || key === "=") && this.tp) this.tp.zoomBy(1 / 1.15);
-    else if (key === "-" && this.tp) this.tp.zoomBy(1.15);
-    else if (key === "+" || key === "=") this.engine?.setZoom((this.engine?.getZoom() ?? 1) * 1.15);
-    else if (key === "-") this.engine?.setZoom((this.engine?.getZoom() ?? 1) / 1.15);
+    else if (key === "+" || key === "=") this.tp?.zoomBy(1 / 1.15);
+    else if (key === "-") this.tp?.zoomBy(1.15);
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
@@ -3574,7 +3510,6 @@ export class WorldController {
       void import("./grounds-life").then((m) => {
         if (!this.G) return;
         this.life = new m.GroundsLife(G);
-        this.engine?.setGrounds(G, this.life.prints);
         if (this.tp) this.tp.prints = this.life.prints;
       });
       // (the lot's cars, driven: docs/plan/28-the-car.md, in a chunk of their own)

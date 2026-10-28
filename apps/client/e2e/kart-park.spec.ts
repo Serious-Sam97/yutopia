@@ -6,13 +6,12 @@ import {
   KART_GATE,
   KART_PARK,
   KART_ROAD,
-  KART_SIGN,
   KART_STANDS,
   KART_TURN,
 } from "../../../packages/shared/src/kart/park.ts";
 import { ANA, enter, test, token } from "./helpers";
 
-// The Kart Park on in the game (docs/plan/46-the-karts.md): in both views, the road's turn off the
+// The Kart Park on in the game (docs/plan/46-the-karts.md): in 3D, the road's turn off the
 // county road (the billboard), the gate, the car park, the paddock, inside by the stands — drawn, the park streamed in with no long frame (the machine's GPU: YUTOPIA_GPU=1). Review shots:
 // YUTOPIA_SHOTS=<dir>. (It moves Ana about the dev world; nothing else of it.)
 
@@ -24,11 +23,11 @@ if (process.env.YUTOPIA_FIREFOX !== "1")
 // the ground floor's corner is at (-60, -10) in the building's coords
 const G = (x: number, z: number) => ({ x: x + 60, y: z + 10 });
 
-async function open(page: Page, view: "3p" | "iso") {
+async function open(page: Page, view: "3p" | "1p") {
   await page.addInitScript((v) => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: v, last3d: "3p", cam3p: "chase" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: v, cam3p: "chase" }));
     const W = window as any;
     W.__worst = 0;
     let last = performance.now();
@@ -40,7 +39,7 @@ async function open(page: Page, view: "3p" | "iso") {
     requestAnimationFrame(tick);
   }, view);
   await enter(page, await token(ANA));
-  if (view === "3p") await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
 }
 const shot = async (page: Page, name: string) => {
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
@@ -84,7 +83,7 @@ async function go(page: Page, x: number, z: number, settle = 4000) {
   await page.waitForTimeout(settle);
 }
 
-for (const view of ["3p", "iso"] as const)
+for (const view of ["3p"] as const)
   test(`the Kart Park in ${view}: the road off the county road, the gate, the stands`, async ({ page }) => {
     test.setTimeout(240_000);
     await open(page, view);
@@ -115,28 +114,15 @@ for (const view of ["3p", "iso"] as const)
     expect(place).toBe("Yutopia Kart Park");
     const w2 = await worst(page);
     console.log(`[kart-park] ${view}: worst frame in the park: ${Math.round(w2)} ms`);
-    if (GPU) expect(Math.max(w1, w2), "worst frame").toBeLessThan(view === "3p" ? 120 : 80);
+    if (GPU) expect(Math.max(w1, w2), "worst frame").toBeLessThan(120);
     // the whole park (after the frames are measured: a camera of my own draws all of it at once):
-    // from the game's own 3D renderer, a camera of my own over the stands' corner;
-    // in iso, zoomed out over the bowl
-    if (view === "3p") {
-      await page.waitForTimeout(4000);
-      for (const [name, from, to] of [
-        ["aerial", [KART_PARK.x + 130, 62, KART_PARK.z + 150], [KART_PARK.x, 0, KART_PARK.z]],
-        ["bowl", [KART_BOWL.x + 30, 16, KART_BOWL.z + 40], [KART_BOWL.x, 0, KART_BOWL.z]],
-      ] as [string, number[], number[]][]) {
-        const url = await look(page, from, to);
-        if (dir) writeFileSync(`${dir}/kart-park-3p-${name}.png`, Buffer.from(url.split(",")[1], "base64"));
-      }
-    } else {
-      await go(page, KART_BOWL.x, KART_BOWL.z + KART_BOWL.r + 12, 6000);
-      await page.evaluate(() => (window as any).__yutopia.engine.setZoom(0));
-      await page.waitForTimeout(5000);
-      await shot(page, "kart-park-iso-wide");
-      // and over the paddock, and the billboard on the corner
-      await go(page, KART_GATE.x - 4, KART_PARK.z + 52, 5000);
-      await shot(page, "kart-park-iso-paddock-wide");
-      await go(page, KART_SIGN.x - 6, KART_SIGN.z + 8, 5000);
-      await shot(page, "kart-park-iso-sign-wide");
+    // from the game's own 3D renderer, a camera of my own over the stands' corner
+    await page.waitForTimeout(4000);
+    for (const [name, from, to] of [
+      ["aerial", [KART_PARK.x + 130, 62, KART_PARK.z + 150], [KART_PARK.x, 0, KART_PARK.z]],
+      ["bowl", [KART_BOWL.x + 30, 16, KART_BOWL.z + 40], [KART_BOWL.x, 0, KART_BOWL.z]],
+    ] as [string, number[], number[]][]) {
+      const url = await look(page, from, to);
+      if (dir) writeFileSync(`${dir}/kart-park-3p-${name}.png`, Buffer.from(url.split(",")[1], "base64"));
     }
   });

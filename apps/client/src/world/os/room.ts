@@ -1,7 +1,6 @@
-import { TILE_H, TILE_W, topCentre, toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { topCentre, type WorldObjectDef } from "@yutopia/shared";
 import {
   type ComputerView,
-  computerFacing,
   computerGlass,
   DEFAULT_ERA,
   type Era,
@@ -9,21 +8,18 @@ import {
   isEra,
   isPhase,
 } from "@yutopia/shared/computer";
-import { Container, Matrix, Sprite, Texture } from "pixi.js";
-import { glowSprite, placeGlow } from "../art/glow";
 import { mixer } from "../audio";
 import type { WorldController } from "../controller";
-import { glowColor, OS_H, OS_W, paintOs, paintTube } from "./screen";
+import { OS_H, OS_W, paintOs, paintTube } from "./screen";
 
 // Marks this chunk for `pnpm budget` (it loads lazily, outside the page's files).
 export const OS_CHUNK = "yutopia-os";
 
 // The studio's computers while someone uses them (docs/plan/19-vortexos.md):
 // each one in the room's `computers` gets a canvas drawn from what its OS
-// reports (world/os/screen.ts), mapped onto its glass in the iso view and
-// handed to the 3D view. A CRT warms up when it comes on and collapses to a
-// dot when it goes off; at night its light falls on the desk. Near you, it
-// clicks on and hums.
+// reports (world/os/screen.ts), handed to the 3D view for its glass. A CRT
+// warms up when it comes on and collapses to a dot when it goes off. Near
+// you, it clicks on and hums.
 
 const ON_MS = 520;
 const OFF_MS = 420;
@@ -32,12 +28,8 @@ const HEAR = 4.5; // tiles: its fan, its click
 
 interface Screen {
   def: WorldObjectDef;
-  sig: string;
   canvas: HTMLCanvasElement;
   g: CanvasRenderingContext2D;
-  tex: Texture;
-  root: Container | null;
-  glow: Sprite;
   view: ComputerView | null; // what it shows (null: switched off, collapsing)
   onAt: number;
   offAt: number;
@@ -45,21 +37,14 @@ interface Screen {
   ver: number; // counts its paints (the 3D view uploads it only when this moves)
 }
 
-const FRONT: [number, number][] = [
-  [0, -1],
-  [1, 0],
-  [0, 1],
-  [-1, 0],
-];
-
 export class OsRoom {
   private screens = new Map<string, Screen>();
   private hum: { osc: OscillatorNode; gain: GainNode } | null = null;
 
   constructor(private w: WorldController) {}
 
-  private get engine() {
-    return this.w.engine;
+  private get model() {
+    return this.w.model;
   }
 
   // What the room says about each computer someone's at.
@@ -87,17 +72,10 @@ export class OsRoom {
     canvas.width = OS_W;
     canvas.height = OS_H;
     const g = canvas.getContext("2d") as CanvasRenderingContext2D;
-    const glow = glowSprite();
-    glow.zIndex = -0.4;
-    this.engine?.mountLive(glow);
     return {
       def,
-      sig: "",
       canvas,
       g,
-      tex: Texture.from(canvas),
-      root: null,
-      glow,
       view: null,
       onAt: 0,
       offAt: 0,
@@ -106,50 +84,17 @@ export class OsRoom {
     };
   }
 
-  private drop(id: string, s: Screen) {
-    s.root?.destroy({ children: true });
-    s.glow.destroy();
-    s.tex.destroy(true);
-    this.screens.delete(id);
-  }
-
-  // onto its glass (again, when it was moved, turned or lifted)
-  private mount(s: Screen) {
-    const engine = this.engine;
-    if (!engine) return;
-    const o = s.def;
-    const sig = `${o.x}|${o.y}|${o.rot ?? 0}|${o.props?.z ?? 0}|${JSON.stringify(o.props?.c ?? null)}`;
-    if (sig === s.sig && s.root) return;
-    s.root?.destroy({ children: true });
-    s.sig = sig;
-    const c = computerGlass(o);
-    if (!c) return;
-    const tl = toScreen(c.tl[0], c.tl[1]);
-    const tr = toScreen(c.tr[0], c.tr[1]);
-    const root = new Container();
-    const sp = new Sprite(s.tex);
-    sp.width = OS_W;
-    sp.height = OS_H;
-    root.addChild(sp);
-    root.setFromMatrix(
-      new Matrix((tr.x - tl.x) / OS_W, (tr.y - tl.y) / OS_W, 0, (c.zTop - c.zBot) / OS_H, tl.x, tl.y - c.zTop),
-    );
-    engine.mountLive(root);
-    s.root = root;
-  }
-
   frame(_dt: number, me: { x: number; y: number }) {
-    const engine = this.engine;
-    if (!engine) return;
+    const model = this.model;
+    if (!model) return;
     const views = this.views();
     const now = Date.now();
     const t = performance.now();
-    const still = engine.stillMotion();
-    const night = engine.nightLevel();
+    const still = model.stillMotion();
     let hum = 0;
     // computers now in use (new ones warm up)
     for (const [id, v] of views) {
-      const def = engine.getObject(id);
+      const def = model.getObject(id);
       if (!def || !isComputer(def.kind)) continue;
       let s = this.screens.get(id);
       if (!s) {
@@ -168,9 +113,9 @@ export class OsRoom {
     }
     for (const [id, s] of this.screens) {
       const v = views.get(id);
-      const def = engine.getObject(id);
+      const def = model.getObject(id);
       if (!def) {
-        this.drop(id, s);
+        this.screens.delete(id);
         continue;
       }
       s.def = def;
@@ -179,19 +124,10 @@ export class OsRoom {
         s.view = null;
         s.offAt = still ? 0 : t;
       }
-      const facing = computerFacing(def) || engine.seesAllSides;
-      const alpha = engine.partAlpha(id);
       const off = !s.view && (!s.offAt || t - s.offAt > OFF_MS);
       if (off) {
-        this.drop(id, s);
+        this.screens.delete(id);
         continue;
-      }
-      this.mount(s);
-      const front = engine.frontKey(id);
-      if (s.root) {
-        s.root.visible = facing && alpha > 0;
-        s.root.alpha = alpha;
-        if (front != null) s.root.zIndex = front + 0.004;
       }
       const c = topCentre(def);
       const dist = Math.hypot(c.x - me.x, c.y - me.y);
@@ -206,21 +142,13 @@ export class OsRoom {
         if (collapsing !== null) paintTube(s.g, collapsing, false);
         else if (warm !== null) paintTube(s.g, warm, true);
         else if (s.view) paintOs(s.g, s.view, now);
-        s.tex.source.update();
         s.ver++;
       }
-      // its light on the desk in front of it, at night
-      if (s.view && night > 0.05 && facing) {
-        const [fx, fy] = FRONT[(def.rot ?? 0) & 3];
-        const p = toScreen(c.x + fx * 0.55, c.y + fy * 0.55);
-        const z = Number(def.props?.z) || 0;
-        placeGlow(s.glow, p.x, p.y - z, TILE_W * 1.4, TILE_H * 1.4, glowColor(s.view), 0.28 * night * alpha);
-      } else s.glow.visible = false;
     }
     this.setHum(hum);
   }
 
-  // For the third-person view: each lit glass and where it is.
+  // For the 3D view: each lit glass and where it is.
   pictures() {
     const out: {
       def: WorldObjectDef;
@@ -256,7 +184,7 @@ export class OsRoom {
   }
 
   dispose() {
-    for (const [id, s] of this.screens) this.drop(id, s);
+    this.screens.clear();
     if (this.hum) {
       try {
         this.hum.osc.stop();

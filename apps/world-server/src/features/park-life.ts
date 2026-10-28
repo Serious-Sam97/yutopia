@@ -93,9 +93,11 @@ registerFeature((room: WorldRoom) => {
     sync();
   };
   /** In reach of a seat: a bench's, by it; a stand's, at its front or its ends, abreast of it. */
+  // (and in three dimensions: the seat at its height, not reached from over it — shared reach.ts)
   const reaches = (p: Player, s: KartSeat) => {
     const x = p.x + off.x;
     const z = p.y + off.y;
+    if (room.upOff(p, { x: s.x - off.x, y: s.z - off.y }, s.top) > 0) return false;
     if (s.stand === undefined) return Math.hypot(x - s.x, z - s.z) < 2.2;
     const st = KART_STANDS[s.stand];
     return Math.abs(x - s.x) < 2.6 && z > st.z - 3 && z < st.z + st.rows * 1.2 + 1.5;

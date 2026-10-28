@@ -17,7 +17,7 @@ import {
 } from "@yutopia/shared/pool-throw";
 import { TABLE_REACH, tableAway } from "@yutopia/shared/tables";
 import { type Player, PoolBallOut } from "../schema.ts";
-import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
+import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Pool balls out of a game (shared/pool-throw.ts; the user's ask, 2026-10-22). A table that
@@ -174,7 +174,8 @@ registerFeature((room: WorldRoom) => {
     const id = String(m?.id ?? "");
     const o = room.state.objects.get(id);
     if (!p || o?.kind !== "pool_table" || !able(p)) return;
-    if (tableAway(o, p.x, p.y) > TABLE_REACH) return warn(client, "Get closer to the table.");
+    if (room.reach3(p, fromSchema(o), tableAway(o, p.x, p.y)) > TABLE_REACH)
+      return warn(client, "Get closer to the table.");
     const t = room.state.pool.get(id);
     if (t?.phase === "play") return warn(client, "Not while a game's on.");
     if (m?.what === "cue") {
@@ -199,7 +200,8 @@ registerFeature((room: WorldRoom) => {
     const now = Date.now();
     if (!p || !b || !able(p) || b.level !== p.level || heldBall(p.held) >= 0) return;
     if (flying.has(key) || (lying.get(key) ?? now) > now + 50) return;
-    if (Math.hypot(p.x - b.rx, p.y - b.ry) > PBALL.reach) return;
+    // (on the floor or a table: in three dimensions — shared reach.ts)
+    if (Math.hypot(p.x - b.rx, p.y - b.ry, room.upOff(p, { x: b.rx, y: b.ry }, 1)) > PBALL.reach) return;
     if (p.gun === "cue") p.gun = "";
     p.held = `pball:${b.n}`;
     p.heldAt = now;

@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page, request } from "@playwright/test";
-import { ANA, API, enter, test, token, useWorld } from "./helpers";
+import { ANA, API, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // Build mode, in the Lab: Tab steps through things stacked under the pointer
 // (a computer on a desk, then the desk), and a dressed desk saved as one of
@@ -8,9 +8,9 @@ import { ANA, API, enter, test, token, useWorld } from "./helpers";
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -61,7 +61,7 @@ test("Tab steps through what's stacked; a dressed desk saved as a setup and plac
       props: { d: "desklamp", c: [1, 1] },
     });
     await expect.poll(async () => (await mine(page, before)).length).toBe(3);
-    await page.evaluate(([x, y]) => (window as any).__yutopia.engine.pinCamera({ x, y, zoom: 2.5 }), [X + 1, Y + 1]);
+    await holdCamera(page, { at: { x: X + 2, y: Y + 1.5 }, dist: 8 });
     await page.evaluate(() => {
       const h = (window as any).__hud;
       h.set({ build: { ...h.get().build, on: true, tool: "furniture", mode: "hand", selected: [] } });

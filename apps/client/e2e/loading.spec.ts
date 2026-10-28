@@ -3,8 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { ANA, loaded, token, useWorld } from "./helpers";
 
 // The loading screen (docs/plan/35-the-loading.md): up on entering until the
-// world is built, and on every change between iso and 3D; the change between
-// third and first person dips to dark. After each, the frames come steadily.
+// world is built; the change between third and first person dips to dark. After each, the frames come steadily.
 // With the real GPU (headless's software GL makes every frame slow):
 // YUTOPIA_GPU=1 npx playwright test loading
 if (process.env.YUTOPIA_GPU)
@@ -41,7 +40,7 @@ async function worstFrame(page: Page, ms: number): Promise<{ worst: number; long
   );
 }
 
-test("the loading screen: entering, iso ↔ 3D, third ↔ first", async ({ page }) => {
+test("the loading screen: entering, third ↔ first", async ({ page }) => {
   test.setTimeout(180_000);
   const tok = await token(ANA);
   await useWorld("demo");
@@ -52,7 +51,7 @@ test("the loading screen: entering, iso ↔ 3D, third ↔ first", async ({ page 
   });
   await page.addInitScript((t) => {
     localStorage.setItem("yutopia:token", t);
-    localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high", view: "3p", last3d: "3p" }));
+    localStorage.setItem("yutopia:prefs", JSON.stringify({ quality: "high", view: "3p" }));
   }, tok);
   const t0 = Date.now();
   await page.goto("/");
@@ -68,26 +67,6 @@ test("the loading screen: entering, iso ↔ 3D, third ↔ first", async ({ page 
     `[loading] enter: connected ${ready - t0} ms, built ${built - ready} ms more (screen up at ready: ${at.on}) · after: ${JSON.stringify(enter)}`,
   );
   await page.evaluate(() => (window as any).__yutopia.room.send("mod:dark", { mode: "peaceful" }));
-
-  // to iso: the screen, then iso steady
-  await page.keyboard.press("t");
-  await page.waitForTimeout(30);
-  expect((await hud(page)).on).toBe(true);
-  const s1 = Date.now();
-  await loaded(page);
-  expect(await page.evaluate(() => !!(window as any).__yutopia.tp)).toBe(false);
-  const iso = await worstFrame(page, 3000);
-  console.log(`[loading] to iso: ${Date.now() - s1} ms · after: ${JSON.stringify(iso)}`);
-
-  // back to 3D: built afresh behind it
-  await page.keyboard.press("t");
-  await page.waitForTimeout(30);
-  expect((await hud(page)).on).toBe(true);
-  const s2 = Date.now();
-  await loaded(page);
-  expect(await page.evaluate(() => !!(window as any).__yutopia.tp)).toBe(true);
-  const back = await worstFrame(page, 4000);
-  console.log(`[loading] to 3D: ${Date.now() - s2} ms · after: ${JSON.stringify(back)}`);
 
   // third → first: a dip to dark, no screen
   const probe = worstFrame(page, 2500);

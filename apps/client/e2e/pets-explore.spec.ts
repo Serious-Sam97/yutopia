@@ -1,12 +1,12 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { BIA, enter, loaded, test, token, useWorld, walkTo } from "./helpers";
+import { BIA, enter, holdCamera, test, token, useWorld, walkTo } from "./helpers";
 
 // A pet off exploring (docs/plan/13-pets.md, "Explore"), in the Lab: "Go
 // explore" from its ring sends it round the place on its own; "Call my pets
 // back" on my own ring brings it the whole way back, walking; and following
 // me a long way it runs after me — never a jump to my side. YUTOPIA_SHOTS=<dir>
-// saves iso and 3D shots. The dog is let go at the end.
+// saves shots. The dog is let go at the end.
 
 const SHOTS = process.env.YUTOPIA_SHOTS;
 const pet = (page: Page, id: string) =>
@@ -51,20 +51,25 @@ async function watchSteps(page: Page, id: string, until: () => Promise<boolean>,
 async function command(page: Page, target: unknown, label: RegExp, done: () => Promise<boolean>) {
   for (let i = 0; i < 2 && !(await done()); i++) {
     await page.evaluate((t) => (window as any).__yutopia.openMenu(t, { x: 640, y: 400 }), target);
-    await page.getByRole("menuitem", { name: label }).click();
+    await page.getByRole("menuitem", { name: label }).click({ timeout: 10_000 });
     await page.waitForTimeout(600);
   }
   expect(await done()).toBe(true);
 }
 
 test("explore: the dog tours the place, comes back when called, and runs after me all the way", async ({ page }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(240_000);
   const tok = await token(BIA);
   await enter(page, tok, await useWorld("lab"));
   for (const id of await mine(page)) await send(page, "pet:release", { id });
   await send(page, "pet:adopt", { species: "dog", name: "Rex" });
   await expect.poll(async () => (await mine(page)).length).toBe(1);
   const [id] = await mine(page);
+  // (its ring needs the pets' chunk, loaded when the first pet shows up)
+  await page.waitForFunction((i) => !!(window as any).__yutopia.menuFor({ type: "pet", id: i }), id, {
+    timeout: 20_000,
+  });
+  await page.waitForTimeout(2000); // (out and at my side)
   const shot = (name: string) => (SHOTS ? page.screenshot({ path: `${SHOTS}/${name}.png` }) : null);
   try {
     // Go explore: off it goes, well away from me (I stand still)
@@ -76,11 +81,12 @@ test("explore: the dog tours the place, comes back when called, and runs after m
     const exploring = await watchSteps(page, id, far, 40_000);
     expect(exploring).toBeLessThan(12);
     await page.waitForTimeout(4000); // (a sniff about over there)
-    const zoom = (z: number) => page.evaluate((v) => (window as any).__yutopia.engine.setZoom(v), z);
-    await zoom(0.55);
+    await holdCamera(page, { dist: 14, pitch: 1.1 });
     await page.waitForTimeout(600);
-    await shot("explore-iso");
-    await zoom(1);
+    await shot("explore");
+    await page.evaluate(() => {
+      (window as any).__yutopia.tp.mode = "chase";
+    });
     // my pets on the minimap: the dot is there
     await expect.poll(() => page.evaluate(() => (window as any).__hud.get().myPetsAt.length)).toBe(1);
     // the rings: its own (Follow me, not Go explore), and mine (Call my pets back)
@@ -112,13 +118,8 @@ test("explore: the dog tours the place, comes back when called, and runs after m
     await walkTo(page, to.x, to.y, 20_000);
     const caught = await watchSteps(page, id, near, 20_000);
     expect(caught).toBeLessThan(12);
-    await shot("followed-iso");
-    // the 3D view: at my heels there too
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-    await loaded(page);
     await page.waitForTimeout(500);
-    await shot("followed-3d");
+    await shot("followed");
   } finally {
     await send(page, "pet:release", { id });
   }

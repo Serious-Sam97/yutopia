@@ -1,4 +1,4 @@
-import type { ClientMessages } from "@yutopia/shared";
+import type { ClientMessages, WorldObjectDef } from "@yutopia/shared";
 import {
   COMPUTER_LEAVE,
   COMPUTER_REACH,
@@ -13,7 +13,7 @@ import {
 } from "@yutopia/shared/computer";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
-import { Computer } from "../schema.ts";
+import { Computer, type Player } from "../schema.ts";
 import { fromSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
@@ -69,6 +69,8 @@ registerFeature((room: WorldRoom) => {
     computers.delete(id);
     offAt.delete(id);
   };
+  // how far a body's hands are from a computer, in three dimensions (shared reach.ts)
+  const away = (o: WorldObjectDef, p: Player) => room.reach3(p, o, computerAway(o, p));
   // the one I'm at (one at a time)
   const mine = (sid: string) => {
     for (const [id, c] of computers) if (c.sid === sid && c.phase !== "shutdown") return id;
@@ -79,7 +81,7 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const o = obj(m?.id);
     if (!p || !o) return;
-    if (computerAway(o, p) > COMPUTER_REACH) return warn(client, "Get closer to the computer.");
+    if (away(o, p) > COMPUTER_REACH) return warn(client, "Get closer to the computer.");
     const c = computers.get(o.id);
     if (c && c.sid !== client.sessionId && c.phase !== "shutdown")
       return warn(client, `${c.name} is using this computer.`);
@@ -151,7 +153,7 @@ registerFeature((room: WorldRoom) => {
         }
         // its user left, lost their connection, or walked off
         const p = room.state.players.get(c.sid);
-        if (!p || !clientOf(c.sid) || computerAway(o, p) > COMPUTER_LEAVE) shutDown(id);
+        if (!p || !clientOf(c.sid) || away(o, p) > COMPUTER_LEAVE) shutDown(id);
       }
     },
     leave(client) {

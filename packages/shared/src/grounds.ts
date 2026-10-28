@@ -308,6 +308,8 @@ export const FENCE: P[] = [
   [220, 170],
   [-400, 170],
 ];
+/** Its height (m): low enough to fly over, never to walk through (docs/plan/50-the-volume.md). */
+export const FENCE_H = 1.2;
 // where the lawn round the headquarters ends (no trees inside)
 const LAWN = { cx: 10, cz: -14, rx: 140, rz: 125 };
 const CLEARING = { x: BENCH.x, z: BENCH.z, r: 15 };
@@ -632,6 +634,13 @@ export const FORECOURT: {
   };
 })();
 /** Is (x, z) in what's built of a building (its whole plot, but for one with open ground in it)? */
+/** The church's steeple, south of its nave and past its plot (docs/plan/50-the-volume.md: the drawing's,
+ *  its solid's, the tiles walking keeps you off). */
+export function steepleOf(b: Building): { x0: number; z0: number; x1: number; z1: number } {
+  const xm = (b.x0 + b.x1) / 2;
+  return { x0: xm - 2.2, z0: b.z1 - 1.2, x1: xm + 2.2, z1: b.z1 + 2.7 };
+}
+
 export const inBuilt = (bd: Building, x: number, z: number) => {
   const r = bd.built ?? bd;
   return x >= r.x0 && x < r.x1 && z >= r.z0 && z < r.z1;
@@ -747,6 +756,18 @@ function kartApronAt(x: number, z: number): Surface | null {
 
 // ── the land ─────────────────────────────────────────────────────────────────
 /** How far (x, z) is beyond the land you can reach: the ridges rise there. */
+/** Where anyone may be (docs/plan/50-the-volume.md): within 24 of the land's own rectangles — these,
+ *  their union (walkable()'s `beyond`; the physics world's invisible wall round it). */
+export function worldRects(): { x0: number; z0: number; x1: number; z1: number }[] {
+  const m = (r: { x0: number; z0: number; x1: number; z1: number }) => ({
+    x0: Math.max(GROUNDS.x0 + 2, r.x0 - 24),
+    z0: Math.max(GROUNDS.z0 + 2, r.z0 - 24),
+    x1: Math.min(GROUNDS.x1 - 2, r.x1 + 24),
+    z1: Math.min(GROUNDS.z1 - 2, r.z1 + 24),
+  });
+  const core = m({ x0: -400, z0: -580, x1: 528, z1: 172 });
+  return KART_LAND ? [core, m(KART_GROUND)] : [core];
+}
 function beyond(x: number, z: number): number {
   const o = Math.max(-400 - x, z - 172, -580 - z, x - 528, 0);
   if (!KART_LAND || o === 0) return o;
@@ -1002,6 +1023,15 @@ export interface Tree {
   ry: number;
 }
 const TREE_CELL = 3.2;
+/** Which spruce a pine is (docs/plan/50-the-volume.md: the drawing's, its trunk's — one choice, the
+ *  same everywhere: an integer hash of where it stands): mostly the usual three (0–2), now and then
+ *  a young one (3), a tall thin one (4), an old broad one (5). */
+export function pineVariant(t: { x: number; z: number; ry: number }): number {
+  const h = hash2(Math.floor(t.x * 64), Math.floor(t.z * 64), 0x9135);
+  return h < 0.6 ? Math.floor(t.ry * 10) % 3 : h < 0.75 ? 3 : h < 0.88 ? 4 : 5;
+}
+/** Each spruce's height before its scale (tp/grounds3d.ts pineGeometry's H). */
+export const PINE_H = [10.5, 10.5, 10.5, 6.5, 13.5, 11];
 /** The trees in a chunk (cx, cz: chunk coords, CHUNK tiles each). */
 export function treesIn(cx: number, cz: number): Tree[] {
   const out: Tree[] = [];
@@ -1244,8 +1274,9 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
   };
   for (const t of trees) shut(t.x, t.z);
   for (const l of LAMPS) if (l.kind !== "porch") shut(l.x, l.z);
+  // (the clearing's bench as it's drawn: a metre each side of BENCH.x)
+  shut(BENCH.x - 1, BENCH.z);
   shut(BENCH.x, BENCH.z);
-  shut(BENCH.x + 1, BENCH.z);
   for (const [x, z] of streetTiles()) shut(x + 0.5, z + 0.5);
   for (const [x, z] of motorsTiles()) shut(x + 0.5, z + 0.5);
   for (let j = 0; j < CHUNK; j++)
@@ -1273,15 +1304,25 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
 function walkable(x: number, z: number): boolean {
   if (x < GROUNDS.x0 + 2 || x > GROUNDS.x1 - 2 || z < GROUNDS.z0 + 2 || z > GROUNDS.z1 - 2) return false;
   if (beyond(x, z) > 24) return false;
-  for (const bd of nearBuildings(x, z))
+  for (const bd of nearBuildings(x, z)) {
+    // (the church's steeple, past its plot)
+    if (bd.kind === "church") {
+      const s = steepleOf(bd);
+      if (x > s.x0 - 0.2 && x < s.x1 + 0.2 && z > s.z0 && z < s.z1 + 0.2) return false;
+    }
+    // (the bus shelter: walked into from the street — its glass back and sides are walls on the
+    // tiles' edges: wallEdgeAt)
+    if (bd.kind === "shelter") continue;
     if (bd.kind !== "hq" && x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1)
       // (inside one you walk into: its floor, round its furniture; its open ground: round what's on it)
       return inBuilt(bd, x, z)
         ? !!insideOf(bd) && !FIT_TILES.has(`${Math.floor(x)},${Math.floor(z)}`)
         : !onForecourt(x, z, 0.2);
+  }
   // (the town's parked cars and the farm's tractor are vehicles now — shared car/homes.ts: their
   // own boxes)
-  if (onFence(x, z) || onBridgeRail(x, z)) return false;
+  // (the fences are walls on the tiles' edges, thin as they're drawn: wallEdgeAt)
+  if (onBridgeRail(x, z)) return false;
   for (const c of SCARECROWS) if (Math.abs(x - c.x) < 0.5 && Math.abs(z - c.z) < 0.5) return false;
   // the water tower: its stem, and the fence round it (a gap to the south)
   const td = Math.hypot(x - TOWER.x, z - TOWER.z);
@@ -1301,7 +1342,9 @@ function walkable(x: number, z: number): boolean {
  *  their own. */
 export function carBlockedTile(tx: number, tz: number): boolean {
   // (and the Kart Park, its gate too: the karts are the park's, the cars stay out)
-  return !walkable(tx + 0.5, tz + 0.5) || (KART_LAND && kartCarBlocked(tx + 0.5, tz + 0.5));
+  return (
+    !walkable(tx + 0.5, tz + 0.5) || onFence(tx + 0.5, tz + 0.5) || (KART_LAND && kartCarBlocked(tx + 0.5, tz + 0.5))
+  );
 }
 /** On the company's fence line (not at the gate). */
 function onFence(x: number, z: number): boolean {
@@ -1347,7 +1390,7 @@ export function slopeAt(x: number, z: number): number {
  *  to vault or climb onto (docs/plan/29-the-move.md M4); else NaN. (The town's cars and the farm's
  *  tractor are vehicles now: their tops are their boxes' — shared grid.ts.) */
 export function topTile(tx: number, tz: number): number {
-  if (tz === Math.floor(BENCH.z) && (tx === Math.floor(BENCH.x) || tx === Math.floor(BENCH.x) + 1)) return 0.45;
+  if (tz === Math.floor(BENCH.z) && (tx === Math.floor(BENCH.x) - 1 || tx === Math.floor(BENCH.x))) return 0.45;
   return Number.NaN;
 }
 
@@ -1645,6 +1688,44 @@ for (const i of INSIDES) {
     door.dir === dir && door.at === at && u >= door.from && u < door.to;
   for (let x = b.x0; x < b.x1; x++) for (const z of [b.z0, b.z1]) if (!open("h", z, x)) WALL_EDGES.add(`h${x},${z}`);
   for (let z = b.z0; z < b.z1; z++) for (const x of [b.x0, b.x1]) if (!open("v", x, z)) WALL_EDGES.add(`v${x},${z}`);
+}
+// the bus shelter's glass: its back (north) and its sides, open to the street (shapes/grounds.ts)
+for (const b of BUILDINGS)
+  if (b.kind === "shelter") {
+    for (let x = b.x0; x < b.x1; x++) WALL_EDGES.add(`h${x},${b.z0}`);
+    for (let z = b.z0; z < b.z1 - 1; z++) for (const x of [b.x0, b.x1]) WALL_EDGES.add(`v${x},${z}`);
+  }
+// the fences, thin as they're drawn (docs/plan/50-the-volume.md: their physics a 0.12 wall on the
+// line): the company's, open at its gate as drawn (x −43…−28, the gatehouse's stretch too); the
+// Kart Park's, open at its gate
+{
+  const line = (ax: number, az: number, bx: number, bz: number, open: (x: number, z: number) => boolean) => {
+    if (az === bz)
+      for (let x = Math.min(ax, bx); x < Math.max(ax, bx); x++) {
+        if (!open(x + 0.5, az)) WALL_EDGES.add(`h${x},${az}`);
+      }
+    else
+      for (let z = Math.min(az, bz); z < Math.max(az, bz); z++) {
+        if (!open(ax, z + 0.5)) WALL_EDGES.add(`v${ax},${z}`);
+      }
+  };
+  for (let i = 0; i < FENCE.length; i++) {
+    const [ax, az] = FENCE[i];
+    const [bx, bz] = FENCE[(i + 1) % FENCE.length];
+    line(ax, az, bx, bz, (x, z) => z === GATE.z && x > GATE.x - 3 && x < GATE.x + 12);
+  }
+  if (KART_LAND) {
+    const F = KART_FENCE;
+    const G = KART_GATE;
+    const corners: P[] = [
+      [F.x0, F.z0],
+      [F.x1, F.z0],
+      [F.x1, F.z1],
+      [F.x0, F.z1],
+    ];
+    for (let i = 0; i < 4; i++)
+      line(...corners[i], ...corners[(i + 1) % 4], (x, z) => z === G.z && Math.abs(x - G.x) < G.w / 2);
+  }
 }
 /** A wall on an edge (building coords: h the north edge of tile (x, z), v the west). */
 export function wallEdgeAt(dir: "h" | "v", x: number, z: number): boolean {

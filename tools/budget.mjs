@@ -19,13 +19,18 @@ import { gzipSync } from "node:zlib";
 // (raised to 559.5 on 2026-10-25 by the user's call: the night — docs/plan/44 — the dark curve, the light map's open sky, the engine's dark)
 // (raised to 560.5 on 2026-10-26 by the user's call: the UI — docs/plan/45 — the top bar's me menu, the dock's named keys, the place card)
 // (raised to 561 on 2026-10-26 by the user's call: the Kart Park's land — docs/plan/46 — the Grounds' chunks split anew, their file lists on the page)
-const BUDGETS = { "/page": 561, "/login/page": 160 }; // KB gzip
+// (lowered to 415 on 2026-10-28: iso retired — docs/plan/50, phase 7 — Pixi and the iso engine off the page, 414.3)
+const BUDGETS = { "/page": 415, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;
 for (const [page, budget] of Object.entries(BUDGETS)) {
   const files = (manifest.pages[page] ?? []).filter((f) => f.endsWith(".js"));
   const kb = files.reduce((n, f) => n + gzipSync(readFileSync(dist + f)).length, 0) / 1024;
+  // (Jolt loads with the 3D view's chunk, never a page: docs/plan/50, guardrail 5)
+  const jolt = files.filter((f) => readFileSync(dist + f, "utf8").includes("JoltInterface"));
+  if (jolt.length) console.log(`[budget] OVER ${page.padEnd(22)} carries Jolt: ${jolt.join(", ")}`);
+  failed ||= jolt.length > 0;
   const ok = kb <= budget;
   failed ||= !ok;
   console.log(

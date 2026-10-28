@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, test, token, useWorld } from "./helpers";
+import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // The Walls tool, Sims-style (docs/plan/11-wall-building.md), in the Lab on a
 // patch of open floor (everything built is taken down after): Build draws a
@@ -16,7 +16,7 @@ const setBuild = (page: Page, b: Record<string, unknown>) =>
     h.set({ build: { ...h.get().build, ...p } });
   }, b);
 const build = (page: Page) => page.evaluate(() => (window as any).__hud.get().build);
-const look = (page: Page) => page.evaluate(() => (window as any).__yutopia.engine.buildLook());
+const look = (page: Page) => page.evaluate(() => (window as any).__yutopia.model.buildLook());
 const edge = (page: Page, dir: "h" | "v", x: number, y: number) =>
   page.evaluate(
     ([d, ex, ey]) => {
@@ -36,9 +36,9 @@ const back = (page: Page, dir: "h" | "v", x: number, y: number) =>
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -92,10 +92,10 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
   const X0 = x + 1;
   const Y0 = y + 1;
   try {
-    await page.evaluate(
-      ([cx, cy]) => (window as any).__yutopia.engine.pinCamera({ x: cx, y: cy, zoom: 2 }),
-      [X0 + 2, Y0 + 3],
-    );
+    // in the room-to-be, the camera held over it (from the south-east: it sees the walls' +y faces)
+    await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 2.5, y: p.y + 3.5 }), { x, y });
+    await page.waitForTimeout(1500);
+    await holdCamera(page);
     await setBuild(page, { on: true, tool: "walls", wallMode: "build", brush: "w:p", paintMode: "line" });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
 
@@ -153,7 +153,7 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
 
     // ── Paint: the face under the pointer, before you click ──
     await setBuild(page, { wallMode: "paint", paint: "b" });
-    // the room's north wall, inside (its +y face, which iso sees)
+    // the room's north wall, inside (its +y face, which the camera sees)
     const p = await pointAt(page, X0 + 1.5, Y0 + 0.1, 60);
     await expect
       .poll(async () => (await build(page)).wallTag)
@@ -162,12 +162,12 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     expect(f.faces).toHaveLength(1);
     expect(f.faces[0]).toMatchObject({ p: { dir: "h", x: X0 + 1, y: Y0, side: 1 }, mat: "b", ok: true });
     await page.screenshot({ path: test.info().outputPath("paint-hover.png") });
-    // Tab: the same panel's other side (outside the room, the far side here)
+    // Tab: the same panel's other side (outside the room), and back
     await page.keyboard.press("Tab");
-    await expect.poll(async () => (await build(page)).wallTag?.far).toBe(true);
+    await expect.poll(async () => (await look(page)).faces[0]?.p.side).toBe(-1);
     await page.screenshot({ path: test.info().outputPath("paint-far.png") });
     await page.keyboard.press("Tab");
-    await expect.poll(async () => (await build(page)).wallTag?.far).toBe(false);
+    await expect.poll(async () => (await look(page)).faces[0]?.p.side).toBe(1);
     // a click paints that one face
     await page.mouse.click(p.x, p.y);
     await expect.poll(() => edge(page, "h", X0 + 1, Y0)).toBe("b");
@@ -209,7 +209,7 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
     // ── the walls' view: [ ] (down / cutaway / up) ──
     await page.keyboard.press("]");
     await expect.poll(async () => (await build(page)).wallView).toBe("up");
-    expect(await page.evaluate(() => (window as any).__yutopia.engine.wallView)).toBe("up");
+    expect(await page.evaluate(() => (window as any).__yutopia.model.wallView)).toBe("up");
     await page.keyboard.press("[");
     await page.keyboard.press("[");
     await expect.poll(async () => (await build(page)).wallView).toBe("down");
@@ -243,8 +243,8 @@ test("the Walls tool, Sims-style: runs, paint with indicators, the inspector, th
   await expect.poll(() => edge(page, "h", X0 + 2, Y0 + 3)).toBe(".");
 });
 
-// In third person the same face shows under the pointer (and its preview in 3D).
-test("third person: Paint shows the face under the pointer", async ({ page }) => {
+// Close up, looking at a wall: the face shows under the pointer (and its preview in 3D).
+test("close up: Paint shows the face under the pointer", async ({ page }) => {
   test.setTimeout(120_000);
   const tok = await token(ANA);
   await page.addInitScript(() => {
@@ -348,7 +348,7 @@ test("third person: Paint shows the face under the pointer", async ({ page }) =>
     await page.evaluate(() => {
       const k = "yutopia:prefs";
       const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-      localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", cam3p: "chase" }));
+      localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase" }));
     });
   }
 });

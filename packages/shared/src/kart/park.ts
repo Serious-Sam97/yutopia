@@ -5,7 +5,7 @@
 // rack of karts, a car park outside. Pure data, in the Grounds' building coords (metres; x east,
 // z south); the land under it is grounds.ts's (its clearing and the park's pad: `KART_LAND`).
 
-import { KART_FENCE, KART_GATE, KART_PARK, type P } from "./land.ts";
+import { KART_FENCE, KART_PARK, type P } from "./land.ts";
 
 export * from "./land.ts";
 
@@ -804,22 +804,11 @@ const inRect = (x: number, z: number, x0: number, z0: number, x1: number, z1: nu
   x >= Math.min(x0, x1) && x < Math.max(x0, x1) && z >= Math.min(z0, z1) && z < Math.max(z0, z1);
 const inPark = (x: number, z: number, pad: number) =>
   x > KART_FENCE.x0 - pad && x < KART_FENCE.x1 + pad && z > KART_FENCE.z0 - pad && z < KART_FENCE.z1 + pad;
-/** On the park's fence line (`gate`: its gap too, shut: the cars'). */
-function onParkFence(x: number, z: number, gate: boolean): boolean {
-  const F = KART_FENCE;
-  const near = (a: number, b: number) => Math.abs(a - b) < 0.55;
-  const onLine =
-    ((near(x, F.x0) || near(x, F.x1)) && z > F.z0 - 0.55 && z < F.z1 + 0.55) ||
-    ((near(z, F.z0) || near(z, F.z1)) && x > F.x0 - 0.55 && x < F.x1 + 0.55);
-  if (!onLine) return false;
-  const inGate = near(z, KART_GATE.z) && Math.abs(x - KART_GATE.x) < KART_GATE.w / 2;
-  return gate || !inGate;
-}
-/** What people walk round in the park: its fence (not the gate), the stands, the tower, the desk,
- *  the rack's karts, the bowl's banked walls, the bridge's guard strips (when it's there). */
+/** What people walk round in the park: the stands, the tower, the desk, the rack's karts, the bowl's
+ *  banked walls, the bridge's guard strips (when it's there). (Its fence is a wall on the tiles'
+ *  edges, thin as it's drawn: grounds.ts wallEdgeAt — docs/plan/50-the-volume.md.) */
 export function kartWalkBlocked(x: number, z: number): boolean {
   if (!inPark(x, z, 1)) return false;
-  if (onParkFence(x, z, false)) return true;
   for (const s of KART_STANDS) if (inRect(x, z, s.x0, s.z - 0.05, s.x1, s.z + s.rows * 1.2 + 0.4)) return true;
   if (Math.abs(x - KART_TOWER.x) < 1.4 && Math.abs(z - KART_TOWER.z) < 0.8) return true;
   if (Math.abs(x - KART_DESK.x) < 0.7 && Math.abs(z - KART_DESK.z) < 1.9) return true;

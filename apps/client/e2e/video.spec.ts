@@ -11,6 +11,7 @@ test("video bubble shows only while the camera is on", async () => {
   });
   try {
     const [ta, tb] = [await token(ANA), await token(BIA)];
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("demo");
     const ctx = { viewport: { width: 1280, height: 800 }, permissions: ["camera", "microphone"] };
     const ana = await (await browser.newContext(ctx)).newPage();
@@ -48,6 +49,7 @@ test("a shared screen: your tile, theirs, big, and gone when you stop", async ()
   });
   try {
     const [ta, tb] = [await token(ANA), await token(BIA)];
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     const ctx = { viewport: { width: 1280, height: 800 }, permissions: ["camera", "microphone"] };
     const ana = await (await browser.newContext(ctx)).newPage();

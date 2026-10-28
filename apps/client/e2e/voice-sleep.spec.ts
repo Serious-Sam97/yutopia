@@ -26,6 +26,7 @@ async function launch() {
 }
 async function open(browser: Awaited<ReturnType<typeof launch>>, who: { email: string; password: string }) {
   const tok = await token(who);
+  // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
   const lab = await useWorld("lab");
   const ctx = await browser.newContext({
     viewport: { width: 1100, height: 720 },

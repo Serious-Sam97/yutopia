@@ -41,46 +41,7 @@ test("third person review shots", async ({ page }) => {
   await page.evaluate(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", cam3p: "chase" }));
-  });
-});
-
-// Side by side (opt-in): each spot in third person, then — same moment, same
-// place — in iso (T switches the view), for a review of the two.
-test("third person vs iso, side by side", async ({ page }) => {
-  test.skip(!dir, "YUTOPIA_SHOTS not set");
-  test.setTimeout(240_000);
-  const tok = await token(ANA);
-  await page.addInitScript(() => {
-    const k = "yutopia:prefs";
-    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "free" }));
-  });
-  await enter(page, tok, await useWorld("demo"));
-  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-  for (const s of SPOTS) {
-    await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x, y: p.y }), s);
-    await page.waitForTimeout(1200);
-    await page.evaluate((p) => {
-      const t = (window as any).__yutopia.tp;
-      t.yaw = p.yaw;
-      t.pitch = p.pitch;
-      t.dist = p.dist;
-    }, s);
-    await page.waitForTimeout(2200);
-    await page.screenshot({ path: `${dir}/pair-${s.name}-3p.png` });
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !(window as any).__yutopia.tp);
-    await page.waitForTimeout(2500);
-    await page.screenshot({ path: `${dir}/pair-${s.name}-iso.png` });
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
-    await page.waitForTimeout(1500);
-  }
-  await page.evaluate(() => {
-    const k = "yutopia:prefs";
-    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", cam3p: "chase" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase" }));
   });
 });
 
@@ -93,7 +54,7 @@ test("first person review shots", async ({ page }) => {
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "1p", last3d: "1p" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "1p" }));
   });
   await enter(page, tok, await useWorld("demo"));
   await page.waitForFunction(() => (window as any).__yutopia.tp?.mode === "first", null, { timeout: 60_000 });
@@ -113,6 +74,6 @@ test("first person review shots", async ({ page }) => {
   await page.evaluate(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", last3d: "3p" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p" }));
   });
 });

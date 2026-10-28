@@ -17,7 +17,7 @@ const FLOORS: Floor[] = ["wood", "carpet", "tile", "wood"];
 const P = Sketch.proj;
 const src = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 const hx = (n: number) => `#${n.toString(16).padStart(6, "0")}`;
-// the engine's night multiply at level 0.85 (engine.drawDarkness)
+// a night multiply at level 0.85 (as the iso view darkened the room, before it was retired)
 const NIGHT = (() => {
   const c = Math.round(255 * (1 - 0.85 * 0.36));
   return `rgb(${Math.round(c * 0.92)},${Math.round(c * 0.88)},${c})`;
@@ -255,7 +255,7 @@ function boxArt(kind: string, rot: number): string {
   return g;
 }
 
-// fake VU content on the board's glass, where the engine mounts the live one
+// fake VU content on the board's glass, where the live one shows (world/model.ts, tp/live.ts)
 function vuSvg(): string {
   let g = "";
   const bars = [0.8, 0.45, 0.6, 0.25, 0.9, 0.5];

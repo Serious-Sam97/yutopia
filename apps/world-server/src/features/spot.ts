@@ -25,6 +25,8 @@ registerFeature((room: WorldRoom) => {
     if (!p || !p.uid || !levelMap(room.map, 0)) return;
     // (on foot, on the ground floor: not riding, not in a car)
     if (p.level !== 0 || /^(drive|ride):/.test(p.busy)) return no(client, "busy");
+    // (standing in it: not over it — shared reach.ts)
+    if (room.upOff(p, p, 0.5) > 0) return no(client, "busy");
     const bay = String(m?.bay ?? "");
     const l = lotLayout();
     const all = objects();

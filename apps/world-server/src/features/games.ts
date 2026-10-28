@@ -47,7 +47,8 @@ registerFeature((room: WorldRoom) => {
   const away = (sid: string, o: WorldObjectDef) => {
     const p = room.state.players.get(sid);
     if (!p) return Number.POSITIVE_INFINITY;
-    return gap({ x: p.x, y: p.y, w: 0, h: 0 }, rect(o));
+    // (in three dimensions: shared reach.ts)
+    return room.reach3(p, o, gap({ x: p.x, y: p.y, w: 0, h: 0 }, rect(o)));
   };
   const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const save = async (o: WorldObjectDef) => {

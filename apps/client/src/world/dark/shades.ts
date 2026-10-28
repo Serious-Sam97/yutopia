@@ -2,15 +2,15 @@ import type { AvatarLayers } from "@yutopia/shared";
 import { beamAt, beamOf } from "@yutopia/shared/beam";
 import { heightAt } from "@yutopia/shared/grounds";
 import type { WorldController } from "../controller";
-import type { AvatarState } from "../engine";
+import type { AvatarState } from "../model";
 import type { Body3 } from "../tp/view";
 
 // The shadowed on my screen (docs/plan/30-the-dark.md D5): the server sends
 // those near me, indoors too (through the windows; StateView) — where they are
 // ten times a second, their state, their shield. Played back a moment late and
 // smooth, handed to the 3D view as bodies (dressed in the dark there:
-// tp/person3d.ts, tp/shroud3d.ts) and to iso as people drawn dark. Coming into
-// range they fade in; out of it, they're drawn a moment more, fading out.
+// tp/person3d.ts, tp/shroud3d.ts). Coming into range they fade in; out of it,
+// they're drawn a moment more, fading out.
 
 // (the move's wire, shared move/spec.ts, by hand: importing that module here re-splits the
 // world page's chunks — docs/plan/30-the-dark.md, phase 2's budget trap)
@@ -55,7 +55,6 @@ interface Seen {
   y: number;
   angle: number;
   speed: number;
-  iso: boolean;
   /** shot down (its dissolve's a burst of light) */
   killed: boolean;
   /** first seen (performance.now) */
@@ -101,7 +100,7 @@ function officeLook(seed: number): AvatarLayers {
   } as AvatarLayers;
 }
 
-// the 8 ways iso draws a facing (shared iso.ts dirFromDelta: the screen's angle, tiles 2:1)
+// a person's 8-way facing, `d` (shared iso.ts dirFromDelta: the screen's angle, tiles 2:1)
 function dir8(angle: number): number {
   const dx = Math.cos(angle);
   const dy = Math.sin(angle);
@@ -123,18 +122,15 @@ function poseOf(state: string): NonNullable<Body3["shade"]>["pose"] {
 
 export class Shades {
   private seen = new Map<string, Seen>();
-  private isoIds = new Set<string>();
   private lastFrame = 0;
 
   constructor(private readonly ctl: WorldController) {}
 
   dispose(): void {
-    for (const id of this.isoIds) this.ctl.engine?.removeAvatar(id);
-    this.isoIds.clear();
     if (this.ctl.tp?.extraBodies === this.bodies) this.ctl.tp.extraBodies = null;
   }
 
-  /** Every frame: read the room, play them back, hand them to whichever view is showing. */
+  /** Every frame: read the room, play them back, hand them to the 3D view. */
   frame(): void {
     const ctl = this.ctl;
     const room = ctl.room;
@@ -160,7 +156,6 @@ export class Shades {
           y: w.y,
           angle: byteToYaw(w.a),
           speed: 0,
-          iso: false,
           killed: false,
           born: now,
           gone: null,
@@ -201,30 +196,8 @@ export class Shades {
       s.y = y;
       s.angle = angle;
     }
-    // 3D: bodies for the view; iso: people drawn dark
-    const tp = ctl.tp;
-    if (tp) {
-      tp.extraBodies = this.bodies;
-      for (const id of this.isoIds) ctl.engine?.removeAvatar(id);
-      this.isoIds.clear();
-      return;
-    }
-    const engine = ctl.engine;
-    if (!engine) return;
-    // (iso shows my floor: theirs is the ground's)
-    for (const s of ctl.level === 0 ? this.seen.values() : []) {
-      const st = this.stateOf(s);
-      // (shot down: its death plays in 3D; here it goes in a second)
-      if (s.killed && s.state === "dissolve")
-        st.fade = Math.min(st.fade ?? 1, Math.max(0, 1 - (performance.now() - s.since) / 1000));
-      engine.upsertAvatar(s.id, st);
-      this.isoIds.add(s.id);
-    }
-    for (const id of [...this.isoIds])
-      if (!this.seen.has(id) || ctl.level !== 0) {
-        engine.removeAvatar(id);
-        this.isoIds.delete(id);
-      }
+    // the 3D view's bodies (it asks each frame)
+    if (ctl.tp) ctl.tp.extraBodies = this.bodies;
   }
 
   /** All of them still sent, their state (the sounds follow it). */

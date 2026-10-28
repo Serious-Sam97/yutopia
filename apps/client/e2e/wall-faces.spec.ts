@@ -1,11 +1,11 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, test, token, useWorld } from "./helpers";
+import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // Both faces of a wall, in the Lab (everything put out is put back after):
 // each face its own material, things hung on either face, anywhere along it
 // and up it; the hand puts a wall item where the pointer meets the wall, R
-// turns it over to the other side. Shots in iso and in third person.
+// turns it over to the other side. Shots of both faces.
 
 const put = (page: Page, o: Record<string, unknown>) =>
   page.evaluate((x) => (window as any).__yutopia.send("obj:put", x), o);
@@ -26,9 +26,9 @@ const walls = (page: Page, edges: Record<string, unknown>[]) =>
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -104,24 +104,32 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
     await expect.poll(async () => (await obj(page, ids.back))?.props).toEqual({ wu: 1, wz: 2 });
     await expect.poll(async () => (await obj(page, ids.front))?.props).toEqual({ wu: 2, wz: 4 });
 
-    // iso: the front face (the back one is behind its wall)
-    await page.evaluate(
-      ([cx, cy]) => (window as any).__yutopia.engine.pinCamera({ x: cx, y: cy, zoom: 2.4 }),
-      [x + 1.5, y + 2],
-    );
+    // the front face (the back one is behind its wall), from the south-east in front of it
+    await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 1.5, y: p.y + 2.5 }), { x, y });
+    await page.waitForTimeout(1500);
+    await holdCamera(page, { at: { x: x + 1.5, y: y + 2 }, dist: 6 });
     await page.waitForTimeout(900);
-    await page.screenshot({ path: test.info().outputPath("iso-front.png") });
+    await page.screenshot({ path: test.info().outputPath("front.png") });
 
     // the hand: a clock from the catalog, pointed at the front face three
     // quarters of a tile along, high up: it hangs there, its middle under the pointer
-    await setBuild(page, { on: true, tool: "furniture", mode: "place", kind: "clock", props: null, rot: 0 });
+    // (the walls up: cut away round the focus, the pointer would look through this one)
+    await setBuild(page, {
+      on: true,
+      tool: "furniture",
+      mode: "place",
+      kind: "clock",
+      props: null,
+      rot: 0,
+      wallView: "up",
+    });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
     const before = new Set(await page.evaluate(() => [...(window as any).__yutopia.room.state.objects.keys()]));
     const p = await at(page, x + 0.75, y + 0.1, 96);
     await page.mouse.move(p.x - 30, p.y - 30);
     await page.mouse.move(p.x, p.y, { steps: 4 });
     await page.waitForTimeout(300);
-    await page.screenshot({ path: test.info().outputPath("iso-hand.png") });
+    await page.screenshot({ path: test.info().outputPath("hand.png") });
     await page.mouse.click(p.x, p.y);
     await expect
       .poll(() =>
@@ -153,24 +161,17 @@ test("both faces of a wall: a material each, things on either, anywhere on it", 
     await page.evaluate(() => (window as any).__yutopia.build.rotate());
     await expect.poll(async () => (await obj(page, ids.hand))?.rot).toBe(2);
     expect((await obj(page, ids.hand))?.y).toBe(y - 1);
-    await setBuild(page, { on: false, selected: [] });
+    await setBuild(page, { on: false, selected: [], wallView: "cut" });
 
-    // third person, from the north room: the back face, its material and things
+    // from the north room: the back face, its material and things
     await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 1.5, y: p.y - 3.5 }), { x, y });
     await page.waitForTimeout(800);
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-    await page.evaluate(() => {
-      const t = (window as any).__yutopia.tp;
-      t.setMode?.("free");
-      t.yaw = Math.PI / 2; // looking +y, at the wall's back face
-      t.pitch = 0.3;
-      t.dist = 5;
-    });
+    await holdCamera(page, { at: null, yaw: Math.PI / 2, pitch: 0.3, dist: 5 }); // looking +y, at the wall's back face
     await page.waitForTimeout(2500);
     await page.screenshot({ path: test.info().outputPath("3p-back.png") });
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !(window as any).__yutopia.tp, null, { timeout: 30_000 });
+    await page.evaluate(() => {
+      (window as any).__yutopia.tp.mode = "chase";
+    });
   } finally {
     for (const id of Object.values(ids)) if (id) await remove(page, id);
     await walls(page, [{ x: x + 1, y, dir: "h", ch: mat, side: -1 }]);
@@ -278,7 +279,7 @@ test("third person: a click high up a wall, above the horizon, hangs the thing",
     await page.evaluate(() => {
       const k = "yutopia:prefs";
       const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-      localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", cam3p: "chase" }));
+      localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase" }));
     });
   }
 });

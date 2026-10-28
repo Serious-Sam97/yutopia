@@ -44,8 +44,7 @@ export class VitalsHud {
     this.frost.innerHTML = ["tl", "tr", "bl", "br"].map((c) => `<i class="${c}">${corner}</i>`).join("");
     // (over the world, under the app's own panels — the top bar, the minimap stay readable: right
     // after the canvas's host, which the panels follow)
-    const host = ctl.engine?.app?.canvas?.parentElement;
-    if (host) host.after(this.vignette, this.frost);
+    if (ctl.host.parentElement) ctl.host.after(this.vignette, this.frost);
     else document.body.append(this.vignette, this.frost);
   }
 
@@ -83,8 +82,7 @@ export class VitalsHud {
           const d = Math.hypot(p.x - me.x, p.y - me.y);
           if (d > TEAM || !ctl.grid.onLand(p.x, p.y)) return;
           // (out of every light in the dark, unseen: no tag over them either — docs/plan/44 N4)
-          const eng = ctl.engine;
-          if (ctl.tp ? ctl.tp.isUnseen(p.sid) : eng?.unseen?.(p.x, p.y, eng.liveTint(p.x, p.y))) return;
+          if (ctl.tp?.isUnseen(p.sid)) return;
           seen.add(p.sid);
           let el = this.tags.get(p.sid);
           if (!el) {
@@ -93,10 +91,10 @@ export class VitalsHud {
             this.root.append(el);
             this.tags.set(p.sid, el);
           }
-          const c = ctl.clientAt(p.x, p.y, (p.z + (ctl.tp ? 1.95 : 1.7)) * 39.19);
-          const r = ctl.engine?.app?.canvas?.getBoundingClientRect();
-          el.style.left = `${c.x + (r?.left ?? 0)}px`;
-          el.style.top = `${c.y + (r?.top ?? 0)}px`;
+          const c = ctl.clientAt(p.x, p.y, (p.z + 1.95) * 39.19);
+          const r = ctl.hostRect();
+          el.style.left = `${c.x + r.left}px`;
+          el.style.top = `${c.y + r.top}px`;
           const low = p.hp < 30;
           el.innerHTML = `<span>${Math.round(d)} m</span><b><i style="width:${p.hp}%;background:${low ? "#d9534f" : "#e9ecef"}"></i></b>`;
         },

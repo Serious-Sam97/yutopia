@@ -53,7 +53,7 @@ import {
 import { DealerPanel } from "@/components/hud/DealerPanel";
 import { extraPanels } from "@/components/hud/panels";
 import { addStrings, trMaybe } from "@/lib/i18n";
-import { prefs } from "@/lib/prefs";
+import { prefs, type Quality } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
 import { mixer } from "../audio";
 import { activePad } from "../pads";
@@ -71,6 +71,8 @@ import { type SpotPrompt, Spots, spotNo } from "./spot";
 
 // MOTORS' panel, with the cars (the world page's panels are full): docs/plan/43-the-spot.md
 extraPanels.motors = DealerPanel;
+// a car's roof over the ground (m): a flier higher passes over it (world-server cars.ts CAR_H)
+const CAR_ROOF = 1.5;
 // (the showroom's door: Main Street's side of the old shut shop, its middle)
 const MOTORS_DOOR = { x: 493, z: -396.6 };
 
@@ -164,15 +166,11 @@ export interface CarsHost {
   dark(): number;
   storm(): number;
   reduced(): boolean;
-  quality(): "high" | "medium" | "low";
+  quality(): Quality;
   /** the Grounds' own vehicles (the shuttle, the visitor's car), eased */
   ai(): { id: string; kind: string; x: number; z: number; a: number; shown: boolean; v?: number; h?: number }[];
   toast(text: string): void;
   chars(): typeof import("../chars") | null;
-  /** the iso view's karts (the Kart Park: kart/karts.ts) */
-  isoKarts(
-    list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; variant?: number; h?: number }[],
-  ): void;
 }
 
 // a sample of someone else's car
@@ -316,15 +314,14 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
       uid: () => c.myUid(),
       tp: () => c.tp,
       objects: () => c.objs.values(),
-      night: () => c.engine?.getDaylight().night ?? 0,
-      dark: () => c.engine?.getDaylight().dark ?? 0,
+      night: () => c.model?.getDaylight().night ?? 0,
+      dark: () => c.model?.getDaylight().dark ?? 0,
       storm: () => Math.max(0, c.storm),
       reduced: () => prefs().reducedMotion,
       quality: () => c.qualityNow(),
       ai: () => c.lifeCars,
       toast: (text) => toast(text, "warn"),
       chars: () => charsMod(),
-      isoKarts: (list) => c.engine?.grounds?.setKarts?.(list),
     },
     G,
   );
@@ -510,7 +507,7 @@ export class Cars {
       if ((near || room?.state.karts?.get("park")?.karts.size) && !this.kartsLoading) {
         this.kartsLoading = true;
         void import("../kart/karts").then((m) => {
-          this.karts = new m.Karts({ ...this.host, iso: (l) => this.host.isoKarts(l) });
+          this.karts = new m.Karts(this.host);
         });
       }
       return;
@@ -751,7 +748,7 @@ export class Cars {
       const f = tp.groundsFrame();
       this.root.position.set(-f.x, f.y, -f.z);
       this.root.visible = f.visible;
-      this.root.updateMatrixWorld();
+      tp.matrices(this.root);
     }
     this.nowMs = now;
     this.updateEnv(tp);
@@ -880,7 +877,7 @@ export class Cars {
       this.cabin.step(l.model, night);
       const q = this.host.quality();
       const tp = this.host.tp();
-      if (this.cam.mode === "cockpit" && tp && q !== "low") {
+      if (this.cam.mode === "cockpit" && tp && (q === "high" || q === "medium")) {
         if (this.mirror?.vid !== mine.vid) {
           this.mirror?.m.dispose();
           this.mirror = { vid: mine.vid, m: new Mirror(l.model) };
@@ -1848,7 +1845,7 @@ export class Cars {
       F.set(-1, 0, 0).transformDirection(m.root.matrix);
       lit = beams;
     } else if (night && !l) lit = this.nearestLit(A, B, F);
-    const want = lit === "off" ? 0 : q !== "low" ? 2 : 1;
+    const want = lit === "off" ? 0 : q === "high" || q === "medium" ? 2 : 1;
     this.beamLights.forEach((s, i) => {
       s.shadow.autoUpdate = i < want;
       if (i >= want) {
@@ -1971,13 +1968,15 @@ export class Cars {
       if (near(v.x, v.z, b.hx + 0.5))
         out.push({ kind: "box", x: v.x, z: v.z, hx: b.hx, hz: b.hz, a: v.a, what: "car" });
     }
-    // people out on the ground floor (never hurt: soft, the car stops)
+    // people out on the ground floor (never hurt: soft, the car stops) — not a flier over its
+    // roof: it passes under them (the server's knock asks the same: world-server features/cars.ts)
     if (room)
-      room.state.players.forEach((p: { x: number; y: number; level: number }, sid: string) => {
+      room.state.players.forEach((p: { x: number; y: number; z: number; level: number }, sid: string) => {
         if (p.level !== 0 || this.seated.has(sid)) return;
         const px = p.x + this.host.ox();
         const pz = p.y + this.host.oy();
-        if (near(px, pz, 0.4)) out.push({ kind: "circle", x: px, z: pz, r: 0.38, soft: true, what: "person", id: sid });
+        if (!near(px, pz, 0.4) || p.z - this.G.heightAt(px, pz) > CAR_ROOF) return;
+        out.push({ kind: "circle", x: px, z: pz, r: 0.38, soft: true, what: "person", id: sid });
       });
   }
   private groundUnder(x: number, z: number): Ground {

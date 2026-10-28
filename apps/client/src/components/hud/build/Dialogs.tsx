@@ -152,7 +152,7 @@ export function RoomDialog({
 // After a seat is clicked with the Desks tool.
 export function DeskDialog({ seatId, members }: { seatId: string; members: Member[] }) {
   const w = useWorld();
-  const seat = w?.engine?.getObject(seatId);
+  const seat = w?.model?.getObject(seatId);
   const [owner, setOwner] = useState<number | null>((seat?.props?.ownerId as number) ?? null);
   const close = () => hud.set((s) => ({ build: { ...s.build, deskDraft: null } }));
   return (

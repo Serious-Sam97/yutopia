@@ -31,11 +31,19 @@
     "./vitals": "./src/vitals.ts",
     "./inventory": "./src/inventory.ts",
     "./beam": "./src/beam.ts",
-    "./weather": "./src/weather.ts"
+    "./weather": "./src/weather.ts",
+    "./admin": "./src/admin.ts",
+    "./shapes": "./src/shapes/index.ts",
+    "./shapes/grounds": "./src/shapes/grounds.ts",
+    "./physics": "./src/physics/index.ts",
+    "./reach": "./src/reach.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/*.test.ts"
+    "test": "tsx --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "jolt-physics": "1.1.1"
   },
   "devDependencies": {
     "typescript": "^5.9.2",

@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { ANA, BIA, enter, holdCamera, test, token, useWorld, walkTo } from "./helpers";
 
 // Two builders in one studio: what one holds, the other can't grab — they see
 // it outlined in rust with "held by …", and get told who's moving it. Once it's
@@ -10,9 +10,9 @@ const SHOTS = process.env.YUTOPIA_SHOTS;
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -33,6 +33,7 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
   const bia = await (await browser.newContext(ctx)).newPage();
   let plant = "";
   try {
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
@@ -50,9 +51,9 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
       ([id, p]) => (window as any).__yutopia.send("obj:put", { id, kind: "plant", x: p.x, y: p.y, rot: 0 }),
       [plant, spot] as const,
     );
-    await expect.poll(() => bia.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), plant)).toBe(true);
+    await expect.poll(() => bia.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), plant)).toBe(true);
     for (const p of [ana, bia]) {
-      await p.evaluate((sp) => (window as any).__yutopia.engine.pinCamera({ x: sp.x, y: sp.y, zoom: 2 }), spot);
+      await holdCamera(p, { at: spot, dist: 8 });
       await buildOn(p);
       await p.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
     }
@@ -75,7 +76,11 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
     await expect(bia.getByText("held by Ana Demo")).toBeVisible();
     // outlined in rust (C.rust), not the amber of a normal hover
     const outline = await bia.evaluate(
-      (id) => (window as any).__yutopia.engine.outlines.filter((o: any) => o.id === id).map((o: any) => o.color),
+      (id) =>
+        (window as any).__yutopia.model
+          .buildLook()
+          .outlines.filter((o: any) => o.id === id)
+          .map((o: any) => o.color),
       plant,
     );
     expect(outline).toEqual([0xb5562f]);
@@ -91,7 +96,7 @@ test("two builders: one hand at a time, and you can see whose", async ({ browser
     await expect
       .poll(() => bia.evaluate((id) => (window as any).__yutopia.room.state.holds.get(id) ?? "", plant))
       .toBe("");
-    const moved = await bia.evaluate((id) => (window as any).__yutopia.engine.getObject(id), plant);
+    const moved = await bia.evaluate((id) => (window as any).__yutopia.model.getObject(id), plant);
     const free = await at(bia, moved.x + 0.5, moved.y + 0.5, 34);
     await bia.mouse.move(free.x, free.y);
     await bia.waitForTimeout(150);

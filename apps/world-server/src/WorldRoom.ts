@@ -24,6 +24,7 @@ import {
   entry,
   findPath,
   floorsOf,
+  footprint,
   GROUND_OFFSET,
   Grid,
   getMap,
@@ -32,12 +33,10 @@ import {
   homeOf,
   hostOf,
   hungOnEdge,
-  isFloor,
   isJump,
   isKind,
   isOpening,
   isV2,
-  jumpTimes,
   layoutFromMap,
   levelMap,
   liftFront,
@@ -56,8 +55,6 @@ import {
   ringOf,
   type ServerMessages,
   SPLIT_KINDS,
-  STEP,
-  STOREY,
   type Status,
   setAreasBeyond,
   setOutdoors,
@@ -67,7 +64,6 @@ import {
   studioV1,
   TEMPLATES,
   TICK_HZ,
-  tileAt,
   topCell,
   upgradeCore,
   upgradeGround,
@@ -76,13 +72,14 @@ import {
   type WorldObjectDef,
   windAt,
 } from "@yutopia/shared";
+import { hasPower, REMOVE_MINUTES, STORM_CALL_MS } from "@yutopia/shared/admin";
 import { monitorsToComputers } from "@yutopia/shared/computer";
 import { groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
-import { Allowance, isVerb, MOVE, MV_WINDED, SentClock, speedCap } from "@yutopia/shared/move";
-import { KNOCK } from "@yutopia/shared/pool-throw";
+import { type Collider, isVerb, MV_WINDED } from "@yutopia/shared/move";
+import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
+import { WALL_H } from "@yutopia/shared/shapes";
 import { boardOfOwner } from "@yutopia/shared/spot";
-import { DOWN } from "@yutopia/shared/vitals";
 import { ApiError, api, type PresenceEntry, type WorldInfo } from "./api.ts";
 import { verifyWorldToken, type WorldClaims } from "./auth.ts";
 import { config } from "./config.ts";
@@ -99,10 +96,11 @@ import { Player, WorldObject, WorldState } from "./schema.ts";
 setOutdoors(groundsOutdoors);
 setAreasBeyond(groundsAreaAt);
 
-// a jump lets a body up for this long (the longest one, falling to the floor from up high)
-const JUMP_AIR_MS = 3000;
 // after a snap, what they sent before it reached them (a round trip, over a slow line too)
 const SNAP_QUIET_MS = 1000;
+
+// a knock on a room's door: how near its walls (m)
+const KNOCK_REACH = 3;
 
 // A spot in the building: a floor (shared levels.ts) and where on it.
 export interface Spot {
@@ -114,9 +112,6 @@ export interface Spot {
 interface ClientData {
   claims: WorldClaims;
   lastPosAt: number;
-  zMax?: number; // how high their jump can take them (tiles)
-  allow: Allowance; // how far they may have moved since (docs/plan/29-the-move.md M7)
-  clock: SentClock; // how much time their moves may count: their clock, not arrival (docs/plan/41-the-snap.md)
   snapAt?: number; // when they were last put back (a snap): what they sent before it reached them is let go
   footAt: number; // when their feet were last on something (a jump starts from there)
   avatarAt?: number; // last look change (rate limit)
@@ -152,6 +147,8 @@ export class WorldRoom extends Room<WorldState> {
   grid!: Grid;
   readonly livekitRoom = "world";
   private features: Feature[] = [];
+  /** Who's being carried (a lift's car on the move): their own moves aren't taken meanwhile. */
+  readonly carried = new Set<string>();
   // the seats kept for a reconnection, by person: a new join of theirs ends the wait
   private waiting = new Map<number, { sid: string; token: string; end: () => void }>();
   // the rooms open in this process (offline sandboxes: several), for a page's goodbye (bye)
@@ -162,7 +159,9 @@ export class WorldRoom extends Room<WorldState> {
   // the room (autoDispose), and they come back to a new one
   private static lastSpot = new Map<number, Spot & { d: number }>();
   private presenceTimer: ReturnType<typeof setTimeout> | null = null;
+  // removed by an admin: until when, and who (the admins' panel lists them: docs/plan/48-the-admin.md)
   private removedUntil = new Map<number, number>();
+  private removedName = new Map<number, string>();
   // the arrival points people picked for themselves (user id → tile centre, its floor)
   readonly mySpawns = new Map<number, { x: number; y: number; level?: number }>();
   private lastPresence = "";
@@ -415,7 +414,12 @@ export class WorldRoom extends Room<WorldState> {
   // admin called one up or sent it off (until the schedule's next change)
   private stormSet: { to: number; until: number } | null = null;
   private weather(now = Date.now()) {
-    if (this.stormSet && now > this.stormSet.until) this.stormSet = null;
+    if (this.stormSet && now > this.stormSet.until) {
+      this.stormSet = null;
+      this.state.stormBy = "";
+      this.state.stormTo = -1;
+      this.state.stormUntil = 0;
+    }
     const want = this.stormSet?.to ?? stormAt(now);
     // (a called-up storm comes up as a scheduled one does, over a minute or so)
     const s = this.state.storm;
@@ -426,7 +430,11 @@ export class WorldRoom extends Room<WorldState> {
   // the world's hour: São Paulo's (shared clock.ts), or the one an admin set
   // running on from when they set it (for the next six hours)
   private clockTick(now = Date.now()) {
-    if (this.hourSet && now > this.hourSet.at + 6 * 3_600_000) this.hourSet = null;
+    if (this.hourSet && now > this.hourSet.at + 6 * 3_600_000) {
+      this.hourSet = null;
+      this.state.hourBy = "";
+      this.state.hourAt = 0;
+    }
     this.state.hour = this.hourSet ? (this.hourSet.h + (now - this.hourSet.at) / 3_600_000) % 24 : spHour(now);
   }
   private hourSet: { h: number; at: number } | null = null;
@@ -476,8 +484,6 @@ export class WorldRoom extends Room<WorldState> {
     client.userData = {
       claims,
       lastPosAt: Date.now(),
-      allow: new Allowance(),
-      clock: new SentClock(),
       footAt: 0,
       hears: new Set(),
       heardByKey: "",
@@ -522,6 +528,7 @@ export class WorldRoom extends Room<WorldState> {
     this.state.players.set(client.sessionId, p);
     metrics.inc("joins_total");
     for (const f of this.features) f.join?.(client, p);
+    if (p.admin) this.sendRemoved(client);
     // their old line's seat, still kept for a reconnection: given up now, so the old one goes at
     // once — with this one already here, as when a second tab takes over (no ghost of themselves)
     const kept = this.waiting.get(p.uid);
@@ -643,67 +650,30 @@ export class WorldRoom extends Room<WorldState> {
       if (!p || !Number.isFinite(m.x) || !Number.isFinite(m.y)) return;
       // (on the shuttle, in a car: it carries them — features/grounds-life.ts, features/cars.ts)
       if (p.busy.startsWith("ride:") || p.busy.startsWith("drive:")) return;
+      // (in a lift's car on the move: it carries them — features/lifts.ts)
+      if (this.carried.has(client.sessionId)) return;
       const now = Date.now();
-      // (the time on their clock since their last move: messages a hiccup held back and handed
-      // over at once still carry their real spacing — shared/move SentClock)
-      const dt = data(client).clock.step(m.mt, (now - data(client).lastPosAt) / 1000);
-      data(client).lastPosAt = now;
-      const to = { x: m.x, y: m.y };
-      // the feet's height: up only in a jump (as high as it goes from where it
-      // started), a step, or the stairs (as high as the tread under them; below
-      // the floor going down them)
-      // (outdoors the ground itself goes down into the ravine and up the hills)
-      const z = Math.max(-30, Math.min(60, Number(m.z) || 0));
       const ud = data(client);
-      // put back — once: what they sent before the last snap reached them (a second or so) is
-      // let go quietly instead of each putting them back again (docs/plan/41-the-snap.md)
-      const snap = () => {
-        if (now - (ud.snapAt ?? 0) < SNAP_QUIET_MS) return;
-        this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
-      };
-      // another floor: only up or down the stairs, one at a time (the frame moves a storey)
-      const level = Number.isInteger(m.l) ? (m.l as number) : p.level;
-      let from: { x: number; y: number } = p;
-      let zFrom = p.z;
-      if (level !== p.level) {
-        if (Math.abs(level - p.level) !== 1 || !levelMap(this.map, level)) return snap();
-        from = across(this.map, p.level, level, p);
-        zFrom = p.z + (level > p.level ? -STOREY : STOREY);
-        if (!this.gridFor(p.uid, level).onRamp(to.x, to.y)) return snap();
-        if (ud.zMax !== undefined) ud.zMax += level > p.level ? -STOREY : STOREY;
-      }
-      const grid = this.gridFor(p.uid, level);
-      // (a vault or a mantle goes up like a jump, as high as its top: docs/plan/29-the-move.md M4)
-      const climbing = (p.jump === "vault" || p.jump === "mantle") && now - p.jumpAt < 2000;
-      const jumping = (isJump(p.jump) && now - p.jumpAt < JUMP_AIR_MS) || climbing;
-      // (not jumping: a step up — shared/move stepUp — is walked, no jump)
-      let cap = jumping ? (ud.zMax ?? 0) : zFrom + Math.max(STEP, MOVE.stepUp) + 0.05;
-      if (grid.onRamp(to.x, to.y)) cap = Math.max(cap, grid.groundAt(to.x, to.y, z) + 0.05);
-      // outdoors: up the slope as far as the ground goes (a message carries a few frames' climb)
-      else if (grid.onLand(to.x, to.y)) cap = Math.max(cap, grid.groundAt(to.x, to.y, z) + 0.3);
-      // where they say they are fits, the way there is clear, and it's no further than they could
-      // have gone since (an allowance: docs/plan/29-the-move.md M7)
-      if (z > cap || !grid.fitsAt(to.x, to.y, z, 0.05) || !grid.clear(from, to, 0.05, Math.max(z, zFrom)))
-        return snap();
-      // (a verb — a roll's burst, a slide — goes faster than feet for a moment)
-      // (out of breath: no faster than a jog — docs/plan/30-the-dark.md D2)
-      const winded = !!this.survival?.winded(client.sessionId);
-      // (down: a crawl — docs/plan/30-the-dark.md D7)
-      // (knocked down by a pool ball: where they fell — shared/pool-throw.ts KNOCK)
-      const fastest =
-        p.fellAt && now - p.fellAt < KNOCK.still * 1000
-          ? 0.3
-          : p.downAt
-            ? DOWN.crawl * 1.4
-            : speedCap(isVerb(p.jump) && now - p.jumpAt < 1500 ? p.jump : null, MOVE, winded);
-      ud.allow.grow(dt, fastest);
-      if (!ud.allow.spend(Math.hypot(to.x - from.x, to.y - from.y))) return snap();
-      const nextArea = areaAt(this.levelMap(level), to.x, to.y);
-      if (nextArea && nextArea.key !== p.area && !this.mayEnter(p, nextArea.key)) {
-        snap();
-        this.knock(client, p, nextArea.key);
+      ud.lastPosAt = now;
+      // where they say they are, they are: no check of the way there, the pace or the height —
+      // nobody's put back for how they moved (the user's call, 2026-10-28: no anticheat for now)
+      const to = { x: m.x, y: m.y };
+      const z = Number.isFinite(m.z) ? (m.z as number) : p.z;
+      // held still by an admin (docs/plan/48-the-admin.md): where they are till it's over
+      if (p.frozenUntil > now) {
+        if (now - (ud.snapAt ?? 0) >= SNAP_QUIET_MS)
+          this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
         return;
       }
+      // another floor: any the building has (one it hasn't: the message let go)
+      const level = Number.isInteger(m.l) ? (m.l as number) : p.level;
+      if (level !== p.level && !levelMap(this.map, level)) return;
+      // (but a placement of ours — a teleport, out of a car — isn't undone by what they sent before
+      // it reached them: far from it, in the second after, it's let go)
+      if (now - (ud.snapAt ?? 0) < SNAP_QUIET_MS && (level !== p.level || Math.hypot(to.x - p.x, to.y - p.y) > 3))
+        return;
+      const grid = this.moveAsk(p.uid, level);
+      const nextArea = areaAt(this.levelMap(level), to.x, to.y);
       if (level !== p.level) {
         const was = p.level;
         p.level = level;
@@ -748,7 +718,7 @@ export class WorldRoom extends Room<WorldState> {
       // from the ground, or just off it (coyote time, plus a message's lag) — a mantle also from
       // the air (catching an edge on the way up); not twice at once
       if ((isJump(p.jump) || isVerb(p.jump)) && now - p.jumpAt < 200) return;
-      const grid = this.gridFor(p.uid, p.level);
+      const grid = this.moveAsk(p.uid, p.level);
       // (the feet a hair up already: the jump's first step can be in the last position sent)
       const grounded = p.z - grid.groundAt(p.x, p.y, p.z) < 0.2;
       if (!grounded && now - data(client).footAt > 350 && k !== "mantle") return;
@@ -756,9 +726,6 @@ export class WorldRoom extends Room<WorldState> {
       if (k === "roll" && this.survival && !this.survival.roll(client.sessionId)) return;
       p.jump = k;
       p.jumpAt = now;
-      // (how high it can take them: from where they stand — a jump's apex, a climb's top)
-      const top = Math.max(0, Math.min(MOVE.mantle.high, Number(m.h) || 0));
-      data(client).zMax = p.z + (isJump(k) ? jumpTimes(k).h : top) + 0.2;
     });
 
     // a new look, saved in the API by the editor: validated, at most every 2 s
@@ -796,7 +763,14 @@ export class WorldRoom extends Room<WorldState> {
 
     this.on("knock", (client, m) => {
       const p = this.state.players.get(client.sessionId);
-      if (p && typeof m.area === "string") this.knock(client, p, m.area);
+      if (!p || typeof m.area !== "string") return;
+      // (at its walls, within a hand's reach of them: shared reach.ts — not from across the floor,
+      // nor flying over the roof)
+      const a = this.areaByKey(m.area);
+      if (!a) return;
+      const at = { x: Math.max(a.x, Math.min(p.x, a.x + a.w)), y: Math.max(a.y, Math.min(p.y, a.y + a.h)) };
+      if (this.reachSpot(p, at, Math.hypot(p.x - at.x, p.y - at.y), 0, WALL_H, false) > KNOCK_REACH) return;
+      this.knock(client, p, m.area);
     });
 
     this.on("admit", (client, m) => {
@@ -869,8 +843,10 @@ export class WorldRoom extends Room<WorldState> {
         target.level === p.level ? p : (this.levelEntry(target.level, p.uid) ?? landing ?? p);
       if (
         !landing ||
-        // (the land outdoors is all one place: no need to find the way there)
-        (!mine.onLand(landing.x, landing.y) &&
+        // (the land outdoors is all one place: no need to find the way there; an admin going
+        // through walls needs no way at all)
+        (!(p.admin && hasPower(p.powers, "clip")) &&
+          !mine.onLand(landing.x, landing.y) &&
           !findPath(mine, startAt, landing)?.length &&
           Math.hypot(landing.x - startAt.x, landing.y - startAt.y) > 0.5)
       ) {
@@ -908,8 +884,13 @@ export class WorldRoom extends Room<WorldState> {
     this.on("mod:storm", (client, m) => {
       if (!owner(client) && !config.offline) return;
       const to = m.storm === null || m.storm === undefined ? null : Math.max(0, Math.min(1, Number(m.storm) || 0));
-      this.stormSet = to === null ? null : { to, until: Date.now() + 20 * 60_000 };
+      this.stormSet = to === null ? null : { to, until: Date.now() + STORM_CALL_MS };
       if (m.now) this.state.storm = to ?? stormAt(Date.now());
+      const by = this.state.players.get(client.sessionId);
+      this.state.stormBy = to === null ? "" : (by?.name ?? "");
+      this.state.stormTo = to ?? -1;
+      this.state.stormUntil = this.stormSet?.until ?? 0;
+      if (by) this.adminLog(by, "storm", null, to === null ? "as scheduled" : to >= 0.5 ? "a storm" : "clear");
     });
     // the hour: set (0–24, then the clock runs on from it), or back to São Paulo's
     // (null). Admins only, offline too: it's everyone's night
@@ -917,7 +898,15 @@ export class WorldRoom extends Room<WorldState> {
       if (!owner(client)) return;
       const h = m.h === null || m.h === undefined ? null : Number(m.h);
       this.hourSet = h === null || !Number.isFinite(h) ? null : { h: ((h % 24) + 24) % 24, at: Date.now() };
+      const by = this.state.players.get(client.sessionId);
+      this.state.hourBy = this.hourSet ? (by?.name ?? "") : "";
+      this.state.hourAt = this.hourSet?.at ?? 0;
       this.clockTick();
+      if (by) {
+        const hh = this.hourSet?.h ?? 0;
+        const hm = `${Math.floor(hh)}:${String(Math.round((hh % 1) * 60) % 60).padStart(2, "0")}`;
+        this.adminLog(by, "hour", null, this.hourSet ? `to ${hm}` : "back to the real hour");
+      }
     });
     const byUid = (uid: number) => [...this.state.players.values()].find((q) => q.uid === uid);
     this.on("mod:mute", (client, m) => {
@@ -925,6 +914,8 @@ export class WorldRoom extends Room<WorldState> {
       if (!owner(client) || !target || target.bot) return;
       target.muted = !!m.muted;
       if (target.muted) target.mic = false;
+      const by = this.state.players.get(client.sessionId);
+      if (by) this.adminLog(by, target.muted ? "mute" : "unmute", target);
       void setCanPublish(this.livekitRoom, String(target.uid), !target.muted);
       const c = this.clients.getById(target.sid);
       if (c)
@@ -936,8 +927,17 @@ export class WorldRoom extends Room<WorldState> {
     this.on("mod:kick", (client, m) => {
       const target = byUid(Number(m.userId));
       const me = this.state.players.get(client.sessionId);
-      if (!owner(client) || !target || target.uid === me?.uid) return;
-      this.removedUntil.set(target.uid, Date.now() + 10 * 60_000);
+      if (!owner(client) || !target || target.uid === me?.uid || !me) return;
+      const minutes = (REMOVE_MINUTES as readonly number[]).includes(Number(m.minutes)) ? Number(m.minutes) : 10;
+      this.removedUntil.set(target.uid, Date.now() + minutes * 60_000);
+      this.removedName.set(target.uid, target.name);
+      this.adminLog(
+        me,
+        "remove",
+        target,
+        minutes >= 1440 ? "for a day" : minutes >= 60 ? "for an hour" : `for ${minutes} min`,
+      );
+      this.sendRemoved();
       const c = this.clients.getById(target.sid) as WorldClient | undefined;
       if (c) {
         if (c.userData) c.userData.kicked = true;
@@ -946,12 +946,24 @@ export class WorldRoom extends Room<WorldState> {
       }
       void removeParticipant(this.livekitRoom, String(target.uid));
     });
+    // let back in before their time's up
+    this.on("mod:unremove", (client, m) => {
+      const me = this.state.players.get(client.sessionId);
+      const uid = Number(m.userId);
+      if (!owner(client) || !me || !this.removedUntil.has(uid)) return;
+      this.adminLog(me, "unremove", null, "", this.removedName.get(uid) ?? "", uid);
+      this.removedUntil.delete(uid);
+      this.removedName.delete(uid);
+      this.sendRemoved();
+    });
     this.on("mod:lock", (client, m) => {
       const p = this.state.players.get(client.sessionId);
       const area = this.areaByKey(m.area);
       if (!owner(client) || !p || !area || area.kind === "open" || area.kind === "stage") return;
+      if (!!m.locked === this.state.locks.has(area.key)) return;
       if (m.locked) this.state.locks.set(area.key, p.name);
       else this.state.locks.delete(area.key);
+      this.adminLog(p, m.locked ? "lock" : "unlock", null, "", area.name);
     });
   }
 
@@ -993,6 +1005,8 @@ export class WorldRoom extends Room<WorldState> {
 
   // ── booths ────────────────────────────────────────────────────────────────
   mayEnter(p: Player, areaKey: string): boolean {
+    // (an admin going through walls: anywhere — shared admin.ts)
+    if (p.admin && hasPower(p.powers, "clip")) return true;
     const area = this.areaByKey(areaKey);
     // booths, and rooms an owner locked: knock to get in
     if (area?.kind !== "booth" && !this.state.locks.has(areaKey)) return true;
@@ -1109,6 +1123,67 @@ export class WorldRoom extends Room<WorldState> {
   private personalGrids = new Map<string, Grid>();
   private layoutTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // ── reach (docs/plan/50-the-volume.md E; shared reach.ts): a flat distance made the 3D one ──
+  /** Sight between two points of a floor (its coords, heights over it): no wall, floor, locked door
+   *  or land between — Jolt's (features/physics.ts sets it); none yet, seen. */
+  sight: ((level: number, a: Feet, b: Feet) => boolean) | null = null;
+  /** How far a body's hands are from a thing, `flat` across to `at` (the thing's point each feature
+   *  measures to; none: its footprint's nearest): its height out of their band added in, Infinity
+   *  through a wall (`sight` false: a door, in its wall). Each feature keeps its own reach. */
+  reach3(
+    p: { uid: number; x: number; y: number; z: number; level: number },
+    o: WorldObjectDef,
+    flat: number,
+    at?: { x: number; y: number },
+    sight = true,
+  ): number {
+    if (!at) {
+      const { w, h } = footprint(o.kind, o.rot ?? 0);
+      at = { x: Math.max(o.x, Math.min(p.x, o.x + w)), y: Math.max(o.y, Math.min(p.y, o.y + h)) };
+    }
+    const level = objLevel(o, this.map);
+    if (level !== p.level) return Number.POSITIVE_INFINITY;
+    const base = this.groundOf(p.uid, level, at.x, at.y);
+    const [y0, y1] = spanOf(o);
+    return this.reachSpot(p, at, flat, base + y0, base + y1, sight);
+  }
+  /** What a thing at (x, y) of a floor stands on: the land's height out on it, else the floor. */
+  groundOf(uid: number, level: number, x: number, y: number): number {
+    const g = this.gridFor(uid, level);
+    return g.onLand(x, y) ? (g.outside?.height(x, y) ?? 0) : 0;
+  }
+  /** How far a thing `h` tall standing on the ground at `at` (a floor's coords) is up or down out
+   *  of a body's hands' band (0: within it) — a car's door, the shuttle, a desk out on the land. */
+  upOff(p: { uid: number; z: number; level: number }, at: { x: number; y: number }, h: number): number {
+    const g = this.groundOf(p.uid, p.level, at.x, at.y);
+    return offBand(p.z, g, g + h);
+  }
+  /** The same to a spot spanning [y0, y1] over the floor (no thing of the world's: a seat, a bay,
+   *  a vehicle's door). */
+  reachSpot(
+    p: { x: number; y: number; z: number; level: number },
+    at: { x: number; y: number },
+    flat: number,
+    y0: number,
+    y1 = y0,
+    sight = true,
+  ): number {
+    const off = offBand(p.z, y0, y1);
+    const out = off ? Math.hypot(flat, off) : flat;
+    if (!sight || !this.sight) return out;
+    const hand = { x: p.x, y: p.y, z: p.z + HAND };
+    const to = { x: at.x, y: at.y, z: Math.max(y0, Math.min(y1, hand.z)) };
+    return this.sight(p.level, hand, to) ? out : Number.POSITIVE_INFINITY;
+  }
+
+  /** The physics world's answers for a person's move on a floor (docs/plan/50-the-volume.md C:
+   *  features/physics.ts sets it once Jolt's world is built; `clip`, an admin through walls) —
+   *  else their grid's. */
+  colliderFor: ((uid: number, level: number, clip: boolean) => Collider | null) | null = null;
+  moveAsk(uid: number, level: number, clip = false): Collider {
+    return this.colliderFor?.(uid, level, clip) ?? this.gridFor(uid, level);
+  }
+
   // Each person's walk grid on a floor: locked doors are walls unless it's their room.
   gridFor(uid: number, level = this.home): Grid {
     const key = `${uid}|${level}`;
@@ -1153,14 +1228,16 @@ export class WorldRoom extends Room<WorldState> {
 
   /** Someone put somewhere in the building by the server (an elevator ride):
    *  their client snaps there, and the features hear of a floor change. */
-  moveTo(client: WorldClient, p: Player, to: Spot) {
+  /** Put someone there (on its floor, `z` over it): told (a snap), or carried there as they watch —
+   *  a lift's car up its shaft (features/lifts.ts), their own client moving them the same. */
+  moveTo(client: WorldClient, p: Player, to: Spot, o: { z?: number; carried?: boolean } = {}) {
     const was = p.level;
     p.level = to.level;
     p.x = to.x;
     p.y = to.y;
-    p.z = 0;
+    p.z = o.z ?? 0;
     p.area = this.areaOf(p)?.key ?? "";
-    this.send(client, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
+    if (!o.carried) this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
     if (was !== p.level) for (const f of this.features) f.levelChange?.(client, p, was, p.level);
     this.pushPresence();
   }
@@ -1242,42 +1319,46 @@ export class WorldRoom extends Room<WorldState> {
       });
   }
 
+  // ── the admins (docs/plan/48-the-admin.md) ──
+  /** A message to every admin in. */
+  toAdmins<K extends keyof ServerMessages>(type: K, msg: ServerMessages[K]) {
+    for (const c of this.clients) if (this.state.players.get(c.sessionId)?.admin) this.send(c, type, msg);
+  }
+  /** Who's removed and till when, to the admins (or one of them, joining). */
+  sendRemoved(to?: Client) {
+    const now = Date.now();
+    for (const [uid, until] of this.removedUntil) if (until <= now) this.removedUntil.delete(uid);
+    const list = [...this.removedUntil].map(([uid, until]) => ({ uid, until, name: this.removedName.get(uid) ?? "" }));
+    if (to) this.send(to, "admin:removed", { list });
+    else this.toAdmins("admin:removed", { list });
+  }
+  /** What an admin did, kept by the API for the log (never offline). `target`: a person here;
+   *  else `what` names it (a room, a car), `targetId` someone not here. */
+  adminLog(by: Player, kind: string, target: Player | null, detail = "", what = "", targetId?: number) {
+    if (config.offline || !by.uid) return;
+    void api
+      .adminLog({
+        adminId: by.uid,
+        kind,
+        targetId: target?.uid ?? targetId,
+        target: target?.name ?? what,
+        detail: detail.slice(0, 200),
+      })
+      .catch((e) => console.warn("[admin] log", (e as Error).message));
+  }
+
   toBuilders<K extends keyof ServerMessages>(type: K, msg: ServerMessages[K]) {
     for (const c of this.clients) if (this.state.players.get(c.sessionId)?.builder) this.send(c, type, msg);
   }
 
-  // People standing somewhere that's no longer floor (or now inside a wall or
-  // furniture) step to the nearest open spot, or go back to the arrival point.
+  // People on a floor that's gone go back to the arrival point. Anyone else stays where they are,
+  // whatever's been built round them (no put-back: the user's call, 2026-10-28).
   rescue() {
-    const all = [...this.state.objects.values()].map(fromSchema);
-    const grids = new Map<number, Grid>();
     for (const c of this.clients) {
       const p = this.state.players.get(c.sessionId);
-      if (!p) continue;
-      // their floor gone: the world's arrival point
-      if (!levelMap(this.map, p.level)) {
-        Object.assign(p, this.homeSpot(), { z: 0 });
-        this.send(c, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
-        continue;
-      }
-      const lm = this.levelMap(p.level);
-      let g = grids.get(p.level);
-      if (!g) {
-        g = Grid.from(lm, all);
-        grids.set(p.level, g);
-      }
-      // (up on something that's still there, or on the stairs: they stay)
-      // (outdoors on the land: they stay too)
-      if (
-        (isFloor(tileAt(lm, Math.floor(p.x), Math.floor(p.y))) || g.onRamp(p.x, p.y) || g.onLand(p.x, p.y)) &&
-        g.fitsAt(p.x, p.y, p.z)
-      )
-        continue;
-      const to = g.nearestOpen(p.x, p.y, 2) ?? (p.level === this.home ? this.map.spawn : lm.spawn);
-      p.x = to.x;
-      p.y = to.y;
-      p.z = g.onLand(to.x, to.y) ? g.groundAt(to.x, to.y, 0) : 0;
-      this.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
+      if (!p || levelMap(this.map, p.level)) continue;
+      Object.assign(p, this.homeSpot(), { z: 0 });
+      this.send(c, "snap", { x: p.x, y: p.y, z: 0, level: p.level });
     }
   }
 

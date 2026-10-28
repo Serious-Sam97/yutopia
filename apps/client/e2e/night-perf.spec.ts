@@ -18,7 +18,7 @@ const hold = (page: Page, h: number) =>
     const c = (window as any).__yutopia;
     c.updateNight = () => {};
     c.hour = hh;
-    c.engine.setClock(hh);
+    c.model.setClock(hh);
     c.tp?.setHour(hh);
   }, h);
 const programs = (page: Page) =>
@@ -57,7 +57,7 @@ test("the night on High: headlamps and the eyes link no shader; driving and a ni
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase", quality: "high" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", quality: "high" }));
   });
   await enter(page, await token(ANA));
   await page.waitForFunction(() => !!(window as any).__yutopia?.tp && !!(window as any).__yutopia?.cars, null, {
@@ -148,7 +148,9 @@ test("the night on High: headlamps and the eyes link no shader; driving and a ni
   await page.evaluate(() => (window as any).__yutopia.interact());
   await page.waitForTimeout(1500);
   await page.evaluate(() => (window as any).__yutopia.teleport({ x: -40, y: -30, level: 0 }));
-  await page.waitForFunction(() => (window as any).__yutopia.engine?.grounds?.land.visible, null, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as any).__yutopia.tp?.around?.grounds?.left.blocks === 0, null, {
+    timeout: 60_000,
+  });
   await hold(page, 23);
   await page.waitForTimeout(12_000);
   const eyes = await page.evaluate(() => (window as any).__yutopia.tp.around.eyes as number);

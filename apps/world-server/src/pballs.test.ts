@@ -67,16 +67,20 @@ test("a ball off the table thrown at A knocks A down; it lies there, is picked u
   const b = await person(902, 91);
   const at = await standIn(a, 10.5, 22.5, 4);
   await standIn(b, 2.5, 22.5, 4);
-  // a table beside B (wherever there's room for one)
+  // a table beside B (wherever there's room for one), on B's side of the wall along y 21 — a hand
+  // doesn't reach through a wall (docs/plan/50-the-volume.md E)
   const id = "t-pool";
   for (const [x, y] of [
     [1, 23],
     [2, 23],
-    [1, 19],
-    [2, 19],
     [0, 23],
     [3, 23],
-    [3, 19],
+    [1, 24],
+    [2, 24],
+    [0, 24],
+    [3, 24],
+    [1, 25],
+    [2, 25],
   ]) {
     b.send("obj:put", { id, kind: "pool_table", x, y, rot: 0 });
     await sleep(300);

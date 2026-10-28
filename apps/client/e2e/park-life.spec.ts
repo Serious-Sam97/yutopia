@@ -4,7 +4,7 @@ import { KART_SITTING, KART_STANDS, kartSeats } from "../../../packages/shared/s
 import { ANA, enter, test, token } from "./helpers";
 
 // The Kart Park's people and seats in the game (docs/plan/46-the-karts.md, "the park's people"):
-// in both views, the folk drawn; a bench by the fire walked onto and sat on, walked off; X by the
+// the folk drawn; a bench by the fire walked onto and sat on, walked off; X by the
 // stands, a seat up a row. Review shots: YUTOPIA_SHOTS=<dir>. (It moves Ana about the dev world.)
 
 const dir = process.env.YUTOPIA_SHOTS;
@@ -13,14 +13,14 @@ if (process.env.YUTOPIA_FIREFOX !== "1")
 const G = (x: number, z: number) => ({ x: x + 60, y: z + 10 });
 const seats = kartSeats();
 
-async function open(page: Page, view: "3p" | "iso") {
+async function open(page: Page, view: "3p" | "1p") {
   await page.addInitScript((v) => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: v, last3d: "3p", cam3p: "chase" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: v, cam3p: "chase" }));
   }, view);
   await enter(page, await token(ANA));
-  if (view === "3p") await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
 }
 const shot = async (page: Page, name: string) => {
   if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
@@ -47,7 +47,7 @@ async function go(page: Page, x: number, z: number) {
 const prompt = (page: Page, kind: string) =>
   page.waitForFunction((k) => (window as any).__hud.get().prompt?.kind === k, kind, { timeout: 30_000 });
 
-for (const view of ["3p", "iso"] as const)
+for (const view of ["3p"] as const)
   test(`the park's people in ${view}: the folk drawn, a bench by the fire, a seat in the stands`, async ({ page }) => {
     test.setTimeout(180_000);
     await open(page, view);

@@ -211,8 +211,30 @@ export interface ClientMessages {
   "mod:storm": { storm: number | null; now?: boolean };
   // the world's hour (shared clock.ts): set one (0–24; it runs on from there), or null: São Paulo's again
   "mod:hour": { h: number | null };
-  "mod:kick": { userId: number };
+  // removed for `minutes` (shared admin.ts REMOVE_MINUTES; none: 10), or let back in early
+  "mod:kick": { userId: number; minutes?: number };
+  "mod:unremove": { userId: number };
   "mod:lock": { area: string; locked: boolean };
+  // ── an admin's own (docs/plan/48-the-admin.md): every one refused to anyone else ──
+  // a power on myself (shared admin.ts POWERS) switched on or off
+  "mod:power": { power: string; on: boolean };
+  // health, breath and battery full, up if down: mine (no userId) or someone's
+  "mod:heal": { userId?: number };
+  // someone brought beside me, sent to the arrival point, out of their car, held still
+  "mod:bring": { userId: number };
+  "mod:home": { userId: number };
+  "mod:unseat": { userId: number };
+  "mod:freeze": { userId: number; minutes: number }; // 0: free again
+  // a line to everyone in (a toast)
+  "mod:notice": { text: string; tone?: "info" | "warn" };
+  // something in a hand (shared held.ts) or the pockets (shared inventory.ts): mine or someone's;
+  // `drop`: on the ground where I stand, for anyone
+  "mod:give": { item: string; n?: number; userId?: number; drop?: boolean };
+  // a vehicle in front of me (shared car CarKind); `clear`: everything I spawned this stay, gone
+  "mod:spawn-car": { model: string; colour: number; plate?: string };
+  "mod:clear": Record<string, never>;
+  // any door's lock, from anywhere (an owned room's too)
+  "mod:door": { id: string; locked: boolean };
   // map editing (builders); `level`: which floor of the building (levels.ts;
   // none: the home floor)
   "map:paint": { cells: { x: number; y: number; ch: string }[]; level?: number }; // floors (tiles)
@@ -439,6 +461,8 @@ export interface ServerMessages {
   knock: { from: string; fromName: string; area: string };
   admitted: { area: string };
   toast: { text: string; tone?: "info" | "warn" | "vortex" };
+  // (to admins) who's removed for a while, and till when (docs/plan/48-the-admin.md)
+  "admin:removed": { list: { uid: number; name: string; until: number }[] };
   // ping-pong: the hit I reported wasn't taken (which flight, why) — my ball goes back to its real path
   "pong:no": { id: string; seq: number; why: "seq" | "turn" | "late" | "early" | "check" | "over" };
   "wb:scene": { objectId: string; items: WbItem[] };

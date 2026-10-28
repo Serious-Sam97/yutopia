@@ -3,9 +3,9 @@
 import { floorOf, GROUND_OFFSET, type MapDef, parseAvatar } from "@yutopia/shared";
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import { addStrings, trMaybe } from "@/lib/i18n";
-import type { AvatarState } from "./engine";
 import { Footprints } from "./footprints";
 import { GroundsSound } from "./grounds-sound";
+import type { AvatarState } from "./model";
 import type { Floor } from "./sound";
 
 // Life on the Grounds, the client's side (docs/plan/27-the-grounds.md, phase

@@ -16,7 +16,7 @@ export function RadioPanel({ objectId }: { objectId: string }) {
   const w = useWorld();
   useHud((s) => s.objectsVersion);
   const pt = useLang() === "pt";
-  const r = radioOf(w?.engine?.getObject(objectId));
+  const r = radioOf(w?.model?.getObject(objectId));
   const [tab, setTab] = useState<"lofi" | "yt">(r.source);
   return (
     <Panel title={t("radio")}>

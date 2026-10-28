@@ -1,22 +1,21 @@
 import { toScreen } from "@yutopia/shared";
 import { aimPitch, flightAt, heldBall, type Launch, PBALL, SETTLE, settleAt } from "@yutopia/shared/pool-throw";
-import { Container, Graphics } from "pixi.js";
 import { lang } from "@/lib/i18n";
 import { hud, toast } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
-import { ballHex, type Q } from "./ballart";
+import type { Q } from "./ballart";
 import type { TableHost } from "./pool";
 import { clack, cueTip, cushion } from "./sound";
 
 // Pool balls out of a game (shared/pool-throw.ts, the server's features/pballs.ts): taken off a
 // table that isn't being played, thrown at people, fired from the cue taken down — whoever's
-// reached is knocked down. Here: every ball out, drawn where its flight has it (the launch, the
-// same arithmetic as the server's), then dropping off whatever it met and lying on the floor;
-// the click that throws or fires (at whoever's under the pointer — in 3D aimed, the crosshair —
-// else the floor there); E takes one lying near, B puts the ball or the cue back; the sounds.
+// reached is knocked down. Here: every ball out where its flight has it (the launch, the same
+// arithmetic as the server's), then dropping off whatever it met and lying on the floor (the 3D
+// view's scene3d); the click that throws or fires (at whoever's under the pointer — aimed, the
+// crosshair — else the floor there); E takes one lying near, B puts the ball or the cue back; the
+// sounds.
 
-const LPX = 45.25; // iso px per tile
-const ZPX = LPX * Math.cos(Math.PI / 6); // iso px of height per tile
+const ZPX = 45.25 * Math.cos(Math.PI / 6); // iso px of height per tile (a ray's z)
 const R_DRAW = 0.0443; // a ball's radius, tiles (as the tables draw theirs)
 
 // biome-ignore lint/suspicious/noExplicitAny: a colyseus schema instance
@@ -27,14 +26,12 @@ interface Seen {
   stopped: boolean; // its stop heard
   roll: number; // how far it has rolled (for the turn of its numbers)
   last: { x: number; y: number; z: number } | null;
-  g: Graphics | null; // iso
-  root: Container | null;
 }
 
 export interface PballHost extends TableHost {
   /** where I am (tiles; z the feet) */
   where(): { x: number; y: number; z: number };
-  /** aiming (the right button, 3D): throws and shots go through the crosshair */
+  /** aiming (the right button): throws and shots go through the crosshair */
   aiming(): boolean;
   /** the floor I'm on */
   level(): number;
@@ -125,14 +122,14 @@ export class PoolBallsOut {
   // The throw (the shot): at whoever the pointer's on — their chest — else where it meets the
   // floor; aimed in 3D, through the crosshair.
   private send(what: "ball" | "cue", cx: number, cy: number) {
-    const engine = this.host.engine;
     let px = cx;
     let py = cy;
-    if (this.host.threeD() && this.aimingNow()) {
+    if (this.aimingNow()) {
       px = window.innerWidth / 2;
       py = window.innerHeight / 2;
     }
-    const ray = engine.rayAt(px, py);
+    const ray = this.host.model.rayAt(px, py);
+    if (!ray) return;
     const o = { x: ray.o.x, y: ray.o.y, z: ray.o.z / ZPX };
     const d0 = { x: ray.d.x, y: ray.d.y, z: ray.d.z / ZPX };
     const len = Math.hypot(d0.x, d0.y, d0.z) || 1;
@@ -177,13 +174,12 @@ export class PoolBallsOut {
   frame(_dt: number, me: { x: number; y: number }) {
     const now = performance.now();
     const state = this.host.room.state;
-    const lvl = this.host.level();
     const keep = new Set<string>();
     for (const [key, b] of (state.pballs ?? new Map()) as Map<string, S>) {
       keep.add(key);
       let s = this.seen.get(key);
       if (!s) {
-        s = { t0: now, stopped: false, roll: 0, last: null, g: null, root: null };
+        s = { t0: now, stopped: false, roll: 0, last: null };
         this.seen.set(key, s);
         // off the cue: its tip's knock; out of a hand, nothing
         if (!b.table && b.t1 < 0) this.sound(b, me, "fire");
@@ -195,13 +191,8 @@ export class PoolBallsOut {
       }
       if (s.last) s.roll += Math.hypot(p.x - s.last.x, p.y - s.last.y);
       s.last = p;
-      this.drawIso(key, b, s, p, b.level === lvl && !this.host.threeD());
     }
-    for (const [key, s] of this.seen)
-      if (!keep.has(key)) {
-        s.root?.destroy({ children: true });
-        this.seen.delete(key);
-      }
+    for (const key of this.seen.keys()) if (!keep.has(key)) this.seen.delete(key);
     // what I hold: told once how it works
     const h = this.holdingNow();
     if (h !== this.holding) {
@@ -215,16 +206,12 @@ export class PoolBallsOut {
         );
       if (h === "cue")
         toast(
-          this.host.threeD()
-            ? pt
-              ? "O taco atira bolas — mire (botão direito) e clique · B devolve"
-              : "The cue fires balls — aim (right button) and click · B puts it back"
-            : pt
-              ? "O taco atira bolas — clique em alguém · B devolve"
-              : "The cue fires balls — click someone · B puts it back",
+          pt
+            ? "O taco atira bolas — mire (botão direito) e clique · B devolve"
+            : "The cue fires balls — aim (right button) and click · B puts it back",
         );
     }
-    this.crosshair(!!h && this.host.threeD() && this.aimingNow());
+    this.crosshair(!!h && this.aimingNow());
   }
 
   // where a ball out is now (tiles, z up): flying, dropping off what it met, lying
@@ -248,43 +235,7 @@ export class PoolBallsOut {
     else cushion(2.4, gain * 0.8, pan);
   }
 
-  // iso: the ball, its shadow on the floor under it
-  private drawIso(_key: string, b: S, s: Seen, p: { x: number; y: number; z: number }, show: boolean) {
-    if (!show) {
-      if (s.root) s.root.visible = false;
-      return;
-    }
-    if (!s.root) {
-      s.root = new Container();
-      s.g = new Graphics();
-      s.root.addChild(s.g);
-      this.host.engine.mountLive(s.root);
-    }
-    const g = s.g as Graphics;
-    s.root.visible = true;
-    s.root.zIndex = p.x + p.y + 0.6;
-    g.clear();
-    const ground = toScreen(p.x, p.y);
-    const r = R_DRAW * LPX * 1.15;
-    const floor = b.rz - PBALL.r;
-    const up = Math.max(0, p.z - PBALL.r - floor);
-    g.ellipse(ground.x, ground.y - floor * ZPX, r * 1.05, r * 0.52).fill({
-      color: 0x0c0806,
-      alpha: Math.max(0.12, 0.35 - up * 0.08),
-    });
-    const cx = ground.x;
-    const cy = ground.y - p.z * ZPX;
-    const hex = Number.parseInt(ballHex(b.n).slice(1), 16);
-    const stripe = b.n > 8;
-    g.circle(cx, cy, r).fill(stripe ? 0xf3eee0 : hex);
-    if (stripe) g.rect(cx - r, cy - r * 0.45, r * 2, r * 0.9).fill(hex);
-    if (b.n > 0) g.circle(cx + r * 0.15, cy - r * 0.1, r * 0.38).fill(0xf3eee0);
-    // a gloss, the ink round it
-    g.circle(cx - r * 0.35, cy - r * 0.4, r * 0.25).fill({ color: 0xffffff, alpha: 0.5 });
-    g.circle(cx, cy, r).stroke({ width: 0.5, color: 0x2a1a12, alpha: 0.8 });
-  }
-
-  // a crosshair while aiming a throw or the cue (3D)
+  // a crosshair while aiming a throw or the cue
   private crosshair(on: boolean) {
     if (on && !this.cross) {
       const c = document.createElement("div");
@@ -299,7 +250,7 @@ export class PoolBallsOut {
     }
   }
 
-  // 3D: the balls out, flying and lying, turning as they roll (on my floor)
+  // the balls out, flying and lying, turning as they roll (on my floor)
   scene3d(into: TableScene3) {
     const lvl = this.host.level();
     for (const [key, b] of (this.host.room.state.pballs ?? new Map()) as Map<string, S>) {
@@ -323,7 +274,6 @@ export class PoolBallsOut {
     window.removeEventListener("mousedown", this.onDown, true);
     window.removeEventListener("keydown", this.onKey, true);
     this.crosshair(false);
-    for (const s of this.seen.values()) s.root?.destroy({ children: true });
     this.seen.clear();
   }
 }

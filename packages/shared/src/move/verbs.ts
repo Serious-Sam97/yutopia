@@ -1,4 +1,7 @@
 import { BODY_R, type Grid } from "../grid.ts";
+
+type Asks = Pick<Grid, "fitsAt" | "groundAt" | "clear">;
+
 import { MOVE, type MoveSpec } from "./spec.ts";
 
 // The verbs (docs/plan/29-the-move.md, M4): getting over things (a vault onto
@@ -29,7 +32,7 @@ const DS = 0.05;
  *  or mantle, or null (nothing there, too low — a step or a hop — too high, or no room). The
  *  faster you go, the further ahead it looks (a run-up's press comes early). */
 export function probeVault(
-  grid: Grid,
+  grid: Asks,
   x: number,
   y: number,
   z: number,

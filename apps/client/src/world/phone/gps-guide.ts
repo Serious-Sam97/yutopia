@@ -18,9 +18,8 @@ import { grounds } from "../grounds-load";
 const heightAt = (x: number, z: number) => grounds()?.heightAt(x, z) ?? 0;
 
 // The GPS's guide in the world (docs/plan/37-the-gps.md § 5): the route ahead
-// on the ground. In 3D a ribbon with chevrons, lying on the land; in iso a
-// dotted line on the ground floor's land. Only the next stretch of it (and a
-// little behind), drawn again as I go.
+// on the ground: a ribbon with chevrons, lying on the land. Only the next
+// stretch of it (and a little behind), drawn again as I go.
 
 const AHEAD = 110; // m of the route ahead
 const BEHIND = 4;
@@ -28,36 +27,21 @@ const STEP = 2; // m between the ribbon's samples
 const LIFT = 0.12; // m over the land (no fighting the snow)
 const CHEVRON_M = 3; // m a chevron
 const CYAN = 0x00e5d0;
-// the iso projection (shared iso.ts TILE_W / TILE_H, grid.ts ZPX_TILE — copied: a
-// value from the shared index in a lazy chunk grows the world page)
-const HW = 32;
-const HH = 16;
-const ZPX_TILE = 39.19;
 
 export class Guide {
   private root: Group | null = null;
   private mesh: Mesh | null = null;
   private tpOf: unknown = null;
-  private iso: ReturnType<NonNullable<WorldController["engine"]>["groundDrawing"]> | null = null;
-  private isoOf: unknown = null;
   private drawn: { r: Route | null; at: number; level: number; ox: number } = { r: null, at: -1, level: -1, ox: 0 };
-  isoDots = 0; // (the dots drawn in iso last time: e2e)
 
   constructor(private readonly ctl: WorldController) {}
 
   draw(r: Route, at: number) {
     const tp = this.ctl.tp;
-    // the 3D view comes and goes (iso ↔ 3D): a new one, a new ribbon
+    // the 3D view made again: a new one, a new ribbon
     if (tp !== this.tpOf) {
       this.drop3d();
       this.tpOf = tp;
-      this.drawn.r = null;
-    }
-    const engine = this.ctl.engine;
-    if (engine !== this.isoOf) {
-      this.iso?.destroy();
-      this.iso = null;
-      this.isoOf = engine;
       this.drawn.r = null;
     }
     // where the ground floor is from mine, every frame (the 3D view is in my floor's coords)
@@ -76,23 +60,18 @@ export class Guide {
     for (let m = from; m < to; m += STEP) pts.push(pointAt(r, m));
     pts.push(pointAt(r, to));
     if (tp) this.ribbon(pts, r.mode === "car" ? 2.6 : 1.3, from);
-    if (engine) this.dots(pts);
   }
 
   clear() {
     if (this.mesh) this.mesh.visible = false;
-    this.iso?.clear();
-    this.isoDots = 0;
     this.drawn.r = null;
   }
 
   destroy() {
     this.drop3d();
-    this.iso?.destroy();
-    this.iso = null;
   }
 
-  // ── 3D: a ribbon on the land, chevrons along it ──────────────────────────
+  // ── a ribbon on the land, chevrons along it ──────────────────────────────
   private ribbon(pts: [number, number][], w: number, from: number) {
     const tp = this.ctl.tp;
     if (!tp || pts.length < 2) return;
@@ -165,29 +144,6 @@ export class Guide {
     this.root?.removeFromParent();
     this.root = null;
     this.mesh = null;
-  }
-
-  // ── iso: dots on the ground floor's land ─────────────────────────────────
-  private dots(pts: [number, number][]) {
-    const engine = this.ctl.engine;
-    if (!engine) return;
-    this.iso ??= engine.groundDrawing();
-    const g = this.iso;
-    g.clear();
-    this.isoDots = 0;
-    // (only the ground floor has the land under it)
-    if (this.ctl.level !== 0) return;
-    const ox = this.ctl.map?.ox ?? 0;
-    const oy = this.ctl.map?.oy ?? 0;
-    for (let i = 0; i < pts.length; i++) {
-      const [gx, gz] = pts[i];
-      const x = gx - ox;
-      const y = gz - oy;
-      const sx = (x - y) * HW;
-      const sy = (x + y) * HH - heightAt(gx, gz) * ZPX_TILE;
-      g.ellipse(sx, sy, 7, 3.5).fill({ color: CYAN, alpha: i < 2 ? 0.35 : 0.85 });
-    }
-    this.isoDots = pts.length;
   }
 }
 

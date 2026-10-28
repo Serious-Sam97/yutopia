@@ -4,7 +4,7 @@ import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
 // Pool balls out of a game (shared/pool-throw.ts): at a table nobody's playing, Ana takes a ball
 // from its console and clicks Bia — the ball flies, Bia's knocked down and up again; then the cue
-// taken down, in 3D, fires a ball at Bia: down again. And a break seen from the 3D game camera
+// taken down fires a ball at Bia: down again. And a break seen from the 3D game camera
 // over the table (the pockets: balls going down them). In the Lab; the table is removed after.
 // YUTOPIA_SHOTS=<dir> keeps pictures.
 const SHOTS = process.env.YUTOPIA_SHOTS;
@@ -107,26 +107,22 @@ test("pool balls: a ball off the table thrown knocks Bia down; the cue fires bal
     await expect(ana.getByRole("dialog", { name: "Pool" })).toBeHidden();
     await ana.waitForTimeout(800);
 
-    // iso: click Bia — the ball goes at her
+    // click Bia — the ball goes at her
     const b = await mine(bia);
-    const aim = await ana.evaluate(([x, y]) => (window as any).__yutopia.engine.worldToClient(x, y, 45), [b.x, b.y]);
+    const aim = await chest3d(ana, b.x, b.y);
     await ana.mouse.click(aim.x, aim.y);
     await expect.poll(() => fellAt(ana, "Bia Demo"), { timeout: 5000 }).toBeGreaterThan(0);
     expect((await mine(ana)).held).toBe("");
     await ana.waitForTimeout(450);
-    if (SHOTS) await ana.screenshot({ path: `${SHOTS}/balls-iso-hit.png` });
+    if (SHOTS) await ana.screenshot({ path: `${SHOTS}/balls-hit.png` });
     await ana.waitForTimeout(900);
-    if (SHOTS) await ana.screenshot({ path: `${SHOTS}/balls-iso-lying.png` });
+    if (SHOTS) await ana.screenshot({ path: `${SHOTS}/balls-lying.png` });
     // up again
     await expect.poll(() => fellAt(ana, "Bia Demo"), { timeout: 6000 }).toBe(0);
 
-    // the cue, in 3D: fired at Bia (across the table, in Ana's view) — down again, and seen falling
+    // the cue: fired at Bia (across the table, in Ana's view) — down again, and seen falling
     await walkTo(bia, T.x + 2, T.y - 1.7, 25_000);
-    await ana.keyboard.press("t");
-    await ana.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
-    await bia.keyboard.press("t");
-    await bia.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
-    await ana.waitForTimeout(4000);
+    await ana.waitForTimeout(2000);
     await ana.evaluate((i) => (window as any).__yutopia.activateObject(i, true), id);
     await expect(ana.getByRole("dialog", { name: "Pool" })).toBeVisible();
     await ana.getByRole("button", { name: /Take the cue/ }).click();
@@ -134,6 +130,12 @@ test("pool balls: a ball off the table thrown knocks Bia down; the cue fires bal
     await ana.waitForTimeout(2500);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/balls-3d-cue.png` });
     const b2 = await mine(bia);
+    // (looking at her across the table, as the 3D view did coming in fresh)
+    await ana.evaluate((p) => {
+      const w = (window as any).__yutopia;
+      w.tp.yaw = Math.atan2(p.y - w.me.y, p.x - w.me.x);
+    }, b2);
+    await ana.waitForTimeout(800);
     const c = await chest3d(ana, b2.x, b2.y);
     await ana.mouse.click(c.x, c.y);
     await expect.poll(() => fellAt(ana, "Bia Demo"), { timeout: 5000 }).toBeGreaterThan(0);

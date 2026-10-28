@@ -1,12 +1,11 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, loaded, test, token, useWorld } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
-// Third person, live: Ana sees the Lab in third person (a per-player setting),
-// Bia in iso, in the same room at the same time. Each sees the other where
-// they really are and moving; Ana walks with WASD relative to her camera and by
-// clicking the floor; T switches her view and back. YUTOPIA_SHOTS=<dir> saves
-// both screens.
+// Third person, live: Ana and Bia see the Lab in third person, in the same
+// room at the same time. Each sees the other where they really are and
+// moving; Ana walks with WASD relative to her camera and by clicking the floor.
+// YUTOPIA_SHOTS=<dir> saves both screens.
 
 const shots = process.env.YUTOPIA_SHOTS;
 
@@ -16,15 +15,12 @@ const mePos = (page: Page) =>
     const w = (window as any).__yutopia;
     return { x: w.me.x as number, y: w.me.y as number, a: w.me.a as number };
   });
-// where Ana's 3D view draws someone (tiles), or null
+// where someone's 3D view draws someone (tiles), or null
 const drawnIn3d = (page: Page, id: string) =>
   page.evaluate((i) => {
     const p = (window as any).__yutopia.tp?.drawnAt(i);
     return p?.shown ? { x: p.x as number, y: p.y as number } : null;
   }, id);
-// where Bia's iso engine draws someone
-const drawnInIso = (page: Page, id: string) =>
-  page.evaluate((i) => (window as any).__yutopia.engine.avatarAt(i) as { x: number; y: number } | null, id);
 
 async function waitNear(read: () => Promise<{ x: number; y: number } | null>, x: number, y: number, ms = 6000) {
   const end = Date.now() + ms;
@@ -37,7 +33,7 @@ async function waitNear(read: () => Promise<{ x: number; y: number } | null>, x:
   throw new Error(`not near (${x.toFixed(2)}, ${y.toFixed(2)}): ${JSON.stringify(last)}`);
 }
 
-test("third person and iso players share the Lab live", async ({ page, browser }) => {
+test("third person: two players share the Lab live", async ({ page, browser }) => {
   test.setTimeout(150_000);
   const tokA = await token(ANA);
   const tokB = await token(BIA);
@@ -51,11 +47,8 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   });
   await enter(page, tokA, lab);
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-  // the iso engine stops drawing underneath
-  // (the iso picture is hidden under the 3D one; the engine keeps its logic running)
-  expect(await page.evaluate(() => (window as any).__yutopia.engine.app.canvas.style.visibility)).toBe("hidden");
 
-  // Bia: iso, in her own browser
+  // Bia, in her own browser
   const ctxB = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const pageB = await ctxB.newPage();
   await enter(pageB, tokB, lab);
@@ -69,9 +62,9 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   const a0 = await mePos(page);
   const b0 = await mePos(pageB);
 
-  // each sees the other where they are: Bia in Ana's 3D view, Ana in Bia's iso view
+  // each sees the other where they are
   await waitNear(() => drawnIn3d(page, biaSid), b0.x, b0.y, 15_000);
-  await waitNear(() => drawnInIso(pageB, anaSid), a0.x, a0.y);
+  await waitNear(() => drawnIn3d(pageB, anaSid), a0.x, a0.y);
 
   // Ana walks with W: away from her camera, and Bia sees her move there
   const fwd = await page.evaluate(() => {
@@ -87,9 +80,9 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   // (walls may slide her along, but never backwards)
   expect(Math.hypot(moved.x, moved.y)).toBeGreaterThan(0.5);
   expect(moved.x * fwd.x + moved.y * fwd.y).toBeGreaterThan(0);
-  await waitNear(() => drawnInIso(pageB, anaSid), a1.x, a1.y);
+  await waitNear(() => drawnIn3d(pageB, anaSid), a1.x, a1.y);
 
-  // Bia walks (iso: S = screen down = world +x +y) and Ana's 3D view follows her
+  // Bia walks (S: towards her camera) and Ana's view follows her
   await pageB.keyboard.down("s");
   await pageB.waitForTimeout(700);
   await pageB.keyboard.up("s");
@@ -101,7 +94,7 @@ test("third person and iso players share the Lab live", async ({ page, browser }
   if (shots) {
     await page.waitForTimeout(800);
     await page.screenshot({ path: `${shots}/live-ana-third-person.png` });
-    await pageB.screenshot({ path: `${shots}/live-bia-iso.png` });
+    await pageB.screenshot({ path: `${shots}/live-bia.png` });
   }
 
   // a click on the floor in front of her: she walks there
@@ -130,26 +123,15 @@ test("third person and iso players share the Lab live", async ({ page, browser }
     await waitNear(() => mePos(page), target.x, target.y, 8000);
   }
 
-  // T: back to iso and into third person again
-  await page.keyboard.press("t");
-  await page.waitForFunction(
-    () => !(window as any).__yutopia.tp && (window as any).__yutopia.engine.app.canvas.style.visibility !== "hidden",
-  );
-  await loaded(page); // (the keys are held while the loading screen's up)
-  await page.keyboard.press("t");
-  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
-  await loaded(page);
-  await waitNear(() => drawnIn3d(page, biaSid), b1.x, b1.y, 15_000);
-
   // leave her setting as it was for the other specs
   await page.evaluate(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p" }));
   });
 });
 
-// What people do shows in third person as in iso (an emote over Bia's head in
+// What people do shows in third person (an emote over Bia's head in
 // Ana's 3D view, her phone in her hand), and things are used by clicking them in 3D: a
 // sofa put down in the Lab, clicked, Sit → Ana sits on it (drawn seated).
 test("third person: emotes and phones over there, a sofa clicked in 3D seats you", async ({ page, browser }) => {
@@ -270,12 +252,12 @@ test("third person: emotes and phones over there, a sofa clicked in 3D seats you
     await page.evaluate(() => {
       const k = "yutopia:prefs";
       const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-      localStorage.setItem(k, JSON.stringify({ ...p, view: "iso" }));
+      localStorage.setItem(k, JSON.stringify({ ...p, view: "3p" }));
     });
   }
 });
 
-// Build mode in third person: the iso build controller, fed the 3D pointer —
+// Build mode in third person: the build controller, fed the 3D pointer —
 // pick a plant from the catalog and click a spot on the floor in 3D; click
 // its leaves to pick it up (a ghost in hand, gone from the room); click two
 // tiles over to put it down there.
@@ -364,7 +346,7 @@ test("third person: build mode places, picks up and moves a thing in 3D", async 
       .toBe(true);
     if (shots) await page.screenshot({ path: `${shots}/live-ana-build-carry.png` });
 
-    // put it down two tiles over (letting go at the height it was held, as in iso: it keeps where you hold it)
+    // put it down two tiles over (letting go at the height it was held: it keeps where you hold it)
     await clickAt(X + 2.5, Y + 0.5, 0.6);
     await expect.poll(() => objectsAt(X + 2, Y)).toEqual([expect.objectContaining({ id: plant })]);
     await expect.poll(async () => (await build()).carrying).toBe(0);
@@ -380,7 +362,7 @@ test("third person: build mode places, picks up and moves a thing in 3D", async 
     await page.mouse.move(pe.x - 5, pe.y);
     await page.mouse.move(pe.x, pe.y);
     await expect
-      .poll(() => page.evaluate(() => (window as any).__yutopia.engine.buildLook().edges.length))
+      .poll(() => page.evaluate(() => (window as any).__yutopia.model.buildLook().edges.length))
       .toBeGreaterThan(0);
     await expect
       .poll(() => page.evaluate(() => (window as any).__yutopia.tp.builder.cues.children.length))
@@ -393,7 +375,7 @@ test("third person: build mode places, picks up and moves a thing in 3D", async 
       h.set({ build: { ...h.get().build, on: false } });
       const k = "yutopia:prefs";
       const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-      localStorage.setItem(k, JSON.stringify({ ...p, view: "iso" }));
+      localStorage.setItem(k, JSON.stringify({ ...p, view: "3p" }));
     });
   }
 });

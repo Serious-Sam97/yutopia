@@ -81,6 +81,9 @@ export const api = {
   world: () => call<WorldInfo>("GET", "/world"),
   // everyone with an account (features/spot.ts: what's left of anyone gone comes down)
   members: () => call<{ ids: number[] }>("GET", "/members"),
+  // what an admin did (docs/plan/48-the-admin.md): the API keeps the log
+  adminLog: (e: { adminId: number; kind: string; targetId?: number; target?: string; detail?: string }) =>
+    call<{ ok: boolean }>("POST", "/admin-log", e),
   seed: (objects: WorldObjectDef[]) => call<{ objects: WorldObjectDef[] }>("POST", "/world/seed", { objects }),
   putLayout: (layout: Layout) => call("PUT", "/world/layout", layout),
   putPlaylists: (playlists: unknown[]) => call("PUT", "/world/playlists", { playlists }),

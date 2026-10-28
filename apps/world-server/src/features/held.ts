@@ -1,6 +1,6 @@
 import { entry, footprint, HELD, type HeldKind, heldState, isHeld } from "@yutopia/shared";
 import { heldBall } from "@yutopia/shared/pool-throw";
-import type { WorldRoom } from "../WorldRoom.ts";
+import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Things people carry (shared/held.ts): taken from what hands them out — a mug
@@ -22,7 +22,8 @@ registerFeature((room: WorldRoom) => {
     const { w, h } = footprint(o.kind, o.rot);
     const cx = Math.max(o.x, Math.min(p.x, o.x + w));
     const cy = Math.max(o.y, Math.min(p.y, o.y + h));
-    if (Math.hypot(p.x - cx, p.y - cy) > REACH) return;
+    // (in three dimensions: shared reach.ts — a flier over the machine doesn't reach it)
+    if (room.reach3(p, fromSchema(o), Math.hypot(p.x - cx, p.y - cy), { x: cx, y: cy }) > REACH) return;
     p.held = kind;
     p.heldAt = Date.now();
   });

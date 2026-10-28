@@ -1,11 +1,11 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { ANA, enter, holdCamera, holdHour, test, token, useWorld, walkTo } from "./helpers";
 
 // Doors and windows are things you put into a wall (shared openings.ts), from
 // the catalog's Doors & windows: the wall stays (its material), the door or
 // window cuts its own hole; a door lets people through, a window doesn't.
-// In the Lab (everything put in is taken out after). Shots in iso and 3D.
+// In the Lab (everything put in is taken out after). Shots along the way.
 
 const put = (page: Page, o: Record<string, unknown>) =>
   page.evaluate((x) => (window as any).__yutopia.send("obj:put", x), o);
@@ -24,9 +24,9 @@ const setBuild = (page: Page, b: Record<string, unknown>) =>
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -88,17 +88,17 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
 
     // a door in hand, pointed at the wall: in it, at the pointer
     const had = (await page.evaluate(() => [...(window as any).__yutopia.room.state.objects.keys()])) as string[];
-    await page.evaluate(
-      ([cx, cy]) => (window as any).__yutopia.engine.pinCamera({ x: cx, y: cy, zoom: 2.2 }),
-      [x + 2, y + 2],
-    );
+    // (in front of it, the camera from the south-east: it sees the wall's +y face)
+    await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x + 1.5, y: q.y + 2.5 }), { x, y });
+    await page.waitForTimeout(1500);
+    await holdCamera(page, { dist: 6 });
     await page.waitForTimeout(600);
     await setBuild(page, { mode: "place", kind: "door", props: null, rot: 0 });
     const p = await at(page, x + 0.5, y + 0.1, 40);
     await page.mouse.move(p.x - 30, p.y + 20);
     await page.mouse.move(p.x, p.y, { steps: 4 });
     await page.waitForTimeout(300);
-    await page.screenshot({ path: test.info().outputPath("iso-door-hand.png") });
+    await page.screenshot({ path: test.info().outputPath("door-hand.png") });
     await page.mouse.click(p.x, p.y);
     await expect.poll(async () => (await newIds(page, had)).length).toBe(1);
     const doorId = (await newIds(page, had))[0];
@@ -123,7 +123,7 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
     expect(await obj(page, poster)).toBeNull();
     await setBuild(page, { on: false, mode: "hand", selected: [] });
     await page.waitForTimeout(900);
-    await page.screenshot({ path: test.info().outputPath("iso-door-windows.png") });
+    await page.screenshot({ path: test.info().outputPath("door-windows.png") });
 
     // through the door (and not through the windows)
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x + 0.5, y: q.y + 1.5 }), { x, y });
@@ -134,22 +134,15 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
       await page.evaluate((q) => (window as any).__yutopia.grid.step(q.x + 1, q.y, q.x + 1, q.y - 1), { x, y }),
     ).toBe(false);
 
-    // third person: from the south room, looking at the wall
+    // from the south room, low, looking at the wall
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x + 2, y: q.y + 3.5 }), { x, y });
     await page.waitForTimeout(800);
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-    await page.evaluate(() => {
-      const t = (window as any).__yutopia.tp;
-      t.setMode?.("free");
-      t.yaw = -Math.PI / 2; // looking −y, at the wall's front face
-      t.pitch = 0.15;
-      t.dist = 5;
-    });
+    await holdCamera(page, { yaw: -Math.PI / 2, pitch: 0.15, dist: 5 }); // looking −y, at the wall's front face
     await page.waitForTimeout(2500);
     await page.screenshot({ path: test.info().outputPath("3p-door-windows.png") });
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !(window as any).__yutopia.tp, null, { timeout: 30_000 });
+    await page.evaluate(() => {
+      (window as any).__yutopia.tp.mode = "chase";
+    });
   } finally {
     for (const id of made) await remove(page, id);
   }
@@ -159,7 +152,7 @@ test("doors and windows go into a wall from the catalog; the wall stays, a door 
 });
 
 // Review shots (YUTOPIA_SHOTS=<dir>): doors shut, open, locked, swung the other
-// way, a glass one; the windows; close up in iso and from both sides in 3D.
+// way, a glass one; the windows; from above and from both sides, low.
 test("doors and windows: review shots", async ({ page }) => {
   const dir = process.env.YUTOPIA_SHOTS;
   test.skip(!dir, "review shots: set YUTOPIA_SHOTS");
@@ -201,30 +194,22 @@ test("doors and windows: review shots", async ({ page }) => {
     await put(page, { id: ids.ww, kind: "window_wide", x: x + 3, y, rot: 0 });
     await put(page, { id: ids.wt, kind: "window_tall", x: x + 5, y, rot: 0 });
     await expect.poll(async () => !!(await obj(page, ids.wt))).toBe(true);
-    await page.evaluate(() => (window as any).__yutopia.engine.setClock?.(11));
-    await page.evaluate(
-      ([cx, cy]) => (window as any).__yutopia.engine.pinCamera({ x: cx, y: cy, zoom: 1.9 }),
-      [x + 3, y + 0.5],
-    );
+    await holdHour(page, 11);
+    await holdCamera(page);
     // (doors open and shut for someone next to them)
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x + 1.5, y: q.y + 1.6 }), { x, y });
     await page.waitForTimeout(1500);
-    await shot("01-iso-open");
+    await shot("01-open");
     await state(ids.a, "closed");
     await state(ids.g, "closed");
     await page.waitForTimeout(800);
-    await shot("02-iso-shut");
+    await shot("02-shut");
     // the other side (the camera's from the south-east: walk round to the north room)
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x + 3, y: q.y - 2.5 }), { x, y });
-    await page.evaluate(
-      ([cx, cy]) => (window as any).__yutopia.engine.pinCamera({ x: cx, y: cy, zoom: 1.9 }),
-      [x + 3, y - 1.5],
-    );
+    await holdCamera(page);
     await page.waitForTimeout(1200);
-    await shot("03-iso-north-room");
-    // 3D, both sides
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
+    await shot("03-north-room");
+    // both sides, low
     const look = (yaw: number) =>
       page.evaluate((a) => {
         const t = (window as any).__yutopia.tp;
@@ -243,8 +228,6 @@ test("doors and windows: review shots", async ({ page }) => {
     await look(-Math.PI / 2);
     await page.waitForTimeout(2500);
     await shot("05-3p-front-face");
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !(window as any).__yutopia.tp, null, { timeout: 30_000 });
   } finally {
     for (const id of Object.values(ids)) await remove(page, id);
     await page.waitForTimeout(500);
@@ -253,7 +236,7 @@ test("doors and windows: review shots", async ({ page }) => {
 });
 
 // Review shots (YUTOPIA_SHOTS=<dir>): every kind of door in one wall — open,
-// then shut (one locked, the studio's ON AIR lit) — in iso and in 3D.
+// then shut (one locked, the studio's ON AIR lit) — from above and low.
 test("door kinds: review shots", async ({ page }) => {
   const dir = process.env.YUTOPIA_SHOTS;
   test.skip(!dir, "review shots: set YUTOPIA_SHOTS");
@@ -310,9 +293,13 @@ test("door kinds: review shots", async ({ page }) => {
     for (const [i, [kind, dx, props]] of doors.entries())
       await put(page, { id: ids[i], kind, x: x + dx, y, rot: 0, props });
     await expect.poll(async () => !!(await obj(page, ids[ids.length - 1]))).toBe(true);
-    await page.evaluate(() => (window as any).__yutopia.engine.setClock?.(11));
-    const pin = (cx: number, cy: number, zoom: number) =>
-      page.evaluate(([a, b, z]) => (window as any).__yutopia.engine.pinCamera({ x: a, y: b, zoom: z }), [cx, cy, zoom]);
+    await holdHour(page, 11);
+    // (a fixed look at a spot: me four tiles south of it, the camera behind me looking north)
+    const pin = async (cx: number, cy: number, zoom: number) => {
+      await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y }), { x: cx, y: cy + 4 });
+      await page.waitForTimeout(500);
+      await holdCamera(page, { yaw: -Math.PI / 2, pitch: 0.45, dist: 9 / zoom });
+    };
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y }), { x: x + 5, y: y + 4.5 });
     await pin(x + 5.5, y + 0.5, 1.5);
     await page.waitForTimeout(1500);
@@ -330,11 +317,9 @@ test("door kinds: review shots", async ({ page }) => {
     await pin(x + 7.5, y + 0.3, 2.6);
     await page.waitForTimeout(900);
     await shot("13-doors-shut-right");
-    // open again and swung the other way, in 3D
+    // open again and swung the other way, low
     for (let i = 1; i < doors.length; i++) if (!["archway", "door_saloon"].includes(doors[i][0])) await set(i, "open");
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y }), { x: x + 3, y: y + 3.5 });
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
     const look = (yaw: number, dist: number) =>
       page.evaluate(
         ([a, d]) => {
@@ -354,8 +339,6 @@ test("door kinds: review shots", async ({ page }) => {
     await look(-Math.PI / 2, 4.2);
     await page.waitForTimeout(2500);
     await shot("15-3p-right");
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !(window as any).__yutopia.tp, null, { timeout: 30_000 });
   } finally {
     await set(0, "open").catch(() => {});
     for (const id of ids) await remove(page, id);
@@ -365,7 +348,7 @@ test("door kinds: review shots", async ({ page }) => {
 });
 
 // Review shots (YUTOPIA_SHOTS=<dir>): every kind of window in one wall, by day
-// and by night in iso, and from both sides in 3D.
+// and by night from above, and from both sides, low.
 test("window kinds: review shots", async ({ page }) => {
   const dir = process.env.YUTOPIA_SHOTS;
   test.skip(!dir, "review shots: set YUTOPIA_SHOTS");
@@ -412,13 +395,17 @@ test("window kinds: review shots", async ({ page }) => {
   ];
   const ids = wins.map(([k, dx]) => `e2e-${k}-${dx}-${s}`);
   const shot = (name: string) => page.screenshot({ path: `${dir}/${name}.png` });
-  const pin = (cx: number, cy: number, zoom: number) =>
-    page.evaluate(([a, b, z]) => (window as any).__yutopia.engine.pinCamera({ x: a, y: b, zoom: z }), [cx, cy, zoom]);
+  // (a fixed look at a spot: me four tiles south of it, the camera behind me looking north)
+  const pin = async (cx: number, cy: number, zoom: number) => {
+    await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y }), { x: cx, y: cy + 4 });
+    await page.waitForTimeout(500);
+    await holdCamera(page, { yaw: -Math.PI / 2, pitch: 0.45, dist: 9 / zoom });
+  };
   try {
     for (const [i, [kind, dx]] of wins.entries()) await put(page, { id: ids[i], kind, x: x + dx, y, rot: 0 });
     await expect.poll(async () => !!(await obj(page, ids[ids.length - 1]))).toBe(true);
     await page.evaluate((q) => (window as any).__yutopia.teleport({ x: q.x, y: q.y }), { x: x + 6, y: y + 4.5 });
-    await page.evaluate(() => (window as any).__yutopia.engine.setClock?.(11));
+    await holdHour(page, 11);
     await pin(x + 6.5, y + 0.5, 1.35);
     await page.waitForTimeout(1600);
     await shot("20-windows");
@@ -428,13 +415,11 @@ test("window kinds: review shots", async ({ page }) => {
     await pin(x + 9, y + 0.3, 2.6);
     await page.waitForTimeout(900);
     await shot("22-windows-right");
-    await page.evaluate(() => (window as any).__yutopia.engine.setClock?.(21.5));
+    await holdHour(page, 21.5);
     await pin(x + 6.5, y + 0.5, 1.35);
     await page.waitForTimeout(1500);
     await shot("23-windows-night");
-    await page.evaluate(() => (window as any).__yutopia.engine.setClock?.(11));
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
+    await holdHour(page, 11);
     const look = (yaw: number) =>
       page.evaluate((a) => {
         const t = (window as any).__yutopia.tp;
@@ -465,8 +450,6 @@ test("window kinds: review shots", async ({ page }) => {
     });
     await page.waitForTimeout(2300);
     await shot("27-3p-sills");
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !(window as any).__yutopia.tp, null, { timeout: 30_000 });
   } finally {
     for (const id of ids) await remove(page, id);
     await page.waitForTimeout(500);

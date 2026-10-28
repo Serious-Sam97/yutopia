@@ -68,7 +68,7 @@ async function liveMap(
   return page.evaluate(() => {
     const y = (window as any).__yutopia;
     const bodies = [...y.room.state.players.values()].map((p: any) => ({ x: p.x, y: p.y }));
-    return { map: JSON.parse(JSON.stringify(y.map)), objects: y.engine.allObjects(), bodies };
+    return { map: JSON.parse(JSON.stringify(y.map)), objects: y.model.allObjects(), bodies };
   });
 }
 
@@ -227,7 +227,7 @@ test("media: YouTube on a radio — its own queue, the card plays near it, a sta
       [radioId, VIDEO] as const,
     );
     await ana.waitForFunction(
-      (i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.source === "yt",
+      (i) => (window as any).__yutopia.model.getObject(i)?.props?.radio?.source === "yt",
       radioId,
     );
     await walk(ana, { x: radio.x + 0.5, y: radio.y + 1.5 }, 60_000).catch(() => false);
@@ -283,7 +283,7 @@ test("media: YouTube on a radio — its own queue, the card plays near it, a sta
     await expect
       .poll(
         () =>
-          ana.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.media?.item?.ref, radioId),
+          ana.evaluate((i) => (window as any).__yutopia.model.getObject(i)?.props?.radio?.media?.item?.ref, radioId),
         {
           timeout: 15_000,
         },
@@ -347,7 +347,7 @@ test("media: one saved playlist after another on a radio", async ({ browser }) =
   const A = ["dQw4w9WgXcQ", "M7lc1UVf-VE"];
   const B = ["9bZkp7q19f0", "kJQP7kiw5Fk"];
   const now = () =>
-    ana.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.media?.item?.ref, radioId);
+    ana.evaluate((i) => (window as any).__yutopia.model.getObject(i)?.props?.radio?.media?.item?.ref, radioId);
   const saved = (l: string) =>
     ana.evaluate((x) => JSON.parse((window as any).__yutopia.room.state.playlists).find((p: any) => p.list === x), l);
   try {

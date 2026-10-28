@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, type Page, test } from "@playwright/test";
-import { ANA, enter, token, useWorld, walkTo } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { ANA, enter, holdCamera, test, token, useWorld, walkTo } from "./helpers";
 
 // Build mode works like The Sims: pick up what you see (click its body), carry
 // it, drop it; drag to move; box-select; turn, copy, delete; pick a look;
@@ -10,9 +10,9 @@ import { ANA, enter, token, useWorld, walkTo } from "./helpers";
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -46,7 +46,7 @@ test("build mode: pick up what you see, carry, drop, select, copy, look, clutter
   await enter(page, tok, await useWorld("demo"));
   await walkTo(page, 9.5, 13.5, 30_000);
   // hold the camera still (a moving camera makes a click land on the next tile)
-  await page.evaluate(() => (window as any).__yutopia.engine.pinCamera({ x: 11, y: 10, zoom: 1.8 }));
+  await holdCamera(page, { at: { x: 11, y: 10 }, dist: 10 });
   await setBuild(page, { on: true, tool: "furniture", mode: "hand", selected: [] });
   await expect(page.getByRole("region", { name: /build mode/i })).toBeVisible();
   await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
@@ -62,11 +62,11 @@ test("build mode: pick up what you see, carry, drop, select, copy, look, clutter
     made.push(plant);
     expect((await build(page)).mode).toBe("hand"); // one placed, back to the hand (Shift keeps placing)
 
-    // ── pick it up by its leaves (well above the floor tile), carry, drop: it
-    // keeps where you hold it, so let go at the same height two tiles over
-    await click(page, 10.5, 10.5, 40);
+    // ── pick it up, carry, drop two tiles over (aimed at floor points: the ray meets its leaves
+    // first, and the floor point under the pointer is what carries it)
+    await click(page, 10.5, 10.5);
     await expect.poll(async () => (await build(page)).carrying).toBe(1);
-    await click(page, 12.5, 10.5, 40);
+    await click(page, 12.5, 10.5);
     await expect.poll(() => objectsAt(page, 12, 10)).toEqual([expect.objectContaining({ id: plant })]);
     await page.screenshot({ path: "../../design/screens/05-build.png" });
 
@@ -83,17 +83,25 @@ test("build mode: pick up what you see, carry, drop, select, copy, look, clutter
     await expect.poll(() => objectsAt(page, 9, 9)).toEqual([expect.objectContaining({ kind: "desk" })]);
     const desk = (await objectsAt(page, 9, 9))[0].id;
     made.push(desk);
-    const from = await at(page, 10, 9.5, 22);
-    const to = await at(page, 13, 9.5, 22);
+    // (aimed at floor points inside it: the ray meets its body first, and the floor point under
+    // the pointer is what carries it — in perspective a raised point's floor point drifts)
+    const from = await at(page, 10, 9.5);
+    const to = await at(page, 13, 9.5);
     await page.mouse.move(from.x, from.y);
     await page.waitForTimeout(150);
     await page.mouse.down();
-    await page.mouse.move(to.x, to.y, { steps: 12 });
+    // (a nudge past the drag's threshold, held till it's in hand: the hand takes it where the
+    // pointer is when the pick-up lands — sweeping on at once, it lands a tile short)
+    await page.mouse.move(from.x + 8, from.y, { steps: 2 });
+    await expect.poll(async () => (await build(page)).carrying).toBe(1);
+    await page.mouse.move(to.x + 8, to.y, { steps: 12 });
     await page.waitForTimeout(250);
     await page.mouse.up();
     await expect.poll(() => objectsAt(page, 12, 9)).toEqual([expect.objectContaining({ id: desk })]);
     // (shown again once its move has landed: until then it can't be picked)
-    await expect.poll(() => page.evaluate((id) => (window as any).__yutopia.engine.hidden.has(id), desk)).toBe(false);
+    await expect
+      .poll(() => page.evaluate((id) => (window as any).__yutopia.model.buildLook().hidden.has(id), desk))
+      .toBe(false);
 
     // ── a look for the desk (Design tool): pick variant 3 from the item toolbar
     await click(page, 13, 9.5, 22); // pick up…
@@ -147,42 +155,51 @@ test("generated clutter becomes a real thing you can move", async ({ page }) => 
   test.setTimeout(150_000);
   const tok = await token(ANA);
   await enter(page, tok, await useWorld("demo"));
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp?.world.picks.length, null, { timeout: 30_000 });
+  // a piece of floor clutter (boxes by a wall, a bin…) the rules placed, away from real things
+  // (the 3D view's picks: its box, tiles)
+  const piece = await page.evaluate(() => {
+    const w = (window as any).__yutopia;
+    const objs = w.model.allObjects();
+    const d = w.tp.world.picks.find((p: any) => {
+      if (!p.dress || p.dress.kind === "frame" || p.z0 > 0.2) return false;
+      const x = (p.x0 + p.x1) / 2;
+      const y = (p.y0 + p.y1) / 2;
+      return !objs.some((o: any) => Math.abs(o.x + 0.5 - x) < 1.6 && Math.abs(o.y + 0.5 - y) < 1.6);
+    });
+    return d
+      ? { id: d.id, kind: d.dress.kind, x: (d.x0 + d.x1) / 2, y: (d.y0 + d.y1) / 2, h: (d.z0 + d.z1) / 2 }
+      : null;
+  });
+  expect(piece, "a piece of clutter").toBeTruthy();
+  const q = piece as { id: string; kind: string; x: number; y: number; h: number };
+  // go and look at it (people arrive at the arrival point, not by this clutter)
+  await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 1.5, y: p.y + 1.5 }), q);
+  await page.waitForTimeout(1500);
   await setBuild(page, { on: true, tool: "furniture", mode: "hand", selected: [] });
   await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
-  // a piece of floor clutter (boxes by a wall, a bin…) the rules placed, away from real things
-  const piece = await page.evaluate(() => {
-    const e = (window as any).__yutopia.engine;
-    const free = (v: any) =>
-      !e.allObjects().some((o: any) => Math.abs(o.x + 0.5 - v.at[0]) < 1.6 && Math.abs(o.y + 0.5 - v.at[1]) < 1.6);
-    const d = e.dress.find(
-      (v: any) => v.piece && !v.piece.host && v.piece.kind !== "frame" && v.root.visible && free(v),
-    );
-    return d ? { id: d.piece.id, kind: d.piece.kind, x: d.at[0], y: d.at[1] } : null;
-  });
-  // look at it (people arrive at the arrival point, not by this clutter)
-  await page.evaluate((q) => (window as any).__yutopia.engine.pinCamera({ x: q.x, y: q.y }), piece);
-  await page.waitForTimeout(400);
+  await holdCamera(page, { dist: 5 });
+  await page.waitForTimeout(600);
   // point at it: the hover tag names it; click to pick it up
-  // the middle of its drawing on screen
-  const p = await page.evaluate((id) => {
-    const e = (window as any).__yutopia.engine;
-    const d = e.dress.find((v: any) => v.piece?.id === id);
-    const b = d.root.getBounds();
-    const r = e.app.canvas.getBoundingClientRect();
-    return { x: r.left + b.x + b.width / 2, y: r.top + b.y + b.height * 0.55 };
-  }, piece.id);
+  // the middle of its box on screen
+  const p = await page.evaluate((d) => {
+    const t = (window as any).__yutopia.tp;
+    const r = t.renderer.domElement.getBoundingClientRect();
+    const s = t.project(d.x, d.y, d.h);
+    return { x: r.left + s.x, y: r.top + s.y };
+  }, q);
   await page.mouse.move(p.x, p.y);
   await expect.poll(async () => (await build(page)).hover?.label ?? "").not.toBe("");
   await page.mouse.click(p.x, p.y);
-  const real = `x-${piece.id}`;
+  const real = `x-${q.id}`;
   await expect.poll(async () => (await build(page)).held).toEqual([real]);
   await page.keyboard.press("Escape");
-  const o = await page.evaluate((id) => (window as any).__yutopia.engine.getObject(id), real);
+  const o = await page.evaluate((id) => (window as any).__yutopia.model.getObject(id), real);
   expect(o.kind).toBe("decor");
-  expect(o.props.d).toBe(piece.kind);
+  expect(o.props.d).toBe(q.kind);
   // undo puts the studio back the way the rules made it
   await page.waitForTimeout(900);
   await page.evaluate(() => (window as any).__yutopia.undo());
-  await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), real)).toBe(false);
+  await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), real)).toBe(false);
   await setBuild(page, { on: false });
 });

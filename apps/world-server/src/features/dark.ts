@@ -37,6 +37,7 @@ import {
 } from "@yutopia/shared/dark";
 import { heightAt, LAMPS } from "@yutopia/shared/grounds";
 import { byteToYaw, GAITS, MV_AIM, yawToByte } from "@yutopia/shared/move";
+import { between } from "@yutopia/shared/reach";
 import { prefetch, ready, stopLand } from "../land.ts";
 import { Flare, Shadow } from "../schema.ts";
 import type { WorldClient, WorldRoom } from "../WorldRoom.ts";
@@ -292,8 +293,9 @@ registerFeature((room: WorldRoom) => {
   const strike = (r: Run, sid: string, now: number) => {
     const p = room.state.players.get(sid);
     if (!p || !outside(p)) return;
-    const d = Math.hypot(p.x - r.shade.x, p.y - r.shade.y);
-    if (d > SHADE.reach) return; // (out of reach: missed)
+    // (its body against yours, each its whole height: out of reach across, or over it up there,
+    // missed — shared reach.ts)
+    if (between(p, { x: r.shade.x, y: r.shade.y, z: r.z }) > SHADE.reach) return;
     // mid-roll: through it (a message's lag of grace)
     const rolling = p.jump === "roll" && now - p.jumpAt >= ROLL_SAFE[0] && now - p.jumpAt <= ROLL_SAFE[1];
     if (rolling) return;
@@ -307,7 +309,10 @@ registerFeature((room: WorldRoom) => {
   room.on("mod:dark", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     if (!p?.admin) return;
-    if (m?.mode === "peaceful" || m?.mode === "normal" || m?.mode === "called") mode = m.mode;
+    if (m?.mode === "peaceful" || m?.mode === "normal" || m?.mode === "called") {
+      if (mode !== m.mode) room.adminLog(p, "dark", null, m.mode);
+      mode = m.mode;
+    }
     if (mode === "peaceful") for (const id of [...shades.keys()]) remove(id);
     const n = Math.max(0, Math.min(10, Number(m?.spawn) || 0));
     // (that many, round me 8–14 tiles off: a few spots tried for each — some are trees)

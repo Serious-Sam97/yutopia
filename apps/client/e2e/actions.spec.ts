@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { ANA, BIA, enter, holdCamera, test, token, useWorld, walkTo } from "./helpers";
 
 // The action menu, Sims-style (in the Lab; everything put out is removed
 // after): click a thing → what you can do with it in a ring; picks queue up
@@ -11,9 +11,9 @@ import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -49,9 +49,9 @@ test("the action menu: pick from the ring, the queue walks you over and does it"
   try {
     await put(page, { id: piano, kind: "piano", x: X + 3, y: Y, rot: 0 });
     await put(page, { id: cooler, kind: "water_cooler", x: X, y: Y, rot: 0 });
-    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), piano)).toBe(true);
+    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), piano)).toBe(true);
     await walkTo(page, X + 1.5, Y + 4.5, 20_000);
-    await page.evaluate(([x, y]) => (window as any).__yutopia.engine.pinCamera({ x, y, zoom: 2 }), [X + 2, Y + 2]);
+    await holdCamera(page, { at: { x: X + 2, y: Y + 2 }, dist: 8 });
     await page.waitForTimeout(400);
 
     // the ring: what the piano offers, numbered
@@ -102,6 +102,7 @@ test("people: a high five both of you do, a drink handed over", async ({ browser
   const bia = await (await browser.newContext(ctx)).newPage();
   const cooler = `e2e-pp-cool-${Date.now().toString(36)}`;
   try {
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
@@ -111,7 +112,7 @@ test("people: a high five both of you do, a drink handed over", async ({ browser
     await put(ana, { id: cooler, kind: "water_cooler", x: X, y: Y, rot: 0 });
     await walkTo(bia, X + 3.5, Y + 3.5, 20_000);
     await walkTo(ana, X + 1.5, Y + 3.5, 20_000);
-    await ana.evaluate(([x, y]) => (window as any).__yutopia.engine.pinCamera({ x, y, zoom: 2 }), [X + 2, Y + 2.5]);
+    await holdCamera(ana, { at: { x: X + 2, y: Y + 2.5 }, dist: 8 });
     await ana.waitForTimeout(500);
     const biaSid = (await me(bia)).sid;
     const biaAt = async () =>
@@ -160,7 +161,7 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
   // a desk with a chair at it, in a room: hers for now (as it was, after)
   const desk = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    const objs = w.engine.allObjects();
+    const objs = w.model.allObjects();
     const d = objs.find(
       (o: any) =>
         o.kind === "desk" &&
@@ -176,12 +177,9 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
       [desk.id, uid],
     );
     await expect
-      .poll(() => page.evaluate((id) => (window as any).__yutopia.engine.getObject(id)?.props?.ownerId, desk.id))
+      .poll(() => page.evaluate((id) => (window as any).__yutopia.model.getObject(id)?.props?.ownerId, desk.id))
       .toBe(uid);
-    await page.evaluate(
-      ([x, y]) => (window as any).__yutopia.engine.pinCamera({ x, y, zoom: 2 }),
-      [desk.x + 1, desk.y],
-    );
+    await holdCamera(page, { at: { x: desk.x + 1, y: desk.y }, dist: 8 });
     await page.waitForTimeout(400);
 
     // my desk: Focus — I go and sit, headphones on, the chip says so (from
@@ -195,7 +193,7 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
     expect(
       await page.evaluate(() => {
         const w = (window as any).__yutopia;
-        return w.engine.avatars.get(w.room.sessionId).state.avatar.accessory;
+        return w.model.avatars.get(w.room.sessionId).avatar.accessory;
       }),
     ).toBe("headphones");
     await page.getByRole("button", { name: "Stop focusing" }).click({ timeout: 5000 });
@@ -216,16 +214,13 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
     const a = spots.area as { x: number; y: number; w: number; h: number };
     await put(page, { id: sw, kind: "light_switch", x: a.x + a.w - 1, y: a.y, rot: 0 });
     await put(page, { id: lamp, kind: "lamp", x: a.x, y: a.y + a.h - 1, rot: 0 });
-    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), lamp)).toBe(true);
-    await page.evaluate(
-      ([x, y]) => (window as any).__yutopia.engine.pinCamera({ x, y, zoom: 2 }),
-      [a.x + a.w - 1, a.y],
-    );
+    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), lamp)).toBe(true);
+    await holdCamera(page, { at: { x: a.x + a.w - 1, y: a.y }, dist: 8 });
     await page.waitForTimeout(400);
     await clickAt(page, a.x + a.w - 0.5, a.y + 0.05, 38);
     await page.getByRole("menuitem", { name: "Lights off" }).click({ timeout: 5000 });
     await expect
-      .poll(() => page.evaluate((id) => (window as any).__yutopia.engine.getObject(id)?.props?.on, lamp), {
+      .poll(() => page.evaluate((id) => (window as any).__yutopia.model.getObject(id)?.props?.on, lamp), {
         timeout: 20_000,
       })
       .toBe(false);
@@ -235,7 +230,7 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
     await expect.poll(() => page.evaluate(() => (window as any).__hud.get().prompt?.objectId)).toBe(sw);
     await page.keyboard.press("e");
     await expect
-      .poll(() => page.evaluate((id) => (window as any).__yutopia.engine.getObject(id)?.props?.on, lamp), {
+      .poll(() => page.evaluate((id) => (window as any).__yutopia.model.getObject(id)?.props?.on, lamp), {
         timeout: 20_000,
       })
       .not.toBe(false);
@@ -258,7 +253,7 @@ test("my desk: focus with headphones on; the room's lights by the switch; a card
       [desk, [sw, lamp]] as const,
     );
     await expect
-      .poll(() => page.evaluate((id) => (window as any).__yutopia.engine.getObject(id)?.props?.ownerId ?? 0, desk.id))
+      .poll(() => page.evaluate((id) => (window as any).__yutopia.model.getObject(id)?.props?.ownerId ?? 0, desk.id))
       .toBe(0);
     await page.evaluate(
       (d) =>

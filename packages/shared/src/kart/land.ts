@@ -13,6 +13,8 @@ export type P = [number, number];
 export const KART_PARK = { x: 54, z: -760, h: 2 };
 /** The park's fence. */
 export const KART_FENCE = { x0: KART_PARK.x - 154, z0: KART_PARK.z - 74, x1: KART_PARK.x + 182, z1: KART_PARK.z + 84 };
+/** Its posts' height (m; docs/plan/50-the-volume.md): a rail fence you fly over. */
+export const KART_FENCE_H = 1;
 /** The gate, on the fence's south side by the paddock, where the road in arrives (its arch spans x). */
 export const KART_GATE = { x: KART_PARK.x + 165, z: KART_FENCE.z1, w: 12 };
 

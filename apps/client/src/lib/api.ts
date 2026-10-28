@@ -94,6 +94,7 @@ export interface Invite {
   email: string | null;
   url: string;
   usedAt: string | null;
+  usedBy: string | null; // who signed up with it
   expiresAt: string;
 }
 
@@ -136,7 +137,7 @@ export const yutopia = {
   // everyone with an account (to hand a room or a desk to)
   members: () => api<{ members: { id: number; name: string }[] }>("/api/members"),
   // admins: single-use sign-up links
-  invites: () => api<{ invites: Invite[] }>("/api/admin/invites"),
+  invites: () => api<{ invites: Invite[]; signup: "invite" | "open" | "closed" }>("/api/admin/invites"),
   makeInvite: (email: string | null) => api<{ invite: Invite }>("/api/admin/invites", post({ email })),
   dropInvite: (id: number) => api(`/api/admin/invites/${id}`, { method: "DELETE" }),
 };

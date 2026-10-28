@@ -259,7 +259,8 @@ registerFeature((room: WorldRoom) => {
       Math.abs(bx - KART_RACK.x) < KART_REACH &&
       bz > KART_RACK.z0 - KART_REACH &&
       bz < KART_RACK.z0 + KART_RACK.n * KART_RACK.dz + KART_REACH;
-    if (!nearDesk && !nearRack) return room.send(client, "kart:no", { why: "far" });
+    // (and on the ground there, not over it: shared reach.ts)
+    if ((!nearDesk && !nearRack) || room.upOff(p, p, 1.2) > 0) return room.send(client, "kart:no", { why: "far" });
     if (park.phase !== "lobby") return room.send(client, "kart:no", { why: "racing" });
     if (park.showing) return room.send(client, "kart:no", { why: "show" });
     const key = freeSlot();

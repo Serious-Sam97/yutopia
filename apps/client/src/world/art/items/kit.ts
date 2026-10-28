@@ -63,14 +63,7 @@ export function rnd(a: number, b = 0, seed = 0): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
 }
 
-export function seedOf(id: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0) / 4294967295;
-}
+export { seedOf } from "../seed";
 
 const f2 = (n: number) => Math.round(n * 100) / 100;
 export const pts = (p: Pt[]) => p.map(([x, y]) => `${f2(x)},${f2(y)}`).join(" ");

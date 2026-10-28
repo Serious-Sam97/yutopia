@@ -1,4 +1,3 @@
-import { BUILDINGS } from "../grounds.ts";
 import type { CarState } from "./sim.ts";
 
 // A car over the wire (docs/plan/28-the-car.md, Together): the driver's
@@ -50,10 +49,6 @@ export const CAR_FLAGS = {
 } as const;
 
 export const CAR_HZ = 20;
-/** The fastest a car may be said to go (m/s), and how hard it may change speed. */
-const VMAX = 62;
-const AMAX = 2.2 * 9.81; // a hard knock included
-
 export function toWire(s: CarState, seq: number, fl: number): CarWire {
   let slip = 0;
   for (const w of s.wheels) slip = Math.max(slip, w.contact ? w.slip : 0);
@@ -82,36 +77,8 @@ export function toWire(s: CarState, seq: number, fl: number): CarWire {
 
 const finite = (...xs: unknown[]) => xs.every((x) => typeof x === "number" && Number.isFinite(x));
 
-/** Could a car have gone from `a` to `b` in `dt` seconds? A reason it couldn't, or null.
- *  `ground` the land's height under a point. */
-export function implausible(
-  a: CarWire | null,
-  b: CarWire,
-  dt: number,
-  ground: (x: number, z: number) => number,
-): string | null {
-  if (!finite(b.x, b.y, b.z, b.qx, b.qy, b.qz, b.qw, b.vx, b.vy, b.vz, b.wy, b.steer, b.rpm, b.gear, b.fl))
-    return "bad numbers";
-  const ql = Math.hypot(b.qx, b.qy, b.qz, b.qw);
-  if (Math.abs(ql - 1) > 0.02) return "bad turn";
-  const v = Math.hypot(b.vx, b.vy, b.vz);
-  if (v > VMAX) return "too fast";
-  if (Math.abs(b.rpm) > 9000 || b.gear < -1 || b.gear > 6) return "bad engine";
-  const h = ground(b.x, b.z);
-  if (b.y < h - 0.8 || b.y > h + 8) return "off the ground";
-  // inside a building (a few tiles in: a bumper over a wall's edge is a knock, not a cheat)
-  for (const bd of BUILDINGS) {
-    const r = bd.built ?? bd;
-    if (b.x > r.x0 + 1.2 && b.x < r.x1 - 1.2 && b.z > r.z0 + 1.2 && b.z < r.z1 - 1.2) return "in a building";
-  }
-  if (!a) return null;
-  const t = Math.max(0.03, Math.min(1.5, dt));
-  const moved = Math.hypot(b.x - a.x, b.z - a.z);
-  // (a late packet carries the time it was late: the slack grows with it)
-  if (moved > VMAX * t + 2) return "jumped";
-  // (a crash stops it dead, or throws it back a little, in one packet: slower is always believable)
-  const dv = Math.hypot(b.vx - a.vx, b.vz - a.vz);
-  const faster = Math.hypot(b.vx, b.vz) - Math.hypot(a.vx, a.vz);
-  if (dv > AMAX * t + 4 && faster > AMAX * t + 1) return "accelerated";
-  return null;
+/** A driver's state all numbers (the server takes it as it is: none put back for its pace or place —
+ *  no anticheat for now, the user's call 2026-10-28). */
+export function finiteState(b: CarWire): boolean {
+  return finite(b.x, b.y, b.z, b.qx, b.qy, b.qz, b.qw, b.vx, b.vy, b.vz, b.wy, b.steer, b.rpm, b.gear, b.fl);
 }

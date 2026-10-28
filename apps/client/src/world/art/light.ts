@@ -20,7 +20,7 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 import type { RGB } from "./daylight";
-import { seedOf } from "./items/kit";
+import { seedOf } from "./seed";
 
 // Baked light: every light source is ray-marched across the tile grid (walls
 // and shut doors block it), with a soft falloff, into an RGB buffer in plan

@@ -77,16 +77,9 @@ test("the GPS: me on the map, a place found, a route with its turns, the ribbon 
   await page.keyboard.press("Escape");
   await expect(page.locator("[data-gps-banner]")).toBeVisible();
   await expect(page.locator("[data-gps-corner]")).toBeVisible();
-  await shot(page, "gps-away-iso");
+  await shot(page, "gps-away");
 
-  // in 3D: the ribbon on the ground
-  await page.evaluate(() => {
-    const p = JSON.parse(localStorage.getItem("yutopia:prefs") ?? "{}");
-    localStorage.setItem("yutopia:prefs", JSON.stringify({ ...p, view: "3p" }));
-  });
-  await page.keyboard.press("t");
-  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-  await loaded(page);
+  // the ribbon on the ground
   await expect
     .poll(
       () =>
@@ -99,8 +92,6 @@ test("the GPS: me on the map, a place found, a route with its turns, the ribbon 
     )
     .toBe(true);
   await shot(page, "gps-ribbon-3d");
-  await page.keyboard.press("t");
-  await loaded(page);
 
   // ended: no route, no banner
   await openGps(page);
@@ -145,9 +136,8 @@ test("the GPS's friends: a contact who shares is on my map; once they stop, gone
 });
 
 // Out on the Grounds (the ground floor: its corner is the Grounds' −60, −10):
-// where I am reads right, and the route lies on the land — dots in iso, the
-// ribbon in 3D.
-test("the GPS outdoors: where I am on the land, the route as dots in iso and a ribbon in 3D", async ({ page }) => {
+// where I am reads right, and the route lies on the land: a ribbon.
+test("the GPS outdoors: where I am on the land, the route as a ribbon", async ({ page }) => {
   test.setTimeout(180_000);
   await enter(page, await token(ANA), await useWorld("demo"));
   await page.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 30_000 });
@@ -159,23 +149,18 @@ test("the GPS outdoors: where I am on the land, the route as dots in iso and a r
   expect(Math.hypot(at.x + 40, at.z + 40)).toBeLessThan(3);
   // to the gatehouse, on foot
   await yu(page, (w) => w.phone.gps.go({ key: "b:gatehouse", name: "Gatehouse", p: [-36, -364] }, "foot"));
-  await expect.poll(() => yu(page, (w) => w.phone.gps.guide?.isoDots ?? 0), { timeout: 15_000 }).toBeGreaterThan(10);
-  await page.waitForTimeout(800);
-  await shot(page, "gps-iso-route");
-  // the 3D view, from behind me
-  await page.evaluate(() => {
-    const p = JSON.parse(localStorage.getItem("yutopia:prefs") ?? "{}");
-    localStorage.setItem("yutopia:prefs", JSON.stringify({ ...p, view: "3p" }));
-  });
-  await page.keyboard.press("t");
-  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-  await loaded(page, 90_000);
+  // the ribbon, from behind me
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const mesh = (window as any).__yutopia.tp?.scene.getObjectByName("gps-guide")?.children[0];
+          return !!mesh?.visible && (mesh.geometry.attributes.position?.count ?? 0) > 10;
+        }),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
   await page.waitForTimeout(1500);
   await shot(page, "gps-ribbon-3d-outdoors");
-  expect(
-    await page.evaluate(() => !!(window as any).__yutopia.tp?.scene.getObjectByName("gps-guide")?.children[0]?.visible),
-  ).toBe(true);
   await yu(page, (w) => w.phone.gps.end());
-  await page.keyboard.press("t");
-  await loaded(page, 90_000);
 });

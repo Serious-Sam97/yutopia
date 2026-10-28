@@ -4,8 +4,8 @@ import { expect, type Page } from "@playwright/test";
 import { KART_THINGS, kartTrack, TRACK_W } from "../../../packages/shared/src/kart/park.ts";
 import { ANA, enter, test, token } from "./helpers";
 
-// The board of the circuits in the game (docs/plan/47-the-track-changer.md, phases 3–6): in both
-// views, stood by the board in the paddock, X opens the panel — a card each layout, its map drawn —,
+// The board of the circuits in the game (docs/plan/47-the-track-changer.md, phases 3–6): in 3D,
+// stood by the board in the paddock, X opens the panel — a card each layout, its map drawn —,
 // the Oval picked and set, the board's face and the desk's strip painted with it (3D), Rosa calling
 // it out; the show — the park shut, four ploughs out, the panel saying so, the new circuit drawn
 // behind them (3D) —; then, the show over, a walk where the Figure Eight's asphalt was: snow now,
@@ -36,17 +36,17 @@ const layoutIs = (page: Page, key: string) =>
     timeout: 10_000,
   });
 
-for (const view of ["3p", "iso"] as const)
+for (const view of ["3p"] as const)
   test(`the board of the circuits in ${view}: the panel, a track set, the board and Rosa`, async ({ page }) => {
     test.setTimeout(200_000);
     if (!board) throw new Error("no board");
     await page.addInitScript((v) => {
       const k = "yutopia:prefs";
       const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-      localStorage.setItem(k, JSON.stringify({ ...p, view: v, last3d: "3p", cam3p: "chase" }));
+      localStorage.setItem(k, JSON.stringify({ ...p, view: v, cam3p: "chase" }));
     }, view);
     await enter(page, await token(ANA));
-    if (view === "3p") await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
+    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
     await page.evaluate(() => (window as any).__yutopia.room.send("park:stand", {}));
     // (from the Figure Eight)
     await page.evaluate(() => (window as any).__yutopia.room.send("kart:layout", { layout: "eight" }));
@@ -56,7 +56,7 @@ for (const view of ["3p", "iso"] as const)
     await page.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "kart:circuits", null, {
       timeout: 30_000,
     });
-    await page.waitForTimeout(view === "3p" ? 3000 : 1500);
+    await page.waitForTimeout(3000);
     await shot(page, `kart-circuits-${view}-board`);
     try {
       await page.keyboard.press("x");
@@ -145,13 +145,6 @@ for (const view of ["3p", "iso"] as const)
       expect(gone.up, "the land where the span was").toBeLessThan(0.1);
       expect(gone.strip, "its guard strip walked").toBe(true);
       if (view === "3p") expect(gone.drawn, "the bridge drawn").toBe(false);
-      if (view === "iso" && dir) {
-        // (a look at where it stood)
-        const top = eight.pts[eight.cross.over];
-        await page.evaluate((q) => (window as any).__yutopia.teleport({ ...q, level: 0 }), G(top.x + 8, top.z + 8));
-        await page.waitForTimeout(4000);
-        await shot(page, "kart-circuits-iso-no-bridge");
-      }
       if (view === "3p") {
         // where the bridge's ramp came down by the start straight (the grid's back, looking up it)
         const grid = await page.evaluate((g) => {

@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - tools/physics-bench
 
 allowBuilds:
   esbuild: true

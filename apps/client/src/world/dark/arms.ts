@@ -11,7 +11,6 @@ import {
   spreadOf,
 } from "@yutopia/shared/dark";
 import { count, type Inventory, isUsable, isWeapon, QUICK_SLOT, STACKS, WEAPONS } from "@yutopia/shared/inventory";
-import { prefs, setPrefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
 import type { Press } from "../input/controls";
 import type { Walker } from "../input/walker";
@@ -21,7 +20,7 @@ import type { DarkSound } from "./voices";
 
 // Guns and flares on my side (docs/plan/30-the-dark.md D6), anywhere — the snow,
 // the office. 1–4 are the quick slots: a weapon there taken out (again: put it
-// away; in iso, it switches to 3D — the fight is 3D), first aid or a battery used,
+// away), first aid or a battery used,
 // a flare thrown; aiming (the right button, LT), the left button (RT)
 // fires: through the crosshair, from the hand — the server decides what it met
 // (features/arms.ts: the shadowed, one of us), the flash and the tracers show at
@@ -137,8 +136,8 @@ export class Arms {
     if (hud.get().build.on) return false;
     const inv = this.inv();
     const q = QUICK_KEYS.indexOf(e.code);
-    // (on foot: riding, driving, at an arcade the keys are theirs)
-    if (q >= 0 && this.walker.stepping) {
+    // (on foot: riding, driving, at an arcade the keys are theirs; an action menu's numbers pick)
+    if (q >= 0 && this.walker.stepping && !hud.get().menu) {
       this.quick(q);
       return true;
     }
@@ -216,8 +215,6 @@ export class Arms {
     const putAway = !w || me?.gun === w.id;
     this.ctl.room?.send("arms:draw", { slot: putAway ? -1 : slot });
     this.reloading = false;
-    // (the fight is 3D: a gun out in iso, the view goes 3D)
-    if (!putAway && !this.ctl.tp) setPrefs({ view: prefs().last3d === "1p" ? "1p" : "3p" });
   }
   reload() {
     const g = this.gun();
@@ -476,14 +473,15 @@ export class Arms {
     if (rt && !this.rtDown && this.walker.aiming && this.gun()) this.fire();
     this.rtDown = rt;
     if (pad.pressed(5)) this.flare();
-    // flares burning on my floor: to whichever view is showing (iso: the snow's only)
-    const flares: { x: number; y: number; z: number; t: number }[] = [];
-    room?.state.flares?.forEach((f: { x: number; y: number; z: number; at: number; level?: number }) => {
-      if ((f.level ?? 0) === ctl.level) flares.push({ x: f.x, y: f.y, z: f.z, t: f.at / 1000 });
-    });
-    if (ctl.tp) ctl.tp.flares = flares;
-    const g = ctl.engine?.grounds;
-    if (g) g.flares = ctl.tp || ctl.level !== 0 ? [] : flares;
+    // flares burning on my floor: to the 3D view
+    const tp = ctl.tp;
+    if (tp) {
+      const flares: { x: number; y: number; z: number; t: number }[] = [];
+      room?.state.flares?.forEach((f: { x: number; y: number; z: number; at: number; level?: number }) => {
+        if ((f.level ?? 0) === ctl.level) flares.push({ x: f.x, y: f.y, z: f.z, t: f.at / 1000 });
+      });
+      tp.flares = flares;
+    }
     this.draws();
   }
 

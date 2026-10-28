@@ -1,24 +1,3 @@
-import type { Container, Graphics } from "pixi.js";
-import type { Daylight } from "../daylight";
-
-// What surrounds the studio. Each theme draws a backdrop behind the world
-// (screen space) and the building below the floor's outer edges (world px).
-export interface ThemeView {
-  readonly root: Container;
-  setDay(d: Daylight): void;
-  setAnimate(on: boolean): void; // off under reduced motion
-  update(dt: number, W: number, H: number, camX: number, camY: number, zoom: number): void;
-  // `lights` only shows at night (windows still lit)
-  drawShell(
-    body: Graphics,
-    lights: Graphics,
-    floorAt: (x: number, y: number) => boolean,
-    width: number,
-    height: number,
-  ): void;
-  destroy(): void;
-}
-
 export function rng(seed: number) {
   let a = seed >>> 0;
   return () => {

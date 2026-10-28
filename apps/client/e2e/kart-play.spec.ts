@@ -1,7 +1,7 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
 import { KART_DESK, KART_STANDS } from "../../../packages/shared/src/kart/park.ts";
-import { ANA, BIA, CAI, enter, test, token } from "./helpers";
+import { ANA, BIA, enter, test, token } from "./helpers";
 
 // The karts in the game (docs/plan/46-the-karts.md, phases 2–6): Ana at the paddock's desk takes a
 // kart (X), drives off (her kart moves, the server has it), Bia sees it go by; Ana sets up a
@@ -16,11 +16,11 @@ if (process.env.YUTOPIA_FIREFOX !== "1")
 test.use({ viewport: { width: 1280, height: 800 } });
 const G = (x: number, z: number) => ({ x: x + 60, y: z + 10 });
 
-async function open(page: Page, who: typeof ANA, view: "3p" | "iso" = "3p") {
+async function open(page: Page, who: typeof ANA, view: "3p" | "1p" = "3p") {
   await page.addInitScript((v) => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: v, last3d: "3p", cam3p: "chase" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: v, cam3p: "chase" }));
     const W = window as any;
     W.__worst = 0;
     let last = performance.now();
@@ -156,21 +156,6 @@ test("a kart at the desk, driven off, a Grand Prix with Vortex started, out", as
   await bp.waitForTimeout(2500);
   if (dir) await bp.screenshot({ path: `${dir}/kart-play-bia-follows.png` });
   expect(await bp.evaluate(() => !!(window as any).__yutopia.tp.gameCam), "the leader's camera").toBeTruthy();
-  // Cai in iso by the stands: the karts go by as sprites
-  const cctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-  const cp = await cctx.newPage();
-  await open(cp, CAI, "iso");
-  await cp.evaluate((q) => (window as any).__yutopia.teleport({ ...q, level: 0 }), at);
-  await cp.waitForFunction(
-    () =>
-      [...((window as any).__yutopia.engine.grounds?.vehViews?.keys?.() ?? [])].some((k: string) =>
-        k.startsWith("kart"),
-      ),
-    null,
-    { timeout: 30_000 },
-  );
-  if (dir) await cp.screenshot({ path: `${dir}/kart-play-iso.png` });
-  await cctx.close();
   await page.keyboard.up("KeyW");
   const p2 = await park(page);
   const vortexMoved = p2.karts

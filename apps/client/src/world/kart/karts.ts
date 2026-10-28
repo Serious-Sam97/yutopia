@@ -104,10 +104,6 @@ interface Host {
   reduced(): boolean;
   toast(text: string): void;
   chars(): typeof import("../chars") | null;
-  /** the iso view's karts (art/grounds-iso.ts setKarts) */
-  iso(
-    list: { id: string; kind: string; x: number; z: number; a: number; shown: boolean; variant?: number; h?: number }[],
-  ): void;
 }
 
 const VORTEX_LOOK = parseAvatar({
@@ -638,21 +634,6 @@ export class Karts {
     this.drawResults(p);
     this.follow(p, dt);
     this.drawTower(p);
-    // iso: everyone's karts as sprites
-    const list: Parameters<Host["iso"]>[0] = [];
-    for (const [k, v] of this.views)
-      list.push({
-        id: `kart${k}`,
-        kind: "kart",
-        x: v.pose.x,
-        z: v.pose.z,
-        a: v.pose.a,
-        shown: true,
-        variant: v.colour,
-        // (its own height: up on the bridge or under it — the land's is the deck's there)
-        h: v.pose.y,
-      });
-    this.host.iso(list);
   }
 
   // the start, as Mario Kart's (shared kartStart): the throttle down on the fourth or fifth light, a
@@ -2371,7 +2352,6 @@ ${r.rows
     this.hideHud();
     this.sound?.dispose();
     this.root.removeFromParent();
-    this.host.iso([]);
   }
 }
 

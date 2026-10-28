@@ -1,5 +1,18 @@
 # The snap — put back only for real (decided 2026-10-24; delivered 2026-10-24)
 
+> **Retired 2026-10-28 — no put-backs at all.** The user, playing after plan 50: too fast (with
+> the fast power too), a car going fast, some places, flying high — the game kept putting them
+> back: *"remove all those teleportings … I don't want that now."* The server now takes every
+> move as sent: no pace, way, height or floor check (`WorldRoom` `pos`), no car plausibility
+> check (`features/cars.ts`: a state only let go if it isn't numbers — shared `finiteState`), no
+> moving people who stand where the grid thinks they don't fit after an edit or a car stopping
+> (`rescue()`: only for a floor that's gone — the grid called a tree's whole tile solid, so cars
+> stopping anywhere put people by trees elsewhere). Kept: an admin's freeze, and a server
+> placement (a teleport, out of a car) not undone by moves already on their way (the second
+> after it). Private spaces (a booth in use, a locked room) stop you at their edge in your own
+> browser and knock (`input/walker.ts` `shutBy`), instead of the server putting you back.
+> Flying goes to 180 m (was 60). Walls, fences and doors still hold — in the browser, on Jolt.
+
 The user, playing: "now and then a lag that isn't the fps: it takes me back to a point
 behind, as if my ping were huge" — walking and driving, on the dev stack and in prod.
 

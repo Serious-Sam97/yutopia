@@ -1,4 +1,5 @@
 import { ANIM, levelMap, objLevel, tileAt } from "@yutopia/shared";
+import { hasPower } from "@yutopia/shared/admin";
 import {
   addItem,
   addItemTo,
@@ -55,6 +56,7 @@ import {
 } from "@yutopia/shared/dark";
 import { INSIDES } from "@yutopia/shared/grounds";
 import { GAITS, MOVE, MV_AIM } from "@yutopia/shared/move";
+import { between } from "@yutopia/shared/reach";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
 import { Cache as CacheWire, Drop, type Player } from "../schema.ts";
@@ -133,6 +135,11 @@ export interface SurvivalHooks {
   inventory(sid: string): Inventory | null;
   /** …changed: sent to them and saved */
   changed(sid: string): void;
+  /** an admin's (docs/plan/48-the-admin.md): health, breath and battery full; up again if down */
+  heal(sid: string): void;
+  /** an admin's: something into their pockets (or, `drop`, on the ground where they stand);
+   *  false: nothing went (unknown, or no room) */
+  give(sid: string, item: string, n: number, drop?: boolean): boolean;
 }
 
 const offlineSurvivors = new Map<number, SurvivorRecord>();
@@ -366,9 +373,11 @@ registerFeature((room: WorldRoom) => {
     if (c) room.send(c, "dark:found", { spot, got, full, ...(gone ? { gone } : {}), ...(later ? { later } : {}) });
     if (got.length) changed(s);
   };
+  // (a loot spot on the ground: in three dimensions — shared reach.ts)
   const near = (p: Player, x: number, z: number) => {
     const b = toB(p.x, p.y);
-    return Math.hypot(b.x - x, b.z - z) <= LOOT_REACH;
+    const at = { x: p.x + (x - b.x), y: p.y + (z - b.z) };
+    return Math.hypot(b.x - x, b.z - z, room.upOff(p, at, 1)) <= LOOT_REACH;
   };
   const ready = (client: WorldClient) => {
     const p = room.state.players.get(client.sessionId);
@@ -394,7 +403,7 @@ registerFeature((room: WorldRoom) => {
       const o = room.state.objects.get(id.slice(KIT_SPOT.length));
       if (o?.kind !== "locker" || objLevel(fromSchema(o), room.map) !== p.level) return;
       const f = lockerFront(o);
-      if (Math.hypot(p.x - f.x, p.y - f.y) > LOOT_REACH) return;
+      if (room.reach3(p, fromSchema(o), Math.hypot(p.x - f.x, p.y - f.y), f) > LOOT_REACH) return;
       const day = dayOf(now + kitClock.shift);
       if (s.kitDay === day) return found(s, client.sessionId, id, [], false, false, true);
       const gun = !hasWeapon(s.inv, "revolver");
@@ -462,7 +471,7 @@ registerFeature((room: WorldRoom) => {
     const r = ready(client);
     const d = room.state.drops.get(String(m?.id ?? ""));
     if (!r || !d || d.level !== r.p.level) return;
-    if (Math.hypot(r.p.x - d.x, r.p.y - d.y) > LOOT_REACH) return;
+    if (Math.hypot(r.p.x - d.x, r.p.y - d.y, room.upOff(r.p, d, 0.3)) > LOOT_REACH) return;
     const item = d.item as ItemId;
     // (into the slot it was dragged to, if it was and it fits there: the inventory's)
     const slot = Number(m?.slot);
@@ -546,7 +555,8 @@ registerFeature((room: WorldRoom) => {
       if (p.revBy === client.sessionId) stopRevive(p);
       return;
     }
-    if (me.downAt || me.level !== p.level || Math.hypot(me.x - p.x, me.y - p.y) > DOWN.reach || p.revBy) return;
+    // (body to body: shared reach.ts — down on the ground, reached from beside them, not from above)
+    if (me.downAt || me.level !== p.level || between(me, p) > DOWN.reach || p.revBy) return;
     p.revBy = client.sessionId;
     p.revAt = Date.now();
   });
@@ -610,6 +620,32 @@ registerFeature((room: WorldRoom) => {
   });
 
   room.survival = {
+    heal(sid) {
+      const p = room.state.players.get(sid);
+      const s = p && people.get(p.uid);
+      if (!p || !s) return;
+      Object.assign(s.v, FULL_VITALS);
+      s.c.winded = false;
+      s.windedAt = 0;
+      if (p.downAt) getUp(p, s, 100);
+      p.hp = vitalByte(s.v.hp);
+      changed(s);
+    },
+    give(sid, item, n, drop) {
+      const p = room.state.players.get(sid);
+      const s = p && people.get(p.uid);
+      if (!p || !s?.loaded || !(isStack(item) || isWeapon(item))) return false;
+      const many = isWeapon(item) ? 1 : Math.max(1, Math.min(99, Math.floor(n) || 1));
+      const loaded = isWeapon(item) ? WEAPONS[item].mag : 0;
+      if (drop) {
+        putDrop(item, many, loaded, p.x, p.y, Date.now(), undefined, p.level);
+        return true;
+      }
+      const left = addItem(s.inv, { id: item, n: many, loaded });
+      if (left === many) return false;
+      changed(s);
+      return true;
+    },
     winded(sid) {
       const s = of(sid);
       return !!s && s.c.winded && s.windedAt > 0 && Date.now() - s.windedAt > WINDED_GRACE_MS;
@@ -627,7 +663,8 @@ registerFeature((room: WorldRoom) => {
     hurt(sid, n) {
       const p = room.state.players.get(sid);
       const s = p && people.get(p.uid);
-      if (!p || !s || p.downAt) return;
+      // (an admin who's unhurt: nothing — docs/plan/48-the-admin.md)
+      if (!p || !s || p.downAt || (p.admin && hasPower(p.powers, "unhurt"))) return;
       hurt(s.v, s.c, n);
       p.hp = vitalByte(s.v.hp);
       s.dirty = true;
@@ -735,11 +772,7 @@ registerFeature((room: WorldRoom) => {
         // down: someone getting them up (it holds the bleeding), their own first aid, else bleeding out
         if (p.downAt) {
           const by = p.revBy ? room.state.players.get(p.revBy) : undefined;
-          if (
-            p.revBy &&
-            (!by || by.downAt || by.level !== p.level || Math.hypot(by.x - p.x, by.y - p.y) > DOWN.reach + 0.3)
-          )
-            stopRevive(p);
+          if (p.revBy && (!by || by.downAt || by.level !== p.level || between(by, p) > DOWN.reach + 0.3)) stopRevive(p);
           if (p.revBy) p.downAt += dt * 1000;
           if (p.revBy && now - p.revAt >= REVIVE_MS) getUp(p, s, DOWN.upHp);
           else if (s.selfAt && now - s.selfAt >= SELF_MS) {

@@ -50,8 +50,23 @@ export const NO_INPUT: MoveInput = {
   look: 0,
 };
 
+/** What a body asks of the world it moves through: where it fits, what's under it, whether a way's
+ *  clear — the grid's answers (iso, the 3D view before Jolt's in) or Jolt's (shared/physics
+ *  JoltCollider). */
+export type Collider = Pick<Grid, "fitsAt" | "groundAt" | "clear" | "onRamp" | "onLand" | "speedAt">;
+
+/** How a body is moved and kept on its feet (docs/plan/50-the-volume.md C): by its velocity for
+ *  dt — along what's in the way (a blocked way's speed gone), up a step `stepUp` high walking and
+ *  down one, falling, landing; `fly`: no gravity, neither. The grid's way (none: this file's) or
+ *  Jolt's character (shared/physics CharacterMover). True: it landed this step. */
+export interface Mover {
+  step(b: Body, dt: number, stepUp: number, blocked?: (x: number, y: number) => boolean, fly?: boolean): boolean;
+}
+
 export interface MoveEnv {
-  grid: Grid;
+  grid: Collider;
+  /** what moves the body (none: the grid's own way, below) */
+  mover?: Mover;
   /** what's underfoot at (x, y) (grounds.ts `groundSurfaceAt` outdoors, else "floor") */
   footing(x: number, y: number): Footing;
   /** how fast the ground lets you go there (1 a floor; default: the grid's `speedAt`) */
@@ -282,12 +297,9 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
     b.vy += dvy * k;
   }
 
-  // ── moving: sliding along walls, a blocked way's speed gone; up steps, and down them
-  move(b, grid, dt, b.up ? 0 : spec.stepUp, env.blocked);
-  stepDown(b, grid, spec);
-
-  // ── the feet: falling, landing, stepping off
-  land(b, grid, dt, spec, ev);
+  // ── moving: sliding along walls, a blocked way's speed gone; up steps, and down them; the
+  // feet: falling, landing, stepping off
+  settle(b, env, dt, b.up ? 0 : spec.stepUp, spec, ev);
 
   // ── facing: where you aim, else where you mean to go
   const heading =
@@ -304,7 +316,20 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   return ev;
 }
 
-function move(b: Body, grid: Grid, dt: number, stepUp = 0, blocked?: (x: number, y: number) => boolean) {
+/** Moved and on its feet: by the env's mover, or the grid's way. */
+function settle(b: Body, env: MoveEnv, dt: number, stepUp: number, spec: MoveSpec, ev: StepEvents) {
+  const falling = b.vz;
+  let down: boolean;
+  if (env.mover) down = env.mover.step(b, dt, stepUp, env.blocked);
+  else {
+    move(b, env.grid, dt, stepUp, env.blocked);
+    stepDown(b, env.grid, spec);
+    down = fall(b, env.grid, dt);
+  }
+  if (down) landed(b, falling, spec, ev);
+}
+
+function move(b: Body, grid: Collider, dt: number, stepUp = 0, blocked?: (x: number, y: number) => boolean) {
   const s = speedOf(b);
   if (s < 1e-6) return;
   const tx = b.x + b.vx * dt;
@@ -332,31 +357,34 @@ function move(b: Body, grid: Grid, dt: number, stepUp = 0, blocked?: (x: number,
 }
 
 /** Walking off a step down (no higher than one up): the feet follow it, no fall. */
-function stepDown(b: Body, grid: Grid, spec: MoveSpec) {
+function stepDown(b: Body, grid: Collider, spec: MoveSpec) {
   if (b.up || b.takeoff >= 0) return;
   const g = grid.groundAt(b.x, b.y, b.z);
   if (g < b.z - 1e-3 && b.z - g <= spec.stepUp + 1e-6) b.z = g;
 }
 
-function land(b: Body, grid: Grid, dt: number, spec: MoveSpec, ev: StepEvents) {
+// falling, landing, stepping off (the grid's way): true, landed
+function fall(b: Body, grid: Collider, dt: number): boolean {
   const h: Height = { z: b.z, vz: b.vz, up: b.up };
-  const falling = b.vz;
   const down = stepHeight(grid, b.x, b.y, h, dt);
   b.z = h.z;
   b.vz = h.vz;
   b.up = h.up;
-  if (down) {
-    const impact = Math.min(1, Math.max(0, -falling) / (spec.hardLand * 1.5));
-    b.landed = impact;
-    ev.landed = impact;
-    b.rising = false;
-    b.jump = null;
-    // a hard landing costs you some speed
-    if (impact > 0.5) {
-      const keep = 1 - 0.5 * (impact - 0.5);
-      b.vx *= keep;
-      b.vy *= keep;
-    }
+  return down;
+}
+
+// landed (`falling`: how fast it came down)
+function landed(b: Body, falling: number, spec: MoveSpec, ev: StepEvents) {
+  const impact = Math.min(1, Math.max(0, -falling) / (spec.hardLand * 1.5));
+  b.landed = impact;
+  ev.landed = impact;
+  b.rising = false;
+  b.jump = null;
+  // a hard landing costs you some speed
+  if (impact > 0.5) {
+    const keep = 1 - 0.5 * (impact - 0.5);
+    b.vx *= keep;
+    b.vy *= keep;
   }
 }
 
@@ -414,9 +442,7 @@ function stepVerb(b: Body, env: MoveEnv, spec: MoveSpec, dt: number, ev: StepEve
   }
   b.vx = v.ux * s;
   b.vy = v.uy * s;
-  move(b, grid, dt, b.up ? 0 : spec.stepUp, env.blocked);
-  stepDown(b, grid, spec);
-  land(b, grid, dt, spec, ev);
+  settle(b, env, dt, b.up ? 0 : spec.stepUp, spec, ev);
   if (k >= 1 || (v.kind === "slide" && s < spec.slide.minSpeed)) end(b, ev);
 }
 

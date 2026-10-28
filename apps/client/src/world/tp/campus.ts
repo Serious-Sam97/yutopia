@@ -819,6 +819,8 @@ class Flakes {
   readonly material: PointsMaterial;
   private geo: BufferGeometry;
   private at: Float32Array;
+  /** how many of them fall (Lowest: half — each one's moved on the CPU every frame) */
+  used: number;
   constructor(
     private box: Vector3,
     count: number,
@@ -827,6 +829,7 @@ class Flakes {
     map: CanvasTexture,
     r: () => number,
   ) {
+    this.used = count;
     this.at = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       this.at[i * 3] = r() * box.x;
@@ -864,7 +867,10 @@ class Flakes {
     const near = roofs.filter(
       (r) => r.x1 > cam.x - B.x / 2 && r.x0 < cam.x + B.x / 2 && r.z1 > cam.z - B.z / 2 && r.z0 < cam.z + B.z / 2,
     );
-    for (let i = 0; i < p.count; i++) {
+    const n = Math.min(this.used, p.count);
+    this.geo.setDrawRange(0, n);
+    const a = p.array as Float32Array;
+    for (let i = 0; i < n; i++) {
       if (animate) {
         f[i * 3 + 1] -= dt * (0.8 + (i % 7) * 0.08) * fall;
         if (f[i * 3 + 1] < 0) f[i * 3 + 1] += B.y;
@@ -875,14 +881,18 @@ class Flakes {
       let y = fold(f[i * 3 + 1], cam.y, B.y);
       const z = fold(f[i * 3 + 2], cam.z, B.z);
       if (y < GROUND) y += B.y;
-      if (
-        (x > fx0 && x < fx1 && z > fz0 && z < fz1) ||
-        near.some((r) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1)
-      ) {
+      let under = x > fx0 && x < fx1 && z > fz0 && z < fz1;
+      for (let j = 0; !under && j < near.length; j++) {
+        const r = near[j];
+        under = x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
+      }
+      if (under) {
         x = cam.x;
         y = GROUND - 200;
       }
-      p.setXYZ(i, x, y, z);
+      a[i * 3] = x;
+      a[i * 3 + 1] = y;
+      a[i * 3 + 2] = z;
     }
     p.needsUpdate = true;
   }
@@ -1095,6 +1105,8 @@ export class Campus {
   private letters: MeshBasicMaterial;
   private beacon: MeshBasicMaterial;
   private flakes: Flakes[] = [];
+  /** Lowest: the snow half as thick (the view's setQuality) */
+  lite = false;
   private terrain: Terrain;
   private visitor: Visitor | null = null;
   private steam: Steam | null = null;
@@ -2157,9 +2169,12 @@ export class Campus {
       heavy.points.visible = storm > 0.02;
       heavy.material.opacity = 0.95 * Math.min(1, storm * 1.3);
     }
-    for (const f of this.flakes)
+    for (const f of this.flakes) {
+      // (the flakes are scattered at random: the first half is half as thick, all over)
+      f.used = Math.round(f.points.geometry.getAttribute("position").count * (this.lite ? 0.5 : 1));
       if (f.points.visible)
         f.update(dt, cam, animate, this.fx0, this.fz0, this.fx1, this.fz1, storm, this.weather.wind, this.roofs);
+    }
     this.visitor?.update(dt, this.night, animate);
     this.steam?.update(dt, animate);
   }

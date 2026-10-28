@@ -104,7 +104,7 @@ test("every radio its own: its station next to it, the other's faint when it's o
       });
     }
     await expect
-      .poll(() => page.evaluate((r) => r.every((id: string) => !!(window as any).__yutopia.engine.getObject(id)), ids))
+      .poll(() => page.evaluate((r) => r.every((id: string) => !!(window as any).__yutopia.model.getObject(id)), ids))
       .toBe(true);
     // (the music needs the page's audio started: a click does it)
     await page.mouse.click(5, 400);
@@ -123,9 +123,9 @@ test("every radio its own: its station next to it, the other's faint when it's o
     // its own knob: turned down, it's quieter right next to it; back up, loud again
     await page.evaluate((i) => (window as any).__yutopia.send("radio:volume", { id: i, volume: 0.25 }), ids[1]);
     await expect.poll(level, { timeout: 10_000 }).toBeLessThan(0.3);
-    expect(
-      await page.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.volume, ids[3]),
-    ).toBe(0.8);
+    expect(await page.evaluate((i) => (window as any).__yutopia.model.getObject(i)?.props?.radio?.volume, ids[3])).toBe(
+      0.8,
+    );
     await page.evaluate((i) => (window as any).__yutopia.send("radio:volume", { id: i, volume: 1 }), ids[1]);
     await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0.9);
     // over by the other one: loud too, and its own station
@@ -137,7 +137,7 @@ test("every radio its own: its station next to it, the other's faint when it's o
     await expect.poll(station, { timeout: 10_000 }).toBe(0);
     await expect.poll(level, { timeout: 10_000 }).toBeLessThan(0.25);
     expect(
-      await page.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.radio?.playing, ids[1]),
+      await page.evaluate((i) => (window as any).__yutopia.model.getObject(i)?.props?.radio?.playing, ids[1]),
     ).toBe(true);
   } finally {
     for (const id of [ids[1], ids[3]])

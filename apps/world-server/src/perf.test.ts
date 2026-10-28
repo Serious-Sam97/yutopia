@@ -90,9 +90,8 @@ test("reports checked, one per 20 s, with who and their snaps, sent in a batch; 
   await waitFor(() => pongs.length === 1);
   assert.equal(pongs[0], 1234.5);
 
-  // a move the server won't have (far off in one step): it puts them back — a snap
-  const p = room.state.players.get(room.sessionId);
-  room.send("pos", { x: p.x + 40, y: p.y, z: 0, l: p.level, d: 0, a: 1, seq: 1, mv: 0, yaw: 0, pitch: 0, mt: 1 });
+  // put somewhere by the server (to the arrival point): a snap
+  room.send("teleport", { to: "spawn" });
   await sleep(300);
 
   room.send("perf:report", report({ frames: { ...report().frames, fps: 99999, worst: -5 } }));

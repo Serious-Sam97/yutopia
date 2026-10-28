@@ -68,7 +68,7 @@ registerFeature((room: WorldRoom) => {
     const { w, h } = footprint(o.kind, o.rot);
     const cx = Math.max(o.x, Math.min(p.x, o.x + w));
     const cy = Math.max(o.y, Math.min(p.y, o.y + h));
-    return Math.hypot(p.x - cx, p.y - cy);
+    return room.reach3(p, fromSchema(o), Math.hypot(p.x - cx, p.y - cy), { x: cx, y: cy });
   };
   const laneOf = (race: SlotRace, sid: string) => [...race.cars.entries()].find(([, c]) => c.sid === sid)?.[0];
   const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });

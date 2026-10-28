@@ -1,14 +1,14 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, loaded, test, token, useWorld } from "./helpers";
+import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // First person, live: Ana sees the Lab from her own eyes (the 3D view's
-// "first" camera, a per-player setting), Bia in iso. The camera stands on
+// "first" camera, a per-player setting), Bia in third person. The camera stands on
 // Ana at eye height and she isn't drawn; where she looks (mouse look) is
 // where she faces, and Bia sees her turn; S walks her backwards without
 // turning; a click (the crosshair) walks her there and the camera comes
 // along; sitting drops the eyes and turns the view the seat's way; Y goes
-// back to third person, T to iso and T again to first person.
+// back to third person and again to first person.
 // Headless Chromium never grants a pointer lock, so the lock is stubbed as
 // in mouse-look.spec.ts.
 
@@ -58,7 +58,7 @@ function stubLock(page: Page) {
   return page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "1p", last3d: "1p", lookSens: 1, lookInvert: false }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "1p", lookSens: 1, lookInvert: false }));
     let el: Element | null = null;
     Object.defineProperty(Document.prototype, "pointerLockElement", { configurable: true, get: () => el });
     Element.prototype.requestPointerLock = function (this: Element) {
@@ -91,7 +91,7 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   expect(c0.y).toBeLessThan(1.9);
   expect(await myCardShown(page)).toBe(false);
 
-  // Bia, in iso, in her own browser; Ana goes to her
+  // Bia, in her own browser; Ana goes to her
   const ctxB = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const pageB = await ctxB.newPage();
   await enter(pageB, tokB, lab);
@@ -180,7 +180,7 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
     });
     await page.waitForTimeout(800);
     await page.screenshot({ path: `${shots}/live-ana-first-person.png` });
-    await pageB.screenshot({ path: `${shots}/live-bia-iso-of-first-person.png` });
+    await pageB.screenshot({ path: `${shots}/live-bia-of-first-person.png` });
   }
 
   // a sofa by the spawn: sitting drops the eyes and turns the view the seat's way
@@ -221,28 +221,24 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
     await page.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), id);
   }
 
-  // Y: third person (drawn again); T: iso; T: back to first person
+  // Y: third person (drawn again); Y: back to first person
   await page.keyboard.press("y");
   await expect.poll(async () => (await cam(page)).mode).toBe("chase");
   await expect.poll(() => myCardShown(page)).toBe(true);
   await page.keyboard.press("y");
   await expect.poll(async () => (await cam(page)).mode).toBe("first");
-  await page.keyboard.press("t");
-  await page.waitForFunction(
-    () => !(window as any).__yutopia.tp && (window as any).__yutopia.engine.app.canvas.style.visibility !== "hidden",
-  );
-  await loaded(page); // (the keys are held while the loading screen's up)
-  await page.keyboard.press("t");
-  await page.waitForFunction(() => (window as any).__yutopia.tp?.mode === "first", null, { timeout: 30_000 });
 
-  // Settings → View: the three choices, first person pressed; a click on
+  // Settings → View: the two choices, first person pressed; a click on
   // Third person takes the chase camera back
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("tab", { name: "View" }).click();
-  const first = page.getByRole("button", { name: "First person (beta)" });
+  const first = page.getByRole("button", { name: "First person", exact: true });
   await expect(first).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: "Isometric" })).toHaveAttribute("aria-pressed", "false");
-  await page.getByRole("button", { name: "Third person (beta)" }).click();
+  await expect(page.getByRole("button", { name: "Third person", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await page.getByRole("button", { name: "Third person", exact: true }).click();
   await expect.poll(async () => (await cam(page)).mode).toBe("chase");
   await expect(page.getByRole("button", { name: "Camera follows me" })).toBeVisible();
   if (shots) await page.screenshot({ path: `${shots}/live-ana-settings-view.png` });
@@ -251,7 +247,7 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   await page.evaluate(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", last3d: "3p" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p" }));
   });
 });
 
@@ -298,6 +294,6 @@ test("first person: my hands come up with the phone, and Settings can hide them"
   await page.evaluate(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", last3d: "3p", hands1p: true }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", hands1p: true }));
   });
 });

@@ -6,6 +6,7 @@ import {
   MOVE,
   MoveClock,
   type MoveEnv,
+  type MoveInput,
   type MoveSpec,
   MV_WINDED,
   newBody,
@@ -22,6 +23,7 @@ import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/
 import type { WorldController } from "../controller";
 import { actionOf } from "./bindings";
 import { afterFirstStep, MoveControls, type Press } from "./controls";
+import { FAST_X, FLY_ACROSS, FLY_RISE, FLY_SPRINT, FLY_TOP, P_CLIP, P_FAST, P_FLY } from "./powers";
 
 // My body in the world (docs/plan/29-the-move.md, phase 2): the movement core
 // run on its fixed step under the keys, the pad or a click-to-walk path, and
@@ -81,6 +83,71 @@ export interface WalkOut {
 
 const SPEC: MoveSpec = MOVE;
 const AIM_BLADE = 0.45; // (shared beam.ts AIM_BLADE: a copy — this chunk doesn't carry beam.ts)
+
+// an admin's powers (docs/plan/48-the-admin.md): fast, through walls, flying — the server holds
+// them and takes the moves they allow; here they're only how I move
+const FAST_SPEC: MoveSpec = {
+  ...MOVE,
+  walk: MOVE.walk * FAST_X,
+  jog: MOVE.jog * FAST_X,
+  sprint: MOVE.sprint * FAST_X,
+  crouch: MOVE.crouch * FAST_X,
+  aim: MOVE.aim * FAST_X,
+};
+/** The grid with nothing in the way (through walls): only the ground's height is kept. */
+function noWalls(grid: Grid): Grid {
+  const g = Object.create(grid) as Grid;
+  g.fitsAt = () => true;
+  g.clear = () => true;
+  return g;
+}
+/** A flier's step: across at a jog's pace (×3 sprinting), up while the jump's held, down while
+ *  sinking; never below the ground, nor through what's in the way (unless the grid lets it). */
+function stepFly(b: Body, inp: MoveInput, env: MoveEnv, dt: number, sinking: boolean, fast: boolean): StepEvents {
+  const k = fast ? FAST_X : 1;
+  const speed = FLY_ACROSS * (inp.sprint ? FLY_SPRINT : 1) * k;
+  const mag = Math.min(1, Math.hypot(inp.x, inp.y));
+  const tx = mag > 1e-3 ? (inp.x / Math.hypot(inp.x, inp.y)) * mag * speed : 0;
+  const ty = mag > 1e-3 ? (inp.y / Math.hypot(inp.x, inp.y)) * mag * speed : 0;
+  const ease = Math.min(1, dt * 8);
+  b.vx += (tx - b.vx) * ease;
+  b.vy += (ty - b.vy) * ease;
+  b.vz = ((inp.jump ? 1 : 0) - (sinking ? 1 : 0)) * FLY_RISE * k;
+  b.t += dt;
+  b.verb = null;
+  b.takeoff = -1;
+  b.rising = false;
+  // (on Jolt: its character, no gravity — over the fence, the ceiling in the way)
+  if (env.mover) {
+    if (b.z + b.vz * dt > FLY_TOP) b.vz = Math.max(0, (FLY_TOP - b.z) / dt);
+    env.mover.step(b, dt, 0, env.blocked, true);
+    if (mag > 0.05) b.yaw = inp.faceLook ? inp.look : Math.atan2(b.vy, b.vx);
+    b.gait = mag < 0.05 ? "still" : inp.sprint ? "sprint" : "jog";
+    return {};
+  }
+  const g = env.grid;
+  const nz = Math.min(FLY_TOP, b.z + b.vz * dt);
+  const fits = (x: number, y: number, z: number) => g.fitsAt(x, y, z) && g.clear(b, { x, y }, undefined, z);
+  let nx = b.x + b.vx * dt;
+  let ny = b.y + b.vy * dt;
+  // (into something: along it, one way or the other)
+  if (!fits(nx, ny, nz)) {
+    if (fits(nx, b.y, nz)) ny = b.y;
+    else if (fits(b.x, ny, nz)) nx = b.x;
+    else {
+      nx = b.x;
+      ny = b.y;
+    }
+  }
+  const ground = g.groundAt(nx, ny, nz);
+  b.x = nx;
+  b.y = ny;
+  b.z = Math.max(ground, nz);
+  b.up = b.z > ground + 0.05;
+  if (mag > 0.05) b.yaw = inp.faceLook ? inp.look : Math.atan2(b.vy, b.vx);
+  b.gait = mag < 0.05 ? "still" : inp.sprint ? "sprint" : "jog";
+  return {};
+}
 
 // the 8 facings (shared/iso.ts) as world angles, for my 3D facing
 const DIR_ANGLE = [
@@ -155,6 +222,13 @@ export class Walker {
   /** knocked down (a pool ball): no moving, no aim, no jump till up */
   fell = false;
   private torchOn = false;
+  /** an admin's powers on me (Player.powers), flying now (the power on, not switched off by a
+   *  double-tap of the jump), sinking (C or Ctrl held), held still by an admin */
+  powers = 0;
+  flying = false;
+  private sinking = false;
+  private spaceAt = 0;
+  heldStill = false;
   /** a gun in my hand, in 3D (world/dark/arms.ts says): aiming indoors too */
   armed = false;
   private dark: DarkHooks | null = null;
@@ -182,15 +256,36 @@ export class Walker {
     e.preventDefault();
     this.inventory();
   };
+  // flying (an admin's power): a double-tap of Space lands or takes off; C or Ctrl held sinks
+  private onFlyKey = (e: KeyboardEvent) => {
+    if (!(this.powers & P_FLY)) return;
+    const el = e.target as HTMLElement | null;
+    if (el?.isContentEditable || el?.tagName === "INPUT" || el?.tagName === "TEXTAREA") return;
+    const down = e.type === "keydown";
+    if (e.code === "KeyC" || e.code === "ControlLeft" || e.code === "ControlRight") this.sinking = down && this.flying;
+    if (e.code === "Space" && down && !e.repeat) {
+      const now = performance.now();
+      if (now - this.spaceAt < 300) {
+        this.flying = !this.flying;
+        this.spaceAt = 0;
+      } else this.spaceAt = now;
+    }
+  };
   constructor(readonly ctl?: WorldController) {
     window.addEventListener("pointerdown", this.onDown);
     window.addEventListener("pointerup", this.onUp);
-    if (ctl) window.addEventListener("keydown", this.onKey);
+    if (ctl) {
+      window.addEventListener("keydown", this.onKey);
+      window.addEventListener("keydown", this.onFlyKey);
+      window.addEventListener("keyup", this.onFlyKey);
+    }
   }
   dispose(): void {
     window.removeEventListener("pointerdown", this.onDown);
     window.removeEventListener("pointerup", this.onUp);
     window.removeEventListener("keydown", this.onKey);
+    window.removeEventListener("keydown", this.onFlyKey);
+    window.removeEventListener("keyup", this.onFlyKey);
     this.dark?.dispose();
     this.dark = null;
   }
@@ -294,7 +389,8 @@ export class Walker {
     const { move, presses } = this.controls.read(c.camYaw, c.camYaw, c.usePad);
     // the inventory open: standing still, no aim (the world doesn't stop), its own pad
     // (knocked down by a pool ball: where they fell till they're up — shared/pool-throw.ts KNOCK)
-    const frozen = !!this.dark?.frozen() || this.fell;
+    // (held still by an admin, too: docs/plan/48-the-admin.md)
+    const frozen = !!this.dark?.frozen() || this.fell || this.heldStill;
     if (frozen) {
       move.x = 0;
       move.y = 0;
@@ -344,13 +440,34 @@ export class Walker {
     // (run out, none until it's back to 25%: shared vitals.ts `drained`)
     this.focus = move.aim && this.torchOn && this.vitals.bat > 0 && !this.breath.drained;
 
-    const env: MoveEnv = { grid: c.grid, footing: c.footing, blocked: c.blocked };
+    // (an admin's powers: through walls, fast, flying)
+    const clip = (this.powers & P_CLIP) !== 0;
+    const fast = (this.powers & P_FAST) !== 0;
+    // my body on Jolt's world in 3D (docs/plan/50-the-volume.md C: its character moves me, through
+    // my own locked doors), the grid's way in iso and until Jolt's in
+    const room = this.ctl?.room;
+    const uid = room?.state.players.get(room.sessionId)?.uid ?? null;
+    const phys = this.ctl?.tp?.physicsBody(uid, this.ctl.level, clip, c.grid, this.flying) ?? null;
+    // (a private space I may not go into: its edge stops me like a wall — nobody's put back)
+    const shut = clip ? null : this.shutBy(uid);
+    const blocked = clip ? undefined : shut ? (x: number, y: number) => !!c.blocked?.(x, y) || shut(x, y) : c.blocked;
+    const env: MoveEnv = phys
+      ? { grid: phys.collider, mover: phys.mover, footing: c.footing, blocked }
+      : { grid: clip ? noWalls(c.grid) : c.grid, footing: c.footing, blocked };
+    const flying = this.flying;
+    if (flying) {
+      move.crouch = false;
+      move.crouchPressed = false;
+      move.dodgePressed = false;
+    }
     const events: StepEvents[] = [];
     let first = true;
     const alpha = this.clock.advance(dt, () => {
       this.prev = { ...this.body };
       if (path?.length) follow(this.body, path, move);
-      const ev = stepBody(this.body, move, env, SPEC);
+      const ev = flying
+        ? stepFly(this.body, move, env, STEP_DT, this.sinking, fast)
+        : stepBody(this.body, move, env, fast ? FAST_SPEC : SPEC);
       events.push(ev);
       const out = c.grid.onLand(this.body.x, this.body.y);
       if (ev.verb === "roll") spendRoll(this.vitals, this.breath, out);
@@ -436,6 +553,43 @@ export class Walker {
 
   /** Moved by (dx, dy, dz) from outside on purpose (up or down the stairs into the next
    *  floor's frame): the body goes on as it was. */
+  // A booth someone's talking in, or a room its owner locked, that I'm not let into (the server's
+  // own rule: world-server WorldRoom.mayEnter): stepping into it, I'm stopped at its edge and knock
+  // (once in 4 s). Null when there's none of either on my floor.
+  private knockedAt = 0;
+  private shutBy(uid: number | null): ((x: number, y: number) => boolean) | null {
+    const room = this.ctl?.room;
+    const map = this.ctl?.map;
+    const st = room?.state;
+    if (!room || !st || !map || uid === null) return null;
+    const closed = map.areas.some((a) => a.kind === "booth" || st.locks.has(a.key));
+    if (!closed) return null;
+    const here = st.players.get(room.sessionId)?.area ?? "";
+    return (x, y) => {
+      // (the floor's own room there: the one on top)
+      let a: (typeof map.areas)[number] | null = null;
+      for (const q of map.areas)
+        if (x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h && (!a || (q.priority ?? 0) > (a.priority ?? 0)))
+          a = q;
+      if (!a || a.key === here) return false;
+      const locked = st.locks.has(a.key);
+      if (a.kind !== "booth" && !locked) return false;
+      if (a.kind === "booth" && a.ownerId === uid && !locked) return false;
+      const key = a.key;
+      let taken = false;
+      st.players.forEach((q: { uid: number; area: string; bot: boolean }) => {
+        if (q.uid !== uid && q.area === key && !q.bot) taken = true;
+      });
+      if (!taken || st.boothGuests.has(`${key}:${uid}`)) return false;
+      const now = performance.now();
+      if (now - this.knockedAt > 4000) {
+        this.knockedAt = now;
+        room.send("knock", { area: key });
+      }
+      return true;
+    };
+  }
+
   shift(dx: number, dy: number, dz: number): void {
     for (const o of [this.body, this.prev, this.last]) {
       o.x += dx;
@@ -449,6 +603,15 @@ export class Walker {
     const room = this.ctl?.room;
     const me = room?.state.players.get(room.sessionId);
     this.torchOn = !!me?.torch;
+    // (an admin's powers, and an admin holding me still)
+    const pw = me?.admin ? (me?.powers ?? 0) : 0;
+    if (pw & P_FLY && !(this.powers & P_FLY)) this.flying = true;
+    if (!(pw & P_FLY)) {
+      this.flying = false;
+      this.sinking = false;
+    }
+    this.powers = pw;
+    this.heldStill = (me?.frozenUntil ?? 0) > Date.now();
     this.down = (me?.downAt ?? 0) > 0;
     this.fell = (me?.fellAt ?? 0) > 0;
     const st = me?.st;

@@ -123,9 +123,10 @@ test("walking in the park: round the fence (through the gate), the stands, the b
   const G = await import("./grounds.ts");
   const P = await import("./kart/park.ts");
   const walk = (x: number, z: number) => G.walkableTile(Math.floor(x), Math.floor(z));
-  // the fence, but its gate
-  assert.equal(walk(KART_FENCE.x0, KART_PARK.z), false);
-  assert.equal(walk(KART_GATE.x, KART_GATE.z), true);
+  // the fence (a wall on the tiles' edges, thin as it's drawn), but its gate
+  assert.equal(G.wallEdgeAt("v", KART_FENCE.x0, KART_PARK.z), true);
+  assert.equal(G.wallEdgeAt("h", KART_GATE.x, KART_GATE.z), false);
+  assert.equal(G.wallEdgeAt("h", KART_GATE.x + 10, KART_GATE.z), true);
   // the stands, the tower, the desk, the bowl's wall; its terrace's not walked up to
   const st = P.KART_STANDS[0];
   assert.equal(walk((st.x0 + st.x1) / 2, st.z + 2), false);

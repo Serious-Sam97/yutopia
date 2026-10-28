@@ -206,7 +206,9 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const v = shuttle.veh;
     if (!p || !has() || p.level !== 0 || !v.stop || riders.size >= 8 || p.busy === RIDING) return;
-    if (Math.hypot(p.x + off.x - v.x, p.y + off.y - v.z) > BOARD_REACH) return;
+    // (in three dimensions: shared reach.ts — the bus 3 m tall on the road)
+    const flat = Math.hypot(p.x + off.x - v.x, p.y + off.y - v.z);
+    if (Math.hypot(flat, room.upOff(p, { x: v.x - off.x, y: v.z - off.y }, 3)) > BOARD_REACH) return;
     riders.add(client.sessionId);
     p.busy = RIDING;
     v.riders = riders.size;
@@ -216,6 +218,7 @@ registerFeature((room: WorldRoom) => {
   room.on("mod:shuttle", (client) => {
     const p = room.state.players.get(client.sessionId);
     if (!p?.admin && !config.offline) return;
+    if (p?.admin) room.adminLog(p, "shuttle", null, "to HQ");
     [...riders].forEach((sid, i) => {
       alight(sid, i);
     });

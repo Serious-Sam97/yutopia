@@ -81,7 +81,7 @@ function NowOn() {
     return () => clearInterval(id);
   }, []);
   // where it's playing: the radio (or record player) I hear — each plays its own
-  const box = radio.id ? w?.engine?.getObject(radio.id) : undefined;
+  const box = radio.id ? w?.model?.getObject(radio.id) : undefined;
   const room = box && w ? areaAt(w.map, box.x + 0.5, box.y + 0.5)?.name : null;
   return (
     <div
@@ -196,10 +196,12 @@ function PresenceBar() {
   );
 }
 
-// My face, a menu: who I am and how I'm set, my look, settings, signing out.
+// My face, a menu: who I am and how I'm set, my look, settings, (an admin) running the
+// place, signing out.
 function MeMenu() {
   const t = useTr();
   const me = useHud((s) => s.me);
+  const isAdmin = useHud((s) => s.isAdmin);
   const [open, setOpen] = useState(false);
   // closes on Escape or a click elsewhere
   useEffect(() => {
@@ -216,7 +218,7 @@ function MeMenu() {
       window.removeEventListener("pointerdown", close);
     };
   }, [open]);
-  const go = (panel: "avatar" | "settings") => {
+  const go = (panel: "avatar" | "settings" | "admin") => {
     setOpen(false);
     hud.set({ panel: { kind: panel } });
   };
@@ -252,19 +254,22 @@ function MeMenu() {
             [
               ["avatar", "myLook", "people"],
               ["settings", "settings", "gear"],
+              ["admin", "runPlace", "key"],
             ] as const
-          ).map(([panel, label, icon]) => (
-            <button
-              key={panel}
-              type="button"
-              role="menuitem"
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-sm text-left hover:bg-white/5"
-              onClick={() => go(panel)}
-            >
-              <Icon name={icon} size={16} />
-              {t(label)}
-            </button>
-          ))}
+          )
+            .filter(([panel]) => panel !== "admin" || isAdmin)
+            .map(([panel, label, icon]) => (
+              <button
+                key={panel}
+                type="button"
+                role="menuitem"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-sm text-left hover:bg-white/5"
+                onClick={() => go(panel)}
+              >
+                <Icon name={icon} size={16} />
+                {t(label)}
+              </button>
+            ))}
           <div className="my-1 h-px" style={{ background: "var(--edge)" }} aria-hidden />
           <button
             type="button"

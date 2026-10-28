@@ -359,8 +359,8 @@ registerFeature((room: WorldRoom) => {
     const p = room.state.players.get(client.sessionId);
     const o = room.state.objects.get(String(m.id));
     if (!p || !o || !isLamp(fromSchema(o)) || objLevel(fromSchema(o), room.map) !== p.level) return;
-    if (Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5)) > 2.5) return;
     const def = fromSchema(o);
+    if (room.reach3(p, def, Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5))) > 2.5) return;
     void save({ ...def, props: { ...(def.props ?? {}), on: !!m.on } });
   });
 
@@ -370,7 +370,7 @@ registerFeature((room: WorldRoom) => {
     const sw = room.state.objects.get(String(m?.id ?? ""));
     const swDef = sw && fromSchema(sw);
     if (!p || !sw || !swDef || sw.kind !== "light_switch" || objLevel(swDef, room.map) !== p.level) return;
-    if (Math.hypot(p.x - (sw.x + 0.5), p.y - (sw.y + 0.5)) > 2.5) return;
+    if (room.reach3(p, swDef, Math.hypot(p.x - (sw.x + 0.5), p.y - (sw.y + 0.5))) > 2.5) return;
     const on = !!m.on;
     const lm = at(p.level);
     const where = areaAt(lm, sw.x + 0.5, sw.y + 0.5)?.key ?? null;
@@ -393,7 +393,8 @@ registerFeature((room: WorldRoom) => {
     const area = doorRoom(lm, def);
     const owner = area?.ownerId ?? null;
     const c = doorCentre(def);
-    const near = p.level === objLevel(def, room.map) && Math.hypot(p.x - c.x, p.y - c.y) <= 2.5;
+    // (a door's in its wall: no sight to it asked)
+    const near = room.reach3(p, def, Math.hypot(p.x - c.x, p.y - c.y), c, false) <= 2.5;
     // an owner's lock is theirs alone: nobody else (not an admin) opens it
     if (m.state === "locked" || current === "locked") {
       if (!mayLockDoor(lm, def, p))
@@ -405,6 +406,23 @@ registerFeature((room: WorldRoom) => {
         );
     } else if (!near) return;
     void save({ ...def, props: { ...(def.props ?? {}), state: m.state } }).then(() => room.rebuildGrid());
+  });
+  // an admin's (docs/plan/48-the-admin.md): any door no one owns, locked or unlocked from anywhere
+  // (an owner's lock stays theirs alone, as above)
+  room.on("mod:door", (client, m) => {
+    const p = room.state.players.get(client.sessionId);
+    const o = room.state.objects.get(String(m?.id ?? ""));
+    if (!p?.admin || !o || entry(o.kind).interact !== "door" || !doorLockable(o.kind)) return;
+    const def = fromSchema(o);
+    const lm = at(objLevel(def, room.map));
+    const area = doorRoom(lm, def);
+    if (area?.ownerId != null) return warn(client, `That's ${area.ownerName ?? "the owner"}'s lock.`);
+    const current = String(def.props?.state ?? doorStartState(o.kind) ?? "open");
+    if ((current === "locked") === !!m.locked) return;
+    void save({ ...def, props: { ...(def.props ?? {}), state: m.locked ? "locked" : "closed" } }).then(() =>
+      room.rebuildGrid(),
+    );
+    room.adminLog(p, m.locked ? "lock" : "unlock", null, "", `${area?.name ?? entry(o.kind).label} door`);
   });
 
   return {};

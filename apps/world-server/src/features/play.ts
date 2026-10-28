@@ -1,5 +1,6 @@
 import { footprint, PIANO_RANGE, USES } from "@yutopia/shared";
-import type { WorldRoom } from "../WorldRoom.ts";
+import { REACH_UP } from "@yutopia/shared/reach";
+import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
 
 // Using things: what someone's busy with (the arcade, the piano, a drink from
@@ -12,6 +13,8 @@ registerFeature((room: WorldRoom) => {
   room.on("use", (client, m) => {
     const p = room.state.players.get(client.sessionId);
     if (!p || p.busy.startsWith("ride:") || p.busy.startsWith("drive:")) return;
+    // (at something on the ground: not from high over it — shared reach.ts)
+    if (room.upOff(p, p, REACH_UP) > 0) return;
     const what = String(m?.what ?? "");
     p.busy = (USES as readonly string[]).includes(what) ? what : "";
   });
@@ -24,7 +27,7 @@ registerFeature((room: WorldRoom) => {
     const { w, h } = footprint(o.kind, o.rot);
     const cx = Math.max(o.x, Math.min(p.x, o.x + w));
     const cy = Math.max(o.y, Math.min(p.y, o.y + h));
-    if (Math.hypot(p.x - cx, p.y - cy) > REACH) return;
+    if (room.reach3(p, fromSchema(o), Math.hypot(p.x - cx, p.y - cy), { x: cx, y: cy }) > REACH) return;
     // a flood of notes is dropped (a stuck key, a script)
     const now = Date.now();
     const b = budget.get(client.sessionId) ?? { n: 0, at: now };

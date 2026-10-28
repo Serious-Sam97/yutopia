@@ -31,7 +31,7 @@ test("the verbs: a vault over a desk, onto an arcade, a roll, crouching and a sl
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase", reducedMotion: false }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", reducedMotion: false }));
   });
   await enter(page, await token(ANA), lab);
   await page.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {
@@ -117,7 +117,7 @@ test("the verbs: a vault over a desk, onto an arcade, a roll, crouching and a sl
       [ids.desk, ids.arcade, s] as const,
     );
     await expect
-      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.arcade))
+      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.arcade))
       .toBe(true);
     await page.waitForTimeout(800);
     await page.evaluate(() => {

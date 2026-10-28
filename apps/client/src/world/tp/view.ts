@@ -7,6 +7,7 @@ import {
   entry,
   floorOf,
   floorsOf,
+  type Grid,
   homeOf,
   isFloor,
   levelMap,
@@ -29,7 +30,7 @@ import {
 } from "@yutopia/shared";
 import { AIM_BLADE, BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
 import { LAMPS as GROUND_LAMPS, KART_LAND, standLights } from "@yutopia/shared/grounds";
-import { MV_AIM } from "@yutopia/shared/move";
+import { ALOFT, MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
   Box3,
@@ -85,6 +86,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { tr } from "@/lib/i18n";
+import type { Quality } from "@/lib/prefs";
 import { chars, loadChars } from "../art/chars-load";
 import { daylight, EYES_LIFT } from "../art/daylight";
 import { emoteUrl } from "../art/emotes";
@@ -92,10 +94,9 @@ import type { LightSource } from "../art/light";
 import type { people } from "../art/people-load";
 import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
-import { holdItems } from "../art/textures";
-import type { PuffKind } from "../engine";
 import { nearLift, unseen } from "../eyes";
 import { type Footprints, printLeft } from "../footprints";
+import type { PuffKind } from "../model";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
 import { BelowCull, boxInParent, HIDDEN_LAYER } from "./below-cull";
@@ -107,12 +108,14 @@ import { CASTER_LAYER } from "./grounds-stream";
 import type { GunFx } from "./guns3d";
 import { Hands1P, handsDoing } from "./hands1p";
 import { zt } from "./kit3d";
+import { type Gather, lazyMatrices, seal } from "./lazy-matrices";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
 import { Light3, landLight, litBalance, patchGrounds } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { mergeStill, PROXIED, shadowProxy } from "./merge-static";
 import { dirAngle, Person3, type PersonIn } from "./people3d";
 import { type Mats as CharMats, Person3D } from "./person3d";
+import { BrowserPhysics } from "./physics3d";
 import { Post3 } from "./post3d";
 import { Shroud3 } from "./shroud3d";
 import { fogFor, Surroundings, type Themes } from "./sky";
@@ -160,11 +163,15 @@ export type Body3 = Omit<PersonIn, "angle"> & {
   bot?: boolean;
 };
 
+// the lamps lit at a tier (the pool's first n)
+const lampsFor = (q: Quality) => (q === "high" ? LAMPS : q === "medium" ? 6 : q === "low" ? 3 : 2);
+
 export interface ViewOpts {
   themes: Themes; // the themes chunk (the sky, trees), shared with iso
   keys?: boolean; // its own keyboard (the demo); the live world reads keys itself
   tags?: boolean; // name tags over heads (default on)
   level?: number; // the floor to show (shared levels.ts; default: the map's own)
+  quality?: Quality; // the tier it starts at (Lowest: no antialiasing, for good)
 }
 
 // Clicks: on the floor (tiles) or on someone (their id, where on the page).
@@ -281,7 +288,7 @@ export class ThirdPersonView {
   private live = new LiveSurfaces();
   private light = new Light3();
   private post: Post3 | null = null;
-  quality: "high" | "medium" | "low" = "high";
+  quality: Quality = "high";
   private lamps = LAMPS;
   private nightLevel = 0;
   private dark = 0; // out under the sky: daylight.ts `dark`
@@ -401,7 +408,7 @@ export class ThirdPersonView {
     objects = onLevel(all, map);
     const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
     this.wellSig = wellsKey(wells);
-    this.renderer = new WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    this.renderer = new WebGLRenderer({ antialias: opts.quality !== "lowest", powerPreference: "high-performance" });
     // every render of the scene (mine, a car's mirror, the warm-up's): each floor's loose
     // pieces left out an area at a time when out of that camera's view (World3.cullLoose)
     this.scene.onBeforeRender = (_r, _s, cam) => {
@@ -752,7 +759,6 @@ void main() {
     this.scene.add(this.highlight, this.marker, this.earshotRing, this.live.root, this.builder.root);
     this.setHour(12);
     this.setQuality("high");
-    holdItems(true); // (the iso view's drawings wait for it: destroy)
   }
 
   // Little bursts, as iso's `puff`: warm sparks, confetti over a head (a card
@@ -1071,9 +1077,11 @@ void main() {
 
   mount(host: HTMLElement) {
     this.host = host;
+    this.startPhysics();
     const c = this.renderer.domElement;
     c.style.display = "block";
     c.style.touchAction = "none";
+    c.setAttribute("aria-label", "Yutopia world");
     host.appendChild(c);
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
@@ -1286,6 +1294,7 @@ void main() {
   private liftObjs: WorldObjectDef[] = [];
   private liftSince = new Map<string, number>();
   liftSway = 0; // (the car I'm riding: its sway, tiles)
+  liftRise = 0; // (and how far up from my floor its floor is, on the way: tiles)
   liftIn: string | null = null; // (the stop whose car I'm standing in, on my floor)
   setLifts(objects: WorldObjectDef[], since: Map<string, number>) {
     this.liftObjs = objects;
@@ -1314,6 +1323,7 @@ void main() {
         shown: level <= this.level, // (the floors above aren't drawn — kept, hidden)
         inside: level === this.level && o.id === this.liftIn,
         sway: level === this.level && motion.phase === "moving" ? this.liftSway : 0,
+        rise: level === this.level && o.id === this.liftIn && motion.phase === "moving" ? this.liftRise : 0,
       });
     }
     this.lifts3.sync(stops);
@@ -1597,9 +1607,9 @@ void main() {
   }
 
   // the ratio a fresh load picks on this screen at this quality
-  private ratioFor(q: "high" | "medium" | "low"): number {
+  private ratioFor(q: Quality): number {
     const dpr = window.devicePixelRatio || 1;
-    return q === "high" ? Math.min(2, dpr) : q === "medium" ? Math.min(1.5, dpr) : 1;
+    return q === "high" ? Math.min(2, dpr) : q === "medium" ? Math.min(1.5, dpr) : q === "low" ? 1 : 0.75;
   }
 
   // the screen's density changed (a moved window, a zoom): to the new one at once
@@ -1632,26 +1642,27 @@ void main() {
   }
 
   // High: shadows in detail, bloom and the finish; Medium: softer shadows, no
-  // finish; Low: no shadows, fewer lamps, 1× pixels.
+  // finish; Low: no shadows, fewer lamps, 1× pixels; Lowest: fewer still, ¾ of a
+  // pixel a pixel (and no antialiasing, from the start: ViewOpts).
   // A change mid-game (auto quality, Settings): every shader the new one needs (the lamps
   // lit, the shadows cast change them all) compiled first, a few a frame, against stand-ins
   // for the scene's lights — the scene drawn as it was meanwhile — then switched. At once,
   // every lit thing's shader was linked in one frame: 0.8 s here, seconds in Firefox.
-  private qualityTo: "high" | "medium" | "low" | null = null;
-  toQuality(q: "high" | "medium" | "low") {
+  private qualityTo: Quality | null = null;
+  toQuality(q: Quality) {
     if (q === (this.qualityTo ?? this.quality)) return;
     this.qualityTo = q;
     void this.compileFor(q).then(() => {
       if (!this.gone && this.qualityTo === q) this.setQuality(q);
     });
   }
-  private async compileFor(q: "high" | "medium" | "low") {
+  private async compileFor(q: Quality) {
     const r = this.renderer;
     // the lights as `q` has them (setQuality): how many lamps, which cast shadows
     const stand = new Scene();
     stand.fog = this.scene.fog;
     stand.environment = this.scene.environment;
-    const lamps = q === "high" ? LAMPS : q === "medium" ? 6 : 3;
+    const lamps = lampsFor(q);
     const torches = this.torch3.map((t) => t.spot as Object3D);
     const shown = (o: Object3D) => {
       for (let x: Object3D | null = o; x; x = x.parent) if (!x.visible) return false;
@@ -1663,7 +1674,7 @@ void main() {
       if (lamp >= 0 ? lamp >= lamps || !(o.parent && shown(o.parent)) : !shown(o)) return;
       const l = o.clone(false);
       l.visible = true; // (a lamp `q` lights that's off now)
-      if (o === this.sun) l.castShadow = q !== "low";
+      if (o === this.sun) l.castShadow = q === "high" || q === "medium";
       const t = torches.indexOf(o);
       if (t >= 0) l.castShadow = q === "high" && t === 0;
       stand.add(l);
@@ -1692,7 +1703,7 @@ void main() {
       const t0 = performance.now();
       const lot: Promise<unknown>[] = [];
       const to = r.getRenderTarget();
-      if (q !== "low") {
+      if (q === "high" || q === "medium") {
         this.warmTarget ??= new WebGLRenderTarget(4, 4, { colorSpace: LinearSRGBColorSpace });
         r.setRenderTarget(this.warmTarget);
       } else r.setRenderTarget(null);
@@ -1703,7 +1714,7 @@ void main() {
     }
   }
 
-  setQuality(q: "high" | "medium" | "low") {
+  setQuality(q: Quality) {
     this.quality = q;
     this.qualityTo = null;
     this.renderer.setPixelRatio(this.ratioFor(q));
@@ -1711,14 +1722,14 @@ void main() {
       this.ratioAtStart = this.renderer.getPixelRatio();
       this.dprAtStart = window.devicePixelRatio || 1;
     }
-    this.sun.castShadow = q !== "low";
+    this.sun.castShadow = q === "high" || q === "medium";
     const size = q === "high" ? 2048 : 1024;
     if (this.sun.shadow.mapSize.x !== size) {
       this.sun.shadow.mapSize.set(size, size);
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
     }
-    this.lamps = q === "high" ? LAMPS : q === "medium" ? 6 : 3;
+    this.lamps = lampsFor(q);
     // the first flashlight (mine) throws shadows on High — its shadow map drawn once now, so it's
     // there even while it's off (a shadow-casting light with no map yet: every lit draw failed —
     // "mismatch between texture format and sampler type" — and only the ink was left)
@@ -1729,7 +1740,7 @@ void main() {
     this.pool.forEach((l, i) => {
       l.visible = i < this.lamps;
     });
-    if (q !== "low") {
+    if (q === "high" || q === "medium") {
       if (this.post && this.post.lite !== (q === "medium")) {
         this.post.dispose();
         this.post = null;
@@ -2011,6 +2022,46 @@ void main() {
   // it (the iso view pans by screen x; here by the camera's right).
   /** Where the Grounds' coords (the building's) sit in my floor's 3D frame: the scene's x, z are
    *  theirs less (x, z); its height theirs plus y (docs/plan/28-the-car.md: the cars draw so). */
+  // ── the physics world (docs/plan/50-the-volume.md; tp/physics3d.ts): my body moves on it ──
+  private physics: BrowserPhysics | null = null;
+  private physicsAsked = false;
+  /** Jolt's world in the browser, made once the view's up (until it's in, the grid moves me). */
+  private startPhysics(): void {
+    if (this.physicsAsked) return;
+    this.physicsAsked = true;
+    void BrowserPhysics.start(this.scene, {
+      world: () => ({ building: this.building, objects: this.allObjects }),
+      at: () => {
+        const off = offsetOf(this.building, this.level);
+        return { x: this.camera.position.x + off.x, z: this.camera.position.z + off.y };
+      },
+      frameOf: (level) => {
+        const off = offsetOf(this.building, level);
+        return { ox: off.x, oy: off.y, elev: elevOf(level) };
+      },
+      frame: () => {
+        const off = offsetOf(this.building, this.level);
+        return { x: -off.x, y: -elevOf(this.level), z: -off.y };
+      },
+    })
+      .then((p) => {
+        if (this.gone) p.stop();
+        else this.physics = p;
+      })
+      .catch((e) => console.warn("[physics] the browser's world couldn't start:", e));
+  }
+  /** My body on Jolt's world (the walker's: input/walker.ts) — null till it's in. */
+  physicsBody(uid: number | null, level: number, clip: boolean, grid: Grid, fly = false) {
+    return this.physics?.body(uid, level, clip, grid, fly) ?? null;
+  }
+  /** Every solid near you as Jolt holds it, drawn over the scene (the admins'): on, or off. */
+  physicsDebug(on: boolean): void {
+    this.physics?.showShapes(on);
+  }
+  /** The physics world, when its shapes are drawn (the admin panel's counts). */
+  get physicsShown(): BrowserPhysics | null {
+    return this.physics?.shapesShown ? this.physics : null;
+  }
   groundsFrame(): { x: number; z: number; y: number; visible: boolean } {
     const off = offsetOf(this.building, this.level);
     return { x: off.x, z: off.y, y: elevOf(0) - elevOf(this.level), visible: !!this.around.grounds };
@@ -2127,9 +2178,12 @@ void main() {
       } else {
         const eye = me.a === 2 ? EYE - 0.3 : EYE;
         // up on something the camera's up there with you; in a jump it rides some of the
-        // way (you see yourself go up)
+        // way (you see yourself go up); flying, higher than any jump, all the rest of it
+        // (shared move ALOFT: docs/plan/49-the-height.md)
         const ground = me.a === 2 ? (me.z ?? 0) : (me.ground ?? 0);
-        const want = new Vector3(me.x, eye + ground + ((me.z ?? 0) - ground) * 0.55, me.y);
+        const air = (me.z ?? 0) - ground;
+        const rise = air <= ALOFT ? air * 0.55 : ALOFT * 0.55 + (air - ALOFT);
+        const want = new Vector3(me.x, eye + ground + rise, me.y);
         if (!this.targetReady) {
           this.target.copy(want);
           this.targetReady = true;
@@ -2222,6 +2276,10 @@ void main() {
     this.stepFlashes(dt);
     this.fadeWalls(dt);
     this.around.campus.cutAbove(this.insideBelowHome(me) ? STOREY - 0.15 : null);
+    // (Lowest, a weak CPU: the snow half as thick, the land built in fewer frames)
+    const lowest = this.quality === "lowest";
+    this.around.campus.lite = lowest;
+    if (this.around.grounds) this.around.grounds.lite = lowest;
     this.around.update(dt, this.camera.position, !me?.reduced, this.target);
     this.drawPrints(performance.now());
     this.drawCues(dt, !!me?.reduced);
@@ -2292,7 +2350,7 @@ void main() {
           onScreen:
             (!hidden3 && this.frustum.intersectsSphere(this.sphere)) ||
             (b.id === meId && first && this.handsOn && handsDoing(b) !== ""),
-          lowQuality: this.quality === "low",
+          lowQuality: this.quality === "low" || this.quality === "lowest",
         });
         this.snowFall(b, p3, dt, hidden3);
         if (p3.ready) {
@@ -2407,7 +2465,7 @@ void main() {
         this.pitch,
         // (a flip turns the body over: the hands drop out of view for it)
         this.lensFov !== null || (me.jump?.kind === "flip" && me.jump.stage === "air" && !me.reduced),
-        this.quality === "low",
+        this.quality === "low" || this.quality === "lowest",
       );
     } else if (this.hands) {
       // (out of first person: put by, ready for the next time)
@@ -2433,9 +2491,23 @@ void main() {
 
     if (!document.hidden) {
       const hands = this.hands?.shown ? this.hands : null;
-      // (what my floor hides from this camera left out of this one render: below-cull.ts)
-      this.cullBelow();
+      // the scene's matrices once, here — the cull below reads them, the render doesn't make
+      // them again (Low and Lowest: only where something moved, lazy-matrices.ts — and on the
+      // way, what of the land and the campus my floor might hide)
+      const slab = this.noCull ? null : this.world.slab();
+      if (this.quality === "low" || this.quality === "lowest") {
+        const g = this.gather;
+        g.root = this.around.root;
+        g.below = slab ? slab.slab.at.y - 0.02 : Number.NEGATIVE_INFINITY;
+        g.out.length = 0;
+        lazyMatrices(this.scene, slab ? g : null);
+        this.gathered = slab ? g.out : null;
+      } else this.scene.updateMatrixWorld();
+      this.scene.matrixWorldAutoUpdate = false;
+      this.matricesMade = true;
       try {
+        // (what my floor hides from this camera left out of this one render: below-cull.ts)
+        this.cullBelow(slab);
         if (this.post) this.post.render(dt > 0 && !me?.reduced, hands);
         else {
           this.renderer.render(this.scene, this.camera);
@@ -2449,6 +2521,9 @@ void main() {
         }
       } finally {
         this.below3.end();
+        this.scene.matrixWorldAutoUpdate = true;
+        this.matricesMade = false;
+        this.gathered = null;
       }
       this.drawTags(bodies);
     }
@@ -2480,8 +2555,9 @@ void main() {
   setMergeClear(on: boolean) {
     for (const b of this.floors.values()) b.world.setMergeClear(on);
   }
-  private cullBelow() {
-    const slab = this.noCull ? null : this.world.slab();
+  private gather: Gather = { root: this.scene, below: 0, out: [] };
+  private gathered: Gather["out"] | null = null;
+  private cullBelow(slab: ReturnType<World3["slab"]>) {
     this.below3.setSlab(slab?.slab ?? null, slab?.key ?? null);
     if (!slab) return;
     // (and its walls: solid ones hide what's outside below their top — not while faded)
@@ -2542,10 +2618,20 @@ void main() {
     // (the campus mesh by mesh: its groups move inside it — with my floor — so a group's box
     // can't be kept by its own place; each mesh's can, by its own world matrix)
     const eye = this.camera.getWorldPosition(this.eyeAt);
-    this.around.root.traverseVisible((o) => {
-      const d = o as Mesh & { isLine?: boolean };
-      if (d.isMesh || d.isLine) still(o);
-    });
+    const got = this.gathered;
+    if (got)
+      // (gathered by the matrices' pass: those low enough to be under my floor)
+      for (let i = 0; i < got.length; i += 2) {
+        const u = unit();
+        u.box.copy(got[i + 1] as Box3);
+        u.obj = got[i] as Object3D;
+        n++;
+      }
+    else
+      this.around.root.traverseVisible((o) => {
+        const d = o as Mesh & { isLine?: boolean };
+        if (d.isMesh || d.isLine) still(o);
+      });
     for (const o of this.stairs3.root.children) around(o, STAIRS_D / 2 + 1, STOREY + 1.5);
     for (const o of this.lifts3?.root.children ?? []) around(o, 2, STOREY + 0.5);
     units.length = n;
@@ -2579,14 +2665,22 @@ void main() {
       o.updateMatrix();
       o.matrixAutoUpdate = false;
     });
+    seal(root);
+  }
+
+  /** `root`'s world matrices made now (Low and Lowest: only where something moved). */
+  matrices(root: Object3D) {
+    if (this.quality === "low" || this.quality === "lowest") lazyMatrices(root);
+    else root.updateMatrixWorld();
   }
 
   // A still thing's world box, made again only when it moves; null if its bounds can't be
   // trusted (anything three itself doesn't cull by its box: particles, sprites, instances,
   // skinned or unculled meshes — their points move without the box knowing).
   private stillBoxes = new WeakMap<Object3D, { m: Matrix4; box: Box3 | null }>();
+  private matricesMade = false; // (this frame's, all of them: frame())
   private stillBox(o: Object3D): Box3 | null {
-    o.updateWorldMatrix(true, false);
+    if (!this.matricesMade) o.updateWorldMatrix(true, false);
     const had = this.stillBoxes.get(o);
     if (had?.m.equals(o.matrixWorld)) return had.box;
     let ok = true;
@@ -3791,7 +3885,7 @@ void main() {
     }
     if (this.onTouch(e)) return;
     this.pointer = { x: e.clientX, y: e.clientY };
-    if (this.buildMode) {
+    if (this.buildMode || this.floorHover) {
       const f = this.buildAt(e.clientX, e.clientY);
       this.events.buildMove?.(f.x, f.y, this.pointer);
     }
@@ -4033,11 +4127,14 @@ void main() {
   private pointer = { x: 0, y: 0 };
   private buildLook: BuildLook | null = null;
   private builder: BuildLayer;
-  setBuild(look: BuildLook | null) {
-    if (look) this.setLook(false);
-    this.buildMode = !!look;
+  // what build mode shows (and my arrival pin, outside it too: `on` false)
+  setBuild(look: BuildLook | null, on = !!look) {
+    if (on) this.setLook(false);
+    this.buildMode = on;
     this.buildLook = look;
   }
+  // the floor under the pointer wanted outside build mode too (picking my arrival point)
+  floorHover = false;
 
   // the floor under a point of the screen (tiles), or null looking up; `h`:
   // the point at that height instead (on a surface that high, in tiles)
@@ -4413,8 +4510,9 @@ void main() {
 
   private gone = false;
   destroy() {
+    this.physics?.stop();
+    this.physics = null;
     this.gone = true;
-    holdItems(false);
     this.shroud?.dispose();
     this.arms3?.dispose();
     const c = this.renderer.domElement;

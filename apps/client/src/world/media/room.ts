@@ -1,9 +1,7 @@
-import { hangSpot, hearingGain, TILE_H, TILE_W, topCentre, toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { hearingGain, topCentre, type WorldObjectDef } from "@yutopia/shared";
 import {
   displaySpot,
   GLASS,
-  glassCorners,
-  glassFacing,
   isDisplay,
   isRadio,
   type MediaState,
@@ -15,10 +13,8 @@ import {
   tvVolume,
   ytThumb,
 } from "@yutopia/shared/media";
-import { Container, Graphics, Matrix, Sprite, Texture } from "pixi.js";
 import { lang } from "@/lib/i18n";
 import { prefs } from "@/lib/prefs";
-import { glowSprite, placeGlow } from "../art/glow";
 import type { WorldController } from "../controller";
 import { hud } from "../store";
 import { MediaCard } from "./card";
@@ -35,14 +31,14 @@ export const MEDIA_CHUNK = "yutopia-media";
 //  · every TV shows what's on from anywhere in the space: YouTube's thumbnail
 //    or a Jellyfin item's picture on its glass (the live picture for the one
 //    Jellyfin TV in earshot), a progress line, ❚❚ when paused, a CRT's
-//    scanlines, its light on the floor at night; projectors beam onto their
-//    screen;
+//    scanlines (a canvas each, the 3D view's `pictures()`); projectors come on
+//    for a playing screen they reach;
 //  · in earshot, you hear it: the loudest YouTube TV (or the radio's YouTube)
 //    plays in the "On TV" card; every Jellyfin TV in earshot streams (the
 //    loudest few, each at its own volume), a stream that fails is tried again;
 //  · Watch makes the card big (YouTube) or shows the Jellyfin stream big.
 
-const S = 36; // px along a wall per tile (engine.mountWall)
+const S = 36; // px along a face per tile (the glass sizes in GLASS)
 const PROJECTOR_REACH = 7;
 const CARD_GRACE_MS = 2500;
 const MAX_JF_STREAMS = 3; // Jellyfin TVs streaming to me at once (the loudest)
@@ -53,20 +49,14 @@ const OFF_MS = 380; // … collapsing
 
 interface Glassed {
   def: WorldObjectDef;
-  sig: string; // what it was mounted for (moved / turned / lifted: mount again)
   canvas: HTMLCanvasElement;
   g: CanvasRenderingContext2D;
-  tex: Texture;
-  roots: Container[];
-  glow: Sprite; // its light on the floor at night
   wasOn: boolean;
   onAt: number; // performance.now() it came on (the CRT's warm-up), 0 = none
   offAt: number; // … went off (the collapse)
   img: { url: string; el: HTMLImageElement; ok: boolean } | null;
   drawn: string; // what's on the canvas now
   ver: number; // counts its paints (the 3D view uploads it only when this moves)
-  avg: number; // the picture's colour (its light at night)
-  avgAt: number;
 }
 
 interface Source {
@@ -93,7 +83,6 @@ const timeline = (m: MediaState): Timeline => ({
 
 export class MediaRoom {
   private screens = new Map<string, Glassed>();
-  private beams = new Map<string, Graphics>();
   private card: MediaCard;
   private yt: SyncedYouTube | null = null;
   private ytStarting = false;
@@ -116,7 +105,6 @@ export class MediaRoom {
   private watchLostAt = 0; // the watched thing went off (or away): the card lets go after a moment
   private cc = false; // subtitles on (watching a Jellyfin stream)
   private clockTimer = 0;
-  private sample = document.createElement("canvas");
   private lastRef = new Map<string, string>(); // what each TV showed (a new thing near me: its sound)
   private noise = 0;
 
@@ -149,8 +137,6 @@ export class MediaRoom {
       pointerEvents: "none",
     });
     document.body.append(this.jfHolder);
-    this.sample.width = 8;
-    this.sample.height = 6;
     const http = this.w.worldHttp;
     if (http) {
       void syncClock(http);
@@ -158,13 +144,13 @@ export class MediaRoom {
     }
   }
 
-  private get engine() {
-    return this.w.engine;
+  private get model() {
+    return this.w.model;
   }
 
   // ── what's on (for panels) ─────────────────────────────────────────────
   stateOf(id: string): MediaState | null {
-    return mediaAt(this.engine?.getObject(id));
+    return mediaAt(this.model?.getObject(id));
   }
 
   watch(id: string | null) {
@@ -178,32 +164,17 @@ export class MediaRoom {
 
   // ── the space's things changed ─────────────────────────────────────────
   refresh() {
-    const engine = this.engine;
-    if (!engine) return;
+    const model = this.model;
+    if (!model) return;
     const keep = new Set<string>();
-    for (const o of engine.allObjects()) {
-      if (o.kind === "projector") {
-        keep.add(o.id);
-        continue;
-      }
+    for (const o of model.allObjects()) {
       if (!isDisplay(o.kind)) continue;
       keep.add(o.id);
       const had = this.screens.get(o.id);
       if (had) had.def = o;
       else this.screens.set(o.id, this.make(o));
     }
-    for (const [id, s] of this.screens)
-      if (!keep.has(id)) {
-        this.unmount(s);
-        s.glow.destroy();
-        s.tex.destroy(true);
-        this.screens.delete(id);
-      }
-    for (const [id, b] of this.beams)
-      if (!keep.has(id)) {
-        b.destroy();
-        this.beams.delete(id);
-      }
+    for (const id of this.screens.keys()) if (!keep.has(id)) this.screens.delete(id);
   }
 
   private make(def: WorldObjectDef): Glassed {
@@ -217,84 +188,30 @@ export class MediaRoom {
     canvas.width = W;
     canvas.height = H;
     const g = canvas.getContext("2d", { willReadFrequently: false }) as CanvasRenderingContext2D;
-    const glow = glowSprite();
-    glow.zIndex = -0.4;
-    this.engine?.mountLive(glow);
     return {
       def,
-      sig: "",
       canvas,
       g,
-      tex: Texture.from(canvas),
-      roots: [],
-      glow,
       wasOn: false,
       onAt: 0,
       offAt: 0,
       img: null,
       drawn: "",
       ver: 0,
-      avg: 0x6080a0,
-      avgAt: 0,
     };
-  }
-
-  private unmount(s: Glassed) {
-    for (const r of s.roots) r.destroy({ children: true });
-    s.roots = [];
-    s.sig = "";
-  }
-
-  private mount(s: Glassed) {
-    const engine = this.engine;
-    if (!engine) return;
-    const o = s.def;
-    const sig = `${o.x}|${o.y}|${o.rot ?? 0}|${o.props?.z ?? 0}|${JSON.stringify(o.props?.c ?? null)}|${o.props?.wu ?? ""}|${o.props?.wz ?? ""}`;
-    if (sig === s.sig && s.roots.length) return;
-    this.unmount(s);
-    s.sig = sig;
-    const gl = GLASS[o.kind];
-    const W = s.canvas.width;
-    const H = s.canvas.height;
-    if (gl.wall) {
-      const pw = (gl.x1 - gl.x0) * S;
-      const ph = gl.z1 - gl.z0;
-      s.roots = engine.mountWallLive(o, gl.x0, gl.y - 0.1, gl.z1, pw, ph, () => {
-        const c = new Container();
-        const sp = new Sprite(s.tex);
-        sp.width = pw;
-        sp.height = ph;
-        c.addChild(sp);
-        return c;
-      });
-      return;
-    }
-    const c = glassCorners(o);
-    if (!c) return;
-    const tl = toScreen(c.tl[0], c.tl[1]);
-    const tr = toScreen(c.tr[0], c.tr[1]);
-    const root = new Container();
-    const sp = new Sprite(s.tex);
-    sp.width = W;
-    sp.height = H;
-    root.addChild(sp);
-    root.setFromMatrix(new Matrix((tr.x - tl.x) / W, (tr.y - tl.y) / W, 0, (c.zTop - c.zBot) / H, tl.x, tl.y - c.zTop));
-    engine.mountLive(root);
-    s.roots = [root];
   }
 
   // ── every frame ────────────────────────────────────────────────────────
   frame(dt: number, me: { x: number; y: number }) {
     this.dt = Math.min(0.25, Math.max(0, dt));
-    const engine = this.engine;
-    if (!engine) return;
+    const model = this.model;
+    if (!model) return;
     const now = serverNow();
-    const night = engine.nightLevel();
     const ear = { x: me.x, y: me.y };
     const sources: Source[] = [];
     for (const s of this.screens.values()) {
       const o = s.def;
-      const on = showsMedia(o) && !engine.showsShare(o.id);
+      const on = showsMedia(o) && !model.showsShare(o.id);
       const m = on ? mediaOf(o) : null;
       if (m?.item) {
         const spot = displaySpot(o);
@@ -307,10 +224,10 @@ export class MediaRoom {
         }
         this.lastRef.set(o.id, ref);
       } else this.lastRef.set(o.id, "");
-      this.drawScreen(s, m?.item ? m : null, now, night);
+      this.drawScreen(s, m?.item ? m : null, now);
     }
     // radios and record players playing YouTube: each its own, heard from where it is
-    for (const o of engine.allObjects()) {
+    for (const o of model.allObjects()) {
       if (!isRadio(o.kind)) continue;
       const m = mediaAt(o);
       if (!m?.item) continue;
@@ -319,7 +236,7 @@ export class MediaRoom {
     }
     for (const src of sources) if (src.gain <= 0) this.hidden.delete(src.id);
     this.letGo(sources);
-    this.drawProjectors(night);
+    this.lightProjectors();
     this.playYouTube(sources);
     this.playJellyfin(sources);
   }
@@ -345,28 +262,23 @@ export class MediaRoom {
   }
 
   // ── the picture on the glass ───────────────────────────────────────────
-  private drawScreen(s: Glassed, m: MediaState | null, now: number, night: number) {
+  private drawScreen(s: Glassed, m: MediaState | null, now: number) {
     const o = s.def;
-    // (the third-person view sees every side: it paints the glass too)
-    const facing = glassFacing(o) || !!this.engine?.seesAllSides;
     const t = performance.now();
-    const still = this.engine?.stillMotion() ?? false;
-    if (!m || !facing) {
+    const still = this.model?.stillMotion() ?? false;
+    if (!m) {
       // switched off: a CRT collapses to a line, then a dot; a flat screen fades
       if (s.wasOn) {
         s.wasOn = false;
-        s.offAt = still || !facing ? 0 : t;
+        s.offAt = still ? 0 : t;
       }
-      s.glow.visible = false;
-      if (s.offAt && t - s.offAt < OFF_MS && s.roots.length) {
+      if (s.offAt && t - s.offAt < OFF_MS) {
         this.paintOff(s, (t - s.offAt) / OFF_MS);
-        s.tex.source.update();
         s.ver++;
         s.drawn = "";
         return;
       }
       s.offAt = 0;
-      for (const r of s.roots) r.visible = false;
       return;
     }
     if (!s.wasOn) {
@@ -376,15 +288,6 @@ export class MediaRoom {
     }
     const warm = s.onAt && t - s.onAt < ON_MS ? (t - s.onAt) / ON_MS : null;
     if (warm === null) s.onAt = 0;
-    this.mount(s);
-    const front = this.engine?.frontKey(o.id);
-    const gl = GLASS[o.kind];
-    const alpha = this.engine?.partAlpha(o.id) ?? 1;
-    for (const r of s.roots) {
-      r.visible = alpha > 0;
-      r.alpha = alpha;
-      if (!gl.wall && front != null) r.zIndex = front + 0.004;
-    }
     const item = m.item;
     if (!item) return;
     // what goes on it: its live stream (a Jellyfin TV I'm near), or a picture
@@ -412,26 +315,12 @@ export class MediaRoom {
     const key =
       live || warm !== null
         ? `live|${t}`
-        : `${item.ref}|${s.img?.ok ? 1 : 0}|${m.paused ? 1 : 0}|${Math.floor(pos)}|${loading ? (this.engine?.stillMotion() ? "snow" : Math.floor(performance.now() / 120)) : ""}`;
+        : `${item.ref}|${s.img?.ok ? 1 : 0}|${m.paused ? 1 : 0}|${Math.floor(pos)}|${loading ? (still ? "snow" : Math.floor(performance.now() / 120)) : ""}`;
     if (key !== s.drawn) {
       s.drawn = key;
       this.paint(s, live ?? (s.img?.ok ? s.img.el : null), m, pos, loading, warm);
-      s.tex.source.update();
       s.ver++;
     }
-    // its light on the floor in front of it, at night (one soft sprite)
-    if (night > 0.05) {
-      if (t - s.avgAt > 400) {
-        s.avgAt = t;
-        s.avg = this.average(s.canvas, s.avg);
-      }
-      // (a wall display: further out from the wall it's on)
-      const spot = gl.wall ? hangSpot(o, 1) : displaySpot(o);
-      const c = toScreen(spot.x, spot.y + (gl.wall ? 0 : 0.6));
-      const k = gl.look === "screen" ? 1.6 : gl.wall ? 1.2 : 1;
-      const a = (m.paused ? 0.16 : 0.3) * night * alpha * (warm ?? 1);
-      placeGlow(s.glow, c.x, c.y, TILE_W * 2.9 * k, TILE_H * 2.9 * k, s.avg, a);
-    } else s.glow.visible = false;
   }
 
   private paint(
@@ -561,36 +450,14 @@ export class MediaRoom {
     }
   }
 
-  private average(c: HTMLCanvasElement, fallback: number): number {
-    try {
-      const g = this.sample.getContext("2d", { willReadFrequently: true });
-      if (!g) return fallback;
-      g.drawImage(c, 0, 0, 8, 6);
-      const d = g.getImageData(0, 0, 8, 6).data;
-      let r = 0;
-      let gg = 0;
-      let b = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        r += d[i];
-        gg += d[i + 1];
-        b += d[i + 2];
-      }
-      const n = d.length / 4;
-      const lift = (v: number) => Math.min(255, Math.round((v / n) * 1.3 + 30));
-      return (lift(r) << 16) | (lift(gg) << 8) | lift(b);
-    } catch {
-      return fallback;
-    }
-  }
-
-  // Projectors light up and beam onto the nearest playing screen they reach.
-  private drawProjectors(night: number) {
-    const engine = this.engine;
-    if (!engine) return;
+  // Projectors come on for the nearest playing screen they reach (the 3D view draws the beam).
+  private lightProjectors() {
+    const model = this.model;
+    if (!model) return;
     const playing = [...this.screens.values()].filter(
       (s) => (s.def.kind === "projector_screen" || s.def.kind === "cinema_screen") && !!mediaOf(s.def)?.item,
     );
-    for (const o of engine.allObjects()) {
+    for (const o of model.allObjects()) {
       if (o.kind !== "projector") continue;
       const c = topCentre(o);
       let best: Glassed | null = null;
@@ -604,52 +471,7 @@ export class MediaRoom {
         }
       }
       const on = !!best && !mediaOf(best.def)?.paused;
-      if (!!o.props?.on !== on) engine.upsertObject({ ...o, props: { ...(o.props ?? {}), on } });
-      let g = this.beams.get(o.id);
-      if (!g) {
-        g = new Graphics();
-        engine.mountLive(g);
-        this.beams.set(o.id, g);
-      }
-      g.clear();
-      if (!on || !best) continue;
-      const k = glassCorners(best.def);
-      if (!k) continue;
-      const lens = toScreen(c.x + 0.25, c.y);
-      const z = (Number(o.props?.z) || 0) + 4;
-      const tl = toScreen(k.tl[0], k.tl[1]);
-      const tr = toScreen(k.tr[0], k.tr[1]);
-      const pts = [
-        lens.x,
-        lens.y - z,
-        tl.x,
-        tl.y - k.zTop,
-        tr.x,
-        tr.y - k.zTop,
-        tr.x,
-        tr.y - k.zBot,
-        tl.x,
-        tl.y - k.zBot,
-      ];
-      // the beam: a wide soft cone, a brighter core toward the middle of the
-      // picture, the lens glowing (stronger in the dark)
-      const color = mixColor(0xfff3cf, best.avg || 0xfff3cf, 0.45);
-      g.poly(pts).fill({ color, alpha: 0.05 + 0.13 * night });
-      const mid = (ax: number, ay: number, bx: number, by: number) => [ax + (bx - ax) * 0.3, ay + (by - ay) * 0.3];
-      const cx = (tl.x + tr.x) / 2;
-      const cyTop = (tl.y + tr.y) / 2 - k.zTop;
-      const cyBot = (tl.y + tr.y) / 2 - k.zBot;
-      const core = [
-        lens.x,
-        lens.y - z,
-        ...mid(cx, cyTop, tl.x, tl.y - k.zTop),
-        ...mid(cx, cyTop, tr.x, tr.y - k.zTop),
-        ...mid(cx, cyBot, tr.x, tr.y - k.zBot),
-        ...mid(cx, cyBot, tl.x, tl.y - k.zBot),
-      ];
-      g.poly(core).fill({ color: 0xfffaf0, alpha: 0.04 + 0.12 * night });
-      g.circle(lens.x, lens.y - z, 2.2).fill({ color: 0xfffaf0, alpha: 0.35 + 0.5 * night });
-      g.zIndex = (engine.frontKey(o.id) ?? c.x + c.y) + 0.01;
+      if (!!o.props?.on !== on) model.upsertObject({ ...o, props: { ...(o.props ?? {}), on } });
     }
   }
 
@@ -881,7 +703,7 @@ export class MediaRoom {
     return s ? { for: { id: s.id, ref: s.ref }, ready: s.p.ready, drift: s.p.drift, failed: s.p.failed } : null;
   }
 
-  // for the third-person view: every display's canvas (what the iso view maps onto its glass)
+  // for the 3D view: every display's canvas (what it puts on the glass)
   pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean; version: number }[] {
     return [...this.screens.values()].map((s) => ({ def: s.def, canvas: s.canvas, on: s.wasOn, version: s.ver }));
   }
@@ -892,19 +714,6 @@ export class MediaRoom {
     this.stopJellyfin();
     this.card.destroy();
     this.jfHolder.remove();
-    for (const s of this.screens.values()) {
-      this.unmount(s);
-      s.glow.destroy();
-      s.tex.destroy(true);
-    }
-    for (const b of this.beams.values()) b.destroy();
     this.screens.clear();
-    this.beams.clear();
   }
-}
-
-// a over b by t (0 = a, 1 = b), per channel
-function mixColor(a: number, b: number, t: number): number {
-  const ch = (sh: number) => Math.round(((a >> sh) & 255) * (1 - t) + ((b >> sh) & 255) * t);
-  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
 }

@@ -12,6 +12,9 @@ import { Client, type Room } from "colyseus.js";
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
+// (no physics world: the visitors start for the benches when the room does, and Jolt's start
+// shifts when that is — the seats they take here are timed against it)
+process.env.YUTOPIA_PHYSICS = "0";
 
 const PORT = 26470 + Math.floor(Math.random() * 100);
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };

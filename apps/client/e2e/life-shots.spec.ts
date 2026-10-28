@@ -16,7 +16,7 @@ test("the look: what moves, in the game", async ({ page }) => {
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "free", quality: "high" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "free", quality: "high" }));
   });
   await enter(page, await token(ANA));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });

@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, type Page, test } from "@playwright/test";
-import { ANA, enter, token, useWorld } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // Desks come bare and you dress them, Sims-style: things from the "On desks &
 // tables" tab go on a quarter-tile grid on the top (several per tile), move
@@ -11,9 +11,9 @@ const SHOTS = process.env.YUTOPIA_SHOTS;
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -43,8 +43,8 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
       ([id, d]) => (window as any).__yutopia.send("obj:put", { id, kind: "desk", x: d.x, y: d.y, rot: 0 }),
       [desk, D] as const,
     );
-    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), desk)).toBe(true);
-    await page.evaluate((d) => (window as any).__yutopia.engine.pinCamera({ x: d.x + 1, y: d.y + 0.5, zoom: 3 }), D);
+    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), desk)).toBe(true);
+    await holdCamera(page, { at: { x: D.x + 1, y: D.y + 0.5 }, dist: 4.5, pitch: 1.0 });
     await page.evaluate(() => {
       const h = (window as any).__hud;
       h.set({ build: { ...h.get().build, on: true, tool: "furniture", mode: "hand", selected: [] } });
@@ -112,7 +112,7 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
     await page.waitForTimeout(250);
     await page.mouse.up();
     await expect
-      .poll(() => page.evaluate((id) => (window as any).__yutopia.engine.getObject(id)?.y, desk))
+      .poll(() => page.evaluate((id) => (window as any).__yutopia.model.getObject(id)?.y, desk))
       .toBe(D.y - 2);
     await expect
       .poll(async () => (await mine()).every((t) => placed.find((p) => p.id === t.id)?.y === t.y + 2))
@@ -120,7 +120,7 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
 
     // ── turn it (it's selected after the drop): they turn with it
     await page.keyboard.press("r");
-    await expect.poll(() => page.evaluate((id) => (window as any).__yutopia.engine.getObject(id)?.rot, desk)).toBe(1);
+    await expect.poll(() => page.evaluate((id) => (window as any).__yutopia.model.getObject(id)?.rot, desk)).toBe(1);
     await expect.poll(async () => (await mine()).every((t) => t.rot === 1)).toBe(true);
     await page.keyboard.press("Escape");
   } finally {
@@ -155,7 +155,7 @@ test("the bin takes only what's dropped on it", async ({ page }) => {
       [a, b, P] as const,
     );
     await expect.poll(() => exists(b)).toBe(true);
-    await page.evaluate((p) => (window as any).__yutopia.engine.pinCamera({ x: p.x + 2, y: p.y, zoom: 2 }), P);
+    await holdCamera(page, { at: { x: P.x + 2, y: P.y + 1 }, dist: 7 });
     await page.evaluate(() => {
       const h = (window as any).__hud;
       h.set({ build: { ...h.get().build, on: true, tool: "furniture", mode: "hand", selected: [] } });
@@ -183,7 +183,7 @@ test("the bin takes only what's dropped on it", async ({ page }) => {
     await page.mouse.move(to.x, to.y, { steps: 6 });
     await page.waitForTimeout(150);
     await page.mouse.click(to.x, to.y);
-    await expect.poll(() => page.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.y, b)).toBe(P.y + 2);
+    await expect.poll(() => page.evaluate((i) => (window as any).__yutopia.model.getObject(i)?.y, b)).toBe(P.y + 2);
     await page.waitForTimeout(600);
     expect(await exists(b)).toBe(true);
     // and dragging something onto the bin still removes it

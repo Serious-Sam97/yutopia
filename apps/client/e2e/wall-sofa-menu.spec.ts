@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, test, token, useWorld } from "./helpers";
+import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // Three fixes, in the Lab (everything put out is removed after): things that
 // hang on a wall go on a west wall too (turned, rot 3); people stay clickable
@@ -9,9 +9,9 @@ import { ANA, enter, test, token, useWorld } from "./helpers";
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -83,16 +83,13 @@ test("wall things hang on a west wall", async ({ page }) => {
   try {
     await put(page, { id, kind: "whiteboard", x, y, rot: 3, props: {} });
     await expect.poll(() => obj(page, id)).toEqual({ x, y, rot: 3 });
-    await page.evaluate(
-      ([cx, cy]) => (window as any).__yutopia.engine.pinCamera({ x: cx, y: cy, zoom: 2.4 }),
-      [x + 1.5, y + 1.5],
-    );
-    await page.waitForTimeout(800);
-    // drawn on that wall: its outline runs along y (taller than wide on screen
-    // would be wrong for a wall board; its hull spans the wall's slope instead)
-    const hull = await page.evaluate((i) => (window as any).__yutopia.engine.hullOf(i), id);
-    expect(hull?.length).toBeGreaterThan(4);
-    await page.screenshot({ path: test.info().outputPath("west-wall.png") });
+    // drawn on that wall: its box in the 3D view runs along y, thin across it
+    await page.waitForFunction((i) => (window as any).__yutopia.tp.world.picks.some((p: any) => p.id === i), id, {
+      timeout: 15_000,
+    });
+    const box = await page.evaluate((i) => (window as any).__yutopia.tp.world.picks.find((p: any) => p.id === i), id);
+    expect(box.y1 - box.y0).toBeGreaterThan(1.2);
+    expect(box.x1 - box.x0).toBeLessThan(0.6);
 
     // (turning one now takes it over to its wall's other side: wall-faces.spec.ts)
   } finally {
@@ -106,22 +103,18 @@ test("after build mode, people (and you) are clickable again", async ({ page }) 
   await enter(page, tok, await useWorld("lab"));
   await setBuild(page, { on: true, tool: "furniture", mode: "hand", selected: [] });
   await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
-  await expect.poll(() => page.evaluate(() => (window as any).__yutopia.engine.passAvatars)).toBe(true);
+  await expect.poll(() => page.evaluate(() => (window as any).__yutopia.model.passAvatars)).toBe(true);
   // out with Esc, the way people leave it
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await expect.poll(() => page.evaluate(() => (window as any).__hud.get().build.on)).toBe(false);
-  expect(await page.evaluate(() => (window as any).__yutopia.engine.passAvatars)).toBe(false);
+  expect(await page.evaluate(() => (window as any).__yutopia.model.passAvatars)).toBe(false);
   // click myself: my menu
-  const me = await page.evaluate(() => (window as any).__yutopia.meTile());
-  await page.evaluate(
-    ([cx, cy]) => (window as any).__yutopia.engine.pinCamera({ x: cx, y: cy, zoom: 2 }),
-    [me.x, me.y],
-  );
+  await holdCamera(page);
   await page.waitForTimeout(400);
   const p = await page.evaluate(() => {
     const w = (window as any).__yutopia;
-    return w.engine.avatars.get(w.room.sessionId).state;
+    return w.model.avatarAt(w.room.sessionId);
   });
   await clickAt(page, p.x, p.y, 40);
   await expect(page.getByRole("menu")).toBeVisible();
@@ -138,10 +131,7 @@ test("the sofa: click it, Sit, and you sit on it", async ({ page }) => {
   try {
     await put(page, { id, kind: "sofa", x: X, y: Y, rot: 0, props: {} });
     await expect.poll(() => obj(page, id)).toEqual({ x: X, y: Y, rot: 0 });
-    await page.evaluate(
-      ([cx, cy]) => (window as any).__yutopia.engine.pinCamera({ x: cx, y: cy, zoom: 2 }),
-      [X + 1.5, Y + 1],
-    );
+    await holdCamera(page);
     await page.waitForTimeout(500);
     await clickAt(page, X + 1.5, Y + 0.5, 14);
     const menu = page.getByRole("menu", { name: /Sofa/ });

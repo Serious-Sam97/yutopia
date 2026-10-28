@@ -91,7 +91,7 @@ async function sweep(page: any, per: number, seed: number): Promise<Cam[]> {
       for (let i = 0; i < per; i++) {
         const hour = i % 2 ? 21.5 : 13;
         c.hour = hour;
-        c.engine?.setClock(hour);
+        c.model.setClock(hour);
         tp.setHour(hour);
         const free = i % 2 === 1;
         tp.yaw = rnd() * Math.PI * 2;
@@ -164,7 +164,7 @@ test.describe("drawn merged", () => {
     await page.addInitScript(() => {
       const k = "yutopia:prefs";
       const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-      localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase", quality: "high" }));
+      localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", quality: "high" }));
     });
     await enter(page, await token(BIA));
     await page.waitForFunction(() => !!(window as any).__yutopia?.tp, null, { timeout: 90_000 });

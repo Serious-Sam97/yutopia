@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdminAction;
 use App\Models\Game;
 use App\Models\LastSpot;
 use App\Models\PerfReport;
@@ -16,12 +17,16 @@ use App\Services\Worlds;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 // The world-server's side door (/api/internal/*, signed: VerifyInternalSignature).
 // It loads the world when it starts, writes every edit and live prop back, keeps
 // pets, arrival points and desks, and asks Vortex what to say.
 class InternalController extends Controller
 {
+    // (shared admin.ts LOG_KINDS: what the log takes)
+    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite'];
+
     public function __construct(private readonly Worlds $worlds) {}
 
     public function ping(): JsonResponse
@@ -107,7 +112,8 @@ class InternalController extends Controller
             // the floor it's on (the building's, see layout); none: the home floor
             'spawn.level' => ['nullable', 'integer', 'between:0,12'],
         ]);
-        User::findOrFail($userId);
+        // (saved every minute someone's in, and as they leave: when they were last seen)
+        User::findOrFail($userId)->forceFill(['seen_at' => now()])->saveQuietly();
         if ($data['spawn'] === null) {
             Spawn::where('user_id', $userId)->delete();
 
@@ -533,5 +539,21 @@ class InternalController extends Controller
         ];
 
         return $p === '' ? $rules : ['objects' => ['present', 'array', 'max:2000']] + $rules;
+    }
+
+    // what an admin did in the world (docs/plan/48-the-admin.md): the world server tells us
+    public function adminLog(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'adminId' => ['required', 'integer'],
+            'kind' => ['required', 'string', Rule::in(self::LOG_KINDS)],
+            'targetId' => ['nullable', 'integer'],
+            'target' => ['nullable', 'string', 'max:160'],
+            'detail' => ['nullable', 'string', 'max:200'],
+        ]);
+        $target = isset($data['targetId']) ? User::find($data['targetId']) : null;
+        AdminAction::record(User::find($data['adminId']), $data['kind'], $target, $data['detail'] ?? '', $data['target'] ?? '');
+
+        return response()->json(['ok' => true], 201);
     }
 }

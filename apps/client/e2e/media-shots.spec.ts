@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { canPlace, findPath, Grid, Q, topAt, type WorldObjectDef } from "@yutopia/shared";
-import { ANA, enter, test, token, useWorld } from "./helpers";
+import { ANA, enter, holdCamera, holdHour, test, token, useWorld } from "./helpers";
 
 // Review shots for media on TVs (docs/plan/10-media.md): the new screens in the
 // Lab, each with something on (YouTube thumbnails; one paused), by day and by
@@ -36,7 +36,7 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
       const y = (window as any).__yutopia;
       return {
         map: JSON.parse(JSON.stringify(y.map)),
-        objects: y.engine.allObjects(),
+        objects: y.model.allObjects(),
         bodies: [...y.room.state.players.values()].map((p: any) => ({ x: p.x, y: p.y })),
       };
     });
@@ -121,27 +121,21 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
     if (paused) await page.evaluate((i) => (window as any).__yutopia.send("media:ctl", { id: i, op: "pause" }), paused);
     await page.waitForTimeout(4000); // thumbnails load, the media chunk draws
     const sheet = await page.addStyleTag({ content: `.ymc,.ymc-back{display:none!important}` });
-    for (const [when, level] of [
-      ["day", 0],
-      ["night", 0.85],
+    // (from the screens' side of the room, looking north-west)
+    await page.evaluate((at) => (window as any).__yutopia.teleport({ x: at.x + 2, y: at.y + 3 }), R);
+    await page.waitForTimeout(2000);
+    for (const [when, hour] of [
+      ["day", 12],
+      ["night", 22],
     ] as const) {
-      await page.evaluate(
-        ([at, night]) => {
-          const c = (window as any).__yutopia;
-          c.updateNight = () => {};
-          c.engine.setNight(night);
-          c.engine.pinCamera({ x: at.x + 2, y: at.y + 3, z: 30, zoom: 1.7 });
-        },
-        [R, level] as const,
-      );
+      await holdHour(page, hour);
+      await holdCamera(page, { pitch: 0.7, dist: 7 });
       await page.waitForTimeout(900);
       await page.screenshot({ path: `${dir}/media-${when}.png` });
     }
     await sheet.evaluate((el) => el.remove());
     await page.evaluate(() => {
-      const c = (window as any).__yutopia;
-      c.engine.setNight(0);
-      c.engine.pinCamera(null);
+      (window as any).__yutopia.tp.mode = "chase";
     });
     // the remote for the HD TV, its YouTube and Jellyfin tabs
     const hd = ids.find((i) => i.includes("tv_hd")) as string;
@@ -160,7 +154,7 @@ test("media shots: the new screens by day and night, the remote", async ({ page 
     }
     // a radio's panel (the Lab may have none: then skip it)
     const radio = await page.evaluate(() =>
-      (window as any).__yutopia.engine.allObjects().find((o: any) => o.kind === "radio" || o.kind === "turntable"),
+      (window as any).__yutopia.model.allObjects().find((o: any) => o.kind === "radio" || o.kind === "turntable"),
     );
     if (radio) {
       await page.evaluate((i) => (window as any).__hud.set({ panel: { kind: "radio", objectId: i } }), radio.id);

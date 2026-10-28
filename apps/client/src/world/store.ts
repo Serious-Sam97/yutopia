@@ -60,6 +60,7 @@ export type PanelKind =
   | "pets"
   | "computer"
   | "motors" // the car dealer's (car/cars.ts registers it: docs/plan/43-the-spot.md)
+  | "admin" // Run the place: admins only (docs/plan/48-the-admin.md)
   | null;
 
 // A pet in the room (shared/pets.ts), as the panel and the menus see it.
@@ -219,6 +220,7 @@ export interface HudState {
   worldName: string; // the one world's name (the API's YUTOPIA_WORLD_NAME)
   canBuild: boolean; // everyone, with a real account
   isAdmin: boolean; // mutes, kicks, locks
+  removed: { uid: number; name: string; until: number }[]; // (admins) removed for a while
   me: Person | null;
   people: Person[];
   side: SideTab | null; // the right-hand panel and its tab
@@ -337,6 +339,7 @@ const initial: HudState = {
   worldName: "",
   canBuild: false,
   isAdmin: false,
+  removed: [],
   me: null,
   people: [],
   side: null,

@@ -133,16 +133,21 @@ test("into a lot car, driven, a passenger beside, out — and it's parked where 
   await waitFor(() => v().seq === 40);
   assert.ok(Math.hypot(v().x - x, v().z - z) < 0.01, "it is where the driver says");
   assert.ok(Math.abs(me(a).x + OFF.x - x) < 2.5, "the driver is carried in it");
-  // a state no car could get to: put back
+  // faster than any car goes: believed all the same (no put-backs — the user's call, 2026-10-28);
+  // only a state that isn't numbers is let go
   let snapped = false;
   a.onMessage("car:snap", () => {
     snapped = true;
   });
-  a.send("car:state", wire(41, 80));
-  await waitFor(() => snapped);
-  assert.ok(Math.hypot(v().x - x, v().z - z) < 0.01, "not believed");
+  a.send("car:state", { ...wire(41, 80), x: Number.NaN });
+  await sleep(150);
+  assert.ok(Math.hypot(v().x - x, v().z - z) < 0.01, "not numbers: let go");
+  a.send("car:state", wire(42, 80));
+  await waitFor(() => v().seq === 42);
+  assert.equal(snapped, false, "nobody put back");
+  await sleep(60); // (states closer together than the car's rate are dropped)
   // stopped, both out: it parks where it is, at its heading
-  a.send("car:state", { ...wire(42), vx: 0, vz: 0 });
+  a.send("car:state", { ...wire(43), vx: 0, vz: 0 });
   await sleep(80);
   a.send("car:leave", {});
   b.send("car:leave", {});

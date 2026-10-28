@@ -43,7 +43,7 @@ test("a Grand Prix on each layout: changed, its show waited out, eight karts hom
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase" }));
   });
   await enter(page, await token(ANA));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });

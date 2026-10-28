@@ -1,4 +1,15 @@
-import { BODY_R, inLift, inLiftDoorway, liftFront, objLevel, type WorldObjectDef } from "@yutopia/shared";
+import {
+  across,
+  BODY_R,
+  floorAt,
+  inLift,
+  inLiftDoorway,
+  liftFront,
+  objLevel,
+  rideAt,
+  STOREY,
+  type WorldObjectDef,
+} from "@yutopia/shared";
 import type { Player } from "../schema.ts";
 import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -13,7 +24,10 @@ import { registerFeature } from "./index.ts";
 // indicator over the doors). Like a real one, the doors don't shut on someone
 // in the doorway, and stay open while someone's in the car with nowhere to go
 // (they pick a floor, or walk out). Not stored: a restart starts every car
-// shut at the home floor.
+// shut at the home floor. On the way the car carries its riders up (or down)
+// the shaft, the building's one space (docs/plan/50-the-volume.md, D): each
+// tick where it is, their floor the one it's passing (shared floorAt), their
+// own clients moving them the same from the stops' props.
 
 const OPEN_MS = 7000; // doors stay open this long with nobody coming or going
 const CLOSE_MS = 1300; // the doors closing (drawn eased over this)
@@ -32,6 +46,7 @@ interface Car {
   queue: number[]; // floors it's been called or sent to, in order
   phase: Phase;
   until: number; // when this phase ends (open: when the doors close by themselves)
+  since: number; // when this phase began (a ride's start)
   riders: { sid: string; dx: number; dy: number }[];
 }
 
@@ -49,7 +64,7 @@ registerFeature((room: WorldRoom) => {
     if (!c) {
       const floors = stops(shaft).map((o) => objLevel(o, room.map));
       const at = floors.includes(room.home) ? room.home : (floors.sort((a, b) => a - b)[0] ?? room.home);
-      c = { shaft, at, to: null, queue: [], phase: "shut", until: 0, riders: [] };
+      c = { shaft, at, to: null, queue: [], phase: "shut", until: 0, since: 0, riders: [] };
       cars.set(shaft, c);
       show(c); // (every stop learns where it is: the shaft is empty elsewhere)
     }
@@ -110,7 +125,7 @@ registerFeature((room: WorldRoom) => {
     const def = fromSchema(o);
     const front = liftFront(def);
     if (objLevel(def, room.map) !== p.level) return;
-    if (!inLift(def, p) && Math.hypot(p.x - front.x, p.y - front.y) > REACH) return;
+    if (!inLift(def, p) && room.reach3(p, def, Math.hypot(p.x - front.x, p.y - front.y), front) > REACH) return;
     go(car(shaftOf(def)), p.level);
   });
 
@@ -158,7 +173,32 @@ registerFeature((room: WorldRoom) => {
           .map((p) => ({ sid: p.sid, dx: p.x - from.x, dy: p.y - from.y }))
       : [];
     c.phase = "moving";
+    c.since = now;
     c.until = now + RIDE_MS + FLOOR_MS * Math.abs((c.to ?? c.at) - c.at);
+    for (const r of c.riders) room.carried.add(r.sid);
+  };
+
+  // the riders where the car is now: up the shaft from where they stood in it, on the floor it's
+  // passing (their frame a storey up each), their height over that floor
+  const carry = (c: Car, now: number) => {
+    const from = stopOn(c.shaft, c.at);
+    if (!from) return;
+    const car = rideAt(c.at, c.to ?? c.at, (now - c.since) / 1000, Math.max(1, c.until - c.since) / 1000);
+    for (const r of c.riders) {
+      const p = room.state.players.get(r.sid) as Player | undefined;
+      const client = room.clients.getById(r.sid) as WorldClient | undefined;
+      if (!p || !client) continue;
+      const here = across(room.map, c.at, p.level, { x: from.x + r.dx, y: from.y + r.dy });
+      const z = (car - p.level) * STOREY;
+      const ch = floorAt(room.map, p.level, here, z);
+      const at = ch?.at ?? here;
+      room.moveTo(
+        client,
+        p,
+        { x: at.x, y: at.y, level: ch?.level ?? p.level },
+        { z: z + (ch?.dz ?? 0), carried: true },
+      );
+    }
   };
 
   const arrive = (c: Car, now: number) => {
@@ -172,6 +212,7 @@ registerFeature((room: WorldRoom) => {
     show(c);
     if (stop)
       for (const r of c.riders) {
+        room.carried.delete(r.sid);
         const p = room.state.players.get(r.sid) as Player | undefined;
         const client = room.clients.getById(r.sid) as WorldClient | undefined;
         if (!p || !client) continue;
@@ -195,6 +236,7 @@ registerFeature((room: WorldRoom) => {
           c.phase = "open";
           c.until = now + HOLD_MS;
         }
+        if (c.phase === "moving" && now < c.until) carry(c, now);
         if (now < c.until && c.phase !== "shut") continue;
         if (c.phase === "open") {
           // nobody in the way, and nobody in it waiting with nowhere to go
@@ -224,6 +266,7 @@ registerFeature((room: WorldRoom) => {
       }
     },
     dispose() {
+      for (const c of cars.values()) for (const r of c.riders) room.carried.delete(r.sid);
       cars.clear();
     },
   };

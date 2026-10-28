@@ -19,7 +19,7 @@ export function Prompt() {
   const building = useHud((s) => s.build.on);
   const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
   if (!prompt || panel || building) return null;
-  const o = w?.engine?.getObject(prompt.objectId);
+  const o = w?.model?.getObject(prompt.objectId);
   const opens = prompt.kind === "notice" || prompt.kind === "screen";
   return (
     <button
@@ -280,7 +280,7 @@ export function VideoBubbles() {
     // placed after each drawn frame (so at the world's frame rate, not the screen's)
     return w.onFrame(() => {
       const el = host.current;
-      if (!el || !w.engine) return;
+      if (!el || !w.model) return;
       for (const node of Array.from(el.children) as HTMLElement[]) {
         const x = Number(node.dataset.x);
         const y = Number(node.dataset.y);
@@ -289,7 +289,7 @@ export function VideoBubbles() {
         const display = hide ? "none" : "";
         if (node.style.display !== display) node.style.display = display;
         if (hide) continue;
-        // over their head, in whichever view is showing (iso or third person)
+        // over their head, on the screen
         const p = w.clientAt(x, y, 116 * PERSON);
         const t = `translate(${Math.round(p.x - 60)}px, ${Math.round(p.y - 90)}px)`;
         if (node.style.transform !== t) node.style.transform = t;
@@ -348,8 +348,7 @@ export function VideoBubbles() {
 
 // Connecting, then the world built behind the screen (docs/plan/35-the-loading.md):
 // it stays until what's shown is all built, then fades away. Again on every change
-// between iso and 3D. (Over everything: the 3D view's tags stack by depth, up to
-// the thousands.)
+// of view. (Over everything: the 3D view's tags stack by depth, up to the thousands.)
 const LOAD_CELLS = 24;
 export function ConnectionOverlay() {
   const t = useTr();
@@ -493,7 +492,7 @@ export function Minimap() {
       x.strokeRect(mine.x * S + 1.5, mine.y * S + 1.5, mine.w * S - 3, mine.h * S - 3);
     }
     // (after dark, nobody out under the sky is seen from afar — docs/plan/44-the-night.md N4)
-    const dark = (w?.engine?.getDaylight().dark ?? 0) > 0.5;
+    const dark = (w?.model?.getDaylight().dark ?? 0) > 0.5;
     // (and the map itself dimmed: its paper shouldn't glare in the pitch dark)
     c.style.filter = dark ? "brightness(.5) saturate(.8)" : "";
     for (const p of people) {
@@ -544,7 +543,8 @@ export function Minimap() {
     }
   }, [w, people, me, vortex, petsAt, carAt, phase, mapVersion]);
 
-  const zoom = (f: number) => w?.engine?.setZoom((w.engine?.getZoom() ?? 1) * f);
+  // (+ brings the camera in: its distance shrinks)
+  const zoom = (f: number) => w?.tp?.zoomBy(1 / f);
   const shown = building || !me || me.area === "lot" || !w?.grid?.onLand(me.x, me.y);
   if (!shown) return null;
   return (

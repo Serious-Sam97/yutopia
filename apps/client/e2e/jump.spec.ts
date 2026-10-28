@@ -3,9 +3,8 @@ import { expect } from "@playwright/test";
 import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
 
 // Jumping (shared/jump.ts): Space hops, Space while running flips. The server
-// takes it and everyone sees it; in iso the body leaves the floor (its shadow
-// stays down), in 3D too. With YUTOPIA_SHOTS=<dir> it also shoots the jumps
-// held moment by moment, in iso and in the 3D view. People are drawn from
+// takes it and everyone sees it; the body leaves the floor. With
+// YUTOPIA_SHOTS=<dir> it also shoots the jumps held moment by moment. People are drawn from
 // their models only with a GPU: Metal on macOS.
 const dir = process.env.YUTOPIA_SHOTS;
 test.use({
@@ -21,19 +20,17 @@ test.use({
   },
 });
 
-test("Space jumps: a hop, a flip on the run, seen by others, off the floor in iso and 3D", async ({
-  page,
-  browser,
-}) => {
+test("Space jumps: a hop, a flip on the run, seen by others, off the floor", async ({ page, browser }) => {
   test.setTimeout(200_000);
   const tok = await token(ANA);
   const lab = await useWorld("lab");
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", reducedMotion: false }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", reducedMotion: false }));
   });
   await enter(page, tok, lab);
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   const me = await page.evaluate(() => (window as any).__yutopia.room.sessionId);
 
   // Bia, in the same room, sees it
@@ -41,30 +38,30 @@ test("Space jumps: a hop, a flip on the run, seen by others, off the floor in is
   const bia = await ctx.newPage();
   await enter(bia, await token(BIA), lab);
 
-  // a hop: the server takes it, and my drawing goes up (y < 0) and comes down
-  const lowest = page.evaluate(
+  // a hop: the server takes it, and my body in the 3D view goes up (tiles) and comes down
+  const highest = page.evaluate(
     (sid) =>
       new Promise<number>((done) => {
-        let min = 0;
+        let max = 0;
         const t0 = performance.now();
         const step = () => {
-          const v = (window as any).__yutopia.engine.avatars.get(sid);
-          min = Math.min(min, v?.sprite?.visible ? v.sprite.position.y : (v?.rig?.root.y ?? 0));
+          const v = (window as any).__yutopia.tp.people3.get(sid);
+          max = Math.max(max, v?.root.position.y ?? 0);
           if (performance.now() - t0 < 1400) requestAnimationFrame(step);
-          else done(min);
+          else done(max);
         };
         requestAnimationFrame(step);
       }),
     me,
   );
   await page.keyboard.press(" ");
-  expect(await lowest).toBeLessThan(-15);
+  expect(await highest).toBeGreaterThan(0.25);
   await expect
     .poll(() => bia.evaluate((sid) => (window as any).__yutopia.room.state.players.get(sid)?.jump, me))
     .toBe("hop");
   // and back on the floor after
   await page.waitForTimeout(400);
-  expect(await page.evaluate((sid) => (window as any).__yutopia.engine.avatars.get(sid).state.jump ?? "", me)).toBe("");
+  expect(await page.evaluate((sid) => (window as any).__yutopia.model.avatars.get(sid).jump ?? "", me)).toBe("");
   await ctx.close();
 
   // running (Shift + a direction) it's a flip
@@ -88,7 +85,7 @@ test("Space jumps: a hop, a flip on the run, seen by others, off the floor in is
   await page.waitForTimeout(1200);
 
   if (dir) {
-    // held moment by moment (the review hook), in iso…
+    // held moment by moment (the review hook)
     const hold = async (kind: "hop" | "flip", t: number, name: string) => {
       await page.evaluate(
         ([k, tt]) => {
@@ -124,15 +121,8 @@ test("Space jumps: a hop, a flip on the run, seen by others, off the floor in is
       return best;
     });
     console.log("shots at", spot);
-    await page.waitForTimeout(1500);
-    await page.evaluate(() => (window as any).__yutopia.engine.setZoom(2.2));
-    await page.waitForTimeout(800);
-    for (const t of [0.05, 0.2, 0.33, 0.45, 0.62, 0.72]) await hold("hop", t, `iso-hop-${t}`);
-    for (const t of [0.08, 0.2, 0.3, 0.4, 0.5, 0.6, 0.72, 0.9]) await hold("flip", t, `iso-flip-${t}`);
-    // …and in the 3D view (chase camera, side on)
-    await page.keyboard.press("t");
-    await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
     await page.waitForTimeout(2500);
+    // (the chase camera, side on)
     await page.evaluate(() => {
       const t = (window as any).__yutopia.tp;
       t.yaw += Math.PI / 2;
@@ -143,13 +133,12 @@ test("Space jumps: a hop, a flip on the run, seen by others, off the floor in is
     await page.evaluate(() => {
       (window as any).__yutopia.jumpHold = null;
     });
-    await page.keyboard.press("t");
   }
   // leave her view as it was for the other specs
   await page.evaluate(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p" }));
   });
 });
 
@@ -162,9 +151,10 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "iso", reducedMotion: false }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", reducedMotion: false }));
   });
   await enter(page, tok, lab);
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   const me = await page.evaluate(() => (window as any).__yutopia.room.sessionId);
   // somewhere clear (5×5 open, away from others), the desk two tiles along +x
   const spot = await page.evaluate(() => {
@@ -195,9 +185,15 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
       ([id, s]) => (window as any).__yutopia.send("obj:put", { id, kind: "desk", x: s.x + 2, y: s.y, rot: 0 }),
       [desk, spot] as const,
     );
-    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), desk)).toBe(true);
+    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), desk)).toBe(true);
     await page.waitForTimeout(1200);
     const top = 25 / 39.19;
+    // (the camera looking north-west: D + S go along +x, A + W back)
+    await page.evaluate(() => {
+      const t = (window as any).__yutopia.tp;
+      t.yaw = -Math.PI * 0.75;
+      t.dragged = 1e12;
+    });
 
     // run at it (D + S: along +x) and hop — a few steps' run-up first: the body takes a moment
     // to get going (docs/plan/29-the-move.md M2)
@@ -211,8 +207,8 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
     await page.waitForTimeout(500);
     const up = await page.evaluate((sid) => {
       const w = (window as any).__yutopia;
-      const v = w.engine.avatars.get(sid);
-      return { x: w.me.x, z: v.state.z, ground: v.state.ground, server: w.room.state.players.get(sid).z };
+      const v = w.model.avatars.get(sid);
+      return { x: w.me.x, z: v.z, ground: v.ground, server: w.room.state.players.get(sid).z };
     }, me);
     expect(up.x).toBeGreaterThan(spot.x + 2);
     expect(up.x).toBeLessThan(spot.x + 4);
@@ -230,15 +226,6 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
       .toBeGreaterThan(top - 0.01);
 
     if (dir) {
-      await page.evaluate(
-        (s) => (window as any).__yutopia.engine.pinCamera({ x: s.x + 2.5, y: s.y + 0.5, zoom: 2.2 }),
-        spot,
-      );
-      await page.waitForTimeout(1200);
-      await page.screenshot({ path: `${dir}/on-desk-iso.png` });
-      await page.keyboard.press("t");
-      await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
-      await page.waitForTimeout(2500);
       await page.evaluate(() => {
         const t = (window as any).__yutopia.tp;
         t.yaw += Math.PI / 2;
@@ -246,8 +233,10 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
       });
       await page.waitForTimeout(1200);
       await page.screenshot({ path: `${dir}/on-desk-3d.png` });
-      await page.keyboard.press("t");
-      await page.waitForTimeout(1500);
+      await page.evaluate(() => {
+        (window as any).__yutopia.tp.yaw = -Math.PI * 0.75;
+      });
+      await page.waitForTimeout(800);
     }
 
     // walk off its edge (back along −x): down on the floor again
@@ -259,7 +248,7 @@ test("a hop up onto a desk: standing on it, seen up there, dropping off its edge
     await page.waitForTimeout(600);
     const down = await page.evaluate((sid) => {
       const w = (window as any).__yutopia;
-      return { x: w.me.x, z: w.engine.avatars.get(sid).state.z };
+      return { x: w.me.x, z: w.model.avatars.get(sid).z ?? 0 };
     }, me);
     expect(down.x).toBeLessThan(spot.x + 2);
     expect(down.z).toBe(0);

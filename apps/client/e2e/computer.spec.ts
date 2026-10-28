@@ -58,7 +58,7 @@ async function deskSpot(page: Page, sp: { x: number; y: number }, id: string) {
       [D, id] as const,
     );
     const placed = await expect
-      .poll(() => page.evaluate((i) => !!(window as any).__yutopia.engine.getObject(i), id), { timeout: 4000 })
+      .poll(() => page.evaluate((i) => !!(window as any).__yutopia.model.getObject(i), id), { timeout: 4000 })
       .toBe(true)
       .then(() => true)
       .catch(() => false);
@@ -96,7 +96,7 @@ test("a computer boots VortexOS for everyone, one person at a time", async ({ pa
       [D, ids] as const,
     );
     await expect
-      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.desk))
+      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.desk))
       .toBe(true);
     await page.evaluate(
       ([d, i]) =>
@@ -110,7 +110,7 @@ test("a computer boots VortexOS for everyone, one person at a time", async ({ pa
         }),
       [D, ids] as const,
     );
-    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.pc)).toBe(true);
+    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.pc)).toBe(true);
 
     // Bia comes in to watch
     await enter(bia, await token(BIA), space);
@@ -143,18 +143,8 @@ test("a computer boots VortexOS for everyone, one person at a time", async ({ pa
     expect(hello?.name).toBeTruthy();
 
     if (SHOTS) {
-      await bia.evaluate(
-        (d) => (window as any).__yutopia.engine.pinCamera({ x: d.x + 0.6, y: d.y + 0.2, zoom: 3.2 }),
-        D,
-      );
       await bia.waitForTimeout(600);
-      await bia.screenshot({ path: `${SHOTS}/computer-desktop-iso.png` });
-      await bia.evaluate(() => (window as any).__yutopia.engine.setClock(22));
-      await bia.waitForTimeout(1200);
-      await bia.screenshot({ path: `${SHOTS}/computer-desktop-iso-night.png` });
-      await bia.evaluate(() =>
-        (window as any).__yutopia.engine.setClock(new Date().getHours() + new Date().getMinutes() / 60),
-      );
+      await bia.screenshot({ path: `${SHOTS}/computer-desktop.png` });
       await page.screenshot({ path: `${SHOTS}/computer-panel.png` });
     }
 
@@ -221,7 +211,7 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
       [D, ids] as const,
     );
     await expect
-      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.desk))
+      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.desk))
       .toBe(true);
     await page.evaluate(
       ([d, i]) =>
@@ -235,7 +225,7 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
         }),
       [D, ids] as const,
     );
-    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.pc)).toBe(true);
+    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.pc)).toBe(true);
     // Ana at it (standing: the chair's at the other end of the desk)
     await walkTo(page, D.x + 0.5, D.y + 1.4, 20_000);
     await page.evaluate((id) => (window as any).__yutopia.activateObject(id, true), ids.pc);
@@ -243,7 +233,7 @@ test("a computer in use, seen in third person", async ({ page, browser }) => {
     await enter(bia, await token(BIA), space);
     await bia.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
     await walkTo(bia, D.x + 1.9, D.y + 1.9, 20_000);
-    // through her eyes, looking at the glass the way the iso camera does
+    // through her eyes, looking at the glass from the south-east
     await bia.evaluate(() => {
       const tp = (window as any).__yutopia.tp;
       tp.setMode("first");
@@ -289,7 +279,7 @@ test("the real VortexOS: boot, sign in with Yutopia, desktop, stand up", async (
       [D, ids] as const,
     );
     await expect
-      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.desk))
+      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.desk))
       .toBe(true);
     await page.evaluate(
       ([d, i]) =>
@@ -303,7 +293,7 @@ test("the real VortexOS: boot, sign in with Yutopia, desktop, stand up", async (
         }),
       [D, ids] as const,
     );
-    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.pc)).toBe(true);
+    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.pc)).toBe(true);
     await enter(bia, await token(BIA), space);
     const watch = setInterval(() => {
       void comp(bia, ids.pc)
@@ -324,12 +314,8 @@ test("the real VortexOS: boot, sign in with Yutopia, desktop, stand up", async (
     if (SHOTS) {
       await page.waitForTimeout(2500);
       await page.screenshot({ path: `${SHOTS}/computer-real-desktop.png` });
-      await bia.evaluate(
-        (d) => (window as any).__yutopia.engine.pinCamera({ x: d.x + 0.6, y: d.y + 0.4, zoom: 3.2 }),
-        D,
-      );
       await bia.waitForTimeout(800);
-      await bia.screenshot({ path: `${SHOTS}/computer-real-iso.png` });
+      await bia.screenshot({ path: `${SHOTS}/computer-real.png` });
     }
     // stand up: it saves (vortexos:bye), then it's off for everyone
     await page.getByRole("button", { name: /Stand up|Levantar/ }).click();
@@ -363,7 +349,7 @@ test("a VortexOS that doesn't talk back: no NO SIGNAL, the glass goes on by itse
   const D = await deskSpot(page, sp, ids.desk);
   try {
     await expect
-      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.desk))
+      .poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.desk))
       .toBe(true);
     await page.evaluate(
       ([d, i]) =>
@@ -377,7 +363,7 @@ test("a VortexOS that doesn't talk back: no NO SIGNAL, the glass goes on by itse
         }),
       [D, ids] as const,
     );
-    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.engine.getObject(id), ids.pc)).toBe(true);
+    await expect.poll(() => page.evaluate((id) => !!(window as any).__yutopia.model.getObject(id), ids.pc)).toBe(true);
     await walkTo(page, D.x + 0.5, D.y + 1.4, 20_000);
     await page.evaluate((id) => (window as any).__yutopia.activateObject(id, true), ids.pc);
     await expect

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdminAction;
 use App\Models\Invite;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,14 +12,21 @@ class InviteController extends Controller
 {
     public function index(): JsonResponse
     {
-        return response()->json(['invites' => Invite::latest('id')->limit(200)->get()->map->toPublic()]);
+        // (and how people sign up here: by invite, open to anyone, or closed)
+        return response()->json([
+            'invites' => Invite::with('user:id,name')->latest('id')->limit(200)->get()->map->toPublic(),
+            'signup' => config('yutopia.signup'),
+        ]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate(['email' => ['nullable', 'email', 'max:255']]);
 
-        return response()->json(['invite' => Invite::make($request->user(), $data['email'] ?? null)->toPublic()], 201);
+        $invite = Invite::make($request->user(), $data['email'] ?? null);
+        AdminAction::record($request->user(), 'invite', null, $invite->email ? "for {$invite->email}" : 'for anyone');
+
+        return response()->json(['invite' => $invite->toPublic()], 201);
     }
 
     public function destroy(Invite $invite): JsonResponse

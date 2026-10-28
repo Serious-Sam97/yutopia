@@ -1,27 +1,34 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
+import { ANA, BIA, enter, holdCamera, test, token, useWorld, walkTo } from "./helpers";
 
 const SHOTS = "../../design/screens";
 
 async function screen(page: Page, x: number, y: number) {
   return page.evaluate(
     ([tx, ty]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx + 0.5, ty + 0.5);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx + 0.5, ty + 0.5);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y],
   );
 }
+// The camera pinned over a spot, looking north (clear of the build panel on the screen's left)
+async function look(page: Page, x: number, y: number) {
+  await holdCamera(page, { at: { x, y }, yaw: -Math.PI / 2, dist: 9, pitch: 1.0 });
+  await page.waitForTimeout(250);
+}
 async function clickTile(page: Page, x: number, y: number) {
+  await look(page, x + 0.5, y + 0.5);
   const p = await screen(page, x, y);
   await page.mouse.move(p.x, p.y);
   await page.waitForTimeout(120);
   await page.mouse.click(p.x, p.y);
 }
 async function dragTiles(page: Page, from: [number, number], to: [number, number]) {
+  await look(page, (from[0] + to[0]) / 2 + 0.5, (from[1] + to[1]) / 2 + 0.5);
   const a = await screen(page, ...from);
   const b = await screen(page, ...to);
   await page.mouse.move(a.x, a.y);
@@ -31,12 +38,13 @@ async function dragTiles(page: Page, from: [number, number], to: [number, number
 }
 // drag along world points (walls go on the lines between tiles)
 async function dragWorld(page: Page, from: [number, number], to: [number, number]) {
+  await look(page, (from[0] + to[0]) / 2, (from[1] + to[1]) / 2);
   const at = (x: number, y: number) =>
     page.evaluate(
       ([wx, wy]) => {
-        const e = (window as any).__yutopia.engine;
-        const r = e.app.canvas.getBoundingClientRect();
-        const s = e.worldToClient(wx, wy);
+        const w = (window as any).__yutopia;
+        const r = w.hostRect();
+        const s = w.model.worldToClient(wx, wy);
         return { x: r.left + s.x, y: r.top + s.y };
       },
       [x, y],
@@ -49,7 +57,6 @@ async function dragWorld(page: Page, from: [number, number], to: [number, number
   await page.mouse.up();
 }
 const st = (page: Page, fn: (s: any) => unknown) => page.evaluate(fn as never, null as never);
-const zoom = (page: Page, z: number) => page.evaluate((v) => (window as any).__yutopia.engine.setZoom(v), z);
 
 test("build: blank map, a room with an owner, walls, a desk, and a locked door", async ({ browser }) => {
   // a whole map built by two people (and screenshots of it): more than the default
@@ -76,7 +83,6 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
     );
   await build(false);
   await walkTo(ana, 11.5, 9.5, 20_000);
-  await zoom(ana, 1);
   await ana.waitForTimeout(600);
   await build(true, "rooms");
 
@@ -156,7 +162,7 @@ test("build: blank map, a room with an owner, walls, a desk, and a locked door",
   await expect(bia.getByText(/door is locked/i)).toBeVisible();
   const after = (await st(bia, () => (window as any).__yutopia.meTile())) as { x: number; y: number };
   expect(after.y).toBeGreaterThan(8);
-  await zoom(bia, 1.6);
+  await holdCamera(bia);
   await bia.waitForTimeout(500);
   await bia.screenshot({ path: `${SHOTS}/10-locked-door.png` });
 

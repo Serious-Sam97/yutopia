@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, CAI, enter, loaded, test, token, useWorld } from "./helpers";
+import { ANA, BIA, CAI, enter, test, token, useWorld } from "./helpers";
 
 // The phone (docs/plan/21-cellphone.md): P brings it out (it boots once), the
 // home grid with the keyboard, you keep walking with it out, others see it in
@@ -60,7 +60,19 @@ test("the phone: out with P, the grid by keyboard, walking with it, others see i
   );
 
   // arrows move the highlight over the grid; Enter opens; Backspace goes back
-  await page.keyboard.press("ArrowRight");
+  // (Ana's window in front again: Bia's opened over it)
+  await page.bringToFront();
+  await page.waitForTimeout(500);
+  // (the torch's button comes before the apps: right until Messages is the one)
+  const selApp = () =>
+    page.evaluate(() => {
+      const items = [...document.querySelectorAll<HTMLElement>("[data-phone] [data-nav]")].filter(
+        (x) => x.offsetParent !== null,
+      );
+      return items[(window as any).__phone.get().sel]?.dataset.app ?? null;
+    });
+  for (let i = 0; i < 4 && (await selApp()) !== "messages"; i++) await page.keyboard.press("ArrowRight");
+  expect(await selApp()).toBe("messages");
   await page.keyboard.press("Enter");
   await expect.poll(async () => (await ph(page)).stack.at(-1).app).toBe("messages");
   await shot(page, "phone-messages");
@@ -207,7 +219,7 @@ test("a call of three: everyone on the line hears the other two", async ({ page,
   await cai.close();
 });
 
-test("the camera: a selfie in iso and in 3D, saved to the Gallery", async ({ page }) => {
+test("the camera: a selfie and a photo, saved to the Gallery", async ({ page }) => {
   const tok = await token(ANA);
   const space = await useWorld("demo");
   await enter(page, tok, space);
@@ -217,28 +229,15 @@ test("the camera: a selfie in iso and in 3D, saved to the Gallery", async ({ pag
   await page.evaluate(() => (window as any).__yutopia.phone.camera.open("selfie"));
   await expect(page.locator("[data-viewfinder=selfie]")).toBeVisible();
   await page.waitForTimeout(1500);
-  await shot(page, "phone-selfie-iso");
+  await shot(page, "phone-selfie");
   const n0 = ((await ph(page)).photos ?? []).length;
   await page.locator("[data-shutter]").click();
   await expect.poll(async () => ((await ph(page)).photos ?? []).length, { timeout: 15_000 }).toBeGreaterThan(n0);
-  // 3D
-  await page.evaluate(() => {
-    const p = JSON.parse(localStorage.getItem("yutopia:prefs") ?? "{}");
-    localStorage.setItem("yutopia:prefs", JSON.stringify({ ...p, view: "3p" }));
-  });
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("t");
-  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
-  await loaded(page);
-  await page.waitForTimeout(500);
-  await page.evaluate(() => (window as any).__yutopia.phone.camera.open("selfie"));
-  await page.waitForTimeout(2000);
-  await shot(page, "phone-selfie-3d");
+  // the camera turned round: a photo
   await page.evaluate(() => (window as any).__yutopia.phone.camera.setMode("photo"));
   await page.waitForTimeout(1500);
-  await shot(page, "phone-photo-3d");
+  await shot(page, "phone-photo");
   await page.keyboard.press("Escape");
-  await page.keyboard.press("t");
 });
 
 // A photo in a chat (docs/plan/37-the-gps.md § 2): + slides the latest photos

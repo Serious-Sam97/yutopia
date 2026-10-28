@@ -2,10 +2,10 @@
 import { expect, type Page } from "@playwright/test";
 import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
-// The pool table: walk up and press X — the camera leans in, the console opens;
+// The pool table: walk up and press X — a game camera takes over, the console opens;
 // take a seat, put Vortex in the other, break (aim at the rack with the mouse,
 // hold Space to build the power, let go). Bia, across the room, sees the shot roll; Vortex
-// plays his turn by himself; the 3D view takes a game camera; leaving the
+// plays his turn by himself; Y puts the camera down the cue; leaving the
 // table mid-game gives it to Vortex. In the Lab; the table is removed after.
 // YUTOPIA_SHOTS=<dir> keeps pictures.
 const SHOTS = process.env.YUTOPIA_SHOTS;
@@ -37,13 +37,14 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
   const bia = await (await browser.newContext(ctx)).newPage();
   const id = `e2e-pool-${Date.now().toString(36)}`;
   try {
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
     // tables an earlier, interrupted run left behind
     await ana.evaluate(() => {
       const w = (window as any).__yutopia;
-      w.room.state.objects.forEach((o: any, k: string) => {
+      w.room.state.objects.forEach((_o: any, k: string) => {
         if (k.startsWith("e2e-pool") || k.startsWith("e2e-pong")) w.send("obj:remove", { id: k });
       });
     });
@@ -72,10 +73,9 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
     }
     expect(at, "room for the table").not.toBeNull();
     const T = at as { x: number; y: number };
-    await expect.poll(() => bia.evaluate((i) => !!(window as any).__yutopia.engine.getObject(i), id)).toBe(true);
+    await expect.poll(() => bia.evaluate((i) => !!(window as any).__yutopia.model.getObject(i), id)).toBe(true);
 
-    // up to its long side, X: the console, the camera leans in
-    const zoom0 = await ana.evaluate(() => (window as any).__yutopia.engine.getZoom());
+    // up to its long side, X: the console, a game camera over the table
     await walkTo(ana, T.x + 2, T.y + 2.6, 25_000);
     await ana.waitForTimeout(500);
     // X when the table is what's in reach; another thing nearer (the Lab's consoles): click it
@@ -85,7 +85,7 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
     await ana.evaluate((i) => (window as any).__yutopia.activateObject(i, true), id);
     await expect(ana.getByRole("dialog", { name: "Pool" })).toBeVisible();
     await ana.waitForFunction(() => !!(window as any).__yutopia.tables, null, { timeout: 15_000 });
-    await expect.poll(() => ana.evaluate(() => (window as any).__yutopia.engine.getZoom())).toBeGreaterThan(zoom0);
+    await expect.poll(() => ana.evaluate(() => !!(window as any).__yutopia.tp.gameCam)).toBe(true);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/pool-lobby.png` });
 
     await ana.getByRole("button", { name: "Take seat" }).first().click();
@@ -101,11 +101,14 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
     // aim at the head ball with the pointer, press, pull back, let go
     const aimAt = await ana.evaluate((i) => {
       const w = (window as any).__yutopia;
-      const o = w.engine.getObject(i);
+      const o = w.model.getObject(i);
       // the head ball: on the foot spot (table metres +0.495, 0) — tiles: x 2 + 0.495·1.55, y 1
-      const head = w.engine.worldToClient(o.x + 2 + 0.495 * 1.55, o.y + 1, 26.7);
-      const cue = w.engine.worldToClient(o.x + 2 - 0.495 * 1.55, o.y + 1, 26.7);
-      return { head, cue };
+      const r = w.hostRect();
+      const on = (x: number, y: number) => {
+        const p = w.model.worldToClient(x, y, 26.7);
+        return { x: r.left + p.x, y: r.top + p.y };
+      };
+      return { head: on(o.x + 2 + 0.495 * 1.55, o.y + 1), cue: on(o.x + 2 - 0.495 * 1.55, o.y + 1) };
     }, id);
     await ana.mouse.move(aimAt.head.x, aimAt.head.y, { steps: 6 });
     await ana.waitForTimeout(300);
@@ -152,16 +155,12 @@ test("pool: lean in, play Vortex, break with the mouse — seen from across the 
     await ana.waitForTimeout(4000);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/pool-rest.png` });
 
-    // the 3D view: a game camera over the table
-    await ana.keyboard.press("t");
-    await ana.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
-    await ana.waitForTimeout(4000);
+    // the game camera over the table; Y: down the cue, and back
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/pool-3d-top.png` });
     await ana.keyboard.press("y");
     await ana.waitForTimeout(2500);
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/pool-3d-cue.png` });
     await ana.keyboard.press("y");
-    await ana.keyboard.press("t");
     await ana.waitForTimeout(1000);
 
     // leaving mid-game: Vortex wins

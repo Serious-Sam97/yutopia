@@ -22,6 +22,8 @@ class SessionController extends Controller
     {
         $user = $request->user();
         $avatar = $this->avatars->for($user);
+        // (in the world now: Run the place's "last seen", kept fresh by the world's spots)
+        $user->forceFill(['seen_at' => now()])->saveQuietly();
 
         return response()->json([
             'world' => ['name' => config('yutopia.world_name'), 'mapKey' => 'studio'],

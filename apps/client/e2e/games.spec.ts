@@ -65,6 +65,7 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
   const tvId = `e2e-tv-${stamp}`;
   const conId = `e2e-nes-${stamp}`;
   try {
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
@@ -122,10 +123,8 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
     const hearsTv = () => bia.evaluate((i) => (window as any).__yutopia.media.voices.has(`tv-${i}`), conId);
 
     if (SHOTS) {
-      await bia.evaluate((p) => (window as any).__yutopia.engine.pinCamera({ x: p.x + 1, y: p.y + 1, zoom: 2.4 }), at);
       await bia.waitForTimeout(600);
       await bia.screenshot({ path: `${SHOTS}/games-watching.png` });
-      await bia.evaluate(() => (window as any).__yutopia.engine.pinCamera(null));
     }
     // Ana presses A on pad 1: red
     await ana.keyboard.down("KeyX");
@@ -362,7 +361,7 @@ test("a Console TV takes a console too: the cable, the game on its glass, back t
   }
   expect(T, "room for the TV and the console").not.toBeNull();
   const at = T as { x: number; y: number };
-  const input = () => page.evaluate((i) => (window as any).__yutopia.engine.getObject(i)?.props?.input ?? "", tvId);
+  const input = () => page.evaluate((i) => (window as any).__yutopia.model.getObject(i)?.props?.input ?? "", tvId);
   const onGlass = () =>
     page.evaluate((i) => ((window as any).__yutopia.games?.pictures() ?? []).some((p: any) => p.def.id === i), tvId);
   try {
@@ -382,10 +381,8 @@ test("a Console TV takes a console too: the cable, the game on its glass, back t
     await expect.poll(onGlass).toBe(true);
     await page.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
     if (SHOTS) {
-      await page.evaluate((p) => (window as any).__yutopia.engine.pinCamera({ x: p.x + 1, y: p.y + 1, zoom: 2.4 }), at);
       await page.waitForTimeout(600);
       await page.screenshot({ path: `${SHOTS}/games-console-tv.png` });
-      await page.evaluate(() => (window as any).__yutopia.engine.pinCamera(null));
     }
     // its own panel now: the inputs (AV1, the TV input), and back to YouTube / Jellyfin
     await walkTo(page, at.x + 1, at.y + 1.5, 25_000);
@@ -413,6 +410,7 @@ test("two games at once: one each, both TVs live for everyone; a second of mine 
   const stamp = Date.now().toString(36);
   const [tvA, conA, tvB, conB] = ["tvA", "conA", "tvB", "conB"].map((k) => `e2e-2g-${k}-${stamp}`);
   try {
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
@@ -446,10 +444,23 @@ test("two games at once: one each, both TVs live for everyone; a second of mine 
     expect(T, "room for two TVs and two consoles").not.toBeNull();
     const at = T as { x: number; y: number };
     // each plugs one in (at its TV), puts the test card in and turns it on (at the console)
+    // (walkTo is done a tile short, still walking: the server's to have me there, at rest)
+    const arrive = async (page: Page, x: number, y: number) => {
+      await walkTo(page, x, y, 25_000);
+      await page.waitForFunction(
+        ([px, py]) => {
+          const w = (window as any).__yutopia;
+          const p = w.room.state.players.get(w.room.sessionId);
+          return Math.hypot(p.x - px, p.y - py) < 0.6;
+        },
+        [x, y],
+        { timeout: 10_000 },
+      );
+    };
     const setUp = async (page: Page, con: string, tv: string, dx: number) => {
-      await walkTo(page, at.x + dx + 1, at.y + 1.5, 25_000);
+      await arrive(page, at.x + dx + 1, at.y + 1.5);
       await page.evaluate(([c, t]) => (window as any).__yutopia.send("game:plug", { id: c, tv: t }), [con, tv]);
-      await walkTo(page, at.x + dx + 1.5, at.y + 3.6, 25_000);
+      await arrive(page, at.x + dx + 1.5, at.y + 3.6);
       await page.evaluate((id) => (window as any).__yutopia.send("game:cart", { id, game: "b:testcard-nes" }), con);
       await page.waitForTimeout(600);
       await page.evaluate((id) => (window as any).__yutopia.send("game:power", { id, on: true }), con);

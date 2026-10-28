@@ -11,7 +11,7 @@ The plan lives in [`docs/plan/`](docs/plan/00-INDEX.md); progress in
 
 | Path | What |
 |---|---|
-| `apps/client` | Next.js + PixiJS client (port 3100) |
+| `apps/client` | Next.js + three.js client (port 3100) |
 | `apps/world-server` | Colyseus world server (port 2567) |
 | `packages/shared` | Map, iso math, pathfinding, hearing rules, protocol |
 | `docker/` | LiveKit (+ optional world container), joins Yondra's `sail` network |

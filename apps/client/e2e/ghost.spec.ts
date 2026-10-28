@@ -3,8 +3,8 @@ import { expect, type Page } from "@playwright/test";
 import { ANA, BIA, enter, loaded, test, token, useWorld, walkTo } from "./helpers";
 
 // No ghosts (docs/plan/36-the-ghost.md): Bia reloads — one Bia, for her and for
-// Ana, back where she was; Bia closes the tab — gone for Ana at once, in 3D and
-// in iso (the iso engine keeps the avatars under the 3D view too).
+// Ana, back where she was; Bia closes the tab — gone for Ana at once (from the model and from the 3D
+// view).
 const bias = (page: Page, uid: number) =>
   page.evaluate((uid) => {
     const out: { sid: string; status: string; x: number; y: number }[] = [];
@@ -20,7 +20,7 @@ test("no ghosts: a reload comes back where it was, a closed tab goes at once", a
   // Ana watches in 3D
   await page.addInitScript(() => {
     const p = JSON.parse(localStorage.getItem("yutopia:prefs") ?? "{}");
-    localStorage.setItem("yutopia:prefs", JSON.stringify({ ...p, view: "3p", last3d: "3p" }));
+    localStorage.setItem("yutopia:prefs", JSON.stringify({ ...p, view: "3p" }));
   });
   await enter(page, await token(ANA), space);
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
@@ -62,20 +62,20 @@ test("no ghosts: a reload comes back where it was, a closed tab goes at once", a
   expect(now.sid).not.toBe(was.sid);
   expect(now.status).toBe("online");
   expect(Math.hypot(now.x - was.x, now.y - was.y)).toBeLessThan(0.6);
-  // (drawn in Ana's views: the new one, not the old)
+  // (in Ana's model and view: the new one, not the old)
   await expect
     .poll(() =>
       page.evaluate(
         ([a, b]) => {
           const w = (window as any).__yutopia;
-          return [w.engine.hasAvatar(a), w.engine.hasAvatar(b), w.tp.people3.has(a), w.tp.people3.has(b)];
+          return [w.model.hasAvatar(a), w.model.hasAvatar(b), w.tp.people3.has(a), w.tp.people3.has(b)];
         },
         [was.sid, now.sid],
       ),
     )
     .toEqual([false, true, false, true]);
 
-  // the tab closed (gone to another page): gone for Ana at once, from both views (well inside the 20 s a seat's
+  // the tab closed (gone to another page): gone for Ana at once, from the model and the view (well inside the 20 s a seat's
   // kept for a drop; the polls of a software-drawn 3D page take their time)
   // (the page leaving as a tab closed by hand does: its pagehide — Playwright's page.close
   // doesn't always run it, and the context closed outright never does: a crash)
@@ -87,7 +87,7 @@ test("no ghosts: a reload comes back where it was, a closed tab goes at once", a
     .poll(() =>
       page.evaluate((s) => {
         const w = (window as any).__yutopia;
-        return w.engine.hasAvatar(s) || w.tp.people3.has(s);
+        return w.model.hasAvatar(s) || w.tp.people3.has(s);
       }, now.sid),
     )
     .toBe(false);

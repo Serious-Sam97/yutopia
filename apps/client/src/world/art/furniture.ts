@@ -1,7 +1,5 @@
 import { CLOTH_COLORS } from "@yutopia/shared";
-import type { Graphics } from "pixi.js";
 import type { Box } from "./iso";
-import { P } from "./iso";
 import { C, hash2, hex, shade } from "./palette";
 
 // Furniture as box compositions in local tile units at rot 0. Heights are px.
@@ -10,7 +8,6 @@ import { C, hash2, hex, shade } from "./palette";
 
 export interface Piece {
   boxes: Box[];
-  custom?: (g: Graphics) => void;
   // boxes flagged `back` on seats get a depth bias so a sitter is drawn
   // between seat and backrest
   seat?: boolean;
@@ -137,34 +134,10 @@ export function piece(kind: string, props: Props, id = ""): Piece {
           { x: 0.28, y: 0.28, w: 0.44, d: 0.44, z: 0, h: 14, color: C.terracotta },
           { x: 0.3, y: 0.3, w: 0.4, d: 0.4, z: 14, h: 0.5, color: 0x3a2a1c, outline: false },
         ],
-        custom: (g) => {
-          const seed = hashId(id);
-          const [cx, cy] = P(0.5, 0.5, 14);
-          const leaves = 7 + Math.floor(seed * 4);
-          for (let i = 0; i < leaves; i++) {
-            const a = (i / leaves) * Math.PI * 2 + seed * 6;
-            const r = 6 + hash2(i, 3, seed * 100) * 8;
-            const lx = cx + Math.cos(a) * r;
-            const ly = cy - 14 - hash2(i, 7, seed * 100) * 22 + Math.sin(a) * r * 0.45;
-            const col = [C.leaf, C.leafDark, C.leafLight][i % 3];
-            g.ellipse(lx, ly, 7, 10).fill(col);
-          }
-          g.ellipse(cx, cy - 26, 8, 9).fill(C.leafLight);
-        },
       };
     case "lamp":
       return {
         boxes: [{ x: 0.32, y: 0.32, w: 0.36, d: 0.36, z: 0, h: 3, color: C.walnutDark }],
-        custom: (g) => {
-          const [bx, by] = P(0.5, 0.5, 3);
-          g.moveTo(bx, by)
-            .lineTo(bx, by - 52)
-            .stroke({ width: 2.5, color: C.alumDark });
-          g.poly([bx - 9, by - 52, bx + 9, by - 52, bx + 13, by - 68, bx - 13, by - 68])
-            .fill({ color: C.cream })
-            .stroke({ width: 1, color: C.creamDark });
-          g.ellipse(bx, by - 52, 9, 3).fill({ color: C.vfd, alpha: 0.9 });
-        },
       };
     case "rug":
       return {
@@ -258,17 +231,6 @@ export function piece(kind: string, props: Props, id = ""): Piece {
     case "mic_stand":
       return {
         boxes: [{ x: 0.36, y: 0.36, w: 0.28, d: 0.28, z: 0, h: 2, color: C.graphite }],
-        custom: (g) => {
-          const [bx, by] = P(0.5, 0.5, 2);
-          g.moveTo(bx, by)
-            .lineTo(bx, by - 40)
-            .stroke({ width: 2, color: C.alumDark });
-          g.moveTo(bx, by - 40)
-            .lineTo(bx + 7, by - 46)
-            .stroke({ width: 2, color: C.alumDark });
-          g.roundRect(bx + 4, by - 54, 7, 11, 3).fill(C.graphite);
-          g.roundRect(bx + 5, by - 53, 5, 5, 2).fill(C.aluminium);
-        },
       };
     case "mixing_desk": {
       const boxes: Box[] = [
@@ -304,18 +266,6 @@ export function piece(kind: string, props: Props, id = ""): Piece {
     case "speaker_cab":
       return {
         boxes: [{ x: 0.1, y: 0.2, w: 0.8, d: 0.62, z: 0, h: 46, color: C.graphite, faces: { s: 0x24221f } }],
-        custom: (g) => {
-          for (const [z, r] of [
-            [14, 8],
-            [33, 5],
-          ]) {
-            const [cx, cy] = P(0.5, 0.82, z);
-            g.ellipse(cx, cy, r * 0.9, r)
-              .fill(0x15130f)
-              .stroke({ width: 1.5, color: C.alumDark });
-            g.ellipse(cx, cy, r * 0.3, r * 0.35).fill(C.alumDark);
-          }
-        },
       };
     case "server_rack": {
       const boxes: Box[] = [

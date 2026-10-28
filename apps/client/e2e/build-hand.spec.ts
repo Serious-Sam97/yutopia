@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, test, token, useWorld } from "./helpers";
+import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // The rest of the hand (plan phase 2), in the Lab: Shift-click keeps placing
 // copies; what you hold turns with the wheel and with a sideways drag while
@@ -9,9 +9,9 @@ import { ANA, enter, test, token, useWorld } from "./helpers";
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
     ([tx, ty, tz]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(tx, ty, tz);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(tx, ty, tz);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y, z],
@@ -49,14 +49,15 @@ test("the hand: Shift keeps placing, wheel and drag turn, arrows nudge, Delete r
   const X = Math.floor(sp.x) - 3;
   const Y = Math.floor(sp.y) - 4;
   try {
-    await page.evaluate(([x, y]) => (window as any).__yutopia.engine.pinCamera({ x, y, zoom: 2 }), [X + 1, Y + 1]);
+    // (looking north: the arrows go by the camera, ArrowDown is +y)
+    await holdCamera(page, { at: { x: X + 1, y: Y + 1 }, yaw: -Math.PI / 2, dist: 7 });
     await page.evaluate(() => {
       const h = (window as any).__hud;
       h.set({ build: { ...h.get().build, on: true, tool: "furniture", mode: "hand", selected: [] } });
     });
     await page.waitForFunction(() => !!(window as any).__yutopia.build, null, { timeout: 15_000 });
     // the build grid is drawn
-    expect(await page.evaluate(() => (window as any).__yutopia.engine.gridG.bounds.width > 0)).toBe(true);
+    expect(await page.evaluate(() => (window as any).__yutopia.model.buildLook().grid)).toBe(true);
 
     // ── Shift-click keeps placing copies; a plain click places the last one and lets go
     await page.getByRole("tab", { name: "Decor" }).click();
@@ -89,6 +90,9 @@ test("the hand: Shift keeps placing, wheel and drag turn, arrows nudge, Delete r
     await page.mouse.move(leaves.x + 60, leaves.y, { steps: 6 }); // the Sims gesture
     await page.mouse.up();
     await expect.poll(() => page.evaluate(() => (window as any).__yutopia.build.handInfo()?.rot)).toBe(2);
+    // (the pointer back over where it was: what's held follows it)
+    await page.mouse.move(leaves.x, leaves.y, { steps: 4 });
+    await page.waitForTimeout(200);
     expect((await build(page)).carrying).toBe(1); // turning doesn't drop it
 
     // ── the arrows nudge it two tiles down (+y), Enter puts it there, turned

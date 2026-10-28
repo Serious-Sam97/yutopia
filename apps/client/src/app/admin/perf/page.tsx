@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Brand } from "@/components/Brand";
-import { api, getToken, yutopia } from "@/lib/api";
+import { type PerfArea, type PerfDetail, type PerfPlayer, type PerfSpot, type PerfVersion, perf } from "@/lib/admin";
+import { getToken, yutopia } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 
 // The admins' look at how the game runs for everyone (docs/plan/39-the-telemetry.md): each
@@ -57,82 +58,6 @@ const W = {
   first: ["First seen", "Primeira vez"],
 } as const;
 type Key = keyof typeof W;
-
-// what the API's admin perf endpoints answer (apps/api PerfController; here, not in lib/api:
-// the world page carries lib/api)
-interface PerfPlayer {
-  userId: number;
-  name: string;
-  windows: number;
-  minutes: number;
-  sessions: number;
-  fps: number;
-  frameP95: number;
-  frameWorst: number;
-  slowShare: number;
-  ping: number | null;
-  snaps: number;
-  last: string;
-  version: string | null;
-  browser: string | null;
-  gpu: string | null;
-  view: string | null;
-  quality: string | null;
-  machine: Record<string, unknown> | null;
-  worstArea: { level: number; area: string; fps: number } | null;
-}
-interface PerfArea {
-  level: number;
-  area: string;
-  windows: number;
-  fps: number;
-  frameP95: number;
-  frameWorst?: number;
-  draws: number | null;
-  slowShare: number;
-  players?: number;
-}
-type PerfSpot = PerfArea & { players: number };
-interface PerfVersion {
-  version: string;
-  windows: number;
-  players: number;
-  fps: number;
-  frameP95: number;
-  slowShare: number;
-  first: string;
-  last: string;
-}
-interface PerfDetail {
-  user: { id: number; name: string };
-  series: {
-    at: string;
-    fps: number;
-    frameMed: number;
-    frameP95: number;
-    frameWorst: number;
-    ping: number | null;
-    view: string;
-    quality: string;
-    level: number;
-    area: string;
-    draws: number | null;
-    snaps: number;
-    session: string;
-    version: string;
-  }[];
-  areas: PerfArea[];
-  stages: Record<string, number>;
-  machines: { browser: string; gpu: string; windows: number; last: string }[];
-  machine: Record<string, unknown> | null;
-}
-
-const perf = {
-  summary: (days: number) =>
-    api<{ players: PerfPlayer[]; versions: PerfVersion[] }>(`/api/admin/perf/summary?days=${days}`),
-  player: (id: number, days: number) => api<PerfDetail>(`/api/admin/perf/player/${id}?days=${days}`),
-  spots: (days: number) => api<{ spots: PerfSpot[] }>(`/api/admin/perf/spots?days=${days}`),
-};
 
 // the API's times: ISO from a model, "Y-m-d H:i:s" (UTC) from an aggregate
 const when = (s: string) => new Date(s.includes("T") ? s : `${s.replace(" ", "T")}Z`);

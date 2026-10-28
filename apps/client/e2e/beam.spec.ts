@@ -21,7 +21,7 @@ const prefs = (page: Page) =>
   page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase", reducedMotion: false }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", reducedMotion: false }));
   });
 // the beams a screen draws (shared beam.ts Beam), and where someone is on it
 const beams = (page: Page) =>
@@ -110,26 +110,8 @@ test("a focused beam on someone: the same on both screens", async ({ page, brows
     await page.screenshot({ path: `${dir}/beam-ana.png` });
     await bia.screenshot({ path: `${dir}/beam-bia.png` });
   }
-  // Bia in iso (soon: 100% of a battery lasts ~8 s focused): the same beam there (as Ana turned, not 8 ways), focused
-  // (T, sent into her page: a real key press would bring her window up and blur Ana's, which
-  // lets go of everything held there — the aim too)
-  await bia.evaluate(() => {
-    for (const type of ["keydown", "keyup"]) window.dispatchEvent(new KeyboardEvent(type, { key: "t", code: "KeyT" }));
-  });
-  await bia.waitForFunction(() => !(window as any).__yutopia.tp, null, { timeout: 20_000 });
-  await bia.waitForTimeout(800);
-  const iso = await bia.evaluate(() =>
-    ((window as any).__yutopia.engine.grounds.torches as Beam[]).map((t) => ({ ...t })),
-  );
-  const there = iso.find((t) => Math.hypot(t.x - mine.x, t.y - mine.y) < 1);
-  expect(there, "Bia's iso draws Ana's beam").toBeTruthy();
-  const isoTurn = Math.abs(
-    Math.atan2(Math.sin((there as Beam).yaw - mine.yaw), Math.cos((there as Beam).yaw - mine.yaw)),
-  );
-  expect(isoTurn, "in iso, pointing the same way").toBeLessThan(0.04);
-  expect((there as Beam).focus).toBe(true);
-
   // focusing eats the battery, the FOCO bar shows it
+  await page.waitForTimeout(1500); // (100% lasts ~8 s focused)
   const bat = await page.evaluate(() => (window as any).__yutopia.walker.vitals.bat as number);
   expect(bat).toBeLessThan(90);
   // run flat: no focus left, the beam wide again on both (and the bar red)
@@ -152,9 +134,7 @@ test("a focused beam on someone: the same on both screens", async ({ page, brows
     .toBe(false);
   await page.waitForTimeout(500);
   expect((await beams(page))[0].focus).toBe(false);
-  await expect
-    .poll(() => bia.evaluate(() => ((window as any).__yutopia.engine.grounds.torches as Beam[]).some((t) => t.focus)))
-    .toBe(false);
+  await expect.poll(async () => (await beams(bia)).some((t) => t.focus)).toBe(false);
   await page.evaluate(() => (window as any).__yutopia.toggleTorch());
   if (dir) await page.evaluate(() => (window as any).__yutopia.room.send("mod:hour", { h: null }));
 });

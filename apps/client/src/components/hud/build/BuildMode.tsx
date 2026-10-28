@@ -26,8 +26,9 @@ const TOOLS: { key: BuildTool; label: Key; icon: IconName }[] = [
   { key: "desks", label: "buildDesks", icon: "tag" },
   { key: "map", label: "buildMap", icon: "map" },
 ];
-// which way an item faces at each rotation (seats face their desk)
-const FACING = ["SW", "SE", "NE", "NW"];
+// which way an item faces at each rotation (seats face their desk), by the world's axes: −y
+// north, +x east; a turn is clockwise from above (shared: a seat's rot 0 faces +y, 1 −x)
+const FACING = ["S", "W", "N", "E"];
 const MOD = typeof navigator !== "undefined" && /Mac|iP/.test(navigator.platform) ? "Cmd+" : "Ctrl+";
 
 // Build mode (project owners) takes over the screen: its own top bar with
@@ -580,11 +581,10 @@ function HoverTag() {
   useEffect(() => {
     if (!w) return;
     return w.onFrame(() => {
-      const e = w.engine;
+      const at = w.model?.pointerAt;
       const node = el.current;
-      if (!e || !node) return;
-      const r = e.app.canvas.getBoundingClientRect();
-      const t = `translate(${Math.round(r.left + e.pointerAt.gx + 16)}px, ${Math.round(r.top + e.pointerAt.gy + 18)}px)`;
+      if (!at || !node) return;
+      const t = `translate(${Math.round(at.x + 16)}px, ${Math.round(at.y + 18)}px)`;
       if (node.style.transform !== t) node.style.transform = t;
     });
   }, [w]);
@@ -613,8 +613,7 @@ function HoverTag() {
   );
 }
 
-// The Walls tool's chip by the pointer: the face it's on — this side or the
-// far one, the room it looks into, its material now → the brush's — or a run
+// The Walls tool's chip by the pointer: the face it's on — the room it looks into, its material now → the brush's — or a run
 // being drawn (how many walls, how many skipped and why).
 function WallTagChip() {
   const t = useTr();
@@ -624,11 +623,10 @@ function WallTagChip() {
   useEffect(() => {
     if (!w) return;
     return w.onFrame(() => {
-      const e = w.engine;
+      const at = w.model?.pointerAt;
       const node = el.current;
-      if (!e || !node) return;
-      const r = e.app.canvas.getBoundingClientRect();
-      const tr = `translate(${Math.round(r.left + e.pointerAt.gx + 18)}px, ${Math.round(r.top + e.pointerAt.gy + 20)}px)`;
+      if (!at || !node) return;
+      const tr = `translate(${Math.round(at.x + 18)}px, ${Math.round(at.y + 20)}px)`;
       if (node.style.transform !== tr) node.style.transform = tr;
     });
   }, [w]);
@@ -653,9 +651,7 @@ function WallTagChip() {
     >
       {tag.kind === "face" ? (
         <>
-          <span style={{ color: tag.far ? "var(--vfd-pale)" : "var(--vfd)" }}>
-            {t(tag.far ? "wallFarSide" : "wallThisSide")}
-          </span>
+          <span style={{ color: "var(--vfd)" }}>{t("wallThisSide")}</span>
           {" · "}
           {tag.room ?? t("wallOpenFloor")}
           {" · "}
@@ -712,12 +708,11 @@ function WallInspector() {
       const node = el.current;
       const at = w.build?.wallAnchor();
       if (!node || !at) return;
-      const r = w.engine?.app.canvas.getBoundingClientRect();
-      // over the wall, but never under the top bar or off the screen (walls are tall)
+      // over the wall (client px), but never under the top bar or off the screen (walls are tall)
       const h = node.offsetHeight;
       const wd = node.offsetWidth;
-      const x = Math.min(Math.max((r?.left ?? 0) + at.x, wd / 2 + 8), window.innerWidth - wd / 2 - 8);
-      const y = Math.min(Math.max((r?.top ?? 0) + at.y, h + 76), window.innerHeight - 96);
+      const x = Math.min(Math.max(at.x, wd / 2 + 8), window.innerWidth - wd / 2 - 8);
+      const y = Math.min(Math.max(at.y, h + 76), window.innerHeight - 96);
       const tr = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
       if (node.style.transform !== tr) node.style.transform = tr;
     });
@@ -801,18 +796,17 @@ function ItemToolbar() {
       const node = el.current;
       const at = sel[0] ? w.build?.anchorOf(sel[0]) : null;
       if (!node || !at) return;
-      const r = w.engine?.app.canvas.getBoundingClientRect();
-      // over the item, but never under the top bar or off the screen (its
+      // over the item (client px), but never under the top bar or off the screen (its
       // look or board picker open above it, high up a tall wall)
       const h = node.offsetHeight;
       const wd = node.offsetWidth;
-      const x = Math.min(Math.max((r?.left ?? 0) + at.x, wd / 2 + 8), window.innerWidth - wd / 2 - 8);
-      const y = Math.max((r?.top ?? 0) + at.y, h + 76);
+      const x = Math.min(Math.max(at.x, wd / 2 + 8), window.innerWidth - wd / 2 - 8);
+      const y = Math.max(at.y, h + 76);
       const t = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
       if (node.style.transform !== t) node.style.transform = t;
     });
   }, [w, sel]);
-  const objs = sel.map((id) => w?.engine?.getObject(id)).filter((o): o is NonNullable<typeof o> => !!o);
+  const objs = sel.map((id) => w?.model?.getObject(id)).filter((o): o is NonNullable<typeof o> => !!o);
   const kind = objs.every((o) => o.kind === objs[0]?.kind) ? objs[0]?.kind : null;
   const looks = kind ? (entry(kind).variants ?? 1) : 1;
   const decorOpts = kind && kind in DECOR ? (DECOR[kind as keyof typeof DECOR] as readonly string[]) : null;

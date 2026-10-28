@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { ANA, enter, test, token, walkTo } from "./helpers";
 
 // The Grounds (docs/plan/27-the-grounds.md, phase 1): out of the lot and onto
-// the land round the building, in both views — the feet on the ground as it
+// the land round the building, in 3D — the feet on the ground as it
 // rises and falls, the land streamed in round you with no long frame. It
 // needs only the building (every world has it), so no fixture is put back.
 // Frame times are measured on the machine's GPU (YUTOPIA_GPU=1); review shots
@@ -16,7 +16,7 @@ if (GPU || dir) test.use({ launchOptions: { args: ["--use-angle=metal", "--enabl
 const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 });
 const LOT = { ...G(-22, 20), level: 0 }; // (aisle E: docs/plan/42-the-lot.md)
 
-async function open(page: Page, view: "3p" | "iso") {
+async function open(page: Page, view: "3p" | "1p") {
   await page.addInitScript((v) => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
@@ -33,7 +33,7 @@ async function open(page: Page, view: "3p" | "iso") {
     requestAnimationFrame(tick);
   }, view);
   await enter(page, await token(ANA));
-  if (view === "3p") await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
   await page.evaluate(() => {
     (window as any).__yutopia.updateNight = () => {};
   });
@@ -57,16 +57,15 @@ const worst = (page: Page, reset = false) =>
     return v;
   }, reset);
 
-for (const view of ["3p", "iso"] as const)
+for (const view of ["3p"] as const)
   test(`the Grounds in ${view}: out of the lot, across the lawn, into the woods and back`, async ({ page }) => {
     test.setTimeout(240_000);
     await open(page, view);
     await goTo(page, LOT);
-    if (view === "3p")
-      await page.evaluate(() => {
-        const tp = (window as any).__yutopia.tp;
-        tp.setHour(13);
-      });
+    await page.evaluate(() => {
+      const tp = (window as any).__yutopia.tp;
+      tp.setHour(13);
+    });
     await page.waitForTimeout(3000);
     await shot(page, `${view}-01-lot`);
     await worst(page, true);
@@ -100,7 +99,7 @@ for (const view of ["3p", "iso"] as const)
 
 // Phase 2: the campus is real — into the east block's ground floor, round the
 // water tower's fence, up the driveway to the gate's barrier.
-for (const view of ["3p", "iso"] as const)
+for (const view of ["3p"] as const)
   test(`the campus in ${view}: the east block, the tower, the barrier`, async ({ page }) => {
     test.setTimeout(240_000);
     await open(page, view);
@@ -127,7 +126,7 @@ for (const view of ["3p", "iso"] as const)
 
 // Phase 3: the woods — the trail out to the frozen pond (onto the ice), deep
 // snow slower than the trail, footprints left in the snow behind you.
-for (const view of ["3p", "iso"] as const)
+for (const view of ["3p"] as const)
   test(`the woods in ${view}: to the pond, deep snow, footprints`, async ({ page }) => {
     test.setTimeout(240_000);
     await open(page, view);
@@ -155,7 +154,7 @@ for (const view of ["3p", "iso"] as const)
 
 // Phase 4: the town — out of the gate down the county road, over the river,
 // along Main Street past the parked cars (they block), into the bar by its door.
-for (const view of ["3p", "iso"] as const)
+for (const view of ["3p"] as const)
   test(`the town in ${view}: the road from the gate, Main Street, the bar`, async ({ page }) => {
     test.setTimeout(420_000);
     await open(page, view);

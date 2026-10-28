@@ -182,7 +182,7 @@ export class Camera {
     const c = phone.get().camera;
     if (!c || this.rec || typeof MediaRecorder === "undefined") return;
     try {
-      this.rec = new Recording(this.ph, c.filter, c.mode === "selfie");
+      this.rec = new Recording(this.ph, c.filter);
     } catch (e) {
       console.warn("[phone] can't record", e);
       return this.ph.note(tr("phRecFailed"));
@@ -248,7 +248,7 @@ export class Camera {
       this.set({ busy: false });
       return this.ph.note(tr("phSaveFailed"));
     }
-    const canvas = develop(shot, c.filter, c.flash, c.mode === "selfie" ? this.ph.ctl.selfieFrame() : null);
+    const canvas = develop(shot, c.filter, c.flash);
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.9));
     const thumb = canvas.toDataURL("image/jpeg", 0.6);
     const me = hud.get().me;
@@ -311,10 +311,9 @@ class Recording {
   constructor(
     private readonly ph: Phone,
     private readonly filter: string,
-    private readonly selfie: boolean,
   ) {
     const src = ph.ctl.viewCanvas();
-    const crop = this.cropOf(src);
+    const crop = src ? this.cropOf(src) : { x: 0, y: 0, w: 1280, h: 720 };
     const k = Math.min(1, 1280 / Math.max(crop.w, crop.h));
     this.canvas.width = Math.round((crop.w * k) / 2) * 2;
     this.canvas.height = Math.round((crop.h * k) / 2) * 2;
@@ -355,17 +354,6 @@ class Recording {
   }
 
   private cropOf(src: HTMLCanvasElement) {
-    const focus = this.selfie ? this.ph.ctl.selfieFrame() : null;
-    if (focus) {
-      const w = Math.min(src.width, Math.max(focus.w, focus.h * 0.8));
-      const h = Math.min(src.height, w * 1.25);
-      return {
-        x: Math.max(0, Math.min(src.width - w, focus.x + focus.w / 2 - w / 2)),
-        y: Math.max(0, Math.min(src.height - h, focus.y + focus.h / 2 - h / 2)),
-        w,
-        h,
-      };
-    }
     // 16:9 out of the middle
     let w = src.width;
     let h = src.height;
@@ -377,6 +365,7 @@ class Recording {
   // (right after the world drew its frame: the drawing buffer still holds it)
   private draw() {
     const src = this.ph.ctl.viewCanvas();
+    if (!src) return;
     const c = this.cropOf(src);
     const g = this.g;
     const W = this.canvas.width;
@@ -419,39 +408,23 @@ const secsOf = (ms: number) => {
 };
 
 // ── developing the frame ───────────────────────────────────────────────────
-// The world's frame, cropped to a photo's 3:2 (or around your face for a
-// selfie), scaled to at most PHOTO_MAX_PX, and filtered by hand (pixel by
+// The world's frame, cropped to a photo's 3:2, scaled to at most PHOTO_MAX_PX, and filtered by hand (pixel by
 // pixel: ctx.filter isn't everywhere, and isn't reliable on big canvases).
-export function develop(
-  src: HTMLCanvasElement,
-  filter: string,
-  flash: boolean,
-  focus: { x: number; y: number; w: number; h: number } | null,
-): HTMLCanvasElement {
+export function develop(src: HTMLCanvasElement, filter: string, flash: boolean): HTMLCanvasElement {
   let sx = 0;
   let sy = 0;
   let sw = src.width;
   let sh = src.height;
-  if (focus) {
-    // a selfie in iso: the box around you (canvas px), widened to 4:5
-    const w = Math.min(src.width, Math.max(focus.w, focus.h * 0.8));
-    const h = Math.min(src.height, w * 1.25);
-    sx = Math.max(0, Math.min(src.width - w, focus.x + focus.w / 2 - w / 2));
-    sy = Math.max(0, Math.min(src.height - h, focus.y + focus.h / 2 - h / 2));
+  // 3:2 out of the middle
+  const want = 3 / 2;
+  if (sw / sh > want) {
+    const w = sh * want;
+    sx = (sw - w) / 2;
     sw = w;
-    sh = h;
   } else {
-    // 3:2 out of the middle
-    const want = 3 / 2;
-    if (sw / sh > want) {
-      const w = sh * want;
-      sx = (sw - w) / 2;
-      sw = w;
-    } else {
-      const h = sw / want;
-      sy = (sh - h) / 2;
-      sh = h;
-    }
+    const h = sw / want;
+    sy = (sh - h) / 2;
+    sh = h;
   }
   const k = Math.min(1, PHOTO_MAX_PX / Math.max(sw, sh));
   const w = Math.round(sw * k);

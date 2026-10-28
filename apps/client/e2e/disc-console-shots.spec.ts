@@ -1,17 +1,15 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { type Page, test } from "@playwright/test";
-import { ANA, enter, token, useWorld } from "./helpers";
+import type { Page } from "@playwright/test";
+import { ANA, enter, test, token, useWorld } from "./helpers";
 
 // Review shots of the disc console's look (docs/plan/23-disc-console.md P1):
 // a disc corner put down in the Lab — a TV, the grey console with its lid open
 // (a disc, a memory card, on), the small white one with its screen up and a
-// plain one, both disc racks — shot in iso and in 3D, by day and night, then
-// taken away. Off by default:
+// plain one, both disc racks — shot in 3D, by day and night, then taken away. Off by default:
 //   YUTOPIA_SHOTS=design/disc-console npx playwright test disc-console-shots
 const OUT = process.env.YUTOPIA_SHOTS;
-const WORLD = 'canvas[aria-label="Yutopia world"]';
 test.skip(!OUT, "set YUTOPIA_SHOTS=<folder> to take the disc console shots");
 
 const stamp = Date.now().toString(36);
@@ -50,7 +48,7 @@ async function putCorner(page: Page): Promise<{ x: number; y: number }> {
     // (consoles aren't solid: the server would let one land on another's tile)
     const busy = await page.evaluate(
       (a) =>
-        (window as any).__yutopia.engine
+        (window as any).__yutopia.model
           .allObjects()
           .some(
             (o: any) => !o.id.startsWith("dc-") && o.x >= a.x - 1 && o.x <= a.x + 4 && o.y >= a.y - 1 && o.y <= a.y + 3,
@@ -88,63 +86,23 @@ async function takeAway(page: Page) {
   throw new Error(`left behind: ${(await ours()).join(", ")}`);
 }
 
-test("disc console shots: iso and 3D, day and night", async ({ browser }) => {
+test("disc console shots: 3D, day and night", async ({ page }) => {
   test.setTimeout(240_000);
   const dir = resolve(__dirname, "../../..", OUT ?? ".");
   mkdirSync(dir, { recursive: true });
-  const tok = await token(ANA);
-  const space = await useWorld("lab");
-  const open = async (view: "iso" | "1p") => {
-    const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 } });
-    const page = await ctx.newPage();
-    await page.addInitScript((v) => {
-      const k = "yutopia:prefs";
-      const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-      localStorage.setItem(k, JSON.stringify({ ...p, quality: "high", view: v }));
-    }, view);
-    await enter(page, tok, space);
-    return page;
-  };
-
-  const iso = await open("iso");
-  let live = iso;
-  const at = await putCorner(iso);
+  await page.addInitScript(() => {
+    const k = "yutopia:prefs";
+    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+    localStorage.setItem(k, JSON.stringify({ ...p, quality: "high", view: "1p" }));
+  });
+  await enter(page, await token(ANA), await useWorld("lab"));
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
+  const at = await putCorner(page);
   try {
-    await iso.addStyleTag({ content: `*{visibility:hidden!important}${WORLD}{visibility:visible!important}` });
-    await iso.evaluate(() => {
-      (window as any).__yutopia.updateNight = () => {};
-    });
-    await iso.waitForTimeout(1500);
-    for (const [when, level] of [
-      ["day", 0],
-      ["night", 0.85],
-    ] as const)
-      for (const [name, zoom] of [
-        ["iso-corner", 2.2],
-        ["iso-close", 4],
-      ] as const) {
-        await iso.evaluate(
-          ([p, night, z]) => {
-            const e = (window as any).__yutopia.engine;
-            e.setNight(night);
-            e.pinCamera({ x: p.x + 2, y: p.y + 2.2, z: 10, zoom: z });
-          },
-          [at, level, zoom] as const,
-        );
-        await iso.waitForTimeout(600);
-        await iso.locator(WORLD).screenshot({ path: `${dir}/${name}-${when}.png` });
-      }
-
-    // 3D: from the sofa side, then close over the consoles, from both sides
-    // (the same person again: this page takes over Ana's session, so the
-    // corner is taken away from here)
-    live = await open("1p");
-    const tp = live;
-    await tp.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-    // (the 3D view draws on its own canvas, over the iso one: shoot the page, the HUD hidden)
-    await tp.addStyleTag({ content: "[data-hud], .hud, nav, aside { visibility: hidden !important }" });
-    await tp.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 1.5, y: p.y + 4.5 }), at);
-    await tp.waitForTimeout(2500);
+    // from the sofa side, then close over the consoles, from both sides (the HUD hidden)
+    await page.addStyleTag({ content: "[data-hud], .hud, nav, aside { visibility: hidden !important }" });
+    await page.evaluate((p) => (window as any).__yutopia.teleport({ x: p.x + 1.5, y: p.y + 4.5 }), at);
+    await page.waitForTimeout(2500);
     // first person (nobody in the way): where Ana stands, where she looks
     const VIEWS = [
       { name: "3d-corner", x: 1.6, y: 5.6, yaw: -Math.PI / 2, pitch: 0.35 },
@@ -152,28 +110,23 @@ test("disc console shots: iso and 3D, day and night", async ({ browser }) => {
       { name: "3d-consoles-side", x: -0.7, y: 2.6, yaw: 0.1, pitch: 0.7 },
       { name: "3d-racks", x: 3.2, y: 2.3, yaw: -Math.PI / 2, pitch: 0.2 },
     ];
-    for (const [when, level] of [
-      ["day", 0],
-      ["night", 0.85],
-    ] as const)
+    for (const when of ["day", "night"] as const)
       for (const v of VIEWS) {
-        await tp.evaluate(
+        await page.evaluate(
           ([p, view, night]) => {
             const y = (window as any).__yutopia;
             y.updateNight = () => {};
-            y.tp.setHour(night ? 22 : 12); // (3D takes its light from the hour)
+            y.tp.setHour(night ? 22 : 12);
             y.teleport({ x: p.x + view.x, y: p.y + view.y });
             y.tp.yaw = view.yaw;
             y.tp.pitch = view.pitch;
           },
-          [at, v, level] as const,
+          [at, v, when === "night"] as const,
         );
-        await tp.waitForTimeout(1800);
-        await tp.screenshot({ path: `${dir}/${v.name}-${when}.png` });
+        await page.waitForTimeout(1800);
+        await page.screenshot({ path: `${dir}/${v.name}-${when}.png` });
       }
   } finally {
-    await takeAway(live);
-    await live.context().close();
-    if (live !== iso) await iso.context().close();
+    await takeAway(page);
   }
 });

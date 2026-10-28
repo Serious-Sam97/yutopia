@@ -102,7 +102,7 @@ function useT(): TFn {
 export function MediaPanel({ objectId }: { objectId: string }) {
   const t = useT();
   const w = useWorld();
-  const label = w?.engine?.getObject(objectId)?.kind;
+  const label = w?.model?.getObject(objectId)?.kind;
   return (
     <Panel title={label ? `${t("remote")} · ${labelOf(label)}` : t("remote")}>
       <MediaRemote id={objectId} />
@@ -130,7 +130,7 @@ export function MediaRemote({ id }: { id: string }) {
   useHud((s) => s.objectsVersion);
   const canLock = useHud((s) => s.isAdmin);
   const [, tick] = useState(0);
-  const obj = w?.engine?.getObject(id);
+  const obj = w?.model?.getObject(id);
   const radio = isRadio(obj?.kind ?? "");
   // the media chunk keeps the clock in step (and plays it)
   useEffect(() => {
@@ -1036,7 +1036,7 @@ export function TvVolume({ id }: { id: string }) {
   const pt = useLang() === "pt";
   useHud((s) => s.objectsVersion);
   const canLock = useHud((s) => s.isAdmin);
-  const o = w?.engine?.getObject(id);
+  const o = w?.model?.getObject(id);
   const locked = !!mediaOf(o)?.lock && !canLock;
   return (
     <VolumeKnob

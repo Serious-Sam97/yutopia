@@ -227,7 +227,8 @@ test("on the real Grounds: the clearing's bench is got over with a jump from eit
   const g = new Grid(1, 1);
   g.outside = outdoorsAt(0, 0);
   const env: MoveEnv = { grid: g, footing: () => "snow" };
-  const x = BENCH.x + 1;
+  // (its middle: it's drawn a metre each side of BENCH.x)
+  const x = BENCH.x + 0.5;
   const row = Math.floor(BENCH.z);
   // its seat: ~0.5 over the lower ground north of it, ~0.35 over the slope south of it — a
   // vault, or (no landing as low beyond it) up onto it

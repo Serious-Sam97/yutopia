@@ -14,9 +14,8 @@ export interface Prefs {
   camId: string;
   speakerId: string;
   seenIntro: boolean;
-  // how you see the world: the iso view, behind you in 3D (beta), or in your head
-  view: "iso" | "3p" | "1p";
-  last3d: "3p" | "1p"; // the 3D view T goes back to
+  // how you see the world: behind you, or in your head
+  view: "3p" | "1p";
   cam3p: "chase" | "free";
   // mouse look (Z, in 3D): how fast the mouse turns the camera (× the base), up/down flipped
   lookSens: number;
@@ -29,7 +28,8 @@ export interface Prefs {
   perfStats: boolean;
 }
 
-export type Quality = "high" | "medium" | "low";
+// (lowest: weak machines — no antialiasing, under a pixel a pixel; docs/plan/50-the-volume.md 7d)
+export type Quality = "high" | "medium" | "low" | "lowest";
 export type QualityPref = Quality | "auto";
 export type MaxFps = 0 | 30 | 60 | 120;
 export const MAX_FPS: readonly MaxFps[] = [30, 60, 120, 0];
@@ -42,7 +42,8 @@ export function deviceQuality(): Quality {
   const small = typeof window !== "undefined" && Math.min(window.innerWidth, window.innerHeight) < 600;
   const cores = n.hardwareConcurrency ?? 4;
   const mem = n.deviceMemory ?? 8;
-  if ((touch && small) || cores <= 2 || mem <= 2) return "low";
+  if (cores <= 2 || mem <= 2) return "lowest";
+  if (touch && small) return "low";
   if (touch || cores <= 4 || mem <= 4) return "medium";
   return "high";
 }
@@ -62,8 +63,7 @@ const DEFAULTS: Prefs = {
   camId: "",
   speakerId: "",
   seenIntro: false,
-  view: "iso",
-  last3d: "3p",
+  view: "3p",
   cam3p: "chase",
   lookSens: 1,
   lookInvert: false,
@@ -80,9 +80,8 @@ export function prefs(): Prefs {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "{}");
     cache = { ...DEFAULTS, ...raw, vol: { ...DEFAULTS.vol, ...(raw?.vol ?? {}) } };
-    if (cache && !["auto", "high", "medium", "low"].includes(cache.quality)) cache.quality = "auto";
-    if (cache && cache.view !== "3p" && cache.view !== "1p") cache.view = "iso";
-    if (cache && cache.last3d !== "1p") cache.last3d = "3p";
+    if (cache && !["auto", "high", "medium", "low", "lowest"].includes(cache.quality)) cache.quality = "auto";
+    if (cache && cache.view !== "1p") cache.view = "3p"; // (a stored "iso" too: the view retired)
     if (cache && cache.cam3p !== "free") cache.cam3p = "chase";
     if (cache && !MAX_FPS.includes(cache.maxFps)) cache.maxFps = 60;
     if (cache && !(cache.lookSens >= 0.25 && cache.lookSens <= 3)) cache.lookSens = 1;

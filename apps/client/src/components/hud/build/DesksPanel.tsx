@@ -40,7 +40,7 @@ export function DesksPanel({ members }: { members: Member[] }) {
   const w = useWorld();
   useHud((s) => s.mapVersion);
   useHud((s) => s.objectsVersion);
-  const seats = (w?.engine?.allObjects() ?? []).filter((o) => entry(o.kind).seat);
+  const seats = (w?.model?.allObjects() ?? []).filter((o) => entry(o.kind).seat);
   const owned = seats.filter((o) => o.props?.ownerId);
   const seated = new Set(owned.map((o) => Number(o.props?.ownerId)));
   const free = members.filter((m) => !seated.has(m.id));

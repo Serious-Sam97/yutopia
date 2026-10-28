@@ -152,8 +152,8 @@ export class Down {
     const me = this.walker.where();
     const at = (x: number, y: number, z: number) => {
       const c = ctl.clientAt(x, y, z * 39.19);
-      const r = ctl.engine?.app?.canvas?.getBoundingClientRect();
-      return { x: c.x + (r?.left ?? 0), y: c.y + (r?.top ?? 0) };
+      const r = ctl.hostRect();
+      return { x: c.x + r.left, y: c.y + r.top };
     };
     const shown = new Set<string>();
     for (const d of this.seen.values()) {

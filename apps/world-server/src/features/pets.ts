@@ -310,7 +310,11 @@ registerFeature((room: WorldRoom) => {
     const pet = room.state.pets.get(String(id ?? ""));
     return pet && pet.sid === c.sessionId && pet.alive ? pet : null;
   };
-  const near = (pet: Pet, p: Player, r = REACH) => Math.hypot(pet.x - p.x, pet.y - p.y) <= r;
+  // (in three dimensions: shared reach.ts — a pet's on what it stands on, half a metre high)
+  const near = (pet: Pet, p: Player, r = REACH) => {
+    const g = room.groundOf(p.uid, p.level, pet.x, pet.y);
+    return room.reachSpot(p, pet, Math.hypot(pet.x - p.x, pet.y - p.y), g, g + 0.6, false) <= r;
+  };
   const stop = (pet: Pet) => {
     const r = runs.get(pet.id);
     if (r) r.path = [];
@@ -732,8 +736,8 @@ registerFeature((room: WorldRoom) => {
     const p = owners().get(c.sessionId);
     const o = room.state.objects.get(String(m?.id ?? ""));
     if (!p || !o || (o.kind !== "pet_bowl" && o.kind !== "water_bowl")) return;
-    if (Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5)) > BOWL_REACH) return;
     const def = fromSchema(o);
+    if (room.reach3(p, def, Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5))) > BOWL_REACH) return;
     void saveObject({ ...def, props: { ...(def.props ?? {}), portions: CARE.bowl.portions } });
   });
 
@@ -809,7 +813,7 @@ registerFeature((room: WorldRoom) => {
     if (m.id) {
       const o = room.state.objects.get(String(m.id));
       if (!o || o.kind !== "toy_box") return;
-      if (Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5)) > BOWL_REACH) return;
+      if (room.reach3(p, fromSchema(o), Math.hypot(p.x - (o.x + 0.5), p.y - (o.y + 0.5))) > BOWL_REACH) return;
     } else if (![...room.state.pets.values()].some((x) => x.sid === c.sessionId && x.alive)) return;
     for (const t of toysOf(c.sessionId)) dropToy(t); // one toy of yours out at a time
     p.held = m.toy;
@@ -858,7 +862,8 @@ registerFeature((room: WorldRoom) => {
     const p = owners().get(c.sessionId);
     const t = toys.get(String(m?.id ?? ""));
     if (!p || !t || t.state !== "floor" || p.held) return;
-    if (Math.hypot(p.x - t.x, p.y - t.y) > 1.8) return;
+    const g = room.groundOf(p.uid, p.level, t.x, t.y);
+    if (room.reachSpot(p, t, Math.hypot(p.x - t.x, p.y - t.y), g, g + 0.3) > 1.8) return;
     dropToy(t);
     p.held = t.kind;
     p.heldAt = Date.now();

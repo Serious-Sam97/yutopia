@@ -85,7 +85,7 @@ function RoomCard({
   const t = useTr();
   const w = useWorld();
   const locked = useHud((s) => !!s.locks[room.key]);
-  const doors = (w?.engine?.allObjects() ?? []).filter(
+  const doors = (w?.model?.allObjects() ?? []).filter(
     (o) => isDoorKind(o.kind) && w && doorRoom(w.map, o)?.key === room.key,
   ).length;
   const meta = [

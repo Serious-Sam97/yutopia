@@ -177,7 +177,7 @@ export function GamePanel({ objectId }: { objectId: string }) {
       <ControllersPanel start={(v?.system || undefined) as GameSystem | undefined} onClose={() => setPadsOpen(false)} />
     );
   // the games panel: the disc rack (discs, the BIOS) or the cartridge shelf
-  const rack = kind === "games" && w?.engine?.getObject(objectId)?.kind === "disc_rack";
+  const rack = kind === "games" && w?.model?.getObject(objectId)?.kind === "disc_rack";
   const showing = kind === "tv" ? (v?.input ?? "") : objectId;
 
   return (

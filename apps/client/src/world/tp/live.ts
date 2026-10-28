@@ -15,13 +15,12 @@ import {
   Vector3,
   VideoTexture,
 } from "three";
-import type { WorldEngine } from "../engine";
+import type { WorldModel } from "../model";
 import { zt } from "./kit3d";
 
 // Live pictures in 3D: what plays on TVs and big screens, the board walls'
-// VU meters, whiteboard miniatures, the consoles on the game-room TVs — the
-// same canvases (and videos) the iso view maps onto its glass, here on a quad
-// over the item's face.
+// VU meters, whiteboard miniatures, the consoles on the game-room TVs: their
+// canvases (and videos) on a quad over the item's face.
 
 export interface Live {
   key: string;
@@ -152,10 +151,10 @@ function placeQuad(mesh: Mesh, l: Live) {
   mesh.matrixWorldNeedsUpdate = true;
 }
 
-// Where the pictures come from: the iso engine's wall displays, the media
+// Where the pictures come from: the room's wall displays (world/model.ts), the media
 // room's screens, the game room's TVs.
 export interface LiveSources {
-  engine: Pick<WorldEngine, "livePanels" | "getObject" | "shareVideo" | "panelCanvas">;
+  model: Pick<WorldModel, "livePanels" | "getObject" | "shareVideo" | "panelCanvas">;
   // (each picture's `version` counts its redraws)
   screens: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean; version: number }[] } | null;
   games: {
@@ -185,12 +184,12 @@ const wide = (o: WorldObjectDef) => ((GLASS[o.kind]?.aspect ?? GAME_ASPECT) > GA
 export class LiveFeed {
   private cache = new Map<string, { version: number; canvas: HTMLCanvasElement }>();
 
-  collect({ engine, screens, games, os }: LiveSources): Live[] {
+  collect({ model, screens, games, os }: LiveSources): Live[] {
     const out: Live[] = [];
     const taken = new Set<string>();
     for (const p of os?.pictures() ?? [])
       out.push({ key: `o:${p.def.id}`, src: p.canvas, ...p.at, version: p.version, live: true, glow: true });
-    const panels = engine.livePanels();
+    const panels = model.livePanels();
     for (const p of games?.pictures() ?? []) {
       const c = p.at ?? glassCorners(p.def); // (a slim console's own screen brings its corners)
       if (!c) continue;
@@ -214,16 +213,15 @@ export class LiveFeed {
     }
     for (const [id, p] of panels) {
       if (taken.has(id)) continue;
-      const o = engine.getObject(id) ?? p.def;
-      // as the iso view mounts it (engine.mountWall): on the wall's face, from ox along it
-      // (any face, shifted along and raised: hang.ts)
+      const o = model.getObject(id) ?? p.def;
+      // on the wall's face, from ox along it (any face, shifted along and raised: hang.ts)
       const S = 36;
       const len = p.pw / S;
       const tl = hangPoint(o, p.ox, p.oy + 0.1);
       const tr = hangPoint(o, p.ox + len, p.oy + 0.1);
       const up = hangOf(o).lift;
       const at = { tl, tr, zTop: p.zTop + up, zBot: p.zTop + up - p.ph };
-      const video = engine.shareVideo(id);
+      const video = model.shareVideo(id);
       if (video) {
         const fit = (video.videoWidth || 16) / (video.videoHeight || 9);
         out.push({ key: `v:${id}`, src: video, ...at, version: 0, glow: true, fit });
@@ -231,7 +229,7 @@ export class LiveFeed {
       }
       let c = this.cache.get(id);
       if (!c || c.version !== p.version) {
-        const canvas = engine.panelCanvas(id);
+        const canvas = model.panelCanvas(id);
         if (!canvas) continue;
         c = { version: p.version, canvas };
         this.cache.set(id, c);

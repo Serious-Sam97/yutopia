@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BiosController;
 use App\Http\Controllers\DarkController;
@@ -76,6 +77,10 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('/invites', [InviteController::class, 'index']);
         Route::post('/invites', [InviteController::class, 'store']);
         Route::delete('/invites/{invite}', [InviteController::class, 'destroy']);
+        // Run the place (docs/plan/48-the-admin.md): everyone, a role, what admins did
+        Route::get('/members', [AdminController::class, 'members']);
+        Route::patch('/members/{user}', [AdminController::class, 'update'])->whereNumber('user');
+        Route::get('/log', [AdminController::class, 'log']);
     });
 });
 
@@ -124,6 +129,7 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::get('/ping', [InternalController::class, 'ping']);
     Route::get('/world', [InternalController::class, 'world']);
     Route::get('/members', [InternalController::class, 'members']);
+    Route::post('/admin-log', [InternalController::class, 'adminLog']);
     Route::post('/world/seed', [InternalController::class, 'seed']);
     Route::put('/world/layout', [InternalController::class, 'layout']);
     Route::put('/world/playlists', [InternalController::class, 'playlists']);

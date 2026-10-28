@@ -2,10 +2,10 @@
 import { expect, type Page } from "@playwright/test";
 import { ANA, BIA, enter, test, token, useWorld, walkTo } from "./helpers";
 
-// The slot-car track: walk up and press X — the camera leans in over the table
-// and the controls open; take a lane, start, five lights, GO; hold Space and
-// the car goes round (too long into a corner and it flies off). Bia, across the
-// room, sees the car running. Esc gives the lane back and the camera returns.
+// The slot-car track: walk up and press X — the controls open; take a lane,
+// start, five lights, GO; hold Space and the car goes round (too long into a
+// corner and it flies off). Bia, across the room, sees the car running. Esc
+// gives the lane back.
 // In the Lab; the track is removed after. YUTOPIA_SHOTS=<dir> keeps pictures.
 const SHOTS = process.env.YUTOPIA_SHOTS;
 const race = (page: Page, id: string) =>
@@ -19,7 +19,7 @@ const race = (page: Page, id: string) =>
     return { phase: r.phase as string, lights: r.lights as number, cars };
   }, id);
 
-test("a race on the slot-car track: lean in, lights, GO, fly off — seen from across the room", async ({ browser }) => {
+test("a race on the slot-car track: lights, GO, fly off — seen from across the room", async ({ browser }) => {
   test.setTimeout(240_000);
   const [ta, tb] = [await token(ANA), await token(BIA)];
   const ctx = { viewport: { width: 1280, height: 800 } };
@@ -27,6 +27,7 @@ test("a race on the slot-car track: lean in, lights, GO, fly off — seen from a
   const bia = await (await browser.newContext(ctx)).newPage();
   const id = `e2e-slot-${Date.now().toString(36)}`;
   try {
+    // biome-ignore lint/correctness/useHookAtTopLevel: an e2e helper, not a React hook
     const s = await useWorld("lab");
     await enter(ana, ta, s);
     await enter(bia, tb, s);
@@ -54,16 +55,14 @@ test("a race on the slot-car track: lean in, lights, GO, fly off — seen from a
     }
     expect(at, "room for the track").not.toBeNull();
     const T = at as { x: number; y: number };
-    await expect.poll(() => bia.evaluate((i) => !!(window as any).__yutopia.engine.getObject(i), id)).toBe(true);
+    await expect.poll(() => bia.evaluate((i) => !!(window as any).__yutopia.model.getObject(i), id)).toBe(true);
 
-    // Ana walks up to its front and presses X: the controls, the camera leans in
-    const zoom0 = await ana.evaluate(() => (window as any).__yutopia.engine.getZoom());
+    // Ana walks up to its front and presses X: the controls
     await walkTo(ana, T.x + 2, T.y + 3.6, 25_000);
     await ana.waitForTimeout(500);
     await expect.poll(() => ana.evaluate(() => (window as any).__hud.get().prompt?.kind)).toBe("slotcar");
     await ana.keyboard.press("x");
     await expect(ana.getByRole("dialog", { name: "Slot cars" })).toBeVisible();
-    await expect.poll(() => ana.evaluate(() => (window as any).__yutopia.engine.getZoom())).toBeGreaterThan(zoom0);
     // the cars come in their own chunk
     await ana.waitForFunction(() => !!(window as any).__yutopia.slots, null, { timeout: 15_000 });
 
@@ -107,11 +106,10 @@ test("a race on the slot-car track: lean in, lights, GO, fly off — seen from a
     if (SHOTS) await ana.screenshot({ path: `${SHOTS}/slot-off.png` });
     await expect(ana.getByText(/1 offs/)).toBeVisible();
 
-    // Esc: the lane goes back, the camera follows Ana again
+    // Esc: the lane goes back
     await ana.keyboard.press("Escape");
     await expect(ana.getByRole("dialog", { name: "Slot cars" })).toBeHidden();
     await expect.poll(async () => Object.keys((await race(bia, id))?.cars ?? {}).length).toBe(0);
-    await expect.poll(() => ana.evaluate(() => (window as any).__yutopia.engine.getZoom())).toBeCloseTo(zoom0, 2);
   } finally {
     await ana.evaluate((i) => (window as any).__yutopia.send("obj:remove", { id: i }), id).catch(() => {});
     await ana.waitForTimeout(400);

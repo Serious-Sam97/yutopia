@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLang, useTr } from "@/lib/i18n";
-import { prefs, setPrefs } from "@/lib/prefs";
 import { hud } from "@/world/store";
 import type { PoolInfo } from "@/world/tables/pool";
 import { useWorld } from "./ctx";
@@ -211,8 +210,6 @@ export function PoolPanel({ objectId }: { objectId: string }) {
         e.preventDefault();
         if (!e.repeat) p.charge(true);
       } else if (e.key.toLowerCase() === "c") p.setCam(p.cam === "top" ? "cue" : "top");
-      else if (e.key.toLowerCase() === "t" && !e.repeat)
-        setPrefs({ view: prefs().view === "iso" ? prefs().last3d : "iso" });
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onUp);

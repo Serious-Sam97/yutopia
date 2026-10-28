@@ -105,7 +105,7 @@ test("disc console: plug in, a disc, the BIOS gate, play for everyone, pads, sav
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       const busy = await ana.evaluate(
         (a) =>
-          (window as any).__yutopia.engine
+          (window as any).__yutopia.model
             .allObjects()
             .some((o: any) => o.x >= a.x - 1 && o.x <= a.x + 2 && o.y >= a.y - 1 && o.y <= a.y + 3),
         p,
@@ -194,16 +194,7 @@ test("disc console: plug in, a disc, the BIOS gate, play for everyone, pads, sav
     await expect.poll(async () => hue(await colourOf(bia, "tv", conId)), { timeout: 10_000 }).toBe("green");
     if (SHOTS) {
       await bia.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
-      await bia.evaluate(
-        (p) => (window as any).__yutopia.engine.pinCamera({ x: p.x + 1.5, y: p.y + 2.5, zoom: 3 }),
-        at,
-      );
-      await bia.waitForTimeout(800);
-      await bia.screenshot({ path: `${SHOTS}/console-two-players.png` });
-      await bia.evaluate(() => (window as any).__yutopia.engine.pinCamera(null));
-      // in 3D (T): over their shoulders, the TV ahead
-      await bia.keyboard.press("t");
-      await bia.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
+      // over their shoulders, the TV ahead
       for (const [name, v] of [
         ["console-3d-players", { yaw: -Math.PI / 2, pitch: 0.42, dist: 2.6 }],
         ["console-3d-pads", { yaw: Math.PI / 2 + 0.3, pitch: 0.55, dist: 1.5 }],
@@ -212,7 +203,6 @@ test("disc console: plug in, a disc, the BIOS gate, play for everyone, pads, sav
         await bia.waitForTimeout(1500);
         await bia.screenshot({ path: `${SHOTS}/${name}.png` });
       }
-      await bia.keyboard.press("t");
     }
     await bia.keyboard.up("KeyX");
 
@@ -323,7 +313,7 @@ test("disc console: a big disc comes down once, with its progress", async ({ bro
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       const busy = await page.evaluate(
         (a) =>
-          (window as any).__yutopia.engine
+          (window as any).__yutopia.model
             .allObjects()
             .some((o: any) => o.x >= a.x - 1 && o.x <= a.x + 2 && o.y >= a.y - 1 && o.y <= a.y + 3),
         p,
@@ -392,7 +382,7 @@ test("disc console: a big disc comes down once, with its progress", async ({ bro
 });
 
 // The slim one with its screen up (P5): while it plays, its own little screen
-// shows the game too — the same picture as the TV, in iso and in 3D.
+// shows the game too — the same picture as the TV.
 test("disc console: the slim one's own screen shows the game", async ({ browser }) => {
   test.setTimeout(240_000);
   const ta = await token(ANA);
@@ -425,7 +415,7 @@ test("disc console: the slim one's own screen shows the game", async ({ browser 
       const p = { x: Math.floor(sp.x) + dx, y: Math.floor(sp.y) + dy };
       const busy = await page.evaluate(
         (a) =>
-          (window as any).__yutopia.engine
+          (window as any).__yutopia.model
             .allObjects()
             .some((o: any) => o.x >= a.x - 1 && o.x <= a.x + 2 && o.y >= a.y - 1 && o.y <= a.y + 3),
         p,
@@ -479,22 +469,12 @@ test("disc console: the slim one's own screen shows the game", async ({ browser 
     await page.keyboard.up("KeyX");
     if (SHOTS) {
       await page.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
-      await page.evaluate(
-        (q) => (window as any).__yutopia.engine.pinCamera({ x: q.x + 1.5, y: q.y + 2.5, zoom: 4 }),
-        p,
-      );
-      await page.waitForTimeout(1000);
-      await page.screenshot({ path: `${SHOTS}/slim-screen-iso.png` });
-      await page.evaluate(() => (window as any).__yutopia.engine.pinCamera(null));
-      await page.keyboard.press("t");
-      await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 30_000 });
       await page.evaluate(() =>
         // (from above her shoulder: she stands right in front of it)
         Object.assign((window as any).__yutopia.tp, { yaw: -Math.PI / 2 - 0.55, pitch: 0.95, dist: 1.5 }),
       );
       await page.waitForTimeout(1500);
       await page.screenshot({ path: `${SHOTS}/slim-screen-3d.png` });
-      await page.keyboard.press("t");
       await page.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), conId);
     }
     await page.getByRole("button", { name: /Turn off/ }).click();

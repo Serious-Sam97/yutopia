@@ -2,12 +2,12 @@
 import { writeFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { ANA, BIA, enter, test, token, walkTo } from "./helpers";
+import { ANA, BIA, enter, test, token } from "./helpers";
 
 // Phase 0 of docs/plan/44-the-night.md: the night's mocks, saved to design/screens/night/.
 // - From the game itself: tonight as it is, then the same frame with the proposed dark poked into the
 //   running view (the sun or moon and the sky's fill off, the sky, ridges, stars and fog black, the
-//   eyes as a faint fill); and the iso view with its light map painted over the game's own frame.
+//   eyes as a faint fill).
 // - From the stills (/dev/grounds?shot=night-…, the "pitch" hour): headlights, the torch, a lamp, a
 //   blizzard, someone in and out of the light. Notes laid over them in HTML.
 // The dev world is left as it was (only Ana teleports; her torch goes back off).
@@ -19,12 +19,12 @@ if (process.env.YUTOPIA_GPU)
 test.use({ viewport: { width: 1600, height: 900 } });
 const OUT = process.env.NIGHT_OUT ?? "../../design/screens/night";
 
-async function open(page: Page, view: "3p" | "iso", who = ANA) {
-  await page.addInitScript((v) => {
+async function open(page: Page, who = ANA) {
+  await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: v }));
-  }, view);
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p" }));
+  });
   await enter(page, await token(who));
   await page.waitForFunction(() => !!(window as any).__yutopia?.cars, null, { timeout: 60_000 });
 }
@@ -34,7 +34,7 @@ const hold = (page: Page, h: number) =>
     const c = (window as any).__yutopia;
     c.updateNight = () => {};
     c.hour = hh;
-    c.engine.setClock(hh);
+    c.model.setClock(hh);
     c.tp?.setHour(hh);
     if (c.life) c.life.weather = () => [0, 0];
   }, h);
@@ -200,7 +200,7 @@ async function still(page: Page, shot: string, name: string, html: (heads: { x: 
 
 test("the lot tonight and in the dark; stepping out of the lobby (the game itself)", async ({ page }) => {
   test.setTimeout(240_000);
-  await open(page, "3p");
+  await open(page);
   await at(page, -8, 30);
   await hold(page, 23);
   await page.waitForTimeout(1500);
@@ -249,115 +249,6 @@ test("the lot tonight and in the dark; stepping out of the lobby (the game itsel
     ],
     2,
   );
-});
-
-test("the iso view: tonight, then its light map over the land (the game itself)", async ({ page }) => {
-  test.setTimeout(240_000);
-  await open(page, "iso");
-  await at(page, -10, 28);
-  await hold(page, 23);
-  // (facing west, out over the lot: her beam up and to the left on screen)
-  await walkTo(page, -14 + 60, 28 + 10);
-  await page.evaluate(() => (window as any).__yutopia.toggleTorch());
-  await page.waitForTimeout(2500);
-  try {
-    await page.evaluate(() => {
-      for (const n of document.querySelectorAll("nextjs-portal")) n.remove();
-    });
-    const now = await page.screenshot();
-    // the light map: black over the land and the lot; cut out of it the rooms (indoors is
-    // untouched), the lamps' pools and her beam
-    await page.evaluate(() => {
-      const c = (window as any).__yutopia;
-      const e = c.engine;
-      const cv = e.app.canvas as HTMLCanvasElement;
-      const r = cv.getBoundingClientRect();
-      const o = document.createElement("canvas");
-      o.width = r.width;
-      o.height = r.height;
-      o.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;pointer-events:none`;
-      cv.parentElement?.insertBefore(o, cv.nextSibling);
-      const g = o.getContext("2d") as CanvasRenderingContext2D;
-      const z = e.zoom;
-      const S = (x: number, y: number): [number, number] => [
-        e.world.position.x + (x - y) * 32 * z,
-        e.world.position.y + (x + y) * 16 * z,
-      ];
-      g.fillStyle = "rgba(0,0,0,0.955)";
-      g.fillRect(0, 0, o.width, o.height);
-      g.globalCompositeOperation = "destination-out";
-      // the rooms
-      const m = e.map;
-      g.fillStyle = "#000";
-      for (let y = 0; y < m.height; y++)
-        for (let x = 0; x < m.width; x++) {
-          const ch = m.tiles[y][x];
-          if (ch === " " || ch === "a" || ch === "c") continue;
-          const p = [S(x, y), S(x + 1, y), S(x + 1, y + 1), S(x, y + 1)];
-          g.beginPath();
-          g.moveTo(...p[0]);
-          for (const q of p.slice(1)) g.lineTo(...q);
-          g.closePath();
-          g.fill();
-        }
-      // a soft pool (radius in tiles) on the ground: an ellipse, as the iso grid squashes a circle
-      const pool = (x: number, y: number, R: number, k: number) => {
-        const [sx, sy] = S(x, y);
-        g.save();
-        g.translate(sx, sy);
-        g.scale(1, 0.5);
-        const rr = R * 32 * Math.SQRT2 * z;
-        const grd = g.createRadialGradient(0, 0, 0, 0, 0, rr);
-        grd.addColorStop(0, `rgba(0,0,0,${k})`);
-        grd.addColorStop(0.55, `rgba(0,0,0,${k * 0.6})`);
-        grd.addColorStop(1, "rgba(0,0,0,0)");
-        g.fillStyle = grd;
-        g.beginPath();
-        g.arc(0, 0, rr, 0, Math.PI * 2);
-        g.fill();
-        g.restore();
-      };
-      c.room.state.objects.forEach((ob: any) => {
-        if (ob.kind === "lamp_post" && (ob.level ?? 0) === 0) pool(ob.x + 1.2, ob.y + 0.6, 5.5, 0.97);
-      });
-      // her beam: west (-x), a cone of 9 tiles, ±0.28 rad
-      const me = c.meTile();
-      const [ax, ay] = [me.x + 0.5, me.y + 0.5];
-      const L = 9;
-      const tip = (a: number) => S(ax + Math.cos(Math.PI + a) * L, ay + Math.sin(Math.PI + a) * L);
-      const [hx, hy] = S(ax, ay);
-      const grd = g.createRadialGradient(hx, hy, 0, hx, hy, L * 32 * Math.SQRT2 * z * 0.9);
-      grd.addColorStop(0, "rgba(0,0,0,1)");
-      grd.addColorStop(0.7, "rgba(0,0,0,0.75)");
-      grd.addColorStop(1, "rgba(0,0,0,0)");
-      g.fillStyle = grd;
-      g.beginPath();
-      g.moveTo(hx, hy);
-      for (let a = -0.28; a <= 0.281; a += 0.04) g.lineTo(...tip(a));
-      g.closePath();
-      g.fill();
-      // …and round her feet, faintly: you always see where you are
-      pool(ax, ay, 1.2, 0.5);
-    });
-    await page.waitForTimeout(300);
-    const then = await page.screenshot();
-    await sheet(
-      page,
-      "07-iso-night",
-      [
-        { url: `data:image/png;base64,${now.toString("base64")}`, label: "Iso tonight, as it is" },
-        { url: `data:image/png;base64,${then.toString("base64")}`, label: "Iso in the dark: its light map" },
-      ],
-      1,
-      1600,
-      900,
-    );
-  } finally {
-    await page.evaluate(() => {
-      const c = (window as any).__yutopia;
-      if (c.room?.state.players.get(c.room.sessionId)?.torch) c.toggleTorch();
-    });
-  }
 });
 
 test("the stills: headlights, the torch, a lamp, a blizzard, people in and out of the light", async ({ page }) => {
@@ -483,10 +374,10 @@ test("the stills: headlights, the torch, a lamp, a blizzard, people in and out o
 
 // Phase 1 built (docs/plan/44-the-night.md): the same frames as 01, 04 and 07 from the game as it
 // now is at 23:00, nothing poked; saved to design/screens/night/built/.
-test("built: the dark in the game itself (3D and iso)", async ({ page, browser }) => {
+test("built: the dark in the game itself", async ({ page }) => {
   test.setTimeout(300_000);
   const BUILT = `${OUT}/built`;
-  await open(page, "3p");
+  await open(page);
   await at(page, -8, 30);
   await hold(page, 23);
   await page.waitForTimeout(2500);
@@ -511,25 +402,15 @@ test("built: the dark in the game itself (3D and iso)", async ({ page, browser }
   });
   await page.screenshot({ path: `${BUILT}/3d-torch.png` });
   await page.evaluate(() => (window as any).__yutopia.toggleTorch());
-  const iso = await (await browser.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
-  await open(iso, "iso");
-  await at(iso, -10, 28);
-  await hold(iso, 23);
-  await iso.waitForTimeout(2500);
-  await iso.evaluate(() => {
-    for (const n of document.querySelectorAll("nextjs-portal")) n.remove();
-  });
-  await iso.screenshot({ path: `${BUILT}/iso-lot.png` });
 });
 
 // Phase 2 (N2): a lot car with its lamps on at night (Ana in it), Bia ten steps ahead of its nose:
-// the headlamps are real light on her and the lot, from Ana's seat and from Bia's side; then Bia
-// in iso. Saved to design/screens/night/built/. Ana gets out after (the car stays in its bay).
-test("built: headlamps on someone (3D and iso)", async ({ page, browser }) => {
+// the headlamps are real light on her and the lot, from Ana's seat and from Bia's side. Saved to design/screens/night/built/. Ana gets out after (the car stays in its bay).
+test("built: headlamps on someone", async ({ page, browser }) => {
   test.setTimeout(300_000);
   const BUILT = `${OUT}/built`;
   const a = page;
-  await open(a, "3p");
+  await open(a);
   await hold(a, 23);
   await a.evaluate(() => (window as any).__yutopia.room.send("mod:cars", {}));
   await a.waitForTimeout(800);
@@ -572,7 +453,7 @@ test("built: headlamps on someone (3D and iso)", async ({ page, browser }) => {
     .toMatch(/^drive:car:/);
   const b = await (await browser.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
   try {
-    await open(b, "3p", BIA);
+    await open(b, BIA);
     await hold(b, 23);
     const at = nose(10);
     await b.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), at);
@@ -608,17 +489,6 @@ test("built: headlamps on someone (3D and iso)", async ({ page, browser }) => {
     console.log("glare in front, behind", glare);
     expect(glare[0], "headlamps in her face").toBeGreaterThan(0.2);
     expect(glare[1], "behind the car").toBeLessThan(0.15);
-    // iso: the beam on the ground, on her (Bia again, in iso)
-    await b.context().close();
-    const iso = await (await browser.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
-    await open(iso, "iso", BIA);
-    await hold(iso, 23);
-    await iso.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), at);
-    await iso.waitForTimeout(4000);
-    await iso.evaluate(() => {
-      for (const n of document.querySelectorAll("nextjs-portal")) n.remove();
-    });
-    await iso.screenshot({ path: `${BUILT}/iso-headlamps.png` });
   } finally {
     await a.evaluate(() => (window as any).__yutopia.interact());
   }
@@ -628,12 +498,14 @@ test("built: headlamps on someone (3D and iso)", async ({ page, browser }) => {
 // camera); into a lamp's pool, put out within a second. Saved to design/screens/night/built/.
 test("built: the eyes adjust, and a lamp puts them out", async ({ page }) => {
   test.setTimeout(240_000);
-  await open(page, "3p");
+  await open(page);
   await hold(page, 23);
   const eyes = () => page.evaluate(() => (window as any).__yutopia.tp.around.eyes as number);
   // (indoors first: the dark's chunk loads the first time out, and the eyes start from the rooms' light)
   await page.evaluate(() => (window as any).__yutopia.teleport({ x: -40, y: -30, level: 0 }));
-  await page.waitForFunction(() => (window as any).__yutopia.engine?.grounds?.land.visible, null, { timeout: 60_000 });
+  await page.waitForFunction(() => (window as any).__yutopia.tp?.around?.grounds?.left.blocks === 0, null, {
+    timeout: 60_000,
+  });
   await hold(page, 23);
   const frames: { url: string; label: string }[] = [];
   const shot = async (label: string) => {
@@ -680,20 +552,22 @@ test("built: the eyes adjust, and a lamp puts them out", async ({ page }) => {
 
 // Phase 4 (N4): seen and unseen. Ana out on the lawn at 23:00, her torch on; Bia eight steps off
 // to the side of the beam: no name over her in Ana's view (3D), her body as dark as the snow; then
-// six steps along the beam: her name back. Then the same in iso. Saved to design/screens/night/built/.
-test("built: seen and unseen (two people, 3D and iso)", async ({ page, browser }) => {
+// six steps along the beam: her name back. Saved to design/screens/night/built/.
+test("built: seen and unseen (two people)", async ({ page, browser }) => {
   test.setTimeout(300_000);
   const BUILT = `${OUT}/built`;
   const a = page;
-  await open(a, "3p");
+  await open(a);
   await hold(a, 23);
   await a.evaluate(() => (window as any).__yutopia.teleport({ x: -40, y: -30, level: 0 }));
-  await a.waitForFunction(() => (window as any).__yutopia.engine?.grounds?.land.visible, null, { timeout: 60_000 });
+  await a.waitForFunction(() => (window as any).__yutopia.tp?.around?.grounds?.left.blocks === 0, null, {
+    timeout: 60_000,
+  });
   await hold(a, 23);
   await a.evaluate(() => (window as any).__yutopia.toggleTorch());
   const b = await (await browser.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
   try {
-    await open(b, "3p", BIA);
+    await open(b, BIA);
     await hold(b, 23);
     const bid = await b.evaluate(() => (window as any).__yutopia.room.sessionId as string);
     await a.waitForTimeout(2500);
@@ -734,24 +608,7 @@ test("built: seen and unseen (two people, 3D and iso)", async ({ page, browser }
     expect(off.name, "off the beam: no name").toBe(false);
     expect(on.unseen, "in the beam: seen").toBe(false);
     expect(on.name, "in the beam: her name").toBe(true);
-    // iso: Ana again, in iso (Bia stays in the beam's place): her tag shown; then off it, hidden
     await a.evaluate(() => (window as any).__yutopia.toggleTorch());
-    await b.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), along(6, 8));
-    const iso = await (await browser.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
-    await a
-      .context()
-      .close()
-      .catch(() => {});
-    await open(iso, "iso");
-    await hold(iso, 23);
-    await iso.evaluate(() => (window as any).__yutopia.teleport({ x: -40, y: -30, level: 0 }));
-    await iso.waitForTimeout(5000);
-    await hold(iso, 23);
-    await iso.waitForTimeout(1500);
-    const isoTag = await iso.evaluate((id) => (window as any).__yutopia.engine.avatars.get(id)?.tag.visible, bid);
-    await iso.screenshot({ path: `${BUILT}/iso-unseen.png` });
-    console.log("iso: Bia's tag off every light", isoTag);
-    expect(isoTag, "iso: no name out of every light").toBe(false);
   } finally {
     await b
       .context()

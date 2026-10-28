@@ -30,7 +30,6 @@ import {
   type MapDef,
   NO_WALL,
   nearestEdge,
-  openingCentre,
   openingEdges,
   openingNear,
   otherFace,
@@ -60,7 +59,7 @@ import type { SetupItem } from "@/lib/api";
 import { tr, trMaybe } from "@/lib/i18n";
 import { C } from "../art/palette";
 import type { WorldController } from "../controller";
-import type { EdgeGhost, FaceGhost, Outline, Pick } from "../engine";
+import type { EdgeGhost, FaceGhost, Outline, Pick } from "../model";
 import { hud, toast, type WallTag, type WallView } from "../store";
 import { buildSound } from "./sounds";
 
@@ -119,7 +118,6 @@ export class BuildController {
   private pending = new Map<string, { key: string; until: number }>();
   private pendingTimer: ReturnType<typeof setInterval> | null = null;
   private shift = false;
-  private overBin = false; // the pointer is over the catalog's bin
   private lastWheel = 0;
   // one wall item in hand: the face it's aimed at (where along it, how high;
   // z null keeps its height), and R's "the other side of this wall"
@@ -166,8 +164,8 @@ export class BuildController {
     this.removing = false;
   };
 
-  private get engine() {
-    return this.w.engine;
+  private get model() {
+    return this.w.model;
   }
   private get map() {
     return this.w.map;
@@ -188,7 +186,7 @@ export class BuildController {
 
   // ── what's around ────────────────────────────────────────────────────────
   private objects(): WorldObjectDef[] {
-    return this.engine?.allObjects() ?? [];
+    return this.model?.allObjects() ?? [];
   }
   private bodies(): Point[] {
     return this.room ? [...this.room.state.players.values()].map((p: S) => ({ x: p.x, y: p.y })) : [];
@@ -199,7 +197,7 @@ export class BuildController {
     const [uid, ...name] = h.split("|");
     return { uid: Number(uid), name: name.join("|") };
   }
-  // An object's stored props (the engine's copy carries drawing-only flags like
+  // An object's stored props (the model's copy carries drawing-only flags like
   // a chair's `occupied`, which must never be saved).
   private storedProps(id: string): Record<string, unknown> | undefined {
     const o = this.room?.state.objects.get(id);
@@ -272,7 +270,7 @@ export class BuildController {
   // the floor under the pointer (the only way to reach the faces this view
   // can't see).
   private aimWall(): boolean {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return false;
     const ray = e.pointerRay();
     const through = e.lookedThrough();
@@ -307,7 +305,7 @@ export class BuildController {
   // The point under the pointer on the top it's over (the highest surface
   // there), else on the floor (world tiles).
   private surfacePoint(): Point {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return { x: this.anchor.x + 0.5, y: this.anchor.y + 0.5 };
     const away = new Set(this.hand.flatMap((h) => (h.origin ? [h.origin.id] : [])));
     const rest = this.objects().filter((o) => !away.has(o.id));
@@ -332,17 +330,9 @@ export class BuildController {
   }
 
   private drawHand() {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return;
     const placed = this.placed();
-    // walls between the camera and what you carry lower out of the way
-    const first = placed[0]?.def;
-    if (first)
-      e.focusAt = entry(first.kind).wall
-        ? hangSpot(first, 0.5)
-        : isOpening(first.kind)
-          ? openingCentre(first)
-          : { x: first.x + 0.5, y: first.y + 0.5 };
     // (a wall item, a door or a window shows exactly where it would go: not lifted)
     e.setGhosts(placed, this.hand.length && !this.hanging() && !this.slotting() ? LIFT : 0);
     const fits = placed.every((p) => p.ok);
@@ -354,7 +344,7 @@ export class BuildController {
   private syncHidden() {
     const ids = new Set<string>(this.pending.keys());
     for (const h of this.hand) if (h.origin) ids.add(h.origin.id);
-    this.engine?.setHidden(ids);
+    this.model?.setHidden(ids);
   }
 
   private setHand(hand: Held[]) {
@@ -364,9 +354,6 @@ export class BuildController {
       this.aim = null;
       this.flip = false;
     }
-    // nothing in hand, no bin: the catalog's bin goes away while it may still be
-    // under the pointer (so it never hears it leave)
-    if (!hand.length) this.overBin = false;
     this.setBuild({
       held: hand.flatMap((h) => (h.origin ? [h.origin.id] : [])),
       carrying: hand.length,
@@ -418,10 +405,10 @@ export class BuildController {
       // generated clutter becomes a real object first (server: dress:take)
       this.send("dress:take", { id: pick.id });
       id = takenId(pick.id);
-      const ok = await this.waitFor(() => !!this.engine?.getObject(id));
+      const ok = await this.waitFor(() => !!this.model?.getObject(id));
       if (!ok) return;
     }
-    const obj = this.engine?.getObject(id);
+    const obj = this.model?.getObject(id);
     if (!obj || !entry(obj.kind).buildable) return;
     // a door or window of someone else's locked room stays where it is
     const locked = isOpening(obj.kind)
@@ -493,7 +480,7 @@ export class BuildController {
   }
 
   private pointerTile(): Point {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return this.anchor;
     const w = e.pointerWorld();
     return { x: Math.floor(w.x), y: Math.floor(w.y) };
@@ -532,7 +519,7 @@ export class BuildController {
     for (const { def } of placed) {
       const h = byId.get(def.id) as Held;
       if (h.origin) this.pending.set(h.origin.id, { key: spotKey(def), until });
-      this.engine?.puff(...this.middle(def), "drop");
+      this.model?.puff(...this.middle(def), "drop");
     }
     this.watchPending();
     buildSound("drop");
@@ -569,7 +556,7 @@ export class BuildController {
     if (!this.pending.size && !this.pendingTimer) return;
     const now = performance.now();
     for (const [id, p] of this.pending) {
-      const o = this.engine?.getObject(id);
+      const o = this.model?.getObject(id);
       if (now > p.until || !o || spotKey(o) === p.key) this.pending.delete(id);
     }
     this.syncHidden();
@@ -611,14 +598,10 @@ export class BuildController {
   commit() {
     if (this.furniture() && this.hand.length) this.drop();
   }
-  setOverBin(on: boolean) {
-    this.overBin = on;
-  }
   private pointerOnBin(): boolean {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return false;
-    const r = e.app.canvas.getBoundingClientRect();
-    const el = document.elementFromPoint(r.left + e.pointerAt.gx, r.top + e.pointerAt.gy);
+    const el = document.elementFromPoint(e.pointerAt.x, e.pointerAt.y);
     return !!el?.closest("[data-build-bin]");
   }
 
@@ -761,7 +744,7 @@ export class BuildController {
     }
     if (list.length === 1) this.send("obj:remove", { id: list[0].id });
     else this.send("obj:removeMany", { ids: list.map((o) => o.id) });
-    for (const o of list) this.engine?.puff(...this.middle(o), "poof");
+    for (const o of list) this.model?.puff(...this.middle(o), "poof");
     buildSound("remove");
     this.setBuild({ selected: [] });
     return true;
@@ -837,7 +820,7 @@ export class BuildController {
         pick.kind === "frame" ? "frame" : ["plant", "boxes", "bin", "cable"].includes(pick.kind) ? "decor" : "tabletop";
       this.setBuild({ mode: "place", kind, props: { d: pick.kind, seed: Math.random() }, rot: 0 });
     } else {
-      const o = this.engine?.getObject(pick.id);
+      const o = this.model?.getObject(pick.id);
       if (!o || !entry(o.kind).buildable) return;
       this.setBuild({ mode: "place", kind: o.kind, props: this.copyable(o.props), rot: o.rot ?? 0 });
     }
@@ -849,7 +832,7 @@ export class BuildController {
 
   private labelOf(p: Pick): string {
     if (p.dress) return trMaybe(`decor_${p.kind}`) ?? p.kind;
-    const o = this.engine?.getObject(p.id);
+    const o = this.model?.getObject(p.id);
     if (!o) return "";
     if (o.kind === "decor" || o.kind === "tabletop")
       return trMaybe(`decor_${String(o.props?.d)}`) ?? entry(o.kind).label;
@@ -858,7 +841,7 @@ export class BuildController {
 
   // ── outlines and the hover tag ───────────────────────────────────────────
   private drawOutlines() {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return;
     const b = hud.get().build;
     const list: Outline[] = [];
@@ -875,8 +858,6 @@ export class BuildController {
   }
 
   private setHover(p: Pick | null) {
-    const o = p && !p.dress ? this.engine?.getObject(p.id) : null;
-    if (this.engine && !this.hand.length) this.engine.focusAt = o ? { x: o.x + 0.5, y: o.y + 0.5 } : null;
     const same = p?.id === this.hoverPick?.id && p?.dress === this.hoverPick?.dress;
     this.hoverPick = p;
     if (!same) {
@@ -892,7 +873,8 @@ export class BuildController {
               }
             : null,
       });
-      const canvas = this.engine?.app.canvas;
+      // (on the 3D view's canvas: it leaves its own hover cursor alone in build mode)
+      const canvas = this.w.tp?.renderer.domElement;
       if (b.on && canvas) canvas.style.cursor = p ? (b.mode === "eyedrop" ? "copy" : "grab") : "default";
     }
     this.drawOutlines();
@@ -900,18 +882,20 @@ export class BuildController {
 
   // Where the hover tag / item toolbar goes (client px): above the thing.
   anchorOf(id: string): { x: number; y: number } | null {
-    const o = this.engine?.getObject(id);
-    if (!o || !this.engine) return null;
-    if (onTop(o)) {
-      const c = topCentre(o);
-      return this.engine.worldToClient(c.x, c.y, (Number(o.props?.z) || 0) + 30);
-    }
-    if (entry(o.kind).wall) {
-      const p = hangSpot(o, 0.15);
-      return this.engine.worldToClient(p.x, p.y, hangOf(o).z1 + 10);
-    }
+    const m = this.model;
+    const o = m?.getObject(id);
+    if (!o || !m) return null;
     const { w, h } = placedFootprint(o);
-    return this.engine.worldToClient(o.x + w / 2, o.y + h / 2, 52);
+    const c = onTop(o) ? topCentre(o) : entry(o.kind).wall ? hangSpot(o, 0.15) : { x: o.x + w / 2, y: o.y + h / 2 };
+    const z = onTop(o) ? (Number(o.props?.z) || 0) + 30 : entry(o.kind).wall ? hangOf(o).z1 + 10 : 52;
+    return this.client(c.x, c.y, z);
+  }
+  // a world point (`z` iso px up) in client px (the view answers from its canvas's corner)
+  private client(x: number, y: number, z: number): { x: number; y: number } | null {
+    const p = this.model?.worldToClient(x, y, z);
+    if (!p) return null;
+    const r = this.w.hostRect();
+    return { x: r.left + p.x, y: r.top + p.y };
   }
 
   // A thing's middle on the floor plan (world tiles).
@@ -931,18 +915,18 @@ export class BuildController {
   // ── pointer ──────────────────────────────────────────────────────────────
   hover(x: number, y: number) {
     const b = hud.get().build;
-    if (!b.on || !this.engine) return;
+    if (!b.on || !this.model) return;
     if (b.pickSpawn) {
       // picking the arrival point: the tile under the pointer, and whether it can be
       const tx = Math.floor(x);
       const ty = Math.floor(y);
-      return this.engine.showSpawn(true, { x: tx, y: ty, ok: this.w.grid.ok(tx, ty) });
+      return this.model.showSpawn(true, { x: tx, y: ty, ok: this.w.grid.ok(tx, ty) });
     }
     if (b.tool !== "furniture") return this.hoverOther(x, y);
-    const e = this.engine;
+    const e = this.model;
     const pr = this.press;
     if (pr && !pr.carry && pr.pick && !pr.dragging && b.mode === "hand") {
-      if (Math.hypot(e.pointerAt.gx - pr.sx, e.pointerAt.gy - pr.sy) > DRAG_PX) {
+      if (Math.hypot(e.pointerAt.x - pr.sx, e.pointerAt.y - pr.sy) > DRAG_PX) {
         pr.dragging = true;
         void this.pickUp(pr.pick);
       }
@@ -950,7 +934,7 @@ export class BuildController {
     }
     if (pr?.carry) {
       // a sideways drag while pressing turns what you hold (and doesn't move it)
-      const steps = Math.floor(Math.abs(e.pointerAt.gx - pr.sx) / TURN_PX);
+      const steps = Math.floor(Math.abs(e.pointerAt.x - pr.sx) / TURN_PX);
       while (pr.turned < steps) {
         pr.turned++;
         this.rotate();
@@ -996,7 +980,7 @@ export class BuildController {
   private cycle = 0;
   private under: Pick[] = [];
   private pickNow(): Pick | null {
-    const all = this.engine?.picksAt() ?? [];
+    const all = this.model?.picksAt() ?? [];
     const key = (l: Pick[]) => l.map((p) => p.id).join(",");
     if (key(all) !== key(this.under)) this.cycle = 0;
     this.under = all;
@@ -1005,16 +989,16 @@ export class BuildController {
 
   down(x: number, y: number) {
     const b = hud.get().build;
-    if (!b.on || !this.engine) return;
+    if (!b.on || !this.model) return;
     if (b.tool !== "furniture") return this.downOther(x, y);
-    const e = this.engine;
+    const e = this.model;
     if (this.hand.length) {
-      this.press = { sx: e.pointerAt.gx, sy: e.pointerAt.gy, pick: null, carry: true, dragging: false, turned: 0 };
+      this.press = { sx: e.pointerAt.x, sy: e.pointerAt.y, pick: null, carry: true, dragging: false, turned: 0 };
       return;
     }
     const pick = this.pickNow();
     if (pick || b.mode === "eyedrop") {
-      this.press = { sx: e.pointerAt.gx, sy: e.pointerAt.gy, pick, carry: false, dragging: false, turned: 0 };
+      this.press = { sx: e.pointerAt.x, sy: e.pointerAt.y, pick, carry: false, dragging: false, turned: 0 };
       return;
     }
     // empty floor: drag a box to select
@@ -1028,9 +1012,9 @@ export class BuildController {
     if (b.tool !== "furniture") return this.upOther(x, y);
     const pr = this.press;
     this.press = null;
-    // released over the catalog's bin (checked where the pointer is now, not
-    // only by the flag): what you hold goes
-    if (this.overBin && this.hand.some((h) => h.origin) && this.pointerOnBin()) {
+    // released over the catalog's bin (checked where the pointer is now: the 3D
+    // canvas holds the pointer through a drag, so the bin never hears it): what you hold goes
+    if (this.hand.some((h) => h.origin) && this.pointerOnBin()) {
       this.remove();
       return;
     }
@@ -1062,7 +1046,7 @@ export class BuildController {
     if (this.boxFrom) {
       const r = rectOf(this.boxFrom, { x: Math.floor(x), y: Math.floor(y) });
       this.boxFrom = null;
-      this.engine?.setRectGhost(null);
+      this.model?.setRectGhost(null);
       const inBox = this.objects().filter((o) => {
         if (!entry(o.kind).buildable || isOpening(o.kind)) return false;
         const { w, h } = placedFootprint(o);
@@ -1083,7 +1067,7 @@ export class BuildController {
     if (b.pickSpawn) {
       this.send("map:spawn", { x: Math.floor(x), y: Math.floor(y) });
       this.setBuild({ pickSpawn: false });
-      this.engine?.showSpawn(true);
+      this.model?.showSpawn(true);
       return;
     }
     if (b.tool === "furniture") return;
@@ -1130,17 +1114,24 @@ export class BuildController {
       this.setHover(this.under[this.cycle]);
     } else if (furn && this.hand.length && key.startsWith("arrow")) {
       // keyboard: nudge what you hold a tile at a time; Enter puts it down
-      // (things on a surface: a quarter tile at a time)
+      // (things on a surface: a quarter tile at a time). By the camera: ↑ is away from it
+      // along its yaw, → to its right, each snapped to the nearest world axis.
       const d = { arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowright: [1, 0] }[key] ?? [0, 0];
+      const yaw = this.w.tp?.yaw ?? -Math.PI * 0.75;
+      const [fx, fy, rx, ry] = [Math.cos(yaw), Math.sin(yaw), -Math.sin(yaw), Math.cos(yaw)];
+      const vx = fx * -d[1] + rx * d[0];
+      const vy = fy * -d[1] + ry * d[0];
+      const [mx, my] = Math.abs(vx) >= Math.abs(vy) ? [Math.sign(vx), 0] : [0, Math.sign(vy)];
       if (this.hanging() && this.aim) {
-        // on a wall: ← → along it a quarter tile (as it runs on screen), ↑ ↓ up and down a step
+        // on a wall: ← → along it a quarter tile (the way it runs as the camera sees it), ↑ ↓ up
+        // and down a step
         const a = this.aim;
         const k = hangOf(this.placed()[0].def);
         const z = a.z ?? (k.z0 + k.z1) / 2;
-        const along = a.face.dir === "h" ? d[0] : -d[0];
+        const along = d[0] * (Math.sign(a.face.dir === "h" ? rx : ry) || 1);
         this.aim = { ...a, along: a.along + along / WQ, z: z - d[1] * WZ_PX };
-      } else if (this.fine()) this.cell = { x: this.cell.x + d[0], y: this.cell.y + d[1] };
-      else this.anchor = { x: this.anchor.x + d[0], y: this.anchor.y + d[1] };
+      } else if (this.fine()) this.cell = { x: this.cell.x + mx, y: this.cell.y + my };
+      else this.anchor = { x: this.anchor.x + mx, y: this.anchor.y + my };
       buildSound("snap");
       this.drawHand();
     } else if (furn && this.hand.length && key === "enter") this.drop();
@@ -1162,33 +1153,34 @@ export class BuildController {
 
   // The UI changed something (tool, catalog item, brush…): redraw.
   refresh() {
-    const engine = this.engine;
-    if (!engine) return;
+    const model = this.model;
+    if (!model) return;
     const bt = hud.get().build;
-    engine.passAvatars = bt.on;
-    engine.passObjects = bt.on && bt.tool === "walls";
-    engine.showSpawn(bt.on && (bt.tool === "map" || bt.pickSpawn));
-    engine.setBuildGrid(bt.on && (bt.tool === "furniture" || bt.tool === "walls" || bt.tool === "rooms"));
-    engine.wallView = bt.on ? bt.wallView : null;
+    model.passAvatars = bt.on;
+    model.passObjects = bt.on && bt.tool === "walls";
+    model.showSpawn(bt.on && (bt.tool === "map" || bt.pickSpawn));
+    model.setBuildGrid(bt.on && (bt.tool === "furniture" || bt.tool === "walls" || bt.tool === "rooms"));
+    model.wallView = bt.on ? bt.wallView : null;
     if (!bt.on) {
       this.cancel();
-      engine.focusAt = null;
-      engine.setGhosts([], 0);
-      engine.setOutlines([]);
-      engine.setHidden([]);
-      engine.setEdgeGhosts([]);
-      engine.setFaceGhosts([]);
+      model.setGhosts([], 0);
+      model.setOutlines([]);
+      model.setHidden([]);
+      model.setEdgeGhosts([]);
+      model.setFaceGhosts([]);
+      const canvas = this.w.tp?.renderer.domElement;
+      if (canvas) canvas.style.cursor = "";
       this.setBuild({ selected: [], hover: null, wallTag: null, wallSel: [] });
       return;
     }
     if (bt.tool !== "walls") {
-      engine.setFaceGhosts([]);
+      model.setFaceGhosts([]);
       this.run = null;
       this.stroke = null;
       if (bt.wallTag) this.setBuild({ wallTag: null });
     }
     if (bt.tool === "furniture") {
-      engine.setEdgeGhost(null, false);
+      model.setEdgeGhost(null, false);
       if (bt.mode === "place") this.syncPlace();
       else if (
         this.hand.some((h) => !h.origin) &&
@@ -1200,7 +1192,7 @@ export class BuildController {
       return this.drawHand();
     }
     if (this.hand.length) this.cancel();
-    engine.setOutlines([]);
+    model.setOutlines([]);
     this.refreshOther();
   }
 
@@ -1214,7 +1206,7 @@ export class BuildController {
 
   private hoverOther(x: number, y: number) {
     const bb = hud.get().build;
-    if (!this.engine) return;
+    if (!this.model) return;
     if (bb.tool === "walls") {
       this.lastFloor = { x, y };
       if (bb.wallMode === "paint") return this.paintHover();
@@ -1226,9 +1218,9 @@ export class BuildController {
     if (tx === this.hoverTile.x && ty === this.hoverTile.y) return;
     this.hoverTile = { x: tx, y: ty };
     if (bb.tool === "walls" && this.boxing() && this.dragFrom)
-      this.engine.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
+      this.model.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
     else if (bb.tool === "walls" && this.painting) this.paintAt(tx, ty);
-    if (bb.tool === "rooms" && this.dragFrom) this.engine.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
+    if (bb.tool === "rooms" && this.dragFrom) this.model.setRectGhost({ ...this.dragRect(tx, ty), ok: true });
     this.refreshOther();
   }
 
@@ -1237,7 +1229,7 @@ export class BuildController {
   private flipFace = false; // Tab: the other face of the panel under the pointer
   private flipOf: string | null = null; // (the edge it was flipped on)
   private panelNow(): Panel | null {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return null;
     const through = e.lookedThrough();
     const p = panelAt(this.map, e.pointerRay(), this.lastFloor, (w) => through.has(`${w.dir}${w.x},${w.y}`));
@@ -1256,8 +1248,8 @@ export class BuildController {
     const room = isFloor(tileAt(this.map, tx, ty)) ? (areaAt(this.map, tx + 0.5, ty + 0.5)?.name ?? null) : null;
     const ch = edgeAt(this.map, p);
     const from = faceMat(this.map, p, p.side) ?? (ch === "g" ? "g" : ch === "h" ? "h" : null);
-    const far = p.side < 0 && !this.engine?.seesAllSides;
-    return { kind: "face", far, room, from, to, why, n };
+    // (`far`: a face turned from the iso camera; the 3D view sees every side)
+    return { kind: "face", far: false, room, from, to, why, n };
   }
   private setTag(tag: WallTag | null) {
     const was = hud.get().build.wallTag;
@@ -1275,7 +1267,7 @@ export class BuildController {
     return tr("wallWhyNone");
   }
   private paintHover() {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return;
     const mat = hud.get().build.paint;
     if (this.stroke) {
@@ -1310,7 +1302,7 @@ export class BuildController {
   // Where along a panel's wall line the pointer is: on that face (the
   // pointer's ray meets its plane), else the floor under the pointer.
   private alongFace(p: Panel): number | null {
-    const ray = this.engine?.pointerRay();
+    const ray = this.model?.pointerRay();
     if (ray) {
       const plane = (p.dir === "h" ? p.y : p.x) + p.side * 0.1;
       const dn = p.dir === "h" ? ray.d.y : ray.d.x;
@@ -1361,7 +1353,7 @@ export class BuildController {
 
   // ── Select (the inspector) ──
   private selectHover() {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return;
     const p = this.panelNow();
     const sel = hud.get().build.wallSel;
@@ -1447,7 +1439,7 @@ export class BuildController {
     return list.map((e) => this.runEdge(e, remove));
   }
   private buildHover(x: number, y: number) {
-    const e = this.engine;
+    const e = this.model;
     if (!e) return;
     if (this.boxing()) {
       const tx = Math.floor(x);
@@ -1488,7 +1480,7 @@ export class BuildController {
       buildSound("nope");
       toast(list.find((g) => g.why)?.why ?? tr("buildNoFit"), "warn");
     }
-    this.engine?.setEdgeGhosts([]);
+    this.model?.setEdgeGhosts([]);
     this.setTag(null);
   }
 
@@ -1534,7 +1526,7 @@ export class BuildController {
       if (b.wallMode === "select") return;
       if (this.boxing()) {
         this.dragFrom = { x: tx, y: ty };
-        if (b.wallMode === "floors") this.engine?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
+        if (b.wallMode === "floors") this.model?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
         else this.buildHover(x, y);
         return;
       }
@@ -1550,7 +1542,7 @@ export class BuildController {
     }
     if (b.tool === "rooms") {
       this.dragFrom = { x: tx, y: ty };
-      this.engine?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
+      this.model?.setRectGhost({ x: tx, y: ty, w: 1, h: 1, ok: true });
     }
   }
 
@@ -1568,8 +1560,8 @@ export class BuildController {
     if (b.tool === "walls" && this.dragFrom) {
       const r = this.dragRect(Math.floor(x), Math.floor(y));
       this.dragFrom = null;
-      this.engine?.setRectGhost(null);
-      this.engine?.setEdgeGhosts([]);
+      this.model?.setRectGhost(null);
+      this.model?.setEdgeGhosts([]);
       this.setTag(null);
       this.paintBox(r);
     }
@@ -1577,27 +1569,27 @@ export class BuildController {
       const r = this.dragRect(Math.floor(x), Math.floor(y));
       this.dragFrom = null;
       if (r.w >= 2 && r.h >= 2) hud.set({ build: { ...hud.get().build, roomDraft: r } });
-      else this.engine?.setRectGhost(null);
+      else this.model?.setRectGhost(null);
     }
   }
 
   private refreshOther() {
-    const engine = this.engine;
-    if (!engine) return;
+    const model = this.model;
+    if (!model) return;
     const bt = hud.get().build;
     if (bt.tool === "walls" && bt.wallMode !== "floors") {
       // (the mode's hover draws what it shows)
       if (this.lastFloor) this.hoverOther(this.lastFloor.x, this.lastFloor.y);
       return;
     }
-    engine.setEdgeGhosts([]);
-    engine.setFaceGhosts([]);
-    engine.setGhost(null, false);
+    model.setEdgeGhosts([]);
+    model.setFaceGhosts([]);
+    model.setGhost(null, false);
     if (bt.wallTag) this.setBuild({ wallTag: null });
   }
 
   clearRoomGhost() {
-    this.engine?.setRectGhost(null);
+    this.model?.setRectGhost(null);
   }
 
   private clickOther(x: number, y: number) {
@@ -1608,7 +1600,7 @@ export class BuildController {
       return;
     }
     if (b.tool === "desks") {
-      const hit = this.engine?.objectAtTile(Math.floor(x), Math.floor(y));
+      const hit = this.model?.objectAtTile(Math.floor(x), Math.floor(y));
       if (hit && entry(hit.kind).seat) this.setBuild({ deskDraft: hit.id });
     }
   }
@@ -1635,7 +1627,7 @@ export class BuildController {
       if (this.run || this.stroke) {
         this.run = null;
         this.stroke = null;
-        this.engine?.setEdgeGhosts([]);
+        this.model?.setEdgeGhosts([]);
         this.refreshOther();
         return true;
       }
@@ -1650,30 +1642,30 @@ export class BuildController {
   // Where the wall inspector goes (client px): over the first selected wall.
   wallAnchor(): { x: number; y: number } | null {
     const p = hud.get().build.wallSel[0];
-    if (!p || !this.engine) return null;
+    if (!p) return null;
     const [mx, my] = p.dir === "h" ? [p.x + 0.5, p.y + p.side * 0.1] : [p.x + p.side * 0.1, p.y + 0.5];
-    return this.engine.worldToClient(mx, my, 136);
+    return this.client(mx, my, 136);
   }
   setWallView(v: WallView) {
     this.setBuild({ wallView: v });
-    if (this.engine) this.engine.wallView = v;
+    if (this.model) this.model.wallView = v;
     buildSound("select");
   }
 
   // Desks tool: drag a person from the panel onto a seat.
   seatAt(clientX: number, clientY: number): WorldObjectDef | null {
-    const w = this.engine?.screenToWorld(clientX, clientY);
+    const w = this.model?.screenToWorld(clientX, clientY);
     if (!w) return null;
-    const o = this.engine?.objectAtTile(Math.floor(w.x), Math.floor(w.y));
+    const o = this.model?.objectAtTile(Math.floor(w.x), Math.floor(w.y));
     return o && entry(o.kind).seat ? o : null;
   }
   showSeatDrop(at: { x: number; y: number } | null) {
-    if (!at) return this.engine?.setRectGhost(null);
-    const w = this.engine?.screenToWorld(at.x, at.y);
+    if (!at) return this.model?.setRectGhost(null);
+    const w = this.model?.screenToWorld(at.x, at.y);
     if (!w) return;
     const seat = this.seatAt(at.x, at.y);
     const t = seat ?? { x: Math.floor(w.x), y: Math.floor(w.y) };
-    this.engine?.setRectGhost({ x: t.x, y: t.y, w: 1, h: 1, ok: !!seat });
+    this.model?.setRectGhost({ x: t.x, y: t.y, w: 1, h: 1, ok: !!seat });
   }
   // The brush a paint stroke uses: Erase takes walls or floors away, whichever
   // the picked brush paints.

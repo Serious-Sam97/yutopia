@@ -15,7 +15,7 @@ const prefs = (page: Page, view: "1p" | "3p") =>
   page.addInitScript((v) => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: v, last3d: v, reducedMotion: false }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: v, reducedMotion: false }));
   }, view);
 
 test("the move seen by others: sprint, stop, a step aside, a jump", async ({ page, browser }) => {

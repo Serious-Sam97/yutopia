@@ -92,7 +92,8 @@ registerFeature((room: WorldRoom) => {
   const away = (id: string, sid: string) => {
     const o = table(id);
     const p = room.state.players.get(sid);
-    return o && p ? tableAway(o, p.x, p.y) : Number.POSITIVE_INFINITY;
+    // (in three dimensions: shared reach.ts)
+    return o && p ? room.reach3(p, fromSchema(o), tableAway(o, p.x, p.y)) : Number.POSITIVE_INFINITY;
   };
   const warn = (c: WorldClient, text: string) => room.send(c, "toast", { text, tone: "warn" });
   const seatOf = (t: PongTable, sid: string): 0 | 1 | -1 => {

@@ -44,7 +44,7 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase", lang: "en" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", lang: "en" }));
     // the pointer lock, as mouse-look.spec fakes it (headless has none)
     let el: Element | null = null;
     Object.defineProperty(Document.prototype, "pointerLockElement", { configurable: true, get: () => el });

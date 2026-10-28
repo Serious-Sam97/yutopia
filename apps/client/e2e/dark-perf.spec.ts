@@ -20,7 +20,7 @@ test("the woods at night on High: 20 shadowed, 4 flares, ≥ 60 fps", async ({ p
   await page.addInitScript(() => {
     const k = "yutopia:prefs";
     const p = JSON.parse(localStorage.getItem(k) ?? "{}");
-    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", last3d: "3p", cam3p: "chase", quality: "high" }));
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", quality: "high" }));
   });
   await enter(page, await token(ANA));
   await page.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {

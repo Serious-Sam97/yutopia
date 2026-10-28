@@ -1,9 +1,8 @@
-import { TILE_H, TILE_W, toScreen, type WorldObjectDef } from "@yutopia/shared";
+import { toScreen, type WorldObjectDef } from "@yutopia/shared";
 import {
   ballAt,
   flightEvents,
   PONG_L,
-  PONG_R,
   PONG_W,
   type PongBall,
   type PongFlight,
@@ -16,7 +15,6 @@ import {
   solveShot,
 } from "@yutopia/shared/pong";
 import { TABLES, tableAway, tableCentre, tableHeading, tablePx, toTable, toWorld } from "@yutopia/shared/tables";
-import { Container, Graphics } from "pixi.js";
 import { hud } from "../store";
 import type { TableScene3 } from "../tp/tables3d";
 import type { TableHost } from "./pool";
@@ -40,7 +38,6 @@ const SHOTS: Record<ShotType, { depth: number; speed: number; top: number; err: 
 };
 const SWING_MS = 240;
 type V = [number, number, number];
-const SHOT_COLOR: Record<ShotType, number> = { drive: 0xffb35c, smash: 0xff5a36, chop: 0x6fb3ff };
 const gauss = () => {
   let u = 0;
   for (let k = 0; k < 6; k++) u += Math.random();
@@ -100,8 +97,7 @@ const K = "pingpong_table" as const;
 const G = TABLES[K];
 const HL = PONG_L / 2;
 const HW = PONG_W / 2;
-const LPX = 45.25;
-const ZPX = LPX * Math.cos(Math.PI / 6);
+const ZPX = 45.25 * Math.cos(Math.PI / 6); // iso px of height per tile (tablePx's unit)
 const HEAR = 12;
 const SEND_MS = 33;
 const CATCH = 260; // ms: a display behind real time closes the gap over about this long
@@ -133,8 +129,6 @@ export interface PongInfo {
 
 interface PView {
   def: WorldObjectDef;
-  slices: { root: Container; g: Graphics }[];
-  front: Graphics;
   sig: string; // the server's flight (JSON)
   flight: PongFlight | null;
   seq: number;
@@ -179,7 +173,6 @@ export class PongTables {
   private swingAt: [number, number] = [0, 0]; // when each end last swung (perf ms)
   private swingType: [ShotType, ShotType] = ["drive", "drive"];
   private sentAt = 0;
-  private zoomBack = 0;
   private now = 0;
   private clock: (() => number) | null = null;
   private rtt: (() => number) | null = null;
@@ -225,7 +218,7 @@ export class PongTables {
 
   // ── tables in the room ───────────────────────────────────────────────────
   refresh() {
-    const defs = this.host.engine.allObjects().filter((o) => o.kind === K);
+    const defs = this.host.model.allObjects().filter((o) => o.kind === K);
     const keep = new Set<string>();
     for (const def of defs) {
       keep.add(def.id);
@@ -235,22 +228,8 @@ export class PongTables {
         continue;
       }
       if (old) this.drop(def.id);
-      const slices: PView["slices"] = [];
-      for (let i = 0; i < 4; i++) {
-        const root = new Container();
-        root.zIndex = def.x + def.y + i + 1 + 0.004;
-        const g = new Graphics();
-        root.addChild(g);
-        this.host.engine.mountLive(root);
-        slices.push({ root, g });
-      }
-      const front = new Graphics();
-      front.zIndex = def.x + def.y + 4 + 0.006;
-      this.host.engine.mountLive(front);
       this.views.set(def.id, {
         def,
-        slices,
-        front,
         sig: "",
         flight: null,
         seq: -1,
@@ -274,10 +253,8 @@ export class PongTables {
   private drop(id: string) {
     const v = this.views.get(id);
     if (!v) return;
-    for (const s of v.slices) s.root.destroy({ children: true });
-    v.front.destroy();
     this.views.delete(id);
-    if (this.focus === id) this.lean(null);
+    if (this.focus === id) this.setFocus(null);
   }
   private table(id: string): S | undefined {
     return this.host.room.state.pong?.get(id);
@@ -376,8 +353,8 @@ export class PongTables {
       this.shot = "drive";
       this.toss(id, v, seat);
     }
-    const ray = this.host.engine.rayAt(cx, cy);
-    if (ray.d.z >= -1e-6) return;
+    const ray = this.host.model.rayAt(cx, cy);
+    if (!ray || ray.d.z >= -1e-6) return;
     const zp = zPx(0.15);
     const k = (zp - ray.o.z) / ray.d.z;
     const p = toTable(v.def, ray.o.x + ray.d.x * k, ray.o.y + ray.d.y * k);
@@ -413,20 +390,14 @@ export class PongTables {
     this.now = performance.now();
     const pk = hud.get().panel;
     const want = pk.kind === "pong" && pk.objectId && this.views.has(pk.objectId) ? pk.objectId : null;
-    if (want !== this.focus) this.lean(want);
-    // (coming back to iso from 3D: lean in again)
-    const td = this.host.threeD();
-    if (td !== this.wasThreeD) {
-      this.wasThreeD = td;
-      this.leanSig = "";
-    }
-    if (this.focus && !td) this.relean();
+    if (want !== this.focus) this.setFocus(want);
     if (this.focus) this.moveRacket(this.focus, Math.min(0.05, dt));
     for (const [id, v] of this.views) this.update(id, v, me);
   }
 
-  private lean(focus: string | null) {
-    const engine = this.host.engine;
+  // The table whose console is open (the 3D view's game camera follows it); closing it
+  // before a game gives the seat back.
+  private setFocus(focus: string | null) {
     const was = this.focus;
     this.focus = focus;
     this.aim = null;
@@ -434,42 +405,6 @@ export class PongTables {
       const t = this.table(was);
       if (t && this.mySeat(t) >= 0 && t.phase !== "play") this.leave(was);
     }
-    if (focus) {
-      if (!was) this.zoomBack = engine.getZoom();
-      this.leanSig = "";
-      this.relean();
-    } else {
-      engine.pinCamera(null);
-      engine.seeThrough = null;
-      if (this.zoomBack) engine.setZoom(this.zoomBack);
-    }
-  }
-  private leanSig = "";
-  private wasThreeD = false;
-  private relean() {
-    const v = this.focus ? this.views.get(this.focus) : undefined;
-    if (!v) return;
-    const sig = `${v.def.id}|${window.innerWidth}x${window.innerHeight}`;
-    if (sig === this.leanSig) return;
-    this.leanSig = sig;
-    const o = v.def;
-    const [w, h] = (o.rot ?? 0) % 2 ? [G.h, G.w] : [G.w, G.h];
-    // room for the players at the ends too
-    const W = w + h + 2.2;
-    const panel = Math.min(170, window.innerHeight * 0.26);
-    const zoom = Math.min(
-      ((window.innerWidth - 24) * 0.94) / (W * (TILE_W / 2)),
-      ((window.innerHeight - panel - 40) * 0.92) / (W * (TILE_H / 2) + 90),
-    );
-    this.host.engine.pinCamera({
-      x: o.x + w / 2,
-      y: o.y + h / 2,
-      z: G.top + 20 - panel / 2 / zoom,
-      zoom,
-      ease: true,
-      zoomMax: 5,
-    });
-    this.host.engine.seeThrough = { x: o.x, y: o.y, w, h };
   }
 
   // What's drawn, on its own clock. A flight heading to someone whose hit
@@ -730,7 +665,7 @@ export class PongTables {
       v.arrived = this.now;
       v.lag = f ? Math.max(0, this.serverNow() - f.t0) : 0;
       // the echo of my toss after I've already served it: mine is newer, keep it
-      if (wasLocal && f && f.t0 < wasLocal.t0 - 1 && f.by === wasLocal.by) return this.draw(id, v, t, this.drawn(v));
+      if (wasLocal && f && f.t0 < wasLocal.t0 - 1 && f.by === wasLocal.by) return;
       // (the other side hitting back after my hit is my hit taken too: that ball
       // only went their way because the server took it)
       const confirmed =
@@ -839,7 +774,6 @@ export class PongTables {
       }
       v.shown = Math.max(v.shown, sf.at);
     }
-    this.draw(id, v, t, sf);
   }
   private gain(v: PView, me: Pt) {
     return Math.max(0, 1 - tableAway(v.def, me.x, me.y) / HEAR) * 0.9;
@@ -912,151 +846,6 @@ export class PongTables {
     const nl = Math.hypot(...N) || 1;
     N = [N[0] / nl, N[1] / nl, N[2] / nl];
     return { x, y, z, N, U };
-  }
-
-  // ── drawing (iso) ────────────────────────────────────────────────────────
-  private draw(id: string, v: PView, t: S | undefined, sf: { f: PongFlight; at: number } | null) {
-    const o = v.def;
-    const rot = o.rot ?? 0;
-    const cols = rot % 2 === 0;
-    const sliceOf = (wx: number, wy: number) => Math.max(0, Math.min(3, Math.floor(cols ? wx - o.x : wy - o.y)));
-    for (const s of v.slices) s.g.clear();
-    v.front.clear();
-    const tint = this.host.engine.liveTint(tableCentre(o).x, tableCentre(o).y);
-    for (const s of v.slices) s.g.tint = tint;
-    v.front.tint = tint;
-    const sc = (x: number, y: number, z: number) => {
-      const w = toWorld(o, x, y);
-      const p = toScreen(w.x, w.y);
-      return { x: p.x, y: p.y - zPx(z), wx: w.x, wy: w.y };
-    };
-    const surface = (x: number, y: number) => (Math.abs(x) <= HL && Math.abs(y) <= HW ? 0 : -0.76);
-    const g = v.front;
-    const seat = this.mySeat(t);
-    // what's coming to me: where it'll bounce, where I'll meet it, my reach
-    if (this.focus === id && seat >= 0) this.drawGuides(g, sc, v, seat as 0 | 1, surface);
-    // the ball: in flight, or in the server's hand
-    let ball: PongBall | null = null;
-    if (sf) ball = ballAt(sf.f, sf.at).ball;
-    else if (t?.phase === "play") {
-      const score = this.parse<PongScore>(t.score);
-      const r = score ? this.racketOf(v, t, score.server) : null;
-      if (r) ball = { x: r.x, y: r.y, z: r.z + 0.1, vx: 0, vy: 0, vz: 0, wx: 0, wy: 0, wz: 0 };
-    }
-    if (ball) {
-      const floorZ = surface(ball.x, ball.y);
-      const sh = sc(ball.x, ball.y, floorZ);
-      const p = sc(ball.x, ball.y, ball.z);
-      // bigger than true: a 4 cm ball is two pixels at table distance
-      const rr = Math.max(2.6, PONG_R * G.tpm * LPX * 1.9);
-      const gs = v.slices[sliceOf(p.wx, p.wy)].g;
-      const lift = Math.min(1, (ball.z - floorZ) / 0.8);
-      gs.ellipse(sh.x, sh.y, rr * (1.25 - 0.35 * lift), rr * 0.6 * (1.25 - 0.35 * lift)).fill({
-        color: 0x0c0806,
-        alpha: 0.5 - 0.25 * lift,
-      });
-      // the line down to its shadow: how high it is, at a glance
-      if (sf && ball.z - floorZ > 0.05) {
-        const n = Math.max(2, Math.floor((sh.y - p.y) / 4));
-        for (let i = 0; i < n; i += 2) {
-          const a = p.y + ((sh.y - p.y) * i) / n;
-          const b = p.y + ((sh.y - p.y) * (i + 1)) / n;
-          g.moveTo(p.x, a).lineTo(p.x, b).stroke({ width: 0.6, color: 0xfff6e6, alpha: 0.35 });
-        }
-      }
-      // a trail when it's quick
-      if (sf) {
-        const back = ballAt(sf.f, sf.at - 40).ball;
-        const q = sc(back.x, back.y, back.z);
-        g.moveTo(q.x, q.y)
-          .lineTo(p.x, p.y)
-          .stroke({ width: rr * 1.4, color: 0xffb35c, alpha: 0.25, cap: "round" });
-      }
-      g.circle(p.x, p.y, rr).fill(0xfbf5e9).stroke({ width: 0.8, color: 0x2a1a12 });
-      g.circle(p.x - rr * 0.35, p.y - rr * 0.35, rr * 0.35).fill({ color: 0xffffff, alpha: 0.95 });
-    }
-    // the rackets
-    for (const k of [0, 1] as const) {
-      const r = this.racketOf(v, t, k);
-      if (!r) continue;
-      this.drawRacket(g, sc, surface, this.pose(k, r), k === seat ? this.shot : null);
-    }
-  }
-
-  // Where the ball coming to me will bounce (a ring closing in), where I'll meet
-  // it (a marker with a line to the floor), and my racket's reach across at
-  // that depth — green when it's in reach, amber when I have to move.
-  private drawGuides(
-    g: Graphics,
-    sc: (x: number, y: number, z: number) => { x: number; y: number },
-    v: PView,
-    seat: 0 | 1,
-    surface: (x: number, y: number) => number,
-  ) {
-    const p = this.plan;
-    const f = v.local ?? v.flight;
-    if (!p || p.done || !f) return;
-    const real = this.serverNow();
-    const inReach = Math.abs(p.y - this.me.y) <= REACH_LAT;
-    const col = inReach ? 0xa8e07a : 0xffb35c;
-    const pulse = 0.5 + 0.5 * Math.sin(this.now / 110);
-    // the bounce
-    const b = flightEvents(f).find((e) => e.k === "table" && e.side === seat);
-    if (b && real < b.t + 60) {
-      const k = Math.max(0, Math.min(1, (b.t - real) / 700));
-      const rad = (0.05 + 0.16 * k) * G.tpm * LPX;
-      const c = sc(b.x, b.y, 0.002);
-      g.ellipse(c.x, c.y, rad, rad * 0.5).stroke({ width: 1.1, color: 0xfff6e6, alpha: 0.85 });
-      g.ellipse(c.x, c.y, 2, 1).fill({ color: 0xfff6e6, alpha: 0.9 });
-    }
-    // where I'll meet it
-    const m = sc(p.x, p.y, p.z);
-    const floor = sc(p.x, p.y, surface(p.x, p.y));
-    for (let y = m.y; y < floor.y; y += 6)
-      g.moveTo(m.x, y)
-        .lineTo(m.x, Math.min(floor.y, y + 3))
-        .stroke({ width: 0.8, color: col, alpha: 0.7 });
-    g.ellipse(floor.x, floor.y, 6, 3).stroke({ width: 1, color: col, alpha: 0.8 });
-    g.circle(m.x, m.y, 5 + 2 * pulse).stroke({ width: 1.6, color: col, alpha: 0.95 });
-    // my reach, across at that depth and height
-    const a = sc(p.x, this.me.y - REACH_LAT, p.z);
-    const c = sc(p.x, this.me.y + REACH_LAT, p.z);
-    g.moveTo(a.x, a.y).lineTo(c.x, c.y).stroke({ width: 4, color: col, alpha: 0.28, cap: "round" });
-    g.moveTo(a.x, a.y).lineTo(c.x, c.y).stroke({ width: 1, color: col, alpha: 0.8, cap: "round" });
-  }
-
-  private drawRacket(
-    g: Graphics,
-    sc: (x: number, y: number, z: number) => { x: number; y: number },
-    surface: (x: number, y: number) => number,
-    q: { x: number; y: number; z: number; N: V; U: V },
-    mine: ShotType | null,
-  ) {
-    const { N, U } = q;
-    // across the blade: U × N
-    const A: V = [U[1] * N[2] - U[2] * N[1], U[2] * N[0] - U[0] * N[2], U[0] * N[1] - U[1] * N[0]];
-    const R = 0.075 * 1.3; // a little bigger than true, so it reads
-    // its shadow below
-    const s = sc(q.x, q.y, surface(q.x, q.y));
-    g.ellipse(s.x, s.y, R * G.tpm * LPX * 0.9, R * G.tpm * LPX * 0.4).fill({ color: 0x0c0806, alpha: 0.22 });
-    const pts: number[] = [];
-    for (let i = 0; i < 22; i++) {
-      const a = (i / 22) * Math.PI * 2;
-      const cs = Math.cos(a) * R;
-      const sn = Math.sin(a) * R * 1.08;
-      const p = sc(q.x + A[0] * cs + U[0] * sn, q.y + A[1] * cs + U[1] * sn, q.z + A[2] * cs + U[2] * sn);
-      pts.push(p.x, p.y);
-    }
-    const h0 = sc(q.x - U[0] * R, q.y - U[1] * R, q.z - U[2] * R);
-    const h1 = sc(q.x - U[0] * (R + 0.11), q.y - U[1] * (R + 0.11), q.z - U[2] * (R + 0.11));
-    g.moveTo(h0.x, h0.y).lineTo(h1.x, h1.y).stroke({ width: 3.2, color: 0xd8b07a, cap: "round" });
-    g.moveTo(h0.x, h0.y).lineTo(h1.x, h1.y).stroke({ width: 0.6, color: 0x2a1a12, alpha: 0.6, cap: "round" });
-    // which rubber the camera sees (the iso camera looks from +x +y, 30° down)
-    const facing = N[0] * Math.SQRT1_2 - N[1] * Math.SQRT1_2 + N[2] * 0.5;
-    g.poly(pts)
-      .fill(facing > 0 ? 0xc62a1e : 0x1c1a17)
-      .stroke({ width: 1.2, color: mine ? SHOT_COLOR[mine] : 0xd8b07a });
-    g.poly(pts).stroke({ width: 0.5, color: 0x2a1a12, alpha: 0.8 });
   }
 
   // ── for the controller ───────────────────────────────────────────────────
@@ -1215,7 +1004,7 @@ export class PongTables {
   }
 
   dispose() {
-    this.lean(null);
+    this.setFocus(null);
     for (const id of [...this.views.keys()]) this.drop(id);
   }
 }

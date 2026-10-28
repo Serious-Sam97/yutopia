@@ -4,10 +4,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
 import { Client, type Room } from "colyseus.js";
 
-// Put back only for real (docs/plan/41-the-snap.md): a move counts the time on the client's
-// clock, so a hiccup that hands a second of moves over at once puts nobody back; going too
-// fast still does, and so does a clock run fast; and one snap is one, not one per message
-// that was already on its way.
+// Nobody put back for how they moved (the user's call, 2026-10-28: no anticheat for now) — a
+// hiccup, a dash, a leap: taken as sent. Only a placement of the server's (a teleport) isn't undone
+// by moves that were already on their way (docs/plan/41-the-snap.md).
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
@@ -77,7 +76,7 @@ test("a hiccup: a second of jogging handed over at once — nobody put back", as
   assert.ok(Math.abs(s.me().y - held[held.length - 1].y) < 0.01, "where they said");
 });
 
-test("in the second after a snap, a move too far is let go, not taken", async () => {
+test("in the second after a teleport, a move from far off (sent before it) is let go", async () => {
   const s = await out(38.5);
   s.room.send("teleport", { to: { x: 30.5, y: 38.5, level: 0 } });
   await sleep(200);
@@ -87,35 +86,15 @@ test("in the second after a snap, a move too far is let go, not taken", async ()
   assert.ok(Math.abs(s.me().y - was) < 0.01, "not moved");
 });
 
-test("too fast for real (12 tiles / s): put back", async () => {
+test("fast or far, taken as sent: 12 tiles / s, then a leap — nobody put back", async () => {
   const s = await out(32.5);
   for (let i = 0; i < 12; i++) {
     s.room.send("pos", s.msg(0.6, 50));
     await sleep(50);
   }
+  const leap = s.msg(20, 50);
+  s.room.send("pos", leap);
   await sleep(300);
-  assert.ok(s.snaps.length >= 1);
-});
-
-test("a clock run fast (100 ms said for every 50) to hide 12 tiles / s: put back", async () => {
-  const s = await out(34.5);
-  for (let i = 0; i < 24; i++) {
-    s.room.send("pos", s.msg(0.6, 100));
-    await sleep(50);
-  }
-  await sleep(300);
-  assert.ok(s.snaps.length >= 1);
-});
-
-test("one snap is one: what was already on its way is let go quietly", async () => {
-  const s = await out(36.5);
-  s.room.send("pos", s.msg(20, 50)); // (a leap: put back)
-  for (let i = 0; i < 8; i++) s.room.send("pos", s.msg(0.21, 50)); // (sent before the snap came)
-  await sleep(500);
-  assert.equal(s.snaps.length, 1, "one snap");
-  // a second later, still wrong: put back again
-  await sleep(700);
-  s.room.send("pos", s.msg(0.21, 50));
-  await sleep(300);
-  assert.equal(s.snaps.length, 2, "a new snap once the first had time to land");
+  assert.equal(s.snaps.length, 0, "not put back");
+  assert.ok(Math.abs(s.me().y - leap.y) < 0.01, "where they said");
 });

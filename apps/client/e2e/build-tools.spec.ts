@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
-import { expect, type Page, test } from "@playwright/test";
-import { ANA, enter, token, useWorld, walkTo } from "./helpers";
+import { expect, type Page } from "@playwright/test";
+import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // Build mode's tools beyond placing: box / fill / erase painting, undo + redo,
 // copies, catalog search, dragging a person onto a seat, "go there".
@@ -10,21 +10,29 @@ const SHOTS = process.env.YUTOPIA_SHOTS;
 async function screen(page: Page, x: number, y: number) {
   return page.evaluate(
     ([wx, wy]) => {
-      const e = (window as any).__yutopia.engine;
-      const r = e.app.canvas.getBoundingClientRect();
-      const s = e.worldToClient(wx, wy);
+      const w = (window as any).__yutopia;
+      const r = w.hostRect();
+      const s = w.model.worldToClient(wx, wy);
       return { x: r.left + s.x, y: r.top + s.y };
     },
     [x, y],
   );
 }
+// The camera pinned over a spot, looking north (the build panel covers the screen's left: the
+// work spans 18 tiles, more than one held view shows clear of it)
+async function look(page: Page, x: number, y: number) {
+  await holdCamera(page, { at: { x, y }, yaw: -Math.PI / 2, dist: 9, pitch: 1.0 });
+  await page.waitForTimeout(250);
+}
 async function clickTile(page: Page, x: number, y: number) {
+  await look(page, x + 0.5, y + 0.5);
   const p = await screen(page, x + 0.5, y + 0.5);
   await page.mouse.move(p.x, p.y);
   await page.waitForTimeout(120);
   await page.mouse.click(p.x, p.y);
 }
 async function drag(page: Page, from: [number, number], to: [number, number], steps = 12) {
+  await look(page, (from[0] + to[0]) / 2, (from[1] + to[1]) / 2);
   const a = await screen(page, ...from);
   const b = await screen(page, ...to);
   await page.mouse.move(a.x, a.y);
@@ -69,8 +77,17 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await page.getByRole("button", { name: /Start from a blank/ }).click();
   await expect.poll(() => width(page)).toBe(32);
   await build(false);
-  await walkTo(page, 14.5, 9.5, 20_000);
-  await page.evaluate(() => (window as any).__yutopia.engine.pinCamera({ x: 14.5, y: 8, zoom: 1 }));
+  // (a teleport: right after the new map the walk there sometimes never starts)
+  await page.evaluate(() => (window as any).__yutopia.teleport({ x: 14.5, y: 9.5 }));
+  await page.waitForFunction(
+    () => {
+      const t = (window as any).__yutopia.meTile();
+      return Math.hypot(t.x - 14.5, t.y - 9.5) < 1;
+    },
+    null,
+    { timeout: 10_000 },
+  );
+  await look(page, 14.5, 6.5);
   await page.waitForTimeout(600);
   await build(true, "walls");
   await expect(page.getByRole("region", { name: /build mode/i })).toBeVisible();
@@ -144,8 +161,9 @@ test("build tools: paint modes, undo/redo, copies, search, seats by drag, go the
   await clickTile(page, 19, 10);
   await expect.poll(async () => (await kinds(page, "chair")).length).toBe(1);
   await page.getByRole("tab", { name: /Desks/ }).click();
+  await look(page, 19.5, 10.5);
   const seat = await screen(page, 19.5, 10.5);
-  const canvas = page.locator("canvas").first();
+  const canvas = page.locator('canvas[aria-label="Yutopia world"]');
   const box = await canvas.boundingBox();
   await page.getByRole("button", { name: /Bia Demo/ }).dragTo(canvas, {
     targetPosition: { x: seat.x - (box?.x ?? 0), y: seat.y - (box?.y ?? 0) },

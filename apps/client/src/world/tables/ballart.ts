@@ -1,8 +1,7 @@
-// The pool balls' look, one source for both views: what colour a ball is in
-// any direction from its centre (its own frame: the stripe's band round its z
-// equator, the number discs on ±x, the cue ball's red dots on all six axes so
-// its spin shows), shaded per pixel into small sprites for the iso view (turned
-// as the physics turns them) and painted into a sphere texture for 3D.
+// The pool balls' look: what colour a ball is in any direction from its centre
+// (its own frame: the stripe's band round its z equator, the number discs on
+// ±x, the cue ball's red dots on all six axes so its spin shows), painted into
+// a sphere texture for the 3D view.
 //
 // Frames: the physics' table frame (x along, y up the plan, z up) → three.js'
 // world (X = tile x, Y = up, Z = tile y) is a quarter turn about X; the table's
@@ -34,7 +33,7 @@ const SIN_DISC = Math.sin(0.43);
 const COS_DOT = Math.cos(0.16);
 const STRIPE = 0.47; // |z| past this: the stripe's white caps
 // edges are blended over this much of the surface (a pixel or so of the 3D
-// texture, of the iso sprite): no stair-steps round the stripe, discs, dots
+// texture): no stair-steps round the stripe, discs, dots
 const SOFT = 0.012;
 const smooth = (e: number) => Math.max(0, Math.min(1, 0.5 + e / SOFT));
 const mix = (a: V3, b: V3, k: number): V3 => [
@@ -123,81 +122,6 @@ const qRot = (rot: number): Q => {
 };
 // a ball's turn in three's world, from the physics' (table frame)
 export const ballQuat = (q: Q, rot: number): Q => qmul(qmul(qRot(rot), Q_BASE), q);
-// rotate v by the inverse of q (three's world → the ball's own frame)
-function unrotate(q: Q, v: V3): V3 {
-  const [x, y, z, w] = [-q[0], -q[1], -q[2], q[3]];
-  // v' = q v q*, with q the conjugate
-  const tx = 2 * (y * v[2] - z * v[1]);
-  const ty = 2 * (z * v[0] - x * v[2]);
-  const tz = 2 * (x * v[1] - y * v[0]);
-  return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)];
-}
-
-// ── iso sprites ──────────────────────────────────────────────────────────────
-// The iso camera (three's world): screen right, screen up, and towards the
-// viewer (30° down, from +x +y).
-const E = Math.PI / 6;
-const R_: V3 = [H, 0, -H];
-const U_: V3 = [-Math.sin(E) * H, Math.cos(E), -Math.sin(E) * H];
-const V_: V3 = [Math.cos(E) * H, Math.sin(E), Math.cos(E) * H];
-// the light: over the table (the lamp) and a little from the upper left
-const L_ = (() => {
-  const l: V3 = [R_[0] * -0.35 + U_[0] * 0.55 + V_[0] * 0.35, 0.9, R_[2] * -0.35 + U_[2] * 0.55 + V_[2] * 0.35];
-  const n = Math.hypot(...l);
-  return [l[0] / n, l[1] / n, l[2] / n] as V3;
-})();
-
-export const CELL = 44; // px per ball sprite in the atlas
-export const ATLAS_COLS = 4;
-
-// Paint one ball into its cell of the atlas, turned `q` (three's world).
-export function paintIso(img: ImageData, cell: number, id: number, q: Q) {
-  const S = CELL;
-  const x0 = (cell % ATLAS_COLS) * S;
-  const y0 = Math.floor(cell / ATLAS_COLS) * S;
-  const d = img.data;
-  const W = img.width;
-  const rad = S / 2 - 1;
-  // half vector for the highlight
-  const hx = L_[0] + V_[0];
-  const hy = L_[1] + V_[1];
-  const hz = L_[2] + V_[2];
-  const hn = Math.hypot(hx, hy, hz);
-  for (let j = 0; j < S; j++)
-    for (let i = 0; i < S; i++) {
-      const o = ((y0 + j) * W + x0 + i) * 4;
-      const px = (i + 0.5 - S / 2) / rad;
-      const py = -(j + 0.5 - S / 2) / rad;
-      const rr = px * px + py * py;
-      if (rr > 1.06) {
-        d[o + 3] = 0;
-        continue;
-      }
-      const r = Math.min(1, rr);
-      const nz = Math.sqrt(1 - r);
-      // the surface's normal in three's world
-      const n: V3 = [
-        px * R_[0] + py * U_[0] + nz * V_[0],
-        px * R_[1] + py * U_[1] + nz * V_[1],
-        px * R_[2] + py * U_[2] + nz * V_[2],
-      ];
-      const loc = unrotate(q, n);
-      const c = ballRGB(id, loc[0], loc[1], loc[2]);
-      const lam = Math.max(0, n[0] * L_[0] + n[1] * L_[1] + n[2] * L_[2]);
-      const spec = Math.max(0, (n[0] * hx + n[1] * hy + n[2] * hz) / hn) ** 46;
-      const shade = 0.42 + 0.68 * lam;
-      const rim = 0.82 + 0.18 * nz;
-      // the outline (the kit's ink) on the very edge, anti-aliased off it
-      const edge = Math.sqrt(rr);
-      const ink = Math.max(0, Math.min(1, (edge - 0.9) / 0.08));
-      const alpha = Math.max(0, Math.min(1, (1.03 - edge) / 0.05));
-      for (let k = 0; k < 3; k++) {
-        const lit = c[k] * shade * rim + 255 * spec * 0.85;
-        d[o + k] = Math.min(255, lit * (1 - ink * 0.75) + 42 * ink * 0.75);
-      }
-      d[o + 3] = Math.round(alpha * 255);
-    }
-}
 
 // ── 3D texture ───────────────────────────────────────────────────────────────
 // An equirectangular map for three's SphereGeometry (u round from −x, v from +y).
