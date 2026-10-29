@@ -6,12 +6,16 @@ import {
   cleanLook,
   cleanName,
   cleanOutfit,
+  cleanPlace,
+  coldHurt,
   DECAY,
   type Fighter,
   FULL_NEEDS,
   feelingOf,
+  goneChance,
   hpFor,
   isDead,
+  isPetMode,
   learned,
   lessonGain,
   levelFor,
@@ -156,4 +160,35 @@ test("the end of a battle", () => {
   const after = afterBattle(FULL_NEEDS, false);
   assert.equal(after.energy, 70);
   assert.equal(after.fun, 90);
+});
+
+test("a pet's place is cleaned on the way in: a spot, a floor, a mode (docs/plan/51-the-pet.md)", () => {
+  assert.deepEqual(cleanPlace({ x: -22.5, y: 14.25, level: 0, mode: "wait" }), {
+    x: -22.5,
+    y: 14.25,
+    level: 0,
+    mode: "wait",
+  });
+  assert.deepEqual(cleanPlace({ x: 38, y: 6, level: 4, mode: "died" })?.mode, "died");
+  // an unknown mode waits; nonsense is nowhere
+  assert.equal(cleanPlace({ x: 1, y: 2, level: 0, mode: "fly" })?.mode, "wait");
+  assert.equal(cleanPlace(null), null);
+  assert.equal(cleanPlace({ x: 1, y: 2 }), null);
+  assert.equal(cleanPlace({ x: Number.NaN, y: 2, level: 0 }), null);
+  assert.equal(cleanPlace({ x: 9000, y: 2, level: 0 }), null);
+  assert.equal(cleanPlace({ x: 1, y: 2, level: 1.5 }), null);
+  assert.ok(isPetMode("wait") && isPetMode("follow") && !isPetMode("died"));
+});
+
+test("lost: a night's cold, the wild's chance, a sighting kept with its place (docs/plan/51-the-pet.md)", () => {
+  // a night out (~7.5 h) costs ~60; two kill it from full
+  assert.equal(coldHurt(7.5), 60);
+  assert.equal(coldHurt(-1), 0);
+  assert.equal(goneChance(0), 0);
+  assert.ok(Math.abs(goneChance(1) - 0.03) < 1e-9);
+  assert.ok(goneChance(24) > 0.5 && goneChance(24) < 0.6);
+  const seen = { x: 240.5, z: -120, level: 0, where: "Boathouse", at: 1760000000000, by: "Bia", lost: true };
+  assert.deepEqual(cleanPlace({ x: 1, y: 2, level: 0, mode: "lost", seen })?.seen, seen);
+  assert.equal(cleanPlace({ x: 1, y: 2, level: 0, mode: "died", cause: "cold" })?.cause, "cold");
+  assert.equal(cleanPlace({ x: 1, y: 2, level: 0, mode: "lost", seen: { x: "a" } })?.seen, undefined);
 });

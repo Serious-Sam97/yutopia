@@ -323,3 +323,88 @@ test("floors: a pet left behind (told to stay) goes after its owner when called;
   await waitFor(() => me(ana).level === 4);
   await waitFor(() => pet().floor === 4, 3000);
 });
+
+test("its owner gone, it stays: waiting where it was, fed by a friend, theirs again where it is; the room shut and opened, it's back (docs/plan/51-the-pet.md)", async () => {
+  const sp = space++;
+  const ana = await person(21, sp, "builder");
+  const bia = await person(22, sp, "builder");
+  ana.room.send("pet:adopt", { species: "dog", name: "Rex" });
+  await waitFor(() => petsOf(ana).length === 1);
+  const id = petsOf(ana)[0].id;
+  const rex = () => bia.room.state.pets.get(id) as S;
+  // into the Live Room with her, then she goes
+  ana.room.send("teleport", { to: { x: 33.5, y: 30.5 } });
+  await waitFor(() => Math.hypot(rex().x - 33.5, rex().y - 30.5) < 4, 15_000);
+  const left = { x: rex().x, y: rex().y };
+  rooms.splice(rooms.indexOf(ana.room), 1); // (left here: not again at the end)
+  await ana.room.leave(true);
+  await waitFor(() => rex().sid === "");
+  assert.equal(rex().mode, "wait");
+  assert.equal(rex().owner, "P21");
+  // it waits about the spot (a sniff, a sit), never far from it
+  await sleep(2500);
+  assert.ok(Math.hypot(rex().x - left.x, rex().y - left.y) < 4.5);
+  // her away, anyone near may feed it, not only pet it
+  bia.room.send("teleport", { to: { x: rex().x + 1, y: rex().y } });
+  await waitFor(() => Math.hypot(me(bia).x - rex().x, me(bia).y - rex().y) < 2.5);
+  bia.room.send("pet:care", { id, what: "snack" });
+  await waitFor(() => rex().act === "eat");
+  // back (where she was): hers again, still waiting
+  const again = await person(21, sp, "builder");
+  await waitFor(() => rex().sid === again.room.sessionId);
+  assert.equal(rex().mode, "wait");
+  // told to stay, and off she goes to the lobby, and out
+  again.room.send("pet:cmd", { id, cmd: "stay" });
+  await waitFor(() => rex().mode === "stay");
+  const kept = { x: rex().x, y: rex().y };
+  again.room.send("teleport", { to: { x: 6.5, y: 24.5 } });
+  await waitFor(() => Math.hypot(me(again).x - 6.5, me(again).y - 24.5) < 2);
+  rooms.splice(rooms.indexOf(again.room), 1);
+  await again.room.leave(true);
+  await waitFor(() => rex().sid === "");
+  assert.equal(rex().mode, "stay");
+  // back in the lobby: hers, where it is — not jumped to her side; told where
+  const fourth = await person(21, sp, "builder");
+  await waitFor(() => rex().sid === fourth.room.sessionId);
+  assert.ok(Math.hypot(rex().x - kept.x, rex().y - kept.y) < 0.5);
+  assert.ok(Math.hypot(rex().x - me(fourth).x, rex().y - me(fourth).y) > 8);
+  await waitFor(() =>
+    (fourth.msgs.toast ?? []).some((t) =>
+      /Rex is waiting where you left it: Live Room/.test((t as { text: string }).text),
+    ),
+  );
+  // everyone gone: the room shuts; opened again, it's back where it was, and hers when she's in
+  for (const p of [fourth, bia]) {
+    rooms.splice(rooms.indexOf(p.room), 1);
+    await p.room.leave(true);
+  }
+  await sleep(600);
+  const third = await person(21, sp, "builder");
+  await waitFor(() => petsOf(third).length === 1);
+  const back = petsOf(third)[0];
+  assert.equal(back.id, id);
+  assert.ok(Math.hypot(back.x - kept.x, back.y - kept.y) < 1.5, `at ${back.x},${back.y}, left at ${kept.x},${kept.y}`);
+  assert.equal(back.mode, "stay");
+  third.room.send("pet:release", { id });
+  await waitFor(() => petsOf(third).length === 0);
+});
+
+test("dead with its owner away: out of the world, and they're told at their next login", async () => {
+  const sp = space++;
+  const cai = await person(23, sp);
+  const dee = await person(24, sp);
+  cai.room.send("pet:adopt", { species: "cat", name: "Mia" });
+  await waitFor(() => petsOf(cai).length === 1);
+  const id = petsOf(cai)[0].id;
+  cai.room.send("pet:test", { id, needs: { food: 0, water: 0, health: 0 } });
+  await waitFor(() => (dee.room.state.pets.get(id) as S)?.health === 0);
+  rooms.splice(rooms.indexOf(cai.room), 1);
+  await cai.room.leave(true);
+  await waitFor(() => !dee.room.state.pets.has(id));
+  const back = await person(23, sp);
+  await waitFor(() => (back.msgs["pet:event"] ?? []).some((e) => (e as { kind: string }).kind === "died"));
+  await waitFor(() => petsOf(back).length === 1);
+  assert.equal(petsOf(back)[0].alive, false);
+  back.room.send("pet:release", { id });
+  await waitFor(() => petsOf(back).length === 0);
+});

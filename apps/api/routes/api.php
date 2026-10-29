@@ -153,7 +153,8 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::post('/phone/calls', [PhoneController::class, 'callLog']);
     // the GPS: who someone's contacts are (only they see where someone sharing is)
     Route::get('/phone/contacts/{userId}', [PhoneController::class, 'contactIds'])->whereNumber('userId');
-    // pets belong to a person
+    // pets belong to a person; those out in the world, everyone's (the world-server's start)
+    Route::get('/pets-out', [InternalController::class, 'petsOut']);
     Route::prefix('pets/{userId}')->whereNumber('userId')->group(function () {
         Route::get('/', [InternalController::class, 'pets']);
         Route::post('/', [InternalController::class, 'createPet']);

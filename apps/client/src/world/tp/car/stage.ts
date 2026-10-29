@@ -1,6 +1,7 @@
 import type { AvatarLayers } from "@yutopia/shared";
 import { groundAt } from "@yutopia/shared/grounds";
 import type * as THREE_NS from "three";
+import type { PetIn } from "../pet-stage";
 import { buildSedan, type Lights, type Sedan, type SedanOpts } from "./sedan";
 import { windscreenSnow } from "./textures";
 import type { Cluster } from "./vfd";
@@ -37,6 +38,8 @@ export interface CarIn {
   driver?: AvatarLayers;
   passenger?: AvatarLayers;
   rear?: AvatarLayers[];
+  /** pets in its seats (docs/plan/51-the-pet.md): each with its `seat` */
+  pets?: PetIn[];
   cockpit?: boolean; // the camera is the driver's eyes: the driver drawn as arms only
   /** the tracks it left; `local`: the path in the car's own frame (x back from the nose, z its left) */
   tracks?: { path: [number, number][]; kind: "snow" | "deep" | "ice"; local?: boolean };
@@ -74,6 +77,8 @@ export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: 
     people: { m: InstanceType<Chars["PersonModel"]>; seat: number; driver: boolean }[];
   }[] = [];
   const extra: THREE_NS.Object3D[] = [];
+  // where the pets sit: the car's body, the seat's hip (grounds-shots stages them, pet-stage.ts)
+  const petSeats: { p: PetIn; parent: THREE_NS.Object3D; hip: THREE_NS.Vector3 }[] = [];
   const disposables: { dispose(): void }[] = [];
   for (const c of cars) {
     const s = buildSedan({ colour: c.colour, snowy: c.snowy ?? 0, kind: c.kind, plate: c.plate });
@@ -155,6 +160,7 @@ export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: 
     sit(c.driver, 0, true);
     sit(c.passenger, 1, false);
     for (const [i, a] of (c.rear ?? []).entries()) sit(a, 2 + i, false);
+    for (const p of c.pets ?? []) petSeats.push({ p, parent: s.body, hip: s.seats[p.seat ?? 2].hip });
     built.push({ c, s, people });
 
     const nose = new T3.Vector3(Math.cos(c.a), 0, Math.sin(c.a));
@@ -241,6 +247,7 @@ export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: 
   const v = new T3.Vector3();
   const back = new T3.Vector3();
   return {
+    petSeats,
     /** Before the frame: what each cockpit's mirror sees. */
     prerender(renderer: THREE_NS.WebGLRenderer) {
       for (const m of mirrors) {

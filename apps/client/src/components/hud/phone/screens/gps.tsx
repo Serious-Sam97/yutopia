@@ -226,21 +226,26 @@ interface MapProps {
   cars?: GpsCar[];
   onCar?: (c: GpsCar) => void;
 }
-/** A car on the map: mine, or one whose keys I hold. */
+/** A car on the map: mine, or one whose keys I hold — or my pet (docs/plan/51-the-pet.md): where it
+ *  waits (a paw), or lost, a circle `ring` m round where it was last seen. */
 interface GpsCar {
   key: string;
   name: string;
   x: number;
   z: number;
   where: string;
+  pet?: boolean;
+  ring?: number;
 }
+// a lost pet's search circle (m): it wanders off in legs of up to 40
+const LOST_RING = 40;
 function MapCanvas({ w, follow, setFollow, center, small, friends, onFriend, cars, onCar }: MapProps) {
   const img = usePlan();
   const cv = useRef<HTMLCanvasElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const view = useRef<View>({ cx: 0, cz: 0, zoom: small ? 1.6 : 2.2, rot: 0 });
   const [pos, setPos] = useState<Record<number, [number, number]>>({});
-  const [carPos, setCarPos] = useState<Record<string, [number, number]>>({});
+  const [carPos, setCarPos] = useState<Record<string, [number, number, number]>>({});
   const drag = useRef<{ x: number; y: number } | null>(null);
   // (a place picked: the map goes there, once)
   useEffect(() => {
@@ -287,8 +292,8 @@ function MapCanvas({ w, follow, setFollow, center, small, friends, onFriend, car
         const next: Record<number, [number, number]> = {};
         for (const f of friends ?? []) next[f.uid] = toScreen(v, W, H, f.x, f.z);
         setPos(next);
-        const nc: Record<string, [number, number]> = {};
-        for (const c of cars ?? []) nc[c.key] = toScreen(v, W, H, c.x, c.z);
+        const nc: Record<string, [number, number, number]> = {};
+        for (const c of cars ?? []) nc[c.key] = [...toScreen(v, W, H, c.x, c.z), (c.ring ?? 0) * v.zoom];
         setCarPos(nc);
       }
     };
@@ -349,6 +354,48 @@ function MapCanvas({ w, follow, setFollow, center, small, friends, onFriend, car
       {cars?.map((c) => {
         const p = carPos[c.key];
         if (!p) return null;
+        // a lost pet: where to search, not a spot
+        if (c.ring)
+          return (
+            <button
+              key={c.key}
+              type="button"
+              data-gps-car={c.key}
+              title={`${c.name} · ${c.where}`}
+              onClick={() => onCar?.(c)}
+              style={{
+                position: "absolute",
+                left: p[0] - p[2],
+                top: p[1] - p[2],
+                width: p[2] * 2,
+                height: p[2] * 2,
+                borderRadius: "50%",
+                background: "rgba(196,64,43,.2)",
+                border: "2px dashed #c4402b",
+              }}
+            />
+          );
+        if (c.pet)
+          return (
+            <button
+              key={c.key}
+              type="button"
+              className={s.gpsFriend}
+              style={{ left: p[0], top: p[1] }}
+              data-gps-car={c.key}
+              title={`${c.name} · ${c.where}`}
+              onClick={() => onCar?.(c)}
+            >
+              <svg viewBox="0 0 24 24" width={small ? 16 : 22} height={small ? 16 : 22} aria-hidden="true">
+                <circle cx="12" cy="12" r="11" fill="#6e7b3a" stroke="#fff" strokeWidth="2" />
+                <ellipse cx="12" cy="15" rx="4" ry="3.4" fill="#fff" />
+                <circle cx="7.4" cy="10.4" r="1.7" fill="#fff" />
+                <circle cx="10.4" cy="7.6" r="1.7" fill="#fff" />
+                <circle cx="13.6" cy="7.6" r="1.7" fill="#fff" />
+                <circle cx="16.6" cy="10.4" r="1.7" fill="#fff" />
+              </svg>
+            </button>
+          );
         return (
           <button
             key={c.key}
@@ -400,6 +447,34 @@ export function Gps() {
   }, []);
   const myCar = useHud((h) => h.myCar);
   const held = useHud((h) => h.keys);
+  // my pets not with me: where each waits, or where a lost one was last seen (the server's note)
+  const [petsOut, setPetsOut] = useState<GpsCar[]>([]);
+  useEffect(() => {
+    const read = () => {
+      const room = w?.room;
+      if (!room) return;
+      const out: GpsCar[] = [];
+      room.state.pets.forEach((p: { id: string; sid: string; name: string; seen: string; alive: boolean }) => {
+        if (p.sid !== room.sessionId || !p.alive || !p.seen) return;
+        try {
+          const s = JSON.parse(p.seen) as { x: number; z: number; where: string; lost?: boolean };
+          out.push({
+            key: `pet:${p.id}`,
+            name: s.lost ? t("gpsPetLost").replace("{name}", p.name) : p.name,
+            x: s.x,
+            z: s.z,
+            where: s.where,
+            pet: true,
+            ring: s.lost ? LOST_RING : undefined,
+          });
+        } catch {}
+      });
+      setPetsOut((was) => (JSON.stringify(was) === JSON.stringify(out) ? was : out));
+    };
+    read();
+    const id = setInterval(read, 2000);
+    return () => clearInterval(id);
+  }, [w, t]);
   // (the same list while they stay put: the map's loop restarts on a new one)
   const cars = useMemo<GpsCar[]>(
     () => [
@@ -415,8 +490,9 @@ export function Gps() {
             },
           ]
         : []),
+      ...petsOut,
     ],
-    [myCar, held, t],
+    [myCar, held, petsOut, t],
   );
   if (!ph || !w) return null;
   const me = w.gpsWhere();

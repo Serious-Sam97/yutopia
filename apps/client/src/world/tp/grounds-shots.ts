@@ -2,6 +2,7 @@ import { type AvatarLayers, DEFAULT_AVATAR } from "@yutopia/shared";
 import { groundAt, LAMPS, MOTORS, WAYS } from "@yutopia/shared/grounds";
 import { bayById, bayLabel, boardOf, type LotBay, lotLayout } from "@yutopia/shared/lot";
 import type * as THREE_NS from "three";
+import { loadPets } from "../art/pets-load";
 import type { CarIn } from "./car/stage";
 import {
   BENCH_TOP,
@@ -22,6 +23,7 @@ import {
   turnOf,
 } from "./kart/shots";
 import type { KartScene } from "./karts3d";
+import type { PetIn } from "./pet-stage";
 import * as S3 from "./spot3d";
 
 export { drawSitePlan } from "../grounds-plan";
@@ -74,6 +76,8 @@ interface Shot {
   /** the Kart Park (docs/plan/46-the-karts.md): its karts, what flies about; the park is drawn
    *  with them (the new land must be on: /dev/karts) */
   karts?: KartScene;
+  /** pets on the Grounds (docs/plan/51-the-pet.md); in a car: its `pets` */
+  pets?: PetIn[];
 }
 
 const DARK = "#2b3138";
@@ -318,6 +322,7 @@ export function shots(): Record<string, Shot> {
     ...nightShots(lamp),
     ...lotShots(),
     ...spotShots(),
+    ...petShots(lamp),
     ...kartShots(),
     "iso-lot-edge": {
       hour: "day",
@@ -1112,6 +1117,191 @@ function spotShots(): Record<string, Shot> {
     },
   };
 }
+// ── the pet's stills (docs/plan/51-the-pet.md, phase 0): it stays, it rides, it gets lost ──
+const REX: PetIn = {
+  species: "dog",
+  name: "Rex",
+  look: { breed: "beagle", color: "#d9a349", mark: "patch", markColor: "#efe4cc" },
+  pose: "sit",
+};
+const MIA: PetIn = {
+  species: "cat",
+  name: "Mia",
+  look: { breed: "tabby", color: "#e8a33d", mark: "stripes" },
+  pose: "sit",
+};
+const BUN: PetIn = { species: "rabbit", name: "Bun", look: { color: "#efe4cc" }, pose: "sit" };
+const KIWI: PetIn = { species: "parrot", name: "Kiwi", look: { color: "#6e9b4a" }, pose: "idle" };
+const PERRY: PetIn = { species: "platypus", name: "Perry", look: { color: "#1fb2a6" }, pose: "sit" };
+const CAPY: PetIn = { species: "capybara", name: "Capy", look: { color: "#a8692f" }, pose: "chill" };
+function petShots(lamp: { x: number; z: number }): Record<string, Shot> {
+  // the lot's aisle E, Ana's car nosed north (as the car's stills)
+  const lot = { x: -22.2, z: 14, a: -Math.PI / 2 };
+  const L = (lx: number, lz: number): [number, number] => {
+    const [x, , z] = local(lot, lx, 0, lz);
+    return [x, z];
+  };
+  // the driveway: the car leaving under its lamp
+  const d = on("driveway", [lamp.x, lamp.z], 0, 0);
+  const leave = { x: d.ahead(9)[0], z: d.ahead(9)[1], a: Math.atan2(d.tz, d.tx) };
+  const behind = (k: number, side = 0): [number, number] => [
+    d.x - d.tx * k - d.tz * side,
+    d.z - d.tz * k + d.tx * side,
+  ];
+  // the ravine's trail, in the woods (as the pitch dark's stills)
+  const r = on("ravine", [-262.6, -204], 7, -1.3);
+  const rs = (n: number, k: number): [number, number] => {
+    const [x, z] = r.ahead(n);
+    return [x - r.tz * k, z + r.tx * k];
+  };
+  const pick = (p: PetIn, o: Partial<PetIn>): PetIn => ({ ...p, ...o });
+  const up = ([x, z]: [number, number], h: number): V3 => [x, gy(x, z) + h, z];
+  const sedan = (o: Partial<CarIn> = {}): CarIn => ({ ...lot, colour: SEDAN_RED, snowy: 0.35, plate: "ANA·86", ...o });
+  const [rx, rz] = L(1.1, 2.4); // by the rear door, the driver's side
+  return {
+    // the owner in, the door held: Rex running to it, the HUD's "Waiting for Rex…"
+    "pet-board": {
+      hour: "day",
+      cam: local(lot, 4.4, 1.6, 3.3),
+      look: local(lot, -0.2, 0.7, 0.4),
+      fov: 46,
+      cars: [sedan({ driver: ANA, doors: [0, 0, 1.0, 0], lights: { dash: 0.35 } })],
+      pets: [pick(REX, { x: rx, z: rz, to: L(0.9, 0.6), pose: "walk", t: 0.35, face: "happy" })],
+      people: [],
+      snow: 400,
+    },
+    // in: Rex in the back looking out of the window, Mia on the passenger seat
+    "pet-ride-sedan": {
+      hour: "day",
+      cam: local(lot, 1.9, 1.55, 4.3),
+      look: local(lot, 0.4, 0.9, 0),
+      fov: 44,
+      near: 0.05,
+      cars: [
+        sedan({
+          driver: ANA,
+          pets: [
+            pick(REX, { seat: 2, pose: "sit", face: "happy", turn: 1.3, look3: 0.3, at: [0, 0.04, -0.34] }),
+            pick(MIA, { seat: 1, pose: "sit", face: "sleepy" }),
+          ],
+        }),
+      ],
+      people: [],
+      snow: 300,
+    },
+    // every species rides: the pickup's bed (Capy and Perry), Bun in the cab
+    "pet-ride-pickup": {
+      hour: "overcast",
+      cam: local(lot, 4.6, 2.3, 3.4),
+      look: local(lot, 0.6, 0.9, 0),
+      fov: 44,
+      cars: [
+        {
+          ...lot,
+          kind: "pickup",
+          colour: 0x3d4a5c,
+          snowy: 0.3,
+          driver: CAI,
+          pets: [
+            pick(CAPY, { seat: 2, pose: "chill", face: "sleepy" }),
+            pick(PERRY, { seat: 3, pose: "sit", face: "happy", turn: 0.6 }),
+            pick(BUN, { seat: 1, pose: "sit", face: "open" }),
+          ],
+        },
+      ],
+      people: [],
+      snow: 500,
+    },
+    // the 4x4: Kiwi on the passenger's headrest, Rex in the back
+    "pet-ride-offroad": {
+      hour: "day",
+      cam: local(lot, 1.2, 1.95, 3.0),
+      look: local(lot, 0.6, 0.95, 0),
+      fov: 46,
+      near: 0.05,
+      cars: [
+        {
+          ...lot,
+          kind: "offroad",
+          colour: 0x2f4a3b,
+          snowy: 0.3,
+          driver: BIA,
+          pets: [
+            pick(KIWI, { seat: 3, pose: "idle", face: "happy", at: [0.32, 0.5, 0.05], turn: 0.9, scale: 0.5 }),
+            pick(REX, { seat: 2, pose: "sit", face: "happy", turn: 1.3, at: [0, 0.04, -0.34] }),
+          ],
+        },
+      ],
+      people: [],
+      snow: 300,
+    },
+    // driven off without it: Rex after the car down the driveway, falling behind
+    "pet-left": {
+      hour: "dusk",
+      cam: up(behind(14, 1.2), 1.6),
+      look: [leave.x, gy(leave.x, leave.z) + 0.8, leave.z],
+      fov: 48,
+      cars: [
+        {
+          ...leave,
+          colour: SEDAN_RED,
+          snowy: 0.3,
+          driver: ANA,
+          lights: { tail: true, dash: 1, beams: "low" },
+          exhaust: 0.8,
+        },
+      ],
+      pets: [
+        pick(REX, { x: behind(5)[0], z: behind(5)[1], to: [leave.x, leave.z], pose: "walk", t: 0.6, face: "sad" }),
+      ],
+      people: [],
+      snow: 1800,
+    },
+    // lost, by day: off the trail in the woods, sniffing, the "?" over its head
+    "pet-lost-day": {
+      hour: "overcast",
+      cam: up(rs(1, -0.6), 1.3),
+      look: up(rs(5, 2.4), 0.45),
+      fov: 44,
+      pets: [pick(REX, { x: rs(5, 2.4)[0], z: rs(5, 2.4)[1], to: rs(3, -1), pose: "sniff", face: "sad", lost: true })],
+      people: [],
+      snow: 900,
+    },
+    // lost, at night: in the one lamp's pool on the driveway, shivering, the dark all round
+    "pet-lost-night": {
+      hour: "night",
+      cam: up(behind(-9, 3), 1.7),
+      look: [lamp.x, gy(lamp.x, lamp.z) + 0.6, lamp.z],
+      fov: 46,
+      pets: [
+        pick(REX, { x: lamp.x + 0.6, z: lamp.z + 0.4, to: behind(-9, 3), pose: "sit", face: "scared", lost: true }),
+      ],
+      people: [],
+      snow: 4000,
+    },
+    // found: Cai on the trail at dusk, Rex running to him
+    "pet-found": {
+      hour: "dusk",
+      cam: up(rs(3, -5.5), 1.6),
+      look: up(rs(5, 0), 0.7),
+      fov: 46,
+      people: [{ x: rs(2, 0)[0], z: rs(2, 0)[1], to: rs(9, 0), a: CAI }],
+      pets: [pick(REX, { x: rs(6, 0.2)[0], z: rs(6, 0.2)[1], to: rs(2, 0), pose: "walk", t: 0.2, face: "excited" })],
+      snow: 5000,
+    },
+    // its owner gone home: Rex waiting by her car, Bia stopped to say hello
+    "pet-waiting": {
+      hour: "day",
+      cam: local(lot, 3.8, 1.5, 3.3),
+      look: local(lot, -0.2, 0.6, 2.1),
+      fov: 46,
+      cars: [sedan({ snowy: 0.6 })],
+      pets: [pick(REX, { x: L(0.6, 1.9)[0], z: L(0.6, 1.9)[1], to: L(-0.8, 2.9), pose: "idle", face: "happy" })],
+      people: [{ x: L(-0.9, 3.0)[0], z: L(-0.9, 3.0)[1], to: L(0.6, 1.9), a: BIA }],
+      snow: 500,
+    },
+  };
+}
 // ── the car's stills (docs/plan/28-the-car.md, phase 0) ──
 const SEDAN_RED = 0x6b2430;
 /** Circles clearing the trees along the line from the camera to what it looks at (the first 12 tiles). */
@@ -1810,6 +2000,15 @@ export async function runShot(
         cam: camV,
       })
     : null;
+  // ── the pets (docs/plan/51-the-pet.md): on the Grounds, and in the cars' seats ──
+  const petList = [
+    ...(shot.pets ?? []).map((p) => ({ p: { ...p, y: p.y ?? groundAt(p.x ?? 0, p.z ?? 0) } })),
+    ...(cars?.petSeats ?? []),
+  ];
+  const pets = petList.length
+    ? // (the pets' models through the page's own loader: an import of their own copied the pets chunk)
+      (await import("./pet-stage")).stagePets(T3, await loadPets(), scene, petList)
+    : null;
   // (no flakes inside a car)
   const inCar = (x: number, y: number, z: number) =>
     (shot.cars ?? []).some((c) => {
@@ -2040,6 +2239,7 @@ export async function runShot(
     }
     cars?.pose();
     karts?.pose();
+    pets?.pose();
     if (cars?.eye(v) && cam instanceof T3.PerspectiveCamera) {
       cam.position.copy(v);
       cam.lookAt(new T3.Vector3(...shot.look));
@@ -2063,6 +2263,12 @@ export async function runShot(
     cars?.prerender(renderer);
     composer.render();
     if (++frames === 4) {
+      // where the pets' name tags go over the still (the HUD's mocks lay them on: pet-shots.spec.ts)
+      if (pets)
+        (window as unknown as { __g: { tags?: unknown } }).__g.tags = pets.pets.map((s) => {
+          const h = s.head(new T3.Vector3()).project(cam);
+          return { name: s.p.name, lost: !!s.p.lost, x: ((h.x + 1) / 2) * W, y: ((1 - h.y) / 2) * H, z: h.z };
+        });
       (window as unknown as { __shot?: boolean }).__shot = true;
       status(
         `${name}: drawn in ${Math.round(performance.now() - t0)} ms · ${renderer.info.render.triangles} tris · ${renderer.info.render.calls} calls`,
@@ -2075,6 +2281,7 @@ export async function runShot(
     cancelAnimationFrame(raf);
     cars?.dispose();
     karts?.dispose();
+    pets?.dispose();
     grounds.dispose();
     renderer.dispose();
     renderer.domElement.remove();

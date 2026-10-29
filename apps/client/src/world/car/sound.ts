@@ -511,7 +511,7 @@ export class CarSound {
     if (s.hit && s.hit.at !== this.lastHit) {
       this.lastHit = s.hit.at;
       const k = clamp(s.hit.j / 9000);
-      const soft = s.hit.what === "person" || s.hit.what === "bank" || s.hit.what === "tree";
+      const soft = s.hit.what === "person" || s.hit.what === "pet" || s.hit.what === "bank" || s.hit.what === "tree";
       this.burst(0.15 + 0.25 * k, soft ? 160 : 420, soft ? 0.7 : 1.4, 0.18 + 0.2 * k, "thud");
       if (!soft && k > 0.15) this.ring(0.12 * k);
     }

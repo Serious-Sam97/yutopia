@@ -14,6 +14,10 @@ export interface Feature {
   areaChange?(client: WorldClient, p: Player, from: string, to: string): void;
   // someone went to another floor (the stairs, an elevator, a teleport)
   levelChange?(client: WorldClient, p: Player, from: number, to: number): void;
+  // someone carried on by a lift's car (WorldRoom.moveTo): where it has them now
+  carried?(client: WorldClient, p: Player): void;
+  // someone knocked on a room's door (a booth, a locked room — WorldRoom.knock)
+  knock?(client: WorldClient, p: Player, areaKey: string): void;
   dispose?(): void;
 }
 

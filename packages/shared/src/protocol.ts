@@ -319,12 +319,23 @@ export interface ClientMessages {
   "pet:adopt": { species: Species; name: string; look?: unknown };
   "pet:release": { id: string };
   "pet:edit": { id: string; name?: string; look?: unknown; outfit?: unknown };
-  "pet:cmd": { id: string; cmd: Command; trick?: Trick };
+  "pet:cmd": { id: string; cmd: Command; trick?: Trick; target?: string }; // target: attack's (a session)
   "pet:care": { id: string; what: "pet" | "snack" | "water" };
+  // my car hit a pet (the driver's client, as car:knock; docs/plan/51-the-pet.md)
+  "pet:hit": { id: string };
   "pet:play": { id: string; toy: Toy };
   "pet:teach": { id: string; trick: Trick };
   "pet:bowl": { id: string }; // the bowl's object id
-  "pet:test": { id: string; needs?: Partial<Needs>; bonds?: Record<string, number>; ago?: number }; // offline tests only
+  "pet:test": {
+    id: string;
+    needs?: Partial<Needs>;
+    bonds?: Record<string, number>;
+    ago?: number;
+    at?: { x: number; y: number };
+    lose?: boolean;
+    hours?: number;
+    arrivals?: number[];
+  }; // offline tests only
   // toys (shared/pets.ts): take one (from a toy box by `id`, or with a pet of
   // yours), throw it where you point, pick one up off the floor, point the laser
   "toy:take": { toy: Toy; id?: string };

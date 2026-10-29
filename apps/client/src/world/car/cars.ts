@@ -55,6 +55,7 @@ import { extraPanels } from "@/components/hud/panels";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import { prefs, type Quality } from "@/lib/prefs";
 import { chars as charsMod } from "../art/chars-load";
+import { pets as petsMod } from "../art/pets-load";
 import { mixer } from "../audio";
 import { activePad } from "../pads";
 import { Radio } from "../sound";
@@ -138,6 +139,8 @@ addStrings(
     carGas: ["GAS", "ACEL"],
     carBrake: ["BRAKE", "FREIO"],
     carHand: ["HAND", "MÃO"],
+    // pets getting in (docs/plan/51-the-pet.md)
+    carPetWait: ["Waiting for {name}…", "Esperando {name}…"],
   },
   "yutopia-car",
 );
@@ -171,6 +174,22 @@ export interface CarsHost {
   ai(): { id: string; kind: string; x: number; z: number; a: number; shown: boolean; v?: number; h?: number }[];
   toast(text: string): void;
   chars(): typeof import("../chars") | null;
+  /** the pets' chunk, if it's in (their models: pets in the seats) */
+  pets(): Pets | null;
+}
+type Pets = typeof import("../art/pets");
+
+/** How big a pet is in a seat (as people are drawn a touch smaller there; more so pets — a
+ *  capybara would fill the back seat): the stills' SEAT_SCALE (tp/pet-stage.ts). */
+const PET_SEAT = 0.72;
+// a pet as the room's state has it (the fields a seat needs)
+interface PetWire {
+  ride: string;
+  seat: number;
+  alive: boolean;
+  species: import("@yutopia/shared/pets").Species;
+  look: string;
+  outfit: string;
 }
 
 // a sample of someone else's car
@@ -206,6 +225,8 @@ interface LiveView {
   fast: number;
   role: string; // shared car/homes.ts: "police", "taxi", "rental" or none
   exhaustAt: number;
+  // pets in its seats (docs/plan/51-the-pet.md): their models, on the seat's cushion
+  pets: Map<string, { holder: Group; model: InstanceType<Pets["PetModel"]>; key: string }>;
 }
 interface ParkedView {
   key: string;
@@ -322,6 +343,7 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
       ai: () => c.lifeCars,
       toast: (text) => toast(text, "warn"),
       chars: () => charsMod(),
+      pets: () => petsMod(),
     },
     G,
   );
@@ -1217,6 +1239,7 @@ export class Cars {
           role: v.role ?? "",
           fast: 0,
           exhaustAt: 0,
+          pets: new Map(),
         };
         this.live.set(id, l);
       }
@@ -1253,6 +1276,7 @@ export class Cars {
         if (sid === mySid) mine = { vid: id, seat: i };
       });
       this.seatPeople(room, l, seats);
+      this.seatPets(room, l);
     });
     for (const [id, l] of this.live)
       if (!seen.has(id)) {
@@ -1260,6 +1284,7 @@ export class Cars {
         l.model.dispose();
         l.sound?.dispose();
         for (const p of l.people.values()) p.m.root.removeFromParent();
+        for (const e of l.pets.values()) e.model.dispose();
         this.live.delete(id);
       }
     this.become(mine);
@@ -1332,6 +1357,56 @@ export class Cars {
         }
       }
     }
+  }
+
+  /** The pets in a car's seats (docs/plan/51-the-pet.md): their models, sitting — a dog turned to
+   *  its window, in from the door (its paws would come through it). */
+  private seatPets(room: RoomLike, l: LiveView) {
+    const P = this.host.pets();
+    if (!P) return;
+    const keep = new Set<string>();
+    room.state.pets.forEach((pet: PetWire, id: string) => {
+      const seat = l.model.seats[pet.seat];
+      if (pet.ride !== l.id || !pet.alive || !seat) return;
+      keep.add(id);
+      const key = `${pet.species}|${pet.look}|${pet.outfit}|${pet.seat}`;
+      let e = l.pets.get(id);
+      if (e && e.key === key) return;
+      if (e) {
+        e.holder.removeFromParent();
+        e.model.dispose();
+      }
+      const json = (s: string) => {
+        try {
+          return JSON.parse(s);
+        } catch {
+          return {};
+        }
+      };
+      const model = new P.PetModel(pet.species, json(pet.look), json(pet.outfit), (c, o) => P.petMaterial(c, o));
+      const holder = new Group();
+      holder.add(model.root);
+      const side = Math.sign(seat.hip.z) || 1;
+      const dog = pet.species === "dog";
+      holder.position.set(seat.hip.x, seat.hip.y - 0.06, seat.hip.z - (dog ? side * 0.34 : 0));
+      holder.rotation.y = Math.PI + (dog ? side * 1.3 : 0);
+      holder.scale.setScalar(PET_SEAT);
+      l.model.body.add(holder);
+      e = { holder, model, key };
+      l.pets.set(id, e);
+    });
+    for (const [id, e] of l.pets)
+      if (!keep.has(id)) {
+        e.holder.removeFromParent();
+        e.model.dispose();
+        l.pets.delete(id);
+      }
+    for (const e of l.pets.values())
+      e.model.pose(
+        { kind: "sit", t: (this.time * 0.25) % 1, face: "happy", look: 0, carry: null },
+        1 / 60,
+        this.time * 1000,
+      );
   }
 
   /** Someone else's car: where it was 110 ms ago (between two of its states), its wheels, lamps, sound. */
@@ -1714,10 +1789,11 @@ export class Cars {
     const h = s.hit;
     const m = this.mine;
     if (!h || !m) return;
-    if (h.what === "person") {
+    if (h.what === "person" || h.what === "pet") {
       if (!h.id || (h.v ?? 0) < 2.2 || this.time - (this.knocked.get(h.id) ?? -9) < 4) return;
       this.knocked.set(h.id, this.time);
-      room.send("car:knock", { sid: h.id });
+      if (h.what === "pet") room.send("pet:hit", { id: h.id });
+      else room.send("car:knock", { sid: h.id });
       return;
     }
     // (a knock, not a lean or the ground under it: hard enough, and not the same one again)
@@ -1978,6 +2054,16 @@ export class Cars {
         if (!near(px, pz, 0.4) || p.z - this.G.heightAt(px, pz) > CAR_ROOF) return;
         out.push({ kind: "circle", x: px, z: pz, r: 0.38, soft: true, what: "person", id: sid });
       });
+    // pets out on the ground floor, not in a car (soft too; at speed, hit: docs/plan/51-the-pet.md)
+    if (room)
+      room.state.pets.forEach(
+        (p: { x: number; y: number; floor: number; ride: string; alive: boolean }, id: string) => {
+          if (p.floor !== 0 || p.ride || !p.alive) return;
+          const px = p.x + this.host.ox();
+          const pz = p.y + this.host.oy();
+          if (near(px, pz, 0.35)) out.push({ kind: "circle", x: px, z: pz, r: 0.3, soft: true, what: "pet", id });
+        },
+      );
   }
   private groundUnder(x: number, z: number): Ground {
     return this.world.ground(x, z);
@@ -2032,6 +2118,12 @@ export class Cars {
     // the tank: at a pump (F), filling, low
     const note = d.querySelector("[data-note]") as HTMLElement;
     let say = "";
+    // my pets on their way to a door (docs/plan/51-the-pet.md)
+    const coming: string[] = [];
+    const room = this.host.room();
+    room?.state.pets.forEach((pet: PetWire & { sid: string; act: string; name: string }) => {
+      if (pet.sid === room.sessionId && pet.act === "board") coming.push(pet.name);
+    });
     if (m.sim) {
       const l = this.live.get(m.vid);
       const v = this.host.room()?.state.vehicles.get(m.vid) as VehWire | undefined;
@@ -2043,6 +2135,7 @@ export class Cars {
       else if (this.stuckFor > 3) say = t("carStuck");
       else if (full < 0.12) say = `${t("carLow")} ${Math.round(full * 100)}%`;
     }
+    if (coming.length) say = t("carPetWait").replace("{name}", coming.join(", "));
     if (note.textContent !== say) {
       note.textContent = say;
       note.style.display = say ? "" : "none";

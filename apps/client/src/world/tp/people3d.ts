@@ -146,6 +146,7 @@ export interface PersonIn {
   fell?: number; // knocked down by a pool ball: s since (tp/view.ts times it from when it's seen)
   fellAt?: number; // …the server's, since when (0: on their feet), and the way the ball went
   fellYaw?: number;
+  pinned?: boolean; // held down by a dog (docs/plan/52-the-pet-two.md D8): lying, not getting up
   jump?: JumpNow; // jumping (shared/jump.ts): its stage
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them, tiles

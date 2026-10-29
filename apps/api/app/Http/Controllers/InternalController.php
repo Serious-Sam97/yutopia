@@ -449,6 +449,15 @@ class InternalController extends Controller
         return response()->json(['pets' => Pet::where('user_id', $userId)->orderBy('id')->get()->map->toWorld()]);
     }
 
+    // Every living pet out in the world, whoever's (docs/plan/51-the-pet.md): the world-server puts
+    // them back where they were when it starts, their owners online or not.
+    public function petsOut(): JsonResponse
+    {
+        $pets = Pet::with('user:id,name')->where('alive', true)->whereNotNull('place')->orderBy('id')->get();
+
+        return response()->json(['pets' => $pets->map(fn (Pet $p) => ['uid' => $p->user_id, 'owner' => $p->user?->name ?? ''] + $p->toWorld())]);
+    }
+
     public function createPet(Request $request, int $userId): JsonResponse
     {
         $data = $request->validate($this->petRules(true));
@@ -498,6 +507,12 @@ class InternalController extends Controller
             'memory' => ['sometimes', 'nullable', 'array', 'max:8'],
             'bonds' => ['sometimes', 'nullable', 'array', 'max:200'],
             'bonds.*' => ['numeric', 'between:0,100'],
+            // where it is (shared/pets.ts PetPlace): a spot on a floor (the land round the ground floor too)
+            'place' => ['sometimes', 'nullable', 'array', 'max:6'],
+            'place.x' => ['required_with:place', 'numeric', 'between:-2000,2000'],
+            'place.y' => ['required_with:place', 'numeric', 'between:-2000,2000'],
+            'place.level' => ['required_with:place', 'integer', 'between:0,200'],
+            'place.mode' => ['required_with:place', 'string', 'max:12'],
             'alive' => [$req, 'boolean'],
             'wins' => [$req, 'integer', 'min:0'],
             'losses' => [$req, 'integer', 'min:0'],
@@ -511,7 +526,7 @@ class InternalController extends Controller
     {
         $ms = fn (?int $v) => $v === null ? null : Carbon::createFromTimestampMs($v);
         $out = [];
-        foreach (['species', 'name', 'look', 'outfit', 'needs', 'xp', 'tricks', 'traits', 'memory', 'bonds', 'alive', 'wins', 'losses'] as $k) {
+        foreach (['species', 'name', 'look', 'outfit', 'needs', 'xp', 'tricks', 'traits', 'memory', 'bonds', 'place', 'alive', 'wins', 'losses'] as $k) {
             if (array_key_exists($k, $d)) {
                 $out[$k] = $d[$k];
             }

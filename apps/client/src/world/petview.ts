@@ -18,6 +18,7 @@ export interface PetView {
   hurtAt?: number; // took a hit in a battle (client ms): a red flash
   lookAt?: { x: number; y: number } | null; // its owner (it looks at them)
   carry?: string | null; // a toy in its mouth (shared/held.ts kind)
+  mood?: string; // how it carries itself (shared mind.ts Mood; docs/plan/52-the-pet-two.md D4)
 }
 
 export const PET_HURT_MS = 350;

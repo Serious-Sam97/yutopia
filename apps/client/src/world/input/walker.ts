@@ -21,6 +21,7 @@ import {
 } from "@yutopia/shared/move";
 import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/vitals";
 import type { WorldController } from "../controller";
+import { hud } from "../store";
 import { actionOf } from "./bindings";
 import { afterFirstStep, MoveControls, type Press } from "./controls";
 import { FAST_X, FLY_ACROSS, FLY_RISE, FLY_SPRINT, FLY_TOP, P_CLIP, P_FAST, P_FLY } from "./powers";
@@ -250,10 +251,13 @@ export class Walker {
       el?.tagName === "TEXTAREA"
     )
       return;
-    if (actionOf(this.controls.b, e.code) !== "inventory") return;
+    const action = actionOf(this.controls.b, e.code);
+    if (action !== "inventory" && action !== "pets") return;
     // (only on foot: not riding, driving, at an arcade — the walker steps only then)
     if (!this.stepping) return;
     e.preventDefault();
+    // the pets' wheel, held (it chooses on the key's release: PetPanel's wheel)
+    if (action === "pets") return hud.set({ panel: { kind: "pets", objectId: "wheel" } });
     this.inventory();
   };
   // flying (an admin's power): a double-tap of Space lands or takes off; C or Ctrl held sinks

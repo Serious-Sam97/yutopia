@@ -80,6 +80,9 @@ export class Player extends Schema {
   // their feet), and the way the ball was going (they fall away from it), radians
   @type("float64") fellAt = 0;
   @type("float32") fellYaw = 0;
+  // held down by a dog (docs/plan/52-the-pet-two.md D8): the pet's id while it lasts ("" free); they
+  // stay down (fellAt kept) till it's called off
+  @type("string") bitBy = "";
 }
 
 // Something dropped (docs/plan/30-the-dark.md, phase 2): anyone on its floor may
@@ -351,6 +354,19 @@ export class Pet extends Schema {
   @type("uint16") losses = 0;
   @type("string") battle = ""; // the battle it's in
   @type("string") carry = ""; // a toy in its mouth (shared/held.ts kind)
+  // in a car (docs/plan/51-the-pet.md): the vehicle's id, and its seat (shared car SEATS_OF)
+  @type("string") ride = "";
+  @type("uint8") seat = 0;
+  // over its floor (m): riding a lift's car with its owner, at the car's height (docs/plan/52-the-pet-two.md)
+  @type("float32") z = 0;
+  // where its owner can look for it (shared PetSeen, JSON; "" with them): a lost pet's last sighting
+  @type("string") seen = "";
+  // how it carries itself (shared mind.ts Mood): "", happy, bored, scared, sulk, alert — the body's
+  // language on the client (docs/plan/52-the-pet-two.md, D4)
+  @type("string") mood = "";
+  // what it knows of its owner's routine, for the panel (JSON: their usual hour in, or null; the
+  // rooms they're in most, by name; their desk) — D3
+  @type("string") routine = "";
   // its mind (shared/mind.ts): what it wants right now (a WANT icon over its
   // head, since when), who it is and who it's close to (JSON, for the panel)
   @type("string") want = "";

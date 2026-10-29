@@ -275,6 +275,7 @@ export const PHONE_STRINGS = {
   // your own car, a car whose keys you hold (docs/plan/43-the-spot.md)
   gpsMine: ["Mine", "Meus"],
   gpsMyCar: ["My car", "Meu carro"],
+  gpsPetLost: ["{name} (lost: last seen)", "{name} (perdido: visto por último)"],
   gpsKeysCar: ["{who}'s car", "Carro de {who}"],
   gpsNone: ["Nothing by that name", "Nada com esse nome"],
   gpsFloor: ["Floor {n}", "Andar {n}"],

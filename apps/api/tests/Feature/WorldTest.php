@@ -363,6 +363,37 @@ it('keeps someone\'s pets for the world-server: create, read, update, delete, at
     $this->getJson($url)->assertStatus(401);
 });
 
+it('keeps where a pet is, and lists every living pet out in the world with its owner', function () {
+    $ana = User::factory()->create(['name' => 'Ana']);
+    $bia = User::factory()->create(['name' => 'Bia']);
+    $rec = fn (string $name) => [
+        'species' => 'dog', 'name' => $name, 'look' => ['color' => '#d9a349', 'mark' => 'none', 'markColor' => '#efe4cc'],
+        'outfit' => ['hat' => 'none', 'hatColor' => '#c4402b', 'collar' => 'none', 'collarColor' => '#c4402b', 'coat' => 'none', 'coatColor' => '#6e7b3a'],
+        'needs' => ['food' => 100, 'water' => 100, 'energy' => 100, 'fun' => 100, 'health' => 100],
+        'xp' => 0, 'tricks' => [], 'alive' => true, 'wins' => 0, 'losses' => 0, 'bornAt' => 1760000000000, 'diedAt' => null, 'seenAt' => 1760000000000,
+    ];
+    $rex = internalCall($this, 'POST', "/api/internal/pets/{$ana->id}", $rec('Rex'))->assertCreated()->json('pet');
+    expect($rex['place'])->toBeNull();
+    $mia = internalCall($this, 'POST', "/api/internal/pets/{$bia->id}", $rec('Mia'))->json('pet');
+    internalCall($this, 'POST', "/api/internal/pets/{$bia->id}", $rec('Nowhere'))->assertCreated();
+    expect(internalCall($this, 'GET', '/api/internal/pets-out')->assertOk()->json('pets'))->toBe([]);
+    // out on the land (west of the building) and on a floor
+    internalCall($this, 'PUT', "/api/internal/pets/{$ana->id}/{$rex['id']}", ['place' => ['x' => -22.5, 'y' => 14.25, 'level' => 0, 'mode' => 'wait']])->assertOk();
+    internalCall($this, 'PUT', "/api/internal/pets/{$bia->id}/{$mia['id']}", ['place' => ['x' => 38, 'y' => 6, 'level' => 4, 'mode' => 'sleep']])->assertOk();
+    $out = internalCall($this, 'GET', '/api/internal/pets-out')->json('pets');
+    expect($out)->toHaveCount(2)
+        ->and($out[0]['name'])->toBe('Rex')->and($out[0]['uid'])->toBe($ana->id)->and($out[0]['owner'])->toBe('Ana')
+        ->and($out[0]['place'])->toBe(['x' => -22.5, 'y' => 14.25, 'level' => 0, 'mode' => 'wait'])
+        ->and($out[1]['owner'])->toBe('Bia')->and($out[1]['place']['level'])->toBe(4);
+    // a dead one isn't out; nor one taken home (null)
+    internalCall($this, 'PUT', "/api/internal/pets/{$bia->id}/{$mia['id']}", ['alive' => false, 'diedAt' => 1760000200000])->assertOk();
+    internalCall($this, 'PUT', "/api/internal/pets/{$ana->id}/{$rex['id']}", ['place' => null])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/pets-out')->json('pets'))->toBe([]);
+    internalCall($this, 'PUT', "/api/internal/pets/{$ana->id}/{$rex['id']}", ['place' => ['x' => 1, 'y' => 1]])->assertStatus(422);
+    internalCall($this, 'PUT', "/api/internal/pets/{$ana->id}/{$rex['id']}", ['place' => ['x' => 9000, 'y' => 1, 'level' => 0, 'mode' => 'wait']])->assertStatus(422);
+    $this->getJson('/api/internal/pets-out')->assertStatus(401);
+});
+
 it('lists everyone with an account for the world server (what is left of anyone gone comes down)', function () {
     $a = User::factory()->create();
     $b = User::factory()->create();

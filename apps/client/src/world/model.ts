@@ -57,6 +57,7 @@ export interface AvatarState {
   gun?: string; // the weapon in the hand (D6)
   arm?: number; // what the hand's doing with it (shared ARM: drawing, reloading, broken open)
   fellAt?: number; // knocked down by a pool ball (shared/pool-throw.ts): server ms, 0 on their feet
+  pinned?: boolean; // held down by a dog (docs/plan/52-the-pet-two.md D8): lying till it lets go
   fellYaw?: number; // …the way the ball was going
   angle?: number; // facing as they turned, world radians (not 8 ways): where a beam points
   jump?: JumpNow; // jumping (shared/jump.ts): its stage (the controller tracks it)

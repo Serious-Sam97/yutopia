@@ -251,8 +251,12 @@ export interface Memory {
   spots: { x: number; y: number; n: number }[]; // where it rested (up to 3)
   bowls: { x: number; y: number; kind: string }[]; // where the bowls were
   grudge: Record<string, number>; // pet id → until (ms)
+  // its owner's routine (docs/plan/52-the-pet-two.md, D3): the world's hour they came in, the last
+  // ARRIVALS times; the rooms they're in most (area key → minutes, the top ROOMS)
+  arrivals?: number[];
+  rooms?: Record<string, number>;
 }
-export const emptyMemory = (): Memory => ({ toys: {}, spots: [], bowls: [], grudge: {} });
+export const emptyMemory = (): Memory => ({ toys: {}, spots: [], bowls: [], grudge: {}, arrivals: [], rooms: {} });
 export function cleanMemory(u: unknown): Memory {
   const m = emptyMemory();
   if (!u || typeof u !== "object") return m;
@@ -271,7 +275,67 @@ export function cleanMemory(u: unknown): Memory {
   if (o.grudge && typeof o.grudge === "object")
     for (const [k, v] of Object.entries(o.grudge as Record<string, unknown>))
       if (typeof v === "number" && k.length < 24) m.grudge[k] = v;
+  if (Array.isArray(o.arrivals))
+    m.arrivals = (o.arrivals as unknown[])
+      .filter((h): h is number => typeof h === "number" && h >= 0 && h < 24)
+      .slice(-ARRIVALS);
+  if (o.rooms && typeof o.rooms === "object")
+    for (const [k, v] of Object.entries(o.rooms as Record<string, unknown>).slice(0, ROOMS))
+      if (typeof v === "number" && v > 0 && k.length < 60) (m.rooms as Record<string, number>)[k] = v;
   return m;
+}
+
+// ── its owner's routine (docs/plan/52-the-pet-two.md, D3) ───────────────────
+export const ARRIVALS = 20;
+export const ROOMS = 8;
+/** Their arrival at the world's `hour` remembered (the last ARRIVALS). */
+export function rememberArrival(m: Memory, hour: number): Memory {
+  return { ...m, arrivals: [...(m.arrivals ?? []), ((hour % 24) + 24) % 24].slice(-ARRIVALS) };
+}
+/** A minute more of them in a room (its top ROOMS kept). */
+export function rememberRoom(m: Memory, key: string): Memory {
+  const rooms = { ...(m.rooms ?? {}) };
+  rooms[key] = (rooms[key] ?? 0) + 1;
+  const top = Object.entries(rooms)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, ROOMS);
+  return { ...m, rooms: Object.fromEntries(top) };
+}
+/** Their usual hour in (round the clock: 23 and 1 average to 0), or null with fewer than 3 arrivals. */
+export function usualHour(m: Memory): number | null {
+  const a = m.arrivals ?? [];
+  if (a.length < 3) return null;
+  let x = 0;
+  let y = 0;
+  for (const h of a) {
+    x += Math.cos((h / 24) * Math.PI * 2);
+    y += Math.sin((h / 24) * Math.PI * 2);
+  }
+  const h = (Math.atan2(y, x) / (Math.PI * 2)) * 24;
+  return (h + 24) % 24;
+}
+/** Within `within` hours before their usual time (it goes to wait for them). */
+export function dueSoon(m: Memory, hour: number, within = 0.75): boolean {
+  const u = usualHour(m);
+  if (u === null) return false;
+  const before = (((u - hour) % 24) + 24) % 24;
+  return before <= within;
+}
+
+// ── its mood, shown (docs/plan/52-the-pet-two.md, D4) ───────────────────────
+export type Mood = "" | "happy" | "bored" | "scared" | "sulk" | "alert";
+// neglected: this long with no one's attention (petted, played with, fed by hand) and fun low — it sulks
+export const NEGLECT_MS = 2 * 60 * 60_000;
+export const SULK_MS = 20 * 60_000;
+export const SULK_OBEY = 0.6; // × its obey chance while it sulks
+/** How it carries itself: alarm first (a stranger in the dark, a growl), then fear (a storm), a
+ *  sulk, then how it feels. */
+export function moodOf(o: { alert: boolean; scared: boolean; sulking: boolean; fun: number; happy: boolean }): Mood {
+  if (o.alert) return "alert";
+  if (o.scared) return "scared";
+  if (o.sulking) return "sulk";
+  if (o.fun < 30) return "bored";
+  return o.happy ? "happy" : "";
 }
 export function rememberToy(m: Memory, toy: string): Memory {
   return { ...m, toys: { ...m.toys, [toy]: (m.toys[toy] ?? 0) + 1 } };

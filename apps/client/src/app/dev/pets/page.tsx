@@ -13,7 +13,7 @@ import {
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { usePets } from "@/components/usePets";
-import type { Face3, PoseKind } from "@/world/art/pets3d";
+import type { BodyMood, Face3, PoseKind } from "@/world/art/pets3d";
 
 // Dev-only review sheet for the pet models (docs/plan/14-pets-v2.md): every
 // species on a turntable, in each pose, with a few looks and outfits; and the
@@ -50,6 +50,10 @@ const POSES: PoseKind[] = [
   "beg",
   "nudge",
   "sniff",
+  "lie",
+  "playbow",
+  "tilt",
+  "sniffground",
 ];
 const FACES: Face3[] = ["open", "happy", "closed", "angry", "sad", "surprised", "sleepy", "excited", "scared", "smug"];
 const OUTFITS: Partial<PetOutfit>[] = [
@@ -81,6 +85,8 @@ function Turn({
   t,
   yaw,
   size = 180,
+  mood,
+  speed,
 }: {
   species: Species;
   look: PetLook;
@@ -90,14 +96,16 @@ function Turn({
   t: number;
   yaw: number;
   size?: number;
+  mood?: BodyMood;
+  speed?: number;
 }) {
   const P = usePets();
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current;
     if (!P || !c) return;
-    P.petRenderer().turntable(c, species, look, outfit, yaw, { kind: pose, t, face });
-  }, [P, species, look, outfit, pose, face, t, yaw]);
+    P.petRenderer().turntable(c, species, look, outfit, yaw, { kind: pose, t, face, mood, speed });
+  }, [P, species, look, outfit, pose, face, t, yaw, mood, speed]);
   return (
     <canvas
       ref={ref}
@@ -216,6 +224,7 @@ export default function PetsSheet() {
           />
         </div>
       </section>
+      <PlanTwo />
       {(["dog", "cat"] as const).map((sp) => (
         <section key={`breeds-${sp}`} className="mb-6">
           <h2 className="mono text-xs uppercase mb-1" style={{ color: "#c9b28a" }}>
@@ -282,5 +291,126 @@ export default function PetsSheet() {
         );
       })}
     </main>
+  );
+}
+
+// docs/plan/52-the-pet-two.md D4–D5: the 12 dogs side on, a strip of each gait, the moods, the new poses.
+// Each section's `data-shot` names its still (e2e/pets-sheet-shots.mts).
+const GOLDEN: PetLook = { color: "#d9a349", mark: "none", markColor: "#efe4cc", breed: "golden" };
+const GAITS: [string, number][] = [
+  ["walk", 1.2],
+  ["trot", 4.2],
+  ["gallop", 7],
+];
+const MOODS: BodyMood[] = ["", "happy", "bored", "scared", "sulk", "alert"];
+const NEW_POSES: PoseKind[] = ["lie", "playbow", "tilt", "sniffground", "shake", "sit"];
+function PlanTwo() {
+  const label = (s: string) => (
+    <span className="mono text-[10px] uppercase" style={{ color: "#c9b28a" }}>
+      {s}
+    </span>
+  );
+  return (
+    <>
+      <section className="mb-6" data-shot="breeds">
+        <h2 className="mono text-xs uppercase mb-1" style={{ color: "#c9b28a" }}>
+          the 12 dogs, side on (plan 52)
+        </h2>
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(6, 160px)" }}>
+          {BREEDS.dog.map((b) => (
+            <div key={b} className="flex flex-col items-center gap-1">
+              <Turn
+                species="dog"
+                look={{
+                  color: BREED_COAT[b] ?? SPECIES_DEFS.dog.colors[0],
+                  mark: "none",
+                  markColor: "#2a2420",
+                  breed: b,
+                }}
+                outfit={DEFAULT_OUTFIT}
+                pose="idle"
+                face="open"
+                t={0.25}
+                yaw={-0.35}
+                size={160}
+              />
+              {label(b)}
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="mb-6" data-shot="gaits">
+        <h2 className="mono text-xs uppercase mb-1" style={{ color: "#c9b28a" }}>
+          gaits: a cycle in six (plan 52)
+        </h2>
+        {GAITS.map(([name, speed]) => (
+          <div key={name} className="flex gap-1 items-center mb-1">
+            <div className="w-16">{label(`${name} ${speed}`)}</div>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Turn
+                key={i}
+                species="dog"
+                look={GOLDEN}
+                outfit={DEFAULT_OUTFIT}
+                pose="walk"
+                face="happy"
+                t={i / 6}
+                yaw={0}
+                size={130}
+                speed={speed}
+              />
+            ))}
+          </div>
+        ))}
+      </section>
+      <section className="mb-6" data-shot="moods">
+        <h2 className="mono text-xs uppercase mb-1" style={{ color: "#c9b28a" }}>
+          moods, standing and trotting (plan 52)
+        </h2>
+        {(["idle", "walk"] as const).map((pose) => (
+          <div key={pose} className="flex gap-2 items-start mb-1">
+            {MOODS.map((m) => (
+              <div key={m || "none"} className="flex flex-col items-center gap-1">
+                <Turn
+                  species="dog"
+                  look={{ color: "#5b3a26", mark: "none", markColor: "#efe4cc", breed: "beagle" }}
+                  outfit={DEFAULT_OUTFIT}
+                  pose={pose}
+                  face="open"
+                  t={0.3}
+                  yaw={-0.5}
+                  size={150}
+                  mood={m}
+                  speed={pose === "walk" ? 3.5 : undefined}
+                />
+                {label(m || "(feeling)")}
+              </div>
+            ))}
+          </div>
+        ))}
+      </section>
+      <section className="mb-6" data-shot="poses">
+        <h2 className="mono text-xs uppercase mb-1" style={{ color: "#c9b28a" }}>
+          new poses (plan 52)
+        </h2>
+        <div className="flex gap-2 items-start">
+          {NEW_POSES.map((p) => (
+            <div key={p} className="flex flex-col items-center gap-1">
+              <Turn
+                species="dog"
+                look={GOLDEN}
+                outfit={DEFAULT_OUTFIT}
+                pose={p}
+                face="happy"
+                t={0.4}
+                yaw={-0.6}
+                size={150}
+              />
+              {label(p)}
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }

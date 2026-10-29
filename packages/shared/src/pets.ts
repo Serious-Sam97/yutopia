@@ -437,12 +437,56 @@ export const PLAY = { fun: 30, energy: 12 } as const;
 export const playFun = (species: Species, toy: Toy) => PLAY.fun * (SPECIES_DEFS[species].favourite === toy ? 2 : 1);
 
 // ── commands ────────────────────────────────────────────────────────────────
-export const COMMANDS = ["come", "stay", "follow", "explore", "sleep", "speak", "trick"] as const;
+// home: wait in my office (standing in it with it); gohome: off to my office on its own (docs/plan/51-the-pet.md);
+// attack: get him (a person, `target`), down till it's called off; leave: leave it (docs/plan/52-the-pet-two.md D8)
+export const COMMANDS = [
+  "come",
+  "stay",
+  "follow",
+  "explore",
+  "sleep",
+  "speak",
+  "trick",
+  "home",
+  "gohome",
+  "attack",
+  "leave",
+] as const;
+// get him (D8): as far as it's sent (tiles), its owner this near to keep it at it; at them this close
+export const ATTACK = { reach: 30, leash: 60, bite: 1.0 } as const;
 export type Command = (typeof COMMANDS)[number];
 export const isCommand = (c: unknown): c is Command =>
   typeof c === "string" && (COMMANDS as readonly string[]).includes(c);
-// explore: a tour of the whole space on its own, room by room, until it's called back
-export type PetMode = "follow" | "stay" | "explore" | "sleep";
+// explore: a tour of the whole space on its own, room by room, until it's called back;
+// wait: where it was left (its owner gone — docs/plan/51-the-pet.md), sniffing round the spot;
+// lost: left too far behind (a car driven off without it), wandering, in danger; home: in its owner's office
+export type PetMode = "follow" | "stay" | "explore" | "sleep" | "wait" | "lost" | "home";
+export const PET_MODES: readonly PetMode[] = ["follow", "stay", "explore", "sleep", "wait", "lost", "home"];
+export const isPetMode = (m: unknown): m is PetMode =>
+  typeof m === "string" && (PET_MODES as readonly string[]).includes(m);
+// waiting: as far from the spot it was left at as it wanders (tiles)
+export const WAIT_RADIUS = 3;
+// Lost (docs/plan/51-the-pet.md, D4). It's lost when its owner's car is over `far` m off for `ms`;
+// found when they're within `found` m (or call it within `call`); seen by anyone within `sight`.
+// Lost, outside in the dark, out of every lamp's pool: `cold` health an hour. A car's hit: `car`
+// (a second kills it). In the wild (deep woods, the river's ice, past the road's closure): a
+// `gone` chance an hour it never comes back.
+export const LOST = { far: 60, ms: 20_000, found: 8, call: 30, sight: 15, cold: 8, car: 60, gone: 0.03 } as const;
+/** The chance it's gone for good after `hours` in the wild. */
+export const goneChance = (hours: number) => 1 - (1 - LOST.gone) ** Math.max(0, hours);
+/** Health lost to the cold over `hours` out in the dark. */
+export const coldHurt = (hours: number) => LOST.cold * Math.max(0, hours);
+// Where its owner can look for it (the panel, the GPS): the Grounds' metres, the floor, the place's
+// name, when, by whom; `lost`: a sighting (a circle to search), else where it is (a pin).
+export interface PetSeen {
+  x: number;
+  z: number;
+  level: number;
+  where: string;
+  at: number;
+  by?: string;
+  lost?: boolean;
+}
 // a happy pet obeys; a bored one listens half the time
 export const obeys = (n: Needs, rnd: number) => n.fun >= 15 || rnd < 0.5;
 
@@ -472,7 +516,45 @@ export interface PetRecord {
   traits?: Traits;
   memory?: Memory;
   bonds?: Bonds;
+  // where it is in the world (docs/plan/51-the-pet.md): it stays when its owner leaves
+  place?: PetPlace | null;
 }
+// A pet's place: a spot on a floor (or the land round the ground floor), in a mode. "died": it
+// died there with its owner away — they're told at their next login, and it's out of the world.
+export interface PetPlace {
+  x: number;
+  y: number;
+  level: number;
+  mode: PetMode | "died";
+  seen?: PetSeen; // lost: its last sighting
+  cause?: string; // died: of what (hunger, cold, car, gone)
+}
+export function cleanPlace(u: unknown): PetPlace | null {
+  if (!u || typeof u !== "object") return null;
+  const o = u as Record<string, unknown>;
+  const x = Number(o.x);
+  const y = Number(o.y);
+  const level = Number(o.level);
+  if (![x, y].every((v) => Number.isFinite(v) && Math.abs(v) <= 2000)) return null;
+  if (!Number.isInteger(level) || level < 0 || level > 200) return null;
+  const mode = o.mode === "died" || isPetMode(o.mode) ? o.mode : "wait";
+  const out: PetPlace = { x, y, level, mode };
+  const s = o.seen as Record<string, unknown> | undefined;
+  if (s && [s.x, s.z, s.at].every((v) => Number.isFinite(Number(v))))
+    out.seen = {
+      x: Number(s.x),
+      z: Number(s.z),
+      level: Number(s.level) | 0,
+      where: String(s.where ?? "").slice(0, 60),
+      at: Number(s.at),
+      by: s.by ? String(s.by).slice(0, 60) : undefined,
+      lost: !!s.lost,
+    };
+  if (typeof o.cause === "string") out.cause = o.cause.slice(0, 12);
+  return out;
+}
+// A pet out in the world, as the API lists them for the world-server's start: whose it is too.
+export type PetOut = PetRecord & { uid: number; owner: string };
 export function newPet(id: number, species: Species, name: string, look: unknown, now: number): PetRecord {
   const clean = cleanLook(species, look);
   return {

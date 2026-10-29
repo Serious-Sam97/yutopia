@@ -20,6 +20,7 @@ import {
   PET_NAME_MAX,
   type PetLook,
   type PetParts,
+  type PetSeen,
   SPECIES,
   SPECIES_DEFS,
   type Species,
@@ -38,12 +39,14 @@ import { useWorld } from "./ctx";
 import { Icon } from "./icons";
 import { Panel } from "./Panel";
 import { PetFace, PetTurntable } from "./PetFace";
+import { PetWheel } from "./PetWheel";
 
 type Tr = (k: TrKey) => string;
 const fill = (s: string, v: Record<string, string | number>) =>
   Object.entries(v).reduce((t, [k, x]) => t.replace(`{${k}}`, String(x)), s);
-type Tab = "status" | "play" | "tricks" | "style" | "battles";
-const TABS: Tab[] = ["status", "play", "tricks", "style", "battles"];
+// (docs/plan/52-the-pet-two.md D6: care, and its mind on a tab of its own)
+type Tab = "care" | "mind" | "play" | "tricks" | "style" | "battles";
+const TABS: Tab[] = ["care", "mind", "play", "tricks", "style", "battles"];
 const ON = {
   border: "1px solid var(--vfd)",
   boxShadow: "inset 0 0 20px color-mix(in srgb, var(--amber) 12%, transparent)",
@@ -68,7 +71,9 @@ export function PetPanel() {
   const mine = pets.filter((p) => p.mine);
   const others = pets.filter((p) => !p.mine);
   const [adopting, setAdopting] = useState(false);
-  const [tab, setTab] = useState<Tab>("status");
+  const [tab, setTab] = useState<Tab>("care");
+  // (the command wheel, held open by T: docs/plan/52-the-pet-two.md D7)
+  const wheel = useHud((s) => s.panel.objectId === "wheel");
   const pet = pets.find((p) => p.id === focus) ?? mine[0] ?? pets[0] ?? null;
   useEffect(() => {
     if (!pets.length) setAdopting(true);
@@ -78,6 +83,7 @@ export function PetPanel() {
     hud.set({ petFocus: id });
     setAdopting(false);
   };
+  if (wheel) return <PetWheel />;
   return (
     <Panel title={t("pets")} size="max-w-4xl h-[min(760px,94vh)]">
       <div className="grid gap-4 h-full min-h-0" style={{ gridTemplateColumns: "250px minmax(0, 1fr)" }}>
@@ -125,6 +131,7 @@ export function PetPanel() {
             <Memorial pet={pet} t={t} />
           ) : pet ? (
             <>
+              {pet.mine && <CommandRow pet={pet} t={t} />}
               <div className="seg">
                 {TABS.map((k) => (
                   <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)}>
@@ -133,7 +140,8 @@ export function PetPanel() {
                 ))}
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto scroll-thin pr-1">
-                {tab === "status" && <StatusTab pet={pet} t={t} />}
+                {tab === "care" && <StatusTab pet={pet} t={t} />}
+                {tab === "mind" && <MindTab pet={pet} t={t} />}
                 {tab === "play" && <PlayTab pet={pet} t={t} />}
                 {tab === "tricks" && <TricksTab pet={pet} t={t} />}
                 {tab === "style" && <StyleTab pet={pet} t={t} />}
@@ -147,7 +155,34 @@ export function PetPanel() {
   );
 }
 
+// Where my pet is, for me to find it (docs/plan/51-the-pet.md): the server's note on it — lost, its
+// last sighting; left somewhere, where it waits. Null with me.
+function useSeen(pet: PetInfo): PetSeen | null {
+  const w = useWorld();
+  if (!pet.mine || !pet.alive) return null;
+  const raw = (w?.room?.state.pets.get(pet.id) as { seen?: string } | undefined)?.seen;
+  try {
+    return raw ? (JSON.parse(raw) as PetSeen) : null;
+  } catch {
+    return null;
+  }
+}
+function seenLine(t: Tr, s: PetSeen): string {
+  const min = Math.round((Date.now() - s.at) / 60_000);
+  const ago =
+    min < 2
+      ? t("petAgoNow")
+      : min < 90
+        ? fill(t("petAgoMin"), { n: min })
+        : fill(t("petAgoH"), { n: Math.round(min / 60) });
+  if (!s.lost) return fill(t("petSeenHere"), { where: s.where });
+  return (
+    fill(t("petSeenLost"), { where: s.where, ago }) + (s.by ? fill(t("petSeenBy"), { who: s.by.split(" ")[0] }) : "")
+  );
+}
+
 function RackRow({ pet, on, onPick, t }: { pet: PetInfo; on: boolean; onPick: () => void; t: Tr }) {
+  const seen = useSeen(pet);
   return (
     <button
       type="button"
@@ -166,7 +201,7 @@ function RackRow({ pet, on, onPick, t }: { pet: PetInfo; on: boolean; onPick: ()
           {pet.name}
         </span>
         <span className="block mono text-[10px] uppercase tracking-wide truncate" style={{ color: "var(--muted)" }}>
-          {t(`sp_${pet.species}` as TrKey)} · Lv {pet.level}
+          {seen ? seenLine(t, seen) : `${t(`sp_${pet.species}` as TrKey)} · Lv ${pet.level}`}
           {!pet.mine && ` · ${pet.owner.split(" ")[0]}`}
         </span>
       </span>
@@ -181,7 +216,12 @@ function Led({ color }: { color: string }) {
 }
 
 // The pet on its stand, its name plate, how it feels at a glance.
+// how it carries itself (the server's: D4)
+const moodOf = (w: ReturnType<typeof useWorld>, id: string): string =>
+  (w?.room?.state.pets.get(id) as { mood?: string } | undefined)?.mood ?? "";
 function Stand({ pet, t }: { pet: PetInfo; t: Tr }) {
+  const seen = useSeen(pet);
+  const w = useWorld();
   const f = feelingOf(pet.needs);
   const lp = levelProgress(pet.xp);
   return (
@@ -222,6 +262,23 @@ function Stand({ pet, t }: { pet: PetInfo; t: Tr }) {
           {pet.alive ? `${t(`feel_${f}` as TrKey)} · ${t(`mode_${pet.mode}` as TrKey)}` : t("petGone")}
           {!pet.mine && ` · ${fill(t("petOwner"), { name: pet.owner.split(" ")[0] })}`}
         </div>
+        {pet.alive && moodOf(w, pet.id) && (
+          <div
+            className="mono text-[10px] uppercase tracking-wide mt-0.5 truncate"
+            style={{ color: "var(--faceplate-dim)" }}
+          >
+            {t(`mood_${moodOf(w, pet.id)}` as TrKey)}
+          </div>
+        )}
+        {seen && (
+          <div
+            className="mono text-[10px] uppercase tracking-wide mt-0.5 truncate"
+            style={{ color: seen.lost ? "var(--rust)" : "var(--faceplate-dim)" }}
+            title={seenLine(t, seen)}
+          >
+            {seenLine(t, seen)}
+          </div>
+        )}
       </div>
       {pet.alive && (
         <div className="well px-2.5 py-2 flex flex-col gap-1.5">
@@ -349,6 +406,69 @@ function useQueue(pet: PetInfo) {
   };
 }
 
+// The words, always there over the tabs (D6): the ones for now; "Leave it" lit while it's on someone.
+const ROW = ["come", "follow", "stay", "explore", "sleep", "speak", "home", "gohome"] as const;
+function CommandRow({ pet, t }: { pet: PetInfo; t: Tr }) {
+  const w = useWorld();
+  const cmd = (c: string) => w?.send("pet:cmd", { id: pet.id, cmd: c as never });
+  const biting = pet.act === "attack";
+  return (
+    <div className="well px-2.5 py-2 flex flex-col gap-1.5" data-pet-commands>
+      <div className="flex flex-wrap gap-1.5">
+        {ROW.map((c) => (
+          <DeckKey key={c} disabled={!!pet.battle || !pet.alive} onClick={() => cmd(c)}>
+            {t(`act_${c === "follow" ? "followMe" : c}` as TrKey)}
+          </DeckKey>
+        ))}
+        {biting && (
+          <DeckKey tone="danger" onClick={() => cmd("leave")}>
+            {t("wheel_leave")}
+          </DeckKey>
+        )}
+      </div>
+      <div className="mono text-[10px]" style={{ color: "var(--muted)" }}>
+        {t("petCommandsHint")} {t("petWheelKey")}
+      </div>
+    </div>
+  );
+}
+
+// Its mind (D3–D4): what it wants, who it is, who it's close to — and what it knows of your days.
+function MindTab({ pet, t }: { pet: PetInfo; t: Tr }) {
+  const w = useWorld();
+  const raw = (w?.room?.state.pets.get(pet.id) as { routine?: string } | undefined)?.routine;
+  let routine: { usual: number | null; rooms: string[]; desk: string | null } | null = null;
+  try {
+    routine = raw ? JSON.parse(raw) : null;
+  } catch {}
+  const hhmm = (h: number) =>
+    `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60) % 60).padStart(2, "0")}`;
+  return (
+    <div className="flex flex-col gap-4">
+      <Mind pet={pet} t={t} />
+      {pet.mine && (
+        <div className="flex flex-col gap-1.5">
+          <div className="grp">{t("petRoutine")}</div>
+          <div className="text-sm flex flex-col gap-1">
+            <span>
+              {routine?.usual != null
+                ? fill(t("petRoutineHour"), { at: hhmm(routine.usual) })
+                : t("petRoutineHourNone")}
+            </span>
+            {routine?.desk && <span>{fill(t("petRoutineDesk"), { at: routine.desk })}</span>}
+            {routine?.rooms?.length ? (
+              <span>{fill(t("petRoutineRooms"), { at: routine.rooms.join(", ") })}</span>
+            ) : null}
+          </div>
+          <div className="mono text-[10px]" style={{ color: "var(--muted)" }}>
+            {t("petRoutineHint")}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatusTab({ pet, t }: { pet: PetInfo; t: Tr }) {
   const w = useWorld();
   const stats = statsOf(pet.species, pet.level);
@@ -408,7 +528,6 @@ function StatusTab({ pet, t }: { pet: PetInfo; t: Tr }) {
           {t("petNeedsHint")}
         </div>
       </div>
-      <Mind pet={pet} t={t} />
       <div className="flex flex-col gap-2">
         <div className="grp">{t("petStats")}</div>
         <div className="grid grid-cols-4 gap-2">
@@ -417,21 +536,6 @@ function StatusTab({ pet, t }: { pet: PetInfo; t: Tr }) {
           ))}
         </div>
       </div>
-      {pet.mine && (
-        <div className="flex flex-col gap-2">
-          <div className="grp">{t("petCommands")}</div>
-          <div className="flex flex-wrap gap-1.5">
-            {(["come", "follow", "explore", "stay", "sleep", "speak"] as const).map((c) => (
-              <DeckKey key={c} disabled={busy} onClick={() => cmd(c)}>
-                {t(`act_${c === "follow" ? "followMe" : c}` as TrKey)}
-              </DeckKey>
-            ))}
-          </div>
-          <div className="mono text-[10px]" style={{ color: "var(--muted)" }}>
-            {t("petCommandsHint")}
-          </div>
-        </div>
-      )}
       {pet.mine && (
         <div className="flex justify-end pt-2" style={{ borderTop: "1px solid var(--edge)" }}>
           {sure ? (

@@ -21,6 +21,7 @@ export const ACTIONS = [
   "look",
   "aid", // first aid from the pockets (docs/plan/30-the-dark.md): the pad's d-pad ↓
   "inventory", // the pockets, all of them (the dark's inventory): I, the pad's Menu
+  "pets", // the pets' command wheel, held (docs/plan/52-the-pet-two.md D7): T (P is the phone)
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -45,6 +46,7 @@ export const DEFAULT_KEYS: KeyBindings = {
   look: ["KeyZ"],
   aid: [],
   inventory: ["KeyI"],
+  pets: ["KeyT"],
 };
 
 // the standard pad: 0 A/✕ 1 B/○ 2 X/□ 3 Y/△ 4 LB 5 RB 6 LT 7 RT 8 View 9 Menu 10 L3 11 R3 12–15 d-pad ↑↓←→

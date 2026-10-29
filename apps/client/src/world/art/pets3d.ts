@@ -81,7 +81,15 @@ export type PoseKind =
   // its mind (docs/plan/17-pets-minds.md): begging, a nudge, a sniff
   | "beg"
   | "nudge"
-  | "sniff";
+  | "sniff"
+  // docs/plan/52-the-pet-two.md D5: lying down (a sphinx), the play-bow, a head tilt, nose down on the move
+  | "lie"
+  | "playbow"
+  | "tilt"
+  | "sniffground";
+// How it feels, in its body (docs/plan/52 D4): the tail, the ears, the head, the walk's bounce.
+// "": as its face says (the feeling).
+export type BodyMood = "" | "happy" | "bored" | "scared" | "sulk" | "alert";
 export type Face3 =
   | "open"
   | "closed"
@@ -101,7 +109,15 @@ export interface PoseIn {
   look: number; // where the head turns (radians about up, 0 ahead), eased by the rig
   carry?: string | null; // a toy in the mouth (shared/held.ts kind)
   flash?: number; // 0..1 red (hurt)
+  mood?: BodyMood;
+  // how fast it's going (tiles/s): what picks a dog's gait — measured from its moves when unset
+  // (the sheets and stills, standing still, set it)
+  speed?: number;
 }
+// lying down: a slower cross-fade into and out of these (it doesn't snap from a run to the floor)
+const LOW: ReadonlySet<PoseKind> = new Set(["sleep", "ko", "lie", "flat", "playdead", "chill", "slide", "dive"]);
+// poses that place their own legs' hips
+const OWN_LEGS: ReadonlySet<PoseKind> = new Set(["sit", "lesson", "beg", "scratch", "groom", "playbow"]);
 
 // What's drawn for each species. Tiles; a person stands ~2 tall.
 interface Profile {
@@ -129,15 +145,17 @@ interface Station {
 }
 
 const PROFILES: Record<Species, Profile> = {
+  // (docs/plan/52-the-pet-two.md D5: a dog, not a lion cub — a smaller head on a longer, slimmer body,
+  // a deep chest and a tucked belly, longer legs, a longer muzzle with a stop)
   dog: {
-    body: [0.21, 0.13, 0.12],
-    up: 0.3,
-    head: { r: 0.17, x: 0.27, y: 0.16 },
+    body: [0.25, 0.115, 0.1],
+    up: 0.36,
+    head: { r: 0.132, x: 0.31, y: 0.2, sx: 1.04, sy: 0.96, sz: 0.94 },
     legs: [
-      { x: 0.13, z: 0.07, len: 0.24, r: 0.042 },
-      { x: 0.13, z: -0.07, len: 0.24, r: 0.042 },
-      { x: -0.13, z: 0.07, len: 0.24, r: 0.045 },
-      { x: -0.13, z: -0.07, len: 0.24, r: 0.045 },
+      { x: 0.16, z: 0.062, len: 0.3, r: 0.034 },
+      { x: 0.16, z: -0.062, len: 0.3, r: 0.034 },
+      { x: -0.16, z: 0.066, len: 0.3, r: 0.038 },
+      { x: -0.16, z: -0.066, len: 0.3, r: 0.038 },
     ],
     ears: "floppy",
     muzzle: "snout",
@@ -145,14 +163,15 @@ const PROFILES: Record<Species, Profile> = {
     belly: true,
     neck: -0.1,
     spine: [
-      { x: -0.27, y: -0.01, r: 0.003 },
-      { x: -0.22, y: 0, r: 0.11, sz: 0.9 },
-      { x: -0.1, y: 0.005, r: 0.125, sz: 0.95 },
-      { x: 0.03, y: -0.01, r: 0.12, sz: 0.9 },
-      { x: 0.14, y: 0, r: 0.14, sz: 1.05 },
-      { x: 0.23, y: 0.05, r: 0.12 },
-      { x: 0.3, y: 0.13, r: 0.07 },
-      { x: 0.33, y: 0.17, r: 0.003 },
+      { x: -0.3, y: 0.01, r: 0.003 },
+      { x: -0.26, y: 0.015, r: 0.085, sz: 0.95 },
+      { x: -0.16, y: 0.025, r: 0.092, sz: 0.94 },
+      { x: -0.05, y: 0.035, r: 0.085, sz: 0.9, sy: 0.88 },
+      { x: 0.07, y: 0.0, r: 0.112, sz: 0.92, sy: 1.18 },
+      { x: 0.17, y: 0.015, r: 0.112, sz: 0.9, sy: 1.12 },
+      { x: 0.25, y: 0.08, r: 0.07 },
+      { x: 0.29, y: 0.15, r: 0.05 },
+      { x: 0.3, y: 0.19, r: 0.003 },
     ],
     fuzz: 0.006,
   },
@@ -368,12 +387,19 @@ export function sweep(st: Station[], rings = 10, segs = 28): BufferGeometry {
   g.setAttribute("position", new Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
-  // wound the wrong way round (the frame's handedness): flip every triangle
-  const mid = Math.floor(N / 2) * segs;
-  const c = curve.getPoint(0.5);
+  // wound the wrong way round (the frame's handedness): flip every triangle — judged over every
+  // ring, not one vertex (a wide, short body fooled the one: a bulldog drawn inside out, docs/plan/52)
   const nrm = g.getAttribute("normal");
-  const out = new Vector3(pos[mid * 3] - c.x, pos[mid * 3 + 1] - c.y, pos[mid * 3 + 2] - c.z);
-  if (out.dot(new Vector3(nrm.getX(mid), nrm.getY(mid), nrm.getZ(mid))) < 0) {
+  let facing = 0;
+  for (let k = 0; k <= N; k++) {
+    const c = curve.getPoint(k / N);
+    for (let j = 0; j < segs; j++) {
+      const v = k * segs + j;
+      facing +=
+        (pos[v * 3] - c.x) * nrm.getX(v) + (pos[v * 3 + 1] - c.y) * nrm.getY(v) + (pos[v * 3 + 2] - c.z) * nrm.getZ(v);
+    }
+  }
+  if (facing < 0) {
     for (let i = 0; i < idx.length; i += 3) {
       const t = idx[i + 1];
       idx[i + 1] = idx[i + 2];
@@ -514,7 +540,7 @@ interface Breed {
   bodyR?: number; // × the body's radius
   bodyLen?: number; // × the body's length
   slope?: number; // the rump this much lower than the chest (a shepherd)
-  muzzle?: "long" | "short" | "flat"; // × the snout's length
+  muzzle?: "long" | "short" | "flat" | "fox"; // × the snout's length (fox: pointed, a shiba's)
   jowls?: boolean; // loose cheeks beside a flat muzzle (a bulldog)
   wrinkles?: boolean; // folds on the brow (a pug, a sphynx)
   crest?: number; // × the crest / tail feathers
@@ -523,16 +549,69 @@ interface Breed {
   saddleK?: number; // how dark the saddle is (shade of the coat)
   preset?: "mask" | "tuxedo" | "dalmatian" | "rosettes" | "calico"; // a marking that paints itself
   eye?: string; // the breed's iris colour when the look sets none
+  // (docs/plan/52 D5: silhouettes, not only colours)
+  width?: number; // × the body's width (a bulldog's barrel)
+  pompoms?: boolean; // a poodle's clip: puffs at the ankles and a topknot
+  ruff?: boolean; // a thick ruff round the neck (a husky)
+  feather?: boolean; // long feathered hair under the chest, the ears and the tail (a golden)
 }
-const MUZZLE_LEN = { long: 1.3, short: 0.72, flat: 0.42 } as const;
+const MUZZLE_LEN = { long: 1.3, short: 0.72, flat: 0.42, fox: 1.12 } as const;
 const BREED: Record<string, Breed> = {
-  shiba: { ears: "pointy", tail: "curl", fuzz: 0.006 },
-  beagle: { ears: "floppy", tail: "long", fuzz: 0.004, bodyLen: 1.08, legLen: 0.9 },
-  poodle: { ears: "round", tail: "puff", fuzz: 0.018, headR: 1.08, legLen: 1.08 },
-  corgi: { ears: "pointy", earSize: 1.3, tail: "nub", bodyLen: 1.2, legLen: 0.62, fuzz: 0.007, eye: "#5b3a26" },
-  dachshund: { ears: "floppy", tail: "long", bodyLen: 1.42, bodyR: 0.86, legLen: 0.5, muzzle: "long", fuzz: 0.003 },
-  husky: { ears: "pointy", tail: "curl", fuzz: 0.012, bodyR: 1.02, legLen: 1.08, preset: "mask", eye: "#4a7fb5" },
-  golden: { ears: "floppy", tail: "long", fuzz: 0.016, bodyR: 1.04, legLen: 1.04, eye: "#5b3a26" },
+  shiba: { ears: "pointy", earSize: 0.85, tail: "curl", fuzz: 0.008, muzzle: "fox", bodyR: 1.05, size: 0.9 },
+  beagle: { ears: "floppy", earSize: 1.25, tail: "long", fuzz: 0.004, bodyLen: 1.05, legLen: 0.86, size: 0.9 },
+  poodle: {
+    ears: "floppy",
+    tail: "puff",
+    fuzz: 0.02,
+    headR: 1.02,
+    legLen: 1.18,
+    bodyR: 0.9,
+    pompoms: true,
+    muzzle: "long",
+  },
+  corgi: {
+    ears: "pointy",
+    earSize: 1.35,
+    tail: "nub",
+    bodyLen: 1.22,
+    bodyR: 1.08,
+    legLen: 0.5,
+    fuzz: 0.008,
+    muzzle: "fox",
+    eye: "#5b3a26",
+  },
+  dachshund: {
+    ears: "floppy",
+    earSize: 1.2,
+    tail: "long",
+    bodyLen: 1.45,
+    bodyR: 0.9,
+    legLen: 0.42,
+    muzzle: "long",
+    fuzz: 0.003,
+  },
+  husky: {
+    ears: "pointy",
+    tail: "curl",
+    fuzz: 0.014,
+    bodyR: 1.12,
+    width: 1.08,
+    legLen: 1.05,
+    size: 1.1,
+    ruff: true,
+    preset: "mask",
+    eye: "#4a7fb5",
+  },
+  golden: {
+    ears: "floppy",
+    tail: "long",
+    fuzz: 0.016,
+    bodyR: 1.06,
+    legLen: 1.04,
+    size: 1.1,
+    feather: true,
+    eye: "#5b3a26",
+  },
   pug: {
     ears: "fold",
     tail: "curl",
@@ -548,8 +627,10 @@ const BREED: Record<string, Breed> = {
   bulldog: {
     ears: "fold",
     tail: "nub",
-    bodyR: 1.22,
-    legLen: 0.7,
+    bodyR: 1.25,
+    width: 1.35,
+    bodyLen: 0.88,
+    legLen: 0.62,
     headR: 1.1,
     muzzle: "flat",
     jowls: true,
@@ -567,21 +648,24 @@ const BREED: Record<string, Breed> = {
   },
   chihuahua: {
     ears: "pointy",
-    earSize: 1.7,
+    earSize: 1.8,
     tail: "curl",
-    size: 0.66,
-    headR: 1.22,
+    size: 0.6,
+    headR: 1.32,
+    bodyR: 0.86,
+    muzzle: "short",
     eyeR: 1.3,
     legLen: 0.95,
     fuzz: 0.004,
   },
   shepherd: {
     ears: "pointy",
-    earSize: 1.2,
+    earSize: 1.3,
     tail: "long",
     bodyLen: 1.1,
     legLen: 1.08,
-    slope: 0.08,
+    size: 1.12,
+    slope: 0.1,
     muzzle: "long",
     saddle: true,
     saddleK: 0.3,
@@ -616,18 +700,25 @@ const BREED: Record<string, Breed> = {
 export function breedProfile(species: Species, breed: string): Profile & { breed: Breed } {
   const base = PROFILES[species];
   const b = BREED[breed] ?? {};
+  const len = b.bodyLen ?? 1;
+  // (shorter legs: the body that much lower — it stood on air before, docs/plan/52 D5)
+  const drop = base.legs[0].len * (1 - (b.legLen ?? 1));
   const pr: Profile & { breed: Breed } = {
     ...base,
+    up: base.up - drop,
     ears: b.ears ?? base.ears,
     tail: b.tail ?? base.tail,
     fuzz: b.fuzz ?? base.fuzz,
-    head: { ...base.head, r: base.head.r * (b.headR ?? 1) },
-    legs: base.legs.map((l) => ({ ...l, len: l.len * (b.legLen ?? 1) })),
+    // (a longer body carries its head and legs further out)
+    head: { ...base.head, r: base.head.r * (b.headR ?? 1), x: base.head.x * len },
+    legs: base.legs.map((l) => ({ ...l, x: l.x * len, len: l.len * (b.legLen ?? 1) })),
+    body: [base.body[0] * len, base.body[1], base.body[2] * (b.width ?? 1)],
     spine: base.spine.map((st) => ({
       ...st,
-      x: st.x * (b.bodyLen ?? 1),
+      x: st.x * len,
       y: st.y + (b.slope && st.x < 0 ? st.x * b.slope : 0),
       r: st.r * (b.bodyR ?? 1),
+      sz: (st.sz ?? 1) * (b.width ?? 1),
     })),
     breed: b,
   };
@@ -688,6 +779,8 @@ export class PetModel {
   private lastKind: PoseKind | null = null;
   private blendFrom: Snap | null = null;
   private blendT = 1;
+  private blendDur = 0.22;
+  private gait = 0; // a dog's stride, 0..1, on the ground's pace
   private blinkAt = 0;
   private blinkUntil = 0;
   readonly height: number; // standing, to the top of the head
@@ -891,6 +984,12 @@ export class PetModel {
             pivot.add(claw);
           }
       }
+      if (pr.breed.pompoms && !pr.bird) {
+        // a poodle's clip: a puff round each ankle
+        const puff = ellipsoid(coat, r * 2.1, r * 1.9, r * 2.1, true);
+        puff.position.set(r * 0.2, -len + r * 2.2, 0);
+        pivot.add(puff);
+      }
       if (look.mark === "socks" || preset === "tuxedo" || preset === "mask") {
         const sock = new Mesh(capsule(r * 1.06, Math.max(0.01, len * 0.4 - r)), look.mark === "socks" ? markM : white);
         sock.position.y = -len + len * 0.2;
@@ -929,6 +1028,30 @@ export class PetModel {
     this.headMesh.position.set(h.r * 0.5, h.r * 0.2, 0);
     this.head.add(this.headMesh);
     const hc = this.headMesh.position; // head centre in the head group
+    if (pr.breed.pompoms) {
+      // the topknot
+      const knot = ellipsoid(coat, h.r * 0.62, h.r * 0.55, h.r * 0.6, true);
+      knot.position.set(hc.x + h.r * 0.05, hc.y + h.r * 0.78, 0);
+      this.head.add(knot);
+    }
+    if (pr.breed.ruff) {
+      // a thick ruff round the neck, lighter underneath
+      const ruff = ellipsoid(coat, h.r * 0.75, h.r * 1.05, h.r * 1.08, true);
+      ruff.position.set(-h.r * 0.15, -h.r * 0.25, 0);
+      this.head.add(ruff);
+      const bib = ellipsoid(light, h.r * 0.5, h.r * 0.8, h.r * 0.8, true);
+      bib.position.set(h.r * 0.1, -h.r * 0.55, 0);
+      bib.castShadow = false;
+      bib.userData.noOutline = true;
+      this.head.add(bib);
+    }
+    if (pr.breed.feather) {
+      // long hair hanging from the chest and the belly
+      const fringe = ellipsoid(light, bx * 0.55, by * 0.38, bz * 0.7, true);
+      fringe.position.set(bx * 0.3, -by * 0.85, 0);
+      fringe.castShadow = false;
+      this.body.add(fringe);
+    }
     if (look.mark === "patch") {
       // round the right eye, flat on the head (the eye sits at fx, 0.2, 0.46 of r)
       const fx = pr.muzzle === "bill" ? 0.62 : pr.bird ? 0.6 : 0.72;
@@ -949,7 +1072,10 @@ export class PetModel {
       n.castShadow = false;
       mz.add(n);
     };
-    const ml = pr.breed.muzzle ? MUZZLE_LEN[pr.breed.muzzle] : 1; // the snout's length
+    // the snout's length (a dog's longer than the old round-faced one: docs/plan/52 D5)
+    const ml = pr.breed.muzzle ? MUZZLE_LEN[pr.breed.muzzle] : species === "dog" ? 1.18 : 1;
+    const dogFace = species === "dog";
+    const fox = pr.breed.muzzle === "fox";
     const faceM = preset === "mask" || preset === "tuxedo" ? white : light;
     const snoutM = partM("bill", faceM);
     if (preset === "mask" || preset === "tuxedo") {
@@ -995,12 +1121,27 @@ export class PetModel {
       }
     switch (pr.muzzle) {
       case "snout": {
-        const m = ellipsoid(snoutM, h.r * 0.62 * ml, h.r * 0.48 * (ml < 1 ? 1.1 : 1), h.r * 0.55 * (ml < 1 ? 1.15 : 1));
-        m.position.set(h.r * (0.72 - (1 - ml) * 0.5), -h.r * 0.22, 0);
+        // (a dog's: narrower, set below the skull — the stop — and a fox's tapering to the nose)
+        const wide = ml < 1 ? 1.15 : dogFace ? (fox ? 0.78 : 0.88) : 1;
+        const m = ellipsoid(
+          snoutM,
+          h.r * 0.62 * ml,
+          h.r * 0.48 * (ml < 1 ? 1.1 : dogFace ? 0.86 : 1),
+          h.r * 0.55 * wide,
+        );
+        m.position.set(h.r * (0.72 - (1 - ml) * 0.5), -h.r * (dogFace && ml >= 1 ? 0.3 : 0.22), 0);
         mz.add(m);
-        nose(h.r * 0.17, h.r * (1.3 - (1 - ml) * 0.72), -h.r * 0.1);
+        if (dogFace && ml >= 1) {
+          // the brow over the stop
+          const brow = ellipsoid(coat, h.r * 0.42, h.r * 0.3, h.r * 0.62, true);
+          brow.position.set(h.r * 0.56, h.r * 0.14, 0);
+          brow.castShadow = false;
+          brow.userData.noOutline = true;
+          mz.add(brow);
+        }
+        nose(h.r * (fox ? 0.13 : 0.17), h.r * (1.3 - (1 - ml) * 0.72), -h.r * (dogFace && ml >= 1 ? 0.18 : 0.1));
         this.tongue = ellipsoid(pink, h.r * 0.14, h.r * 0.05, h.r * 0.1, true);
-        this.tongue.position.set(h.r * 1.12, -h.r * 0.58, 0);
+        this.tongue.position.set(h.r * (1.12 + Math.max(0, ml - 1) * 0.55), -h.r * 0.62, 0);
         this.tongue.visible = false;
         mz.add(this.tongue);
         break;
@@ -1063,8 +1204,9 @@ export class PetModel {
     }
     // mouth (opens when it speaks / pants), with teeth behind the lip
     this.teeth = new Mesh(new BoxGeometry(h.r * 0.1, h.r * 0.06, h.r * 0.28), white);
+    const reach = pr.muzzle === "snout" ? Math.max(0, ml - 1) * 0.55 : 0; // (a longer muzzle's mouth further out)
     this.teeth.position.set(
-      h.r * (pr.muzzle === "bill" ? 1.6 : pr.muzzle === "beak" ? 1.0 : 1.08),
+      h.r * (pr.muzzle === "bill" ? 1.6 : pr.muzzle === "beak" ? 1.0 : 1.08 + reach),
       -h.r * (pr.muzzle === "beak" ? 0.36 : 0.47),
       0,
     );
@@ -1074,7 +1216,7 @@ export class PetModel {
     if (!pr.bird && pr.muzzle !== "bill") mz.add(this.teeth);
     this.mouth = ellipsoid(ink, h.r * 0.16, h.r * 0.06, h.r * 0.2, true);
     this.mouth.position.set(
-      h.r * (pr.muzzle === "bill" ? 1.6 : pr.muzzle === "beak" ? 1.0 : 1.05),
+      h.r * (pr.muzzle === "bill" ? 1.6 : pr.muzzle === "beak" ? 1.0 : 1.05 + reach),
       -h.r * (pr.muzzle === "beak" ? 0.4 : 0.52),
       0,
     );
@@ -1238,7 +1380,8 @@ export class PetModel {
     }
 
     // tail
-    this.tail.position.set(-bx * 0.92, by * 0.1, 0);
+    // (a dog's set high on the rump, where it shows what it feels)
+    this.tail.position.set(-bx * 0.92, by * (species === "dog" ? 0.42 : 0.1), 0);
     this.body.add(this.tail);
     switch (pr.tail) {
       case "curl": {
@@ -1259,7 +1402,7 @@ export class PetModel {
           new Vector3(-0.22, 0.14, 0.03),
           new Vector3(-0.2, 0.3, 0.02),
         ]);
-        this.tailMesh = new Mesh(new TubeGeometry(curve, 16, 0.024, 10, false), coat);
+        this.tailMesh = new Mesh(new TubeGeometry(curve, 16, pr.breed.feather ? 0.036 : 0.024, 10, false), coat);
         break;
       }
       case "puff":
@@ -1632,6 +1775,7 @@ export class PetModel {
       if (this.lastKind && this.lastKind !== p.kind) {
         this.blendFrom = this.snap();
         this.blendT = 0;
+        this.blendDur = LOW.has(p.kind) || LOW.has(this.lastKind) ? 0.5 : 0.22;
       }
       this.lastKind = p.kind;
     }
@@ -1712,6 +1856,49 @@ export class PetModel {
             this.body.rotation.z = Math.sin(t * TAU * 2) * 0.05;
             for (const w of this.wings) w.rotation.x += Math.max(0, Math.sin(t * TAU)) * 0.35 * Math.sign(w.position.z);
             break;
+          case "dog": {
+            // its gaits by how fast it's going (docs/plan/52 D5): a walk, a trot, a gallop — the legs on
+            // the ground's pace (a stride by its legs' length), not on a clock; into a turn, the body bends
+            const sp = p.speed ?? this.speed;
+            const leg = this.legs[0]?.len ?? 0.3;
+            const gait = sp < 1.8 ? 0 : sp < 5.4 ? 1 : 2;
+            const stride = leg * (gait === 0 ? 4.2 : gait === 1 ? 6 : 8.5); // tiles a cycle
+            if (dt > 0 && sp > 0.05) this.gait = (this.gait + (sp * dt) / stride) % 1;
+            const ph = dt > 0 ? this.gait : t;
+            const up = pr.up;
+            if (gait === 0) {
+              // four beats: each foot in turn
+              const off = [0.25, 0.75, 0, 0.5];
+              for (const [i, l] of this.legs.entries()) l.pivot.rotation.z = Math.sin((ph + off[i]) * TAU) * 0.3;
+              this.body.position.y += Math.abs(Math.sin(ph * TAU * 2)) * up * 0.012;
+              this.head.rotation.z = Math.sin(ph * TAU * 2) * 0.04 + 0.06;
+              wagSpeed = 1.2;
+            } else if (gait === 1) {
+              // a trot: diagonal pairs, a bounce on every step
+              legSwing(0.55, ph);
+              this.body.position.y += Math.abs(Math.sin(ph * TAU * 2)) * up * 0.045;
+              this.body.rotation.z = Math.sin(ph * TAU) * 0.03;
+              this.head.rotation.z = Math.sin(ph * TAU * 2) * 0.05;
+              this.tail.rotation.z = 0.25;
+              wagSpeed = 2;
+            } else {
+              // a gallop: the forelegs together, then the hind; the back flexing; a moment off the ground
+              const fore = Math.sin(ph * TAU);
+              const hind = Math.sin((ph + 0.45) * TAU);
+              for (const [i, l] of this.legs.entries())
+                l.pivot.rotation.z =
+                  (i < 2 ? Math.sin((ph + i * 0.06) * TAU) : Math.sin((ph + 0.45 + (i - 2) * 0.06) * TAU)) * 0.85;
+              this.body.rotation.z = Math.sin((ph + 0.2) * TAU) * 0.14;
+              this.body.position.y += Math.max(0, Math.sin(ph * TAU * 2 + 0.6)) * up * 0.08;
+              this.head.rotation.z = -Math.sin((ph + 0.2) * TAU) * 0.1 + 0.08;
+              this.tail.rotation.z = 0.05 + (fore - hind) * 0.05;
+              wag = 0.15;
+            }
+            const bend = Math.max(-0.35, Math.min(0.35, this.turn * 0.12));
+            this.body.rotation.y += bend * 0.5;
+            this.head.rotation.y += bend;
+            break;
+          }
           default:
             // a trot: diagonal pairs, a bounce on every step
             legSwing(0.55, t);
@@ -1729,13 +1916,14 @@ export class PetModel {
         this.body.rotation.z = 0.5;
         this.body.position.y -= by * 0.55;
         this.body.position.x -= bx * 0.1;
+        const dogSit = this.species === "dog"; // (its longer forelegs straight under it: docs/plan/52)
         for (const [i, l] of this.legs.entries()) {
           if (i >= 2) {
             l.pivot.rotation.z = -1.4;
             l.pivot.position.y = pr.up - by * 0.55 - by * 0.5;
           } else {
-            l.pivot.rotation.z = 0.5;
-            l.pivot.position.y = pr.up - by * 0.55 - by * 0.3;
+            l.pivot.rotation.z = dogSit ? 0.06 : 0.5;
+            l.pivot.position.y = pr.up - by * 0.55 - by * (dogSit ? 0.05 : 0.3);
           }
         }
         this.head.rotation.z = -0.35;
@@ -2031,6 +2219,51 @@ export class PetModel {
         this.head.rotation.z = -0.25 * k;
         break;
       }
+      case "lie": {
+        // down like a sphinx: on its belly, the forelegs out ahead, the hind tucked, the head up
+        lying = true;
+        this.body.position.y = by * 1.0;
+        this.body.scale.y = 1 + Math.sin(t * TAU) * 0.02;
+        for (const [i, l] of this.legs.entries()) l.pivot.rotation.z = i < 2 ? -1.5 : 1.45;
+        this.head.rotation.z = 0.1;
+        wag = 0.15;
+        break;
+      }
+      case "playbow": {
+        // the front down, the rump up, the tail going: play with me
+        const k = 0.85 + Math.sin(t * TAU * 2) * 0.15;
+        this.body.rotation.z = -0.42 * k;
+        this.body.position.y -= by * 0.3 * k;
+        for (const [i, l] of this.legs.entries()) {
+          l.pivot.rotation.z = i < 2 ? -1.25 * k : 0.12;
+          l.pivot.position.y = pr.up - by * 0.55 - (i < 2 ? by * 0.75 * k : 0);
+        }
+        this.head.rotation.z = 0.4;
+        this.tail.rotation.z = -0.7;
+        eyes = "excited";
+        mouthOpen = 0.4;
+        wag = 1;
+        wagSpeed = 3;
+        break;
+      }
+      case "tilt": {
+        // a head tilt, held: what was that?
+        const k = Math.sin((Math.min(1, t * 2) * Math.PI) / 2);
+        this.head.rotation.x = 0.45 * k;
+        this.head.rotation.z = 0.12;
+        for (const [i, e] of this.ears.entries()) e.rotation.z += (i ? 0.2 : -0.25) * k;
+        break;
+      }
+      case "sniffground": {
+        // on the move, slowly, the nose on the ground, side to side
+        legSwing(0.22, t);
+        this.head.rotation.z = -0.85;
+        this.head.rotation.y = Math.sin(t * TAU * 2) * 0.25;
+        this.body.rotation.z = -0.06;
+        this.tail.rotation.z = -0.35;
+        wag = 0.5;
+        break;
+      }
       case "battle": {
         this.body.scale.y = 0.92;
         this.body.position.y -= by * 0.12;
@@ -2076,7 +2309,7 @@ export class PetModel {
     if (lying) for (const l of this.legs) l.pivot.position.y = this.body.position.y - by * 0.3;
     else
       for (const [i, l] of this.legs.entries())
-        if (p.kind !== "sit" && p.kind !== "lesson") l.pivot.position.y = pr.up - by * 0.55 + (i >= 2 ? 0 : 0);
+        if (!OWN_LEGS.has(p.kind)) l.pivot.position.y = pr.up - by * 0.55 + (i >= 2 ? 0 : 0);
     // the mood in the ears and the tail: back and tucked when scared or angry,
     // forward and up when excited or surprised
     const back = eyes === "scared" || eyes === "angry";
@@ -2084,14 +2317,59 @@ export class PetModel {
     if (pr.ears !== "none" && pr.ears !== "crest")
       for (const e of this.ears) e.rotation.z += back ? 0.55 : alert ? -0.3 : 0;
     if (pr.ears === "crest") for (const e of this.ears) e.rotation.z += back ? 0.6 : alert ? -0.5 : 0;
+    // (about z a positive turn lowers the tail and raises the nose: tucked is +, up is −)
     if (!lying) {
-      if (eyes === "scared") this.tail.rotation.z += this.tailKind === "feathers" ? 0.3 : -1.1;
-      else if (alert) this.tail.rotation.z += this.tailKind === "feathers" ? -0.3 : 0.35;
+      if (eyes === "scared") this.tail.rotation.z += this.tailKind === "feathers" ? 0.3 : 1.1;
+      else if (alert) this.tail.rotation.z += this.tailKind === "feathers" ? -0.3 : -0.35;
     }
     if (alert) {
       wag = 1;
       wagSpeed = 3;
     } else if (eyes === "scared") wag = 0.05;
+    // the mood it's in (the server's: docs/plan/52 D4), in its body: the tail, the ears, the head
+    const mood = p.mood ?? "";
+    if (mood && !lying) {
+      const earsBy = (v: number) => {
+        if (pr.ears !== "none") for (const e of this.ears) e.rotation.z += v;
+      };
+      switch (mood) {
+        case "happy":
+          this.tail.rotation.z -= 0.3;
+          wag = Math.max(wag, 0.9);
+          wagSpeed = Math.max(wagSpeed, 2);
+          earsBy(-0.15);
+          if (p.kind === "walk") this.body.position.y += pr.up * 0.02 * Math.abs(Math.sin(t * TAU * 2));
+          break;
+        case "bored":
+          this.tail.rotation.z += 0.4;
+          wag = 0.08;
+          this.head.rotation.z -= 0.25;
+          earsBy(0.2);
+          break;
+        case "scared":
+          // (tucked: by the face's if it's scared — rigOf's — else here)
+          if (eyes !== "scared") this.tail.rotation.z += 1.1;
+          wag = 0.03;
+          earsBy(0.6);
+          this.head.rotation.z -= 0.3;
+          this.body.position.y -= by * 0.18;
+          break;
+        case "sulk":
+          this.tail.rotation.z += 0.6;
+          wag = 0;
+          earsBy(0.35);
+          this.head.rotation.z -= 0.35;
+          this.head.rotation.y += 0.5;
+          break;
+        case "alert":
+          this.tail.rotation.z -= 0.5;
+          wag = 0.12;
+          wagSpeed = 2.5;
+          earsBy(-0.4);
+          this.head.rotation.z += 0.18;
+          break;
+      }
+    }
     // the tail wags
     const wagT = now ? now / 1000 : t * 4;
     if (this.tailKind === "curl" || this.tailKind === "long")
@@ -2099,7 +2377,7 @@ export class PetModel {
     else if (this.tailKind === "paddle") this.tail.rotation.y = Math.sin(wagT * 3 * wagSpeed) * wag * 0.5;
     else this.tail.rotation.x = Math.sin(wagT * 8 * wagSpeed) * wag * 0.4;
     // the head follows the look, eased; ears twitch now and then
-    const look = p.kind === "walk" || lying ? 0 : p.look;
+    const look = p.kind === "walk" || (lying && p.kind !== "lie") ? 0 : p.look;
     this.looked += (look - this.looked) * (dt ? Math.min(1, dt * 8) : 1);
     this.head.rotation.y += this.looked;
     if (now && this.ears.length && pr.ears !== "crest") {
@@ -2173,7 +2451,7 @@ export class PetModel {
     }
     // cross-fade from the last pose
     if (this.blendFrom && this.blendT < 1) {
-      this.blendT = Math.min(1, this.blendT + dt / 0.22);
+      this.blendT = Math.min(1, this.blendT + dt / this.blendDur);
       const k = 1 - this.blendT * this.blendT * (3 - 2 * this.blendT);
       this.lerpFrom(this.blendFrom, k);
       if (this.blendT >= 1) this.blendFrom = null;
@@ -2391,12 +2669,14 @@ export interface RigIn {
   feeling: string;
   hurtAt?: number;
   carry?: string | null;
+  mood?: BodyMood; // the server's (docs/plan/52 D4); unset: the feeling's face only
 }
 export interface RigOut {
   kind: PoseKind;
   cycle: number; // ms per cycle; one-shots play once
   once: boolean;
   face: Face3;
+  mood: BodyMood;
 }
 export function rigOf(s: RigIn, now: number): RigOut & { t: number; flash: number } {
   const [what, arg] = s.act.split(":");
@@ -2405,6 +2685,10 @@ export function rigOf(s: RigIn, now: number): RigOut & { t: number; flash: numbe
   let once = false;
   let face: Face3 = s.feeling === "happy" ? "happy" : s.feeling === "ok" || s.feeling === "bored" ? "open" : "sad";
   if (s.feeling === "tired") face = "sleepy";
+  // (a mood shows in the face too)
+  if (s.mood === "scared") face = "scared";
+  else if (s.mood === "sulk") face = "sad";
+  else if (s.mood === "bored" && face === "open") face = "sleepy";
   if (s.a === 1) {
     kind = "walk";
     cycle = s.species === "capybara" ? 760 : s.species === "rabbit" ? 520 : 560;
@@ -2475,6 +2759,25 @@ export function rigOf(s: RigIn, now: number): RigOut & { t: number; flash: numbe
       cycle = 1200;
       face = "open";
       break;
+    // its moves (docs/plan/52-the-pet-two.md D2/D5, features/pets.ts): act "move:<kind>"
+    case "move": {
+      const MOVES: Record<string, [PoseKind, number, boolean]> = {
+        lie: ["lie", 3200, false],
+        playbow: ["playbow", 900, false],
+        shake: ["shake", 1300, true],
+        tilt: ["tilt", 1600, true],
+        sniffground: ["sniffground", 900, false],
+      };
+      const k = MOVES[arg];
+      if (k) [kind, cycle, once] = k;
+      // a few bounds after a passing car: running (its gait, a gallop at that pace, by its speed)
+      else if (arg === "chase") {
+        kind = "walk";
+        face = "excited";
+      }
+      if (arg === "playbow") face = "excited";
+      break;
+    }
     case "idle": {
       // species idle sets (features/pets.ts idle()): act "idle:<kind>"
       const IDLE: Record<string, [PoseKind, number, boolean]> = {
@@ -2490,6 +2793,11 @@ export function rigOf(s: RigIn, now: number): RigOut & { t: number; flash: numbe
         flat: ["flat", 3200, false],
         preen: ["preen", 1300, false],
         wing: ["wing", 2000, true],
+        // docs/plan/52 D5
+        lie: ["lie", 3200, false],
+        playbow: ["playbow", 900, false],
+        tilt: ["tilt", 1600, true],
+        sniffground: ["sniffground", 900, false],
       };
       const k = IDLE[arg];
       if (k) [kind, cycle, once] = k;
@@ -2592,5 +2900,5 @@ export function rigOf(s: RigIn, now: number): RigOut & { t: number; flash: numbe
   }
   const since = Math.max(0, now - (kind === "hurt" ? (s.hurtAt ?? now) : s.actAt));
   const t = once ? Math.min(1, since / cycle) : (since % cycle) / cycle;
-  return { kind, cycle, once, face, t, flash: hurt };
+  return { kind, cycle, once, face, t, flash: hurt, mood: s.mood ?? "" };
 }

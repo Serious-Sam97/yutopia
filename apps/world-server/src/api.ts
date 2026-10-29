@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import type { Layout, WorldObjectDef } from "@yutopia/shared";
 import type { Inventory } from "@yutopia/shared/inventory";
-import type { PetRecord } from "@yutopia/shared/pets";
+import type { PetOut, PetRecord } from "@yutopia/shared/pets";
 import { config } from "./config.ts";
 import { metrics } from "./metrics.ts";
 
@@ -115,6 +115,8 @@ export const api = {
     call<{ line: string | null; mood?: string; personal: boolean }>("POST", "/vortex", context),
   // someone's pets (features/pets.ts): all of them, a new one, a change, one let go
   pets: (userId: number) => call<{ pets: PetRecord[] }>("GET", `/pets/${userId}`),
+  // every living pet out in the world, whoever's (docs/plan/51-the-pet.md): put back at the room's start
+  petsOut: () => call<{ pets: PetOut[] }>("GET", "/pets-out"),
   createPet: (userId: number, pet: Omit<PetRecord, "id">) => call<{ pet: PetRecord }>("POST", `/pets/${userId}`, pet),
   savePet: (userId: number, petId: number, patch: Partial<PetRecord>) =>
     call<{ pet: PetRecord }>("PUT", `/pets/${userId}/${petId}`, patch),

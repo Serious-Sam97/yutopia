@@ -11,20 +11,25 @@ import {
   compatible,
   drift,
   drives,
+  dueSoon,
   emptyMemory,
   favouriteSpot,
   favouriteToy,
   hasGrudge,
   holdGrudge,
   type MindCtx,
+  moodOf,
   nightOf,
   obeyChance,
+  rememberArrival,
   rememberBowl,
+  rememberRoom,
   rememberSpot,
   rememberToy,
   rollTraits,
   TRAIT_NAMES,
   traitWords,
+  usualHour,
 } from "./mind.ts";
 import { FULL_NEEDS } from "./pets.ts";
 
@@ -154,4 +159,35 @@ test("bonds grow with care, fade with days, and tell friends from strangers", ()
   assert.equal(nightOf(2), 1);
   assert.equal(nightOf(12), 0);
   assert.ok(nightOf(21) > 0 && nightOf(21) < 1);
+});
+
+test("its owner's routine: arrivals and rooms remembered, the usual hour round the clock, due soon (docs/plan/52-the-pet-two.md)", () => {
+  let m = cleanMemory(null);
+  assert.equal(usualHour(m), null);
+  for (const h of [9, 9.5, 8.5]) m = rememberArrival(m, h);
+  assert.ok(Math.abs((usualHour(m) ?? -1) - 9) < 0.01);
+  assert.ok(dueSoon(m, 8.5) && dueSoon(m, 8.25) && !dueSoon(m, 7) && !dueSoon(m, 10));
+  // round midnight: 23 and 1 → 0
+  let n = cleanMemory(null);
+  for (const h of [23, 1, 23.5, 0.5]) n = rememberArrival(n, h);
+  const u = usualHour(n) ?? -1;
+  assert.ok(u < 0.01 || u > 23.99, `midnight ${u}`);
+  for (let i = 0; i < 30; i++) m = rememberArrival(m, 9);
+  assert.equal(m.arrivals?.length, 20);
+  for (let i = 0; i < 12; i++) m = rememberRoom(m, `room-${i}`);
+  m = rememberRoom(m, "room-3");
+  assert.equal(Object.keys(m.rooms ?? {}).length, 8);
+  assert.equal(m.rooms?.["room-3"], 2);
+  // cleaned on the way in: bad hours out
+  assert.deepEqual(cleanMemory({ arrivals: [9, 30, -1, "x", 10] }).arrivals, [9, 10]);
+});
+
+test("its mood: alarm, fear, a sulk, then how it feels", () => {
+  const base = { alert: false, scared: false, sulking: false, fun: 80, happy: true };
+  assert.equal(moodOf(base), "happy");
+  assert.equal(moodOf({ ...base, happy: false }), "");
+  assert.equal(moodOf({ ...base, fun: 20 }), "bored");
+  assert.equal(moodOf({ ...base, sulking: true }), "sulk");
+  assert.equal(moodOf({ ...base, sulking: true, scared: true }), "scared");
+  assert.equal(moodOf({ ...base, scared: true, alert: true }), "alert");
 });

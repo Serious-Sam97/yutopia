@@ -2313,7 +2313,9 @@ void main() {
       }
       seen.add(b.id);
       // (knocked down by a pool ball: facing back the way it came, timed from when it's seen here)
-      const fell = this.fellT(b);
+      // (held down by a dog: lying there, not getting up — docs/plan/52-the-pet-two.md D8)
+      const ft = this.fellT(b);
+      const fell = ft !== undefined && b.pinned ? Math.min(ft, 1.4) : ft;
       const angle3 = fell !== undefined ? (b.fellYaw ?? 0) + Math.PI : (b.angle ?? dirAngle(b.d));
       const hidden3 =
         ((first || (this.gameCam !== null && this.gcMix > 0.5 && !this.gameCam.showMe)) && b.id === meId) ||
@@ -2820,6 +2822,7 @@ void main() {
         feeling: pet.feeling,
         hurtAt: pet.hurtAt,
         carry: pet.carry,
+        mood: pet.mood as never,
       },
       now,
     );
@@ -2831,13 +2834,12 @@ void main() {
       look = Math.max(-1.1, Math.min(1.1, -rel));
     }
     e.model.pose(
-      { kind: r.kind, t: r.t, face: r.face, look, carry: pet.carry ?? null, flash: r.flash },
+      { kind: r.kind, t: r.t, face: r.face, look, carry: pet.carry ?? null, flash: r.flash, mood: r.mood },
       dt,
       performance.now(),
     );
-    // (on a floor below mine: down there, its height is that floor's)
-    const below = (b.level ?? this.level) !== this.level ? (b.z ?? 0) : 0;
-    e.model.root.position.set(b.x, below, b.y);
+    // (its height: on a floor below mine, that floor's; in a lift's car, the car's)
+    e.model.root.position.set(b.x, b.z ?? 0, b.y);
     e.model.root.rotation.y -= e.turned;
     e.model.root.visible = true;
   }
@@ -2901,8 +2903,10 @@ void main() {
         t.bubble.style.display = "none";
       }
       const p3 = this.people3.get(b.id);
+      const pe = b.pet ? this.pets3.get(b.id) : undefined;
+      // (a pet's over its back, where it stands: the land's height, a lift's car)
       const h = b.pet
-        ? (this.pets3.get(b.id)?.model.height ?? 0.8) + 0.18
+        ? (pe?.model.root.position.y ?? b.z ?? 0) + (pe?.model.height ?? 0.8) + 0.18
         : p3?.ready
           ? p3.tagY()
           : b.npc

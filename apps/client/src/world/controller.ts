@@ -1497,9 +1497,16 @@ export class WorldController {
       this.toyPick = null;
     }
     room.state.pets.forEach((pet: S, id: string) => {
-      if (!pet.alive) return;
+      // (in a car: the car draws it, in its seat — car/cars.ts; in a lift's car it's drawn as ever)
+      const inCar = pet.ride && pet.ride !== "lift";
+      if (!pet.alive || inCar) {
+        if (inCar && model.hasAvatar(`pet:${id}`)) model.removeAvatar(`pet:${id}`);
+        return;
+      }
       const pos = interpolate(this.petBuf.get(id) ?? [{ t: 0, x: pet.x, y: pet.y }], renderAt);
       const st = { ...this.petState(pet), x: pos.x, y: pos.y };
+      // (out on the land its feet are on it — the hills, the road —; in a lift's car, the car's height)
+      if ((pet.floor ?? 0) === this.level && !pet.z) st.z = this.grid.groundAt(pos.x, pos.y, 0, 0.25);
       if ((pet.floor ?? 0) === this.level) model.upsertAvatar(`pet:${id}`, st);
       else if (model.hasAvatar(`pet:${id}`)) model.removeAvatar(`pet:${id}`);
       if (tp) bodies.push({ ...st, id: `pet:${id}`, reduced, level: pet.floor ?? 0 });
@@ -2037,6 +2044,8 @@ export class WorldController {
       } else {
         const myFree =
           [...room.state.players.values()].length > 0 && hud.get().pets.some((x) => x.mine && x.alive && !x.battle);
+        // its owner away (docs/plan/51-the-pet.md): anyone may feed and water it
+        if (!pet.sid) items.push({ act: "snack", ok: !pet.battle }, { act: "water", ok: !pet.battle });
         items.push({ act: "challenge", ok: myFree && !pet.battle }, { act: "petCare", ok: true });
       }
       const feeling = tr(`feel_${P.feelingOf(petNeeds(pet))}` as never);
@@ -2297,7 +2306,8 @@ export class WorldController {
     hud.set({ vortex: vx ? { x: vx.x, y: vx.y, say: vx.say, sayAt: vx.sayAt, mood: vx.mood } : null });
     const petsAt: { x: number; y: number }[] = [];
     room.state.pets.forEach((pet: S) => {
-      if (pet.sid === room.sessionId && pet.alive) petsAt.push({ x: pet.x, y: pet.y });
+      // (lost: not where it is — where it was last seen is on the GPS)
+      if (pet.sid === room.sessionId && pet.alive && pet.mode !== "lost") petsAt.push({ x: pet.x, y: pet.y });
     });
     if (petsAt.length || hud.get().myPetsAt.length) hud.set({ myPetsAt: petsAt });
     this.publishPets();
@@ -2319,12 +2329,15 @@ export class WorldController {
       hurtAt: this.petHurt.get(pet.id),
       lookAt: this.whereIs(pet.sid),
       carry: pet.carry || null,
+      mood: pet.mood || undefined,
     };
     return {
-      name: pet.name,
+      // (its owner away: whose it is on its tag — "Rex · Ana's")
+      name: pet.sid ? pet.name : `${pet.name} · ${String(pet.owner).split(" ")[0]}'s`,
       avatar: VORTEX_LOOK,
       x: pet.x,
       y: pet.y,
+      z: pet.z || undefined, // (in a lift's car: its height)
       d: pet.d,
       a: pet.a,
       status: "online",
@@ -2335,12 +2348,17 @@ export class WorldController {
     };
   }
 
-  // My pets not at my heels (exploring, staying put): "Call my pets" brings them.
+  // My pets not at my heels (exploring, staying put, waiting where I left them): "Call my pets" brings them.
   private petsAway(): string[] {
     const room = this.room;
     const out: string[] = [];
     room?.state.pets.forEach((pet: S) => {
-      if (pet.sid === room.sessionId && pet.alive && !pet.battle && (pet.mode === "explore" || pet.mode === "stay"))
+      if (
+        pet.sid === room.sessionId &&
+        pet.alive &&
+        !pet.battle &&
+        (pet.mode === "explore" || pet.mode === "stay" || pet.mode === "wait")
+      )
         out.push(pet.id);
     });
     return out;
@@ -3615,6 +3633,7 @@ export class WorldController {
       arm: p.arm,
       fellAt: p.fellAt,
       fellYaw: p.fellYaw,
+      pinned: !!p.bitBy || undefined,
     };
   }
 

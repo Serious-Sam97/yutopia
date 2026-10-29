@@ -214,7 +214,11 @@ export class WorldRoom extends Room<WorldState> {
     return sent;
   }
 
-  async onCreate() {
+  /** offline, the sandbox this copy is (server.ts); "" for the one world */
+  sandbox = "";
+
+  async onCreate(options?: { sandbox?: unknown }) {
+    if (config.offline) this.sandbox = String(options?.sandbox ?? "");
     // (offline sandboxes, server.ts, may be several: the newest is "current")
     if (WorldRoom.held) throw new Error("The world is being reset — try again in a moment");
     if (WorldRoom.current && !config.offline) throw new Error("The world is already open");
@@ -1032,6 +1036,7 @@ export class WorldRoom extends Room<WorldState> {
       if (q && q.area === areaKey) this.send(c, "knock", { from: client.sessionId, fromName: p.name, area: areaKey });
     }
     this.send(client, "toast", { text: `Knocked on ${area.name}. Waiting for someone to let you in…` });
+    for (const f of this.features) f.knock?.(client, p, areaKey);
   }
 
   private cleanBooths() {
@@ -1239,6 +1244,7 @@ export class WorldRoom extends Room<WorldState> {
     p.area = this.areaOf(p)?.key ?? "";
     if (!o.carried) this.send(client, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
     if (was !== p.level) for (const f of this.features) f.levelChange?.(client, p, was, p.level);
+    if (o.carried) for (const f of this.features) f.carried?.(client, p);
     this.pushPresence();
   }
 

@@ -50,7 +50,7 @@ export interface Solid {
   shove?: (jx: number, jz: number, px: number, pz: number) => void;
   id?: string;
   /** what it is, for the sound */
-  what?: "tree" | "post" | "wall" | "car" | "person" | "fence" | "bank";
+  what?: "tree" | "post" | "wall" | "car" | "person" | "pet" | "fence" | "bank";
 }
 
 export interface CarWorld {

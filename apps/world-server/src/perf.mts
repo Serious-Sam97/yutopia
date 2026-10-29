@@ -248,6 +248,34 @@ if (DARK) {
   while ((WorldRoom.current?.state.shadows.size ?? 0) < 35 && Date.now() - t0 < 60_000)
     await new Promise((r) => setTimeout(r, 200));
 }
+// PETS=n (docs/plan/51-the-pet.md, phase 5): n pets out in the world on their own — their owners in
+// for a moment to adopt three each, then gone: one of each three lost out on the land (wandering
+// legs, the dangers in play), the others waiting in the building where they were left
+const PETS = Number(process.env.PETS ?? 0);
+const SPECIES = ["dog", "cat", "rabbit", "platypus", "capybara", "parrot"];
+let lostN = 0;
+for (let i = 0; i < PETS; i += 3) {
+  const owner = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 1,
+    token: `dev:${900000 + i}:O${i}:member,builder,admin`,
+  });
+  owner.onMessage("*", () => {});
+  const n = Math.min(3, PETS - i);
+  for (let k = 0; k < n; k++) owner.send("pet:adopt", { species: SPECIES[(i + k) % 6], name: `P${i + k}` });
+  const mine = () =>
+    // biome-ignore lint/suspicious/noExplicitAny: decoded schema state
+    [...(owner.state.pets?.values() ?? [])].filter((p: any) => p.sid === owner.sessionId) as { id: string }[];
+  for (let t = 0; t < 100 && mine().length < n; t++) await new Promise((r) => setTimeout(r, 50));
+  const first = mine()[0];
+  if (first) {
+    // (on the open ground west of the lot: the shared grounds' metres -148, -4, spread about)
+    const at = { x: -88 + (Math.random() - 0.5) * 40, y: 6 + (Math.random() - 0.5) * 40 };
+    owner.send("pet:test", { id: first.id, at, lose: true });
+    lostN++;
+  }
+  await new Promise((r) => setTimeout(r, 200));
+  await owner.leave(true);
+}
 bytes.out = 0;
 bytes.in = 0;
 let shadowsMax = 0;
@@ -275,7 +303,7 @@ const max = Number(/yutopia_tick_ms_max ([\d.]+)/.exec(text)?.[1] ?? "NaN");
 const cpuPct = ((cpu.user + cpu.system) / 1000 / (SECONDS * 1000)) * 100;
 clearInterval(watch);
 console.log(
-  `[perf] ${BOTS} bots · tick avg ${avg} ms · max ${max} ms · process CPU ${cpuPct.toFixed(0)}% (incl. the bots themselves) · ${snaps} put back · out of breath ${winded} times outside`,
+  `[perf] ${BOTS} bots${PETS ? ` · ${WorldRoom.current?.state.pets.size ?? 0} pets out (${lostN} lost)` : ""} · tick avg ${avg} ms · max ${max} ms · process CPU ${cpuPct.toFixed(0)}% (incl. the bots themselves) · ${snaps} put back · out of breath ${winded} times outside`,
 );
 // (the moves checked on Jolt: what each costs, and the server's share of a core for every message)
 const moves = after.n;

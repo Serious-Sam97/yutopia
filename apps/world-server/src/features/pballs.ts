@@ -310,7 +310,9 @@ registerFeature((room: WorldRoom) => {
         from.delete(sid);
       }
       // up again; the throw's follow-through over
-      for (const p of room.state.players.values()) if (p.fellAt && now - p.fellAt > KNOCK.secs * 1000) p.fellAt = 0;
+      // (held down by a dog: down till it's called off — features/pets.ts)
+      for (const p of room.state.players.values())
+        if (p.fellAt && !p.bitBy && now - p.fellAt > KNOCK.secs * 1000) p.fellAt = 0;
       for (const [sid, until] of posing)
         if (now >= until) {
           posing.delete(sid);

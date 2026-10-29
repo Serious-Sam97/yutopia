@@ -9,7 +9,7 @@ import {
   SRGBColorSpace,
   WebGLRenderer,
 } from "three";
-import { type Face3, PetModel, type PoseKind, plainMat, type RigIn, rigOf, toyMesh } from "./pets3d";
+import { type BodyMood, type Face3, PetModel, type PoseKind, plainMat, type RigIn, rigOf, toyMesh } from "./pets3d";
 
 // The pet models drawn for the iso view (pets3d.ts): rendered from the iso
 // camera — 30° down, the viewer at +x +y, 8 facings — into sprites, one per
@@ -43,6 +43,10 @@ const FRAMES: Record<PoseKind, number> = {
   beg: 6,
   nudge: 6,
   sniff: 6,
+  lie: 6,
+  playbow: 6,
+  tilt: 6,
+  sniffground: 6,
   idle: 6,
   walk: 8,
   sit: 1,
@@ -199,7 +203,8 @@ class SpriteRenderer {
     look: PetLook,
     outfit: PetOutfit,
     yaw: number,
-    pose: { kind: PoseKind; t: number; face: Face3 },
+    // (a mood and a speed: the sheet's moods and gaits — docs/plan/52-the-pet-two.md)
+    pose: { kind: PoseKind; t: number; face: Face3; mood?: BodyMood; speed?: number },
   ) {
     const gl = this.gl();
     if (!gl) return;
