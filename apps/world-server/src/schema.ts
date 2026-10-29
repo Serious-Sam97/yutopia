@@ -555,6 +555,8 @@ export class WorldState extends Schema {
   @type("float32") spawnX = 0;
   @type("float32") spawnY = 0;
   @type("uint32") mapVersion = 0;
+  // god mode's edits to the Grounds laid now (docs/plan/53-the-god-mode.md): clients fetch them
+  @type("uint32") groundsRev = 0;
   // the building (shared levels.ts): the floor the map above is, and the others (LevelDef[], JSON)
   @type("uint8") floor = 0;
   @type("string") levels = "[]";

@@ -1,5 +1,13 @@
 import { groundAt, type StreetThing } from "@yutopia/shared/grounds";
-import { BoxGeometry, type BufferGeometry, ConeGeometry, CylinderGeometry, SphereGeometry } from "three";
+import {
+  BoxGeometry,
+  type BufferGeometry,
+  ConeGeometry,
+  CylinderGeometry,
+  IcosahedronGeometry,
+  PlaneGeometry,
+  SphereGeometry,
+} from "three";
 import { place, tinted } from "./campus";
 
 // The town's street furniture in 3D (docs/plan/33-the-look.md, phase 4; where it stands: shared
@@ -139,6 +147,85 @@ function postbox(): BufferGeometry[] {
   ];
 }
 
+// ── god mode's own (docs/plan/53-the-god-mode.md, phase 8: shapes/grounds.ts their solids) ──
+function boulder(): BufferGeometry[] {
+  // a faceted rock, squat, the snow on its top
+  return [
+    tinted(new IcosahedronGeometry(0.85, 0).scale(1, 0.62, 0.9).translate(0, 0.5, 0), 0x7c8187),
+    tinted(new IcosahedronGeometry(0.62, 0).scale(1, 0.32, 0.85).translate(0.04, 0.9, 0), SNOW),
+  ];
+}
+function planter(): BufferGeometry[] {
+  const wood = 0x6a4b35;
+  return [
+    box(1.2, 0.5, 1.2, 0, 0, 0, wood),
+    box(1.26, 0.06, 1.26, 0, 0.5, 0, 0x553a28), // its rim
+    box(1.08, 0.04, 1.08, 0, 0.5, 0, SNOW),
+    cyl(0.07, 0.07, 0.5, 0.5, 0x4a3a2c, 6),
+    // a little spruce in it, snow on its tiers
+    ...[0, 1, 2].map((i) =>
+      tinted(new ConeGeometry(0.55 - i * 0.14, 0.7, 7).translate(0, 1.15 + i * 0.42, 0), 0x2c4a36),
+    ),
+    tinted(new ConeGeometry(0.2, 0.3, 7).translate(0, 2.15, 0), SNOW),
+  ];
+}
+function sign(): BufferGeometry[] {
+  const wood = 0x5a4434;
+  return [
+    cyl(0.06, 0.06, 2.0, 0, wood, 6),
+    box(1.6, 0.7, 0.07, 0, 1.3, 0, 0x3e2f24), // the board (its words: signFaces)
+    box(1.64, 0.05, 0.1, 0, 2.0, 0, SNOW),
+  ];
+}
+/** A fence along its line: split rails on posts every 2.5 m, the land's height under each. */
+function fence(t: StreetThing): BufferGeometry[] {
+  const out: BufferGeometry[] = [];
+  const pts = t.pts ?? [];
+  const wood = 0x6b5440;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, az] = pts[i - 1];
+    const [bx, bz] = pts[i];
+    const len = Math.hypot(bx - ax, bz - az);
+    const n = Math.max(1, Math.ceil(len / 2.5));
+    const a = Math.atan2(bz - az, bx - ax);
+    for (let k = 0; k <= n; k++) {
+      if (k === 0 && i > 1) continue;
+      const x = ax + ((bx - ax) * k) / n;
+      const z = az + ((bz - az) * k) / n;
+      out.push(cyl(0.07, 0.06, 1.15, groundAt(x, z), wood, 5).translate(x, 0, z));
+      out.push(cyl(0.08, 0.08, 0.04, groundAt(x, z) + 1.15, SNOW, 5).translate(x, 0, z));
+    }
+    for (let k = 0; k < n; k++) {
+      const x0 = ax + ((bx - ax) * k) / n;
+      const z0 = az + ((bz - az) * k) / n;
+      const x1 = ax + ((bx - ax) * (k + 1)) / n;
+      const z1 = az + ((bz - az) * (k + 1)) / n;
+      const y0 = groundAt(x0, z0);
+      const y1 = groundAt(x1, z1);
+      const l = Math.hypot(x1 - x0, z1 - z0, y1 - y0);
+      for (const [h, c] of [
+        [0.45, wood],
+        [0.9, wood],
+        [0.94, SNOW],
+      ] as const) {
+        const g = new BoxGeometry(l, h === 0.94 ? 0.03 : 0.09, h === 0.94 ? 0.1 : 0.07);
+        g.rotateZ(Math.atan2(y1 - y0, Math.hypot(x1 - x0, z1 - z0)));
+        g.rotateY(-a);
+        g.translate((x0 + x1) / 2, (y0 + y1) / 2 + h, (z0 + z1) / 2);
+        out.push(tinted(g, c));
+      }
+    }
+  }
+  return out;
+}
+/** A sign's words: a face either side of its board, in place (its own picture: grounds3d.ts). */
+export function signFaces(t: StreetThing): BufferGeometry[] {
+  const y = groundAt(t.x, t.z);
+  return [0, Math.PI].map((r) =>
+    place(new PlaneGeometry(1.5, 0.6).rotateY(r).translate(0, 1.65, r ? -0.04 : 0.04), t.x, y, t.z, t.ry),
+  );
+}
+
 const MAKE: Record<StreetThing["kind"], () => BufferGeometry[]> = {
   hydrant,
   bin,
@@ -148,7 +235,12 @@ const MAKE: Record<StreetThing["kind"], () => BufferGeometry[]> = {
   stop,
   streetsign,
   postbox,
+  boulder,
+  planter,
+  sign,
+  fence: () => [], // (along its line: fence())
 };
+const SIZED = new Set<StreetThing["kind"]>(["boulder", "planter"]);
 
 /** Every street thing's parts in place, and the wires sagging from pole to pole. */
 export function streetGeometry(things: StreetThing[]): BufferGeometry[] {
@@ -158,8 +250,13 @@ export function streetGeometry(things: StreetThing[]): BufferGeometry[] {
     const y = groundAt(t.x, t.z);
     // (a bench is two tiles: (x, z) its west one's corner)
     const [cx, cz] = t.kind === "bench" ? [t.x + 1, t.z + 0.5] : [t.x, t.z];
+    if (t.kind === "fence") {
+      out.push(...fence(t));
+      continue;
+    }
     const parts = [...MAKE[t.kind](), ...(t.kind === "pole" && i % 3 === 1 ? transformer() : [])];
-    for (const p of parts) out.push(place(p, cx, y, cz, t.ry));
+    const k = SIZED.has(t.kind) ? (t.s ?? 1) : 1;
+    for (const p of parts) out.push(place(k === 1 ? p : p.scale(k, k, k), cx, y, cz, t.ry));
     if (t.kind === "pole") poles.push(t);
   }
   // the wires: four, each a chain of thin boxes sagging between two arms
@@ -167,6 +264,8 @@ export function streetGeometry(things: StreetThing[]): BufferGeometry[] {
   for (let i = 0; i + 1 < poles.length; i++) {
     const a = poles[i];
     const b = poles[i + 1];
+    // (a pole put down far off — god mode's — isn't wired to the town's)
+    if (Math.hypot(b.x - a.x, b.z - a.z) > 70) continue;
     const ya = groundAt(a.x, a.z) + 7.86;
     const yb = groundAt(b.x, b.z) + 7.86;
     for (const off of [-1.05, -0.35, 0.35, 1.05]) {

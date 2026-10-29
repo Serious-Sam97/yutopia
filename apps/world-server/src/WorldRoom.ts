@@ -74,7 +74,7 @@ import {
 } from "@yutopia/shared";
 import { hasPower, REMOVE_MINUTES, STORM_CALL_MS } from "@yutopia/shared/admin";
 import { monitorsToComputers } from "@yutopia/shared/computer";
-import { groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
+import { editsNow, groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { type Collider, isVerb, MV_WINDED } from "@yutopia/shared/move";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
@@ -87,6 +87,7 @@ import type { DarkHooks } from "./features/dark.ts";
 import { type Feature, featureNames, installFeatures } from "./features/index.ts";
 import type { PballHooks } from "./features/pballs.ts";
 import type { SurvivalHooks } from "./features/survival.ts";
+import { landEdits } from "./land.ts";
 import { removeParticipant, setCanPublish } from "./livekit.ts";
 import { metrics } from "./metrics.ts";
 import { Player, WorldObject, WorldState } from "./schema.ts";
@@ -235,6 +236,10 @@ export class WorldRoom extends Room<WorldState> {
           WorldRoom.current = null;
           throw e;
         });
+    // god mode's edits to the Grounds as published, laid before anything's made of the land
+    // (docs/plan/53-the-god-mode.md; offline: the world file's)
+    if (info?.edits && info.edits.rev !== editsNow().rev) landEdits(info.edits);
+    this.state.groundsRev = editsNow().rev;
     const base = getMap(info?.mapKey ?? "studio");
     const layout = info?.layout && validLayout(info.layout) ? info.layout : null;
     let objects: WorldObjectDef[] = info?.objects ?? base.objects;

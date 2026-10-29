@@ -66,6 +66,8 @@ const LAZY = {
   "yutopia-karts": 60,
   // the karts in play (docs/plan/46-the-karts.md, phases 2–6): your kart, the HUD and lobby, everyone's karts, what flies
   "yutopia-kart-play": 40,
+  // god mode (docs/plan/53-the-god-mode.md): an admin's editor of the open world, its tools and strings
+  "yutopia-god": 20,
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {

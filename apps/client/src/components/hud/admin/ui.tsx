@@ -147,7 +147,7 @@ export function useMine(w: WorldController | null): { powers: number; flying: bo
       w,
       (w) => {
         const r = w.room;
-        const p = r?.state.players.get(r.sessionId);
+        const p = r?.state.players?.get(r.sessionId);
         // (the controller keeps its walker to itself; its `flying` is plain data)
         const walker = (w as unknown as { walker?: { flying?: boolean } | null }).walker;
         return { powers: (p?.powers as number) ?? 0, flying: !!walker?.flying };

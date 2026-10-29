@@ -34,6 +34,7 @@ import {
   PLAZA,
   POND,
   POND_LEVEL,
+  quarter,
   RAVINE,
   RIVER,
   ROAD_CLOSED,
@@ -48,6 +49,7 @@ import {
   terrainAt,
   trackAt,
   treesIn,
+  turnOf,
   WAYS,
   type Way,
   wallEdgeAt,
@@ -116,7 +118,7 @@ import {
 import type { Themes } from "./sky";
 import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
 import { motorsForecourt } from "./spot3d";
-import { streetGeometry } from "./town3d";
+import { signFaces, streetGeometry } from "./town3d";
 
 // the change's show: the old circuit whitens to the snow's colour (docs/plan/47-the-track-changer.md)
 const SHOW_SNOW = new Color("#eef2f5");
@@ -161,6 +163,58 @@ export interface GroundsOpts {
   hqEast?: number;
   /** a still's own cars parked in the lot's bays, besides the seeded ones (no snow under them) */
   parked?: { x: number; z: number }[];
+  /** in the game: only the Kart Park (it's never edited: made once), or all but it (made again
+   *  with god mode's edits — docs/plan/53-the-god-mode.md); a still: all */
+  part?: "kart" | "rest";
+  /** the pictures and materials kept between the parts and their remakes (else its own) */
+  shared?: GroundsShared;
+  /** made again after this one: the ways that didn't change taken from it when swapped in
+   *  (`adopt`), not made again — save these (the land moved under them) */
+  from?: { g: Grounds3; moved: Set<string> };
+}
+
+/** The Grounds' pictures and the materials made of them: one lot for every part of the game's
+ *  Grounds and every time they're made again (freed with the stream). */
+export interface GroundsShared {
+  ts: {
+    snow: CanvasTexture;
+    road: CanvasTexture;
+    trail: CanvasTexture;
+    walk: CanvasTexture;
+    slabs: CanvasTexture;
+    ice: CanvasTexture;
+    pool: CanvasTexture;
+    glow: CanvasTexture;
+  };
+  lambert: Map<string, MeshLambertMaterial>;
+  paint: Map<string, MeshLambertMaterial>;
+  disp: { dispose(): void }[];
+}
+export function groundsShared(T: Themes): GroundsShared {
+  const disp: { dispose(): void }[] = [];
+  const keep = <X extends { dispose(): void }>(x: X): X => {
+    disp.push(x);
+    return x;
+  };
+  return {
+    ts: {
+      snow: keep(tex(snowCanvas(T, 512, 43))),
+      road: keep(tex(roadCanvas(T))),
+      trail: keep(tex(trailCanvas(T))),
+      walk: keep(tex(walkCanvas(T))),
+      slabs: keep(tex(slabCanvas(T))),
+      ice: keep(tex(iceCanvas(T))),
+      pool: keep(tex(poolCanvas(T), false)),
+      glow: keep(tex(glowCanvas(T), false)),
+    },
+    lambert: new Map(),
+    paint: new Map(),
+    disp,
+  };
+}
+/** What a way's drawing is made of (its own: the others near it are the remake's `changed`). */
+function waySig(w: Way): string {
+  return JSON.stringify([WAYS.indexOf(w), w.kind, w.w, w.pave, w.closed, w.flare, w.line, w.h, w.bridged]);
 }
 
 export const SURF: Record<Surface, number> = {
@@ -569,17 +623,17 @@ export class Grounds3 {
   readonly lights: LampLight[] = [];
   private disposables: { dispose(): void }[] = [];
   private night: { m: MeshBasicMaterial | MeshLambertMaterial | MeshStandardMaterial; on: number; kind: string }[] = [];
-  private lambertCache = new Map<string, MeshLambertMaterial>();
+  private sh: GroundsShared;
   private trim = new G(); // a building's sills and such, added with it (settle)
   private asphalts = new Map<string, Texture>();
-  private paintMats = new Map<string, MeshLambertMaterial>();
   /** The lines' material for a kind of way: worn and snowed over with it (roads3d.ts). */
   private paintMat(kind: string): MeshLambertMaterial {
-    let m = this.paintMats.get(kind);
+    let m = this.sh.paint.get(kind);
     if (!m) {
-      m = this.keep(new MeshLambertMaterial({ vertexColors: true }));
+      m = new MeshLambertMaterial({ vertexColors: true });
+      this.sh.disp.push(m);
       paintCover(m, kind);
-      this.paintMats.set(kind, m);
+      this.sh.paint.set(kind, m);
     }
     return m;
   }
@@ -597,55 +651,109 @@ export class Grounds3 {
     near: (x: number, z: number, pad = 0) => this.near(x, z, pad),
     yAt: (w: Way, i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] : groundAt(x, z)),
   };
-  private ts: {
-    snow: CanvasTexture;
-    road: CanvasTexture;
-    trail: CanvasTexture;
-    walk: CanvasTexture;
-    slabs: CanvasTexture;
-    ice: CanvasTexture;
-    pool: CanvasTexture;
-    glow: CanvasTexture;
-  };
+  private get ts(): GroundsShared["ts"] {
+    return this.sh.ts;
+  }
 
   constructor(
     private T: Themes,
     private o: GroundsOpts,
   ) {
-    this.ts = {
-      snow: this.keep(tex(snowCanvas(T, 512, 43))),
-      road: this.keep(tex(roadCanvas(T))),
-      trail: this.keep(tex(trailCanvas(T))),
-      walk: this.keep(tex(walkCanvas(T))),
-      slabs: this.keep(tex(slabCanvas(T))),
-      ice: this.keep(tex(iceCanvas(T))),
-      pool: this.keep(tex(poolCanvas(T), false)),
-      glow: this.keep(tex(glowCanvas(T), false)),
-    };
+    this.sh = o.shared ?? groundsShared(T);
     // (in the game a step a frame or so: `step()`; for a still, all at once)
     const run = (f: () => void) => (o.stream ? this.pending.push(f) : f());
-    if (!o.stream) this.terrain();
-    if (o.stream) for (const w of WAYS) run(() => this.ways(w));
-    else this.ways();
-    run(() => this.water());
-    run(() => this.lot());
-    if (!o.stream) this.woods();
-    for (const b of BUILDINGS)
-      if (this.near(b.x0, b.z0, 60) && !(o.stream && b.kind === "hq")) run(() => this.building(b));
-    run(() => this.courtyardBridge());
-    run(() => this.fence());
-    run(() => this.landmarks());
-    run(() => this.town());
-    run(() => this.motors());
-    for (const f of this.farmSteps()) run(f);
+    const rest = o.part !== "kart";
+    if (rest) {
+      if (!o.stream) this.terrain();
+      if (o.stream) {
+        for (const w of WAYS) run(() => this.wayStep(w));
+        run(() => this.waysAll());
+      } else this.ways();
+      run(() => this.water());
+      run(() => this.lot());
+      if (!o.stream) this.woods();
+      for (const b of BUILDINGS)
+        if (this.near(b.x0, b.z0, 60) && !(o.stream && b.kind === "hq")) run(() => this.building(b));
+      run(() => this.courtyardBridge());
+      run(() => this.fence());
+      run(() => this.landmarks());
+      run(() => this.town());
+      run(() => this.motors());
+      for (const f of this.farmSteps()) run(f);
+    }
     // the Kart Park (the game's: the stills and the sandbox stage it themselves)
-    if (o.stream && KART_LAND) {
+    if (o.part !== "rest" && o.stream && KART_LAND) {
       run(() => this.kartParkLamps());
       run(() => this.kartPark());
     }
     // (last: they gather every light and glow the steps before added)
     run(() => this.lamps());
-    run(() => this.ridges());
+    if (rest) run(() => this.ridges());
+  }
+
+  // ── a way a step, and what's kept of it to be taken by the next one made (god mode's edits:
+  // docs/plan/53-the-god-mode.md) — a way's step adds only its own meshes, its own asphalt ──
+  private wayParts = new Map<
+    string,
+    { sig: string; box: ReturnType<typeof boxOf>; objects: Object3D[]; disp: { dispose(): void }[] }
+  >();
+  /** the ways to be taken from `from` when this one's swapped in */
+  private takes: string[] = [];
+  /** what was handed on to the next one made: not freed with this one */
+  private handed = new WeakSet<object>();
+  /** round the ways that changed (made, gone, moved): a way near one is made again (its banks,
+   *  crossings and corners see the others) */
+  private changed: ReturnType<typeof boxOf>[] | null = null;
+  private wayStep(w: Way) {
+    const sig = waySig(w);
+    const box = boxOf(w);
+    const from = this.o.from;
+    if (from && !from.moved.has(w.key) && from.g.wayParts.get(w.key)?.sig === sig) {
+      if (!this.changed) {
+        const now = new Map(WAYS.map((u) => [u.key, u]));
+        this.changed = [];
+        for (const [k, p] of from.g.wayParts) {
+          const u = now.get(k);
+          if (u && waySig(u) === p.sig) continue;
+          this.changed.push(p.box);
+          if (u) this.changed.push(boxOf(u));
+        }
+        for (const u of WAYS) if (!from.g.wayParts.has(u.key)) this.changed.push(boxOf(u));
+      }
+      const pad = 30;
+      const near = this.changed.some(
+        (b) => b.x0 - pad < box.x1 && b.x1 + pad > box.x0 && b.z0 - pad < box.z1 && b.z1 + pad > box.z0,
+      );
+      if (!near) {
+        this.takes.push(w.key);
+        this.wayParts.set(w.key, { sig, box, objects: [], disp: [] });
+        return;
+      }
+    }
+    const n = this.root.children.length;
+    const d = this.disposables.length;
+    this.ways(w);
+    this.wayParts.set(w.key, { sig, box, objects: this.root.children.slice(n), disp: this.disposables.slice(d) });
+  }
+  /** Swapped in: the ways not made again taken from the one made before (once it's done). */
+  adopt() {
+    const from = this.o.from?.g;
+    if (!from) return;
+    for (const k of this.takes) {
+      const p = from.wayParts.get(k);
+      const mine = this.wayParts.get(k);
+      if (!p || !mine) continue;
+      for (const o of p.objects) this.root.add(o);
+      for (const d of p.disp) {
+        from.handed.add(d);
+        this.disposables.push(d);
+      }
+      mine.objects = p.objects;
+      mine.disp = p.disp;
+      const t = from.asphalts.get(k);
+      if (t) this.asphalts.set(k, t);
+    }
+    this.takes = [];
   }
   private pending: (() => void)[] = [];
   /** steps still to build (`step()`) */
@@ -681,12 +789,18 @@ export class Grounds3 {
   private near(x: number, z: number, pad = 0): boolean {
     return Math.hypot(x - this.o.cx, z - this.o.cz) < this.o.radius + pad;
   }
+  // (one of the shared pictures', or none: kept with them; else with this one's own pictures)
+  private ownLambert = new Map<string, MeshLambertMaterial>();
   private lambert(hex = 0xffffff, map?: Texture, vertex = true): MeshLambertMaterial {
     const key = `${hex}|${map?.uuid ?? ""}|${vertex}`;
-    let m = this.lambertCache.get(key);
+    const shared = !map || Object.values(this.sh.ts).includes(map as CanvasTexture);
+    const cache = shared ? this.sh.lambert : this.ownLambert;
+    let m = cache.get(key);
     if (!m) {
-      m = this.keep(new MeshLambertMaterial({ color: hex, map, vertexColors: vertex }));
-      this.lambertCache.set(key, m);
+      m = new MeshLambertMaterial({ color: hex, map, vertexColors: vertex });
+      if (shared) this.sh.disp.push(m);
+      else this.keep(m);
+      cache.set(key, m);
     }
     return m;
   }
@@ -892,7 +1006,8 @@ export class Grounds3 {
         const ag = new G();
         this.ribbon(w, w.w, 0, 0.05, 9, ag, 0, w.line.length - 1, w.flare ? (i) => 2 * wayHalf(w, i) : undefined);
         if (!ag.empty) {
-          const am = this.lambert(0xffffff, this.asphalt(w));
+          // (its own, as its picture is: with the way's step — wayStep)
+          const am = this.keep(new MeshLambertMaterial({ map: this.asphalt(w), vertexColors: true }));
           roadCover(am, w);
           this.add(ag.build(), am, "receive");
         }
@@ -925,7 +1040,10 @@ export class Grounds3 {
     if (!walk.empty) this.add(walk.build(), this.lambert(0xffffff, this.ts.walk), "receive");
     // (they only take shadows: a long low ridge's own came out jagged on the road)
     if (!banks.empty) this.add(banks.build(), this.lambert(), "receive");
-    if (only && only !== WAYS[WAYS.length - 1]) return;
+    if (!only) this.waysAll();
+  }
+  /** What's of all the ways, not one: the square's crossing, the snow poles, the bridges. */
+  private waysAll() {
     if (this.near(420, -405, 40)) {
       const cw = new G();
       crossingPaint(cw, groundAt);
@@ -1299,6 +1417,10 @@ export class Grounds3 {
     return this.glows(m, 0.9, "windows");
   }
   private building(b: Building) {
+    // (turned: built on a side its kind's builder draws, then turned about its plot's middle —
+    // shared turnOf, its solids the same — docs/plan/53-the-god-mode.md phase 9)
+    const t = turnOf(b);
+    if (t.k) return this.turned(b, t);
     const n = this.root.children.length;
     this.buildingBody(b);
     this.settle(b);
@@ -1310,6 +1432,35 @@ export class Grounds3 {
     const added = this.root.children.slice(n);
     this.cuts.set(b.key, { b, parts: added });
     this.interior(inside);
+  }
+  /** God mode's turned building: what's built of it moved into a pivot at its plot's middle,
+   *  turned `t.k` quarters; its lights and pools turned with it (`xf`). */
+  private xf: ((x: number, z: number) => [number, number]) | null = null;
+  private turned(b: Building, t: { k: number; b: Building }) {
+    const cx = (b.x0 + b.x1) / 2;
+    const cz = (b.z0 + b.z1) / 2;
+    const n = this.root.children.length;
+    const l = this.lights.length;
+    this.xf = (x, z) => quarter(x, z, cx, cz, t.k);
+    this.buildingBody(t.b);
+    this.settle(t.b);
+    this.xf = null;
+    const pivot = new Group();
+    pivot.name = `turned:${b.key}`;
+    pivot.position.set(cx, 0, cz);
+    pivot.rotation.y = (t.k * Math.PI) / 2;
+    for (const o of this.root.children.slice(n)) {
+      this.root.remove(o);
+      o.position.x -= cx;
+      o.position.z -= cz;
+      pivot.add(o);
+    }
+    this.root.add(pivot);
+    for (const L of this.lights.slice(l)) {
+      const [x, z] = quarter(L.p.x, L.p.z, cx, cz, t.k);
+      L.p.x = x;
+      L.p.z = z;
+    }
   }
   private interior(i: Inside) {
     const { b } = i;
@@ -2211,7 +2362,7 @@ export class Grounds3 {
   }
   private boathouse(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, "#6e2a22")));
+    const siding = this.keep(tex(sidingCanvas(this.T, b.tint ?? "#6e2a22")));
     const walls = new G();
     const H = 3.2;
     const U = (a: number, y: number): [number, number] => [a / 3, y / 3];
@@ -2302,20 +2453,30 @@ export class Grounds3 {
     r.color(0x5d6267).box(b.x0 - 0.4, y0 + H - 0.05, b.z0 - 0.4, b.x1 + 0.4, y0 + H + 0.15, b.z1 + 0.4);
     flatSnow(r, b.x0 - 0.38, b.z0 - 0.38, b.x1 + 0.38, b.z1 + 0.38, y0 + H + 0.15, 0.4, groundsRng(b.x0 * 5 + 2));
     icicles(r, [b.x0 - 0.4, y0 + H - 0.05, b.z0 - 0.4], [b.x1 + 0.4, y0 + H - 0.05, b.z0 - 0.4], groundsRng(b.z1), 0.5);
-    // the roll-up door: its slats, its frame, the drum's box over it; a lamp; a side door
-    r.color(0x9aa0a6).box(b.x0 + 2, y0, b.z0 - 0.06, b.x0 + 7, y0 + 3.2, b.z0 + 0.02);
+    // the roll-up door: its slats, its frame, the drum's box over it; a lamp; a side door (a narrow
+    // shed — god mode's — its door in the middle, no side door)
+    const W = b.x1 - b.x0;
+    const wide = W >= 10.5;
+    const d0 = wide ? b.x0 + 2 : b.x0 + Math.max(1, (W - 5) / 2);
+    const d1 = wide ? b.x0 + 7 : Math.min(b.x1 - 1, d0 + 5);
+    r.color(0x9aa0a6).box(d0, y0, b.z0 - 0.06, d1, y0 + 3.2, b.z0 + 0.02);
     for (let y = 0.2; y < 3.2; y += 0.22)
-      r.color(0x868c92).box(b.x0 + 2, y0 + y, b.z0 - 0.09, b.x0 + 7, y0 + y + 0.04, b.z0 - 0.06);
-    r.color(0x5d6267).box(b.x0 + 1.8, y0, b.z0 - 0.12, b.x0 + 2, y0 + 3.4, b.z0 + 0.02);
-    r.color(0x5d6267).box(b.x0 + 7, y0, b.z0 - 0.12, b.x0 + 7.2, y0 + 3.4, b.z0 + 0.02);
-    r.color(0x5d6267).box(b.x0 + 1.8, y0 + 3.2, b.z0 - 0.4, b.x0 + 7.2, y0 + 3.7, b.z0);
-    r.color(0x6b4a3a).box(b.x0 + 9, y0, b.z0 - 0.06, b.x0 + 10, y0 + 2.2, b.z0 + 0.02);
-    r.color(0x2a2e33).box(b.x0 + 9.3, y0 + 3.0, b.z0 - 0.35, b.x0 + 9.7, y0 + 3.2, b.z0); // its lamp
-    r.color(0x6b6f74).box(b.x1 - 4, y0, b.z0 - 3.4, b.x1 - 1, y0 + 0.9, b.z0 - 1.4); // the plough blade
+      r.color(0x868c92).box(d0, y0 + y, b.z0 - 0.09, d1, y0 + y + 0.04, b.z0 - 0.06);
+    r.color(0x5d6267).box(d0 - 0.2, y0, b.z0 - 0.12, d0, y0 + 3.4, b.z0 + 0.02);
+    r.color(0x5d6267).box(d1, y0, b.z0 - 0.12, d1 + 0.2, y0 + 3.4, b.z0 + 0.02);
+    r.color(0x5d6267).box(d0 - 0.2, y0 + 3.2, b.z0 - 0.4, d1 + 0.2, y0 + 3.7, b.z0);
+    if (wide) {
+      r.color(0x6b4a3a).box(b.x0 + 9, y0, b.z0 - 0.06, b.x0 + 10, y0 + 2.2, b.z0 + 0.02);
+      r.color(0x2a2e33).box(b.x0 + 9.3, y0 + 3.0, b.z0 - 0.35, b.x0 + 9.7, y0 + 3.2, b.z0); // its lamp
+    }
+    // (the town's shed's: the plough blade and the salt, out in front and beside it)
+    if (b.key === "shed") r.color(0x6b6f74).box(b.x1 - 4, y0, b.z0 - 3.4, b.x1 - 1, y0 + 0.9, b.z0 - 1.4);
     r.color(0xd8d0c0);
-    const salt = tinted(new ConeGeometry(1.6, 1.5, 9).translate(0, 0.75, 0), 0xcfc7b8);
     this.add(r.build(), this.lambert());
-    this.add(place(salt, b.x1 + 2, y0, b.z0 + 2), this.lambert());
+    if (b.key === "shed") {
+      const salt = tinted(new ConeGeometry(1.6, 1.5, 9).translate(0, 0.75, 0), 0xcfc7b8);
+      this.add(place(salt, b.x1 + 2, y0, b.z0 + 2), this.lambert());
+    }
   }
   // ── the farm (docs/plan/31-the-day.md): the barn, the silo, the farmhouse ──
   // walls as quads round a box, with a gap (a doorway) on one face if asked
@@ -2383,7 +2544,7 @@ export class Grounds3 {
   }
   private barn(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, "#8e2b20")));
+    const siding = this.keep(tex(sidingCanvas(this.T, b.tint ?? "#8e2b20")));
     const H = 5.2;
     const zm = (b.z0 + b.z1) / 2;
     const K = 3.2; // the gambrel's knee: this far in from each side, 2.8 up
@@ -2628,7 +2789,7 @@ export class Grounds3 {
   }
   private farmhouse(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, "#e3dccb")));
+    const siding = this.keep(tex(sidingCanvas(this.T, b.tint ?? "#e3dccb")));
     const H = 6.2;
     const door = insideOf(b)?.door;
     const g = new G();
@@ -3033,7 +3194,7 @@ export class Grounds3 {
     // (what it looks like: decided with the iso view's — world/grounds-look.ts)
     const L = shopLook(b);
     const { civic, diner, brick } = L;
-    const wall = this.wallPic(brick ? "brick" : "siding", L.wall, b.x0);
+    const wall = this.wallPic(brick ? "brick" : "siding", b.tint ?? L.wall, b.x0);
     const { x0, z0, x1, z1 } = b;
     const nz = b.face === "n" ? -1 : 1;
     const fz = b.face === "n" ? z0 : z1;
@@ -3504,7 +3665,7 @@ export class Grounds3 {
     const L = houseLook(b);
     const q = groundsRng(b.z0 * 17 + b.x0);
     const { kind, H } = L;
-    const hex = L.wall;
+    const hex = b.tint ?? L.wall;
     const shutter = hexOf(L.shutter);
     const trim = 0xece6da;
     const siding = this.wallPic("siding", hex);
@@ -3698,7 +3859,7 @@ export class Grounds3 {
    *  open (louvres in it), a cross on the spire. */
   private church(b: Building) {
     const y0 = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const siding = this.keep(tex(sidingCanvas(this.T, "#ecebe5")));
+    const siding = this.keep(tex(sidingCanvas(this.T, b.tint ?? "#ecebe5")));
     const H = 6;
     const { x0, z0, x1, z1 } = b;
     const g = new G();
@@ -4104,6 +4265,7 @@ export class Grounds3 {
   // (draped over the ground a cell at a time: one flat quad at the lamp's own height sank under
   // the land's rolls and the road's camber round it, and most of a pool went unseen)
   private pool(x: number, z: number, r: number, c = 0xdce8ff) {
+    if (this.xf) [x, z] = this.xf(x, z);
     if (!this.near(x, z, 10)) return;
     this.pools.color(c);
     const N = Math.max(2, Math.ceil(r / 1.5));
@@ -4176,8 +4338,9 @@ export class Grounds3 {
     }
   }
   private lamps() {
-    // (the Kart Park's floods are its own masts: karts3d.ts, their pools kartParkLamps)
-    for (const l of LAMPS) if (l.kind !== "flood") this.lampAt(l.x, l.z, l.ry, l.kind);
+    // (the Kart Park's floods are its own masts: karts3d.ts, their pools kartParkLamps; its own
+    // part has no lamps of the Grounds')
+    if (this.o.part !== "kart") for (const l of LAMPS) if (l.kind !== "flood") this.lampAt(l.x, l.z, l.ry, l.kind);
     if (this.lampGeo.length) this.add(mergeGeometries(this.lampGeo, false), this.lambert());
     for (const g of this.lampGeo) g.dispose();
     const head = this.glows(
@@ -4622,6 +4785,18 @@ export class Grounds3 {
     const parts = streetGeometry(STREET);
     this.add(mergeGeometries(parts, false), this.lambert());
     for (const p of parts) p.dispose();
+    // a sign's words (god mode's signs: docs/plan/53-the-god-mode.md), its own picture each
+    for (const t of STREET) {
+      if (t.kind !== "sign" || !t.text || !this.near(t.x, t.z, 10)) continue;
+      const faces = signFaces(t);
+      const m = this.keep(
+        new MeshLambertMaterial({
+          map: this.keep(tex(signCanvas(this.T, t.text, 512, 205, "#3e2f24", "#efe7d4"), false)),
+        }),
+      );
+      this.add(mergeGeometries(faces, false), m, "none");
+      for (const f of faces) f.dispose();
+    }
   }
 
   // ── far ridges and mountains: the one painted thing (beyond everything you can reach) ──
@@ -4659,7 +4834,8 @@ export class Grounds3 {
     this.circuit?.dispose();
     for (const o of this.circuitGone) o.dispose();
     for (const made of this.circuitBuilds) for (const d of made) d.dispose();
-    for (const d of this.disposables) d.dispose();
+    for (const d of this.disposables) if (!this.handed.has(d)) d.dispose();
+    if (!this.o.shared) for (const d of this.sh.disp) d.dispose();
     this.root.removeFromParent();
   }
 }
@@ -4676,7 +4852,8 @@ function nearLine(w: Way, x: number, z: number): number {
   }
   return best;
 }
-const boxes = new Map<Way, { x0: number; x1: number; z0: number; z1: number }>();
+// (a way's: made again with god mode's edits, a new object)
+const boxes = new WeakMap<Way, { x0: number; x1: number; z0: number; z1: number }>();
 function boxOf(w: Way) {
   const xs = w.line.map((p) => p[0]);
   const zs = w.line.map((p) => p[1]);

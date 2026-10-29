@@ -1,17 +1,25 @@
 import {
   BUILDINGS,
   CHUNK,
+  editsNow,
   GROUNDS,
   groundSurfaceAt,
   groundsChunk,
   heightAt,
   KART_FENCE,
+  KART_LAND,
+  LAMPS,
   missingLand,
+  onGroundsChanged,
   pineVariant,
+  SNOW_POLES,
+  STREET,
   type Tree,
   terrainAt,
   treesIn,
+  WAYS,
 } from "@yutopia/shared/grounds";
+import { decodeHeights } from "@yutopia/shared/grounds-edits";
 import {
   BufferGeometry,
   CanvasTexture,
@@ -40,6 +48,8 @@ import {
   farBirchGeometry,
   farPineGeometry,
   Grounds3,
+  type GroundsShared,
+  groundsShared,
   pineGeometry,
   SURF,
 } from "./grounds3d";
@@ -57,6 +67,11 @@ import { boulderGeometry, COVERS, coverIn, logGeometry, shrubGeometry, stoneGeom
 // is, what covers its ground (its parent, or its children) stays. The trees
 // are pools of instances (one draw a kind of tree, however many there are),
 // filled from the blocks shown; a few near you cast the sun's shadow.
+//
+// God mode's edits laid (docs/plan/53-the-god-mode.md, phase 4): the blocks over the chunks that
+// changed are made again under the same budget, the old one shown till the new is; the rest is
+// made again whole behind what's shown, and swapped in when it's all there (its steps feed what
+// the lamps' step gathers — pools, glows, the night's list — so a part can't be made alone).
 //
 // Units are tiles in the building's coords, y up, the ground round the
 // headquarters at 0 (the campus's GROUND: the root is placed by the caller).
@@ -99,8 +114,15 @@ function landColour(x: number, z: number, near: boolean, c: Color) {
 
 export class GroundsStream {
   readonly root = new Group();
-  readonly statics: Grounds3;
+  statics: Grounds3;
+  /** the rest made again (god mode's edits), not shown till it's all there */
+  private next: Grounds3 | null = null;
+  /** the rest as it was, hidden, to be freed */
+  private gone: { g: Grounds3; frames: number } | null = null;
+  private night = { k: 0, land: new Color() };
   private blocks = new Map<string, Block>();
+  /** blocks over changed chunks: made again (their old shown meanwhile) */
+  private stale = new Set<string>();
   private landMat: MeshLambertMaterial;
   private snowTex: CanvasTexture;
   private pools: Pool[] = [];
@@ -122,6 +144,9 @@ export class GroundsStream {
   private windT = { value: 0 };
   private casting = new Set<number>();
   private fade = { a: { value: new Vector3() }, b: { value: new Vector3() } };
+  /** god mode's camera (docs/plan/53): the trees between it and where it looks stay (it looks at
+   *  the land, not at me) */
+  fadeOff = false;
   /** behind the loading screen (docs/plan/35): build with a much bigger budget a frame */
   boost = false;
   /** Lowest (a weak CPU): built one frame in three, in half the time (what covers the ground
@@ -261,17 +286,42 @@ if (vFade < 0.999) {
       this.casters.push(c);
       this.root.add(c.mesh);
     }
-    // everything that isn't land or woods: built once, all of it
-    this.statics = new Grounds3(T, {
+    // everything that isn't land or woods: built once, all of it — the Kart Park on its own (never
+    // edited), the rest made again with god mode's edits (`invalidate`); their pictures shared
+    this.shared = groundsShared(T);
+    const opts = {
       cx: (GROUNDS.x0 + GROUNDS.x1) / 2,
       cz: (GROUNDS.z0 + GROUNDS.z1) / 2,
       radius: 900,
       stream: true,
       hqEast,
-    });
+      shared: this.shared,
+    };
+    this.makeStatics = (from) => new Grounds3(T, { ...opts, part: "rest", from });
+    this.statics = this.makeStatics();
     this.root.add(this.statics.root);
+    if (KART_LAND) {
+      this.kart = new Grounds3(T, { ...opts, part: "kart" });
+      this.root.add(this.kart.root);
+    }
     this.patch = patch;
+    this.fillBoxes();
+    this.drawnOf = staticsOf();
+    this.offChanged = onGroundsChanged((cs, why) => {
+      if (why !== "edits") return;
+      const of = staticsOf();
+      const moved = movedUnder(this.drawnOf.height, of.height);
+      this.invalidate(cs, of.lists !== this.drawnOf.lists || moved.other || moved.ways.size > 0 ? moved.ways : null);
+      this.drawnOf = of;
+    });
   }
+  private shared: GroundsShared;
+  /** the Kart Park's own part (made once) */
+  private kart: Grounds3 | null = null;
+  /** what the rest is made from, of god mode's edits (`staticsOf`) */
+  private drawnOf: ReturnType<typeof staticsOf>;
+  private offChanged: () => void;
+  private makeStatics: (from?: { g: Grounds3; moved: Set<string> }) => Grounds3;
   private patch: (m: Material) => void;
   private patched = new WeakSet<Material>();
   /** Set by the view: a new thing's shaders made ready before it's drawn (a town
@@ -279,23 +329,50 @@ if (vFade < 0.999) {
   prepare: ((o: Object3D) => void) | null = null;
 
   /** The buildings standing on the Grounds (building coords), to their roofs:
-   *  the chase camera keeps out of them as out of walls. */
-  readonly boxes = BUILDINGS.filter((b) => b.kind !== "hq").map((b) => {
-    const y = terrainAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
-    const h =
-      b.kind === "block"
-        ? b.floors * 3.5 + 0.7
-        : b.kind === "house"
-          ? 9
-          : b.kind === "church"
-            ? 12
-            : b.kind === "gas" || b.kind === "shelter" || b.kind === "gatehouse"
-              ? 3.2
-              : b.kind === "boathouse" || b.kind === "shed"
-                ? 5.5
-                : b.floors * 3.8 + 1.1;
-    return { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1, top: y + h };
-  });
+   *  the chase camera keeps out of them as out of walls. (Filled in place: god mode's edits.) */
+  readonly boxes: { x0: number; z0: number; x1: number; z1: number; top: number }[] = [];
+  private fillBoxes() {
+    this.boxes.length = 0;
+    for (const b of BUILDINGS) if (b.kind !== "hq") this.boxes.push(boxOf(b));
+  }
+
+  /** God mode's edits laid (docs/plan/53-the-god-mode.md): these chunks changed. Their blocks are
+   *  made again, nearest first under the frame's budget, the old shown till then. `rest` (the ways
+   *  the land moved under), the rest too (the ways, the buildings, the lamps…: anything but the
+   *  land's paint and trees), its ways that didn't change taken from the one shown. */
+  invalidate(chunks: [number, number][], rest: Set<string> | null) {
+    const cs = new Set(chunks.map(([x, z]) => `${x},${z}`));
+    for (const b of this.blocks.values()) {
+      const S = TIERS[b.tier].size;
+      let hit = false;
+      for (let cz = Math.floor(b.z0 / CHUNK); !hit && cz * CHUNK < b.z0 + S; cz++)
+        for (let cx = Math.floor(b.x0 / CHUNK); !hit && cx * CHUNK < b.x0 + S; cx++) hit = cs.has(`${cx},${cz}`);
+      if (hit) this.stale.add(b.key);
+    }
+    if (!rest) return;
+    this.fillBoxes();
+    // (still making the first: that one goes, the new one is made in its place)
+    if (this.statics.left) {
+      this.statics.dispose();
+      this.statics = this.made();
+      return;
+    }
+    // (one being made again already: made after the one shown, as this one is)
+    this.next?.dispose();
+    this.next = this.made({ g: this.statics, moved: rest });
+  }
+  private made(from?: { g: Grounds3; moved: Set<string> }): Grounds3 {
+    const g = this.makeStatics(from);
+    g.root.visible = !from;
+    this.root.add(g.root);
+    g.setNight(this.night.k);
+    g.ridgeMat.color.copy(this.night.land);
+    return g;
+  }
+  /** Still making the rest again (god mode's edits): its steps left. */
+  get remaking(): number {
+    return this.next?.left ?? 0;
+  }
 
   /** The ground's height at (x, z) (building coords: where clicks land). */
   heightAt(x: number, z: number): number {
@@ -303,9 +380,14 @@ if (vFade < 0.999) {
   }
 
   setNight(k: number, land: Color) {
-    this.statics.setNight(k);
     // (the far ridges are painted: they take the hour as a tint)
-    this.statics.ridgeMat.color.copy(land).multiplyScalar(1 + 0.4 * k);
+    this.night.k = k;
+    this.night.land.copy(land).multiplyScalar(1 + 0.4 * k);
+    for (const s of [this.statics, this.next, this.kart]) {
+      if (!s) continue;
+      s.setNight(k);
+      s.ridgeMat.color.copy(this.night.land);
+    }
   }
 
   /** Round (x, z) (building coords: whose feet the camera's on): what's wanted,
@@ -313,14 +395,17 @@ if (vFade < 0.999) {
   update(x: number, z: number, cam: Vector3, target?: Vector3) {
     this.windT.value = performance.now() / 1000;
     this.statics.tick(this.windT.value);
+    this.next?.tick(this.windT.value);
+    this.kart?.tick(this.windT.value);
     this.fade.a.value.copy(cam);
-    this.fade.b.value.copy(target ?? cam);
+    this.fade.b.value.copy(this.fadeOff ? cam : (target ?? cam));
     // (Lowest: what's wanted, built and shown worked out one frame in three — the land two frames
     // behind at most, what covers it there meanwhile)
     this.turn = (this.turn + 1) % 3;
     if (this.lite && !this.boost && this.turn) {
       if (target) this.statics.cutAt(target.x, target.z);
       this.statics.faceCards(cam);
+      this.kart?.faceCards(cam);
       return;
     }
     const want: string[] = [];
@@ -349,11 +434,12 @@ if (vFade < 0.999) {
     for (let z0 = Math.floor(GROUNDS.z0 / S) * S; z0 < GROUNDS.z1; z0 += S)
       for (let x0 = Math.floor(GROUNDS.x0 / S) * S; x0 < GROUNDS.x1; x0 += S) visit(0, x0, z0);
     // build the nearest missing, a few ms a frame
-    const missing = want.filter((k) => !this.blocks.get(k)?.mesh);
+    const missing = want.filter((k) => !this.blocks.get(k)?.mesh || this.stale.has(k));
     missing.sort((a, b) => distTo(a, x, z) - distTo(b, x, z));
     this.left.blocks = missing.length;
     const budget = this.boost ? BOOST_MS : this.lite ? BUDGET_MS / 2 : BUDGET_MS;
     const t0 = performance.now();
+    let built = 0;
     for (const k of missing) {
       if (performance.now() - t0 > budget) break;
       // a near block reads its chunk's land and, for its slopes, the
@@ -363,6 +449,7 @@ if (vFade < 0.999) {
         const need = missingLand(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK));
         if (need) {
           groundsChunk(need[0], need[1]);
+          built++;
           if (!this.boost) break;
           // (covered by the loading screen: all it needs now, then the block)
           let more = missingLand(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK));
@@ -373,6 +460,7 @@ if (vFade < 0.999) {
         }
       }
       this.build(k);
+      built++;
       this.left.blocks--;
     }
     // show: each wanted block, or while it isn't built what covers it
@@ -399,14 +487,25 @@ if (vFade < 0.999) {
         b.mesh?.geometry.dispose();
         b.mesh?.removeFromParent();
         this.blocks.delete(b.key);
+        this.stale.delete(b.key);
       }
     }
     if (this.poolsDirty) this.fillPools();
     if (target) this.statics.cutAt(target.x, target.z);
-    // the rest of the Grounds (the ways, the buildings, the lamps…), a few ms a frame
+    // the rest of the Grounds (the ways, the buildings, the lamps…), a few ms a frame (made
+    // again: that, then swapped in whole)
     const s0 = performance.now();
-    while (performance.now() - s0 < (this.boost ? BOOST_MS : this.lite ? 2 : 4)) {
-      const added = this.statics.step();
+    // (made again behind what's shown: not in a frame the land's had its share — one long step
+    // on top of a block is a frame missed)
+    const making = this.statics.left
+      ? this.statics
+      : this.kart?.left
+        ? this.kart
+        : built && !this.boost
+          ? null
+          : this.next;
+    while (making && performance.now() - s0 < (this.boost ? BOOST_MS : this.lite ? 2 : 4)) {
+      const added = making.step();
       if (!added) break;
       for (const o of added) {
         o.traverse((c) => {
@@ -417,13 +516,34 @@ if (vFade < 0.999) {
               this.patched.add(x);
               this.patch(x);
             }
+          // (made again: its bounds worked out now, not all of them the frame it's swapped in)
+          if (making === this.next && c instanceof Mesh) {
+            if (c instanceof InstancedMesh) c.boundingSphere ?? c.computeBoundingSphere();
+            else c.geometry.boundingSphere ?? c.geometry.computeBoundingSphere();
+          }
         });
         this.prepare?.(o);
       }
     }
-    this.left.statics = this.statics.left;
+    if (this.gone && --this.gone.frames <= 0) {
+      this.gone.g.dispose();
+      this.gone = null;
+    }
+    if (this.next && !this.next.left && !this.gone) {
+      // (the old one hidden now, freed a little later: not in the frame the new one's first drawn)
+      this.statics.root.visible = false;
+      this.gone = { g: this.statics, frames: 20 };
+      this.next.adopt();
+      this.statics = this.next;
+      this.statics.root.visible = true;
+      this.next = null;
+      // (a stored block's storeys: cut again in the new one)
+      if (target) this.statics.cutAt(target.x, target.z);
+    }
+    this.left.statics = this.statics.left + (this.kart?.left ?? 0);
     if (Math.hypot(x - this.castersAt.x, z - this.castersAt.z) > 6) this.fillCasters(x, z);
     this.statics.faceCards(cam);
+    this.kart?.faceCards(cam);
   }
 
   private ancestorBuilt(k: string): string | null {
@@ -572,7 +692,15 @@ if (vFade < 0.999) {
     if (near && chunk)
       for (const c of coverIn(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK), trees))
         put(K.cover[c.kind], { x: c.x, y: c.y, z: c.z, ry: c.ry, s: c.s, kind: "pine" } as Tree, c.s, c.s, 0, false);
-    const blk: Block = { key: k, tier, x0, z0, mesh, trees: new Map(), shown: false };
+    // (made again: in the old one's place, shown as it was)
+    const old = this.blocks.get(k);
+    this.stale.delete(k);
+    if (old) {
+      old.mesh?.geometry.dispose();
+      old.mesh?.removeFromParent();
+      mesh.visible = old.shown;
+    }
+    const blk: Block = { key: k, tier, x0, z0, mesh, trees: new Map(), shown: old?.shown ?? false };
     for (const [p, l] of by) blk.trees.set(p, new Float32Array(l));
     this.blocks.set(k, blk);
     this.poolsDirty = true;
@@ -612,11 +740,16 @@ if (vFade < 0.999) {
   }
 
   dispose() {
+    this.offChanged();
+    this.next?.dispose();
+    this.gone?.g.dispose();
     for (const b of this.blocks.values()) b.mesh?.geometry.dispose();
     for (const p of [...this.pools, ...this.casters]) p.dispose();
     this.landMat.dispose();
     this.snowTex.dispose();
     this.statics.dispose();
+    this.kart?.dispose();
+    for (const d of this.shared.disp) d.dispose();
     this.root.removeFromParent();
   }
 }
@@ -674,4 +807,62 @@ function distTo(k: string, x: number, z: number): number {
   const [t, x0, z0] = parse(k);
   const s = TIERS[t].size;
   return Math.hypot(x0 + s / 2 - x, z0 + s / 2 - z);
+}
+
+/** What of god mode's edits the rest of the Grounds is made from: the ways, the buildings and the
+ *  things as listed, and the land's heights under them (the paint and the trees are the land's own,
+ *  the blocks'). */
+function staticsOf() {
+  const e = editsNow();
+  return { lists: JSON.stringify([e.ways ?? null, e.buildings ?? null, e.things ?? null]), height: e.height ?? {} };
+}
+/** Did the land's heights change under anything the rest draws (a way, a building, a lamp, a
+ *  thing in the street, a snow pole: each stands on it)? The ways it moved under, and whether
+ *  it moved under anything else. A hill in the woods: none, no. */
+function movedUnder(was: Record<string, string>, now: Record<string, string>): { ways: Set<string>; other: boolean } {
+  const ways = new Set<string>();
+  const N = CHUNK * 2 + 1;
+  const grids = new Map<string, [Int16Array | null, Int16Array | null]>();
+  for (const k of new Set([...Object.keys(was), ...Object.keys(now)]))
+    if (was[k] !== now[k])
+      grids.set(k, [was[k] ? decodeHeights(was[k], N * N) : null, now[k] ? decodeHeights(now[k], N * N) : null]);
+  if (!grids.size) return { ways, other: false };
+  // (the lift's nearest sample, every half metre: changed by more than a centimetre)
+  const moved = (x: number, z: number) => {
+    const cx = Math.floor(x / CHUNK);
+    const cz = Math.floor(z / CHUNK);
+    const g = grids.get(`${cx},${cz}`);
+    if (!g) return false;
+    const n = Math.round((z - cz * CHUNK) * 2) * N + Math.round((x - cx * CHUNK) * 2);
+    return Math.abs((g[0]?.[n] ?? 0) - (g[1]?.[n] ?? 0)) > 1;
+  };
+  const round = (x: number, z: number, r: number) =>
+    moved(x, z) || moved(x + r, z) || moved(x - r, z) || moved(x, z + r) || moved(x, z - r);
+  const plot = (b: (typeof BUILDINGS)[number]) => {
+    for (let z = b.z0 - 2; z <= b.z1 + 2; z += 2)
+      for (let x = b.x0 - 2; x <= b.x1 + 2; x += 2) if (moved(x, z)) return true;
+    return false;
+  };
+  for (const w of WAYS) if (w.line.some(([x, z]) => round(x, z, w.w / 2 + w.pave + 1))) ways.add(w.key);
+  return {
+    ways,
+    other: BUILDINGS.some(plot) || [...LAMPS, ...STREET, ...SNOW_POLES].some((t) => round(t.x, t.z, 1.5)),
+  };
+}
+
+function boxOf(b: (typeof BUILDINGS)[number]) {
+  const y = terrainAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2);
+  const h =
+    b.kind === "block"
+      ? b.floors * 3.5 + 0.7
+      : b.kind === "house"
+        ? 9
+        : b.kind === "church"
+          ? 12
+          : b.kind === "gas" || b.kind === "shelter" || b.kind === "gatehouse"
+            ? 3.2
+            : b.kind === "boathouse" || b.kind === "shed"
+              ? 5.5
+              : b.floors * 3.8 + 1.1;
+  return { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1, top: y + h };
 }

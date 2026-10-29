@@ -6,6 +6,7 @@ import { useHud } from "@/world/store";
 import { Icon, type IconName } from "../icons";
 import { Panel } from "../Panel";
 import { Dark } from "./Dark";
+import { God } from "./God";
 import { Invites } from "./Invites";
 import { Log } from "./Log";
 import { People } from "./People";
@@ -32,6 +33,11 @@ const W = {
   ],
   spawn: ["Spawn", "Criar"],
   spawnSub: ["Put something into the world, near you.", "Pôr algo no mundo, perto de você."],
+  god: ["God mode", "Modo deus"],
+  godSub: [
+    "Build the open world: the land, roads, trees, things and buildings. Your draft is yours until you publish it.",
+    "Construir o mundo aberto: o terreno, vias, árvores, coisas e prédios. Seu rascunho é seu até você publicar.",
+  ],
   world: ["The world", "O mundo"],
   worldSub: [
     "What the whole town feels: the hour, the weather, locks, vehicles, a notice.",
@@ -52,11 +58,12 @@ const W = {
 } as const;
 type Word = keyof typeof W;
 
-type Page = "people" | "powers" | "spawn" | "invites" | "world" | "dark" | "perf" | "log";
+type Page = "people" | "powers" | "spawn" | "god" | "invites" | "world" | "dark" | "perf" | "log";
 const PAGES: { id: Page; label: Word; sub: Word; icon: IconName }[] = [
   { id: "people", label: "people", sub: "peopleSub", icon: "people" },
   { id: "powers", label: "powers", sub: "powersSub", icon: "stairs" },
   { id: "spawn", label: "spawn", sub: "spawnSub", icon: "plus" },
+  { id: "god", label: "god", sub: "godSub", icon: "globe" },
   { id: "invites", label: "invites", sub: "invitesSub", icon: "key" },
   { id: "world", label: "world", sub: "worldSub", icon: "home" },
   { id: "dark", label: "dark", sub: "darkSub", icon: "window" },
@@ -110,6 +117,7 @@ export function AdminPanel() {
             {at.id === "people" && <People />}
             {at.id === "powers" && <Powers />}
             {at.id === "spawn" && <Spawn />}
+            {at.id === "god" && <God />}
             {at.id === "invites" && <Invites />}
             {at.id === "world" && <World />}
             {at.id === "dark" && <Dark />}

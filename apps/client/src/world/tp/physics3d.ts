@@ -1,5 +1,5 @@
 import type { Grid, MapDef, WorldObjectDef } from "@yutopia/shared";
-import { CHUNK, hasChunk } from "@yutopia/shared/grounds";
+import { CHUNK, hasChunk, onGroundsChanged } from "@yutopia/shared/grounds";
 import type { Collider, Mover } from "@yutopia/shared/move";
 import {
   type BuildingSolids,
@@ -22,7 +22,9 @@ import { BufferGeometry, Float32BufferAttribute, LineBasicMaterial, LineSegments
 // Grounds' chunks round you as the view makes their land. My body moves on it in 3D (phase 3: the
 // walker's mover and its questions — input/walker.ts), the server checking it on its own. The
 // admins see every solid near them in amber (Powers → Physics shapes). Jolt loads with the 3D view
-// (its own chunk: guardrail 5); till it's in, the grid moves me.
+// (its own chunk: guardrail 5); till it's in, the grid moves me. A chunk that changes (the park's
+// layout raced, god mode's edits laid — docs/plan/53-the-god-mode.md) is made again once its land
+// is, round you; till then its old solids stay.
 
 const NEAR = 40; // m round you, drawn
 const RING = 2; // Grounds chunks each way round you, built (the land the view has made)
@@ -53,6 +55,9 @@ export class BrowserPhysics {
   private level = 0;
   private through: Through = { mask: "all", pass: null };
   private land: Grid | null = null;
+  // the chunks changed since they were built here (made again when their land is)
+  private readonly stale = new Set<string>();
+  private readonly offChanged: () => void;
 
   private constructor(
     private readonly scene: Scene,
@@ -69,6 +74,9 @@ export class BrowserPhysics {
       () => this.through,
       (x, y) => !!this.land?.onLand(x, y),
     );
+    this.offChanged = onGroundsChanged((cs) => {
+      for (const [cx, cz] of cs) if (this.world.has(`land:${cx},${cz}`)) this.stale.add(`${cx},${cz}`);
+    });
     this.timer = setInterval(() => this.refresh(), EVERY_MS);
     this.refresh();
   }
@@ -104,11 +112,15 @@ export class BrowserPhysics {
     const cz = Math.floor(me.z / CHUNK);
     let more = 0;
     for (let dz = -RING; dz <= RING; dz++)
-      for (let dx = -RING; dx <= RING; dx++)
-        if (hasChunk(cx + dx, cz + dz) && !this.world.has(`land:${cx + dx},${cz + dz}`)) {
-          this.build.groundChunk(cx + dx, cz + dz);
+      for (let dx = -RING; dx <= RING; dx++) {
+        const k = `${cx + dx},${cz + dz}`;
+        if (!hasChunk(cx + dx, cz + dz)) continue;
+        const again = this.stale.delete(k);
+        if (again || !this.world.has(`land:${k}`)) {
+          this.build.groundChunk(cx + dx, cz + dz, again);
           more++;
         }
+      }
     if (more) this.world.settle();
     if (edits || more) this.rev++;
     if (this.lines) this.draw(me);
@@ -178,6 +190,7 @@ export class BrowserPhysics {
     if (this.dead) return;
     this.dead = true;
     clearInterval(this.timer);
+    this.offChanged();
     this.showShapes(false);
     this.mover.dispose();
     this.world.destroy();

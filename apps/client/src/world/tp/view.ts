@@ -29,7 +29,7 @@ import {
   wellsOf,
 } from "@yutopia/shared";
 import { AIM_BLADE, BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
-import { LAMPS as GROUND_LAMPS, KART_LAND, standLights } from "@yutopia/shared/grounds";
+import { LAMPS as GROUND_LAMPS, KART_LAND, standLights, terrainAt } from "@yutopia/shared/grounds";
 import { ALOFT, MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
@@ -240,6 +240,14 @@ const LIMITS: Record<CamMode, { pitch: [number, number]; dist: [number, number] 
 // the stairwells' tiles as a signature (a floor rebuilt when they change)
 const wellsKey = (w: { floor: Set<string>; ceiling: Set<string> }) =>
   `${[...w.floor].sort().join(";")}/${[...w.ceiling].sort().join(";")}`;
+
+/** God mode's hands on the view (world/god): the pointer and the wheel, all of them, while it's on. */
+export interface GodInput {
+  down(e: PointerEvent): void;
+  move(e: PointerEvent): void;
+  up(e: PointerEvent): void;
+  wheel(e: WheelEvent): void;
+}
 
 export class ThirdPersonView {
   readonly renderer: WebGLRenderer;
@@ -965,6 +973,11 @@ void main() {
     }
     return (performance.now() - f.t0) / 1000;
   }
+  /** God mode (world/god, docs/plan/53-the-god-mode.md): the ground point its camera looks at, my
+   *  floor's frame (the land, the lamps and the sun round it, not round me), how far the camera
+   *  is from it (the fog drawn back that far), and its pointer and wheel; null: the usual. The
+   *  camera itself is a game camera (gameCam), eased in out of mine and back. */
+  god: { at: Vector3; dist: number; input: GodInput } | null = null;
   gameCam: {
     eye: [number, number, number];
     look: [number, number, number];
@@ -2062,6 +2075,11 @@ void main() {
   get physicsShown(): BrowserPhysics | null {
     return this.physics?.shapesShown ? this.physics : null;
   }
+  /** Where floor `level`'s coords sit in the Grounds' (added to a point on it: the Grounds'). */
+  floorOffset(level: number): { x: number; z: number } {
+    const o = offsetOf(this.building, level);
+    return { x: o.x, z: o.y };
+  }
   groundsFrame(): { x: number; z: number; y: number; visible: boolean } {
     const off = offsetOf(this.building, this.level);
     return { x: off.x, z: off.y, y: elevOf(0) - elevOf(this.level), visible: !!this.around.grounds };
@@ -2198,6 +2216,10 @@ void main() {
       this.target.set(seat.x + o.x, EYE - 0.3 + seat.ground + o.h, seat.y + o.y);
       this.targetReady = true;
     }
+    if (this.god) {
+      this.target.copy(this.god.at);
+      this.targetReady = true;
+    }
     this.aimK += ((this.aim && !first ? 1 : 0) - this.aimK) * (1 - Math.exp(-dt * 10));
     // (into an aim the camera comes up to look ahead, near level — not at the ground at your feet)
     // (third person only: in first person the look is the look — it kept pulling it back level)
@@ -2274,12 +2296,16 @@ void main() {
     this.builder.sync(this.buildLook, this.world, dt);
     this.stepFx(dt);
     this.stepFlashes(dt);
-    this.fadeWalls(dt);
-    this.around.campus.cutAbove(this.insideBelowHome(me) ? STOREY - 0.15 : null);
+    // (god mode: the buildings whole from above)
+    if (!this.god) this.fadeWalls(dt);
+    this.around.campus.cutAbove(!this.god && this.insideBelowHome(me) ? STOREY - 0.15 : null);
     // (Lowest, a weak CPU: the snow half as thick, the land built in fewer frames)
     const lowest = this.quality === "lowest";
     this.around.campus.lite = lowest;
-    if (this.around.grounds) this.around.grounds.lite = lowest;
+    if (this.around.grounds) {
+      this.around.grounds.lite = lowest;
+      this.around.grounds.fadeOff = !!this.god;
+    }
     this.around.update(dt, this.camera.position, !me?.reduced, this.target);
     this.drawPrints(performance.now());
     this.drawCues(dt, !!me?.reduced);
@@ -2867,7 +2893,9 @@ void main() {
         layer.appendChild(t.root);
         this.tagEls.set(b.id, t);
       }
-      if (t.name.textContent !== b.name) t.name.textContent = b.name;
+      // (in god mode: building the open world — docs/plan/53-the-god-mode.md)
+      const label = b.busy === "god" ? `${b.name} · ${tr("godBuilding")}` : b.name;
+      if (t.name.textContent !== label) t.name.textContent = label;
       const dot = b.pet
         ? b.pet.look.color
         : b.npc
@@ -3279,8 +3307,15 @@ void main() {
     const f = fogFor();
     const s = this.storm;
     const fog = this.scene.fog as Fog;
-    fog.near = f.near + (4 - f.near) * s;
-    fog.far = f.far + (55 - f.far) * s;
+    // (god mode's camera, high over the land: the fog that far further off, and so the lens)
+    const up = this.god ? this.god.dist * this.gcMix : 0;
+    fog.near = f.near + up + (4 - f.near) * s;
+    fog.far = f.far + up * 1.6 + (55 - f.far) * s;
+    const far = Math.max(f.cameraFar, up * 2.5);
+    if (Math.abs(this.camera.far - far) > 1) {
+      this.camera.far = far;
+      this.camera.updateProjectionMatrix();
+    }
     const l = landLight.value;
     this.stormFog.setRGB(
       Math.min(1, l.r * 1.15) * 0.84,
@@ -3856,6 +3891,10 @@ void main() {
 
   private onDown = (e: PointerEvent) => {
     this.activeAt = performance.now();
+    if (this.god) {
+      this.renderer.domElement.setPointerCapture(e.pointerId);
+      return this.god.input.down(e);
+    }
     // mouse look: a click uses what the crosshair is on
     if (this.looking) {
       if (e.button === 0 && !(this.aim && this.armed)) {
@@ -3877,6 +3916,7 @@ void main() {
   };
   private onMove = (e: PointerEvent) => {
     this.activeAt = performance.now();
+    if (this.god) return this.god.input.move(e);
     if (this.looking) {
       // (some browsers send one huge jump as the lock starts)
       if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
@@ -3905,6 +3945,7 @@ void main() {
     this.clampCam();
   };
   private onUp = (e: PointerEvent) => {
+    if (this.god) return this.god.input.up(e);
     this.onTouch(e);
     const b = this.buildPress;
     if (b && b.id === e.pointerId) {
@@ -4330,6 +4371,38 @@ void main() {
     left.needsUpdate = true;
   }
 
+  /** God mode's pointer: where the ray through the screen's (clientX, clientY) meets the land (the
+   *  Grounds' own heights, not their chunks': far off none's made), the Grounds' coords; null
+   *  over the sky. */
+  landUnder(clientX: number, clientY: number): { x: number; z: number; h: number } | null {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    this.ray.setFromCamera(
+      new Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1),
+      this.camera,
+    );
+    const o = this.ray.ray.origin;
+    const d = this.ray.ray.direction;
+    const f = this.groundsFrame();
+    const below = (t: number) => o.y + d.y * t <= terrainAt(o.x + d.x * t + f.x, o.z + d.z * t + f.z) + f.y;
+    let t0 = 0;
+    let t1 = -1;
+    for (let t = 2; t < this.camera.far; t += 2 + t * 0.01)
+      if (below(t)) {
+        t1 = t;
+        break;
+      } else t0 = t;
+    if (t1 < 0) return null;
+    for (let i = 0; i < 14; i++) {
+      const m = (t0 + t1) / 2;
+      if (below(m)) t1 = m;
+      else t0 = m;
+    }
+    const x = o.x + d.x * t1 + f.x;
+    const z = o.z + d.z * t1 + f.z;
+    return { x, z, h: terrainAt(x, z) };
+  }
+
   /** Where a ray (my floor's coords) first meets the land round the ground floor, off
    *  the floor's own tiles; null on any other floor, or when it meets the floor first. */
   private landAt(o: Vector3, dir: Vector3): { x: number; y: number } | null {
@@ -4413,6 +4486,7 @@ void main() {
   private onWheel = (e: WheelEvent) => {
     this.activeAt = performance.now();
     e.preventDefault();
+    if (this.god) return this.god.input.wheel(e);
     if (this.buildMode && this.events.wheel?.(e.deltaY)) return; // turning what you hold
     this.dist *= e.deltaY > 0 ? 1.1 : 1 / 1.1;
     this.clampCam();
@@ -4420,7 +4494,8 @@ void main() {
   private onKey = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     this.activeAt = performance.now();
-    if (e.type === "keydown" && e.code === "KeyZ" && !e.repeat && !e.metaKey && !e.ctrlKey) this.setLook(!this.looking);
+    if (e.type === "keydown" && e.code === "KeyZ" && !this.god && !e.repeat && !e.metaKey && !e.ctrlKey)
+      this.setLook(!this.looking);
     if (e.type === "keydown") this.keys.add(e.code);
     else this.keys.delete(e.code);
   };

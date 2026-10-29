@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Desk;
+use App\Models\GroundRevision;
 use App\Models\Spawn;
 use App\Models\World;
 use App\Models\WorldObject;
@@ -33,6 +34,8 @@ class WorldSnapshot
             'settings' => $w->settings,
             'seeded' => $w->seeded_at !== null,
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld()->all(),
+            // god mode's edits to the Grounds as published (docs/plan/53-the-god-mode.md)
+            'grounds' => GroundRevision::edits(),
             'desks' => Desk::orderBy('id')->get(['user_id', 'desk_uid'])->map(fn (Desk $d) => ['userId' => $d->user_id, 'desk' => $d->desk_uid])->all(),
         ];
     }
@@ -79,6 +82,18 @@ class WorldSnapshot
                 }
                 if ($clearSpawns) {
                     Spawn::query()->delete();
+                }
+                // the Grounds' edits as they were: a revision of their own (none in it: left as they are)
+                if (is_array($snap['grounds'] ?? null)) {
+                    $edits = $snap['grounds'];
+                    unset($edits['rev']);
+                    $now = GroundRevision::current();
+                    $was = $now ? $now->data() : ['rev' => 0];
+                    unset($was['rev']);
+                    if ($edits != $was) {
+                        $json = json_encode($edits ?: new \stdClass, JSON_UNESCAPED_SLASHES);
+                        GroundRevision::create(['rev' => ($now->rev ?? 0) + 1, 'data' => $json, 'size' => strlen($json), 'note' => 'From a snapshot']);
+                    }
                 }
             });
         } finally {

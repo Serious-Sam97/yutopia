@@ -46,6 +46,17 @@ export {
   trackAt,
 } from "./kart/park.ts";
 
+import {
+  type BuildingDef,
+  decodeBytes,
+  decodeHeights,
+  type GroundsEdits,
+  NO_EDITS,
+  type Section,
+  type ThingDef,
+  TREE_MASK,
+  type WayDef,
+} from "./grounds-edits.ts";
 import type { LotLayout } from "./lot.ts";
 import type { AreaDef, MapDef } from "./map.ts";
 
@@ -169,6 +180,8 @@ export interface Way {
   /** it opens out from `w0` wide (and no pavements) at its start to its width over `n` samples
    *  (Main Street from the county road: docs/plan/33-the-look.md) */
   flare?: { n: number; w0: number };
+  /** lamps along it (god mode's ways: grounds-edits.ts WayDef) */
+  lamps?: boolean;
 }
 /** A way's half-width and its pavements' at sample i (a flared start narrower). */
 export function wayHalf(w: Way, i: number): number {
@@ -218,8 +231,12 @@ export interface Building {
   /** the part of its plot that's built (the rest open ground: the gas station's forecourt under
    *  its canopy, driven in and walked); none: all of it */
   built?: { x0: number; z0: number; x1: number; z1: number };
+  /** its walls' colour (god mode's: one of WALL_TINTS); none: its kind's own */
+  tint?: string;
 }
 export interface Lamp {
+  /** which lamp, for ever (docs/plan/53-the-god-mode.md): its way's and its place along it, or a name */
+  key: string;
   x: number;
   z: number;
   ry: number; // which way its arm reaches (radians about y; 0 = +x)
@@ -333,7 +350,8 @@ function way(
   return { key, kind, name, w, pts, closed, line: dense(pts, closed), h: [], bridged: [], pave, flare };
 }
 
-export const WAYS: Way[] = [
+// (the generator's; WAYS is them as edited)
+const BASE_WAYS: Way[] = [
   // from the lot's mouth up through the woods to the gatehouse
   // (widths, docs/plan/33-the-look.md: two cars pass; the driveway as wide as the road it runs
   // into, so their lanes and lines meet; Main Street parks both kerbs as well)
@@ -468,7 +486,69 @@ export const WAYS: Way[] = [
   ]),
 ];
 // the road in to the Kart Park, off the county road by the river (docs/plan/46-the-karts.md)
-if (KART_LAND) WAYS.push(way("kart-road", "road", "Kart Park road", 9, KART_ROAD));
+if (KART_LAND) BASE_WAYS.push(way("kart-road", "road", "Kart Park road", 9, KART_ROAD));
+
+// ── god mode's edits (docs/plan/53-the-god-mode.md): laid over all that's generated ──
+let EDITS: GroundsEdits = NO_EDITS;
+// its grids, decoded, by chunk (chunkKey): the land's lift in cm, the surfaces painted, the tree cells
+const LIFT_N = CHUNK * 2 + 1;
+const lifts = new Map<number, Int16Array>();
+const paints = new Map<number, Uint8Array>();
+const treeMasks = new Map<number, Uint8Array>();
+const keep = <T extends { key: string }>(s: Section<T> | undefined) => ({
+  gone: new Set(s?.remove ?? []),
+  change: (s?.change ?? {}) as Record<string, Partial<T>>,
+  add: s?.add ?? [],
+});
+const wayDef = (w: Way): WayDef => ({
+  key: w.key,
+  kind: w.kind,
+  name: w.name,
+  w: w.w,
+  pts: w.pts,
+  closed: w.closed,
+  pave: w.pave,
+});
+const wayOf = (d: WayDef, flare?: Way["flare"]): Way => ({
+  ...way(d.key, d.kind, d.name, d.w, d.pts, d.closed ?? false, d.pave ?? 0, flare),
+  ...(d.lamps !== undefined ? { lamps: d.lamps } : {}),
+});
+/** The ways as they are: the generator's, edited. */
+export const WAYS: Way[] = [];
+/** The way a plot lies on (a sample of its line within it, or its carriageway over its edge),
+ *  its name; or null. */
+function wayOver(r: { x0: number; z0: number; x1: number; z1: number }): string | null {
+  for (const w of WAYS)
+    for (const [x, z] of w.line)
+      if (x > r.x0 - w.w / 2 && x < r.x1 + w.w / 2 && z > r.z0 - w.w / 2 && z < r.z1 + w.w / 2) return w.name;
+  return null;
+}
+/** The way at (x, z) — within its width and `pad` m of its middle — the nearest; its line's
+ *  sample there, and how far off its middle (god mode's roads tool picks with it). */
+export function wayAt(x: number, z: number, pad = 2): { w: Way; i: number; d: number } | null {
+  let best: { w: Way; i: number; d: number } | null = null;
+  for (const [f, n] of nearLines(x, z)) {
+    if (f >= WAYS.length) continue;
+    const w = WAYS[f];
+    if (n.d < w.w / 2 + pad && (!best || n.d < best.d)) best = { w, i: n.i, d: n.d };
+  }
+  return best;
+}
+/** A way's line through its points, smoothed as the generator's are (a sample a tile). */
+export function smoothLine(pts: P[], closed = false): P[] {
+  return dense(pts, closed);
+}
+function layWays() {
+  const e = keep<WayDef>(EDITS.ways);
+  WAYS.length = 0;
+  for (const w of BASE_WAYS) {
+    if (e.gone.has(w.key)) continue;
+    const c = e.change[w.key];
+    WAYS.push(c ? wayOf({ ...wayDef(w), ...c }, w.flare) : { ...w });
+  }
+  for (const d of e.add) if (!e.gone.has(d.key)) WAYS.push(wayOf({ ...d, ...e.change[d.key] }));
+}
+layWays();
 
 export const RIVER = {
   w: 22,
@@ -518,7 +598,7 @@ const b = (
   extra: Partial<Building> = {},
 ): Building => ({ key, kind, name, x0, z0, x1, z1, floors, face, ...extra });
 
-export const BUILDINGS: Building[] = [
+const BASE_BUILDINGS: Building[] = [
   b("hq", "hq", "Headquarters", 0, 0, W, H, 5, "w", { enter: true }),
   // (their ground floors are the ground floor's own: shared building.ts BLOCKS)
   // (clear of a studio up to 64 × 48 across a 12-tile courtyard: building.ts BLOCKS)
@@ -553,6 +633,30 @@ export const BUILDINGS: Building[] = [
   b("silo", "silo", "Silo", 468, -318, 476, -310, 4, "w"),
   b("farmhouse", "farmhouse", "Farmhouse", 440, -262, 454, -250, 2, "n", { enter: true }),
 ];
+// two rows of the same townhouse up Church Street
+for (let k = 0; k < 7; k++) {
+  const z1 = -440 - k * 10;
+  BASE_BUILDINGS.push(b(`house-w${k}`, "house", "Townhouse", 402, z1 - 8, 412, z1, 2, "e"));
+  BASE_BUILDINGS.push(b(`house-e${k}`, "house", "Townhouse", 428, z1 - 8, 438, z1, 2, "w"));
+}
+/** The buildings as they are: the generator's, edited. */
+export const BUILDINGS: Building[] = [];
+function layBuildings() {
+  const e = keep<BuildingDef>(EDITS.buildings);
+  BUILDINGS.length = 0;
+  for (const bd of BASE_BUILDINGS) {
+    if (e.gone.has(bd.key)) continue;
+    const c = e.change[bd.key];
+    BUILDINGS.push(c ? { ...bd, ...c } : bd);
+  }
+  for (const d of e.add) {
+    if (e.gone.has(d.key)) continue;
+    const bd: Building = { ...d, ...e.change[d.key] };
+    // (a gas station put down: its kiosk built, its forecourt open — as the town's)
+    BUILDINGS.push(bd.kind === "gas" && !bd.built ? { ...bd, built: kioskOf(bd) } : bd);
+  }
+}
+layBuildings();
 
 /** The car dealer's forecourt (docs/plan/43-the-spot.md): east of its showroom (Main Street's
  *  old shut shop) to where the street's closed. Its way in is at the east end, the one gap in
@@ -637,25 +741,111 @@ export const FORECOURT: {
 /** The church's steeple, south of its nave and past its plot (docs/plan/50-the-volume.md: the drawing's,
  *  its solid's, the tiles walking keeps you off). */
 export function steepleOf(b: Building): { x0: number; z0: number; x1: number; z1: number } {
-  const xm = (b.x0 + b.x1) / 2;
-  return { x0: xm - 2.2, z0: b.z1 - 1.2, x1: xm + 2.2, z1: b.z1 + 2.7 };
+  const t = turnOf(b);
+  const xm = (t.b.x0 + t.b.x1) / 2;
+  const s = { x0: xm - 2.2, z0: t.b.z1 - 1.2, x1: xm + 2.2, z1: t.b.z1 + 2.7 };
+  return t.k ? quarterRect(s, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, t.k) : s;
 }
+
+// ── a building turned (god mode's, docs/plan/53-the-god-mode.md phase 9): each kind's builder
+// draws its door on some sides; on another, it's built on one of those and turned a quarter (or
+// two, or three) about its plot's middle — drawn, solid and walked the same ──
+type Face = Building["face"];
+/** The sides each kind's builder puts its door on itself. */
+export const NATIVE_FACES: Partial<Record<BuildingKind, Face[]>> = {
+  house: ["e", "w"],
+  shop: ["n", "s"],
+  bar: ["n", "s"],
+  diner: ["n", "s"],
+  hotel: ["n", "s"],
+  barn: ["w"],
+  farmhouse: ["n"],
+  church: ["s"],
+  gas: ["n"],
+  shed: ["n"],
+  boathouse: ["s"],
+  silo: ["n", "e", "s", "w"],
+};
+// a quarter turn (+90° about up, as three.js turns: x' = z, z' = −x) takes a door from n to w,
+// w to s, s to e, e to n
+const TURNED: Record<Face, Face> = { n: "w", w: "s", s: "e", e: "n" };
+/** (x, z) turned `k` quarters about (cx, cz). */
+export function quarter(x: number, z: number, cx: number, cz: number, k: number): [number, number] {
+  let dx = x - cx;
+  let dz = z - cz;
+  for (let i = 0; i < ((k % 4) + 4) % 4; i++) [dx, dz] = [dz, -dx];
+  return [cx + dx, cz + dz];
+}
+/** A rectangle turned `k` quarters about (cx, cz). */
+export function quarterRect<R extends { x0: number; z0: number; x1: number; z1: number }>(
+  r: R,
+  cx: number,
+  cz: number,
+  k: number,
+): R {
+  const [ax, az] = quarter(r.x0, r.z0, cx, cz, k);
+  const [bx, bz] = quarter(r.x1, r.z1, cx, cz, k);
+  return { ...r, x0: Math.min(ax, bx), z0: Math.min(az, bz), x1: Math.max(ax, bx), z1: Math.max(az, bz) };
+}
+/** How a building's drawn: `k` quarters turned from `b`, a building on a side its kind's builder
+ *  draws (k 0: as it is). */
+export function turnOf(b: Building): { k: number; b: Building } {
+  const native = NATIVE_FACES[b.kind];
+  if (!native || native.includes(b.face)) return { k: 0, b };
+  for (let k = 1; k < 4; k++)
+    for (const f of native) {
+      let g = f;
+      for (let i = 0; i < k; i++) g = TURNED[g];
+      if (g !== b.face) continue;
+      const cx = (b.x0 + b.x1) / 2;
+      const cz = (b.z0 + b.z1) / 2;
+      return { k, b: { ...quarterRect(b, cx, cz, 4 - k), face: f } };
+    }
+  return { k: 0, b };
+}
+/** A placed gas station's kiosk (as tp/grounds3d.ts draws it: at the back, the canopy at the front). */
+function kioskOf(b: Building): { x0: number; z0: number; x1: number; z1: number } {
+  const t = turnOf(b);
+  const k = { x0: t.b.x0 + 2, z0: t.b.z1 - 6, x1: t.b.x0 + 12, z1: t.b.z1 };
+  return t.k ? quarterRect(k, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, t.k) : k;
+}
+/** A gas station's forecourt's solid bits (any gas station: as drawn, turned with it). */
+export function forecourtOf(b: Building): {
+  islands: { x: number; z: number; hx: number; hz: number }[];
+  posts: { x: number; z: number }[];
+} {
+  const t = turnOf(b);
+  const g = t.b;
+  const cx = (b.x0 + b.x1) / 2;
+  const cz = (b.z0 + b.z1) / 2;
+  const at = (x: number, z: number) => (t.k ? quarter(x, z, cx, cz, t.k) : ([x, z] as P));
+  const odd = t.k % 2 === 1;
+  return {
+    islands: [g.x0 + 7, g.x1 - 7].map((x) => {
+      const [ix, iz] = at(x, g.z0 + 5);
+      return { x: ix, z: iz, hx: odd ? 1.82 : 0.62, hz: odd ? 0.62 : 1.82 };
+    }),
+    posts: [g.x0 + 3, g.x1 - 3].flatMap((x) =>
+      [g.z0 + 2, g.z0 + 8].map((z) => {
+        const [px, pz] = at(x, z);
+        return { x: px, z: pz };
+      }),
+    ),
+  };
+}
+/** God mode's walls' colours (the mock 07-buildings): cream, sage, tan, oxblood, a pale grey. */
+export const WALL_TINTS = ["#e8e1cf", "#9fb5a2", "#c9a27e", "#7a3b2e", "#d8dde0"] as const;
 
 export const inBuilt = (bd: Building, x: number, z: number) => {
   const r = bd.built ?? bd;
   return x >= r.x0 && x < r.x1 && z >= r.z0 && z < r.z1;
 };
-/** On the forecourt's islands or posts (a body a little round them)? */
-function onForecourt(x: number, z: number, pad = 0): boolean {
-  for (const i of FORECOURT.islands) if (Math.abs(x - i.x) < i.hx + pad && Math.abs(z - i.z) < i.hz + pad) return true;
-  for (const p of FORECOURT.posts) if (Math.hypot(x - p.x, z - p.z) < 0.3 + pad) return true;
+/** On a gas station's forecourt's islands or posts (a body a little round them)? */
+function onForecourt(bd: Building, x: number, z: number, pad = 0): boolean {
+  const f = bd.key === "gas" ? FORECOURT : forecourtOf(bd);
+  for (const i of f.islands) if (Math.abs(x - i.x) < i.hx + pad && Math.abs(z - i.z) < i.hz + pad) return true;
+  for (const p of f.posts) if (Math.hypot(x - p.x, z - p.z) < 0.3 + pad) return true;
   return false;
-}
-// two rows of the same townhouse up Church Street
-for (let k = 0; k < 7; k++) {
-  const z1 = -440 - k * 10;
-  BUILDINGS.push(b(`house-w${k}`, "house", "Townhouse", 402, z1 - 8, 412, z1, 2, "e"));
-  BUILDINGS.push(b(`house-e${k}`, "house", "Townhouse", 428, z1 - 8, 438, z1, 2, "w"));
 }
 
 // ── the index: the lines' samples by cell, for "what's near here" ────────────
@@ -666,8 +856,8 @@ interface Sample {
   f: number; // which line: 0..WAYS.length-1 the ways, then the river, the ravine
   i: number; // which sample
 }
-const RIVER_F = WAYS.length;
-const RAVINE_F = WAYS.length + 1;
+let RIVER_F = 0;
+let RAVINE_F = 0;
 const cells = new Map<number, Sample[]>();
 const cellKey = (cx: number, cz: number) => cx * 4096 + cz;
 function indexLine(line: P[], f: number) {
@@ -678,18 +868,25 @@ function indexLine(line: P[], f: number) {
     l.push({ x, z, f, i });
   }
 }
-for (const [f, w] of WAYS.entries()) indexLine(w.line, f);
-indexLine(RIVER.line, RIVER_F);
-indexLine(RAVINE.line, RAVINE_F);
 const bCells = new Map<number, Building[]>();
-for (const bd of BUILDINGS)
-  for (let cx = Math.floor((bd.x0 - 8) / CELL); cx <= Math.floor((bd.x1 + 8) / CELL); cx++)
-    for (let cz = Math.floor((bd.z0 - 8) / CELL); cz <= Math.floor((bd.z1 + 8) / CELL); cz++) {
-      const k = cellKey(cx, cz);
-      const l = bCells.get(k) ?? [];
-      bCells.set(k, l);
-      l.push(bd);
-    }
+function layIndex() {
+  RIVER_F = WAYS.length;
+  RAVINE_F = WAYS.length + 1;
+  cells.clear();
+  for (const [f, w] of WAYS.entries()) indexLine(w.line, f);
+  indexLine(RIVER.line, RIVER_F);
+  indexLine(RAVINE.line, RAVINE_F);
+  bCells.clear();
+  for (const bd of BUILDINGS)
+    for (let cx = Math.floor((bd.x0 - 8) / CELL); cx <= Math.floor((bd.x1 + 8) / CELL); cx++)
+      for (let cz = Math.floor((bd.z0 - 8) / CELL); cz <= Math.floor((bd.z1 + 8) / CELL); cz++) {
+        const k = cellKey(cx, cz);
+        const l = bCells.get(k) ?? [];
+        bCells.set(k, l);
+        l.push(bd);
+      }
+}
+layIndex();
 
 /** The nearest sample of every line within ~a cell of (x, z): distance and sample. */
 function nearLines(x: number, z: number): Map<number, { d: number; i: number }> {
@@ -807,7 +1004,7 @@ function base(x: number, z: number): number {
 // the ways' heights: the land under them, smoothed along them — and on through a way that goes
 // on from either end, so two that meet agree where they meet (the driveway's end and the road's
 // start were 0.17 apart: a step across the road at the gatehouse)
-{
+function layLevels() {
   const raws = WAYS.map((w) => w.line.map(([x, z]) => macro(x, z)));
   const at = (p: P, q: P) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1.5;
   WAYS.forEach((w, f) => {
@@ -861,16 +1058,17 @@ function base(x: number, z: number): number {
       }
     }
   }
+  RIVER.h = RIVER.line.map(([x, z]) => macro(x, z) - 2.6);
+  // bridges: where a way crosses the river or the ravine
+  for (const w of WAYS)
+    for (const [i, [x, z]] of w.line.entries()) {
+      const n = nearLines(x, z);
+      const r = n.get(RIVER_F);
+      const v = n.get(RAVINE_F);
+      if ((r && r.d < RIVER.w / 2 + 6) || (v && v.d < RAVINE.w / 2 + 1.5)) w.bridged[i] = true;
+    }
 }
-RIVER.h = RIVER.line.map(([x, z]) => macro(x, z) - 2.6);
-// bridges: where a way crosses the river or the ravine
-for (const w of WAYS)
-  for (const [i, [x, z]] of w.line.entries()) {
-    const n = nearLines(x, z);
-    const r = n.get(RIVER_F);
-    const v = n.get(RAVINE_F);
-    if ((r && r.d < RIVER.w / 2 + 6) || (v && v.d < RAVINE.w / 2 + 1.5)) w.bridged[i] = true;
-  }
+layLevels();
 /** The deck's height where a way is bridged (the river's: the banks either side). */
 export const POND_LEVEL = macro(POND.cx, POND.cz) - 1.1;
 
@@ -921,7 +1119,26 @@ export function terrainAt(x: number, z: number): number {
       target = p.h;
     }
   }
-  return lerp(target, h, best);
+  const land = lerp(target, h, best);
+  return lifts.size ? land + liftAt(x, z) : land;
+}
+/** God mode's lift of the land at (x, z) (its grid's, between samples as the chunks are). */
+function liftAt(x: number, z: number): number {
+  const cx = Math.floor(x / CHUNK);
+  const cz = Math.floor(z / CHUNK);
+  const g = lifts.get(chunkKey(cx, cz));
+  if (!g) return 0;
+  const u = (x - cx * CHUNK) * 2;
+  const v = (z - cz * CHUNK) * 2;
+  const i = Math.min(LIFT_N - 2, Math.floor(u));
+  const j = Math.min(LIFT_N - 2, Math.floor(v));
+  const fu = u - i;
+  const fv = v - j;
+  const a = g[j * LIFT_N + i];
+  const b = g[j * LIFT_N + i + 1];
+  const d = g[(j + 1) * LIFT_N + i];
+  const e = g[(j + 1) * LIFT_N + i + 1];
+  return (a + (b - a) * fu + (d - a) * fv + (a - b - d + e) * fu * fv) / 100;
 }
 
 /** Where a body stands at (x, z): the land, or a bridge's deck over it. */
@@ -938,6 +1155,14 @@ export function groundAt(x: number, z: number): number {
 export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
   for (const bd of nearBuildings(x, z))
     if (x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1) return inBuilt(bd, x, z) ? "floor" : "walk";
+  if (paints.size) {
+    const tx = Math.floor(x);
+    const tz = Math.floor(z);
+    const cx = Math.floor(tx / CHUNK);
+    const cz = Math.floor(tz / CHUNK);
+    const p = paints.get(chunkKey(cx, cz))?.[(tz - cz * CHUNK) * CHUNK + (tx - cx * CHUNK)];
+    if (p) return SURFACES[p - 1];
+  }
   if (KART_LAND) {
     const ks = kartSurfaceAt(x, z) ?? kartApronAt(x, z);
     if (ks) return ks;
@@ -970,6 +1195,24 @@ export function insideFence(x: number, z: number): boolean {
 }
 
 /** How thick the woods are at (x, z), 0..1 (0: kept clear). */
+/** Room for a tree at (x, z) whatever the woods would do there: off the ways, the buildings and
+ *  the water (god mode's planted ones: docs/plan/53-the-god-mode.md, phase 8). */
+export function treeRoom(x: number, z: number): boolean {
+  for (const bd of nearBuildings(x, z)) if (rectDist(bd, x, z) < 2) return false;
+  if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1.15) return false;
+  for (const [f, n] of nearLines(x, z)) {
+    if (f === RAVINE_F) {
+      if (n.d < RAVINE.w / 2) return false;
+      continue;
+    }
+    if (f === RIVER_F) {
+      if (n.d < RIVER.w / 2 + 1) return false;
+      continue;
+    }
+    if (n.d < WAYS[f].w / 2 + 1.5) return false;
+  }
+  return true;
+}
 export function treeDensity(x: number, z: number): number {
   if (x < GROUNDS.x0 || x > GROUNDS.x1 || z < GROUNDS.z0 || z > GROUNDS.z1) return 0;
   const lawn = inLawn(x, z);
@@ -1032,6 +1275,13 @@ export function pineVariant(t: { x: number; z: number; ry: number }): number {
 }
 /** Each spruce's height before its scale (tp/grounds3d.ts pineGeometry's H). */
 export const PINE_H = [10.5, 10.5, 10.5, 6.5, 13.5, 11];
+const PLANTED: TreeKind[] = ["pine", "birch", "bare"];
+/** God mode's byte for tree cell (i, j) (TREE_MASK): its grid is the chunk the cell's tenth is. */
+function treeMaskAt(i: number, j: number): number {
+  const ci = Math.floor(i / 10);
+  const cj = Math.floor(j / 10);
+  return treeMasks.get(chunkKey(ci, cj))?.[(j - cj * 10) * 10 + (i - ci * 10)] ?? TREE_MASK.generated;
+}
 /** The trees in a chunk (cx, cz: chunk coords, CHUNK tiles each). */
 export function treesIn(cx: number, cz: number): Tree[] {
   const out: Tree[] = [];
@@ -1039,15 +1289,26 @@ export function treesIn(cx: number, cz: number): Tree[] {
   const z0 = cz * CHUNK;
   for (let i = Math.ceil(x0 / TREE_CELL); i * TREE_CELL < x0 + CHUNK; i++)
     for (let j = Math.ceil(z0 / TREE_CELL); j * TREE_CELL < z0 + CHUNK; j++) {
+      // (god mode's: cleared, or planted — where and how big as the generator's own would be)
+      const m = treeMasks.size ? treeMaskAt(i, j) : TREE_MASK.generated;
+      if (m === TREE_MASK.none) continue;
       const r = groundsRng(Math.imul(i, 92821) ^ Math.imul(j, 68917) ^ 0x51ed);
       const x = (i + 0.15 + r() * 0.7) * TREE_CELL;
       const z = (j + 0.15 + r() * 0.7) * TREE_CELL;
-      const d = treeDensity(x, z);
+      const d = m ? 1 : treeDensity(x, z);
       if (r() >= d) continue;
+      // (planted: not on a way, a building, the water)
+      if (m && !treeRoom(x, z)) continue;
       // birches by the water, pines in the deep woods, a few dead ones
       const nearWater = ((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 4 || Math.abs(x - 260) < 50;
       const q = r();
-      const kind: TreeKind = q < (nearWater ? 0.45 : 0.2) ? "birch" : q > 0.9 ? "bare" : "pine";
+      const kind: TreeKind = m
+        ? PLANTED[m - TREE_MASK.pine]
+        : q < (nearWater ? 0.45 : 0.2)
+          ? "birch"
+          : q > 0.9
+            ? "bare"
+            : "pine";
       out.push({ x, z, y: terrainAt(x, z), kind, s: 0.72 + r() * 0.62, ry: r() * Math.PI * 2 });
     }
   return out;
@@ -1055,8 +1316,12 @@ export function treesIn(cx: number, cz: number): Tree[] {
 
 // ── lamps ────────────────────────────────────────────────────────────────────
 export const LAMPS: Lamp[] = [];
-{
-  const along = (w: Way, every: number, both: boolean, kind: Lamp["kind"], from = 0) => {
+// (the generated ways with their own lamps, below)
+const LAMPED = new Set(["driveway", "main", "church-st"]);
+function layLamps() {
+  LAMPS.length = 0;
+  const along = (w: Way | undefined, every: number, both: boolean, kind: Lamp["kind"], from = 0) => {
+    if (!w || w.lamps === false) return;
     let side = 1;
     for (let i = from; i < w.line.length - 2; i += every) {
       const [x, z] = w.line[i];
@@ -1069,55 +1334,88 @@ export const LAMPS: Lamp[] = [];
         const nx = -tz * s;
         const nz = tx * s;
         const off = w.w / 2 + (kind === "town" ? 1.6 : 1.4);
-        LAMPS.push({ x: x + nx * off, z: z + nz * off, ry: Math.atan2(nz, -nx), kind });
+        const key = `lamp:${w.key}:${i}${both ? (s > 0 ? "l" : "r") : ""}`;
+        LAMPS.push({ key, x: x + nx * off, z: z + nz * off, ry: Math.atan2(nz, -nx), kind });
       }
       side = -side;
     }
   };
-  const byKey = (k: string) => WAYS.find((w) => w.key === k) as Way;
+  const byKey = (k: string) => WAYS.find((w) => w.key === k);
   along(byKey("driveway"), 30, false, "cobra", 70);
   along(byKey("main"), 22, true, "town", 6);
   along(byKey("church-st"), 22, true, "town", 12);
+  // (god mode's ways with lamps: a street's both sides every 22, a road's one side every 30)
+  for (const w of WAYS)
+    if (w.lamps && !LAMPED.has(w.key)) {
+      const st = w.kind === "street";
+      along(w, st ? 22 : 30, st, st ? "town" : "cobra", 4);
+    }
   // (none in the gas station's way in, x 306–328: to its corner)
   for (const l of LAMPS) if (l.kind === "town" && l.x > 305 && l.x < 329 && l.z > -399 && l.z < -394) l.x = 329.5;
-  LAMPS.push({ x: BENCH.x + 2.2, z: BENCH.z - 1.4, ry: Math.PI, kind: "lone" });
-  LAMPS.push({ x: -36, z: -370, ry: Math.PI, kind: "cobra" }); // the gate's
-  LAMPS.push({ x: -255, z: -97.4, ry: 0, kind: "porch" }); // the boathouse's
-  LAMPS.push({ x: -13, z: -412, ry: 0, kind: "porch" }); // the bus shelter's
+  LAMPS.push({ key: "lamp:clearing", x: BENCH.x + 2.2, z: BENCH.z - 1.4, ry: Math.PI, kind: "lone" });
+  LAMPS.push({ key: "lamp:gate", x: -36, z: -370, ry: Math.PI, kind: "cobra" }); // the gate's
+  LAMPS.push({ key: "lamp:boathouse", x: -255, z: -97.4, ry: 0, kind: "porch" }); // the boathouse's
+  LAMPS.push({ key: "lamp:shelter", x: -13, z: -412, ry: 0, kind: "porch" }); // the bus shelter's
   // the Kart Park's floodlights (docs/plan/46-the-karts.md): their light and pools as any lamp's
-  if (KART_LAND) for (const f of kartFloods()) LAMPS.push({ x: f.x, z: f.z, ry: f.ry, kind: "flood" });
+  if (KART_LAND)
+    for (const [i, f] of kartFloods().entries())
+      LAMPS.push({ key: `lamp:kart-flood:${i}`, x: f.x, z: f.z, ry: f.ry, kind: "flood" });
   // and its others: the road in's corner, the turning circle, the car park's row ends and footway,
   // the paddock's
   if (KART_LAND) {
     const C = KART_CARPARK;
     const g = KART_GATE.x;
     const z1 = KART_FENCE.z1;
-    for (const [x, z, ry] of [
-      [g + 5.8, -410.4, -2.36],
-      [KART_TURN.x + KART_TURN.r + 2, KART_TURN.z, Math.PI],
-      [C.x0 + 1.5, (C.z0 + C.aisle[0]) / 2, 0],
-      [C.x0 + 1.5, (C.aisle[1] + C.z1) / 2, 0],
-      [(C.x0 + C.x1) / 2, C.walk[0] + 0.4, -Math.PI / 2],
-      [(C.x0 + C.x1) / 2, C.z1 + 1.2, Math.PI / 2],
-    ])
-      LAMPS.push({ x, z, ry, kind: "cobra" });
+    for (const [name, x, z, ry] of [
+      ["corner", g + 5.8, -410.4, -2.36],
+      ["turn", KART_TURN.x + KART_TURN.r + 2, KART_TURN.z, Math.PI],
+      ["row-n", C.x0 + 1.5, (C.z0 + C.aisle[0]) / 2, 0],
+      ["row-s", C.x0 + 1.5, (C.aisle[1] + C.z1) / 2, 0],
+      ["footway", (C.x0 + C.x1) / 2, C.walk[0] + 0.4, -Math.PI / 2],
+      ["car-park", (C.x0 + C.x1) / 2, C.z1 + 1.2, Math.PI / 2],
+    ] as const)
+      LAMPS.push({ key: `lamp:kart:${name}`, x, z, ry, kind: "cobra" });
     // the paddock's: down its east edge by the fence, out of the walk from the gate (the user's call)
-    for (const dz of [52, 38, 24, 10]) LAMPS.push({ x: g + 12.5, z: z1 - dz, ry: 0, kind: "lone" });
+    for (const dz of [52, 38, 24, 10])
+      LAMPS.push({ key: `lamp:kart-paddock:${dz}`, x: g + 12.5, z: z1 - dz, ry: 0, kind: "lone" });
   }
 }
+layLamps();
 
 /** The town's street furniture (docs/plan/33-the-look.md, phase 4): hydrants, bins, newspaper
  *  boxes along Main Street's kerbs, wooden poles carrying the wires down its north side, benches
  *  and bins round the statue, a stop sign and the street names where Church Street meets Main,
  *  the post office's box. Solid (a tile each, a bench two); `ry` turns its front (+z) to face. */
 export interface StreetThing {
-  kind: "hydrant" | "bin" | "newsbox" | "pole" | "bench" | "stop" | "streetsign" | "postbox";
+  /** which one, for ever (docs/plan/53-the-god-mode.md): its place, not its order */
+  key: string;
+  kind:
+    | "hydrant"
+    | "bin"
+    | "newsbox"
+    | "pole"
+    | "bench"
+    | "stop"
+    | "streetsign"
+    | "postbox"
+    // god mode's own (docs/plan/53-the-god-mode.md, phase 8)
+    | "boulder"
+    | "planter"
+    | "sign"
+    | "fence";
   x: number;
   z: number;
   ry: number;
+  /** how big (a boulder, a planter) */
+  s?: number;
+  /** what a sign says */
+  text?: string;
+  /** a fence's line */
+  pts?: P[];
 }
 export const STREET: StreetThing[] = [];
-{
+function layStreet() {
+  STREET.length = 0;
   const MZ = -405;
   const doors = BUILDINGS.filter((b) => b.sign || b.vacant).map((b) => ({
     x: (b.x0 + b.x1) / 2,
@@ -1135,24 +1433,38 @@ export const STREET: StreetThing[] = [];
     for (let x = 322; x < 516; x += 9) {
       const z = MZ + side * 7.7;
       if (!clear(x, side) || lampNear(x, z, 2.5)) continue;
-      STREET.push({ kind: seq[k++ % seq.length], x, z, ry: side > 0 ? Math.PI : 0 });
+      STREET.push({
+        key: `street:main-${side > 0 ? "s" : "n"}:${x}`,
+        kind: seq[k++ % seq.length],
+        x,
+        z,
+        ry: side > 0 ? Math.PI : 0,
+      });
     }
   // the poles down the north side, every 26 tiles or so
   for (let x = 306; x < 520; x += 26) {
     let px = x;
     while (!clear(px, -1) || lampNear(px, MZ - 8, 3.5)) px += 2;
-    if (px < 524) STREET.push({ kind: "pole", x: px, z: MZ - 8, ry: 0 });
+    if (px < 524) STREET.push({ key: `street:pole:${x}`, kind: "pole", x: px, z: MZ - 8, ry: 0 });
   }
   // round the statue: two benches facing it, a bin by each
   for (const bx of [STATUE.x - 7, STATUE.x + 5]) {
-    STREET.push({ kind: "bench", x: bx, z: STATUE.z - 7, ry: 0 });
-    STREET.push({ kind: "bin", x: bx + (bx < STATUE.x ? -1.2 : 3.2), z: STATUE.z - 6.6, ry: 0 });
+    const at = bx < STATUE.x ? "w" : "e";
+    STREET.push({ key: `street:statue-bench:${at}`, kind: "bench", x: bx, z: STATUE.z - 7, ry: 0 });
+    STREET.push({
+      key: `street:statue-bin:${at}`,
+      kind: "bin",
+      x: bx + (at === "w" ? -1.2 : 3.2),
+      z: STATUE.z - 6.6,
+      ry: 0,
+    });
   }
   // where Church Street meets Main: its stop sign, the street names
-  STREET.push({ kind: "stop", x: 424.8, z: -415.6, ry: 0 });
-  STREET.push({ kind: "streetsign", x: 415.2, z: -415.6, ry: 0 });
-  STREET.push({ kind: "postbox", x: 349.6, z: MZ - 7.7, ry: 0 });
+  STREET.push({ key: "street:stop", kind: "stop", x: 424.8, z: -415.6, ry: 0 });
+  STREET.push({ key: "street:streetsign", kind: "streetsign", x: 415.2, z: -415.6, ry: 0 });
+  STREET.push({ key: "street:postbox", kind: "postbox", x: 349.6, z: MZ - 7.7, ry: 0 });
 }
+layStreet();
 /** The tiles street furniture stands on. */
 function streetTiles(): [number, number][] {
   return STREET.flatMap((t) =>
@@ -1168,10 +1480,12 @@ function streetTiles(): [number, number][] {
 /** Snow poles along the driveway and the county road (docs/plan/33-the-look.md): an orange
  *  stake with a reflector each side every 25 tiles or so, out in the plough's bank — where the
  *  road's edge is when it's all white. Only to look at (thin; not in the walking). */
-export const SNOW_POLES: { x: number; z: number; ry: number }[] = [];
-{
+export const SNOW_POLES: { key: string; x: number; z: number; ry: number }[] = [];
+function laySnowPoles() {
+  SNOW_POLES.length = 0;
   for (const key of ["driveway", "road", ...(KART_LAND ? ["kart-road"] : [])]) {
-    const w = WAYS.find((u) => u.key === key) as Way;
+    const w = WAYS.find((u) => u.key === key);
+    if (!w) continue;
     const L = w.line;
     for (let i = 8; i < L.length - 8; i += 25)
       for (const s of [1, -1]) {
@@ -1191,10 +1505,57 @@ export const SNOW_POLES: { x: number; z: number; ry: number }[] = [];
         if (crossing) continue;
         if (x > LOT.x0 - 3 && x < LOT.x1 + 3 && z > LOT.z0 - 3 && z < LOT.z1 + 3) continue;
         if (LAMPS.some((m) => Math.hypot(m.x - x, m.z - z) < 3)) continue;
-        SNOW_POLES.push({ x, z, ry: Math.atan2(nx, nz) });
+        SNOW_POLES.push({ key: `snowpole:${key}:${i}${s > 0 ? "l" : "r"}`, x, z, ry: Math.atan2(nx, nz) });
       }
   }
 }
+laySnowPoles();
+
+/** God mode's things: the generated ones moved or taken away, new ones put down. */
+function layThings() {
+  const e = keep<ThingDef>(EDITS.things);
+  const place = (c: Partial<ThingDef> | undefined) =>
+    c
+      ? {
+          ...(c.x !== undefined && { x: c.x }),
+          ...(c.z !== undefined && { z: c.z }),
+          ...(c.ry !== undefined && { ry: c.ry }),
+          ...(c.s !== undefined && { s: c.s }),
+          ...(c.text !== undefined && { text: c.text }),
+          ...(c.pts !== undefined && { pts: c.pts }),
+        }
+      : null;
+  const edit = <T extends { key: string; x: number; z: number; ry: number }>(list: T[]) => {
+    const kept = list.filter((t) => !e.gone.has(t.key));
+    list.length = 0;
+    for (const t of kept) {
+      const c = place(e.change[t.key]);
+      list.push(c ? { ...t, ...c } : t);
+    }
+  };
+  edit(LAMPS);
+  edit(STREET);
+  edit(SNOW_POLES);
+  for (const d of e.add) {
+    if (e.gone.has(d.key)) continue;
+    const t = { ...d, ...e.change[d.key] };
+    if (t.kind.startsWith("lamp-"))
+      LAMPS.push({ key: t.key, x: t.x, z: t.z, ry: t.ry, kind: t.kind.slice(5) as Lamp["kind"] });
+    else if (t.kind === "snowpole") SNOW_POLES.push({ key: t.key, x: t.x, z: t.z, ry: t.ry });
+    else
+      STREET.push({
+        key: t.key,
+        kind: t.kind as StreetThing["kind"],
+        x: t.x,
+        z: t.z,
+        ry: t.ry,
+        ...(t.s !== undefined && { s: t.s }),
+        ...(t.text !== undefined && { text: t.text }),
+        ...(t.pts !== undefined && { pts: t.pts }),
+      });
+  }
+}
+layThings();
 
 /** Where the barrier closes the road at the edge of the world (east, past the town). */
 export const ROAD_CLOSED = { x: 528, z: -405 };
@@ -1232,17 +1593,42 @@ export function groundsChunk(cx: number, cz: number): GroundsChunk {
 export function setParkLayout(key: string, reverse: boolean): boolean {
   if (!setKartLayout(key, reverse)) return false;
   layoutVersion++;
-  const F = KART_FENCE;
-  const over = (cx: number, cz: number) =>
-    cx * CHUNK + CHUNK > F.x0 - 4 && cx * CHUNK < F.x1 + 4 && cz * CHUNK + CHUNK > F.z0 - 4 && cz * CHUNK < F.z1 + 4;
-  for (const [k, c] of chunks) if (over(c.cx, c.cz)) chunks.delete(k);
-  // (and the tiles' surfaces kept for walking)
-  for (let cz = Math.floor((F.z0 - 4) / CHUNK); cz <= Math.floor((F.z1 + 4) / CHUNK); cz++)
-    for (let cx = Math.floor((F.x0 - 4) / CHUNK); cx <= Math.floor((F.x1 + 4) / CHUNK); cx++)
-      surfaces.delete(chunkKey(cx, cz));
+  const cs = chunksOver(KART_FENCE, 4);
+  drop(cs);
+  for (const f of changed) f(cs, "park");
   return true;
 }
-/** How many times the park's layout changed here (a chunk made elsewhere before: not taken). */
+/** Forget every chunk made (a full rebuild; the tests, to check what's kept against what's made). */
+export function forgetGrounds(): void {
+  chunks.clear();
+  surfaces.clear();
+}
+/** The chunks a rectangle (and `pad` round it) falls in. */
+function chunksOver(r: { x0: number; z0: number; x1: number; z1: number }, pad: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let cz = Math.floor((r.z0 - pad) / CHUNK); cz <= Math.floor((r.z1 + pad) / CHUNK); cz++)
+    for (let cx = Math.floor((r.x0 - pad) / CHUNK); cx <= Math.floor((r.x1 + pad) / CHUNK); cx++) out.push([cx, cz]);
+  return out;
+}
+/** Drop these chunks and their tiles' surfaces: they're made again when next asked. */
+function drop(cs: [number, number][]) {
+  for (const [cx, cz] of cs) {
+    chunks.delete(chunkKey(cx, cz));
+    surfaces.delete(chunkKey(cx, cz));
+  }
+}
+type Changed = (chunks: [number, number][], why: "park" | "edits") => void;
+const changed = new Set<Changed>();
+/** Told each time chunks change here (the park's layout raced, god mode's edits laid): what's
+ *  made of them — drawn, solid — makes itself again. Gives back the unsubscribe. */
+export function onGroundsChanged(f: Changed): () => void {
+  changed.add(f);
+  return () => {
+    changed.delete(f);
+  };
+}
+/** How many times the park's layout or god mode's edits changed here (a chunk made elsewhere
+ *  before: not taken). */
 export let layoutVersion = 0;
 /** A chunk made elsewhere (a worker) put in the cache. */
 export function adoptChunk(c: GroundsChunk): void {
@@ -1317,7 +1703,7 @@ function walkable(x: number, z: number): boolean {
       // (inside one you walk into: its floor, round its furniture; its open ground: round what's on it)
       return inBuilt(bd, x, z)
         ? !!insideOf(bd) && !FIT_TILES.has(`${Math.floor(x)},${Math.floor(z)}`)
-        : !onForecourt(x, z, 0.2);
+        : bd.kind === "gas" && !onForecourt(bd, x, z, 0.2);
   }
   // (the town's parked cars and the farm's tractor are vehicles now — shared car/homes.ts: their
   // own boxes)
@@ -1429,7 +1815,8 @@ export function speedOn(s: Surface): number {
 
 // a tile's surface (kept: walking asks every frame)
 const surfaces = new Map<number, Uint8Array>();
-const SURFACES: Surface[] = ["snow", "deep", "path", "asphalt", "walk", "ice", "floor", "rock"];
+/** The surfaces a painted tile can be (its byte: the index + 1; 0 as generated). */
+export const SURFACES: Surface[] = ["snow", "deep", "path", "asphalt", "walk", "ice", "floor", "rock"];
 /** What the tile (tx, tz) (building coords) is. */
 export function surfaceTileAt(tx: number, tz: number): Surface {
   const cx = Math.floor(tx / CHUNK);
@@ -1467,27 +1854,34 @@ interface Deck {
   z1: number;
 }
 const RAIL = 1.6; // the blocked strip's width past the deck
-const DECKS: Deck[] = WAYS.flatMap((w) => {
-  const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
-  if (!idx.length) return [];
-  const xs = idx.map((i) => w.line[i][0]);
-  const zs = idx.map((i) => w.line[i][1]);
-  const half = w.w / 2 + (w.kind === "trail" ? 0.2 : 0.35);
-  const m = half + RAIL + 0.5;
-  // (a segment more each end: onto the land flattened to the way, no gap over the bank)
-  return [
-    {
-      w,
-      a: Math.max(0, idx[0] - 1),
-      b: Math.min(w.line.length - 1, idx[idx.length - 1] + 1),
-      half,
-      x0: Math.min(...xs) - m,
-      x1: Math.max(...xs) + m,
-      z0: Math.min(...zs) - m,
-      z1: Math.max(...zs) + m,
-    },
-  ];
-});
+const DECKS: Deck[] = [];
+function layDecks() {
+  DECKS.length = 0;
+  DECKS.push(
+    ...WAYS.flatMap((w) => {
+      const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
+      if (!idx.length) return [];
+      const xs = idx.map((i) => w.line[i][0]);
+      const zs = idx.map((i) => w.line[i][1]);
+      const half = w.w / 2 + (w.kind === "trail" ? 0.2 : 0.35);
+      const m = half + RAIL + 0.5;
+      // (a segment more each end: onto the land flattened to the way, no gap over the bank)
+      return [
+        {
+          w,
+          a: Math.max(0, idx[0] - 1),
+          b: Math.min(w.line.length - 1, idx[idx.length - 1] + 1),
+          half,
+          x0: Math.min(...xs) - m,
+          x1: Math.max(...xs) + m,
+          z0: Math.min(...zs) - m,
+          z1: Math.max(...zs) + m,
+        },
+      ];
+    }),
+  );
+}
+layDecks();
 /** Where (x, z) falls along a deck: the segment and how far along it, how far off its line,
  *  and whether that's within the bridge's span (not past either end). */
 function alongDeck(d: Deck, x: number, z: number): { i: number; u: number; off: number; within: boolean } {
@@ -1665,68 +2059,74 @@ function fitsOf(b: Building): { floor: string; fits: Fit[] } {
   f("fridge", x1 - 1.2, z0 + 3, 1, z1 - z0 - 5, 2.4);
   return { floor: "#d8d2c4", fits };
 }
-export const INSIDES: Inside[] = BUILDINGS.filter((b) => b.enter && !b.stored && b.kind !== "hq").map((b) => ({
-  b,
-  door: doorOf(b),
-  ...fitsOf(b),
-}));
-const insideBy = new Map(INSIDES.map((i) => [i.b, i]));
+export const INSIDES: Inside[] = [];
+const insideBy = new Map<string, Inside>();
 /** The inside of a building you walk into (not the stored ones), or null. */
 export function insideOf(b: Building): Inside | null {
-  return insideBy.get(b) ?? null;
+  return insideBy.get(b.key) ?? null;
 }
 // the tiles their solid furniture stands on; their walls' edges
 const FIT_TILES = new Set<string>();
 const WALL_EDGES = new Set<string>();
-for (const i of INSIDES) {
-  for (const f of i.fits)
-    if (f.solid)
-      for (let z = Math.floor(f.z); z < Math.ceil(f.z + f.d); z++)
-        for (let x = Math.floor(f.x); x < Math.ceil(f.x + f.w); x++) FIT_TILES.add(`${x},${z}`);
-  const { b, door } = i;
-  const open = (dir: "h" | "v", at: number, u: number) =>
-    door.dir === dir && door.at === at && u >= door.from && u < door.to;
-  for (let x = b.x0; x < b.x1; x++) for (const z of [b.z0, b.z1]) if (!open("h", z, x)) WALL_EDGES.add(`h${x},${z}`);
-  for (let z = b.z0; z < b.z1; z++) for (const x of [b.x0, b.x1]) if (!open("v", x, z)) WALL_EDGES.add(`v${x},${z}`);
+function layInsides() {
+  INSIDES.length = 0;
+  for (const b of BUILDINGS)
+    if (b.enter && !b.stored && b.kind !== "hq") INSIDES.push({ b, door: doorOf(b), ...fitsOf(b) });
+  insideBy.clear();
+  for (const i of INSIDES) insideBy.set(i.b.key, i);
+  FIT_TILES.clear();
+  WALL_EDGES.clear();
+  for (const i of INSIDES) {
+    for (const f of i.fits)
+      if (f.solid)
+        for (let z = Math.floor(f.z); z < Math.ceil(f.z + f.d); z++)
+          for (let x = Math.floor(f.x); x < Math.ceil(f.x + f.w); x++) FIT_TILES.add(`${x},${z}`);
+    const { b, door } = i;
+    const open = (dir: "h" | "v", at: number, u: number) =>
+      door.dir === dir && door.at === at && u >= door.from && u < door.to;
+    for (let x = b.x0; x < b.x1; x++) for (const z of [b.z0, b.z1]) if (!open("h", z, x)) WALL_EDGES.add(`h${x},${z}`);
+    for (let z = b.z0; z < b.z1; z++) for (const x of [b.x0, b.x1]) if (!open("v", x, z)) WALL_EDGES.add(`v${x},${z}`);
+  }
+  // the bus shelter's glass: its back (north) and its sides, open to the street (shapes/grounds.ts)
+  for (const b of BUILDINGS)
+    if (b.kind === "shelter") {
+      for (let x = b.x0; x < b.x1; x++) WALL_EDGES.add(`h${x},${b.z0}`);
+      for (let z = b.z0; z < b.z1 - 1; z++) for (const x of [b.x0, b.x1]) WALL_EDGES.add(`v${x},${z}`);
+    }
+  // the fences, thin as they're drawn (docs/plan/50-the-volume.md: their physics a 0.12 wall on the
+  // line): the company's, open at its gate as drawn (x −43…−28, the gatehouse's stretch too); the
+  // Kart Park's, open at its gate
+  {
+    const line = (ax: number, az: number, bx: number, bz: number, open: (x: number, z: number) => boolean) => {
+      if (az === bz)
+        for (let x = Math.min(ax, bx); x < Math.max(ax, bx); x++) {
+          if (!open(x + 0.5, az)) WALL_EDGES.add(`h${x},${az}`);
+        }
+      else
+        for (let z = Math.min(az, bz); z < Math.max(az, bz); z++) {
+          if (!open(ax, z + 0.5)) WALL_EDGES.add(`v${ax},${z}`);
+        }
+    };
+    for (let i = 0; i < FENCE.length; i++) {
+      const [ax, az] = FENCE[i];
+      const [bx, bz] = FENCE[(i + 1) % FENCE.length];
+      line(ax, az, bx, bz, (x, z) => z === GATE.z && x > GATE.x - 3 && x < GATE.x + 12);
+    }
+    if (KART_LAND) {
+      const F = KART_FENCE;
+      const G = KART_GATE;
+      const corners: P[] = [
+        [F.x0, F.z0],
+        [F.x1, F.z0],
+        [F.x1, F.z1],
+        [F.x0, F.z1],
+      ];
+      for (let i = 0; i < 4; i++)
+        line(...corners[i], ...corners[(i + 1) % 4], (x, z) => z === G.z && Math.abs(x - G.x) < G.w / 2);
+    }
+  }
 }
-// the bus shelter's glass: its back (north) and its sides, open to the street (shapes/grounds.ts)
-for (const b of BUILDINGS)
-  if (b.kind === "shelter") {
-    for (let x = b.x0; x < b.x1; x++) WALL_EDGES.add(`h${x},${b.z0}`);
-    for (let z = b.z0; z < b.z1 - 1; z++) for (const x of [b.x0, b.x1]) WALL_EDGES.add(`v${x},${z}`);
-  }
-// the fences, thin as they're drawn (docs/plan/50-the-volume.md: their physics a 0.12 wall on the
-// line): the company's, open at its gate as drawn (x −43…−28, the gatehouse's stretch too); the
-// Kart Park's, open at its gate
-{
-  const line = (ax: number, az: number, bx: number, bz: number, open: (x: number, z: number) => boolean) => {
-    if (az === bz)
-      for (let x = Math.min(ax, bx); x < Math.max(ax, bx); x++) {
-        if (!open(x + 0.5, az)) WALL_EDGES.add(`h${x},${az}`);
-      }
-    else
-      for (let z = Math.min(az, bz); z < Math.max(az, bz); z++) {
-        if (!open(ax, z + 0.5)) WALL_EDGES.add(`v${ax},${z}`);
-      }
-  };
-  for (let i = 0; i < FENCE.length; i++) {
-    const [ax, az] = FENCE[i];
-    const [bx, bz] = FENCE[(i + 1) % FENCE.length];
-    line(ax, az, bx, bz, (x, z) => z === GATE.z && x > GATE.x - 3 && x < GATE.x + 12);
-  }
-  if (KART_LAND) {
-    const F = KART_FENCE;
-    const G = KART_GATE;
-    const corners: P[] = [
-      [F.x0, F.z0],
-      [F.x1, F.z0],
-      [F.x1, F.z1],
-      [F.x0, F.z1],
-    ];
-    for (let i = 0; i < 4; i++)
-      line(...corners[i], ...corners[(i + 1) % 4], (x, z) => z === G.z && Math.abs(x - G.x) < G.w / 2);
-  }
-}
+layInsides();
 /** A wall on an edge (building coords: h the north edge of tile (x, z), v the west). */
 export function wallEdgeAt(dir: "h" | "v", x: number, z: number): boolean {
   return WALL_EDGES.has(`${dir}${x},${z}`);
@@ -1949,3 +2349,511 @@ export const GUARD_ROUND: Route = (() => {
     ]),
   );
 })();
+
+// ── keys and anchors (docs/plan/53-the-god-mode.md, phase 1) ────────────────
+// Every generated thing on the Grounds has a key that stays its own whatever is edited round it
+// (a way's and a building's own key, a lamp's way and its place along it, a tree's cell), so an
+// edit can move or take away that one thing. Anchored ones are what other features hang on:
+// god mode can't move or remove them, and the land in an anchored area stays as generated.
+
+/** A tree's key: its 3.2 m cell (treesIn puts one tree at most in each). */
+export function treeKey(t: { x: number; z: number }): string {
+  return `tree:${Math.floor(t.x / TREE_CELL)},${Math.floor(t.z / TREE_CELL)}`;
+}
+export type GroundsThingKind =
+  | "way"
+  | "building"
+  | "lamp"
+  | "street"
+  | "snowpole"
+  | "fence"
+  | "landmark"
+  | "scarecrow"
+  | "town-car"
+  | "tractor"
+  | "field"
+  | "water"
+  | "park";
+export interface GroundsThing {
+  key: string;
+  kind: GroundsThingKind;
+  x: number;
+  z: number;
+}
+let things: GroundsThing[] | null = null;
+/** Every generated thing but the trees (they're per chunk: treesIn, treeKey), with its key. */
+export function groundsThings(): GroundsThing[] {
+  if (things) return things;
+  const mid = (r: { x0: number; z0: number; x1: number; z1: number }) => ({
+    x: (r.x0 + r.x1) / 2,
+    z: (r.z0 + r.z1) / 2,
+  });
+  const t = (key: string, kind: GroundsThingKind, p: { x: number; z: number }): GroundsThing => ({
+    key,
+    kind,
+    x: p.x,
+    z: p.z,
+  });
+  things = [
+    ...WAYS.map((w) => t(`way:${w.key}`, "way", { x: w.line[0][0], z: w.line[0][1] })),
+    ...BUILDINGS.map((b) => t(`building:${b.key}`, "building", mid(b))),
+    ...LAMPS.map((l) => t(l.key, "lamp", l)),
+    ...STREET.map((s) => t(s.key, "street", s)),
+    ...SNOW_POLES.map((p) => t(p.key, "snowpole", p)),
+    t("fence:company", "fence", { x: GATE.x, z: GATE.z }),
+    t("landmark:tower", "landmark", TOWER),
+    t("landmark:statue", "landmark", STATUE),
+    t("landmark:bench", "landmark", BENCH),
+    ...SCARECROWS.map((c, i) => t(`scarecrow:${i}`, "scarecrow", c)),
+    ...TOWN_CARS.map((c, i) => t(`town-car:${i}`, "town-car", c)),
+    t("tractor", "tractor", TRACTOR),
+    t("field:corn", "field", mid(CORN)),
+    t("water:pond", "water", { x: POND.cx, z: POND.cz }),
+    t("water:river", "water", { x: RIVER.line[0][0], z: RIVER.line[0][1] }),
+    t("water:ravine", "water", { x: RAVINE.line[0][0], z: RAVINE.line[0][1] }),
+    ...(KART_LAND ? [t("park:kart", "park", KART_PARK)] : []),
+  ];
+  return things;
+}
+/** What other features hang on, and why (key → why). God mode can't move or remove these. */
+export const ANCHORED: Readonly<Record<string, string>> = {
+  "building:hq": "The HQ: its floors are the stored map, its lifts and stairs, everyone's arrival",
+  "building:east": "The east block: its ground floor is the stored map's",
+  "building:south": "The south block: its ground floor is the stored map's",
+  "building:gatehouse": "The gatehouse: its locker gives the first revolver; the night guard keeps it",
+  "building:gas": "The gas station: its pumps and forecourt",
+  "building:motors": "Motors, the car dealer: its forecourt, the collection bay",
+  "building:hall": "The town hall: a town car's home",
+  "building:hotel": "The hotel: a town car's home",
+  "way:driveway": "The driveway: the shuttle's and the visitors' way in, the lot's mouth",
+  "way:road": "The county road: the shuttle's and the visitors' way",
+  "way:main": "Main Street: the shuttle's stop in town",
+  "way:kart-road": "The Kart Park's road in",
+  "fence:company": "The company's fence: the guard walks it, the gate is on it",
+  tractor: "The farm's tractor: driven, its home by the barn",
+  "park:kart": "The Kart Park: its circuits, paddock and bowl (the track changer's)",
+  "water:pond": "Water stays as it is for now (plan 53, open question 4)",
+  "water:river": "Water stays as it is for now (plan 53, open question 4)",
+  "water:ravine": "Water stays as it is for now (plan 53, open question 4)",
+  ...Object.fromEntries(TOWN_CARS.map((_, i) => [`town-car:${i}`, "A town car: someone's, kept at its home"])),
+};
+/** Where the land stays as generated: no sculpting, painting or building there. */
+export const ANCHORED_AREAS: readonly { key: string; why: string; x0: number; z0: number; x1: number; z1: number }[] = [
+  { key: "area:campus", why: "The campus: the HQ, its blocks and the parking lot", ...SITE },
+  ...(KART_LAND ? [{ key: "area:kart", why: "The Kart Park and its road in", ...KART_GROUND }] : []),
+  ...BUILDINGS.filter((b) => ANCHORED[`building:${b.key}`]).map((b) => ({
+    key: `area:${b.key}`,
+    why: ANCHORED[`building:${b.key}`],
+    x0: b.x0 - 2,
+    z0: b.z0 - 2,
+    x1: b.x1 + 2,
+    z1: b.z1 + 2,
+  })),
+  { key: "area:forecourt", why: "Motors' forecourt", ...MOTORS.yard },
+];
+/** The anchored area at (x, z), or null; past the world's edge counts as one. */
+export function anchoredAt(x: number, z: number): { key: string; why: string } | null {
+  if (beyond(x, z) > 0) return { key: "area:edge", why: "Past the world's edge: scenery" };
+  return ANCHORED_AREAS.find((a) => x >= a.x0 && x < a.x1 && z >= a.z0 && z < a.z1) ?? null;
+}
+
+// ── laying god mode's edits (docs/plan/53-the-god-mode.md § B) ──────────────
+/** How many times edits were laid here: what's made from the Grounds once and kept (the solids'
+ *  buckets, the GPS's graph) makes itself again when this moves. */
+export let editsVersion = 0;
+/** The edits laid now. */
+export function editsNow(): GroundsEdits {
+  return EDITS;
+}
+type Rect = { x0: number; z0: number; x1: number; z1: number };
+/** What's on the Grounds now, each thing's look as a string and the ground it reaches. */
+function sigs(): Map<string, { sig: string; r: Rect }> {
+  const out = new Map<string, { sig: string; r: Rect }>();
+  const around = (x: number, z: number, pad: number): Rect => ({ x0: x - pad, z0: z - pad, x1: x + pad, z1: z + pad });
+  for (const w of WAYS) {
+    const xs = w.line.map((p) => p[0]);
+    const zs = w.line.map((p) => p[1]);
+    // (30 round: its verges eased in, the trees and lamps cleared, a way joined to it levelled)
+    out.set(`way:${w.key}`, {
+      sig: JSON.stringify([w.kind, w.w, w.pave, w.pts, w.closed, w.lamps]),
+      r: { x0: Math.min(...xs) - 30, z0: Math.min(...zs) - 30, x1: Math.max(...xs) + 30, z1: Math.max(...zs) + 30 },
+    });
+  }
+  // (12 round: its pad eased in, the trees cleared, its door's street things)
+  for (const b of BUILDINGS)
+    out.set(`building:${b.key}`, {
+      sig: JSON.stringify(b),
+      r: { x0: b.x0 - 12, z0: b.z0 - 12, x1: b.x1 + 12, z1: b.z1 + 12 },
+    });
+  for (const l of LAMPS) out.set(l.key, { sig: `${l.kind} ${l.x} ${l.z} ${l.ry}`, r: around(l.x, l.z, 3) });
+  for (const t of STREET) {
+    const sig = `${t.kind} ${t.x} ${t.z} ${t.ry} ${t.s ?? ""} ${t.text ?? ""} ${t.pts ? JSON.stringify(t.pts) : ""}`;
+    const r = t.pts
+      ? {
+          x0: Math.min(...t.pts.map((p) => p[0])) - 3,
+          z0: Math.min(...t.pts.map((p) => p[1])) - 3,
+          x1: Math.max(...t.pts.map((p) => p[0])) + 3,
+          z1: Math.max(...t.pts.map((p) => p[1])) + 3,
+        }
+      : around(t.x, t.z, 3 * (t.s ?? 1));
+    out.set(t.key, { sig, r });
+  }
+  for (const p of SNOW_POLES) out.set(p.key, { sig: `${p.x} ${p.z} ${p.ry}`, r: around(p.x, p.z, 1) });
+  return out;
+}
+function decode<T>(into: Map<number, T>, grids: Record<string, string> | undefined, f: (s: string) => T | null) {
+  into.clear();
+  for (const [k, s] of Object.entries(grids ?? {})) {
+    const [cx, cz] = k.split(",").map(Number);
+    const g = Number.isInteger(cx) && Number.isInteger(cz) ? f(s) : null;
+    if (g) into.set(chunkKey(cx, cz), g);
+  }
+}
+/** Lay these edits over the generated Grounds (in place of the ones laid before) and give back
+ *  the chunks that changed: they're dropped here, to be made again when next asked. The same on
+ *  the server and every client, so they agree. */
+export function applyEdits(next: GroundsEdits): [number, number][] {
+  const before = sigs();
+  const was = EDITS;
+  EDITS = next;
+  decode(lifts, next.height, (s) => decodeHeights(s, LIFT_N * LIFT_N));
+  decode(paints, next.paint, (s) => decodeBytes(s, CHUNK * CHUNK));
+  decode(treeMasks, next.trees, (s) => decodeBytes(s, 100));
+  layWays();
+  layBuildings();
+  layIndex();
+  layLevels();
+  layLamps();
+  layStreet();
+  laySnowPoles();
+  layThings();
+  layDecks();
+  layInsides();
+  things = null;
+  // what changed: a thing whose look did, where it was and where it is
+  const after = sigs();
+  const dirty = new Map<number, [number, number]>();
+  const add = (cs: [number, number][]) => {
+    for (const c of cs) dirty.set(chunkKey(c[0], c[1]), c);
+  };
+  for (const [k, a] of after) {
+    const b = before.get(k);
+    if (b?.sig === a.sig) continue;
+    add(chunksOver(a.r, 0));
+    if (b) add(chunksOver(b.r, 0));
+  }
+  for (const [k, b] of before) if (!after.has(k)) add(chunksOver(b.r, 0));
+  // a grid that changed: its chunk and those round it (its slopes reach them; a tree cell's
+  // chunk can be the next one's)
+  for (const f of ["height", "paint", "trees"] as const) {
+    const o = was[f] ?? {};
+    const n = next[f] ?? {};
+    for (const k of new Set([...Object.keys(o), ...Object.keys(n)]))
+      if (o[k] !== n[k]) {
+        const [cx, cz] = k.split(",").map(Number);
+        if (Number.isInteger(cx) && Number.isInteger(cz))
+          add(
+            chunksOver(
+              { x0: cx * CHUNK, z0: cz * CHUNK, x1: cx * CHUNK + CHUNK - 1, z1: cz * CHUNK + CHUNK - 1 },
+              CHUNK,
+            ),
+          );
+      }
+  }
+  const list = [...dirty.values()];
+  drop(list);
+  layoutVersion++;
+  editsVersion++;
+  for (const f of changed) f(list, "edits");
+  return list;
+}
+
+// ── the rule book (docs/plan/53-the-god-mode.md § A): what edits may do ─────
+/** The building kinds god mode puts down, and how big each may be (m a side). */
+export const PREFABS: Partial<Record<BuildingKind, { min: number; max: number; floors: number }>> = {
+  house: { min: 8, max: 20, floors: 3 },
+  shop: { min: 8, max: 24, floors: 3 },
+  bar: { min: 10, max: 24, floors: 2 },
+  diner: { min: 10, max: 24, floors: 1 },
+  hotel: { min: 14, max: 30, floors: 5 },
+  church: { min: 14, max: 30, floors: 1 },
+  barn: { min: 14, max: 32, floors: 2 },
+  farmhouse: { min: 10, max: 20, floors: 2 },
+  silo: { min: 6, max: 10, floors: 5 },
+  shed: { min: 6, max: 16, floors: 1 },
+  gas: { min: 14, max: 28, floors: 1 },
+  boathouse: { min: 8, max: 18, floors: 1 },
+};
+/** A boulder's or a planter's size, times its own; a sign's words; a fence's longest run (m). */
+export const THING_SIZE = { min: 0.5, max: 2 };
+export const SIGN_TEXT = 40;
+export const FENCE_RUN = 60;
+/** A fence's line: a sample every metre along its runs (straight). */
+export function fenceLine(pts: P[]): P[] {
+  const out: P[] = [];
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, az] = pts[i - 1];
+    const [bx, bz] = pts[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az)));
+    for (let k = i === 1 ? 0 : 1; k <= n; k++) out.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
+  }
+  return out;
+}
+export const EDIT_LIMITS = {
+  bytes: 6_000_000,
+  ways: 400,
+  buildings: 300,
+  things: 20_000,
+  lift: 30,
+  wayPts: 64,
+} as const;
+const WAY_KINDS: WayKind[] = ["driveway", "road", "street", "trail", "walk"];
+const THING_KINDS = new Set<string>([
+  "lamp-cobra",
+  "lamp-town",
+  "lamp-lone",
+  "lamp-porch",
+  "hydrant",
+  "bin",
+  "newsbox",
+  "pole",
+  "bench",
+  "stop",
+  "streetsign",
+  "postbox",
+  "snowpole",
+  "boulder",
+  "planter",
+  "sign",
+  "fence",
+]);
+/** What's wrong with a set of edits (none: it may be laid), each a line an admin can read. The
+ *  world server's say before a publish; the god mode ghost's, as they edit. */
+export function checkEdits(e: GroundsEdits): string[] {
+  const out: string[] = [];
+  const no = (s: string) => out.length < 50 && out.push(s);
+  const inWorld = (x: number, z: number) => Number.isFinite(x) && Number.isFinite(z) && beyond(x, z) === 0;
+  const anchoredHere = (x: number, z: number) => {
+    const a = anchoredAt(x, z);
+    return a && a.key !== "area:edge" ? a : null;
+  };
+  if (JSON.stringify(e).length > EDIT_LIMITS.bytes) no(`Too big: at most ${EDIT_LIMITS.bytes / 1e6} MB`);
+  // the grids: a chunk that's there, the right size, nothing on anchored ground
+  const grid = (
+    name: "height" | "paint" | "trees",
+    n: number,
+    per: number,
+    ok: (v: number) => boolean,
+    decode: (s: string) => ArrayLike<number> | null,
+  ) => {
+    for (const [k, s] of Object.entries(e[name] ?? {})) {
+      const [cx, cz] = k.split(",").map(Number);
+      if (
+        !Number.isInteger(cx) ||
+        !Number.isInteger(cz) ||
+        cx * CHUNK < GROUNDS.x0 ||
+        cx * CHUNK >= GROUNDS.x1 ||
+        cz * CHUNK < GROUNDS.z0 ||
+        cz * CHUNK >= GROUNDS.z1
+      ) {
+        no(`${name} ${k}: not a chunk of the Grounds`);
+        continue;
+      }
+      const g = typeof s === "string" ? decode(s) : null;
+      if (!g || g.length !== n) {
+        no(`${name} ${k}: not ${n} values`);
+        continue;
+      }
+      const side = Math.round(Math.sqrt(n));
+      for (let i = 0; i < n; i++) {
+        if (!g[i]) continue;
+        if (!ok(g[i])) {
+          no(`${name} ${k}: ${g[i]} is out of bounds`);
+          break;
+        }
+        const x = cx * CHUNK + ((i % side) + 0.5) * per;
+        const z = cz * CHUNK + (Math.floor(i / side) + 0.5) * per;
+        const a = anchoredHere(x, z) ?? (inWorld(x, z) ? null : { why: "Past the world's edge" });
+        if (a) {
+          no(`${name} ${k}: on ground that stays as it is (${a.why})`);
+          break;
+        }
+      }
+    }
+  };
+  grid(
+    "height",
+    LIFT_N * LIFT_N,
+    0.5,
+    (v) => Math.abs(v) <= EDIT_LIMITS.lift * 100,
+    (s) => decodeHeights(s, LIFT_N * LIFT_N),
+  );
+  grid(
+    "paint",
+    CHUNK * CHUNK,
+    1,
+    (v) => v >= 1 && v <= SURFACES.length,
+    (s) => decodeBytes(s, CHUNK * CHUNK),
+  );
+  grid(
+    "trees",
+    100,
+    TREE_CELL,
+    (v) => v >= 1 && v <= TREE_MASK.bare,
+    (s) => decodeBytes(s, 100),
+  );
+  // what's anchored: not moved, not taken away (the shuttle's ways: wider, lit, no more)
+  const touched = (prefix: string, s: Section<{ key: string }> | undefined, may: string[] = []) => {
+    for (const k of s?.remove ?? [])
+      if (ANCHORED[`${prefix}${k}`]) no(`Can't take away ${k}: ${ANCHORED[`${prefix}${k}`]}`);
+    for (const [k, c] of Object.entries(s?.change ?? {}))
+      if (ANCHORED[`${prefix}${k}`] && Object.keys(c ?? {}).some((f) => !may.includes(f)))
+        no(`Can't move ${k}: ${ANCHORED[`${prefix}${k}`]}`);
+  };
+  touched("way:", e.ways, ["w", "pave", "lamps"]);
+  touched("building:", e.buildings);
+  touched("", e.things);
+  // new keys: god mode's own (never one the generator makes), each once
+  const fresh = (key: unknown, _prefix: string, seen: Set<string>) => {
+    if (typeof key !== "string" || !/^god-[a-z0-9-]{1,40}$/.test(key)) {
+      no(`A new key "${String(key)}": "god-" and letters, digits, dashes`);
+      return false;
+    }
+    if (seen.has(key)) {
+      no(`${key}: twice`);
+      return false;
+    }
+    seen.add(key);
+    return true;
+  };
+  // ways
+  const wk = new Set<string>();
+  const ways = [...(e.ways?.add ?? []).map((d) => ({ ...d, ...e.ways?.change?.[d.key] }))];
+  if (ways.length > EDIT_LIMITS.ways) no(`At most ${EDIT_LIMITS.ways} new ways`);
+  for (const d of ways) {
+    if (!fresh(d.key, "way:", wk)) continue;
+    if (!WAY_KINDS.includes(d.kind)) no(`${d.key}: not a kind of way`);
+    if (!(d.w >= 2 && d.w <= 16)) no(`${d.key}: 2–16 m wide`);
+    if (!Array.isArray(d.pts) || d.pts.length < 2 || d.pts.length > EDIT_LIMITS.wayPts) {
+      no(`${d.key}: 2–${EDIT_LIMITS.wayPts} points`);
+      continue;
+    }
+    const line = dense(d.pts as P[], !!d.closed, 2);
+    const bad = line.find(([x, z]) => !inWorld(x, z) || anchoredHere(x, z));
+    if (bad)
+      no(
+        `${d.key}: through ground that stays as it is (${anchoredHere(bad[0], bad[1])?.why ?? "past the world's edge"})`,
+      );
+  }
+  // a generated way moved (its points): not onto what's anchored either
+  for (const [k, c] of Object.entries(e.ways?.change ?? {})) {
+    const base = BASE_WAYS.find((w) => w.key === k);
+    if (!base || !c?.pts) continue;
+    if (!Array.isArray(c.pts) || c.pts.length < 2 || c.pts.length > EDIT_LIMITS.wayPts) {
+      no(`${k}: 2–${EDIT_LIMITS.wayPts} points`);
+      continue;
+    }
+    const bad = dense(c.pts as P[], !!base.closed, 2).find(([x, z]) => !inWorld(x, z) || anchoredHere(x, z));
+    if (bad)
+      no(`${k}: through ground that stays as it is (${anchoredHere(bad[0], bad[1])?.why ?? "past the world's edge"})`);
+  }
+  // buildings
+  const bk = new Set<string>();
+  const adds = (e.buildings?.add ?? []).map((d) => ({ ...d, ...e.buildings?.change?.[d.key] }));
+  if (adds.length > EDIT_LIMITS.buildings) no(`At most ${EDIT_LIMITS.buildings} new buildings`);
+  const plots: Rect[] = BASE_BUILDINGS.filter((b) => !e.buildings?.remove?.includes(b.key)).map((b) => ({
+    ...b,
+    ...e.buildings?.change?.[b.key],
+  }));
+  for (const d of adds) {
+    if (!fresh(d.key, "building:", bk)) continue;
+    const p = PREFABS[d.kind];
+    if (!p) {
+      no(`${d.key}: not a kind god mode builds`);
+      continue;
+    }
+    const w = d.x1 - d.x0;
+    const h = d.z1 - d.z0;
+    if (![d.x0, d.z0, d.x1, d.z1].every(Number.isInteger)) no(`${d.key}: its corners on whole metres`);
+    if (!(w >= p.min && w <= p.max && h >= p.min && h <= p.max))
+      no(`${d.key}: a ${d.kind} is ${p.min}–${p.max} m a side`);
+    if (!(d.floors >= 1 && d.floors <= p.floors)) no(`${d.key}: a ${d.kind} has 1–${p.floors} floors`);
+    if (!["n", "s", "e", "w"].includes(d.face)) no(`${d.key}: its door's side`);
+    else if (d.enter && !NATIVE_FACES[d.kind]?.includes(d.face))
+      no(`${d.key}: one you walk into has its door ${NATIVE_FACES[d.kind]?.join(" or ")} (its inside's)`);
+    if (d.tint !== undefined && !(WALL_TINTS as readonly string[]).includes(d.tint))
+      no(`${d.key}: not one of the walls' colours`);
+    if (typeof d.name !== "string" || !d.name.trim() || d.name.length > 40) no(`${d.key}: a name, 40 at most`);
+    if (d.sign !== undefined && (typeof d.sign !== "string" || d.sign.length > 24))
+      no(`${d.key}: its sign, 24 at most`);
+    for (const [x, z] of [
+      [d.x0, d.z0],
+      [d.x1, d.z0],
+      [d.x0, d.z1],
+      [d.x1, d.z1],
+      [(d.x0 + d.x1) / 2, (d.z0 + d.z1) / 2],
+    ]) {
+      const a = anchoredHere(x, z);
+      if (a || !inWorld(x, z)) {
+        no(`${d.key}: on ground that stays as it is (${a?.why ?? "past the world's edge"})`);
+        break;
+      }
+    }
+    const over = plots.find((b) => b.x0 < d.x1 && d.x0 < b.x1 && b.z0 < d.z1 && d.z0 < b.z1);
+    if (over) no(`${d.key}: on top of ${(over as Building).name ?? "another building"}`);
+    const across = wayOver(d);
+    if (across) no(`${d.key}: on ${across}`);
+    plots.push(d);
+  }
+  // a generator's building moved: not onto what's anchored, nor onto another
+  for (const [k, c] of Object.entries(e.buildings?.change ?? {})) {
+    const base = BASE_BUILDINGS.find((b) => b.key === k);
+    if (!base || !c || !["x0", "z0", "x1", "z1"].some((f) => f in c)) continue;
+    const d = { ...base, ...c };
+    if ([d.x0, d.z0, d.x1, d.z1].some((v) => !Number.isInteger(v))) no(`${k}: its corners on whole metres`);
+    const hit = [
+      [d.x0, d.z0],
+      [d.x1, d.z1],
+      [(d.x0 + d.x1) / 2, (d.z0 + d.z1) / 2],
+    ].find(([x, z]) => anchoredHere(x, z) || !inWorld(x, z));
+    if (hit) no(`${k}: moved onto ground that stays as it is`);
+    const over = plots.find(
+      (b) => b !== d && (b as Building).key !== k && b.x0 < d.x1 && d.x0 < b.x1 && b.z0 < d.z1 && d.z0 < b.z1,
+    );
+    if (over) no(`${k}: on top of ${(over as Building).name ?? "another building"}`);
+  }
+  // things
+  const tk = new Set<string>();
+  const things = (e.things?.add ?? []).map((d) => ({ ...d, ...e.things?.change?.[d.key] }));
+  if (things.length > EDIT_LIMITS.things) no(`At most ${EDIT_LIMITS.things} new things`);
+  for (const d of things) {
+    if (!fresh(d.key, "", tk)) continue;
+    if (!THING_KINDS.has(d.kind)) no(`${d.key}: not a kind of thing`);
+    if (!inWorld(d.x, d.z) || anchoredHere(d.x, d.z)) no(`${d.key}: on ground that stays as it is`);
+    if (![d.x, d.z, d.ry].every(Number.isFinite)) no(`${d.key}: where it is, which way`);
+    if (d.s !== undefined && !(d.kind === "boulder" || d.kind === "planter"))
+      no(`${d.key}: only a boulder or a planter is sized`);
+    if (d.s !== undefined && !(d.s >= THING_SIZE.min && d.s <= THING_SIZE.max))
+      no(`${d.key}: ${THING_SIZE.min}–${THING_SIZE.max} times its size`);
+    if (d.text !== undefined && (d.kind !== "sign" || typeof d.text !== "string" || d.text.length > SIGN_TEXT))
+      no(`${d.key}: a sign's words, ${SIGN_TEXT} at most`);
+    if (d.kind === "fence") {
+      const ok =
+        Array.isArray(d.pts) &&
+        d.pts.length >= 2 &&
+        d.pts.length <= EDIT_LIMITS.wayPts &&
+        d.pts.every((p, i, all) => i === 0 || Math.hypot(p[0] - all[i - 1][0], p[1] - all[i - 1][1]) <= FENCE_RUN);
+      if (!ok) no(`${d.key}: a fence's line: 2–${EDIT_LIMITS.wayPts} points, each run ${FENCE_RUN} m at most`);
+      else if (fenceLine(d.pts as P[]).some(([x, z]) => !inWorld(x, z) || anchoredHere(x, z)))
+        no(`${d.key}: through ground that stays as it is`);
+    } else if (d.pts !== undefined) no(`${d.key}: only a fence has a line`);
+  }
+  // a generator's thing moved: not onto what's anchored either
+  for (const [k, c] of Object.entries(e.things?.change ?? {}))
+    if (!e.things?.add?.some((d) => d.key === k) && c && (c.x !== undefined || c.z !== undefined)) {
+      const x = c.x ?? 0;
+      const z = c.z ?? 0;
+      if (!inWorld(x, z) || anchoredHere(x, z)) no(`${k}: moved onto ground that stays as it is`);
+    }
+  return out;
+}

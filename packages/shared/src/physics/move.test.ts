@@ -406,3 +406,29 @@ test("one building: a flier stops at the ceiling; through walls, up through it o
   assert.equal(floorAt(map, 2, { x: -3, y: 10 }, 0.5)?.level, 0, "out through a wall up a floor: outdoors");
   assert.equal(floorAt(map, 0, g, elevOf(2) + 0.3)?.level, 2, "up in the building: that floor");
 });
+
+test("on land the world hasn't built yet (just teleported far): the grid's way, standing, not falling", async () => {
+  const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 8 }));
+  worlds.push(world);
+  // (a floor 10 a side; past it the land, 2 up, everywhere — and none of it in Jolt's world)
+  const grid = new Grid(10, 10);
+  grid.walk.fill(1);
+  grid.top.fill(0);
+  grid.outside = { walkable: () => true, height: () => 2 };
+  const collider = new JoltCollider(world, grid, FRAME);
+  const mover = new CharacterMover(
+    world,
+    () => FRAME,
+    undefined,
+    (x, y) => grid.onLand(x, y),
+  );
+  const env: MoveEnv = { grid: collider, mover, footing: () => "floor" };
+  assert.equal(mover.ready(50, 5), false);
+  const b = newBody(50, 5);
+  b.z = 2;
+  run(b, env, 1, () => NO_INPUT);
+  assert.ok(Math.abs(b.z - 2) < 0.05, `stood at ${b.z}`);
+  // and walked on it, at its height
+  run(b, env, 0.5, () => go());
+  assert.ok(b.x > 50.5 && Math.abs(b.z - 2) < 0.05, `walked to ${b.x}, ${b.z}`);
+});

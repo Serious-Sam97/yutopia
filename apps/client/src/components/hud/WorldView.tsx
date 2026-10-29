@@ -35,6 +35,8 @@ import { Rituals } from "./Rituals";
 import { ScreenTray } from "./Screens";
 import { TopBar } from "./TopBar";
 
+// God mode's HUD (docs/plan/53-the-god-mode.md): an admin's, loaded the first time they go in
+const GodHud = dynamic(() => import("./god/GodHud").then((m) => m.GodHud), { ssr: false });
 // loaded the first time someone builds
 const BuildMode = dynamic(() => import("./build/BuildMode").then((m) => m.BuildMode), { ssr: false });
 // chat · people · room: loaded the first time the panel opens
@@ -61,8 +63,11 @@ export function WorldView({ to }: { to?: string | null }) {
   const host = useRef<HTMLDivElement>(null);
   const [ctrl, setCtrl] = useState<WorldController | null>(null);
   const phase = useHud((s) => s.phase);
-  // build mode takes over the screen (its own top bar, panels and bottom bar)
-  const building = useHud((s) => s.build.on && s.canBuild);
+  // build mode takes over the screen (its own top bar, panels and bottom bar); god mode too, on
+  // foot in its draft a strip of its own over a bare world
+  const god = useHud((s) => s.god.on);
+  const godWalking = useHud((s) => s.god.on && s.god.walking);
+  const building = useHud((s) => (s.build.on && s.canBuild) || s.god.on);
   const admin = useHud((s) => s.isAdmin);
   const side = useHud((s) => s.side);
   // the phone's camera: the screen is the viewfinder, the HUD steps aside
@@ -132,7 +137,7 @@ export function WorldView({ to }: { to?: string | null }) {
         <div ref={host} className="absolute inset-0" />
         <VideoBubbles />
         <div className="pointer-events-none absolute inset-0" style={camera ? { display: "none" } : undefined}>
-          {!building && <TopBar />}
+          {(!building || godWalking) && <TopBar />}
           {!building && <Rituals />}
           {!building && side && <SidePanel />}
           <PersonCard />
@@ -148,7 +153,8 @@ export function WorldView({ to }: { to?: string | null }) {
           {!building && <ActionQueueBar />}
           {!building && <PetOverlays />}
           {!building && <ScreenTray />}
-          {building && <BuildMode />}
+          {building && !god && <BuildMode />}
+          {god && <GodHud />}
           {!racing && <Minimap />}
           {!building && !racing && <Dock />}
           {admin && !building && <AdminHud />}

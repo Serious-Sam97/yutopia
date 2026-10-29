@@ -6,6 +6,7 @@ use App\Http\Controllers\BiosController;
 use App\Http\Controllers\DarkController;
 use App\Http\Controllers\E2eController;
 use App\Http\Controllers\GamesController;
+use App\Http\Controllers\GroundsController;
 use App\Http\Controllers\InternalController;
 use App\Http\Controllers\InviteController;
 use App\Http\Controllers\PerfController;
@@ -66,6 +67,9 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('/saves/{game}/{kind}', [GamesController::class, 'saveFile'])->whereIn('kind', ['state', 'sram']);
     Route::post('/saves/{game}', [GamesController::class, 'putSave'])->middleware('throttle:60,1,saves');
 
+    // god mode's edits to the Grounds as published (docs/plan/53-the-god-mode.md): everyone in lays them
+    Route::get('/world/edits', [GroundsController::class, 'published']);
+
     // the e2e suite's fixtures (YUTOPIA_E2E=1 only)
     Route::post('/e2e/world', [E2eController::class, 'world']);
 
@@ -81,6 +85,14 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('/members', [AdminController::class, 'members']);
         Route::patch('/members/{user}', [AdminController::class, 'update'])->whereNumber('user');
         Route::get('/log', [AdminController::class, 'log']);
+        // god mode (docs/plan/53-the-god-mode.md): my drafts (by name: plan 55), the history
+        Route::get('/grounds/drafts', [GroundsController::class, 'drafts']);
+        Route::post('/grounds/drafts', [GroundsController::class, 'createDraft'])->middleware('throttle:30,1,grounds-draft-new');
+        Route::get('/grounds/drafts/{id}', [GroundsController::class, 'draft'])->whereNumber('id');
+        Route::put('/grounds/drafts/{id}', [GroundsController::class, 'putDraft'])->whereNumber('id')->middleware('throttle:120,1,grounds-draft');
+        Route::delete('/grounds/drafts/{id}', [GroundsController::class, 'deleteDraft'])->whereNumber('id');
+        Route::get('/grounds/revisions', [GroundsController::class, 'revisions']);
+        Route::get('/grounds/revisions/{rev}', [GroundsController::class, 'revision'])->whereNumber('rev');
     });
 });
 
@@ -135,6 +147,10 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::put('/world/playlists', [InternalController::class, 'playlists']);
     // the Kart Park's record (docs/plan/46-the-karts.md): best lap, the last races, wins
     Route::put('/world/karts', [InternalController::class, 'karts']);
+    // god mode (docs/plan/53-the-god-mode.md): an admin's draft (by its id), a revision, the next one
+    Route::get('/grounds/drafts/{id}', [GroundsController::class, 'internalDraft'])->whereNumber('id');
+    Route::get('/grounds/revisions/{rev}', [GroundsController::class, 'internalRevision'])->whereNumber('rev');
+    Route::post('/grounds/revisions', [GroundsController::class, 'publish']);
     // the dark (docs/plan/30-the-dark.md): the Grounds' loot, someone's pockets
     Route::put('/world/loot', [DarkController::class, 'loot']);
     Route::get('/survivors/{userId}', [DarkController::class, 'survivor'])->whereNumber('userId');

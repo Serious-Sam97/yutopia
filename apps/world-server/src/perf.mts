@@ -5,12 +5,15 @@
 // stamina in play (docs/plan/30-the-dark.md D2): out of breath they jog, as the
 // client does, and say so.
 //   pnpm --filter @yutopia/world-server perf
+
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { ANIM, dirFromDelta, findPath, type Point, ROOM_NAME } from "@yutopia/shared";
 import { dayNests, dayOf, NESTS } from "@yutopia/shared/dark";
-import { heightAt, walkableTile } from "@yutopia/shared/grounds";
+import { CHUNK, checkEdits, GROUNDS, heightAt, SURFACES, walkableTile } from "@yutopia/shared/grounds";
+import { encodeBytes, encodeHeights, type GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { type Gait, MOVE, MV_WINDED, packMv, yawToByte } from "@yutopia/shared/move";
 import { FULL_VITALS, freshClock, stepVitals } from "@yutopia/shared/vitals";
-import { Client } from "colyseus.js";
+import { Client, type Room } from "colyseus.js";
 
 // DARK=1 (docs/plan/30-the-dark.md phase 4): 50 bots, 40 of them out on the pond at night,
 // the shadowed up to their 40 (brought out quickly); the bytes one outside and one inside
@@ -23,6 +26,14 @@ if (DARK) process.env.YUTOPIA_DARK_FAST = "1";
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET ??= "perf";
 process.env.YUTOPIA_INTERNAL_SECRET ??= "perf";
+// GOD=1 (docs/plan/53-the-god-mode.md, phase 11): a third of the way in, an admin publishes ~4 MB
+// of edits (the land lifted and painted over ~300 chunks of the woods, away from everyone) and,
+// once every bot has it, rolls it back: both revisions reach every bot, nobody's put back, and the
+// server's own work on each (checked against the rule book and laid: the handler's time, as
+// metered) stays under GOD_MS. (The event loop's longest stall is shown too, not held: the bots
+// share this process.)
+const GOD = process.env.GOD === "1";
+const GOD_MS = 200;
 const BOTS = Number(process.env.BOTS ?? (DARK || DAY ? 50 : 60));
 const SECONDS = Number(process.env.SECONDS ?? 15);
 const BUDGET_MS = 4;
@@ -55,6 +66,7 @@ function by(n: { x: number; z: number }): { x: number; y: number } | null {
   }
   return null;
 }
+const rooms: Room[] = [];
 let winded = 0; // times an outdoor bot ran out of breath
 let awake = 0; // bots struck down (DARK)
 
@@ -75,6 +87,7 @@ for (let i = 0; i < BOTS; i++) {
     // (the ones out on the land: builders, to be put there — bots can't teleport)
     token: outside(i) ? `dev:${800000 + i}:B${i}:member,builder,admin` : `bot:${800000 + i}:B${i}`,
   });
+  rooms.push(room);
   for (const t of [
     "hear",
     "chat",
@@ -276,6 +289,54 @@ for (let i = 0; i < PETS; i += 3) {
   await new Promise((r) => setTimeout(r, 200));
   await owner.leave(true);
 }
+// GOD: the edits (lifted 1.5 m at most in long waves, painted in bands), chunk by chunk where the
+// rule book takes them and 40 m clear of the pond's laps, till they're ~4 MB
+const N = CHUNK * 2 + 1;
+const big: GroundsEdits = { rev: 0, height: {}, paint: {} };
+let bigBytes = 0;
+if (GOD) {
+  const near = (cx: number, cz: number) =>
+    cx * CHUNK < -200 + 40 && (cx + 1) * CHUNK > -280 - 40 && cz * CHUNK < -48 + 40 && (cz + 1) * CHUNK > -72 - 40;
+  for (let cz = Math.ceil(GROUNDS.z0 / CHUNK); cz * CHUNK < GROUNDS.z1 && bigBytes < 4e6; cz++)
+    for (let cx = Math.ceil(GROUNDS.x0 / CHUNK); cx * CHUNK < GROUNDS.x1 && bigBytes < 4e6; cx++) {
+      if (near(cx, cz)) continue;
+      const h = new Int16Array(N * N);
+      for (let i = 0; i < N * N; i++) {
+        const x = cx * CHUNK + (i % N) * 0.5;
+        const z = cz * CHUNK + Math.floor(i / N) * 0.5;
+        h[i] = Math.round(150 * Math.sin(x / 23) * Math.cos(z / 31)) || 1;
+      }
+      const pt = new Uint8Array(CHUNK * CHUNK);
+      for (let i = 0; i < pt.length; i++) pt[i] = 1 + (Math.floor(((i % CHUNK) + cx * CHUNK) / 6) % SURFACES.length);
+      const k = `${cx},${cz}`;
+      const hs = encodeHeights(h);
+      const ps = encodeBytes(pt);
+      if (checkEdits({ rev: 0, height: { [k]: hs }, paint: { [k]: ps } }).length) continue;
+      (big.height as Record<string, string>)[k] = hs;
+      (big.paint as Record<string, string>)[k] = ps;
+      // (as JSON: the two strings, their keys quoted, a colon and a comma each)
+      bigBytes += hs.length + ps.length + 2 * (k.length + 4);
+    }
+  bigBytes = JSON.stringify(big).length;
+  const no = checkEdits(big);
+  if (no.length) throw new Error(`the edits refused: ${no.slice(0, 3).join("; ")}`);
+}
+const god = GOD
+  ? await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 1,
+      token: "dev:899999:God:member,builder,admin",
+    })
+  : null;
+const godSaid: string[] = [];
+god?.onMessage("*", (t) => godSaid.push(String(t)));
+const godRun = { publish: NaN, rollback: NaN, ok: !GOD };
+const everyoneAt = async (rev: number, t0: number) => {
+  while (!rooms.every((r) => r.state.groundsRev === rev)) {
+    if (performance.now() - t0 > 60_000) throw new Error(`not every bot got revision ${rev}`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return performance.now() - t0;
+};
 bytes.out = 0;
 bytes.in = 0;
 let shadowsMax = 0;
@@ -294,10 +355,30 @@ const handled = (text: string) => {
 };
 await fetch(`http://localhost:${PORT}/metrics`);
 const cpu0 = process.cpuUsage();
-await new Promise((r) => setTimeout(r, SECONDS * 1000));
+const stalls = monitorEventLoopDelay({ resolution: 5 });
+stalls.enable();
+if (god) {
+  const { offlineDrafts } = await import("./features/godmode.ts");
+  await new Promise((r) => setTimeout(r, (SECONDS * 1000) / 3));
+  const was = god.state.groundsRev as number;
+  offlineDrafts.set(899999, { userId: 899999, name: "perf", baseRev: was, data: { ...big, rev: was } });
+  let t0 = performance.now();
+  god.send("god:publish", { draftId: 899999, note: "perf" });
+  godRun.publish = await everyoneAt(was + 1, t0);
+  t0 = performance.now();
+  god.send("god:rollback", { rev: was });
+  godRun.rollback = await everyoneAt(was + 2, t0);
+  godRun.ok = !godSaid.includes("god:refused");
+  await new Promise((r) => setTimeout(r, (SECONDS * 1000) / 3));
+} else await new Promise((r) => setTimeout(r, SECONDS * 1000));
+stalls.disable();
+const stallMax = stalls.max / 1e6;
 const cpu = process.cpuUsage(cpu0);
 const text = await (await fetch(`http://localhost:${PORT}/metrics`)).text();
 const after = handled(text);
+const godMs = (t: string) =>
+  Number(new RegExp(`^yutopia_message_ms_max\\{type="god:${t}"\\} ([\\d.]+)$`, "m").exec(text)?.[1] ?? NaN);
+const godWork = { publish: godMs("publish"), rollback: godMs("rollback") };
 const avg = Number(/yutopia_tick_ms_avg ([\d.]+)/.exec(text)?.[1] ?? "NaN");
 const max = Number(/yutopia_tick_ms_max ([\d.]+)/.exec(text)?.[1] ?? "NaN");
 const cpuPct = ((cpu.user + cpu.system) / 1000 / (SECONDS * 1000)) * 100;
@@ -320,7 +401,19 @@ if (DARK)
   console.log(
     `[perf] the dark: ${shadowsMax} shadowed at most · received ${outKBs.toFixed(2)} KB/s outside, ${inKBs.toFixed(2)} KB/s inside (the shadowed's share outside: ${(outKBs - inKBs).toFixed(2)}) · ${awake} struck down`,
   );
+if (GOD)
+  console.log(
+    `[perf] god mode: ${(bigBytes / 1e6).toFixed(2)} MB over ${Object.keys(big.height ?? {}).length} chunks · the server's work on it ${godWork.publish.toFixed(0)} ms, on the roll back ${godWork.rollback.toFixed(0)} ms (held under ${GOD_MS}) · every bot had it in ${godRun.publish.toFixed(0)} ms, the roll back in ${godRun.rollback.toFixed(0)} ms · the event loop's longest stall ${stallMax.toFixed(0)} ms${godRun.ok ? "" : " · REFUSED"}`,
+  );
 for (const t of timers) clearInterval(t);
 await server.gracefullyShutdown(false);
 // (inside, nothing of the dark arrives: what it receives is the people; outside, the shadowed add theirs)
-process.exit(avg <= BUDGET_MS && snaps === 0 && (!DARK || outKBs - inKBs <= 6) ? 0 : 1);
+process.exit(
+  avg <= BUDGET_MS &&
+    snaps === 0 &&
+    (!DARK || outKBs - inKBs <= 6) &&
+    godRun.ok &&
+    (!GOD || Math.max(godWork.publish, godWork.rollback) <= GOD_MS)
+    ? 0
+    : 1,
+);

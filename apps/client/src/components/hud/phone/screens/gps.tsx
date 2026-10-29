@@ -5,7 +5,7 @@ import { gpsPlaces, type Place, type Route, routeOver, type Step } from "@yutopi
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Key, useTr } from "@/lib/i18n";
 import type { WorldController } from "@/world/controller";
-import { loadGrounds } from "@/world/grounds-load";
+import { layings, loadGrounds, onEditsLaid } from "@/world/grounds-load";
 import type { PlanData } from "@/world/grounds-plan-data";
 import { phone, usePhone } from "@/world/phone/store";
 import { useHud } from "@/world/store";
@@ -20,7 +20,7 @@ import { cx, Ic, PFace } from "../ui";
 
 type T = ReturnType<typeof useTr>;
 
-// ── the site plan, drawn once (world/grounds-plan.ts) ─────────────────────
+// ── the site plan, drawn once each time god mode's edits are laid (world/grounds-plan.ts) ──
 // (and a quarter-size copy: a map zoomed out, the small one in the corner,
 // draws from it — scaling the whole plan down every frame is slow)
 const PX = 2; // the plan's pixels per tile
@@ -33,10 +33,10 @@ interface Plan {
   full: HTMLCanvasElement;
   small: HTMLCanvasElement;
 }
-let plan: Promise<Plan> | null = null;
+let plan: { rev: number; p: Promise<Plan> } | null = null;
 // the plan's land and trees worked out in a worker: on the main thread they froze the world
 // for ~4 s the first time the map opened (docs/plan/38-the-lag.md). No worker: worked out here.
-function planInWorker(): Promise<PlanData | null> {
+function planInWorker(edits: unknown): Promise<PlanData | null> {
   return new Promise((done) => {
     let w: Worker;
     try {
@@ -52,12 +52,15 @@ function planInWorker(): Promise<PlanData | null> {
       w.terminate();
       done(null);
     };
-    w.postMessage(null);
+    w.postMessage(edits);
   });
 }
 function sitePlan(): Promise<Plan> {
-  plan ??= Promise.all([import("@/world/grounds-plan"), loadGrounds(), planInWorker()]).then(
-    ([{ drawSitePlan }, g, data]) => {
+  if (plan && plan.rev === layings()) return plan.p;
+  const rev = layings();
+  const p = loadGrounds()
+    .then((g) => Promise.all([import("@/world/grounds-plan"), g, planInWorker(g.editsNow())]))
+    .then(([{ drawSitePlan }, g, data]) => {
       X0 = g.GROUNDS.x0;
       Z0 = g.GROUNDS.z0;
       const full = document.createElement("canvas");
@@ -67,17 +70,25 @@ function sitePlan(): Promise<Plan> {
       small.height = Math.ceil(full.height / 4);
       small.getContext("2d")?.drawImage(full, 0, 0, small.width, small.height);
       return { full, small };
-    },
-  );
-  return plan;
+    });
+  plan = { rev, p };
+  return p;
 }
 function usePlan(): Plan | null {
   const [c, setC] = useState<Plan | null>(null);
   useEffect(() => {
     let live = true;
-    void sitePlan().then((x) => live && setC(x));
+    // (again once a new revision's laid: the old one shown till it's drawn)
+    const draw = () => {
+      const p = sitePlan();
+      // (a revision since: that one's drawn instead)
+      void p.then((x) => live && plan?.p === p && setC(x));
+    };
+    draw();
+    const off = onEditsLaid(draw);
     return () => {
       live = false;
+      off();
     };
   }, []);
   return c;

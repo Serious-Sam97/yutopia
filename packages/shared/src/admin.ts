@@ -60,5 +60,9 @@ export const LOG_KINDS = [
   "shuttle",
   "dark",
   "invite",
+  // god mode (docs/plan/53-the-god-mode.md): a publish, a roll back, in and out
+  "publish",
+  "rollback",
+  "god",
 ] as const;
 export type LogKind = (typeof LOG_KINDS)[number];

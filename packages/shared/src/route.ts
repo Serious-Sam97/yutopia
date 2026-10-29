@@ -16,6 +16,15 @@ function g(): Grounds {
   if (!G) throw new Error("route.ts: routeOver(grounds) first");
   return G;
 }
+// (god mode's edits laid since: the ways and buildings changed, so the graph and the places go)
+let laid = 0;
+function fresh() {
+  if (G && G.editsVersion !== laid) {
+    laid = G.editsVersion;
+    nodes = null;
+    places = null;
+  }
+}
 
 // The GPS (docs/plan/37-the-gps.md § 4): a route over the Grounds' ways — on
 // foot along every one of them, by car along the driveway, the road and the
@@ -71,6 +80,7 @@ interface Node {
 let nodes: Node[] | null = null;
 
 function graph(): Node[] {
+  fresh();
   if (nodes) return nodes;
   const ns: Node[] = [];
   const add = (p: P, way: number) => ns.push({ p, way, edges: [] }) - 1;
@@ -405,6 +415,7 @@ export function landmarks(): { key: string; name: string; p: P }[] {
 let places: Place[] | null = null;
 /** Everywhere the GPS can find: the buildings (one of each name), the ways, the landmarks. */
 export function gpsPlaces(extra?: { key: string; name: string; p: P }[]): Place[] {
+  fresh();
   if (places && !extra) return places;
   const out: Place[] = [];
   const seen = new Set<string>();

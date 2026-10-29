@@ -4,6 +4,7 @@ import type { Social } from "./actions.ts";
 import type { AvatarLayers } from "./avatar";
 import type { CarWire } from "./car/net.ts";
 import type { LootItem } from "./dark/loot.ts";
+import type { GroundsEdits } from "./grounds-edits.ts";
 import type { Inventory } from "./inventory.ts";
 import type { JumpKind } from "./jump.ts";
 import type { KartWire } from "./kart/net.ts";
@@ -227,6 +228,15 @@ export interface ClientMessages {
   "mod:freeze": { userId: number; minutes: number }; // 0: free again
   // a line to everyone in (a toast)
   "mod:notice": { text: string; tone?: "info" | "warn" };
+  // god mode (docs/plan/53-the-god-mode.md), admins only: my draft (the API's) published, the
+  // Grounds rolled back to an older revision
+  /** god mode: in (the body held, marked "building"), out; walking the draft (on foot again) */
+  "god:enter": Record<string, never>;
+  "god:leave": Record<string, never>;
+  "god:walk": { on: boolean };
+  /** an admin's draft published, by its id (docs/plan/55-the-drafts.md) */
+  "god:publish": { draftId: number; note?: string };
+  "god:rollback": { rev: number };
   // something in a hand (shared held.ts) or the pockets (shared inventory.ts): mine or someone's;
   // `drop`: on the ground where I stand, for anyone
   "mod:give": { item: string; n?: number; userId?: number; drop?: boolean };
@@ -449,6 +459,11 @@ export interface ClientMessages {
 
 // server → client
 export interface ServerMessages {
+  // god mode (docs/plan/53-the-god-mode.md): published as revision `rev`; refused and why; the
+  // edits laid (offline only: online, every client fetches them from the API)
+  "god:published": { rev: number };
+  "god:refused": { reason: string; problems: string[] };
+  "god:edits": GroundsEdits;
   snap: { x: number; y: number; z?: number; level?: number };
   // my car put back where the server has it (a state it couldn't believe)
   "car:snap": CarWire & { id: string };

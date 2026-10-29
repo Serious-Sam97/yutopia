@@ -1,5 +1,8 @@
 "use client";
 
+import type { BuildingKind, WayKind } from "@yutopia/shared/grounds";
+import type { LandMode, Paint, TreePick } from "@yutopia/shared/grounds-brush";
+import type { ThingKind } from "@yutopia/shared/grounds-edits";
 import type { BattleEvent, Needs, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
 import { useRef, useSyncExternalStore } from "react";
 import type { Setup } from "@/lib/api";
@@ -179,6 +182,114 @@ export interface GameView {
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
 export type PaintMode = "line" | "box" | "fill" | "erase";
+/** God mode's tools (the bottom bar): Select, then each kind of edit (phases 6–9 of plan 53). */
+export const GOD_TOOLS = ["select", "land", "paint", "roads", "nature", "things", "buildings"] as const;
+export type GodTool = (typeof GOD_TOOLS)[number];
+/** The tools built so far (the rest: phases 7–9 of plan 53). */
+export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
+  "select",
+  "land",
+  "paint",
+  "roads",
+  "nature",
+  "things",
+  "buildings",
+]);
+/** One of my drafts, as the list has it (the API's row: no data). */
+export interface GodDraftRow {
+  id: number;
+  name: string;
+  baseRev: number;
+  size: number;
+  changes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface GodHud {
+  on: boolean;
+  /** on foot in the draft (Walk it) */
+  walking: boolean;
+  /** the camera's metres over the ground, and the way it looks (radians: east 0, south π/2) */
+  up: number;
+  yaw: number;
+  /** the place under the camera */
+  place: string;
+  tool: GodTool;
+  /** what the Select tool has picked: a thing, a building or a way (its tool's `sel` says which) */
+  picked: "thing" | "building" | "way" | null;
+  /** the grid the tools snap to (m; 0: off) */
+  snap: 0 | 1 | 4;
+  /** the land under the pointer (the Grounds' coords, its height, what's on it; what they were
+   *  published, where the draft changed them) */
+  pointer: { x: number; z: number; h: number; surface: string; was: number | null; wasSurface: string | null } | null;
+  /** the land brush (phase 6): what it does, how big (m across), how strong (1–100) */
+  land: { mode: LandMode; size: number; strength: number };
+  /** the paint brush: what it puts down ("generated": as made), how big */
+  paint: { surface: Paint; size: number };
+  /** what the draft does to what stands on the land (a plot tipped, a way made steep) */
+  issues: string[];
+  /** the roads tool (phase 7): drawing a new way, moving a way's points, taking one away; a new
+   *  way's kind, width, pavements and lamps (or the picked way's) */
+  roads: {
+    mode: "draw" | "edit" | "remove";
+    kind: WayKind;
+    w: number;
+    pave: boolean;
+    lamps: boolean;
+    /** the way being drawn: its points so far, how long, what's in its way, what it joins */
+    drawing: { n: number; m: number; blocked: string | null; joins: string | null } | null;
+    /** the way picked (Edit points), its name, why it can't be moved (the shuttle's) */
+    sel: { key: string; name: string; locked: string | null } | null;
+  };
+  /** the nature tool (phase 8): the forest brush (plant, clear, as made), one tree, one rock */
+  nature: { mode: "plant" | "clear" | "generated" | "tree" | "rock"; pick: TreePick; thick: number; size: number };
+  /** the things tool (phase 8): putting one down (or a fence along a line), the kind, how it's
+   *  turned (°), sized, what a sign says; the thing picked, what's in the way, a fence drawn */
+  things: {
+    mode: "place" | "line";
+    kind: ThingKind;
+    ry: number;
+    s: number;
+    text: string;
+    sel: { key: string; kind: ThingKind; locked: string | null } | null;
+    blocked: string | null;
+    drawing: { n: number; m: number } | null;
+  };
+  /** the buildings tool (phase 9): the prefab to put down (or the picked one's): its kind, size
+   *  (m), floors, door's side, walls' colour (null: its kind's), whether you walk in, its sign */
+  buildings: {
+    kind: BuildingKind;
+    w: number;
+    d: number;
+    floors: number;
+    face: "n" | "e" | "s" | "w";
+    tint: string | null;
+    enter: boolean;
+    name: string;
+    sign: string;
+    sel: { key: string; locked: string | null } | null;
+    blocked: string | null;
+  };
+  /** the draft open (docs/plan/55-the-drafts.md): its id (null: none yet — the first change asks
+   *  its name) and name */
+  draft: { id: number | null; name: string };
+  /** a new draft's name asked (the dialog): the first change's, or the list's New draft */
+  naming: { name: string; why: "first" | "new" } | null;
+  /** my drafts: the list shown or not, the rows (null: not fetched), how many I may keep */
+  drafts: { open: boolean; list: GodDraftRow[] | null; max: number; failed: boolean };
+  /** what the draft changes against what's published */
+  changes: number;
+  save: "idle" | "saving" | "saved" | "failed";
+  undo: number;
+  redo: number;
+  /** the revision published (and the draft made on it) */
+  rev: number;
+  /** the draft fetched */
+  loaded: boolean;
+  /** the publish dialog: open, sending, or refused with why */
+  publish: { state: "open" | "sending" | "refused"; reason?: string; problems?: string[] } | null;
+}
+
 // The Walls tool, Sims-style (docs/plan/11-wall-building.md): build walls and
 // openings, paint wall faces, paint floors, or select walls (the inspector).
 export type WallMode = "build" | "paint" | "floors" | "select";
@@ -297,6 +408,8 @@ export interface HudState {
     save: { state: "idle" | "saving" | "saved" | "failed" | "rejected"; at: number };
     setups: Setup[] | null; // my saved setups (null until loaded)
   };
+  /** God mode (docs/plan/53-the-god-mode.md): an admin building the open world (world/god) */
+  god: GodHud;
   mapVersion: number;
   // the building (shared levels.ts): the floor I'm on, and every floor there is
   floor: number;
@@ -401,6 +514,46 @@ const initial: HudState = {
     history: { undo: 0, redo: 0, undoLabel: null, redoLabel: null },
     save: { state: "idle", at: 0 },
     setups: null,
+  },
+  god: {
+    on: false,
+    walking: false,
+    up: 80,
+    yaw: 0,
+    place: "",
+    tool: "select",
+    picked: null,
+    snap: 4,
+    pointer: null,
+    land: { mode: "raise", size: 24, strength: 40 },
+    paint: { surface: "path", size: 4 },
+    issues: [],
+    roads: { mode: "draw", kind: "road", w: 7, pave: false, lamps: true, drawing: null, sel: null },
+    nature: { mode: "plant", pick: "mix", thick: 55, size: 24 },
+    things: { mode: "place", kind: "bench", ry: 0, s: 1, text: "", sel: null, blocked: null, drawing: null },
+    buildings: {
+      kind: "house",
+      w: 12,
+      d: 10,
+      floors: 2,
+      face: "e",
+      tint: null,
+      enter: false,
+      name: "",
+      sign: "",
+      sel: null,
+      blocked: null,
+    },
+    draft: { id: null, name: "" },
+    naming: null,
+    drafts: { open: false, list: null, max: 20, failed: false },
+    changes: 0,
+    save: "idle",
+    undo: 0,
+    redo: 0,
+    rev: 0,
+    loaded: false,
+    publish: null,
   },
   mapVersion: 0,
   floor: 0,

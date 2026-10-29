@@ -16,6 +16,7 @@ const W = {
   powers: ["Powers", "Poderes"],
   roles: ["Roles", "Papéis"],
   invites: ["Invites", "Convites"],
+  god: ["God mode", "Modo deus"],
   more: ["Older", "Mais antigos"],
   none: ["Nothing yet.", "Nada ainda."],
   failed: ["Couldn't load the log.", "Não deu para carregar o registro."],
@@ -44,6 +45,9 @@ const W = {
   k_shuttle: ["called the shuttle {d}", "chamou o ônibus {d}"],
   k_dark: ["set the dark to {d}", "pôs o escuro em {d}"],
   k_invite: ["made an invite {d}", "criou um convite {d}"],
+  k_publish: ["published the open world's {d}", "publicou o mundo aberto: {d}"],
+  k_rollback: ["rolled the open world back {d}", "voltou o mundo aberto {d}"],
+  k_god: ["god mode: {d}", "modo deus: {d}"],
 } as const;
 type Word = keyof typeof W;
 
@@ -54,6 +58,7 @@ const GROUPS: Record<string, string[]> = {
   powers: ["power"],
   roles: ["admin", "unadmin"],
   invites: ["invite"],
+  god: ["publish", "rollback", "god"],
 };
 const ICON: Record<string, IconName> = {
   mute: "micOff",
@@ -80,6 +85,9 @@ const ICON: Record<string, IconName> = {
   shuttle: "home",
   dark: "screen",
   invite: "key",
+  publish: "publish",
+  rollback: "undo",
+  god: "globe",
 };
 
 export function Log() {

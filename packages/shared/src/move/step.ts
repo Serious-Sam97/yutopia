@@ -61,6 +61,8 @@ export type Collider = Pick<Grid, "fitsAt" | "groundAt" | "clear" | "onRamp" | "
  *  Jolt's character (shared/physics CharacterMover). True: it landed this step. */
 export interface Mover {
   step(b: Body, dt: number, stepUp: number, blocked?: (x: number, y: number) => boolean, fly?: boolean): boolean;
+  /** It can move the body at (x, y): its world has the ground there (else the grid's way) */
+  ready?(x: number, y: number): boolean;
 }
 
 export interface MoveEnv {
@@ -320,7 +322,10 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
 function settle(b: Body, env: MoveEnv, dt: number, stepUp: number, spec: MoveSpec, ev: StepEvents) {
   const falling = b.vz;
   let down: boolean;
-  if (env.mover) down = env.mover.step(b, dt, stepUp, env.blocked);
+  // (where the mover's world hasn't the land yet — just teleported far, the browser's chunks
+  // still being made — the grid's way: else nothing's under the body, it falls, and the land
+  // made over it a moment later has it under the ground for good)
+  if (env.mover && (env.mover.ready?.(b.x, b.y) ?? true)) down = env.mover.step(b, dt, stepUp, env.blocked);
   else {
     move(b, env.grid, dt, stepUp, env.blocked);
     stepDown(b, env.grid, spec);

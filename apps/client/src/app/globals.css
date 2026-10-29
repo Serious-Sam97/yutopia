@@ -57,6 +57,20 @@
   --on-amber: #1a1a1e; /* text on a lit key */
   --faceplate-dim: #6b5a44;
   --good: #8aa04a;
+  /* god mode's paint swatches (docs/plan/53): the surfaces as the land draws them */
+  --swatch-snow: #f3f6f9;
+  --swatch-deep: #dfe8f1;
+  --swatch-path: #cdc6ba;
+  --swatch-asphalt: #484d54;
+  --swatch-walk: #c4c4c0;
+  --swatch-ice: #b2c5d3;
+  --swatch-rock: #969ca2;
+  /* god mode's walls' colours (shared grounds.ts WALL_TINTS, in its order) */
+  --tint-1: #e8e1cf;
+  --tint-2: #9fb5a2;
+  --tint-3: #c9a27e;
+  --tint-4: #7a3b2e;
+  --tint-5: #d8dde0;
   --good-bright: #a9c25a;
   --good-glow: #a8e07a;
   --lcd-good: #d4e4a6;

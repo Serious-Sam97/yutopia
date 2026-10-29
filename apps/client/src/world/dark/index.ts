@@ -1,5 +1,5 @@
 import type { ServerMessages } from "@yutopia/shared";
-import { KIT_SPOT, LOCKER, LOOT, LOOT_REACH, type LootItem, lockerFront, SEARCH_MS } from "@yutopia/shared/dark";
+import { KIT_SPOT, LOCKER, LOOT_REACH, type LootItem, lockerFront, lootNow, SEARCH_MS } from "@yutopia/shared/dark";
 import { heightAt } from "@yutopia/shared/grounds";
 import {
   count,
@@ -557,7 +557,7 @@ class Dark implements DarkHooks {
     if (out && Number.isFinite(me.x)) {
       const bx = me.x + ox;
       const bz = me.y + oy;
-      for (const s of LOOT) {
+      for (const s of lootNow()) {
         const d = far(s.x - bx, s.z - bz, s.x - ox, s.z - oy);
         if (d <= bestD) {
           bestD = d;
@@ -699,6 +699,10 @@ class Dark implements DarkHooks {
     // (the phone out sits where the column is: the guns, the quick slots, the battery go under it)
     const phone = hud.get().phone;
     this.col.style.visibility = phone.open || phone.camera ? "hidden" : "";
+    // (god mode's camera over the land: none of it, till I'm on foot again — docs/plan/53)
+    const god = hud.get().god;
+    const gone = god.on && !god.walking ? "none" : "";
+    if (this.root.style.display !== gone) this.root.style.display = gone;
     if (this.toastUntil && now > this.toastUntil) {
       this.toastUntil = 0;
       this.toastEl.style.display = "none";

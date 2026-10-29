@@ -93,7 +93,8 @@ import { mixer } from "./audio";
 import type { BuildController } from "./build/controller";
 import { fanfare, machineSound, pianoNote, socialSound } from "./foley";
 import type { GameRoom } from "./games/room";
-import { loadGrounds } from "./grounds-load";
+import type { GodController } from "./god/controller";
+import { layEdits, loadGrounds, wantEdits } from "./grounds-load";
 import { jumps, loadJumps } from "./jumps-load";
 import { liftSound, loadLiftSounds, nearGain, stairStep } from "./lift-sound";
 import { Media } from "./media";
@@ -113,6 +114,8 @@ import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
 // biome-ignore lint/suspicious/noExplicitAny: decoded Colyseus schema objects
 type S = any;
 
+/** How long after the land changes my feet are kept on it (till the physics' ground is made). */
+const LAND_SHIFTED_MS = 6000;
 // map edits that act on a floor (the one I'm on, unless they say)
 const FLOOR_EDITS = new Set<string>([
   "map:paint",
@@ -582,6 +585,9 @@ export class WorldController {
     $(room.state).listen("mapVersion", () => {
       this.mapDirty = true;
     });
+    // god mode's edits to the Grounds (docs/plan/53-the-god-mode.md): the revision live, laid here
+    $(room.state).listen("groundsRev", (rev: number) => wantEdits(rev));
+    room.onMessage("god:edits", (e: ServerMessages["god:edits"]) => layEdits(e));
     model.setObjects([]);
     // every floor's things kept; the model has mine
     const putObj = (o: S) => {
@@ -877,6 +883,8 @@ export class WorldController {
   stop() {
     this.framePerf.dispose();
     this.stopped = true;
+    this.offLandShifted?.();
+    this.god?.dispose();
     this.walker?.dispose();
     this.build?.dispose();
     this.slots?.dispose();
@@ -1546,7 +1554,13 @@ export class WorldController {
       tp.setLiveFrom({ model, screens: this.screens, games: this.games, os: this.os });
       tp.setCars(this.slots?.cars() ?? []);
       tp.setTables(this.tables?.scene3d() ?? null);
-      tp.gameCam = this.cars?.camera() ?? this.photoCam() ?? this.tables?.gameCam() ?? this.liftCam(now) ?? null;
+      tp.gameCam =
+        this.god?.camera(this.godDt(now)) ??
+        this.cars?.camera() ??
+        this.photoCam() ??
+        this.tables?.gameCam() ??
+        this.liftCam(now) ??
+        null;
       if (this.liftsDirty) {
         this.liftsDirty = false;
         tp.setLifts(
@@ -1644,6 +1658,12 @@ export class WorldController {
     }
     // in a lift's car on the move: it carries me (the server too: world-server features/lifts.ts)
     if (this.liftCarry(performance.now())) return;
+    // the land changed under me (god mode's edits laid, the park's layout raced): till my body's
+    // ground is made again (tp/physics3d.ts: a second or so), never under the land — onto it, as
+    // the server sets me (docs/plan/53-the-god-mode.md)
+    if (performance.now() < this.landShifted) this.ontoLand();
+    // in god mode: my body stays where it stood (on foot again walking the draft)
+    if (this.god?.on && !this.god.walking) return;
     // my body (docs/plan/29-the-move.md): the movement core on its fixed step, under the keys,
     // the pad or a click-to-walk path (the input chunk: until it's here, I stand still)
     const w = this.walker;
@@ -2883,6 +2903,32 @@ export class WorldController {
     return this.model?.worldToClient(x, y, z) ?? { x: -9999, y: -9999 };
   }
 
+  // ── god mode (docs/plan/53-the-god-mode.md): its own chunk (world/god), an admin's ──
+  god: GodController | null = null;
+  private godLoading: Promise<GodController | null> | null = null;
+  private godAt = 0;
+  loadGod(): Promise<GodController | null> {
+    if (this.god) return Promise.resolve(this.god);
+    this.godLoading ??= import("./god/controller").then((m) => {
+      if (this.stopped || !hud.get().isAdmin) return null;
+      this.god = new m.GodController(this);
+      return this.god;
+    });
+    return this.godLoading;
+  }
+  /** In god mode, or out (an admin's: the world server refuses anyone else). */
+  async toggleGod(): Promise<void> {
+    if (!hud.get().isAdmin || !this.tp) return;
+    if (hud.get().build.on) hud.set((s) => ({ build: { ...s.build, on: false } }));
+    (await this.loadGod())?.toggle();
+  }
+  // (the god camera's step: the frame's own time)
+  private godDt(now: number): number {
+    const dt = this.godAt ? Math.min(0.1, (now - this.godAt) / 1000) : 0;
+    this.godAt = now;
+    return dt;
+  }
+
   // ── build mode: its own chunk (world/build), loaded when an owner opens it ──
   build: BuildController | null = null;
   private buildLoading: Promise<void> | null = null;
@@ -3461,6 +3507,11 @@ export class WorldController {
       return;
     }
     if (hud.get().panel.kind && e.key !== "Escape") return;
+    // god mode: its camera's keys, its own (on foot in the draft: Esc goes back up)
+    if (!hud.get().panel.kind && this.god?.key(e, true)) {
+      e.preventDefault();
+      return;
+    }
     // in a car: its controls (docs/plan/28-the-car.md, car/controls.ts)
     if (this.cars?.inCar() && !e.metaKey && !e.ctrlKey && this.cars.key(e, true)) {
       e.preventDefault();
@@ -3497,12 +3548,14 @@ export class WorldController {
     else if (key === "z") this.toggleLook();
     else if (key === "p" && !hud.get().build.on) void this.togglePhone();
     else if (key === "f" && !hud.get().build.on) this.toggleTorch();
+    else if (key === "o" && hud.get().isAdmin && !hud.get().build.on) void this.toggleGod();
     else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
     else if (key === "+" || key === "=") this.tp?.zoomBy(1 / 1.15);
     else if (key === "-") this.tp?.zoomBy(1.15);
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
+    if (this.god?.key(e, false)) return;
     this.walker?.controls.up(e.code);
     this.cars?.key(e, false);
   };
@@ -3521,6 +3574,10 @@ export class WorldController {
     // the land round the ground floor: the grid walks it once it's here
     void loadGrounds().then((G) => {
       this.G = G;
+      if (!this.stopped)
+        this.offLandShifted = G.onGroundsChanged(() => {
+          this.landShifted = performance.now() + LAND_SHIFTED_MS;
+        });
       setOutdoors(G.groundsOutdoors);
       setAreasBeyond(G.groundsAreaAt);
       this.rebuildGrid();
@@ -3577,6 +3634,15 @@ export class WorldController {
 
   // the Grounds (docs/plan/27), once loaded: what's underfoot out there, its sound
   private G: typeof import("@yutopia/shared/grounds") | null = null;
+  /** till when the land under me may have moved (`ontoLand`) */
+  private landShifted = 0;
+  private offLandShifted: (() => void) | null = null;
+  /** Under the land where I stand (on the ground floor, out on it): onto it. */
+  private ontoLand() {
+    if (this.level !== 0 || !this.grid.onLand(this.me.x, this.me.y)) return;
+    const g = this.grid.outside?.height(this.me.x, this.me.y);
+    if (g !== undefined && this.height.z < g - 0.05) this.height = { z: g, vz: 0, up: false };
+  }
   private landFloor(x = this.me.x, y = this.me.y): Floor {
     return this.life?.floorAt(x, y, this.map) ?? "asphalt";
   }

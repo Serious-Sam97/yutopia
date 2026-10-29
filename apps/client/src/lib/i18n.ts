@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
+import type { GodKey } from "./i18n-god";
 import type { PetKey } from "./i18n-pets";
 import type { PhoneKey } from "./i18n-phone";
 
@@ -160,6 +161,7 @@ const D = {
   close: ["Close", "Fechar"],
   knocking: ["is knocking", "está batendo"],
   letIn: ["Let in", "Deixar entrar"],
+  godBuilding: ["building", "construindo"],
   ignore: ["Ignore", "Ignorar"],
   devices: ["Devices", "Dispositivos"],
   microphone: ["Microphone", "Microfone"],
@@ -722,7 +724,7 @@ const D = {
   catPets: ["Pets", "Pets"],
 } as const;
 
-export type Key = keyof typeof D | PetKey | PhoneKey;
+export type Key = keyof typeof D | PetKey | PhoneKey | GodKey;
 
 // Strings that come with a lazy chunk (the pets'): added once it loads; until
 // then a key reads as itself. `tag` names the chunk (kept for the bundle budget).

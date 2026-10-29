@@ -1,4 +1,5 @@
 import {
+  editsVersion,
   groundsRng,
   KART_LAND,
   KART_TURN,
@@ -202,8 +203,14 @@ function strip(
 
 /** Per sample of `w`: is another way crossing it there (within that one's width, its pavements
  *  and `pad`)? Worked out once a way (it was asked per sample per strip: a 130 ms frame). */
+// (again once god mode's edits change the ways: docs/plan/53-the-god-mode.md)
 const crossings = new Map<string, boolean[]>();
+let crossingsOf = -1;
 function crossedAll(w: Way, pad: number, nearLine: (u: Way, x: number, z: number) => number): boolean[] {
+  if (crossingsOf !== editsVersion) {
+    crossings.clear();
+    crossingsOf = editsVersion;
+  }
   const k = `${w.key}|${pad}`;
   let c = crossings.get(k);
   if (!c) {

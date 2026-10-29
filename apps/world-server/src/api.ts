@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import type { Layout, WorldObjectDef } from "@yutopia/shared";
+import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import type { Inventory } from "@yutopia/shared/inventory";
 import type { PetOut, PetRecord } from "@yutopia/shared/pets";
 import { config } from "./config.ts";
@@ -55,6 +56,7 @@ export interface WorldInfo {
   playlists?: unknown; // the YouTube playlists played here (features/media.ts)
   loot?: unknown; // the Grounds' loot: spots, the night's budget, drops (features/survival.ts)
   karts?: unknown; // the Kart Park's record (features/karts.ts)
+  edits?: GroundsEdits; // god mode's edits to the Grounds as published (features/godmode.ts)
 }
 
 // A survivor (docs/plan/30-the-dark.md, phase 2): what they carry, their vitals
@@ -88,6 +90,22 @@ export const api = {
   putLayout: (layout: Layout) => call("PUT", "/world/layout", layout),
   putPlaylists: (playlists: unknown[]) => call("PUT", "/world/playlists", { playlists }),
   putKarts: (record: unknown) => call("PUT", "/world/karts", { record }),
+  // god mode (docs/plan/53-the-god-mode.md): an admin's draft (by its id: plan 55), a revision, the next one
+  groundsDraft: (id: number) =>
+    call<{ draft: { userId: number; name: string; baseRev: number; data: GroundsEdits } | null }>(
+      "GET",
+      `/grounds/drafts/${id}`,
+    ),
+  groundsRevision: (rev: number) =>
+    call<{ revision: { rev: number; data: GroundsEdits } }>("GET", `/grounds/revisions/${rev}`),
+  publishGrounds: (b: {
+    adminId: number;
+    data: GroundsEdits;
+    note?: string;
+    baseRev: number;
+    rollbackOf?: number | null;
+    draftId?: number;
+  }) => call<{ revision: { rev: number } }>("POST", "/grounds/revisions", b),
   putObject: (o: WorldObjectDef) => call<{ object: WorldObjectDef }>("PUT", "/objects", o),
   deleteObject: (uid: string) => call("DELETE", `/objects/${encodeURIComponent(uid)}`),
   // a cartridge someone uploaded (game room)

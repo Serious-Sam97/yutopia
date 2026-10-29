@@ -180,6 +180,18 @@ export function shots(): Record<string, Shot> {
   const d = on("driveway", [lamp.x, lamp.z], 16, 1.0);
   const r = on("ravine", [-262.6, -204], 15, 0);
   return {
+    // god mode's camera (docs/plan/53-the-god-mode.md, the mocks): anywhere from overhead, aimed
+    // with &cam=x,y,z&look=x,y,z (the y's over the ground there) and &fov= &radius= &haze=
+    god: {
+      hour: "day",
+      cam: [418, 90, -300],
+      look: [418, 0, -400],
+      fov: 50,
+      radius: 440,
+      haze: 0.3,
+      people: [],
+      snow: 0,
+    },
     "driveway-night": {
       hour: "night",
       cam: [d.bx, gy(d.bx, d.bz) + 2.3, d.bz],
@@ -1746,6 +1758,11 @@ export async function runShot(
   const { ShaderPass } = await import("three/addons/postprocessing/ShaderPass.js");
   const S = await import("@yutopia/shared/grounds");
   pondY = S.POND_LEVEL;
+  // god mode's buildings (docs/plan/53-the-god-mode.md, phase 9): every kind put down in the
+  // woods north-west, &prefabs=min (each at its smallest), max (its biggest, its most floors) or
+  // turn (between, their doors north and west) — to see each builder at any size
+  const pf = new URLSearchParams(location.search).get("prefabs");
+  if (pf) S.applyEdits({ rev: 1, buildings: { add: prefabSet(S, pf as "min" | "max" | "turn") } });
   const { Grounds3 } = await import("./grounds3d");
   const Themes = await import("../art/themes");
   const C = await import("../chars");
@@ -1765,6 +1782,13 @@ export async function runShot(
     eyes: q.has("eyes") ? Number(q.get("eyes")) : base.eyes,
     storm: q.has("storm") ? q.get("storm") === "1" : base.storm,
   };
+  const v3 = (k: string): V3 | undefined => {
+    const v = q.get(k)?.split(",").map(Number);
+    return v?.length === 3 && v.every(Number.isFinite) ? [v[0], gy(v[0], v[2]) + v[1], v[2]] : undefined;
+  };
+  shot.cam = v3("cam") ?? shot.cam;
+  shot.look = v3("look") ?? shot.look;
+  for (const k of ["fov", "radius", "haze"] as const) if (q.has(k)) shot[k] = Number(q.get(k));
   const pitch = shot.hour === "pitch";
   const eyes = shot.eyes ?? 0.6;
   if (shot.motors) shot.cars = [...(shot.cars ?? []), ...motorsShow()];
@@ -2434,4 +2458,35 @@ function inside(T3: THREE, scene: THREE_NS.Scene, _g: unknown) {
   for (const m of chair.children) m.castShadow = true;
   grp.add(chair);
   scene.add(grp);
+}
+
+/** God mode's buildings for the stills (`&prefabs=`): each kind in a cell 45 m a side, from
+ *  (−400, −580), four a row. */
+export function prefabSet(
+  S: typeof import("@yutopia/shared/grounds"),
+  how: "min" | "max" | "turn",
+): import("@yutopia/shared/grounds-edits").BuildingDef[] {
+  const kinds = Object.keys(S.PREFABS) as (keyof typeof S.PREFABS)[];
+  return kinds.map((kind, i) => {
+    const p = S.PREFABS[kind] as { min: number; max: number; floors: number };
+    const w = how === "min" ? p.min : how === "max" ? p.max : Math.round((p.min + p.max) / 2);
+    const d = how === "min" ? p.min : how === "max" ? Math.round((p.min + p.max) / 2) : p.min + 2;
+    const [sw, sd] = how === "turn" ? [d, w] : [w, d];
+    const cx = -400 + (i % 4) * 45 + 22;
+    const cz = -580 + Math.floor(i / 4) * 45 + 22;
+    const x0 = Math.round(cx - sw / 2);
+    const z0 = Math.round(cz - sd / 2);
+    return {
+      key: `god-shot-${kind}`,
+      kind,
+      name: `Test ${kind}`,
+      x0,
+      z0,
+      x1: x0 + sw,
+      z1: z0 + sd,
+      floors: how === "max" ? p.floors : 1,
+      face: how === "turn" ? (i % 2 ? "w" : "n") : how === "max" ? "e" : "s",
+      sign: kind === "shop" || kind === "bar" || kind === "diner" || kind === "hotel" ? "TEST" : undefined,
+    };
+  });
 }

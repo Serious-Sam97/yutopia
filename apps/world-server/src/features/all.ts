@@ -31,4 +31,5 @@ import "./dark.ts";
 import "./arms.ts";
 import "./perf.ts";
 import "./admin.ts";
+import "./godmode.ts";
 import "./physics.ts";

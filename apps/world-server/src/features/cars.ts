@@ -28,6 +28,7 @@ import { atPump, BUILDINGS, GROUNDS, heightAt, inBuilt, LOT, MOTORS } from "@yut
 import { BOARD_KIND, boardOfOwner, boardsOf, postOf } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
+import { onLandChanged } from "../land.ts";
 import { type Player, Vehicle } from "../schema.ts";
 import { fromSchema, toSchema, type WorldClient, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -941,7 +942,21 @@ registerFeature((room: WorldRoom) => {
 
   let towAt = Date.now() + 60_000;
   let sweepAt = 0;
+  // god mode's edits laid (docs/plan/53-the-god-mode.md): a car nobody's driving set down on the
+  // land where it changed
+  const offLand = onLandChanged((cs) => {
+    const dirty = new Set(cs.map(([x, z]) => `${x},${z}`));
+    for (const l of live.values()) {
+      const v = l.veh;
+      if (l.seats[0] || !dirty.has(`${Math.floor(v.x / 32)},${Math.floor(v.z / 32)}`)) continue;
+      v.y = heightAt(v.x, v.z) + l.spec.cog;
+    }
+  });
+
   return {
+    dispose() {
+      offLand();
+    },
     tick(dt, now) {
       if (!fleet) makeFleet();
       if (!homesMade) makeHomes();

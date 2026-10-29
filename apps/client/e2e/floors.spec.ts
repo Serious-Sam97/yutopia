@@ -147,7 +147,8 @@ test("the stairs by a click: up them from floor 3, down them again from 4", asyn
     .poll(() => page.evaluate(() => (window as any).__yutopia.path?.length ?? 0), { timeout: 10_000 })
     .toBe(0);
   const top = await state(page);
-  expect(Math.abs(top.y - (S.y + 0.5))).toBeLessThan(0.7);
+  // out on the landing (two tiles deep, v 0..2): where the way up ends, v 1.2 (shared stairsWayUp)
+  expect(Math.abs(top.y - (S.y + 1.2))).toBeLessThan(0.5);
   // from floor 4, a click on flight B down in the well: back to floor 3's landing
   await page.evaluate((p) => (window as any).__yutopia.engine.events.onTileClick(p.x + 1, p.y + 2.5), S);
   await expect.poll(async () => (await state(page)).level, { timeout: 20_000 }).toBe(3);

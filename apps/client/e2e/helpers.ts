@@ -58,6 +58,34 @@ async function login(who: { email: string; password: string }): Promise<string> 
   return (await res.json()).token;
 }
 
+// God mode's drafts (docs/plan/55-the-drafts.md): an admin's all deleted (a spec's start and end:
+// the dev world's shared), or one made by its name on what's live — the newest, so god mode opens
+// it going in (no name asked by the first change).
+const draftCall = (tok: string, method: string, path: string, body?: unknown) =>
+  fetch(`${API}/api/admin/grounds${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${tok}`, Accept: "application/json", "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+export async function clearDrafts(tok: string): Promise<void> {
+  const r = await (await draftCall(tok, "GET", "/drafts")).json();
+  for (const d of r.drafts ?? []) await draftCall(tok, "DELETE", `/drafts/${d.id}`);
+}
+export async function makeDraft(
+  tok: string,
+  name: string,
+  edit: (live: { rev: number } & Record<string, unknown>) => unknown = (e) => e,
+): Promise<number> {
+  const live = (
+    await (
+      await fetch(`${API}/api/world/edits`, { headers: { Authorization: `Bearer ${tok}`, Accept: "application/json" } })
+    ).json()
+  ).edits;
+  const res = await draftCall(tok, "POST", "/drafts", { name, baseRev: live.rev, data: edit(live) });
+  expect(res.status, `a draft "${name}": ${await res.clone().text()}`).toBe(201);
+  return (await res.json()).draft.id;
+}
+
 // There's one world. The specs were written against two layouts, kept as fixtures
 // in ./worlds: "demo" (the Studio as designed) and "lab" (the build sandbox, as
 // map-edit.spec leaves it: a blank floor with Ana's office, its desk and its door). The world is put back to the one a spec asks for whenever

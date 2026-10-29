@@ -1,13 +1,16 @@
 import { Worker } from "node:worker_threads";
 import {
   adoptChunk,
+  applyEdits,
   CHUNK,
+  editsNow,
   GROUNDS,
   type GroundsChunk,
   hasChunk,
   layoutVersion,
   setParkLayout,
 } from "@yutopia/shared/grounds";
+import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { kartLayoutNow } from "@yutopia/shared/kart";
 
 // The Grounds' land is made a chunk at a time when first asked (shared
@@ -25,6 +28,8 @@ function start(): Worker {
   // (the Kart Park's layout raced, first: docs/plan/47-the-track-changer.md)
   const n = kartLayoutNow();
   w.postMessage({ layout: [n.key, n.reverse], v: layoutVersion });
+  // (and god mode's edits laid: docs/plan/53-the-god-mode.md)
+  if (editsNow().rev) w.postMessage({ edits: editsNow(), v: layoutVersion });
   w.on("message", (m: { c: GroundsChunk; v: number }) => {
     if (m.v === layoutVersion) adoptChunk(m.c);
     asked.delete(key(m.c.cx, m.c.cz));
@@ -71,4 +76,19 @@ export function landLayout(layout: string, reverse: boolean): boolean {
   if (!setParkLayout(layout, reverse)) return false;
   worker?.postMessage({ layout: [kartLayoutNow().key, reverse], v: layoutVersion });
   return true;
+}
+
+const listeners = new Set<(chunks: [number, number][]) => void>();
+/** Told the chunks god mode's edits changed (the physics world makes them again). */
+export function onLandChanged(f: (chunks: [number, number][]) => void): () => void {
+  listeners.add(f);
+  return () => listeners.delete(f);
+}
+/** God mode's edits laid on the Grounds (docs/plan/53-the-god-mode.md): here, in the worker, and
+ *  whoever keeps what's made of them told the chunks that changed. */
+export function landEdits(edits: GroundsEdits): [number, number][] {
+  const dirty = applyEdits(edits);
+  worker?.postMessage({ edits, v: layoutVersion });
+  for (const f of listeners) f(dirty);
+  return dirty;
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AdminAction;
 use App\Models\Game;
+use App\Models\GroundRevision;
 use App\Models\LastSpot;
 use App\Models\PerfReport;
 use App\Models\Pet;
@@ -25,7 +26,7 @@ use Illuminate\Validation\Rule;
 class InternalController extends Controller
 {
     // (shared admin.ts LOG_KINDS: what the log takes)
-    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite'];
+    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god'];
 
     public function __construct(private readonly Worlds $worlds) {}
 
@@ -53,6 +54,8 @@ class InternalController extends Controller
             'playlists' => $world->settings['playlists'] ?? [],
             'loot' => $world->settings['loot'] ?? null,
             'karts' => $world->settings['karts'] ?? null,
+            // god mode's edits to the Grounds as published (docs/plan/53-the-god-mode.md)
+            'edits' => GroundRevision::edits(),
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld(),
         ]);
     }

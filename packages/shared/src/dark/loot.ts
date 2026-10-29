@@ -1,5 +1,5 @@
 import { SP_OFFSET_H } from "../clock.ts";
-import { BUILDINGS, type Building, INSIDES, TOWN_CARS, TRACTOR } from "../grounds.ts";
+import { BUILDINGS, type Building, editsVersion, INSIDES, TOWN_CARS, TRACTOR } from "../grounds.ts";
 import type { ItemId, StackId } from "../inventory.ts";
 
 // Where things are found on the Grounds (docs/plan/30-the-dark.md, D3): spots by
@@ -57,7 +57,20 @@ function atDoor(b: Building): { x: number; z: number } {
   return { x: b.x0 - 1, z: zm };
 }
 
-export const LOOT: LootSpot[] = (() => {
+/** Every spot on the Grounds there's something to find (made again when god mode's edits are laid,
+ *  docs/plan/53-the-god-mode.md: a house put down has its own, one taken away takes its with it). */
+export const LOOT: LootSpot[] = [];
+let laid = -1;
+export function lootNow(): LootSpot[] {
+  if (laid === editsVersion) return LOOT;
+  laid = editsVersion;
+  LOOT.length = 0;
+  LOOT.push(...lootSpots());
+  byId.clear();
+  for (const s of LOOT) byId.set(s.id, s);
+  return LOOT;
+}
+function lootSpots(): LootSpot[] {
   const out: LootSpot[] = [];
   for (const b of BUILDINGS) {
     if (b.kind === "house") out.push({ id: b.key, place: "house", ...atDoor(b) });
@@ -100,9 +113,13 @@ export const LOOT: LootSpot[] = (() => {
     z: TRACTOR.z + Math.cos(TRACTOR.ry) * 1.9,
   });
   return out;
-})();
-const byId = new Map(LOOT.map((s) => [s.id, s]));
-export const lootSpot = (id: string) => byId.get(id);
+}
+const byId = new Map<string, LootSpot>();
+lootNow();
+export function lootSpot(id: string): LootSpot | undefined {
+  lootNow();
+  return byId.get(id);
+}
 
 /** The gatehouse's locker (a fit of its own, shared/grounds.ts): where you open it from. */
 export const LOCKER = (() => {

@@ -12,7 +12,7 @@ import {
   WorldBuilder,
 } from "@yutopia/shared/physics";
 import { config } from "../config.ts";
-import { prefetch } from "../land.ts";
+import { onLandChanged, prefetch } from "../land.ts";
 import { metrics } from "../metrics.ts";
 import { fromSchema, type WorldRoom } from "../WorldRoom.ts";
 import { registerFeature } from "./index.ts";
@@ -61,6 +61,14 @@ registerFeature((room) => {
   let built = 0;
 
   const objects = () => [...room.state.objects.values()].map(fromSchema);
+  // god mode's edits laid (docs/plan/53-the-god-mode.md): the chunks they changed, again
+  const offLand = onLandChanged((cs) => {
+    for (const [cx, cz] of cs)
+      if (!todo.some(([x, z]) => x === cx && z === cz)) {
+        todo.push([cx, cz]);
+        built--;
+      }
+  });
   void (async () => {
     const t0 = performance.now();
     const b = buildingSolids(room.map, objects());
@@ -139,6 +147,7 @@ registerFeature((room) => {
     },
     dispose() {
       gone = true;
+      offLand();
       room.colliderFor = null;
       room.sight = null;
       owner = null;

@@ -16,9 +16,9 @@ import {
   BUILDINGS,
   type Building,
   CHUNK,
+  editsVersion,
   FENCE,
   FENCE_H,
-  FORECOURT,
   GATE,
   groundAt,
   INSIDES,
@@ -43,8 +43,8 @@ import {
   layoutVersion,
   MOTORS,
   PINE_H,
-  PUMPS,
   pineVariant,
+  quarter,
   SCARECROWS,
   SNOW_POLES,
   STATUE,
@@ -54,6 +54,7 @@ import {
   TOWER,
   terrainAt,
   treesIn,
+  turnOf,
   WAYS,
   wallEdgeAt,
   worldRects,
@@ -258,6 +259,19 @@ function shell(b: Building): { H: number; roof: (out: GroundSolid[], y0: number)
 }
 
 function building(out: GroundSolid[], b: Building) {
+  // (turned: made as its builder draws it, then turned about its plot's middle — grounds.ts turnOf)
+  const t = turnOf(b);
+  if (t.k) {
+    const mine: GroundSolid[] = [];
+    building(mine, t.b);
+    const cx = (b.x0 + b.x1) / 2;
+    const cz = (b.z0 + b.z1) / 2;
+    for (const g of mine) {
+      const [x, z] = quarter(g.s.x, g.s.z, cx, cz, t.k);
+      out.push({ ...g, s: g.s.t === "box" ? { ...g.s, x, z, a: g.s.a + (t.k * Math.PI) / 2 } : { ...g.s, x, z } });
+    }
+    return;
+  }
   const { x0, z0, x1, z1 } = b;
   const y0 = groundAt((x0 + x1) / 2, (z0 + z1) / 2);
   const inside = INSIDES.find((i) => i.b === b);
@@ -275,14 +289,16 @@ function building(out: GroundSolid[], b: Building) {
   }
   if (b.kind === "gas") {
     // the kiosk at the back; its forecourt: the islands, the pumps, the canopy on four posts
+    // (any gas station's: its own islands and posts, where they're drawn — the town's are these)
     out.push({ what: "building", s: flat(x0 + 2, z1 - 6, x0 + 12, z1, y0, y0 + 3.2) });
-    for (const i of FORECOURT.islands)
-      out.push({ what: "forecourt", s: flat(i.x - 0.6, z0 + 3.2, i.x + 0.6, z0 + 6.8, y0, y0 + 0.3) });
-    for (const p of PUMPS)
+    for (const x of [x0 + 7, x1 - 7])
+      out.push({ what: "forecourt", s: flat(x - 0.6, z0 + 3.2, x + 0.6, z0 + 6.8, y0, y0 + 0.3) });
+    for (const x of [x0 + 7, x1 - 7])
       for (const z of [z0 + 4.5, z0 + 5.5])
-        out.push({ what: "forecourt", s: flat(p.x - 0.37, z - 0.32, p.x + 0.37, z + 0.32, y0, y0 + 1.92) });
-    for (const p of FORECOURT.posts)
-      out.push({ what: "forecourt", s: flat(p.x - 0.25, p.z - 0.25, p.x + 0.25, p.z + 0.25, y0, y0 + 4.6) });
+        out.push({ what: "forecourt", s: flat(x - 0.37, z - 0.32, x + 0.37, z + 0.32, y0, y0 + 1.92) });
+    for (const x of [x0 + 3, x1 - 3])
+      for (const z of [z0 + 2, z0 + 8])
+        out.push({ what: "forecourt", s: flat(x - 0.25, z - 0.25, x + 0.25, z + 0.25, y0, y0 + 4.6) });
     out.push({ what: "roof", s: flat(x0 + 1, z0, x1 - 1, z0 + 10, y0 + 4.6, y0 + 5.4) });
     return;
   }
@@ -730,6 +746,40 @@ function things(out: GroundSolid[]) {
           blocks: "seat",
         });
         break;
+      // god mode's own (docs/plan/53-the-god-mode.md, phase 8: tp/town3d.ts draws them)
+      case "boulder": {
+        const k = t.s ?? 1;
+        // (the drawn rock's middle: its points reach 0.85 out, its faces less)
+        out.push({ what: "street", s: cyl(t.x, t.z, 0.72 * k, y, y + 1.05 * k) });
+        break;
+      }
+      case "planter": {
+        const k = t.s ?? 1;
+        b(-0.6 * k, -0.6 * k, 0.6 * k, 0.6 * k, 0, 0.55 * k);
+        out.push({ what: "street", s: cyl(t.x, t.z, 0.1 * k, y, y + 2.3 * k) });
+        break;
+      }
+      case "sign":
+        out.push({ what: "street", s: cyl(t.x, t.z, 0.06, y, y + 2.05) });
+        b(-0.8, -0.04, 0.8, 0.04, 1.3, 2.0);
+        break;
+      case "fence": {
+        // its runs: rails 1.1 high, a box a run (8 m at most a box: the land rolls under it)
+        const pts = t.pts ?? [];
+        for (let i = 1; i < pts.length; i++) {
+          const [ax, az] = pts[i - 1];
+          const [bx, bz] = pts[i];
+          const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 8));
+          for (let k = 0; k < n; k++) {
+            const p0 = [ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n];
+            const p1 = [ax + ((bx - ax) * (k + 1)) / n, az + ((bz - az) * (k + 1)) / n];
+            const y0 = Math.min(groundAt(p0[0], p0[1]), groundAt(p1[0], p1[1]));
+            const y1 = Math.max(groundAt(p0[0], p0[1]), groundAt(p1[0], p1[1]));
+            out.push({ what: "street", s: along(p0[0], p0[1], p1[0], p1[1], 0.12, y0, y1 + 1.1) });
+          }
+        }
+        break;
+      }
     }
   }
   // the snow poles: orange stakes 1.74 by the roads (thin: in the walking today)
@@ -806,7 +856,7 @@ function edge(out: GroundSolid[]) {
     }
 }
 
-let fixed: Map<string, GroundSolid[]> | null = null;
+let fixed: { v: number; by: Map<string, GroundSolid[]> } | null = null;
 let bridge: { v: number; by: Map<string, GroundSolid[]> } | null = null;
 function bucket(list: GroundSolid[]): Map<string, GroundSolid[]> {
   const by = new Map<string, GroundSolid[]>();
@@ -824,18 +874,19 @@ function bucket(list: GroundSolid[]): Map<string, GroundSolid[]> {
  *  to its tip, its boughs and twigs open. The park's bridge follows its layout (`layoutVersion`):
  *  its chunks are asked again when that changes. */
 export function groundSolidsIn(cx: number, cz: number): GroundSolid[] {
-  fixed ??= (() => {
+  // (made again when god mode's edits are laid: docs/plan/53-the-god-mode.md)
+  if (fixed?.v !== editsVersion) {
     const all: GroundSolid[] = [];
     things(all);
     edge(all);
-    return bucket(all);
-  })();
+    fixed = { v: editsVersion, by: bucket(all) };
+  }
   if (KART_LAND && bridge?.v !== layoutVersion) {
     const l: GroundSolid[] = [];
     kartBridge(l);
     bridge = { v: layoutVersion, by: bucket(l) };
   }
-  const out = [...(fixed.get(key(cx, cz)) ?? []), ...(bridge?.by.get(key(cx, cz)) ?? [])];
+  const out = [...(fixed.by.get(key(cx, cz)) ?? []), ...(bridge?.by.get(key(cx, cz)) ?? [])];
   for (const t of treesIn(cx, cz)) {
     // (as tp/grounds-stream.ts sizes them: a pine 1.45 × its scale, a bare tree 1.7 ×, `sy` taller;
     // set 0.25 into the snow)

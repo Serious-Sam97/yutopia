@@ -116,6 +116,13 @@ export class CharacterMover implements Mover {
     private readonly onLand: (x: number, y: number) => boolean = () => false,
   ) {}
 
+  /** The land under (x, y) is in the world (or it isn't land: the building's floors are). */
+  ready(x: number, y: number): boolean {
+    if (!this.onLand(x, y)) return true;
+    const f = this.frame();
+    return this.world.has(`land:${Math.floor((f.ox + x) / 32)},${Math.floor((f.oy + y) / 32)}`);
+  }
+
   step(b: Body, dt: number, stepUp: number, blocked?: (x: number, y: number) => boolean, fly = false): boolean {
     const f = this.frame();
     const X = f.ox + b.x;
