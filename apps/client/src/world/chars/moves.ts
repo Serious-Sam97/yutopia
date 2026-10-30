@@ -28,8 +28,12 @@ export interface Moved {
 }
 
 // ── the leg, as built (build/body.ts, build/shoes.ts at the base proportions) ─
-export const THIGH = 0.306;
-export const SHIN = 0.306;
+// (2026-10-30: 15% longer — params.ts LEGS — from 0.306 each)
+export const THIGH = 0.352;
+export const SHIN = 0.352;
+/** The legs against the ones every gait was keyed on (0.612 m): strides, the hips' heights, where a
+ *  foot lands scale by it. */
+export const LEG_K = (THIGH + SHIN) / 0.612;
 export const ANKLE = 0.061; // the ankle over the sole
 export const TOE = 0.19; // the shoe ahead of the ankle
 /** The ball of the foot ahead of the ankle, where the toes bend (the toe joint: build/shoes.ts). */
@@ -308,7 +312,7 @@ const RUN_TRUNK: Key[] = cycle([
 ]);
 
 /** Tiles per run cycle (two steps), by effort. */
-export const runStride = (effort: number) => 1.7 + 0.65 * clamp01(effort);
+export const runStride = (effort: number) => (1.7 + 0.65 * clamp01(effort)) * LEG_K;
 
 /** The run at `phase` (0..1, distance-driven): `effort` 0 a jog (light, upright, low knees),
  *  ½ a run, 1 a sprint (long, driving, leaning into it). */
@@ -404,7 +408,7 @@ const SNEAK: Key[] = cycle([
 ]);
 
 /** Tiles per sneaking cycle. */
-export const SNEAK_STRIDE = 1.0;
+export const SNEAK_STRIDE = 1.0 * LEG_K;
 /** Sneaking along crouched (`phase` distance-driven). */
 export function crouchWalkPose(phase: number): Moved {
   const c = sneakChannels(phase);
@@ -430,7 +434,7 @@ const STRAFE: Key[] = [
 ];
 
 /** Tiles per side-step cycle. */
-export const STRAFE_STRIDE = 1.1;
+export const STRAFE_STRIDE = 1.1 * LEG_K;
 /** A side-step (`side` +1: to their left, −1: to their right). */
 export function strafePose(phase: number, side: 1 | -1): Moved {
   let c = strafeChannels(phase);
@@ -468,7 +472,7 @@ const BACK: Key[] = cycle([
 ]);
 
 /** Tiles per backing-up cycle. */
-export const BACK_STRIDE = 1.0;
+export const BACK_STRIDE = 1.0 * LEG_K;
 /** Backing up (`phase` distance-driven). */
 export function backpedalPose(phase: number): Moved {
   const c = backChannels(phase);

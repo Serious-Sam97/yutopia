@@ -159,14 +159,19 @@ export class CharacterMover implements Mover {
       p[0] = X;
       p[2] = Z;
     }
-    // a blocked way's speed gone (along a wall, what's left of it)
+    // a blocked way's speed gone (along a wall, what's left of it) — not a step's: walking up one the
+    // body goes less far across while Jolt lifts it, and taking that as a wall cut a jog to 1.3 m/s
+    // at a 10 cm kerb (it stalled at every step)
+    const rose = p[1] - Y;
+    const climbed = this.along && !b.up && !fly && rose > 0.002;
     const dx = nx - b.x;
     const dy = ny - b.y;
     const want = (v: number, d: number) =>
       Math.abs(v * dt) > 1e-6 && Math.abs(d) < Math.abs(v * dt) - 1e-4 ? d / dt : v;
-    b.vx = Math.sign(dx) === Math.sign(b.vx) || dx === 0 ? want(b.vx, dx) : 0;
-    b.vy = Math.sign(dy) === Math.sign(b.vy) || dy === 0 ? want(b.vy, dy) : 0;
-    const rose = p[1] - Y;
+    if (!climbed) {
+      b.vx = Math.sign(dx) === Math.sign(b.vx) || dx === 0 ? want(b.vx, dx) : 0;
+      b.vy = Math.sign(dy) === Math.sign(b.vy) || dy === 0 ? want(b.vy, dy) : 0;
+    }
     b.x = nx;
     b.y = ny;
     b.z = p[1] - f.elev;

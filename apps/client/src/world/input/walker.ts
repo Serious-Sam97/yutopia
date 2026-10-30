@@ -27,7 +27,7 @@ import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/
 import type { WorldController } from "../controller";
 import { hud } from "../store";
 import { type Action, actionOf } from "./bindings";
-import { afterFirstStep, camKeys, MoveControls, type Press } from "./controls";
+import { afterFirstStep, camKeys, HeldOver, MoveControls, type Press } from "./controls";
 import { PadState } from "./pad";
 import { FAST_X, FLY_ACROSS, FLY_RISE, FLY_SPRINT, FLY_TOP, P_CLIP, P_FAST, P_FLY } from "./powers";
 import { Targets } from "./targets";
@@ -416,6 +416,7 @@ export class Walker {
   private body: Body = newBody(0, 0);
   private prev: Body = newBody(0, 0);
   private clock = new MoveClock();
+  private heldOver = new HeldOver();
   // s into a flow jump's spin, or none
   private spinT: number | null = null;
   private last = { x: Number.NaN, y: Number.NaN, z: Number.NaN };
@@ -532,6 +533,7 @@ export class Walker {
     }
     const events: StepEvents[] = [];
     let first = true;
+    this.heldOver.add(move);
     const alpha = this.clock.advance(dt, () => {
       this.prev = { ...this.body };
       if (path?.length) follow(this.body, path, move);
@@ -558,6 +560,7 @@ export class Walker {
         first = false;
       }
     });
+    this.heldOver.after(move, !first);
     const b = this.body;
     // first time out on the land: the dark's chunk (its HUD, the loot, the pockets); indoors, a
     // few seconds in, when the page has a moment

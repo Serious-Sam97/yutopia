@@ -34,6 +34,10 @@ export function AvatarCanvas({
     if (!C.isoPeople().canDraw()) return setGl(false);
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const motion = new C.Motion3(0.37);
+    // (plan 58: the new animations, so the look's walk — 4e — is the one shown, at the walk's pace)
+    motion.v2 = true;
+    motion.gait = a.gait ?? "calm";
+    const pace = 1.5;
     const iso = C.isoPeople();
     let raf = 0;
     const t0 = performance.now();
@@ -45,10 +49,24 @@ export function AvatarCanvas({
       const dt = Math.min(0.2, (now - last) / 1000);
       last = now;
       const t = (now - t0) / 1000;
+      const going = walk && !reduced;
       const mo = motion.update(dt, {
-        dist: walk && !reduced ? 3.2 * dt : 0,
-        walking: walk && !reduced,
-        speed: walk && !reduced ? 3.2 : 0,
+        dist: going ? pace * dt : 0,
+        walking: going,
+        speed: going ? pace : 0,
+        loco: {
+          ahead: going ? pace : 0,
+          left: 0,
+          crouch: false,
+          aim: false,
+          pitch: 0,
+          yaw: 0,
+          turn: 0,
+          accel: 0,
+          up: false,
+          verb: null,
+          goal: pace,
+        },
         sit: false,
         typing: false,
         speaking: false,

@@ -920,7 +920,8 @@ export function kartSeats(): KartSeat[] {
 }
 
 export type FolkRole = "control" | "mechanic" | "cocoa" | "visitor";
-/** The park's people (world-server features/park-life.ts walks them): race control at the desk,
+/** The park's people (world-server features/park-life.ts walks them), each walking as who they are
+ *  (`look.gait`, plan 58 4e): race control at the desk,
  *  the mechanic at the kart on its stand, the cocoa cart's, and visitors who go between the
  *  cocoa, the fire's benches, the rack, the stands and the podium. */
 export const KART_FOLK: { id: string; name: string; role: FolkRole; look: Record<string, string> }[] = [
@@ -929,6 +930,7 @@ export const KART_FOLK: { id: string; name: string; role: FolkRole; look: Record
     name: "Rosa",
     role: "control",
     look: {
+      gait: "brisk",
       gender: "feminine",
       shoes: "boots",
       body: "slim",
@@ -948,6 +950,7 @@ export const KART_FOLK: { id: string; name: string; role: FolkRole; look: Record
     name: "Joe",
     role: "mechanic",
     look: {
+      gait: "heavy",
       gender: "masculine",
       shoes: "boots",
       body: "broad",
@@ -968,6 +971,7 @@ export const KART_FOLK: { id: string; name: string; role: FolkRole; look: Record
     name: "Lia",
     role: "cocoa",
     look: {
+      gait: "calm",
       gender: "feminine",
       shoes: "boots",
       body: "regular",
@@ -989,6 +993,7 @@ export const KART_FOLK: { id: string; name: string; role: FolkRole; look: Record
     name: "Maya",
     role: "visitor",
     look: {
+      gait: "bouncy",
       gender: "feminine",
       shoes: "boots",
       skin: "#7a4a2a",
@@ -1005,6 +1010,7 @@ export const KART_FOLK: { id: string; name: string; role: FolkRole; look: Record
     name: "Theo",
     role: "visitor",
     look: {
+      gait: "tired",
       gender: "masculine",
       shoes: "boots",
       skin: "#c9a27e",
@@ -1021,6 +1027,7 @@ export const KART_FOLK: { id: string; name: string; role: FolkRole; look: Record
     name: "Inês",
     role: "visitor",
     look: {
+      gait: "calm",
       gender: "feminine",
       shoes: "boots",
       skin: "#e4b48e",
@@ -1037,11 +1044,13 @@ export const KART_FOLK: { id: string; name: string; role: FolkRole; look: Record
     name: "Ben",
     role: "visitor",
     look: {
+      gait: "old",
+      beard: "full",
       gender: "masculine",
       shoes: "boots",
       skin: "#a8693f",
       hair: "afro",
-      hairColor: "#1c1410",
+      hairColor: "#e8e0d0",
       top: "jacket",
       topColor: "#2f4a3b",
       accessory: "beanie",

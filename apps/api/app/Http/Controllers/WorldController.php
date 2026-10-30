@@ -39,6 +39,8 @@ class WorldController extends Controller
             'shoes' => ['sometimes', ...$slug], 'shoesColor' => ['sometimes', ...$hex],
             // facial hair, in the hair's colour
             'beard' => ['sometimes', ...$slug],
+            // how they walk (plan 58, 4e): calm, bouncy, heavy
+            'gait' => ['sometimes', ...$slug],
         ]);
         $layers['style'] = 'ligne';
         $user = $request->user();

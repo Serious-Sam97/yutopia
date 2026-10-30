@@ -13,7 +13,7 @@ class Avatars
         'top' => 'tee', 'topColor' => '#b5562f', 'bottom' => 'jeans', 'bottomColor' => '#3d4a5c',
         'accessory' => 'none', 'accessoryColor' => '#e8a33d', 'style' => 'ligne', 'gender' => 'neutral',
         'eyewear' => 'none', 'eyewearColor' => '#2a2420', 'extra' => 'none', 'extraColor' => '#e8a33d',
-        'shoes' => 'sneakers', 'shoesColor' => '#efe4cc', 'beard' => 'none',
+        'shoes' => 'sneakers', 'shoesColor' => '#efe4cc', 'beard' => 'none', 'gait' => 'calm',
     ];
 
     public function for(User $user): array

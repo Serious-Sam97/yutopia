@@ -106,6 +106,15 @@ function trunkSkin(rest: RestPose, y: number): [JointName, JointName, number] {
   return ["hips", "spine", smooth(spine - 0.12 * T, spine + 0.08 * T, y)];
 }
 
+// (each joint's leg: the left's +1, the right's −1, the rest none)
+export const THIGH_BONES = [JOINT_INDEX.thighL, JOINT_INDEX.thighR] as const;
+const LEG_SIDE: Record<number, number> = Object.fromEntries(
+  (["thighL", "kneeL", "ankleL", "toeL", "thighR", "kneeR", "ankleR", "toeR"] as JointName[]).map((j) => [
+    JOINT_INDEX[j],
+    j.endsWith("L") ? 1 : -1,
+  ]),
+);
+
 export function bake(k: Kit): Baked {
   const at = restWorld(k.rest);
   const hipsY = at.hips.y;
@@ -117,6 +126,10 @@ export function bake(k: Kit): Baked {
   const skinI = new Uint16Array(nv * 4);
   const skinW = new Float32Array(nv * 4);
   const inkK = new Float32Array(nv);
+  // (which leg a vertex rides: + the left, − the right, by its weights; and that leg's hip joint, at
+  // rest — model.ts darkens the far leg, finding both hips by the thighs' bones)
+  const legSide = new Float32Array(nv);
+  const legHip = new Float32Array(nv * 3);
   const bodyIdx: number[] = [];
   const inkIdx: number[] = [];
   const tags: Record<string, [number, number][]> = {};
@@ -174,6 +187,15 @@ export function bake(k: Kit): Baked {
         skinW[v * 4 + 1] = w;
       }
       inkK[v] = part.ink;
+      let side = 0;
+      for (let k2 = 0; k2 < 4; k2++) side += skinW[v * 4 + k2] * (LEG_SIDE[skinI[v * 4 + k2]] ?? 0);
+      legSide[v] = side;
+      if (side) {
+        const hip = side > 0 ? at.thighL : at.thighR;
+        legHip[v * 3] = hip.x;
+        legHip[v * 3 + 1] = hip.y;
+        legHip[v * 3 + 2] = hip.z;
+      }
     }
     const I = g.getIndex();
     const n = I ? I.count : P.count;
@@ -196,6 +218,8 @@ export function bake(k: Kit): Baked {
     skinIndex: new BufferAttribute(skinI, 4),
     skinWeight: new BufferAttribute(skinW, 4),
     inkK: new BufferAttribute(inkK, 1),
+    legSide: new BufferAttribute(legSide, 1),
+    legHip: new BufferAttribute(legHip, 3),
   };
   const make = (idx: number[]) => {
     const g = new BufferGeometry();

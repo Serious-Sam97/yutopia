@@ -2,6 +2,7 @@ import type { JumpNow } from "@yutopia/shared";
 import { type Body, type FlowLook, KH_MOVE, type MoveSpec, speedOf, verbProgress } from "@yutopia/shared/move";
 import { blend, ease, jumpPose, STRIDE, walkPose } from "./motion";
 import {
+  ANKLE,
   aimPose,
   BACK_STRIDE,
   backpedalPose,
@@ -62,6 +63,16 @@ export interface LocoIn {
   flow?: FlowLook | null;
   /** plan 58 G.D: someone or something looked at, from the facing: yaw + to the left, pitch + up */
   look?: { yaw: number; pitch: number } | null;
+  /** 4c: the speed the body's going for (its gait's, tiles / s): a first step out keyed by it */
+  goal?: number;
+  /** 4d: how hurt (0…1: the vitals' health gone): a limp */
+  hurt?: number;
+  /** 4f: the ground's height (m, + up) at a spot in the body's own space (x to its left, z ahead),
+   *  from the ground under it — the land, a kerb, a stair, by Jolt's rays */
+  ground?: (x: number, z: number) => number;
+  /** 4d: the body faces the look, not the way it goes (first person, lock-on, aiming): it goes aside
+   *  and backs up — else it faces its way, and a moment's velocity off it (turning round) isn't */
+  facing?: boolean;
   reduced: boolean;
 }
 
@@ -209,14 +220,36 @@ export class Locomotion {
   private leadY = 0;
   private skidW = 0;
   private driveW = 0;
-  private turnSide = 1;
   private skidFrom = 0;
   private moving = false;
-  private turnPh = 0;
-  private turnW = 0;
+  // 4c: the stepper — standing, stopping, setting off and turning round, by steps (hero.ts `Stepper`):
+  // `idle` the standing pose has the feet, `steps` the stepper, `start` its first step out then the
+  // cycle on that foot, `cycle` the gait; `stepW` how much the stepper's legs are laid on
+  private steps: InstanceType<Hero["Stepper"]> | null = null;
+  private stepping: "idle" | "steps" | "start" | "cycle" | "off" = "idle";
+  private stepW = 0;
+  private lead: "L" | "R" = "R";
+  private still = 0;
+  private vWas = 0;
+  private ownStep = false;
+  /** 4d: the way it goes off its facing (rad, + to the left) */
+  private way = 0;
+  /** down from a jump: its kind, and how far through its landing (0..1) */
+  private landOf: { kind: string; t: number } | null = null;
+  // (a jump from the run: up off the stride, the air's pose eased in)
+  private fromRun = false;
+  /** where the feet were last shown (the model's space) */
+  private shown: { L: [number, number, number]; R: [number, number, number] } | null = null;
+  private airT = 0;
+  /** 4d: the gait at a phase and speed as it is now (the stepper's first step aims at it) */
+  private gaitAt: ((ph: number, spd: number) => Moved) | null = null;
+  private aNow = 0;
+  private handT = 0.12;
   /** plan 58 G.E: whose body this is (their quirks: one arm swinging more, a head carried on one
    *  side, a stride a little long or short) */
   seed = 0;
+  /** 4e: how they walk — their look's (`AvatarLayers.gait`) */
+  gait = "calm";
   private walked = 0;
   private quirk(n: number, span: number) {
     return (seeded(n, this.seed) - 0.5) * 2 * span;
@@ -230,8 +263,8 @@ export class Locomotion {
   private breath = 0;
   private puff = 0;
   /** The breath for the standing pose (`idle2Pose`'s `life`). */
-  life(): { breath: number; puff: number } {
-    return { breath: this.breath, puff: this.puff };
+  life(): { breath: number; puff: number; gait: string } {
+    return { breath: this.breath, puff: this.puff, gait: this.gait };
   }
 
   /** This frame's pose; `standing`: the pose they'd have standing still (Motion3's, with its
@@ -258,14 +291,268 @@ export class Locomotion {
     // layers above did — let go of in the air, a verb or a Flowmotion move
     this.lock ??= new hero.FootLock();
     const moved = { ahead: m.ahead * dt, left: m.left * dt, yaw: -m.turn * dt };
-    return this.lock.apply({ pose, lift: out.lift }, dt, moved, m.up || !!m.verb || !!m.flow, this.base);
+    const off = m.up || !!m.verb || !!m.flow;
+    const done = this.lock.apply({ pose, lift: out.lift }, dt, moved, off, this.base);
+    // 4f: last, the feet on the ground under them
+    this.grounded(hero, done, off ? null : (m.ground ?? null), dt);
+    this.shown = { L: hero.footOf(done, "L").ankle, R: hero.footOf(done, "R").ankle };
+    return done;
+  }
+
+  // 4f: the feet on the ground under each (plan 58 C2: the land, a kerb, a stair — the world's
+  // own): a foot down set on its ground and tipped to it, along and across; a foot up carried over
+  // what's under it and ahead of its toes (not into a step's riser); the hips let down for the
+  // lower foot (never up: the body's height is the core's). The pose till now stood on the flat.
+  private drop = 0;
+  /** what the feet found (for /dev/move's probes): each one's ground and the hips' drop */
+  groundOut: { under: [number, number]; drop: number } | null = null;
+  private grounded(H: Hero, m: Moved, g: ((x: number, z: number) => number) | null, dt: number): void {
+    const k = 1 - Math.exp(-14 * dt);
+    if (!g) {
+      this.drop += (0 - this.drop) * k;
+      if (Math.abs(this.drop) > 1e-4) m.lift = [m.lift[0], m.lift[1] + this.drop, m.lift[2]];
+      this.groundOut = null;
+      return;
+    }
+    const feet = (["L", "R"] as const).map((S) => {
+      const f = H.footOf(m, S);
+      // (how much it's down: by its lower spot, on the flat it stood on)
+      const low = Math.min(f.heel[1], f.ball[1]);
+      const w = smoother(clamp(1 - low / 0.04, 0, 1));
+      const fx = f.ball[0] - f.heel[0];
+      const fz = f.ball[2] - f.heel[2];
+      const n = Math.hypot(fx, fz) || 1;
+      const [ux, uz] = [fx / n, fz / n];
+      const gh = g(f.heel[0], f.heel[2]);
+      const gb = g(f.ball[0], f.ball[2]);
+      // (ahead of the toes: a step's riser coming)
+      const ga = g(f.ball[0] + ux * 0.1, f.ball[2] + uz * 0.1);
+      // (across, a sole's width each side: its left edge, its right)
+      const mx = (f.heel[0] + f.ball[0]) / 2;
+      const mz = (f.heel[2] + f.ball[2]) / 2;
+      const gl = g(mx + uz * 0.04, mz - ux * 0.04);
+      const gr = g(mx - uz * 0.04, mz + ux * 0.04);
+      // down: on the higher of its heel's and its ball's (over a stair's edge it rests on the nosing,
+      // flat, the rest of it over the step below); tipped to the slope where it's a slope
+      const edge = Math.abs(gb - gh) > 0.03;
+      const rest = Math.max(gh, gb);
+      // (a foot up over what's under it and near it — ahead of its toes, behind its heel, less a
+      // centimetre a centimetre off: a cone. It rises as it nears a riser and comes down past an
+      // edge, never at once — over the edge itself it'd jump a riser in a frame)
+      let air = Math.max(gh, gb, ga);
+      if (w < 1) {
+        // (out from its toes and its heel, the first rise found and its edge found between samples —
+        // sampled alone, each sample crossing an edge jumped the foot by the samples' gap)
+        const cone = (x: number, z: number, dx: number, dz: number, base: number) => {
+          for (let d = 0.04; d <= 0.2 + 1e-6; d += 0.04) {
+            const h = g(x + dx * d, z + dz * d);
+            if (h <= base + 0.005) continue;
+            let lo = d - 0.04;
+            let hi = d;
+            for (let n = 0; n < 5; n++) {
+              const mid = (lo + hi) / 2;
+              if (g(x + dx * mid, z + dz * mid) > base + 0.005) hi = mid;
+              else lo = mid;
+            }
+            return h - hi;
+          }
+          return base;
+        };
+        air = Math.max(air, cone(f.ball[0], f.ball[2], ux, uz, gb), cone(f.heel[0], f.heel[2], -ux, -uz, gh));
+      }
+      const up = w * rest + (1 - w) * air;
+      const pitch = edge ? 0 : -w * clamp(Math.atan2(gb - gh, n), -0.35, 0.35);
+      const roll = w * clamp(Math.atan2(gl - gr, 0.08), -0.3, 0.3);
+      return { S, ankle: f.ankle, up, w, pitch, roll, rest };
+    });
+    // the hips let down as far as the lower foot down needs
+    let want = 0;
+    // (each foot by how far it's down: a threshold jumped it as a foot crossed it)
+    for (const f of feet) want = Math.min(want, f.rest * f.w);
+    this.drop += (Math.max(-0.35, want) - this.drop) * k;
+    m.lift = [m.lift[0], m.lift[1] + this.drop, m.lift[2]];
+    // (a leg on flat ground under hips that haven't moved is left as it was)
+    for (const f of feet)
+      if (Math.abs(f.up - this.drop) > 1e-4 || Math.abs(this.drop) > 1e-4 || f.pitch || f.roll)
+        H.groundLeg(m, f.S, [f.ankle[0], f.ankle[1] + f.up, f.ankle[2]], f.pitch, f.roll);
+    this.groundOut = { under: [feet[0].rest, feet[1].rest], drop: this.drop };
   }
 
   private lock: InstanceType<Hero["FootLock"]> | null = null;
-  private base: { L: [number, number, number]; R: [number, number, number] } | null = null;
+  private base: Record<"L" | "R", ReturnType<Hero["footOf"]>> | null = null;
   private gaze: InstanceType<Hero["Gaze"]> | null = null;
   /** plan 58 G.D: this frame's gaze — the eyes' morphs and a blink (null: none) */
   gazeOut: { eyes: [number, number]; blink: number } | null = null;
+
+  /** 4c: who has the feet — the idle, the stepper or the cycle — and the stepper's legs laid on. */
+  private stepper(H: Hero, dt: number, m: LocoIn, body: Moved, T: number, stride: number): Moved {
+    this.steps ??= new H.Stepper();
+    const st = this.steps;
+    const S = this.spec;
+    const mv = { ahead: m.ahead * dt, left: m.left * dt, yaw: -m.turn * dt };
+    const v = m.speed;
+    // (the speed's change as it is — `m.accel` is eased, and lags a start by a tenth of a second)
+    if (dt > 0) this.aNow += ((v - this.vWas) / dt - this.aNow) * Math.min(1, dt * 40);
+    this.vWas = v;
+    const a = this.aNow;
+    // (setting off: the gait it's going for — its first step's the cycle's foot as it lands)
+    const goal = m.goal ?? S.jog;
+    // (where the body will be in `t` s: the way it's going, slowing to a stop or speeding up to its
+    // gait's speed)
+    const dir = v > 1e-3 ? [m.left / v, m.ahead / v] : [0, 0];
+    const goes = (t: number): number => {
+      if (a < -0.5) {
+        const u = Math.min(t, v / -a);
+        return v * u + 0.5 * a * u * u;
+      }
+      if (a > 0.5 && v < goal) {
+        const u = Math.min(t, (goal - v) / a);
+        return v * u + 0.5 * a * u * u + goal * (t - u);
+      }
+      return v * t;
+    };
+    const rem = a < -0.5 ? (v * v) / (-2 * a) : Number.POSITIVE_INFINITY;
+    const home = this.crouchW > 0.5 ? H.crouchFeet() : H.idleFeet(this.seed, this.gait);
+    const want = (F: "L" | "R", left: number) => {
+      const s = goes(left);
+      const at = home[F].at;
+      return { at: [at[0] + dir[0] * s, at[1], at[2] + dir[1] * s] as [number, number, number], yaw: home[F].yaw };
+    };
+    // (the cycle's foot where it lands, for the first step out: the gait taken over on it)
+    const landPh = (F: "L" | "R") => (F === "R" ? 0 : 0.5);
+    const rg = clamp((goal - (S.walk + 0.4)) / 1.2, 0, 1);
+    // (the gait as it'll be at the speed it's going for: any way, crouched or not)
+    const gaitAt = this.gaitAt;
+    const cycleAt = (ph: number): Moved => (gaitAt ? gaitAt(ph, goal) : H.walk2Pose(ph, T));
+    const can = !m.up && !m.verb && !m.flow;
+    const feet = { L: H.footOf(body, "L"), R: H.footOf(body, "R") };
+    const quick = clamp(v / S.jog + Math.abs(m.turn) / 8, 0, 1);
+    if (!can) {
+      this.stepping = "off";
+      this.stepW = 0;
+      st.watch(feet, mv, dt);
+      return body;
+    }
+    if (this.stepping === "off") this.stepping = v > 0.5 ? "cycle" : "idle";
+    if (this.stepping === "idle" || this.stepping === "cycle") {
+      st.watch(feet, mv, dt);
+      // (from the cycle: a skid's brace as it begins braking from a sprint, else a stop's steps once
+      // it's to stop within a step — not a landing's check in the speed)
+      const skid = this.stepping === "cycle" && this.skidFrom > (S.jog + S.sprint) / 2 && v > 4;
+      const take =
+        this.stepping === "idle" ? v > 0.05 || Math.abs(m.turn) > 0.8 : skid || (a < -4 && rem < 0.6 && !this.landOf && !this.lastJump) || v < 0.3;
+      if (take) {
+        st.take(body.lift);
+        if (skid) {
+          const ahead = st.feet.L.at[2] > st.feet.R.at[2] ? "L" : "R";
+          st.brace(ahead);
+        }
+        this.stepping = "steps";
+        this.stepW = 1;
+        this.still = 0;
+      }
+    }
+    // (the skid over — nearly stopped, or driving on again: the feet grip)
+    if (st.slip > 0 && !this.skidFrom) st.brace(null);
+    if (this.stepping === "steps" || this.stepping === "start") {
+      // setting off: the foot behind (the way it's going) steps out first, to where the cycle will
+      // have it as it lands; the cycle goes on from there
+      // (a step already going the way it's setting off is taken as that first step)
+      if (this.stepping === "steps" && v > 0.1 && (a > 0.5 || (v > 1 && a > -2))) {
+        const going = st.feet.L.swing ? "L" : st.feet.R.swing ? "R" : null;
+        const behind = (F: "L" | "R") => st.feet[F].at[0] * dir[0] + st.feet[F].at[2] * dir[1];
+        this.lead = going ?? (behind("L") < behind("R") ? "L" : "R");
+        this.stepping = "start";
+        // (as long as it takes the body to carry the foot left behind back to where the cycle has it
+        // as the lead lands — a short quick first step, not a long one that leaves it stretched; along
+        // the way it's going)
+        const F = this.lead;
+        const other = F === "L" ? "R" : "L";
+        const trail = H.footOf(cycleAt(landPh(F)), other).ankle;
+        const o = st.feet[other].at;
+        const need = Math.max(0.05, (o[0] - trail[0]) * dir[0] + (o[2] - trail[2]) * dir[1]);
+        let lo = 0.08;
+        let hi = 0.4;
+        for (let k = 0; k < 12; k++) {
+          const mid = (lo + hi) / 2;
+          if (goes(mid) < need) lo = mid;
+          else hi = mid;
+        }
+        const dur = Math.max(lerp(0.2, 0.15, rg), Math.min(0.32, hi));
+        // (one already going — a catch step, a brake — is that first step, with its time and aim)
+        // (a step of its own, aimed at the cycle's landing, hands over a little early; one taken over, on
+        // landing)
+        this.ownStep = !going;
+        if (going) st.adopt(going, dur);
+        else
+          st.step(F, (G, left) => this.firstStep(G, left, cycleAt, landPh, goes, dir, home), dur, lerp(0.06, 0.09, rg));
+      }
+      const landed = st.update(
+        dt,
+        mv,
+        this.stepping === "start" ? (F, left) => this.firstStep(F, left, cycleAt, landPh, goes, dir, home) : want,
+        { quick, turn: m.turn, free: this.stepping === "start" },
+      );
+      if (this.stepping === "start") {
+        // (the cycle takes over a little before the lead foot's down — the other's off the ground by
+        // then in a run, pushed off behind — its phase set so the lead lands as it would have)
+        const left = st.left(this.lead);
+        // (…or one taken over, once the foot left behind is near the end of the leg's reach)
+        const trailing = st.feet[this.lead === "L" ? "R" : "L"].at;
+        const stretched = Math.hypot(trailing[0], trailing[2]) > 0.3;
+        if (landed === this.lead || ((this.ownStep || stretched) && left < lerp(0.1, 0.08, rg))) {
+          // (the cycle's phase from where the lead foot is: still to land, or down and as far through
+          // its time on the ground as the body's gone past it)
+          const F = this.lead;
+          const f0 = H.footOf(cycleAt(landPh(F)), F).ankle;
+          const at = st.feet[F].at;
+          const past = (f0[0] - at[0]) * dir[0] + (f0[2] - at[2]) * dir[1];
+          const ph =
+            landed === F ? landPh(F) + Math.max(0, Math.min(0.15, past / stride)) : landPh(F) - goes(left) / stride;
+          this.gaitPh = ((ph % 1) + 1) % 1;
+          this.stepping = "cycle";
+          this.handT = Math.max(0.06, left);
+        } else if (v < 0.1) this.stepping = "steps";
+      } else {
+        // settled: both feet where they stand, still — the standing pose has them again
+        this.still = !st.busy && v < 0.05 && Math.abs(m.turn) < 0.3 ? this.still + dt : 0;
+        if (this.still > 0.15) this.stepping = "idle";
+      }
+    }
+    // (handing over: its feet still carried with the body while they're laid on — no new steps)
+    else if (this.stepW > 0)
+      st.update(dt, mv, (F, left) => this.firstStep(F, left, cycleAt, landPh, goes, dir, home), {
+        quick,
+        turn: m.turn,
+        free: true,
+      });
+    const to = this.stepping === "steps" || this.stepping === "start" ? 1 : 0;
+    // (out to the cycle quickly, to the idle easily: their feet are where the stepper's are)
+    this.stepW = to ? 1 : Math.max(0, this.stepW - dt / (this.stepping === "cycle" ? this.handT : 0.3));
+    if (this.stepW > 0) st.lay(body, smoother(this.stepW), dt);
+    return body;
+  }
+  /** The first step out: the lead foot to where the cycle has it landing (the body gone on by then);
+   *  the other foot stays. */
+  private firstStep(
+    F: "L" | "R",
+    left: number,
+    cycleAt: (ph: number) => Moved,
+    landPh: (F: "L" | "R") => number,
+    goes: (t: number) => number,
+    dir: number[],
+    home: Record<"L" | "R", { at: [number, number, number]; yaw: number }>,
+  ) {
+    const H = hero as Hero;
+    if (F !== this.lead)
+      return { at: this.steps?.feet[F].at ?? home[F].at, yaw: this.steps?.feet[F].yaw ?? home[F].yaw };
+    const f = H.footOf(cycleAt(landPh(F)), F);
+    const s = goes(left);
+    return {
+      at: [f.ankle[0] + dir[0] * s, ANKLE, f.ankle[2] + dir[1] * s] as [number, number, number],
+      yaw: home[F].yaw,
+    };
+  }
 
   private compose(dt: number, m: LocoIn, standing?: Moved): Moved {
     // (plan 58's, when they're on and in)
@@ -339,57 +626,101 @@ export class Locomotion {
     // planted by its stride, and a stride that isn't the one they're keyed to slides them)
     this.walked += d;
     const vary = H ? 1 + (this.quirk(3, 0.03) + 0.035 * wander(this.walked * 0.55, this.seed)) * (1 - runW) : 1;
-    const strideNow =
-      lerp(H ? H.walk2Stride(T) : 1, H ? H.run2Stride(effort) : runStride(effort), runW) *
+    let strideNow =
+      lerp(H ? H.walk2Stride(T, this.gait) : 1, H ? H.run2Stride(effort) : runStride(effort), runW) *
       (1 - 0.35 * this.driveW) *
       vary;
+    // (4d: backing up, crouched — their own strides, by how far it's each)
+    if (H) {
+      const back = smoother(clamp((Math.abs(this.way) - 1.6) / 0.4, 0, 1));
+      const bs = H.back2Stride(clamp((m.speed - S.walk) / (S.jog - S.walk), 0, 1), T);
+      strideNow = lerp(strideNow, bs, back);
+      strideNow = lerp(strideNow, H.crouch2Stride(T, back > 0.5), ease(this.crouchW));
+    }
     if (H) {
       this.gaitPh = (this.gaitPh + d / strideNow) % 1;
-      // (slowing to a stop, or as the stride fades out: onto both feet, quickly — no foot left up
-      // in the air once she's stood)
-      const settling = (m.accel < -3 && m.speed < S.walk + 0.4) || (m.speed < 1.2 && this.moveW < 0.95);
-      if (settling && this.moveW > 0.02) {
-        const both = Math.round(this.gaitPh * 2) / 2;
-        this.gaitPh = (this.gaitPh + (both - this.gaitPh) * k(18) + 1) % 1;
-      }
+      // (4c: stopping and setting off are steps of their own — the stepper's, below — not the cycle
+      // run down onto both feet)
     }
+    // 4d: the way it goes off its facing (first person, lock-on, aiming: aside, aslant, backing up) —
+    // the hips and legs turned to it, the chest kept ahead; past a right angle, backing up
+    const sp = Math.hypot(m.ahead, m.left);
+    // (as it is once it's going — the core turns it smoothly — eased only near still, where it's unsure)
+    if (!m.facing && !m.aim) this.way += (0 - this.way) * k(20);
+    else if (sp > 0.3) {
+      const to = Math.atan2(m.left, m.ahead);
+      const dw = Math.atan2(Math.sin(to - this.way), Math.cos(to - this.way));
+      this.way += sp > 1 ? dw : dw * k(20);
+    }
+    const backTo = H ? smoother(clamp((Math.abs(this.way) - 1.6) / 0.4, 0, 1)) : 0;
+    const crouched = this.crouchW > 0.01;
+    const life = { puff: this.puff, breath: this.breath, hurt: m.hurt ?? 0, gait: this.gait };
+    const wayF = clamp(this.way, -1.75, 1.75);
+    const wayB = clamp(this.way - Math.PI * Math.sign(this.way || 1), -1.2, 1.2);
+    // (the gait at a phase and a speed: forward — walk, run — or backing up, crouched or not)
+    const gaitAt = (ph: number, spd: number, pump = -1): Moved => {
+      const Hh = H as Hero;
+      const rw = clamp((spd - (S.walk + 0.4)) / 1.2, 0, 1);
+      const ef = clamp((spd - S.jog) / (S.sprint - S.jog), 0, 1);
+      const walk = Hh.walk2Pose(ph, T, wayF, life);
+      let fwd = rw > 0 ? mix(walk, Hh.run2Pose(ph, pump < 0 ? ef : pump, T, ef, wayF), rw) : walk;
+      // (mixed by where the feet are)
+      if (backTo > 0) {
+        const back = Hh.back2Pose(ph, clamp((spd - S.walk) / (S.jog - S.walk), 0, 1), T, wayB);
+        fwd = Hh.blendLegs(mix(fwd, back, backTo), fwd, back, backTo);
+      }
+      if (!crouched) return fwd;
+      const low = backTo > 0.5 ? Hh.crouch2Pose(ph, T, wayB, true) : Hh.crouch2Pose(ph, T, wayF);
+      const cw = ease(this.crouchW);
+      return Hh.blendLegs(mix(fwd, low, cw), fwd, low, cw);
+    };
+    this.gaitAt = H ? gaitAt : null;
     const walkNow = (): Moved => (H ? H.walk2Pose(this.gaitPh, T) : (walkPose(this.walkPh, 1) as Moved));
-    if (m.speed < S.walk + 0.4) gaitPose = walkNow();
-    else {
+    let still2 = still;
+    if (H) {
       const pump = clamp(effort + 0.6 * this.driveW + 0.06 * wander(this.walked * 0.4, this.seed + 2), 0, 1);
-      const run = H ? H.run2Pose(this.gaitPh, pump, T, effort) : runPose(this.runPh, effort);
+      gaitPose = gaitAt(this.gaitPh, m.speed, pump);
+      // (crouched and still: low over the feet, placed)
+      if (crouched) {
+        const low = H.crouch2Pose0(this.t, T);
+        const cw = ease(this.crouchW);
+        still2 = H.blendLegs(mix(still, low, cw), still, low, cw);
+      }
+    } else if (m.speed < S.walk + 0.4) gaitPose = walkNow();
+    else {
+      const run = runPose(this.runPh, effort);
       gaitPose = mix(walkNow(), run, runW);
     }
-    // going aside or backing up (first person's A / D and S): the legs step that way
-    const sp = Math.hypot(m.ahead, m.left);
-    const backTo = sp > 0.3 ? clamp((-m.ahead / sp) * 1.4 - 0.3, 0, 1) : 0;
-    const sideTo = sp > 0.3 ? clamp((Math.abs(m.left) / sp - 0.6) * 2.5, 0, 1) * (1 - backTo) : 0;
-    this.backW += (backTo - this.backW) * k(10);
-    this.sideW += (sideTo - this.sideW) * k(10);
-    if (this.backW > 0.01) gaitPose = mix(gaitPose, backpedalPose(this.backPh), ease(this.backW));
-    if (this.sideW > 0.01) gaitPose = mix(gaitPose, strafePose(this.sidePh, m.left > 0 ? 1 : -1), ease(this.sideW));
-    let body = mix(still, gaitPose, ease(this.moveW));
+    if (!H) {
+      // going aside or backing up (first person's A / D and S): the legs step that way
+      const backTo0 = sp > 0.3 ? clamp((-m.ahead / sp) * 1.4 - 0.3, 0, 1) : 0;
+      const sideTo = sp > 0.3 ? clamp((Math.abs(m.left) / sp - 0.6) * 2.5, 0, 1) * (1 - backTo0) : 0;
+      this.backW += (backTo0 - this.backW) * k(10);
+      this.sideW += (sideTo - this.sideW) * k(10);
+      if (this.backW > 0.01) gaitPose = mix(gaitPose, backpedalPose(this.backPh), ease(this.backW));
+      if (this.sideW > 0.01) gaitPose = mix(gaitPose, strafePose(this.sidePh, m.left > 0 ? 1 : -1), ease(this.sideW));
+    }
+    let body = mix(still2, gaitPose, ease(this.moveW));
 
     if (H && !m.up) {
-      // turning on the spot: the feet step round with it (two steps a half turn), not a turntable
-      const spinning = m.speed < 0.8 && Math.abs(m.turn) > 1.2;
-      if (spinning) {
-        // (a turn begun from standing starts on both feet: not wherever the last one's step was)
-        if (this.turnW < 0.02) this.turnPh = 0;
-        this.turnPh = (this.turnPh + (Math.abs(m.turn) * dt) / Math.PI) % 1;
-        this.turnSide = m.turn > 0 ? -1 : 1;
-      }
-      // (in over 0.15 s and out over 0.25, eased at both ends: it snapped in over 30 ms, a pop)
-      this.turnW = clamp(this.turnW + (spinning ? dt / 0.15 : -dt / 0.25), 0, 1);
-      if (this.turnW > 0.001) body = mix(body, H.turnStepPose(this.turnPh, this.turnSide), 0.85 * smoother(this.turnW));
       // slowing hard from speed: a skid
       // (begun braking from speed, held till nearly stopped: a sprint's stop skids all the way, a
       // run's a little)
-      if (!this.skidFrom && -m.accel > 6 && m.speed > 4) this.skidFrom = m.speed;
-      if (this.skidFrom && (m.speed < 0.8 || m.accel > 2)) this.skidFrom = 0;
+      // (going forward: backing up or aside, a stop's the stepper's)
+      // (nor turning hard: a cut at a sprint slows as its way swings round — braced on a foot out
+      // ahead, slid on it while it turned, the leg folded under her)
+      if (!this.skidFrom && -m.accel > 6 && m.speed > 4 && Math.abs(this.way) < 1 && Math.abs(m.turn) < 1.5)
+        this.skidFrom = m.speed;
+      // (over when it's nearly stopped, or done braking — slowed from a sprint to a walk, say)
+      if (this.skidFrom && (m.speed < 0.8 || m.accel > -1)) this.skidFrom = 0;
       const skidTo = this.skidFrom ? clamp((this.skidFrom - 3) / (S.sprint - 3), 0, 1) : 0;
       this.skidW += (skidTo - this.skidW) * k(skidTo > this.skidW ? 16 : 6);
-      if (this.skidW > 0.01) body = mix(body, H.skid2Pose(this.skidW, this.t), ease(this.skidW));
+      // (its lean and arms; the feet where the gait has them — the stepper's brace, while it skids)
+      if (this.skidW > 0.01) {
+        const pre = body;
+        body = H.blendLegs(mix(body, H.skid2Pose(this.skidW, this.t), ease(this.skidW)), pre, pre, 0.5);
+      }
+      body = this.stepper(H, dt, m, body, T, strideNow);
       // come to a stop from a run: the weight settles (a small give in the knees)
       if (m.speed > 2.5) this.moving = true;
       else if (this.moving && m.speed < 0.6) {
@@ -399,8 +730,8 @@ export class Locomotion {
       }
     }
 
-    // crouched: the crouch, sneaking when moving
-    if (this.crouchW > 0.01) {
+    // crouched: the crouch, sneaking when moving (plan 58's: in the gait, above)
+    if (!H && this.crouchW > 0.01) {
       const low = mix(crouchPose(breath), crouchWalkPose(this.sneakPh), ease(this.moveW));
       body = mix(body, low, ease(this.crouchW));
     }
@@ -414,11 +745,13 @@ export class Locomotion {
     if (this.aimW > 0.01) {
       const sp = Math.max(1e-6, Math.hypot(m.ahead, m.left));
       let legs: Moved;
-      if (m.speed < 0.2) legs = aimPose(0, 0, false, breath);
+      // (plan 58: the legs the gait's — aside, backing up, by the way it goes — the top aims)
+      if (H) legs = body;
+      else if (m.speed < 0.2) legs = aimPose(0, 0, false, breath);
       else if (-m.ahead > Math.abs(m.left) * 0.8) legs = backpedalPose(this.backPh);
       else if (Math.abs(m.left) > Math.abs(m.ahead)) legs = strafePose(this.sidePh, m.left > 0 ? 1 : -1);
       else legs = walkPose(this.walkPh, 0.85) as Moved;
-      legs = mix(aimPose(0, 0, false, breath), legs, ease(clamp(sp / 0.7, 0, 1)));
+      if (!H) legs = mix(aimPose(0, 0, false, breath), legs, ease(clamp(sp / 0.7, 0, 1)));
       this.pitch += (m.pitch - this.pitch) * k(16);
       const top = aimPose(this.pitch, m.yaw, !!m.gun, breath);
       const both: Moved = { pose: { ...legs.pose }, lift: legs.lift };
@@ -427,18 +760,68 @@ export class Locomotion {
     }
 
     // ── in the air: the jump's own arc (a sprint's flip turns over), or falling
-    const jump = m.jump ?? (m.up ? this.lastJump : null);
+    // (plan 58: down from a jump, its own landing — the reach, the impact, the give — then into the
+    // gait; on the run quick and light, the run picked up on a foot that's landing. The core has no
+    // landing of its own: the jump's pose was dropped for the run's in a frame)
+    if (H && !m.up && !m.jump && this.lastJump && this.lastJump.stage === "air") {
+      this.landOf = { kind: this.lastJump.kind, t: 0 };
+      // (the run picked up on the foot the jump brings down first: the lower one)
+      // (…at the point of its time on the ground where the run has it where the jump put it: further
+      // back, further through — set at its landing it jumped there)
+      if (m.speed > 1 && this.gaitAt && this.shown) {
+        // (where the feet were last shown, the body's way since taken off)
+        const was = this.shown;
+        const F = was.R[1] <= was.L[1] ? "R" : "L";
+        const ph0 = F === "R" ? 0 : 0.5;
+        const z0 = H.footOf(this.gaitAt(ph0, m.speed), F).ankle[2];
+        const past = clamp((z0 - (was[F][2] - m.ahead * dt)) / strideNow, -0.08, 0.15);
+        this.gaitPh = (ph0 + past + 1) % 1;
+      }
+    }
+    const running = clamp((m.speed - S.walk) / (S.jog - S.walk), 0, 1);
+    if (this.landOf) {
+      this.landOf.t += dt / lerp(0.38, 0.2, running);
+      if (this.landOf.t >= 1 || m.up || m.jump || m.verb || m.flow) this.landOf = null;
+    }
+    const landing = this.landOf ? { kind: this.landOf.kind as JumpNow["kind"], stage: "land" as const, k: this.landOf.t } : null;
+    if (m.jump?.stage === "crouch") this.fromRun = running > 0.5;
+    const jump = m.jump ?? (m.up ? this.lastJump : landing);
     if (m.jump) this.lastJump = m.jump;
     if (!m.up && !m.jump) this.lastJump = null;
     if (spin !== null && m.up) {
       body = spinPose(spin, m.reduced);
     } else if (jump) {
       const j = H ? H.jump2Pose(jump, !m.reduced) : jumpPose(jump, !m.reduced);
-      if (j.w > 0)
+      // (on the run: landing lighter — the gait's legs take most of it; going up off the stride itself —
+      // no crouch onto both feet, which dragged them at a run — the air's pose eased in as it leaves)
+      if (jump.stage === "air") this.airT += dt;
+      else this.airT = 0;
+      const jw = !H
+        ? j.w
+        : jump === landing
+          ? j.w * (1 - 0.45 * running)
+          : jump.stage === "crouch"
+            ? j.w * (1 - running)
+            : j.w * (this.fromRun ? smoother(clamp(this.airT / 0.08, 0, 1)) : 1);
+      if (jw > 0) {
+        const pre = body;
         body = {
-          pose: blend(body.pose, j.pose, j.w),
-          lift: [body.lift[0], lerp(body.lift[1], j.lift[1], j.w), body.lift[2]],
+          pose: blend(body.pose, j.pose, jw),
+          lift: [body.lift[0], lerp(body.lift[1], j.lift[1], jw), body.lift[2]],
         };
+        // (landing, and crouching to go: the feet between the jump's and the gait's by where they are —
+        // by the angles they dragged along the ground under a body still going)
+        if (H && jump.stage === "crouch") body = H.blendLegs(body, pre, { pose: j.pose, lift: j.lift }, jw);
+        // (landing: only a foot the gait has down takes the landing's height — one it has swinging stays
+        // up: pulled down to the landing's, it dragged along the floor)
+        if (H && jump === landing) {
+          const down = (S: "L" | "R") => {
+            const f = H.footOf(pre, S);
+            return 1 - smoother(clamp(Math.min(f.heel[1], f.ball[1]) / 0.04, 0, 1));
+          };
+          body = H.blendLegs(body, pre, { pose: j.pose, lift: j.lift }, [jw * down("L"), jw * down("R")], false);
+        }
+      }
     } else if (this.airW > 0.01) {
       // off an edge: the legs reaching down, the arms out
       const fall = landPose(0.15);
@@ -448,9 +831,10 @@ export class Locomotion {
     }
 
     // ── landing: a squash by how hard it was, gone in a moment
-    if (m.landed !== undefined && m.landed > 0.04) {
+    // (plan 58: a jump's landing is its own, above; off an edge, the squash — lighter on the run)
+    if (m.landed !== undefined && m.landed > 0.04 && !this.landOf) {
       this.landT = 0;
-      this.landK = m.landed;
+      this.landK = H ? m.landed * (1 - 0.7 * running) : m.landed;
     }
     if (this.landT < 1) {
       this.landT = Math.min(1, this.landT + dt / (0.18 + 0.22 * this.landK));
@@ -474,7 +858,7 @@ export class Locomotion {
 
     // (plan 58 phase 2e: where the base has the feet — the cycle, its transitions — before the layers
     // lean and twist the body: the foot lock takes them on the ground from here, and keeps them there)
-    this.base = H && !m.up && !m.verb ? { L: H.ankleOf(body, "L").at, R: H.ankleOf(body, "R").at } : null;
+    this.base = H && !m.up && !m.verb ? { L: H.footOf(body, "L"), R: H.footOf(body, "R") } : null;
 
     // ── plan 58 G.E: whose it is, and never twice the same — one arm swinging more than the other,
     // each stride's swing its own; the head carried a little to one side; a slow wander through the

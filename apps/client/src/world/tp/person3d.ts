@@ -191,6 +191,8 @@ export class Person3D {
     if (seen.lowQuality && lod === 0) lod = 1;
     if (this.model.avatar !== p.avatar || this.model.lod !== lod) this.model.set(p.avatar, lod);
     this.model.update(d);
+    // (how they walk is their look's: plan 58 4e)
+    this.motion.gait = p.avatar.gait ?? "calm";
 
     // the facing turns smoothly (others only send 8 directions)
     if (this.turned === null) this.turned = p.angle;

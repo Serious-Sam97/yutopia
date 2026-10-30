@@ -22,7 +22,7 @@ import * as C from "../../chars";
 import type { LookAt } from "../../chars/anim/hero";
 // (the input chunk's parts, not its index: its marker counts the world's chunk for the budget)
 import { isMac, keyLabel, khBindings, learnLayout, padLabel, plan29Bindings, walkKeys } from "../../input/bindings";
-import { afterFirstStep, camLook, MoveControls } from "../../input/controls";
+import { afterFirstStep, camLook, HeldOver, MoveControls } from "../../input/controls";
 import { type CamTune, type Follow, FollowCam } from "../follow-cam";
 import { joltPad, LAND, onPadLand, WALL_H, YARD } from "./jolt-pad";
 
@@ -295,10 +295,11 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
   let loco = new C.Locomotion(spec);
   // plan 58's animations (docs/plan/58-the-animation.md, phase 0): on here, against the old with
   // the panel's box; the mood from day (0) to the dark (1)
-  const anim: { v2: boolean; tension: number; shown?: () => void; changed?: () => void } = {
-    v2: new URLSearchParams(location.search).get("v2") !== "0",
-    tension: 0,
-  };
+  const anim: { v2: boolean; tension: number; hurt?: number; gait?: string; shown?: () => void; changed?: () => void } =
+    {
+      v2: new URLSearchParams(location.search).get("v2") !== "0",
+      tension: 0,
+    };
   // …and with them, the body with weight (plan 58 G.A: KH_FEEL's ramp, arcs, facing where it goes);
   // off, today's KH body. Heavier in the dark: slower to speed and to stop, wider turns.
   const feel = () => {
@@ -319,6 +320,7 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
   anim.changed = feel;
   feel();
   const clock = new MoveClock();
+  const heldOver = new HeldOver();
   let controls = new MoveControls(kh ? khBindings() : plan29Bindings());
 
   // ── the camera
@@ -333,7 +335,6 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
   let aheadFor = 0;
   let fov = 62;
   const target = new T3.Vector3(START.x, 1.15, START.y);
-  const footAt = new T3.Vector3();
   // s into a flow jump's spin (chars/moves.ts spinPose), or none
   let spinT: number | null = null;
   let aimPitch = 0;
@@ -409,10 +410,13 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
     else if (controls.down(e.code)) e.preventDefault();
   };
   const kd = (e: KeyboardEvent) => {
-    // plan 58: N new / old, M the mood round day → dusk → the dark
-    if (!e.repeat && (e.code === "KeyN" || e.code === "KeyM")) {
+    // plan 58: N new / old, M the mood round day → dusk → the dark, B the walk's style round (4e)
+    if (!e.repeat && (e.code === "KeyN" || e.code === "KeyM" || e.code === "KeyB")) {
       if (e.code === "KeyN") anim.v2 = !anim.v2;
-      else anim.tension = anim.tension < 0.25 ? 0.5 : anim.tension < 0.75 ? 1 : 0;
+      else if (e.code === "KeyB") {
+        const all = ["calm", "bouncy", "heavy", "brisk", "tired", "old"];
+        anim.gait = all[(all.indexOf(anim.gait ?? "calm") + 1) % all.length];
+      } else anim.tension = anim.tension < 0.25 ? 0.5 : anim.tension < 0.75 ? 1 : 0;
       feel();
       anim.shown?.();
       return;
@@ -589,6 +593,7 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
     // the body's fixed steps
     const events: StepEvents[] = [];
     let first = true;
+    heldOver.add(move);
     const alpha = clock.advance(dt, () => {
       prev = { ...body, verb: body.verb ? { ...body.verb } : null };
       events.push(stepBody(body, move, env, spec));
@@ -597,6 +602,7 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
         first = false;
       }
     });
+    heldOver.after(move, !first);
     jolt?.step(dt);
     const ix = prev.x + (body.x - prev.x) * alpha;
     const iy = prev.y + (body.y - prev.y) * alpha;
@@ -638,6 +644,7 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
     loco.v2 = anim.v2;
     loco.tension = anim.tension;
     loco.seed = 3;
+    loco.gait = anim.gait ?? "calm";
     // (G.D: whoever's locked on is looked at — from the facing, + to the left: the floor's y south;
     // else (3e) someone near — a dummy, a ball rolling by — that she can see: Jolt's ray)
     const H0 = anim.v2 ? C.heroNow() : null;
@@ -692,6 +699,27 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
             : null,
         flow: spinT === null ? flowLook(body, spec) : { kind: "spin", t: spinT / SPIN_LEN, side: 1, speed: 0 },
         look: gazeAt,
+        // (4c/4d: the gait it's going for, and facing the look — lock-on, aiming — not its way)
+        goal:
+          body.gait === "walk" ||
+          body.gait === "jog" ||
+          body.gait === "sprint" ||
+          body.gait === "crouch" ||
+          body.gait === "aim"
+            ? spec[body.gait]
+            : undefined,
+        facing: !!move.faceLook || !!move.aim,
+        hurt: anim.hurt,
+        // (4f: the ground under a spot in her own space — Jolt's, a foot's width round it: round a
+        // body's it found the tops of things beside the foot)
+        ground: jolt
+          ? (lx: number, lz: number) => {
+              const ry = Math.PI / 2 - iyaw;
+              const wx = ix + lx * Math.cos(ry) + lz * Math.sin(ry);
+              const wz = iy - lx * Math.sin(ry) + lz * Math.cos(ry);
+              return env.grid.groundAt(wx, wz, iz + 0.6, 0.04) - iz;
+            }
+          : undefined,
         reduced: false,
       },
       standing,
@@ -699,32 +727,7 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
     model.root.position.set(ix, iz, iy);
     model.root.rotation.y = Math.PI / 2 - iyaw;
     model.setPose(mo.pose, mo.lift);
-    // plan 58 G.G: the feet on Jolt's ground — the heights under each foot (and a step ahead and
-    // behind it, for the slope), the hips let down, the knees bent to meet them
-    if (H && jolt && !body.up && !body.verb && !body.flow) {
-      model.root.updateMatrixWorld(true);
-      const rootY = model.root.position.y;
-      const under: [number, number] = [0, 0];
-      const sole: [number, number] = [0, 0];
-      const slope: [number, number] = [0, 0];
-      const fx = Math.cos(body.yaw);
-      const fy = Math.sin(body.yaw);
-      // (a foot's own spot, not a body's width: round a whole body it found the tops of things beside
-      // the foot, or started inside them — 0.72 m under a foot on the flat, a leg jerked up)
-      const ground = (x: number, y: number) => env.grid.groundAt(x, y, rootY + 0.6, 0.04);
-      (["L", "R"] as const).forEach((S, i) => {
-        model.bones[`ankle${S}`].getWorldPosition(footAt);
-        under[i] = ground(footAt.x, footAt.z) - rootY;
-        sole[i] = footAt.y - C.ANKLE - rootY;
-        const up = ground(footAt.x + fx * 0.12, footAt.z + fy * 0.12);
-        const down = ground(footAt.x - fx * 0.12, footAt.z - fy * 0.12);
-        slope[i] = Math.max(-1, Math.min(1, (up - down) / 0.24));
-      });
-      const lift0 = mo.lift[1];
-      H.footPlant(mo, { under, sole, slope });
-      planted = { under: [...under], sole: [...sole], drop: mo.lift[1] - lift0 };
-      model.setPose(mo.pose, mo.lift);
-    }
+    planted = loco.groundOut ? { under: [...loco.groundOut.under], sole: [], drop: loco.groundOut.drop } : null;
     // (plan 58 phase 2d: the springs, after the pose)
     model.step(dt);
     // (plan 58 G.D: the gaze's eyes and blink)
@@ -932,7 +935,7 @@ interface PanelCtx {
   /** KH (true) or today's */
   preset(kh: boolean): void;
   /** plan 58's animations on, and the mood (0 day … 1 the dark) */
-  anim: { v2: boolean; tension: number; shown?: () => void; changed?: () => void };
+  anim: { v2: boolean; tension: number; hurt?: number; gait?: string; shown?: () => void; changed?: () => void };
 }
 
 function panel(host: HTMLElement, spec: MoveSpec, cam: CamTune, kh: boolean, ctx: PanelCtx) {
@@ -993,18 +996,32 @@ function panel(host: HTMLElement, spec: MoveSpec, cam: CamTune, kh: boolean, ctx
       `<label><input type=checkbox data-a58> new animations</label> · ${k("KeyN")} new / old<br>` +
       `<span data-mood></span> · ${k("KeyM")} day / dusk / dark<br>` +
       `<input type=range min=0 max=1 step=0.05 data-moodr style="width:100%"><br>` +
+      `<span data-gaitl></span> · ${k("KeyB")} the walk's style (4e)<br>` +
+      `<span data-hurtl></span> (4d: a limp)<br>` +
+      `<input type=range min=0 max=1 step=0.05 data-hurt style="width:100%"><br>` +
       `<span style="color:#aaa">stand still: the idle · ${k(walkKeys(isMac())[0])}+${k("KeyW")} walk · ${k("KeyW")} run · ${k("ShiftLeft")} sprint · ${k("Space")} jump (running: the flip)</span>` +
       `</div>`,
   );
   const a58 = anim.querySelector("[data-a58]") as HTMLInputElement;
   const moodL = anim.querySelector("[data-mood]") as HTMLElement;
   const moodR = anim.querySelector("[data-moodr]") as HTMLInputElement;
+  const hurtR = anim.querySelector("[data-hurt]") as HTMLInputElement;
+  const hurtL = anim.querySelector("[data-hurtl]") as HTMLElement;
+  const gaitL = anim.querySelector("[data-gaitl]") as HTMLElement;
   const showAnim = () => {
     a58.checked = ctx.anim.v2;
     moodR.value = String(ctx.anim.tension);
     const t = ctx.anim.tension;
     moodL.textContent = `mood: ${t < 0.25 ? "day" : t < 0.75 ? "dusk" : "the dark"} (${t.toFixed(2)})`;
     moodR.disabled = !ctx.anim.v2;
+    hurtR.value = String(ctx.anim.hurt ?? 0);
+    hurtL.textContent = `hurt: ${(ctx.anim.hurt ?? 0).toFixed(2)}`;
+    gaitL.textContent = `walk: ${ctx.anim.gait ?? "calm"}`;
+    hurtR.disabled = !ctx.anim.v2;
+  };
+  hurtR.oninput = () => {
+    ctx.anim.hurt = Number(hurtR.value);
+    showAnim();
   };
   a58.onchange = () => {
     ctx.anim.v2 = a58.checked;

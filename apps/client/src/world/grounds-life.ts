@@ -243,6 +243,8 @@ export class GroundsLife {
 const FOLK_ROLE: Record<string, string> = { control: "folkControl", mechanic: "folkMechanic", cocoa: "folkCocoa" };
 
 const GUARD_LOOK = parseAvatar({
+  // (his rounds walked heavy)
+  gait: "heavy",
   body: "broad",
   skin: "#c9a27e",
   hair: "short",

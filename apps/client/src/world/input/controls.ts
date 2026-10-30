@@ -230,3 +230,23 @@ export function afterFirstStep(m: MoveInput): void {
   m.dodgePressed = false;
   m.crouchPressed = false;
 }
+
+/** A frame's presses that no fixed step took — a 120 Hz screen's frame comes before a whole step now
+ *  and then (1 in 100: a jump pressed then was lost) — carried to the next frame's. */
+export class HeldOver {
+  private jump = false;
+  private dodge = false;
+  private crouch = false;
+  /** Before the frame's steps: last frame's untaken presses added. */
+  add(m: MoveInput): void {
+    m.jumpPressed ||= this.jump;
+    m.dodgePressed ||= this.dodge;
+    m.crouchPressed ||= this.crouch;
+  }
+  /** After them: kept if no step ran, else let go. */
+  after(m: MoveInput, stepped: boolean): void {
+    this.jump = !stepped && m.jumpPressed;
+    this.dodge = !stepped && m.dodgePressed;
+    this.crouch = !stepped && m.crouchPressed;
+  }
+}

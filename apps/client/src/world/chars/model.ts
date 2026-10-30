@@ -10,7 +10,7 @@ import {
   SkinnedMesh,
   Vector3,
 } from "three";
-import { armsOf, type Baked, bake } from "./bake";
+import { armsOf, type Baked, bake, THIGH_BONES } from "./bake";
 import { buildPerson } from "./build";
 import { solveArm } from "./ik";
 import { inkMaterial } from "./ink";
@@ -26,8 +26,48 @@ import { JOINTS, type JointName, PARENT, type Pose, REST, type RestPose, type Sp
 let body: MeshBasicMaterial | null = null;
 /** The one material every person's body is drawn with: flat, its colours in the vertices. */
 export function bodyMaterial(): MeshBasicMaterial {
-  if (!body) body = new MeshBasicMaterial({ vertexColors: true });
+  if (!body) {
+    body = new MeshBasicMaterial({ vertexColors: true });
+    legShade(body);
+  }
   return body;
+}
+
+// (2026-10-30) The far leg a shade darker: side on, two legs in one flat colour read as one short
+// shape. Each leg's vertex knows its leg and its hip joint at rest (bake.ts `legSide`, `legHip`); the
+// vertex shader finds both hips where the thighs' bones have them now (the other's the mirror of its
+// own) and darkens the leg whose hip is the farther from the camera — side on, all of it; face on,
+// none. (Worked out per vertex: a material's uniforms aren't sent again between people sharing it.)
+/** Darken the far leg on `m` (chained after what's patched on it already: the world's light). */
+export function legShade(m: Material): void {
+  const was = m.onBeforeCompile;
+  const key = m.customProgramCacheKey;
+  m.onBeforeCompile = (sh, r) => {
+    was.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nattribute float legSide;\nattribute vec3 legHip;\nvarying float vFarLeg;",
+      )
+      .replace(
+        "#include <project_vertex>",
+        `#include <project_vertex>
+vFarLeg = 0.0;
+#ifdef USE_SKINNING
+if (legSide != 0.0) {
+  float own = legSide > 0.0 ? ${THIGH_BONES[0]}.0 : ${THIGH_BONES[1]}.0;
+  float other = legSide > 0.0 ? ${THIGH_BONES[1]}.0 : ${THIGH_BONES[0]}.0;
+  vec4 a = viewMatrix * modelMatrix * (bindMatrixInverse * (getBoneMatrix(own) * (bindMatrix * vec4(legHip, 1.0))));
+  vec4 b = viewMatrix * modelMatrix * (bindMatrixInverse * (getBoneMatrix(other) * (bindMatrix * vec4(-legHip.x, legHip.y, legHip.z, 1.0))));
+  vFarLeg = clamp((b.z - a.z) / 0.1, 0.0, 1.0) * abs(legSide);
+}
+#endif`,
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vFarLeg;")
+      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.2 * vFarLeg;");
+  };
+  m.customProgramCacheKey = () => `${key.call(m)}|legs`;
 }
 
 /** What makes two looks the same model (everything in the avatar is drawn). */

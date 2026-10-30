@@ -33,6 +33,10 @@ it('saves and validates avatars', function () {
     $this->actingAs($ana)->putJson('/api/avatar', $more + $layers)->assertOk()
         ->assertJsonPath('avatar.extra', 'scarf')->assertJsonPath('avatar.shoes', 'boots')->assertJsonPath('avatar.eyewear', 'sunglasses');
     $this->actingAs($ana)->putJson('/api/avatar', ['shoesColor' => 'brown'] + $more + $layers)->assertUnprocessable();
+    // how they walk (plan 58, 4e): calm till chosen, kept, a slug
+    $this->actingAs($ana)->getJson('/api/avatar')->assertJsonPath('avatar.gait', 'calm');
+    $this->actingAs($ana)->putJson('/api/avatar', ['gait' => 'bouncy'] + $layers)->assertOk()->assertJsonPath('avatar.gait', 'bouncy');
+    $this->actingAs($ana)->putJson('/api/avatar', ['gait' => 'a walk!'] + $layers)->assertUnprocessable();
     $this->actingAs($ana)->putJson('/api/avatar', ['beard' => 'goatee', 'hair' => 'crew'] + $more + $layers)->assertOk()
         ->assertJsonPath('avatar.beard', 'goatee')->assertJsonPath('avatar.hair', 'crew');
     $this->actingAs($ana)->putJson('/api/avatar', ['beard' => '<b>'] + $more + $layers)->assertUnprocessable();

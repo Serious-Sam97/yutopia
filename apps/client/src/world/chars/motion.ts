@@ -2,6 +2,7 @@ import { type HeldKind, heldState, type JumpNow } from "@yutopia/shared";
 import { Euler, Quaternion } from "three";
 import { heroNow, type LocoIn, Locomotion, loadHero } from "./locomotion";
 import type { Reach } from "./model";
+import { LEG_K } from "./moves";
 import { type Euler3, HANDS, handPose, JOINTS, type JointName, type Pose, REST } from "./rig";
 
 // How a 3D person moves (docs/plan/22-people-3d.md, P3): the same layers, in
@@ -53,7 +54,7 @@ export const ease = (t: number) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
 // tiles per walk cycle (two steps) at walking speed: with the thigh swinging
 // ±27° the planted foot stays put
-export const STRIDE = 1.2;
+export const STRIDE = 1.2 * LEG_K;
 const SWING = 0.48;
 
 /** The right side's version of a left-side rotation (mirrored across the body). */
@@ -623,6 +624,8 @@ export class Motion3 {
   /** plan 58's animations (phase 0: beside the old till signed off), the mood (0 day … 1 dark) */
   v2 = false;
   tension = 0;
+  /** plan 58 4e: how they walk (their look's) */
+  gait = "calm";
   private seed: number;
 
   constructor(seed: number) {
@@ -670,7 +673,7 @@ export class Motion3 {
     const idle2 = !!H && !m.sit && !m.reduced;
     if (H && idle2) {
       // (gazed: the head's turned by the gaze, its eyes leading — Locomotion's)
-      const id = H.idle2Pose(t, this.tension, this.seed * 10, !!m.loco, this.loco?.life());
+      const id = H.idle2Pose(t, this.tension, this.seed * 10, !!m.loco, this.loco?.life() ?? { gait: this.gait });
       p = id.pose;
       lifted(id.lift);
     }
@@ -716,6 +719,7 @@ export class Motion3 {
       this.loco.v2 = this.v2;
       this.loco.tension = this.tension;
       this.loco.seed = this.seed * 10;
+      this.loco.gait = this.gait;
       const lo = this.loco.update(
         dt,
         { ...m.loco, dist: m.dist, speed: m.speed, jump: m.jump ?? null, reduced: m.reduced },

@@ -2868,6 +2868,9 @@ void main() {
       this.light.patch(body);
       const bodyAway = new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 });
       this.light.patch(bodyAway);
+      // (the far leg a shade darker, after the light: chars/model.ts)
+      C.legShade(body);
+      C.legShade(bodyAway);
       const prop = (color: string) => {
         let m = this.propMats.get(color);
         if (!m) {

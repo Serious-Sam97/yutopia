@@ -3,6 +3,7 @@ import { afterEach, test } from "node:test";
 import { Grid } from "../grid.ts";
 import {
   type Body,
+  KH_FEEL,
   MOVE,
   type MoveEnv,
   type MoveInput,
@@ -460,4 +461,39 @@ test("up a 30° slope: along the ground the body keeps its pace; without, the sl
   }
   assert.ok(pace > 0.95 * MOVE.jog, `along: ${pace}`);
   assert.ok(end.true.x > end.false.x + 2, `along to x ${end.true.x}, today's to ${end.false.x}`);
+});
+
+// small steps walked up at a run, no stall (the game's mover: along the ground). A capsule's round
+// foot met a kerb's edge as a slope and slid up it, stopping dead a frame first: a jog stalled to 0
+// at a 15 cm stair or a 20 cm kerb.
+test("a jog up a 15 cm stair, a 20 cm kerb (straight on or at an angle): its pace kept; 40 cm stops it", async () => {
+  for (const [rise, n, aslant] of [
+    [0.15, 4, 0],
+    [0.2, 1, 0],
+    [0.15, 1, 0.7],
+    [0.4, 1, 0],
+  ] as [number, number, number][]) {
+    const tops = new Map<string, number>();
+    for (let i = 0; i < n; i++)
+      for (let y = 0; y < 12; y++)
+        for (let x = 10 + i; x < 20; x++) tops.set(`${x},${y}`, Math.max(tops.get(`${x},${y}`) ?? 0, rise * (i + 1)));
+    const { env, mover } = await pad(
+      20,
+      12,
+      [...tops].map(([k, t]) => {
+        const [x, y] = k.split(",").map(Number);
+        return [x, y, t] as [number, number, number];
+      }),
+    );
+    mover.along = true;
+    const b = newBody(4, 3);
+    let slowest = 99;
+    for (let i = 0; i < 400 && b.x < 10 + n + 1; i++) {
+      stepBody(b, go({ y: aslant }), env, KH_FEEL);
+      if (b.x > 8) slowest = Math.min(slowest, Math.hypot(b.vx, b.vy));
+    }
+    if (rise < 0.3)
+      assert.ok(slowest > 0.9 * KH_FEEL.jog, `${rise} m${aslant ? " aslant" : ""}: down to ${slowest.toFixed(2)} m/s`);
+    else assert.ok(b.x < 10 && b.z < 0.01, `${rise} m: stopped at ${b.x.toFixed(2)}`);
+  }
 });

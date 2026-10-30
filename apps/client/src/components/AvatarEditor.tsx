@@ -35,6 +35,8 @@ const TABS: { id: Tab; name: [string, string] }[] = [
 const ROWS: { shape?: ShapeKey; color?: keyof AvatarLayers; palette?: string[]; label: Key; tab: Tab }[] = [
   { shape: "gender", label: "gender", tab: "body" },
   { shape: "body", label: "body", tab: "body" },
+  // (plan 58 4e: kept with the look, seen by everyone; the preview walks it)
+  { shape: "gait", label: "gait", tab: "body" },
   { color: "skin", palette: SKIN_TONES, label: "skin", tab: "body" },
   { shape: "hair", label: "hair", tab: "hair" },
   { color: "hairColor", palette: HAIR_COLORS, label: "hairColor", tab: "hair" },
@@ -175,11 +177,17 @@ export function AvatarEditor({
                     key={opt}
                     type="button"
                     aria-pressed={a[row.shape as ShapeKey] === opt}
-                    onClick={() => set({ [row.shape as string]: opt })}
+                    onClick={() => {
+                      set({ [row.shape as string]: opt });
+                      // (a walk chosen: the preview walks it)
+                      if (row.shape === "gait") setWalk(true);
+                    }}
                     className="deck-btn"
                     style={{ height: 34, fontSize: 12.5 }}
                   >
-                    {row.shape === "gender" ? t(`${row.shape}_${opt}` as Key) : (NAMES[opt] ?? opt)}
+                    {row.shape === "gender" || row.shape === "gait"
+                      ? t(`${row.shape}_${opt}` as Key)
+                      : (NAMES[opt] ?? opt)}
                   </button>
                 ))}
               {row.color &&

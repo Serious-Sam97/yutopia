@@ -1,5 +1,5 @@
-import { type JumpKind, jumpArc, jumpNowAt, jumpTimes } from "@yutopia/shared";
-import { KH_FEEL, KH_MOVE } from "@yutopia/shared/move";
+import { Grid, type JumpKind, jumpArc, jumpNowAt, jumpTimes } from "@yutopia/shared";
+import { KH_FEEL, KH_MOVE, type MoveEnv, type MoveInput, NO_INPUT, newBody, stepBody } from "@yutopia/shared/move";
 import type { LocoIn, Moved } from "@/world/chars";
 
 // /dev/anim's clips (docs/plan/58-the-animation.md, phase 2): every animation by name, two ways —
@@ -15,6 +15,8 @@ export interface Ctx {
   H: Hero;
   /** the mood: 0 day … 1 the dark */
   T: number;
+  /** the walk's style (plan 58 4e) */
+  gait?: string;
 }
 /** Where the body is, in the scene (three's: it faces +z at yaw 0, its left +x), and turned (rad,
  *  + to its left: three's rotation.y). */
@@ -38,6 +40,15 @@ export interface Clip {
   len: number;
   raw?: { after: (x: Ctx, t: number) => Moved; before?: (x: Ctx, t: number) => Moved; root?: (t: number) => Root };
   live?: (t: number) => Drive;
+  /** (4c) driven by the move core itself under these keys (`x`, `y`: the way, in the body's own
+   *  frame at the start — y ahead, x to its right), as the game moves the body: starts, stops,
+   *  turning back */
+  keys?: (t: number) => Partial<MoveInput>;
+  /** (4d) how hurt she is (0…1): a limp */
+  hurt?: number;
+  /** (4f) the ground's height at (x, z) in the scene (three's: z the way she sets off): a ramp,
+   *  stairs; else flat */
+  ground?: (x: number, z: number) => number;
 }
 
 const still = (): Root => ({ x: 0, y: 0, z: 0, yaw: 0 });
@@ -82,7 +93,7 @@ export function clipList(): Clip[] {
     group: "standing",
     // (long enough for its variants: one every 17–24 s)
     len: 40,
-    raw: { after: (x, t) => x.H.idle2Pose(t, x.T, 3, false) },
+    raw: { after: (x, t) => x.H.idle2Pose(t, x.T, 3, false, { gait: x.gait }) },
     live: () => ({ speed: 0 }),
   });
   // the trunk bent every way, through the spine and the chest (plan 58 phase 2: the waist, the
@@ -176,8 +187,8 @@ export function clipList(): Clip[] {
   cycle(
     "walk",
     WALK,
-    (x) => x.H.walk2Stride(x.T),
-    (x, ph) => x.H.walk2Pose(ph, x.T),
+    (x) => x.H.walk2Stride(x.T, x.gait),
+    (x, ph) => x.H.walk2Pose(ph, x.T, 0, { gait: x.gait }),
     (x, ph) => x.C.walkPose(ph, 1) as Moved,
     (x) => x.C.STRIDE,
   );
@@ -205,19 +216,128 @@ export function clipList(): Clip[] {
     (x, ph) => x.C.runPose(ph, 1),
     (x) => x.C.runStride(1),
   );
-  // ── on the move: driven, as the game does it
-  add({
-    name: "start, jog, stop",
-    group: "on the move",
-    len: 3.2,
-    live: (t) => ({ speed: t < 0.4 ? 0 : t < 2.2 ? JOG : 0 }),
-  });
-  add({
-    name: "sprint, skid",
-    group: "on the move",
-    len: 3.2,
-    live: (t) => ({ speed: t < 0.3 ? 0 : t < 1.8 ? SPRINT : 0 }),
-  });
+  // ── on the move: driven, as the game does it (4c: by the move core, under keys)
+  const keyed = (name: string, len: number, keys: (t: number) => Partial<MoveInput>) =>
+    add({ name, group: "starts, stops, turns", len, live: () => ({ speed: 0 }), keys });
+  const during = (t: number, a: number, b: number) => t >= a && t < b;
+  keyed("start, walk, stop", 3.6, (t) => ({ y: during(t, 0.4, 2.4) ? 1 : 0, walk: true }));
+  keyed("start, jog, stop", 3.2, (t) => ({ y: during(t, 0.4, 2.2) ? 1 : 0 }));
+  keyed("sprint, skid", 3.4, (t) => ({ y: during(t, 0.3, 2.2) ? 1 : 0, sprint: true }));
+  // (turning back: the keys the other way — the body faces on as it slows, turns round once it's
+  // slow, and goes)
+  keyed("walk, turn back", 4.4, (t) => ({ y: during(t, 0.3, 2) ? 1 : during(t, 2, 3.6) ? -1 : 0, walk: true }));
+  keyed("jog, turn back", 4, (t) => ({ y: during(t, 0.3, 1.8) ? 1 : during(t, 1.8, 3.2) ? -1 : 0 }));
+  keyed("sprint, turn back", 4.6, (t) => ({ y: during(t, 0.3, 2.2) ? 1 : during(t, 2.2, 3.8) ? -1 : 0, sprint: true }));
+  // (a cut: a quarter turn at a jog, to the right)
+  keyed("jog, cut right", 3.4, (t) => (during(t, 0.3, 1.6) ? { y: 1 } : during(t, 1.6, 2.8) ? { x: 1 } : {}));
+  // ── 4d: aside, backing up, crouched, aiming, winded, hurt (facing where it looks, as first person
+  // and lock-on do: the keys move it, the look holds the facing)
+  const facing = (k: Partial<MoveInput>): Partial<MoveInput> => ({ ...k, faceLook: true, look: Math.PI / 2 });
+  const way4d = (name: string, len: number, keys: (t: number) => Partial<MoveInput>, hurt?: number) =>
+    add({ name, group: "aside, back, low, hurt", len, live: () => ({ speed: 0 }), keys, hurt });
+  way4d("back up, walk", 3.6, (t) => facing({ y: during(t, 0.4, 2.6) ? -1 : 0, walk: true }));
+  way4d("back up, jog", 3.4, (t) => facing({ y: during(t, 0.4, 2.4) ? -1 : 0 }));
+  way4d("aside right, jog", 3.4, (t) => facing({ x: during(t, 0.4, 2.4) ? 1 : 0 }));
+  way4d("aside left, walk", 3.6, (t) => facing({ x: during(t, 0.4, 2.6) ? -1 : 0, walk: true }));
+  way4d("aslant back-left, jog", 3.4, (t) => facing(during(t, 0.4, 2.4) ? { x: -0.7, y: -0.7 } : {}));
+  // (round a square, facing on: ahead, right, back, left)
+  way4d("a square, facing on", 6, (t) =>
+    facing(
+      during(t, 0.4, 1.5)
+        ? { y: 1 }
+        : during(t, 1.5, 2.6)
+          ? { x: 1 }
+          : during(t, 2.6, 3.7)
+            ? { y: -1 }
+            : during(t, 3.7, 4.8)
+              ? { x: -1 }
+              : {},
+    ),
+  );
+  way4d("crouch: start, sneak, stop", 3.6, (t) => ({ crouch: true, y: during(t, 0.6, 2.6) ? 1 : 0 }));
+  way4d("crouch: back up, aside", 5, (t) =>
+    facing({ crouch: true, ...(during(t, 0.6, 2.2) ? { y: -1 } : during(t, 2.2, 3.8) ? { x: 1 } : {}) }),
+  );
+  way4d("aim: round a square", 6, (t) =>
+    facing({
+      aim: true,
+      ...(during(t, 0.4, 1.5)
+        ? { y: 1 }
+        : during(t, 1.5, 2.6)
+          ? { x: 1 }
+          : during(t, 2.6, 3.7)
+            ? { y: -1 }
+            : during(t, 3.7, 4.8)
+              ? { x: -1 }
+              : {}),
+    }),
+  );
+  way4d("sprint, then walk winded", 10, (t) =>
+    during(t, 0.3, 5) ? { y: 1, sprint: true } : during(t, 5, 9) ? { y: 1, walk: true } : {},
+  );
+  way4d("walk hurt", 3.6, (t) => ({ y: during(t, 0.4, 2.6) ? 1 : 0, walk: true }), 0.85);
+  // (turning at speed: a sprint into a quarter turn, and round a circle — the keys turning with time)
+  keyed("sprint, turn right", 3.2, (t) =>
+    during(t, 0.3, 1.6) ? { y: 1, sprint: true } : during(t, 1.6, 2.8) ? { x: 1, sprint: true } : {},
+  );
+  keyed("sprint round", 4, (t) =>
+    during(t, 0.3, 3.7)
+      ? { x: Math.sin(Math.max(0, t - 1) * 2.2), y: Math.cos(Math.max(0, t - 1) * 2.2), sprint: true }
+      : {},
+  );
+  keyed("jog round", 4, (t) =>
+    during(t, 0.3, 3.7) ? { x: Math.sin(Math.max(0, t - 1) * 2.2), y: Math.cos(Math.max(0, t - 1) * 2.2) } : {},
+  );
+  // (jumping on the run: the core's own jump, a press held a moment — the jog's hop, the sprint's leap)
+  keyed("jog, jump", 3, (t) => ({
+    y: during(t, 0.3, 2.6) ? 1 : 0,
+    jump: during(t, 1.2, 1.5),
+    jumpPressed: Math.abs(t - 1.2) < 0.004,
+  }));
+  keyed("sprint, jump", 3.4, (t) => ({
+    y: during(t, 0.3, 2.8) ? 1 : 0,
+    sprint: true,
+    jump: during(t, 1.4, 1.7),
+    jumpPressed: Math.abs(t - 1.4) < 0.004,
+  }));
+  // ── 4f: slopes and stairs (the ground's own: the feet set on it, tipped to it)
+  const slope =
+    (deg: number, from = 1.2) =>
+    (_x: number, z: number) =>
+      Math.max(0, z - from) * Math.tan((deg * Math.PI) / 180);
+  // (stairs: a 15 cm rise, a 30 cm tread, from 1.2 m on, ten of them; `down`: from the top)
+  const stairs = (down: boolean) => (_x: number, z: number) => {
+    const n = Math.max(0, Math.min(10, Math.floor((z - 1.2) / 0.3) + 1));
+    return 0.15 * (down ? 10 - n : n);
+  };
+  const ground4f = (
+    name: string,
+    len: number,
+    ground: (x: number, z: number) => number,
+    keys: (t: number) => Partial<MoveInput>,
+  ) => add({ name, group: "slopes and stairs", len, live: () => ({ speed: 0 }), keys, ground });
+  ground4f("walk up a ramp (15°)", 4.5, slope(15), (t) => ({ y: during(t, 0.3, 3.8) ? 1 : 0, walk: true }));
+  ground4f(
+    "walk down a ramp (15°)",
+    4.5,
+    (x, z) => slope(15)(x, -z + 4.5),
+    (t) => ({ y: during(t, 0.3, 3.8) ? 1 : 0, walk: true }),
+  );
+  ground4f(
+    "walk across a slope (12°)",
+    4,
+    (x) => Math.max(-0.5, x * Math.tan((12 * Math.PI) / 180)),
+    (t) => ({ y: during(t, 0.3, 3.4) ? 1 : 0, walk: true }),
+  );
+  ground4f("walk up stairs", 4.5, stairs(false), (t) => ({ y: during(t, 0.3, 3.8) ? 1 : 0, walk: true }));
+  ground4f("walk down stairs", 4.5, stairs(true), (t) => ({ y: during(t, 0.3, 3.8) ? 1 : 0, walk: true }));
+  ground4f("jog up stairs", 2.6, stairs(false), (t) => ({ y: during(t, 0.3, 1.5) ? 1 : 0 }));
+  ground4f(
+    "stand on a stair's edge",
+    6,
+    (_x, z) => (z > 0.02 ? 0.15 : 0),
+    () => ({}),
+  );
   // (3b) a hard sprint, then standing to get the breath back
   add({
     name: "sprint, then winded",
@@ -225,7 +345,7 @@ export function clipList(): Clip[] {
     len: 16,
     live: (t) => ({ speed: t < 0.3 ? 0 : t < 6 ? SPRINT : 0 }),
   });
-  add({ name: "jog round", group: "on the move", len: 4, live: () => ({ speed: JOG, turn: 2.2 }) });
+  add({ name: "jog round (steady turn)", group: "on the move", len: 4, live: () => ({ speed: JOG, turn: 2.2 }) });
   // ── in the air
   for (const [kind, v] of [
     ["hop", 0],
@@ -274,6 +394,15 @@ export interface Frame {
 }
 export const RATE = 120;
 
+const wrapPi = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+/** An open floor 200 m a side for the move core. */
+function open(): Grid {
+  const g = new Grid(200, 200);
+  g.walk.fill(1);
+  g.top.fill(0);
+  return g;
+}
+
 /** A clip, `after` or `before`, `live` or raw, at `rate` frames a second. */
 export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: boolean, rate = RATE): Frame[] | null {
   const n = Math.round(clip.len * rate) + 1;
@@ -295,51 +424,106 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
   loco.v2 = which === "after";
   loco.tension = x.T;
   loco.seed = 3;
+  loco.gait = x.gait ?? "calm";
   const dt = 1 / rate;
   let v = 0;
   let acc = 0;
   let yaw = 0;
   let px = 0;
   let pz = 0;
+  let goal: number | undefined;
+  let rideY = 0;
+  let coreLanded: number | undefined;
   let was: ReturnType<typeof jumpArc>["stage"] | null = null;
+  // (4c: the move core's body on an open floor, facing three's +z — the floor's +y, south)
+  const body = newBody(100, 100, 0, Math.PI / 2);
+  const env: MoveEnv = { grid: open(), footing: () => "floor" };
   for (let i = 0; i < n; i++) {
     const t = i / rate;
     const d = clip.live(t);
-    // (the body's own ramp: the feel's grip, about 0.2 s to a run and 0.25 s to a stop)
-    const want = d.speed;
-    const grip = want > v ? 30 : 24;
-    const nv = v + Math.max(-grip * dt, Math.min(grip * dt, want - v));
-    acc += ((nv - v) / dt - acc) * Math.min(1, dt * 10);
-    v = nv;
-    // (a turn's rate + to the right, as the floor's y is south: the yaw + to the left)
-    const turn = d.turn ?? 0;
-    yaw -= turn * dt;
-    px += Math.sin(yaw) * v * dt;
-    pz += Math.cos(yaw) * v * dt;
+    let turn = d.turn ?? 0;
+    let ahead = 0;
+    let left = 0;
+    let dist = 0;
+    if (clip.keys) {
+      const k = clip.keys(t);
+      // (the keys in the body's starting frame: ahead the floor's +y, its right the floor's -x)
+      const inp = { ...NO_INPUT, ...k, x: -(k.x ?? 0), y: k.y ?? 0 };
+      const [x0, y0, yaw0] = [body.x, body.y, body.yaw];
+      const ev = stepBody(body, inp, env, KH_FEEL, dt);
+      coreLanded = ev.landed;
+      const g = body.gait;
+      goal = g === "walk" || g === "jog" || g === "sprint" || g === "crouch" || g === "aim" ? KH_FEEL[g] : goal;
+      const nv = Math.hypot(body.vx, body.vy);
+      acc += ((nv - v) / dt - acc) * Math.min(1, dt * 10);
+      v = nv;
+      // (a turn's rate + to the right, as the floor's y is south)
+      turn = wrapPi(body.yaw - yaw0) / dt;
+      dist = Math.hypot(body.x - x0, body.y - y0);
+      const c = Math.cos(body.yaw);
+      const s = Math.sin(body.yaw);
+      ahead = body.vx * c + body.vy * s;
+      left = -(-body.vx * s + body.vy * c);
+      yaw = Math.PI / 2 - body.yaw;
+      px = body.x - 100;
+      pz = body.y - 100;
+    } else {
+      // (the body's own ramp: the feel's grip, about 0.2 s to a run and 0.25 s to a stop)
+      const want = d.speed;
+      const grip = want > v ? 30 : 24;
+      const nv = v + Math.max(-grip * dt, Math.min(grip * dt, want - v));
+      acc += ((nv - v) / dt - acc) * Math.min(1, dt * 10);
+      v = nv;
+      // (a turn's rate + to the right, as the floor's y is south: the yaw + to the left)
+      yaw -= turn * dt;
+      px += Math.sin(yaw) * v * dt;
+      pz += Math.cos(yaw) * v * dt;
+      ahead = v;
+      dist = v * dt;
+    }
     const jt = d.jump ? t - d.jump.at : -1;
     const arc = d.jump && jt >= 0 ? jumpArc(d.jump.kind, jt) : null;
-    const up = arc?.stage === "air";
-    const landed = was === "air" && arc && arc.stage !== "air" ? 0.5 : undefined;
+    // (keyed: the core's own jump — its takeoff, its arc, its landing)
+    const up = clip.keys ? body.up : arc?.stage === "air";
+    const landed = clip.keys ? coreLanded : was === "air" && arc && arc.stage !== "air" ? 0.5 : undefined;
     was = arc?.stage ?? null;
+    const keysNow = clip.keys?.(t);
+    // (4f: the body on the ground under it — up a step at once and eased there, as the sandbox's;
+    // the ground under a spot in her own space for Locomotion)
+    const G = clip.ground;
+    if (G) {
+      const at = G(px, pz);
+      rideY = i === 0 ? at : rideY + (at - rideY) * Math.min(1, dt * 16);
+    }
+    const ry = yaw;
+    const ground = G
+      ? (lx: number, lz: number) =>
+          G(px + lx * Math.cos(ry) + lz * Math.sin(ry), pz - lx * Math.sin(ry) + lz * Math.cos(ry)) - rideY
+      : undefined;
     const st = d.slide !== undefined ? (t - d.slide) / x.C.VERB_LEN.slide : -1;
     const standing = loco.v2 ? x.H.idle2Pose(t, x.T, 3, true, loco.life()) : undefined;
     const m = loco.update(
       dt,
       {
-        dist: v * dt,
+        dist,
         speed: v,
-        ahead: v,
-        left: 0,
-        crouch: false,
-        aim: false,
+        ahead,
+        left,
+        // (as the sandbox has them: crouched by the gait, or held still)
+        crouch: body.gait === "crouch" || (!!keysNow?.crouch && v < 0.2),
+        aim: !!keysNow?.aim,
         pitch: 0,
         yaw: 0,
         turn,
         accel: acc,
         up,
-        jump: d.jump && jt >= 0 ? jumpNowAt(d.jump.kind, jt) : null,
+        jump: clip.keys ? x.C.jumpNowOf(body, KH_FEEL) : d.jump && jt >= 0 ? jumpNowAt(d.jump.kind, jt) : null,
         landed,
         verb: st >= 0 && st < 1 ? { kind: "slide", t: st } : null,
+        goal,
+        hurt: clip.hurt,
+        facing: !!(keysNow?.faceLook || keysNow?.aim),
+        ground,
         reduced: false,
       } satisfies LocoIn,
       standing,
@@ -348,7 +532,7 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
     out.push({
       pose: m.pose,
       lift: m.lift,
-      root: { x: px, y: arc?.h ?? 0, z: pz, yaw },
+      root: { x: px, y: (clip.keys ? body.z : (arc?.h ?? 0)) + rideY, z: pz, yaw },
       eyes: g ? [g.eyes[0], g.eyes[1]] : [0, 0],
       blink: g?.blink ?? 0,
     });
@@ -360,8 +544,8 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
  *  its speed by a hair a sample, a break in it all at once. */
 export const POP_RATE = 1000;
 /** Moments a joint pops (in a table at POP_RATE): its speed changing in one sample by `least` (rad:
- *  0.6 rad/s at once) more than the samples 3 ms either side do — a break, a spike off the trend;
- *  a hard swing, or a speed-up that steps, keeps to the trend. */
+ *  0.6 rad/s at once), or by 8% of how fast it's going if more, beyond what the samples 3 ms either
+ *  side do — a break, a spike off the trend; a hard swing, or a speed-up that steps, keeps to it. */
 export function pops(frames: Frame[], least = 0.0006): { t: number; what: string }[] {
   const chans: { name: string; get: (f: Frame) => number | undefined; least: number }[] = [];
   const first = frames[0];
@@ -383,7 +567,12 @@ export function pops(frames: Frame[], least = 0.0006): { t: number; what: string
       d2.push(a === undefined || b === undefined || n === undefined ? 0 : n - 2 * b + a);
     }
     for (let i = S; i < d2.length - S; i++) {
-      if (Math.abs(d2[i] - (d2[i - S] + d2[i + S]) / 2) < c.least) continue;
+      // (against how fast it's turning, too: the eye judges a jolt by the motion it's in — a sprint's
+      // foot, down 50 ms and turning 20 rad/s, wobbling a thirtieth of that isn't seen)
+      const a = c.get(frames[i]);
+      const b = c.get(frames[i + 2]);
+      const speed = a === undefined || b === undefined ? 0 : Math.abs(b - a) / 2;
+      if (Math.abs(d2[i] - (d2[i - S] + d2[i + S]) / 2) < Math.max(c.least, 0.08 * speed)) continue;
       const t = Math.round(((i + 1) / POP_RATE) * RATE);
       const set = hits.get(t) ?? new Set();
       set.add(c.name);

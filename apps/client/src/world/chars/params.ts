@@ -64,16 +64,20 @@ export const LODS: Record<Lod, Seg> = {
   2: { radial: 9, profile: 11, curve: 3, bevel: 1, tube: 6, tubeRadial: 4, ring: 2, capRows: 5 },
 };
 
+// (2026-10-30, plan 58: the legs 15% longer — at 36% of 1.7 m they read short, worst from a little
+// above and running; the head, the trunk and the arms as they were, so she stands 9 cm taller)
+const LEGS = 0.612 * 1.15;
+const TALL = 1.7 + LEGS - 0.612;
 // Ligne claire, as the user tuned it on 2026-10-17 (belly, longer trunk,
 // shorter arms, the shirt down to the hips).
 export const BASE: Params = {
-  height: 1.7,
-  heads: 5,
+  height: TALL,
+  heads: TALL / 0.34,
   head: { width: 0.9, depth: 0.95, jaw: 0.3, square: 0, neckBack: 0.08 },
   neck: { len: 0.2, r: 0.13 },
   torso: { shoulder: 0.53, chest: 0.5, waist: 0.47, hip: 0.5, depth: 0.74, squareness: 0.65, belly: 0.42, bust: 0 },
-  arm: { len: 0.33, upper: 0.12, fore: 0.105, wrist: 0.08 },
-  leg: { len: 0.36, thigh: 0.19, knee: 0.13, ankle: 0.09, gap: 0.23, calf: 0.02 },
+  arm: { len: (0.33 * 1.7) / TALL, upper: 0.12, fore: 0.105, wrist: 0.08 },
+  leg: { len: LEGS / TALL, thigh: 0.19, knee: 0.13, ankle: 0.09, gap: 0.23, calf: 0.02 },
   hand: { size: 0.34, thick: 0.11 },
   foot: { len: 0.8, width: 0.3, height: 0.3, sole: 0.07 },
   face: {

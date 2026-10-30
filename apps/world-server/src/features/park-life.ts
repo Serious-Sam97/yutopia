@@ -27,6 +27,8 @@ import { registerFeature } from "./index.ts";
 const off = GROUND_OFFSET; // (a player's x, y + off: the Grounds' coords)
 const SITTING = KART_SITTING; // (busy "ride:…": the room leaves my pose alone, as a rider's)
 const V = 1.25; // a visitor's pace, m/s
+// (by how they walk — plan 58 4e: the old slower, the tired too, the brisk quicker)
+const PACE: Record<string, number> = { old: 0.7, tired: 0.85, brisk: 1.15, bouncy: 1.05, heavy: 0.95 };
 const SPINE = KART_GATE.x; // the paddock's walk, gate to desk
 const FOLK_LINES: Record<string, string[]> = {
   control: [
@@ -120,6 +122,8 @@ registerFeature((room: WorldRoom) => {
   interface Walker {
     npc: Npc;
     role: string;
+    /** their pace, m/s */
+    v: number;
     leg: { x: number; z: number }[];
     /** where they are: a stop, and how they got there from the walk (back the same way) */
     stop: Stop | "";
@@ -160,6 +164,7 @@ registerFeature((room: WorldRoom) => {
     walkers.push({
       npc,
       role: f.role,
+      v: V * (PACE[f.look.gait ?? ""] ?? 1),
       leg: [],
       stop: "",
       from: [],
@@ -231,7 +236,7 @@ registerFeature((room: WorldRoom) => {
     const gx = n.x + off.x;
     const gz = n.y + off.y;
     const d = Math.hypot(t.x - gx, t.z - gz);
-    const step = V * dt;
+    const step = w.v * dt;
     n.a = ANIM.walk;
     n.z = 0;
     if (d <= step) {
@@ -352,7 +357,7 @@ registerFeature((room: WorldRoom) => {
           len += Math.hypot(q.x - px, q.z - pz);
           [px, pz] = [q.x, q.z];
         }
-        w.until += (len / V) * 1000;
+        w.until += (len / w.v) * 1000;
       }
     },
     leave(client) {

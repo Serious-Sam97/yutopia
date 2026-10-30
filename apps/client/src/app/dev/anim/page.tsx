@@ -168,25 +168,47 @@ function Bench({ q }: { q: URLSearchParams }) {
         m.setEyes(fr.eyes[0], fr.eyes[1]);
       };
       // the feet: posed frame by frame, each ankle read where it is
-      const feetOf = (frames: Frame[]): Feet => {
-        // (the trail's where the feet were when after stood alone: it's moved with after)
-        const ank: [number, number, number, number][] = [];
+      // (4f: a clip's own ground — a ramp, stairs — drawn as a heightfield over the floor)
+      let land: InstanceType<typeof T.Mesh> | null = null;
+      const showGround = (G?: (x: number, z: number) => number) => {
+        if (land) {
+          scene.remove(land);
+          land.geometry.dispose();
+          land = null;
+        }
+        if (!G) return;
+        const geo = new T.PlaneGeometry(6, 16, 60, 800);
+        geo.rotateX(-Math.PI / 2);
+        geo.translate(0, 0, 6);
+        const at = geo.getAttribute("position");
+        for (let i = 0; i < at.count; i++) at.setY(i, G(at.getX(i), at.getZ(i)) + 0.002);
+        geo.computeVertexNormals();
+        land = new T.Mesh(geo, new T.MeshLambertMaterial({ color: "#d8cdb6" }));
+        land.receiveShadow = true;
+        scene.add(land);
+      };
+      const feetOf = (frames: Frame[], G?: (x: number, z: number) => number): Feet => {
+        // each foot's two contacts, frame by frame: the ankle (its heel down) and the ball (the toe's
+        // joint: up on its toes — a sprinter's ankle never comes down), over the ground
+        const pts: number[][] = [];
         for (const fr of frames) {
           place(after, fr, 0);
           after.root.updateMatrixWorld(true);
-          const bL = after.bone("ankleL");
-          const bR = after.bone("ankleR");
-          if (!bL || !bR) return { down: [], slide: [], trail: [], sunk: 0 };
-          bL.getWorldPosition(v);
-          const lx = v.x;
-          const ly = v.y;
-          const lz = v.z;
-          bR.getWorldPosition(v);
-          ank.push([lx, ly, lz, 0]);
-          ank.push([v.x, v.y, v.z, 1]);
+          for (const S of ["L", "R"] as const) {
+            const an = after.bone(`ankle${S}`);
+            const toe = after.bone(`toe${S}`);
+            if (!an || !toe) return { down: [], slide: [], trail: [], sunk: 0 };
+            // (over the ground under each: the clip's own, else the body's)
+            an.getWorldPosition(v);
+            const ax = v.x;
+            const ay = v.y - (G ? G(v.x, v.z) : fr.root.y);
+            const az = v.z;
+            toe.getWorldPosition(v);
+            pts.push([ax, ay, az, v.x, v.y - (G ? G(v.x, v.z) : fr.root.y), v.z]);
+          }
         }
-        // (on the ground: within 5 mm of where the ankle is standing at rest, or under it — a foot
-        // pushed into the floor counts, and how far it went is kept)
+        // (down: within 5 mm of where each is standing at rest, or under it — a foot pushed into the
+        // floor counts, and how far it went is kept)
         const rest = { pose: { ...C.REST }, lift: [0, 0, 0] as [number, number, number] };
         place(
           after,
@@ -195,26 +217,39 @@ function Bench({ q }: { q: URLSearchParams }) {
         );
         after.root.updateMatrixWorld(true);
         after.bone("ankleL")?.getWorldPosition(v);
-        const low = v.y;
+        const lowAnkle = v.y;
+        after.bone("toeL")?.getWorldPosition(v);
+        const lowBall = v.y;
         let sunk = 0;
         const down: [boolean, boolean][] = [];
         const slide: [number, number][] = [];
         const trail: number[] = [];
+        // (which contact: the heel's when it's down, else the ball's)
+        const contact = (q: number[]) => (q[1] < lowAnkle + 0.005 ? [q[0], q[2]] : [q[3], q[5]]);
         for (let i = 0; i < frames.length; i++) {
           const d: [boolean, boolean] = [false, false];
           const s: [number, number] = [0, 0];
           for (let k = 0; k < 2; k++) {
-            const a = ank[i * 2 + k];
-            const y = a[1] - frames[i].root.y;
-            d[k] = y < low + 0.005;
-            if (d[k]) sunk = Math.max(sunk, low - y);
+            const q = pts[i * 2 + k];
+            const heel = q[1] < lowAnkle + 0.005;
+            const ball = q[4] < lowBall + 0.005;
+            d[k] = heel || ball;
+            if (heel) sunk = Math.max(sunk, lowAnkle - q[1]);
+            if (ball) sunk = Math.max(sunk, lowBall - q[4]);
             // (its slide once it's down: from its second frame there — touching down, a foot's still
             // braking from its swing)
-            if (d[k] && i > 1 && down[i - 1][k] && down[i - 2][k]) {
-              const b = ank[(i - 1) * 2 + k];
-              s[k] = Math.hypot(a[0] - b[0], a[2] - b[2]) * RATE;
+            // (the same contact both frames: the heel's handing on to the ball isn't a slide)
+            const was = pts[(i - 1 + (i > 0 ? 0 : 1)) * 2 + k];
+            const same = i > 0 && was[1] < lowAnkle + 0.005 === heel;
+            if (d[k] && same && i > 1 && down[i - 1][k] && down[i - 2][k]) {
+              const [x0, z0] = contact(was);
+              const [x1, z1] = contact(q);
+              s[k] = Math.hypot(x1 - x0, z1 - z0) * RATE;
             }
-            if (d[k]) trail.push(a[0], 0.004, a[2]);
+            if (d[k]) {
+              const [x1, z1] = contact(q);
+              trail.push(x1, 0.004, z1);
+            }
           }
           down.push(d);
           slide.push(s);
@@ -222,7 +257,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         return { down, slide, trail, sunk };
       };
 
-      const x: Ctx = { C, H, T: 0 };
+      // (&gait=bouncy: the walk's style, plan 58 4e)
+      const x: Ctx = { C, H, T: 0, gait: q.get("gait") ?? undefined };
       bench.current.x = x;
       bench.current.redo = () => {
         const s = st.current;
@@ -233,6 +269,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         bench.current.after = tabulate(x, s.clip, "after", s.live);
         bench.current.before = tabulate(x, s.clip, "before", s.live);
         bench.current.feet = null;
+        showGround(s.clip.ground);
         // (pops on their own fine table)
         setReport({ pops: pops(tabulate(x, s.clip, "after", s.live, POP_RATE) ?? []), feet: null, len: s.clip.len });
       };
@@ -250,7 +287,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         if (ready && A) {
           // the feet, once the model's built (they're read off its bones)
           if (!bench.current.feet) {
-            bench.current.feet = feetOf(A);
+            bench.current.feet = feetOf(A, st.current.clip.ground);
             const feet = bench.current.feet;
             setReport((r) => ({ ...r, feet }));
             trailGeo.setAttribute("position", new T.Float32BufferAttribute(feet.trail, 3));
@@ -303,8 +340,10 @@ function Bench({ q }: { q: URLSearchParams }) {
           } else {
             const fx = Math.sin(r.yaw) * fwd;
             const fz = Math.cos(r.yaw) * fwd;
-            cam.position.set(cx + fx + ox, lookY + 0.38 / zoom, cz + fz + oz);
-            cam.lookAt(cx + fx, lookY, cz + fz);
+            // (on a clip's own ground — stairs, a ramp — up and down with her; a jump's arc it doesn't)
+            const ry = s.clip.ground ? r.y : 0;
+            cam.position.set(cx + fx + ox, ry + lookY + 0.38 / zoom, cz + fz + oz);
+            cam.lookAt(cx + fx, ry + lookY, cz + fz);
           }
           sun.position.set(cx - 3, 6, cz + 4);
           sun.target.position.set(cx, 0, cz);
@@ -318,10 +357,14 @@ function Bench({ q }: { q: URLSearchParams }) {
           clips: clips.map((c) => c.name),
           report: () => ({
             pops: report_.current.length,
-            popsAt: report_.current.slice(0, 12),
+            popsAt: report_.current,
             feet: summary(bench.current.feet),
           }),
           bench: bench.current,
+          // (a still at a moment: e2e/anim-strip.mts)
+          seek: (to: number) => {
+            st.current.t = to;
+          },
         };
         raf = requestAnimationFrame(frame);
       };

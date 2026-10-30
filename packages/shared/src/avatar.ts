@@ -33,6 +33,9 @@ export const AVATAR_OPTIONS = {
   // one more thing: round the neck, on the ears, the wrist, the back…
   extra: ["none", "walkman", "scarf", "earrings", "necklace", "backpack", "watch"],
   shoes: ["sneakers", "hightops", "boots", "loafers", "sandals"],
+  // how you walk (docs/plan/58-the-animation.md, decision 6): yours to choose; the folk have their
+  // own too (brisk, tired, old — not offered here)
+  gait: ["calm", "bouncy", "heavy"],
 } as const;
 
 export const SKIN_TONES = ["#f3d2b3", "#e4b48e", "#c68a5e", "#a8693f", "#7c4a2b", "#4f2e1c"];
@@ -73,6 +76,8 @@ export interface AvatarLayers {
   shoes: string;
   shoesColor: string;
   beard: string;
+  /** how they walk (plan 58, 4e): calm, bouncy, heavy; the folk's brisk, tired, old */
+  gait: string;
 }
 
 export const DEFAULT_AVATAR: AvatarLayers = {
@@ -95,6 +100,7 @@ export const DEFAULT_AVATAR: AvatarLayers = {
   shoes: "sneakers",
   shoesColor: "#efe4cc",
   beard: "none",
+  gait: "calm",
 };
 
 export function parseAvatar(raw: unknown): AvatarLayers {
@@ -170,9 +176,12 @@ export function avatarFromSeed(seed: number): AvatarLayers {
     shoes: pick(AVATAR_OPTIONS.shoes),
     shoesColor: pick(["#efe4cc", "#2a2420", "#5b3a26", "#b5562f", "#efe4cc"]),
     beard: "none",
+    gait: "calm",
   };
   // (the last draw: everything above stays as it was) some masculine bots grow one
   const beard = pick(["none", "none", "stubble", "mustache", "goatee", "full"]);
   if (a.gender === "masculine") a.beard = beard;
+  // (after that: their walks — most calm)
+  a.gait = pick(["calm", "calm", "calm", "bouncy", "heavy", "brisk"]);
   return a;
 }

@@ -718,6 +718,253 @@ world before you've passed it.
    banking, the feet on slopes and stairs by Jolt's rays, the winded and hurt walks, sneaking,
    strafing. Gaits by persona and your own chosen one (in the look's editor, on the wire with
    your look).
+
+   **In steps (2026-10-30):** 4a the walk; 4b the run and the sprint; 4c starts, stops and pivots;
+   4d crouching, sneaking, strafing, backing up, the winded and hurt walks; 4e gaits by persona and
+   your own in the look's editor; 4f slopes and stairs.
+
+   **4a built 2026-10-30: the walk.**
+   - **Your call: the walk 1.5 m/s** (KH_MOVE's; it was 2.2). At 2.2 her legs (0.61 m) had no
+     reach for a walk — one foot always down caps a step near a leg's length — so it floated
+     (down 9–20% of the time) and slid (up to 47 cm/s) at over four steps a second. Now 1.6
+     strides a second.
+   - **One gait engine** (`Gait`, `gaitPlanted`/`gaitLeg`/`gaitPlant`): the jog's way made
+     general — the foot on the ground keyed by where it is, landing on its heel if the gait
+     strikes with it, rocking down off the heel and up onto the ball (each staying put, the ankle
+     swinging round it: `ANKLE·sin f`), the leg solved from where the hips' turn puts the hip
+     joint; the leg in the air keyed by its joints, or late in the swing by where the foot's to be
+     (solved from wherever the hips are: the dark's lower hips once put the landing heel 3 cm
+     through the floor); joined by where, how fast and how that's changing. The jog runs on it
+     too (its push-off's ball now stays put: it slid 9.5 mm with the ankle held).
+   - **The walk on it:** a heel strike (toes up 0.3), down onto the flat foot, over it, up onto
+     the toes and off; 58% of the cycle on the ground, a little of both at each change. The hips
+     a pendulum — highest over the planted foot (its knee ~13°), lowest as the weight changes feet
+     — the hip over the swinging leg dropping, the chest back over it; the arms and twist as keyed.
+     In the dark shorter, lower, the swinging knee folded more. The leg solver's ease into
+     straight starts at 98% now (a walking leg's near straight over its foot).
+   - **Measured:** keyed, 0 pops by day and in the dark, nothing in the floor; driven, the feet
+     planted but for setting off, one stray pop. Tests: the heel then the ball held within 8 mm
+     and on the ground, no sole in the floor in any mood; the jog's ball held through its stance.
+   - `design/anim/walk.mp4`, `walk-dark.mp4`, `16-walk-day-dark.png`.
+
+   **4b built 2026-10-30: the run and the sprint.**
+   - **The sprint a gait from its feet** (`SPRINT`): landing on the ball under the hip, never
+     the heel (a tilt of 0.25 settling to 0.12 — the gait's new mid-stance tilt), driving off the
+     toes; 30% of each step on the ground, the rest in the air; the heel kicked up to the seat, the
+     knee driven high, the foot clawing back to land; the hips lowest as the foot takes them. Its
+     stride 2.7 m (was 2.35): three strides a second, not three and a half.
+   - **The run between, a gait between** (`lerpGait`): the jog's spec and the sprint's blended by
+     the legs' effort, key by key — planted at any speed (blending two poses, each planted by its
+     own stride, slid the feet). The keyed sprint's legs are gone (they floated, slid 9 m/s, sank
+     9 cm and kinked at the knee every stride); the trunk's work fades from the jog's to the
+     sprint's held drive.
+   - **Smoother still:** the roll onto the toes a cube, not a square (a square started with a
+     jolt in its acceleration — at a sprint's pace a pop), the toes' release matched to it.
+   - **The bench:** a foot's contact is its heel or its ball, whichever's down (a sprinter's
+     ankle never comes down: it read no contact); a slide is only from one contact to the same
+     one; a pop's judged against the joint's own speed too (8% of it) — the eye judges a jolt by
+     the motion it's in. The jog, the walk and the idle: 0 pops; the sprint still flags ~90 at its
+     turning points (high jerk where it's near still), not seen at a quarter speed.
+   - **Tests:** the ball planted at a run and a sprint, the cadence; 76 client, 443 shared.
+   - `design/anim/sprint.mp4`, `sprint-slow.mp4`, `run.mp4`.
+
+   **Fixed 2026-10-30: "our legs are smaller?"** The bones hadn't changed. Phase 3's idle stood
+   in a half-squat: its hips 3.3 cm under standing, so both knees bent ~37° (~50° in the dark),
+   and that reads as short legs. Now the hips are 0.7 cm down (+1.4 cm at the dark's full
+   tension), the weight shift rolls them less (0.045, was 0.07: that dropped the free hip till
+   its knee bent), and the free heel lifts 4 cm, not more (more bent the free knee to 48°). The
+   leg solver's soft limit now starts at 99.2% of the leg's reach (was 98%): a leg at 99% of its
+   reach already reads ~16° at the knee. Knees now: day 17–26° standing, 23–32° free; dark
+   26–36°, 34–40°. The walk, jog and sprint benches are unchanged. `design/anim/17-idle-stance.png`.
+
+   **4c built 2026-10-30: starts, stops and pivots — steps of their own.**
+   - **The bench drives the move core itself** (`keys` clips: start/stop for the walk and jog, the
+     sprint's skid, turning back at a walk, a jog and a sprint, a quarter-turn cut): the body as the
+     game moves it. Found on the way: the bench's driven turn had the wrong sign.
+   - **The foot lock holds what the foot stands on** — its heel, then its ball as it rolls up (it held
+     the ankle, which dragged the ball back 0.7–1.9 m/s at every push-off in every gait).
+   - **The stepper** (hero.ts `Stepper`; Locomotion's `idle` / `steps` / `start` / `cycle`): each foot
+     put down where it's to go on the ground and kept there, the hips carried over them (a spring;
+     never higher than a planted leg reaches), the legs solved to them, laid on by where the feet
+     are (never by blending angles). A cycle can't do these: a jog never has both feet down.
+     - **Setting off:** the foot behind steps out first, to where the cycle will have it as it lands
+       — timed so the foot left behind is where the cycle has it then (a quick short first step);
+       that one rolls up onto its ball and pushes; the cycle takes over on that foot.
+     - **Stopping:** the cycle's feet taken as they are; one up is the brake — down where it was
+       going — the body carried over it, the other brought through beside it, then the idle (whose
+       foot spots are the stepper's targets).
+     - **The skid** (from a sprint): the front foot out ahead on its heel, toes up, the other under on
+       its ball, both sliding on with the body (85%) till it's nearly stopped; then they grip and the
+       catch step brings her up.
+     - **Pivots** (the core turns her half round in ~0.15 s): the planted foot under her turned on its
+       ball at the turn's rate and drawn in under her (she turns about herself, not the foot: half a
+       turn crossed the legs); the other swung round; no foot under her, a little hop round.
+     - **Turning on the spot:** the feet step round as they fall behind the body's turn (the old
+       turn-step pose is gone).
+   - **Measured** (worst slide of a planted foot; frames over 0.3 m/s): start-walk-stop 4.4 m/s →
+     0.27 (none); start-jog-stop 11 → 0.8 (2, touchdowns); walk turn back ~0.3–1.5 (1–5); jog turn
+     back 8 → 3.3 (one heel frame as the pivot begins; ~18 short); sprint turn back 21 → 4.4 (the skid's
+     own slide); turning on the spot 0 frames (was 27). Idle unchanged (0 pops).
+   - **Left:** the pop count stays high on the runs' speed-ups (the stride shortening as she drives);
+     the jog's start handover in the dark slides ~3 m/s for a few frames; the stop's settle holds the
+     knees bent ~0.5 s.
+   - **Tools:** `e2e/anim-strip.mts` (a filmstrip of a clip at set moments: `__anim.seek`),
+     `e2e/anim-report.mts`. **Tests** 77 client (a new one: starts, stops, turning back — planted
+     feet held, none in the floor). **Budget, fresh build:** page 419.5, `yutopia-chars` 39.2,
+     `yutopia-anim` 11.6.
+   - `design/anim/4c-jog-start-stop.mp4`, `4c-walk-start-stop.mp4`, `4c-jog-turn-back.mp4`,
+     `4c-sprint-skid.mp4`, `4c-turn-on-the-spot.mp4` (half speed).
+   **4c signed off 2026-10-30.**
+
+   **4d built 2026-10-30: aside, backing up, crouched, aiming, winded, hurt.**
+   - **Your calls:** the speeds stay — crouched 1.6 m/s, aiming 2.0, and facing the look (first
+     person, lock-on) aside and backing up at the jog's 5 m/s.
+   - **Aside and aslant:** the walk and the run turned the way the body goes — the hips and the legs'
+     plane turned to it (up to 100°), the trunk twisted back so the chest and then the head still face
+     ahead: how a body runs sideways, its feet as true as going forward. Only when the body faces the
+     look (`LocoIn.facing`: first person, lock-on, aiming) — in third person a moment's velocity off
+     the facing (turning round) isn't backing up.
+   - **Backing up** (`back2Pose`): a walk the other way round (toes down first behind, back onto the
+     heel, off it last, toes up) and a run on the balls of the feet for 5 m/s, between them by the
+     speed; past a right angle off the facing, turned aslant up to 70°. The gait engine has a
+     direction now (`Gait.dir`).
+   - **Crouched** (`crouch2Pose`): a low sneak at 1.6 m/s with long heel-to-toe steps (low hips give
+     the legs more reach, not less), the back round, the hands loose in front; crouched backing up on
+     the back-walk's steps; crouched and still with the feet placed, the back one on its ball. The
+     stepper works crouched (the crouch's own spots).
+   - **Aiming:** the legs are the gait's (aside, backing up, starts and stops by the stepper); the top
+     aims over them.
+   - **Winded** (after a sprint): the walk bent over, the head down, the arms hanging, the chest
+     heaving with the breath; easing as she gets it back.
+   - **Hurt** (`LocoIn.hurt` 0…1, the vitals' health gone; a slider in /dev/move): a limp on the
+     right leg — on it a shorter while (47% of the cycle, the left landing early), its knee kept
+     stiff, swung through from the hip hiked up, the trunk lurching over it while it's down; the right
+     arm held in against the side.
+   - **On the way:** the swings near the floor keyed by where the foot's to be (by the joints the
+     crouch's and the back-walk's went through it); the hips' height read at the body's phase (a
+     limp's legs aren't half a cycle apart); crouching down, backing up and the skid's lean mixed by
+     where the feet are (`blendLegs` — by the angles the feet sank 3.8 cm crouching); the skid over
+     when the braking is; a swing never through the floor; an adopted first step takes the first
+     step's time, and hands over early once the foot left behind is stretched; the bench's floor
+     200 m (a long sprint ran off its edge).
+   - **Measured** (worst slide; frames over 0.3 m/s): crouch start–sneak–stop 0.27 (0); aiming round
+     a square 0.8 (14, touchdowns); back-up walk 0.26–3.1 (4); back-up jog 0.8–2.3 (8); aside walk/jog
+     ≤2.7 (7–10); limp 0.3 (1); the turn-backs back to 4c's. Nothing sinks but the skid's brace (1.9
+     cm, from 4c).
+   - **Left:** a corner at the jog's 5 m/s facing on (a 90° cut sideways) slides 3–6 m/s for a few
+     frames; crouched backing up as it sets off ~4 m/s for two; slowing from a sprint into a walk, one
+     slide. `yutopia-anim` is 13.3 of 15 KB.
+   - **Tests** 77 client (the planted-feet test now covers crouching, aiming round a square, backing
+     up and the limp). **Budget:** page 419.5, `yutopia-chars` 39.7, `yutopia-anim` 13.3.
+   - `design/anim/4d-back-up-jog.mp4`, `4d-aside-jog.mp4`, `4d-square-facing-on.mp4`,
+     `4d-aim-square.mp4`, `4d-crouch.mp4`, `4d-crouch-back-aside.mp4`, `4d-walk-hurt.mp4`,
+     `4d-winded.mp4` (half speed).
+   **4d signed off 2026-10-30.**
+
+   **4e built 2026-10-30: how someone walks — yours chosen, the folk's by who they are.**
+   - **Six walks** (`GAIT_STYLES` in hero.ts): calm (today's), bouncy (up on the toes, the hips
+     bobbing, quick short steps, the arms loose and wide), heavy (low, flat-footed, long steps, the
+     shoulders rolling, arms out, a wider stance) — yours to choose; brisk (long steps, the arms
+     working), tired (hunched, the head down, the arms hanging), old (stooped, the knees soft, short
+     flat steps) — the folk's. Each shapes the walk from its feet (the stride, the hips' height and
+     bob, the heel strike and the push-off, the swing's knee — the gait's hips' turn its own, so the
+     legs reach true) and over them (the arms, the twist, the lean, the head), and how they stand
+     (the stance, the stoop, how often the weight shifts). Lower hips get more knee in the swing, not
+     less (less put the foot through the floor).
+   - **Yours in the look** (`AvatarLayers.gait`, calm by default): the editor's Body tab has "How
+     you walk" (calm, bouncy, heavy; English and Portuguese), and choosing one walks the preview —
+     the preview now on plan 58's animations at the walk's 1.5 m/s. The API keeps it (`gait`, a
+     slug; its test), it travels with the look, and `person3d` hands it to each person's motion:
+     others see your walk. Bots draw theirs last from their seed (their looks unchanged).
+   - **The folk:** Rosa (race control) brisk, Joe (the mechanic) heavy, Lia (cocoa) calm, Maya
+     bouncy, Theo tired, Inês calm, Ben old — Ben's hair and beard grey for it; the night guard
+     heavy. The world server walks them at their pace (old 0.7×, tired 0.85×, brisk 1.15×…).
+   - **Tried:** /dev/move — B cycles the walk (the panel shows it); /dev/anim `&gait=bouncy`.
+   - **Measured:** calm, bouncy, heavy and brisk driven at the walk's 1.5 m/s and from start to stop:
+     0–4 frames over 0.3 m/s, nothing in the floor; old and tired at their own paces 0–2. Tests 78
+     client (every style, every mood: planted feet held, none in the floor), the API's 21, shared,
+     park-life. **Budget, fresh build:** page 419.7, `yutopia-chars` 39.8, `yutopia-anim` 14.0 of 15
+     — the next phases need room (split the chunk, or raise it by your call).
+   - **Left:** the run keeps one style (the walks differ; at a run everyone's KH); the limp on top of
+     the tired or old walk scrapes (no folk are hurt; players can't pick those).
+   - `design/anim/4e-walk-styles.mp4` (half speed; top: calm, bouncy, heavy; bottom: brisk, tired,
+     old), `18-walk-styles.png` (a cycle each, side on).
+   **4e signed off 2026-10-30.**
+
+   **4f built 2026-10-30: slopes and stairs.**
+   - **The ground in Locomotion** (`LocoIn.ground`: the height at a spot in the body's own space, from
+     the ground under it). The last pass, after the foot lock (`Locomotion.grounded`): every pose till
+     then stands on the flat; now each foot on its own ground — a foot down set on it and tipped to
+     it along and across (pitch and roll, ±0.35 / ±0.3 rad), over a stair's edge resting flat on the
+     nosing (the higher of its heel's and ball's ground), the rest over the step below; a foot up
+     carried over what's under it and near it — out from its toes and its heel, less a centimetre a
+     centimetre off (a cone: it rises as it nears a riser and comes down past an edge, the edge found
+     between samples by bisection — sampled alone, the foot jumped by the samples' gap); the hips let
+     down for the lower foot down, each foot weighted by how far it's down (never up: the body's
+     height is the core's), eased. Legs on flat ground under hips that haven't moved are left as they
+     were. The 3D legs (`groundLeg`: the solver, the foot tipped), so the pelvis's twist, the way-turn
+     and the foot lock all hold.
+   - **footPlant is gone** (phase 1d's: 2D legs after everything, wrong for the twisted pelvis and the
+     3D feet); /dev/move hands Locomotion Jolt's ground under a spot (a foot's width) instead, its
+     probe now `Locomotion.groundOut`.
+   - **The bench:** slopes and stairs clips (a 15° ramp up and down, a 12° cross-slope, stairs up and
+     down — 15 cm rises, 30 cm treads — at a walk and a jog, standing on a stair's edge), the ground
+     drawn, the feet measured over the ground under each, the camera rising with her.
+   - **Measured:** up and down the ramp and the stairs at a walk, across the slope: planted feet held
+     (no frame over 0.3 m/s), nothing in the ground; the jog up the stairs 4 frames at touchdowns.
+     The pop count on stairs is high (~140 a clip: the legs' solve as the ground changes under a
+     swinging foot) and isn't seen at half speed. Test: a step up under one foot raises just it, a
+     step down drops the hips 10 cm, the flat changes nothing (replacing footPlant's).
+   - **Left:** a landing isn't moved onto a tread (a foot can land with its heel over the step's edge:
+     it rests on the nosing); stairs taken a step a tread is the stride's luck, not planned; the
+     world's people get the ground when the world switches to plan 58.
+   - **Budget, fresh build:** page 419.7, `yutopia-chars` 40.4, `yutopia-anim` 13.7.
+   - `design/anim/4f-up-stairs.mp4`, `4f-down-stairs.mp4`, `4f-jog-up-stairs.mp4`, `4f-up-ramp.mp4`,
+     `4f-across-slope.mp4`, `4f-stair-edge.mp4` (half speed).
+
+   **Fixes, 2026-10-30 (your four):**
+   - **"Jumping when running isn't precise":** the core's jump was clean (off the ground 33 ms after
+     the press, the run's speed kept), but (a) at a 120 Hz screen 1 frame in 100 runs no fixed step,
+     and its press was lost — now carried to the next frame (`HeldOver`, controls.ts; the world's
+     walker and /dev/move; a test); (b) the landing: the core has no landing stage, so the jump's pose
+     dropped to the run's in a frame and a fall's deep crouch was held 0.3 s at a sprint, the feet
+     sliding 18 m/s. Now the jump's own keyed landing plays — quick and light on the run, only the
+     foot the run has down taking its height (a swinging one dragged along the floor), the run picked
+     up on the foot that comes down first at the point of its stance where the jump put it; the
+     stepper keeps out of a landing's check in the speed; going up from the run off the stride (no
+     two-footed crouch at 4 m/s), the air's pose eased in. `blendLegs` now always solves each leg
+     (a weight of 0 left the angle-mixed one). Bench: `jog, jump`, `sprint, jump` (the core's own).
+     The sprint jump lands clean; the jog jump has one frame's hop of a few cm left.
+   - **"Small steps catch you":** a jog at a 10 cm kerb fell from 5 to 1.3 m/s, at a 15 cm stair or
+     a 20 cm kerb to 0 a moment. Two causes in the mover: a step's climb (less ground covered while
+     Jolt lifts the body) was taken as a wall and the speed cut; and a capsule's round foot meets a
+     kerb's edge as a walkable slope, not the wall Jolt walks stairs from — it slid up the edge. Now
+     the climb keeps the speed (`CharacterMover`, along the ground), and a walking body held short
+     at a step it may climb is put on it (`PhysicsWorld.moveCharacter`: the top just past its front,
+     the room checked; Jolt's own `WalkStairs` gave up — a few cm on, a capsule's middle is still
+     over the floor below). Kerbs and stairs to 20 cm, straight or aslant: the pace kept; 40 cm
+     stops it. A physics test; the bench's checks and hashes unchanged.
+   - **"Running fast and turning, the leg folds":** a cut at a sprint slows as its way swings round,
+     and that started the skid — braced on a foot out ahead and slid on it while it turned: the knee
+     83° off its foot, the foot 25 cm across her middle. The skid now waits for a stop, not a turn
+     (`|turn| < 1.5`). Measured: 16° (a straight sprint's 8°), nothing across.
+   - **"Sprinting, the legs look strange":** she leant 40° and ran with her legs streaming behind
+     (the thigh 29° back, 59° forward, the knee on the ground 54°). Now leant ~26°, the thigh 17°
+     back and driven 72° forward, the hips a centimetre up.
+   - `design/anim/fix-sprint.mp4`, `fix-sprint-turn.mp4`, `fix-sprint-jump.mp4`, `fix-jog-jump.mp4`
+     (half speed). Tests 79 client, 444 shared, the physics bench.
+   - **"The legs look small" (and side on, running, the two legs one shape):** they were — 36% of 1.7 m
+     (a real adult's ~50%, Sora's ~46%). Your calls: the legs 15% longer, she taller (head, trunk
+     and arms as they were: 1.79 m, the head still 0.34 m), and the far leg a shade darker. The gaits'
+     strides, landings, foot keys and hips' heights scale with the legs (`LEG_K`, moves.ts; `hipAt`,
+     hero.ts), and today's world's old strides too. The far leg: each leg's vertex knows its leg and
+     its hip at rest (bake.ts), the vertex shader finds both hips where the thighs' bones have them
+     and darkens the one farther from the camera by 20% — side on, all; face on, none (`legShade`,
+     model.ts, on the world's body materials after their light). Tests 79; budget: page 419.7,
+     `yutopia-chars` 41.5, `yutopia-anim` 13.7. To watch: the car's and the kart's seated legs
+     (fixed angles: 13% further toward the pedals); the physics body is still 1.75 m tall.
+     `design/anim/19-longer-legs.png`, `legs-jog.mp4`, `legs-sprint.mp4`.
+   **The fixes and the legs signed off 2026-10-30 ("they read right").**
 5. **In the air and Flowmotion:**
    - the jumps, falls and landings, the verbs; the ragdoll (C2) for high falls and hits, and its
      get-ups;

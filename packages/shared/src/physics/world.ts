@@ -492,7 +492,43 @@ export class PhysicsWorld {
     ch.SetLinearVelocity(this.v);
     const pass = this.passFilter(o.pass);
     const temp = this.jolt.GetTempAllocator();
+    const p0 = ch.GetPosition();
+    const [x0, z0] = [p0.GetX(), p0.GetZ()];
     ch.ExtendedUpdate(dt, this.zero, walking ? this.walk : this.air, m.bp, m.obj, pass, this.shapeFilter, temp);
+    // walking, held up short at a step it may walk up: onto it. (A capsule's round foot meets a kerb's
+    // edge as a slope it can walk, not the wall Jolt walks stairs from: it slid up the edge, stopping
+    // dead a frame first — a jog at a 15 cm stair or a 20 cm kerb stalled to 0. Jolt's own stair walk
+    // gave up: a few centimetres on, a capsule's middle is still over the floor below.)
+    const stepUp = o.stepUp ?? 0.35;
+    if (walking && stepUp > 0) {
+      const p1 = ch.GetPosition();
+      const wx = vx * dt;
+      const wz = vz * dt;
+      const want = Math.hypot(wx, wz);
+      const [x1, y1, z1] = [p1.GetX(), p1.GetY(), p1.GetZ()];
+      // (how far it got the way it meant: sliding along a kerb's face at an angle isn't getting on)
+      const [ux, uz] = want > 1e-4 ? [wx / want, wz / want] : [0, 0];
+      const got = (x1 - x0) * ux + (z1 - z0) * uz;
+      if (want > 1e-4 && got < want * 0.5) {
+        // (the top just past its front, let down from a step's height over its feet)
+        const top = this.groundUnder(
+          x1 + ux * (BODY.r + 0.05),
+          y1 + stepUp + 0.02,
+          z1 + uz * (BODY.r + 0.05),
+          0.04,
+          stepUp + 0.02,
+          o.mask,
+          o.pass,
+        );
+        const nx = x1 + ux * (want - got);
+        const nz = z1 + uz * (want - got);
+        const room = top !== null && this.fits(nx, top + 0.01, nz, BODY.r - 0.03, BODY.h - 0.05, o.mask, o.pass);
+        if (top !== null && top > y1 + 0.01 && top <= y1 + stepUp + 1e-3 && room) {
+          this.r.Set(nx, top + 0.005, nz);
+          ch.SetPosition(this.r);
+        }
+      }
+    }
     const on = ch.GetGroundState() === this.J.EGroundState_OnGround;
     if (on || !walking) return on;
     // (off a stair's edge walking: down onto the tread, as the move steps down — Jolt's own update

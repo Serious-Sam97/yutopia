@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { KH_FEEL } from "@yutopia/shared/move";
 import { Euler, Quaternion, Vector3 } from "three";
 import { Locomotion, loadHero } from "./locomotion";
-import { ANKLE, BALL, HEEL, HIP_H } from "./moves";
+import { ANKLE, BALL, HEEL, HIP_H, SHIN, THIGH } from "./moves";
 
 // Plan 58 G (the feel): what the body does as it's driven, checked on its pose. The floor's y is
 // south, so a turn's rate is + to the right — the lean into it and the look round it read it so.
@@ -61,45 +61,47 @@ test("the feel: braking hard from a sprint, a skid; driving up from still, short
   assert.ok((s as unknown as { driveW: number }).driveW > 0.5, "driving");
 });
 
-test("the feet on the ground: a step up under one foot bends that knee just enough; a step down drops the hips", async () => {
+// 4f: the feet on the ground under each (Locomotion's last pass, the ground in the body's own space)
+test("the feet on the ground: a step up under one foot raises just it; a step down drops the hips; the flat changes nothing", async () => {
   const H = await loadHero();
-  const T = 0.306;
-  const S = 0.306;
-  // (the ankle's height under the hips, from a leg's thigh and knee)
-  const ankle = (t: number, k: number) => -T * Math.cos(t) - S * Math.cos(t + k);
-  const stand = () => H.idle2Pose(0, 0, 0, true);
-  // the left foot's ground 10 cm up: the left ankle 10 cm higher, its knee bent more; the hips stay
-  const a = stand();
-  const before = ankle(a.pose.thighL?.[0] ?? 0, a.pose.kneeL?.[0] ?? 0);
-  const k0 = a.pose.kneeL?.[0] ?? 0;
-  const lift0 = a.lift[1];
-  H.footPlant(a, { under: [0.1, 0], sole: [0, 0], slope: [0, 0] });
-  const after = ankle(a.pose.thighL?.[0] ?? 0, a.pose.kneeL?.[0] ?? 0);
-  assert.ok(Math.abs(after - before - 0.1) < 0.005, `the ankle up ${(after - before).toFixed(3)}`);
-  assert.ok((a.pose.kneeL?.[0] ?? 0) > k0 + 0.1, "the knee bent more");
-  assert.equal(a.lift[1], lift0, "the hips where they were");
-  // the right foot's ground 10 cm down: the hips 10 cm lower, the left leg taking it up again
-  const b = stand();
-  const bLift = b.lift[1];
-  const bL = ankle(b.pose.thighL?.[0] ?? 0, b.pose.kneeL?.[0] ?? 0);
-  H.footPlant(b, { under: [0, -0.1], sole: [0, 0], slope: [0, 0] });
-  assert.ok(Math.abs(b.lift[1] - (bLift - 0.1)) < 1e-9, "the hips down 10 cm");
-  const aL = ankle(b.pose.thighL?.[0] ?? 0, b.pose.kneeL?.[0] ?? 0);
-  assert.ok(Math.abs(aL - bL - 0.1) < 0.005, `the left ankle 10 cm up under the lowered hips: ${(aL - bL).toFixed(3)}`);
-  // on the flat, a foot the pose has a little up (coming down to land, up on its toes) stays up: the
-  // hips aren't dropped to pull it down (the jog's shake: 4–5 cm a frame at every landing)
-  const c = H.run2Pose(0.9, 0, 0);
-  const cLift = c.lift[1];
-  const cR = ankle(c.pose.thighR?.[0] ?? 0, c.pose.kneeR?.[0] ?? 0);
-  H.footPlant(c, { under: [0, 0], sole: [0, 0.04], slope: [0, 0] });
-  assert.equal(c.lift[1], cLift, "the hips where they were");
-  assert.ok(Math.abs(ankle(c.pose.thighR?.[0] ?? 0, c.pose.kneeR?.[0] ?? 0) - cR) < 1e-9, "the landing foot as it was");
+  // standing a second over ground `g` (x to the left): the last pose
+  const stand = (g?: (x: number, z: number) => number) => {
+    const l = new Locomotion(KH_FEEL);
+    l.v2 = true;
+    let out = l.update(1 / 60, move({ ground: g }), H.idle2Pose(0, 0, 0, true));
+    for (let i = 0; i < 60; i++) out = l.update(1 / 60, move({ ground: g }), H.idle2Pose(i / 60, 0, 0, true));
+    return out;
+  };
+  const flat = stand();
+  const same = stand(() => 0);
+  for (const S of ["L", "R"] as const)
+    assert.ok(
+      Math.hypot(...H.footOf(same, S).ankle.map((x, i) => x - H.footOf(flat, S).ankle[i])) < 1e-6,
+      "the flat: as it was",
+    );
+  // the left foot's ground 10 cm up: its ankle 10 cm higher, the hips where they were
+  const up = stand((x) => (x > 0 ? 0.1 : 0));
+  const dl = H.footOf(up, "L").ankle[1] - H.footOf(flat, "L").ankle[1];
+  assert.ok(Math.abs(dl - 0.1) < 0.006, `the left ankle up ${dl.toFixed(3)}`);
+  assert.ok(Math.abs(up.lift[1] - flat.lift[1]) < 1e-3, "the hips where they were");
+  // the right foot's ground 10 cm down: the hips down 10 cm, the right foot on it, the left as it was
+  const down = stand((x) => (x < 0 ? -0.1 : 0));
+  assert.ok(
+    Math.abs(down.lift[1] - flat.lift[1] + 0.1) < 0.006,
+    `the hips down ${(flat.lift[1] - down.lift[1]).toFixed(3)}`,
+  );
+  const dr = H.footOf(down, "R").ankle[1] - H.footOf(flat, "R").ankle[1];
+  assert.ok(Math.abs(dr + 0.1) < 0.006, `the right ankle down ${dr.toFixed(3)}`);
+  assert.ok(
+    Math.abs(H.footOf(down, "L").ankle[1] - H.footOf(flat, "L").ankle[1]) < 0.006,
+    "the left foot where it was",
+  );
 });
 
 test("the jog (no Shift): a foot on the ground stays where it landed, on the ground — the pelvis's twist and all; the cadence calm", async () => {
   const H = await loadHero();
-  const T = 0.306;
-  const S = 0.306;
+  const T = THIGH;
+  const S = SHIN;
   const stride = H.run2Stride(0);
   // (2.5 strides a second at the jog's 5 m/s: five steps, not the seven that shivered)
   assert.ok(KH_FEEL.jog / stride <= 2.6, `${(KH_FEEL.jog / stride).toFixed(2)} strides a second`);
@@ -149,7 +151,7 @@ test("the foot lock: whatever the layers lean and twist, a foot on the ground st
   for (let i = 0; i < 96; i++) {
     const ph = ((v * i * dt) / stride) % 1;
     const base = H.run2Pose(ph, 0, 0);
-    const feet = { L: H.ankleOf(base, "L").at, R: H.ankleOf(base, "R").at };
+    const feet = { L: H.footOf(base, "L"), R: H.footOf(base, "R") };
     // a layer's lean and twist over it, swinging (the hips rolled, pitched and turned; the thighs not
     // turned back: the lock's to keep the feet)
     const m = { pose: { ...base.pose }, lift: base.lift };
@@ -210,15 +212,17 @@ test("looking at people: someone near and in front, never through a wall, let go
 
 test("the walk: the heel strikes and stays, then the ball, on the ground — one foot always down", async () => {
   const H = await loadHero();
-  const T = 0.306;
-  const S = 0.306;
+  const T = THIGH;
+  const S = SHIN;
   const stride = H.walk2Stride(0);
   const q = (e?: number[]) => new Quaternion().setFromEuler(new Euler(e?.[0] ?? 0, e?.[1] ?? 0, e?.[2] ?? 0));
   // (a point on the right foot's sole, `at` along it from the ankle: −HEEL the heel, BALL the ball)
   const solePoint = (ph: number, at: number) => {
     const m = H.walk2Pose(ph, 0);
     const qh = q(m.pose.hips);
-    const hip = new Vector3(-0.078, 0.061, 0).applyQuaternion(qh).add(new Vector3(0, HIP_H - 0.061 + m.lift[1], ph * stride));
+    const hip = new Vector3(-0.078, 0.061, 0)
+      .applyQuaternion(qh)
+      .add(new Vector3(0, HIP_H - 0.061 + m.lift[1], ph * stride));
     const qt = qh.clone().multiply(q(m.pose.thighR));
     const knee = hip.clone().add(new Vector3(0, -T, 0).applyQuaternion(qt));
     const qs = qt.clone().multiply(q(m.pose.kneeR));
@@ -239,8 +243,169 @@ test("the walk: the heel strikes and stays, then the ball, on the ground — one
   // the heel from its strike till the foot's flat; the ball from then till the toes leave
   const heel = held(0, 0.09, -HEEL);
   const ball = held(0.1, 0.57, BALL);
-  assert.ok(heel.slip < 0.008 && heel.off < 0.006, `the heel: slid ${heel.slip.toFixed(4)}, off the ground ${heel.off.toFixed(4)}`);
-  assert.ok(ball.slip < 0.008 && ball.off < 0.006, `the ball: slid ${ball.slip.toFixed(4)}, off the ground ${ball.off.toFixed(4)}`);
+  assert.ok(
+    heel.slip < 0.008 && heel.off < 0.006,
+    `the heel: slid ${heel.slip.toFixed(4)}, off the ground ${heel.off.toFixed(4)}`,
+  );
+  assert.ok(
+    ball.slip < 0.008 && ball.off < 0.006,
+    `the ball: slid ${ball.slip.toFixed(4)}, off the ground ${ball.off.toFixed(4)}`,
+  );
+  // never into the floor, in any mood (the dark's lower hips once put the landing heel 3 cm through)
+  for (const T of [0, 0.5, 1]) {
+    for (let ph = 0; ph < 1; ph += 0.01) {
+      const m = H.walk2Pose(ph, T);
+      const qh = q(m.pose.hips);
+      const hip = new Vector3(-0.078, 0.061, 0).applyQuaternion(qh).add(new Vector3(0, HIP_H - 0.061 + m.lift[1], 0));
+      const qt = qh.clone().multiply(q(m.pose.thighR));
+      const qs = qt.clone().multiply(q(m.pose.kneeR));
+      const ankle = hip
+        .add(new Vector3(0, -THIGH, 0).applyQuaternion(qt))
+        .add(new Vector3(0, -THIGH, 0).applyQuaternion(qs));
+      const qa = qs.clone().multiply(q(m.pose.ankleR));
+      for (const z of [-HEEL, BALL]) {
+        const y = ankle.clone().add(new Vector3(0, -ANKLE, z).applyQuaternion(qa)).y;
+        assert.ok(y > -0.005, `mood ${T}, ${ph.toFixed(2)}: the sole ${(y * 100).toFixed(1)} cm into the floor`);
+      }
+    }
+  }
   // (1.6 strides a second at 1.5 m/s, a walk's cadence for her legs)
   assert.ok(KH_FEEL.walk / stride < 1.7, `${(KH_FEEL.walk / stride).toFixed(2)} strides a second`);
+});
+
+test("the run and the sprint: on the ball and held there, at any speed (a gait between the jog's and the sprint's)", async () => {
+  const H = await loadHero();
+  const q = (e?: number[]) => new Quaternion().setFromEuler(new Euler(e?.[0] ?? 0, e?.[1] ?? 0, e?.[2] ?? 0));
+  for (const e of [0.5, 1]) {
+    const stride = H.run2Stride(e);
+    const ballAt = (ph: number) => {
+      const m = H.run2Pose(ph, e, 0);
+      const qh = q(m.pose.hips);
+      const hip = new Vector3(-0.078, 0.061, 0)
+        .applyQuaternion(qh)
+        .add(new Vector3(0, HIP_H - 0.061 + m.lift[1], ph * stride));
+      const qt = qh.clone().multiply(q(m.pose.thighR));
+      const knee = hip.clone().add(new Vector3(0, -THIGH, 0).applyQuaternion(qt));
+      const qs = qt.clone().multiply(q(m.pose.kneeR));
+      const ankle = knee.add(new Vector3(0, -THIGH, 0).applyQuaternion(qs));
+      return ankle.add(new Vector3(0, -ANKLE, BALL).applyQuaternion(qs.clone().multiply(q(m.pose.ankleR))));
+    };
+    // (on the ground from landing to its toes leaving: 0.2 of the cycle at a jog, 0.15 at a sprint)
+    const on = 0.2 + (0.15 - 0.2) * e;
+    const b0 = ballAt(0);
+    let slip = 0;
+    let off = 0;
+    for (let ph = 0; ph <= on - 0.005; ph += 0.005) {
+      const b = ballAt(ph);
+      slip = Math.max(slip, Math.hypot(b.x - b0.x, b.z - b0.z));
+      off = Math.max(off, Math.abs(b.y));
+    }
+    assert.ok(slip < 0.008, `effort ${e}: the ball slid ${slip.toFixed(4)}`);
+    assert.ok(off < 0.006, `effort ${e}: the ball off the ground ${off.toFixed(4)}`);
+  }
+  // (a sprint at three strides a second, not three and a half)
+  assert.ok(
+    KH_FEEL.sprint / H.run2Stride(1) < 3.1,
+    `${(KH_FEEL.sprint / H.run2Stride(1)).toFixed(2)} strides a second`,
+  );
+});
+
+// 4c: setting off, stopping and turning back are steps (hero.ts `Stepper`), driven by the move core
+// itself on /dev/anim's clips — a foot on the ground stays where it's put, and none goes into it
+test("starts, stops, turning back; crouched, aside, backing up, hurt — a planted foot stays put, none in the floor", async () => {
+  const C = await import("./index");
+  const { clipList, tabulate, RATE } = await import("../../app/dev/anim/clips");
+  await loadHero();
+  const H = C.heroNow();
+  assert.ok(H);
+  const q = (e?: number[]) => new Quaternion().setFromEuler(new Euler(e?.[0] ?? 0, e?.[1] ?? 0, e?.[2] ?? 0));
+  // (each foot's heel and ball in the world: the bench's own reading)
+  const feet = (f: {
+    pose: Record<string, number[] | undefined>;
+    lift: number[];
+    root: { x: number; y: number; z: number; yaw: number };
+  }) => {
+    const qr = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.root.yaw);
+    const root = new Vector3(f.root.x, f.root.y, f.root.z);
+    return (["L", "R"] as const).map((S) => {
+      const qh = q(f.pose.hips);
+      const hip = new Vector3(S === "L" ? 0.078 : -0.078, 0.061, 0)
+        .applyQuaternion(qh)
+        .add(new Vector3(f.lift[0], HIP_H - 0.061 + f.lift[1], f.lift[2]));
+      const qt = qh.clone().multiply(q(f.pose[`thigh${S}`]));
+      const qs = qt.clone().multiply(q(f.pose[`knee${S}`]));
+      const ankle = hip
+        .clone()
+        .add(new Vector3(0, -THIGH, 0).applyQuaternion(qt))
+        .add(new Vector3(0, -THIGH, 0).applyQuaternion(qs));
+      const ball = ankle
+        .clone()
+        .add(new Vector3(0, -ANKLE, BALL).applyQuaternion(qs.clone().multiply(q(f.pose[`ankle${S}`]))));
+      return { heel: ankle.applyQuaternion(qr).add(root), ball: ball.applyQuaternion(qr).add(root) };
+    });
+  };
+  for (const [name, most] of [
+    ["start, walk, stop", 1],
+    ["start, jog, stop", 6],
+    ["walk, turn back", 4],
+    // 4d: crouched, aiming round a square (facing on), backing up, a limp
+    ["crouch: start, sneak, stop", 1],
+    ["aim: round a square", 16],
+    ["back up, walk", 7],
+    ["walk hurt", 2],
+  ] as const) {
+    const clip = clipList().find((c) => c.name === name);
+    assert.ok(clip);
+    const fr = tabulate({ C, H, T: 0 }, clip, "after", true);
+    assert.ok(fr);
+    let slips = 0;
+    let sunk = 0;
+    const was: ({ k: string; x: number; z: number } | null)[] = [null, null];
+    for (const f of fr) {
+      feet(f).forEach((a, k) => {
+        sunk = Math.max(sunk, ANKLE - a.heel.y, -a.ball.y);
+        const on = a.heel.y < ANKLE + 0.005 ? "h" : a.ball.y < 0.005 ? "b" : "-";
+        const at = on === "h" ? a.heel : a.ball;
+        const w = was[k];
+        if (w && w.k === on && on !== "-" && Math.hypot(at.x - w.x, at.z - w.z) * RATE > 0.3) slips++;
+        was[k] = on === "-" ? null : { k: on, x: at.x, z: at.z };
+      });
+    }
+    // (a frame or so at a touchdown: a landing foot's still braking from its swing)
+    assert.ok(slips <= most, `${name}: ${slips} frames a planted foot slid over 0.3 m/s`);
+    assert.ok(sunk < 0.01, `${name}: a foot ${(sunk * 100).toFixed(1)} cm into the floor`);
+  }
+});
+
+// 4e: how someone walks — every style's feet held where they're put and none in the floor, at any mood
+test("the walks' styles (calm, bouncy, heavy, brisk, tired, old): planted feet held, none in the floor", async () => {
+  await loadHero();
+  const H = (await import("./index")).heroNow();
+  assert.ok(H);
+  for (const gait of H.GAIT_STYLES)
+    for (const T of [0, 1]) {
+      const stride = H.walk2Stride(T, gait);
+      const N = 200;
+      let sunk = 0;
+      let slid = 0;
+      const was: ({ x: number; z: number; k: string } | null)[] = [null, null];
+      for (let i = 0; i <= 2 * N; i++) {
+        const ph = (i / N) % 1;
+        const m = H.walk2Pose(ph, T, 0, { gait });
+        const ahead = (i / N) * stride;
+        (["L", "R"] as const).forEach((S, k) => {
+          const f = H.footOf(m, S);
+          sunk = Math.max(sunk, -f.heel[1], -f.ball[1]);
+          const on = f.heel[1] < 0.003 ? "h" : f.ball[1] < 0.003 ? "b" : "-";
+          const at = on === "h" ? f.heel : f.ball;
+          const w = was[k];
+          // (from one contact to the same, mid-stance: the touchdown's first frame is still braking)
+          if (w && w.k === on && on !== "-") slid = Math.max(slid, Math.hypot(at[0] - w.x, at[2] + ahead - w.z));
+          was[k] = on === "-" ? null : { x: at[0], z: at[2] + ahead, k: on };
+        });
+      }
+      assert.ok(sunk < 0.004, `${gait} T${T}: a foot ${(sunk * 100).toFixed(1)} cm in the floor`);
+      // (a step per ~1/200 of a cycle: no planted spot moving more than 1.5 cm in one)
+      assert.ok(slid < 0.015, `${gait} T${T}: a planted foot moved ${(slid * 100).toFixed(1)} cm in a step`);
+    }
 });
