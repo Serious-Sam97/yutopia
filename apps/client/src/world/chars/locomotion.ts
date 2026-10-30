@@ -49,6 +49,11 @@ export interface LocoIn {
   torch?: boolean;
   /** reloading the gun, not aiming (docs/plan/32-the-arms.md): it's brought up before the chest */
   reload?: boolean;
+  /** (plan 58 7) a shot's kick, 0..1 as it goes off and fades: the arms thrown up */
+  kick?: number;
+  /** (plan 58 7) struck — or startled, a small `k` — from `from` (rad off the facing: 0 ahead, + to
+   *  the left), `t` s ago */
+  hit?: { from: number; t: number; k: number } | null;
   yaw: number;
   /** the facing's turn, rad / s, and the speed's change, tiles / s² */
   turn: number;
@@ -114,24 +119,32 @@ let heroLoading: Promise<Hero> | null = null;
 // (phase 5's — getting over things, the hands placed, the ragdoll — in a chunk of their own beside it)
 type Air = typeof import("./anim/air");
 let air: Air | null = null;
-// (phase 6's — sitting, the hands, busy, together, the emotes — another)
+// (phase 6's — sitting, the hands, busy, together, the emotes — another; phase 7's, the dark, another)
 type Acts = typeof import("./anim/acts");
 let acts: Acts | null = null;
+type Night = typeof import("./anim/night");
+let night: Night | null = null;
 export function loadHero(): Promise<Hero> {
-  heroLoading ??= Promise.all([import("./anim/hero"), import("./anim/air"), import("./anim/acts")]).then(
-    ([m, a, b]) => {
-      hero = m;
-      air = a;
-      acts = b;
-      return m;
-    },
-  );
+  heroLoading ??= Promise.all([
+    import("./anim/hero"),
+    import("./anim/air"),
+    import("./anim/acts"),
+    import("./anim/night"),
+  ]).then(([m, a, b, n]) => {
+    hero = m;
+    air = a;
+    acts = b;
+    night = n;
+    return m;
+  });
   return heroLoading;
 }
 /** Phase 5's, once in. */
 export const airNow = (): Air | null => air;
 /** Phase 6's, once in. */
 export const actsNow = (): Acts | null => acts;
+/** Phase 7's, once in. */
+export const nightNow = (): Night | null => night;
 /** …if they're in (null while they load, or never asked for). */
 export const heroNow = (): Hero | null => hero;
 
@@ -411,6 +424,16 @@ export class Locomotion {
   /** (5b) where this frame's hands go — on a top, an edge, the ground — in the body's own space (x
    *  its left, y up from its feet, z ahead), for the model to reach last (`PersonModel.handsTo`) */
   handsOut: import("./anim/air").Hands | null = null;
+  /** (7) a hand put somewhere at a weight, over any put before it */
+  private hand(h: import("./anim/air").Hands | null | undefined, w: number): void {
+    if (!h || w <= 0) return;
+    this.handsOut ??= {};
+    for (const S of ["L", "R"] as const) {
+      const x = h[S];
+      if (x) this.handsOut[S] = { ...x, w: x.w * w };
+    }
+  }
+  private reloadT = 0;
 
   /** Down from the air on the move: the run picked up on the foot that comes down first (the lower,
    *  as last shown), at the point of its time on the ground where the run has it where it came down —
@@ -798,10 +821,27 @@ export class Locomotion {
       body = mix(body, low, ease(this.crouchW));
     }
 
-    // the torch on: the left forearm out ahead (over the arm's swing)
-    if (this.torchW > 0.01) body = { pose: blend(body.pose, torchPose(breath), ease(this.torchW)), lift: body.lift };
-    // reloading: the gun up before the chest, both hands at it
-    if (this.reloadW > 0.01) body = { pose: blend(body.pose, reloadPose(breath), ease(this.reloadW)), lift: body.lift };
+    // (plan 58 7: the dark again, once its chunk's in — the fear by the mood)
+    const N = H && !m.reduced ? night : null;
+    const fear = N ? N.fearOf(this.tension) : 0;
+    this.reloadT = m.reload ? this.reloadT + dt : 0;
+    // the torch on: the left forearm out ahead (over the arm's swing); plan 58: out along the look,
+    // the hand put there, shaking with the fear
+    if (N && this.torchW > 0.01) {
+      const tr = N.torch2(m.yaw, m.pitch, this.t, fear, breath);
+      body = { pose: blend(body.pose, tr.pose, ease(this.torchW)), lift: body.lift };
+      this.hand(tr.hands, ease(this.torchW));
+    } else if (this.torchW > 0.01)
+      body = { pose: blend(body.pose, torchPose(breath), ease(this.torchW)), lift: body.lift };
+    // reloading: the gun up before the chest, both hands at it; plan 58: the left to the pocket and back
+    if (N && this.reloadW > 0.01) {
+      const rl = N.reload2(this.reloadT, fear);
+      body = { pose: blend(body.pose, { ...reloadPose(breath), ...rl.pose }, ease(this.reloadW)), lift: body.lift };
+      this.hand(rl.hands, ease(this.reloadW));
+    } else if (this.reloadW > 0.01)
+      body = { pose: blend(body.pose, reloadPose(breath), ease(this.reloadW)), lift: body.lift };
+    // (the fear's hunch, on the move and stood, not aiming)
+    if (N && fear > 0.01) body = { pose: N.hunch(body.pose, fear * (1 - this.aimW)), lift: body.lift };
 
     // aiming: the legs step the way the body goes (ahead, aside, backing up), the top aims
     if (this.aimW > 0.01) {
@@ -815,7 +855,9 @@ export class Locomotion {
       else legs = walkPose(this.walkPh, 0.85) as Moved;
       if (!H) legs = mix(aimPose(0, 0, false, breath), legs, ease(clamp(sp / 0.7, 0, 1)));
       this.pitch += (m.pitch - this.pitch) * k(16);
-      const top = aimPose(this.pitch, m.yaw, !!m.gun, breath);
+      const top0 = aimPose(this.pitch, m.yaw, !!m.gun, breath);
+      // (plan 58 7: the breath in the arms, the fear's shake, a shot's kick)
+      const top = N ? { pose: N.aim2(top0.pose, this.t, fear, m.kick ?? 0, breath), lift: top0.lift } : top0;
       const both: Moved = { pose: { ...legs.pose }, lift: legs.lift };
       for (const j of UPPER) if (top.pose[j]) both.pose[j] = top.pose[j];
       body = mix(body, both, ease(this.aimW));
@@ -951,6 +993,22 @@ export class Locomotion {
       this.landT = Math.min(1, this.landT + dt / (0.18 + 0.22 * this.landK));
       const w = this.landK * (1 - ease(this.landT)) * (this.landT < 0.15 ? ease(this.landT / 0.15) : 1);
       body = mix(body, landPose(this.landK), clamp(w * 1.3, 0, 1));
+    }
+
+    // ── struck, startled (plan 58 7): thrown from the blow, the arms up to guard, a stagger
+    if (N && m.hit) {
+      const h = N.hit2(m.hit.from, m.hit.t, m.hit.k);
+      const p = { ...body.pose };
+      for (const [j, d] of Object.entries(h.add) as [JointName, [number, number, number]][]) {
+        const r = p[j] ?? [0, 0, 0];
+        p[j] = [r[0] + d[0], r[1] + d[1], r[2] + d[2]];
+      }
+      // (the hands let go of what they were put on while they guard)
+      if (this.handsOut) for (const x of Object.values(this.handsOut)) if (x) x.w *= 1 - h.w;
+      body = {
+        pose: h.w > 0.01 ? blend(p, h.guard, h.w) : p,
+        lift: [body.lift[0] + h.lift[0], body.lift[1] + h.lift[1], body.lift[2] + h.lift[2]],
+      };
     }
 
     // ── out of a verb: from its last pose into this one

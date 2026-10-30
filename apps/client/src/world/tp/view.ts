@@ -994,6 +994,16 @@ void main() {
   // (`snap`: no easing once it's over — a car's camera, which moves on its own)
   // knocked down (shared/pool-throw.ts): when each fall was first seen here (performance.now)
   private falls = new Map<string, { at: number; t0: number }>();
+  // struck (plan 58 7): when each blow was first seen here
+  private hits = new Map<string, { at: number; t0: number }>();
+  private hitOf(b: { id: string; hitAt?: number; hitYaw?: number }): { t: number; yaw: number } | undefined {
+    const at = b.hitAt ?? 0;
+    const h = this.hits.get(b.id);
+    // (a blow already there when they're first seen — joining late — isn't played: only a new one)
+    if (!h || h.at !== at) this.hits.set(b.id, { at, t0: h ? performance.now() : Number.NEGATIVE_INFINITY });
+    const t = (performance.now() - (this.hits.get(b.id)?.t0 ?? 0)) / 1000;
+    return at && t < 1.2 ? { t, yaw: b.hitYaw ?? 0 } : undefined;
+  }
   private fellT(b: { id: string; fellAt?: number }): number | undefined {
     if (!b.fellAt) {
       this.falls.delete(b.id);
@@ -2494,7 +2504,7 @@ void main() {
         p3.setTint(this.onLand(b.x, b.y) ? this.ownTint.setRGB(c.r / L.r, c.g / L.g, c.b / L.b) : null);
         if (b.id === meId) mySeat = seat3;
         p3.gunFx = b.id === meId ? this.myGun : this.otherGun(b, dt);
-        p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id), fell }, dt, {
+        p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id), fell, hit: this.hitOf(b) }, dt, {
           camX: cam.x,
           camZ: cam.z,
           onScreen:
@@ -2559,6 +2569,7 @@ void main() {
       if (!seen.has(id)) {
         p.dispose();
         this.people3.delete(id);
+        this.hits.delete(id);
       }
     // the shadowed's shroud (tp/shroud3d.ts): their smoke, and embers where a beam burns them
     const shades = bodies.filter((b) => b.shade);

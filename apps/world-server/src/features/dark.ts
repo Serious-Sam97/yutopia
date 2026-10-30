@@ -300,6 +300,9 @@ registerFeature((room: WorldRoom) => {
     const rolling = p.jump === "roll" && now - p.jumpAt >= ROLL_SAFE[0] && now - p.jumpAt <= ROLL_SAFE[1];
     if (rolling) return;
     room.survival?.hurt(sid, SHADE.strikeDamage);
+    // (the body thrown from it, as everyone sees it: plan 58 7)
+    p.hitAt = now;
+    p.hitYaw = Math.atan2(r.shade.y - p.y, r.shade.x - p.x);
     tension = Math.min(1, tension + 0.2);
     const c = room.clients.getById(sid) as WorldClient | undefined;
     if (c) room.send(c, "dark:hit", { id: r.wire.id, n: SHADE.strikeDamage });

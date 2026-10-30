@@ -19,6 +19,7 @@ import {
 import type { chars } from "../art/chars-load";
 import { MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
+import type { Pose } from "../chars/rig";
 import { cueModel, type GunFx, type GunKind, type GunModel, gunModel, poseGun, shellGeometry } from "./guns3d";
 import { ZPX } from "./kit3d";
 import type { PersonIn } from "./people3d";
@@ -143,6 +144,8 @@ export class Person3D {
   motionOut: MotionOut | null = null;
   /** what the body was last drawn doing (a verb, a jump, a Flowmotion move: "" none) — tests */
   drawn = { verb: "", jump: "", flow: "" };
+  /** (plan 58 8) one of the shadowed's body as it was when its time caught: held a beat */
+  private shadeHeld: { pose: Pose; lift: [number, number, number] } | null = null;
 
   constructor(
     readonly id: string,
@@ -192,7 +195,8 @@ export class Person3D {
     if (this.model.avatar !== p.avatar || this.model.lod !== lod) this.model.set(p.avatar, lod);
     this.model.update(d);
     // (how they walk is their look's: plan 58 4e)
-    this.motion.gait = p.avatar.gait ?? "calm";
+    // (plan 58 8: the shadowed limp, heavy)
+    this.motion.gait = p.shade ? "heavy" : (p.avatar.gait ?? "calm");
 
     // the facing turns smoothly (others only send 8 directions)
     if (this.turned === null) this.turned = p.angle;
@@ -279,6 +283,10 @@ export class Person3D {
           aim: (mv & 16) !== 0,
           gun: !!p.gun,
           reload: (this.gunFx?.reload ?? 0) > 0.3,
+          kick: this.gunFx?.kick ?? 0,
+          hurt: p.shade ? 0.7 : undefined,
+          // (struck: thrown from where it came from — off the facing, + to the left)
+          hit: p.hit ? { from: this.turned - p.hit.yaw, t: p.hit.t, k: 1 } : null,
           torch: !!p.torch && !p.phone && !p.shade,
           pitch: p.pitch ?? 0,
           // (aiming, bladed: the shoulders and the arms twist back along the look, left of the body)
@@ -294,25 +302,61 @@ export class Person3D {
     this.motionOut = mo;
     this.drawn = { verb: verb?.kind ?? "", jump: jump?.kind ?? "", flow: flow?.kind ?? "" };
     // one of the shadowed: its own arms, back and head over the walk
-    let pose = p.shade ? this.C.blend(mo.pose, this.C.shadePose(p.shade.pose, p.shade.t, p.shade.seed), 1) : mo.pose;
+    let pose = mo.pose;
     let lift = mo.lift;
-    // one of the day's, asleep in its nest: squatting, folded over its knees (docs/plan/31-the-day.md)
-    if (p.shade?.pose === "lurk") {
-      const m = this.C.lurkPose(p.shade.t, p.shade.seed);
-      pose = this.C.blend(pose, m.pose, 1);
-      lift = m.lift;
-    }
-    // shot down: it dies (staggers, drops to its knees, folds over onto the snow)
+    const SN = p.shade && this.motion.v2 && !p.reduced ? this.C.nightNow() : null;
     const dying = p.shade?.state === "dissolve" && p.shade.killed ? p.shade.t : -1;
-    if (p.shade && dying >= 0) {
-      const m = this.C.deathPose(dying, p.shade.seed);
-      pose = this.C.blend(mo.pose, m.pose, 1);
-      lift = m.lift;
+    if (p.shade && SN) {
+      // (plan 58 8: their own — hunched, lolling, clawed, twitching, their time catching; stood to
+      // fight or reeling, all of them; a beam on it from where it shines; shot down, thrown back, then
+      // the old fall)
+      const sh = p.shade;
+      const b = sh.burn;
+      const from = b ? this.turned - Math.atan2(b.y - p.y, b.x - p.x) : 0;
+      const s =
+        dying >= 0
+          ? { m: dying < SN.LIMP ? SN.shadeShot(dying, sh.seed) : this.C.deathPose(dying, sh.seed), legs: true }
+          : SN.shade2(sh.pose, sh.t, sh.seed, this.spd > 0.2, from);
+      if (s.legs) {
+        pose = s.m.pose;
+        lift = s.m.lift;
+      } else {
+        pose = { ...mo.pose };
+        for (const [j, r] of Object.entries(s.m.pose))
+          if (!/^(thigh|knee|ankle|toe|hips)/.test(j)) pose[j as keyof typeof pose] = r;
+      }
+      // (their time catching: the whole body held a beat, then on)
+      if (SN.glitch(sh.t, sh.seed) !== sh.t && this.shadeHeld) ({ pose, lift } = this.shadeHeld);
+      else this.shadeHeld = { pose, lift };
+    } else {
+      if (p.shade) pose = this.C.blend(mo.pose, this.C.shadePose(p.shade.pose, p.shade.t, p.shade.seed), 1);
+      // one of the day's, asleep in its nest: squatting, folded over its knees (docs/plan/31-the-day.md)
+      if (p.shade?.pose === "lurk") {
+        const m = this.C.lurkPose(p.shade.t, p.shade.seed);
+        pose = this.C.blend(pose, m.pose, 1);
+        lift = m.lift;
+      }
+      // shot down: it dies (staggers, drops to its knees, folds over onto the snow)
+      if (p.shade && dying >= 0) {
+        const m = this.C.deathPose(dying, p.shade.seed);
+        pose = this.C.blend(mo.pose, m.pose, 1);
+        lift = m.lift;
+      }
     }
     // down: on hands and knees, crawling as they go; by someone down, kneeling (D7)
+    let downHands: {
+      L?: { at: [number, number, number]; w: number };
+      R?: { at: [number, number, number]; w: number };
+    } | null = null;
     if (p.down) {
       this.crawlPh = (this.crawlPh + dist / 0.45) % 1;
-      const m = p.down === "down" ? this.C.crawlPose(this.crawlPh) : this.C.kneelPose();
+      // (plan 58 7: the hands and knees set on the ground and held as she goes over them; kneeling, a
+      // hand on their back)
+      const N = this.motion.v2 && !p.reduced ? this.C.nightNow() : null;
+      const now = performance.now() / 1000;
+      const r = N ? (p.down === "down" ? N.crawl2(this.crawlPh, now, dist > 1e-4) : N.kneel2(now, 1)) : null;
+      downHands = r?.hands ?? null;
+      const m = r ? r.m : p.down === "down" ? this.C.crawlPose(this.crawlPh) : this.C.kneelPose();
       this.downW = Math.min(1, this.downW + step * 4);
       pose = this.C.blend(pose, m.pose, this.downW);
       lift = [lift[0] + (m.lift[0] - lift[0]) * this.downW, lift[1] + (m.lift[1] - lift[1]) * this.downW, lift[2]];
@@ -335,6 +379,10 @@ export class Person3D {
     this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], mo.reach);
     // (plan 58 6: the hands on the keys, the pad, the knees, the other one's hand)
     this.model.handsTo(mo.hands ?? null);
+    if (downHands && this.downW > 0) {
+      for (const h of Object.values(downHands)) if (h) h.w *= this.downW;
+      this.model.handsTo(downHands);
+    }
     this.gunHands(p, step);
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
     this.model.step(step, d > 12 || !!p.reduced || this.part !== "all");

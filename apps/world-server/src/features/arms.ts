@@ -249,6 +249,12 @@ registerFeature((room: WorldRoom) => {
       const q = who.q;
       const n = damageAt(id, pvpDamage(id), who.t, who.head);
       room.survival?.hurt(q.sid, n);
+      // (the body thrown from the shot, as everyone sees it: plan 58 7)
+      const qp = room.state.players.get(q.sid);
+      if (qp) {
+        qp.hitAt = now;
+        qp.hitYaw = Math.atan2(oy - qp.y, ox - qp.x);
+      }
       room.send(client, "arms:hit", { id: q.sid, kind: q.downAt ? "downed" : "person", head: who.head, ...at });
       const qc = (room.clients as WorldClient[]).find((c) => c.sessionId === q.sid);
       if (qc) room.send(qc, "dark:hit", { id: client.sessionId, n, shot: true });

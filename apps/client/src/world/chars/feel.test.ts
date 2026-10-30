@@ -489,3 +489,64 @@ test("phase 6: the everyday — no NaN; sat down she's down, up she's stood; a h
   const gap = Math.hypot(me.at[0] - -them.at[0], me.at[1] - them.at[1], me.at[2] - (1.2 - them.at[2]));
   assert.ok(gap < 0.08, `the hands ${gap.toFixed(2)} m apart`);
 });
+
+test("phase 7: the dark — no NaN; struck she's thrown from the blow and guards; the crawl's hands held", async () => {
+  const H = await loadHero();
+  const C = await import("./index");
+  const { clipList, tabulate } = await import("@/app/dev/anim/clips");
+  const x = { C, H, T: 0 } as never;
+  for (const clip of clipList().filter((c) => c.group === "the dark"))
+    for (const f of tabulate(x, clip, "after", !clip.raw) ?? []) {
+      for (const [j, r] of Object.entries(f.pose))
+        assert.ok((r as number[]).every(Number.isFinite), `${clip.name}: ${j}`);
+      for (const h of Object.values(f.hands ?? {})) assert.ok(h?.at.every(Number.isFinite), `${clip.name}: a hand`);
+    }
+  const N = C.nightNow();
+  assert.ok(N);
+  // (from ahead the trunk goes back, from behind forward; the arms up to guard either way)
+  const ahead = N.hit2(0, 0.15, 1);
+  const behind = N.hit2(Math.PI, 0.15, 1);
+  assert.ok((ahead.add.spine?.[0] ?? 0) < -0.1 && (behind.add.spine?.[0] ?? 0) > 0.05);
+  assert.ok(ahead.w > 0.8 && (ahead.guard.shoulderL?.[0] ?? 0) < -1);
+  // (crawling: a hand down stays put on the ground as the body goes over it — 0.6 m/s)
+  const v = 0.6;
+  let worst = 0;
+  let was: number | null = null;
+  for (let i = 0; i < 100; i++) {
+    const t = i / 120;
+    const h = N.crawl2(((t * v) / 0.42) % 1, t, true).hands.R;
+    assert.ok(h);
+    const world = h.at[2] + t * v;
+    if (h.at[1] < 0.04 && was !== null) worst = Math.max(worst, Math.abs(world - was) * 120);
+    was = h.at[1] < 0.04 ? world : null;
+  }
+  assert.ok(worst < 0.05, `a planted hand slides ${worst.toFixed(2)} m/s`);
+});
+
+test("phase 8: the shadowed — no NaN; their time catches and goes on; a beam turns them from it", async () => {
+  const H = await loadHero();
+  const C = await import("./index");
+  const { clipList, tabulate } = await import("@/app/dev/anim/clips");
+  const x = { C, H, T: 0 } as never;
+  for (const clip of clipList().filter((c) => c.group === "the shadowed"))
+    for (const f of tabulate(x, clip, "after", false) ?? [])
+      for (const [j, r] of Object.entries(f.pose))
+        assert.ok((r as number[]).every(Number.isFinite), `${clip.name}: ${j}`);
+  const N = C.nightNow();
+  assert.ok(N);
+  // (held a beat now and then — less than a fifth of the time — and never running backwards)
+  let held = 0;
+  let was = -1;
+  for (let i = 0; i < 1200; i++) {
+    const g = N.glitch(i / 120, 5);
+    assert.ok(g >= was - 1e-9 && g <= i / 120 + 1e-9);
+    if (g !== i / 120) held++;
+    was = g;
+  }
+  assert.ok(held > 30 && held < 240, `held ${held} of 1200`);
+  // (a beam from its left: the left arm over the face, the body turned to the right, away)
+  const l = N.shade2("recoil", 0.5, 3, false, 1.2).m.pose;
+  const r = N.shade2("recoil", 0.5, 3, false, -1.2).m.pose;
+  assert.ok((l.shoulderL?.[0] ?? 0) < -1.5 && (r.shoulderR?.[0] ?? 0) < -1.5);
+  assert.ok((l.spine?.[1] ?? 0) < 0 && (r.spine?.[1] ?? 0) > 0);
+});

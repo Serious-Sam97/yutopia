@@ -48,13 +48,29 @@ export interface Drive {
   flow?: { kind: FlowLook["kind"]; t: number; side: number; speed: number };
   rise?: number;
   fwd?: number;
+  /** (7) the dark's: the torch on, aiming (with the gun), reloading, a shot's kick, the look (off her
+   *  facing: + left, + up), struck or startled */
+  torch?: boolean;
+  aim?: boolean;
+  gun?: boolean;
+  reload?: boolean;
+  kick?: number;
+  yaw?: number;
+  pitch?: number;
+  hit?: { from: number; t: number; k: number } | null;
 }
 export interface Clip {
   name: string;
   group: string;
   /** seconds shown (a whole number of cycles, so the loop joins) */
   len: number;
-  raw?: { after: (x: Ctx, t: number) => Moved; before?: (x: Ctx, t: number) => Moved; root?: (t: number) => Root };
+  /** (7) the mood the clip's at, whatever the slider says (the dark's clips: 1) */
+  mood?: number;
+  raw?: {
+    after: (x: Ctx, t: number) => Moved & { hands?: Frame["hands"] };
+    before?: (x: Ctx, t: number) => Moved;
+    root?: (t: number) => Root;
+  };
   live?: (t: number) => Drive;
   /** (4c) driven by the move core itself under these keys (`x`, `y`: the way, in the body's own
    *  frame at the start — y ahead, x to its right), as the game moves the body: starts, stops,
@@ -87,6 +103,8 @@ export interface Clip {
     drop?: number;
     vel?: [number, number, number];
     hit?: { part: number; impulse: [number, number, number] };
+    /** (8) never getting up (one of the shadowed, shot down) */
+    stay?: boolean;
     solids?: SolidBox3[];
   };
 }
@@ -497,6 +515,163 @@ export function clipList(): Clip[] {
     );
   for (const e of ["wave", "clap", "laugh", "heart", "question", "fire", "coffee", "tape"])
     every(`emote: ${e}`, "emotes", 4, (t) => ({ emote: t > 0.3 && t < 3.5 ? e : "" }));
+  // ── 7: the dark (the mood all the way: the fear)
+  const dark = (name: string, len: number, live: (t: number) => Drive, mood = 1) =>
+    add({ name, group: "the dark", len, live, mood });
+  dark("torch, looking round", 6, (t) => ({
+    speed: 0,
+    torch: true,
+    yaw: 0.9 * Math.sin(t * 0.9),
+    pitch: 0.25 * Math.sin(t * 0.55),
+  }));
+  dark("torch, walking", 4, () => ({ speed: WALK, torch: true }));
+  dark("torch, by day", 4, (t) => ({ speed: 0, torch: true, yaw: 0.6 * Math.sin(t * 0.9) }), 0);
+  dark("aiming, shooting", 4, (t) => {
+    const s = t > 0.8 ? (t - 0.8) % 0.7 : 9;
+    return { speed: 0, aim: true, gun: true, kick: s < 0.3 ? Math.exp(-s * 12) : 0 };
+  });
+  dark("reloading", 4, () => ({ speed: 0, gun: true, reload: true }));
+  for (const [side, from] of [
+    ["ahead", 0],
+    ["behind", Math.PI],
+    ["the left", Math.PI / 2],
+    ["the right", -Math.PI / 2],
+  ] as [string, number][])
+    dark(`struck from ${side}`, 2, (t) => ({
+      speed: 0,
+      torch: true,
+      hit: t > 0.4 ? { from, t: t - 0.4, k: 1 } : null,
+    }));
+  dark("startled from the left", 2, (t) => ({
+    speed: 0,
+    torch: true,
+    hit: t > 0.4 ? { from: 1.2, t: t - 0.4, k: 0.4 } : null,
+  }));
+  dark("struck walking, from ahead", 3, (t) => ({
+    speed: WALK,
+    torch: true,
+    hit: t > 1.2 ? { from: 0, t: t - 1.2, k: 1 } : null,
+  }));
+  // (down: crawling on, kneeling by someone — the world's view lays these: docs/plan/30-the-dark.md D7)
+  add({
+    name: "down, crawling",
+    group: "the dark",
+    len: 3.36,
+    raw: {
+      after: (x, t) => {
+        const N = x.C.nightNow();
+        if (!N) return x.C.crawlPose(((t * 0.6) / 0.45) % 1);
+        const r = N.crawl2(((t * 0.6) / 0.42) % 1, t, true);
+        return { ...r.m, hands: r.hands };
+      },
+      before: (x, t) => x.C.crawlPose(((t * 0.6) / 0.45) % 1),
+      root: ahead(0.6),
+    },
+  });
+  add({
+    name: "kneeling by someone",
+    group: "the dark",
+    len: 6,
+    raw: {
+      after: (x, t) => {
+        const N = x.C.nightNow();
+        if (!N) return x.C.kneelPose();
+        const r = N.kneel2(t, 1);
+        return { ...r.m, hands: r.hands };
+      },
+      before: (x) => x.C.kneelPose(),
+    },
+  });
+  // ── 8: the shadowed, their own (the mood at its full; "before" the old poses)
+  const SHADE_V = 1.3;
+  const shadeClip = (
+    name: string,
+    len: number,
+    after: (x: Ctx, t: number) => Moved,
+    before: (x: Ctx, t: number) => Moved,
+    more: Partial<Clip> & { root?: (t: number) => Root } = {},
+  ) => add({ name, group: "the shadowed", len, raw: { after, before, root: more.root }, rag: more.rag, mood: 1 });
+  // (their walk: the heavy limp; the top theirs over it — or the old, slumped over the old walk)
+  const shadeWalk = (x: Ctx, t: number, kind: "lurch" | "recoil" | "exposed"): Moved => {
+    const N = x.C.nightNow();
+    const stride = x.H.walk2Stride(1, "heavy");
+    const legs = x.H.walk2Pose(((t * SHADE_V) / stride) % 1, 1, 0, { hurt: 0.7, gait: "heavy" });
+    if (!N) return legs;
+    const top = N.shade2(kind, t, 3, true, 1.2).m;
+    const p = { ...legs.pose };
+    for (const j of [
+      "spine",
+      "chest",
+      "neck",
+      "head",
+      "shoulderL",
+      "shoulderR",
+      "elbowL",
+      "elbowR",
+      "wristL",
+      "wristR",
+    ] as const)
+      if (top.pose[j]) p[j] = top.pose[j];
+    for (const [k, r] of Object.entries(top.pose)) if (/^(fingers|index|thumb)/.test(k)) p[k as keyof typeof p] = r;
+    return { pose: p, lift: legs.lift };
+  };
+  const oldWalk = (x: Ctx, t: number, kind: "lurch" | "recoil" | "exposed"): Moved => {
+    const w = x.C.walkPose(((t * SHADE_V) / x.C.STRIDE) % 1, 1);
+    return { pose: x.C.blend(w.pose, x.C.shadePose(kind, t, 3), 1), lift: w.lift };
+  };
+  const oldStood = (x: Ctx, t: number, kind: "lurch" | "windup" | "strike" | "recoil" | "exposed"): Moved => ({
+    pose: x.C.blend({ ...x.C.REST }, x.C.shadePose(kind, t, 3), 1),
+    lift: [0, 0, 0],
+  });
+  const stood =
+    (kind: "lurch" | "windup" | "strike" | "recoil" | "exposed", from = 0) =>
+    (x: Ctx, t: number) =>
+      x.C.nightNow()?.shade2(kind, t, 3, false, from).m ?? oldStood(x, t, kind);
+  shadeClip(
+    "lurching on",
+    4,
+    (x, t) => shadeWalk(x, t, "lurch"),
+    (x, t) => oldWalk(x, t, "lurch"),
+    { root: ahead(SHADE_V) },
+  );
+  shadeClip("stood, twitching", 6, stood("lurch"), (x, t) => oldStood(x, t, "lurch"));
+  shadeClip(
+    "wind-up and strike",
+    2.4,
+    (x, t) => (t < 0.8 ? stood("windup")(x, t) : t < 1.5 ? stood("strike")(x, t - 0.8) : stood("lurch")(x, t)),
+    (x, t) => (t < 0.8 ? oldStood(x, t, "windup") : t < 1.5 ? oldStood(x, t - 0.8, "strike") : oldStood(x, t, "lurch")),
+  );
+  shadeClip("caught in a beam from its left", 3, stood("recoil", 1.2), (x, t) => oldStood(x, t, "recoil"));
+  shadeClip("exposed", 4, stood("exposed"), (x, t) => oldStood(x, t, "exposed"));
+  shadeClip(
+    "asleep in its nest",
+    6,
+    (x, t) => x.C.nightNow()?.shade2("lurk", t, 3, false).m ?? x.C.lurkPose(t, 3),
+    (x, t) => x.C.lurkPose(t, 3),
+  );
+  shadeClip(
+    "shot down",
+    5,
+    (x, t) => {
+      const N = x.C.nightNow();
+      if (!N) return x.C.deathPose(t, 3);
+      if (t < N.LIMP) return N.shadeShot(t, 3);
+      // (no world for the ragdoll: from the shot into the old fall)
+      const a = N.shadeShot(N.LIMP, 3);
+      const b = x.C.deathPose(t, 3);
+      const w = Math.min(1, (t - N.LIMP) / 0.3);
+      return {
+        pose: x.C.blend(a.pose, b.pose, w),
+        lift: [
+          a.lift[0] + (b.lift[0] - a.lift[0]) * w,
+          a.lift[1] + (b.lift[1] - a.lift[1]) * w,
+          a.lift[2] + (b.lift[2] - a.lift[2]) * w,
+        ],
+      };
+    },
+    (x, t) => x.C.deathPose(t, 3),
+    { rag: { at: 0.55, vel: [0, 0.3, -2.2], stay: true } },
+  );
   // ── 5d: limp on the ragdoll, and up again — off a drop too high to land on her feet; a blow
   add({
     name: "jog off an 8 m drop, limp",
@@ -636,7 +811,14 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
     for (let i = 0; i < n; i++) {
       const t = i / rate;
       const m = at(x, t);
-      out.push({ pose: m.pose, lift: m.lift, root: r?.root?.(t) ?? still(), eyes: [0, 0], blink: 0 });
+      out.push({
+        pose: m.pose,
+        lift: m.lift,
+        root: r?.root?.(t) ?? still(),
+        eyes: [0, 0],
+        blink: 0,
+        hands: (m as { hands?: Frame["hands"] }).hands,
+      });
     }
     return out;
   }
@@ -645,7 +827,7 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
   // driven: as the sandbox drives it — the body's speed, its change and its turn; Locomotion's layers
   const loco = new x.C.Locomotion(KH_FEEL);
   loco.v2 = which === "after";
-  loco.tension = x.T;
+  loco.tension = clip.mood ?? x.T;
   loco.seed = 3;
   loco.gait = x.gait ?? "calm";
   const dt = 1 / rate;
@@ -745,9 +927,14 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
         left,
         // (as the sandbox has them: crouched by the gait, or held still)
         crouch: body.gait === "crouch" || (!!keysNow?.crouch && v < 0.2),
-        aim: !!keysNow?.aim,
-        pitch: 0,
-        yaw: 0,
+        aim: !!keysNow?.aim || !!d.aim,
+        gun: d.gun,
+        torch: d.torch,
+        reload: d.reload,
+        kick: d.kick,
+        hit: d.hit ?? null,
+        pitch: d.pitch ?? 0,
+        yaw: d.yaw ?? 0,
         turn,
         accel: acc,
         up,
@@ -857,7 +1044,7 @@ export function limp(
   model.setPose(f0.pose, f0.lift);
   model.root.updateMatrixWorld(true);
   const D = new A.Downed(world, model);
-  if (!D.fall(f0.pose, vel, R.hit)) return;
+  if (!D.fall(f0.pose, vel, R.hit, R.stay)) return;
   let root = { ...f0.root };
   let last: Frame = f0;
   for (let i = i0 + 1; i < frames.length; i++) {

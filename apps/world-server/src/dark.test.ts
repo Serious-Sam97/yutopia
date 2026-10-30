@@ -144,6 +144,12 @@ test("a strike lands on someone standing there (15); rolled through, it misses",
   await waitFor(() => hits.length === 1, 2000);
   assert.equal(hits[0].n, SHADE.strikeDamage);
   await waitFor(() => me(a).hp === 100 - SHADE.strikeDamage);
+  // (and everyone sees it: when, and from where — towards the one that struck: plan 58 7)
+  const sh = shadows(a)[0];
+  assert.ok(me(a).hitAt > 0, "struck: its time");
+  const want = Math.atan2(sh.y - me(a).y, sh.x - me(a).x);
+  const off = Math.atan2(Math.sin(me(a).hitYaw - want), Math.cos(me(a).hitYaw - want));
+  assert.ok(Math.abs(off) < 0.7, `from where it stands: ${off.toFixed(2)} rad off`);
   // the next: roll as it swings (0.55 s into its 0.8 s windup: the strike lands in the roll's first 350 ms)
   await waitFor(() => shadows(a)[0]?.s === code("recover"), 2000);
   await waitFor(() => shadows(a)[0]?.s === code("windup"), 15_000);

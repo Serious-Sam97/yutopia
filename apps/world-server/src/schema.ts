@@ -82,6 +82,10 @@ export class Player extends Schema {
   // their feet), and the way the ball was going (they fall away from it), radians
   @type("float64") fellAt = 0;
   @type("float32") fellYaw = 0;
+  // struck — by one of the shadowed, or shot (docs/plan/58-the-animation.md 7): when (server ms) and
+  // where it came from (radians, the floor's: from them towards whoever struck) — thrown from it
+  @type("float64") hitAt = 0;
+  @type("float32") hitYaw = 0;
   // held down by a dog (docs/plan/52-the-pet-two.md D8): the pet's id while it lasts ("" free); they
   // stay down (fellAt kept) till it's called off
   @type("string") bitBy = "";

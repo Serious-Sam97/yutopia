@@ -1100,7 +1100,72 @@ world before you've passed it.
      drawn in the bench; the world's people on all of it when the world switches to plan 58.
    **Phase 6 signed off 2026-10-30.**
 7. **The dark:** the torch, the gun, hits, down and crawling, fear.
+
+   **Phase 7 built 2026-10-30** (built through, checked at the end). Its own chunk, `yutopia-night`
+   (`chars/anim/night.ts`, 1.9 KB), loaded with the hero's; Locomotion and the world's view lay it on
+   when plan 58 is on. The fear is the mood's (`fearOf(tension)`: nothing by day, all of it in the dark).
+   - **The torch** (not aiming): in the left fist at the chest, out along the look — the hand put there
+     (IK), the chest and the look turned after it a little — swaying with the breath, shaking with the
+     fear; hunched, the other arm in close. By day it's held steady.
+   - **The gun:** the aim's stance (moves.ts) with its own life — the breath in the arms, the fear's
+     shake — and each shot's kick (`LocoIn.kick`, the view's `gunFx.kick`): the arms thrown up, the
+     trunk rocked back. Reloading: the gun before the chest, the head down at it, the left hand to the
+     pocket at the hip and back, again and again.
+   - **Struck** (`LocoIn.hit`: from where, how long ago, how hard): thrown from the blow — back from
+     ahead, a shove forward from behind, bent and twisted away from a side — the head snapped back, the
+     knees giving, the hips shoved away; the arms up to guard (the side it came from higher, the hands
+     open; anything they held let go meanwhile); back in about half a second. **Startled**: the same,
+     small. Walking, it's laid over the gait.
+   - **Down** (the world's `down`): on hands and knees crawling, each hand and knee set down and held
+     where it is while the body goes over it (the right hand with the left knee), lifted and landed
+     still; the head hung. **Kneeling by someone:** on the right knee, a hand on their back shaking them
+     now and then, the other on her own knee, looking round, breathing hard.
+   - **The fear's hunch** on the move and stood: the chest in, the head down a little, the arms in close.
+   - **Bench** ("the dark", at the mood's full): `torch, looking round`, `torch, walking`, `torch, by day`,
+     `aiming, shooting`, `reloading`, `struck from ahead / behind / the left / the right`,
+     `startled from the left`, `struck walking, from ahead`, `down, crawling`, `kneeling by someone`.
+   - Tests: client 83 (the dark's clips finite; struck from ahead the trunk goes back, from behind
+     forward, the guard up; a crawling hand down slides under 5 cm/s). **Budget, fresh build:** page
+     420.1 of 421 (+0.5: the view's crawl and kneel — room is short now), `yutopia-chars` 43.1,
+     `yutopia-night` 1.9.
+   - `design/anim/7-torch-looking-round.mp4`, `7-aiming-shooting.mp4`, `7-reloading.mp4`,
+     `7-struck-from-ahead.mp4`, `7-struck-from-behind.mp4`, `7-struck-from-the-left.mp4`,
+     `7-struck-walking.mp4`, `7-down-crawling.mp4`, `7-kneeling-by-someone.mp4` (half speed).
+   - **The world's blow, from where it came (done 2026-10-30):** `Player.hitAt` and `hitYaw` (synced,
+     like a fall's `fellAt`/`fellYaw`): set by a shade's strike (towards the shade) and by a shot
+     (towards the shooter), so everyone sees the struck one thrown the right way; the view times it from
+     when it's seen (one already there when someone's first seen — joining late — isn't played) and
+     the person's Locomotion gets `hit` (off the facing: `turned − hitYaw`). A server test checks a
+     strike's time and that it points at the shade; the dark's and the arms' server tests pass. The
+     world's people show it when the world switches to plan 58.
+   **Phase 7 signed off 2026-10-30** ("done for now").
 8. **The shadowed** made again on the new body.
+
+   **Phase 8 built 2026-10-30** (in the dark's chunk, `yutopia-night`, now 3.0 KB): Alan Wake 2's Taken —
+   wrong in how they move. The world's view lays it on when plan 58 is on.
+   - **Their time catches** (`glitch`): every 1–2 s (each its own) the whole body is held a beat (~0.1 s),
+     then goes on — in the view the drawn pose itself is held.
+   - **The lurch:** hunched, the chest in, the head lolling and dipping, the arms hung ahead swinging late
+     with the hands clawed, a twitch now and then (the head snapped round, a shoulder jerked); going, a
+     heavy limp (the walk's heavy gait, hurt); stood, crooked on one leg, swaying.
+   - **The wind-up:** reared back, the head cocked hard over, both arms up over it clawed and shuddering,
+     the weight back. **The strike:** a lunge — the front foot in, the trunk thrown over it, the arms
+     slashing down and through.
+   - **Caught in a beam:** the arm on the beam's side over the face, the body wrenched away from it,
+     reeling back, shaking (the view knows where the beam comes from: `burn`). **Exposed:** stunned and
+     bare, swaying, the arms hung, the head lolling, the knees going. **Asleep in its nest:** folded over
+     its knees, a slow breath, a shiver.
+   - **Shot down:** thrown back with the arms flung up into the light, reeling back clawing at the air,
+     then limp on the ragdoll and lying there (`Downed`'s `stay`: it never gets up) where there's a world
+     for it — the bench; the world's view goes on into the old fall for now (its physics is behind the
+     view's floor frame: the ragdoll there comes with the world's switch to plan 58).
+   - **Bench** ("the shadowed", "before" the old poses): `lurching on`, `stood, twitching`,
+     `wind-up and strike`, `caught in a beam from its left`, `exposed`, `asleep in its nest`, `shot down`.
+   - Tests: client 84 (the shadowed's clips finite; the glitch holds now and then, never backwards; a
+     beam from either side turns them from it). Budget: page 420.1 (unchanged), `yutopia-night` 3.0.
+   - `design/anim/8-lurching-on.mp4`, `8-stood-twitching.mp4`, `8-wind-up-and-strike.mp4`,
+     `8-caught-in-a-beam.mp4`, `8-exposed.mp4`, `8-asleep-in-its-nest.mp4`, `8-shot-down.mp4` (half speed).
+   **Phase 8 signed off 2026-10-30.**
 9. **Reactions and life:** flinches, shivers, catching breath, idles by persona, glances; the
    cold (breath puffs, hunching, stamping).
 10. **The checks:**

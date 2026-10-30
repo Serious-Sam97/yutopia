@@ -27,6 +27,7 @@ export {
   Locomotion,
   loadHero,
   localVel,
+  nightNow,
   verbIn,
   verbT,
 } from "./locomotion";

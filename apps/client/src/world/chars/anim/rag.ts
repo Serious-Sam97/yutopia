@@ -196,6 +196,8 @@ export class Downed {
   private t = 0;
   private still = 0;
   private up: { u: number; back: boolean; from: Moved } | null = null;
+  /** (8) never getting up: one of the shadowed, shot down, lying there as it burns away */
+  private stay = false;
 
   constructor(
     world: PhysicsWorld,
@@ -209,7 +211,13 @@ export class Downed {
   }
 
   /** Gone limp from `pose`, going at `vel`, perhaps hit (RagdollRig.start). */
-  fall(pose: Pose, vel: [number, number, number], hit?: { part: number; impulse: [number, number, number] }): boolean {
+  fall(
+    pose: Pose,
+    vel: [number, number, number],
+    hit?: { part: number; impulse: [number, number, number] },
+    stay = false,
+  ): boolean {
+    this.stay = stay;
     this.t = 0;
     this.still = 0;
     this.up = null;
@@ -234,7 +242,7 @@ export class Downed {
       this.t += dt;
       this.still = R.speed() < 0.25 ? this.still + dt : 0;
       const at = { x: M.root.position.x, y: M.root.position.y, z: M.root.position.z, yaw: M.root.rotation.y };
-      if (this.still < 0.5 && this.t < 4) return { m: R.moved(), hands: null, root: at };
+      if (this.stay || (this.still < 0.5 && this.t < 4)) return { m: R.moved(), hands: null, root: at };
       const L = R.lying();
       if (!L) return null;
       const back = L.front.y > 0;
