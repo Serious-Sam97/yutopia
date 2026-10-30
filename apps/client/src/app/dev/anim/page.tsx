@@ -163,7 +163,7 @@ function Bench({ q }: { q: URLSearchParams }) {
       const place = (m: InstanceType<typeof C.PersonModel>, fr: Frame, dx: number, dz = 0) => {
         m.root.position.set(fr.root.x + dx, fr.root.y, fr.root.z + dz);
         m.root.rotation.y = fr.root.yaw;
-        m.setPose(fr.pose, fr.lift);
+        m.setPose(fr.pose, fr.lift, fr.reach);
         m.handsTo(fr.hands ?? null);
         m.setFace(fr.blink, 0);
         m.setEyes(fr.eyes[0], fr.eyes[1]);
@@ -188,6 +188,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         land.receiveShadow = true;
         scene.add(land);
       };
+      const propMeshes: InstanceType<typeof T.Mesh>[] = [];
+      const propMat = new T.MeshLambertMaterial({ color: "#a39a88" });
       // (5c: a clip's pole, swung round)
       const pole = new T.Mesh(
         new T.CylinderGeometry(0.06, 0.06, 3, 12),
@@ -280,6 +282,18 @@ function Bench({ q }: { q: URLSearchParams }) {
         bench.current.feet = null;
         showGround(s.clip.ground);
         pole.visible = !!s.clip.pole;
+        // (6: the clip's things — a seat, a desk)
+        for (const b of propMeshes.splice(0)) {
+          scene.remove(b);
+          b.geometry.dispose();
+        }
+        for (const b of s.clip.props ?? []) {
+          const mesh = new T.Mesh(new T.BoxGeometry(b.hx * 2, b.hy * 2, b.hz * 2), propMat);
+          mesh.position.set(b.x, b.y, b.z);
+          mesh.castShadow = mesh.receiveShadow = true;
+          scene.add(mesh);
+          propMeshes.push(mesh);
+        }
         if (s.clip.pole) pole.position.set(s.clip.pole[0], 1.5, s.clip.pole[1]);
         // (pops on their own fine table)
         setReport({ pops: pops(tabulate(x, s.clip, "after", s.live, POP_RATE) ?? []), feet: null, len: s.clip.len });
@@ -351,9 +365,11 @@ function Bench({ q }: { q: URLSearchParams }) {
           // (across the view: after on the left of the picture, before on the right)
           const ax = (-oz / d) * gap;
           const az = (ox / d) * gap;
-          place(after, A[i], ax, az);
-          before.root.visible = !!(s.compare && B);
-          if (B && s.compare) place(before, B[Math.min(B.length - 1, i)], -ax, -az);
+          // (6d: a pair's other one where they stand, facing her — not beside her)
+          const two = !!s.clip.pair;
+          place(after, A[i], two ? 0 : ax, two ? 0 : az);
+          before.root.visible = !!((s.compare || two) && B);
+          if (B && (s.compare || two)) place(before, B[Math.min(B.length - 1, i)], two ? 0 : -ax, two ? 0 : -az);
           // (the springs swing as it plays; scrubbed, they hold)
           const sdt = s.playing ? dt * s.speed : 0;
           after.step(sdt);

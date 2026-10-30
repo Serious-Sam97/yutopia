@@ -1,6 +1,7 @@
 import { type HeldKind, heldState, type JumpNow } from "@yutopia/shared";
 import { Euler, Quaternion } from "three";
-import { heroNow, type LocoIn, Locomotion, loadHero } from "./locomotion";
+import type { Hands } from "./anim/acts";
+import { actsNow, heroNow, type LocoIn, Locomotion, loadHero } from "./locomotion";
 import type { Reach } from "./model";
 import { LEG_K } from "./moves";
 import { type Euler3, HANDS, handPose, JOINTS, type JointName, type Pose, REST } from "./rig";
@@ -25,7 +26,9 @@ export interface MotionIn {
   reduced: boolean; // reduced motion: no idle life, short gestures
   held?: { kind: HeldKind; since: number } | null; // carrying something, `since` ms
   busy?: string; // using something (shared USES)
-  act?: { what: string; t: number; len: number } | null; // with someone (shared SOCIAL, or "take")
+  act?: { what: string; t: number; len: number; with?: [number, number] } | null; // with someone (shared SOCIAL, or "take"); (plan 58 6d) where they are in my own space: x my left, z ahead
+  /** (plan 58 6a) how far the hips go down onto the seat (m, − down: the view's `sitDrop`) */
+  seatDrop?: number;
   phone?: { state: string; pose: string; ringing: boolean } | null;
   jump?: JumpNow | null; // jumping (shared/jump.ts): its stage
   /** how they move (docs/plan/29-the-move.md M6): the gaits, crouching, aiming, the jump's arc
@@ -47,6 +50,9 @@ export interface MotionOut {
   sip: number;
   /** hands put on the body (IK: the phone at the ear, the mug at the mouth…) */
   reach: Reach;
+  /** (plan 58 phase 6) hands put on things — the keys, the knees, the pad, the other one's hand — in
+   *  the body's own space (x its left, y up from its feet, z ahead): `PersonModel.handsTo` */
+  hands?: import("./anim/acts").Hands | null;
 }
 
 const TAU = Math.PI * 2;
@@ -661,9 +667,21 @@ export class Motion3 {
     this.walkW = clamp01(this.walkW + (m.walking && !m.sit ? dt : -dt) * 8);
     if (!m.walking && this.walkW === 0) this.phase = this.phase < 0.5 ? 0 : 0.5;
 
+    // (plan 58 phase 6: the everyday again, once its chunk's in — sitting down and getting up its own
+    // 0.9 s, the hands put on things)
+    const A = this.v2 && !m.reduced ? actsNow() : null;
+    let hands: Hands | null = null;
+    const handed = (h: Hands | null | undefined, w: number) => {
+      if (!h || w <= 0) return;
+      hands ??= {};
+      for (const S of ["L", "R"] as const) {
+        const x = h[S];
+        if (x) hands[S] = { ...x, w: x.w * w };
+      }
+    };
     if (this.seated !== null && this.seated !== m.sit) this.settleT = 0;
     this.seated = m.sit;
-    this.settleT = Math.min(1, this.settleT + dt / 0.32);
+    this.settleT = Math.min(1, this.settleT + dt / (A ? 0.9 : 0.32));
 
     // ── standing / seated, and idle life
     let p = m.sit ? seatedPose(m.typing) : standPose();
@@ -713,7 +731,19 @@ export class Motion3 {
       this.look += (this.lookTo - this.look) * Math.min(1, dt * 5);
       add(p, "head", 0, this.look);
     }
-    if (m.loco && !m.sit) {
+    // (6a: sat, sitting down, getting up — the legs solved to the floor, the hands on the knees or keys)
+    const sat =
+      A && (m.sit || this.settleT < 1)
+        ? A.sit2(this.settleT, !m.sit, t, m.typing, m.seatDrop ?? -0.34, this.seed)
+        : null;
+    if (sat) {
+      p = sat.pose;
+      lift[0] = sat.lift?.[0] ?? 0;
+      lift[1] = sat.lift?.[1] ?? 0;
+      lift[2] = sat.lift?.[2] ?? 0;
+      handed(sat.hands, 1);
+    }
+    if (m.loco && !m.sit && !sat) {
       // the move: standing (as above), walking, jogging, sprinting, crouched, aiming, in the air
       this.loco ??= new Locomotion();
       this.loco.v2 = this.v2;
@@ -729,7 +759,7 @@ export class Motion3 {
       lift[0] = lo.lift[0];
       lift[1] = lo.lift[1];
       lift[2] = lo.lift[2];
-    } else {
+    } else if (!sat) {
       // walking takes over the legs, the hips and the swing of the arms
       if (this.walkW > 0) {
         const w = walkPose(this.phase, k);
@@ -753,7 +783,11 @@ export class Motion3 {
     if (m.held && !ph) {
       const st = heldState(m.held.kind, m.held.since);
       sip = sipEnv(st.sip);
-      p = blend(p, blend(holdPose(), sipPose(), sip), 1);
+      if (A) {
+        const h = A.hold2(sip, t);
+        p = blend(p, h.pose, 1);
+        handed(h.hands, 1);
+      } else p = blend(p, blend(holdPose(), sipPose(), sip), 1);
       reaching({ R: { at: "mouth", w: 1 } }, sip);
       sipping = st.sip >= 0.32 && st.sip <= 0.68;
     }
@@ -762,15 +796,23 @@ export class Motion3 {
     if (m.busy) this.busyWhat = m.busy;
     this.busyW = clamp01(this.busyW + (m.busy && !m.sit ? dt : -dt) * 5);
     if (this.busyW > 0 && this.busyWhat) {
-      const b = busyPose(this.busyWhat, t);
+      const b = A ? A.busy2(this.busyWhat, t, this.seed) : busyPose(this.busyWhat, t);
       p = blend(p, b.pose, ease(this.busyW));
-      lifted(b.lift, ease(this.busyW));
+      if (b.lift) lifted(b.lift, ease(this.busyW));
+      if ("hands" in b) handed(b.hands, ease(this.busyW));
     }
 
     // the phone in the hand
     if (ph) this.phoneWhat = ph;
     this.phoneW = clamp01(this.phoneW + (ph ? dt : -dt) * 5);
-    if (this.phoneW > 0 && this.phoneWhat) {
+    let phoneTalk = 0;
+    if (this.phoneW > 0 && this.phoneWhat && A) {
+      const f = A.phone2(this.phoneWhat, m.phone?.pose ?? "", t, m.speaking, this.seed);
+      p = blend(p, f.pose, ease(this.phoneW));
+      handed(f.hands, ease(this.phoneW));
+      phoneTalk = (f.talk ?? 0) * ease(this.phoneW) * (m.speaking ? 1 : 0);
+      if (this.phoneWhat === "call") reaching({ R: { at: "ear", w: 1 } }, ease(this.phoneW));
+    } else if (this.phoneW > 0 && this.phoneWhat) {
       p = blend(p, phonePose(this.phoneWhat, m.phone?.pose ?? "", t, m.speaking), ease(this.phoneW));
       // on a call the phone is at the ear
       if (this.phoneWhat === "call") reaching({ R: { at: "ear", w: 1 } }, ease(this.phoneW));
@@ -779,7 +821,7 @@ export class Motion3 {
     if (m.phone?.ringing && !ph && !m.reduced) lift[0] += 0.004 * Math.sin(t * 46) * (Math.sin(t * 2.6) > 0 ? 1 : 0);
 
     // lowering onto the seat (from a little higher) or rising off it (from a crouch)
-    if (this.settleT < 1 && !m.reduced) {
+    if (this.settleT < 1 && !m.reduced && !sat) {
       const s = 1 - ease(this.settleT);
       lift[1] += (m.sit ? 0.05 : -0.04) * s;
       if (!m.sit) {
@@ -822,7 +864,11 @@ export class Motion3 {
     if (m.act && !m.sit) {
       const { what, t: at, len } = m.act;
       const w = m.reduced ? 1 : ease(at / 0.3) * (1 - ease((at - (len - 0.35)) / 0.35));
-      if (w > 0)
+      if (w > 0 && A) {
+        const g = A.together2(what, at / len, CONTACT, m.act.with);
+        p = blend(p, g.pose, w);
+        handed(g.hands, w);
+      } else if (w > 0)
         p = what === "wave" ? blend(p, emotePose("wave", at).pose, w) : blend(p, togetherPose(what, at / len), w);
     }
 
@@ -835,7 +881,15 @@ export class Motion3 {
       this.emoteT += dt;
       const len = m.reduced ? 1.2 : 3.2;
       const e = ease(this.emoteT / 0.28) * (1 - ease((this.emoteT - (len - 0.4)) / 0.4));
-      if (e > 0) {
+      if (e > 0 && A) {
+        const em = A.emote2(this.emote, this.emoteT);
+        p = blend(p, em.pose, e);
+        if (em.lift) lifted(em.lift, e);
+        handed(em.hands, e);
+        if (em.sip) reaching({ R: { at: "mouth", w: 1 } }, em.sip * e);
+        if (em.blink !== undefined) blink = Math.max(blink, em.blink * e);
+        if (em.talk !== undefined) talk = Math.max(talk, em.talk * e);
+      } else if (e > 0) {
         const em = emotePose(this.emote, this.emoteT);
         p = blend(p, em.pose, e);
         lifted(em.lift, e);
@@ -847,7 +901,8 @@ export class Motion3 {
     // (the gaze's eyes and its blinks: plan 58 G.D)
     const gz = this.loco?.gazeOut;
     if (gz) blink = Math.max(blink, gz.blink);
-    return { pose: p, lift, blink, talk, settle: ease(this.settleT), sip, reach, eyes: gz?.eyes };
+    talk = Math.max(talk, phoneTalk);
+    return { pose: p, lift, blink, talk, settle: sat?.settle ?? ease(this.settleT), sip, reach, eyes: gz?.eyes, hands };
   }
 }
 

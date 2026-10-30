@@ -1054,6 +1054,51 @@ world before you've passed it.
      the dark's hits, the car's); a mantle from a hang uses Flowmotion's climb, not the verb's.
    **Phase 5 signed off 2026-10-30.**
 6. **Everyday acts:** sitting, the phone, busy, together (the hands meeting by IK), emotes.
+
+   **Phase 6 built 2026-10-30** (built through, checked at the end, as phase 5 was). Its own chunk,
+   `yutopia-acts` (`chars/anim/acts.ts`, 4.7 KB), loaded with the hero's; Motion3 uses it when plan 58
+   is on. Every act gives the joints it moves and where its hands go in her own space (`MotionOut.hands`
+   → `PersonModel.handsTo`, as 5b's: on the keys, the knees, the pad, the other one's hand).
+   - **6a, sitting:** down in 0.9 s (was 0.3) — the trunk forward over the feet, the hands on the knees,
+     the hips back and down onto the seat, back upright and settled; the legs solved each frame so the
+     feet stay planted while the hips go down (the feet stepped out to where they sit, one then the
+     other, lifted as they go). Sat: the breath, the weight, a glance, the feet moved every ~7 s (both
+     flat, one out, the ankles crossed), the hands on the thighs. Typing: the hands on the keys, the
+     fingers tapping in bursts, a pause to read. Up: forward again, pushing off the knees, up through the
+     legs. In a car (`car2`) the breath and a glance out of the side. The view lowers the hips by the
+     act's own `settle` when plan 58 is on (person3d; the old sitting keeps its 0.3 s).
+   - **6b, the hands:** a mug held at the waist and a sip (up to the mouth, the head back, the eyes
+     shut); the phone — texting in both hands with the thumbs going, a call (at the ear, the head leant
+     to it; talking, the free hand talks along, listening it holds the other elbow), a video call (held
+     out at the face), a photo (up in both, a press of the shutter), a selfie (the arm out and up, the
+     head tipped to it) with its poses.
+   - **6c, busy**, each its own loop: a machine's button pressed and the wait (a glance up, the weight);
+     the throw (a step into it, the wind-up, through, the follow-through); the arcade (the stick going
+     round, the buttons); the piano (the hands along the keys, the fingers); the pad (the thumbs, leant
+     into corners); pool (down over the cue, the bridge hand on the cloth, strokes, the strike, up to
+     watch); pong (ready on the toes, a forehand); typing at a computer; writing on a whiteboard a line at
+     a time, a step back to look.
+   - **6d, together — the hands meeting:** each one's right hand to the same place, on the line between
+     the two of them at the act's height (a high five overhead, a fist bump at the chest, a clink, a
+     hand-over): wound up (cocked back), out to it, struck, followed through (bounced apart, the fist
+     opened, the drink back to the mouth). Motion3's act takes `with` (where the other one is); the
+     world doesn't say who it's with yet — the bench draws the other one facing her. KH3's big wave.
+   - **6e, the emotes (KH3's):** the wave over the head; the clap (the hands meeting, a bounce to each);
+     the laugh (doubled over, a hand slapping the thigh); the heart (the hands in front of the chest,
+     the head on one side); the question (a shrug, palms up, then a hand to the chin); fire (two fist
+     pumps, the second off the ground); the coffee sip; the dance (a step side to side on the beat).
+   - **Bench:** 31 clips through Motion3 — sitting (with a seat and a desk drawn), the hands, busy,
+     together (the other one shown facing her), emotes; "before" plan 58 off.
+   - Tests: client 82 (every everyday clip finite; sat she's down by the seat's drop and up after; a
+     high five's two hands within a palm of each other). **Budget, fresh build:** page 419.6,
+     `yutopia-chars` 42.7, `yutopia-anim` 14.2, `yutopia-air` 4.4, `yutopia-acts` 4.7.
+   - `design/anim/6a-sit-down-get-up.mp4`, `6a-typing.mp4`, `6b-mug.mp4`, `6b-phone-text.mp4`,
+     `6b-phone-call.mp4`, `6b-phone-selfie.mp4`, `6c-piano.mp4`, `6c-pool.mp4`, `6c-throw.mp4`,
+     `6d-high-five.mp4`, `6d-fist-bump.mp4`, `6d-cheers.mp4`, `6e-emotes-clap.mp4`,
+     `6e-emotes-laugh.mp4`, `6e-emotes-fire.mp4`, `6e-emotes-tape.mp4` (half speed).
+   - **Left:** the world saying who an act is with (for `with`), its props (the phone, the mug, the cue)
+     drawn in the bench; the world's people on all of it when the world switches to plan 58.
+   **Phase 6 signed off 2026-10-30.**
 7. **The dark:** the torch, the gun, hits, down and crawling, fear.
 8. **The shadowed** made again on the new body.
 9. **Reactions and life:** flinches, shivers, catching breath, idles by persona, glances; the

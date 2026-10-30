@@ -330,8 +330,11 @@ export class Person3D {
       ];
     } else this.fellW = 0;
     const seatY = (SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX;
-    const drop = this.model.sitDrop(seatY) * w;
+    // (plan 58 6a: the new sitting lowers the hips by its own settle, its legs solved for it)
+    const drop = this.model.sitDrop(seatY) * (this.motion.v2 && !p.reduced ? mo.settle : w);
     this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], mo.reach);
+    // (plan 58 6: the hands on the keys, the pad, the knees, the other one's hand)
+    this.model.handsTo(mo.hands ?? null);
     this.gunHands(p, step);
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
     this.model.step(step, d > 12 || !!p.reduced || this.part !== "all");

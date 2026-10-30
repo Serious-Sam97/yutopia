@@ -18,7 +18,18 @@ export {
   verbAt,
 } from "./iso";
 export type { Anchor } from "./kit";
-export { airNow, heroNow, jumpNowOf, type LocoIn, Locomotion, loadHero, localVel, verbIn, verbT } from "./locomotion";
+export {
+  actsNow,
+  airNow,
+  heroNow,
+  jumpNowOf,
+  type LocoIn,
+  Locomotion,
+  loadHero,
+  localVel,
+  verbIn,
+  verbT,
+} from "./locomotion";
 export { bodyMaterial, CharFactory, legShade, lookKey, PersonModel, type Reach } from "./model";
 export { blend, CONTACT, carPose, jumpPose, Motion3, type MotionIn, type MotionOut, STRIDE, walkPose } from "./motion";
 export {

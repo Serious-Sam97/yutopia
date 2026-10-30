@@ -461,3 +461,31 @@ test("phase 5d: the get-ups end standing, from the back and the front", async ()
       for (const r of Object.values(A.getUp2Pose(u, back).m.pose)) assert.ok((r as number[]).every(Number.isFinite));
   }
 });
+
+test("phase 6: the everyday — no NaN; sat down she's down, up she's stood; a high five's hands meet", async () => {
+  const H = await loadHero();
+  const C = await import("./index");
+  const { clipList, tabulate } = await import("@/app/dev/anim/clips");
+  const x = { C, H, T: 0 } as never;
+  for (const clip of clipList().filter((c) => c.motion))
+    for (const f of tabulate(x, clip, "after", true) ?? []) {
+      for (const [j, r] of Object.entries(f.pose))
+        assert.ok((r as number[]).every(Number.isFinite), `${clip.name}: ${j}`);
+      for (const h of Object.values(f.hands ?? {})) assert.ok(h?.at.every(Number.isFinite), `${clip.name}: a hand`);
+    }
+  // (sitting down and getting up: the hips down by the seat's drop sat, back up after)
+  const sit = clipList().find((c) => c.name === "sit down, sit, get up");
+  assert.ok(sit);
+  const fr = tabulate(x, sit, "after", true) ?? [];
+  assert.ok(fr[Math.round(4 * 120)].lift[1] < -0.3, `sat: hips ${fr[Math.round(4 * 120)].lift[1]}`);
+  assert.ok(Math.abs(fr[fr.length - 1].lift[1]) < 0.03, `stood: hips ${fr[fr.length - 1].lift[1]}`);
+  // (a high five at its contact: her hand and theirs where they meet — in the world, a palm apart)
+  const A = C.actsNow();
+  assert.ok(A);
+  const me = A.together2("highfive", 0.45, 0.45, [0, 1.2]).hands?.R;
+  const them = A.together2("highfive", 0.45, 0.45, [0, 1.2]).hands?.R;
+  assert.ok(me && them && me.w > 0.9);
+  // (they face her 1.2 m ahead: their space turned round)
+  const gap = Math.hypot(me.at[0] - -them.at[0], me.at[1] - them.at[1], me.at[2] - (1.2 - them.at[2]));
+  assert.ok(gap < 0.08, `the hands ${gap.toFixed(2)} m apart`);
+});

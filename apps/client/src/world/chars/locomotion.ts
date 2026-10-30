@@ -114,16 +114,24 @@ let heroLoading: Promise<Hero> | null = null;
 // (phase 5's — getting over things, the hands placed, the ragdoll — in a chunk of their own beside it)
 type Air = typeof import("./anim/air");
 let air: Air | null = null;
+// (phase 6's — sitting, the hands, busy, together, the emotes — another)
+type Acts = typeof import("./anim/acts");
+let acts: Acts | null = null;
 export function loadHero(): Promise<Hero> {
-  heroLoading ??= Promise.all([import("./anim/hero"), import("./anim/air")]).then(([m, a]) => {
-    hero = m;
-    air = a;
-    return m;
-  });
+  heroLoading ??= Promise.all([import("./anim/hero"), import("./anim/air"), import("./anim/acts")]).then(
+    ([m, a, b]) => {
+      hero = m;
+      air = a;
+      acts = b;
+      return m;
+    },
+  );
   return heroLoading;
 }
 /** Phase 5's, once in. */
 export const airNow = (): Air | null => air;
+/** Phase 6's, once in. */
+export const actsNow = (): Acts | null => acts;
 /** …if they're in (null while they load, or never asked for). */
 export const heroNow = (): Hero | null => hero;
 

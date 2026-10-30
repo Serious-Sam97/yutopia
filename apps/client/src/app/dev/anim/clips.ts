@@ -11,7 +11,8 @@ import {
 } from "@yutopia/shared/move";
 import type { PhysicsWorld } from "@yutopia/shared/physics";
 import { box3, type SolidBox3 } from "@yutopia/shared/shapes";
-import type { LocoIn, Locomotion, Moved } from "@/world/chars";
+import type { LocoIn, Locomotion, MotionIn, Moved } from "@/world/chars";
+import type { Reach } from "@/world/chars/model";
 
 // /dev/anim's clips (docs/plan/58-the-animation.md, phase 2): every animation by name, two ways —
 // `raw`, the keyed pose at a moment (what's keyed, nothing laid on), and `live`, a scripted run
@@ -72,6 +73,13 @@ export interface Clip {
   blocks?: boolean;
   /** (5c) a pole stood at (x, z), swung round */
   pole?: [number, number];
+  /** (6) driven through Motion3 (the everyday: sitting, the hands, busy, together, the emotes) by
+   *  these inputs at `t` s */
+  motion?: (t: number) => Partial<MotionIn>;
+  /** (6) things drawn: a seat, a desk, a board */
+  props?: SolidBox3[];
+  /** (6d) the other one, facing her this far ahead (m), doing this — shown as the "before" */
+  pair?: { d: number; act: string };
   /** (5d) gone limp on Jolt's ragdoll: at `at` s, or on landing from `drop` m or more; a blow to a
    *  part (RagdollRig's: 2 the chest) and the whole body sent at `vel` by it; what's solid besides the land (the ledge she came off) */
   rag?: {
@@ -440,6 +448,55 @@ export function clipList(): Clip[] {
   flowClip("run up a wall", 1, (t) => ({ speed: 0, flow: { kind: "wallrun", t, side: 1, speed: 5.5 } }));
   flowClip("run along a wall", 1.1, (t) => ({ speed: 0, flow: { kind: "wallside", t, side: 1, speed: 8.5 } }));
   flowClip("grind a rail", 1.2, (t) => ({ speed: 0, flow: { kind: "grind", t, side: 1, speed: 7 } }));
+  // ── 6: the everyday, through Motion3 (sitting, the hands and the phone, busy, together, the emotes)
+  const seat = [box3(-0.24, -0.3, 0.24, 0.16, 0, 0.36), box3(-0.24, -0.34, 0.24, -0.28, 0.36, 0.95)];
+  const desk = [...seat, box3(-0.6, 0.38, 0.6, 0.98, 0.69, 0.73)];
+  const every = (
+    name: string,
+    group: string,
+    len: number,
+    motion: (t: number) => Partial<MotionIn>,
+    more: Partial<Clip> = {},
+  ) => add({ name, group, len, motion, ...more });
+  every("sit down, sit, get up", "sitting", 10, (t) => ({ sit: t > 0.6 && t < 7.2 }), { props: seat });
+  every("sat at a desk, typing", "sitting", 8, () => ({ sit: true, typing: true }), { props: desk });
+  every("sat, a while", "sitting", 24, () => ({ sit: true }), { props: seat });
+  every("a mug, sipping", "the hands", 9, (t) => ({ held: { kind: "mug", since: t * 1000 } }));
+  for (const [state, pose, speaking] of [
+    ["text", "", false],
+    ["call", "", true],
+    ["video", "", true],
+    ["photo", "", false],
+    ["selfie", "peace", false],
+  ] as [string, string, boolean][])
+    every(`phone: ${state}${pose ? `, ${pose}` : ""}`, "the hands", 6, () => ({
+      phone: { state, pose, ringing: false },
+      speaking,
+    }));
+  for (const what of ["coffee", "throw", "arcade", "piano", "gamepad", "pool", "pong", "computer", "whiteboard"])
+    every(`busy: ${what}`, "busy", 7, () => ({ busy: what }));
+  for (const [what, ms] of [
+    ["highfive", 1500],
+    ["fistbump", 1400],
+    ["cheers", 1700],
+    ["give", 1500],
+    ["wave", 2200],
+  ] as [string, number][])
+    every(
+      `with someone: ${what}`,
+      "together",
+      ms / 1000 + 1.2,
+      (t) => ({
+        act:
+          t > 0.4 && t < 0.4 + ms / 1000
+            ? { what, t: t - 0.4, len: ms / 1000, with: [0, 1.2] as [number, number] }
+            : null,
+        held: what === "cheers" || what === "give" ? { kind: "mug", since: 0 } : null,
+      }),
+      { pair: { d: 1.2, act: what === "give" ? "take" : what } },
+    );
+  for (const e of ["wave", "clap", "laugh", "heart", "question", "fire", "coffee", "tape"])
+    every(`emote: ${e}`, "emotes", 4, (t) => ({ emote: t > 0.3 && t < 3.5 ? e : "" }));
   // ── 5d: limp on the ragdoll, and up again — off a drop too high to land on her feet; a blow
   add({
     name: "jog off an 8 m drop, limp",
@@ -554,6 +611,8 @@ export interface Frame {
   blink: number;
   /** (5b) where the hands go, in her own space: `Locomotion.handsOut` */
   hands?: Locomotion["handsOut"];
+  /** (6) hands put on the body: the phone at the ear, the mug at the mouth */
+  reach?: Reach;
 }
 export const RATE = 120;
 
@@ -581,6 +640,7 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
     }
     return out;
   }
+  if (clip.motion) return everyday(x, clip, which, rate);
   if (!clip.live) return null;
   // driven: as the sandbox drives it — the body's speed, its change and its turn; Locomotion's layers
   const loco = new x.C.Locomotion(KH_FEEL);
@@ -809,4 +869,45 @@ export function limp(
     frames[i] = { ...last, root: { ...root } };
   }
   D.stop();
+}
+
+/** (6) A clip of the everyday, through Motion3 as the world drives it: "before" plan 58 off, or the
+ *  other one of a pair facing her. The seat's drop as the world's view lays it on. */
+function everyday(x: Ctx, clip: Clip, which: "after" | "before", rate: number): Frame[] {
+  const n = Math.round(clip.len * rate) + 1;
+  const pair = which === "before" && clip.pair;
+  const m3 = new x.C.Motion3(pair ? 0.71 : 0.3);
+  m3.v2 = which === "after" || !!pair;
+  m3.tension = x.T;
+  m3.gait = x.gait ?? "calm";
+  const out: Frame[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / rate;
+    const inp: MotionIn = {
+      dist: 0,
+      walking: false,
+      speed: 0,
+      sit: false,
+      typing: false,
+      speaking: false,
+      emote: "",
+      reduced: false,
+      ...clip.motion?.(t),
+    };
+    if (pair && inp.act) inp.act = { ...inp.act, what: clip.pair?.act ?? inp.act.what };
+    const o = m3.update(1 / rate, inp);
+    // (the view's: down by the seat's drop as it settles — the old's by its own ease either way)
+    const k = m3.v2 ? o.settle : inp.sit ? o.settle : 1 - o.settle;
+    const drop = clip.props && (inp.sit || o.settle < 1) ? (inp.seatDrop ?? -0.34) * k : 0;
+    out.push({
+      pose: o.pose,
+      lift: [o.lift[0], o.lift[1] + drop, o.lift[2]],
+      root: pair ? { x: 0, y: 0, z: clip.pair?.d ?? 1.2, yaw: Math.PI } : still(),
+      eyes: o.eyes ? [o.eyes[0], o.eyes[1]] : [0, 0],
+      blink: o.blink,
+      hands: o.hands ?? undefined,
+      reach: o.reach,
+    });
+  }
+  return out;
 }
