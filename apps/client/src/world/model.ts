@@ -61,6 +61,8 @@ export interface AvatarState {
   fellYaw?: number; // …the way the ball was going
   hitAt?: number; // struck (docs/plan/58 7): server ms, and where it came from (the floor's radians)
   hitYaw?: number;
+  wm?: number; // (plan 58 9) the warmth and the stamina (0..100): cold, spent
+  st?: number;
   angle?: number; // facing as they turned, world radians (not 8 ways): where a beam points
   jump?: JumpNow; // jumping (shared/jump.ts): its stage (the controller tracks it)
   z?: number; // feet off the floor (up on something, in a jump), tiles

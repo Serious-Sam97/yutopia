@@ -20,6 +20,10 @@ import type { chars } from "../art/chars-load";
 import { MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
 import type { Pose } from "../chars/rig";
+
+const puffAt = new Vector3();
+const puffDir = new Vector3();
+
 import { cueModel, type GunFx, type GunKind, type GunModel, gunModel, poseGun, shellGeometry } from "./guns3d";
 import { ZPX } from "./kit3d";
 import type { PersonIn } from "./people3d";
@@ -146,6 +150,11 @@ export class Person3D {
   drawn = { verb: "", jump: "", flow: "" };
   /** (plan 58 8) one of the shadowed's body as it was when its time caught: held a beat */
   private shadeHeld: { pose: Pose; lift: [number, number, number] } | null = null;
+  /** (plan 58 9) the breath's puffs in the cold */
+  private puffs: {
+    update(dt: number, at: Vector3, dir: Vector3, breath: number, cold: number): void;
+    dispose(): void;
+  } | null = null;
 
   constructor(
     readonly id: string,
@@ -260,6 +269,7 @@ export class Person3D {
     // (mine as it is; someone's from its byte, timed from when it shows here)
     const flow =
       p.flow ?? (p.flowCode ? flowOfCode(p.flowCode, (performance.now() - (p.flowAt ?? 0)) / 1000, KH_MOVE) : null);
+    const LF = this.motion.v2 && !p.reduced ? this.C.lifeNow() : null;
     const mo =
       given ??
       this.motion.update(step, {
@@ -285,6 +295,17 @@ export class Person3D {
           reload: (this.gunFx?.reload ?? 0) > 0.3,
           kick: this.gunFx?.kick ?? 0,
           hurt: p.shade ? 0.7 : undefined,
+          // (plan 58 9: cold and spent by the vitals; a sound heard, from where it came)
+          cold: LF ? LF.coldOf(p.wm ?? 100) : 0,
+          spent: LF ? LF.spentOf(p.st ?? 100) : 0,
+          heard: p.heard
+            ? {
+                yaw: this.turned - Math.atan2(p.heard.y - p.y, p.heard.x - p.x),
+                pitch: 0,
+                t: p.heard.t,
+                loud: p.heard.loud,
+              }
+            : null,
           // (struck: thrown from where it came from — off the facing, + to the left)
           hit: p.hit ? { from: this.turned - p.hit.yaw, t: p.hit.t, k: 1 } : null,
           torch: !!p.torch && !p.phone && !p.shade,
@@ -386,6 +407,15 @@ export class Person3D {
     this.gunHands(p, step);
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
     this.model.step(step, d > 12 || !!p.reduced || this.part !== "all");
+    // (plan 58 9: the breath a puff in the cold air — near only)
+    const cold = LF && this.part === "all" && d < 12 ? LF.coldOf(p.wm ?? 100) : 0;
+    const head = cold > 0.15 || this.puffs ? this.model.bone("head") : null;
+    if (LF && head) {
+      this.puffs ??= new LF.Puffs(this.root.parent ?? this.root);
+      puffDir.set(Math.cos(this.turned), 0, Math.sin(this.turned));
+      head.getWorldPosition(puffAt).addScaledVector(puffDir, 0.1).y += 0.04;
+      this.puffs.update(step, puffAt, puffDir, this.motion.breath(), cold);
+    }
     this.model.setFace(mo.blink, mo.talk);
     this.model.setEyes(mo.eyes?.[0] ?? 0, mo.eyes?.[1] ?? 0);
 
@@ -980,6 +1010,7 @@ export class Person3D {
   }
 
   dispose() {
+    this.puffs?.dispose();
     for (const m of this.own.values()) m.dispose();
     this.burning?.dispose();
     this.dropHeld();

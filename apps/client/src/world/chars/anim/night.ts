@@ -1,4 +1,4 @@
-import { body, type Ch, type Moved, smoother, steady } from "../moves";
+import { body, type Ch, clamp01, type Moved, smoother, steady } from "../moves";
 import { HANDS, handPose, type JointName, type Pose } from "../rig";
 
 // Plan 58 phase 7 (docs/plan/58-the-animation.md): the dark, after Alan Wake 2 — the torch held out
@@ -37,7 +37,7 @@ export function torch2(
   t: number,
   fear: number,
   breath: number,
-): { pose: Pose; hands: Hands } {
+): { pose: Pose; hands: Hands; look: { yaw: number; pitch: number } } {
   const y = Math.max(-1.1, Math.min(1.1, yaw));
   const p = Math.max(-0.7, Math.min(0.6, pitch - 0.18));
   const d = 0.4 + 0.06 * Math.cos(y);
@@ -47,10 +47,11 @@ export function torch2(
     1.2 + Math.sin(p) * d + 0.006 * Math.sin(TAU * breath) + sh * shake(t, 4),
     0.04 + Math.cos(y) * Math.cos(p) * d,
   ];
-  // (the chest and the head turned after it: the beam leads, the body follows a little; hunched in
-  // the fear, the other arm in close)
+  // (the chest turned after it — the arm never sweeps across a body that stays put — and the eyes on
+  // where it shines (the gaze's target); hunched in the fear, the free hand drawn in to the chest)
   const c: Ch = {
-    sy: 0.25 * y,
+    sy: 0.5 * y,
+    cy: 0.12 * y,
     cx: 0.08 * fear,
     sx: 0.05 * fear,
     sR: 0.05,
@@ -61,14 +62,30 @@ export function torch2(
   const pose: Pose = {};
   for (const j of ["spine", "chest", "shoulderR", "elbowR"] as JointName[]) if (m.pose[j]) pose[j] = m.pose[j];
   Object.assign(pose, handPose(1, HANDS.grip), handPose(-1, fear > 0.5 ? HANDS.fist : HANDS.relaxed));
-  pose.wristL = [0.1 - 0.3 * p, 0, -0.05];
-  return { pose, hands: { L: { at, w: 1, pole: ELBOW_DOWN } } };
+  // (the wrist turned so the torch lies along the beam: up and down with it)
+  pose.wristL = [0.1 - 0.6 * p, 0, -0.05];
+  const near = smoother((fear - 0.3) / 0.5);
+  return {
+    pose,
+    hands: {
+      L: { at, w: 1, pole: ELBOW_DOWN },
+      ...(near > 0.01 ? { R: { at: [-0.04 + 0.12 * Math.sin(y), 1.16, 0.17], w: 0.75 * near, pole: ELBOW_DOWN } } : {}),
+    },
+    look: { yaw: y, pitch: p },
+  };
 }
 
 /** The aim's own life over the stance (moves.ts aimPose): the breath in the arms, the fear's shake,
  *  and a shot's `kick` (0..1, as it goes off and fades): the arms thrown up, the trunk rocked back.
  *  Added to the pose. */
-export function aim2(pose: Pose, t: number, fear: number, kick: number, breath: number): Pose {
+export function aim2(
+  pose: Pose,
+  t: number,
+  fear: number,
+  kick: number,
+  breath: number,
+  pitch = 0,
+): { pose: Pose; hands: Hands } {
   const out: Pose = { ...pose };
   const add = (j: JointName, dx: number, dy = 0, dz = 0) => {
     const r = out[j] ?? [0, 0, 0];
@@ -84,7 +101,19 @@ export function aim2(pose: Pose, t: number, fear: number, kick: number, breath: 
   add("spine", -0.06 * kick);
   add("chest", -0.05 * kick);
   add("head", -0.05 * kick);
-  return out;
+  // (the gun out level along the look, both hands on it at the eye's height — not the old pose's up
+  // past it; the view's own gun puts the hands on its grip when there is one; kicked up and back)
+  const p = Math.max(-0.8, Math.min(0.8, pitch));
+  const d = 0.5 - 0.05 * kick;
+  const y = 1.42 + Math.sin(p) * d + 0.07 * kick + 0.004 * Math.sin(TAU * breath) + 0.01 * fear * shake(t, 7);
+  const z = 0.1 + Math.cos(p) * d;
+  return {
+    pose: out,
+    hands: {
+      R: { at: [-0.03, y, z], w: 1, pole: [-0.5, -1, -0.2] },
+      L: { at: [0.02, y - 0.035, z - 0.03], w: 1, pole: [-0.5, -1, -0.2] },
+    },
+  };
 }
 
 /** Reloading (not aiming), `t` s into it: the gun up before the chest tipped open, the head down at
@@ -161,8 +190,24 @@ export function hit2(
   for (const j of ["shoulderL", "shoulderR", "elbowL", "elbowR", "wristL", "wristR"] as JointName[])
     guard[j] = m.pose[j];
   Object.assign(guard, handPose(1, HANDS.open), handPose(-1, HANDS.open));
+  // (a hard one from ahead staggers a foot back — the right — to catch the weight; from behind, the left
+  // forward: lifted, put down a stride on, and the body over it; a side's shove, the hips across)
+  const sw = Math.sin(Math.PI * clamp01((t - 0.05) / 0.3)) * smoother((Math.abs(fb) - 0.3) / 0.3) * k;
+  if (fb > 0) {
+    add.thighR = [0.4 * sw, 0, 0];
+    add.kneeR = [0.75 * sw, 0, 0];
+  } else {
+    add.thighL = [-0.55 * sw - 0.12 * w, 0, 0];
+    add.kneeL = [0.65 * sw + 0.3 * w, 0, 0];
+  }
+  const back = smoother(clamp01((t - 0.08) / 0.3)) * (1 - smoother(clamp01((t - 0.45) / 0.5)));
   const gw = k * smoother((t - 0.02) / 0.1) * (1 - smoother((t - 0.3) / 0.5));
-  return { add, guard, w: Math.min(1, gw), lift: [-0.07 * lr * w, -0.05 * w, -0.08 * fb * w] };
+  return {
+    add,
+    guard,
+    w: Math.min(1, gw),
+    lift: [-0.09 * lr * w, -0.05 * w, -(0.08 * w + 0.16 * back * k) * fb],
+  };
 }
 
 // ── down: on hands and knees (docs/plan/30-the-dark.md D7), crawling — each hand and knee set down
@@ -173,7 +218,18 @@ const STRIDE = 0.42; // m a cycle
  *  and its hands on the ground. */
 export function crawl2(phase: number, t: number, moving: boolean): { m: Moved; hands: Hands } {
   const hx = 1.12;
-  const c: Ch = { hx, up: HIPS_UP - 0.765, sx: 0.08 + 0.02 * Math.sin(t * 3), nx: -0.35, dx: -0.4 };
+  const sw = Math.sin(TAU * phase) * (moving ? 1 : 0);
+  const c: Ch = {
+    hx,
+    up: HIPS_UP - 0.765 - 0.012 * sw * sw,
+    // (labouring: the breath heaving the back; the head hung, now and then lifted to see ahead)
+    sx: 0.1 + 0.03 * Math.sin(t * 3.4),
+    cx: 0.06,
+    sy: 0.12 * sw,
+    cy: 0.06 * sw,
+    nx: 0.05 - 0.3 * smoother(Math.sin(t * 0.6) * 2 - 1),
+    dx: 0.15,
+  };
   // (a limb's place along its step: on the ground back through the stance, lifted and forward in the swing)
   const along = (ph: number) => {
     const u = ((ph % 1) + 1) % 1;
@@ -199,8 +255,8 @@ export function crawl2(phase: number, t: number, moving: boolean): { m: Moved; h
     c[`f${S}`] = Math.PI / 2 - hx - 0.25;
   }
   // (the weight from side to side over the hand and knee that are down)
-  c.hz = 0.04 * Math.sin(TAU * phase) * (moving ? 1 : 0);
-  c.sz = -0.05 * Math.sin(TAU * phase) * (moving ? 1 : 0);
+  c.hz = 0.07 * sw;
+  c.sz = -0.09 * sw;
   const m = body(c);
   const hand = (S: 1 | -1, ph: number): Hand => {
     const a = along(ph);
@@ -226,10 +282,12 @@ export function kneel2(t: number, fear: number): { m: Moved; hands: Hands } {
     fR: 1.2,
     aL: 0.08,
     aR: 0.06,
-    sx: 0.35 + 0.03 * Math.sin(t * (2 + 1.5 * fear)),
-    dx: 0.15,
-    dy: 0.55 * look,
-    sy: 0.1 * look,
+    // (leant over them, the breath hard; looking round the dark, then back down at them)
+    sx: 0.58 + 0.04 * Math.sin(t * (2 + 1.5 * fear)),
+    cx: 0.1,
+    dx: 0.2 + 0.35 * smoother(-look * 3),
+    dy: 0.65 * look,
+    sy: 0.15 * look,
   };
   const m = body(steady(c));
   Object.assign(m.pose, handPose(1, HANDS.relaxed), handPose(-1, HANDS.open));
@@ -237,8 +295,8 @@ export function kneel2(t: number, fear: number): { m: Moved; hands: Hands } {
   return {
     m,
     hands: {
-      R: { at: [-0.08 + pat, 0.36, 0.62], w: 1, pole: ELBOW_DOWN },
-      L: { at: [0.13, 0.5, 0.3], w: 0.85, pole: [-0.8, -0.5, 0] },
+      R: { at: [-0.06 + pat, 0.36, 0.52], w: 1, pole: ELBOW_DOWN },
+      L: { at: [0.13, 0.49, 0.28], w: 0.9, pole: [-0.8, -0.5, 0] },
     },
   };
 }
@@ -265,6 +323,7 @@ export function hunch(pose: Pose, fear: number): Pose {
 // how they move. Hunched, the head lolling, the arms hung ahead clawed; a twitch now and then; and
 // their time catches — the body held a beat, then on (`glitch`). The legs a heavy limp (the walk's,
 // hurt) when they go; their own when they fight.
+const win = (u: number, a: number, b: number, e = 0.1) => smoother((u - a) / e) * (1 - smoother((u - b) / e));
 const hash = (n: number) => {
   const x = Math.sin(n * 127.1) * 43758.5453;
   return x - Math.floor(x);
@@ -292,31 +351,38 @@ export function shade2(
   const t = glitch(t0, seed);
   const ph = t * 0.9 + seed * 7.13;
   // (a twitch: the head snapped round, a shoulder jerked, gone)
-  const tw = Math.max(0, Math.sin(ph * 2.7) * Math.sin(ph * 1.3) - 0.8) * 5;
+  const tw = (Math.max(0, Math.sin(ph * 2.7) * Math.sin(ph * 1.3) - 0.8) * 5) ** 2;
   const side = seed % 2 ? 1 : -1;
+  // (its striking arm, and the other: each its own side)
+  const A = side > 0 ? "R" : "L";
+  const B = side > 0 ? "L" : "R";
   let c: Ch;
   let legs = !moving;
   switch (kind) {
     case "windup": {
-      // reared back, the head cocked hard over, the arms up over it clawed, shuddering; the weight back
+      // cocked to strike: hunched in, the trunk wound back on the striking side, that arm up and back
+      // behind the head clawed, the other reaching out ahead clawing; the head cocked hard over;
+      // shuddering; the weight back on the striking side's leg
       const k = smoother(t / 0.5);
-      const sh = 0.05 * Math.sin(t * 41 + seed) * k;
+      const sh = 0.06 * Math.sin(t * 41 + seed) * k;
       c = {
-        sL: -0.4 - 2.25 * k + sh,
-        sR: -0.4 - 2.25 * k - sh,
-        eL: -0.3 - 0.75 * k,
-        eR: -0.3 - 0.75 * k,
-        oL: 0.15 + 0.35 * k,
-        oR: 0.15 + 0.35 * k,
-        sx: 0.35 - 0.6 * k,
-        cx: -0.1 * k,
+        [`s${A}`]: -0.4 - 2.0 * k + sh,
+        [`o${A}`]: 0.15 + 0.6 * k,
+        [`e${A}`]: -0.3 - 1.1 * k,
+        [`w${A}`]: -0.4 * k,
+        [`s${B}`]: -0.4 - 0.85 * k - sh,
+        [`o${B}`]: 0.15 + 0.2 * k,
+        [`e${B}`]: -0.3 - 0.25 * k,
+        sx: 0.25 + 0.05 * k,
+        cx: 0.08 * k,
+        sy: -0.5 * k * side,
         dz: 0.5 * k * side,
-        dx: -0.2 * k,
-        tL: -0.35,
-        kL: 0.35,
-        tR: 0.35,
-        kR: 0.55,
-        fR: 0.5,
+        dx: -0.1 * k,
+        [`t${A}`]: 0.35,
+        [`k${A}`]: 0.55,
+        [`f${A}`]: 0.5,
+        [`t${B}`]: -0.35,
+        [`k${B}`]: 0.35,
         aL: 0.12,
         aR: 0.12,
         up: -0.08 * k,
@@ -325,25 +391,27 @@ export function shade2(
       break;
     }
     case "strike": {
-      // a lunge: the front foot in, the trunk thrown over it, the arms slashing down and through
+      // the swipe: the cocked arm torn down and across from high behind, the trunk unwinding through,
+      // the other pulled back; a lunge over the front foot
       const k = smoother(t / 0.13);
       const f = smoother((t - 0.1) / 0.25);
       c = {
-        sL: -2.65 + 2.45 * k + 0.2 * f,
-        sR: -2.65 + 2.6 * k + 0.25 * f,
-        eL: -1.05 + 0.75 * k,
-        eR: -1.05 + 0.8 * k,
-        oL: 0.5 - 0.3 * k,
-        oR: 0.5 - 0.35 * k,
-        sx: -0.25 + 1.0 * k,
-        sy: 0.25 * k * side,
-        dx: 0.25 * k,
+        [`s${A}`]: -2.4 + 2.05 * k + 0.15 * f,
+        [`o${A}`]: 0.75 - 1.0 * k,
+        [`e${A}`]: -1.4 + 1.1 * k,
+        [`w${A}`]: -0.4 + 0.6 * k,
+        [`s${B}`]: -1.25 + 1.6 * k,
+        [`o${B}`]: 0.35,
+        [`e${B}`]: -0.55 - 0.5 * k,
+        sx: 0.3 + 0.5 * k,
+        sy: (-0.5 + 1.0 * k) * side,
+        dx: 0.2 * k,
         dz: 0.5 * side * (1 - k),
-        tL: -0.35 - 0.45 * k,
-        kL: 0.35 + 0.35 * k,
-        tR: 0.35 + 0.15 * k,
-        kR: 0.55 - 0.2 * k,
-        fR: 0.5 + 0.4 * k,
+        [`t${B}`]: -0.35 - 0.45 * k,
+        [`k${B}`]: 0.35 + 0.35 * k,
+        [`t${A}`]: 0.35 + 0.15 * k,
+        [`k${A}`]: 0.55 - 0.2 * k,
+        [`f${A}`]: 0.5 + 0.4 * k,
         aL: 0.12,
         aR: 0.12,
         up: -0.08 - 0.08 * k,
@@ -353,60 +421,65 @@ export function shade2(
       break;
     }
     case "recoil": {
-      // the arm on the beam's side over the face, the body wrenched away from it, reeling back, shaking
+      // burnt by the beam: the arm on its side over the face, the other clawing out at the light; the
+      // body wrenched away and writhing, reeling back a stumbling step at a time, shaking
       const s = Math.sin(from) >= 0 ? 1 : -1;
       const sh = 0.06 * Math.sin(t * 47 + seed);
       const near = s > 0 ? "L" : "R";
       const far = s > 0 ? "R" : "L";
+      const st = Math.sin(t * 9);
       c = {
-        [`s${near}`]: -1.95,
+        [`s${near}`]: -1.95 + sh,
         [`e${near}`]: -2.1,
         [`o${near}`]: -0.1,
         [`w${near}`]: 0.3,
-        [`s${far}`]: 0.5,
-        [`o${far}`]: 0.45,
-        [`e${far}`]: -0.6,
-        sx: -0.25 + sh,
-        sy: -0.35 * s,
-        sz: -0.12 * s,
-        dy: -0.6 * s,
+        [`s${far}`]: -1.0 + 0.45 * Math.sin(t * 4.3),
+        [`o${far}`]: 0.6 + 0.2 * Math.sin(t * 3.1),
+        [`e${far}`]: -0.45,
+        sx: -0.2 + sh,
+        sy: -0.35 * s + 0.2 * Math.sin(t * 3.3),
+        sz: -0.12 * s + 0.1 * Math.sin(t * 2.7),
+        dy: -0.6 * s + 0.15 * Math.sin(t * 5),
         dx: 0.15,
-        tL: -0.25,
-        kL: 0.45,
-        tR: 0.2,
-        kR: 0.45,
+        tL: -0.2 + 0.35 * (st > 0 ? st * st : 0),
+        kL: 0.4 + 0.6 * (st > 0 ? st * st : 0),
+        tR: 0.15 + 0.35 * (st < 0 ? st * st : 0),
+        kR: 0.4 + 0.6 * (st < 0 ? st * st : 0),
         aL: 0.1,
         aR: 0.1,
-        up: -0.06,
-        fw: -0.06 - 0.03 * Math.sin(t * 5),
+        up: -0.06 - 0.02 * st * st,
+        fw: -0.08,
         x: -0.04 * s,
       };
       legs = !moving;
       break;
     }
     case "exposed": {
-      // stunned, bare: swaying where it stands, the arms hung, the head lolling, the knees going
+      // stunned, bare: swaying, the head rolling; the knees going now and then and caught; a hand
+      // clawing at its own face
       const sw = Math.sin(t * 1.3 + seed);
+      const bk = win((t % 2.6) / 2.6, 0.15, 0.45, 0.08);
+      const face = win((t % 5.3) / 5.3, 0.3, 0.65, 0.07);
       c = {
-        sL: -0.15 + 0.1 * sw,
-        sR: -0.2 - 0.1 * sw,
-        eL: -0.35,
-        eR: -0.3,
-        oL: 0.05,
-        oR: 0.05,
-        sx: 0.4,
+        [`s${A}`]: -0.2 - 1.7 * face,
+        [`e${A}`]: -0.35 - 1.85 * face,
+        [`o${A}`]: 0.05 + 0.15 * face,
+        [`s${B}`]: -0.15 - 0.1 * sw,
+        [`e${B}`]: -0.3,
+        [`o${B}`]: 0.05,
+        sx: 0.4 + 0.15 * bk,
         cx: 0.1,
         sz: 0.1 * sw,
-        dx: 0.45,
-        dz: 0.35 * sw + 0.3 * tw * side,
-        dy: 0.4 * tw * side,
-        tL: -0.2,
-        kL: 0.4 + 0.1 * sw,
-        tR: -0.15,
-        kR: 0.35 - 0.1 * sw,
+        dx: 0.4,
+        dz: 0.35 * Math.sin(t * 1.1) + 0.3 * tw * side,
+        dy: 0.3 * Math.sin(t * 0.7) + 0.4 * tw * side,
+        tL: -0.2 - 0.25 * bk,
+        kL: 0.4 + 0.1 * sw + 0.55 * bk,
+        tR: -0.15 - 0.25 * bk,
+        kR: 0.35 - 0.1 * sw + 0.5 * bk,
         aL: 0.12,
         aR: 0.12,
-        up: -0.06,
+        up: -0.06 - 0.12 * bk,
         x: 0.04 * sw,
       };
       legs = !moving;
@@ -414,7 +487,7 @@ export function shade2(
     }
     case "lurk": {
       // asleep in a nest by day: folded over the knees, the arms round them, a slow breath, a shiver
-      const sv = Math.max(0, Math.sin(ph * 3.3) * Math.sin(ph * 1.7) - 0.9) * 4;
+      const sv = (Math.max(0, Math.sin(ph * 3.3) * Math.sin(ph * 1.7) - 0.9) * 4) ** 2;
       c = {
         up: -0.5,
         tL: -1.95,
@@ -439,21 +512,23 @@ export function shade2(
       break;
     }
     default: {
-      // the lurch: hunched over, the arms hung ahead swinging late, clawed; the head lolling and
-      // dipping, twitching round; stood, crooked on one leg, swaying
+      // the lurch: broken, lopsided — one shoulder dropped and that arm hanging dead, swinging late; the
+      // other drawn up bent and clawed; hunched over; the head cocked over to the low side and lolling,
+      // twitching round; stood, crooked on one leg, swaying
       const sw = Math.sin(ph * 0.7);
       c = {
-        sL: -0.45 + 0.12 * Math.sin(ph * 3.1),
-        sR: -0.4 + 0.12 * Math.sin(ph * 3.1 + 2),
-        eL: -0.35,
-        eR: -0.3,
-        oL: 0.12,
-        oR: 0.12,
+        [`s${B}`]: 0.08 + 0.18 * Math.sin(ph * 3.1 - 1),
+        [`e${B}`]: -0.1,
+        [`o${B}`]: 0.04,
+        [`s${A}`]: -0.75 + 0.1 * Math.sin(ph * 3.1),
+        [`e${A}`]: -1.35,
+        [`o${A}`]: 0.25,
+        [`w${A}`]: -0.5,
         sx: 0.42,
         cx: 0.12,
-        sz: 0.08 * sw,
-        dx: 0.38 + 0.1 * Math.sin(ph * 1.9),
-        dz: 0.3 * sw + 0.45 * tw * side,
+        sz: -0.15 * side + 0.06 * sw,
+        dx: 0.32 + 0.1 * Math.sin(ph * 1.9),
+        dz: -0.4 * side + 0.2 * sw + 0.45 * tw * side,
         dy: 0.6 * tw * side,
         tL: -0.1,
         kL: 0.15,
@@ -462,7 +537,7 @@ export function shade2(
         fR: 0.3,
         aL: 0.12,
         aR: 0.16,
-        hz: 0.05 * side,
+        hz: 0.07 * side,
         up: -0.04,
       };
     }

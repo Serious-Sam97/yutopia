@@ -3996,6 +3996,8 @@ export class WorldController {
       fellYaw: p.fellYaw,
       hitAt: p.hitAt,
       hitYaw: p.hitYaw,
+      wm: p.wm,
+      st: p.st,
       pinned: !!p.bitBy || undefined,
     };
   }

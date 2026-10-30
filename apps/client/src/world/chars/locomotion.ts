@@ -54,6 +54,12 @@ export interface LocoIn {
   /** (plan 58 7) struck — or startled, a small `k` — from `from` (rad off the facing: 0 ahead, + to
    *  the left), `t` s ago */
   hit?: { from: number; t: number; k: number } | null;
+  /** (plan 58 9) how cold (0..1: the warmth's, `coldOf`) and how spent (0..1: the stamina's, `spentOf`) */
+  cold?: number;
+  spent?: number;
+  /** (plan 58 9) a sound heard, `t` s ago, from there (off the facing: + left, + up); `loud`: close and
+   *  sharp — a flinch */
+  heard?: { yaw: number; pitch: number; t: number; loud?: boolean } | null;
   yaw: number;
   /** the facing's turn, rad / s, and the speed's change, tiles / s² */
   turn: number;
@@ -124,17 +130,22 @@ type Acts = typeof import("./anim/acts");
 let acts: Acts | null = null;
 type Night = typeof import("./anim/night");
 let night: Night | null = null;
+// (phase 9's: life — the cold, the breath caught, who she is, a sound's turn)
+type LifeM = typeof import("./anim/life");
+let lifeM: LifeM | null = null;
 export function loadHero(): Promise<Hero> {
   heroLoading ??= Promise.all([
     import("./anim/hero"),
     import("./anim/air"),
     import("./anim/acts"),
     import("./anim/night"),
-  ]).then(([m, a, b, n]) => {
+    import("./anim/life"),
+  ]).then(([m, a, b, n, l]) => {
     hero = m;
     air = a;
     acts = b;
     night = n;
+    lifeM = l;
     return m;
   });
   return heroLoading;
@@ -145,6 +156,8 @@ export const airNow = (): Air | null => air;
 export const actsNow = (): Acts | null => acts;
 /** Phase 7's, once in. */
 export const nightNow = (): Night | null => night;
+/** Phase 9's, once in. */
+export const lifeNow = (): LifeM | null => lifeM;
 /** …if they're in (null while they load, or never asked for). */
 export const heroNow = (): Hero | null => hero;
 
@@ -319,8 +332,12 @@ export class Locomotion {
     // its own spring the head's
     this.gaze ??= new hero.Gaze(this.seed);
     const ahead = m.up ? 0 : Math.max(-0.6, Math.min(0.6, -m.turn * 0.25)) * Math.min(1, m.speed / 2);
-    const idle = this.moveW < 0.5 ? hero.idleGlance(this.t, this.tension, this.seed) : 0;
-    const g = this.gaze.update(dt, { target: m.look ?? null, idle, ahead, tension: this.tension });
+    // (the idle's glances held off while her eyes are on her own hands: 9)
+    const idle = this.moveW < 0.5 ? hero.idleGlance(this.t, this.tension, this.seed) * (1 - this.eyesDown) : 0;
+    // (9: a sound heard turns the eyes and the head to it a while, over whoever's looked at)
+    const heard = m.heard && m.heard.t < 2.2 ? { yaw: m.heard.yaw, pitch: m.heard.pitch } : null;
+    // (7: the torch's beam is where the eyes are, when nothing else has them)
+    const g = this.gaze.update(dt, { target: heard ?? m.look ?? this.torchLook, idle, ahead, tension: this.tension });
     add(pose, "head", -g.headPitch, g.head, 0);
     add(pose, "neck", 0, g.neck, 0);
     add(pose, "chest", 0, g.chest, 0);
@@ -434,6 +451,15 @@ export class Locomotion {
     }
   }
   private reloadT = 0;
+  /** (10) a start aside: the steps of its own taken since the first */
+  private taken = 0;
+  /** (10) going aside — not ahead, not backing up: the feet the cycle has turned the way she goes */
+  private aside(): boolean {
+    const w = Math.abs(this.way);
+    return w > 0.5 && w < 2.0;
+  }
+  private eyesDown = 0;
+  private torchLook: { yaw: number; pitch: number } | null = null;
 
   /** Down from the air on the move: the run picked up on the foot that comes down first (the lower,
    *  as last shown), at the point of its time on the ground where the run has it where it came down —
@@ -529,6 +555,7 @@ export class Locomotion {
         const behind = (F: "L" | "R") => st.feet[F].at[0] * dir[0] + st.feet[F].at[2] * dir[1];
         this.lead = going ?? (behind("L") < behind("R") ? "L" : "R");
         this.stepping = "start";
+        this.taken = 0;
         // (as long as it takes the body to carry the foot left behind back to where the cycle has it
         // as the lead lands — a short quick first step, not a long one that leaves it stretched; along
         // the way it's going)
@@ -566,7 +593,21 @@ export class Locomotion {
         // (…or one taken over, once the foot left behind is near the end of the leg's reach)
         const trailing = st.feet[this.lead === "L" ? "R" : "L"].at;
         const stretched = Math.hypot(trailing[0], trailing[2]) > 0.3;
-        if (landed === this.lead || ((this.ownStep || stretched) && left < lerp(0.1, 0.08, rg))) {
+        // (10: going aside, the cycle has the feet turned the way she goes — a quarter round from how
+        // she stood — and the one left behind further out and back: taken over on the ground, it was
+        // spun round and dragged (2.7 m/s). So each step lands turned as the cycle has it, and the foot
+        // left behind takes its own step too — more while she's getting up to pace, four at most —
+        // before the hand-over)
+        if (this.aside() && (this.taken < 1 || (v < 0.9 * goal && this.taken < 4))) {
+          if (landed === this.lead) {
+            const G = this.lead === "L" ? "R" : "L";
+            this.taken++;
+            this.lead = G;
+            this.ownStep = true;
+            const dur = clamp((0.5 * stride) / Math.max(v, 0.8), 0.16, 0.34);
+            st.step(G, (F2, l2) => this.firstStep(F2, l2, cycleAt, landPh, goes, dir, home), dur, lerp(0.06, 0.09, rg));
+          } else if (v < 0.1) this.stepping = "steps";
+        } else if (landed === this.lead || ((this.ownStep || stretched) && left < lerp(0.1, 0.08, rg))) {
           // (the cycle's phase from where the lead foot is: still to land, or down and as far through
           // its time on the ground as the body's gone past it)
           const F = this.lead;
@@ -616,7 +657,9 @@ export class Locomotion {
     const s = goes(left);
     return {
       at: [f.ankle[0] + dir[0] * s, ANKLE, f.ankle[2] + dir[1] * s] as [number, number, number],
-      yaw: home[F].yaw,
+      // (10: turned as the cycle has it landing — aside, a quarter round: one put down facing ahead was
+      // spun round on the ground as the cycle took it over)
+      yaw: this.aside() ? H.footAngles(f).yaw : home[F].yaw,
     };
   }
 
@@ -831,8 +874,10 @@ export class Locomotion {
       const tr = N.torch2(m.yaw, m.pitch, this.t, fear, breath);
       body = { pose: blend(body.pose, tr.pose, ease(this.torchW)), lift: body.lift };
       this.hand(tr.hands, ease(this.torchW));
+      this.torchLook = this.torchW > 0.5 ? tr.look : null;
     } else if (this.torchW > 0.01)
       body = { pose: blend(body.pose, torchPose(breath), ease(this.torchW)), lift: body.lift };
+    if (this.torchW <= 0.5) this.torchLook = null;
     // reloading: the gun up before the chest, both hands at it; plan 58: the left to the pocket and back
     if (N && this.reloadW > 0.01) {
       const rl = N.reload2(this.reloadT, fear);
@@ -842,6 +887,50 @@ export class Locomotion {
       body = { pose: blend(body.pose, reloadPose(breath), ease(this.reloadW)), lift: body.lift };
     // (the fear's hunch, on the move and stood, not aiming)
     if (N && fear > 0.01) body = { pose: N.hunch(body.pose, fear * (1 - this.aimW)), lift: body.lift };
+    // (plan 58 9: the cold, the breath caught when spent, who she is when she stands)
+    if (H && lifeM && !m.reduced && !m.up) {
+      const lf = lifeM.life2({
+        t: this.t,
+        seed: this.seed,
+        gait: this.gait,
+        cold: m.cold ?? 0,
+        spent: m.spent ?? 0,
+        still: 1 - ease(this.moveW),
+        busy: Math.max(this.torchW, this.aimW, this.reloadW, this.crouchW),
+        breath: this.breath,
+      });
+      if (lf.w > 0.01) {
+        const p = blend(body.pose, lf.pose, lf.w);
+        for (const [j, d] of Object.entries(lf.add ?? {}) as [JointName, [number, number, number]][]) {
+          const r = p[j] ?? [0, 0, 0];
+          p[j] = [r[0] + d[0] * lf.w, r[1] + d[1] * lf.w, r[2] + d[2] * lf.w];
+        }
+        body = { pose: p, lift: [body.lift[0] + lf.lift[0], body.lift[1] + lf.lift[1], body.lift[2] + lf.lift[2]] };
+        this.hand(lf.hands, 1);
+      }
+      this.eyesDown += ((lf.eyesDown ?? 0) * lf.w - this.eyesDown) * k(8);
+      // a sound: past the head's own reach, the chest turned to it a while; sharp and close, a startle
+      const hd = m.heard;
+      if (hd && hd.t < 2.4) {
+        const p = { ...body.pose };
+        const add = (j: JointName, d: [number, number, number]) => {
+          const r = p[j] ?? [0, 0, 0];
+          p[j] = [r[0] + d[0], r[1] + d[1], r[2] + d[2]];
+        };
+        const past = Math.sign(hd.yaw) * Math.max(0, Math.min(1.4, Math.abs(hd.yaw) - 0.8));
+        const tw =
+          smoother(clamp(hd.t / 0.35, 0, 1)) * (1 - smoother(clamp((hd.t - 1.7) / 0.6, 0, 1))) * (1 - this.aimW);
+        add("spine", [0, 0.3 * past * tw, 0]);
+        add("chest", [0, 0.3 * past * tw, 0]);
+        let dl = 0;
+        if (hd.loud) {
+          const st = lifeM.startle(hd.yaw, hd.t);
+          for (const [j, d] of Object.entries(st.add) as [JointName, [number, number, number]][]) add(j, d);
+          dl = st.lift;
+        }
+        body = { pose: p, lift: [body.lift[0], body.lift[1] + dl, body.lift[2]] };
+      }
+    }
 
     // aiming: the legs step the way the body goes (ahead, aside, backing up), the top aims
     if (this.aimW > 0.01) {
@@ -857,7 +946,9 @@ export class Locomotion {
       this.pitch += (m.pitch - this.pitch) * k(16);
       const top0 = aimPose(this.pitch, m.yaw, !!m.gun, breath);
       // (plan 58 7: the breath in the arms, the fear's shake, a shot's kick)
-      const top = N ? { pose: N.aim2(top0.pose, this.t, fear, m.kick ?? 0, breath), lift: top0.lift } : top0;
+      const a2 = N ? N.aim2(top0.pose, this.t, fear, m.kick ?? 0, breath, this.pitch) : null;
+      if (a2 && m.gun) this.hand(a2.hands, ease(this.aimW));
+      const top = a2 ? { pose: a2.pose, lift: top0.lift } : top0;
       const both: Moved = { pose: { ...legs.pose }, lift: legs.lift };
       for (const j of UPPER) if (top.pose[j]) both.pose[j] = top.pose[j];
       body = mix(body, both, ease(this.aimW));
@@ -996,8 +1087,9 @@ export class Locomotion {
     }
 
     // ── struck, startled (plan 58 7): thrown from the blow, the arms up to guard, a stagger
-    if (N && m.hit) {
-      const h = N.hit2(m.hit.from, m.hit.t, m.hit.k);
+    const hitNow = m.hit;
+    if (N && hitNow) {
+      const h = N.hit2(hitNow.from, hitNow.t, hitNow.k);
       const p = { ...body.pose };
       for (const [j, d] of Object.entries(h.add) as [JointName, [number, number, number]][]) {
         const r = p[j] ?? [0, 0, 0];

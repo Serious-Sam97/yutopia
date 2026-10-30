@@ -300,6 +300,7 @@ function Bench({ q }: { q: URLSearchParams }) {
       };
 
       let ragDone = false;
+      let puffs: InstanceType<NonNullable<ReturnType<typeof C.lifeNow>>["Puffs"]> | null = null;
       let ragWorld: import("@yutopia/shared/physics").PhysicsWorld | null = null;
       let raf = 0;
       let last = performance.now();
@@ -372,6 +373,21 @@ function Bench({ q }: { q: URLSearchParams }) {
           if (B && (s.compare || two)) place(before, B[Math.min(B.length - 1, i)], two ? 0 : -ax, two ? 0 : -az);
           // (the springs swing as it plays; scrubbed, they hold)
           const sdt = s.playing ? dt * s.speed : 0;
+          // (9: the breath a puff in the cold air)
+          const L9 = C.lifeNow();
+          if (L9 && A[i].cold) {
+            puffs ??= new L9.Puffs(scene);
+            after.root.updateMatrixWorld(true);
+            const head = after.bone("head");
+            if (head) {
+              const ahead9 = new T.Vector3(0, 0, 1).applyQuaternion(after.root.quaternion);
+              const mouth = head
+                .getWorldPosition(new T.Vector3())
+                .addScaledVector(ahead9, 0.1)
+                .add(new T.Vector3(0, 0.04, 0));
+              puffs.update(sdt, mouth, ahead9, A[i].breath ?? 0, A[i].cold ?? 0);
+            }
+          }
           after.step(sdt);
           before.step(sdt);
           ghosts.forEach((g, k) => {

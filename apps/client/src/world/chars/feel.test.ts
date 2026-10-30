@@ -353,6 +353,9 @@ test("starts, stops, turning back; crouched, aside, backing up, hurt — a plant
     ["aim: round a square", 16],
     ["back up, walk", 7],
     ["walk hurt", 2],
+    // (10: setting off aside — the feet put down turned as the cycle has them; the planted one was
+    // spun a quarter round on the ground as the cycle took it over)
+    ["aside left, walk", 0],
   ] as const) {
     const clip = clipList().find((c) => c.name === name);
     assert.ok(clip);
@@ -549,4 +552,45 @@ test("phase 8: the shadowed — no NaN; their time catches and goes on; a beam t
   const r = N.shade2("recoil", 0.5, 3, false, -1.2).m.pose;
   assert.ok((l.shoulderL?.[0] ?? 0) < -1.5 && (r.shoulderR?.[0] ?? 0) < -1.5);
   assert.ok((l.spine?.[1] ?? 0) < 0 && (r.spine?.[1] ?? 0) > 0);
+});
+
+test("phase 9: life — no NaN; warm and rested she's herself; cold she hugs herself; spent, hands on knees", async () => {
+  const H = await loadHero();
+  const C = await import("./index");
+  const { clipList, tabulate } = await import("@/app/dev/anim/clips");
+  const x = { C, H, T: 0 } as never;
+  for (const clip of clipList().filter((c) => c.group === "life"))
+    for (const f of tabulate(x, clip, "after", true) ?? [])
+      for (const [j, r] of Object.entries(f.pose))
+        assert.ok((r as number[]).every(Number.isFinite), `${clip.name}: ${j}`);
+  const L = C.lifeNow();
+  assert.ok(L);
+  assert.equal(L.coldOf(100), 0);
+  assert.equal(L.spentOf(100), 0);
+  assert.ok(L.coldOf(20) > 0.99 && L.spentOf(5) > 0.99);
+  const base = { t: 1, seed: 3, gait: "calm", cold: 0, spent: 0, still: 1, busy: 0, breath: 0 };
+  assert.equal(L.life2(base).w, 0, "warm, rested, calm: nothing laid on");
+  const cold = L.life2({ ...base, cold: 0.9 });
+  assert.ok(cold.w > 0.5 && cold.hands?.L && cold.hands.R, "cold: hugged in");
+  const spent = L.life2({ ...base, spent: 1 });
+  assert.ok(spent.w > 0.9 && (spent.hands?.L?.at[1] ?? 1) < 0.6, "spent: the hands down on the knees");
+  // (her hands taken — a torch, a gun — the cold's hug leaves them be)
+  assert.ok(!L.life2({ ...base, cold: 0.9, busy: 1 }).hands?.L?.w);
+});
+
+test("phase 10: every clip on the bench — every frame finite (the census, e2e/anim-census.mts, counts the pops)", async () => {
+  const H = await loadHero();
+  const C = await import("./index");
+  const { clipList, tabulate } = await import("@/app/dev/anim/clips");
+  const x = { C, H, T: 0 } as never;
+  const clips = clipList();
+  assert.ok(clips.length > 120, `${clips.length} clips`);
+  for (const clip of clips)
+    for (const f of tabulate(x, clip, "after", !clip.raw) ?? []) {
+      for (const [j, r] of Object.entries(f.pose))
+        assert.ok((r as number[]).every(Number.isFinite), `${clip.name}: ${j}`);
+      assert.ok(f.lift.every(Number.isFinite), `${clip.name}: lift`);
+      for (const h of Object.values(f.hands ?? {}))
+        assert.ok(!h || h.at.every(Number.isFinite), `${clip.name}: a hand`);
+    }
 });

@@ -643,6 +643,11 @@ export class Motion3 {
     this.lookAt = this.t + 3 + this.r() * 5;
   }
 
+  /** (plan 58 9) the breath's place in its cycle (0..1): a puff in the cold with each breath out */
+  breath(): number {
+    return this.loco?.life().breath ?? (this.t / 4) % 1;
+  }
+
   update(dt: number, m: MotionIn): MotionOut {
     this.t += dt;
     const t = this.t;

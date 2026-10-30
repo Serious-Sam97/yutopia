@@ -1,6 +1,13 @@
 import { ANKLE, body, type Ch, clamp01, HIP_H, type Key, SHIN, sample, smoother, steady, THIGH } from "../moves";
 import { HANDS, type HandShape, handPose, type Pose } from "../rig";
 
+// (a pulse: the sine's upper half, squared — it starts and ends at rest, no corner where it sets off:
+// plan 58 10, the census's pops)
+const bump = (x: number) => {
+  const s = Math.sin(x);
+  return s > 0 ? s * s : 0;
+};
+
 // Plan 58 phase 6 (docs/plan/58-the-animation.md): the everyday — sitting down, sat, typing, getting
 // up; what the hands hold (a mug, a sip, the phone's every way); busy at things; together (the
 // hands meeting where the two of them meet); the emotes. Alan Wake 2's weight for the living, KH3's
@@ -141,7 +148,7 @@ export function sit2(u: number, rising: boolean, t: number, typing: boolean, dro
       const on = Math.sin(t * 0.9 + seed) > -0.3 ? 1 : 0;
       const key = (S: 1 | -1, ph: number): [number, number, number] => [
         S * 0.13 + 0.012 * Math.sin(t * 7 + ph) * on,
-        hip + 0.31 + 0.01 * Math.max(0, Math.sin(t * 17 + ph)) * on,
+        hip + 0.31 + 0.01 * bump(t * 17 + ph) * on,
         0.44 + 0.015 * Math.sin(t * 3.1 + ph) * on,
       ];
       hands = { L: { at: key(1, 0), w: sat, pole: ELBOW_DOWN }, R: { at: key(-1, 1.7), w: sat, pole: ELBOW_DOWN } };
@@ -149,12 +156,12 @@ export function sit2(u: number, rising: boolean, t: number, typing: boolean, dro
         ["L", 1, 0],
         ["R", -1, 1.7],
       ] as const) {
-        const tap = on * Math.max(0, Math.sin(t * 19 + ph));
+        const tap = on * bump(t * 19 + ph);
         Object.assign(
           p,
           shape(side, {
             fingers: 0.55 + 0.35 * tap,
-            index: 0.4 + 0.5 * Math.max(0, Math.sin(t * 23 + ph * 2)) * on,
+            index: 0.4 + 0.5 * bump(t * 23 + ph * 2) * on,
             thumb: 0.3,
           }),
         );
@@ -248,7 +255,7 @@ export function phone2(state: string, pose: string, t: number, talking: boolean,
         [1, 0],
         [-1, 1.9],
       ] as const)
-        Object.assign(p, shape(side, { ...PHONE_GRIP, thumb: 0.15 + 0.55 * on * Math.max(0, Math.sin(t * 11 + ph)) }));
+        Object.assign(p, shape(side, { ...PHONE_GRIP, thumb: 0.15 + 0.55 * on * bump(t * 11 + ph) }));
       p.wristL = [-0.25, 0, 0.3];
       p.wristR = [-0.25, 0, -0.3];
       return { pose: p, hands };
@@ -279,7 +286,7 @@ export function phone2(state: string, pose: string, t: number, talking: boolean,
     case "photo": {
       // up in both hands at the eyes, aiming, a press of the shutter now and then
       Object.assign(c, { dx: 0.02, sx: -0.03 });
-      const click = Math.max(0, Math.sin(t * 1.6)) ** 8;
+      const click = bump(t * 1.6) ** 8;
       hands = {
         L: { at: [0.08, 1.48, 0.33], w: 1, pole: ELBOW_OUT },
         R: { at: [-0.08, 1.48, 0.33], w: 1, pole: ELBOW_OUT },
@@ -337,7 +344,7 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
         dy: 0.25 * win(u, 0.65, 0.85, 0.1),
       });
       hands = {
-        R: { at: [-0.12, 1.18, 0.4 + 0.05 * Math.max(0, Math.sin(u * TAU * 12)) * press], w: press, pole: ELBOW_DOWN },
+        R: { at: [-0.12, 1.18, 0.4 + 0.05 * bump(u * TAU * 12) * press], w: press, pole: ELBOW_DOWN },
       };
       Object.assign(c, { sL: 0.08, eL: -0.3, sR: lerp(0.05, -1.1, press), eR: lerp(-0.3, -0.5, press) });
       hs[1] = mixH(HANDS.relaxed, HANDS.point, press);
@@ -419,7 +426,7 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
       const st = t * 5;
       hands = {
         L: { at: [0.16 + 0.03 * Math.cos(st), 1.02, 0.38 + 0.03 * Math.sin(st)], w: 1, pole: ELBOW_OUT },
-        R: { at: [-0.14, 1.02 + 0.015 * Math.max(0, Math.sin(t * 21)), 0.38], w: 1, pole: ELBOW_OUT },
+        R: { at: [-0.14, 1.02 + 0.015 * bump(t * 21), 0.38], w: 1, pole: ELBOW_OUT },
       };
       Object.assign(c, { sx: 0.14, dx: 0.18 + 0.03 * Math.sin(t * 7), sz: 0.04 * Math.sin(t * 1.3) });
       hs[0] = HANDS.grip;
@@ -432,25 +439,25 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
       const sway = Math.sin(t * 1.1);
       hands = {
         L: {
-          at: [a + 0.03 * Math.sin(t * 2.3), 1.0 + 0.012 * Math.max(0, Math.sin(t * 9)), 0.33],
+          at: [a + 0.03 * Math.sin(t * 2.3), 1.0 + 0.012 * bump(t * 9), 0.33],
           w: 1,
           pole: ELBOW_OUT,
         },
         R: {
-          at: [-a + 0.03 * Math.sin(t * 1.9), 1.0 + 0.012 * Math.max(0, Math.sin(t * 9 + 2)), 0.33],
+          at: [-a + 0.03 * Math.sin(t * 1.9), 1.0 + 0.012 * bump(t * 9 + 2), 0.33],
           w: 1,
           pole: ELBOW_OUT,
         },
       };
       Object.assign(c, { sx: 0.1, sz: 0.06 * sway, dz: 0.08 * sway, dx: 0.2 });
       hs[0] = {
-        fingers: 0.5 + 0.4 * Math.max(0, Math.sin(t * 11)),
-        index: 0.4 + 0.5 * Math.max(0, Math.sin(t * 13 + 1)),
+        fingers: 0.5 + 0.4 * bump(t * 11),
+        index: 0.4 + 0.5 * bump(t * 13 + 1),
         thumb: 0.3,
       };
       hs[1] = {
-        fingers: 0.5 + 0.4 * Math.max(0, Math.sin(t * 12 + 2)),
-        index: 0.4 + 0.5 * Math.max(0, Math.sin(t * 10 + 3)),
+        fingers: 0.5 + 0.4 * bump(t * 12 + 2),
+        index: 0.4 + 0.5 * bump(t * 10 + 3),
         thumb: 0.3,
       };
       break;
@@ -464,8 +471,8 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
         R: { at: [-0.07, 1.08, 0.3], w: 1, pole: ELBOW_DOWN },
       };
       Object.assign(c, { sx: 0.08, sz: 0.1 * lean, dz: 0.06 * lean, dx: 0.28 });
-      hs[0] = { ...HANDS.grip, thumb: 0.2 + 0.4 * Math.max(0, Math.sin(t * 6)) };
-      hs[1] = { ...HANDS.grip, thumb: 0.2 + 0.4 * Math.max(0, Math.sin(t * 9 + 1)) };
+      hs[0] = { ...HANDS.grip, thumb: 0.2 + 0.4 * bump(t * 6) };
+      hs[1] = { ...HANDS.grip, thumb: 0.2 + 0.4 * bump(t * 9 + 1) };
       break;
     }
     case "pool": {
@@ -521,7 +528,7 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
         sL: -0.45,
         oL: 0.25,
         eL: -1.2,
-        up: -0.07 + 0.02 * Math.abs(Math.sin(t * 6)),
+        up: -0.07 + 0.02 * Math.sin(t * 6) ** 2,
       });
       hs[1] = HANDS.grip;
       break;
@@ -531,25 +538,25 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
       const on = Math.sin(t * 0.9 + seed) > -0.25 ? 1 : 0;
       hands = {
         L: {
-          at: [0.13 + 0.01 * Math.sin(t * 6), 1.0 + 0.01 * on * Math.max(0, Math.sin(t * 17)), 0.36],
+          at: [0.13 + 0.01 * Math.sin(t * 6), 1.0 + 0.01 * on * bump(t * 17), 0.36],
           w: 1,
           pole: ELBOW_DOWN,
         },
         R: {
-          at: [-0.13 + 0.01 * Math.sin(t * 5), 1.0 + 0.01 * on * Math.max(0, Math.sin(t * 19 + 1)), 0.36],
+          at: [-0.13 + 0.01 * Math.sin(t * 5), 1.0 + 0.01 * on * bump(t * 19 + 1), 0.36],
           w: 1,
           pole: ELBOW_DOWN,
         },
       };
       Object.assign(c, { sx: 0.08, dx: 0.12, dy: 0.06 * Math.sin(t * 0.7) });
       hs[0] = {
-        fingers: 0.55 + 0.3 * on * Math.max(0, Math.sin(t * 19)),
-        index: 0.4 + 0.5 * on * Math.max(0, Math.sin(t * 23)),
+        fingers: 0.55 + 0.3 * on * bump(t * 19),
+        index: 0.4 + 0.5 * on * bump(t * 23),
         thumb: 0.3,
       };
       hs[1] = {
-        fingers: 0.55 + 0.3 * on * Math.max(0, Math.sin(t * 17 + 2)),
-        index: 0.4 + 0.5 * on * Math.max(0, Math.sin(t * 21 + 1)),
+        fingers: 0.55 + 0.3 * on * bump(t * 17 + 2),
+        index: 0.4 + 0.5 * on * bump(t * 21 + 1),
         thumb: 0.3,
       };
       break;
@@ -671,7 +678,7 @@ export function emote2(e: string, t: number): Act & { legs: boolean } {
     case "clap": {
       // the hands meeting in front of the chest, a bounce in the knees to each
       legs = true;
-      const cl = Math.max(0, Math.sin(t * 9)) ** 2;
+      const cl = bump(t * 9) ** 2;
       const y = 1.32 + 0.03 * Math.sin(t * 9);
       hands = {
         L: { at: [0.02 + 0.09 * (1 - cl), y, 0.3], w: 1, pole: ELBOW_DOWN },
@@ -687,7 +694,7 @@ export function emote2(e: string, t: number): Act & { legs: boolean } {
       // doubled over with it, a hand slapping the thigh, the head thrown back between
       legs = true;
       const b = Math.sin(t * 2.2);
-      const slap = Math.max(0, Math.sin(t * 6.5)) ** 3;
+      const slap = bump(t * 6.5) ** 3;
       Object.assign(c, {
         sx: 0.45 + 0.2 * b + 0.04 * Math.sin(t * 13),
         dx: -0.5 - 0.15 * b,
@@ -741,7 +748,7 @@ export function emote2(e: string, t: number): Act & { legs: boolean } {
     case "fire": {
       // two fist pumps, the second off the ground, the other fist in at the side
       legs = true;
-      const pump = Math.max(0, Math.sin(t * 6.5)) ** 1.5;
+      const pump = bump(t * 6.5) ** 1.5;
       const hop = t > 0.9 && t < 1.9 ? pump : 0;
       Object.assign(c, {
         sR: -2.75 + 0.3 * pump,
@@ -771,7 +778,7 @@ export function emote2(e: string, t: number): Act & { legs: boolean } {
       // swinging, a bounce
       legs = true;
       const s = Math.sin(t * 4.4);
-      const b = Math.abs(Math.sin(t * 4.4));
+      const b = Math.sin(t * 4.4) ** 2;
       Object.assign(c, {
         hz: 0.1 * s,
         sz: -0.12 * s,

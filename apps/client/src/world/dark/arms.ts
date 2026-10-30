@@ -114,6 +114,7 @@ export class Arms {
       const rays = pellets(gun, m.yaw, m.pitch, m.seed, m.spread).map((d) => this.flight(o.x, o.y, o.z, d, 30));
       tp.arms().shot(o.x, o.y, o.z, rays, gun, m.oz - HAND);
       tp.gunShot(m.sid);
+      tp.heard(m.ox, m.oy);
       // (far off: dulled, heard further; near: as the place I'm in sounds)
       const me = this.walker.where();
       const far = Math.hypot(m.ox - me.x, m.oy - me.y) > 22;
@@ -338,6 +339,7 @@ export class Arms {
       g.id,
       me.z,
     );
+    tp.heard(mz.x, mz.y);
     // the kick: on my look (most of it settles back), in my hands
     const feel = FEEL[g.id];
     tp.kick(feel.up * (0.85 + Math.random() * 0.3), feel.side * (Math.random() * 2 - 1), feel.settle);

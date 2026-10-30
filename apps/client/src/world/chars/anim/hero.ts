@@ -1484,7 +1484,7 @@ export function idleFeet(seed: number, gait?: string): Record<Side, { at: V3; ya
   return out;
 }
 /** A foot's pitch (+: the heel up, onto the ball) and turn (+: to the left), from where it is. */
-function footAngles(f: Foot): { pitch: number; yaw: number } {
+export function footAngles(f: Foot): { pitch: number; yaw: number } {
   const d = sub3(f.ball, f.heel);
   return { pitch: Math.atan2(-d[1], Math.hypot(d[0], d[2])), yaw: Math.atan2(d[0], d[2]) };
 }

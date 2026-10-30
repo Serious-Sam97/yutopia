@@ -58,6 +58,10 @@ export interface Drive {
   yaw?: number;
   pitch?: number;
   hit?: { from: number; t: number; k: number } | null;
+  /** (9) how cold, how spent (0..1), a sound heard */
+  cold?: number;
+  spent?: number;
+  heard?: { yaw: number; pitch: number; t: number; loud?: boolean } | null;
 }
 export interface Clip {
   name: string;
@@ -66,6 +70,8 @@ export interface Clip {
   len: number;
   /** (7) the mood the clip's at, whatever the slider says (the dark's clips: 1) */
   mood?: number;
+  /** (9) her walk's style for this clip, whatever the page says */
+  gait?: string;
   raw?: {
     after: (x: Ctx, t: number) => Moved & { hands?: Frame["hands"] };
     before?: (x: Ctx, t: number) => Moved;
@@ -672,6 +678,23 @@ export function clipList(): Clip[] {
     (x, t) => x.C.deathPose(t, 3),
     { rag: { at: 0.55, vel: [0, 0.3, -2.2], stay: true } },
   );
+  // ── 9: reactions and life — the cold, catching her breath, who she is, a sound
+  const life = (name: string, len: number, live: (t: number) => Drive, more: Partial<Clip> = {}) =>
+    add({ name, group: "life", len, live, ...more });
+  life("cold, stood", 14, () => ({ speed: 0, cold: 0.9 }), { mood: 0.6 });
+  life("cold, walking", 4, () => ({ speed: WALK, cold: 0.8 }), { mood: 0.6 });
+  life("spent, catching her breath", 6, () => ({ speed: 0, spent: 0.95 }));
+  for (const g of ["old", "brisk", "tired", "bouncy", "heavy"])
+    life(`stood: ${g}`, 9, () => ({ speed: 0 }), { gait: g });
+  life("a sound off to her left", 4, (t) => ({ speed: 0, heard: t > 1 ? { yaw: 1.4, pitch: 0.1, t: t - 1 } : null }));
+  life(
+    "a shot close behind",
+    3,
+    (t) => ({ speed: 0, heard: t > 0.8 ? { yaw: 2.8, pitch: 0, t: t - 0.8, loud: true } : null }),
+    {
+      mood: 1,
+    },
+  );
   // ── 5d: limp on the ragdoll, and up again — off a drop too high to land on her feet; a blow
   add({
     name: "jog off an 8 m drop, limp",
@@ -788,6 +811,9 @@ export interface Frame {
   hands?: Locomotion["handsOut"];
   /** (6) hands put on the body: the phone at the ear, the mug at the mouth */
   reach?: Reach;
+  /** (9) the breath's place (0..1) and how cold: a puff in the air with each breath out */
+  breath?: number;
+  cold?: number;
 }
 export const RATE = 120;
 
@@ -829,7 +855,7 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
   loco.v2 = which === "after";
   loco.tension = clip.mood ?? x.T;
   loco.seed = 3;
-  loco.gait = x.gait ?? "calm";
+  loco.gait = clip.gait ?? x.gait ?? "calm";
   const dt = 1 / rate;
   let v = 0;
   let acc = 0;
@@ -933,6 +959,9 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
         reload: d.reload,
         kick: d.kick,
         hit: d.hit ?? null,
+        cold: d.cold,
+        spent: d.spent,
+        heard: d.heard ?? null,
         pitch: d.pitch ?? 0,
         yaw: d.yaw ?? 0,
         turn,
@@ -958,6 +987,8 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
       eyes: g ? [g.eyes[0], g.eyes[1]] : [0, 0],
       blink: g?.blink ?? 0,
       hands: loco.handsOut ?? undefined,
+      breath: loco.life().breath,
+      cold: d.cold,
     });
   }
   return out;

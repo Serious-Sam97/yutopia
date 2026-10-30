@@ -994,6 +994,18 @@ void main() {
   // (`snap`: no easing once it's over — a car's camera, which moves on its own)
   // knocked down (shared/pool-throw.ts): when each fall was first seen here (performance.now)
   private falls = new Map<string, { at: number; t0: number }>();
+  // a sound everyone near turns to (plan 58 9): the last shot, where and when
+  private sound: { x: number; y: number; at: number } | null = null;
+  heard(x: number, y: number) {
+    this.sound = { x, y, at: performance.now() };
+  }
+  private heardBy(b: { x: number; y: number }): { t: number; x: number; y: number; loud: boolean } | undefined {
+    const s = this.sound;
+    if (!s) return undefined;
+    const t = (performance.now() - s.at) / 1000;
+    const d = Math.hypot(s.x - b.x, s.y - b.y);
+    return t < 2.5 && d > 0.6 && d < 30 ? { t, x: s.x, y: s.y, loud: d < 8 } : undefined;
+  }
   // struck (plan 58 7): when each blow was first seen here
   private hits = new Map<string, { at: number; t0: number }>();
   private hitOf(b: { id: string; hitAt?: number; hitYaw?: number }): { t: number; yaw: number } | undefined {
@@ -2504,14 +2516,26 @@ void main() {
         p3.setTint(this.onLand(b.x, b.y) ? this.ownTint.setRGB(c.r / L.r, c.g / L.g, c.b / L.b) : null);
         if (b.id === meId) mySeat = seat3;
         p3.gunFx = b.id === meId ? this.myGun : this.otherGun(b, dt);
-        p3.update({ ...b, angle: angle3, seat: seat3, down: this.downed.get(b.id), fell, hit: this.hitOf(b) }, dt, {
-          camX: cam.x,
-          camZ: cam.z,
-          onScreen:
-            (!hidden3 && this.frustum.intersectsSphere(this.sphere)) ||
-            (b.id === meId && first && this.handsOn && handsDoing(b) !== ""),
-          lowQuality: this.quality === "low" || this.quality === "lowest",
-        });
+        p3.update(
+          {
+            ...b,
+            angle: angle3,
+            seat: seat3,
+            down: this.downed.get(b.id),
+            fell,
+            hit: this.hitOf(b),
+            heard: this.heardBy(b),
+          },
+          dt,
+          {
+            camX: cam.x,
+            camZ: cam.z,
+            onScreen:
+              (!hidden3 && this.frustum.intersectsSphere(this.sphere)) ||
+              (b.id === meId && first && this.handsOn && handsDoing(b) !== ""),
+            lowQuality: this.quality === "low" || this.quality === "lowest",
+          },
+        );
         this.snowFall(b, p3, dt, hidden3);
         if (p3.ready) {
           // (its drawing stood in until now)

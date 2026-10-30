@@ -25,6 +25,7 @@ export {
   jumpNowOf,
   type LocoIn,
   Locomotion,
+  lifeNow,
   loadHero,
   localVel,
   nightNow,

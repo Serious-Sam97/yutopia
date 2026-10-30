@@ -150,6 +150,10 @@ export interface PersonIn {
   /** (plan 58 7) struck: s since (the view times it from when it's seen) and where it came from (the
    *  floor's radians) */
   hit?: { t: number; yaw: number };
+  /** (plan 58 9) the warmth and the stamina (0..100), and a sound heard (s since, from where; loud: close) */
+  wm?: number;
+  st?: number;
+  heard?: { t: number; x: number; y: number; loud: boolean };
   pinned?: boolean; // held down by a dog (docs/plan/52-the-pet-two.md D8): lying, not getting up
   jump?: JumpNow; // jumping (shared/jump.ts): its stage
   z?: number; // feet off the floor (up on something, in a jump), tiles

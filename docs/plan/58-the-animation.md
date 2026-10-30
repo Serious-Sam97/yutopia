@@ -1139,6 +1139,20 @@ world before you've passed it.
      strike's time and that it points at the shade; the dark's and the arms' server tests pass. The
      world's people show it when the world switches to plan 58.
    **Phase 7 signed off 2026-10-30** ("done for now").
+   **Phase 7 reworked 2026-10-30** (the user: "check their quality and improve"), each looked at close,
+   front and side:
+   - **The torch:** the arm swept across a body that stayed put — now the chest turns after the beam
+     (half the look's turn), the eyes go where it shines (the gaze's target when nothing else has them),
+     the wrist lies along the beam up and down, and in the fear the free hand's drawn in to the chest.
+   - **Aiming:** the stance aimed up at ~45° (the old pose lifts the arms past the sights) — now the gun's
+     out level along the look at the eye's height, both hands on it (the view's own gun takes the hands
+     onto its grip when there is one); the kick throws them up and back.
+   - **Struck:** leant over planted feet — now a hard blow from ahead staggers the right foot back (lifted,
+     put down behind, the body over it), from behind the left steps forward; the hips shoved with it.
+   - **Crawling:** stiff — now labouring: the back swaying and twisting over the hand that's down, the
+     hips rolling, the breath heaving, the head hung and lifted now and then to see ahead.
+   - **Kneeling by someone:** upright and reaching straight out — now leant over them, the hand on their
+     back closer, looking round the dark and back down at them.
 8. **The shadowed** made again on the new body.
 
    **Phase 8 built 2026-10-30** (in the dark's chunk, `yutopia-night`, now 3.0 KB): Alan Wake 2's Taken —
@@ -1166,13 +1180,107 @@ world before you've passed it.
    - `design/anim/8-lurching-on.mp4`, `8-stood-twitching.mp4`, `8-wind-up-and-strike.mp4`,
      `8-caught-in-a-beam.mp4`, `8-exposed.mp4`, `8-asleep-in-its-nest.mp4`, `8-shot-down.mp4` (half speed).
    **Phase 8 signed off 2026-10-30.**
+   **Phase 8 reworked 2026-10-30** (the same ask):
+   - **The lurch:** symmetric and droopy — now broken and lopsided: one shoulder dropped and that arm
+     hanging dead and swinging late, the other drawn up bent and clawed, the head cocked to the low side.
+   - **The wind-up:** both arms straight up read as a cheer — now cocked: the striking arm up and back
+     behind the head, the other reaching out ahead clawing, the trunk wound back, the head cocked over;
+     **the strike** tears the cocked arm down and across while the trunk unwinds through, the other
+     pulled back, a lunge (each its own striking side).
+   - **Caught in a beam:** one held pose — now it writhes: the arm over the face, the other clawing out at
+     the light, reeling back a stumbling step at a time, shaking.
+   - **Exposed:** a slow sway — now the knees go now and then and are caught, the head rolls, a hand claws
+     at its own face.
+   - (Asleep and shot down as they were.) Tests 85; budget: page 420.1, `yutopia-night` 3.6 KB. The videos
+     re-recorded: `design/anim/7-*.mp4`, `8-*.mp4`.
+   **Phases 7 and 8's rework signed off 2026-10-30.**
 9. **Reactions and life:** flinches, shivers, catching breath, idles by persona, glances; the
    cold (breath puffs, hunching, stamping).
+
+   **Phase 9 built 2026-10-30, reworked the same day ("revisit all the animations of phase 9 and
+   improve quality").** Its own chunk, `yutopia-life` (`chars/anim/life.ts`, 2.8 KB), loaded with the
+   hero's; Locomotion lays it on, the world feeds it (when plan 58 is on).
+   - **The cold**, by the warmth (`Player.wm`: none at 70, all of it by 20): hunched and sunk into the
+     collar, the knees in together and soft. Stood: hugging herself — the hands tucked under the arms,
+     the elbows in — rocking from foot to foot; every ~10 s the hands rise (blended, not jumped) to rub
+     hard before the mouth, then cup and are blown into, the eyes on them (the idle's glances held off);
+     back down to the hug. Going: the hands in the front pockets, the elbows hanging. A shiver in bursts
+     that shows (the shoulders, the trunk, the knees). **The breath a puff** in the air with each breath
+     out (near people only; `Puffs`). Her hands busy (a torch, a gun, the phone): only the trunk's share.
+     (First pass: the hands up on the shoulders like an X, and a jump to the rub that swung an arm over
+     the head.)
+   - **Spent**, by the stamina (`Player.st`: none over 40, all of it at 5): stood, bent over the knees —
+     the knees bent, the back rounded — the hands on the knees, the whole body heaving with the breath,
+     the head hung and lifted to look ahead now and then. (First pass: a stiff bow, the knees straight.)
+   - **Who she is, stood** (her walk's style): **old** — stooped, the hands held behind, the head nodding a
+     little, a slow glance round; **brisk** — upright, the left forearm up across now and then and the
+     head down to the watch, between, the right foot's toes tapping (~2 a second); **tired** — slumped on
+     one hip, the arms heavy, a sigh (up and in, held, let go and down), now and then a hand rubbing the
+     back of the neck; **bouncy** — up on the balls of her feet to a beat (the heels 6 cm up, the balls
+     held to the floor), a dip in the knees, the shoulders and the head grooving; **heavy** — stood wide,
+     the weight on one leg, the arms folded, the chin up; **calm** as she was.
+   - **A sound:** the eyes and the head turn to it a while (the gaze's, over whoever's looked at); past
+     the head's own reach, the chest turns too. **A shot close (within 8 m): a startle** — ducked, the
+     shoulders up and in, the arms in, the knees dipped — then the head and the chest whipped round to
+     it. In the world, a shot: everyone within 30 m hears it from where it was fired (the view's `heard`,
+     from the arms).
+   - **Bench** ("life"): `cold, stood` (the puffs drawn), `cold, walking`, `spent, catching her breath`,
+     `stood: old / brisk / tired / bouncy / heavy`, `a sound off to her left`, `a shot close behind`.
+   - Tests: client 85 (life's clips finite; warm, rested and calm nothing's laid on; cold she hugs
+     herself; spent, the hands on the knees; her hands busy, the hug leaves them). Measured: bouncy's
+     balls within 4 mm of the floor as the heels rise 6 cm; brisk's tap ~2 Hz. Budget: page 420.1
+     (unchanged), `yutopia-chars` 43.5, `yutopia-life` 2.8.
+   - `design/anim/9-cold-stood.mp4`, `9-cold-walking.mp4`, `9-spent.mp4`, `9-stood-old.mp4`,
+     `9-stood-brisk.mp4`, `9-stood-tired.mp4`, `9-stood-bouncy.mp4`, `9-stood-heavy.mp4`,
+     `9-a-sound-to-her-left.mp4`, `9-a-shot-close-behind.mp4` (half speed; the reworked ones).
+   **Phase 9's rework accepted 2026-10-30** ("ok" — then 7 and 8 the same way).
 10. **The checks:**
    - e2e: a pose sheet of every animation, built and played, with no NaNs and no pops.
    - The feet's slide measured, under a set limit, in every cycle.
    - Two browsers: others drawn in step.
    - The weak machine with 20 people near; `pnpm budget`; a final reel.
+
+   **Phase 10 run 2026-10-30.**
+   - **The census** (`e2e/anim-census.mts`, node, as the bench works them): all 127 clips, every frame
+     finite — no NaN in a joint, the hips or a hand's target (also a client test now, every clip, 5 s);
+     each clip's pops counted at 1000 samples a second, plan 58 beside the old. The worst were the taps
+     and keys drawn as a sine's upper half (`max(0, sin)`: a corner each time one sets off) — typing 201
+     pops, the computer 138, the piano 111, texting 49, bouncy 35, brisk 26, the crawl 9, a beam's stumble
+     22 — now a squared half (no corner): 8, 4, 0, 4, 0, 0, 0, 8. The counts kept as the baseline
+     (`e2e/anim-census.json`); `CHECK=1` fails a clip that goes past its own by a fifth (or 3), or any NaN.
+     What's left high is the gaits' — the sprint's turns and skids, stairs (a foot onto each step), the
+     long winded clips — as signed off in phase 4; and the shadowed's glitch, a held beat then on, which
+     is meant.
+   - **The feet's slide** (the bench's report, each foot's worst, on the model): walk 0.10 m/s, jog
+     0.24–0.28, run 0.35–0.39, sprint 0.50–0.53, crouched 0.19–0.23, hurt 0.10–0.13, the torch walking
+     0.11, cold walking 0.19, up stairs 0.10–0.24, down a ramp 0.10–0.21; steady cycles all under ~0.5.
+     **Found:** a start aside drags the planted foot (walking left from still: 2.7 m/s for ~60 ms; a jog
+     aside 1.2–1.4, backing up 1.2–2.0 for a frame or two) — at the stepper's hand-over the cycle aside
+     has the foot left behind 5 cm out and 8 cm back of where the first step left it, and the hand-over
+     closes that on the ground. Holding that foot till the cycle lifts it fixed the walk but slid others
+     (turning, aiming round a square); reverted.
+     **Fixed** (the user: "yes, fix it"): the real cause was the feet's way, not their place — the stepper
+     put each foot down facing ahead, as she stood, while the cycle aside has them turned the way she
+     goes, a quarter round; at the hand-over the planted foot was spun a quarter turn on the ground in a
+     tenth of a second. Now, going aside (30°–115° off the facing), each of the start's steps lands
+     turned as the cycle has it, and the foot left behind takes its own step too (more while she's
+     getting up to pace, four at most) before the hand-over. Walking off aside from still: no planted
+     frame over 0.3 m/s (a client test now); a jog aside and backing up as they were (a touchdown frame
+     or two — backing up, the feet face ahead anyway, and a second step there only hurt). Still to see
+     to: the crouched back-up's steady cycle slides for a frame as each foot lands (1.3–2.8 m/s), the
+     jog aside dips a foot 1.1 cm into the floor and slides as it stops — all from before.
+     `design/anim/10-aside-start.mp4`.
+   - **The cost** (`e2e/anim-cost.mts`, this machine's CPU, Motion3 over Locomotion and all of plan 58's
+     layers, each person doing something else): 20 people 1.18 ms a frame (p99 2.2), 60 people 3.6 ms —
+     0.06 ms a person, ~10× the old (0.11 ms for 20). A weak machine at 4× slower: ~5 ms for 20, in a
+     15 fps frame's 66 ms. (Skinning and drawing as before: the GPU's.)
+   - **The pose sheet** (`e2e/anim-sheet.mts`): every clip at a quarter, half and three quarters,
+     labelled, a page a group — `design/anim/sheet/*.png`.
+   - **Budget, fresh build:** page 420.1 of 421, `yutopia-chars` 43.6 of 45, `yutopia-anim` 14.2, `-air`
+     4.5, `-acts` 4.7, `-night` 3.6, `-life` 2.8 (each of 15). Client tests 86.
+   - **The reel:** `design/anim/10-reel.mp4` (2 min 12 s, half speed): a card and the best of each phase.
+   - **Two browsers, others drawn in step:** with the world's switch to plan 58 — the world's people are
+     still on the old animations (Motion3.v2 off), so there's nothing of plan 58 to see in step yet.
 
 ## Guardrails
 
