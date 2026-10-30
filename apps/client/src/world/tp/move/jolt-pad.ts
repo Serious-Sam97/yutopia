@@ -74,6 +74,8 @@ export interface JoltPad {
   balls(): [number, number, number][];
   /** what Flowmotion can run up, swing round, grind along */
   flow: FlowWorld;
+  /** the physics world itself (plan 58 5d: a ragdoll in it) */
+  world: PhysicsWorld;
   dispose(): void;
 }
 
@@ -102,7 +104,7 @@ export async function joltPad(
   ];
   // the floor: everywhere but the land
   const floor: Solid3[] = [box3(0, 0, size.w, LAND.z0, -1, 0), box3(LAND.x1, LAND.z0, size.w, size.h, -1, 0)];
-  const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 8, things: BALLS.length + 4 }));
+  const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 8, things: BALLS.length + 4 + 12 }));
   world.setStatic("pad", boxes);
   world.setStatic("posts", posts);
   world.setStatic("yard", yard);
@@ -211,6 +213,7 @@ export async function joltPad(
 
   let acc = 0;
   return {
+    world,
     collider,
     mover,
     step(dt: number) {

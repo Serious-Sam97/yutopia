@@ -11,6 +11,7 @@ import {
   MoveClock,
   type MoveEnv,
   type MoveSpec,
+  NO_INPUT,
   newBody,
   SPIN_LEN,
   type StepEvents,
@@ -337,6 +338,10 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
   const target = new T3.Vector3(START.x, 1.15, START.y);
   // s into a flow jump's spin (chars/moves.ts spinPose), or none
   let spinT: number | null = null;
+  // (5d) down on the ragdoll: the fall's top, a blow asked for (K), the state
+  let topZ = 0;
+  let hitNow = false;
+  let downed: InstanceType<NonNullable<ReturnType<typeof C.airNow>>["Downed"]> | null = null;
   let aimPitch = 0;
 
   // ── lock-on: the dummies
@@ -411,6 +416,11 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
   };
   const kd = (e: KeyboardEvent) => {
     // plan 58: N new / old, M the mood round day → dusk → the dark, B the walk's style round (4e)
+    // (5d: K a blow from in front — down on the ragdoll, and up again)
+    if (!e.repeat && e.code === "KeyK") {
+      hitNow = true;
+      return;
+    }
     if (!e.repeat && (e.code === "KeyN" || e.code === "KeyM" || e.code === "KeyB")) {
       if (e.code === "KeyN") anim.v2 = !anim.v2;
       else if (e.code === "KeyB") {
@@ -596,7 +606,8 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
     heldOver.add(move);
     const alpha = clock.advance(dt, () => {
       prev = { ...body, verb: body.verb ? { ...body.verb } : null };
-      events.push(stepBody(body, move, env, spec));
+      // (5d: down, nothing she's asked does anything till she's up)
+      events.push(stepBody(body, downed?.on ? NO_INPUT : move, env, spec));
       if (first) {
         afterFirstStep(move);
         first = false;
@@ -693,7 +704,7 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
         jump: body.flow ? null : C.jumpNowOf(body, spec),
         landed,
         verb: body.verb
-          ? { kind: body.verb.kind, t: C.verbT(body, spec) }
+          ? C.verbIn(body, spec)
           : body.airDash && spec.airDash
             ? { kind: "adash", t: 1 - body.airDash / spec.airDash.len }
             : null,
@@ -727,6 +738,43 @@ export async function runMoveSandbox(el: HTMLElement, opts: { avatar?: AvatarLay
     model.root.position.set(ix, iz, iy);
     model.root.rotation.y = Math.PI / 2 - iyaw;
     model.setPose(mo.pose, mo.lift);
+    // (5d: down on the ragdoll — a fall from 6 m or more, a blow (K) — and up again: the body held
+    // where it is, then stood where she lay)
+    const A = anim.v2 ? C.airNow() : null;
+    const fellFrom = topZ - body.z;
+    if (body.up) topZ = Math.max(topZ, body.z);
+    else topZ = body.z;
+    if (A && jolt && !downed?.on && (hitNow || (landed !== undefined && fellFrom >= 6))) {
+      downed ??= new A.Downed(jolt.world, model);
+      const c = Math.cos(body.yaw);
+      const sn = Math.sin(body.yaw);
+      // (three's: x, up, the floor's y; a blow from in front sends her back and a little up)
+      const vel: [number, number, number] = hitNow
+        ? [-c * 2.8 + body.vx * 0.2, 1.2, -sn * 2.8 + body.vy * 0.2]
+        : [body.vx, -Math.min(12, Math.sqrt(2 * 30 * fellFrom)), body.vy];
+      downed.fall(mo.pose, vel, hitNow ? { part: 2, impulse: [-c * 60, 0, -sn * 60] } : undefined);
+    }
+    hitNow = false;
+    if (A && downed?.on) {
+      const r = downed.update(dt, (x, z) => env.grid.groundAt(x, z, body.z + 2, 0.04), A.getUp2Pose, A.GETUP_LEN);
+      if (r) {
+        if (r.root) {
+          // (the body where she is: held, still, till she's up)
+          body.x = r.root.x;
+          body.y = r.root.z;
+          body.z = r.root.y;
+          body.yaw = Math.PI / 2 - r.root.yaw;
+          prev = { ...body, verb: null };
+          zShow = body.z;
+        }
+        body.vx = 0;
+        body.vy = 0;
+        model.root.position.set(body.x, body.z, body.y);
+        model.root.rotation.y = Math.PI / 2 - body.yaw;
+        model.setPose(r.m.pose, r.m.lift);
+        model.handsTo(r.hands);
+      }
+    } else model.handsTo(loco.handsOut);
     planted = loco.groundOut ? { under: [...loco.groundOut.under], sole: [], drop: loco.groundOut.drop } : null;
     // (plan 58 phase 2d: the springs, after the pose)
     model.step(dt);
@@ -996,7 +1044,7 @@ function panel(host: HTMLElement, spec: MoveSpec, cam: CamTune, kh: boolean, ctx
       `<label><input type=checkbox data-a58> new animations</label> · ${k("KeyN")} new / old<br>` +
       `<span data-mood></span> · ${k("KeyM")} day / dusk / dark<br>` +
       `<input type=range min=0 max=1 step=0.05 data-moodr style="width:100%"><br>` +
-      `<span data-gaitl></span> · ${k("KeyB")} the walk's style (4e)<br>` +
+      `<span data-gaitl></span> · ${k("KeyB")} the walk's style (4e) · ${k("KeyK")} a blow: down and up (5d)<br>` +
       `<span data-hurtl></span> (4d: a limp)<br>` +
       `<input type=range min=0 max=1 step=0.05 data-hurt style="width:100%"><br>` +
       `<span style="color:#aaa">stand still: the idle · ${k(walkKeys(isMac())[0])}+${k("KeyW")} walk · ${k("KeyW")} run · ${k("ShiftLeft")} sprint · ${k("Space")} jump (running: the flip)</span>` +

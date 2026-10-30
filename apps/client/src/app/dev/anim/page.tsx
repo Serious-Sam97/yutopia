@@ -3,7 +3,7 @@
 import { DEFAULT_AVATAR } from "@yutopia/shared";
 import { notFound } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type Ctx, clipList, type Frame, POP_RATE, pops, RATE, tabulate } from "./clips";
+import { type Ctx, clipList, type Frame, limp, POP_RATE, pops, RATE, tabulate } from "./clips";
 
 // Dev-only: the animation bench (docs/plan/58-the-animation.md, phase 2). Any animation by name,
 // scrubbed, slowed, looped and onion-skinned; before and after side by side; on a ground grid,
@@ -164,6 +164,7 @@ function Bench({ q }: { q: URLSearchParams }) {
         m.root.position.set(fr.root.x + dx, fr.root.y, fr.root.z + dz);
         m.root.rotation.y = fr.root.yaw;
         m.setPose(fr.pose, fr.lift);
+        m.handsTo(fr.hands ?? null);
         m.setFace(fr.blink, 0);
         m.setEyes(fr.eyes[0], fr.eyes[1]);
       };
@@ -187,6 +188,13 @@ function Bench({ q }: { q: URLSearchParams }) {
         land.receiveShadow = true;
         scene.add(land);
       };
+      // (5c: a clip's pole, swung round)
+      const pole = new T.Mesh(
+        new T.CylinderGeometry(0.06, 0.06, 3, 12),
+        new T.MeshLambertMaterial({ color: "#7a7f86" }),
+      );
+      pole.visible = false;
+      scene.add(pole);
       const feetOf = (frames: Frame[], G?: (x: number, z: number) => number): Feet => {
         // each foot's two contacts, frame by frame: the ankle (its heel down) and the ball (the toe's
         // joint: up on its toes — a sprinter's ankle never comes down), over the ground
@@ -267,13 +275,18 @@ function Bench({ q }: { q: URLSearchParams }) {
         if (bench.current.key === key) return;
         bench.current.key = key;
         bench.current.after = tabulate(x, s.clip, "after", s.live);
+        ragDone = false;
         bench.current.before = tabulate(x, s.clip, "before", s.live);
         bench.current.feet = null;
         showGround(s.clip.ground);
+        pole.visible = !!s.clip.pole;
+        if (s.clip.pole) pole.position.set(s.clip.pole[0], 1.5, s.clip.pole[1]);
         // (pops on their own fine table)
         setReport({ pops: pops(tabulate(x, s.clip, "after", s.live, POP_RATE) ?? []), feet: null, len: s.clip.len });
       };
 
+      let ragDone = false;
+      let ragWorld: import("@yutopia/shared/physics").PhysicsWorld | null = null;
       let raf = 0;
       let last = performance.now();
       const frame = (now: number) => {
@@ -284,6 +297,25 @@ function Bench({ q }: { q: URLSearchParams }) {
         last = now;
         bench.current.redo();
         const A = bench.current.after;
+        // (5d: a limp clip's ragdoll worked out on Jolt with her own model, once it's built)
+        if (ready && A && s.clip.rag && !ragDone) {
+          ragDone = true;
+          const clip = s.clip;
+          void (async () => {
+            const P = await import("@yutopia/shared/physics");
+            ragWorld ??= await P.PhysicsWorld.create(P.loadJolt, P.sizesFor({ statics: 8, things: 32 }));
+            const w = ragWorld;
+            w.remove("ledge");
+            if (clip.rag?.solids) w.setStatic("ledge", clip.rag.solids);
+            if (!w.has("land"))
+              w.setLand("land", { x0: -40, z0: -40, n: 161, step: 0.5, h: new Float32Array(161 * 161) });
+            w.settle();
+            const air = C.airNow();
+            if (!air || st.current.clip !== clip || bench.current.after !== A) return;
+            limp(A, clip, after, w, air);
+            bench.current.feet = null;
+          })();
+        }
         if (ready && A) {
           // the feet, once the model's built (they're read off its bones)
           if (!bench.current.feet) {

@@ -2325,6 +2325,147 @@ export function jump2Pose(
   return { pose: out.pose, lift: out.lift, w };
 }
 
+// ── 5a: falling and landing by height (docs/plan/58-the-animation.md phase 5). Off an edge the
+// stride goes on a moment, then the legs gather and the arms come up and out, looking down; a long
+// fall the arms wheel and the legs pedal; the last of it the legs reach for the ground. Down, by how
+// far it fell: an absorb (hips low, knees deep, arms out ahead); a heavy one — a knee low, a hand
+// down, the head up — then up; from high at a run, a roll and on.
+const FALL: Ch = {
+  tL: -0.55,
+  kL: 0.95,
+  fL: 0.25,
+  tR: -0.15,
+  kR: 0.75,
+  fR: 0.4,
+  sL: -1.3,
+  sR: -1.1,
+  oL: 0.85,
+  oR: 0.8,
+  eL: -0.45,
+  eR: -0.5,
+  sx: 0.12,
+  dx: 0.3,
+  hL: -0.6,
+  hR: -0.6,
+};
+const REACH: Ch = {
+  tL: -0.4,
+  kL: 0.35,
+  fL: 0.2,
+  tR: -0.15,
+  kR: 0.3,
+  fR: 0.25,
+  sL: -0.7,
+  sR: -0.6,
+  oL: 0.65,
+  oR: 0.6,
+  eL: -0.35,
+  eR: -0.35,
+  sx: 0.08,
+  dx: 0.2,
+  hL: -0.6,
+  hR: -0.6,
+};
+/** Falling `t` s (off an edge, or long past a jump's top), `soon` s from the ground (Infinity: not
+ *  known), `long` 0…1 how far it's fallen past a long fall's. */
+export function fall2Pose(t: number, soon: number, long: number): Moved {
+  let c = lerpCh(FALL, REACH, smoother(1 - soon / 0.22));
+  if (long > 0) {
+    const w = Math.sin(t * 7);
+    c = {
+      ...c,
+      sL: v(c, "sL") + 0.7 * long * w,
+      sR: v(c, "sR") - 0.7 * long * w,
+      tL: v(c, "tL") + 0.35 * long * w,
+      tR: v(c, "tR") - 0.35 * long * w,
+    };
+  }
+  c.up = 0;
+  return body(steady(leanAtHips(c)));
+}
+const ABSORB: Ch = {
+  tL: -1.15,
+  kL: 1.95,
+  fL: 0,
+  aL: 0.14,
+  tR: -0.8,
+  kR: 1.75,
+  fR: 0.25,
+  aR: 0.12,
+  sx: 0.4,
+  hx: 0.12,
+  sL: -0.6,
+  sR: -0.55,
+  oL: 0.6,
+  oR: 0.55,
+  eL: -0.6,
+  eR: -0.6,
+  dx: -0.15,
+  hL: -0.4,
+  hR: -0.4,
+};
+const HERO_LAND: Ch = {
+  tL: -1.45,
+  kL: 2.05,
+  fL: 0,
+  aL: 0.12,
+  tR: -0.15,
+  kR: 2.45,
+  fR: 0.95,
+  aR: 0.08,
+  sx: 0.5,
+  hx: 0.25,
+  sR: -1.15,
+  eR: -0.15,
+  oR: 0.2,
+  wR: 0.5,
+  hR: -1,
+  sL: 0.5,
+  oL: 0.75,
+  eL: -0.7,
+  dx: -0.45,
+  hL: 0.6,
+};
+const TUCK: Ch = {
+  tL: -2.1,
+  kL: 2.4,
+  tR: -2.0,
+  kR: 2.4,
+  fL: 0.6,
+  fR: 0.6,
+  sL: -1.2,
+  sR: -1.2,
+  oL: 0.25,
+  oR: 0.25,
+  eL: -1.6,
+  eR: -1.6,
+  sx: 0.6,
+  nx: 0.5,
+  dx: 0.4,
+  hL: 1,
+  hR: 1,
+};
+/** Down from a fall `kind` ("absorb", "hard", "roll"), `t` s on: the pose and how much of it's
+ *  laid on (0 when it's done). */
+export function land2Pose(kind: string, t: number): { m: Moved; w: number } {
+  if (kind === "roll") {
+    // (round the hips over half a second, low: tucked, over, and out onto the feet running)
+    const u = clamp01(t / 0.55);
+    const c = { ...TUCK };
+    c.up = 0.42 - HIP_H;
+    const m = body(steady(c));
+    const h = m.pose.hips ?? [0, 0, 0];
+    m.pose.hips = [h[0] + TAU * smoother(u), h[1], h[2]];
+    return { m, w: smoother(u / 0.12) * (1 - smoother((u - 0.75) / 0.25)) };
+  }
+  const hard = kind === "hard";
+  // (the impact taken in a few hundredths, held, then up — a heavy one longer)
+  const [hold, rise] = hard ? [0.3, 0.45] : [0.12, 0.3];
+  const c = { ...(hard ? HERO_LAND : ABSORB) };
+  const m = body(steady(leanAtHips(c)));
+  return { m, w: smoother(t / 0.05) * (1 - smoother((t - hold) / rise)) };
+}
+
 // plan 58: the slide again (KH: a baseball slide) — the plant from the run, the drop with the lead
 // leg kicked out, then reclined from the hips: that leg along the ground toes up, the other folded
 // under, the trailing hand skimming the ground, the other arm up for balance, the head looking

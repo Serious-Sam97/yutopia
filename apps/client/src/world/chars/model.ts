@@ -219,6 +219,7 @@ const SP = {
 const DOWN = new Vector3(0, -1, 0);
 const target = new Vector3();
 const pole = new Vector3();
+const handAt = new Vector3();
 
 /** One person: shows the best ready level of their look, posed by joint. */
 export class PersonModel {
@@ -231,7 +232,8 @@ export class PersonModel {
   private shown: { baked: Baked; lod: Lod } | null = null;
   private pose: Pose = REST;
   private lift: [number, number, number] = [0, 0, 0];
-  private restHips: [number, number, number] = [0, 0, 0];
+  /** the hips' place at rest, in the root (plan 58 5d: a ragdoll's hips read back as a lift off it) */
+  restHips: [number, number, number] = [0, 0, 0];
   private face: [number, number] = [0, 0];
   private eyes: [number, number] = [0, 0];
   private held: { a: AvatarLayers; lod: Lod } | null = null;
@@ -404,6 +406,21 @@ export class PersonModel {
     shoulder.quaternion.slerp(ik.shoulder, k);
     const el = this.bones[`elbow${side}`];
     el.rotation.set(el.rotation.x + (ik.elbow - el.rotation.x) * k, el.rotation.y * (1 - k), el.rotation.z * (1 - k));
+  }
+
+  /** (plan 58 5b) Hands put where a move has them — on a top, an edge, the ground — given in the
+   *  body's own space (x its left, y up from its feet, z ahead): `Locomotion.handsOut`. After
+   *  `setPose` and the root placed. */
+  handsTo(
+    hands: { [S in "L" | "R"]?: { at: [number, number, number]; w: number; pole?: [number, number, number] } } | null,
+  ) {
+    if (!hands) return;
+    this.root.updateMatrixWorld(true);
+    for (const S of ["L", "R"] as const) {
+      const h = hands[S];
+      if (!h || h.w <= 0) continue;
+      this.reachTo(S, this.root.localToWorld(handAt.set(h.at[0], h.at[1], h.at[2])), h.w, h.pole);
+    }
   }
 
   /** Swing the springs (after `setPose`, once a frame): `rest` holds them as they hang (reduced

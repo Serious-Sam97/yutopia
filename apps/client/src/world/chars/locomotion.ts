@@ -57,7 +57,8 @@ export interface LocoIn {
   jump: JumpNow | null;
   /** landed this frame: how hard (0..1) */
   landed?: number;
-  verb: { kind: Verb; t: number } | null;
+  /** (5b: and what it's over — the core's probe: the top, where it met it and ended, how far) */
+  verb: { kind: Verb; t: number; h?: number; near?: number; far?: number; dist?: number } | null;
   /** a Flowmotion move (docs/plan/56-the-controls.md F): its own body, over everything; a flow
    *  jump's spin (shared move/flow.ts FlowLook), over the jump's arc */
   flow?: FlowLook | null;
@@ -110,13 +111,19 @@ function add(p: Pose, j: JointName, dx: number, dy = 0, dz = 0) {
 type Hero = typeof import("./anim/hero");
 let hero: Hero | null = null;
 let heroLoading: Promise<Hero> | null = null;
+// (phase 5's — getting over things, the hands placed, the ragdoll — in a chunk of their own beside it)
+type Air = typeof import("./anim/air");
+let air: Air | null = null;
 export function loadHero(): Promise<Hero> {
-  heroLoading ??= import("./anim/hero").then((m) => {
+  heroLoading ??= Promise.all([import("./anim/hero"), import("./anim/air")]).then(([m, a]) => {
     hero = m;
+    air = a;
     return m;
   });
   return heroLoading;
 }
+/** Phase 5's, once in. */
+export const airNow = (): Air | null => air;
 /** …if they're in (null while they load, or never asked for). */
 export const heroNow = (): Hero | null => hero;
 
@@ -236,6 +243,15 @@ export class Locomotion {
   private way = 0;
   /** down from a jump: its kind, and how far through its landing (0..1) */
   private landOf: { kind: string; t: number } | null = null;
+  /** (5a) in the air: how long, how high over the ground, how fast that's changing, the top of it */
+  private fallT = 0;
+  /** (5a) how long since she was last up: a landing's check in the speed isn't a stop */
+  private upAgo = 9;
+  private hAir: number | null = null;
+  private vzG = 0;
+  private fallTop = 0;
+  /** down from a fall: how, and how long since */
+  private downFrom: { kind: string; t: number } | null = null;
   // (a jump from the run: up off the stride, the air's pose eased in)
   private fromRun = false;
   /** where the feet were last shown (the model's space) */
@@ -271,6 +287,7 @@ export class Locomotion {
    *  breathing and glances), else a plain stand. */
   update(dt: number, m: LocoIn, standing?: Moved): Moved {
     if (this.v2 && !hero) void loadHero();
+    this.upAgo = m.up ? 0 : this.upAgo + dt;
     const out = this.compose(dt, m, standing);
     if (!this.v2 || !hero || m.reduced) {
       this.gazeOut = null;
@@ -291,7 +308,7 @@ export class Locomotion {
     // layers above did — let go of in the air, a verb or a Flowmotion move
     this.lock ??= new hero.FootLock();
     const moved = { ahead: m.ahead * dt, left: m.left * dt, yaw: -m.turn * dt };
-    const off = m.up || !!m.verb || !!m.flow;
+    const off = m.up || !!m.verb || !!m.flow || this.downFrom?.kind === "roll";
     const done = this.lock.apply({ pose, lift: out.lift }, dt, moved, off, this.base);
     // 4f: last, the feet on the ground under them
     this.grounded(hero, done, off ? null : (m.ground ?? null), dt);
@@ -383,6 +400,22 @@ export class Locomotion {
   private gaze: InstanceType<Hero["Gaze"]> | null = null;
   /** plan 58 G.D: this frame's gaze — the eyes' morphs and a blink (null: none) */
   gazeOut: { eyes: [number, number]; blink: number } | null = null;
+  /** (5b) where this frame's hands go — on a top, an edge, the ground — in the body's own space (x
+   *  its left, y up from its feet, z ahead), for the model to reach last (`PersonModel.handsTo`) */
+  handsOut: import("./anim/air").Hands | null = null;
+
+  /** Down from the air on the move: the run picked up on the foot that comes down first (the lower,
+   *  as last shown), at the point of its time on the ground where the run has it where it came down —
+   *  further back, further through (set at its landing it jumped there). */
+  private runOnLanding(H: Hero, m: LocoIn, dt: number, stride: number): void {
+    if (m.speed <= 1 || !this.gaitAt || !this.shown) return;
+    const was = this.shown;
+    const F = was.R[1] <= was.L[1] ? "R" : "L";
+    const ph0 = F === "R" ? 0 : 0.5;
+    const z0 = H.footOf(this.gaitAt(ph0, m.speed), F).ankle[2];
+    const past = clamp((z0 - (was[F][2] - m.ahead * dt)) / stride, -0.08, 0.15);
+    this.gaitPh = (ph0 + past + 1) % 1;
+  }
 
   /** 4c: who has the feet — the idle, the stepper or the cycle — and the stepper's legs laid on. */
   private stepper(H: Hero, dt: number, m: LocoIn, body: Moved, T: number, stride: number): Moved {
@@ -440,7 +473,9 @@ export class Locomotion {
       // it's to stop within a step — not a landing's check in the speed)
       const skid = this.stepping === "cycle" && this.skidFrom > (S.jog + S.sprint) / 2 && v > 4;
       const take =
-        this.stepping === "idle" ? v > 0.05 || Math.abs(m.turn) > 0.8 : skid || (a < -4 && rem < 0.6 && !this.landOf && !this.lastJump) || v < 0.3;
+        this.stepping === "idle"
+          ? v > 0.05 || Math.abs(m.turn) > 0.8
+          : skid || (a < -4 && rem < 0.6 && !this.landOf && !this.lastJump && this.upAgo > 0.3) || v < 0.3;
       if (take) {
         st.take(body.lift);
         if (skid) {
@@ -555,6 +590,7 @@ export class Locomotion {
   }
 
   private compose(dt: number, m: LocoIn, standing?: Moved): Moved {
+    this.handsOut = null;
     // (plan 58's, when they're on and in)
     const H = this.v2 ? hero : null;
     const S = this.spec;
@@ -590,6 +626,8 @@ export class Locomotion {
       const into = m.flow.kind === "swing" || m.flow.kind === "wallside" ? 0.16 : 0.09;
       this.flowT = Math.min(1, this.flowT + dt / into);
       const f = flowPose({ ...m.flow, kind: m.flow.kind });
+      // (5c: the hands taking hold of the pole and the ledge, the toes driving off the wall)
+      if (H && air && !m.reduced) this.handsOut = air.flow2(f, m.flow);
       const out = this.flowFrom && this.flowT < 1 ? mix(this.flowFrom, f, ease(this.flowT)) : f;
       this.landT = 1;
       this.lastJump = null;
@@ -602,7 +640,14 @@ export class Locomotion {
     // a verb takes the whole body
     if (m.verb) {
       this.landT = 1;
-      this.verbOut = H && m.verb.kind === "slide" ? H.slide2Pose(m.verb.t) : verbPose(m.verb.kind, m.verb.t, m.reduced);
+      // (5b: the vault, the mantle, the roll and the slide again, the hands put where they go)
+      if (H && air && !m.reduced && m.verb.kind !== "adash") {
+        const r = air.verb2Pose(m.verb, H.slide2Pose);
+        this.handsOut = r.hands;
+        this.verbOut = r.m;
+      } else
+        this.verbOut =
+          H && m.verb.kind === "slide" ? H.slide2Pose(m.verb.t) : verbPose(m.verb.kind, m.verb.t, m.reduced);
       this.outT = 0;
       this.last = this.verbOut;
       return this.verbOut;
@@ -637,6 +682,8 @@ export class Locomotion {
       strideNow = lerp(strideNow, bs, back);
       strideNow = lerp(strideNow, H.crouch2Stride(T, back > 0.5), ease(this.crouchW));
     }
+    // (5b: out of a verb on the move — the run picked up on the foot it came down on)
+    if (H && this.verbOut && this.outT === 0) this.runOnLanding(H, m, dt, strideNow);
     if (H) {
       this.gaitPh = (this.gaitPh + d / strideNow) % 1;
       // (4c: stopping and setting off are steps of their own — the stepper's, below — not the cycle
@@ -709,7 +756,14 @@ export class Locomotion {
       // (going forward: backing up or aside, a stop's the stepper's)
       // (nor turning hard: a cut at a sprint slows as its way swings round — braced on a foot out
       // ahead, slid on it while it turned, the leg folded under her)
-      if (!this.skidFrom && -m.accel > 6 && m.speed > 4 && Math.abs(this.way) < 1 && Math.abs(m.turn) < 1.5)
+      if (
+        !this.skidFrom &&
+        -m.accel > 6 &&
+        m.speed > 4 &&
+        this.upAgo > 0.3 &&
+        Math.abs(this.way) < 1 &&
+        Math.abs(m.turn) < 1.5
+      )
         this.skidFrom = m.speed;
       // (over when it's nearly stopped, or done braking — slowed from a sprint to a walk, say)
       if (this.skidFrom && (m.speed < 0.8 || m.accel > -1)) this.skidFrom = 0;
@@ -768,22 +822,41 @@ export class Locomotion {
       // (the run picked up on the foot the jump brings down first: the lower one)
       // (…at the point of its time on the ground where the run has it where the jump put it: further
       // back, further through — set at its landing it jumped there)
-      if (m.speed > 1 && this.gaitAt && this.shown) {
-        // (where the feet were last shown, the body's way since taken off)
-        const was = this.shown;
-        const F = was.R[1] <= was.L[1] ? "R" : "L";
-        const ph0 = F === "R" ? 0 : 0.5;
-        const z0 = H.footOf(this.gaitAt(ph0, m.speed), F).ankle[2];
-        const past = clamp((z0 - (was[F][2] - m.ahead * dt)) / strideNow, -0.08, 0.15);
-        this.gaitPh = (ph0 + past + 1) % 1;
-      }
+      this.runOnLanding(H, m, dt, strideNow);
     }
     const running = clamp((m.speed - S.walk) / (S.jog - S.walk), 0, 1);
+    // (5a) up: how high over the ground under her, how fast that's going, the top of it; down: by how
+    // far it fell (else the core's own measure — it tops out at 1.5 m)
+    const hNow = H && m.ground ? -m.ground(0, 0) : null;
+    if (m.up) {
+      this.fallT += dt;
+      if (hNow !== null) {
+        if (this.hAir !== null && dt > 0) this.vzG = (hNow - this.hAir) / dt;
+        this.fallTop = Math.max(this.fallTop, hNow);
+      }
+      this.hAir = hNow;
+    } else {
+      if (H && m.landed !== undefined && this.fallT > 0) {
+        const fell = this.hAir !== null ? this.fallTop : 1.5 * m.landed;
+        if (fell >= 0.8 && !(this.landOf && fell < 1.2)) {
+          this.landOf = null;
+          this.downFrom = { kind: fell >= 2.2 ? (m.speed > 3 ? "roll" : "hard") : "absorb", t: 0 };
+          // (on the run, its cycle picked up as a jump's is: it drifted on through the fall, both feet up)
+          if (!this.lastJump) this.runOnLanding(H, m, dt, strideNow);
+        }
+      }
+      this.fallT = 0;
+      this.fallTop = 0;
+      this.hAir = null;
+      this.vzG = 0;
+    }
     if (this.landOf) {
       this.landOf.t += dt / lerp(0.38, 0.2, running);
       if (this.landOf.t >= 1 || m.up || m.jump || m.verb || m.flow) this.landOf = null;
     }
-    const landing = this.landOf ? { kind: this.landOf.kind as JumpNow["kind"], stage: "land" as const, k: this.landOf.t } : null;
+    const landing = this.landOf
+      ? { kind: this.landOf.kind as JumpNow["kind"], stage: "land" as const, k: this.landOf.t }
+      : null;
     if (m.jump?.stage === "crouch") this.fromRun = running > 0.5;
     const jump = m.jump ?? (m.up ? this.lastJump : landing);
     if (m.jump) this.lastJump = m.jump;
@@ -823,16 +896,46 @@ export class Locomotion {
         }
       }
     } else if (this.airW > 0.01) {
-      // off an edge: the legs reaching down, the arms out
-      const fall = landPose(0.15);
-      add(fall.pose, "shoulderL", -0.3, 0, 0.5);
-      add(fall.pose, "shoulderR", -0.3, 0, -0.5);
-      body = mix(body, { pose: fall.pose, lift: [0, 0, 0] }, ease(this.airW) * 0.8);
+      if (H) {
+        // (5a) off an edge: the stride on a moment, then gathered, arms out; reaching for the ground as
+        // it comes (how soon: its height and how fast it's coming, by the ground under her)
+        const g = 30;
+        const vz = this.vzG;
+        // (its height never under nought: stepping off, the ground under her middle can still be the
+        // edge's — a root of less than nought spoilt the trunk's every spring)
+        const h = Math.max(0, this.hAir ?? 0);
+        const soon = this.hAir !== null && vz < -0.3 ? (vz + Math.sqrt(vz * vz + 2 * g * h)) / g : 9;
+        const f = H.fall2Pose(this.fallT, soon, smoother(clamp((this.fallT - 0.45) / 0.4, 0, 1)));
+        body = mix(body, f, ease(this.airW) * smoother(clamp(this.fallT / 0.18, 0, 1)));
+      } else {
+        // off an edge: the legs reaching down, the arms out
+        const fall = landPose(0.15);
+        add(fall.pose, "shoulderL", -0.3, 0, 0.5);
+        add(fall.pose, "shoulderR", -0.3, 0, -0.5);
+        body = mix(body, { pose: fall.pose, lift: [0, 0, 0] }, ease(this.airW) * 0.8);
+      }
+    }
+    // (5a) down from a fall: by how far — an absorb, a heavy one with a hand down, from high at a run
+    // a roll — its feet where they land, the gait's on the run
+    if (H && this.downFrom) {
+      const D = this.downFrom;
+      D.t += dt * (D.kind === "absorb" ? 1 + 1.5 * running : 1);
+      const L = H.land2Pose(D.kind, D.t);
+      if (L.w <= 0 && D.t > 0.2) this.downFrom = null;
+      else if (L.w > 0) {
+        // (on the run mostly the run's legs, a dip: the absorb's deep hips under feet left at a run's
+        // stride stretched the back leg out into a lunge)
+        const w = D.kind === "roll" ? L.w : L.w * (1 - 0.8 * running);
+        if (D.kind === "hard" && air) this.handsOut = air.landHands(w);
+        const pre = body;
+        body = mix(body, L.m, w);
+        if (D.kind !== "roll") body = H.blendLegs(body, pre, L.m, w, m.speed < 1);
+      }
     }
 
     // ── landing: a squash by how hard it was, gone in a moment
     // (plan 58: a jump's landing is its own, above; off an edge, the squash — lighter on the run)
-    if (m.landed !== undefined && m.landed > 0.04 && !this.landOf) {
+    if (m.landed !== undefined && m.landed > 0.04 && !this.landOf && !this.downFrom) {
       this.landT = 0;
       this.landK = H ? m.landed * (1 - 0.7 * running) : m.landed;
     }
@@ -934,6 +1037,17 @@ export function jumpNowOf(b: Body, spec: MoveSpec = KH_MOVE): JumpNow | null {
  *  it slides (by the speed it has lost), its getting up is eased out of by `Locomotion`. */
 export function verbT(b: Body, spec: MoveSpec = KH_MOVE): number {
   return b.verb ? verbProgress(b.verb, spec) : 0;
+}
+
+/** A body's verb for `LocoIn`: how far through it, and (getting over or onto something) what it's
+ *  over — the hands go on it (5b). */
+export function verbIn(b: Body, spec: MoveSpec = KH_MOVE): LocoIn["verb"] {
+  const V = b.verb;
+  if (!V) return null;
+  const t = verbProgress(V, spec);
+  return V.kind === "vault" || V.kind === "mantle"
+    ? { kind: V.kind, t, h: V.h, near: V.near, far: V.far, dist: V.dist }
+    : { kind: V.kind, t };
 }
 
 /** A body's velocity in its own frame (ahead, to its left), for `LocoIn`. */

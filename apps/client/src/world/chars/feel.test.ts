@@ -409,3 +409,55 @@ test("the walks' styles (calm, bouncy, heavy, brisk, tired, old): planted feet h
       assert.ok(slid < 0.015, `${gait} T${T}: a planted foot moved ${(slid * 100).toFixed(1)} cm in a step`);
     }
 });
+
+test("phase 5b–5c: over things, onto them, the roll, the slide, Flowmotion — no NaN, the hands placed", async () => {
+  const H = await loadHero();
+  const C = await import("./index");
+  const { clipList, tabulate } = await import("@/app/dev/anim/clips");
+  const x = { C, H, T: 0 } as never;
+  const finite = (v: number[] | undefined) => !v || v.every(Number.isFinite);
+  const hands: Record<string, number> = {
+    "jog, vault a 0.7 m wall": 0,
+    "jog, climb onto 1.2 m": 0,
+    "jog, jump, catch a 2.2 m ledge": 0,
+    "jog, roll": 0,
+    "sprint, slide": 0,
+    hang: 0,
+    "hang, climb up": 0,
+    "swing round a pole": 0,
+  };
+  for (const name of [
+    ...Object.keys(hands),
+    "sprint, vault a 0.5 m wall",
+    "run up a wall",
+    "run along a wall",
+    "grind a rail",
+  ]) {
+    const clip = clipList().find((c) => c.name === name);
+    assert.ok(clip, name);
+    for (const f of tabulate(x, clip, "after", true) ?? []) {
+      for (const [j, r] of Object.entries(f.pose)) assert.ok(finite(r as number[]), `${name}: ${j} ${r}`);
+      assert.ok(finite(f.lift), `${name}: lift`);
+      for (const h of Object.values(f.hands ?? {})) {
+        assert.ok(h && finite(h.at) && h.w >= 0 && h.w <= 1, `${name}: a hand ${JSON.stringify(h)}`);
+        if (name in hands && h.w > 0.8) hands[name]++;
+      }
+    }
+  }
+  // (each puts a hand down for a while: a tenth of a second at least)
+  for (const [name, n] of Object.entries(hands)) assert.ok(n >= 12, `${name}: a hand down ${n} frames`);
+});
+
+test("phase 5d: the get-ups end standing, from the back and the front", async () => {
+  await loadHero();
+  const A = (await import("./index")).airNow();
+  assert.ok(A);
+  for (const back of [true, false]) {
+    const start = A.getUp2Pose(0, back).m;
+    const end = A.getUp2Pose(1, back).m;
+    assert.ok(start.lift[1] < -0.55, `lying: hips ${start.lift[1]}`);
+    assert.ok(Math.abs(end.lift[1]) < 0.02, `stood: hips ${end.lift[1]}`);
+    for (let u = 0; u <= 1; u += 0.01)
+      for (const r of Object.values(A.getUp2Pose(u, back).m.pose)) assert.ok((r as number[]).every(Number.isFinite));
+  }
+});

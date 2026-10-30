@@ -156,7 +156,12 @@ export function verbPath(
     }
     case "mantle":
       // up to the top first, then onto it
-      return { ahead: (dist ?? 0.8) * smoother((x - 0.5) / 0.45), up: h * smoother(x / 0.55) };
+      if (near === undefined) return { ahead: (dist ?? 0.8) * smoother((x - 0.5) / 0.45), up: h * smoother(x / 0.55) };
+      // (docs/plan/58 5b: in to the face first — the hands take the edge — then up, then onto it)
+      return {
+        ahead: near * smoother(x / 0.22) + ((dist ?? near + 0.6) - near) * smoother((x - 0.5) / 0.42),
+        up: h * smoother((x - 0.08) / 0.52),
+      };
     case "roll": {
       const L = spec.roll.len * spec.roll.speed;
       return { ahead: L * (1.3 * x - 0.35 * x * x), up: 0 };

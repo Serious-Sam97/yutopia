@@ -22,6 +22,27 @@ import type Jolt from "jolt-physics";
 import type { Solid3, SolidBox3 } from "../shapes/index.ts";
 import type { JoltModule } from "./load.ts";
 
+/** A ragdoll's part (docs/plan/58 5d): a bone's body, set at its joint `at` (world, m) turned `q`
+ *  (the bone's own turn: what it reads back is the bone's), a capsule of radius `r` from the joint
+ *  along `end` (the bone's own space: to its child's joint), weighing `mass` kg. Jointed to its
+ *  `parent` (−1: none) at `at`: `dir` the bone's way (world), `axis` its own x (world); a hinge about
+ *  `axis` within `hinge` (rad, from how it's bent now: a knee, an elbow), else a cone of `cone` about
+ *  `rest` (the way it hangs from its parent at rest, world) and a twist of ±`twist`. */
+export interface RagPart {
+  parent: number;
+  at: [number, number, number];
+  q: [number, number, number, number];
+  end: [number, number, number];
+  r: number;
+  mass: number;
+  dir: [number, number, number];
+  axis: [number, number, number];
+  rest?: [number, number, number];
+  hinge?: [number, number];
+  cone?: number;
+  twist?: number;
+}
+
 /** What the world may hold, fixed when it's made (Jolt can't grow them). */
 export interface Sizes {
   maxBodies: number;
@@ -115,6 +136,11 @@ export class PhysicsWorld {
   private readonly things = new Map<number, Owned>();
   private readonly vehicles = new Map<string, Owned & { box: SolidBox3 }>();
   private readonly chars = new Map<number, Jolt.CharacterVirtual>();
+  private readonly rags = new Map<
+    number,
+    { parts: Owned[]; joints: Jolt.Constraint[]; filter: Jolt.GroupFilterTable }
+  >();
+  private nextRag = 1;
   private nextThing = 1;
   private nextChar = 1;
   private refused = 0;
@@ -412,6 +438,154 @@ export class PhysicsWorld {
     if (!o) return;
     this.drop(o);
     this.things.delete(id);
+  }
+
+  // ── ragdolls (docs/plan/58 5d): a person gone limp — a body a bone, capsules jointed as the
+  // skeleton is; the animation reads each part back as its bone ──
+  /** A ragdoll from its parts (a bone each, see RagPart), all going at `vel`; null if refused. */
+  addRagdoll(parts: RagPart[], vel: [number, number, number]): number | null {
+    if (!parts.length || this.system.GetNumBodies() + parts.length >= this.sizes.maxBodies || !this.room("a ragdoll"))
+      return null;
+    const J = this.J;
+    // (a part never meets the one it hangs from, nor that one's parent: the shoulder in the chest)
+    const filter = new J.GroupFilterTable(parts.length);
+    filter.AddRef();
+    parts.forEach((p, i) => {
+      for (let k = p.parent, n = 0; k >= 0 && n < 2; k = parts[k].parent, n++) filter.DisableCollision(i, k);
+    });
+    const id = this.nextRag++;
+    const owned: Owned[] = [];
+    const v3 = (x: [number, number, number]) => new J.Vec3(x[0], x[1], x[2]);
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      const len = Math.hypot(p.end[0], p.end[1], p.end[2]) || 1e-3;
+      // (the capsule along the bone from its joint: up its own y turned onto `end`, its middle halfway)
+      const cap = new J.CapsuleShapeSettings(Math.max(0.01, len / 2 - p.r), p.r);
+      const [dx, dy, dz] = [p.end[0] / len, p.end[1] / len, p.end[2] / len];
+      const ax = [dz, 0, -dx];
+      const s = Math.hypot(ax[0], ax[2]);
+      const ang = Math.acos(Math.max(-1, Math.min(1, dy)));
+      const sh = Math.sin(ang / 2);
+      const rot =
+        s > 1e-6
+          ? new J.Quat((ax[0] / s) * sh, 0, (ax[2] / s) * sh, Math.cos(ang / 2))
+          : new J.Quat(dy < 0 ? 1 : 0, 0, 0, dy < 0 ? 0 : 1);
+      this.v.Set(p.end[0] / 2, p.end[1] / 2, p.end[2] / 2);
+      const shape = this.shape(new J.RotatedTranslatedShapeSettings(this.v, rot, cap));
+      J.destroy(rot);
+      if (!shape) break;
+      this.r.Set(p.at[0], p.at[1], p.at[2]);
+      this.q.Set(p.q[0], p.q[1], p.q[2], p.q[3]);
+      const bcs = new J.BodyCreationSettings(shape, this.r, this.q, J.EMotionType_Dynamic, MOVING);
+      bcs.mOverrideMassProperties = J.EOverrideMassProperties_CalculateInertia;
+      bcs.mMassPropertiesOverride.mMass = p.mass;
+      bcs.mMotionQuality = J.EMotionQuality_LinearCast;
+      bcs.mLinearDamping = 0.15;
+      bcs.mAngularDamping = 0.9;
+      bcs.mFriction = 0.8;
+      const g = new J.CollisionGroup(filter, id, i);
+      bcs.mCollisionGroup = g;
+      J.destroy(g);
+      const o = this.make(bcs, true);
+      shape.Release();
+      this.v.Set(vel[0], vel[1], vel[2]);
+      this.bodies.SetLinearVelocity(o.id, this.v);
+      owned.push(o);
+    }
+    const joints: Jolt.Constraint[] = [];
+    if (owned.length === parts.length)
+      parts.forEach((p, i) => {
+        if (p.parent < 0) return;
+        this.r.Set(p.at[0], p.at[1], p.at[2]);
+        let c: Jolt.Constraint;
+        if (p.hinge) {
+          // (a knee, an elbow: about the bone's own x, its limits from where it's bent now)
+          const s = new J.HingeConstraintSettings();
+          s.mSpace = J.EConstraintSpace_WorldSpace;
+          s.mPoint1 = s.mPoint2 = this.r;
+          const h = v3(p.axis);
+          const n = v3(p.dir);
+          s.mHingeAxis1 = s.mHingeAxis2 = h;
+          s.mNormalAxis1 = s.mNormalAxis2 = n;
+          s.mLimitsMin = p.hinge[0];
+          s.mLimitsMax = p.hinge[1];
+          c = s.Create(owned[p.parent].body, owned[i].body);
+          J.destroy(h);
+          J.destroy(n);
+          J.destroy(s);
+        } else {
+          // (a hip, a shoulder, the neck, the back: a cone about where the bone hangs at rest, a twist)
+          const s = new J.SwingTwistConstraintSettings();
+          s.mSpace = J.EConstraintSpace_WorldSpace;
+          s.mPosition1 = s.mPosition2 = this.r;
+          const t1 = v3(p.rest ?? p.dir);
+          const t2 = v3(p.dir);
+          const pl = v3(p.axis);
+          s.mTwistAxis1 = t1;
+          s.mTwistAxis2 = t2;
+          s.mPlaneAxis1 = s.mPlaneAxis2 = pl;
+          s.mNormalHalfConeAngle = s.mPlaneHalfConeAngle = p.cone ?? 0.6;
+          s.mTwistMinAngle = -(p.twist ?? 0.3);
+          s.mTwistMaxAngle = p.twist ?? 0.3;
+          c = s.Create(owned[p.parent].body, owned[i].body);
+          J.destroy(t1);
+          J.destroy(t2);
+          J.destroy(pl);
+          J.destroy(s);
+        }
+        c.AddRef();
+        this.system.AddConstraint(c);
+        joints.push(c);
+      });
+    this.rags.set(id, { parts: owned, joints, filter });
+    if (owned.length < parts.length) {
+      this.removeRagdoll(id);
+      return null;
+    }
+    return id;
+  }
+
+  /** A ragdoll's parts as they are: each its joint's place and its turn (x y z, qx qy qz qw). */
+  ragdollParts(id: number, out: Float32Array): boolean {
+    const R = this.rags.get(id);
+    if (!R) return false;
+    R.parts.forEach((o, i) => {
+      const p = this.bodies.GetPosition(o.id);
+      const q = this.bodies.GetRotation(o.id);
+      out.set([p.GetX(), p.GetY(), p.GetZ(), q.GetX(), q.GetY(), q.GetZ(), q.GetW()], i * 7);
+    });
+    return true;
+  }
+
+  /** How fast its quickest part goes (m/s): near nought, it's come to rest. */
+  ragdollSpeed(id: number): number {
+    const R = this.rags.get(id);
+    let top = 0;
+    for (const o of R?.parts ?? []) {
+      const v = this.bodies.GetLinearVelocity(o.id);
+      top = Math.max(top, Math.hypot(v.GetX(), v.GetY(), v.GetZ()));
+    }
+    return top;
+  }
+
+  /** A blow to one of its parts (an impulse, N·s). */
+  pushRagdoll(id: number, part: number, impulse: [number, number, number]): void {
+    const o = this.rags.get(id)?.parts[part];
+    if (!o) return;
+    this.v.Set(impulse[0], impulse[1], impulse[2]);
+    this.bodies.AddImpulse(o.id, this.v);
+  }
+
+  removeRagdoll(id: number): void {
+    const R = this.rags.get(id);
+    if (!R) return;
+    for (const c of R.joints) {
+      this.system.RemoveConstraint(c);
+      c.Release();
+    }
+    for (const o of R.parts) this.drop(o);
+    R.filter.Release();
+    this.rags.delete(id);
   }
 
   // ── vehicles: kinematic boxes the car sim moves (it stays their driver) ──
@@ -786,6 +960,7 @@ export class PhysicsWorld {
     if (this.dead) return;
     const J = this.J;
     for (const id of [...this.chars.keys()]) this.removeCharacter(id);
+    for (const id of [...this.rags.keys()]) this.removeRagdoll(id);
     for (const id of [...this.things.keys()]) this.removeThing(id);
     for (const id of [...this.vehicles.keys()]) this.removeVehicle(id);
     for (const k of [...this.statics.keys()]) this.remove(k);

@@ -969,6 +969,90 @@ world before you've passed it.
    - the jumps, falls and landings, the verbs; the ragdoll (C2) for high falls and hits, and its
      get-ups;
    - Flowmotion on the new body: fingers gripping the ledge and the pole, toes pushing off.
+
+   Split in four: **5a** jumps, falls and landings by height; **5b** the verbs (vault, mantle,
+   roll, slide) with the hands placed; **5c** Flowmotion on the new body; **5d** Jolt's ragdoll for
+   high falls and hits, and the get-ups.
+
+   **5a built 2026-10-30: falls and landings by height.**
+   - **Off an edge** (`fall2Pose`, hero.ts): the stride carried on a moment, then gathered, arms
+     out; after half a second the long fall's own pose. As the ground comes she
+     reaches for it — how soon from her height over the ground under her and how fast it's coming
+     (a root never under nought: stepping off, the ground under her middle can still be the edge's).
+   - **Down by how far she fell** (the top of the fall over the ground she lands on, not the core's
+     measure, which tops out at 1.5 m) — `land2Pose`:
+     - under 0.8 m: the light squash, as before (lighter on the run);
+     - 0.8–2.2 m: an absorb — the hips down, the arms out, back up in ~0.3 s; on the run mostly the
+       run's legs and a dip (the absorb's deep hips under a run's stride made a lunge);
+     - over 2.2 m walking: a hard landing — down on one knee, a hand to the ground, held 0.3 s;
+     - over 2.2 m at a run: a roll, over the shoulder and up running (the foot lock off for it).
+     - A jump's own landing still plays for a jump; a jump whose top was 1.2 m or more over where it
+       lands takes the fall's.
+   - **Running on after it:** the run picked up on the foot that comes down first, at the point of
+     its stance where it came down (as a jump's). The stepper took a landing's check in the speed
+     (5 → 3.8 m/s in a step) for a stop and stepped both feet into a lunge — it now waits 0.3 s
+     after she was last up, and so does the skid.
+   - Bench clips: `walk off a 0.6 m ledge`, `walk off a 3 m drop`, `jog off a 1.5 m ledge`,
+     `jog off a 4 m drop` (the land under her from its own ground, the camera after her height).
+   - Tests 79 client. **Budget, fresh build:** `yutopia-chars` 42.0 of 45, `yutopia-anim` 14.2 of
+     15 — 5b–5d need room (split the chunk, or raise it, by your call).
+   - `design/anim/5a-walk-ledge.mp4`, `5a-jog-ledge.mp4`, `5a-walk-drop-hard.mp4`,
+     `5a-jog-drop-roll.mp4`, `5a-double-jump.mp4` (half speed).
+   **5a signed off 2026-10-30.** Your call: 5b–5d built through, checked together at the end.
+
+   **5b–5d built 2026-10-30** (one chunk of their own, `yutopia-air`, `chars/anim/air.ts` and
+   `rag.ts`, loaded with the hero's: the hero's chunk was full).
+   - **The hands placed (all of them):** a move says where a hand goes in her own space (`Locomotion.handsOut`:
+     on a top, an edge, the ground, a pole) and the model reaches it last, after the follow-through, by
+     its own arm's length (`PersonModel.handsTo`, its two-bone IK). The bench and /dev/move do it; the
+     world's people when the world switches to plan 58.
+   - **5b, the verbs, keyed by where the body's got to along the core's own path** (`verb2Pose`; the
+     core's probe — the top, where she met it and where it ends — now comes with the verb: `verbIn`):
+     - **the vault** (KH3's speed vault): off one foot, the right hand planted on the top's edge and held
+       there as she passes over it, the legs swung by to the left, the trunk leant over the arm; on a
+       deep top, a step on it after the hand's pushed off, then off its far edge running;
+     - **the mantle**: both hands catch the edge (a foot on the face), pulled up, the right knee onto
+       the top, pushed over on straight arms, up. The core's mantle now goes in to the face first, then
+       up (it rose in place up to a metre from the wall, past the hands' reach) — the same start and end;
+     - **the roll**: a dive, both hands to the ground ahead and held as she goes over them, once round
+       over the shoulder, up running;
+     - **the slide**: the trailing hand skimming the ground beside the hips;
+     - out of a verb on the move, the run picked up on the foot it came down on (as a landing's);
+     - a heavy landing (5a's) puts its hand on the ground too.
+   - **5c, Flowmotion on the new body** (plan 56's poses, `flow2` over them): the hang's hands over the
+     edge with the fingers shut on it, held where they took it as the climb goes past them, then flat on
+     the top pushing over; round the pole on the near hand shut on it (the body flung out further: her
+     head came to the pole); the toes bent back as a foot drives off a wall's face (up it and along it).
+   - **5d, the ragdoll and the get-ups** (C2):
+     - Jolt's own, in the world's physics (`PhysicsWorld.addRagdoll`, the one owner): a body a bone — 12
+       capsules, ~70 kg, each made where its bone is and turned as it is, so what comes back is the
+       bone; knees and elbows hinges (their limits from how bent they are), hips, shoulders, the back
+       and the neck cones with a twist; a part never meets the one it hangs from nor that one's parent.
+       A physics test: dropped from 3 m it lands, settles, its knee held, and leaves nothing behind.
+     - `RagdollRig` makes it from the model's bones and reads it back onto them, then as a pose off the
+       root (the hips a lift); `Downed` runs it: the root kept under the hips as it goes, lain still
+       half a second (or 4 s) she's stood where she lay — turned the way the body lies — and the
+       get-up blends in from how she lay: **from her back** sat up on a hand behind, the knees drawn
+       in, onto a foot and a knee, up; **from her front** pushed up on both hands, the knees under, a
+       foot forward, up (1.5 s).
+     - When: landing from 6 m or more (past 5a's roll: she crumples), and a blow. /dev/move: fall off
+       something high, or **K** for a blow from in front (nothing you press does anything till she's up).
+   - **Bench clips:** over things — `jog, vault a 0.7 m wall`, `sprint, vault a 0.5 m wall`,
+     `jog, climb onto 1.2 m`, `jog, jump, catch a 2.2 m ledge`, `jog, roll`, `sprint, slide` (the core's
+     own, its walls blocked tiles); Flowmotion — `hang`, `hang, climb up`, `swing round a pole` (the
+     pole drawn), `run up a wall`, `run along a wall`, `grind a rail`; limp — `jog off an 8 m drop, limp`,
+     `jogging, hit in the chest` (the page runs Jolt on her own model for the limp stretch).
+   - Tests: client 81 (the verbs' and Flowmotion's clips: no NaN, a hand down a tenth of a second at
+     least; the get-ups lying to standing), shared 446 (the ragdoll). **Budget, fresh build:** page
+     419.7, `yutopia-chars` 42.2, `yutopia-anim` 14.2, `yutopia-air` 4.4 of 15 (its own entry). (A trap:
+     `air` importing `motion.ts`'s blend or the shared root index split the people's shared code out
+     of their chunk into an unmarked one — chars read 30 KB; it has its own blend now.)
+   - `design/anim/5b-jog-vault.mp4`, `5b-sprint-vault.mp4`, `5b-climb.mp4`, `5b-catch-ledge.mp4`,
+     `5b-roll.mp4`, `5b-slide.mp4`, `5c-hang-climb.mp4`, `5c-pole-swing.mp4`, `5c-wall-run.mp4`,
+     `5d-hit.mp4`, `5d-drop-8m.mp4` (half speed).
+   - **Left:** the world's people get all of it when the world switches to plan 58 (a hit's blow from
+     the dark's hits, the car's); a mantle from a hang uses Flowmotion's climb, not the verb's.
+   **Phase 5 signed off 2026-10-30.**
 6. **Everyday acts:** sitting, the phone, busy, together (the hands meeting by IK), emotes.
 7. **The dark:** the torch, the gun, hits, down and crawling, fear.
 8. **The shadowed** made again on the new body.

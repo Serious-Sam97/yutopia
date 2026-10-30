@@ -1,6 +1,17 @@
 import { Grid, type JumpKind, jumpArc, jumpNowAt, jumpTimes } from "@yutopia/shared";
-import { KH_FEEL, KH_MOVE, type MoveEnv, type MoveInput, NO_INPUT, newBody, stepBody } from "@yutopia/shared/move";
-import type { LocoIn, Moved } from "@/world/chars";
+import {
+  type FlowLook,
+  KH_FEEL,
+  KH_MOVE,
+  type MoveEnv,
+  type MoveInput,
+  NO_INPUT,
+  newBody,
+  stepBody,
+} from "@yutopia/shared/move";
+import type { PhysicsWorld } from "@yutopia/shared/physics";
+import { box3, type SolidBox3 } from "@yutopia/shared/shapes";
+import type { LocoIn, Locomotion, Moved } from "@/world/chars";
 
 // /dev/anim's clips (docs/plan/58-the-animation.md, phase 2): every animation by name, two ways —
 // `raw`, the keyed pose at a moment (what's keyed, nothing laid on), and `live`, a scripted run
@@ -32,6 +43,10 @@ export interface Drive {
   turn?: number;
   jump?: { kind: JumpKind; at: number };
   slide?: number;
+  /** (5c) a Flowmotion move as it's drawn, and her feet held this high and this far on (m) */
+  flow?: { kind: FlowLook["kind"]; t: number; side: number; speed: number };
+  rise?: number;
+  fwd?: number;
 }
 export interface Clip {
   name: string;
@@ -49,6 +64,23 @@ export interface Clip {
   /** (4f) the ground's height at (x, z) in the scene (three's: z the way she sets off): a ramp,
    *  stairs; else flat */
   ground?: (x: number, z: number) => number;
+  /** (5a) the core walks on this ground itself (a ledge to run off): `ground`'s heights are the
+   *  floor's, a tile at a time, and her height is the core's own */
+  coreGround?: boolean;
+  /** (5b) …and what's raised is a block in the way (its tiles not walked through: a wall, a crate),
+   *  not a floor to walk off */
+  blocks?: boolean;
+  /** (5c) a pole stood at (x, z), swung round */
+  pole?: [number, number];
+  /** (5d) gone limp on Jolt's ragdoll: at `at` s, or on landing from `drop` m or more; a blow to a
+   *  part (RagdollRig's: 2 the chest) and the whole body sent at `vel` by it; what's solid besides the land (the ledge she came off) */
+  rag?: {
+    at?: number;
+    drop?: number;
+    vel?: [number, number, number];
+    hit?: { part: number; impulse: [number, number, number] };
+    solids?: SolidBox3[];
+  };
 }
 
 const still = (): Root => ({ x: 0, y: 0, z: 0, yaw: 0 });
@@ -300,6 +332,135 @@ export function clipList(): Clip[] {
     jump: during(t, 1.4, 1.7),
     jumpPressed: Math.abs(t - 1.4) < 0.004,
   }));
+  // ── 5a: in the air — the jumps (standing, the jump in the air, the air dash) and off ledges
+  const press = (t: number, at: number) => Math.abs(t - at) < 0.004;
+  keyed("stand, jump", 2.4, (t) => ({ jump: during(t, 0.5, 0.8), jumpPressed: press(t, 0.5) }));
+  keyed("jog, jump, jump again", 3.4, (t) => ({
+    y: during(t, 0.3, 3) ? 1 : 0,
+    jump: during(t, 1.0, 1.3) || during(t, 1.5, 1.8),
+    jumpPressed: press(t, 1.0) || press(t, 1.5),
+  }));
+  keyed("jog, jump, air dash", 3, (t) => ({
+    y: during(t, 0.3, 2.6) ? 1 : 0,
+    jump: during(t, 1.0, 1.3),
+    jumpPressed: press(t, 1.0),
+    dodgePressed: press(t, 1.4),
+  }));
+  // (its edge on a tile's: the core's floor is a tile at a time)
+  const ledge = (h: number) => (_x: number, z: number) => (z < 2 ? h : 0);
+  for (const [name, h, walk] of [
+    ["walk off a 0.6 m ledge", 0.6, true],
+    ["walk off a 3 m drop", 3, true],
+    ["jog off a 1.5 m ledge", 1.5, false],
+    ["jog off a 4 m drop", 4, false],
+  ] as [string, number, boolean][])
+    add({
+      name,
+      group: "in the air",
+      len: 3.6,
+      live: () => ({ speed: 0 }),
+      keys: (t) => ({ y: during(t, 0.3, 3) ? 1 : 0, walk }),
+      ground: ledge(h),
+      coreGround: true,
+    });
+  // ── 5b: over things and onto them, the roll and the slide — the core's own verbs, by its probe
+  // (a block across the way from `at` m on, `deep` m deep and `h` high; the core's floor a tile at a
+  // time. A jog's 5 m/s reaches 5 m by about 1.37 s, a sprint 6.9 m by 1.27 s)
+  const block = (h: number, at: number, deep: number) => (_x: number, z: number) => (z >= at && z < at + deep ? h : 0);
+  for (const [name, h, deep, sprint, at, hold] of [
+    ["jog, vault a 0.7 m wall", 0.7, 1, false, 1.37, false],
+    ["sprint, vault a 0.5 m wall", 0.5, 1, true, 1.27, false],
+    ["jog, climb onto 1.2 m", 1.2, 3, false, 1.37, false],
+    ["jog, jump, catch a 2.2 m ledge", 2.2, 3, false, 1.2, true],
+  ] as [string, number, number, boolean, number, boolean][])
+    add({
+      name,
+      group: "over things",
+      len: 3.4,
+      live: () => ({ speed: 0 }),
+      keys: (t) => ({
+        y: during(t, 0.3, 2.9) ? 1 : 0,
+        sprint,
+        jump: hold ? during(t, at, at + 0.8) : during(t, at, at + 0.1),
+        jumpPressed: press(t, at),
+      }),
+      ground: block(h, sprint ? 8 : 6, deep),
+      coreGround: true,
+      blocks: true,
+    });
+  for (const [name, sprint, k] of [
+    ["jog, roll", false, "dodgePressed"],
+    ["sprint, slide", true, "crouchPressed"],
+  ] as [string, boolean, string][])
+    add({
+      name,
+      group: "over things",
+      len: 3,
+      live: () => ({ speed: 0 }),
+      keys: (t) => ({
+        y: during(t, 0.3, 2.6) ? 1 : 0,
+        sprint,
+        [k]: press(t, 1.2),
+        crouch: k === "crouchPressed" && during(t, 1.2, 1.3),
+      }),
+      ground: () => 0,
+      coreGround: true,
+    });
+  // ── 5c: Flowmotion on the new body — the hands taking hold (a 2.2 m ledge 0.25 m ahead: hung from
+  // with the feet 1.45 m under its top, climbed onto as the core climbs; a pole on her left)
+  const ledge22 = (_x: number, z: number) => (z >= 0.25 ? 2.2 : 0);
+  const hangY = 2.2 - 1.45;
+  const flowClip = (name: string, len: number, f: (t: number) => Drive, ground?: (x: number, z: number) => number) =>
+    add({ name, group: "Flowmotion", len, live: f, ground, coreGround: !!ground });
+  flowClip("hang", 1.6, (t) => ({ speed: 0, flow: { kind: "hang", t, side: 1, speed: 0 }, rise: hangY }), ledge22);
+  flowClip(
+    "hang, climb up",
+    1.2,
+    (t) => {
+      const u = Math.max(0, Math.min(1, (t - 0.4) / 0.34));
+      const sm = (x: number) => x * x * (3 - 2 * x);
+      if (t < 0.4) return { speed: 0, flow: { kind: "hang", t: t + 1, side: 1, speed: 0 }, rise: hangY };
+      if (u >= 1) return { speed: 0, rise: 2.2, fwd: 0.6 };
+      return {
+        speed: 0,
+        flow: { kind: "climb", t: u, side: 1, speed: 0 },
+        rise: hangY + 1.45 * sm(Math.min(1, u / 0.65)),
+        fwd: 0.6 * sm(Math.max(0, (u - 0.35) / 0.65)),
+      };
+    },
+    ledge22,
+  );
+  add({
+    name: "swing round a pole",
+    group: "Flowmotion",
+    len: 1.4,
+    live: (t) => ({ speed: 0, flow: { kind: "swing", t, side: 1, speed: 0 } }),
+    pole: [0.48, 0],
+  });
+  flowClip("run up a wall", 1, (t) => ({ speed: 0, flow: { kind: "wallrun", t, side: 1, speed: 5.5 } }));
+  flowClip("run along a wall", 1.1, (t) => ({ speed: 0, flow: { kind: "wallside", t, side: 1, speed: 8.5 } }));
+  flowClip("grind a rail", 1.2, (t) => ({ speed: 0, flow: { kind: "grind", t, side: 1, speed: 7 } }));
+  // ── 5d: limp on the ragdoll, and up again — off a drop too high to land on her feet; a blow
+  add({
+    name: "jog off an 8 m drop, limp",
+    group: "limp",
+    len: 5.6,
+    live: () => ({ speed: 0 }),
+    keys: (t) => ({ y: during(t, 0.3, 1.2) ? 1 : 0 }),
+    ground: ledge(8),
+    coreGround: true,
+    rag: { drop: 6, solids: [box3(-3, -10, 3, 2, 0, 8)] },
+  });
+  add({
+    name: "jogging, hit in the chest",
+    group: "limp",
+    len: 5,
+    live: () => ({ speed: 0 }),
+    keys: (t) => ({ y: during(t, 0.3, 4) ? 1 : 0 }),
+    ground: () => 0,
+    coreGround: true,
+    rag: { at: 1.2, vel: [0, 1.2, -2.8], hit: { part: 2, impulse: [0, 0, -60] } },
+  });
   // ── 4f: slopes and stairs (the ground's own: the feet set on it, tipped to it)
   const slope =
     (deg: number, from = 1.2) =>
@@ -391,6 +552,8 @@ export interface Frame {
   root: Root;
   eyes: [number, number];
   blink: number;
+  /** (5b) where the hands go, in her own space: `Locomotion.handsOut` */
+  hands?: Locomotion["handsOut"];
 }
 export const RATE = 120;
 
@@ -436,8 +599,17 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
   let coreLanded: number | undefined;
   let was: ReturnType<typeof jumpArc>["stage"] | null = null;
   // (4c: the move core's body on an open floor, facing three's +z — the floor's +y, south)
-  const body = newBody(100, 100, 0, Math.PI / 2);
-  const env: MoveEnv = { grid: open(), footing: () => "floor" };
+  // (5a: the clip's ground under the core's own feet — a ledge — a tile at a time)
+  const grid = open();
+  if (clip.coreGround && clip.ground)
+    for (let y = 0; y < 200; y++)
+      for (let x = 0; x < 200; x++) {
+        const h = clip.ground(x + 0.5 - 100, y + 0.5 - 100);
+        grid.top[y * 200 + x] = h;
+        if (clip.blocks && h > 0) grid.walk[y * 200 + x] = 0;
+      }
+  const body = newBody(100, 100, clip.coreGround && clip.ground ? clip.ground(0, 0) : 0, Math.PI / 2);
+  const env: MoveEnv = { grid, footing: () => "floor" };
   for (let i = 0; i < n; i++) {
     const t = i / rate;
     const d = clip.live(t);
@@ -491,14 +663,16 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
     // (4f: the body on the ground under it — up a step at once and eased there, as the sandbox's;
     // the ground under a spot in her own space for Locomotion)
     const G = clip.ground;
-    if (G) {
+    if (G && !clip.coreGround) {
       const at = G(px, pz);
       rideY = i === 0 ? at : rideY + (at - rideY) * Math.min(1, dt * 16);
     }
     const ry = yaw;
+    // (on the core's own ground her height's the core's)
+    const under = clip.coreGround ? body.z : rideY;
     const ground = G
       ? (lx: number, lz: number) =>
-          G(px + lx * Math.cos(ry) + lz * Math.sin(ry), pz - lx * Math.sin(ry) + lz * Math.cos(ry)) - rideY
+          G(px + lx * Math.cos(ry) + lz * Math.sin(ry), pz - lx * Math.sin(ry) + lz * Math.cos(ry)) - under
       : undefined;
     const st = d.slide !== undefined ? (t - d.slide) / x.C.VERB_LEN.slide : -1;
     const standing = loco.v2 ? x.H.idle2Pose(t, x.T, 3, true, loco.life()) : undefined;
@@ -519,7 +693,8 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
         up,
         jump: clip.keys ? x.C.jumpNowOf(body, KH_FEEL) : d.jump && jt >= 0 ? jumpNowAt(d.jump.kind, jt) : null,
         landed,
-        verb: st >= 0 && st < 1 ? { kind: "slide", t: st } : null,
+        verb: clip.keys ? x.C.verbIn(body, KH_FEEL) : st >= 0 && st < 1 ? { kind: "slide", t: st } : null,
+        flow: d.flow ?? null,
         goal,
         hurt: clip.hurt,
         facing: !!(keysNow?.faceLook || keysNow?.aim),
@@ -532,9 +707,10 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
     out.push({
       pose: m.pose,
       lift: m.lift,
-      root: { x: px, y: (clip.keys ? body.z : (arc?.h ?? 0)) + rideY, z: pz, yaw },
+      root: { x: px, y: (clip.keys ? body.z : (arc?.h ?? d.rise ?? 0)) + rideY, z: pz + (d.fwd ?? 0), yaw },
       eyes: g ? [g.eyes[0], g.eyes[1]] : [0, 0],
       blink: g?.blink ?? 0,
+      hands: loco.handsOut ?? undefined,
     });
   }
   return out;
@@ -580,4 +756,57 @@ export function pops(frames: Frame[], least = 0.0006): { t: number; what: string
     }
   }
   return [...hits].sort((a, b) => a[0] - b[0]).map(([i, set]) => ({ t: i / RATE, what: [...set].join(", ") }));
+}
+
+type Air = NonNullable<ReturnType<Chars["airNow"]>>;
+/** (5d) A clip's limp stretch, worked out on Jolt with her own model: from the moment it goes limp
+ *  (or lands from its drop) the frames are the ragdoll's, then the get-up's, then standing. */
+export function limp(
+  frames: Frame[],
+  clip: Clip,
+  model: InstanceType<Chars["PersonModel"]>,
+  world: PhysicsWorld,
+  A: Air,
+): void {
+  const R = clip.rag;
+  if (!R || frames.length < 4) return;
+  let i0 = R.at !== undefined ? Math.round(R.at * RATE) : -1;
+  if (R.drop !== undefined) {
+    let top = 0;
+    for (let i = 1; i < frames.length && i0 < 0; i++) {
+      top = Math.max(top, frames[i].root.y);
+      if (
+        top - frames[i].root.y >= R.drop &&
+        frames[i].root.y <= frames[i - 1].root.y &&
+        frames[i + 1]?.root.y >= frames[i].root.y - 1e-3
+      )
+        i0 = i;
+    }
+  }
+  if (i0 < 2 || i0 >= frames.length) return;
+  const f0 = frames[i0];
+  const a = frames[i0 - 2].root;
+  // (going as it was: down at no more than a fall's 12 m/s — the core's falls are quick)
+  const vel: [number, number, number] = R.vel ?? [
+    ((f0.root.x - a.x) * RATE) / 2,
+    Math.max(-12, ((frames[i0 - 1].root.y - frames[i0 - 3].root.y) * RATE) / 2),
+    ((f0.root.z - a.z) * RATE) / 2,
+  ];
+  model.root.position.set(f0.root.x, f0.root.y, f0.root.z);
+  model.root.rotation.y = f0.root.yaw;
+  model.setPose(f0.pose, f0.lift);
+  model.root.updateMatrixWorld(true);
+  const D = new A.Downed(world, model);
+  if (!D.fall(f0.pose, vel, R.hit)) return;
+  let root = { ...f0.root };
+  let last: Frame = f0;
+  for (let i = i0 + 1; i < frames.length; i++) {
+    world.step(1 / RATE);
+    const r = D.update(1 / RATE, () => 0, A.getUp2Pose, A.GETUP_LEN);
+    if (r?.root) root = { ...r.root };
+    if (r)
+      last = { pose: r.m.pose, lift: r.m.lift, root: { ...root }, eyes: [0, 0], blink: 0, hands: r.hands ?? undefined };
+    frames[i] = { ...last, root: { ...root } };
+  }
+  D.stop();
 }
