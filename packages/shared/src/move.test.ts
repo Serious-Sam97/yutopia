@@ -4,16 +4,21 @@ import { parkAt, parkedBody, SPECS } from "./car/index.ts";
 import { BODY_R, Grid, moveStep, setOutdoors } from "./grid.ts";
 import { BENCH, outdoorsAt } from "./grounds.ts";
 import type { MapDef } from "./map.ts";
+import { FLOW_MOVES } from "./move/flow-moves.ts";
 import {
   Allowance,
   type Body,
   byteToYaw,
   dodging,
+  type FlowWorld,
   type Footing,
+  KH_FEEL,
+  KH_MOVE,
   MOVE,
   MoveClock,
   type MoveEnv,
   type MoveInput,
+  type MoveSpec,
   NO_INPUT,
   newBody,
   packMv,
@@ -41,12 +46,12 @@ const on = (grid: Grid, f: Footing = "floor"): MoveEnv => ({ grid, footing: () =
 const go = (o: Partial<MoveInput> = {}): MoveInput => ({ ...NO_INPUT, x: 1, ...o });
 
 /** Steps `b` for `secs` under `inp(t)` (t: s since the start); every step's events. */
-function run(b: Body, env: MoveEnv, secs: number, inp: (t: number) => MoveInput) {
+function run(b: Body, env: MoveEnv, secs: number, inp: (t: number) => MoveInput, spec: MoveSpec = MOVE) {
   const out: { t: number; b: Body; ev: StepEvents }[] = [];
   const n = Math.round(secs / STEP_DT);
   for (let i = 0; i < n; i++) {
     const t = i * STEP_DT;
-    const ev = stepBody(b, inp(t), env);
+    const ev = stepBody(b, inp(t), env, spec);
     out.push({ t: t + STEP_DT, b: { ...b, verb: b.verb ? { ...b.verb } : null }, ev });
   }
   return out;
@@ -561,3 +566,374 @@ test("a parked car is solid to the skin of its body: either model, any angle, on
 function moveStepTo(g: Grid, pos: { x: number; y: number }, d: { x: number; y: number }) {
   return moveStep(g, pos, d, 4.2, 1 / 60);
 }
+
+// ── the KH feel (docs/plan/56-the-controls.md B), tried in /dev/move ──────────
+
+// a press on one step only (the input's own way: afterFirstStep)
+const pressAt = (t: number, at: number) => t >= at && t < at + STEP_DT;
+
+test("KH: a run in under a tenth of a second, stopped as quick", () => {
+  const b = newBody(2, 6);
+  const tr = run(b, on(pad()), 0.5, () => go(), KH_MOVE);
+  const at = tr.find((s) => speedOf(s.b) >= 0.95 * KH_MOVE.jog);
+  assert.ok(at && at.t <= 0.1, `reached a run at ${at?.t}`);
+  const stop = run(b, on(pad()), 0.3, () => ({ ...NO_INPUT }), KH_MOVE);
+  const still = stop.find((s) => speedOf(s.b) < 0.1);
+  assert.ok(still && still.t <= 0.1, `stopped at ${still?.t}`);
+});
+
+test("KH: up quick, a hang at the top, down quicker, never faster than the cap", () => {
+  const b = newBody(2, 6);
+  const tr = run(b, on(pad()), 2, (t) => ({ ...NO_INPUT, jump: t < 0.6, jumpPressed: pressAt(t, 0) }), KH_MOVE);
+  const top = tr.reduce((m, s) => (s.b.z > m.b.z ? s : m));
+  const off = tr.find((s) => s.b.up) as (typeof tr)[number];
+  const down = tr.find((s) => s.t > top.t && !s.b.up) as (typeof tr)[number];
+  assert.ok(top.b.z > 1.4 && top.b.z < 1.9, `a held jump peaks at ${top.b.z}`);
+  assert.ok(down.t - top.t < top.t - off.t, `down in ${down.t - top.t} s, up in ${top.t - off.t} s`);
+  // off a tall top, the fall is capped
+  const h = newBody(2, 6, 30);
+  h.up = true;
+  const fall = run(h, on(pad()), 1.5, () => ({ ...NO_INPUT }), KH_MOVE);
+  assert.ok(Math.min(...fall.map((s) => s.b.vz)) >= -(KH_MOVE.fallCap ?? 0) - 0.5, "the fall is capped");
+});
+
+test("KH: a second jump in the air goes higher than one; there's no third", () => {
+  const once = newBody(2, 6);
+  const one = run(once, on(pad()), 2, (t) => ({ ...NO_INPUT, jump: true, jumpPressed: pressAt(t, 0) }), KH_MOVE);
+  const twice = newBody(2, 6);
+  const two = run(
+    twice,
+    on(pad()),
+    2.5,
+    (t) => ({ ...NO_INPUT, jump: true, jumpPressed: pressAt(t, 0) || pressAt(t, 0.35) || pressAt(t, 0.6) }),
+    KH_MOVE,
+  );
+  const peak = (tr: typeof one) => Math.max(...tr.map((s) => s.b.z));
+  assert.ok(peak(two) > peak(one) + 0.6, `one ${peak(one)}, two ${peak(two)}`);
+  assert.equal(two.filter((s) => s.ev.airJump).length, 1, "one jump in the air");
+  // today's body: none
+  const plain = newBody(2, 6);
+  const p = run(plain, on(pad()), 2, (t) => ({
+    ...NO_INPUT,
+    jump: true,
+    jumpPressed: pressAt(t, 0) || pressAt(t, 0.3),
+  }));
+  assert.equal(p.filter((s) => s.ev.airJump).length, 0);
+});
+
+test("KH: the dodge in the air dashes ~3 tiles on the level, once an air time", () => {
+  const b = newBody(2, 6);
+  const tr = run(
+    b,
+    on(pad(40, 12)),
+    1.6,
+    (t) => ({
+      ...NO_INPUT,
+      x: 1,
+      jump: t < 0.3,
+      jumpPressed: pressAt(t, 0),
+      dodgePressed: pressAt(t, 0.25) || pressAt(t, 0.4),
+    }),
+    KH_MOVE,
+  );
+  const i = tr.findIndex((s) => s.ev.airDash);
+  assert.ok(i >= 0, "an air dash");
+  const end = tr[i + Math.round((KH_MOVE.airDash?.len ?? 0) / STEP_DT)].b;
+  const from = tr[i].b;
+  assert.ok(end.x - from.x > 2.4, `dashed ${end.x - from.x}`);
+  assert.ok(Math.abs(end.z - from.z) < 0.08, `level within ${end.z - from.z}`);
+  assert.equal(tr.filter((s) => s.ev.airDash).length, 1, "once an air time");
+  assert.ok(!b.up, "landed");
+  // landed: again
+  const again = run(
+    b,
+    on(pad(40, 12)),
+    0.6,
+    (t) => ({ ...NO_INPUT, x: 1, jumpPressed: pressAt(t, 0), jump: true, dodgePressed: pressAt(t, 0.2) }),
+    KH_MOVE,
+  );
+  assert.equal(again.filter((s) => s.ev.airDash).length, 1);
+});
+
+test("KH: today's body is untouched by the KH fields", () => {
+  for (const k of ["gDown", "hang", "fallCap", "airJumps", "airJump", "airDash", "grip"] as const)
+    assert.equal(MOVE[k], undefined, k);
+});
+
+// ── Flowmotion (docs/plan/56-the-controls.md F: flow.ts), in a made-up world: a wall to run up
+// at x 8 (its face looking west, 9 high), a pole at (8, 3), a rail along y 9 from x 2 to x 12, a
+// metre up; and the pad's own ledge, a block two tiles up ──
+const FLOW: FlowWorld = {
+  moves: FLOW_MOVES,
+  pole: (x, y, _z, reach) => (Math.hypot(x - 8, y - 3) - 0.2 < reach ? { x: 8, y: 3, r: 0.2, top: 4 } : null),
+  wall: (x, y, _z, ux, _uy, reach) =>
+    y > 5 && y < 7 && 8 - x < reach + 0.25 && 8 - x > 0 && ux > 0
+      ? { nx: -1, ny: 0, d: 8 - x - 0.25, top: 9, run: true }
+      : null,
+  rail: (x, y, z, reach) =>
+    Math.abs(y - 9) < reach && x > 2 && x < 12 && Math.abs(z - 1) < 0.5
+      ? { x, y: 9, z: 1, ux: 1, uy: 0, back: x - 2, ahead: 12 - x }
+      : null,
+};
+const flowEnv = (grid: Grid): MoveEnv => ({ grid, footing: () => "floor", flow: FLOW });
+const dash = (o: Partial<MoveInput> = {}): MoveInput => ({ ...NO_INPUT, x: 1, sprint: true, ...o });
+
+test("Flowmotion: a jump at a wall in the air kicks off it, up and back", () => {
+  const b = newBody(7.2, 6, 1);
+  b.up = true;
+  b.vx = 4;
+  const tr = run(b, flowEnv(pad(20, 12)), 0.1, (t) => go({ jumpPressed: pressAt(t, 0) }), KH_MOVE);
+  assert.equal(tr[0].ev.flow, "kick");
+  assert.ok(tr[0].b.vx < -2 && tr[0].b.vz > 5, `off it: vx ${tr[0].b.vx}, vz ${tr[0].b.vz}`);
+  // today's body: no Flowmotion, whatever the world tags
+  const p = newBody(7.2, 6, 1);
+  p.up = true;
+  p.vx = 4;
+  const today = run(p, flowEnv(pad(20, 12)), 0.1, (t) => go({ jumpPressed: pressAt(t, 0) }));
+  assert.ok(!today.some((s) => s.ev.flow));
+});
+
+test("Flowmotion: dashing into a wall runs up it, then kicks off it", () => {
+  const b = newBody(6.2, 6);
+  b.vx = 8;
+  b.gait = "sprint";
+  const tr = run(b, flowEnv(pad(20, 12)), 1.4, () => dash(), KH_MOVE);
+  assert.equal(tr.find((s) => s.ev.flow)?.ev.flow, "wallrun");
+  const top = Math.max(...tr.map((s) => s.b.z));
+  assert.ok(top > 4.5, `up it to ${top}`);
+  const off = tr.find((s) => s.ev.flowEnd);
+  assert.equal(off?.ev.flowEnd, "kick");
+  assert.ok((off?.b.vx ?? 0) < -2, "kicked back off it");
+});
+
+test("Flowmotion: dashing at a wall slantwise runs along it in a low arc; a jump is off it, out", () => {
+  // a long wall at x 8, its face looking west
+  const LONG: FlowWorld = {
+    ...FLOW,
+    wall: (x, _y, _z, _ux, _uy, reach) =>
+      8 - x < reach + 0.25 && 8 - x > 0 ? { nx: -1, ny: 0, d: Math.max(0, 8 - x - 0.25), top: 9, run: true } : null,
+  };
+  const env: MoveEnv = { grid: pad(20, 40), footing: () => "floor", flow: LONG };
+  const start = () => {
+    const b = newBody(7.5, 2);
+    b.vx = 2;
+    b.vy = 8;
+    b.gait = "sprint";
+    return b;
+  };
+  const b = start();
+  const tr = run(b, env, 1.4, () => dash({ x: 0.25, y: 1 }), KH_MOVE);
+  assert.equal(tr.find((s) => s.ev.flow)?.ev.flow, "wallside");
+  const on = tr.filter((s) => s.b.flow?.kind === "wallside");
+  assert.ok(
+    on.every((s) => Math.abs(s.b.x - 7.75) < 1e-6),
+    "held at the wall's face",
+  );
+  const top = Math.max(...on.map((s) => s.b.z));
+  assert.ok(top > 0.8 && top < 1.6, `a low arc, up to ${top}`);
+  assert.ok(on[on.length - 1].b.y - on[0].b.y > 7, "along it");
+  assert.ok(
+    tr.some((s) => s.ev.flowEnd),
+    "off it in the end",
+  );
+  // a jump halfway: off it, out (west) and on (north)
+  const c = start();
+  const off = run(c, env, 0.6, (t) => dash({ x: 0.25, y: 1, jumpPressed: pressAt(t, 0.4) }), KH_MOVE).find(
+    (s) => s.ev.flowEnd,
+  );
+  assert.equal(off?.ev.flowEnd, "jump");
+  assert.ok((off?.b.vx ?? 0) < -2 && (off?.b.vy ?? 0) > 4, `out and on: ${off?.b.vx}, ${off?.b.vy}`);
+});
+
+test("Flowmotion: a pole swung round while the dash is held, flung off when it's let go", () => {
+  const b = newBody(6.8, 3);
+  b.vx = 8;
+  b.gait = "sprint";
+  const tr = run(b, flowEnv(pad(20, 12)), 1.2, (t) => dash({ sprint: t < 0.8 }), KH_MOVE);
+  assert.equal(tr.find((s) => s.ev.flow)?.ev.flow, "swing");
+  const round = tr.filter((s) => s.t > 0.1 && s.t < 0.7).map((s) => Math.hypot(s.b.x - 8, s.b.y - 3));
+  assert.ok(Math.max(...round) - Math.min(...round) < 0.05, "round it at one radius");
+  const flung = tr.find((s) => s.ev.flowEnd);
+  assert.ok(flung && flung.t > 0.75 && flung.t < 0.9, `let go at ${flung?.t}`);
+  assert.ok(Math.hypot(flung.b.vx, flung.b.vy) > 8 && flung.b.vz > 3, "flung on, up");
+});
+
+test("Flowmotion: landing on a rail grinds along it; a jump off it is the flow jump", () => {
+  const b = newBody(4, 9.1, 1.2);
+  b.up = true;
+  b.vz = -1;
+  b.vx = 3;
+  const tr = run(
+    b,
+    flowEnv(pad(20, 12)),
+    0.6,
+    (t) => ({ ...NO_INPUT, jump: true, jumpPressed: pressAt(t, 0.5) }),
+    KH_MOVE,
+  );
+  assert.equal(tr.find((s) => s.ev.flow)?.ev.flow, "grind");
+  const mid = tr.find((s) => s.t > 0.4) as (typeof tr)[number];
+  assert.ok(Math.abs(mid.b.z - 1) < 1e-6 && mid.b.x > 6, `along it: x ${mid.b.x}, z ${mid.b.z}`);
+  const off = tr.find((s) => s.ev.flowEnd === "jump");
+  assert.ok(off && off.b.vz > Math.sqrt(2 * KH_MOVE.g * KH_MOVE.hop) * 0.95, "higher than a jump");
+  // (and off it: not caught again by the rail it rose off)
+  const after = tr.filter((s) => s.t > (off?.t ?? 0));
+  assert.ok(!after.some((s) => s.ev.flow === "grind"), "not caught again on the way up");
+  assert.ok(Math.max(...after.map((s) => s.b.z)) > 1.8, "up off it");
+  // (a tap: the whole flow jump all the same, not cut to a tap's)
+  const d = newBody(4, 9.1, 1.2);
+  d.up = true;
+  d.vz = -1;
+  d.vx = 3;
+  const tap = run(
+    d,
+    flowEnv(pad(20, 12)),
+    1.2,
+    (t) => ({ ...NO_INPUT, jump: t >= 0.3 && t < 0.32, jumpPressed: pressAt(t, 0.3) }),
+    KH_MOVE,
+  );
+  assert.ok(Math.max(...tap.map((s) => s.b.z)) > 1 + (KH_MOVE.flow?.jump ?? 0) * 0.95, "the whole arc");
+  // left alone, off its end at x 12, on at its speed
+  const c = newBody(10, 9.1, 1.2);
+  c.up = true;
+  c.vz = -1;
+  c.vx = 3;
+  const end = run(c, flowEnv(pad(20, 12)), 0.6, () => ({ ...NO_INPUT }), KH_MOVE).find((s) => s.ev.flowEnd);
+  assert.equal(end?.ev.flowEnd, "off");
+  assert.ok((end?.b.x ?? 0) >= 12);
+});
+
+test("Flowmotion: a solid rail in a vault's reach is jumped onto and ground along, not vaulted", () => {
+  // (the rail as the world has it: a solid a tile wide and a metre up, under its tagged top)
+  const b = newBody(5.5, 8);
+  b.vy = 5;
+  const tr = run(
+    b,
+    flowEnv(pad(20, 12, [[5, 9, 1]])),
+    0.6,
+    (t) => ({ ...NO_INPUT, y: 1, jump: true, jumpPressed: pressAt(t, 0) }),
+    KH_MOVE,
+  );
+  assert.ok(!tr.some((s) => s.ev.verb === "vault" || s.ev.verb === "mantle"), "not vaulted");
+  assert.equal(tr.find((s) => s.ev.flow)?.ev.flow, "grind");
+});
+
+test("Flowmotion: falling at a ledge a little too high to mantle, a hang, then up onto it", () => {
+  // (a top four tiles deep: room to walk on along it after)
+  const grid = pad(
+    20,
+    12,
+    [6, 7, 8, 9].flatMap((x): [number, number, number][] => [
+      [x, 5, 2],
+      [x, 6, 2],
+      [x, 7, 2],
+    ]),
+  );
+  const b = newBody(5.4, 6, 0.6);
+  b.up = true;
+  b.vz = -0.5;
+  const tr = run(b, flowEnv(grid), 0.8, () => go(), KH_MOVE);
+  assert.equal(tr.find((s) => s.ev.flow)?.ev.flow, "hang");
+  assert.ok(
+    tr.some((s) => s.ev.flowEnd === "top"),
+    "up onto it",
+  );
+  assert.ok(Math.abs(b.z - 2) < 1e-6 && !b.up, `on the top: z ${b.z}`);
+});
+
+test("Flowmotion: a wall run's limit — over tops to ~6.4 m from the ground, ~7.6 from a jump; higher, a kick off; low walls are climbed, not run", () => {
+  const at = (top: number, jump: boolean) => {
+    const W: FlowWorld = {
+      ...FLOW,
+      wall: (x, _y, _z, ux, _uy, reach) =>
+        8 - x < reach + 0.25 && 8 - x > 0 && ux > 0 ? { nx: -1, ny: 0, d: 8 - x - 0.25, top, run: true } : null,
+    };
+    const grid = pad(
+      20,
+      12,
+      [8, 9, 10].flatMap((x) => Array.from({ length: 12 }, (_, y): [number, number, number] => [x, y, top])),
+    );
+    const b = newBody(5.6, 6);
+    b.vx = 8;
+    b.gait = "sprint";
+    const tr = run(
+      b,
+      { grid, footing: () => "floor", flow: W },
+      2,
+      (t) => dash({ jump: jump && t < 0.3, jumpPressed: jump && pressAt(t, 0) }),
+      KH_MOVE,
+    );
+    return {
+      ran: tr.some((s) => s.ev.flow === "wallrun"),
+      end: tr.find((s) => s.ev.flowEnd === "top" || s.ev.flowEnd === "kick")?.ev.flowEnd,
+    };
+  };
+  assert.equal(at(6.3, false).end, "top");
+  assert.equal(at(6.5, false).end, "kick");
+  assert.equal(at(7.5, true).end, "top");
+  assert.equal(at(8, true).end, "kick");
+  // (a wall a mantle or a jump gets onto isn't run up)
+  assert.equal(at(1.8, false).ran, false);
+  assert.equal(at(2.4, false).ran, true);
+});
+
+test("KH: a jump out of a slide is running's leap from the ground, never the air's flip", () => {
+  const b = newBody(2, 6);
+  b.vx = KH_MOVE.sprint;
+  b.gait = "sprint";
+  const env: MoveEnv = { grid: pad(60, 12), footing: () => "floor" };
+  // sprinting, then into a slide
+  run(b, env, 0.3, () => ({ ...NO_INPUT, x: 1, sprint: true }), KH_MOVE);
+  run(b, env, 1 / 120, () => ({ ...NO_INPUT, x: 1, sprint: true, crouch: true, crouchPressed: true }), KH_MOVE);
+  assert.equal(b.verb?.kind, "slide");
+  run(b, env, 0.1, () => ({ ...NO_INPUT, x: 1, sprint: true, crouch: true }), KH_MOVE);
+  // (as if the slide's last step read the feet a hair up)
+  b.up = true;
+  b.coyote = 0;
+  const tr = run(
+    b,
+    env,
+    0.3,
+    (t) => ({ ...NO_INPUT, x: 1, sprint: true, jump: true, jumpPressed: pressAt(t, 0) }),
+    KH_MOVE,
+  );
+  assert.ok(!tr.some((s) => s.ev.airJump), "not the jump in the air");
+  assert.equal(b.jump, "leap");
+});
+
+test("KH_FEEL (plan 58): a run in ~0.2 s, a stop in ~0.25 s, a turn an arc, a reversal facing on till it's slow", () => {
+  const env: MoveEnv = { grid: pad(80, 40), footing: () => "floor" };
+  const until = (tr: { t: number; b: Body }[], f: (b: Body) => boolean) => tr.find((s) => f(s.b))?.t ?? Number.NaN;
+  // from still to a run
+  const a = newBody(5, 20);
+  const go = run(a, env, 0.6, () => ({ ...NO_INPUT, x: 1 }), KH_FEEL);
+  const reach = until(go, (b) => speedOf(b) > KH_FEEL.jog * 0.95);
+  assert.ok(reach > 0.14 && reach < 0.3, `a run in ${reach} s`);
+  // (KH_MOVE's: near at once)
+  const k = newBody(5, 20);
+  const kh = until(
+    run(k, env, 0.6, () => ({ ...NO_INPUT, x: 1 }), KH_MOVE),
+    (b) => speedOf(b) > KH_MOVE.jog * 0.95,
+  );
+  assert.ok(kh < 0.1, `today's KH body: ${kh} s`);
+  // from a run to still
+  const stop = until(
+    run(a, env, 0.8, () => NO_INPUT, KH_FEEL),
+    (b) => speedOf(b) < 0.2,
+  );
+  assert.ok(stop > 0.15 && stop < 0.35, `a stop in ${stop} s`);
+  // a quarter turn on the run: an arc, facing where it goes all the way round
+  const c = newBody(5, 20);
+  run(c, env, 0.6, () => ({ ...NO_INPUT, x: 1 }), KH_FEEL);
+  const turn = run(c, env, 0.6, () => ({ ...NO_INPUT, y: 1 }), KH_FEEL);
+  const mid = turn.find((s) => s.t > 0.12) as (typeof turn)[number];
+  const way = Math.atan2(mid.b.vy, mid.b.vx);
+  assert.ok(way > 0.2 && way < 1.4, `mid-turn going between the two ways: ${way}`);
+  assert.ok(Math.abs(Math.atan2(Math.sin(mid.b.yaw - way), Math.cos(mid.b.yaw - way))) < 0.35, "facing where it goes");
+  // a reversal: still facing on while it slows, turned round once it's slow
+  const d = newBody(5, 20);
+  run(d, env, 0.6, () => ({ ...NO_INPUT, x: 1 }), KH_FEEL);
+  const back = run(d, env, 0.8, () => ({ ...NO_INPUT, x: -1 }), KH_FEEL);
+  const early = back.find((s) => s.t > 0.06) as (typeof back)[number];
+  assert.ok(Math.cos(early.b.yaw) > 0.9, "facing on, slowing");
+  assert.ok(Math.cos(d.yaw) < -0.9, "round, and away");
+});

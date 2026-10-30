@@ -20,7 +20,9 @@ import { gzipSync } from "node:zlib";
 // (raised to 560.5 on 2026-10-26 by the user's call: the UI — docs/plan/45 — the top bar's me menu, the dock's named keys, the place card)
 // (raised to 561 on 2026-10-26 by the user's call: the Kart Park's land — docs/plan/46 — the Grounds' chunks split anew, their file lists on the page)
 // (lowered to 415 on 2026-10-28: iso retired — docs/plan/50, phase 7 — Pixi and the iso engine off the page, 414.3)
-const BUDGETS = { "/page": 415, "/login/page": 160 }; // KB gzip
+// (raised to 419 on 2026-10-29 by the user's call: the controls — docs/plan/56 — the focus's prompt, Use held, the mouse as the camera; HEAD was already 416.2 after pets and god mode)
+// (raised to 421 on 2026-10-29 by the user's call: the controls — docs/plan/56, phase 5 — the lock-on and its chip, the camera's settings)
+const BUDGETS = { "/page": 421, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;
@@ -52,6 +54,7 @@ const LAZY = {
   "yutopia-phone": 60, // the phone: Vortex Mobile's screens, calls, camera, sounds (docs/plan/21-cellphone.md)
   "yutopia-chars": 45, // (raised from 40 on 2026-10-22 by the user's call: 39.1, the next detail on people would tip it) // the 3D people: the model builder, motion, iso sprites (docs/plan/22-people-3d.md)
   "yutopia-input": 15, // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
+  "yutopia-anim": 15, // plan 58's animations, loaded with the 3D people when asked for (docs/plan/58-the-animation.md)
   "yutopia-jumps": 10, // a jump's dust and sounds (shared/jump.ts)
   "yutopia-dark": 80, // the dark: vitals, pockets, loot on the client (docs/plan/30-the-dark.md)
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every

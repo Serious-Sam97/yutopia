@@ -20,6 +20,11 @@ export interface Prefs {
   // mouse look (Z, in 3D): how fast the mouse turns the camera (× the base), up/down flipped
   lookSens: number;
   lookInvert: boolean;
+  // the camera (docs/plan/56-the-controls.md D): how it comes round behind you, the stick's and
+  // the arrows' speed, left–right flipped
+  camFollow: "on" | "gentle" | "off";
+  stickSens: number;
+  lookInvertX: boolean;
   // first person: my own arms come into view when they're doing something
   hands1p: boolean;
   // frames per second, at most (0 = as many as the screen shows); 30 once nothing moves
@@ -67,6 +72,9 @@ const DEFAULTS: Prefs = {
   cam3p: "chase",
   lookSens: 1,
   lookInvert: false,
+  camFollow: "on",
+  stickSens: 1,
+  lookInvertX: false,
   hands1p: true,
   maxFps: 60,
   perfStats: false,
@@ -86,6 +94,11 @@ export function prefs(): Prefs {
     if (cache && !MAX_FPS.includes(cache.maxFps)) cache.maxFps = 60;
     if (cache && !(cache.lookSens >= 0.25 && cache.lookSens <= 3)) cache.lookSens = 1;
     if (cache) cache.lookInvert = cache.lookInvert === true;
+    // (the free camera was one that didn't follow: plan 56 merged it into the one camera)
+    if (cache && !["on", "gentle", "off"].includes(cache.camFollow))
+      cache.camFollow = raw?.cam3p === "free" ? "off" : "on";
+    if (cache && !(cache.stickSens >= 0.25 && cache.stickSens <= 3)) cache.stickSens = 1;
+    if (cache) cache.lookInvertX = cache.lookInvertX === true;
     if (cache) cache.hands1p = cache.hands1p !== false;
     if (cache) cache.perfStats = cache.perfStats === true;
     if (

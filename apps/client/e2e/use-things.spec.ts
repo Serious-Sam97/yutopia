@@ -38,7 +38,7 @@ test("a cup from the cooler, a can from the machine, a tune on the piano", async
 
     await goTo(X + 0.5, Y + 1.6);
     await expect.poll(() => page.evaluate(() => (window as any).__hud.get().prompt?.kind)).toBe("water");
-    await page.keyboard.press("x");
+    await page.keyboard.press("e");
     // the cooler does its thing first: you're shown using it, then the cup
     await expect.poll(async () => (await mine(page))?.busy).toBe("water");
     await expect.poll(() => held(page)).toBe("cup");
@@ -46,14 +46,14 @@ test("a cup from the cooler, a can from the machine, a tune on the piano", async
 
     await goTo(X + 2.5, Y + 1.6);
     await expect.poll(() => page.evaluate(() => (window as any).__hud.get().prompt?.kind)).toBe("vending");
-    await page.keyboard.press("x");
+    await page.keyboard.press("e");
     await expect.poll(() => held(page)).toBe("soda");
     await page.getByRole("button", { name: "Put down" }).click();
     await expect.poll(() => held(page)).toBe("");
 
     await goTo(X + 5, Y + 1.6);
     await expect.poll(() => page.evaluate(() => (window as any).__hud.get().prompt?.kind)).toBe("piano");
-    await page.keyboard.press("x");
+    await page.keyboard.press("e");
     await expect(page.getByRole("button", { name: "C4", exact: true })).toBeVisible();
     await expect.poll(async () => (await mine(page))?.busy).toBe("piano");
     await page.getByRole("button", { name: "E4", exact: true }).click();

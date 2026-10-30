@@ -15,6 +15,8 @@ export function speedCap(verb: VerbKind | null, spec: MoveSpec = MOVE, winded = 
       return Math.max(feet, rollSpeed(0, spec) * 1.1);
     case "slide":
       return Math.max(feet, (spec.sprint + spec.slide.boost) * 1.15);
+    case "adash":
+      return Math.max(feet, ((spec.airDash?.dist ?? 3) / (spec.airDash?.len ?? 0.18)) * 1.1);
     case "vault":
       return Math.max(feet, ((spec.vault.reach + 0.9 + spec.vault.beyond) / spec.vault.len) * 1.1);
     default:

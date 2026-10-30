@@ -5,6 +5,7 @@ import { useLang, useTr } from "@/lib/i18n";
 import { hud } from "@/world/store";
 import type { PoolInfo } from "@/world/tables/pool";
 import { useWorld } from "./ctx";
+import { usePadFrame } from "./usePad";
 
 // The pool table's console: the camera leans in over the table (iso) or takes
 // a game camera (3D), and this sits under it. In the lobby: two seats, Vortex
@@ -145,6 +146,22 @@ export function PoolPanel({ objectId }: { objectId: string }) {
   const sig = useRef("");
   const lastNo = useRef(-1);
   const close = () => hud.set({ panel: { kind: null } });
+  // on a pad (docs/plan/56-the-controls.md phase 6): the left stick turns the cue (gently: past a
+  // half tilt, faster), A held charges and let go shoots, Y the camera, B lets the charge go or
+  // leaves
+  usePadFrame((f) => {
+    const p = w?.tables?.pool;
+    if (!p) return;
+    const x = f.left.x || (f.held(15) ? 1 : f.held(14) ? -1 : 0);
+    if (x) p.nudge((-x * Math.abs(x) * 0.9 * Math.PI) / 180);
+    if (f.pressed(0)) p.charge(true);
+    if (f.released(0)) p.charge(false);
+    if (f.pressed(3)) p.setCam(p.cam === "top" ? "cue" : "top");
+    if (f.pressed(1)) {
+      if (p.charging) p.charge(false, true);
+      else close();
+    }
+  });
 
   // the table's state, read every frame (only re-rendered when it changes)
   useEffect(() => {

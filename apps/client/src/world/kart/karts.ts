@@ -67,6 +67,7 @@ import {
 } from "three";
 import { mixer } from "../audio";
 import { activePad } from "../pads";
+import { hud } from "../store";
 import type { CrowdUniforms } from "../tp/kart/crowd3d";
 import { KartFx } from "../tp/kart/fx";
 import { crate3d, drone3d, fax3d, ice3d, plough3d, snowball3d, umbrella3d } from "../tp/kart/items3d";
@@ -310,7 +311,8 @@ export class Karts {
       this.ctl.keyUp(e.code);
       return false;
     }
-    if (e.code === "KeyX" && !e.repeat) {
+    // out: Use (E: docs/plan/56-the-controls.md; X as it was)
+    if ((e.code === "KeyE" || e.code === "KeyX") && !e.repeat) {
       const v = this.sim ? Math.abs(kartSpeed(this.sim)) : 0;
       if (v < 3 || this.phase === "lobby") this.host.room()?.send("kart:leave", {});
       return true;
@@ -1486,11 +1488,19 @@ export class Karts {
     this.circuits = el;
     this.circuitsSig = "";
     window.addEventListener("keydown", this.onCircuitsKey);
+    this.wantPointer();
   }
   private closeCircuits() {
     this.circuits?.remove();
     this.circuits = null;
     window.removeEventListener("keydown", this.onCircuitsKey);
+    this.wantPointer();
+  }
+  // the lobby's and the circuits' buttons are clicked: the mouse leaves the camera for them while
+  // they're up (docs/plan/56-the-controls.md A, the cursor rule — controller pointerWanted)
+  private wantPointer() {
+    const on = !!this.circuits || !!this.lobby;
+    if (hud.get().kartUi !== on) hud.set({ kartUi: on });
   }
   /** Why it can't be set now (empty: it can). */
   private circuitsWhy(p: S): string {
@@ -1948,6 +1958,7 @@ export class Karts {
     this.lobby?.remove();
     this.lobby = null;
     this.lobbySig = "";
+    this.wantPointer();
     this.results?.remove();
     this.results = null;
     this.camNow = null;
@@ -2141,6 +2152,7 @@ ${rows
       this.lobby?.remove();
       this.lobby = null;
       this.lobbySig = "";
+      this.wantPointer();
       return;
     }
     const rows = [...(p.karts as Map<string, S>).entries()];
@@ -2164,6 +2176,7 @@ ${rows
         "position:absolute;right:24px;top:110px;width:400px;padding:16px 18px 14px;z-index:21;pointer-events:auto;color:var(--cream);font-family:var(--font-body)";
       this.lobby.addEventListener("click", (e) => this.lobbyClick(e));
       (tp?.hostEl ?? document.body).appendChild(this.lobby);
+      this.wantPointer();
     }
     let rec: S = {};
     try {

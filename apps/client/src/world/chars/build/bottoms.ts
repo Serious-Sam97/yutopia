@@ -55,6 +55,12 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
     // its front rides the thighs below the hip joints (sitting, a stride), the back stays
     const hip = b.hipY - b.torsoBot;
     k.add("hips", b.squash(lathe(pts, R)), c, { skin: skirtSkin(hip, hem, rh) });
+    // (it swings on its spring from the hips, the hem most: plan 58 phase 2d)
+    k.spring("skirt", [0, hip, 0], [0, hem - hip, 0], {
+      hz: long ? 2.4 : 3,
+      damp: 0.5,
+      limit: long ? 0.35 : 0.4,
+    });
     return;
   }
 
@@ -200,10 +206,16 @@ function onLimbSide(
 
 /** A skirt's (or a long hem's) second bone: the thigh on that side, more so lower down and in front. */
 export function skirtSkin(hipY: number, hemY: number, r: number) {
-  return (x: number, y: number, z: number): [JointName, number] => {
+  return (x: number, y: number, z: number): [JointName, number][] => {
     const down = smooth(hipY, hipY + (hemY - hipY) * 0.7, y);
     const front = smooth(-0.25, 0.65, z / Math.max(1e-6, r));
     const side = smooth(0, r * 0.35, Math.abs(x));
-    return [x >= 0 ? "thighL" : "thighR", down * front * (0.55 + 0.45 * side) * 0.9];
+    const thigh = down * front * (0.55 + 0.45 * side) * 0.9;
+    // (and what's left of it, lower down, on the skirt's spring)
+    const swing = (1 - thigh) * 0.75 * smooth(hipY + (hemY - hipY) * 0.1, hemY, y);
+    return [
+      [x >= 0 ? "thighL" : "thighR", thigh],
+      ["skirt", swing],
+    ];
   };
 }

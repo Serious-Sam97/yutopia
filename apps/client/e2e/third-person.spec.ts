@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
+import { ANA, actOn, BIA, enter, test, token, useWorld } from "./helpers";
 
 // Third person, live: Ana and Bia see the Lab in third person, in the same
 // room at the same time. Each sees the other where they really are and
@@ -97,31 +97,7 @@ test("third person: two players share the Lab live", async ({ page, browser }) =
     await pageB.screenshot({ path: `${shots}/live-bia.png` });
   }
 
-  // a click on the floor in front of her: she walks there
-  const target = await page.evaluate(() => {
-    const w = (window as any).__yutopia;
-    const yaw = w.tp.yaw as number;
-    const r = w.tp.renderer.domElement.getBoundingClientRect();
-    // somewhere free in view, clear of the HUD (ahead first, then to the sides)
-    for (const turn of [0, 0.5, -0.5, 1, -1])
-      for (let d = 2.5; d >= 1; d -= 0.5) {
-        const x = w.me.x + Math.cos(yaw + turn) * d;
-        const y = w.me.y + Math.sin(yaw + turn) * d;
-        if (!w.grid.fits(x, y)) continue;
-        const p = w.tp.project(x, y, 0);
-        if (!p || p.x < 260 || p.x > r.width - 60 || p.y < 120 || p.y > r.height - 120) continue;
-        // bare floor there: not someone, not something to use
-        w.tp.setRay(r.left + p.x, r.top + p.y);
-        if (w.tp.personAt() || w.tp.pickObject()) continue;
-        return { x, y, cx: r.left + p.x, cy: r.top + p.y };
-      }
-    return null;
-  });
-  expect(target).not.toBeNull();
-  if (target) {
-    await page.mouse.click(target.cx, target.cy);
-    await waitNear(() => mePos(page), target.x, target.y, 8000);
-  }
+  // (a click on the floor no longer walks her there — the mouse is the camera: mouse-look.spec)
 
   // leave her setting as it was for the other specs
   await page.evaluate(() => {
@@ -132,9 +108,9 @@ test("third person: two players share the Lab live", async ({ page, browser }) =
 });
 
 // What people do shows in third person (an emote over Bia's head in
-// Ana's 3D view, her phone in her hand), and things are used by clicking them in 3D: a
-// sofa put down in the Lab, clicked, Sit → Ana sits on it (drawn seated).
-test("third person: emotes and phones over there, a sofa clicked in 3D seats you", async ({ page, browser }) => {
+// Ana's 3D view, her phone in her hand), and things are used with Use in 3D: a sofa put down in
+// the Lab, Use tapped on it → Ana sits on it (drawn seated).
+test("third person: emotes and phones over there, Use on a sofa in 3D seats you", async ({ page, browser }) => {
   test.setTimeout(150_000);
   const tokA = await token(ANA);
   const tokB = await token(BIA);
@@ -207,24 +183,8 @@ test("third person: emotes and phones over there, a sofa clicked in 3D seats you
       t.dist = 6;
     });
     await page.waitForTimeout(800);
-    // a spot on the sofa that isn't someone
-    const at = await page.evaluate((i) => {
-      const t = (window as any).__yutopia.tp;
-      const p = t.world.picks.find((q: any) => q.id === i);
-      const r = t.renderer.domElement.getBoundingClientRect();
-      for (const fx of [0.5, 0.25, 0.75, 0.1, 0.9]) {
-        const s = t.project(p.x0 + (p.x1 - p.x0) * fx, (p.y0 + p.y1) / 2, (p.z0 + p.z1) / 2);
-        if (!s) continue;
-        t.setRay(r.left + s.x, r.top + s.y);
-        if (!t.personAt() && t.pickObject() === i) return { x: r.left + s.x, y: r.top + s.y };
-      }
-      return null;
-    }, id);
-    expect(at).not.toBeNull();
-    if (at) await page.mouse.click(at.x, at.y);
-    const menu = page.getByRole("menu", { name: /Sofa/ });
-    await expect(menu).toBeVisible();
-    await menu.getByRole("menuitem", { name: "Sit" }).click();
+    // Use tapped on it (docs/plan/56-the-controls.md C: no clicking the world): its first, Sit
+    await actOn(page, X + 1.5, Y + 0.5, { key: `o:${id}`, hold: false });
     await expect
       .poll(
         () =>

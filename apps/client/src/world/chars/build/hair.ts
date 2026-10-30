@@ -108,6 +108,11 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
     t * (1 + 0.25 * Math.sin(Math.PI * Math.min(1, u * 1.4))) * (1 - 0.94 * smooth(0.8, 1, u));
   // a hairline: front, over the ears, nape — the parting a little to one side
   const part = 0.35;
+  // the parts built since `from` hang on the hair's spring: none above `top`, all of it (× `most`)
+  // by `full` (heights in the head's space)
+  const hang = (from: number, top: number, full: number, most: number) => {
+    for (const q of k.parts.slice(from)) q.skin = (_x, y) => ["hair", most * smooth(top, full, y)];
+  };
   const line =
     (tf: number, ts: number, tb: number, parted = true) =>
     (phi: number) => {
@@ -324,18 +329,28 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
       );
       return;
     }
-    case "bob":
+    case "bob": {
       cap(line(0.8, 0.42, 0.2), rolled(th));
       bangs(8, 1.15, 0.56, 0.18, false);
       quiff(p.hair.tuft * 0.6);
+      // (the locks swing a little on the hair's spring, below the ears: plan 58 phase 2d)
+      const from = k.parts.length;
       around(false, lw * 1.15);
+      hang(from, 0.45 * hh, -0.15 * hh, 0.55);
+      k.spring("hair", [0, 0.45 * hh, -0.05 * hh], [0, -0.75 * hh, -0.1 * hh], { hz: 3.2, damp: 0.45, limit: 0.4 });
       return;
-    case "long":
+    }
+    case "long": {
       cap(line(0.8, 0.42, 0.2), rolled(th));
       bangs(8, 1.15, 0.56, 0.18, false);
       quiff(p.hair.tuft * 0.6);
+      // (the locks hang on the hair's spring, more the lower: they swing and trail, then settle)
+      const from = k.parts.length;
       around(true, lw * 1.4);
+      hang(from, 0.3 * hh, -0.6 * hh, 1);
+      k.spring("hair", [0, 0.45 * hh, -0.05 * hh], [0, -1.35 * hh, -0.15 * hh], { hz: 2.4, damp: 0.35, limit: 0.65 });
       return;
+    }
     case "curly": {
       // a full head of tight curls: a thick cap and round curls over it, out to the jaw
       cap(line(0.8, 0.36, 0.18, false), rolled(th * 1.4));
@@ -426,6 +441,11 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
         color,
         { keepNormals: true },
       );
+      // (the tail on the hair's spring, from its tie: it swings and bounces)
+      const end = k.parts[k.parts.length - 1];
+      end.skin = (_x, y) => ["hair", smooth(a.y + 0.03 * hh, a.y - 0.4 * hh, y)];
+      const tip = tail[tail.length - 1];
+      k.spring("hair", [a.x, a.y, a.z], [tip.x - a.x, tip.y - a.y, tip.z - a.z], { hz: 1.9, damp: 0.3, limit: 1 });
       const tie = ring(0.07 * hh, 0.022 * hh);
       tie.rotateX(Math.PI / 2 - 0.25);
       k.add("head", tie, o.tieColor, { at: a.clone().add(new Vector3(0, 0.01 * hh, -0.05 * hh)) });

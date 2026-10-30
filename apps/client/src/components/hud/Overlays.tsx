@@ -10,54 +10,139 @@ import { useHud } from "@/world/store";
 import { ItemThumb } from "./build/thumbs";
 import { useWorld } from "./ctx";
 
-// What's in reach: the thing's picture, its name, and how to use it.
+// What's in reach (docs/plan/56-the-controls.md C): the focus at the bottom — its picture, its
+// name, the button and what it does, "hold: more" when it has a menu — and the others in reach
+// above it, smaller ([ ] or the pad's ↑ ↓ make one the focus). A car's door or the shuttle: on
+// its own, as before.
 export function Prompt() {
   const t = useTr();
   const w = useWorld();
   const prompt = useHud((s) => s.prompt);
+  const targets = useHud((s) => s.targets);
+  const pad = useHud((s) => s.padLive);
   const panel = useHud((s) => s.panel.kind);
+  const menu = useHud((s) => s.menu);
   const building = useHud((s) => s.build.on);
   const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
-  if (!prompt || panel || building) return null;
-  const o = w?.model?.getObject(prompt.objectId);
-  const opens = prompt.kind === "notice" || prompt.kind === "screen";
-  return (
-    <button
-      type="button"
-      onClick={() => w?.interact()}
-      className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[176px] sm:bottom-[112px] cabinet rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 rise max-w-[calc(100vw-24px)]"
+  if (panel || building || menu) return null;
+  const glyph = (
+    <kbd
+      className="keycap"
+      style={{
+        color: "var(--amber)",
+        opacity: 1,
+        height: 26,
+        minWidth: 26,
+        fontSize: 12,
+        borderRadius: pad ? 13 : 5,
+      }}
     >
-      <span
-        className="w-9 h-9 rounded-full grid place-items-center shrink-0 p-1"
-        style={{ background: "radial-gradient(var(--tile-hi),var(--panel))", border: "1px solid var(--edge)" }}
-        aria-hidden
+      {pad ? "Y" : "E"}
+    </kbd>
+  );
+  const own = prompt && /^(car|ride|plug)/.test(prompt.kind);
+  if (!targets?.items.length || own) {
+    if (!prompt) return null;
+    const o = w?.model?.getObject(prompt.objectId);
+    const opens = prompt.kind === "notice" || prompt.kind === "screen";
+    return (
+      <button
+        type="button"
+        onClick={() => w?.interact()}
+        className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[176px] sm:bottom-[112px] cabinet rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 rise max-w-[calc(100vw-24px)]"
       >
-        {o && <ItemThumb kind={o.kind} props={o.props} />}
-      </span>
-      {!touch && (
-        <kbd
-          className="keycap"
-          style={{ color: "var(--amber)", opacity: 1, height: 26, minWidth: 26, fontSize: 12, borderRadius: 5 }}
-        >
-          X
-        </kbd>
-      )}
-      <span className="text-sm truncate">{prompt.label}</span>
-      {prompt.kind !== "plug" && (
-        <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
-          · {touch ? t("tapToUse") : opens ? t("pressToOpen") : t("pressToUse")}
+        <Thumb objectId={o ? prompt.objectId : undefined} />
+        {!touch && glyph}
+        <span className="text-sm truncate">{prompt.label}</span>
+        {prompt.kind !== "plug" && (
+          <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+            · {touch ? t("tapToUse") : opens ? t("pressToOpen") : t("pressToUse")}
+          </span>
+        )}
+      </button>
+    );
+  }
+  const items = targets.items;
+  const focus = items[targets.at] ?? items[0];
+  const verb = (it: (typeof items)[number]) =>
+    it.kind === "object" && it.act === "use"
+      ? t(prompt?.kind === "notice" || prompt?.kind === "screen" ? "pressToOpen" : "pressToUse")
+      : (trMaybe(`act_${it.act}`) ?? it.act);
+  return (
+    <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[176px] sm:bottom-[112px] flex flex-col items-center gap-1.5 max-w-[calc(100vw-24px)]">
+      {items
+        .filter((it) => it !== focus)
+        .map((it) => (
+          <div
+            key={it.key}
+            className="cabinet rounded-full pl-1 pr-3 py-1 flex items-center gap-2"
+            style={{ transform: "scale(.86)", opacity: 0.72 }}
+          >
+            <Thumb objectId={it.objectId} kind={it.kind} />
+            <span className="text-[13px] truncate">{it.label}</span>
+            <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+              · {verb(it)}
+            </span>
+          </div>
+        ))}
+      <button
+        type="button"
+        onClick={() => w?.interact()}
+        className="pointer-events-auto cabinet rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 rise"
+        data-focus={focus.key}
+      >
+        <Thumb objectId={focus.objectId} kind={focus.kind} />
+        <span className="text-sm truncate">{focus.label}</span>
+        {!touch && glyph}
+        <span className="text-sm whitespace-nowrap" style={{ color: "var(--amber)" }}>
+          {verb(focus)}
         </span>
-      )}
-    </button>
+        {!touch && focus.kind !== "toy" && focus.kind !== "npc" && (
+          <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+            · {t("holdMore")}
+          </span>
+        )}
+      </button>
+    </div>
   );
 }
 
-// Mouse look (3D): the pointer is locked — how to get it back. Shown as it
-// starts, gone after a few seconds (it fades).
+// a prompt's picture: the thing's, else a mark for who or what it is
+function Thumb({ objectId, kind }: { objectId?: string; kind?: string }) {
+  const w = useWorld();
+  const o = objectId ? w?.model?.getObject(objectId) : undefined;
+  return (
+    <span
+      className="w-9 h-9 rounded-full grid place-items-center shrink-0 p-1 text-[15px]"
+      style={{ background: "radial-gradient(var(--tile-hi),var(--panel))", border: "1px solid var(--edge)" }}
+      aria-hidden
+    >
+      {o ? <ItemThumb kind={o.kind} props={o.props} /> : MARK[kind ?? ""]}
+    </span>
+  );
+}
+const MARK: Record<string, string> = { person: "☺", pet: "🐾", npc: "◉", toy: "●" };
+
+// The mouse is the camera (docs/plan/56-the-controls.md A): as it takes the pointer, how to get it
+// back (gone after a few seconds); in play without it (Esc let it go, or not yet clicked), how to
+// give it again — while nothing on screen wants the pointer.
 const LOOK_HINT_MS = 3000;
 export function LookHint() {
   const t = useTr();
   const look = useHud((s) => s.look);
+  const free = useHud(
+    (s) =>
+      s.phase === "ready" &&
+      !s.loading.on &&
+      !s.menu &&
+      !s.panel.kind &&
+      !s.build.on &&
+      !s.pickArrival &&
+      s.side === null &&
+      !s.phone.open &&
+      !s.god.on,
+  );
+  const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
   const [phase, setPhase] = useState<"on" | "fading" | "off">("off");
   useEffect(() => {
     if (!look) return setPhase("off");
@@ -69,18 +154,22 @@ export function LookHint() {
       clearTimeout(gone);
     };
   }, [look]);
-  if (phase === "off") return null;
+  if (touch) return null;
+  const ask = !look && free;
+  if (!ask && phase === "off") return null;
   return (
     <div
       // (rise holds opacity 1 once in: off while fading)
-      className={`absolute left-1/2 -translate-x-1/2 top-[76px] cabinet rounded-full px-3 py-1 flex items-center gap-2 ${phase === "on" ? "rise" : ""}`}
-      style={{ opacity: phase === "fading" ? 0 : 1, transition: "opacity .4s" }}
+      className={`absolute left-1/2 -translate-x-1/2 top-[76px] cabinet rounded-full px-3 py-1 flex items-center gap-2 pointer-events-none ${ask || phase === "on" ? "rise" : ""}`}
+      style={{ opacity: !ask && phase === "fading" ? 0 : 1, transition: "opacity .4s" }}
     >
-      <kbd className="keycap" style={{ color: "var(--cream)", opacity: 1, height: 20, minWidth: 20, fontSize: 11 }}>
-        Z
-      </kbd>
+      {!ask && (
+        <kbd className="keycap" style={{ color: "var(--cream)", opacity: 1, height: 20, minWidth: 20, fontSize: 11 }}>
+          Esc
+        </kbd>
+      )}
       <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
-        {t("lookHint")}
+        {t(ask ? "lookClick" : "lookHint")}
       </span>
     </div>
   );
@@ -595,6 +684,29 @@ export function Minimap() {
           ))}
         </span>
       </div>
+    </div>
+  );
+}
+
+// Locked on (docs/plan/56-the-controls.md E): to whom or what, and how to switch.
+export function LockChip() {
+  const t = useTr();
+  const lock = useHud((s) => s.lockOn);
+  const pad = useHud((s) => s.padLive);
+  if (!lock) return null;
+  const cap = { color: "var(--amber)", opacity: 1, height: 20, minWidth: 20, fontSize: 11 };
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 top-[112px] cabinet rounded-full pl-2 pr-3.5 py-1 flex items-center gap-2 rise pointer-events-none">
+      <kbd className="keycap" style={cap}>
+        {pad ? "RB" : "F"}
+      </kbd>
+      <span className="mono text-[11px] uppercase tracking-[.06em]" style={{ color: "var(--vfd)" }}>
+        {t("lockOn")}
+      </span>
+      <span className="text-sm whitespace-nowrap">{lock.label}</span>
+      <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+        · {t(pad ? "lockNextPad" : "lockNext")}
+      </span>
     </div>
   );
 }

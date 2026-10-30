@@ -350,6 +350,8 @@ class Dark implements DarkHooks {
   }
   presses(p: Set<Press>, aiming: boolean): void {
     this.arms.presses(p, aiming);
+    // LB held and A B X Y: the quick slots, as 1–4 (docs/plan/56-the-controls.md phase 6)
+    for (let i = 0; i < 4; i++) if (p.has(`slot${i + 1}` as Press)) this.arms.quick(i);
   }
   aid(): void {
     const slot = this.inv ? findStack(this.inv, "aid") : -1;

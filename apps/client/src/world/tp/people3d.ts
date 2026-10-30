@@ -7,6 +7,7 @@ import {
   type JumpNow,
   SOCIAL_MS,
 } from "@yutopia/shared";
+import type { FlowLook } from "@yutopia/shared/move";
 import {
   CanvasTexture,
   CircleGeometry,
@@ -153,6 +154,11 @@ export interface PersonIn {
   mv?: number; // the gait, crouching, aiming (shared/move packMv)
   // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)
   verb?: { kind: string; t: number; at?: number };
+  // a Flowmotion move (docs/plan/56-the-controls.md F): mine as it is (shared move FlowLook), or
+  // someone's by its byte (move/flow.ts flowCode) and since when it shows (performance.now ms)
+  flow?: FlowLook | null;
+  flowCode?: number;
+  flowAt?: number;
   pitch?: number; // aiming: up from level (radians)
   // one of the shadowed (docs/plan/30-the-dark.md D5; world/dark gives them): its upper body's
   // pose and how far in (s), its own twitches, how wrapped in the dark it is (0 bare … 1),

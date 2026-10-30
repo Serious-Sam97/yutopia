@@ -238,3 +238,41 @@ export async function walkTo(page: Page, x: number, y: number, ms = 12_000) {
     { timeout: ms },
   );
 }
+
+// Use on something (docs/plan/56-the-controls.md C — no clicking the world): close enough to it,
+// facing it, it the focus ([ ] till it is, given its key: "o:id", "p:sid", "pet:id", "toy:id"),
+// then E held (its menu) or tapped (its main action).
+export async function actOn(page: Page, x: number, y: number, o: { key?: string; near?: number; hold?: boolean } = {}) {
+  const near = o.near ?? 1.3;
+  const m = (await page.evaluate(() => (window as any).__yutopia.meTile())) as { x: number; y: number };
+  const d = Math.hypot(x - m.x, y - m.y);
+  if (d > near + 0.25) {
+    const k = (d - near) / d;
+    await walkTo(page, m.x + (x - m.x) * k, m.y + (y - m.y) * k, 20_000);
+  }
+  await page.evaluate(
+    ([tx, ty]) => {
+      const w = (window as any).__yutopia;
+      const yaw = Math.atan2(ty - w.me.y, tx - w.me.x);
+      w.walker.body.yaw = yaw;
+      if (w.walker.prev) w.walker.prev.yaw = yaw;
+    },
+    [x, y],
+  );
+  const focus = () => page.evaluate(() => (window as any).__yutopia.walker.targets.focus?.key ?? null);
+  await expect.poll(focus, { timeout: 5000 }).not.toBeNull();
+  if (o.key) {
+    for (let i = 0; i < 4 && (await focus()) !== o.key; i++) {
+      await page.keyboard.press("BracketRight");
+      await page.waitForTimeout(150);
+    }
+    const list = await page.evaluate(() =>
+      (window as any).__yutopia.walker.targets.list.map((t: any) => `${t.key} ${t.score.toFixed(2)}`),
+    );
+    expect(await focus(), `the focus (in reach: ${list.join(", ")})`).toBe(o.key);
+  }
+  if (o.hold === false) return page.keyboard.press("KeyE");
+  await page.keyboard.down("KeyE");
+  await page.waitForTimeout(450);
+  await page.keyboard.up("KeyE");
+}

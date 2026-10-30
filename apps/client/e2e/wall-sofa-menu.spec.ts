@@ -1,28 +1,11 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
+import { ANA, actOn, enter, test, token, useWorld } from "./helpers";
 
 // Three fixes, in the Lab (everything put out is removed after): things that
-// hang on a wall go on a west wall too (turned, rot 3); people stay clickable
-// after build mode closes; the sofa seats people.
+// hang on a wall go on a west wall too (turned, rot 3); menus open again after build mode
+// closes; the sofa seats people (Use, not a click: docs/plan/56-the-controls.md C).
 
-async function at(page: Page, x: number, y: number, z = 0) {
-  return page.evaluate(
-    ([tx, ty, tz]) => {
-      const w = (window as any).__yutopia;
-      const r = w.hostRect();
-      const s = w.model.worldToClient(tx, ty, tz);
-      return { x: r.left + s.x, y: r.top + s.y };
-    },
-    [x, y, z],
-  );
-}
-async function clickAt(page: Page, x: number, y: number, z: number) {
-  const p = await at(page, x, y, z);
-  await page.mouse.move(p.x, p.y);
-  await page.waitForTimeout(100);
-  await page.mouse.click(p.x, p.y);
-}
 const put = (page: Page, o: Record<string, unknown>) =>
   page.evaluate((x) => (window as any).__yutopia.send("obj:put", x), o);
 const obj = (page: Page, id: string) =>
@@ -97,7 +80,7 @@ test("wall things hang on a west wall", async ({ page }) => {
   }
 });
 
-test("after build mode, people (and you) are clickable again", async ({ page }) => {
+test("after build mode, Use held opens a menu again", async ({ page }) => {
   test.setTimeout(60_000);
   const tok = await token(ANA);
   await enter(page, tok, await useWorld("lab"));
@@ -109,18 +92,15 @@ test("after build mode, people (and you) are clickable again", async ({ page }) 
   await page.keyboard.press("Escape");
   await expect.poll(() => page.evaluate(() => (window as any).__hud.get().build.on)).toBe(false);
   expect(await page.evaluate(() => (window as any).__yutopia.model.passAvatars)).toBe(false);
-  // click myself: my menu
-  await holdCamera(page);
+  // Use held: a menu (what's in front of me, or mine)
   await page.waitForTimeout(400);
-  const p = await page.evaluate(() => {
-    const w = (window as any).__yutopia;
-    return w.model.avatarAt(w.room.sessionId);
-  });
-  await clickAt(page, p.x, p.y, 40);
+  await page.keyboard.down("KeyE");
+  await page.waitForTimeout(450);
+  await page.keyboard.up("KeyE");
   await expect(page.getByRole("menu")).toBeVisible();
 });
 
-test("the sofa: click it, Sit, and you sit on it", async ({ page }) => {
+test("the sofa: Use held on it, Sit, and you sit on it", async ({ page }) => {
   test.setTimeout(60_000);
   const tok = await token(ANA);
   await enter(page, tok, await useWorld("lab"));
@@ -131,9 +111,7 @@ test("the sofa: click it, Sit, and you sit on it", async ({ page }) => {
   try {
     await put(page, { id, kind: "sofa", x: X, y: Y, rot: 0, props: {} });
     await expect.poll(() => obj(page, id)).toEqual({ x: X, y: Y, rot: 0 });
-    await holdCamera(page);
-    await page.waitForTimeout(500);
-    await clickAt(page, X + 1.5, Y + 0.5, 14);
+    await actOn(page, X + 1.5, Y + 0.5, { key: `o:${id}` });
     const menu = page.getByRole("menu", { name: /Sofa/ });
     await expect(menu).toBeVisible();
     await menu.getByRole("menuitem", { name: "Sit" }).click();

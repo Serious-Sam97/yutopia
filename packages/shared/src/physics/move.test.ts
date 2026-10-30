@@ -432,3 +432,32 @@ test("on land the world hasn't built yet (just teleported far): the grid's way, 
   run(b, env, 0.5, () => go());
   assert.ok(b.x > 50.5 && Math.abs(b.z - 2) < 0.05, `walked to ${b.x}, ${b.z}`);
 });
+
+test("up a 30° slope: along the ground the body keeps its pace; without, the slope eats it (plan 56 H.3)", async () => {
+  const end: Record<string, Body> = {};
+  let pace = 0;
+  for (const along of [false, true]) {
+    const { world, env, mover } = await pad(40, 12);
+    // a ramp of land rising east from x 4, 30°, to a 4 m top
+    const n = 65;
+    const h = new Float32Array(n * n);
+    for (let j = 0; j < n; j++)
+      for (let i = 0; i < n; i++) h[j * n + i] = Math.min(4, Math.max(0, (i * 0.5 - 4) * Math.tan(Math.PI / 6)));
+    world.setLand("land:0,0", { x0: 0, z0: 0, n, step: 0.5, h });
+    world.settle();
+    mover.along = along;
+    const b = newBody(2, 6);
+    const tr = run(b, env, 2.4, () => go());
+    end[String(along)] = b;
+    if (along) {
+      // its pace across the slope, between x 6 and x 9 (on it, past the foot's crease)
+      const a = tr.find((s) => s.b.x >= 6);
+      const c = tr.find((s) => s.b.x >= 9);
+      assert.ok(a && c, `along: up it (to x ${b.x.toFixed(2)}, z ${b.z.toFixed(2)})`);
+      pace = (c.b.x - a.b.x) / (c.t - a.t);
+      assert.ok(c.b.z > 2, `up the slope: z ${c.b.z}`);
+    }
+  }
+  assert.ok(pace > 0.95 * MOVE.jog, `along: ${pace}`);
+  assert.ok(end.true.x > end.false.x + 2, `along to x ${end.true.x}, today's to ${end.false.x}`);
+});

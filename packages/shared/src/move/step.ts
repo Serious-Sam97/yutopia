@@ -1,5 +1,6 @@
 import { type Grid, moveStep } from "../grid.ts";
-import { type Height, type JumpKind, stepHeight } from "../jump.ts";
+import { type Height, JUMP_G, type JumpKind, stepHeight } from "../jump.ts";
+import type { FlowKind, FlowNow, FlowWorld } from "./flow.ts";
 import { type Gait, MOVE, type MoveSpec, STEP_DT } from "./spec.ts";
 import { type Footing, footGrip, GRIP } from "./surface.ts";
 import { probeVault, rollSpeed, type VerbKind, verbLen, verbPath } from "./verbs.ts";
@@ -75,6 +76,8 @@ export interface MoveEnv {
   speed?(x: number, y: number): number;
   /** something there the grid doesn't know about (a car on the move): in the way */
   blocked?(x: number, y: number): boolean;
+  /** what can be run, swung round, ground along (Flowmotion: flow.ts) */
+  flow?: FlowWorld;
 }
 
 const groundSpeed = (env: MoveEnv, x: number, y: number) => env.speed?.(x, y) ?? env.grid.speedAt(x, y);
@@ -122,6 +125,13 @@ export interface Body {
   verb: VerbNow | null;
   /** 0..1, the last landing's force (the body's squash) */
   landed: number;
+  /** jumps made in this air time; an air dash made, and s left in it (the KH spec's: plan 56) */
+  airJumps?: number;
+  dashed?: boolean;
+  airDash?: number;
+  /** a Flowmotion move under way (flow.ts), and s left of a kick's or a fling's way kept */
+  flow?: FlowNow | null;
+  carry?: number;
   /** s simulated */
   t: number;
 }
@@ -132,6 +142,12 @@ export interface StepEvents {
   landed?: number;
   verb?: VerbKind;
   ended?: VerbKind;
+  /** a jump in the air (a double jump: `jumped` says "flip"), an air dash started */
+  airJump?: boolean;
+  airDash?: boolean;
+  /** Flowmotion: a move begun (a kick's instant), one ended and how */
+  flow?: FlowKind | "kick";
+  flowEnd?: string;
 }
 
 export function newBody(x: number, y: number, z = 0, yaw = 0): Body {
@@ -180,13 +196,37 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   b.coyote = b.up ? Math.max(0, b.coyote - dt) : spec.coyote;
 
   if (b.verb) {
-    // a jump out of a slide
-    if (b.verb.kind === "slide" && b.buffer > 0) b.verb = null;
-    else {
+    // a jump out of a slide: from the ground, whatever the slide's last step said (going fast over
+    // the land a slide can read a hair up — and a jump from the air is the air's, a flip)
+    if (b.verb.kind === "slide" && b.buffer > 0) {
+      b.verb = null;
+      b.up = false;
+      b.coyote = spec.coyote;
+    } else {
       stepVerb(b, env, spec, dt, ev);
       return ev;
     }
   }
+
+  // (back on the ground: the air's jumps and dash are there again)
+  if (!b.up && (spec.airJumps || spec.airDash)) {
+    b.airJumps = 0;
+    b.dashed = false;
+    b.airDash = 0;
+  }
+  if (b.airDash && spec.airDash) {
+    stepAirDash(b, env, spec, dt, ev);
+    return ev;
+  }
+  if (b.flow && spec.flow) {
+    // (gone where nothing's tagged — through a door, the 3D view let go: the move's over)
+    if (!env.flow) b.flow = null;
+    else {
+      env.flow.moves.step(b, inp, env.grid, spec, dt, ev, env.flow);
+      return ev;
+    }
+  }
+  if (b.carry) b.carry = Math.max(0, b.carry - dt);
 
   const mag = Math.min(1, Math.hypot(inp.x, inp.y));
   const ux = mag > 1e-3 ? inp.x / Math.hypot(inp.x, inp.y) : Math.cos(b.yaw);
@@ -194,11 +234,34 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   const foot = footGrip(env.footing(b.x, b.y));
   const speed = speedOf(b);
 
+  // ── Flowmotion: a wall, a pole, a rail, a ledge (flow.ts: the KH spec's, where the world tags them)
+  if (spec.flow && env.flow?.moves.start(b, inp, env.grid, env.flow, spec, ux, uy, mag, ev)) {
+    env.flow.moves.step(b, inp, env.grid, spec, dt, ev, env.flow);
+    return ev;
+  }
+  // (kicked off a wall this step: the press is the kick's — in the air already, nothing else starts)
+  if (ev.flow === "kick") {
+    inp.dodgePressed = false;
+    inp.jumpPressed = false;
+  }
+
   // ── the verbs a press starts
   if (inp.dodgePressed && !b.up && b.takeoff < 0) {
     begin(b, "roll", ux, uy, 0, 0, spec);
     ev.verb = "roll";
     stepVerb(b, env, spec, dt, ev);
+    return ev;
+  }
+  if (inp.dodgePressed && b.up && spec.airDash && !b.dashed && b.takeoff < 0) {
+    const s = spec.airDash.dist / spec.airDash.len;
+    b.dashed = true;
+    b.airDash = spec.airDash.len;
+    b.vx = ux * s;
+    b.vy = uy * s;
+    b.yaw = Math.atan2(uy, ux);
+    b.rising = false;
+    ev.airDash = true;
+    stepAirDash(b, env, spec, dt, ev);
     return ev;
   }
   if (inp.crouchPressed && !b.up && b.gait === "sprint" && speed > spec.slide.enter * spec.sprint) {
@@ -211,7 +274,9 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   }
   if (b.buffer > 0 && b.takeoff < 0 && (!b.up || b.coyote > 0)) {
     // something ahead to get over, going towards it
-    const p = mag > 0.2 ? probeVault(grid, b.x, b.y, b.z, ux, uy, speed, spec) : null;
+    let p = mag > 0.2 ? probeVault(grid, b.x, b.y, b.z, ux, uy, speed, spec) : null;
+    // (a rail's to be jumped onto and ground along, not vaulted)
+    if (p && env.flow && spec.flow && railAhead(env.flow, b, ux, uy, b.z + p.h)) p = null;
     b.buffer = 0;
     b.coyote = 0;
     if (p) {
@@ -221,7 +286,24 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
       return ev;
     }
     b.takeoff = spec.takeoff;
-    b.jump = b.gait === "sprint" ? "flip" : "hop";
+    b.jump = b.gait === "sprint" ? (spec.leap ? "leap" : "flip") : "hop";
+  } else if (
+    inp.jumpPressed &&
+    b.up &&
+    b.coyote <= 0 &&
+    b.takeoff < 0 &&
+    !b.verb &&
+    (b.airJumps ?? 0) < (spec.airJumps ?? 0)
+  ) {
+    // a jump in the air: up again from wherever the body is, a flip
+    b.airJumps = (b.airJumps ?? 0) + 1;
+    b.buffer = 0;
+    b.vz = Math.sqrt(2 * spec.g * (spec.airJump ?? spec.hop));
+    b.rising = true;
+    b.riseFrom = b.z;
+    b.jump = "flip";
+    ev.jumped = "flip";
+    ev.airJump = true;
   }
   // in the air with the jump held, going at something too high to clear: catch its edge, climb up
   if (b.up && inp.jump && mag > 0.2 && b.vz < 2.5 && b.takeoff < 0) {
@@ -236,7 +318,7 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   if (b.takeoff >= 0) {
     b.takeoff -= dt;
     if (b.takeoff <= 0) {
-      const h = b.jump === "flip" ? spec.flip : spec.hop;
+      const h = b.jump === "hop" ? spec.hop : spec.flip;
       b.vz = Math.sqrt(2 * spec.g * h);
       b.up = true;
       b.rising = true;
@@ -249,7 +331,7 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   if (b.rising) {
     if (b.vz <= 0) b.rising = false;
     else if (!inp.jump) {
-      const tap = b.jump === "flip" ? spec.flipTap : spec.hopTap;
+      const tap = b.jump === "hop" ? spec.hopTap : spec.flipTap;
       const rest = Math.max(0.04, tap - (b.z - b.riseFrom));
       b.vz = Math.min(b.vz, Math.sqrt(2 * spec.g * rest));
       b.rising = false;
@@ -293,7 +375,11 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   const dv = Math.hypot(dvx, dvy);
   if (dv > 1e-9) {
     const gaining = wx * b.vx + wy * b.vy >= b.vx * b.vx + b.vy * b.vy;
-    const rate = b.up ? air : gaining ? foot.accel : foot.decel;
+    const rate = b.up
+      ? air * (b.carry ? 0.12 : 1) * (spec.grip ?? 1)
+      : gaining
+        ? foot.accel * (spec.grip ?? 1)
+        : foot.decel * (spec.gripStop ?? spec.grip ?? 1);
     const k = Math.min(1, (rate * dt) / dv);
     b.vx += dvx * k;
     b.vy += dvy * k;
@@ -301,21 +387,59 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
 
   // ── moving: sliding along walls, a blocked way's speed gone; up steps, and down them; the
   // feet: falling, landing, stepping off
+  gravity(b, spec, dt);
   settle(b, env, dt, b.up ? 0 : spec.stepUp, spec, ev);
 
   // ── facing: where you aim, else where you mean to go
+  const going = speedOf(b);
   const heading =
     inp.aim || inp.faceLook
       ? inp.look
-      : mag > 0.1
-        ? Math.atan2(uy, ux)
-        : speedOf(b) > 0.3
-          ? Math.atan2(b.vy, b.vx)
-          : b.yaw;
-  const rate = b.up ? spec.airTurn : spec.turn * foot.turn;
+      : // (plan 58: on the move, the way it goes — turns are arcs, a reversal turns round as it stops)
+        spec.faceWay && !b.up && going > spec.walk * 0.6
+        ? Math.atan2(b.vy, b.vx)
+        : mag > 0.1
+          ? Math.atan2(uy, ux)
+          : going > 0.3
+            ? Math.atan2(b.vy, b.vx)
+            : b.yaw;
+  const rate = b.up
+    ? spec.airTurn
+    : (spec.turnRun ? spec.turn + (spec.turnRun - spec.turn) * Math.min(1, going / spec.jog) : spec.turn) * foot.turn;
   b.yaw = turnTo(b.yaw, heading, rate * dt);
   b.gait = gait === "still" && speedOf(b) > 0.4 ? b.gait : gait;
   return ev;
+}
+
+/** The spec's own gravity (plan 56: harder down than up, a hang at the top, a fastest fall), as
+ *  what the mover is about to take off `vz` (JUMP_G) made up to it. MOVE's: nothing changes. */
+function gravity(b: Body, spec: MoveSpec, dt: number) {
+  if (!b.up) return;
+  let g = b.vz > 0 ? spec.g : (spec.gDown ?? spec.g);
+  if (spec.hang && Math.abs(b.vz) < spec.hang.band) g *= spec.hang.k;
+  if (g !== JUMP_G) b.vz += (JUMP_G - g) * dt;
+  if (spec.fallCap !== undefined) b.vz = Math.max(b.vz, JUMP_G * dt - spec.fallCap);
+}
+
+/** The air dash: straight on at its speed, no fall (the mover's gravity made up), and on at a run
+ *  when it's done; landing ends it. */
+function stepAirDash(b: Body, env: MoveEnv, spec: MoveSpec, dt: number, ev: StepEvents) {
+  const d = spec.airDash as NonNullable<MoveSpec["airDash"]>;
+  const s0 = speedOf(b);
+  const ux = s0 > 1e-6 ? b.vx / s0 : Math.cos(b.yaw);
+  const uy = s0 > 1e-6 ? b.vy / s0 : Math.sin(b.yaw);
+  const s = d.dist / d.len;
+  b.airDash = Math.max(0, (b.airDash ?? 0) - dt);
+  b.vx = ux * s;
+  b.vy = uy * s;
+  b.vz = JUMP_G * dt;
+  settle(b, env, dt, 0, spec, ev);
+  if (!b.up) b.airDash = 0;
+  if (!b.airDash) {
+    b.vx = ux * Math.min(s, spec.jog);
+    b.vy = uy * Math.min(s, spec.jog);
+    b.vz = Math.min(b.vz, 0);
+  }
 }
 
 /** Moved and on its feet: by the env's mover, or the grid's way. */
@@ -410,6 +534,12 @@ function begin(
   b.yaw = Math.atan2(uy, ux);
 }
 
+// a rail across the way within a vault's reach, its top at `top`
+function railAhead(flow: FlowWorld, b: Body, ux: number, uy: number, top: number): boolean {
+  for (const d of [0.3, 0.6, 0.9, 1.2]) if (flow.rail(b.x + ux * d, b.y + uy * d, top, 0.15)) return true;
+  return false;
+}
+
 function stepVerb(b: Body, env: MoveEnv, spec: MoveSpec, dt: number, ev: StepEvents) {
   const v = b.verb as VerbNow;
   const grid = env.grid;
@@ -447,6 +577,7 @@ function stepVerb(b: Body, env: MoveEnv, spec: MoveSpec, dt: number, ev: StepEve
   }
   b.vx = v.ux * s;
   b.vy = v.uy * s;
+  gravity(b, spec, dt);
   settle(b, env, dt, b.up ? 0 : spec.stepUp, spec, ev);
   if (k >= 1 || (v.kind === "slide" && s < spec.slide.minSpeed)) end(b, ev);
 }

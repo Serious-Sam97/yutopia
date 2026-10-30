@@ -1,7 +1,7 @@
 import { Shape, Vector3 } from "three";
 import type { Kit } from "../kit";
 import { arc, extrude, lathe, type Prof, sweepTube } from "../shapes";
-import { type Body, lerp } from "./body";
+import { type Body, lerp, smooth } from "./body";
 import { chestBand, chestDot, shade } from "./tops";
 
 // One more thing — every AvatarLayers extra: walkman, scarf, earrings,
@@ -58,6 +58,7 @@ export function buildExtra(k: Kit, b: Body, kind: string, color: string, o: { ea
       const ring = lathe(arc(nr * 1.75, 0.04 * hh, 0.09 * hh, -Math.PI / 2, Math.PI * 1.5, k.seg.ring * 2), R);
       k.add("neck", ring, color);
       const x0 = nr * 0.6;
+      const from = k.parts.length;
       k.add(
         "spine",
         toSpine(
@@ -90,6 +91,13 @@ export function buildExtra(k: Kit, b: Body, kind: string, color: string, o: { ea
         ),
         shade(color, 0.88),
       );
+      // (the ends hang from under the knot on the scarf's spring, swinging off the chest: plan 58
+      // phase 2d; spine space here, the spring's in the chest's)
+      const knot = 0.93 * T;
+      for (const q of k.parts.slice(from))
+        q.skin = (_x, y) => ["scarf", smooth(knot - b.spineY, 0.55 * T - b.spineY, y)];
+      const front = b.surf(0, knot, 1.1);
+      k.spring("scarf", [0, knot - b.chestY, front.z], [0, -0.42 * T, 0.03 * hh], { hz: 2.6, damp: 0.35, limit: 0.6 });
       return;
     }
     case "earrings": {
@@ -133,6 +141,15 @@ export function buildExtra(k: Kit, b: Body, kind: string, color: string, o: { ea
       k.add("spine", toSpine(g.translate(at.x, at.y, at.z - 0.11 * hh)), color);
       const flap = box(0.5 * hh, 0.26 * hh, 0.05 * hh, 0.06 * hh, k);
       k.add("spine", toSpine(flap.translate(at.x, at.y + 0.2 * hh, at.z - 0.24 * hh)), shade(color, 0.85));
+      // (the pack bounces on its spring from its top, the straps stay: plan 58 phase 2d)
+      const top = at.y + 0.37 * hh;
+      for (const q of k.parts.slice(-2))
+        q.skin = (_x, y) => ["pack", 0.85 * smooth(top - b.spineY, top - 0.3 * hh - b.spineY, y)];
+      k.spring("pack", [0, top - b.chestY, at.z - 0.11 * hh], [0, -0.75 * hh, -0.02 * hh], {
+        hz: 4.5,
+        damp: 0.4,
+        limit: 0.12,
+      });
       for (const sx of [1, -1]) {
         const x = sx * b.trunk.r(0.85 * T) * 0.45;
         let yTop = 0.85 * T;

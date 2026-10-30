@@ -95,7 +95,7 @@ test("ping-pong: serve to Vortex with the mouse, he plays it back — seen from 
     await walkTo(ana, T.x - 0.7, T.y + 1, 25_000);
     await ana.waitForTimeout(400);
     const prompt = await ana.evaluate(() => (window as any).__hud.get().prompt?.kind);
-    if (prompt === "pong") await ana.keyboard.press("x");
+    if (prompt === "pong") await ana.keyboard.press("e");
     else await ana.evaluate((i) => (window as any).__yutopia.activateObject(i, true), id);
     await expect(ana.getByRole("dialog", { name: "Ping-pong" })).toBeVisible();
     await ana.waitForFunction(() => !!(window as any).__yutopia.tables?.pong, null, { timeout: 15_000 });

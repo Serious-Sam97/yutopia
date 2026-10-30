@@ -1,8 +1,8 @@
 import { type HeldKind, heldState, type JumpNow } from "@yutopia/shared";
 import { Euler, Quaternion } from "three";
-import { type LocoIn, Locomotion } from "./locomotion";
+import { heroNow, type LocoIn, Locomotion, loadHero } from "./locomotion";
 import type { Reach } from "./model";
-import { type Euler3, JOINTS, type JointName, type Pose, REST } from "./rig";
+import { type Euler3, HANDS, handPose, JOINTS, type JointName, type Pose, REST } from "./rig";
 
 // How a 3D person moves (docs/plan/22-people-3d.md, P3): the same layers, in
 // the same order and with the same timings, as the 2D people's `Motion`
@@ -38,6 +38,8 @@ export interface MotionOut {
   lift: Euler3;
   blink: number;
   talk: number;
+  /** plan 58 G.D: where the eyes look (−1..1: x to the left, y up), when they're the gaze's */
+  eyes?: [number, number];
   /** 0 → 1 over a sit-down or get-up (the view lowers the hips onto the seat with it) */
   settle: number;
   /** the right hand is up at the mouth (a sip): what it holds tips */
@@ -153,11 +155,17 @@ export function walkPose(phase: number, k = 1): { pose: Pose; lift: Euler3 } {
 // ── what the hands do ───────────────────────────────────────────────────────
 export function holdPose(): Pose {
   // a mug at the waist in the right hand
-  return { shoulderR: [-0.3, 0, -0.12], elbowR: [-1.45, 0.25, 0], wristR: [0.1, 0, 0] };
+  return { shoulderR: [-0.3, 0, -0.12], elbowR: [-1.45, 0.25, 0], wristR: [0.1, 0, 0], ...handPose(-1, HANDS.grip) };
 }
 export function sipPose(): Pose {
   // up at the mouth
-  return { shoulderR: [-1.05, 0, -0.3], elbowR: [-2.25, 0.45, 0], wristR: [-0.3, 0, 0], head: [-0.16, 0, 0] };
+  return {
+    shoulderR: [-1.05, 0, -0.3],
+    elbowR: [-2.25, 0.45, 0],
+    wristR: [-0.3, 0, 0],
+    head: [-0.16, 0, 0],
+    ...handPose(-1, HANDS.grip),
+  };
 }
 export const sipEnv = (s: number) => (s < 0 ? 0 : ease(s / 0.28) * (1 - ease((s - 0.72) / 0.28)));
 
@@ -271,8 +279,10 @@ export function busyPose(what: string, t: number): { pose: Pose; lift: Euler3 } 
 }
 
 // The phone in the hand (shared/phone.ts PHONE_STATES), a pose for a photo with the free hand.
+// (the phone held in the right hand, the thumb free over its screen)
+const PHONE_HAND = { fingers: 1.05, index: 0.95, thumb: 0.2 };
 export function phonePose(state: string, pose: string, t: number, talking: boolean): Pose {
-  const p: Pose = {};
+  const p: Pose = { ...handPose(-1, PHONE_HAND) };
   switch (state) {
     case "text": {
       // both hands low in front, thumbs going, head down over it
@@ -323,17 +333,22 @@ export function phonePose(state: string, pose: string, t: number, talking: boole
   }
   if (state === "selfie" || state === "photo") {
     // the free hand poses for it
+    // (the hand's own shape: plan 58 phase 2c — the index out, the thumb up; peace is the index and
+    // the rest half open, as near as one hinge for the other fingers gets)
     if (pose === "peace") {
       p.shoulderL = [-1.05, 0, 0.42];
       p.elbowL = [-2.1, 0, 0];
       p.wristL = [0, 0, 0.3];
+      Object.assign(p, handPose(1, { fingers: 0.6, index: 0, thumb: 0.9 }));
     } else if (pose === "point") {
       p.shoulderL = [-1.45, 0, 0.1];
       p.elbowL = [-0.06, 0, 0];
+      Object.assign(p, handPose(1, HANDS.point));
     } else if (pose === "thumbs") {
       p.shoulderL = [-0.8, 0, 0.25];
       p.elbowL = [-1.2, 0, 0];
       p.wristL = [0, 0, -1.25];
+      Object.assign(p, handPose(1, HANDS.thumbsUp));
     }
   }
   return p;
@@ -383,6 +398,7 @@ export function emotePose(
       p.shoulderR = [-0.25, 0, -2.55];
       p.elbowR = [0, 0, -0.35 + 0.45 * Math.sin(t * 9)];
       p.head = [0, 0, 0.08];
+      Object.assign(p, handPose(-1, HANDS.open));
       break;
     case "clap": {
       // hands together in front of the chest, clapping
@@ -604,8 +620,13 @@ export class Motion3 {
   private seated: boolean | null = null;
   private settleT = 1;
   private loco: Locomotion | null = null;
+  /** plan 58's animations (phase 0: beside the old till signed off), the mood (0 day … 1 dark) */
+  v2 = false;
+  tension = 0;
+  private seed: number;
 
   constructor(seed: number) {
+    this.seed = seed;
     this.r = rnd(seed);
     this.t = this.r() * 10;
     this.blinkAt = this.t + 1 + this.r() * 3;
@@ -643,7 +664,17 @@ export class Motion3 {
 
     // ── standing / seated, and idle life
     let p = m.sit ? seatedPose(m.typing) : standPose();
-    if (!m.reduced) {
+    // plan 58: the new idle — its weight, breath, glances and mood all its own (once it's in)
+    const H = this.v2 ? heroNow() : null;
+    if (this.v2 && !H) void loadHero();
+    const idle2 = !!H && !m.sit && !m.reduced;
+    if (H && idle2) {
+      // (gazed: the head's turned by the gaze, its eyes leading — Locomotion's)
+      const id = H.idle2Pose(t, this.tension, this.seed * 10, !!m.loco, this.loco?.life());
+      p = id.pose;
+      lifted(id.lift);
+    }
+    if (!m.reduced && !idle2) {
       const breath = Math.sin(t * 2.1);
       add(p, "spine", 0.012 * breath);
       add(p, "head", -0.01 * breath);
@@ -682,6 +713,9 @@ export class Motion3 {
     if (m.loco && !m.sit) {
       // the move: standing (as above), walking, jogging, sprinting, crouched, aiming, in the air
       this.loco ??= new Locomotion();
+      this.loco.v2 = this.v2;
+      this.loco.tension = this.tension;
+      this.loco.seed = this.seed * 10;
       const lo = this.loco.update(
         dt,
         { ...m.loco, dist: m.dist, speed: m.speed, jump: m.jump ?? null, reduced: m.reduced },
@@ -700,7 +734,7 @@ export class Motion3 {
       }
       // a jump takes the whole body (what's in the hands is laid back over it next)
       if (m.jump && !m.sit) {
-        const j = jumpPose(m.jump, !m.reduced);
+        const j = H ? H.jump2Pose(m.jump, !m.reduced) : jumpPose(m.jump, !m.reduced);
         if (j.w > 0) {
           p = blend(p, j.pose, j.w);
           lift[1] = lift[1] * (1 - j.w) + j.lift[1] * j.w;
@@ -754,7 +788,8 @@ export class Motion3 {
     }
 
     // ── the face: blinking, talking
-    if (!m.reduced && t > this.blinkAt) {
+    // (the gaze blinks on its own when it's on: plan 58 G.D)
+    if (!m.reduced && t > this.blinkAt && !this.loco?.gazeOut) {
       this.blinkUntil = t + 0.11;
       this.blinkAt = t + (r() < 0.2 ? 0.25 : 2.2 + r() * 4);
     }
@@ -805,7 +840,10 @@ export class Motion3 {
         if (em.talk !== undefined) talk = Math.max(talk, em.talk * e);
       }
     }
-    return { pose: p, lift, blink, talk, settle: ease(this.settleT), sip, reach };
+    // (the gaze's eyes and its blinks: plan 58 G.D)
+    const gz = this.loco?.gazeOut;
+    if (gz) blink = Math.max(blink, gz.blink);
+    return { pose: p, lift, blink, talk, settle: ease(this.settleT), sip, reach, eyes: gz?.eyes };
   }
 }
 

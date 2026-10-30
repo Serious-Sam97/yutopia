@@ -59,7 +59,7 @@ for (const view of ["3p"] as const)
     await page.waitForTimeout(3000);
     await shot(page, `kart-circuits-${view}-board`);
     try {
-      await page.keyboard.press("x");
+      await page.keyboard.press("e");
       const panel = page.locator("[data-circuits]");
       await expect(panel).toBeVisible();
       await expect(panel.locator("button[data-pick]")).toHaveCount(4);
@@ -185,7 +185,7 @@ for (const view of ["3p"] as const)
           return tp.renderer.domElement.toDataURL("image/png") as string;
         }, board);
         if (dir) writeFileSync(`${dir}/kart-circuits-3p-face.png`, Buffer.from(url.split(",")[1], "base64"));
-        await page.keyboard.press("x");
+        await page.keyboard.press("e");
       }
       // where the Figure Eight's asphalt was: snow underfoot, and to look at (3D)
       if (!lost) throw new Error("no stretch of the Figure Eight's own");
@@ -250,7 +250,7 @@ for (const view of ["3p"] as const)
       await page.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "kart:circuits", null, {
         timeout: 30_000,
       });
-      await page.keyboard.press("x");
+      await page.keyboard.press("e");
       await panel.locator("button[data-pick='eight']").click();
       await panel.locator("button[data-go='set']").click();
       await layoutIs(page, "eight");

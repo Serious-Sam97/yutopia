@@ -9,7 +9,9 @@ import { MOVE, type MoveSpec } from "./spec.ts";
 // grid ahead, and the dodge's roll and the sprint's slide. Each is a shape in
 // time — the same on the client and the server, so the server can check it.
 
-export const VERBS = ["vault", "mantle", "roll", "slide"] as const;
+// (adash: the air dash on the wire — the body keeps it as `airDash`, not a verb of its own:
+// docs/plan/56-the-controls.md B)
+export const VERBS = ["vault", "mantle", "roll", "slide", "adash"] as const;
 export type VerbKind = (typeof VERBS)[number];
 export const isVerb = (k: unknown): k is VerbKind => VERBS.includes(k as VerbKind);
 
@@ -188,5 +190,7 @@ export function verbLen(kind: VerbKind, spec: MoveSpec = MOVE): number {
       ? spec.mantle.len
       : kind === "roll"
         ? spec.roll.len
-        : spec.slide.len;
+        : kind === "adash"
+          ? (spec.airDash?.len ?? 0.18)
+          : spec.slide.len;
 }

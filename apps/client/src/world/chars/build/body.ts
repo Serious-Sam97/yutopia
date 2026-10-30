@@ -1,5 +1,5 @@
 import { BufferGeometry, Float32BufferAttribute, Shape, type Vector2, Vector3 } from "three";
-import type { Kit } from "../kit";
+import type { Kit, Skin } from "../kit";
 import { arc, capsule, extrude, lathe, mapVerts, type Prof, spline2, subdivide } from "../shapes";
 
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -51,6 +51,7 @@ export class Body {
   readonly torsoBot: number;
   readonly T: number; // trunk height
   readonly spineY: number; // the spine joint, up the trunk
+  readonly chestY: number; // the chest joint, up the trunk
   readonly profile: Vector2[]; // the trunk's outline (radius, y)
   readonly trunk: Lookup;
   readonly shY: number; // the shoulder joints, up the trunk
@@ -82,6 +83,7 @@ export class Body {
     const T = this.neckBase - this.torsoBot;
     this.T = T;
     this.spineY = 0.42 * T;
+    this.chestY = 0.66 * T;
     const sq = p.torso.squareness;
     const stations: Prof[] = [
       [0, 0],
@@ -112,14 +114,33 @@ export class Body {
     this.hipX = p.leg.gap * hh;
 
     k.joint("hips", 0, this.torsoBot);
+    // (what the springs keep out of: the head, and the chest round its middle)
+    const mid = (y: number) => this.trunk.r(y) * (1 + p.torso.depth) * 0.5 * 1.08;
+    k.collide.push(
+      { joint: "head", at: [0, 0.5 * hh, 0], r: 0.56 * hh * p.head.width },
+      { joint: "chest", at: [0, 0.72 * this.T - this.chestY, 0], r: mid(0.72 * this.T) },
+    );
+    // (the springs' places when nothing's worn on them: the builders put them where things hang)
+    k.joint("hair", 0, 0.5 * hh, 0);
+    k.joint("skirt", 0, 0.5 * this.T, 0);
+    k.joint("scarf", 0, 0.3 * this.T, 0);
+    k.joint("pack", 0, 0.2 * this.T, 0);
     k.joint("spine", 0, this.spineY);
-    k.joint("neck", 0, this.neckBase - this.torsoBot - this.spineY, -p.head.neckBack * hh);
+    k.joint("chest", 0, this.chestY - this.spineY);
+    k.joint("neck", 0, this.neckBase - this.torsoBot - this.chestY, -p.head.neckBack * hh);
     k.joint("head", 0, this.chinY - this.neckBase, p.head.neckBack * hh);
     for (const side of [1, -1] as const) {
       const S = side > 0 ? "L" : "R";
-      k.joint(`shoulder${S}`, side * this.shX, this.shY - this.spineY);
+      k.joint(`shoulder${S}`, side * this.shX, this.shY - this.chestY);
       k.joint(`elbow${S}`, 0, -this.upper);
       k.joint(`wrist${S}`, 0, -this.fore);
+      // the hand's (the mitten's: fingers down −y, the thumb forward +z): the knuckles across the
+      // palm, the index on the thumb's side; the thumb's root
+      const l = p.hand.size * hh;
+      const w = l * 0.62;
+      k.joint(`fingers${S}`, 0, -0.5 * l, -0.1 * w);
+      k.joint(`index${S}`, 0, -0.5 * l, 0.22 * w);
+      k.joint(`thumb${S}`, 0, -0.1 * l, 0.28 * w);
       k.joint(`thigh${S}`, side * this.hipX, this.hipY - this.torsoBot);
       k.joint(`knee${S}`, 0, -this.thigh);
       k.joint(`ankle${S}`, 0, -this.shin);
@@ -265,12 +286,29 @@ export class Body {
         k.add(`shoulder${side}`, capsule(this.upper, this.uR, this.fR, this.uR * 0.06, R, k.seg.ring), skin);
         k.add(`elbow${side}`, capsule(this.fore, this.fR, this.wR, this.fR * 0.08, R, k.seg.ring), skin);
       }
-      k.add(`wrist${side}`, this.mitten(), skin);
+      k.add(`wrist${side}`, this.mitten(), skin, { skin: this.handSkin(side) });
       if (!hidden.legs) {
         k.add(`thigh${side}`, capsule(this.thigh, this.thighR, this.kneeR, this.thighR * 0.08, R, k.seg.ring), skin);
         k.add(`knee${side}`, capsule(this.shin, this.kneeR, this.ankleR, k.p.leg.calf * this.hh, R, k.seg.ring), skin);
       }
     }
+  }
+
+  /** The mitten's weights (wrist space): the thumb's lobe on the thumb; below the knuckles the
+   *  fingers, the index on the thumb's side — blended across, so a bend stretches, never tears. */
+  handSkin(side: "L" | "R"): Skin {
+    const l = this.k.p.hand.size * this.hh;
+    const w = l * 0.62;
+    return (_x, y, z) => {
+      const thumb = smooth(0.3 * w, 0.48 * w, z) * smooth(-0.64 * l, -0.52 * l, y);
+      const below = smooth(0.42 * l, 0.56 * l, -y) * (1 - thumb);
+      const index = smooth(0.02 * w, 0.24 * w, z);
+      return [
+        [`thumb${side}`, thumb],
+        [`index${side}`, below * index],
+        [`fingers${side}`, below * (1 - index)],
+      ];
+    };
   }
 
   // A mitten, palm side on: fingers down −y, the thumb forward (+z once turned).

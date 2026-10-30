@@ -61,7 +61,7 @@ test("a race on the slot-car track: lights, GO, fly off — seen from across the
     await walkTo(ana, T.x + 2, T.y + 3.6, 25_000);
     await ana.waitForTimeout(500);
     await expect.poll(() => ana.evaluate(() => (window as any).__hud.get().prompt?.kind)).toBe("slotcar");
-    await ana.keyboard.press("x");
+    await ana.keyboard.press("e");
     await expect(ana.getByRole("dialog", { name: "Slot cars" })).toBeVisible();
     // the cars come in their own chunk
     await ana.waitForFunction(() => !!(window as any).__yutopia.slots, null, { timeout: 15_000 });

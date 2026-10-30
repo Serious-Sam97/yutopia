@@ -5,6 +5,7 @@ import { useLang, useTr } from "@/lib/i18n";
 import { hud } from "@/world/store";
 import type { PongInfo } from "@/world/tables/pong";
 import { useWorld } from "./ctx";
+import { usePadFrame } from "./usePad";
 
 // The ping-pong table's console: the camera leans in (iso) or stands behind
 // your end (3D), and this sits under it — the flip-card scoreboard (points,
@@ -118,6 +119,21 @@ export function PongPanel({ objectId }: { objectId: string }) {
   const sig = useRef("");
   const lastNo = useRef(-1);
   const close = () => hud.set({ panel: { kind: null } });
+  // on a pad (docs/plan/56-the-controls.md phase 6): the stick or the d-pad moves the racket, A
+  // serves, B leaves
+  const padDir = useRef<"left" | "right" | null>(null);
+  usePadFrame((f) => {
+    const pong = w?.tables?.pong;
+    if (!pong) return;
+    const x = f.left.x < -0.4 || f.held(14) ? "left" : f.left.x > 0.4 || f.held(15) ? "right" : null;
+    if (x !== padDir.current) {
+      if (padDir.current) pong.key(padDir.current, false);
+      if (x) pong.key(x, true);
+      padDir.current = x;
+    }
+    if (f.pressed(0)) pong.key("serve", true);
+    if (f.pressed(1)) close();
+  });
   const pong = w?.tables?.pong;
 
   useEffect(() => {

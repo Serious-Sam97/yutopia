@@ -30,7 +30,7 @@ import {
 } from "@yutopia/shared";
 import { AIM_BLADE, BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
 import { LAMPS as GROUND_LAMPS, KART_LAND, standLights, terrainAt } from "@yutopia/shared/grounds";
-import { ALOFT, MV_AIM } from "@yutopia/shared/move";
+import { ALOFT, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
   Box3,
@@ -103,6 +103,7 @@ import { BelowCull, boxInParent, HIDDEN_LAYER } from "./below-cull";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
 import { carGeometry } from "./campus";
+import { FollowCam } from "./follow-cam";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { CASTER_LAYER } from "./grounds-stream";
 import type { GunFx } from "./guns3d";
@@ -230,9 +231,11 @@ const EYE_1P = 1.7;
 const EYE_1P_SEATED = 1.2;
 const FOV = 50;
 const VEIL_MS = 150; // into or out of first person: the dip to dark, and back (setMode)
+const AIM_HELP = 0.12; // rad: aiming on a pad or keys, someone this near the reticle is helped onto
 
 const LIMITS: Record<CamMode, { pitch: [number, number]; dist: [number, number] }> = {
-  chase: { pitch: [0.35, 1.0], dist: [2.6, 9] },
+  // (the KH camera: low and behind — docs/plan/56-the-controls.md D; follow-cam.ts keeps it there)
+  chase: { pitch: [-0.15, 0.75], dist: [2, 12] },
   free: { pitch: [-0.12, 1.45], dist: [1.2, 14] },
   first: { pitch: [-1.25, 1.25], dist: [0, 0] },
 };
@@ -324,13 +327,43 @@ export class ThirdPersonView {
 
   mode: CamMode = "chase";
   yaw = -Math.PI * 0.75; // looking where the iso camera looks
-  pitch = 0.62;
-  dist = 5.4;
+  pitch = 0.25; // (the KH camera's rest: follow-cam.ts CAM_TUNE.pitch)
+  dist = 4.2;
   lean = 0.55; // how far people's drawings tip back towards a camera looking down
   hour = 12;
   private target = new Vector3();
   private targetReady = false;
   padFree = true; // the gamepad moves me and the camera (not while it plays a console)
+  /** the camera's keys held this frame (the arrows: docs/plan/56-the-controls.md phase 2) */
+  keyLook = { x: 0, y: 0 };
+  /** The chase camera after Kingdom Hearts 3 (follow-cam.ts: docs/plan/56-the-controls.md D): it
+   *  owns yaw, pitch and distance in chase; the mouse, the stick and the arrows turn it. */
+  readonly follow = new FollowCam();
+  /** where I face (rad, the floor's atan2): R / R3 put the camera behind it (the controller's) */
+  myFacing = 0;
+  private recenterAsk = false;
+  /** Behind me, now (R / R3). */
+  recenter() {
+    this.recenterAsk = true;
+  }
+  /** what I'm locked on to (docs/plan/56 E), my floor's coords, its feet's height: the camera
+   *  frames us both, a ring at its feet (the controller's) */
+  lockAt: { x: number; y: number; z: number; id?: string } | null = null;
+  /** round a pole (Flowmotion's swing: docs/plan/56-the-controls.md F): the pole, my floor's, and
+   *  how far round it I go — the camera holds still on it */
+  swingAt: { x: number; y: number; r: number } | null = null;
+  private flickX = 0;
+  /** A sideways flick of the mouse while locked on (-1, 1; 0 none): the next target that way. */
+  takeFlick(): number {
+    if (Math.abs(this.flickX) < 140) return 0;
+    const s = Math.sign(this.flickX);
+    this.flickX = 0;
+    return s;
+  }
+  /** aiming help on a pad or the keys (not the mouse's: there you aim yourself), and who it helps
+   *  onto (my floor's coords, chest high) — docs/plan/56 E */
+  aimAssist = false;
+  aimTargets: { x: number; y: number; z: number }[] = [];
   private walkAt = { x: 0, y: 0 }; // where I was last frame (the chase camera follows where I go)
   /** aiming (docs/plan/29-the-move.md M5): over the shoulder (`shoulder` 1 the right, -1 the left) */
   aim = false;
@@ -1903,8 +1936,48 @@ void main() {
       this.fov1p = Math.max(40, Math.min(80, this.fov1p * k));
       return;
     }
+    // (the chase camera: how far back it rests — it eases there, and further in a dash)
+    if (this.mode === "chase" && !this.buildMode) {
+      const L = LIMITS.chase.dist;
+      this.follow.tune.dist = Math.max(L[0], Math.min(L[1] - 3, this.follow.tune.dist * k));
+      return;
+    }
     this.dist *= k;
     this.clampCam();
+  }
+  // the lock-on's ring at its feet, turning (docs/plan/56-the-controls.md E)
+  private lockRing: Mesh | null = null;
+  private drawLock() {
+    const l = this.lockAt;
+    if (!l && !this.lockRing) return;
+    if (!this.lockRing) {
+      this.lockRing = new Mesh(
+        new RingGeometry(0.62, 0.72, 48).rotateX(-Math.PI / 2),
+        new MeshBasicMaterial({ color: 0xf1d79a, transparent: true, opacity: 0.85, depthTest: false }),
+      );
+      this.lockRing.renderOrder = 20;
+      this.scene.add(this.lockRing);
+    }
+    const r = this.lockRing;
+    r.visible = !!l;
+    if (!l) return;
+    // (someone: at their feet as they're drawn — out on the land the drawing's height is the view's)
+    const drawn = l.id ? this.people3.get(l.id)?.root.position : undefined;
+    if (drawn) r.position.set(drawn.x, drawn.y + 0.04, drawn.z);
+    else r.position.set(l.x, l.z + 0.04, l.y);
+    r.rotation.y = this.time * 1.6;
+  }
+  // someone near the reticle, aiming (within AIM_HELP of where I look, near enough): how far off
+  private aimNear(me: { x: number; y: number }): { off: number } | null {
+    let best: { off: number } | null = null;
+    for (const t of this.aimTargets) {
+      const d = Math.hypot(t.x - me.x, t.y - me.y);
+      if (d < 0.5 || d > 25) continue;
+      const way = Math.atan2(t.y - me.y, t.x - me.x);
+      const off = Math.atan2(Math.sin(way - this.lookYaw), Math.cos(way - this.lookYaw));
+      if (Math.abs(off) < AIM_HELP && (!best || Math.abs(off) < Math.abs(best.off))) best = { off };
+    }
+    return best;
   }
 
   // Into or out of my head the screen dips to dark and the camera changes there,
@@ -2149,21 +2222,29 @@ void main() {
     const me = bodies.find((b) => b.id === meId);
     this.syncStairs(dt, bodies);
     const pad = this.padFree ? activePad() : null;
-    // look around: Q / E, the right stick
-    let turn = 0;
-    if (this.opts.keys !== false) {
-      if (this.keys.has("KeyQ")) turn -= 1;
-      if (this.keys.has("KeyE")) turn += 1;
-    }
+    // look around: the arrows, the right stick — the chase camera's the KH camera's (follow-cam.ts,
+    // below); the others turn as they did (Q / E in the views that read their own keys)
+    // (build mode keeps the camera where it's put: placing things, it mustn't come round)
+    const chase = this.mode === "chase" && !this.god && !this.buildMode;
+    let lx = this.keyLook.x;
+    let ly = this.keyLook.y;
     if (pad) {
       const [, , rx = 0, ry = 0] = pad.axes;
-      if (Math.abs(rx) > 0.15) turn += rx;
-      if (Math.abs(ry) > 0.15) this.pitch += ry * dt * 1.4;
+      if (!lx && Math.abs(rx) > 0.15) lx = rx;
+      if (!ly && Math.abs(ry) > 0.15) ly = ry;
     }
-    if (turn) {
-      this.yaw += turn * dt * 2.2;
-      this.dragged = this.time;
-    }
+    if (!chase) {
+      let turn = lx;
+      if (ly) this.pitch += ly * dt * 1.4;
+      if (this.opts.keys !== false) {
+        if (this.keys.has("KeyQ")) turn -= 1;
+        if (this.keys.has("KeyE")) turn += 1;
+      }
+      if (turn) {
+        this.yaw += turn * dt * 2.2;
+        this.dragged = this.time;
+      }
+    } else if (lx || ly) this.dragged = this.time;
     // mouse look: the mouse aims the camera (no swinging in behind you)
     if (this.looking) {
       this.dragged = this.time;
@@ -2184,8 +2265,39 @@ void main() {
       const going = Math.atan2(my, mx);
       const off = Math.atan2(Math.sin(going - this.yaw), Math.cos(going - this.yaw));
       this.aheadFor = speed > 0.8 && Math.abs(off) < 0.44 ? this.aheadFor + dt : 0;
-      if (this.mode === "chase" && !this.aim && this.aheadFor > 0.4 && this.time - this.dragged > 1.2)
-        this.yaw += off * Math.min(1, dt * 1.4 * Math.min(1.6, speed / 4.2));
+      if (chase) {
+        // aiming on a pad or the keys: over someone near the reticle the turn slows and is drawn
+        // onto them a little; locked on, the camera's own lock aims at them (docs/plan/56 E)
+        const near = this.aim && this.aimAssist && !this.lockAt ? this.aimNear(me) : null;
+        if (near) {
+          lx *= 0.5;
+          ly *= 0.5;
+        }
+        const f = this.follow;
+        f.yaw = this.yaw;
+        f.pitch = this.pitch;
+        f.tune.pitchMin = this.aimK > 0.5 ? -0.5 : LIMITS.chase.pitch[0];
+        const lock = this.lockAt;
+        f.update({
+          dt,
+          look: { x: lx, y: ly },
+          recenter: this.recenterAsk,
+          yaw: this.myFacing,
+          vx: Math.cos(going) * speed,
+          vy: Math.sin(going) * speed,
+          air: Math.max(0, (me.z ?? 0) - (me.ground ?? 0)),
+          run: KH_MOVE.jog,
+          dash: KH_MOVE.sprint,
+          lock: lock ? { dx: lock.x - me.x, dy: lock.y - me.y } : null,
+          still: this.aim,
+          hold: !!this.swingAt,
+        });
+        this.recenterAsk = false;
+        this.yaw = f.yaw;
+        this.pitch = f.pitch;
+        this.dist = f.dist;
+        if (near) this.yaw += near.off * Math.min(1, dt * 4) * (1 - Math.abs(near.off) / AIM_HELP);
+      }
       if (first) {
         // in your head: exactly where you are, every frame (an eased position
         // floats); only the eyes' height eases, sitting down and getting up
@@ -2202,6 +2314,15 @@ void main() {
         const air = (me.z ?? 0) - ground;
         const rise = air <= ALOFT ? air * 0.55 : ALOFT * 0.55 + (air - ALOFT);
         const want = new Vector3(me.x, eye + ground + rise, me.y);
+        // (locked on: a third of the way over to it, so we're both in frame; round a pole, the
+        // pole: the view still while I go round it)
+        if (this.lockAt && this.mode === "chase") {
+          want.x += (this.lockAt.x - me.x) * 0.35;
+          want.z += (this.lockAt.y - me.y) * 0.35;
+        } else if (this.swingAt && this.mode === "chase") {
+          want.x = this.swingAt.x;
+          want.z = this.swingAt.y;
+        }
         if (!this.targetReady) {
           this.target.copy(want);
           this.targetReady = true;
@@ -2268,6 +2389,7 @@ void main() {
       this.camera.lookAt(this.target.x + sx, this.target.y + up, this.target.z + sz);
     }
     this.aimFrame(dt, me);
+    this.drawLock();
 
     // a game camera: ease over to it (and back when it lets go)
     const gc = this.gameCam;
@@ -3090,6 +3212,23 @@ void main() {
         }
       }
     }
+    // whatever's solid between me and it in Jolt's world — a tree, a fence, the hill behind me
+    // (docs/plan/56-the-controls.md H.6): in front of it
+    // (not building: placing things by a wall, the camera stays where it's put)
+    // (round a pole the look's from inside it: the ray starts out past its side)
+    const from = this.swingAt ? Math.max(0, this.swingAt.r - 0.25) : 0;
+    const hit = this.buildMode
+      ? null
+      : (this.physics?.ray(
+          t.x + dx * cp * from,
+          t.y + sp * from,
+          t.z + dz * cp * from,
+          dx * cp,
+          sp,
+          dz * cp,
+          this.dist - from,
+        ) ?? null);
+    if (hit !== null) reach = Math.min(reach, Math.max(0.6, from + hit - 0.3));
     // eased: in quickly, back out gently (a zoom isn't: it's the distance itself)
     const pull = Math.max(0, this.dist - reach);
     this.camPull += (pull - this.camPull) * (1 - Math.exp(-dt * (pull > this.camPull ? 14 : 3)));
@@ -3895,15 +4034,16 @@ void main() {
       this.renderer.domElement.setPointerCapture(e.pointerId);
       return this.god.input.down(e);
     }
-    // mouse look: a click uses what the crosshair is on
-    if (this.looking) {
-      if (e.button === 0 && !(this.aim && this.armed)) {
-        const r = this.renderer.domElement.getBoundingClientRect();
-        this.pick(r.left + r.width / 2, r.top + r.height / 2);
-      }
+    // the mouse is the camera (docs/plan/56-the-controls.md A): its buttons aim and fire (the
+    // walker's, the dark's), and nothing in the world is clicked
+    if (this.looking) return;
+    if (this.onTouch(e)) return;
+    // not locked yet (or Esc let it go): a click takes the pointer back — build mode's and the
+    // arrival's own picking aside, which want it
+    if (this.mouseCam(e)) {
+      this.setLook(true);
       return;
     }
-    if (this.onTouch(e)) return;
     this.renderer.domElement.setPointerCapture(e.pointerId);
     // build mode: the left button builds (the right one turns the camera)
     if (this.buildMode && e.button === 0) {
@@ -3920,14 +4060,26 @@ void main() {
     if (this.looking) {
       // (some browsers send one huge jump as the lock starts)
       if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
+      this.dragged = this.time;
+      if (this.mode === "chase" && !this.god && !this.buildMode) {
+        // the KH camera's: by how far it moved; locked on, a sideways flick is the next target
+        const f = this.follow;
+        f.yaw = this.yaw;
+        f.pitch = this.pitch;
+        f.mouse(e.movementX, e.movementY, !!this.lockAt);
+        this.yaw = f.yaw;
+        this.pitch = f.pitch;
+        if (this.lockAt) this.flickX = this.flickX * 0.8 + e.movementX;
+        return;
+      }
       const k = 0.0024 * this.lookSens;
       this.yaw += e.movementX * k;
       this.pitch += e.movementY * k * 0.8 * (this.lookInvert ? -1 : 1);
-      this.dragged = this.time;
       this.clampCam();
       return;
     }
     if (this.onTouch(e)) return;
+    if (this.mouseCam(e)) return;
     this.pointer = { x: e.clientX, y: e.clientY };
     if (this.buildMode || this.floorHover) {
       const f = this.buildAt(e.clientX, e.clientY);
@@ -3947,6 +4099,7 @@ void main() {
   private onUp = (e: PointerEvent) => {
     if (this.god) return this.god.input.up(e);
     this.onTouch(e);
+    if (this.mouseCam(e)) return;
     const b = this.buildPress;
     if (b && b.id === e.pointerId) {
       this.buildPress = null;
@@ -3969,6 +4122,12 @@ void main() {
     )
       this.pick(e.clientX, e.clientY, { shift: e.shiftKey, right: e.button === 2 });
   };
+
+  /** A mouse in play: the camera's, not a pointer (touch taps and drags as it did; build mode and
+   *  choosing my arrival on the floor still point). */
+  private mouseCam(e: PointerEvent): boolean {
+    return e.pointerType === "mouse" && !this.buildMode && !this.floorHover;
+  }
 
   // the nearest usable thing along the ray (its 3D box; see-through walls don't
   // stop it) — an elevator car's buttons first (you're in the car's own box)
@@ -4488,8 +4647,7 @@ void main() {
     e.preventDefault();
     if (this.god) return this.god.input.wheel(e);
     if (this.buildMode && this.events.wheel?.(e.deltaY)) return; // turning what you hold
-    this.dist *= e.deltaY > 0 ? 1.1 : 1 / 1.1;
-    this.clampCam();
+    this.zoomBy(e.deltaY > 0 ? 1.1 : 1 / 1.1);
   };
   private onKey = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -4506,6 +4664,8 @@ void main() {
   // The browser owns the lock: Esc, another window or tab let it go, and right
   // after Esc it refuses to lock again for a moment. `looking` follows it.
   looking = false;
+  /** the pointer may be locked to the camera now (the controller's: nothing on screen wants it) */
+  canLock: () => boolean = () => true;
   lookSens = 1; // × the base speed
   lookInvert = false;
   private crosshair: HTMLDivElement | null = null;
@@ -4517,7 +4677,7 @@ void main() {
       if (document.pointerLockElement === c) document.exitPointerLock();
       return;
     }
-    if (this.looking || this.buildMode || !c.requestPointerLock) return;
+    if (this.looking || this.buildMode || !c.requestPointerLock || !this.canLock()) return;
     // raw mouse movement where there is (Chrome); a plain lock elsewhere (Firefox)
     const lock = c.requestPointerLock as (o?: { unadjustedMovement?: boolean }) => Promise<void> | undefined;
     // a refusal: the promise says so (Chrome), or the error event (Firefox: no promise)

@@ -91,18 +91,19 @@ test("the move seen by others: sprint, stop, a step aside, a jump", async ({ pag
   console.log({ frames: seen.length, fast, still, top, snaps: JSON.stringify(snaps) });
   expect(snaps, "the server put Ana back").toEqual([]);
 
-  // at Ana's speeds: sprinting, then stopped
-  expect(fast).toBeGreaterThan(5.8);
+  // at Ana's speeds (the KH body, docs/plan/56-the-controls.md B: a run 5.8, Shift's 8.2): running
+  // fast, then stopped
+  expect(fast).toBeGreaterThan(7);
   // (the drawn speed is from frame to frame on Bia's side: a little over now and then)
-  expect(fast).toBeLessThan(8.4);
+  expect(fast).toBeLessThan(9.8);
   expect(still).toBeLessThan(0.6);
   // stepping aside she keeps facing the same way (a facing as she turned, not 8 ways)
   const turned = aside.map((s) => s[4]);
   expect(Math.max(...turned) - Math.min(...turned)).toBeLessThan(0.15);
   expect(Math.max(...aside.map((s) => s[5]))).toBeGreaterThan(2.5);
-  // up in the jump (a hop's 0.55–0.8)
-  expect(top).toBeGreaterThan(0.4);
-  expect(top).toBeLessThan(1.0);
+  // up in the jump (a tapped hop's 0.7, a little more for the hang at the top)
+  expect(top).toBeGreaterThan(0.5);
+  expect(top).toBeLessThan(1.3);
   // smooth: while she's moving, no frame drawn where she stands still or leaps (a stall or a catch-up)
   const moving = during(800, 1500);
   let stalls = 0;

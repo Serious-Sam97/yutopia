@@ -88,7 +88,20 @@ export function ActionMenu() {
                 disabled={!it.ok}
                 onClick={() => w?.pickAction(it.act)}
                 className="pointer-events-auto absolute cabinet rounded-full pl-1.5 pr-3.5 h-9 flex items-center gap-2 text-[13px] whitespace-nowrap pop-in act-item disabled:opacity-45"
-                style={{ left: ix, top: iy, translate: `${tx} -50%`, animationDelay: `${i * 25}ms` }}
+                style={{
+                  left: ix,
+                  top: iy,
+                  translate: `${tx} -50%`,
+                  animationDelay: `${i * 25}ms`,
+                  // (chosen on the keys or a pad: docs/plan/56-the-controls.md C)
+                  ...(i === menu.sel
+                    ? {
+                        boxShadow: "0 0 0 2px var(--amber), 0 0 18px color-mix(in srgb, var(--amber) 45%, transparent)",
+                        color: "var(--amber)",
+                      }
+                    : null),
+                }}
+                data-sel={i === menu.sel ? "1" : undefined}
               >
                 <kbd className="keycap" style={{ height: 20, minWidth: 20, fontSize: 11, opacity: 1 }}>
                   {i + 1}

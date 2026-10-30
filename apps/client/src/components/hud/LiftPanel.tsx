@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTr } from "@/lib/i18n";
 import { useHud } from "@/world/store";
 import { useWorld } from "./ctx";
-
-// A floor's short name on a button and a display: G for the ground, else its number.
-export const floorLabel = (level: number) => (level === 0 ? "G" : String(level));
+import { floorLabel } from "./FloorChip";
+import { usePadFrame } from "./usePad";
 
 // In an elevator's car (docs/plan/26): its panel, brushed steel on the right —
 // what it's doing now (pick a floor, going up to 3, doors closing), the floors
@@ -18,6 +17,22 @@ export function LiftPanel() {
   const lift = useHud((s) => s.lift);
   const floor = useHud((s) => s.floor);
   const blank = (name: string) => /^Floor \d+$/.test(name);
+  // on a pad (docs/plan/56-the-controls.md phase 6): the d-pad or the stick picks a floor, A sends
+  // the car there, B steps out
+  const [sel, setSel] = useState<number | null>(null);
+  const [stickWas, setStickWas] = useState(0);
+  usePadFrame((f) => {
+    if (!lift || !w) return;
+    const levels = lift.floors.map((fl) => fl.level);
+    const at = sel !== null && levels.includes(sel) ? levels.indexOf(sel) : levels.indexOf(floor);
+    const y = f.left.y < -0.6 ? -1 : f.left.y > 0.6 ? 1 : 0;
+    const step =
+      f.pressed(12) || (y === -1 && stickWas !== -1) ? -1 : f.pressed(13) || (y === 1 && stickWas !== 1) ? 1 : 0;
+    if (y !== stickWas) setStickWas(y);
+    if (step) setSel(levels[Math.max(0, Math.min(levels.length - 1, (at < 0 ? 0 : at) + step))]);
+    if (f.pressed(0) && sel !== null) w.send("lift:go", { id: lift.id, level: sel });
+    if (f.pressed(1)) w.stepOutOfLift();
+  }, !!lift);
 
   useEffect(() => {
     if (!lift || !w) return;
@@ -94,6 +109,8 @@ export function LiftPanel() {
               aria-current={f.level === floor ? "true" : undefined}
               aria-pressed={lit}
               data-floor={f.level}
+              // (chosen on a pad)
+              style={f.level === sel ? { boxShadow: "0 0 0 2px var(--amber)" } : undefined}
             >
               <span
                 className="grid place-items-center w-10 h-10 rounded-full text-[16px] font-semibold"
@@ -154,14 +171,3 @@ export function LiftPanel() {
 }
 
 // Which floor I'm on, in the line under where I am (only in a building of more than one).
-export function FloorChip() {
-  const t = useTr();
-  const floor = useHud((s) => s.floor);
-  const many = useHud((s) => s.floors.length > 1);
-  if (!many) return null;
-  return (
-    <span className="whitespace-nowrap" data-testid="floor-chip">
-      {` · ${t("floor")} ${floorLabel(floor)}`}
-    </span>
-  );
-}

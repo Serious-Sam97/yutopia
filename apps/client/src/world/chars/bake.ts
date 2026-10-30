@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, Color, Sphere, Vector3 } from "three";
-import type { Anchor, Kit } from "./kit";
+import type { Anchor, Kit, SpringSpec } from "./kit";
 import { JOINTS, type JointName, PARENT, type RestPose } from "./rig";
 
 // One person as two draws: every part merged into one geometry, each vertex
@@ -26,12 +26,30 @@ export interface Baked {
   tris: number;
   /** vertex ranges of the face's moving bits ("eye", "mouth"), for morphs */
   tags: Record<string, [number, number][]>;
+  /** the springs worn (plan 58 phase 2d), and the body's round bits they keep out of */
+  springs: SpringSpec[];
+  collide: Kit["collide"];
 }
 
 export const JOINT_INDEX = Object.fromEntries(JOINTS.map((j, i) => [j, i])) as Record<JointName, number>;
 
 const ARM = new Set(
-  (["shoulderL", "elbowL", "wristL", "shoulderR", "elbowR", "wristR"] as const).map((j) => JOINT_INDEX[j]),
+  (
+    [
+      "shoulderL",
+      "elbowL",
+      "wristL",
+      "fingersL",
+      "indexL",
+      "thumbL",
+      "shoulderR",
+      "elbowR",
+      "wristR",
+      "fingersR",
+      "indexR",
+      "thumbR",
+    ] as const
+  ).map((j) => JOINT_INDEX[j]),
 );
 
 /** The arms alone: the same vertices, only the triangles riding the arms' bones. */
@@ -69,8 +87,28 @@ export function restWorld(rest: RestPose): Record<JointName, Vector3> {
   return out;
 }
 
+// The trunk's skin weights (plan 58, phase 2): the body and all it wears from the hips to the
+// shoulders ride the hips, the spine and the chest by height, blended across each joint — so the
+// trunk bends as one, skin and clothes alike. (Till then it was two rigid pieces overlapping at the
+// waist: a bend opened them and skin showed through a fitted top.)
+const TRUNK = new Set<JointName>(["hips", "spine", "chest"]);
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+/** The trunk's two bones and the second's weight at height `y` above the hips' joint. */
+function trunkSkin(rest: RestPose, y: number): [JointName, JointName, number] {
+  const spine = rest.spine[1];
+  const chest = spine + rest.chest[1];
+  const T = chest + rest.neck[1];
+  const c = smooth(chest - 0.08 * T, chest + 0.08 * T, y);
+  if (c > 0) return ["spine", "chest", c];
+  return ["hips", "spine", smooth(spine - 0.12 * T, spine + 0.08 * T, y)];
+}
+
 export function bake(k: Kit): Baked {
   const at = restWorld(k.rest);
+  const hipsY = at.hips.y;
   let nv = 0;
   for (const p of k.parts) nv += p.geo.getAttribute("position").count;
   const pos = new Float32Array(nv * 3);
@@ -104,13 +142,36 @@ export function bake(k: Kit): Baked {
       col[v * 3 + 2] = c.b;
       skinI[v * 4] = ji;
       skinW[v * 4] = 1;
-      if (part.skin) {
-        const [j2, w] = part.skin(P.getX(i), P.getY(i), P.getZ(i));
-        if (w > 0) {
-          skinI[v * 4 + 1] = JOINT_INDEX[j2];
-          skinW[v * 4] = 1 - w;
-          skinW[v * 4 + 1] = w;
+      // (a part's own other bones first — a skirt's front riding the thighs, a mitten's fingers — else
+      // the trunk's by height)
+      const got = part.skin?.(P.getX(i), P.getY(i), P.getZ(i));
+      const own =
+        (got && (typeof got[0] === "string" ? [got as [JointName, number]] : (got as [JointName, number][]))) ?? [];
+      let slot = 1;
+      let rest = 1;
+      for (const [j, w] of own) {
+        if (w <= 0 || slot > 3) continue;
+        skinI[v * 4 + slot] = JOINT_INDEX[j];
+        skinW[v * 4 + slot] = w;
+        rest -= w;
+        slot++;
+      }
+      if (slot > 1) {
+        skinW[v * 4] = Math.max(0, rest);
+        // (what's left of a trunk part's weight goes by the trunk's, as everything's on it does)
+        if (TRUNK.has(part.joint) && rest > 0 && slot <= 3) {
+          const [a, b, w] = trunkSkin(k.rest, pos[v * 3 + 1] - hipsY);
+          skinI[v * 4] = JOINT_INDEX[a];
+          skinW[v * 4] = rest * (1 - w);
+          skinI[v * 4 + slot] = JOINT_INDEX[b];
+          skinW[v * 4 + slot] = rest * w;
         }
+      } else if (TRUNK.has(part.joint)) {
+        const [a, b, w] = trunkSkin(k.rest, pos[v * 3 + 1] - hipsY);
+        skinI[v * 4] = JOINT_INDEX[a];
+        skinI[v * 4 + 1] = JOINT_INDEX[b];
+        skinW[v * 4] = 1 - w;
+        skinW[v * 4 + 1] = w;
       }
       inkK[v] = part.ink;
     }
@@ -170,7 +231,40 @@ export function bake(k: Kit): Baked {
     a.name = tag;
     return a;
   };
-  body.morphAttributes.position = [morph("eye", 1.15, 0.14), morph("mouth", 0.72, 4.2)];
+  // …and two that look (plan 58 G.D): the eye dots slid to the person's left (+x) and up, about
+  // their own width at a full look (the influence ±1 picks the way)
+  const look = (tag: string, fx: number, fy: number, name: string) => {
+    const d = new Float32Array(nv * 3);
+    for (const [start, count] of tags[tag] ?? []) {
+      let x0 = Infinity;
+      let x1 = -Infinity;
+      let y0 = Infinity;
+      let y1 = -Infinity;
+      for (let v = start; v < start + count; v++) {
+        x0 = Math.min(x0, pos[v * 3]);
+        x1 = Math.max(x1, pos[v * 3]);
+        y0 = Math.min(y0, pos[v * 3 + 1]);
+        y1 = Math.max(y1, pos[v * 3 + 1]);
+      }
+      // (sliding round the face's curve: the eye heading for the middle comes out, the one heading
+      // for the side goes back — flat, the one sank under the skin)
+      const cx = (x0 + x1) / 2;
+      for (let v = start; v < start + count; v++) {
+        d[v * 3] = (x1 - x0) * fx;
+        d[v * 3 + 1] = (y1 - y0) * fy;
+        d[v * 3 + 2] = -Math.sign(cx) * 0.45 * (x1 - x0) * fx + 0.08 * (y1 - y0) * Math.abs(fy);
+      }
+    }
+    const a = new BufferAttribute(d, 3);
+    a.name = name;
+    return a;
+  };
+  body.morphAttributes.position = [
+    morph("eye", 1.15, 0.14),
+    morph("mouth", 0.72, 4.2),
+    look("eye", 0.75, 0, "lookX"),
+    look("eye", 0, 0.32, "lookY"),
+  ];
   body.morphTargetsRelative = true;
   // culling: a sphere round the whole figure, generous enough for any pose
   const height = k.p.height;
@@ -190,5 +284,7 @@ export function bake(k: Kit): Baked {
     ear: k.ear,
     tris: bodyIdx.length / 3,
     tags,
+    springs: k.springs,
+    collide: k.collide,
   };
 }

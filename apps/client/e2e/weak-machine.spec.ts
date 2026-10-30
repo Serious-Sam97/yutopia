@@ -87,10 +87,29 @@ test("a weak machine: the Lowest tier, and frames it can live with", async ({ pa
     });
     await page.keyboard.up("w");
   }
+  // Flowmotion slowed down too (docs/plan/56-the-controls.md phase 8): up the town's 4.2 m house and
+  // over its roof's step, the frames as she goes — the move's steps are the clock's, not the frames'
+  await page.evaluate((p) => (window as any).__yutopia.teleport(p), { ...G(397, -463.5), level: 0 });
+  await page.waitForTimeout(12_000);
+  await page.evaluate(() => {
+    const w = (window as any).__yutopia;
+    w.walker.body.yaw = 0;
+    w.tp.yaw = 0;
+  });
+  await page.waitForTimeout(500);
+  const z0 = await page.evaluate(() => (window as any).__yutopia.walker.body.z as number);
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("w");
+  out["Flowmotion: up and over"] = await frames(page, 3);
+  await page.keyboard.up("w");
+  await page.keyboard.up("Shift");
+  await page.waitForTimeout(1500);
+  const rose = (await page.evaluate(() => (window as any).__yutopia.walker.body.z as number)) - z0;
+  expect(rose, "up on the roof, slowed down as it is").toBeGreaterThan(4);
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   for (const [name, f] of Object.entries(out))
     console.log(
-      `[weak ${GPU ? "GPU" : "software GL"}, CPU ÷${SLOW}] ${name}: median ${f.median.toFixed(1)} ms · p95 ${f.p95.toFixed(1)} · worst ${f.worst.toFixed(0)} (${f.n} frames) · ${stages[name]}`,
+      `[weak ${GPU ? "GPU" : "software GL"}, CPU ÷${SLOW}] ${name}: median ${f.median.toFixed(1)} ms · p95 ${f.p95.toFixed(1)} · worst ${f.worst.toFixed(0)} (${f.n} frames)${stages[name] ? ` · ${stages[name]}` : ""}`,
     );
   expect(await page.evaluate(() => (window as any).__yutopia.tp.quality), "still Lowest (no lower)").toBe("lowest");
   // (on a real GPU, a CPU a quarter of this one's: 15 fps at the least, everywhere — software GL is

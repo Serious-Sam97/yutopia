@@ -81,7 +81,7 @@ import { type BattleEvent, type PetLook, type PetOutfit, type Species, toyAt } f
 import { offBand, spanOf } from "@yutopia/shared/reach";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
 import { ApiError, type Session, yutopia } from "@/lib/api";
-import { lang, tr } from "@/lib/i18n";
+import { type Key, lang, tr } from "@/lib/i18n";
 import { deviceQuality, prefs, type Quality, resolveQuality, setPrefs, subscribePrefs } from "@/lib/prefs";
 import { ActionQueue } from "./actions";
 import { loadChars } from "./art/chars-load";
@@ -101,6 +101,7 @@ import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import { type AvatarState, WorldModel } from "./model";
 import type { OsRoom } from "./os/room";
+import { activePad } from "./pads";
 import { FramePerf } from "./perf";
 import type { PerfReport } from "./perf-report";
 import type { PetView } from "./petview";
@@ -160,6 +161,8 @@ interface Remote {
   offAt: number;
   jumpKey: string; // their last jump (kind|server ms), timed from when it showed up here
   track: JumpTrack;
+  flow: number; // their Flowmotion move (Player.flow) and when it shows here
+  flowAt: number;
 }
 
 const INTERP_MS = 110;
@@ -174,6 +177,21 @@ const STEADY_MS = 50;
 const LOAD_CAP_MS = 15_000;
 const WANT_MS = 6000; // how long what a pet wants shows over its head
 const INTERACT_RANGE = 1.7;
+/** A lock-on's reach (tiles), and how long it holds on out of it (ms): docs/plan/56-the-controls.md E */
+const LOCK_RANGE = 14;
+const LOCK_LOST_MS = 1500;
+/** Use held this long: the focus's menu, not its main action (ms; docs/plan/56-the-controls.md C) */
+const USE_HOLD = 350;
+const MENU_STEP: Record<string, number> = {
+  KeyW: -1,
+  ArrowUp: -1,
+  KeyA: -1,
+  ArrowLeft: -1,
+  KeyS: 1,
+  ArrowDown: 1,
+  KeyD: 1,
+  ArrowRight: 1,
+};
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 
 // (a lot car out being driven: not where it was parked — docs/plan/28-the-car.md)
@@ -196,6 +214,9 @@ export class WorldController {
   private walker: import("./input").Walker | null = null;
   private walkYaw = 0;
   private myVerb: { kind: string; t: number } | undefined;
+  // my Flowmotion move as it's drawn, and as it was last sent (Player.flow)
+  private myFlow: import("./input/walker").WalkOut["flow"] = null;
+  private myFlowSent = 0;
   private myPitch = 0;
   private lastPitch = 0;
   private lastMv = 0;
@@ -247,6 +268,7 @@ export class WorldController {
     this.host = host;
     this.actions = new ActionQueue({
       me: () => this.me,
+      focused: () => !!this.room?.state.players.get(this.room.sessionId)?.focus,
       setFacing: (d) => {
         this.me.d = d;
       },
@@ -544,6 +566,8 @@ export class WorldController {
           verbAt: 0,
           jumpKey: `${p.jump}|${p.jumpAt}`, // (a jump from before I came isn't played)
           track: new JumpTrack(),
+          flow: p.flow ?? 0,
+          flowAt: 0,
         });
         if (hud.get().phase === "ready" && !p.bot) mixer.blip("join");
       }
@@ -1353,6 +1377,7 @@ export class WorldController {
         a: this.me.a,
         mv: this.lastMv,
         verb: this.myVerb,
+        flow: this.myFlow,
         pitch: this.myPitch,
         angle: this.meAngle,
         focused: this.walker?.focus,
@@ -1396,6 +1421,8 @@ export class WorldController {
         mv: at.mv,
         // (their verb, if it's one: timed from when it shows, by the 3D people)
         verb: p.jump ? { kind: p.jump, t: 0, at: r.verbAt } : undefined,
+        // (their Flowmotion move, likewise: docs/plan/56-the-controls.md F)
+        ...this.theirFlow(r, p, now),
         pitch: p.pitch / 40,
         // (their facing as they turned, not 8 ways: from the move's own senders)
         angle: p.mt ? (at.yaw / 128) * Math.PI : undefined,
@@ -1683,16 +1710,33 @@ export class WorldController {
           : "floor",
       // (a car on the move is in the way)
       blocked: this.level === 0 && this.cars ? (x, y) => !!this.cars?.blocks(x, y) : undefined,
-      camYaw: this.tp?.lookYaw ?? 0,
-      faceLook: first,
+      // (locked on: the way to them, exactly — the camera comes round after it, and going by its
+      // turn, still behind, a circle round them spiralled out)
+      camYaw: this.lock ? Math.atan2(this.lock.y - this.me.y, this.lock.x - this.me.x) : (this.tp?.lookYaw ?? 0),
+      // (locked on: I face it, and go round it — docs/plan/56 E)
+      faceLook: first || !!this.lock,
       canJump: !!lp && this.me.a !== ANIM.sit && !lp.busy && !lp.act && !playing,
       // (aiming, in 3D, anywhere: a gun, or the flashlight raised — world/dark/arms.ts; a quick
       // right click on a thing is still its menu)
       canAim: !!this.tp,
-      usePad: !playing,
+      usePad: !playing && !hud.get().menu,
       path: this.path,
       at: { x: this.me.x, y: this.me.y, z: this.height.z },
     });
+    // the camera on the arrows (the stick's the view's own)
+    if (this.tp) {
+      this.tp.keyLook = w.camKeys();
+      this.tp.myFacing = out.yaw;
+      // aiming help on a pad or the keys (not the mouse's: docs/plan/56 E): onto whoever's on my floor
+      this.tp.aimAssist = hud.get().padLive || !this.tp.looking;
+      if (out.aim && this.room) {
+        const list: { x: number; y: number; z: number }[] = [];
+        this.room.state.players.forEach((p: S, sid: string) => {
+          if (sid !== this.room?.sessionId && (p.level ?? 0) === this.level) list.push({ x: p.x, y: p.y, z: 1.2 });
+        });
+        this.tp.aimTargets = list;
+      }
+    }
     const now = performance.now();
     if (out.manual) {
       this.actions.clear();
@@ -1701,7 +1745,17 @@ export class WorldController {
       hud.set({ following: null });
     }
     // (the pad's buttons: X uses, Y the camera, ↑ the torch)
-    if (out.presses.has("use")) this.interact();
+    if (out.presses.has("use") && !this.use) this.use = { src: "pad", at: now, done: false };
+    if (out.presses.has("recenter")) this.tp?.recenter();
+    if (out.presses.has("lock")) this.toggleLock();
+    this.holdFrame(now);
+    // a menu open: the pad moves its choice, A does it, B closes it (the walker's off it meanwhile)
+    if (hud.get().menu) {
+      const mp = w.menuPad();
+      if (mp.step) this.menuStep(mp.step);
+      if (mp.pick) this.menuPick();
+      if (mp.back) this.closeMenu();
+    }
     if (out.presses.has("camera")) this.swapCamera();
     if (out.presses.has("torch")) this.toggleTorch();
     let moved = out.moved;
@@ -1800,6 +1854,8 @@ export class WorldController {
     // (my torch's battery: low, it flickers)
     if (this.tp) this.tp.battery = w.vitals.bat;
     this.myVerb = out.verb ?? undefined;
+    this.myFlow = out.flow;
+    if (this.tp) this.tp.swingAt = out.pole;
     this.myPitch = out.aim && this.tp ? this.tp.aimPitch : 0;
     const go = jumped ?? out.started?.kind;
     // (a jump, a verb: where I took off from first, so the server sees my feet on the ground)
@@ -1823,7 +1879,11 @@ export class WorldController {
       this.lastYaw = out.yawByte;
       this.lastPitch = Math.round(this.myPitch * 40);
     }
-    if (go) this.send("jump", { k: go, h: out.started?.h });
+    if (go) this.send("jump", { k: go, h: out.started?.h, air: out.air || undefined });
+    if (out.flowCode !== this.myFlowSent) {
+      this.myFlowSent = out.flowCode;
+      this.send("flow", { f: out.flowCode });
+    }
   }
 
   walkTo(target: Point, objectId?: string, quiet = false): boolean {
@@ -1868,15 +1928,26 @@ export class WorldController {
     return best;
   }
 
-  // Mouse look (Z, 3D only): the pointer locked, the mouse turns the camera.
-  // It lets go by itself when something wants the pointer: a menu, a panel,
-  // build mode, a side panel opening, the phone.
+  // The mouse is the camera (docs/plan/56-the-controls.md A, 3D only): the pointer locked in play,
+  // the mouse turns the camera — a click on the world takes it, Esc (the browser's) lets it go.
+  // It lets go by itself when something wants the pointer — a menu, a panel, build mode, god
+  // mode, a side panel, choosing my arrival — and comes back when that's gone (if it was mine).
   private aimId: string | null = null; // the usable thing under the crosshair
-  private lookWas = { menu: false, panel: false, build: false, side: null as string | null, pick: false };
-  private toggleLook() {
-    const v = this.tp;
-    if (!v || hud.get().build.on || window.matchMedia?.("(pointer: coarse)").matches) return;
-    v.setLook(!v.looking);
+  private lookWas = { menu: false, panel: false, build: false, side: null as string | null, pick: false, kart: false };
+  private relock = false;
+  /** Something on screen wants the pointer (the cursor): no locking it to the camera now. */
+  pointerWanted(): boolean {
+    const h = hud.get();
+    return (
+      !!h.menu ||
+      !!h.panel.kind ||
+      h.build.on ||
+      h.pickArrival ||
+      h.side !== null ||
+      h.phone.open ||
+      h.kartUi ||
+      !!this.god?.on
+    );
   }
   // C (3D only): third person ↔ first person. Into first person from a key
   // press, mouse look starts at once (half the mode without it).
@@ -1886,21 +1957,38 @@ export class WorldController {
     const view = prefs().view === "1p" ? "3p" : "1p";
     setPrefs({ view });
     v.setMode(this.camWanted());
-    if (view === "1p" && !hud.get().build.on && !window.matchMedia?.("(pointer: coarse)").matches) v.setLook(true);
   }
   private watchLook = () => {
     const h = hud.get();
-    const now = { menu: !!h.menu, panel: !!h.panel.kind, build: h.build.on, side: h.side, pick: h.pickArrival };
+    const now = {
+      menu: !!h.menu,
+      panel: !!h.panel.kind,
+      build: h.build.on,
+      side: h.side,
+      pick: h.pickArrival,
+      kart: h.kartUi,
+    };
     const was = this.lookWas;
     this.lookWas = now;
-    if (!this.tp?.looking) return;
+    const tp = this.tp;
+    if (!tp) return;
     const opened =
       (now.menu && !was.menu) ||
       (now.panel && !was.panel) ||
       (now.build && !was.build) ||
       (now.pick && !was.pick) ||
+      (now.kart && !was.kart) ||
       (now.side !== null && now.side !== was.side);
-    if (opened) this.tp.setLook(false);
+    if (opened && tp.looking) {
+      this.relock = true;
+      tp.setLook(false);
+    }
+    // all of it gone again: back to the camera (Chrome locks again without a click after a
+    // let-go from code; where the browser says no, the next click on the world does)
+    if (this.relock && !this.pointerWanted()) {
+      this.relock = false;
+      tp.resumeLook();
+    }
   };
   // what E / X uses: in mouse look the thing under the crosshair (when it's
   // something to use), else the nearest
@@ -1949,11 +2037,46 @@ export class WorldController {
       if (cur?.objectId !== ride.objectId || cur.label !== ride.label) hud.set({ prompt: ride });
       return;
     }
+    // what's in front of me (docs/plan/56-the-controls.md C: the walker's focus, a few times a
+    // second); in first person, what the crosshair's on first
+    const tg = this.walker?.targets;
+    const now = performance.now();
+    this.focusHost.room = this.room;
+    this.focusHost.level = this.level;
+    if (tg && now - this.focusAt > 120) {
+      this.focusAt = now;
+      tg.update();
+      this.lockFrame(now);
+      // (locked on: the prompt's the lock's, wherever it is)
+      const f = this.lock ?? tg.focus;
+      const items = (this.lock ? [this.lock] : tg.list).map((t) => ({
+        key: t.key,
+        kind: t.kind,
+        label: t.kind === "toy" ? tr(`act_${t.act}` as Key) : t.label,
+        act: t.act,
+        objectId: t.objectId,
+      }));
+      const at = Math.max(
+        0,
+        items.findIndex((t) => t.key === f?.key),
+      );
+      const sig = `${items.map((t) => `${t.key}|${t.act}`).join(",")}@${at}`;
+      if (sig !== this.focusSig) {
+        this.focusSig = sig;
+        hud.set({ targets: items.length ? { items, at } : null });
+      }
+    }
+    const pad = this.walker?.controls.pad.live ?? false;
+    if (pad !== hud.get().padLive) hud.set({ padLive: pad });
+    const fo = tg?.focus;
     // (in an elevator's car its panel is the way to use it: no "X" for it)
-    const near = this.aimedObject() ?? this.nearestInteractable();
+    const near =
+      this.aimedObject() ??
+      (tg ? (fo?.objectId ? (this.model?.getObject(fo.objectId) ?? null) : null) : this.nearestInteractable());
     const o = near?.kind === "elevator" && hud.get().lift ? null : near;
     const cur = hud.get().prompt;
-    const kind = !o ? "" : hud.get().cable ? "plug" : (entry(o.kind).interact as string);
+    // (a seat, my desk: no use of their own, only their menu's)
+    const kind = !o ? "" : hud.get().cable ? "plug" : (entry(o.kind).interact ?? "menu");
     if ((o?.id ?? null) === (cur?.objectId ?? null) && kind === (cur?.kind ?? "")) return;
     this.tp?.setHighlight(this.footprintOf(o?.id));
     hud.set({
@@ -1961,11 +2084,108 @@ export class WorldController {
     });
   }
 
+  /** What the focus (input/targets.ts) asks of the world. */
+  readonly focusHost: import("./input/targets").TargetHost = {
+    room: null,
+    level: 0,
+    me: () => this.me,
+    facing: () => this.walkYaw,
+    camYaw: () => this.tp?.lookYaw ?? this.walkYaw,
+    objects: () => this.model?.allObjects() ?? [],
+    reach: (o) => this.reach(o),
+    cable: () => !!hud.get().cable,
+    inLift: () => !!hud.get().lift,
+    menuFor: (t) => this.menuFor(t),
+  };
+  /** Use, tapped: a car's door, the shuttle, else the focus's main action (docs/plan/56 C). */
   interact() {
     const p = hud.get().prompt;
     if (p && this.cars?.act(p.kind, p.objectId)) return;
-    if (p?.kind === "ride" || p?.kind === "ride:leave") this.send(p.kind === "ride" ? "ride:board" : "ride:leave", {});
-    else if (p) this.activateObject(p.objectId, false);
+    if (p?.kind === "ride" || p?.kind === "ride:leave")
+      return this.send(p.kind === "ride" ? "ride:board" : "ride:leave", {});
+    const f = this.lock ?? this.walker?.targets?.focus;
+    if (p && (!f || this.aimedObject())) return this.activateObject(p.objectId, false);
+    if (!f) return;
+    // (locked on to it from over there: walked over to)
+    if (f.kind === "object" && f.act === "use") return this.activateObject(f.objectId ?? "", !!this.lock);
+    if (f.kind === "npc") return this.send("vortex:poke", {});
+    if (f.kind === "toy") return this.pickToy(f.key.slice(4));
+    if (f.menu) this.doAct(f.act, f.menu, f.label);
+  }
+  /** Use, held: the focus's menu over it on screen, or mine with nothing in focus. */
+  focusMenu() {
+    if (hud.get().prompt?.kind.startsWith("car") || hud.get().prompt?.kind.startsWith("ride")) return this.interact();
+    const f = this.lock ?? this.walker?.targets?.focus;
+    if (f && !f.menu) return this.interact();
+    const target: ActTarget = f?.menu ?? { type: "self" };
+    const at = f ?? this.me;
+    const r = this.hostRect();
+    const s = this.clientAt(at.x, at.y, f?.kind === "object" ? 20 : 47);
+    const where = { x: r.left + s.x, y: r.top + s.y };
+    this.walker?.clear();
+    if (!this.openMenu(target, where, true) && f?.kind === "object") this.activateObject(f.objectId ?? "", false);
+  }
+  // ── the lock-on (docs/plan/56-the-controls.md E): F / the wheel's button / RB holds on to the
+  // focus, or who the camera's looking at; the camera frames us both, I face it, Use acts on it;
+  // ← → / a flick of the stick or the mouse goes to the next one that way; again, or out of
+  // range for a moment, lets go
+  private lock: import("./input/targets").Target | null = null;
+  private lockLostAt = 0;
+  private lockSide = 0;
+  toggleLock() {
+    const tg = this.walker?.targets;
+    if (!tg) return;
+    this.lock = this.lock ? null : (tg.focus ?? tg.lockable(LOCK_RANGE)[0] ?? null);
+    this.lockLostAt = 0;
+    this.showLock();
+  }
+  private showLock() {
+    const l = this.lock;
+    const cur = hud.get().lockOn;
+    if ((cur?.label ?? null) !== (l?.label ?? null)) hud.set({ lockOn: l ? { label: l.label } : null });
+    // (its feet: someone's own, else where my feet are)
+    if (this.tp)
+      this.tp.lockAt = l
+        ? { x: l.x, y: l.y, z: l.z ?? this.height.z, id: l.kind === "person" ? l.key.slice(2) : undefined }
+        : null;
+    this.focusSig = "";
+  }
+  private lockFrame(now: number) {
+    const tg = this.walker?.targets;
+    const l = this.lock;
+    if (!tg || !l) return;
+    const t = tg.find(l.key, LOCK_RANGE + 4);
+    if (t) {
+      this.lock = t;
+      this.lockLostAt = 0;
+    } else if (!this.lockLostAt) this.lockLostAt = now;
+    else if (now - this.lockLostAt > LOCK_LOST_MS) this.lock = null;
+    // the next one that way: ← → (the camera's keys), the right stick or the mouse flicked
+    const keys = this.walker?.camKeys().x ?? 0;
+    const stick = activePad()?.axes[2] ?? 0;
+    const side = keys || (Math.abs(stick) > 0.7 ? Math.sign(stick) : 0);
+    const flick = this.tp?.takeFlick() ?? 0;
+    const go = flick || (side && side !== this.lockSide ? side : 0);
+    this.lockSide = side;
+    if (go && this.lock) this.lock = tg.next(this.lock, go, LOCK_RANGE) ?? this.lock;
+    this.showLock();
+  }
+  // Use held down: a tap on its release, the menu past USE_HOLD (keys and a pad: docs/plan/56 C)
+  private use: { src: "key" | "pad"; at: number; done: boolean } | null = null;
+  private focusAt = 0;
+  private focusSig = "";
+  private holdFrame(now: number) {
+    const u = this.use;
+    if (!u) return;
+    if (u.src === "pad" && !this.walker?.padHeld("use")) {
+      this.use = null;
+      if (!u.done) this.interact();
+      return;
+    }
+    if (!u.done && now - u.at >= USE_HOLD) {
+      u.done = true;
+      this.focusMenu();
+    }
   }
 
   // ── the lot's cars, driven (docs/plan/28-the-car.md; car/cars.ts, loaded on their own) ──
@@ -2104,12 +2324,36 @@ export class WorldController {
     return { title, items: acts.map((act) => ({ act, ok: true })) };
   }
 
-  openMenu(target: ActTarget, at: { x: number; y: number }): boolean {
+  openMenu(target: ActTarget, at: { x: number; y: number }, chosen = false): boolean {
     const m = this.menuFor(target);
     if (!m) return false;
     mixer.blip("click");
-    hud.set({ menu: { x: at.x, y: at.y, target, ...m } });
+    // (opened on the keys or a pad: the first that can be done chosen, moved with them)
+    const sel = chosen
+      ? Math.max(
+          0,
+          m.items.findIndex((i) => i.ok),
+        )
+      : undefined;
+    hud.set({ menu: { x: at.x, y: at.y, target, ...m, sel } });
     return true;
+  }
+  /** The open menu's choice moved by `by` (round its ring, past what can't be done). */
+  private menuStep(by: number) {
+    const m = hud.get().menu;
+    if (!m) return;
+    const n = m.items.length;
+    let i = m.sel ?? (by > 0 ? -1 : 0);
+    for (let k = 0; k < n; k++) {
+      i = (i + by + n) % n;
+      if (m.items[i].ok) break;
+    }
+    hud.set({ menu: { ...m, sel: i } });
+  }
+  private menuPick() {
+    const m = hud.get().menu;
+    const it = m?.items[m.sel ?? -1];
+    if (it?.ok) this.pickAction(it.act);
   }
 
   closeMenu() {
@@ -2121,6 +2365,11 @@ export class WorldController {
     const m = hud.get().menu;
     if (!m) return;
     hud.set({ menu: null });
+    this.doAct(act, m.target, m.title);
+  }
+  /** An action on a target: a menu's pick, or Use tapped on the focus (docs/plan/56 C). */
+  doAct(act: string, target: ActTarget, title: string) {
+    const m = { target, title };
     // looking things up happens at once (no need to walk over)
     const t = m.target;
     const desk = t.type === "object" ? this.model?.getObject(t.id) : undefined;
@@ -2545,6 +2794,16 @@ export class WorldController {
     return { jump: this.jumpTrack.update(now, h.up) ?? undefined, z: h.z, ground };
   }
 
+  // someone's Flowmotion move: from when it showed up here, as late as their position is drawn
+  private theirFlow(r: Remote, p: S, now: number): { flowCode: number; flowAt: number } {
+    const f = p.flow ?? 0;
+    if (f !== r.flow) {
+      r.flow = f;
+      r.flowAt = now + INTERP_MS;
+    }
+    return { flowCode: f, flowAt: r.flowAt };
+  }
+
   // someone else's: from when it showed up here, as late as their position is drawn
   private theirJump(r: Remote, p: S, at: { x: number; y: number; z: number }, now: number) {
     const key = `${p.jump}|${p.jumpAt}`;
@@ -2568,7 +2827,7 @@ export class WorldController {
     else this.jumpStages.delete(id);
     const j = st.jump;
     if (!j) return;
-    const hard = j.kind === "flip" ? 1 : 0.6;
+    const hard = j.kind !== "hop" ? 1 : 0.6;
     const floor = this.grid.onLand(st.x, st.y)
       ? this.landFloor(st.x, st.y)
       : (FLOORS[tileAt(this.map, Math.floor(st.x), Math.floor(st.y)) as keyof typeof FLOORS] ?? "wood");
@@ -2758,7 +3017,18 @@ export class WorldController {
     // the phone's camera: Photo is my eyes, Selfie a camera out in front of me
     if (this.photo) return this.photo.mode === "photo" ? "first" : "chase";
     if (prefs().view === "1p") return hud.get().build.on ? "chase" : "first";
-    return prefs().cam3p;
+    // (one camera behind you: how it follows is its own setting — docs/plan/56-the-controls.md D)
+    return "chase";
+  }
+  // the KH camera as the settings have it (docs/plan/56-the-controls.md D)
+  private camPrefs(v: ThirdPersonView) {
+    const p = prefs();
+    const t = v.follow.tune;
+    t.follow = p.camFollow;
+    t.sens = p.stickSens;
+    t.mouseSens = p.lookSens;
+    t.invertY = p.lookInvert;
+    t.invertX = p.lookInvertX;
   }
   // in my head (the first-person camera is showing)
   firstPerson(): boolean {
@@ -2772,6 +3042,7 @@ export class WorldController {
       this.tp.lookSens = prefs().lookSens;
       this.tp.lookInvert = prefs().lookInvert;
       this.tp.handsOn = prefs().hands1p;
+      this.camPrefs(this.tp);
     }
     if (this.viewNow === "3d") return;
     this.viewNow = "3d";
@@ -2854,10 +3125,13 @@ export class WorldController {
       v.setMode(this.camWanted());
       v.lookSens = prefs().lookSens;
       v.lookInvert = prefs().lookInvert;
+      this.camPrefs(v);
       v.handsOn = prefs().hands1p;
       v.setHour(this.hour);
       v.warming = hud.get().loading.on;
       v.yaw = this.meAngle; // start behind me
+      // (the camera takes the mouse only when nothing on screen wants the pointer)
+      v.canLock = () => !this.pointerWanted();
       this.tp = v;
       this.tpHost = host;
       v.setHighlight(this.footprintOf(hud.get().prompt?.objectId));
@@ -3487,13 +3761,25 @@ export class WorldController {
       e.preventDefault();
       return this.pickArrival(false);
     }
-    // the action menu: a number picks, Esc closes
+    // the action menu: a number picks, Esc closes; W S / A D / the arrows move the choice, E,
+    // Enter or Space does it (docs/plan/56-the-controls.md C)
     const menu = hud.get().menu;
     if (menu) {
       const i = Number(e.key) - 1;
+      const step = MENU_STEP[e.code] ?? 0;
       if (e.key === "Escape") this.closeMenu();
       else if (Number.isInteger(i) && i >= 0 && menu.items[i]?.ok) this.pickAction(menu.items[i].act);
-      else return;
+      else if (step) this.menuStep(step);
+      else if ((e.code === "KeyE" || e.code === "Enter" || e.code === "Space") && !e.repeat) {
+        if (menu.sel !== undefined) this.menuPick();
+      } else return;
+      e.preventDefault();
+      return;
+    }
+    // [ ] (a pad's ↑ ↓: the walker's): the next in the prompt's stack is the focus
+    if ((e.code === "BracketLeft" || e.code === "BracketRight") && this.walker?.targets?.list.length) {
+      this.walker.targets?.cycle(e.code === "BracketRight" ? 1 : -1);
+      this.focusAt = 0;
       e.preventDefault();
       return;
     }
@@ -3529,7 +3815,9 @@ export class WorldController {
       else this.undo();
       return;
     }
-    if (e.metaKey || e.ctrlKey) return;
+    // (Ctrl's the walk: held, the moving keys still move — Ctrl's other keys stay the browser's)
+    const walking = e.ctrlKey && !e.metaKey && !e.altKey && !!this.walker?.controls.movesMe(e.code);
+    if ((e.metaKey || e.ctrlKey) && !walking) return;
     if (this.buildKey(key)) {
       e.preventDefault();
       return;
@@ -3541,13 +3829,15 @@ export class WorldController {
       return;
     }
     if (e.repeat) return;
-    if (key === "x" || key === "e") this.interact();
-    else if (key === "m") void this.toggleMic();
+    if (key === "e") {
+      // a tap on its release, the menu held (holdFrame)
+      if (!this.use) this.use = { src: "key", at: performance.now(), done: false };
+    } else if (key === "m") void this.toggleMic();
     else if (key === "v") void this.toggleCam();
     else if (key === "y") this.swapCamera();
-    else if (key === "z") this.toggleLook();
     else if (key === "p" && !hud.get().build.on) void this.togglePhone();
-    else if (key === "f" && !hud.get().build.on) this.toggleTorch();
+    // (the lantern on L till it's an item in the pockets: plan 57 — F focuses, the walker's)
+    else if (key === "l" && !hud.get().build.on) this.toggleTorch();
     else if (key === "o" && hud.get().isAdmin && !hud.get().build.on) void this.toggleGod();
     else if (key >= "1" && key <= "8") this.emote(Number(key) - 1);
     else if (key === "+" || key === "=") this.tp?.zoomBy(1 / 1.15);
@@ -3555,6 +3845,11 @@ export class WorldController {
   };
 
   private onKeyUp = (e: KeyboardEvent) => {
+    if (e.key.toLowerCase() === "e" && this.use?.src === "key") {
+      const u = this.use;
+      this.use = null;
+      if (!u.done) this.interact();
+    }
     if (this.god?.key(e, false)) return;
     this.walker?.controls.up(e.code);
     this.cars?.key(e, false);

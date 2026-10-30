@@ -39,7 +39,7 @@ export function jumpSound(kind: JumpKind, gain = 1) {
   const ctx = ready();
   if (!ctx) return;
   const at = ctx.currentTime;
-  const flip = kind === "flip";
+  const flip = kind !== "hop";
   const len = flip ? 0.62 : 0.2;
   const b = ctx.createBufferSource();
   b.buffer = sound.noiseBuffer(ctx);
@@ -70,7 +70,7 @@ export function landSound(kind: JumpKind, floor: Floor, gain = 1) {
   const ctx = ready();
   if (!ctx) return;
   const at = ctx.currentTime;
-  const hard = (kind === "flip" ? 1 : 0.7) * gain;
+  const hard = (kind !== "hop" ? 1 : 0.7) * gain;
   const o = ctx.createOscillator();
   o.type = "sine";
   o.frequency.setValueAtTime(130, at);

@@ -9,13 +9,60 @@ import { PadState } from "./pad";
 // was pressed this frame.
 
 /** Pressed this frame (besides the body's own: jump, dodge, crouch). */
-export type Press = "use" | "torch" | "shoulder" | "camera" | "look" | "aid" | "inventory";
-const PRESSES: Press[] = ["use", "torch", "shoulder", "camera", "look", "aid", "inventory"];
+export type Press =
+  | "use"
+  | "torch"
+  | "shoulder"
+  | "camera"
+  | "look"
+  | "aid"
+  | "inventory"
+  | "recenter"
+  | "lock"
+  | "pets"
+  | "emotes"
+  // LB held and a face button: the quick slots (docs/plan/56-the-controls.md phase 6)
+  | "slot1"
+  | "slot2"
+  | "slot3"
+  | "slot4";
+const PRESSES: Extract<Press, Action>[] = [
+  "use",
+  "torch",
+  "shoulder",
+  "camera",
+  "look",
+  "aid",
+  "inventory",
+  "recenter",
+  "lock",
+  "pets",
+  "emotes",
+];
+const LB = 4; // (the standard pad's left bumper: held, the face buttons are the quick slots)
 // the actions the world takes from the keys here (the rest are still its own keys)
-const WORLD: Action[] = ["up", "down", "left", "right", "walk", "sprint", "jump", "crouch", "dodge", "aim"];
+const WORLD: Action[] = [
+  "up",
+  "down",
+  "left",
+  "right",
+  "walk",
+  "sprint",
+  "jump",
+  "crouch",
+  "dodge",
+  "aim",
+  // (the camera on the arrows, behind me, the lock-on: docs/plan/56-the-controls.md)
+  "camLeft",
+  "camRight",
+  "camUp",
+  "camDown",
+  "recenter",
+  "lock",
+];
 
 export class MoveControls {
-  b: Bindings = loadBindings();
+  b: Bindings;
   readonly pad = new PadState();
   private held = new Set<Action>();
   private codes = new Set<string>();
@@ -25,7 +72,13 @@ export class MoveControls {
   private since = new Set<Action>();
   /** crouching (the toggle's state) */
   crouched = false;
+  // (stood up by a slide with crouch held: up till it's let go)
+  private upTillLet = false;
   private padSprint = false;
+
+  constructor(b: Bindings = loadBindings()) {
+    this.b = b;
+  }
 
   /** A key (`code`) or a mouse button (`Mouse0`, `Mouse2`) went down: true if it's ours. */
   down(code: string): boolean {
@@ -46,10 +99,22 @@ export class MoveControls {
     const a = actionOf(this.b, code);
     return !!a && WORLD.includes(a) && this.down(code);
   }
+  /** A key that moves me (the stick's way, walk, sprint, jump, crouch) — kept moving with Ctrl
+   *  held, as Ctrl's the walk (2026-10-30) */
+  movesMe(code: string): boolean {
+    const a = actionOf(this.b, code);
+    return !!a && WORLD.includes(a);
+  }
   up(code: string): void {
     this.codes.delete(code);
     const a = actionOf(this.b, code);
     if (a && ![...this.codes].some((c) => actionOf(this.b, c) === a)) this.held.delete(a);
+  }
+  /** Up on your feet: a slide began (its press was the slide's, not a crouch — out of it you
+   *  stand, run or jump). Held crouch stands too, till it's let go and pressed again. */
+  stand(): void {
+    this.crouched = false;
+    if (this.b.crouchHold) this.upTillLet = true;
   }
   /** Everything let go (the window lost focus). */
   clear(): void {
@@ -59,6 +124,10 @@ export class MoveControls {
     this.since.clear();
   }
 
+  /** An action held on the keys now. */
+  isHeld(a: Action): boolean {
+    return this.held.has(a);
+  }
   /** A way held on the keys or the stick, without reading the frame's input (sat: walk off?). */
   moving(): boolean {
     return (["up", "down", "left", "right"] as Action[]).some((a) => this.held.has(a)) || this.pad.leftNow() > 0;
@@ -71,13 +140,16 @@ export class MoveControls {
     const p = this.pad;
     p.poll();
     if (!usePad) p.mute();
+    // (LB held: A B X Y are the quick slots, not their own actions)
+    const lb = p.held(LB);
+    const face = (i: number) => lb && i <= 3;
     const padOn = (a: Action) => {
       const i = this.b.pad[a];
-      return i !== undefined && p.held(i);
+      return i !== undefined && !face(i) && p.held(i);
     };
     const padHit = (a: Action) => {
       const i = this.b.pad[a];
-      return i !== undefined && p.pressed(i);
+      return i !== undefined && !face(i) && p.pressed(i);
     };
     const on = (a: Action) => this.held.has(a) || this.since.has(a) || padOn(a);
     const hit = (a: Action) => this.hits.has(a) || padHit(a);
@@ -97,14 +169,16 @@ export class MoveControls {
     const x = ((fx * fwd - fy * side) / n) * mag;
     const y = ((fy * fwd + fx * side) / n) * mag;
 
-    // sprint: held on the keys; on a pad L3 starts it and it lasts until you stop
+    // sprint: held on the keys; on a pad L3 starts it and it lasts until you stop (plan 56's pad:
+    // the dodge held)
     if (padHit("sprint")) this.padSprint = true;
     if (p.left.mag < 0.3) this.padSprint = false;
-    const sprint = this.held.has("sprint") || this.padSprint;
+    const sprint = this.held.has("sprint") || (this.b.dashOnDodge ? padOn("dodge") : this.padSprint);
     // crouch: a toggle (or held, in the settings); sprinting stands you up
     let crouchPressed = false;
     if (this.b.crouchHold) {
-      const c = on("crouch");
+      if (!on("crouch")) this.upTillLet = false;
+      const c = on("crouch") && !this.upTillLet;
       crouchPressed = c && !this.crouched;
       this.crouched = c;
     } else if (hit("crouch")) {
@@ -130,10 +204,24 @@ export class MoveControls {
     };
     const presses = new Set<Press>();
     for (const a of PRESSES) if (hit(a)) presses.add(a);
+    if (lb) for (let i = 0; i < 4; i++) if (p.pressed(i)) presses.add(`slot${i + 1}` as Press);
     this.hits.clear();
     this.since.clear();
     return { move, presses };
   }
+}
+
+/** The camera's keys held, -1..1 each (x: right, y: down). */
+export function camKeys(c: MoveControls): { x: number; y: number } {
+  const k = (a: Action) => c.isHeld(a);
+  return { x: (k("camRight") ? 1 : 0) - (k("camLeft") ? 1 : 0), y: (k("camDown") ? 1 : 0) - (k("camUp") ? 1 : 0) };
+}
+/** The camera turned by hand this frame, -1..1 each (x: right, y: down): the camera's keys, else the
+ *  right stick (polled by this frame's `read`). */
+export function camLook(c: MoveControls): { x: number; y: number } {
+  const k = camKeys(c);
+  if (k.x || k.y) return k;
+  return { x: c.pad.right.x, y: c.pad.right.y };
 }
 
 /** The presses go to the first fixed step of a frame only. */

@@ -36,13 +36,13 @@ const hue = (rgb: string) => {
   return `other(${rgb})`;
 };
 // From the console's panel: its cable into my hands, over to the TV's front,
-// X there; then back to the console, its panel open again.
+// E there; then back to the console, its panel open again.
 async function plugIn(page: Page, consoleId: string, front: { x: number; y: number }, back: { x: number; y: number }) {
   await page.getByRole("button", { name: "Take the cable" }).click();
   await expect(page.getByText("Console cable")).toBeVisible();
   await walkTo(page, front.x, front.y, 25_000);
   await expect.poll(() => page.evaluate(() => (window as any).__hud.get().prompt?.kind)).toBe("plug");
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await expect(page.getByText("Console cable")).toBeHidden({ timeout: 10_000 });
   await walkTo(page, back.x, back.y, 25_000);
   await page.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), consoleId);
@@ -105,7 +105,7 @@ test("game room: plug in, cartridge, on — everyone sees the TV, pad 2 plays, c
     await walkTo(ana, at.x + 1.5, at.y + 3.6, 25_000);
     await ana.waitForFunction(() => !!(window as any).__yutopia.games, null, { timeout: 15_000 });
     await ana.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), conId);
-    // the cable into her hands (the panel closes), over to the TV, X there
+    // the cable into her hands (the panel closes), over to the TV, E there
     await plugIn(ana, conId, { x: at.x + 1, y: at.y + 1.5 }, { x: at.x + 1.5, y: at.y + 3.6 });
     await ana.getByRole("button", { name: "Insert a cartridge" }).click();
     const card = ana.locator("li", { hasText: "Test Card" }).filter({ hasText: "8-bit" });

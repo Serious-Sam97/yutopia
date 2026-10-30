@@ -198,3 +198,37 @@ test("saved while down (a restart, the line dropped): back on their feet, not st
   assert.equal(me(back.room).hp, DOWN.awakeHp);
   assert.equal(me(back.room).downAt, 0);
 });
+
+test("in the air: a jump marked `air` (a second jump) is taken, an air dash too; unmarked, not", async () => {
+  const f = await person(733, 76);
+  await standAt(f, POND.x + 4, POND.z);
+  await sleep(1100); // (the teleport's snap: what was sent before it is let go for a second)
+  const g = heightAt(POND.x + 4, POND.z);
+  const up = { x: POND.x + 4 - OFF.x, y: POND.z - OFF.y, z: g + 2, d: 2, a: 0, seq: 0, mv: 0 };
+  // two metres up for half a second: off the ground longer than coyote time and a message's lag
+  for (let i = 0; i < 10; i++) {
+    f.room.send("pos", up);
+    await sleep(50);
+  }
+  f.room.send("jump", { k: "hop" });
+  await sleep(150);
+  assert.notEqual(me(f.room).jump, "hop", "a plain jump from the air: no");
+  f.room.send("jump", { k: "flip", air: true });
+  await waitFor(() => me(f.room).jump === "flip", 2000);
+  // (right after it: an air dash follows the jump it's in)
+  f.room.send("jump", { k: "adash", air: true });
+  await waitFor(() => me(f.room).jump === "adash", 2000);
+});
+
+test("Flowmotion: a move begun is on the player for everyone (its byte), ended it's 0; nonsense isn't taken", async () => {
+  const f = await person(734, 76);
+  // (a grind, the rail on my right: shared move/flow.ts flowCode)
+  f.room.send("flow", { f: 4 + 16 });
+  await waitFor(() => me(f.room).flow === 20, 2000);
+  f.room.send("flow", { f: 99 });
+  f.room.send("flow", { f: "grind" });
+  await sleep(200);
+  assert.equal(me(f.room).flow, 20);
+  f.room.send("flow", { f: 0 });
+  await waitFor(() => me(f.room).flow === 0, 2000);
+});

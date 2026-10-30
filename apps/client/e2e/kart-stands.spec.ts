@@ -99,7 +99,7 @@ test("the crowd at a race: up at the go, a wave as the karts go by, up at the fl
   await open(page);
   await go(page, KART_DESK.x + 2, KART_DESK.z);
   await page.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "kart:take", null, { timeout: 30_000 });
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await page.waitForSelector("button[data-go='start']", { timeout: 15_000 });
   await page.click("button[data-set='mode'][data-v='gp']");
   await page.click("button[data-set='laps'][data-v='1']");

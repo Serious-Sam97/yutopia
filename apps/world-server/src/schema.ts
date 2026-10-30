@@ -54,6 +54,8 @@ export class Player extends Schema {
   // a jump (shared/jump.ts): which, and when it started (server ms)
   @type("string") jump = "";
   @type("float64") jumpAt = 0;
+  // a Flowmotion move under way (shared move/flow.ts flowCode: its kind and side), 0 none
+  @type("uint8") flow = 0;
   // the phone's flashlight on (the Grounds at night: a beam everyone sees)
   @type("boolean") torch = false;
   // the move (docs/plan/29-the-move.md M7): the gait (shared/move packMv), the facing and the

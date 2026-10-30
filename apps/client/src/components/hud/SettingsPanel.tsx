@@ -435,11 +435,11 @@ function ViewPage() {
         {p.view === "3p" && (
           <div className="mt-2.5">
             <Choice
-              options={["chase", "free"] as const}
-              value={p.cam3p}
-              cols={2}
-              label={(c) => t(c === "chase" ? "cam3pChase" : "cam3pFree")}
-              onPick={(c) => setPrefs({ cam3p: c })}
+              options={["on", "gentle", "off"] as const}
+              value={p.camFollow}
+              cols={3}
+              label={(c) => t(c === "on" ? "camFollowOn" : c === "gentle" ? "camFollowGentle" : "camFollowOff")}
+              onPick={(c) => setPrefs({ camFollow: c })}
             />
           </div>
         )}
@@ -454,6 +454,16 @@ function ViewPage() {
           shown={p.lookSens.toFixed(1)}
           onChange={(v) => setPrefs({ lookSens: v })}
         />
+        <Slider
+          label={t("stickSpeed")}
+          value={p.stickSens}
+          min={0.25}
+          max={3}
+          step={0.05}
+          shown={p.stickSens.toFixed(1)}
+          onChange={(v) => setPrefs({ stickSens: v })}
+        />
+        <Toggle label={t("lookInvertX")} value={p.lookInvertX} onChange={(v) => setPrefs({ lookInvertX: v })} />
         <Toggle label={t("lookInvert")} value={p.lookInvert} onChange={(v) => setPrefs({ lookInvert: v })} />
         {p.view === "1p" && (
           <Toggle label={t("hands1p")} value={p.hands1p} onChange={(v) => setPrefs({ hands1p: v })} />

@@ -1,0 +1,349 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Yutopia, the controls</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&family=Special+Elite&display=block" rel="stylesheet">
+<style>
+/* docs/plan/56-the-controls.md, phase 0. ?s=camera|prompt|hold|lockon|aim|wheel|controls|sheet
+   The classes are the live ones (apps/client/src/app/globals.css), as the god mode mocks copied them. */
+:root {
+  --cream: #ece6da; --cream-dim: #a7a094; --paper: #ece5d3; --amber: #f1d79a; --vfd: #f1d79a;
+  --rust: #c8553f; --ink: #1a1a1e; --muted: #8a857c; --panel: #17181d; --edge: #3a3631;
+  --wood: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27600%27%20height=%27240%27%3E%3Cfilter%20id=%27g%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.006%200.22%27%20numOctaves=%273%27%20seed=%277%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%200.55%200%200%200%200%200.36%200%200%200%200%200.2%201.1%200%200%200%20-0.35%27/%3E%3C/filter%3E%3Crect%20width=%27600%27%20height=%27240%27%20fill=%27%234e301b%27/%3E%3Crect%20width=%27600%27%20height=%27240%27%20filter=%27url(%23g)%27/%3E%3C/svg%3E");
+  --edge-2: #46413a; --edge-cabinet: #4a443b; --well-edge: #2f2d2a; --field: #121318;
+  --amber-shade: #8a7346; --amber-lo: #e0c07e; --on-amber: #1a1a1e; --good: #8aa04a;
+  --scrim: #06080c9e; --tile-hi: #2a2a30;
+  --font-mono: "Special Elite", ui-monospace, monospace; --font-title: "Cormorant Garamond", Georgia, serif; --font-body: Inter, system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1440px; height: 900px; overflow: hidden; background: #111216; color: var(--cream); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
+.bg { position: absolute; inset: 0; background: 0 0 / 100% 100% no-repeat; }
+.abs { position: absolute; }
+.row { display: flex; align-items: center; }
+.mono { font-family: var(--font-mono); }
+.title { font-family: var(--font-title); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--cream); line-height: 1.05; }
+.cabinet { border: 5px solid transparent; border-radius: 6px; background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--wood) 0 0 / 600px 240px border-box; box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.55), 0 12px 30px rgba(0,0,0,.5); }
+.pill { border-radius: 999px; }
+.keycap { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 5px; border: 1px solid currentColor; font-family: var(--font-mono); font-size: 12px; line-height: 1; color: var(--amber); white-space: nowrap; }
+.keycap.sm { min-width: 19px; height: 19px; font-size: 10.5px; padding: 0 4px; border-radius: 4px; }
+/* a pad's button: the face buttons round, the rest a rounded chip */
+.pad { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--amber); color: var(--amber); font: 12px/1 var(--font-mono); background: radial-gradient(circle at 40% 35%, #2b2a2c, #141418); flex: none; position: relative; }
+.pad.sm { width: 20px; height: 20px; font-size: 10px; }
+.pad.sh { width: auto; min-width: 30px; padding: 0 6px; border-radius: 7px; height: 22px; font-size: 10.5px; }
+.pad.hold::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; background: conic-gradient(var(--amber) 0 var(--p, 60%), rgba(241,215,154,.14) var(--p, 60%) 100%); -webkit-mask: radial-gradient(circle, transparent 15px, #000 16px); mask: radial-gradient(circle, transparent 15px, #000 16px); }
+.dim { color: var(--cream-dim); }
+.mut { color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); }
+.lab { font: 11.5px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--vfd); }
+.ov { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.callout { position: absolute; font: 13px/1.35 var(--font-mono); color: var(--ink); background: var(--paper); padding: 8px 11px; border-radius: 3px; box-shadow: 0 6px 16px rgba(0,0,0,.45); max-width: 250px; z-index: 5; }
+.callout::before { content: "▸ "; color: var(--rust); }
+.scrim { position: absolute; inset: 0; background: var(--scrim); backdrop-filter: blur(2px); }
+.card { border-radius: 4px; background: rgba(255,255,255,.025); border: 1px solid var(--well-edge); padding: 12px 16px; }
+.rail-item { position: relative; display: flex; align-items: center; gap: 11px; height: 38px; padding: 0 12px; border-radius: 4px; font-size: 14px; color: var(--cream-dim); white-space: nowrap; width: 100%; }
+.rail-item.sel { color: var(--amber); background: color-mix(in srgb, var(--amber) 9%, transparent); }
+.rail-item.sel::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; background: var(--amber); box-shadow: 0 0 8px color-mix(in srgb, var(--amber) 80%, transparent); }
+svg.i { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.seg { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--field); border: 1px solid var(--edge-2); }
+.seg > span { flex: 1; padding: 6px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--cream-dim); white-space: nowrap; text-align: center; }
+.seg > span.on { background: var(--vfd); color: var(--ink); }
+.sw { position: relative; width: 42px; height: 24px; border-radius: 12px; flex: none; background: rgba(255,255,255,.08); border: 1px solid color-mix(in srgb, var(--amber) 15%, transparent); }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--cream-dim); }
+.sw.on { background: color-mix(in srgb, var(--amber) 25%, transparent); border-color: var(--amber); }
+.sw.on::after { left: 21px; background: var(--amber); box-shadow: 0 0 8px color-mix(in srgb, var(--amber) 80%, transparent); }
+.slider { position: relative; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--amber-shade), var(--amber)) 0 0 / var(--v, 50%) 100% no-repeat, color-mix(in srgb, var(--amber) 14%, transparent); }
+.slider::after { content: ""; position: absolute; left: calc(var(--v) - 8px); top: -6px; width: 16px; height: 16px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff3cf, var(--amber-lo) 70%); box-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.grp { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--vfd); margin: 4px 0 2px; }
+.grp::after { content: ""; flex: 1; height: 1px; background: var(--edge-2); }
+.deck-btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; height: 34px; padding: 0 .8rem; border-radius: 6px; background: rgba(255,255,255,.04); border: 1px solid color-mix(in srgb, var(--amber) 16%, transparent); color: var(--cream); font-family: var(--font-mono); font-size: .78rem; white-space: nowrap; }
+
+/* the prompt stack */
+.stack { position: absolute; left: 50%; transform: translateX(-50%); bottom: 112px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.cmd { display: flex; align-items: center; gap: 10px; padding: 5px 16px 5px 6px; }
+.cmd .th { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(var(--tile-hi), var(--panel)); border: 1px solid var(--edge); flex: none; }
+.cmd .th svg { width: 22px; height: 22px; }
+.cmd .what { font-size: 14px; white-space: nowrap; }
+.cmd .verb { font-size: 14px; color: var(--amber); white-space: nowrap; }
+.cmd .more { font: 11px/1 var(--font-mono); color: var(--muted); white-space: nowrap; }
+.cmd.small { transform: scale(.86); opacity: .72; }
+.vs { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--edge-2); }
+/* the ring menu (today's, Actions.tsx), now with a chosen one */
+.ritem { position: absolute; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 6px; font-size: 13px; white-space: nowrap; }
+.ritem.on { box-shadow: 0 0 0 2px var(--amber), 0 0 18px color-mix(in srgb, var(--amber) 45%, transparent), 0 12px 30px rgba(0,0,0,.5); color: var(--amber); }
+.tag { position: absolute; font: 12px/1 var(--font-mono); padding: 4px 9px; border-radius: 3px; background: rgba(23,24,29,.88); color: var(--cream); white-space: nowrap; }
+.hint { display: inline-flex; align-items: center; gap: 7px; font: 11.5px/1 var(--font-mono); color: var(--cream-dim); white-space: nowrap; }
+.hints { display: flex; align-items: center; gap: 16px; padding: 7px 14px; }
+/* the controls page */
+.bind { display: grid; grid-template-columns: 1fr 150px 70px; white-space: nowrap; align-items: center; gap: 10px; height: 29px; padding: 0 8px; border-radius: 4px; font-size: 13.5px; }
+.bind:nth-child(even) { background: rgba(255,255,255,.018); }
+.bind .k { display: flex; gap: 5px; }
+.bind.listen { background: color-mix(in srgb, var(--amber) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 45%, transparent); }
+.cursor { position: absolute; width: 22px; height: 28px; z-index: 9; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+/* the sheet */
+.kb { display: grid; gap: 6px; }
+.kb .r { display: flex; gap: 6px; }
+.kc { position: relative; height: 46px; min-width: 46px; border-radius: 6px; border: 1px solid #3c3a36; background: linear-gradient(#1f1f24, #18181c); color: #6f6b64; font: 13px/1 var(--font-mono); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.kc.on { border-color: var(--amber); color: var(--amber); background: linear-gradient(#2a261d, #1c1a16); box-shadow: 0 0 10px color-mix(in srgb, var(--amber) 22%, transparent); }
+.kc.cam { border-color: #9fb6c8; color: #c9d8e4; background: linear-gradient(#1d2328, #171b1f); }
+.kc small { font: 9px/1.05 var(--font-body); color: var(--cream-dim); text-align: center; letter-spacing: 0; max-width: 64px; }
+</style>
+</head>
+<body>
+<div class="bg" id="bg"></div>
+<div id="app"></div>
+<script>
+const A = "#f1d79a";
+const bg = (n) => { document.getElementById("bg").style.backgroundImage = `url(bg/${n}.png)`; };
+const ov = (svg) => `<svg class="ov" viewBox="0 0 1440 900">${svg}</svg>`;
+const co = (x, y, t, rot = 0, w = 250) => `<div class="callout" style="left:${x}px;top:${y}px;max-width:${w}px;transform:rotate(${rot}deg)">${t}</div>`;
+const pad = (l, cls = "") => `<span class="pad ${cls}">${l}</span>`;
+const key = (l, cls = "") => `<span class="keycap ${cls}">${l}</span>`;
+const ICON = {
+  sofa: `<svg viewBox="0 0 24 24"><path d="M4 11V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3" fill="#5e7340" stroke="#2c3520" stroke-width="1.2"/><rect x="2.5" y="10.5" width="19" height="6" rx="2" fill="#6f8a4a" stroke="#2c3520" stroke-width="1.2"/><path d="M5 16.5v2M19 16.5v2" stroke="#2c3520" stroke-width="1.6"/></svg>`,
+  lift: `<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1" fill="#4b5563" stroke="#1f2329" stroke-width="1.2"/><path d="M12 3v18" stroke="#1f2329"/><path d="M9.5 8l2.5-2.5L14.5 8" fill="none" stroke="${A}" stroke-width="1.3"/></svg>`,
+  face: `<svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="5.5" fill="#b9764f" stroke="#2a1a12" stroke-width="1.1"/><path d="M6.6 9.2C7 4.8 17 4.5 17.4 9.2 15 7.4 9 7.4 6.6 9.2z" fill="#2b1d16"/><path d="M5 21c1-4.2 3.8-5.6 7-5.6s6 1.4 7 5.6" fill="#c2552f" stroke="#2a1a12" stroke-width="1.1"/></svg>`,
+  car: `<svg viewBox="0 0 24 24"><path d="M3 15l1.6-4.5A2 2 0 0 1 6.5 9h11a2 2 0 0 1 1.9 1.5L21 15v3H3z" fill="#3b4a6b" stroke="#141a26" stroke-width="1.1"/><circle cx="7" cy="18" r="1.8" fill="#111"/><circle cx="17" cy="18" r="1.8" fill="#111"/></svg>`,
+};
+// corner brackets round a thing in focus
+const brackets = (x0, y0, x1, y1, c = A, s = 18) => `<g fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round">
+  <path d="M${x0} ${y0 + s}V${y0}H${x0 + s}"/><path d="M${x1 - s} ${y0}H${x1}V${y0 + s}"/>
+  <path d="M${x1} ${y1 - s}V${y1}H${x1 - s}"/><path d="M${x0 + s} ${y1}H${x0}V${y1 - s}"/></g>`;
+const diamond = (x, y, r = 9, fill = A) => `<path d="M${x} ${y - r}L${x + r} ${y}L${x} ${y + r}L${x - r} ${y}z" fill="${fill}" stroke="#17181d" stroke-width="2"/>`;
+// the prompt stack: rows of [icon, what, verb]; the first is the focus
+const stack = (rows, dev = "pad", hold = 0) => `<div class="stack">${rows.map((r, i) => {
+  const btn = dev === "pad" ? pad("Y", hold && !i ? "hold" : "") : key("E");
+  return `<div class="cabinet pill cmd ${i ? "small" : ""}" style="${hold && !i ? `--p:${hold}%` : ""}">
+    <span class="th">${ICON[r[0]]}</span><span class="what">${r[1]}</span><span class="vs"></span>
+    ${i ? "" : btn}<span class="verb">${r[2]}</span>${i ? "" : `<span class="more">· hold: more</span>`}</div>`;
+}).reverse().join("")}</div>`;
+
+const S = {};
+
+S.camera = () => {
+  document.getElementById("bg").style.background = "#111216";
+  const half = (img, x, title, sub) => `<div class="abs" style="left:${x}px;top:0;width:720px;height:900px;overflow:hidden">
+      <div class="abs" style="left:-360px;top:0;width:1440px;height:900px;background:url(bg/${img}.png) 0 0/100% 100%"></div>
+      <div class="abs cabinet" style="left:24px;top:24px;padding:10px 16px"><div class="title" style="font-size:20px">${title}</div><div class="mono dim" style="font-size:12px;margin-top:4px">${sub}</div></div></div>`;
+  return half("lot-now", 0, "Today", "chase · 20–57° down · slow to come round") +
+    half("lot-day", 720, "Behind you, low", "pitch 0.25 · 4.2 m back · follows your run") +
+    `<div class="abs" style="left:719px;top:0;width:2px;height:900px;background:${A};box-shadow:0 0 12px ${A}"></div>` +
+    co(40, 640, "Today it looks down at the asphalt: what's ahead of you is off the top of the screen.", -1, 260) +
+    co(1110, 520, "Low and behind: you see where you're going, the cars, the woods, someone across the lot.", 1, 270) +
+    co(760, 640, "Turned by the mouse, the right stick or the arrows. It comes round behind your run on its own (no 0.4 s wait), lets go while you turn it, and pulls back when you dash or jump. R / R3 puts it behind you.", -1, 300);
+};
+
+S.prompt = () => {
+  bg("lobby-kh");
+  return ov(brackets(880, 560, 1210, 790) + diamond(1045, 540)) +
+    stack([["sofa", "Sofa", "Sit"], ["lift", "Elevator", "Call it"]], "pad", 55) +
+    `<div class="abs cabinet pill cmd" style="left:1060px;top:96px;transform:scale(.9);transform-origin:left top"><span class="th">${ICON.sofa}</span><span class="what">Sofa</span><span class="vs"></span>${key("E")}<span class="verb">Sit</span><span class="more">· hold E: more · [ ] next</span></div>` +
+    `<div class="abs mono" style="left:1064px;top:150px;font-size:11px;color:var(--cream)">on the keyboard (the glyphs follow what you last touched)</div>` +
+    co(1000, 380, "The focus: the thing in front of you you could act on, scored by distance, your facing and the camera. Brackets on it, no pointer.", 1, 260) +
+    co(250, 520, "The command stack where today's prompt is. The focus on the bottom; others in reach above it, smaller. D-pad ↑↓ (or [ ]) picks between them.", -1, 270) +
+    co(250, 700, "Tap Y / E: its main action (Sit). Hold: its menu, the ring fills as you hold.", -1, 250) +
+    co(60, 96, "In play there's no cursor: the mouse turns the camera, and a click on the world does nothing.", 0, 250);
+};
+
+S.hold = () => {
+  bg("lot-day");
+  const cx = 398, cy = 330;
+  const items = [["Wave", 1], ["High five", 2], ["Fist bump", 3], ["Follow", 4], ["Who's this?", 5]];
+  const R = 112, n = items.length;
+  const ring = items.map(([t, k], i) => {
+    const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+    const x = cx + Math.cos(a) * R * 1.25, y = cy + Math.sin(a) * R;
+    const c = Math.cos(a);
+    const tx = Math.abs(c) < 0.3 ? "-50%" : c > 0 ? "-24px" : "calc(-100% + 24px)";
+    return `<div class="cabinet pill ritem ${i === 1 ? "on" : ""}" style="left:${x}px;top:${y}px;translate:${tx} -50%">${key(k, "sm")}${t}</div>`;
+  }).join("");
+  const a = -Math.PI / 2 + (1 / n) * Math.PI * 2;
+  return ov(`<circle cx="${cx}" cy="${cy}" r="40" fill="rgba(23,24,29,.55)" stroke="${A}" stroke-opacity=".35" stroke-width="1.5"/>
+      <line x1="${cx}" y1="${cy}" x2="${cx + Math.cos(a) * 70}" y2="${cy + Math.sin(a) * 56}" stroke="${A}" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="${cx}" cy="${cy}" r="5" fill="${A}"/>`) +
+    `<div class="abs" style="left:${cx}px;top:${cy + 62}px;transform:translateX(-50%)"><span class="cabinet pill" style="padding:2px 10px;font-size:12px;white-space:nowrap">Bia Demo</span></div>` +
+    ring +
+    `<div class="abs cabinet pill hints" style="left:50%;transform:translateX(-50%);bottom:112px">
+      <span class="hint">${pad("◎", "sm")} or ${key("WASD", "sm")} choose</span>
+      <span class="hint">${pad("A", "sm")} ${key("E", "sm")} do it</span>
+      <span class="hint">${pad("B", "sm")} ${key("Esc", "sm")} back</span>
+      <span class="hint">${key("1", "sm")}–${key("5", "sm")}</span></div>` +
+    co(700, 220, "Hold Use on someone: today's ring, round them on screen, the one the stick (or WASD) points at lit. A / E does it.", 1, 270) +
+    co(700, 420, "The same for a pet, an object with more than one thing to do, and your own menu (hold Use with nothing in focus, or LB + Y).", -1, 280) +
+    co(1010, 120, "The world doesn't stop: you stand still while the ring's open, others carry on.", 1, 220);
+};
+
+S.lockon = () => {
+  bg("lot-lock");
+  const x = 718, y = 352;
+  return ov(`<g>
+      <circle cx="${x}" cy="${y}" r="74" fill="none" stroke="${A}" stroke-width="2" stroke-dasharray="20 12" opacity=".9"/>
+      ${diamond(x, y - 74, 8)}${diamond(x + 74, y, 8)}${diamond(x, y + 74, 8)}${diamond(x - 74, y, 8)}
+      <circle cx="${x}" cy="${y}" r="88" fill="none" stroke="${A}" stroke-width="1" opacity=".35"/></g>
+      ${diamond(560, 225, 6, "rgba(241,215,154,.45)")}${diamond(900, 220, 6, "rgba(241,215,154,.45)")}
+      <path d="M612 300 L560 236" stroke="${A}" stroke-opacity=".35" stroke-dasharray="3 5"/>
+      <path d="M824 300 L896 232" stroke="${A}" stroke-opacity=".35" stroke-dasharray="3 5"/>`) +
+    `<div class="abs cabinet pill row" style="left:50%;transform:translateX(-50%);top:96px;gap:10px;padding:5px 14px 5px 8px">
+      ${key("F", "sm")} ${pad("RB", "sh")}<span class="lab">Focus</span><span style="font-size:14px">Bia Demo</span>
+      <span class="vs"></span><span class="hint">${pad("◎", "sm")} flick · ${key("←", "sm")} ${key("→", "sm")} next</span></div>` +
+    stack([["face", "Bia Demo", "Wave"]], "pad") +
+    co(860, 380, "F / RB focuses on her: the camera frames you both, you face her, left and right circle round.", 1, 250) +
+    co(260, 300, "The next ones either way (a car you can get in, someone else): a flick of the right stick, or ← →.", -1, 240) +
+    co(1050, 600, "Use acts on the one you're focused on, even across a crowd. F / RB again lets go; so does 1.5 s out of sight.", 1, 250);
+};
+
+S.aim = () => {
+  bg("lot-night-aim");
+  const x = 566, y = 360;
+  return `<div class="abs" style="left:700px;top:430px;width:40px;height:40px;background:#0a0b10;border-radius:50%;filter:blur(6px)"></div>` +
+    ov(`<g opacity=".95">
+      <circle cx="${x}" cy="${y}" r="26" fill="none" stroke="${A}" stroke-width="2"/>
+      <path d="M${x} ${y - 38}v14M${x} ${y + 24}v14M${x - 38} ${y}h14M${x + 24} ${y}h14" stroke="${A}" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="${x}" cy="${y}" r="3" fill="${A}"/></g>
+      <path d="M720 450 Q640 400 ${x + 30} ${y + 8}" fill="none" stroke="${A}" stroke-width="1.5" stroke-dasharray="4 6" opacity=".6"/>
+      <circle cx="720" cy="450" r="4" fill="none" stroke="${A}" opacity=".5"/>
+      ${brackets(470, 175, 660, 530, "rgba(241,215,154,.6)", 14)}`) +
+    `<div class="abs cabinet pill hints" style="left:50%;transform:translateX(-50%);bottom:160px">
+      <span class="hint">${pad("LT", "sh")} aim</span><span class="hint">${pad("RT", "sh")} fire</span>
+      <span class="hint">${pad("Y", "sm")} reload</span><span class="hint">${pad("RB", "sh")} flare</span></div>
+    <div class="abs cabinet pill hints" style="left:50%;transform:translateX(-50%);bottom:112px">
+      <span class="hint">${key("RMB", "sm")} ${key("Z", "sm")} aim</span><span class="hint">${key("LMB", "sm")} ${key("Space", "sm")} fire</span>
+      <span class="hint">${key("E", "sm")} reload</span><span class="hint">mouse ${key("←↑→↓", "sm")} aim</span></div>` +
+    co(760, 210, "With the mouse you aim yourself (RMB aim, LMB fire). On a pad or the keys aiming has help: over a target the reticle slows and is drawn in a little (dashed: where you pointed → where it settles).", 1, 280) +
+    co(180, 600, "Locked on first, the aim goes straight to them. The hit test (shared beam.ts) doesn't change.", -1, 240) +
+    co(1010, 400, "On keys and mouse: RMB (or Z) aims, LMB (or Space) fires, the mouse aims. Without a mouse, the arrows fine-tune.", 1, 260);
+};
+
+S.wheel = () => {
+  bg("lot-day");
+  const cx = 720, cy = 420, r0 = 70, r1 = 170;
+  const em = [["👋", "Wave"], ["❤️", "Heart"], ["😂", "Laugh"], ["👏", "Clap"], ["🔥", "Fire"], ["❓", "Question"], ["☕", "Coffee"], ["📼", "Tape"]];
+  const seg = em.map(([e, t], i) => {
+    const a0 = -Math.PI / 2 - Math.PI / 8 + (i * Math.PI) / 4, a1 = a0 + Math.PI / 4;
+    const p = (r, a) => `${cx + Math.cos(a) * r} ${cy + Math.sin(a) * r}`;
+    const on = i === 1;
+    const am = (a0 + a1) / 2;
+    return `<path d="M${p(r0, a0)} L${p(r1, a0)} A${r1} ${r1} 0 0 1 ${p(r1, a1)} L${p(r0, a1)} A${r0} ${r0} 0 0 0 ${p(r0, a0)}z"
+        fill="${on ? "#4a4232" : "#1b1c21"}" stroke="${on ? A : "#4a443b"}" stroke-width="${on ? 2.5 : 1.5}"/>
+      <text x="${cx + Math.cos(am) * 120}" y="${cy + Math.sin(am) * 120 + 2}" text-anchor="middle" font-size="30">${e}</text>
+      <text x="${cx + Math.cos(am) * 120}" y="${cy + Math.sin(am) * 120 + 30}" text-anchor="middle" font-family="Special Elite" font-size="12" fill="${on ? A : "#a7a094"}">${t}</text>`;
+  }).join("");
+  const a = -Math.PI / 2 + Math.PI / 4;
+  return ov(`<circle cx="${cx}" cy="${cy}" r="${r1 + 7}" fill="none" stroke="#4e301b" stroke-width="10"/>${seg}
+      <circle cx="${cx}" cy="${cy}" r="${r0 - 8}" fill="rgba(23,24,29,.92)" stroke="#4a443b"/>
+      <line x1="${cx}" y1="${cy}" x2="${cx + Math.cos(a) * 46}" y2="${cy + Math.sin(a) * 46}" stroke="${A}" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="${cx}" cy="${cy}" r="6" fill="${A}"/>
+      <text x="${cx}" y="${cy + r1 + 40}" text-anchor="middle" font-family="Cormorant Garamond" font-weight="600" font-size="20" letter-spacing="3" fill="#ece6da">EMOTES</text>`) +
+    `<div class="abs cabinet pill hints" style="left:50%;transform:translateX(-50%);bottom:112px">
+      <span class="hint">hold ${pad("←", "sm")} · ${key("G", "sm")}</span><span class="hint">right stick · ${key("←↑→↓", "sm")} point</span>
+      <span class="hint">let go: do it</span><span class="hint">${key("5", "sm")}–${key("8", "sm")} straight away</span></div>` +
+    co(960, 250, "The emote wheel and the pets' wheel (hold d-pad → / T) chosen by pointing, not by the pointer: the right stick or the arrows.", 1, 260) +
+    co(170, 470, "Let go to do it; let go in the middle, nothing. You keep walking while it's open, so it's the right stick and the arrows that point (the left stick and WASD still walk).", -1, 260);
+};
+
+S.controls = () => {
+  bg("lobby-kh");
+  const rows = (g, list) => `<div class="grp">${g}</div>` + list.map(([n, ks, p, cls]) =>
+    `<div class="bind ${cls ?? ""}"><span>${n}</span><span class="k">${cls === "listen" ? `<span class="mono" style="font-size:11.5px;color:var(--amber);white-space:nowrap">Press a key…</span>` : ks.map((k) => key(k, "sm")).join("")}</span><span class="k">${p.map((x) => pad(x, x.length > 1 ? "sh" : "sm")).join("")}</span></div>`).join("");
+  const rail = [["Me"], ["Sound"], ["Camera"], ["View"], ["Quality"], ["Controls", 1]].map(([t, s]) => `<div class="rail-item ${s ? "sel" : ""}">${t}</div>`).join("");
+  return `<div class="scrim"></div>
+    <div class="abs cabinet" style="left:200px;top:70px;width:1040px;height:760px;padding:18px 22px">
+      <div class="row" style="justify-content:space-between"><div class="title" style="font-size:22px">Settings</div><span class="keycap sm" style="color:var(--cream-dim)">Esc</span></div>
+      <div class="row" style="align-items:stretch;gap:22px;margin-top:14px;height:680px">
+        <div style="width:170px">${rail}</div>
+        <div style="flex:1;min-width:0">
+          <div class="title" style="font-size:26px">Controls</div>
+          <p class="dim" style="font-size:13.5px;margin-top:6px">Keys, the mouse and a pad. Pick a row and press the key or button you want.</p>
+          <div class="row" style="gap:18px;margin-top:12px;align-items:flex-start">
+            <div class="card" style="flex:1.35;padding:8px 10px">
+              <div class="bind" style="height:24px;background:none"><span class="lab">Action</span><span class="lab">Keyboard</span><span class="lab">Pad</span></div>
+              ${rows("Moving", [["Move", ["WASD"], ["L"]], ["Jump · double jump", ["Space"], ["A"]], ["Run fast (held)", ["Shift"], ["X"]], ["Roll · air dash", ["Q"], ["X"]], ["Crouch · slide", ["C"], ["B"]], ["Walk", ["Alt"], ["½"]]])}
+              ${rows("Doing", [["Use · held: its menu", ["E"], ["Y"]], ["Focus (lock on) · next", ["F", "MMB"], ["RB"], "listen"], ["Shortcuts", ["1–4"], ["LB"]], ["Emotes · pets (held)", ["G", "T"], ["←", "→"]], ["Pockets", ["I"], ["Menu"]]])}
+              ${rows("Camera", [["Look around", ["Mouse", "←↑→↓"], ["R"]], ["Behind me", ["R"], ["R3"]], ["1st · 3rd person", ["Y"], ["View"]]])}
+              ${rows("Aiming", [["Aim", ["RMB", "Z"], ["LT"]], ["Fire · throw", ["LMB", "Space"], ["RT"]]])}
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+              <div class="card"><div class="lab" style="margin-bottom:9px">The camera follows</div><div class="seg"><span class="on">On</span><span>Gentle</span><span>Off</span></div>
+                <div class="row" style="gap:12px;margin-top:14px;font-size:13px"><span style="width:84px" class="dim">Mouse</span><div class="slider" style="--v:45%;flex:1"></div><span class="mono" style="font-size:11px">1.0</span></div><div class="row" style="gap:12px;margin-top:10px;font-size:13px"><span style="width:84px" class="dim">Stick, keys</span><div class="slider" style="--v:55%;flex:1"></div><span class="mono" style="font-size:11px">1.0</span></div>
+                <div class="row" style="justify-content:space-between;margin-top:14px;font-size:13px"><span class="dim">Invert left–right</span><span class="sw"></span></div>
+                <div class="row" style="justify-content:space-between;margin-top:10px;font-size:13px"><span class="dim">Invert up–down</span><span class="sw"></span></div></div>
+              <div class="card"><div class="lab" style="margin-bottom:9px">Aim</div><div class="seg"><span class="on">Hold</span><span>Toggle</span></div>
+                <div class="row" style="gap:12px;margin-top:14px;font-size:13px"><span style="width:84px" class="dim">Aim help</span><div class="slider" style="--v:70%;flex:1"></div></div></div>
+              <div class="card"><div class="lab" style="margin-bottom:9px">Crouch</div><div class="seg"><span class="on">Toggle</span><span>Hold</span></div></div>
+              <div class="row" style="gap:8px"><span class="deck-btn" style="flex:1">Controllers</span><span class="deck-btn" style="flex:1">The control sheet</span><span class="deck-btn">Defaults</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <svg class="cursor" style="left:528px;top:470px" viewBox="0 0 22 28"><path d="M2 2v21l5.5-5 3.6 8 3.4-1.5-3.6-7.8H18z" fill="#ece6da" stroke="#17181d" stroke-width="1.6" stroke-linejoin="round"/></svg>` +
+    co(1255, 150, "Settings open: the pointer's let go and the cursor's back (the phone, the pockets, build and god mode too). Closed: the mouse is the camera again.", 1, 175) +
+    co(1255, 420, "Two columns, both rebindable. A row listening for its new key, here (Esc leaves it as it was).", -1, 175) +
+    co(1255, 620, "Old saved bindings move to the new layout, not dropped.", 1, 175);
+};
+
+S.sheet = () => {
+  document.getElementById("bg").style.background = "radial-gradient(ellipse at 50% 40%, #1d1d22, #0d0e11)";
+  const K = (l, w = 46, cls = "", s = "") => `<div class="kc ${cls}" style="width:${w}px">${l}${s ? `<small>${s}</small>` : ""}</div>`;
+  const kb = `<div class="kb">
+    <div class="r">${K("Esc", 56)}${K("1", 46, "on", "shortcut")}${K("2", 46, "on")}${K("3", 46, "on")}${K("4", 46, "on")}${K("5", 46, "", "")}${K("6")}${K("7")}${K("8")}${K("9")}${K("0")}${K("−", 46, "", "zoom")}${K("+", 46, "", "zoom")}</div>
+    <div class="r">${K("Tab", 70)}${K("Q", 46, "on", "roll")}${K("W", 46, "on", "move")}${K("E", 46, "on", "use")}${K("R", 46, "cam", "behind")}${K("T", 46, "on", "pets")}${K("Y", 46, "on", "1st/3rd")}${K("U")}${K("I", 46, "on", "pockets")}${K("O")}${K("P", 46, "on", "phone")}</div>
+    <div class="r">${K("Caps", 84)}${K("A", 46, "on")}${K("S", 46, "on")}${K("D", 46, "on")}${K("F", 46, "on", "focus")}${K("G", 46, "on", "emotes")}${K("H")}${K("J")}${K("K")}${K("L")}</div>
+    <div class="r">${K("Shift", 108, "on", "run fast")}${K("Z", 46, "on", "aim")}${K("X")}${K("C", 46, "on", "crouch")}${K("V", 46, "on", "shoulder")}${K("B")}${K("N")}${K("M", 46, "", "mic")}</div>
+    <div class="r">${K("Alt", 66, "on", "walk")}${K("Space", 300, "on", "jump · fire while aiming")}<div style="width:70px"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:auto auto;gap:6px">
+        <div></div>${K("↑", 46, "cam")}<div></div>${K("←", 46, "cam")}${K("↓", 46, "cam")}${K("→", 46, "cam")}</div></div>
+  </div>`;
+  const L = (x, y, x2, y2, t, anchor = "start") => `<path d="M${x} ${y}L${x2} ${y2}" stroke="#6f6b64" stroke-width="1"/><circle cx="${x}" cy="${y}" r="3" fill="${A}"/>
+    <text x="${x2 + (anchor === "start" ? 6 : -6)}" y="${y2 + 4}" text-anchor="${anchor}" font-family="Inter" fill="#ece6da">${t}</text>`;
+  const padSvg = `<svg viewBox="-200 20 1040 360" width="572" height="198" font-size="21">
+    <path d="M170 90 Q320 60 470 90 Q560 100 590 220 Q615 330 555 345 Q510 355 470 290 Q440 255 320 255 Q200 255 170 290 Q130 355 85 345 Q25 330 50 220 Q80 100 170 90z" fill="#1c1c21" stroke="#4a443b" stroke-width="2"/>
+    <rect x="150" y="62" width="70" height="20" rx="8" fill="#232328" stroke="#4a443b"/><rect x="420" y="62" width="70" height="20" rx="8" fill="#232328" stroke="#4a443b"/>
+    <circle cx="200" cy="160" r="30" fill="#141418" stroke="#4a443b" stroke-width="2"/><circle cx="200" cy="160" r="18" fill="#26262b"/>
+    <circle cx="390" cy="225" r="30" fill="#141418" stroke="#4a443b" stroke-width="2"/><circle cx="390" cy="225" r="18" fill="#26262b"/>
+    <path d="M250 215h16v-16h14v16h16v14h-16v16h-14v-16h-16z" fill="#26262b" stroke="#4a443b"/>
+    ${[["Y", 450, 130], ["X", 420, 160], ["B", 480, 160], ["A", 450, 190]].map(([l, x, y]) => `<circle cx="${x}" cy="${y}" r="15" fill="#141418" stroke="${A}" stroke-width="1.5"/><text x="${x}" y="${y + 4}" text-anchor="middle" font-family="Special Elite" font-size="12" fill="${A}">${l}</text>`).join("")}
+    <rect x="290" y="150" width="22" height="12" rx="5" fill="#26262b" stroke="#4a443b"/><rect x="330" y="150" width="22" height="12" rx="5" fill="#26262b" stroke="#4a443b"/>
+    ${L(185, 72, 120, 30, "LB held: shortcuts · LT aim", "end")}
+    ${L(455, 72, 520, 30, "RB lock on · RT fire")}
+    ${L(172, 160, 40, 160, "move", "end")}
+    ${L(273, 200, 230, 300, "↓ aid · ← emotes · → pets", "end")}
+    ${L(301, 150, 262, 92, "View: 1st/3rd", "end")}
+    ${L(341, 150, 372, 92, "Menu: pockets")}
+    ${L(465, 130, 600, 108, "Y use · hold: menu")}
+    ${L(495, 160, 610, 160, "B crouch · back")}
+    ${L(465, 190, 600, 212, "A jump · double")}
+    ${L(405, 160, 520, 262, "X dodge · held: dash")}
+    ${L(390, 255, 420, 330, "R: camera · R3: behind you")}
+  </svg>`;
+  return `<div class="abs" style="left:60px;top:40px"><div class="title" style="font-size:34px">The controls</div>
+      <div class="mono dim" style="font-size:13px;margin-top:6px">Keys, a pad, and the mouse as the camera. No pointer in play: it comes back for menus, the phone and building.</div></div>
+    <div class="abs cabinet" style="left:40px;top:130px;width:770px;padding:22px 22px 18px">
+      <div class="lab" style="margin-bottom:14px">Keyboard <span class="mut" style="text-transform:none;letter-spacing:0">· amber: you · blue: the camera</span></div>${kb}</div>
+    <div class="abs cabinet" style="left:830px;top:130px;width:580px;height:300px;padding:16px 4px 0">
+      <div class="lab" style="margin:0 0 4px 16px">Pad <span class="mut" style="text-transform:none;letter-spacing:0">· Xbox letters; ✕ ○ □ △ on a PlayStation</span></div>
+      <div style="margin:18px 0 0 0">${padSvg}</div></div>
+    <div class="abs cabinet" style="left:830px;top:450px;width:580px;padding:14px 18px">
+      <div class="lab" style="margin-bottom:8px">Moves</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:13px" class="dim">
+        <span>Jump in the air: <b style="color:var(--cream);font-weight:500">a second jump</b></span>
+        <span>Roll in the air (Q / X): <b style="color:var(--cream);font-weight:500">an air dash</b></span>
+        <span>Hold Shift / X: <b style="color:var(--cream);font-weight:500">run fast</b> (breath, at night)</span>
+        <span>Crouch while running fast: <b style="color:var(--cream);font-weight:500">slide</b></span>
+        <span>Run at a bench: <b style="color:var(--cream);font-weight:500">vault it</b></span>
+        <span>Jump at a wall to your chest: <b style="color:var(--cream);font-weight:500">climb it</b></span></div></div>
+    <div class="abs" style="left:40px;top:560px;width:770px">
+      <div class="card" style="font-size:13px;line-height:1.55" ><span class="lab">The prompt</span><br>
+        <span class="dim">What's in front of you shows by the dock. </span>Tap ${key("E", "sm")} ${pad("Y", "sm")} to do it, hold for its menu.
+        <span class="dim">Two in reach: </span>${key("[", "sm")} ${key("]", "sm")} / d-pad ↑↓.
+        <span class="dim">Focus on someone with </span>${key("F", "sm")} ${pad("RB", "sh")}<span class="dim"> to talk to someone across a crowd.</span></div>
+      <div class="card" style="font-size:13px;line-height:1.55;margin-top:12px"><span class="lab">The mouse</span><br>
+        <span class="dim">Moving it turns the camera (always, in play). </span>${key("RMB", "sm")} aim · ${key("LMB", "sm")} fire, throw · wheel: in and out.
+        <span class="dim">Esc lets it go; a click takes it back.</span></div></div>`;
+};
+
+const s = new URLSearchParams(location.search).get("s") ?? "prompt";
+document.getElementById("app").innerHTML = (S[s] ?? S.prompt)();
+</script>
+</body>
+</html>

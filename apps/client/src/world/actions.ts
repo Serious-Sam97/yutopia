@@ -35,6 +35,8 @@ export interface Queued {
 // What the queue needs from the world controller.
 export interface ActionHost {
   me(): { x: number; y: number; d: number; a: number };
+  /** the room has me focusing (the queue's Focus stops asking once it does) */
+  focused?(): boolean;
   setFacing(d: number): void;
   grid(): Grid;
   object(id: string): WorldObjectDef | undefined;
@@ -326,13 +328,21 @@ export class ActionQueue {
         return null; // sitting happens by standing on the seat
       case "work":
         return null;
-      case "focus":
-        // once I've sat down (the room only lets you focus while seated)
+      case "focus": {
+        // once I've sat down (the room only lets you focus while seated) — a few times over a
+        // second: sat down here before the room has me seated, the first is turned down
+        let sentAt = 0;
+        let sent = 0;
         return () => {
           if (h.me().a !== ANIM.sit) return false;
+          if (sent && h.focused?.()) return true;
+          const now = performance.now();
+          if (now - sentAt < 300) return false;
+          sentAt = now;
           h.send("focus", { on: true });
-          return true;
+          return ++sent >= 4;
         };
+      }
       case "unfocus":
         h.send("focus", { on: false });
         return null;

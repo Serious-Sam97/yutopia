@@ -73,7 +73,7 @@ export function PetPanel() {
   const [adopting, setAdopting] = useState(false);
   const [tab, setTab] = useState<Tab>("care");
   // (the command wheel, held open by T: docs/plan/52-the-pet-two.md D7)
-  const wheel = useHud((s) => s.panel.objectId === "wheel");
+  const wheel = useHud((s) => s.panel.objectId?.startsWith("wheel") ?? false);
   const pet = pets.find((p) => p.id === focus) ?? mine[0] ?? pets[0] ?? null;
   useEffect(() => {
     if (!pets.length) setAdopting(true);

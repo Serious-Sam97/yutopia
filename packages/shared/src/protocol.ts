@@ -105,7 +105,10 @@ export interface ClientMessages {
   emote: { e: Emote };
   // a jump (shared/jump.ts): a hop, or a flip on the run
   // or a verb (shared/move verbs.ts: vault, mantle, roll, slide), with the top it goes over (h)
-  jump: { k: JumpKind | VerbKind; h?: number };
+  /** `air`: in the air already — a second jump, an air dash (docs/plan/56-the-controls.md B) */
+  jump: { k: JumpKind | VerbKind; h?: number; air?: boolean };
+  /** a Flowmotion move begun or ended (move/flow.ts flowCode; 0 none) */
+  flow: { f: number };
   // take something to carry from a thing that hands it out (a mug from the coffee machine)
   "item:take": { id: string };
   "item:drop": Record<string, never>;

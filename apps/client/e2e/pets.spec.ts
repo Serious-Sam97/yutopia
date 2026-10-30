@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
-import { ANA, BIA, enter, test, token, useWorld } from "./helpers";
+import { ANA, actOn, BIA, enter, test, token, useWorld } from "./helpers";
 
 // Pets (docs/plan/13-pets.md), in the Lab: adopt one from the panel, it
 // turns up beside you; its ring of actions; "Speak!" makes a sound bubble;
@@ -82,15 +82,12 @@ test("adopt a platypus, its actions, a sound, and a battle with a friend's cat",
     const back = await me(page);
     expect(Math.hypot((ball?.x ?? 99) - back.x, (ball?.y ?? 99) - back.y)).toBeLessThan(1.6);
 
-    // the ring on the pet (it's low), then "Speak!"
+    // the ring on the pet (Use held on him: docs/plan/56-the-controls.md C), then "Speak!"
     const p = await page.evaluate((id) => {
-      const w = (window as any).__yutopia;
-      const a = w.model.avatarAt(`pet:${id}`);
-      const r = w.hostRect();
-      const s = w.model.worldToClient(a.x, a.y, 6);
-      return { x: r.left + s.x, y: r.top + s.y };
+      const pet = (window as any).__yutopia.room.state.pets.get(id);
+      return { x: pet.x as number, y: pet.y as number };
     }, perry.id);
-    await page.mouse.click(p.x, p.y);
+    await actOn(page, p.x, p.y, { key: `pet:${perry.id}`, near: 1.4 });
     const menu = page.getByRole("menu", { name: /Perry/ });
     await expect(menu).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: /give a snack/i })).toBeVisible();

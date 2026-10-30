@@ -18,10 +18,11 @@ export {
   verbAt,
 } from "./iso";
 export type { Anchor } from "./kit";
-export { jumpNowOf, type LocoIn, Locomotion, localVel, verbT } from "./locomotion";
+export { heroNow, jumpNowOf, type LocoIn, Locomotion, loadHero, localVel, verbT } from "./locomotion";
 export { bodyMaterial, CharFactory, lookKey, PersonModel, type Reach } from "./model";
-export { blend, CONTACT, carPose, Motion3, type MotionIn, type MotionOut, STRIDE } from "./motion";
+export { blend, CONTACT, carPose, jumpPose, Motion3, type MotionIn, type MotionOut, STRIDE, walkPose } from "./motion";
 export {
+  ANKLE,
   aimPose,
   BACK_STRIDE,
   backpedalPose,
@@ -30,7 +31,10 @@ export {
   crouchWalkPose,
   deathPose,
   FALL_LEN,
+  type FlowPoseIn,
+  type FlowPoseKind,
   fellPose,
+  flowPose,
   HIP_H,
   kneelPose,
   landPose,
@@ -42,6 +46,7 @@ export {
   SNEAK_STRIDE,
   STRAFE_STRIDE,
   shadePose,
+  spinPose,
   strafePose,
   VERB_LEN,
   type Verb,
@@ -50,4 +55,4 @@ export {
 } from "./moves";
 export { BASE, LODS, type Lod, type Params, paramsFor } from "./params";
 export { buildProp, inHand, keepUpright, type PropKind, pointAlong } from "./props";
-export { JOINTS, type JointName, type Pose, REST } from "./rig";
+export { HANDS, type HandShape, handPose, JOINTS, type JointName, type Pose, REST } from "./rig";

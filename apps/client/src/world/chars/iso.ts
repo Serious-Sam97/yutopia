@@ -175,7 +175,7 @@ const ACT_N = 6;
 const EMOTE_N = 8;
 const EMOTE_LEN = 3.2; // s (Motion3's)
 // a jump's frames: the crouch, the air (a flip turns a whole way round in it), the landing
-const JUMP_N = { crouch: 2, air: { hop: 9, flip: 16 }, land: 3 };
+const JUMP_N = { crouch: 2, air: { hop: 9, flip: 16, leap: 9 }, land: 3 };
 const FELL_N = 16; // knocked down: thrown back, on the floor, up again
 
 /** Which of a jump's frames its stage falls on. */
@@ -367,7 +367,7 @@ export function isoPose(s: IsoState): {
     const w = fellPose(((s.bf + 0.5) / FELL_N) * FALL_LEN);
     p = w.pose;
     lift = [...w.lift];
-  } else if (s.base === "hop" || s.base === "flip") {
+  } else if (s.base === "hop" || s.base === "flip" || s.base === "leap") {
     const j = jumpPose(jumpAtFrame(s.base, s.bf));
     p = blend(standPose(), j.pose, j.w);
     lift = [0, j.lift[1] * j.w, 0];

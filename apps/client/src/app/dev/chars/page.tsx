@@ -10,6 +10,7 @@ import {
   jumpNowAt,
   jumpTimes,
 } from "@yutopia/shared";
+import { KH_FEEL } from "@yutopia/shared/move";
 import { notFound } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { Moved, Verb } from "@/world/chars";
@@ -110,6 +111,13 @@ type Act = {
   // the verb's progress, or the landing's impact; a cycle without `mp` plays at `walk` tiles/s
   mv?: MoveKind;
   mp?: number;
+  // plan 58's animations (docs/plan/58-the-animation.md, phase 0) and the mood (0 day … 1 dark)
+  v2?: boolean;
+  tension?: number;
+  // plan 58 G (the feel): driven through the scripted loop (FEEL), `at` this far into it
+  feel?: number;
+  // plan 58 G.D: the eyes held looking this way (x to the left, y up; −1..1)
+  eyes?: [number, number];
 };
 type MoveKind =
   | "jog"
@@ -126,11 +134,17 @@ type MoveKind =
   | "vault"
   | "mantle"
   | "roll"
-  | "slide";
+  | "slide"
+  | "walkOld"
+  | "walk2"
+  | "run2"
+  | "jog2"
+  | "sprint2"
+  | "slide2";
 // a cycle or a verb as a filmstrip: n moments evenly through it
 const moveStrip = (mv: MoveKind, n: number): Act[] =>
   Array.from({ length: n }, (_, i) => {
-    const cyc = mv === "jog" || mv === "run" || mv === "sprint";
+    const cyc = ["jog", "run", "sprint", "walkOld", "walk2", "run2", "jog2", "sprint2"].includes(mv);
     const mp = mv === "land" ? (i + 1) / n : (i + (cyc ? 0 : 0.5)) / n;
     return { label: `${mv} ${mp.toFixed(2)}`, mv, mp };
   });
@@ -145,7 +159,136 @@ const jumpStrip = (kind: JumpKind, n: number): Act[] =>
     const jt = ((i + 0.5) / n) * jumpTimes(kind).len;
     return { label: `${kind} ${jt.toFixed(2)}`, jump: kind, jt };
   });
+// plan 58 G (the feel): a body driven through a loop — standing, a start, a run, a sprint, a hard
+// stop (the skid), settling, a pivot round, a run back, an arc, a run's stop, standing — its speed
+// and turn as KH_FEEL's body would have them (speeding up 30 t/s², slowing 28.5), so each change
+// plays the same every time. [from s, the speed wanted, the turn rad/s]
+const FEEL: [number, number, number][] = [
+  [0, 0, 0],
+  [1.2, 5.8, 0],
+  [2.6, 8.2, 0],
+  [4.2, 0, 0],
+  [5.6, 0, 20],
+  [5.75, 5.8, 0],
+  [6.4, 5.8, 2.6],
+  [7.0, 5.8, 0],
+  [7.4, 0, 0],
+];
+const FEEL_LEN = 9.5;
+type FeelState = {
+  t: number;
+  v: number;
+  acc: number;
+  yaw: number;
+  loco: InstanceType<typeof import("@/world/chars")["Locomotion"]>;
+  last: Moved | null;
+};
+/** A feel row's body stepped on to `to` s into the loop (from the start of it, a 60th at a time). */
+function feelStep(C: typeof import("@/world/chars"), st: FeelState, to: number): Moved {
+  let mo: Moved | null = st.last;
+  const dt = 1 / 60;
+  while (st.t < to - 1e-6 || !mo) {
+    const u = st.t % FEEL_LEN;
+    let seg = FEEL[0];
+    for (const f of FEEL) if (u >= f[0]) seg = f;
+    const was = st.v;
+    const rate = seg[1] > st.v ? 30 : 28.5;
+    st.v += Math.max(-rate * dt, Math.min(rate * dt, seg[1] - st.v));
+    st.acc += ((st.v - was) / dt - st.acc) * Math.min(1, dt * 10);
+    st.yaw += seg[2] * dt;
+    mo = st.loco.update(
+      dt,
+      {
+        dist: st.v * dt,
+        speed: st.v,
+        ahead: st.v,
+        left: 0,
+        crouch: false,
+        aim: false,
+        pitch: 0,
+        yaw: 0,
+        turn: seg[2],
+        accel: st.acc,
+        up: false,
+        jump: null,
+        verb: null,
+        reduced: false,
+      },
+      C.heroNow()?.idle2Pose(st.t, 0, 2, true),
+    );
+    st.t += dt;
+  }
+  st.last = mo;
+  return mo;
+}
+
+// plan 58, phase 0: a filmstrip of a cycle in a mood
+const strip2 = (mv: MoveKind, n: number, tension = 0): Act[] =>
+  Array.from({ length: n }, (_, i) => ({ label: `${mv} ${(i / n).toFixed(2)}`, mv, mp: i / n, tension }));
+// …of a jump, the new one or the old (one person, frozen moment by moment)
+const jumpStrip2 = (kind: JumpKind, n: number, v2: boolean): Act[] =>
+  Array.from({ length: n }, (_, i) => {
+    const jt = ((i + 0.5) / n) * jumpTimes(kind).len;
+    return { label: `${v2 ? "new" : "old"} ${jt.toFixed(2)}`, jump: kind, jt, v2 };
+  });
 const ANIMS: Record<string, Act[]> = {
+  // plan 58 G.D: the eyes' two morphs — looking right, ahead, left and up
+  eyes: [
+    { label: "eyes right", eyes: [-1, 0] },
+    { label: "eyes ahead", eyes: [0, 0] },
+    { label: "eyes left, up", eyes: [1, 0.8] },
+  ],
+  // plan 58 G: the feel loop, played; and its moments, frozen
+  feel: [{ label: "the feel loop", feel: 0 }],
+  feelstrip: [1.3, 1.45, 1.6, 4.3, 4.45, 4.6, 5.62, 5.7, 6.7, 7.5].map((t) => ({
+    label: `feel ${t.toFixed(2)}`,
+    feel: t,
+  })),
+  feelstop: [7.2, 7.28, 7.36, 7.44, 7.52, 7.6, 7.7, 7.85].map((t) => ({ label: `stop ${t.toFixed(2)}`, feel: t })),
+  feelpivot: [5.58, 5.62, 5.66, 5.7, 5.74, 5.78, 5.84, 5.92].map((t) => ({ label: `pivot ${t.toFixed(2)}`, feel: t })),
+  // plan 58, phase 0: the hero animations, old beside new (day) and new in the dark
+  hero: [
+    { label: "idle · old" },
+    { label: "idle · new", v2: true },
+    { label: "idle · new, dark", v2: true, tension: 1 },
+    { label: "walk · old", mv: "walkOld", walk: 2.2 },
+    { label: "walk · new", mv: "walk2", walk: 2.2 },
+    { label: "walk · new, dark", mv: "walk2", walk: 1.8, tension: 1 },
+    { label: "run · old", mv: "run", walk: 5.8 },
+    { label: "run · new", mv: "run2", walk: 5.8 },
+    { label: "sprint · old", mv: "sprint", walk: 8.2 },
+    { label: "sprint · new", mv: "sprint2", walk: 8.2 },
+  ],
+  idles: [
+    { label: "idle · old" },
+    { label: "idle · new", v2: true },
+    { label: "idle · new, dusk", v2: true, tension: 0.5 },
+    { label: "idle · new, dark", v2: true, tension: 1 },
+  ],
+  walkold: strip2("walkOld", 8),
+  walk2: strip2("walk2", 8),
+  walk2dark: strip2("walk2", 8, 1),
+  run2: strip2("run2", 8),
+  // (the jog, the run without Shift: 2026-10-30)
+  jog2: strip2("jog2", 8),
+  sprint2: strip2("sprint2", 8),
+  slide2: moveStrip("slide2", 8),
+  leap2: jumpStrip2("leap", 10, true),
+  hopold: jumpStrip2("hop", 10, false),
+  hop2: jumpStrip2("hop", 10, true),
+  flipold: jumpStrip2("flip", 12, false),
+  flip2: jumpStrip2("flip", 12, true),
+  jumps2: [
+    { label: "hop · old", jump: "hop", v2: false },
+    { label: "hop · new", jump: "hop", v2: true },
+    { label: "flip · old", jump: "flip", v2: false },
+    { label: "flip · new", jump: "flip", v2: true },
+    { label: "leap · new (running)", jump: "leap", v2: true },
+  ],
+  slides: [
+    { label: "slide · old", mv: "slide" },
+    { label: "slide · new", mv: "slide2" },
+  ],
   base: [
     { label: "stand" },
     { label: "walk", walk: 3.6 },
@@ -206,10 +349,34 @@ const ANIMS: Record<string, Act[]> = {
   ],
 };
 // how far apart each in a row stands
-const SPACING: Record<string, number> = { vault: 1.35, mantle: 1.5, roll: 1.35, land: 1.2, slide: 1.4, verbs: 2.2 };
+const SPACING: Record<string, number> = {
+  vault: 1.35,
+  mantle: 1.5,
+  roll: 1.35,
+  land: 1.2,
+  slide: 1.4,
+  verbs: 2.2,
+  hero: 1.15,
+  idles: 1.1,
+  jumps2: 2.6,
+  feel: 2.4,
+  feelstrip: 1.25,
+  feelstop: 1.3,
+  feelpivot: 1.3,
+  slides: 3.2,
+};
+// a jump's time: frozen at `jt`, or played over and over with a breath between
+const jtOf = (a: Act, at: number) => a.jt ?? at % (jumpTimes(a.jump ?? "hop").len + 0.6);
 
 /** The pose for one of the move's acts (`at`: seconds in, for one playing live: a cycle at
  *  `walk` tiles/s, a verb over and over with a pause between). */
+// plan 58's animations (loaded before the page draws: `loadHero`)
+const hero = (C: typeof import("@/world/chars")) => {
+  const H = C.heroNow();
+  if (!H) throw new Error("plan 58's animations aren't in");
+  return H;
+};
+
 function movePose(C: typeof import("@/world/chars"), a: Act, at: number): Moved {
   const cyc = (stride: number) => a.mp ?? ((at * (a.walk ?? 0)) / stride) % 1;
   const breath = (at / 3.6) % 1;
@@ -220,6 +387,18 @@ function movePose(C: typeof import("@/world/chars"), a: Act, at: number): Moved 
       return C.runPose(cyc(C.runStride(0.5)), 0.5);
     case "sprint":
       return C.runPose(cyc(C.runStride(1)), 1);
+    case "walkOld":
+      return C.walkPose(cyc(C.STRIDE), 1) as Moved;
+    case "walk2":
+      return hero(C).walk2Pose(cyc(hero(C).walk2Stride(a.tension ?? 0)), a.tension ?? 0);
+    case "run2":
+      return hero(C).run2Pose(cyc(C.runStride(0.5)), 0.5, a.tension ?? 0);
+    case "jog2":
+      return hero(C).run2Pose(cyc(hero(C).run2Stride(0)), 0, a.tension ?? 0);
+    case "sprint2":
+      return hero(C).run2Pose(cyc(C.runStride(1)), 1, a.tension ?? 0);
+    case "slide2":
+      return hero(C).slide2Pose(verbAt(C, a, at));
     case "crouch":
       return C.crouchPose(breath);
     case "sneak":
@@ -243,7 +422,7 @@ function movePose(C: typeof import("@/world/chars"), a: Act, at: number): Moved 
 /** How far through its verb an act is: frozen at `mp`, or played over and over. */
 function verbAt(C: typeof import("@/world/chars"), a: Act, at: number): number {
   if (a.mp !== undefined) return a.mp;
-  const len = C.VERB_LEN[a.mv as Verb];
+  const len = C.VERB_LEN[(a.mv === "slide2" ? "slide" : a.mv) as Verb];
   return Math.min(1, (at % (len + 0.7)) / len);
 }
 
@@ -307,6 +486,8 @@ function Sheet({ q }: { q: URLSearchParams }) {
     (async () => {
       const T = await import("three");
       const C = await import("@/world/chars");
+      // (plan 58's animations: their own chunk, in before anything's drawn)
+      await C.loadHero();
       if (stop) return;
       const renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
       renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
@@ -342,13 +523,21 @@ function Sheet({ q }: { q: URLSearchParams }) {
       };
       const back = q.get("back") === "1";
       const acts = mode.kind === "anim" ? ANIMS[mode.group] : [];
-      const motions = acts.map((_, i) => new C.Motion3(i * 0.137 + 0.05));
+      const motions = acts.map((a, i) => {
+        const m = new C.Motion3(i * 0.137 + 0.05);
+        m.v2 = !!a.v2;
+        m.tension = a.tension ?? 0;
+        return m;
+      });
       const step = mode.kind === "anim" ? (SPACING[mode.group] ?? 0.95) : 0.82;
       if (mode.kind === "anim")
         acts.forEach((a, i) => {
           // (a jump's filmstrip: one person, side on, going left to right)
           const strip =
-            a.jump || a.mp !== undefined || ["vault", "mantle", "roll", "slide", "land"].includes(a.mv ?? "");
+            a.jump ||
+            a.mp !== undefined ||
+            a.feel !== undefined ||
+            ["vault", "mantle", "roll", "slide", "slide2", "land"].includes(a.mv ?? "");
           const look = withQuery({ ...CAST[strip ? 0 : i % CAST.length], accessory: "none" }, q);
           // (&yaw= turns everyone: π shows their backs)
           const turn = Number(q.get("yaw") ?? 0);
@@ -454,19 +643,45 @@ function Sheet({ q }: { q: URLSearchParams }) {
       // play the actions (frozen at &t= for a still)
       const since = performance.now();
       const mugs: Record<number, InstanceType<typeof T.Group>> = {}; // (kept upright, tipped for a sip)
+      const feels = new Map<number, FeelState>();
       const animate = (dt: number, at: number) => {
         acts.forEach((a, i) => {
           const m = items[i].m;
+          if (a.feel !== undefined) {
+            // (the loop played on; a moment of it frozen at its own time)
+            let st = feels.get(i);
+            if (!st) {
+              const loco = new C.Locomotion(KH_FEEL);
+              loco.v2 = true;
+              loco.seed = 2;
+              st = { t: 0, v: 0, acc: 0, yaw: 0, loco, last: null };
+              feels.set(i, st);
+            }
+            const mo = feelStep(C, st, a.feel === 0 ? at : a.feel);
+            m.root.rotation.y = Math.PI / 2 + st.yaw;
+            m.setPose(mo.pose, mo.lift);
+            // (the gaze's eyes and blink: plan 58 G.D)
+            const gz = st.loco.gazeOut;
+            m.setFace(gz?.blink ?? 0, 0);
+            m.setEyes(gz?.eyes[0] ?? 0, gz?.eyes[1] ?? 0);
+            return;
+          }
           if (a.mv) {
             const mo = movePose(C, a, at);
             const x = (i - (acts.length - 1) / 2) * step;
-            const verb = a.mv === "vault" || a.mv === "mantle" || a.mv === "roll" || a.mv === "slide" ? a.mv : null;
+            const verb =
+              a.mv === "slide2"
+                ? "slide"
+                : a.mv === "vault" || a.mv === "mantle" || a.mv === "roll" || a.mv === "slide"
+                  ? a.mv
+                  : null;
             const top = a.mv ? TOPS[a.mv] : undefined;
             const go = verb ? C.verbRoot(verb, verbAt(C, a, at), top?.h) : { ahead: 0, up: 0 };
             m.root.position.y = go.up;
             const box = tops[i];
             if (box && top) box.position.x = x + top.at + top.len / 2 - go.ahead;
             m.setPose(mo.pose, mo.lift);
+            m.step(dt);
             m.setFace(0, 0);
             return;
           }
@@ -483,12 +698,14 @@ function Sheet({ q }: { q: URLSearchParams }) {
             busy: a.busy,
             act: a.act ? { what: a.act, t: at % 1.6, len: 1.6 } : null,
             phone: a.phone || a.ringing ? { state: a.phone ?? "", pose: a.photo ?? "", ringing: !!a.ringing } : null,
-            jump: a.jump ? jumpNowAt(a.jump, a.jt ?? 0) : null,
+            jump: a.jump ? jumpNowAt(a.jump, jtOf(a, at)) : null,
           });
-          if (a.jump) m.root.position.y = jumpArc(a.jump, a.jt ?? 0).h;
+          if (a.jump) m.root.position.y = jumpArc(a.jump, jtOf(a, at)).h;
           const drop = a.sit ? m.sitDrop(seatY) : 0;
           m.setPose(mo.pose, [mo.lift[0], mo.lift[1] + drop * mo.settle, mo.lift[2]], mo.reach);
-          m.setFace(mo.blink, mo.talk);
+          m.step(dt);
+          m.setFace(a.eyes ? 0 : mo.blink, mo.talk);
+          if (a.eyes) m.setEyes(a.eyes[0], a.eyes[1]);
           if (mugs[i]) C.keepUpright(mugs[i], "mug", m.root, mo.sip * 1.05);
         });
       };

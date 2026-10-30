@@ -55,7 +55,7 @@ import {
   WEAPONS,
 } from "@yutopia/shared/dark";
 import { INSIDES } from "@yutopia/shared/grounds";
-import { GAITS, MOVE, MV_AIM } from "@yutopia/shared/move";
+import { GAITS, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
@@ -81,7 +81,8 @@ const BLEED_MS = (FAST_DOWN ? 3 : DOWN.bleed) * 1000;
 const REVIVE_MS = DOWN.revive * 1000;
 const SELF_MS = DOWN.selfAid * 1000;
 const WINDED_GRACE_MS = 300; // the client stops sprinting a message's lag before we hear of it
-const SPRINT_SEEN = MOVE.jog * 1.25; // tiles / s over the last quarter second (for a second): no jog
+// tiles / s over the last quarter second (for a second): no run (the body's KH run since plan 56)
+const SPRINT_SEEN = KH_MOVE.jog * 1.2;
 const SPRINT = GAITS.indexOf("sprint");
 const MAX_DROPS = 300;
 
@@ -791,7 +792,8 @@ registerFeature((room: WorldRoom) => {
         const span = (now - tr[0].t) / 1000;
         const dist = Math.hypot(p.x - tr[0].x, p.y - tr[0].y);
         if (dist > 4 || p.level !== 0) tr.splice(0, tr.length - 1);
-        const verb = p.jump !== "" && now - p.jumpAt < 1500 && p.jump !== "hop" && p.jump !== "flip";
+        const verb =
+          p.jump !== "" && now - p.jumpAt < 1500 && p.jump !== "hop" && p.jump !== "flip" && p.jump !== "leap";
         // (a second of it: a sprint's momentum on the ice after letting go isn't a sprint)
         const fast = span >= 0.2 && dist / span > SPRINT_SEEN && !verb;
         s.fastSince = fast ? s.fastSince || now : 0;

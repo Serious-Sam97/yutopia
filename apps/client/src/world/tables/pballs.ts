@@ -96,8 +96,8 @@ export class PoolBallsOut {
       this.putBack();
       return;
     }
-    // E (or X): a ball lying near, if my hand's free
-    if ((e.code === "KeyE" || e.code === "KeyX") && heldBall(me.held) < 0 && !me.fellAt) {
+    // E: a ball lying near, if my hand's free
+    if (e.code === "KeyE" && heldBall(me.held) < 0 && !me.fellAt) {
       const near = this.nearest();
       if (!near) return;
       e.stopImmediatePropagation();
@@ -120,11 +120,12 @@ export class PoolBallsOut {
   }
 
   // The throw (the shot): at whoever the pointer's on — their chest — else where it meets the
-  // floor; aimed in 3D, through the crosshair.
+  // floor; aimed in 3D, or with the mouse as the camera (the pointer locked: plan 56), through the
+  // middle of the view.
   private send(what: "ball" | "cue", cx: number, cy: number) {
     let px = cx;
     let py = cy;
-    if (this.aimingNow()) {
+    if (this.aimingNow() || document.pointerLockElement) {
       px = window.innerWidth / 2;
       py = window.innerHeight / 2;
     }

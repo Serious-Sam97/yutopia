@@ -1,11 +1,12 @@
 import type { Grid, MapDef, WorldObjectDef } from "@yutopia/shared";
 import { CHUNK, hasChunk, onGroundsChanged } from "@yutopia/shared/grounds";
-import type { Collider, Mover } from "@yutopia/shared/move";
+import type { Collider, FlowWorld, Mover } from "@yutopia/shared/move";
 import {
   type BuildingSolids,
   buildingSolids,
   CharacterMover,
   type Frame,
+  GroundsFlow,
   JoltCollider,
   loadJolt,
   PhysicsWorld,
@@ -52,6 +53,9 @@ export class BrowserPhysics {
   private dead = false;
   // my body: one Jolt character, on whichever floor I'm on, through what I pass
   private readonly mover: CharacterMover;
+  // what Flowmotion moves off out on the Grounds (docs/plan/56-the-controls.md F): their solids by
+  // what each is, on my floor's frame
+  private readonly flow: GroundsFlow;
   private level = 0;
   private through: Through = { mask: "all", pass: null };
   private land: Grid | null = null;
@@ -74,13 +78,26 @@ export class BrowserPhysics {
       () => this.through,
       (x, y) => !!this.land?.onLand(x, y),
     );
+    // up and down the hills at the body's own pace (docs/plan/56-the-controls.md H.3)
+    this.mover.along = true;
+    this.flow = new GroundsFlow(() => this.src.frameOf(this.level));
     this.offChanged = onGroundsChanged((cs) => {
-      for (const [cx, cz] of cs) if (this.world.has(`land:${cx},${cz}`)) this.stale.add(`${cx},${cz}`);
+      for (const [cx, cz] of cs) {
+        if (this.world.has(`land:${cx},${cz}`)) this.stale.add(`${cx},${cz}`);
+        this.flow.forget(cx, cz);
+      }
     });
     this.timer = setInterval(() => this.refresh(), EVERY_MS);
     this.refresh();
   }
 
+  /** How far from a point of the scene (the floor I see) along (dx, dy, dz) the first wall, floor or
+   *  the land is (sight's mask: not furniture, not what moves), or null — the camera keeping out of
+   *  them (docs/plan/56-the-controls.md H.6). */
+  ray(x: number, y: number, z: number, dx: number, dy: number, dz: number, max: number): number | null {
+    const f = this.src.frame();
+    return this.world.rayHit(x - f.x, y - f.y, z - f.z, dx, dy, dz, max, "sight");
+  }
   static async start(scene: Scene, src: PhysicsSource): Promise<BrowserPhysics> {
     const { building, objects } = src.world();
     const solids = buildingSolids(building, objects);
@@ -135,13 +152,17 @@ export class BrowserPhysics {
     clip: boolean,
     grid: Grid,
     fly = false,
-  ): { collider: Collider; mover: Mover } {
+  ): { collider: Collider; mover: Mover; flow: FlowWorld } {
     this.keepUp();
     this.level = level;
     this.land = grid;
     const mask = clip ? (fly ? "ghost" : "clip") : "all";
     this.through = { mask, pass: this.world.pass(passKeys(this.solids, uid)) };
-    return { collider: new JoltCollider(this.world, grid, this.src.frameOf(level), this.through), mover: this.mover };
+    return {
+      collider: new JoltCollider(this.world, grid, this.src.frameOf(level), this.through),
+      mover: this.mover,
+      flow: this.flow,
+    };
   }
 
   // ── the admins' view: every solid near me, as Jolt has it ──

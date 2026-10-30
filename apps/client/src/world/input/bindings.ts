@@ -22,13 +22,23 @@ export const ACTIONS = [
   "aid", // first aid from the pockets (docs/plan/30-the-dark.md): the pad's d-pad ↓
   "inventory", // the pockets, all of them (the dark's inventory): I, the pad's Menu
   "pets", // the pets' command wheel, held (docs/plan/52-the-pet-two.md D7): T (P is the phone)
+  // the camera on keys, behind me, lock-on (docs/plan/56-the-controls.md: KH_KEYS; none in the world yet)
+  "camLeft",
+  "camRight",
+  "camUp",
+  "camDown",
+  "recenter",
+  "lock",
+  "emotes", // the emote wheel, held (docs/plan/56-the-controls.md phase 6): X, the pad's d-pad ←
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
-/** Keys by `code`; the mouse's buttons as Mouse0 (left), Mouse2 (right). */
+/** Keys by `code`; the mouse's buttons as Mouse0 (left), Mouse1 (the wheel's), Mouse2 (right). */
 export type KeyBindings = Record<Action, string[]>;
 
-export const DEFAULT_KEYS: KeyBindings = {
+/** Plan 29's keys (the arrows walked, Z looked with the mouse, X used): what a device saved before
+ *  plan 56 is read against, and /dev/move's "today". */
+export const PLAN29_KEYS: KeyBindings = {
   up: ["KeyW", "ArrowUp"],
   down: ["KeyS", "ArrowDown"],
   left: ["KeyA", "ArrowLeft"],
@@ -47,11 +57,19 @@ export const DEFAULT_KEYS: KeyBindings = {
   aid: [],
   inventory: ["KeyI"],
   pets: ["KeyT"],
+  camLeft: [],
+  camRight: [],
+  camUp: [],
+  camDown: [],
+  recenter: [],
+  lock: [],
+  emotes: [],
 };
 
 // the standard pad: 0 A/✕ 1 B/○ 2 X/□ 3 Y/△ 4 LB 5 RB 6 LT 7 RT 8 View 9 Menu 10 L3 11 R3 12–15 d-pad ↑↓←→
 export type PadBindings = Partial<Record<Action, number>>;
-export const DEFAULT_PAD: PadBindings = {
+/** Plan 29's pad (X used, Y the camera, LB rolled, L3 sprinted). */
+export const PLAN29_PAD: PadBindings = {
   jump: 0,
   crouch: 1,
   use: 2,
@@ -72,19 +90,125 @@ export interface Bindings {
   pad: PadBindings;
   /** crouch: a toggle (default) or held */
   crouchHold: boolean;
+  /** the pad's dodge held is the dash (plan 56's: no sprint button on the pad) */
+  dashOnDodge?: boolean;
 }
 
+/** On a Mac (the browser's shortcuts are Cmd's there, not Ctrl's). */
+export function isMac(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const n = navigator as Navigator & { userAgentData?: { platform?: string } };
+  // (either says so: Safari and Firefox have only `platform`; some Chromes' `userAgentData` doesn't
+  // agree with it — a test browser on a Mac reports Windows there)
+  const mac = /mac|iphone|ipad/i;
+  return mac.test(n.platform || "") || mac.test(n.userAgentData?.platform || "");
+}
+/** Walk's keys: Ctrl on a Mac; Alt elsewhere — Ctrl+W closes the tab on Windows and Linux, and a page
+ *  can't stop it (the user's call, 2026-10-30). */
+export const walkKeys = (mac: boolean): string[] => (mac ? ["ControlLeft", "ControlRight"] : ["AltLeft", "AltRight"]);
+
+// The controls after Kingdom Hearts 3 (docs/plan/56-the-controls.md, Controls): WASD only walks,
+// the mouse (always: the pointer's locked in play) and the arrows turn the camera, Shift held runs
+// fast and Q rolls (as before: the user's call), F or the wheel's button locks on (focuses on
+// someone or something; the lantern leaves F to be an item in the pockets), R puts the camera
+// behind me, RMB or Z aims; on a pad X dodges (held: the dash), Y uses, RB locks on, R3
+// recenters, View swaps the camera.
+// /dev/move's for now: the world's come in phase 2.
+export const KH_KEYS: KeyBindings = {
+  up: ["KeyW"],
+  down: ["KeyS"],
+  left: ["KeyA"],
+  right: ["KeyD"],
+  walk: walkKeys(isMac()),
+  sprint: ["ShiftLeft", "ShiftRight"],
+  crouch: ["KeyC"],
+  jump: ["Space"],
+  dodge: ["KeyQ"],
+  use: ["KeyE"],
+  aim: ["Mouse2", "KeyZ"],
+  torch: [],
+  shoulder: ["KeyV"],
+  camera: ["KeyY"],
+  look: [],
+  aid: [],
+  inventory: ["KeyI"],
+  pets: ["KeyT"],
+  camLeft: ["ArrowLeft"],
+  camRight: ["ArrowRight"],
+  camUp: ["ArrowUp"],
+  camDown: ["ArrowDown"],
+  recenter: ["KeyR"],
+  lock: ["KeyF", "Mouse1"],
+  emotes: ["KeyX"],
+};
+export const KH_PAD: PadBindings = {
+  jump: 0,
+  crouch: 1,
+  dodge: 2,
+  use: 3,
+  lock: 5,
+  aim: 6,
+  camera: 8,
+  inventory: 9,
+  recenter: 11,
+  aid: 13,
+  emotes: 14,
+  pets: 15,
+};
+export const khBindings = (): Bindings => ({
+  keys: structuredClone(KH_KEYS),
+  pad: { ...KH_PAD },
+  crouchHold: false,
+  dashOnDodge: true,
+});
+/** Plan 29's (not what's saved on this device): /dev/move's "today". */
+export const plan29Bindings = (): Bindings => ({
+  keys: structuredClone(PLAN29_KEYS),
+  pad: { ...PLAN29_PAD },
+  crouchHold: false,
+});
+
+// The world's (docs/plan/56-the-controls.md): the KH keys and pad — F focuses (the lock-on, the
+// user's call); the lantern on L (and the pad's ↑) till it's an item in the pockets (plan 57).
+export const DEFAULT_KEYS: KeyBindings = {
+  ...structuredClone(KH_KEYS),
+  torch: ["KeyL"],
+};
+export const DEFAULT_PAD: PadBindings = { ...KH_PAD, torch: 12 };
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+// defaults since given up (saved as they were, they move to today's: what you'd set yourself is
+// kept) — walk: Alt till 2026-10-30, then Ctrl for a few hours everywhere, now Ctrl on a Mac and
+// Alt elsewhere, so the other one's the given-up default there
+const retired = (): Partial<Record<Action, string[][]>> => ({ walk: [walkKeys(!isMac())] });
+
 export function loadBindings(): Bindings {
-  const base: Bindings = { keys: structuredClone(DEFAULT_KEYS), pad: { ...DEFAULT_PAD }, crouchHold: false };
+  const base: Bindings = {
+    keys: structuredClone(DEFAULT_KEYS),
+    pad: { ...DEFAULT_PAD },
+    crouchHold: false,
+    dashOnDodge: true,
+  };
+  // (walk's own default: the platform's, as it is now)
+  base.keys.walk = walkKeys(isMac());
   try {
     const raw = localStorage.getItem(STORE);
     if (!raw) return base;
     const saved = JSON.parse(raw) as Partial<Bindings>;
+    // (saved before plan 56: what was plan 29's own default moves to the new one; what you'd set
+    // yourself is kept)
     for (const a of ACTIONS) {
       const k = saved.keys?.[a];
-      if (Array.isArray(k) && k.every((c) => typeof c === "string")) base.keys[a] = k;
+      if (
+        Array.isArray(k) &&
+        k.every((c) => typeof c === "string") &&
+        !same(k, PLAN29_KEYS[a]) &&
+        !(retired()[a] ?? []).some((r) => same(k, r))
+      )
+        base.keys[a] = k;
       const p = saved.pad?.[a];
-      if (typeof p === "number") base.pad[a] = p;
+      if (typeof p === "number" && p !== PLAN29_PAD[a]) base.pad[a] = p;
     }
     if (typeof saved.crouchHold === "boolean") base.crouchHold = saved.crouchHold;
   } catch {
@@ -114,11 +238,14 @@ const NAMES: Record<string, string> = {
   ShiftRight: "Shift",
   AltLeft: "Alt",
   AltRight: "Alt",
+  ControlLeft: "Ctrl",
+  ControlRight: "Ctrl",
   ArrowUp: "↑",
   ArrowDown: "↓",
   ArrowLeft: "←",
   ArrowRight: "→",
   Mouse0: "LMB",
+  Mouse1: "MMB",
   Mouse2: "RMB",
 };
 let layout: Map<string, string> | null = null;

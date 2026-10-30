@@ -1,5 +1,6 @@
 import { type HeldKind, heldState, isHeld, isSocial, SOCIAL_MS } from "@yutopia/shared";
 import { AIM_BLADE, BEAM } from "@yutopia/shared/beam";
+import { flowOfCode, KH_MOVE } from "@yutopia/shared/move";
 import {
   CircleGeometry,
   Color,
@@ -140,6 +141,8 @@ export class Person3D {
   private headUp = 0; // the head's height standing as they last stood (the tag stays over it through a flip)
   /** what posed them last (first person's hands take mine from here) */
   motionOut: MotionOut | null = null;
+  /** what the body was last drawn doing (a verb, a jump, a Flowmotion move: "" none) — tests */
+  drawn = { verb: "", jump: "", flow: "" };
 
   constructor(
     readonly id: string,
@@ -247,6 +250,10 @@ export class Person3D {
     const mv = p.mv ?? 0;
     const held =
       isHeld(p.held) && p.heldAt && !p.phone ? { kind: p.held as HeldKind, since: Date.now() - p.heldAt } : null;
+    const verb = this.C.verbAt(p.verb, performance.now());
+    // (mine as it is; someone's from its byte, timed from when it shows here)
+    const flow =
+      p.flow ?? (p.flowCode ? flowOfCode(p.flowCode, (performance.now() - (p.flowAt ?? 0)) / 1000, KH_MOVE) : null);
     const mo =
       given ??
       this.motion.update(step, {
@@ -278,10 +285,12 @@ export class Person3D {
           accel: this.acc,
           up,
           landed,
-          verb: this.C.verbAt(p.verb, performance.now()),
+          verb,
+          flow,
         },
       });
     this.motionOut = mo;
+    this.drawn = { verb: verb?.kind ?? "", jump: jump?.kind ?? "", flow: flow?.kind ?? "" };
     // one of the shadowed: its own arms, back and head over the walk
     let pose = p.shade ? this.C.blend(mo.pose, this.C.shadePose(p.shade.pose, p.shade.t, p.shade.seed), 1) : mo.pose;
     let lift = mo.lift;
@@ -322,7 +331,10 @@ export class Person3D {
     const drop = this.model.sitDrop(seatY) * w;
     this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], mo.reach);
     this.gunHands(p, step);
+    // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
+    this.model.step(step, d > 12 || !!p.reduced || this.part !== "all");
     this.model.setFace(mo.blink, mo.talk);
+    this.model.setEyes(mo.eyes?.[0] ?? 0, mo.eyes?.[1] ?? 0);
 
     this.props(p, held, mo.sip);
     // away: faded, like iso

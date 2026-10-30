@@ -162,8 +162,9 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   const p1 = await me(page);
   expect(Math.hypot(p1.x - p0.x, p1.y - p0.y), "walks once it's closed").toBeGreaterThan(0.5);
 
-  // mouse look (Z) on: opening shows the pointer (the lock let go), closing locks it again
-  await page.keyboard.press("KeyZ");
+  // the mouse as the camera (a click on the world: docs/plan/56-the-controls.md A): opening shows
+  // the pointer (the lock let go), closing locks it again
+  await page.mouse.click(640, 400);
   await expect.poll(() => page.evaluate(() => (window as any).__yutopia.tp.looking)).toBe(true);
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeVisible();
@@ -172,7 +173,8 @@ test("the inventory: open with I, standing still; use, drag, drop and take back;
   await page.keyboard.press("KeyI");
   await expect(page.locator(".dk-inv .panel")).toBeHidden();
   await expect.poll(() => page.evaluate(() => (window as any).__yutopia.tp.looking)).toBe(true);
-  await page.keyboard.press("KeyZ");
+  // (let go, as Esc would)
+  await page.evaluate(() => document.exitPointerLock());
   await expect.poll(() => page.evaluate(() => (window as any).__yutopia.tp.looking)).toBe(false);
 
   // indoors (the studio): it opens, nothing on the ground; the flares dropped lie on its floor

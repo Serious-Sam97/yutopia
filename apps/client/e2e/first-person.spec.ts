@@ -100,9 +100,9 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   await page.evaluate((uid) => (window as any).__yutopia.teleport({ userId: uid }), biaUid);
   await page.waitForTimeout(1500);
 
-  // Z: mouse look; a quarter turn to the right → I face that way, and so does
-  // the Ana in Bia's world
-  await page.keyboard.press("z");
+  // a click: the mouse is the camera (docs/plan/56-the-controls.md A); a quarter turn to the
+  // right → I face that way, and so does the Ana in Bia's world
+  await page.mouse.click(640, 400);
   await expect.poll(() => page.evaluate(() => !!(window as any).__yutopia.tp.looking)).toBe(true);
   const y0 = (await cam(page)).yaw;
   await turn(page, 330);
@@ -143,37 +143,12 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   const c3 = await cam(page);
   expect(Math.hypot(c3.x - a3.x, c3.z - a3.y)).toBeLessThan(0.05);
 
-  // a click: the crosshair's spot on the floor ahead → I walk there
-  let spot: { x: number; y: number } | null = null;
-  for (const pitch of [0.9, 0.7, 1.1, 0.5]) {
-    await page.evaluate((p) => {
-      (window as any).__yutopia.tp.pitch = p;
-    }, pitch);
-    await page.waitForTimeout(120);
-    spot = await page.evaluate(() => {
-      const w = (window as any).__yutopia;
-      const t = w.tp;
-      const r = t.renderer.domElement.getBoundingClientRect();
-      const f = t.floorAt(r.left + r.width / 2, r.top + r.height / 2, 0);
-      if (!f || !w.grid.fits(f.x, f.y) || Math.hypot(f.x - w.me.x, f.y - w.me.y) < 0.8) return null;
-      t.setRay(r.left + r.width / 2, r.top + r.height / 2);
-      return t.personAt() || t.pickObject() ? null : f;
-    });
-    if (spot) break;
-  }
-  expect(spot).not.toBeNull();
-  if (spot) {
-    await page.mouse.click(640, 400);
-    await expect
-      .poll(
-        async () => {
-          const m = await me(page);
-          return Math.hypot(m.x - spot.x, m.y - spot.y);
-        },
-        { timeout: 10_000 },
-      )
-      .toBeLessThan(0.6);
-  }
+  // a click with the mouse as the camera: nothing in the world is clicked — I stay where I am
+  const at0 = await me(page);
+  await page.mouse.click(640, 400);
+  await page.waitForTimeout(1200);
+  const at1 = await me(page);
+  expect(Math.hypot(at1.x - at0.x, at1.y - at0.y)).toBeLessThan(0.05);
   if (shots) {
     await page.evaluate(() => {
       (window as any).__yutopia.tp.pitch = 0.1;
@@ -183,8 +158,9 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
     await pageB.screenshot({ path: `${shots}/live-bia-of-first-person.png` });
   }
 
-  // a sofa by the spawn: sitting drops the eyes and turns the view the seat's way
-  await page.keyboard.press("z");
+  // a sofa by the spawn: sitting drops the eyes and turns the view the seat's way (the mouse let
+  // go first, as Esc would)
+  await page.evaluate(() => document.exitPointerLock());
   await expect.poll(() => page.evaluate(() => !!(window as any).__yutopia.tp.looking)).toBe(false);
   await page.evaluate(() => (window as any).__yutopia.teleport("spawn"));
   await page.waitForTimeout(1200);
@@ -229,7 +205,7 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   await expect.poll(async () => (await cam(page)).mode).toBe("first");
 
   // Settings → View: the two choices, first person pressed; a click on
-  // Third person takes the chase camera back
+  // Third person takes the camera behind me back
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("tab", { name: "View" }).click();
   const first = page.getByRole("button", { name: "First person", exact: true });
@@ -240,7 +216,8 @@ test("first person: in my head, facing where I look, Bia sees me turn", async ({
   );
   await page.getByRole("button", { name: "Third person", exact: true }).click();
   await expect.poll(async () => (await cam(page)).mode).toBe("chase");
-  await expect(page.getByRole("button", { name: "Camera follows me" })).toBeVisible();
+  // (how the one camera follows: docs/plan/56-the-controls.md D)
+  await expect(page.getByRole("button", { name: "Follows me", exact: true })).toBeVisible();
   if (shots) await page.screenshot({ path: `${shots}/live-ana-settings-view.png` });
 
   // leave her setting as it was for the other specs

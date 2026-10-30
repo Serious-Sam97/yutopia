@@ -2,12 +2,12 @@
 import { expect, type Page } from "@playwright/test";
 import { ANA, enter, test, token, useWorld } from "./helpers";
 
-// Mouse look (third person): Z locks the pointer and the mouse turns the
-// camera; a click uses what's under the crosshair (the middle of the view);
-// Z again, or something that wants the pointer (the phone), lets it go. The hint
-// saying so shows for a few seconds.
-// Headless Chromium never grants a pointer lock, so the lock is stubbed: it
-// behaves as the browser's (the element, the change event, letting go).
+// The mouse is the camera (docs/plan/56-the-controls.md A): a click on the world locks the
+// pointer and the mouse turns the camera; a click then picks nothing in the world; what wants the
+// pointer (a panel, the phone) lets it go and gives it back when it's gone; Esc lets it go and the
+// hint says how to take it again; Z no longer toggles it (it aims now). The hints show as they say.
+// Headless Chromium never grants a pointer lock, so the lock is stubbed: it behaves as the
+// browser's (the element, the change event, letting go).
 
 // (3D: the real GPU — headless software GL draws a frame in seconds, and the hints fade first)
 test.use({ launchOptions: { args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] } });
@@ -16,7 +16,7 @@ const looking = (page: Page) => page.evaluate(() => !!(window as any).__yutopia.
 const locked = (page: Page) => page.evaluate(() => document.pointerLockElement?.tagName ?? null);
 const yaw = (page: Page) => page.evaluate(() => (window as any).__yutopia.tp.yaw as number);
 
-test("mouse look: Z locks the pointer, the mouse turns the camera, a click picks the middle", async ({ page }) => {
+test("the mouse is the camera: a click takes it, it turns the camera, it picks nothing", async ({ page }) => {
   test.setTimeout(120_000);
   const tok = await token(ANA);
   const lab = await useWorld("lab");
@@ -43,13 +43,25 @@ test("mouse look: Z locks the pointer, the mouse turns the camera, a click picks
   });
   await enter(page, tok, lab);
   await page.waitForFunction(() => !!(window as any).__yutopia.tp, null, { timeout: 60_000 });
-  await page.mouse.move(640, 400);
 
-  // Z: locked, the hint and the crosshair show
-  await page.keyboard.press("z");
+  // in play without it: the hint asks for a click
+  await expect(page.getByText("Click to look around with the mouse")).toBeVisible();
+
+  // a click on the world: locked, and the hint says how to let go — nothing in the world picked
+  const picks = await page.evaluate(() => {
+    const tp = (window as any).__yutopia.tp;
+    (window as any).__picks = 0;
+    const pick = tp.pick.bind(tp);
+    tp.pick = (...a: unknown[]) => {
+      (window as any).__picks++;
+      return pick(...a);
+    };
+    return 0;
+  });
+  await page.mouse.click(640, 400);
   await expect.poll(() => looking(page)).toBe(true);
   expect(await locked(page)).toBe("CANVAS");
-  await expect(page.getByText("Z or Esc frees the mouse")).toBeVisible();
+  await expect(page.getByText("Esc frees it")).toBeVisible();
 
   // the mouse turns the camera (left / right: yaw)
   const y0 = await yaw(page);
@@ -57,51 +69,44 @@ test("mouse look: Z locks the pointer, the mouse turns the camera, a click picks
     const c = document.pointerLockElement as HTMLElement;
     c.dispatchEvent(new PointerEvent("pointermove", { movementX: 120, movementY: 0, bubbles: true }));
   });
-  await expect.poll(async () => (await yaw(page)) - y0).toBeGreaterThan(0.2);
+  // (the camera keeps its angle in −π..π: the turn as an angle between)
+  const turned = async () => {
+    const d = (await yaw(page)) - y0;
+    return Math.atan2(Math.sin(d), Math.cos(d));
+  };
+  await expect.poll(turned).toBeGreaterThan(0.2);
 
-  // a click: what's in the middle of the view, wherever the mouse was
-  const picked = await page.evaluate(async () => {
-    const tp = (window as any).__yutopia.tp;
-    const seen: [number, number][] = [];
-    const pick = tp.pick.bind(tp);
-    // (only where it looks: what's in the middle here is me, and my menu would take the pointer)
-    tp.pick = (x: number, y: number) => {
-      seen.push([x, y]);
-    };
-    const c = tp.renderer.domElement as HTMLCanvasElement;
-    c.dispatchEvent(new PointerEvent("pointerdown", { button: 0, clientX: 5, clientY: 5, bubbles: true }));
-    c.dispatchEvent(new PointerEvent("pointerup", { button: 0, clientX: 5, clientY: 5, bubbles: true }));
-    tp.pick = pick;
-    const r = c.getBoundingClientRect();
-    return { seen, mid: [r.left + r.width / 2, r.top + r.height / 2] };
-  });
-  expect(picked.seen).toEqual([picked.mid]);
+  // a click with it: nothing in the world is picked, no menu
+  await page.mouse.click(640, 400);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window as any).__picks)).toBe(picks);
+  expect(await page.evaluate(() => (window as any).__hud.get().menu)).toBe(null);
 
-  // the hint goes after a few seconds; mouse look stays on
-  await expect(page.getByText("Z or Esc frees the mouse")).toBeHidden({ timeout: 6000 });
+  // the hint goes after a few seconds; the mouse stays the camera
+  await expect(page.getByText("Esc frees it")).toBeHidden({ timeout: 6000 });
   expect(await looking(page)).toBe(true);
 
-  // Z again lets go
+  // Z is the aim now, not a toggle
   await page.keyboard.press("z");
-  await expect.poll(() => looking(page)).toBe(false);
-  expect(await locked(page)).toBe(null);
-  await expect(page.getByText("Z or Esc frees the mouse")).toBeHidden();
+  await page.waitForTimeout(200);
+  expect(await looking(page)).toBe(true);
 
-  // the phone wants the pointer: P lets go
-  await page.waitForTimeout(1200);
-  await page.keyboard.press("z");
-  await expect.poll(() => looking(page)).toBe(true);
-  await page.waitForFunction(() => (window as any).__yutopia.phone, null, { timeout: 20_000 });
-  await page.keyboard.press("p");
+  // a panel wants the pointer: let go; closed, it's the camera's again
+  await page.evaluate(() => (window as any).__hud.set({ panel: { kind: "settings" } }));
   await expect.poll(() => looking(page)).toBe(false);
+  await page.evaluate(() => (window as any).__hud.set({ panel: { kind: null } }));
+  await expect.poll(() => looking(page)).toBe(true);
+
+  // Esc (the browser's): let go, and the hint asks for a click again
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(() => looking(page)).toBe(false);
+  await expect(page.getByText("Click to look around with the mouse")).toBeVisible();
 
   // the browser says no (as right after Esc): a note, and nothing locked
-  await page.keyboard.press("Escape");
   await page.evaluate(() => {
     (window as any).__refuseLock = true;
-    (document.activeElement as HTMLElement | null)?.blur();
   });
-  await page.keyboard.press("z");
-  await expect(page.getByText("didn't let mouse look start")).toBeVisible();
+  await page.mouse.click(640, 400);
+  await expect(page.getByText("didn't give the mouse to the camera")).toBeVisible();
   expect(await looking(page)).toBe(false);
 });

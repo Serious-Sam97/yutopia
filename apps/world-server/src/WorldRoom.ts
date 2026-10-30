@@ -76,7 +76,7 @@ import { hasPower, REMOVE_MINUTES, STORM_CALL_MS } from "@yutopia/shared/admin";
 import { monitorsToComputers } from "@yutopia/shared/computer";
 import { editsNow, groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
-import { type Collider, isVerb, MV_WINDED } from "@yutopia/shared/move";
+import { type Collider, isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
 import { WALL_H } from "@yutopia/shared/shapes";
 import { boardOfOwner } from "@yutopia/shared/spot";
@@ -726,15 +726,26 @@ export class WorldRoom extends Room<WorldState> {
       const now = Date.now();
       // from the ground, or just off it (coyote time, plus a message's lag) — a mantle also from
       // the air (catching an edge on the way up); not twice at once
-      if ((isJump(p.jump) || isVerb(p.jump)) && now - p.jumpAt < 200) return;
+      // (a second jump, an air dash: one right after the jump it follows is the point of it)
+      const air = !!m.air || k === "adash";
+      if (!air && (isJump(p.jump) || isVerb(p.jump)) && now - p.jumpAt < 200) return;
       const grid = this.moveAsk(p.uid, p.level);
       // (the feet a hair up already: the jump's first step can be in the last position sent)
       const grounded = p.z - grid.groundAt(p.x, p.y, p.z) < 0.2;
-      if (!grounded && now - data(client).footAt > 350 && k !== "mantle") return;
+      // (in the air on purpose — a second jump, an air dash: taken as sent, docs/plan/56 B)
+      if (!grounded && now - data(client).footAt > 350 && k !== "mantle" && !air) return;
       // (a roll costs stamina outside; out of breath, none)
       if (k === "roll" && this.survival && !this.survival.roll(client.sessionId)) return;
       p.jump = k;
       p.jumpAt = now;
+    });
+
+    // a Flowmotion move begun or ended (docs/plan/56-the-controls.md F): drawn by everyone, taken
+    // as sent (docs: no anticheat for now)
+    this.on("flow", (client, m) => {
+      const p = this.state.players.get(client.sessionId);
+      if (!p || !isFlowCode(m?.f)) return;
+      p.flow = m.f;
     });
 
     // a new look, saved in the API by the editor: validated, at most every 2 s

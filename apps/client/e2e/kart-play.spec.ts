@@ -87,7 +87,7 @@ test("a kart at the desk, driven off, a Grand Prix with Vortex started, out", as
   // the X: "take a kart" (the karts' module loads near the park)
   await page.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "kart:take", null, { timeout: 30_000 });
   await shot(page, "kart-play-desk");
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await page.waitForFunction(
     () => {
       const w = (window as any).__yutopia;
@@ -152,7 +152,7 @@ test("a kart at the desk, driven off, a Grand Prix with Vortex started, out", as
   const at = G((st.x0 + st.x1) / 2, st.z - 3);
   await bp.evaluate((q) => (window as any).__yutopia.teleport({ ...q, level: 0 }), at);
   await bp.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "kart:follow", null, { timeout: 20_000 });
-  await bp.keyboard.press("x");
+  await bp.keyboard.press("e");
   await bp.waitForTimeout(2500);
   if (dir) await bp.screenshot({ path: `${dir}/kart-play-bia-follows.png` });
   expect(await bp.evaluate(() => !!(window as any).__yutopia.tp.gameCam), "the leader's camera").toBeTruthy();
@@ -167,7 +167,7 @@ test("a kart at the desk, driven off, a Grand Prix with Vortex started, out", as
   expect(vortexMoved, "Vortex away").toBeTruthy();
   // out: X once it's stopped
   await page.waitForTimeout(2500);
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await page.waitForFunction(
     () => {
       const w = (window as any).__yutopia;
@@ -188,7 +188,7 @@ const phase = (page: Page) =>
 async function inKart(page: Page) {
   await toDesk(page);
   await page.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "kart:take", null, { timeout: 30_000 });
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await page.waitForFunction(
     () => {
       const w = (window as any).__yutopia;
@@ -292,7 +292,7 @@ test("the start: the engine revved on the grid, the throttle down on the fourth 
   await shot(page, "kart-play-rocket");
   await page.keyboard.up("KeyW");
   await page.waitForTimeout(3000);
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await page.waitForFunction(() => (window as any).__yutopia.room.state.karts.get("park").phase === "lobby", null, {
     timeout: 30_000,
   });
@@ -319,7 +319,7 @@ test("a battle in the bowl: the clock, smashes", async ({ page }) => {
   await auto(page, false);
   // (stopped first: X is refused on the move)
   await page.waitForTimeout(4000);
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await page.waitForFunction(() => (window as any).__yutopia.room.state.karts.get("park").phase === "lobby", null, {
     timeout: 30_000,
   });
@@ -366,7 +366,7 @@ test("a night race under the floodlights: eight karts, frame times on High", asy
   await auto(page, false);
   await page.evaluate(() => (window as any).__yutopia.room.send("mod:hour", { h: 12 }));
   await page.waitForTimeout(4000);
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await page.waitForFunction(() => (window as any).__yutopia.room.state.karts.get("park").phase === "lobby", null, {
     timeout: 30_000,
   });
@@ -416,7 +416,7 @@ test("the lobby's colour and Ready, the race's mini-map, Vortex's drone fishing 
   await page.waitForFunction(() => !(window as any).__karts.fish, null, { timeout: 5000 });
   // out
   await page.waitForTimeout(1500);
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await page.waitForFunction(() => (window as any).__yutopia.room.state.karts.get("park").phase === "lobby", null, {
     timeout: 40_000,
   });

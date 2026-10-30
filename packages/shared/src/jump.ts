@@ -7,7 +7,9 @@
 // client's (chars/motion.ts `jumpPose`).
 import type { Grid } from "./grid.ts";
 
-export const JUMPS = ["hop", "flip"] as const;
+// (a leap: running's jump in the KH body — the flip's height, leant forward, not turned over: the
+// flip is the jump in the air there — docs/plan/58-the-animation.md)
+export const JUMPS = ["hop", "flip", "leap"] as const;
 export type JumpKind = (typeof JUMPS)[number];
 export const isJump = (k: unknown): k is JumpKind => JUMPS.includes(k as JumpKind);
 
@@ -17,6 +19,7 @@ export const JUMP_G = 20;
 const SPEC: Record<JumpKind, { crouch: number; h: number; land: number }> = {
   hop: { crouch: 0.09, h: 0.8, land: 0.16 },
   flip: { crouch: 0.11, h: 1.45, land: 0.22 },
+  leap: { crouch: 0.06, h: 1.45, land: 0.2 },
 };
 
 export interface JumpTimes {

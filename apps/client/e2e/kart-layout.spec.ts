@@ -56,7 +56,7 @@ test("a Grand Prix on each layout: changed, its show waited out, eight karts hom
       await page.waitForFunction(() => (window as any).__hud.get().prompt?.kind === "kart:take", null, {
         timeout: 30_000,
       });
-      await page.keyboard.press("x");
+      await page.keyboard.press("e");
       await page.waitForSelector("button[data-go='start']", { timeout: 15_000 });
       // the lobby shows the layout's own record
       await expect(page.locator(`text=HOUSE RECORD · ${title}`)).toBeVisible();

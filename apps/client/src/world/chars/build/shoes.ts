@@ -2,7 +2,7 @@ import type { AvatarLayers } from "@yutopia/shared";
 import { type BufferGeometry, Shape, Vector3 } from "three";
 import type { Kit } from "../kit";
 import { arc, extrude, flipWinding, lathe, mapVerts, oval, type Prof, sweepTube } from "../shapes";
-import type { Body } from "./body";
+import { type Body, smooth } from "./body";
 import { shade } from "./tops";
 
 // Shoes — every AvatarLayers shoe: sneakers, hightops, boots, loafers,
@@ -88,6 +88,13 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
     // (on the left foot that mapping is a mirror: turn the faces back out)
     return sx > 0 ? flipWinding(g) : g;
   };
+
+  // the toe's joint at the ball of the foot, on the sole: the shoe's front rides it, blended over
+  // the ball (a boot's stiffer: over a longer stretch)
+  const ball = 0.42 * fl;
+  const give = a.shoes === "boots" ? 0.16 * fl : 0.1 * fl;
+  const first = k.parts.length;
+  for (const side of ["L", "R"] as const) k.joint(`toe${side}`, 0, y0 + sole * 0.5, ball);
 
   for (const side of ["L", "R"] as const) {
     const sx = side === "L" ? 1 : -1;
@@ -207,5 +214,11 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
         break;
       }
     }
+  }
+  // (everything on the feet from here: its front on the toe)
+  for (const part of k.parts.slice(first)) {
+    if (part.skin || !part.joint.startsWith("ankle")) continue;
+    const toe = part.joint === "ankleL" ? "toeL" : "toeR";
+    part.skin = (_x, _y, z) => [toe, smooth(ball - give, ball + give, z)];
   }
 }

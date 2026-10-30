@@ -97,7 +97,7 @@ for (const view of ["3p"] as const)
     const st = KART_STANDS[0];
     await go(page, (st.x0 + st.x1) / 2 + 0.3, st.z - 0.9);
     await prompt(page, "park:sit");
-    await page.keyboard.press("x");
+    await page.keyboard.press("e");
     await page.waitForFunction(
       (b) => {
         const w = (window as any).__yutopia;
@@ -109,7 +109,7 @@ for (const view of ["3p"] as const)
     await page.waitForTimeout(2500);
     await shot(page, `park-life-${view}-stands`);
     await prompt(page, "park:stand");
-    await page.keyboard.press("x");
+    await page.keyboard.press("e");
     await page.waitForFunction(
       () => {
         const w = (window as any).__yutopia;

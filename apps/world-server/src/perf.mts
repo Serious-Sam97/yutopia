@@ -11,7 +11,7 @@ import { ANIM, dirFromDelta, findPath, type Point, ROOM_NAME } from "@yutopia/sh
 import { dayNests, dayOf, NESTS } from "@yutopia/shared/dark";
 import { CHUNK, checkEdits, GROUNDS, heightAt, SURFACES, walkableTile } from "@yutopia/shared/grounds";
 import { encodeBytes, encodeHeights, type GroundsEdits } from "@yutopia/shared/grounds-edits";
-import { type Gait, MOVE, MV_WINDED, packMv, yawToByte } from "@yutopia/shared/move";
+import { type Gait, KH_MOVE, MV_WINDED, packMv, yawToByte } from "@yutopia/shared/move";
 import { FULL_VITALS, freshClock, stepVitals } from "@yutopia/shared/vitals";
 import { Client, type Room } from "colyseus.js";
 
@@ -115,7 +115,7 @@ for (let i = 0; i < BOTS; i++) {
   let seq = 0;
   // a third each walk, jog and sprint, as the move's gaits go
   const gait: Gait = (["walk", "jog", "sprint"] as const)[i % 3];
-  const speed = MOVE[gait];
+  const speed = KH_MOVE[gait];
   let yaw = 0;
   // out on the pond: laps of its ice along z −60 (the building's coords; the floor's are 60, 10 on)
   const out = outside(i);
@@ -195,7 +195,7 @@ for (let i = 0; i < BOTS; i++) {
           dt,
         );
         if (breath.winded && !was) winded++;
-        pos.x += (east ? 1 : -1) * MOVE[g] * dt;
+        pos.x += (east ? 1 : -1) * KH_MOVE[g] * dt;
         if (pos.x > -200 + 60) east = false;
         if (pos.x < -280 + 60) east = true;
         yaw = east ? 0 : Math.PI;

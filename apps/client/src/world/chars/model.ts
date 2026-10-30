@@ -14,9 +14,9 @@ import { armsOf, type Baked, bake } from "./bake";
 import { buildPerson } from "./build";
 import { solveArm } from "./ik";
 import { inkMaterial } from "./ink";
-import type { Anchor } from "./kit";
+import type { Anchor, SpringSpec } from "./kit";
 import type { Lod } from "./params";
-import { JOINTS, type JointName, PARENT, type Pose, REST, type RestPose } from "./rig";
+import { JOINTS, type JointName, PARENT, type Pose, REST, type RestPose, type SpringName } from "./rig";
 
 // People in the world: a factory that builds and caches each look at each
 // level of detail (shared by everyone wearing it, built a few per frame so
@@ -150,6 +150,33 @@ export class CharFactory {
 export type Reach = Partial<Record<"L" | "R", { at: Anchor; w: number; dx?: number; dz?: number }>>;
 
 const ik = { shoulder: new Quaternion(), elbow: 0 };
+
+// ── the springs (plan 58 phase 2d): hair, a skirt, a scarf's ends, a pack — each a damped spring off
+// its parent, its tip chasing where it'd hang (partly as its parent holds it, partly straight down),
+// held to its length, kept out of the head and the chest, the bone turned after it (no further than
+// its limit). Stepped after the pose; never in it.
+interface SpringRun {
+  spec: SpringSpec;
+  p: Vector3;
+  v: Vector3;
+  on: boolean;
+}
+// (how much of each hangs by gravity rather than its parent's turn — a pack's strapped to the back:
+// hardly any, or it swung off it like a board leant forward)
+const HANG: Record<SpringName, number> = { hair: 0.55, skirt: 0.35, scarf: 0.65, pack: 0.04 };
+// (scratch, reused: nothing's made in the step)
+const SP = {
+  a: new Vector3(),
+  b: new Vector3(),
+  c: new Vector3(),
+  t: new Vector3(),
+  d: new Vector3(),
+  o: new Vector3(),
+  q: new Quaternion(),
+  pq: new Quaternion(),
+  none: new Quaternion(),
+};
+const DOWN = new Vector3(0, -1, 0);
 const target = new Vector3();
 const pole = new Vector3();
 
@@ -166,7 +193,9 @@ export class PersonModel {
   private lift: [number, number, number] = [0, 0, 0];
   private restHips: [number, number, number] = [0, 0, 0];
   private face: [number, number] = [0, 0];
+  private eyes: [number, number] = [0, 0];
   private held: { a: AvatarLayers; lod: Lod } | null = null;
+  private springs: SpringRun[] = [];
 
   constructor(
     private f: CharFactory,
@@ -211,7 +240,7 @@ export class PersonModel {
     const b = this.shown?.baked;
     if (!b) return 0.3;
     const r = b.rest;
-    return b.height - (r.hips[1] + r.spine[1] + r.neck[1] + r.head[1]);
+    return b.height - (r.hips[1] + r.spine[1] + r.chest[1] + r.neck[1] + r.head[1]);
   }
   /** How far to lower the person so a seated pose rests on a seat `seatY` high. */
   sitDrop(seatY: number): number {
@@ -252,7 +281,9 @@ export class PersonModel {
     this.bodyMesh.bind(sk, id);
     (this.inkMesh as SkinnedMesh).bind(sk, id);
     this.bodyMesh.updateMorphTargets();
+    this.springs = baked.springs.map((spec) => ({ spec, p: new Vector3(), v: new Vector3(), on: false }));
     this.setFace(this.face[0], this.face[1]);
+    this.setEyes(this.eyes[0], this.eyes[1]);
   }
 
   private makeSkeleton(rest: RestPose, key: string) {
@@ -295,11 +326,12 @@ export class PersonModel {
       const sx = side === "L" ? -1 : 1; // anchors are for the right hand: the left mirrors x
       const a = b.anchors[r.at];
       const sh = b.rest[`shoulder${side}`];
-      // into the spine's space, from the shoulder joint
+      // into the chest's space, from the shoulder joint
+      const R = b.rest;
       target.set(
-        a[0] * sx + (r.dx ?? 0) * sx - b.rest.hips[0] - b.rest.spine[0] - sh[0],
-        a[1] - b.rest.hips[1] - b.rest.spine[1] - sh[1],
-        a[2] + (r.dz ?? 0) - b.rest.hips[2] - b.rest.spine[2] - sh[2],
+        a[0] * sx + (r.dx ?? 0) * sx - R.hips[0] - R.spine[0] - R.chest[0] - sh[0],
+        a[1] - R.hips[1] - R.spine[1] - R.chest[1] - sh[1],
+        a[2] + (r.dz ?? 0) - R.hips[2] - R.spine[2] - R.chest[2] - sh[2],
       );
       pole.set(side === "L" ? 0.6 : -0.6, -1, -0.45);
       solveArm(target, b.arm[0], b.arm[1], pole, ik);
@@ -312,15 +344,15 @@ export class PersonModel {
   }
 
   /** Put a hand on a point in the world (a steering wheel's rim), after `setPose`: two-bone IK
-   *  from the posed shoulder, the elbow pointing down and out by `pole` (the spine's space,
+   *  from the posed shoulder, the elbow pointing down and out by `pole` (the chest's space,
    *  the right arm's; the left mirrors x). */
   reachTo(side: "L" | "R", world: Vector3, w = 1, poleR: [number, number, number] = [-0.6, -1, -0.45]) {
     const b = this.shown?.baked;
     if (!b || !this.skeleton || w <= 0) return;
-    const spine = this.bones.spine;
-    spine.updateWorldMatrix(true, false);
+    const chest = this.bones.chest;
+    chest.updateWorldMatrix(true, false);
     target.copy(world);
-    spine.worldToLocal(target);
+    chest.worldToLocal(target);
     const sh = b.rest[`shoulder${side}`];
     target.x -= sh[0];
     target.y -= sh[1];
@@ -334,6 +366,78 @@ export class PersonModel {
     el.rotation.set(el.rotation.x + (ik.elbow - el.rotation.x) * k, el.rotation.y * (1 - k), el.rotation.z * (1 - k));
   }
 
+  /** Swing the springs (after `setPose`, once a frame): `rest` holds them as they hang (reduced
+   *  motion, far off) and starts them there next time. */
+  step(dt: number, rest = false) {
+    const b = this.shown?.baked;
+    if (!b || !this.skeleton || !this.springs.length) return;
+    this.root.updateMatrixWorld(true);
+    const L = SP.a;
+    for (const s of this.springs) {
+      const bone = this.bones[s.spec.joint];
+      const parent = bone.parent;
+      if (!parent) continue;
+      bone.quaternion.identity();
+      bone.updateMatrixWorld(true);
+      const pivot = SP.b.setFromMatrixPosition(bone.matrixWorld);
+      const tip = L.set(...s.spec.tip);
+      const len = tip.length();
+      tip.applyMatrix4(bone.matrixWorld);
+      // where it'd hang: as its parent holds it, drawn down by its weight
+      const target = SP.t
+        .copy(tip)
+        .sub(pivot)
+        .normalize()
+        .lerp(DOWN, HANG[s.spec.joint])
+        .normalize()
+        .multiplyScalar(len)
+        .add(pivot);
+      if (rest || !s.on || s.p.distanceTo(target) > 1 || dt <= 0) {
+        s.on = !rest;
+        s.p.copy(target);
+        s.v.set(0, 0, 0);
+        if (rest || dt <= 0) continue;
+      }
+      const w = 2 * Math.PI * s.spec.hz;
+      const n = Math.max(1, Math.ceil(Math.min(dt, 0.1) * 240));
+      const h = Math.min(dt, 0.1) / n;
+      for (let i = 0; i < n; i++) {
+        const ax = w * w * (target.x - s.p.x) - 2 * s.spec.damp * w * s.v.x;
+        const ay = w * w * (target.y - s.p.y) - 2 * s.spec.damp * w * s.v.y;
+        const az = w * w * (target.z - s.p.z) - 2 * s.spec.damp * w * s.v.z;
+        s.v.x += ax * h;
+        s.v.y += ay * h;
+        s.v.z += az * h;
+        s.p.addScaledVector(s.v, h);
+        // its length kept
+        const d = SP.d.copy(s.p).sub(pivot).normalize();
+        s.p.copy(pivot).addScaledVector(d, len);
+        // out of the head and the chest (its velocity into them taken off)
+        for (const c of b.collide) {
+          const cb = this.bones[c.joint];
+          const centre = SP.c.set(...c.at).applyMatrix4(cb.matrixWorld);
+          const off = SP.o.copy(s.p).sub(centre);
+          const dist = off.length();
+          if (dist >= c.r || dist < 1e-6) continue;
+          off.divideScalar(dist);
+          s.p.copy(centre).addScaledVector(off, c.r);
+          const into = s.v.dot(off);
+          if (into < 0) s.v.addScaledVector(off, -into);
+        }
+      }
+      // the bone turned from how it hangs at rest to where its tip is, no further than its limit
+      const from = tip.sub(pivot).normalize();
+      const to = SP.d.copy(s.p).sub(pivot).normalize();
+      SP.q.setFromUnitVectors(from, to);
+      const angle = 2 * Math.acos(Math.min(1, Math.abs(SP.q.w)));
+      if (angle > s.spec.limit) SP.q.slerp(SP.none, 1 - s.spec.limit / angle);
+      // (into the parent's space: the bone's rest turn is none, so its world turn is the parent's)
+      parent.getWorldQuaternion(SP.pq);
+      bone.quaternion.copy(SP.pq).invert().multiply(SP.q).multiply(SP.pq);
+      bone.updateMatrixWorld(true);
+    }
+  }
+
   /** The face: eyes closed (0..1) and mouth open (0..1). */
   setFace(blink: number, talk: number) {
     this.face = [blink, talk];
@@ -341,6 +445,15 @@ export class PersonModel {
     if (m) {
       m[0] = blink;
       m[1] = talk;
+    }
+  }
+  /** Where the eyes look (plan 58 G.D): x + to the person's left, y + up; −1..1 each. */
+  setEyes(x: number, y: number) {
+    this.eyes = [x, y];
+    const m = this.bodyMesh?.morphTargetInfluences;
+    if (m && m.length > 3) {
+      m[2] = x;
+      m[3] = y;
     }
   }
 

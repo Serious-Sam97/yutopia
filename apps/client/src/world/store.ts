@@ -61,6 +61,7 @@ export type PanelKind =
   | "pads"
   | "avatar"
   | "pets"
+  | "emotes" // the emote wheel, held (docs/plan/56-the-controls.md phase 6)
   | "computer"
   | "motors" // the car dealer's (car/cars.ts registers it: docs/plan/43-the-spot.md)
   | "admin" // Run the place: admins only (docs/plan/48-the-admin.md)
@@ -123,6 +124,14 @@ export interface ActionMenu {
   title: string;
   subtitle?: string; // a desk's owner, someone's status…
   items: { act: string; ok: boolean }[]; // ok false: shown, greyed out
+  /** the one chosen on the keys or a pad (docs/plan/56-the-controls.md C): none, opened by a tap */
+  sel?: number;
+}
+/** What's in front of me I could act on, best first (docs/plan/56-the-controls.md C): the prompt's
+ *  stack; `at` the focus. */
+export interface FocusHud {
+  items: { key: string; kind: string; label: string; act: string; objectId?: string }[];
+  at: number;
 }
 export interface QueuedAct {
   key: number;
@@ -338,6 +347,13 @@ export interface HudState {
   phone: PhoneHud;
   heardBy: number[]; // user ids who can hear me right now
   prompt: { objectId: string; kind: string; label: string } | null;
+  targets: FocusHud | null;
+  /** the Kart Park's lobby or circuits are up (their buttons want the pointer: docs/plan/56 A) */
+  kartUi: boolean;
+  /** locked on to (docs/plan/56-the-controls.md E): who or what */
+  lockOn: { label: string } | null;
+  /** a pad's what I last touched (the prompts show its buttons) */
+  padLive: boolean;
   held: { kind: string; at: number } | null; // what I carry (a mug, a ball…) and since when (server ms)
   throwArm: boolean; // the next floor click throws what I hold (or points the laser)
   cable: { consoleId: string } | null; // a console's cable in my hands, on the way to a TV
@@ -459,6 +475,10 @@ const initial: HudState = {
   phone: { open: false, loaded: false, badge: 0, ringing: false, onCall: false, camera: false },
   heardBy: [],
   prompt: null,
+  targets: null,
+  lockOn: null,
+  kartUi: false,
+  padLive: false,
   held: null,
   throwArm: false,
   cable: null,

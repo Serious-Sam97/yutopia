@@ -50,7 +50,7 @@ async function plugIn(page: Page, consoleId: string, front: { x: number; y: numb
   await expect(page.getByText("Console cable")).toBeVisible();
   await walkTo(page, front.x, front.y, 25_000);
   await expect.poll(() => page.evaluate(() => (window as any).__hud.get().prompt?.kind)).toBe("plug");
-  await page.keyboard.press("x");
+  await page.keyboard.press("e");
   await expect(page.getByText("Console cable")).toBeHidden({ timeout: 10_000 });
   await walkTo(page, back.x, back.y, 25_000);
   await page.evaluate((id) => (window as any).__hud.set({ panel: { kind: "console", objectId: id } }), consoleId);

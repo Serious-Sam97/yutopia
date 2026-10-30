@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Animation Style Guide</title>
+<style>
+  :root {
+    --bg: #f3ece0; --ink: #2a2230; --muted: #6b6070; --card: #fffaf2; --line: #d9cdbb;
+    --kh: #2f7fd1; --aw: #b5452f; --mix: #7a5cc2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #17141b; --ink: #ece4d8; --muted: #a49aa6; --card: #221d27; --line: #3a3340; --kh: #6aa9ec; --aw: #e07a63; --mix: #a68ae6; }
+  }
+  :root[data-theme="dark"] { --bg: #17141b; --ink: #ece4d8; --muted: #a49aa6; --card: #221d27; --line: #3a3340; --kh: #6aa9ec; --aw: #e07a63; --mix: #a68ae6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1060px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 34px; margin: 0 0 4px; letter-spacing: -0.5px; }
+  h2 { font-size: 22px; margin: 44px 0 10px; }
+  h3 { font-size: 17px; margin: 22px 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; color: #fff; vertical-align: 2px; }
+  .kh { background: var(--kh); } .aw { background: var(--aw); } .mix { background: var(--mix); }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card p { margin: 6px 0; }
+  .card ul { margin: 6px 0; padding-left: 18px; }
+  figure { margin: 14px 0; }
+  figure img, figure video { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; background: #000; }
+  figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .note { border-left: 3px solid var(--mix); padding: 6px 12px; background: var(--card); border-radius: 0 8px 8px 0; }
+  code { font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Animation Style Guide</h1>
+  <p class="sub">Plan 58, phase 0: the direction, shown on four hero animations keyed again on today's body. Old beside new.</p>
+
+  <h2>The two styles</h2>
+  <p><span class="tag kh">KH3</span> where you play: running, jumping, Flowmotion, emotes, games. <span class="tag aw">Alan Wake 2</span> where you live and where it's dark: standing, walking, the torch and the gun, being hurt.</p>
+  <table>
+    <tr><th></th><th>Kingdom Hearts 3</th><th>Alan Wake 2</th></tr>
+    <tr><td><b>Timing</b></td><td>Fast in, a hold at the key, fast out</td><td>Even and continuous, small overlaps</td></tr>
+    <tr><td><b>Weight</b></td><td>Light, springy, up on the toes</td><td>Heavy, down in the heels, knees soft</td></tr>
+    <tr><td><b>Arcs</b></td><td>Big, readable from far away</td><td>Small, true to a real body</td></tr>
+    <tr><td><b>Silhouette</b></td><td>Clear in every key pose</td><td>Natural, closed in when cold or afraid</td></tr>
+    <tr><td><b>Head</b></td><td>Leads the move, looks where it goes</td><td>Checks around, looks at sounds and people</td></tr>
+    <tr><td><b>Secondary</b></td><td>Hair and clothes trail, then settle</td><td>Breath, small shifts, never fully still</td></tr>
+    <tr><td><b>Landings</b></td><td>A squash and a pop back up</td><td>A real absorb, by height</td></tr>
+  </table>
+  <p class="note"><b>The mood moves it.</b> A tension dial (0 day, 1 the dark) leans everything toward Alan Wake 2: the walk shortens and lowers, the idle looks around, the run tightens. It rises at night, in the dark's fog, near the shadowed, after a hit, and with low vitals.</p>
+
+  <h2>What changed, animation by animation</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Standing <span class="tag mix">AW, KH by day</span></h3>
+      <ul>
+        <li>The weight on one leg, the other easy and a little out. It moves over every few seconds, with a small dip.</li>
+        <li>Breath lifts the chest: slow by day, quicker in the dark.</li>
+        <li>Never still: a slow wander through the hips, the arms and the head.</li>
+        <li>Glances turn the eyes, head, neck and a little of the chest, then come back.</li>
+        <li>In the dark: knees soft, shoulders in, looking round more, now and then over the shoulder.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Walking <span class="tag aw">AW</span></h3>
+      <ul>
+        <li>A heel strike with the toes up, a roll onto the flat foot, a push off the toes. The old walk was one sine wave per joint.</li>
+        <li>The knee gives as the weight lands; the body dips there and rises over the passing foot.</li>
+        <li>The pelvis turns with each step and drops on the swinging side; the chest turns against it.</li>
+        <li>The arms swing from the shoulder, a beat behind the legs, the elbows trailing.</li>
+        <li>In the dark: shorter steps, lower, leaning in, arms bent and close, the head checking round.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Running and sprinting <span class="tag kh">KH</span></h3>
+      <ul>
+        <li>Up on the balls of the feet, landing under the knee, not out ahead.</li>
+        <li>The knee driven high, the heel to the seat.</li>
+        <li>Arms pumping bent at about a right angle, a beat behind the legs.</li>
+        <li>Leaning into the speed (a sprint most), chest proud, a springy bounce.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Feel, everywhere <span class="tag mix">both</span></h3>
+      <ul>
+        <li>Follow-through: the spine, head, arms and hands come after the move, a touch late, a touch past, then settle. Nothing snaps from pose to pose.</li>
+        <li>The body stays upright: the hips' roll is taken back out of the legs.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>The slide <span class="tag kh">KH</span></h3>
+      <ul>
+        <li>A baseball slide: the plant, the drop with the lead leg kicked out, then reclined from the hips.</li>
+        <li>That leg along the ground with the toes up, the other folded under, the trailing hand skimming the ground, the other arm up, the head looking ahead.</li>
+        <li>Out of it, a push off the folded leg back into the run.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Jumping <span class="tag kh">KH</span></h3>
+      <ul>
+        <li>A deep wind-up with the arms thrown back, then a full stretch off the toes, arms thrown up.</li>
+        <li>Hang time at the top. The hop: both knees up, one higher, arms flung out. The flip: balled up tight.</li>
+        <li>The legs reach down for the ground, arms up for balance; a squash that gives by how hard it lands.</li>
+        <li>Running, the jump is a leap: a long stride through the air, leant forward. The flip is the jump in the air.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Old beside new</h2>
+  <figure><video src="hero.mp4" controls loop muted playsinline></video><figcaption>Idle, walk, run and sprint: old, new, and new in the dark.</figcaption></figure>
+  <figure><video src="jumps2.mp4" controls loop muted playsinline></video><figcaption>The hop and the flip, old and new.</figcaption></figure>
+  <figure><video src="idles.mp4" controls loop muted playsinline></video><figcaption>Standing: old, new by day, at dusk, and in the dark.</figcaption></figure>
+  <figure><video src="slides.mp4" controls loop muted playsinline></video><figcaption>The slide, old and new.</figcaption></figure>
+  <figure><img src="01-walk.png" alt="Walk filmstrips: old, new, new in the dark"><figcaption>The walk, moment by moment: old, new, new in the dark.</figcaption></figure>
+  <figure><img src="02-run.png" alt="Run and sprint filmstrips, old and new"><figcaption>The run and the sprint, old and new.</figcaption></figure>
+  <figure><img src="03-jump.png" alt="Hop and flip filmstrips, old and new"><figcaption>The hop and the flip, old and new.</figcaption></figure>
+  <figure><img src="06-leap.png" alt="The running leap, moment by moment"><figcaption>The running jump is a leap now; the flip is the jump in the air.</figcaption></figure>
+  <figure><img src="05-slide.png" alt="The new slide, moment by moment"><figcaption>The slide: a baseball slide, reclined from the hips.</figcaption></figure>
+
+  <h2>What today's body can't do yet (phase 1)</h2>
+  <ul>
+    <li><b>The waist:</b> the trunk is two rigid pieces. A spine bent forward or twisted opens them, and skin shows through a fitted top. The old run shows it on the back. Phase 0 takes the lean at the hips instead; phase 1's chest joint and proper skinning fix it.</li>
+    <li><b>No toes, no fingers:</b> no push-off through the toes, no fists, grips or pointing.</li>
+    <li><b>Nothing hangs:</b> hair and hems don't trail or settle yet.</li>
+    <li><b>Feet on the ground:</b> on slopes and stairs they still float or sink, until Jolt's rays place them.</li>
+  </ul>
+
+  <h2>Try it</h2>
+  <ul>
+    <li><code>/dev/move</code>: the "new animations (plan 58)" box, and the "mood: day → the dark" slider. Walk with Alt, run, sprint with Shift, jump.</li>
+    <li><code>/dev/chars?anim=hero</code>, <code>idles</code>, <code>jumps2</code>; filmstrips <code>walk2</code>, <code>walk2dark</code>, <code>run2</code>, <code>sprint2</code>, <code>hop2</code>, <code>flip2</code> (and <code>walkold</code>, <code>run</code>, <code>sprint</code>, <code>hopold</code>, <code>flipold</code>).</li>
+    <li>The world is unchanged until you sign off.</li>
+  </ul>
+</main>
+</body>
+</html>

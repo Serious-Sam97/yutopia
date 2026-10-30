@@ -33,6 +33,7 @@
     "./car": "./src/car/index.ts",
     "./kart": "./src/kart/index.ts",
     "./move": "./src/move/index.ts",
+    "./move/flow-moves": "./src/move/flow-moves.ts",
     "./dark": "./src/dark/index.ts",
     "./vitals": "./src/vitals.ts",
     "./inventory": "./src/inventory.ts",

@@ -3,7 +3,7 @@ import { Vector3 } from "three";
 import { Kit } from "../kit";
 import { LODS, type Lod, type Params, paramsFor } from "../params";
 import { buildBeard } from "./beard";
-import { Body, smooth } from "./body";
+import { Body } from "./body";
 import { buildBottom } from "./bottoms";
 import { buildExtra } from "./extras";
 import { buildEyewear } from "./eyewear";
@@ -38,15 +38,8 @@ export function buildPerson(a: AvatarLayers, lod: Lod, params?: Params): Kit {
   buildHeadwear(k, a.accessory, a.accessoryColor, hairCrown(k, a.hair), hairSide(k, a.hair));
   buildEyewear(k, a.eyewear, a.eyewearColor);
   buildBottom(k, b, a);
-  // the top: wherever it covers the trousers it rides the hips as they do
-  // (all of it, front and back), or a stride's twist and the chest's lean
-  // swing the waist out through it; above that it blends to the spine
-  const firstTop = k.parts.length;
+  // (the top rides the trunk as the body under it does, by height: bake.ts's skin weights)
   buildTop(k, b, a);
-  const lowY = 0.5 * b.T - b.spineY; // (spine joint space: the trousers' seat ends at 0.5 T)
-  const upY = 0.64 * b.T - b.spineY;
-  for (const part of k.parts.slice(firstTop))
-    if (part.joint === "spine" && !part.skin) part.skin = (_x, y) => ["hips", 1 - smooth(lowY, upY, y)];
   buildShoes(k, b, a);
   buildExtra(k, b, a.extra, a.extraColor, { earsShow, skin: a.skin });
   // (the phone at the ear sits on whatever covers it: long hair, an afro, headphones)

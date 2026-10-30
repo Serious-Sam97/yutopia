@@ -103,6 +103,8 @@ export class JoltCollider implements Collider {
  *  sim (shared/move) still says where it means to go, its jumps and verbs. Moved from outside (a
  *  verb's path, a snap, a teleport, the stairs into the next floor's frame) it's put there. */
 export class CharacterMover implements Mover {
+  /** along the ground on slopes (PhysicsWorld.moveCharacter's `along`): /dev/move's for now */
+  along = false;
   private id: number | null = null;
   private readonly at: [number, number, number] = [Number.NaN, Number.NaN, Number.NaN];
   private readonly p: [number, number, number] = [0, 0, 0];
@@ -143,6 +145,7 @@ export class CharacterMover implements Mover {
       stickDown: this.onLand(b.x, b.y) ? STICK_LAND : stepUp + 0.01,
       mask: t.mask,
       pass: t.pass,
+      along: this.along,
     });
     const p = this.p;
     this.world.characterAt(id, p);

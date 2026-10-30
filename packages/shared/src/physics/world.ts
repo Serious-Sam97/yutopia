@@ -459,8 +459,10 @@ export class PhysicsWorld {
 
   /** Moved by its velocity (m/s) for dt, sliding along what's in the way. Walking: up a step
    *  `stepUp` high without a jump and kept to the floor down to `stickDown` (`walking` false: in
-   *  the air, neither). What it meets: `mask`, less what `pass` lets it through. True: on the
-   *  ground after. */
+   *  the air, neither); `along`: walking on a slope it goes along the ground at the speed it's
+   *  given across it (up and down hills at its own pace: docs/plan/56-the-controls.md H.3 —
+   *  without, a slope eats the speed into it). What it meets: `mask`, less what `pass` lets it
+   *  through. True: on the ground after. */
   moveCharacter(
     id: number,
     vx: number,
@@ -468,10 +470,17 @@ export class PhysicsWorld {
     vz: number,
     dt: number,
     walking: boolean,
-    o: { stepUp?: number; stickDown?: number; mask?: Mask; pass?: Pass | null } = {},
+    o: { stepUp?: number; stickDown?: number; mask?: Mask; pass?: Pass | null; along?: boolean } = {},
   ): boolean {
     const ch = this.chars.get(id);
     if (!ch) return false;
+    let up = vy;
+    if (o.along && walking && ch.GetGroundState() === this.J.EGroundState_OnGround) {
+      // the way across the ground lifted onto its plane (a walkable one: not a wall's side)
+      const n = ch.GetGroundNormal();
+      const ny = n.GetY();
+      if (ny > 0.5) up = -(vx * n.GetX() + vz * n.GetZ()) / ny;
+    }
     const m = this.masks[o.mask ?? "all"];
     if (walking) {
       this.v.Set(0, o.stepUp ?? 0.35, 0);
@@ -479,7 +488,7 @@ export class PhysicsWorld {
       this.v.Set(0, -(o.stickDown ?? 0.5), 0);
       this.walk.mStickToFloorStepDown = this.v;
     }
-    this.v.Set(vx, vy, vz);
+    this.v.Set(vx, up, vz);
     ch.SetLinearVelocity(this.v);
     const pass = this.passFilter(o.pass);
     const temp = this.jolt.GetTempAllocator();

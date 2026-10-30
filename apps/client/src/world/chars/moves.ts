@@ -1,5 +1,5 @@
 import { verbPath } from "@yutopia/shared/move";
-import type { Euler3, Pose } from "./rig";
+import { type Euler3, HANDS, type HandShape, handPose, type Pose } from "./rig";
 
 // The move (docs/plan/29-the-move.md, M6): the body's new poses — the jog, the
 // run and the sprint, crouching and sneaking, side-steps and backing up, a
@@ -15,9 +15,9 @@ import type { Euler3, Pose } from "./rig";
 // a cycle's second step is its first mirrored. The feet are planted by
 // solving the leg chain (the build's own lengths), so nothing floats or sinks.
 
-const TAU = Math.PI * 2;
-const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
-const smoother = (t: number) => {
+export const TAU = Math.PI * 2;
+export const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
+export const smoother = (t: number) => {
   const x = clamp01(t);
   return x * x * x * (x * (x * 6 - 15) + 10);
 };
@@ -28,11 +28,13 @@ export interface Moved {
 }
 
 // ── the leg, as built (build/body.ts, build/shoes.ts at the base proportions) ─
-const THIGH = 0.306;
-const SHIN = 0.306;
-const ANKLE = 0.061; // the ankle over the sole
-const TOE = 0.19; // the shoe ahead of the ankle
-const HEEL = 0.082; // and behind it
+export const THIGH = 0.306;
+export const SHIN = 0.306;
+export const ANKLE = 0.061; // the ankle over the sole
+export const TOE = 0.19; // the shoe ahead of the ankle
+/** The ball of the foot ahead of the ankle, where the toes bend (the toe joint: build/shoes.ts). */
+export const BALL = 0.114;
+export const HEEL = 0.082; // and behind it
 const KNEE_CAP = 0.04;
 /** The hip joint over the ground, standing. */
 export const HIP_H = THIGH + SHIN + ANKLE;
@@ -42,7 +44,8 @@ export const HIP_H = THIGH + SHIN + ANKLE;
  *  thigh's spread out to the side. */
 function legReach(t: number, k: number, f: number, ab = 0): number {
   const ankle = (THIGH * Math.cos(t) + SHIN * Math.cos(t + k)) * Math.cos(ab);
-  const toe = ANKLE * Math.cos(f) + TOE * Math.sin(f);
+  // (up on its toes it stands on the ball: the toes bend flat — `body`)
+  const toe = ANKLE * Math.cos(f) + BALL * Math.sin(f);
   const heel = ANKLE * Math.cos(f) - HEEL * Math.sin(f);
   const knee = (THIGH * Math.cos(t) + KNEE_CAP) * Math.cos(ab);
   return Math.max(ankle + Math.max(toe, heel), knee);
@@ -50,13 +53,17 @@ function legReach(t: number, k: number, f: number, ab = 0): number {
 
 // ── channels and keys ───────────────────────────────────────────────────────
 // t/k/f thigh, knee, foot pitch · a thigh out to the side · s/e/o shoulder (fore/aft),
-// elbow, shoulder out · w wrist · hx/hy/hz the hips · sx/sy/sz the spine · nx/ny the
+// elbow, shoulder out · w wrist · hx/hy/hz the hips · sx/sy/sz the spine (its twist and side
+// bend shared with the chest) · cx/cy/cz the chest's own · nx/ny the
 // neck · dx/dy/dz the head · x a sway to the side · up the hips up (verbs; cycles plant)
 // · air the hips off the ground (a run's flight)
-type Ch = Record<string, number>;
-interface Key {
+export type Ch = Record<string, number>;
+export interface Key {
   at: number;
   c: Ch;
+  /** (plan 58 G.F) eased in and out of this key, 0..1: 1 a hold (it arrives and leaves at rest —
+   *  the top of a jump, a slide), 0 moved through (the neighbours' slope) */
+  ease?: number;
 }
 const PAIRS: [string, string][] = [
   ["tL", "tR"],
@@ -71,7 +78,7 @@ const PAIRS: [string, string][] = [
 const SIDEWAYS = ["hy", "hz", "sy", "sz", "ny", "dy", "dz", "x"];
 
 /** The same pose on the other foot. */
-function mirror(c: Ch): Ch {
+export function mirror(c: Ch): Ch {
   const m: Ch = { ...c };
   for (const [l, r] of PAIRS) {
     if (l in c || r in c) {
@@ -84,14 +91,14 @@ function mirror(c: Ch): Ch {
 }
 
 /** A whole cycle from its first step (keys in [0, 0.5)): the second is the first mirrored. */
-function cycle(half: Key[]): Key[] {
+export function cycle(half: Key[]): Key[] {
   return [...half, ...half.map((k) => ({ at: k.at + 0.5, c: mirror(k.c) }))];
 }
 
 /** The channels at `t` along keys: Hermite between keys with slopes from the neighbours (so
  *  it moves through each key rather than stopping on it); `loop`: the keys wrap at 1, else a
  *  verb that eases out of its first key and into its last. */
-function sample(keys: Key[], t: number, loop: boolean): Ch {
+export function sample(keys: Key[], t: number, loop: boolean): Ch {
   const n = keys.length;
   let x = loop ? ((t % 1) + 1) % 1 : Math.max(keys[0].at, Math.min(keys[n - 1].at, t));
   let i = n - 1;
@@ -133,18 +140,18 @@ function sample(keys: Key[], t: number, loop: boolean): Ch {
     const p2 = k2.k.c[c] ?? 0;
     const p0 = k0.k.c[c] ?? p1;
     const p3 = k3.k.c[c] ?? p2;
-    const m1 = !loop && i === 0 ? 0 : (p2 - p0) / (t2 - t0);
-    const m2 = !loop && i + 1 === n - 1 ? 0 : (p3 - p1) / (t3 - t1);
+    const m1 = !loop && i === 0 ? 0 : ((p2 - p0) / (t2 - t0)) * (1 - (k1.k.ease ?? 0));
+    const m2 = !loop && i + 1 === n - 1 ? 0 : ((p3 - p1) / (t3 - t1)) * (1 - (k2.k.ease ?? 0));
     out[c] = h00 * p1 + h10 * d * m1 + h01 * p2 + h11 * d * m2;
   }
   return out;
 }
 
-const v = (c: Ch, n: string, d = 0) => c[n] ?? d;
+export const v = (c: Ch, n: string, d = 0) => c[n] ?? d;
 
 /** The pose for a set of channels; the hips planted on the lowest foot unless `up` is given
  *  (then the hips are that far up), plus any `air`. */
-function body(c: Ch): Moved {
+export function body(c: Ch): Moved {
   const p: Pose = {};
   for (const S of ["L", "R"] as const) {
     const out = S === "L" ? 1 : -1;
@@ -160,12 +167,49 @@ function body(c: Ch): Moved {
     p[`elbow${S}`] = [v(c, `e${S}`, -0.16), 0, 0];
     p[`wrist${S}`] = [v(c, `w${S}`), 0, -out * 0.05];
   }
+  // the hands' shapes (`h`: −1 open, 0 relaxed, 1 a fist; the rest's relaxed when it's not given)
+  for (const [S, side] of [
+    ["L", 1],
+    ["R", -1],
+  ] as const)
+    if (`h${S}` in c) Object.assign(p, handPose(side, handAt(v(c, `h${S}`))));
   p.hips = [v(c, "hx"), v(c, "hy"), v(c, "hz")];
-  p.spine = [v(c, "sx"), v(c, "sy"), v(c, "sz")];
+  // (the trunk's twist and its bend to the side shared by the spine and the chest: it curves; the
+  // chest's own `c…` on top)
+  p.spine = [v(c, "sx"), v(c, "sy") * 0.5, v(c, "sz") * 0.5];
+  p.chest = [v(c, "cx"), v(c, "sy") * 0.5 + v(c, "cy"), v(c, "sz") * 0.5 + v(c, "cz")];
   p.neck = [v(c, "nx"), v(c, "ny"), 0];
   p.head = [v(c, "dx"), v(c, "dy"), v(c, "dz")];
   const up = "up" in c ? c.up : plantUp(c);
+  // the toes: their own (`g`), else bent just as far as the ground presses them — the toes' tip kept
+  // out of the floor while the ball's low, let go as it rises (a push-off rolls through the ball)
+  for (const S of ["L", "R"] as const) {
+    if (`g${S}` in c) {
+      p[`toe${S}`] = [v(c, `g${S}`), 0, 0];
+      continue;
+    }
+    const t = v(c, `t${S}`);
+    const k = v(c, `k${S}`);
+    const f = v(c, `f${S}`) + v(c, "hx");
+    const ankle =
+      (THIGH * Math.cos(t + v(c, "hx")) + SHIN * Math.cos(t + v(c, "hx") + k)) * Math.cos(v(c, `a${S}`, 0.03));
+    const ball = HIP_H + up + v(c, "air") - ankle - (ANKLE * Math.cos(f) + BALL * Math.sin(f));
+    // (how far past flat the toes would go into the ground; eased in from nothing)
+    const into = f - Math.asin(clamp01(ball / (TOE - BALL)));
+    const bend = Math.min(0.9, into * smoother(clamp01(into / 0.12)));
+    p[`toe${S}`] = [-bend, 0, 0];
+  }
   return { pose: p, lift: [v(c, "x"), up + v(c, "air"), v(c, "fw")] };
+}
+
+/** A hand's shape from −1 (open) through 0 (relaxed) to 1 (a fist). */
+export function handAt(h: number): HandShape {
+  const [a, b, u] = h >= 0 ? [HANDS.relaxed, HANDS.fist, Math.min(1, h)] : [HANDS.relaxed, HANDS.open, Math.min(1, -h)];
+  return {
+    fingers: a.fingers + (b.fingers - a.fingers) * u,
+    index: a.index + (b.index - a.index) * u,
+    thumb: a.thumb + (b.thumb - a.thumb) * u,
+  };
 }
 
 /** The hips' height that puts the lowest foot on the ground. */
@@ -183,7 +227,7 @@ function plantUp(c: Ch): number {
 // round it, calmed, and read back.
 const LIFT_N = 96;
 const lifts = new Map<string, Float32Array>();
-function cycleLift(key: string, at: (phase: number) => Ch, phase: number, calm = 0.6): number {
+export function cycleLift(key: string, at: (phase: number) => Ch, phase: number, calm = 0.6): number {
   let t = lifts.get(key);
   if (!t) {
     let a = new Float32Array(LIFT_N);
@@ -215,8 +259,8 @@ function cycleLift(key: string, at: (phase: number) => Ch, phase: number, calm =
 }
 
 /** The head kept level and looking ahead over whatever the trunk does (`look` down > 0). */
-function steady(c: Ch, look = 0): Ch {
-  const lean = v(c, "sx") + v(c, "hx");
+export function steady(c: Ch, look = 0): Ch {
+  const lean = v(c, "sx") + v(c, "hx") + v(c, "cx");
   c.nx = v(c, "nx") - lean * 0.45;
   c.dx = v(c, "dx") - lean * 0.4 + look;
   c.dy = v(c, "dy") - (v(c, "sy") + v(c, "hy")) * 0.75;
@@ -471,7 +515,13 @@ export function landPose(impact: number): Moved {
  *  breath (0..1); the rest of the body as it goes. */
 export function torchPose(breath = 0): Pose {
   const b = 0.015 * Math.sin(TAU * breath);
-  return { shoulderL: [-0.42 + b, 0, 0.12], elbowL: [-1.05, 0, 0], wristL: [0.08, 0, -0.05] };
+  // (the torch gripped in the left hand)
+  return {
+    shoulderL: [-0.42 + b, 0, 0.12],
+    elbowL: [-1.05, 0, 0],
+    wristL: [0.08, 0, -0.05],
+    ...handPose(1, HANDS.grip),
+  };
 }
 
 /** Reloading a gun, not aiming (docs/plan/32-the-arms.md): both forearms up before the chest, the
@@ -485,6 +535,8 @@ export function reloadPose(breath = 0): Pose {
     shoulderL: [-0.66 + b, 0, 0.3],
     elbowL: [-1.6, 0, 0],
     wristL: [0.1, 0, -0.25],
+    ...handPose(1, HANDS.grip),
+    ...handPose(-1, HANDS.grip),
   };
 }
 
@@ -525,6 +577,9 @@ export function aimPose(pitch = 0, yaw = 0, gun = false, breath = 0): Moved {
       eL: -0.45,
     });
   else Object.assign(c, { sR: -0.36, eR: -1.15, oR: 0.1, wR: 0.22 });
+  // (the torch, or the gun's fore end, gripped in the left; the gun's grip in the right)
+  c.hL = 0.65;
+  c.hR = gun ? 0.75 : 0;
   steady(c, -up * 0.25);
   c.dy += yaw * 0.25;
   c.ny = yaw * 0.25;
@@ -532,7 +587,7 @@ export function aimPose(pitch = 0, yaw = 0, gun = false, breath = 0): Moved {
 }
 
 // ── the verbs: keys along t (0..1); `up` is the hips over where the feet are (verbRoot) ──
-export type Verb = "vault" | "mantle" | "roll" | "slide";
+export type Verb = "vault" | "mantle" | "roll" | "slide" | "adash";
 
 // over something hip-high: a step onto it and off, the arms out wide for balance (our people's
 // arms are too short to put a hand on the top while the feet are on it)
@@ -954,9 +1009,34 @@ const SLIDE: Key[] = [
   },
 ];
 
-const VERBS: Record<Verb, Key[]> = { vault: VAULT, mantle: MANTLE, roll: ROLL, slide: SLIDE };
+// The air dash (docs/plan/56-the-controls.md B): flung ahead level — leaning into it, the arms
+// swept back, the legs trailing bent; easing out of it at the end
+const DASHING: Ch = {
+  sx: 0.55,
+  up: -0.05,
+  sL: 0.85,
+  sR: 0.85,
+  eL: -0.35,
+  eR: -0.35,
+  oL: 0.25,
+  oR: 0.25,
+  tL: 0.3,
+  kL: 0.8,
+  fL: 0.3,
+  tR: -0.25,
+  kR: 1.1,
+  fR: 0.45,
+};
+const ADASH: Key[] = [
+  { at: 0, c: { ...DASHING, sx: 0.3, sL: 0.3, sR: 0.3 } },
+  { at: 0.25, c: DASHING },
+  { at: 0.8, c: DASHING },
+  { at: 1, c: { sx: 0.2, sL: 0.3, sR: 0.3, eL: -0.4, eR: -0.4, tL: -0.2, kL: 0.6, tR: 0.15, kR: 0.5 } },
+];
+
+const VERBS: Record<Verb, Key[]> = { vault: VAULT, mantle: MANTLE, roll: ROLL, slide: SLIDE, adash: ADASH };
 /** How long each verb takes, s. */
-export const VERB_LEN: Record<Verb, number> = { vault: 0.55, mantle: 0.75, roll: 0.42, slide: 0.9 };
+export const VERB_LEN: Record<Verb, number> = { vault: 0.55, mantle: 0.75, roll: 0.42, slide: 0.9, adash: 0.18 };
 
 /** The body at `t` (0..1) through a verb. The roll turns once about the hips. */
 export function verbPose(verb: Verb, t: number, reduced = false): Moved {
@@ -981,6 +1061,343 @@ export function verbPose(verb: Verb, t: number, reduced = false): Moved {
  *  `up` is the hips over these feet. */
 export function verbRoot(verb: Verb, t: number, h = 0.6): { ahead: number; up: number } {
   return verbPath(verb, t, h);
+}
+
+// ── Flowmotion (docs/plan/56-the-controls.md F, shared/move/flow.ts): each move its own body ──
+// `t` the seconds it's been going (a climb: how far through it, 0..1); `side` where the wall or
+// the pole is (1 their left, -1 their right); `phase` a run cycle's (along a wall)
+export type FlowPoseKind = "wallrun" | "wallside" | "swing" | "grind" | "hang" | "climb";
+export interface FlowPoseIn {
+  kind: FlowPoseKind;
+  t: number;
+  side?: number;
+  phase?: number;
+  /** how fast it goes, tiles / s: a run's cycle by it (when no `phase`) */
+  speed?: number;
+}
+
+/** How far up a wall run's sprint pitches the body back from the wall: its feet on the face,
+ *  the body out from it, KH's way (rad). */
+const UP_WALL = 0.7;
+/** How far a run along a wall rolls the body off it, the feet on its face (rad). */
+const ON_WALL = 0.8;
+
+// a hang from a top: both hands over the head on its edge, the body long under them, the legs
+// loose; a little swing in from the catch, settling
+const HANGING: Ch = {
+  sL: -2.75,
+  sR: -2.75,
+  eL: -0.35,
+  eR: -0.35,
+  oL: 0.32,
+  oR: 0.32,
+  wL: -0.5,
+  wR: -0.5,
+  tL: -0.12,
+  kL: 0.35,
+  fL: 0.55,
+  tR: 0.08,
+  kR: 0.2,
+  fR: 0.5,
+  sx: -0.08,
+  nx: -0.2,
+  dx: -0.15,
+};
+// up from it onto the top: pulled up (elbows in, a knee coming up), pushed over (the arms
+// straight down on the top, the hips over), a foot planted on it, and up
+const CLIMB: Key[] = [
+  { at: 0, c: HANGING },
+  {
+    at: 0.3,
+    c: {
+      sL: -2.0,
+      sR: -2.0,
+      eL: -2.1,
+      eR: -2.1,
+      oL: 0.4,
+      oR: 0.4,
+      tL: -1.1,
+      kL: 1.9,
+      fL: 0.4,
+      tR: -0.2,
+      kR: 0.6,
+      fR: 0.6,
+      sx: 0.25,
+      nx: -0.25,
+      dx: -0.1,
+    },
+  },
+  {
+    at: 0.55,
+    c: {
+      sL: -0.35,
+      sR: -0.35,
+      eL: -0.25,
+      eR: -0.25,
+      oL: 0.25,
+      oR: 0.25,
+      wL: 1.1,
+      wR: 1.1,
+      tL: -1.7,
+      kL: 2.35,
+      fL: 0.4,
+      tR: -0.6,
+      kR: 1.7,
+      fR: 0.7,
+      sx: 0.85,
+      nx: -0.4,
+      dx: -0.3,
+    },
+  },
+  {
+    at: 0.8,
+    c: {
+      sL: 0.2,
+      sR: 0.2,
+      eL: -0.9,
+      eR: -0.9,
+      tL: -1.15,
+      kL: 1.75,
+      fL: 0,
+      tR: 0.1,
+      kR: 1.6,
+      fR: 0.9,
+      sx: 0.5,
+    },
+  },
+  { at: 1, c: { tL: -0.1, kL: 0.2, fL: 0, tR: -0.1, kR: 0.2, fR: 0, sx: 0.1, sL: 0.1, sR: 0.1 } },
+];
+const smoothstep = (x: number) => {
+  const u = clamp01(x);
+  return u * u * (3 - 2 * u);
+};
+
+/** A Flowmotion move's body (the hips' lift in it). */
+export function flowPose(f: FlowPoseIn): Moved {
+  const side = f.side ?? 1;
+  const phase = f.phase ?? (f.t * (f.speed ?? 0)) / runStride(1);
+  switch (f.kind) {
+    case "wallrun": {
+      // a sprint up the wall's face: the body pitched back off it, the look up the wall
+      const c = runChannels(phase, 1);
+      c.hx = -UP_WALL;
+      // (the chest leant back in to the wall over the hips, the knees driven high, the look up it)
+      c.sx = 0.5;
+      c.nx = -0.1;
+      c.dx = -0.25;
+      for (const S of ["L", "R"]) c[`t${S}`] = (c[`t${S}`] ?? 0) - 0.25;
+      // (the feet on the face: the hips back from it and down, so the soles meet it)
+      c.fw = -HIP_H * Math.sin(UP_WALL) + 0.3;
+      c.up = -HIP_H * (1 - Math.cos(UP_WALL)) + 0.1;
+      c.air = 0;
+      return body(c);
+    }
+    case "wallside": {
+      // a sprint along it, rolled off it (the feet on the face), the arm off the wall out wide,
+      // the one by it swept back low
+      const c = runChannels(phase, 1);
+      const near = side > 0 ? "L" : "R";
+      const far = side > 0 ? "R" : "L";
+      c.hz = side * ON_WALL;
+      c.sz = -side * 0.12;
+      c[`o${far}`] = 1.15;
+      c[`s${far}`] = (c[`s${far}`] ?? 0) * 0.5 - 0.2;
+      c[`e${far}`] = -0.5;
+      c[`o${near}`] = 0.35;
+      c[`s${near}`] = 0.7;
+      c[`e${near}`] = -0.4;
+      // the head kept nearer level, looking along
+      c.dz = -side * ON_WALL * 0.55;
+      c.nx = -0.05;
+      c.x = -side * (HIP_H * Math.sin(ON_WALL) - 0.25);
+      c.up = -HIP_H * (1 - Math.cos(ON_WALL)) + 0.05;
+      c.air = 0;
+      return body(c);
+    }
+    case "swing": {
+      // round a pole on one hand: that arm up to it, the body flung out level from it, legs
+      // together and long, the free arm out; a scissor of the legs as it goes round
+      const near = side > 0 ? "L" : "R";
+      const far = side > 0 ? "R" : "L";
+      const kick = Math.sin(f.t * 11) * 0.18;
+      const c: Ch = {
+        hz: -side * 1.15,
+        hx: 0.15,
+        sx: -0.1,
+        sz: -side * 0.15,
+        [`s${near}`]: -0.15,
+        [`o${near}`]: 2.55,
+        [`e${near}`]: -0.15,
+        [`w${near}`]: -0.3,
+        [`s${far}`]: 0.35,
+        [`o${far}`]: 1.0,
+        [`e${far}`]: -0.45,
+        tL: 0.12 + kick,
+        kL: 0.35,
+        fL: 0.7,
+        tR: 0.12 - kick,
+        kR: 0.25,
+        fR: 0.7,
+        dz: side * 0.6,
+        dy: 0,
+        nx: -0.1,
+        // (the hand at the pole's height, the body out from it: the head clear of the pole)
+        up: 0.72 + Math.sin(f.t * 9) * 0.05,
+        x: -side * 0.45,
+      };
+      return body(c);
+    }
+    case "grind": {
+      // side-on along the rail, the feet apart on it, knees bent, the arms out for balance, the
+      // chest and look turned back to the way it goes; swaying to keep on
+      const sway = Math.sin(f.t * 5.2);
+      // (landing on it: the knees give, then come back up)
+      const give = f.t < 0.06 ? f.t / 0.06 : 1 - smoothstep((f.t - 0.06) / 0.3);
+      const c: Ch = {
+        hy: -1.25,
+        sy: 0.55,
+        hx: 0.12,
+        sx: 0.32,
+        sz: sway * 0.08,
+        hz: sway * 0.05,
+        tL: -0.75,
+        kL: 1.3,
+        fL: 0,
+        aL: 0.38,
+        tR: -0.75,
+        kR: 1.3,
+        fR: 0,
+        aR: 0.38,
+        sL: -0.2 + sway * 0.15,
+        sR: -0.1 - sway * 0.15,
+        oL: 1.25 + sway * 0.2,
+        oR: 1.25 - sway * 0.2,
+        eL: -0.3,
+        eR: -0.3,
+        wL: 0.3,
+        wR: 0.3,
+        dy: 0.4,
+        x: sway * 0.03,
+      };
+      c.kL += 0.55 * give;
+      c.kR += 0.55 * give;
+      c.tL -= 0.3 * give;
+      c.tR -= 0.3 * give;
+      c.sx += 0.18 * give;
+      return body(steady(c));
+    }
+    case "hang": {
+      // the catch's swing, settling
+      const c: Ch = { ...HANGING };
+      const swing = Math.sin(f.t * 7) * Math.exp(-f.t * 3) * 0.22;
+      c.hx = swing;
+      c.tL = (c.tL ?? 0) - swing * 0.8;
+      c.tR = (c.tR ?? 0) - swing * 0.6;
+      // (the hands on the top's edge over the hips)
+      c.up = -0.42;
+      c.fw = -0.08;
+      return body(c);
+    }
+    case "climb": {
+      const u = clamp01(f.t);
+      const c = sample(CLIMB, u, false);
+      // (from the hang's hold to standing, as the core lifts the body up its first 65 %)
+      c.up = -0.42 * (1 - smoothstep(u / 0.55));
+      c.fw = -0.08 * (1 - smoothstep(u / 0.65));
+      return body(c);
+    }
+  }
+}
+
+// the flow jump (off a rail, a pole, a wall run along): KH's corkscrew — up off it reaching, tucked
+// tight through a turn round, opened out to land; `u` 0..1 through it
+const SPIN: Key[] = [
+  {
+    at: 0,
+    c: {
+      sL: -2.3,
+      sR: -2.0,
+      eL: -0.3,
+      eR: -0.4,
+      oL: 0.3,
+      oR: 0.3,
+      tL: 0.1,
+      kL: 0.3,
+      fL: 0.6,
+      tR: -0.3,
+      kR: 0.9,
+      fR: 0.4,
+      sx: -0.1,
+    },
+  },
+  {
+    at: 0.28,
+    c: {
+      sL: -0.9,
+      sR: -0.9,
+      eL: -2.0,
+      eR: -2.0,
+      oL: -0.1,
+      oR: -0.1,
+      tL: -1.35,
+      kL: 2.1,
+      fL: 0.5,
+      tR: -1.2,
+      kR: 2.2,
+      fR: 0.5,
+      sx: 0.4,
+      dx: 0.2,
+    },
+  },
+  {
+    at: 0.68,
+    c: {
+      sL: -0.8,
+      sR: -0.8,
+      eL: -2.0,
+      eR: -2.0,
+      oL: -0.1,
+      oR: -0.1,
+      tL: -1.3,
+      kL: 2.1,
+      fL: 0.5,
+      tR: -1.25,
+      kR: 2.15,
+      fR: 0.5,
+      sx: 0.4,
+      dx: 0.2,
+    },
+  },
+  {
+    at: 1,
+    c: {
+      sL: 0.1,
+      sR: 0.1,
+      eL: -0.5,
+      eR: -0.5,
+      oL: 0.95,
+      oR: 0.95,
+      tL: -0.35,
+      kL: 0.5,
+      fL: 0.2,
+      tR: -0.15,
+      kR: 0.4,
+      fR: 0.2,
+      sx: 0.12,
+    },
+  },
+];
+/** Through a flow jump's spin (`u` 0..1): the body, once round about its own up. */
+export function spinPose(u: number, reduced = false): Moved {
+  const c = sample(SPIN, clamp01(u), false);
+  // (in the air: the hips where they are, the tuck pulling the feet up to them)
+  c.up = 0.12 * Math.sin(Math.PI * clamp01(u));
+  const out = body(c);
+  if (!reduced) {
+    const h = out.pose.hips ?? [0, 0, 0];
+    out.pose.hips = [h[0], h[1] + TAU * smoother((u - 0.06) / 0.78), h[2]];
+  }
+  return out;
 }
 
 // ── the shadowed (docs/plan/30-the-dark.md D5): the upper body over their walk ──

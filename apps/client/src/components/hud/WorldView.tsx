@@ -17,12 +17,12 @@ const OWN_PANELS = new Set(["settings", "avatar", "pets"]);
 import { ActionMenu, ActionQueueBar, ArrivalChip, FocusChip } from "./Actions";
 import { WorldCtx } from "./ctx";
 import { Dock } from "./Dock";
-import { LiftPanel } from "./LiftPanel";
 import {
   CableChip,
   ConnectionOverlay,
   HeldChip,
   Knocks,
+  LockChip,
   LookHint,
   Minimap,
   Prompt,
@@ -34,6 +34,9 @@ import { PersonCard } from "./PersonCard";
 import { Rituals } from "./Rituals";
 import { ScreenTray } from "./Screens";
 import { TopBar } from "./TopBar";
+
+// (the lift's panel, its pad's floors among it: only in an elevator's car — loaded then)
+const LiftPanel = dynamic(() => import("./LiftPanel").then((m) => m.LiftPanel), { ssr: false });
 
 // God mode's HUD (docs/plan/53-the-god-mode.md): an admin's, loaded the first time they go in
 const GodHud = dynamic(() => import("./god/GodHud").then((m) => m.GodHud), { ssr: false });
@@ -148,6 +151,7 @@ export function WorldView({ to }: { to?: string | null }) {
           {!building && <HeldChip />}
           {!building && <CableChip />}
           {!building && <LookHint />}
+          {!building && <LockChip />}
           {!building && <FocusChip />}
           {!building && <ArrivalChip />}
           {!building && <ActionQueueBar />}

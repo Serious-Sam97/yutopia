@@ -1,9 +1,12 @@
 import type { dirFromDelta, Grid, JumpKind, Point } from "@yutopia/shared";
 import {
   type Body,
+  type FlowLook,
   type Footing,
+  flowCode,
+  flowLook,
   type Gait,
-  MOVE,
+  KH_MOVE,
   MoveClock,
   type MoveEnv,
   type MoveInput,
@@ -11,6 +14,7 @@ import {
   MV_WINDED,
   newBody,
   packMv,
+  SPIN_LEN,
   STEP_DT,
   type StepEvents,
   speedOf,
@@ -22,9 +26,11 @@ import {
 import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/vitals";
 import type { WorldController } from "../controller";
 import { hud } from "../store";
-import { actionOf } from "./bindings";
-import { afterFirstStep, MoveControls, type Press } from "./controls";
+import { type Action, actionOf } from "./bindings";
+import { afterFirstStep, camKeys, MoveControls, type Press } from "./controls";
+import { PadState } from "./pad";
 import { FAST_X, FLY_ACROSS, FLY_RISE, FLY_SPRINT, FLY_TOP, P_CLIP, P_FAST, P_FLY } from "./powers";
+import { Targets } from "./targets";
 
 // My body in the world (docs/plan/29-the-move.md, phase 2): the movement core
 // run on its fixed step under the keys, the pad or a click-to-walk path, and
@@ -70,10 +76,18 @@ export interface WalkOut {
   manual: boolean;
   /** a jump left the ground this frame (which), a landing (how hard) */
   jumped: JumpKind | null;
+  /** …that jump was in the air (a second one), or the verb an air dash (sent as `air`) */
+  air: boolean;
   landed: number | null;
   /** a verb started this frame (and the top it goes over), and the one under way (how far in) */
   started: { kind: VerbKind; h: number } | null;
   verb: { kind: VerbKind; t: number } | null;
+  /** a Flowmotion move under way, or a flow jump's spin (docs/plan/56-the-controls.md F); round a
+   *  pole, the pole (the camera holds on it) */
+  flow: FlowLook | null;
+  /** …as it goes on the wire (Player.flow) */
+  flowCode: number;
+  pole: { x: number; y: number; r: number } | null;
   crouch: boolean;
   aim: boolean;
   presses: Set<Press>;
@@ -82,18 +96,19 @@ export interface WalkOut {
   yawByte: number;
 }
 
-const SPEC: MoveSpec = MOVE;
+// the body after Kingdom Hearts 3 (docs/plan/56-the-controls.md B: signed off in /dev/move)
+const SPEC: MoveSpec = KH_MOVE;
 const AIM_BLADE = 0.45; // (shared beam.ts AIM_BLADE: a copy — this chunk doesn't carry beam.ts)
 
 // an admin's powers (docs/plan/48-the-admin.md): fast, through walls, flying — the server holds
 // them and takes the moves they allow; here they're only how I move
 const FAST_SPEC: MoveSpec = {
-  ...MOVE,
-  walk: MOVE.walk * FAST_X,
-  jog: MOVE.jog * FAST_X,
-  sprint: MOVE.sprint * FAST_X,
-  crouch: MOVE.crouch * FAST_X,
-  aim: MOVE.aim * FAST_X,
+  ...KH_MOVE,
+  walk: KH_MOVE.walk * FAST_X,
+  jog: KH_MOVE.jog * FAST_X,
+  sprint: KH_MOVE.sprint * FAST_X,
+  crouch: KH_MOVE.crouch * FAST_X,
+  aim: KH_MOVE.aim * FAST_X,
 };
 /** The grid with nothing in the way (through walls): only the ground's height is kept. */
 function noWalls(grid: Grid): Grid {
@@ -238,8 +253,9 @@ export class Walker {
   private darkLoading = false;
   private darkIdle = 0; // when the dark's chunk comes anyway, indoors too (performance.now; 0: not yet set)
   // the right button: aiming (the world says where it may: WalkCtx.canAim)
-  private onDown = (e: PointerEvent) => e.button === 2 && this.controls.down("Mouse2");
-  private onUp = (e: PointerEvent) => e.button === 2 && this.controls.up("Mouse2");
+  // (the right button aims; the wheel's locks on: docs/plan/56-the-controls.md)
+  private onDown = (e: PointerEvent) => (e.button === 2 || e.button === 1) && this.controls.down(`Mouse${e.button}`);
+  private onUp = (e: PointerEvent) => (e.button === 2 || e.button === 1) && this.controls.up(`Mouse${e.button}`);
   // the inventory's key (I): wherever I am — the dark's chunk loaded for it if it isn't yet
   private onKey = (e: KeyboardEvent) => {
     const el = e.target as HTMLElement | null;
@@ -252,12 +268,14 @@ export class Walker {
     )
       return;
     const action = actionOf(this.controls.b, e.code);
-    if (action !== "inventory" && action !== "pets") return;
+    if (action !== "inventory" && action !== "pets" && action !== "emotes") return;
     // (only on foot: not riding, driving, at an arcade — the walker steps only then)
     if (!this.stepping) return;
     e.preventDefault();
     // the pets' wheel, held (it chooses on the key's release: PetPanel's wheel)
     if (action === "pets") return hud.set({ panel: { kind: "pets", objectId: "wheel" } });
+    // the emotes' wheel, held (EmoteWheel: on the key's release)
+    if (action === "emotes") return hud.set({ panel: { kind: "emotes" } });
     this.inventory();
   };
   // flying (an admin's power): a double-tap of Space lands or takes off; C or Ctrl held sinks
@@ -275,7 +293,50 @@ export class Walker {
       } else this.spaceAt = now;
     }
   };
+  /** What's in front of me I could act on (docs/plan/56-the-controls.md C). */
+  readonly targets: Targets | null = null;
+  /** An action held on the pad now (Use held: its menu). */
+  padHeld(a: Action): boolean {
+    const i = this.controls.b.pad[a];
+    return i !== undefined && this.controls.pad.held(i);
+  }
+  // a menu open: the pad read on its own (the walker's is off it): up and down (the stick, the
+  // d-pad) move the choice, A or Use does it, B closes it
+  private menuPadState = new PadState();
+  private menuStick = 0;
+  private menuPadAt = 0;
+  menuPad(): { step: number; pick: boolean; back: boolean } {
+    const p = this.menuPadState;
+    p.poll();
+    // (just opened — by Use still held: what's down now isn't a press for it)
+    const now = performance.now();
+    const fresh = now - this.menuPadAt > 150;
+    this.menuPadAt = now;
+    if (fresh) {
+      p.poll();
+      this.menuStick = p.left.y < -0.6 ? -1 : p.left.y > 0.6 ? 1 : 0;
+      return { step: 0, pick: false, back: false };
+    }
+    const y = p.left.y;
+    const stick = y < -0.6 ? -1 : y > 0.6 ? 1 : 0;
+    const step =
+      stick && stick !== this.menuStick
+        ? stick
+        : p.pressed(12) || p.pressed(14)
+          ? -1
+          : p.pressed(13) || p.pressed(15)
+            ? 1
+            : 0;
+    this.menuStick = stick;
+    const use = this.controls.b.pad.use;
+    return { step, pick: p.pressed(0) || (use !== undefined && p.pressed(use)), back: p.pressed(1) };
+  }
+  /** The camera's keys held (the arrows: docs/plan/56-the-controls.md phase 2), -1..1 each. */
+  camKeys(): { x: number; y: number } {
+    return camKeys(this.controls);
+  }
   constructor(readonly ctl?: WorldController) {
+    if (ctl) (this as { targets: Targets | null }).targets = new Targets(ctl.focusHost);
     window.addEventListener("pointerdown", this.onDown);
     window.addEventListener("pointerup", this.onUp);
     if (ctl) {
@@ -355,6 +416,8 @@ export class Walker {
   private body: Body = newBody(0, 0);
   private prev: Body = newBody(0, 0);
   private clock = new MoveClock();
+  // s into a flow jump's spin, or none
+  private spinT: number | null = null;
   private last = { x: Number.NaN, y: Number.NaN, z: Number.NaN };
   private wall = 0; // the clock when the last frame was (ms)
 
@@ -455,8 +518,11 @@ export class Walker {
     // (a private space I may not go into: its edge stops me like a wall — nobody's put back)
     const shut = clip ? null : this.shutBy(uid);
     const blocked = clip ? undefined : shut ? (x: number, y: number) => !!c.blocked?.(x, y) || shut(x, y) : c.blocked;
+    // (Flowmotion out on the Grounds only: indoors a lamp post outside would be in reach through
+    // the wall — and not through walls, nor flying)
+    const flow = phys && !clip && c.grid.onLand(this.body.x, this.body.y) ? phys.flow : undefined;
     const env: MoveEnv = phys
-      ? { grid: phys.collider, mover: phys.mover, footing: c.footing, blocked }
+      ? { grid: phys.collider, mover: phys.mover, footing: c.footing, blocked, flow }
       : { grid: clip ? noWalls(c.grid) : c.grid, footing: c.footing, blocked };
     const flying = this.flying;
     if (flying) {
@@ -475,6 +541,8 @@ export class Walker {
       events.push(ev);
       const out = c.grid.onLand(this.body.x, this.body.y);
       if (ev.verb === "roll") spendRoll(this.vitals, this.breath, out);
+      // (the crouch press that slid isn't a crouch: out of the slide you're up)
+      if (ev.verb === "slide") this.controls.stand();
       stepVitals(
         this.vitals,
         this.breath,
@@ -515,6 +583,11 @@ export class Walker {
     if (presses.has("aid")) this.dark?.aid();
     this.aiming = move.aim;
     this.dark?.presses(presses, move.aim);
+    // the pad's d-pad → and ←, held: the pets' wheel, the emotes' (they choose on its release)
+    if (this.stepping && !hud.get().panel.kind) {
+      if (presses.has("pets")) hud.set({ panel: { kind: "pets", objectId: "wheel:pad" } });
+      else if (presses.has("emotes")) hud.set({ panel: { kind: "emotes", objectId: "pad" } });
+    }
     const p = this.prev;
     const x = p.x + (b.x - p.x) * alpha;
     const y = p.y + (b.y - p.y) * alpha;
@@ -526,12 +599,35 @@ export class Walker {
     let jumped: JumpKind | null = null;
     let landed: number | null = null;
     let started: WalkOut["started"] = null;
+    let air = false;
     for (const e of events) {
       if (e.jumped) jumped = e.jumped;
+      if (e.airJump) air = true;
+      // (the air dash: a verb on the wire, the body's own `airDash` here)
+      if (e.airDash) {
+        started = { kind: "adash", h: 0 };
+        air = true;
+      }
       if (e.landed !== undefined) landed = Math.max(landed ?? 0, e.landed);
+      // (Flowmotion: kicked off a wall, a flip in the air; a flow jump's spin — both from the air)
+      if (e.flow === "kick") {
+        jumped = "flip";
+        air = true;
+      }
+      if (e.flowEnd === "jump") {
+        this.spinT = 0;
+        air = true;
+      }
       // (a vault's or a mantle's top: a verb lasts longer than a frame, so it's still the body's)
       if (e.verb) started = { kind: e.verb, h: e.verb === "vault" || e.verb === "mantle" ? (b.verb?.h ?? 0) : 0 };
     }
+    if (this.spinT !== null) {
+      this.spinT += dt;
+      if (!b.up || b.flow || b.verb || this.spinT > SPIN_LEN) this.spinT = null;
+    }
+    const f = b.flow;
+    const look: FlowLook | null =
+      this.spinT !== null ? { kind: "spin", t: this.spinT / SPIN_LEN, side: 1, speed: 0 } : flowLook(b, SPEC);
     return {
       x,
       y,
@@ -544,10 +640,18 @@ export class Walker {
       moved,
       manual,
       jumped,
+      air,
       landed,
       presses,
       started,
-      verb: b.verb ? { kind: b.verb.kind, t: verbProgress(b.verb, SPEC) } : null,
+      verb: b.verb
+        ? { kind: b.verb.kind, t: verbProgress(b.verb, SPEC) }
+        : b.airDash && SPEC.airDash
+          ? { kind: "adash", t: 1 - b.airDash / SPEC.airDash.len }
+          : null,
+      flow: look,
+      flowCode: flowCode(look),
+      pole: f?.kind === "swing" ? { x: f.cx, y: f.cy, r: f.r } : null,
       crouch: move.crouch,
       aim: move.aim,
       mv: packMv(b.gait, move.crouch, move.aim) | (this.breath.winded ? MV_WINDED : 0),

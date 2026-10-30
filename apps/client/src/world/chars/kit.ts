@@ -1,6 +1,6 @@
 import type { BufferGeometry, Shape, Vector3 } from "three";
 import type { Params, Seg } from "./params";
-import type { JointName, RestPose } from "./rig";
+import type { JointName, RestPose, SpringName } from "./rig";
 import { extrude, mapVerts, smoothNormals, subdivide } from "./shapes";
 
 // What a person is built into: pieces of geometry, each riding one joint, with
@@ -16,9 +16,12 @@ export interface Part {
   body: boolean;
   /** the face's moving bits, for blink / talk morphs (P3) */
   tag?: string;
-  /** a second bone some vertices follow (a skirt's front rides the thighs): which, and how much */
-  skin?: (x: number, y: number, z: number) => [JointName, number];
+  /** other bones some vertices follow (a skirt's front rides the thighs; a mitten's fingers, index
+   *  and thumb): which, and how much each (up to three; the part's own joint has the rest) */
+  skin?: Skin;
 }
+
+export type Skin = (x: number, y: number, z: number) => [JointName, number] | [JointName, number][];
 
 /** The surface of the head: things are stood on it (hair, eyes, brows). */
 export interface HeadSurface {
@@ -29,6 +32,16 @@ export interface HeadSurface {
   front(x: number, y: number): { p: Vector3; n: Vector3 };
 }
 
+/** A spring worn (plan 58 phase 2d): its joint, where its tip hangs from it (the joint's space), and
+ *  how it swings — its frequency (Hz), damping (0..1, 1 no overshoot) and the most it turns (rad). */
+export interface SpringSpec {
+  joint: SpringName;
+  tip: [number, number, number];
+  hz: number;
+  damp: number;
+  limit: number;
+}
+
 /** Where a right hand goes to reach a part of the body (wrist targets, model space). */
 export type Anchor = "ear" | "mouth" | "chin" | "chest" | "belly";
 
@@ -36,6 +49,10 @@ export class Kit {
   readonly parts: Part[] = [];
   readonly rest = {} as RestPose;
   readonly anchors = {} as Record<Anchor, [number, number, number]>;
+  /** the springs this look wears */
+  readonly springs: SpringSpec[] = [];
+  /** the body's round bits the springs keep out of (a joint, a centre off it, a radius) */
+  readonly collide: { joint: JointName; at: [number, number, number]; r: number }[] = [];
   /** between the eyes, a little inside the head (the head joint's space): where first person looks from */
   eye: [number, number, number] = [0, 0, 0];
   /** the right ear's opening, on the head's side (the head joint's space): where an earbud sits */
@@ -72,12 +89,26 @@ export class Kit {
       ink?: number;
       keepNormals?: boolean;
       tag?: string;
-      skin?: (x: number, y: number, z: number) => [JointName, number];
+      skin?: Skin;
     } = {},
   ) {
     if (o.at) geo.translate(o.at.x, o.at.y, o.at.z);
     if (!o.keepNormals) smoothNormals(geo);
     this.parts.push({ joint, geo, color, ink: o.ink ?? 1, body: true, tag: o.tag, skin: o.skin });
+  }
+
+  /** A spring worn: its joint put at `at` (its parent's space) and swung from there, its tip `tip`
+   *  off it; the parts that hang on it get their weights from the builder. */
+  spring(
+    joint: SpringName,
+    at: [number, number, number],
+    tip: [number, number, number],
+    o: Omit<SpringSpec, "joint" | "tip">,
+  ) {
+    this.rest[joint] = at;
+    const was = this.springs.findIndex((s) => s.joint === joint);
+    if (was >= 0) this.springs.splice(was, 1);
+    this.springs.push({ joint, tip, ...o });
   }
 
   /** A crease — a hem, a seam, a placket's edge — drawn only as a line. */
