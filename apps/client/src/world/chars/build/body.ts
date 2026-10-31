@@ -207,11 +207,9 @@ export class Body {
   }
 
   /** A ring round the trunk at height y (a hem, a waistband), `r` thick, `k` out from the skin. */
-  ring(y: number, k: number, r: number): BufferGeometry {
+  ring(y: number, k: number, r: number, segs = this.k.seg.ring * 2): BufferGeometry {
     const R0 = this.trunk.r(y) * k;
-    return this.squash(
-      lathe(arc(R0 + r * 0.4, y, r, -Math.PI / 2, Math.PI * 1.5, this.k.seg.ring * 2), this.k.seg.radial),
-    );
+    return this.squash(lathe(arc(R0 + r * 0.4, y, r, -Math.PI / 2, Math.PI * 1.5, segs), this.k.seg.radial));
   }
 
   /** A point on a garment over the trunk (`kk` out from the skin) at (x, y), in front (side 1) or behind (−1). */
@@ -292,18 +290,21 @@ export class Body {
   }
 
   /** The bare figure: trunk, neck, arms, hands, legs — less what clothes hide all of. */
-  build(skin: string, hidden: { arms?: boolean; legs?: boolean } = {}) {
+  build(skin: string, hidden: { arms?: boolean; legs?: boolean; trunk?: boolean } = {}) {
     const k = this.k;
     const R = k.seg.radial;
     // the trunk in two: the hips up past the waist, and the chest (it rides
     // the spine) down over it — they overlap, so a bend never opens a gap
+    // (none where a top covers it all, down to the seat: docs/plan/60)
     const T = this.T;
-    const low = this.around(1, 0, 0.56 * T);
-    low.push([this.trunk.r(0.56 * T) * 0.6, 0.6 * T], [0, 0.6 * T]);
-    k.add("hips", this.squash(lathe(low, R)), skin);
-    const high = this.around(0.995, 0.4 * T, T);
-    high.unshift([0, 0.38 * T], [this.trunk.r(0.4 * T) * 0.6, 0.38 * T]);
-    k.add("spine", this.squash(lathe(high, R)).translate(0, -this.spineY, 0), skin);
+    if (!hidden.trunk) {
+      const low = this.around(1, 0, 0.56 * T);
+      low.push([this.trunk.r(0.56 * T) * 0.6, 0.6 * T], [0, 0.6 * T]);
+      k.add("hips", this.squash(lathe(low, R)), skin);
+      const high = this.around(0.995, 0.4 * T, T);
+      high.unshift([0, 0.38 * T], [this.trunk.r(0.4 * T) * 0.6, 0.38 * T]);
+      k.add("spine", this.squash(lathe(high, R)).translate(0, -this.spineY, 0), skin);
+    }
     // neck
     const nl = this.chinY - this.neckBase + 0.32 * this.hh;
     const nr = k.p.neck.r * this.hh;

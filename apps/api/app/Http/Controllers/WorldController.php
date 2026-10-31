@@ -41,6 +41,13 @@ class WorldController extends Controller
             'beard' => ['sometimes', ...$slug],
             // how they walk (plan 58, 4e): calm, bouncy, heavy
             'gait' => ['sometimes', ...$slug],
+            // the wardrobe's second set (docs/plan/60): a layer over the top, each garment's pattern
+            // and its second colour, the shoes' second colour
+            'outer' => ['sometimes', ...$slug], 'outerColor' => ['sometimes', ...$hex],
+            'topPattern' => ['sometimes', ...$slug], 'topColor2' => ['sometimes', ...$hex],
+            'bottomPattern' => ['sometimes', ...$slug], 'bottomColor2' => ['sometimes', ...$hex],
+            'outerPattern' => ['sometimes', ...$slug], 'outerColor2' => ['sometimes', ...$hex],
+            'shoesColor2' => ['sometimes', ...$hex],
         ]);
         $layers['style'] = 'ligne';
         $user = $request->user();

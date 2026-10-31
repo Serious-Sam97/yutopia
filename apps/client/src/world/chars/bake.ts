@@ -130,6 +130,11 @@ export function bake(k: Kit): Baked {
   // rest — model.ts darkens the far leg, finding both hips by the thighs' bones)
   const legSide = new Float32Array(nv);
   const legHip = new Float32Array(nv * 3);
+  // (a pattern on a part, plan 60: which, and its other colour — only made when a part has one)
+  const patterned = k.parts.some((p) => p.pattern);
+  const pat = patterned ? new Float32Array(nv) : null;
+  const col2 = patterned ? new Float32Array(nv * 3) : null;
+  const c2 = new Color();
   const bodyIdx: number[] = [];
   const inkIdx: number[] = [];
   const tags: Record<string, [number, number][]> = {};
@@ -142,6 +147,7 @@ export function bake(k: Kit): Baked {
     const o = at[part.joint];
     const ji = JOINT_INDEX[part.joint];
     c.set(part.color);
+    if (part.pattern) c2.set(part.pattern[1]);
     for (let i = 0; i < P.count; i++) {
       const v = base + i;
       pos[v * 3] = P.getX(i) + o.x;
@@ -153,6 +159,12 @@ export function bake(k: Kit): Baked {
       col[v * 3] = c.r;
       col[v * 3 + 1] = c.g;
       col[v * 3 + 2] = c.b;
+      if (pat && col2 && part.pattern) {
+        pat[v] = part.pattern[0];
+        col2[v * 3] = c2.r;
+        col2[v * 3 + 1] = c2.g;
+        col2[v * 3 + 2] = c2.b;
+      }
       skinI[v * 4] = ji;
       skinW[v * 4] = 1;
       // (a part's own other bones first — a skirt's front riding the thighs, a mitten's fingers — else
@@ -220,6 +232,7 @@ export function bake(k: Kit): Baked {
     inkK: new BufferAttribute(inkK, 1),
     legSide: new BufferAttribute(legSide, 1),
     legHip: new BufferAttribute(legHip, 3),
+    ...(pat && col2 ? { pat: new BufferAttribute(pat, 1), col2: new BufferAttribute(col2, 3) } : {}),
   };
   const make = (idx: number[]) => {
     const g = new BufferGeometry();

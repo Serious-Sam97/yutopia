@@ -2,23 +2,78 @@ import type { AvatarLayers } from "@yutopia/shared";
 import { type BufferGeometry, Shape, Vector3 } from "three";
 import type { Kit } from "../kit";
 import type { JointName } from "../rig";
-import { arc, extrude, lathe, mapVerts, type Prof, spline2, subdivide, sweepTube } from "../shapes";
+import { arc, ellipsoid, extrude, lathe, mapVerts, type Prof, spline2, subdivide, sweepTube } from "../shapes";
 import { type Body, creaseRing, LIMBS, type LimbShape, Lookup, lerp, limbFold, shapeOver, shell, smooth } from "./body";
-import { shade } from "./tops";
+import { shaftTop } from "./shoes";
+import { PATTERNS, shade } from "./tops";
 
-// Bottoms — every AvatarLayers bottom: jeans, trousers, cargo, joggers,
-// shorts, skirt, longskirt (and a dress's skirt, in the top's colour). The
-// seat is a shell over the hips; each trouser leg two closed shells (thigh,
-// shin) that bend at the knee; skirts a thick A-line shell on the hips.
+// Bottoms — every AvatarLayers bottom, a recipe each (`BOTTOMS`; a dress's skirt too, in the top's
+// colour). The seat is a shell over the hips; each trouser leg two closed shells (thigh, shin) that
+// bend at the knee; skirts a thick A-line shell on the hips.
 
-const SKIRTS = new Set(["skirt", "longskirt"]);
+export interface Bottom {
+  /** a skirt: its length × the leg, its flare × the hips; pleated in this many */
+  skirt?: number;
+  flare?: number;
+  pleats?: number;
+  /** shorts: their length × the thigh */
+  shorts?: number;
+  /** a trouser leg: its looseness, its ankle × the ankle; its hem's thickness × the ankle (0 none),
+   *  that hem's radius, turned up (lighter); how much of the leg's shape shows through */
+  loose?: number;
+  ankle?: number;
+  cuff?: number;
+  cuffR?: number;
+  turn?: boolean;
+  fit?: number;
+  /** a waistband; a seam down the outside or a pressed crease down the front; pockets; a stripe;
+   *  a bib and its straps */
+  band?: boolean;
+  seam?: "side" | "crease";
+  pockets?: "back" | "cargo";
+  stripe?: boolean;
+  bib?: boolean;
+  /** its pattern when none's chosen */
+  pattern?: string;
+}
+export const BOTTOMS: Record<string, Bottom> = {
+  jeans: { ankle: 1.5, cuff: 0.42, turn: true, band: true, seam: "side", pockets: "back" },
+  trousers: { ankle: 1.45, cuff: 0.3, seam: "crease" },
+  cargo: { loose: 1.12, ankle: 1.55, cuff: 0.3, band: true, pockets: "cargo", fit: 0.35 },
+  joggers: { loose: 1.06, ankle: 1.15, cuff: 0.36, cuffR: 1.16, band: true, seam: "side", stripe: true },
+  shorts: { shorts: 0.55 },
+  skirt: { skirt: 0.36, flare: 1.55 },
+  longskirt: { skirt: 0.8, flare: 1.7 },
+  // the wardrobe's second set (docs/plan/60)
+  chinos: { loose: 1.03, ankle: 1.42, cuff: 0.3, band: true },
+  wide: { loose: 1.38, ankle: 3.0, cuff: 0.22, seam: "crease", fit: 0.1 },
+  leggings: { loose: 0.9, ankle: 1.02, cuff: 0, fit: 0.9 },
+  overalls: { ankle: 1.5, cuff: 0.42, turn: true, seam: "side", bib: true },
+  pleated: { skirt: 0.3, flare: 1.62, pleats: 14 },
+  snowpants: { loose: 1.2, ankle: 1.65, cuff: 0.3, band: true, seam: "side", fit: 0.25 },
+  // suit trousers: a straight leg with a pressed crease, tweed unless chosen otherwise
+  suit: { loose: 1.06, ankle: 1.55, cuff: 0.3, seam: "crease", fit: 0.4, pattern: "tweed" },
+};
 
 export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
+  const first = k.parts.length;
+  bottomParts(k, b, a);
+  // its pattern over its colour (a dress's skirt: the top's)
+  const dress = a.top === "dress";
+  const chosen = dress ? a.topPattern : a.bottomPattern;
+  const own = dress ? undefined : BOTTOMS[a.bottom]?.pattern;
+  const kind = PATTERNS[(chosen && chosen !== "none" ? chosen : own) ?? ""] ?? 0;
+  const c = dress ? a.topColor : a.bottomColor;
+  const c2 = (dress ? a.topColor2 : a.bottomColor2) ?? shade(c, 0.55);
+  if (kind) for (const q of k.parts.slice(first)) if (q.color === c) q.pattern = [kind, c2];
+}
+
+function bottomParts(k: Kit, b: Body, a: AvatarLayers) {
   const R = k.seg.radial;
   const T = b.T;
   const hh = b.hh;
   const dress = a.top === "dress";
-  const kind = dress ? "skirt" : a.bottom;
+  const g = dress ? BOTTOMS.skirt : (BOTTOMS[a.bottom] ?? BOTTOMS.jeans);
   const c = dress ? a.topColor : a.bottomColor;
   const fine = k.seg.radial >= 16;
 
@@ -28,10 +83,9 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
   seat.push([b.trunk.r(0.47 * T) * 0.6, 0.5 * T], [0, 0.5 * T]);
   k.add("hips", b.squash(lathe(seat, R)), c);
   // a waistband
-  if (kind === "joggers" || kind === "cargo" || kind === "jeans")
-    k.crease("hips", b.squash(creaseRing(b.trunk.r(0.36 * T) * 1.035, 0.36 * T, R)));
+  if (g.band) k.crease("hips", b.squash(creaseRing(b.trunk.r(0.36 * T) * 1.035, 0.36 * T, R)));
   // jeans' back pockets (`folds`, close up only): their outlines stitched on the seat
-  if (kind === "jeans" && !dress && k.p.folds > 0 && k.seg.radial > 16)
+  if (g.pockets === "back" && k.p.folds > 0 && k.seg.radial > 16)
     for (const s of [1, -1] as const) {
       const corners: [number, number][] = [
         [0.2, 0.27],
@@ -56,13 +110,61 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
       );
     }
 
-  if (SKIRTS.has(kind)) {
+  if (g.bib) {
+    // overalls: a bib up the front over the top, straps over the shoulders to the back, buttons
+    const bw = b.trunk.r(0.6 * T) * 0.5;
+    const bib = new Shape();
+    bib.moveTo(-bw, 0.34 * T);
+    bib.lineTo(bw, 0.34 * T);
+    bib.lineTo(bw * 0.92, 0.72 * T);
+    bib.lineTo(-bw * 0.92, 0.72 * T);
+    bib.closePath();
+    k.add(
+      "spine",
+      b.onTrunk(bib, { depth: 0.008 * hh, bevel: 0.005 * hh, kk: 1.1, lift: 0.004 * hh }).translate(0, -b.spineY, 0),
+      c,
+    );
+    for (const sx of [1, -1] as const) {
+      const x = sx * bw * 0.75;
+      let yTop = 0.84 * T;
+      while (yTop < T && b.trunk.r(yTop) > Math.abs(x)) yTop += T * 0.01;
+      const strap = [
+        b.surf(x, 0.7 * T, 1.12, 1),
+        b.surf(x, lerp(0.86 * T, yTop, 0.6), 1.13, 1),
+        new Vector3(x, yTop + 0.03 * hh, 0),
+        b.surf(x, lerp(0.86 * T, yTop, 0.6), 1.13, -1),
+        // (crossed behind, down to the waist on the other side)
+        b.surf(x * 0.2, 0.62 * T, 1.13, -1),
+        b.surf(-x * 0.9, 0.4 * T, 1.12, -1),
+      ];
+      k.add(
+        "spine",
+        sweepTube(strap, () => [0.045 * hh, 0.012 * hh], {
+          segs: k.seg.tube,
+          radial: Math.max(4, k.seg.tubeRadial - 2),
+          up: (q) => new Vector3(q.x, 0, q.z).normalize(),
+        }).translate(0, -b.spineY, 0),
+        c,
+        { keepNormals: true },
+      );
+      if (fine) {
+        const at = b.surf(x, 0.69 * T, 1.14, 1);
+        k.add(
+          "spine",
+          ellipsoid(0.022 * hh, 0.022 * hh, 0.01 * hh, 10, 3).translate(at.x, at.y - b.spineY, at.z),
+          "#c9b28a",
+        );
+      }
+    }
+  }
+
+  if (g.skirt) {
     // an A-line skirt: a thick shell — down the inside, round the hem, up the outside
-    const long = kind === "longskirt" && !dress;
+    const long = g.skirt > 0.5;
     const top = 0.46 * T;
-    const hem = -(b.legLen * (long ? 0.8 : 0.36));
+    const hem = -(b.legLen * g.skirt);
     const rw = b.trunk.r(top);
-    const rh = k.p.torso.hip * hh * (long ? 1.7 : 1.55);
+    const rh = k.p.torso.hip * hh * (g.flare ?? 1.55);
     const th = 0.02 * hh;
     const outer = spline2(
       [
@@ -82,15 +184,17 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
     // (`folds`: the hem waved, in and out between seven folds, more the lower — a hollow on every
     // fourth of the nearest level's 28 columns, so a fold's line lies in it, not under the faces
     // across it)
-    const N = 7;
+    // (pleated: twice as many, sharper, all the way round and up)
+    const N = g.pleats ?? 7;
+    const pleat = g.pleats ? 1 : 0;
     // (not in front, over the thighs: a hollow there and a seated thigh comes through it)
     const wave = (y: number, phi: number) =>
       1 -
-      0.09 *
+      (0.09 - 0.03 * pleat) *
         k.p.folds *
         smooth(lerp(hem, top, 0.7), hem, y) *
-        (1 - 0.9 * Math.max(0, Math.cos(phi)) ** 2) *
-        Math.cos(N * phi);
+        (1 - 0.9 * (1 - pleat) * Math.max(0, Math.cos(phi)) ** 2) *
+        (pleat ? Math.abs(Math.cos(N * phi * 0.5)) * 2 - 1 : Math.cos(N * phi));
     const skirt = lathe(pts, R);
     if (k.p.folds > 0)
       mapVerts(skirt, (v) => {
@@ -106,7 +210,7 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
       const ups = [0.35, 0.25, 0.42, 0.3, 0.45, 0.28, 0.38];
       for (let i = 0; i < N; i++) {
         const phi = (2 * Math.PI * i) / N + 0.001;
-        const up = ups[i];
+        const up = pleat ? 0.6 : ups[i % 7];
         k.add(
           "hips",
           b.squash(
@@ -140,15 +244,23 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
 
   const leg = (side: "L" | "R") => {
     const sx = side === "L" ? 1 : -1;
-    if (kind === "shorts") {
-      k.add(`thigh${side}`, shell(b.thigh * 0.55, b.thighR * 1.22, b.thighR * 0.98, R, k.seg.ring, b.thighR * 1.16), c);
+    if (g.shorts) {
+      k.add(
+        `thigh${side}`,
+        shell(b.thigh * g.shorts, b.thighR * 1.22, b.thighR * 0.98, R, k.seg.ring, b.thighR * 1.16),
+        c,
+      );
       return;
     }
-    // trouser legs: thigh and shin shells, looser for cargo, tapered for joggers
-    const loose = kind === "cargo" ? 1.12 : kind === "joggers" ? 1.06 : 1;
-    const ankle = kind === "joggers" ? 1.15 : kind === "jeans" ? 1.5 : kind === "cargo" ? 1.55 : 1.45;
+    // trouser legs: thigh and shin shells, looser or tapered as the recipe has them
+    const loose = g.loose ?? 1;
+    const ankle = (g.ankle ?? 1.45) * (shaftTop(k, a.shoes) > 0 && a.shoes !== "snowboots" ? 1.18 : 1);
     const thighG = closedLimb(b.thigh, b.thighR * 1.1 * loose, b.kneeR * 1.18 * loose, b.thighR * 0.1, R, k.seg.ring);
-    const shinLen = b.shin - b.ankleR * 0.6;
+    // (over a boot's shaft, the leg stops short of the ankle and sits wider, stacked on it)
+    const shaft = shaftTop(k, a.shoes);
+    // (tucked into snow boots instead: the leg ends inside the shaft)
+    const tucked = a.shoes === "snowboots";
+    const shinLen = shaft > 0 ? b.shin - shaft + (tucked ? -0.08 : 0.03) * hh : b.shin - b.ankleR * 0.6;
     const shinG = closedLimb(
       shinLen,
       b.kneeR * 1.18 * loose,
@@ -158,22 +270,31 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
       k.seg.ring,
     );
     // (`anatomy`: the leg's shape shows through, less in a looser cut)
-    const fit = k.p.anatomy * (kind === "cargo" ? 0.35 : 0.6);
+    const fit = k.p.anatomy * (g.fit ?? 0.6);
     if (fit > 0) {
       shapeOver(thighG, b.thigh, sx, LIMBS.thigh, fit);
       shapeOver(shinG, b.shin, sx, LIMBS.shin, fit);
     }
     k.add(`thigh${side}`, thighG, c);
     k.add(`knee${side}`, shinG, c);
-    // the hem at the ankle: turned up (jeans), an elastic cuff (joggers), plain
-    const cuffR = b.ankleR * (kind === "joggers" ? 1.16 : ankle - 0.07);
-    const cuffT = kind === "jeans" ? b.ankleR * 0.42 : kind === "joggers" ? b.ankleR * 0.36 : b.ankleR * 0.3;
-    const cuffColor = kind === "jeans" ? shade(c, 1.18) : c;
-    k.add(
-      `knee${side}`,
-      lathe(arc(cuffR, -b.shin + b.ankleR * 0.65, cuffT, -Math.PI / 2, Math.PI * 1.5, k.seg.ring * 2), R),
-      cuffColor,
-    );
+    // the hem at the ankle: turned up (lighter), an elastic cuff, plain — or none
+    const cuffT = b.ankleR * (g.cuff ?? 0.3);
+    if (cuffT > 0)
+      k.add(
+        `knee${side}`,
+        lathe(
+          arc(
+            b.ankleR * (g.cuffR ?? ankle - 0.07),
+            -shinLen + b.ankleR * 0.05,
+            cuffT,
+            -Math.PI / 2,
+            Math.PI * 1.5,
+            k.seg.ring * 2,
+          ),
+          R,
+        ),
+        g.turn ? shade(c, 1.18) : c,
+      );
     // folds: whiskers off the crotch (not on trousers: they've their crease), behind the knee and
     // where the hem breaks over the shoe (the nearest level of detail only)
     if (k.p.folds > 0 && k.seg.radial > 16) {
@@ -196,7 +317,7 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
       };
       const fold = (joint: JointName, pts: [number, number][], wd: number, r: (y: number, phi: number) => number) =>
         k.add(joint, limbFold(k, pts, wd, r, sx), k.p.ink, { ink: 0 });
-      if (kind !== "trousers") {
+      if (g.seam !== "crease") {
         fold(
           `thigh${side}`,
           [
@@ -236,7 +357,7 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
         0.004,
         rThigh,
       );
-      const hem = kind === "joggers" ? 0.82 : 0.86;
+      const hem = g.stripe ? 0.82 : 0.86;
       fold(
         `knee${side}`,
         [
@@ -267,16 +388,16 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
       }
       return sweepTube(pts, () => [1e-4, 1e-4], { segs: 6, radial: 4 });
     };
-    if (kind === "jeans" || kind === "joggers") {
+    if (g.seam === "side") {
       const phi = sx * Math.PI * 0.5;
       k.crease(`thigh${side}`, along(phi, 1.16 * loose, b.thighR, b.kneeR * 1.05, b.thigh * 0.95, -b.thighR * 0.4));
       k.crease(`knee${side}`, along(phi, 1.24 * loose, b.kneeR, b.ankleR * ankle * 0.9, shinLen * 0.92, 0));
     }
-    if (kind === "trousers") {
-      k.crease(`thigh${side}`, along(0, 1.17, b.thighR, b.kneeR * 1.05, b.thigh * 0.9, -b.thighR * 0.5));
-      k.crease(`knee${side}`, along(0, 1.25, b.kneeR, b.ankleR * ankle * 0.92, shinLen * 0.92, 0));
+    if (g.seam === "crease") {
+      k.crease(`thigh${side}`, along(0, 1.17 * loose, b.thighR, b.kneeR * 1.05, b.thigh * 0.9, -b.thighR * 0.5));
+      k.crease(`knee${side}`, along(0, 1.25 * loose, b.kneeR, b.ankleR * ankle * 0.92, shinLen * 0.92, 0));
     }
-    if (kind === "cargo" && fine) {
+    if (g.pockets === "cargo" && fine) {
       // a big pocket on the outside of the thigh, with its flap
       const p = new Shape();
       const w = 0.075 * hh;
@@ -300,7 +421,7 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
         shade(c, 0.9),
       );
     }
-    if (kind === "joggers" && fine)
+    if (g.stripe && fine)
       // a stripe down the side
       k.add(
         `thigh${side}`,
@@ -320,8 +441,8 @@ export function buildBottom(k: Kit, b: Body, a: AvatarLayers) {
   leg("R");
 }
 
-// a closed trouser leg: like the bare limb, a little looser
-function closedLimb(len: number, rTop: number, rBot: number, swell: number, radial: number, ring: number) {
+// a closed trouser leg: like the bare limb, a little looser (a long sleeve too: tops.ts)
+export function closedLimb(len: number, rTop: number, rBot: number, swell: number, radial: number, ring: number) {
   const pts: Prof[] = [];
   pts.push(...arc(0, -len, rBot, -Math.PI / 2, 0, ring));
   const mid = Math.max(6, ring);

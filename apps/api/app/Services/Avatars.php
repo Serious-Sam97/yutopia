@@ -14,6 +14,10 @@ class Avatars
         'accessory' => 'none', 'accessoryColor' => '#e8a33d', 'style' => 'ligne', 'gender' => 'neutral',
         'eyewear' => 'none', 'eyewearColor' => '#2a2420', 'extra' => 'none', 'extraColor' => '#e8a33d',
         'shoes' => 'sneakers', 'shoesColor' => '#efe4cc', 'beard' => 'none', 'gait' => 'calm',
+        // the wardrobe's second set (docs/plan/60)
+        'outer' => 'none', 'outerColor' => '#4f6b5a', 'topPattern' => 'none', 'topColor2' => '#2a2420',
+        'bottomPattern' => 'none', 'bottomColor2' => '#2a2420', 'outerPattern' => 'none', 'outerColor2' => '#2a2420',
+        'shoesColor2' => '#f4efe6',
     ];
 
     public function for(User $user): array

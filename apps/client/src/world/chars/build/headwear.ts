@@ -1,6 +1,6 @@
 import { BufferGeometry, Float32BufferAttribute, Shape, Vector3 } from "three";
 import type { Kit } from "../kit";
-import { arc, ellipsoid, extrude, lathe, type Prof, sweepTube } from "../shapes";
+import { arc, ellipsoid, extrude, lathe, lumpy, mapVerts, type Prof, sweepTube } from "../shapes";
 import { lerp, smooth } from "./body";
 import { shade } from "./tops";
 
@@ -8,7 +8,7 @@ import { shade } from "./tops";
 // bucket hat, bandana, headband. Each sits over the hair (`crown`: how far
 // the hair stands off the scalp) on the head's own surface.
 
-export const HATS = new Set(["cap", "beanie", "beret", "bucket"]);
+export const HATS = new Set(["cap", "beanie", "beret", "bucket", "pompom", "trapper", "flatcap"]);
 
 // Where each hat's rim comes down to (0 chin … 1 crown) round the head (phi 0 front).
 // (a bandana isn't a hat, but the fringe hangs from under it too)
@@ -16,8 +16,11 @@ const RIMS: Record<string, [number, number]> = {
   cap: [0.66, 0.55],
   beanie: [0.72, 0.5],
   beret: [0.8, 0.66],
-  bucket: [0.58, 0.54],
+  bucket: [0.68, 0.6],
   bandana: [0.7, 0.46],
+  pompom: [0.72, 0.5],
+  trapper: [0.7, 0.54],
+  flatcap: [0.68, 0.58],
 };
 const levelOf =
   ([tf, tb]: [number, number]) =>
@@ -79,28 +82,48 @@ export function buildHeadwear(k: Kit, kind: string, color: string, crown: number
   };
 
   switch (kind) {
-    case "cap": {
-      // a crown with a seam, and a curved brim over the brow
-      const edge = level(...RIMS.cap);
-      k.add("head", dome(edge, on), color);
+    case "cap":
+    case "flatcap":
+    case "visor": {
+      // a crown with a seam, and a curved brim over the brow (a flat cap's crown low and forward,
+      // its brim short; a visor no crown, a band round instead)
+      const flatcap = kind === "flatcap";
+      const edge = level(...(RIMS[kind] ?? [0.74, 0.62]));
+      if (kind === "visor") k.add("head", loop(edge, on, 0.06 * hh, 0.016 * hh), color, { keepNormals: true });
+      else {
+        const crown = dome(edge, flatcap ? on + 0.035 * hh : on);
+        if (flatcap) {
+          // (its crown pulled forward and down over the brow, flat on top: lifted clear of the hair
+          // first, so nothing comes through)
+          mapVerts(crown, (v) => {
+            const up = smooth(0.62 * hh, hh * 1.05, v.y);
+            v.y -= 0.035 * hh * up;
+            v.z += 0.07 * hh * up;
+          });
+        }
+        k.add("head", crown, color);
+      }
       const fy = hs.at(edge(0), 0, on);
       const brim = new Shape();
-      const W = hs.R(fy.y) * k.p.head.width * 0.95;
+      const W = hs.R(fy.y) * k.p.head.width * (flatcap ? 0.85 : 0.95);
+      const L = flatcap ? 0.26 : 0.46;
       brim.moveTo(-W, 0);
-      brim.quadraticCurveTo(-W * 0.9, 0.42 * hh, 0, 0.46 * hh);
-      brim.quadraticCurveTo(W * 0.9, 0.42 * hh, W, 0);
+      brim.quadraticCurveTo(-W * 0.9, (L - 0.04) * hh, 0, L * hh);
+      brim.quadraticCurveTo(W * 0.9, (L - 0.04) * hh, W, 0);
       brim.quadraticCurveTo(0, 0.12 * hh, -W, 0);
       const g = extrude(brim, 0.008 * hh, 0.006 * hh, k.seg.curve, k.seg.bevel);
       // lie it flat (its y becomes forward), tipped down a little, at the front of the crown
-      g.rotateX(Math.PI / 2 + 0.36);
+      g.rotateX(Math.PI / 2 + (flatcap ? 0.5 : 0.36));
       // (its back edge tucked under the crown's rim, so no forehead shows between)
       k.add("head", g, color, { at: new Vector3(0, fy.y + 0.022 * hh, fy.z - 0.05 * hh) });
+      if (kind !== "cap") return;
       if (k.seg.radial >= 16)
         k.add("head", ellipsoid(0.03 * hh, 0.02 * hh, 0.03 * hh, 10, 3), dark, { at: hs.at(1, 0, on + 0.004 * hh) });
       return;
     }
-    case "beanie": {
-      // a knit dome over the ears with a turned-up band
+    case "beanie":
+    case "pompom": {
+      // a knit dome over the ears with a turned-up band (and a bobble on top)
       const edge = level(...RIMS.beanie);
       k.add("head", dome(edge, on + 0.01 * hh, 0.01 * hh), color);
       k.add(
@@ -109,6 +132,46 @@ export function buildHeadwear(k: Kit, kind: string, color: string, crown: number
         color,
         { keepNormals: true },
       );
+      if (kind === "pompom")
+        k.add(
+          "head",
+          lumpy(ellipsoid(0.11 * hh, 0.1 * hh, 0.11 * hh, k.seg.radial, k.seg.ring * 2), 0.014 * hh, 30 / hh, 5),
+          shade(color, 1.15),
+          {
+            at: hs.at(1, 0, on + 0.1 * hh),
+          },
+        );
+      return;
+    }
+    case "trapper": {
+      // a trapper: a dome, flaps down over the ears, fur round the front
+      const edge = level(...RIMS.trapper);
+      k.add("head", dome(edge, on + 0.015 * hh), color);
+      for (const sx of [1, -1]) {
+        const flap = ellipsoid(0.05 * hh, 0.2 * hh, 0.15 * hh, k.seg.radial, k.seg.ring * 2);
+        k.add("head", flap, color, { at: hs.at(0.42, sx * (Math.PI / 2 + 0.1), Math.max(on, sideHair) + 0.04 * hh) });
+      }
+      k.add(
+        "head",
+        lumpy(
+          loop((phi) => edge(phi) + 0.04, on + 0.04 * hh, 0.08 * hh, 0.04 * hh),
+          0.012 * hh,
+          30 / hh,
+          2,
+        ),
+        "#e9dfc9",
+      );
+      return;
+    }
+    case "hairclip": {
+      // a bow clipped in at the side
+      const at = hs.at(0.8, 0.95, on + 0.01 * hh);
+      for (const sx of [1, -1]) {
+        const lobe = ellipsoid(0.1 * hh, 0.075 * hh, 0.04 * hh, 10, 4);
+        lobe.rotateZ(sx * 0.3);
+        k.add("head", lobe, color, { at: at.clone().add(new Vector3(sx * 0.08 * hh, 0, 0)) });
+      }
+      k.add("head", ellipsoid(0.035 * hh, 0.045 * hh, 0.045 * hh, 8, 3), shade(color, 0.8), { at });
       return;
     }
     case "beret": {
@@ -123,15 +186,17 @@ export function buildHeadwear(k: Kit, kind: string, color: string, crown: number
     case "bucket": {
       // a dome and a brim sloping down all round
       // (the crown comes down past where the brim joins, so nothing shows between)
+      // (up off the eyes, the brim not too steep)
       const edge = level(...RIMS.bucket);
       k.add("head", dome(edge, on + 0.012 * hh), color);
-      const y = hs.at(0.62, 0, on).y;
+      const y = hs.at(0.7, 0, on).y;
+      const drop = 0.11;
       const r0 = hs.R(y) * Math.max(k.p.head.width, k.p.head.depth) + on;
       const prof: Prof[] = [
         [r0 * 0.98, y + 0.02 * hh],
         [r0 * 1.02, y - 0.004 * hh],
-        [r0 * 1.36, y - 0.2 * hh],
-        ...arc(r0 * 1.36, y - 0.21 * hh, 0.012 * hh, Math.PI * 0.5, -Math.PI * 0.5, k.seg.ring).map(
+        [r0 * 1.36, y - drop * hh],
+        ...arc(r0 * 1.36, y - (drop + 0.01) * hh, 0.012 * hh, Math.PI * 0.5, -Math.PI * 0.5, k.seg.ring).map(
           ([x, yy]): Prof => [x, yy],
         ),
         [r0 * 1.0, y - 0.03 * hh],
@@ -149,10 +214,13 @@ export function buildHeadwear(k: Kit, kind: string, color: string, crown: number
       return;
     }
     case "bandana": {
-      // tied round the forehead, the knot and its two ends at the back
-      k.add("head", loop(level(0.76, 0.5), on, 0.07 * hh, 0.018 * hh), color, { keepNormals: true });
+      // tied round the forehead, folded, the knot and its two ends at the back
+      k.add("head", loop(level(0.76, 0.5), on, 0.1 * hh, 0.026 * hh), color, { keepNormals: true });
+      k.crease("head", loop(level(0.76, 0.5), on + 0.027 * hh, 1e-4, 1e-4));
       const knot = hs.at(0.5, Math.PI, on + 0.02 * hh);
-      k.add("head", ellipsoid(0.05 * hh, 0.04 * hh, 0.04 * hh, 10, 3), color, { at: knot });
+      k.add("head", ellipsoid(0.07 * hh, 0.055 * hh, 0.055 * hh, 10, 4), color, {
+        at: knot,
+      });
       for (const sx of [1, -1]) {
         const tail = [
           knot,
@@ -161,7 +229,7 @@ export function buildHeadwear(k: Kit, kind: string, color: string, crown: number
         ];
         k.add(
           "head",
-          sweepTube(tail, (u) => [0.05 * hh * (1 - u * 0.3), 0.012 * hh], {
+          sweepTube(tail, (u) => [0.075 * hh * (1 - u * 0.3), 0.012 * hh], {
             segs: 8,
             radial: 4,
             up: () => new Vector3(0, 0, -1),
@@ -169,6 +237,37 @@ export function buildHeadwear(k: Kit, kind: string, color: string, crown: number
           color,
           { keepNormals: true },
         );
+      }
+      return;
+    }
+    case "earmuffs": {
+      // a thin band over the top, two fluffy muffs over the ears
+      const side = sideHair + 0.03 * hh;
+      const pts: Vector3[] = [];
+      for (let i = 0; i <= 12; i++) {
+        const f = (i / 12) * 2 - 1;
+        pts.push(
+          hs.at(lerp(1, 0.5, Math.abs(f) ** 2), f * (Math.PI / 2) - 0.1, lerp(on + 0.01 * hh, side, Math.abs(f) ** 3)),
+        );
+      }
+      k.add(
+        "head",
+        sweepTube(pts, () => [0.022 * hh, 0.012 * hh], {
+          segs: Math.max(12, k.seg.tube),
+          radial: Math.max(4, k.seg.tubeRadial - 2),
+          up,
+        }),
+        "#2a2420",
+        { keepNormals: true },
+      );
+      for (const sx of [1, -1]) {
+        const muff = lumpy(
+          ellipsoid(0.1 * hh, 0.17 * hh, 0.16 * hh, k.seg.radial, k.seg.ring * 2),
+          0.012 * hh,
+          30 / hh,
+          sx > 0 ? 3 : 4,
+        );
+        k.add("head", muff, color, { at: hs.at(0.44, sx * (Math.PI / 2 + 0.08), side + 0.05 * hh) });
       }
       return;
     }
@@ -212,7 +311,8 @@ export function buildHeadwear(k: Kit, kind: string, color: string, crown: number
           pts,
           (u) => {
             const end = Math.min(1, u / 0.04, (1 - u) / 0.04);
-            return [(phones ? 0.04 : 0.05) * hh * Math.sqrt(Math.max(0.05, end)), 0.016 * hh];
+            // (a headband a band you can see, padded headphones)
+            return [(phones ? 0.06 : 0.075) * hh * Math.sqrt(Math.max(0.05, end)), 0.024 * hh];
           },
           { segs: Math.max(12, k.seg.tube), radial: Math.max(4, k.seg.tubeRadial - 2), up },
         ),

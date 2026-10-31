@@ -1,11 +1,11 @@
 import { Shape, Vector3 } from "three";
 import type { Kit } from "../kit";
-import { arc, extrude, lathe, type Prof, sweepTube } from "../shapes";
+import { arc, ellipsoid, extrude, lathe, type Prof, sweepTube } from "../shapes";
 import { type Body, lerp, smooth } from "./body";
-import { chestBand, chestDot, shade } from "./tops";
+import { chestBand, chestDot, OUTERS, shade, tie } from "./tops";
 
-// One more thing — every AvatarLayers extra: walkman, scarf, earrings,
-// necklace, backpack, watch.
+// One more thing — every AvatarLayers extra: walkman, scarf, earrings, necklace, backpack, watch,
+// a crossbody bag, mittens, bracelets, a tie, a lanyard, a tote, a fanny pack, a leather satchel.
 
 /** A rounded box (w × h, d deep) facing +z. */
 function box(w: number, h: number, d: number, r: number, k: Kit) {
@@ -25,7 +25,13 @@ function box(w: number, h: number, d: number, r: number, k: Kit) {
   return g;
 }
 
-export function buildExtra(k: Kit, b: Body, kind: string, color: string, o: { earsShow: boolean; skin: string }) {
+export function buildExtra(
+  k: Kit,
+  b: Body,
+  kind: string,
+  color: string,
+  o: { earsShow: boolean; skin: string; outer?: string },
+) {
   if (kind === "none") return;
   const hh = b.hh;
   const T = b.T;
@@ -38,7 +44,9 @@ export function buildExtra(k: Kit, b: Body, kind: string, color: string, o: { ea
       const x = -b.trunk.r(y) * 0.62;
       const at = b.surf(x, y, 1.08);
       const n = b.surfNormal(x, y, 1.08);
-      const g = box(0.13 * hh, 0.17 * hh, 0.05 * hh, 0.02 * hh, k);
+      // (big enough to read at play distance)
+      const z = 1.35;
+      const g = box(0.13 * hh * z, 0.17 * hh * z, 0.05 * hh * z, 0.02 * hh, k);
       g.lookAt(n);
       k.add("hips", g, color, { at: at.addScaledVector(n, 0.02 * hh) });
       const lead: Vector3[] = [];
@@ -107,13 +115,14 @@ export function buildExtra(k: Kit, b: Body, kind: string, color: string, o: { ea
       const y = (f.eyeY - 0.04) * hh - f.ears * hh * 0.55;
       for (const side of [1, -1]) {
         const x = hs.R(y) * k.p.head.width * 0.97;
+        const z = 1.5; // (a hoop that reads at play distance)
         const hoop = lathe(
-          arc(0.05 * hh, 0, 0.012 * hh, -Math.PI / 2, Math.PI * 1.5, Math.max(2, k.seg.ring)),
+          arc(0.05 * hh * z, 0, 0.012 * hh * z, -Math.PI / 2, Math.PI * 1.5, Math.max(2, k.seg.ring)),
           Math.max(8, R / 2),
         );
         hoop.rotateX(Math.PI / 2);
         hoop.rotateY(Math.PI / 2);
-        k.add("head", hoop, color, { at: new Vector3(side * (x + 0.012 * hh), y - 0.05 * hh, -0.01 * hh) });
+        k.add("head", hoop, color, { at: new Vector3(side * (x + 0.012 * hh * z), y - 0.05 * hh * z, -0.01 * hh) });
       }
       return;
     }
@@ -127,10 +136,11 @@ export function buildExtra(k: Kit, b: Body, kind: string, color: string, o: { ea
         const x = Math.sin(phi) * b.trunk.r(y) * 1.05;
         pts.push(b.surf(x, y, 1.05, Math.cos(phi) >= 0 ? 1 : -1));
       }
-      k.add("spine", toSpine(sweepTube(pts, () => [0.006 * hh, 0.006 * hh], { segs: 32, radial: 4 })), color, {
+      const z = 1.6; // (a chain and a pendant that read at play distance)
+      k.add("spine", toSpine(sweepTube(pts, () => [0.006 * hh * z, 0.006 * hh * z], { segs: 32, radial: 4 })), color, {
         keepNormals: true,
       });
-      k.add("spine", toSpine(chestDot(b, 0, T * 0.86, 0.026 * hh, 1.06)), color);
+      k.add("spine", toSpine(chestDot(b, 0, T * (z > 1 ? 0.85 : 0.86), 0.026 * hh * z, 1.06)), color);
       return;
     }
     case "backpack": {
@@ -188,7 +198,318 @@ export function buildExtra(k: Kit, b: Body, kind: string, color: string, o: { ea
       ];
       const g = lathe(face, Math.max(10, R / 2));
       g.rotateZ(-Math.PI / 2);
+      // (a face that reads: big, a pale dial in the case's ring)
+      g.scale(1.5, 1.6, 1.6);
       k.add("elbowL", g, color, { at: new Vector3(b.wR * 1.25, y, 0) });
+      const dial = lathe(face, Math.max(10, R / 2));
+      dial.rotateZ(-Math.PI / 2);
+      dial.scale(0.6, 1.15, 1.15);
+      k.add("elbowL", dial, "#efe4cc", { at: new Vector3(b.wR * 1.25 + 0.022 * hh, y, 0), ink: 0 });
+      return;
+    }
+    case "mittens": {
+      // knitted mittens over the hands (they curl with the fingers: the hand's own weights), a cuff
+      const was = k.p.hand.fingers;
+      k.p.hand.fingers = 0;
+      for (const side of ["L", "R"] as const) {
+        const m = b.mitten();
+        m.scale(1.3, 1.12, 1.3);
+        k.add(`wrist${side}`, m, color, { skin: b.handSkin(side) });
+        k.add(
+          `elbow${side}`,
+          lathe(arc(b.wR * 1.35, -b.fore + 0.02 * hh, 0.035 * hh, -Math.PI / 2, Math.PI * 1.5, k.seg.ring * 2), R),
+          shade(color, 0.85),
+        );
+      }
+      k.p.hand.fingers = was;
+      return;
+    }
+    case "bracelets": {
+      // three thin bangles on the left wrist
+      for (let i = 0; i < 3; i++)
+        k.add(
+          "elbowL",
+          lathe(
+            arc(
+              b.wR * (1.18 + 0.04 * i),
+              -b.fore + b.wR * (0.9 + 0.55 * i),
+              b.wR * 0.13,
+              -Math.PI / 2,
+              Math.PI * 1.5,
+              Math.max(2, k.seg.ring),
+            ),
+            R,
+          ),
+          i === 1 ? shade(color, 1.25) : color,
+        );
+      return;
+    }
+    case "tie":
+      tie(k, b, color, 1.07);
+      return;
+    case "lanyard": {
+      // a cord round the neck down to a badge on the chest
+      const pts: Vector3[] = [];
+      for (let i = 0; i <= 24; i++) {
+        const phi = (i / 24) * Math.PI * 2;
+        const front = Math.max(0, Math.cos(phi));
+        const y = T * (0.975 - 0.3 * front ** 3);
+        pts.push(
+          b.surf(Math.sin(phi) * b.trunk.r(y) * 1.08 * (1 - 0.6 * front ** 4), y, 1.08, Math.cos(phi) >= 0 ? 1 : -1),
+        );
+      }
+      k.add("spine", toSpine(sweepTube(pts, () => [0.012 * hh, 0.004 * hh], { segs: 40, radial: 4 })), color, {
+        keepNormals: true,
+      });
+      const at = b.surf(0, T * 0.6, 1.1);
+      const card = box(0.17 * hh, 0.22 * hh, 0.012 * hh, 0.015 * hh, k);
+      k.add("spine", toSpine(card.translate(at.x, at.y, at.z + 0.01 * hh)), "#f4efe6");
+      k.add(
+        "spine",
+        toSpine(
+          box(0.17 * hh, 0.05 * hh, 0.014 * hh, 0.01 * hh, k).translate(at.x, at.y + 0.08 * hh, at.z + 0.012 * hh),
+        ),
+        color,
+      );
+      return;
+    }
+    case "tote": {
+      // a tote on the right shoulder, hanging at the hip behind the arm
+      const y = 0.28 * T;
+      const x = -b.trunk.r(y) * 1.12;
+      const at = b.surf(x * 0.9, y, 1.15, -1).add(new Vector3(-0.06 * hh, 0, 0));
+      const bag = box(0.12 * hh, 0.5 * hh, 0.42 * hh, 0.03 * hh, k);
+      k.add("spine", toSpine(bag.translate(at.x - 0.04 * hh, at.y, at.z * 0.3)), color);
+      for (const dz of [1, -1]) {
+        const strap = [
+          new Vector3(at.x - 0.04 * hh, at.y + 0.24 * hh, at.z * 0.3 + dz * 0.12 * hh),
+          b.surf(-b.trunk.r(0.8 * T) * 0.85, 0.8 * T, 1.15, dz > 0 ? 1 : -1),
+          new Vector3(-b.shX * 0.9, b.shY + 0.05 * hh, 0),
+        ];
+        k.add(
+          "spine",
+          toSpine(
+            sweepTube(strap, () => [0.03 * hh, 0.008 * hh], {
+              segs: 12,
+              radial: 4,
+              up: (q) => new Vector3(q.x, 0, q.z).normalize(),
+            }),
+          ),
+          shade(color, 0.8),
+          { keepNormals: true },
+        );
+      }
+      return;
+    }
+    case "fannypack": {
+      // a pouch at the front of the waist on a belt round it
+      const y = 0.36 * T;
+      k.add("spine", toSpine(b.ring(y, 1.12, 0.018 * hh)), shade(color, 0.7));
+      const at = b.surf(0, y, 1.14).add(new Vector3(0, 0, 0.05 * hh));
+      k.add("spine", toSpine(box(0.38 * hh, 0.2 * hh, 0.12 * hh, 0.06 * hh, k).translate(at.x, at.y, at.z)), color);
+      k.crease(
+        "spine",
+        toSpine(
+          sweepTube(
+            [
+              at.clone().add(new Vector3(-0.17 * hh, 0.04 * hh, 0.061 * hh)),
+              at.clone().add(new Vector3(0.17 * hh, 0.04 * hh, 0.061 * hh)),
+            ],
+            () => [1e-4, 1e-4],
+            { segs: 2, radial: 4 },
+          ),
+        ),
+      );
+      return;
+    }
+    case "satchel": {
+      // a satchel: worn leather on a long strap from the right shoulder across the body, the bag low
+      // and behind the left hip — a flap over its top half riveted in brass, two straps down the front through
+      // brass buckles; over a coat if there is one
+      const off = OUTERS[o.outer ?? "none"] ? 0.13 : 0;
+      const kk = 1.1 + off;
+      // (a long strap: from over the right shoulder across the chest to the left side, low, and back
+      // up across the back — round the trunk by angle, phi 0 the front, + its left)
+      const strap: Vector3[] = [];
+      const run = (p0: number, p1: number, y0: number, y1: number, n: number) => {
+        for (let i = 0; i <= n; i++) {
+          const u = i / n;
+          strap.push(b.around3(lerp(y0, y1, u), lerp(p0, p1, u), kk + 0.01));
+        }
+      };
+      run(-0.35, 2.3, 0.97 * T, 0.12 * T, 12);
+      run(3.25, 3.55, 0.12 * T, 0.97 * T, 12);
+      run(3.55, 2 * Math.PI - 0.35, 0.985 * T, 0.985 * T, 4);
+      const leather = shade(color, 0.82);
+      k.add(
+        "spine",
+        toSpine(
+          sweepTube(strap, () => [0.04 * hh, 0.009 * hh], {
+            segs: Math.max(32, k.seg.tube * 2),
+            radial: Math.max(4, k.seg.tubeRadial - 2),
+            up: (q) => new Vector3(q.x, 0, q.z).normalize(),
+          }),
+        ),
+        leather,
+        { keepNormals: true },
+      );
+      // the bag low behind the left hip, hanging from the strap's two ends, its front turned to the back
+      // (placed by the trunk where it's widest, at the hip, then hung lower: the trunk narrows to a point
+      // at its bottom)
+      const phi = 2.78;
+      const on = b.around3(0.16 * T, phi, kk);
+      const n = new Vector3(on.x, 0, on.z).normalize();
+      const at = on.addScaledVector(n, 0.08 * hh).add(new Vector3(0, -0.2 * hh, 0));
+      // a messenger bag: wide and deep, a flap over the top and down past the middle — its lower corners
+      // round, stitched round its edge — two straps from the flap down the front through buckles, two
+      // rivets over each strap
+      const W = 1.0 * hh;
+      const H = 0.66 * hh;
+      const D = 0.22 * hh;
+      const fine = k.seg.radial > 9;
+      const place = (g: ReturnType<typeof box>, dx: number, dy: number, dz: number) => {
+        g.translate(dx, dy, dz);
+        g.lookAt(n);
+        return g;
+      };
+      const flat2 = (sh: Shape, depth: number, bevel: number, z: number) => {
+        const g = extrude(sh, depth, bevel, k.seg.curve, Math.max(1, k.seg.bevel));
+        return place(g, 0, 0, z);
+      };
+      k.add("hips", place(box(W, H, D, 0.05 * hh, k), 0, 0, 0), color, { at: at.clone() });
+      // the flap: from over the top, down the front to below the middle
+      const fb = -H * 0.12; // (its lower edge)
+      const fr = 0.09 * hh;
+      const hw = W * 0.51;
+      const top = H * 0.5 + 0.01 * hh;
+      const flapShape = (inset: number) => {
+        const f = new Shape();
+        const w = hw - inset;
+        const b2 = fb + inset;
+        f.moveTo(-w, top - inset);
+        f.lineTo(w, top - inset);
+        f.lineTo(w, b2 + fr);
+        f.quadraticCurveTo(w, b2, w - fr, b2);
+        f.lineTo(-w + fr, b2);
+        f.quadraticCurveTo(-w, b2, -w, b2 + fr);
+        f.closePath();
+        return f;
+      };
+      k.add("hips", flat2(flapShape(0), 0.012 * hh, 0.008 * hh, D / 2 + 0.004 * hh), leather, { at: at.clone() });
+      // (over the top, to the back)
+      k.add("hips", place(box(W * 1.02, 0.03 * hh, D * 1.06, 0.012 * hh, k), 0, H / 2 + 0.008 * hh, 0), leather, {
+        at: at.clone(),
+      });
+      if (k.seg.radial > 16) {
+        // the stitching round the flap's edge, a little in
+        const pts = flapShape(0.025 * hh)
+          .getPoints(k.seg.curve)
+          .map((q) => new Vector3(q.x, q.y, D / 2 + 0.03 * hh));
+        pts.push(pts[0].clone());
+        const st = sweepTube(pts, () => [1e-4, 1e-4], { segs: pts.length * 2, radial: 4 });
+        st.lookAt(n);
+        k.crease("hips", st.translate(at.x, at.y, at.z));
+      }
+      for (const sx of [1, -1]) {
+        const x = sx * W * 0.3;
+        // a strap from the flap down over the front, its tip cut to a point
+        const sw = 0.042 * hh;
+        const s0 = H * 0.16;
+        const s1 = -H * 0.44;
+        const strap2 = new Shape();
+        strap2.moveTo(x - sw, s0);
+        strap2.lineTo(x + sw, s0);
+        strap2.lineTo(x + sw, s1 + sw);
+        strap2.lineTo(x, s1);
+        strap2.lineTo(x - sw, s1 + sw);
+        strap2.closePath();
+        k.add("hips", flat2(strap2, 0.008 * hh, 0.004 * hh, D / 2 + 0.034 * hh), leather, { at: at.clone() });
+        if (!fine) continue;
+        // its buckle: a brass frame over the strap a little below the flap, its tongue across
+        const by = -H * 0.2;
+        const fw = sw * 1.5;
+        const fh = 0.055 * hh;
+        const frame = new Shape();
+        frame.moveTo(x - fw, by - fh);
+        frame.lineTo(x + fw, by - fh);
+        frame.lineTo(x + fw, by + fh);
+        frame.lineTo(x - fw, by + fh);
+        frame.closePath();
+        const hole = new Shape();
+        const t = 0.014 * hh;
+        hole.moveTo(x - fw + t, by - fh + t);
+        hole.lineTo(x - fw + t, by + fh - t);
+        hole.lineTo(x + fw - t, by + fh - t);
+        hole.lineTo(x + fw - t, by - fh + t);
+        hole.closePath();
+        frame.holes.push(hole);
+        k.add("hips", flat2(frame, 0.008 * hh, 0.003 * hh, D / 2 + 0.046 * hh), "#b8913f", { at: at.clone() });
+        // (the strap's end caught back through it: a keeper below)
+        k.add(
+          "hips",
+          place(box(sw * 2.4, 0.02 * hh, 0.014 * hh, 0.005 * hh, k), x, by - fh - 0.04 * hh, D / 2 + 0.05 * hh),
+          leather,
+          {
+            at: at.clone(),
+          },
+        );
+        // two rivets on the flap over the strap
+        for (const ry of [0.24, 0.32])
+          k.add(
+            "hips",
+            place(ellipsoid(0.02 * hh, 0.02 * hh, 0.01 * hh, 8, 3), x, H * ry, D / 2 + 0.026 * hh),
+            "#d8d2c4",
+            {
+              at: at.clone(),
+              ink: 0,
+            },
+          );
+      }
+      return;
+    }
+    case "crossbody": {
+      // a strap from the left shoulder across the chest and back, a small bag on
+      // the right hip with its flap
+      const strap: Vector3[] = [];
+      const s0 = b.surf(b.trunk.r(0.92 * T) * 0.5, 0.92 * T, 1.08, 1);
+      for (let i = 0; i <= 10; i++) {
+        const u = i / 10;
+        const y = lerp(0.95 * T, 0.36 * T, u);
+        strap.push(b.surf(lerp(b.trunk.r(0.92 * T) * 0.5, -b.trunk.r(y) * 0.7, u), y, 1.09, 1));
+      }
+      for (let i = 0; i <= 10; i++) {
+        const u = i / 10;
+        const y = lerp(0.36 * T, 0.95 * T, u);
+        strap.push(b.surf(lerp(-b.trunk.r(y) * 0.7, b.trunk.r(0.92 * T) * 0.5, u), y, 1.09, -1));
+      }
+      strap.push(s0);
+      k.add(
+        "spine",
+        toSpine(
+          sweepTube(strap, () => [0.03 * hh, 0.008 * hh], {
+            segs: Math.max(24, k.seg.tube * 2),
+            radial: Math.max(4, k.seg.tubeRadial - 2),
+            up: (q) => new Vector3(q.x, 0, q.z).normalize(),
+          }),
+        ),
+        shade(color, 0.7),
+        { keepNormals: true },
+      );
+      const y = 0.32 * T;
+      const x = -b.trunk.r(y) * 0.82;
+      const n = b.surfNormal(x, y, 1.1);
+      const at = b.surf(x, y, 1.1).addScaledVector(n, 0.05 * hh);
+      const bag = box(0.3 * hh, 0.24 * hh, 0.1 * hh, 0.05 * hh, k);
+      bag.lookAt(n);
+      k.add("hips", bag, color, { at });
+      const flap = box(0.31 * hh, 0.13 * hh, 0.03 * hh, 0.04 * hh, k);
+      flap.lookAt(n);
+      k.add("hips", flap, shade(color, 0.85), {
+        at: at
+          .clone()
+          .add(new Vector3(0, 0.06 * hh, 0))
+          .addScaledVector(n, 0.05 * hh),
+      });
       return;
     }
   }

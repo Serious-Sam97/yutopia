@@ -1,7 +1,7 @@
 import type { AvatarLayers } from "@yutopia/shared";
 import { type BufferGeometry, Shape, Vector3 } from "three";
 import type { Kit } from "../kit";
-import { arc, extrude, flipWinding, lathe, mapVerts, oval, type Prof, sweepTube } from "../shapes";
+import { arc, extrude, flipWinding, lathe, lumpy, mapVerts, oval, type Prof, sweepTube } from "../shapes";
 import { type Body, lerp, smooth } from "./body";
 import { shade } from "./tops";
 
@@ -12,15 +12,30 @@ import { shade } from "./tops";
 interface Cut {
   top: number; // how high the upper comes, × the foot's height
   sole: number; // sole thickness × the foot's sole
-  soleColor: (c: string) => string;
+  soleColor: (c: string, c2: string) => string; // (c2: the second colour, cream if not chosen)
+  toe?: number; // the toe box's height (1)
 }
 const CUTS: Record<string, Cut> = {
-  sneakers: { top: 1, sole: 1, soleColor: () => "#f4efe6" },
-  hightops: { top: 1.75, sole: 1.1, soleColor: () => "#f4efe6" },
+  sneakers: { top: 1, sole: 1, soleColor: (_c, c2) => c2 },
+  hightops: { top: 1.75, sole: 1.1, soleColor: (_c, c2) => c2 },
   boots: { top: 2.3, sole: 1.5, soleColor: (c) => shade(c, 0.45) },
-  loafers: { top: 0.66, sole: 0.8, soleColor: (c) => shade(c, 0.6) },
+  loafers: { top: 0.58, sole: 0.8, soleColor: (c) => shade(c, 0.6) },
   sandals: { top: 0, sole: 0.9, soleColor: (c) => c },
+  // a rubber foot, a fur cuff
+  snowboots: { top: 2.1, sole: 1.7, soleColor: () => "#2a2420" },
+  // the wardrobe's second set (docs/plan/60)
+  runners: { top: 0.95, sole: 1.6, soleColor: (_c, c2) => c2 },
+  chelsea: { top: 2.0, sole: 1.3, soleColor: (c) => shade(c, 0.4) },
+  flats: { top: 0.5, sole: 0.5, soleColor: (c) => shade(c, 0.7), toe: 0.6 },
+  slipons: { top: 0.85, sole: 1, soleColor: (_c, c2) => c2 },
+  // lace-up leather boots, worn in, a heavy sole
+  laceboots: { top: 1.85, sole: 1.45, soleColor: (c) => shade(c, 0.4) },
 };
+/** How high a shoe's shaft comes up the shin over the ankle joint (0: none above the foot). */
+export function shaftTop(k: Kit, shoes: string): number {
+  const cut = CUTS[shoes] ?? CUTS.sneakers;
+  return cut.top > 1 ? k.p.foot.height * k.hh * cut.top - k.p.foot.height * k.hh * 0.6 : 0;
+}
 
 export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
   const p = k.p;
@@ -117,7 +132,7 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
     if (a.shoes === "sandals") {
       // a bare foot on the sole, two straps over it
       k.add(J, across(upper(0.55, 0.7), fw * 0.9, bev), shade(a.skin, 1));
-      k.add(J, soleG, cut.soleColor(c));
+      k.add(J, soleG, cut.soleColor(c, (a as { shoesColor2?: string }).shoesColor2 ?? "#f4efe6"));
       for (const at of [0.42, 0.05]) {
         const x = at * fl;
         const yTop = y0 + fh * (at > 0.2 ? 0.5 : 0.62) + sole * 0.5;
@@ -142,12 +157,15 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
       }
       continue;
     }
-    k.add(J, shoe(across(upper(Math.min(1, cut.top)), fw, bev)), c);
-    k.add(J, soleG, cut.soleColor(c));
+    const snow = a.shoes === "snowboots";
+    // (snow boots: the foot a rubber shell, darker, the shaft over it the colour chosen)
+    k.add(J, shoe(across(upper(Math.min(1, cut.top), cut.toe), snow ? fw * 1.08 : fw, bev)), snow ? shade(c, 0.45) : c);
+    k.add(J, soleG, cut.soleColor(c, (a as { shoesColor2?: string }).shoesColor2 ?? "#f4efe6"));
     if (cut.top > 1) {
       // high-tops and boots: a round shaft up the shin (under trouser legs)
       const top = y0 + fh * cut.top;
-      const r0 = b.ankleR * (a.shoes === "boots" ? 1.36 : 1.3);
+      // (snow boots wide, the trousers tucked into them: bottoms.ts)
+      const r0 = b.ankleR * (a.shoes === "snowboots" ? 1.9 : a.shoes === "hightops" ? 1.3 : 1.36);
       const r1 = r0 * (a.shoes === "boots" ? 1.08 : 1.02);
       const prof: Prof[] = [
         [0, y0 + fh * 0.5],
@@ -160,10 +178,35 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
         [0, top],
       ];
       k.add(J, lathe(prof, k.seg.radial).translate(0, 0, -0.05 * fl), c);
+      if (snow) {
+        // a fur cuff, lumpy, round the top
+        const cuff = lathe(
+          arc(r1 * 1.12, top - r0 * 0.1, r0 * 0.3, -Math.PI / 2, Math.PI * 1.5, k.seg.ring * 2),
+          k.seg.radial,
+        );
+        k.add(J, lumpy(cuff, r0 * 0.07, 9 / r0, side === "L" ? 1 : 2).translate(0, 0, -0.05 * fl), "#efe4cc");
+      }
+      if ((a.shoes === "boots" || a.shoes === "laceboots") && fine) {
+        // laces crossing up the front of the shaft, and a pull tab behind
+        const zf = -0.05 * fl + r1 * 1.0;
+        for (let i = 0; i < 4; i++) {
+          const y = lerp(y0 + fh * 0.75, top - r0 * 0.35, i / 3.5);
+          for (const d of [1, -1])
+            k.crease(
+              J,
+              sweepTube(
+                [new Vector3(-d * r1 * 0.32, y, zf * 0.96), new Vector3(d * r1 * 0.32, y + fh * 0.18, zf * 0.96)],
+                () => [1e-4, 1e-4],
+                { segs: 2, radial: 4 },
+              ),
+            );
+        }
+      }
     }
     if (!fine) continue;
     switch (a.shoes) {
-      case "sneakers": {
+      case "sneakers":
+      case "runners": {
         // a swoosh of a stripe on the outside
         const st = new Shape();
         st.moveTo(-0.2 * fl, y0 + sole + 0.22 * fh);
@@ -206,6 +249,24 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
             { segs: 16, radial: 4 },
           ),
         );
+        break;
+      }
+      case "chelsea": {
+        // the elastic gore up each side of the shaft, darker, and the pull tab behind
+        const gore = new Shape();
+        gore.moveTo(-0.05 * fl, y0 + fh * 2.0);
+        gore.lineTo(0.09 * fl, y0 + fh * 2.0);
+        gore.lineTo(0.02 * fl, y0 + fh * 1.05);
+        gore.closePath();
+        for (const s2 of [1, -1]) k.add(J, onSide(gore, s2, b.ankleR * 2.85), shade(c, 0.55), { ink: 0 });
+        break;
+      }
+      case "slipons": {
+        // the elastic gores either side of the tongue
+        for (const s2 of [1, -1])
+          k.add(J, onSide(oval(0.16 * fl, y0 + fh * 0.72, 0.05 * fl, fh * 0.09), s2, fw * 0.8), shade(c, 0.6), {
+            ink: 0,
+          });
         break;
       }
       case "loafers": {

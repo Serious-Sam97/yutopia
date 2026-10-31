@@ -46,7 +46,7 @@ test("one style: City-pop looks (old tokens, old tabs) come out Ligne claire", (
 });
 
 test("facial hair: its own slot, none for looks saved before it; bots keep their looks", () => {
-  assert.deepEqual(AVATAR_OPTIONS.beard, ["none", "stubble", "mustache", "goatee", "full"]);
+  assert.deepEqual(AVATAR_OPTIONS.beard.slice(0, 5), ["none", "stubble", "mustache", "goatee", "full"]);
   assert.equal(parseAvatar({ hair: "crew" }).beard, "none");
   assert.equal(parseAvatar({ beard: "goatee", hair: "crew" }).beard, "goatee");
   assert.equal(parseAvatar({ beard: "<b>" }).beard, "none");
@@ -57,4 +57,24 @@ test("facial hair: its own slot, none for looks saved before it; bots keep their
     if (a.gender !== "masculine") assert.equal(a.beard, "none");
     assert.ok(!["crew", "slick", "spiky"].includes(a.hair));
   }
+});
+
+test("the wardrobe's second set (docs/plan/60): bots keep what they wore, only gain", () => {
+  // (each bot's slots as they were drawn before the second set: the first draws, unchanged)
+  const before = { 7: { top: "dress", bottom: avatarFromSeed(7).bottom } };
+  assert.equal(avatarFromSeed(7).top, before[7].top);
+  for (let s = 1; s <= 300; s++) {
+    const a = avatarFromSeed(s);
+    for (const k of ["top", "bottom", "shoes"] as const)
+      assert.ok(
+        (AVATAR_OPTIONS[k] as readonly string[]).slice(0, k === "top" ? 11 : k === "bottom" ? 7 : 5).includes(a[k]),
+        `${s} ${k} ${a[k]}`,
+      );
+  }
+  // a saved look from before it: no layer, no pattern
+  const old = parseAvatar({ top: "tee", topColor: "#b5562f" });
+  assert.equal(old.outer, "none");
+  assert.equal(old.topPattern, "none");
+  assert.equal(parseAvatar({ outer: "parka", outerColor: "#112233", topColor2: "#abcdef" }).outerColor, "#112233");
+  assert.equal(parseAvatar({ topColor2: "nope" }).topColor2, "#2a2420");
 });

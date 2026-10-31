@@ -82,11 +82,18 @@ export function celShade(m: Material, k = 1): void {
   m.onBeforeCompile = (sh, r) => {
     was.call(m, sh, r);
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vCelN;\nvarying float vCelY;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying vec3 vCelN;\nvarying float vCelY;\nattribute float pat;\nattribute vec3 col2;\nvarying float vPat;\nvarying vec3 vCol2;\nvarying vec3 vPP;\nvarying vec3 vPN;",
+      )
       .replace(
         "#include <project_vertex>",
         `#include <project_vertex>
 vCelY = position.y;
+vPat = pat;
+vCol2 = col2;
+vPP = position;
+vPN = normal;
 #ifdef USE_SKINNING
 vCelN = normalize(transformedNormal);
 #else
@@ -94,10 +101,51 @@ vCelN = vec3(0.0, 0.0, 1.0);
 #endif`,
       );
     sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vCelN;\nvarying float vCelY;")
+      .replace(
+        "#include <common>",
+        "#include <common>\nvarying vec3 vCelN;\nvarying float vCelY;\nvarying float vPat;\nvarying vec3 vCol2;\nvarying vec3 vPP;\nvarying vec3 vPN;",
+      )
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
+// (plan 60) a pattern over the colour, in the garment's own space at rest (it moves with it): across
+// a face turned to the front or back by x, a side by z; up by y — plaid two sets of bands with a fine
+// line between, stripes one, check two halves, dots a grid, tweed a herringbone
+if (vPat > 0.5) {
+  float wx = smoothstep(0.35, 0.65, abs(vPN.z) / (abs(vPN.x) + abs(vPN.z) + 1e-4));
+  float u = mix(vPP.z, vPP.x, wx);
+  float v = vPP.y;
+  if (vPat < 1.5) {
+    float P = 0.085;
+    float bx = 1.0 - smoothstep(0.34, 0.37, fract(u / P));
+    float by = 1.0 - smoothstep(0.34, 0.37, fract(v / P));
+    vec3 c = mix(diffuseColor.rgb, vCol2, 0.5 * bx + 0.5 * by);
+    float lx = 1.0 - smoothstep(0.012, 0.024, abs(fract(u / P) - 0.68));
+    float ly = 1.0 - smoothstep(0.012, 0.024, abs(fract(v / P) - 0.68));
+    diffuseColor.rgb = mix(c, vCol2 * 0.55, 0.7 * max(lx, ly));
+  } else if (vPat < 2.5) {
+    float by = 1.0 - smoothstep(0.48, 0.52, fract(v / 0.055));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vCol2, by);
+  } else if (vPat < 3.5) {
+    // check (gingham): bands both ways, half the second colour each, full where they cross
+    float bx = 1.0 - smoothstep(0.48, 0.52, fract(u / 0.05));
+    float by = 1.0 - smoothstep(0.48, 0.52, fract(v / 0.05));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vCol2, 0.5 * bx + 0.5 * by);
+  } else if (vPat > 4.5) {
+    // tweed: a herringbone — fine diagonal ribs, their slant turned every band — over a fleck
+    // (coarse enough not to shimmer at a distance, soft enough to read as cloth)
+    float band = mod(floor(u / 0.05), 2.0) * 2.0 - 1.0;
+    float rib = 1.0 - smoothstep(0.25, 0.5, abs(fract((v + band * u) / 0.022) - 0.5));
+    float fleck = step(0.95, fract(sin(dot(floor(vec2(u, v) / 0.012), vec2(12.99, 78.23))) * 43758.5));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vCol2, 0.22 * rib + 0.2 * fleck);
+  } else {
+    // dots in a grid, every other row shifted half a step
+    vec2 g = vec2(u, v) / 0.045;
+    g.x += 0.5 * mod(floor(g.y), 2.0);
+    float d = length(fract(g) - 0.5);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vCol2, 1.0 - smoothstep(0.2, 0.24, d));
+  }
+}
 {
   vec3 n = normalize(vCelN);
   float l = dot(n, normalize(vec3(-0.6, 0.5, 0.62)));

@@ -24,10 +24,13 @@ export function hairCrown(k: Kit, kind: string): number {
       return 0;
     case "buzz":
     case "mohawk":
+    case "cornrows":
       return th * 0.4;
     case "crew":
       return th * 0.9;
     case "slick":
+      return th * 1.6;
+    case "swept":
       return th * 1.6;
     case "curly":
       return th * 1.4 + 0.12 * k.hh;
@@ -45,6 +48,10 @@ export function hairSide(k: Kit, kind: string): number {
   switch (kind) {
     case "bob":
     case "long":
+    case "wavy":
+    case "curtain":
+    case "locs":
+    case "swept":
       return th * 1.5 + lw * 0.55;
     case "curly":
       return th * 1.4 + 0.16 * k.hh;
@@ -119,12 +126,13 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
       const c = Math.cos(phi - (parted ? part * 0.3 : 0));
       return c >= 0 ? lerp(ts, tf, c ** 1.3) : lerp(ts, tb, (-c) ** 1.1);
     };
-  const bangs = (n: number, spread: number, tipT: number, sweep: number, shortCut: boolean) => {
+  const bangs = (n: number, spread: number, tipT: number, sweep: number, shortCut: boolean, curtain = false) => {
     const count = Math.max(3, Math.round(n * p.hair.count));
     for (let i = 0; i < count; i++) {
       const f = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
       const phi = f * spread;
-      const sw = sweep * (1 - Math.abs(f) * 0.5);
+      // (curtain bangs: parted in the middle, each half swept out to its side)
+      const sw = sweep * (1 - Math.abs(f) * 0.5) * (curtain ? Math.sign(f || 1) : 1);
       const tip = tipT + (i % 2) * 0.035 + Math.abs(f) * (shortCut ? 0.02 : -0.08);
       const rim = o.hatLine?.(phi);
       lock(
@@ -162,7 +170,7 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
     );
   };
   // locks all round the sides and back, to the chin (bob) or the shoulder blades (long)
-  const around = (long: boolean, width: number, tip = 0.85) => {
+  const around = (long: boolean, width: number, tip = 0.85, wave = 0, flat = 0.38) => {
     const n = Math.max(6, Math.round(16 * p.hair.count));
     for (let i = 0; i < n; i++) {
       const f = i / (n - 1);
@@ -184,14 +192,70 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
             .add(new Vector3(0, -kk * hh, 0));
           if (back > 0.2) q.z = Math.min(q.z, -o.backZ - th * 2); // clear of the back
           q.x *= 1 + 0.05 * kk * (1 - back);
+          // (waved: each lock swinging side to side down its length)
+          if (wave) q.addScaledVector(new Vector3(-out.z, 0, out.x), Math.sin(kk * 7 + phi * 2) * wave * hh);
           return q;
         };
         pts.push(a, drop(0.45, th * 1.4), drop(0.9, th * 1.1), drop(1.15, th * 0.6));
       } else {
         pts.push(hs.at(0.14, phi, th * 1.55), hs.at(0.07, phi * 0.98 + Math.sign(Math.sin(phi)) * -0.05, th * 0.7));
       }
-      lock(pts, width, 0.38, 0.05, tip);
+      lock(pts, width, flat, 0.05, tip);
     }
+  };
+  // a tail tied at (t, phi) on the head, swinging on the hair's spring: a ponytail behind, pigtails
+  // at the sides; out from the head and clear of the back, `len` long, `W` wide
+  const tail = (t: number, phi: number, len: number, W: number) => {
+    const a = hs.at(t, phi, th * 1.2);
+    const d = new Vector3(a.x, 0, a.z).normalize();
+    const back = Math.max(0, -d.z);
+    const clear = (o2: number) => Math.max(o2 * hh, back * (o.backZ + 0.05 * hh - Math.abs(a.z) + o2 * hh * 0.3));
+    const pt = (y: number, o2: number, x: number) =>
+      a
+        .clone()
+        .addScaledVector(d, clear(o2))
+        .add(new Vector3(x * hh, y * hh, 0));
+    const pts = [
+      a,
+      a
+        .clone()
+        .addScaledVector(d, 0.16 * hh)
+        .add(new Vector3(0, 0.05 * hh, 0)),
+      pt(-0.22 * len, 0.24, 0.01),
+      pt(-0.6 * len, 0.17, 0.02),
+      pt(-0.92 * len, 0.14, -0.01),
+    ];
+    k.add(
+      "head",
+      sweepTube(
+        pts,
+        (u) => {
+          // full near the tie, swelling, then pointed
+          const s =
+            Math.sqrt(Math.min(1, u / 0.04)) * (0.7 + 0.5 * Math.sin(Math.PI * Math.min(1, u * 1.3))) * (1 - u) ** 0.7;
+          return [W * s, W * 0.8 * s];
+        },
+        { segs: k.seg.tube, radial: k.seg.tubeRadial + 4 },
+      ),
+      color,
+      { keepNormals: true },
+    );
+    // (on the hair's spring, from its tie: it swings and bounces)
+    k.parts[k.parts.length - 1].skin = (_x, y) => ["hair", smooth(a.y + 0.03 * hh, a.y - 0.4 * hh, y)];
+    const tip = pts[pts.length - 1];
+    k.spring("hair", [0, a.y, a.z * (1 - Math.abs(d.x))], [0, tip.y - a.y, tip.z - a.z], {
+      hz: 1.9,
+      damp: 0.3,
+      limit: 1,
+    });
+    const tie = ring(W * 0.37, 0.022 * hh);
+    tie.lookAt(d.clone().add(new Vector3(0, 0.25, 0)));
+    k.add("head", tie, o.tieColor, {
+      at: a
+        .clone()
+        .addScaledVector(d, 0.05 * hh)
+        .add(new Vector3(0, 0.01 * hh, 0)),
+    });
   };
   const ring = (r: number, tube: number) =>
     lathe(arc(r, 0, tube, -Math.PI / 2, Math.PI * 1.5, k.seg.ring * 2), k.seg.radial);
@@ -383,7 +447,8 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
       cap(hair, (u, phi) => {
         const front = Math.max(0, Math.cos(phi));
         const max = big * (1 - 0.5 * front ** 2);
-        const rise = Math.sin(Math.PI * 0.5 * Math.min(1, u * 1.7));
+        // (round over the crown too, not flat on top: a ball, not a mushroom)
+        const rise = 0.82 + 0.18 * Math.sin(Math.PI * 0.5 * Math.min(1, u * 1.7));
         const roll = Math.sqrt(Math.max(0, 1 - smooth(0.78, 1, u) ** 2));
         // (its edge tucks right in to the scalp: no gap to see into)
         return th * (1 - 0.9 * smooth(0.85, 1, u)) + max * rise * roll;
@@ -404,11 +469,245 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
     case "bun": {
       cap(line(0.8, 0.48, 0.3), rolled(th));
       bangs(8, 1.15, 0.56, 0.18, false);
-      const c = hs.at(0.86, Math.PI, 0.16 * hh);
-      k.add("head", ellipsoid(0.2 * hh, 0.18 * hh, 0.19 * hh, k.seg.radial, k.seg.ring * 2), color, { at: c });
-      const tie = ring(0.13 * hh, 0.025 * hh);
-      tie.rotateX(Math.PI / 2 - 0.6);
-      k.add("head", tie, o.tieColor, { at: hs.at(0.8, Math.PI, 0.06 * hh) });
+      // a big bun up on the crown's back, its coil drawn round it, the tie under it
+      const s = 0.25 * hh;
+      const c = hs.at(0.93, Math.PI, 0.17 * hh);
+      k.add("head", ellipsoid(s, s * 0.85, s * 0.95, k.seg.radial, k.seg.ring * 2), color, { at: c });
+      const coil: Vector3[] = [];
+      for (let i = 0; i <= 40; i++) {
+        const u = i / 40;
+        const a = u * Math.PI * 4;
+        const r = s * (1.02 - 0.6 * u);
+        coil.push(
+          new Vector3(
+            Math.cos(a) * r,
+            s * 0.85 * Math.sqrt(Math.max(0, 1 - (r / s) ** 2)) * 0.98,
+            Math.sin(a) * r * 0.95,
+          ),
+        );
+      }
+      const g = sweepTube(coil, () => [1e-4, 1e-4], { segs: 60, radial: 4 });
+      // (tilted back with the head's curve there)
+      g.rotateX(-0.9);
+      k.crease("head", g.translate(c.x, c.y, c.z));
+      const tie = ring(0.16 * hh, 0.028 * hh);
+      tie.rotateX(Math.PI / 2 - 0.9);
+      k.add("head", tie, o.tieColor, { at: hs.at(0.88, Math.PI, 0.08 * hh) });
+      return;
+    }
+    case "braids": {
+      // parted in the middle, two plaits from behind the ears down the back of the
+      // shoulders, tied at the ends — a plait a tube that swells and narrows, a bead a cross
+      cap(line(0.8, 0.44, 0.22, false), rolled(th));
+      bangs(6, 1.0, 0.62, 0.1, false);
+      const from = k.parts.length;
+      for (const sx of [1, -1]) {
+        const a = hs.at(0.4, sx * (Math.PI / 2 + 0.45), th * 1.2);
+        const back = -Math.max(o.backZ + 0.05 * hh, Math.abs(a.z) + 0.04 * hh);
+        const pts = [
+          a,
+          new Vector3(sx * 0.33 * hh, a.y - 0.25 * hh, back * 0.8),
+          new Vector3(sx * 0.36 * hh, a.y - 0.6 * hh, back),
+          new Vector3(sx * 0.35 * hh, a.y - 1.0 * hh, back * 0.98),
+        ];
+        const W = 0.075 * hh;
+        const N = 9;
+        k.add(
+          "head",
+          sweepTube(
+            pts,
+            (u) => {
+              const s =
+                Math.sqrt(Math.min(1, u / 0.04)) * (1 - 0.35 * u) * (0.7 + 0.3 * Math.abs(Math.sin(u * N * Math.PI)));
+              return [W * s, W * 0.85 * s];
+            },
+            { segs: Math.max(24, k.seg.tube * 2), radial: k.seg.tubeRadial },
+          ),
+          color,
+          { keepNormals: true },
+        );
+        const end = pts[3];
+        const tie = ring(0.04 * hh, 0.014 * hh);
+        k.add("head", tie, o.tieColor, { at: end.clone().add(new Vector3(0, 0.03 * hh, 0)) });
+        lock(
+          [
+            end.clone().add(new Vector3(0, 0.02 * hh, 0)),
+            end.clone().add(new Vector3(0, -0.06 * hh, 0)),
+            end.clone().add(new Vector3(sx * 0.01 * hh, -0.13 * hh, 0.01 * hh)),
+          ],
+          W * 0.9,
+          0.6,
+          0.1,
+        );
+      }
+      // (they swing on the hair's spring, from behind the ears down)
+      hang(from, 0.35 * hh, -0.5 * hh, 0.9);
+      k.spring("hair", [0, 0.4 * hh, -0.08 * hh], [0, -1.0 * hh, -0.12 * hh], { hz: 2.6, damp: 0.35, limit: 0.5 });
+      return;
+    }
+    case "swept": {
+      // to the collar, swept back off the forehead and over the crown, parted a little off the
+      // middle, the sides back over the ears, the ends turning out at the nape; one strand loose at
+      // the brow
+      cap(line(0.82, 0.42, 0.14, true), rolled(th * 0.85));
+      if (o.hat) return;
+      const n = Math.max(6, Math.round(11 * p.hair.count));
+      for (let i = 0; i < n; i++) {
+        const f = (i / (n - 1)) * 2 - 1;
+        const phi = f * 1.05;
+        lock(
+          [
+            hs.at(0.8, phi, th * 0.5),
+            hs.at(0.9, phi * 0.98, th * 1.5),
+            hs.at(0.99, phi * 0.7, th * 1.4),
+            hs.at(0.84, Math.PI - phi * 0.55, th * 1.1),
+            hs.at(0.52, Math.PI - phi * 0.62, th * 1.1),
+            hs.at(0.22, Math.PI - phi * 0.7, th * 1.6),
+          ],
+          lw * 0.85,
+          0.34,
+          0.06,
+          0.5,
+        );
+      }
+      const from = k.parts.length;
+      // the sides: back over the ears to the jaw, the tips flicked out
+      for (const sx of [1, -1]) {
+        for (const d of [0.05, 0.45]) {
+          const phi = sx * (Math.PI / 2 + 0.15 + d);
+          lock(
+            [
+              hs.at(0.88, phi * 0.9, th * 0.6),
+              hs.at(0.6, phi, th * 1.3),
+              hs.at(0.3, phi * 1.03, th * 1.4),
+              hs.at(0.12, phi * 1.06, th * 2.2),
+            ],
+            lw * 0.9,
+            0.36,
+            0.05,
+            0.55,
+          );
+        }
+      }
+      hang(from, 0.4 * hh, 0.05 * hh, 0.4);
+      k.spring("hair", [0, 0.45 * hh, -0.05 * hh], [0, -0.55 * hh, -0.1 * hh], { hz: 3.4, damp: 0.5, limit: 0.3 });
+      // (and the strand that won't stay back, down over one side of the brow)
+      lock([hs.at(0.92, 0.25, th * 1.6), hs.at(0.82, 0.38, th * 1.4), hs.at(0.7, 0.42, th * 0.6)], lw * 0.45, 0.4, 0.1);
+      return;
+    }
+    case "pigtails": {
+      cap(line(0.8, 0.46, 0.28, false), rolled(th));
+      bangs(7, 1.1, 0.58, 0.1, false);
+      for (const sx of [1, -1]) tail(0.55, sx * (Math.PI / 2 + 0.55), 0.62, 0.14 * hh);
+      return;
+    }
+    case "highpony": {
+      cap(line(0.8, 0.48, 0.4), rolled(th));
+      if (!o.hat) tail(0.9, Math.PI, 1.15, 0.2 * hh);
+      return;
+    }
+    case "pixie": {
+      // short all over, the fringe long and swept across, the nape tapered
+      cap(line(0.74, 0.5, 0.24), rolled(th * 0.9));
+      bangs(7, 1.0, 0.66, 0.5, true);
+      return;
+    }
+    case "wavy": {
+      // to the shoulders in waves, parted
+      cap(line(0.8, 0.42, 0.2), rolled(th));
+      bangs(7, 1.1, 0.6, 0.25, false);
+      const from = k.parts.length;
+      around(true, lw * 1.25, 0.6, 0.13);
+      hang(from, 0.3 * hh, -0.6 * hh, 0.9);
+      k.spring("hair", [0, 0.45 * hh, -0.05 * hh], [0, -1.1 * hh, -0.15 * hh], { hz: 2.4, damp: 0.35, limit: 0.55 });
+      return;
+    }
+    case "curtain": {
+      // long, the fringe parted in the middle and swept out either side of the face
+      cap(line(0.8, 0.42, 0.2, false), rolled(th));
+      bangs(8, 1.1, 0.55, 0.42, false, true);
+      const from = k.parts.length;
+      around(true, lw * 1.4);
+      hang(from, 0.3 * hh, -0.6 * hh, 1);
+      k.spring("hair", [0, 0.45 * hh, -0.05 * hh], [0, -1.35 * hh, -0.15 * hh], { hz: 2.4, damp: 0.35, limit: 0.65 });
+      return;
+    }
+    case "locs": {
+      // locs: many round ropes from the crown down past the shoulders, tips blunt
+      cap(line(0.8, 0.4, 0.2, false), rolled(th * 1.2));
+      const from = k.parts.length;
+      // (ropes: narrow and round, blunt tips, many)
+      around(true, lw * 0.42, 0.15, 0.015, 1);
+      // (a second layer of them between, close up only)
+      if (k.seg.radial > 16) around(true, lw * 0.4, 0.15, -0.015, 1);
+      hang(from, 0.3 * hh, -0.6 * hh, 1);
+      k.spring("hair", [0, 0.45 * hh, -0.05 * hh], [0, -1.35 * hh, -0.15 * hh], { hz: 2.2, damp: 0.35, limit: 0.6 });
+      return;
+    }
+    case "topknot": {
+      // pulled up tight, a knot on top
+      cap(line(0.8, 0.52, 0.32), rolled(th));
+      if (o.hat) return;
+      const c = hs.at(0.99, Math.PI * 0.7, 0.12 * hh);
+      k.add("head", ellipsoid(0.15 * hh, 0.13 * hh, 0.15 * hh, k.seg.radial, k.seg.ring * 2), color, { at: c });
+      const tie = ring(0.1 * hh, 0.02 * hh);
+      k.add("head", tie, o.tieColor, { at: hs.at(0.97, Math.PI * 0.7, 0.04 * hh) });
+      return;
+    }
+    case "undercut":
+    case "fade": {
+      // the sides clipped close; on top long and combed back (undercut) or short and up (fade)
+      const fade = kind === "fade";
+      cap(
+        line(0.78, 0.5, 0.28),
+        (u) => th * lerp(fade ? 0.9 : 1.1, 0.3, smooth(0.3, 0.6, u)) * (1 - 0.94 * smooth(0.8, 1, u)),
+      );
+      if (o.hat) return;
+      const n = Math.max(5, Math.round(9 * p.hair.count));
+      for (let i = 0; i < n; i++) {
+        const f = (i / (n - 1)) * 2 - 1;
+        const phi = f * 0.7;
+        lock(
+          fade
+            ? [hs.at(0.8, phi, th * 0.5), hs.at(0.86, phi, th * 2), hs.at(0.92, phi * 0.9, th * 2.1)]
+            : [
+                hs.at(0.8, phi, th * 0.7),
+                hs.at(0.9, phi * 0.95, th * 2.6),
+                hs.at(0.99, phi * 0.6, th * 2.2),
+                hs.at(0.84, Math.PI - phi * 0.5, th * 1.2),
+              ],
+          lw * 0.9,
+          0.35,
+          0.08,
+        );
+      }
+      return;
+    }
+    case "cornrows": {
+      // braided flat to the scalp in rows, front to the nape
+      cap(line(0.8, 0.5, 0.26, false), rolled(th * 0.4));
+      if (o.hat) return;
+      for (let i = 0; i < 7; i++) {
+        const phi = lerp(-0.75, 0.75, i / 6);
+        const row: Vector3[] = [];
+        for (let j = 0; j <= 8; j++) {
+          const u = j / 8;
+          row.push(
+            u < 0.5
+              ? hs.at(lerp(0.8, 1, u * 2), phi * (1 - u * 0.5), th * 0.5)
+              : hs.at(lerp(1, 0.36, (u - 0.5) * 2), Math.PI - phi * u * 0.6, th * 0.5),
+          );
+        }
+        k.add(
+          "head",
+          tube(row, (u) => {
+            const s = Math.min(1, u / 0.04, (1 - u) / 0.04) * (0.75 + 0.25 * Math.abs(Math.sin(u * 40)));
+            return [0.045 * hh * s, 0.03 * hh * s];
+          }),
+          color,
+          { keepNormals: true },
+        );
+      }
       return;
     }
     default: {
@@ -416,41 +715,7 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
       cap(line(0.8, 0.48, 0.3), rolled(th));
       bangs(8, 1.15, 0.56, 0.18, false);
       quiff(p.hair.tuft * 0.6);
-      const a = hs.at(0.62, Math.PI, th * 1.2);
-      const clear = (d: number) => -Math.max(d * hh, o.backZ + 0.05 * hh - Math.abs(a.z) + d * hh * 0.3);
-      const tail = [
-        a,
-        a.clone().add(new Vector3(0, 0.05 * hh, -0.16 * hh)),
-        a.clone().add(new Vector3(0.01 * hh, -0.22 * hh, clear(0.24))),
-        a.clone().add(new Vector3(0.02 * hh, -0.6 * hh, clear(0.17))),
-        a.clone().add(new Vector3(-0.01 * hh, -0.92 * hh, clear(0.14))),
-      ];
-      const W = 0.19 * hh;
-      k.add(
-        "head",
-        sweepTube(
-          tail,
-          (u) => {
-            // full near the tie, swelling, then pointed
-            const s =
-              Math.sqrt(Math.min(1, u / 0.04)) *
-              (0.7 + 0.5 * Math.sin(Math.PI * Math.min(1, u * 1.3))) *
-              (1 - u) ** 0.7;
-            return [W * s, W * 0.8 * s];
-          },
-          { segs: k.seg.tube, radial: k.seg.tubeRadial + 4 },
-        ),
-        color,
-        { keepNormals: true },
-      );
-      // (the tail on the hair's spring, from its tie: it swings and bounces)
-      const end = k.parts[k.parts.length - 1];
-      end.skin = (_x, y) => ["hair", smooth(a.y + 0.03 * hh, a.y - 0.4 * hh, y)];
-      const tip = tail[tail.length - 1];
-      k.spring("hair", [a.x, a.y, a.z], [tip.x - a.x, tip.y - a.y, tip.z - a.z], { hz: 1.9, damp: 0.3, limit: 1 });
-      const tie = ring(0.07 * hh, 0.022 * hh);
-      tie.rotateX(Math.PI / 2 - 0.25);
-      k.add("head", tie, o.tieColor, { at: a.clone().add(new Vector3(0, 0.01 * hh, -0.05 * hh)) });
+      tail(0.62, Math.PI, 1, 0.19 * hh);
     }
   }
 }

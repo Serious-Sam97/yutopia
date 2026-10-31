@@ -696,6 +696,33 @@ class IsoPeople {
     return url;
   }
 
+  /** One option of the look, framed on the part it's about (the avatar editor's buttons, docs/plan/60):
+   *  the head, the chest, the legs or the feet, three-quarter on, as a data URL (null without WebGL). */
+  thumb(avatar: AvatarLayers, focus: "head" | "chest" | "legs" | "feet", px = 96): string | null {
+    const res = INK.res.value.clone();
+    const ipx = INK.px.value;
+    const l = this.picture(avatar, 1, 0.5, px, null);
+    const gl = this.renderer;
+    let url: string | null = null;
+    if (l && gl) {
+      const h = l.model.height;
+      // (the point to look at, up the figure, and how far back to frame it)
+      const [y, d] = { head: [0.88, 0.62], chest: [0.66, 0.85], legs: [0.3, 1.05], feet: [0.05, 0.6] }[focus];
+      this.persp.position.set(0, h * (y + 0.04), h * d);
+      this.persp.lookAt(0, h * y, 0);
+      this.shoot(gl, px);
+      const c = document.createElement("canvas");
+      c.width = px;
+      c.height = px;
+      (c.getContext("2d") as CanvasRenderingContext2D).drawImage(gl.domElement, 0, 0, px, px, 0, 0, px, px);
+      gl.setSize(ISO.W, ISO.H, false);
+      url = c.toDataURL();
+    }
+    INK.res.value.copy(res);
+    INK.px.value = ipx;
+    return url;
+  }
+
   private prop(l: Look, kind: PropKind, color: string) {
     const k = `${kind}|${color}`;
     let pr = l.props.get(k);

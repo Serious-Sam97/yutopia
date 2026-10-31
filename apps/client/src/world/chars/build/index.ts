@@ -4,28 +4,39 @@ import { Kit } from "../kit";
 import { LODS, type Lod, type Params, paramsFor } from "../params";
 import { buildBeard } from "./beard";
 import { Body } from "./body";
-import { buildBottom } from "./bottoms";
+import { BOTTOMS, buildBottom } from "./bottoms";
 import { buildExtra } from "./extras";
 import { buildEyewear } from "./eyewear";
 import { buildHair, hairCrown, hairSide } from "./hair";
 import { buildHead, jawLine } from "./head";
 import { buildHeadwear, HATS, hatLine } from "./headwear";
 import { buildShoes } from "./shoes";
-import { buildTop, LONG_SLEEVES } from "./tops";
+import { buildOuter, buildTop, LONG_SLEEVES, OUTERS, TOPS } from "./tops";
 
 /** Build one person's parts (not yet merged: `bake.ts` does that). */
 export function buildPerson(a: AvatarLayers, lod: Lod, params?: Params): Kit {
   const k = new Kit(params ?? paramsFor(a), LODS[lod]);
   const b = new Body(k);
   // skin that clothes cover all of isn't built (legs in trousers, arms in long sleeves)
-  const trousers = a.top !== "dress" && ["jeans", "trousers", "cargo", "joggers"].includes(a.bottom);
-  b.build(a.skin, { legs: trousers && a.shoes !== "sandals", arms: LONG_SLEEVES.has(a.top) });
+  const g = BOTTOMS[a.bottom] ?? BOTTOMS.jeans;
+  const trousers = a.top !== "dress" && !g.skirt && !g.shorts;
+  // (a layer with sleeves over the top: the arms under it aren't built)
+  const outer = (OUTERS[a.outer ?? ""]?.sleeve ?? 0) > 0;
+  // (a top down to the seat, over all the trunk: none of it built under there)
+  const top = TOPS[a.top] ?? TOPS.tee;
+  b.build(a.skin, {
+    legs: trousers && a.shoes !== "sandals",
+    arms: LONG_SLEEVES.has(a.top) || outer,
+    trunk: !top.tank && top.hem <= 0.4,
+  });
   const hat = HATS.has(a.accessory);
   // ears hide under long hair, a big afro, a beanie and headphones
   const earsShow =
-    !(a.hair === "bob" || a.hair === "long" || a.hair === "curly" || a.hair === "afro") &&
+    !["bob", "long", "curly", "afro", "wavy", "curtain", "locs", "swept"].includes(a.hair) &&
     a.accessory !== "beanie" &&
-    a.accessory !== "headphones";
+    a.accessory !== "headphones" &&
+    a.accessory !== "earmuffs" &&
+    a.accessory !== "trapper";
   buildHead(k, a.skin, earsShow);
   buildBeard(k, a.beard ?? "none", a.hairColor, a.skin);
   const backY = 0.85 * b.T;
@@ -40,13 +51,18 @@ export function buildPerson(a: AvatarLayers, lod: Lod, params?: Params): Kit {
   buildBottom(k, b, a);
   // (the top rides the trunk as the body under it does, by height: bake.ts's skin weights)
   buildTop(k, b, a);
+  buildOuter(k, b, a);
   buildShoes(k, b, a);
-  buildExtra(k, b, a.extra, a.extraColor, { earsShow, skin: a.skin });
+  buildExtra(k, b, a.extra, a.extraColor, { earsShow, skin: a.skin, outer: a.outer });
   jawLine(k);
   // (the phone at the ear sits on whatever covers it: long hair, an afro, headphones)
   const cover = Math.max(
     earsShow ? 0 : hairSide(k, a.hair),
-    a.accessory === "headphones" ? 0.1 * k.hh : a.accessory === "beanie" ? 0.03 * k.hh : 0,
+    a.accessory === "headphones" || a.accessory === "earmuffs"
+      ? 0.1 * k.hh
+      : a.accessory === "beanie"
+        ? 0.03 * k.hh
+        : 0,
   );
   anchors(k, b, cover);
   return k;

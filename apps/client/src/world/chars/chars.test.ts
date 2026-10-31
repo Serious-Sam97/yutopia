@@ -28,6 +28,26 @@ function looks(): AvatarLayers[] {
     for (const hair of ["afro", "long", "mohawk", "curly", "ponytail"])
       out.push({ ...DEFAULT_AVATAR, accessory, hair });
   out.push({ ...DEFAULT_AVATAR, bottom: "longskirt", shoes: "boots", top: "tank", extra: "backpack" });
+  // and the heaviest the second set allows (docs/plan/60): every layer over a hooded top with big
+  // hair, a hat with flaps, a pack, a beard, goggles; patterns on all three garments
+  for (const outer of AVATAR_OPTIONS.outer)
+    for (const hair of ["locs", "long", "braids"])
+      out.push({
+        ...DEFAULT_AVATAR,
+        outer,
+        hair,
+        gender: "masculine",
+        top: "hoodie",
+        accessory: "trapper",
+        extra: "backpack",
+        bottom: "overalls",
+        shoes: "snowboots",
+        beard: "full",
+        eyewear: "goggles",
+        topPattern: "plaid",
+        bottomPattern: "check",
+        outerPattern: "stripes",
+      });
   return out;
 }
 

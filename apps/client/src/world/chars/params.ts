@@ -72,6 +72,7 @@ export interface Params {
   };
   folds: number; // 0 … 1 a top's creases inked in: from under the arms, at the waist
   anatomy: number; // 0 the limbs as capsules … 1 shaped: the shoulder, bicep, forearm, knee, calf
+  wear: number; // 0 the wardrobe as it is … 1 plan 60's mocks (the quality pass): only /dev/chars asks for it
   bevel: number; // softness of extruded parts × hh
   ink: string; // the line and the eyes
 }
@@ -177,6 +178,7 @@ export const BASE: Params = {
   },
   folds: 1,
   anatomy: 1,
+  wear: 0,
   bevel: 0.012,
   ink: "#151515",
 };
@@ -279,5 +281,7 @@ export function paramsFor(a: Pick<AvatarLayers, "body" | "gender">, base: Params
   const p = structuredClone(base);
   apply(p, BODY[a.body] ?? BODY.regular);
   apply(p, GENDER[a.gender] ?? GENDER.neutral);
+  // (plan 60's mocks: a `wear` key on the avatar, from /dev/chars only)
+  p.wear = (a as { wear?: number }).wear ?? 0;
   return p;
 }

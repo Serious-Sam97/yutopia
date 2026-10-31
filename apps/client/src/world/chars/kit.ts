@@ -21,6 +21,8 @@ export interface Part {
   skin?: Skin;
   /** its normals its own (a lock of hair's), not smoothed from its faces */
   own?: boolean;
+  /** a pattern drawn over its colour by the cel shade (plan 60): 1 plaid, 2 stripes; and its other colour */
+  pattern?: [number, string];
 }
 
 export type Skin = (x: number, y: number, z: number) => [JointName, number] | [JointName, number][];

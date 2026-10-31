@@ -29,9 +29,9 @@ import type { Moved, Verb } from "@/world/chars";
 //                              the move (docs/plan/29-the-move.md): move (the gaits,
 //                              crouch, strafe, aim), run, sprint, land, vault, mantle,
 //                              roll (filmstrips)
-//   /dev/chars?looks=,flat,muted&who=0   one of them in each variant, front and side
+//   /dev/chars?looks=,flat,muted,new&who=0   one of them in each variant, front and side
 //                              (docs/plan/59-the-character.md: "flat" without the cel
-//                              shade, "muted" the clothes muted; &head=1 close on the heads,
+//                              shade, "muted" the clothes muted; "new" plan 60's wardrobe mocks; &head=1 close on the heads,
 //                              &y=0.8 close at that height, &back=1 the back for the front)
 //   …&look=flat (or muted) puts any view in a variant
 //   …&w=&h=&ink=2.4&spin=1&blink=0.5&talk=1&eyesX=1&eyesY=0.5 (the face's morphs held)
@@ -449,6 +449,8 @@ type Mode =
 // "flat", read by `add`, draws them without the cel shade)
 function inLook(a: AvatarLayers, name: string): AvatarLayers {
   const out = { ...a };
+  // ("new": plan 60's wardrobe mocks — docs/plan/60-the-wardrobe.md)
+  if (name.split("+").includes("new")) (out as { wear?: number }).wear = 1;
   if (name.split("+").includes("muted")) {
     const mute = (hex: string, k: number) => {
       const n = Number.parseInt(hex.replace("#", ""), 16);
@@ -474,9 +476,16 @@ function inLook(a: AvatarLayers, name: string): AvatarLayers {
 // any part of a look can be set in the query (&hair=long&top=hoodie&gender=masculine)
 function withQuery(a: AvatarLayers, q: URLSearchParams): AvatarLayers {
   const out = { ...a };
-  for (const key of Object.keys(DEFAULT_AVATAR) as (keyof AvatarLayers)[]) {
+  // (and plan 60's mock slots: a layer over the top, a pattern and a second colour on it)
+  for (const key of [
+    ...Object.keys(DEFAULT_AVATAR),
+    "outer",
+    "outerColor",
+    "topPattern",
+    "topColor2",
+  ] as (keyof AvatarLayers)[]) {
     const v = q.get(key);
-    if (v) out[key] = key.endsWith("Color") || key === "skin" ? `#${v.replace("#", "")}` : v;
+    if (v) out[key] = key.includes("Color") || key === "skin" ? `#${v.replace("#", "")}` : v;
   }
   return out;
 }
@@ -489,7 +498,13 @@ function sheetLooks(field: Field, q: URLSearchParams): { label: string; a: Avata
   );
   const opts = AVATAR_OPTIONS[field] as readonly string[];
   return opts.map((o) => {
-    const a: AvatarLayers = { ...base, [field]: o };
+    // (the pattern sheet: each on a shirt, in rust and walnut)
+    const a: AvatarLayers =
+      field === "pattern"
+        ? { ...base, top: "shirt", topColor: "#b5562f", topPattern: o, topColor2: "#2a2420" }
+        : field === "outer"
+          ? { ...base, [field]: o, top: "hoodie" }
+          : { ...base, [field]: o };
     if (field === "accessory") a.accessoryColor = "#d8423a";
     if (field === "eyewear") a.eyewearColor = "#2a2420";
     if (field === "extra") a.extraColor = o === "earrings" || o === "necklace" ? "#e8b84a" : "#5b3f8c";
