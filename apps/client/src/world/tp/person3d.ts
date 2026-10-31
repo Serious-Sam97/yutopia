@@ -1,6 +1,7 @@
 import { type HeldKind, heldState, isHeld, isSocial, SOCIAL_MS } from "@yutopia/shared";
 import { AIM_BLADE, BEAM } from "@yutopia/shared/beam";
-import { flowOfCode, KH_MOVE } from "@yutopia/shared/move";
+import { flowOfCode, KH_FEEL, KH_MOVE, unpackMv } from "@yutopia/shared/move";
+import type { PhysicsWorld } from "@yutopia/shared/physics";
 import {
   CircleGeometry,
   Color,
@@ -72,6 +73,19 @@ export interface Seen {
   camZ: number;
   onScreen: boolean;
   lowQuality: boolean;
+  /** (plan 58) the mood: 0 day … 1 the dark */
+  mood?: number;
+  /** (plan 58 4f) the ground's height under a spot (the floor's x, y; from a height there), or null */
+  groundAt?: (x: number, y: number, from: number) => number | null;
+  /** (plan 58 5d) the world's physics for a ragdoll, and its origin in the scene */
+  rag?: () => { world: PhysicsWorld; origin: () => { x: number; y: number; z: number } } | null;
+}
+// (plan 58 is the world's: `?anim=old` puts the old animations back, to compare)
+const ANIM_OLD = typeof location !== "undefined" && new URLSearchParams(location.search).get("anim") === "old";
+// (the speed a gait goes for: the body with weight's — walker.ts)
+function goalOf(mv: number): number | undefined {
+  const g = unpackMv(mv).gait;
+  return g === "walk" || g === "jog" || g === "sprint" || g === "crouch" || g === "aim" ? KH_FEEL[g] : undefined;
 }
 
 const gq = new Quaternion();
@@ -148,6 +162,28 @@ export class Person3D {
   motionOut: MotionOut | null = null;
   /** what the body was last drawn doing (a verb, a jump, a Flowmotion move: "" none) — tests */
   drawn = { verb: "", jump: "", flow: "" };
+  /** plan 58's tension as eased (-1: not yet) */
+  private mood = -1;
+  /** (plan 58 4f) the ground under a spot in her own space (x her left, z ahead), off her feet's height */
+  private groundFn(p: PersonIn, at: (x: number, y: number, from: number) => number | null) {
+    const a = this.turned ?? p.angle;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const h = p.z ?? 0;
+    return (lx: number, lz: number) => {
+      // (ahead is the facing's way; her left, the floor's y being south, is (sin, −cos))
+      const x = p.x + c * lz + s * lx;
+      const y = p.y + s * lz - c * lx;
+      const g = at(x, y, h + 0.6);
+      return g === null ? 0 : g - h;
+    };
+  }
+  /** (plan 58 5d) down on the ragdoll and up again (the world's physics), a fall's top, the facing
+   *  while getting up, one of the shadowed shot down already laid on it */
+  limp: InstanceType<NonNullable<ReturnType<Chars["airNow"]>>["Downed"]> | null = null;
+  private fallTop: number | null = null;
+  private limpYaw: number | null = null;
+  private shotDown = false;
   /** (plan 58 8) one of the shadowed's body as it was when its time caught: held a beat */
   private shadeHeld: { pose: Pose; lift: [number, number, number] } | null = null;
   /** (plan 58 9) the breath's puffs in the cold */
@@ -206,13 +242,23 @@ export class Person3D {
     // (how they walk is their look's: plan 58 4e)
     // (plan 58 8: the shadowed limp, heavy)
     this.motion.gait = p.shade ? "heavy" : (p.avatar.gait ?? "calm");
+    // (plan 58, the world's since the switch — `?anim=old` for the old ones; the mood the hour's dark
+    // and the dark's own, a shade's the dark itself)
+    this.motion.v2 = !ANIM_OLD;
+    // (eased: in and out of a door, a shade coming on — over a second or two, not at a step)
+    const mood = p.shade ? 1 : (seen.mood ?? 0);
+    this.mood =
+      this.mood < 0 ? mood : this.mood + (mood - this.mood) * Math.min(1, dt * (mood > this.mood ? 1.5 : 0.5));
+    this.motion.tension = this.mood;
 
     // the facing turns smoothly (others only send 8 directions)
     if (this.turned === null) this.turned = p.angle;
     let dA = p.angle - this.turned;
     dA = Math.atan2(Math.sin(dA), Math.cos(dA));
-    const turnBy = dA * Math.min(1, dt * 14);
+    const turnBy = this.limpYaw !== null ? 0 : dA * Math.min(1, dt * 14);
     this.turned += turnBy;
+    // (plan 58 5d: getting up off the ragdoll, turned the way they lay — the root's yaw is the scene's)
+    if (this.limpYaw !== null) this.turned = Math.PI / 2 - this.limpYaw;
     // (my hands in first person are placed by hands1p.ts)
     if (this.part === "all") this.root.rotation.y = Math.PI / 2 - this.turned;
 
@@ -294,7 +340,11 @@ export class Person3D {
           gun: !!p.gun,
           reload: (this.gunFx?.reload ?? 0) > 0.3,
           kick: this.gunFx?.kick ?? 0,
-          hurt: p.shade ? 0.7 : undefined,
+          hurt: p.shade ? 0.7 : p.hp !== undefined ? Math.max(0, 1 - p.hp / 100) : undefined,
+          // (plan 58 4c: the gait it's going for — its first step's keyed by it; 4f: the ground under
+          // each foot, by the world's own rays, near only)
+          goal: goalOf(p.mv ?? 0),
+          ground: seen.groundAt && d < 12 && this.part === "all" ? this.groundFn(p, seen.groundAt) : undefined,
           // (plan 58 9: cold and spent by the vitals; a sound heard, from where it came)
           cold: LF ? LF.coldOf(p.wm ?? 100) : 0,
           spent: LF ? LF.spentOf(p.st ?? 100) : 0,
@@ -394,12 +444,56 @@ export class Person3D {
         lift[2] + (m.lift[2] - lift[2]) * k,
       ];
     } else this.fellW = 0;
+    // (plan 58 5d: limp on the ragdoll — one of the shadowed shot down (and lying there as it burns
+    // away), anyone down from 6 m or more (up again after) — Jolt's, the world's own; near only)
+    let limpHands: {
+      L?: { at: [number, number, number]; w: number };
+      R?: { at: [number, number, number]; w: number };
+    } | null = null;
+    const RS = this.motion.v2 && !p.reduced && this.part === "all" && d < 30 && seen.rag ? seen.rag() : null;
+    const AR = RS ? this.C.airNow() : null;
+    const hz = p.z ?? 0;
+    let fellFrom = 0;
+    if (up) this.fallTop = Math.max(this.fallTop ?? hz, hz);
+    else {
+      if (this.fallTop !== null) fellFrom = this.fallTop - hz;
+      this.fallTop = null;
+    }
+    const shot = !!SN && dying >= SN.LIMP && !this.shotDown;
+    if (AR && RS && !this.limp?.on && (shot || fellFrom >= 6)) {
+      this.limp = new AR.Downed(RS.world, this.model, RS.origin, true);
+      const c = Math.cos(this.turned);
+      const sn = Math.sin(this.turned);
+      // (the scene's: x, up, the floor's y; shot, thrown back off its feet; fallen, coming down hard)
+      const vel: [number, number, number] = shot
+        ? [-c * 2.2, 0.4, -sn * 2.2]
+        : [0, -Math.min(12, Math.sqrt(60 * fellFrom)), 0];
+      if (!this.limp.fall(pose, vel, undefined, shot)) this.limp = null;
+      this.shotDown = shot;
+    }
+    if (!p.shade?.killed) this.shotDown = false;
+    if (this.limp?.on && AR) {
+      const r = this.limp.update(step, () => h, AR.getUp2Pose, AR.GETUP_LEN);
+      if (r) {
+        pose = r.m.pose;
+        lift = r.m.lift;
+        limpHands = r.hands;
+        // (standing up: the root turned the way it lay)
+        if (r.root && this.limpYaw === null && !this.limp.rig.on) this.limpYaw = r.root.yaw;
+      } else this.limpYaw = null;
+    } else {
+      this.limp = null;
+      this.limpYaw = null;
+    }
     const seatY = (SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX;
     // (plan 58 6a: the new sitting lowers the hips by its own settle, its legs solved for it)
     const drop = this.model.sitDrop(seatY) * (this.motion.v2 && !p.reduced ? mo.settle : w);
-    this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], mo.reach);
+    // (one of the shadowed under plan 58: its arms its own — no hands put on things, no reach: the
+    // wind-up's cocked arm was pulled onto whoever it struck)
+    const own = !!p.shade && this.motion.v2 && !p.reduced;
+    this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], own ? undefined : mo.reach);
     // (plan 58 6: the hands on the keys, the pad, the knees, the other one's hand)
-    this.model.handsTo(mo.hands ?? null);
+    this.model.handsTo(limpHands ?? (this.limp?.on || own ? null : (mo.hands ?? null)));
     if (downHands && this.downW > 0) {
       for (const h of Object.values(downHands)) if (h) h.w *= this.downW;
       this.model.handsTo(downHands);

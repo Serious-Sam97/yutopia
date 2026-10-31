@@ -49,6 +49,9 @@ export const SHADE = {
   /** a strike lands within this; the windup starts this close */
   reach: 1.3,
   closeIn: 1.2,
+  /** the windup leans in to this far, an arm's length — not into whoever it swings at (plan 58: its
+   *  lunge and swipe went through them at the bodies' 0.8) */
+  armsLength: 1.05,
   /** they circle at this far, until they rush in */
   circle: [4, 6] as const,
   /** between rushes (after the last, or after first seeing you) */
@@ -337,7 +340,9 @@ export function think(s: Shade, sense: ShadeSense, dt: number, rand: () => numbe
     case "windup":
       // committed (a beam doesn't stop it — roll): it leans in after whoever it's swinging at
       if (tgt) {
-        act.goal = { x: tgt.x, y: tgt.y };
+        const d = Math.hypot(tgt.x - s.x, tgt.y - s.y);
+        const k = d > 1e-3 ? Math.max(0, d - SHADE.armsLength) / d : 0;
+        act.goal = { x: s.x + (tgt.x - s.x) * k, y: s.y + (tgt.y - s.y) * k };
         act.speed = SHADE.speed.windup;
       }
       if (inState >= SHADE.windup) {

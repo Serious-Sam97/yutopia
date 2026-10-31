@@ -61,6 +61,7 @@ export interface AvatarState {
   fellYaw?: number; // …the way the ball was going
   hitAt?: number; // struck (docs/plan/58 7): server ms, and where it came from (the floor's radians)
   hitYaw?: number;
+  hp?: number; // (plan 58) the health (0..100): hurt, a limp
   wm?: number; // (plan 58 9) the warmth and the stamina (0..100): cold, spent
   st?: number;
   angle?: number; // facing as they turned, world radians (not 8 ways): where a beam points

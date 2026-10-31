@@ -22,7 +22,9 @@ import { gzipSync } from "node:zlib";
 // (lowered to 415 on 2026-10-28: iso retired — docs/plan/50, phase 7 — Pixi and the iso engine off the page, 414.3)
 // (raised to 419 on 2026-10-29 by the user's call: the controls — docs/plan/56 — the focus's prompt, Use held, the mouse as the camera; HEAD was already 416.2 after pets and god mode)
 // (raised to 421 on 2026-10-29 by the user's call: the controls — docs/plan/56, phase 5 — the lock-on and its chip, the camera's settings)
-const BUDGETS = { "/page": 421, "/login/page": 160 }; // KB gzip
+// (raised to 430 on 2026-10-30 by the user's call: the world switched to plan 58's animations — the page
+// was 420.2 of 421 with it)
+const BUDGETS = { "/page": 430, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;

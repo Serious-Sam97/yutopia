@@ -1282,6 +1282,98 @@ world before you've passed it.
    - **Two browsers, others drawn in step:** with the world's switch to plan 58 — the world's people are
      still on the old animations (Motion3.v2 off), so there's nothing of plan 58 to see in step yet.
 
+   **The world switched 2026-10-30** (the user: "do it and increase the limit").
+   - **Everyone on plan 58:** the world's people (`tp/person3d.ts`) turn `Motion3.v2` on; `?anim=old`
+     in the address brings the old ones back, for a look side by side. Their gait's speed is the
+     goal (KH_FEEL's), the hurt from the vitals (hp), cold and spent from warmth and stamina, a sound
+     heard and a blow from where it came, the hands from Locomotion's layers (`loco.handsOut`).
+   - **The walker on KH_FEEL** (Decided 9): real momentum in the world; the verbs carry their
+     geometry (height, near, far) so the vault's and the mantle's hands land on the top.
+   - **The feet on the ground** (Decided 8): a Jolt ray under each foot (`view.groundAt`, 1.4 m
+     down) for those near (12 m), drawn whole.
+   - **The ragdoll:** a fall from 6 m or more, and one of the shadowed shot down, go limp on Jolt's
+     ragdoll in the view's own physics world (`physics3d.ragdollSpace`, stepped while anyone's down)
+     — anchored: the root stays where the server has her, the body lies round it — and get up where
+     they lay (the shadowed stay down). While I'm down my walker's held (`walker.limp`). A blow's
+     ragdoll (K in the bench) isn't in the world: a hit's the additive stagger.
+   - **The mood:** each person's own tension (`view.moodOf`) — the night out under the sky 0.7 of it
+     (wary: fear about half), indoors 0.2 (lit, hardly), the shadowed within 16 m all of it at 5 m;
+     eased (up in ~1 s, down in ~2 s). A shade's own is 1. (The night alone first gave everyone the full
+     fear's hunch all evening, indoors too.)
+   - **Found in the world:** stood, everyone sank a hand's depth into the floor — `Motion3`'s `settle`
+     fell back to its progress (1) when not sat, and the view lets the hips down by the seat's drop times
+     it. Under plan 58 it's 0 stood now (the bench never let a standing clip down, so it didn't show).
+   - **Checked in the world** (two browsers, GPU): Ana walked, sprinted, jumped and fell 9 m — on the
+     ragdoll ~4 s in her browser and ~2.7 s in Bia's, then up; no console errors in either; side-on
+     close by day and at night beside `?anim=old`. e2e: people-3d, moves-seen (Bia draws Ana's double
+     jump, dash, roll, swing), move-others, third-person ×3, physics, jump's desk hop and **the weak
+     machine** pass. Red, and red on KH_MOVE too (stale since plan 56, not the switch): jump.spec's
+     "a flip on the run" (a sprint's jump is a leap since plan 56) and move.spec's mantle onto the
+     arcade (`slide,vault`).
+   - **Budget, fresh build:** page 420.2 — its limit raised to 430 (the user's call); `yutopia-chars`
+     43.7, `-anim` 14.2, `-air` 4.7, `-acts` 4.7, `-night` 3.6, `-life` 2.8. Client tests 86.
+
+   **The user's look at the world, 2026-10-30:**
+   1. *Getting up played on while walking off.* Rising was its own 0.9 s, the move held off till it
+      was done — she glided away bent over with her hands on her knees. Now getting up is 0.5 s
+      stood still, a fifth of a second once she sets off, and the move's legs are laid in as she
+      rises (from the start if she's off, by its end if not); the seat's drop goes with it. In the
+      world: up and walking upright ~0.24 s after the key.
+   2. *The ceiling looks low.* Not changed: the storey is 3.5 m (walls 3.27), she's 1.79 m, the lift
+      doors 2.2 — asked where it looks low.
+   3. *Not sitting on the wooden bench.* Not reproduced: the office's bench (Live Room), the garden's
+      and the Kart Park's by the fire all seat her, by E and by walking onto one and standing still
+      (park-life e2e green) — asked which.
+   4. *The shadowed's strike.* The wind-up leaned in to where its prey stood (stopped only by the
+      bodies, 0.8 m), so its lead arm reached into her and the lunge and swipe went through her. Now
+      it leans in to an arm's length (shared `SHADE.armsLength`, 1.05 m; a strike still lands within
+      1.3, a step or a roll still gets you out), and the world lays no hands or reach over the
+      shadowed's own arms.
+   5. *A sprint one way, then the other: the legs broken.* The skid's lean back and braced legs
+      (weight 0.8) stayed laid over the turn and the sprint back for ~0.3 s — the skid ended only below
+      0.8 m/s, and the reversal's lowest was 0.9. Now a turn round mid-skid (over 4 rad/s) ends it at
+      once and it fades in ~0.05 s: the skid, the turn, the run back.
+   Census: 127 clips, none worse. Client tests 86; the brain's 8 and the dark's 7.
+
+   **The turn back made again** (the user: "even if the leg isn't breaking, it's poor and strange —
+   improve it and look again"). What it was: a stiff plank tipped back with the arms flung out (the
+   skid, and the trunk's inertia tipping the whole body back on top of it), then an upright spin over
+   both planted feet (the legs crossed), then a split as the run took over late.
+   - **The skid:** low and sat back over the feet — the back knee deep, the front leg braced and bent,
+     the hips 11 cm down, the chest over the hips, the arms forward and low (not flung out); the
+     inertia's braking pitch three-quarters off while it skids (the skid is the brace).
+   - **The about-turn, first try** (feet pinned where they stood, the legs solved to them while the
+     hips went round): the user, "horrible, the leg all dislocated — do a proper animation, the whole
+     body". A leg pinned to the ground while the hips turned 180° had its thigh swung out of its socket.
+   - **The about-turn, again** (`chars/anim/about.ts`, in `yutopia-air`, 0.34 s): a hop-turn as KH3
+     does it, keyed whole — no leg solved to a spot. Out of the skid she drops into a crouch (the knees
+     to 1.5 rad, the hips 17 cm down), the head and the chest already going round and the arms winding;
+     springs into a small hop, the legs tucked and the arms pulled in as the body turns in the air;
+     comes down low facing the new way, the foot ahead and the trunk thrown forward over it, the arms
+     as a sprint's start; the run has her on that foot once she's up to pace (3 m/s). The hips are
+     turned against the core's tenth-of-a-second spin so she goes round as the keys have it (a little
+     in the gather, most in the air, round as she lands). The foot lock let go only till she's down;
+     the trunk's roll, the lead into a turn and the gaze's kept out while she's going round. Only out
+     of a skid — not a turn from a stop.
+   - **The stretched leg, at last** (the user: "the leg stretched straight, totally out of the ordinary
+     — and now it happens when you sprint and let go of Shift, a little slide and a stop"). The cause
+     was never the turn: it was the skid. A hard stop planted a brake foot far ahead (the stepper's
+     `brace`, 30 cm out) and the foot lock held it while she slid on half a metre past it — the leg
+     pulled out straight to reach it, 38–46° off the vertical. Measured, not looked at: every frame, a
+     leg down, near straight and reaching past 30°.
+     - The skid is its own now, whole: compact — the front foot a short way ahead with its knee bent,
+       the back one under the hips, the hips 0.58 m up between them — on whichever foot was ahead, the
+       feet sliding with her (the stepper doesn't take them while it skids; the foot lock lets go).
+       From a jog's pace up it's all skid (the core stops her from 5 m/s in a fifth of a second).
+     - Shift let go with a way still held isn't a stop: the run slows to a jog, running (`easing`:
+       the gait's pace well under what she was just going) — no skid, no stop's steps.
+     - The hop-turn's own landing and drive less long; the foot lock off till the run has her.
+     - A client test (87): the skids, the turns back and Shift let go — no leg stretched out to the
+       ground. The jog stop's planted-feet check moved to it (its feet slide by design). A bench clip,
+       "sprint, let go of Shift". Census re-based: 128 clips.
+   - `design/anim/11-stops-world.mp4` (the world, half speed: Shift let go, a full stop, a turn back).
+     Budget `yutopia-chars` 44.3, `-air` 5.4, page 420.2.
+
 ## Guardrails
 
 - **The sign-off gate:** every phase is shown in `/dev/anim` and passed by you before the world

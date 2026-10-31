@@ -2132,6 +2132,19 @@ void main() {
    *  theirs less (x, z); its height theirs plus y (docs/plan/28-the-car.md: the cars draw so). */
   // ── the physics world (docs/plan/50-the-volume.md; tp/physics3d.ts): my body moves on it ──
   private physics: BrowserPhysics | null = null;
+  /** (plan 58 5d) the world's physics for a ragdoll; someone's limp this frame; mine is */
+  private readonly ragSpace = () => this.physics?.ragdollSpace() ?? null;
+  private limpNow = false;
+  private meLimp = false;
+  /** (plan 58 5d) I'm down on the ragdoll: the walker holds me still till I'm up */
+  limpMe(): boolean {
+    return this.meLimp;
+  }
+  /** (plan 58 4f) the ground under a spot on my floor, by Jolt's ray down (null: none, or no physics) */
+  private readonly groundAt = (x: number, y: number, from: number): number | null => {
+    const hit = this.physics?.ray(x, from, y, 0, -1, 0, 1.4) ?? null;
+    return hit === null ? null : from - hit;
+  };
   private physicsAsked = false;
   /** Jolt's world in the browser, made once the view's up (until it's in, the grid moves me). */
   private startPhysics(): void {
@@ -2473,6 +2486,8 @@ void main() {
     const seenPets = new Set<string>();
     let mySeat: string | undefined;
     this.unseen.clear();
+    // (plan 58's mood: the shadowed about, for everyone's tension)
+    const shadesNear = bodies.filter((b) => b.shade && !b.shade.killed);
     for (const b of bodies) {
       if (b.pet) {
         seenPets.add(b.id);
@@ -2534,8 +2549,14 @@ void main() {
               (!hidden3 && this.frustum.intersectsSphere(this.sphere)) ||
               (b.id === meId && first && this.handsOn && handsDoing(b) !== ""),
             lowQuality: this.quality === "low" || this.quality === "lowest",
+            mood: this.moodOf(b, shadesNear),
+            groundAt: this.groundAt,
+            rag: this.ragSpace,
           },
         );
+        // (plan 58 5d: down on the ragdoll — the physics stepped while anyone is; mine holds the walker)
+        if (p3.limp?.on) this.limpNow = true;
+        if (b.id === meId) this.meLimp = !!p3.limp?.on;
         this.snowFall(b, p3, dt, hidden3);
         if (p3.ready) {
           // (its drawing stood in until now)
@@ -2589,6 +2610,9 @@ void main() {
         p.dispose();
         this.people.delete(id);
       }
+    // (plan 58 5d: the ragdolls in the world's physics, a step on while anyone's down)
+    if (this.limpNow) this.physics?.step(dt);
+    this.limpNow = false;
     for (const [id, p] of this.people3)
       if (!seen.has(id)) {
         p.dispose();
@@ -3518,6 +3542,18 @@ void main() {
     this.snowOn.set(b.id, k);
     p3.snowK = hidden ? 0 : k;
     p3.updateSnow();
+  }
+  // The mood (plan 58 C.6), someone's tension 0..1: the night out under the sky (wary, not afraid —
+  // indoors, lit, hardly), and the shadowed close (all of it within 5 m, from 16 m). A shade's own is
+  // the dark itself (person3d).
+  private moodOf(b: Body3, shades: Body3[]): number {
+    const night = this.nightLevel * (this.underSky(b.x, b.y) ? 0.7 : 0.2);
+    let near = 0;
+    for (const s of shades) {
+      const d = Math.hypot(s.x - b.x, s.y - b.y);
+      near = Math.max(near, Math.min(1, Math.max(0, (16 - d) / 11)));
+    }
+    return Math.min(1, Math.max(night, near * (0.6 + 0.4 * this.nightLevel)));
   }
   // out under the open sky: on the land, or the lot's open tiles (asphalt, concrete)
   private underSky(x: number, y: number): boolean {

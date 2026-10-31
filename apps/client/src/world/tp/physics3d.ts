@@ -91,6 +91,15 @@ export class BrowserPhysics {
     this.refresh();
   }
 
+  /** (plan 58 5d) The world to lay a ragdoll in, and where its origin is in the scene (my floor's frame). */
+  ragdollSpace(): { world: PhysicsWorld; origin: () => { x: number; y: number; z: number } } {
+    return { world: this.world, origin: () => this.src.frame() };
+  }
+  /** (plan 58 5d) A step for what's loose in it (the ragdolls: the walker's character moves itself). */
+  step(dt: number): void {
+    this.world.step(Math.min(dt, 1 / 30));
+  }
+
   /** How far from a point of the scene (the floor I see) along (dx, dy, dz) the first wall, floor or
    *  the land is (sight's mask: not furniture, not what moves), or null — the camera keeping out of
    *  them (docs/plan/56-the-controls.md H.6). */

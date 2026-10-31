@@ -660,4 +660,5 @@ export function getUp2Pose(u: number, back: boolean): { m: Moved; hands: Hands |
   };
 }
 
+export { ABOUT_DOWN, ABOUT_LEN, AboutTurn } from "./about";
 export { Downed, RagdollRig } from "./rag";

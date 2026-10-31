@@ -45,6 +45,7 @@ const e = new Vector3();
 const m4 = new Matrix4();
 const eu = new Euler();
 const tup = (v: Vector3): [number, number, number] => [v.x, v.y, v.z];
+const up = new Vector3(0, 1, 0);
 
 /** One person's ragdoll: made from how their model stands now, run by the world, read back. */
 export class RagdollRig {
@@ -58,6 +59,8 @@ export class RagdollRig {
   constructor(
     private readonly world: PhysicsWorld,
     private readonly model: PersonModel,
+    /** where the physics world's origin is in the scene (the world's: its floor's frame) */
+    private readonly origin: () => { x: number; y: number; z: number } = () => ({ x: 0, y: 0, z: 0 }),
   ) {}
 
   /** Limp from the model's pose as it's shown now, going at `vel` (m/s, world); `hit`: a blow to a
@@ -67,6 +70,7 @@ export class RagdollRig {
     const M = this.model;
     M.root.updateMatrixWorld(true);
     this.from = { ...pose };
+    const o = this.origin();
     const parts: RagPart[] = [];
     for (const s of SPECS) {
       const b = M.bone(s.bone);
@@ -90,7 +94,7 @@ export class RagdollRig {
         s.hinge === "knee" ? [-bent, 2.5 - bent] : s.hinge === "elbow" ? [-2.5 - bent, -bent] : undefined;
       parts.push({
         parent: s.parent,
-        at: tup(p),
+        at: [p.x - o.x, p.y - o.y, p.z - o.z],
         q: [q.x, q.y, q.z, q.w],
         end: tup(e),
         r: s.r,
@@ -120,8 +124,15 @@ export class RagdollRig {
 
   /** After the world's step: the parts read back as the bones, then as a pose off the model's root
    *  (`pose`, and `moved()` with the hips' lift). */
-  read(): void {
+  read(root?: { at: Vector3; yaw: number }): void {
     if (this.id === null || !this.world.ragdollParts(this.id, this.buf)) return;
+    // (into the scene: the world's origin added back)
+    const o = this.origin();
+    for (let i = 0; i < SPECS.length; i++) {
+      this.buf[i * 7] += o.x;
+      this.buf[i * 7 + 1] += o.y;
+      this.buf[i * 7 + 2] += o.z;
+    }
     const M = this.model;
     M.root.updateMatrixWorld(true);
     const world = new Map<JointName, Quaternion>();
@@ -131,14 +142,21 @@ export class RagdollRig {
       const wq = new Quaternion(B[i * 7 + 3], B[i * 7 + 4], B[i * 7 + 5], B[i * 7 + 6]);
       world.set(s.bone, wq);
       // (its turn off its parent's: the root for the hips)
-      const par = s.parent >= 0 ? world.get(SPECS[s.parent].bone) : M.root.getWorldQuaternion(qp).clone();
+      // (off a root given — the world's: where it'll stand, turned the way it lies — else the model's)
+      const par =
+        s.parent >= 0
+          ? world.get(SPECS[s.parent].bone)
+          : root
+            ? new Quaternion().setFromAxisAngle(up, root.yaw)
+            : M.root.getWorldQuaternion(qp).clone();
       const local = (par as Quaternion).clone().invert().multiply(wq);
       eu.setFromQuaternion(local, "XYZ");
       out[s.bone] = [eu.x, eu.y, eu.z] as Euler3;
       // (the joints between parts as they were: the chest's to the neck's done by the parts' own)
       if (i === 0) {
         p.set(B[0], B[1], B[2]);
-        m4.copy(M.root.matrixWorld).invert();
+        if (root) m4.makeRotationY(root.yaw).setPosition(root.at).invert();
+        else m4.copy(M.root.matrixWorld).invert();
         p.applyMatrix4(m4);
         const r = M.restHips;
         this.lift = [p.x - r[0], p.y - r[1], p.z - r[2]];
@@ -202,8 +220,12 @@ export class Downed {
   constructor(
     world: PhysicsWorld,
     private readonly model: PersonModel,
+    origin?: () => { x: number; y: number; z: number },
+    /** (the world's) the root stays where the body is — it isn't the rig's to move: the pose is read
+     *  off it wherever the ragdoll's gone, and the get-up's turned the way she lies (`root.yaw`) */
+    private readonly anchored = false,
   ) {
-    this.rig = new RagdollRig(world, model);
+    this.rig = new RagdollRig(world, model, origin);
   }
 
   get on(): boolean {
@@ -237,7 +259,7 @@ export class Downed {
       // (the root kept under the hips as it goes: where the body is, for the camera and the world)
       const was = R.lying();
       const M = this.model;
-      if (was) M.root.position.set(was.hips.x, groundY(was.hips.x, was.hips.z), was.hips.z);
+      if (was && !this.anchored) M.root.position.set(was.hips.x, groundY(was.hips.x, was.hips.z), was.hips.z);
       R.read();
       this.t += dt;
       this.still = R.speed() < 0.25 ? this.still + dt : 0;
@@ -249,10 +271,19 @@ export class Downed {
       const fx = (L.head.x - L.hips.x) * (back ? -1 : 1);
       const fz = (L.head.z - L.hips.z) * (back ? -1 : 1);
       const root = { x: L.hips.x, y: groundY(L.hips.x, L.hips.z), z: L.hips.z, yaw: Math.atan2(fx, fz) };
-      // (how it lies, read again off where it'll stand)
-      this.model.root.position.set(root.x, root.y, root.z);
-      this.model.root.rotation.y = root.yaw;
-      R.read();
+      // (how it lies, read again off where it'll stand — anchored, off the root where the body is, turned
+      // the way it lies: the caller turns the person so)
+      if (!this.anchored) {
+        this.model.root.position.set(root.x, root.y, root.z);
+        this.model.root.rotation.y = root.yaw;
+        R.read();
+      } else {
+        const at = this.model.root.getWorldPosition(new Vector3());
+        root.x = at.x;
+        root.y = at.y;
+        root.z = at.z;
+        R.read({ at, yaw: root.yaw });
+      }
       this.up = { u: 0, back, from: R.moved() };
       R.stop();
       return { m: this.up.from, hands: null, root };

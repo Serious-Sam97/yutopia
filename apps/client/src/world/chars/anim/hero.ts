@@ -2142,23 +2142,27 @@ export function crouch2Pose0(t: number, tension = 0): Moved {
 
 // ── a skid (plan 58 G.B): slowing hard from speed — the lead foot braced out ahead on its heel,
 // the other bent under, the body leant back over it (at the hips), the arms thrown out ahead
+// (compact, the legs never stretched out: the front foot a short way ahead with its knee bent, the
+// back one under the hips on its ball, the hips sat down between them — 0.58 m — and the feet sliding
+// with her; the trunk sat back a little, the arms forward and low)
 const SKID: Ch = {
-  tR: -0.85,
-  kR: 0.25,
-  fR: -0.4,
-  tL: 0.15,
-  kL: 1.25,
-  fL: 0.55,
+  tR: -0.87,
+  kR: 0.86,
+  fR: -0.12,
+  tL: -0.18,
+  kL: 1.03,
+  fL: 0.4,
   aL: 0.08,
-  aR: 0.1,
-  sx: -0.3,
-  sL: -0.75,
-  sR: -0.55,
-  oL: 0.85,
-  oR: 0.7,
-  eL: -0.4,
-  eR: -0.55,
-  dx: -0.12,
+  aR: 0.12,
+  sx: -0.04,
+  sL: -0.85,
+  sR: -0.45,
+  oL: 0.3,
+  oR: 0.25,
+  eL: -1,
+  eR: -1.15,
+  hL: 0.4,
+  hR: 0.4,
 };
 
 // ── the jump (KH): a deep wind-up, arms thrown back; a stretch off the toes, arms thrown up; at
@@ -2578,21 +2582,22 @@ export function slide2Pose(t: number): Moved {
 }
 
 /** The skid's body, braced as hard as it brakes (`k` 0..1), the trailing leg scrubbing at `t` s. */
-export function skid2Pose(k: number, t: number): Moved {
+export function skid2Pose(k: number, t: number, lead: "L" | "R" = "R"): Moved {
   const c: Ch = { ...SKID };
-  // (harder: lower on the trailing knee, leant further back, the arms further out)
-  c.kL = v(c, "kL") + 0.35 * k;
-  c.sx = v(c, "sx") - 0.15 * k;
-  c.oL = v(c, "oL") + 0.2 * k;
-  c.oR = v(c, "oR") + 0.15 * k;
-  // the scrub: the trailing foot chattering over the ground, the arms catching the balance
-  const scrub = Math.sin(t * 2 * Math.PI * 13) * 0.06 * k;
-  c.tL = v(c, "tL") + scrub;
-  c.kL += scrub * 1.5;
-  const bal = Math.sin(t * 2 * Math.PI * 2.2) * 0.12 * k;
+  // (harder: a little lower, sat back further, the arms further out)
+  c.kR = v(c, "kR") + 0.12 * k;
+  c.kL = v(c, "kL") + 0.12 * k;
+  c.sx = v(c, "sx") - 0.08 * k;
+  c.oL = v(c, "oL") + 0.1 * k;
+  c.oR = v(c, "oR") + 0.08 * k;
+  // the scrub: the back foot chattering over the ground, the arms catching the balance
+  const scrub = Math.sin(t * 2 * Math.PI * 13) * 0.025 * k;
+  c.kL += scrub;
+  const bal = Math.sin(t * 2 * Math.PI * 2.2) * 0.08 * k;
   c.sL = v(c, "sL") + bal;
   c.sR = v(c, "sR") - bal;
-  return upright(body(steady(leanAtHips(c))));
+  // (on whichever foot was ahead as it began)
+  return upright(body(steady(leanAtHips(lead === "L" ? mirror(c) : c))));
 }
 
 // ── the gaze (plan 58 G.D): the eyes go first — almost at once, a saccade — and the head comes

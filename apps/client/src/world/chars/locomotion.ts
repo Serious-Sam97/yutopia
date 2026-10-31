@@ -260,6 +260,10 @@ export class Locomotion {
   private inert = { p: 0, pv: 0, r: 0, rv: 0 };
   private leadY = 0;
   private skidW = 0;
+  private skidOff = false;
+  private skidLead: "L" | "R" = "R";
+  private vPeak = 0;
+  private easing = false;
   private driveW = 0;
   private skidFrom = 0;
   private moving = false;
@@ -331,7 +335,7 @@ export class Locomotion {
     // the gaze (G.D): the eyes leading, the head after them — laid on after the follow-through,
     // its own spring the head's
     this.gaze ??= new hero.Gaze(this.seed);
-    const ahead = m.up ? 0 : Math.max(-0.6, Math.min(0.6, -m.turn * 0.25)) * Math.min(1, m.speed / 2);
+    const ahead = m.up || this.aboutBusy ? 0 : Math.max(-0.6, Math.min(0.6, -m.turn * 0.25)) * Math.min(1, m.speed / 2);
     // (the idle's glances held off while her eyes are on her own hands: 9)
     const idle = this.moveW < 0.5 ? hero.idleGlance(this.t, this.tension, this.seed) * (1 - this.eyesDown) : 0;
     // (9: a sound heard turns the eyes and the head to it a while, over whoever's looked at)
@@ -346,7 +350,8 @@ export class Locomotion {
     // layers above did — let go of in the air, a verb or a Flowmotion move
     this.lock ??= new hero.FootLock();
     const moved = { ahead: m.ahead * dt, left: m.left * dt, yaw: -m.turn * dt };
-    const off = m.up || !!m.verb || !!m.flow || this.downFrom?.kind === "roll";
+    // (…and a skid's feet slide: let go of while it's on)
+    const off = m.up || !!m.verb || !!m.flow || this.downFrom?.kind === "roll" || this.aboutBusy || this.skidW > 0.3;
     const done = this.lock.apply({ pose, lift: out.lift }, dt, moved, off, this.base);
     // 4f: last, the feet on the ground under them
     this.grounded(hero, done, off ? null : (m.ground ?? null), dt);
@@ -474,6 +479,55 @@ export class Locomotion {
     this.gaitPh = (ph0 + past + 1) % 1;
   }
 
+  private about: InstanceType<Air["AboutTurn"]> | null = null;
+  private aboutW = 0;
+  private aboutOut = 1;
+  private brakeAgo = 9;
+  /** turning round (or just done), its feet its own: the foot lock let go */
+  private aboutBusy = false;
+  private aboutTurn(H: Hero, A: Air, dt: number, m: LocoIn, body: Moved, crouched: boolean): Moved {
+    this.brakeAgo = -m.accel > 6 && m.speed > 3 ? 0 : this.brakeAgo + dt;
+    this.about ??= new A.AboutTurn();
+    const ab = this.about;
+    const yaw = -m.turn * dt;
+    // (begun: skidding from a run, slow now, and the core turning her round — not a turn from a stop)
+    if (
+      !ab.on &&
+      this.brakeAgo < 0.5 &&
+      this.skidW > 0.25 &&
+      Math.abs(m.turn) > 4 &&
+      m.speed < 3 &&
+      !crouched &&
+      !m.aim
+    ) {
+      ab.start(-Math.sign(m.turn) || 1);
+      this.aboutW = 0;
+      this.aboutOut = 0;
+    }
+    // (the feet its own till the run has her: pinned where she landed as she sped away, a leg was
+    // stretched out to it)
+    this.aboutBusy = ab.on || this.aboutOut < 1;
+    if (ab.on) {
+      this.aboutW = Math.min(1, this.aboutW + dt / 0.06);
+      const out = ab.update(body, dt, yaw, m.speed, smoother(this.aboutW));
+      // (done: the run on the foot she came down on, a moment after it's down)
+      if (!ab.on) {
+        this.stepping = "cycle";
+        this.stepW = 0;
+        this.gaitPh = (ab.lead() === "R" ? 0 : 0.5) + 0.08;
+      }
+      return out;
+    }
+    if (this.aboutOut < 1) {
+      // (out into the run, the turn's legs and the run's mixed by where the feet are)
+      this.aboutOut = Math.min(1, this.aboutOut + dt / 0.12);
+      const a = ab.update(body, dt, yaw, m.speed, 1);
+      const k = smoother(this.aboutOut);
+      return H.blendLegs(mix(a, body, k), a, body, k);
+    }
+    return body;
+  }
+
   /** 4c: who has the feet — the idle, the stepper or the cycle — and the stepper's legs laid on. */
   private stepper(H: Hero, dt: number, m: LocoIn, body: Moved, T: number, stride: number): Moved {
     this.steps ??= new H.Stepper();
@@ -528,17 +582,19 @@ export class Locomotion {
       st.watch(feet, mv, dt);
       // (from the cycle: a skid's brace as it begins braking from a sprint, else a stop's steps once
       // it's to stop within a step — not a landing's check in the speed)
-      const skid = this.stepping === "cycle" && this.skidFrom > (S.jog + S.sprint) / 2 && v > 4;
+      // (not while it skids, nor as a hard stop from a jog or faster begins — that's a skid: its feet
+      // slide with her, its own; the stepper takes them once it's done, where they've slid to. A brake
+      // foot planted there was stretched out to as she slid half a metre past it)
       const take =
         this.stepping === "idle"
           ? v > 0.05 || Math.abs(m.turn) > 0.8
-          : skid || (a < -4 && rem < 0.6 && !this.landOf && !this.lastJump && this.upAgo > 0.3) || v < 0.3;
+          : this.skidW < 0.3 &&
+            !this.skidFrom &&
+            !(v > 3.5 && a < -4 && !this.easing) &&
+            !this.easing &&
+            ((a < -4 && rem < 0.6 && !this.landOf && !this.lastJump && this.upAgo > 0.3) || v < 0.3);
       if (take) {
         st.take(body.lift);
-        if (skid) {
-          const ahead = st.feet.L.at[2] > st.feet.R.at[2] ? "L" : "R";
-          st.brace(ahead);
-        }
         this.stepping = "steps";
         this.stepW = 1;
         this.still = 0;
@@ -683,6 +739,10 @@ export class Locomotion {
     this.sidePh = (this.sidePh + d / STRAFE_STRIDE) % 1;
     this.backPh = (this.backPh + d / BACK_STRIDE) % 1;
     this.moveW += (clamp(m.speed / 0.7, 0, 1) - this.moveW) * k(12);
+    // (slowing to a slower gait — Shift let go, the sprint to a run — not stopping: the pace it's
+    // going for well under what it was just going, and not nothing)
+    this.vPeak = Math.max(m.speed, this.vPeak - dt * 3);
+    this.easing = m.goal !== undefined && m.goal > 1 && m.goal < this.vPeak - 0.6 && m.speed > m.goal - 0.3;
     this.crouchW += ((m.crouch ? 1 : 0) - this.crouchW) * k(10);
     this.aimW += ((m.aim ? 1 : 0) - this.aimW) * k(14);
     this.torchW += ((m.torch && !m.aim ? 1 : 0) - this.torchW) * k(8);
@@ -830,10 +890,13 @@ export class Locomotion {
       // (going forward: backing up or aside, a stop's the stepper's)
       // (nor turning hard: a cut at a sprint slows as its way swings round — braced on a foot out
       // ahead, slid on it while it turned, the leg folded under her)
+      // (not easing down to a slower gait — Shift let go, the sprint to a run: that's the run slowing,
+      // its feet running; a skid is stopping, or turning round, the gait's own pace still asked for)
       if (
         !this.skidFrom &&
         -m.accel > 6 &&
         m.speed > 4 &&
+        !this.easing &&
         this.upAgo > 0.3 &&
         Math.abs(this.way) < 1 &&
         Math.abs(m.turn) < 1.5
@@ -841,14 +904,27 @@ export class Locomotion {
         this.skidFrom = m.speed;
       // (over when it's nearly stopped, or done braking — slowed from a sprint to a walk, say)
       if (this.skidFrom && (m.speed < 0.8 || m.accel > -1)) this.skidFrom = 0;
-      const skidTo = this.skidFrom ? clamp((this.skidFrom - 3) / (S.sprint - 3), 0, 1) : 0;
-      this.skidW += (skidTo - this.skidW) * k(skidTo > this.skidW ? 16 : 6);
-      // (its lean and arms; the feet where the gait has them — the stepper's brace, while it skids)
-      if (this.skidW > 0.01) {
-        const pre = body;
-        body = H.blendLegs(mix(body, H.skid2Pose(this.skidW, this.t), ease(this.skidW)), pre, pre, 0.5);
+      // (…or turned round on it — the keys the other way: the lean back was for the way she was going;
+      // it's gone at once, not laid over the turn and the run back — the world's, a sprint reversed)
+      if (this.skidFrom && Math.abs(m.turn) > 4) {
+        this.skidFrom = 0;
+        this.skidOff = true;
       }
+      // (from a jog's pace on, all of it: the core stops her from 5 m/s in a fifth of a second — a slide)
+      const skidTo = this.skidFrom ? clamp((this.skidFrom - 2.5) / 2.5, 0, 1) : 0;
+      if (skidTo > 0) this.skidOff = false;
+      this.skidW += (skidTo - this.skidW) * k(skidTo > this.skidW ? 16 : this.skidOff ? 22 : 6);
+      // (its lean and arms; the feet where the gait has them — the stepper's brace, while it skids)
+      // (the skid's own legs, whole — bent, short, the feet sliding with her: pinned where they were put
+      // down as she slid on, they were stretched out straight. On the foot that was ahead as it began)
+      if (this.skidFrom && this.skidW < 0.02)
+        this.skidLead = H.footOf(body, "L").ankle[2] > H.footOf(body, "R").ankle[2] ? "L" : "R";
+      if (this.skidW > 0.01)
+        body = mix(body, H.skid2Pose(this.skidW, this.t, this.skidLead), ease(clamp(this.skidW * 1.3, 0, 1)));
       body = this.stepper(H, dt, m, body, T, strideNow);
+      // (the user's: a sprint one way and then the other — turning round as a move of its own, out of
+      // the skid: low over the braced foot, the head and chest round first, driven off into the run)
+      if (air && !m.reduced) body = this.aboutTurn(H, air, dt, m, body, crouched);
       // come to a stop from a run: the weight settles (a small give in the knees)
       if (m.speed > 2.5) this.moving = true;
       else if (this.moving && m.speed < 0.6) {
@@ -1142,9 +1218,12 @@ export class Locomotion {
     // Taken at the hips, the legs keeping their way (the waist opens at a spine's bend).
     if (H && !m.reduced) {
       const I = this.inert;
-      const pTo = m.up ? 0 : clamp(m.accel * 0.011, -0.2, 0.18);
+      // (braking in a skid: the skid's own pose is the brace — low, sat back over the feet — not the
+      // whole body tipped back on top of it, a plank)
+      const pTo = m.up ? 0 : clamp(m.accel * 0.011, -0.2, 0.18) * (m.accel < 0 ? 1 - 0.75 * this.skidW : 1);
       // (the turn: + to the right — the floor's y is south — leant into it)
-      const rTo = m.up ? 0 : clamp(m.turn * m.speed * 0.011, -0.28, 0.28);
+      // (not while turning round: the core's own spin isn't hers — the about-turn has its own)
+      const rTo = m.up || this.aboutBusy ? 0 : clamp(m.turn * m.speed * 0.011, -0.28, 0.28);
       const h = Math.min(dt, 1 / 30) / 2;
       for (let n = 0; n < 2; n++) {
         I.pv += (100 * (pTo - I.p) - 2 * 0.45 * 10 * I.pv) * h;
@@ -1162,7 +1241,7 @@ export class Locomotion {
       add(body.pose, "shoulderR", 0.9 * I.p, 0, 0.9 * Math.min(0, I.r));
       // the chest and the head lead a turn: they look round it before the hips have gone
       // (a turn to the right: the head turns to the right, its −y)
-      const lead = clamp(-m.turn * 0.045, -0.3, 0.3) * clamp(m.speed / 2, 0.3, 1);
+      const lead = this.aboutBusy ? 0 : clamp(-m.turn * 0.045, -0.3, 0.3) * clamp(m.speed / 2, 0.3, 1);
       this.leadY += (lead - this.leadY) * k(10);
       // (the head and neck: the gaze's, leading into the turn — G.D)
       add(body.pose, "chest", 0, this.leadY * 0.5, 0);

@@ -346,7 +346,7 @@ test("starts, stops, turning back; crouched, aside, backing up, hurt — a plant
   };
   for (const [name, most] of [
     ["start, walk, stop", 1],
-    ["start, jog, stop", 6],
+    // ("start, jog, stop" is a skid now — its feet slide with her by design: the test below)
     ["walk, turn back", 4],
     // 4d: crouched, aiming round a square (facing on), backing up, a limp
     ["crouch: start, sneak, stop", 1],
@@ -377,6 +377,40 @@ test("starts, stops, turning back; crouched, aside, backing up, hurt — a plant
     // (a frame or so at a touchdown: a landing foot's still braking from its swing)
     assert.ok(slips <= most, `${name}: ${slips} frames a planted foot slid over 0.3 m/s`);
     assert.ok(sunk < 0.01, `${name}: a foot ${(sunk * 100).toFixed(1)} cm into the floor`);
+  }
+});
+
+// (the user's, 2026-10-30: "the leg stretched out, totally bizarre" — a hard stop and a sprint turned
+// round had a foot planted far out ahead and the leg pulled straight to it. A skid's legs are its own,
+// short and bent, the feet sliding with her; the turn round keyed whole; Shift let go runs on)
+test("a skid, turning round from it, Shift let go: no leg stretched out to a foot on the ground", async () => {
+  const C = await import("./index");
+  const { clipList, tabulate } = await import("../../app/dev/anim/clips");
+  await loadHero();
+  const H = C.heroNow();
+  assert.ok(H);
+  for (const name of [
+    "sprint, skid",
+    "sprint, turn back",
+    "start, jog, stop",
+    "jog, turn back",
+    "sprint, let go of Shift",
+  ]) {
+    const clip = clipList().find((c) => c.name === name);
+    assert.ok(clip);
+    const fr = tabulate({ C, H, T: 0 }, clip, "after", true, 60);
+    assert.ok(fr);
+    let out = 0;
+    for (const f of fr)
+      for (const S of ["L", "R"] as const) {
+        const a = H.ankleOf(f, S);
+        const d = [a.at[0] - a.hip[0], a.at[1] - a.hip[1], a.at[2] - a.hip[2]];
+        const straight = Math.hypot(d[0], d[1], d[2]) / (THIGH * 2);
+        const off = Math.atan2(Math.hypot(d[0], d[2]), -d[1]);
+        // (down, near straight, and reaching out past 30° — a running stride's push-off is ~26°)
+        if (a.at[1] < 0.12 && straight > 0.95 && off > Math.PI / 6) out++;
+      }
+    assert.equal(out, 0, `${name}: ${out} frames a leg stretched out to the ground`);
   }
 });
 

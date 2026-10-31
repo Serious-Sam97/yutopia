@@ -151,6 +151,7 @@ export interface PersonIn {
    *  floor's radians) */
   hit?: { t: number; yaw: number };
   /** (plan 58 9) the warmth and the stamina (0..100), and a sound heard (s since, from where; loud: close) */
+  hp?: number;
   wm?: number;
   st?: number;
   heard?: { t: number; x: number; y: number; loud: boolean };

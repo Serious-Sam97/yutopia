@@ -686,7 +686,9 @@ export class Motion3 {
     };
     if (this.seated !== null && this.seated !== m.sit) this.settleT = 0;
     this.seated = m.sit;
-    this.settleT = Math.min(1, this.settleT + dt / (A ? 0.9 : 0.32));
+    // (getting up: half a second stood still; set off and it's a fifth, the move's legs already in it)
+    const moving = m.walking || m.speed > 0.3;
+    this.settleT = Math.min(1, this.settleT + dt / (!A ? 0.32 : m.sit ? 0.9 : moving ? 0.2 : 0.5));
 
     // ── standing / seated, and idle life
     let p = m.sit ? seatedPose(m.typing) : standPose();
@@ -741,14 +743,18 @@ export class Motion3 {
       A && (m.sit || this.settleT < 1)
         ? A.sit2(this.settleT, !m.sit, t, m.typing, m.seatDrop ?? -0.34, this.seed)
         : null;
+    // (getting up, the move takes over as it goes: from the start if she's off, else by its end)
+    const rising = !!sat && !m.sit && !!m.loco;
+    const riseW = rising ? smoother(moving ? Math.min(1, this.settleT * 1.6) : (this.settleT - 0.5) / 0.5) : 0;
+    const stood = { pose: p, lift: [lift[0], lift[1], lift[2]] as Euler3 };
     if (sat) {
       p = sat.pose;
       lift[0] = sat.lift?.[0] ?? 0;
       lift[1] = sat.lift?.[1] ?? 0;
       lift[2] = sat.lift?.[2] ?? 0;
-      handed(sat.hands, 1);
+      handed(sat.hands, 1 - riseW);
     }
-    if (m.loco && !m.sit && !sat) {
+    if (m.loco && !m.sit && (!sat || rising)) {
       // the move: standing (as above), walking, jogging, sprinting, crouched, aiming, in the air
       this.loco ??= new Locomotion();
       this.loco.v2 = this.v2;
@@ -758,12 +764,15 @@ export class Motion3 {
       const lo = this.loco.update(
         dt,
         { ...m.loco, dist: m.dist, speed: m.speed, jump: m.jump ?? null, reduced: m.reduced },
-        { pose: p, lift: [lift[0], lift[1], lift[2]] },
+        sat ? stood : { pose: p, lift: [lift[0], lift[1], lift[2]] },
       );
-      p = lo.pose;
-      lift[0] = lo.lift[0];
-      lift[1] = lo.lift[1];
-      lift[2] = lo.lift[2];
+      const w = sat ? riseW : 1;
+      p = w < 1 ? blend(p, lo.pose, w) : lo.pose;
+      lift[0] += (lo.lift[0] - lift[0]) * w;
+      lift[1] += (lo.lift[1] - lift[1]) * w;
+      lift[2] += (lo.lift[2] - lift[2]) * w;
+      // (plan 58: the move's hands — on a top, an edge, the pole, the torch, the gun — to the model)
+      handed(this.loco.handsOut, w);
     } else if (!sat) {
       // walking takes over the legs, the hips and the swing of the arms
       if (this.walkW > 0) {
@@ -907,7 +916,18 @@ export class Motion3 {
     const gz = this.loco?.gazeOut;
     if (gz) blink = Math.max(blink, gz.blink);
     talk = Math.max(talk, phoneTalk);
-    return { pose: p, lift, blink, talk, settle: sat?.settle ?? ease(this.settleT), sip, reach, eyes: gz?.eyes, hands };
+    return {
+      pose: p,
+      lift,
+      blink,
+      talk,
+      // (plan 58: the seat's drop — none stood; the old one's settle its progress either way)
+      settle: sat ? (sat.settle ?? 1) * (1 - riseW) : this.v2 ? (m.sit ? 1 : 0) : ease(this.settleT),
+      sip,
+      reach,
+      eyes: gz?.eyes,
+      hands,
+    };
   }
 }
 

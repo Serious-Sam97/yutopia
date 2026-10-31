@@ -6,7 +6,7 @@ import {
   flowCode,
   flowLook,
   type Gait,
-  KH_MOVE,
+  KH_FEEL,
   MoveClock,
   type MoveEnv,
   type MoveInput,
@@ -81,7 +81,7 @@ export interface WalkOut {
   landed: number | null;
   /** a verb started this frame (and the top it goes over), and the one under way (how far in) */
   started: { kind: VerbKind; h: number } | null;
-  verb: { kind: VerbKind; t: number } | null;
+  verb: { kind: VerbKind; t: number; h?: number; near?: number; far?: number; dist?: number } | null;
   /** a Flowmotion move under way, or a flow jump's spin (docs/plan/56-the-controls.md F); round a
    *  pole, the pole (the camera holds on it) */
   flow: FlowLook | null;
@@ -97,18 +97,20 @@ export interface WalkOut {
 }
 
 // the body after Kingdom Hearts 3 (docs/plan/56-the-controls.md B: signed off in /dev/move)
-const SPEC: MoveSpec = KH_MOVE;
+// (plan 58: the KH body with weight — ~0.2 s to a run, ~0.25 s to a stop, arcs on the run; decided
+// 9, "not visual-only" — signed off with the animations, the world's since the switch)
+const SPEC: MoveSpec = KH_FEEL;
 const AIM_BLADE = 0.45; // (shared beam.ts AIM_BLADE: a copy — this chunk doesn't carry beam.ts)
 
 // an admin's powers (docs/plan/48-the-admin.md): fast, through walls, flying — the server holds
 // them and takes the moves they allow; here they're only how I move
 const FAST_SPEC: MoveSpec = {
-  ...KH_MOVE,
-  walk: KH_MOVE.walk * FAST_X,
-  jog: KH_MOVE.jog * FAST_X,
-  sprint: KH_MOVE.sprint * FAST_X,
-  crouch: KH_MOVE.crouch * FAST_X,
-  aim: KH_MOVE.aim * FAST_X,
+  ...KH_FEEL,
+  walk: KH_FEEL.walk * FAST_X,
+  jog: KH_FEEL.jog * FAST_X,
+  sprint: KH_FEEL.sprint * FAST_X,
+  crouch: KH_FEEL.crouch * FAST_X,
+  aim: KH_FEEL.aim * FAST_X,
 };
 /** The grid with nothing in the way (through walls): only the ground's height is kept. */
 function noWalls(grid: Grid): Grid {
@@ -413,6 +415,8 @@ export class Walker {
   }
   /** s from a jump's press to its take-off */
   readonly takeoff = SPEC.takeoff;
+  /** (plan 58 5d) down on the ragdoll (the view's: my person's), held still till I'm up */
+  limp = false;
   private body: Body = newBody(0, 0);
   private prev: Body = newBody(0, 0);
   private clock = new MoveClock();
@@ -458,7 +462,8 @@ export class Walker {
     // the inventory open: standing still, no aim (the world doesn't stop), its own pad
     // (knocked down by a pool ball: where they fell till they're up — shared/pool-throw.ts KNOCK)
     // (held still by an admin, too: docs/plan/48-the-admin.md)
-    const frozen = !!this.dark?.frozen() || this.fell || this.heldStill;
+    // (down on the ragdoll from a fall, till I'm up: plan 58 5d)
+    const frozen = !!this.dark?.frozen() || this.fell || this.heldStill || this.limp;
     if (frozen) {
       move.x = 0;
       move.y = 0;
@@ -647,8 +652,18 @@ export class Walker {
       landed,
       presses,
       started,
+      // (getting over or onto something: what it's over, for the hands — plan 58 5b)
       verb: b.verb
-        ? { kind: b.verb.kind, t: verbProgress(b.verb, SPEC) }
+        ? b.verb.kind === "vault" || b.verb.kind === "mantle"
+          ? {
+              kind: b.verb.kind,
+              t: verbProgress(b.verb, SPEC),
+              h: b.verb.h,
+              near: b.verb.near,
+              far: b.verb.far,
+              dist: b.verb.dist,
+            }
+          : { kind: b.verb.kind, t: verbProgress(b.verb, SPEC) }
         : b.airDash && SPEC.airDash
           ? { kind: "adash", t: 1 - b.airDash / SPEC.airDash.len }
           : null,

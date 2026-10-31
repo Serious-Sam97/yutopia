@@ -1695,6 +1695,7 @@ export class WorldController {
     // the pad or a click-to-walk path (the input chunk: until it's here, I stand still)
     const w = this.walker;
     if (!w) return;
+    w.limp = !!this.tp?.limpMe();
     const first = this.firstPerson();
     const lp = this.room?.state.players.get(this.room.sessionId);
     const playing = !!this.games?.playing();
@@ -3996,6 +3997,7 @@ export class WorldController {
       fellYaw: p.fellYaw,
       hitAt: p.hitAt,
       hitYaw: p.hitYaw,
+      hp: p.hp,
       wm: p.wm,
       st: p.st,
       pinned: !!p.bitBy || undefined,

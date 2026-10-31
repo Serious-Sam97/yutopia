@@ -287,6 +287,8 @@ export function clipList(): Clip[] {
   keyed("start, walk, stop", 3.6, (t) => ({ y: during(t, 0.4, 2.4) ? 1 : 0, walk: true }));
   keyed("start, jog, stop", 3.2, (t) => ({ y: during(t, 0.4, 2.2) ? 1 : 0 }));
   keyed("sprint, skid", 3.4, (t) => ({ y: during(t, 0.3, 2.2) ? 1 : 0, sprint: true }));
+  // (Shift let go on the sprint, the way still held: the run slows to a jog, running — no skid)
+  keyed("sprint, let go of Shift", 3.4, (t) => ({ y: during(t, 0.3, 3.4) ? 1 : 0, sprint: t < 1.8 }));
   // (turning back: the keys the other way — the body faces on as it slows, turns round once it's
   // slow, and goes)
   keyed("walk, turn back", 4.4, (t) => ({ y: during(t, 0.3, 2) ? 1 : during(t, 2, 3.6) ? -1 : 0, walk: true }));
