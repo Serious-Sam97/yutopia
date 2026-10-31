@@ -1,3 +1,4 @@
+import { PIANO_STOOL } from "@yutopia/shared";
 import { fe, fr, INK, rnd, type Sketch, sh, te, tr } from "./kit";
 import { K, M } from "./pal";
 
@@ -89,6 +90,27 @@ export function piano(s: Sketch) {
   for (const x of [0.12, 1.8]) s.box({ x, y: 0.76, w: 0.08, d: 0.08, z: 0, h: 14, mat: wood, line: 0.7 });
   for (const x of [0.86, 0.98, 1.1]) s.box({ x, y: 0.58, w: 0.06, d: 0.08, z: 1, h: 0.8, mat: M.brass, line: 0.4 });
   s.shadow(0.06, 0.08, 1.88, 0.76, 0.42, 0.3);
+  // its stool, out in front of the keys (plan 62: played sat on it — tp/seats3d.ts "stool", its
+  // place shared PIANO_STOOL): four legs, a padded top in the case's wood
+  const [sx, sy] = PIANO_STOOL;
+  for (const [dx, dy] of [
+    [-0.27, -0.12],
+    [0.23, -0.12],
+    [-0.27, 0.08],
+    [0.23, 0.08],
+  ])
+    s.box({ x: sx + dx, y: sy + dy, w: 0.04, d: 0.04, z: 0, h: 10, mat: wood, line: 0.6 });
+  s.box({ x: sx - 0.3, y: sy - 0.15, w: 0.6, d: 0.3, z: 10, h: 2, mat: wood, line: 0.7 });
+  s.box({
+    x: sx - 0.28,
+    y: sy - 0.13,
+    w: 0.56,
+    d: 0.26,
+    z: 12,
+    h: 1.4,
+    mat: { c: "#3a2a22", top: "#4a372c" },
+    puff: 1.2,
+  });
 }
 
 // A record player standing on a surface (drawn standing on z 0): a walnut

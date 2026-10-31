@@ -505,6 +505,9 @@ export interface Sedan {
   seats: { hip: Vector3; side: 1 | -1; front: boolean }[];
   /** the driver's eyes (model coords, sitting back) */
   eye: Vector3;
+  /** (plan 62) the pedals' faces — clutch, brake, throttle — and the footwell floor's height (model coords) */
+  pedals?: Vector3[];
+  floor?: number;
   /** the body: its length, where its front axle is (the profile's u), which */
   dims: { L: number; axleF: number; kind: NonNullable<SedanOpts["kind"]> };
   /** the lamps (model coords): headlamps' centres and their aim; tail lamps */
@@ -1412,16 +1415,19 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
   I.add(wood, cube(2.26, 2.34, 0.5, 0.507, -0.07, 0.07));
   I.add(leather, beam(U(2.86, 0.5, 0), U(2.66, 0.6, 0), 0.04, 0.035));
   I.add(chrome, new CylinderGeometry(0.008, 0.008, 0.02, 8).rotateZ(Math.PI / 2).translate(ux(2.65), 0.604, 0));
-  // pedals: clutch, brake, throttle
+  // pedals: clutch, brake, throttle (plan 62: their faces kept for the driver's feet)
+  const pedals: Vector3[] = [];
   for (const [z, y0, y1] of [
     [0.57, 0.4, 0.47],
     [0.43, 0.4, 0.47],
     [0.29, 0.37, 0.5],
   ]) {
+    pedals.push(new Vector3(ux(1.84), (y0 + y1) / 2, z));
     I.add(rubber, cube(1.82, 1.84, y0, y1, z - 0.04, z + 0.04));
     I.add(satin, beam(U(1.83, y1, z), U(1.76, 0.66, z), 0.02, 0.012));
   }
-  // the seats: two cloth buckets, the bench behind
+  // the seats: two cloth buckets, the bench behind (plan 62: the buckets slid 0.12 forward on their
+  // runners — plan 59's people reach the pedals and hold the wheel with their arms bent)
   const seats: Sedan["seats"] = [];
   // (the 4x4's are narrower on the outside: its rear tubs are beside their backs)
   const outer = off ? 0.18 : 0.26;
@@ -1433,12 +1439,12 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
       cloth,
       slab(
         [
-          [2.4, 0.36],
-          [2.4, 0.45],
-          [2.45, 0.495],
-          [2.9, 0.455],
-          [2.94, 0.4],
-          [2.9, 0.36],
+          [2.28, 0.36],
+          [2.28, 0.45],
+          [2.33, 0.495],
+          [2.78, 0.455],
+          [2.82, 0.4],
+          [2.78, 0.36],
         ],
         ...across(z, s, 0.26, outer),
         0.035,
@@ -1449,10 +1455,10 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
       cloth,
       slab(
         [
-          [2.88, 0.43],
-          [3.12, 1.08],
-          [3.22, 1.07],
-          [3.02, 0.4],
+          [2.76, 0.43],
+          [3, 1.08],
+          [3.1, 1.07],
+          [2.9, 0.4],
         ],
         ...across(z, s, 0.25, outer - 0.01),
         0.035,
@@ -1463,10 +1469,10 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
         vinyl,
         slab(
           [
-            [2.86, 0.45],
-            [3.06, 1.0],
-            [3.12, 0.99],
-            [2.94, 0.42],
+            [2.74, 0.45],
+            [2.94, 1.0],
+            [3, 0.99],
+            [2.82, 0.42],
           ],
           z + e * (e === s && off ? 0.15 : 0.25) - 0.05,
           z + e * (e === s && off ? 0.15 : 0.25) + 0.05,
@@ -1478,10 +1484,10 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
       cloth,
       slab(
         [
-          [3.14, 1.15],
-          [3.2, 1.32],
-          [3.29, 1.31],
-          [3.23, 1.14],
+          [3.02, 1.15],
+          [3.08, 1.32],
+          [3.17, 1.31],
+          [3.11, 1.14],
         ],
         z - 0.13,
         z + 0.13,
@@ -1489,12 +1495,12 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
       ),
     );
     for (const e of [-1, 1])
-      I.add(chrome, beam(U(3.15, 1.06, z + e * 0.08), U(3.18, 1.16, z + e * 0.08), 0.012, 0.012));
+      I.add(chrome, beam(U(3.03, 1.06, z + e * 0.08), U(3.06, 1.16, z + e * 0.08), 0.012, 0.012));
     // the seat's runners
-    I.add(satin, cube(2.45, 2.9, 0.31, 0.36, z - 0.22, z + 0.22));
-    seats.push({ hip: new Vector3(ux(2.8), 0.47, z), side: s, front: true });
+    I.add(satin, cube(2.33, 2.78, 0.31, 0.36, z - 0.22, z + 0.22));
+    seats.push({ hip: new Vector3(ux(2.68), 0.47, z), side: s, front: true });
     // the belt hanging from the B-pillar, unbuckled
-    I.add(strap, beam(onSide(XB + 0.02, 1.42, s, 0.08), U(2.96, 0.55, s * 0.74), 0.045, 0.004, [1, 0, 0]));
+    I.add(strap, beam(onSide(XB + 0.02, 1.42, s, 0.08), U(2.84, 0.55, s * 0.74), 0.045, 0.004, [1, 0, 0]));
   }
   // the rear bench: between the tubs (wider in front of them)
   const cushion: P2[] = [
@@ -1603,8 +1609,10 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
     return out.copy(steerTmp).applyMatrix4(column.matrix).applyMatrix4(cabin.matrix);
   };
   // the seats and the driver's eyes, from the cabin's frame to the body's
-  const eye = new Vector3(ux(2.86), 1.3, 0.42);
-  for (const p of [...seats.map((x) => x.hip), eye]) {
+  const eye = new Vector3(ux(2.74), 1.3, 0.42);
+  // (the footwell's floor: the carpet's top, plan 62)
+  const floor = new Vector3(0, 0.318, 0);
+  for (const p of [...seats.map((x) => x.hip), eye, ...pedals, floor]) {
     p.x += cabin.position.x;
     p.y += dy;
     p.z *= sh.cabin.sz;
@@ -1838,6 +1846,8 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
     snow,
     seats,
     eye,
+    pedals,
+    floor: floor.y,
     dims: { L, axleF: sh.axleF, kind: sh.kind },
     lamps: { head, tail, exhaust },
     rearView,

@@ -955,11 +955,18 @@ export class PoolTables {
           const { tip, butt } = this.cuePoints(from.x, from.y, a, pull, sx, sy);
           const A = toWorld(o, tip[0], tip[1]);
           const B = toWorld(o, butt[0], butt[1]);
-          into.cues.push({
+          const cue = {
             key: `${id}:shot`,
-            tip: [A.x, A.y, zt(tablePx(K, tip[2]))],
-            butt: [B.x, B.y, zt(tablePx(K, butt[2]))],
-          });
+            tip: [A.x, A.y, zt(tablePx(K, tip[2]))] as [number, number, number],
+            butt: [B.x, B.y, zt(tablePx(K, butt[2]))] as [number, number, number],
+          };
+          into.cues.push(cue);
+          // (plan 62: the shooter drawn at it — not Vortex, he walks there himself)
+          const s = (t.seats as Map<string, S>).get(String(g.turn));
+          if (s?.sid && !s.vortex) {
+            into.shooters ??= [];
+            into.shooters.push({ sid: s.sid, tip: cue.tip, butt: cue.butt });
+          }
         }
         if (mine && !v.sim && !this.drag && t.guide !== "pro") {
           const gd = aimGuide(g.balls, this.angle);

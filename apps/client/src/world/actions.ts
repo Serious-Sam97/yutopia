@@ -8,11 +8,13 @@ import {
   hangSpot,
   isSocial,
   liftFront,
+  PIANO_STOOL,
   type Point,
   placedFootprint,
   reachOf,
   SOCIAL_MS,
   SOCIAL_REACH,
+  seatFront,
   type WorldObjectDef,
 } from "@yutopia/shared";
 import { COMPUTER_REACH, computerAway } from "@yutopia/shared/computer";
@@ -422,25 +424,39 @@ const FRONT: [number, number][] = [
   [0, -1],
   [-1, 0],
 ];
+const CLOSE = new Set(["whiteboard", "coffee", "water", "vending", "piano"]);
 function frontOf(grid: Grid, o: WorldObjectDef): Point | null {
   const { w, h } = placedFootprint(o);
   if (o.kind === "elevator") {
     const at = liftFront(o, 0.6);
     return grid.fits(at.x, at.y) ? at : grid.nearestOpen(at.x, at.y, 2);
   }
+  // (plan 62: what the hands go to, stood up close to — a whiteboard written on, a machine's button,
+  // the piano's keys; a thing on a desk just clear of the desk's edge)
+  const close = CLOSE.has(entry(o.kind).interact ?? "");
   if (entry(o.kind).wall) {
-    const at = hangSpot(o, 0.5);
-    return grid.nearestOpen(at.x, at.y, 3);
+    const at = hangSpot(o, close ? 0.4 : 0.5);
+    return grid.fits(at.x, at.y) ? at : grid.nearestOpen(at.x, at.y, 3);
   }
   const [fx, fy] = FRONT[(o.rot ?? 0) % 4];
-  const x = o.x + w / 2 + fx * (w / 2 + 0.5);
-  const y = o.y + h / 2 + fy * (h / 2 + 0.5);
+  // (the piano: behind its stool, out in front of it — PIANO_STOOL; she's drawn sat on it to play)
+  const out = entry(o.kind).onSurface
+    ? 0.23
+    : o.kind === "piano"
+      ? PIANO_STOOL[1] + 0.15 + 0.24 - h
+      : close
+        ? 0.26
+        : 0.5;
+  const x = o.x + w / 2 + fx * (w / 2 + out);
+  const y = o.y + h / 2 + fy * (h / 2 + out);
   // a wide thing (a piano, a counter): its middle, else along its front
   return grid.fits(x, y) ? { x, y } : grid.nearestOpen(x, y, 2);
 }
 
 // The seat to sit on: the thing's own (a chair, the nearest place on a bench),
-// or for a desk the chair at it nearest to me.
+// or for a desk the chair at it nearest to me — walked to just in front of it,
+// on its tile (plan 62: sitting down goes back onto it from there, not stood in it).
+const SEAT_FRONT = 0.36;
 function seatFor(grid: Grid, o: WorldObjectDef, me: Point): Point | null {
   const { w, h } = footprint(o.kind, o.rot ?? 0);
   const pad = entry(o.kind).seat ? 0 : 1;
@@ -448,11 +464,17 @@ function seatFor(grid: Grid, o: WorldObjectDef, me: Point): Point | null {
   let bestD = Number.POSITIVE_INFINITY;
   for (let y = o.y - pad; y < o.y + h + pad; y++)
     for (let x = o.x - pad; x < o.x + w + pad; x++) {
-      if (!grid.seatAt(x + 0.5, y + 0.5)) continue;
-      const d = Math.hypot(x + 0.5 - me.x, y + 0.5 - me.y);
+      const seat = grid.seatAt(x + 0.5, y + 0.5);
+      if (!seat) continue;
+      // (its front: the way a sitter faces — server `seatFacing`)
+      const [fx, fy] = seatFront(seat.rot);
+      // (a desk's chair has the desk there: its middle, then)
+      const front = { x: x + 0.5 + fx * SEAT_FRONT, y: y + 0.5 + fy * SEAT_FRONT };
+      const at = grid.fits(front.x, front.y) ? front : { x: x + 0.5, y: y + 0.5 };
+      const d = Math.hypot(at.x - me.x, at.y - me.y);
       if (d < bestD) {
         bestD = d;
-        best = { x: x + 0.5, y: y + 0.5 };
+        best = at;
       }
     }
   return best;

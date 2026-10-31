@@ -1118,7 +1118,7 @@ function everyday(x: Ctx, clip: Clip, which: "after" | "before", rate: number): 
     const o = m3.update(1 / rate, inp);
     // (the view's: down by the seat's drop as it settles — the old's by its own ease either way)
     const k = m3.v2 ? o.settle : inp.sit ? o.settle : 1 - o.settle;
-    const drop = clip.props && (inp.sit || o.settle < 1) ? (inp.seatDrop ?? -0.34) * k : 0;
+    const drop = clip.props && (inp.sit || o.settle < 1) ? (inp.seat?.drop ?? -0.34) * k : 0;
     out.push({
       pose: o.pose,
       lift: [o.lift[0], o.lift[1] + drop, o.lift[2]],

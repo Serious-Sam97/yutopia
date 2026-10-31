@@ -26,6 +26,7 @@ import {
 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
+import { carFit } from "../car/seatfit";
 
 // The kart (docs/plan/46-the-karts.md; rebuilt in the quality pass): a little 80s go-kart, chunky
 // as a toy — a tube frame on a floor tray, fat tyres with tread and lettered walls on five-spoke
@@ -49,6 +50,8 @@ export interface Kart {
   setSteer(a: number): void;
   /** where the driver's hips sit (body coords) */
   hip: Vector3;
+  /** (plan 62) its pedals: the brake (the driver's left), the throttle (right) — body coords */
+  pedals: Vector3[];
   /** a point on the steering wheel's rim at clock angle `phi` (0 top, + to the right), body coords */
   rim(phi: number, out?: Vector3): Vector3;
   /** the exhaust's tip, and the way it points (body coords) */
@@ -731,6 +734,7 @@ export function buildKart(o: KartOpts, ink: Material): Kart {
       sw.rotation.x = -a * 2.2;
     },
     hip,
+    pedals: [new Vector3(0.7, 0.16, -0.1), new Vector3(0.7, 0.16, 0.1)],
     rim(phi: number, out = new Vector3()) {
       // (in the wheel's frame: its face is the y–z plane, top +y, right −z)
       v.set(0, Math.cos(phi) * 0.12, -Math.sin(phi) * 0.15);
@@ -874,7 +878,8 @@ export function kartDriver(
   );
   m.root.position.set(kart.hip.x, 0, kart.hip.z);
   m.root.rotation.y = Math.PI / 2; // (people face +z; the kart's nose is +x)
-  m.root.scale.setScalar(0.9);
+  // (plan 62: full size — the pedals reach, nothing over the head)
+  m.root.scale.setScalar(1);
   kart.body.add(m.root);
   let helmet: Group | null = null;
   const v = new Vector3();
@@ -882,17 +887,15 @@ export function kartDriver(
     model: m,
     ready: () => m.update(),
     pose(lean = 0, dizzy = false) {
-      const pose = C.carPose(true);
-      // (a kart's seat is on the floor: legs out ahead, near flat, knees up a little)
-      pose.thighL = [-1.42, 0, 0.12];
-      pose.thighR = [-1.42, 0, -0.12];
-      pose.kneeL = [0.42, 0, 0];
-      pose.kneeR = [0.42, 0, 0];
-      pose.ankleL = [-0.35, 0, 0];
-      pose.ankleR = [-0.35, 0, 0];
-      pose.spine = [-0.22 + (dizzy ? 0.2 : 0), 0, lean * 0.25];
+      // (a kart's seat is on the floor: the legs out ahead to its pedals, the back against its
+      // bucket — plan 62's fit —; leant into the corners, slumped dizzy)
+      const A = C.actsNow();
+      const fit = A ? carFit(m, { hip: kart.hip, front: true }, true, kart, 1, 1, true) : null;
+      const pose = A && fit ? A.car3(fit, 0, 0).pose : C.carPose(true);
+      const sp = pose.spine ?? [0, 0, 0];
+      pose.spine = [sp[0] + (dizzy ? 0.2 : 0), sp[1], sp[2] + lean * 0.25];
       pose.neck = [0.12, 0, -lean * 0.12];
-      m.setPose(pose, [0, m.sitDrop((kart.hip.y + 0.02) / 0.9), 0]);
+      m.setPose(pose, [0, m.sitDrop(kart.hip.y + 0.02), 0]);
       m.setFace(1, 0);
       kart.root.updateMatrixWorld(true);
       for (const [sd, phi] of [

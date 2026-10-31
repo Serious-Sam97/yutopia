@@ -82,7 +82,8 @@ function anchors(k: Kit, b: Body, cover: number) {
   const ear = new Vector3(-(hs.R(earY) * k.p.head.width + 0.03 * hh + cover), earY - 0.24 * hh, 0.04 * hh);
   k.anchors.ear = at(ear.add(head));
   const mouth = hs.front(0, f.mouthY * hh);
-  k.anchors.mouth = at(new Vector3(-0.05 * hh, f.mouthY * hh - 0.26 * hh, mouth.p.z + 0.16 * hh).add(head));
+  // (plan 62: a drink's rim at the lips — a moustache's width out —, not in the jaw: refit to plan 59's head)
+  k.anchors.mouth = at(new Vector3(-0.021 * hh, f.mouthY * hh - 0.26 * hh, mouth.p.z + 0.242 * hh).add(head));
   const chin = hs.front(0, 0.04 * hh);
   k.anchors.chin = at(new Vector3(-0.02 * hh, -0.2 * hh, chin.p.z + 0.06 * hh).add(head));
   const eyeY = f.eyeY * hh;

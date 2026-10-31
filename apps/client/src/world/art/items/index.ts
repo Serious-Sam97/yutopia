@@ -59,7 +59,7 @@ export interface ItemGen {
 const occupied = (p: Props) => (p.occupied ? "sit" : "");
 // fabric / paint (props.color)
 const painted = (p: Props) => (typeof p.color === "string" ? p.color : "");
-const sitPaint = (p: Props) => `${occupied(p)}|${painted(p)}`;
+const sitPaint = (p: Props) => `${occupied(p)}|${painted(p)}|${Number(p.pull) || 0}`;
 // a console's cartridge (its label colour)
 const cart = (p: Props) => (p.cart ? String(p.cartColor ?? "c") : "");
 // a disc console: its disc, the lid, the memory card, the LED
@@ -250,7 +250,8 @@ export function itemSketchOpts(o: ItemRef): {
     w: e.w,
     h: e.h,
     seed: (variantOf(o) + 0.5) / variantsOf(o.kind),
-    offset: e.wall ? [0, WALL_FACE] : undefined,
+    // (a desk's chair sat on: pulled in to it, the way it faces — plan 62)
+    offset: e.wall ? [0, WALL_FACE] : Number(o.props?.pull) ? [0, Number(o.props?.pull)] : undefined,
   };
 }
 export function drawItem(s: Sketch, o: ItemRef) {

@@ -57,12 +57,35 @@ export interface SolidBox {
 }
 type Box = SolidBox & { ca: number; sa: number; r: number };
 
+/** A seat on a tile: what it is, its turn, and how far a sitter's pulled in to a desk (tiles). */
+export interface Seat {
+  id: string;
+  rot: number;
+  kind: string;
+  pull: number;
+}
+/** How far a chair at a desk (and whoever's on it) comes in to it, tiles: the knees under its top,
+ *  still on the chair's own tile (docs/plan/62-the-touch.md, phase 2). */
+export const DESK_PULL = 0.4;
+/** The way a seat's sitter faces, as a step on the floor: away from its back (on −y at rot 0) —
+ *  the world server's `seatFacing`. */
+export function seatFront(rot: number): [number, number] {
+  return (
+    [
+      [0, 1],
+      [-1, 0],
+      [0, -1],
+      [1, 0],
+    ] as [number, number][]
+  )[((rot % 4) + 4) % 4];
+}
+
 export class Grid {
   readonly walk: Uint8Array;
   readonly top: Float32Array; // what a body stands on in each tile, tiles up (Infinity: nothing)
   readonly hBlock: Uint8Array; // north edge of (x, y): (height + 1) × width
   readonly vBlock: Uint8Array; // west edge of (x, y): height × (width + 1)
-  readonly seats = new Map<number, { id: string; rot: number }>();
+  readonly seats = new Map<number, Seat>();
   // stairs (stairs.ts): the treads' surfaces, and the tiles of their wells,
   // which have no floor of their own (only the treads)
   readonly ramps: Ramp[] = [];
@@ -151,7 +174,8 @@ export class Grid {
       }
       if (e.seat)
         for (let dy = 0; dy < h; dy++)
-          for (let dx = 0; dx < w; dx++) g.seats.set(g.idx(o.x + dx, o.y + dy), { id: o.id, rot: o.rot ?? 0 });
+          for (let dx = 0; dx < w; dx++)
+            g.seats.set(g.idx(o.x + dx, o.y + dy), { id: o.id, rot: o.rot ?? 0, kind: o.kind, pull: 0 });
       if (isDoorKind(o.kind)) {
         const locked =
           doorLockable(o.kind) && o.props?.state === "locked" && (as?.uid == null || doorOwner(map, o) !== as.uid);
@@ -179,6 +203,22 @@ export class Grid {
     }
     if (opts.dressing !== false)
       for (const d of dressItems(map, list)) if (d.solid && d.tile) g.block(d.tile[0], d.tile[1]);
+    // (a chair with a desk's top right in front of it is pulled in to it, sat on: docs/plan/62)
+    const tops = new Set<number>();
+    for (const o of objects) {
+      const e = entry(o.kind);
+      if (!e.surface || e.onSurface) continue;
+      const { w, h } = footprint(o.kind, o.rot ?? 0);
+      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) tops.add(g.idx(o.x + dx, o.y + dy));
+    }
+    if (tops.size)
+      for (const [i, s] of g.seats) {
+        if (s.kind !== "chair") continue;
+        const [fx, fy] = seatFront(s.rot);
+        const x = (i % W) + fx;
+        const y = Math.floor(i / W) + fy;
+        if (x >= 0 && y >= 0 && x < W && y < map.height && tops.has(g.idx(x, y))) s.pull = DESK_PULL;
+      }
     return g;
   }
 
@@ -370,8 +410,18 @@ export class Grid {
     );
   }
 
-  seatAt(x: number, y: number): { id: string; rot: number } | undefined {
+  seatAt(x: number, y: number): Seat | undefined {
     return this.seats.get(this.idx(Math.floor(x), Math.floor(y)));
+  }
+
+  /** Where someone sits on the seat at (x, y): its tile's middle, a desk's chair pulled in to it. */
+  seatSpot(x: number, y: number): Point {
+    const tx = Math.floor(x);
+    const ty = Math.floor(y);
+    const s = this.seats.get(this.idx(tx, ty));
+    const [fx, fy] = s ? seatFront(s.rot) : [0, 0];
+    const k = s?.pull ?? 0;
+    return { x: tx + 0.5 + fx * k, y: ty + 0.5 + fy * k };
   }
 
   // A body is a small square around its centre: its corners must be on floor,

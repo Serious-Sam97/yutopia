@@ -59,6 +59,10 @@ export interface CatalogEntry {
   opening?: "door" | "window";
 }
 
+/** (docs/plan/62) The piano's stool, drawn with it out in front of its keys: its middle in the
+ *  piano's own tiles (rot 0, the keys toward +y) — played sat on it. */
+export const PIANO_STOOL: [number, number] = [1, 1.27];
+
 export const CATALOG = {
   desk: { label: "Desk", w: 2, h: 1, solid: true, buildable: true, variants: 4, look: 0, surface: 25 },
   chair: { label: "Chair", w: 1, h: 1, solid: false, seat: true, buildable: true, variants: 4, paint: true },

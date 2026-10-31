@@ -2,6 +2,7 @@ import type { AvatarLayers } from "@yutopia/shared";
 import { groundAt } from "@yutopia/shared/grounds";
 import type * as THREE_NS from "three";
 import type { PetIn } from "../pet-stage";
+import { carFit } from "./seatfit";
 import { buildSedan, type Lights, type Sedan, type SedanOpts } from "./sedan";
 import { windscreenSnow } from "./textures";
 import type { Cluster } from "./vfd";
@@ -153,7 +154,8 @@ export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: 
       const hip = s.seats[seat].hip;
       m.root.position.set(hip.x, 0, hip.z);
       m.root.rotation.y = -Math.PI / 2; // (people face +z; the car's nose is −x)
-      m.root.scale.setScalar(SEATED); // (a touch smaller in a seat: the people's heads are big)
+      // (plan 62: full size in a cabin drawn to fit them — its pedals known —, else a touch smaller)
+      m.root.scale.setScalar(s.pedals ? 1 : SEATED);
       s.body.add(m.root);
       people.push({ m, seat, driver });
     };
@@ -288,8 +290,16 @@ export function stageCars(T3: THREE, scene: THREE_NS.Scene, cars: CarIn[], ctx: 
       for (const b of built)
         for (const p of b.people) {
           const seat = b.s.seats[p.seat];
-          const pose = ctx.C.carPose(p.driver);
-          p.m.setPose(pose, [0, p.m.sitDrop((seat.hip.y + 0.02) / SEATED), 0]);
+          // (plan 62: fitted to the seat — the back to its back, the feet to the pedals or the floor)
+          const A = ctx.C.actsNow();
+          const sc = p.m.root.scale.x;
+          if (A) {
+            const fit = carFit(p.m, seat, p.driver, b.s, sc, -1);
+            const act = A.car3(fit, 0, p.seat * 1.7);
+            const l3 = act.lift ?? [0, 0, 0];
+            p.m.setPose(act.pose, [l3[0], l3[1] + fit.drop, l3[2]]);
+            if (act.hands) p.m.handsTo(act.hands);
+          } else p.m.setPose(ctx.C.carPose(p.driver), [0, p.m.sitDrop((seat.hip.y + 0.02) / sc), 0]);
           p.m.setFace(1, 0);
           if (p.driver) {
             b.s.root.updateMatrixWorld(true);

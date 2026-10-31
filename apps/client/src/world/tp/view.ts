@@ -8,7 +8,9 @@ import {
   floorOf,
   floorsOf,
   type Grid,
+  hangSpot,
   homeOf,
+  hostWorld,
   isFloor,
   levelMap,
   liftFloorName,
@@ -17,11 +19,14 @@ import {
   objLevel,
   offsetOf,
   onLevel,
+  PIANO_STOOL,
   type Point,
   placedFootprint,
   STAIRS_D,
   STOREY,
+  surfaceAt,
   tileAt,
+  topCentre,
   WANTS,
   type Want,
   type WorldObjectDef,
@@ -108,13 +113,13 @@ import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { CASTER_LAYER } from "./grounds-stream";
 import type { GunFx } from "./guns3d";
 import { Hands1P, handsDoing } from "./hands1p";
-import { zt } from "./kit3d";
+import { ZPX, zt } from "./kit3d";
 import { type Gather, lazyMatrices, seal } from "./lazy-matrices";
 import { type LiftStop3, Lifts3, liftMats } from "./lift3d";
 import { Light3, landLight, litBalance, patchGrounds } from "./light3d";
 import { type Live, LiveFeed, type LiveSources, LiveSurfaces } from "./live";
 import { mergeStill, PROXIED, shadowProxy } from "./merge-static";
-import { dirAngle, Person3, type PersonIn } from "./people3d";
+import { dirAngle, type Keys, Person3, type PersonIn } from "./people3d";
 import { type Mats as CharMats, Person3D } from "./person3d";
 import { BrowserPhysics } from "./physics3d";
 import { Post3 } from "./post3d";
@@ -139,6 +144,66 @@ type People = NonNullable<ReturnType<typeof people>>;
 // turn see-through (the iso view's "wall-down", in 3D).
 
 // (the elevators and the staircases are drawn by Lifts3 / Stairs3, not with the floor's things)
+/** (plan 62) The keys: how far off a keyboard is still the one typed on (tiles); a keyboard's top
+ *  over the desk (art/items/clutter.ts, 1.8 iso px). */
+const KEYS_REACH = 1.3;
+const KEYBOARD_H = 1.8 / ZPX;
+/** (plan 62) The things each use puts the hands to. */
+const PART_KINDS: Record<string, string[]> = {
+  coffee: ["coffee_machine"],
+  water: ["water_cooler"],
+  vending: ["vending"],
+  piano: ["piano"],
+  whiteboard: ["whiteboard"],
+};
+const footCentre = (o: WorldObjectDef) => {
+  const { w, h } = placedFootprint(o);
+  return { x: o.x + w / 2, y: o.y + h / 2 };
+};
+/** A thing's parts the hands go to (its drawing's own tiles and iso px, at rot 0 — art/items), in the
+ *  world, for someone at (x, y): what's pressed first, then what's taken or played along. */
+function partsOf(o: WorldObjectDef, here: WorldObjectDef[], x: number, y: number): Keys[] | null {
+  const at = (lx: number, ly: number, zpx: number, base = 0): Keys => {
+    const [wx, wy] = hostWorld(o, lx, ly);
+    return { x: wx, y: wy, h: base + zpx / ZPX };
+  };
+  switch (o.kind) {
+    case "water_cooler":
+      // the cold tap; a paper cup from the holder on its side
+      return [at(0.58, 0.72, 23), at(0.8, 0.5, 26)];
+    case "vending":
+      // the keypad; the flap, low down
+      return [at(0.785, 0.86, 36), at(0.4, 0.86, 8)];
+    case "piano": {
+      // its keys, before the stool's middle; the stool (shared PIANO_STOOL), its top
+      const [sx, sy] = PIANO_STOOL;
+      return [at(sx, 0.72, 20), at(sx, sy, 13.4)];
+    }
+    case "coffee_machine": {
+      // on a counter: its buttons on top of the front, then the cup under the spout
+      const c = topCentre(o);
+      const host = surfaceAt(here, Math.floor(c.x), Math.floor(c.y));
+      const top = (host ? (entry(host.kind).surface ?? 0) : 0) / ZPX;
+      const dx = x - c.x;
+      const dy = y - c.y;
+      const n = Math.hypot(dx, dy) || 1;
+      return [
+        { x: c.x + (dx / n) * 0.1, y: c.y + (dy / n) * 0.1, h: top + 16 / ZPX },
+        { x: c.x + (dx / n) * 0.17, y: c.y + (dy / n) * 0.17, h: top + 3 / ZPX },
+      ];
+    }
+    case "whiteboard": {
+      // its face, at the height one writes, along it where they stand
+      const h = hangSpot(o, 0.1);
+      const span = placedFootprint(o);
+      const horiz = span.w >= span.h;
+      const u = horiz ? Math.max(o.x + 0.3, Math.min(o.x + span.w - 0.3, x)) : h.x;
+      const v = horiz ? h.y : Math.max(o.y + 0.3, Math.min(o.y + span.h - 0.3, y));
+      return [{ x: horiz ? u : h.x, y: horiz ? h.y : v, h: 1.35 }];
+    }
+  }
+  return null;
+}
 const noLifts = (objects: WorldObjectDef[]): WorldObjectDef[] =>
   objects.filter((o) => o.kind !== "elevator" && o.kind !== "stairs");
 
@@ -977,7 +1042,11 @@ void main() {
 
   // The game tables (Fita 13, tp/tables3d.ts): balls, cues, the lamp, rackets.
   private tables3: TablesIn3D | null = null;
+  // (plan 62) who's on a pool shot now, and its cue (tables/pool.ts)
+  private shooters = new Map<string, { tip: [number, number, number]; butt: [number, number, number] }>();
   setTables(s: TableScene3 | null) {
+    this.shooters.clear();
+    for (const c of s?.shooters ?? []) this.shooters.set(c.sid, c);
     if (s && !this.tables3) {
       this.tables3 = new TablesIn3D((m) => this.light.patch(m));
       this.scene.add(this.tables3.root);
@@ -1200,6 +1269,9 @@ void main() {
     const all = objects;
     this.allObjects = all;
     objects = onLevel(all, map);
+    this.hereObjects = objects;
+    this.keysAt.clear();
+    this.partsAt.clear();
     const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
     const wellSig = wellsKey(wells);
     this.light.update(map, objects);
@@ -1423,6 +1495,79 @@ void main() {
   // are on the GPU and their shaders compiled before anyone goes there: a
   // floor change then only moves and shows what's ready.
   private allObjects: WorldObjectDef[] = [];
+  private hereObjects: WorldObjectDef[] = [];
+
+  // (plan 62) The keys someone at a desk types on: the keyboard ahead of them (else in front of the
+  // computer or the monitor they face), its middle on the floor and its top's height — by where they
+  // are and the way they face, as the room's things are now.
+  private keysAt = new Map<string, Keys | null>();
+  private keysFor(x: number, y: number, angle: number): Keys | null {
+    const key = `${x.toFixed(2)}|${y.toFixed(2)}|${Math.round((angle * 4) / Math.PI)}`;
+    const had = this.keysAt.get(key);
+    if (had !== undefined) return had;
+    const fx = Math.cos(angle);
+    const fy = Math.sin(angle);
+    let best: Keys | null = null;
+    let bestD = KEYS_REACH;
+    for (const o of this.hereObjects) {
+      const d = o.kind === "tabletop" ? String(o.props?.d) : "";
+      const board = d === "keyboard";
+      if (!board && d !== "monitor" && o.kind !== "computer") continue;
+      const c = topCentre(o);
+      const host = surfaceAt(this.hereObjects, Math.floor(c.x), Math.floor(c.y));
+      const top = (host ? (entry(host.kind).surface ?? 0) : 0) / ZPX;
+      // (a screen faces whoever uses it: the keys a little this side of it, on the desk)
+      let kx = c.x;
+      let ky = c.y;
+      if (!board) {
+        const dx = x - c.x;
+        const dy = y - c.y;
+        const n = Math.hypot(dx, dy) || 1;
+        kx += (dx / n) * 0.3;
+        ky += (dy / n) * 0.3;
+      }
+      const ahead = (kx - x) * fx + (ky - y) * fy;
+      const dist = Math.hypot(kx - x, ky - y);
+      if (ahead < 0.15 || ahead < dist * 0.6) continue;
+      const score = dist - (board ? 0.3 : 0);
+      if (score < bestD) {
+        bestD = score;
+        best = { x: kx, y: ky, h: top + (board ? KEYBOARD_H : 0) };
+      }
+    }
+    if (this.keysAt.size > 256) this.keysAt.clear();
+    this.keysAt.set(key, best);
+    return best;
+  }
+
+  // (plan 62, phase 3) What someone busy at a thing puts their hands to, on the thing itself: the
+  // nearest of its kind ahead of them, its parts from its drawing (art/items, rot 0) turned with it —
+  // a machine's button then where its drink comes out, a tap, the piano's keys, the whiteboard's face
+  // (along it where they stand). Floor x, y and height (tiles).
+  private partsFor(busy: string, x: number, y: number, angle: number): Keys[] | null {
+    const kinds = PART_KINDS[busy];
+    if (!kinds) return null;
+    const key = `${busy}|${x.toFixed(2)}|${y.toFixed(2)}|${Math.round((angle * 4) / Math.PI)}`;
+    const had = this.partsAt.get(key);
+    if (had !== undefined) return had;
+    let best: WorldObjectDef | null = null;
+    let bestD = 2.5;
+    for (const o of this.hereObjects) {
+      if (!kinds.includes(o.kind)) continue;
+      const c = entry(o.kind).wall ? hangSpot(o, 0.1) : entry(o.kind).onSurface ? topCentre(o) : footCentre(o);
+      const d = Math.hypot(c.x - x, c.y - y);
+      if (d < bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+    let out: Keys[] | null = null;
+    if (best) out = partsOf(best, this.hereObjects, x, y);
+    if (this.partsAt.size > 256) this.partsAt.clear();
+    this.partsAt.set(key, out);
+    return out;
+  }
+  private partsAt = new Map<string, Keys[] | null>();
   private warmAt = 0;
   private cutWarm = false;
   private warmTarget: WebGLRenderTarget | null = null;
@@ -2539,6 +2684,12 @@ void main() {
             ...b,
             angle: angle3,
             seat: seat3,
+            keys:
+              (b.a === 2 && b.typing) || b.busy === "computer"
+                ? (this.keysFor(b.x, b.y, angle3) ?? undefined)
+                : undefined,
+            parts: b.busy ? (this.partsFor(b.busy, b.x, b.y, angle3) ?? undefined) : undefined,
+            cue: b.busy === "pool" ? this.shooters.get(b.id) : undefined,
             down: this.downed.get(b.id),
             fell,
             hit: this.hitOf(b),

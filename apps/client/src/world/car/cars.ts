@@ -63,6 +63,7 @@ import { hud, toast } from "../store";
 import { carGeometry } from "../tp/campus";
 import { CarCamera } from "../tp/car/camera";
 import { CarRig } from "../tp/car/rig";
+import { carFit } from "../tp/car/seatfit";
 import { buildSedan, type Sedan } from "../tp/car/sedan";
 import type { ThirdPersonView } from "../tp/view";
 import { CarInput, type Switch } from "./controls";
@@ -214,7 +215,14 @@ interface LiveView {
   // (`at`: when they sat down — they slide in from the open door)
   people: Map<
     string,
-    { m: InstanceType<typeof import("../chars").PersonModel>; seat: number; key: string; at: number }
+    {
+      m: InstanceType<typeof import("../chars").PersonModel>;
+      seat: number;
+      key: string;
+      at: number;
+      /** (plan 62) got out: when, the model kept a moment to climb out by the door */
+      gone?: number;
+    }
   >;
   sound: CarSound | null;
   pose: { p: Vector3; q: Quaternion; v: Vector3 };
@@ -315,7 +323,9 @@ function soundOf(ctx: AudioContext, kind: CarKind): CarSound | null {
 }
 /** The kinds the far model (a wagon's or a sedan's outline) can't stand in for: always drawn whole. */
 const OWN_SHAPE = new Set<CarKind>(["snowmobile", "snowcat", "ploughtruck", "tractor", "toboggan"]);
-const ENTER_S = 0.7; // s: getting in (sliding in from the door; the camera easing to the car's)
+const ENTER_S = 1.0; // s: getting in (stood at the door, down and in onto the seat; the camera easing to the car's)
+const EXIT_S = 0.8; // s: getting out (plan 62): up off the seat and out by the door, before they're a person again
+const SEATED_OLD = 0.92; // a vehicle whose cabin isn't fitted to plan 59's people: drawn a little smaller in it
 const RENDER_BEHIND = 110;
 const v3 = new Vector3();
 const q1 = new Quaternion();
@@ -356,6 +366,12 @@ export class Cars {
   private world: CarWorld;
   private helps: Helps = { ...HELPS };
   private parked = new Map<string, ParkedView>();
+  // (plan 62) when a parked car went (driven off): a car out on the road just after was got into
+  private unparked = new Map<string, number>();
+  private wasParked(vid: string): boolean {
+    const oid = vid.replace(/^car:/, "");
+    return this.parked.has(oid) || this.time - (this.unparked.get(oid) ?? Number.NEGATIVE_INFINITY) < 2;
+  }
   private shoves = new Map<string, Shove>();
   private nowMs = 0;
   private live = new Map<string, LiveView>();
@@ -1110,6 +1126,7 @@ export class Cars {
       if (!seen.has(id)) {
         this.dropParked(p);
         this.parked.delete(id);
+        this.unparked.set(id, this.time);
       }
     // the lot's empty bays snowed in (only where no car stands)
     if (!this.baySnow.mesh.parent) this.root.add(this.baySnow.mesh);
@@ -1235,7 +1252,9 @@ export class Cars {
           pose: { p: new Vector3(v.x, v.y, v.z), q: new Quaternion(v.qx, v.qy, v.qz, v.qw), v: new Vector3() },
           doors: [0, 0, 0, 0],
           doorUntil: [0, 0, 0, 0],
-          prevSeats: String(v.seats ?? "|||").split("|"),
+          // (plan 62: a car parked here a moment ago has just been got into — its seats were empty;
+          // one first seen out on the road already had them in it)
+          prevSeats: this.wasParked(id) ? ["", "", "", ""] : String(v.seats ?? "|||").split("|"),
           role: v.role ?? "",
           fast: 0,
           exhaustAt: 0,
@@ -1320,40 +1339,78 @@ export class Cars {
         );
         m.root.position.set(l.model.seats[i].hip.x, 0, l.model.seats[i].hip.z);
         m.root.rotation.y = -Math.PI / 2;
-        m.root.scale.setScalar(0.92);
+        // (plan 62: full size in a car whose cabin is drawn to fit — its pedals known —, else as before)
+        m.root.scale.setScalar(l.model.pedals ? 1 : SEATED_OLD);
         l.model.body.add(m.root);
         // (sliding in only as they get in — its door just opened —, not a model remade or a car
         // first seen with them in it)
         const getting = (!e || e.seat !== i) && this.time < l.doorUntil[i];
-        e = { m, seat: i, key, at: getting ? this.time : -9 };
+        // (remade in the same seat — the camera into the cockpit as they get in —: still getting in)
+        e = { m, seat: i, key, at: e && e.seat === i ? e.at : getting ? this.time : -9 };
         l.people.set(sid, e);
       }
     });
     for (const [sid, e] of l.people)
       if (!keep.has(sid)) {
+        // (plan 62: just got out — the door open —: kept a moment, climbing out by it; hidden as a
+        // person till then, so there's one of them)
+        if (e.gone === undefined && this.time < l.doorUntil[e.seat]) e.gone = this.time;
+        if (e.gone !== undefined && this.time - e.gone < EXIT_S) {
+          this.seated.add(sid);
+          continue;
+        }
         e.m.root.removeFromParent();
         l.people.delete(sid);
-      }
-    // posed: sitting, the driver's hands on the wheel
+      } else e.gone = undefined;
+    // posed: sitting, the driver's hands on the wheel (plan 62: fitted to the seat — the back to its
+    // back, the feet to the pedals or the floor —, getting in and out by the door)
     const C2 = C;
+    const A = C2.actsNow();
     for (const e of l.people.values()) {
-      // getting in: from outside the open door, ducking in, onto the seat
-      const seatAt = l.model.seats[e.seat].hip;
-      const k = Math.min(1, (this.time - e.at) / ENTER_S);
-      const out = 1 - k * k * (3 - 2 * k);
-      e.m.root.position.set(seatAt.x, -0.12 * Math.sin(Math.PI * k), seatAt.z + Math.sign(seatAt.z) * 0.85 * out);
-      if (!e.m.update()) continue;
       const seat = l.model.seats[e.seat];
-      e.m.setPose(C2.carPose(e.seat === 0), [0, e.m.sitDrop((seat.hip.y + 0.02) / 0.92), 0]);
-      if (e.seat === 0) {
+      const seatAt = seat.hip;
+      // (q: 0 sat … 1 stood out by the door — swung out sideways first, turned to it, then up off
+      // the seat once clear of the roof; getting in the same backwards)
+      const q =
+        e.gone !== undefined
+          ? Math.min(1, (this.time - e.gone) / EXIT_S)
+          : 1 - Math.min(1, (this.time - e.at) / ENTER_S);
+      const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+      const across = ease(q / 0.6);
+      const out = ease((q - 0.45) / 0.55);
+      const side = Math.sign(seatAt.z) || 1;
+      e.m.root.position.set(seatAt.x, 0, seatAt.z + side * 0.85 * across);
+      e.m.root.rotation.y = -Math.PI / 2 + side * (Math.PI / 2) * across;
+      if (!e.m.update()) continue;
+      const s = e.m.root.scale.x;
+      const driver = e.seat === 0;
+      if (A) {
+        const fit = carFit(e.m, seat, driver, l.model, s, -1);
+        // (swung out over the sill: the feet down on the ground outside, not on the pedals)
+        if (across > 0)
+          fit.feet = fit.feet.map((f) => [f[0], f[1] + (0.4 - f[1]) * across, f[2] * (1 - across)]) as typeof fit.feet;
+        const act = A.car3(fit, this.time, e.seat * 1.7);
+        const l3 = act.lift ?? [0, 0, 0];
+        e.m.setPose(C2.blend(act.pose, {}, out), [
+          l3[0] * (1 - out),
+          (l3[1] + fit.drop) * (1 - out),
+          l3[2] * (1 - out),
+        ]);
+        if (act.hands)
+          e.m.handsTo({
+            L: act.hands.L && { ...act.hands.L, w: 1 - out },
+            R: act.hands.R && { ...act.hands.R, w: 1 - out },
+          });
+      } else e.m.setPose(C2.carPose(driver), [0, e.m.sitDrop((seatAt.y + 0.02) / s), 0]);
+      if (driver && across < 1) {
         l.model.root.updateMatrixWorld(true);
-        for (const [side, phi] of [
+        for (const [hand, phi] of [
           ["L", -1.0],
           ["R", 1.0],
         ] as const) {
           l.model.rim(phi, v3);
           l.model.body.localToWorld(v3);
-          e.m.reachTo(side, v3, 1, [-0.75, -1, -0.35]);
+          e.m.reachTo(hand, v3, 1 - across, [-0.75, -1, -0.35]);
         }
       }
     }

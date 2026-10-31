@@ -22,6 +22,8 @@ export interface Hand {
   at: [number, number, number];
   w: number;
   pole?: [number, number, number];
+  /** (plan 62) the hand turned at the wrist to point this far from level (rad, − down) */
+  level?: number;
 }
 export type Hands = { L?: Hand; R?: Hand };
 export interface Act {
@@ -64,6 +66,7 @@ function upper(c: Ch): Pose {
 }
 const ELBOW_DOWN: [number, number, number] = [-0.6, -1, -0.45];
 const ELBOW_OUT: [number, number, number] = [-1, -0.4, -0.2];
+const ELBOW_ARM: [number, number, number] = [-0.5, -1, -0.9];
 
 // ── sitting (6a): the legs solved so the feet stay planted while the hips go down onto the seat and
 // back (the view lowers the hips by `settle` times the seat's drop: `drop` here, the same, m)
@@ -75,16 +78,201 @@ function leg(dz: number, dy: number): [number, number] {
   const k = Math.PI - Math.acos(Math.max(-1, Math.min(1, (THIGH * THIGH + SHIN * SHIN - d * d) / (2 * THIGH * SHIN))));
   return [-(phi + a), k];
 }
-// where each foot is sat (ahead, out): both flat, one out ahead, the ankles crossed
+// where each foot is sat (ahead, out): both flat, one out ahead, the ankles crossed, one tucked
+// (plan 62: ahead as the thigh's length — plan 59's legs are 14% longer)
 const FEET: [number, number, number, number][] = [
-  [0.4, 0.11, 0.4, 0.11],
-  [0.52, 0.12, 0.38, 0.1],
-  [0.56, -0.03, 0.56, 0.04],
-  [0.36, 0.13, 0.48, 0.13],
+  [1.14, 0.11, 1.14, 0.11],
+  [1.48, 0.12, 1.08, 0.1],
+  [1.59, -0.03, 1.59, 0.04],
+  [1.02, 0.13, 1.36, 0.13],
 ];
+
+/** Where she sits (plan 62, docs/plan/62-the-touch.md), in the body's own space (m): the hips' drop
+ *  from standing onto the seat (the view's `sitDrop`), how high they stand (the model's own hips, for
+ *  the legs to meet the floor to the mm), the floor under the feet (0 a room's; a step below on the
+ *  stands), how far the trunk leans back to meet the seat's back (rad), the least the feet go ahead
+ *  (a seat solid down to the floor in front: the shins clear of it), an armrest's top. */
+export interface SitFit {
+  drop: number;
+  stand?: number;
+  floor?: number;
+  recline?: number;
+  ahead?: number;
+  arms?: number | null;
+}
+// ── at the keys (plan 62): the hands on them from wherever they are, leant in to reach
+/** The keys in her own space (x her left, y up, z ahead), and how wide the hands go along them. */
+export type Keys4 = [number, number, number, number?];
+const SAT_SHOULDER = 0.47; // m: the shoulders over the hips' joint, sat upright
+const STOOD_SHOULDER = 0.58; // m: … over the hips, stood
+const KEY_OVER = 0.02; // m: the wrist over the keys' top (the hand level, the fingers curl down onto them)
+const KEYS_PITCH = -0.12; // rad: the hand over the keys, a touch down from level
+const REACH = 0.52; // m: the shoulder to the wrist, the arm all but straight
+/** How far forward (rad) to lean so the keys `z` ahead come within the forearms' comfort. */
+function leanTo(z: number, up: number): number {
+  return Math.asin(Math.max(0, Math.min(0.8, (z - 0.36) / up)));
+}
+/** The keys `k` (her own space), brought within reach of shoulders `sy` high leant `lean` in: past
+ *  it, the hands rest on the desk toward them. */
+function reachKeys(k: Keys4, sy: number, lean: number): [number, number, number] {
+  const sz = Math.sin(lean) * (sy - k[1] > 0 ? 0.47 : 0);
+  const dz = k[2] - sz;
+  const dy = sy - k[1];
+  const d = Math.hypot(dz, dy);
+  if (d <= REACH) return [k[0], k[1], k[2]];
+  // (along the desk's top toward them, as far as the arm goes)
+  const flat = Math.sqrt(Math.max(0, REACH * REACH - dy * dy));
+  return [k[0], k[1], sz + Math.min(dz, flat)];
+}
+/** Stood, bowed `bow` from the hips: the shoulders to the keys `k` (her own space). */
+function shoulderTo(k: Keys4, bow: number): number {
+  const sy = HIP_H + STOOD_SHOULDER * Math.cos(bow);
+  const sz = STOOD_SHOULDER * Math.sin(bow);
+  return Math.hypot(k[2] - 0.03 - sz, sy - k[1] - KEY_OVER);
+}
+/** Bowed `bow` from the hips, the legs straight under her and the feet flat, the head up. */
+function bowed(bow: number): Ch {
+  const hx = bow * 0.8;
+  return {
+    hx,
+    sx: bow * 0.2,
+    tL: -hx,
+    tR: -hx,
+    kL: 0.06,
+    kR: 0.06,
+    fL: -hx,
+    fR: -hx,
+    up: 0,
+    nx: -0.25 * bow,
+    dx: 0.1 - 0.25 * bow,
+  };
+}
+const MARKER = 0.1; // m: the marker's tip ahead of the hand's joint
+// (plan 62) How long each machine takes (world/controller.ts's), s
+const MACHINE_S: Record<string, number> = { coffee: 1.6, water: 1.4, vending: 1.5 };
+/** At a machine, `t` s since it began, its button `a` and where the drink comes out `b` (her own
+ *  space): the press you see, the wait, the drink taken — the cup in the hand then (shared/held). */
+function machine(
+  what: string,
+  t: number,
+  a: [number, number, number],
+  b: [number, number, number],
+): { c: Ch; hands: Hands; hs: [HandShape, HandShape]; legs: boolean } {
+  const len = MACHINE_S[what] ?? 1.5;
+  const u = Math.min(1, t / len);
+  const c: Ch = { sL: 0.08, eL: -0.3 };
+  const hs: [HandShape, HandShape] = [HANDS.relaxed, HANDS.relaxed];
+  let hands: Hands = {};
+  let legs = false;
+  // (each reach in and back out: there by `in0`, gone by `out1`)
+  const reach = (in0: number, out1: number) => win(u, in0, out1, 0.12);
+  // (down to a low part as people go: the knees bent as far as it's low, the hips back to keep the
+  // head off the machine, the back leant over — not folded stiff-legged)
+  const lowTo = (q: [number, number, number], w: number) => {
+    const low = Math.max(0, Math.min(1, (HIP_H + STOOD_SHOULDER - REACH * 0.8 - q[1]) / 0.6)) * w;
+    const lean = Math.max(0, Math.min(0.45, (q[2] - 0.3) * 1.2)) * w;
+    if (low + lean < 0.01) return;
+    legs = true;
+    // (right down near the floor — a vending machine's flap —: over further still)
+    const deep = Math.max(0, Math.min(1, (0.45 - q[1]) / 0.25)) * w;
+    const hx = 0.35 * low + 0.5 * lean + 0.3 * deep;
+    Object.assign(c, {
+      hx,
+      sx: 0.3 * low + 0.2 * lean + 0.3 * deep,
+      tL: -1.5 * low - hx * (1 - low),
+      tR: -1.3 * low - hx * (1 - low),
+      kL: 2.2 * low,
+      kR: 2.0 * low,
+      fL: -hx,
+      fR: -hx,
+      aL: 0.15 * low,
+      aR: 0.15 * low,
+      fw: -0.12 * low - 0.22 * deep,
+    });
+    // (the free hand on the left thigh, down low)
+    if (deep > 0.01) hands.L = { at: [0.14, 0.42, 0.2], w: deep, pole: ELBOW_OUT };
+  };
+  if (what === "vending") {
+    // the keypad keyed in, then down to the flap for the can
+    const key = reach(0.02, 0.45);
+    const flap = smoother((u - 0.5) / 0.2);
+    const tap = 0.012 * bump(u * TAU * 7) * key;
+    hands = {
+      R: {
+        at: flap > 0 ? [b[0], b[1] + 0.06, b[2] - 0.08] : [a[0], a[1], a[2] - 0.06 + tap],
+        w: Math.max(key, flap),
+        pole: ELBOW_DOWN,
+      },
+    };
+    hs[1] = flap > 0 ? mixH(HANDS.relaxed, HANDS.grip, flap) : mixH(HANDS.relaxed, HANDS.point, key);
+    lowTo(flap > 0 ? b : a, Math.max(key, flap));
+  } else if (what === "water") {
+    // a paper cup from its holder, under the tap, the tap held
+    const cup = smoother(u / 0.25);
+    const under = smoother((u - 0.25) / 0.2);
+    const tapW = win(u, 0.4, 0.95, 0.1);
+    const L: [number, number, number] = [
+      lerp(b[0], a[0] + 0.02, under),
+      lerp(b[1], a[1] - 0.09, under),
+      lerp(b[2], a[2] - 0.03, under),
+    ];
+    hands = {
+      L: { at: L, w: cup, pole: ELBOW_DOWN },
+      R: { at: [a[0] - 0.04, a[1] + 0.01, a[2] - 0.05], w: tapW, pole: ELBOW_DOWN },
+    };
+    hs[0] = HANDS.grip;
+    hs[1] = mixH(HANDS.relaxed, HANDS.point, tapW);
+    lowTo(cup > 0.5 && under < 0.5 ? b : a, Math.max(cup, tapW));
+  } else {
+    // the button pressed, the wait (a glance, the weight shifting), the cup from under the spout
+    const press = reach(0.02, 0.35);
+    const take = smoother((u - 0.72) / 0.2);
+    const tap = 0.015 * bump(Math.min(1, u / 0.3) * Math.PI) * press;
+    hands = {
+      R: {
+        at: take > 0 ? [b[0], b[1] + 0.04, b[2] - 0.06] : [a[0], a[1] + 0.01, a[2] - 0.06 + tap],
+        w: Math.max(press, take),
+        pole: ELBOW_DOWN,
+      },
+    };
+    hs[1] = take > 0 ? mixH(HANDS.relaxed, HANDS.grip, take) : mixH(HANDS.relaxed, HANDS.point, press);
+    lowTo(take > 0 ? b : a, Math.max(press, take));
+    c.dy = 0.25 * win(u, 0.4, 0.65, 0.1);
+  }
+  c.dx = (c.dx ?? 0) + 0.25;
+  return { c, hands, hs, legs };
+}
+/** A hand on the keys: the fingers curved down onto them, tapping in bursts, the wrist level. */
+function typingHand(p: Pose, S: "L" | "R", side: 1 | -1, t: number, ph: number, on: number) {
+  const tap = on * bump(t * 19 + ph);
+  Object.assign(
+    p,
+    shape(side, {
+      fingers: 0.3 + 0.25 * tap,
+      index: 0.25 + 0.4 * bump(t * 23 + ph * 2) * on,
+      thumb: 0.15,
+    }),
+  );
+  p[`wrist${S}`] = [-0.05, 0, 0];
+}
+
+/** A chair's, before the seats had their own (the bench's, the grounds' stills). */
+export const SIT_ANY: SitFit = { drop: -0.34 };
+
 /** Sitting: `u` 0→1 down onto the seat (or 1→0 getting up, `rising`), then sat `t` s (its life: the
- *  breath, the weight, the feet moved now and then, the hands on the lap or typing). */
-export function sit2(u: number, rising: boolean, t: number, typing: boolean, drop: number, seed: number): Act {
+ *  breath, the weight, the feet moved now and then, the hands on the lap, on the arms, or typing). */
+export function sit2(
+  u: number,
+  rising: boolean,
+  t: number,
+  typing: boolean,
+  seat: SitFit = SIT_ANY,
+  seed = 0,
+  keys?: Keys4,
+): Act {
+  const floor = seat.floor ?? 0;
+  // (typing: upright, leant in over the keys as far as they're off)
+  const recline = typing ? 0 : (seat.recline ?? 0);
   // (down: the trunk forward over the feet as the hips go back and down, then back upright and a
   // settle; up: forward again, the hands pushing on the knees, up through the legs)
   const s = rising ? smoother(clamp01((1 - u) / 0.75)) : smoother(clamp01((u - 0.12) / 0.7));
@@ -97,7 +285,9 @@ export function sit2(u: number, rising: boolean, t: number, typing: boolean, dro
   const sw = sat * smoother((((t / 7 + hash(1, seed) * 3) % 1) - 0.85) / 0.15);
   const F = f0.map((x, i) => lerp(x, f1[i], sw));
   const out = rising ? 1 - smoother(clamp01((1 - u - 0.45) / 0.45)) : smoother(clamp01((u - 0.05) / 0.5));
-  const fz = [F[0] * out, F[2] * out];
+  // (ahead in thighs; clear of a seat's solid front)
+  const least = seat.ahead ?? 0;
+  const fz = [Math.max(F[0] * THIGH, least) * out, Math.max(F[2] * THIGH, least) * out];
   const fx = [lerp(0.09, F[1], out), lerp(0.09, F[3], out)];
   // (each foot lifted as it moves: on the way in and out, and moving between the ways it sits)
   const step = (k: number) => 0.035 * Math.sin(Math.PI * clamp01(k));
@@ -105,11 +295,15 @@ export function sit2(u: number, rising: boolean, t: number, typing: boolean, dro
     step(rising ? (0.55 - u) / 0.4 : (u - 0.05) / 0.25) + step(sw * 2),
     step(rising ? (0.75 - u) / 0.4 : (u - 0.25) / 0.25) + step(sw * 2 - 1),
   ];
-  const hip = HIP_H + drop * s;
-  const hx = 0.12 * lean;
-  const c: Ch = { hx, sx: lean * 0.8 + 0.06 * sat, up: 0 };
+  const hip = (seat.stand ?? HIP_H) + seat.drop * s;
+  // (leant back to the seat's back by the pelvis — the trunk with it —, the head kept level)
+  const back = recline * sat;
+  const hx = 0.12 * lean - back;
+  const leanIn = typing && keys ? leanTo(keys[2], SAT_SHOULDER) * sat : 0;
+  const c: Ch = { hx, sx: lean * 0.8 + 0.06 * sat * (1 - Math.min(1, recline * 4)) + leanIn, up: 0 };
+  c.nx = 0.45 * back;
   (["L", "R"] as const).forEach((S, i) => {
-    const [th, k] = leg(fz[i], ANKLE + lifts[i] - hip);
+    const [th, k] = leg(fz[i], ANKLE + floor + lifts[i] - hip);
     c[`t${S}`] = th - hx;
     c[`k${S}`] = k;
     c[`f${S}`] = -hx;
@@ -121,7 +315,8 @@ export function sit2(u: number, rising: boolean, t: number, typing: boolean, dro
   c.sx += 0.015 * br * sat;
   c.hz = 0.03 * wob(t * 0.4, seed) * sat;
   c.dy = 0.25 * wob(t * 0.31, seed + 2) * sat * (typing ? 0.3 : 1);
-  c.dx = (typing ? 0.22 : 0.05) * sat;
+  // (typing: the eyes on the screen — the head held up against the lean in)
+  c.dx = (typing ? 0.22 : 0.05) * sat + 0.35 * back - 0.9 * leanIn;
   // the arms: out a little going down (for the balance), the hands on the knees getting up
   c.sL = c.sR = -0.35 - 0.4 * lean;
   c.eL = c.eR = -0.5 - 0.4 * lean;
@@ -130,7 +325,7 @@ export function sit2(u: number, rising: boolean, t: number, typing: boolean, dro
   const p = m.pose;
   // the hands: on the thighs sat, on the keys typing, on the knees pushing up
   const knee = (S: 1 | -1, i: number) => {
-    const [th] = leg(fz[i], ANKLE - hip);
+    const [th] = leg(fz[i], ANKLE + floor - hip);
     const a = th + hx;
     return [S * 0.1, hip - THIGH * Math.cos(a) + 0.06, -THIGH * Math.sin(a) - 0.04] as [number, number, number];
   };
@@ -144,29 +339,33 @@ export function sit2(u: number, rising: boolean, t: number, typing: boolean, dro
       return [S * 0.13, hip + 0.13, k[2] * 0.55];
     };
     if (typing) {
-      // (in bursts, a pause to read; the fingers going)
+      // (in bursts, a pause to read; the fingers going — on the keys she faces (plan 62), else where
+      // a desk's would be)
       const on = Math.sin(t * 0.9 + seed) > -0.3 ? 1 : 0;
+      const k = keys ? reachKeys(keys, hip + SAT_SHOULDER, leanIn) : null;
+      // (a piano's keys: the hands wide along them, apart and together)
+      const wide = keys?.[3] ? keys[3] * (0.6 + 0.4 * Math.sin(t * 0.9 + seed)) : 0;
       const key = (S: 1 | -1, ph: number): [number, number, number] => [
-        S * 0.13 + 0.012 * Math.sin(t * 7 + ph) * on,
-        hip + 0.31 + 0.01 * bump(t * 17 + ph) * on,
-        0.44 + 0.015 * Math.sin(t * 3.1 + ph) * on,
+        (k ? k[0] + S * (0.1 + wide) : S * 0.13) + 0.012 * Math.sin(t * 7 + ph) * on,
+        (k ? k[1] + KEY_OVER : hip + 0.31) + 0.01 * bump(t * 17 + ph) * on,
+        (k ? k[2] - 0.03 : 0.44) + 0.015 * Math.sin(t * 3.1 + ph) * on,
       ];
-      hands = { L: { at: key(1, 0), w: sat, pole: ELBOW_DOWN }, R: { at: key(-1, 1.7), w: sat, pole: ELBOW_DOWN } };
+      hands = {
+        L: { at: key(1, 0), w: sat, pole: ELBOW_DOWN, level: KEYS_PITCH },
+        R: { at: key(-1, 1.7), w: sat, pole: ELBOW_DOWN, level: KEYS_PITCH },
+      };
       for (const [S, side, ph] of [
         ["L", 1, 0],
         ["R", -1, 1.7],
-      ] as const) {
-        const tap = on * bump(t * 19 + ph);
-        Object.assign(
-          p,
-          shape(side, {
-            fingers: 0.55 + 0.35 * tap,
-            index: 0.4 + 0.5 * bump(t * 23 + ph * 2) * on,
-            thumb: 0.3,
-          }),
-        );
-        p[`wrist${S}`] = [0.12, 0, 0];
-      }
+      ] as const)
+        typingHand(p, S, side, t, ph, on);
+    } else if (seat.arms != null) {
+      // (an armchair's: the forearms along its arms, the hands over their fronts)
+      const arm = (S: 1 | -1): [number, number, number] => [S * 0.33, seat.arms as number, 0.24];
+      hands = { L: { at: arm(1), w: sat, pole: ELBOW_ARM }, R: { at: arm(-1), w: sat, pole: ELBOW_ARM } };
+      Object.assign(p, shape(1, HANDS.relaxed), shape(-1, HANDS.relaxed));
+      p.wristL = [0.15, 0, 0];
+      p.wristR = [0.15, 0, 0];
     } else {
       hands = { L: { at: lap(1, 0), w: sat, pole: ELBOW_DOWN }, R: { at: lap(-1, 1), w: sat, pole: ELBOW_DOWN } };
       Object.assign(p, shape(1, HANDS.relaxed), shape(-1, HANDS.relaxed));
@@ -175,6 +374,44 @@ export function sit2(u: number, rising: boolean, t: number, typing: boolean, dro
     }
   }
   return { pose: p, lift: m.lift, hands, settle: s };
+}
+
+/** (plan 62) Sat in a vehicle as it is: the hips onto its seat, the trunk back against its seat's back,
+ *  each foot where it goes — the pedals, the footwell's floor, out ahead on a kart's floor — in her
+ *  own space (x out to its side, y up from her root, z ahead: the ankle's, m). */
+export interface CarFit {
+  drop: number;
+  stand: number;
+  recline: number;
+  feet: [[number, number, number], [number, number, number]];
+  /** a passenger's hands in the lap (a driver's go on the rim: the car's reachTo) */
+  lap?: boolean;
+}
+/** In a vehicle (plan 62): the legs solved to each foot's place, the back to the seat's, the breath
+ *  and a glance out now and then (car2's life). */
+export function car3(f: CarFit, t: number, seed: number): Act {
+  const hip = f.stand + f.drop;
+  const back = f.recline;
+  const c: Ch = { hx: -back, up: 0, nx: 0.4 * back, dx: 0.25 * back + 0.05 };
+  (["L", "R"] as const).forEach((S, i) => {
+    const [out, ahead, y] = f.feet[i];
+    const [th, k] = leg(ahead, ANKLE + y - hip);
+    c[`t${S}`] = th + back;
+    c[`k${S}`] = k;
+    c[`f${S}`] = back;
+    c[`a${S}`] = Math.atan2(out - 0.078, Math.max(0.3, ahead)) * 0.8;
+  });
+  c.sx = 0.012 * Math.sin(t * 1.9);
+  c.dy = (f.lap ? 0.6 : 0.35) * Math.max(0, wob(t * 0.25, seed)) ** 2 * Math.sign(wob(t * 0.13, seed + 1));
+  c.sL = c.sR = -0.45;
+  c.eL = c.eR = -1.05;
+  const m = body(c);
+  const lap = (S: 1 | -1): [number, number, number] => [S * 0.13, hip + 0.1, 0.24];
+  return {
+    pose: m.pose,
+    lift: m.lift,
+    hands: f.lap ? { L: { at: lap(1), w: 1, pole: ELBOW_DOWN }, R: { at: lap(-1), w: 1, pole: ELBOW_DOWN } } : null,
+  };
 }
 
 /** In a car, sat behind the wheel or beside it: reclined, the legs out to the pedals; the breath, a
@@ -326,7 +563,13 @@ export function phone2(state: string, pose: string, t: number, talking: boolean,
 // at a computer; writing on the whiteboard and a step back to look
 const loop = (t: number, len: number) => (t % len) / len;
 /** Using something (shared USES), `t` s in: the whole body, and its hands. */
-export function busy2(what: string, t: number, seed: number): Act & { legs: boolean } {
+export function busy2(
+  what: string,
+  t: number,
+  seed: number,
+  keys?: Keys4,
+  parts?: [number, number, number][],
+): Act & { legs: boolean } {
   let c: Ch = {};
   let hands: Hands | null = null;
   let legs = false;
@@ -335,6 +578,16 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
     case "coffee":
     case "water":
     case "vending": {
+      if (parts?.length === 2) {
+        // (plan 62: on the machine itself, from when it began — `t` is since then)
+        const m = machine(what, t, parts[0], parts[1]);
+        c = m.c;
+        hands = m.hands;
+        hs[0] = m.hs[0];
+        hs[1] = m.hs[1];
+        legs = m.legs;
+        break;
+      }
       // a button pressed (a lean in), then the wait: weight shifting, a glance up at it, a tap of the foot
       const u = loop(t, 5);
       const press = win(u, 0.04, 0.34, 0.07);
@@ -435,6 +688,28 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
     }
     case "piano": {
       // the hands along the keys (apart, together), the fingers pressing, the body swaying with it
+      if (parts?.length) {
+        // (plan 62: on its keys — bowed over them from the hips as far as they're low and off)
+        const k = parts[0];
+        let bow = 0;
+        while (bow < 1.1 && shoulderTo(k, bow) > REACH * 0.95) bow += 0.05;
+        const a = 0.15 + 0.07 * Math.sin(t * 0.9 + seed);
+        const sw = Math.sin(t * 1.1);
+        const key = (S: 1 | -1, ph: number, f: number): [number, number, number] => [
+          k[0] + S * a + 0.03 * Math.sin(t * f),
+          k[1] + KEY_OVER + 0.012 * bump(t * 9 + ph),
+          k[2] - 0.02,
+        ];
+        hands = {
+          L: { at: key(1, 0, 2.3), w: 1, pole: ELBOW_OUT, level: KEYS_PITCH },
+          R: { at: key(-1, 2, 1.9), w: 1, pole: ELBOW_OUT, level: KEYS_PITCH },
+        };
+        legs = true;
+        Object.assign(c, bowed(bow), { sz: 0.06 * sw, dz: 0.08 * sw });
+        hs[0] = { fingers: 0.35 + 0.4 * bump(t * 11), index: 0.3 + 0.5 * bump(t * 13 + 1), thumb: 0.2 };
+        hs[1] = { fingers: 0.35 + 0.4 * bump(t * 12 + 2), index: 0.3 + 0.5 * bump(t * 10 + 3), thumb: 0.2 };
+        break;
+      }
       const a = 0.15 + 0.07 * Math.sin(t * 0.9 + seed);
       const sway = Math.sin(t * 1.1);
       hands = {
@@ -476,31 +751,31 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
       break;
     }
     case "pool": {
-      // down over the cue: the bridge hand on the cloth ahead, the cue hand drawing back and forth,
-      // then through for the strike; up to watch it
-      legs = true;
-      const u = loop(t, 4);
-      const up = win(u, 0.78, 1.02, 0.08);
-      const stroke = u < 0.6 ? Math.sin(u * TAU * 3) * 0.08 : u < 0.7 ? -0.12 + 0.34 * smoother((u - 0.6) / 0.1) : 0.22;
-      Object.assign(c, {
-        sx: lerp(0.95, 0.35, up),
-        dx: lerp(-0.7, -0.25, up),
-        nx: lerp(-0.2, 0, up),
-        tL: -0.4,
-        kL: 0.4,
-        fL: 0,
-        tR: 0.25,
-        kR: 0.1,
-        fR: 0.2,
-        hy: -0.25,
-        sy: 0.2,
-      });
-      hands = {
-        L: { at: [0.06, lerp(0.88, 1.0, up), 0.62], w: 1 - up, pole: ELBOW_OUT },
-        R: { at: [-0.16, 0.95, 0.02 + stroke], w: 1, pole: [-0.2, 1, -0.3] },
-      };
-      hs[0] = { fingers: 0.3, index: 0.05, thumb: 0.8 };
-      hs[1] = HANDS.grip;
+      if (parts?.length === 2) {
+        // (plan 62) on the shot: bowed over the cue far enough for the bridge hand to reach the
+        // cloth, the left leg forward and bent, the right back; the bridge hand on the cloth, the
+        // back hand on the cue where the table draws it back and through — the stroke is the cue's
+        legs = true;
+        const [bridge, grip] = parts;
+        let bow = 0.5;
+        while (bow < 1.25 && shoulderTo(bridge, bow) > REACH) bow += 0.05;
+        Object.assign(c, bowed(bow));
+        c.tL -= 0.3;
+        c.kL = 0.4;
+        c.tR += 0.15;
+        c.hy = -0.2;
+        c.sy = 0.15;
+        c.dx = 0.05 - 0.5 * bow;
+        hands = {
+          L: { at: [bridge[0], bridge[1] + 0.03, bridge[2]], w: 1, pole: ELBOW_OUT },
+          R: { at: grip, w: 1, pole: [-0.2, 1, -0.3] },
+        };
+        hs[0] = { fingers: 0.3, index: 0.05, thumb: 0.8 };
+        hs[1] = HANDS.grip;
+        break;
+      }
+      // (waiting for the turn — or another's shot — stood by, watching the table)
+      Object.assign(c, { sx: 0.05, dx: 0.3, dy: 0.15 * Math.sin(t * 0.4 + seed) });
       break;
     }
     case "pong": {
@@ -536,6 +811,27 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
     case "computer": {
       // stood at a keyboard, typing in bursts, the head reading
       const on = Math.sin(t * 0.9 + seed) > -0.25 ? 1 : 0;
+      if (keys) {
+        // (plan 62: bowed from the hips over the desk till the keys are in reach — the legs straight
+        // under her —, the fingers on them)
+        let bow = 0;
+        while (bow < 1 && shoulderTo(keys, bow) > REACH * 0.95) bow += 0.05;
+        const key = (S: 1 | -1, ph: number): [number, number, number] => [
+          keys[0] + S * 0.1 + 0.01 * Math.sin(t * 6 + ph),
+          keys[1] + KEY_OVER + 0.01 * on * bump(t * 17 + ph),
+          keys[2] - 0.03,
+        ];
+        hands = {
+          L: { at: key(1, 0), w: 1, pole: ELBOW_DOWN, level: KEYS_PITCH },
+          R: { at: key(-1, 1.3), w: 1, pole: ELBOW_DOWN, level: KEYS_PITCH },
+        };
+        Object.assign(c, bowed(bow), { dy: 0.06 * Math.sin(t * 0.7) });
+        const m = body(steady(c));
+        const p: Pose = { ...m.pose };
+        typingHand(p, "L", 1, t, 0, on);
+        typingHand(p, "R", -1, t, 1.3, on);
+        return { pose: p, lift: m.lift, hands, legs: true };
+      }
       hands = {
         L: {
           at: [0.13 + 0.01 * Math.sin(t * 6), 1.0 + 0.01 * on * bump(t * 17), 0.36],
@@ -567,15 +863,22 @@ export function busy2(what: string, t: number, seed: number): Act & { legs: bool
       const look = win(u, 0.8, 1.02, 0.06);
       const line = Math.floor(u * 4) % 3;
       const along = (u * 4) % 1;
+      // (plan 62: on the board's face, where she stands at it; the marker's tip a hand ahead)
+      const b = parts?.[0];
       hands = {
         R: {
-          at: [0.06 - 0.42 * along, 1.5 - 0.12 * line + 0.025 * Math.sin(along * 60), 0.48],
+          at: b
+            ? [b[0] + 0.2 - 0.4 * along, b[1] + 0.12 - 0.12 * line + 0.02 * Math.sin(along * 60), b[2] - MARKER]
+            : [0.06 - 0.42 * along, 1.5 - 0.12 * line + 0.025 * Math.sin(along * 60), 0.48],
           w: 1 - look,
           pole: ELBOW_DOWN,
         },
       };
+      // (leant in to it as far as it's off)
+      if (b) c.sx = Math.max(0, Math.min(0.35, (b[2] - 0.45) * 1.2)) * (1 - look);
       Object.assign(c, {
-        dx: -0.1 - 0.08 * line,
+        // (the eyes on the line being written, a little below them)
+        dx: b ? 0.12 + 0.06 * line : -0.1 - 0.08 * line,
         dy: 0.25 * (0.5 - along) * (1 - look),
         sx: -0.03 * look,
         sL: 0.05,

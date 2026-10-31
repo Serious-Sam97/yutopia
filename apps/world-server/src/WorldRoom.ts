@@ -883,8 +883,10 @@ export class WorldRoom extends Room<WorldState> {
       const seat = mine.seatAt(landing.x, landing.y);
       const was = p.level;
       p.level = target.level;
-      p.x = landing.x;
-      p.y = landing.y;
+      // (onto a seat: where it has you — a desk's chair pulled in to it, docs/plan/62)
+      const at = seat ? mine.seatSpot(landing.x, landing.y) : landing;
+      p.x = at.x;
+      p.y = at.y;
       p.z = mine.onLand(landing.x, landing.y) ? mine.groundAt(landing.x, landing.y, 0) : 0;
       p.a = seat ? ANIM.sit : ANIM.idle;
       if (seat) p.d = seatFacing(seat.rot);

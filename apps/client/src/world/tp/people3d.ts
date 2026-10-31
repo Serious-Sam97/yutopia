@@ -111,6 +111,15 @@ function partImage(key: string, svg: string, box: [number, number, number, numbe
   return null;
 }
 
+/** (plan 62) Where the keys someone types on are: the floor's x, y and the top's height (tiles). */
+export interface Keys {
+  x: number;
+  y: number;
+  h: number;
+  /** (a piano's) how far apart the hands go along them, m */
+  spread?: number;
+}
+
 export interface PersonIn {
   name: string;
   avatar: AvatarLayers;
@@ -130,6 +139,9 @@ export interface PersonIn {
   act?: string; // with someone (shared SOCIAL, or "take"), since actAt
   actAt?: number;
   typing?: boolean; // seated at a desk with a keyboard
+  keys?: Keys; // (plan 62) the keys they type on: its middle on the floor, its top's height
+  parts?: Keys[]; // (plan 62) the parts of what they're busy at their hands go to (a button, a tap…)
+  cue?: { tip: [number, number, number]; butt: [number, number, number] }; // (plan 62) their pool shot's cue
   reduced?: boolean; // reduced motion
   seat?: string; // what they sit on (catalog kind), when `a` is 2
   // the phone (shared/phone.ts): in the hand, its case, a photo pose, ringing

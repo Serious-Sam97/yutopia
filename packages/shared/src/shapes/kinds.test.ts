@@ -16,7 +16,9 @@ test("every kind has a shape, and its parts are real boxes near its footprint", 
       // (an arm or a lamp's head may reach out a little; a lamp post's arm 2 m)
       const [u0, u1, v0, v1] = p.t === "box" ? [p.u0, p.u1, p.v0, p.v1] : [p.u - p.r, p.u + p.r, p.v - p.r, p.v + p.r];
       const out = Math.max(-u0, u1 - w, -v0, v1 - h);
-      assert.ok(out <= (kind === "lamp_post" ? 1.6 : 0.2), `${kind}: ${out.toFixed(2)} m past its footprint`);
+      // (a lamp post's arm over the road; a piano's stool out in front of its keys, docs/plan/62)
+      const reach = kind === "lamp_post" ? 1.6 : kind === "piano" ? 0.45 : 0.2;
+      assert.ok(out <= reach, `${kind}: ${out.toFixed(2)} m past its footprint`);
     }
   }
 });

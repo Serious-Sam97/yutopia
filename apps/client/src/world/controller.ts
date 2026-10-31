@@ -58,6 +58,7 @@ import {
   STAIRS_W,
   STEP_LABELS,
   STOREY,
+  seatFront,
   setAreasBeyond,
   setOutdoors,
   socialFor,
@@ -1823,10 +1824,18 @@ export class WorldController {
     else if (seat) {
       this.me.a = ANIM.sit;
       if (this.me.a !== this.lastSent.a) {
-        // snap onto the seat and face its direction
-        this.me.x = Math.floor(this.me.x) + 0.5;
-        this.me.y = Math.floor(this.me.y) + 0.5;
+        // snap onto the seat and face its direction (the walker's body with me: else it's walked
+        // straight back off it the next frame)
+        // (a desk's chair: pulled in to it — plan 62, the grid's `seatSpot`)
+        const at = this.grid.seatSpot(this.me.x, this.me.y);
+        w.shift(at.x - this.me.x, at.y - this.me.y, 0);
+        this.me.x = at.x;
+        this.me.y = at.y;
         this.me.d = [1, 3, 5, 7][seat.rot % 4]; // away from the seat's back (server `seatFacing`)
+        // (the body's own yaw too: else it's still the way I walked onto it, and sends me back round)
+        const [fx, fy] = seatFront(seat.rot);
+        w.faceYaw(Math.atan2(fy, fx));
+        this.meAngle = Math.atan2(fy, fx);
       }
     } else this.me.a = ANIM.idle;
     // a selfie: I face the camera (it's in front of me)
@@ -2482,8 +2491,9 @@ export class WorldController {
       if (performance.now() < this.usingUntil) return;
       const how = {
         coffee: ["brew", 1600, "coffeeMade"],
-        water: ["pour", 1000, "waterPoured"],
-        vending: ["clunk", 900, "sodaBought"],
+        // (as long as the body takes at it: chars/anim/acts.ts MACHINE_S, plan 62)
+        water: ["pour", 1400, "waterPoured"],
+        vending: ["clunk", 1500, "sodaBought"],
       } as const;
       const [snd, ms, msg] = how[e.interact];
       this.usingWhat = e.interact;
@@ -3668,7 +3678,10 @@ export class WorldController {
     for (const o of model.allObjects()) {
       if (o.kind === "chair" || o.kind === "armchair" || o.kind === "beanbag") {
         const occupied = sitting.has(`${o.x},${o.y}`);
-        if (!!o.props?.occupied !== occupied) model.upsertObject({ ...o, props: { ...(o.props ?? {}), occupied } });
+        // (a desk's chair comes in to it with whoever's on it: plan 62, the grid's `seatSpot`)
+        const pull = occupied ? (this.grid.seatAt(o.x + 0.5, o.y + 0.5)?.pull ?? 0) : 0;
+        if (!!o.props?.occupied !== occupied || (Number(o.props?.pull) || 0) !== pull)
+          model.upsertObject({ ...o, props: { ...(o.props ?? {}), occupied, pull } });
         continue;
       }
       if (isRadio(o.kind)) {

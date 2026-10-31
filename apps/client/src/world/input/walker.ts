@@ -409,6 +409,12 @@ export class Walker {
     return angle;
   }
 
+  /** (plan 62) Turned to face `yaw` at once (sat down: the seat's way, not the way I walked onto it). */
+  faceYaw(yaw: number): void {
+    this.body.yaw = yaw;
+    this.prev.yaw = yaw;
+  }
+
   /** where my body is (the floor's coords, feet height) */
   where(): { x: number; y: number; z: number } {
     return { x: this.last.x, y: this.last.y, z: this.last.z };

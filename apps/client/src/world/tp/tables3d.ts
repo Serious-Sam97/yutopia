@@ -32,6 +32,8 @@ type V = [number, number, number];
 export interface TableScene3 {
   balls: { key: string; id: number; x: number; y: number; z: number; r: number; q: Q; alpha: number }[];
   cues: { key: string; tip: V; butt: V }[];
+  /** (plan 62) who's on the shot, and its cue: they're drawn at it, over it, the hands on it */
+  shooters?: { sid: string; tip: V; butt: V }[];
   lines: { key: string; pts: V[]; color: number; alpha: number }[];
   rings: { key: string; x: number; y: number; z: number; r: number; color: number; alpha: number; face?: boolean }[];
   // thick lines (the ping-pong reach bar, a marker's drop to the floor)

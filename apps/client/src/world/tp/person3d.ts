@@ -3,8 +3,10 @@ import { AIM_BLADE, BEAM } from "@yutopia/shared/beam";
 import { flowOfCode, KH_FEEL, KH_MOVE, unpackMv } from "@yutopia/shared/move";
 import type { PhysicsWorld } from "@yutopia/shared/physics";
 import {
+  BoxGeometry,
   CircleGeometry,
   Color,
+  CylinderGeometry,
   Group,
   type Material,
   Matrix4,
@@ -26,8 +28,9 @@ const puffAt = new Vector3();
 const puffDir = new Vector3();
 
 import { cueModel, type GunFx, type GunKind, type GunModel, gunModel, poseGun, shellGeometry } from "./guns3d";
-import { ZPX } from "./kit3d";
+import { levelHands } from "./level3d";
 import type { PersonIn } from "./people3d";
+import { ANKLE_M, legOf, SEATS, seatFit, seatShape } from "./seats3d";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
 type Model = InstanceType<Chars["PersonModel"]>;
@@ -45,11 +48,8 @@ type MotionOut = ReturnType<InstanceType<Chars["Motion3"]>["update"]>;
 // things. Vortex stays his drawing (people3d.ts): he must look exactly like
 // Yondra's.
 
-// Where a sitter's hips rest, iso px of height (as people3d.ts): each seat's
-// cushion top less what it gives.
-const SEAT_HIP: Record<string, number> = { chair: 14, armchair: 13.5, sofa: 15.2, beanbag: 11, bench: 11.2 };
 const SIT_IN = 0.3; // s: sitting down / getting up
-const SEAT_BACK = 0.06; // tiles: the hips sit this far back of the seat's middle (the knees reach its front)
+const STAND_RISER = 0.45; // m: a stand's row over the one before (shared/kart/park.ts kartSeats)
 const PICK_R = 0.26; // tiles: how wide a person is to a click
 
 export interface Mats {
@@ -129,6 +129,60 @@ const tq = new Quaternion();
 const tv = new Vector3();
 const tv2 = new Vector3();
 
+/** (plan 62) Playing the piano: sat on its stool, facing its keys, the hands on them (wide, along
+ *  them) — as sat at a desk typing. Its parts (tp/view.ts): the keys, then the stool. */
+function atPiano(p: PersonIn): PersonIn {
+  const [keys, stool] = p.parts ?? [];
+  if (p.busy !== "piano" || !keys || !stool) return p;
+  return {
+    ...p,
+    a: 2,
+    seat: "stool",
+    x: stool.x,
+    y: stool.y,
+    angle: Math.atan2(keys.y - stool.y, keys.x - stool.x),
+    typing: true,
+    keys: { ...keys, spread: PIANO_SPREAD },
+  };
+}
+const PIANO_SPREAD = 0.2; // m: the hands apart along the keys, at most
+
+/** (plan 62) Where someone on a pool shot stands, turned along its cue, and their hands on it in their
+ *  own space: the bridge on the cloth behind the tip, the back hand at the butt (beside the hip). */
+interface Stance {
+  x: number;
+  z: number;
+  a: number;
+  parts: [number, number, number][];
+}
+const BRIDGE = 0.22; // m: the bridge hand behind the tip
+const GRIP = 0.16; // m: the back hand in from the butt
+function cueStance(cue: { tip: [number, number, number]; butt: [number, number, number] }): Stance {
+  const [tx, ty, tz] = cue.tip;
+  const [bx, by, bz] = cue.butt;
+  const len = Math.hypot(tx - bx, ty - by, tz - bz) || 1;
+  const at = (d: number): [number, number, number] => {
+    const u = d / len;
+    return [bx + (tx - bx) * u, by + (ty - by) * u, bz + (tz - bz) * u];
+  };
+  const a = Math.atan2(ty - by, tx - bx);
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const grip = at(GRIP);
+  const bridge = at(len - BRIDGE);
+  // (the cue under the right side of the chin: the body a little left of it, the back hand a little
+  // behind the hip)
+  const x = grip[0] + c * 0.2 + s * 0.15;
+  const z = grip[1] + s * 0.2 - c * 0.15;
+  // (into her own space: x her left, y up, z ahead)
+  const own = (q: [number, number, number], dy = 0): [number, number, number] => {
+    const dx = q[0] - x;
+    const dz = q[1] - z;
+    return [dx * s - dz * c, q[2] + dy, dx * c + dz * s];
+  };
+  return { x, z, a, parts: [own(bridge, -0.025), own(grip)] };
+}
+
 export class Person3D {
   readonly root = new Group();
   readonly model: Model;
@@ -145,6 +199,15 @@ export class Person3D {
   private vz = 0;
   private wasUp = false;
   private sitW: number | null = null;
+  // (plan 62) sat: the seat's fit (the hips along it, the lean, the floor under the feet); sitting
+  // down from where she stood, getting up from the seat; how far down onto it the motion has her
+  private sat: { seat: string; along: number; fit: import("../chars/anim/acts").SitFit } | null = null;
+  private sitFrom: { x: number; z: number } | null = null;
+  private seatOff = { x: 0, z: 0 };
+  private wasSitting = false;
+  private stanceW = 0;
+  private stance: Stance | null = null;
+  private settled = 0;
   private ring: Mesh;
   private shadow: Mesh;
   private held: { key: string; kind: string; prop: Prop | null; toy: Object3D | null } | null = null;
@@ -170,6 +233,72 @@ export class Person3D {
   /** plan 58's tension as eased (-1: not yet) */
   private mood = -1;
   /** (plan 58 4f) the ground under a spot in her own space (x her left, z ahead), off her feet's height */
+  /** (plan 62) How long she's been at what she's busy at (s): a machine's press first, then its drink. */
+  private busyWas = "";
+  private busySince = 0;
+  private busyT(busy: string): number {
+    const now = performance.now() / 1000;
+    if (busy !== this.busyWas) {
+      this.busyWas = busy;
+      this.busySince = now;
+    }
+    return now - this.busySince;
+  }
+  /** (plan 62) The keys she types on, in her own space (x her left, y up from her feet, z ahead). */
+  private keysIn(
+    k: { x: number; y: number; h: number; spread?: number },
+    p: PersonIn,
+    h: number,
+  ): [number, number, number, number?] | undefined {
+    if (this.turned === null) return undefined;
+    const r = this.root.position;
+    const dx = k.x - (this.part === "all" ? r.x : p.x);
+    const dy = k.y - (this.part === "all" ? r.z : p.y);
+    const c = Math.cos(this.turned);
+    const sn = Math.sin(this.turned);
+    return [dx * sn - dy * c, k.h - h, dx * c + dy * sn, k.spread];
+  }
+  /** (plan 62) The seat she's on, fitted to her: where her hips go along it, how far she leans back,
+   *  the floor under her feet (a room's floor; out on the land the ground or the step below, by the
+   *  world's ray once she's near, kept within her legs' reach). */
+  private seatOf(p: PersonIn, h: number, seen: Seen): { along: number } {
+    const kind = p.seat ?? "";
+    const m = this.model;
+    if (this.sat?.seat === kind && m.ready) return this.sat;
+    const s = seatShape(p.seat);
+    const leg = legOf((j) => m.bone(j));
+    const { along, recline } = seatFit(s, leg.thigh);
+    const drop = m.sitDrop(s.top);
+    const hip = leg.hipY + drop;
+    let floor = 0;
+    if (!SEATS[kind]) {
+      // (ahead of the seat's front, from under its top: the lowest of a few — a stand's footwell, not
+      // the ledge before it)
+      let g: number | null = null;
+      for (const ahead of [0.35, 0.5, 0.65]) {
+        const x = p.x + Math.cos(p.angle) * (along + ahead);
+        const y = p.y + Math.sin(p.angle) * (along + ahead);
+        const at = seen.groundAt?.(x, y, h + s.top - 0.06) ?? null;
+        if (at !== null && (g === null || at < g)) g = at;
+      }
+      // (a seat solid to its front at its own height — a stand's row, a block in the physics — has
+      // its feet a riser down, in the row's footwell as it's drawn: tp/kart/park3d.ts)
+      if (g !== null && g - h > s.top - 0.12) g -= STAND_RISER;
+      const reach = hip - ANKLE_M - 1.9 * leg.thigh;
+      floor = g === null || g - h < reach ? hip - ANKLE_M - 0.47 : Math.min(g - h, hip - ANKLE_M - 0.3);
+    }
+    const fit = {
+      drop,
+      stand: leg.hipY,
+      floor,
+      recline,
+      ahead: s.solid ? s.front - along + 0.06 : 0,
+      arms: s.arms ?? null,
+    };
+    const out = { seat: kind, along, fit };
+    if (m.ready && (SEATS[kind] || seen.groundAt)) this.sat = out;
+    return out;
+  }
   private groundFn(p: PersonIn, at: (x: number, y: number, from: number) => number | null) {
     const a = this.turned ?? p.angle;
     const c = Math.cos(a);
@@ -237,6 +366,7 @@ export class Person3D {
 
   /** Step and pose them; `given` poses them with someone else's motion (my hands with my body's). */
   update(p: PersonIn, dt: number, seen: Seen, given?: MotionOut) {
+    p = atPiano(p);
     const sitting = p.a === 2;
     // detail by distance (low quality never builds the closest level)
     const d = Math.hypot(seen.camX - p.x, seen.camZ - p.y);
@@ -271,14 +401,50 @@ export class Person3D {
     if (this.sitW === null || p.reduced) this.sitW = sitting ? 1 : 0;
     else this.sitW = Math.max(0, Math.min(1, this.sitW + (sitting ? dt : -dt) / SIT_IN));
     const w = this.sitW * this.sitW * (3 - 2 * this.sitW);
-    const back = -SEAT_BACK * w;
     // off the floor (in a jump, up on something): the shadow and the ring stay on what's under them
     const jump = !sitting ? (p.jump ?? null) : null;
     // (a sitter's at the seat's height: 0 on a floor's chair, up a stand's row out on the land)
     const h = p.z ?? 0;
     const ground = sitting ? h : Math.min(h, p.ground ?? 0);
-    if (this.part === "all")
-      this.root.position.set(p.x + Math.cos(this.turned) * back, h, p.y + Math.sin(this.turned) * back);
+    // (plan 62) sat where the seat has her — the knees at its front, the back to its back —, gone
+    // there from where she stood as the hips go down (and back off it getting up)
+    const v2sit = this.motion.v2 && !p.reduced;
+    const k = v2sit ? this.settled : w;
+    if (sitting) {
+      if (!this.wasSitting) this.sat = null;
+      const fit = this.seatOf(p, h, seen);
+      this.seatOff.x = Math.cos(p.angle) * fit.along;
+      this.seatOff.z = Math.sin(p.angle) * fit.along;
+      if (!this.wasSitting) {
+        const r = this.root.position;
+        this.sitFrom =
+          this.last && this.part === "all" && Math.hypot(r.x - p.x - this.seatOff.x, r.z - p.y - this.seatOff.z) < 1.2
+            ? { x: r.x, z: r.z }
+            : null;
+      }
+    } else this.sat = k > 0 ? this.sat : null;
+    this.wasSitting = sitting;
+    if (this.part === "all") {
+      const sx = p.x + this.seatOff.x * (sitting ? 1 : k);
+      const sz = p.y + this.seatOff.z * (sitting ? 1 : k);
+      const from = sitting && k < 1 ? this.sitFrom : null;
+      if (from) this.root.position.set(from.x + (sx - from.x) * k, h, from.z + (sz - from.z) * k);
+      else this.root.position.set(sx, h, sz);
+      if (!sitting && k <= 0) this.seatOff.x = this.seatOff.z = 0;
+    }
+    // (plan 62) on a pool shot: drawn at its cue — behind the shot, beside its line, turned along it
+    // — eased there and back
+    this.stanceW = Math.max(0, Math.min(1, this.stanceW + (p.cue ? dt : -dt) / 0.35));
+    if (p.cue) this.stance = cueStance(p.cue);
+    const sw = this.stanceW * this.stanceW * (3 - 2 * this.stanceW);
+    if (this.stance && sw > 0 && this.part === "all") {
+      const r = this.root.position;
+      r.x += (this.stance.x - r.x) * sw;
+      r.z += (this.stance.z - r.z) * sw;
+      let dA = this.stance.a - this.turned;
+      dA = Math.atan2(Math.sin(dA), Math.cos(dA));
+      this.root.rotation.y = Math.PI / 2 - (this.turned + dA * sw);
+    } else if (sw <= 0) this.stance = null;
     this.jumpH = h;
     this.jumpOn = !!jump;
     this.shadow.position.y = 0.004 + ground - h;
@@ -329,6 +495,13 @@ export class Person3D {
         speed: this.spd,
         sit: sitting,
         typing: !!p.typing && sitting,
+        seat: this.sat?.fit,
+        keys: p.keys ? this.keysIn(p.keys, p, h) : undefined,
+        busyT: this.busyT(p.busy ?? ""),
+        parts:
+          p.cue && this.stance
+            ? this.stance.parts
+            : p.parts?.map((k) => this.keysIn(k, p, h) as [number, number, number]),
         speaking: !!p.speaking,
         emote: p.emote ?? "",
         reduced: !!p.reduced,
@@ -490,15 +663,22 @@ export class Person3D {
       this.limp = null;
       this.limpYaw = null;
     }
-    const seatY = (SEAT_HIP[p.seat ?? ""] ?? 14) / ZPX;
     // (plan 58 6a: the new sitting lowers the hips by its own settle, its legs solved for it)
-    const drop = this.model.sitDrop(seatY) * (this.motion.v2 && !p.reduced ? mo.settle : w);
+    const drop = this.model.sitDrop(seatShape(p.seat).top) * (v2sit ? mo.settle : w);
+    this.settled = mo.settle;
     // (one of the shadowed under plan 58: its arms its own — no hands put on things, no reach: the
     // wind-up's cocked arm was pulled onto whoever it struck)
     const own = !!p.shade && this.motion.v2 && !p.reduced;
     this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], own ? undefined : mo.reach);
     // (plan 58 6: the hands on the keys, the pad, the knees, the other one's hand)
-    this.model.handsTo(limpHands ?? (this.limp?.on || own ? null : (mo.hands ?? null)));
+    let put = limpHands ?? (this.limp?.on || own ? null : (mo.hands ?? null));
+    // (plan 62) sat with a drink: held at the waist between sips — the waist down on the seat with
+    // the hips, not stood's height over the floor
+    const R = put?.R;
+    if (put && R && held && sitting && !p.typing && !limpHands)
+      put = { ...put, R: { ...R, at: [R.at[0], R.at[1] + drop, R.at[2]] } };
+    this.model.handsTo(put);
+    levelHands((j) => this.model.bone(j), put);
     if (downHands && this.downW > 0) {
       for (const h of Object.values(downHands)) if (h) h.w *= this.downW;
       this.model.handsTo(downHands);
@@ -612,6 +792,7 @@ export class Person3D {
       }
     }
     this.gunFrame(p, hand);
+    this.toolFrame(p);
     this.ballFrame(p, hand);
     // aiming: the gun along the look too, whatever the wrist is doing (its barrel's −y)
     // (held in both hands — the hands placed by gunHands: the gun along the way it set)
@@ -1021,6 +1202,55 @@ export class Person3D {
     this.torch = null;
   }
 
+  // (plan 62) What a use puts in the hands: a marker at the whiteboard (its tip ahead of the right
+  // hand, along it), a pad in both for a game or the slot cars (between them, flat ahead)
+  private tool: { key: string; mesh: Mesh } | null = null;
+  private toolFrame(p: PersonIn) {
+    const busy = p.busy ?? "";
+    const key = busy === "whiteboard" ? "marker" : busy === "gamepad" || busy === "slotcar" ? "pad" : "";
+    if ((this.tool?.key ?? "") !== key) {
+      this.dropTool();
+      if (key) {
+        const geo =
+          key === "marker"
+            ? new CylinderGeometry(0.009, 0.009, 0.13, 8).rotateX(Math.PI / 2)
+            : new BoxGeometry(0.15, 0.03, 0.07);
+        const mesh = new Mesh(geo, this.mats.prop(key === "marker" ? "#2f5fb3" : "#2b2a28"));
+        this.root.add(mesh);
+        this.tool = { key, mesh };
+      }
+    }
+    const t = this.tool;
+    if (!t) return;
+    const wl = this.model.bone("wristL");
+    const wr = this.model.bone("wristR");
+    const fr = this.model.bone("fingersR");
+    if (!wl || !wr || !fr) return;
+    this.root.updateMatrixWorld(true);
+    wr.getWorldPosition(hw);
+    if (t.key === "marker") {
+      fr.getWorldPosition(hf);
+      hf.sub(hw).normalize();
+      // (gripped: from the knuckles on, its tip a hand ahead)
+      hw.addScaledVector(hf, 0.07);
+      this.root.worldToLocal(hw);
+      t.mesh.position.copy(hw);
+      t.mesh.lookAt(this.root.localToWorld(hv.copy(hw)).add(hf));
+    } else {
+      wl.getWorldPosition(hf);
+      hw.add(hf).multiplyScalar(0.5);
+      this.root.worldToLocal(hw);
+      t.mesh.position.set(hw.x, hw.y - 0.01, hw.z + 0.05);
+      t.mesh.rotation.set(0, 0, 0);
+    }
+  }
+  private dropTool() {
+    if (!this.tool) return;
+    this.tool.mesh.removeFromParent();
+    this.tool.mesh.geometry.dispose();
+    this.tool = null;
+  }
+
   private dropPhone() {
     if (!this.phone) return;
     this.phone.prop.root.removeFromParent();
@@ -1118,6 +1348,7 @@ export class Person3D {
     this.dropGun();
     this.dropBud();
     this.dropTorch();
+    this.dropTool();
     this.model.dispose();
     this.shadow.geometry.dispose();
     (this.shadow.material as Material).dispose();

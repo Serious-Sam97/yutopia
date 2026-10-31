@@ -27,8 +27,15 @@ export interface MotionIn {
   held?: { kind: HeldKind; since: number } | null; // carrying something, `since` ms
   busy?: string; // using something (shared USES)
   act?: { what: string; t: number; len: number; with?: [number, number] } | null; // with someone (shared SOCIAL, or "take"); (plan 58 6d) where they are in my own space: x my left, z ahead
-  /** (plan 58 6a) how far the hips go down onto the seat (m, − down: the view's `sitDrop`) */
-  seatDrop?: number;
+  /** (plan 62) where she sits: the hips' drop onto the seat (the view's `sitDrop`), the floor, the
+   *  seat's back and arms (`acts.ts` SitFit) */
+  seat?: import("./anim/acts").SitFit;
+  /** (plan 62) the keys typed on, in her own space (x her left, y up from her feet, z ahead, m) */
+  keys?: [number, number, number, number?];
+  /** (plan 62) s since she began what she's busy at */
+  busyT?: number;
+  /** (plan 62) the parts of what she's busy at the hands go to (a button, then what's taken), her own space */
+  parts?: [number, number, number][];
   phone?: { state: string; pose: string; ringing: boolean } | null;
   jump?: JumpNow | null; // jumping (shared/jump.ts): its stage
   /** how they move (docs/plan/29-the-move.md M6): the gaits, crouching, aiming, the jump's arc
@@ -740,9 +747,7 @@ export class Motion3 {
     }
     // (6a: sat, sitting down, getting up — the legs solved to the floor, the hands on the knees or keys)
     const sat =
-      A && (m.sit || this.settleT < 1)
-        ? A.sit2(this.settleT, !m.sit, t, m.typing, m.seatDrop ?? -0.34, this.seed)
-        : null;
+      A && (m.sit || this.settleT < 1) ? A.sit2(this.settleT, !m.sit, t, m.typing, m.seat, this.seed, m.keys) : null;
     // (getting up, the move takes over as it goes: from the start if she's off, else by its end)
     const rising = !!sat && !m.sit && !!m.loco;
     const riseW = rising ? smoother(moving ? Math.min(1, this.settleT * 1.6) : (this.settleT - 0.5) / 0.5) : 0;
@@ -806,11 +811,12 @@ export class Motion3 {
       sipping = st.sip >= 0.32 && st.sip <= 0.68;
     }
 
-    // using something, blended in and out
+    // using something, blended in and out (plan 62: timed from when it began — a machine's press
+    // first: the view's `busyT`)
     if (m.busy) this.busyWhat = m.busy;
     this.busyW = clamp01(this.busyW + (m.busy && !m.sit ? dt : -dt) * 5);
     if (this.busyW > 0 && this.busyWhat) {
-      const b = A ? A.busy2(this.busyWhat, t, this.seed) : busyPose(this.busyWhat, t);
+      const b = A ? A.busy2(this.busyWhat, m.busyT ?? t, this.seed, m.keys, m.parts) : busyPose(this.busyWhat, t);
       p = blend(p, b.pose, ease(this.busyW));
       if (b.lift) lifted(b.lift, ease(this.busyW));
       if ("hands" in b) handed(b.hands, ease(this.busyW));

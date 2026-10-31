@@ -6,7 +6,7 @@
 // A kind's parts are in its own frame at rot 0 — u across its footprint (0..w), v down it
 // (0..h) — and turned with it the way the art and the stairs turn things (stairs.ts
 // `stairsPoint`): rot 1 puts its v = 0 side on the east, 2 south, 3 west.
-import { entry, footprint, type ObjectKind, rotOf, standHeight, type WorldObjectDef } from "../catalog.ts";
+import { entry, footprint, type ObjectKind, PIANO_STOOL, rotOf, standHeight, type WorldObjectDef } from "../catalog.ts";
 import { hangOf } from "../hang.ts";
 import { STOREY } from "../levels.ts";
 import { type Edge, HALF_WALL, isWallEdge } from "../map.ts";
@@ -218,7 +218,11 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   tape_shelf: flat(0, 0.2, 2, 0.81, 1.17),
   water_cooler: flat(0.26, 0.28, 0.84, 0.73, 1.3),
   vending: flat(0.1, 0.16, 0.9, 0.87, 1.58),
-  piano: flat(0.06, 0.08, 1.94, 0.84, 1.12),
+  // (and its stool out in front: catalog PIANO_STOOL, 0.6 × 0.3, 13.4 px up — docs/plan/62)
+  piano: one(
+    box(0.06, 0.08, 1.94, 0.84, 0, 1.12),
+    box(PIANO_STOOL[0] - 0.3, PIANO_STOOL[1] - 0.15, PIANO_STOOL[0] + 0.3, PIANO_STOOL[1] + 0.15, 0, m(13.4)),
+  ),
   crt_tv: flat(0.06, 0.1, 1.94, 0.91, 1.25),
   tv_wall: one(box(0.16, 0.06, 0.86, 0.43, 0.15, 1.99)),
   tv_hd: one(box(0.12, 0.05, 2.94, 0.18, 0.43, 2.07)),

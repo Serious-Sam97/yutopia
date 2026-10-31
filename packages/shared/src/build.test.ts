@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { canPlace, TEMPLATES } from "./build.ts";
 import { entry, placedFootprint, rotOf, variantOf, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
-import { Grid } from "./grid.ts";
+import { DESK_PULL, Grid } from "./grid.ts";
 import { hungOn, wallSpan } from "./hang.ts";
 import { holdsItems, vWall } from "./map.ts";
 import { edgeBlocker } from "./map-edit.ts";
@@ -151,11 +151,28 @@ test("wall items hang on a north wall, or turned (rot 3) on a west wall", () => 
   assert.equal(edgeBlocker(studio, [west], { dir: "v", x: 0, y }, "."), "Whiteboard hangs on that wall");
 });
 
+test("a chair at a desk pulls in to it, sat on; one with nothing before it stays (plan 62)", () => {
+  // (the chair's back on +y at rot 2: its sitter faces −y, the desk there)
+  const d = desk(6, 6);
+  const at: WorldObjectDef = { id: "c", kind: "chair", x: 6, y: 7, rot: 2 };
+  const alone: WorldObjectDef = { id: "a", kind: "chair", x: 10, y: 7, rot: 2 };
+  const g = Grid.from(studio, [d, at, alone], undefined, { dressing: false });
+  assert.equal(g.seatAt(6.5, 7.5)?.pull, DESK_PULL);
+  assert.deepEqual(g.seatSpot(6.5, 7.5), { x: 6.5, y: 7.5 - DESK_PULL });
+  // (still on the chair's own tile: it's still the seat you're on)
+  assert.equal(g.seatAt(6.5, 7.5 - DESK_PULL)?.id, "c");
+  assert.equal(g.seatAt(10.5, 7.5)?.pull, 0);
+  assert.deepEqual(g.seatSpot(10.5, 7.5), { x: 10.5, y: 7.5 });
+  // (turned away from the desk: not pulled)
+  const back = Grid.from(studio, [d, { ...at, rot: 0 }], undefined, { dressing: false });
+  assert.equal(back.seatAt(6.5, 7.5)?.pull, 0);
+});
+
 test("a sofa is three seats, walkable, facing the way it's turned", () => {
   const sofa: WorldObjectDef = { id: "s", kind: "sofa", x: 6, y: 6, rot: 2 };
   const g = Grid.from(studio, [sofa], undefined, { dressing: false });
   for (const x of [6, 7, 8]) {
     assert.ok(g.ok(x, 6), `tile ${x} is walkable`);
-    assert.deepEqual(g.seats.get(g.idx(x, 6)), { id: "s", rot: 2 });
+    assert.deepEqual(g.seats.get(g.idx(x, 6)), { id: "s", rot: 2, kind: "sofa", pull: 0 });
   }
 });
