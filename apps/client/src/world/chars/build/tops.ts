@@ -834,7 +834,14 @@ export function tie(k: Kit, b: Body, color: string, kk: number) {
   blade.lineTo(0, T * 0.45);
   blade.lineTo(-kw * 1.5, T * 0.5);
   blade.closePath();
-  k.add("spine", at(blade, 0.006, 0.005), color);
+  // (stood a little off the shirt, so the belly's own bend never meets it)
+  k.add("spine", at(blade, 0.006, 0.011), color);
+  // (the blade swings whole from under the knot on the scarf's joint, near — a tie's stiff: bent
+  // along it, it kinked: docs/plan/61)
+  k.parts[k.parts.length - 1].skin = () => ["scarf", 1];
+  const front = b.surf(0, 0.925 * T, kk);
+  k.joint("scarf", 0, 0.925 * T - b.chestY, front.z);
+  k.hangs.push({ joint: "scarf", kind: "tie", c: [0, -0.24 * T, 0.008 * hh], box: [kw * 1.2, 0.24 * T, 0.006 * hh] });
 }
 
 /** A short band laid on the chest (used for a scarf's tails). */

@@ -46,6 +46,21 @@ export interface SpringSpec {
   limit: number;
 }
 
+type V3 = [number, number, number];
+/** Something worn that swings on Jolt near (docs/plan/61): its joint, what it is (the sway's recipe),
+ *  where it hangs from (its parent's space: where a strap leaves the body; none, the joint), its
+ *  middle (the joint's space) and its shape — a box of half sides `box` turned `yaw` about up, or a
+ *  rod of radius `r` from where it hangs through its middle. */
+export interface HangSpec {
+  joint: JointName;
+  kind: string;
+  from?: V3;
+  c: V3;
+  box?: V3;
+  yaw?: number;
+  r?: number;
+}
+
 /** Where a right hand goes to reach a part of the body (wrist targets, model space). */
 export type Anchor = "ear" | "mouth" | "chin" | "chest" | "belly";
 
@@ -55,6 +70,8 @@ export class Kit {
   readonly anchors = {} as Record<Anchor, [number, number, number]>;
   /** the springs this look wears */
   readonly springs: SpringSpec[] = [];
+  /** what it wears that swings on Jolt near (docs/plan/61) */
+  readonly hangs: HangSpec[] = [];
   /** the body's round bits the springs keep out of (a joint, a centre off it, a radius) */
   readonly collide: { joint: JointName; at: [number, number, number]; r: number }[] = [];
   /** between the eyes, a little inside the head (the head joint's space): where first person looks from */

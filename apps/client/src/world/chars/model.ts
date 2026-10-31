@@ -14,7 +14,7 @@ import { armsOf, type Baked, bake, THIGH_BONES } from "./bake";
 import { buildPerson } from "./build";
 import { solveArm } from "./ik";
 import { inkMaterial } from "./ink";
-import type { Anchor, SpringSpec } from "./kit";
+import type { Anchor, HangSpec, SpringSpec } from "./kit";
 import type { Lod } from "./params";
 import { JOINTS, type JointName, PARENT, type Pose, REST, type RestPose, type SpringName } from "./rig";
 
@@ -513,14 +513,22 @@ export class PersonModel {
     }
   }
 
+  /** What's worn that swings on Jolt near (docs/plan/61), once it's shown. */
+  worn(): readonly HangSpec[] | null {
+    const b = this.shown?.baked;
+    return b && this.skeleton ? b.hangs : null;
+  }
+
   /** Swing the springs (after `setPose`, once a frame): `rest` holds them as they hang (reduced
-   *  motion, far off) and starts them there next time. */
-  step(dt: number, rest = false) {
+   *  motion, far off) and starts them there next time; those in `skip` left as they are (swung on
+   *  Jolt, docs/plan/61). */
+  step(dt: number, rest = false, skip?: ReadonlySet<JointName>) {
     const b = this.shown?.baked;
     if (!b || !this.skeleton || !this.springs.length) return;
     this.root.updateMatrixWorld(true);
     const L = SP.a;
     for (const s of this.springs) {
+      if (skip?.has(s.spec.joint)) continue;
       const bone = this.bones[s.spec.joint];
       const parent = bone.parent;
       if (!parent) continue;

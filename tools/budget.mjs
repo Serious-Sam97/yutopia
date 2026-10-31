@@ -61,6 +61,7 @@ const LAZY = {
   "yutopia-acts": 15, // plan 58 phase 6's: sitting, the hands and the phone, busy, together, the emotes (loaded with the hero's)
   "yutopia-night": 15, // plan 58 phase 7's: the torch, the gun's life, hits, the crawl and the kneel, the fear (loaded with the hero's)
   "yutopia-life": 15, // plan 58 phase 9's: the cold, the breath caught, who she is, a sound's turn (loaded with the hero's)
+  "yutopia-sway": 10, // plan 61's: what's worn swinging on Jolt — the bags, the hair, the scarf, the tie, the badge, earrings (loaded with the 3D view's physics)
   "yutopia-jumps": 10, // a jump's dust and sounds (shared/jump.ts)
   "yutopia-dark": 80, // the dark: vitals, pockets, loot on the client (docs/plan/30-the-dark.md)
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every

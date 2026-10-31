@@ -248,6 +248,8 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
       damp: 0.3,
       limit: 1,
     });
+    // (and on Jolt near: a rod from the tie down its length — docs/plan/61)
+    k.hangs.push({ joint: "hair", kind: "tail", c: [0, (tip.y - a.y) / 2, (tip.z - a.z) / 2], r: W * 0.6 });
     const tie = ring(W * 0.37, 0.022 * hh);
     tie.lookAt(d.clone().add(new Vector3(0, 0.25, 0)));
     k.add("head", tie, o.tieColor, {

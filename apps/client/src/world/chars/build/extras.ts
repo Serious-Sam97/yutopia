@@ -37,6 +37,13 @@ export function buildExtra(
   const T = b.T;
   const R = k.seg.radial;
   const toSpine = (g: ReturnType<typeof box>) => g.translate(0, -b.spineY, 0);
+  // (it swings on Jolt near, docs/plan/61: the bag's joint at its middle `at` (the trunk's), hung from
+  // `from`, a box of half sides `half` turned `yaw`; the parts since `p0` on it)
+  const hang = (kind: string, p0: number, at: Vector3, from: Vector3, half: [number, number, number], yaw = 0) => {
+    k.joint("pack", at.x, at.y - b.chestY, at.z);
+    k.hangs.push({ joint: "pack", kind, from: [from.x, from.y - b.chestY, from.z], c: [0, 0, 0], box: half, yaw });
+    for (const q of k.parts.slice(p0)) q.skin = () => ["pack", 1];
+  };
   switch (kind) {
     case "walkman": {
       // on the waistband at the right hip, its lead up to the collar
@@ -106,6 +113,7 @@ export function buildExtra(
         q.skin = (_x, y) => ["scarf", smooth(knot - b.spineY, 0.55 * T - b.spineY, y)];
       const front = b.surf(0, knot, 1.1);
       k.spring("scarf", [0, knot - b.chestY, front.z], [0, -0.42 * T, 0.03 * hh], { hz: 2.6, damp: 0.35, limit: 0.6 });
+      k.hangs.push({ joint: "scarf", kind: "scarf", c: [0, -0.21 * T, 0.015 * hh], r: 0.05 * hh });
       return;
     }
     case "earrings": {
@@ -122,7 +130,11 @@ export function buildExtra(
         );
         hoop.rotateX(Math.PI / 2);
         hoop.rotateY(Math.PI / 2);
-        k.add("head", hoop, color, { at: new Vector3(side * (x + 0.012 * hh * z), y - 0.05 * hh * z, -0.01 * hh) });
+        // (each swings from the lobe on its own joint, near: docs/plan/61)
+        const ear = side > 0 ? "earL" : "earR";
+        k.joint(ear, side * (x + 0.012 * hh * z), y, -0.01 * hh);
+        k.add(ear, hoop.translate(0, -0.05 * hh * z, 0), color);
+        k.hangs.push({ joint: ear, kind: "earring", c: [0, -0.05 * hh * z, 0], r: 0.02 * hh });
       }
       return;
     }
@@ -159,6 +171,12 @@ export function buildExtra(
         hz: 4.5,
         damp: 0.4,
         limit: 0.12,
+      });
+      k.hangs.push({
+        joint: "pack",
+        kind: "backpack",
+        c: [0, -0.375 * hh, -0.01 * hh],
+        box: [0.3 * hh, 0.375 * hh, 0.11 * hh],
       });
       for (const sx of [1, -1]) {
         const x = sx * b.trunk.r(0.85 * T) * 0.45;
@@ -261,7 +279,15 @@ export function buildExtra(
       k.add("spine", toSpine(sweepTube(pts, () => [0.012 * hh, 0.004 * hh], { segs: 40, radial: 4 })), color, {
         keepNormals: true,
       });
-      const at = b.surf(0, T * 0.6, 1.1);
+      // (the cord's front low on the badge: it swings from high on the chest)
+      k.parts[k.parts.length - 1].skin = (_x, y, z) => [
+        "pack",
+        z > 0 ? smooth(0.86 * T - b.spineY, 0.7 * T - b.spineY, y) : 0,
+      ];
+      const p0 = k.parts.length;
+      // (stood off the shirt a little: as the trunk twists under the chest it swings from, the card
+      // stays clear of it)
+      const at = b.surf(0, T * 0.6, 1.1).add(new Vector3(0, 0, 0.02 * hh));
       const card = box(0.17 * hh, 0.22 * hh, 0.012 * hh, 0.015 * hh, k);
       k.add("spine", toSpine(card.translate(at.x, at.y, at.z + 0.01 * hh)), "#f4efe6");
       k.add(
@@ -271,6 +297,11 @@ export function buildExtra(
         ),
         color,
       );
+      hang("badge", p0, at.clone().add(new Vector3(0, 0, 0.01 * hh)), b.surf(0, T * 0.86, 1.08), [
+        0.085 * hh,
+        0.12 * hh,
+        0.008 * hh,
+      ]);
       return;
     }
     case "tote": {
@@ -278,6 +309,7 @@ export function buildExtra(
       const y = 0.28 * T;
       const x = -b.trunk.r(y) * 1.12;
       const at = b.surf(x * 0.9, y, 1.15, -1).add(new Vector3(-0.06 * hh, 0, 0));
+      const p0 = k.parts.length;
       const bag = box(0.12 * hh, 0.5 * hh, 0.42 * hh, 0.03 * hh, k);
       k.add("spine", toSpine(bag.translate(at.x - 0.04 * hh, at.y, at.z * 0.3)), color);
       for (const dz of [1, -1]) {
@@ -299,6 +331,12 @@ export function buildExtra(
           { keepNormals: true },
         );
       }
+      // (on its straps from the shoulder, near: the straps on it the lower they are)
+      const mid = new Vector3(at.x - 0.04 * hh, at.y, at.z * 0.3);
+      const sh = new Vector3(-b.shX * 0.9, b.shY + 0.05 * hh, 0);
+      hang("tote", p0, mid, sh, [0.06 * hh, 0.25 * hh, 0.21 * hh]);
+      for (const q of k.parts.slice(p0 + 1))
+        q.skin = (_x, y) => ["pack", smooth(sh.y - b.spineY, mid.y + 0.24 * hh - b.spineY, y)];
       return;
     }
     case "fannypack": {
@@ -306,6 +344,7 @@ export function buildExtra(
       const y = 0.36 * T;
       k.add("spine", toSpine(b.ring(y, 1.12, 0.018 * hh)), shade(color, 0.7));
       const at = b.surf(0, y, 1.14).add(new Vector3(0, 0, 0.05 * hh));
+      const p0 = k.parts.length;
       k.add("spine", toSpine(box(0.38 * hh, 0.2 * hh, 0.12 * hh, 0.06 * hh, k).translate(at.x, at.y, at.z)), color);
       k.crease(
         "spine",
@@ -320,6 +359,8 @@ export function buildExtra(
           ),
         ),
       );
+      // (the pouch bobs on the belt, near)
+      hang("fannypack", p0, at, b.surf(0, y + 0.03 * hh, 1.12), [0.19 * hh, 0.1 * hh, 0.06 * hh]);
       return;
     }
     case "satchel": {
@@ -341,6 +382,7 @@ export function buildExtra(
       run(3.25, 3.55, 0.12 * T, 0.97 * T, 12);
       run(3.55, 2 * Math.PI - 0.35, 0.985 * T, 0.985 * T, 4);
       const leather = shade(color, 0.82);
+      const p0 = k.parts.length;
       k.add(
         "spine",
         toSpine(
@@ -360,6 +402,12 @@ export function buildExtra(
       const on = b.around3(0.16 * T, phi, kk);
       const n = new Vector3(on.x, 0, on.z).normalize();
       const at = on.addScaledVector(n, 0.08 * hh).add(new Vector3(0, -0.2 * hh, 0));
+      // (it swings from the strap on Jolt near, docs/plan/61: its joint at the bag's middle, hung from
+      // where the strap leaves the body above it; low on it, the strap goes with it)
+      const hung = b.around3(0.45 * T, phi, kk);
+      // (over a long stretch of it: a short one kinked where the strap meets the bag)
+      k.parts[p0].skin = (_x, y) => ["pack", smooth(0.62 * T - b.spineY, 0.14 * T - b.spineY, y)];
+      const p1 = k.parts.length;
       // a messenger bag: wide and deep, a flap over the top and down past the middle — its lower corners
       // round, stitched round its edge — two straps from the flap down the front through buckles, two
       // rivets over each strap
@@ -465,6 +513,7 @@ export function buildExtra(
             },
           );
       }
+      hang("satchel", p1, at, hung, [0.5 * hh, 0.33 * hh, 0.11 * hh], Math.atan2(n.x, n.z));
       return;
     }
     case "crossbody": {
@@ -501,6 +550,9 @@ export function buildExtra(
       const at = b.surf(x, y, 1.1).addScaledVector(n, 0.05 * hh);
       const bag = box(0.3 * hh, 0.24 * hh, 0.1 * hh, 0.05 * hh, k);
       bag.lookAt(n);
+      // (its strap on it low down, near: docs/plan/61)
+      k.parts[k.parts.length - 1].skin = (_x, y) => ["pack", smooth(0.55 * T - b.spineY, 0.38 * T - b.spineY, y)];
+      const p0 = k.parts.length;
       k.add("hips", bag, color, { at });
       const flap = box(0.31 * hh, 0.13 * hh, 0.03 * hh, 0.04 * hh, k);
       flap.lookAt(n);
@@ -510,6 +562,7 @@ export function buildExtra(
           .add(new Vector3(0, 0.06 * hh, 0))
           .addScaledVector(n, 0.05 * hh),
       });
+      hang("crossbody", p0, at, b.surf(x, 0.5 * T, 1.1), [0.15 * hh, 0.12 * hh, 0.05 * hh], Math.atan2(n.x, n.z));
       return;
     }
   }

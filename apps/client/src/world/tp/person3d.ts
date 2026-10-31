@@ -20,7 +20,7 @@ import {
 import type { chars } from "../art/chars-load";
 import { MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
-import type { Pose } from "../chars/rig";
+import type { JointName, Pose } from "../chars/rig";
 
 const puffAt = new Vector3();
 const puffDir = new Vector3();
@@ -79,6 +79,8 @@ export interface Seen {
   groundAt?: (x: number, y: number, from: number) => number | null;
   /** (plan 58 5d) the world's physics for a ragdoll, and its origin in the scene */
   rag?: () => { world: PhysicsWorld; origin: () => { x: number; y: number; z: number } } | null;
+  /** (plan 61) their joints swung on Jolt this frame: the springs leave them be */
+  sway?: ReadonlySet<JointName>;
 }
 // (plan 58 is the world's: `?anim=old` puts the old animations back, to compare)
 const ANIM_OLD = typeof location !== "undefined" && new URLSearchParams(location.search).get("anim") === "old";
@@ -162,6 +164,9 @@ export class Person3D {
   motionOut: MotionOut | null = null;
   /** what the body was last drawn doing (a verb, a jump, a Flowmotion move: "" none) — tests */
   drawn = { verb: "", jump: "", flow: "" };
+  /** (plan 61) how far from the camera, if what they wear may swing on Jolt (seen whole, motion not
+   *  reduced, plan 58's animations): else never */
+  swayD = Number.POSITIVE_INFINITY;
   /** plan 58's tension as eased (-1: not yet) */
   private mood = -1;
   /** (plan 58 4f) the ground under a spot in her own space (x her left, z ahead), off her feet's height */
@@ -500,7 +505,8 @@ export class Person3D {
     }
     this.gunHands(p, step);
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
-    this.model.step(step, d > 12 || !!p.reduced || this.part !== "all");
+    this.model.step(step, d > 12 || !!p.reduced || this.part !== "all", seen.sway);
+    this.swayD = this.motion.v2 && !p.reduced && this.part === "all" ? d : Number.POSITIVE_INFINITY;
     // (plan 58 9: the breath a puff in the cold air — near only)
     const cold = LF && this.part === "all" && d < 12 ? LF.coldOf(p.wm ?? 100) : 0;
     const head = cold > 0.15 || this.puffs ? this.model.bone("head") : null;

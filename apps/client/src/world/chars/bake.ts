@@ -29,6 +29,7 @@ export interface Baked {
   /** the springs worn (plan 58 phase 2d), and the body's round bits they keep out of */
   springs: SpringSpec[];
   collide: Kit["collide"];
+  hangs: Kit["hangs"];
 }
 
 export const JOINT_INDEX = Object.fromEntries(JOINTS.map((j, i) => [j, i])) as Record<JointName, number>;
@@ -376,5 +377,6 @@ export function bake(k: Kit): Baked {
     tags,
     springs: k.springs,
     collide: k.collide,
+    hangs: k.hangs,
   };
 }

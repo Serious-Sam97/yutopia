@@ -10,7 +10,9 @@ import { type Ctx, clipList, type Frame, limp, POP_RATE, pops, RATE, tabulate } 
 // with each foot's time on the ground and its slide there shown, and pops flagged.
 //   /dev/anim?clip=jog&live=1&compare=1&onion=3&speed=0.25&view=side&t=0.4&tension=0&play=0
 // Keys: Space play · ← → a frame · [ ] slower / faster · O onion · C compare · L live / raw ·
-// 1–5 the view (side, front, back, ¾, above)
+// 1–5 the view (side, front, back, ¾, above) · S the sway
+// (&sway=1, docs/plan/61: a satchel and a ponytail — or what the query wears — swung on Jolt on the
+// left, today's springs on the right)
 
 const LOOK = {
   ...DEFAULT_AVATAR,
@@ -24,6 +26,8 @@ const LOOK = {
   shoesColor: "#2fb3a0",
   gender: "neutral" as const,
 };
+/** the sway's (docs/plan/61): what swings on Jolt, worn */
+const SWAY_LOOK = { extra: "satchel", extraColor: "#7a4a2a", hair: "ponytail" };
 const VIEWS = ["side", "front", "back", "three-quarter", "above"] as const;
 type View = (typeof VIEWS)[number];
 const SPEEDS = [0.05, 0.1, 0.25, 0.5, 1];
@@ -50,7 +54,7 @@ export default function AnimPage() {
 
 // (the look from the query: &top=tank&bottom=skirt&hair=long…)
 const lookOf = (q: URLSearchParams) => {
-  const a: Record<string, string> = { ...LOOK };
+  const a: Record<string, string> = { ...LOOK, ...(q.get("sway") === "1" ? SWAY_LOOK : {}) };
   for (const k of Object.keys(DEFAULT_AVATAR)) {
     const v = q.get(k);
     if (v) a[k] = v.startsWith("%23") || /^[0-9a-f]{6}$/i.test(v) ? `#${v.replace("%23", "")}` : v;
@@ -78,6 +82,8 @@ function Bench({ q }: { q: URLSearchParams }) {
     len: clip.len,
   });
   const live_ = live && !!clip.live ? true : !clip.raw;
+  // (61: the sway on — made with the page)
+  const swayOn = q.get("sway") === "1";
 
   const host = useRef<HTMLDivElement>(null);
   const lane = useRef<HTMLCanvasElement>(null);
@@ -136,6 +142,33 @@ function Bench({ q }: { q: URLSearchParams }) {
 
       const f = new C.CharFactory();
       const after = new C.PersonModel(f, look, 0);
+      // (61: the sway's own world — the land, the clip's things — and the driver on her)
+      let sway: InstanceType<typeof import("@/world/sway/sway").Sway> | null = null;
+      let swayWorld: import("@yutopia/shared/physics").PhysicsWorld | null = null;
+      // (the sway's world as the clip's: its ground — a ledge, a drop — its things and solids)
+      const swayGround = (clip: (typeof clips)[number]) => {
+        const w = swayWorld;
+        if (!w) return;
+        const n = 161;
+        const h = new Float32Array(n * n);
+        const G = clip.ground;
+        if (G) for (let i = 0; i < n * n; i++) h[i] = G(-40 + (i % n) * 0.5, -40 + Math.floor(i / n) * 0.5);
+        w.setLand("land", { x0: -40, z0: -40, n, step: 0.5, h });
+        w.remove("props");
+        const solids = [...(clip.props ?? []), ...(clip.rag?.solids ?? [])];
+        if (solids.length) w.setStatic("props", solids);
+        w.settle();
+      };
+      if (swayOn)
+        void (async () => {
+          const [P, S] = await Promise.all([import("@yutopia/shared/physics"), import("@/world/sway/sway")]);
+          const w = await P.PhysicsWorld.create(P.loadJolt, P.sizesFor({ statics: 8, things: 64 }));
+          if (stop) return w.destroy();
+          swayWorld = w;
+          swayGround(st.current.clip);
+          sway = new S.Sway(w, after);
+        })();
+      let lastT = -1;
       const before = new C.PersonModel(f, { ...look, topColor: "#8a8f9c" }, 0);
       scene.add(after.root, before.root);
       // the onion: ghosts of the moments before, fading
@@ -278,7 +311,8 @@ function Bench({ q }: { q: URLSearchParams }) {
         bench.current.key = key;
         bench.current.after = tabulate(x, s.clip, "after", s.live);
         ragDone = false;
-        bench.current.before = tabulate(x, s.clip, "before", s.live);
+        // (61: the same moves on the right, the springs swinging what's worn)
+        bench.current.before = swayOn ? bench.current.after : tabulate(x, s.clip, "before", s.live);
         bench.current.feet = null;
         showGround(s.clip.ground);
         pole.visible = !!s.clip.pole;
@@ -295,6 +329,8 @@ function Bench({ q }: { q: URLSearchParams }) {
           propMeshes.push(mesh);
         }
         if (s.clip.pole) pole.position.set(s.clip.pole[0], 1.5, s.clip.pole[1]);
+        swayGround(s.clip);
+        sway?.reset();
         // (pops on their own fine table)
         setReport({ pops: pops(tabulate(x, s.clip, "after", s.live, POP_RATE) ?? []), feet: null, len: s.clip.len });
       };
@@ -388,7 +424,17 @@ function Bench({ q }: { q: URLSearchParams }) {
               puffs.update(sdt, mouth, ahead9, A[i].breath ?? 0, A[i].cold ?? 0);
             }
           }
-          after.step(sdt);
+          // (61: the sway on Jolt — back to hanging when the loop comes round or she's put elsewhere)
+          if (sway && swayWorld) {
+            if (s.t < lastT || sdt <= 0) sway.reset();
+            if (sdt > 0) {
+              sway.pre(sdt);
+              swayWorld.step(sdt);
+              sway.post();
+            }
+          }
+          lastT = s.t;
+          after.step(sdt, false, sway?.skip);
           before.step(sdt);
           ghosts.forEach((g, k) => {
             g.root.visible = k < s.onion;
@@ -425,6 +471,8 @@ function Bench({ q }: { q: URLSearchParams }) {
             feet: summary(bench.current.feet),
           }),
           bench: bench.current,
+          // (61: the sway's driver and world, to look into)
+          sway: () => ({ sway, world: swayWorld, after }),
           // (a still at a moment: e2e/anim-strip.mts)
           seek: (to: number) => {
             st.current.t = to;
@@ -435,6 +483,8 @@ function Bench({ q }: { q: URLSearchParams }) {
       raf = requestAnimationFrame(frame);
       cleanup = () => {
         cancelAnimationFrame(raf);
+        sway?.dispose();
+        swayWorld?.destroy();
         after.dispose();
         before.dispose();
         for (const g of ghosts) g.dispose();
@@ -450,7 +500,7 @@ function Bench({ q }: { q: URLSearchParams }) {
       stop = true;
       cleanup();
     };
-  }, [clips, look]);
+  }, [clips, look, swayOn, q]);
 
   const report_ = useRef(report.pops);
   report_.current = report.pops;
@@ -471,6 +521,7 @@ function Bench({ q }: { q: URLSearchParams }) {
       else if (e.code === "KeyC") setCompare((c) => !c);
       else if (e.code === "KeyL") setLive((l) => !l);
       else if (/^Digit[1-5]$/.test(e.code)) setView(VIEWS[Number(e.code.slice(5)) - 1]);
+      else if (e.code === "KeyS") swayToggle();
       else return;
       e.preventDefault();
     };
@@ -527,6 +578,7 @@ function Bench({ q }: { q: URLSearchParams }) {
           <Toggle on={live_} disabled={!clip.live} onClick={() => setLive(true)} label="live (L)" />
           <Toggle on={compare} onClick={() => setCompare(!compare)} label="before (C)" />
           <Toggle on={trail} onClick={() => setTrail(!trail)} label="feet trail" />
+          <Toggle on={q.get("sway") === "1"} onClick={swayToggle} label="sway (S)" />
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {SPEEDS.map((v) => (
@@ -578,7 +630,9 @@ function Bench({ q }: { q: URLSearchParams }) {
           </div>
           {compare && (
             <div style={{ opacity: 0.7 }}>
-              left: after (now) · right: before ({live_ ? "plan 58 off" : "the old keys"})
+              {q.get("sway") === "1"
+                ? "left: swung on Jolt · right: today's springs"
+                : `left: after (now) · right: before (${live_ ? "plan 58 off" : "the old keys"})`}
             </div>
           )}
         </div>
@@ -602,6 +656,14 @@ function Bench({ q }: { q: URLSearchParams }) {
       />
     </main>
   );
+}
+
+// (the sway on or off: the page again, with it — the look and the world are made with the page)
+function swayToggle() {
+  const u = new URL(window.location.href);
+  if (u.searchParams.get("sway") === "1") u.searchParams.delete("sway");
+  else u.searchParams.set("sway", "1");
+  window.location.href = u.toString();
 }
 
 function Toggle({

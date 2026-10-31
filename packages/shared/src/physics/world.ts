@@ -43,6 +43,38 @@ export interface RagPart {
   twist?: number;
 }
 
+/** A dangle's part (docs/plan/61): a box (`box`: half its sides) or a capsule (`r`, `h` half its
+ *  length, along its own y), its centre `c` turned `q` (world), weighing `mass` kg; jointed to its
+ *  `parent` (−1: the anchor) at `at` (world), `across` the way across it (world: a person's left) —
+ *  let rise up its strap `slack` m (stretching back on a spring of `stretch` Hz), swung no further
+ *  than `cone` (rad) forward, `back` back (for what lies on the body: into it), `coneAcross` out, twisted ±`twist`, against the joint's
+ *  `friction` (N·m), drawn back to how it hung at first on a spring of `rest` Hz (what lies on the
+ *  body). Its `drag`, `spin` (damping), `bounce`; the owner's stand-ins it never meets
+ *  (`skip`). */
+export interface DanglePart {
+  parent: number;
+  at: [number, number, number];
+  c: [number, number, number];
+  q: [number, number, number, number];
+  box?: [number, number, number];
+  r?: number;
+  h?: number;
+  mass: number;
+  across?: [number, number, number];
+  slack?: number;
+  stretch?: number;
+  cone: number;
+  back?: number;
+  coneAcross?: number;
+  twist?: number;
+  friction?: number;
+  rest?: number;
+  drag?: number;
+  spin?: number;
+  bounce?: number;
+  skip?: number[];
+}
+
 /** What the world may hold, fixed when it's made (Jolt can't grow them). */
 export interface Sizes {
   maxBodies: number;
@@ -50,12 +82,13 @@ export interface Sizes {
   maxContacts: number;
 }
 
-/** Sizes for a world of this much, with ×2 headroom (build mode adds, things get dropped). */
-export function sizesFor(n: { statics: number; things?: number; vehicles?: number }): Sizes {
-  const bodies = n.statics + (n.things ?? 0) + (n.vehicles ?? 0);
+/** Sizes for a world of this much, with ×2 headroom (build mode adds, things get dropped); `worn`: what
+ *  swings on people near and their stand-ins (docs/plan/61). */
+export function sizesFor(n: { statics: number; things?: number; vehicles?: number; worn?: number }): Sizes {
+  const bodies = n.statics + (n.things ?? 0) + (n.vehicles ?? 0) + (n.worn ?? 0);
   const maxBodies = Math.max(1024, 2 * bodies);
   // (pairs and contacts: what moves touching what's near it — things and vehicles, a few each)
-  const moving = (n.things ?? 0) + (n.vehicles ?? 0);
+  const moving = (n.things ?? 0) + (n.vehicles ?? 0) + (n.worn ?? 0);
   const contacts = Math.max(4096, 2 * 8 * moving);
   return { maxBodies, maxPairs: contacts, maxContacts: contacts };
 }
@@ -106,7 +139,12 @@ const MEETS: Record<Mask, number[]> = {
 };
 // (a query's own layer, after the bodies' — no body is ever on one: it only says what it meets)
 const QUERY: Record<Mask, number> = { all: 6, clip: 7, tops: 8, land: 9, sight: 10, ghost: 11 };
-const LAYERS = 12;
+// (docs/plan/61: what's worn and swings — a bag, a ponytail — meets what's still and the bodies'
+// stand-ins, never anything gameplay; the stand-ins meet only it; a dangle's anchor meets nothing)
+const COSMETIC = 12;
+const PROXY = 13;
+const NONE = 14;
+const LAYERS = 15;
 
 /** A body's size (docs/plan/50 C): a capsule this round and tall, its feet at its position. */
 export const BODY = { r: 0.25, h: 1.75 };
@@ -141,6 +179,9 @@ export class PhysicsWorld {
     { parts: Owned[]; joints: Jolt.Constraint[]; filter: Jolt.GroupFilterTable }
   >();
   private nextRag = 1;
+  private readonly dangles = new Map<number, { anchor: Owned; parts: Owned[]; joints: Jolt.Constraint[] }>();
+  private readonly proxies = new Map<number, { parts: Owned[]; filter: Jolt.GroupFilterTable; n: number }>();
+  private nextDangle = 1;
   private nextThing = 1;
   private nextChar = 1;
   private refused = 0;
@@ -191,6 +232,7 @@ export class PhysicsWorld {
     const pairs = new J.ObjectLayerPairFilterTable(LAYERS);
     for (const l of Object.values(LAYER)) pairs.EnableCollision(MOVING, l);
     for (const [m, q] of Object.entries(QUERY)) for (const l of MEETS[m as Mask]) pairs.EnableCollision(q, l);
+    for (const l of [0, 2, 3, 4, 5, PROXY]) pairs.EnableCollision(COSMETIC, l);
     const bp = new J.BroadPhaseLayerInterfaceTable(LAYERS, 2);
     for (let l = 0; l < LAYERS; l++)
       bp.MapObjectToBroadPhaseLayer(l, new J.BroadPhaseLayer(l === MOVING || l >= QUERY.all ? 1 : 0));
@@ -588,6 +630,222 @@ export class PhysicsWorld {
     this.rags.delete(id);
   }
 
+  // ── dangles (docs/plan/61): what's worn and swings — a bag on its strap, a ponytail. A chain of
+  // bodies off a kinematic anchor moved to its bone; a person's stand-ins (proxies: kinematic
+  // capsules moved to the bones) for it to rest and knock against ──
+  /** A person's stand-ins: capsules (radius `r`, `h` half the length between their ends' centres,
+   *  along their own y), kinematic, met only by dangles; null if refused. `room` subgroups are kept
+   *  for the person's dangles (their parts' collisions with these filtered by addDangle's `skip`). */
+  addProxies(caps: { r: number; h: number }[], room = 12): number | null {
+    if (this.system.GetNumBodies() + caps.length >= this.sizes.maxBodies || !this.room("a body's stand-ins"))
+      return null;
+    const J = this.J;
+    const filter = new J.GroupFilterTable(caps.length + room);
+    filter.AddRef();
+    const id = this.nextDangle++;
+    const parts: Owned[] = [];
+    caps.forEach((c, i) => {
+      const shape = this.shape(
+        c.h > 0.005 ? new J.CapsuleShapeSettings(c.h, Math.max(0.01, c.r)) : new J.SphereShapeSettings(c.r),
+      );
+      if (!shape) return;
+      const bcs = this.settings(shape, 0, -100, 0, 0, J.EMotionType_Kinematic, PROXY);
+      const g = new J.CollisionGroup(filter, id, i);
+      bcs.mCollisionGroup = g;
+      J.destroy(g);
+      bcs.mFriction = 0.6;
+      parts.push(this.make(bcs, true));
+      shape.Release();
+    });
+    this.proxies.set(id, { parts, filter, n: caps.length + room });
+    return id;
+  }
+
+  /** Stand-ins to where the bones are now (x y z, qx qy qz qw each, world), reached over `dt` s —
+   *  so what they knock goes at their speed. `snap`: put there, still (a teleport). */
+  moveProxies(id: number, at: Float32Array, dt: number, snap = false): void {
+    const P = this.proxies.get(id);
+    if (!P) return;
+    P.parts.forEach((o, i) => {
+      this.moveTo(o, at, i * 7, dt, snap);
+    });
+  }
+
+  private moveTo(o: Owned, at: Float32Array, k: number, dt: number, snap: boolean) {
+    this.r.Set(at[k], at[k + 1], at[k + 2]);
+    this.q.Set(at[k + 3], at[k + 4], at[k + 5], at[k + 6]);
+    if (snap || dt <= 0) {
+      this.bodies.SetPositionAndRotation(o.id, this.r, this.q, this.J.EActivation_Activate);
+      this.bodies.SetLinearVelocity(o.id, this.zero);
+      this.bodies.SetAngularVelocity(o.id, this.zero);
+    } else this.bodies.MoveKinematic(o.id, this.r, this.q, dt);
+  }
+
+  removeProxies(id: number): void {
+    const P = this.proxies.get(id);
+    if (!P) return;
+    for (const o of P.parts) this.drop(o);
+    P.filter.Release();
+    this.proxies.delete(id);
+  }
+
+  /** A dangle hung at `anchor` (x y z, qx qy qz qw: its bone's place and turn, world) from its
+   *  parts (see DanglePart), of `owner`'s (addProxies: its parts don't meet the stand-ins in their
+   *  `skip`), its parts in the owner's subgroups from `sub` (past the stand-ins' own: the caller's to
+   *  keep apart, one dangle from another); null if refused. */
+  addDangle(anchor: Float32Array, parts: DanglePart[], owner = 0, sub = 0): number | null {
+    if (
+      !parts.length ||
+      this.system.GetNumBodies() + parts.length + 1 >= this.sizes.maxBodies ||
+      !this.room("a dangle")
+    )
+      return null;
+    const J = this.J;
+    const P0 = this.proxies.get(owner);
+    const P = P0 && sub >= P0.parts.length && sub + parts.length <= P0.n ? P0 : undefined;
+    const shapeA = this.shape(new J.SphereShapeSettings(0.01));
+    if (!shapeA) return null;
+    const bA = this.settings(shapeA, anchor[0], anchor[1], anchor[2], 0, J.EMotionType_Kinematic, NONE);
+    this.q.Set(anchor[3], anchor[4], anchor[5], anchor[6]);
+    bA.mRotation = this.q;
+    const a = this.make(bA, true);
+    const owned: Owned[] = [];
+    const joints: Jolt.Constraint[] = [];
+    const v3 = (x: number[]) => new J.Vec3(x[0], x[1], x[2]);
+    for (const [i, p] of parts.entries()) {
+      let st: Jolt.ShapeSettings;
+      if (p.box) {
+        this.v.Set(p.box[0], p.box[1], p.box[2]);
+        st = new J.BoxShapeSettings(this.v, Math.min(0.02, ...p.box.map((b) => b * 0.4)));
+      } else st = new J.CapsuleShapeSettings(Math.max(0.005, p.h ?? 0.05), p.r ?? 0.03);
+      const shape = this.shape(st);
+      if (!shape) break;
+      this.r.Set(p.c[0], p.c[1], p.c[2]);
+      this.q.Set(p.q[0], p.q[1], p.q[2], p.q[3]);
+      const bcs = new J.BodyCreationSettings(shape, this.r, this.q, J.EMotionType_Dynamic, COSMETIC);
+      bcs.mOverrideMassProperties = J.EOverrideMassProperties_CalculateInertia;
+      bcs.mMassPropertiesOverride.mMass = p.mass;
+      bcs.mMotionQuality = J.EMotionQuality_LinearCast;
+      bcs.mLinearDamping = p.drag ?? 0.2;
+      bcs.mAngularDamping = p.spin ?? 0.6;
+      bcs.mFriction = 0.5;
+      bcs.mRestitution = p.bounce ?? 0.1;
+      bcs.mAllowSleeping = false;
+      if (P) {
+        const g = new J.CollisionGroup(P.filter, owner, sub + i);
+        for (const k of p.skip ?? []) P.filter.DisableCollision(sub + i, k);
+        // (the part it hangs from: never)
+        if (p.parent >= 0) P.filter.DisableCollision(sub + i, sub + p.parent);
+        bcs.mCollisionGroup = g;
+        J.destroy(g);
+      }
+      const o = this.make(bcs, true);
+      shape.Release();
+      owned.push(o);
+      const from = p.parent >= 0 ? owned[p.parent].body : a.body;
+      // its joint to what it hangs from (six ways, Jolt's: its x the way it hangs, up — the twist —
+      // its y across): held at `at`, or let rise up its strap by `slack` m (a bag's strap gone slack:
+      // it lifts in a jump's fall) and stretched on a spring; swung no further than `cone` fore and
+      // aft, `coneAcross` out, twisted ±`twist`, all of it against the joint's `friction`
+      const s = new J.SixDOFConstraintSettings();
+      s.mSpace = J.EConstraintSpace_WorldSpace;
+      this.r.Set(p.at[0], p.at[1], p.at[2]);
+      s.mPosition1 = s.mPosition2 = this.r;
+      const tw = [p.at[0] - p.c[0], p.at[1] - p.c[1], p.at[2] - p.c[2]];
+      const tl = Math.hypot(tw[0], tw[1], tw[2]) || 1;
+      const up = tw.map((x) => x / tl);
+      // (across: the given way, made square to the hang)
+      const g = p.across ?? [1, 0, 0];
+      const dot = g[0] * up[0] + g[1] * up[1] + g[2] * up[2];
+      let ac = [g[0] - dot * up[0], g[1] - dot * up[1], g[2] - dot * up[2]];
+      const al = Math.hypot(ac[0], ac[1], ac[2]);
+      ac = al > 1e-3 ? ac.map((x) => x / al) : [up[1], -up[0], 0];
+      const X = v3(up);
+      const Y = v3(ac);
+      s.mAxisX1 = s.mAxisX2 = X;
+      s.mAxisY1 = s.mAxisY2 = Y;
+      J.destroy(X);
+      J.destroy(Y);
+      s.MakeFixedAxis(J.SixDOFConstraintSettings_EAxis_TranslationY);
+      s.MakeFixedAxis(J.SixDOFConstraintSettings_EAxis_TranslationZ);
+      const tx = J.SixDOFConstraintSettings_EAxis_TranslationX;
+      if (p.slack) {
+        s.SetLimitedAxis(tx, 0, p.slack);
+        if (p.stretch) {
+          const sp = s.get_mLimitsSpringSettings(tx);
+          sp.mFrequency = p.stretch;
+          sp.mDamping = 0.5;
+        }
+      } else s.MakeFixedAxis(tx);
+      const across = p.coneAcross ?? p.cone;
+      // (a pyramid's limits each their own: back and forward unalike — a cone's must match)
+      s.mSwingType = J.ESwingType_Pyramid;
+      const turns: [Jolt.SixDOFConstraintSettings_EAxis, number][] = [
+        [J.SixDOFConstraintSettings_EAxis_RotationX, p.twist ?? 0.3],
+        [J.SixDOFConstraintSettings_EAxis_RotationY, p.cone],
+        [J.SixDOFConstraintSettings_EAxis_RotationZ, across],
+      ];
+      for (const [r, lim] of turns) {
+        // (about across, + swings it back: no further than `back` that way)
+        s.SetLimitedAxis(r, -lim, r === J.SixDOFConstraintSettings_EAxis_RotationY ? (p.back ?? lim) : lim);
+        s.set_mMaxFriction(r, p.friction ?? 0);
+        // (drawn back to how it hung at first on a spring of `rest` Hz: a tie lying on the shirt)
+        if (p.rest) {
+          const m = s.get_mMotorSettings(r).mSpringSettings;
+          m.mFrequency = p.rest;
+          m.mDamping = 1;
+        }
+      }
+      const c = s.Create(from, o.body);
+      J.destroy(s);
+      if (p.rest) {
+        const six = J.castObject(c, J.SixDOFConstraint);
+        for (const [r] of turns) six.SetMotorState(r, J.EMotorState_Position);
+      }
+      c.AddRef();
+      this.system.AddConstraint(c);
+      joints.push(c);
+    }
+    shapeA.Release();
+    const id = this.nextDangle++;
+    this.dangles.set(id, { anchor: a, parts: owned, joints });
+    if (owned.length < parts.length) {
+      this.removeDangle(id);
+      return null;
+    }
+    return id;
+  }
+
+  /** A dangle's anchor to its bone now (x y z, qx qy qz qw, world), reached over `dt` s. */
+  moveDangle(id: number, anchor: Float32Array, dt: number): void {
+    const D = this.dangles.get(id);
+    if (D) this.moveTo(D.anchor, anchor, 0, dt, false);
+  }
+
+  /** A dangle's parts as they are: each its centre and its turn (x y z, qx qy qz qw). */
+  dangleParts(id: number, out: Float32Array): boolean {
+    const D = this.dangles.get(id);
+    if (!D) return false;
+    D.parts.forEach((o, i) => {
+      const p = this.bodies.GetPosition(o.id);
+      const q = this.bodies.GetRotation(o.id);
+      out.set([p.GetX(), p.GetY(), p.GetZ(), q.GetX(), q.GetY(), q.GetZ(), q.GetW()], i * 7);
+    });
+    return true;
+  }
+
+  removeDangle(id: number): void {
+    const D = this.dangles.get(id);
+    if (!D) return;
+    for (const c of D.joints) {
+      this.system.RemoveConstraint(c);
+      c.Release();
+    }
+    for (const o of D.parts) this.drop(o);
+    this.drop(D.anchor);
+    this.dangles.delete(id);
+  }
+
   // ── vehicles: kinematic boxes the car sim moves (it stays their driver) ──
   setVehicle(id: string, box: SolidBox3): boolean {
     const J = this.J;
@@ -736,8 +994,10 @@ export class PhysicsWorld {
   }
 
   // ── time ──
-  step(dt = DT): void {
-    if (!this.dead) this.jolt.Step(dt, 1);
+  /** On by `dt` s, in `steps` steps (Jolt's collision steps: what's on a quick-turned anchor — a
+   *  badge on a chest that pitches — holds its limits the better for them, docs/plan/61). */
+  step(dt = DT, steps = 1): void {
+    if (!this.dead) this.jolt.Step(dt, steps);
   }
 
   // ── who goes through what (locked doors: their owner) ──
@@ -961,6 +1221,8 @@ export class PhysicsWorld {
     const J = this.J;
     for (const id of [...this.chars.keys()]) this.removeCharacter(id);
     for (const id of [...this.rags.keys()]) this.removeRagdoll(id);
+    for (const id of [...this.dangles.keys()]) this.removeDangle(id);
+    for (const id of [...this.proxies.keys()]) this.removeProxies(id);
     for (const id of [...this.things.keys()]) this.removeThing(id);
     for (const id of [...this.vehicles.keys()]) this.removeVehicle(id);
     for (const k of [...this.statics.keys()]) this.remove(k);

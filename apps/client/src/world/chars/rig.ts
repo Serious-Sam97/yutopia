@@ -1,9 +1,10 @@
-// The skeleton every person shares: 29 joints, each a bone of the skinned
+// The skeleton every person shares: 31 joints, each a bone of the skinned
 // mesh (plan 58's phase 2: the chest between the spine and the neck, so the
 // trunk bends in two places; a toe at each foot's ball; each hand's fingers as
 // one hinge, the index on its own, and the thumb; four springs — long hair or a
 // ponytail, a skirt, a scarf's ends, a backpack — weighted only on whoever
-// wears them, swung by `model.ts`'s springs, never by a pose). At rest no joint is turned — a pose is Euler angles per joint (x, y,
+// wears them, swung by `model.ts`'s springs, never by a pose; and each ear's
+// earring, swung on Jolt near — docs/plan/61, as are the bags on `pack`). At rest no joint is turned — a pose is Euler angles per joint (x, y,
 // z, radians); L is the person's own left (+x; they face +z).
 
 export const JOINTS = [
@@ -36,6 +37,8 @@ export const JOINTS = [
   "skirt",
   "scarf",
   "pack",
+  "earL",
+  "earR",
 ] as const;
 export type JointName = (typeof JOINTS)[number];
 
@@ -69,6 +72,8 @@ export const PARENT: Record<JointName, JointName | null> = {
   skirt: "hips",
   scarf: "chest",
   pack: "chest",
+  earL: "head",
+  earR: "head",
 };
 
 /** The springs (plan 58 phase 2d): joints a pose never turns — `model.ts` swings them. */

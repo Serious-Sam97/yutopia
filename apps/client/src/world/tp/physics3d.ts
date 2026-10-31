@@ -95,7 +95,8 @@ export class BrowserPhysics {
   ragdollSpace(): { world: PhysicsWorld; origin: () => { x: number; y: number; z: number } } {
     return { world: this.world, origin: () => this.src.frame() };
   }
-  /** (plan 58 5d) A step for what's loose in it (the ragdolls: the walker's character moves itself). */
+  /** (plan 58 5d) A step for what's loose in it (the ragdolls, what's worn swinging — plan 61: the
+   *  walker's character moves itself). */
   step(dt: number): void {
     this.world.step(Math.min(dt, 1 / 30));
   }
@@ -113,7 +114,8 @@ export class BrowserPhysics {
     const chunks = (2 * RING + 1) ** 2 * 4; // (round wherever you go: built ones are kept)
     const world = await PhysicsWorld.create(
       loadJolt,
-      sizesFor({ statics: staticCount(solids, chunks), vehicles: solids.cars.size + 16 }),
+      // (worn: what swings on people near and their stand-ins — docs/plan/61, me and six, ~16 each)
+      sizesFor({ statics: staticCount(solids, chunks), vehicles: solids.cars.size + 16, worn: 7 * 16 }),
     );
     const build = new WorldBuilder(world);
     build.building(solids);

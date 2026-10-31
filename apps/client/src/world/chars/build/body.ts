@@ -140,6 +140,8 @@ export class Body {
     k.joint("skirt", 0, 0.5 * this.T, 0);
     k.joint("scarf", 0, 0.3 * this.T, 0);
     k.joint("pack", 0, 0.2 * this.T, 0);
+    k.joint("earL", 0, 0.5 * hh, 0);
+    k.joint("earR", 0, 0.5 * hh, 0);
     k.joint("spine", 0, this.spineY);
     k.joint("chest", 0, this.chestY - this.spineY);
     // (the neck's root set back by `neckBack`, or with `neckFwd` in the middle of the trunk's top — of a

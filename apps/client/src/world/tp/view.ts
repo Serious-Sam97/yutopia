@@ -2136,6 +2136,9 @@ void main() {
   private readonly ragSpace = () => this.physics?.ragdollSpace() ?? null;
   private limpNow = false;
   private meLimp = false;
+  /** (plan 61) what's worn swinging on Jolt — me and the nearest few: its own chunk, once the physics is in */
+  private sway: import("@/world/sway/hub").SwayHub | null = null;
+  private swayAsked = false;
   /** (plan 58 5d) I'm down on the ragdoll: the walker holds me still till I'm up */
   limpMe(): boolean {
     return this.meLimp;
@@ -2552,6 +2555,7 @@ void main() {
             mood: this.moodOf(b, shadesNear),
             groundAt: this.groundAt,
             rag: this.ragSpace,
+            sway: this.sway?.skipOf(b.id),
           },
         );
         // (plan 58 5d: down on the ragdoll — the physics stepped while anyone is; mine holds the walker)
@@ -2610,8 +2614,26 @@ void main() {
         p.dispose();
         this.people.delete(id);
       }
-    // (plan 58 5d: the ragdolls in the world's physics, a step on while anyone's down)
-    if (this.limpNow) this.physics?.step(dt);
+    // (plan 61: what's worn swinging on Jolt — me and the nearest few: their stand-ins and anchors to
+    // their bones, the step, their bones where it has them)
+    const ph = this.physics;
+    if (ph && this.charF && !this.swayAsked) {
+      this.swayAsked = true;
+      void import("@/world/sway/hub").then((m) => {
+        const rs = this.physics?.ragdollSpace();
+        if (rs && !this.gone) this.sway = new m.SwayHub(rs.world, rs.origin);
+      });
+    }
+    const sw = this.sway;
+    if (sw) {
+      const near: { id: string; model: Person3D["model"]; d: number }[] = [];
+      for (const [id, p] of this.people3)
+        if (seen.has(id) && p.ready && p.root.visible && p.swayD < 14) near.push({ id, model: p.model, d: p.swayD });
+      sw.pre(near, Math.min(dt, 1 / 30), meId ?? undefined);
+    }
+    // (plan 58 5d: the ragdolls in the world's physics, a step on while anyone's down — or swings)
+    if (this.limpNow || sw?.active) ph?.step(dt);
+    sw?.post();
     this.limpNow = false;
     for (const [id, p] of this.people3)
       if (!seen.has(id)) {
@@ -4826,6 +4848,8 @@ void main() {
 
   private gone = false;
   destroy() {
+    this.sway?.dispose();
+    this.sway = null;
     this.physics?.stop();
     this.physics = null;
     this.gone = true;
