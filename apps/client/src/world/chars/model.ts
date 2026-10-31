@@ -29,6 +29,7 @@ export function bodyMaterial(): MeshBasicMaterial {
   if (!body) {
     body = new MeshBasicMaterial({ vertexColors: true });
     legShade(body);
+    celShade(body);
   }
   return body;
 }
@@ -68,6 +69,47 @@ if (legSide != 0.0) {
       .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.2 * vFarLeg;");
   };
   m.customProgramCacheKey = () => `${key.call(m)}|legs`;
+}
+
+// (2026-10-31, plan 59) Cel shading: the side of each form turned from a light over the viewer's left
+// shoulder takes a cool shadow tone, cut sharp with a soft edge — volume without textures, like the
+// world's facets; the lit side's edges catch a warm rim, and the figure darkens a little toward the
+// feet, standing in its own shade. In view space, so the light keeps to the camera.
+/** Two-tone shade the body on `m` (chained after what's patched on it already). */
+export function celShade(m: Material, k = 1): void {
+  const was = m.onBeforeCompile;
+  const key = m.customProgramCacheKey;
+  m.onBeforeCompile = (sh, r) => {
+    was.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vCelN;\nvarying float vCelY;")
+      .replace(
+        "#include <project_vertex>",
+        `#include <project_vertex>
+vCelY = position.y;
+#ifdef USE_SKINNING
+vCelN = normalize(transformedNormal);
+#else
+vCelN = vec3(0.0, 0.0, 1.0);
+#endif`,
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vCelN;\nvarying float vCelY;")
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+{
+  vec3 n = normalize(vCelN);
+  float l = dot(n, normalize(vec3(-0.6, 0.5, 0.62)));
+  float dark = 1.0 - smoothstep(-0.2, 0.12, l);
+  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.6, 0.64, 0.86), dark * ${k.toFixed(3)});
+  float rim = smoothstep(0.55, 0.85, 1.0 - abs(n.z)) * smoothstep(0.05, 0.4, -n.x) * (1.0 - dark);
+  diffuseColor.rgb += rim * ${(0.16 * k).toFixed(3)} * vec3(1.0, 0.9, 0.75);
+  diffuseColor.rgb *= mix(1.0, mix(0.8, 1.0, smoothstep(0.0, 0.6, vCelY)), ${k.toFixed(3)});
+}`,
+      );
+  };
+  m.customProgramCacheKey = () => `${key.call(m)}|cel${k}`;
 }
 
 /** What makes two looks the same model (everything in the avatar is drawn). */
@@ -502,6 +544,8 @@ export class PersonModel {
     if (m) {
       m[0] = blink;
       m[1] = talk;
+      // (an eye's shut line, where there is one: only as the lids meet)
+      if (m.length > 4) m[4] = Math.min(1, Math.max(0, (blink - 0.65) / 0.3));
     }
   }
   /** Where the eyes look (plan 58 G.D): x + to the person's left, y + up; −1..1 each. */

@@ -11,8 +11,18 @@ import type { AvatarLayers } from "@yutopia/shared";
 export interface Params {
   height: number; // floor to crown, world units (tiles ≈ metres)
   heads: number; // how many heads tall
-  head: { width: number; depth: number; jaw: number; square: number; neckBack: number }; // × hh; jaw 0 round … 1 pointed; square 0 … 1 a wide, flat jaw
-  neck: { len: number; r: number }; // × hh
+  head: {
+    width: number;
+    depth: number;
+    jaw: number;
+    square: number;
+    neckBack: number; // × hh, the head forward of where the neck meets it (the neck joins it behind the jaw)
+    neckFwd: number; // 0 … 1 the neck's root in the middle of the trunk's top (a collar's middle), not set back; the head goes with it
+    lean: number;
+    jawLine: number;
+    form: number;
+  }; // × hh; form 0 … 1 the head shaped round it, not one outline turned: cheekbones, the brow, the back of the skull; jaw 0 round … 1 pointed; square 0 … 1 a wide, flat jaw; lean 0 … 1 the cheeks and jaw drawn in; jawLine 0 … 1 the head's underside a jaw, from the chin up and back to the nape (not a bowl as low behind as the chin)
+  neck: { len: number; r: number; apple: number }; // × hh; apple 0 … 1 an Adam's apple (drawn with `anatomy`)
   torso: {
     shoulder: number;
     chest: number;
@@ -22,11 +32,16 @@ export interface Params {
     squareness: number;
     belly: number;
     bust: number; // 0 none … a chest that stands out in front
+    seat: number; // 0 … 1 the bottom of the trunk drawn in front to back, into the thighs
+    bustH: number; // how tall the bust's rounds are, × the trunk
+    trap: number; // 0 … 1 the shoulders sloping down from the neck (the trapezius), not a flat top
+    pelvis: number; // how far below the hip joints the trunk comes down (the crotch), × the thigh's radius
+    bowl: number; // 1 … the trunk's bottom a deep bowl between the thighs; less, flatter
   }; // radii × hh
-  arm: { len: number; upper: number; fore: number; wrist: number }; // len × height, radii × hh
+  arm: { len: number; upper: number; fore: number; wrist: number; socket: number }; // len × height, radii × hh; socket 0 … 1 the arm set up into the shoulder, under its cap, not hung below it
   leg: { len: number; thigh: number; knee: number; ankle: number; gap: number; calf: number }; // len × height
-  hand: { size: number; thick: number }; // × hh
-  foot: { len: number; width: number; height: number; sole: number }; // × hh
+  hand: { size: number; thick: number; fingers: number }; // × hh; fingers 0 a mitten … 1 four fingers, thinner to the tips
+  foot: { len: number; width: number; height: number; sole: number; shape: number }; // × hh; shape 0 a slab … 1 a shoe's own shape (a round toe, the top drawn in, a higher toe box)
   face: {
     eyeY: number; // height on the head, 0 chin … 1 crown
     eyeGap: number; // half the distance between the eyes × hh
@@ -37,9 +52,26 @@ export interface Params {
     brows: number; // thickness × eyeSize
     browArch: number; // 1 the usual gentle arch; 0 straight, 2 high
     ears: number; // × hh
+    earBack: number; // 0 … 1 the ears set back and a touch lower, as on a real head
     lashes: boolean; // a little flick at each eye's outer corner
+    smile: number; // the mouth's curve: 1 the usual smile, 0 a straight line
+    lid: number; // 0 none … 1 an upper lid line over a shorter eye
+    bridge: number; // 0 a button nose … 1 a narrower one with a bridge
+    iris: number; // 0 a dot for an eye … 1 an eye: the white, an iris, a pupil and a glint
   };
-  hair: { thick: number; lockW: number; count: number; tuft: number }; // × hh; tuft 0..1: the quiff
+  hair: {
+    thick: number; // × hh
+    lockW: number; // × hh
+    count: number;
+    tuft: number; // 0..1 the quiff
+    flat: number; // × how thin a lock is for its width
+    nape: number; // 0..1 a bob's or long hair's cap down over the nape
+    blunt: number; // 0..1 a bob's locks cut square, not to a point
+    fringe: number; // × the fringe's locks' width
+    side: number; // how far round from the front (rad) the locks round the sides start
+  };
+  folds: number; // 0 … 1 a top's creases inked in: from under the arms, at the waist
+  anatomy: number; // 0 the limbs as capsules … 1 shaped: the shoulder, bicep, forearm, knee, calf
   bevel: number; // softness of extruded parts × hh
   ink: string; // the line and the eyes
 }
@@ -68,31 +100,83 @@ export const LODS: Record<Lod, Seg> = {
 // above and running; the head, the trunk and the arms as they were, so she stands 9 cm taller)
 const LEGS = 0.612 * 1.15;
 const TALL = 1.7 + LEGS - 0.612;
+// (2026-10-31, plan 59: the legs 14% longer for the same height, the trunk shorter by as much, the
+// crotch from 39% of the height to 46% — moves.ts THIGH and SHIN agree, chars.test.ts checks)
+export const LEG_X = 1.14;
 // Ligne claire, as the user tuned it on 2026-10-17 (belly, longer trunk,
-// shorter arms, the shirt down to the hips).
+// shorter arms, the shirt down to the hips) — then the character pass (2026-10-31, plan 59): lean
+// (the belly to a fifth, the cheeks and jaw drawn in) and grown up, the head 10% shorter (`M`)
+// with everything else measured in heads made 1/M as many, so the body's the same; a longer neck
+// into a trapezius, bigger hands with fingers, the shoes shaped; a jaw and a head shaped round it,
+// real eyes with lids, a nose with a bridge, a calm mouth; the hair closer and in bigger shapes; folds,
+// seams and the limbs' anatomy close up.
+const M = 0.9;
 export const BASE: Params = {
   height: TALL,
-  heads: TALL / 0.34,
-  head: { width: 0.9, depth: 0.95, jaw: 0.3, square: 0, neckBack: 0.08 },
-  neck: { len: 0.2, r: 0.13 },
-  torso: { shoulder: 0.53, chest: 0.5, waist: 0.47, hip: 0.5, depth: 0.74, squareness: 0.65, belly: 0.42, bust: 0 },
-  arm: { len: (0.33 * 1.7) / TALL, upper: 0.12, fore: 0.105, wrist: 0.08 },
-  leg: { len: LEGS / TALL, thigh: 0.19, knee: 0.13, ankle: 0.09, gap: 0.23, calf: 0.02 },
-  hand: { size: 0.34, thick: 0.11 },
-  foot: { len: 0.8, width: 0.3, height: 0.3, sole: 0.07 },
+  heads: TALL / 0.34 / M,
+  head: {
+    width: 0.9 * 0.96,
+    depth: 0.95,
+    jaw: 0.3,
+    square: 0,
+    neckBack: 0.08,
+    neckFwd: 1,
+    lean: 1,
+    jawLine: 1,
+    form: 1,
+  },
+  // (the neck shorter than it was: 2026-10-31, the user found it too long on the smaller head)
+  neck: { len: 0.1 / M, r: 0.13 / M, apple: 0 },
+  torso: {
+    shoulder: (0.53 * 1.05) / M,
+    chest: (0.5 * 1.04) / M,
+    waist: (0.47 * 0.9) / M,
+    hip: (0.5 * 0.93) / M,
+    depth: 0.74 * 0.93,
+    squareness: 0.65,
+    belly: 0.42 * 0.2,
+    bust: 0,
+    seat: 1,
+    bustH: 0.12,
+    trap: 1,
+    pelvis: 0.35,
+    bowl: 0.4,
+  },
+  arm: { len: (0.33 * 1.7) / TALL, upper: 0.12 / M, fore: 0.105 / M, wrist: 0.08 / M, socket: 0.5 },
+  leg: { len: (LEGS * LEG_X) / TALL, thigh: 0.19 / M, knee: 0.13 / M, ankle: 0.09 / M, gap: 0.23 / M, calf: 0.02 / M },
+  hand: { size: (0.34 * 1.12) / M, thick: 0.11 / M, fingers: 1 },
+  // (smaller feet: 10% in heads, which are 1/M as many)
+  foot: { len: 0.8, width: 0.3, height: 0.3, sole: 0.07, shape: 1 },
   face: {
     eyeY: 0.47,
     eyeGap: 0.15,
-    eyeSize: 0.075,
+    eyeSize: 0.075 * 1.35,
     mouthY: 0.21,
     mouthW: 0.11,
     nose: 0.07,
     brows: 0.35,
     browArch: 1,
-    ears: 0.13,
+    ears: 0.13 * 1.2,
+    earBack: 1,
     lashes: false,
+    smile: 0.45,
+    lid: 0.7,
+    bridge: 1,
+    iris: 1,
   },
-  hair: { thick: 0.055, lockW: 0.2, count: 0.6, tuft: 0.9 },
+  hair: {
+    thick: 0.055 * 0.7,
+    lockW: 0.2 * 1.4,
+    count: 0.6 * 0.75,
+    tuft: 0,
+    flat: 0.7,
+    nape: 1,
+    blunt: 1,
+    fringe: 0.7,
+    side: 1.2,
+  },
+  folds: 1,
+  anatomy: 1,
   bevel: 0.012,
   ink: "#151515",
 };
@@ -107,7 +191,7 @@ interface Shape {
   face?: Scale; // × eyeSize, mouthW, nose, ears, brows…
   hand?: Scale;
   foot?: Scale;
-  set?: { square?: number; bust?: number; browArch?: number; lashes?: boolean };
+  set?: { square?: number; bust?: number; browArch?: number; lashes?: boolean; apple?: number };
 }
 
 // The figure (`body`) and the face and frame (`gender`) as changes to BASE —
@@ -117,7 +201,20 @@ interface Shape {
 export const BODY: Record<string, Shape> = {
   regular: {},
   slim: { torso: { shoulder: 0.93, chest: 0.9, waist: 0.86, hip: 0.92, belly: 0.55 }, limbs: 0.9 },
-  broad: { torso: { shoulder: 1.1, chest: 1.12, waist: 1.16, hip: 1.08, depth: 1.05, belly: 1.35 }, limbs: 1.12 },
+  // (with the belly cut to a fifth in BASE, broad keeps half of its own, its waist and its depth, and
+  // a stronger neck: or the three bodies come out nearly alike)
+  broad: {
+    torso: {
+      shoulder: 1.1,
+      chest: 1.12,
+      waist: (1.16 * 0.98) / 0.9,
+      hip: 1.08,
+      depth: (1.05 * 0.98) / 0.93,
+      belly: 1.35 * 2.5,
+    },
+    neck: { r: 1.12 },
+    limbs: 1.12,
+  },
 };
 export const GENDER: Record<string, Shape> = {
   neutral: {},
@@ -131,7 +228,7 @@ export const GENDER: Record<string, Shape> = {
     face: { eyeSize: 1.14, brows: 0.62, mouthW: 0.9, nose: 0.85 },
     hand: { size: 0.88, thick: 0.9 },
     foot: { len: 0.92, width: 0.92 },
-    set: { bust: 0.4, browArch: 1.7, lashes: true },
+    set: { bust: 0.4 * 0.85, browArch: 1.7, lashes: true },
   },
   // broad shoulders over narrow hips, a straight flank; a thick neck, strong
   // arms, big hands; a wide square jaw, heavy straight brows, smaller eyes
@@ -143,7 +240,7 @@ export const GENDER: Record<string, Shape> = {
     face: { eyeSize: 0.9, brows: 2.3, mouthW: 1.12, nose: 1.18, ears: 1.1 },
     hand: { size: 1.14, thick: 1.12 },
     foot: { len: 1.08, width: 1.08 },
-    set: { square: 0.6, browArch: 0.25, lashes: false },
+    set: { square: 0.6, browArch: 0.25, lashes: false, apple: 1 },
   },
 };
 
@@ -175,6 +272,7 @@ function apply(p: Params, s: Shape) {
   if (s.set?.bust !== undefined) p.torso.bust = s.set.bust;
   if (s.set?.browArch !== undefined) p.face.browArch = s.set.browArch;
   if (s.set?.lashes !== undefined) p.face.lashes = s.set.lashes;
+  if (s.set?.apple !== undefined) p.neck.apple = s.set.apple;
 }
 
 export function paramsFor(a: Pick<AvatarLayers, "body" | "gender">, base: Params = BASE): Params {

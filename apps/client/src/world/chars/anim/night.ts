@@ -1,4 +1,4 @@
-import { body, type Ch, clamp01, type Moved, smoother, steady } from "../moves";
+import { body, type Ch, clamp01, HIP_H, type Moved, smoother, steady } from "../moves";
 import { HANDS, handPose, type JointName, type Pose } from "../rig";
 
 // Plan 58 phase 7 (docs/plan/58-the-animation.md): the dark, after Alan Wake 2 — the torch held out
@@ -212,7 +212,7 @@ export function hit2(
 
 // ── down: on hands and knees (docs/plan/30-the-dark.md D7), crawling — each hand and knee set down
 // and held where it is while the body goes over it, the right hand with the left knee; the head hung
-const HIPS_UP = 0.46; // the hips over the ground, on the knees
+const HIPS_UP = 0.46 * 1.14; // the hips over the ground, on the knees (on the thighs: moves.ts THIGH)
 const STRIDE = 0.42; // m a cycle
 /** Crawling, `phase` 0..1 a cycle (by the ground covered; still at 0), `t` s (the breath): the body
  *  and its hands on the ground. */
@@ -221,7 +221,7 @@ export function crawl2(phase: number, t: number, moving: boolean): { m: Moved; h
   const sw = Math.sin(TAU * phase) * (moving ? 1 : 0);
   const c: Ch = {
     hx,
-    up: HIPS_UP - 0.765 - 0.012 * sw * sw,
+    up: HIPS_UP - HIP_H - 0.012 * sw * sw,
     // (labouring: the breath heaving the back; the head hung, now and then lifted to see ahead)
     sx: 0.1 + 0.03 * Math.sin(t * 3.4),
     cx: 0.06,

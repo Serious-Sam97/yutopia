@@ -231,9 +231,13 @@ export function bake(k: Kit): Baked {
   const ink = make(inkIdx);
   // the face's two morphs (relative): blink squashes each eye dot to a line,
   // talk opens the mouth's line into a mouth
-  const morph = (tag: string, sx: number, sy: number) => {
+  const morph = (tag: string, sx: number, sy0: number) => {
     const d = new Float32Array(nv * 3);
-    for (const [start, count] of tags[tag] ?? []) {
+    // (with lids to close over it, an eye — white, iris and all — goes all the way: nothing peeks out
+    // under the lid shut)
+    const sy = tag === "eye" && tags.lid?.length ? 0.02 : sy0;
+    // (an eye's white blinks with it)
+    for (const [start, count] of [...(tags[tag] ?? []), ...(tag === "eye" ? (tags.white ?? []) : [])]) {
       let x0 = Infinity;
       let x1 = -Infinity;
       let y0 = Infinity;
@@ -251,12 +255,39 @@ export function bake(k: Kit): Baked {
         d[v * 3 + 1] = (pos[v * 3 + 1] - cy) * (sy - 1);
       }
     }
+    // (a blink brings an eye's lids down and up to the middle of its white, where they meet in one
+    // line: each to the white nearest it)
+    if (tag === "eye") {
+      const whites = (tags.white ?? []).map(([start, count]) => {
+        let x = 0;
+        let y0 = Infinity;
+        let y1 = -Infinity;
+        for (let v = start; v < start + count; v++) {
+          x += pos[v * 3];
+          y0 = Math.min(y0, pos[v * 3 + 1]);
+          y1 = Math.max(y1, pos[v * 3 + 1]);
+        }
+        return { x: x / count, y: (y0 + y1) / 2 };
+      });
+      for (const [start, count] of whites.length ? (tags.lid ?? []) : []) {
+        let x = 0;
+        for (let v = start; v < start + count; v++) x += pos[v * 3];
+        x /= count;
+        const w = whites.reduce((a, b) => (Math.abs(b.x - x) < Math.abs(a.x - x) ? b : a));
+        // (both into a sliver at the middle; the shut line, its own morph, draws the closed eye)
+        for (let v = start; v < start + count; v++) {
+          const h = pos[v * 3 + 1] - w.y;
+          d[v * 3 + 1] = h * ((h > 0 ? 0.15 : 0.05) - 1);
+        }
+      }
+    }
     const a = new BufferAttribute(d, 3);
     a.name = tag;
     return a;
   };
   // …and two that look (plan 58 G.D): the eye dots slid to the person's left (+x) and up, about
   // their own width at a full look (the influence ±1 picks the way)
+  const e = k.p.face.eyeSize * k.hh;
   const look = (tag: string, fx: number, fy: number, name: string) => {
     const d = new Float32Array(nv * 3);
     for (const [start, count] of tags[tag] ?? []) {
@@ -272,15 +303,36 @@ export function bake(k: Kit): Baked {
       }
       // (sliding round the face's curve: the eye heading for the middle comes out, the one heading
       // for the side goes back — flat, the one sank under the skin)
+      // (an iris, its pupil and glint all the iris's way: as far as the white lets it)
       const cx = (x0 + x1) / 2;
+      const iris = k.p.face.iris > 0 && k.seg.radial > 9; // (far off, a dot: build/head.ts)
+      const w = iris ? 0.36 * e : x1 - x0;
+      const h = iris ? 0.32 * e : y1 - y0;
       for (let v = start; v < start + count; v++) {
-        d[v * 3] = (x1 - x0) * fx;
-        d[v * 3 + 1] = (y1 - y0) * fy;
-        d[v * 3 + 2] = -Math.sign(cx) * 0.45 * (x1 - x0) * fx + 0.08 * (y1 - y0) * Math.abs(fy);
+        d[v * 3] = w * fx;
+        d[v * 3 + 1] = h * fy;
+        d[v * 3 + 2] = -Math.sign(cx) * 0.45 * w * fx + 0.08 * h * Math.abs(fy);
       }
     }
     const a = new BufferAttribute(d, 3);
     a.name = name;
+    return a;
+  };
+  // …and a fifth where an eye has a shut line (build/head.ts): drawn, but kept to a point until a blink
+  // ends, when it opens out to the line where the lids meet
+  const shut = () => {
+    const d = new Float32Array(nv * 3);
+    for (const [start, count] of tags.shut ?? []) {
+      const c = [0, 0, 0];
+      for (let v = start; v < start + count; v++) for (let i = 0; i < 3; i++) c[i] += pos[v * 3 + i] / count;
+      for (let v = start; v < start + count; v++)
+        for (let i = 0; i < 3; i++) {
+          d[v * 3 + i] = pos[v * 3 + i] - c[i];
+          pos[v * 3 + i] = c[i];
+        }
+    }
+    const a = new BufferAttribute(d, 3);
+    a.name = "shut";
     return a;
   };
   body.morphAttributes.position = [
@@ -288,6 +340,7 @@ export function bake(k: Kit): Baked {
     morph("mouth", 0.72, 4.2),
     look("eye", 0.75, 0, "lookX"),
     look("eye", 0, 0.32, "lookY"),
+    ...(tags.shut?.length ? [shut()] : []),
   ];
   body.morphTargetsRelative = true;
   // culling: a sphere round the whole figure, generous enough for any pose

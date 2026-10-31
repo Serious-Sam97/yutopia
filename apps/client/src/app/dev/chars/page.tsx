@@ -29,7 +29,12 @@ import type { Moved, Verb } from "@/world/chars";
 //                              the move (docs/plan/29-the-move.md): move (the gaits,
 //                              crouch, strafe, aim), run, sprint, land, vault, mantle,
 //                              roll (filmstrips)
-//   …&w=&h=&ink=2.4&spin=1
+//   /dev/chars?looks=,flat,muted&who=0   one of them in each variant, front and side
+//                              (docs/plan/59-the-character.md: "flat" without the cel
+//                              shade, "muted" the clothes muted; &head=1 close on the heads,
+//                              &y=0.8 close at that height, &back=1 the back for the front)
+//   …&look=flat (or muted) puts any view in a variant
+//   …&w=&h=&ink=2.4&spin=1&blink=0.5&talk=1&eyesX=1&eyesY=0.5 (the face's morphs held)
 const CAST: AvatarLayers[] = [
   {
     ...DEFAULT_AVATAR,
@@ -118,6 +123,8 @@ type Act = {
   feel?: number;
   // plan 58 G.D: the eyes held looking this way (x to the left, y up; −1..1)
   eyes?: [number, number];
+  /** the face's morphs held: [blink, talk] (0 open … 1 shut / open) */
+  face?: [number, number];
 };
 type MoveKind =
   | "jog"
@@ -237,6 +244,9 @@ const ANIMS: Record<string, Act[]> = {
     { label: "eyes right", eyes: [-1, 0] },
     { label: "eyes ahead", eyes: [0, 0] },
     { label: "eyes left, up", eyes: [1, 0.8] },
+    { label: "half shut", eyes: [0, 0], face: [0.5, 0] },
+    { label: "shut", eyes: [0, 0], face: [1, 0] },
+    { label: "talking", eyes: [0, 0], face: [0, 1] },
   ],
   // plan 58 G: the feel loop, played; and its moments, frozen
   feel: [{ label: "the feel loop", feel: 0 }],
@@ -432,7 +442,34 @@ type Mode =
   | { kind: "sheet"; field: Field }
   | { kind: "turn"; look: number }
   | { kind: "lods"; look: number }
-  | { kind: "crowd"; n: number };
+  | { kind: "crowd"; n: number }
+  | { kind: "looks"; who: number; looks: string[] };
+
+// a variant of someone for the character pass's stills (plan 59): "muted" mutes the clothes (and
+// "flat", read by `add`, draws them without the cel shade)
+function inLook(a: AvatarLayers, name: string): AvatarLayers {
+  const out = { ...a };
+  if (name.split("+").includes("muted")) {
+    const mute = (hex: string, k: number) => {
+      const n = Number.parseInt(hex.replace("#", ""), 16);
+      const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+      const l = 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+      const m = c.map((v) => Math.round((v + (l - v) * k) * (1 - 0.35 * k)));
+      return `#${m.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+    };
+    for (const key of [
+      "topColor",
+      "bottomColor",
+      "shoesColor",
+      "accessoryColor",
+      "extraColor",
+      "eyewearColor",
+    ] as const)
+      if (out[key]) out[key] = mute(out[key], 0.5);
+    out.hairColor = mute(out.hairColor, 0.3);
+  }
+  return out;
+}
 
 // any part of a look can be set in the query (&hair=long&top=hoodie&gender=masculine)
 function withQuery(a: AvatarLayers, q: URLSearchParams): AvatarLayers {
@@ -446,7 +483,10 @@ function withQuery(a: AvatarLayers, q: URLSearchParams): AvatarLayers {
 
 // the person each sheet dresses up (a look that shows the part off)
 function sheetLooks(field: Field, q: URLSearchParams): { label: string; a: AvatarLayers }[] {
-  const base = withQuery({ ...CAST[0], hair: "short", accessory: "none", eyewear: "none", extra: "none" }, q);
+  const base = inLook(
+    withQuery({ ...CAST[0], hair: "short", accessory: "none", eyewear: "none", extra: "none" }, q),
+    q.get("look") ?? "",
+  );
   const opts = AVATAR_OPTIONS[field] as readonly string[];
   return opts.map((o) => {
     const a: AvatarLayers = { ...base, [field]: o };
@@ -467,6 +507,8 @@ function modeOf(q: URLSearchParams): Mode {
   if (q.get("crowd")) return { kind: "crowd", n: Number(q.get("crowd")) };
   if (q.get("turn")) return { kind: "turn", look: Number(q.get("turn")) };
   if (q.get("lods")) return { kind: "lods", look: Number(q.get("lods")) };
+  if (q.get("looks"))
+    return { kind: "looks", who: Number(q.get("who") ?? 0), looks: (q.get("looks") ?? "").split(",") };
   return { kind: "row" };
 }
 
@@ -514,8 +556,17 @@ function Sheet({ q }: { q: URLSearchParams }) {
       const f = new C.CharFactory();
       type Model = InstanceType<typeof C.PersonModel>;
       const items: { m: Model; phase: number }[] = [];
-      const add = (a: AvatarLayers, lod: 0 | 1 | 2, x: number, z: number, yaw: number) => {
-        const m = new C.PersonModel(f, a, lod);
+      // (people are cel shaded, as in the world; "flat" without it, to compare)
+      let plain: InstanceType<typeof T.MeshBasicMaterial> | null = null;
+      const add = (a: AvatarLayers, lod: 0 | 1 | 2, x: number, z: number, yaw: number, flat = false) => {
+        if (flat && !plain) {
+          plain = new T.MeshBasicMaterial({ vertexColors: true });
+          C.legShade(plain);
+        }
+        const m =
+          flat && plain
+            ? new C.PersonModel(f, a, lod, { body: plain, ink: C.inkMaterial() })
+            : new C.PersonModel(f, a, lod);
         m.root.position.set(x, 0, z);
         m.root.rotation.y = yaw;
         scene.add(m.root);
@@ -538,11 +589,13 @@ function Sheet({ q }: { q: URLSearchParams }) {
             a.mp !== undefined ||
             a.feel !== undefined ||
             ["vault", "mantle", "roll", "slide", "slide2", "land"].includes(a.mv ?? "");
-          const look = withQuery({ ...CAST[strip ? 0 : i % CAST.length], accessory: "none" }, q);
+          // (&look=flat or muted: a variant, as in ?looks=)
+          const named = q.get("look") ?? "";
+          const look = inLook(withQuery({ ...CAST[strip ? 0 : i % CAST.length], accessory: "none" }, q), named);
           // (&yaw= turns everyone: π shows their backs)
           const turn = Number(q.get("yaw") ?? 0);
           const yaw = strip ? Math.PI / 2 : a.walk ? Math.PI / 2 - 0.5 : 0.4;
-          add(look, 0, (i - (acts.length - 1) / 2) * step, 0, yaw + turn);
+          add(look, 0, (i - (acts.length - 1) / 2) * step, 0, yaw + turn, named.includes("flat"));
         });
       // a stool for whoever sits (a lathe, like everything else)
       const stools: InstanceType<typeof T.Mesh>[] = [];
@@ -578,15 +631,35 @@ function Sheet({ q }: { q: URLSearchParams }) {
         stools.push(m);
         return m;
       });
+      const closeY = q.get("y") ? Number(q.get("y")) : null;
+      const close = q.get("head") === "1" || closeY !== null;
+      const pairGap = close ? 0.62 : 1.0;
+      const lookGap = close ? 1.5 : 2.5;
       const from = Number(q.get("from") ?? 0);
       const sheet = mode.kind === "sheet" ? sheetLooks(mode.field, q).slice(from, from + Number(q.get("n") ?? 99)) : [];
       if (mode.kind === "sheet")
         sheet.forEach((it, i) => {
-          add(it.a, 0, (i - (sheet.length - 1) / 2) * 0.82, 0, back ? Math.PI - 0.35 : 0.35);
+          add(
+            it.a,
+            0,
+            (i - (sheet.length - 1) / 2) * 0.82,
+            0,
+            back ? Math.PI - 0.35 : 0.35,
+            (q.get("look") ?? "").includes("flat"),
+          );
         });
       else if (mode.kind === "row")
         CAST.forEach((a, i) => {
-          add(a, 0, (i - 1.5) * 1.15, 0, [0.3, -0.15, 0.2, Math.PI - 0.55][i]);
+          const look = q.get("look") ?? "";
+          add(inLook(a, look), 0, (i - 1.5) * 1.15, 0, [0.3, -0.15, 0.2, Math.PI - 0.55][i], look.includes("flat"));
+        });
+      else if (mode.kind === "looks")
+        mode.looks.forEach((look, i) => {
+          const a = inLook(withQuery(CAST[mode.who % CAST.length], q), look);
+          const x = (i - (mode.looks.length - 1) / 2) * lookGap;
+          const flat = look.includes("flat");
+          add(a, 0, x - pairGap / 2, 0, back ? Math.PI - 0.25 : 0.25, flat);
+          add(a, 0, x + pairGap / 2, 0, Math.PI / 2, flat);
         });
       else if (mode.kind === "turn")
         [0, 0.7, Math.PI / 2, Math.PI].forEach((yaw, i) => {
@@ -594,17 +667,20 @@ function Sheet({ q }: { q: URLSearchParams }) {
         });
       else if (mode.kind === "lods")
         ([0, 1, 2] as const).forEach((l, i) => {
-          add(CAST[mode.look % CAST.length], l, (i - 1) * 1.1, 0, 0.5);
+          const named = q.get("look") ?? "";
+          add(inLook(CAST[mode.look % CAST.length], named), l, (i - 1) * 1.1, 0, 0.5, named.includes("flat"));
         });
       else if (mode.kind === "crowd") {
         const side = Math.ceil(Math.sqrt(mode.n));
+        const named = q.get("look") ?? "";
         for (let i = 0; i < mode.n; i++)
           add(
-            avatarFromSeed(i + 1),
+            inLook(avatarFromSeed(i + 1), named),
             1,
             ((i % side) - (side - 1) / 2) * 1.1,
             (Math.floor(i / side) - (side - 1) / 2) * 1.1,
             (i * 1.3) % 6.28,
+            named.includes("flat"),
           );
       }
 
@@ -618,6 +694,17 @@ function Sheet({ q }: { q: URLSearchParams }) {
         const span = acts.length * step + 0.6;
         cam.position.set(0, tall * 0.62 + 0.5, Math.max(6.6, span / (2 * Math.tan((10 * Math.PI) / 180) * (W / H))));
         cam.lookAt(0, tall * 0.5, 0);
+      } else if (mode.kind === "looks") {
+        const span = mode.looks.length * lookGap + 0.2;
+        const fit = span / (2 * Math.tan((10 * Math.PI) / 180) * (W / H));
+        if (close) {
+          const y = closeY ?? tall * 0.84;
+          cam.position.set(0, y + tall * 0.08, fit);
+          cam.lookAt(0, y, 0);
+        } else {
+          cam.position.set(0, tall * 0.62 + 0.4, Math.max(6.6, fit));
+          cam.lookAt(0, tall * 0.5, 0);
+        }
       } else if (mode.kind === "sheet") {
         // fit the row across the sheet (20° tall → about 35° wide here)
         const span = sheet.length * 0.82 + 0.5;
@@ -633,11 +720,17 @@ function Sheet({ q }: { q: URLSearchParams }) {
         cam.position.set(0, tall * 0.62 + 0.6, mode.kind === "row" ? 8.6 : 7.4);
         cam.lookAt(0, tall * 0.47, 0);
       }
-      const labelled = mode.kind === "anim" ? acts.map((a) => a.label) : sheet.map((it) => it.label);
+      const labelled =
+        mode.kind === "anim"
+          ? acts.map((a) => a.label)
+          : mode.kind === "looks"
+            ? mode.looks
+            : sheet.map((it) => it.label);
+      const gap = mode.kind === "looks" ? lookGap : step;
       setLabels(
         labelled.map((text, i) => ({
           text,
-          x: ((new T.Vector3((i - (labelled.length - 1) / 2) * step, 0, 0).project(cam).x + 1) / 2) * W,
+          x: ((new T.Vector3((i - (labelled.length - 1) / 2) * gap, 0, 0).project(cam).x + 1) / 2) * W,
         })),
       );
       // play the actions (frozen at &t= for a still)
@@ -704,7 +797,7 @@ function Sheet({ q }: { q: URLSearchParams }) {
           const drop = a.sit ? m.sitDrop(seatY) : 0;
           m.setPose(mo.pose, [mo.lift[0], mo.lift[1] + drop * mo.settle, mo.lift[2]], mo.reach);
           m.step(dt);
-          m.setFace(a.eyes ? 0 : mo.blink, mo.talk);
+          m.setFace(a.face ? a.face[0] : a.eyes ? 0 : mo.blink, a.face ? a.face[1] : mo.talk);
           if (a.eyes) m.setEyes(a.eyes[0], a.eyes[1]);
           if (mugs[i]) C.keepUpright(mugs[i], "mug", m.root, mo.sip * 1.05);
         });
@@ -747,6 +840,8 @@ function Sheet({ q }: { q: URLSearchParams }) {
       let t0 = performance.now();
       const spin = q.get("spin") === "1";
       const sway = mode.kind === "crowd";
+      // (&blink=0.5&talk=1&eyesX=1&eyesY=0.5: the face's morphs held, for a still of them)
+      const held = ["blink", "talk", "eyesX", "eyesY"].some((n) => q.has(n));
       const frame = (now: number) => {
         const built = f.pump(mode.kind === "crowd" ? 6 : 1000);
         let ready = 0;
@@ -768,6 +863,10 @@ function Sheet({ q }: { q: URLSearchParams }) {
         }
         last = now;
         for (const it of items) {
+          if (held && mode.kind !== "anim") {
+            it.m.setFace(Number(q.get("blink") ?? 0), Number(q.get("talk") ?? 0));
+            it.m.setEyes(Number(q.get("eyesX") ?? 0), Number(q.get("eyesY") ?? 0));
+          }
           if (spin) it.m.root.rotation.y += 0.006;
           if (sway) {
             const s = Math.sin(now / 400 + it.phase);
@@ -833,11 +932,13 @@ function Sheet({ q }: { q: URLSearchParams }) {
         ? `Wardrobe · ${mode.field}`
         : mode.kind === "crowd"
           ? `Crowd of ${mode.n}`
-          : mode.kind === "lods"
-            ? "Levels of detail"
-            : mode.kind === "turn"
-              ? "Turnaround"
-              : "Ligne Claire";
+          : mode.kind === "looks"
+            ? "Character pass"
+            : mode.kind === "lods"
+              ? "Levels of detail"
+              : mode.kind === "turn"
+                ? "Turnaround"
+                : "Ligne Claire";
   return (
     <main
       style={{
@@ -870,9 +971,9 @@ function Sheet({ q }: { q: URLSearchParams }) {
             {stats}
           </div>
         </div>
-        {labels.map((l) => (
+        {labels.map((l, i) => (
           <div
-            key={l.text}
+            key={`${i}-${l.text}`}
             style={{
               position: "absolute",
               bottom: 36,

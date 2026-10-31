@@ -32,7 +32,7 @@ export {
   verbIn,
   verbT,
 } from "./locomotion";
-export { bodyMaterial, CharFactory, legShade, lookKey, PersonModel, type Reach } from "./model";
+export { bodyMaterial, CharFactory, celShade, legShade, lookKey, PersonModel, type Reach } from "./model";
 export { blend, CONTACT, carPose, jumpPose, Motion3, type MotionIn, type MotionOut, STRIDE, walkPose } from "./motion";
 export {
   ANKLE,

@@ -2927,9 +2927,12 @@ void main() {
       this.light.patch(body);
       const bodyAway = new MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.55 });
       this.light.patch(bodyAway);
-      // (the far leg a shade darker, after the light: chars/model.ts)
+      // (the far leg a shade darker, after the light; each form's turned side in shade, with a rim
+      // of light on the lit one: chars/model.ts — the room's light multiplies all of it, after)
       C.legShade(body);
       C.legShade(bodyAway);
+      C.celShade(body);
+      C.celShade(bodyAway);
       const prop = (color: string) => {
         let m = this.propMats.get(color);
         if (!m) {

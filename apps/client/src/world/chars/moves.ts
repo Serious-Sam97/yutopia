@@ -28,9 +28,10 @@ export interface Moved {
 }
 
 // ── the leg, as built (build/body.ts, build/shoes.ts at the base proportions) ─
-// (2026-10-30: 15% longer — params.ts LEGS — from 0.306 each)
-export const THIGH = 0.352;
-export const SHIN = 0.352;
+// (2026-10-30: 15% longer — params.ts LEGS — from 0.306 each; 2026-10-31, plan 59: 14% longer again
+// for the same height, the crotch up where it is on a person — params.ts LEG_X; a test checks they agree)
+export const THIGH = (0.612 * 1.15 * 1.14) / 2;
+export const SHIN = THIGH;
 /** The legs against the ones every gait was keyed on (0.612 m): strides, the hips' heights, where a
  *  foot lands scale by it. */
 export const LEG_K = (THIGH + SHIN) / 0.612;

@@ -54,7 +54,7 @@ const LAZY = {
   "yutopia-media": 30, // TVs and the radio's media; hls.js is its own chunk, fetched for Jellyfin only
   "yutopia-os": 15, // VortexOS on the computers' glass (docs/plan/19-vortexos.md)
   "yutopia-phone": 60, // the phone: Vortex Mobile's screens, calls, camera, sounds (docs/plan/21-cellphone.md)
-  "yutopia-chars": 45, // (raised from 40 on 2026-10-22 by the user's call: 39.1, the next detail on people would tip it) // the 3D people: the model builder, motion, iso sprites (docs/plan/22-people-3d.md)
+  "yutopia-chars": 50, // (raised from 40 on 2026-10-22 by the user's call: 39.1, the next detail on people would tip it; to 50 on 2026-10-31 by the user's call: the character pass — docs/plan/59 — 48.8) // the 3D people: the model builder, motion, iso sprites (docs/plan/22-people-3d.md)
   "yutopia-input": 15, // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
   "yutopia-anim": 15, // plan 58's animations, loaded with the 3D people when asked for (docs/plan/58-the-animation.md)
   "yutopia-air": 15, // plan 58 phase 5's: over things with the hands placed, Flowmotion's grips, the ragdoll and the get-ups (loaded with the hero's)

@@ -67,13 +67,13 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
   const up = (q: Vector3) => q.clone().sub(centre).normalize();
   const tube = (ctrl: Vector3[], radius: (u: number) => [number, number], radial = k.seg.tubeRadial) =>
     sweepTube(ctrl, radius, { segs: k.seg.tube, radial, up });
-  // a lock: round at the root (hidden in the cap), pointed at the tip
-  const lock = (ctrl: Vector3[], w: number, flat = 0.4, root = 0.08) =>
+  // a lock: round at the root (hidden in the cap), pointed at the tip (`tip` lower: blunter, cut)
+  const lock = (ctrl: Vector3[], w: number, flat = 0.4, root = 0.08, tip = 0.85) =>
     k.add(
       "head",
       tube(ctrl, (u) => {
-        const s = Math.sqrt(Math.min(1, u / root)) * (1 - u) ** 0.85;
-        return [w * s, w * flat * s];
+        const s = Math.sqrt(Math.min(1, u / root)) * (1 - u) ** tip;
+        return [w * s, w * flat * p.hair.flat * s];
       }),
       color,
       { keepNormals: true },
@@ -141,7 +141,7 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
               hs.at(lerp(0.9, tip, 0.55), phi * 0.92 + sw * 0.5, th * 1.0),
               hs.at(tip, phi + sw, th * 0.35),
             ],
-        lw * (1 - Math.abs(f) * 0.15),
+        lw * p.hair.fringe * (1 - Math.abs(f) * 0.15),
         0.42,
       );
     }
@@ -162,11 +162,11 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
     );
   };
   // locks all round the sides and back, to the chin (bob) or the shoulder blades (long)
-  const around = (long: boolean, width: number) => {
+  const around = (long: boolean, width: number, tip = 0.85) => {
     const n = Math.max(6, Math.round(16 * p.hair.count));
     for (let i = 0; i < n; i++) {
       const f = i / (n - 1);
-      const phi = lerp(0.95, Math.PI * 2 - 0.95, f);
+      const phi = lerp(p.hair.side, Math.PI * 2 - p.hair.side, f);
       const back = -Math.cos(phi); // 1 at the back
       const rim = o.hatLine?.(phi);
       // (under a hat they start at its rim)
@@ -190,7 +190,7 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
       } else {
         pts.push(hs.at(0.14, phi, th * 1.55), hs.at(0.07, phi * 0.98 + Math.sign(Math.sin(phi)) * -0.05, th * 0.7));
       }
-      lock(pts, width, 0.38, 0.05);
+      lock(pts, width, 0.38, 0.05, tip);
     }
   };
   const ring = (r: number, tube: number) =>
@@ -330,18 +330,20 @@ export function buildHair(k: Kit, kind: string, color: string, o: Opts) {
       return;
     }
     case "bob": {
-      cap(line(0.8, 0.42, 0.2), rolled(th));
+      // (`nape`: the cap down over the nape, no skin between the locks' points behind)
+      cap(line(0.8, 0.42, lerp(0.2, 0.06, p.hair.nape)), rolled(th));
       bangs(8, 1.15, 0.56, 0.18, false);
       quiff(p.hair.tuft * 0.6);
       // (the locks swing a little on the hair's spring, below the ears: plan 58 phase 2d)
       const from = k.parts.length;
-      around(false, lw * 1.15);
+      around(false, lw * 1.15, lerp(0.85, 0.22, p.hair.blunt));
       hang(from, 0.45 * hh, -0.15 * hh, 0.55);
       k.spring("hair", [0, 0.45 * hh, -0.05 * hh], [0, -0.75 * hh, -0.1 * hh], { hz: 3.2, damp: 0.45, limit: 0.4 });
       return;
     }
     case "long": {
-      cap(line(0.8, 0.42, 0.2), rolled(th));
+      // (`nape`: the cap down over the nape, no skin between the locks' points behind)
+      cap(line(0.8, 0.42, lerp(0.2, 0.06, p.hair.nape)), rolled(th));
       bangs(8, 1.15, 0.56, 0.18, false);
       quiff(p.hair.tuft * 0.6);
       // (the locks hang on the hair's spring, more the lower: they swing and trail, then settle)

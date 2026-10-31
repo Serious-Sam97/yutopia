@@ -8,7 +8,7 @@ import { buildBottom } from "./bottoms";
 import { buildExtra } from "./extras";
 import { buildEyewear } from "./eyewear";
 import { buildHair, hairCrown, hairSide } from "./hair";
-import { buildHead } from "./head";
+import { buildHead, jawLine } from "./head";
 import { buildHeadwear, HATS, hatLine } from "./headwear";
 import { buildShoes } from "./shoes";
 import { buildTop, LONG_SLEEVES } from "./tops";
@@ -42,6 +42,7 @@ export function buildPerson(a: AvatarLayers, lod: Lod, params?: Params): Kit {
   buildTop(k, b, a);
   buildShoes(k, b, a);
   buildExtra(k, b, a.extra, a.extraColor, { earsShow, skin: a.skin });
+  jawLine(k);
   // (the phone at the ear sits on whatever covers it: long hair, an afro, headphones)
   const cover = Math.max(
     earsShow ? 0 : hairSide(k, a.hair),
@@ -56,7 +57,8 @@ export function buildPerson(a: AvatarLayers, lod: Lod, params?: Params): Kit {
 // the belly. Model space, standing at rest.
 function anchors(k: Kit, b: Body, cover: number) {
   const hh = b.hh;
-  const head = new Vector3(0, b.chinY, 0); // (the head joint: at the chin, on the axis)
+  // (the head joint: at the chin, forward of the trunk's axis as far as the neck's root is: body.ts)
+  const head = new Vector3(0, b.chinY, k.p.head.neckBack * hh * k.p.head.neckFwd);
   const hs = k.head;
   const f = k.p.face;
   const at = (v: Vector3): [number, number, number] => [v.x, v.y, v.z];

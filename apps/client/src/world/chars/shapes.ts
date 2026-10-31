@@ -244,6 +244,49 @@ export function band(pts: [number, number][], width: number | ((u: number) => nu
   return s;
 }
 
+/** Only the triangles of `g` that face +z (an extrusion seen only from the front: its back and
+ *  walls dropped, its front's bevel kept, so it looks the same). */
+export function frontOnly(g: BufferGeometry): BufferGeometry {
+  const src = g.getIndex() ? g.toNonIndexed() : g;
+  const p = src.getAttribute("position");
+  const out: number[] = [];
+  const a = new Vector3();
+  const b = new Vector3();
+  const c = new Vector3();
+  for (let i = 0; i < p.count; i += 3) {
+    a.fromBufferAttribute(p, i);
+    b.fromBufferAttribute(p, i + 1);
+    c.fromBufferAttribute(p, i + 2);
+    const nz = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    if (nz > 1e-12) out.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  }
+  if (src !== g) src.dispose();
+  g.dispose();
+  const f = new Geo();
+  f.setAttribute("position", new Float32BufferAttribute(out, 3));
+  return f;
+}
+
+/** A flat strip along a spline (x, y; z 0, facing +z), `width(u)` across: a brush stroke with no
+ *  thickness, two triangles a step (an inked fold, seen only from the front). */
+export function ribbon(pts: [number, number][], width: (u: number) => number, samples = 12): BufferGeometry {
+  const curve = new SplineCurve(pts.map(([x, y]) => new Vector2(x, y)));
+  const pos: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i <= samples; i++) {
+    const u = i / samples;
+    const p = curve.getPointAt(u);
+    const t = curve.getTangentAt(u).normalize();
+    const h = Math.max(1e-6, width(u) / 2);
+    pos.push(p.x - t.y * h, p.y + t.x * h, 0, p.x + t.y * h, p.y - t.x * h, 0);
+    if (i < samples) idx.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
+  }
+  const g = new Geo();
+  g.setAttribute("position", new Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  return g;
+}
+
 /** An ellipse outline. */
 export function oval(cx: number, cy: number, rx: number, ry: number, rot = 0): Shape {
   const s = new Shape();

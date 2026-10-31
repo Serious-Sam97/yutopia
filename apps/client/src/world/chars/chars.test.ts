@@ -93,3 +93,12 @@ test("levels of detail get coarser", () => {
   const t = ([0, 1, 2] as Lod[]).map((l) => bake(buildPerson(DEFAULT_AVATAR, l)).tris);
   assert.ok(t[0] > t[1] && t[1] > t[2], t.join(" > "));
 });
+
+test("the motion's legs are the body's (moves.ts THIGH, SHIN against params and build/body.ts)", async () => {
+  const { THIGH, SHIN } = await import("./moves");
+  const { Kit } = await import("./kit");
+  const { Body } = await import("./build/body");
+  const b = new Body(new Kit(paramsFor(DEFAULT_AVATAR), LODS[0]));
+  assert.ok(Math.abs(b.thigh - THIGH) < 1e-6, `thigh ${b.thigh} vs ${THIGH}`);
+  assert.ok(Math.abs(b.shin - SHIN) < 1e-6, `shin ${b.shin} vs ${SHIN}`);
+});

@@ -1,7 +1,7 @@
 import type { BufferGeometry, Shape, Vector3 } from "three";
 import type { Params, Seg } from "./params";
 import type { JointName, RestPose, SpringName } from "./rig";
-import { extrude, mapVerts, smoothNormals, subdivide } from "./shapes";
+import { extrude, frontOnly, mapVerts, smoothNormals, subdivide } from "./shapes";
 
 // What a person is built into: pieces of geometry, each riding one joint, with
 // a flat colour and how the ink treats it. `bake.ts` merges them into one
@@ -19,6 +19,8 @@ export interface Part {
   /** other bones some vertices follow (a skirt's front rides the thighs; a mitten's fingers, index
    *  and thumb): which, and how much each (up to three; the part's own joint has the rest) */
   skin?: Skin;
+  /** its normals its own (a lock of hair's), not smoothed from its faces */
+  own?: boolean;
 }
 
 export type Skin = (x: number, y: number, z: number) => [JointName, number] | [JointName, number][];
@@ -94,7 +96,7 @@ export class Kit {
   ) {
     if (o.at) geo.translate(o.at.x, o.at.y, o.at.z);
     if (!o.keepNormals) smoothNormals(geo);
-    this.parts.push({ joint, geo, color, ink: o.ink ?? 1, body: true, tag: o.tag, skin: o.skin });
+    this.parts.push({ joint, geo, color, ink: o.ink ?? 1, body: true, tag: o.tag, skin: o.skin, own: o.keepNormals });
   }
 
   /** A spring worn: its joint put at `at` (its parent's space) and swung from there, its tip `tip`
@@ -119,7 +121,11 @@ export class Kit {
 
   /** A flat shape on the face plane bent onto the head: eyes, brows, the mouth. */
   decal(shape: Shape | Shape[], depth: number, bevel: number, lift: number, color: string, tag?: string) {
-    const g = subdivide(extrude(shape, depth, bevel, this.seg.curve, Math.max(1, this.seg.bevel - 2)), this.bend);
+    // (seen only from the front: its back and walls never drawn)
+    const g = subdivide(
+      frontOnly(extrude(shape, depth, bevel, this.seg.curve, Math.max(1, this.seg.bevel - 2))),
+      this.bend,
+    );
     mapVerts(g, (v) => {
       const s = this.head.front(v.x, v.y);
       const z = v.z;

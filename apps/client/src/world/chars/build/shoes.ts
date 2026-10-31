@@ -2,7 +2,7 @@ import type { AvatarLayers } from "@yutopia/shared";
 import { type BufferGeometry, Shape, Vector3 } from "three";
 import type { Kit } from "../kit";
 import { arc, extrude, flipWinding, lathe, mapVerts, oval, type Prof, sweepTube } from "../shapes";
-import { type Body, smooth } from "./body";
+import { type Body, lerp, smooth } from "./body";
 import { shade } from "./tops";
 
 // Shoes — every AvatarLayers shoe: sneakers, hightops, boots, loafers,
@@ -34,6 +34,19 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
   const y0 = -b.ankleY;
   const c = a.shoesColor;
   const fine = k.seg.radial >= 16;
+  // (`foot.shape`: a shoe's own shape, not a slab — round at the toe seen from above, the heel
+  // drawn in, the top narrower than the sole; across the foot, at each point along it and up it)
+  const sh = p.foot.shape;
+  const shoe = (g: BufferGeometry) =>
+    sh > 0
+      ? mapVerts(g, (v) => {
+          const t = Math.max(0, v.z - 0.4 * fl) / (0.38 * fl);
+          const toe = Math.sqrt(Math.max(0.12, 1 - t * t));
+          const heel = lerp(1, 0.84, smooth(-0.12 * fl, -0.34 * fl, v.z));
+          const top = lerp(1, 0.72, smooth(y0 + sole, y0 + 0.8 * fh, v.y));
+          v.x *= lerp(1, toe * heel * top, sh);
+        })
+      : g;
 
   // the upper's side profile (toe forward, +x before it's turned): up to `top`
   const upper = (top: number, toe = 1) => {
@@ -41,8 +54,8 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
     const h = Math.max(fh * 0.55, fh * top);
     s.moveTo(-0.26 * fl, y0 + sole * 0.6);
     s.lineTo(0.5 * fl, y0 + sole * 0.6);
-    s.quadraticCurveTo(0.7 * fl, y0 + sole * 0.6, 0.7 * fl, y0 + sole + 0.3 * fh * toe);
-    s.quadraticCurveTo(0.68 * fl, y0 + 0.66 * fh, 0.34 * fl, y0 + Math.min(h, 0.74 * fh));
+    s.quadraticCurveTo(0.7 * fl, y0 + sole * 0.6, 0.7 * fl, y0 + sole + 0.3 * fh * toe * (1 + 0.35 * sh));
+    s.quadraticCurveTo(0.68 * fl, y0 + lerp(0.66, 0.76, sh) * fh, 0.34 * fl, y0 + Math.min(h, 0.74 * fh));
     if (h > fh) {
       // up the shin (high-tops, boots)
       s.quadraticCurveTo(0.14 * fl, y0 + 0.82 * fh, 0.12 * fl, y0 + fh);
@@ -85,6 +98,7 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
   const onSide = (shape: Shape, sx: number, width: number) => {
     const g = extrude(shape, 0.003 * hh, 0.002 * hh, 6, 1);
     mapVerts(g, (v) => v.set(sx * (width * 0.5 + v.z), v.y, v.x));
+    shoe(g);
     // (on the left foot that mapping is a mirror: turn the faces back out)
     return sx > 0 ? flipWinding(g) : g;
   };
@@ -99,7 +113,7 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
   for (const side of ["L", "R"] as const) {
     const sx = side === "L" ? 1 : -1;
     const J = `ankle${side}` as const;
-    const soleG = across(soleShape(a.shoes === "boots"), fw * 1.06, sole * 0.27);
+    const soleG = shoe(across(soleShape(a.shoes === "boots"), fw * 1.06, sole * 0.27));
     if (a.shoes === "sandals") {
       // a bare foot on the sole, two straps over it
       k.add(J, across(upper(0.55, 0.7), fw * 0.9, bev), shade(a.skin, 1));
@@ -128,7 +142,7 @@ export function buildShoes(k: Kit, b: Body, a: AvatarLayers) {
       }
       continue;
     }
-    k.add(J, across(upper(Math.min(1, cut.top)), fw, bev), c);
+    k.add(J, shoe(across(upper(Math.min(1, cut.top)), fw, bev)), c);
     k.add(J, soleG, cut.soleColor(c));
     if (cut.top > 1) {
       // high-tops and boots: a round shaft up the shin (under trouser legs)
