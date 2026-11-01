@@ -226,8 +226,9 @@ export interface GodHud {
   tool: GodTool;
   /** what the Select tool has picked: a thing, a building or a way (its tool's `sel` says which) */
   picked: "thing" | "building" | "way" | null;
-  /** the grid the tools snap to (m; 0: off) */
-  snap: 0 | 1 | 4;
+  /** the grid the tools snap to (m; 0: none, free to the centimetre); Ctrl/⌘ held swaps it (none:
+   *  1 m, a grid: none) */
+  snap: 0 | 0.5 | 1 | 4;
   /** the land under the pointer (the Grounds' coords, its height, what's on it; what they were
    *  published, where the draft changed them) */
   pointer: { x: number; z: number; h: number; surface: string; was: number | null; wasSurface: string | null } | null;
@@ -543,7 +544,7 @@ const initial: HudState = {
     place: "",
     tool: "select",
     picked: null,
-    snap: 4,
+    snap: 0,
     pointer: null,
     land: { mode: "raise", size: 24, strength: 40 },
     paint: { surface: "path", size: 4 },

@@ -1,4 +1,4 @@
-import { ANCHORED, type P } from "@yutopia/shared/grounds";
+import { ANCHORED, groundAt, type P, pavedAt, type StreetThing } from "@yutopia/shared/grounds";
 import type { GroundsEdits, ThingDef } from "@yutopia/shared/grounds-edits";
 import {
   addThing,
@@ -11,7 +11,7 @@ import {
   thingBlocked,
   thingDefOf,
 } from "@yutopia/shared/grounds-things";
-import type { Scene } from "three";
+import type { BufferGeometry, Scene } from "three";
 import { tr } from "@/lib/i18n";
 import { type GodHud, hud, toast } from "../store";
 import { RoadGhost } from "./road-ghost";
@@ -31,6 +31,8 @@ export interface ThingsHost {
   change(next: GroundsEdits): void;
   up(): number;
   snap(): GodHud["snap"];
+  /** a street thing's parts as the Grounds draw it (the 3D view's) */
+  parts(t: StreetThing): BufferGeometry[];
 }
 const DOUBLE_MS = 350;
 const RAD = Math.PI / 180;
@@ -40,8 +42,9 @@ export class ThingsTool {
   private line: RoadGhost | null = null;
   private pts: P[] = [];
   private lastClick = { t: 0, x: 0, y: 0 };
-  // a thing dragged: its key, where it was picked up from, where it is now
-  private drag: { key: string; from: P; at: P; d: ThingDef } | null = null;
+  // a thing dragged: its key, where it was picked up from, where it is now, how far from the
+  // pointer it was grabbed (kept: it doesn't jump to the pointer)
+  private drag: { key: string; from: P; at: P; d: ThingDef; off: P; ry0: number } | null = null;
 
   constructor(
     private readonly host: ThingsHost,
@@ -61,7 +64,24 @@ export class ThingsTool {
     const s = this.host.snap();
     return s
       ? [Math.round(at.x / s) * s, Math.round(at.z / s) * s]
-      : [Math.round(at.x * 10) / 10, Math.round(at.z * 10) / 10];
+      : [Math.round(at.x * 100) / 100, Math.round(at.z * 100) / 100];
+  }
+  /** The ghost's model of a thing held or dragged: a street thing's own parts, round where it
+   *  stands (a lamp, a snow pole, a fence: the box alone). */
+  private model(kind: ThingDef["kind"], s = 1, text?: string) {
+    const g = this.ghost;
+    if (!g) return;
+    if (kind === "fence" || kind === "snowpole" || kind.startsWith("lamp-")) return g.setModel("", null);
+    g.setModel(`${kind}|${s}|${text ?? ""}`, () => {
+      // (made where it stands at the origin, then down onto it: the ghost stands it on the land)
+      const [cx, cz] = thingAtOf({ kind, x: 0, z: 0 });
+      const x = -cx;
+      const z = -cz;
+      const parts = this.host.parts({ key: "ghost", kind, x, z, ry: 0, s, text } as StreetThing);
+      const y = groundAt(x, z) + pavedAt(x, z);
+      for (const p of parts) p.translate(0, -y, 0);
+      return parts;
+    });
   }
   private locked(key: string): string | null {
     return ANCHORED[key] ?? null;
@@ -88,11 +108,12 @@ export class ThingsTool {
       return true;
     }
     const p = thingAtOf(d);
-    this.drag = { key, from: p, at: p, d };
+    this.drag = { key, from: p, at: p, d, off: [p[0] - at.x, p[1] - at.z], ry0: d.ry };
     return true;
   }
   move(at: Ground) {
-    if (this.drag && at) this.drag.at = this.snapped(at);
+    const dr = this.drag;
+    if (dr && at) dr.at = this.snapped({ x: at.x + dr.off[0], z: at.z + dr.off[1] });
   }
   /** The button up: a dragged thing put down where it is; or a click (`click`). */
   up(at: Ground, click: boolean, e: { clientX: number; clientY: number; altKey: boolean }) {
@@ -100,10 +121,12 @@ export class ThingsTool {
     if (dr) {
       this.drag = null;
       const [dx, dz] = [dr.at[0] - dr.from[0], dr.at[1] - dr.from[1]];
-      if (Math.hypot(dx, dz) < 0.05) return this.pick(dr.key, e.altKey);
+      const turned = dr.d.ry !== dr.ry0;
+      if (Math.hypot(dx, dz) < 0.05 && !turned) return this.pick(dr.key, e.altKey);
       const why = thingBlocked(dr.d.kind, dr.at[0], dr.at[1], dr.d.ry);
       if (why) return void toast(tr("godThingBlocked").replace("{why}", why), "warn");
       const patch: Partial<ThingDef> = { x: dr.d.x + dx, z: dr.d.z + dz };
+      if (turned) patch.ry = dr.d.ry;
       if (dr.d.pts) patch.pts = dr.d.pts.map(([x, z]) => [x + dx, z + dz] as P);
       this.host.change(changeThing(this.host.draft(), dr.key, patch));
       return;
@@ -179,7 +202,18 @@ export class ThingsTool {
   }
   /** R: turned 15° (Shift: back). */
   turn(by: number) {
-    this.setOpts({ ry: (((this.o.ry + by) % 360) + 360) % 360 });
+    this.setOpts({ ry: Math.round(((((this.o.ry + by) % 360) + 360) % 360) * 10) / 10 });
+  }
+  /** A thing being dragged (Select's too). */
+  get dragging(): boolean {
+    return !!this.drag;
+  }
+  /** The wheel: the thing dragged turned `by` degrees (a step when it's put down), else the kind
+   *  to put down (never a picked one: a step each notch). */
+  wheelTurn(by: number) {
+    const dr = this.drag;
+    if (dr) dr.d = { ...dr.d, ry: dr.d.ry + by * RAD };
+    else if (!this.o.sel) this.setO({ ry: Math.round(((((this.o.ry + by) % 360) + 360) % 360) * 10) / 10 });
   }
 
   // a fence along a line
@@ -229,6 +263,7 @@ export class ThingsTool {
     if (dr) {
       const c = catalogThing(dr.d.kind);
       const why = thingBlocked(dr.d.kind, dr.at[0], dr.at[1], dr.d.ry);
+      this.model(dr.d.kind, dr.d.s ?? 1, dr.d.text);
       this.ghost.show({ x: dr.at[0], z: dr.at[1] }, dr.d.ry, c.foot, dr.d.s ?? 1, why ? "no" : "ok", f);
       if (why !== o.blocked) this.setO({ blocked: why });
       return;
@@ -238,6 +273,7 @@ export class ThingsTool {
     const d = shown ? thingDefOf(shown) : null;
     if (d) {
       const p = thingAtOf(d);
+      this.ghost.setModel("", null);
       this.ghost.show({ x: p[0], z: p[1] }, d.ry, catalogThing(d.kind).foot, d.s ?? 1, "picked", f);
       if (o.blocked) this.setO({ blocked: null });
       return;
@@ -247,6 +283,7 @@ export class ThingsTool {
     const p = this.snapped(at);
     const why = thingBlocked(o.kind, p[0], p[1], o.ry * RAD);
     const c = catalogThing(o.kind);
+    this.model(o.kind, c.sized ? o.s : 1);
     this.ghost.show({ x: p[0], z: p[1] }, o.ry * RAD, c.foot, c.sized ? o.s : 1, why ? "no" : "ok", f);
     if (why !== o.blocked) this.setO({ blocked: why });
   }

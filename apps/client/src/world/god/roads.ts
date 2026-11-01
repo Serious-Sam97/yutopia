@@ -72,7 +72,7 @@ export class RoadsTool {
     const s = this.host.snap();
     return s
       ? [Math.round(at.x / s) * s, Math.round(at.z / s) * s]
-      : [Math.round(at.x * 10) / 10, Math.round(at.z * 10) / 10];
+      : [Math.round(at.x * 100) / 100, Math.round(at.z * 100) / 100];
   }
 
   /** The left button down at `at`: true if it's this tool's (a point picked to drag), not a pan. */

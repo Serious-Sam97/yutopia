@@ -97,6 +97,7 @@ const W = {
   zoomOut: ["Further", "Mais longe"],
   pointer: ["Pointer", "Ponteiro"],
   snap: ["Snap", "Grade"],
+  snapHint: ["Ctrl/⌘ held: snaps (or frees)", "Ctrl/⌘ segurado: encaixa (ou solta)"],
   off: ["Off", "Não"],
   soon: ["next", "em breve"],
   walking: ["Walking the draft", "Andando no rascunho"],
@@ -1341,14 +1342,17 @@ function Pointer({ g }: { g: GodState }) {
         <span className="text-[12.5px]" style={{ color: "var(--cream-dim)" }}>
           {t("snap")}
         </span>
-        <div className="seg flex-1">
-          {([1, 4, 0] as const).map((s) => (
+        <div className="seg flex-1" title={t("snapHint")}>
+          {([0, 0.5, 1, 4] as const).map((s) => (
             <button key={s} type="button" aria-pressed={g.snap === s} onClick={() => w?.god?.setSnap(s)}>
               {s ? `${s} m` : t("off")}
             </button>
           ))}
         </div>
       </div>
+      <p className="text-[11.5px] mt-1" style={{ color: "var(--cream-dim)" }}>
+        {t("snapHint")}
+      </p>
     </div>
   );
 }

@@ -34,7 +34,7 @@ import {
   wellsOf,
 } from "@yutopia/shared";
 import { AIM_BLADE, BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
-import { LAMPS as GROUND_LAMPS, KART_LAND, standLights, terrainAt } from "@yutopia/shared/grounds";
+import { LAMPS as GROUND_LAMPS, KART_LAND, type StreetThing, standLights, terrainAt } from "@yutopia/shared/grounds";
 import { ALOFT, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
@@ -128,6 +128,7 @@ import { fogFor, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { heldPoolBall, type TableScene3, TablesIn3D } from "./tables3d";
 import { tailPatch } from "./tail-glow";
+import { streetGeometry } from "./town3d";
 import { busModel, ploughModel } from "./vehicles3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
@@ -4816,6 +4817,11 @@ void main() {
   /** God mode's pointer: where the ray through the screen's (clientX, clientY) meets the land (the
    *  Grounds' own heights, not their chunks': far off none's made), the Grounds' coords; null
    *  over the sky. */
+  /** A street thing's parts as the Grounds draw it (god mode's ghost of one held or dragged). */
+  streetParts(t: StreetThing): BufferGeometry[] {
+    return streetGeometry([t]);
+  }
+
   landUnder(clientX: number, clientY: number): { x: number; z: number; h: number } | null {
     const r = this.renderer.domElement.getBoundingClientRect();
     if (!r.width || !r.height) return null;

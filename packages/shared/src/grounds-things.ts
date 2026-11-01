@@ -1,4 +1,4 @@
-import { anchoredAt, BUILDINGS, LAMPS, type P, SNOW_POLES, STREET, THING_SPAN, thingEnds, wayAt } from "./grounds.ts";
+import { anchoredAt, LAMPS, type P, SNOW_POLES, STREET, THING_SPAN, thingEnds } from "./grounds.ts";
 import type { GroundsEdits, ThingDef, ThingKind } from "./grounds-edits.ts";
 
 // God mode's things (docs/plan/53-the-god-mode.md, phase 8): what stands on the land — a lamp, a
@@ -101,15 +101,15 @@ function segDist(a: P, b: P, x: number, z: number): number {
   return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z);
 }
 
-/** Why a thing can't stand at (x, z) (turned `ry`), or null: what's anchored, a way's
- *  carriageway, a building — a long one (a rail, a wall) anywhere along it. */
+/** Why a thing can't stand at (x, z) (turned `ry`), or null — a long one (a rail, a wall)
+ *  anywhere along it. God mode puts things anywhere in the world (the user's call, 2026-11-01): on
+ *  a road, in a building, on the campus; only past the world's edge (scenery nobody reaches) not. */
 export function thingBlocked(kind: ThingKind, x: number, z: number, ry = 0): string | null {
   const ends = thingEnds({ kind, x, z, ry });
   if (ends) {
     const n = Math.ceil((THING_SPAN[kind as keyof typeof THING_SPAN] ?? 0) * 2);
     for (let i = 0; i <= n; i++) {
       const why = blockedAt(
-        kind,
         ends[0][0] + ((ends[1][0] - ends[0][0]) * i) / n,
         ends[0][1] + ((ends[1][1] - ends[0][1]) * i) / n,
       );
@@ -117,15 +117,11 @@ export function thingBlocked(kind: ThingKind, x: number, z: number, ry = 0): str
     }
     return null;
   }
-  return blockedAt(kind, x, z);
+  return blockedAt(x, z);
 }
-function blockedAt(kind: ThingKind, x: number, z: number): string | null {
+function blockedAt(x: number, z: number): string | null {
   const a = anchoredAt(x, z);
-  if (a) return a.why;
-  const w = wayAt(x, z, -0.4);
-  if (w && w.w.kind !== "trail" && w.w.kind !== "walk" && kind !== "snowpole") return `on ${w.w.name}`;
-  for (const b of BUILDINGS) if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) return `in ${b.name}`;
-  return null;
+  return a?.key === "area:edge" ? a.why : null;
 }
 
 const isNew = (e: GroundsEdits, key: string) => !!e.things?.add?.some((d) => d.key === key);

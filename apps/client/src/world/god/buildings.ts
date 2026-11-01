@@ -1,4 +1,4 @@
-import { type BuildingKind, NATIVE_FACES, PREFABS } from "@yutopia/shared/grounds";
+import { type BuildingKind, NATIVE_FACES, PREFABS, terrainAt } from "@yutopia/shared/grounds";
 import {
   addBuilding,
   buildingAt,
@@ -13,7 +13,7 @@ import {
   SIGNED,
 } from "@yutopia/shared/grounds-buildings";
 import type { BuildingDef, GroundsEdits } from "@yutopia/shared/grounds-edits";
-import type { Scene } from "three";
+import { DoubleSide, Mesh, MeshBasicMaterial, type Scene, Shape, ShapeGeometry } from "three";
 import { tr } from "@/lib/i18n";
 import { type GodHud, hud, toast } from "../store";
 import { ThingGhost } from "./thing-ghost";
@@ -35,9 +35,34 @@ export interface BuildingsHost {
 // R: a quarter clockwise from above (n → e → s → w)
 const CLOCKWISE: Record<Face, Face> = { n: "e", e: "s", s: "w", w: "n" };
 const FLOOR_H = 3.8;
+// which way out of its door each side looks (the Grounds' coords: north is −z)
+const OUT: Record<Face, [number, number]> = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+
+/** An arrow on the ground, out of a building's door: which way it faces (flat, along +x). */
+function doorArrow(): Mesh {
+  const a = new Shape();
+  a.moveTo(0, -0.7);
+  a.lineTo(3.2, -0.7);
+  a.lineTo(3.2, -1.7);
+  a.lineTo(5.6, 0);
+  a.lineTo(3.2, 1.7);
+  a.lineTo(3.2, 0.7);
+  a.lineTo(0, 0.7);
+  a.closePath();
+  const g = new ShapeGeometry(a).rotateX(-Math.PI / 2);
+  const m = new Mesh(
+    g,
+    new MeshBasicMaterial({ color: 0xf1d79a, depthTest: false, transparent: true, opacity: 0.9, side: DoubleSide }),
+  );
+  m.renderOrder = 22;
+  m.frustumCulled = false;
+  m.visible = false;
+  return m;
+}
 
 export class BuildingsTool {
   private ghost: ThingGhost | null = null;
+  private arrow: Mesh | null = null;
   // a building dragged: its key, where it was picked up from, where it is now
   private drag: { key: string; from: [number, number]; at: [number, number]; d: BuildingDef } | null = null;
 
@@ -194,26 +219,38 @@ export class BuildingsTool {
    *  (or the one picked). */
   frame(at: Ground, f: Frame, only = false) {
     this.ghost ??= new ThingGhost(this.scene);
+    if (!this.arrow) {
+      this.arrow = doorArrow();
+      this.scene.add(this.arrow);
+    }
     const o = this.o;
-    const box = (d: BuildingDef, tone: "ok" | "no" | "picked") => {
+    // (`by`: drawn that far off its plot — sliding with the pointer; it's put down on whole metres)
+    const box = (d: BuildingDef, tone: "ok" | "no" | "picked", by: [number, number] = [0, 0]) => {
       const w = d.x1 - d.x0;
       const dd = d.z1 - d.z0;
-      this.ghost?.show(
-        { x: (d.x0 + d.x1) / 2, z: (d.z0 + d.z1) / 2 },
-        0,
-        [-w / 2, -dd / 2, w / 2, dd / 2, d.floors * FLOOR_H + 2],
-        1,
-        tone,
-        f,
-      );
+      const cx = (d.x0 + d.x1) / 2 + by[0];
+      const cz = (d.z0 + d.z1) / 2 + by[1];
+      this.ghost?.show({ x: cx, z: cz }, 0, [-w / 2, -dd / 2, w / 2, dd / 2, d.floors * FLOOR_H + 2], 1, tone, f);
+      // the arrow out of its door, a metre off the wall
+      const [ox, oz] = OUT[d.face];
+      const ax = cx + ox * (w / 2 + 1);
+      const az = cz + oz * (dd / 2 + 1);
+      const a = this.arrow as Mesh;
+      a.visible = true;
+      a.position.set(ax - f.x, terrainAt(ax, az) + f.y + 0.3, az - f.z);
+      a.rotation.y = Math.atan2(-oz, ox);
+      // (as big as the building's half across, 6.7 m at least: read from high up)
+      a.scale.setScalar(Math.max(1.2, Math.min(w, dd) / 9));
     };
     const dr = this.drag;
     if (dr) {
-      const dx = Math.round(dr.at[0] - dr.from[0]);
-      const dz = Math.round(dr.at[1] - dr.from[1]);
+      const fx = dr.at[0] - dr.from[0];
+      const fz = dr.at[1] - dr.from[1];
+      const dx = Math.round(fx);
+      const dz = Math.round(fz);
       const moved = { ...dr.d, x0: dr.d.x0 + dx, z0: dr.d.z0 + dz, x1: dr.d.x1 + dx, z1: dr.d.z1 + dz };
       const why = buildingBlocked(changeBuilding(this.host.draft(), dr.key, moved), dr.key);
-      box(moved, why ? "no" : "ok");
+      box(moved, why ? "no" : "ok", [fx - dx, fz - dz]);
       if (why !== o.blocked) this.setO({ blocked: why });
       return;
     }
@@ -226,17 +263,27 @@ export class BuildingsTool {
       return;
     }
     // (Select's: nothing to put down)
-    if (!at || only) return this.ghost.show(null, 0, [0, 0, 0, 0, 0], 1, "ok", f);
+    if (!at || only) {
+      if (this.arrow) this.arrow.visible = false;
+      return this.ghost.show(null, 0, [0, 0, 0, 0, 0], 1, "ok", f);
+    }
     const b = this.def(at.x, at.z, "god-building-ghost");
     const why = buildingBlocked(addBuilding(this.host.draft(), b), b.key);
-    box(b, why ? "no" : "ok");
+    box(b, why ? "no" : "ok", [at.x - (b.x0 + b.x1) / 2, at.z - (b.z0 + b.z1) / 2]);
     if (why !== o.blocked) this.setO({ blocked: why });
   }
   hide() {
     this.ghost?.show(null, 0, [0, 0, 0, 0, 0], 1, "ok", { x: 0, z: 0, y: 0 });
+    if (this.arrow) this.arrow.visible = false;
   }
   dispose() {
     this.ghost?.dispose();
     this.ghost = null;
+    if (this.arrow) {
+      this.arrow.removeFromParent();
+      this.arrow.geometry.dispose();
+      (this.arrow.material as MeshBasicMaterial).dispose();
+      this.arrow = null;
+    }
   }
 }

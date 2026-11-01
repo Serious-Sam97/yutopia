@@ -2993,13 +2993,13 @@ export function checkEdits(e: GroundsEdits): string[] {
   for (const d of things) {
     if (!fresh(d.key, "", tk)) continue;
     if (!THING_KINDS.has(d.kind)) no(`${d.key}: not a kind of thing`);
-    if (!inWorld(d.x, d.z) || anchoredHere(d.x, d.z)) no(`${d.key}: on ground that stays as it is`);
+    // (anywhere in the world: on a road, in a building, on the campus — only not past its edge)
+    if (!inWorld(d.x, d.z)) no(`${d.key}: past the world's edge`);
     if (![d.x, d.z, d.ry].every(Number.isFinite)) no(`${d.key}: where it is, which way`);
     else {
       // a long one (a rail, a wall): its ends too
       const ends = thingEnds(d);
-      if (ends?.some(([x, z]) => !inWorld(x, z) || anchoredHere(x, z)))
-        no(`${d.key}: reaches onto ground that stays as it is`);
+      if (ends?.some(([x, z]) => !inWorld(x, z))) no(`${d.key}: reaches past the world's edge`);
     }
     if (d.s !== undefined && !(d.kind === "boulder" || d.kind === "planter"))
       no(`${d.key}: only a boulder or a planter is sized`);
@@ -3014,16 +3014,15 @@ export function checkEdits(e: GroundsEdits): string[] {
         d.pts.length <= EDIT_LIMITS.wayPts &&
         d.pts.every((p, i, all) => i === 0 || Math.hypot(p[0] - all[i - 1][0], p[1] - all[i - 1][1]) <= FENCE_RUN);
       if (!ok) no(`${d.key}: a fence's line: 2–${EDIT_LIMITS.wayPts} points, each run ${FENCE_RUN} m at most`);
-      else if (fenceLine(d.pts as P[]).some(([x, z]) => !inWorld(x, z) || anchoredHere(x, z)))
-        no(`${d.key}: through ground that stays as it is`);
+      else if (fenceLine(d.pts as P[]).some(([x, z]) => !inWorld(x, z))) no(`${d.key}: past the world's edge`);
     } else if (d.pts !== undefined) no(`${d.key}: only a fence has a line`);
   }
-  // a generator's thing moved: not onto what's anchored either
+  // a generator's thing moved: anywhere in the world too
   for (const [k, c] of Object.entries(e.things?.change ?? {}))
     if (!e.things?.add?.some((d) => d.key === k) && c && (c.x !== undefined || c.z !== undefined)) {
       const x = c.x ?? 0;
       const z = c.z ?? 0;
-      if (!inWorld(x, z) || anchoredHere(x, z)) no(`${k}: moved onto ground that stays as it is`);
+      if (!inWorld(x, z)) no(`${k}: moved past the world's edge`);
     }
   return out;
 }

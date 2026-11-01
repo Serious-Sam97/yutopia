@@ -96,7 +96,8 @@ test("parkour: a rail, a wall, a pole each one solid of its own kind; a long one
   assert.equal(thingAt(at(2).x + 1.9, at(2).z + 0.6), "god-thing-3");
   assert.equal(thingAt(long.x + 2.5, long.z + 2), null, "beside both");
   applyEdits(NO_EDITS);
-  // reaching onto a road or into the campus along it, though its middle is clear
+  // god mode puts them anywhere in the world: across a road, reaching into the campus; only not
+  // past the world's edge
   const road = WAYS.find((w) => w.key === "road") as (typeof WAYS)[number];
   const m = Math.floor(road.line.length / 2);
   const [rx, rz] = road.line[m];
@@ -106,20 +107,20 @@ test("parkour: a rail, a wall, a pole each one solid of its own kind; a long one
   const [cx, cz] = [rx - dz * (road.w / 2 + 1.5), rz + dx * (road.w / 2 + 1.5)];
   const turn = (x: number, z: number) => Math.atan2(-z, x); // (its +x along (x, z), as three.js turns)
   assert.equal(thingBlocked("pk_pole", cx, cz), null, "beside the road");
-  assert.match(thingBlocked("pk_rail_long", cx, cz, turn(-dz, dx)) ?? "", /County road/, "across: its end on it");
-  assert.equal(thingBlocked("pk_rail_long", cx, cz, turn(dx, dz)), null, "along it: clear");
+  assert.equal(thingBlocked("pk_rail_long", cx, cz, turn(-dz, dx)), null, "across it");
+  assert.equal(thingBlocked("pk_rail_long", cx, cz, turn(dx, dz)), null, "along it");
   const e2 = addThing(NO_EDITS, thing({ key: "god-thing-1", kind: "pk_wall", x: SITE.x0 - 1.5, z: 37 }));
+  assert.deepEqual(checkEdits(e2), [], "reaching into the campus");
+  // (a long rail along x, its middle 1 m in: its end reaches past the edge, x −400)
+  assert.match(thingBlocked("pk_rail_long", -399, 0, 0) ?? "", /edge/, "its end past the edge");
+  const e3 = addThing(NO_EDITS, thing({ key: "god-thing-1", kind: "pk_rail_long", x: -399, z: 0, ry: 0 }));
   assert.ok(
-    checkEdits(e2).some((p) => /reaches onto/.test(p)),
-    checkEdits(e2).join("; "),
-  );
-  assert.deepEqual(
-    checkEdits(addThing(NO_EDITS, thing({ key: "god-thing-1", kind: "pk_pole", x: SITE.x0 - 1.5, z: 37 }))),
-    [],
+    checkEdits(e3).some((p) => /reaches past the world's edge/.test(p)),
+    checkEdits(e3).join("; "),
   );
 });
 
-test("the rule book: too big, words where there are none, a fence too long or into the campus", () => {
+test("the rule book: too big, words where there are none, a fence too long or past the edge", () => {
   const no = (d: ThingDef) => checkEdits(addThing(NO_EDITS, d));
   assert.ok(no(thing({ key: "god-thing-1", kind: "boulder", s: 3 })).length);
   assert.ok(no(thing({ key: "god-thing-1", kind: "bench", s: 1.2 })).length);
@@ -142,6 +143,21 @@ test("the rule book: too big, words where there are none, a fence too long or in
       thing({
         key: "god-thing-1",
         kind: "fence",
+        x: -390,
+        z: 0,
+        pts: [
+          [-390, 0],
+          [-410, 0],
+        ],
+      }),
+    ).some((p) => /past the world's edge/.test(p)),
+  );
+  // into the campus: as anywhere in the world
+  assert.deepEqual(
+    no(
+      thing({
+        key: "god-thing-1",
+        kind: "fence",
         x: -80,
         z: 0,
         pts: [
@@ -149,17 +165,19 @@ test("the rule book: too big, words where there are none, a fence too long or in
           [-40, 0],
         ],
       }),
-    ).some((p) => /stays as it is/.test(p)),
+    ),
+    [],
   );
-  // where the tool won't put one down
+  // where the tool puts one down: anywhere but past the edge
   const road = WAYS.find((w) => w.key === "road") as (typeof WAYS)[number];
   const [rx, rz] = road.line[Math.floor(road.line.length / 2)];
-  assert.match(thingBlocked("bench", rx, rz) ?? "", /County road/);
-  assert.ok(thingBlocked("bench", 0, 0), "the campus");
+  assert.equal(thingBlocked("bench", rx, rz), null, "on the county road");
+  assert.equal(thingBlocked("bench", 0, 0), null, "on the campus");
   assert.equal(thingBlocked("bench", FIELD.x, FIELD.z), null);
+  assert.match(thingBlocked("bench", -450, 0) ?? "", /edge/, "past the edge");
 });
 
-test("the generator's: a lamp moved, a bench taken away; not moved into the campus", () => {
+test("the generator's: a lamp moved, a bench taken away; moved into the campus, not past the edge", () => {
   applyEdits(NO_EDITS);
   const lamp = LAMPS.find((l) => l.kind === "town") as (typeof LAMPS)[number];
   const bench = STREET.find((t) => t.kind === "bench") as (typeof STREET)[number];
@@ -169,7 +187,10 @@ test("the generator's: a lamp moved, a bench taken away; not moved into the camp
   applyEdits(e);
   assert.equal(LAMPS.find((l) => l.key === lamp.key)?.x, lamp.x + 2);
   assert.ok(!STREET.some((t) => t.key === bench.key));
-  assert.ok(checkEdits(changeThing(NO_EDITS, lamp.key, { x: 0, z: 0 })).some((p) => /stays as it is/.test(p)));
+  assert.deepEqual(checkEdits(changeThing(NO_EDITS, lamp.key, { x: 0, z: 0 })), []);
+  assert.ok(
+    checkEdits(changeThing(NO_EDITS, lamp.key, { x: -450, z: 0 })).some((p) => /past the world's edge/.test(p)),
+  );
   applyEdits(NO_EDITS);
 });
 

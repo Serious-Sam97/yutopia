@@ -102,8 +102,10 @@ test("nothing on ground that stays as it is: the campus, the park, past the edge
       /god-x: through ground/,
     ),
   );
+  // (things go anywhere in the world, the campus too: only not past its edge)
+  assert.ok(!has({ rev: 0, things: { add: [{ key: "god-l", kind: "lamp-lone", x: 20, z: 20, ry: 0 }] } }, /god-l/));
   assert.ok(
-    has({ rev: 0, things: { add: [{ key: "god-l", kind: "lamp-lone", x: 20, z: 20, ry: 0 }] } }, /god-l: on ground/),
+    has({ rev: 0, things: { add: [{ key: "god-l", kind: "lamp-lone", x: -450, z: 20, ry: 0 }] } }, /god-l: past/),
   );
 });
 

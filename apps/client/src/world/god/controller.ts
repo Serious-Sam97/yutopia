@@ -367,6 +367,7 @@ export class GodController {
   /** A key down or up: god mode's (true) or not. */
   key(e: KeyboardEvent, down: boolean): boolean {
     if (!this.on) return false;
+    if (e.key === "Control" || e.key === "Meta") this.snapKey = down;
     if (this.walking) {
       if (!down || e.repeat) return false;
       if (e.key === "Escape") {
@@ -463,8 +464,17 @@ export class GodController {
   };
 
   // ── the pointer on the canvas (the view hands it over: tp.god.input) ───────
+  /** Ctrl/⌘ held: the grid swapped (snapNow) */
+  private snapKey = false;
+  /** The grid the tools snap to now: the strip's, swapped while Ctrl/⌘ is held (none: 1 m; a grid:
+   *  none). */
+  snapNow(): GodHud["snap"] {
+    const s = hud.get().god.snap;
+    return this.snapKey ? (s ? 0 : 1) : s;
+  }
   private readonly input: GodInput = {
     down: (e) => {
+      this.snapKey = e.ctrlKey || e.metaKey;
       // a brush: the left button (one finger) presses it
       const tool = hud.get().god.tool;
       const touches = [...this.pointers.values()].filter((q) => q.touch).length;
@@ -516,6 +526,7 @@ export class GodController {
       this.pinch = null;
     },
     move: (e) => {
+      this.snapKey = e.ctrlKey || e.metaKey;
       if (e.pointerType === "mouse") this.mouse = { x: e.clientX, y: e.clientY };
       if (this.stroke?.id === e.pointerId) {
         this.stroke.at = { x: e.clientX, y: e.clientY };
@@ -549,6 +560,7 @@ export class GodController {
       else this.drag(dx, dy);
     },
     up: (e) => {
+      this.snapKey = e.ctrlKey || e.metaKey;
       if (this.stroke?.id === e.pointerId) this.end();
       if (this.roadDrag === e.pointerId) {
         this.roadDrag = null;
@@ -594,6 +606,19 @@ export class GodController {
       }
     },
     wheel: (e) => {
+      // a thing held to put down (the things tool's) or dragged: the wheel turns it — 5° a notch,
+      // Alt 1°, a trackpad's small steps finer (its pinch, with Ctrl, still zooms)
+      const th = this.things;
+      const g = hud.get().god;
+      if (
+        th &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        (th.dragging || (g.tool === "things" && g.things.mode === "place" && !g.things.sel && !g.publish))
+      ) {
+        th.wheelTurn((clamp(e.deltaY, -240, 240) / 100) * (e.altKey ? 1 : 5));
+        return;
+      }
       // (shift: tilt; else zoom, a trackpad's small steps as smooth as a wheel's)
       if (e.shiftKey) this.tilt((e.deltaY || e.deltaX) * 0.002);
       else this.zoom(Math.exp(clamp(e.deltaY, -120, 120) * 0.0016));
@@ -673,7 +698,7 @@ export class GodController {
           draft: () => this.draftNow(),
           change: (next) => this.change(next),
           up: () => this.up,
-          snap: () => hud.get().god.snap,
+          snap: () => this.snapNow(),
         },
         tp.scene,
       );
@@ -689,7 +714,8 @@ export class GodController {
           draft: () => this.draftNow(),
           change: (next) => this.change(next),
           up: () => this.up,
-          snap: () => hud.get().god.snap,
+          snap: () => this.snapNow(),
+          parts: (t) => tp.streetParts(t),
         },
         tp.scene,
       );
