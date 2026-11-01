@@ -179,6 +179,8 @@ export class AboutTurn {
   on = false;
   /** + to her left */
   side = 1;
+  /** its feet down again this frame (ABOUT_DOWN): a landing heard (docs/plan/63-the-steps.md) */
+  landed = false;
   /** the core's own turn since it began (+ to the left) */
   private turned = 0;
 
@@ -198,6 +200,7 @@ export class AboutTurn {
   /** This frame's body (over `m`, what it'd be otherwise, by `w`): the core turned `yaw` (rad, + to
    *  the left) since the last frame, going `speed` (m/s). */
   update(m: Moved, dt: number, yaw: number, speed: number, w: number): Moved {
+    this.landed = this.u < ABOUT_DOWN && this.u + dt / ABOUT_LEN >= ABOUT_DOWN;
     this.u = Math.min(1, this.u + dt / ABOUT_LEN);
     this.turned += yaw;
     const u = this.u;

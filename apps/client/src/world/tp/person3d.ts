@@ -83,6 +83,10 @@ export interface Seen {
   sway?: ReadonlySet<JointName>;
   /** (plan 63) a foot of theirs put down, as it lands: a step heard */
   step?: (id: string, side: "L" | "R") => void;
+  /** (plan 63) both feet down at once out of the body's own hop (a turn round from a run) */
+  hop?: (id: string, hard: number) => void;
+  /** (plan 63) limp on the ragdoll, it hit something (`hard` 0..1: by how much it was stopped) */
+  thud?: (id: string, hard: number) => void;
 }
 // (plan 58 is the world's: `?anim=old` puts the old animations back, to compare)
 const ANIM_OLD = typeof location !== "undefined" && new URLSearchParams(location.search).get("anim") === "old";
@@ -344,6 +348,8 @@ export class Person3D {
   limp: InstanceType<NonNullable<ReturnType<Chars["airNow"]>>["Downed"]> | null = null;
   private fallTop: number | null = null;
   private limpYaw: number | null = null;
+  // (plan 63) the ragdoll's speed last frame (its impacts heard)
+  private ragSpeed = 0;
   /** (plan 58 5d) Getting up off the ragdoll: the way the body's turned (as `angle`), or null. */
   upFacing(): number | null {
     return this.limpYaw !== null ? this.turned : null;
@@ -588,6 +594,12 @@ export class Person3D {
       if (!given && seen.onScreen) for (const S of down) seen.step?.(this.id, S);
       down.length = 0;
     }
+    // (out of a turn round from a run: down on both feet, the foot lock let go through it)
+    const about = this.motion.loco?.about;
+    if (about?.landed) {
+      if (!given && seen.onScreen) seen.hop?.(this.id, 0.35);
+      about.landed = false;
+    }
     this.drawn = { verb: verb?.kind ?? "", jump: jump?.kind ?? "", flow: flow?.kind ?? "" };
     // one of the shadowed: its own arms, back and head over the walk
     let pose = mo.pose;
@@ -710,6 +722,10 @@ export class Person3D {
     if (!p.shade?.killed) this.shotDown = false;
     if (this.limp?.on && AR) {
       const r = this.limp.update(step, () => h, AR.getUp2Pose, AR.GETUP_LEN);
+      // (stopped short — the ground, a wall — : a thud, by how much of its speed it lost)
+      const sp = this.limp.rig.on ? this.limp.rig.speed() : 0;
+      if (this.ragSpeed - sp > 2) seen.thud?.(this.id, Math.min(1, (this.ragSpeed - sp) / 6));
+      this.ragSpeed = sp;
       if (r) {
         pose = r.m.pose;
         lift = r.m.lift;

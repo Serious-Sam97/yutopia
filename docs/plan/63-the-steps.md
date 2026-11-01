@@ -410,6 +410,57 @@ cap.
 skids, Flowmotion (wall run, vault, mantle, slide, grind, swing), ragdoll, stairs on the step
 player, the lift, kneel and crawl, emotes, stepping out of a car, sitting.
 
+> Built 2026-11-01 (uncommitted; phases 0–3 committed as 3593924).
+>
+> - **For everyone near, me too, in `Footfalls`** (the steps chunk: 5.6 KB). Each frame it
+>   compares a body with how it was the frame before:
+>   - **A move begun:** a vault's hand on the thing and the feet after; a mantle's hand and two
+>     scrambling steps; a roll's thud, cloth and scrape; a slide's scrape held while it lasts.
+>   - **Flowmotion:** a wall run's steps on the wall (concrete) every 0.16 s and its kick off
+>     the end; a grind's metal held while it lasts; a bar or ledge gripped (a hand and cloth); a
+>     climb's hand and three scrambling steps.
+>   - **A fall off an edge** (in the air without a jump of its own): both feet down from 0.3 m,
+>     as hard as how far; from 2.2 m a roll (thud and scrape).
+>   - **A seat** taken (a settle and a creak) or given back.
+>   - **Emotes:** the tape's side steps every 0.42 s, the fist pump's stomp, up onto the toes.
+>     These are by time from the emote's start, not from the pose.
+>   - **A skid**, braking from a run (a scrape; the snow sprays).
+>   - **The dark:** down on a knee, and crawling (a hand or knee every 0.35 tiles, with
+>     cloth). My own walking steps are off while I'm down.
+>   - The sounds are synthesized in `StepPlayer` (`thud`, `cloth`, `hand`, `scrape`, `grind`,
+>     `seat`, `land`). The scrape uses each surface's band, the synth's own.
+> - **Jumps:** the push-off is a step on what's under them, and the landing is both soles from
+>   the recordings (`land`), with jumps.ts keeping its thud (its synth soles off once the
+>   recordings are in).
+> - **Stepping out of a car:** both feet down (the controller notices someone who was in a car
+>   is drawn again).
+> - **The ragdoll:** the 3D person hears it stopped short (its speed dropped by 2 m/s or more)
+>   as a thud, by how much.
+> - **The stairs:** the steps' own, on the treads' concrete (`thing:stairs`). The old stair
+>   timer and its four samples are out of the game; `/dev/lift` still has them.
+> - **What was left, done the same day:**
+>   - **The hop-turn's feet down.** `AboutTurn` (the air chunk) marks the frame its feet come
+>     down (`landed`, at `ABOUT_DOWN`). `Locomotion.about` lost `private` (no bytes in chars),
+>     and the 3D person passes it on as `seen.hop`: a light landing on both feet.
+>   - **Scuffs:** a body's step at under 1.2 tiles/s (setting off, stopping, turning on the
+>     spot) has the sole scuffed along the surface too (`scuff`, the surface's band).
+>   - **The emotes by their poses** (`acts.ts emote2`): the tape's feet down each time its sway
+>     crosses the middle (every 0.714 s); the fist pump's one hop down at 1.45 s. The wave's
+>     legs aren't keyed, so it has no step.
+>   - **The lift car answers a landing** in it, a jump's or a fall's: a hollow boom and a rattle
+>     (`liftCar`).
+>   - **Checked:** 17 in `world/steps.test.ts` (the tape at 0.71 and 1.43 s, the pump at 1.45 s,
+>     the wave silent; slow body steps scuffed, walking ones not; a fall into a lift's car; the
+>     hop-turn's landing once, as it lands) and the four steps specs again; client 137; build and
+>     budget (page 423.6 KB, chars 58.0, air 5.4, steps 5.9).
+> - **Checked:** `world/steps.test.ts` (14: the verbs and flow codes agree with shared move's; a
+>   vault, a mantle, a roll; a slide's and a grind's sounds ending with them; a wall run's 6
+>   steps a second and its kick; falls by height, not a hop's 0.2 m nor a jump's own; a seat,
+>   the tape's steps, a skid, a crawl and a kneel; my moments heard but not my steps) and
+>   `e2e/steps-moments.spec.ts` (Bia jumps: a step off the wood, both soles back onto it, one
+>   thud); the other three steps specs again. Client 134; types; Biome; build and budget (page
+>   423.4 KB, +0.1).
+
 **5 — The space.** The reverb send per area, distance filtering, muffling through doorways.
 
 **6 — The checks.** The quality bar above: the sync test, the e2e walk with its step log on

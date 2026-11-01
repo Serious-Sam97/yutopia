@@ -4,7 +4,8 @@ import { playSample, sample } from "./sfx";
 // The elevators' and the stairs' sounds in the world (docs/plan/26): the samples
 // in public/sfx (world/sfx.ts) through the effects bus, so the volume settings
 // hold. Loaded once the building has elevators; a sound asked for before it's
-// in (or that isn't there) is skipped.
+// in (or that isn't there) is skipped. (The steps on the stairs are the steps'
+// own since docs/plan/63: concrete treads, steps.ts.)
 
 const NAMES = [
   "lift/button",
@@ -14,10 +15,6 @@ const NAMES = [
   "lift/ride.wav",
   "stairs/door-open",
   "stairs/door-close",
-  "stairs/step-1",
-  "stairs/step-2",
-  "stairs/step-3",
-  "stairs/step-4",
 ];
 const ready = new Map<string, AudioBuffer>();
 let loading = false;
@@ -49,19 +46,3 @@ export function liftSound(
 
 /** How loud something `d` tiles away is (heard across the floor, not past ~14). */
 export const nearGain = (d: number): number => Math.max(0, Math.min(1, 1.15 - d / 12));
-
-// On the stairs: a step's sound every so often while walking (a stair's
-// rhythm is quicker and shorter than the floor's), one of the four, a hair
-// different each time.
-let stepT = 0;
-export function stairStep(dt: number, walking: boolean, running: boolean) {
-  if (!walking) {
-    stepT = 0.12;
-    return;
-  }
-  stepT -= dt;
-  if (stepT > 0) return;
-  stepT = running ? 0.2 : 0.3;
-  loadLiftSounds();
-  liftSound(`stairs/step-${1 + Math.floor(Math.random() * 4)}`, { gain: 0.5, rate: 0.95 + Math.random() * 0.1 });
-}

@@ -480,7 +480,8 @@ export class Locomotion {
     this.gaitPh = (ph0 + past + 1) % 1;
   }
 
-  private about: InstanceType<Air["AboutTurn"]> | null = null;
+  /** (its feet down out of the hop — `landed` — read by the 3D person for the steps: docs/plan/63) */
+  about: InstanceType<Air["AboutTurn"]> | null = null;
   private aboutW = 0;
   private aboutOut = 1;
   private brakeAgo = 9;

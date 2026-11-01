@@ -65,8 +65,9 @@ export function jumpSound(kind: JumpKind, gain = 1) {
   b.stop(at + len + 0.05);
 }
 
-/** Back down: a thud through the floor and the floor's own sound, harder after a flip. */
-export function landSound(kind: JumpKind, floor: Floor, gain = 1) {
+/** Back down: a thud through the floor and the floor's own sound, harder after a flip (`soles` false:
+ *  the thud alone — the steps' recordings are the soles, docs/plan/63). */
+export function landSound(kind: JumpKind, floor: Floor, gain = 1, soles = true) {
   const ctx = ready();
   if (!ctx) return;
   const at = ctx.currentTime;
@@ -82,6 +83,7 @@ export function landSound(kind: JumpKind, floor: Floor, gain = 1) {
   o.connect(og).connect(mixer.buses.effects);
   o.start(at);
   o.stop(at + 0.2);
+  if (!soles) return;
   // the soles on the floor (as a footstep, louder and both feet at once)
   const spec: Record<Floor, [number, number]> = {
     wood: [900, 0.08],

@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AVATAR_OPTIONS } from "@yutopia/shared";
-import { KH_FEEL } from "@yutopia/shared/move";
+import { flowCode, KH_FEEL, VERBS } from "@yutopia/shared/move";
+import { ABOUT_DOWN, ABOUT_LEN, AboutTurn } from "./chars/anim/about";
 import { Locomotion, loadHero } from "./chars/locomotion";
-import { type Ears, Footfalls, levelOf, type StepPlayer, shoeOf, type Walker } from "./steps";
+import { type Ears, FLOW_CODES, Footfalls, levelOf, type StepPlayer, shoeOf, VERB_KINDS, type Walker } from "./steps";
 
-// The steps (docs/plan/63-the-steps.md, phase 2): a step heard as each foot is put down — the body's
+// The steps (docs/plan/63-the-steps.md, phases 2–4): a step heard as each foot is put down — the body's
 // own (FootLock's), at its stride's pace, the feet in turn — with the shoe's family and the surface's
 // level.
 
@@ -218,4 +219,212 @@ test("pets: a dog's paws, its claws on a hard floor; a cat barely heard, but in 
     avg(snow.paws) > 4 * avg(cat.paws),
     `a cat on snow ${avg(snow.paws).toFixed(3)}, indoors ${avg(cat.paws).toFixed(3)}`,
   );
+});
+
+// ── the other moments (phase 4) ──
+function moments() {
+  const calls: { what: string; f?: string; at?: number }[] = [];
+  let stopped = 0;
+  const loop = (what: string) => {
+    calls.push({ what });
+    return () => {
+      stopped++;
+    };
+  };
+  const player = {
+    now: () => 100,
+    step: (f: string, o: { at?: number; scuff?: boolean }) =>
+      calls.push({ what: o.scuff ? "scuff" : "step", f, at: o.at }),
+    liftCar: () => calls.push({ what: "lift" }),
+    paw: () => calls.push({ what: "paw" }),
+    land: (f: string) => calls.push({ what: "land", f }),
+    thud: () => calls.push({ what: "thud" }),
+    cloth: () => calls.push({ what: "cloth" }),
+    hand: () => calls.push({ what: "hand" }),
+    seat: (down: boolean) => calls.push({ what: down ? "sit" : "stand" }),
+    scrape: (_f: string, _g: number, _p: number, len = 0) =>
+      len ? calls.push({ what: "scrape" }) && null : loop("slide"),
+    grind: () => loop("grind"),
+  } as unknown as StepPlayer;
+  let down: "down" | "kneel" | undefined;
+  let lift = false;
+  const ears: Ears = {
+    me: "me",
+    level: 0,
+    lift: () => lift,
+    gain: () => 1,
+    pan: () => 0,
+    footing: () => "wood",
+    down: () => down,
+  };
+  const ff = new Footfalls(player);
+  let t = 0;
+  const run = (w: Partial<Walker>, secs: number, v = 0) => {
+    for (let i = 0; i < secs * 60; i++) {
+      t += 1000 / 60;
+      const x = (w.x ?? 0) + (v * i) / 60;
+      ff.frame([me, { id: "bia", y: 1, level: 0, a: 0, ...w, x } as Walker], ears, 1 / 60, t);
+    }
+  };
+  const what = () => calls.map((c) => c.what);
+  return {
+    ff,
+    calls,
+    run,
+    what,
+    stopped: () => stopped,
+    inLift: (l: boolean) => {
+      lift = l;
+    },
+    setDown: (d: typeof down) => {
+      down = d;
+    },
+  };
+}
+
+test("the verbs and Flowmotion's codes as the steps read them agree with the shared move's", () => {
+  assert.deepEqual(VERB_KINDS, [...VERBS]);
+  for (const k of FLOW_CODES) assert.equal(FLOW_CODES[(flowCode({ kind: k as never, side: 1 }) & 15) - 1], k);
+});
+
+test("a vault: a hand on it and the feet after; a mantle's scramble; a roll's thud", () => {
+  const m = moments();
+  m.run({}, 0.2);
+  m.run({ verb: { kind: "vault" } }, 0.3);
+  assert.deepEqual(m.what().slice(0, 2), ["hand", "land"]);
+  m.calls.length = 0;
+  m.run({}, 0.2);
+  m.run({ verb: { kind: "mantle" } }, 0.3);
+  assert.deepEqual(m.what(), ["hand", "step", "step"]);
+  m.calls.length = 0;
+  m.run({}, 0.2);
+  m.run({ verb: { kind: "roll" } }, 0.3);
+  assert.deepEqual(m.what(), ["thud", "cloth", "scrape"]);
+});
+
+test("a slide's scrape and a grind held while they last, ended with them; a wall run's steps and its kick", () => {
+  const m = moments();
+  m.run({}, 0.2);
+  m.run({ verb: { kind: "slide" } }, 0.5);
+  assert.deepEqual(m.what(), ["slide"]);
+  m.run({}, 0.1);
+  assert.equal(m.stopped(), 1, "the slide's sound ends with it");
+  m.calls.length = 0;
+  m.run({ flowCode: flowCode({ kind: "grind", side: 1 }) }, 0.5);
+  m.run({}, 0.1);
+  assert.deepEqual(m.what(), ["grind"]);
+  assert.equal(m.stopped(), 2);
+  m.calls.length = 0;
+  m.run({ flow: { kind: "wallrun" } }, 1);
+  const onWall = m.what().filter((w) => w === "step").length;
+  assert.ok(onWall >= 5 && onWall <= 7, `${onWall} steps on the wall in 1 s`);
+  m.run({}, 0.1);
+  assert.equal(m.what().filter((w) => w === "step").length, onWall + 1, "and the kick off it");
+});
+
+test("off an edge: down from a fall heard as hard as how far — not a hop's height, nor a jump of its own", () => {
+  const m = moments();
+  m.run({ z: 0, ground: 0 }, 0.2);
+  m.run({ z: 0.2, ground: 0 }, 0.1);
+  m.run({ z: 0, ground: 0 }, 0.1);
+  assert.deepEqual(m.what(), [], "0.2 m: nothing");
+  m.run({ z: 1.2, ground: 0 }, 0.1);
+  m.run({ z: 0, ground: 0 }, 0.1);
+  assert.deepEqual(m.what(), ["land"]);
+  m.calls.length = 0;
+  m.run({ z: 3, ground: 0 }, 0.1);
+  m.run({ z: 0, ground: 0 }, 0.1);
+  assert.deepEqual(m.what(), ["land", "thud", "scrape"], "from 3 m: a roll");
+  m.calls.length = 0;
+  m.run({ z: 1.5, ground: 0, jump: { kind: "hop" } }, 0.1);
+  m.run({ z: 0, ground: 0, jump: { kind: "hop" } }, 0.1);
+  m.run({ z: 0, ground: 0 }, 0.1);
+  assert.deepEqual(m.what(), [], "a jump's landing is the jump's own");
+});
+
+test("a seat taken and given back, the tape's side steps, a skid from a run, a crawl and a kneel", () => {
+  const m = moments();
+  m.run({ a: 0 }, 0.1);
+  m.run({ a: 2 }, 0.1);
+  m.run({ a: 0 }, 0.1);
+  assert.deepEqual(m.what(), ["sit", "stand"]);
+  m.calls.length = 0;
+  // (the tape: a foot down each time its sway crosses the middle — 0.71 s, 1.43 s; the fist pump's
+  // hop down at 1.45 s; the wave's legs aren't keyed: nothing)
+  m.run({ emote: "tape" }, 1.6);
+  assert.equal(m.what().filter((w) => w === "step").length, 2, "the tape's feet down at 0.71 and 1.43 s");
+  m.calls.length = 0;
+  m.run({ emote: "" }, 0.1);
+  m.run({ emote: "fire" }, 1.4);
+  assert.deepEqual(m.what(), [], "the fist pump: still up at 1.4 s");
+  m.run({ emote: "fire" }, 0.2);
+  assert.deepEqual(m.what(), ["land"], "down from its hop at 1.45 s");
+  m.calls.length = 0;
+  m.run({ emote: "" }, 0.1);
+  m.run({ emote: "wave" }, 2);
+  assert.deepEqual(m.what(), []);
+  m.calls.length = 0;
+  m.run({ emote: "" }, 0.1);
+  m.run({ a: 1, mv: 3, x: 0 }, 0.5, 7);
+  m.calls.length = 0;
+  m.run({ a: 1, mv: 3, x: 3.5 }, 0.2, 0);
+  assert.ok(m.what().includes("scrape"), `a skid: ${m.what().join(" ")}`);
+  m.calls.length = 0;
+  m.setDown("down");
+  m.run({ a: 1, x: 0 }, 1, 1);
+  const w = m.what();
+  assert.equal(w[0], "thud", "down on a knee");
+  assert.ok(w.filter((x) => x === "step").length >= 2, `crawling: ${w.join(" ")}`);
+});
+
+test("my own moments heard too (gain 1), but my steps left to the controller", () => {
+  const m = moments();
+  const mine = (w: Partial<Walker>, secs: number, v = 0) => {
+    for (let i = 0; i < secs * 60; i++)
+      m.ff.frame(
+        [{ id: "me", x: (w.x ?? 0) + (v * i) / 60, y: 0, level: 0, a: 1, ...w } as Walker],
+        { me: "me", level: 0, gain: () => 1, pan: () => 0, footing: () => "wood" },
+        1 / 60,
+        i * 16,
+      );
+  };
+  mine({}, 2, 1.5);
+  assert.deepEqual(m.what(), [], "walking: no steps of mine from here");
+  mine({ verb: { kind: "vault" } }, 0.2);
+  assert.deepEqual(m.what().slice(0, 2), ["hand", "land"]);
+});
+
+test("a body's slow steps (setting off, stopping, on the spot) scuffed; walking ones not", () => {
+  const m = moments();
+  m.run({ a: 1, mv: 1, x: 0 }, 0.5, 0.5);
+  m.ff.body("bia", "L", 1e6);
+  m.run({ a: 1, mv: 1, x: 0.25 }, 0.5, 1.5);
+  m.ff.body("bia", "R", 2e6);
+  assert.deepEqual(
+    m.what().filter((w) => w === "step" || w === "scuff"),
+    ["scuff", "step"],
+  );
+});
+
+test("a fall into a lift's car: the car answers", () => {
+  const m = moments();
+  m.inLift(true);
+  m.run({ z: 0, ground: 0 }, 0.1);
+  m.run({ z: 1, ground: 0 }, 0.1);
+  m.run({ z: 0, ground: 0 }, 0.1);
+  assert.deepEqual(m.what(), ["land", "lift"]);
+});
+
+test("the turn round from a run: its feet down heard once, as it lands", () => {
+  const ab = new AboutTurn();
+  ab.start(1);
+  const pose = { pose: {}, lift: [0, 0, 0] as [number, number, number] };
+  const dt = 1 / 60;
+  const at: number[] = [];
+  for (let i = 0; i < 40; i++) {
+    ab.update(pose, dt, 0, 0, 1);
+    if (ab.landed) at.push(ab.u);
+  }
+  assert.equal(at.length, 1, "once");
+  assert.ok(at[0] >= ABOUT_DOWN && at[0] < ABOUT_DOWN + dt / ABOUT_LEN + 1e-9, `at ${at[0].toFixed(3)}`);
 });

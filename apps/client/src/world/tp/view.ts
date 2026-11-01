@@ -2355,6 +2355,10 @@ void main() {
   /** Each body's feet as they're put down (docs/plan/63-the-steps.md): its id, which foot — set by
    *  the controller (mine, everyone else's near). */
   onStep: ((id: string, side: "L" | "R") => void) | undefined = undefined;
+  /** Both feet down at once out of a body's own hop (`hard` 0..1) — set by the controller. */
+  onHop: ((id: string, hard: number) => void) | undefined = undefined;
+  /** A body limp on the ragdoll hitting something (`hard` 0..1) — set by the controller. */
+  onThud: ((id: string, hard: number) => void) | undefined = undefined;
   /** What's under (x, y) from z down on `level` and what it is, as Jolt has it (the steps'), or null
    *  till the physics is in. */
   underfoot(grid: Grid, level: number, x: number, y: number, z: number): { g: number; on: string } | null {
@@ -2745,6 +2749,8 @@ void main() {
             rag: this.ragSpace,
             sway: this.sway?.skipOf(b.id),
             step: this.onStep,
+            thud: this.onThud,
+            hop: this.onHop,
           },
         );
         // (plan 58 5d: down on the ragdoll — the physics stepped while anyone is; mine holds the walker)

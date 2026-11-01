@@ -98,7 +98,7 @@ import type { GameRoom } from "./games/room";
 import type { GodController } from "./god/controller";
 import { layEdits, loadGrounds, wantEdits } from "./grounds-load";
 import { jumps, loadJumps } from "./jumps-load";
-import { liftSound, loadLiftSounds, nearGain, stairStep } from "./lift-sound";
+import { liftSound, loadLiftSounds, nearGain } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
 import { type AvatarState, WorldModel } from "./model";
@@ -167,6 +167,7 @@ interface Remote {
   track: JumpTrack;
   flow: number; // their Flowmotion move (Player.flow) and when it shows here
   flowAt: number;
+  carried?: boolean; // in a car last frame (out of it: their feet heard down)
 }
 
 const INTERP_MS = 110;
@@ -1393,6 +1394,8 @@ export class WorldController {
       this.jumpEffects(localSid, st, 1);
       this.life?.print(localSid, st, now, this.map, this.grid.onLand(st.x, st.y));
       const inCar = !!this.cars?.inCar();
+      if (this.wasInCar && !inCar) this.alighted.push(localSid);
+      this.wasInCar = inCar;
       if (inCar) {
         if (model.hasAvatar(localSid)) model.removeAvatar(localSid);
       } else model.upsertAvatar(localSid, st);
@@ -1443,6 +1446,8 @@ export class WorldController {
       // the model keeps my floor's; 3D draws everyone where they are in the building
       // (someone in a car: the car draws them, sitting in it)
       const carried = !!this.cars?.seatedIds().has(sid) || unseen;
+      if (r.carried && !carried && !unseen) this.alighted.push(sid);
+      r.carried = carried;
       if (here && !carried) this.life?.print(sid, st, now, this.map, this.grid.onLand(st.x, st.y));
       else this.life?.prints.forget(sid);
       if (here && !carried) model.upsertAvatar(sid, st);
@@ -1806,7 +1811,6 @@ export class WorldController {
       void loadJumps();
       this.activeAt = now;
     }
-    const running = out.gait === "sprint";
     // one building (docs/plan/50 D): past a storey's band my feet are on the next floor up or down
     // where it has a floor under them — up the stairs, or a flier through a ceiling (its frame is a
     // storey off, its coords maybe shifted; beside the building the land rises and falls as it
@@ -1832,15 +1836,13 @@ export class WorldController {
     const land = this.grid.onLand(this.me.x, this.me.y);
     const floor = this.myFooting(hgt.z);
     this.life?.hear(dt, this.me, this.map, land && this.level === 0, this.model?.getDaylight().night ?? 0, this.storm);
-    // my steps (docs/plan/63-the-steps.md): never in the air, a verb or a move (their own sounds);
-    // on the stairs, a shoe on concrete treads in the stairwell, as it was
-    const ramp = this.grid.onRamp(this.me.x, this.me.y);
-    if (ramp) stairStep(dt, moved, running);
+    // my steps (docs/plan/63-the-steps.md): never in the air, a verb or a move, nor down on hands and
+    // knees in the dark (their own sounds: the steps chunk's Footfalls); the stairs' treads as any floor
     this.feet = {
-      ok: !ramp && !hgt.up && !out.verb && !out.flow && !this.jumpTrack.kind,
+      ok: !hgt.up && !out.verb && !out.flow && !this.jumpTrack.kind && !this.tp?.downed.has(this.room?.sessionId ?? ""),
       gait: out.gait === "crouch" || out.gait === "jog" || out.gait === "sprint" ? out.gait : "walk",
     };
-    this.stepsBy(went, floor);
+    this.stepsBy(went, floor, dt);
     if (moved) this.me.a = ANIM.walk;
     else if (seat) {
       this.me.a = ANIM.sit;
@@ -2881,12 +2883,28 @@ export class WorldController {
     const hard = j.kind !== "hop" ? 1 : 0.6;
     // (up on something the dust is on its top)
     const lift = (st.ground ?? 0) * ZPX_TILE;
+    // (the soles off and onto what's under them: the steps' recordings, once they're in)
+    const S = steps();
+    const pan = id === this.room?.sessionId ? 0 : (this.tp?.pan(this.me, st) ?? 0);
     if (stage === "air" && was === "crouch") {
       this.model?.puff(st.x, st.y, "kick", lift, hard);
       if (near > 0) jumps()?.jumpSound(j.kind, near);
+      if (near > 0 && S)
+        this.stepPlayer(S).step(this.footingAt(st.x, st.y, st.ground ?? 0), {
+          gait: "sprint",
+          shoe: "soft",
+          gain: near * 0.8,
+          pan,
+        });
     } else if (stage === "land") {
       this.model?.puff(st.x, st.y, "land", lift, hard);
-      if (near > 0) jumps()?.landSound(j.kind, this.footingAt(st.x, st.y, st.ground ?? 0), near);
+      const f = this.footingAt(st.x, st.y, st.ground ?? 0);
+      if (near > 0) jumps()?.landSound(j.kind, f, near, !S);
+      if (near > 0 && S) {
+        this.stepPlayer(S).land(f, hard, { gain: near, pan, thud: false });
+        // (in a lift's car: its floor on its cables answers)
+        if (this.inLiftCar(st.x, st.y)) this.stepPlayer(S).liftCar(hard, near, pan);
+      }
     }
   }
 
@@ -3183,6 +3201,8 @@ export class WorldController {
       // (the feet as the bodies put them down: the steps — mine, everyone else's near me)
       v.onStep = (id, side) =>
         id === this.room?.sessionId ? this.myStep(side) : this.footfalls?.body(id, side, performance.now());
+      v.onThud = (id, hard) => this.footfalls?.impact(id, hard);
+      v.onHop = (id, hard) => (id === this.room?.sessionId ? this.myHop(hard) : this.footfalls?.landed(id, hard));
       this.tp = v;
       this.tpHost = host;
       v.setHighlight(this.footprintOf(hud.get().prompt?.objectId));
@@ -4027,7 +4047,7 @@ export class WorldController {
   // my steps' state: may they be heard now, at what gait; where the body isn't stepping them, the
   // way gone since the last
   private feet: { ok: boolean; gait: StepGait } = { ok: false, gait: "walk" };
-  private stepped = { body: 0, way: 0, side: "R" as "L" | "R" };
+  private stepped = { body: 0, way: 0, side: "R" as "L" | "R", speed: 0 };
   private stepper: StepPlayer | null = null;
   private shoe: { avatar: string; shoe: Shoe } = { avatar: "", shoe: "soft" };
   /** A foot of mine put down (the body's: the 3D view's onStep), or by the way gone (`side` none). */
@@ -4045,7 +4065,24 @@ export class WorldController {
     }
     const av = this.room?.state.players.get(this.room.sessionId)?.avatar ?? "";
     if (av !== this.shoe.avatar) this.shoe = { avatar: av, shoe: S.shoeOf(parseAvatar(av).shoes) };
-    this.stepPlayer(S).step(f, { gait: this.feet.gait, shoe: this.shoe.shoe });
+    // (setting off, stopping, turning on the spot — the body's slow steps: the sole scuffed too)
+    this.stepPlayer(S).step(f, {
+      gait: this.feet.gait,
+      shoe: this.shoe.shoe,
+      scuff: !!side && this.stepped.speed < S.SCUFF,
+    });
+  }
+  /** Both my feet down at once out of my own hop (a turn round from a run: the 3D view's onHop). */
+  private myHop(hard: number) {
+    const S = steps();
+    if (!S || !this.feet.ok) return;
+    this.stepPlayer(S).land(this.myFooting(this.height.z), hard, { shoe: this.shoe.shoe, thud: false });
+  }
+  /** Standing in a lift's car on my floor (its floor answers a landing). */
+  private inLiftCar(x: number, y: number): boolean {
+    for (const o of this.objs.values())
+      if (o.kind === "elevator" && objLevel(o, this.building) === this.level && inLift(o, { x, y })) return true;
+    return false;
   }
   private stepPlayer(S: NonNullable<ReturnType<typeof steps>>): StepPlayer {
     this.stepper ??= new S.StepPlayer(
@@ -4070,7 +4107,12 @@ export class WorldController {
       ),
     pan: (w) => this.tp?.pan(this.me, w) ?? 0,
     footing: (w) => this.footingAt(w.x, w.y, w.z ?? w.ground ?? 0),
+    down: (id) => this.tp?.downed.get(id),
+    lift: (w) => this.inLiftCar(w.x, w.y),
   };
+  /** who stepped out of a car this frame (their feet heard down once they're drawn again) */
+  private alighted: string[] = [];
+  private wasInCar = false;
   private theirSteps(bodies: Walker[], dt: number) {
     const S = steps();
     if (!S) {
@@ -4081,10 +4123,12 @@ export class WorldController {
     this.ears.me = this.room?.sessionId ?? "";
     this.ears.level = this.level;
     this.footfalls.frame(bodies, this.ears, dt, performance.now());
+    for (const id of this.alighted.splice(0)) this.footfalls.alight(id);
   }
   // where the body isn't stepping (first person, `?anim=old`, reduced motion, before its chunk's
   // in): a step every half a stride I go (plan 58's strides: tiles)
-  private stepsBy(went: number, f: Floor) {
+  private stepsBy(went: number, f: Floor, dt: number) {
+    if (dt > 0 && went < 1.5) this.stepped.speed += (went / dt - this.stepped.speed) * Math.min(1, dt * 8);
     this.stepper?.preload(f);
     if (!this.feet.ok || went > 1.5) return;
     this.stepped.way += went;
