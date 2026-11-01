@@ -169,6 +169,8 @@ export interface CarsHost {
   /** out under the sky: 0 … 1 pitch dark (daylight.ts) */
   dark(): number;
   storm(): number;
+  /** how much the morning fog calls for lamps, 0 … 1 (view.ts lampFog) */
+  lampFog(): number;
   reduced(): boolean;
   quality(): Quality;
   /** the Grounds' own vehicles (the shuttle, the visitor's car), eased */
@@ -348,6 +350,7 @@ export function attachCars(c: any, G: typeof GroundsModule): Cars {
       night: () => c.model?.getDaylight().night ?? 0,
       dark: () => c.model?.getDaylight().dark ?? 0,
       storm: () => Math.max(0, c.storm),
+      lampFog: () => c.tp?.lampFog ?? 0,
       reduced: () => prefs().reducedMotion,
       quality: () => c.qualityNow(),
       ai: () => c.lifeCars,
@@ -908,10 +911,15 @@ export class Cars {
       if (this.screen?.vid !== mine.vid) {
         this.screen?.s.dispose();
         this.screen = { vid: mine.vid, s: new ScreenSnow(l.model) };
+        // (stood out in the morning fog: its screen misted — docs/plan/64-the-fog.md F6)
+        this.screen.s.amount = 0.85 * (this.host.tp()?.fogAir ?? 0);
       }
       const speed = Math.hypot(l.pose.v.x, l.pose.v.z);
       const wipers = mine.seat === 0 ? this.wipers : ((l.buf[l.buf.length - 1]?.fl ?? 0) >> 8) & 3;
       this.screen.s.step(dt, 0.25 + 0.9 * storm, speed, wipers, false);
+      // (a minute's driving clears a misted screen, out of a storm: the heater, the air over it)
+      if (storm < 0.1 && speed > 2)
+        this.screen.s.amount = Math.max(0, this.screen.s.amount - (dt * Math.min(1, speed / 10)) / 45);
       this.cabin.step(l.model, night);
       const q = this.host.quality();
       const tp = this.host.tp();
@@ -1638,7 +1646,8 @@ export class Cars {
         sim.temp = 0.1 + 0.3 * (1 - this.host.night());
         this.mine.sim = sim;
         this.mine.rig = new CarRig(l.model, sim);
-        this.beams = this.host.night() > 0.4 && !sim.spec.pushed ? "low" : "off";
+        // (on after dark, and in the morning fog — docs/plan/64 F4)
+        this.beams = Math.max(this.host.night(), this.host.lampFog()) > 0.4 && !sim.spec.pushed ? "low" : "off";
         this.wipers = this.host.storm() > 0.4 ? 2 : 0;
       }
       this.cam.mode = "chase";
@@ -1967,7 +1976,7 @@ export class Cars {
       this.beamLights[0].castShadow = shadow;
       this.beamLights[0].shadow.needsUpdate = true;
     }
-    const night = this.host.night() > 0.25;
+    const night = Math.max(this.host.night(), this.host.lampFog()) > 0.25;
     const [A, B, F] = [this.lampA, this.lampB, this.lampFwd];
     let lit: "off" | "low" | "high" = "off";
     if (night && l && beams !== "off") {
@@ -1994,6 +2003,36 @@ export class Cars {
       s.position.copy(at);
       s.target.position.copy(at).addScaledVector(F, 30);
       s.target.position.y -= lit === "high" ? 0.4 : 1.3;
+    });
+    this.airBeams(tp, want);
+  }
+  /** Each lit headlamp's beam in the air (the flashlight's, view.ts airBeam): there in the morning
+   *  fog and the snow, hardly on a clear night (docs/plan/64-the-fog.md F4). */
+  private air: ReturnType<ThirdPersonView["airBeam"]>[] = [];
+  private airBeams(tp: ThirdPersonView | null, want: number) {
+    if (!tp) return;
+    if (!this.air.length)
+      for (let i = 0; i < 2; i++) {
+        const b = tp.airBeam(0xfff2da);
+        this.root.add(b.mesh);
+        this.air.push(b);
+      }
+    const thick = Math.max(tp.fogAir, this.host.storm());
+    this.air.forEach((b, i) => {
+      const s = this.beamLights[i];
+      const op = i < want && s.intensity > 0 ? (0.015 + 0.5 * thick) * (s.intensity > 150 ? 1.2 : 1) : 0;
+      b.mat.uniforms.opacity.value = op;
+      b.mesh.visible = op > 0.01;
+      if (!b.mesh.visible) return;
+      b.mat.uniforms.time.value = this.time;
+      b.mat.uniforms.storm.value = this.host.storm();
+      // (as long as the light reaches into the murk; as wide as it throws)
+      const len = 20;
+      const along = len / b.len;
+      const across = (Math.tan(s.angle * 0.75) * len) / (Math.tan(b.half) * b.len);
+      b.mesh.position.copy(s.position);
+      b.mesh.lookAt(s.target.position);
+      b.mesh.scale.set(across, across, along);
     });
   }
   /** The nearest car with its lamps on, to the camera (within 80 tiles): its two headlamps and
@@ -2311,6 +2350,7 @@ export class Cars {
     this.cabin.dispose();
     this.mirror?.m.dispose();
     this.screen?.s.dispose();
+    for (const b of this.air) b.mat.dispose(); // (their cone's the flashlight's: not ours to drop)
     this.radio.stop();
     this.root.removeFromParent();
     this.env?.dispose();

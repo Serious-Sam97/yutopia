@@ -1,5 +1,6 @@
 "use client";
 
+import { fogToday } from "@yutopia/shared/weather";
 import { useState } from "react";
 import { useLang } from "@/lib/i18n";
 import { useHud } from "@/world/store";
@@ -8,7 +9,7 @@ import { Icon } from "../icons";
 import { ago, Card, Note, Row, Seg, Tag, useLive, useWords } from "./ui";
 
 // The world (docs/plan/48-the-admin.md): what the whole town feels, live — the hour, the
-// weather, the steps' volume (docs/plan/63-the-steps.md), every lock with its unlock from anywhere,
+// weather, the morning fog (docs/plan/64-the-fog.md), the steps' volume (docs/plan/63-the-steps.md), every lock with its unlock from anywhere,
 // the cars and the shuttle, the Kart Park's layout, a notice to everyone in. Admins only; the world server says who set what and when.
 const W = {
   hour: ["The hour", "A hora"],
@@ -19,6 +20,13 @@ const W = {
   weather: ["The weather", "O tempo"],
   clear: ["Clear", "Limpo"],
   storm: ["Storm", "Tempestade"],
+  fog: ["The morning fog", "A neblina da manhã"],
+  mist: ["Mist", "Névoa"],
+  fogK: ["Fog", "Neblina"],
+  thick: ["Thick", "Densa"],
+  today: ["This morning: {what}", "Esta manhã: {what}"],
+  none: ["clear", "limpa"],
+  blown: ["a storm's blowing it away", "uma tempestade a está levando"],
   steps: ["The steps' volume", "O volume dos passos"],
   stepsS: [
     "Everyone's footsteps and the body's other sounds, for everyone.",
@@ -67,6 +75,10 @@ interface Snap {
   stormBy: string;
   stormTo: number;
   stormUntil: number;
+  fogBy: string;
+  fogTo: string;
+  fogUntil: number;
+  storm: number;
   stepsVol: number;
   stepsBy: string;
   stepsAt: number;
@@ -108,6 +120,10 @@ export function World() {
       stormBy: st?.stormBy ?? "",
       stormTo: st?.stormTo ?? -1,
       stormUntil: st?.stormUntil ?? 0,
+      fogBy: st?.fogBy ?? "",
+      fogTo: st?.fogTo ?? "",
+      fogUntil: st?.fogUntil ?? 0,
+      storm: st?.storm ?? 0,
       stepsVol: st?.stepsVol ?? 1,
       stepsBy: st?.stepsBy ?? "",
       stepsAt: st?.stepsAt ?? 0,
@@ -130,6 +146,13 @@ export function World() {
       .filter((a) => a.name && d.x >= a.x - 1 && d.x <= a.x + a.w && d.y >= a.y - 1 && d.y <= a.y + a.h)
       .sort((p, q) => p.w * p.h - q.w * q.h)[0]?.name;
   const weather = s.stormTo < 0 ? "scheduled" : s.stormTo >= 0.5 ? "storm" : "clear";
+  const fog = (s.fogTo || "scheduled") as "clear" | "mist" | "fog" | "thick" | "scheduled";
+  const fogName = (k: string) => t(k === "mist" ? "mist" : k === "fog" ? "fogK" : k === "thick" ? "thick" : "clear");
+  const today = fogToday(Date.now());
+  // (a storm blows the fog away — the room's state has none while it lasts: said, or a called one
+  // reads as not working)
+  const fogWanted = s.fogTo ? s.fogTo !== "clear" : !!today;
+  const blown = fogWanted && s.storm >= 0.3 ? ` · ${t("blown")}` : "";
   const locked = s.rooms.length + s.doors.length;
   const hour = hourDraft ?? s.hour;
   const steps = stepsDraft ?? s.stepsVol;
@@ -201,6 +224,39 @@ export function World() {
           options={[
             { v: "clear", label: t("clear") },
             { v: "storm", label: t("storm") },
+            { v: "scheduled", label: t("scheduled") },
+          ]}
+        />
+      </Card>
+      <Card
+        label={t("fog")}
+        right={
+          s.fogBy ? (
+            <Note>
+              {t("calledBy", {
+                what: fogName(s.fogTo),
+                who: s.fogBy,
+                m: Math.max(0, Math.ceil((s.fogUntil - Date.now()) / 60_000)),
+              })}
+              {blown}
+            </Note>
+          ) : (
+            <Note>
+              {t("today", { what: today ? fogName(today.kind).toLowerCase() : t("none") })}
+              {blown}
+            </Note>
+          )
+        }
+      >
+        <Seg
+          value={fog}
+          label={t("fog")}
+          onPick={(v) => w.send("mod:fog", { fog: v === "scheduled" ? null : v })}
+          options={[
+            { v: "clear", label: t("clear") },
+            { v: "mist", label: t("mist") },
+            { v: "fog", label: t("fogK") },
+            { v: "thick", label: t("thick") },
             { v: "scheduled", label: t("scheduled") },
           ]}
         />

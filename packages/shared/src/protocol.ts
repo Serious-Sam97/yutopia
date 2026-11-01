@@ -213,6 +213,9 @@ export interface ClientMessages {
   // the weather (shared weather.ts): a storm called up (1) or sent off (0), or
   // back to the schedule (null); `now`: at once, not over a minute
   "mod:storm": { storm: number | null; now?: boolean };
+  // the morning fog (docs/plan/64-the-fog.md): one called up ("mist", "fog", "thick") or sent off
+  // ("clear") for a while, or back to the schedule (null); `now`: at once, not over a minute
+  "mod:fog": { fog: "clear" | "mist" | "fog" | "thick" | null; now?: boolean };
   // the world's hour (shared clock.ts): set one (0–24; it runs on from there), or null: São Paulo's again
   "mod:hour": { h: number | null };
   // the steps' volume for everyone (docs/plan/63-the-steps.md): 0 none … 1 as they are … 2 twice; null: 1 again

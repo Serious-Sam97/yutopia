@@ -33,6 +33,8 @@ export const FREEZE_MINUTES = [1, 5, 10] as const;
 export const NOTICE_MAX = 140;
 /** A called-up storm, or a sent-off one, lasts this long before the schedule's back. */
 export const STORM_CALL_MS = 20 * 60_000;
+/** A called-up fog, or a sent-off one, likewise (docs/plan/64-the-fog.md). */
+export const FOG_CALL_MS = 20 * 60_000;
 
 /** What an admin did, for the log (the API's admin_actions.kind). */
 export const LOG_KINDS = [
@@ -46,6 +48,7 @@ export const LOG_KINDS = [
   "unadmin",
   "hour",
   "storm",
+  "fog",
   "notice",
   "power",
   "spawn",

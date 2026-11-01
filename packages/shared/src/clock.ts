@@ -12,3 +12,8 @@ export function spHour(ms: number): number {
   const h = (ms / 3_600_000 + SP_OFFSET_H) % 24;
   return h < 0 ? h + 24 : h;
 }
+
+/** São Paulo's day at `ms`: whole days since the epoch there (the morning fog's, weather.ts). */
+export function spDay(ms: number): number {
+  return Math.floor((ms / 3_600_000 + SP_OFFSET_H) / 24);
+}

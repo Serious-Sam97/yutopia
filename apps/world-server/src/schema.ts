@@ -579,6 +579,15 @@ export class WorldState extends Schema {
   @type("string") stormBy = "";
   @type("float32") stormTo = -1;
   @type("float64") stormUntil = 0;
+  // the morning fog (shared weather.ts, docs/plan/64-the-fog.md): its haze and its wall, 0 … 1,
+  // a storm's blown away, and how far it's lifted burning off; who called one, which ("": the
+  // schedule's; "clear", "mist", "fog", "thick") and till when
+  @type("float32") fog = 0;
+  @type("float32") fogWall = 0;
+  @type("float32") fogLift = 0;
+  @type("string") fogBy = "";
+  @type("string") fogTo = "";
+  @type("float64") fogUntil = 0;
   // the steps' volume for everyone (docs/plan/63-the-steps.md: 1 as they are), who set it and when
   @type("float32") stepsVol = 1;
   @type("string") stepsBy = "";

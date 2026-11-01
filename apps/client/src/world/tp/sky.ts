@@ -209,14 +209,13 @@ export class Surroundings {
   setDay(d: Daylight) {
     this.day = d;
     const [top, mid, bot] = this.T.keyed(this.T.SNOW_SKY, d.hour);
-    const u = this.domeMat.uniforms;
-    (u.top.value as Color).setHex(top, SRGBColorSpace);
-    (u.mid.value as Color).setHex(mid, SRGBColorSpace);
-    (u.bot.value as Color).setHex(bot, SRGBColorSpace);
-    this.horizon.setHex(mid, SRGBColorSpace);
+    this.sky.top.setHex(top, SRGBColorSpace);
+    this.sky.mid.setHex(mid, SRGBColorSpace);
+    this.sky.bot.setHex(bot, SRGBColorSpace);
     // (no stars in the pitch dark: the overcast — docs/plan/44-the-night.md)
     const over = Math.min(1, Math.max(0, (d.dark - 0.2) / 0.4));
-    (this.stars.material as PointsMaterial).opacity = Math.max(0, d.night * 1.1 - 0.1) * (1 - over);
+    this.sky.stars = Math.max(0, d.night * 1.1 - 0.1) * (1 - over);
+    this.fogSky();
     // the land's light (as the campus's things are tinted: the same by the hour), and in
     // the pitch dark next to none: the sky's light goes, the lamps' and the beams' stay
     const dk = darkK(d.dark, DARK_LEFT.land3 + EYES_LIFT.land3 * this.eyes);
@@ -227,12 +226,47 @@ export class Surroundings {
     this.grounds?.setNight(d.night, landLight.value);
   }
 
+  // the sky by the hour (setDay), before the morning fog whites it out (fogSky)
+  private sky = { top: new Color(), mid: new Color(), bot: new Color(), stars: 0 };
+  private fog = { k: 0, wall: 0, col: new Color() };
+
+  /** The morning fog (docs/plan/64-the-fog.md): how much of the sky it takes (0 … 1), the wall,
+   *  its colour (linear). The dome goes to it, the stars and the overcast's pattern go. */
+  setFog(k: number, wall: number, col: Color) {
+    const f = this.fog;
+    if (Math.abs(k - f.k) < 1e-4 && Math.abs(wall - f.wall) < 1e-4 && col.equals(f.col)) return;
+    f.k = k;
+    f.wall = wall;
+    f.col.copy(col);
+    this.fogSky();
+  }
+  private fogSky() {
+    const u = this.domeMat.uniforms;
+    const { k, wall, col } = this.fog;
+    // (the top a little less, but for the wall's: no sky at all)
+    (u.top.value as Color).copy(this.sky.top).lerp(col, wall > 0 ? k : k * 0.8);
+    (u.mid.value as Color).copy(this.sky.mid).lerp(col, k);
+    (u.bot.value as Color).copy(this.sky.bot).lerp(col, k);
+    this.horizon.copy(u.mid.value as Color);
+    (this.stars.material as PointsMaterial).opacity = this.sky.stars * (1 - k);
+    u.cloudK.value = (1 - 0.7 * this.storm) * (1 - 0.85 * k);
+  }
+  private storm = 0;
+
+  /** How far the camera sees (the wall brings it in): the dome and the stars inside it. */
+  setReach(far: number) {
+    const k = Math.min(1, (far * 0.9) / DOME_R);
+    this.dome.scale.setScalar(k);
+    this.stars.scale.setScalar(k);
+  }
+
   /** The weather (shared weather.ts): the snow and the sky follow it. */
   setWeather(storm: number, wind: number) {
     this.campus.weather.storm = storm;
     this.campus.weather.wind = wind;
-    // (a storm's sky: the overcast thick and even)
-    this.domeMat.uniforms.cloudK.value = 1 - 0.7 * storm;
+    // (a storm's sky: the overcast thick and even — and the morning fog's thins it)
+    this.storm = storm;
+    this.domeMat.uniforms.cloudK.value = (1 - 0.7 * storm) * (1 - 0.85 * this.fog.k);
     // (the woods sway harder in it)
     if (this.grounds) this.grounds.wind.value = 1 + 2.5 * storm;
     // (and the roads go white in it, and clear after: roads3d.ts)

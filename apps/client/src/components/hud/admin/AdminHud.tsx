@@ -71,6 +71,7 @@ const COMMANDS: { c: string; arg?: string; does: string }[] = [
   { c: "clear", does: "everything you spawned, gone" },
   { c: "hour", arg: "<0–24 | real>", does: "set the world's hour" },
   { c: "storm", arg: "[on | off | auto]", does: "the weather" },
+  { c: "fog", arg: "[mist | fog | thick | off | auto]", does: "the morning fog" },
   { c: "notice", arg: "<text>", does: "a toast to everyone in" },
   { c: "cars", does: "every car back home" },
   { c: "shuttle", does: "the shuttle to HQ" },
@@ -234,7 +235,11 @@ function QuickBox({ powers, onClose }: { powers: number; onClose: () => void }) 
       const h = Number(a[0]?.replace(":", "."));
       send("mod:hour", { h: a[0] === "real" || !Number.isFinite(h) ? null : h });
     } else if (c === "storm") send("mod:storm", { storm: a[0] === "off" ? 0 : a[0] === "auto" ? null : 1 });
-    else if (c === "notice" && rest) send("mod:notice", { text: rest });
+    else if (c === "fog") {
+      const k = (a[0] ?? "fog").toLowerCase();
+      if (!["mist", "fog", "thick", "off", "auto"].includes(k)) return void toast(t("unknown"), "warn");
+      send("mod:fog", { fog: k === "off" ? "clear" : k === "auto" ? null : (k as "mist" | "fog" | "thick") });
+    } else if (c === "notice" && rest) send("mod:notice", { text: rest });
     else if (c === "cars") send("mod:cars", {});
     else if (c === "shuttle") send("mod:shuttle", {});
     else if (c === "panel") hud.set({ panel: { kind: "admin" } });

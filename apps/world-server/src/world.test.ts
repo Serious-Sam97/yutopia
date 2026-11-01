@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { ROOM_NAME, spHour } from "@yutopia/shared";
+import { fogAt, ROOM_NAME, spDay, spHour } from "@yutopia/shared";
 import { Client, type Room } from "colyseus.js";
 
 process.env.YUTOPIA_OFFLINE = "1";
@@ -178,6 +178,70 @@ test("the steps' volume (docs/plan/63): as they are for everyone; an admin sets 
   // as they are again
   admin.send("mod:steps", { v: null });
   await waitFor(() => guest.state.stepsVol === 1 && guest.state.stepsBy === "");
+});
+
+test("the morning fog (docs/plan/64): the day's by the world's hour; an admin calls one for everyone, nobody else can; a storm blows it away", async () => {
+  const person = async (id: number, roles: string) => {
+    const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 10,
+      token: `dev:${id}:P${id}:${roles}`,
+    });
+    rooms.push(room);
+    await waitFor(() => !!room.state?.players?.get(room.sessionId));
+    return room;
+  };
+  const admin = await person(95, "member,admin");
+  const guest = await person(96, "member");
+  await waitFor(() => guest.state.players.size === 2);
+  const near = (a: number, b: number) => Math.abs(a - b) < 1e-3;
+  // (no storm, whatever the schedule says: it'd blow the fog away)
+  admin.send("mod:storm", { storm: 0, now: true });
+  await waitFor(() => guest.state.storm === 0);
+  // not theirs to call
+  guest.send("mod:fog", { fog: "thick", now: true });
+  await sleep(300);
+  assert.equal(guest.state.fogTo, "", "a member can't call the fog");
+  // an admin's: the wall, for both, at once; who and till when
+  admin.send("mod:fog", { fog: "thick", now: true });
+  await waitFor(() => near(guest.state.fog, 1) && near(guest.state.fogWall, 1));
+  assert.equal(guest.state.fogTo, "thick");
+  assert.equal(guest.state.fogBy, "P95");
+  assert.ok(Math.abs(guest.state.fogUntil - (Date.now() + 20 * 60_000)) < 5000);
+  // a mist: a thin haze, no wall
+  admin.send("mod:fog", { fog: "mist", now: true });
+  await waitFor(() => near(guest.state.fog, 0.45) && guest.state.fogWall === 0);
+  // a storm blows it away, and when it's gone the fog's back
+  admin.send("mod:storm", { storm: 1, now: true });
+  await waitFor(() => guest.state.fog === 0);
+  admin.send("mod:storm", { storm: 0, now: true });
+  await waitFor(() => near(guest.state.fog, 0.45));
+  // sent off: it thins out (a minute's way, not at once)
+  admin.send("mod:fog", { fog: "clear" });
+  await waitFor(() => guest.state.fog < 0.44 && guest.state.fog > 0);
+  assert.equal(guest.state.fogTo, "clear");
+  // back to the schedule: today's by the world's hour — none in the afternoon, the morning's at 7:00
+  admin.send("mod:hour", { h: 14 });
+  admin.send("mod:fog", { fog: null, now: true });
+  await waitFor(() => guest.state.fogTo === "" && guest.state.fogBy === "" && guest.state.fog === 0);
+  assert.equal(guest.state.fogWall, 0);
+  admin.send("mod:hour", { h: 7 });
+  admin.send("mod:fog", { fog: null, now: true });
+  const want = fogAt(spDay(Date.now()), 7);
+  await waitFor(() => Math.abs(guest.state.fog - want.haze) < 0.02 && Math.abs(guest.state.fogWall - want.wall) < 0.02);
+  assert.equal(guest.state.fogLift, 0, "on the ground at 7:00");
+  // burning off at 9:30: lifting, if there's any left (the day's)
+  admin.send("mod:hour", { h: 9.5 });
+  admin.send("mod:fog", { fog: null, now: true });
+  const later = fogAt(spDay(Date.now()), 9.5);
+  await waitFor(
+    () => Math.abs(guest.state.fogLift - later.lift) < 0.02 && Math.abs(guest.state.fog - later.haze) < 0.02,
+  );
+  // a called one lies on the ground, whatever the hour
+  admin.send("mod:fog", { fog: "fog", now: true });
+  await waitFor(() => near(guest.state.fog, 1) && guest.state.fogLift === 0);
+  admin.send("mod:fog", { fog: null, now: true });
+  admin.send("mod:hour", { h: null });
+  admin.send("mod:storm", { storm: null, now: true });
 });
 
 // No ghosts (docs/plan/36-the-ghost.md): a reload or a tab opened again takes over

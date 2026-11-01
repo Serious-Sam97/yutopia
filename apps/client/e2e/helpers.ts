@@ -159,6 +159,10 @@ export async function enter(page: Page, tok: string, worldName?: World) {
   await page.evaluate(() => {
     const w = (window as unknown as { __yutopia?: { room?: { send(t: string, m: unknown): void } } }).__yutopia;
     w?.room?.send("mod:dark", { mode: "peaceful" });
+    // (and no morning fog: at the real hour it may be a foggy morning in São Paulo, and the specs'
+    // shots were taken clear — docs/plan/64-the-fog.md. An admin's call, twenty minutes; the
+    // fog's own spec calls one up)
+    w?.room?.send("mod:fog", { fog: "clear", now: true });
   });
   await page.waitForTimeout(800);
 }

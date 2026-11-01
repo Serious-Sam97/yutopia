@@ -26,7 +26,7 @@ use Illuminate\Validation\Rule;
 class InternalController extends Controller
 {
     // (shared admin.ts LOG_KINDS: what the log takes)
-    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps'];
+    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'fog', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps'];
 
     public function __construct(private readonly Worlds $worlds) {}
 

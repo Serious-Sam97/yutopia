@@ -22,8 +22,12 @@ import {
   edgeAt,
   edgeKey,
   entry,
+  FOG_KINDS,
+  type FogKind,
   findPath,
   floorsOf,
+  fogAt,
+  fogOf,
   footprint,
   GROUND_OFFSET,
   Grid,
@@ -58,6 +62,7 @@ import {
   type Status,
   setAreasBeyond,
   setOutdoors,
+  spDay,
   spHour,
   splitAll,
   stormAt,
@@ -72,7 +77,7 @@ import {
   type WorldObjectDef,
   windAt,
 } from "@yutopia/shared";
-import { hasPower, REMOVE_MINUTES, STORM_CALL_MS } from "@yutopia/shared/admin";
+import { FOG_CALL_MS, hasPower, REMOVE_MINUTES, STORM_CALL_MS } from "@yutopia/shared/admin";
 import { monitorsToComputers } from "@yutopia/shared/computer";
 import { editsNow, groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
@@ -442,6 +447,27 @@ export class WorldRoom extends Room<WorldState> {
     this.state.storm = Math.abs(want - s) < 0.02 ? want : s + Math.sign(want - s) * Math.min(Math.abs(want - s), 0.02);
     this.state.wind = windAt(now);
     this.clockTick(now);
+    this.fogTick(now);
+  }
+
+  // the morning fog (shared weather.ts, docs/plan/64-the-fog.md): the day's by the world's hour,
+  // or the one an admin called (at its height, any hour) till the call runs out; eased as the
+  // storm is, and blown away by it
+  private fogSet: { to: FogKind | null; until: number } | null = null;
+  private fogTick(now = Date.now(), at = false) {
+    if (this.fogSet && now > this.fogSet.until) {
+      this.fogSet = null;
+      this.state.fogBy = "";
+      this.state.fogTo = "";
+      this.state.fogUntil = 0;
+    }
+    const f = this.fogSet ? fogOf(this.fogSet.to) : fogAt(spDay(now), this.state.hour);
+    const calm = 1 - this.state.storm;
+    const ease = (was: number, want: number) =>
+      at || Math.abs(want - was) < 0.02 ? want : was + Math.sign(want - was) * 0.02;
+    this.state.fog = ease(this.state.fog, f.haze * calm);
+    this.state.fogWall = ease(this.state.fogWall, f.wall * calm);
+    this.state.fogLift = ease(this.state.fogLift, f.lift);
   }
   // the world's hour: São Paulo's (shared clock.ts), or the one an admin set
   // running on from when they set it (for the next six hours)
@@ -914,12 +940,32 @@ export class WorldRoom extends Room<WorldState> {
       if (!owner(client) && !config.offline) return;
       const to = m.storm === null || m.storm === undefined ? null : Math.max(0, Math.min(1, Number(m.storm) || 0));
       this.stormSet = to === null ? null : { to, until: Date.now() + STORM_CALL_MS };
-      if (m.now) this.state.storm = to ?? stormAt(Date.now());
+      if (m.now) {
+        this.state.storm = to ?? stormAt(Date.now());
+        this.fogTick(Date.now(), true); // (and the fog it blows away, or lets back)
+      }
       const by = this.state.players.get(client.sessionId);
       this.state.stormBy = to === null ? "" : (by?.name ?? "");
       this.state.stormTo = to ?? -1;
       this.state.stormUntil = this.stormSet?.until ?? 0;
       if (by) this.adminLog(by, "storm", null, to === null ? "as scheduled" : to >= 0.5 ? "a storm" : "clear");
+    });
+    // the fog: one called up ("mist", "fog", "thick"), sent off ("clear"), or back to the
+    // schedule (null). Admins only, offline too
+    this.on("mod:fog", (client, m) => {
+      if (!owner(client)) return;
+      const to = m.fog === null || m.fog === undefined ? null : String(m.fog);
+      if (to !== null && to !== "clear" && !FOG_KINDS.includes(to as FogKind)) return;
+      const was = this.state.fogTo;
+      this.fogSet =
+        to === null ? null : { to: to === "clear" ? null : (to as FogKind), until: Date.now() + FOG_CALL_MS };
+      const by = this.state.players.get(client.sessionId);
+      this.state.fogBy = to === null ? "" : (by?.name ?? "");
+      this.state.fogTo = to ?? "";
+      this.state.fogUntil = this.fogSet?.until ?? 0;
+      this.fogTick(Date.now(), !!m.now);
+      // (logged when it changes: the same call again — every e2e spec's "clear" — only runs on)
+      if (by && (to ?? "") !== was) this.adminLog(by, "fog", null, to ?? "as scheduled");
     });
     // the hour: set (0–24, then the clock runs on from it), or back to São Paulo's
     // (null). Admins only, offline too: it's everyone's night

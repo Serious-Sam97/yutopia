@@ -27,11 +27,16 @@ const INK = {
     ink: { value: new Color("#1b2230").convertSRGBToLinear() },
     strength: { value: 0.8 },
     fade: { value: new Vector2(18, 90) },
+    // the morning fog's (fog3d.ts: the haze's density at eye height, the wall, its reach)
+    fogA: { value: 0 },
+    fogW: { value: 0 },
+    fogV: { value: 18 },
   },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 res; uniform float near; uniform float far;
     uniform vec3 ink; uniform float strength; uniform vec2 fade; varying vec2 vUv;
+    uniform float fogA; uniform float fogW; uniform float fogV;
     // 1 / the view distance: linear across the screen over a plane
     float inv(vec2 uv) { float z = texture2D(tDepth, uv).x; return (far - z * (far - near)) / (near * far); }
     void main() {
@@ -48,6 +53,9 @@ const INK = {
       float e = smoothstep(0.012, 0.05, k);
       float d = 1.0 / i0;
       float w = 1.0 - smoothstep(fade.x, fade.y, d);
+      // (in the morning fog the lines go with what they outline: fog3d.ts inkLeft)
+      float lw = max(0.0, d - 3.0) / fogV;
+      w *= exp(-(fogA * 0.71 * d + fogW * 3.0 * lw * lw));
       // (multiplied in: a line on the snow is ink, on a dark wall it barely shows)
       gl_FragColor = vec4(mix(c.rgb, c.rgb * ink * 2.2, e * w * strength), c.a);
     }`,
@@ -66,6 +74,14 @@ export class InkPass extends Pass {
   /** 0 by day … 1 at night: fainter in the dark (the lamps' pools stay clean) */
   setNight(n: number) {
     this.mat.uniforms.strength.value = 0.8 - 0.4 * n;
+  }
+
+  /** The morning fog (fog3d.ts): the haze's density, the wall, its reach. */
+  setFog(a: number, wall: number, reach: number) {
+    const u = this.mat.uniforms;
+    u.fogA.value = a;
+    u.fogW.value = wall;
+    u.fogV.value = reach;
   }
 
   setSize(w: number, h: number) {

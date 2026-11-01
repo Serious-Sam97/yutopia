@@ -1940,6 +1940,9 @@ export class Campus {
         premultipliedAlpha: true,
         depthWrite: false,
       });
+      // (multiplied in: in fog it goes to white, gone — not grey, darker; and the sun's shadows,
+      // gone with the sun in the wall: fog3d.ts)
+      m.defines = { MF_WHITE: "", MF_SUN_SHADOW: "" };
       this.disposables.push(m);
       this.add(g.build(), m);
     }
@@ -2136,6 +2139,8 @@ export class Campus {
     this.night = d.night;
   }
   private night = 0;
+  /** How much the morning fog calls for lamps (view.ts lampFog): the visitor's car's on in it. */
+  lampFog = 0;
   /** The weather (shared weather.ts, eased): the snow follows it. */
   readonly weather = { storm: 0, wind: 0 };
   /** Roofs the snow doesn't fall under (the Grounds' buildings). */
@@ -2175,7 +2180,7 @@ export class Campus {
       if (f.points.visible)
         f.update(dt, cam, animate, this.fx0, this.fz0, this.fx1, this.fz1, storm, this.weather.wind, this.roofs);
     }
-    this.visitor?.update(dt, this.night, animate);
+    this.visitor?.update(dt, Math.max(this.night, 0.6 * this.lampFog), animate);
     this.steam?.update(dt, animate);
   }
 

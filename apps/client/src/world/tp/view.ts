@@ -1,3 +1,5 @@
+// (first: the fog chunks swapped before anything below makes a material — fog3d.ts)
+import "./fog3d";
 import {
   across,
   cutsSig,
@@ -22,8 +24,10 @@ import {
   PIANO_STOOL,
   type Point,
   placedFootprint,
+  rimeAt,
   STAIRS_D,
   STOREY,
+  spDay,
   surfaceAt,
   tileAt,
   topCentre,
@@ -107,7 +111,9 @@ import { Arms3 } from "./arms3d";
 import { BelowCull, boxInParent, HIDDEN_LAYER } from "./below-cull";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
-import { carGeometry } from "./campus";
+import { carGeometry, GROUND } from "./campus";
+import { FogBanks } from "./fog-banks";
+import { farFor, flatLight, fogColour, hazeDensity, inkLeft, LIFT_TOP, mf, roomBounds } from "./fog3d";
 import { FollowCam } from "./follow-cam";
 import { type GameScene3, GamesIn3D, HAND_SIT, HAND_STAND } from "./games3d";
 import { CASTER_LAYER } from "./grounds-stream";
@@ -492,8 +498,70 @@ export class ThirdPersonView {
   /** The weather (shared weather.ts, eased by the controller). */
   setWeather(storm: number, wind: number) {
     this.storm = storm;
+    this.wind = wind;
     this.around.setWeather(storm, wind);
   }
+  private wind = 0;
+  /** The morning fog (the room's state, docs/plan/64-the-fog.md): its haze and its wall, 0 … 1,
+   *  and how far it's lifted burning off; eased here (a called one comes at once). */
+  setFog(haze: number, wall: number, lift = 0) {
+    this.fogWant.haze = haze;
+    this.fogWant.wall = wall;
+    this.fogWant.lift = lift;
+  }
+  private fogWant = { haze: 0, wall: 0, lift: 0 };
+  /** How much the morning fog calls for lamps, 0 … 1 (none below 0.2 of it, all of it by 0.5): the
+   *  cars' headlamps and the Grounds' vehicles' come on in it as after dark (docs/plan/64 F4). */
+  /** How thick the air is with the morning fog, 0 … 1 (its haze or its wall): beams show in it. */
+  get fogAir(): number {
+    return Math.max(this.fogNow.haze, this.fogNow.wall);
+  }
+  get lampFog(): number {
+    const f = Math.max(this.fogNow.haze, this.fogNow.wall);
+    return Math.min(1, Math.max(0, (f - 0.2) / 0.3));
+  }
+  // the flashlight's beam in the air (its cone, its fade along, its shaders): airBeam's too
+  private beamCone: ConeGeometry | null = null;
+  private beamAlong: CanvasTexture | null = null;
+  private beamVert = "";
+  private beamFrag = "";
+  /** A beam in the air like the flashlight's, for another light (the cars' headlamps): its mesh
+   *  (tip at the lens, along +z; scale z by `len` / the length it's built at, x and y for the
+   *  spread) and its material (`opacity`, `color`). Seen in fog, the snow, a storm. */
+  airBeam(color: number): { mesh: Mesh; mat: ShaderMaterial; len: number; half: number } {
+    const mat = new ShaderMaterial({
+      uniforms: {
+        color: { value: new Color(color) },
+        opacity: { value: 0 },
+        along: { value: this.beamAlong },
+        time: { value: 0 },
+        storm: { value: 0 },
+        focus: { value: 0 },
+        tight: { value: 1 },
+      },
+      vertexShader: this.beamVert,
+      fragmentShader: this.beamFrag,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      side: DoubleSide,
+      toneMapped: false,
+    });
+    const mesh = new Mesh(this.beamCone ?? undefined, mat);
+    mesh.visible = false;
+    mesh.renderOrder = 4;
+    return { mesh, mat, len: BEAM_LEN, half: BEAM_HALF };
+  }
+  private banks: FogBanks | null = null;
+  private rime = 0;
+  private fogNow = { haze: 0, wall: 0, lift: 0 };
+  // the room I'm in, for the fog (its tiles' bounds), and the tile it was found from
+  private roomAt = "";
+  private room: { x0: number; y0: number; x1: number; y1: number } | null = null;
+  private roomMap: MapDef | null = null; // (the floor's map it was found in: a new one, found again)
+  // the sun and the open sky's fill by the hour (setHour), before the fog's flat light
+  private sunIntensity = 1;
+  private fillOut = 1;
   private frustum = new Frustum();
   private projView = new Matrix4();
   private sphere = new Sphere(new Vector3(), 1.1);
@@ -657,6 +725,8 @@ export class ThirdPersonView {
     const cone = new ConeGeometry(Math.tan(BEAM_HALF) * BEAM_LEN, BEAM_LEN, 32, 1, true);
     cone.translate(0, -BEAM_LEN / 2, 0);
     cone.rotateX(-Math.PI / 2); // (its tip at the lens, opening along +z)
+    this.beamCone = cone;
+    this.beamAlong = along;
     // what a flashlight throws (the spot's map): a hot core, the reflector's ring round it, the
     // spill fading out — not a flat disc
     const throwCv = document.createElement("canvas");
@@ -746,6 +816,8 @@ void main() {
   float motes = m * (0.4 + 1.4 * focus) * (0.8 + 0.6 * storm);
   gl_FragColor = vec4(color, a * edge * edge * opacity * (haze + motes));
 }`;
+    this.beamVert = beamVert;
+    this.beamFrag = beamFrag;
     for (let i = 0; i < TORCHES; i++) {
       const spot = new SpotLight(0xfff1dc, 0, BEAM_LEN * 1.6, BEAM_HALF * 1.25, 0.55, 1.3);
       // (every torch has its map, always: a light's map coming or going recompiles every material)
@@ -1336,6 +1408,8 @@ void main() {
   private winSig = "";
   private surround(building: MapDef, home: WorldObjectDef[]) {
     this.scene.remove(this.around.root);
+    this.banks?.dispose();
+    this.banks = null;
     this.around.dispose();
     this.around = new Surroundings(building, this.opts.themes, wallCuts(home));
     this.around.floorLit = (m) => this.light.patch(m);
@@ -2221,7 +2295,8 @@ void main() {
     const up = Math.min(1, Math.max(0, (d.sun.elevation - 0.05) / 0.4));
     const k = up * up * (3 - 2 * up);
     litBalance.lmSunOut.value = 1 + 0.6 * k;
-    litBalance.lmFillOut.value = 1 - 0.4 * k;
+    this.fillOut = 1 - 0.4 * k;
+    litBalance.lmFillOut.value = this.fillOut * flatLight(this.fogNow.wall).fill;
     // …and the lamp posts' pools come up after dark (light3d.ts: stored halved)
     // (five times as strong in the pitch dark: islands on the dark asphalt — docs/plan/44-the-night.md N2)
     litBalance.lmGlowK.value = 2 * LAMP_GLOW * Math.min(1, Math.max(0, (d.night - 0.1) / 0.4)) * (1 + 4 * d.dark);
@@ -2235,7 +2310,8 @@ void main() {
     const el = d.sun.elevation;
     const w = Math.min(1, Math.max(0, (el + 0.1) / 0.25));
     const sw = w * w * (3 - 2 * w);
-    this.sun.intensity = 0.25 + (0.1 + 0.9 * Math.min(1, Math.max(0, el) * 1.6)) * sw;
+    this.sunIntensity = 0.25 + (0.1 + 0.9 * Math.min(1, Math.max(0, el) * 1.6)) * sw;
+    this.sun.intensity = this.sunIntensity * flatLight(this.fogNow.wall).sun;
     this.sun.userData.el = 0.9 + (Math.max(0.05, el) - 0.9) * sw;
     this.sun.userData.az = Math.PI * 0.6 + (d.sun.azimuth - Math.PI * 0.6) * sw;
     // people and paper pictures aren't lit: they take the light map's tint (per person, in frame)
@@ -2657,7 +2733,7 @@ void main() {
     this.drawCues(dt, !!me?.reduced);
     this.placeSun();
     this.assignLamps(dt);
-    this.weatherFrame();
+    this.weatherFrame(dt, me);
     if (!me?.reduced) this.breathe(bodies);
 
     // cards and people face back along the camera's view (all the same way)
@@ -3295,6 +3371,9 @@ void main() {
     for (const b of bodies) {
       if (b.shade) continue; // (the shadowed have no names)
       seen.add(b.id);
+      // (and in the morning fog, past what it leaves of them: docs/plan/64-the-fog.md F5)
+      const fogK = this.fogSeen(b);
+      if (fogK < 0.1) this.unseen.add(b.id);
       const dark = this.unseen.has(b.id);
       let t = this.tagEls.get(b.id);
       if (!t) {
@@ -3335,6 +3414,12 @@ void main() {
       const pill = t.name.parentElement as HTMLElement;
       const showName = dark ? "none" : "";
       if (pill.style.display !== showName) pill.style.display = showName;
+      // (fading with them as the fog takes them; a bubble not: they're heard)
+      const fade = fogK >= 0.5 ? "" : (Math.max(0, fogK - 0.1) / 0.4).toFixed(2);
+      if (pill.style.opacity !== fade) {
+        pill.style.opacity = fade;
+        t.emote.style.opacity = fade;
+      }
       if (t.bubbleUntil && now > t.bubbleUntil) {
         t.bubbleUntil = 0;
         t.bubble.style.display = "none";
@@ -3729,7 +3814,7 @@ void main() {
 
   // ── the Grounds' mood (docs/plan/27) ──
   // a storm: the fog closes in, white (as dark as the hour)
-  private weatherFrame() {
+  private weatherFrame(dt: number, me?: Body3) {
     const f = fogFor();
     const s = this.storm;
     const fog = this.scene.fog as Fog;
@@ -3737,10 +3822,13 @@ void main() {
     const up = this.god ? this.god.dist * this.gcMix : 0;
     fog.near = f.near + up + (4 - f.near) * s;
     fog.far = f.far + up * 1.6 + (55 - f.far) * s;
-    const far = Math.max(f.cameraFar, up * 2.5);
+    const mist = this.morningFog(dt, me, up);
+    // (in the wall nothing past its reach is seen: the camera sees no further, the sky brought in)
+    const far = farFor(mist.wall, Math.max(f.cameraFar, up * 2.5), mf.mfV.value);
     if (Math.abs(this.camera.far - far) > 1) {
       this.camera.far = far;
       this.camera.updateProjectionMatrix();
+      this.around.setReach(far);
     }
     const l = landLight.value;
     this.stormFog.setRGB(
@@ -3749,6 +3837,122 @@ void main() {
       Math.min(1, l.b * 1.15) * 0.92,
     );
     fog.color.copy(this.around.horizon).lerp(this.stormFog, Math.min(1, s * 1.4));
+  }
+
+  // The morning fog (docs/plan/64-the-fog.md, F2): fog3d.ts's uniforms by the fog, the hour and
+  // where I am; the sky, the ink and the light with it
+  private morningFog(dt: number, me: Body3 | undefined, up: number): { haze: number; wall: number; lift: number } {
+    const n = this.fogNow;
+    const k = 1 - Math.exp(-dt * 2);
+    n.haze += (this.fogWant.haze - n.haze) * k;
+    n.wall += (this.fogWant.wall - n.wall) * k;
+    n.lift += (this.fogWant.lift - n.lift) * k;
+    if (n.haze < 1e-3) n.haze = 0;
+    if (n.wall < 1e-3) n.wall = 0;
+    const { haze, wall } = n;
+    mf.mfA.value = hazeDensity(haze);
+    mf.mfW.value = wall;
+    // (burning off: clear under a floor that rises)
+    mf.mfLift.value = n.lift > 1e-3 ? LIFT_TOP * n.lift : -1000;
+    // (from god mode's height the wall's further off, as the storm's is)
+    mf.mfV.value = 18 + up;
+    // its floor: the land's height 0 where the land is drawn (the campus moves with the floor shown)
+    mf.mfY0.value = this.around.campus.root.position.y + GROUND;
+    mf.mfT.value = this.time;
+    mf.mfWind.value[0] = Math.cos(this.wind) * 0.004;
+    mf.mfWind.value[1] = Math.sin(this.wind) * 0.004;
+    fogColour(mf.mfCol.value, landLight.value, this.hour, wall);
+    // towards the sun, gold while it's low (the wall's hardly)
+    const el = this.sun.userData.el as number;
+    const az = this.sun.userData.az as number;
+    mf.mfSun.value.set(-Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize();
+    const l = landLight.value;
+    const lum = Math.max(l.r, l.g, l.b) * 1.2;
+    const sc = this.sun.color;
+    mf.mfSunCol.value.setRGB(Math.min(1, sc.r * lum), Math.min(1, sc.g * lum * 0.92), Math.min(1, sc.b * lum * 0.8));
+    mf.mfSunK.value = (el > -0.12 ? Math.max(0, 1 - el / 0.7) * 0.5 : 0) * (1 - 0.85 * wall);
+    // none of it inside the room I'm in (a storm's neither)
+    this.roomBox(me);
+    // the rime on the trees: the day's (built through a foggy morning, there till noon), or what a
+    // called one's left — eased over minutes
+    const rimeWant = Math.max(rimeAt(spDay(Date.now()), this.hour), 0.9 * Math.max(haze, wall));
+    this.rime += (rimeWant - this.rime) * (1 - Math.exp(-dt / (rimeWant > this.rime ? 240 : 600)));
+    if (this.around.grounds) this.around.grounds.rime.value = this.rime;
+    // the lamps' glows grown to halos in it
+    if (this.around.grounds) this.around.grounds.halo = 1 + 1.4 * haze + 0.6 * wall;
+    this.around.campus.lampFog = this.lampFog;
+    // the banks over the low places (High only; made the first time they're wanted)
+    const grounds = this.around.grounds;
+    const banks = this.quality === "high" && grounds ? haze * (1 - wall) * (1 - n.lift) : 0;
+    if (banks > 0.01 && !this.banks && grounds) this.banks = new FogBanks(grounds.root);
+    if (this.banks) {
+      const o = this.around.campus.root.position;
+      const c = this.camera.position;
+      this.banks.update(banks, mf.mfCol.value, this.wind, { x: c.x - o.x, z: c.z - o.z }, this.time);
+    }
+    // the sky whited out by it, the ink's lines going with what they outline, the light flat in the wall
+    this.around.setFog(haze > 0 || wall > 0 ? Math.min(1, Math.max(haze * 1.1, wall * 2.5)) : 0, wall, mf.mfCol.value);
+    // (the ink: the haze where the camera is — none under its lifted floor — and none of it at all
+    // in the room I'm in, its lines as they were)
+    const inside = mf.mfBox.value > 0.5;
+    const camY = this.camera.position.y;
+    const lifted = camY < mf.mfY0.value + mf.mfLift.value;
+    // (the ink takes the haze at eye height as 0.71 of its floor's: ink3d.ts, fog3d.ts inkLeft)
+    const atCam = hazeDensity(haze) * Math.exp(-Math.max(0, camY - mf.mfY0.value) / mf.mfH.value);
+    this.post?.setFog(inside || lifted ? 0 : atCam / 0.71, inside ? 0 : wall, mf.mfV.value);
+    // (the sun itself dimmed: every surface's shadows go, the ice's too; the open sky's fill up)
+    const flat = flatLight(wall);
+    this.sun.intensity = this.sunIntensity * flat.sun;
+    litBalance.lmFillOut.value = this.fillOut * flat.fill;
+    mf.mfFlat.value = 1 - flat.sun;
+    return n;
+  }
+
+  // the room I'm in: the floor's indoor tiles round me (the lot's asphalt and concrete are out), or
+  // a Grounds building's box out on the land; none on the open sky
+  private roomBox(me: Body3 | undefined) {
+    const box = mf.mfBox;
+    if (!me) {
+      box.value = 0;
+      return;
+    }
+    const tx = Math.floor(me.x);
+    const ty = Math.floor(me.y);
+    const z = me.z ?? 0;
+    if (this.onLand(me.x, me.y)) {
+      this.roomAt = "";
+      const g = this.around.grounds;
+      const o = this.around.campus.root.position;
+      const lx = me.x - o.x;
+      const lz = me.y - o.z;
+      const b = g?.boxes.find((q) => lx >= q.x0 && lx <= q.x1 && lz >= q.z0 && lz <= q.z1);
+      if (!b || z > o.y + GROUND + b.top) {
+        box.value = 0;
+        return;
+      }
+      box.value = 1;
+      mf.mfBoxMin.value.set(b.x0 + o.x, z - 0.5, b.z0 + o.z);
+      mf.mfBoxMax.value.set(b.x1 + o.x, o.y + GROUND + b.top, b.z1 + o.z);
+      return;
+    }
+    const key = `${this.level}|${tx}|${ty}`;
+    if (key !== this.roomAt || this.roomMap !== this.map) {
+      this.roomAt = key;
+      this.roomMap = this.map;
+      const ground = this.level === 0;
+      this.room = roomBounds(
+        this.map.tiles,
+        tx,
+        ty,
+        (ch) => !ch || ch === " " || (ground && (ch === "a" || ch === "c")),
+      );
+    }
+    const r = this.room;
+    box.value = r ? 1 : 0;
+    if (!r) return;
+    // (a little past its walls: a camera against one, a hair outside them, is still in here)
+    mf.mfBoxMin.value.set(r.x0 - 0.35, z - 0.5, r.y0 - 0.35);
+    mf.mfBoxMax.value.set(r.x1 + 0.35, z + STOREY, r.y1 + 0.35);
   }
 
   // Snow settling on people out under the sky (docs/plan/33-the-look.md): their shoulders and
@@ -3846,6 +4050,17 @@ void main() {
     return c;
   }
   private unseen = new Set<string>(); // out in the dark, unseen this frame (N4: no name, no emote)
+  // How much of someone the morning fog leaves, 0 … 1 (docs/plan/64-the-fog.md F5): by how far
+  // they are from the camera, as the ink's lines go (fog3d.ts inkLeft) — all of them in here with
+  // me (the room's out of it)
+  private fogSeen(b: Body3): number {
+    const n = this.fogNow;
+    if (n.haze <= 0 && n.wall <= 0) return 1;
+    if (mf.mfBox.value > 0.5 && !this.underSky(b.x, b.y)) return 1;
+    const c = this.camera.position;
+    const d = Math.hypot(c.x - b.x, c.y - ((b.z ?? 0) + 1.4), c.z - b.y);
+    return inkLeft(d, n.haze, n.wall, mf.mfV.value);
+  }
   /** Out in the dark and unseen this frame (no name, no emote; the dark's HUD hides its tag too). */
   isUnseen(id: string): boolean {
     return this.unseen.has(id);
@@ -3937,7 +4152,8 @@ void main() {
       m.position.set(px, (v.h ?? g.heightAt(v.x, v.z)) + up + 0.03, pz);
       // (the models' noses point −x: turned to the heading)
       m.rotation.y = Math.PI - v.a;
-      const n = this.nightLevel;
+      // (their lamps on in the morning fog as after dark)
+      const n = Math.max(this.nightLevel, 0.6 * this.lampFog);
       for (const l of m.userData.glow as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.25 + n * 1.2);
       for (const l of m.userData.tail as MeshBasicMaterial[]) l.opacity = Math.min(1, 0.35 + n * 1.1);
       const tg = m.userData.tailGlow as Mesh<PlaneGeometry, MeshBasicMaterial>;
@@ -4066,8 +4282,16 @@ void main() {
         toneMapped: false,
       }),
     );
-    warm.add(puff, this.carModel("visitor"), this.busModel());
-    void this.renderer.compileAsync(warm, this.camera, this.scene).then(() => puff.material.dispose());
+    // (and the morning fog's: its banks — made now, their sheets when a fog wants them — and the
+    // flashlight's beam, which the cars' beams in the air share: docs/plan/64-the-fog.md)
+    this.banks ??= new FogBanks(g.root);
+    const banks = this.banks.warm();
+    const beam = new Mesh(this.beamCone ?? undefined, this.torch3[0]?.mat);
+    warm.add(puff, this.carModel("visitor"), this.busModel(), banks, beam);
+    void this.renderer.compileAsync(warm, this.camera, this.scene).then(() => {
+      puff.material.dispose();
+      banks.geometry.dispose();
+    });
   }
 
   // the flashlights on: mine first, then the nearest — out of the lens of the one in their hand
@@ -4179,7 +4403,9 @@ void main() {
       tc.beam.scale.set(across, across, along);
       // (a third as thick in the pitch dark: on a black night the haze hid what the beam lit —
       // docs/plan/44-the-night.md; a storm's snow still thickens it)
-      const op0 = Math.min(0.5, (0.03 + 0.16 * night) * (1 - 0.65 * this.dark) * (1 + this.storm * 1.6));
+      // (and in the morning fog, as in the snow: docs/plan/64 F4)
+      const air = Math.max(this.storm, this.fogNow.haze, this.fogNow.wall);
+      const op0 = Math.min(0.5, (0.03 + 0.16 * night) * (1 - 0.65 * this.dark) * (1 + air * 1.6));
       const op = Math.min(0.5, op0 * (1 + 0.35 * f) * kick) * flick;
       for (const m of [tc.mat, tc.coreMat]) {
         m.uniforms.time.value = tm;
@@ -4268,9 +4494,10 @@ void main() {
           vy: Math.sin(a) * sp + (Math.random() - 0.5) * 0.1,
           vz: 0.1 + Math.random() * 0.08,
           t: -i * 0.06,
-          life: 1.3,
+          // (it hangs in the morning fog's still, damp air)
+          life: 1.3 * (1 + 1.2 * this.fogAir),
           g: -0.05,
-          drag: 1.6,
+          drag: 1.6 * (1 - 0.4 * this.fogAir),
           grow: 4,
           size: 0.08,
           op: 0.3,
@@ -5100,6 +5327,7 @@ void main() {
     for (const b of this.floors.values()) b.world.dispose();
     this.warmTarget?.dispose();
     for (const m of this.fadeKept) m.dispose();
+    this.banks?.dispose();
     this.around.dispose();
     this.renderer.dispose();
     c.remove();

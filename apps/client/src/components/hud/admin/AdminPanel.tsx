@@ -40,8 +40,8 @@ const W = {
   ],
   world: ["The world", "O mundo"],
   worldSub: [
-    "What the whole town feels: the hour, the weather, locks, vehicles, a notice.",
-    "O que a cidade toda sente: a hora, o tempo, trancas, veículos, um aviso.",
+    "What the whole town feels: the hour, the weather, the fog, locks, vehicles, a notice.",
+    "O que a cidade toda sente: a hora, o tempo, a neblina, trancas, veículos, um aviso.",
   ],
   dark: ["The dark", "O escuro"],
   darkSub: ["For trying the fight: what's out there.", "Para testar a luta: o que há lá fora."],

@@ -20,6 +20,7 @@ export interface Here {
   inside: boolean; // in one of the Grounds' buildings
   night: number; // 0 day … 1 night
   storm: number; // 0 … 1
+  fog?: number; // the morning fog, 0 … 1 (docs/plan/64-the-fog.md F6): hushed
 }
 
 export class GroundsSound {
@@ -30,6 +31,7 @@ export class GroundsSound {
   private nextCrow = 20;
   private nextTick = 2;
   private nextDog = 30;
+  private nextDrip = 1;
   private open = 1; // eased: how open it is round you (1 none of the woods)
   /** the mixer, for the dark's sound (world/dark/voices.ts takes it from here: importing it
    *  there split the world page's chunks — docs/plan/30-the-dark.md phase 2's trap) */
@@ -85,7 +87,9 @@ export class GroundsSound {
     // gusts: two slow waves
     const gust = 0.6 + 0.25 * Math.sin(this.t * 0.37) + 0.15 * Math.sin(this.t * 1.13 + 1);
     const out = h.land ? 1 : h.inside ? 0.12 : 0.18;
-    const level = ((h.land ? 0.03 + 0.05 * this.open : 0) + 0.22 * h.storm) * gust * out;
+    // (in the morning fog the air's still: next to no wind — docs/plan/64-the-fog.md F6)
+    const fog = h.fog ?? 0;
+    const level = ((h.land ? 0.03 + 0.05 * this.open : 0) * (1 - 0.85 * fog) + 0.22 * h.storm) * gust * out;
     this.wind.out.gain.setTargetAtTime(level, ctx.currentTime, 0.4);
     this.wind.bp.frequency.setTargetAtTime(
       (h.land ? 320 + 380 * gust + 500 * h.storm : 240) * (h.inside ? 0.5 : 1),
@@ -127,8 +131,17 @@ export class GroundsSound {
     // ── a crow, by day, out in the woods or on the lawn ──
     this.nextCrow -= dt;
     if (this.nextCrow < 0) {
-      this.nextCrow = 35 + Math.random() * 80;
-      if (h.land && h.night < 0.4 && h.storm < 0.3) this.caw(ctx, 0.5 + Math.random() * 0.5, Math.random() * 1.6 - 0.8);
+      this.nextCrow = (35 + Math.random() * 80) * (1 - 0.4 * fog);
+      // (in the fog: somewhere far off, quieter, and early too — first light's enough)
+      if (h.land && h.night < (fog > 0.3 ? 0.7 : 0.4) && h.storm < 0.3)
+        this.caw(ctx, (0.5 + Math.random() * 0.5) * (1 - 0.65 * fog), Math.random() * 1.6 - 0.8);
+    }
+    // ── in the fog, the trees dripping round you ──
+    this.nextDrip -= dt;
+    if (this.nextDrip < 0) {
+      this.nextDrip = 0.5 + Math.random() * 2.2;
+      const k = h.land ? fog * Math.min(1, woods * 1.6 + 0.15) : 0;
+      if (k > 0.05) this.drip(ctx, 0.022 * k * (0.5 + Math.random() * 0.5), Math.random() * 1.8 - 0.9);
     }
     // ── the river's ice, ticking, near it ──
     const river = h.land ? riverDistance(G, h.x, h.z) : 99;
@@ -187,6 +200,25 @@ export class GroundsSound {
       o.start(at);
       o.stop(at + (big ? 0.7 : 0.45));
     }
+  }
+
+  // a drip off a branch onto the snow: a short, falling plip
+  private drip(ctx: AudioContext, gain: number, pan: number) {
+    const at = ctx.currentTime + 0.01;
+    const p = ctx.createStereoPanner();
+    p.pan.value = pan;
+    const out = ctx.createGain();
+    out.gain.setValueAtTime(0.0001, at);
+    out.gain.exponentialRampToValueAtTime(gain, at + 0.004);
+    out.gain.exponentialRampToValueAtTime(0.0001, at + 0.09);
+    const o = ctx.createOscillator();
+    o.type = "sine";
+    const f = 1400 + Math.random() * 1300;
+    o.frequency.setValueAtTime(f, at);
+    o.frequency.exponentialRampToValueAtTime(f * 0.45, at + 0.08);
+    o.connect(out).connect(p).connect(mixer.buses.ambience);
+    o.start(at);
+    o.stop(at + 0.1);
   }
 
   // a crow: two or three harsh, falling caws

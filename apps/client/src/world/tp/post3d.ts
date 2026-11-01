@@ -125,6 +125,11 @@ export class Post3 {
     this.bloom.threshold = litCap(n) + 0.02;
   }
 
+  /** The morning fog (fog3d.ts): the ink's lines go with it. */
+  setFog(a: number, wall: number, reach: number) {
+    this.ink.setFog(a, wall, reach);
+  }
+
   render(moving: boolean, over?: { scene: Scene; camera: Camera } | null) {
     if (over && !this.over) {
       this.over = new RenderPass(over.scene, over.camera);

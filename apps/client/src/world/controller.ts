@@ -1371,6 +1371,8 @@ export class WorldController {
       [this.storm, this.wind] = this.life.weather(dt, room.state.storm, room.state.wind);
       this.tp?.setWeather(this.storm, this.wind);
     }
+    // the morning fog (docs/plan/64-the-fog.md): the server's, eased by the view
+    this.tp?.setFog(room.state.fog ?? 0, room.state.fogWall ?? 0, room.state.fogLift ?? 0);
     // someone high-fives me, hands me something…: turn to them
     if (lp?.act && lp.actAt !== this.facedAct) {
       this.facedAct = lp.actAt;
@@ -1839,7 +1841,15 @@ export class WorldController {
     // (outdoors on the land: what's underfoot there — snow, the trail, the ice)
     const land = this.grid.onLand(this.me.x, this.me.y);
     const floor = this.myFooting(hgt.z);
-    this.life?.hear(dt, this.me, this.map, land && this.level === 0, this.model?.getDaylight().night ?? 0, this.storm);
+    this.life?.hear(
+      dt,
+      this.me,
+      this.map,
+      land && this.level === 0,
+      this.model?.getDaylight().night ?? 0,
+      this.storm,
+      this.tp?.fogAir ?? 0,
+    );
     // my steps (docs/plan/63-the-steps.md): never in the air, a verb or a move, nor down on hands and
     // knees in the dark (their own sounds: the steps chunk's Footfalls); the stairs' treads as any floor
     this.feet = {
@@ -4116,7 +4126,8 @@ export class WorldController {
     lift: (w) => this.inLiftCar(w.x, w.y),
     // (phase 5) the far off's top lost; through a doorway, another room: muffled
     lp: (w) => {
-      const f = 16000 / (1 + 0.35 * Math.hypot(w.x - this.me.x, w.y - this.me.y));
+      // (and faster in the morning fog: docs/plan/64-the-fog.md F6)
+      const f = 16000 / (1 + 0.35 * Math.hypot(w.x - this.me.x, w.y - this.me.y) * (1 + 1.5 * (this.tp?.fogAir ?? 0)));
       const a = areaAt(this.map, w.x, w.y);
       const b = areaAt(this.map, this.me.x, this.me.y);
       return (a?.key ?? "") !== (b?.key ?? "") && a?.kind !== "stage" && b?.kind !== "stage" ? Math.min(f, 900) : f;

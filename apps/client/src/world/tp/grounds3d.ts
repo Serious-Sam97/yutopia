@@ -825,7 +825,7 @@ export class Grounds3 {
     return m;
   }
 
-  private beacon: { m: MeshBasicMaterial; halo: SpriteMaterial } | null = null;
+  private beacon: { m: MeshBasicMaterial; halo: SpriteMaterial; sprite: Sprite } | null = null;
   /** The water tower's beacon: a second on, a second and a half off, after dark. */
   tick(t: number) {
     this.kartCircuit();
@@ -4403,14 +4403,16 @@ export class Grounds3 {
     this.root.add(this.cards);
   }
   private cards: InstancedMesh | null = null;
-  /** Face the lamps' glow cards to the camera. */
-  faceCards(cam: Vector3) {
+  /** Face the lamps' glow cards to the camera; `halo`: how much bigger (the morning fog's halos,
+   *  docs/plan/64-the-fog.md F4). */
+  faceCards(cam: Vector3, halo = 1) {
+    if (this.beacon) this.beacon.sprite.scale.setScalar(6 * halo);
     if (!this.cards) return;
     const o = new Object3D();
     this.glowCards.forEach((c, i) => {
       o.position.set(c.x, c.y, c.z);
       o.lookAt(cam);
-      o.scale.set(c.s, c.s, 1);
+      o.scale.set(c.s * halo, c.s * halo, 1);
       o.updateMatrix();
       this.cards?.setMatrixAt(i, o.matrix);
     });
@@ -4613,7 +4615,7 @@ export class Grounds3 {
       halo.position.copy(bm.position);
       halo.scale.setScalar(6);
       this.root.add(halo);
-      this.beacon = { m: beacon, halo: halo.material };
+      this.beacon = { m: beacon, halo: halo.material, sprite: halo };
       // its fence: chain-link between posts, a gate to the south
       const chain = this.keep(tex(chainCanvas(this.T)));
       const posts = new G().color(0x5d6268);
@@ -4807,7 +4809,10 @@ export class Grounds3 {
   }
 
   // ── far ridges and mountains: the one painted thing (beyond everything you can reach) ──
-  readonly ridgeMat = new MeshBasicMaterial({ vertexColors: true, fog: false });
+  // (past the day's fog, as they always were — but the morning's takes them: fog3d.ts)
+  readonly ridgeMat = Object.assign(new MeshBasicMaterial({ vertexColors: true }), {
+    defines: { MF_MORNING_ONLY: "" },
+  });
   private ridges() {
     this.keep(this.ridgeMat);
     const g = new G();

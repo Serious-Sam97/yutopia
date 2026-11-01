@@ -141,6 +141,8 @@ export class GroundsStream {
   };
   /** the woods' sway: the time, and how hard (sky.ts: harder in a storm) */
   readonly wind = { value: 1 };
+  /** The rime on the trees, 0 … 1 (the morning fog's: view.ts sets it — docs/plan/64-the-fog.md F6). */
+  readonly rime = { value: 0 };
   private windT = { value: 0 };
   private casting = new Set<number>();
   private fade = { a: { value: new Vector3() }, b: { value: new Vector3() } };
@@ -182,10 +184,11 @@ export class GroundsStream {
       shader.uniforms.fadeB = this.fade.b;
       shader.uniforms.windT = this.windT;
       shader.uniforms.windK = this.wind;
+      shader.uniforms.rimeK = this.rime;
       shader.vertexShader = shader.vertexShader
         .replace(
           "#include <common>",
-          "#include <common>\nuniform vec3 fadeA;\nuniform vec3 fadeB;\nuniform float windT;\nuniform float windK;\nvarying float vFade;",
+          "#include <common>\nuniform vec3 fadeA;\nuniform vec3 fadeB;\nuniform float windT;\nuniform float windK;\nuniform float rimeK;\nvarying float vFade;",
         )
         // each tree its own green and bark (docs/plan/33-the-look.md); the snow on it stays white
         .replace(
@@ -201,6 +204,8 @@ export class GroundsStream {
   vec3 t = vec3(v * (1.0 + warm), v * (1.0 + warm * 0.3), v * (1.0 - warm * 0.8));
   float l = dot(vColor.rgb, vec3(0.299, 0.587, 0.114));
   vColor.rgb *= mix(t, vec3(1.0), smoothstep(0.6, 0.85, l));
+  // the rime after a freezing fog: the needles and the bark frosted pale (the snow on it as it is)
+  vColor.rgb = mix(vColor.rgb, vec3(0.8, 0.85, 0.9), rimeK * 0.6 * (1.0 - smoothstep(0.6, 0.85, l)));
 }
 #endif`,
         )
@@ -331,6 +336,8 @@ if (vFade < 0.999) {
   /** The buildings standing on the Grounds (building coords), to their roofs:
    *  the chase camera keeps out of them as out of walls. (Filled in place: god mode's edits.) */
   readonly boxes: { x0: number; z0: number; x1: number; z1: number; top: number }[] = [];
+  /** How much bigger the lamps' glows are (the morning fog's halos: view.ts sets it). */
+  halo = 1;
   private fillBoxes() {
     this.boxes.length = 0;
     for (const b of BUILDINGS) if (b.kind !== "hq") this.boxes.push(boxOf(b));
@@ -404,8 +411,8 @@ if (vFade < 0.999) {
     this.turn = (this.turn + 1) % 3;
     if (this.lite && !this.boost && this.turn) {
       if (target) this.statics.cutAt(target.x, target.y, target.z);
-      this.statics.faceCards(cam);
-      this.kart?.faceCards(cam);
+      this.statics.faceCards(cam, this.halo);
+      this.kart?.faceCards(cam, this.halo);
       return;
     }
     const want: string[] = [];
@@ -542,8 +549,8 @@ if (vFade < 0.999) {
     }
     this.left.statics = this.statics.left + (this.kart?.left ?? 0);
     if (Math.hypot(x - this.castersAt.x, z - this.castersAt.z) > 6) this.fillCasters(x, z);
-    this.statics.faceCards(cam);
-    this.kart?.faceCards(cam);
+    this.statics.faceCards(cam, this.halo);
+    this.kart?.faceCards(cam, this.halo);
   }
 
   private ancestorBuilt(k: string): string | null {

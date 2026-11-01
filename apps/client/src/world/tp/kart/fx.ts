@@ -11,6 +11,8 @@ import {
   ShaderMaterial,
   SRGBColorSpace,
   type Texture,
+  UniformsLib,
+  UniformsUtils,
 } from "three";
 
 // The karts' effects (docs/plan/46-the-karts.md, the quality pass): one particle system — a pool
@@ -97,6 +99,7 @@ attribute vec4 iCol;
 attribute vec2 iSize; // size, stretch (s)
 varying vec2 vUv;
 varying vec4 vCol;
+#include <fog_pars_vertex>
 void main() {
   vUv = uv;
   vCol = iCol;
@@ -114,15 +117,20 @@ void main() {
     c.xy += corner * size;
   }
   gl_Position = projectionMatrix * c;
+  // (in the fog as everything is: docs/plan/64-the-fog.md)
+  vec4 mvPosition = c;
+  #include <fog_vertex>
 }`;
 const FRAG = /* glsl */ `
 uniform sampler2D map;
 varying vec2 vUv;
 varying vec4 vCol;
+#include <fog_pars_fragment>
 void main() {
   vec4 t = texture2D(map, vUv);
   gl_FragColor = vec4(vCol.rgb * t.rgb, vCol.a * t.a);
   if (gl_FragColor.a < 0.004) discard;
+  #include <fog_fragment>
   #include <colorspace_fragment>
 }`;
 
@@ -183,9 +191,10 @@ export class Particles {
     this.mesh = new Mesh(
       geo,
       new ShaderMaterial({
-        uniforms: { map: { value: tex(look) } },
+        uniforms: { ...UniformsUtils.clone(UniformsLib.fog), map: { value: tex(look) } },
         vertexShader: VERT,
         fragmentShader: FRAG,
+        fog: true,
         transparent: true,
         depthWrite: false,
         blending: glow ? AdditiveBlending : NormalBlending,

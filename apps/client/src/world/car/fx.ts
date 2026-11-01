@@ -345,18 +345,21 @@ export class RoadPatches {
     // dst × mix(1, colour, alpha): darker where it lies, never brighter (premultiplied: three's MultiplyBlending)
     add(
       slush,
-      new MeshBasicMaterial({
-        color: 0x8f8a84,
-        map: slushTex(),
-        transparent: true,
-        premultipliedAlpha: true,
-        blending: MultiplyBlending,
-        depthWrite: false,
-        toneMapped: false,
-        fog: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -2,
-      }),
+      Object.assign(
+        new MeshBasicMaterial({
+          color: 0x8f8a84,
+          map: slushTex(),
+          transparent: true,
+          premultipliedAlpha: true,
+          blending: MultiplyBlending,
+          depthWrite: false,
+          toneMapped: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+        }),
+        // (fogged to white: gone in it, never darker — fog3d.ts)
+        { defines: { MF_WHITE: "" } },
+      ),
     );
     const iceMat = new MeshStandardMaterial({
       color: 0x1b2128,

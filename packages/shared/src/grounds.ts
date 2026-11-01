@@ -1833,6 +1833,11 @@ export function groundsChunk(cx: number, cz: number): GroundsChunk {
   chunks.set(k, c);
   return c;
 }
+/** Whether the land at (x, z) is made already (its chunk): reading it then costs nothing — the
+ *  fog's banks wait for it rather than make it (a chunk by the river is 30–50 ms: fog-banks.ts). */
+export function landReady(x: number, z: number): boolean {
+  return chunks.has(chunkKey(Math.floor(x / CHUNK), Math.floor(z / CHUNK)));
+}
 /** The Kart Park's layout to race (docs/plan/47-the-track-changer.md): what's asphalt there
  *  follows it, and the bridge (there for a layout over it: its deck walked, its guard strips not),
  *  so the park's chunks are dropped, to be made again. True if it changed. */

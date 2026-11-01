@@ -155,11 +155,20 @@ export class GroundsLife {
     land: boolean,
     night: number,
     storm: number,
+    fog = 0,
   ) {
     const x = me.x + (map.ox ?? 0);
     const z = me.y + (map.oy ?? 0);
     const inside = this.G.INSIDES.some((i) => x >= i.b.x0 && x < i.b.x1 && z >= i.b.z0 && z < i.b.z1);
-    this.sound.update(dt, { x, z, land: land && !inside, inside: inside || !land, night, storm: Math.max(0, storm) });
+    this.sound.update(dt, {
+      x,
+      z,
+      land: land && !inside,
+      inside: inside || !land,
+      night,
+      storm: Math.max(0, storm),
+      fog,
+    });
   }
 
   // the storm as I feel it: the server's (it ramps it itself, a second at a
