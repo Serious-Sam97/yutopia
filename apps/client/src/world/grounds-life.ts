@@ -1,12 +1,13 @@
 "use client";
 
 import { floorOf, GROUND_OFFSET, type MapDef, parseAvatar } from "@yutopia/shared";
+import type { Footing } from "@yutopia/shared/footing";
 import type * as GroundsModule from "@yutopia/shared/grounds";
+import type { GroundWhat } from "@yutopia/shared/shapes/grounds";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import { Footprints } from "./footprints";
 import { GroundsSound } from "./grounds-sound";
 import type { AvatarState } from "./model";
-import type { Floor } from "./sound";
 
 // Life on the Grounds, the client's side (docs/plan/27-the-grounds.md, phase
 // 6; the server drives it: world-server features/grounds-life.ts): the
@@ -132,10 +133,18 @@ export class GroundsLife {
     this.prints.step(id, st.x, st.y, ground, now);
   }
 
-  /** What's underfoot out there (a footstep's sound). */
-  floorAt(x: number, y: number, map: MapDef): Floor {
-    const s = this.G.groundSurfaceAt(x + (map.ox ?? 0), y + (map.oy ?? 0));
-    return s === "walk" || s === "rock" ? "concrete" : s === "floor" ? "wood" : s;
+  /** What's underfoot out there (the steps', docs/plan/63-the-steps.md): the ground, a town
+   *  building's floor, a road's slush and black ice — and its snow in a storm, the cold and the cover
+   *  as the cars have them (car/cars.ts; not the ploughs' cells). `under`: on the land itself, under
+   *  a bridge. */
+  footingAt(x: number, y: number, map: MapDef, night: number, storm: number, under = false): Footing {
+    const cold = Math.min(1, 0.35 + 0.5 * night + 0.3 * storm);
+    const cover = Math.max(0, storm - 0.2) * 0.9;
+    return this.G.footingAt(x + (map.ox ?? 0), y + (map.oy ?? 0), cold, cover, under);
+  }
+  /** A Grounds' thing stood on at (x, y) (a roof, a porch, a bridge's deck — by its way there). */
+  thingFooting(what: GroundWhat, x: number, y: number, map: MapDef, night: number, storm: number): Footing {
+    return this.G.whatFooting(what, () => this.footingAt(x, y, map, night, storm));
   }
 
   /** The Grounds' sound round me (`me` the floor's coords; `land` out on it). */

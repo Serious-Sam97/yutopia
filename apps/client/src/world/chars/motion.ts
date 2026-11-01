@@ -633,7 +633,8 @@ export class Motion3 {
   private phoneWhat = "";
   private seated: boolean | null = null;
   private settleT = 1;
-  private loco: Locomotion | null = null;
+  /** (its feet's steps: loco.lock.down, docs/plan/63) */
+  loco: Locomotion | null = null;
   /** plan 58's animations (phase 0: beside the old till signed off), the mood (0 day … 1 dark) */
   v2 = false;
   tension = 0;

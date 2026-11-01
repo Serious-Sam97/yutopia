@@ -3,13 +3,12 @@ import {
   BUILDINGS,
   CHUNK,
   carBlockedTile,
-  deckAt,
   FORECOURT,
-  fbm,
   GROUNDS,
   heightAt,
   LAMPS,
   MOTORS,
+  patchAt,
   surfaceTileAt,
   treesIn,
 } from "../grounds.ts";
@@ -23,17 +22,6 @@ import type { CarSpec } from "./specs.ts";
 // black ice), and the solids round a point: trunks, lamp posts, buildings, the
 // fence and the edge of the world, the parked cars in town. Plus a test pad
 // (the sandbox's and the tests'): a strip of every surface, a skid pan, a hill.
-
-/** A road's patches (on asphalt): slush in places; black ice on the bridges and, colder,
- *  in the shaded hollows. The same everywhere — both views paint them from this. */
-export function patchAt(x: number, z: number, cold = 0.5): "slush" | "blackice" | null {
-  const n = fbm(x / 11, z / 11, 2, 77);
-  // (a bridge freezes first: patches of black ice on its deck, not the whole of it)
-  if (deckAt(x, z) !== null && cold > 0.35) return fbm(x / 6, z / 6, 1, 78) > 0.35 ? "blackice" : null;
-  if (cold > 0.6 && fbm(x / 23, z / 23, 2, 79) > 0.55) return "blackice";
-  if (n > 0.42) return "slush";
-  return null;
-}
 
 /** The Grounds' surface for a car: its surface, the roads' patches. */
 export function groundAt(x: number, z: number, cold = 0.5): Ground {

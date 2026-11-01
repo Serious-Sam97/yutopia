@@ -1,0 +1,171 @@
+{
+  "wood": [
+    {
+      "id": "208104",
+      "user": "Phil25",
+      "title": "Wood Steps",
+      "files": ["wood-1.mp3", "wood-2.mp3", "wood-3.mp3", "wood-4.mp3", "wood-5.mp3", "wood-6.mp3"],
+      "url": "https://freesound.org/people/Phil25/sounds/208104/"
+    }
+  ],
+  "hollow": [
+    {
+      "id": "459970",
+      "user": "florianreichelt",
+      "title": "Footsteps on hollow wood",
+      "files": ["hollow-1.mp3", "hollow-2.mp3", "hollow-3.mp3", "hollow-4.mp3", "hollow-5.mp3", "hollow-6.mp3"],
+      "url": "https://freesound.org/people/florianreichelt/sounds/459970/"
+    }
+  ],
+  "carpet": [
+    {
+      "id": "509534",
+      "user": "MindlessTrails",
+      "title": "FootstepsCarpet.wav",
+      "files": ["carpet-1.mp3", "carpet-2.mp3", "carpet-3.mp3", "carpet-4.mp3", "carpet-5.mp3", "carpet-6.mp3"],
+      "url": "https://freesound.org/people/MindlessTrails/sounds/509534/"
+    }
+  ],
+  "tile": [
+    {
+      "id": "50725",
+      "user": "RutgerMuller",
+      "title": "Footsteps on Tiles.wav",
+      "files": ["tile-1.mp3", "tile-2.mp3", "tile-3.mp3", "tile-4.mp3", "tile-5.mp3", "tile-6.mp3"],
+      "url": "https://freesound.org/people/RutgerMuller/sounds/50725/"
+    }
+  ],
+  "concrete": [
+    {
+      "id": "459964",
+      "user": "florianreichelt",
+      "title": "Footsteps on concrete",
+      "files": [
+        "concrete-1.mp3",
+        "concrete-2.mp3",
+        "concrete-3.mp3",
+        "concrete-4.mp3",
+        "concrete-5.mp3",
+        "concrete-6.mp3"
+      ],
+      "url": "https://freesound.org/people/florianreichelt/sounds/459964/"
+    }
+  ],
+  "rock": [
+    {
+      "id": "208103",
+      "user": "Phil25",
+      "title": "Stone Steps",
+      "files": ["rock-1.mp3", "rock-2.mp3", "rock-3.mp3", "rock-4.mp3", "rock-5.mp3"],
+      "url": "https://freesound.org/people/Phil25/sounds/208103/"
+    }
+  ],
+  "asphalt": [
+    {
+      "id": "637556",
+      "user": "kyles",
+      "title": "footsteps shoes walk road asphalt hard.flac",
+      "files": ["asphalt-1.mp3", "asphalt-2.mp3", "asphalt-3.mp3", "asphalt-4.mp3", "asphalt-5.mp3", "asphalt-6.mp3"],
+      "url": "https://freesound.org/people/kyles/sounds/637556/"
+    }
+  ],
+  "grate": [
+    {
+      "id": "809440",
+      "user": "SoundsofTheMachine",
+      "title": "Walking_and_running_on_a_steel_floor (sound samples)",
+      "files": ["grate-1.mp3", "grate-2.mp3", "grate-3.mp3", "grate-4.mp3", "grate-5.mp3", "grate-6.mp3"],
+      "url": "https://freesound.org/people/SoundsofTheMachine/sounds/809440/"
+    }
+  ],
+  "sheet": [
+    {
+      "id": "834029",
+      "user": "IENBA",
+      "title": "Footsteps On Metal",
+      "files": ["sheet-1.mp3", "sheet-2.mp3", "sheet-3.mp3", "sheet-4.mp3", "sheet-5.mp3", "sheet-6.mp3"],
+      "url": "https://freesound.org/people/IENBA/sounds/834029/"
+    }
+  ],
+  "earth": [
+    {
+      "id": "353799",
+      "user": "monte32",
+      "title": "Footsteps_6_Dirt_shoe.wav",
+      "files": ["earth-1.mp3", "earth-2.mp3", "earth-3.mp3", "earth-4.mp3", "earth-5.mp3", "earth-6.mp3"],
+      "url": "https://freesound.org/people/monte32/sounds/353799/"
+    }
+  ],
+  "felt": [
+    {
+      "id": "148466",
+      "user": "conleec",
+      "title": "FOLEY_Footsteps_Carpet_001.wav",
+      "files": ["felt-1.mp3", "felt-2.mp3", "felt-3.mp3", "felt-4.mp3", "felt-5.mp3", "felt-6.mp3"],
+      "url": "https://freesound.org/people/conleec/sounds/148466/"
+    }
+  ],
+  "snow": [
+    {
+      "id": "559459",
+      "user": "mshahen",
+      "title": "Footsteps or Walking in Hard Crunchy Snow",
+      "files": ["snow-1.mp3", "snow-2.mp3", "snow-3.mp3", "snow-4.mp3", "snow-5.mp3", "snow-6.mp3"],
+      "url": "https://freesound.org/people/mshahen/sounds/559459/"
+    }
+  ],
+  "deep": [
+    {
+      "id": "oga-corsica-shoes",
+      "user": "Corsica_S",
+      "title": "Snow shoe steps (41, via qubodup)",
+      "url": "https://opengameart.org/content/41-snow-shoe-steps",
+      "files": [
+        "deep-1.mp3",
+        "deep-2.mp3",
+        "deep-3.mp3",
+        "deep-4.mp3",
+        "deep-5.mp3",
+        "deep-6.mp3",
+        "deep-7.mp3",
+        "deep-8.mp3"
+      ]
+    }
+  ],
+  "packed": [
+    {
+      "id": "oga-corsica-walk",
+      "user": "Corsica_S",
+      "title": "Walking in snow (42 steps, via qubodup)",
+      "url": "https://opengameart.org/content/42-snow-and-gravel-footsteps",
+      "files": [
+        "packed-1.mp3",
+        "packed-2.mp3",
+        "packed-3.mp3",
+        "packed-4.mp3",
+        "packed-5.mp3",
+        "packed-6.mp3",
+        "packed-7.mp3",
+        "packed-8.mp3"
+      ]
+    }
+  ],
+  "ice": [
+    {
+      "id": "447822",
+      "user": "courter",
+      "title": "Walking on Crunchy Ice (01/30/2014)",
+      "files": ["ice-1.mp3", "ice-2.mp3", "ice-3.mp3", "ice-4.mp3", "ice-5.mp3", "ice-6.mp3"],
+      "url": "https://freesound.org/people/courter/sounds/447822/"
+    }
+  ],
+  "slush": [
+    {
+      "id": "611278",
+      "user": "xkeril",
+      "title": "Footsteps on slush",
+      "files": ["slush-1.mp3", "slush-2.mp3", "slush-3.mp3", "slush-4.mp3", "slush-5.mp3", "slush-6.mp3"],
+      "url": "https://freesound.org/people/xkeril/sounds/611278/"
+    }
+  ]
+}

@@ -175,6 +175,8 @@ interface Owned {
 
 export class PhysicsWorld {
   private readonly statics = new Map<string, Owned>();
+  /** a static's or a vehicle's key by its body (what's stood on: underKey) */
+  private readonly named = new Map<number, string>();
   private readonly things = new Map<number, Owned>();
   private readonly vehicles = new Map<string, Owned & { box: SolidBox3 }>();
   private readonly chars = new Map<number, Jolt.CharacterVirtual>();
@@ -385,7 +387,7 @@ export class PhysicsWorld {
     }
     const shape = this.shape(cs);
     if (!shape) return false;
-    this.statics.set(key, this.make(this.settings(shape, ox, oy, oz, 0, J.EMotionType_Static, LAYER[layer]), false));
+    this.keep(key, this.make(this.settings(shape, ox, oy, oz, 0, J.EMotionType_Static, LAYER[layer]), false));
     shape.Release();
     return true;
   }
@@ -411,15 +413,20 @@ export class PhysicsWorld {
       for (let i = 0; i < n; i++) out[j * n + i] = i < land.n && j < land.n ? land.h[j * land.n + i] : hole;
     const shape = this.shape(hs);
     if (!shape) return false;
-    this.statics.set(key, this.make(this.settings(shape, 0, 0, 0, 0, J.EMotionType_Static, LAYER.land), false));
+    this.keep(key, this.make(this.settings(shape, 0, 0, 0, 0, J.EMotionType_Static, LAYER.land), false));
     shape.Release();
     return true;
+  }
+  private keep(key: string, o: Owned): void {
+    this.statics.set(key, o);
+    this.named.set(o.id.GetIndexAndSequenceNumber(), key);
   }
 
   /** Statics gone (a key from setStatic or setLand). */
   remove(key: string): void {
     const o = this.statics.get(key);
     if (!o) return;
+    this.named.delete(o.id.GetIndexAndSequenceNumber());
     this.drop(o);
     this.statics.delete(key);
     // (a door's body made again has another id: who passes which made again too)
@@ -870,12 +877,14 @@ export class PhysicsWorld {
     const o = this.make(this.settings(shape, box.x, box.y, box.z, box.a, J.EMotionType_Kinematic, MOVING), false);
     shape.Release();
     this.vehicles.set(id, { ...o, box });
+    this.named.set(o.id.GetIndexAndSequenceNumber(), id);
     return true;
   }
 
   removeVehicle(id: string): void {
     const o = this.vehicles.get(id);
     if (!o) return;
+    this.named.delete(o.id.GetIndexAndSequenceNumber());
     this.drop(o);
     this.vehicles.delete(id);
   }
@@ -1130,6 +1139,13 @@ export class PhysicsWorld {
       .CastShape(cast, this.castSettings, this.r, this.castHit, m.bp, m.obj, this.passFilter(pass), this.shapeFilter);
     J.destroy(cast);
     return this.castHit.HadHit() ? top - this.castHit.mHit.mFraction * depth : null;
+  }
+
+  /** What the last groundUnder stood on: its static's key (setStatic's, setLand's) or its
+   *  vehicle's id — null if it hit nothing or something else (a body, a ragdoll). */
+  underKey(): string | null {
+    if (this.dead || !this.castHit.HadHit()) return null;
+    return this.named.get(this.castHit.mHit.mBodyID2.GetIndexAndSequenceNumber()) ?? null;
   }
 
   /** How many solids a sphere at (x, y, z) touches. */

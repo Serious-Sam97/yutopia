@@ -1247,6 +1247,35 @@ export function groundSolidsIn(cx: number, cz: number): GroundSolid[] {
   return out;
 }
 
+/** Chunk (cx, cz)'s thing whose top is at `top` under (x, z), r round, or null: what the feet stand
+ *  on there (Jolt's hit on the chunk's compound, `grounds:cx,cz`, doesn't say which of its things —
+ *  each is in the chunk of its middle, maybe not the feet's). */
+export function groundSolidAt(cx: number, cz: number, x: number, z: number, top: number, r = 0.25): GroundWhat | null {
+  let best: GroundWhat | null = null;
+  let d = 0.12;
+  for (const g of groundSolidsIn(cx, cz)) {
+    const s = g.s;
+    let t: number;
+    if (s.t === "cyl") {
+      if (Math.hypot(x - s.x, z - s.z) > s.r + r) continue;
+      t = s.y1;
+    } else {
+      // (into its own frame: Jolt turns it a about y)
+      const dx = x - s.x;
+      const dz = z - s.z;
+      const c = Math.cos(s.a);
+      const n = Math.sin(s.a);
+      if (Math.abs(dx * c - dz * n) > s.hx + r || Math.abs(dx * n + dz * c) > s.hz + r) continue;
+      t = s.y + s.hy;
+    }
+    if (Math.abs(t - top) < d) {
+      d = Math.abs(t - top);
+      best = g.what;
+    }
+  }
+  return best;
+}
+
 export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?: string }> = {
   fence: {
     label: "The company's fence",

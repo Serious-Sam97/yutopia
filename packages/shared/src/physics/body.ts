@@ -77,6 +77,22 @@ export class JoltCollider implements Collider {
     return g === Number.NEGATIVE_INFINITY ? -2 * STOREY : g - f.elev;
   }
 
+  /** What's under the feet at (x, y) from z down, as groundAt finds it: its top (`g`) and what it
+   *  is — "land", a static's key (`thing:id`, `grounds:cx,cz`, `slab:L:cx,cz`…) or a car's id; ""
+   *  where Jolt can't say (the land not built yet: the grid's). */
+  underfoot(x: number, y: number, z: number, r = BODY_R): { g: number; on: string } {
+    if (!this.ready(x, y)) return { g: this.grid.groundAt(x, y, z, r), on: "" };
+    const f = this.frame;
+    const X = f.ox + x;
+    const Z = f.oy + y;
+    const top = f.elev + z + STEP;
+    const land = this.world.rayHit(X, top, Z, 0, -1, 0, DEEP, "land");
+    const on = this.world.groundUnder(X, top, Z, r, DEEP, "tops", this.through.pass);
+    const l = land === null ? Number.NEGATIVE_INFINITY : top - land;
+    if (on === null || l >= on) return { g: l === Number.NEGATIVE_INFINITY ? -2 * STOREY : l - f.elev, on: "land" };
+    return { g: on - f.elev, on: this.world.underKey() ?? "" };
+  }
+
   clear(a: { x: number; y: number }, b: { x: number; y: number }, r = BODY_R, z = 0): boolean {
     const d = Math.hypot(b.x - a.x, b.y - a.y);
     const steps = Math.max(1, Math.ceil(d / 0.1));

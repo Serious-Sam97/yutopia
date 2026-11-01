@@ -7,6 +7,7 @@ import {
   CharacterMover,
   type Frame,
   GroundsFlow,
+  groundsThingAt,
   JoltCollider,
   loadJolt,
   PhysicsWorld,
@@ -187,6 +188,17 @@ export class BrowserPhysics {
    *  land and its floor: up on a roof it'd say the land below). */
   groundUnder(grid: Grid, level: number, x: number, y: number, z: number): number {
     return new JoltCollider(this.world, grid, this.src.frameOf(level)).groundAt(x, y, z);
+  }
+
+  /** What's under (x, y) from z down on `level`, as groundUnder finds it, and what it is (the steps':
+   *  docs/plan/63-the-steps.md) — "land", Jolt's key for it (`thing:id`, `slab:L:…`, `car:id`…), a
+   *  Grounds chunk's thing by its kind (`grounds:roof`); "" where Jolt can't say yet. */
+  underfoot(grid: Grid, level: number, x: number, y: number, z: number): { g: number; on: string } {
+    const f = this.src.frameOf(level);
+    const u = new JoltCollider(this.world, grid, f).underfoot(x, y, z);
+    if (!u.on.startsWith("grounds:")) return u;
+    const what = groundsThingAt(u.on, f.ox + x, f.oy + y, f.elev + u.g);
+    return { g: u.g, on: what ? `grounds:${what}` : "land" };
   }
 
   // ── the admins' view: every solid near me, as Jolt has it ──

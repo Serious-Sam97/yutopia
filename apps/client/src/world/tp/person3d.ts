@@ -81,6 +81,8 @@ export interface Seen {
   rag?: () => { world: PhysicsWorld; origin: () => { x: number; y: number; z: number } } | null;
   /** (plan 61) their joints swung on Jolt this frame: the springs leave them be */
   sway?: ReadonlySet<JointName>;
+  /** (plan 63) a foot of theirs put down, as it lands: a step heard */
+  step?: (id: string, side: "L" | "R") => void;
 }
 // (plan 58 is the world's: `?anim=old` puts the old animations back, to compare)
 const ANIM_OLD = typeof location !== "undefined" && new URLSearchParams(location.search).get("anim") === "old";
@@ -578,6 +580,14 @@ export class Person3D {
         },
       });
     this.motionOut = mo;
+    // the feet it put down this frame: the steps (docs/plan/63-the-steps.md) — each heard once, and
+    // only from a body stepped every frame (off screen it's caught up in jumps: the host's way-gone
+    // steps stand in)
+    const down = this.motion.loco?.lock?.down;
+    if (down?.length) {
+      if (!given && seen.onScreen) for (const S of down) seen.step?.(this.id, S);
+      down.length = 0;
+    }
     this.drawn = { verb: verb?.kind ?? "", jump: jump?.kind ?? "", flow: flow?.kind ?? "" };
     // one of the shadowed: its own arms, back and head over the walk
     let pose = mo.pose;

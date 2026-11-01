@@ -438,7 +438,8 @@ export class Locomotion {
     this.groundOut = { under: [feet[0].rest, feet[1].rest], drop: this.drop };
   }
 
-  private lock: InstanceType<Hero["FootLock"]> | null = null;
+  /** (its feet put down this frame — `down` — read by the 3D person for the steps: docs/plan/63) */
+  lock: InstanceType<Hero["FootLock"]> | null = null;
   private base: Record<"L" | "R", ReturnType<Hero["footOf"]>> | null = null;
   private gaze: InstanceType<Hero["Gaze"]> | null = null;
   /** plan 58 G.D: this frame's gaze — the eyes' morphs and a blink (null: none) */

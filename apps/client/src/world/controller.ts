@@ -12,11 +12,11 @@ import {
   doorOwner,
   EMOTES,
   entry,
-  FLOORS,
   findPath,
   floorAt,
   floorOf,
   floorsOf,
+  footprint,
   Grid,
   getMap,
   HEAR_RADIUS,
@@ -76,6 +76,7 @@ import {
   ZPX_TILE,
 } from "@yutopia/shared";
 import { COMPUTER_REACH, computerAway, isComputer } from "@yutopia/shared/computer";
+import { keyFooting, MATS, TILE_FOOTING } from "@yutopia/shared/footing";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
 import { type BattleEvent, type PetLook, type PetOutfit, type Species, toyAt } from "@yutopia/shared/pets";
@@ -109,6 +110,8 @@ import type { PetView } from "./petview";
 import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
 import { type Floor, radio, sound } from "./sound";
+import type { Ears, Footfalls, Shoe, StepGait, StepPlayer, Walker } from "./steps";
+import { loadSteps, steps } from "./steps-load";
 import { type ActTarget, type BattleView, hud, type Person, type PetInfo, toast } from "./store";
 import type { GameTables } from "./tables";
 import type { Body3, CamMode, ThirdPersonView } from "./tp/view";
@@ -194,6 +197,8 @@ const MENU_STEP: Record<string, number> = {
   KeyD: 1,
   ArrowRight: 1,
 };
+/** half a stride, by gait (tiles: plan 58's walk2/run2/crouch2Stride) — a step by the way gone */
+const HALF_STRIDE: Record<StepGait, number> = { walk: 0.62, crouch: 0.66, jog: 1.31, sprint: 1.77 };
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 
 // (a lot car out being driven: not where it was parked — docs/plan/28-the-car.md)
@@ -1548,6 +1553,8 @@ export class WorldController {
       else if (model.hasAvatar(`pet:${id}`)) model.removeAvatar(`pet:${id}`);
       if (tp) bodies.push({ ...st, id: `pet:${id}`, reduced, level: pet.floor ?? 0 });
     });
+    // their steps (docs/plan/63-the-steps.md, phase 3): everyone else's near me, as they land
+    if (bodies.length > 1) this.theirSteps(bodies, dt);
     this.watchActs();
     lap = perf.lap("logic", lap); // (doors, things, moving, the tables and screens, the people)
     if (tp) {
@@ -1772,6 +1779,7 @@ export class WorldController {
     if (out.presses.has("camera")) this.swapCamera();
     if (out.presses.has("torch")) this.toggleTorch();
     let moved = out.moved;
+    const went = Math.hypot(out.x - this.me.x, out.y - this.me.y);
     const turned = Math.abs(out.yaw - this.walkYaw) > 1e-4;
     this.walkYaw = out.yaw;
     this.me.x = out.x;
@@ -1822,15 +1830,17 @@ export class WorldController {
     const seat = hgt.up || hgt.z > 0 || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
     // (outdoors on the land: what's underfoot there — snow, the trail, the ice)
     const land = this.grid.onLand(this.me.x, this.me.y);
-    const floor = land
-      ? this.landFloor()
-      : (FLOORS[tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y)) as keyof typeof FLOORS] ?? "wood");
+    const floor = this.myFooting(hgt.z);
     this.life?.hear(dt, this.me, this.map, land && this.level === 0, this.model?.getDaylight().night ?? 0, this.storm);
-    // (on the stairs: a shoe on concrete treads, in the stairwell)
-    if (this.grid.onRamp(this.me.x, this.me.y)) {
-      stairStep(dt, moved, running);
-      sound.step(0, false, false, floor);
-    } else sound.step(dt, moved, running, floor);
+    // my steps (docs/plan/63-the-steps.md): never in the air, a verb or a move (their own sounds);
+    // on the stairs, a shoe on concrete treads in the stairwell, as it was
+    const ramp = this.grid.onRamp(this.me.x, this.me.y);
+    if (ramp) stairStep(dt, moved, running);
+    this.feet = {
+      ok: !ramp && !hgt.up && !out.verb && !out.flow && !this.jumpTrack.kind,
+      gait: out.gait === "crouch" || out.gait === "jog" || out.gait === "sprint" ? out.gait : "walk",
+    };
+    this.stepsBy(went, floor);
     if (moved) this.me.a = ANIM.walk;
     else if (seat) {
       this.me.a = ANIM.sit;
@@ -2869,9 +2879,6 @@ export class WorldController {
     const j = st.jump;
     if (!j) return;
     const hard = j.kind !== "hop" ? 1 : 0.6;
-    const floor = this.grid.onLand(st.x, st.y)
-      ? this.landFloor(st.x, st.y)
-      : (FLOORS[tileAt(this.map, Math.floor(st.x), Math.floor(st.y)) as keyof typeof FLOORS] ?? "wood");
     // (up on something the dust is on its top)
     const lift = (st.ground ?? 0) * ZPX_TILE;
     if (stage === "air" && was === "crouch") {
@@ -2879,7 +2886,7 @@ export class WorldController {
       if (near > 0) jumps()?.jumpSound(j.kind, near);
     } else if (stage === "land") {
       this.model?.puff(st.x, st.y, "land", lift, hard);
-      if (near > 0) jumps()?.landSound(j.kind, st.ground ? "wood" : floor, near);
+      if (near > 0) jumps()?.landSound(j.kind, this.footingAt(st.x, st.y, st.ground ?? 0), near);
     }
   }
 
@@ -3173,6 +3180,9 @@ export class WorldController {
       v.yaw = this.meAngle; // start behind me
       // (the camera takes the mouse only when nothing on screen wants the pointer)
       v.canLock = () => !this.pointerWanted();
+      // (the feet as the bodies put them down: the steps — mine, everyone else's near me)
+      v.onStep = (id, side) =>
+        id === this.room?.sessionId ? this.myStep(side) : this.footfalls?.body(id, side, performance.now());
       this.tp = v;
       this.tpHost = host;
       v.setHighlight(this.footprintOf(hud.get().prompt?.objectId));
@@ -3996,8 +4006,115 @@ export class WorldController {
     const g = this.grid.outside?.height(this.me.x, this.me.y);
     if (g !== undefined && this.height.z < g - 0.05) this.height = { z: g, vz: 0, up: false };
   }
-  private landFloor(x = this.me.x, y = this.me.y): Floor {
-    return this.life?.floorAt(x, y, this.map) ?? "asphalt";
+  /** What (x, y)'s feet are on at z, on my floor (docs/plan/63-the-steps.md): what Jolt says they
+   *  stand on — a car's roof, a desk, a porch, a bridge's deck — else the floor's tile (a rug on it)
+   *  or the land (under a bridge: the ice). */
+  footingAt(x: number, y: number, z: number): Floor {
+    const on = this.tp?.underfoot(this.grid, this.level, x, y, z)?.on ?? "";
+    const night = this.model?.getDaylight().night ?? 0;
+    const land = (under = false) => this.life?.footingAt(x, y, this.map, night, this.storm, under) ?? "asphalt";
+    const f = on
+      ? keyFooting(
+          on,
+          (id) => this.objs.get(id)?.kind,
+          (what) => this.life?.thingFooting(what, x, y, this.map, night, this.storm) ?? "snow",
+        )
+      : null;
+    if (f) return f;
+    if (this.grid.onLand(x, y)) return land(on === "land");
+    return this.matAt(x, y) ?? TILE_FOOTING[tileAt(this.map, Math.floor(x), Math.floor(y))] ?? "wood";
+  }
+  // my steps' state: may they be heard now, at what gait; where the body isn't stepping them, the
+  // way gone since the last
+  private feet: { ok: boolean; gait: StepGait } = { ok: false, gait: "walk" };
+  private stepped = { body: 0, way: 0, side: "R" as "L" | "R" };
+  private stepper: StepPlayer | null = null;
+  private shoe: { avatar: string; shoe: Shoe } = { avatar: "", shoe: "soft" };
+  /** A foot of mine put down (the body's: the 3D view's onStep), or by the way gone (`side` none). */
+  private myStep(side?: "L" | "R") {
+    if (!this.feet.ok) return;
+    if (side) this.stepped.body = performance.now();
+    this.stepped.way = 0;
+    this.stepped.side = side ?? (this.stepped.side === "L" ? "R" : "L");
+    const f = this.myFooting(this.height.z);
+    const S = steps();
+    if (!S) {
+      void loadSteps();
+      sound.stepSynth(f, this.feet.gait === "crouch" ? 0.22 : 0.7);
+      return;
+    }
+    const av = this.room?.state.players.get(this.room.sessionId)?.avatar ?? "";
+    if (av !== this.shoe.avatar) this.shoe = { avatar: av, shoe: S.shoeOf(parseAvatar(av).shoes) };
+    this.stepPlayer(S).step(f, { gait: this.feet.gait, shoe: this.shoe.shoe });
+  }
+  private stepPlayer(S: NonNullable<ReturnType<typeof steps>>): StepPlayer {
+    this.stepper ??= new S.StepPlayer(
+      () => (mixer.ctx?.state === "running" ? mixer.ctx : null),
+      () => mixer.buses.effects,
+      (g, gain) => sound.stepSynth(g, gain),
+    );
+    return this.stepper;
+  }
+  // everyone else's: the nearest few on my floor, as loud and where the voices' rule has them (a
+  // stairwell's other floor not: their feet aren't on mine), on what's under their feet
+  private footfalls: Footfalls | null = null;
+  private ears: Ears = {
+    me: "",
+    level: 0,
+    gain: (w) =>
+      hearingGain(
+        this.building,
+        { x: this.me.x, y: this.me.y, level: this.level },
+        { x: w.x, y: w.y, level: w.level ?? this.level },
+        true,
+      ),
+    pan: (w) => this.tp?.pan(this.me, w) ?? 0,
+    footing: (w) => this.footingAt(w.x, w.y, w.z ?? w.ground ?? 0),
+  };
+  private theirSteps(bodies: Walker[], dt: number) {
+    const S = steps();
+    if (!S) {
+      void loadSteps();
+      return;
+    }
+    this.footfalls ??= new S.Footfalls(this.stepPlayer(S));
+    this.ears.me = this.room?.sessionId ?? "";
+    this.ears.level = this.level;
+    this.footfalls.frame(bodies, this.ears, dt, performance.now());
+  }
+  // where the body isn't stepping (first person, `?anim=old`, reduced motion, before its chunk's
+  // in): a step every half a stride I go (plan 58's strides: tiles)
+  private stepsBy(went: number, f: Floor) {
+    this.stepper?.preload(f);
+    if (!this.feet.ok || went > 1.5) return;
+    this.stepped.way += went;
+    if (performance.now() - this.stepped.body < 700) return;
+    if (this.stepped.way >= HALF_STRIDE[this.feet.gait]) this.myStep();
+  }
+  // mine, looked again only when I've gone a little way (a step's worth) or up or down
+  private footing = { x: Number.NaN, y: Number.NaN, z: 0, level: -1, f: "wood" as Floor };
+  private myFooting(z: number): Floor {
+    const m = this.footing;
+    if (Math.hypot(this.me.x - m.x, this.me.y - m.y) < 0.2 && Math.abs(z - m.z) < 0.1 && m.level === this.level)
+      return m.f;
+    this.footing = { x: this.me.x, y: this.me.y, z, level: this.level, f: this.footingAt(this.me.x, this.me.y, z) };
+    return this.footing.f;
+  }
+  // the rugs and mats on my floor, by tile (made again when the things or my floor change)
+  private mats: { key: string; at: Map<number, Floor> } | null = null;
+  private matAt(x: number, y: number): Floor | undefined {
+    const key = `${this.objsRev}|${this.level}`;
+    if (this.mats?.key !== key) {
+      const at = new Map<number, Floor>();
+      for (const o of onLevel(this.objs.values(), this.map)) {
+        const m = MATS[o.kind];
+        if (!m) continue;
+        const { w, h } = footprint(o.kind, o.rot ?? 0);
+        for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) at.set((o.y + j) * 4096 + o.x + i, m);
+      }
+      this.mats = { key, at };
+    }
+    return this.mats.at.get(Math.floor(y) * 4096 + Math.floor(x));
   }
 
   /** The GPS (docs/plan/37-the-gps.md): where I am on the Grounds' coords (my

@@ -1,6 +1,7 @@
 import { lotLayout } from "@yutopia/shared";
-import { GRIP, type Ground, patchAt } from "@yutopia/shared/car";
+import { GRIP, type Ground } from "@yutopia/shared/car";
 import type * as GroundsModule from "@yutopia/shared/grounds";
+import { patchAt } from "@yutopia/shared/grounds";
 import {
   BufferAttribute,
   BufferGeometry,

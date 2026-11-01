@@ -2352,6 +2352,14 @@ void main() {
   groundUnder(grid: Grid, level: number, x: number, y: number, z: number): number {
     return this.physics?.groundUnder(grid, level, x, y, z) ?? grid.groundAt(x, y, z);
   }
+  /** Each body's feet as they're put down (docs/plan/63-the-steps.md): its id, which foot — set by
+   *  the controller (mine, everyone else's near). */
+  onStep: ((id: string, side: "L" | "R") => void) | undefined = undefined;
+  /** What's under (x, y) from z down on `level` and what it is, as Jolt has it (the steps'), or null
+   *  till the physics is in. */
+  underfoot(grid: Grid, level: number, x: number, y: number, z: number): { g: number; on: string } | null {
+    return this.physics?.underfoot(grid, level, x, y, z) ?? null;
+  }
   /** Every solid near you as Jolt holds it, drawn over the scene (the admins'): on, or off. */
   physicsDebug(on: boolean): void {
     this.physics?.showShapes(on);
@@ -2736,6 +2744,7 @@ void main() {
             groundAt: this.groundAt,
             rag: this.ragSpace,
             sway: this.sway?.skipOf(b.id),
+            step: this.onStep,
           },
         );
         // (plan 58 5d: down on the ragdoll — the physics stepped while anyone is; mine holds the walker)

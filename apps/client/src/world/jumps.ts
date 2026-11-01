@@ -85,17 +85,22 @@ export function landSound(kind: JumpKind, floor: Floor, gain = 1) {
   // the soles on the floor (as a footstep, louder and both feet at once)
   const spec: Record<Floor, [number, number]> = {
     wood: [900, 0.08],
+    hollow: [700, 0.08],
     carpet: [380, 0.1],
     tile: [2400, 0.05],
     felt: [320, 0.1],
-    stage: [700, 0.08],
     grate: [3200, 0.1],
+    sheet: [2600, 0.1],
     asphalt: [1500, 0.11],
     concrete: [1900, 0.06],
+    rock: [1700, 0.07],
+    earth: [600, 0.1],
     snow: [1600, 0.14],
     deep: [800, 0.2],
-    path: [2100, 0.1],
+    packed: [2100, 0.1],
+    slush: [1100, 0.14],
     ice: [3400, 0.04],
+    blackice: [3400, 0.04],
   };
   const [freq, len] = spec[floor];
   for (const dt of [0, 0.018]) {
@@ -104,7 +109,7 @@ export function landSound(kind: JumpKind, floor: Floor, gain = 1) {
     const bp = ctx.createBiquadFilter();
     bp.type = "bandpass";
     bp.frequency.value = freq * (0.85 + Math.random() * 0.3);
-    bp.Q.value = floor === "grate" ? 8 : 1.2;
+    bp.Q.value = floor === "grate" ? 8 : floor === "sheet" ? 5 : 1.2;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.16 * hard, at + dt);
     g.gain.exponentialRampToValueAtTime(0.0001, at + dt + len);

@@ -1,0 +1,162 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { FOOTINGS, keyFooting, kindFooting, MATS, TILE_FOOTING } from "./footing.ts";
+import { BUILDINGS, CHUNK, deckAt, footingAt, inBuilt, POND, WAYS, whatFooting } from "./grounds.ts";
+import { FLOORS } from "./map.ts";
+import { type GroundWhat, groundSolidAt, groundSolidsIn } from "./shapes/grounds.ts";
+
+// What the feet are on (docs/plan/63-the-steps.md, phase 1): every place a body stands, at its
+// height, gives one of the steps' surfaces.
+
+const way = (): "asphalt" => "asphalt";
+
+test("every floor tile has its footing; a rug and the standup mat are carpet over it", () => {
+  for (const ch of Object.keys(FLOORS)) assert.ok(FOOTINGS.includes(TILE_FOOTING[ch]), `tile ${ch}`);
+  assert.equal(TILE_FOOTING["~"], "hollow", "the stage's boards");
+  assert.equal(TILE_FOOTING[":"], "carpet", "the booths' felt");
+  assert.equal(MATS.rug, "carpet");
+  assert.equal(kindFooting("standup_mat"), "carpet");
+});
+
+test("what's stood on in the building, by Jolt's key", () => {
+  const kinds: Record<string, string> = { d1: "desk", a1: "arcade", p1: "pool_table", s1: "stairs", v1: "vending" };
+  const at = (on: string) =>
+    keyFooting(
+      on,
+      (id) => kinds[id],
+      (what) => whatFooting(what, way),
+    );
+  assert.equal(at("thing:d1"), "wood", "a desk's top");
+  assert.equal(at("thing:a1"), "sheet", "an arcade cabinet");
+  assert.equal(at("thing:p1"), "felt", "the pool table");
+  assert.equal(at("thing:s1"), "concrete", "the stairs' treads");
+  assert.equal(at("thing:v1"), "sheet", "the vending machine");
+  assert.equal(at("thing:gone"), "wood", "a thing not known (yet): wood");
+  assert.equal(at("car:c9"), "sheet", "a parked car's roof");
+  assert.equal(at("lift:l1"), "tile", "the lift car's stone floor");
+  assert.equal(at("roof:2:0,0"), "concrete", "the HQ's roof");
+  assert.equal(at("clutter:0:1,1"), "wood");
+  assert.equal(at("slab:0:0,0"), null, "a floor's slab: the floor's tile, the caller's");
+  assert.equal(at("land"), null, "the land: the caller's");
+  assert.equal(at("grounds:porch"), "hollow");
+});
+
+test("the Grounds' things stood on: roofs under their snow, porches, stands, the bridges by their way", () => {
+  assert.equal(whatFooting("roof", way), "snow");
+  assert.equal(whatFooting("porch", way), "hollow");
+  assert.equal(whatFooting("kart_stand", way), "hollow");
+  assert.equal(whatFooting("kart_bowl", way), "asphalt");
+  assert.equal(whatFooting("bench", way), "wood");
+  assert.equal(whatFooting("lamp_cobra", way), "sheet");
+  assert.equal(
+    whatFooting("bridge_deck", () => "packed"),
+    "hollow",
+    "the trail's timber footbridge",
+  );
+  assert.equal(
+    whatFooting("bridge_deck", () => "asphalt"),
+    "sheet",
+    "the road's steel bridge",
+  );
+  assert.equal(
+    whatFooting("bridge_deck", () => "blackice"),
+    "blackice",
+    "its black ice",
+  );
+});
+
+// a bridged way's middle sample
+function bridgeOf(kinds: string[]): [number, number] {
+  const w = WAYS.find((w) => kinds.includes(w.kind) && w.bridged.some(Boolean));
+  assert.ok(w, `a bridged ${kinds.join("/")}`);
+  const a = w.bridged.indexOf(true);
+  const b = w.bridged.lastIndexOf(true);
+  return w.line[Math.floor((a + b) / 2)];
+}
+// what's at (x, z) at `top`, in its chunk or one round it (a thing's in the chunk of its middle)
+function solidAt(x: number, z: number, top: number): GroundWhat | null {
+  const cx = Math.floor(x / CHUNK);
+  const cz = Math.floor(z / CHUNK);
+  for (let dz = -1; dz <= 1; dz++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const w = groundSolidAt(cx + dx, cz + dz, x, z, top);
+      if (w) return w;
+    }
+  return null;
+}
+
+test("out on the Grounds: the pond's ice, a road, a trail, the woods, a storm's snow on the road", () => {
+  assert.equal(footingAt(POND.cx, POND.cz), "ice");
+  const road = WAYS.find((w) => w.kind === "road" && !w.bridged.some(Boolean)) ?? WAYS.find((w) => w.kind === "road");
+  assert.ok(road);
+  const [rx, rz] = road.line[Math.floor(road.line.length / 2)];
+  assert.ok(["asphalt", "slush", "blackice"].includes(footingAt(rx, rz)), "a road: asphalt (or its patches)");
+  assert.equal(footingAt(rx, rz, 0.5, 0.6), "snow", "a road under a storm's snow");
+  const trail = WAYS.find((w) => w.kind === "trail");
+  assert.ok(trail);
+  const [tx, tz] = trail.line[2];
+  assert.equal(footingAt(tx, tz), "packed", "a trail's packed snow");
+  // the woods: deep snow somewhere off the ways
+  let deep = false;
+  for (let x = -380; x < 200 && !deep; x += 7)
+    for (let z = -340; z < 160 && !deep; z += 7) deep = footingAt(x, z) === "deep";
+  assert.ok(deep, "deep snow in the woods");
+});
+
+test("a bridge: its deck over the river by its way; on the ice under it, the ice", () => {
+  const [x, z] = bridgeOf(["road", "street", "driveway"]);
+  assert.ok(["asphalt", "slush", "blackice"].includes(footingAt(x, z)), "on the road's deck: the road");
+  assert.equal(footingAt(x, z, 0.5, 0, true), "ice", "on the river under it: ice, not the road over it");
+  const deck = deckAt(x, z);
+  assert.ok(deck !== null);
+  assert.equal(solidAt(x, z, deck), "bridge_deck", "Jolt's hit there is the deck");
+  assert.equal(
+    whatFooting("bridge_deck", () => footingAt(x, z, 0.5)),
+    "sheet",
+    "the road's steel",
+  );
+  const [fx, fz] = bridgeOf(["trail"]);
+  assert.equal(
+    whatFooting("bridge_deck", () => footingAt(fx, fz)),
+    "hollow",
+    "the trail's footbridge",
+  );
+  assert.notEqual(footingAt(fx, fz, 0.5, 0, true), "packed", "the ravine under it isn't the trail");
+});
+
+test("in the town's buildings, each its own floor", () => {
+  const want: Record<string, string> = {
+    barn: "earth",
+    bar: "wood",
+    diner: "tile",
+    hotel: "carpet",
+    gatehouse: "rock",
+  };
+  for (const [kind, f] of Object.entries(want)) {
+    const b = BUILDINGS.find((b) => b.kind === kind);
+    assert.ok(b, kind);
+    const x = (b.x0 + b.x1) / 2;
+    const z = (b.z0 + b.z1) / 2;
+    assert.ok(inBuilt(b, x, z), `${kind}: its middle is built`);
+    assert.equal(footingAt(x, z), f, kind);
+  }
+});
+
+test("a town roof stood on is the roof (under its snow), not the floor under it", () => {
+  const b = BUILDINGS.find((b) => b.kind === "bar");
+  assert.ok(b);
+  const cx = Math.floor((b.x0 + b.x1) / 2 / CHUNK);
+  const cz = Math.floor((b.z0 + b.z1) / 2 / CHUNK);
+  // (its topmost: a roof under it is the same snow, its walls' tops too)
+  let roof: { x: number; z: number; top: number } | null = null;
+  for (let dz = -1; dz <= 1; dz++)
+    for (let dx = -1; dx <= 1; dx++)
+      for (const g of groundSolidsIn(cx + dx, cz + dz))
+        if (g.what === "roof" && g.s.t === "box" && g.s.a === 0 && (!roof || g.s.y + g.s.hy > roof.top))
+          roof = { x: g.s.x, z: g.s.z, top: g.s.y + g.s.hy };
+  assert.ok(roof, "a roof near the bar");
+  const what = solidAt(roof.x, roof.z, roof.top);
+  assert.ok(what === "roof" || what === "building", `on the roof: ${what}`);
+  assert.equal(whatFooting(what, way), "snow");
+  assert.equal(solidAt(roof.x, roof.z, roof.top + 1.5), null, "1.5 m over it: nothing stood on");
+});

@@ -1,5 +1,6 @@
 "use client";
 
+import type { Footing } from "@yutopia/shared/footing";
 import { mixer } from "./audio";
 
 // All sound is synthesized — no asset files. Three parts:
@@ -10,20 +11,8 @@ import { mixer } from "./audio";
 //  · a procedural lo-fi radio, deterministic from (station, startedAt) so every
 //    client in the room plays the same bar at the same time.
 
-export type Floor =
-  | "wood"
-  | "carpet"
-  | "tile"
-  | "felt"
-  | "stage"
-  | "grate"
-  | "asphalt"
-  | "concrete"
-  // the Grounds (docs/plan/27): fresh snow, deep snow, a packed trail, the ice
-  | "snow"
-  | "deep"
-  | "path"
-  | "ice";
+/** What the feet are on (shared footing.ts, docs/plan/63-the-steps.md). */
+export type Floor = Footing;
 
 interface Tone {
   out: GainNode;
@@ -54,7 +43,6 @@ class Sound {
   private noise: AudioBuffer | null = null;
   private tone: Tone | null = null;
   private toneKey = "";
-  private stepT = 0;
 
   private ctx(): AudioContext | null {
     const c = mixer.ctx;
@@ -164,48 +152,49 @@ class Sound {
   }
 
   // ── footsteps ─────────────────────────────────────────────────────────────
-  step(dt: number, walking: boolean, running: boolean, floor: Floor) {
-    if (!walking) {
-      this.stepT = 0.15;
-      return;
-    }
-    this.stepT -= dt;
-    if (this.stepT > 0) return;
-    this.stepT = running ? 0.22 : 0.34;
+  /** One step on `floor`, synthesized: the steps' stand-in while a surface's recordings aren't in
+   *  (steps.ts, docs/plan/63-the-steps.md). `gain`: how loud (a walk's 0.7). */
+  stepSynth(floor: Floor, gain = 0.7) {
     const ctx = this.ctx();
-    if (!ctx) return;
+    if (!ctx || gain <= 0.01) return;
     const spec: Record<Floor, [number, number, number]> = {
       wood: [900, 0.09, 0.05],
+      hollow: [700, 0.1, 0.05],
       carpet: [380, 0.05, 0.07],
       tile: [2400, 0.07, 0.03],
       felt: [320, 0.04, 0.07],
-      stage: [700, 0.1, 0.05],
       grate: [3200, 0.08, 0.06],
+      sheet: [2600, 0.08, 0.06],
       // outdoors: slush on the lot crunches, the cleared path scuffs
       asphalt: [1500, 0.09, 0.09],
       concrete: [1900, 0.07, 0.04],
+      rock: [1700, 0.08, 0.05],
+      earth: [600, 0.07, 0.06],
       // the snow crunches (grains after the first), deep snow is a slower, softer sink
       snow: [1800, 0.08, 0.11],
       deep: [900, 0.1, 0.17],
-      path: [2300, 0.07, 0.07],
+      packed: [2300, 0.07, 0.07],
+      slush: [1200, 0.09, 0.1],
       ice: [3600, 0.045, 0.025],
+      blackice: [3600, 0.045, 0.025],
     };
-    const [freq, gain, len] = spec[floor];
+    const [freq, peak, len] = spec[floor];
+    const loud = (peak * gain) / 0.7;
     const b = ctx.createBufferSource();
     b.buffer = this.noiseBuffer(ctx);
     const bp = ctx.createBiquadFilter();
     bp.type = "bandpass";
     bp.frequency.value = freq * (0.9 + Math.random() * 0.2);
-    bp.Q.value = floor === "grate" ? 8 : 1.4;
+    bp.Q.value = floor === "grate" ? 8 : floor === "sheet" ? 5 : 1.4;
     const g = ctx.createGain();
     const at = ctx.currentTime;
-    g.gain.setValueAtTime(gain, at);
+    g.gain.setValueAtTime(loud, at);
     g.gain.exponentialRampToValueAtTime(0.0001, at + len);
     b.connect(bp).connect(g).connect(mixer.buses.effects);
     b.start(at, Math.random() * 1.5);
     b.stop(at + len + 0.02);
     // (the snow's crunch: its grains, the Grounds' sound — grounds-sound.ts)
-    if (floor === "snow" || floor === "deep" || floor === "path") this.onCrunch?.(ctx, at, len, gain);
+    if (floor === "snow" || floor === "deep" || floor === "packed") this.onCrunch?.(ctx, at, len, loud);
   }
 
   /** Set by the Grounds' sound: a snowy step's grains. */

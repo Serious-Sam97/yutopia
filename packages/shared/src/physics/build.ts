@@ -24,7 +24,7 @@ import { elevOf, floorsOf, levelMap, objLevel, offsetOf, onLevel, STOREY } from 
 import { liftDoorEdges, liftHere, liftWallEdges } from "../lift.ts";
 import { type Edge, hWall, isFloor, type MapDef, tileAt, vWall } from "../map.ts";
 import { doorLockable, edgeKey, isOpening, openingEdges, wallCuts } from "../openings.ts";
-import { type GroundSolid, groundSolidsIn } from "../shapes/grounds.ts";
+import { type GroundSolid, type GroundWhat, groundSolidAt, groundSolidsIn } from "../shapes/grounds.ts";
 import {
   blocksOf,
   box3,
@@ -271,6 +271,16 @@ function toStorey(s: Solid3): Solid3 {
 function edgeBox(e: Edge, y0: number, y1: number): Solid3 {
   const t = WALL_T / 2;
   return e.dir === "h" ? box3(e.x, e.y - t, e.x + 1, e.y + t, y0, y1) : box3(e.x - t, e.y, e.x + t, e.y + 1, y0, y1);
+}
+
+/** What's stood on at (x, z), `top` high, in a Grounds chunk's things (Jolt's key for them,
+ *  `grounds:cx,cz`: its compound doesn't say which): the thing's kind, or null. */
+export function groundsThingAt(key: string, x: number, z: number, top: number): GroundWhat | null {
+  const [cx, cz] = key
+    .slice(key.indexOf(":") + 1)
+    .split(",")
+    .map(Number);
+  return groundSolidAt(cx, cz, x, z, top);
 }
 
 /** How many statics a world of this building and these Grounds chunks holds (for its sizes). */

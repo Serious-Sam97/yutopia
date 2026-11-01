@@ -20,6 +20,7 @@
     "./pool-game": "./src/pool-game.ts",
     "./pool-throw": "./src/pool-throw.ts",
     "./phone": "./src/phone.ts",
+    "./footing": "./src/footing.ts",
     "./grounds": "./src/grounds.ts",
     "./grounds-edits": "./src/grounds-edits.ts",
     "./grounds-draft": "./src/grounds-draft.ts",

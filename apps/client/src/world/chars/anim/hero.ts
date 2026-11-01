@@ -1352,12 +1352,17 @@ interface Planted {
   going: boolean;
   /** in the air, how far it's drawn to the base's foot (eased from a release, never jumped) */
   air: number;
+  /** lifted since it was last put down (a step, not a foot slid and pinned again) */
+  up: boolean;
 }
 export class FootLock {
   private feet: Record<"L" | "R", Planted> = {
-    L: { at: null, on: "heel", w: 0, was: 0, going: false, air: 0 },
-    R: { at: null, on: "heel", w: 0, was: 0, going: false, air: 0 },
+    L: { at: null, on: "heel", w: 0, was: 0, going: false, air: 0, up: false },
+    R: { at: null, on: "heel", w: 0, was: 0, going: false, air: 0, up: false },
   };
+  /** the feet put down this frame after they'd been lifted: the steps heard (docs/plan/63-the-steps.md;
+   *  none out of the air, a verb or a move — their own sounds) */
+  down: ("L" | "R")[] = [];
   /** Pin the planted feet of `m` (posed, the model's space) — the body gone `ahead` and `left` (m),
    *  turned `yaw` (rad, + to its left) since the last frame. `base`: where the feet were before the
    *  layers leant and twisted the body (on the ground or not is told by it, and they're held there);
@@ -1374,6 +1379,7 @@ export class FootLock {
   ): Moved {
     const c = Math.cos(-move.yaw);
     const sn = Math.sin(-move.yaw);
+    this.down.length = 0;
     for (const S of ["L", "R"] as const) {
       const f = this.feet[S];
       if (off) {
@@ -1381,6 +1387,7 @@ export class FootLock {
         f.w = 0;
         f.going = false;
         f.air = 0;
+        f.up = false;
         continue;
       }
       // (a spot on the ground carried into this frame: back by what the body went, turned against its
@@ -1403,6 +1410,7 @@ export class FootLock {
       // still down), or rising fast
       const lands = low < 0.012 && Math.abs(vy) < 0.3;
       const lifted = low > 0.035 || vy > 0.9;
+      if (low > 0.035) f.up = true;
       // (which spot it stands on: the heel till the ball's the lower by 3 mm, and back the same)
       const on =
         f.on === "heel"
@@ -1421,6 +1429,8 @@ export class FootLock {
         f.at = [q[0], q[1], q[2]];
         f.on = on;
         f.going = false;
+        if (f.up) this.down.push(S);
+        f.up = false;
       }
       if (!f.at) {
         f.on = on;

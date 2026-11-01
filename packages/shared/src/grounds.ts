@@ -46,6 +46,7 @@ export {
   trackAt,
 } from "./kart/park.ts";
 
+import type { Footing } from "./footing.ts";
 import {
   type BuildingDef,
   decodeBytes,
@@ -59,6 +60,7 @@ import {
 } from "./grounds-edits.ts";
 import type { LotLayout } from "./lot.ts";
 import type { AreaDef, MapDef } from "./map.ts";
+import type { GroundWhat } from "./shapes/grounds.ts";
 
 // The Grounds (docs/plan/27-the-grounds.md): the land round the headquarters
 // made real — the campus, the woods inside the company's fence, the road out
@@ -1240,10 +1242,17 @@ export function groundAt(x: number, z: number): number {
   return terrainAt(x, z);
 }
 
-/** What the ground is at (x, z). `rough`: no rock (its slope needs the chunk underfoot: far off, don't). */
-export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
-  for (const bd of nearBuildings(x, z))
-    if (x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1) return inBuilt(bd, x, z) ? "floor" : "walk";
+/** The building whose plot (x, z) is on, or null. */
+export function builtAt(x: number, z: number): Building | null {
+  for (const bd of nearBuildings(x, z)) if (x >= bd.x0 && x < bd.x1 && z >= bd.z0 && z < bd.z1) return bd;
+  return null;
+}
+
+/** What the ground is at (x, z). `rough`: no rock (its slope needs the chunk underfoot: far off, don't).
+ *  `under`: on the land itself, under any bridge (its way's deck isn't the ground there). */
+export function groundSurfaceAt(x: number, z: number, rough = false, under = false): Surface {
+  const bd = builtAt(x, z);
+  if (bd) return inBuilt(bd, x, z) ? "floor" : "walk";
   if (paints.size) {
     const tx = Math.floor(x);
     const tz = Math.floor(z);
@@ -1261,6 +1270,7 @@ export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
   for (const [f, n] of near) {
     if (f >= WAYS.length) continue;
     const w = WAYS[f];
+    if (under && w.bridged[n.i]) continue;
     if (n.d < wayHalf(w, n.i)) {
       const s: Surface = w.kind === "trail" ? "path" : w.kind === "walk" ? "walk" : "asphalt";
       if (!on || s === "asphalt") on = s;
@@ -1276,6 +1286,107 @@ export function groundSurfaceAt(x: number, z: number, rough = false): Surface {
   if (r && r.d < RIVER.w / 2) return "ice";
   if (!rough && slopeAt(x, z) > 0.85) return "rock";
   return treeDensity(x, z) > 0.3 ? "deep" : "snow";
+}
+
+// ── what the feet are on (docs/plan/63-the-steps.md; the page's side: footing.ts) ──
+/** The Grounds' surfaces as the feet have them (a building's floor: by the building). */
+export const SURFACE_FOOTING: Record<Exclude<Surface, "floor">, Footing> = {
+  snow: "snow",
+  deep: "deep",
+  path: "packed",
+  asphalt: "asphalt",
+  walk: "concrete",
+  ice: "ice",
+  rock: "rock",
+};
+
+/** Inside a town's building, its floor (insideOf's colours: the bar's dark boards, the
+ *  diner's lino, the barn's earth, the gatehouse's stone). */
+const BUILT: Partial<Record<BuildingKind, Footing>> = {
+  bar: "wood",
+  house: "wood",
+  farmhouse: "wood",
+  church: "wood",
+  hotel: "carpet",
+  boathouse: "hollow",
+  shed: "hollow",
+  barn: "earth",
+  gatehouse: "rock",
+  shelter: "concrete",
+  silo: "concrete",
+  block: "concrete",
+};
+export const builtFooting = (kind: BuildingKind | undefined): Footing => (kind && BUILT[kind]) ?? "tile";
+
+/** A Grounds' thing stood on (shapes/grounds.ts): the roofs under their snow, the porches' boards,
+ *  the stands' planks, metal posts and kit. A bridge's deck: by its way (the trail's footbridge
+ *  timber, the road's steel) — `way`, the land's footing there. */
+export function whatFooting(what: GroundWhat, way: () => Footing): Footing {
+  switch (what) {
+    case "roof":
+    case "building":
+    case "motors":
+    case "tower":
+      return "snow";
+    case "porch":
+    case "kart_stand":
+      return "hollow";
+    case "fence":
+    case "porch_rail":
+    case "bench":
+    case "fit":
+    case "scarecrow":
+    case "kart_desk":
+    case "tree_pine":
+    case "tree_birch":
+    case "tree_bare":
+      return "wood";
+    case "pavement":
+    case "forecourt":
+    case "building_wall":
+    case "kart_island":
+    case "kart_tower":
+    case "pk_wall":
+      return "concrete";
+    case "statue":
+    case "edge":
+      return "rock";
+    case "kart_bowl":
+    case "kart_bridge":
+      return "asphalt";
+    case "bridge_deck": {
+      const w = way();
+      return w === "packed" || w === "snow" ? "hollow" : w === "blackice" ? w : "sheet";
+    }
+    default:
+      return "sheet";
+  }
+}
+
+/** A road's patches (on asphalt): slush in places; black ice on the bridges and, colder,
+ *  in the shaded hollows. The same everywhere — both views paint them from this, the cars drive on
+ *  them (car/world.ts), the feet step on them. */
+export function patchAt(x: number, z: number, cold = 0.5): "slush" | "blackice" | null {
+  const n = fbm(x / 11, z / 11, 2, 77);
+  // (a bridge freezes first: patches of black ice on its deck, not the whole of it)
+  if (deckAt(x, z) !== null && cold > 0.35) return fbm(x / 6, z / 6, 1, 78) > 0.35 ? "blackice" : null;
+  if (cold > 0.6 && fbm(x / 23, z / 23, 2, 79) > 0.55) return "blackice";
+  if (n > 0.42) return "slush";
+  return null;
+}
+
+/** What the feet are on out here (docs/plan/63-the-steps.md): the ground's surface, a town
+ *  building's floor, a road's slush and black ice, its snow in a storm (`cold`, `cover` as the cars
+ *  have them). `under`: on the land itself, under any bridge. */
+export function footingAt(x: number, z: number, cold = 0.5, cover = 0, under = false): Footing {
+  const s = groundSurfaceAt(x, z, false, under);
+  if (s === "floor") return builtFooting(builtAt(x, z)?.kind);
+  if (s === "asphalt") {
+    if (cover > 0.35) return "snow";
+    const p = patchAt(x, z, cold);
+    if (p) return p;
+  }
+  return SURFACE_FOOTING[s];
 }
 
 /** Inside the company's fence. */

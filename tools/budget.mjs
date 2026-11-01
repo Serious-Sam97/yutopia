@@ -63,6 +63,7 @@ const LAZY = {
   "yutopia-life": 15, // plan 58 phase 9's: the cold, the breath caught, who she is, a sound's turn (loaded with the hero's)
   "yutopia-sway": 10, // plan 61's: what's worn swinging on Jolt — the bags, the hair, the scarf, the tie, the badge, earrings (loaded with the 3D view's physics)
   "yutopia-jumps": 10, // a jump's dust and sounds (shared/jump.ts)
+  "yutopia-steps": 10, // the steps' player (docs/plan/63-the-steps.md): the recordings by surface, shoe and gait
   "yutopia-dark": 80, // the dark: vitals, pockets, loot on the client (docs/plan/30-the-dark.md)
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every
   // chunk that uses it — its own, the 3D view's, the dev mock pages' (~6 KB each), and the marker counts those
