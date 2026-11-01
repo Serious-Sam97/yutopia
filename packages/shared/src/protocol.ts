@@ -477,6 +477,8 @@ export interface ServerMessages {
   "kart:hit": { by: string; item: string; smash: boolean };
   "kart:boost": { secs: number; top?: number };
   "kart:no": { why: string };
+  // out of my kart (before the snap to the desk: the state saying so comes after it)
+  "kart:out": Record<string, never>;
   "spot:no": { why: string };
   "car:bought": { id: string };
   // someone's car keys lent to me, or back with them (why: "taken", "home", "day")

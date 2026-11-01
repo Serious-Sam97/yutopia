@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
+import { heightAt } from "@yutopia/shared/grounds";
 import {
   createKart,
   KART_DESK,
@@ -113,8 +114,20 @@ test("a kart at the desk, free laps counted, given back", async () => {
   // where I am: in my seat, in the kart
   // (a tick behind its last report, at most)
   assert.ok(Math.hypot(me(a).x + OFF.x - slot().x, me(a).y + OFF.y - slot().z) < 3);
+  // given back: told I'm out, then put by the desk on the land (not under it, at 0)
+  const got: string[] = [];
+  const to: { at?: { x: number; y: number; z?: number } } = {};
+  a.onMessage("kart:out", () => got.push("out"));
+  a.onMessage("snap", (m) => {
+    got.push("snap");
+    to.at = m;
+  });
   a.send("kart:leave", {});
-  await waitFor(() => me(a).busy === "" && !park(a).karts.get(key));
+  await waitFor(() => me(a).busy === "" && !park(a).karts.get(key) && !!to.at);
+  assert.deepEqual(got, ["out", "snap"]);
+  const g = heightAt(KART_DESK.x + 2 * KART_DESK.face, KART_DESK.z + 1);
+  assert.ok(g > 0.5, `the desk's land is up (${g})`);
+  assert.ok(Math.abs((to.at?.z ?? 0) - g) < 0.05, `on the land by the desk (${to.at?.z}, the land ${g})`);
 });
 
 test("a teleport isn't believed: the kart's snapped back", async () => {

@@ -244,8 +244,14 @@ registerFeature((room: WorldRoom) => {
     const key = bySid.get(p.sid);
     if (key !== undefined) drop(key);
     if (p.busy.startsWith("drive:kart:")) p.busy = "";
-    if (client)
-      room.moveTo(client, p, { x: KART_DESK.x + 2 * KART_DESK.face - off.x, y: KART_DESK.z + 1 - off.y, level: 0 });
+    if (!client) return;
+    // (told first: its client lets go of the kart before the snap, not when the state comes)
+    room.send(client, "kart:out", {});
+    // on the land there, as a car's door puts you (not under it: z 0 is 2 m down at the desk)
+    const x = KART_DESK.x + 2 * KART_DESK.face - off.x;
+    const y = KART_DESK.z + 1 - off.y;
+    const g = room.gridFor(p.uid, 0);
+    room.moveTo(client, p, { x, y, level: 0 }, { z: g.onLand(x, y) ? g.groundAt(x, y, 0) : 0 });
   };
 
   room.on("kart:take", (client, m) => {

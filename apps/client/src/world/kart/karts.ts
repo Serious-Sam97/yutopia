@@ -171,6 +171,9 @@ export class Karts {
   private ink: Material | null = null;
   // mine
   private mine: string | null = null;
+  // the kart the server's told me I'm out of, till my busy says so too (else I'm carried back to
+  // it after the snap to the desk, at the desk's height: under the land there)
+  private gotOut: string | null = null;
   private sim: KartState | null = null;
   private spec: KartSpec = { ...KART };
   private prev = { x: 0, y: 0, z: 0, a: 0 };
@@ -215,6 +218,9 @@ export class Karts {
     if (room) {
       this.offs.push(
         room.onMessage("kart:snap", (m: S) => this.snap(m)),
+        room.onMessage("kart:out", () => {
+          this.gotOut = this.mine;
+        }),
         // my ping (the guns' own exchange): my items judged where I saw the others
         room.onMessage("arms:pong", (m: S) => {
           const rtt = performance.now() - Number(m.t);
@@ -577,7 +583,9 @@ export class Karts {
     // which is mine
     const mine = room.state.players.get(room.sessionId);
     const busy: string = mine?.busy ?? "";
-    const key = busy.startsWith("drive:kart:") ? busy.slice(11) : null;
+    const held = busy.startsWith("drive:kart:") ? busy.slice(11) : null;
+    if (held !== this.gotOut) this.gotOut = null;
+    const key = held !== null && held === this.gotOut ? null : held;
     if (key !== this.mine) {
       this.mine = key;
       if (!key) {
