@@ -3,7 +3,9 @@
 import { mixer } from "./audio";
 
 // All sound is synthesized — no asset files. Three parts:
-//  · room tone per area (soft tape hiss + hum, vinyl crackle in the lounge, fans in the server room)
+//  · room tone per area: quiet in a closed room — vinyl crackle in the lounge, fans in the server
+//    room (a tape hiss and a mains hum everywhere, always on, read as a fan or an open mic with
+//    the volume up: gone, 2026-11-01)
 //  · footsteps that change with the floor
 //  · a procedural lo-fi radio, deterministic from (station, startedAt) so every
 //    client in the room plays the same bar at the same time.
@@ -33,18 +35,19 @@ const TONES: Record<
   string,
   { hiss: number; hum: number; humHz: number; crackle?: boolean; fans?: boolean; drone?: boolean }
 > = {
-  tracking: { hiss: 0.012, hum: 0.006, humHz: 60 },
-  lobby: { hiss: 0.009, hum: 0.003, humHz: 50 },
-  lounge: { hiss: 0.01, hum: 0.004, humHz: 55, crackle: true },
-  "war-room": { hiss: 0.006, hum: 0.008, humHz: 48 },
-  hall: { hiss: 0.008, hum: 0.002, humHz: 60 },
-  booth: { hiss: 0.003, hum: 0.002, humHz: 40 },
-  "live-room": { hiss: 0.012, hum: 0.006, humHz: 50 },
-  stage: { hiss: 0.014, hum: 0.008, humHz: 50 },
+  tracking: { hiss: 0, hum: 0, humHz: 60 },
+  lobby: { hiss: 0, hum: 0, humHz: 50 },
+  lounge: { hiss: 0, hum: 0, humHz: 55, crackle: true },
+  "war-room": { hiss: 0, hum: 0, humHz: 48 },
+  hall: { hiss: 0, hum: 0, humHz: 60 },
+  booth: { hiss: 0, hum: 0, humHz: 40 },
+  "live-room": { hiss: 0, hum: 0, humHz: 50 },
+  stage: { hiss: 0, hum: 0, humHz: 50 },
+  // (its fans: the hiss is them)
   "server-room": { hiss: 0.02, hum: 0.012, humHz: 41, fans: true, drone: true },
-  standup: { hiss: 0.01, hum: 0.006, humHz: 60 },
-  // out on the Grounds: no hum (the wind is grounds-sound.ts's)
-  outdoors: { hiss: 0.003, hum: 0, humHz: 50 },
+  standup: { hiss: 0, hum: 0, humHz: 60 },
+  // out on the Grounds: the wind (grounds-sound.ts's)
+  outdoors: { hiss: 0, hum: 0, humHz: 50 },
 };
 
 class Sound {
@@ -94,24 +97,28 @@ class Sound {
     out.gain.value = 0;
     out.connect(mixer.buses.ambience);
     const nodes: AudioNode[] = [];
-    const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuffer(ctx);
-    src.loop = true;
-    const lp = ctx.createBiquadFilter();
-    lp.type = "lowpass";
-    lp.frequency.value = t.fans ? 2200 : 5200;
-    const hissG = ctx.createGain();
-    hissG.gain.value = t.hiss;
-    src.connect(lp).connect(hissG).connect(out);
-    src.start();
-    nodes.push(src);
-    const hum = ctx.createOscillator();
-    hum.frequency.value = t.humHz;
-    const humG = ctx.createGain();
-    humG.gain.value = t.hum;
-    hum.connect(humG).connect(out);
-    hum.start();
-    nodes.push(hum);
+    if (t.hiss) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuffer(ctx);
+      src.loop = true;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = t.fans ? 2200 : 5200;
+      const hissG = ctx.createGain();
+      hissG.gain.value = t.hiss;
+      src.connect(lp).connect(hissG).connect(out);
+      src.start();
+      nodes.push(src);
+    }
+    if (t.hum) {
+      const hum = ctx.createOscillator();
+      hum.frequency.value = t.humHz;
+      const humG = ctx.createGain();
+      humG.gain.value = t.hum;
+      hum.connect(humG).connect(out);
+      hum.start();
+      nodes.push(hum);
+    }
     if (t.drone) {
       for (const f of [t.humHz * 1.5, t.humHz * 1.505]) {
         const o = ctx.createOscillator();

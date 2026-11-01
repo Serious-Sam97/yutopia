@@ -6,7 +6,8 @@ import { sound } from "./sound";
 
 // The Grounds' sound (docs/plan/27-the-grounds.md, the mood), synthesized as
 // the rest is (sound.ts): the wind — stronger in the open, hushed in the woods,
-// a roar in a storm, muffled indoors —, a crow now and then by day, the lamps'
+// a roar in a storm; indoors only a storm's, muffled (a calm one heard through closed
+// windows read as a fan) —, a crow now and then by day, the lamps'
 // buzz under them after dark, the river's ice ticking, a dog far off in the
 // town at night, the bar's music through its door. Loaded with the Grounds.
 
@@ -84,7 +85,7 @@ export class GroundsSound {
     // gusts: two slow waves
     const gust = 0.6 + 0.25 * Math.sin(this.t * 0.37) + 0.15 * Math.sin(this.t * 1.13 + 1);
     const out = h.land ? 1 : h.inside ? 0.12 : 0.18;
-    const level = (0.03 + 0.05 * this.open + 0.22 * h.storm) * gust * out;
+    const level = ((h.land ? 0.03 + 0.05 * this.open : 0) + 0.22 * h.storm) * gust * out;
     this.wind.out.gain.setTargetAtTime(level, ctx.currentTime, 0.4);
     this.wind.bp.frequency.setTargetAtTime(
       (h.land ? 320 + 380 * gust + 500 * h.storm : 240) * (h.inside ? 0.5 : 1),
