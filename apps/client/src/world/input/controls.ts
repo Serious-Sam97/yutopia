@@ -25,7 +25,10 @@ export type Press =
   | "slot1"
   | "slot2"
   | "slot3"
-  | "slot4";
+  | "slot4"
+  // LB held and the d-pad's ↑ ↓: the one before / after in the prompt's stack (input/targets.ts)
+  | "focusPrev"
+  | "focusNext";
 const PRESSES: Extract<Press, Action>[] = [
   "use",
   "torch",
@@ -40,6 +43,8 @@ const PRESSES: Extract<Press, Action>[] = [
   "emotes",
 ];
 const LB = 4; // (the standard pad's left bumper: held, the face buttons are the quick slots)
+const DPAD_UP = 12;
+const DPAD_DOWN = 13;
 // the actions the world takes from the keys here (the rest are still its own keys)
 const WORLD: Action[] = [
   "up",
@@ -140,9 +145,10 @@ export class MoveControls {
     const p = this.pad;
     p.poll();
     if (!usePad) p.mute();
-    // (LB held: A B X Y are the quick slots, not their own actions)
+    // (LB held: A B X Y are the quick slots and the d-pad's ↑ ↓ go round the prompt's stack, not
+    // their own actions)
     const lb = p.held(LB);
-    const face = (i: number) => lb && i <= 3;
+    const face = (i: number) => lb && (i <= 3 || i === DPAD_UP || i === DPAD_DOWN);
     const padOn = (a: Action) => {
       const i = this.b.pad[a];
       return i !== undefined && !face(i) && p.held(i);
@@ -205,6 +211,8 @@ export class MoveControls {
     const presses = new Set<Press>();
     for (const a of PRESSES) if (hit(a)) presses.add(a);
     if (lb) for (let i = 0; i < 4; i++) if (p.pressed(i)) presses.add(`slot${i + 1}` as Press);
+    if (lb && p.pressed(DPAD_UP)) presses.add("focusPrev");
+    if (lb && p.pressed(DPAD_DOWN)) presses.add("focusNext");
     this.hits.clear();
     this.since.clear();
     return { move, presses };

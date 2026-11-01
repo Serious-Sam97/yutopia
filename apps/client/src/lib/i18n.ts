@@ -680,6 +680,8 @@ const D = {
   act_wave: ["Wave", "Acenar"],
   act_poke: ["Poke", "Cutucar"],
   holdMore: ["hold: more", "segure: mais"],
+  focusPrev: ["Previous in reach", "Anterior ao alcance"],
+  focusNext: ["Next in reach", "Próximo ao alcance"],
   lockOn: ["Focus", "Foco"],
   lockNext: ["← → next", "← → próximo"],
   lockNextPad: ["flick the stick: next", "analógico de lado: próximo"],

@@ -5,9 +5,20 @@ import { test } from "node:test";
 // of the slide — run on or jumped out of — you're up, not crouched (2026-10-30). The walker and
 // /dev/move call controls.stand() on the slide's start, as here.
 
+// (a pad plugged in, for the tests that want one: its buttons pressed by index)
+const pads: unknown[] = [];
+const padWith = (...down: number[]) => {
+  pads[0] = {
+    connected: true,
+    mapping: "standard",
+    timestamp: 1,
+    axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: down.includes(i), value: down.includes(i) ? 1 : 0 })),
+  };
+};
 Object.defineProperty(globalThis, "navigator", {
   configurable: true,
-  value: { platform: "MacIntel", getGamepads: () => [] },
+  value: { platform: "MacIntel", getGamepads: () => pads },
 });
 
 async function slide(hold: boolean, after: "run" | "jump") {
@@ -72,3 +83,25 @@ for (const hold of [false, true])
   for (const after of ["run", "jump"] as const)
     test(`a slide, then ${after === "run" ? "run on" : "jump out"} (crouch ${hold ? "held" : "a toggle"}): standing`, () =>
       slide(hold, after));
+
+// The prompt's stack on a pad: LB held, ↑ ↓ go round it — not the lantern and first aid they are
+// on their own.
+test("LB and the d-pad's ↑ ↓: the one before / after in reach, not the torch or first aid", async () => {
+  const { khBindings } = await import("./bindings");
+  const { MoveControls } = await import("./controls");
+  const c = new MoveControls({ ...khBindings(), pad: { ...khBindings().pad, torch: 12 } });
+  const frame = (...down: number[]) => {
+    padWith(...down);
+    return c.read(0).presses;
+  };
+  frame();
+  assert.deepEqual([...frame(12)], ["torch"], "↑ alone: the torch");
+  frame();
+  assert.deepEqual([...frame(13)], ["aid"], "↓ alone: first aid");
+  frame();
+  frame(4);
+  assert.deepEqual([...frame(4, 13)], ["focusNext"]);
+  frame(4);
+  assert.deepEqual([...frame(4, 12)], ["focusPrev"]);
+  pads.length = 0;
+});

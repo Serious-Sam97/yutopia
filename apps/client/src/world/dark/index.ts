@@ -43,6 +43,7 @@ const t = (key: string, vars: Record<string, string> = {}) =>
 const itemName = (id: ItemId) => t(`dark_item_${id}`);
 const TPX = 39.19; // iso px a tile up (the views' clientAt)
 const AMBER = "#e9a33a";
+const TAB_PEEK_MS = 250; // Tab held this long, with things in reach to go round: the pockets (the controller's TAB_TAP_MS)
 
 type Target =
   | { kind: "spot"; id: string; label: string; x: number; y: number; z: number }
@@ -152,6 +153,11 @@ class Dark implements DarkHooks {
   }
   private stripUntil = 0;
   private tab = false;
+  private tabWait: ReturnType<typeof setTimeout> | undefined;
+  private peek(on: boolean) {
+    this.tab = on;
+    this.render();
+  }
   private fresh = new Map<number, string>(); // slot → "+n", for the strip's moment after a pickup
   private target: Target | null = null;
   private search: { target: Target; at: number } | null = null;
@@ -274,8 +280,12 @@ class Dark implements DarkHooks {
       }
       if (e.code === "Tab") {
         e.preventDefault();
-        this.tab = true;
-        this.render();
+        if (e.repeat) return;
+        // (with more than one thing in reach a tap is the prompt's — the next of them: the pockets
+        // wait to see it held)
+        clearTimeout(this.tabWait);
+        if ((this.walker.targets?.list.length ?? 0) > 1) this.tabWait = setTimeout(() => this.peek(true), TAB_PEEK_MS);
+        else this.peek(true);
         return;
       }
       if (!e.repeat && actionOf(this.walker.controls.b, e.code) === "use" && this.use()) {
@@ -287,10 +297,11 @@ class Dark implements DarkHooks {
     const up = (e: KeyboardEvent) => {
       if (e.code === this.useKey) this.useKey = null;
       if (e.code !== "Tab") return;
-      this.tab = false;
-      this.render();
+      clearTimeout(this.tabWait);
+      this.peek(false);
     };
     const blur = () => {
+      clearTimeout(this.tabWait);
       this.tab = false;
       this.useKey = null;
     };

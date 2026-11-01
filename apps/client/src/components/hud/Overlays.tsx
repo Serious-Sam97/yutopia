@@ -12,8 +12,10 @@ import { useWorld } from "./ctx";
 
 // What's in reach (docs/plan/56-the-controls.md C): the focus at the bottom — its picture, its
 // name, the button and what it does, "hold: more" when it has a menu — and the others in reach
-// above it, smaller ([ ] or the pad's ↑ ↓ make one the focus). A car's door or the shuttle: on
-// its own, as before.
+// above it, smaller. With more than one in reach, either side of the focus how to go round them —
+// Tab (⇧Tab back; [ ] too), on a pad LB held and ↑ ↓ — clickable; a click on one above makes it
+// the focus. A car's door or
+// the shuttle: on its own, as before.
 export function Prompt() {
   const t = useTr();
   const w = useWorld();
@@ -64,18 +66,43 @@ export function Prompt() {
   }
   const items = targets.items;
   const focus = items[targets.at] ?? items[0];
+  const many = items.length > 1;
   const verb = (it: (typeof items)[number]) =>
     it.kind === "object" && it.act === "use"
       ? t(prompt?.kind === "notice" || prompt?.kind === "screen" ? "pressToOpen" : "pressToUse")
       : (trMaybe(`act_${it.act}`) ?? it.act);
+  const step = (by: 1 | -1) => (
+    <button
+      type="button"
+      onClick={() => w?.cycleFocus(by)}
+      title={t(by > 0 ? "focusNext" : "focusPrev")}
+      aria-label={t(by > 0 ? "focusNext" : "focusPrev")}
+      className="pointer-events-auto cabinet rounded-full h-9 px-1.5 grid place-items-center shrink-0 text-lg"
+      style={{ color: "var(--amber)", minWidth: 36 }}
+    >
+      {touch ? (
+        by > 0 ? (
+          "›"
+        ) : (
+          "‹"
+        )
+      ) : (
+        <kbd className="keycap" style={{ height: 22, minWidth: 22, fontSize: 11, opacity: 1, padding: "0 5px" }}>
+          {pad ? (by > 0 ? "LB ↓" : "LB ↑") : by > 0 ? "Tab" : "⇧Tab"}
+        </kbd>
+      )}
+    </button>
+  );
   return (
     <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[176px] sm:bottom-[112px] flex flex-col items-center gap-1.5 max-w-[calc(100vw-24px)]">
       {items
         .filter((it) => it !== focus)
         .map((it) => (
-          <div
+          <button
+            type="button"
             key={it.key}
-            className="cabinet rounded-full pl-1 pr-3 py-1 flex items-center gap-2"
+            onClick={() => w?.pickFocus(it.key)}
+            className="pointer-events-auto cabinet rounded-full pl-1 pr-3 py-1 flex items-center gap-2"
             style={{ transform: "scale(.86)", opacity: 0.72 }}
           >
             <Thumb objectId={it.objectId} kind={it.kind} />
@@ -83,26 +110,35 @@ export function Prompt() {
             <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
               · {verb(it)}
             </span>
-          </div>
+          </button>
         ))}
-      <button
-        type="button"
-        onClick={() => w?.interact()}
-        className="pointer-events-auto cabinet rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 rise"
-        data-focus={focus.key}
-      >
-        <Thumb objectId={focus.objectId} kind={focus.kind} />
-        <span className="text-sm truncate">{focus.label}</span>
-        {!touch && glyph}
-        <span className="text-sm whitespace-nowrap" style={{ color: "var(--amber)" }}>
-          {verb(focus)}
-        </span>
-        {!touch && focus.kind !== "toy" && focus.kind !== "npc" && (
-          <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
-            · {t("holdMore")}
+      <div className="flex items-center gap-2 max-w-full">
+        {many && step(-1)}
+        <button
+          type="button"
+          onClick={() => w?.interact()}
+          className="pointer-events-auto cabinet rounded-full pl-1.5 pr-4 py-1.5 flex items-center gap-2.5 rise min-w-0"
+          data-focus={focus.key}
+        >
+          <Thumb objectId={focus.objectId} kind={focus.kind} />
+          <span className="text-sm truncate">{focus.label}</span>
+          {!touch && glyph}
+          <span className="text-sm whitespace-nowrap" style={{ color: "var(--amber)" }}>
+            {verb(focus)}
           </span>
-        )}
-      </button>
+          {!touch && focus.kind !== "toy" && focus.kind !== "npc" && (
+            <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+              · {t("holdMore")}
+            </span>
+          )}
+          {many && (
+            <span className="mono text-[11px] whitespace-nowrap" style={{ color: "var(--muted)" }}>
+              · {items.indexOf(focus) + 1}/{items.length}
+            </span>
+          )}
+        </button>
+        {many && step(1)}
+      </div>
     </div>
   );
 }

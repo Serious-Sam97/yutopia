@@ -6,8 +6,8 @@ import type { ActTarget } from "../store";
 // The focus (docs/plan/56-the-controls.md C): what's in front of me I could act on — someone, a
 // pet, Vortex, a thing with something to do, a toy — instead of a click on it. Scored by how near
 // it is and how far off my facing and the camera's line it is; the one I had keeps it a little
-// longer (no flicker between two). The nearest few make the prompt's stack; [ ] or the pad's ↑ ↓
-// pick between them. Tap Use: its main action; hold: its menu.
+// longer (no flicker between two). The nearest few make the prompt's stack; Tab (⇧Tab back), [ ]
+// or LB held and the pad's ↑ ↓ pick between them. Tap Use: its main action; hold: its menu.
 
 export type TargetKind = "object" | "person" | "pet" | "npc" | "toy";
 
@@ -64,7 +64,7 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 export class Targets {
   /** in reach, best first (the first is the focus unless one's picked) */
   list: Target[] = [];
-  /** the one picked with [ ] / ↑ ↓ (its key), while it's in the list */
+  /** the one picked with Tab / [ ] / LB ↑ ↓ (its key), while it's in the list */
   private picked: string | null = null;
   private had: string | null = null;
 
@@ -83,6 +83,10 @@ export class Targets {
       this.list.findIndex((t) => t.key === this.focus?.key),
     );
     this.picked = this.list[(at + by + this.list.length) % this.list.length].key;
+  }
+  /** One in the stack, by its key, is the focus (a click on it in the prompt). */
+  pick(key: string): void {
+    if (this.list.some((t) => t.key === key)) this.picked = key;
   }
 
   /** Everyone and everything I could lock on to (docs/plan/56-the-controls.md E): what update()
@@ -117,7 +121,13 @@ export class Targets {
   update(): void {
     const out = this.gather(0, false);
     out.sort((a, b) => a.score - b.score);
-    this.list = out.slice(0, STACK);
+    const was = this.list.map((t) => t.key);
+    const list = out.slice(0, STACK);
+    // (picking through them: the stack keeps its order while it's the same few — re-sorted by the
+    // picked one's STICKY, ] went back and forth between two and never reached the third)
+    if (this.picked && list.length === was.length && list.every((t) => was.includes(t.key)))
+      list.sort((a, b) => was.indexOf(a.key) - was.indexOf(b.key));
+    this.list = list;
     if (this.picked && !this.list.some((t) => t.key === this.picked)) this.picked = null;
     this.had = this.focus?.key ?? null;
   }

@@ -72,6 +72,30 @@ test("the one I had holds on a little; [ ] cycles; out of reach it's gone", () =
   assert.equal(far.focus, null);
 });
 
+test("[ ] goes through all of the stack, in an order that holds", () => {
+  // (sat with a chair, a lamp and a cooler about: each in turn, then back to the first)
+  const t = new Targets(host({ players: { a: { x: 0.6, y: 0 }, b: { x: 1.2, y: 0.5 }, c: { x: 1.3, y: -0.6 } } }));
+  t.update();
+  const order = t.list.map((x) => x.key);
+  assert.equal(order.length, 3);
+  const seen = [t.focus?.key];
+  for (let i = 0; i < 3; i++) {
+    t.cycle(1);
+    t.update();
+    t.update();
+    seen.push(t.focus?.key);
+    assert.deepEqual(
+      t.list.map((x) => x.key),
+      order,
+      "the stack's order holds while picking",
+    );
+  }
+  assert.deepEqual(seen, [...order, order[0]]);
+  t.cycle(-1);
+  t.update();
+  assert.equal(t.focus?.key, order[2], "back the other way");
+});
+
 test("a pet by its floor (its `level` is how far it's come on), not on another floor", () => {
   const on = new Targets(host({ pets: { rex: { x: 1.2, y: 0, floor: 0, level: 5 } } }));
   on.update();

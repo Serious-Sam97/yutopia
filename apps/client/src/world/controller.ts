@@ -183,6 +183,7 @@ const LOCK_RANGE = 14;
 const LOCK_LOST_MS = 1500;
 /** Use held this long: the focus's menu, not its main action (ms; docs/plan/56-the-controls.md C) */
 const USE_HOLD = 350;
+const TAB_TAP_MS = 250; // Tab let go sooner: a tap, the next in reach (the dark's TAB_PEEK_MS)
 const MENU_STEP: Record<string, number> = {
   KeyW: -1,
   ArrowUp: -1,
@@ -1750,6 +1751,8 @@ export class WorldController {
     if (out.presses.has("use") && !this.use) this.use = { src: "pad", at: now, done: false };
     if (out.presses.has("recenter")) this.tp?.recenter();
     if (out.presses.has("lock")) this.toggleLock();
+    if (out.presses.has("focusPrev")) this.cycleFocus(-1);
+    if (out.presses.has("focusNext")) this.cycleFocus(1);
     this.holdFrame(now);
     // a menu open: the pad moves its choice, A does it, B closes it (the walker's off it meanwhile)
     if (hud.get().menu) {
@@ -2121,6 +2124,16 @@ export class WorldController {
     if (f.kind === "npc") return this.send("vortex:poke", {});
     if (f.kind === "toy") return this.pickToy(f.key.slice(4));
     if (f.menu) this.doAct(f.act, f.menu, f.label);
+  }
+  /** The next (1) or previous (-1) in the prompt's stack is the focus: [ ], the prompt's ‹ ›. */
+  cycleFocus(by: 1 | -1) {
+    this.walker?.targets?.cycle(by);
+    this.focusAt = 0;
+  }
+  /** One in the prompt's stack, clicked, is the focus. */
+  pickFocus(key: string) {
+    this.walker?.targets?.pick(key);
+    this.focusAt = 0;
   }
   /** Use, held: the focus's menu over it on screen, or mine with nothing in focus. */
   focusMenu() {
@@ -3790,11 +3803,17 @@ export class WorldController {
       e.preventDefault();
       return;
     }
-    // [ ] (a pad's ↑ ↓: the walker's): the next in the prompt's stack is the focus
+    // [ ] (LB and the pad's ↑ ↓: the walker's): the next in the prompt's stack is the focus
     if ((e.code === "BracketLeft" || e.code === "BracketRight") && this.walker?.targets?.list.length) {
-      this.walker.targets?.cycle(e.code === "BracketRight" ? 1 : -1);
-      this.focusAt = 0;
+      this.cycleFocus(e.code === "BracketRight" ? 1 : -1);
       e.preventDefault();
+      return;
+    }
+    // Tab tapped, the same (Shift+Tab: back), on its release; held, the dark's look at the pockets
+    // (build mode's Tab is its own)
+    if (e.code === "Tab" && !hud.get().build.on && !hud.get().panel.kind && !this.god?.on) {
+      e.preventDefault();
+      if (!e.repeat) this.tabDown = { at: e.timeStamp, back: e.shiftKey };
       return;
     }
     if (hud.get().cable && e.key === "Escape" && !hud.get().panel.kind) {
@@ -3858,17 +3877,25 @@ export class WorldController {
     else if (key === "-") this.tp?.zoomBy(1.15);
   };
 
+  private tabDown: { at: number; back: boolean } | null = null;
   private onKeyUp = (e: KeyboardEvent) => {
     if (e.key.toLowerCase() === "e" && this.use?.src === "key") {
       const u = this.use;
       this.use = null;
       if (!u.done) this.interact();
     }
+    if (e.code === "Tab" && this.tabDown) {
+      const t = this.tabDown;
+      this.tabDown = null;
+      // (by the events' own times: a long frame between the two is no hold)
+      if (e.timeStamp - t.at < TAB_TAP_MS) this.cycleFocus(t.back ? -1 : 1);
+    }
     if (this.god?.key(e, false)) return;
     this.walker?.controls.up(e.code);
     this.cars?.key(e, false);
   };
   private onBlur = () => {
+    this.tabDown = null;
     this.walker?.clear();
     this.cars?.blur();
   };
