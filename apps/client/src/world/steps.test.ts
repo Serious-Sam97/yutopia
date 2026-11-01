@@ -4,7 +4,18 @@ import { AVATAR_OPTIONS } from "@yutopia/shared";
 import { flowCode, KH_FEEL, VERBS } from "@yutopia/shared/move";
 import { ABOUT_DOWN, ABOUT_LEN, AboutTurn } from "./chars/anim/about";
 import { Locomotion, loadHero } from "./chars/locomotion";
-import { type Ears, FLOW_CODES, Footfalls, levelOf, type StepPlayer, shoeOf, VERB_KINDS, type Walker } from "./steps";
+import {
+  type Ears,
+  FLOW_CODES,
+  Footfalls,
+  impulse,
+  levelOf,
+  SPACES,
+  type StepPlayer,
+  shoeOf,
+  VERB_KINDS,
+  type Walker,
+} from "./steps";
 
 // The steps (docs/plan/63-the-steps.md, phases 2–4): a step heard as each foot is put down — the body's
 // own (FootLock's), at its stride's pace, the feet in turn — with the shoe's family and the surface's
@@ -125,8 +136,14 @@ function heard(footing: (w: Walker) => string = () => "wood") {
   const steps: { gait: string; shoe: string; gain: number; pan?: number; f: string }[] = [];
   const paws: { f: string; gain: number; claws?: boolean }[] = [];
   const player = {
-    step: (f: string, o: { gait: string; shoe: string; gain?: number; pan?: number }) =>
-      steps.push({ f, gait: o.gait, shoe: o.shoe, gain: o.gain ?? 1, pan: o.pan }),
+    step: (f: string, o: { gait: string; shoe: string; gain?: number; pan?: number | { pan: number } }) =>
+      steps.push({
+        f,
+        gait: o.gait,
+        shoe: o.shoe,
+        gain: o.gain ?? 1,
+        pan: typeof o.pan === "object" ? o.pan.pan : o.pan,
+      }),
     paw: (f: string, o: { gain: number; claws?: boolean }) => paws.push({ f, gain: o.gain, claws: o.claws }),
   } as unknown as StepPlayer;
   const ears: Ears = {
@@ -164,7 +181,7 @@ test("their body's feet, when it's stepping on screen, and the way gone doesn't 
   for (let i = 0; i <= 120; i++) {
     const t = (i * 1000) / 60;
     ff.frame([me, { ...w, x: -2 + (1.5 * i) / 60 }], ears, 1 / 60, t);
-    if (i % 25 === 0) ff.body("bia", i % 50 === 0 ? "R" : "L", t);
+    if (i % 25 === 0) ff.body("bia", i % 50 === 0 ? "R" : "L");
   }
   assert.equal(steps.length, 5, `the body's 5 steps (none by the way gone): ${steps.length}`);
 });
@@ -397,9 +414,9 @@ test("my own moments heard too (gain 1), but my steps left to the controller", (
 test("a body's slow steps (setting off, stopping, on the spot) scuffed; walking ones not", () => {
   const m = moments();
   m.run({ a: 1, mv: 1, x: 0 }, 0.5, 0.5);
-  m.ff.body("bia", "L", 1e6);
+  m.ff.body("bia", "L");
   m.run({ a: 1, mv: 1, x: 0.25 }, 0.5, 1.5);
-  m.ff.body("bia", "R", 2e6);
+  m.ff.body("bia", "R");
   assert.deepEqual(
     m.what().filter((w) => w === "step" || w === "scuff"),
     ["scuff", "step"],
@@ -427,4 +444,69 @@ test("the turn round from a run: its feet down heard once, as it lands", () => {
   }
   assert.equal(at.length, 1, "once");
   assert.ok(at[0] >= ABOUT_DOWN && at[0] < ABOUT_DOWN + dt / ABOUT_LEN + 1e-9, `at ${at[0].toFixed(3)}`);
+});
+
+// ── the space (phase 5) ──
+function fakeCtx(sampleRate = 8000) {
+  return {
+    sampleRate,
+    createBuffer: (channels: number, length: number) => {
+      const data = Array.from({ length: channels }, () => new Float32Array(length));
+      return { length, numberOfChannels: channels, getChannelData: (c: number) => data[c] };
+    },
+  } as unknown as BaseAudioContext;
+}
+const energy = (d: Float32Array, a: number, b: number) => {
+  let e = 0;
+  for (let i = a; i < b; i++) e += d[i] * d[i];
+  return e / Math.max(1, b - a);
+};
+
+test("each space's ring: as long as its tail, in stereo, dying away; a street's slap off the buildings", () => {
+  const ctx = fakeCtx();
+  assert.equal(SPACES.dry.wet, 0, "out in the open: dry");
+  assert.ok(SPACES.stairs.len > SPACES.hall.len && SPACES.hall.len > SPACES.small.len, "the stairwell rings longest");
+  for (const k of ["small", "hall", "stairs", "lift"] as const) {
+    const b = impulse(ctx, SPACES[k]);
+    const n = b.length;
+    assert.equal(n, Math.floor(8000 * SPACES[k].len), k);
+    const L = b.getChannelData(0);
+    const R = b.getChannelData(1);
+    assert.ok(energy(L, n - n / 10, n) < energy(L, 0, n / 10) / 100, `${k}: died away 20 dB and more`);
+    assert.notDeepEqual(L.slice(0, 50), R.slice(0, 50), `${k}: the two sides differ`);
+  }
+  const st = impulse(ctx, SPACES.street);
+  const d = st.getChannelData(0);
+  const at = Math.floor(0.07 * 8000);
+  assert.ok(energy(d, at, at + 60) > 3 * energy(d, at - 120, at - 60), "the slap at 70 ms");
+});
+
+test("someone else's sounds carry their pan and low-pass (far, another room); mine are where I am", () => {
+  const places: unknown[] = [];
+  const player = {
+    now: () => 0,
+    step: (_f: string, o: { pan?: unknown }) => places.push(o.pan),
+    land: (_f: string, _h: number, o: { pan?: unknown }) => places.push(o.pan),
+    hand: (_g: number, pan: unknown) => places.push(pan),
+    thud: () => {},
+    cloth: () => {},
+    liftCar: () => {},
+  } as unknown as StepPlayer;
+  const ff = new Footfalls(player);
+  const ears: Ears = {
+    me: "me",
+    level: 0,
+    gain: () => 1,
+    pan: () => 0.4,
+    lp: () => 900,
+    footing: () => "wood",
+  };
+  for (let i = 0; i <= 60; i++)
+    ff.frame([me, { id: "bia", x: (1.5 * i) / 60, y: 1, a: 1, level: 0 }], ears, 1 / 60, (i * 1000) / 60);
+  assert.ok(places.length > 0);
+  assert.deepEqual(places[0], { pan: 0.4, lp: 900 });
+  places.length = 0;
+  ff.frame([{ ...me, a: 1 }], ears, 1 / 60, 2000);
+  ff.frame([{ ...me, a: 1, verb: { kind: "vault" } }], ears, 1 / 60, 2016);
+  assert.equal(places[0], 0, "my vault's hand: here, no low-pass");
 });

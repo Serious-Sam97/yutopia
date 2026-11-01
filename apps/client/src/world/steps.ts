@@ -10,6 +10,9 @@ import type { Footing } from "@yutopia/shared/footing";
 export const STEPS_CHUNK = "yutopia-steps";
 
 export type StepGait = "crouch" | "walk" | "jog" | "sprint";
+/** Where a sound is (phase 5): its pan (−1..1), or its pan and a low-pass (Hz: far off, or through
+ *  a doorway; 0 none) */
+export type Place = number | { pan: number; lp: number };
 export type Shoe = "hard" | "soft" | "sandals";
 
 /** A shoe's family (shared avatar.ts's shoes): what it sounds like. */
@@ -32,8 +35,8 @@ export interface StepOpts {
   shoe: Shoe;
   /** 0..1, how near (others'); 1 mine */
   gain?: number;
-  /** −1..1, where it is */
-  pan?: number;
+  /** where it is (−1..1; a low-pass too: far, or through a doorway) */
+  pan?: Place;
   /** the context's time to play it (default now) */
   at?: number;
   /** a step setting off, stopping or turning on the spot: the sole scuffed along the ground too */
@@ -148,28 +151,20 @@ export class StepPlayer {
     g.gain.setValueAtTime(level, at);
     g.gain.setValueAtTime(level, at + len * 0.7);
     g.gain.linearRampToValueAtTime(0.0001, at + len);
-    let end: AudioNode = g;
-    if (o.pan) {
-      const p = ctx.createStereoPanner();
-      p.pan.value = Math.max(-1, Math.min(1, o.pan));
-      g.connect(p);
-      end = p;
-    }
-    end.connect(this.out());
+    const end = this.placed(ctx, o.pan ?? 0);
+    g.connect(end);
     src.connect(tone).connect(dull).connect(g);
     src.start(at);
     src.stop(at + len + 0.02);
-    if (o.shoe === "sandals")
-      this.slap(ctx, end === g ? this.out() : end, at + 0.06 + Math.random() * 0.02, 0.09 * loud);
-    if (o.scuff)
-      this.noise(ctx, end === g ? this.out() : end, at + 0.02, 0.14, "bandpass", BAND[f] * 1.3, 1.2, 0.06 * loud, 0.03);
+    if (o.shoe === "sandals") this.slap(ctx, end, at + 0.06 + Math.random() * 0.02, 0.09 * loud);
+    if (o.scuff) this.noise(ctx, end, at + 0.02, 0.14, "bandpass", BAND[f] * 1.3, 1.2, 0.06 * loud, 0.03);
     if (o.shoe === "soft" && (f === "tile" || f === "wood") && Math.random() < 0.08)
-      this.squeak(ctx, end === g ? this.out() : end, at + 0.04, 0.025 * loud);
+      this.squeak(ctx, end, at + 0.04, 0.025 * loud);
   }
 
   /** A paw (pets: docs/plan/63, phase 3) — the surface's own step, short, light and higher (`rate`),
    *  and a dog's claws ticking on a hard floor. */
-  paw(f: Footing, o: { rate: number; gain: number; len: number; claws?: boolean; pan?: number }): void {
+  paw(f: Footing, o: { rate: number; gain: number; len: number; claws?: boolean; pan?: Place }): void {
     const ctx = this.ctx();
     if (!ctx || o.gain <= 0.01) return;
     const k = BORROW[f] ?? f;
@@ -187,9 +182,8 @@ export class StepPlayer {
     const level = LEVEL * bank.gain * o.gain;
     g.gain.setValueAtTime(level, at);
     g.gain.linearRampToValueAtTime(0.0001, at + o.len);
-    const p = ctx.createStereoPanner();
-    p.pan.value = Math.max(-1, Math.min(1, o.pan ?? 0));
-    src.connect(g).connect(p).connect(this.out());
+    const p = this.placed(ctx, o.pan ?? 0);
+    src.connect(g).connect(p);
     src.start(at);
     src.stop(at + o.len + 0.02);
     if (o.claws && HARD.has(f)) {
@@ -260,13 +254,80 @@ export class StepPlayer {
   }
 
   // ── the other moments the feet (and hands, and the body) meet something (phase 4) ──
-  // where a moment's sound goes: panned for someone else
-  private placed(ctx: AudioContext, pan: number): AudioNode {
-    if (!pan) return this.out();
-    const p = ctx.createStereoPanner();
-    p.pan.value = Math.max(-1, Math.min(1, pan));
-    p.connect(this.out());
-    return p;
+  // where a sound goes (phase 5): through its low-pass (far off, through a doorway) and its pan, out
+  // dry and into the room's reverb
+  private placed(ctx: AudioContext, place: Place): AudioNode {
+    const pan = typeof place === "number" ? place : place.pan;
+    const lp = typeof place === "number" ? 0 : place.lp;
+    const head = ctx.createGain();
+    let tail: AudioNode = head;
+    if (lp > 0 && lp < 15000) {
+      const f = ctx.createBiquadFilter();
+      f.type = "lowpass";
+      f.frequency.value = lp;
+      f.Q.value = 0.5;
+      tail.connect(f);
+      tail = f;
+    }
+    if (pan) {
+      const p = ctx.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, pan));
+      tail.connect(p);
+      tail = p;
+    }
+    tail.connect(this.out());
+    const wet = this.wet();
+    if (wet) tail.connect(wet);
+    return head;
+  }
+
+  // ── the room (phase 5): one reverb, its impulse made for the kind of space I'm in, crossfaded
+  //    between two as it changes ──
+  private room: {
+    send: GainNode;
+    conv: [ConvolverNode, ConvolverNode];
+    gain: [GainNode, GainNode];
+    live: 0 | 1;
+    space: Space;
+  } | null = null;
+  private irs = new Map<Space, AudioBuffer>();
+  private wet(): AudioNode | null {
+    const r = this.room;
+    return r && SPACES[r.space].wet > 0 ? r.send : null;
+  }
+  /** The kind of space I'm in (the controller's, as I go): the steps' reverb. */
+  space(s: Space): void {
+    const ctx = this.ctx();
+    if (!ctx || this.room?.space === s) return;
+    if (!this.room) {
+      const send = ctx.createGain();
+      send.gain.value = 0;
+      const conv: [ConvolverNode, ConvolverNode] = [ctx.createConvolver(), ctx.createConvolver()];
+      const gain: [GainNode, GainNode] = [ctx.createGain(), ctx.createGain()];
+      for (const i of [0, 1] as const) {
+        gain[i].gain.value = 0;
+        send.connect(conv[i]).connect(gain[i]).connect(this.out());
+      }
+      this.room = { send, conv, gain, live: 0, space: "dry" };
+    }
+    const r = this.room;
+    const t = ctx.currentTime;
+    const S = SPACES[s];
+    r.send.gain.setTargetAtTime(S.wet, t, 0.15);
+    if (S.wet > 0) {
+      // (into the idle one, then over to it)
+      const next: 0 | 1 = r.live === 0 ? 1 : 0;
+      let ir = this.irs.get(s);
+      if (!ir) {
+        ir = impulse(ctx, S);
+        this.irs.set(s, ir);
+      }
+      r.conv[next].buffer = ir;
+      r.gain[next].gain.setTargetAtTime(1, t, 0.15);
+      r.gain[r.live].gain.setTargetAtTime(0, t, 0.15);
+      r.live = next;
+    }
+    r.space = s;
   }
 
   /** Both feet down from a jump or a fall (`hard` 0..1): the surface's steps together, harder, and
@@ -274,7 +335,7 @@ export class StepPlayer {
   land(
     f: Footing,
     hard: number,
-    o: { gain?: number; pan?: number; shoe?: Shoe; at?: number; thud?: boolean } = {},
+    o: { gain?: number; pan?: Place; shoe?: Shoe; at?: number; thud?: boolean } = {},
   ): void {
     const ctx = this.ctx();
     if (!ctx) return;
@@ -286,7 +347,7 @@ export class StepPlayer {
   }
 
   /** A body meeting the ground (a fall's, a roll's, the ragdoll's): a dull thump and its cloth. */
-  thud(gain: number, pan = 0, at?: number): void {
+  thud(gain: number, pan: Place = 0, at?: number): void {
     const ctx = this.ctx();
     if (!ctx || gain <= 0.01) return;
     const t = at ?? ctx.currentTime;
@@ -306,14 +367,14 @@ export class StepPlayer {
   }
 
   /** Clothes moving: a rustle `len` s long. */
-  cloth(gain: number, pan = 0, len = 0.3, at?: number): void {
+  cloth(gain: number, pan: Place = 0, len = 0.3, at?: number): void {
     const ctx = this.ctx();
     if (!ctx || gain <= 0.01) return;
     this.noise(ctx, this.placed(ctx, pan), at ?? ctx.currentTime, len, "bandpass", 1300, 0.6, 0.05 * gain, len * 0.3);
   }
 
   /** A hand on something: a vault's push off it, a ledge caught, a bar gripped. */
-  hand(gain: number, pan = 0, at?: number): void {
+  hand(gain: number, pan: Place = 0, at?: number): void {
     const ctx = this.ctx();
     if (!ctx || gain <= 0.01) return;
     const t = at ?? ctx.currentTime;
@@ -324,7 +385,7 @@ export class StepPlayer {
 
   /** Sliding on the surface (a slide, a skid, a roll): its scrape — held till the stop it returns
    *  (`len` none), or `len` s; the snow sprays. */
-  scrape(f: Footing, gain: number, pan = 0, len = 0): (() => void) | null {
+  scrape(f: Footing, gain: number, pan: Place = 0, len = 0): (() => void) | null {
     const ctx = this.ctx();
     if (!ctx || gain <= 0.01) return null;
     const t = ctx.currentTime;
@@ -339,7 +400,7 @@ export class StepPlayer {
   }
 
   /** Metal on metal (a grind along a rail): held till the stop it returns. */
-  grind(gain: number, pan = 0): (() => void) | null {
+  grind(gain: number, pan: Place = 0): (() => void) | null {
     const ctx = this.ctx();
     if (!ctx || gain <= 0.01) return null;
     const t = ctx.currentTime;
@@ -364,7 +425,7 @@ export class StepPlayer {
   }
 
   /** A lift's car under a landing (`hard` 0..1): its floor on its cables, a hollow boom and a rattle. */
-  liftCar(hard: number, gain: number, pan = 0, at?: number): void {
+  liftCar(hard: number, gain: number, pan: Place = 0, at?: number): void {
     const ctx = this.ctx();
     if (!ctx || gain * hard <= 0.01) return;
     const t = at ?? ctx.currentTime;
@@ -385,7 +446,7 @@ export class StepPlayer {
   }
 
   /** A seat taking the weight (`down`) or giving it back: a soft settle and a creak. */
-  seat(down: boolean, gain: number, pan = 0): void {
+  seat(down: boolean, gain: number, pan: Place = 0): void {
     const ctx = this.ctx();
     if (!ctx || gain <= 0.01) return;
     const t = ctx.currentTime + (down ? 0.25 : 0.1);
@@ -422,6 +483,45 @@ export class StepPlayer {
     o.start(at);
     o.stop(at + 0.08);
   }
+}
+
+/** The kinds of space the steps ring in (phase 5): out in the open and the woods dry, a paved
+ *  street a slap off the buildings, rooms by their size, the stairwell's concrete, the server
+ *  room's metal, a lift's car, a booth's deadened walls. */
+export type Space = "dry" | "street" | "booth" | "small" | "room" | "hall" | "stairs" | "server" | "lift";
+/** each one's tail (s, to −60 dB), how much of a step goes into it, how bright it is (Hz), a slap (s) */
+export const SPACES: Record<Space, { len: number; wet: number; bright: number; slap?: number }> = {
+  dry: { len: 0, wet: 0, bright: 0 },
+  street: { len: 0.35, wet: 0.08, bright: 4000, slap: 0.07 },
+  booth: { len: 0.12, wet: 0.05, bright: 3000 },
+  small: { len: 0.35, wet: 0.1, bright: 5000 },
+  room: { len: 0.6, wet: 0.14, bright: 5500 },
+  hall: { len: 1.1, wet: 0.18, bright: 6500 },
+  stairs: { len: 1.8, wet: 0.26, bright: 7500 },
+  server: { len: 0.7, wet: 0.16, bright: 8000 },
+  lift: { len: 0.2, wet: 0.14, bright: 3500 },
+};
+
+/** A space's impulse, made: stereo noise dying away over its tail, darkened to its brightness (a
+ *  one-pole low-pass), a street's slap off the buildings as an echo early in it. */
+export function impulse(ctx: BaseAudioContext, S: (typeof SPACES)[Space]): AudioBuffer {
+  const n = Math.max(1, Math.floor(ctx.sampleRate * (S.len + (S.slap ?? 0))));
+  const b = ctx.createBuffer(2, n, ctx.sampleRate);
+  const k = Math.exp((-2 * Math.PI * S.bright) / ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = b.getChannelData(c);
+    let lp = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / ctx.sampleRate;
+      lp = (1 - k) * (Math.random() * 2 - 1) + k * lp;
+      d[i] = lp * Math.exp((-6.9 * t) / Math.max(S.len, 0.01));
+    }
+    if (S.slap) {
+      const at = Math.floor(S.slap * ctx.sampleRate) + c * 37;
+      for (let i = 0; i < 300 && at + i < n; i++) d[at + i] += 1.5 * Math.exp(-i / 60) * (Math.random() * 2 - 1);
+    }
+  }
+  return b;
 }
 
 // a surface's scrape: the band its noise is in (the synth's, sound.ts); the snow's spray
@@ -492,6 +592,8 @@ export interface Ears {
   level: number;
   gain(w: Walker): number;
   pan(w: Walker): number;
+  /** their low-pass (Hz; 0 none): far off, through a doorway (phase 5) */
+  lp?(w: Walker): number;
   footing(w: Walker): Footing;
   down?(id: string): "down" | "kneel" | undefined;
   /** standing in a lift's car (its floor answers a landing) */
@@ -522,6 +624,8 @@ const PAWS: Record<string, { every: number; rate: number; gain: number; len: num
 };
 const SOFT_SNOW = new Set<Footing>(["snow", "deep", "packed", "slush"]);
 /** a fall heard from this high (m); a roll from this (locomotion's) */
+/** walked this long (s) with no step of their body's, it isn't stepping: steps by the way they go */
+const QUIET = 0.5;
 const FALL = 0.3;
 const ROLL = 2.2;
 /** a body's step this slow (tiles/s) is setting off, stopping or turning on the spot: scuffed */
@@ -539,8 +643,8 @@ interface Heard {
   speed: number;
   was: number;
   way: number;
-  /** when their body last put a foot down (ms) */
-  body: number;
+  /** walked this long (s) with no foot of their body's put down: it isn't stepping (off screen…) */
+  quiet: number;
   side: "L" | "R";
   /** among the nearest, on my floor, this frame */
   near: boolean;
@@ -593,7 +697,7 @@ export class Footfalls {
           speed: 0,
           was: 0,
           way: 0,
-          body: 0,
+          quiet: 0,
           side: "R",
           near: false,
           w,
@@ -620,6 +724,7 @@ export class Footfalls {
       h.was = h.speed;
       h.speed += (went / dt - h.speed) * Math.min(1, dt * 8);
       h.way = this.moving(w, h) ? h.way + went : 0;
+      if (went > 0 && this.moving(w, h)) h.quiet += dt;
       if (w.id === ears.me) mine = h;
       else {
         const d = meAt ? Math.hypot(w.x - meAt.x, w.y - meAt.y) : 0;
@@ -648,17 +753,24 @@ export class Footfalls {
         }
       } else if (h.down === "down") {
         if (h.way >= CRAWL) this.crawl(h);
-      } else if (now - h.body > 700 && h.way >= HALF[this.gait(h)]) this.play(h);
+      } else if (h.quiet >= QUIET && h.way >= HALF[this.gait(h)]) this.play(h);
     }
     // (out of earshot, a slide's or a grind's sound ends)
     for (const h of this.heard.values()) if (!h.near && h.loop) this.endLoop(h);
   }
 
+  // where they're heard from: the camera's pan, and their low-pass (far, or another room)
+  private placeOf(w: Walker): Place {
+    const ears = this.ears;
+    if (!ears || w.id === ears.me) return 0;
+    return { pan: ears.pan(w), lp: ears.lp?.(w) ?? 0 };
+  }
+
   /** A foot of theirs put down (their body's, on screen). */
-  body(id: string, side: "L" | "R", now: number): void {
+  body(id: string, side: "L" | "R"): void {
     const h = this.heard.get(id);
     if (!h?.near || h.w.id === this.ears?.me || h.down || !this.moving(h.w, h)) return;
-    h.body = now;
+    h.quiet = 0;
     h.side = side;
     this.play(h, h.speed < SCUFF);
   }
@@ -672,7 +784,7 @@ export class Footfalls {
     if (g > 0.02)
       this.player.land(ears.footing(h.w), hard, {
         gain: g,
-        pan: ears.pan(h.w),
+        pan: this.placeOf(h.w),
         shoe: shoeOf(h.w.avatar?.shoes),
         thud: false,
       });
@@ -683,7 +795,7 @@ export class Footfalls {
     const h = this.heard.get(id);
     const ears = this.ears;
     if (!h?.near || !ears) return;
-    this.player.thud(hard * ears.gain(h.w), ears.pan(h.w));
+    this.player.thud(hard * ears.gain(h.w), this.placeOf(h.w));
   }
 
   /** Off a car (the controller's: they were in it): their feet on the ground. */
@@ -695,7 +807,7 @@ export class Footfalls {
     if (gain > 0.02)
       this.player.land(ears.footing(h.w), 0.15, {
         gain: gain * 0.7,
-        pan: ears.pan(h.w),
+        pan: this.placeOf(h.w),
         shoe: shoeOf(h.w.avatar?.shoes),
       });
   }
@@ -723,7 +835,7 @@ export class Footfalls {
       gait: this.gait(h),
       shoe: shoeOf(h.w.avatar?.shoes),
       gain,
-      pan: ears.pan(h.w),
+      pan: this.placeOf(h.w),
       scuff,
     });
   }
@@ -736,7 +848,7 @@ export class Footfalls {
     const f = ears.footing(h.w);
     // (a cat's soft pads: heard only in the snow)
     const g = h.w.pet?.species === "cat" && SOFT_SNOW.has(f) ? 0.25 : P.gain;
-    this.player.paw(f, { rate: P.rate, gain: g * gain, len: P.len, claws: P.claws, pan: ears.pan(h.w) });
+    this.player.paw(f, { rate: P.rate, gain: g * gain, len: P.len, claws: P.claws, pan: this.placeOf(h.w) });
   }
 
   // on hands and knees (the dark's down): a hand or a knee on the floor, and the clothes dragged
@@ -746,7 +858,7 @@ export class Footfalls {
     h.way = 0;
     const gain = ears.gain(h.w);
     if (gain <= 0.02) return;
-    const pan = ears.pan(h.w);
+    const pan = this.placeOf(h.w);
     this.player.step(ears.footing(h.w), { gait: "crouch", shoe: "soft", gain: gain * 1.6, pan });
     this.player.cloth(gain * 0.8, pan, 0.25);
   }
@@ -763,7 +875,7 @@ export class Footfalls {
     if (!ears) return;
     const w = h.w;
     const gain = () => ears.gain(w);
-    const pan = () => ears.pan(w);
+    const pan = () => this.placeOf(w);
     const f = () => ears.footing(w);
     const P = this.player;
     // a move: its start (and a wall run's kick at its end), what's held while it lasts
@@ -865,7 +977,7 @@ export class Footfalls {
 
   // a verb begun: a vault's hand on what it goes over and the feet after; a mantle's hand and its
   // scramble up; a roll over the shoulder; a slide's scrape, held while it lasts
-  private verbStart(h: Heard, verb: string, g: number, pan: number, f: () => Footing): void {
+  private verbStart(h: Heard, verb: string, g: number, pan: Place, f: () => Footing): void {
     if (g <= 0.02) return;
     const P = this.player;
     const shoe = shoeOf(h.w.avatar?.shoes);

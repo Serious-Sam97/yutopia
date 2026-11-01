@@ -110,7 +110,7 @@ import type { PetView } from "./petview";
 import type { Phone } from "./phone";
 import type { SlotTracks } from "./slots";
 import { type Floor, radio, sound } from "./sound";
-import type { Ears, Footfalls, Shoe, StepGait, StepPlayer, Walker } from "./steps";
+import type { Ears, Footfalls, Shoe, Space, StepGait, StepPlayer, Walker } from "./steps";
 import { loadSteps, steps } from "./steps-load";
 import { type ActTarget, type BattleView, hud, type Person, type PetInfo, toast } from "./store";
 import type { GameTables } from "./tables";
@@ -200,6 +200,10 @@ const MENU_STEP: Record<string, number> = {
 };
 /** half a stride, by gait (tiles: plan 58's walk2/run2/crouch2Stride) — a step by the way gone */
 const HALF_STRIDE: Record<StepGait, number> = { walk: 0.62, crouch: 0.66, jog: 1.31, sprint: 1.77 };
+/** walked this long (s) with no step of the body's, it isn't stepping: steps by the way gone */
+const QUIET = 0.5;
+/** out on the land, a building's floor underfoot: inside one of the town's (its room rings) */
+const FLOORED = new Set<Floor>(["wood", "tile", "carpet", "earth", "hollow"]);
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
 
 // (a lot car out being driven: not where it was parked — docs/plan/28-the-car.md)
@@ -2885,7 +2889,8 @@ export class WorldController {
     const lift = (st.ground ?? 0) * ZPX_TILE;
     // (the soles off and onto what's under them: the steps' recordings, once they're in)
     const S = steps();
-    const pan = id === this.room?.sessionId ? 0 : (this.tp?.pan(this.me, st) ?? 0);
+    const pan =
+      id === this.room?.sessionId ? 0 : { pan: this.tp?.pan(this.me, st) ?? 0, lp: this.ears.lp?.({ id, ...st }) ?? 0 };
     if (stage === "air" && was === "crouch") {
       this.model?.puff(st.x, st.y, "kick", lift, hard);
       if (near > 0) jumps()?.jumpSound(j.kind, near);
@@ -3199,8 +3204,7 @@ export class WorldController {
       // (the camera takes the mouse only when nothing on screen wants the pointer)
       v.canLock = () => !this.pointerWanted();
       // (the feet as the bodies put them down: the steps — mine, everyone else's near me)
-      v.onStep = (id, side) =>
-        id === this.room?.sessionId ? this.myStep(side) : this.footfalls?.body(id, side, performance.now());
+      v.onStep = (id, side) => (id === this.room?.sessionId ? this.myStep(side) : this.footfalls?.body(id, side));
       v.onThud = (id, hard) => this.footfalls?.impact(id, hard);
       v.onHop = (id, hard) => (id === this.room?.sessionId ? this.myHop(hard) : this.footfalls?.landed(id, hard));
       this.tp = v;
@@ -4047,13 +4051,14 @@ export class WorldController {
   // my steps' state: may they be heard now, at what gait; where the body isn't stepping them, the
   // way gone since the last
   private feet: { ok: boolean; gait: StepGait } = { ok: false, gait: "walk" };
-  private stepped = { body: 0, way: 0, side: "R" as "L" | "R", speed: 0 };
+  // (`quiet`: s walked with no step of the body's — it's not stepping: first person, off screen…)
+  private stepped = { quiet: 0, way: 0, side: "R" as "L" | "R", speed: 0 };
   private stepper: StepPlayer | null = null;
   private shoe: { avatar: string; shoe: Shoe } = { avatar: "", shoe: "soft" };
   /** A foot of mine put down (the body's: the 3D view's onStep), or by the way gone (`side` none). */
   private myStep(side?: "L" | "R") {
     if (!this.feet.ok) return;
-    if (side) this.stepped.body = performance.now();
+    if (side) this.stepped.quiet = 0;
     this.stepped.way = 0;
     this.stepped.side = side ?? (this.stepped.side === "L" ? "R" : "L");
     const f = this.myFooting(this.height.z);
@@ -4109,6 +4114,13 @@ export class WorldController {
     footing: (w) => this.footingAt(w.x, w.y, w.z ?? w.ground ?? 0),
     down: (id) => this.tp?.downed.get(id),
     lift: (w) => this.inLiftCar(w.x, w.y),
+    // (phase 5) the far off's top lost; through a doorway, another room: muffled
+    lp: (w) => {
+      const f = 16000 / (1 + 0.35 * Math.hypot(w.x - this.me.x, w.y - this.me.y));
+      const a = areaAt(this.map, w.x, w.y);
+      const b = areaAt(this.map, this.me.x, this.me.y);
+      return (a?.key ?? "") !== (b?.key ?? "") && a?.kind !== "stage" && b?.kind !== "stage" ? Math.min(f, 900) : f;
+    },
   };
   /** who stepped out of a car this frame (their feet heard down once they're drawn again) */
   private alighted: string[] = [];
@@ -4127,12 +4139,30 @@ export class WorldController {
   }
   // where the body isn't stepping (first person, `?anim=old`, reduced motion, before its chunk's
   // in): a step every half a stride I go (plan 58's strides: tiles)
+  // the kind of space I'm in, for the steps' reverb (phase 5): the stairs, a lift's car, a room by its
+  // size (the server room's metal, a booth's deadened walls), out on the land by what's underfoot
+  private spaceHere(f: Floor): Space {
+    if (this.grid.onRamp(this.me.x, this.me.y)) return "stairs";
+    if (this.inLiftCar(this.me.x, this.me.y)) return "lift";
+    if (this.grid.onLand(this.me.x, this.me.y))
+      return f === "concrete" || f === "asphalt" || f === "slush" ? "street" : FLOORED.has(f) ? "room" : "dry";
+    const a = areaAt(this.map, this.me.x, this.me.y);
+    if (!a) return "room";
+    if (/server/.test(a.key)) return "server";
+    if (a.kind === "booth") return "booth";
+    const n = a.w * a.h;
+    return n < 60 ? "small" : n < 250 ? "room" : "hall";
+  }
   private stepsBy(went: number, f: Floor, dt: number) {
+    this.stepper?.space(this.spaceHere(f));
     if (dt > 0 && went < 1.5) this.stepped.speed += (went / dt - this.stepped.speed) * Math.min(1, dt * 8);
     this.stepper?.preload(f);
     if (!this.feet.ok || went > 1.5) return;
     this.stepped.way += went;
-    if (performance.now() - this.stepped.body < 700) return;
+    // (setting off, the body's first foot's down a third of a second in: none by the way till half a
+    // second's gone with no foot of its own)
+    if (went > 0) this.stepped.quiet += dt;
+    if (this.stepped.quiet < QUIET) return;
     if (this.stepped.way >= HALF_STRIDE[this.feet.gait]) this.myStep();
   }
   // mine, looked again only when I've gone a little way (a step's worth) or up or down

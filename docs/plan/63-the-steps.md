@@ -463,6 +463,43 @@ player, the lift, kneel and crawl, emotes, stepping out of a car, sitting.
 
 **5 — The space.** The reverb send per area, distance filtering, muffling through doorways.
 
+> Built 2026-11-01 (uncommitted; phase 4 committed as 4eee98c).
+>
+> - **One reverb for the steps** (`StepPlayer.space`): a send into two convolvers, crossfaded
+>   (0.15 s) when the space changes, each one's impulse made in code (`impulse`: stereo noise
+>   dying away over its tail, darkened by a one-pole low-pass, and for a street a slap off the
+>   buildings at 70 ms). The spaces (`SPACES`: tail, how much goes in, brightness):
+>
+>   | Space | Tail | Wet | Bright |
+>   |---|---|---|---|
+>   | out in the open, the woods (dry) | — | 0 | — |
+>   | a paved street (a slap at 70 ms) | 0.35 s | 0.08 | 4 kHz |
+>   | a booth's deadened walls | 0.12 s | 0.05 | 3 kHz |
+>   | a small room (under 60 tiles) | 0.35 s | 0.10 | 5 kHz |
+>   | a room (under 250 tiles) | 0.6 s | 0.14 | 5.5 kHz |
+>   | a hall | 1.1 s | 0.18 | 6.5 kHz |
+>   | the stairwell | 1.8 s | 0.26 | 7.5 kHz |
+>   | the server room | 0.7 s | 0.16 | 8 kHz |
+>   | a lift's car | 0.2 s | 0.14 | 3.5 kHz |
+>
+> - **The controller picks mine each frame** (`spaceHere`): the stairs; a lift's car; a room by
+>   its area's size (a "server" key, a booth); out on the land, a paved footing is a street, a
+>   town building's floor a room, the rest dry. Everything I hear rings in my space (whoever
+>   made it).
+> - **Where a sound is is a `Place`:** its pan and a low-pass. Each of someone else's steps and
+>   moments goes through it: 16 kHz ÷ (1 + 0.35 × tiles), so 11.9 kHz a tile away and 4.2 kHz at
+>   8 tiles. Through a doorway, in another area (not the stage), it's held to 900 Hz. Mine stay
+>   unfiltered.
+> - **Found on the way:** setting off, the way-gone fallback fired 2 ms before the body's first
+>   foot (a double step). The fallback now waits for half a second *walked* with no step of the
+>   body's (`QUIET`), mine and everyone's.
+> - **Checked:** `world/steps.test.ts` (19: each space's impulse its length, stereo, dying away
+>   20 dB and more, the street's slap 12–16× over the tail; someone else's sounds with their pan
+>   and low-pass, mine without) and `e2e/steps-space.spec.ts` (Bia in a hall, the 32 × 24 main
+>   room, its reverb built; 11.9 kHz a tile off, 4.2 kHz at 8, 900 Hz in Ana's office next
+>   door); the other four steps specs, the walk now starting on the body's own foot. Client 139;
+>   types; Biome; build and budget (page 423.9 KB, chars 58.0, steps 6.6).
+
 **6 — The checks.** The quality bar above: the sync test, the e2e walk with its step log on
 every surface, the budget, the perf with 12 walkers, and a last listening pass by the user in the
 world.
