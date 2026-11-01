@@ -374,7 +374,9 @@ export class GameRoom {
       });
       if (h.stopped) return h.emu.exit();
       h.emu.onRumble(this.rumble);
-      h.stream = canvas.captureStream(30);
+      // (my own big picture: every frame the core draws — at 30 a second the game
+      // I play looked half as smooth as it runs; the TV going out keeps its 30, tv.ts)
+      h.stream = canvas.captureStream();
       this.w.send("game:tv", { id });
     } catch (e) {
       console.warn("[games] couldn't start", e);

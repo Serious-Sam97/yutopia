@@ -114,6 +114,63 @@ function tapSpeakers(world: BaseAudioContext | null) {
       // never connected through us
     }
   } as typeof AudioNode.prototype.disconnect;
+  // how far ahead each console's sound is queued (its buffers, back to back)
+  const start = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (this: AudioBufferSourceNode, when?: number, ...rest: number[]) {
+    const ctx = this.context;
+    if (ctx !== worldCtx && this.buffer)
+      queued.set(ctx, Math.max(when ?? 0, ctx.currentTime, queued.get(ctx) ?? 0) + this.buffer.duration);
+    return start.call(this, when, ...rest);
+  } as typeof AudioBufferSourceNode.prototype.start;
+}
+
+// The cores run on the page's animation frames, a frame of the game per frame
+// of the page (their main loop is on requestAnimationFrame): a page drawing
+// slower than 60 a second — the world, busy — slowed every game down with it,
+// and its sound ran dry between frames (slower music, crackles and pops). So in
+// a frame where a console's sound won't last until the page's next frame, its
+// tick runs again, a few times at most: RetroArch's own throttle only runs a
+// frame while there's room for its sound, so it never runs ahead. A core's tick
+// is the callback its preMainLoop hook fires in.
+const CATCH_UP_BELOW = 0.028; // s of sound queued at least (RetroArch keeps ~35–55 ms at 60 fps)
+const CATCH_UP_SPARE = 0.012; // s more than the page's frames take (eased)
+const CATCH_UP_MAX = 4; // extra frames in one frame of the page
+const queued = new WeakMap<BaseAudioContext, number>(); // to when its sound is queued
+const ticks = new WeakMap<FrameRequestCallback, () => boolean>(); // a core's tick: is it behind
+let ticking: FrameRequestCallback | null = null; // the callback running now
+let pageFrame = 1 / 60; // s between the page's frames (eased)
+let pacing = false;
+function paceCores() {
+  if (pacing) return;
+  pacing = true;
+  const raf = window.requestAnimationFrame.bind(window);
+  const pending = new Set<FrameRequestCallback>();
+  let lastT = 0;
+  const run = (cb: FrameRequestCallback, t: number) => {
+    ticking = cb;
+    try {
+      cb(t);
+    } finally {
+      ticking = null;
+    }
+  };
+  window.requestAnimationFrame = (cb: FrameRequestCallback) => {
+    if (ticks.has(cb)) {
+      // (a tick run again asks for its next frame again: it has one)
+      if (pending.has(cb)) return 0;
+      pending.add(cb);
+    }
+    return raf((t) => {
+      if (t !== lastT) {
+        if (lastT) pageFrame += (Math.min(0.1, (t - lastT) / 1000) - pageFrame) * 0.2;
+        lastT = t;
+      }
+      pending.delete(cb);
+      run(cb, t);
+      const behind = ticks.get(cb);
+      for (let i = 0; behind && i < CATCH_UP_MAX && behind(); i++) run(cb, t);
+    });
+  };
 }
 
 // RetroArch asks to keep the screen awake when it starts; refused (no gesture,
@@ -210,6 +267,8 @@ export async function startEmu(o: {
   const { Nostalgist: N } = await import("nostalgist");
   quietWakeLock();
   tapSpeakers(o.worldAudio ?? null);
+  paceCores();
+  let behind = () => false; // (its sound running short: set once it's running)
   const before = new Set<BaseAudioContext>(contexts()); // (earlier games' contexts)
   const sys = SYSTEMS[o.system];
   o.canvas.width = EMU_W;
@@ -267,7 +326,13 @@ export async function startEmu(o: {
     resolveCoreWasm: (core: unknown) => `/emu/cores/${String(core)}_libretro.wasm`,
     retroarchConfig: { ...retroarchConfig(o.system), ...pads.config, ...o.config } as never,
     // EmulatorJS-built cores (the 2600's) look for their canvas's parent
-    emscriptenModule: { parent: o.canvas.parentElement ?? document.body } as never,
+    // (preMainLoop: its tick, found for catching up — paceCores)
+    emscriptenModule: {
+      parent: o.canvas.parentElement ?? document.body,
+      preMainLoop: () => {
+        if (ticking && !ticks.has(ticking)) ticks.set(ticking, () => behind());
+      },
+    } as never,
     ...(o.sram ? { sram: new File([o.sram], "sram") } : {}),
     async beforeLaunch(nn: Nostalgist) {
       const fs = nn.getEmscriptenFS() as {
@@ -318,6 +383,16 @@ export async function startEmu(o: {
     for (const c of contexts()) if (!before.has(c) && taps.get(c)) return c;
     return null;
   };
+  // RetroArch's own cores catch up (their sound's queue, measured: the 2600's
+  // OpenAL one isn't, and isn't paced by its sound)
+  let paced: BaseAudioContext | null = null;
+  if (!ejs)
+    behind = () => {
+      paced ??= mine();
+      if (!paced || paced.state !== "running") return false;
+      const want = Math.max(CATCH_UP_BELOW, pageFrame + CATCH_UP_SPARE);
+      return (queued.get(paced) ?? 0) - paced.currentTime < want;
+    };
   const emu: Emu = {
     canvas: o.canvas,
     system: o.system,
@@ -390,6 +465,7 @@ export async function startEmu(o: {
     },
     emscripten: () => n.getEmscriptenModule(),
     exit() {
+      behind = () => false;
       sizing.disconnect();
       emu.onRumble(null);
       unplug();
