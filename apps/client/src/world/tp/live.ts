@@ -2,6 +2,7 @@ import { hangOf, hangPoint, type WorldObjectDef } from "@yutopia/shared";
 import { GAME_ASPECT } from "@yutopia/shared/games";
 import { GLASS, glassCorners } from "@yutopia/shared/media";
 import {
+  type Camera,
   CanvasTexture,
   type Color,
   DoubleSide,
@@ -9,6 +10,7 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  NoBlending,
   PlaneGeometry,
   SRGBColorSpace,
   type Texture,
@@ -33,10 +35,37 @@ export interface Live {
   live?: boolean; // redrawn as it plays: further than NEAR it keeps its last frame
   glow: boolean; // a screen (its own light) or not (paper, cork)
   fit?: number; // fit this aspect inside (a video with its own shape)
+  // a real player (YouTube's iframe, world/media) laid behind the canvas onto this glass:
+  // told each frame where the glass is on the page (its corners in CSS px), null when
+  // it can't be seen whole enough (behind me, off the screen, faded) — then it isn't there
+  glass?: (q: GlassQuad | null) => void;
 }
+
+// the glass's corners on the page (CSS px): top-left, top-right, bottom-right, bottom-left
+export type GlassQuad = [[number, number], [number, number], [number, number], [number, number]];
 
 const PLANE = new PlaneGeometry(1, 1);
 const NEAR = 18; // tiles: pictures further away keep their last frame
+// A glass a player shows through: drawn last of the solid things, with what's in front
+// of it depth-tested as ever, and a clear hole (alpha 0) left in the frame — the page
+// under the canvas (the iframe) shows there; whatever is nearer covers it
+const HOLE = new MeshBasicMaterial({
+  color: 0x000000,
+  opacity: 0,
+  blending: NoBlending,
+  side: DoubleSide,
+  toneMapped: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+  polygonOffsetUnits: -2,
+});
+const CORNERS = [
+  [-0.5, 0.5],
+  [0.5, 0.5],
+  [0.5, -0.5],
+  [-0.5, -0.5],
+] as const;
+const _v = new Vector3();
 
 interface Shown {
   mesh: Mesh;
@@ -45,6 +74,7 @@ interface Shown {
   src: Live["src"];
   version: number;
   place: string;
+  glass?: Live["glass"];
 }
 
 export class LiveSurfaces {
@@ -89,6 +119,11 @@ export class LiveSurfaces {
         s.place = place;
         placeQuad(s.mesh, l);
       }
+      if (s.glass && !l.glass) {
+        this.unhole(s);
+        s.glass(null);
+      }
+      s.glass = l.glass;
       // what: canvases when they're redrawn (live ones only near enough, after their first)
       const near = Math.hypot((l.tl[0] + l.tr[0]) / 2 - camX, (l.tl[1] + l.tr[1]) / 2 - camY) < NEAR;
       if (
@@ -109,7 +144,55 @@ export class LiveSurfaces {
     for (const [k, s] of this.shown) if (!keep.has(k)) this.drop(k, s);
   }
 
+  // Before the frame's render, its matrices made: each glass a player shows through
+  // gets its hole (and the player its corners on the page), or its picture back.
+  // `off`: none this render (a photo of the frame: the canvas alone)
+  // `page`: the canvas on the page (asked only when there's a glass: it's a layout read)
+  holes(camera: Camera, page: () => DOMRect, off = false) {
+    let at: DOMRect | null = null;
+    for (const s of this.shown.values()) {
+      if (!s.glass) continue;
+      at ??= page();
+      const q = off ? null : this.quadOf(s, camera, at);
+      if (q) {
+        s.mesh.material = HOLE;
+        s.mesh.renderOrder = 999; // (after every solid thing it might be behind)
+      } else this.unhole(s);
+      s.glass(q);
+    }
+  }
+
+  private unhole(s: Shown) {
+    s.mesh.material = s.mat;
+    s.mesh.renderOrder = 2;
+  }
+
+  private quadOf(s: Shown, camera: Camera, page: DOMRect): GlassQuad | null {
+    if (!s.mesh.visible || s.mat.opacity < 0.98) return null;
+    camera.updateMatrixWorld();
+    const q: [number, number][] = [];
+    let inX = false;
+    let inY = false;
+    for (const [x, y] of CORNERS) {
+      _v.set(x, y, 0).applyMatrix4(s.mesh.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+      if (_v.z > -0.05) return null; // a corner behind the lens
+      _v.applyMatrix4(camera.projectionMatrix);
+      if (Math.abs(_v.x) < 1) inX = true;
+      if (Math.abs(_v.y) < 1) inY = true;
+      q.push([page.left + ((_v.x + 1) / 2) * page.width, page.top + ((1 - _v.y) / 2) * page.height]);
+    }
+    if (!inX || !inY) {
+      // (no corner on the screen: off it, unless it's spread across it)
+      const xs = q.map((p) => p[0]);
+      const ys = q.map((p) => p[1]);
+      if (Math.max(...xs) < page.left || Math.min(...xs) > page.right) return null;
+      if (Math.max(...ys) < page.top || Math.min(...ys) > page.bottom) return null;
+    }
+    return q as GlassQuad;
+  }
+
   private drop(k: string, s: Shown) {
+    if (s.glass) s.glass(null);
     this.root.remove(s.mesh);
     s.tex.dispose();
     s.mat.dispose();
@@ -156,7 +239,16 @@ function placeQuad(mesh: Mesh, l: Live) {
 export interface LiveSources {
   model: Pick<WorldModel, "livePanels" | "getObject" | "shareVideo" | "panelCanvas">;
   // (each picture's `version` counts its redraws)
-  screens: { pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean; version: number }[] } | null;
+  // (`glass`: the one whose YouTube plays in my card — the player on its glass when it's seen)
+  screens: {
+    pictures(): {
+      def: WorldObjectDef;
+      canvas: HTMLCanvasElement;
+      on: boolean;
+      version: number;
+      glass?: Live["glass"];
+    }[];
+  } | null;
   games: {
     pictures(): {
       def: WorldObjectDef;
@@ -208,7 +300,15 @@ export class LiveFeed {
       if (taken.has(p.def.id) || (!p.on && panels.has(p.def.id))) continue;
       const c = glassCorners(p.def);
       if (!c) continue;
-      out.push({ key: `m:${p.def.id}`, src: p.canvas, ...c, version: p.version, live: true, glow: true });
+      out.push({
+        key: `m:${p.def.id}`,
+        src: p.canvas,
+        ...c,
+        version: p.version,
+        live: true,
+        glow: true,
+        glass: p.glass,
+      });
       taken.add(p.def.id);
     }
     for (const [id, p] of panels) {

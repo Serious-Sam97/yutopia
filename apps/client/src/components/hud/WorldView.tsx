@@ -136,7 +136,9 @@ export function WorldView({ to }: { to?: string | null }) {
 
   return (
     <WorldCtx.Provider value={ctrl}>
-      <main className="relative h-full w-full overflow-hidden select-none">
+      {/* (isolate: YouTube's player on a TV sits under the canvas at z -1 — media/card.ts — over
+          the body's background, which would hide it outside a stacking context of its own) */}
+      <main className="relative isolate h-full w-full overflow-hidden select-none">
         <div ref={host} className="absolute inset-0" />
         <VideoBubbles />
         <div className="pointer-events-none absolute inset-0" style={camera ? { display: "none" } : undefined}>

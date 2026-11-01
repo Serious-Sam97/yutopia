@@ -17,7 +17,7 @@ import { lang } from "@/lib/i18n";
 import { prefs } from "@/lib/prefs";
 import type { WorldController } from "../controller";
 import { hud } from "../store";
-import { MediaCard } from "./card";
+import { MediaCard, type Quad } from "./card";
 import { serverNow, syncClock } from "./clock";
 import { tvOn } from "./foley";
 import { SyncedVideo } from "./jf";
@@ -34,7 +34,9 @@ export const MEDIA_CHUNK = "yutopia-media";
 //    scanlines (a canvas each, the 3D view's `pictures()`); projectors come on
 //    for a playing screen they reach;
 //  · in earshot, you hear it: the loudest YouTube TV (or the radio's YouTube)
-//    plays in the "On TV" card; every Jellyfin TV in earshot streams (the
+//    plays in the "On TV" card — and on the TV itself while it's in sight (its
+//    player behind the canvas, the glass a hole in the frame: tp/live.ts, the
+//    card's `yt`; the thumbnail on the others); every Jellyfin TV in earshot streams (the
 //    loudest few, each at its own volume), a stream that fails is tried again;
 //  · Watch makes the card big (YouTube) or shows the Jellyfin stream big.
 
@@ -44,6 +46,7 @@ const CARD_GRACE_MS = 2500;
 const MAX_JF_STREAMS = 3; // Jellyfin TVs streaming to me at once (the loudest)
 const YT_START_MS = 20_000; // a YouTube player that isn't ready by then is given up on
 const JF_RETRY_MS = [3000, 6000, 12_000, 30_000]; // a failed stream: tried again after
+const GLASS_LOST_MS = 150; // the view stopped placing the player on its TV: back in the card
 const ON_MS = 520; // a CRT warming up
 const OFF_MS = 380; // … collapsing
 
@@ -106,6 +109,7 @@ export class MediaRoom {
   private cc = false; // subtitles on (watching a Jellyfin stream)
   private clockTimer = 0;
   private lastRef = new Map<string, string>(); // what each TV showed (a new thing near me: its sound)
+  private glassAt = 0; // performance.now() the view last put YouTube's player on its TV
   private noise = 0;
 
   constructor(private w: WorldController) {
@@ -239,7 +243,22 @@ export class MediaRoom {
     this.lightProjectors();
     this.playYouTube(sources);
     this.playJellyfin(sources);
+    // YouTube's player over the card, unless the view has it on its TV
+    if (!this.card.onTv || performance.now() - this.glassAt > GLASS_LOST_MS) this.card.ytCard();
   }
+
+  // From the 3D view, each frame its TV has YouTube's player: where its glass is on the
+  // page (null: not in sight — the player goes back to the card)
+  private placeGlass = (q: Quad | null) => {
+    const s = this.ytFor ? this.screens.get(this.ytFor) : null;
+    if (!q || !s || !this.yt) {
+      this.glassAt = 0;
+      if (this.card.onTv) this.card.ytCard();
+      return;
+    }
+    this.glassAt = performance.now();
+    this.card.ytTv(q, s.canvas.width / s.canvas.height);
+  };
 
   // The thing I was watching went off, or was taken away: after a moment the
   // card lets go, so what plays elsewhere isn't held back by it.
@@ -526,7 +545,7 @@ export class MediaRoom {
       this.ytStarting = true;
       const gen = ++this.ytGen;
       const host = document.createElement("div");
-      this.card.body.prepend(host);
+      this.card.yt.prepend(host);
       const p = new SyncedYouTube(host, item.ref, t);
       // (a player that never gets ready — the script stalled, the card was
       // taken down under it — mustn't leave this stuck: it's timed out and dropped)
@@ -574,8 +593,9 @@ export class MediaRoom {
     this.ytLevel = 0;
     this.ytFor = null;
     this.ytIdleSince = 0;
-    for (const c of Array.from(this.card.body.children)) if (!c.classList.contains("ymc-sound")) c.remove();
+    this.card.yt.replaceChildren();
     if (!this.watching || !this.jfs.has(this.watching)) this.card.hide();
+    else this.card.ytCard();
   }
 
   // Every Jellyfin TV in earshot streams onto its glass (the loudest few, each
@@ -703,9 +723,23 @@ export class MediaRoom {
     return s ? { for: { id: s.id, ref: s.ref }, ready: s.p.ready, drift: s.p.drift, failed: s.p.failed } : null;
   }
 
-  // for the 3D view: every display's canvas (what it puts on the glass)
-  pictures(): { def: WorldObjectDef; canvas: HTMLCanvasElement; on: boolean; version: number }[] {
-    return [...this.screens.values()].map((s) => ({ def: s.def, canvas: s.canvas, on: s.wasOn, version: s.ver }));
+  // for the 3D view: every display's canvas (what it puts on the glass), and on the TV
+  // whose YouTube plays in my card (a TV, not Watched big), the player itself (`glass`)
+  pictures(): {
+    def: WorldObjectDef;
+    canvas: HTMLCanvasElement;
+    on: boolean;
+    version: number;
+    glass?: (q: Quad | null) => void;
+  }[] {
+    const on = this.yt && this.ytFor && this.card.visible && !this.card.big ? this.ytFor : null;
+    return [...this.screens.values()].map((s) => ({
+      def: s.def,
+      canvas: s.canvas,
+      on: s.wasOn,
+      version: s.ver,
+      glass: s.def.id === on ? this.placeGlass : undefined,
+    }));
   }
 
   dispose() {

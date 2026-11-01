@@ -514,7 +514,14 @@ export class ThirdPersonView {
     objects = onLevel(all, map);
     const wells = { floor: wellsOf(map, all), ceiling: wellsOf(map, all, "ceiling") };
     this.wellSig = wellsKey(wells);
-    this.renderer = new WebGLRenderer({ antialias: opts.quality !== "lowest", powerPreference: "high-performance" });
+    // (with alpha: a glass a real player shows through is a clear hole in the frame —
+    // live.ts — the page under the canvas there; everywhere else it stays opaque)
+    this.renderer = new WebGLRenderer({
+      antialias: opts.quality !== "lowest",
+      powerPreference: "high-performance",
+      alpha: true,
+    });
+    this.renderer.setClearAlpha(1);
     // every render of the scene (mine, a car's mirror, the warm-up's): each floor's loose
     // pieces left out an area at a time when out of that camera's view (World3.cullLoose)
     this.scene.onBeforeRender = (_r, _s, cam) => {
@@ -2028,6 +2035,7 @@ void main() {
   get ads(): number {
     return this.hands?.ads ?? 0;
   }
+  private pageRect = () => this.renderer.domElement.getBoundingClientRect();
   private fov1p = FOV; // first person's own lens (the wheel zooms it), down the sights closer
 
   // The phone's camera in first person: its zoom (1 = the eye's lens). null lets go.
@@ -2041,8 +2049,11 @@ void main() {
   // task, so it's there without keeping the drawing buffer.
   snapshot(): HTMLCanvasElement | null {
     const tags = this.tagLayer?.style.display ?? "";
+    // (the canvas alone: a glass with a player behind it gets its picture back for this one)
+    this.live.holes(this.camera, this.pageRect, true);
     if (this.post) this.post.render(false);
     else this.renderer.render(this.scene, this.camera);
+    this.live.holes(this.camera, this.pageRect);
     const src = this.renderer.domElement;
     const c = document.createElement("canvas");
     c.width = src.width;
@@ -2911,6 +2922,7 @@ void main() {
       try {
         // (what my floor hides from this camera left out of this one render: below-cull.ts)
         this.cullBelow(slab);
+        this.live.holes(this.camera, this.pageRect);
         if (this.post) this.post.render(dt > 0 && !me?.reduced, hands);
         else {
           this.renderer.render(this.scene, this.camera);

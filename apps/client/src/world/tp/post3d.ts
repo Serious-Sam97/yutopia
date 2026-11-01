@@ -1,12 +1,15 @@
 import {
   type Camera,
+  CustomBlending,
   DepthTexture,
   HalfFloatType,
+  OneFactor,
   type PerspectiveCamera,
   type Scene,
   Vector2,
   type WebGLRenderer,
   WebGLRenderTarget,
+  ZeroFactor,
 } from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
@@ -49,9 +52,12 @@ const FINISH = {
       float d = distance(vUv, vec2(0.5)) / 0.7071;
       float v = smoothstep(0.33, 1.0, d) * 0.32;
       c.rgb = mix(c.rgb, vec3(0.102, 0.063, 0.039), v);
+      // (where a glass is a hole — alpha under 1, a player under the canvas: live.ts —
+      // the dark goes over what shows through it too: as cover, its alpha raised with it)
+      c.a = mix(c.a, 1.0, v);
       // grain, a new pattern each frame
       float n = hash(floor(vUv * res) + frame) - 0.5;
-      c.rgb += n * grain;
+      c.rgb += n * grain * c.a;
       gl_FragColor = c;
     }`,
 };
@@ -88,6 +94,13 @@ export class Post3 {
       "vec4 texel = texture2D( tDiffuse, vUv );\n\t\t\tif ( any( isnan( texel ) ) || any( isinf( texel ) ) ) texel = vec4( 0.0 );",
     );
     hp.needsUpdate = true;
+    // (added to the colour only: the frame's alpha — a glass's hole — left as it is)
+    const bm = this.bloom.blendMaterial;
+    bm.blending = CustomBlending;
+    bm.blendSrc = OneFactor;
+    bm.blendDst = OneFactor;
+    bm.blendSrcAlpha = ZeroFactor;
+    bm.blendDstAlpha = OneFactor;
     this.composer.addPass(this.bloom);
     this.finish = new ShaderPass(FINISH);
     if (lite) this.finish.uniforms.grain.value = 0;
