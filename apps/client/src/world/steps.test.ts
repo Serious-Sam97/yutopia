@@ -9,7 +9,10 @@ import {
   FLOW_CODES,
   Footfalls,
   impulse,
+  LIVE,
   levelOf,
+  nextOf,
+  StepPlayer as Player,
   SPACES,
   type StepPlayer,
   shoeOf,
@@ -509,4 +512,103 @@ test("someone else's sounds carry their pan and low-pass (far, another room); mi
   ff.frame([{ ...me, a: 1 }], ears, 1 / 60, 2000);
   ff.frame([{ ...me, a: 1, verb: { kind: "vault" } }], ears, 1 / 60, 2016);
   assert.equal(places[0], 0, "my vault's hand: here, no low-pass");
+});
+
+// ── the checks (phase 6) ──
+test("never the same step twice running, and every one of them used", () => {
+  for (const n of [2, 3, 6, 8]) {
+    const used = new Set<number>();
+    let last: number | undefined;
+    for (let i = 0; i < 10_000; i++) {
+      const k = nextOf(n, last);
+      assert.notEqual(k, last, `${n} recordings: the same twice at ${i}`);
+      assert.ok(k >= 0 && k < n);
+      used.add(k);
+      last = k;
+    }
+    assert.equal(used.size, n);
+  }
+  assert.equal(nextOf(1, 0), 0, "one recording: it, again");
+});
+
+// an audio context that only counts what's made
+function countingCtx() {
+  let made = 0;
+  const param = () => ({
+    value: 0,
+    setValueAtTime() {},
+    linearRampToValueAtTime() {},
+    exponentialRampToValueAtTime() {},
+    setTargetAtTime() {},
+    cancelScheduledValues() {},
+  });
+  const node = (extra: object = {}) => {
+    made++;
+    return { connect: (n: unknown) => n, start() {}, stop() {}, onended: null, ...extra };
+  };
+  const ctx = {
+    state: "running",
+    currentTime: 0,
+    sampleRate: 8000,
+    createBufferSource: () => node({ buffer: null, playbackRate: param() }),
+    createBiquadFilter: () => node({ type: "", frequency: param(), Q: param(), gain: param() }),
+    createGain: () => node({ gain: param() }),
+    createStereoPanner: () => node({ pan: param() }),
+    createOscillator: () => node({ type: "", frequency: param() }),
+    createBuffer: (_c: number, n: number) => ({ length: n, duration: 0.3, getChannelData: () => new Float32Array(n) }),
+  } as unknown as AudioContext;
+  return { ctx, made: () => made };
+}
+function playerWith(ctx: AudioContext) {
+  const out = { connect: (n: unknown) => n } as unknown as AudioNode;
+  const P = new Player(
+    () => ctx,
+    () => out,
+    () => {},
+  );
+  const buf = { duration: 0.3, getChannelData: () => new Float32Array(10) } as unknown as AudioBuffer;
+  (P as unknown as { ready: Map<string, unknown> }).ready.set("wood", { bufs: [buf, buf, buf], gain: 1 });
+  return P;
+}
+
+test("a step's sound is small: mine 3 nodes, someone else's 5 (its low-pass and pan); 8 at once at most", () => {
+  const c = countingCtx();
+  const P = playerWith(c.ctx);
+  let was = c.made();
+  P.step("wood", { gait: "walk", shoe: "hard" });
+  assert.equal(c.made() - was, 3, "mine: the recording, the shoe, its level");
+  was = c.made();
+  P.step("wood", { gait: "walk", shoe: "hard", gain: 0.5, pan: { pan: 0.3, lp: 4000 } });
+  assert.equal(c.made() - was, 5, "someone else's: and its low-pass and pan");
+  // (none of them ended: the cap holds the rest of theirs back, never mine)
+  const before = c.made();
+  for (let i = 0; i < 12; i++) P.step("wood", { gait: "walk", shoe: "hard", gain: 0.5, pan: 0.2 });
+  const theirs = (c.made() - before) / 4;
+  assert.equal(theirs + 2, LIVE, `${theirs} more of theirs sounding with the 2 before: ${LIVE} at most`);
+  was = c.made();
+  P.step("wood", { gait: "walk", shoe: "hard" });
+  assert.equal(c.made() - was, 3, "mine past the cap all the same");
+});
+
+test("twelve people walking round me: a frame's work in the steps' chunk is a few microseconds", () => {
+  const { ff, ears } = heard();
+  const walkers = (i: number): Walker[] => [
+    me,
+    ...Array.from({ length: 12 }, (_, k) => ({
+      id: `p${k}`,
+      x: Math.cos(k) * 4 + (1.5 * i) / 60,
+      y: Math.sin(k) * 4,
+      a: 1,
+      mv: 1,
+      level: 0,
+      avatar: { shoes: "boots" },
+    })),
+  ];
+  for (let i = 0; i < 60; i++) ff.frame(walkers(i), ears, 1 / 60, (i * 1000) / 60);
+  const t0 = performance.now();
+  const N = 600;
+  for (let i = 60; i < 60 + N; i++) ff.frame(walkers(i), ears, 1 / 60, (i * 1000) / 60);
+  const us = ((performance.now() - t0) / N) * 1000;
+  console.log(`[perf] ${us.toFixed(1)} µs a frame for 12 walkers`);
+  assert.ok(us < 200, `${us.toFixed(1)} µs a frame`);
 });

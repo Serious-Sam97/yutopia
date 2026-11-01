@@ -58,6 +58,12 @@ test("my steps: the body's feet as they land, at the walk's pace, in turn; none 
   );
   await page.waitForTimeout(1200);
   const log: { t: number; side: string; f: string; ok: boolean }[] = await page.evaluate(() => (window as any).__steps);
+  // (a step's played the frame its foot's put down: what's left is the audio's own way out)
+  const latency = await page.evaluate(() => {
+    const c = (window as any).__audio?.mixer?.ctx;
+    return c ? { base: c.baseLatency, output: c.outputLatency, state: c.state } : null;
+  });
+  console.log("[latency]", JSON.stringify(latency));
   const walking = log.filter((s) => s.t >= t0 && s.t <= t1 + 300 && s.ok);
   // (the stop's last foot brought alongside is a step: from 0.4 s after the last move, none)
   const after = log.filter((s) => s.t > t1 + 400);

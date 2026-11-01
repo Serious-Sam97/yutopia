@@ -504,6 +504,22 @@ player, the lift, kneel and crawl, emotes, stepping out of a car, sitting.
 every surface, the budget, the perf with 12 walkers, and a last listening pass by the user in the
 world.
 
+> Run 2026-11-01 (phase 5 committed as e8996a7). The quality bar, item by item:
+>
+> | # | The bar | Where it stands |
+> |---|---|---|
+> | 1 | The sound lands with the foot, within a frame | **Met.** The step is played in the very frame FootLock pins the foot. FootLock over a run hears each foot near its landing phase; a walk gives 2.40 steps/s, the stride says 2.43. In the game: R L R L R, 0.23–0.26 s apart. After that the audio's own way out adds 5.3 ms base + 16 ms output (Chromium on this Mac). |
+> | 2 | Never the same step twice; pitch and level vary | **Met.** `nextOf`: 10,000 picks over 2, 3, 6 and 8 recordings, never one twice running, all used. ±4 % pitch, ±1.5 dB. |
+> | 3 | Every surface has its sound at the feet; a walk finds no gaps | **Met, by a census** (`shared/footing.test.ts`): every tile, the things stood on, the Grounds every 6 m (on a cold night, in a storm's snow), and every Grounds thing's top. All 17 surfaces are under someone's feet somewhere. The walk itself is on Bia's floor only (wood, carpet, a desk): she can't go elsewhere without an admin, and Ana's is the user's own. |
+> | 4 | No steps in the air; every landing has one | **Met.** None in the air, a verb or a move (tests; in the game, a jump gives a step off the wood and both soles back on, one thud). Every landing: a jump's, an edge's (from 0.3 m), the hop-turn's, the fist pump's, out of a car. |
+> | 5 | Others heard by the room rules, as their voices are | **Met.** `hearingGain` with its hysteresis, the camera's pan, a low-pass by distance and 900 Hz through a doorway (in the game: Cai heard fading 1.0 → 0.5; 11.9 kHz a tile off, 4.2 kHz at 8, 900 Hz next door). |
+> | 6 | The page and chars grow by hooks only (under 0.5 KB together) | **Chars met** (58.0, unchanged). **The page didn't:** 421.9 → 423.9 KB (+2.0), inside its 430 budget. Most of it is the controller's: the footing (phase 1), my steps and gates (2), the bodies handed over (3), the moments' hooks (4), the space and the low-pass (5). The steps' own chunk is 6.7 KB of its 10. |
+> | 7 | No measurable frame cost with 12 people walking; ~40 audio nodes | **Met.** `Footfalls` takes 8.9 µs a frame for 12 walkers. A step of mine is 3 nodes and someone else's 5 (its low-pass and pan; the gait's filter only when it's dulled). At most 8 steps sound at once: past that, someone else's quieter one goes (never mine), so ~40 nodes at the worst. |
+> | — | The user's listening pass in the world | **Waiting for the user.** |
+>
+> All three suites (shared 479, client 142, world-server 187), types, Biome, the five steps specs
+> in the game, the build and the budget pass.
+
 ## Decisions
 
 Decided by the user, 2026-11-01:

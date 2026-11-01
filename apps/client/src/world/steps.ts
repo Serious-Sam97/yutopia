@@ -15,6 +15,15 @@ export type StepGait = "crouch" | "walk" | "jog" | "sprint";
 export type Place = number | { pan: number; lp: number };
 export type Shoe = "hard" | "soft" | "sandals";
 
+/** The next of a surface's `n` recordings — any but the `last` one. */
+export function nextOf(n: number, last: number | undefined, r = Math.random): number {
+  const i = Math.floor(r() * n);
+  return n > 1 && i === last ? (i + 1 + Math.floor(r() * (n - 1))) % n : i;
+}
+
+/** steps sounding at once, at most (someone else's past it goes: mine always) */
+export const LIVE = 8;
+
 /** A shoe's family (shared avatar.ts's shoes): what it sounds like. */
 export function shoeOf(shoes: string | undefined): Shoe {
   if (shoes === "sandals") return "sandals";
@@ -54,6 +63,8 @@ export class StepPlayer {
   private banks = new Map<Footing, Promise<Bank | null>>();
   private ready = new Map<Footing, Bank | null>();
   private last = new Map<Footing, number>();
+  /** steps sounding now */
+  private live = 0;
 
   constructor(
     private readonly ctx: () => AudioContext | null,
@@ -112,11 +123,10 @@ export class StepPlayer {
       this.synth(f, loud);
       return;
     }
+    // (so many at once and no more: someone else's quieter one goes — never mine)
+    if (this.live >= LIVE && near < 1) return;
     const at = o.at ?? ctx.currentTime;
-    // (never the same one twice running)
-    const n = bank.bufs.length;
-    let i = Math.floor(Math.random() * n);
-    if (n > 1 && i === this.last.get(k)) i = (i + 1 + Math.floor(Math.random() * (n - 1))) % n;
+    const i = nextOf(bank.bufs.length, this.last.get(k));
     this.last.set(k, i);
     const b = bank.bufs[i];
     const src = ctx.createBufferSource();
@@ -134,9 +144,15 @@ export class StepPlayer {
       tone.Q.value = 0.6;
     }
     // the gait (a crouch dull) and a surface borrowing another's recordings (the felt over carpet)
-    const dull = ctx.createBiquadFilter();
-    dull.type = "lowpass";
-    dull.frequency.value = Math.min(o.gait === "crouch" ? 2200 : 18000, DAMPED[f] ?? 18000);
+    const cut = Math.min(o.gait === "crouch" ? 2200 : 18000, DAMPED[f] ?? 18000);
+    let dull: AudioNode = tone;
+    if (cut < 18000) {
+      const d = ctx.createBiquadFilter();
+      d.type = "lowpass";
+      d.frequency.value = cut;
+      tone.connect(d);
+      dull = d;
+    }
     const g = ctx.createGain();
     const vary = 10 ** (((Math.random() - 0.5) * 3) / 20);
     const level =
@@ -151,15 +167,21 @@ export class StepPlayer {
     g.gain.setValueAtTime(level, at);
     g.gain.setValueAtTime(level, at + len * 0.7);
     g.gain.linearRampToValueAtTime(0.0001, at + len);
-    const end = this.placed(ctx, o.pan ?? 0);
-    g.connect(end);
-    src.connect(tone).connect(dull).connect(g);
+    this.route(ctx, g, o.pan ?? 0);
+    src.connect(tone);
+    dull.connect(g);
     src.start(at);
     src.stop(at + len + 0.02);
-    if (o.shoe === "sandals") this.slap(ctx, end, at + 0.06 + Math.random() * 0.02, 0.09 * loud);
-    if (o.scuff) this.noise(ctx, end, at + 0.02, 0.14, "bandpass", BAND[f] * 1.3, 1.2, 0.06 * loud, 0.03);
+    this.live++;
+    src.onended = () => {
+      this.live--;
+    };
+    // (what goes with it, when it does: its own way out)
+    const extra = () => this.placed(ctx, o.pan ?? 0);
+    if (o.shoe === "sandals") this.slap(ctx, extra(), at + 0.06 + Math.random() * 0.02, 0.09 * loud);
+    if (o.scuff) this.noise(ctx, extra(), at + 0.02, 0.14, "bandpass", BAND[f] * 1.3, 1.2, 0.06 * loud, 0.03);
     if (o.shoe === "soft" && (f === "tile" || f === "wood") && Math.random() < 0.08)
-      this.squeak(ctx, end, at + 0.04, 0.025 * loud);
+      this.squeak(ctx, extra(), at + 0.04, 0.025 * loud);
   }
 
   /** A paw (pets: docs/plan/63, phase 3) — the surface's own step, short, light and higher (`rate`),
@@ -257,10 +279,15 @@ export class StepPlayer {
   // where a sound goes (phase 5): through its low-pass (far off, through a doorway) and its pan, out
   // dry and into the room's reverb
   private placed(ctx: AudioContext, place: Place): AudioNode {
+    const head = ctx.createGain();
+    this.route(ctx, head, place);
+    return head;
+  }
+  // `from` on out that way: its low-pass and pan only when it has them (a step of mine: straight out)
+  private route(ctx: AudioContext, from: AudioNode, place: Place): void {
     const pan = typeof place === "number" ? place : place.pan;
     const lp = typeof place === "number" ? 0 : place.lp;
-    const head = ctx.createGain();
-    let tail: AudioNode = head;
+    let tail: AudioNode = from;
     if (lp > 0 && lp < 15000) {
       const f = ctx.createBiquadFilter();
       f.type = "lowpass";
@@ -278,7 +305,6 @@ export class StepPlayer {
     tail.connect(this.out());
     const wet = this.wet();
     if (wet) tail.connect(wet);
-    return head;
   }
 
   // ── the room (phase 5): one reverb, its impulse made for the kind of space I'm in, crossfaded

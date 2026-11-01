@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FOOTINGS, keyFooting, kindFooting, MATS, TILE_FOOTING } from "./footing.ts";
-import { BUILDINGS, CHUNK, deckAt, footingAt, inBuilt, POND, WAYS, whatFooting } from "./grounds.ts";
+import { BUILDINGS, CHUNK, deckAt, footingAt, GROUNDS, inBuilt, POND, WAYS, whatFooting } from "./grounds.ts";
 import { FLOORS } from "./map.ts";
 import { type GroundWhat, groundSolidAt, groundSolidsIn } from "./shapes/grounds.ts";
 
@@ -159,4 +159,48 @@ test("a town roof stood on is the roof (under its snow), not the floor under it"
   assert.ok(what === "roof" || what === "building", `on the roof: ${what}`);
   assert.equal(whatFooting(what, way), "snow");
   assert.equal(solidAt(roof.x, roof.z, roof.top + 1.5), null, "1.5 m over it: nothing stood on");
+});
+
+test("the census: every one of the steps' surfaces is under someone's feet somewhere", () => {
+  const seen = new Map<string, string>();
+  const saw = (f: string, where: string) => {
+    if (!seen.has(f)) seen.set(f, where);
+  };
+  // the building: its tiles, the rugs, what's stood on
+  for (const ch of Object.keys(FLOORS)) saw(TILE_FOOTING[ch], `tile ${ch}`);
+  for (const k of ["rug", "desk", "pool_table", "arcade", "stairs", "piano"]) saw(kindFooting(k), k);
+  saw(
+    keyFooting(
+      "car:c",
+      () => undefined,
+      (w) => whatFooting(w, way),
+    ) ?? "",
+    "a car's roof",
+  );
+  saw(
+    keyFooting(
+      "lift:l",
+      () => undefined,
+      (w) => whatFooting(w, way),
+    ) ?? "",
+    "the lift car",
+  );
+  // the Grounds, every 6 m, on a cold night and in a storm's snow
+  for (let x = GROUNDS.x0; x < GROUNDS.x1; x += 6)
+    for (let z = GROUNDS.z0; z < GROUNDS.z1; z += 6) {
+      saw(footingAt(x, z), `${x},${z}`);
+      saw(footingAt(x, z, 0.95), `${x},${z} cold`);
+      saw(footingAt(x, z, 0.5, 0.6), `${x},${z} in a storm`);
+    }
+  // the things stood on out there (their tops), the bridges by their way
+  for (let cx = Math.floor(GROUNDS.x0 / CHUNK); cx * CHUNK < GROUNDS.x1; cx++)
+    for (let cz = Math.floor(GROUNDS.z0 / CHUNK); cz * CHUNK < GROUNDS.z1; cz++)
+      for (const g of groundSolidsIn(cx, cz))
+        saw(
+          whatFooting(g.what, () => footingAt(g.s.x, g.s.z)),
+          g.what,
+        );
+  const missing = FOOTINGS.filter((f) => !seen.has(f));
+  assert.deepEqual(missing, [], `never under anyone's feet: ${missing.join(", ")}`);
+  console.log(`[census] ${[...seen].map(([f, w]) => `${f} (${w})`).join(", ")}`);
 });
