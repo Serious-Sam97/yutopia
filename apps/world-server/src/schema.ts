@@ -579,6 +579,10 @@ export class WorldState extends Schema {
   @type("string") stormBy = "";
   @type("float32") stormTo = -1;
   @type("float64") stormUntil = 0;
+  // the steps' volume for everyone (docs/plan/63-the-steps.md: 1 as they are), who set it and when
+  @type("float32") stepsVol = 1;
+  @type("string") stepsBy = "";
+  @type("float64") stepsAt = 0;
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();

@@ -408,6 +408,20 @@ it('lists everyone with an account for the world server (what is left of anyone 
     expect(internalCall($this, 'GET', '/api/internal/members')->json('ids'))->not->toContain($b->id);
 });
 
+it('keeps the world\'s sound an admin set: the steps\' volume, who and when', function () {
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('sound'))->toBeNull();
+    internalCall($this, 'PUT', '/api/internal/world/sound', ['sound' => ['steps' => 0.6, 'by' => 'Ana Demo', 'at' => 1762000000000]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('sound'))->toBe(['steps' => 0.6, 'by' => 'Ana Demo', 'at' => 1762000000000]);
+    // between none and twice; who's said (none: back as they are)
+    internalCall($this, 'PUT', '/api/internal/world/sound', ['sound' => ['steps' => 2.5, 'by' => null, 'at' => 0]])->assertUnprocessable();
+    internalCall($this, 'PUT', '/api/internal/world/sound', ['sound' => ['steps' => -0.1, 'by' => null, 'at' => 0]])->assertUnprocessable();
+    internalCall($this, 'PUT', '/api/internal/world/sound', ['sound' => ['steps' => 1, 'by' => null, 'at' => 0]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('sound.steps'))->toEqual(1);
+    // (the karts' record beside it untouched)
+    internalCall($this, 'PUT', '/api/internal/world/karts', ['record' => ['best' => null, 'last' => [], 'wins' => []]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('sound.by'))->toBeNull();
+});
+
 it('keeps the Kart Park\'s record', function () {
     $record = ['best' => ['t' => 33450, 'name' => 'Ana Demo'], 'last' => [['at' => 1, 'mode' => 'gp', 'top' => ['Vortex', 'Ana Demo', 'Vortex']]], 'wins' => ['Vortex' => 2]];
     internalCall($this, 'PUT', '/api/internal/world/karts', ['record' => $record])->assertOk();

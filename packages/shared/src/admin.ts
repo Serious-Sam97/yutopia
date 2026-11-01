@@ -64,5 +64,6 @@ export const LOG_KINDS = [
   "publish",
   "rollback",
   "god",
+  "steps",
 ] as const;
 export type LogKind = (typeof LOG_KINDS)[number];

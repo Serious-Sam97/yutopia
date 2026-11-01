@@ -378,6 +378,13 @@ export class WorldRoom extends Room<WorldState> {
     this.state.playlists = JSON.stringify(cleanPlaylists(info?.playlists ?? []));
     this.savedLoot = info?.loot ?? null;
     this.savedKarts = info?.karts ?? null;
+    // the steps' volume an admin set (kept in the world's settings)
+    const sv = Number(info?.sound?.steps);
+    if (Number.isFinite(sv)) {
+      this.state.stepsVol = Math.max(0, Math.min(2, sv));
+      this.state.stepsBy = typeof info?.sound?.by === "string" ? info.sound.by : "";
+      this.state.stepsAt = Number(info?.sound?.at) || 0;
+    }
     this.registerMessages();
     this.features = installFeatures(this);
 
@@ -929,6 +936,28 @@ export class WorldRoom extends Room<WorldState> {
         const hm = `${Math.floor(hh)}:${String(Math.round((hh % 1) * 60) % 60).padStart(2, "0")}`;
         this.adminLog(by, "hour", null, this.hourSet ? `to ${hm}` : "back to the real hour");
       }
+    });
+    // the steps' volume for everyone (docs/plan/63-the-steps.md): 0 … 2, or null: as they are (1).
+    // Admins only; kept in the world's settings
+    this.on("mod:steps", (client, m) => {
+      if (!owner(client)) return;
+      const v = m.v === null || m.v === undefined ? null : Number(m.v);
+      if (v !== null && !Number.isFinite(v)) return;
+      const by = this.state.players.get(client.sessionId);
+      this.state.stepsVol = v === null ? 1 : Math.round(Math.max(0, Math.min(2, v)) * 100) / 100;
+      this.state.stepsBy = v === null ? "" : (by?.name ?? "");
+      this.state.stepsAt = v === null ? 0 : Date.now();
+      if (!config.offline)
+        void api
+          .putSound({ steps: this.state.stepsVol, by: this.state.stepsBy || null, at: this.state.stepsAt })
+          .catch((e) => console.warn("[sound] steps", e.message));
+      if (by)
+        this.adminLog(
+          by,
+          "steps",
+          null,
+          v === null ? "back to as they are" : `to ${Math.round(this.state.stepsVol * 100)} %`,
+        );
     });
     const byUid = (uid: number) => [...this.state.players.values()].find((q) => q.uid === uid);
     this.on("mod:mute", (client, m) => {

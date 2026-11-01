@@ -66,6 +66,28 @@ export class StepPlayer {
   private last = new Map<Footing, number>();
   /** steps sounding now */
   private live = 0;
+  // everything the steps make goes out through this: the steps' volume (an admin's, for everyone)
+  private master: GainNode | null = null;
+  private level = 1;
+  private dest(ctx: AudioContext): AudioNode {
+    if (!this.master) {
+      this.master = ctx.createGain();
+      this.master.gain.value = this.level;
+      this.master.connect(this.out());
+    }
+    return this.master;
+  }
+  /** The steps' volume (0 none, 1 as they are, 2 twice: the room's `stepsVol`, docs/plan/63). */
+  volume(v: number): void {
+    if (v === this.level) return;
+    this.level = v;
+    const ctx = this.ctx();
+    if (this.master && ctx) this.master.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+  }
+  /** The steps' volume as it is. */
+  get vol(): number {
+    return this.level;
+  }
 
   constructor(
     private readonly ctx: () => AudioContext | null,
@@ -303,7 +325,7 @@ export class StepPlayer {
       tail.connect(p);
       tail = p;
     }
-    tail.connect(this.out());
+    tail.connect(this.dest(ctx));
     const wet = this.wet();
     if (wet) tail.connect(wet);
   }
@@ -333,7 +355,7 @@ export class StepPlayer {
       const gain: [GainNode, GainNode] = [ctx.createGain(), ctx.createGain()];
       for (const i of [0, 1] as const) {
         gain[i].gain.value = 0;
-        send.connect(conv[i]).connect(gain[i]).connect(this.out());
+        send.connect(conv[i]).connect(gain[i]).connect(this.dest(ctx));
       }
       this.room = { send, conv, gain, live: 0, space: "dry" };
     }

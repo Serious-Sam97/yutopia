@@ -148,6 +148,38 @@ test("the hour: São Paulo's, the same for everyone; an admin sets another, nobo
   await waitFor(() => near(guest.state.hour, spHour(Date.now())));
 });
 
+test("the steps' volume (docs/plan/63): as they are for everyone; an admin sets another, nobody else can", async () => {
+  const person = async (id: number, roles: string) => {
+    const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 9,
+      token: `dev:${id}:P${id}:${roles}`,
+    });
+    rooms.push(room);
+    await waitFor(() => !!room.state?.players?.get(room.sessionId));
+    return room;
+  };
+  const admin = await person(93, "member,admin");
+  const guest = await person(94, "member");
+  // (the sandbox may hold others from before: the guest sees the admin)
+  await waitFor(() => guest.state.players.has(admin.sessionId));
+  assert.equal(guest.state.stepsVol, 1);
+  guest.send("mod:steps", { v: 0.3 });
+  await sleep(300);
+  assert.equal(guest.state.stepsVol, 1, "a member can't set it");
+  // an admin's, for everyone, who and when said; kept between none and twice, to the percent
+  admin.send("mod:steps", { v: 0.6 });
+  await waitFor(() => Math.abs(guest.state.stepsVol - 0.6) < 1e-6);
+  assert.equal(guest.state.stepsBy, "P93");
+  assert.ok(guest.state.stepsAt > 0);
+  admin.send("mod:steps", { v: 7 });
+  await waitFor(() => guest.state.stepsVol === 2);
+  admin.send("mod:steps", { v: 0.333 });
+  await waitFor(() => Math.abs(guest.state.stepsVol - 0.33) < 1e-6);
+  // as they are again
+  admin.send("mod:steps", { v: null });
+  await waitFor(() => guest.state.stepsVol === 1 && guest.state.stepsBy === "");
+});
+
 // No ghosts (docs/plan/36-the-ghost.md): a reload or a tab opened again takes over
 // the seat kept for the old line, at once, and arrives where they were.
 test("back after a reload: the old line's kept seat goes at once, and they're where they were", async () => {

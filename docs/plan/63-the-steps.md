@@ -520,6 +520,13 @@ world.
 > All three suites (shared 479, client 142, world-server 187), types, Biome, the five steps specs
 > in the game, the build and the budget pass.
 
+> **After (2026-11-01):** the steps 2.4 dB down by ear (`LEVEL` 0.5 → 0.38, 4832040). Then the
+> steps' volume on the admins' panel (World → "The steps' volume"): 0–200 % for everyone, as the
+> hour and the weather are. It's an admin-only `mod:steps`, the room's `stepsVol` / `stepsBy` /
+> `stepsAt`, and it's kept in the world's settings (`PUT /internal/world/sound`, read back with the
+> world at start), with an admin log line ("steps"). Each client's step player has one master
+> gain at it; the synth stand-in is scaled too.
+
 ## Decisions
 
 Decided by the user, 2026-11-01:

@@ -56,6 +56,7 @@ export interface WorldInfo {
   playlists?: unknown; // the YouTube playlists played here (features/media.ts)
   loot?: unknown; // the Grounds' loot: spots, the night's budget, drops (features/survival.ts)
   karts?: unknown; // the Kart Park's record (features/karts.ts)
+  sound?: { steps?: unknown; by?: unknown; at?: unknown } | null; // the steps' volume an admin set (WorldRoom mod:steps)
   edits?: GroundsEdits; // god mode's edits to the Grounds as published (features/godmode.ts)
 }
 
@@ -90,6 +91,7 @@ export const api = {
   putLayout: (layout: Layout) => call("PUT", "/world/layout", layout),
   putPlaylists: (playlists: unknown[]) => call("PUT", "/world/playlists", { playlists }),
   putKarts: (record: unknown) => call("PUT", "/world/karts", { record }),
+  putSound: (sound: { steps: number; by: string | null; at: number }) => call("PUT", "/world/sound", { sound }),
   // god mode (docs/plan/53-the-god-mode.md): an admin's draft (by its id: plan 55), a revision, the next one
   groundsDraft: (id: number) =>
     call<{ draft: { userId: number; name: string; baseRev: number; data: GroundsEdits } | null }>(

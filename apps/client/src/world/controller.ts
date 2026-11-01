@@ -4093,7 +4093,7 @@ export class WorldController {
     this.stepper ??= new S.StepPlayer(
       () => (mixer.ctx?.state === "running" ? mixer.ctx : null),
       () => mixer.buses.effects,
-      (g, gain) => sound.stepSynth(g, gain),
+      (g, gain) => sound.stepSynth(g, gain * (this.stepper?.vol ?? 1)),
     );
     return this.stepper;
   }
@@ -4155,6 +4155,8 @@ export class WorldController {
   }
   private stepsBy(went: number, f: Floor, dt: number) {
     this.stepper?.space(this.spaceHere(f));
+    // (the steps' volume an admin set, for everyone: the room's)
+    this.stepper?.volume(this.room?.state.stepsVol ?? 1);
     if (dt > 0 && went < 1.5) this.stepped.speed += (went / dt - this.stepped.speed) * Math.min(1, dt * 8);
     this.stepper?.preload(f);
     if (!this.feet.ok || went > 1.5) return;

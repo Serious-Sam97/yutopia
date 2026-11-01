@@ -8,8 +8,8 @@ import { Icon } from "../icons";
 import { ago, Card, Note, Row, Seg, Tag, useLive, useWords } from "./ui";
 
 // The world (docs/plan/48-the-admin.md): what the whole town feels, live — the hour, the
-// weather, every lock with its unlock from anywhere, the cars and the shuttle, the Kart Park's
-// layout, a notice to everyone in. Admins only; the world server says who set what and when.
+// weather, the steps' volume (docs/plan/63-the-steps.md), every lock with its unlock from anywhere,
+// the cars and the shuttle, the Kart Park's layout, a notice to everyone in. Admins only; the world server says who set what and when.
 const W = {
   hour: ["The hour", "A hora"],
   inWorld: ["in the world", "no mundo"],
@@ -19,6 +19,13 @@ const W = {
   weather: ["The weather", "O tempo"],
   clear: ["Clear", "Limpo"],
   storm: ["Storm", "Tempestade"],
+  steps: ["The steps' volume", "O volume dos passos"],
+  stepsS: [
+    "Everyone's footsteps and the body's other sounds, for everyone.",
+    "Os passos e os outros sons do corpo, para todos.",
+  ],
+  stepsBy: ["set by {who} · {when}", "definido por {who} · {when}"],
+  stepsReset: ["Back to 100 %", "Voltar a 100 %"],
   scheduled: ["As scheduled", "Como previsto"],
   calledBy: ["{what} called by {who} · {m} min left", "{what} pedido por {who} · faltam {m} min"],
   locks: ["Locked now · {n}", "Trancado agora · {n}"],
@@ -60,6 +67,9 @@ interface Snap {
   stormBy: string;
   stormTo: number;
   stormUntil: number;
+  stepsVol: number;
+  stepsBy: string;
+  stepsAt: number;
   rooms: { key: string; by: string }[];
   doors: { id: string; x: number; y: number; level: number; kind: string }[];
   layout: string;
@@ -75,6 +85,7 @@ export function World() {
   const pt = useLang() === "pt";
   const people = useHud((s) => s.people);
   const [hourDraft, setHourDraft] = useState<number | null>(null);
+  const [stepsDraft, setStepsDraft] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [tone, setTone] = useState<"info" | "warn">("info");
   const s = useLive<Snap>(w, (w) => {
@@ -97,6 +108,9 @@ export function World() {
       stormBy: st?.stormBy ?? "",
       stormTo: st?.stormTo ?? -1,
       stormUntil: st?.stormUntil ?? 0,
+      stepsVol: st?.stepsVol ?? 1,
+      stepsBy: st?.stepsBy ?? "",
+      stepsAt: st?.stepsAt ?? 0,
       rooms,
       doors,
       layout: park?.layout ?? "eight",
@@ -118,6 +132,11 @@ export function World() {
   const weather = s.stormTo < 0 ? "scheduled" : s.stormTo >= 0.5 ? "storm" : "clear";
   const locked = s.rooms.length + s.doors.length;
   const hour = hourDraft ?? s.hour;
+  const steps = stepsDraft ?? s.stepsVol;
+  const sendSteps = () => {
+    if (stepsDraft !== null) w.send("mod:steps", { v: stepsDraft });
+    setStepsDraft(null);
+  };
   return (
     <>
       <Card
@@ -185,6 +204,42 @@ export function World() {
             { v: "scheduled", label: t("scheduled") },
           ]}
         />
+      </Card>
+      <Card
+        label={t("steps")}
+        right={s.stepsBy ? <Tag tone="lamp">{t("stepsBy", { who: s.stepsBy, when: ago(s.stepsAt, pt) })}</Tag> : null}
+      >
+        <div className="flex items-center gap-5 flex-wrap">
+          <div className="text-center w-24">
+            <div className="title text-[32px]" style={{ letterSpacing: ".04em" }}>
+              {Math.round(steps * 100)}%
+            </div>
+          </div>
+          <input
+            type="range"
+            className="slider flex-1 min-w-[160px]"
+            min={0}
+            max={2}
+            step={0.05}
+            value={steps}
+            style={{ "--v": `${(steps / 2) * 100}%` } as React.CSSProperties}
+            aria-label={t("steps")}
+            data-testid="steps-volume"
+            onChange={(e) => setStepsDraft(Number(e.target.value))}
+            onPointerUp={sendSteps}
+            onKeyUp={sendSteps}
+          />
+          <button
+            type="button"
+            className="deck-btn"
+            disabled={!s.stepsBy}
+            onClick={() => w.send("mod:steps", { v: null })}
+          >
+            <Icon name="walk" size={15} />
+            {t("stepsReset")}
+          </button>
+        </div>
+        <Note>{t("stepsS")}</Note>
       </Card>
       <Card label={t("locks", { n: locked })}>
         {!locked && <Note>{t("noLocks")}</Note>}

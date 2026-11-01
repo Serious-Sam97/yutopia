@@ -568,6 +568,8 @@ function playerWith(ctx: AudioContext) {
   );
   const buf = { duration: 0.3, getChannelData: () => new Float32Array(10) } as unknown as AudioBuffer;
   (P as unknown as { ready: Map<string, unknown> }).ready.set("wood", { bufs: [buf, buf, buf], gain: 1 });
+  // (its way out made, once: the steps' volume)
+  (P as unknown as { dest(c: AudioContext): AudioNode }).dest(ctx);
   return P;
 }
 
@@ -611,4 +613,27 @@ test("twelve people walking round me: a frame's work in the steps' chunk is a fe
   const us = ((performance.now() - t0) / N) * 1000;
   console.log(`[perf] ${us.toFixed(1)} µs a frame for 12 walkers`);
   assert.ok(us < 200, `${us.toFixed(1)} µs a frame`);
+});
+
+test("the steps' volume (the admins'): everything the steps make goes out through it", () => {
+  const gains: { gain: { value: number } }[] = [];
+  const c = countingCtx();
+  const make = c.ctx.createGain.bind(c.ctx);
+  (c.ctx as unknown as { createGain: () => unknown }).createGain = () => {
+    const g = make() as unknown as { gain: { value: number } };
+    gains.push(g);
+    return g;
+  };
+  const out = { connect: (n: unknown) => n } as unknown as AudioNode;
+  const P = new Player(
+    () => c.ctx,
+    () => out,
+    () => {},
+  );
+  P.volume(0.4);
+  assert.equal(P.vol, 0.4);
+  const buf = { duration: 0.3, getChannelData: () => new Float32Array(10) } as unknown as AudioBuffer;
+  (P as unknown as { ready: Map<string, unknown> }).ready.set("wood", { bufs: [buf], gain: 1 });
+  P.step("wood", { gait: "walk", shoe: "hard" });
+  assert.equal(gains.filter((g) => g.gain.value === 0.4).length, 1, "its way out made at the volume set");
 });

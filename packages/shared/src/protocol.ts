@@ -215,6 +215,8 @@ export interface ClientMessages {
   "mod:storm": { storm: number | null; now?: boolean };
   // the world's hour (shared clock.ts): set one (0–24; it runs on from there), or null: São Paulo's again
   "mod:hour": { h: number | null };
+  // the steps' volume for everyone (docs/plan/63-the-steps.md): 0 none … 1 as they are … 2 twice; null: 1 again
+  "mod:steps": { v: number | null };
   // removed for `minutes` (shared admin.ts REMOVE_MINUTES; none: 10), or let back in early
   "mod:kick": { userId: number; minutes?: number };
   "mod:unremove": { userId: number };

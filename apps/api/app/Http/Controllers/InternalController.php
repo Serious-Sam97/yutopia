@@ -26,7 +26,7 @@ use Illuminate\Validation\Rule;
 class InternalController extends Controller
 {
     // (shared admin.ts LOG_KINDS: what the log takes)
-    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god'];
+    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps'];
 
     public function __construct(private readonly Worlds $worlds) {}
 
@@ -54,6 +54,7 @@ class InternalController extends Controller
             'playlists' => $world->settings['playlists'] ?? [],
             'loot' => $world->settings['loot'] ?? null,
             'karts' => $world->settings['karts'] ?? null,
+            'sound' => $world->settings['sound'] ?? null,
             // god mode's edits to the Grounds as published (docs/plan/53-the-god-mode.md)
             'edits' => GroundRevision::edits(),
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld(),
@@ -427,6 +428,26 @@ class InternalController extends Controller
 
     // The Kart Park's record (docs/plan/46-the-karts.md): its best lap, the last ten races' top
     // three, wins by name — kept as the world-server sends it (it's the one that counts them).
+    // The world's sound as an admin set it (docs/plan/63-the-steps.md): the steps' volume (1 as they
+    // are, 0 none, 2 twice), who set it and when — kept in the world's settings like the karts'.
+    public function sound(Request $request): JsonResponse
+    {
+        $request->validate([
+            'sound' => ['present', 'array'],
+            'sound.steps' => ['required', 'numeric', 'min:0', 'max:2'],
+            'sound.by' => ['present', 'nullable', 'string', 'max:120'],
+            'sound.at' => ['present', 'integer', 'min:0'],
+        ]);
+        $sound = $request->input('sound');
+        $world = World::current();
+        $world->settings = array_merge($world->settings ?? [], [
+            'sound' => ['steps' => (float) $sound['steps'], 'by' => $sound['by'], 'at' => (int) $sound['at']],
+        ]);
+        $world->save();
+
+        return response()->json(['ok' => true]);
+    }
+
     public function karts(Request $request): JsonResponse
     {
         $request->validate([
