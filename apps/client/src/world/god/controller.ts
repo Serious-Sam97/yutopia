@@ -19,7 +19,7 @@ import { api } from "@/lib/api";
 import { addStrings, type Key, tr } from "@/lib/i18n";
 import { GOD_STRINGS } from "@/lib/i18n-god";
 import type { WorldController } from "../controller";
-import { layDraft, layings, onPublished, publishedEdits } from "../grounds-load";
+import { layDraft, layings, onPublished, publishedEdits, recheckEdits } from "../grounds-load";
 import { GOD_READY, GOD_TOOLS, type GodDraftRow, type GodHud, type GodTool, hud, toast } from "../store";
 import type { GodInput, ThirdPersonView } from "../tp/view";
 import { BuildingsTool } from "./buildings";
@@ -1150,6 +1150,8 @@ export class GodController {
     if (!this.changes()) return;
     // (no name yet: asked first)
     if (this.draft?.id === null) return this.ask("first");
+    // (the room has a newer revision live than the one I have: fetched, the draft merged onto it)
+    if ((this.w.room?.state.groundsRev ?? this.base.rev) !== this.base.rev) recheckEdits();
     this.set({ publish: { state: "open" } });
   }
   closePublish() {
@@ -1216,6 +1218,8 @@ export class GodController {
   }
   private refused(m: ServerMessages["god:refused"]) {
     if (hud.get().god.publish) this.set({ publish: { state: "refused", reason: m.reason, problems: m.problems } });
+    // (made on an older revision than live, say: what's live fetched again, the draft merged onto it)
+    recheckEdits();
   }
 
   // ── the HUD's ─────────────────────────────────────────────────────────────

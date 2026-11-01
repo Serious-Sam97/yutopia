@@ -99,21 +99,58 @@ function gotPublished(m: Grounds, edits: GroundsEdits) {
   m.applyEdits(edits);
   done(edits.rev);
 }
+// Fetched by the revision the room says is live: an answer older than that (a cache on the way, a
+// fetch that failed) was taken as what's live and never asked again — god mode then made every
+// draft on it, and every publish was refused ("Revision 2 is live; your draft was made on 0").
+// Now an older one, or none, is asked again a moment later, longer each time — in the background:
+// the land's there meanwhile, as it is.
+const RETRY_MS = [1000, 2000, 5000, 10_000, 30_000];
+let recheck = false; // asked again even if it's laid (god mode refused: what's live may be newer)
+let tries = 0;
+let retrying = false;
 function layWanted(m: Grounds): Promise<void> {
   laying ??= (async () => {
     try {
       // (again while the room's moved on since the last fetch)
-      while (laid !== want) {
+      while (laid !== want || recheck) {
         const asked = want;
-        const edits: GroundsEdits = asked ? (await api<{ edits: GroundsEdits }>("/api/world/edits")).edits : { rev: 0 };
-        gotPublished(m, edits);
+        const again = recheck;
+        recheck = false;
+        let edits: GroundsEdits | null = { rev: 0 };
+        if (asked || again)
+          try {
+            // (by revision: nothing on the way keeps an older one under this address)
+            edits = (await api<{ edits: GroundsEdits }>(`/api/world/edits?rev=${asked}`)).edits;
+          } catch (e) {
+            console.warn("[grounds] god mode's edits not fetched:", e);
+            edits = null;
+          }
+        if (!edits || edits.rev < asked) {
+          recheck ||= again;
+          if (!retrying) {
+            retrying = true;
+            setTimeout(
+              () => {
+                retrying = false;
+                void layWanted(m);
+              },
+              RETRY_MS[Math.min(tries++, RETRY_MS.length - 1)],
+            );
+          }
+          return;
+        }
+        tries = 0;
+        if (edits.rev !== laid || draft) gotPublished(m, edits);
         if (want === asked) want = edits.rev;
       }
-    } catch (e) {
-      console.warn("[grounds] god mode's edits not laid:", e);
     } finally {
       laying = null;
     }
   })();
   return laying;
+}
+/** What's live asked for again (god mode was told its draft's on an older revision than live). */
+export function recheckEdits(): void {
+  recheck = true;
+  if (mod) void layWanted(mod);
 }
