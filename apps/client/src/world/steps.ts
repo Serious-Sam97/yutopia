@@ -31,8 +31,9 @@ export function shoeOf(shoes: string | undefined): Shoe {
 }
 
 const LOUD: Record<StepGait, number> = { crouch: 0.22, walk: 0.7, jog: 0.85, sprint: 1 };
-/** a step's level under the effects bus (recordings at about −22 dB RMS, peaks near 0) */
-const LEVEL = 0.5;
+/** a step's level under the effects bus (recordings at about −22 dB RMS, peaks near 0; 0.5 → 0.38,
+ *  2.4 dB down, on the user's ear 2026-11-01) */
+const LEVEL = 0.38;
 /** each surface's recordings brought to this RMS (their first 150 ms), so none stands out */
 const TARGET = 10 ** (-22 / 20);
 /** with no recordings of their own: another's, damped */
