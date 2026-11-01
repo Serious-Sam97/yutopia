@@ -323,6 +323,14 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   scratch_post: one(box(0.15, 0.15, 0.85, 0.85, 0, 0.08), cyl(0.5, 0.5, 0.24, 0.08, 1.02)),
   pet_house: flat(0.02, 0.04, 0.98, 0.99, 0.77),
   toy_box: flat(0.2, 0.2, 0.8, 0.8, 0.41),
+  // parkour (art/items/parkour.ts): a rail one thin box to its top (ground along: physics/flow.ts
+  // takes a rail ≤ 0.13 m half thick), a wall a slab, a pole a rod
+  pk_rail: one(box(0, 0.45, 4, 0.55, 0, 0.9)),
+  pk_rail_long: one(box(0, 0.45, 8, 0.55, 0, 0.9)),
+  pk_wall: one(box(0, 0.35, 4, 0.65, 0, 3.2)),
+  pk_wall_tall: one(box(0, 0.35, 4, 0.65, 0, 6)),
+  pk_pole: one(box(0.3, 0.3, 0.7, 0.7, 0, 0.04), cyl(0.5, 0.5, 0.08, 0.04, 3)),
+  pk_pole_tall: one(box(0.3, 0.3, 0.7, 0.7, 0, 0.04), cyl(0.5, 0.5, 0.08, 0.04, 5.5)),
 };
 
 /** A kind's shape (a run-time kind with none: its footprint, 1 m, flagged). */

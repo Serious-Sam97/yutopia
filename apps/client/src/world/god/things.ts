@@ -101,7 +101,7 @@ export class ThingsTool {
       this.drag = null;
       const [dx, dz] = [dr.at[0] - dr.from[0], dr.at[1] - dr.from[1]];
       if (Math.hypot(dx, dz) < 0.05) return this.pick(dr.key, e.altKey);
-      const why = thingBlocked(dr.d.kind, dr.at[0], dr.at[1]);
+      const why = thingBlocked(dr.d.kind, dr.at[0], dr.at[1], dr.d.ry);
       if (why) return void toast(tr("godThingBlocked").replace("{why}", why), "warn");
       const patch: Partial<ThingDef> = { x: dr.d.x + dx, z: dr.d.z + dz };
       if (dr.d.pts) patch.pts = dr.d.pts.map(([x, z]) => [x + dx, z + dz] as P);
@@ -122,7 +122,7 @@ export class ThingsTool {
       return;
     }
     // place: the catalog's kind there
-    const why = thingBlocked(o.kind, p[0], p[1]);
+    const why = thingBlocked(o.kind, p[0], p[1], o.ry * RAD);
     if (why) return void toast(tr("godThingBlocked").replace("{why}", why), "warn");
     const d = this.host.draft();
     const c = catalogThing(o.kind);
@@ -228,7 +228,7 @@ export class ThingsTool {
     const dr = this.drag;
     if (dr) {
       const c = catalogThing(dr.d.kind);
-      const why = thingBlocked(dr.d.kind, dr.at[0], dr.at[1]);
+      const why = thingBlocked(dr.d.kind, dr.at[0], dr.at[1], dr.d.ry);
       this.ghost.show({ x: dr.at[0], z: dr.at[1] }, dr.d.ry, c.foot, dr.d.s ?? 1, why ? "no" : "ok", f);
       if (why !== o.blocked) this.setO({ blocked: why });
       return;
@@ -245,7 +245,7 @@ export class ThingsTool {
     // (Select's: nothing to put down)
     if (!at || only) return this.ghost.show(null, 0, [0, 0, 0, 0, 0], 1, "ok", f);
     const p = this.snapped(at);
-    const why = thingBlocked(o.kind, p[0], p[1]);
+    const why = thingBlocked(o.kind, p[0], p[1], o.ry * RAD);
     const c = catalogThing(o.kind);
     this.ghost.show({ x: p[0], z: p[1] }, o.ry * RAD, c.foot, c.sized ? o.s : 1, why ? "no" : "ok", f);
     if (why !== o.blocked) this.setO({ blocked: why });

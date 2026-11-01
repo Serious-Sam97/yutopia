@@ -2288,6 +2288,18 @@ void main() {
   limpMe(): boolean {
     return this.meLimp;
   }
+  private meDrift: { dx: number; dz: number } | null = null;
+  private meUp: number | null = null;
+  /** (plan 58 5d) Getting up off the ragdoll: the way my body's turned — the walker faces it, so up
+   *  I don't turn back round to the way I'd faced before the fall. */
+  limpFacing(): number | null {
+    return this.meUp;
+  }
+  /** (plan 58 5d) How far my ragdoll's hips have gone from where I am (the scene's x, z = my floor's
+   *  x, y): the walker follows them, so I get up where I lie and the camera stays on me. */
+  limpDrift(): { dx: number; dz: number } | null {
+    return this.meDrift;
+  }
   /** (plan 58 4f) the ground under a spot on my floor, by Jolt's ray down (null: none, or no physics) */
   private readonly groundAt = (x: number, y: number, from: number): number | null => {
     const hit = this.physics?.ray(x, from, y, 0, -1, 0, 1.4) ?? null;
@@ -2322,6 +2334,11 @@ void main() {
   /** My body on Jolt's world (the walker's: input/walker.ts) — null till it's in. */
   physicsBody(uid: number | null, level: number, clip: boolean, grid: Grid, fly = false) {
     return this.physics?.body(uid, level, clip, grid, fly) ?? null;
+  }
+  /** What's under (x, y) from z down on `level` as Jolt has it (a roof, not the land under it), or
+   *  the grid's say till the physics is in. */
+  groundUnder(grid: Grid, level: number, x: number, y: number, z: number): number {
+    return this.physics?.groundUnder(grid, level, x, y, z) ?? grid.groundAt(x, y, z);
   }
   /** Every solid near you as Jolt holds it, drawn over the scene (the admins'): on, or off. */
   physicsDebug(on: boolean): void {
@@ -2662,7 +2679,7 @@ void main() {
           this.people3.set(b.id, p3);
           this.scene.add(p3.root);
         }
-        this.sphere.center.set(b.x, 0.9, b.y);
+        this.sphere.center.set(b.x, (b.z ?? 0) + 0.9, b.y); // (up on a roof too)
         const seat3 = b.a === 2 ? this.seatKinds.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined;
         // (the shadowed: not there yet while the dark gathers, gone as it goes)
         const sh = b.shade;
@@ -2711,7 +2728,11 @@ void main() {
         );
         // (plan 58 5d: down on the ragdoll — the physics stepped while anyone is; mine holds the walker)
         if (p3.limp?.on) this.limpNow = true;
-        if (b.id === meId) this.meLimp = !!p3.limp?.on;
+        if (b.id === meId) {
+          this.meLimp = !!p3.limp?.on;
+          this.meDrift = p3.limp?.drift() ?? null;
+          this.meUp = p3.upFacing();
+        }
         this.snowFall(b, p3, dt, hidden3);
         if (p3.ready) {
           // (its drawing stood in until now)
@@ -2733,7 +2754,7 @@ void main() {
       }
       const angle = b.angle ?? dirAngle(b.d);
       this.lightOn(b, me);
-      this.sphere.center.set(b.x, 0.9, b.y);
+      this.sphere.center.set(b.x, (b.z ?? 0) + 0.9, b.y); // (up on a roof too)
       // first person: you aren't drawn (the camera is inside you); the rig
       // keeps stepping so the other cameras find you as you left them
       // (nor under a game camera: it stands where you'd block the table)

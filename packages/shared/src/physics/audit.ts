@@ -5,9 +5,19 @@
 //   node --import tsx audit.ts [--json]
 
 import { STEP } from "../grid.ts";
-import { BUILDINGS, CHUNK, GROUNDS, heightAt, slopeAt, treesIn, walkableTile, worldRects } from "../grounds.ts";
+import {
+  BUILDINGS,
+  CHUNK,
+  GROUNDS,
+  heightAt,
+  pavedAt,
+  slopeAt,
+  treesIn,
+  walkableTile,
+  worldRects,
+} from "../grounds.ts";
 import { type GroundWhat, groundSolidsIn } from "../shapes/grounds.ts";
-import type { Solid3 } from "../shapes/index.ts";
+import type { Solid3, SolidBox3 } from "../shapes/index.ts";
 import { WorldBuilder } from "./build.ts";
 import { loadJolt } from "./load.ts";
 import { BODY, PhysicsWorld, sizesFor } from "./world.ts";
@@ -44,6 +54,20 @@ export async function audit(): Promise<Audit> {
   const build = new WorldBuilder(world);
   // what's in each tile (its solids' footprints), for saying why
   const what = new Map<number, Set<GroundWhat | "tree">>();
+  // the porches' decks and steps (and the civic fronts' and the church door's): stood on, gone up
+  // by their steps
+  const porches: SolidBox3[] = [];
+  const onPorch = (x: number, z: number) => {
+    let top = Number.NEGATIVE_INFINITY;
+    for (const s of porches) {
+      const dx = x - s.x;
+      const dz = z - s.z;
+      const lx = dx * Math.cos(s.a) - dz * Math.sin(s.a);
+      const lz = dx * Math.sin(s.a) + dz * Math.cos(s.a);
+      if (Math.abs(lx) <= s.hx && Math.abs(lz) <= s.hz) top = Math.max(top, s.y + s.hy);
+    }
+    return top;
+  };
   const key = (x: number, z: number) => (x - GROUNDS.x0) * 4096 + (z - GROUNDS.z0);
   const mark = (x: number, z: number, w: GroundWhat | "tree") => {
     const k = key(x, z);
@@ -55,6 +79,7 @@ export async function audit(): Promise<Audit> {
     for (let cx = cx0; cx < cx1; cx++) {
       build.groundChunk(cx, cz);
       for (const g of groundSolidsIn(cx, cz)) {
+        if (g.what === "porch" && g.s.t === "box") porches.push(g.s);
         const [x0, z0, x1, z1] = tilesOf(g.s);
         for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) mark(x, z, g.what);
       }
@@ -79,7 +104,8 @@ export async function audit(): Promise<Audit> {
       if (stored.some((b) => mx >= b.x0 - 1 && mx < b.x1 + 1 && mz >= b.z0 - 1 && mz < b.z1 + 1)) continue;
       if (!inWorld(mx, mz)) continue;
       out.tiles++;
-      const g = heightAt(mx, mz);
+      // (on a pavement, stood on its slabs: grounds.ts pavedAt)
+      const g = Math.max(heightAt(mx, mz) + pavedAt(mx, mz), onPorch(mx, mz));
       const fits = world.fits(mx, g + STEP, mz, R, BODY.h - STEP, "tops");
       const walk = walkableTile(x, z);
       if (walk === fits) continue;
@@ -111,8 +137,10 @@ export function failures(a: Audit): string[] {
     if ((a.blockedFree[f]?.n ?? 0) > 30) out.push(`${f}: ${a.blockedFree[f].n} tiles`);
   const kept = sum(a.blockedFree, (k) => tree(k) || k === "steep");
   if (kept > 1000) out.push(`the grid keeps you off ${kept} tiles Jolt doesn't (want ≤ 1000)`);
+  // (450 since 2026-11-01: the town's details made solid — porch posts, mailboxes, the porches'
+  // edges — thin things in tiles the grid walks, as the statue's and the snow poles'; 407 then)
   const open = sum(a.openSolid, tree);
-  if (open > 400) out.push(`the grid walks ${open} tiles Jolt blocks (want ≤ 400)`);
+  if (open > 450) out.push(`the grid walks ${open} tiles Jolt blocks (want ≤ 450)`);
   return out;
 }
 

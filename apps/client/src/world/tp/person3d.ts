@@ -183,6 +183,17 @@ function cueStance(cue: { tip: [number, number, number]; butt: [number, number, 
   return { x, z, a, parts: [own(bridge, -0.025), own(grip)] };
 }
 
+// (the legs' parts and how far their skin reaches under the joint: legsUnder)
+const LEG_SKIN: [JointName, number][] = [
+  ["kneeL", 0.07],
+  ["kneeR", 0.07],
+  ["ankleL", 0.08],
+  ["ankleR", 0.08],
+  ["toeL", 0.03],
+  ["toeR", 0.03],
+];
+const LEG_AT = new Vector3();
+
 export class Person3D {
   readonly root = new Group();
   readonly model: Model;
@@ -299,6 +310,18 @@ export class Person3D {
     if (m.ready && (SEATS[kind] || seen.groundAt)) this.sat = out;
     return out;
   }
+  // how far the legs' lowest part is under the ground she stands on (the root's height), skin and
+  // all (a knee's, an ankle's over its sole, a toe's): 0 when none is
+  private legsUnder(): number {
+    this.root.updateMatrixWorld(true);
+    const g = this.root.getWorldPosition(LEG_AT).y;
+    let under = 0;
+    for (const [j, r] of LEG_SKIN) {
+      const b = this.model.bone(j);
+      if (b) under = Math.max(under, g + r - b.getWorldPosition(LEG_AT).y);
+    }
+    return under;
+  }
   private groundFn(p: PersonIn, at: (x: number, y: number, from: number) => number | null) {
     const a = this.turned ?? p.angle;
     const c = Math.cos(a);
@@ -309,7 +332,9 @@ export class Person3D {
       const x = p.x + c * lz + s * lx;
       const y = p.y + s * lz - c * lx;
       const g = at(x, y, h + 0.6);
-      return g === null ? 0 : g - h;
+      // (the ray looks 1.4 m down: higher, what's under her as the world has it — the controller's
+      // Jolt ground, a roof or the land — so a fall's height is its own, not 1.4 m at most)
+      return g === null ? (p.ground ?? h) - h : g - h;
     };
   }
   /** (plan 58 5d) down on the ragdoll and up again (the world's physics), a fall's top, the facing
@@ -317,6 +342,10 @@ export class Person3D {
   limp: InstanceType<NonNullable<ReturnType<Chars["airNow"]>>["Downed"]> | null = null;
   private fallTop: number | null = null;
   private limpYaw: number | null = null;
+  /** (plan 58 5d) Getting up off the ragdoll: the way the body's turned (as `angle`), or null. */
+  upFacing(): number | null {
+    return this.limpYaw !== null ? this.turned : null;
+  }
   private shotDown = false;
   /** (plan 58 8) one of the shadowed's body as it was when its time caught: held a beat */
   private shadeHeld: { pose: Pose; lift: [number, number, number] } | null = null;
@@ -631,23 +660,42 @@ export class Person3D {
     const RS = this.motion.v2 && !p.reduced && this.part === "all" && d < 30 && seen.rag ? seen.rag() : null;
     const AR = RS ? this.C.airNow() : null;
     const hz = p.z ?? 0;
+    // (a fall's height by the body's own, over what's under it — not the jump's stages: a fall's
+    // hop has a land stage after the feet are down, and limp only after it the body stood up first)
+    const airborne = !sitting && hz > ground + 0.03;
     let fellFrom = 0;
-    if (up) this.fallTop = Math.max(this.fallTop ?? hz, hz);
-    else {
+    let falling = false;
+    if (airborne) {
+      this.fallTop = Math.max(this.fallTop ?? hz, hz);
+      // limp a moment before the ground, as it comes: down from 6 m or more, a sixth of a second off
+      // (on the ragdoll it lands as a body — limp with the feet down, the legs took it all and folded)
+      falling = this.vz < -1 && this.fallTop - ground >= 6 && hz - ground <= -this.vz * 0.16;
+    } else {
       if (this.fallTop !== null) fellFrom = this.fallTop - hz;
       this.fallTop = null;
     }
     const shot = !!SN && dying >= SN.LIMP && !this.shotDown;
-    if (AR && RS && !this.limp?.on && (shot || fellFrom >= 6)) {
+    if (AR && RS && !this.limp?.on && (shot || falling || fellFrom >= 6)) {
       this.limp = new AR.Downed(RS.world, this.model, RS.origin, true);
       const c = Math.cos(this.turned);
       const sn = Math.sin(this.turned);
-      // (the scene's: x, up, the floor's y; shot, thrown back off its feet; fallen, coming down hard)
+      // (the scene's: x, up, the floor's y; shot, thrown back off its feet; falling, as it goes — on
+      // across too, the speed it fell at but no more than the height gives; down already (it came
+      // too quickly to see), a little, tipped on the way it went)
       const vel: [number, number, number] = shot
         ? [-c * 2.2, 0.4, -sn * 2.2]
-        : [0, -Math.min(12, Math.sqrt(60 * fellFrom)), 0];
-      if (!this.limp.fall(pose, vel, undefined, shot)) this.limp = null;
+        : falling
+          ? [this.vx, Math.max(this.vz, -Math.sqrt(2 * 9.8 * (this.fallTop ?? hz) - 2 * 9.8 * ground), -16), this.vy]
+          : [this.vx * 0.5 + c * 0.8, -3.5, this.vy * 0.5 + sn * 0.8];
+      // (straight down, the trunk tipped back off the feet: it came down onto the legs and folded
+      // into a crouched ball — on the run, the run carries it over)
+      const tip =
+        !shot && Math.hypot(this.vx, this.vy) < 2
+          ? { part: 2, impulse: [-c * 22, 0, -sn * 22] as [number, number, number] }
+          : undefined;
+      if (!this.limp.fall(pose, vel, tip, shot)) this.limp = null;
       this.shotDown = shot;
+      if (falling) this.fallTop = null;
     }
     if (!p.shade?.killed) this.shotDown = false;
     if (this.limp?.on && AR) {
@@ -656,8 +704,13 @@ export class Person3D {
         pose = r.m.pose;
         lift = r.m.lift;
         limpHands = r.hands;
-        // (standing up: the root turned the way it lay)
-        if (r.root && this.limpYaw === null && !this.limp.rig.on) this.limpYaw = r.root.yaw;
+        // (standing up: the root turned the way it lay — now, with the get-up's first pose: a frame
+        // later the whole body spun round for one frame)
+        if (r.root && this.limpYaw === null && !this.limp.rig.on) {
+          this.limpYaw = r.root.yaw;
+          this.turned = Math.PI / 2 - this.limpYaw;
+          if (this.part === "all") this.root.rotation.y = Math.PI / 2 - this.turned;
+        }
       } else this.limpYaw = null;
     } else {
       this.limp = null;
@@ -670,6 +723,12 @@ export class Person3D {
     // wind-up's cocked arm was pulled onto whoever it struck)
     const own = !!p.shade && this.motion.v2 && !p.reduced;
     this.model.setPose(pose, [lift[0], lift[1] + drop, lift[2]], own ? undefined : mo.reach);
+    // (getting up off the ragdoll: nothing of the legs under the ground — the get-up's keyed for a
+    // body lying flat; off its side, its knees and feet went half a metre through the snow)
+    if (this.limp?.on && !this.limp.rig.on) {
+      const under = this.legsUnder();
+      if (under > 0.005) this.model.setPose(pose, [lift[0], lift[1] + drop + under, lift[2]], mo.reach);
+    }
     // (plan 58 6: the hands on the keys, the pad, the knees, the other one's hand)
     let put = limpHands ?? (this.limp?.on || own ? null : (mo.hands ?? null));
     // (plan 62) sat with a drink: held at the waist between sips — the waist down on the seat with

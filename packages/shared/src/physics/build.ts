@@ -24,7 +24,7 @@ import { elevOf, floorsOf, levelMap, objLevel, offsetOf, onLevel, STOREY } from 
 import { liftDoorEdges, liftHere, liftWallEdges } from "../lift.ts";
 import { type Edge, hWall, isFloor, type MapDef, tileAt, vWall } from "../map.ts";
 import { doorLockable, edgeKey, isOpening, openingEdges, wallCuts } from "../openings.ts";
-import { groundSolidsIn } from "../shapes/grounds.ts";
+import { type GroundSolid, groundSolidsIn } from "../shapes/grounds.ts";
 import {
   blocksOf,
   box3,
@@ -72,6 +72,10 @@ export interface BuildingSolids {
   cars: Map<string, SolidBox3>;
   /** door:id → whose it is (null: nobody's — nobody passes it locked) */
   locked: Map<string, number | null>;
+  /** what Flowmotion moves off here, out of doors (physics/flow.ts): the walls with the outside on
+   *  a side — each as high as its storey, so a run up the face goes on up the floor above's — and
+   *  the parkour pieces stood outside */
+  flow: GroundSolid[];
 }
 
 /** The locked doors `uid` passes (their own rooms'): PhysicsWorld.pass of these. */
@@ -132,7 +136,7 @@ function lay(
 
 export function buildingSolids(map: MapDef, objects: Iterable<WorldObjectDef>): BuildingSolids {
   const all = [...objects];
-  const out: BuildingSolids = { statics: new Map(), cars: new Map(), locked: new Map() };
+  const out: BuildingSolids = { statics: new Map(), cars: new Map(), locked: new Map(), flow: [] };
   const add = (k: string, layer: Layer, s: Solid3) => {
     const had = out.statics.get(k);
     if (had) had.solids.push(s);
@@ -147,9 +151,16 @@ export function buildingSolids(map: MapDef, objects: Iterable<WorldObjectDef>): 
     const elev = elevOf(level);
     // the walls, cut by their doors and windows
     const cuts = wallCuts(here);
+    const outside = (x: number, y: number) => !isFloor(tileAt(lm, x, y));
     const wall = (e: Edge, ch: string) => {
       const w = wallSolids(e, ch, cuts.get(edgeKey(e)));
       for (const s of [...w.solids, ...(w.pane ? [w.pane] : [])]) put(level, moved(s, ox, elev, oz));
+      // (out of doors on a side: Flowmotion's — indoors it's off)
+      if (
+        w.solids.length &&
+        (e.dir === "h" ? outside(e.x, e.y - 1) || outside(e.x, e.y) : outside(e.x - 1, e.y) || outside(e.x, e.y))
+      )
+        for (const s of w.solids) out.flow.push({ what: "building_wall", s: moved(toStorey(s), ox, elev, oz) });
     };
     for (let y = 0; y <= lm.height; y++) for (let x = 0; x < lm.width; x++) wall({ dir: "h", x, y }, hWall(lm, x, y));
     for (let y = 0; y < lm.height; y++) for (let x = 0; x <= lm.width; x++) wall({ dir: "v", x, y }, vWall(lm, x, y));
@@ -228,10 +239,32 @@ export function buildingSolids(map: MapDef, objects: Iterable<WorldObjectDef>): 
       const stairs = o.kind === "stairs";
       if (!stairs && blocksOf(o.kind) !== "solid") continue;
       const base = baseOf(lm, level, o.x + 0.5, o.y + 0.5);
-      for (const s of kindSolids(o, elev + base)) add(`thing:${o.id}`, stairs ? "floor" : "solid", moved(s, ox, 0, oz));
+      const flow = level === 0 && outside(o.x, o.y) ? PARKOUR[o.kind] : undefined;
+      for (const s of kindSolids(o, elev + base)) {
+        add(`thing:${o.id}`, stairs ? "floor" : "solid", moved(s, ox, 0, oz));
+        if (flow) out.flow.push({ what: flow, s: moved(s, ox, 0, oz) });
+      }
     }
   }
   return out;
+}
+
+// the build menu's parkour pieces, by what Flowmotion makes of them (out of doors only)
+const PARKOUR: Partial<Record<string, GroundSolid["what"]>> = {
+  pk_rail: "pk_rail",
+  pk_rail_long: "pk_rail",
+  pk_wall: "pk_wall",
+  pk_wall_tall: "pk_wall",
+  pk_pole: "pk_pole",
+  pk_pole_tall: "pk_pole",
+};
+
+// a wall's piece that goes to its top, on up to the next storey's floor (the slab between is
+// the same face from outside); the rest (under a window, over a door) as it is
+function toStorey(s: Solid3): Solid3 {
+  if (s.t !== "box" || Math.abs(s.y + s.hy - WALL_H) > 0.01) return s;
+  const y0 = s.y - s.hy;
+  return { ...s, y: (y0 + STOREY) / 2, hy: (STOREY - y0) / 2 };
 }
 
 // a wall-thick box along an edge (a floor's own coords), y0..y1 up

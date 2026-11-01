@@ -1763,6 +1763,16 @@ export async function runShot(
   // turn (between, their doors north and west) — to see each builder at any size
   const pf = new URLSearchParams(location.search).get("prefabs");
   if (pf) S.applyEdits({ rev: 1, buildings: { add: prefabSet(S, pf as "min" | "max" | "turn") } });
+  // god mode's parkour pieces (rails, walls, poles), &parkour=1: in a row on the farm's field
+  if (new URLSearchParams(location.search).get("parkour") === "1") {
+    const kinds = ["pk_rail", "pk_rail_long", "pk_wall", "pk_wall_tall", "pk_pole", "pk_pole_tall"] as const;
+    S.applyEdits({
+      rev: 1,
+      things: {
+        add: kinds.map((kind, i) => ({ key: `god-thing-${i + 1}`, kind, x: 428.5, z: -222.5 - i * 7, ry: 0 })),
+      },
+    });
+  }
   const { Grounds3 } = await import("./grounds3d");
   const Themes = await import("../art/themes");
   const C = await import("../chars");

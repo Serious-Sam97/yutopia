@@ -1,4 +1,4 @@
-import { anchoredAt, BUILDINGS, LAMPS, type P, SNOW_POLES, STREET, wayAt } from "./grounds.ts";
+import { anchoredAt, BUILDINGS, LAMPS, type P, SNOW_POLES, STREET, THING_SPAN, thingEnds, wayAt } from "./grounds.ts";
 import type { GroundsEdits, ThingDef, ThingKind } from "./grounds-edits.ts";
 
 // God mode's things (docs/plan/53-the-god-mode.md, phase 8): what stands on the land — a lamp, a
@@ -34,6 +34,13 @@ export const THINGS: CatalogThing[] = [
   { kind: "pole", name: "Utility pole", foot: [-0.16, -1.2, 0.16, 1.2, 8.6] },
   { kind: "stop", name: "Bus stop sign", foot: [-0.38, -0.05, 0.38, 0.1, 2.66] },
   { kind: "streetsign", name: "Street sign", foot: [-0.2, -0.2, 1.1, 1.1, 3.06] },
+  // parkour (Flowmotion's: a rail to grind, a wall to run, a pole to swing round)
+  { kind: "pk_rail", name: "Grind rail", foot: [-2, -0.05, 2, 0.05, 0.9] },
+  { kind: "pk_rail_long", name: "Long grind rail", foot: [-4, -0.05, 4, 0.05, 0.9] },
+  { kind: "pk_wall", name: "Parkour wall", foot: [-2, -0.15, 2, 0.15, 3.2] },
+  { kind: "pk_wall_tall", name: "Tall parkour wall", foot: [-2, -0.15, 2, 0.15, 6] },
+  { kind: "pk_pole", name: "Swing pole", foot: [-0.08, -0.08, 0.08, 0.08, 3] },
+  { kind: "pk_pole_tall", name: "Tall swing pole", foot: [-0.08, -0.08, 0.08, 0.08, 5.5] },
 ];
 export const catalogThing = (kind: ThingKind): CatalogThing => THINGS.find((t) => t.kind === kind) ?? THINGS[0];
 
@@ -61,7 +68,8 @@ export function thingAtOf(t: { kind: string; x: number; z: number }): P {
   return t.kind === "bench" ? [t.x + 1, t.z + 0.5] : [t.x, t.z];
 }
 
-/** The thing nearest (x, z), within `r` m (a fence: of its line), its key; or null. The Kart
+/** The thing nearest (x, z), within `r` m (a fence: of its line; a rail, a wall: of its length),
+ *  its key; or null. The Kart
  *  Park's floods are its own, not anyone's to move. */
 export function thingAt(x: number, z: number, r = 1.5): string | null {
   let best: { key: string; d: number } | null = null;
@@ -73,6 +81,11 @@ export function thingAt(x: number, z: number, r = 1.5): string | null {
   for (const t of STREET) {
     if (t.pts) {
       for (let i = 1; i < t.pts.length; i++) consider(t.key, segDist(t.pts[i - 1], t.pts[i], x, z));
+      continue;
+    }
+    const ends = thingEnds(t);
+    if (ends) {
+      consider(t.key, segDist(ends[0], ends[1], x, z));
       continue;
     }
     const [cx, cz] = thingAtOf(t);
@@ -88,8 +101,25 @@ function segDist(a: P, b: P, x: number, z: number): number {
   return Math.hypot(a[0] + dx * t - x, a[1] + dz * t - z);
 }
 
-/** Why a thing can't stand at (x, z), or null: what's anchored, a way's carriageway, a building. */
-export function thingBlocked(kind: ThingKind, x: number, z: number): string | null {
+/** Why a thing can't stand at (x, z) (turned `ry`), or null: what's anchored, a way's
+ *  carriageway, a building — a long one (a rail, a wall) anywhere along it. */
+export function thingBlocked(kind: ThingKind, x: number, z: number, ry = 0): string | null {
+  const ends = thingEnds({ kind, x, z, ry });
+  if (ends) {
+    const n = Math.ceil((THING_SPAN[kind as keyof typeof THING_SPAN] ?? 0) * 2);
+    for (let i = 0; i <= n; i++) {
+      const why = blockedAt(
+        kind,
+        ends[0][0] + ((ends[1][0] - ends[0][0]) * i) / n,
+        ends[0][1] + ((ends[1][1] - ends[0][1]) * i) / n,
+      );
+      if (why) return why;
+    }
+    return null;
+  }
+  return blockedAt(kind, x, z);
+}
+function blockedAt(kind: ThingKind, x: number, z: number): string | null {
   const a = anchoredAt(x, z);
   if (a) return a.why;
   const w = wayAt(x, z, -0.4);

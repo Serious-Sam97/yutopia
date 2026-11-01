@@ -15,7 +15,9 @@ import type { Frame } from "./body.ts";
 //           kart shed and tower, Motors: run up and along too (when RUN_MIN or more over the feet);
 //           what's stacked flush on a face (a roof's first step on its wall) is the same wall, as
 //           high as the stack — the top run over is where there's room to stand
-// The building's own floors aren't here: Flowmotion is out on the Grounds.
+// The building's walls with the outside on a side, and the build menu's parkour pieces stood
+// outside, are in it too (`building`: physics/build.ts's `flow`) — run up the office from out on
+// the land; indoors Flowmotion is off (the walker hands it in only out on the land).
 
 const BODY_R = 0.25; // (flow.ts's)
 const POLE_R = 0.5;
@@ -24,7 +26,14 @@ const RAIL_T = 0.13; // half its thickness, at most
 const RAIL_LEN = 0.6; // half its length, at least
 const WALL_H = 1.6;
 
-const RAILS: ReadonlySet<GroundWhat> = new Set(["fence", "tower_fence", "bridge_rail", "kart_fence"]);
+const RAILS: ReadonlySet<GroundWhat> = new Set([
+  "fence",
+  "tower_fence",
+  "bridge_rail",
+  "kart_fence",
+  "pk_rail",
+  "porch_rail",
+]);
 const RUNS: ReadonlySet<GroundWhat> = new Set([
   "building",
   "roof",
@@ -33,9 +42,10 @@ const RUNS: ReadonlySet<GroundWhat> = new Set([
   "kart_tower",
   "kart_shed",
   "motors",
+  "pk_wall",
 ]);
 // (never anything to move off: under foot, overhead, or the world's own end)
-const NOT: ReadonlySet<GroundWhat> = new Set(["street", "bridge_deck", "forecourt", "kart_island", "edge"]);
+const NOT: ReadonlySet<GroundWhat> = new Set(["street", "pavement", "bridge_deck", "forecourt", "kart_island", "edge"]);
 
 interface Pole {
   x: number;
@@ -94,7 +104,10 @@ export function flowParts(solids: GroundSolid[]): Parts {
     const thin = Math.min(s.hx, s.hz);
     const long = Math.max(s.hx, s.hz);
     if (RAILS.has(what) && thin <= RAIL_T && long >= RAIL_LEN) out.rails.push(boxOf(s, false));
-    else if (s.hy * 2 >= WALL_H || what === "roof") out.walls.push(boxOf(s, RUNS.has(what)));
+    // (a building's own parts a metre and more — a false front over the roof — too: stacked on its
+    // face, as high as the stack)
+    else if (s.hy * 2 >= WALL_H || what === "roof" || (RUNS.has(what) && s.hy * 2 >= 1))
+      out.walls.push(boxOf(s, RUNS.has(what)));
   }
   return out;
 }
@@ -104,11 +117,31 @@ export function flowParts(solids: GroundSolid[]): Parts {
 export class GroundsFlow implements FlowWorld {
   readonly moves = FLOW_MOVES;
   private readonly chunks = new Map<string, Parts>();
+  // the building's, by the chunks each touches (`building`)
+  private inside = new Map<string, Parts>();
 
   constructor(
     private readonly frame: () => Frame,
     private readonly solidsIn: (cx: number, cz: number) => GroundSolid[] = groundSolidsIn,
   ) {}
+
+  /** The building's own (physics/build.ts `flow`), as it is now: a chunk's parts each it reaches
+   *  into. */
+  building(solids: GroundSolid[]) {
+    const by = new Map<string, GroundSolid[]>();
+    for (const g of solids) {
+      const s = g.s;
+      const r = s.t === "cyl" ? s.r : Math.hypot(s.hx, s.hz);
+      for (let cx = Math.floor((s.x - r) / CHUNK); cx <= Math.floor((s.x + r) / CHUNK); cx++)
+        for (let cz = Math.floor((s.z - r) / CHUNK); cz <= Math.floor((s.z + r) / CHUNK); cz++) {
+          const k = `${cx},${cz}`;
+          const l = by.get(k);
+          if (l) l.push(g);
+          else by.set(k, [g]);
+        }
+    }
+    this.inside = new Map([...by].map(([k, l]) => [k, flowParts(l)]));
+  }
 
   /** A chunk made again (an edit, a layout): asked afresh next time. */
   forget(cx: number, cz: number) {
@@ -126,10 +159,30 @@ export class GroundsFlow implements FlowWorld {
         const k = `${cx},${cz}`;
         let p = this.chunks.get(k);
         if (!p) {
-          p = flowParts(this.solidsIn(cx, cz));
+          p = flowParts(this.reaching(cx, cz));
           this.chunks.set(k, p);
         }
         out.push(p);
+        const b = this.inside.get(k);
+        if (b) out.push(b);
+      }
+    return out;
+  }
+
+  // what reaches into chunk (cx, cz): its own (kept by their middles) and its neighbours' that
+  // overlap it — a building's far side is in a chunk of its own (the hall, 26 m, the church)
+  private reaching(cx: number, cz: number): GroundSolid[] {
+    const x0 = cx * CHUNK;
+    const z0 = cz * CHUNK;
+    const out = [...this.solidsIn(cx, cz)];
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dz = -1; dz <= 1; dz++) {
+        if (!dx && !dz) continue;
+        for (const g of this.solidsIn(cx + dx, cz + dz)) {
+          const s = g.s;
+          const r = s.t === "cyl" ? s.r : Math.hypot(s.hx, s.hz);
+          if (s.x + r > x0 && s.x - r < x0 + CHUNK && s.z + r > z0 && s.z - r < z0 + CHUNK) out.push(g);
+        }
       }
     return out;
   }

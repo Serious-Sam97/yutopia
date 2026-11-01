@@ -3,7 +3,7 @@ import { Grid } from "./grid.ts";
 import { hangEdges, hangFits, hangOf } from "./hang.ts";
 import type { Point } from "./iso.ts";
 import { onLevel } from "./levels.ts";
-import { type Edge, type MapDef, wallBetween } from "./map.ts";
+import { type Edge, isFloor, type MapDef, tileAt, wallBetween } from "./map.ts";
 import { isOpening, openingBlocker } from "./openings.ts";
 import { fitsOnSurface, splitAll } from "./tops.ts";
 
@@ -31,6 +31,8 @@ export function canPlace(map: MapDef, others: WorldObjectDef[], o: WorldObjectDe
       const tx = o.x + dx;
       const ty = o.y + dy;
       if (!floor.ok(tx, ty)) return false;
+      // (parkour's out of doors: on the land, never a floor)
+      if (e.outdoor && isFloor(tileAt(map, tx, ty))) return false;
       if (e.solid && (!base.ok(tx, ty) || base.boxOn(tx, ty))) return false;
       // never straddling a wall
       if (dx > 0 && wallBetween(map, tx - 1, ty, tx, ty) !== ".") return false;

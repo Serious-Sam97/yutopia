@@ -820,6 +820,12 @@ const THING_ICONS: Partial<Record<ThingKind, IconName>> = {
   pole: "stairs",
   stop: "close",
   streetsign: "tag",
+  pk_rail: "desk",
+  pk_rail_long: "desk",
+  pk_wall: "wall",
+  pk_wall_tall: "wall",
+  pk_pole: "rotate",
+  pk_pole_tall: "rotate",
 };
 const THING_WORDS: Partial<Record<ThingKind, string>> = {
   "lamp-town": "Poste da cidade",
@@ -838,6 +844,12 @@ const THING_WORDS: Partial<Record<ThingKind, string>> = {
   pole: "Poste de luz",
   stop: "Ponto de ônibus",
   streetsign: "Placa de rua",
+  pk_rail: "Corrimão de grind",
+  pk_rail_long: "Corrimão longo",
+  pk_wall: "Muro de parkour",
+  pk_wall_tall: "Muro alto de parkour",
+  pk_pole: "Poste de giro",
+  pk_pole_tall: "Poste alto de giro",
 };
 const thingName = (k: ThingKind, pt: boolean) => (pt ? (THING_WORDS[k] ?? catalogThing(k).name) : catalogThing(k).name);
 

@@ -202,7 +202,10 @@ export function stepFlow(
       if (b.z + 0.9 >= v.top) {
         const ax = b.x - v.ux * 0.6;
         const ay = b.y - v.uy * 0.6;
-        if (grid.fitsAt(ax, ay, v.top)) return climb(b, ax, ay, v.top, spec.jog, ev);
+        // (a slope over it — a pitched roof's —: up onto where it stands there, under a metre over the
+        // top; what's asked looks a step over 0.6 at most)
+        const top = Math.max(v.top, grid.groundAt(ax, ay, v.top + 0.6));
+        if (top < v.top + 1 && grid.fitsAt(ax, ay, top)) return climb(b, ax, ay, top, spec.jog, ev);
       }
       // a jump, the dash let go, or out of run: kicked off
       if (inp.jumpPressed || !inp.sprint || v.t >= f.runLen) {

@@ -1,4 +1,4 @@
-import { groundAt, type StreetThing } from "@yutopia/shared/grounds";
+import { groundAt, pavedAt, type StreetThing } from "@yutopia/shared/grounds";
 import {
   BoxGeometry,
   type BufferGeometry,
@@ -177,6 +177,10 @@ function sign(): BufferGeometry[] {
     box(1.64, 0.05, 0.1, 0, 2.0, 0, SNOW),
   ];
 }
+/** Where a street thing stands at (x, z): the ground, on a street's pavement its top (shared
+ *  pavedAt — shapes/grounds.ts stands its solid there too). */
+const standAt = (x: number, z: number) => groundAt(x, z) + pavedAt(x, z);
+
 /** A fence along its line: split rails on posts every 2.5 m, the land's height under each. */
 function fence(t: StreetThing): BufferGeometry[] {
   const out: BufferGeometry[] = [];
@@ -192,16 +196,16 @@ function fence(t: StreetThing): BufferGeometry[] {
       if (k === 0 && i > 1) continue;
       const x = ax + ((bx - ax) * k) / n;
       const z = az + ((bz - az) * k) / n;
-      out.push(cyl(0.07, 0.06, 1.15, groundAt(x, z), wood, 5).translate(x, 0, z));
-      out.push(cyl(0.08, 0.08, 0.04, groundAt(x, z) + 1.15, SNOW, 5).translate(x, 0, z));
+      out.push(cyl(0.07, 0.06, 1.15, standAt(x, z), wood, 5).translate(x, 0, z));
+      out.push(cyl(0.08, 0.08, 0.04, standAt(x, z) + 1.15, SNOW, 5).translate(x, 0, z));
     }
     for (let k = 0; k < n; k++) {
       const x0 = ax + ((bx - ax) * k) / n;
       const z0 = az + ((bz - az) * k) / n;
       const x1 = ax + ((bx - ax) * (k + 1)) / n;
       const z1 = az + ((bz - az) * (k + 1)) / n;
-      const y0 = groundAt(x0, z0);
-      const y1 = groundAt(x1, z1);
+      const y0 = standAt(x0, z0);
+      const y1 = standAt(x1, z1);
       const l = Math.hypot(x1 - x0, z1 - z0, y1 - y0);
       for (const [h, c] of [
         [0.45, wood],
@@ -218,9 +222,59 @@ function fence(t: StreetThing): BufferGeometry[] {
   }
   return out;
 }
+// ── parkour (god mode's; shapes/grounds.ts their solids: the bar, the wall, the pole) ──
+const STEEL = 0x8d949b;
+const STEEL_DARK = 0x5d636a;
+/** A grind rail 2L long along x, its top 0.9 up: a round bar on posts ~2.7 m apart (each on a
+ *  plate, a weld collar where it meets the bar), its ends capped. */
+function rail(L: number): BufferGeometry[] {
+  const out: BufferGeometry[] = [
+    tinted(new CylinderGeometry(0.045, 0.045, 2 * L, 8).rotateZ(Math.PI / 2).translate(0, 0.855, 0), STEEL),
+  ];
+  for (const e of [-L, L])
+    out.push(tinted(new CylinderGeometry(0.05, 0.05, 0.03, 8).rotateZ(Math.PI / 2).translate(e, 0.855, 0), STEEL_DARK));
+  const n = Math.max(1, Math.round((2 * L - 0.8) / 2.7));
+  for (let k = 0; k <= n; k++) {
+    const x = -(L - 0.4) + ((2 * L - 0.8) * k) / n;
+    out.push(box(0.2, 0.025, 0.2, x, 0, 0, STEEL_DARK)); // its plate
+    out.push(cyl(0.032, 0.032, 0.8, 0.025, STEEL, 6).translate(x, 0, 0));
+    out.push(cyl(0.05, 0.05, 0.05, 0.775, STEEL_DARK, 6).translate(x, 0, 0)); // the weld collar
+  }
+  return out;
+}
+/** A free-standing parkour wall 4 m along x, 0.3 thick, `h` tall: painted ply over a plinth, its
+ *  panels' seams, a dark cap with snow on it (a tall one: a rail of ply halfway up). */
+function pkWall(h: number): BufferGeometry[] {
+  const face = 0xd3cbbb;
+  const seam = 0x8f877a;
+  const out = [
+    box(4.02, 0.22, 0.34, 0, 0, 0, 0x8c8780), // the plinth
+    box(4, h - 0.34, 0.3, 0, 0.22, 0, face),
+    box(4.1, 0.12, 0.38, 0, h - 0.12, 0, 0x4d4a46), // the cap
+    box(4.02, 0.04, 0.3, 0, h, 0, SNOW),
+  ];
+  for (const x of [-0.67, 0.67]) out.push(box(0.03, h - 0.34, 0.31, x, 0.22, 0, seam));
+  if (h > 4) out.push(box(4.01, 0.05, 0.31, 0, h / 2, 0, seam));
+  return out;
+}
+/** An upright swing pole `h` tall, 0.08 round, on a bolted plate; hazard bands at its foot, a
+ *  grip near the top, a cap with snow on it. */
+function pkPole(h: number): BufferGeometry[] {
+  const out = [
+    box(0.46, 0.04, 0.46, 0, 0, 0, 0x4a4f55),
+    ...[-1, 1].flatMap((a) => [-1, 1].map((b) => box(0.05, 0.03, 0.05, a * 0.17, 0.04, b * 0.17, STEEL_DARK))),
+    cyl(0.08, 0.08, h - 0.04, 0.04, STEEL, 8),
+    cyl(0.088, 0.088, 0.5, h - 1.2, 0x2b2f34, 8), // a rubber grip
+    cyl(0.1, 0.1, 0.05, h, STEEL_DARK, 8),
+    cyl(0.1, 0.1, 0.03, h + 0.05, SNOW, 8),
+  ];
+  for (let i = 0; i < 4; i++) out.push(cyl(0.086, 0.086, 0.12, 0.04 + i * 0.12, i % 2 ? 0x22262b : 0xd9a51f, 8));
+  return out;
+}
+
 /** A sign's words: a face either side of its board, in place (its own picture: grounds3d.ts). */
 export function signFaces(t: StreetThing): BufferGeometry[] {
-  const y = groundAt(t.x, t.z);
+  const y = standAt(t.x, t.z);
   return [0, Math.PI].map((r) =>
     place(new PlaneGeometry(1.5, 0.6).rotateY(r).translate(0, 1.65, r ? -0.04 : 0.04), t.x, y, t.z, t.ry),
   );
@@ -239,6 +293,12 @@ const MAKE: Record<StreetThing["kind"], () => BufferGeometry[]> = {
   planter,
   sign,
   fence: () => [], // (along its line: fence())
+  pk_rail: () => rail(2),
+  pk_rail_long: () => rail(4),
+  pk_wall: () => pkWall(3.2),
+  pk_wall_tall: () => pkWall(6),
+  pk_pole: () => pkPole(3),
+  pk_pole_tall: () => pkPole(5.5),
 };
 const SIZED = new Set<StreetThing["kind"]>(["boulder", "planter"]);
 
@@ -247,7 +307,7 @@ export function streetGeometry(things: StreetThing[]): BufferGeometry[] {
   const out: BufferGeometry[] = [];
   const poles: StreetThing[] = [];
   for (const [i, t] of things.entries()) {
-    const y = groundAt(t.x, t.z);
+    const y = standAt(t.x, t.z);
     // (a bench is two tiles: (x, z) its west one's corner)
     const [cx, cz] = t.kind === "bench" ? [t.x + 1, t.z + 0.5] : [t.x, t.z];
     if (t.kind === "fence") {
@@ -266,8 +326,8 @@ export function streetGeometry(things: StreetThing[]): BufferGeometry[] {
     const b = poles[i + 1];
     // (a pole put down far off — god mode's — isn't wired to the town's)
     if (Math.hypot(b.x - a.x, b.z - a.z) > 70) continue;
-    const ya = groundAt(a.x, a.z) + 7.86;
-    const yb = groundAt(b.x, b.z) + 7.86;
+    const ya = standAt(a.x, a.z) + 7.86;
+    const yb = standAt(b.x, b.z) + 7.86;
     for (const off of [-1.05, -0.35, 0.35, 1.05]) {
       const n = 10;
       for (let k = 0; k < n; k++) {

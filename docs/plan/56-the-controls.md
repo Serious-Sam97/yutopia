@@ -658,3 +658,95 @@ double-tap of Space, and C / Ctrl to sink.
   `mouse-look`, `pets`, `floors`; RMB/LMB in `arms`, `arms-feel`, `arms-fx`, `arms-empty`, `beam`,
   `shades`, `dark-hud`; `pool-balls`, `pool`, `pingpong`, `pets-wheel`, `inventory`, `games` (the
   touch pad). `helpers.walkTo` is already programmatic and stays.
+
+## After: the office's walls and parkour pieces (2026-11-01)
+
+The user found the office's walls and the walls built in build mode did nothing: no wall run, up or
+along. Flowmotion read only the Grounds' own solids (`physics/flow.ts` GroundsFlow), and the
+building — its walls on every floor, the build menu's walls and things — is a list of its own
+(`physics/build.ts`). Now:
+
+- **The building's walls with the outside on a side** (a tile either side of the edge that isn't a
+  floor) go to Flowmotion as `building_wall` (`BuildingSolids.flow`), each full piece made as high as
+  its storey so the run goes on up the floor above's face, and onto the roof. The walls inside —
+  floor both sides — aren't. `GroundsFlow.building()` buckets them by chunk; physics3d hands them in
+  whenever the building changes (now also when only the map changes: a wall built or taken away).
+- **Out of doors only, as the user asked:** the walker hands Flowmotion in only out on the land
+  (`grid.onLand`), as before — so the office's wall runs from outside, and nothing from inside.
+- **Parkour pieces**, the same six in both menus — a grind rail (4 m) and a long one (8 m), a parkour
+  wall (3.2 m) and a tall one (6 m), a swing pole (3 m) and a tall one (5.5 m):
+  - the build menu's **Parkour** tab (`pk_*` in the catalog, `outdoor`: placed only on the land round
+    the ground floor, never on a floor; drawn in `art/items/parkour.ts`);
+  - god mode's things (`pk_*` StreetThings with their own `what` — `pk_rail`, `pk_wall`,
+    `pk_pole` — since Flowmotion skips "street"; drawn in `tp/town3d.ts`). A long one is checked
+    along its length (`thingEnds`, `thingBlocked` with its turn) and picked anywhere along it.
+- Checks: `flow.test.ts` (the building's walls, the indoor ones not, pieces outside only, god mode's
+  six as rails / run walls / poles), `grounds-things.test.ts`, the shapes fit their models, and
+  `e2e/flowmotion.spec.ts` "on the office" (a wall run from outside, nothing inside — red with the
+  building left out). Stills: `/dev/grounds?shot=god&parkour=1&cam=414,7,-232&look=429,2,-240`
+  (design/parkour/).
+
+## After: the town's buildings, their roofs, and the collision audit (2026-11-01)
+
+The user: some town buildings can't be parkoured; on some roofs you see inside; on every roof the
+body's animation is strange and the flip doesn't show; and an audit of the town's collision.
+
+- **Faces that couldn't be run** (the hall's and the books' west, the hotel's east, the church's
+  south and west, the boathouse's west): `GroundsFlow` sorted each chunk's solids by their
+  middles and looked only ~2.5 m round the body, so a building whose middle is in the next chunk
+  wasn't there. Each chunk's parts now hold its neighbours' that reach into it (`reaching`). The
+  false fronts (market, laundry) stand flush on their face, 0.25 deep (and 0.1 out on one you walk
+  into, its walls on its edges), and a building's own part a metre and more is a wall — so a run goes
+  on up the front to its top (it was 0.15 proud and under 1.6 m: not stacked).
+- **Seeing inside from the roof**: the walk-in buildings' outsides went whenever you were over their
+  footprint (`Grounds3.cutAt`), whatever your height. Now only while the eyes are under the roof
+  (`wallsHigh(b)` in grounds.ts, kept the shapes' `shell` H by a test).
+- **Strange on the roof, no flip**: two causes. The animation was given the grid's ground — the land
+  under the building, not the roof — so on a roof she was always falling (`airW` 1, the landing
+  never came, the last jump's pose kept); now the controller asks Jolt what's under the feet when the
+  grid has them off it (`BrowserPhysics.groundUnder`). And the person's culling sphere sat at 0.9 m
+  whatever their height, so up on a roof they were "off screen" and stepped twice a second; it's at
+  their height now. Measured on the bar's roof: ground 9.9, every frame stepped, the flip crouch →
+  air → land as in the street (design/parkour/roof-*.png).
+- **Collision fixed now**: the road closed's barricades and drift are solid (you walked through);
+  the wooden utility poles are `street_pole` so Flowmotion swings round them. The Grounds' solids
+  fingerprint is re-pinned for these (grounds-edits.test.ts).
+- **Roofs and pavements, done after (the user picked them):**
+  - pitched roofs are their drawn cross-section in steps of 0.2 (`roofSteps`: the eaves' overhang
+    out, the snow on it; the barn's gambrel by its own profile) — never over the drawn slope, a step
+    under it at most, within the walls; walked up and over the ridge (measured: 6.7 → 10.1 → down);
+  - the flat roofs have their snow (0.3) on them, flush on the walls;
+  - a wall run's climb onto a slope goes up onto where it stands 0.6 in (`flow-moves.ts`, under a
+    metre over the top: the eave's ledge on a slope is a step wide);
+  - the streets' pavements and kerbs are solid (`pavements`, what `pavement`: 0.18 over the ground,
+    open where another way crosses and on bridges, as drawn): stood on at 1.68 on Main Street;
+    Flowmotion never uses them. Cars now meet a 0.18 kerb.
+  - tests: the roofs' steps under the slope and up to the ridge, Main Street's pavement height
+    (`shapes/grounds.test.ts`); the Grounds' solids re-pinned.
+- **Awnings and porches, done after (the user's next pick)** (`shapes/grounds.ts` shopFront,
+  houseFront; tests in shapes/grounds.test.ts):
+  - awnings, the post office's canopy and the hotel's marquee are solid (what `awning`) from 0.6 out
+    from the wall to their edge — the strip by the wall open, so a run up a shopfront goes on past
+    them (measured: the market's front, up to 8.5) — their tops under the drawn surface, 2.2 and more
+    over the pavement;
+  - the townhouses' porches (deck 0.5, a 0.25 step, posts, the porch roof from 0.6 out, the railing
+    as `porch_rail`, ground along), the hall's and the post office's steps, the church's door steps:
+    walked up (measured: onto a deck at 2.0 from the street); the hall's columns and the hotel's
+    marquee posts are poles; the hall's entablature and pediment, chimneys, dormers, mailboxes and the
+    hotel's blade sign solid;
+  - the street things and the town lamps on a pavement stand on it (`grounds.ts pavedAt`, the same
+    slabs `pavements()` makes), drawn and solid; a front-gable house's chimney end is now its look's
+    own pick (`houseLook.chimneyWest`), so the solids follow it — some moved ends;
+  - the walking grid shuts the road closed's barricades and drift (the walk fingerprint re-pinned);
+    the physics audit stands on pavements and porches, and its "grid walks, Jolt blocks" limit is
+    450 (407: the details' thin posts and mailboxes).
+- **Then the user's look again (2026-11-01):** the gas station's canopy and kiosk roofs, and the other
+  flat roofs (the gatehouse's, the shed's, the bus shelter's, the statue's top) had their drawn snow
+  over the solid — feet sank: their solids have it now (0.85 of flatSnow's depth: its middle's least).
+  The kerb caught a body: a 0.18 edge is a wall to a capsule's round foot — walked into it slantwise
+  (10°) it slid along it and never got up; head on, a sprint stalled to 1.3 m/s. The pavement's kerb
+  is three treads of a third of its height across its top (0.09 wide each): walked up as a slope from
+  any way, at any pace (move.test.ts "Main Street's kerb"; a plain kerb fails it).
+- **Found, not done** (the audit's scripts in the session scratchpad):
+  - the silo is a cylinder Flowmotion can't run (and 0.45 m fatter than drawn); Motors' and the kart
+    tower's thin posts are run as walls, not swung as poles; the steeple's solid 0.2 m proud.

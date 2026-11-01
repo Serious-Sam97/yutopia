@@ -457,6 +457,11 @@ const D = {
   catBuilding: ["Building", "Prédio"],
   catTops: ["On desks & tables", "Sobre as mesas"],
   catFloor: ["Rugs & rings", "Tapetes"],
+  catParkour: ["Parkour", "Parkour"],
+  buildInfoOutdoor: [
+    "outdoors only: wall runs, grinds and swings",
+    "só do lado de fora: corrida na parede, grind e giro",
+  ],
   buildInfoSeat: ["people sit here", "pessoas sentam aqui"],
   buildInfoLight: ["gives light", "ilumina"],
   buildInfoUse: ["press X to use", "aperte X para usar"],

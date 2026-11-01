@@ -27,7 +27,8 @@ const SPECS: Spec[] = [
   { bone: "hips", parent: -1, to: "spine", past: 0.12, r: 0.12, mass: 14 },
   { bone: "spine", parent: 0, to: "chest", r: 0.11, mass: 9, cone: 0.35, twist: 0.3 },
   { bone: "chest", parent: 1, to: "neck", r: 0.13, mass: 12, cone: 0.3, twist: 0.3 },
-  { bone: "neck", parent: 2, to: "head", past: 0.2, r: 0.1, mass: 5, cone: 0.55, twist: 0.6 },
+  // (the neck held close: at 0.55 and 0.6 the head lolled about on it, the neck looked long)
+  { bone: "neck", parent: 2, to: "head", past: 0.2, r: 0.1, mass: 5, cone: 0.35, twist: 0.3 },
   { bone: "shoulderL", parent: 2, to: "elbowL", r: 0.05, mass: 2.2, cone: 1.4, twist: 0.8 },
   { bone: "elbowL", parent: 4, to: "wristL", past: 0.08, r: 0.045, mass: 1.8, hinge: "elbow" },
   { bone: "shoulderR", parent: 2, to: "elbowR", r: 0.05, mass: 2.2, cone: 1.4, twist: 0.8 },
@@ -183,6 +184,12 @@ export class RagdollRig {
     return { hips: new Vector3(B[0], B[1], B[2]), front, head: new Vector3(B[21], B[22], B[23]) };
   }
 
+  /** Where its hips are in the scene as last read (`read` adds the world's origin back into what it
+   *  reads), or null when it's not on. */
+  hipsAt(): Vector3 | null {
+    return this.lying()?.hips ?? null;
+  }
+
   stop(): void {
     if (this.id !== null) this.world.removeRagdoll(this.id);
     this.id = null;
@@ -230,6 +237,16 @@ export class Downed {
 
   get on(): boolean {
     return this.rig.on || !!this.up;
+  }
+
+  /** (anchored) How far its hips have gone from the root across the ground (the scene's x, z) — the
+   *  one whose body it is to follow them there, so it gets up where it lies (it slid back before). */
+  drift(): { dx: number; dz: number } | null {
+    if (!this.rig.on) return null;
+    const h = this.rig.hipsAt();
+    if (!h) return null;
+    const r = this.model.root.getWorldPosition(new Vector3());
+    return { dx: h.x - r.x, dz: h.z - r.z };
   }
 
   /** Gone limp from `pose`, going at `vel`, perhaps hit (RagdollRig.start). */
@@ -292,7 +309,8 @@ export class Downed {
     if (!U) return null;
     U.u = Math.min(1, U.u + dt / len);
     const g = getUp(U.u, U.back);
-    const w = 1 - (1 - Math.min(1, U.u / 0.22)) ** 3;
+    // (into the get-up from how it lay over its first 0.4 — 0.6 s: it snapped up off its side in 0.33)
+    const w = 1 - (1 - Math.min(1, U.u / 0.4)) ** 3;
     const m: Moved = {
       pose: blend(U.from.pose, g.m.pose, w),
       lift: [0, 1, 2].map((i) => U.from.lift[i] + (g.m.lift[i] - U.from.lift[i]) * w) as [number, number, number],

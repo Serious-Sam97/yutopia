@@ -208,11 +208,12 @@ test("Flowmotion on the town's walls: up and over, kicked off a tall one, along 
   const from = await body(page);
   await page.keyboard.down("Shift");
   await page.keyboard.down("w");
-  await expect.poll(async () => (await body(page)).flow, { timeout: 3000 }).toBe("wallside");
+  await expect.poll(async () => (await body(page)).flow, { timeout: 3000, intervals: [10] }).toBe("wallside");
   const along = await watch(900);
   await page.keyboard.up("w");
   await page.keyboard.up("Shift");
-  expect(along.rise, "a low arc up it").toBeGreaterThan(0.5);
+  // (from the ground she set off on: the arc's top may be past by the time the poll sees the move)
+  expect(along.rise + along.z0 - from.z, "a low arc up it").toBeGreaterThan(0.5);
   expect(along.end.x - from.x, "along it").toBeGreaterThan(8);
   expect(Math.abs(along.end.y - G(0, LONG.z).y), "beside its face").toBeLessThan(1.2);
 
@@ -235,4 +236,62 @@ test("Flowmotion on the town's walls: up and over, kicked off a tall one, along 
   await page.keyboard.down("w");
   await expect.poll(async () => (await body(page)).z - foot, { timeout: 3000 }).toBeGreaterThan(3);
   await page.keyboard.up("w");
+});
+
+// the office's west wall (building x 0, solid z 2..14): the land west of it, its floor east
+const OFFICE_X = 0;
+const OFFICE_Z = 8;
+
+test("Flowmotion on the office: its wall run from out on the land, nothing from inside", async ({ page }) => {
+  test.skip(!GPU, "needs the GPU: YUTOPIA_GPU=1");
+  test.setTimeout(180_000);
+  await page.addInitScript(() => {
+    const k = "yutopia:prefs";
+    const p = JSON.parse(localStorage.getItem(k) ?? "{}");
+    localStorage.setItem(k, JSON.stringify({ ...p, view: "3p", cam3p: "chase", reducedMotion: false }));
+  });
+  await enter(page, await token(ANA));
+  await page.waitForFunction(() => !!(window as any).__yutopia.tp && !!(window as any).__yutopia.walker, null, {
+    timeout: 60_000,
+  });
+  await page.evaluate(() => {
+    const r = (window as any).__yutopia.room;
+    for (const k of ["fly", "clip", "fast", "hidden"]) r.send("mod:power", { power: k, on: false });
+  });
+  await page.evaluate((p) => (window as any).__yutopia.teleport({ ...p, level: 0 }), G(OFFICE_X - 5, OFFICE_Z));
+  await page.waitForTimeout(4000);
+  const seen = async (ms: number) => {
+    const out = new Set<string>();
+    let top = Number.NEGATIVE_INFINITY;
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      const b = await body(page);
+      if (b.flow) out.add(b.flow);
+      top = Math.max(top, b.z);
+      await page.waitForTimeout(25);
+    }
+    return { flows: [...out], top };
+  };
+
+  // ── outside, 5 m west of it, sprinting east: up it
+  await standAt(page, G(OFFICE_X - 5, OFFICE_Z), 0);
+  const z0 = (await body(page)).z;
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("w");
+  const out = await seen(1800);
+  await page.keyboard.up("w");
+  await page.keyboard.up("Shift");
+  expect(out.flows, "a wall run up the office from outside").toContain("wallrun");
+  expect(out.top - z0, "up it").toBeGreaterThan(1.5);
+
+  // ── inside, 4 m east of it, sprinting west: into the wall, no Flowmotion
+  await standAt(page, G(OFFICE_X + 4, OFFICE_Z), Math.PI);
+  const z1 = (await body(page)).z;
+  await page.keyboard.down("Shift");
+  await page.keyboard.down("w");
+  const inside = await seen(1800);
+  await page.keyboard.up("w");
+  await page.keyboard.up("Shift");
+  expect(inside.flows, "nothing indoors").toEqual([]);
+  expect(inside.top - z1, "not up it").toBeLessThan(0.5);
 });

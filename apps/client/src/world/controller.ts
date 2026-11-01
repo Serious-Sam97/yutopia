@@ -1698,6 +1698,14 @@ export class WorldController {
     const w = this.walker;
     if (!w) return;
     w.limp = !!this.tp?.limpMe();
+    // (down on the ragdoll: where my body's gone, my place — it tumbles on from a fall; it slid back
+    // to where I'd stood to get up)
+    const drift = w.limp ? this.tp?.limpDrift() : null;
+    if (drift && Math.hypot(drift.dx, drift.dz) > 0.02) {
+      w.driftBy(drift.dx, drift.dz);
+    }
+    const upYaw = w.limp ? this.tp?.limpFacing() : null;
+    if (upYaw != null) w.faceYaw(upYaw);
     const first = this.firstPerson();
     const lp = this.room?.state.players.get(this.room.sessionId);
     const playing = !!this.games?.playing();
@@ -2809,10 +2817,19 @@ export class WorldController {
 
   // ── jumping ─────────────────────────────────────────────────────────────
 
+  // what's under (x, y) from z down: the grid's, and where that has them off it (up on a roof, a
+  // wall's top — or in the air) Jolt's say in 3D, as the move core stands on it
+  private groundUnder(x: number, y: number, z: number): number {
+    const g = this.grid.groundAt(x, y, z);
+    if (z <= g + 0.03 || !this.tp) return g;
+    return Math.max(g, this.tp.groundUnder(this.grid, this.level, x, y, z));
+  }
+
   // my jump as the views show it, my feet's height and what's under them
   private myJump(now: number): { jump?: JumpNow; z: number; ground: number } {
     const h = this.height;
-    const ground = this.grid.groundAt(this.me.x, this.me.y, h.z);
+    // (what's really under me — up on a roof, the roof — as the move core has it)
+    const ground = this.groundUnder(this.me.x, this.me.y, h.z);
     const hold = this.jumpHold;
     if (hold) return { jump: jumpNowAt(hold.kind, hold.t) ?? undefined, z: h.z + jumpArc(hold.kind, hold.t).h, ground };
     return { jump: this.jumpTrack.update(now, h.up) ?? undefined, z: h.z, ground };
@@ -2837,7 +2854,7 @@ export class WorldController {
       r.verbAt = now + INTERP_MS;
       void loadJumps();
     }
-    const ground = this.grid.groundAt(at.x, at.y, at.z);
+    const ground = this.groundUnder(at.x, at.y, at.z);
     const jump = r.track.update(now, at.z > ground + 0.03) ?? undefined;
     return { jump, z: at.z, ground };
   }

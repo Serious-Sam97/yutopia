@@ -47,6 +47,7 @@ export class BrowserPhysics {
   private readonly timer: ReturnType<typeof setInterval>;
   private solids: BuildingSolids;
   private seen: WorldObjectDef[];
+  private seenMap: MapDef;
   private lines: LineSegments | null = null;
   private drawn: { x: number; z: number; rev: string } | null = null;
   private rev = 0;
@@ -54,7 +55,7 @@ export class BrowserPhysics {
   // my body: one Jolt character, on whichever floor I'm on, through what I pass
   private readonly mover: CharacterMover;
   // what Flowmotion moves off out on the Grounds (docs/plan/56-the-controls.md F): their solids by
-  // what each is, on my floor's frame
+  // what each is, on my floor's frame — and the building's walls and pieces with the outside on a side
   private readonly flow: GroundsFlow;
   private level = 0;
   private through: Through = { mask: "all", pass: null };
@@ -68,10 +69,11 @@ export class BrowserPhysics {
     private readonly src: PhysicsSource,
     private readonly world: PhysicsWorld,
     private readonly build: WorldBuilder,
-    first: { solids: BuildingSolids; objects: WorldObjectDef[] },
+    first: { solids: BuildingSolids; objects: WorldObjectDef[]; building: MapDef },
   ) {
     this.solids = first.solids;
     this.seen = first.objects;
+    this.seenMap = first.building;
     this.mover = new CharacterMover(
       world,
       () => this.src.frameOf(this.level),
@@ -81,6 +83,7 @@ export class BrowserPhysics {
     // up and down the hills at the body's own pace (docs/plan/56-the-controls.md H.3)
     this.mover.along = true;
     this.flow = new GroundsFlow(() => this.src.frameOf(this.level));
+    this.flow.building(this.solids.flow);
     this.offChanged = onGroundsChanged((cs) => {
       for (const [cx, cz] of cs) {
         if (this.world.has(`land:${cx},${cz}`)) this.stale.add(`${cx},${cz}`);
@@ -119,15 +122,18 @@ export class BrowserPhysics {
     );
     const build = new WorldBuilder(world);
     build.building(solids);
-    return new BrowserPhysics(scene, src, world, build, { solids, objects });
+    return new BrowserPhysics(scene, src, world, build, { solids, objects, building });
   }
 
   // the building as it is now (an edit: only what changed made again)
   private keepUp(): number {
     const { building, objects } = this.src.world();
-    if (objects === this.seen) return 0;
+    // (a wall built or taken away is the map's: it too)
+    if (objects === this.seen && building === this.seenMap) return 0;
     this.seen = objects;
+    this.seenMap = building;
     this.solids = buildingSolids(building, objects);
+    this.flow.building(this.solids.flow);
     const made = this.build.building(this.solids);
     return made.made + made.removed;
   }
@@ -174,6 +180,13 @@ export class BrowserPhysics {
       mover: this.mover,
       flow: this.flow,
     };
+  }
+
+  /** What's under (x, y) on `level`'s floor from z down (its own coords): the land or the top of
+   *  anything there — a roof, a wall's top — as the move core stands on it (the grid knows only the
+   *  land and its floor: up on a roof it'd say the land below). */
+  groundUnder(grid: Grid, level: number, x: number, y: number, z: number): number {
+    return new JoltCollider(this.world, grid, this.src.frameOf(level)).groundAt(x, y, z);
   }
 
   // ── the admins' view: every solid near me, as Jolt has it ──

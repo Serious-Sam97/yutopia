@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyEdits, CHUNK, checkEdits, LAMPS, SNOW_POLES, STREET, treesIn, WAYS } from "./grounds.ts";
+import { applyEdits, CHUNK, checkEdits, groundAt, LAMPS, SITE, SNOW_POLES, STREET, treesIn, WAYS } from "./grounds.ts";
 import { oneTree, WoodsStroke } from "./grounds-brush.ts";
 import { type GroundsEdits, NO_EDITS, type ThingDef } from "./grounds-edits.ts";
 import { addThing, changeThing, removeThing, thingAt, thingBlocked, thingDefOf } from "./grounds-things.ts";
@@ -57,6 +57,66 @@ test("a boulder, a sign, a fence, a snow pole: laid, solid where they stand, by 
   assert.equal(thingAt(FIELD.x + 3, FIELD.z + 6.05), "god-thing-3", "a fence: by its line");
   assert.deepEqual(thingDefOf("god-thing-2")?.text, "Frost's Pond 200 m");
   applyEdits(NO_EDITS);
+});
+
+test("parkour: a rail, a wall, a pole each one solid of its own kind; a long one picked and checked along it", () => {
+  applyEdits(NO_EDITS);
+  const at = (i: number) => ({ x: FIELD.x - 12 + i * 5, z: FIELD.z - 14 });
+  const kinds = ["pk_rail", "pk_rail_long", "pk_wall", "pk_wall_tall", "pk_pole", "pk_pole_tall"] as const;
+  let e: GroundsEdits = NO_EDITS;
+  for (const [i, kind] of kinds.entries())
+    e = addThing(
+      e,
+      thing({ key: `god-thing-${i + 1}`, kind, ...at(i), ry: kind === "pk_rail_long" ? Math.PI / 2 : 0 }),
+    );
+  assert.deepEqual(checkEdits(e), []);
+  applyEdits(e);
+  const what = { pk_rail: "pk_rail", pk_rail_long: "pk_rail", pk_wall: "pk_wall", pk_wall_tall: "pk_wall" } as const;
+  for (const [i, kind] of kinds.entries()) {
+    const p = at(i);
+    const mine = solidsNear(p.x, p.z, 0.05).filter((g) => g.what.startsWith("pk_"));
+    assert.equal(mine.length, 1, `${kind}: one solid`);
+    const [g] = mine;
+    const y = groundAt(p.x, p.z);
+    if (g.s.t === "cyl") {
+      assert.equal(g.what, "pk_pole");
+      assert.equal(g.s.r, 0.08);
+      assert.ok(Math.abs(g.s.y1 - y - (kind === "pk_pole" ? 3 : 5.5)) < 1e-9, kind);
+    } else {
+      assert.equal(g.what, what[kind as keyof typeof what]);
+      const tall = { pk_rail: 0.9, pk_rail_long: 0.9, pk_wall: 3.2, pk_wall_tall: 6 }[kind as keyof typeof what];
+      assert.ok(Math.abs(g.s.y + g.s.hy - y - tall) < 1e-9, kind);
+      assert.equal(g.s.hx, kind === "pk_rail_long" ? 4 : 2);
+      assert.equal(g.s.hz, kind.startsWith("pk_rail") ? 0.05 : 0.15);
+    }
+  }
+  // the long rail (turned a quarter: along z), picked by its end; a wall 4 m long by its end
+  const long = at(1);
+  assert.equal(thingAt(long.x + 0.3, long.z - 3.6), "god-thing-2");
+  assert.equal(thingAt(at(2).x + 1.9, at(2).z + 0.6), "god-thing-3");
+  assert.equal(thingAt(long.x + 2.5, long.z + 2), null, "beside both");
+  applyEdits(NO_EDITS);
+  // reaching onto a road or into the campus along it, though its middle is clear
+  const road = WAYS.find((w) => w.key === "road") as (typeof WAYS)[number];
+  const m = Math.floor(road.line.length / 2);
+  const [rx, rz] = road.line[m];
+  const [qx, qz] = road.line[m + 1];
+  const l = Math.hypot(qx - rx, qz - rz);
+  const [dx, dz] = [(qx - rx) / l, (qz - rz) / l];
+  const [cx, cz] = [rx - dz * (road.w / 2 + 1.5), rz + dx * (road.w / 2 + 1.5)];
+  const turn = (x: number, z: number) => Math.atan2(-z, x); // (its +x along (x, z), as three.js turns)
+  assert.equal(thingBlocked("pk_pole", cx, cz), null, "beside the road");
+  assert.match(thingBlocked("pk_rail_long", cx, cz, turn(-dz, dx)) ?? "", /County road/, "across: its end on it");
+  assert.equal(thingBlocked("pk_rail_long", cx, cz, turn(dx, dz)), null, "along it: clear");
+  const e2 = addThing(NO_EDITS, thing({ key: "god-thing-1", kind: "pk_wall", x: SITE.x0 - 1.5, z: 37 }));
+  assert.ok(
+    checkEdits(e2).some((p) => /reaches onto/.test(p)),
+    checkEdits(e2).join("; "),
+  );
+  assert.deepEqual(
+    checkEdits(addThing(NO_EDITS, thing({ key: "god-thing-1", kind: "pk_pole", x: SITE.x0 - 1.5, z: 37 }))),
+    [],
+  );
 });
 
 test("the rule book: too big, words where there are none, a fence too long or into the campus", () => {

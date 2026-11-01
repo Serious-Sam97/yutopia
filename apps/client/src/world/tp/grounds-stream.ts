@@ -403,7 +403,7 @@ if (vFade < 0.999) {
     // behind at most, what covers it there meanwhile)
     this.turn = (this.turn + 1) % 3;
     if (this.lite && !this.boost && this.turn) {
-      if (target) this.statics.cutAt(target.x, target.z);
+      if (target) this.statics.cutAt(target.x, target.y, target.z);
       this.statics.faceCards(cam);
       this.kart?.faceCards(cam);
       return;
@@ -491,7 +491,7 @@ if (vFade < 0.999) {
       }
     }
     if (this.poolsDirty) this.fillPools();
-    if (target) this.statics.cutAt(target.x, target.z);
+    if (target) this.statics.cutAt(target.x, target.y, target.z);
     // the rest of the Grounds (the ways, the buildings, the lamps…), a few ms a frame (made
     // again: that, then swapped in whole)
     const s0 = performance.now();
@@ -538,7 +538,7 @@ if (vFade < 0.999) {
       this.statics.root.visible = true;
       this.next = null;
       // (a stored block's storeys: cut again in the new one)
-      if (target) this.statics.cutAt(target.x, target.z);
+      if (target) this.statics.cutAt(target.x, target.y, target.z);
     }
     this.left.statics = this.statics.left + (this.kart?.left ?? 0);
     if (Math.hypot(x - this.castersAt.x, z - this.castersAt.z) > 6) this.fillCasters(x, z);

@@ -497,3 +497,58 @@ test("a jog up a 15 cm stair, a 20 cm kerb (straight on or at an angle): its pac
     else assert.ok(b.x < 10 && b.z < 0.01, `${rise} m: stopped at ${b.x.toFixed(2)}`);
   }
 });
+
+test("Main Street's kerb walked up from any way at it — head on, aslant, nearly along it — never slid along it", async () => {
+  const G = await import("../grounds.ts");
+  const { WorldBuilder } = await import("./build.ts");
+  const main = G.WAYS.find((w) => w.key === "main");
+  assert.ok(main);
+  const i = main.line.findIndex(([x]) => Math.abs(x - 440) < 0.6);
+  const [ax, az] = main.line[i];
+  const [bx, bz] = main.line[i + 1];
+  const l = Math.hypot(bx - ax, bz - az);
+  const [tx, tz] = [(bx - ax) / l, (bz - az) / l];
+  const [nx, nz] = [-tz, tx];
+  const hw = G.wayHalf(main, i);
+  const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 64 }));
+  worlds.push(world);
+  const build = new WorldBuilder(world);
+  for (let cx = Math.floor(ax / 32) - 1; cx <= Math.floor(ax / 32) + 1; cx++)
+    for (let cz = Math.floor(az / 32) - 1; cz <= Math.floor(az / 32) + 1; cz++) build.groundChunk(cx, cz);
+  world.settle();
+  for (const [speed, deg] of [
+    [5, 90],
+    [8.2, 90],
+    [8.2, 45],
+    [8.2, 20],
+    [8.2, 10],
+    [5, 10],
+  ]) {
+    const a = (deg * Math.PI) / 180;
+    const ux = nx * Math.sin(a) + tx * Math.cos(a);
+    const uz = nz * Math.sin(a) + tz * Math.cos(a);
+    // (2 m out from the kerb on the road, at it)
+    const sx = ax + nx * (hw - 2 * Math.sin(a)) - tx * 2 * Math.cos(a);
+    const sz = az + nz * (hw - 2 * Math.sin(a)) - tz * 2 * Math.cos(a);
+    const m = new CharacterMover(
+      world,
+      () => ({ ox: 0, oy: 0, elev: 0 }),
+      undefined,
+      () => true,
+    );
+    m.along = true;
+    const b = { ...newBody(sx, sz, G.groundAt(sx, sz)) };
+    let on = false;
+    let slow = 0;
+    for (let k = 0; k < 150 && !on; k++) {
+      b.vx = ux * speed;
+      b.vy = uz * speed;
+      const [x0, y0] = [b.x, b.y];
+      m.step(b, 1 / 60, 0.27);
+      if (Math.hypot(b.x - x0, b.y - y0) * 60 < speed * 0.4) slow++;
+      on = b.z > G.groundAt(b.x, b.y) + 0.15;
+    }
+    assert.ok(on, `${speed} m/s at ${deg}°: up on the pavement`);
+    assert.ok(slow <= 1, `${speed} m/s at ${deg}°: held up ${slow} frames`);
+  }
+});

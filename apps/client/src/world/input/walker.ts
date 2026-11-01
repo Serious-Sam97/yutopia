@@ -424,6 +424,12 @@ export class Walker {
   /** (plan 58 5d) down on the ragdoll (the view's: my person's), held still till I'm up */
   limp = false;
   private body: Body = newBody(0, 0);
+  /** (plan 58 5d) Down on the ragdoll: moved with it across the ground (its hips' drift) — the body
+   *  gets up where it lies, the camera on it. */
+  driftBy(dx: number, dy: number): void {
+    this.body.x += dx;
+    this.body.y += dy;
+  }
   private prev: Body = newBody(0, 0);
   private clock = new MoveClock();
   private heldOver = new HeldOver();

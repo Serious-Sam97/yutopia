@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyEdits, CHUNK, groundAt, type StreetThing } from "@yutopia/shared/grounds";
+import { applyEdits, CHUNK, groundAt, pavedAt, type StreetThing } from "@yutopia/shared/grounds";
 import { NO_EDITS } from "@yutopia/shared/grounds-edits";
 import { addThing, THINGS } from "@yutopia/shared/grounds-things";
 import type { Solid3 } from "@yutopia/shared/shapes";
@@ -21,14 +21,17 @@ function solidBox(s: Solid3) {
   return { x0: s.x - ex, x1: s.x + ex, z0: s.z - ez, z1: s.z + ez, y1: s.y + s.hy };
 }
 
-for (const kind of KINDS)
-  test(`${kind}: what's solid of it is inside what's drawn, as tall`, () => {
+// (the long ones turned too: the solid turned as the drawing is)
+for (const [kind, ry] of KINDS.flatMap((k) =>
+  k.startsWith("pk_") ? [[k, 0] as const, [k, 0.6] as const] : [[k, 0] as const],
+))
+  test(`${kind}${ry ? ` turned ${ry}` : ""}: what's solid of it is inside what's drawn, as tall`, () => {
     const t: StreetThing = {
       key: "god-thing-1",
       kind: kind as StreetThing["kind"],
       x: AT.x,
       z: AT.z,
-      ry: 0,
+      ry,
       ...(kind === "fence" && {
         pts: [
           [AT.x, AT.z],
@@ -45,7 +48,7 @@ for (const kind of KINDS)
     const cz = Math.floor(AT.z / CHUNK);
     const solids = [-1, 0, 1]
       .flatMap((dx) => [-1, 0, 1].flatMap((dz) => groundSolidsIn(cx + dx, cz + dz)))
-      .filter((g) => g.what === "street")
+      .filter((g) => g.what === "street" || g.what === "street_pole" || g.what.startsWith("pk_"))
       .map((g) => solidBox(g.s))
       .filter(near);
     applyEdits(NO_EDITS);
@@ -74,4 +77,46 @@ for (const kind of KINDS)
       Math.abs(top - drawn.y1) < 0.3,
       `${kind}: solid to ${top - groundAt(AT.x, AT.z)}, drawn ${drawn.y1 - groundAt(AT.x, AT.z)}`,
     );
+  });
+
+// (on a street's pavement: drawn and solid on its top — shared pavedAt — not sunk in it)
+for (const kind of ["hydrant", "bin", "pk_rail", "fence"] as const)
+  test(`${kind} on Main Street's pavement: drawn and solid on the pavement's top`, () => {
+    const at = { x: 446.5, z: -397.3 };
+    const lift = pavedAt(at.x, at.z);
+    assert.ok(lift > 0.17, `on the pavement: ${lift}`);
+    const t: StreetThing = {
+      key: "god-thing-1",
+      kind,
+      x: at.x,
+      z: at.z,
+      ry: 0,
+      ...(kind === "fence" && {
+        pts: [
+          [at.x, at.z],
+          [at.x + 3, at.z],
+        ] as [number, number][],
+      }),
+    };
+    applyEdits(addThing(NO_EDITS, { ...t, kind: t.kind }));
+    const cx = Math.floor(at.x / CHUNK);
+    const cz = Math.floor(at.z / CHUNK);
+    const mine = [-1, 0, 1]
+      .flatMap((dx) => [-1, 0, 1].flatMap((dz) => groundSolidsIn(cx + dx, cz + dz)))
+      .filter(
+        (g) =>
+          (g.what === "street" || g.what.startsWith("pk_")) &&
+          Math.hypot(g.s.x - at.x - (kind === "fence" ? 1.5 : 0), g.s.z - at.z) < 0.6,
+      );
+    applyEdits(NO_EDITS);
+    assert.ok(mine.length, "something solid");
+    const floor = groundAt(at.x, at.z) + lift;
+    const low = Math.min(...mine.map((g) => (g.s.t === "box" ? g.s.y - g.s.hy : g.s.y0)));
+    assert.ok(Math.abs(low - floor) < 0.02, `solid from ${low - groundAt(at.x, at.z)}`);
+    let drawn = Number.POSITIVE_INFINITY;
+    for (const g of streetGeometry([t])) {
+      g.computeBoundingBox();
+      if (g.boundingBox) drawn = Math.min(drawn, g.boundingBox.min.y);
+    }
+    assert.ok(Math.abs(drawn - floor) < 0.02, `drawn from ${drawn - groundAt(at.x, at.z)}`);
   });

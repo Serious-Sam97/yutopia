@@ -144,7 +144,11 @@ const QUERY: Record<Mask, number> = { all: 6, clip: 7, tops: 8, land: 9, sight: 
 const COSMETIC = 12;
 const PROXY = 13;
 const NONE = 14;
-const LAYERS = 15;
+// (plan 58 5d: a ragdoll's parts meet what's still — the land, the floors, the walls, furniture —
+// one another (its own parts but a joint's two: its group filter), never a body on the move — the
+// walker's own character stood up on its own ragdoll)
+const RAG = 15;
+const LAYERS = 16;
 
 /** A body's size (docs/plan/50 C): a capsule this round and tall, its feet at its position. */
 export const BODY = { r: 0.25, h: 1.75 };
@@ -233,9 +237,10 @@ export class PhysicsWorld {
     for (const l of Object.values(LAYER)) pairs.EnableCollision(MOVING, l);
     for (const [m, q] of Object.entries(QUERY)) for (const l of MEETS[m as Mask]) pairs.EnableCollision(q, l);
     for (const l of [0, 2, 3, 4, 5, PROXY]) pairs.EnableCollision(COSMETIC, l);
+    for (const l of [0, 2, 3, 4, 5, RAG]) pairs.EnableCollision(RAG, l);
     const bp = new J.BroadPhaseLayerInterfaceTable(LAYERS, 2);
     for (let l = 0; l < LAYERS; l++)
-      bp.MapObjectToBroadPhaseLayer(l, new J.BroadPhaseLayer(l === MOVING || l >= QUERY.all ? 1 : 0));
+      bp.MapObjectToBroadPhaseLayer(l, new J.BroadPhaseLayer(l === MOVING || l === RAG || l >= QUERY.all ? 1 : 0));
     settings.mObjectLayerPairFilter = pairs;
     settings.mBroadPhaseLayerInterface = bp;
     settings.mObjectVsBroadPhaseLayerFilter = new J.ObjectVsBroadPhaseLayerFilterTable(bp, 2, pairs, LAYERS);
@@ -518,7 +523,7 @@ export class PhysicsWorld {
       if (!shape) break;
       this.r.Set(p.at[0], p.at[1], p.at[2]);
       this.q.Set(p.q[0], p.q[1], p.q[2], p.q[3]);
-      const bcs = new J.BodyCreationSettings(shape, this.r, this.q, J.EMotionType_Dynamic, MOVING);
+      const bcs = new J.BodyCreationSettings(shape, this.r, this.q, J.EMotionType_Dynamic, RAG);
       bcs.mOverrideMassProperties = J.EOverrideMassProperties_CalculateInertia;
       bcs.mMassPropertiesOverride.mMass = p.mass;
       bcs.mMotionQuality = J.EMotionQuality_LinearCast;

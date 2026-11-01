@@ -67,6 +67,7 @@ export interface HouseLook {
   H: number; // its walls' height
   rise: number; // its roof's
   chimneyEnd: boolean; // at the far end of the ridge (else the near)
+  chimneyWest: boolean; // a front gable's: at its west end (x0 + 2, else x1 − 2) — shapes/grounds.ts's too
   lit: (n: number) => boolean[];
 }
 export function houseLook(b: Building): HouseLook {
@@ -76,6 +77,7 @@ export function houseLook(b: Building): HouseLook {
   const shutter = ["#2f4a3b", "#6b2430", "#2c3e55", "#3a3f45", "#5a4636"][Math.floor(r() * 5)];
   const chimneyEnd = r() < 0.5;
   const seed = r() * 1e9;
+  const chimneyWest = r() < 0.5;
   return {
     kind,
     wall,
@@ -83,6 +85,7 @@ export function houseLook(b: Building): HouseLook {
     H: kind === 2 ? 4.2 : 6.4,
     rise: kind === 2 ? 4.4 : kind === 1 ? 3.6 : 2.6,
     chimneyEnd,
+    chimneyWest,
     lit: (n) => {
       const q = rngOf(seed);
       return Array.from({ length: n }, () => q() < 0.35);

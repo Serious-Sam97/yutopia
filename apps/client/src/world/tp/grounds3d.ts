@@ -34,6 +34,7 @@ import {
   PLAZA,
   POND,
   POND_LEVEL,
+  pavedAt,
   quarter,
   RAVINE,
   RIVER,
@@ -53,6 +54,7 @@ import {
   WAYS,
   type Way,
   wallEdgeAt,
+  wallsHigh,
   wayHalf,
 } from "@yutopia/shared/grounds";
 import { lotLayout } from "@yutopia/shared/lot";
@@ -760,13 +762,14 @@ export class Grounds3 {
   get left(): number {
     return this.pending.length;
   }
-  // the stored blocks' storeys above their ground floor (gone while you're in one)
-  private cuts = new Map<string, { b: Building; parts: Object3D[] }>();
+  // the stored blocks' storeys above their ground floor (gone while you're in one); `under`: how
+  // high the eyes are still in it (up on its roof they aren't: it's all there)
+  private cuts = new Map<string, { b: Building; parts: Object3D[]; under: number }>();
   private cutKey = "";
-  /** You're at (x, z) (building coords): inside a stored block, its storeys above go. */
-  cutAt(x: number, z: number) {
+  /** Your eyes are at (x, y, z) (building coords, y up): inside a stored block, its storeys above go. */
+  cutAt(x: number, y: number, z: number) {
     let key = "";
-    for (const [k, c] of this.cuts) if (x >= c.b.x0 && x < c.b.x1 && z >= c.b.z0 && z < c.b.z1) key = k;
+    for (const [k, c] of this.cuts) if (x >= c.b.x0 && x < c.b.x1 && z >= c.b.z0 && z < c.b.z1 && y < c.under) key = k;
     if (key === this.cutKey) return;
     this.cutKey = key;
     for (const [k, c] of this.cuts) for (const p of c.parts) p.visible = k !== key;
@@ -1430,7 +1433,9 @@ export class Grounds3 {
     const inside = this.o.stream ? insideOf(b) : null;
     if (!inside) return;
     const added = this.root.children.slice(n);
-    this.cuts.set(b.key, { b, parts: added });
+    // (in it while the eyes are under its roof: up on it, it's all there)
+    const under = groundAt((b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2) + wallsHigh(b) - 0.3;
+    this.cuts.set(b.key, { b, parts: added, under });
     this.interior(inside);
   }
   /** God mode's turned building: what's built of it moved into a pivot at its plot's middle,
@@ -1900,7 +1905,7 @@ export class Grounds3 {
       cap.color(0xf6f8fa).box(x - 0.05, top + h, z - 0.05, x + w + 0.05, top + h + 0.2, z + d + 0.05);
     }
     above.push(this.add(cap.build(), this.lambert()));
-    if (own) this.cuts.set(b.key, { b, parts: above });
+    if (own) this.cuts.set(b.key, { b, parts: above, under: top - 0.3 });
     // drifts at the foot of the walls (open at the doors)
     const dg = new G();
     const rd = groundsRng(b.z1 * 13 + 5);
@@ -3792,7 +3797,8 @@ export class Grounds3 {
     // the chimney, at one end of the ridge
     {
       const cz = L.chimneyEnd ? z0 + 1.6 : z1 - 1.6;
-      const cxx = front ? (q() < 0.5 ? x0 + 2 : x1 - 2) : xc;
+      // (which end: its look's, the solids' too — shapes/grounds.ts)
+      const cxx = front ? (L.chimneyWest ? x0 + 2 : x1 - 2) : xc;
       const top = y0 + H + L.rise + 0.8;
       r.color(0x7b3b2c).box(cxx - 0.4, y0 + H, cz - 0.35, cxx + 0.4, top, cz + 0.35);
       r.color(0x5b4a44).box(cxx - 0.48, top, cz - 0.43, cxx + 0.48, top + 0.15, cz + 0.43);
@@ -4292,7 +4298,8 @@ export class Grounds3 {
   }
   private lampAt(x: number, z: number, ry: number, kind: LampLight["kind"]) {
     if (!this.near(x, z, 20)) return;
-    const gy = groundAt(x, z);
+    // (on a street's pavement: stood on it — shared pavedAt, its solid's too; a porch's on its wall)
+    const gy = groundAt(x, z) + (kind === "porch" ? 0 : pavedAt(x, z));
     const P = this.lampGeo;
     if (kind === "cobra") {
       P.push(place(tinted(new CylinderGeometry(0.09, 0.13, 9, 8).translate(0, 4.5, 0), 0x3a3e44), x, gy, z, ry));

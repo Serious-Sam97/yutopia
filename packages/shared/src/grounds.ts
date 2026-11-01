@@ -918,6 +918,95 @@ export function wayClearance(x: number, z: number): number {
   if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) best = 0;
   return Math.max(0, best);
 }
+
+// ── the streets' pavements (tp/roads3d.ts draws them: from the road's edge out max(0.28, its
+// pavement), its kerb KERB over the ground — less as a flared start's pavement opens; none where
+// another way crosses, nor on a bridge). One rule for the solids' slabs (shapes/grounds.ts) and
+// for what stands on them (`pavedAt`: the street things, the lamps, drawn and solid) ──
+/** A kerb's height over the road (and the pavement's over its ground). */
+export const KERB = 0.18;
+/** One stretch of a street's pavements, its samples i to i + 1, either side: from `hw` off its line
+ *  out `wide`, `kerb` over the ground. */
+export interface PaveSlab {
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  hw: number;
+  wide: number;
+  kerb: number;
+}
+let paved: { v: number; by: WeakMap<Way, (PaveSlab | null)[]> } | null = null;
+/** A street's pavement slabs, per sample (null: none from it to the next). */
+export function paveSlabs(w: Way): (PaveSlab | null)[] {
+  if (paved?.v !== editsVersion) paved = { v: editsVersion, by: new WeakMap() };
+  const had = paved.by.get(w);
+  if (had) return had;
+  const L = w.line;
+  const out: (PaveSlab | null)[] = L.map(() => null);
+  if (w.kind === "street" && w.pave) {
+    // (as the drawing's `crossedAll`: not a way carrying it on end to end, nor a trail or a walk;
+    // near one by every other sample, as the drawing's nearLine)
+    const ends = (u: Way) => [u.line[0], u.line[u.line.length - 1]];
+    const joined = (u: Way) => ends(u).some((p) => ends(w).some((q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 1.5));
+    const box = (l: P[]) => {
+      const xs = l.map((p) => p[0]);
+      const zs = l.map((p) => p[1]);
+      return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+    };
+    const wb = box(L);
+    const them = WAYS.filter((u) => {
+      if (u === w || u.kind === "trail" || u.kind === "walk" || joined(u)) return false;
+      const ub = box(u.line);
+      return ub.x0 - 30 < wb.x1 && ub.x1 + 30 > wb.x0 && ub.z0 - 30 < wb.z1 && ub.z1 + 30 > wb.z0;
+    });
+    const near = (u: Way, x: number, z: number) => {
+      let best = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < u.line.length; i += 2) best = Math.min(best, Math.hypot(u.line[i][0] - x, u.line[i][1] - z));
+      return best;
+    };
+    const crossed = L.map(([x, z]) => them.some((u) => near(u, x, z) < u.w / 2 + u.pave + 0.5));
+    for (let i = 0; i + 1 < L.length; i++) {
+      if (crossed[i] || crossed[i + 1] || w.bridged[i] || w.bridged[i + 1]) continue;
+      const pv = (wayPave(w, i) + wayPave(w, i + 1)) / 2;
+      const kerb = KERB * Math.min(1, pv / 0.8);
+      if (kerb < 0.03 || Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]) < 1e-6) continue;
+      out[i] = {
+        ax: L[i][0],
+        az: L[i][1],
+        bx: L[i + 1][0],
+        bz: L[i + 1][1],
+        hw: (wayHalf(w, i) + wayHalf(w, i + 1)) / 2,
+        wide: Math.max(0.28, pv),
+        kerb,
+      };
+    }
+  }
+  paved.by.set(w, out);
+  return out;
+}
+/** How far a street's pavement lifts what stands at (x, z) over the ground (`groundAt`): its kerb
+ *  (KERB, less where a flared start's opens) on a pavement's slab, its edges in; 0 off one. */
+export function pavedAt(x: number, z: number): number {
+  let best = 0;
+  for (const [f, n] of nearLines(x, z)) {
+    if (f >= WAYS.length) continue;
+    const w = WAYS[f];
+    if (w.kind !== "street" || !w.pave) continue;
+    const slabs = paveSlabs(w);
+    for (let i = Math.max(0, n.i - 1); i <= n.i && i < slabs.length; i++) {
+      const s = slabs[i];
+      if (!s || s.kerb <= best) continue;
+      const len = Math.hypot(s.bx - s.ax, s.bz - s.az);
+      const tx = (s.bx - s.ax) / len;
+      const tz = (s.bz - s.az) / len;
+      const along = (x - s.ax) * tx + (z - s.az) * tz;
+      const off = Math.abs(-(x - s.ax) * tz + (z - s.az) * tx);
+      if (along >= -1e-6 && along <= len + 1e-6 && off >= s.hw - 1e-6 && off <= s.hw + s.wide + 1e-6) best = s.kerb;
+    }
+  }
+  return best;
+}
 function nearBuildings(x: number, z: number): Building[] {
   return bCells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL))) ?? [];
 }
@@ -1402,7 +1491,14 @@ export interface StreetThing {
     | "boulder"
     | "planter"
     | "sign"
-    | "fence";
+    | "fence"
+    // parkour pieces: grind rails, free-standing walls, swing poles (Flowmotion's)
+    | "pk_rail"
+    | "pk_rail_long"
+    | "pk_wall"
+    | "pk_wall_tall"
+    | "pk_pole"
+    | "pk_pole_tall";
   x: number;
   z: number;
   ry: number;
@@ -1414,6 +1510,25 @@ export interface StreetThing {
   pts?: P[];
 }
 export const STREET: StreetThing[] = [];
+/** How far a long thing reaches either side of where it stands, along its own x (a grind rail, a
+ *  parkour wall): picked anywhere along it, what it reaches checked, redrawn round all of it. */
+export const THING_SPAN: Partial<Record<StreetThing["kind"], number>> = {
+  pk_rail: 2,
+  pk_rail_long: 4,
+  pk_wall: 2,
+  pk_wall_tall: 2,
+};
+/** A long thing's ends (a rail's, a wall's: along its x turned `ry`, as three.js turns), or null. */
+export function thingEnds(t: { kind: string; x: number; z: number; ry: number }): [P, P] | null {
+  const L = THING_SPAN[t.kind as StreetThing["kind"]];
+  if (!L) return null;
+  const dx = Math.cos(t.ry) * L;
+  const dz = -Math.sin(t.ry) * L;
+  return [
+    [t.x - dx, t.z - dz],
+    [t.x + dx, t.z + dz],
+  ];
+}
 function layStreet() {
   STREET.length = 0;
   const MZ = -405;
@@ -1465,16 +1580,36 @@ function layStreet() {
   STREET.push({ key: "street:postbox", kind: "postbox", x: 349.6, z: MZ - 7.7, ry: 0 });
 }
 layStreet();
-/** The tiles street furniture stands on. */
+/** The tiles street furniture stands on (a rail's, a wall's: every one along it). */
+/** The road closed's tiles: its three barricades across the road and the drift past them
+ *  (the shapes' solids there: 1.3 high, the drift's first step 0.55 — nobody walks onto them). */
+function roadClosedTiles(): [number, number][] {
+  const { x: X, z: Z } = ROAD_CLOSED;
+  const out: [number, number][] = [];
+  const rect = (x0: number, z0: number, x1: number, z1: number) => {
+    for (let z = Math.floor(z0); z < Math.ceil(z1); z++)
+      for (let x = Math.floor(x0); x < Math.ceil(x1); x++) out.push([x, z]);
+  };
+  for (const zc of [Z - 4.6, Z, Z + 4.6]) rect(X - 0.35, zc - 2.2, X + 0.35, zc + 2.2);
+  rect(X + 5 - 3.6, Z - 6.3, X + 5 + 3.6, Z + 6.3);
+  return out;
+}
 function streetTiles(): [number, number][] {
-  return STREET.flatMap((t) =>
-    t.kind === "bench"
-      ? [
-          [Math.floor(t.x), Math.floor(t.z)],
-          [Math.floor(t.x) + 1, Math.floor(t.z)],
-        ]
-      : [[Math.floor(t.x), Math.floor(t.z)]],
-  );
+  return STREET.flatMap((t): [number, number][] => {
+    if (t.kind === "bench")
+      return [
+        [Math.floor(t.x), Math.floor(t.z)],
+        [Math.floor(t.x) + 1, Math.floor(t.z)],
+      ];
+    const ends = thingEnds(t);
+    if (!ends) return [[Math.floor(t.x), Math.floor(t.z)]];
+    const [[ax, az], [bx, bz]] = ends;
+    const n = Math.ceil(Math.hypot(bx - ax, bz - az) * 2);
+    return Array.from({ length: n + 1 }, (_, i): [number, number] => [
+      Math.floor(ax + ((bx - ax) * i) / n),
+      Math.floor(az + ((bz - az) * i) / n),
+    ]);
+  });
 }
 
 /** Snow poles along the driveway and the county road (docs/plan/33-the-look.md): an orange
@@ -1665,6 +1800,8 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
   shut(BENCH.x, BENCH.z);
   for (const [x, z] of streetTiles()) shut(x + 0.5, z + 0.5);
   for (const [x, z] of motorsTiles()) shut(x + 0.5, z + 0.5);
+  // the road closed's barricades and the drift past them (shapes/grounds.ts: solid, a dead end)
+  for (const [x, z] of roadClosedTiles()) shut(x + 0.5, z + 0.5);
   for (let j = 0; j < CHUNK; j++)
     for (let i = 0; i < CHUNK; i++) {
       const x = x0 + i + 0.5;
@@ -2062,6 +2199,27 @@ function fitsOf(b: Building): { floor: string; fits: Fit[] } {
 export const INSIDES: Inside[] = [];
 const insideBy = new Map<string, Inside>();
 /** The inside of a building you walk into (not the stored ones), or null. */
+/** How tall a building's walls stand over its ground (shapes/grounds.ts `shell`'s H: a test keeps
+ *  them the same) — the ones you walk into and the blocks; a house's own is its look's, not here. */
+export function wallsHigh(b: Building): number {
+  switch (b.kind) {
+    case "gatehouse":
+      return 2.6;
+    case "boathouse":
+      return 3.2;
+    case "shed":
+      return 4;
+    case "church":
+      return 6;
+    case "barn":
+      return 5.2;
+    case "farmhouse":
+      return 6.2;
+    default:
+      return b.floors * 3.8 + 0.8;
+  }
+}
+
 export function insideOf(b: Building): Inside | null {
   return insideBy.get(b.key) ?? null;
 }
@@ -2495,7 +2653,7 @@ function sigs(): Map<string, { sig: string; r: Rect }> {
           x1: Math.max(...t.pts.map((p) => p[0])) + 3,
           z1: Math.max(...t.pts.map((p) => p[1])) + 3,
         }
-      : around(t.x, t.z, 3 * (t.s ?? 1));
+      : around(t.x, t.z, 3 * (t.s ?? 1) + (THING_SPAN[t.kind] ?? 0));
     out.set(t.key, { sig, r });
   }
   for (const p of SNOW_POLES) out.set(p.key, { sig: `${p.x} ${p.z} ${p.ry}`, r: around(p.x, p.z, 1) });
@@ -2626,6 +2784,12 @@ const THING_KINDS = new Set<string>([
   "planter",
   "sign",
   "fence",
+  "pk_rail",
+  "pk_rail_long",
+  "pk_wall",
+  "pk_wall_tall",
+  "pk_pole",
+  "pk_pole_tall",
 ]);
 /** What's wrong with a set of edits (none: it may be laid), each a line an admin can read. The
  *  world server's say before a publish; the god mode ghost's, as they edit. */
@@ -2831,6 +2995,12 @@ export function checkEdits(e: GroundsEdits): string[] {
     if (!THING_KINDS.has(d.kind)) no(`${d.key}: not a kind of thing`);
     if (!inWorld(d.x, d.z) || anchoredHere(d.x, d.z)) no(`${d.key}: on ground that stays as it is`);
     if (![d.x, d.z, d.ry].every(Number.isFinite)) no(`${d.key}: where it is, which way`);
+    else {
+      // a long one (a rail, a wall): its ends too
+      const ends = thingEnds(d);
+      if (ends?.some(([x, z]) => !inWorld(x, z) || anchoredHere(x, z)))
+        no(`${d.key}: reaches onto ground that stays as it is`);
+    }
     if (d.s !== undefined && !(d.kind === "boulder" || d.kind === "planter"))
       no(`${d.key}: only a boulder or a planter is sized`);
     if (d.s !== undefined && !(d.s >= THING_SIZE.min && d.s <= THING_SIZE.max))

@@ -32,10 +32,18 @@ import { groundSolidsIn } from "./shapes/grounds.ts";
  *  change, and say why in the commit. */
 const TODAY = {
   land: "c6e49333",
-  walk: "80ace7be",
+  // (2026-11-01: the road closed's barricades and drift shut, as their solids)
+  walk: "8fb986de",
   trees: "0940af8b",
   surfaces: "0cbae68d",
-  solids: "2fbfd9b7",
+  // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
+  // solid, the wooden poles their own what, the pitched roofs in steps under their slopes, the flat
+  // roofs' snow, the streets' pavements and kerbs — the town's audit; then its details: the shops'
+  // awnings, the post office's canopy, the hotel's marquee, its posts and blade sign, the civic and
+  // church steps, the hall's columns, entablature and pediment, the townhouses' porches, railings,
+  // dormers, chimneys and mailboxes, the lamps and street things on a pavement stood on it; the gas
+  // station's and the other flat roofs' snow, the kerbs in three treads)
+  solids: "4dd38332",
   things: "ac236950",
 };
 

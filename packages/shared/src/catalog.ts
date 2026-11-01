@@ -57,6 +57,9 @@ export interface CatalogEntry {
   // doors and windows (openings.ts): set into a wall on tile edges, `w` of
   // them along it, cutting their own hole; the wall keeps its material
   opening?: "door" | "window";
+  // only out of doors, on the land round the ground floor: the parkour pieces
+  // (Flowmotion's off indoors — physics/flow.ts)
+  outdoor?: boolean;
 }
 
 /** (docs/plan/62) The piano's stool, drawn with it out in front of its keys: its middle in the
@@ -411,6 +414,14 @@ export const CATALOG = {
   scratch_post: { label: "Scratching post", w: 1, h: 1, solid: true, buildable: true },
   pet_house: { label: "Pet house", w: 1, h: 1, solid: true, buildable: true, variants: 2, paint: true },
   toy_box: { label: "Toy box", w: 1, h: 1, solid: true, interact: "toybox", buildable: true, paint: true },
+  // parkour, out of doors (Flowmotion: physics/flow.ts — ground along, run up and kicked off,
+  // swung round)
+  pk_rail: { label: "Grind rail", w: 4, h: 1, solid: true, buildable: true, outdoor: true },
+  pk_rail_long: { label: "Long grind rail", w: 8, h: 1, solid: true, buildable: true, outdoor: true },
+  pk_wall: { label: "Parkour wall", w: 4, h: 1, solid: true, buildable: true, outdoor: true },
+  pk_wall_tall: { label: "Tall parkour wall", w: 4, h: 1, solid: true, buildable: true, outdoor: true },
+  pk_pole: { label: "Swing pole", w: 1, h: 1, solid: true, buildable: true, outdoor: true },
+  pk_pole_tall: { label: "Tall swing pole", w: 1, h: 1, solid: true, buildable: true, outdoor: true },
 } satisfies Record<string, CatalogEntry>;
 
 // What decor pieces can be (props.d), by kind.
@@ -483,6 +494,9 @@ const STAND: Partial<Record<ObjectKind, number>> = {
   crt_terminal: 20,
   pet_house: 16,
   toy_box: 16,
+  // (a parkour wall's cap: run up and stood on)
+  pk_wall: 125,
+  pk_wall_tall: 235,
 };
 
 /** How high a body stands on top of this (iso px), or undefined: it can't. */

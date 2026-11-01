@@ -1407,3 +1407,26 @@ world before you've passed it.
    on the run, heavier in the dark. Not visual-only, and not heavy everywhere.
 10. **Eyes that look** (G.D): two morph targets on the eyes, a gaze that leads the head.
 11. **The feel comes first**, on today's body (phase 1); the bigger skeleton after (phase 2).
+
+## After: the ragdoll in a big fall, fixed (2026-11-01)
+
+The user: falling from very high, the body touches the ground "and then comes apart". Kept the
+ragdoll for falls of 6 m and more (their call, over a KH3 hero landing) and fixed it, measured with
+a side-on capture at 5, 8, 15 and 25 m (design/parkour/fall-*.jpg):
+- **It went limp late, after it stood up.** The fall's hop has a land stage after the feet are down;
+  limp waited for it — the body landed, stood straight, then folded like a puppet cut loose. Now
+  person3d goes limp a sixth of a second before the ground (falling ≥ 6 m by its own height over what's
+  under it), at its real speed — across too, the down capped by the height — and the trunk tipped back
+  when it isn't moving across, so it crumples and falls back instead of squatting into a ball; first
+  frame down at the latest, slower.
+- **Every fall was an absorb at most.** The animation's ground came from a 1.4 m ray (0 past it):
+  the hard landing (a knee and a hand down) and the roll never played in the world. The ray's miss
+  now falls back on the person's real ground (the controller's Jolt ground), so 2.2–6 m shows them.
+- **My own character stood on my ragdoll** (the walker's Jolt body meets "moving"): the ragdoll's parts
+  have their own layer (`RAG`) meeting what's still and one another, never a body on the move — the
+  walker no longer rose 0.3–0.6 m, the ragdoll settles (it never did from 8 m: the 4 s cap).
+- **It slid back to get up**: the walker follows the ragdoll's hips while down (`Downed.drift`,
+  `view.limpDrift`, `Walker.driftBy`), and faces the way it gets up (no turning back after).
+- **The get-up**: the lying yaw on the same frame as its first pose (a 137° one-frame spin before),
+  blended in over 0.6 s (was 0.33), the legs never under the ground (person3d `legsUnder`: they went
+  0.5 m through it), the neck held closer (0.35 swing, 0.3 twist: it lolled).

@@ -195,6 +195,13 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     icon: "paw",
     items: ["pet_bed", "pet_bowl", "water_bowl", "scratch_post", "pet_house"].map(it),
   },
+  {
+    // out of doors only (shared catalog `outdoor`): Flowmotion's, off indoors
+    key: "parkour",
+    label: "catParkour",
+    icon: "walk",
+    items: ["pk_rail", "pk_rail_long", "pk_wall", "pk_wall_tall", "pk_pole", "pk_pole_tall"].map(it),
+  },
 ];
 const ALL = CATS.flatMap((c) => c.items);
 const RECENT_KEY = "yutopia:build:recent";
@@ -446,6 +453,7 @@ function Details({ item }: { item: Item }) {
   if (e.wall) chips.push(t("buildInfoWall"));
   if (e.opening) chips.push(t("buildInfoOpening"));
   if (e.onSurface) chips.push(t("buildInfoOnSurface"));
+  if (e.outdoor) chips.push(t("buildInfoOutdoor"));
   if ((e.variants ?? 1) > 1) chips.push(t("buildInfoLooks").replace("{n}", String(e.variants)));
   return (
     <footer className="flex items-center gap-3 px-3 py-2.5" style={{ borderTop: "1px solid var(--edge)" }}>

@@ -25,6 +25,7 @@ import { beanbag, bookcase, clock, counter, lightSwitch, neon, partition } from 
 import { type Clip, type Group, type ItemArt, Sketch, seedOf } from "./kit";
 import { lamp } from "./lamp";
 import { micStand, mixingDesk, radio, sideTable, speakerCab, tapeShelf } from "./music";
+import { wall as pkWall, pole, rail } from "./parkour";
 import { petBed, petBowl, petHouse, scratchPost, waterBowl } from "./pets";
 import { PLANT_VARIANTS, plant } from "./plant";
 import { piano, turntable, vending, waterCooler } from "./play";
@@ -182,6 +183,13 @@ const GENS: Record<string, ItemGen> = {
   water_bowl: { draw: waterBowl, variants: 1, key: (p) => `${painted(p)}|${Number(p.portions ?? 0)}` },
   scratch_post: { draw: scratchPost, variants: 1 },
   pet_house: { draw: petHouse, variants: 2, key: painted },
+  // parkour, out of doors (art/items/parkour.ts)
+  pk_rail: { draw: (s) => rail(s, 4), variants: 1 },
+  pk_rail_long: { draw: (s) => rail(s, 8), variants: 1 },
+  pk_wall: { draw: (s) => pkWall(s, 3.2), variants: 1 },
+  pk_wall_tall: { draw: (s) => pkWall(s, 6), variants: 1 },
+  pk_pole: { draw: (s) => pole(s, 3), variants: 1 },
+  pk_pole_tall: { draw: (s) => pole(s, 5.5), variants: 1 },
 };
 
 // What changes a door's drawing: shut or not (and how), its part and leaf, glass, which way, its paint.
