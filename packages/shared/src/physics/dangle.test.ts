@@ -264,3 +264,104 @@ test("a dangle with a rest spring comes back to how it hung at first, not straig
   assert.ok(hang(8) > 0.3, "the rest spring didn't hold it out");
   assert.ok(Math.abs(hang()) < 0.1, "without one it didn't hang plumb");
 });
+
+// (a satchel as the sway hangs one — off a hip 15 cm to its left, its limits and strap; `feel` its cap)
+const satchel = (feel?: number): DanglePart => ({
+  parent: -1,
+  at: [0.15, 1, 0],
+  c: [0.15, 0.8, 0],
+  q: [0, 0, 0, 1],
+  box: [0.03, 0.12, 0.15],
+  mass: 1.4,
+  slack: 0.06,
+  stretch: 14,
+  cone: 0.6,
+  coneAcross: 0.3,
+  twist: 0.25,
+  friction: 0.15,
+  drag: 0.35,
+  spin: 1.2,
+  across: [1, 0, 0],
+  feel,
+});
+// (the anchor at (x, y, z) turned `yaw` about up)
+const anchorTurned = (x: number, y: number, z: number, yaw: number) =>
+  new Float32Array([x, y, z, 0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)]);
+
+test("a bag that feels no more than 2 g goes round a pole steadily: the swing's 16 g is carried, not fought", async () => {
+  const w = await world();
+  // (the move core's pole swing: 9 m/s round 0.5 m, facing the way round — at 30 frames a second,
+  // the view's slowest step; how much the bag's hang off the hip jumps a frame, in the hip's frame)
+  const swing = (feel?: number) => {
+    const dt = 1 / 30;
+    const id = w.addDangle(anchorTurned(0, 1, 0, 0), [satchel(feel)]);
+    assert.ok(id);
+    for (let i = 0; i < 30; i++) {
+      w.moveDangle(id, anchorTurned(0, 1, 0, 0), dt);
+      w.step(dt);
+    }
+    let a = 0;
+    let last: number[] | null = null;
+    let sum = 0;
+    let most = 0;
+    for (let i = 0; i < 60; i++) {
+      a += (9 * dt) / 0.5;
+      const ax = -0.5 + Math.cos(a) * 0.5;
+      const az = Math.sin(a) * 0.5;
+      w.moveDangle(id, anchorTurned(ax, 1, az, -a), dt);
+      w.step(dt);
+      w.dangleParts(id, out);
+      // (pivot → centre, turned back into the hip's frame)
+      const pivX = ax + Math.cos(-a) * 0.15;
+      const pivZ = az - Math.sin(-a) * 0.15;
+      const dx = out[0] - pivX;
+      const dz = out[2] - pivZ;
+      const hx = Math.cos(a) * dx + Math.sin(a) * dz;
+      const hz = -Math.sin(a) * dx + Math.cos(a) * dz;
+      const L = Math.hypot(hx, out[1] - 1, hz);
+      const hang = [hx / L, (out[1] - 1) / L, hz / L];
+      if (last) {
+        const j = Math.acos(Math.min(1, hang[0] * last[0] + hang[1] * last[1] + hang[2] * last[2]));
+        sum += j;
+        most = Math.max(most, j);
+      }
+      last = hang;
+    }
+    w.removeDangle(id);
+    return { avg: (sum / 59) * (180 / Math.PI), most: most * (180 / Math.PI) };
+  };
+  const wild = swing();
+  const calm = swing(20);
+  assert.ok(wild.avg > 6, `uncapped it went round calmly (${wild.avg.toFixed(1)}°/frame): the test no longer bites`);
+  assert.ok(calm.avg < 5, `capped it jumped ${calm.avg.toFixed(1)}° a frame`);
+  assert.ok(calm.most < 20, `capped it jumped ${calm.most.toFixed(0)}° in a frame`);
+});
+
+test("under its cap a bag swings just as it would without one (a jog's start at 1.5 g, a run, a stop)", async () => {
+  const w = await world();
+  const run = (feel?: number) => {
+    const id = w.addDangle(anchorAt(0.15, 1, 0), [satchel(feel)]);
+    assert.ok(id);
+    const at: number[] = [];
+    let z = 0;
+    let vz = 0;
+    for (let i = 0; i < 150; i++) {
+      // (up to 6 m/s at 15 m/s², on, then down to a stop at 15)
+      vz = i < 60 ? Math.min(6, vz + 15 * DT) : Math.max(0, vz - 15 * DT);
+      z += vz * DT;
+      w.moveDangle(id, anchorAt(0.15, 1, z), DT);
+      w.step(DT);
+      w.dangleParts(id, out);
+      at.push(out[0], out[1], out[2] - z);
+    }
+    w.removeDangle(id);
+    return at;
+  };
+  const free = run();
+  const capped = run(20);
+  const most = Math.max(...free.map((x, i) => Math.abs(x - capped[i])));
+  assert.ok(most < 1e-4, `the cap changed a swing under it, by ${most.toFixed(4)} m`);
+  // (and it did swing: back on the start, forward on the stop)
+  const zs = free.filter((_, i) => i % 3 === 2);
+  assert.ok(Math.min(...zs) < -0.05 && Math.max(...zs) > 0.05, "the start and stop never swung it");
+});

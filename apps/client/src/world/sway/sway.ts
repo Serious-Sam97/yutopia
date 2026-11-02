@@ -41,7 +41,8 @@ const CHEST = STAND.map((_, i) => i);
 /** How a thing swings: how heavy (kg); its strap's slack (m, at 1.7 m tall) and stretch (Hz); how
  *  far it swings forward (rad), back (into the body, for what lies on it), out; its twist; its
  *  joint's friction (N·m); the spring (Hz) drawing it back to lie as it was built (what lies on the
- *  body, not hanging free); its damping; the stand-ins it never meets (what it lies on or hangs by). */
+ *  body, not hanging free); its damping; the stand-ins it never meets (what it lies on or hangs by);
+ *  how hard it feels the body's moves at most (m/s²: past it, carried along — FEEL if not given). */
 export interface Recipe {
   mass: number;
   slack?: number;
@@ -55,7 +56,12 @@ export interface Recipe {
   drag: number;
   spin: number;
   skip?: number[];
+  feel?: number;
 }
+/** what's worn feels of the body's moves at most (m/s²): about 2 g, the move core's own getting to a
+ *  run — what goes past it (a pole swing's 16 g, an air dash's start) carries it along, or its joint
+ *  can't hold it and it thrashes */
+const FEEL = 20;
 const BAG = { drag: 0.35, spin: 1.2 };
 export const RECIPES: Record<string, Recipe> = {
   satchel: { ...BAG, mass: 1.4, slack: 0.06, stretch: 14, cone: 0.6, out: 0.3, twist: 0.25, friction: 0.15 },
@@ -141,8 +147,11 @@ const q = new Quaternion();
 const pq = new Quaternion();
 const lq = new Quaternion();
 const X = new Vector3(1, 0, 0);
-// (a way's tilt fore and aft in its parent's space: + forward, from hanging straight down)
+const ax = new Vector3();
+// (a way's tilt fore and aft in its parent's space: + forward, from hanging straight down; and
+// out of the plane fore and aft: + to its left)
 const pitchOf = (x: Vector3) => Math.atan2(x.z, -x.y);
+const rollOf = (x: Vector3) => Math.asin(Math.max(-1, Math.min(1, x.x / (x.length() || 1))));
 
 interface Hung {
   joint: JointName;
@@ -161,6 +170,10 @@ interface Hung {
   pitch: number;
   fwd: number;
   back: number;
+  /** how it hung at first out to the side (rad, + its left), and how far out it may go either way —
+   *  as drawn, the same (a bag spun round a pole lies at its limit out, not past it) */
+  roll: number;
+  out: number;
 }
 type Origin = () => { x: number; y: number; z: number };
 
@@ -222,8 +235,8 @@ export class Sway {
       const parent = bone.parent;
       if (!parent) continue;
       const b = this.one;
-      // (its body in its parent's space; past its limits fore and aft as Jolt has it — late — turned
-      // back within them about where it hangs from)
+      // (its body in its parent's space; past its limits fore and aft, or out, as Jolt has it — late
+      // — turned back within them about where it hangs from)
       parent.getWorldQuaternion(pq);
       lq.copy(pq.invert()).multiply(q.set(b[3], b[4], b[5], b[6]));
       parent.worldToLocal(v.set(b[0] + o.x, b[1] + o.y, b[2] + o.z));
@@ -234,8 +247,18 @@ export class Sway {
         // (+ about its left swings it back: undo the excess)
         q.setFromAxisAngle(X, over);
         lq.premultiply(q);
-        v.copy(h.piv).add(d.applyQuaternion(q));
+        d.applyQuaternion(q);
       }
+      const side = rollOf(d) - h.roll;
+      const out = side > h.out ? side - h.out : side < -h.out ? side + h.out : 0;
+      if (out && ax.set(0, d.z, -d.y).lengthSq() > 1e-8) {
+        // (+ about the way square to it in the plane fore and aft swings it out to its left — its
+        // front, hanging down: undo the excess)
+        q.setFromAxisAngle(ax.normalize(), -out);
+        lq.premultiply(q);
+        d.applyQuaternion(q);
+      }
+      if (over || out) v.copy(h.piv).add(d);
       // (the bone's turn: its body's, less the body's own off it; its place, the body's less its
       // middle off the bone)
       lq.multiply(pq.copy(h.off).invert());
@@ -362,7 +385,9 @@ export class Sway {
         drag: R.drag,
         spin: R.spin,
         skip: R.skip,
+        feel: R.feel ?? FEEL,
       };
+      const hang = parent.worldToLocal(mid.clone()).sub(piv);
       const hung: Hung = {
         joint: h.joint,
         id: 0,
@@ -370,9 +395,11 @@ export class Sway {
         off,
         c,
         rest: bone.position.clone(),
-        pitch: pitchOf(parent.worldToLocal(mid.clone()).sub(piv)),
+        pitch: pitchOf(hang),
         fwd: R.cone,
         back: R.back ?? R.cone,
+        roll: rollOf(hang),
+        out: R.out,
       };
       const id = this.world.addDangle(this.anchor(hung), [part], this.proxies, sub++);
       if (!id) continue;

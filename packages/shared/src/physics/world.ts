@@ -50,7 +50,8 @@ export interface RagPart {
  *  than `cone` (rad) forward, `back` back (for what lies on the body: into it), `coneAcross` out, twisted ±`twist`, against the joint's
  *  `friction` (N·m), drawn back to how it hung at first on a spring of `rest` Hz (what lies on the
  *  body). Its `drag`, `spin` (damping), `bounce`; the owner's stand-ins it never meets
- *  (`skip`). */
+ *  (`skip`). How hard it feels its anchor's moves at most (`feel`, m/s²): past it, they carry it
+ *  along whole (a pole swing's 16 g, a dash's start — no body moves so, and no joint holds it). */
 export interface DanglePart {
   parent: number;
   at: [number, number, number];
@@ -73,6 +74,7 @@ export interface DanglePart {
   spin?: number;
   bounce?: number;
   skip?: number[];
+  feel?: number;
 }
 
 /** What the world may hold, fixed when it's made (Jolt can't grow them). */
@@ -168,6 +170,28 @@ function freeOf(J: JoltModule): number {
   return J.HEAPU8.length - used;
 }
 
+// (a way turned by a turn, x y z w: q · v · q⁻¹)
+function rotate(q: ArrayLike<number>, x: number, y: number, z: number, out: number[]): number[] {
+  const tx = 2 * (q[1] * z - q[2] * y);
+  const ty = 2 * (q[2] * x - q[0] * z);
+  const tz = 2 * (q[0] * y - q[1] * x);
+  out[0] = x + q[3] * tx + (q[1] * tz - q[2] * ty);
+  out[1] = y + q[3] * ty + (q[2] * tx - q[0] * tz);
+  out[2] = z + q[3] * tz + (q[0] * ty - q[1] * tx);
+  return out;
+}
+
+/** A dangle: its anchor, parts and joints; how hard each part feels the anchor's moves at most
+ *  (0: all of them), and how the anchor carried each last step (the velocity it gave the point
+ *  where the part was, and its spin — null till it's moved once). */
+interface Dangle {
+  anchor: Owned;
+  parts: Owned[];
+  joints: Jolt.Constraint[];
+  feel: number[];
+  rides: (Float64Array | null)[];
+}
+
 interface Owned {
   body: Jolt.Body;
   id: Jolt.BodyID;
@@ -185,7 +209,7 @@ export class PhysicsWorld {
     { parts: Owned[]; joints: Jolt.Constraint[]; filter: Jolt.GroupFilterTable }
   >();
   private nextRag = 1;
-  private readonly dangles = new Map<number, { anchor: Owned; parts: Owned[]; joints: Jolt.Constraint[] }>();
+  private readonly dangles = new Map<number, Dangle>();
   private readonly proxies = new Map<number, { parts: Owned[]; filter: Jolt.GroupFilterTable; n: number }>();
   private nextDangle = 1;
   private nextThing = 1;
@@ -820,7 +844,13 @@ export class PhysicsWorld {
     }
     shapeA.Release();
     const id = this.nextDangle++;
-    this.dangles.set(id, { anchor: a, parts: owned, joints });
+    this.dangles.set(id, {
+      anchor: a,
+      parts: owned,
+      joints,
+      feel: parts.map((p) => p.feel ?? 0),
+      rides: parts.map(() => null),
+    });
     if (owned.length < parts.length) {
       this.removeDangle(id);
       return null;
@@ -828,10 +858,70 @@ export class PhysicsWorld {
     return id;
   }
 
-  /** A dangle's anchor to its bone now (x y z, qx qy qz qw, world), reached over `dt` s. */
+  /** A dangle's anchor to its bone now (x y z, qx qy qz qw, world), reached over `dt` s — what of
+   *  the move its parts can't feel (past their `feel`) carried into them. */
   moveDangle(id: number, anchor: Float32Array, dt: number): void {
     const D = this.dangles.get(id);
-    if (D) this.moveTo(D.anchor, anchor, 0, dt, false);
+    if (!D) return;
+    if (dt > 0) this.carry(D, anchor, dt);
+    else D.rides.fill(null);
+    this.moveTo(D.anchor, anchor, 0, dt, false);
+  }
+
+  // Each part: how the anchor changes the velocity of a point riding it where the part is — its
+  // own motion against the anchor turned with it, plus where the anchor takes that point this step
+  // (its speeding up, its turning, the spin's pull in) — felt up to `feel`, the rest put in its
+  // velocity as is: the joint only ever holds what a body could do to it.
+  private carry(D: Dangle, a: Float32Array, dt: number) {
+    if (!D.feel.some((f) => f > 0)) return;
+    const B = this.bodies;
+    const P = B.GetPosition(D.anchor.id);
+    const p0 = [P.GetX(), P.GetY(), P.GetZ()];
+    const Q = B.GetRotation(D.anchor.id);
+    const q0 = [Q.GetX(), Q.GetY(), Q.GetZ(), Q.GetW()];
+    // the anchor's turn this step (q1 · q0⁻¹), its spin from it
+    const R = [
+      a[6] * -q0[0] + a[3] * q0[3] + a[4] * -q0[2] - a[5] * -q0[1],
+      a[6] * -q0[1] - a[3] * -q0[2] + a[4] * q0[3] + a[5] * -q0[0],
+      a[6] * -q0[2] + a[3] * -q0[1] - a[4] * -q0[0] + a[5] * q0[3],
+      a[6] * q0[3] - a[3] * -q0[0] - a[4] * -q0[1] - a[5] * -q0[2],
+    ];
+    if (R[3] < 0) for (let i = 0; i < 4; i++) R[i] = -R[i];
+    const s = Math.hypot(R[0], R[1], R[2]);
+    const f = s > 1e-9 ? (2 * Math.atan2(s, R[3])) / (s * dt) : 2 / dt;
+    const w1 = [R[0] * f, R[1] * f, R[2] * f];
+    const t = [0, 0, 0];
+    D.parts.forEach((o, i) => {
+      const feel = D.feel[i];
+      if (!(feel > 0)) return;
+      const C = B.GetPosition(o.id);
+      const c = [C.GetX(), C.GetY(), C.GetZ()];
+      // (where the anchor takes the point it's at: its velocity riding)
+      rotate(R, c[0] - p0[0], c[1] - p0[1], c[2] - p0[2], t);
+      const u = [(t[0] + a[0] - c[0]) / dt, (t[1] + a[1] - c[1]) / dt, (t[2] + a[2] - c[2]) / dt];
+      const was = D.rides[i];
+      const ride = was ?? new Float64Array(6);
+      const pu = [ride[0], ride[1], ride[2]];
+      const pw = [ride[3], ride[4], ride[5]];
+      ride.set([...u, ...w1]);
+      D.rides[i] = ride;
+      if (!was) return;
+      const L = B.GetLinearVelocity(o.id);
+      const v = [L.GetX(), L.GetY(), L.GetZ()];
+      // carried whole, it'd go: its own against the anchor, turned with it, plus the ride
+      rotate(R, v[0] - pu[0], v[1] - pu[1], v[2] - pu[2], t);
+      const dv = [t[0] + u[0] - v[0], t[1] + u[1] - v[1], t[2] + u[2] - v[2]];
+      const n = Math.hypot(dv[0], dv[1], dv[2]);
+      if (n <= feel * dt) return;
+      const k = 1 - (feel * dt) / n;
+      const W = B.GetAngularVelocity(o.id);
+      const w = [W.GetX(), W.GetY(), W.GetZ()];
+      rotate(R, w[0] - pw[0], w[1] - pw[1], w[2] - pw[2], t);
+      this.v.Set(v[0] + dv[0] * k, v[1] + dv[1] * k, v[2] + dv[2] * k);
+      B.SetLinearVelocity(o.id, this.v);
+      this.v.Set(w[0] + (t[0] + w1[0] - w[0]) * k, w[1] + (t[1] + w1[1] - w[1]) * k, w[2] + (t[2] + w1[2] - w[2]) * k);
+      B.SetAngularVelocity(o.id, this.v);
+    });
   }
 
   /** A dangle's parts as they are: each its centre and its turn (x y z, qx qy qz qw). */
