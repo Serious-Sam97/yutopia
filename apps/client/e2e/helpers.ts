@@ -163,6 +163,10 @@ export async function enter(page: Page, tok: string, worldName?: World) {
     // shots were taken clear — docs/plan/64-the-fog.md. An admin's call, twenty minutes; the
     // fog's own spec calls one up)
     w?.room?.send("mod:fog", { fog: "clear", now: true });
+    // (and the weather the specs' shots were taken in — docs/plan/65-the-weather.md: the snow
+    // lying, a grey sky, nothing coming down unless a spec calls a storm. An admin's calls, an hour)
+    w?.room?.send("mod:weather", { to: "cloudy", now: true });
+    w?.room?.send("mod:ground", { to: "snow", now: true });
   });
   await page.waitForTimeout(800);
 }

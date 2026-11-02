@@ -26,7 +26,7 @@ use Illuminate\Validation\Rule;
 class InternalController extends Controller
 {
     // (shared admin.ts LOG_KINDS: what the log takes)
-    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'fog', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps'];
+    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'fog', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps', 'weather'];
 
     public function __construct(private readonly Worlds $worlds) {}
 
@@ -55,6 +55,8 @@ class InternalController extends Controller
             'loot' => $world->settings['loot'] ?? null,
             'karts' => $world->settings['karts'] ?? null,
             'sound' => $world->settings['sound'] ?? null,
+            // the weather when last saved (docs/plan/65-the-weather.md): the ground, when, the call
+            'weather' => $world->settings['weather'] ?? null,
             // god mode's edits to the Grounds as published (docs/plan/53-the-god-mode.md)
             'edits' => GroundRevision::edits(),
             'objects' => WorldObject::orderBy('id')->get()->map->toWorld(),
@@ -442,6 +444,41 @@ class InternalController extends Controller
         $world = World::current();
         $world->settings = array_merge($world->settings ?? [], [
             'sound' => ['steps' => (float) $sound['steps'], 'by' => $sound['by'], 'at' => (int) $sound['at']],
+        ]);
+        $world->save();
+
+        return response()->json(['ok' => true]);
+    }
+
+    // The weather as the world-server last saved it (docs/plan/65-the-weather.md, W2): what lay on
+    // the ground (snow, wet, puddles, the water's ice, each 0..1) and when, and an admin's call on
+    // the sky if one was running — so a restart doesn't lose a snow an admin made.
+    public function weather(Request $request): JsonResponse
+    {
+        $request->validate([
+            'weather' => ['present', 'array'],
+            'weather.snow' => ['required', 'numeric', 'min:0', 'max:1'],
+            'weather.wet' => ['required', 'numeric', 'min:0', 'max:1'],
+            'weather.puddles' => ['required', 'numeric', 'min:0', 'max:1'],
+            'weather.ice' => ['required', 'numeric', 'min:0', 'max:1'],
+            'weather.at' => ['required', 'integer', 'min:0'],
+            'weather.call' => ['present', 'nullable', 'array'],
+            'weather.call.to' => ['required_with:weather.call', 'string', Rule::in(['clear', 'cloudy', 'rain', 'snow', 'storm'])],
+            'weather.call.by' => ['required_with:weather.call', 'nullable', 'string', 'max:120'],
+            'weather.call.until' => ['required_with:weather.call', 'integer', 'min:0'],
+        ]);
+        $w = $request->input('weather');
+        $call = $w['call'] ?? null;
+        $world = World::current();
+        $world->settings = array_merge($world->settings ?? [], [
+            'weather' => [
+                'snow' => (float) $w['snow'],
+                'wet' => (float) $w['wet'],
+                'puddles' => (float) $w['puddles'],
+                'ice' => (float) $w['ice'],
+                'at' => (int) $w['at'],
+                'call' => $call === null ? null : ['to' => $call['to'], 'by' => $call['by'] ?? null, 'until' => (int) $call['until']],
+            ],
         ]);
         $world->save();
 

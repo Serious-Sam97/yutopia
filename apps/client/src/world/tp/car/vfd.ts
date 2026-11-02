@@ -178,7 +178,8 @@ export function drawCluster(c: HTMLCanvasElement, s: Cluster) {
   const t = `${s.outside < 0 ? "-" : " "}${String(Math.abs(Math.round(s.outside))).padStart(2, " ")}`;
   digits(g, t, 838, 190, 18, 30, 6);
   label(g, "°C", 918, 216, 18);
-  label(g, "ICE", 966, 216, 18, s.outside <= -3);
+  // (lit near freezing and under it: the road may be ice — docs/plan/65 W9)
+  label(g, "ICE", 966, 216, 18, s.outside <= 3);
   label(g, String(Math.floor(s.odo)).padStart(6, "0"), 838, 248, 16);
   label(g, "km", 918, 248, 13);
 

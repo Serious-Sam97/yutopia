@@ -2897,12 +2897,12 @@ registerFeature((room: WorldRoom) => {
     }
     return false;
   };
-  // How it carries itself now (Pet.mood): alarm, fear (a storm out there), a sulk, how it feels.
+  // How it carries itself now (Pet.mood): alarm, fear (a storm out there, thunder), a sulk, how it feels.
   const setMood = (pet: Pet, r: Run, now: number) => {
     const n = needsOf(pet);
     const mood = moodOf({
       alert: (r.alertUntil ?? 0) > now,
-      scared: room.state.storm > 0.5 && outside(pet),
+      scared: (room.state.storm > 0.5 || room.state.weather.thunder > 0.2) && outside(pet),
       sulking: (r.sulkUntil ?? 0) > now,
       fun: n.fun,
       happy: n.fun > 60 && n.food > 40 && n.water > 40 && n.health > 60,

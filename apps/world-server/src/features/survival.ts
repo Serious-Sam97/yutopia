@@ -1,4 +1,4 @@
-import { ANIM, levelMap, objLevel, tileAt } from "@yutopia/shared";
+import { ANIM, chillOf, levelMap, objLevel, tileAt } from "@yutopia/shared";
 import { hasPower } from "@yutopia/shared/admin";
 import {
   addItem,
@@ -807,7 +807,10 @@ registerFeature((room: WorldRoom) => {
         // the torch focused: on, aiming (shared/move's mv bit), on foot (the land or indoors), battery
         // left (and not run out and still coming back)
         const focus = !riding && p.torch && (p.mv & MV_AIM) !== 0 && canFocus(s.v, s.c);
-        stepVitals(s.v, s.c, { sprinting, outside: land, night, storm: room.state.storm, warm, focus }, dt);
+        // (the cold by the air and the rain on you: docs/plan/65-the-weather.md, W9)
+        const w = room.state.weather;
+        const chill = chillOf(w.temp, w.kind === "rain" || w.kind === "sleet" ? w.fall : 0);
+        stepVitals(s.v, s.c, { sprinting, outside: land, night, storm: room.state.storm, chill, warm, focus }, dt);
         p.focused = focus && s.v.bat > 0;
         if (s.c.winded && !was) s.windedAt = now;
         if (!s.c.winded) s.windedAt = 0;

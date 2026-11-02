@@ -1,7 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { FOOTINGS, keyFooting, kindFooting, MATS, TILE_FOOTING } from "./footing.ts";
-import { BUILDINGS, CHUNK, deckAt, footingAt, GROUNDS, inBuilt, POND, WAYS, whatFooting } from "./grounds.ts";
+import {
+  BUILDINGS,
+  CHUNK,
+  deckAt,
+  footingAt,
+  GROUNDS,
+  inBuilt,
+  POND,
+  placeShift,
+  roadFooting,
+  setUnderfoot,
+  speedOn,
+  WAYS,
+  weatheredFooting,
+  whatFooting,
+} from "./grounds.ts";
 import { FLOORS } from "./map.ts";
 import { type GroundWhat, groundSolidAt, groundSolidsIn } from "./shapes/grounds.ts";
 
@@ -192,6 +207,16 @@ test("the census: every one of the steps' surfaces is under someone's feet somew
       saw(footingAt(x, z, 0.95), `${x},${z} cold`);
       saw(footingAt(x, z, 0.5, 0.6), `${x},${z} in a storm`);
     }
+  // …and under the weather (docs/plan/65, W5): a green day, a soaked one, every 12 m
+  for (const u of [
+    { snow: 0, wet: 0, freezing: false },
+    { snow: 0, wet: 1, freezing: false },
+  ]) {
+    setUnderfoot(u);
+    for (let x = GROUNDS.x0; x < GROUNDS.x1; x += 12)
+      for (let z = GROUNDS.z0; z < GROUNDS.z1; z += 12) saw(footingAt(x, z), `${x},${z} ${u.wet ? "soaked" : "green"}`);
+  }
+  setUnderfoot({ snow: 1, wet: 0, freezing: true });
   // the things stood on out there (their tops), the bridges by their way
   for (let cx = Math.floor(GROUNDS.x0 / CHUNK); cx * CHUNK < GROUNDS.x1; cx++)
     for (let cz = Math.floor(GROUNDS.z0 / CHUNK); cz * CHUNK < GROUNDS.z1; cz++)
@@ -203,4 +228,78 @@ test("the census: every one of the steps' surfaces is under someone's feet somew
   const missing = FOOTINGS.filter((f) => !seen.has(f));
   assert.deepEqual(missing, [], `never under anyone's feet: ${missing.join(", ")}`);
   console.log(`[census] ${[...seen].map(([f, w]) => `${f} (${w})`).join(", ")}`);
+});
+
+test("the weather underfoot (docs/plan/65, W5): grass, earth and mud with no snow lying, snow over them as it lies; the roads' slush and black ice only in winter; wet in the rain", () => {
+  const at = <T>(u: { snow: number; wet: number; freezing: boolean }, f: () => T): T => {
+    setUnderfoot(u);
+    try {
+      return f();
+    } finally {
+      setUnderfoot({ snow: 1, wet: 0, freezing: true });
+    }
+  };
+  const green = { snow: 0, wet: 0, freezing: false };
+  const soaked = { snow: 0, wet: 1, freezing: false };
+  const white = { snow: 1, wet: 0, freezing: true };
+  // (the land's own: open ground, the woods' floor, a trail, a pavement)
+  for (const [s, bare, wet, under] of [
+    ["snow", "grass", "mud", "snow"],
+    ["deep", "earth", "mud", "deep"],
+    ["path", "earth", "mud", "packed"],
+    ["walk", "concrete", "concrete", "snow"],
+  ] as const) {
+    assert.equal(
+      at(green, () => weatheredFooting(s, 10, 10)),
+      bare,
+      s,
+    );
+    assert.equal(
+      at(soaked, () => weatheredFooting(s, 10, 10)),
+      wet,
+      s,
+    );
+    assert.equal(
+      at(white, () => weatheredFooting(s, 10, 10)),
+      under,
+      s,
+    );
+  }
+  // (the place's own share: a little before or after the rest, never more than 0.1)
+  for (let x = -300; x < 300; x += 37) assert.ok(Math.abs(placeShift(x, x * 0.7)) <= 0.1 + 1e-9);
+  // the roads: on a green day plain asphalt, wet in the rain; their patches only with snow about,
+  // black ice only freezing
+  let slush = 0;
+  let black = 0;
+  for (let x = 0; x < 400; x += 3) {
+    assert.equal(
+      at(green, () => roadFooting(x, 50, 0.95)),
+      null,
+    );
+    const w = at({ snow: 0.6, wet: 0.5, freezing: false }, () => roadFooting(x, 50, 0.95));
+    assert.notEqual(w, "blackice", "no black ice above freezing");
+    const c = at({ snow: 0.6, wet: 0.5, freezing: true }, () => roadFooting(x, 50, 0.95));
+    if (c === "slush") slush++;
+    if (c === "blackice") black++;
+  }
+  assert.ok(slush + black > 0, "a winter road has its patches");
+  // the pace: deep snow as slow as ever with it lying, the woods' floor bare as a floor without
+  assert.equal(
+    at(white, () => speedOn("deep")),
+    0.6,
+  );
+  assert.equal(
+    at(green, () => speedOn("deep")),
+    1,
+  );
+  assert.ok(at(soaked, () => speedOn("snow")) < 1);
+  // the tops of things: snow on a roof when it lies, its sheet when it doesn't
+  assert.equal(
+    at(white, () => whatFooting("roof", way)),
+    "snow",
+  );
+  assert.equal(
+    at(green, () => whatFooting("roof", way)),
+    "sheet",
+  );
 });

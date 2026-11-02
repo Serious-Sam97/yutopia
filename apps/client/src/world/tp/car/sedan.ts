@@ -31,9 +31,9 @@ import {
   Vector3,
   Vector4,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { skyLeft } from "../sky-left";
 import { tailPatch } from "../tail-glow";
+import { layerShader, mergeGeometries } from "../wx3d";
 import * as T from "./textures";
 import { buildSnowcat, buildSnowmobile } from "./tracked";
 import { type Cluster, drawCluster, drawRadio } from "./vfd";
@@ -529,6 +529,8 @@ export interface Sedan {
   /** its wear: the road's dirt up its sides (0..1), its dents (front, rear, left, right: 0..1) —
    *  the panels crumpled where it was hit; a front badly hit, a headlamp cracked (dim) */
   setWear(grime: number, dmg: readonly number[]): void;
+  /** the snow lying on it (since it last moved: docs/plan/65), 0..1 — its paint's frost */
+  setSnow(k: number): void;
   dispose(): void;
 }
 
@@ -761,6 +763,7 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
     uGrime: { value: 0 },
     uDmg: { value: new Vector4(0, 0, 0, 0) },
     uEnds: { value: new Vector3(-L / 2, L / 2, W / 2) },
+    uSnow: { value: 1 },
   };
   for (const m of [paint, chrome, satin, rubber, headLens, red, amberL, amberR, reverse, plateMat])
     wearable(m, wear, m === paint);
@@ -1788,9 +1791,13 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
     radioTex.needsUpdate = true;
   };
   const setScreenSnow = (t: Texture | null) => {
+    // (asked every frame: only a new picture's set, and the shader looked at again only when it
+    // comes or goes)
+    if (snowScreenMat.map === t) return;
+    const had = !!snowScreenMat.map;
     snowScreenMat.map = t;
     snowScreenMat.emissiveMap = t;
-    snowScreenMat.needsUpdate = true;
+    if (had !== !!t) snowScreenMat.needsUpdate = true;
     snowScreen.visible = !!t;
   };
   const setEnv = (t: Texture | null) => {
@@ -1861,6 +1868,9 @@ function buildBody(o: SedanOpts, kind: BodyKind): Sedan {
     setEnv,
     setBeacon,
     setWear,
+    setSnow: (k: number) => {
+      wear.uSnow.value = k;
+    },
     dispose: () => {
       for (const d of disposables) d.dispose();
       root.traverse((x) => {
@@ -1926,7 +1936,7 @@ function bowed(
  *  grey dirt up from the sills. The model's coords: the nose −x, the left +z, the ground y 0. */
 export function wearable(
   m: MeshStandardMaterial | MeshPhysicalMaterial,
-  u: { uGrime: { value: number }; uDmg: { value: Vector4 }; uEnds: { value: Vector3 } },
+  u: { uGrime: { value: number }; uDmg: { value: Vector4 }; uEnds: { value: Vector3 }; uSnow?: { value: number } },
   dirt: boolean,
 ) {
   m.onBeforeCompile = (sh) => {
@@ -1971,6 +1981,13 @@ vec3 wearPush(vec3 p) {
           "#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.95, grime);",
         );
     else sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vCarPos;");
+    // (the paint: the snow's dusting on what faces up — docs/plan/65, W4: its own, what fell on it
+    // since it last moved; the world's if it has none)
+    if (dirt) {
+      if (u.uSnow) sh.uniforms.wxCarSnow = u.uSnow;
+      layerShader(sh, "car");
+    }
   };
-  m.customProgramCacheKey = () => (dirt ? "car-wear-dirt" : "car-wear");
+  // (its own snow's or the world's: a different shader, so a different program)
+  m.customProgramCacheKey = () => (dirt ? `car-wear-dirt-wx${u.uSnow ? "-own" : ""}` : "car-wear");
 }

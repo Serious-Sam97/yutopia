@@ -66,6 +66,7 @@ import { CarRig } from "../tp/car/rig";
 import { carFit } from "../tp/car/seatfit";
 import { buildSedan, type Sedan } from "../tp/car/sedan";
 import type { ThirdPersonView } from "../tp/view";
+import { AT, growOf, SHOWN, wx, wxHold, wxNow } from "../tp/wx3d";
 import { CarInput, type Switch } from "./controls";
 import { BaySnow, CabinLight, Mirror, RoadPatches, ScreenSnow, Spray, Tracks } from "./fx";
 import { CarSound, preloadEngine } from "./sound";
@@ -209,6 +210,8 @@ interface Sample {
 }
 interface LiveView {
   id: string;
+  /** the snow on it since it last moved (docs/plan/65), 0..1 — the world's when first seen */
+  snowK?: number;
   kind: CarKind;
   model: Sedan;
   buf: Sample[];
@@ -451,6 +454,8 @@ export class Cars {
   private hazard = false;
   private siren = false; // (a police car's: G)
   private wipers: 0 | 1 | 2 | 3 = 0;
+  /** the wipers left to the weather (till V's pressed): on as it rains, off as it stops */
+  private wipersAuto = true;
   private time = 0;
   private hud: HTMLDivElement | null = null;
   private offMsg: (() => void)[] = [];
@@ -885,6 +890,7 @@ export class Cars {
         for (const sm of m.snow)
           if (sm.visible) {
             sm.visible = false;
+            l.snowK = 0;
             sm.updateWorldMatrix(true, false);
             sm.getWorldPosition(v3);
             this.root.worldToLocal(v3);
@@ -902,6 +908,32 @@ export class Cars {
                 0.5,
               );
           }
+      // the snow on it (docs/plan/65, phase 5): what fell on it since it last moved — a car standing
+      // has the world's, one driven sheds it (most of it in a minute at speed; at once blown off at
+      // speed, above), and it settles on it again as it stands in a fall; never more than lies
+      const lie = wx.wxSnow.value;
+      // (the stills' held snow: every car the world's)
+      if (l.snowK === undefined || wxHold.on) l.snowK = lie;
+      if (speed > 1.5) l.snowK -= (dt * Math.min(1, speed / 12)) / 40;
+      else if (wxNow.snowing > 0.02) l.snowK += (dt * 0.75 * Math.min(1, wxNow.snowing * 1.5)) / 3600;
+      l.snowK = Math.max(0, Math.min(l.snowK, lie));
+      m.setSnow(l.snowK);
+      // its own shapes: pressed down onto it till enough lies, each car in at its own
+      if (m.snow.length) {
+        let h = 0;
+        for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 997;
+        const g = growOf(AT.roof[0] + ((AT.roof[1] - AT.roof[0]) * h) / 997, l.snowK, wx.wxMelt.value);
+        for (const sm of m.snow) {
+          if (sm.userData.y0 === undefined) {
+            sm.geometry.computeBoundingBox();
+            sm.userData.y0 = sm.geometry.boundingBox?.min.y ?? 0;
+            sm.userData.py = sm.position.y;
+          }
+          sm.visible = g > SHOWN;
+          sm.scale.y = Math.max(g, 1e-3);
+          sm.position.y = sm.userData.py + sm.userData.y0 * (1 - sm.scale.y);
+        }
+      }
     }
     // the car I'm in: the snow on its windscreen, the lamps over its cabin, its mirror
     const mine = this.mine;
@@ -911,12 +943,28 @@ export class Cars {
       if (this.screen?.vid !== mine.vid) {
         this.screen?.s.dispose();
         this.screen = { vid: mine.vid, s: new ScreenSnow(l.model) };
-        // (stood out in the morning fog: its screen misted — docs/plan/64-the-fog.md F6)
+        // (stood out in the morning fog: its screen misted — docs/plan/64-the-fog.md F6; in the rain,
+        // beaded — docs/plan/65)
         this.screen.s.amount = 0.85 * (this.host.tp()?.fogAir ?? 0);
+        this.screen.s.wet = Math.min(1, 1.2 * wxNow.rain);
+      }
+      // (the wipers by the weather through the drive, till they're set by hand)
+      if (mine.seat === 0 && this.wipersAuto) {
+        const rain = this.host.storm() > 0.4 || wxNow.rain > 0.2;
+        if (rain && this.wipers === 0) this.wipers = 2;
+        else if (!rain && wxNow.rain < 0.05 && this.wipers !== 0) this.wipers = 0;
       }
       const speed = Math.hypot(l.pose.v.x, l.pose.v.z);
       const wipers = mine.seat === 0 ? this.wipers : ((l.buf[l.buf.length - 1]?.fl ?? 0) >> 8) & 3;
-      this.screen.s.step(dt, 0.25 + 0.9 * storm, speed, wipers, false);
+      // (what falls on it: as hard as it's snowing — none on a dry day, docs/plan/65)
+      this.screen.s.step(
+        dt,
+        0.25 * Math.min(1, wxNow.snowing * 1.5) + 0.9 * storm * Math.min(1, wxNow.snowing * 3),
+        speed,
+        wipers,
+        false,
+        wxNow.rain,
+      );
       // (a minute's driving clears a misted screen, out of a storm: the heater, the air over it)
       if (storm < 0.1 && speed > 2)
         this.screen.s.amount = Math.max(0, this.screen.s.amount - (dt * Math.min(1, speed / 10)) / 45);
@@ -1648,7 +1696,9 @@ export class Cars {
         this.mine.rig = new CarRig(l.model, sim);
         // (on after dark, and in the morning fog — docs/plan/64 F4)
         this.beams = Math.max(this.host.night(), this.host.lampFog()) > 0.4 && !sim.spec.pushed ? "low" : "off";
-        this.wipers = this.host.storm() > 0.4 ? 2 : 0;
+        // (on in a storm, and in the rain: docs/plan/65 W7)
+        this.wipers = this.host.storm() > 0.4 || wxNow.rain > 0.2 ? 2 : 0;
+        this.wipersAuto = true;
       }
       this.cam.mode = "chase";
       this.enteredAt = this.time;
@@ -1719,7 +1769,8 @@ export class Cars {
       rig.state.wipers = this.wipers;
       rig.state.dash = this.host.night() > 0.4 ? 1 : 0.45;
       rig.state.clock = new Date().toTimeString().slice(0, 5);
-      rig.state.outside = Math.round(-6 - 8 * this.host.night() - 6 * this.host.storm());
+      // (the air's: the room's weather — docs/plan/65 W9)
+      rig.state.outside = Math.round(wxNow.temp);
       rig.pose(m.acc / STEP, dt, this.time);
       l.pose.p.set(s.p.x, s.p.y, s.p.z);
       l.pose.q.set(s.q.x, s.q.y, s.q.z, s.q.w);
@@ -1805,8 +1856,10 @@ export class Cars {
     else if (sw === "siren") {
       const l = this.mine ? this.live.get(this.mine.vid) : null;
       if (l?.role === "police" && this.mine?.seat === 0) this.siren = !this.siren;
-    } else if (sw === "wipers") this.wipers = ((this.wipers + 1) % 4) as 0 | 1 | 2 | 3;
-    else if (sw === "camera") this.cam.cycle();
+    } else if (sw === "wipers") {
+      this.wipers = ((this.wipers + 1) % 4) as 0 | 1 | 2 | 3;
+      this.wipersAuto = false;
+    } else if (sw === "camera") this.cam.cycle();
     else if (sw === "exit") this.act("car:leave", this.mine?.vid ?? "");
     else if (sw === "radio") {
       // (a passenger's: the driver's client keeps the station — the server tells it)

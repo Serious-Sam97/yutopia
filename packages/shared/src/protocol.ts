@@ -216,6 +216,12 @@ export interface ClientMessages {
   // the morning fog (docs/plan/64-the-fog.md): one called up ("mist", "fog", "thick") or sent off
   // ("clear") for a while, or back to the schedule (null); `now`: at once, not over a minute
   "mod:fog": { fog: "clear" | "mist" | "fog" | "thick" | null; now?: boolean };
+  // the weather (docs/plan/65-the-weather.md, W10): a sky called for an hour (WEATHER_CALLS), or the
+  // schedule's again (null); `now`: at once, not eased
+  "mod:weather": { to: "clear" | "cloudy" | "rain" | "snow" | "storm" | null; now?: boolean };
+  // what lies on the ground: snowed in or melted over two minutes, or back to the weather's (null);
+  // `now`: at once
+  "mod:ground": { to: "snow" | "melt" | null; now?: boolean };
   // the world's hour (shared clock.ts): set one (0–24; it runs on from there), or null: São Paulo's again
   "mod:hour": { h: number | null };
   // the steps' volume for everyone (docs/plan/63-the-steps.md): 0 none … 1 as they are … 2 twice; null: 1 again

@@ -772,8 +772,9 @@ export class Person3D {
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
     this.model.step(step, d > 12 || !!p.reduced || this.part !== "all", seen.sway);
     this.swayD = this.motion.v2 && !p.reduced && this.part === "all" ? d : Number.POSITIVE_INFINITY;
-    // (plan 58 9: the breath a puff in the cold air — near only)
-    const cold = LF && this.part === "all" && d < 12 ? LF.coldOf(p.wm ?? 100) : 0;
+    // (plan 58 9: the breath a puff in the cold air — near only; the air's own cold: none over 8 °C,
+    // docs/plan/65 W9)
+    const cold = LF && this.part === "all" && d < 12 ? LF.coldOf(p.wm ?? 100) * Person3D.airCold : 0;
     const head = cold > 0.15 || this.puffs ? this.model.bone("head") : null;
     if (LF && head) {
       this.puffs ??= new LF.Puffs(this.root.parent ?? this.root);
@@ -1236,6 +1237,8 @@ export class Person3D {
   // ── snow settling on them outside (docs/plan/33-the-look.md): on the shoulders and the top of
   // the head, as deep as `snowK` (0..1; the view keeps it, by how long they've been out) ──
   static snowMat: Material | null = null;
+  /** How cold the air is for a breath to show, 0 … 1 (1 by 0 °C, none over 8: the view sets it). */
+  static airCold = 1;
   snowK = 0;
   private snow: { pad: Mesh; cap: Mesh } | null = null;
   updateSnow() {

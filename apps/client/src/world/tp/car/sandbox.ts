@@ -46,6 +46,10 @@ const SURF_COL: Record<Ground, string> = {
   ice: "#b9cddd",
   rock: "#6c6a66",
   floor: "#a59f94",
+  grass: "#4f6b35",
+  earth: "#7a6a52",
+  mud: "#4a3d2e",
+  wet: "#2c2f34",
 };
 
 export interface SandboxOpts {

@@ -101,10 +101,10 @@ test("the guard's shift: at his post by day, out of the gatehouse's door to the 
   a.send("mod:hour", { h: null });
 });
 
-test("a storm: the snow plough comes out, runs to the headquarters and back, and goes home after it", async () => {
+test("snow on the roads: the plough comes out to a snowstorm, runs to the headquarters and back, home after it; never to a downpour", async () => {
   const a = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
     sandbox: 8,
-    token: "dev:33:P33:member,builder",
+    token: "dev:33:P33:member,builder,admin", // (an admin: the weather's theirs to call)
   });
   rooms.push(a);
   await waitFor(() => a.state.players?.size > 0 && !!a.state.vehicles?.get("plough"));
@@ -113,13 +113,24 @@ test("a storm: the snow plough comes out, runs to the headquarters and back, and
   a.send("mod:storm", { storm: 0, now: true });
   await sleep(300);
   assert.equal(pl().shown, false, "no storm: home");
+  // a downpour: no snow to clear
+  a.send("mod:weather", { to: "rain", now: true });
+  a.send("mod:ground", { to: "melt", now: true });
   a.send("mod:storm", { storm: 1, now: true });
+  await sleep(1500);
+  assert.equal(pl().shown, false, "a downpour: home");
+  // a snowstorm with the snow lying
+  a.send("mod:weather", { to: "snow", now: true });
+  a.send("mod:ground", { to: "snow", now: true });
   await waitFor(() => pl().shown, 15_000);
   // out at the town square's end, along the road towards the headquarters (west)
   const x0 = pl().x;
   await waitFor(() => pl().x < x0 - 100, 15_000);
   // the storm over: it finishes its round and goes home
   a.send("mod:storm", { storm: 0, now: true });
+  a.send("mod:weather", { to: "clear", now: true });
   await waitFor(() => !pl().shown, 30_000);
   a.send("mod:storm", { storm: null, now: true });
+  a.send("mod:weather", { to: null, now: true });
+  a.send("mod:ground", { to: null, now: true });
 });

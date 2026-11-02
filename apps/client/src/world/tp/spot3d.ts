@@ -9,10 +9,10 @@ import {
   SRGBColorSpace,
   Vector3,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { G, place, tinted } from "./campus";
 import type { Themes } from "./sky";
-import { SNOW } from "./snow3d";
+import { SNOW, snowBox } from "./snow3d";
+import { atOf, mergeGeometries } from "./wx3d";
 
 // Someone's own bay and the car dealer in 3D (docs/plan/43-the-spot.md): the
 // wooden board with their name at a claimed bay's head, and MOTORS' forecourt
@@ -122,13 +122,21 @@ export function boardGeometry(post = true): { solid: BufferGeometry; face: Buffe
   if (post) {
     s.color(POST).box(-0.045, 0, -0.045, 0.045, POST_TOP, 0.045);
     // its cap of snow
-    s.color(SNOW).box(-0.06, POST_TOP, -0.06, 0.06, POST_TOP + 0.05, 0.06);
+    snowBox(s.color(SNOW), -0.06, POST_TOP, -0.06, 0.06, POST_TOP + 0.05, 0.06);
   }
   // the plank: pine edges, a bare back; the front is the face
   s.color(PINE_EDGE).box(-PLANK.x, PLANK.y0, PLANK.z0, PLANK.x, PLANK.y1, PLANK.z1 - 0.002);
   // snow along its top edge, a little over each side
-  s.color(SNOW).box(-PLANK.x - 0.01, PLANK.y1, PLANK.z0 - 0.012, PLANK.x + 0.01, PLANK.y1 + 0.045, PLANK.z1 + 0.012);
-  s.color(SNOW).box(-PLANK.x * 0.7, PLANK.y1 + 0.045, PLANK.z0, PLANK.x * 0.6, PLANK.y1 + 0.07, PLANK.z1);
+  snowBox(
+    s.color(SNOW),
+    -PLANK.x - 0.01,
+    PLANK.y1,
+    PLANK.z0 - 0.012,
+    PLANK.x + 0.01,
+    PLANK.y1 + 0.045,
+    PLANK.z1 + 0.012,
+  );
+  snowBox(s.color(SNOW), -PLANK.x * 0.7, PLANK.y1 + 0.045, PLANK.z0, PLANK.x * 0.6, PLANK.y1 + 0.07, PLANK.z1);
   const f = new G().color(0xffffff);
   const v0 = 1 - 168 / 256;
   f.quad(
@@ -302,7 +310,7 @@ export function motorsForecourt(T: Themes, y0: number): Motors {
   s.color(0x2a2e33);
   for (const [x, z] of MOTORS.signPosts) s.box(x - 0.09, y0, z - 0.09, x + 0.09, y0 + SH - 1.6, z + 0.09);
   s.color(0x1d2620).box(sign.x - 2.2, y0 + SH - 1.65, sign.z - 0.16, sign.x + 2.2, y0 + SH, sign.z + 0.16);
-  s.color(SNOW).box(sign.x - 2.24, y0 + SH, sign.z - 0.2, sign.x + 2.24, y0 + SH + 0.09, sign.z + 0.2);
+  snowBox(s.color(SNOW), sign.x - 2.24, y0 + SH, sign.z - 0.2, sign.x + 2.24, y0 + SH + 0.09, sign.z + 0.2);
   // the collection sign's post
   const cs = MOTORS.collectSign;
   s.color(0x2a2e33).box(cs.x - 0.04, y0, cs.z - 0.04, cs.x + 0.04, y0 + 1.5, cs.z + 0.04);
@@ -434,7 +442,9 @@ export function motorsForecourt(T: Themes, y0: number): Motors {
       [yard.x0 + 1.2, yard.z1 - 1.0, 1.1],
       [yard.x1 - 1.2, yard.z1 - 1.2, 0.9],
       [yard.x1 - 1.0, yard.z0 + 2.4, 0.7],
-    ].map(([x, z, k]) => place(tinted(new SphereGeometry(1, 9, 6).scale(k * 1.3, k * 0.5, k), SNOW), x, y0, z));
+    ].map(([x, z, k]) =>
+      place(tinted(new SphereGeometry(1, 9, 6).scale(k * 1.3, k * 0.5, k), SNOW, atOf("bank", x, z)), x, y0, z),
+    );
     const m = new Mesh(mergeGeometries(parts, false), new MeshLambertMaterial({ vertexColors: true }));
     m.receiveShadow = true;
     root.add(m);

@@ -7,7 +7,7 @@ import {
   Float32BufferAttribute,
   IcosahedronGeometry,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { mergeGeometries, tagged } from "./wx3d";
 
 // The woods' floor (docs/plan/33-the-look.md, phase 3): what lies between the
 // trees — snowed-on shrubs, stumps, a fallen log now and then, stones; boulders
@@ -26,10 +26,9 @@ export interface Lying {
   s: number;
 }
 
-const SNOW = new Color(0xf2f5f8);
-
-/** Faceted, its faces coloured: snow on whatever faces up, `base` (a little varied) on the rest. */
-function snowedOn(g: BufferGeometry, base: number, r: () => number, up = 0.55): BufferGeometry {
+/** Faceted, its faces coloured: `top` on whatever faces up (it was the snow's white: the snow's the
+ *  weather's now — docs/plan/65), `base` (a little varied) on the rest. */
+function snowedOn(g: BufferGeometry, base: number, r: () => number, up = 0.55, top = base): BufferGeometry {
   const f = g.index ? g.toNonIndexed() : g;
   if (f !== g) g.dispose();
   f.computeVertexNormals();
@@ -37,9 +36,10 @@ function snowedOn(g: BufferGeometry, base: number, r: () => number, up = 0.55): 
   const nor = f.getAttribute("normal");
   const col = new Float32Array(pos.count * 3);
   const b = new Color(base);
+  const t = new Color(top);
   for (let i = 0; i < pos.count; i += 3) {
     const ny = (nor.getY(i) + nor.getY(i + 1) + nor.getY(i + 2)) / 3;
-    const c = ny > up ? SNOW : b.clone().multiplyScalar(0.85 + r() * 0.3);
+    const c = ny > up ? t : b.clone().multiplyScalar(0.85 + r() * 0.3);
     for (let k = 0; k < 3; k++) col.set([c.r, c.g, c.b], (i + k) * 3);
   }
   f.setAttribute("color", new Float32BufferAttribute(col, 3));
@@ -68,14 +68,14 @@ const merge = (parts: BufferGeometry[]) => {
   return m;
 };
 
-/** A low shrub under snow: a few small green blobs (snow on their tops), bare twigs poking out. */
+/** A low shrub: a few small green blobs (their tops lighter), bare twigs poking out. */
 export function shrubGeometry(r: () => number): BufferGeometry {
   const parts: BufferGeometry[] = [];
   for (let i = 0; i < 5; i++) {
     const s = 0.28 + r() * 0.22;
     const g = rough(new IcosahedronGeometry(s, 0), r, 0.08).scale(1, 0.85, 1);
     g.translate((r() - 0.5) * 1.0, s * 0.6 + r() * 0.25, (r() - 0.5) * 1.0);
-    parts.push(snowedOn(g, i % 2 ? 0x34452f : 0x46502f, r, 0.72));
+    parts.push(snowedOn(g, i % 2 ? 0x34452f : 0x46502f, r, 0.72, 0x55673c));
   }
   for (let i = 0; i < 7; i++) {
     const l = 0.5 + r() * 0.5;
@@ -87,36 +87,39 @@ export function shrubGeometry(r: () => number): BufferGeometry {
   return merge(parts);
 }
 
-/** A stump, its cut top under a cap of snow. */
+/** A stump, its cut top under a cap of snow (the weather's). */
 export function stumpGeometry(r: () => number): BufferGeometry {
   const bark = new CylinderGeometry(0.28, 0.36, 0.55, 7).translate(0, 0.27, 0);
   const cap = new CylinderGeometry(0.31, 0.29, 0.08, 7).translate(0, 0.58, 0);
-  return merge([snowedOn(rough(bark, r, 0.05), 0x3a2e26, r, 2), snowedOn(cap, 0xf2f5f8, r)]);
+  return merge([
+    snowedOn(rough(bark, r, 0.05), 0x3a2e26, r, 2),
+    tagged(snowedOn(cap, 0xf2f5f8, r, 0.55, 0xf2f5f8), 0.4),
+  ]);
 }
 
 /** A fallen log along x, snow along its top, its broken ends showing the wood. */
 export function logGeometry(r: () => number): BufferGeometry {
   const L = 3.4;
   const g = new CylinderGeometry(0.22, 0.26, L, 7, 1).rotateZ(Math.PI / 2).translate(0, 0.2, 0);
-  const wood = snowedOn(rough(g, r, 0.04), 0x3d3129, r, 0.8);
+  const wood = snowedOn(rough(g, r, 0.04), 0x3d3129, r, 0.8, 0x4a3b2e);
   const top = new CylinderGeometry(0.2, 0.22, L * 0.92, 7, 1, true, 0, Math.PI)
     .rotateZ(Math.PI / 2)
     .rotateX(Math.PI / 2)
     .scale(1, 0.55, 1)
     .translate(0, 0.33, 0);
-  return merge([wood, snowedOn(top, 0xf2f5f8, r, -1)]);
+  return merge([wood, tagged(snowedOn(top, 0xf2f5f8, r, -1, 0xf2f5f8), 0.45)]);
 }
 
-/** A stone half in the snow. */
+/** A stone half in the ground, moss on its top. */
 export function stoneGeometry(r: () => number): BufferGeometry {
   const g = rough(new DodecahedronGeometry(0.42, 0), r, 0.14).scale(1, 0.62, 0.85).translate(0, 0.08, 0);
-  return snowedOn(g, 0x6c7178, r, 0.5);
+  return snowedOn(g, 0x6c7178, r, 0.5, 0x6e7764);
 }
 
-/** A boulder (the steep rock's): big, broken, snow on its ledges. */
+/** A boulder (the steep rock's): big, broken, moss on its ledges. */
 export function boulderGeometry(r: () => number): BufferGeometry {
   const g = rough(new IcosahedronGeometry(1.3, 1), r, 0.45).scale(1.25, 0.8, 1).translate(0, 0.45, 0);
-  return snowedOn(g, 0x5f646b, r, 0.6);
+  return snowedOn(g, 0x5f646b, r, 0.6, 0x66705c);
 }
 
 const KINDS: Cover[] = ["shrub", "stump", "log", "stone", "boulder"];

@@ -1,5 +1,6 @@
 import type { G, V } from "./campus";
 import { face, SNOW } from "./snow3d";
+import { atOf } from "./wx3d";
 
 // The Grounds' landmarks (docs/plan/33-the-look.md, phase 5): beams between any two points —
 // a bridge's truss and rails, a water tower's legs and braces — and what's built of them.
@@ -35,7 +36,8 @@ export function beam(g: G, p: V, q: V, w: number, col: number, snow = false) {
     face(g, c(p, a0, b0), c(p, a1, b1), c(q, a1, b1), c(q, a0, b0), out);
   }
   if (snow && Math.abs(d[1]) < 0.35) {
-    g.color(SNOW);
+    // (the weather's: there or not, a thin strip — wx3d.ts)
+    g.color(SNOW).snow(atOf("cap", p[0] + q[0], p[2] + q[2]), () => 0);
     const t = h + 0.05;
     face(
       g,
@@ -44,6 +46,7 @@ export function beam(g: G, p: V, q: V, w: number, col: number, snow = false) {
       add(c(q, 1, 1), u, t * 0.6),
       add(c(q, -1, 1), u, t * 0.6),
     );
+    g.snow(null);
   }
 }
 

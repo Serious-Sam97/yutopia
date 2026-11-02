@@ -43,7 +43,9 @@ const TODAY = {
   // church steps, the hall's columns, entablature and pediment, the townhouses' porches, railings,
   // dormers, chimneys and mailboxes, the lamps and street things on a pavement stood on it; the gas
   // station's and the other flat roofs' snow, the kerbs in three treads)
-  solids: "4dd38332",
+  // (2026-11-02: the roofs, the canopies, the mailboxes and the statue at their bare heights — their
+  // snow the weather's, stood a little in: docs/plan/65, the user's call)
+  solids: "d53f868a",
   things: "ac236950",
 };
 

@@ -1,0 +1,170 @@
+{
+  "rain-light": [
+    {
+      "id": "96729",
+      "user": "Ryding",
+      "title": "Light rain.wav",
+      "url": "https://freesound.org/people/Ryding/sounds/96729/",
+      "files": [
+        "rain-light.mp3"
+      ]
+    }
+  ],
+  "rain-heavy": [
+    {
+      "id": "200272",
+      "user": "jmbphilmes",
+      "title": "Rain heavy 2 (rural)",
+      "url": "https://freesound.org/people/jmbphilmes/sounds/200272/",
+      "files": [
+        "rain-heavy.mp3"
+      ]
+    }
+  ],
+  "rain-trees": [
+    {
+      "id": "678435",
+      "user": "Borgory",
+      "title": "Soft Rain in Forest Raindrops fall on leaves",
+      "url": "https://freesound.org/people/Borgory/sounds/678435/",
+      "files": [
+        "rain-trees.mp3"
+      ]
+    }
+  ],
+  "rain-roof": [
+    {
+      "id": "333509",
+      "user": "mmorgaine",
+      "title": "January rain on a roof.aif",
+      "url": "https://freesound.org/people/mmorgaine/sounds/333509/",
+      "files": [
+        "rain-roof.mp3"
+      ]
+    }
+  ],
+  "rain-car": [
+    {
+      "id": "535870",
+      "user": "Nox_Sound",
+      "title": "Ambiance_Rain_Inside_Car_Close_Roof_Loop_Stereo.wav",
+      "url": "https://freesound.org/people/Nox_Sound/sounds/535870/",
+      "files": [
+        "rain-car.mp3"
+      ]
+    }
+  ],
+  "rain-water": [
+    {
+      "id": "399281",
+      "user": "Mjeno",
+      "title": "Rain on pond",
+      "url": "https://freesound.org/people/Mjeno/sounds/399281/",
+      "files": [
+        "rain-water.mp3"
+      ]
+    }
+  ],
+  "sleet": [
+    {
+      "id": "255741",
+      "user": "kvgarlic",
+      "title": "SleetNovember2014.WAV",
+      "url": "https://freesound.org/people/kvgarlic/sounds/255741/",
+      "files": [
+        "sleet.mp3"
+      ]
+    }
+  ],
+  "birds": [
+    {
+      "id": "573283",
+      "user": "Lord_Tarkus",
+      "title": "Birds in the morning.wav",
+      "url": "https://freesound.org/people/Lord_Tarkus/sounds/573283/",
+      "files": [
+        "birds.mp3"
+      ]
+    }
+  ],
+  "river": [
+    {
+      "id": "786172",
+      "user": "sound368",
+      "title": "Water Stream 2",
+      "url": "https://freesound.org/people/sound368/sounds/786172/",
+      "files": [
+        "river.mp3"
+      ]
+    }
+  ],
+  "drips": [
+    {
+      "id": "249927",
+      "user": "launemax",
+      "title": "gully with water drips",
+      "url": "https://freesound.org/people/launemax/sounds/249927/",
+      "files": [
+        "drips.mp3"
+      ]
+    }
+  ],
+  "thunder-near": [
+    {
+      "id": "476739",
+      "user": "elmoustachio",
+      "title": "thunder 5 dry.wav",
+      "url": "https://freesound.org/people/elmoustachio/sounds/476739/",
+      "files": [
+        "thunder-near-a1.mp3"
+      ]
+    },
+    {
+      "id": "744722",
+      "user": "Emulius",
+      "title": "Thunder 07",
+      "url": "https://freesound.org/people/Emulius/sounds/744722/",
+      "files": [
+        "thunder-near-b1.mp3"
+      ]
+    },
+    {
+      "id": "194364",
+      "user": "Dave Welsh",
+      "title": "Thunder Clap OWB KY 441x16.wav",
+      "url": "https://freesound.org/people/Dave%20Welsh/sounds/194364/",
+      "files": [
+        "thunder-near-c1.mp3"
+      ]
+    }
+  ],
+  "thunder-far": [
+    {
+      "id": "243782",
+      "user": "bastipictures",
+      "title": "peal of thunder - distant",
+      "url": "https://freesound.org/people/bastipictures/sounds/243782/",
+      "files": [
+        "thunder-far-a1.mp3"
+      ]
+    },
+    {
+      "id": "347562",
+      "user": "mikala_oidua",
+      "title": "Distant Thunder Clap_Gentle.wav",
+      "url": "https://freesound.org/people/mikala_oidua/sounds/347562/",
+      "files": [
+        "thunder-far-b1.mp3"
+      ]
+    },
+    {
+      "id": "238743",
+      "user": "csengeri",
+      "title": "Distant thunder in suburban area",
+      "url": "https://freesound.org/people/csengeri/sounds/238743/",
+      "files": [
+        "thunder-far-c1.mp3"
+      ]
+    }
+  ]
+}

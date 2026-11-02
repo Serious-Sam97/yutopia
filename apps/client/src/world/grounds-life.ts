@@ -6,7 +6,7 @@ import type * as GroundsModule from "@yutopia/shared/grounds";
 import type { GroundWhat } from "@yutopia/shared/shapes/grounds";
 import { addStrings, trMaybe } from "@/lib/i18n";
 import { Footprints } from "./footprints";
-import { GroundsSound } from "./grounds-sound";
+import { GroundsSound, type Here } from "./grounds-sound";
 import type { AvatarState } from "./model";
 
 // Life on the Grounds, the client's side (docs/plan/27-the-grounds.md, phase
@@ -126,11 +126,22 @@ export class GroundsLife {
       this.prints.prune(now);
     }
     if (floorOf(map) !== 0 || !land) return this.prints.forget(id);
-    const s = this.G.surfaceTileAt(Math.floor(st.x + (map.ox ?? 0)), Math.floor(st.y + (map.oy ?? 0)));
+    const x = st.x + (map.ox ?? 0);
+    const z = st.y + (map.oy ?? 0);
+    const s = this.G.surfaceTileAt(Math.floor(x), Math.floor(z));
+    // (in snow only — where it lies there now: docs/plan/65, W5 — not on the grass)
     if (s !== "snow" && s !== "deep") return this.prints.forget(id);
+    const f = this.G.weatheredFooting(s, x, z);
+    if (f !== "snow" && f !== "deep") return this.prints.forget(id);
     const ground = st.ground ?? st.z ?? 0;
     if ((st.z ?? 0) > ground + 0.05) return; // (in the air)
     this.prints.step(id, st.x, st.y, ground, now);
+  }
+
+  /** The weather underfoot (docs/plan/65, W5): the room's snow lying, how wet, whether it's freezing
+   *  — the Grounds' footing, speed, the cars' grip and the prints by it. */
+  underfoot(snow: number, wet: number, freezing: boolean, ice: number) {
+    this.G.setUnderfoot({ snow, wet, freezing, ice });
   }
 
   /** What's underfoot out there (the steps', docs/plan/63-the-steps.md): the ground, a town
@@ -156,6 +167,7 @@ export class GroundsLife {
     night: number,
     storm: number,
     fog = 0,
+    more: Pick<Here, "car" | "hour" | "wx" | "roof" | "up"> = {},
   ) {
     const x = me.x + (map.ox ?? 0);
     const z = me.y + (map.oy ?? 0);
@@ -168,6 +180,7 @@ export class GroundsLife {
       night,
       storm: Math.max(0, storm),
       fog,
+      ...more,
     });
   }
 

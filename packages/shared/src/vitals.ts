@@ -34,6 +34,8 @@ export interface VitalsIn {
   night: number;
   /** 0 calm … 1 a blizzard */
   storm: number;
+  /** how the air bites (weather.ts chillOf): 1 at freezing, 0 mild, up to 2 bitter; not said, 1 */
+  chill?: number;
   /** indoors (any building), in a lamp's pool, in a car */
   warm: boolean;
   /** the torch focused (phase 3) */
@@ -69,7 +71,12 @@ export function stepVitals(v: Vitals, c: VitalsClock, i: VitalsIn, dt: number): 
   if (c.sinceHurt >= VITALS.hp.after && v.hp > 0) v.hp = fill(v.hp, VITALS.hp.regen, dt, VITALS.hp.upTo);
   // warmth
   if (i.warm) v.wm = fill(v.wm, VITALS.wm.warmUp, dt);
-  else if (i.outside) v.wm = drain(v.wm, VITALS.wm.night * i.night * (1 + Math.min(1, Math.max(0, i.storm))), dt);
+  else if (i.outside) {
+    // the night's cold, as cold as the air; a bitter one bites by day too (half the night's at its worst)
+    const chill = Math.min(2, Math.max(0, i.chill ?? 1));
+    const cold = i.night + 0.5 * Math.max(0, chill - 1) * (1 - i.night);
+    v.wm = drain(v.wm, VITALS.wm.night * cold * Math.min(1, chill) * (1 + Math.min(1, Math.max(0, i.storm))), dt);
+  }
   // the battery
   if (i.focus) {
     v.bat = drain(v.bat, VITALS.bat.focus, dt);

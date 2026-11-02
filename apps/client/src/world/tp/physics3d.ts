@@ -1,5 +1,5 @@
 import type { Grid, MapDef, WorldObjectDef } from "@yutopia/shared";
-import { CHUNK, hasChunk, onGroundsChanged } from "@yutopia/shared/grounds";
+import { CHUNK, hasChunk, onGroundsChanged, underfoot } from "@yutopia/shared/grounds";
 import type { Collider, FlowWorld, Mover } from "@yutopia/shared/move";
 import {
   type BuildingSolids,
@@ -8,6 +8,7 @@ import {
   type Frame,
   GroundsFlow,
   groundsThingAt,
+  ICE_WALK,
   JoltCollider,
   loadJolt,
   PhysicsWorld,
@@ -142,6 +143,8 @@ export class BrowserPhysics {
   private refresh() {
     if (this.dead) return;
     const edits = this.keepUp();
+    // the water open (its shores walls) or frozen, as the room's weather has it (W6)
+    this.build.water(underfoot().ice < ICE_WALK);
     const me = this.src.at();
     const cx = Math.floor(me.x / CHUNK);
     const cz = Math.floor(me.z / CHUNK);

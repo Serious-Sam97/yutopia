@@ -4,6 +4,7 @@
 // parapets. Read straight from the circuit's samples (park.ts); the pad under it is flat
 // (`KART_PARK.h`), so this needs nothing of the Grounds.
 
+import { underfoot } from "../grounds.ts";
 import { KART_PARK } from "./land.ts";
 import { TRACK_W as KART_TRACK_W, kartTrack, type Track, type TrackPoint, trackAt } from "./park.ts";
 import type { KartGround, KartUnder, KartWorld } from "./sim.ts";
@@ -76,7 +77,12 @@ export function kartTrackWorld(t: Track = kartTrack(), o: { base?: number; surfa
   }
   function under(x: number, z: number, y: number): KartUnder {
     const o2 = locate(x, z, y);
-    if (!o2) return { y: base, ground: "deep" };
+    // (off it: the park's ground under the weather — deep snow when it lies, else grass or mud:
+    // docs/plan/65, W5)
+    if (!o2) {
+      const u = underfoot();
+      return { y: base, ground: u.snow >= 0.35 ? "deep" : u.wet > 0.6 ? "mud" : "grass" };
+    }
     const { p, s, lat } = o2;
     let ground: KartGround = o.surface ?? "asphalt";
     // the kerbs: on the inside of a corner, its last 1.2 m

@@ -60,6 +60,27 @@ const TYPED = "'Courier New', monospace";
 
 /** Boxes and the like gathered by material and drawn as one mesh each (a few draw calls for
  *  the lot of them). */
+// The park's snow is the weather's (docs/plan/65, W3, the user's call): each piece made of a snow
+// material tagged as tp/wx3d.ts tags it — (how far it's pressed down, −the snow it comes in at) a
+// vertex — pressed down onto what it's on till enough lies, gone under 2 % grown. (Written here: the
+// park's builders take three as T3, never import it.)
+const SNOWS = new Set([0xf1f5f8, 0xf4f7fa]);
+const isSnow = (m: THREE_NS.Material) => SNOWS.has((m as THREE_NS.MeshStandardMaterial).color?.getHex?.() ?? -1);
+/** A piece of snow (its own coords): all of it in at `at`, pressed down to its own foot. */
+export function snowTag(T3: THREE, g: THREE_NS.BufferGeometry, at: number) {
+  const p = g.getAttribute("position");
+  let y0 = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < p.count; i++) y0 = Math.min(y0, p.getY(i));
+  const t = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    t[i * 2] = p.getY(i) - y0;
+    t[i * 2 + 1] = -at;
+  }
+  g.setAttribute("wxTag", new T3.Float32BufferAttribute(t, 2));
+}
+/** Where a piece is, its own threshold in a cap's range (wx3d.ts AT.cap: 0.30 … 0.55). */
+const capAt = (x: number, z: number) => 0.3 + 0.25 * (Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1);
+
 function batch(e: ParkEnv) {
   const { T3 } = e;
   const by = new Map<THREE_NS.Material, THREE_NS.BufferGeometry[]>();
@@ -80,6 +101,7 @@ function batch(e: ParkEnv) {
     m4.compose(new T3.Vector3(x, y, z), q.setFromEuler(eu.set(rx, ry, rz, "YXZ")), one);
     const flat = g.index ? g.toNonIndexed() : g;
     if (flat !== g) g.dispose();
+    if (isSnow(m)) snowTag(T3, flat, capAt(x, z));
     flat.applyMatrix4(m4);
     const l = by.get(m) ?? [];
     l.push(flat);
@@ -119,8 +141,8 @@ function batch(e: ParkEnv) {
       for (const [m, gs] of by) {
         const n = gs.reduce((s, g) => s + g.attributes.position.count, 0);
         const merged = e.keep(new T3.BufferGeometry());
-        for (const name of ["position", "normal", "uv"]) {
-          const size = name === "uv" ? 2 : 3;
+        for (const name of isSnow(m) ? ["position", "normal", "uv", "wxTag"] : ["position", "normal", "uv"]) {
+          const size = name === "uv" || name === "wxTag" ? 2 : 3;
           const arr = new Float32Array(n * size);
           let o = 0;
           for (const g of gs) {
@@ -132,7 +154,8 @@ function batch(e: ParkEnv) {
         }
         for (const g of gs) g.dispose();
         const mesh = new T3.Mesh(merged, m);
-        mesh.castShadow = cast;
+        // (its snow pressed down as it lies: no shadow of it as it was)
+        mesh.castShadow = cast && !isSnow(m);
         mesh.receiveShadow = true;
         e.root.add(mesh);
       }
@@ -364,16 +387,18 @@ export function paddock3d(e: ParkEnv) {
     corr.wrapT = T3.RepeatWrapping;
     corr.repeat.set(1, len * 2.2);
     const roofM = e.keep(new T3.MeshStandardMaterial({ map: corr, roughness: 0.55, metalness: 0.3 }));
-    const roof = new T3.Mesh(e.keep(new T3.BoxGeometry(run, 0.12, len + 1)), [roofM, roofM, snow, roofM, roofM, roofM]);
+    // (its top the roofing's: the snow on it is the cap's, the weather's)
+    const roof = new T3.Mesh(e.keep(new T3.BoxGeometry(run, 0.12, len + 1)), roofM);
     roof.position.set(xm, y0 + (hf + hb) / 2 + 0.06, zm);
     roof.rotation.z = fall;
     roof.castShadow = true;
     roof.receiveShadow = true;
     e.root.add(roof);
-    const cap = new T3.Mesh(e.keep(new T3.BoxGeometry(run - 0.25, 0.16, len + 0.7)), snow);
+    const capG = e.keep(new T3.BoxGeometry(run - 0.25, 0.16, len + 0.7));
+    snowTag(T3, capG, 0.4);
+    const cap = new T3.Mesh(capG, snow);
     cap.position.set(xm, y0 + (hf + hb) / 2 + 0.2, zm);
     cap.rotation.z = fall;
-    cap.castShadow = true;
     e.root.add(cap);
     // the back wall: boards, the park's name painted on the inside facing the paddock
     const wall = e.tex(

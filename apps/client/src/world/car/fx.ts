@@ -34,9 +34,10 @@ import {
   WebGLRenderTarget,
 } from "three";
 import type { Sedan } from "../tp/car/sedan";
-import { windscreenSnow } from "../tp/car/textures";
+import { windscreenRain, windscreenSnow } from "../tp/car/textures";
 import { patchGrounds } from "../tp/light3d";
 import { baySnow } from "../tp/lot3d";
+import { wx } from "../tp/wx3d";
 
 // What the cars leave and throw (docs/plan/28-the-car.md, phase 5) and what
 // their cabins show (phase 4): tyre tracks in the snow that fill back in over
@@ -124,6 +125,10 @@ export class Tracks {
   fade(now: number, night: number) {
     if (now - this.fadeAt < 1) return;
     this.fadeAt = now;
+    // (in snow only: none on a green road — its snow the weather's, docs/plan/65)
+    const lie = Math.min(1, Math.max(0, (wx.wxSnow.value - 0.15) / 0.35));
+    (this.mesh.material as MeshBasicMaterial).opacity = 0.55 * lie;
+    this.mesh.visible = lie > 0.01;
     const n = Math.min(this.max, this.n);
     const bg = SNOW_BACK.clone().multiplyScalar(1 - 0.75 * night);
     for (let i = 0; i < n; i++) {
@@ -271,19 +276,67 @@ export class Spray {
 /** The roads' slush and black ice, laid on the asphalt where shared patchAt says (rebuilt as it gets colder).
  *  Soft, lumpy blobs scattered over the patch (no grid). The slush darkens what's under it (multiplied:
  *  wet, and lit as the asphalt is — the floor's light map, the lamps' pools, the night); the ice is
- *  lit as the land is (light3d patchGrounds). */
+ *  lit as the land is (light3d patchGrounds). Only while the snow lies, as the footing has them (shared
+ *  roadFooting: none under 0.15 of it, black ice only freezing — docs/plan/65); the blobs made again as
+ *  it gets colder, the two materials kept (made again, their shaders were freed and compiled anew: a
+ *  60 ms frame each time a storm ended). */
 export class RoadPatches {
   private mesh: Object3D | null = null;
+  private slush: Mesh | null = null;
+  private ice: Mesh | null = null;
   private cold = -1;
+  private mats: { slush: MeshBasicMaterial; ice: MeshStandardMaterial } | null = null;
   constructor(
     private root: Group,
     private G: typeof GroundsModule,
   ) {}
   update(cold: number) {
+    const u = this.G.underfoot();
+    const lies = u.snow >= 0.15;
+    // (built the first time there's snow to lie in them: none on a green day, nor its 100 ms at load)
     const band = cold > 0.6 ? 2 : cold > 0.35 ? 1 : 0;
-    if (band === this.cold) return;
-    this.cold = band;
-    this.dispose();
+    if (lies && band !== this.cold) {
+      this.cold = band;
+      this.build(band);
+    }
+    if (this.slush) this.slush.visible = lies;
+    if (this.ice) this.ice.visible = lies && u.freezing;
+  }
+  private materials() {
+    if (this.mats) return this.mats;
+    // dst × mix(1, colour, alpha): darker where it lies, never brighter (premultiplied: three's MultiplyBlending)
+    const slush = Object.assign(
+      new MeshBasicMaterial({
+        color: 0x8f8a84,
+        map: slushTex(),
+        transparent: true,
+        premultipliedAlpha: true,
+        blending: MultiplyBlending,
+        depthWrite: false,
+        toneMapped: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+      }),
+      // (fogged to white: gone in it, never darker — fog3d.ts)
+      { defines: { MF_WHITE: "" } },
+    );
+    const ice = new MeshStandardMaterial({
+      color: 0x1b2128,
+      roughness: 0.06,
+      metalness: 0.3,
+      alphaMap: slushTex(),
+      transparent: true,
+      opacity: 0.6,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    });
+    patchGrounds(ice);
+    this.mats = { slush, ice };
+    return this.mats;
+  }
+  private build(band: number) {
+    this.clear();
     const slush: number[][] = [[], []];
     const ice: number[][] = [[], []];
     // a blob about (x, z): jittered, its size, shape and turn its own (the same every build)
@@ -332,7 +385,7 @@ export class RoadPatches {
       for (let z = L.z0 + 1; z < L.z1 - 1; z += 2) if (patchAt(x, z, c) === "slush") blob(slush, x, z, 1.5, 0);
     const g = new Object3D();
     const add = (pos: number[][], mat: MeshBasicMaterial | MeshStandardMaterial) => {
-      if (!pos[0].length) return;
+      if (!pos[0].length) return null;
       const geo = new BufferGeometry();
       geo.setAttribute("position", new Float32BufferAttribute(pos[0], 3));
       geo.setAttribute("uv", new Float32BufferAttribute(pos[1], 2));
@@ -341,53 +394,30 @@ export class RoadPatches {
       m.receiveShadow = true;
       m.renderOrder = 1;
       g.add(m);
+      return m;
     };
-    // dst × mix(1, colour, alpha): darker where it lies, never brighter (premultiplied: three's MultiplyBlending)
-    add(
-      slush,
-      Object.assign(
-        new MeshBasicMaterial({
-          color: 0x8f8a84,
-          map: slushTex(),
-          transparent: true,
-          premultipliedAlpha: true,
-          blending: MultiplyBlending,
-          depthWrite: false,
-          toneMapped: false,
-          polygonOffset: true,
-          polygonOffsetFactor: -2,
-        }),
-        // (fogged to white: gone in it, never darker — fog3d.ts)
-        { defines: { MF_WHITE: "" } },
-      ),
-    );
-    const iceMat = new MeshStandardMaterial({
-      color: 0x1b2128,
-      roughness: 0.06,
-      metalness: 0.3,
-      alphaMap: slushTex(),
-      transparent: true,
-      opacity: 0.6,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-    });
-    patchGrounds(iceMat);
-    add(ice, iceMat);
+    const M = this.materials();
+    this.slush = add(slush, M.slush);
+    this.ice = add(ice, M.ice);
     this.mesh = g;
     this.root.add(g);
   }
-  dispose() {
+  // the blobs gone (their materials kept)
+  private clear() {
     if (!this.mesh) return;
     this.mesh.removeFromParent();
     this.mesh.traverse((m) => {
-      const mm = m as Mesh;
-      if (mm.isMesh) {
-        mm.geometry.dispose();
-        (mm.material as MeshStandardMaterial).dispose();
-      }
+      if ((m as Mesh).isMesh) (m as Mesh).geometry.dispose();
     });
-    this.mesh = null;
+    this.mesh = this.slush = this.ice = null;
+  }
+  dispose() {
+    this.clear();
+    if (!this.mats) return;
+    // (their picture's shared and cached: slushTex)
+    this.mats.slush.dispose();
+    this.mats.ice.dispose();
+    this.mats = null;
   }
 }
 
@@ -397,8 +427,8 @@ export class ScreenSnow {
   private tex = new Map<string, Texture>();
   amount = 0;
   constructor(private model: Sedan) {}
-  private get(fans: boolean, k: number): Texture | null {
-    const key = `${fans}|${k}`;
+  private get(fans: boolean, k: number, rain = false): Texture | null {
+    const key = `${rain ? "rain" : "snow"}|${fans}|${k}`;
     const hit = this.tex.get(key);
     if (hit) return hit;
     if (this.paintedAt === this.frame) return null; // (one a frame)
@@ -407,26 +437,37 @@ export class ScreenSnow {
     const w = fans
       ? this.model.wipers.map((x) => ({ z: x.pivot, arm: x.len, blade: x.blade, a0: x.sweep, a1: x.park }))
       : [];
-    const t = windscreenSnow(s.hw0, s.len, [0.35, 0.7, 1][k], w, (fans ? 30 : 20) + k, 512);
+    const t = rain
+      ? windscreenRain(s.hw0, s.len, [0.35, 0.7, 1][k], w, (fans ? 50 : 40) + k, 512)
+      : windscreenSnow(s.hw0, s.len, [0.35, 0.7, 1][k], w, (fans ? 30 : 20) + k, 512);
     this.tex.set(key, t);
     return t;
   }
   private frame = 0;
   private paintedAt = -1;
-  step(dt: number, snowing: number, speed: number, wipers: number, parked: boolean) {
+  /** the rain on it (W7): beads, gathering as it rains, wiped to a few by the wipers, drying when it
+   *  stops; shown while there's more of it than of snow */
+  wet = 0;
+  step(dt: number, snowing: number, speed: number, wipers: number, parked: boolean, raining = 0) {
     this.frame++;
+    if (wipers > 0) this.wet += (raining * 0.3 - this.wet) * Math.min(1, dt * (0.8 + wipers));
+    else if (raining > 0.01) this.wet = Math.min(1, this.wet + dt * raining * (0.03 + Math.min(speed, 25) * 0.002));
+    else this.wet = Math.max(0, this.wet - dt / 240);
     if (wipers > 0) this.amount += (snowing * 0.25 - this.amount) * Math.min(1, dt * (0.6 + wipers));
     else
       this.amount = Math.min(
         1,
         this.amount + dt * snowing * (0.012 + Math.min(speed, 25) * 0.0015) * (parked ? 0.4 : 1),
       );
-    if (this.amount < 0.03) {
+    // (one of them on it: whichever there's more of — the snow's eased fall is never quite 0)
+    const rain = this.wet > this.amount;
+    const on = rain ? this.wet : this.amount;
+    if (on < 0.03) {
       this.model.setScreenSnow(null);
       return;
     }
-    const k = this.amount < 0.4 ? 0 : this.amount < 0.75 ? 1 : 2;
-    const t = this.get(wipers > 0, k);
+    const k = on < 0.4 ? 0 : on < 0.75 ? 1 : 2;
+    const t = this.get(wipers > 0, k, rain);
     if (t) this.model.setScreenSnow(t);
   }
   dispose() {

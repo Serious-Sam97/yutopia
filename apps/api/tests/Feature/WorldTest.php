@@ -422,6 +422,22 @@ it('keeps the world\'s sound an admin set: the steps\' volume, who and when', fu
     expect(internalCall($this, 'GET', '/api/internal/world')->json('sound.by'))->toBeNull();
 });
 
+it('keeps the weather the world-server saved: the ground, when, an admin\'s call', function () {
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('weather'))->toBeNull();
+    $w = ['snow' => 0.75, 'wet' => 0.2, 'puddles' => 0, 'ice' => 1, 'at' => 1762000000000, 'call' => ['to' => 'snow', 'by' => 'Ana Demo', 'until' => 1762003600000]];
+    internalCall($this, 'PUT', '/api/internal/world/weather', ['weather' => $w])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('weather'))->toEqual($w);
+    // no call running; each number 0..1; a call one of the five
+    internalCall($this, 'PUT', '/api/internal/world/weather', ['weather' => [...$w, 'call' => null]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('weather.call'))->toBeNull();
+    internalCall($this, 'PUT', '/api/internal/world/weather', ['weather' => [...$w, 'snow' => 1.2]])->assertUnprocessable();
+    internalCall($this, 'PUT', '/api/internal/world/weather', ['weather' => [...$w, 'ice' => -0.1]])->assertUnprocessable();
+    internalCall($this, 'PUT', '/api/internal/world/weather', ['weather' => [...$w, 'call' => ['to' => 'hail', 'by' => null, 'until' => 1]]])->assertUnprocessable();
+    // (the steps' volume beside it untouched)
+    internalCall($this, 'PUT', '/api/internal/world/sound', ['sound' => ['steps' => 0.6, 'by' => null, 'at' => 0]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('weather.snow'))->toEqual(0.75);
+});
+
 it('keeps the Kart Park\'s record', function () {
     $record = ['best' => ['t' => 33450, 'name' => 'Ana Demo'], 'last' => [['at' => 1, 'mode' => 'gp', 'top' => ['Vortex', 'Ana Demo', 'Vortex']]], 'wins' => ['Vortex' => 2]];
     internalCall($this, 'PUT', '/api/internal/world/karts', ['record' => $record])->assertOk();

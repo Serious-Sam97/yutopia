@@ -1,9 +1,9 @@
 import { type LotLayout, type LotRect, lotBanksOf, lotStripes } from "@yutopia/shared/lot";
 import { type BufferGeometry, IcosahedronGeometry } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { G, place, tinted } from "./campus";
 import type { Themes } from "./sky";
 import { ridge, SNOW, type Station } from "./snow3d";
+import { atOf, mergeGeometries } from "./wx3d";
 
 // The headquarters' lot in 3D (docs/plan/42-the-lot.md), drawn from the shared
 // layout (packages/shared lot.ts): the asphalt's paint, the kerbs and islands,
@@ -17,7 +17,7 @@ const CONCRETE = 0xbab9b4;
 
 /** The asphalt in plan, `px` a tile: ploughed, wet patches, the tyres' tracks round the aisles'
  *  loop, the bays' lines, the accessible bays' blue and hatching, VISITOR stencils, the stop
- *  line; packed snow on the dump's strip, concrete slabs on the pavement. */
+ *  line; concrete slabs on the pavement (its snow the weather's). */
 export function lotPaintCanvas(T: Themes, l: LotLayout, px: number): HTMLCanvasElement {
   const W = Math.round((l.x1 - l.x0) * px);
   const H = Math.round((l.z1 - l.z0) * px);
@@ -33,20 +33,17 @@ export function lotPaintCanvas(T: Themes, l: LotLayout, px: number): HTMLCanvasE
     const y = r() * H;
     const w = 20 + r() * 80;
     const grd = g.createRadialGradient(x, y, 0, x, y, w);
-    grd.addColorStop(0, r() < 0.5 ? "rgba(90,96,104,0.5)" : "rgba(20,22,26,0.4)");
+    // (worn, lighter and darker: its wet patches the weather's — docs/plan/65)
+    grd.addColorStop(0, r() < 0.5 ? "rgba(90,96,104,0.3)" : "rgba(20,22,26,0.2)");
     grd.addColorStop(1, "rgba(60,64,70,0)");
     g.fillStyle = grd;
     g.beginPath();
     g.ellipse(x, y, w, w * 0.4, 0, 0, Math.PI * 2);
     g.fill();
   }
-  // snow left in the corners, thicker along the rows' backs
-  g.fillStyle = "rgba(240,243,247,0.5)";
-  for (let i = 0; i < 180; i++) {
-    g.beginPath();
-    g.ellipse(r() * W, r() * H, 3 + r() * 10, 2 + r() * 5, 0, 0, Math.PI * 2);
-    g.fill();
-  }
+  // (the snow left in the corners was painted in: it's the weather's now — docs/plan/65; its
+  // draws kept, so what's drawn after is as it was)
+  for (let i = 0; i < 180 * 4; i++) r();
   // the tyres' tracks: up the mouth, round the loop (the aisles and the cross aisles)
   g.strokeStyle = "rgba(15,17,20,0.28)";
   g.lineWidth = px * 0.3;
@@ -286,7 +283,7 @@ export function lotDressing(l: LotLayout, parked: { x: number; z: number }[] | n
   for (const k of banks.filter((b) => b.x < l.dump.x1 - 0.5)) {
     parts.push(
       place(
-        tinted(heap(k.s, k.s * 0.62, k.sz, k.x * 7 + k.z), r() < 0.4 ? 0xdde2e7 : 0xeef2f5),
+        tinted(heap(k.s, k.s * 0.62, k.sz, k.x * 7 + k.z), r() < 0.4 ? 0xdde2e7 : 0xeef2f5, atOf("bank", k.x, k.z)),
         k.x,
         y0 - 0.05,
         k.z,
@@ -300,7 +297,7 @@ export function lotDressing(l: LotLayout, parked: { x: number; z: number }[] | n
     const hz = (i.z1 - i.z0) / 2 - 0.45;
     parts.push(
       place(
-        tinted(heap(hx, 0.28, hz, i.x0 + i.z0 * 3), SNOW),
+        tinted(heap(hx, 0.28, hz, i.x0 + i.z0 * 3), SNOW, atOf("mound", i.x0, i.z0)),
         (i.x0 + i.x1) / 2,
         y0 + KERB_H - 0.04,
         (i.z0 + i.z1) / 2,

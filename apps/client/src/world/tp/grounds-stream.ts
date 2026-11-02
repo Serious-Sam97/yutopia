@@ -41,7 +41,7 @@ import {
   StaticDrawUsage,
   Vector3,
 } from "three";
-import { bareTree3, snowCanvas, tinted } from "./campus";
+import { BARE_LEAVES, BIRCH_LEAVES, bareTree3, crowned, snowCanvas, tinted } from "./campus";
 import {
   birchGeometry,
   farBareGeometry,
@@ -55,6 +55,7 @@ import {
 } from "./grounds3d";
 import type { Themes } from "./sky";
 import { boulderGeometry, COVERS, coverIn, logGeometry, shrubGeometry, stoneGeometry, stumpGeometry } from "./woods3d";
+import { landAround, snowShadow, wx } from "./wx3d";
 
 // The Grounds in the game's 3D view (docs/plan/27-the-grounds.md, phase 1):
 // the land and the woods streamed round you, the rest (the ways, the water,
@@ -104,12 +105,13 @@ interface Block {
 // asphalt is its circuit's own meshes': under them the land's snow — its layout changes, the land's
 // made once — docs/plan/47-the-track-changer.md)
 const BLUE = new Color(0xdbe5f0);
-function landColour(x: number, z: number, near: boolean, c: Color) {
+function landColour(x: number, z: number, near: boolean, c: Color): string {
   const F = KART_FENCE;
   const g = groundSurfaceAt(x, z, !near);
   const s = g === "asphalt" && x > F.x0 && x < F.x1 && z > F.z0 && z < F.z1 ? "snow" : g;
   c.setHex(SURF[s]);
   if (s === "snow" || s === "deep") c.lerp(BLUE, 0.35 + 0.35 * Math.sin(x * 0.05 + z * 0.031));
+  return s;
 }
 
 export class GroundsStream {
@@ -170,10 +172,15 @@ export class GroundsStream {
     this.snowTex.wrapT = RepeatWrapping;
     this.snowTex.anisotropy = 8;
     this.landMat = new MeshLambertMaterial({ map: this.snowTex, vertexColors: true });
+    // (the land to the snow's layer: its snow is the snow; its picture the dusting's grain — wx3d.ts)
+    this.landMat.userData.wx = "land";
+    wx.wxTex.value = this.snowTex;
+    wx.wxTexOn.value = 1;
     patch(this.landMat);
     // the trees' kinds, one pool each (and its shadow casters)
     const r = T.rng(9);
     const treeMat = new MeshLambertMaterial({ vertexColors: true });
+    treeMat.userData.wx = "tree";
     patch(treeMat);
     // a tree between the camera and you goes (as walls fade): its instance
     // folded to a point in the vertex shader; its shadow (the casters) stays
@@ -204,8 +211,9 @@ export class GroundsStream {
   vec3 t = vec3(v * (1.0 + warm), v * (1.0 + warm * 0.3), v * (1.0 - warm * 0.8));
   float l = dot(vColor.rgb, vec3(0.299, 0.587, 0.114));
   vColor.rgb *= mix(t, vec3(1.0), smoothstep(0.6, 0.85, l));
-  // the rime after a freezing fog: the needles and the bark frosted pale (the snow on it as it is)
-  vColor.rgb = mix(vColor.rgb, vec3(0.8, 0.85, 0.9), rimeK * 0.6 * (1.0 - smoothstep(0.6, 0.85, l)));
+  // the rime after a freezing fog: the needles and the bark frosted pale (the snow on it as it is:
+  // its pieces are tagged — wx3d.ts — the birch's white bark isn't snow)
+  vColor.rgb = mix(vColor.rgb, vec3(0.8, 0.85, 0.9), rimeK * 0.6 * (wxTag.y < 0.0 ? 0.0 : 1.0));
 }
 #endif`,
         )
@@ -256,13 +264,15 @@ if (vFade < 0.999) {
       pineGeometry(r, { tiers: 5, H: 6.5, width: 0.82, snow: 0.55 }),
       pineGeometry(r, { tiers: 9, H: 13.5, width: 0.72, snow: 0.45 }),
       pineGeometry(r, { tiers: 7, H: 11, width: 1.22, snow: 0.68 }),
-      ...[0, 1, 2].map(() => birchGeometry(r)),
-      ...[0, 1, 2].map(() => bareTree3(r)),
+      // (in leaf — docs/plan/65, W3 — but for one bare snag in three)
+      ...[0, 1, 2].map(() => crowned(birchGeometry(r), ...BIRCH_LEAVES)),
+      ...[0, 1, 2].map((i) => (i < 2 ? crowned(bareTree3(r), ...BARE_LEAVES) : bareTree3(r))),
       farPineGeometry(),
       // (finer than it was: faceted, a coarse one was a heap of shards)
-      tinted(new SphereGeometry(1, 16, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0xf6f8fb),
-      farBirchGeometry(),
-      farBareGeometry(),
+      // (the weather's: each its own, wx3d.ts gives an instance its own threshold round this)
+      tinted(new SphereGeometry(1, 16, 5, 0, Math.PI * 2, 0, Math.PI / 2), 0xf6f8fb, 0.62),
+      crowned(farBirchGeometry(), [0.38, 0.48, 0.25], 0.62, 0.26, true),
+      crowned(farBareGeometry(), [0.3, 0.39, 0.2], 0.6, 0.3, true),
       // the woods' floor (woods3d.ts)
       shrubGeometry(r),
       stumpGeometry(r),
@@ -335,12 +345,16 @@ if (vFade < 0.999) {
 
   /** The buildings standing on the Grounds (building coords), to their roofs:
    *  the chase camera keeps out of them as out of walls. (Filled in place: god mode's edits.) */
-  readonly boxes: { x0: number; z0: number; x1: number; z1: number; top: number }[] = [];
+  readonly boxes: { x0: number; z0: number; x1: number; z1: number; top: number; eaves: number }[] = [];
   /** How much bigger the lamps' glows are (the morning fog's halos: view.ts sets it). */
   halo = 1;
+  /** The HQ's (not the camera's to keep out of: the studio's its own) — its roof keeps the rain and
+   *  the dusting off its floors (sky.ts roofsNear: docs/plan/65). */
+  readonly hqBoxes: { x0: number; z0: number; x1: number; z1: number; top: number; eaves: number }[] = [];
   private fillBoxes() {
     this.boxes.length = 0;
-    for (const b of BUILDINGS) if (b.kind !== "hq") this.boxes.push(boxOf(b));
+    this.hqBoxes.length = 0;
+    for (const b of BUILDINGS) (b.kind === "hq" ? this.hqBoxes : this.boxes).push(boxOf(b));
   }
 
   /** God mode's edits laid (docs/plan/53-the-god-mode.md): these chunks changed. Their blocks are
@@ -593,6 +607,7 @@ if (vFade < 0.999) {
     const col: number[] = [];
     const uv: number[] = [];
     const idx: number[] = [];
+    const surf: string[] = [];
     const c = new Color();
     // near: the walking chunk's own heights (the same the feet are on)
     const chunk = near ? groundsChunk(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK)) : null;
@@ -600,7 +615,7 @@ if (vFade < 0.999) {
       chunk ? chunk.h[j * 2 * (CHUNK * 2 + 1) + i * 2] : terrainAt(x0 + i * step, z0 + j * step);
     const vert = (x: number, y: number, z: number) => {
       pos.push(x - x0, y, z - z0);
-      landColour(x, z, near, c);
+      surf.push(landColour(x, z, near, c));
       col.push(c.r, c.g, c.b);
       uv.push(x / 14, z / 14);
     };
@@ -612,6 +627,19 @@ if (vFade < 0.999) {
         const p = j * (n + 1) + i;
         idx.push(p, p + n + 1, p + 1, p + 1, p + n + 1, p + n + 2);
       }
+    // (the green's: the woods and the ways round each vertex — wx3d.ts)
+    // (past the block's edge, the land there: its neighbours agree at their shared edge)
+    const past = new Color();
+    const around = Array.from(
+      landAround(
+        (i, j) =>
+          i >= 0 && j >= 0 && i <= n && j <= n
+            ? surf[j * (n + 1) + i]
+            : landColour(x0 + i * step, z0 + j * step, near, past),
+        n,
+        step,
+      ),
+    );
     // skirts down from the edges (no cracks where the detail changes)
     const under: [number, number][] = []; // a skirt's foot, the edge vertex over it
     const edge = (list: number[]) => {
@@ -621,6 +649,7 @@ if (vFade < 0.999) {
         pos.push(pos[p * 3], pos[p * 3 + 1] - 1.6 - step * 0.4, pos[p * 3 + 2]);
         col.push(col[p * 3], col[p * 3 + 1], col[p * 3 + 2]);
         uv.push(uv[p * 2], uv[p * 2 + 1]);
+        around.push(around[p * 2], around[p * 2 + 1]);
       }
       for (let i = 0; i < list.length - 1; i++) {
         const a = list[i];
@@ -636,6 +665,7 @@ if (vFade < 0.999) {
     g.setAttribute("position", new Float32BufferAttribute(pos, 3));
     g.setAttribute("color", new Float32BufferAttribute(col, 3));
     g.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+    g.setAttribute("wxLand", new Float32BufferAttribute(around, 2));
     g.setIndex(idx);
     g.computeVertexNormals();
     // (a skirt is two-faced: its feet's normals summed to nothing — NaN in the
@@ -775,7 +805,7 @@ class Pool {
   }
   private make(cap: number): InstancedMesh {
     this.cap = cap;
-    const m = new InstancedMesh(this.geo, this.mat, cap);
+    const m = snowShadow(new InstancedMesh(this.geo, this.mat, cap));
     m.instanceMatrix.setUsage(StaticDrawUsage as unknown as typeof DynamicDrawUsage);
     m.count = 0;
     m.frustumCulled = false;
@@ -871,5 +901,8 @@ function boxOf(b: (typeof BUILDINGS)[number]) {
             : b.kind === "boathouse" || b.kind === "shed"
               ? 5.5
               : b.floors * 3.8 + 1.1;
-  return { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1, top: y + h };
+  // (and under its roof: what's inside is out of the weather — its pitched roof's eaves lower)
+  const eaves =
+    b.kind === "house" ? 5 : b.kind === "church" ? 7 : b.kind === "boathouse" || b.kind === "shed" ? 3.2 : h - 0.4;
+  return { x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1, top: y + h, eaves: y + eaves };
 }

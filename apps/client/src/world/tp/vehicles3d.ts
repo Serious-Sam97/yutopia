@@ -10,9 +10,9 @@ import {
   MeshLambertMaterial,
   RingGeometry,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { G, tinted } from "./campus";
 import { flatSnow } from "./snow3d";
+import { mergeGeometries } from "./wx3d";
 
 // The snow plough (docs/plan/28-the-car.md, improvements): the town's truck out in a storm — an
 // orange cab, a yellow blade angled ahead of it, the salt hopper on its back, an amber beacon

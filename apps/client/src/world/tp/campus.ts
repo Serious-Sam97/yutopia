@@ -14,6 +14,7 @@ import {
 } from "@yutopia/shared";
 import {
   AdditiveBlending,
+  type Box3,
   BoxGeometry,
   BufferGeometry,
   CanvasTexture,
@@ -45,10 +46,10 @@ import {
   SRGBColorSpace,
   Vector3,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Daylight } from "../art/daylight";
 import type { Themes } from "./sky";
-import { driftAlong, flatSnow } from "./snow3d";
+import { driftAlong, flatSnow, snowBox } from "./snow3d";
+import { atOf, mergeGeometries, snowShadow, tagged, wx } from "./wx3d";
 
 // The snow theme's outside, in 3D: the studio is the top floor of a corporate
 // headquarters alone in the snow (docs/plan/18-snow-campus.md). The main block
@@ -75,7 +76,24 @@ export class G {
   nor: number[] = [];
   uv: number[] = [];
   col: number[] = [];
+  /** the snow's tags (wx3d.ts): (how far down it's pressed, −the snow it comes in at) a vertex */
+  tag: number[] | null = null;
   private rgb = [1, 1, 1];
+  private snowAt: number | ((p: V) => number) = 0;
+  private dropOf: ((p: V) => number) | null = null;
+  /** What's made from here on is snow (docs/plan/65, W4): it comes in at `at` of the snow lying (or
+   *  each vertex at its own, + BURIED), each vertex pressed down by `drop` when it's not grown
+   *  (null: what's made is not snow). */
+  snow(at: number | ((p: V) => number) | null, drop?: (p: V) => number) {
+    if (at === null) {
+      this.dropOf = null;
+      return this;
+    }
+    if (!this.tag) this.tag = new Array((this.pos.length / 3) * 2).fill(0);
+    this.snowAt = at;
+    this.dropOf = drop ?? (() => 0);
+    return this;
+  }
   color(hex: number) {
     const c = new Color(hex);
     this.rgb = [c.r, c.g, c.b];
@@ -106,6 +124,34 @@ export class G {
       this.nor.push(n[0], n[1], n[2]);
       this.uv.push(uv[i][0], uv[i][1]);
       this.col.push(this.rgb[0], this.rgb[1], this.rgb[2]);
+      if (this.tag) {
+        const at = this.snowAt;
+        if (this.dropOf) this.tag.push(this.dropOf(P[i]), -(typeof at === "number" ? at : at(P[i])));
+        else this.tag.push(0, 0);
+      }
+    }
+  }
+  // a, b, c: one triangle, wound to face `n`
+  tri(a: V, b: V, c: V, n: V) {
+    const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const cr = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]];
+    const P = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] >= 0 ? [a, b, c] : [a, c, b];
+    const uv = [
+      [0, 0],
+      [1, 0],
+      [0.5, 1],
+    ];
+    for (const [i, p] of P.entries()) {
+      this.pos.push(p[0], p[1], p[2]);
+      this.nor.push(n[0], n[1], n[2]);
+      this.uv.push(uv[i][0], uv[i][1]);
+      this.col.push(this.rgb[0], this.rgb[1], this.rgb[2]);
+      if (this.tag) {
+        const at = this.snowAt;
+        if (this.dropOf) this.tag.push(this.dropOf(p), -(typeof at === "number" ? at : at(p)));
+        else this.tag.push(0, 0);
+      }
     }
   }
   // an axis-aligned box (all six faces), uvs by face size
@@ -126,13 +172,15 @@ export class G {
     g.setAttribute("normal", new Float32BufferAttribute(this.nor, 3));
     g.setAttribute("uv", new Float32BufferAttribute(this.uv, 2));
     g.setAttribute("color", new Float32BufferAttribute(this.col, 3));
+    if (this.tag) g.setAttribute("wxTag", new Float32BufferAttribute(this.tag, 2));
     return g;
   }
 }
 export type V = [number, number, number];
 
 // three's own geometries, coloured and merged (non-indexed, with colours)
-export function tinted(g: BufferGeometry, hex: number): BufferGeometry {
+/** (`at`: it's snow, coming in at that much lying, pressed down to its own foot — wx3d.ts) */
+export function tinted(g: BufferGeometry, hex: number, at?: number): BufferGeometry {
   const n = g.index ? g.toNonIndexed() : g;
   if (g.index) g.dispose();
   const c = new Color(hex);
@@ -144,7 +192,7 @@ export function tinted(g: BufferGeometry, hex: number): BufferGeometry {
     col[i * 3 + 2] = c.b;
   }
   n.setAttribute("color", new Float32BufferAttribute(col, 3));
-  return n;
+  return at === undefined ? n : tagged(n, at);
 }
 export const place = (g: BufferGeometry, x: number, y: number, z: number, ry = 0, s = 1) => {
   const m = new Matrix4().compose(
@@ -208,6 +256,10 @@ export function facadeCanvases(T: Themes) {
   const H = STOREY * 4 * PX;
   const body = T.canvas(W, H);
   const lit = T.canvas(W, H);
+  // the snow on the ledges: its own mask (white where it lies), shown as the snow does (wx3d.ts)
+  const ledge = T.canvas(W, H);
+  ledge.g.fillStyle = "#000";
+  ledge.g.fillRect(0, 0, W, H);
   const g = body.g;
   const r = T.rng(71);
   const SP = 0.875 * PX; // spandrel height
@@ -222,13 +274,13 @@ export function facadeCanvases(T: Themes) {
     g.fillRect(0, y0 + SP - 6, W, 6);
     g.fillStyle = "#c9c5bb";
     g.fillRect(0, y0 + SP - 14, W, 2);
-    // snow on the ledge, a ragged line
-    g.fillStyle = "#ffffff";
-    g.beginPath();
-    g.moveTo(0, y0);
-    for (let x = 0; x <= W; x += 6) g.lineTo(x, y0 + 7 + r() * 6);
-    g.lineTo(W, y0);
-    g.fill();
+    // snow on the ledge, a ragged line (in the mask: the weather's)
+    ledge.g.fillStyle = "#ffffff";
+    ledge.g.beginPath();
+    ledge.g.moveTo(0, y0);
+    for (let x = 0; x <= W; x += 6) ledge.g.lineTo(x, y0 + 7 + r() * 6);
+    ledge.g.lineTo(W, y0);
+    ledge.g.fill();
     // glass: the sky reflected, lighter at the top of each pane
     const gy = y0 + SP;
     const gh = STOREY * PX - SP;
@@ -272,7 +324,7 @@ export function facadeCanvases(T: Themes) {
     t.anisotropy = 8;
     return t;
   };
-  return { map: tex(body.c), lit: tex(lit.c) };
+  return { map: tex(body.c), lit: tex(lit.c), ledge: tex(ledge.c) };
 }
 
 // Snow: a soft tileable field with drifts and blue hollows.
@@ -323,28 +375,20 @@ export function lotCanvas(T: Themes, lot: Lot, px: number): HTMLCanvasElement {
   const Z = (z: number) => (z - lot.z0) * px;
   g.fillStyle = "#3a3d42";
   g.fillRect(0, 0, W, H);
-  // wet patches and slush streaks
+  // worn patches, lighter and darker (the wet's the weather's: phase 6)
   for (let i = 0; i < 60; i++) {
     const x = r() * W;
     const y = r() * H;
     const w = 20 + r() * 80;
     const grd = g.createRadialGradient(x, y, 0, x, y, w);
-    grd.addColorStop(0, r() < 0.5 ? "rgba(90,96,104,0.5)" : "rgba(20,22,26,0.4)");
+    grd.addColorStop(0, r() < 0.5 ? "rgba(90,96,104,0.3)" : "rgba(20,22,26,0.22)");
     grd.addColorStop(1, "rgba(60,64,70,0)");
     g.fillStyle = grd;
     g.beginPath();
     g.ellipse(x, y, w, w * 0.4, 0, 0, Math.PI * 2);
     g.fill();
   }
-  // snow left in the bays' corners and along the edges
-  g.fillStyle = "rgba(240,243,247,0.55)";
-  for (let i = 0; i < 160; i++) {
-    const x = r() * W;
-    const y = r() * H;
-    g.beginPath();
-    g.ellipse(x, y, 3 + r() * 10, 2 + r() * 5, 0, 0, Math.PI * 2);
-    g.fill();
-  }
+  // (the snow left in the bays' corners was painted in: it's the weather's now — docs/plan/65)
   // tyre tracks down the aisles (dark, two lines)
   g.strokeStyle = "rgba(15,17,20,0.55)";
   g.lineWidth = px * 0.3;
@@ -382,8 +426,8 @@ export function lotCanvas(T: Themes, lot: Lot, px: number): HTMLCanvasElement {
   return c;
 }
 
-// A tileable strip of road: asphalt with two tyre tracks and snow at the
-// verges (u across, v along). Every line that runs along it wanders by sines
+// A tileable strip of road: asphalt with two tyre tracks and a gravel shoulder at the
+// verges (u across, v along) — its snow the weather's (docs/plan/65). Every line that runs along it wanders by sines
 // that wrap round the tile (it repeats with no seam): the verge's ragged edge
 // (it was a row of flat ellipses — a comb of teeth down every road), the
 // tracks a little off straight.
@@ -401,21 +445,21 @@ export function roadCanvas(T: Themes): HTMLCanvasElement {
     const ph = [r() * 6, r() * 6, r() * 6];
     const edge = (y: number) => 13 + wave(y, ph, [3.5, 2, 1]);
     const at = (x: number) => (side ? W - x : x);
-    g.fillStyle = "rgba(196,203,212,0.35)";
+    g.fillStyle = "rgba(120,116,104,0.35)";
     g.beginPath();
     g.moveTo(at(0), 0);
     for (let y = 0; y <= H; y += 4) g.lineTo(at(edge(y) + 7 + wave(y, ph, [1.5, 1.5, 0.8])), y);
     g.lineTo(at(0), H);
     g.fill();
-    g.fillStyle = "#f0f3f6";
+    g.fillStyle = "#77736a";
     g.beginPath();
     g.moveTo(at(0), 0);
     for (let y = 0; y <= H; y += 4) g.lineTo(at(edge(y)), y);
     g.lineTo(at(0), H);
     g.fill();
   }
-  // a few small patches of slush out on the asphalt
-  g.fillStyle = "rgba(210,216,224,0.28)";
+  // a few small worn patches out on the asphalt
+  g.fillStyle = "rgba(110,114,120,0.22)";
   for (let i = 0; i < 16; i++) {
     g.beginPath();
     g.ellipse(18 + r() * (W - 36), r() * H, 2 + r() * 3, 3 + r() * 6, r() * Math.PI, 0, Math.PI * 2);
@@ -440,8 +484,8 @@ export function roadCanvas(T: Themes): HTMLCanvasElement {
       g.stroke();
     }
   }
-  // a centre line, faded under slush
-  g.fillStyle = "rgba(230,220,160,0.35)";
+  // a centre line, worn
+  g.fillStyle = "rgba(230,220,160,0.55)";
   for (let y = 0; y < H; y += 48) g.fillRect(W / 2 - 1.5, y, 3, 26);
   return c;
 }
@@ -600,6 +644,128 @@ export function bareTree3(r: () => number): BufferGeometry {
   return merged;
 }
 
+/** A tree's leaves (docs/plan/65, W3: the birches and the bare trees in leaf — no seasons): a faceted
+ *  crown in a few lumpy clumps, centred `cy` of its height up, `cr` of its height across, in `col`
+ *  (sRGB 0 … 1), each face a shade by how much it looks up; merged into the tree's own geometry, so
+ *  its instances' tints and the wind's sway are its. The approved mock's. */
+/** A tree in leaf: its crown, lumpy, added to `tree` (`col` its green, `cy` how far up it sits, `cr`
+ *  how big — of the tree's height). `far`: a far tree's: two lumps of eighty faces, 160 triangles (a
+ *  near one's five, 400; the far woods are thousands of trees). */
+export function crowned(
+  tree: BufferGeometry,
+  col: [number, number, number],
+  cy: number,
+  cr: number,
+  far = false,
+): BufferGeometry {
+  tree.computeBoundingBox();
+  const bb = tree.boundingBox as Box3;
+  const h = bb.max.y - bb.min.y;
+  const t = (1 + Math.sqrt(5)) / 2;
+  const V = [
+    [-1, t, 0],
+    [1, t, 0],
+    [-1, -t, 0],
+    [1, -t, 0],
+    [0, -1, t],
+    [0, 1, t],
+    [0, -1, -t],
+    [0, 1, -t],
+    [t, 0, -1],
+    [t, 0, 1],
+    [-t, 0, -1],
+    [-t, 0, 1],
+  ].map((v) => {
+    const l = Math.hypot(v[0], v[1], v[2]);
+    return [v[0] / l, v[1] / l, v[2] / l];
+  });
+  const F = [
+    [0, 11, 5],
+    [0, 5, 1],
+    [0, 1, 7],
+    [0, 7, 10],
+    [0, 10, 11],
+    [1, 5, 9],
+    [5, 11, 4],
+    [11, 10, 2],
+    [10, 7, 6],
+    [7, 1, 8],
+    [3, 9, 4],
+    [3, 4, 2],
+    [3, 2, 6],
+    [3, 6, 8],
+    [3, 8, 9],
+    [4, 9, 5],
+    [2, 4, 11],
+    [6, 2, 10],
+    [8, 6, 7],
+    [9, 8, 1],
+  ];
+  // (once subdivided, its corners pushed in and out: lumpy)
+  const mid = (p: number[], q: number[]) => {
+    const v = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2];
+    const l = Math.hypot(v[0], v[1], v[2]);
+    return [v[0] / l, v[1] / l, v[2] / l];
+  };
+  const tris: number[][][] = [];
+  for (const [a, b, c] of F) {
+    const ab = mid(V[a], V[b]);
+    const bc = mid(V[b], V[c]);
+    const ca = mid(V[c], V[a]);
+    tris.push([V[a], ab, ca], [ab, V[b], bc], [ca, bc, V[c]], [ab, bc, ca]);
+  }
+  const jit = (v: number[]) => {
+    const k = 1 + 0.14 * Math.sin(v[0] * 7.1 + v[1] * 3.3 + v[2] * 5.7);
+    return [v[0] * k, v[1] * k, v[2] * k];
+  };
+  const g = new G();
+  const lin = (v: number) => v ** 2.2;
+  const c = new Color();
+  // (the far one's two lumps as broad as the five's cluster: rounded and lumpy still — one plain
+  // twenty-faced lump read as a cut gem from the lot)
+  const lumps = far
+    ? [
+        [0, 0, 0, 1.12],
+        [0.42, -0.18, 0.2, 0.86],
+      ]
+    : [
+        [0, 0, 0, 1],
+        [0.55, -0.2, 0.15, 0.72],
+        [-0.5, -0.15, -0.25, 0.75],
+        [0.1, 0.45, -0.1, 0.7],
+        [-0.15, -0.35, 0.55, 0.65],
+      ];
+  for (const [ox, oy, oz, sc] of lumps)
+    for (const tri of tris) {
+      const P = tri.map((v): V => {
+        const j = jit(v);
+        return [
+          (ox + j[0] * sc) * cr * h,
+          bb.min.y + cy * h + (oy + j[1] * sc * 0.85) * cr * h,
+          (oz + j[2] * sc) * cr * h,
+        ];
+      });
+      const u = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]];
+      const w = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
+      let n: V = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+      const nl = Math.hypot(...n) || 1;
+      n = [n[0] / nl, n[1] / nl, n[2] / nl];
+      const shade = 0.78 + 0.32 * Math.max(0, n[1]) + 0.05 * Math.sin(P[0][0] * 9 + P[0][2] * 7);
+      // (sRGB in G's colour, as every hex: three makes it linear)
+      c.setRGB(lin(col[0] * shade), lin(col[1] * shade), lin(col[2] * shade));
+      g.color(c.getHex());
+      g.tri(P[0], P[1], P[2], n);
+    }
+  const leaves = g.build();
+  const out = mergeGeometries([tree, leaves], false);
+  leaves.dispose();
+  tree.dispose();
+  return out;
+}
+/** The birch's leaves and the bare tree's (their crowns: where on it, how big). */
+export const BIRCH_LEAVES: [[number, number, number], number, number] = [[0.4, 0.5, 0.25], 0.62, 0.24];
+export const BARE_LEAVES: [[number, number, number], number, number] = [[0.31, 0.41, 0.2], 0.6, 0.3];
+
 // A snow-laden conifer: tiers of dark cones, each with snow on its shoulders.
 export function coniferGeometry(): BufferGeometry {
   const parts: BufferGeometry[] = [];
@@ -625,7 +791,15 @@ export function coniferGeometry(): BufferGeometry {
     g.setAttribute("color", new Float32BufferAttribute(col, 3));
     parts.push(g);
     const sh = h * 0.42;
-    parts.push(tinted(new ConeGeometry(rad * 0.8, sh, 8).translate(0, y + h / 2 - sh / 2 + 0.03, 0), 0xe9eef1));
+    // (its snow the weather's: pressed onto the tier's slope — docs/plan/65)
+    const top = y + h / 2;
+    parts.push(
+      tagged(
+        tinted(new ConeGeometry(rad * 0.8, sh, 8).translate(0, top - sh / 2 + 0.03, 0), 0xe9eef1),
+        0.4 + rad * 0.06,
+        (px, py, pz) => Math.max(0, py - (top - (h * Math.hypot(px, pz)) / rad) + 0.04),
+      ),
+    );
   }
   parts.push(tinted(new CylinderGeometry(0.18, 0.3, 1.4, 6).translate(0, 0.7, 0), 0x3a2e26));
   const merged = mergeGeometries(parts, false);
@@ -1150,17 +1324,22 @@ export class Campus {
     this.fx1 = W + 0.5;
     this.fz1 = H + 0.5;
     const floor = (x: number, z: number) => x >= 0 && z >= 0 && x < W && z < H && isFloor(tileAt(map, x, z));
-    const { map: facadeMap, lit } = facadeCanvases(T);
+    const { map: facadeMap, lit, ledge } = facadeCanvases(T);
     this.facade = new MeshLambertMaterial({
       map: facadeMap,
       emissive: 0xffffff,
       emissiveMap: lit,
       emissiveIntensity: 0,
     });
+    // (the ledges' snow by its mask, as the snow lies: light3d.ts patchOutdoors — set after the clone:
+    // a material's clone copies its userData through JSON, the texture made a PNG on the way)
     this.mainFacade = this.facade.clone();
-    this.disposables.push(facadeMap, lit, this.facade, this.mainFacade);
+    this.facade.userData.wxLedge = ledge;
+    this.mainFacade.userData.wxLedge = ledge;
+    this.disposables.push(facadeMap, lit, ledge, this.facade, this.mainFacade);
     const concrete = this.lambert(0xcfcbc2);
-    const white = this.lambert(0xf4f6f8);
+    // (the parapets' caps: their stone — the snow on them is the dusting's, wx3d.ts)
+    const white = this.lambert(0xdcd8d0);
     // soft shadows on the ground (multiplied): blobs under things, a band at the foot of walls
     const shadows = new G();
     const bands = new G();
@@ -1208,7 +1387,7 @@ export class Campus {
       return isWindow(e.dir === "h" ? hWall(map, e.x, e.y) : vWall(map, e.x, e.y)) ? [WIN0, WIN1] : null;
     };
     for (const r of mainRuns) this.facadeRun(skin, cap, coping, r, 0, (i) => win(r, i), topSkin);
-    const mainWhite = this.lambert(0xf4f6f8);
+    const mainWhite = this.lambert(0xdcd8d0);
     const mainConcrete = this.lambert(0xcfcbc2);
     this.mainCut = [this.mainFacade, mainWhite, mainConcrete];
     this.add(skin.build(), this.mainFacade);
@@ -1288,9 +1467,16 @@ export class Campus {
         const w = 2 + r0() * 3;
         const d = 1.5 + r0() * 2;
         plant.box(x, STOREY, z, x + w, STOREY + 0.9 + r0() * 0.8, z + d);
-        plant
-          .color(0xffffff)
-          .box(x - 0.05, STOREY + 0.9 + r0() * 0.8, z - 0.05, x + w + 0.05, STOREY + 1.85, z + d + 0.05);
+        snowBox(
+          plant.color(0xffffff),
+          x - 0.05,
+          STOREY + 0.9 + r0() * 0.8,
+          z - 0.05,
+          x + w + 0.05,
+          STOREY + 1.85,
+          z + d + 0.05,
+          "roof",
+        );
         plant.color(0x8e9399);
       }
     }
@@ -1371,10 +1557,10 @@ export class Campus {
     this.dropFake(fake);
     fake = this.root.children.length;
     // ── the ground: an endless snowfield, with the site drawn nearer in ──
-    const far = new Mesh(
-      new PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2),
-      this.lambert(0xf2f4f7, this.snowTexture(100, 100)),
-    );
+    // (open ground: grass, the snow over it the weather's — wx3d.ts; its picture the snow's)
+    const farMat = this.lambert(0xf2f4f7, this.snowTexture(100, 100));
+    farMat.userData.wx = "field";
+    const far = new Mesh(new PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2), farMat);
     far.position.set(this.cx, GROUND - 0.05, this.cz);
     this.add(far);
     const siteGeo = new PlaneGeometry(420, 420, 150, 150).rotateX(-Math.PI / 2);
@@ -1383,7 +1569,9 @@ export class Campus {
       for (let i = 0; i < pos.count; i++) pos.setY(i, this.terrain.at(pos.getX(i) + this.cx, pos.getZ(i) + this.cz));
       siteGeo.computeVertexNormals();
     }
-    const site = new Mesh(siteGeo, this.lambert(0xf2f4f7, this.snowTexture(9, 9, 43)));
+    const siteMat = this.lambert(0xf2f4f7, this.snowTexture(9, 9, 43));
+    siteMat.userData.wx = "field";
+    const site = new Mesh(siteGeo, siteMat);
     site.position.set(this.cx, GROUND, this.cz);
     this.add(site);
 
@@ -1430,7 +1618,7 @@ export class Campus {
     // the plough's banks and its dump
     const banks = lotBanksOf(lay).map((k) =>
       place(
-        tinted(new SphereGeometry(1, 10, 7).scale(k.s, k.s * 0.42, k.sz), 0xf7f9fb),
+        tinted(new SphereGeometry(1, 10, 7).scale(k.s, k.s * 0.42, k.sz), 0xf7f9fb, atOf("bank", k.x, k.z)),
         k.x,
         ground(k.x, k.z) - 0.1,
         k.z,
@@ -1507,7 +1695,9 @@ export class Campus {
     gate.color(0xd8d4cb).box(gx - 1.2, GROUND, gz - 1.2, gx + 1.2, GROUND + 2.6, gz + 1.2);
     gate.color(0x2c3a40).box(gx - 1.25, GROUND + 1.2, gz - 0.9, gx + 1.25, GROUND + 2.1, gz + 0.9);
     gate.color(0x2c3a40).box(gx - 0.9, GROUND + 1.2, gz - 1.25, gx + 0.9, GROUND + 2.1, gz + 1.25);
-    gate.color(0xffffff).box(gx - 1.35, GROUND + 2.6, gz - 1.35, gx + 1.35, GROUND + 2.85, gz + 1.35);
+    // (its roof, and the snow on it: the weather's)
+    gate.color(0x5b5f66).box(gx - 1.35, GROUND + 2.6, gz - 1.35, gx + 1.35, GROUND + 2.7, gz + 1.35);
+    snowBox(gate.color(0xffffff), gx - 1.35, GROUND + 2.68, gz - 1.35, gx + 1.35, GROUND + 2.85, gz + 1.35, "roof");
     gate.color(0x8e9399).box(gx - 1.6, GROUND, gz - 0.15, gx - 1.3, GROUND + 1.1, gz + 0.15);
     gate.color(0xd93a2f).box(gx - 1.52, GROUND + 1.1, gz - 0.06, gx - 1.38, GROUND + 4.6, gz + 0.06); // the arm, up
     for (let y = 1.3; y < 4.4; y += 0.8)
@@ -1523,7 +1713,7 @@ export class Campus {
       const ez = (west.z0 + west.z1) / 2;
       const ent = new G();
       ent.color(0xd8d4cb).box(ex - 4.2, GROUND + 3.3, ez - 5.5, ex + 0.3, GROUND + 3.75, ez + 5.5); // canopy
-      ent.color(0xffffff).box(ex - 4.25, GROUND + 3.75, ez - 5.55, ex + 0.3, GROUND + 3.95, ez + 5.55); // snow on it
+      snowBox(ent.color(0xffffff), ex - 4.25, GROUND + 3.73, ez - 5.55, ex + 0.3, GROUND + 3.95, ez + 5.55, "roof"); // snow on it
       for (const z of [ez - 5, ez + 5])
         ent.color(0x8e9399).box(ex - 3.9, GROUND, z - 0.18, ex - 3.55, GROUND + 3.3, z + 0.18);
       ent.color(0x5b5f66).box(ex - 1.1, GROUND, ez - 4, ex, GROUND + 0.08, ez + 4); // the mat
@@ -1612,6 +1802,8 @@ export class Campus {
       slushTex.colorSpace = SRGBColorSpace;
       this.disposables.push(slushTex);
       const slushMat = new MeshLambertMaterial({ map: slushTex, transparent: true, depthWrite: false });
+      // (trodden snow: there as the snow lies — docs/plan/65)
+      this.slushMat = slushMat;
       this.tinted.push([slushMat, new Color(1, 1, 1)]);
       const slush = new Mesh(new PlaneGeometry(ex - 1 - (lot.x1 + 0.5), 11).rotateX(-Math.PI / 2), slushMat);
       slush.position.set((ex - 1 + lot.x1 + 0.5) / 2, GROUND + 0.014, ez);
@@ -1692,7 +1884,15 @@ export class Campus {
         );
         posts.push(place(tinted(new BoxGeometry(2.2, 0.12, 0.12).translate(1.0, 8.95, 0), 0x3a3e44), x, gy, z, ry));
         posts.push(place(tinted(new BoxGeometry(1.0, 0.24, 0.42).translate(2.0, 8.9, 0), 0x50555b), x, gy, z, ry));
-        posts.push(place(tinted(new BoxGeometry(1.0, 0.08, 0.42).translate(2.0, 9.06, 0), 0xffffff), x, gy, z, ry));
+        posts.push(
+          place(
+            tinted(new BoxGeometry(1.0, 0.08, 0.42).translate(2.0, 9.06, 0), 0xffffff, atOf("cap", x, z)),
+            x,
+            gy,
+            z,
+            ry,
+          ),
+        );
         shadowAt(x, z, 0.9, 0.9, 0, gy + 0.028);
       }
       const hx = x + Math.cos(ry) * 2.0;
@@ -1814,7 +2014,11 @@ export class Campus {
       () => 0.85 + rt() * 0.6,
     );
     // bare trees in 3D on the lawn, by the lot and along the drive
-    const treeKinds = [41, 42, 43].map((seed) => bareTree3(T.rng(seed)));
+    // (two in leaf, one a bare snag: docs/plan/65, W3)
+    const treeKinds = [41, 42, 43].map((seed, i) => {
+      const g = bareTree3(T.rng(seed));
+      return i < 2 ? crowned(g, ...BARE_LEAVES) : g;
+    });
     for (const k of treeKinds) this.disposables.push(k);
     const rb2 = T.rng(3);
     const spots: [number, number][] = [];
@@ -2101,7 +2305,7 @@ export class Campus {
     }
     const m = mat ?? this.lambert(0xffffff);
     if (vertex) m.vertexColors = true;
-    const mesh = new Mesh(g, m);
+    const mesh = snowShadow(new Mesh(g, m));
     this.disposables.push(g);
     this.root.add(mesh);
     return mesh;
@@ -2141,10 +2345,13 @@ export class Campus {
   private night = 0;
   /** How much the morning fog calls for lamps (view.ts lampFog): the visitor's car's on in it. */
   lampFog = 0;
-  /** The weather (shared weather.ts, eased): the snow follows it. */
-  readonly weather = { storm: 0, wind: 0 };
+  /** The weather (shared weather.ts, eased): the snow follows it — `snowing`, how hard it's
+   *  coming down (0: none falls, the near and far flakes too: docs/plan/65; 1 when nothing's said:
+   *  a still's). */
+  readonly weather = { storm: 0, wind: 0, snowing: 1 };
   /** Roofs the snow doesn't fall under (the Grounds' buildings). */
   roofs: Roof[] = [];
+  private slushMat: MeshLambertMaterial | null = null;
 
   /** Inside the building on a floor under the studio, the Sims rule: nothing of
    *  the main block above `y` (world height; null: all of it, seen from outside).
@@ -2167,6 +2374,12 @@ export class Campus {
     for (const t of this.trees) t.rotation.y = Math.atan2(cam.x - t.position.x, cam.z - t.position.z);
     // the tower's beacon blinks at night
     this.beacon.opacity = this.night > 0.1 ? (Math.sin(this.t * 2.2) > 0.3 ? this.night : 0.08) : 0;
+    // (the entrance's trodden snow as the snow lies)
+    if (this.slushMat) {
+      const lie = Math.min(1, Math.max(0, (wx.wxSnow.value - 0.15) / 0.35));
+      this.slushMat.opacity = lie;
+      this.slushMat.visible = lie > 0.01;
+    }
     // (the storm's flakes come in with it)
     const storm = this.weather.storm;
     const heavy = this.flakes[2];
@@ -2174,9 +2387,14 @@ export class Campus {
       heavy.points.visible = storm > 0.02;
       heavy.material.opacity = 0.95 * Math.min(1, storm * 1.3);
     }
-    for (const f of this.flakes) {
-      // (the flakes are scattered at random: the first half is half as thick, all over)
-      f.used = Math.round(f.points.geometry.getAttribute("position").count * (this.lite ? 0.5 : 1));
+    // (the near and the far ones by how hard it's snowing: thinner in a light fall, none in a dry
+    // spell — they're scattered at random, so the first of them is a thinner fall all over)
+    const fall = Math.min(1, this.weather.snowing * 1.5);
+    for (const [i, f] of this.flakes.entries()) {
+      f.used = Math.round(
+        f.points.geometry.getAttribute("position").count * (this.lite ? 0.5 : 1) * (i < 2 ? fall : 1),
+      );
+      if (i < 2) f.points.visible = f.used > 0;
       if (f.points.visible)
         f.update(dt, cam, animate, this.fx0, this.fz0, this.fx1, this.fz1, storm, this.weather.wind, this.roofs);
     }

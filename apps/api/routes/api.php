@@ -149,6 +149,8 @@ Route::middleware('internal')->prefix('internal')->group(function () {
     Route::put('/world/karts', [InternalController::class, 'karts']);
     // the world's sound an admin set (docs/plan/63-the-steps.md): the steps' volume, who, when
     Route::put('/world/sound', [InternalController::class, 'sound']);
+    // the weather as last saved (docs/plan/65-the-weather.md): the ground, when, an admin's call
+    Route::put('/world/weather', [InternalController::class, 'weather']);
     // god mode (docs/plan/53-the-god-mode.md): an admin's draft (by its id), a revision, the next one
     Route::get('/grounds/drafts/{id}', [GroundsController::class, 'internalDraft'])->whereNumber('id');
     Route::get('/grounds/revisions/{rev}', [GroundsController::class, 'internalRevision'])->whereNumber('rev');

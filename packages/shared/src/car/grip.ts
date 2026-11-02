@@ -2,7 +2,22 @@
 // friction's peak, the slip it peaks at, how fast it falls off past the peak,
 // what it costs to roll through it, how deep a tyre sinks, how rough it is.
 
-export type Ground = "asphalt" | "slush" | "blackice" | "walk" | "path" | "snow" | "deep" | "ice" | "rock" | "floor";
+export type Ground =
+  | "asphalt"
+  | "slush"
+  | "blackice"
+  | "walk"
+  | "path"
+  | "snow"
+  | "deep"
+  | "ice"
+  | "rock"
+  | "floor"
+  // (the green's and the rain's: docs/plan/65, W5)
+  | "grass"
+  | "earth"
+  | "mud"
+  | "wet";
 
 export interface Grip {
   mu: number; // peak friction
@@ -19,6 +34,56 @@ export interface Grip {
 }
 
 export const GRIP: Record<Ground, Grip> = {
+  // the green's (W5): grass a little loose, worse wet; a dry trail's earth; mud sinking and sliding;
+  // a wet road short of the dry's peak, letting go sooner
+  grass: {
+    mu: 0.55,
+    kappa: 0.14,
+    alpha: 0.16,
+    slide: 0.65,
+    shape: 1.3,
+    crr: 0.03,
+    plough: 0,
+    sink: 0.01,
+    rough: 0.01,
+    trace: "light",
+  },
+  earth: {
+    mu: 0.6,
+    kappa: 0.12,
+    alpha: 0.15,
+    slide: 0.7,
+    shape: 1.4,
+    crr: 0.025,
+    plough: 0,
+    sink: 0.005,
+    rough: 0.008,
+    trace: "light",
+  },
+  mud: {
+    mu: 0.35,
+    kappa: 0.16,
+    alpha: 0.18,
+    slide: 0.6,
+    shape: 1.2,
+    crr: 0.06,
+    plough: 0.006,
+    sink: 0.06,
+    rough: 0.012,
+    trace: "ruts",
+  },
+  wet: {
+    mu: 0.7,
+    kappa: 0.1,
+    alpha: 0.12,
+    slide: 0.6,
+    shape: 1.8,
+    crr: 0.014,
+    plough: 0,
+    sink: 0,
+    rough: 0.002,
+    trace: "spray",
+  },
   asphalt: {
     mu: 0.86,
     kappa: 0.1,
@@ -192,6 +257,11 @@ const FEET: Record<"ski" | "track" | "lug" | "runner", Record<Ground, [mu: numbe
     walk: [0.4, 0.4],
     floor: [0.4, 0.4],
     rock: [0.4, 0.5],
+    // (bare ground stops them; wet grass and mud let them slide a little)
+    grass: [0.38, 0.25],
+    earth: [0.4, 0.35],
+    mud: [0.3, 0.2],
+    wet: [0.38, 0.35],
   },
   // a tractor's big lugged tyre: it bites snow and mud as no road tyre does
   lug: {
@@ -205,6 +275,10 @@ const FEET: Record<"ski" | "track" | "lug" | "runner", Record<Ground, [mu: numbe
     walk: [0.75, 0.02],
     floor: [0.75, 0.02],
     rock: [0.65, 0.03],
+    grass: [0.65, 0.03],
+    earth: [0.7, 0.025],
+    mud: [0.55, 0.04],
+    wet: [0.72, 0.02],
   },
   ski: {
     snow: [0.5, 0.006],
@@ -217,6 +291,10 @@ const FEET: Record<"ski" | "track" | "lug" | "runner", Record<Ground, [mu: numbe
     walk: [0.3, 0.12],
     floor: [0.3, 0.12],
     rock: [0.3, 0.15],
+    grass: [0.32, 0.08],
+    earth: [0.3, 0.12],
+    mud: [0.3, 0.06],
+    wet: [0.28, 0.1],
   },
   track: {
     deep: [0.8, 0.02],
@@ -230,6 +308,10 @@ const FEET: Record<"ski" | "track" | "lug" | "runner", Record<Ground, [mu: numbe
     walk: [0.5, 0.09],
     floor: [0.5, 0.09],
     rock: [0.55, 0.07],
+    grass: [0.6, 0.04],
+    earth: [0.65, 0.04],
+    mud: [0.6, 0.03],
+    wet: [0.48, 0.09],
   },
 };
 /** A foot's grip on a ground (a tyre's: `base`, the ground's own). */

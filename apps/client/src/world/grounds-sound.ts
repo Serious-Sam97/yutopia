@@ -3,13 +3,15 @@
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import { mixer } from "./audio";
 import { sound } from "./sound";
+import { WeatherSound } from "./weather-sound";
 
 // The Grounds' sound (docs/plan/27-the-grounds.md, the mood), synthesized as
 // the rest is (sound.ts): the wind — stronger in the open, hushed in the woods,
 // a roar in a storm; indoors only a storm's, muffled (a calm one heard through closed
 // windows read as a fan) —, a crow now and then by day, the lamps'
 // buzz under them after dark, the river's ice ticking, a dog far off in the
-// town at night, the bar's music through its door. Loaded with the Grounds.
+// town at night, the bar's music through its door. Loaded with the Grounds. And the weather's
+// (weather-sound.ts: the rain by where I am, the thunder, the drips, the birds, the river running).
 
 type G = typeof GroundsModule;
 
@@ -21,7 +23,17 @@ export interface Here {
   night: number; // 0 day … 1 night
   storm: number; // 0 … 1
   fog?: number; // the morning fog, 0 … 1 (docs/plan/64-the-fog.md F6): hushed
+  car?: boolean; // in a car
+  roof?: number; // under a roof, how much of its rain's heard: 1 right under it, less floors down
+  up?: number; // how high I hear from over the land (m: the camera's)
+  hour?: number; // the hour as the sky has it
+  /** the room's weather (docs/plan/65-the-weather.md): how hard it rains, sleet, a thunderstorm's,
+   *  °C, the ground's wet, the water's ice (0 open … 1 frozen), the cloud */
+  wx?: { rain: number; sleet: boolean; thunder: number; temp: number; wet: number; ice: number; cloud: number };
 }
+
+/** the water's ice from which it's walked on, and the river's ice ticks (shared physics ICE_WALK) */
+const FROZEN = 0.8;
 
 export class GroundsSound {
   private wind: { out: GainNode; bp: BiquadFilterNode; src: AudioBufferSourceNode } | null = null;
@@ -33,6 +45,7 @@ export class GroundsSound {
   private nextDog = 30;
   private nextDrip = 1;
   private open = 1; // eased: how open it is round you (1 none of the woods)
+  readonly weather = new WeatherSound();
   /** the mixer, for the dark's sound (world/dark/voices.ts takes it from here: importing it
    *  there split the world page's chunks — docs/plan/30-the-dark.md phase 2's trap) */
   readonly mixer = mixer;
@@ -89,7 +102,13 @@ export class GroundsSound {
     const out = h.land ? 1 : h.inside ? 0.12 : 0.18;
     // (in the morning fog the air's still: next to no wind — docs/plan/64-the-fog.md F6)
     const fog = h.fog ?? 0;
-    const level = ((h.land ? 0.03 + 0.05 * this.open : 0) * (1 - 0.85 * fog) + 0.22 * h.storm) * gust * out;
+    // (and by the weather: a grey day's breezier, the rain's gusts — docs/plan/65 W8)
+    const wx = h.wx;
+    const by = wx ? 0.75 + 0.25 * wx.cloud + 0.5 * Math.min(1, wx.rain) : 1;
+    // (and up off the ground, more of it: flying, god mode's camera)
+    const aloft = 1 + 0.6 * Math.min(1, Math.max(0, ((h.up ?? 0) - 5) / 35));
+    const level =
+      ((h.land ? 0.03 + 0.05 * this.open : 0) * (1 - 0.85 * fog) * by + 0.22 * h.storm) * gust * out * aloft;
     this.wind.out.gain.setTargetAtTime(level, ctx.currentTime, 0.4);
     this.wind.bp.frequency.setTargetAtTime(
       (h.land ? 320 + 380 * gust + 500 * h.storm : 240) * (h.inside ? 0.5 : 1),
@@ -143,12 +162,33 @@ export class GroundsSound {
       const k = h.land ? fog * Math.min(1, woods * 1.6 + 0.15) : 0;
       if (k > 0.05) this.drip(ctx, 0.022 * k * (0.5 + Math.random() * 0.5), Math.random() * 1.8 - 0.9);
     }
-    // ── the river's ice, ticking, near it ──
+    // ── the river's ice, ticking, near it (frozen: else it runs — the weather's) ──
     const river = h.land ? riverDistance(G, h.x, h.z) : 99;
+    const ice = wx?.ice ?? 1;
     this.nextTick -= dt;
     if (this.nextTick < 0) {
       this.nextTick = 0.4 + Math.random() * 2.6;
-      if (river < 30) this.tick(ctx, (1 - river / 30) * 0.05);
+      if (river < 30 && ice >= FROZEN) this.tick(ctx, (1 - river / 30) * 0.05);
+    }
+    // ── the weather's: the rain by where I am, the thunder, the drips, the birds, the river ──
+    if (wx) {
+      const P = G.POND;
+      const e = Math.hypot((h.x - P.cx) / P.rx, (h.z - P.cz) / P.rz);
+      const pond = e < 1 ? 1 : Math.max(0, 1 - ((e - 1) * Math.min(P.rx, P.rz)) / 30);
+      this.weather.update(dt, {
+        out: h.land && !h.car,
+        car: !!h.car,
+        roof: h.roof ?? 1,
+        up: h.up ?? 0,
+        woods: 1 - this.open,
+        water: h.land ? Math.max(pond, Math.max(0, 1 - river / 25)) : 0,
+        river: h.land ? Math.max(0, 1 - river / 35) : 0,
+        night: h.night,
+        storm: h.storm,
+        fog,
+        hour: h.hour ?? 12,
+        ...wx,
+      });
     }
     // ── a dog, far off in the town at night ──
     this.nextDog -= dt;
@@ -320,7 +360,60 @@ export class GroundsSound {
     return { out, timer };
   }
 
+  /** Thin ice under a step (the water not long frozen, or thawing): a creak, now and then a crack
+   *  running off. `thin` 0 … 1 (just walkable). */
+  crack(thin: number, gain = 1) {
+    const ctx = this.ctx();
+    if (!ctx || thin <= 0) return;
+    const at = ctx.currentTime + 0.02;
+    const pan = ctx.createStereoPanner();
+    pan.pan.value = Math.random() * 1.2 - 0.6;
+    pan.connect(mixer.buses.effects);
+    // the creak: a low, wavering groan
+    const o = ctx.createOscillator();
+    o.type = "sawtooth";
+    const f = 90 + Math.random() * 70;
+    o.frequency.setValueAtTime(f, at);
+    o.frequency.linearRampToValueAtTime(f * (0.7 + Math.random() * 0.2), at + 0.35);
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 420;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(0.05 * thin * gain, at + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.4);
+    o.connect(lp).connect(g).connect(pan);
+    o.start(at);
+    o.stop(at + 0.42);
+    // the crack, the thinner the likelier: a sharp tick and its ping running off under the ice
+    if (Math.random() < 0.25 + 0.5 * thin) {
+      const c = ctx.createBufferSource();
+      c.buffer = sound.noiseBuffer(ctx);
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 1800 + Math.random() * 1600;
+      bp.Q.value = 6;
+      const cg = ctx.createGain();
+      cg.gain.setValueAtTime(0.09 * thin * gain, at + 0.08);
+      cg.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+      c.connect(bp).connect(cg).connect(pan);
+      c.start(at + 0.08, Math.random());
+      c.stop(at + 0.18);
+      const ping = ctx.createOscillator();
+      ping.frequency.setValueAtTime(2600 + Math.random() * 1200, at + 0.1);
+      ping.frequency.exponentialRampToValueAtTime(500, at + 0.5);
+      const pg = ctx.createGain();
+      pg.gain.setValueAtTime(0.0001, at + 0.1);
+      pg.gain.exponentialRampToValueAtTime(0.02 * thin * gain, at + 0.11);
+      pg.gain.exponentialRampToValueAtTime(0.0001, at + 0.55);
+      ping.connect(pg).connect(pan);
+      ping.start(at + 0.1);
+      ping.stop(at + 0.56);
+    }
+  }
+
   stop() {
+    this.weather.stop();
     this.wind?.src.stop();
     this.wind?.out.disconnect();
     this.wind = null;

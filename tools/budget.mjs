@@ -55,7 +55,7 @@ const LAZY = {
   "yutopia-os": 15, // VortexOS on the computers' glass (docs/plan/19-vortexos.md)
   "yutopia-phone": 60, // the phone: Vortex Mobile's screens, calls, camera, sounds (docs/plan/21-cellphone.md)
   "yutopia-chars": 58, // (raised from 40 on 2026-10-22 by the user's call: 39.1, the next detail on people would tip it; to 50 on 2026-10-31 by the user's call: the character pass — docs/plan/59 — 48.8; to 58 the same day by the user's call: the wardrobe — docs/plan/60 — 55.8) // the 3D people: the model builder, motion, iso sprites (docs/plan/22-people-3d.md)
-  "yutopia-input": 15, // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
+  "yutopia-input": 15.5, // (raised from 15 on 2026-11-02 under the user's standing call to raise as needed: 14.99 → 15.04 with plan 65's phase 3 — none of the weather in it, the minifier's names moved with the shared modules) // the keys by position, the pad, my body's movement core (docs/plan/29-the-move.md)
   "yutopia-anim": 15, // plan 58's animations, loaded with the 3D people when asked for (docs/plan/58-the-animation.md)
   "yutopia-air": 15, // plan 58 phase 5's: over things with the hands placed, Flowmotion's grips, the ragdoll and the get-ups (loaded with the hero's)
   "yutopia-acts": 15, // plan 58 phase 6's: sitting, the hands and the phone, busy, together, the emotes (loaded with the hero's)
@@ -68,7 +68,7 @@ const LAZY = {
   // the land round the building, generated (shared/grounds.ts, docs/plan/27): the bundler copies it into every
   // chunk that uses it — its own, the 3D view's, the dev mock pages' (~6 KB each), and the marker counts those
   // whole chunks (the 3D view's ~46 KB); raised from 120 on 2026-10-20 with phases 2–6 (the town, the night, life)
-  "yutopia-grounds": 187, // (raised from 180 on 2026-10-24 by the user's call: the lag's culling — docs/plan/38 — put it at 183.1; to 187 the same day, the user's call: the lot's 3D dressing — docs/plan/42 — put it at 186.3)
+  "yutopia-grounds": 176, // (lowered from 210 on 2026-11-02 to 173.1: the cars' chunk is loaded through the game's view (tp/game-view.ts), a child of its chunks, not beside it from the page — its own copy of light3d, wx3d, the lot's 3D and three's merging (~17 KB) gone; wx3d is now one chunk the game's view and /dev/3p's share, light3d one copy a page (the game's view, /dev/3p's); every chunk together −20 KB, the page 424.9 → 424.6) // (raised from 187 on 2026-11-02 under the user's standing call to raise as needed: plan 65's phases 3–4 — the snow's layer, its tags, the green, the leaves, the canvases redone — put it at 191.1, from 176.1; to 210 the same day with phase 5 — the wet, the icicles, the floor's open tiles, a car's own snow, the footing by the weather — at 203.2: light3d.ts, and with it tp/wx3d.ts and three's BufferGeometryUtils, is copied into three of the 3D view's chunks, so the layer counts thrice — a split to fix) // (raised from 180 on 2026-10-24 by the user's call: the lag's culling — docs/plan/38 — put it at 183.1; to 187 the same day, the user's call: the lot's 3D dressing — docs/plan/42 — put it at 186.3)
   // the lot's cars, driven (docs/plan/28-the-car.md): the sim, the models and their cabins, the sound, the fx
   "yutopia-car": 120,
   // the Kart Park in 3D (docs/plan/46-the-karts.md), loaded once the Grounds get to it: one ~16 KB file a

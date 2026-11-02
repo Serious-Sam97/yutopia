@@ -88,6 +88,24 @@ test("warmth: 0.6 a minute at night, twice in a blizzard, back somewhere warm; f
   assert.equal(f.hp, 100);
 });
 
+test("warmth by the air (docs/plan/65-the-weather.md): the night's at freezing, none when mild, a bitter day bites too", () => {
+  const after = (i: Partial<VitalsIn>) => {
+    const v = { ...FULL_VITALS };
+    run(v, freshClock(), { ...OUT, ...i }, 60);
+    return 100 - v.wm;
+  };
+  // not said: as it always was; at freezing (chill 1) the same
+  assert.ok(near(after({ night: 1 }), 0.6, 1e-3));
+  assert.ok(near(after({ night: 1, chill: 1 }), 0.6, 1e-3));
+  // a mild night less, a warm one nothing
+  assert.ok(near(after({ night: 1, chill: 0.5 }), 0.3, 1e-3));
+  assert.equal(after({ night: 1, chill: 0 }), 0);
+  // a bitter night no worse than freezing's; a bitter day half the night's at its worst; a mild day nothing
+  assert.ok(near(after({ night: 1, chill: 2 }), 0.6, 1e-3));
+  assert.ok(near(after({ night: 0, chill: 2 }), 0.3, 1e-3));
+  assert.equal(after({ night: 0, chill: 1 }), 0);
+});
+
 test("health comes back to 60 after 8 s unhurt; the battery to 40 at 4 a second", () => {
   const v = { ...FULL_VITALS, bat: 10 };
   const c = freshClock();

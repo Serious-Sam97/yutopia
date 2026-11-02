@@ -491,6 +491,12 @@ export class CarSound {
         crunch += 0.25 * clamp(r.speed / 6) + 0.2 * slide;
       if (w.ground === "ice" || w.ground === "blackice") hiss += 0.25 * clamp(r.speed / 15) + 0.3 * slide;
       if (w.ground === "slush") splash += 0.25 * clamp(r.speed / 10);
+      // (the rain's: a wet road's spray, mud's — docs/plan/65-the-weather.md)
+      if (w.ground === "wet") splash += 0.16 * clamp(r.speed / 14);
+      if (w.ground === "mud") splash += 0.2 * clamp(r.speed / 8) + 0.15 * slide;
+      // (the green's: grass a soft brush, the earth a little grit)
+      if (w.ground === "grass" || w.ground === "earth")
+        crunch += (w.ground === "grass" ? 0.08 : 0.12) * clamp(r.speed / 6) + 0.1 * slide;
       rough += 0.25 * g.rough;
     }
     // (its chatter: louder and softer at random, the resonances jumping a little, every frame)

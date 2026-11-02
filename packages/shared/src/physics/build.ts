@@ -19,7 +19,7 @@ import { parkedBody } from "../car/park.ts";
 import { footprint, standHeight, type WorldObjectDef } from "../catalog.ts";
 import { dressItems } from "../dressing.ts";
 import { doorOwner, ZPX_TILE } from "../grid.ts";
-import { CHUNK, groundsChunk, heightAt } from "../grounds.ts";
+import { CHUNK, groundsChunk, heightAt, ICE_WALK, POND, POND_LEVEL, RIVER } from "../grounds.ts";
 import { elevOf, floorsOf, levelMap, objLevel, offsetOf, onLevel, STOREY } from "../levels.ts";
 import { liftDoorEdges, liftHere, liftWallEdges } from "../lift.ts";
 import { type Edge, hWall, isFloor, type MapDef, tileAt, vWall } from "../map.ts";
@@ -299,6 +299,79 @@ function sig(ss: Solid3[]): string {
   return s;
 }
 
+// (the water's ice walked on — W6 — is grounds.ts's, the paths' too: one number for both)
+export { ICE_WALK };
+
+/** Open water's shores as walls (W6): round the pond at its edge (but where the dock goes out —
+ *  its deck fenced on its three sides over the water), along both sides of the river's bed at its
+ *  foot. Low (to 2.2 over the water): under the bridges' decks and the banks' tops, so only what
+ *  goes down to it is stopped. */
+export function waterWalls(): Solid3[] {
+  const out: Solid3[] = [];
+  // a wall from (ax, az) to (bx, bz), from y0 to y1, 0.3 thick
+  const wall = (ax: number, az: number, bx: number, bz: number, y0: number, y1: number) => {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const l = Math.hypot(dx, dz);
+    if (l < 1e-3) return;
+    // (three's rotation.y: the local x along it)
+    out.push({
+      t: "box",
+      x: (ax + bx) / 2,
+      y: (y0 + y1) / 2,
+      z: (az + bz) / 2,
+      hx: l / 2 + 0.15,
+      hy: (y1 - y0) / 2,
+      hz: 0.15,
+      a: Math.atan2(-dz, dx),
+    });
+  };
+  // the pond: its edge, the dock's way out left open — cut to the deck's width exactly (a segment
+  // there in short pieces, the deck's left out)
+  const DX0 = -253.7;
+  const DX1 = -250.3;
+  const onDeck = (x: number, z: number) => x > DX0 && x < DX1 && z < -85;
+  const N = 96;
+  const at = (a: number): [number, number] => [POND.cx + Math.cos(a) * POND.rx, POND.cz + Math.sin(a) * POND.rz];
+  for (let i = 0; i < N; i++) {
+    const a0 = (i / N) * Math.PI * 2;
+    const a1 = ((i + 1) / N) * Math.PI * 2;
+    const [ax, az] = at(a0);
+    const [bx, bz] = at(a1);
+    const near = Math.min(ax, bx) < DX1 + 4 && Math.max(ax, bx) > DX0 - 4 && Math.min(az, bz) < -85;
+    const n = near ? 24 : 1;
+    for (let j = 0; j < n; j++) {
+      const [px, pz] = at(a0 + ((a1 - a0) * j) / n);
+      const [qx, qz] = at(a0 + ((a1 - a0) * (j + 1)) / n);
+      if (onDeck((px + qx) / 2, (pz + qz) / 2)) continue;
+      wall(px, pz, qx, qz, POND_LEVEL - 0.6, POND_LEVEL + 2.2);
+    }
+  }
+  // the dock's deck (x −253.5 … −250.5, from the land at z −98 out over the water to −84.4: the
+  // shore's at −92.9 under it): fenced where it's over the water, its sides from just inland of the
+  // shore to its end, and across its end
+  const y0 = POND_LEVEL - 0.6;
+  const y1 = POND_LEVEL + 1.8;
+  wall(DX0, -94, DX0, -84.2, y0, y1);
+  wall(DX1, -94, DX1, -84.2, y0, y1);
+  wall(DX0, -84.2, DX1, -84.2, y0, y1);
+  // the river: both sides of its bed, at the banks' foot
+  const L = RIVER.line;
+  for (let i = 0; i + 1 < L.length; i++) {
+    const [ax, az] = L[i];
+    const [bx, bz] = L[i + 1];
+    const l = Math.hypot(bx - ax, bz - az) || 1;
+    const nx = -(bz - az) / l;
+    const nz = (bx - ax) / l;
+    const h = Math.min(RIVER.h[i], RIVER.h[i + 1]);
+    for (const s of [1, -1]) {
+      const o = (RIVER.w / 2 + 0.15) * s;
+      wall(ax + nx * o, az + nz * o, bx + nx * o, bz + nz * o, h - 0.6, h + 2.2);
+    }
+  }
+  return out;
+}
+
 /** Keeps a PhysicsWorld matching the world: the Grounds' chunks as asked for, the building
  *  diffed on every change (only what changed is made again). */
 export class WorldBuilder {
@@ -317,6 +390,15 @@ export class WorldBuilder {
     if (things.length) this.world.setStatic(`grounds:${k}`, things, "wall");
     else this.world.remove(`grounds:${k}`);
   }
+
+  /** The water open (its shores walls) or frozen (walked: W6) — set when it changes. */
+  water(open: boolean): void {
+    if (open === this.waterOpen) return;
+    this.waterOpen = open;
+    if (open) this.world.setStatic("water", waterWalls(), "wall");
+    else this.world.remove("water");
+  }
+  private waterOpen: boolean | null = null;
 
   /** Every Grounds chunk in a rectangle (the server: all of them, once). */
   groundRect(x0: number, z0: number, x1: number, z1: number): void {

@@ -544,6 +544,28 @@ export class KartPark extends Schema {
   @type("float32") show = 0;
 }
 
+// The weather (docs/plan/65-the-weather.md, W11): the sky now (shared weather.ts skyAt, or an
+// admin's call), eased; what lies on the ground, stepped each second by the one rule; and the calls
+// in force. The storm, the wind and the fog stay on the world, where everything reads them.
+export class Weather extends Schema {
+  @type("string") kind = "clear"; // shared SkyKind
+  @type("float32") fall = 0; // how hard it's coming down, 0 … 1
+  @type("float32") temp = 5; // the air, °C
+  @type("float32") cloud = 0;
+  @type("float32") thunder = 0;
+  @type("float32") snow = 0; // lying, 0 … 1 (white at 1)
+  @type("float32") wet = 0;
+  @type("float32") puddles = 0;
+  @type("float32") ice = 0; // the pond's and the river's
+  // an admin's call on the sky ("": the schedule's; shared WeatherCall), who and till when
+  @type("string") to = "";
+  @type("string") by = "";
+  @type("float64") until = 0;
+  // and on the ground ("": the weather's; "snow", "melt", "auto": back to the weather's), who
+  @type("string") groundTo = "";
+  @type("string") groundBy = "";
+}
+
 export class WorldState extends Schema {
   @type("string") name = "";
   @type("string") mapKey = "studio";
@@ -592,6 +614,7 @@ export class WorldState extends Schema {
   @type("float32") stepsVol = 1;
   @type("string") stepsBy = "";
   @type("float64") stepsAt = 0;
+  @type(Weather) weather = new Weather();
   @type({ map: Player }) players = new MapSchema<Player>();
   @type({ map: WorldObject }) objects = new MapSchema<WorldObject>();
   @type({ map: Npc }) npcs = new MapSchema<Npc>();

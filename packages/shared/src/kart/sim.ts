@@ -8,7 +8,7 @@
 export const KART_STEP = 1 / 120;
 
 /** What's underfoot. */
-export type KartGround = "asphalt" | "kerb" | "snow" | "deep" | "ice" | "blackice";
+export type KartGround = "asphalt" | "kerb" | "snow" | "deep" | "ice" | "blackice" | "grass" | "mud";
 export const KART_GROUNDS: Record<KartGround, { grip: number; speed: number }> = {
   asphalt: { grip: 1, speed: 1 },
   kerb: { grip: 1, speed: 0.97 },
@@ -16,6 +16,9 @@ export const KART_GROUNDS: Record<KartGround, { grip: number; speed: number }> =
   deep: { grip: 0.6, speed: 0.4 },
   ice: { grip: 0.14, speed: 1 },
   blackice: { grip: 0.08, speed: 1 },
+  // (off the track on a green day — docs/plan/65, W5 — or soaked)
+  grass: { grip: 0.65, speed: 0.7 },
+  mud: { grip: 0.45, speed: 0.5 },
 };
 
 /** The numbers that make it feel the way it does (the sandbox's sliders tune a copy). */

@@ -13,7 +13,8 @@ import { ploughAt } from "./ploughed.ts";
 // then, parks in its bay by the doors and leaves (it stops for whoever's in
 // its way, and honks); the shuttle runs between the headquarters and the town
 // square — get on at a stop, ride it, get off at the other; a night guard walks
-// the fence and says nothing. In a storm the snow plough comes out: from the
+// the fence and says nothing. When the snow's on the roads the plough comes out (a snowstorm, or snow
+// coming down hard with some lying: docs/plan/65-the-weather.md; never to a downpour): from the
 // town square to the headquarters and back along the shuttle's roads, again
 // while it's still snowing, then home. Positions are the building's coords (shared
 // grounds.ts); people's are the ground floor's (the building's less GROUND_OFFSET).
@@ -29,8 +30,9 @@ const STOP_MS = FAST ? 2500 : 25_000; // the shuttle at a stop
 const BOARD_REACH = 6;
 const GUARD_V = FAST ? 40 : 1.25;
 const PLOUGH_V = FAST ? 120 : 8;
-const PLOUGH_OUT = 0.45; // the storm this strong: the plough comes out
+const PLOUGH_OUT = 0.45; // the snow coming down this hard (or a snowstorm): the plough comes out
 const PLOUGH_ON = 0.25; // …and keeps going round while it's still this strong
+const PLOUGH_LYING = 0.15; // …once there's this much on the ground
 const PLOUGH_REST_MS = 10 * 60 * 1000; // home a while after a storm
 export const RIDING = "ride:shuttle";
 
@@ -285,8 +287,9 @@ registerFeature((room: WorldRoom) => {
         else riders.delete(sid);
       });
       v.riders = riders.size;
-      // ── the plough: out in a storm, round the shuttle's roads, home after it ──
-      const storm = Number(room.state.storm) || 0;
+      // ── the plough: out to the snow on the roads, round the shuttle's roads, home after it ──
+      const w = room.state.weather;
+      const storm = w.kind === "snow" && w.snow > PLOUGH_LYING ? Math.max(Number(room.state.storm) || 0, w.fall) : 0;
       plough.veh.shown = pPhase !== "away";
       if (pPhase === "away") {
         // (out from the town square's end, once the shuttle's not standing there)

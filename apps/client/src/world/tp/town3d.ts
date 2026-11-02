@@ -8,13 +8,15 @@ import {
   PlaneGeometry,
   SphereGeometry,
 } from "three";
-import { place, tinted } from "./campus";
+import { place, tinted as tinted0 } from "./campus";
 
 // The town's street furniture in 3D (docs/plan/33-the-look.md, phase 4; where it stands: shared
 // grounds.ts STREET). Each a few primitives, coloured, merged with the rest; faceted (few sides);
 // snow on whatever has a top. Its front is +z before it's turned.
 
 const SNOW = 0xf2f5f8;
+// (the snow on them the weather's — docs/plan/65, W4: each piece a cap's, pressed onto its top)
+const tinted = (g: BufferGeometry, c: number) => tinted0(g, c, c === SNOW ? 0.36 : undefined);
 const cyl = (r0: number, r1: number, h: number, y: number, c: number, seg = 8) =>
   tinted(new CylinderGeometry(r1, r0, h, seg).translate(0, y + h / 2, 0), c);
 const box = (w: number, h: number, d: number, x: number, y: number, z: number, c: number) =>

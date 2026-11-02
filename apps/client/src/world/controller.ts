@@ -202,6 +202,10 @@ const MENU_STEP: Record<string, number> = {
 const HALF_STRIDE: Record<StepGait, number> = { walk: 0.62, crouch: 0.66, jog: 1.31, sprint: 1.77 };
 /** walked this long (s) with no step of the body's, it isn't stepping: steps by the way gone */
 const QUIET = 0.5;
+// the water's ice walked on from (shared physics/build.ts ICE_WALK: imported, it brings the builder onto
+// the page), and thin under it (docs/plan/65-the-weather.md: a creak, a crack)
+const ICE_WALK = 0.8;
+const THIN_ICE = 0.95;
 /** out on the land, a building's floor underfoot: inside one of the town's (its room rings) */
 const FLOORED = new Set<Floor>(["wood", "tile", "carpet", "earth", "hollow"]);
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
@@ -1338,6 +1342,7 @@ export class WorldController {
     this.driveVehicles(dt);
     this.isolated("cars", () => this.cars?.frame(dt, now));
     this.moveLocal(dt);
+    this.hearAround(dt);
     this.updateLift();
     this.stairsDoors();
     if (hud.get().build.on) {
@@ -1371,6 +1376,22 @@ export class WorldController {
       [this.storm, this.wind] = this.life.weather(dt, room.state.storm, room.state.wind);
       this.tp?.setWeather(this.storm, this.wind);
     }
+    // what lies on the ground (docs/plan/65-the-weather.md): the server's, eased by the view
+    const wxs = room.state.weather;
+    if (wxs) this.life?.underfoot(wxs.snow ?? 0, wxs.wet ?? 0, (wxs.temp ?? 0) < 0, wxs.ice ?? 1);
+    if (wxs)
+      this.tp?.setGround({
+        snow: wxs.snow ?? 0,
+        falling: wxs.kind === "snow" ? Math.max(this.storm, wxs.fall ?? 0) : 0,
+        cloud: wxs.cloud ?? 1,
+        rain: rainOf(wxs, this.storm),
+        sleet: wxs.kind === "sleet",
+        wet: wxs.wet ?? 0,
+        puddles: wxs.puddles ?? 0,
+        temp: wxs.temp ?? -5,
+        thunder: wxs.thunder ?? 0,
+        ice: wxs.ice ?? 1,
+      });
     // the morning fog (docs/plan/64-the-fog.md): the server's, eased by the view
     this.tp?.setFog(room.state.fog ?? 0, room.state.fogWall ?? 0, room.state.fogLift ?? 0);
     // someone high-fives me, hands me something…: turn to them
@@ -1838,18 +1859,8 @@ export class WorldController {
     }
     // (up on something or in the air nobody sits down: a jump over a chair lands on its feet)
     const seat = hgt.up || hgt.z > 0 || this.jumpTrack.kind ? null : this.grid.seatAt(this.me.x, this.me.y);
-    // (outdoors on the land: what's underfoot there — snow, the trail, the ice)
-    const land = this.grid.onLand(this.me.x, this.me.y);
+    // (what's underfoot: on the land snow, the trail, the ice — or a floor's tile)
     const floor = this.myFooting(hgt.z);
-    this.life?.hear(
-      dt,
-      this.me,
-      this.map,
-      land && this.level === 0,
-      this.model?.getDaylight().night ?? 0,
-      this.storm,
-      this.tp?.fogAir ?? 0,
-    );
     // my steps (docs/plan/63-the-steps.md): never in the air, a verb or a move, nor down on hands and
     // knees in the dark (their own sounds: the steps chunk's Footfalls); the stairs' treads as any floor
     this.feet = {
@@ -3141,7 +3152,7 @@ export class WorldController {
     this.tpLoading = true;
     try {
       const [{ ThirdPersonView }, P, items, themes] = await Promise.all([
-        import("./tp/view"),
+        import("./tp/game-view"),
         loadPeople(),
         loadItemArt() as Promise<typeof import("./art/items")>,
         loadThemes(),
@@ -3984,8 +3995,8 @@ export class WorldController {
         this.life = new m.GroundsLife(G);
         if (this.tp) this.tp.prints = this.life.prints;
       });
-      // (the lot's cars, driven: docs/plan/28-the-car.md, in a chunk of their own)
-      void Promise.all([import("./car/cars"), loadChars()]).then(([m]) => {
+      // (the lot's cars, driven: docs/plan/28-the-car.md, in a chunk of their own — through the view's, tp/game-view.ts)
+      void Promise.all([import("./tp/game-view").then((v) => v.loadCars()), loadChars()]).then(([m]) => {
         if (!this.G || this.stopped || this.cars) return;
         this.cars = m.attachCars(this, G);
         this.objectsDirty = true;
@@ -4056,7 +4067,9 @@ export class WorldController {
       : null;
     if (f) return f;
     if (this.grid.onLand(x, y)) return land(on === "land");
-    return this.matAt(x, y) ?? TILE_FOOTING[tileAt(this.map, Math.floor(x), Math.floor(y))] ?? "wood";
+    const t = this.matAt(x, y) ?? TILE_FOOTING[tileAt(this.map, Math.floor(x), Math.floor(y))] ?? "wood";
+    // (the lot's asphalt, open to the sky, wet in the rain as the roads are: docs/plan/65)
+    return t === "asphalt" && this.level === 0 && (this.G?.underfoot().wet ?? 0) > 0.4 ? "wet" : t;
   }
   // my steps' state: may they be heard now, at what gait; where the body isn't stepping them, the
   // way gone since the last
@@ -4086,6 +4099,51 @@ export class WorldController {
       shoe: this.shoe.shoe,
       scuff: !!side && this.stepped.speed < S.SCUFF,
     });
+    // (thin ice under me: the water not long frozen, or thawing — docs/plan/65-the-weather.md)
+    const ice = this.room?.state.weather?.ice ?? 1;
+    if (f === "ice" && ice < THIN_ICE && Math.random() < 0.35 && this.grid.onLand(this.me.x, this.me.y))
+      this.life?.sound.crack(
+        Math.min(1, (THIN_ICE - ice) / (THIN_ICE - ICE_WALK)),
+        this.feet.gait === "crouch" ? 0.4 : 1,
+      );
+  }
+  /** The Grounds' sound round me, every frame — on foot, in a car, on the shuttle, in a lift, in god
+   *  mode. Open to the sky out on the land and on the ground floor's asphalt and concrete (the lot,
+   *  the pavements: as the view's fog has them); under the building's roof on its top floor, its
+   *  windows' rain below. */
+  private hearAround(dt: number) {
+    const land = this.level === 0 && this.grid.onLand(this.me.x, this.me.y);
+    const t = tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y));
+    const top = Math.max(0, ...(this.building.levels ?? []).map((l) => l.index));
+    this.life?.hear(
+      dt,
+      this.me,
+      this.map,
+      land || (this.level === 0 && (t === "a" || t === "c")),
+      this.model?.getDaylight().night ?? 0,
+      this.storm,
+      this.tp?.fogAir ?? 0,
+      { ...this.hearWeather(), roof: this.level >= top ? 1 : 0.45, up: this.tp?.earUp() ?? 0 },
+    );
+  }
+  /** The weather for the Grounds' sound (docs/plan/65-the-weather.md W8): the room's, as the view's. */
+  private hearWeather() {
+    const w = this.room?.state.weather;
+    return {
+      car: !!this.cars?.inCar(),
+      hour: this.model?.getDaylight().hour ?? 12,
+      wx: w
+        ? {
+            rain: rainOf(w, this.storm),
+            sleet: w.kind === "sleet",
+            thunder: w.thunder ?? 0,
+            temp: w.temp ?? -5,
+            wet: w.wet ?? 0,
+            ice: w.ice ?? 1,
+            cloud: w.cloud ?? 1,
+          }
+        : undefined,
+    };
   }
   /** Both my feet down at once out of my own hop (a turn round from a run: the 3D view's onHop). */
   private myHop(hard: number) {
@@ -4168,6 +4226,8 @@ export class WorldController {
     this.stepper?.space(this.spaceHere(f));
     // (the steps' volume an admin set, for everyone: the room's)
     this.stepper?.volume(this.room?.state.stepsVol ?? 1);
+    // (the puddles out there: a splash now and then on a wet way — docs/plan/65)
+    this.stepper?.puddled(this.room?.state.weather?.puddles ?? 0);
     if (dt > 0 && went < 1.5) this.stepped.speed += (went / dt - this.stepped.speed) * Math.min(1, dt * 8);
     this.stepper?.preload(f);
     if (!this.feet.ok || went > 1.5) return;
@@ -4370,4 +4430,9 @@ function interpolate<T extends { t: number; x: number; y: number; z?: number; a?
     }
   }
   return of(buf[buf.length - 1]);
+}
+
+/** How hard it's raining (0 … 1) by the room's weather: what the view draws and the sound plays. */
+function rainOf(w: { kind?: string; fall?: number }, storm: number): number {
+  return w.kind === "rain" || w.kind === "sleet" ? Math.min(1, Math.max(storm, (w.fall ?? 0) * 1.5)) : 0;
 }

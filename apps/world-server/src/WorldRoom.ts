@@ -9,6 +9,7 @@ import {
   bayById,
   CATALOG,
   type ClientMessages,
+  calledSky,
   campusBuilding,
   canPlace,
   carried,
@@ -31,7 +32,9 @@ import {
   footprint,
   GROUND_OFFSET,
   Grid,
+  type Ground,
   getMap,
+  groundAt,
   HEARING_HZ,
   hearingGain,
   homeOf,
@@ -58,28 +61,41 @@ import {
   replacedByTemplate,
   ringOf,
   type ServerMessages,
+  type Sky,
   SPLIT_KINDS,
   type Status,
   setAreasBeyond,
   setOutdoors,
+  skyAt,
   spDay,
   spHour,
   splitAll,
-  stormAt,
+  stepGround,
   studioV1,
   TEMPLATES,
   TICK_HZ,
+  thunderOf,
   topCell,
   upgradeCore,
   upgradeGround,
   upgradeLot,
   validLayout,
+  WEATHER_CALLS,
+  type WeatherCall,
   type WorldObjectDef,
+  weatherFrom,
   windAt,
 } from "@yutopia/shared";
-import { FOG_CALL_MS, hasPower, REMOVE_MINUTES, STORM_CALL_MS } from "@yutopia/shared/admin";
+import {
+  FOG_CALL_MS,
+  GROUND_CALL_MS,
+  hasPower,
+  REMOVE_MINUTES,
+  STORM_CALL_MS,
+  WEATHER_CALL_MS,
+} from "@yutopia/shared/admin";
 import { monitorsToComputers } from "@yutopia/shared/computer";
-import { editsNow, groundsAreaAt, groundsOutdoors } from "@yutopia/shared/grounds";
+import { editsNow, groundsAreaAt, groundsOutdoors, setUnderfoot } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { type Collider, isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
@@ -104,6 +120,7 @@ setAreasBeyond(groundsAreaAt);
 
 // after a snap, what they sent before it reached them (a round trip, over a slow line too)
 const SNAP_QUIET_MS = 1000;
+const WEATHER_SAVE_MS = 3 * 60_000; // the weather saved this often (and after a call, and on shutdown)
 
 // a knock on a room's door: how near its walls (m)
 const KNOCK_REACH = 3;
@@ -390,6 +407,8 @@ export class WorldRoom extends Room<WorldState> {
       this.state.stepsBy = typeof info?.sound?.by === "string" ? info.sound.by : "";
       this.state.stepsAt = Number(info?.sound?.at) || 0;
     }
+    // the weather as it was saved, brought up to now (docs/plan/65-the-weather.md, W2)
+    this.loadWeather(info?.weather, Date.now());
     this.registerMessages();
     this.features = installFeatures(this);
 
@@ -428,6 +447,7 @@ export class WorldRoom extends Room<WorldState> {
     this.clock.setInterval(() => this.pushPresence(true), 60_000);
     this.clock.setInterval(() => this.saveSpots([...this.state.players.values()]), 60_000);
     this.clock.setInterval(() => this.weather(), 1000);
+    this.clock.setInterval(() => void this.saveWeather(), WEATHER_SAVE_MS);
     this.weather();
   }
 
@@ -441,13 +461,103 @@ export class WorldRoom extends Room<WorldState> {
       this.state.stormTo = -1;
       this.state.stormUntil = 0;
     }
-    const want = this.stormSet?.to ?? stormAt(now);
+    const sky = this.weatherTick(now);
+    // (the Grounds' footing and speed by what lies: docs/plan/65, W5)
+    const w = this.state.weather;
+    setUnderfoot({ snow: w.snow, wet: w.wet, freezing: w.temp < 0, ice: w.ice });
+    // (a storm only while it's coming down: a front's gusts, a blizzard or a downpour)
+    const want = this.stormSet?.to ?? sky.storm;
     // (a called-up storm comes up as a scheduled one does, over a minute or so)
     const s = this.state.storm;
     this.state.storm = Math.abs(want - s) < 0.02 ? want : s + Math.sign(want - s) * Math.min(Math.abs(want - s), 0.02);
+    this.state.weather.thunder = thunderOf(sky.kind, this.state.storm, this.state.weather.temp);
     this.state.wind = windAt(now);
     this.clockTick(now);
     this.fogTick(now);
+  }
+
+  // the weather (shared weather.ts, docs/plan/65-the-weather.md): the sky by the schedule or an
+  // admin's call (an hour), eased; the ground stepped by the one rule each second — or, while an
+  // admin's call on it runs, carried to where they asked over two minutes, the rule taking over
+  // after. Saved with the world's settings every few minutes, after a call and on shutdown.
+  private weatherSet: { to: WeatherCall; until: number } | null = null;
+  private groundSet: { to: "snow" | "melt" | "auto"; from: Ground; want: Ground; at: number } | null = null;
+  private weatherAt = 0;
+  private skyNow(now: number): Sky {
+    const base = skyAt(now);
+    return this.weatherSet ? calledSky(this.weatherSet.to, base) : base;
+  }
+  // `at`: the sky at once (a call made now); `ground`: a ground call running finished too (a load)
+  private weatherTick(now = Date.now(), at = false, ground = at): Sky {
+    const w = this.state.weather;
+    if (this.weatherSet && now > this.weatherSet.until) {
+      this.weatherSet = null;
+      w.to = "";
+      w.by = "";
+      w.until = 0;
+    }
+    const sky = this.skyNow(now);
+    const ease = (was: number, want: number, by: number) =>
+      at || Math.abs(want - was) <= by ? want : was + Math.sign(want - was) * by;
+    // (what was falling stays what's falling till it's eased out: the rain going over the 40 s its
+    // fall takes, not gone at once with "clear" over a downpour's fall)
+    const falls = (k: string) => k === "rain" || k === "sleet" || k === "snow";
+    if (at || falls(sky.kind) || !falls(w.kind) || w.fall <= 0.02) w.kind = sky.kind;
+    w.fall = ease(w.fall, sky.fall, 0.02);
+    w.cloud = ease(w.cloud, sky.cloud, 0.02);
+    w.temp = ease(w.temp, sky.temp, 0.05); // (a called snow's cold comes over a minute or two)
+    const dt = Math.min(5000, Math.max(0, now - (this.weatherAt || now)));
+    this.weatherAt = now;
+    const g: Ground = { snow: w.snow, wet: w.wet, puddles: w.puddles, ice: w.ice };
+    let next: Ground;
+    if (this.groundSet) {
+      const c = this.groundSet;
+      const k = ground ? 1 : Math.min(1, (now - c.at) / GROUND_CALL_MS);
+      const e = k * k * (3 - 2 * k);
+      const lerp = (a: number, b: number) => a + (b - a) * e;
+      next = {
+        snow: lerp(c.from.snow, c.want.snow),
+        wet: lerp(c.from.wet, c.want.wet),
+        puddles: lerp(c.from.puddles, c.want.puddles),
+        ice: lerp(c.from.ice, c.want.ice),
+      };
+      if (k >= 1) {
+        this.groundSet = null;
+        w.groundTo = "";
+        w.groundBy = "";
+      }
+    } else next = stepGround(g, { ...sky, temp: w.temp, storm: this.state.storm }, this.state.hour, dt);
+    w.snow = next.snow;
+    w.wet = next.wet;
+    w.puddles = next.puddles;
+    w.ice = next.ice;
+    return sky;
+  }
+  private loadWeather(saved: unknown, now: number) {
+    const { ground, call } = weatherFrom(saved, now);
+    Object.assign(this.state.weather, ground);
+    // (the tests' world: snowed in, the water frozen — their spots on the pond's ice, the winter they
+    // were written in; the weather's own tests take the schedule's: YUTOPIA_WEATHER unset)
+    if (process.env.YUTOPIA_WEATHER === "winter")
+      Object.assign(this.state.weather, { snow: 1, ice: 1, wet: 0, puddles: 0 });
+    if (call) {
+      this.weatherSet = { to: call.to, until: call.until };
+      this.state.weather.to = call.to;
+      this.state.weather.by = call.by;
+      this.state.weather.until = call.until;
+    }
+    this.weatherTick(now, true);
+  }
+  // (a ground call running: where it's taking the ground — the room may close before its two minutes)
+  private saveWeather(): Promise<void> {
+    if (config.offline) return Promise.resolve();
+    const w = this.state.weather;
+    const g = this.groundSet?.want ?? w;
+    const call = this.weatherSet ? { to: this.weatherSet.to, by: w.by, until: this.weatherSet.until } : null;
+    return api
+      .putWeather({ snow: g.snow, wet: g.wet, puddles: g.puddles, ice: g.ice, at: Date.now(), call })
+      .then(() => {})
+      .catch((e) => console.warn("[weather] save", e.message));
   }
 
   // the morning fog (shared weather.ts, docs/plan/64-the-fog.md): the day's by the world's hour,
@@ -682,6 +792,7 @@ export class WorldRoom extends Room<WorldState> {
       await this.saveLayout();
     }
     if (!config.offline) await api.presence([]).catch(() => {});
+    await this.saveWeather();
     for (const f of this.features) f.dispose?.();
   }
 
@@ -941,7 +1052,7 @@ export class WorldRoom extends Room<WorldState> {
       const to = m.storm === null || m.storm === undefined ? null : Math.max(0, Math.min(1, Number(m.storm) || 0));
       this.stormSet = to === null ? null : { to, until: Date.now() + STORM_CALL_MS };
       if (m.now) {
-        this.state.storm = to ?? stormAt(Date.now());
+        this.state.storm = to ?? this.skyNow(Date.now()).storm;
         this.fogTick(Date.now(), true); // (and the fog it blows away, or lets back)
       }
       const by = this.state.players.get(client.sessionId);
@@ -966,6 +1077,62 @@ export class WorldRoom extends Room<WorldState> {
       this.fogTick(Date.now(), !!m.now);
       // (logged when it changes: the same call again — every e2e spec's "clear" — only runs on)
       if (by && (to ?? "") !== was) this.adminLog(by, "fog", null, to ?? "as scheduled");
+    });
+    // the weather (docs/plan/65-the-weather.md, W10): a sky called for an hour, or back to the
+    // schedule (null). Admins only, offline too; logged when it changes; saved at once
+    this.on("mod:weather", (client, m) => {
+      if (!owner(client)) return;
+      const to = m.to === null || m.to === undefined ? null : String(m.to);
+      if (to !== null && !WEATHER_CALLS.includes(to as WeatherCall)) return;
+      const w = this.state.weather;
+      const was = w.to;
+      const now = Date.now();
+      this.weatherSet = to === null ? null : { to: to as WeatherCall, until: now + WEATHER_CALL_MS };
+      const by = this.state.players.get(client.sessionId);
+      w.to = to ?? "";
+      w.by = to === null ? "" : (by?.name ?? "");
+      w.until = this.weatherSet?.until ?? 0;
+      if (m.now) {
+        this.weatherTick(now, true, false);
+        this.state.storm = this.stormSet?.to ?? this.skyNow(now).storm;
+        this.fogTick(now, true); // (and the fog a storm blows away, or lets back)
+      }
+      if ((to ?? "") !== was || m.now) void this.saveWeather();
+      if (by && (to ?? "") !== was) this.adminLog(by, "weather", null, to ?? "as scheduled");
+    });
+    // what lies on the ground: snowed in (the snow and the water's ice to all of it), melted (none,
+    // the ground wet with it) or back to what the weather would have left (the replay) — over two
+    // minutes, the rule running on from there. Admins only
+    this.on("mod:ground", (client, m) => {
+      if (!owner(client)) return;
+      const to = m.to === null || m.to === undefined ? "auto" : String(m.to);
+      if (to !== "snow" && to !== "melt" && to !== "auto") return;
+      const w = this.state.weather;
+      const now = Date.now();
+      const from: Ground = { snow: w.snow, wet: w.wet, puddles: w.puddles, ice: w.ice };
+      const want: Ground =
+        to === "snow"
+          ? { ...from, snow: 1, ice: 1 }
+          : to === "melt"
+            ? { ...from, snow: 0, ice: 0, wet: Math.max(from.wet, 0.7) }
+            : groundAt(now);
+      this.groundSet = { to, from, want, at: now };
+      const by = this.state.players.get(client.sessionId);
+      w.groundTo = to;
+      w.groundBy = by?.name ?? "";
+      if (m.now) this.weatherTick(now, true);
+      // (saved and logged when it changes the ground: the same call again — every e2e spec's "snow" —
+      // only runs on)
+      const moved = (Object.keys(want) as (keyof Ground)[]).some((k) => Math.abs(want[k] - from[k]) > 0.01);
+      if (!moved) return;
+      void this.saveWeather();
+      if (by)
+        this.adminLog(
+          by,
+          "weather",
+          null,
+          to === "snow" ? "snowed in" : to === "melt" ? "melted" : "the ground as the weather has it",
+        );
     });
     // the hour: set (0–24, then the clock runs on from it), or back to São Paulo's
     // (null). Admins only, offline too: it's everyone's night

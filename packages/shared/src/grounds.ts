@@ -1323,11 +1323,13 @@ export const builtFooting = (kind: BuildingKind | undefined): Footing => (kind &
  *  timber, the road's steel) — `way`, the land's footing there. */
 export function whatFooting(what: GroundWhat, way: () => Footing): Footing {
   switch (what) {
+    // (their tops: the snow on them when it lies — W5 — else the roof's sheet, the building's top)
     case "roof":
-    case "building":
     case "motors":
     case "tower":
-      return "snow";
+      return UNDER.snow >= 0.35 ? "snow" : "sheet";
+    case "building":
+      return UNDER.snow >= 0.35 ? "snow" : "concrete";
     case "porch":
     case "kart_stand":
       return "hollow";
@@ -1375,18 +1377,65 @@ export function patchAt(x: number, z: number, cold = 0.5): "slush" | "blackice" 
   return null;
 }
 
-/** What the feet are on out here (docs/plan/63-the-steps.md): the ground's surface, a town
- *  building's floor, a road's slush and black ice, its snow in a storm (`cold`, `cover` as the cars
- *  have them). `under`: on the land itself, under any bridge. */
+/** The weather underfoot (docs/plan/65-the-weather.md, W5): the snow lying, how wet it is, whether
+ *  it's freezing — set by whoever runs the Grounds (the client from the room's weather each frame).
+ *  Nothing set: today's winter, all snow. */
+export interface Underfoot {
+  snow: number;
+  wet: number;
+  freezing: boolean;
+  /** the water's ice (W6): walked on over ICE_WALK (physics/build.ts) — under it, open water */
+  ice: number;
+}
+const UNDER: Underfoot = { snow: 1, wet: 0, freezing: true, ice: 1 };
+export function setUnderfoot(u: Partial<Underfoot>): void {
+  Object.assign(UNDER, u);
+}
+export function underfoot(): Readonly<Underfoot> {
+  return UNDER;
+}
+/** A place's own share of the snow (±0.1, a broad noise ~20 m across: as the drawn snow's drifts —
+ *  it comes in and goes there a little before or after the rest). */
+export const placeShift = (x: number, z: number) => fbm(x / 18, z / 18, 2, 81) * 0.1;
+/** What the land itself is under the weather (W5): the open ground grass till ~0.3 of snow lies
+ *  (mud soaked), snow over it; the woods' floor earth till ~0.35, deep snow over it; a trail earth
+ *  (mud soaked) till ~0.4, packed snow over it; a pavement bare till nearly all of it lies. */
+export function weatheredFooting(s: Exclude<Surface, "floor" | "asphalt">, x: number, z: number): Footing {
+  const lie = UNDER.snow - placeShift(x, z);
+  const soaked = UNDER.wet > 0.6;
+  switch (s) {
+    case "snow":
+      return lie >= 0.3 ? "snow" : soaked ? "mud" : "grass";
+    case "deep":
+      return lie >= 0.35 ? "deep" : soaked ? "mud" : "earth";
+    case "path":
+      return lie >= 0.4 ? "packed" : soaked ? "mud" : "earth";
+    case "walk":
+      return lie >= 0.85 ? "snow" : "concrete";
+    default:
+      return SURFACE_FOOTING[s];
+  }
+}
+
+/** What the feet are on out here (docs/plan/63-the-steps.md): the ground's surface under the
+ *  weather (W5, `underfoot`), a town building's floor, a road's slush and black ice while the snow's
+ *  about, its snow in a storm (`cold`, `cover` as the cars have them), wet in the rain. `under`: on
+ *  the land itself, under any bridge. */
 export function footingAt(x: number, z: number, cold = 0.5, cover = 0, under = false): Footing {
   const s = groundSurfaceAt(x, z, false, under);
   if (s === "floor") return builtFooting(builtAt(x, z)?.kind);
   if (s === "asphalt") {
     if (cover > 0.35) return "snow";
-    const p = patchAt(x, z, cold);
-    if (p) return p;
+    return roadFooting(x, z, cold) ?? (UNDER.wet > 0.4 ? "wet" : "asphalt");
   }
-  return SURFACE_FOOTING[s];
+  return weatheredFooting(s, x, z);
+}
+/** A road's patches under the weather: its slush and black ice only while the snow's about (black
+ *  ice only freezing); none on a green day. */
+export function roadFooting(x: number, z: number, cold = 0.5): "slush" | "blackice" | null {
+  if (UNDER.snow < 0.15) return null;
+  const p = patchAt(x, z, cold);
+  return p === "blackice" && !UNDER.freezing ? "slush" : p;
 }
 
 /** Inside the company's fence. */
@@ -2034,10 +2083,16 @@ export function topTile(tx: number, tz: number): number {
 }
 
 /** Can you walk on tile (tx, tz) (building coords)? */
+/** The water's ice from which it's walked on and driven over (W6): under it the shores are walls
+ *  (physics/build.ts waterWalls) and the paths keep off it. */
+export const ICE_WALK = 0.8;
+
 export function walkableTile(tx: number, tz: number): boolean {
   const cx = Math.floor(tx / CHUNK);
   const cz = Math.floor(tz / CHUNK);
-  return groundsChunk(cx, cz).walk[(tz - cz * CHUNK) * CHUNK + (tx - cx * CHUNK)] === 1;
+  if (groundsChunk(cx, cz).walk[(tz - cz * CHUNK) * CHUNK + (tx - cx * CHUNK)] !== 1) return false;
+  // (open water isn't walked: the pond's, the river's — W6; the ravine's creek is shallow, waded)
+  return UNDER.ice >= ICE_WALK || surfaceTileAt(tx, tz) !== "ice";
 }
 
 /** The ground floor's outdoors (shared grid.ts Outdoors), for a floor whose
@@ -2061,9 +2116,14 @@ export function outdoorsAt(
   };
 }
 
-/** How fast you go on a surface (1: a floor). */
+/** How fast you go on a surface (1: a floor) — by the snow on it (W5: deep snow as slow as ever,
+ *  the woods' floor and the grass bare as a floor, mud a little slower). */
 export function speedOn(s: Surface): number {
-  return s === "deep" ? 0.6 : s === "snow" ? 0.85 : s === "rock" ? 0.7 : 1;
+  if (s === "rock") return 0.7;
+  if (s !== "deep" && s !== "snow" && s !== "path") return 1;
+  const k = Math.min(1, Math.max(0, (UNDER.snow - 0.25) / 0.5));
+  const bare = UNDER.wet > 0.6 && s !== "path" ? 0.92 : 1;
+  return s === "deep" ? bare + (0.6 - bare) * k : s === "snow" ? bare + (0.85 - bare) * k : bare;
 }
 
 // a tile's surface (kept: walking asks every frame)

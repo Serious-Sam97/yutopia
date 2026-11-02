@@ -70,7 +70,9 @@ const COMMANDS: { c: string; arg?: string; does: string }[] = [
   { c: "give", arg: "<item> [n] [who]", does: "into a hand or pockets" },
   { c: "clear", does: "everything you spawned, gone" },
   { c: "hour", arg: "<0–24 | real>", does: "set the world's hour" },
-  { c: "storm", arg: "[on | off | auto]", does: "the weather" },
+  { c: "weather", arg: "[clear | cloudy | rain | snow | storm | auto]", does: "the weather" },
+  { c: "ground", arg: "[snow | melt | auto]", does: "what lies on the ground" },
+  { c: "storm", arg: "[on | off | auto]", does: "a storm alone" },
   { c: "fog", arg: "[mist | fog | thick | off | auto]", does: "the morning fog" },
   { c: "notice", arg: "<text>", does: "a toast to everyone in" },
   { c: "cars", does: "every car back home" },
@@ -235,7 +237,15 @@ function QuickBox({ powers, onClose }: { powers: number; onClose: () => void }) 
       const h = Number(a[0]?.replace(":", "."));
       send("mod:hour", { h: a[0] === "real" || !Number.isFinite(h) ? null : h });
     } else if (c === "storm") send("mod:storm", { storm: a[0] === "off" ? 0 : a[0] === "auto" ? null : 1 });
-    else if (c === "fog") {
+    else if (c === "weather") {
+      const k = (a[0] ?? "auto").toLowerCase();
+      if (!["clear", "cloudy", "rain", "snow", "storm", "auto"].includes(k)) return void toast(t("unknown"), "warn");
+      send("mod:weather", { to: k === "auto" ? null : (k as "clear" | "cloudy" | "rain" | "snow" | "storm") });
+    } else if (c === "ground") {
+      const k = (a[0] ?? "auto").toLowerCase();
+      if (!["snow", "melt", "auto"].includes(k)) return void toast(t("unknown"), "warn");
+      send("mod:ground", { to: k === "auto" ? null : (k as "snow" | "melt") });
+    } else if (c === "fog") {
       const k = (a[0] ?? "fog").toLowerCase();
       if (!["mist", "fog", "thick", "off", "auto"].includes(k)) return void toast(t("unknown"), "warn");
       send("mod:fog", { fog: k === "off" ? "clear" : k === "auto" ? null : (k as "mist" | "fog" | "thick") });

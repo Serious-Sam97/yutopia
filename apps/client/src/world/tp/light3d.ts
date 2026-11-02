@@ -8,11 +8,13 @@ import {
   RGBAFormat,
   ShaderChunk,
   SRGBColorSpace,
+  type Texture,
   Vector2,
 } from "three";
 import { daylight, litCap, outAmbient } from "../art/daylight";
 import { headlights, type LightMap, type LightSource, lightMapFor, lightSig, lightSources } from "../art/light";
 import { skyLeft } from "./sky-left";
+import { kindOf, layerShader, type WxKind } from "./wx3d";
 
 // The iso view's light, in 3D: the same baked light map (lamps and windows
 // ray-marched across the tiles, walls and shut doors blocking them) plus the
@@ -76,8 +78,24 @@ const balanced = (k: string) =>
 
 /** A material that's out under the sky everywhere (the campus): the open sky's balance,
  *  and in the pitch dark only what's left of the sky's sun and fill (lmSkyLeft). */
+/** A façade's ledges: their snow by a mask (white where it lies), shown as the snow lies (docs/plan/65:
+ *  it was painted into the façade). After the layer's (its `wxSnow`). */
+function ledgeShader(shader: { uniforms: Record<string, unknown>; fragmentShader: string }, ledge: Texture) {
+  shader.uniforms.wxLedge = { value: ledge };
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <common>", "#include <common>\nuniform sampler2D wxLedge;")
+    .replace(
+      "#include <emissivemap_fragment>",
+      "diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.95, 0.97), texture2D(wxLedge, vMapUv).r * smoothstep(0.3, 0.75, wxSnow));\n#include <emissivemap_fragment>",
+    );
+}
 export function patchOutdoors(m: Material) {
-  m.onBeforeCompile = (shader) => {
+  // (its own hook kept, called first — and the snow's layer after it: docs/plan/65, W4)
+  const own = m.onBeforeCompile;
+  const kind = kindOf(m);
+  const ledge = m.userData.wxLedge as Texture | undefined;
+  m.onBeforeCompile = (shader, r) => {
+    own.call(m, shader, r);
     shader.uniforms.lmSunOut = litBalance.lmSunOut;
     shader.uniforms.lmFillOut = litBalance.lmFillOut;
     shader.uniforms.lmCap = litBalance.lmCap;
@@ -97,8 +115,11 @@ export function patchOutdoors(m: Material) {
           ),
       )
       .replace("#include <opaque_fragment>", ROLL_OFF);
+    layerShader(shader, kind);
+    if (ledge && kind !== "none") ledgeShader(shader, ledge);
   };
-  m.customProgramCacheKey = () => "yutopia-outdoors";
+  const key = m.customProgramCacheKey;
+  m.customProgramCacheKey = () => `yutopia-outdoors-${kind}${ledge ? "-ledge" : ""}|${key.call(m)}`;
   m.needsUpdate = true;
 }
 
@@ -146,8 +167,14 @@ uniform vec3 landBounce;`,
     // (and what else the material asks for: a road's snow cover — roads3d.ts)
     const extra = m.userData.grounds as { patch: (s: typeof shader) => void; key: string } | undefined;
     extra?.patch(shader);
+    // (the snow's layer over it: docs/plan/65, W4)
+    layerShader(shader, kind);
+    if (ledge && kind !== "none") ledgeShader(shader, ledge);
   };
-  m.customProgramCacheKey = () => `yutopia-grounds${(m.userData.grounds as { key?: string } | undefined)?.key ?? ""}`;
+  const kind = kindOf(m);
+  const ledge = m.userData.wxLedge as Texture | undefined;
+  m.customProgramCacheKey = () =>
+    `yutopia-grounds${(m.userData.grounds as { key?: string } | undefined)?.key ?? ""}-${kind}${ledge ? "-ledge" : ""}`;
   m.needsUpdate = true;
 }
 
@@ -379,9 +406,13 @@ export class Light3 {
       // (and what else the material asks for: the lot's snow cover — roads3d.ts lotCover)
       const extra = m.userData.grounds as { patch: (s: typeof shader) => void; key: string } | undefined;
       extra?.patch(shader);
+      // (the snow's layer on its tiles open to the sky — the lot, the pavements by the doors: trodden
+      // ways — docs/plan/65)
+      layerShader(shader, kind, true);
     };
+    const kind: WxKind = (m.userData.wx as WxKind | undefined) ?? (m.transparent ? "none" : "way");
     m.customProgramCacheKey = () =>
-      `yutopia-lightmap${(m.userData.grounds as { key?: string } | undefined)?.key ?? ""}`;
+      `yutopia-lightmap${(m.userData.grounds as { key?: string } | undefined)?.key ?? ""}-${kind}`;
     m.needsUpdate = true;
   }
 

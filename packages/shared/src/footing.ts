@@ -25,6 +25,11 @@ export const FOOTINGS = [
   "ice",
   "slush",
   "blackice",
+  // (the green's and the rain's — docs/plan/65, W5: the grass, a trail or the woods' floor soaked,
+  // a wet road)
+  "grass",
+  "mud",
+  "wet",
 ] as const;
 export type Footing = (typeof FOOTINGS)[number];
 

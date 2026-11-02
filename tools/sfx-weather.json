@@ -1,0 +1,384 @@
+{
+  "_": "The weather's sound candidates (docs/plan/65-the-weather.md, phase 9): every one CC0 on Freesound, fetched as its HQ preview. `pick`: the one the user picked by ear on /dev/weather-sound (2026-11-02; thunder unpicked: all of its peals); with none, every candidate is made and the game plays the first. kind: steps (cut into single steps, public/sfx/steps), loop (a bed, public/sfx/weather), shot (thunder's peals, public/sfx/weather).",
+  "grass": {
+    "kind": "steps",
+    "from": [
+      {
+        "id": "362250",
+        "user": "DSOADigital",
+        "title": "grass footsteps.mp3",
+        "preview": "https://cdn.freesound.org/previews/362/362250_6115487-hq.mp3",
+        "url": "https://freesound.org/people/DSOADigital/sounds/362250/"
+      },
+      {
+        "id": "463854",
+        "user": "drowsyprincess",
+        "title": "snd_footsteps_grass.wav",
+        "preview": "https://cdn.freesound.org/previews/463/463854_4839973-hq.mp3",
+        "url": "https://freesound.org/people/drowsyprincess/sounds/463854/"
+      },
+      {
+        "id": "521587",
+        "user": "Fission9",
+        "title": "Hiking Boot Footsteps on Grass",
+        "preview": "https://cdn.freesound.org/previews/521/521587_9395330-hq.mp3",
+        "url": "https://freesound.org/people/Fission9/sounds/521587/"
+      }
+    ],
+    "pick": 1
+  },
+  "mud": {
+    "kind": "steps",
+    "from": [
+      {
+        "id": "548384",
+        "user": "Nox_Sound",
+        "title": "Footsteps_Mountain_Boots_Mud_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/548/548384_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/548384/"
+      },
+      {
+        "id": "488068",
+        "user": "BenDrain",
+        "title": "Footsteps_Mud_01.wav",
+        "preview": "https://cdn.freesound.org/previews/488/488068_4763661-hq.mp3",
+        "url": "https://freesound.org/people/BenDrain/sounds/488068/"
+      },
+      {
+        "id": "840086",
+        "user": "Ultra-Edward",
+        "title": "Mud Footsteps",
+        "preview": "https://cdn.freesound.org/previews/840/840086_16786392-hq.mp3",
+        "url": "https://freesound.org/people/Ultra-Edward/sounds/840086/"
+      }
+    ],
+    "pick": 0
+  },
+  "wet": {
+    "kind": "steps",
+    "from": [
+      {
+        "id": "553241",
+        "user": "NachtmahrTV",
+        "title": "Wet Footsteps",
+        "preview": "https://cdn.freesound.org/previews/553/553241_5620304-hq.mp3",
+        "url": "https://freesound.org/people/NachtmahrTV/sounds/553241/"
+      },
+      {
+        "id": "354129",
+        "user": "sean_sd2007",
+        "title": "Wet Footsteps Sidewalk : Metro Pass .wav",
+        "preview": "https://cdn.freesound.org/previews/354/354129_3278999-hq.mp3",
+        "url": "https://freesound.org/people/sean_sd2007/sounds/354129/"
+      },
+      {
+        "id": "326543",
+        "user": "sqeeeek",
+        "title": "WetFootsteps.wav",
+        "preview": "https://cdn.freesound.org/previews/326/326543_4277312-hq.mp3",
+        "url": "https://freesound.org/people/sqeeeek/sounds/326543/"
+      }
+    ],
+    "pick": 2
+  },
+  "puddle": {
+    "kind": "steps",
+    "from": [
+      {
+        "id": "531566",
+        "user": "patchytherat",
+        "title": "puddle footsteps.wav",
+        "preview": "https://cdn.freesound.org/previews/531/531566_5911297-hq.mp3",
+        "url": "https://freesound.org/people/patchytherat/sounds/531566/"
+      },
+      {
+        "id": "553238",
+        "user": "NachtmahrTV",
+        "title": "Walking through puddle",
+        "preview": "https://cdn.freesound.org/previews/553/553238_5620304-hq.mp3",
+        "url": "https://freesound.org/people/NachtmahrTV/sounds/553238/"
+      },
+      {
+        "id": "106395",
+        "user": "j1987",
+        "title": "puddlewalk.wav",
+        "preview": "https://cdn.freesound.org/previews/106/106395_367313-hq.mp3",
+        "url": "https://freesound.org/people/j1987/sounds/106395/"
+      }
+    ],
+    "pick": 2
+  },
+  "rain-light": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "200273",
+        "user": "jmbphilmes",
+        "title": "Rain light 2 (rural)",
+        "preview": "https://cdn.freesound.org/previews/200/200273_2322692-hq.mp3",
+        "url": "https://freesound.org/people/jmbphilmes/sounds/200273/"
+      },
+      {
+        "id": "96729",
+        "user": "Ryding",
+        "title": "Light rain.wav",
+        "preview": "https://cdn.freesound.org/previews/96/96729_981397-hq.mp3",
+        "url": "https://freesound.org/people/Ryding/sounds/96729/"
+      }
+    ],
+    "pick": 1
+  },
+  "rain-heavy": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "200272",
+        "user": "jmbphilmes",
+        "title": "Rain heavy 2 (rural)",
+        "preview": "https://cdn.freesound.org/previews/200/200272_2322692-hq.mp3",
+        "url": "https://freesound.org/people/jmbphilmes/sounds/200272/"
+      },
+      {
+        "id": "640651",
+        "user": "barkenov",
+        "title": "Heavy Rain and gutter.WAV",
+        "preview": "https://cdn.freesound.org/previews/640/640651_2414299-hq.mp3",
+        "url": "https://freesound.org/people/barkenov/sounds/640651/"
+      }
+    ],
+    "pick": 0
+  },
+  "rain-trees": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "678435",
+        "user": "Borgory",
+        "title": "Soft Rain in Forest Raindrops fall on leaves",
+        "preview": "https://cdn.freesound.org/previews/678/678435_801011-hq.mp3",
+        "url": "https://freesound.org/people/Borgory/sounds/678435/"
+      },
+      {
+        "id": "613464",
+        "user": "rifualk",
+        "title": "rain in suburban forest",
+        "preview": "https://cdn.freesound.org/previews/613/613464_2968542-hq.mp3",
+        "url": "https://freesound.org/people/rifualk/sounds/613464/"
+      }
+    ],
+    "pick": 0
+  },
+  "rain-roof": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "242889",
+        "user": "samesamesame",
+        "title": "Rain from Indoors - Perfect loop",
+        "preview": "https://cdn.freesound.org/previews/242/242889_4047489-hq.mp3",
+        "url": "https://freesound.org/people/samesamesame/sounds/242889/"
+      },
+      {
+        "id": "669487",
+        "user": "xkeril",
+        "title": "Rain on roofs",
+        "preview": "https://cdn.freesound.org/previews/669/669487_13504080-hq.mp3",
+        "url": "https://freesound.org/people/xkeril/sounds/669487/"
+      },
+      {
+        "id": "333509",
+        "user": "mmorgaine",
+        "title": "January rain on a roof.aif",
+        "preview": "https://cdn.freesound.org/previews/333/333509_5887515-hq.mp3",
+        "url": "https://freesound.org/people/mmorgaine/sounds/333509/"
+      }
+    ],
+    "pick": 2
+  },
+  "rain-car": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "535870",
+        "user": "Nox_Sound",
+        "title": "Ambiance_Rain_Inside_Car_Close_Roof_Loop_Stereo.wav",
+        "preview": "https://cdn.freesound.org/previews/535/535870_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/535870/"
+      },
+      {
+        "id": "344460",
+        "user": "eRobb4",
+        "title": "Hard Rain on Car Roof.wav",
+        "preview": "https://cdn.freesound.org/previews/344/344460_2435274-hq.mp3",
+        "url": "https://freesound.org/people/eRobb4/sounds/344460/"
+      }
+    ],
+    "pick": 0
+  },
+  "rain-water": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "399281",
+        "user": "Mjeno",
+        "title": "Rain on pond",
+        "preview": "https://cdn.freesound.org/previews/399/399281_3958938-hq.mp3",
+        "url": "https://freesound.org/people/Mjeno/sounds/399281/"
+      },
+      {
+        "id": "572429",
+        "user": "TRP",
+        "title": "180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac",
+        "preview": "https://cdn.freesound.org/previews/572/572429_97550-hq.mp3",
+        "url": "https://freesound.org/people/TRP/sounds/572429/"
+      }
+    ],
+    "pick": 0
+  },
+  "sleet": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "255741",
+        "user": "kvgarlic",
+        "title": "SleetNovember2014.WAV",
+        "preview": "https://cdn.freesound.org/previews/255/255741_1050391-hq.mp3",
+        "url": "https://freesound.org/people/kvgarlic/sounds/255741/"
+      },
+      {
+        "id": "498232",
+        "user": "leo153",
+        "title": "freezing_rain.wav",
+        "preview": "https://cdn.freesound.org/previews/498/498232_2535988-hq.mp3",
+        "url": "https://freesound.org/people/leo153/sounds/498232/"
+      }
+    ],
+    "pick": 0
+  },
+  "birds": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "151635",
+        "user": "wehrwolf78",
+        "title": "birdsong",
+        "preview": "https://cdn.freesound.org/previews/151/151635_2251064-hq.mp3",
+        "url": "https://freesound.org/people/wehrwolf78/sounds/151635/"
+      },
+      {
+        "id": "390564",
+        "user": "dadshb1489",
+        "title": "Nature  Birdsong.wav",
+        "preview": "https://cdn.freesound.org/previews/390/390564_7346000-hq.mp3",
+        "url": "https://freesound.org/people/dadshb1489/sounds/390564/"
+      },
+      {
+        "id": "573283",
+        "user": "Lord_Tarkus",
+        "title": "Birds in the morning.wav",
+        "preview": "https://cdn.freesound.org/previews/573/573283_429945-hq.mp3",
+        "url": "https://freesound.org/people/Lord_Tarkus/sounds/573283/"
+      }
+    ],
+    "pick": 2
+  },
+  "river": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "231536",
+        "user": "VKProduktion",
+        "title": "Creek 06 (loop)",
+        "preview": "https://cdn.freesound.org/previews/231/231536_4034520-hq.mp3",
+        "url": "https://freesound.org/people/VKProduktion/sounds/231536/"
+      },
+      {
+        "id": "786172",
+        "user": "sound368",
+        "title": "Water Stream 2",
+        "preview": "https://cdn.freesound.org/previews/786/786172_4846901-hq.mp3",
+        "url": "https://freesound.org/people/sound368/sounds/786172/"
+      },
+      {
+        "id": "237328",
+        "user": "Soundkrampf",
+        "title": "Creek",
+        "preview": "https://cdn.freesound.org/previews/237/237328_3435865-hq.mp3",
+        "url": "https://freesound.org/people/Soundkrampf/sounds/237328/"
+      }
+    ],
+    "pick": 1
+  },
+  "drips": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "249927",
+        "user": "launemax",
+        "title": "gully with water drips",
+        "preview": "https://cdn.freesound.org/previews/249/249927_389377-hq.mp3",
+        "url": "https://freesound.org/people/launemax/sounds/249927/"
+      },
+      {
+        "id": "334477",
+        "user": "Motmant",
+        "title": "Exterior After Rain Ambience",
+        "preview": "https://cdn.freesound.org/previews/334/334477_3090365-hq.mp3",
+        "url": "https://freesound.org/people/Motmant/sounds/334477/"
+      }
+    ],
+    "pick": 0
+  },
+  "thunder-near": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "476739",
+        "user": "elmoustachio",
+        "title": "thunder 5 dry.wav",
+        "preview": "https://cdn.freesound.org/previews/476/476739_10180177-hq.mp3",
+        "url": "https://freesound.org/people/elmoustachio/sounds/476739/"
+      },
+      {
+        "id": "744722",
+        "user": "Emulius",
+        "title": "Thunder 07",
+        "preview": "https://cdn.freesound.org/previews/744/744722_10934718-hq.mp3",
+        "url": "https://freesound.org/people/Emulius/sounds/744722/"
+      },
+      {
+        "id": "194364",
+        "user": "Dave Welsh",
+        "title": "Thunder Clap OWB KY 441x16.wav",
+        "preview": "https://cdn.freesound.org/previews/194/194364_1985044-hq.mp3",
+        "url": "https://freesound.org/people/Dave%20Welsh/sounds/194364/"
+      }
+    ]
+  },
+  "thunder-far": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "243782",
+        "user": "bastipictures",
+        "title": "peal of thunder - distant",
+        "preview": "https://cdn.freesound.org/previews/243/243782_997601-hq.mp3",
+        "url": "https://freesound.org/people/bastipictures/sounds/243782/"
+      },
+      {
+        "id": "347562",
+        "user": "mikala_oidua",
+        "title": "Distant Thunder Clap_Gentle.wav",
+        "preview": "https://cdn.freesound.org/previews/347/347562_5481182-hq.mp3",
+        "url": "https://freesound.org/people/mikala_oidua/sounds/347562/"
+      },
+      {
+        "id": "238743",
+        "user": "csengeri",
+        "title": "Distant thunder in suburban area",
+        "preview": "https://cdn.freesound.org/previews/238/238743_197070-hq.mp3",
+        "url": "https://freesound.org/people/csengeri/sounds/238743/"
+      }
+    ]
+  }
+}

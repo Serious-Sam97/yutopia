@@ -8,9 +8,11 @@ import {
   heightAt,
   LAMPS,
   MOTORS,
-  patchAt,
+  roadFooting,
   surfaceTileAt,
   treesIn,
+  underfoot,
+  weatheredFooting,
 } from "../grounds.ts";
 import { lotBanksOf, lotLayout } from "../lot.ts";
 import type { Ground } from "./grip.ts";
@@ -23,10 +25,16 @@ import type { CarSpec } from "./specs.ts";
 // fence and the edge of the world, the parked cars in town. Plus a test pad
 // (the sandbox's and the tests'): a strip of every surface, a skid pan, a hill.
 
-/** The Grounds' surface for a car: its surface, the roads' patches. */
+/** The Grounds' surface for a car: its surface under the weather (docs/plan/65, W5: the grass and
+ *  the earth bare, mud soaked, the snow's when it lies), the roads' patches while the snow's about,
+ *  wet in the rain. */
 export function groundAt(x: number, z: number, cold = 0.5): Ground {
   const s = surfaceTileAt(Math.floor(x), Math.floor(z));
-  if (s === "asphalt") return patchAt(x, z, cold) ?? "asphalt";
+  if (s === "asphalt") return roadFooting(x, z, cold) ?? (underfoot().wet > 0.4 ? "wet" : "asphalt");
+  if (s === "snow" || s === "deep" || s === "path") {
+    const f = weatheredFooting(s, x, z);
+    return f === "packed" ? "path" : f === "grass" || f === "earth" || f === "mud" ? f : s;
+  }
   return s;
 }
 

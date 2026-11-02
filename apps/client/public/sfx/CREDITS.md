@@ -35,3 +35,24 @@
   41-snow-shoe-steps); `packed-*` *Walking in snow (42 steps, via qubodup)* by Corsica_S
   (OpenGameArt, 42-snow-and-gravel-footsteps); `ice-*` *Walking on Crunchy Ice (01/30/2014)* by
   courter (Freesound 447822); `slush-*` *Footsteps on slush* by xkeril (Freesound 611278).
+- The weather's (docs/plan/65-the-weather.md, phase 9), picked by ear on `/dev/weather-sound`
+  2026-11-02 from 41 candidates. All CC0 from Freesound (its HQ previews), made by
+  `tools/sfx-weather.mjs` from `tools/sfx-weather.json`: the steps cut into single steps by onset
+  and levelled to about −22 dB, mono 80 kb/s; the beds their steadiest 30 s, −24 dB RMS, stereo
+  96 kb/s (the game crossfades the seam); thunder's peals cut and peaking at −3 dB, all six played.
+  - `steps/grass-*`: *snd_footsteps_grass.wav* by drowsyprincess (Freesound 463854).
+  - `steps/mud-*`: *Footsteps_Mountain_Boots_Mud_Mono.wav* by Nox_Sound (Freesound 548384).
+  - `steps/wet-*`: *WetFootsteps.wav* by sqeeeek (Freesound 326543).
+  - `steps/puddle-*`: *puddlewalk.wav* by j1987 (Freesound 106395).
+  - `weather/rain-light.mp3`: *Light rain.wav* by Ryding (Freesound 96729).
+  - `weather/rain-heavy.mp3`: *Rain heavy 2 (rural)* by jmbphilmes (Freesound 200272).
+  - `weather/rain-trees.mp3`: *Soft Rain in Forest Raindrops fall on leaves* by Borgory (Freesound 678435).
+  - `weather/rain-roof.mp3`: *January rain on a roof.aif* by mmorgaine (Freesound 333509).
+  - `weather/rain-car.mp3`: *Ambiance_Rain_Inside_Car_Close_Roof_Loop_Stereo.wav* by Nox_Sound (Freesound 535870).
+  - `weather/rain-water.mp3`: *Rain on pond* by Mjeno (Freesound 399281).
+  - `weather/sleet.mp3`: *SleetNovember2014.WAV* by kvgarlic (Freesound 255741).
+  - `weather/birds.mp3`: *Birds in the morning.wav* by Lord_Tarkus (Freesound 573283).
+  - `weather/river.mp3`: *Water Stream 2* by sound368 (Freesound 786172).
+  - `weather/drips.mp3`: *gully with water drips* by launemax (Freesound 249927).
+  - `weather/thunder-near-*`: `a` *thunder 5 dry.wav* by elmoustachio (Freesound 476739); `b` *Thunder 07* by Emulius (Freesound 744722); `c` *Thunder Clap OWB KY 441x16.wav* by Dave Welsh (Freesound 194364).
+  - `weather/thunder-far-*`: `a` *peal of thunder - distant* by bastipictures (Freesound 243782); `b` *Distant Thunder Clap_Gentle.wav* by mikala_oidua (Freesound 347562); `c` *Distant thunder in suburban area* by csengeri (Freesound 238743).

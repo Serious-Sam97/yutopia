@@ -130,12 +130,13 @@ import { type Mats as CharMats, Person3D } from "./person3d";
 import { BrowserPhysics } from "./physics3d";
 import { Post3 } from "./post3d";
 import { Shroud3 } from "./shroud3d";
-import { fogFor, Surroundings, type Themes } from "./sky";
+import { fogFor, type Ground, Surroundings, type Themes } from "./sky";
 import { type StairStop3, Stairs3, stairMats } from "./stairs3d";
 import { heldPoolBall, type TableScene3, TablesIn3D } from "./tables3d";
 import { tailPatch } from "./tail-glow";
 import { streetGeometry } from "./town3d";
 import { busModel, ploughModel } from "./vehicles3d";
+import { wx, wxNow } from "./wx3d";
 
 type People = NonNullable<ReturnType<typeof people>>;
 
@@ -501,6 +502,17 @@ export class ThirdPersonView {
     this.wind = wind;
     this.around.setWeather(storm, wind);
   }
+  /** What lies on the ground (the room's weather, docs/plan/65): the snow lying and how hard it's
+   *  snowing now — the snow's layer (wx3d.ts) and the roads follow it. */
+  setGround(g: Ground) {
+    const { falling, temp } = g;
+    this.around.setGround(g);
+    // (a breath shows in the cold air only: none over 8 °C — W9)
+    Person3D.airCold = temp === undefined ? 1 : Math.min(1, Math.max(0, (8 - temp) / 8));
+    this.snowing = falling;
+  }
+  /** How hard it's snowing (the room's weather; 1 till it's said: a still's). */
+  private snowing = 1;
   private wind = 0;
   /** The morning fog (the room's state, docs/plan/64-the-fog.md): its haze and its wall, 0 … 1,
    *  and how far it's lifted burning off; eased here (a called one comes at once). */
@@ -2724,6 +2736,7 @@ void main() {
     // (Lowest, a weak CPU: the snow half as thick, the land built in fewer frames)
     const lowest = this.quality === "lowest";
     this.around.campus.lite = lowest;
+    this.around.quality = this.quality;
     if (this.around.grounds) {
       this.around.grounds.lite = lowest;
       this.around.grounds.fadeOff = !!this.god;
@@ -2793,7 +2806,11 @@ void main() {
         // (the light on them; out on the land, past the floor's light map, as a tint of their own)
         const c = this.lightOn(b, me);
         const L = landLight.value;
-        p3.setTint(this.onLand(b.x, b.y) ? this.ownTint.setRGB(c.r / L.r, c.g / L.g, c.b / L.b) : null);
+        // (and wet from the rain: darker, clothes and hair — docs/plan/65 W7)
+        const wk = 1 - 0.32 * this.wetOf(b, dt);
+        p3.setTint(
+          this.onLand(b.x, b.y) ? this.ownTint.setRGB((wk * c.r) / L.r, (wk * c.g) / L.g, (wk * c.b) / L.b) : null,
+        );
         if (b.id === meId) mySeat = seat3;
         p3.gunFx = b.id === meId ? this.myGun : this.otherGun(b, dt);
         p3.update(
@@ -3820,8 +3837,14 @@ void main() {
     const fog = this.scene.fog as Fog;
     // (god mode's camera, high over the land: the fog that far further off, and so the lens)
     const up = this.god ? this.god.dist * this.gcMix : 0;
-    fog.near = f.near + up + (4 - f.near) * s;
-    fog.far = f.far + up * 1.6 + (55 - f.far) * s;
+    // (the weather's air: further on a clear day, closer in the rain — docs/plan/65, W3)
+    const near = f.near + (210 - f.near) * wxNow.clear + (40 - f.near) * wxNow.rain;
+    const fogFar = f.far + (1150 - f.far) * wxNow.clear + (420 - f.far) * wxNow.rain;
+    fog.near = near + up + (4 - near) * s;
+    fog.far = fogFar + up * 1.6 + (55 - fogFar) * s;
+    // (the far ridges: the haze the air has at 700 m, a clear day's kept off them as it was)
+    const at = Math.min(1, Math.max(0, (700 - fog.near) / Math.max(1, fog.far - fog.near)));
+    wx.wxHaze.value = 0.92 * at * (1 - wxNow.clear);
     const mist = this.morningFog(dt, me, up);
     // (in the wall nothing past its reach is seen: the camera sees no further, the sky brought in)
     const far = farFor(mist.wall, Math.max(f.cameraFar, up * 2.5), mf.mfV.value);
@@ -3900,8 +3923,9 @@ void main() {
     // (the ink takes the haze at eye height as 0.71 of its floor's: ink3d.ts, fog3d.ts inkLeft)
     const atCam = hazeDensity(haze) * Math.exp(-Math.max(0, camY - mf.mfY0.value) / mf.mfH.value);
     this.post?.setFog(inside || lifted ? 0 : atCam / 0.71, inside ? 0 : wall, mf.mfV.value);
-    // (the sun itself dimmed: every surface's shadows go, the ice's too; the open sky's fill up)
-    const flat = flatLight(wall);
+    // (the sun itself dimmed: every surface's shadows go, the ice's too; the open sky's fill up — and
+    // in the rain about half as much: no crisp sun shadows in a downpour. docs/plan/65)
+    const flat = flatLight(Math.max(wall, 0.55 * wxNow.rain));
     this.sun.intensity = this.sunIntensity * flat.sun;
     litBalance.lmFillOut.value = this.fillOut * flat.fill;
     mf.mfFlat.value = 1 - flat.sun;
@@ -3955,19 +3979,47 @@ void main() {
     mf.mfBoxMax.value.set(r.x1 + 0.35, z + STOREY, r.y1 + 0.35);
   }
 
+  /** How high the camera — the ear — is over the land under it (m): the weather's ground sounds fade
+   *  as it goes up (docs/plan/65, W8). 0 with no land about. */
+  earUp(): number {
+    const g = this.around.grounds;
+    if (!g) return 0;
+    const c = this.camera.position;
+    const o = wx.wxOff.value;
+    return Math.max(0, c.y - (g.heightAt(c.x - o.x, c.z - o.z) + o.y));
+  }
+
+  // Wet from the rain (docs/plan/65, W7): soaked over three minutes or so out in it (faster in a
+  // downpour), dried in four under cover or indoors, slower out in the open once it's stopped. Each
+  // viewer keeps its own count.
+  private wetOn = new Map<string, number>();
+  private wetOf(b: Body3, dt: number): number {
+    const sheltered = !!b.busy && (b.busy.startsWith("ride:") || b.busy.startsWith("drive:"));
+    const out = !sheltered && this.underSky(b.x, b.y);
+    const rain = wxNow.rain;
+    const was = this.wetOn.get(b.id) ?? (out ? rain : 0);
+    const rate = out && rain > 0.02 ? (0.4 + rain) / 180 : out ? -1 / 900 : -1 / 240;
+    const k = Math.max(0, Math.min(1, was + rate * dt));
+    this.wetOn.set(b.id, k);
+    return k;
+  }
   // Snow settling on people out under the sky (docs/plan/33-the-look.md): their shoulders and
-  // heads white after six minutes or so out (a minute and a half in a storm), gone again in a
-  // minute and a half indoors (or in a car, on the shuttle). Each viewer keeps its own count.
+  // heads white after six minutes or so out in a steady fall (a minute and a half in a storm), gone
+  // again in a minute and a half indoors (or in a car, on the shuttle) — and out under the sky in
+  // ten when it's stopped (docs/plan/65: only while it snows). Each viewer keeps its own count.
   private snowOn = new Map<string, number>();
   private snowFall(b: Body3, p3: Person3D, dt: number, hidden: boolean) {
     if (!Person3D.snowMat) {
       Person3D.snowMat = new MeshLambertMaterial({ color: 0xf2f5f8 });
+      Person3D.snowMat.userData.wx = "none"; // (it is snow: no dusting on it — wx3d.ts)
       patchGrounds(Person3D.snowMat);
     }
     const sheltered = !!b.busy && (b.busy.startsWith("ride:") || b.busy.startsWith("drive:"));
     const out = !sheltered && this.underSky(b.x, b.y);
     const was = this.snowOn.get(b.id) ?? 0;
-    const k = Math.max(0, Math.min(1, was + (out ? ((1 + 3 * this.storm) * dt) / 360 : -dt / 90)));
+    const falling = Math.min(1, this.snowing * 1.5);
+    const rate = !out ? -1 / 90 : falling > 0.02 ? ((1 + 3 * this.storm) * falling) / 360 : -1 / 600;
+    const k = Math.max(0, Math.min(1, was + rate * dt));
     this.snowOn.set(b.id, k);
     p3.snowK = hidden ? 0 : k;
     p3.updateSnow();
@@ -4450,8 +4502,10 @@ void main() {
     return this.puffTex;
   }
 
-  // breath in the cold: a little cloud now and then from everyone out on the land
+  // breath in the cold: a little cloud now and then from everyone out on the land (when the air's
+  // cold: under 8 °C — docs/plan/65 W9)
   private breathe(bodies: Body3[]) {
+    if (Person3D.airCold < 0.05) return;
     const now = this.time;
     const cam = this.camera.position;
     for (const b of bodies) {

@@ -103,10 +103,11 @@ test("a tree's trunk stands on the land at the tree", () => {
   assert.ok(trunk.s.t === "cyl" && trunk.s.y0 < terrainAt(t.x, t.z) && trunk.s.y0 > terrainAt(t.x, t.z) - 0.5);
 });
 
-test("the pitched roofs: steps a body walks up (≤ 0.2), none over the drawn slope and its snow, up to the ridge", async () => {
+test("the pitched roofs: steps a body walks up (≤ 0.2), none over the drawn slope (bare), up to the ridge", async () => {
   const { BUILDINGS, CHUNK: C, groundAt: gAt } = await import("../grounds.ts");
   const { groundSolidsIn: inChunk } = await import("./grounds.ts");
-  // (the drawn slope: tp/grounds3d.ts `pitched` — over, rise, ridge along x — and its 0.24 of snow)
+  // (the drawn slope: tp/grounds3d.ts `pitched` — over, rise, ridge along x — bare: its snow's the
+  // weather's, stood a little in — docs/plan/65)
   const look: Record<string, { over: number; rise: number }> = {
     church: { over: 0.5, rise: 6 },
     farmhouse: { over: 0.55, rise: 3 },
@@ -119,7 +120,7 @@ test("the pitched roofs: steps a body walks up (≤ 0.2), none over the drawn sl
     const eave = y0 + { church: 6, farmhouse: 6.2, boathouse: 3.2 }[b.kind as "church"];
     const [v0, v1] = alongX ? [b.z0, b.z1] : [b.x0, b.x1];
     const half = (v1 - v0) / 2;
-    const drawn = (v: number) => eave + (rise * (half + over - Math.abs(v - (v0 + v1) / 2))) / (half + over) + 0.24;
+    const drawn = (v: number) => eave + (rise * (half + over - Math.abs(v - (v0 + v1) / 2))) / (half + over);
     const roofs = [];
     for (let cx = Math.floor(b.x0 / C) - 1; cx <= Math.floor(b.x1 / C) + 1; cx++)
       for (let cz = Math.floor(b.z0 / C) - 1; cz <= Math.floor(b.z1 / C) + 1; cz++)
@@ -135,7 +136,7 @@ test("the pitched roofs: steps a body walks up (≤ 0.2), none over the drawn sl
       assert.ok(s.y + s.hy <= Math.min(drawn(a), drawn(c)) + 0.05, `${b.key}: a step over the roof`);
       top = Math.max(top, s.y + s.hy);
     }
-    assert.ok(eave + rise + 0.24 - top < 0.25, `${b.key}: up to its ridge (${top} of ${eave + rise})`);
+    assert.ok(eave + rise - top < 0.25, `${b.key}: up to its ridge (${top} of ${eave + rise})`);
   }
 });
 
@@ -317,7 +318,7 @@ test("the hall's pediment: steps ≤ 0.2 under its drawn slopes, up to its peak"
   const fz = b.face === "n" ? b.z0 : b.z1;
   const xm = (b.x0 + b.x1) / 2;
   const y0 = groundAt(xm, (b.z0 + b.z1) / 2);
-  const drawn = (x: number) => y0 + 4.8 + (1.5 * (3.3 - Math.abs(x - xm))) / 3.3 + 0.06;
+  const drawn = (x: number) => y0 + 4.8 + (1.5 * (3.3 - Math.abs(x - xm))) / 3.3;
   const steps = chunksRound(xm, fz).filter(
     (g) => g.what === "building" && g.s.t === "box" && Math.abs(g.s.x - xm) < 3.4 && bottom(g.s) >= y0 + 4.8 - 1e-6,
   );
@@ -332,7 +333,7 @@ test("the hall's pediment: steps ≤ 0.2 under its drawn slopes, up to its peak"
     );
     peak = Math.max(peak, top(s));
   }
-  assert.ok(y0 + 6.36 - peak < 0.2, `to ${peak - y0}`);
+  assert.ok(y0 + 6.3 - peak < 0.2, `to ${peak - y0}`);
 });
 
 test("lamps and street things on a pavement stand on it (pavedAt), off it on the ground", async () => {

@@ -177,6 +177,10 @@ class Sound {
       slush: [1200, 0.09, 0.1],
       ice: [3600, 0.045, 0.025],
       blackice: [3600, 0.045, 0.025],
+      // (the green's and the rain's: a soft brush, a squelch, a splashy scuff)
+      grass: [500, 0.06, 0.07],
+      mud: [400, 0.08, 0.12],
+      wet: [1300, 0.09, 0.1],
     };
     const [freq, peak, len] = spec[floor];
     const loud = (peak * gain) / 0.7;

@@ -88,11 +88,13 @@ import {
   TorusGeometry,
   Vector3,
 } from "three";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { hexOf, houseLook, shopLook } from "../grounds-look";
 import {
+  BARE_LEAVES,
+  BIRCH_LEAVES,
   bareTree3,
   carGeometry,
+  crowned,
   facadeCanvases,
   G,
   lettersCanvas,
@@ -118,9 +120,10 @@ import {
   wayDressing,
 } from "./roads3d";
 import type { Themes } from "./sky";
-import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, wobble } from "./snow3d";
+import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, snowBox, wobble } from "./snow3d";
 import { motorsForecourt } from "./spot3d";
 import { signFaces, streetGeometry } from "./town3d";
+import { AT, atOf, BURIED, landAround, mergeGeometries, smoothAt, snowShadow, tagged, type WxKind, wx } from "./wx3d";
 
 // the change's show: the old circuit whitens to the snow's colour (docs/plan/47-the-track-changer.md)
 const SHOW_SNOW = new Color("#eef2f5");
@@ -241,31 +244,47 @@ function tex(c: HTMLCanvasElement, repeat = true): CanvasTexture {
   t.anisotropy = 8;
   return t;
 }
-// Packed snow on a trail: trodden grey-white, boot prints, a few dark wet spots.
+// A trail (docs/plan/65, W3): packed earth, gravel, two ruts worn along it, grass at its edges —
+// the snow on it the weather's.
 function trailCanvas(T: Themes): HTMLCanvasElement {
   const { c, g } = T.canvas(128, 512);
   const r = T.rng(301);
-  g.fillStyle = "#e3e2de";
+  g.fillStyle = "#8a7860";
   g.fillRect(0, 0, 128, 512);
-  for (let i = 0; i < 140; i++) {
-    const x = 18 + r() * 92;
+  // the earth's patches, lighter and darker
+  for (let i = 0; i < 90; i++) {
+    const x = r() * 128;
     const y = r() * 512;
-    g.fillStyle = `rgba(150,150,150,${0.08 + r() * 0.12})`;
-    g.beginPath();
-    g.ellipse(x, y, 4 + r() * 3, 8 + r() * 4, (r() - 0.5) * 0.5, 0, Math.PI * 2);
-    g.fill();
+    g.fillStyle = r() < 0.5 ? `rgba(160,146,120,${0.15 + r() * 0.2})` : `rgba(80,66,48,${0.12 + r() * 0.18})`;
+    for (const oy of [-512, 0, 512]) {
+      g.beginPath();
+      g.ellipse(x, y + oy, 6 + r() * 14, 10 + r() * 22, 0, 0, Math.PI * 2);
+      g.fill();
+    }
   }
-  // soft untrodden edges
+  // the ruts, worn along it
+  for (const x of [44, 84]) {
+    g.fillStyle = "rgba(72,58,42,0.28)";
+    g.fillRect(x - 7, 0, 14, 512);
+  }
+  // gravel: small stones, light and dark
+  for (let i = 0; i < 2400; i++) {
+    const v = r();
+    g.fillStyle = v < 0.5 ? `rgba(196,188,170,${0.3 + r() * 0.4})` : `rgba(60,52,42,${0.25 + r() * 0.35})`;
+    g.fillRect(r() * 128, r() * 512, 1 + r() * 2, 1 + r() * 2);
+  }
+  // its edges: darker, softer earth
   for (const x0 of [0, 128]) {
-    const grd = g.createLinearGradient(x0, 0, x0 === 0 ? 24 : 104, 0);
-    grd.addColorStop(0, "rgba(246,248,250,1)");
-    grd.addColorStop(1, "rgba(246,248,250,0)");
+    const grd = g.createLinearGradient(x0, 0, x0 === 0 ? 22 : 106, 0);
+    grd.addColorStop(0, "rgba(96,80,58,0.8)");
+    grd.addColorStop(1, "rgba(96,80,58,0)");
     g.fillStyle = grd;
-    g.fillRect(x0 === 0 ? 0 : 104, 0, 24, 512);
+    g.fillRect(x0 === 0 ? 0 : 106, 0, 22, 512);
   }
   return c;
 }
-// A pavement: concrete slabs under a dusting, a kerb on the street side (u = 0).
+// A pavement: concrete slabs, a little stained, a kerb on the street side (u = 0) — the dusting on it
+// the weather's.
 function walkCanvas(T: Themes): HTMLCanvasElement {
   const { c, g } = T.canvas(128, 256);
   const r = T.rng(303);
@@ -280,7 +299,7 @@ function walkCanvas(T: Themes): HTMLCanvasElement {
     g.stroke();
   }
   for (let i = 0; i < 90; i++) {
-    g.fillStyle = `rgba(246,248,250,${0.4 + r() * 0.5})`;
+    g.fillStyle = `rgba(120,118,112,${0.05 + r() * 0.08})`;
     g.beginPath();
     g.ellipse(r() * 128, r() * 256, 6 + r() * 20, 3 + r() * 8, 0, 0, Math.PI * 2);
     g.fill();
@@ -565,7 +584,13 @@ export function pineGeometry(
       sp.setXYZ(i, x * (0.85 + 0.25 * j), sp.getY(i) - (j - 0.8) * 0.2, z * (0.85 + 0.25 * j));
     }
     sg.computeVertexNormals();
-    parts.push(tinted(sg, 0xeef2f5));
+    // (the weather's: pressed onto the tier's slope under it, each tier in at its own)
+    const surf = (x: number, z: number) => y0 + h - (h * Math.hypot(x, z)) / rad;
+    parts.push(
+      tagged(tinted(sg, 0xeef2f5), AT.cone[0] + (AT.cone[1] - AT.cone[0]) * ((t * 0.618 + 0.3) % 1), (x, y, z) =>
+        Math.max(0, y - surf(x, z) + 0.05),
+      ),
+    );
   }
   parts.push(tinted(new CylinderGeometry(0.16, 0.3, 2.2, 7).translate(0, 1.1, 0), 0x3a2e26));
   const m = mergeGeometries(parts, false);
@@ -577,7 +602,9 @@ export function farPineGeometry(): BufferGeometry {
   const parts = [
     tinted(new ConeGeometry(2.4, 5.5, 6).translate(0, 4.2, 0), 0x26332d),
     tinted(new ConeGeometry(1.6, 4.4, 6).translate(0, 7.6, 0), 0x2d3b34),
-    tinted(new ConeGeometry(1.25, 1.6, 6).translate(0, 9.0, 0), 0xe2e8ec),
+    tagged(tinted(new ConeGeometry(1.25, 1.6, 6).translate(0, 9.0, 0), 0xe2e8ec), 0.48, (x, y, z) =>
+      Math.max(0, y - (9.8 - (4.4 * Math.hypot(x, z)) / 1.6) + 0.04),
+    ),
     tinted(new CylinderGeometry(0.2, 0.3, 1.6, 4).translate(0, 0.8, 0), 0x3a2e26),
   ];
   const m = mergeGeometries(parts, false);
@@ -794,13 +821,15 @@ export class Grounds3 {
   }
   // (one of the shared pictures', or none: kept with them; else with this one's own pictures)
   private ownLambert = new Map<string, MeshLambertMaterial>();
-  private lambert(hex = 0xffffff, map?: Texture, vertex = true): MeshLambertMaterial {
-    const key = `${hex}|${map?.uuid ?? ""}|${vertex}`;
+  // (`wx`: what it is to the snow's dusting — wx3d.ts)
+  private lambert(hex = 0xffffff, map?: Texture, vertex = true, wx?: WxKind): MeshLambertMaterial {
+    const key = `${hex}|${map?.uuid ?? ""}|${vertex}|${wx ?? ""}`;
     const shared = !map || Object.values(this.sh.ts).includes(map as CanvasTexture);
     const cache = shared ? this.sh.lambert : this.ownLambert;
     let m = cache.get(key);
     if (!m) {
       m = new MeshLambertMaterial({ color: hex, map, vertexColors: vertex });
+      if (wx) m.userData.wx = wx;
       if (shared) this.sh.disp.push(m);
       else this.keep(m);
       cache.set(key, m);
@@ -808,7 +837,7 @@ export class Grounds3 {
     return m;
   }
   private add(g: BufferGeometry, m: Material, shadow: "both" | "cast" | "receive" | "none" = "both"): Mesh {
-    const mesh = new Mesh(g, m);
+    const mesh = snowShadow(new Mesh(g, m));
     mesh.castShadow = shadow === "both" || shadow === "cast";
     mesh.receiveShadow = shadow === "both" || shadow === "receive";
     this.root.add(mesh);
@@ -853,7 +882,7 @@ export class Grounds3 {
   private terrain() {
     const { cx, cz, radius } = this.o;
     const near = this.o.near ?? 140;
-    const mat = this.lambert(0xffffff, this.ts.snow);
+    const mat = this.lambert(0xffffff, this.ts.snow, true, "land");
     const c0 = Math.floor((cx - radius) / CHUNK);
     const c1 = Math.floor((cx + radius) / CHUNK);
     const r0 = Math.floor((cz - radius) / CHUNK);
@@ -875,9 +904,11 @@ export class Grounds3 {
         const col: number[] = [];
         const uv: number[] = [];
         const idx: number[] = [];
+        const surf: string[] = [];
         const vert = (x: number, z: number, y: number) => {
           pos.push(x, y, z);
           const s = d < near * 2 ? groundSurfaceAt(x, z) : "deep";
+          surf.push(s);
           tint.setHex(SURF[s]);
           if (s === "snow" || s === "deep") tint.lerp(blue, 0.35 + 0.35 * Math.sin(x * 0.05 + z * 0.031));
           col.push(tint.r, tint.g, tint.b);
@@ -915,6 +946,29 @@ export class Grounds3 {
         g.setAttribute("position", new Float32BufferAttribute(pos, 3));
         g.setAttribute("color", new Float32BufferAttribute(col, 3));
         g.setAttribute("uv", new Float32BufferAttribute(uv, 2));
+        // (the green's: the woods and the ways round each vertex — the skirts' as their edges')
+        const around = landAround(
+          (a, b) =>
+            a >= 0 && b >= 0 && a <= n && b <= n
+              ? surf[b * (n + 1) + a]
+              : d < near * 2
+                ? groundSurfaceAt(x0 + a * step, z0 + b * step)
+                : "deep",
+          n,
+          step,
+        );
+        const all = new Float32Array((pos.length / 3) * 2);
+        all.set(around);
+        for (let k = around.length; k < all.length; k += 2) {
+          // (a skirt vertex: its edge vertex's, by where it is)
+          const v = k / 2;
+          const a = Math.round((pos[v * 3] - x0) / step);
+          const b = Math.round((pos[v * 3 + 2] - z0) / step);
+          const p = Math.min(n, Math.max(0, b)) * (n + 1) + Math.min(n, Math.max(0, a));
+          all[k] = around[p * 2];
+          all[k + 1] = around[p * 2 + 1];
+        }
+        g.setAttribute("wxLand", new Float32BufferAttribute(all, 2));
         g.setIndex(idx);
         g.computeVertexNormals();
         (step === 1 ? parts : far).push(g);
@@ -1038,9 +1092,9 @@ export class Grounds3 {
     }
     if (!road.empty) this.add(road.build(), this.lambert(0xffffff, this.ts.road), "receive");
     if (!paint.empty) this.add(paint.build(), this.lambert(), "receive");
-    if (!slabs.empty) this.add(slabs.build(), this.lambert(0xffffff, this.ts.slabs), "receive");
-    if (!trail.empty) this.add(trail.build(), this.lambert(0xffffff, this.ts.trail), "receive");
-    if (!walk.empty) this.add(walk.build(), this.lambert(0xffffff, this.ts.walk), "receive");
+    if (!slabs.empty) this.add(slabs.build(), this.lambert(0xffffff, this.ts.slabs, true, "way"), "receive");
+    if (!trail.empty) this.add(trail.build(), this.lambert(0xffffff, this.ts.trail, true, "trail"), "receive");
+    if (!walk.empty) this.add(walk.build(), this.lambert(0xffffff, this.ts.walk, true, "way"), "receive");
     // (they only take shadows: a long low ridge's own came out jagged on the road)
     if (!banks.empty) this.add(banks.build(), this.lambert(), "receive");
     if (!only) this.waysAll();
@@ -1138,6 +1192,32 @@ export class Grounds3 {
     const ice = this.keep(
       new MeshStandardMaterial({ map: this.ts.ice, roughness: 0.38, metalness: 0.0, color: 0xf2f6f9 }),
     );
+    // (its snow drifted across it is its own picture's; it comes in from the shores and goes from
+    // the middle by the room's ice — wx3d.ts WX_ICE — over the water: docs/plan/65, W6)
+    ice.userData.wx = "ice";
+    // (drawn ahead of the water 2.5 cm under it: far off the depth can't tell them apart, and the
+    // water flickered through)
+    ice.polygonOffset = true;
+    ice.polygonOffsetFactor = -1;
+    ice.polygonOffsetUnits = -4;
+    const wet = this.keep(new MeshLambertMaterial({ color: 0xffffff }));
+    wet.userData.wx = "water";
+    // the ice and, a little under it, the water: each vertex how far from its shore (wxSide: 0 the
+    // middle, 1 a shore — signed across a ribbon, so its middle comes out between)
+    const both = (g: BufferGeometry, side: (i: number, x: number, z: number) => number) => {
+      const p = g.getAttribute("position");
+      const s = new Float32Array(p.count);
+      for (let i = 0; i < p.count; i++) s[i] = side(i, p.getX(i), p.getZ(i));
+      g.setAttribute("wxSide", new Float32BufferAttribute(s, 1));
+      const w = g.clone().translate(0, -0.025, 0);
+      this.add(w, wet, "receive");
+      this.add(g, ice, "receive");
+    };
+    // (a ribbon's: by the segment each quad is of, signed across it)
+    const ribbon = (segs: { a: V; n: [number, number]; o: number }[]) => (i: number, x: number, z: number) => {
+      const q = segs[Math.floor(i / 6)];
+      return ((x - q.a[0]) * q.n[0] + (z - q.a[2]) * q.n[1]) / q.o;
+    };
     if (this.near(POND.cx, POND.cz, POND.rx)) {
       const g = new G();
       const n = 64;
@@ -1154,7 +1234,7 @@ export class Grounds3 {
         const ps = [P(a0, 0), P(a1, 0), P(a1, 1.02), P(a0, 1.02)];
         g.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], ps.map(U) as [number, number][]);
       }
-      this.add(g.build(), ice, "receive");
+      both(g.build(), (_i, x, z) => Math.min(1, Math.hypot((x - POND.cx) / POND.rx, (z - POND.cz) / POND.rz)));
       // the shore: snow lying over the ice's edge all round (but where the dock goes out)
       const shore = new G();
       const rs = groundsRng(911);
@@ -1189,11 +1269,11 @@ export class Grounds3 {
       const y = POND_LEVEL + 0.55;
       for (let z = -98; z < -84; z += 0.45)
         d.color(z % 0.9 < 0.45 ? 0x6b5442 : 0x5e4a3b).box(dx0, y, z, dx1, y + 0.12, z + 0.4);
-      d.color(0xf1f4f7).box(dx0 + 0.15, y + 0.12, -97.8, dx1 - 0.15, y + 0.2, -84.4);
+      snowBox(d.color(0xf1f4f7), dx0 + 0.15, y + 0.12, -97.8, dx1 - 0.15, y + 0.2, -84.4);
       for (const z of [-97, -92, -87, -84.4])
         for (const x of [dx0 + 0.15, dx1 - 0.15]) {
           d.color(0x3f342c).box(x - 0.14, POND_LEVEL - 0.3, z - 0.14, x + 0.14, y + 0.55, z + 0.14);
-          d.color(0xf1f4f7).box(x - 0.16, y + 0.55, z - 0.16, x + 0.16, y + 0.66, z + 0.16); // snow capping it
+          snowBox(d.color(0xf1f4f7), x - 0.16, y + 0.55, z - 0.16, x + 0.16, y + 0.66, z + 0.16); // snow capping it
         }
       // a ladder down to the ice at its end, a mooring cleat
       for (const x of [dx0 + 1, dx1 - 1]) d.color(0x3f342c).box(x - 0.04, POND_LEVEL, -84.5, x + 0.04, y + 0.12, -84.4);
@@ -1208,12 +1288,14 @@ export class Grounds3 {
       const cs = tinted(
         new SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.42, 0.18, 2.1).translate(0, 0.2, 0),
         0xf4f6f9,
+        atOf("cap", -252, -91),
       );
       const c = mergeGeometries([canoe, cs], false);
       this.add(place(c, -252, y + 0.12, -91, 0.05), this.lambert());
     }
     // the river: a ribbon of ice in its bed, snow drifted on it
     const g = new G();
+    const rs: { a: V; n: [number, number]; o: number }[] = [];
     let v = 0;
     const L = RIVER.line;
     for (let i = 0; i < L.length - 1; i++) {
@@ -1233,12 +1315,14 @@ export class Grounds3 {
         [bx - nx * o, yb, bz - nz * o],
       ];
       g.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], ps.map((p) => [p[0] / 24, p[2] / 24]) as [number, number][]);
+      rs.push({ a: [ax, ya, az], n: [nx, nz], o: RIVER.w / 2 });
       v += len;
     }
-    if (!g.empty) this.add(g.build(), ice, "receive");
+    if (!g.empty) both(g.build(), ribbon(rs));
     void v;
     // the ravine's creek: a thin ice line on its floor
     const k = new G();
+    const ks: { a: V; n: [number, number]; o: number }[] = [];
     for (let i = 0; i < RAVINE.line.length - 1; i++) {
       const [ax, az] = RAVINE.line[i];
       const [bx, bz] = RAVINE.line[i + 1];
@@ -1255,8 +1339,9 @@ export class Grounds3 {
         [bx - nx * 1.4, yb, bz - nz * 1.4],
       ];
       k.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], ps.map((p) => [p[0] / 24, p[2] / 24]) as [number, number][]);
+      ks.push({ a: [ax, ya, az], n: [nx, nz], o: 1.4 });
     }
-    if (!k.empty) this.add(k.build(), ice, "receive");
+    if (!k.empty) both(k.build(), ribbon(ks));
   }
 
   // ── the parking lot (docs/plan/42-the-lot.md): the stills draw the new one whole from the
@@ -1356,8 +1441,8 @@ export class Grounds3 {
     const r = groundsRng(9);
     const pines = [0, 1, 2].map(() => this.keep(pineGeometry(r)));
     const farPine = this.keep(farPineGeometry());
-    const birches = [0, 1, 2].map(() => this.keep(birchGeometry(r)));
-    const bares = [0, 1, 2].map(() => this.keep(bareTree3(r)));
+    const birches = [0, 1, 2].map(() => this.keep(crowned(birchGeometry(r), ...BIRCH_LEAVES)));
+    const bares = [0, 1, 2].map((i) => this.keep(i < 2 ? crowned(bareTree3(r), ...BARE_LEAVES) : bareTree3(r)));
     const mat = this.lambert();
     const groups = new Map<BufferGeometry, Matrix4[]>();
     const m4 = (t: Tree, s: number) =>
@@ -1384,7 +1469,7 @@ export class Grounds3 {
       l.push(m4(t, s));
     }
     for (const [g, ms] of groups) {
-      const mesh = new InstancedMesh(g, mat, ms.length);
+      const mesh = snowShadow(new InstancedMesh(g, mat, ms.length));
       for (const [i, m] of ms.entries()) mesh.setMatrixAt(i, m);
       mesh.castShadow = g !== farPine;
       mesh.receiveShadow = false;
@@ -1395,19 +1480,25 @@ export class Grounds3 {
     for (const t of trees)
       if (t.kind === "pine" && Math.hypot(t.x - cx, t.z - cz) < near * 0.6)
         mounds.push(
-          place(tinted(new SphereGeometry(1, 7, 4).scale(2.2 * t.s, 0.45, 2.2 * t.s), 0xf6f8fb), t.x, t.y - 0.2, t.z),
+          place(
+            tinted(new SphereGeometry(1, 7, 4).scale(2.2 * t.s, 0.45, 2.2 * t.s), 0xf6f8fb, atOf("mound", t.x, t.z)),
+            t.x,
+            t.y - 0.2,
+            t.z,
+          ),
         );
     if (mounds.length) this.add(mergeGeometries(mounds, false), mat, "receive");
     for (const m of mounds) m.dispose();
   }
 
   // ── buildings ──
-  private facade: { map: CanvasTexture; lit: CanvasTexture } | null = null;
+  private facade: { map: CanvasTexture; lit: CanvasTexture; ledge: CanvasTexture } | null = null;
   private curtainMat(): MeshLambertMaterial {
     if (!this.facade) {
       this.facade = facadeCanvases(this.T);
       this.keep(this.facade.map);
       this.keep(this.facade.lit);
+      this.keep(this.facade.ledge);
     }
     const m = this.keep(
       new MeshLambertMaterial({
@@ -1417,6 +1508,8 @@ export class Grounds3 {
         emissiveIntensity: 0,
       }),
     );
+    // (the ledges' snow by its mask, as the snow lies: light3d.ts)
+    m.userData.wxLedge = this.facade.ledge;
     return this.glows(m, 0.9, "windows");
   }
   private building(b: Building) {
@@ -1893,7 +1986,9 @@ export class Grounds3 {
     cap.box(b.x0 - 0.3, top, b.z1 - 0.2, b.x1 + 0.3, top + 0.7, b.z1 + 0.3);
     cap.box(b.x0 - 0.3, top, b.z0 - 0.3, b.x0 + 0.2, top + 0.7, b.z1 + 0.3);
     cap.box(b.x1 - 0.2, top, b.z0 - 0.3, b.x1 + 0.3, top + 0.7, b.z1 + 0.3);
-    cap.color(0xf6f8fa).box(b.x0, top - 0.1, b.z0, b.x1, top + 0.35, b.z1);
+    // (the roofing under it: the snow's the weather's)
+    cap.color(0x6f7378).box(b.x0, top - 0.14, b.z0, b.x1, top - 0.04, b.z1);
+    snowBox(cap.color(0xf6f8fa), b.x0, top - 0.1, b.z0, b.x1, top + 0.35, b.z1, "roof");
     const r = groundsRng(b.x0 * 7 + b.z0);
     for (let i = 0; i < 5; i++) {
       const x = b.x0 + 3 + r() * (b.x1 - b.x0 - 8);
@@ -1902,7 +1997,7 @@ export class Grounds3 {
       const d = 1.5 + r() * 2;
       const h = 0.9 + r() * 0.8;
       cap.color(0x8e9399).box(x, top, z, x + w, top + h, z + d);
-      cap.color(0xf6f8fa).box(x - 0.05, top + h, z - 0.05, x + w + 0.05, top + h + 0.2, z + d + 0.05);
+      snowBox(cap.color(0xf6f8fa), x - 0.05, top + h, z - 0.05, x + w + 0.05, top + h + 0.2, z + d + 0.05);
     }
     above.push(this.add(cap.build(), this.lambert()));
     if (own) this.cuts.set(b.key, { b, parts: above, under: top - 0.3 });
@@ -1952,7 +2047,8 @@ export class Grounds3 {
     const [ax, , az] = P(-W / 2 - 0.1, 0, 0);
     const [bx, , bz] = P(W / 2 + 0.1, D + 0.1, 0);
     g.color(0xd8d4cb).box(Math.min(ax, bx), y0 + H, Math.min(az, bz), Math.max(ax, bx), y0 + H + 0.3, Math.max(az, bz));
-    g.color(0xf6f8fa).box(
+    snowBox(
+      g.color(0xf6f8fa),
       Math.min(ax, bx),
       y0 + H + 0.3,
       Math.min(az, bz),
@@ -2029,7 +2125,7 @@ export class Grounds3 {
     const y = 14;
     const g = new G();
     g.color(0xe3e6ea).box(a, y + 2.9, 16.4, b, y + 3.15, 19.6);
-    g.color(0xf6f8fa).box(a, y + 3.15, 16.4, b, y + 3.35, 19.6);
+    snowBox(g.color(0xf6f8fa), a, y + 3.15, 16.4, b, y + 3.35, 19.6, "roof");
     g.color(0xd3d6da).box(a, y - 0.35, 16.4, b, y, 19.6);
     // mullions every 2 tiles along both sides
     for (let x = a + 2; x < b - 0.5; x += 2) {
@@ -2141,16 +2237,15 @@ export class Grounds3 {
       const [za, zb] = nz ? [z + Math.min(0, nz * 0.18), z + Math.max(0, nz * 0.18)] : [z - a, z + a];
       this.trim.color(0xd6d0c4).box(xa, y - 0.12, za, xb, y, zb);
       const i = 0.04;
-      this.trim
-        .color(SNOW)
-        .box(
-          xa + (nz ? i : 0),
-          y,
-          za + (nz ? 0 : i),
-          xb - (nz ? i : 0),
-          y + 0.05 + 0.03 * Math.abs(Math.sin(x * 12.9 + z * 7.3)),
-          zb - (nz ? 0 : i),
-        );
+      snowBox(
+        this.trim.color(SNOW),
+        xa + (nz ? i : 0),
+        y,
+        za + (nz ? 0 : i),
+        xb - (nz ? i : 0),
+        y + 0.05 + 0.03 * Math.abs(Math.sin(x * 12.9 + z * 7.3)),
+        zb - (nz ? 0 : i),
+      );
     }
     // (a building's windows are one mesh a kind of light: hundreds of little meshes, drawn
     // the first time all at once, were a long frame on the way into the town)
@@ -2287,7 +2382,7 @@ export class Grounds3 {
       bar
         .color(k % 2 ? 0xf2f2f2 : 0xc8322a)
         .box(px - 0.3 - (k + 1) * 0.95, py + 0.98, pz - 0.06, px - 0.3 - k * 0.95, py + 1.1, pz + 0.06);
-    bar.color(0xf4f7fa).box(px - 7.9, py + 1.1, pz - 0.05, px - 0.4, py + 1.15, pz + 0.05);
+    snowBox(bar.color(0xf4f7fa), px - 7.9, py + 1.1, pz - 0.05, px - 0.4, py + 1.15, pz + 0.05);
     for (let x = px - 1; x > px - 7.9; x -= 0.35)
       bar.color(0xe9e6dc).box(x - 0.02, py + 0.55, pz - 0.015, x + 0.02, py + 0.98, pz + 0.015);
     bar.color(0x8e9399).box(-44.6, py, pz - 0.12, -44.2, py + 0.85, pz + 0.12);
@@ -2345,7 +2440,7 @@ export class Grounds3 {
     const board = new Mesh(this.keep(new BoxGeometry(w, h, 0.08)), [
       this.lambert(0x2a2e33, undefined, false),
       this.lambert(0x2a2e33, undefined, false),
-      this.lambert(0xf2f5f8, undefined, false),
+      this.lambert(0x2a2e33, undefined, false), // (its top: the dusting's)
       this.lambert(0x2a2e33, undefined, false),
       m,
       this.lambert(0x2a2e33, undefined, false),
@@ -2621,7 +2716,7 @@ export class Grounds3 {
         [b.x1 + over, y0 + yb, zb],
         n,
       );
-      r.color(0xf4f7fa);
+      r.color(0xf4f7fa).snow(atOf("roof", b.x0 + k * 3, b.z0), () => 0.18);
       r.quad(
         [b.x1 + over - 0.15, y0 + ya + 0.16, za + (k < 2 ? 0.15 : -0.15)],
         [b.x0 - over + 0.15, y0 + ya + 0.16, za + (k < 2 ? 0.15 : -0.15)],
@@ -2629,6 +2724,7 @@ export class Grounds3 {
         [b.x1 + over - 0.15, y0 + yb + 0.16, zb],
         n,
       );
+      r.snow(null);
     }
     // white trim: the corners, the eaves' fascia, the gables' rake boards
     const t = 0xece6da;
@@ -2701,7 +2797,7 @@ export class Grounds3 {
     r.color(t).box(b.x0 - 0.2, y0 + H + 0.45, zm - 0.06, b.x0 - 0.14, y0 + H + 2.35, zm + 0.06);
     r.color(0x5a4636).box(b.x0 - 1.0, y0 + H + 2.75, zm - 0.07, b.x0, y0 + H + 2.88, zm + 0.07);
     r.color(0x8e2b20).box(b.x0 - 0.7, y0 + H + 2.88, zm - 1.25, b.x0, y0 + H + 2.98, zm + 1.25);
-    r.color(0xf4f7fa).box(b.x0 - 0.7, y0 + H + 2.98, zm - 1.25, b.x0, y0 + H + 3.08, zm + 1.25);
+    snowBox(r.color(0xf4f7fa), b.x0 - 0.7, y0 + H + 2.98, zm - 1.25, b.x0, y0 + H + 3.08, zm + 1.25);
     // the cupola on the ridge: louvred sides, a little pyramid roof, the weathervane
     const rx = (b.x0 + b.x1) / 2;
     const ry = y0 + H + 4.2;
@@ -2713,7 +2809,11 @@ export class Grounds3 {
     }
     this.add(r.build(), this.lambert());
     const cap = tinted(new ConeGeometry(1.25, 0.9, 4).rotateY(Math.PI / 4).translate(0, 0.45, 0), 0x3d3a36);
-    const capSnow = tinted(new ConeGeometry(1.1, 0.75, 4).rotateY(Math.PI / 4).translate(0, 0.62, 0), 0xf4f7fa);
+    const capSnow = tinted(
+      new ConeGeometry(1.1, 0.75, 4).rotateY(Math.PI / 4).translate(0, 0.62, 0),
+      0xf4f7fa,
+      atOf("cap", rx, zm),
+    );
     const vane = tinted(new BoxGeometry(0.06, 1.2, 0.06).translate(0, 1.4, 0), 0x2a2a2a);
     const arrow = tinted(new BoxGeometry(1.1, 0.08, 0.04).translate(0, 1.85, 0), 0x2a2a2a);
     const bird = tinted(new BoxGeometry(0.5, 0.35, 0.04).translate(0.1, 2.15, 0), 0x2a2a2a);
@@ -2752,11 +2852,16 @@ export class Grounds3 {
         new SphereGeometry(R + 0.05, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.5, 1).translate(0, Hh, 0),
         0x8f9499,
       ),
-      tinted(
-        new SphereGeometry(R + 0.12, 28, 6, 0, Math.PI * 2, 0, Math.PI / 3.2)
-          .scale(1, 0.5, 1)
-          .translate(0, Hh + 0.04, 0),
-        0xf6f8fa,
+      // (the weather's: pressed onto the dome)
+      tagged(
+        tinted(
+          new SphereGeometry(R + 0.12, 28, 6, 0, Math.PI * 2, 0, Math.PI / 3.2)
+            .scale(1, 0.5, 1)
+            .translate(0, Hh + 0.04, 0),
+          0xf6f8fa,
+        ),
+        atOf("roof", cx, cz),
+        (x, y, z) => Math.max(0, y - (Hh + 0.5 * Math.sqrt(Math.max(0, (R + 0.05) ** 2 - x * x - z * z))) + 0.03),
       ),
       tinted(new CylinderGeometry(0.45, 0.55, 0.7, 12).translate(0, Hh + R * 0.5 + 0.2, 0), 0x7e8388),
       tinted(new ConeGeometry(0.7, 0.4, 12).translate(0, Hh + R * 0.5 + 0.75, 0), 0x6a6f74),
@@ -2867,7 +2972,7 @@ export class Grounds3 {
     const cz = (b.z0 + b.z1) / 2;
     r.color(0x8a4a3a).box(b.x1 - 3, y0 + H - 1, cz + 0.5, b.x1 - 2, y0 + H + 3.6, cz + 1.5);
     r.color(0x6f3a2e).box(b.x1 - 3.1, y0 + H + 3.4, cz + 0.4, b.x1 - 1.9, y0 + H + 3.6, cz + 1.6);
-    r.color(0xf4f7fa).box(b.x1 - 3.05, y0 + H + 3.6, cz + 0.45, b.x1 - 1.95, y0 + H + 3.78, cz + 1.55);
+    snowBox(r.color(0xf4f7fa), b.x1 - 3.05, y0 + H + 3.6, cz + 0.45, b.x1 - 1.95, y0 + H + 3.78, cz + 1.55);
     this.add(r.build(), this.lambert());
     // the windows: dark (nobody's home), framed, with shutters
     const w = new G();
@@ -2961,9 +3066,15 @@ export class Grounds3 {
         corn.color(0xd2bc8c);
         strip(sx + lx, y + h, sz + lz, sx + lx * 1.3, y + h + 0.3, sz + lz * 1.3, 0.05);
         if (r() < 0.2)
-          corn
-            .color(0xf4f7fa)
-            .box(sx + lx - 0.07, y + h * 0.8, sz + lz - 0.07, sx + lx + 0.07, y + h * 0.8 + 0.07, sz + lz + 0.07);
+          snowBox(
+            corn.color(0xf4f7fa),
+            sx + lx - 0.07,
+            y + h * 0.8,
+            sz + lz - 0.07,
+            sx + lx + 0.07,
+            y + h * 0.8 + 0.07,
+            sz + lz + 0.07,
+          );
       }
     // (its own material, both sides of the cards — the cached ones are shared; one for the field)
     this.cornMat ??= this.keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
@@ -2979,7 +3090,7 @@ export class Grounds3 {
       const y = groundAt(x, z);
       f.color(0x5a4636).box(x - 0.08, y, z - 0.08, x + 0.08, y + 1.15, z + 0.08);
       f.color(0x4a3a2c).box(x - 0.06, y + 1.15, z - 0.06, x + 0.06, y + 1.22, z + 0.06);
-      f.color(0xf4f7fa).box(x - 0.08, y + 1.22, z - 0.08, x + 0.08, y + 1.27, z + 0.08);
+      snowBox(f.color(0xf4f7fa), x - 0.08, y + 1.22, z - 0.08, x + 0.08, y + 1.27, z + 0.08);
     };
     const rail = (ax: number, az: number, bx: number, bz: number) => {
       const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 2.5));
@@ -3000,8 +3111,8 @@ export class Grounds3 {
             y + hy + wob + 0.11,
             Math.max(z0, z1) + 0.05,
           );
-          f.color(0xf4f7fa);
-          f.box(
+          snowBox(
+            f.color(0xf4f7fa),
             Math.min(x0, x1) - 0.04,
             y + hy + wob + 0.11,
             Math.min(z0, z1) - 0.04,
@@ -3045,8 +3156,8 @@ export class Grounds3 {
         tinted(new BoxGeometry(0.22, 0.03, 0.02).translate(0, 2.22, 0.26), 0x2a2420), // the stitched mouth
         tinted(new CylinderGeometry(0.4, 0.42, 0.05, 12).translate(0, 2.55, 0), 0x3a3228), // the hat
         tinted(new CylinderGeometry(0.2, 0.24, 0.3, 12).translate(0, 2.72, 0), 0x3a3228),
-        tinted(new CylinderGeometry(0.4, 0.4, 0.03, 12).translate(0, 2.59, 0), 0xf4f7fa),
-        tinted(new BoxGeometry(1.4, 0.06, 0.28).translate(0, 2.05, 0), 0xf4f7fa),
+        tinted(new CylinderGeometry(0.4, 0.4, 0.03, 12).translate(0, 2.59, 0), 0xf4f7fa, atOf("cap", sc.x, sc.z)),
+        tinted(new BoxGeometry(1.4, 0.06, 0.28).translate(0, 2.05, 0), 0xf4f7fa, atOf("cap", sc.x, sc.z)),
       ];
       for (const [x, yy] of [
         [-0.8, 1.88],
@@ -3112,7 +3223,15 @@ export class Grounds3 {
             rot,
           ),
         );
-      bales.push(place(tinted(new BoxGeometry(0.75, 0.1, 1.05).translate(0, 1.22, 0), 0xf6f8fa), x, y, z, rot));
+      bales.push(
+        place(
+          tinted(new BoxGeometry(0.75, 0.1, 1.05).translate(0, 1.22, 0), 0xf6f8fa, atOf("cap", x, z)),
+          x,
+          y,
+          z,
+          rot,
+        ),
+      );
     }
     this.add(mergeGeometries(bales, false), this.lambert());
     for (const b of bales) b.dispose();
@@ -3494,9 +3613,15 @@ export class Grounds3 {
         const legs = new G().color(0x3a3f45);
         for (const sx of [-sw / 2 + 0.4, sw / 2 - 0.4])
           legs.box(xm + sx - 0.07, y0 + H, fz + nz * 1.2 - 0.07, xm + sx + 0.07, sy - sh / 2, fz + nz * 1.2 + 0.07);
-        legs
-          .color(SNOW)
-          .box(xm - sw / 2, sy + sh / 2, fz + nz * 1.2 - 0.07, xm + sw / 2, sy + sh / 2 + 0.06, fz + nz * 1.2 + 0.07);
+        snowBox(
+          legs.color(SNOW),
+          xm - sw / 2,
+          sy + sh / 2,
+          fz + nz * 1.2 - 0.07,
+          xm + sw / 2,
+          sy + sh / 2 + 0.06,
+          fz + nz * 1.2 + 0.07,
+        );
         this.add(legs.build(), this.lambert());
       }
     }
@@ -3809,7 +3934,7 @@ export class Grounds3 {
     r.color(0x3a3f45).box(X(1.9) - 0.05, y0, mz - 0.05, X(1.9) + 0.05, y0 + 1.1, mz + 0.05);
     r.color(0x2a2e33).box(X(1.9) - 0.22, y0 + 1.1, mz - 0.25, X(1.9) + 0.22, y0 + 1.38, mz + 0.25);
     r.color(0xa8322a).box(X(1.9) + 0.22, y0 + 1.2, mz + 0.1, X(1.9) + 0.25, y0 + 1.5, mz + 0.16); // its flag
-    r.color(SNOW).box(X(1.9) - 0.22, y0 + 1.38, mz - 0.25, X(1.9) + 0.22, y0 + 1.45, mz + 0.25);
+    snowBox(r.color(SNOW), X(1.9) - 0.22, y0 + 1.38, mz - 0.25, X(1.9) + 0.22, y0 + 1.45, mz + 0.25);
     this.add(r.build(), this.lambert());
     this.lights.push({ p: new Vector3(X(1.2), y0 + 2.6, zm), kind: "porch", color: 0xffc98a, r: 3 });
     this.pool(X(2), zm, 3, 0xffc98a);
@@ -3851,7 +3976,8 @@ export class Grounds3 {
       y,
       Math.max(s0[2], s1[2]) + 0.05 + nz * 0.12,
     );
-    fr.color(SNOW).box(
+    snowBox(
+      fr.color(SNOW),
       Math.min(s0[0], s1[0]),
       y,
       Math.min(s0[2], s1[2]),
@@ -3906,7 +4032,11 @@ export class Grounds3 {
     this.add(r.build(), this.lambert());
     const spire = tinted(new ConeGeometry(2.1, 8.2, 4).rotateY(Math.PI / 4).translate(0, 4.1, 0), 0x2f343a);
     this.add(place(spire, xm, y0 + 13.4, (sz0 + sz1) / 2), this.lambert());
-    const snowCap = tinted(new ConeGeometry(2.14, 1.2, 4, 1, true).rotateY(Math.PI / 4).translate(0, 0.6, 0), 0xf2f5f8);
+    const snowCap = tinted(
+      new ConeGeometry(2.14, 1.2, 4, 1, true).rotateY(Math.PI / 4).translate(0, 0.6, 0),
+      0xf2f5f8,
+      atOf("roof", xm, sz0),
+    );
     this.add(place(snowCap, xm, y0 + 13.4, (sz0 + sz1) / 2), this.lambert());
     for (const z of [z0 + 4, z0 + 9, z0 + 14, z0 + 19])
       for (const [x, nx] of [
@@ -4306,7 +4436,16 @@ export class Grounds3 {
       P.push(place(tinted(new CylinderGeometry(0.22, 0.26, 0.5, 8).translate(0, 0.25, 0), 0x3a3e44), x, gy, z, ry));
       P.push(place(tinted(new BoxGeometry(2.2, 0.12, 0.12).translate(1.0, 8.95, 0), 0x3a3e44), x, gy, z, ry));
       P.push(place(tinted(new BoxGeometry(1.0, 0.24, 0.42).translate(2.0, 8.9, 0), 0x50555b), x, gy, z, ry));
-      P.push(place(tinted(new BoxGeometry(1.0, 0.08, 0.42).translate(2.0, 9.06, 0), 0xffffff), x, gy, z, ry));
+      // (the snow on its head: the weather's — docs/plan/65, W4)
+      P.push(
+        place(
+          tinted(new BoxGeometry(1.0, 0.08, 0.42).translate(2.0, 9.06, 0), 0xffffff, atOf("cap", x, z)),
+          x,
+          gy,
+          z,
+          ry,
+        ),
+      );
       const hx = x + Math.cos(ry) * 2.0;
       const hz = z - Math.sin(ry) * 2.0;
       this.headGeo.color(0xeaf2ff);
@@ -4331,7 +4470,9 @@ export class Grounds3 {
       P.push(place(tinted(new CylinderGeometry(0.24, 0.3, 0.6, 8).translate(0, 0.3, 0), 0x1f2a26), x, gy, z));
       P.push(place(tinted(new CylinderGeometry(0.34, 0.2, 0.18, 8).translate(0, 4.9, 0), 0x1f2a26), x, gy, z));
       P.push(place(tinted(new ConeGeometry(0.42, 0.4, 8).translate(0, 5.18, 0), 0x1f2a26), x, gy, z));
-      P.push(place(tinted(new ConeGeometry(0.36, 0.22, 8).translate(0, 5.3, 0), 0xf4f7fa), x, gy, z));
+      P.push(
+        place(tinted(new ConeGeometry(0.36, 0.22, 8).translate(0, 5.3, 0), 0xf4f7fa, atOf("cap", x, z)), x, gy, z),
+      );
       this.headGeo.color(0xffe0a8);
       const s = new G();
       s.color(0xffe0a8).box(-0.24, 4.25, -0.24, 0.24, 4.82, 0.24);
@@ -4464,8 +4605,11 @@ export class Grounds3 {
         );
         // the top rail
         beam(posts, [x, y + top, z], [x2, y2 + top, z2], 0.06, 0x5d6268, true);
-        // snow caught on the mesh's foot, following the ground
-        posts.color(0xf4f7fa);
+        // snow caught on the mesh's foot, following the ground (the weather's: out of the ground)
+        posts.color(0xf4f7fa).snow(
+          (p) => smoothAt(p[0], p[2], AT.drift[0], AT.drift[1]) + BURIED,
+          (p) => p[1] - (terrainAt(p[0], p[2]) - 0.5),
+        );
         face(posts, [x, y - 0.05, z], [x2, y2 - 0.05, z2], [x2, y2 + 0.32, z2], [x, y + 0.38, z], [ox, 0, oz]);
         face(
           posts,
@@ -4484,7 +4628,7 @@ export class Grounds3 {
           [x - ox * 0.45, y - 0.05, z - oz * 0.45],
           [-ox, 1, -oz],
         );
-        posts.color(0x5d6268);
+        posts.snow(null).color(0x5d6268);
         if (++n % 20 === 7)
           this.signBoard(
             "PRIVATE PROPERTY\nNO TRESPASSING",
@@ -4564,9 +4708,10 @@ export class Grounds3 {
       tank.push(place(tinted(new ConeGeometry(7.1, 3.6, 24, 1).translate(0, 35.1, 0), 0xb4b9bf), tx, y, tz));
       tank.push(
         place(
-          tinted(
-            new ConeGeometry(7.15, 3.65, 24, 1, true, 0, Math.PI * 2).translate(0, 35.2, 0).scale(1, 1, 1),
-            0xf2f5f8,
+          tagged(
+            tinted(new ConeGeometry(7.15, 3.65, 24, 1, true, 0, Math.PI * 2).translate(0, 35.2, 0), 0xf2f5f8),
+            atOf("roof", tx, tz),
+            (x, yy, z) => Math.max(0, yy - (36.9 - (3.6 * Math.hypot(x, z)) / 7.1) + 0.03),
           ),
           tx,
           y,
@@ -4578,7 +4723,14 @@ export class Grounds3 {
       tank.push(
         place(tinted(new CylinderGeometry(7.6, 7.6, 0.18, 28, 1, false).translate(0, 26.9, 0), 0x6f767d), tx, y, tz),
       );
-      tank.push(place(tinted(new CylinderGeometry(7.55, 7.55, 0.08, 28).translate(0, 27.03, 0), 0xf2f5f8), tx, y, tz));
+      tank.push(
+        place(
+          tinted(new CylinderGeometry(7.55, 7.55, 0.08, 28).translate(0, 27.03, 0), 0xf2f5f8, atOf("cap", tx, tz)),
+          tx,
+          y,
+          tz,
+        ),
+      );
       tank.push(
         place(tinted(new CylinderGeometry(7.6, 7.6, 0.06, 28, 1, true).translate(0, 28.0, 0), 0x5d6268), tx, y, tz),
       );
@@ -4673,10 +4825,11 @@ export class Grounds3 {
       for (let x = PLAZA.x0; x < PLAZA.x1; x += 2)
         for (let z = PLAZA.z0; z < PLAZA.z1; z += 2) {
           const v = rp();
-          // (snowed over, now and then, more towards the edges)
+          // (a paler flag now and then, more towards the edges: they were snowed over — the snow's
+          // the weather's now, docs/plan/65)
           const edge = Math.min(x - PLAZA.x0, PLAZA.x1 - x - 2, z - PLAZA.z0, PLAZA.z1 - z - 2);
-          const snowy = rp() < (edge < 3 ? 0.55 : 0.12);
-          p.color(snowy ? 0xe9eef2 : v < 0.33 ? 0xb4b0a8 : v < 0.66 ? 0xbcb8b0 : 0xa9a59d).quad(
+          const pale = rp() < (edge < 3 ? 0.55 : 0.12);
+          p.color(pale ? 0xc6c2ba : v < 0.33 ? 0xb4b0a8 : v < 0.66 ? 0xbcb8b0 : 0xa9a59d).quad(
             [x + 0.05, y + 0.07, z + 0.05],
             [x + 1.95, y + 0.07, z + 0.05],
             [x + 1.95, y + 0.07, z + 1.95],
@@ -4693,7 +4846,8 @@ export class Grounds3 {
       p.color(0x5f6b5a).box(X - 0.7, y + 1.3, Z - 1.42, X + 0.7, y + 2.1, Z - 1.38); // the plaque (north, to the street)
       flatSnow(p, X - 2.35, Z - 2.35, X + 2.35, Z + 2.35, y + 0.3, 0.12, rp);
       flatSnow(p, X - 1.55, Z - 1.55, X + 1.55, Z + 1.55, y + 3.2, 0.18, rp);
-      this.add(p.build(), this.lambert(), "both");
+      // (a paved square: trodden and swept, a way to the snow — wx3d.ts)
+      this.add(p.build(), this.lambert(0xffffff, undefined, true, "way"), "both");
       const bronze = 0x47423a;
       const verd = 0x5f7a6c;
       const fig: BufferGeometry[] = [
@@ -4715,10 +4869,10 @@ export class Grounds3 {
         tinted(new CylinderGeometry(0.1, 0.13, 1.05, 7).rotateZ(0.12).translate(-0.06, 2.4, 0.46), bronze),
         tinted(new CylinderGeometry(0.035, 0.035, 1.9, 6).rotateZ(0.12).translate(-0.12, 0.95, 0.52), 0x2f2c27),
         // snow: on his hat, his shoulders, his arm
-        tinted(new CylinderGeometry(0.24, 0.26, 0.07, 12).translate(0, 3.97, 0), SNOW),
-        tinted(new CylinderGeometry(0.47, 0.47, 0.04, 14, 1, true).translate(0, 3.645, 0), SNOW),
-        tinted(new CylinderGeometry(0.44, 0.44, 0.05, 12).translate(0, 3.12, 0), SNOW),
-        tinted(new BoxGeometry(0.9, 0.04, 0.14).rotateZ(0.42).translate(0.6, 3.21, -0.38), SNOW),
+        tinted(new CylinderGeometry(0.24, 0.26, 0.07, 12).translate(0, 3.97, 0), SNOW, 0.32),
+        tinted(new CylinderGeometry(0.47, 0.47, 0.04, 14, 1, true).translate(0, 3.645, 0), SNOW, 0.36),
+        tinted(new CylinderGeometry(0.44, 0.44, 0.05, 12).translate(0, 3.12, 0), SNOW, 0.4),
+        tinted(new BoxGeometry(0.9, 0.04, 0.14).rotateZ(0.42).translate(0.6, 3.21, -0.38), SNOW, 0.44),
       ];
       this.add(place(mergeGeometries(fig, false), STATUE.x, y + 3.2, STATUE.z, Math.PI / 2, 1.05), this.lambert());
       for (const f of fig) f.dispose();
@@ -4734,7 +4888,7 @@ export class Grounds3 {
       b.color(0x2a2e33);
       for (const dx of [-0.85, 0.85])
         b.box(BENCH.x + dx - 0.05, y, BENCH.z - 0.05, BENCH.x + dx + 0.05, y + 1.0, BENCH.z + 0.6);
-      b.color(0xf4f7fa).box(BENCH.x - 1, y + 0.52, BENCH.z, BENCH.x + 1, y + 0.62, BENCH.z + 0.6);
+      snowBox(b.color(0xf4f7fa), BENCH.x - 1, y + 0.52, BENCH.z, BENCH.x + 1, y + 0.62, BENCH.z + 0.6);
       this.add(b.build(), this.lambert());
     }
     if (this.near(ROAD_CLOSED.x, ROAD_CLOSED.z, 30)) {
@@ -4755,7 +4909,7 @@ export class Grounds3 {
               y + yy + 0.22,
               zc - 1.65 + k * 0.55,
             );
-        g.color(SNOW).box(X - 0.22, y + 1.27, zc - 2.2, X - 0.14, y + 1.31, zc + 2.2);
+        snowBox(g.color(SNOW), X - 0.22, y + 1.27, zc - 2.2, X - 0.14, y + 1.31, zc + 2.2);
         g.color(0x2a2e33).box(X - 0.25, y + 1.27, zc + 1.7, X - 0.1, y + 1.47, zc + 1.9);
       }
       this.add(g.build(), this.lambert());
@@ -4771,7 +4925,11 @@ export class Grounds3 {
         ),
         "none",
       );
-      const drift = tinted(new SphereGeometry(1, 12, 7).scale(4, 1.8, 7), 0xf4f7fa);
+      const drift = tinted(
+        new SphereGeometry(1, 12, 7).scale(4, 1.8, 7),
+        0xf4f7fa,
+        atOf("drift", ROAD_CLOSED.x + 5, ROAD_CLOSED.z),
+      );
       this.add(place(drift, ROAD_CLOSED.x + 5, y - 0.3, ROAD_CLOSED.z), this.lambert());
       this.signBoard(
         "ROAD CLOSED",
@@ -4810,9 +4968,8 @@ export class Grounds3 {
 
   // ── far ridges and mountains: the one painted thing (beyond everything you can reach) ──
   // (past the day's fog, as they always were — but the morning's takes them: fog3d.ts)
-  readonly ridgeMat = Object.assign(new MeshBasicMaterial({ vertexColors: true }), {
-    defines: { MF_MORNING_ONLY: "" },
-  });
+  // (snowy as the snow lies; dark green hills without it — docs/plan/65, W3: the approved mock's)
+  readonly ridgeMat = ridgeMaterial();
   private ridges() {
     this.keep(this.ridgeMat);
     const g = new G();
@@ -4850,6 +5007,32 @@ export class Grounds3 {
     if (!this.o.shared) for (const d of this.sh.disp) d.dispose();
     this.root.removeFromParent();
   }
+}
+
+function ridgeMaterial(): MeshBasicMaterial {
+  const m = Object.assign(new MeshBasicMaterial({ vertexColors: true }), { defines: { MF_MORNING_ONLY: "" } });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.wxSnow = wx.wxSnow;
+    sh.uniforms.wxHaze = wx.wxHaze;
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float wxSnow;\nuniform float wxHaze;")
+      // (the day's haze over them, as over the far woods in front: in the fog's colour, after it)
+      .replace(
+        "#include <fog_fragment>",
+        "#include <fog_fragment>\n#ifdef USE_FOG\ngl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, wxHaze);\n#endif",
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+{
+  float l = dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15));
+  vec3 hill = vec3(0.071, 0.118, 0.105) * (0.55 + 0.9 * l);
+  diffuseColor.rgb = mix(hill, diffuseColor.rgb, smoothstep(0.35, 0.8, wxSnow));
+}`,
+      );
+  };
+  m.customProgramCacheKey = () => "yutopia-ridges-wx";
+  return m;
 }
 
 /** The distance from (x, z) to a way's line (its samples). */

@@ -1,4 +1,5 @@
 import type { G, V } from "./campus";
+import { AT, atOf, BURIED, smoothAt } from "./wx3d";
 
 // Snow that settled (docs/plan/33-the-look.md, phase 2): what falls, lies — on
 // roofs with a lip curled over the eaves and icicles under them, on flat roofs
@@ -6,6 +7,8 @@ import type { G, V } from "./campus";
 // banks along every road — instead of white slabs and strings of beads. All of
 // it faceted (the look), lumpy by a smooth noise along its run, standing on the
 // ground where it is.
+// Every piece made here is the weather's (docs/plan/65-the-weather.md, W4): tagged as snow (wx3d.ts),
+// pressed down onto what it lies on until enough's lying for it.
 
 export const SNOW = 0xf4f7fa;
 const ICE = 0xdbe7f0;
@@ -54,9 +57,16 @@ export interface Station {
 }
 
 /** A ridge of snow along stations: its cross-section `prof` ([out from the line, up]), the
- *  heights scaled by each station's k, standing on the ground. */
-export function ridge(g: G, st: Station[], prof: [number, number][], yAt: YAt) {
+ *  heights scaled by each station's k, standing on the ground. The snow's: each stretch of it
+ *  comes in at its own (`kind`'s range, smooth along it), rising out of the ground. */
+export function ridge(g: G, st: Station[], prof: [number, number][], yAt: YAt, kind: keyof typeof AT = "drift") {
   g.color(SNOW);
+  const [lo, hi] = AT[kind];
+  g.snow(
+    (p) => smoothAt(p[0], p[2], lo, hi) + BURIED,
+    // (well under: the land's drawn between its vertices, lower than its height in places)
+    (p) => p[1] - (yAt(p[0], p[2]) - 0.5),
+  );
   const P = st.map((s) =>
     prof.map(([o, h]): V => {
       const x = s.x + s.nx * o;
@@ -68,6 +78,7 @@ export function ridge(g: G, st: Station[], prof: [number, number][], yAt: YAt) {
     if (st[i].k <= 0 && st[i + 1].k <= 0) continue;
     for (let j = 0; j + 1 < prof.length; j++) face(g, P[i][j], P[i + 1][j], P[i + 1][j + 1], P[i][j + 1]);
   }
+  g.snow(null);
 }
 
 /** Snow drifted against a wall from a to b, banked up on its `n` side; none where `skip` says
@@ -155,6 +166,7 @@ export function bankAlong(
       [o.w * 0.9, -1],
     ],
     yAt,
+    "bank",
   );
 }
 
@@ -162,6 +174,12 @@ export function bankAlong(
 export function icicles(g: G, a: V, b: V, r: Rng, rate = 0.5) {
   const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
   g.color(ICE);
+  // (the snow's: last to come; drawn up into the edge they hang from when gone)
+  const L2 = len * len || 1;
+  g.snow(atOf("icicle", a[0], a[2]), (p) => {
+    const f = ((p[0] - a[0]) * (b[0] - a[0]) + (p[2] - a[2]) * (b[2] - a[2])) / L2;
+    return p[1] - (a[1] + (b[1] - a[1]) * f);
+  });
   for (let t = 0.15 + r() * 0.3; t < len - 0.1; t += 0.18 + r() * 0.45) {
     if (r() > rate) continue;
     const f = t / len;
@@ -182,6 +200,7 @@ export function icicles(g: G, a: V, b: V, r: Rng, rate = 0.5) {
       face(g, p, q, tip, tip, mid);
     }
   }
+  g.snow(null);
 }
 
 /** Snow on a slope (a roof's, an awning's, a porch's): from its high edge h0→h1 down to its
@@ -224,6 +243,10 @@ export function slopeSnow(g: G, h0: V, h1: V, l0: V, l1: V, t: number, r: Rng, i
     lipB.push(add(add(L, down, 0.04), [0, -1, 0], tl * 0.7));
   }
   g.color(SNOW);
+  // (the snow's: a slab all at once, pressed onto the slope — straight down to it)
+  g.snow(atOf("roof", h0[0] + h1[0], h0[2] + h1[2]), (p) =>
+    Math.max(0, ((p[0] - l0[0]) * N[0] + (p[1] - l0[1]) * N[1] + (p[2] - l0[2]) * N[2]) / Math.max(N[1], 0.2)),
+  );
   for (let i = 0; i < n; i++) {
     face(g, hi[i], hi[i + 1], lo[i + 1], lo[i], N);
     face(g, lo[i], lo[i + 1], lipA[i + 1], lipA[i], add(N, down));
@@ -239,6 +262,7 @@ export function slopeSnow(g: G, h0: V, h1: V, l0: V, l1: V, t: number, r: Rng, i
     const L = lerp(l0, l1, i / n);
     face(g, H, L, lo[i], hi[i], out);
   }
+  g.snow(null);
   if (ice > 0) icicles(g, lerp(lipB[0], lipB[n], 0.02), lerp(lipB[0], lipB[n], 0.98), r, ice);
 }
 
@@ -257,6 +281,8 @@ export function flatSnow(g: G, x0: number, z0: number, x1: number, z1: number, y
   }
   const P = (i: number, j: number): V => [x0 + ((x1 - x0) * i) / nx, h[i][j], z0 + ((z1 - z0) * j) / nz];
   g.color(SNOW);
+  // (the snow's: all at once, pressed flat onto the top)
+  g.snow(atOf("roof", x0 + x1, z0 + z1), (p) => p[1] - (y - 0.02));
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) face(g, P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1));
   const base = (p: V): V => [p[0], y - 0.02, p[2]];
   for (let i = 0; i < nx; i++) {
@@ -267,4 +293,24 @@ export function flatSnow(g: G, x0: number, z0: number, x1: number, z1: number, y
     face(g, base(P(0, j)), base(P(0, j + 1)), P(0, j + 1), P(0, j), [-1, 0, 0]);
     face(g, base(P(nx, j)), base(P(nx, j + 1)), P(nx, j + 1), P(nx, j), [1, 0, 0]);
   }
+  g.snow(null);
+}
+
+/** A box of snow lying on y0 (a cap on a post, a canopy, a wall's top): the snow's, all at once
+ *  (`kind`'s range), pressed flat onto what it's on. In the colour set. */
+export function snowBox(
+  g: G,
+  x0: number,
+  y0: number,
+  z0: number,
+  x1: number,
+  y1: number,
+  z1: number,
+  kind: keyof typeof AT = "cap",
+) {
+  // (pressed a centimetre into what it's on, as flatSnow is: a cap just grown, millimetres thin,
+  // flickered against its top)
+  g.snow(atOf(kind, x0 + x1, z0 + z1), (p) => p[1] - y0 + 0.01);
+  g.box(x0, y0, z0, x1, y1, z1);
+  g.snow(null);
 }

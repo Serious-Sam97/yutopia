@@ -365,15 +365,18 @@ export class KartSound {
     const g = k.air ? null : (k.ground ?? "asphalt");
     const hard = g === "asphalt" || g === "kerb";
     const slick = g === "ice" || g === "blackice";
-    const soft = g === "snow" || g === "deep";
+    // (and the green's, the rain's: grass a softer brush, mud a low churn — docs/plan/65)
+    const soft = g === "snow" || g === "deep" || g === "grass" || g === "mud";
+    const crunchK = g === "deep" || g === "mud" ? 0.01 : g === "grass" ? 0.005 : 0.007;
+    const crunchHz = g === "deep" ? 700 : g === "mud" ? 450 : g === "grass" ? 950 : 1300;
     if (this.road && this.roadTone) {
       at(this.road.gain, hard ? Math.min(0.07, v * 0.0028) : slick ? Math.min(0.02, v * 0.0008) : 0, 0.06);
       at(this.roadTone.frequency, 180 + v * 22 + (slick ? 2500 : 0), 0.1);
     }
     if (this.crunch && this.crunchBand && this.crunchLfo) {
-      at(this.crunch.gain, soft ? Math.min(0.14, v * (g === "deep" ? 0.01 : 0.007)) : 0, 0.06);
+      at(this.crunch.gain, soft ? Math.min(0.14, v * crunchK) : 0, 0.06);
       at(this.crunchLfo.frequency, 5 + v * 0.9, 0.1);
-      at(this.crunchBand.frequency, (g === "deep" ? 700 : 1300) + v * 25, 0.1);
+      at(this.crunchBand.frequency, crunchHz + v * 25, 0.1);
     }
     if (this.kerb && this.kerbLfo) {
       at(this.kerb.gain, g === "kerb" ? Math.min(0.12, v * 0.006) : 0, 0.03);

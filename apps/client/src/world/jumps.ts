@@ -103,6 +103,9 @@ export function landSound(kind: JumpKind, floor: Floor, gain = 1, soles = true) 
     slush: [1100, 0.14],
     ice: [3400, 0.04],
     blackice: [3400, 0.04],
+    grass: [500, 0.12],
+    mud: [400, 0.16],
+    wet: [1300, 0.12],
   };
   const [freq, len] = spec[floor];
   for (const dt of [0, 0.018]) {

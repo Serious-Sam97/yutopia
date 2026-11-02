@@ -35,6 +35,10 @@ export const NOTICE_MAX = 140;
 export const STORM_CALL_MS = 20 * 60_000;
 /** A called-up fog, or a sent-off one, likewise (docs/plan/64-the-fog.md). */
 export const FOG_CALL_MS = 20 * 60_000;
+/** A called sky (docs/plan/65-the-weather.md, W10): an hour, then the schedule's again. */
+export const WEATHER_CALL_MS = 60 * 60_000;
+/** The ground's call (Snow it in, Melt it, As the weather has it): this long to get there. */
+export const GROUND_CALL_MS = 2 * 60_000;
 
 /** What an admin did, for the log (the API's admin_actions.kind). */
 export const LOG_KINDS = [
@@ -68,5 +72,6 @@ export const LOG_KINDS = [
   "rollback",
   "god",
   "steps",
+  "weather",
 ] as const;
 export type LogKind = (typeof LOG_KINDS)[number];

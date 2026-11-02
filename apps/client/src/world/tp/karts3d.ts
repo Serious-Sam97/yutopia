@@ -233,6 +233,9 @@ export function* buildCircuit(
     polygonOffset: true,
     polygonOffsetFactor: -2,
   });
+  // (the track is kept clear: no snow's dusting on it — tp/wx3d.ts, docs/plan/65; its tarmac read
+  // as the snow beside it)
+  asphalt.userData.wx = "road";
   // (the lap twice over its seam: closed; up on the bridge the deck's own road)
   sweep(
     0,
@@ -251,6 +254,7 @@ export function* buildCircuit(
   // the centre line, dashed
   {
     const m = std("#e6d69a", { roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -4 });
+    m.userData.wx = "road";
     for (let s = 0; s < t.len; s += 8)
       sweep(
         s,
@@ -310,6 +314,7 @@ export function* buildCircuit(
     pl.position.set(p.x, padY(p.x, p.z) + 0.07, p.z);
     root.add(pl);
     const lineMat = std("#f3ead6", { polygonOffset: true, polygonOffsetFactor: -6 });
+    lineMat.userData.wx = "road";
     for (const gs of t.grid) {
       const q = new T3.Mesh(keep(new T3.PlaneGeometry(2.4, 0.12)), lineMat);
       q.rotation.set(-Math.PI / 2, 0, 0);
@@ -335,8 +340,8 @@ export function* buildCircuit(
   // ── the snow banks: soft walls either side (not on the raised stretch: walls there) ──
   {
     const snow = std("#f4f7fa", { roughness: 0.95 });
-    for (const sgn of [1, -1])
-      sweep(
+    for (const sgn of [1, -1]) {
+      const m = sweep(
         0,
         t.len,
         (p) => {
@@ -352,6 +357,17 @@ export function* buildCircuit(
         },
         snow,
       );
+      // the weather's (tp/wx3d.ts, docs/plan/65): each stretch in at its own snow lying (a drift's,
+      // 0.45 … 0.74, smooth along it), pressed down under the ground when it's gone, never clipped
+      // (+10: wx3d.ts BURIED)
+      const p = m.geometry.getAttribute("position");
+      const tag = new Float32Array(p.count * 2);
+      for (let i = 0; i < p.count; i++) {
+        tag[i * 2] = 1.2;
+        tag[i * 2 + 1] = -(10 + 0.45 + 0.29 * (0.5 + 0.5 * Math.sin(p.getX(i) * 0.11 + p.getZ(i) * 0.07)));
+      }
+      m.geometry.setAttribute("wxTag", new T3.Float32BufferAttribute(tag, 2));
+    }
   }
   yield;
   // tyre walls on the hairpin's outside: stacks of three
@@ -400,7 +416,8 @@ export function* buildCircuit(
           [-H + 0.2, y],
         ];
       },
-      std("#f7f9fb", { roughness: 0.9, side: T3.DoubleSide }),
+      // (packed earth: the snow on it the weather's — docs/plan/65)
+      std("#8a7860", { roughness: 0.9, side: T3.DoubleSide }),
     );
     const p = trackAt(t, r.s);
     sweep(
@@ -410,14 +427,14 @@ export function* buildCircuit(
         [H - 0.2, r.h + 0.05],
         [H - 0.2, 0.05],
       ],
-      std("#f7f9fb"),
+      std("#8a7860"),
     );
     const lip = new T3.Mesh(keep(new T3.BoxGeometry(0.25, 0.08, TRACK_W - 0.4)), std("#b5562f"));
     lip.position.set(p.x, padY(p.x, p.z) + r.h + 0.06, p.z);
     lip.rotation.y = -p.a;
     root.add(lip);
     // its front face
-    const face = new T3.Mesh(keep(new T3.PlaneGeometry(TRACK_W - 0.4, r.h)), std("#e3e9ee", { side: T3.DoubleSide }));
+    const face = new T3.Mesh(keep(new T3.PlaneGeometry(TRACK_W - 0.4, r.h)), std("#6e5d47", { side: T3.DoubleSide }));
     face.position.set(p.x, padY(p.x, p.z) + r.h / 2 + 0.05, p.z);
     face.rotation.y = -p.a + Math.PI / 2;
     root.add(face);
@@ -639,6 +656,7 @@ export function stageKarts(T3: THREE, scene: THREE_NS.Object3D, k: KartScene, ct
   );
   {
     const m = std("#e6d69a", { roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -4 });
+    m.userData.wx = "road";
     for (let s = r0; s < r1; s += 8)
       sweep(
         s,

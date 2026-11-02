@@ -9,7 +9,7 @@ import { Icon } from "../icons";
 import { ago, Card, Note, Row, Seg, Tag, useLive, useWords } from "./ui";
 
 // The world (docs/plan/48-the-admin.md): what the whole town feels, live — the hour, the
-// weather, the morning fog (docs/plan/64-the-fog.md), the steps' volume (docs/plan/63-the-steps.md), every lock with its unlock from anywhere,
+// weather and what lies on the ground (docs/plan/65-the-weather.md), the morning fog (docs/plan/64-the-fog.md), the steps' volume (docs/plan/63-the-steps.md), every lock with its unlock from anywhere,
 // the cars and the shuttle, the Kart Park's layout, a notice to everyone in. Admins only; the world server says who set what and when.
 const W = {
   hour: ["The hour", "A hora"],
@@ -19,7 +19,31 @@ const W = {
   real: ["the real hour", "a hora real"],
   weather: ["The weather", "O tempo"],
   clear: ["Clear", "Limpo"],
+  cloudy: ["Cloudy", "Nublado"],
+  rain: ["Rain", "Chuva"],
+  sleet: ["Sleet", "Chuva com neve"],
+  snow: ["Snow", "Neve"],
   storm: ["Storm", "Tempestade"],
+  thunder: ["thunder", "trovoada"],
+  now: ["Now: {what}, {t} °C", "Agora: {what}, {t} °C"],
+  nothingDown: ["nothing coming down", "nada caindo"],
+  coming: ["{what} {how}", "{what} {how}"],
+  light: ["light", "fraca"],
+  steady: ["steady", "constante"],
+  hard: ["hard", "forte"],
+  onGround: ["On the ground", "No chão"],
+  lying: ["Snow", "Neve"],
+  wet: ["Wet", "Molhado"],
+  puddles: ["Puddles", "Poças"],
+  ice: ["The water's ice", "O gelo da água"],
+  snowIn: ["Snow it in", "Cobrir de neve"],
+  melt: ["Melt it", "Derreter"],
+  asWeather: ["As the weather has it", "Como o tempo deixar"],
+  groundBy: ["{what} by {who} · two minutes", "{what} por {who} · dois minutos"],
+  groundS: [
+    "Snow it in and Melt it take two minutes; then it melts or lies by the weather.",
+    "Cobrir e derreter levam dois minutos; depois derrete ou fica conforme o tempo.",
+  ],
   fog: ["The morning fog", "A neblina da manhã"],
   mist: ["Mist", "Névoa"],
   fogK: ["Fog", "Neblina"],
@@ -72,9 +96,21 @@ interface Snap {
   hour: number;
   hourBy: string;
   hourAt: number;
-  stormBy: string;
-  stormTo: number;
-  stormUntil: number;
+  wx: {
+    kind: string;
+    fall: number;
+    temp: number;
+    thunder: number;
+    snow: number;
+    wet: number;
+    puddles: number;
+    ice: number;
+    to: string;
+    by: string;
+    until: number;
+    groundTo: string;
+    groundBy: string;
+  };
   fogBy: string;
   fogTo: string;
   fogUntil: number;
@@ -117,9 +153,21 @@ export function World() {
       hour: st?.hour ?? 12,
       hourBy: st?.hourBy ?? "",
       hourAt: st?.hourAt ?? 0,
-      stormBy: st?.stormBy ?? "",
-      stormTo: st?.stormTo ?? -1,
-      stormUntil: st?.stormUntil ?? 0,
+      wx: {
+        kind: st?.weather?.kind ?? "clear",
+        fall: st?.weather?.fall ?? 0,
+        temp: st?.weather?.temp ?? 0,
+        thunder: st?.weather?.thunder ?? 0,
+        snow: st?.weather?.snow ?? 0,
+        wet: st?.weather?.wet ?? 0,
+        puddles: st?.weather?.puddles ?? 0,
+        ice: st?.weather?.ice ?? 0,
+        to: st?.weather?.to ?? "",
+        by: st?.weather?.by ?? "",
+        until: st?.weather?.until ?? 0,
+        groundTo: st?.weather?.groundTo ?? "",
+        groundBy: st?.weather?.groundBy ?? "",
+      },
       fogBy: st?.fogBy ?? "",
       fogTo: st?.fogTo ?? "",
       fogUntil: st?.fogUntil ?? 0,
@@ -145,7 +193,34 @@ export function World() {
     floorAreas(d.level)
       .filter((a) => a.name && d.x >= a.x - 1 && d.x <= a.x + a.w && d.y >= a.y - 1 && d.y <= a.y + a.h)
       .sort((p, q) => p.w * p.h - q.w * q.h)[0]?.name;
-  const weather = s.stormTo < 0 ? "scheduled" : s.stormTo >= 0.5 ? "storm" : "clear";
+  const wx = s.wx;
+  const weather = (wx.to || "scheduled") as "clear" | "cloudy" | "rain" | "snow" | "storm" | "scheduled";
+  const kindName = (k: string) =>
+    t(
+      k === "cloudy"
+        ? "cloudy"
+        : k === "rain"
+          ? "rain"
+          : k === "sleet"
+            ? "sleet"
+            : k === "snow"
+              ? "snow"
+              : k === "storm"
+                ? "storm"
+                : "clear",
+    );
+  // what's coming down now, how hard, the air; a storm's and thunder's said
+  const down =
+    wx.fall > 0
+      ? t("coming", {
+          what: kindName(wx.kind).toLowerCase(),
+          how: t(s.storm > 0.5 ? "hard" : wx.fall < 0.4 ? "light" : wx.fall < 0.85 ? "steady" : "hard"),
+        }) +
+        (s.storm > 0.5 ? ` · ${t("storm").toLowerCase()}` : "") +
+        (wx.thunder > 0.2 ? ` · ${t("thunder")}` : "")
+      : `${kindName(wx.kind).toLowerCase()} · ${t("nothingDown")}`;
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  const groundWhat = (k: string) => t(k === "snow" ? "snowIn" : k === "melt" ? "melt" : "asWeather");
   const fog = (s.fogTo || "scheduled") as "clear" | "mist" | "fog" | "thick" | "scheduled";
   const fogName = (k: string) => t(k === "mist" ? "mist" : k === "fog" ? "fogK" : k === "thick" ? "thick" : "clear");
   const today = fogToday(Date.now());
@@ -206,12 +281,12 @@ export function World() {
       <Card
         label={t("weather")}
         right={
-          s.stormBy ? (
+          wx.by ? (
             <Note>
               {t("calledBy", {
-                what: t(weather === "storm" ? "storm" : "clear"),
-                who: s.stormBy,
-                m: Math.max(0, Math.ceil((s.stormUntil - Date.now()) / 60_000)),
+                what: kindName(wx.to),
+                who: wx.by,
+                m: Math.max(0, Math.ceil((wx.until - Date.now()) / 60_000)),
               })}
             </Note>
           ) : null
@@ -220,13 +295,53 @@ export function World() {
         <Seg
           value={weather}
           label={t("weather")}
-          onPick={(v) => w.send("mod:storm", { storm: v === "scheduled" ? null : v === "storm" ? 1 : 0 })}
+          onPick={(v) => w.send("mod:weather", { to: v === "scheduled" ? null : v })}
           options={[
             { v: "clear", label: t("clear") },
+            { v: "cloudy", label: t("cloudy") },
+            { v: "rain", label: t("rain") },
+            { v: "snow", label: t("snow") },
             { v: "storm", label: t("storm") },
             { v: "scheduled", label: t("scheduled") },
           ]}
         />
+        <div className="mt-1.5" data-testid="weather-now">
+          <Note>{t("now", { what: down, t: wx.temp.toFixed(1) })}</Note>
+        </div>
+      </Card>
+      <Card
+        label={t("onGround")}
+        right={wx.groundBy ? <Note>{t("groundBy", { what: groundWhat(wx.groundTo), who: wx.groundBy })}</Note> : null}
+      >
+        <div className="grid grid-cols-4 gap-2 mb-2" data-testid="on-the-ground">
+          {(
+            [
+              ["lying", wx.snow],
+              ["wet", wx.wet],
+              ["puddles", wx.puddles],
+              ["ice", wx.ice],
+            ] as const
+          ).map(([k, v]) => (
+            <div key={k} className="text-center">
+              <div className="title text-[22px]">{pct(v)}</div>
+              <Note>{t(k)}</Note>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button type="button" className="deck-btn" onClick={() => w.send("mod:ground", { to: "snow" })}>
+            {t("snowIn")}
+          </button>
+          <button type="button" className="deck-btn" onClick={() => w.send("mod:ground", { to: "melt" })}>
+            {t("melt")}
+          </button>
+          <button type="button" className="deck-btn" onClick={() => w.send("mod:ground", { to: null })}>
+            {t("asWeather")}
+          </button>
+        </div>
+        <div className="mt-1.5">
+          <Note>{t("groundS")}</Note>
+        </div>
       </Card>
       <Card
         label={t("fog")}

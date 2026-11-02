@@ -115,6 +115,7 @@ export function kit(o: SedanOpts, L: number, W: number) {
     uGrime: { value: 0 },
     uDmg: { value: new Vector4(0, 0, 0, 0) },
     uEnds: { value: new Vector3(-L / 2, L / 2, W / 2) },
+    uSnow: { value: 1 },
   };
   const outside: (MeshStandardMaterial | MeshPhysicalMaterial)[] = [];
   /** A material of its own: `out` (the default) takes the sky's reflection and the wear. */
@@ -738,6 +739,9 @@ export function kit(o: SedanOpts, L: number, W: number) {
         }
       },
       setBeacon: (on, t) => beaconOn(on, t),
+      setSnow: (k: number) => {
+        wear.uSnow.value = k;
+      },
       setWear: (grime, dmg) => {
         wear.uGrime.value = Math.max(0, Math.min(1, grime));
         wear.uDmg.value.set(dmg[0] ?? 0, dmg[1] ?? 0, dmg[2] ?? 0, dmg[3] ?? 0);

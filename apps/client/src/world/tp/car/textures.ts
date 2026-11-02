@@ -417,6 +417,76 @@ export function windscreenSnow(
   return tex(c);
 }
 
+/** Rain on a windscreen (docs/plan/65, W7): beads of water, a dark rim and a bright spot each, more
+ *  and bigger the more `amount`, a few running down in trails; the wipers' fans wiped to a thin
+ *  smear with only fresh specks in them. As windscreenSnow is drawn: the screen's own size. */
+export function windscreenRain(
+  hw: number,
+  len: number,
+  amount: number,
+  wipers: { z: number; arm: number; blade: number; a0: number; a1: number }[],
+  seed = 5,
+  W = 512,
+): CanvasTexture {
+  const H = Math.round((W * len) / (2 * hw));
+  const [c, g] = canvas(W, H);
+  const r = rng(seed);
+  const X = (z: number) => ((z + hw) / (2 * hw)) * W;
+  const Y = (s: number) => H - (s / len) * H;
+  const px = W / (2 * hw);
+  g.clearRect(0, 0, W, H);
+  const bead = (x: number, y: number, s: number) => {
+    g.fillStyle = "rgba(40,50,62,0.28)";
+    g.beginPath();
+    g.arc(x, y, s, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "rgba(200,214,228,0.32)";
+    g.beginPath();
+    g.arc(x, y, s * 0.72, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "rgba(255,255,255,0.75)";
+    g.beginPath();
+    g.arc(x - s * 0.3, y - s * 0.35, Math.max(0.6, s * 0.25), 0, Math.PI * 2);
+    g.fill();
+  };
+  for (let i = 0; i < 1600 * amount * (W / 512) ** 2; i++)
+    bead(r() * W, r() * H, 0.8 + r() ** 3 * 3.5 * (0.5 + amount));
+  // trails: a few beads run down, leaving a wet line
+  for (let i = 0; i < 26 * amount; i++) {
+    const x = r() * W;
+    const y0 = r() * H * 0.7;
+    const l = 20 + r() * 80;
+    g.strokeStyle = "rgba(190,206,222,0.22)";
+    g.lineWidth = 1.5 + r() * 1.5;
+    g.beginPath();
+    g.moveTo(x, y0);
+    g.lineTo(x + (r() - 0.5) * 6, y0 + l);
+    g.stroke();
+    bead(x, y0 + l, 2.2 + r() * 1.8);
+  }
+  // the wipers' fans: wiped (a smear of a few fresh drops left)
+  g.save();
+  g.globalCompositeOperation = "destination-out";
+  for (const w of wipers) {
+    const cx = X(w.z);
+    const cy = Y(0);
+    g.fillStyle = "rgba(0,0,0,0.93)";
+    g.beginPath();
+    g.arc(cx, cy, w.arm * px, -w.a1, -w.a0, false);
+    g.arc(cx, cy, (w.arm - w.blade) * px, -w.a0, -w.a1, true);
+    g.closePath();
+    g.fill();
+  }
+  g.restore();
+  for (const w of wipers)
+    for (let i = 0; i < 40; i++) {
+      const rr = (w.arm - w.blade + r() * w.blade) * px;
+      const a = w.a0 + r() * (w.a1 - w.a0);
+      bead(X(w.z) + Math.cos(a) * rr, Y(0) - Math.sin(a) * rr, 0.7 + r() * 1.2);
+    }
+  return tex(c);
+}
+
 /** Checker plate (the steps, the footplates, the running boards): raised diamonds on steel. */
 export function diamond(): CanvasTexture {
   const [c, g] = canvas(128, 128);

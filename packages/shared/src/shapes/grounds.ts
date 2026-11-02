@@ -212,7 +212,9 @@ function pitched(
   ]);
 }
 const ROOF_STEP = 0.2; // (under the body's step-up, 0.27: walked up)
-const ROOF_SNOW = 0.2; // (the snow drawn on a slope: 0.24)
+// (the roofs as they are bare: the snow drawn on them is the weather's now — docs/plan/65 — and
+// on a snowy day you stand a little in it; the user's call, 2026-11-02)
+const ROOF_SNOW = 0;
 /** A roof by its cross-section `prof` ([across, height]: from one eave over the ridge to the other,
  *  as drawn) as steps ROOF_STEP high, each as wide as the snowed surface stands at its top — never
  *  over the drawn roof, a step under it at most: stood on, walked up. Within the walls (the
@@ -300,16 +302,14 @@ function shell(b: Building): { H: number; roof: (out: GroundSolid[], y0: number)
     case "gatehouse":
       return {
         H: 2.6,
-        roof: (o, y) =>
-          o.push({ what: "roof", s: flat(x0 - 0.6, z0 - 0.6, x1 + 0.6, z1 + 0.6, y + 2.6, y + 2.95 + 0.25) }), // (+ its snow)
+        roof: (o, y) => o.push({ what: "roof", s: flat(x0 - 0.6, z0 - 0.6, x1 + 0.6, z1 + 0.6, y + 2.6, y + 2.95) }), // (bare: its snow the weather's)
       };
     case "boathouse":
       return { H: 3.2, roof: (o, y) => pitched(o, x0, z0, x1, z1, y + 3.2, 2.4, true, 0.5) };
     case "shed":
       return {
         H: 4,
-        roof: (o, y) =>
-          o.push({ what: "roof", s: flat(x0 - 0.4, z0 - 0.4, x1 + 0.4, z1 + 0.4, y + 3.95, y + 4.15 + 0.34) }), // (+ its snow)
+        roof: (o, y) => o.push({ what: "roof", s: flat(x0 - 0.4, z0 - 0.4, x1 + 0.4, z1 + 0.4, y + 3.95, y + 4.15) }), // (bare)
       };
     case "house": {
       const k = houseKind(b);
@@ -372,7 +372,7 @@ function building(out: GroundSolid[], b: Building) {
     // the bus shelter: open to the street (south), glass back and sides, a roof on posts
     out.push({ what: "building", s: flat(x0, z0 - 0.05, x1, z0 + 0.05, y0, y0 + 2.5) });
     for (const x of [x0, x1]) out.push({ what: "building", s: flat(x - 0.05, z0, x + 0.05, z1 - 1, y0, y0 + 2.5) });
-    out.push({ what: "roof", s: flat(x0 - 0.3, z0 - 0.3, x1 + 0.3, z1 + 0.3, y0 + 2.5, y0 + 2.7 + 0.22) }); // (+ its snow)
+    out.push({ what: "roof", s: flat(x0 - 0.3, z0 - 0.3, x1 + 0.3, z1 + 0.3, y0 + 2.5, y0 + 2.7) }); // (bare)
     return;
   }
   if (b.kind === "silo") {
@@ -468,7 +468,7 @@ function shopFront(out: GroundSolid[], b: Building, y0: number) {
     if (b.key === "hall") {
       // four columns 2.2 out (0.2–0.24 round, their plinths at 0.6, capitals to 4.35), the entablature
       // over them (6.4 across, 2.6 out, 4.35–4.8), the pediment on it (its slopes from 4.8 at 3.3 either
-      // side to 6.3 at the middle, 0.14 of snow on them: in steps, under it)
+      // side to 6.3 at the middle: in steps, under it — bare, its snow the weather's)
       for (const sx of [-2.4, -0.8, 0.8, 2.4])
         out.push({ what: "building", s: cyl(xm + sx, fz + nz * 2.2, 0.22, y0 + 0.6, y0 + 4.35) });
       box("building", xm - 3.2, xm + 3.2, 0, 2.6, 4.35, 4.8);
@@ -486,19 +486,19 @@ function shopFront(out: GroundSolid[], b: Building, y0: number) {
           [xm + 3.3, y0 + 4.8],
         ],
         "building",
-        0.06,
+        0,
       );
     } else {
-      // the flat canopy over the door: 3.2 across, 1.4 out, 3.75–3.95 and its snow (0.07 at its edges)
-      box("awning", xm - 1.55, xm + 1.55, AWNING_IN, 1.4, 3.75, 4.01);
+      // the flat canopy over the door: 3.2 across, 1.4 out, 3.75–3.95 (bare)
+      box("awning", xm - 1.55, xm + 1.55, AWNING_IN, 1.4, 3.75, 3.95);
     }
     return;
   }
   if (b.kind === "diner") return;
   if (b.kind === "hotel") {
-    // the marquee over its door: 4.8 across, 3 out, 3.1–3.45 and its snow (0.1 at its edges); its two
+    // the marquee over its door: 4.8 across, 3 out, 3.1–3.45 (bare); its two
     // brass posts at 2.85 out (0.12 square, to its underside)
-    box("awning", xm - 2.35, xm + 2.35, AWNING_IN, 2.95, 3.1, 3.54);
+    box("awning", xm - 2.35, xm + 2.35, AWNING_IN, 2.95, 3.1, 3.45);
     for (const sx of [-2.2, 2.2]) out.push({ what: "building", s: cyl(xm + sx, fz + nz * 2.85, 0.06, y0, y0 + 3.1) });
     // its blade sign at the corner (grounds3d.ts `signBoard`: 1.2 across the street's way, 4 tall from
     // 3.5, 0.08 thick, on two legs 0.12 square 0.4 either side of its middle), on the ground there
@@ -574,10 +574,10 @@ function houseFront(out: GroundSolid[], b: Building, y0: number, H: number) {
     out.push({ what: "building", s: flat(cx - 0.4, cz - 0.35, cx + 0.4, cz + 0.35, y0 + H, top) });
     out.push({ what: "building", s: flat(cx - 0.48, cz - 0.43, cx + 0.48, cz + 0.43, top, top + 0.15) });
   }
-  // the mailbox at the pavement: its post (1.1) and box (to 1.38, its snow 1.45)
+  // the mailbox at the pavement: its post (1.1) and box (to 1.38; bare)
   const mz = z1 - 0.5;
   box("street", 1.85, 1.95, mz - 0.05, mz + 0.05, 0, 1.1);
-  box("street", 1.68, 2.12, mz - 0.25, mz + 0.25, 1.1, 1.45);
+  box("street", 1.68, 2.12, mz - 0.25, mz + 0.25, 1.1, 1.38);
 }
 
 /** One you walk into: a wall on each of its wall edges (grounds.ts `wallEdgeAt`) as tall as its
@@ -998,7 +998,7 @@ function things(out: GroundSolid[]) {
     out.push({ what: "statue", s: flat(x - 2.4, z - 2.4, x + 2.4, z + 2.4, y, y + 0.3) });
     out.push({ what: "statue", s: flat(x - 2, z - 2, x + 2, z + 2, y + 0.3, y + 0.6) });
     out.push({ what: "statue", s: flat(x - 1.4, z - 1.4, x + 1.4, z + 1.4, y + 0.6, y + 2.9) });
-    out.push({ what: "statue", s: flat(x - 1.6, z - 1.6, x + 1.6, z + 1.6, y + 2.9, y + 3.2 + 0.15) }); // (+ its snow)
+    out.push({ what: "statue", s: flat(x - 1.6, z - 1.6, x + 1.6, z + 1.6, y + 2.9, y + 3.2) }); // (bare)
     out.push({ what: "statue", s: cyl(x, z, 0.62, y + 3.2, y + 7.4) });
   }
   // the farm's scarecrows: a post to 2.6, a body round it, the arms out 1.55
@@ -1335,7 +1335,7 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
   },
   street: {
     label: "Street furniture",
-    how: "hydrant (0.17 round, 0.84), bin (0.3, 0.96), newspaper box (0.5 × 0.44, 1.18), postbox (0.52 × 0.5, 1.31), wooden pole (0.16, 8.6, its crossarm 2.4 across at 7.5), stop sign (pole 2.66, the plate 1.87–2.63), street names (pole 3.06, two blades), bench (a seat 2 × 0.54, 0.92); a townhouse's mailbox (its post 1.1, the box 0.44 × 0.5 to 1.45 with its snow, 1.9 out from the door); the hotel's blade sign (1.2 × 0.08 from 3.5 to 7.5, its two legs 0.12 square to 7.5)",
+    how: "hydrant (0.17 round, 0.84), bin (0.3, 0.96), newspaper box (0.5 × 0.44, 1.18), postbox (0.52 × 0.5, 1.31), wooden pole (0.16, 8.6, its crossarm 2.4 across at 7.5), stop sign (pole 2.66, the plate 1.87–2.63), street names (pole 3.06, two blades), bench (a seat 2 × 0.54, 0.92); a townhouse's mailbox (its post 1.1, the box 0.44 × 0.5 to 1.38, 1.9 out from the door); the hotel's blade sign (1.2 × 0.08 from 3.5 to 7.5, its two legs 0.12 square to 7.5)",
     odd: "drawn at (x, z); on a street's pavement stood on it, drawn and solid (grounds.ts pavedAt: the kerb's 0.18 over the ground). Walking blocks the tile whose corner that is (floor(x), floor(z)) — half a tile off. The wires between the poles (7.86) aren't solids",
   },
   pavement: {
@@ -1355,12 +1355,12 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
   },
   building: {
     label: "Building",
-    how: "closed ones: a box over the plot to the eaves (boathouse 3.2, shed 4, townhouse 6.4 or 4.2 by its kind, church 6, barn 5.2, farmhouse 6.2, shops 3.8 a floor + 0.8); the silo a cylinder (13 + its dome); the bus shelter's glass back and sides (2.5); the gas station's kiosk (3.2); the church's steeple (to 13.4, its spire 0.9 round to 21.6); a shop's false front 1.4 over its roof; a townhouse's chimney (0.8 × 0.7 to 0.8 over its ridge, its cap 0.15) and a storey and a half's dormer (2.2 across, 0.3 out past the face, to 2.2 over the eaves, its own roof in steps); the town hall's four columns (0.22 round, 0.6–4.35, 2.2 out), its entablature (6.4 × 2.6, 4.35–4.8) and pediment (steps under its slopes, 4.8–6.3 and the snow); the hotel's marquee posts (0.06 round, 3.1)",
+    how: "closed ones: a box over the plot to the eaves (boathouse 3.2, shed 4, townhouse 6.4 or 4.2 by its kind, church 6, barn 5.2, farmhouse 6.2, shops 3.8 a floor + 0.8); the silo a cylinder (13 + its dome); the bus shelter's glass back and sides (2.5); the gas station's kiosk (3.2); the church's steeple (to 13.4, its spire 0.9 round to 21.6); a shop's false front 1.4 over its roof; a townhouse's chimney (0.8 × 0.7 to 0.8 over its ridge, its cap 0.15) and a storey and a half's dormer (2.2 across, 0.3 out past the face, to 2.2 over the eaves, its own roof in steps); the town hall's four columns (0.22 round, 0.6–4.35, 2.2 out), its entablature (6.4 × 2.6, 4.35–4.8) and pediment (steps under its slopes, 4.8–6.3); the hotel's marquee posts (0.06 round, 3.1)",
     odd: "the HQ, east and south blocks aren't here (stored floors: phase 6). The steeple and the bus shelter (walked into, its glass walls on the tiles' edges) are as drawn on the grid too since phase 4. Roof overhangs, a false front's raised middle, the diner's roof sign and the stone base course aren't followed; the hall's columns stand at 0.6 as drawn (past its steps)",
   },
   awning: {
     label: "Awnings, canopies, the marquee",
-    how: "a shop's awning (3.5 at the wall to 2.9 at 1.6 out, its valance to 2.62; 0.6 in from either end) in three strips, each as high as its outer edge; the post office's canopy (3.2 × 1.4, 3.75 to its snow at 4.01); the hotel's marquee (4.7 × 3, 3.1 to its snow at 3.54)",
+    how: "a shop's awning (3.5 at the wall to 2.9 at 1.6 out, its valance to 2.62; 0.6 in from either end) in three strips, each as high as its outer edge; the post office's canopy (3.2 × 1.4, 3.75–3.95); the hotel's marquee (4.7 × 3, 3.1–3.45)",
     odd: "solid from 0.6 out from the wall's face (shapes/grounds.ts AWNING_IN) to the edge: by the wall it's open, so a run up the face passes up past it; their bottoms at the valance or underside, 2.2 over the pavement at least; the awnings' own snow (0.13) not counted. Not the diner's nor a boarded shop's (none drawn)",
   },
   porch: {

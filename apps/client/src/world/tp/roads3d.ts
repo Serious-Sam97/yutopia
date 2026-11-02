@@ -14,6 +14,7 @@ import { BoxGeometry, type BufferGeometry, CylinderGeometry, IcosahedronGeometry
 import { type G, place, tinted, type V } from "./campus";
 import type { Themes } from "./sky";
 import { face, ridge, type Station, wobble } from "./snow3d";
+import { AT, atOf, BURIED, smoothAt, wx } from "./wx3d";
 
 // The roads (docs/plan/33-the-look.md, the roads): the asphalt's own picture (its lanes' tyre
 // tracks, wear, tar seams — no snow painted into it), and as geometry what lies on it and beside
@@ -51,10 +52,10 @@ export function asphaltCanvas(T: Themes, w: Way): HTMLCanvasElement {
     const y = r() * H;
     g.fillRect(x, y, 1 + r() * 2, 1 + r() * 2);
   }
-  // salt and slush grey between and outside the wheel paths
+  // the parking lanes a little lighter: less worn (their salt and slush the weather's)
   const lanes = lanesOf(w);
   for (const m of lanes.parking) {
-    g.fillStyle = "rgba(150,156,164,0.22)";
+    g.fillStyle = "rgba(150,156,164,0.1)";
     g.fillRect(U(m - 1.2), 0, U(m + 1.2) - U(m - 1.2), H);
   }
   // the tracks: two a lane, worn darker and smoother, wandering a little (wrapping at the tile)
@@ -95,7 +96,7 @@ export function asphaltCanvas(T: Themes, w: Way): HTMLCanvasElement {
   return c;
 }
 
-/** The pavements' slabs: concrete flags with their joints, a little stained, salt at the edges. */
+/** The pavements' slabs: concrete flags with their joints, a little stained. */
 export function slabCanvas(T: Themes): HTMLCanvasElement {
   const S = 256;
   const { c, g } = T.canvas(S, S);
@@ -121,9 +122,9 @@ export function slabCanvas(T: Themes): HTMLCanvasElement {
     g.lineTo(S, k * 64);
     g.stroke();
   }
-  // trodden snow in patches, salt stains
+  // stains (the trodden snow in patches was painted in: the weather's now — docs/plan/65)
   for (let i = 0; i < 14; i++) {
-    g.fillStyle = `rgba(240,243,246,${0.25 + r() * 0.3})`;
+    g.fillStyle = `rgba(150,148,142,${0.08 + r() * 0.1})`;
     g.beginPath();
     g.ellipse(r() * S, r() * S, 8 + r() * 26, 4 + r() * 12, r() * Math.PI, 0, Math.PI * 2);
     g.fill();
@@ -337,8 +338,12 @@ export function wayDressing(
     );
   if (w.kind !== "street") {
     // ── the verges: packed grey snow from inside the edge out to the plough's bank, its inner
-    // edge ragged (by distance along: no repeat) ──
-    paint.color(0xd9dfe5);
+    // edge ragged (by distance along: no repeat) — the weather's, as its spray is: under the road
+    // when there's none lying (wx3d.ts) ──
+    paint.color(0xd9dfe5).snow(
+      (p) => smoothAt(p[0], p[2], AT.bank[0], AT.bank[1]) + BURIED,
+      () => 0.12,
+    );
     const street = intoStreet(w);
     const ease = street.map((e, i) => Math.min(e, turn[i]));
     for (const s of [1, -1]) {
@@ -371,12 +376,17 @@ export function wayDressing(
         (i) => open(i) && notBridge(i),
       );
     }
+    paint.snow(null);
     return;
   }
   // ── a street: slush in the gutters, the kerbs (a face and a top), the pavements, snow along
   // the buildings' feet; all open where another street meets it ──
   const keep = (i: number) => open(i) && notBridge(i);
-  paint.color(0xa9a59d); // (the gutters' slush: grey-brown)
+  // (the gutters' slush: grey-brown — the weather's, under the road when there's no snow lying)
+  paint.color(0xa9a59d).snow(
+    (p) => smoothAt(p[0], p[2], AT.bank[0], AT.bank[1]) + BURIED,
+    () => 0.12,
+  );
   for (const s of [1, -1]) {
     const inner = (t: number, i: number) => s * (hw(i) - 0.35 - 0.35 * (0.5 + 0.5 * wobA(t + s * 40)));
     strip(
@@ -389,6 +399,7 @@ export function wayDressing(
       keep,
     );
   }
+  paint.snow(null);
   const KERB = 0.18;
   // (the kerb rises as the pavement opens: no wall where the road ends)
   const kerbH = (i: number) => KERB * Math.min(1, pv(i) / 0.8);
@@ -436,8 +447,11 @@ export function wayDressing(
       kerbH,
       keep,
     );
-    // snow banked along the buildings' side of it, ragged
-    paint.color(0xf1f4f7);
+    // snow banked along the buildings' side of it, ragged (the weather's)
+    paint.color(0xf1f4f7).snow(
+      (p) => smoothAt(p[0], p[2], AT.bank[0], AT.bank[1]) + BURIED,
+      () => 0.06,
+    );
     const inner = (t: number, i: number) =>
       s *
       (hw(i) +
@@ -453,6 +467,7 @@ export function wayDressing(
       (i) => kerbH(i) + 0.025,
       keep,
     );
+    paint.snow(null);
   }
 }
 
@@ -499,25 +514,35 @@ export function snowPoles(
     );
     out.push(place(tinted(new BoxGeometry(0.09, 0.2, 0.02).translate(0, 1.45, 0.04), 0xe8eef2), p.x, y, p.z, p.ry));
     out.push(
-      place(tinted(new CylinderGeometry(0.045, 0.045, 0.04, 5).translate(0, 1.72, 0), 0xf2f5f8), p.x, y, p.z, p.ry),
+      place(
+        tinted(new CylinderGeometry(0.045, 0.045, 0.04, 5).translate(0, 1.72, 0), 0xf2f5f8, atOf("cap", p.x, p.z)),
+        p.x,
+        y,
+        p.z,
+        p.ry,
+      ),
     );
   }
   return out;
 }
 
 // ── the roads worn (docs/plan/33-the-look.md, "The roads, worn") ──────────────────────────────
-// How white the carriageways are from the weather: up as a storm comes, cleared by the ploughs
-// and the traffic over about an hour after it (shared weather.ts: the same for everyone).
+// How white the carriageways are from the weather: up as the snow comes down, cleared by the
+// ploughs and the traffic over about an hour after it (shared weather.ts: the same for everyone).
+// And all of it — the packed snow each kind of way keeps too — only as the snow lies (the room's,
+// wx3d.ts `wxSnow`: docs/plan/65, W4): none on a green day.
 export const roadSnow = { value: -1 };
 // (the e2e shots set it: after a storm)
 if (typeof window !== "undefined") (window as unknown as { __roadSnow?: typeof roadSnow }).__roadSnow = roadSnow;
 let snowAt = 0;
-export function stepRoadSnow(storm: number, stormAt: (ms: number) => number) {
+/** `falling`: how hard it's snowing now (the storm, or the snow's own fall); `fallingAt` the same
+ *  by the schedule at a time (coming in: what the last two hours left). */
+export function stepRoadSnow(falling: number, fallingAt: (ms: number) => number) {
   const now = Date.now();
   if (roadSnow.value < 0) {
     // (coming in: what the last storms left)
     let v = 0;
-    for (let k = 0; k <= 24; k++) v = Math.max(v, stormAt(now - k * 5 * 60_000) * Math.max(0, 1 - (k * 5) / 60));
+    for (let k = 0; k <= 24; k++) v = Math.max(v, fallingAt(now - k * 5 * 60_000) * Math.max(0, 1 - (k * 5) / 60));
     roadSnow.value = v;
     snowAt = now;
     return;
@@ -525,7 +550,7 @@ export function stepRoadSnow(storm: number, stormAt: (ms: number) => number) {
   const dt = Math.min(5, (now - snowAt) / 1000);
   snowAt = now;
   const v = roadSnow.value;
-  roadSnow.value = storm > v ? v + (storm - v) * Math.min(1, dt / 300) : Math.max(storm, v - dt / 3600);
+  roadSnow.value = falling > v ? v + (falling - v) * Math.min(1, dt / 300) : Math.max(falling, v - dt / 3600);
 }
 
 const NOISE = `
@@ -581,7 +606,12 @@ export function roadCover(m: { userData: Record<string, unknown> }, w: Way) {
     rdBase: { value: BASE[w.kind] ?? 0.3 },
     rdPark: { value: lanes.parking.length ? 3.5 : 99 },
     rdSnow: roadSnow,
+    wxSnow: wx.wxSnow,
+    wxMelt: wx.wxMelt,
   };
+  // (its snow is its own, by the rules above: no dusting over it — its wet, sheen and puddles the
+  // layer's, which declares wxSnow and wxMelt: wx3d.ts)
+  m.userData.wx = "road";
   m.userData.grounds = {
     key: "-road",
     patch: (sh: { uniforms: Record<string, unknown>; vertexShader: string; fragmentShader: string }) => {
@@ -596,7 +626,9 @@ export function roadCover(m: { userData: Record<string, unknown> }, w: Way) {
           "#include <map_fragment>",
           `#include <map_fragment>
 {
-  float snow = max(rdSnow, 0.0);
+  // (only as much as lies: wx3d.ts)
+  float lie = smoothstep(0.1, 0.75, wxSnow);
+  float snow = min(max(rdSnow, 0.0), wxSnow);
   vec2 P = vRdW.xz;
   float m = (vMapUv.x - 0.5) * rdW; // across it, tiles from its line
   float big = rdFbm(P * 0.07);
@@ -626,13 +658,16 @@ export function roadCover(m: { userData: Record<string, unknown> }, w: Way) {
   float cover = clamp(base + snow * 0.6 + (big - 0.5) * 0.8 + park * 0.18, 0.0, 1.0);
   cover = cover * (1.0 - rut * (0.92 - snow * 0.35));
   cover = max(cover, edge * (0.5 + snow * 0.45) * smoothstep(0.25, 0.6, fine + 0.2));
+  cover *= lie;
   vec3 packed = mix(vec3(0.52, 0.55, 0.59), vec3(0.74, 0.77, 0.81), fine);
   // slush and the wheels' spray: brown-grey towards the edges and by the parking bays
-  float slush = clamp(edge * 0.8 + park * 0.5, 0.0, 1.0) * smoothstep(0.35, 0.75, rdNoise(P * 0.4 + 5.0)) * (1.0 - snow * 0.6);
+  // (and while it melts: slush all over, brown-grey — docs/plan/65, phase 5)
+  float slush = clamp(edge * 0.8 + park * 0.5 + wxMelt * 0.55, 0.0, 1.0) * smoothstep(0.35, 0.75, rdNoise(P * 0.4 + 5.0)) * (1.0 - snow * 0.6);
   packed = mix(packed, vec3(0.30, 0.27, 0.23), slush * 0.65);
   diffuseColor.rgb = mix(diffuseColor.rgb, packed, smoothstep(0.08, 0.55, cover) * 0.95);
-  // on the bare: salt drying white, dark wet patches
-  float bare = 1.0 - smoothstep(0.1, 0.5, cover);
+  // on the bare: salt drying white, dark wet patches — winter's, as the snow lies (the wet's own
+  // in the rain: phase 6)
+  float bare = (1.0 - smoothstep(0.1, 0.5, cover)) * lie;
   float salt = smoothstep(0.66, 0.78, rdFbm(P * 0.45 + 17.0)) * bare;
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.36, 0.37, 0.38), salt * 0.55);
   float wet = smoothstep(0.62, 0.8, rdFbm(P * 0.16 + 31.0)) * bare;
@@ -646,7 +681,8 @@ export function roadCover(m: { userData: Record<string, unknown> }, w: Way) {
 /** The paint under it: worn and snowed over where the cover's thick (no ruts known here: by the
  *  same noise, a little less). */
 export function paintCover(m: { userData: Record<string, unknown> }, kind: string) {
-  const u = { rdBase: { value: (BASE[kind] ?? 0.3) * 0.8 }, rdSnow: roadSnow };
+  const u = { rdBase: { value: (BASE[kind] ?? 0.3) * 0.8 }, rdSnow: roadSnow, wxSnow: wx.wxSnow };
+  m.userData.wx = "road";
   m.userData.grounds = {
     key: "-paint",
     patch: (sh: { uniforms: Record<string, unknown>; vertexShader: string; fragmentShader: string }) => {
@@ -662,7 +698,7 @@ export function paintCover(m: { userData: Record<string, unknown> }, kind: strin
           `#include <color_fragment>
 {
   vec2 P = vRdW.xz;
-  float cover = clamp(rdBase + max(rdSnow, 0.0) * 0.6 + (rdFbm(P * 0.07) - 0.5) * 0.8, 0.0, 1.0);
+  float cover = clamp(rdBase + min(max(rdSnow, 0.0), wxSnow) * 0.6 + (rdFbm(P * 0.07) - 0.5) * 0.8, 0.0, 1.0) * smoothstep(0.1, 0.75, wxSnow);
   float scuff = smoothstep(0.55, 0.85, rdFbm(P * 1.7));
   vec3 packed = mix(vec3(0.52, 0.55, 0.59), vec3(0.74, 0.77, 0.81), rdFbm(P * 0.8));
   diffuseColor.rgb = mix(diffuseColor.rgb, packed, clamp(smoothstep(0.2, 0.7, cover) + scuff * 0.45, 0.0, 0.92));
@@ -718,6 +754,7 @@ export function streetCorners(w: Way, ctx: Ctx, nearLine: (u: Way, x: number, z:
         [0.85, -1],
       ],
       yAt,
+      "bank",
     );
     // a bay with no car: snowed in to the parking lane's edge
     if (lanes.parking.length)
@@ -731,6 +768,7 @@ export function streetCorners(w: Way, ctx: Ctx, nearLine: (u: Way, x: number, z:
           [2.55, -1],
         ],
         yAt,
+        "bank",
       );
   }
 }
@@ -757,7 +795,9 @@ export function crossingHeaps(yAt: (x: number, z: number) => number): BufferGeom
       pos.setXYZ(i, pos.getX(i) * k * 1.3, Math.max(-0.1, pos.getY(i)) * k * 0.75, pos.getZ(i) * k);
     }
     g.computeVertexNormals();
-    out.push(place(tinted(g, r() < 0.5 ? 0xe6eaee : 0xd4d8dc), x, yAt(x, z) - 0.05, z, r() * Math.PI, s));
+    out.push(
+      place(tinted(g, r() < 0.5 ? 0xe6eaee : 0xd4d8dc, atOf("bank", x, z)), x, yAt(x, z) - 0.05, z, r() * Math.PI, s),
+    );
   }
   return out;
 }
@@ -773,7 +813,7 @@ export function lotCover(
 ) {
   m.transparent = true;
   m.depthWrite = false;
-  const u: Record<string, { value: unknown }> = { rdSnow: roadSnow };
+  const u: Record<string, { value: unknown }> = { rdSnow: roadSnow, wxSnow: wx.wxSnow };
   if (lot) {
     u.lotA = { value: lot.aisles };
     u.lotZ = { value: lot.cross };
@@ -797,21 +837,21 @@ export function lotCover(
       sh.fragmentShader = sh.fragmentShader
         .replace(
           "#include <common>",
-          `#include <common>\nvarying vec3 vRdW;\nuniform float rdSnow;\n${lot ? "uniform vec2 lotA;\nuniform vec2 lotZ;\n" : ""}${NOISE}`,
+          `#include <common>\nvarying vec3 vRdW;\nuniform float rdSnow; uniform float wxSnow;\n${lot ? "uniform vec2 lotA;\nuniform vec2 lotZ;\n" : ""}${NOISE}`,
         )
         .replace(
           "#include <color_fragment>",
           `#include <color_fragment>
 {
   vec2 P = vRdW.xz;
-  float snow = max(rdSnow, 0.0);
+  float snow = min(max(rdSnow, 0.0), wxSnow);
   float cover = clamp(0.5 + snow * 0.6 + (rdFbm(P * 0.07) - 0.5) * 0.9 + (rdFbm(P * 0.6) - 0.5) * 0.25, 0.0, 1.0);${worn}
   cover = clamp(cover, 0.0, 1.0);
   vec3 packed = mix(vec3(0.52, 0.55, 0.59), vec3(0.76, 0.79, 0.83), rdFbm(P * 0.8));
   float slush = smoothstep(0.45, 0.8, rdNoise(P * 0.35 + 5.0)) * (1.0 - snow * 0.6);
   packed = mix(packed, vec3(0.30, 0.27, 0.23), slush * 0.5);
   diffuseColor.rgb = packed;
-  diffuseColor.a = smoothstep(0.08, 0.55, cover) * 0.92;
+  diffuseColor.a = smoothstep(0.08, 0.55, cover) * 0.92 * smoothstep(0.1, 0.75, wxSnow);
 }`,
         );
     },

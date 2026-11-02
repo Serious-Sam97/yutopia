@@ -38,6 +38,8 @@ const LEVEL = 0.38;
 const TARGET = 10 ** (-22 / 20);
 /** with no recordings of their own: another's, damped */
 const BORROW: Partial<Record<Footing, Footing>> = { blackice: "ice" };
+/** a step in a puddle (docs/plan/65-the-weather.md): its own recordings, played on a wet way */
+type Bank_ = Footing | "puddle";
 const DAMPED: Partial<Record<Footing, number>> = { felt: 1600 };
 
 export interface StepOpts {
@@ -60,10 +62,14 @@ interface Bank {
 }
 
 export class StepPlayer {
-  private files: Promise<Record<string, string[]>> | null = null;
-  private banks = new Map<Footing, Promise<Bank | null>>();
-  private ready = new Map<Footing, Bank | null>();
-  private last = new Map<Footing, number>();
+  private files: Promise<Record<string, string[][]>> | null = null;
+  private banks = new Map<Bank_, Promise<Bank | null>>();
+  private ready = new Map<Bank_, Bank | null>();
+  private last = new Map<Bank_, number>();
+  /** a candidate other than the first (the benches') */
+  private picks: Partial<Record<Bank_, number>> = {};
+  /** the puddles out there, 0 … 1 (the room's weather) */
+  private puddles = 0;
   /** steps sounding now */
   private live = 0;
   // everything the steps make goes out through this: the steps' volume (an admin's, for everyone)
@@ -102,22 +108,35 @@ export class StepPlayer {
     return this.ctx()?.currentTime ?? 0;
   }
 
+  /** The puddles out there (0 … 1: the room's weather): a wet way's steps splash now and then. */
+  puddled(p: number): void {
+    this.puddles = p;
+  }
+
+  /** The benches': a surface's candidate `i` (its recordings fetched again). */
+  choose(f: Bank_, i: number): void {
+    this.picks[f] = i;
+    this.banks.delete(f);
+    this.ready.delete(f);
+  }
+
   /** A surface's recordings, fetched (once) so its first step isn't the synth's. */
-  preload(f: Footing): void {
+  preload(f: Bank_): void {
     const ctx = this.ctx();
     if (!ctx) return;
-    const k = BORROW[f] ?? f;
+    const k = f === "puddle" ? f : (BORROW[f] ?? f);
     if (this.banks.has(k)) return;
+    if (f === "wet") this.preload("puddle");
     this.files ??= fetch(`${this.base}manifest.json`)
       .then((r) => (r.ok ? r.json() : {}))
       .then((m: Record<string, { files: string[] }[]>) =>
-        Object.fromEntries(Object.entries(m).map(([s, c]) => [s, c[0]?.files ?? []])),
+        Object.fromEntries(Object.entries(m).map(([s, c]) => [s, c.map((x) => x.files)])),
       )
       .catch(() => ({}));
     const p = this.files.then(async (all) => {
       const bufs = (
         await Promise.all(
-          (all[k] ?? []).map((n) =>
+          (all[k]?.[this.picks[k] ?? 0] ?? []).map((n) =>
             fetch(this.base + n)
               .then((r) => (r.ok ? r.arrayBuffer() : null))
               .then((b) => (b ? ctx.decodeAudioData(b) : null))
@@ -126,7 +145,8 @@ export class StepPlayer {
         )
       ).filter((b): b is AudioBuffer => !!b);
       const bank = bufs.length ? { bufs, gain: levelOf(bufs) } : null;
-      this.ready.set(k, bank);
+      // (only if it's still the one wanted: a pick made while it loaded loads its own)
+      if (this.banks.get(k) === p) this.ready.set(k, bank);
       return bank;
     });
     this.banks.set(k, p);
@@ -139,7 +159,11 @@ export class StepPlayer {
     const near = o.gain ?? 1;
     if (near <= 0.01) return;
     const loud = LOUD[o.gait] * near;
-    const k = BORROW[f] ?? f;
+    let k: Bank_ = BORROW[f] ?? f;
+    // (a wet way: now and then into a puddle, the more of them the oftener — none with none about)
+    const puddle = f === "wet" ? this.ready.get("puddle") : null;
+    if (puddle && Math.random() < 0.1 * Math.min(1, this.puddles * 4) + 0.45 * this.puddles * this.puddles)
+      k = "puddle";
     const bank = this.ready.get(k);
     if (!bank) {
       this.preload(f);
@@ -592,6 +616,9 @@ const BAND: Record<Footing, number> = {
   ice: 3600,
   slush: 1200,
   blackice: 3600,
+  grass: 500,
+  mud: 400,
+  wet: 1300,
 };
 const SPRAY = new Set<Footing>(["snow", "deep", "packed", "slush"]);
 
