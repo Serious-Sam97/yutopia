@@ -348,13 +348,10 @@ if (vFade < 0.999) {
   readonly boxes: { x0: number; z0: number; x1: number; z1: number; top: number; eaves: number }[] = [];
   /** How much bigger the lamps' glows are (the morning fog's halos: view.ts sets it). */
   halo = 1;
-  /** The HQ's (not the camera's to keep out of: the studio's its own) — its roof keeps the rain and
-   *  the dusting off its floors (sky.ts roofsNear: docs/plan/65). */
-  readonly hqBoxes: { x0: number; z0: number; x1: number; z1: number; top: number; eaves: number }[] = [];
   private fillBoxes() {
     this.boxes.length = 0;
-    this.hqBoxes.length = 0;
-    for (const b of BUILDINGS) (b.kind === "hq" ? this.hqBoxes : this.boxes).push(boxOf(b));
+    // (not the headquarters: the office is the campus's, at the server's size — sky.ts roofsNear)
+    for (const b of BUILDINGS) if (b.kind !== "hq") this.boxes.push(boxOf(b));
   }
 
   /** God mode's edits laid (docs/plan/53-the-god-mode.md): these chunks changed. Their blocks are

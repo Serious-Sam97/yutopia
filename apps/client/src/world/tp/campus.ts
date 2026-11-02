@@ -1298,6 +1298,12 @@ export class Campus {
   private door: { z0: number; z1: number } | null = null;
   // the top storey's skin even close up (the studio isn't drawn: you're below it)
   skinAlways = false;
+  /** The office's footprint and its roof (campus coords: the studio's floor at 0) — its size the
+   *  server's (a Large office bigger than the Grounds' own headquarters): the rain kept off it, as the
+   *  snow (sky.ts roofsNear, docs/plan/65). */
+  footprint(): { x0: number; z0: number; x1: number; z1: number; roof: number } {
+    return { x0: this.fx0, z0: this.fz0, x1: this.fx1, z1: this.fz1, roof: STOREY };
+  }
   // the studio's footprint (snow never falls inside it)
   private fx0: number;
   private fz0: number;

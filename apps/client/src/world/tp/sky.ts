@@ -434,8 +434,13 @@ export class Surroundings {
     this.roofsAt = now;
     const d = (b: (typeof boxes)[number]) =>
       Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
-    // (the HQ's always: inside it the rain mustn't fall, wherever its floors put me)
-    const hq = this.grounds?.hqBoxes ?? [];
+    // (the office's always, at its own size — the server's: a Large one's bigger than the Grounds'
+    // headquarters — from its campus, in the Grounds' coords: no rain inside it, wherever its floors put
+    // me)
+    // (the Grounds' coords are the campus's, a ground four storeys under its studio: wxOff, update)
+    const f = this.campus.footprint();
+    const roof = f.roof - GROUND;
+    const hq = [{ x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, top: roof, eaves: roof }];
     const near = [
       ...hq,
       ...boxes

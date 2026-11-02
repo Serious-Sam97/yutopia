@@ -1266,6 +1266,17 @@ every weather at the lot, the lawn, the trail, Main Street and the pond looked a
 - `snow-layer-shots.mts` takes `WORLD=ws://localhost:2667`, to render stills in an offline world
   as Bia, leaving the dev world and whoever's in it alone.
 
+**Rain inside a Large office** (found by the user on their server, 2026-11-02).
+- The rain's roof over the office was the Grounds' headquarters box, fixed at 48 × 36. A Large
+  office is 64 × 48, so it rained in its far end (the pool room at x 56).
+- The office's roof now comes from its campus at the server's size (`Campus.footprint`), as the
+  snowflakes' always did, one storey over the studio: in the Grounds' coords, the campus's own,
+  14 m up.
+- The Grounds' box is out of the rain's roofs. It would also be wrong for a Small office, stopping
+  the rain outside it.
+- Checked in the user's world, offline: the roof is −0.5 … 64.5 × −0.5 … 48.5 at 17.4, and the
+  pool room is dry in a downpour.
+
 **Seen, left** (for later, or the user's say):
 - People wet in the rain look dry once indoors: their light's the floor's map there, and a tint
   would replace it.
