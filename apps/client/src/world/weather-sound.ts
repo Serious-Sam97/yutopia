@@ -199,7 +199,9 @@ export class WeatherSound {
   private peals = new Set<AudioBufferSourceNode>();
   // everything out through one gentle compressor: a near crack over a downpour, the trees and the
   // water stays under 0 dB (its own: the voices and the rest untouched)
-  private bus: AudioNode | null = null;
+  // (and the weather's volume, an admin's for everyone, in front of it: the room's weather.vol)
+  private bus: GainNode | null = null;
+  private level = 1;
   private out(ctx: AudioContext): AudioNode {
     if (!this.bus) {
       const c = ctx.createDynamicsCompressor();
@@ -209,9 +211,23 @@ export class WeatherSound {
       c.attack.value = 0.004;
       c.release.value = 0.25;
       c.connect(mixer.buses.ambience);
-      this.bus = c;
+      const g = ctx.createGain();
+      g.gain.value = this.level;
+      g.connect(c);
+      this.bus = g;
     }
     return this.bus;
+  }
+  /** The weather's volume (0 none, 1 as it is, 2 twice: the room's weather.vol, docs/plan/65). */
+  volume(v: number): void {
+    if (v === this.level) return;
+    this.level = v;
+    const ctx = mixer.ctx;
+    if (this.bus && ctx) this.bus.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+  }
+  /** The weather's volume as it is. */
+  get vol(): number {
+    return this.level;
   }
   /** a candidate other than the first (the bench's) */
   private chosen: Partial<Record<Slot, number>> = {};

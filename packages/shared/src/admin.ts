@@ -73,5 +73,6 @@ export const LOG_KINDS = [
   "god",
   "steps",
   "weather",
+  "weathersound",
 ] as const;
 export type LogKind = (typeof LOG_KINDS)[number];

@@ -206,6 +206,10 @@ const QUIET = 0.5;
 // the page), and thin under it (docs/plan/65-the-weather.md: a creak, a crack)
 const ICE_WALK = 0.8;
 const THIN_ICE = 0.95;
+// how much of the rain on the building's roof is heard indoors: on its top floor, under it (too loud
+// at all of it, on the user's ear 2026-11-02), and the floors below, through the windows
+const ROOF_TOP = 0.55;
+const ROOF_BELOW = 0.25;
 /** out on the land, a building's floor underfoot: inside one of the town's (its room rings) */
 const FLOORED = new Set<Floor>(["wood", "tile", "carpet", "earth", "hollow"]);
 const JUMP_HEARD = 9; // tiles: others' jumps are heard this far
@@ -4114,7 +4118,8 @@ export class WorldController {
   private hearAround(dt: number) {
     const land = this.level === 0 && this.grid.onLand(this.me.x, this.me.y);
     const t = tileAt(this.map, Math.floor(this.me.x), Math.floor(this.me.y));
-    const top = Math.max(0, ...(this.building.levels ?? []).map((l) => l.index));
+    // (the top: the office's own floor too — the building's levels list the floors under it)
+    const top = Math.max(this.building.floor ?? 0, ...(this.building.levels ?? []).map((l) => l.index));
     this.life?.hear(
       dt,
       this.me,
@@ -4123,7 +4128,7 @@ export class WorldController {
       this.model?.getDaylight().night ?? 0,
       this.storm,
       this.tp?.fogAir ?? 0,
-      { ...this.hearWeather(), roof: this.level >= top ? 1 : 0.45, up: this.tp?.earUp() ?? 0 },
+      { ...this.hearWeather(), roof: this.level >= top ? ROOF_TOP : ROOF_BELOW, up: this.tp?.earUp() ?? 0 },
     );
   }
   /** The weather for the Grounds' sound (docs/plan/65-the-weather.md W8): the room's, as the view's. */
@@ -4141,6 +4146,7 @@ export class WorldController {
             wet: w.wet ?? 0,
             ice: w.ice ?? 1,
             cloud: w.cloud ?? 1,
+            vol: w.vol ?? 1,
           }
         : undefined,
     };

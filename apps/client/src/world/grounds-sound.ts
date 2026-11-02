@@ -29,7 +29,16 @@ export interface Here {
   hour?: number; // the hour as the sky has it
   /** the room's weather (docs/plan/65-the-weather.md): how hard it rains, sleet, a thunderstorm's,
    *  °C, the ground's wet, the water's ice (0 open … 1 frozen), the cloud */
-  wx?: { rain: number; sleet: boolean; thunder: number; temp: number; wet: number; ice: number; cloud: number };
+  wx?: {
+    rain: number;
+    sleet: boolean;
+    thunder: number;
+    temp: number;
+    wet: number;
+    ice: number;
+    cloud: number;
+    vol?: number;
+  };
 }
 
 /** the water's ice from which it's walked on, and the river's ice ticks (shared physics ICE_WALK) */
@@ -107,8 +116,14 @@ export class GroundsSound {
     const by = wx ? 0.75 + 0.25 * wx.cloud + 0.5 * Math.min(1, wx.rain) : 1;
     // (and up off the ground, more of it: flying, god mode's camera)
     const aloft = 1 + 0.6 * Math.min(1, Math.max(0, ((h.up ?? 0) - 5) / 35));
+    // (the weather's volume an admin set, for everyone: the wind's the weather's too)
+    this.weather.volume(wx?.vol ?? 1);
     const level =
-      ((h.land ? 0.03 + 0.05 * this.open : 0) * (1 - 0.85 * fog) * by + 0.22 * h.storm) * gust * out * aloft;
+      ((h.land ? 0.03 + 0.05 * this.open : 0) * (1 - 0.85 * fog) * by + 0.22 * h.storm) *
+      gust *
+      out *
+      aloft *
+      (wx?.vol ?? 1);
     this.wind.out.gain.setTargetAtTime(level, ctx.currentTime, 0.4);
     this.wind.bp.frequency.setTargetAtTime(
       (h.land ? 320 + 380 * gust + 500 * h.storm : 240) * (h.inside ? 0.5 : 1),

@@ -407,8 +407,16 @@ export class WorldRoom extends Room<WorldState> {
       this.state.stepsBy = typeof info?.sound?.by === "string" ? info.sound.by : "";
       this.state.stepsAt = Number(info?.sound?.at) || 0;
     }
-    // the weather as it was saved, brought up to now (docs/plan/65-the-weather.md, W2)
+    // the weather as it was saved, brought up to now (docs/plan/65-the-weather.md, W2), and its
+    // sound's volume an admin set
     this.loadWeather(info?.weather, Date.now());
+    const wv = Number(info?.sound?.weather);
+    if (Number.isFinite(wv)) {
+      const w = this.state.weather;
+      w.vol = Math.max(0, Math.min(2, wv));
+      w.volBy = typeof info?.sound?.weatherBy === "string" ? info.sound.weatherBy : "";
+      w.volAt = Number(info?.sound?.weatherAt) || 0;
+    }
     this.registerMessages();
     this.features = installFeatures(this);
 
@@ -549,6 +557,21 @@ export class WorldRoom extends Room<WorldState> {
     this.weatherTick(now, true);
   }
   // (a ground call running: where it's taking the ground — the room may close before its two minutes)
+  // the world's sound an admin set, all of it (the API keeps it as one: the steps' and the weather's)
+  private saveSound(what: string) {
+    if (config.offline) return;
+    const s = this.state;
+    void api
+      .putSound({
+        steps: s.stepsVol,
+        by: s.stepsBy || null,
+        at: s.stepsAt,
+        weather: s.weather.vol,
+        weatherBy: s.weather.volBy || null,
+        weatherAt: s.weather.volAt,
+      })
+      .catch((e) => console.warn(`[sound] ${what}`, e.message));
+  }
   private saveWeather(): Promise<void> {
     if (config.offline) return Promise.resolve();
     const w = this.state.weather;
@@ -1160,10 +1183,7 @@ export class WorldRoom extends Room<WorldState> {
       this.state.stepsVol = v === null ? 1 : Math.round(Math.max(0, Math.min(2, v)) * 100) / 100;
       this.state.stepsBy = v === null ? "" : (by?.name ?? "");
       this.state.stepsAt = v === null ? 0 : Date.now();
-      if (!config.offline)
-        void api
-          .putSound({ steps: this.state.stepsVol, by: this.state.stepsBy || null, at: this.state.stepsAt })
-          .catch((e) => console.warn("[sound] steps", e.message));
+      this.saveSound("steps");
       if (by)
         this.adminLog(
           by,
@@ -1171,6 +1191,22 @@ export class WorldRoom extends Room<WorldState> {
           null,
           v === null ? "back to as they are" : `to ${Math.round(this.state.stepsVol * 100)} %`,
         );
+    });
+    // the weather's sound for everyone (docs/plan/65-the-weather.md): the rain, the sleet, the
+    // drips, the birds, the river, the thunder, the wind — 0 … 2, or null: as they are (1). Admins
+    // only; kept in the world's settings beside the steps'
+    this.on("mod:weatherVol", (client, m) => {
+      if (!owner(client)) return;
+      const v = m.v === null || m.v === undefined ? null : Number(m.v);
+      if (v !== null && !Number.isFinite(v)) return;
+      const by = this.state.players.get(client.sessionId);
+      const w = this.state.weather;
+      w.vol = v === null ? 1 : Math.round(Math.max(0, Math.min(2, v)) * 100) / 100;
+      w.volBy = v === null ? "" : (by?.name ?? "");
+      w.volAt = v === null ? 0 : Date.now();
+      this.saveSound("weather");
+      if (by)
+        this.adminLog(by, "weathersound", null, v === null ? "back to as it is" : `to ${Math.round(w.vol * 100)} %`);
     });
     const byUid = (uid: number) => [...this.state.players.values()].find((q) => q.uid === uid);
     this.on("mod:mute", (client, m) => {

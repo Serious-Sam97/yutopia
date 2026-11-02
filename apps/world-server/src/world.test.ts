@@ -179,6 +179,37 @@ test("the steps' volume (docs/plan/63): as they are for everyone; an admin sets 
   admin.send("mod:steps", { v: null });
   await waitFor(() => guest.state.stepsVol === 1 && guest.state.stepsBy === "");
 });
+test("the weather's volume (docs/plan/65): as it is for everyone; an admin sets another, nobody else can", async () => {
+  const person = async (id: number, roles: string) => {
+    const room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+      sandbox: 9,
+      token: `dev:${id}:P${id}:${roles}`,
+    });
+    rooms.push(room);
+    await waitFor(() => !!room.state?.players?.get(room.sessionId));
+    return room;
+  };
+  const admin = await person(95, "member,admin");
+  const guest = await person(96, "member");
+  await waitFor(() => guest.state.players.has(admin.sessionId));
+  assert.equal(guest.state.weather.vol, 1);
+  guest.send("mod:weatherVol", { v: 0.3 });
+  await sleep(300);
+  assert.equal(guest.state.weather.vol, 1, "a member can't set it");
+  // an admin's, for everyone, who and when said; kept between none and twice, to the percent
+  admin.send("mod:weatherVol", { v: 0.6 });
+  await waitFor(() => Math.abs(guest.state.weather.vol - 0.6) < 1e-6);
+  assert.equal(guest.state.weather.volBy, "P95");
+  assert.ok(guest.state.weather.volAt > 0);
+  // (the steps' untouched by it)
+  assert.equal(guest.state.stepsVol, 1);
+  admin.send("mod:weatherVol", { v: 7 });
+  await waitFor(() => guest.state.weather.vol === 2);
+  // as it is again
+  admin.send("mod:weatherVol", { v: null });
+  await waitFor(() => guest.state.weather.vol === 1 && guest.state.weather.volBy === "");
+});
+
 
 test("the morning fog (docs/plan/64): the day's by the world's hour; an admin calls one for everyone, nobody else can; a storm blows it away", async () => {
   const person = async (id: number, roles: string) => {

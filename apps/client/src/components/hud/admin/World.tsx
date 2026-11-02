@@ -58,6 +58,11 @@ const W = {
   ],
   stepsBy: ["set by {who} · {when}", "definido por {who} · {when}"],
   stepsReset: ["Back to 100 %", "Voltar a 100 %"],
+  wxVol: ["The weather's volume", "O volume do tempo"],
+  wxVolS: [
+    "The rain, the sleet, the drips, the birds, the river, the thunder and the wind, for everyone.",
+    "A chuva, o granizo, as gotas, os pássaros, o rio, o trovão e o vento, para todos.",
+  ],
   scheduled: ["As scheduled", "Como previsto"],
   calledBy: ["{what} called by {who} · {m} min left", "{what} pedido por {who} · faltam {m} min"],
   locks: ["Locked now · {n}", "Trancado agora · {n}"],
@@ -110,6 +115,9 @@ interface Snap {
     until: number;
     groundTo: string;
     groundBy: string;
+    vol: number;
+    volBy: string;
+    volAt: number;
   };
   fogBy: string;
   fogTo: string;
@@ -134,6 +142,7 @@ export function World() {
   const people = useHud((s) => s.people);
   const [hourDraft, setHourDraft] = useState<number | null>(null);
   const [stepsDraft, setStepsDraft] = useState<number | null>(null);
+  const [wxVolDraft, setWxVolDraft] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [tone, setTone] = useState<"info" | "warn">("info");
   const s = useLive<Snap>(w, (w) => {
@@ -167,6 +176,9 @@ export function World() {
         until: st?.weather?.until ?? 0,
         groundTo: st?.weather?.groundTo ?? "",
         groundBy: st?.weather?.groundBy ?? "",
+        vol: st?.weather?.vol ?? 1,
+        volBy: st?.weather?.volBy ?? "",
+        volAt: st?.weather?.volAt ?? 0,
       },
       fogBy: st?.fogBy ?? "",
       fogTo: st?.fogTo ?? "",
@@ -231,6 +243,11 @@ export function World() {
   const locked = s.rooms.length + s.doors.length;
   const hour = hourDraft ?? s.hour;
   const steps = stepsDraft ?? s.stepsVol;
+  const wxVol = wxVolDraft ?? s.wx.vol;
+  const sendWxVol = () => {
+    if (wxVolDraft !== null) w.send("mod:weatherVol", { v: wxVolDraft });
+    setWxVolDraft(null);
+  };
   const sendSteps = () => {
     if (stepsDraft !== null) w.send("mod:steps", { v: stepsDraft });
     setStepsDraft(null);
@@ -411,6 +428,44 @@ export function World() {
           </button>
         </div>
         <Note>{t("stepsS")}</Note>
+      </Card>
+      <Card
+        label={t("wxVol")}
+        right={
+          s.wx.volBy ? <Tag tone="lamp">{t("stepsBy", { who: s.wx.volBy, when: ago(s.wx.volAt, pt) })}</Tag> : null
+        }
+      >
+        <div className="flex items-center gap-5 flex-wrap">
+          <div className="text-center w-24">
+            <div className="title text-[32px]" style={{ letterSpacing: ".04em" }}>
+              {Math.round(wxVol * 100)}%
+            </div>
+          </div>
+          <input
+            type="range"
+            className="slider flex-1 min-w-[160px]"
+            min={0}
+            max={2}
+            step={0.05}
+            value={wxVol}
+            style={{ "--v": `${(wxVol / 2) * 100}%` } as React.CSSProperties}
+            aria-label={t("wxVol")}
+            data-testid="weather-volume"
+            onChange={(e) => setWxVolDraft(Number(e.target.value))}
+            onPointerUp={sendWxVol}
+            onKeyUp={sendWxVol}
+          />
+          <button
+            type="button"
+            className="deck-btn"
+            disabled={!s.wx.volBy}
+            onClick={() => w.send("mod:weatherVol", { v: null })}
+          >
+            <Icon name="ear" size={15} />
+            {t("stepsReset")}
+          </button>
+        </div>
+        <Note>{t("wxVolS")}</Note>
       </Card>
       <Card label={t("locks", { n: locked })}>
         {!locked && <Note>{t("noLocks")}</Note>}

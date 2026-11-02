@@ -564,6 +564,11 @@ export class Weather extends Schema {
   // and on the ground ("": the weather's; "snow", "melt", "auto": back to the weather's), who
   @type("string") groundTo = "";
   @type("string") groundBy = "";
+  // its sound's volume for everyone (the rain, the thunder, the wind…: 1 as they are, 0 none, 2
+  // twice), who set it and when — an admin's, as the steps' is (WorldRoom mod:weatherVol)
+  @type("float32") vol = 1;
+  @type("string") volBy = "";
+  @type("float64") volAt = 0;
 }
 
 export class WorldState extends Schema {

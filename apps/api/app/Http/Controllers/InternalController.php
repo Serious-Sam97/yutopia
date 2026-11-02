@@ -26,7 +26,7 @@ use Illuminate\Validation\Rule;
 class InternalController extends Controller
 {
     // (shared admin.ts LOG_KINDS: what the log takes)
-    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'fog', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps', 'weather'];
+    private const LOG_KINDS = ['mute', 'unmute', 'remove', 'unremove', 'lock', 'unlock', 'admin', 'unadmin', 'hour', 'storm', 'fog', 'notice', 'power', 'spawn', 'clear', 'freeze', 'home', 'bring', 'unseat', 'heal', 'give', 'cars', 'shuttle', 'dark', 'invite', 'publish', 'rollback', 'god', 'steps', 'weather', 'weathersound'];
 
     public function __construct(private readonly Worlds $worlds) {}
 
@@ -431,7 +431,8 @@ class InternalController extends Controller
     // The Kart Park's record (docs/plan/46-the-karts.md): its best lap, the last ten races' top
     // three, wins by name — kept as the world-server sends it (it's the one that counts them).
     // The world's sound as an admin set it (docs/plan/63-the-steps.md): the steps' volume (1 as they
-    // are, 0 none, 2 twice), who set it and when — kept in the world's settings like the karts'.
+    // are, 0 none, 2 twice), who set it and when — kept in the world's settings like the karts'. And the
+    // weather's (docs/plan/65-the-weather.md), its own who and when.
     public function sound(Request $request): JsonResponse
     {
         $request->validate([
@@ -439,12 +440,22 @@ class InternalController extends Controller
             'sound.steps' => ['required', 'numeric', 'min:0', 'max:2'],
             'sound.by' => ['present', 'nullable', 'string', 'max:120'],
             'sound.at' => ['present', 'integer', 'min:0'],
+            // the weather's volume (docs/plan/65-the-weather.md): the same, its own who and when
+            'sound.weather' => ['sometimes', 'numeric', 'min:0', 'max:2'],
+            'sound.weatherBy' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'sound.weatherAt' => ['sometimes', 'integer', 'min:0'],
         ]);
         $sound = $request->input('sound');
         $world = World::current();
-        $world->settings = array_merge($world->settings ?? [], [
-            'sound' => ['steps' => (float) $sound['steps'], 'by' => $sound['by'], 'at' => (int) $sound['at']],
-        ]);
+        $kept = ['steps' => (float) $sound['steps'], 'by' => $sound['by'], 'at' => (int) $sound['at']];
+        if (array_key_exists('weather', $sound)) {
+            $kept += [
+                'weather' => (float) $sound['weather'],
+                'weatherBy' => $sound['weatherBy'] ?? null,
+                'weatherAt' => (int) ($sound['weatherAt'] ?? 0),
+            ];
+        }
+        $world->settings = array_merge($world->settings ?? [], ['sound' => $kept]);
         $world->save();
 
         return response()->json(['ok' => true]);

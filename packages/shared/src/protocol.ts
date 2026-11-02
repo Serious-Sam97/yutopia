@@ -226,6 +226,8 @@ export interface ClientMessages {
   "mod:hour": { h: number | null };
   // the steps' volume for everyone (docs/plan/63-the-steps.md): 0 none … 1 as they are … 2 twice; null: 1 again
   "mod:steps": { v: number | null };
+  // the weather's sound for everyone (docs/plan/65-the-weather.md): 0 none … 1 as it is … 2 twice; null: 1 again
+  "mod:weatherVol": { v: number | null };
   // removed for `minutes` (shared admin.ts REMOVE_MINUTES; none: 10), or let back in early
   "mod:kick": { userId: number; minutes?: number };
   "mod:unremove": { userId: number };

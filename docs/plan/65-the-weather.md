@@ -1277,6 +1277,32 @@ every weather at the lot, the lawn, the trail, Main Street and the pond looked a
 - Checked in the user's world, offline: the roof is −0.5 … 64.5 × −0.5 … 48.5 at 17.4, and the
   pool room is dry in a downpour.
 
+**The weather's volume on the admins' panel** (the user's ask, 2026-11-02), as the steps' is.
+- **The panel.** World → "The weather's volume", 0–200 % for everyone: the rain, the sleet, the
+  drips, the birds, the river, the thunder and the wind.
+- **The server.** An admin-only `mod:weatherVol`. The room's `weather.vol`, `volBy` and `volAt`
+  sit in the Weather child (WorldState is near its 64 fields). An admin log line
+  (`weathersound`).
+- **Kept** in the world's settings beside the steps' (PUT /internal/world/sound: `weather`,
+  `weatherBy`, `weatherAt`). Each save carries both, since the API keeps the record as one.
+- **The client.** The weather's sound goes out through one gain in front of its compressor, and
+  the wind follows the same volume.
+- **The log.** The weather calls' own log lines (`weather`) had no label, group or icon there.
+  They have them now.
+- **Checks.**
+  - World server: the new test and the world tests, 14/14. Client: 8/8 for the weather's sound.
+  - In the game, offline: the panel's slider set the room's 95 % for everyone, the sound followed,
+    the steps' were untouched, and "Back to 100 %" reset it.
+  - The API's Pest test ran with the user's say: WorldTest 24/24 (on its in-memory database).
+
+**The roof's rain indoors** (the user's ear, 2026-11-02).
+- On the top floor it was too loud at all of it. It's now 55 % there (`ROOF_TOP`), and 25 % on
+  the floors below (`ROOF_BELOW`, was 45 %), keeping the same step between them.
+- The top floor was counted from the building's levels alone, which list the floors under the
+  office (to 3), so floor 3 had the top's loud roof too. The office's own floor counts now.
+- Measured offline in the user's world, in a downpour: the office 0.50 → 0.27, floor 3 0.50 →
+  0.13, floor 1 0.23 → 0.13.
+
 **Seen, left** (for later, or the user's say):
 - People wet in the rain look dry once indoors: their light's the floor's map there, and a tint
   would replace it.

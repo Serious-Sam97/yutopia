@@ -422,6 +422,19 @@ it('keeps the world\'s sound an admin set: the steps\' volume, who and when', fu
     expect(internalCall($this, 'GET', '/api/internal/world')->json('sound.by'))->toBeNull();
 });
 
+it('keeps the weather\'s volume beside the steps\', its own who and when', function () {
+    internalCall($this, 'PUT', '/api/internal/world/sound', ['sound' => ['steps' => 0.8, 'by' => 'Ana Demo', 'at' => 1762000000000, 'weather' => 0.4, 'weatherBy' => 'Ana Demo', 'weatherAt' => 1762000001000]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('sound'))->toBe([
+        'steps' => 0.8, 'by' => 'Ana Demo', 'at' => 1762000000000,
+        'weather' => 0.4, 'weatherBy' => 'Ana Demo', 'weatherAt' => 1762000001000,
+    ]);
+    // between none and twice
+    internalCall($this, 'PUT', '/api/internal/world/sound', ['sound' => ['steps' => 1, 'by' => null, 'at' => 0, 'weather' => 2.1, 'weatherBy' => null, 'weatherAt' => 0]])->assertUnprocessable();
+    // (a world server from before it: the steps' alone, still taken)
+    internalCall($this, 'PUT', '/api/internal/world/sound', ['sound' => ['steps' => 1, 'by' => null, 'at' => 0]])->assertOk();
+    expect(internalCall($this, 'GET', '/api/internal/world')->json('sound.weather'))->toBeNull();
+});
+
 it('keeps the weather the world-server saved: the ground, when, an admin\'s call', function () {
     expect(internalCall($this, 'GET', '/api/internal/world')->json('weather'))->toBeNull();
     $w = ['snow' => 0.75, 'wet' => 0.2, 'puddles' => 0, 'ice' => 1, 'at' => 1762000000000, 'call' => ['to' => 'snow', 'by' => 'Ana Demo', 'until' => 1762003600000]];

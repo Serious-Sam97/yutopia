@@ -56,7 +56,15 @@ export interface WorldInfo {
   playlists?: unknown; // the YouTube playlists played here (features/media.ts)
   loot?: unknown; // the Grounds' loot: spots, the night's budget, drops (features/survival.ts)
   karts?: unknown; // the Kart Park's record (features/karts.ts)
-  sound?: { steps?: unknown; by?: unknown; at?: unknown } | null; // the steps' volume an admin set (WorldRoom mod:steps)
+  // the steps' volume an admin set (WorldRoom mod:steps), and the weather's (mod:weatherVol)
+  sound?: {
+    steps?: unknown;
+    by?: unknown;
+    at?: unknown;
+    weather?: unknown;
+    weatherBy?: unknown;
+    weatherAt?: unknown;
+  } | null;
   weather?: unknown; // the ground and the call in force when last saved (shared weather.ts SavedWeather)
   edits?: GroundsEdits; // god mode's edits to the Grounds as published (features/godmode.ts)
 }
@@ -92,7 +100,14 @@ export const api = {
   putLayout: (layout: Layout) => call("PUT", "/world/layout", layout),
   putPlaylists: (playlists: unknown[]) => call("PUT", "/world/playlists", { playlists }),
   putKarts: (record: unknown) => call("PUT", "/world/karts", { record }),
-  putSound: (sound: { steps: number; by: string | null; at: number }) => call("PUT", "/world/sound", { sound }),
+  putSound: (sound: {
+    steps: number;
+    by: string | null;
+    at: number;
+    weather: number;
+    weatherBy: string | null;
+    weatherAt: number;
+  }) => call("PUT", "/world/sound", { sound }),
   putWeather: (weather: SavedWeather) => call("PUT", "/world/weather", { weather }),
   // god mode (docs/plan/53-the-god-mode.md): an admin's draft (by its id: plan 55), a revision, the next one
   groundsDraft: (id: number) =>

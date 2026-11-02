@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { loopable, mixOf, thunderOf, type WxHere } from "./weather-sound";
+import { mixer } from "./audio";
+import { loopable, mixOf, thunderOf, WeatherSound, type WxHere } from "./weather-sound";
 
 // The weather's sound (docs/plan/65-the-weather.md, W8): which beds, how loud and how muffled, by the
 // weather and by where I am.
@@ -121,4 +122,49 @@ test("weather sound: up off the ground the ground's sounds fade — the rain rou
   // (the drips too, and on a roof's height the same as on the ground)
   assert.equal(lv({ wet: 0.8, after: 30, up: 25 }).drips, 0);
   assert.equal(lv({ wet: 0.8, after: 30, up: 2 }).drips, lv({ wet: 0.8, after: 30 }).drips);
+});
+
+test("weather sound: the admins' volume — everything it plays goes out through it, set before or after", () => {
+  const node = () => ({
+    connect: (n: unknown) => n,
+    gain: {
+      value: 1,
+      setTargetAtTime(v: number) {
+        this.value = v;
+      },
+    },
+  });
+  const made: ReturnType<typeof node>[] = [];
+  const ctx = {
+    currentTime: 0,
+    createGain: () => {
+      const g = node();
+      made.push(g);
+      return g;
+    },
+    createDynamicsCompressor: () => ({
+      ...node(),
+      threshold: { value: 0 },
+      knee: { value: 0 },
+      ratio: { value: 0 },
+      attack: { value: 0 },
+      release: { value: 0 },
+    }),
+  } as unknown as AudioContext;
+  const was = { buses: mixer.buses, ctx: mixer.ctx };
+  (mixer as unknown as { buses: unknown }).buses = { ambience: node() };
+  (mixer as unknown as { ctx: unknown }).ctx = ctx;
+  try {
+    const W = new WeatherSound();
+    W.volume(0.4);
+    assert.equal(W.vol, 0.4);
+    // (its way out made: the beds' and the peals' — at the volume set)
+    const out = (W as unknown as { out(c: AudioContext): { gain: { value: number } } }).out(ctx);
+    assert.equal(out.gain.value, 0.4);
+    W.volume(1.5);
+    assert.equal(out.gain.value, 1.5, "and changed on it after");
+  } finally {
+    (mixer as unknown as { buses: unknown }).buses = was.buses;
+    (mixer as unknown as { ctx: unknown }).ctx = was.ctx;
+  }
 });
