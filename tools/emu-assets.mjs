@@ -9,6 +9,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { setDefaultAutoSelectFamilyAttemptTimeout } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync, inflateRawSync } from "node:zlib";
@@ -40,14 +41,30 @@ mkdirSync(cache, { recursive: true });
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 
+// Node gives each of a host's addresses 250 ms to connect before trying the
+// next; a far host (slackware.uk is ~220 ms from here) misses it on a slow
+// moment, and with no IPv6 in the docker build the fallback fails at once:
+// ETIMEDOUT though the host was up. A longer wait per address, and retries.
+setDefaultAutoSelectFamilyAttemptTimeout(2000);
+
+async function download(name, url, tries = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+      return Buffer.from(await res.arrayBuffer());
+    } catch (e) {
+      if (i >= tries) throw new Error(`${name}: ${e.message} (${e.cause?.code ?? "no code"}) after ${tries} tries`, { cause: e });
+      console.warn(`[emu] ${name}: ${e.cause?.code ?? e.message}, retrying (${i}/${tries})`);
+      await new Promise((r) => setTimeout(r, 2000 * i));
+    }
+  }
+}
+
 async function fetchPinned(c) {
   const file = join(cache, `${c.core ?? c.file}-${c.sha256.slice(0, 12)}`);
   let buf = existsSync(file) ? readFileSync(file) : null;
-  if (!buf) {
-    const res = await fetch(c.url);
-    if (!res.ok) throw new Error(`${c.core}: HTTP ${res.status} for ${c.url}`);
-    buf = Buffer.from(await res.arrayBuffer());
-  }
+  if (!buf) buf = await download(c.core ?? c.file, c.url);
   const got = sha256(buf);
   if (got !== c.sha256) throw new Error(`${c.core ?? c.file}: sha256 ${got} ≠ pinned ${c.sha256} — refusing it`);
   writeFileSync(file, buf);
