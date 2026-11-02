@@ -40,7 +40,7 @@ export interface WxHere {
    *  sounds fade out over the first fifteen metres up */
   up?: number;
   /** seconds since the rain stopped (the player keeps it, as it sees the rain; the bench's set):
-   *  the drips, full as it stops and gone in ten minutes */
+   *  the drips, full as it stops and gone in five minutes */
   after?: number;
   /** the room's weather: how hard it rains (0 … 1), sleet, a thunderstorm's, °C, the ground's wet,
    *  the water's ice (0 open … 1 frozen), the cloud */
@@ -85,7 +85,7 @@ const OPEN_HZ = 20000;
 /** how long a slot's recordings are kept unwanted (ms) */
 export const LET_GO_MS = 120_000;
 /** how long the drips go on after the rain (s) */
-export const DRIPS_FOR = 600;
+export const DRIPS_FOR = 300; // (five minutes: ten went on too long, on the user's ear 2026-11-02)
 const INSIDE_HZ = 1600; // the roof's and the walls' muffling
 const CAR_HZ = 1200;
 
@@ -117,7 +117,7 @@ export function mixOf(h: WxHere): Record<Bed, { level: number; lp: number }> {
     (0.6 + 0.4 * (1 - h.cloud)) *
     (1 - 0.85 * h.fog) *
     (0.7 + 0.3 * h.woods);
-  // the drips: the trees and the eaves for ten minutes after it stops (as the roofs' drawn drops),
+  // the drips: the trees and the eaves for five minutes after it stops (as the roofs' drawn drops),
   // most just after, more under the trees — not for the hours the ground takes to dry, and none
   // after a melt with no rain
   const after = h.after ?? Number.POSITIVE_INFINITY;

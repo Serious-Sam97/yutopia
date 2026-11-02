@@ -1303,6 +1303,9 @@ every weather at the lot, the lawn, the trail, Main Street and the pond looked a
 - Measured offline in the user's world, in a downpour: the office 0.50 → 0.27, floor 3 0.50 →
   0.13, floor 1 0.23 → 0.13.
 
+**The drips after the rain: five minutes** (the user's ear, 2026-11-02). Ten went on too long.
+`DRIPS_FOR` is 300, and the drops drawn from the roofs stop with them (rain3d.ts).
+
 **Seen, left** (for later, or the user's say):
 - People wet in the rain look dry once indoors: their light's the floor's map there, and a tint
   would replace it.

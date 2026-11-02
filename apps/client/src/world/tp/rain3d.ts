@@ -274,8 +274,9 @@ export class Rain {
     this.splash.count = n;
     this.splashMat.opacity = 0.18 * Math.min(1, rain * 2);
     this.splashMat.color.copy(o.col);
-    // the drips: from the nearest roofs' eaves, for ten minutes after the rain, thinning out
-    const drip = rain > 0.05 ? 0.4 : this.after < 600 ? (1 - this.after / 600) * Math.min(1, wx.wxWet.value * 2) : 0;
+    // the drips: from the nearest roofs' eaves, for five minutes after the rain, thinning out (as long
+    // as they're heard: weather-sound.ts DRIPS_FOR)
+    const drip = rain > 0.05 ? 0.4 : this.after < 300 ? (1 - this.after / 300) * Math.min(1, wx.wxWet.value * 2) : 0;
     if (drip > 0.01 && wx.wxRoofN.value > 0 && Math.random() < dt * 40 * drip) {
       const i = Math.floor(Math.random() * wx.wxRoofN.value);
       const a = wx.wxRoofs.value[i * 2];

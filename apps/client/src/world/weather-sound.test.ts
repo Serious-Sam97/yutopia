@@ -71,12 +71,12 @@ test("weather sound: sleet hisses in the rain's place; the drips after it; the r
   const rain = lv({ rain: 0.6 });
   assert.ok(sleet.sleet > 0 && rain.sleet === 0);
   assert.ok(sleet["rain-light"] < rain["rain-light"]);
-  // (the drips: just after it stops, more under the trees, gone in ten minutes — not for the hours
+  // (the drips: just after it stops, more under the trees, gone in five minutes — not for the hours
   // the ground takes to dry, and none after a melt that no rain made)
   assert.ok(lv({ wet: 0.8, after: 30 }).drips > 0);
   assert.ok(lv({ wet: 0.8, after: 30, woods: 1 }).drips > lv({ wet: 0.8, after: 30 }).drips);
-  assert.ok(lv({ wet: 0.8, after: 400 }).drips < lv({ wet: 0.8, after: 30 }).drips * 0.4);
-  assert.equal(lv({ wet: 0.8, after: 700 }).drips, 0);
+  assert.ok(lv({ wet: 0.8, after: 200 }).drips < lv({ wet: 0.8, after: 30 }).drips * 0.4);
+  assert.equal(lv({ wet: 0.8, after: 301 }).drips, 0, "gone after five minutes");
   assert.equal(lv({ wet: 0.8 }).drips, 0, "a melt's wet, no rain seen");
   assert.equal(lv({ wet: 0.8, after: 30, rain: 0.5 }).drips, 0);
   assert.equal(lv({ wet: 0.1, after: 30 }).drips, 0);
