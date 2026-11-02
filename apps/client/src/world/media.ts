@@ -6,6 +6,7 @@ import {
   type RemoteAudioTrack,
   type RemoteTrack,
   type RemoteTrackPublication,
+  DisconnectReason,
   Room,
   RoomEvent,
   Track,
@@ -45,6 +46,25 @@ async function picked(kind: MediaDeviceKind, id: string): Promise<string | undef
   return all?.some((d) => d.kind === kind && d.deviceId === id) ? id : undefined;
 }
 
+// The relay over TLS on 443 alone (from Cloudflare's list): web traffic, which
+// gets out of networks that block UDP or drop it a few seconds in.
+export function tlsRelay(servers: RTCIceServer[]): RTCIceServer[] {
+  return servers.flatMap((s) => {
+    const urls = ([] as string[]).concat(s.urls).filter((u) => /^turns:[^?]+:443(\?|$)/.test(u));
+    return urls.length ? [{ ...s, urls }] : [];
+  });
+}
+
+// The ways a line goes that the network's to blame for (the TLS relay may help).
+const NETWORK_LOSS = new Set([
+  DisconnectReason.UNKNOWN_REASON,
+  DisconnectReason.SIGNAL_CLOSE,
+  DisconnectReason.STATE_MISMATCH,
+  DisconnectReason.JOIN_FAILURE,
+  DisconnectReason.CONNECTION_TIMEOUT,
+  DisconnectReason.MEDIA_FAILURE,
+]);
+
 // LiveKit wrapper. We never subscribe ourselves: the world-server subscribes us
 // to the people in range (canSubscribe=false in our token). We only attach what
 // arrives and give each voice its own gain + stereo pan.
@@ -77,6 +97,17 @@ export class Media {
   // (a fresh token when the one we have is getting old; set by the controller)
   refreshCreds: (() => Promise<{ url: string; token: string; iceServers: RTCIceServer[] } | null>) | null = null;
   private op: Promise<unknown> = Promise.resolve(); // opens / closes, one at a time
+  // The line over the TLS relay only: "next" once one dropped soon after it opened
+  // (taken at the next open), "on" from then on, for the rest of the session.
+  private tls: "off" | "next" | "on" = "off";
+  private onAt = 0;
+  // (true when the TLS relay was switched to just now: open again over it)
+  private toTls(): boolean {
+    if (this.tls === "on" || !this.creds || !tlsRelay(this.creds.iceServers).length) return false;
+    this.tls = "on";
+    console.warn("[media] the direct line failed: over the TLS relay (443) from now on");
+    return true;
+  }
   private tvs = new Set<string>(); // game TVs whose picture I have
   private turningOn = 0; // a mic / camera / screen being switched on right now: no sleep meanwhile
   asleep(): boolean {
@@ -127,6 +158,8 @@ export class Media {
   private async open(fromSleep: boolean): Promise<boolean> {
     if (!this.creds) return false;
     const { url, token, iceServers } = this.creds;
+    if (this.tls === "next") this.tls = "on";
+    const relay = this.tls === "on" ? tlsRelay(iceServers) : [];
     this.state = "connecting";
     const ctx = mixer.ensure();
     const room = new Room({
@@ -187,26 +220,43 @@ export class Media {
         if (mine()) this.report();
       })
       .on(RoomEvent.Reconnecting, () => {
-        if (mine()) this.ev.onState({ ready: false, offline: false, asleep: false });
+        if (!mine()) return;
+        // (lost within a minute of opening: the direct way through is no good here)
+        if (this.tls === "off" && Date.now() - this.onAt < 60_000) this.tls = "next";
+        this.ev.onState({ ready: false, offline: false, asleep: false });
       })
       .on(RoomEvent.Reconnected, () => {
         if (!mine()) return;
         this.ev.onState({ ready: true, offline: false, asleep: false });
         this.report();
       })
-      .on(RoomEvent.Disconnected, () => {
+      .on(RoomEvent.Disconnected, (reason?: DisconnectReason) => {
         if (!mine()) return;
         this.state = "failed";
         this.ev.onState({ ready: false, offline: true, asleep: false });
+        // (lost on the way, not sent off: a second tab, removed, the room gone)
+        if (NETWORK_LOSS.has(reason ?? DisconnectReason.UNKNOWN_REASON) && this.toTls())
+          void this.queue(async () => {
+            // (still down: not opened again meanwhile, nor put to sleep; a failed
+            // first open has let go of the room already)
+            if (this.state !== "failed" || (this.room && this.room !== room)) return;
+            await this.close();
+            await this.open(false);
+          });
       });
     try {
       await room.connect(url, token, {
         autoSubscribe: false,
         // Ours replace LiveKit's own ICE servers, so only pass them when we have some.
-        ...(iceServers.length ? { rtcConfig: { iceServers } } : {}),
+        ...(relay.length
+          ? { rtcConfig: { iceServers: relay, iceTransportPolicy: "relay" as const } }
+          : iceServers.length
+            ? { rtcConfig: { iceServers } }
+            : {}),
       });
       if (!mine()) return false;
       this.state = "on";
+      this.onAt = Date.now();
       this.ev.onState({ ready: true, offline: false, asleep: false });
       this.report();
       this.applySubscriptions();
@@ -217,6 +267,7 @@ export class Media {
       if (!mine()) return false;
       this.room = null;
       void room.disconnect().catch(() => {});
+      if (this.toTls()) return this.open(fromSleep);
       // waking up and the server's not there: stay asleep, try again later; at the start: offline
       this.state = fromSleep ? "asleep" : "failed";
       this.ev.onState(
