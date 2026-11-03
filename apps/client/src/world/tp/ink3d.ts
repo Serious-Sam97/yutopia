@@ -3,6 +3,7 @@ import {
   type PerspectiveCamera,
   ShaderMaterial,
   type Texture,
+  UniformsUtils,
   Vector2,
   type WebGLRenderer,
   type WebGLRenderTarget,
@@ -67,7 +68,14 @@ export class InkPass extends Pass {
 
   constructor(private camera: PerspectiveCamera) {
     super();
-    this.mat = new ShaderMaterial({ ...INK, uniforms: INK.uniforms, depthTest: false, depthWrite: false });
+    // (its own uniforms: another view's ink — the Furnish panel's pictures, at their size, by day — set
+    // on shared ones turned this one's line into a wide band round everyone)
+    this.mat = new ShaderMaterial({
+      ...INK,
+      uniforms: UniformsUtils.clone(INK.uniforms),
+      depthTest: false,
+      depthWrite: false,
+    });
     this.quad = new FullScreenQuad(this.mat);
   }
 
