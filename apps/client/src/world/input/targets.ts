@@ -1,6 +1,7 @@
 import { entry, isSocial, type WorldObjectDef } from "@yutopia/shared";
 import { isGameTv } from "@yutopia/shared/games";
 import { TOYS } from "@yutopia/shared/pets";
+import { thingLabel } from "../labels";
 import type { ActTarget } from "../store";
 
 // The focus (docs/plan/56-the-controls.md C): what's in front of me I could act on — someone, a
@@ -175,7 +176,7 @@ export class Targets {
         {
           key: `o:${o.id}`,
           kind: "object",
-          label: e.label,
+          label: thingLabel(o),
           act: first?.act ?? "use",
           x: o.x + 0.5,
           y: o.y + 0.5,

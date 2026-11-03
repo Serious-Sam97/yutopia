@@ -1,6 +1,17 @@
 "use client";
 
-import { areaAt, CLOTH_COLORS, DECOR, edgeAt, entry, faceMat, footprint, isOpening, panelTile } from "@yutopia/shared";
+import {
+  areaAt,
+  CLOTH_COLORS,
+  DECOR,
+  edgeAt,
+  entry,
+  faceMat,
+  footprint,
+  isOpening,
+  panelTile,
+  TEXT_DEFAULT,
+} from "@yutopia/shared";
 import { useEffect, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
@@ -811,7 +822,9 @@ function ItemToolbar() {
   const looks = kind ? (entry(kind).variants ?? 1) : 1;
   const decorOpts = kind && kind in DECOR ? (DECOR[kind as keyof typeof DECOR] as readonly string[]) : null;
   const paintable = !!kind && !!entry(kind).paint;
-  const canLook = !!kind && (looks > 1 || !!decorOpts || paintable);
+  // (plan 68) a sign's words, at most its length
+  const words = kind ? (entry(kind).text ?? 0) : 0;
+  const canLook = !!kind && (looks > 1 || !!decorOpts || paintable || words > 0);
   // a board wall (or a screen showing boards): which board it shows
   const btn = (icon: IconName, label: Key, onClick: () => void, pressed?: boolean) => (
     <button
@@ -873,6 +886,27 @@ function ItemToolbar() {
                 </button>
               )}
             </div>
+          )}
+          {words > 0 && objs.length === 1 && (
+            <label className="flex flex-col gap-1 min-w-[260px]">
+              <span className="grp">{t("buildWords")}</span>
+              <input
+                key={objs[0].id}
+                defaultValue={String(objs[0].props?.text ?? TEXT_DEFAULT[kind ?? ""] ?? "")}
+                maxLength={words}
+                aria-label={t("buildWords")}
+                className="h-8 rounded-md px-2 mono text-sm uppercase bg-transparent"
+                style={{ border: "1px solid var(--edge)", color: "var(--cream)" }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                }}
+                onBlur={(e) => w?.build?.setLook({ text: e.target.value })}
+              />
+              <span className="text-[10.5px]" style={{ color: "var(--muted)" }}>
+                {t(kind === "split_flap" ? "buildWordsRows" : "buildWordsHint")}
+              </span>
+            </label>
           )}
           {paintable && (
             // its fabric or paint: the palette, or back to how it comes

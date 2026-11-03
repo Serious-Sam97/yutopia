@@ -9,6 +9,7 @@ import {
   findPath,
   Grid,
   getMap,
+  isHeld,
   ROOM_NAME,
   studio,
   takenId,
@@ -73,6 +74,9 @@ async function person(id: number, sandbox: number, roles = "member"): Promise<Pe
     "call:update",
     "call:join",
     "gps:friends",
+    "present:opened",
+    "claw:result",
+    "tg:state",
   ])
     room.onMessage(t, (m) => {
       if (!p.msgs[t]) p.msgs[t] = [];
@@ -425,6 +429,161 @@ test("office: a builder furnishes the room they're in, Undo puts it back; the fl
   builder.room.send("build:undo", {});
   await waitFor(() => !added.some((id) => ids().has(id)));
   assert.deepEqual(ids(), before, "Undo puts the room back as it was");
+});
+
+test("Christmas: an admin puts it out and away; a present opens for who it's for; wrapped at the table; the mistletoe", async () => {
+  const s = ++space;
+  const admin = await person(41, s, "member,builder,admin");
+  const bia = await person(42, s, "member,builder");
+  const ids = () => [...admin.room.state.objects.keys()] as string[];
+  const xmas = () => ids().filter((id) => id.startsWith("xmas-"));
+  await sleep(600);
+  // only an admin
+  bia.room.send("build:christmas", { on: true });
+  await sleep(300);
+  assert.equal(xmas().length, 0, "a builder can't put Christmas out");
+  admin.room.send("build:christmas", { on: true });
+  await waitFor(() => xmas().length > 0);
+  const out = xmas();
+  assert.ok(out.length >= 10, `put out (${out.length})`);
+  // a present for P42, by the lounge's sofa
+  await walk(bia, { x: 18.5, y: 27.5 });
+  await walk(admin, { x: 19.5, y: 27.5 });
+  const { map } = liveWorld(bia);
+  const spot = spotFor(bia, "present", 18, 28, 3, (sx, sy) => !!areaAt(map, sx + 0.5, sy + 0.5));
+  assert.ok(spot, "somewhere for a present");
+  bia.room.send("obj:put", { id: "t-gift", kind: "present", ...spot, rot: 0, props: { text: "p42" } });
+  await waitFor(() => !!bia.room.state.objects.get("t-gift"));
+  admin.room.send("present:open", { id: "t-gift" });
+  await waitFor(() => (admin.msgs.toast ?? []).some((m) => /for P42/.test((m as { text: string }).text)));
+  assert.ok(bia.room.state.objects.get("t-gift"), "not for the admin: still wrapped");
+  bia.room.send("present:open", { id: "t-gift" });
+  await waitFor(() => !bia.room.state.objects.get("t-gift"));
+  const gift = me(bia).held;
+  assert.ok(isHeld(gift), `in hand: ${gift}`);
+  assert.equal((bia.msgs["present:opened"]?.[0] as { gift: string }).gift, gift);
+  // wrapped at a table, for the admin
+  const tspot = spotFor(bia, "wrapping_table", 18, 29, 4, (sx, sy) => !!areaAt(map, sx + 0.5, sy + 0.5));
+  assert.ok(tspot, "somewhere for the table");
+  bia.room.send("obj:put", { id: "t-table", kind: "wrapping_table", ...tspot, rot: 0 });
+  await waitFor(() => !!bia.room.state.objects.get("t-table"));
+  await walk(bia, { x: tspot.x + 1, y: tspot.y + 1.5 });
+  bia.room.send("present:wrap", { id: "t-table", to: 41 });
+  await waitFor(() => ids().some((id) => id.startsWith("present-42-")));
+  const wrapped = admin.room.state.objects.get(ids().find((id) => id.startsWith("present-42-")));
+  const props = JSON.parse(wrapped.props);
+  assert.equal(props.to, 41, "for the admin");
+  assert.equal(props.gift, gift, "what she held inside");
+  assert.equal(me(bia).held, "", "out of her hands");
+  // the two of them under the mistletoe: hearts
+  const at = { x: Math.floor(me(bia).x), y: Math.floor(me(bia).y) };
+  bia.room.send("obj:put", { id: "t-mistle", kind: "mistletoe", ...at, rot: 0 });
+  await waitFor(() => !!bia.room.state.objects.get("t-mistle"));
+  await walk(bia, { x: at.x + 0.3, y: at.y + 0.5 });
+  await walk(admin, { x: at.x + 0.75, y: at.y + 0.5 });
+  await waitFor(() => me(bia).emote === "heart" && me(admin).emote === "heart", 4000);
+  // put away (Undo brings it back)
+  admin.room.send("build:christmas", { on: false });
+  await waitFor(() => xmas().length === 0);
+  await sleep(800);
+  admin.room.send("build:undo", {});
+  await waitFor(() => xmas().length === out.length);
+});
+
+test("the small games: chess moves by the rules, darts score, the claw drops, air hockey for two", async () => {
+  const s = ++space;
+  const a = await person(51, s, "member,builder");
+  const b = await person(52, s, "member,builder");
+  await sleep(600);
+  await walk(a, { x: 18.5, y: 27.5 });
+  await walk(b, { x: 19.5, y: 27.5 });
+  const { map } = liveWorld(a);
+  const inside = (sx: number, sy: number) => !!areaAt(map, sx + 0.5, sy + 0.5);
+  const put = async (id: string, kind: string, x: number, y: number, r = 4) => {
+    const at = spotFor(a, kind, x, y, r, inside);
+    assert.ok(at, `somewhere for the ${kind}`);
+    a.room.send("obj:put", { id, kind, ...at, rot: 0 });
+    await waitFor(() => !!a.room.state.objects.get(id));
+  };
+  const props = (id: string) => JSON.parse(a.room.state.objects.get(id).props || "{}");
+  // chess: sides taken, a legal move made, an illegal one and one out of turn refused
+  await put("g-chess", "chess_table", 18, 28);
+  a.room.send("chess:sit", { id: "g-chess", side: "w" });
+  b.room.send("chess:sit", { id: "g-chess", side: "b" });
+  await waitFor(() => props("g-chess").w === 51 && props("g-chess").b === 52);
+  b.room.send("chess:move", { id: "g-chess", from: 12, to: 28 }); // (black's e7–e5: not their turn)
+  a.room.send("chess:move", { id: "g-chess", from: 52, to: 20 }); // (e2–e5: illegal)
+  await sleep(300);
+  assert.equal(props("g-chess").fen, undefined, "nothing moved yet");
+  a.room.send("chess:move", { id: "g-chess", from: 52, to: 36 }); // e2–e4
+  await waitFor(() => String(props("g-chess").fen ?? "").startsWith("rnbqkbnr/pppppppp/8/8/4P3/"));
+  // (a builder moving the table can't set its game: the position and the seats stay the game's)
+  {
+    const o = a.room.state.objects.get("g-chess");
+    a.room.send("obj:put", {
+      id: "g-chess",
+      kind: "chess_table",
+      x: o.x,
+      y: o.y,
+      rot: 1,
+      props: { fen: "garbage", w: 99 },
+    });
+    await waitFor(() => a.room.state.objects.get("g-chess").rot === 1);
+    assert.ok(String(props("g-chess").fen).startsWith("rnbqkbnr/pppppppp/8/8/4P3/"), "the game kept");
+    assert.equal(props("g-chess").w, 51, "white's seat kept");
+  }
+  // darts: thrown into the board, scored; three make a turn
+  await put("g-darts-wall", "dartboard", 18, 27, 9);
+  {
+    const d = a.room.state.objects.get("g-darts-wall");
+    await walk(a, { x: d.x + 0.5, y: d.y + 0.5 });
+  }
+  for (let i = 0; i < 3; i++) {
+    a.room.send("darts:throw", { id: "g-darts-wall", x: 0, y: 0.103 });
+    // (a dart a moment: one sent straight after is let fall)
+    if (i === 0) a.room.send("darts:throw", { id: "g-darts-wall", x: 0, y: 0 });
+    await sleep(400);
+  }
+  await waitFor(() => props("g-darts-wall").turn?.n === 3);
+  assert.equal(props("g-darts-wall").turn.total, 180, "three treble twenties");
+  assert.equal(props("g-darts-wall").best.score, 180);
+  // the claw: dropped, told what it won (or not)
+  await put("g-claw", "claw_machine", 20, 28);
+  const near = async (p: typeof a, id: string) => {
+    const o = a.room.state.objects.get(id);
+    const at = spotFor(p, "chair", o.x, o.y, 3, inside);
+    assert.ok(at);
+    await walk(p, { x: at.x + 0.5, y: at.y + 0.5 });
+  };
+  await near(a, "g-claw");
+  a.room.send("claw:drop", { id: "g-claw", x: 0.5, z: 0.5 });
+  await waitFor(() => (a.msgs["claw:result"]?.length ?? 0) > 0);
+  // (again straight away: too soon, told so — the panel's claw comes back up empty)
+  a.room.send("claw:drop", { id: "g-claw", x: 0.5, z: 0.5 });
+  await waitFor(() => (a.msgs["claw:result"]?.length ?? 0) > 1);
+  assert.equal((a.msgs["claw:result"].at(-1) as { toy: string | null }).toy, null);
+  // air hockey: two join, it runs, the state comes to both
+  await put("g-hockey", "air_hockey", 17, 30);
+  await near(a, "g-hockey");
+  await near(b, "g-hockey");
+  a.room.send("tg:join", { id: "g-hockey" });
+  b.room.send("tg:join", { id: "g-hockey" });
+  await waitFor(() => (b.msgs["tg:state"] ?? []).some((m) => (m as { running: boolean }).running));
+  a.room.send("tg:input", { id: "g-hockey", x: 1, y: 0.4 });
+  await sleep(200);
+  const last = (a.msgs["tg:state"] ?? []).at(-1) as { side: number; s: number[] };
+  assert.equal(last.side, 0);
+  b.room.send("tg:leave", { id: "g-hockey" });
+  await waitFor(() => (a.msgs["tg:state"] ?? []).some((m) => !(m as { running: boolean }).running));
+  // a chess side kept by someone who's walked off is anyone's to take
+  await near(a, "g-chess");
+  await near(b, "g-chess");
+  b.room.send("chess:sit", { id: "g-chess", side: "w" });
+  await sleep(300);
+  assert.equal(props("g-chess").w, 51, "white still Ana's while she's at it");
+  await walk(a, { x: 30.5, y: 27.5 });
+  b.room.send("chess:sit", { id: "g-chess", side: "w" });
+  await waitFor(() => props("g-chess").w === 52);
 });
 
 test("moderation: admins mute, lock rooms and remove people; builders and members can't", async () => {

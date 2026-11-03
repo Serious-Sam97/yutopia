@@ -371,7 +371,9 @@ export function rug(m: Model, o: Look) {
     const bands = [field, P.cream, 0xd9a441, 0x3f4a5a, P.cream, field, P.olive, P.cream, field];
     m.add(box([3.9, 0.006, 2.9]), field, { at: [2, 0.003, 1.5] });
     const w = 3.9 / bands.length;
-    bands.forEach((c, i) => flat(0.05 + i * w, 0.05, 0.05 + (i + 1) * w, 2.95, 0.0065, c));
+    bands.forEach((c, i) => {
+      flat(0.05 + i * w, 0.05, 0.05 + (i + 1) * w, 2.95, 0.0065, c);
+    });
     for (let i = 1; i < bands.length; i += 2)
       for (let k = 0; k < 6; k++)
         diamond(0.05 + (i + 0.5) * w, 0.3 + k * 0.48, w * 0.32, 0.16, 0.008, i % 4 === 1 ? field : P.ink);
@@ -670,3 +672,149 @@ export const DECOR_THINGS: Record<string, (m: Model, seed: number) => void> = {
   },
   plant: (m, seed) => plant(m, { look: Math.floor(seed * 5) % 5, fabric: null, seed, occupied: false }),
 };
+
+// ── the fireplace (2×1, against a wall) — plan 68 ──────────────────────────────────────────────────
+export const FIREPLACE_LOOKS = ["Brick fireplace", "Marble fireplace", "Modern fireplace"] as const;
+/** A fireplace standing against its wall (its back on the wall's face, z 0.1): a chimney breast
+ *  built round an open firebox — its sooty back and sides, logs on their grate, the embers glowing
+ *  and live flames (liveparts.ts) — the mantel shelf at the spec's height (shared SURFACE.fireplace:
+ *  things stand on it), a stone hearth before it. Red brick under an oak beam; white marble with
+ *  fluted pilasters and a carved shelf; modern — plaster with a long slot of fire over pebbles. Lit
+ *  when on (`on` unset: lit). */
+export function fireplace(m: Model, o: Look, mantel: number) {
+  const lit = o.on !== false;
+  const B = 0.1; // (the wall's face)
+  const [x0, x1] = [0.15, 1.85];
+  const F = 0.48; // the breast's face
+  const H = 2.0; // its height
+  const soot = 0x1a1412;
+  /** The breast round an opening (ox0..ox1 across, oy0..oy1 up): its blocks, the opening's sooty back
+   *  and sides — open in front. */
+  const breast = (c: number, ox0: number, ox1: number, oy0: number, oy1: number) => {
+    const d = F - B;
+    const z = (B + F) / 2;
+    m.add(box([ox0 - x0, H, d]), c, { at: [(x0 + ox0) / 2, H / 2, z] });
+    m.add(box([x1 - ox1, H, d]), c, { at: [(ox1 + x1) / 2, H / 2, z] });
+    m.add(box([ox1 - ox0, H - oy1, d]), c, { at: [(ox0 + ox1) / 2, (oy1 + H) / 2, z] });
+    if (oy0 > 0) m.add(box([ox1 - ox0, oy0, d]), c, { at: [(ox0 + ox1) / 2, oy0 / 2, z] });
+    // the firebox: its back, its sides and its top, sooty
+    m.add(box([ox1 - ox0, oy1 - oy0, 0.03]), soot, { at: [(ox0 + ox1) / 2, (oy0 + oy1) / 2, B + 0.015] });
+    for (const x of [ox0 + 0.01, ox1 - 0.01])
+      m.add(box([0.02, oy1 - oy0, d - 0.03], 0, 1), soot, { at: [x, (oy0 + oy1) / 2, z + 0.015], tone: 1.2 });
+    m.add(box([ox1 - ox0, 0.02, d - 0.03]), soot, { at: [(ox0 + ox1) / 2, oy1 - 0.01, z + 0.015] });
+  };
+  /** The embers' bed glowing, the flames over it (live), across w at y, z a little in from the face. */
+  const fire = (cx: number, w: number, y: number, n: number, z: number) => {
+    m.add(box([w, 0.02, 0.16]), lit ? 0xff6a2a : 0x2a1a14, { at: [cx, y + 0.01, z], glow: lit });
+    if (!lit) return;
+    // (a flame: a teardrop, its belly low and its tip drawn up; the hot core a smaller one in front)
+    const tongue = (r: number, h: number) =>
+      lathe(
+        [
+          [0.001, 0],
+          [r * 0.8, h * 0.08],
+          [r, h * 0.25],
+          [r * 0.75, h * 0.5],
+          [r * 0.35, h * 0.78],
+          [0.001, h],
+        ],
+        8,
+      );
+    for (let i = 0; i < n; i++) {
+      const fx = cx - w / 2 + ((i + 0.5) * w) / n;
+      const big = i % 2 === 0;
+      const h = big ? 0.32 : 0.22;
+      m.live(
+        tongue(0.065, h),
+        0xff8a2a,
+        { kind: "flame", phase: i * 0.37 },
+        {
+          at: [fx, y + 0.02, z - 0.02 + (i % 2) * 0.03],
+          glow: true,
+        },
+      );
+      m.live(
+        tongue(0.035, h * 0.6),
+        0xffe08a,
+        { kind: "flame", phase: i * 0.37 + 0.5 },
+        {
+          at: [fx, y + 0.02, z + 0.04 + (i % 2) * 0.03],
+          glow: true,
+        },
+      );
+    }
+  };
+  if (o.look === 2) {
+    // modern: a plaster breast round a long low slot, pebbles in it, a thin oak shelf
+    breast(0xe6e1d8, 0.4, 1.6, 0.4, 0.68);
+    for (let i = 0; i < 14; i++)
+      m.add(ball(0.02 + (i % 3) * 0.006, 5), [0x8a8580, 0x6d6964, 0xb0aba3][i % 3], {
+        at: [0.46 + i * 0.08, 0.42, 0.3 + (i % 2) * 0.06],
+        scale: [1, 0.6, 1],
+      });
+    fire(1, 1.0, 0.42, 7, 0.32);
+    m.add(box([x1 - x0 + 0.1, 0.04, 0.26], 0.006), P.oak, { at: [1, mantel - 0.02, F + 0.08] });
+    m.add(box([x1 - x0 + 0.1, 0.06, 0.4]), 0x3a3836, { at: [1, 0.03, F + 0.2] });
+    return;
+  }
+  const marble = o.look === 1;
+  const face = marble ? 0xeceae4 : 0x9a4a32;
+  const [ox0, ox1, oy] = [0.6, 1.4, 0.82];
+  breast(face, ox0, ox1, 0, oy);
+  if (marble) {
+    // the surround: fluted pilasters, a frieze, the carved shelf
+    for (const x of [ox0 - 0.1, ox1 + 0.1]) {
+      m.add(box([0.16, mantel - 0.08, 0.05], 0.006), 0xf8f6f0, { at: [x, (mantel - 0.08) / 2, F + 0.025] });
+      for (let k = -1; k <= 1; k++)
+        m.add(box([0.012, mantel - 0.22, 0.006]), 0xd6d2c8, { at: [x + k * 0.04, (mantel - 0.08) / 2, F + 0.052] });
+    }
+    m.add(box([ox1 - ox0 + 0.36, mantel - 0.08 - oy, 0.04], 0.004), 0xf4f2ec, {
+      at: [1, (oy + mantel - 0.08) / 2, F + 0.02],
+    });
+    m.add(box([x1 - x0 + 0.14, 0.06, 0.3], 0.01, 2), 0xf8f6f0, { at: [1, mantel - 0.03, F + 0.1] });
+    m.add(box([x1 - x0 + 0.06, 0.04, 0.24], 0.006), 0xe0ddd5, { at: [1, mantel - 0.08, F + 0.08] });
+  } else {
+    // the brick: courses with their joints staggered, a lighter brick here and there
+    const course = 0.075;
+    for (let r = 0; r * course < H; r++) {
+      const y = r * course;
+      // (the bed joint: broken where the fire's opening is)
+      if (y < oy)
+        for (const [a, b] of [
+          [x0, ox0],
+          [ox1, x1],
+        ])
+          m.add(box([b - a, 0.008, 0.004]), 0xc9b9a8, { at: [(a + b) / 2, y + 0.004, F + 0.002] });
+      else m.add(box([x1 - x0, 0.008, 0.004]), 0xc9b9a8, { at: [1, y + 0.004, F + 0.002] });
+      for (let x = x0 + (r % 2 ? 0.11 : 0.22); x < x1 - 0.02; x += 0.22) {
+        if (x > ox0 - 0.005 && x < ox1 + 0.005 && y < oy) continue;
+        m.add(box([0.008, course - 0.008, 0.004]), 0xc9b9a8, { at: [x, y + course / 2 + 0.004, F + 0.002] });
+      }
+    }
+    for (let i = 0; i < 26; i++) {
+      const r = Math.floor(rnd(i, 1, o.seed) * 26);
+      const x = x0 + 0.11 + Math.floor(rnd(i, 2, o.seed) * 7) * 0.22 + (r % 2 ? 0 : 0.11);
+      if ((x > ox0 - 0.12 && x < ox1 + 0.12 && r * course < oy) || x > x1 - 0.1) continue;
+      m.add(box([0.2, course - 0.012, 0.004]), shade(face, 0.82 + rnd(i, 3, o.seed) * 0.36), {
+        at: [x, r * course + course / 2 + 0.004, F + 0.003],
+      });
+    }
+    // the oak beam for a mantel
+    m.add(box([x1 - x0 + 0.1, 0.14, 0.28], 0.012, 2), P.walnut, { at: [1, mantel - 0.07, F + 0.08] });
+  }
+  // the grate and its logs, the fire
+  for (const x of [0.78, 1.22]) m.add(box([0.03, 0.1, 0.24]), P.ink, { at: [x, 0.05, 0.3] });
+  m.add(rod(0.06, 0.055, 0.5, "x", 8), 0x5a3a24, { at: [1, 0.15, 0.24], rot: [0, 0.12, 0] });
+  m.add(rod(0.05, 0.05, 0.44, "x", 8), 0x6b4a30, { at: [0.98, 0.14, 0.36], rot: [0, -0.2, 0] });
+  m.add(rod(0.045, 0.04, 0.38, "x", 8), 0x5a3a24, { at: [1.02, 0.24, 0.3], rot: [0, 0.4, 0.1] });
+  fire(1, 0.5, 0.18, 5, 0.3);
+  // the hearth: a stone slab before it
+  m.add(box([x1 - x0 + 0.1, 0.06, 0.42], 0.008), marble ? 0xd8d4cc : 0x5e5a55, { at: [1, 0.03, F + 0.21] });
+  // (story) a basket of logs by its side, or a poker leant on it
+  if (o.seed > 0.5)
+    for (let i = 0; i < 4; i++)
+      m.add(rod(0.04, 0.04, 0.32, "z", 7), 0x6b4a30, {
+        at: [1.89, 0.1 + Math.floor(i / 2) * 0.075, F + 0.14 + (i % 2) * 0.085],
+      });
+  else m.add(cyl(0.008, 0.008, 0.62), P.ink, { at: [0.1, 0.06, F + 0.24], rot: [0, 0, 0.1] });
+}

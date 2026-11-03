@@ -37,7 +37,13 @@ export type ObjectAction =
   | "takeFeather"
   | "takeLaser"
   | "useComputer"
-  | "callLift";
+  | "callLift"
+  // (plan 68) a hot cocoa, a present opened, what I'm holding wrapped
+  | "pourCocoa"
+  | "makeTea"
+  | "scoopIceCream"
+  | "openPresent"
+  | "wrapGift";
 
 export interface ActionContext {
   uid: number;
@@ -107,6 +113,21 @@ export function objectActions(o: WorldObjectDef, ctx: ActionContext): ObjectActi
       break;
     case "lift":
       out.push("callLift");
+      break;
+    case "cocoa":
+      out.push("pourCocoa");
+      break;
+    case "tea":
+      out.push("makeTea");
+      break;
+    case "icecream":
+      out.push("scoopIceCream");
+      break;
+    case "present":
+      out.push("openPresent");
+      break;
+    case "wrap":
+      out.push("wrapGift");
       break;
     case "door": {
       const st = String(props.state ?? "open");

@@ -17,6 +17,11 @@ export const HELD = {
   mug: { label: "Coffee", uses: 8, first: 2500, every: 7000, linger: 6000, from: ["coffee"] },
   cup: { label: "Water", uses: 5, first: 2000, every: 6000, linger: 4000, from: ["water"] },
   soda: { label: "Soda", uses: 6, first: 2200, every: 6500, linger: 5000, from: ["vending"] },
+  // (plan 68: from the hot cocoa station; warm in the hand, out in the cold too)
+  cocoa: { label: "Hot cocoa", uses: 8, first: 2500, every: 7000, linger: 6000, from: ["cocoa"] },
+  // (plan 68 phase 19: a tea from the kettle, an ice-cream tub from the freezer)
+  tea: { label: "Tea", uses: 8, first: 2500, every: 7000, linger: 6000, from: ["tea"] },
+  icecream: { label: "Ice cream", uses: 6, first: 2000, every: 6000, linger: 4000, from: ["icecream"] },
   // a pet's toys, from the toy box (or the Pets panel): thrown, tugged, waved, pointed
   ball: { label: "Ball", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
   frisbee: { label: "Frisbee", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
@@ -25,9 +30,22 @@ export const HELD = {
   laser: { label: "Laser pointer", uses: 1, first: 0, every: 0, linger: 0, from: ["toybox"], toy: true },
 } as const satisfies Record<string, HeldDef>;
 export const isToyHeld = (k: unknown): boolean => isHeld(k) && !!(HELD[k] as HeldDef).toy;
+/** (plan 68) What a present put out (not wrapped by someone) has in it. */
+export const GIFTS = ["cocoa", "ball", "frisbee", "rope", "feather"] as const satisfies readonly HeldKind[];
 export const THROWN = ["ball", "frisbee"] as const; // what flies when you throw it
 
 export type HeldKind = keyof typeof HELD;
+/** The drinks (and the tub), and the thing each is drawn as in the hand: a mug, a paper cup, a can. */
+const DRINK_AS: Record<string, "mug" | "cup" | "soda"> = {
+  mug: "mug",
+  cup: "cup",
+  soda: "soda",
+  cocoa: "mug",
+  tea: "mug",
+  icecream: "cup",
+};
+export const isDrink = (k: unknown): boolean => typeof k === "string" && Object.hasOwn(DRINK_AS, k);
+export const drinkAs = (k: string): "mug" | "cup" | "soda" => DRINK_AS[k] ?? "mug";
 export const isHeld = (k: unknown): k is HeldKind => typeof k === "string" && Object.hasOwn(HELD, k);
 
 export const SIP_MS = 1500; // a sip: up to the mouth, a drink, back down

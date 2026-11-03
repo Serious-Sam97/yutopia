@@ -20,11 +20,14 @@ import { GLASS } from "@yutopia/shared/media";
 const SEAT = { ...SEAT_SPEC, ...SEAT_NEXT };
 const SURF = { ...SURFACE, ...SURFACE_NEXT };
 
-import { turnPoint } from "@yutopia/shared/shapes";
+import { frameOf, turnPoint } from "@yutopia/shared/shapes";
 import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
 import { Out } from "../tp/kit3d";
+import type { LivePart } from "./kit";
+import { liveAt } from "./liveparts";
 import { CEL_ALPHA } from "./look";
-import { modelOf, nativeDressInto, nativeInto } from "./native";
+import { liveInto, modelOf, nativeDressInto, nativeInto, wordsOf } from "./native";
+import { adventDay, XMAS_LOOKS } from "./xmas";
 
 // Plan 67 phase 1 (docs/plan/67-the-furniture.md): a kind the kit draws stays on its footprint,
 // its anchors are where its spec says (the task chair's seat at SEAT_NEXT's top), and it's turned
@@ -545,4 +548,182 @@ test("the staples: their tops and seats at the spec, the ceiling lights lit when
     assert.ok(modelOf({ id: "l", kind, x: 0, y: 0 }).userData.glow, `${kind}: lit`);
     assert.ok(!modelOf({ id: "l", kind, x: 0, y: 0, props: { on: false } }).userData.glow, `${kind}: off`);
   }
+});
+
+// Plan 68 phase 0: the bench's heroes — on their footprints, the loveseat's seat and the mantel at
+// their spec; live parts kept out of the merged model and moved by the clock (liveparts.ts).
+test("plan 68's heroes: on their footprints, at their spec; live parts apart and moving", () => {
+  for (const kind of ["loveseat", "fireplace", "lava_lamp"])
+    for (let variant = 0; variant < 3; variant++) {
+      const e = entry(kind);
+      const g = modelOf({ id: "h", kind, x: 0, y: 0, rot: 0, props: { variant } });
+      const b = bounds(g.attributes.position.array);
+      const what = `${kind} ${variant}`;
+      assert.ok(
+        b.x0 >= -0.005 && b.x1 <= e.w + 0.005 && b.z0 >= -0.005 && b.z1 <= e.h + 0.005,
+        `${what}: on its footprint`,
+      );
+      assert.ok(b.y0 > -0.006 && b.y0 < 0.012, `${what}: on the floor`);
+      assert.ok(g.attributes.position.count / 3 < 8000, `${what}: under 8k tris`);
+    }
+  for (let variant = 0; variant < 3; variant++) {
+    const sofa = modelOf({ id: "s", kind: "loveseat", x: 0, y: 0, rot: 0, props: { variant } });
+    for (const x of [0.6, 1.4]) {
+      const h = topAt(sofa, x, 0.5 + SEAT_SPEC.loveseat.front - 0.15, 1);
+      assert.ok(Math.abs(h - SEAT_SPEC.loveseat.top) < 0.03, `loveseat ${variant}: its seat at ${h.toFixed(3)}`);
+    }
+    const fire = modelOf({ id: "f", kind: "fireplace", x: 0, y: 0, rot: 0, props: { variant } });
+    const top = entry("fireplace").top ?? [0, 0, 8, 4];
+    for (let cx = top[0]; cx < top[2]; cx++) {
+      const h = topAt(fire, (cx + 0.5) / 4, (top[1] + 0.5) / 4, SURFACE.fireplace + 0.3);
+      assert.ok(
+        Math.abs(h - SURFACE.fireplace) < 0.012,
+        `fireplace ${variant}: its mantel at ${h.toFixed(3)} over cell ${cx}`,
+      );
+    }
+    // its flames live (lit), none when out
+    assert.ok((fire.userData.live as unknown[]).length > 0, `fireplace ${variant}: flames`);
+    const out = modelOf({ id: "f", kind: "fireplace", x: 0, y: 0, rot: 0, props: { variant, on: false } });
+    assert.equal((out.userData.live as unknown[]).length, 0, `fireplace ${variant}: out, no flames`);
+  }
+  // the lava lamp's blobs rise and fall with the clock; its glass stays put
+  const lamp = modelOf({ id: "l", kind: "lava_lamp", x: 0, y: 0, rot: 0 });
+  const parts = lamp.userData.live as LivePart[];
+  assert.ok(parts.some((p) => p.glass) && parts.filter((p) => p.anim.kind === "lava").length >= 3);
+  const blob = parts.find((p) => p.anim.kind === "lava");
+  assert.ok(blob);
+  const ys = [0, 2, 4, 6, 8].map((t) => liveAt(blob.anim, t).dy);
+  assert.ok(Math.max(...ys) - Math.min(...ys) > 0.05, "a blob rises and falls");
+  // (a model's still parts don't hold its live ones)
+  const plain = new Out();
+  nativeInto(plain, { id: "l", kind: "lava_lamp", x: 0, y: 0, rot: 0 });
+  assert.equal(plain.lit.pos.length / 3, lamp.attributes.position.count);
+});
+
+// Plan 68 phase 1: live parts in the world — placed as the model is, every turn (shared turnPoint,
+// as the shapes and the buffers are), lifted with things on a surface.
+test("live parts in the world: at every turn where the model's own points go", () => {
+  const mat = new MeshBasicMaterial();
+  for (const [kind, props] of [
+    ["fireplace", { variant: 0 }],
+    ["lava_lamp", { z: 29, c: [1, 1] }],
+  ] as const)
+    for (const rot of [0, 1, 2, 3]) {
+      const o = { id: "lv", kind, x: 5, y: 7, rot, props };
+      const g = liveInto(o, mat, mat, mat);
+      assert.ok(g, `${kind}: live parts`);
+      g.updateMatrixWorld(true);
+      const f = frameOf(o);
+      for (const m of g.children) {
+        const p = (m.userData.live as LivePart).at;
+        const w = g.localToWorld(new Vector3(...p));
+        const want = turnPoint(f, f.w, f.h, p[0], p[2]);
+        assert.ok(Math.hypot(w.x - want.x, w.z - want.z) < 1e-6, `${kind} rot ${rot}: x/z`);
+        assert.ok(Math.abs(w.y - (p[1] + f.lift)) < 1e-6, `${kind} rot ${rot}: lifted ${f.lift}`);
+      }
+    }
+});
+
+// Plan 68 phase 1: words on things — the marquee's bulbs spell its words (more letters, more bulbs),
+// its border chases; the ticker and the split-flap a still housing round a face the screens draw on.
+test("words on things: the marquee spells its words, the boards frame their faces", () => {
+  const sign = (kind: string, text?: string) =>
+    modelOf({ id: "w", kind, x: 0, y: 0, rot: 0, props: text === undefined ? {} : { text } });
+  for (const kind of ["marquee_sign", "vfd_ticker", "split_flap"]) {
+    const e = entry(kind);
+    const b = bounds(sign(kind).attributes.position.array);
+    assert.ok(b.x0 >= -0.005 && b.x1 <= e.w + 0.005, `${kind}: across its footprint`);
+    assert.ok(b.y1 < 3.27, `${kind}: under the ceiling`);
+  }
+  // (its letters' bulbs lit: in its glow)
+  const tris = (text: string) => (sign("marquee_sign", text).userData.glow as BufferGeometry).attributes.position.count;
+  assert.ok(tris("HELLO") > tris("HI"), "more letters, more bulbs");
+  assert.equal(tris("hi <3"), tris("HI 3"), "drawn as the face draws it");
+  assert.equal(wordsOf({ id: "w", kind: "marquee_sign", x: 0, y: 0 }), "OPEN");
+  assert.equal(wordsOf({ id: "w", kind: "marquee_sign", x: 0, y: 0, props: { text: "x".repeat(30) } }).length, 10);
+  // the chase: its bulb sets blink in turn
+  const blinks = (sign("marquee_sign").userData.live as LivePart[]).filter((p) => p.anim.kind === "blink");
+  assert.ok(blinks.length >= 3, "a chase round the border");
+  const lit = [0, 0.3, 0.6].map((t) => blinks.map((p) => liveAt(p.anim, t).shown).join());
+  assert.equal(new Set(lit).size, 3, "the chase moves");
+});
+
+// Plan 68 phase 2: Christmas — every piece on its footprint (on a wall, its wall; hung from the
+// ceiling, under it), under 8k tris; the lights twinkle while on and are still when off, the
+// reindeer nods, the globe's flakes drift, the village's train goes round; the stocking says its
+// name; the advent calendar opens to the day.
+test("Christmas: on their footprints, lit and moving, named and dated", () => {
+  const XMAS = Object.keys(XMAS_LOOKS);
+  for (const kind of XMAS)
+    for (let variant = 0; variant < (entry(kind).variants ?? 1); variant++) {
+      const e = entry(kind);
+      const g = modelOf({ id: "x", kind, x: 0, y: 0, rot: 0, props: { variant } });
+      const b = bounds(g.attributes.position.array);
+      const what = `${kind} ${variant}`;
+      const [w, h] = e.onSurface ? [1, 1] : [e.w, e.h];
+      assert.ok(
+        b.x0 >= -0.005 && b.x1 <= w + 0.005 && b.z0 >= -0.005 && b.z1 <= h + 0.005,
+        `${what}: on its footprint`,
+      );
+      assert.ok(b.y1 <= 3.275, `${what}: under the ceiling (${b.y1.toFixed(3)})`);
+      if (!e.wall && kind !== "mistletoe")
+        assert.ok(b.y0 > -0.03 && b.y0 < 0.02, `${what}: on the floor (${b.y0.toFixed(3)})`);
+      assert.ok(g.attributes.position.count / 3 < 8000, `${what}: under 8k tris`);
+    }
+  const live = (kind: string, props: Record<string, unknown> = {}) =>
+    (modelOf({ id: "x", kind, x: 0, y: 0, rot: 0, props }).userData.live as LivePart[]) ?? [];
+  // the lights: sets blinking out of step, so something's always changing; none when off
+  for (const kind of ["xmas_tree", "xmas_tree_small", "garland"]) {
+    const sets = live(kind).filter((p) => p.anim.kind === "blink");
+    assert.ok(sets.length >= 2, `${kind}: its lights in sets`);
+    const at = [0, 0.4, 0.8, 1.2].map((t) => sets.map((p) => liveAt(p.anim, t).shown).join());
+    assert.ok(new Set(at).size > 1, `${kind}: they twinkle`);
+    assert.equal(live(kind, { on: false }).filter((p) => p.anim.kind === "blink").length, 0, `${kind}: off, still`);
+  }
+  const nod = live("reindeer").find((p) => p.anim.kind === "nod");
+  assert.ok(nod && Math.abs(liveAt(nod.anim, 0.9).turn[1] - liveAt(nod.anim, 0).turn[1]) > 0.05, "the reindeer nods");
+  const flakes = live("snow_globe").filter((p) => p.anim.kind === "swirl");
+  assert.ok(flakes.length === 3 && liveAt(flakes[0].anim, 2).turn[0] !== 0, "the globe's flakes drift");
+  assert.ok(
+    live("snow_globe").some((p) => p.glass),
+    "under its glass",
+  );
+  assert.ok(
+    live("xmas_village").some((p) => p.anim.kind === "spin"),
+    "the village's train goes round",
+  );
+  assert.ok(!live("xmas_village", { on: false }).length, "and stops when it's off");
+  // a stocking's name: another model a name, none drawn for nothing
+  const tris = (text?: string) =>
+    modelOf({ id: "s", kind: "stocking", x: 0, y: 0, rot: 0, props: text === undefined ? {} : { text } }).attributes
+      .position.count;
+  assert.ok(tris("SAM") > tris(), "a name on its cuff");
+  assert.equal(tris("sam!"), tris("SAM!"), "as the face draws it");
+  // full on Christmas Day
+  const sock = (d: number) =>
+    modelOf({ id: "s", kind: "stocking", x: 0, y: 0, rot: 0, props: { text: "SAM", _day: d } });
+  assert.ok(sock(25).attributes.position.count > sock(24).attributes.position.count, "full on the 25th");
+  // the advent calendar: shut before December, open to the day in it
+  assert.equal(adventDay(new Date(2026, 10, 3)), 0);
+  assert.equal(adventDay(new Date(2026, 11, 12)), 12);
+  assert.equal(adventDay(new Date(2026, 11, 31)), 25);
+  const cal = (d: number) => modelOf({ id: "a", kind: "advent_calendar", x: 0, y: 0, rot: 0, props: { _day: d } });
+  assert.notEqual(cal(0), cal(12), "opened to the day");
+  assert.ok(
+    bounds(cal(12).attributes.position.array).z1 > bounds(cal(0).attributes.position.array).z1,
+    "its doors swung out",
+  );
+});
+
+// (plan 68's review) a chess table keeps only its latest position's model — a game's every move
+// would otherwise stay in memory — and a position that won't read draws the start, never throws
+test("a chess table's model: the latest position only, a bad one drawn as the start", () => {
+  const at = (fen: string) => ({ id: "cache-chess", kind: "chess_table", x: 0, y: 0, rot: 0, props: { fen } });
+  const a = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+  const b = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2";
+  const first = modelOf(at(a));
+  assert.ok(modelOf(at(a)) === first, "the same position: the same model");
+  modelOf(at(b));
+  assert.ok(modelOf(at(a)) !== first, "the old position's model let go");
+  assert.doesNotThrow(() => modelOf(at("garbage")));
 });

@@ -135,7 +135,11 @@ export function lightSources(objects: WorldObjectDef[]): LightSource[] {
     const c = (CATALOG as Record<string, { light?: { color: number; radius: number; intensity: number } }>)[o.kind]
       ?.light;
     if (c) {
-      if ((o.kind === "lamp" || o.kind === "pendant_light" || o.kind === "panel_light") && o.props?.on === false)
+      // (switched off: a lamp, a ceiling light, a fire, a tree's lights)
+      if (
+        (o.kind === "pendant_light" || o.kind === "panel_light" || entry(o.kind).interact === "lamp") &&
+        o.props?.on === false
+      )
         continue;
       if (o.kind === "radio" && !o.props?.on) continue;
       const e = entry(o.kind);

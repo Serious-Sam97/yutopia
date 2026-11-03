@@ -3,7 +3,7 @@
 import { HELD, heldState, isHeld, isToyHeld } from "@yutopia/shared";
 import { useEffect, useRef, useState } from "react";
 import { type Key, trMaybe, useTr } from "@/lib/i18n";
-import { HELD_BOX, heldSvg, MUG_COLORS } from "@/world/art/held";
+import { COCOA_MUG, HELD_BOX, heldSvg, MUG_COLORS, TEA_MUG } from "@/world/art/held";
 import { PERSON } from "@/world/art/iso";
 import { svgDoc } from "@/world/art/svgdoc";
 import { useHud } from "@/world/store";
@@ -241,6 +241,47 @@ export function CableChip() {
   );
 }
 
+// (plan 68) At a gift-wrapping table, what I'm holding to be wrapped: who it's for — the people
+// here, or anyone.
+export function WrapPicker() {
+  const t = useTr();
+  const w = useWorld();
+  const wrap = useHud((s) => s.wrap);
+  const people = useHud((s) => s.people);
+  const me = useHud((s) => s.me);
+  if (!wrap) return null;
+  const others = people.filter((p) => !p.bot && p.uid !== me?.uid);
+  return (
+    <div
+      role="dialog"
+      aria-label={t("wrapTitle")}
+      className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[224px] sm:bottom-[160px] cabinet rounded-xl p-3 rise w-[min(320px,calc(100vw-24px))] space-y-2"
+    >
+      <div className="flex items-center justify-between">
+        <h3 className="grp">{t("wrapTitle")}</h3>
+        <button type="button" className="ghost-btn" style={{ height: 26 }} onClick={() => w?.wrapFor(-1)}>
+          ✕
+        </button>
+      </div>
+      {!others.length && (
+        <p className="text-xs" style={{ color: "var(--muted)" }}>
+          {t("wrapNoOne")}
+        </p>
+      )}
+      <div className="max-h-[220px] overflow-y-auto grid gap-1">
+        {others.map((p) => (
+          <button key={p.sid} type="button" className="ghost-btn justify-start" onClick={() => w?.wrapFor(p.uid)}>
+            🎁 {p.name}
+          </button>
+        ))}
+        <button type="button" className="ghost-btn justify-start" onClick={() => w?.wrapFor(0)}>
+          {t("wrapAnyone")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // What I carry (a mug from the coffee machine): its picture, how much is
 // left, and a button to put it down.
 export function HeldChip() {
@@ -299,9 +340,26 @@ export function HeldChip() {
   // the same mug the world draws in my hand
   let h = 2166136261;
   for (const ch of me?.name ?? "") h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-  const color = MUG_COLORS[Math.floor(((h >>> 0) / 4294967296) * MUG_COLORS.length)];
+  // (a hot cocoa in the station's red mug, a tea in a white one: plan 68, as the hand has them)
+  const color =
+    held.kind === "cocoa"
+      ? COCOA_MUG
+      : held.kind === "tea"
+        ? TEA_MUG
+        : MUG_COLORS[Math.floor(((h >>> 0) / 4294967296) * MUG_COLORS.length)];
   const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgDoc(heldSvg(held.kind, color, level), HELD_BOX, 3))}`;
-  const label: Key = held.kind === "cup" ? "heldCup" : held.kind === "soda" ? "heldSoda" : "heldMug";
+  const label: Key =
+    held.kind === "cup"
+      ? "heldCup"
+      : held.kind === "soda"
+        ? "heldSoda"
+        : held.kind === "cocoa"
+          ? "heldCocoa"
+          : held.kind === "tea"
+            ? "heldTea"
+            : held.kind === "icecream"
+              ? "heldIceCream"
+              : "heldMug";
   return (
     <div className="pointer-events-auto absolute left-1/2 -translate-x-1/2 bottom-[224px] sm:bottom-[160px] cabinet rounded-full pl-1.5 pr-1.5 py-1 flex items-center gap-2.5 rise">
       <span

@@ -36,8 +36,10 @@ export interface VitalsIn {
   storm: number;
   /** how the air bites (weather.ts chillOf): 1 at freezing, 0 mild, up to 2 bitter; not said, 1 */
   chill?: number;
-  /** indoors (any building), in a lamp's pool, in a car */
+  /** indoors (any building), in a lamp's pool, in a car, a hot cocoa in hand */
   warm: boolean;
+  /** by a lit fire (plan 68: a fireplace): warmed three times as fast */
+  hearth?: boolean;
   /** the torch focused (phase 3) */
   focus: boolean;
   /** in the water to the chest (docs/plan/66-the-water.md, S3): how warm it is, °C */
@@ -50,7 +52,7 @@ export const VITALS = {
   hp: { regen: 1, after: 8, upTo: 60 },
   // 0.6 a minute outside at night (twice that in a blizzard); 20 a minute somewhere warm;
   // frozen, stamina comes back at half speed (the cold never kills)
-  wm: { night: 0.6 / 60, warmUp: 20 / 60, coldRegen: 0.5 },
+  wm: { night: 0.6 / 60, warmUp: 20 / 60, coldRegen: 0.5, hearth: 3 },
   // in the water (plan 66): 6 a minute at 2 °C, none at 20 or over, half again at night
   water: { cold: 6 / 60, none: 20, at: 2 },
   // (run out, the focus is gone until it's back to `back`: at 0 it isn't on and off every step)
@@ -79,7 +81,7 @@ export function stepVitals(v: Vitals, c: VitalsClock, i: VitalsIn, dt: number): 
     const W = VITALS.water;
     const cold = Math.min(1, Math.max(0, (W.none - i.water) / (W.none - W.at)));
     v.wm = drain(v.wm, W.cold * cold * (1 + 0.5 * Math.min(1, Math.max(0, i.night))), dt);
-  } else if (i.warm) v.wm = fill(v.wm, VITALS.wm.warmUp, dt);
+  } else if (i.warm || i.hearth) v.wm = fill(v.wm, VITALS.wm.warmUp * (i.hearth ? VITALS.wm.hearth : 1), dt);
   else if (i.outside) {
     // the night's cold, as cold as the air; a bitter one bites by day too (half the night's at its worst)
     const chill = Math.min(2, Math.max(0, i.chill ?? 1));

@@ -1,4 +1,4 @@
-import { hangOf, hangPoint, ISO_PX, type WorldObjectDef } from "@yutopia/shared";
+import { hangOf, hangPoint, ISO_PX, TEXT_FACE, type WorldObjectDef } from "@yutopia/shared";
 import { GAME_ASPECT } from "@yutopia/shared/games";
 import { GLASS, glassCorners } from "@yutopia/shared/media";
 import {
@@ -17,8 +17,9 @@ import {
   Vector3,
   VideoTexture,
 } from "three";
-import { isNative } from "../furn/native";
+import { isNative, wordsOf } from "../furn/native";
 import { CLOCK_FACE } from "../furn/walls";
+import { drawFlaps, drawTicker, FLAPS_PX, TICKER_PX } from "../furn/words";
 import type { WorldModel } from "../model";
 import { zt } from "./kit3d";
 
@@ -341,6 +342,69 @@ export class LiveFeed {
     for (const id of this.cache.keys()) if (!panels.has(id)) this.cache.delete(id);
     // the clocks' hands: the time where you are, on the kit's clock face (plan 67, world/furn/walls.ts)
     if (isNative("clock")) out.push(...this.clocks(model));
+    // the signs' moving words (plan 68: the ticker's scroll, the split-flap's flaps)
+    out.push(...this.words(model));
+    return out;
+  }
+
+  private wordList = { at: Number.NEGATIVE_INFINITY, list: [] as WorldObjectDef[] };
+  private boards = new Map<
+    string,
+    { canvas: HTMLCanvasElement; text: string; since: number; version: number; key: string }
+  >();
+  private words(model: LiveSources["model"]): Live[] {
+    const now = performance.now() / 1000;
+    if (now * 1000 - this.wordList.at > 2000)
+      this.wordList = {
+        at: now * 1000,
+        list: model
+          .allObjects()
+          .filter((o) => (o.kind === "vfd_ticker" || o.kind === "split_flap") && isNative(o.kind)),
+      };
+    const out: Live[] = [];
+    const seen = new Set<string>();
+    for (const o of this.wordList.list) {
+      seen.add(o.id);
+      const ticker = o.kind === "vfd_ticker";
+      const f = TEXT_FACE[o.kind as keyof typeof TEXT_FACE];
+      const text = wordsOf(o);
+      let b = this.boards.get(o.id);
+      if (!b) {
+        const canvas = document.createElement("canvas");
+        [canvas.width, canvas.height] = ticker ? TICKER_PX : FLAPS_PX;
+        b = { canvas, text: "", since: now, version: 0, key: "" };
+        this.boards.set(o.id, b);
+      }
+      if (b.text !== text) {
+        b.text = text;
+        b.since = now;
+      }
+      // what's on it now: a key that changes when it must be drawn again
+      const key = ticker
+        ? `${Math.floor(now * 30)}`
+        : now - b.since < FLIP_S
+          ? `${Math.floor(now * 14)}`
+          : `${text}|still`;
+      if (key !== b.key) {
+        b.key = key;
+        b.version++;
+        if (ticker) drawTicker(b.canvas, text, now);
+        else drawFlaps(b.canvas, text, now - b.since, o.id);
+      }
+      const up = hangOf(o).lift;
+      out.push({
+        key: `w:${o.id}`,
+        src: b.canvas,
+        tl: hangPoint(o, f.x0, f.z),
+        tr: hangPoint(o, f.x1, f.z),
+        zTop: f.y1 * ISO_PX + up,
+        zBot: f.y0 * ISO_PX + up,
+        version: b.version,
+        live: true,
+        glow: ticker,
+      });
+    }
+    for (const id of this.boards.keys()) if (!seen.has(id)) this.boards.delete(id);
     return out;
   }
 
@@ -389,3 +453,6 @@ export class LiveFeed {
     });
   }
 }
+
+// ── the signs' words (plan 68 phase 1) ──────────────────────────────────────────────────────────────
+const FLIP_S = 2.2; // a split-flap board turns its flaps over this long when its words change

@@ -46,11 +46,47 @@ export interface PartOpts {
   tone?: number;
   /** lit from within (a screen, a VFD, a lamp's bulb): unshaded, and it blooms at night */
   glow?: boolean;
+  /** see-through, this opaque (0..1): a window's pane, merged with the rest (not a live part) */
+  glass?: number;
+}
+
+/** How a live part moves (docs/plan/68-more-furniture.md, live parts: world/furn/liveparts.ts). */
+export type LiveAnim =
+  // a lava lamp's blob: up and down between lo and hi (m over its rest) over `period` s, stretched
+  // as it moves
+  | { kind: "lava"; lo: number; hi: number; period: number; phase: number }
+  // a flame: flickering taller and shorter, swaying
+  | { kind: "flame"; phase: number }
+  // turning round its own y (or z) axis at `speed` rad/s
+  | { kind: "spin"; axis: "y" | "z"; speed: number }
+  // not moving: a part drawn apart for its material (a lava lamp's glass)
+  | { kind: "still" }
+  // a bulb blinking: lit for `on` of every `period` s, from `phase` of the way in (a marquee's chase)
+  | { kind: "blink"; period: number; on: number; phase: number }
+  // nodding: tipped round its own z by up to `amp` rad and back, over `period` s (a reindeer's head)
+  | { kind: "nod"; amp: number; period: number; phase: number }
+  // drifting round: turning round its own y at `speed` rad/s, bobbing `bob` m up and down over
+  // `period` s (a snow globe's flakes)
+  | { kind: "swirl"; speed: number; bob: number; period: number; phase: number }
+  // a clock's hand: round its own z with the time, once every `period` s (12 h, 1 h, 1 min) — the
+  // time where you are, or `zone` hours from UTC (a world-time clock's city)
+  | { kind: "clock"; period: number; zone?: number };
+/** A moving part of a model: its own geometry round its own origin, where it rests, how it moves. */
+export interface LivePart {
+  geo: BufferGeometry;
+  glow: boolean;
+  /** see-through, tinted by its colour (a lava lamp's glass and liquid) */
+  glass: boolean;
+  at: V3;
+  rot: V3;
+  anim: LiveAnim;
 }
 
 export class Model {
   private parts: BufferGeometry[] = [];
   private glows: BufferGeometry[] = [];
+  private clears: BufferGeometry[] = [];
+  private lives: LivePart[] = [];
   /** turned round the frame's middle (0.5, 0.5) when it's done, radians: a thing drawn facing −z
    *  that faces the room (+z) instead */
   facing = 0;
@@ -72,24 +108,63 @@ export class Model {
     const col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) col.set([C.r, C.g, C.b], i * 3);
     geo.setAttribute("color", new Float32BufferAttribute(col, 3));
-    (o.glow ? this.glows : this.parts).push(geo);
+    if (o.glass !== undefined) {
+      geo.setAttribute("op", new Float32BufferAttribute(new Float32Array(n).fill(o.glass), 1));
+      this.clears.push(geo);
+    } else (o.glow ? this.glows : this.parts).push(geo);
+    return this;
+  }
+
+  /** A part that moves (a lava lamp's blob, a flame): kept out of the merged model, built round
+   *  its own origin and resting at `o.at`, moved each frame by `anim` (live parts: liveparts.ts). */
+  live(g: BufferGeometry, color: number, anim: LiveAnim, o: Omit<PartOpts, "glass"> & { glass?: boolean } = {}): this {
+    const geo = g.index ? g.toNonIndexed() : g;
+    if (geo !== g) g.dispose();
+    for (const k of Object.keys(geo.attributes)) if (k !== "position") geo.deleteAttribute(k);
+    if (o.scale) geo.scale(...o.scale);
+    geo.computeVertexNormals();
+    C.set(color).multiplyScalar(o.tone ?? 1);
+    const n = geo.attributes.position.count;
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) col.set([C.r, C.g, C.b], i * 3);
+    geo.setAttribute("color", new Float32BufferAttribute(col, 3));
+    this.lives.push({ geo, glow: !!o.glow, glass: !!o.glass, at: o.at ?? [0, 0, 0], rot: o.rot ?? [0, 0, 0], anim });
     return this;
   }
 
   /** Everything added, as one geometry (the parts let go); what glows, merged too, in its
-   *  `userData.glow` (a BufferGeometry, or null). */
+   *  `userData.glow` (a BufferGeometry, or null); the live parts in `userData.live` (LivePart[]). */
   geometry(): BufferGeometry {
     const g = mergeGeometries(this.parts);
     const glow = this.glows.length ? mergeGeometries(this.glows) : null;
-    for (const p of [...this.parts, ...this.glows]) p.dispose();
+    const clear = this.clears.length ? mergeGeometries(this.clears) : null;
+    for (const p of [...this.parts, ...this.glows, ...this.clears]) p.dispose();
     this.parts = [];
     this.glows = [];
+    this.clears = [];
     if (!g) throw new Error("an empty model");
     if (this.facing)
-      for (const x of glow ? [g, glow] : [g]) x.translate(-0.5, 0, -0.5).rotateY(this.facing).translate(0.5, 0, 0.5);
+      for (const x of [g, glow, clear]) x?.translate(-0.5, 0, -0.5).rotateY(this.facing).translate(0.5, 0, 0.5);
+    // (the live parts turned as the model is: their rest and their heading)
+    const live = this.lives.map((p) =>
+      this.facing
+        ? {
+            ...p,
+            at: [
+              0.5 + (p.at[0] - 0.5) * Math.cos(this.facing) + (p.at[2] - 0.5) * Math.sin(this.facing),
+              p.at[1],
+              0.5 - (p.at[0] - 0.5) * Math.sin(this.facing) + (p.at[2] - 0.5) * Math.cos(this.facing),
+            ] as V3,
+            rot: [p.rot[0], p.rot[1] + this.facing, p.rot[2]] as V3,
+          }
+        : p,
+    );
+    this.lives = [];
     g.computeBoundingBox();
     g.computeBoundingSphere();
     g.userData.glow = glow;
+    g.userData.clear = clear;
+    g.userData.live = live;
     return g;
   }
 }
@@ -176,6 +251,19 @@ export function quads(qs: V3[][]): BufferGeometry {
   }
   const g = new BufferGeometry();
   g.setAttribute("position", new Float32BufferAttribute(pos, 3));
+  return g;
+}
+
+/** Several shapes as one (each already where it goes): a live part made of many — a marquee's set of
+ *  bulbs blinking together, one draw. */
+export function merged(geos: BufferGeometry[]): BufferGeometry {
+  const flat = geos.map((g) => {
+    const n = g.index ? g.toNonIndexed() : g;
+    for (const k of Object.keys(n.attributes)) if (k !== "position") n.deleteAttribute(k);
+    return n;
+  });
+  const g = mergeGeometries(flat);
+  if (!g) throw new Error("nothing to merge");
   return g;
 }
 

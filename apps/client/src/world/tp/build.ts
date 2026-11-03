@@ -61,8 +61,9 @@ import { FloorBake } from "../art/floors";
 import { piece, WALL_H } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
+import { animateLive } from "../furn/liveparts";
 import { celLit } from "../furn/look";
-import { isNative, isNativeDress, nativeDressInto, nativeInto } from "../furn/native";
+import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, openingInto } from "../furn/native";
 import { boxInParent, type Slab } from "./below-cull";
 import { type Geo, MeshSketch, type Opts3, Out, zt } from "./kit3d";
 import { poolTable3 } from "./pooltable3d";
@@ -133,6 +134,10 @@ interface Built {
   picks: Pick3[];
   dispose: { dispose(): void }[];
 }
+
+/** Live parts are moved within this many tiles of the camera's target, at most this many a frame. */
+const LIVE_NEAR = 18;
+const LIVE_MAX = 64;
 
 export class World3 {
   readonly root = new Group();
@@ -432,6 +437,7 @@ export class World3 {
       const keep = [...left, ...a.sig.filter((x) => x.startsWith("d|"))].sort().join(";");
       this.areas.set(k, { sig: keep, built });
     }
+    this.syncLive(objects);
     for (const [k, had] of this.areas)
       if (!byArea.has(k)) {
         this.unmount(had.built);
@@ -857,11 +863,15 @@ export class World3 {
       const a0 = this.posts.has(`${first.x},${first.y}`) ? T : 0;
       const a1 = this.posts.has(first.dir === "h" ? `${last.x + 1},${last.y}` : `${last.x},${last.y + 1}`) ? n - T : n;
       const clip = first.dir === "h" ? { x0: a0, x1: a1, y0: -1, y1: 1 } : { x0: -1, x1: 1, y0: a0, y1: a1 };
-      for (const part of leaves ? ["edge", "leaf"] : ["edge"]) {
-        const s = new MeshSketch({ rot, w: n, h: 1, at: [o.x, o.y], out, clip: part === "edge" ? clip : null });
-        drawItem(s, { kind: o.kind, id: o.id, rot, props: { ...(o.props ?? {}), _part: part } });
-        s.end();
-      }
+      if (isNative(o.kind))
+        // (plan 68 phase 13: redrawn by the kit — world/furn/openings.ts)
+        openingInto(out, o, a0, a1);
+      else
+        for (const part of leaves ? ["edge", "leaf"] : ["edge"]) {
+          const s = new MeshSketch({ rot, w: n, h: 1, at: [o.x, o.y], out, clip: part === "edge" ? clip : null });
+          drawItem(s, { kind: o.kind, id: o.id, rot, props: { ...(o.props ?? {}), _part: part } });
+          s.end();
+        }
     } else {
       const rot = rotOf(o);
       const ref = { kind: o.kind, id: o.id, rot, props: o.props };
@@ -1202,7 +1212,58 @@ export class World3 {
     }
   }
 
+  // ── live parts (plan 68: a lava lamp's blobs, a fire's flames) ─────────────────────────────────
+  /** Each placed thing's moving parts, kept apart from the merged buffers (furn/liveparts.ts). */
+  private live = new Map<string, { sig: string; group: Group }>();
+  private liveRoot = new Group();
+  private glassMat: Material | null = null;
+  private syncLive(objects: WorldObjectDef[]) {
+    const seen = new Set<string>();
+    for (const o of objects) {
+      if (!isNative(o.kind)) continue;
+      const sig = objectSig(o);
+      seen.add(o.id);
+      const had = this.live.get(o.id);
+      if (had?.sig === sig) continue;
+      if (had) this.liveRoot.remove(had.group);
+      if (!this.glassMat) {
+        this.glassMat = new MeshLambertMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.42,
+          depthWrite: false,
+        });
+        this.light(this.glassMat);
+      }
+      const g = liveInto(o, this.materials.lit, this.materials.glow, this.glassMat);
+      if (!g) {
+        this.live.delete(o.id);
+        continue;
+      }
+      this.liveRoot.add(g);
+      this.live.set(o.id, { sig, group: g });
+    }
+    for (const [id, l] of this.live)
+      if (!seen.has(id)) {
+        this.liveRoot.remove(l.group);
+        this.live.delete(id);
+      }
+    if (!this.liveRoot.parent && this.live.size) this.root.add(this.liveRoot);
+  }
+  /** Move the live parts to time `t` (s): only those near `near` (world, this floor's frame) — the
+   *  rest hold still — and at most LIVE_MAX of them a frame. */
+  animateLive(t: number, near: { x: number; z: number }): void {
+    let n = 0;
+    for (const { group } of this.live.values()) {
+      const p = group.position;
+      if ((p.x - near.x) ** 2 + (p.z - near.z) ** 2 > LIVE_NEAR * LIVE_NEAR) continue;
+      animateLive(group, t);
+      if (++n >= LIVE_MAX) break;
+    }
+  }
+
   dispose() {
+    this.glassMat?.dispose();
     for (const b of this.walls) this.unmount(b);
     for (const a of this.areas.values()) this.unmount(a.built);
     for (const t of this.tall.values()) this.unmount(t.built);

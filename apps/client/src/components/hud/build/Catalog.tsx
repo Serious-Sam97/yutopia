@@ -1,6 +1,6 @@
 "use client";
 
-import { CLOTH_COLORS, entry, SEAT_SPEC, SURFACE, TEMPLATES } from "@yutopia/shared";
+import { CLOTH_COLORS, entry, FAM_KINDS, SEAT_SPEC, SURFACE, TEMPLATES, TEXT_DEFAULT } from "@yutopia/shared";
 import { GAME_ROOM_SETUP } from "@yutopia/shared/library";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
@@ -22,13 +22,15 @@ const decor = (kind: "decor" | "tabletop" | "frame", d: string): Item => ({
   kind,
   props: { d, seed: 0.37 },
 });
+// (plan 68's families, in their own order: shared fam/)
+const fam = (...names: string[]): Item[] => names.flatMap((n) => FAM_KINDS[n] ?? []).map(it);
 
 const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
   {
     key: "seating",
     label: "catSeating",
     icon: "sofa",
-    items: ["chair", "armchair", "sofa", "beanbag", "bench", "bar_stool"].map(it),
+    items: [...["chair", "armchair", "sofa", "loveseat", "beanbag", "bench", "bar_stool"].map(it), ...fam("seating2")],
   },
   {
     key: "surfaces",
@@ -43,7 +45,9 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       "high_table",
       "reception",
       "counter",
-    ].map(it),
+    ]
+      .map(it)
+      .concat(fam("tables2")),
   },
   {
     // (plan 67: what holds things, and the office's own pieces)
@@ -59,22 +63,17 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       "locker", // (a kit a day: docs/plan/30-the-dark.md)
       "coat_rack",
       "wall_shelf",
-    ].map(it),
+    ]
+      .map(it)
+      .concat(fam("storage2")),
   },
   {
     key: "office",
     label: "catOffice",
     icon: "hammer",
-    items: [
-      "printer",
-      "phone_booth",
-      "partition",
-      "water_cooler",
-      "vending",
-      "fridge",
-      "microwave",
-      "coffee_machine",
-    ].map(it),
+    items: ["printer", "phone_booth", "partition", "water_cooler", "vending"]
+      .map(it)
+      .concat(fam("office2").filter((i) => i.kind !== "drinks_fridge")),
   },
   {
     // what goes on them: as many as fit, a quarter tile at a time
@@ -89,6 +88,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       ...(["mug", "papers", "book", "binder", "tapes", "vinyl", "photo", "succulent", "cards", "bell"] as const).map(
         (d) => decor("tabletop", d),
       ),
+      ...fam("desktop2"),
     ],
   },
   {
@@ -106,7 +106,9 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       "tv_console",
       "tv_portable",
       "computer",
-    ].map(it),
+    ]
+      .map(it)
+      .concat(fam("screens2")),
   },
   {
     key: "games",
@@ -123,28 +125,30 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       "console_ps1_slim",
       "cart_shelf",
       "disc_rack",
-    ].map(it),
+    ]
+      .map(it)
+      .concat(fam("gameroom")),
   },
   {
     key: "tech",
     label: "catTech",
     icon: "radio",
-    items: [
-      "arcade",
-      "slot_track",
-      "pool_table",
-      "pingpong_table",
-      "piano",
-      "mixing_desk",
-      "speaker_cab",
-      "mic_stand",
-    ].map(it),
+    items: ["arcade", "slot_track", "pool_table", "pingpong_table", "piano", "mixing_desk", "speaker_cab", "mic_stand"]
+      .map(it)
+      .concat(fam("music")),
   },
   {
     key: "lights",
     label: "catLights",
     icon: "globe",
-    items: [it("lamp"), it("pendant_light"), it("panel_light"), decor("tabletop", "desklamp")],
+    items: [
+      it("lamp"),
+      it("pendant_light"),
+      it("panel_light"),
+      it("lava_lamp"),
+      decor("tabletop", "desklamp"),
+      ...fam("lights2"),
+    ],
   },
   {
     key: "walls",
@@ -161,8 +165,12 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
         "light_switch",
         "acoustic_panel",
         "poster",
+        "marquee_sign",
+        "vfd_ticker",
+        "split_flap",
       ].map(it),
       decor("frame", "frame"),
+      ...fam("walls2"),
     ],
   },
   {
@@ -178,6 +186,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       { key: "door_studio", kind: "door_studio", props: { state: "closed" } },
       { key: "door_barn", kind: "door_barn", props: { state: "closed" } },
       { key: "door_saloon", kind: "door_saloon", props: { state: "closed" } },
+      ...["door_auto", "door_revolving", "door_garage"].map((k) => ({ key: k, kind: k, props: { state: "closed" } })),
       it("archway"),
     ],
   },
@@ -196,6 +205,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       it("window_stained"),
       it("window_blinds"),
       it("window_studio"),
+      ...fam("doors2"),
     ],
   },
   {
@@ -205,13 +215,15 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     items: [
       it("plant"),
       decor("decor", "plant"),
+      it("fireplace"),
       it("column"),
       decor("decor", "boxes"),
       decor("decor", "bin"),
       decor("decor", "cable"),
+      ...fam("decor2"),
     ],
   },
-  { key: "floor", label: "catFloor", icon: "marquee", items: ["rug", "standup_mat"].map(it) },
+  { key: "floor", label: "catFloor", icon: "marquee", items: ["rug", "standup_mat"].map(it).concat(fam("floor2")) },
   {
     // the building (docs/plan/25): stairs up to the floor above, an elevator's
     // stop (it joins the shaft of the ones above or below), and outside
@@ -224,14 +236,55 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     key: "pets",
     label: "catPets",
     icon: "paw",
-    items: ["pet_bed", "pet_bowl", "water_bowl", "scratch_post", "pet_house", "toy_box"].map(it),
+    items: ["pet_bed", "pet_bowl", "water_bowl", "scratch_post", "pet_house", "toy_box"].map(it).concat(fam("pets2")),
   },
   {
     // out of doors only (shared catalog `outdoor`): Flowmotion's, off indoors
     key: "parkour",
     label: "catParkour",
     icon: "walk",
-    items: ["pk_rail", "pk_rail_long", "pk_wall", "pk_wall_tall", "pk_pole", "pk_pole_tall"].map(it),
+    items: ["pk_rail", "pk_rail_long", "pk_wall", "pk_wall_tall", "pk_pole", "pk_pole_tall"]
+      .map(it)
+      .concat(fam("parkour2")),
+  },
+  {
+    // (plan 68 phase 2: Christmas, the first of the seasons)
+    key: "seasonal",
+    label: "catSeasonal",
+    icon: "gift",
+    items: [
+      "xmas_tree",
+      "xmas_tree_small",
+      "present",
+      "stocking",
+      "wreath",
+      "garland",
+      "mistletoe",
+      "advent_calendar",
+      "poinsettia",
+      "nutcracker",
+      "candle_arch",
+      "gingerbread_house",
+      "xmas_village",
+      "cocoa_station",
+      "wrapping_table",
+    ]
+      .map(it)
+      .concat(fam("seasons")),
+  },
+  {
+    // out of doors only (shared catalog `outdoor`)
+    key: "outdoors",
+    label: "catOutdoors",
+    icon: "land",
+    items: ["candy_cane", "reindeer", "sleigh", "inflatable_snowman", "snow_globe"].map(it).concat(fam("outdoors")),
+  },
+  {
+    // (plan 68 phase 19: the kitchen and the café, with the office's fridge, microwave and coffee)
+    key: "kitchen",
+    label: "catKitchen",
+    icon: "mug",
+    items: [...fam("kitchen"), ...["fridge", "drinks_fridge", "microwave", "coffee_machine"].map(it)],
   },
 ];
 const ALL = CATS.flatMap((c) => c.items);
@@ -252,6 +305,20 @@ const NEW = new Set([
   "pendant_light",
   "panel_light",
   "toy_box",
+  // (plan 68's)
+  "loveseat",
+  "fireplace",
+  "lava_lamp",
+  ...["xmas_tree", "xmas_tree_small", "present", "stocking", "wreath", "garland", "mistletoe"],
+  ...["advent_calendar", "poinsettia", "nutcracker", "candle_arch", "gingerbread_house", "xmas_village"],
+  ...["cocoa_station", "wrapping_table", "candy_cane", "reindeer", "sleigh", "inflatable_snowman", "snow_globe"],
+  "marquee_sign",
+  "vfd_ticker",
+  "split_flap",
+  "door_auto",
+  "door_revolving",
+  "door_garage",
+  ...Object.values(FAM_KINDS).flat(),
 ]);
 const RECENT_KEY = "yutopia:build:recent";
 
@@ -670,6 +737,23 @@ function HeldCard({ item }: { item: Item }) {
           )}
         </span>
       </div>
+      {(e.text ?? 0) > 0 && (
+        <label className="flex flex-col gap-1">
+          <span className="grp">{t("buildWords")}</span>
+          <input
+            defaultValue={String(props.text ?? TEXT_DEFAULT[item.kind] ?? "")}
+            maxLength={e.text}
+            aria-label={t("buildWords")}
+            className="h-8 rounded-md px-2 mono text-sm uppercase bg-transparent"
+            style={{ border: "1px solid var(--edge)", color: "var(--cream)" }}
+            onKeyDown={(ev) => {
+              ev.stopPropagation();
+              if (ev.key === "Enter") (ev.target as HTMLInputElement).blur();
+            }}
+            onBlur={(ev) => w?.build?.placeLook({ text: ev.target.value })}
+          />
+        </label>
+      )}
       {(e.variants ?? 1) > 1 && (
         <fieldset className="space-y-1" aria-label={t("buildHeldLook")}>
           <legend className="grp">{t("buildHeldLook")}</legend>
@@ -862,6 +946,10 @@ const PLANS: { key: string; name: Key }[] = [
   { key: "lounge", name: "planLounge" },
   { key: "booths", name: "planBooths" },
   { key: "reception", name: "planReception" },
+  // (plan 68)
+  { key: "cafe", name: "planCafe" },
+  { key: "games", name: "planGames" },
+  { key: "library", name: "planLibrary" },
 ];
 function Furnish() {
   const t = useTr();
@@ -898,6 +986,27 @@ function Furnish() {
         >
           {t("buildRefurnish")}
         </button>
+      )}
+      {admin && (
+        // (plan 68) Christmas: every room in the building dressed, or put away
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            className="ghost-btn justify-start"
+            onClick={() => {
+              if (window.confirm(t("buildChristmasConfirm"))) w?.send("build:christmas", { on: true });
+            }}
+          >
+            🎄 {t("buildChristmasOn")}
+          </button>
+          <button
+            type="button"
+            className="ghost-btn justify-start"
+            onClick={() => w?.send("build:christmas", { on: false })}
+          >
+            {t("buildChristmasOff")}
+          </button>
+        </div>
       )}
     </section>
   );

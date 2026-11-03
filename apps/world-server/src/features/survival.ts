@@ -1,4 +1,4 @@
-import { ANIM, chillOf, levelMap, objLevel, tileAt } from "@yutopia/shared";
+import { ANIM, chillOf, levelMap, objLevel, tileAt, type WorldObjectDef } from "@yutopia/shared";
 import { hasPower } from "@yutopia/shared/admin";
 import {
   addItem,
@@ -57,6 +57,7 @@ import {
 import { bankNear, INSIDES, iceAt, inDeepWater, waterAt } from "@yutopia/shared/grounds";
 import { GAITS, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
+import { frameOf, turnPoint } from "@yutopia/shared/shapes";
 import { api, type SurvivorRecord } from "../api.ts";
 import { config } from "../config.ts";
 import { Cache as CacheWire, Drop, type Player } from "../schema.ts";
@@ -147,7 +148,20 @@ const offlineSurvivors = new Map<number, SurvivorRecord>();
 /** The lobby locker's clock, ahead by `shift` ms (the tests' next day). */
 export const kitClock = { shift: 0 };
 
+// (plan 68: by a fire — within 3 m of a lit fireplace's hearth — warmed three times as fast)
+const HEARTH_M = 3;
+// (what burns: the fireplace, the wood stove; out of doors the fire pit and the patio heater)
+const HEARTHS = new Set(["fireplace", "wood_stove", "fire_pit", "patio_heater", "outdoor_heater"]);
+/** Where a fireplace's hearth is, in its floor's tiles: its front, its middle. */
+function hearthOf(o: WorldObjectDef): { x: number; y: number } {
+  const f = frameOf(o);
+  const p = turnPoint(f, f.w, f.h, f.w / 2, f.h);
+  return { x: p.x, y: p.z };
+}
+
 registerFeature((room: WorldRoom) => {
+  let fires: { x: number; y: number; level: number }[] = [];
+  let firesAt = 0;
   const people = new Map<number, Survivor>(); // by user id
   const hello = new Set<string>(); // sids whose chunk listens
   const ground = () => levelMap(room.map, 0);
@@ -760,6 +774,16 @@ registerFeature((room: WorldRoom) => {
     },
     tick(dt, now) {
       const g = ground();
+      // the fires burning (plan 68: a fireplace not switched off), looked for once a second
+      if (now - firesAt > 1000) {
+        firesAt = now;
+        fires = [];
+        for (const o of room.state.objects.values())
+          if (HEARTHS.has(o.kind)) {
+            const d = fromSchema(o);
+            if (d.props?.on !== false) fires.push({ ...hearthOf(d), level: objLevel(d, room.map) });
+          }
+      }
       const hour = room.state.hour;
       const night = nightness(hour);
       const dark = blackoutAt(now, hour);
@@ -810,7 +834,13 @@ registerFeature((room: WorldRoom) => {
         const b = toB(p.x, p.y);
         const onLot = !land && p.level === 0 && !!g && tileAt(g, Math.floor(p.x), Math.floor(p.y)) === "a";
         const warm =
-          riding || (!land && !onLot) || inside(b.x, b.z) || (land && !dark && night > 0.3 && inLampPool(b.x, b.z));
+          riding ||
+          (!land && !onLot) ||
+          inside(b.x, b.z) ||
+          (land && !dark && night > 0.3 && inLampPool(b.x, b.z)) ||
+          p.held === "cocoa" ||
+          p.held === "tea";
+        const hearth = fires.some((f) => f.level === p.level && Math.hypot(p.x - f.x, p.y - f.y) < HEARTH_M);
         const was = s.c.winded;
         const before = { hp: s.v.hp, wm: s.v.wm, bat: s.v.bat };
         // the torch focused: on, aiming (shared/move's mv bit), on foot (the land or indoors), battery
@@ -825,7 +855,7 @@ registerFeature((room: WorldRoom) => {
         stepVitals(
           s.v,
           s.c,
-          { sprinting, outside: land, night, storm: room.state.storm, chill, warm, focus, water },
+          { sprinting, outside: land, night, storm: room.state.storm, chill, warm, hearth, focus, water },
           dt,
         );
         p.focused = focus && s.v.bat > 0;

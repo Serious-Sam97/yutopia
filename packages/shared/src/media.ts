@@ -4,6 +4,7 @@
 // world-server (rules, the queue's clock) and the tests.
 
 import { entry, footprint, rotOf, type WorldObjectDef } from "./catalog.ts";
+import { GLASS as FAM_GLASS } from "./fam/screens2.ts";
 import { isGameTv, TV_SCREEN, turnLocal } from "./games.ts";
 import { hangOf, hangSpot } from "./hang.ts";
 import { topCentre } from "./tops.ts";
@@ -219,6 +220,8 @@ export const GLASS: Record<string, Glass> = {
   tv_giant: { x0: 0.35, x1: 4.65, y: 0.17, z0: 28, z1: 115, aspect: 16 / 9, look: "hd", wall: true },
   cinema_screen: { x0: 0.68, x1: 5.32, y: 0.15, z0: 18, z1: 112, aspect: 16 / 9, look: "screen", wall: true },
   screen_wall: { x0: 0.14, x1: 3.86, y: 0.16, z0: 21, z1: 73, aspect: 16 / 9, look: "hd", wall: true },
+  // (plan 68 phase 8: the video wall, the outdoor cinema, the radio-TV cabinet)
+  ...FAM_GLASS,
 };
 
 export const DISPLAY_KINDS = Object.keys(GLASS);

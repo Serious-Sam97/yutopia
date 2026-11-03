@@ -1,4 +1,4 @@
-import { isHeld } from "@yutopia/shared";
+import { isDrink, isHeld } from "@yutopia/shared";
 import { AIM_BLADE } from "@yutopia/shared/beam";
 import { MV_WINDED } from "@yutopia/shared/move";
 import { Group, PerspectiveCamera as Lens, Matrix4, type PerspectiveCamera, Quaternion, Scene, Vector3 } from "three";
@@ -67,7 +67,7 @@ export function handsDoing(
   p: Pick<PersonIn, "phone" | "held" | "heldAt" | "typing" | "a" | "busy" | "act" | "emote" | "gun" | "torch" | "mv">,
 ): string {
   if (p.phone) return p.phone === "photo" || p.phone === "selfie" ? "" : p.phone;
-  if (isHeld(p.held) && p.heldAt) return p.held === "mug" || p.held === "cup" || p.held === "soda" ? "drink" : "toy";
+  if (isHeld(p.held) && p.heldAt) return isDrink(p.held) ? "drink" : "toy";
   if (p.typing && p.a === 2) return "type";
   if (p.busy) return p.busy === "throw" ? "throw" : "use";
   if (p.act) return `act:${p.act}`;

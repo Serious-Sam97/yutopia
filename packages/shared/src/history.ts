@@ -216,6 +216,7 @@ export const STEP_LABELS: Record<string, string> = {
   "build:template": "switched a layout",
   "build:furnish": "furnished a room",
   "build:refurnish": "refurnished the floor",
+  "build:christmas": "switched Christmas",
   "map:paint": "painted floors",
   "map:walls": "painted walls",
   "map:room": "made a room",

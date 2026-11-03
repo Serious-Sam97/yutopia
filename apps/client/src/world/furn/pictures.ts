@@ -1,20 +1,26 @@
-import { entry } from "@yutopia/shared";
+import { entry, TEXT_FACE } from "@yutopia/shared";
 import {
   ACESFilmicToneMapping,
   Box3,
+  CanvasTexture,
   DirectionalLight,
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
+  MeshLambertMaterial,
   PerspectiveCamera,
+  PlaneGeometry,
   Scene,
   Sphere,
   SRGBColorSpace,
   WebGLRenderer,
 } from "three";
 import { Post3 } from "../tp/post3d";
+import { LOOKS as DESK2_LOOKS } from "./fam/desktop2";
 import { toon } from "./kit";
-import { isNative, LOOK_NAMES, modelOf } from "./native";
+import { animateLive, liveGroup } from "./liveparts";
+import { isNative, LOOK_NAMES, modelOf, wordsOf } from "./native";
+import { drawFlaps, drawTicker, FLAPS_PX, TICKER_PX } from "./words";
 
 // The Furnish panel's pictures, from the models the world draws (docs/plan/67-the-furniture.md,
 // phase 9): one offscreen renderer for them all, lazily made — the cel as the people's, the post's
@@ -32,6 +38,7 @@ let r: {
 } | null = null;
 const mat = toon();
 const glowMat = new MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+const glassMat = new MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.42, depthWrite: false });
 const urls = new Map<string, string>();
 
 function rig(w: number, h: number) {
@@ -64,6 +71,9 @@ function rig(w: number, h: number) {
 /** Does the kit draw this kind (so it has a picture from its model)? */
 export const drawsKind = (kind: string): boolean => isNative(kind);
 
+/** The desk things drawn facing whoever sits at them (from their side, in their pictures). */
+const SITTER = new Set(["tabletop", "computer", "radio", "turntable", ...Object.keys(DESK2_LOOKS)]);
+
 /** A kind's looks, by name (its variants), or none. */
 export const looksOf = (kind: string): readonly string[] => LOOK_NAMES[kind] ?? [];
 
@@ -75,6 +85,34 @@ function render(kind: string, props: Record<string, unknown>, w: number, h: numb
   const mesh = new Mesh(geo, mat);
   const glow = geo.userData.glow;
   if (glow) mesh.add(new Mesh(glow, glowMat));
+  // (its glass: a window's panes, a door's)
+  const clear = geo.userData.clear;
+  if (clear) mesh.add(new Mesh(clear, glassMat));
+  // (its live parts at a moment: the lava's blobs mid-rise, the flames)
+  const live = liveGroup(geo, mat, glowMat, glassMat);
+  if (live) {
+    animateLive(live, 3.2);
+    mesh.add(live);
+  }
+  // (a board's words on its face: the ticker's from their start, the flaps settled)
+  const face = TEXT_FACE[kind as keyof typeof TEXT_FACE];
+  let words: Mesh<PlaneGeometry, MeshBasicMaterial> | null = null;
+  if (face) {
+    const c = document.createElement("canvas");
+    const ticker = kind === "vfd_ticker";
+    [c.width, c.height] = ticker ? TICKER_PX : FLAPS_PX;
+    const text = wordsOf({ id: "catalog", kind, x: 0, y: 0, props });
+    if (ticker) drawTicker(c, text, (c.width - 24) / 90);
+    else drawFlaps(c, text, 99, "catalog");
+    const map = new CanvasTexture(c);
+    map.colorSpace = SRGBColorSpace;
+    words = new Mesh(
+      new PlaneGeometry(face.x1 - face.x0, face.y1 - face.y0),
+      new MeshBasicMaterial({ map, toneMapped: false }),
+    );
+    words.position.set((face.x0 + face.x1) / 2, (face.y0 + face.y1) / 2, face.z + 0.002);
+    mesh.add(words);
+  }
   geo.computeBoundingBox();
   const bb = geo.boundingBox as Box3;
   mesh.position.set(-(bb.min.x + bb.max.x) / 2, 0, -(bb.min.z + bb.max.z) / 2);
@@ -92,6 +130,11 @@ function render(kind: string, props: Record<string, unknown>, w: number, h: numb
   g.camera.lookAt(sphere.center);
   g.post.render(false);
   g.scene.remove(mesh);
+  if (words) {
+    words.geometry.dispose();
+    words.material.map?.dispose();
+    words.material.dispose();
+  }
   return g.renderer.domElement;
 }
 
@@ -102,7 +145,7 @@ export function pictureOf(kind: string, props: Record<string, unknown> = {}, siz
   const key = `${kind}|${JSON.stringify(props)}|${size}`;
   let url = urls.get(key);
   if (!url) {
-    const turn = kind === "tabletop" || kind === "computer" ? 3.6 : 0.55;
+    const turn = SITTER.has(kind) ? 3.6 : 0.55;
     url = render(kind, props, size, size, turn).toDataURL("image/png");
     urls.set(key, url);
   }

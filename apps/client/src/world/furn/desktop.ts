@@ -539,3 +539,86 @@ export const DESK_THINGS: Record<string, (m: Model, seed: number, on: boolean) =
   bell,
   monitor,
 };
+
+// ── the lava lamp (on a surface) — plan 68 ────────────────────────────────────────────────────────
+export const LAVA_LOOKS = [
+  "Lava lamp, red in yellow",
+  "Lava lamp, violet in blue",
+  "Lava lamp, green in orange",
+] as const;
+const LAVA: [number, number][] = [
+  [0xff4a2a, 0xffd36a],
+  [0xc45cff, 0x3a6cff],
+  [0x6aff5a, 0xff8a2a],
+];
+/** A lava lamp standing round its tile's middle: its tapered metal base and cap, the glass rocket
+ *  between (see-through, the liquid's tint: a live part of glass), the wax blobs rising and sinking
+ *  in it (live), lit when on (`on` unset: lit). */
+export function lavaLamp(m: Model, o: Look) {
+  const lit = o.on !== false;
+  const [blob, liquid] = LAVA[o.look] ?? LAVA[0];
+  const metal = o.look === 1 ? P.chrome : P.brass;
+  m.add(
+    lathe(
+      [
+        [0.001, 0],
+        [0.085, 0],
+        [0.085, 0.012],
+        [0.06, 0.1],
+        [0.046, 0.15],
+        [0.04, 0.155],
+        [0.001, 0.155],
+      ],
+      18,
+    ),
+    metal,
+    { at: [0.5, 0, 0.5] },
+  );
+  // the heater's glow at the glass's foot
+  m.add(cyl(0.038, 0.038, 0.01, 14), lit ? blob : shade(blob, 0.4), { at: [0.5, 0.152, 0.5], glow: lit });
+  // the glass and its liquid (see-through)
+  m.live(
+    lathe(
+      [
+        [0.04, 0],
+        [0.055, 0.08],
+        [0.06, 0.13],
+        [0.045, 0.21],
+        [0.03, 0.24],
+        [0.001, 0.24],
+      ],
+      18,
+    ),
+    liquid,
+    { kind: "still" },
+    { at: [0.5, 0.155, 0.5], glass: true, glow: lit },
+  );
+  // the cap
+  m.add(
+    lathe(
+      [
+        [0.03, 0],
+        [0.026, 0.03],
+        [0.012, 0.06],
+        [0.001, 0.062],
+      ],
+      14,
+    ),
+    metal,
+    { at: [0.5, 0.39, 0.5] },
+  );
+  // the wax: blobs rising and sinking, out of step
+  for (let i = 0; i < 4; i++) {
+    const r = 0.018 + (i % 2) * 0.008;
+    m.live(
+      ball(r, 10),
+      lit ? blob : shade(blob, 0.5),
+      { kind: "lava", lo: 0, hi: 0.17 - r, period: 9 + i * 2.3, phase: i * 0.27 },
+      {
+        at: [0.5 + Math.cos(i * 2.1) * 0.012, 0.17 + r, 0.5 + Math.sin(i * 2.1) * 0.012],
+        glow: lit,
+      },
+    );
+  }
+  m.add(cyl(0.032, 0.032, 0.012, 14), lit ? blob : shade(blob, 0.4), { at: [0.5, 0.157, 0.5], glow: lit });
+}

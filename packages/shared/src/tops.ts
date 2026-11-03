@@ -30,6 +30,18 @@ const KIND_SIZE: Record<string, [number, number]> = {
   tv_portable: [2, 2],
   projector: [2, 2],
   computer: [2, 2],
+  // (plan 68's bigger ones, by their models)
+  desk_aquarium: [2, 1],
+  typewriter: [2, 2],
+  bankers_lamp: [2, 1],
+  salt_lamp: [2, 2],
+  candles: [2, 2],
+  book_stack: [2, 2],
+  hamster_wheel: [2, 2],
+  fruit_bowl: [2, 2],
+  toaster: [2, 1],
+  kettle: [2, 1],
+  jack_o_lantern: [2, 2],
 };
 
 export function topSize(o: { kind: string; rot?: number; props?: Record<string, unknown> }): [number, number] {

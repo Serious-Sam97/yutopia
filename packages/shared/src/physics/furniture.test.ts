@@ -89,7 +89,9 @@ test("every solid piece in Jolt: walked at from four sides, stopped where it blo
       }
       // stood on: dropped onto its body's middle, it lands at the jump table's height
       const st = standHeight(kind);
-      if (st !== undefined) {
+      // (a top narrower than a body isn't stood on: a fireplace's mantel shelf)
+      const narrow = solids[0].t === "box" && Math.min(solids[0].hx, solids[0].hz) < BODY.r * 0.6;
+      if (st !== undefined && !narrow) {
         const top = st / ISO_PX;
         // (its body's middle, or a quarter along it where something else stands over the middle: a
         // net, a terminal on its cart, a roof's ridge)

@@ -24,36 +24,13 @@ export const HALF_WALL_H = m(34);
 /** The slab under each storey's floor: what's left of a storey over its walls. */
 export const SLAB = +(STOREY - WALL_H).toFixed(3);
 
-/** A box, axis-aligned in its thing's frame: u, v across and down the footprint, y up. */
-export interface BoxPart {
-  t: "box";
-  u0: number;
-  v0: number;
-  u1: number;
-  v1: number;
-  y0: number;
-  y1: number;
-}
-/** An upright cylinder: its axis at (u, v), radius r, from y0 to y1. */
-export interface CylPart {
-  t: "cyl";
-  u: number;
-  v: number;
-  r: number;
-  y0: number;
-  y1: number;
-}
-export type Part = BoxPart | CylPart;
+export type { BoxPart, CylPart, KindShape, Part } from "../fam/units.ts";
+
+import type { KindShape, Part } from "../fam/units.ts";
 
 /** What a body does with it: walks into it (solid), sits on it (seat: walked onto, then sat),
  *  or nothing (it's under foot, on a wall, on a table: reach and the view only). */
 export type Blocks = "solid" | "seat" | "none";
-
-export interface KindShape {
-  parts: Part[];
-  /** something's odd about it (the review page lists these): why */
-  odd?: string;
-}
 
 /** The catalog says: solid things stop you, seats take you in, the rest (and wall items) don't. */
 export function blocksOf(kind: string): Blocks {
@@ -61,24 +38,10 @@ export function blocksOf(kind: string): Blocks {
   return e.solid && !e.wall ? "solid" : e.seat ? "seat" : "none";
 }
 
-// ── part makers (metres; from the footprint's corner) ──
-export const box = (u0: number, v0: number, u1: number, v1: number, y0: number, y1: number): BoxPart => ({
-  t: "box",
-  u0,
-  v0,
-  u1,
-  v1,
-  y0,
-  y1,
-});
-export const cyl = (u: number, v: number, r: number, y0: number, y1: number): CylPart => ({
-  t: "cyl",
-  u,
-  v,
-  r,
-  y0,
-  y1,
-});
+export { box, cyl } from "../fam/units.ts";
+
+import { FAM_SHAPES } from "../fam/index.ts";
+import { box, cyl, one } from "../fam/units.ts";
 
 /** The top of a kind's parts (m): what the review compares with its stand height. */
 export function topOf(parts: Part[]): number {
@@ -173,7 +136,6 @@ export const slabSolid = (x0: number, z0: number, x1: number, z1: number, elev: 
 // seat, back and arms. Wall items in the frame of the wall they hang on (v out from its line,
 // y at the lowest they hang: hang.ts lifts them); things on a surface in a 1 × 1 frame round the
 // spot they're on (tops.ts), y from that surface.
-const one = (...parts: Part[]) => ({ parts });
 const flat = (u0: number, v0: number, u1: number, v1: number, y1: number) => one(box(u0, v0, u1, v1, 0, y1));
 const DOOR = "the hole's frame and leaf (art/items/walls.ts); walking through it is the wall's cut (wallSolids)";
 const WINDOW = "set in a wall: the wall's sill and head and the pane between (wallSolids)";
@@ -287,6 +249,9 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   door_barn: { parts: [], odd: `${DOOR}; the leaf rolls along the wall's face` },
   door_saloon: { parts: [], odd: `${DOOR}; the leaves swing as people pass (never shut to anyone)` },
   archway: { parts: [], odd: "a doorway with no door: the wall's cut, always open" },
+  door_auto: { parts: [], odd: DOOR },
+  door_revolving: { parts: [], odd: DOOR },
+  door_garage: { parts: [], odd: DOOR },
   window: { parts: [], odd: WINDOW },
   window_wide: { parts: [], odd: WINDOW },
   window_tall: { parts: [], odd: WINDOW },
@@ -387,12 +352,61 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   wall_shelf: one(box(0.2, 0.1, 1.8, 0.34, 1.26, 1.71)),
   pendant_light: { parts: [box(0.3, 0.3, 0.7, 0.7, 2.3, 3.27)], odd: "hung from the ceiling, over heads" },
   panel_light: { parts: [box(0.19, 0.19, 0.81, 0.81, 3.24, 3.27)], odd: "set in the ceiling" },
+  // plan 68's heroes (world/furn: seating.ts, decor.ts, desktop.ts)
+  loveseat: one(box(0.18, 0.08, 1.82, 0.92, 0, 0.455), box(0.18, 0.08, 1.82, 0.32, 0.455, 0.91)),
+  // (the mantel and the firebox's front first — its shelf is where things stand — then the chimney
+  // breast up the wall behind, the hearth's slab)
+  fireplace: one(
+    box(0.1, 0.46, 1.9, 0.68, 0, 1.15),
+    box(0.15, 0.1, 1.85, 0.46, 0, 2.0),
+    box(0.03, 0.68, 1.9, 0.92, 0, 0.06),
+  ),
+  lava_lamp: one(box(0.415, 0.415, 0.585, 0.585, 0, 0.45)),
+  marquee_sign: one(box(0.1, 0.1, 2.9, 0.2, 1.52, 2.23)),
+  vfd_ticker: one(box(0.15, 0.1, 1.85, 0.18, 1.94, 2.16)),
+  split_flap: one(box(0.1, 0.1, 2.9, 0.19, 1.44, 2.12)),
+  // plan 68 phase 2: Christmas (world/furn/xmas.ts)
+  xmas_tree: {
+    parts: [cyl(1, 1, 0.85, 0, 1.0), cyl(1, 1, 0.5, 1.0, 2.38)],
+    odd: "its lower tiers, then the top: you go round a tree",
+  },
+  xmas_tree_small: one(box(0.34, 0.34, 0.66, 0.66, 0, 0.5)),
+  present: {
+    parts: [box(0.2, 0.28, 0.82, 0.86, 0, 0.28)],
+    odd: "set down as its seed has them: the boxes they all cover",
+  },
+  stocking: one(box(0.37, 0.1, 0.7, 0.19, 0.66, 1.32)),
+  wreath: one(box(0.11, 0.1, 0.9, 0.32, 1.16, 2.0)),
+  garland: one(box(0.03, 0.08, 2.97, 0.32, 1.9, 2.33)),
+  mistletoe: { parts: [box(0.4, 0.4, 0.6, 0.6, 2.25, 3.27)], odd: "hung from the ceiling, over heads" },
+  cocoa_station: one(box(0.02, 0.09, 1.98, 0.91, 0, 0.9), box(0.28, 0.31, 0.56, 0.59, 0.9, 1.37)),
+  gingerbread_house: one(box(0.34, 0.37, 0.66, 0.63, 0, 0.22)),
+  xmas_village: one(box(0.2, 0.25, 0.8, 0.75, 0, 0.23)),
+  nutcracker: one(cyl(0.5, 0.5, 0.19, 0, 1.3)),
+  candle_arch: one(box(0.28, 0.47, 0.72, 0.53, 0, 0.27)),
+  poinsettia: { parts: [cyl(0.5, 0.5, 0.15, 0, 0.24)], odd: "its pot only: the leaves brushed past" },
+  advent_calendar: {
+    parts: [box(0.05, 0.1, 0.95, 0.19, 1.15, 1.96)],
+    odd: "its board: in December the doors up to today swing open a hand out",
+  },
+  wrapping_table: one(box(0.05, 0.09, 1.95, 0.9, 0, 0.9), box(0.04, 0.1, 1.96, 0.19, 0.9, 1.48)),
+  candy_cane: { parts: [cyl(0.5, 0.5, 0.06, 0, 1.05)], odd: "the cane: its hook and its drift of snow brushed past" },
+  reindeer: one(box(0.27, 0.35, 1.91, 0.65, 0, 1.8)),
+  sleigh: one(
+    box(0.14, 0.1, 2.93, 0.9, 0, 0.62),
+    box(0.22, 0.19, 0.6, 0.81, 0.62, 1.17),
+    box(2.45, 0.19, 2.78, 0.81, 0.62, 1.18),
+  ),
+  inflatable_snowman: one(box(0.02, 0.12, 0.98, 0.94, 0, 1.93)),
+  snow_globe: one(cyl(1, 1, 0.86, 0, 2.16)),
   pk_rail: one(box(0, 0.45, 4, 0.55, 0, 0.9)),
   pk_rail_long: one(box(0, 0.45, 8, 0.55, 0, 0.9)),
   pk_wall: one(box(0, 0.35, 4, 0.65, 0, 3.2)),
   pk_wall_tall: one(box(0, 0.35, 4, 0.65, 0, 6)),
   pk_pole: one(box(0.3, 0.3, 0.7, 0.7, 0, 0.04), cyl(0.5, 0.5, 0.08, 0.04, 3)),
   pk_pole_tall: one(box(0.3, 0.3, 0.7, 0.7, 0, 0.04), cyl(0.5, 0.5, 0.08, 0.04, 5.5)),
+  // (plan 68's families: fam/*.ts)
+  ...FAM_SHAPES,
 };
 
 /** A kind's shape (a run-time kind with none: its footprint, 1 m, flagged). */

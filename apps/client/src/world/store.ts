@@ -358,6 +358,7 @@ export interface HudState {
   held: { kind: string; at: number } | null; // what I carry (a mug, a ball…) and since when (server ms)
   throwArm: boolean; // the next floor click throws what I hold (or points the laser)
   cable: { consoleId: string } | null; // a console's cable in my hands, on the way to a TV
+  wrap: { id: string } | null; // (plan 68) at a wrapping table: who it's for
   menu: ActionMenu | null;
   queue: QueuedAct[];
   focus: boolean; // heads down at my desk
@@ -483,6 +484,7 @@ const initial: HudState = {
   held: null,
   throwArm: false,
   cable: null,
+  wrap: null,
   menu: null,
   queue: [],
   focus: false,

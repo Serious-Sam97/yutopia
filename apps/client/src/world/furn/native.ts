@@ -1,13 +1,27 @@
-import { ISO_PX, isKind, variantOf, type WorldObjectDef } from "@yutopia/shared";
+import {
+  CATALOG,
+  entry,
+  ISO_PX,
+  isKind,
+  isOpening,
+  SURFACE,
+  TEXT_DEFAULT,
+  variantOf,
+  type WorldObjectDef,
+} from "@yutopia/shared";
+import { parseFen } from "@yutopia/shared/games68/chess";
+import { cleanText } from "@yutopia/shared/glyphs";
 import { frameOf } from "@yutopia/shared/shapes";
 import { slotTrackOf } from "@yutopia/shared/slotcar";
-import type { BufferGeometry } from "three";
+import { type BufferGeometry, Float32BufferAttribute, type Group, type Material } from "three";
 import type { Out } from "../tp/kit3d";
 import {
   bowl,
   column,
   DECOR_LOOKS,
   DECOR_THINGS,
+  FIREPLACE_LOOKS,
+  fireplace,
   partition,
   petBed,
   petHouse,
@@ -20,10 +34,13 @@ import {
   standupMat,
   toyBox,
 } from "./decor";
-import { coffeeMachine, computer, DESK_THINGS, DESKTOP_LOOKS, radio, turntable } from "./desktop";
+import { coffeeMachine, computer, DESK_THINGS, DESKTOP_LOOKS, LAVA_LOOKS, lavaLamp, radio, turntable } from "./desktop";
+import { FAM_DRAW, FAM_LOOKS } from "./fam";
 import { FURN } from "./flag";
-import { type Look, Model } from "./kit";
+import { type LivePart, type Look, Model } from "./kit";
+import { liveGroup } from "./liveparts";
 import { CEL_ALPHA } from "./look";
+import { openingLook, openingModel } from "./openings";
 import {
   arcade,
   crtTerminal,
@@ -59,7 +76,7 @@ import {
   tvPortable,
   tvWall,
 } from "./screens";
-import { armchair, beanbag, bench, chair, LOOKS, sofa } from "./seating";
+import { armchair, beanbag, bench, chair, LOOKS, LOVESEAT_LOOKS, loveseat, sofa } from "./seating";
 import {
   barStool,
   coatRack,
@@ -83,14 +100,42 @@ import {
   boardWall,
   clock,
   lightSwitch,
+  marqueeSign,
   neon,
   noticeBoard,
   pictureFrame,
   poster,
   screenWall,
+  splitFlap,
+  vfdTicker,
   WALL_LOOKS,
+  WORD_LOOKS,
   whiteboard,
 } from "./walls";
+import {
+  adventCalendar,
+  adventDay,
+  candleArch,
+  candyCane,
+  cocoaStation,
+  garland,
+  gingerbreadHouse,
+  inflatableSnowman,
+  mistletoe,
+  nutcracker,
+  poinsettia,
+  presents,
+  reindeer,
+  sleigh,
+  snowGlobe,
+  stocking,
+  wrappingTable,
+  wreath,
+  XMAS_LOOKS,
+  xmasTree,
+  xmasTreeSmall,
+  xmasVillage,
+} from "./xmas";
 
 // The kinds the kit draws in the world (docs/plan/67-the-furniture.md, phase 1): World3.drawObject
 // asks here before the iso art. Each model is built once a look (its kind and what changes it: the
@@ -101,6 +146,9 @@ import {
 
 interface Kind {
   signed: boolean;
+  /** new since plan 67: nothing else draws it, so the kit does even before it's signed off (it's
+   *  kept out of the panel till then) */
+  fresh?: boolean;
   /** what makes two of them look different (the cache's key) */
   look: (o: WorldObjectDef) => string;
   make: (o: WorldObjectDef) => BufferGeometry;
@@ -124,8 +172,22 @@ export const LOOK_NAMES: Record<string, readonly string[]> = {
   ...SCREEN_LOOKS,
   ...PLAY_LOOKS,
   ...WALL_LOOKS,
+  ...WORD_LOOKS,
   ...DECOR_LOOKS,
   ...STAPLE_LOOKS,
+  // plan 68's
+  loveseat: LOVESEAT_LOOKS,
+  fireplace: FIREPLACE_LOOKS,
+  lava_lamp: LAVA_LOOKS,
+  ...XMAS_LOOKS,
+  // plan 68's families (fam/*.ts)
+  ...FAM_LOOKS,
+  // (plan 68 phase 13: the doors and windows, one look each)
+  ...Object.fromEntries(
+    Object.keys(CATALOG)
+      .filter(isOpening)
+      .map((k) => [k, [entry(k).label]]),
+  ),
 };
 
 /** The iso art's seed for an id (kit.ts seedOf, world/games/room.ts): what picked a look unset. */
@@ -161,7 +223,24 @@ const drawn = (draw: (m: Model, l: Look) => void, signed = false): Kind => ({
   },
 });
 
+const dayOf = (o: WorldObjectDef) => (typeof o.props?._day === "number" ? o.props._day : adventDay());
+
+/** A door or window (plan 68 phase 13: furn/openings.ts) as the catalog's pictures and the bench
+ *  draw it: on its own, no posts at its ends. */
+const opening = (kind: string): Kind => {
+  const L = (o: WorldObjectDef) => openingLook(o, entry(o.kind).w, 0, entry(o.kind).w);
+  return { signed: true, look: (o) => JSON.stringify(L(o)), make: (o) => openingModel(L(o)) };
+};
+
 const KINDS: Record<string, Kind> = {
+  // plan 68 phase 13: the doors and windows (drawn in their walls by openingInto)
+  ...Object.fromEntries(
+    Object.keys(CATALOG)
+      .filter(isOpening)
+      .map((k) => [k, opening(k)]),
+  ),
+  // plan 68's families, phases 3–20 (fam/*.ts)
+  ...Object.fromEntries(Object.entries(FAM_DRAW).map(([k, draw]) => [k, drawn(draw, true)])),
   // phase 2: seating (signed off, in the world 2026-11-03)
   chair: drawn(chair, true),
   armchair: drawn(armchair, true),
@@ -301,6 +380,97 @@ const KINDS: Record<string, Kind> = {
   wall_shelf: drawn(wallShelf, true),
   pendant_light: drawn(pendantLight, true),
   panel_light: drawn(panelLight, true),
+  // plan 68 phase 0: the bench's heroes (signed off, in the world 2026-11-03)
+  loveseat: drawn(loveseat, true),
+  fireplace: drawn((m, o) => fireplace(m, o, SURFACE.fireplace), true),
+  lava_lamp: drawn(lavaLamp, true),
+  // plan 68 phase 1: words on things (props.text; the ticker's and the split-flap's drawn live)
+  marquee_sign: {
+    signed: true,
+    look: (o) => wordsOf(o),
+    make: (o) => {
+      const m = new Model(2);
+      marqueeSign(m, wordsOf(o));
+      return m.geometry();
+    },
+  },
+  vfd_ticker: drawn(vfdTicker, true),
+  split_flap: drawn(splitFlap, true),
+  // plan 68 phase 2: Christmas (signed off, in the world 2026-11-03)
+  xmas_tree: drawn(xmasTree, true),
+  xmas_tree_small: drawn(xmasTreeSmall, true),
+  present: drawn(presents, true),
+  stocking: {
+    signed: true,
+    // (full from Christmas Day: December's date, or the bench's `_day`)
+    look: (o) => `${JSON.stringify(lookOf(o))}|${wordsOf(o)}|${dayOf(o) >= 25}`,
+    make: (o) => {
+      const m = new Model(2);
+      stocking(m, lookOf(o), wordsOf(o), dayOf(o) >= 25);
+      return m.geometry();
+    },
+  },
+  wreath: drawn(wreath, true),
+  garland: drawn(garland, true),
+  mistletoe: drawn(mistletoe, true),
+  cocoa_station: drawn(cocoaStation, true),
+  gingerbread_house: drawn(gingerbreadHouse, true),
+  xmas_village: drawn(xmasVillage, true),
+  nutcracker: drawn(nutcracker, true),
+  candle_arch: drawn(candleArch, true),
+  poinsettia: drawn(poinsettia, true),
+  // (opened to today: December's date, or the bench's `_day`)
+  advent_calendar: {
+    signed: true,
+    look: (o) => `${JSON.stringify(lookOf(o))}|${dayOf(o)}`,
+    make: (o) => {
+      const m = new Model(2);
+      adventCalendar(m, lookOf(o), dayOf(o));
+      return m.geometry();
+    },
+  },
+  wrapping_table: drawn(wrappingTable, true),
+  candy_cane: drawn(candyCane, true),
+  reindeer: drawn(reindeer, true),
+  sleigh: drawn(sleigh, true),
+  inflatable_snowman: drawn(inflatableSnowman, true),
+  snow_globe: drawn(snowGlobe, true),
+  // (plan 68 phase 12: open at today's page — drawn again once the date's moved on)
+  wall_calendar: {
+    signed: true,
+    look: (o) => `${JSON.stringify(lookOf(o))}|${new Date().toDateString()}`,
+    make: (o) => {
+      const m = new Model(2);
+      FAM_DRAW.wall_calendar(m, lookOf(o));
+      return m.geometry();
+    },
+  },
+  // plan 68 phases 23–24: the chess table with its game, the dartboard with its darts (the room's)
+  chess_table: {
+    signed: true,
+    look: (o) => `${JSON.stringify(lookOf(o))}|${String(o.props?.fen ?? "")}`,
+    make: (o) => {
+      const m = new Model(2);
+      let board: string[] | null = null;
+      try {
+        if (typeof o.props?.fen === "string") board = parseFen(o.props.fen).board;
+      } catch {
+        // (a position that won't read: the pieces as they start)
+      }
+      FAM_DRAW.chess_table(m, { ...lookOf(o), ...(board ? { board } : {}) } as Look);
+      return m.geometry();
+    },
+  },
+  dartboard: {
+    signed: true,
+    look: (o) => `${JSON.stringify(lookOf(o))}|${JSON.stringify(o.props?.darts ?? null)}`,
+    make: (o) => {
+      const m = new Model(2);
+      const darts = Array.isArray(o.props?.darts) ? (o.props.darts as [number, number][]) : null;
+      FAM_DRAW.dartboard(m, { ...lookOf(o), ...(darts ? { darts } : {}) } as Look);
+      return m.geometry();
+    },
+  },
   tabletop: {
     signed: true,
     // (what it is, its look's seed in 20 steps, a lamp switched off)
@@ -309,6 +479,12 @@ const KINDS: Record<string, Kind> = {
   },
 };
 
+/** A sign's words: its own, or its kind's default (shared TEXT_DEFAULT), as the face draws them. */
+export function wordsOf(o: WorldObjectDef): string {
+  const max = (isKind(o.kind) && entry(o.kind).text) || 0;
+  const t = typeof o.props?.text === "string" ? o.props.text : (TEXT_DEFAULT[o.kind] ?? "");
+  return cleanText(t, max);
+}
 const frameSeed = (s: unknown) => (typeof s === "number" && Number.isFinite(s) ? s : 0.5);
 /** A pet's bowl: what's left in it (props.portions) changes it too. */
 function portioned(water: boolean): Kind {
@@ -340,14 +516,25 @@ function thing(d: string, seed: number, on: boolean): BufferGeometry {
 /** Does the kit draw this kind here (signed off, or ?furn=new; never with ?furn=old)? */
 export function isNative(kind: string): boolean {
   const k = KINDS[kind];
-  return !!k && FURN !== "old" && (k.signed || FURN === "new");
+  return !!k && FURN !== "old" && (k.signed || !!k.fresh || FURN === "new");
 }
 
 const cache = new Map<string, BufferGeometry>();
+// (the kinds drawn by their state — a chess game, the darts in a board, today's page — keep only each
+// one's latest model: a game's every move would otherwise stay in memory)
+const STATEFUL = new Set(["chess_table", "dartboard", "wall_calendar", "advent_calendar"]);
+const stateKey = new Map<string, string>();
 /** The model of a placed thing (built once a look). */
 export function modelOf(o: WorldObjectDef): BufferGeometry {
   const k = KINDS[o.kind];
   const key = `${o.kind}|${k.look(o)}`;
+  if (STATEFUL.has(o.kind)) {
+    const was = stateKey.get(o.id);
+    if (was !== undefined && was !== key) {
+      stateKey.set(o.id, key);
+      if (![...stateKey.values()].includes(was)) cache.delete(was);
+    } else stateKey.set(o.id, key);
+  }
   let g = cache.get(key);
   if (!g) {
     g = k.make(o);
@@ -363,6 +550,116 @@ export function modelOf(o: WorldObjectDef): BufferGeometry {
 export function nativeInto(out: Out, o: WorldObjectDef): void {
   const f = frameOf(o);
   into(out, modelOf(o), f, Number(o.props?.pull) || 0);
+}
+
+/** A placed thing's live parts (plan 68: a lava lamp's blobs, a fire's flames) as a group, placed
+ *  exactly as its model is turned into the world's buffers (`into`: turned by its frame, pulled),
+ *  or null when it has none. */
+export function liveInto(o: WorldObjectDef, lit: Material, glow: Material, glass: Material): Group | null {
+  // (whether the kit draws it here is the caller's: World3 asks isNative, the bench draws them all)
+  if (!KINDS[o.kind]) return null;
+  const geo = modelOf(o);
+  // (in the world's own materials: their colours as the buffers have them — RGBA, the cel's mark on
+  // the lit ones, look.ts)
+  for (const p of (geo.userData.live as LivePart[] | undefined) ?? []) rgba(p.geo, p.glow || p.glass ? 1 : CEL_ALPHA);
+  const g = liveGroup(geo, lit, glow, glass);
+  if (!g) return null;
+  if (isOpening(o.kind)) {
+    // (in its wall: along it from its first edge, turned for a west one — as openingInto places it)
+    g.position.set(o.x, 0, o.y);
+    g.rotation.y = (o.rot ?? 0) % 2 === 1 ? -Math.PI / 2 : 0;
+    return g;
+  }
+  const f = frameOf(o);
+  const [tx, tz] = frameTurn(f)(0, Number(o.props?.pull) || 0, false);
+  g.position.set(f.x + tx, f.lift, f.y + tz);
+  g.rotation.y = -(f.rot & 3) * (Math.PI / 2);
+  return g;
+}
+
+const openings = new Map<string, BufferGeometry>();
+/** A door or window in its wall (plan 68 phase 13): its model along its edges from (o.x, o.y), the
+ *  wall's middle its z 0 — a west wall's (odd rot) turned a quarter, x along the wall going south;
+ *  its frame stopped `a0`/`a1` in at a post. */
+export function openingInto(out: Out, o: WorldObjectDef, a0: number, a1: number): void {
+  const L = openingLook(o, entry(o.kind).w, a0, a1);
+  const key = JSON.stringify(L);
+  let g = openings.get(key);
+  if (!g) {
+    g = openingModel(L);
+    openings.set(key, g);
+  }
+  const west = (o.rot ?? 0) % 2 === 1;
+  const at = (x: number, y: number, z: number): [number, number, number] =>
+    west ? [o.x - z, y, o.y + x] : [o.x + x, y, o.y + z];
+  const nor = (x: number, z: number): [number, number] => (west ? [-z, x] : [x, z]);
+  for (const [geo, buf, a] of [
+    [g, out.lit, CEL_ALPHA],
+    [g.userData.glow as BufferGeometry | null, out.glow, 1],
+  ] as const) {
+    if (!geo) continue;
+    const p = geo.attributes.position.array;
+    const n = geo.attributes.normal.array;
+    const c = geo.attributes.color.array;
+    for (let t = 0; t < p.length; t += 9) {
+      const [nx, nz] = nor(n[t], n[t + 2]);
+      buf.tri(
+        at(p[t], p[t + 1], p[t + 2]),
+        at(p[t + 3], p[t + 4], p[t + 5]),
+        at(p[t + 6], p[t + 7], p[t + 8]),
+        [nx, n[t + 1], nz],
+        [c[t], c[t + 1], c[t + 2], a],
+      );
+    }
+  }
+  clearInto(out, g, at, nor);
+}
+
+/** A model's see-through parts (kit `glass`) into `out.clear`, placed by `at`, its normals by `nor`. */
+export function clearInto(
+  out: Out,
+  g: BufferGeometry,
+  at: (x: number, y: number, z: number) => [number, number, number],
+  nor: (x: number, z: number) => [number, number],
+): void {
+  const c = g.userData.clear as BufferGeometry | null;
+  if (!c) return;
+  const p = c.attributes.position.array;
+  const n = c.attributes.normal.array;
+  const col = c.attributes.color.array;
+  const op = c.attributes.op.array;
+  for (let t = 0; t < p.length; t += 9) {
+    const a = at(p[t], p[t + 1], p[t + 2]);
+    const b = at(p[t + 3], p[t + 4], p[t + 5]);
+    const d = at(p[t + 6], p[t + 7], p[t + 8]);
+    const [nx, nz] = nor(n[t], n[t + 2]);
+    out.clear.tri(a, b, d, [nx, n[t + 1], nz], [col[t], col[t + 1], col[t + 2], op[t / 3]]);
+  }
+}
+
+function rgba(g: BufferGeometry, a: number) {
+  const c = g.attributes.color;
+  if (!c || c.itemSize === 4) return;
+  const out = new Float32Array(c.count * 4);
+  for (let i = 0; i < c.count; i++) out.set([c.getX(i), c.getY(i), c.getZ(i), a], i * 4);
+  g.setAttribute("color", new Float32BufferAttribute(out, 4));
+}
+
+/** A frame's turn (shared shapes turnPoint): each quarter turn (u, v) → (h − v, u); normals turn
+ *  without the shift. */
+function frameTurn(fr: { rot: number; w: number; h: number }) {
+  const rot = fr.rot & 3;
+  return (u: number, v: number, n: boolean): [number, number] => {
+    let X = u;
+    let Y = v;
+    let H = fr.h;
+    let W = fr.w;
+    for (let i = 0; i < rot; i++) {
+      [X, Y] = [(n ? 0 : H) - Y, X];
+      [W, H] = [H, W];
+    }
+    return [X, Y];
+  };
 }
 
 /** Does the kit draw this piece of the rooms' dressing (a mug, papers, a monitor…) here? */
@@ -396,21 +693,10 @@ function into(
 ): void {
   const o = fr;
   const lift = fr.lift;
-  const rot = fr.rot & 3;
   const pos = g.attributes.position.array;
   const nor = g.attributes.normal.array;
   const col = g.attributes.color.array;
-  const turn = (u: number, v: number, n: boolean): [number, number] => {
-    let X = u;
-    let Y = v;
-    let H = fr.h;
-    let W = fr.w;
-    for (let i = 0; i < rot; i++) {
-      [X, Y] = [(n ? 0 : H) - Y, X];
-      [W, H] = [H, W];
-    }
-    return [X, Y];
-  };
+  const turn = frameTurn(fr);
   let x0 = Number.POSITIVE_INFINITY;
   let y0 = Number.POSITIVE_INFINITY;
   let x1 = Number.NEGATIVE_INFINITY;
@@ -456,6 +742,16 @@ function into(
       out.glow.tri(w[0], w[1], w[2], [nx, gn[t + 1], nz], [gc[t], gc[t + 1], gc[t + 2], 1]);
     }
   }
+  // what's see-through (a window's panes): into the clear buffers, its own opacity
+  clearInto(
+    out,
+    g,
+    (x, y, z) => {
+      const [X, Y] = turn(x, z + pull, false);
+      return [o.x + X, y + lift, o.y + Y];
+    },
+    (x, z) => turn(x, z, true),
+  );
   // (what stands low makes the shadow on the floor: a chair's base, a sofa's plinth)
   if (Number.isFinite(x0) && lift === 0)
     out.soft.rects.push({ x0: x0 + 0.04, y0: y0 + 0.04, x1: x1 - 0.04, y1: y1 - 0.04, op: 0.32, round: 0.35 });

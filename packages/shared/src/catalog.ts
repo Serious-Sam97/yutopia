@@ -1,3 +1,4 @@
+import { FAM_CATALOG } from "./fam/index.ts";
 import { isoPx, STAND, SURFACE } from "./furniture.ts";
 
 // Every placeable thing in the world. Footprints are in tiles at rot 0; rot 1/3
@@ -32,7 +33,20 @@ export type Interaction =
   | "waterbowl"
   | "toybox"
   | "computer"
-  | "lift";
+  | "lift"
+  // (plan 68: a present opened by who it's for, a hot cocoa poured, a held thing wrapped)
+  | "present"
+  | "cocoa"
+  | "wrap"
+  // (plan 68 phase 19: the kettle's tea, the freezer's ice cream)
+  | "tea"
+  | "icecream"
+  // (plan 68 phases 21–25: the small games)
+  | "chess"
+  | "darts"
+  | "claw"
+  | "hockey"
+  | "foosball";
 
 export interface CatalogEntry {
   label: string;
@@ -59,6 +73,8 @@ export interface CatalogEntry {
   // doors and windows (openings.ts): set into a wall on tile edges, `w` of
   // them along it, cutting their own hole; the wall keeps its material
   opening?: "door" | "window";
+  // words on it (plan 68: shared glyphs.ts): `props.text`, at most this many letters
+  text?: number;
   // only out of doors, on the land round the ground floor: the parkour pieces
   // (Flowmotion's off indoors — physics/flow.ts)
   outdoor?: boolean;
@@ -399,6 +415,20 @@ export const CATALOG = {
   },
   // a doorway with no door: always open
   archway: { label: "Archway", w: 1, h: 1, solid: false, buildable: true, opening: "door" },
+  // (plan 68 phase 13) automatic glass doors sliding apart as anyone comes near; a revolving door
+  // turning as you walk through; a garage's roller door
+  door_auto: { label: "Automatic doors", w: 2, h: 1, solid: false, interact: "door", buildable: true, opening: "door" },
+  door_revolving: { label: "Revolving door", w: 2, h: 1, solid: false, buildable: true, opening: "door" },
+  door_garage: {
+    label: "Garage door",
+    w: 2,
+    h: 1,
+    solid: false,
+    interact: "door",
+    buildable: true,
+    opening: "door",
+    paint: true,
+  },
   window: { label: "Window", w: 1, h: 1, solid: false, buildable: true, opening: "window" },
   window_wide: { label: "Wide window", w: 2, h: 1, solid: false, buildable: true, opening: "window" },
   window_tall: { label: "Tall window", w: 1, h: 1, solid: false, buildable: true, opening: "window" },
@@ -526,12 +556,176 @@ export const CATALOG = {
     buildable: true,
     light: { color: 0xf4f8ff, radius: 5, intensity: 0.45, h: 3.2 },
   },
+  // plan 68 (docs/plan/68-more-furniture.md): phase 0's heroes (signed off 2026-11-03)
+  loveseat: {
+    label: "Loveseat",
+    w: 2,
+    h: 1,
+    solid: false,
+    seat: true,
+    buildable: true,
+    variants: 3,
+    look: 0,
+    paint: true,
+  },
+  fireplace: {
+    label: "Fireplace",
+    w: 2,
+    h: 1,
+    solid: true,
+    buildable: true,
+    interact: "lamp",
+    variants: 3,
+    look: 0,
+    surface: isoPx(SURFACE.fireplace),
+    top: [1, 2, 7, 3], // (its mantel shelf)
+    light: { color: 0xff9a4a, radius: 4.5, intensity: 0.6 },
+  },
+  lava_lamp: {
+    label: "Lava lamp",
+    w: 1,
+    h: 1,
+    solid: false,
+    onSurface: true,
+    buildable: true,
+    interact: "lamp",
+    variants: 3,
+    look: 0,
+    light: { color: 0xff7a4a, radius: 1.6, intensity: 0.3 },
+  },
+  // plan 68 phase 1: words on things (props.text, glyphs.ts)
+  marquee_sign: {
+    label: "Marquee sign",
+    w: 3,
+    h: 1,
+    solid: false,
+    wall: true,
+    buildable: true,
+    text: 10,
+    light: { color: 0xffd28a, radius: 3, intensity: 0.4 },
+  },
+  vfd_ticker: { label: "Ticker sign", w: 2, h: 1, solid: false, wall: true, buildable: true, text: 48 },
+  split_flap: { label: "Split-flap board", w: 3, h: 1, solid: false, wall: true, buildable: true, text: 36 },
+  // plan 68 phase 2: Christmas (signed off 2026-11-03)
+  xmas_tree: {
+    label: "Christmas tree",
+    buildable: true,
+    w: 2,
+    h: 2,
+    solid: true,
+    interact: "lamp",
+    variants: 3,
+    look: 0,
+    light: { color: 0xffc27a, radius: 4, intensity: 0.5 },
+  },
+  xmas_tree_small: {
+    label: "Tabletop tree",
+    buildable: true,
+    w: 1,
+    h: 1,
+    solid: false,
+    onSurface: true,
+    interact: "lamp",
+    variants: 3,
+    look: 0,
+    light: { color: 0xffc27a, radius: 1.6, intensity: 0.3 },
+  },
+  present: { label: "Presents", buildable: true, w: 1, h: 1, solid: false, variants: 3, interact: "present", text: 12 },
+  stocking: { label: "Stocking", buildable: true, w: 1, h: 1, solid: false, wall: true, variants: 3, text: 8 },
+  wreath: { label: "Wreath", buildable: true, w: 1, h: 1, solid: false, wall: true, variants: 3, look: 0 },
+  garland: {
+    label: "Garland with lights",
+    buildable: true,
+    w: 3,
+    h: 1,
+    solid: false,
+    wall: true,
+    interact: "lamp",
+    variants: 3,
+    look: 0,
+    light: { color: 0xffd9a0, radius: 3, intensity: 0.35 },
+  },
+  mistletoe: { label: "Mistletoe", buildable: true, w: 1, h: 1, solid: false },
+  cocoa_station: {
+    label: "Hot cocoa station",
+    buildable: true,
+    w: 2,
+    h: 1,
+    solid: true,
+    variants: 2,
+    look: 0,
+    interact: "cocoa",
+  },
+  gingerbread_house: { label: "Gingerbread house", buildable: true, w: 1, h: 1, solid: false, onSurface: true },
+  xmas_village: {
+    label: "Christmas village",
+    buildable: true,
+    w: 1,
+    h: 1,
+    solid: false,
+    onSurface: true,
+    interact: "lamp",
+    light: { color: 0xffc27a, radius: 1.4, intensity: 0.25 },
+  },
+  nutcracker: { label: "Nutcracker", buildable: true, w: 1, h: 1, solid: true, variants: 3, look: 0 },
+  candle_arch: {
+    label: "Candle arch",
+    buildable: true,
+    w: 1,
+    h: 1,
+    solid: false,
+    onSurface: true,
+    interact: "lamp",
+    variants: 2,
+    look: 0,
+    light: { color: 0xffc27a, radius: 1.6, intensity: 0.3 },
+  },
+  poinsettia: { label: "Poinsettia", buildable: true, w: 1, h: 1, solid: false, variants: 3, look: 0 },
+  advent_calendar: {
+    label: "Advent calendar",
+    buildable: true,
+    w: 1,
+    h: 1,
+    solid: false,
+    wall: true,
+    variants: 3,
+    look: 0,
+  },
+  wrapping_table: { label: "Gift-wrapping table", buildable: true, w: 2, h: 1, solid: true, interact: "wrap" },
+  candy_cane: { label: "Candy cane", buildable: true, w: 1, h: 1, solid: false, outdoor: true, variants: 3, look: 0 },
+  reindeer: {
+    label: "Light-up reindeer",
+    buildable: true,
+    w: 2,
+    h: 1,
+    // (1.8 m of reindeer: gone round, not through — the Jolt pass, plan 68)
+    solid: true,
+    outdoor: true,
+    interact: "lamp",
+    variants: 3,
+    look: 0,
+    light: { color: 0xfff1d0, radius: 3, intensity: 0.4 },
+  },
+  sleigh: { label: "Sleigh", buildable: true, w: 3, h: 1, solid: true, outdoor: true, variants: 3, look: 0 },
+  inflatable_snowman: { label: "Inflatable snowman", buildable: true, w: 1, h: 1, solid: true, outdoor: true },
+  snow_globe: {
+    label: "Giant snow globe",
+    buildable: true,
+    w: 2,
+    h: 2,
+    solid: true,
+    outdoor: true,
+    interact: "lamp",
+    light: { color: 0xffe0b0, radius: 3, intensity: 0.35 },
+  },
   pk_rail: { label: "Grind rail", w: 4, h: 1, solid: true, buildable: true, outdoor: true },
   pk_rail_long: { label: "Long grind rail", w: 8, h: 1, solid: true, buildable: true, outdoor: true },
   pk_wall: { label: "Parkour wall", w: 4, h: 1, solid: true, buildable: true, outdoor: true },
   pk_wall_tall: { label: "Tall parkour wall", w: 4, h: 1, solid: true, buildable: true, outdoor: true },
   pk_pole: { label: "Swing pole", w: 1, h: 1, solid: true, buildable: true, outdoor: true },
   pk_pole_tall: { label: "Tall swing pole", w: 1, h: 1, solid: true, buildable: true, outdoor: true },
+  // (plan 68's families, phases 3–20: fam/*.ts)
+  ...FAM_CATALOG,
 } satisfies Record<string, CatalogEntry>;
 
 // What decor pieces can be (props.d), by kind.

@@ -242,9 +242,7 @@ export function skyAt(ms: number): Sky {
   // light as it starts (in the half hour or so the line takes), steady soon after, hard at the top
   // of a front; never a jump
   const front =
-    wet > WET_FALL
-      ? 0.15 * smooth(WET_FALL, WET_FALL + 0.02, wet) + 0.85 * smooth(WET_FALL, WET_FALL + 0.2, wet)
-      : 0;
+    wet > WET_FALL ? 0.15 * smooth(WET_FALL, WET_FALL + 0.02, wet) + 0.85 * smooth(WET_FALL, WET_FALL + 0.2, wet) : 0;
   // (the rain in showers, the snow as the front has it: sleet between)
   const showers = smooth(SNOW_BELOW, SLEET_BELOW, temp);
   const falling =

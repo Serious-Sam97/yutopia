@@ -351,12 +351,19 @@ export class ActionQueue {
       case "brew":
       case "pour":
       case "buy":
+      case "pourCocoa":
+      case "makeTea":
+      case "scoopIceCream":
         h.activate(id);
         // the machine's moment, then the drink lands in the hand
         return () => !h.machineBusy();
       case "lightOn":
       case "lightOff":
         h.send("lamp:set", { id, on: q.act === "lightOn" });
+        return null;
+      case "openPresent":
+      case "wrapGift":
+        h.activate(id);
         return null;
       case "fillFood":
       case "fillWater":

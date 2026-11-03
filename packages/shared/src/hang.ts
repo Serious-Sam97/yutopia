@@ -1,4 +1,5 @@
 import { entry, footprint, rotOf, type WorldObjectDef } from "./catalog.ts";
+import { FAM_HANGS } from "./fam/index.ts";
 import {
   type Edge,
   type EdgeDir,
@@ -46,11 +47,23 @@ const HANG_SIZE: Record<string, [number, number, number]> = {
   light_switch: [2, 32, 45],
   frame: [2, 40, 60],
   wall_shelf: [7, 53, 69], // (plan 67: its board 1.45 m up, what's on it)
+  // (plan 68: words on things — the marquee's panel, the ticker's strip, the split-flap's board)
+  marquee_sign: [11, 60, 87],
+  vfd_ticker: [7, 76, 85],
+  split_flap: [11, 56, 83],
+  // (plan 68 phase 2: Christmas — a stocking under its hook, the wreath, the garland over heads, the
+  // advent calendar's board)
+  stocking: [2, 26, 52],
+  wreath: [4, 45, 79],
+  garland: [12, 74, 91],
+  advent_calendar: [4, 45, 77],
   tv_wall: [4, 44, 80],
   tv_hd: [12, 17, 80],
   projector_screen: [12, 17, 86],
   tv_giant: [20, 15, 118],
   cinema_screen: [24, 6, 124],
+  // (plan 68's families: fam/*.ts)
+  ...FAM_HANGS,
 };
 
 export function hangSize(kind: string): [number, number, number] {

@@ -49,10 +49,12 @@ import { registerFeature } from "./index.ts";
 // while it's locked nobody else changes that room (room.lockBreak). The shared
 // rules (packages/shared/src/map-edit.ts) decide what's allowed.
 // What switches on and off: floor lamps, the ceiling lights (plan 67) and the desk lamps on desks.
+// (anything switched as a lamp: the catalog's interact "lamp" — a fireplace, a lava lamp, a tree's
+// lights — and a desk lamp on a desk)
 const isLamp = (o: WorldObjectDef) =>
-  o.kind === "lamp" ||
   o.kind === "pendant_light" ||
   o.kind === "panel_light" ||
+  entry(o.kind).interact === "lamp" ||
   (o.kind === "tabletop" && o.props?.d === "desklamp");
 
 registerFeature((room: WorldRoom) => {

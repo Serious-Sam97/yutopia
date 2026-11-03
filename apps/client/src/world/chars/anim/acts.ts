@@ -149,7 +149,14 @@ function bowed(bow: number): Ch {
 }
 const MARKER = 0.1; // m: the marker's tip ahead of the hand's joint
 // (plan 62) How long each machine takes (world/controller.ts's), s
-const MACHINE_S: Record<string, number> = { coffee: 1.6, water: 1.4, vending: 1.5 };
+const MACHINE_S: Record<string, number> = {
+  coffee: 1.6,
+  water: 1.4,
+  vending: 1.5,
+  cocoa: 1.6,
+  tea: 1.6,
+  icecream: 1.4,
+};
 /** At a machine, `t` s since it began, its button `a` and where the drink comes out `b` (her own
  *  space): the press you see, the wait, the drink taken — the cup in the hand then (shared/held). */
 function machine(
@@ -576,6 +583,9 @@ export function busy2(
   const hs: [HandShape, HandShape] = [HANDS.relaxed, HANDS.relaxed];
   switch (what) {
     case "coffee":
+    case "cocoa":
+    case "tea":
+    case "icecream":
     case "water":
     case "vending": {
       if (parts?.length === 2) {

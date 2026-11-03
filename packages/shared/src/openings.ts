@@ -37,12 +37,21 @@ export const isWindowKind = (kind: string): boolean => entry(kind).opening === "
 // swinging; lockable: saloon doors and archways can't be; a door starts open,
 // saloon doors closed (they swing as people pass).
 export function doorLeaves(kind: string): number {
-  return kind === "archway" ? 0 : kind === "door_double" || kind === "door_saloon" ? 2 : 1;
+  return kind === "archway" ? 0 : kind === "door_double" || kind === "door_saloon" || kind === "door_auto" ? 2 : 1;
 }
-export const doorSlides = (kind: string): boolean => kind === "door_barn";
-export const doorLockable = (kind: string): boolean => isDoorKind(kind) && kind !== "door_saloon" && kind !== "archway";
+export const doorSlides = (kind: string): boolean => kind === "door_barn" || kind === "door_auto";
+export const doorLockable = (kind: string): boolean =>
+  isDoorKind(kind) && kind !== "door_saloon" && kind !== "archway" && kind !== "door_revolving";
+// (plan 68: the automatic doors and the revolving door shut till someone comes, the garage's down)
 export const doorStartState = (kind: string): string | undefined =>
-  kind === "archway" ? undefined : kind === "door_saloon" ? "closed" : "open";
+  kind === "archway"
+    ? undefined
+    : kind === "door_saloon" || kind === "door_auto" || kind === "door_revolving" || kind === "door_garage"
+      ? "closed"
+      : "open";
+/** How near someone opens it as they pass (tiles from its middle, across the wall): the automatic
+ *  doors from further off (plan 68). */
+export const doorReach = (kind: string): number => (kind === "door_auto" ? 1.6 : 0.55);
 
 // Shut right now (a closed or locked one nobody's passing through); an archway never.
 export function doorShut(o: { kind: string; props?: Record<string, unknown> }): boolean {
@@ -63,6 +72,9 @@ const CUTS: Record<string, [number, number]> = {
   door_barn: [0, 88],
   door_saloon: [0, 88],
   archway: [0, 98],
+  door_auto: [0, 88],
+  door_revolving: [0, 88],
+  door_garage: [0, 96],
   window: [36, 88],
   window_wide: [36, 88],
   window_tall: [12, 100],

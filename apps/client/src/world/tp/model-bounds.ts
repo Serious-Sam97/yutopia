@@ -1,4 +1,6 @@
 import { CATALOG, entry, type ObjectKind, type WorldObjectDef } from "@yutopia/shared";
+import { Box3, MeshBasicMaterial } from "three";
+import { liveInto } from "../furn/native";
 import { World3 } from "./build";
 import type { Out } from "./kit3d";
 
@@ -31,10 +33,27 @@ export function outBounds(o: Out): Bounds3 | null {
   return b.x0 > b.x1 ? null : b;
 }
 
-/** One thing's model as the 3D view draws it, measured. */
+const anyMat = new MeshBasicMaterial();
+/** One thing's model as the 3D view draws it, measured — its live parts at rest too (plan 68: a lava
+ *  lamp's glass, a snow globe's). */
 export function modelBounds(items: Items, o: WorldObjectDef): Bounds3 | null {
   const draw = World3.prototype.drawObject.call({ items, posts: new Set<string>() } as unknown as World3, o);
-  return outBounds(draw.out);
+  const b = outBounds(draw.out);
+  const live = liveInto(o, anyMat, anyMat, anyMat);
+  if (!live) return b;
+  live.updateMatrixWorld(true);
+  const l = new Box3().setFromObject(live);
+  const lb = { x0: l.min.x, y0: l.min.y, z0: l.min.z, x1: l.max.x, y1: l.max.y, z1: l.max.z };
+  return b
+    ? {
+        x0: Math.min(b.x0, lb.x0),
+        y0: Math.min(b.y0, lb.y0),
+        z0: Math.min(b.z0, lb.z0),
+        x1: Math.max(b.x1, lb.x1),
+        y1: Math.max(b.y1, lb.y1),
+        z1: Math.max(b.z1, lb.z1),
+      }
+    : lb;
 }
 
 /** Every look of a catalog kind at rot 0 at the origin: the box round all of them. */

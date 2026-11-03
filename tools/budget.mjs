@@ -24,7 +24,14 @@ import { gzipSync } from "node:zlib";
 // (raised to 421 on 2026-10-29 by the user's call: the controls — docs/plan/56, phase 5 — the lock-on and its chip, the camera's settings)
 // (raised to 430 on 2026-10-30 by the user's call: the world switched to plan 58's animations — the page
 // was 420.2 of 421 with it)
-const BUDGETS = { "/page": 430, "/login/page": 160 }; // KB gzip
+// (raised to 434 on 2026-11-03, free to (2026-11-01): plan 68 phase 1 — live parts in the world, the
+// 5×7 face, the signs' boards drawn live, the marquee/ticker/split-flap — 429.5 → 431.0)
+// (raised to 438 on 2026-11-03, free to: plan 68 phase 2 into the world — the wrap picker, the
+// Christmas words and actions, presents and cocoa in the controller, the gift icon — 432.0 → 433.3)
+// (raised to 446 on 2026-11-03, free to: plan 68 phases 3–25 — ~150 kinds' catalog entries, shapes and
+//  seats (shared fam/, on the page as every kind's are), the Furnish panel's lists, the games' and the
+//  kitchen's strings; 443.5, the models, games and panels lazy)
+const BUDGETS = { "/page": 446, "/login/page": 160 }; // KB gzip
 const dist = new URL(`../apps/client/${process.env.NEXT_DIST_DIR ?? ".next-prod"}/`, import.meta.url).pathname;
 const manifest = JSON.parse(readFileSync(`${dist}app-build-manifest.json`, "utf8"));
 let failed = false;

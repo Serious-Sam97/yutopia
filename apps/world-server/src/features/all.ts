@@ -33,5 +33,7 @@ import "./perf.ts";
 import "./admin.ts";
 import "./godmode.ts";
 import "./office.ts";
+import "./xmas.ts";
+import "./games68.ts";
 import "./ice.ts";
 import "./physics.ts";

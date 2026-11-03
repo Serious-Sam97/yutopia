@@ -96,6 +96,7 @@ import {
   WEATHER_CALL_MS,
 } from "@yutopia/shared/admin";
 import { monitorsToComputers } from "@yutopia/shared/computer";
+import { cleanText } from "@yutopia/shared/glyphs";
 import { editsNow, groundsAreaAt, groundsOutdoors, inDeepWater, setUnderfoot } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { type Collider, isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
@@ -125,6 +126,8 @@ const WEATHER_SAVE_MS = 3 * 60_000; // the weather saved this often (and after a
 
 // a knock on a room's door: how near its walls (m)
 const KNOCK_REACH = 3;
+/** The small games' state on their pieces (plan 68: features/games68.ts) — only the games set it. */
+const GAME_KEYS = ["fen", "w", "wn", "b", "bn", "over", "last", "darts", "turn", "best", "won"];
 
 // A spot in the building: a floor (shared levels.ts) and where on it.
 export interface Spot {
@@ -1697,7 +1700,16 @@ export class WorldRoom extends Room<WorldState> {
       return;
     }
     // which floor (props.level; none: the home floor), one that's there
-    const props0 = m.props ?? safeJson(existing?.props ?? "{}");
+    const props0 = { ...(m.props ?? safeJson(existing?.props ?? "{}")) };
+    // (a game's state is the game's, never a builder's: kept from the piece as it was — plan 68's
+    // chess, darts and claw, features/games68.ts)
+    if (m.props) {
+      const was = existing ? safeJson(existing.props ?? "{}") : {};
+      for (const k of GAME_KEYS) {
+        if (k in was) props0[k] = was[k];
+        else delete props0[k];
+      }
+    }
     const level = Number.isInteger(props0.level) ? (props0.level as number) : this.home;
     if (!levelMap(this.map, level)) return;
     const lm = this.levelMap(level);
@@ -1931,6 +1943,11 @@ export function cleanProps(
   if ((SPLIT_KINDS as readonly string[]).includes(kind)) out.split = 1;
   // on a wall: where along it (a quarter-tile shift, 0..3) and how high (steps
   // that keep it on the wall); without wu it's an older save's spot
+  // words on it (plan 68): what the sign's face can draw, at most its length; none on anything else
+  const max = entry(kind).text;
+  if (max) {
+    if (out.text !== undefined) out.text = cleanText(out.text, max);
+  } else delete out.text;
   if (entry(kind).wall) {
     if (out.wu !== undefined) out.wu = Number.isInteger(out.wu) ? Math.max(0, Math.min(3, out.wu as number)) : 0;
     if (out.wz !== undefined) {

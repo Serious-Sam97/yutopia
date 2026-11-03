@@ -1,4 +1,4 @@
-import { type HeldKind, heldState, isHeld, isSocial, SOCIAL_MS } from "@yutopia/shared";
+import { drinkAs, type HeldKind, heldState, isDrink, isHeld, isSocial, SOCIAL_MS } from "@yutopia/shared";
 import { AIM_BLADE, BEAM } from "@yutopia/shared/beam";
 import { flowOfCode, KH_FEEL, KH_MOVE, unpackMv } from "@yutopia/shared/move";
 import type { PhysicsWorld } from "@yutopia/shared/physics";
@@ -20,7 +20,7 @@ import {
   Vector3,
 } from "three";
 import type { chars } from "../art/chars-load";
-import { MUG_COLORS } from "../art/held";
+import { COCOA_MUG, ICE_TUB, MUG_COLORS } from "../art/held";
 import { phoneColors } from "../art/phone-art";
 import type { JointName, Pose } from "../chars/rig";
 
@@ -886,15 +886,21 @@ export class Person3D {
       this.dropHeld();
       if (held && hand) {
         const kind = held.kind as string;
-        if (kind === "mug" || kind === "cup" || kind === "soda") {
+        if (isDrink(kind)) {
+          // (plan 68: a hot cocoa in the station's red mug, a tea in a white one, an ice-cream tub)
           const color =
             kind === "mug"
               ? MUG_COLORS[Math.floor(hashSeed(p.name) * MUG_COLORS.length)]
               : kind === "soda"
                 ? "#c4402b"
-                : "#efe4cc";
-          const prop = this.C.buildProp(kind, color, this.mats.prop);
-          this.C.inHand(prop.root, kind);
+                : kind === "cocoa"
+                  ? COCOA_MUG
+                  : kind === "icecream"
+                    ? ICE_TUB
+                    : "#efe4cc";
+          const as = drinkAs(kind);
+          const prop = this.C.buildProp(as, color, this.mats.prop);
+          this.C.inHand(prop.root, as);
           hand.add(prop.root);
           this.held = { key, kind, prop, toy: null };
         } else {
@@ -910,7 +916,7 @@ export class Person3D {
     if (held && this.held?.prop) {
       this.held.prop.setLevel?.(heldState(held.kind, held.since).level);
       // upright, however the wrist turns; tipped to the mouth for a sip
-      this.C.keepUpright(this.held.prop.root, this.held.kind as "mug", this.root, sip * 1.05);
+      this.C.keepUpright(this.held.prop.root, drinkAs(this.held.kind), this.root, sip * 1.05);
     }
     // the phone in its case
     const phoneKey = p.phone ? `${p.phoneCase ?? "walnut"}` : "";

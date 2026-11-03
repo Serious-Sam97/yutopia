@@ -170,8 +170,11 @@ const KEYBOARD_H = KEYBOARD_TOP;
 /** (plan 62) The things each use puts the hands to. */
 const PART_KINDS: Record<string, string[]> = {
   coffee: ["coffee_machine"],
+  tea: ["kettle"],
+  icecream: ["ice_cream_freezer"],
   water: ["water_cooler"],
-  vending: ["vending"],
+  vending: ["vending", "drinks_fridge"],
+  cocoa: ["cocoa_station"],
   piano: ["piano"],
   whiteboard: ["whiteboard"],
 };
@@ -194,12 +197,20 @@ function partsOf(o: WorldObjectDef, here: WorldObjectDef[], x: number, y: number
     case "vending":
       // the keypad; the flap, low down
       return [atM(HANDS_AT.vending.keypad), atM(HANDS_AT.vending.flap)];
+    case "cocoa_station":
+      // (plan 68) the urn's tap; a mug off the stack
+      return [atM(HANDS_AT.cocoa_station.tap), atM(HANDS_AT.cocoa_station.mugs)];
+    case "drinks_fridge":
+      return [atM(HANDS_AT.drinks_fridge.handle), atM(HANDS_AT.drinks_fridge.shelf)];
+    case "ice_cream_freezer":
+      return [atM(HANDS_AT.ice_cream_freezer.lid), atM(HANDS_AT.ice_cream_freezer.tub)];
     case "piano": {
       // its keys, before the stool's middle; the stool (shared PIANO_STOOL), its top
       const [sx, sy] = PIANO_STOOL;
       const [, ky, kh] = HANDS_AT.piano.keys;
       return [atM([sx, ky, kh]), atM([sx, sy, SEAT_SPEC.stool.top])];
     }
+    case "kettle":
     case "coffee_machine": {
       // on a counter: its buttons on top of the front, then the cup under the spout
       const c = topCentre(o);
@@ -2538,6 +2549,13 @@ void main() {
       if (this.ratioFor(this.quality) !== this.renderer.getPixelRatio()) this.resize();
     }
     if (this.extraBodies) bodies = bodies.concat(this.extraBodies());
+    // the furniture's live parts (plan 68: flames, a lava lamp's blobs), on every floor shown, near
+    // the camera
+    {
+      const cam = this.camera.position;
+      for (const w of new Set([this.world, ...[...this.floors.values()].map((b) => b.world)]))
+        if (w.root.parent) w.animateLive(this.time, { x: cam.x - w.root.position.x, z: cam.z - w.root.position.z });
+    }
     this.warmUp(performance.now());
     this.syncLifts(performance.now());
     // everyone in my floor's frame: the floors below where they are, above not drawn

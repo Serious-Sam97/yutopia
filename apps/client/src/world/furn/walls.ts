@@ -1,6 +1,7 @@
-import { ISO_PX } from "@yutopia/shared";
+import { ISO_PX, TEXT_FACE } from "@yutopia/shared";
+import { glyphDots } from "@yutopia/shared/glyphs";
 import { GLASS } from "@yutopia/shared/media";
-import { ball, box, cyl, type Look, type Model, ring, rod, type V3 } from "./kit";
+import { ball, box, cyl, type Look, type Model, merged, ring, rod, type V3 } from "./kit";
 import { P, shade } from "./palette";
 
 // On the walls (docs/plan/67-the-furniture.md, phase 7), in the wall's frame (shared hang.ts): x
@@ -391,4 +392,65 @@ export function pictureFrame(m: Model, seed: number) {
     m.add(ball(0.05, 10), 0xe4b48e, { at: [0.5, iso(49), F + 0.004], scale: [1, 1.15, 0.1] });
     rect(0.44, 0.56, iso(43), iso(46), P.rust, 0.004);
   }
+}
+
+// ── words on things (plan 68 phase 1: props.text, shared glyphs.ts) ─────────────────────────────────
+export const WORD_LOOKS = {
+  marquee_sign: ["Marquee sign"],
+  vfd_ticker: ["Ticker sign"],
+  split_flap: ["Split-flap board"],
+} as const;
+
+/** A theatre marquee on the wall: a red panel in a chrome frame, its words in lit bulbs (the shared
+ *  dot face, sized to fit), a border of bulbs chasing round it (live: three sets blinking in turn). */
+export function marqueeSign(m: Model, text: string) {
+  const [x0, x1, y0, y1] = [0.1, 2.9, 1.52, 2.23];
+  slab(m, x0, x1, y0, y1, 0.06, 0x6e1f1a, 0.01);
+  bars(m, x0 + 0.02, x1 - 0.02, y0 + 0.02, y1 - 0.02, 0.025, FACE + 0.07, P.chrome);
+  // the words: a bulb a dot, the letters centred
+  const n = Math.max(1, text.length);
+  const p = Math.min(0.06, (x1 - x0 - 0.36) / (n * 6));
+  const w = n * 6 * p - p;
+  const sx = (x0 + x1) / 2 - w / 2;
+  const sy = (y0 + y1) / 2 + 3 * p;
+  for (let i = 0; i < text.length; i++)
+    for (const [c, r] of glyphDots(text[i]))
+      m.add(cyl(p * 0.36, p * 0.36, 0.012, 6), 0xffe7b0, {
+        at: [sx + (i * 6 + c) * p + p / 2, sy - r * p, FACE + 0.06],
+        rot: [Math.PI / 2, 0, 0],
+        glow: true,
+      });
+  // the chasing border: unlit bulbs all round, every third one lit with its set (one live part a
+  // set: one draw), the three sets in turn
+  const ring: [number, number][] = [];
+  const step = 0.1;
+  for (let x = x0 + 0.08; x <= x1 - 0.07; x += step) ring.push([x, y1 - 0.05], [x, y0 + 0.05]);
+  for (let y = y0 + 0.15; y <= y1 - 0.14; y += step) ring.push([x0 + 0.06, y], [x1 - 0.06, y]);
+  for (const [x, y] of ring) m.add(ball(0.016, 6), 0x8a6a3a, { at: [x, y, FACE + 0.07] });
+  for (let k = 0; k < 3; k++)
+    m.live(
+      merged(ring.filter((_, i) => i % 3 === k).map(([x, y]) => ball(0.019, 6).translate(x, y, FACE + 0.071))),
+      0xffd28a,
+      { kind: "blink", period: 0.9, on: 0.34, phase: k / 3 },
+      { glow: true },
+    );
+}
+
+/** A VFD ticker strip: its black housing, the dark glass where its words scroll by (drawn live:
+ *  tp/live.ts, on TEXT_FACE). */
+export function vfdTicker(m: Model) {
+  const f = TEXT_FACE.vfd_ticker;
+  slab(m, 0.15, 1.85, 1.94, 2.16, f.z - FACE - 0.01, 0x18181a, 0.01);
+  m.add(box([f.x1 - f.x0, f.y1 - f.y0, 0.004]), 0x0b120e, { at: [(f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2, f.z - 0.004] });
+  bars(m, f.x0, f.x1, f.y0, f.y1, 0.012, f.z + 0.004, 0x2a2a2d);
+}
+
+/** A split-flap departures board: its black frame, the dark face its flaps turn on (drawn live:
+ *  tp/live.ts, on TEXT_FACE), a brass name plate under it. */
+export function splitFlap(m: Model) {
+  const f = TEXT_FACE.split_flap;
+  slab(m, 0.1, 2.9, 1.44, 2.12, f.z - FACE - 0.01, 0x141416, 0.012);
+  m.add(box([f.x1 - f.x0, f.y1 - f.y0, 0.004]), 0x0e0e10, { at: [(f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2, f.z - 0.004] });
+  bars(m, f.x0, f.x1, f.y0, f.y1, 0.015, f.z + 0.006, 0x26262a);
+  m.add(box([0.5, 0.035, 0.006], 0.002), P.brass, { at: [1.5, 1.465, f.z + 0.002] });
 }

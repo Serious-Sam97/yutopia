@@ -69,6 +69,9 @@ export default function FurnitureDev() {
         labels: q.get("labels") !== "0",
         sitters: q.get("sitters") === "1",
         scene: q.get("scene") === "desk" || q.get("scene") === "hosts" ? (q.get("scene") as "desk") : null,
+        ...(q.get("t") !== null ? { t: Number(q.get("t")) } : {}),
+        ...(q.get("day") !== null ? { day: Number(q.get("day")) } : {}),
+        ...(q.get("text") !== null ? { text: q.get("text") as string } : {}),
         w: Number(q.get("w")) || window.innerWidth,
         h: Number(q.get("h")) || window.innerHeight,
       });

@@ -210,6 +210,23 @@ export interface ClientMessages {
   // (plan 67) the room I'm standing in furnished by a plan (shared office.ts); an admin's whole floor
   "build:furnish": { plan: string };
   "build:refurnish": Record<string, never>;
+  // (plan 68) an admin's Christmas: every room dressed, or all of it put away
+  "build:christmas": { on: boolean };
+  // a present opened (by who it's for); what I'm holding wrapped at a wrapping table, for someone
+  // (their user id; 0: anyone)
+  "present:open": { id: string };
+  "present:wrap": { id: string; to: number };
+  // (plan 68 phases 21–25) the small games: a chess move, a side taken, a new game; a dart thrown
+  // (where it lands, m on the board); the claw dropped (where, 0..1 in its pit); a table game joined,
+  // played (my mallet or my rods: x, y in the table's frame, a kick), left
+  "chess:move": { id: string; from: number; to: number; promo?: string };
+  "chess:sit": { id: string; side: "w" | "b" | null };
+  "chess:new": { id: string };
+  "darts:throw": { id: string; x: number; y: number };
+  "claw:drop": { id: string; x: number; z: number };
+  "tg:join": { id: string };
+  "tg:input": { id: string; x: number; y: number; kick?: boolean };
+  "tg:leave": { id: string };
   "build:undo": Record<string, never>; // your own last build step (history.ts)
   "build:redo": Record<string, never>;
   "mod:mute": { userId: number; muted: boolean };
@@ -510,6 +527,19 @@ export interface ServerMessages {
   knock: { from: string; fromName: string; area: string };
   admitted: { area: string };
   toast: { text: string; tone?: "info" | "warn" | "vortex" };
+  // (plan 68) a present I opened: what was in it, who it was from
+  "present:opened": { gift: string; from: string };
+  // (plan 68) the claw's drop: what it won (a toy) or null; a table game's state for its players
+  "claw:result": { id: string; toy: string | null };
+  "tg:state": {
+    id: string;
+    kind: "hockey" | "foosball";
+    side: number;
+    names: [string, string];
+    running: boolean;
+    s: number[];
+    score: [number, number];
+  };
   // (to admins) who's removed for a while, and till when (docs/plan/48-the-admin.md)
   "admin:removed": { list: { uid: number; name: string; until: number }[] };
   // ping-pong: the hit I reported wasn't taken (which flight, why) — my ball goes back to its real path
@@ -591,6 +621,9 @@ export interface ServerMessages {
 // Things you can be busy with (shown on the body: hands on the controls…).
 export const USES = [
   "coffee",
+  "cocoa",
+  "tea",
+  "icecream",
   "water",
   "vending",
   "arcade",

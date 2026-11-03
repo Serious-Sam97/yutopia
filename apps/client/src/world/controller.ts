@@ -10,6 +10,7 @@ import {
   doorCentre,
   doorLeaves,
   doorOwner,
+  doorReach,
   EMOTES,
   entry,
   findPath,
@@ -20,12 +21,14 @@ import {
   Grid,
   getMap,
   HEAR_RADIUS,
+  HELD,
   type Height,
   hangSpot,
   hangStrip,
   hearingGain,
   inLift,
   isDoorKind,
+  isHeld,
   isJump,
   isPrivate,
   isSocial,
@@ -99,6 +102,7 @@ import type { GameRoom } from "./games/room";
 import type { GodController } from "./god/controller";
 import { layEdits, loadGrounds, wantEdits } from "./grounds-load";
 import { jumps, loadJumps } from "./jumps-load";
+import { thingLabel } from "./labels";
 import { liftSound, loadLiftSounds, nearGain } from "./lift-sound";
 import { Media } from "./media";
 import type { MediaRoom } from "./media/room";
@@ -794,6 +798,19 @@ export class WorldController {
       if (area) this.walkTo({ x: area.x + area.w / 2, y: area.y + area.h / 2 });
     });
     room.onMessage("toast", (m: ServerMessages["toast"]) => toast(m.text, m.tone ?? "info"));
+    // (plan 68 phases 21–25) the small games' news, to their panels
+    for (const type of ["claw:result", "tg:state"] as const)
+      room.onMessage(type, (m: unknown) => {
+        for (const fn of this.gameFns.get(type) ?? []) fn(m);
+      });
+    // (plan 68) a present I opened: a fanfare, what was in it
+    room.onMessage("present:opened", (m: ServerMessages["present:opened"]) => {
+      fanfare(0.5);
+      const what = isHeld(m.gift) ? HELD[m.gift].label.toLowerCase() : m.gift;
+      toast(
+        `${tr("presentOpened").replace("{gift}", what)}${m.from ? ` ${tr("presentFrom").replace("{name}", m.from)}` : ""}`,
+      );
+    });
     // (to admins) who's removed, till when: the admins' panel (docs/plan/48-the-admin.md)
     room.onMessage("admin:removed", (m: ServerMessages["admin:removed"]) => hud.set({ removed: m.list }));
     // the computer I sat down at is mine (its panel boots VortexOS), or it went off under me
@@ -1037,6 +1054,25 @@ export class WorldController {
       this.busySent = want;
       this.send("use", { what: want });
     }
+  }
+
+  private gameFns = new Map<string, Set<(m: unknown) => void>>();
+  /** (plan 68 phases 21–25) A small game's panel told of its news (the claw's drop, a table game's
+   *  state); the returned function stops it. */
+  onGame<T>(type: string, fn: (m: T) => void): () => void {
+    const set = this.gameFns.get(type) ?? new Set();
+    const f = fn as (m: unknown) => void;
+    set.add(f);
+    this.gameFns.set(type, set);
+    return () => set.delete(f);
+  }
+
+  /** (plan 68) What I'm holding, wrapped at the table I'm at, for `to` (a user id; 0: anyone). */
+  wrapFor(to: number) {
+    const w = hud.get().wrap;
+    // (−1: not wrapped after all)
+    if (w && to >= 0) this.send("present:wrap", { id: w.id, to });
+    hud.set({ wrap: null });
   }
 
   // A note on the piano I'm at: heard here at once, sent to everyone else.
@@ -2186,7 +2222,7 @@ export class WorldController {
     if ((o?.id ?? null) === (cur?.objectId ?? null) && kind === (cur?.kind ?? "")) return;
     this.tp?.setHighlight(this.footprintOf(o?.id));
     hud.set({
-      prompt: o ? { objectId: o.id, kind, label: kind === "plug" ? tr("cablePlug") : entry(o.kind).label } : null,
+      prompt: o ? { objectId: o.id, kind, label: kind === "plug" ? tr("cablePlug") : thingLabel(o) } : null,
     });
   }
 
@@ -2591,7 +2627,14 @@ export class WorldController {
       else toast(tr("cableNotHere"), "warn");
       return;
     }
-    if (e.interact === "coffee" || e.interact === "water" || e.interact === "vending") {
+    if (
+      e.interact === "coffee" ||
+      e.interact === "water" ||
+      e.interact === "vending" ||
+      e.interact === "cocoa" ||
+      e.interact === "tea" ||
+      e.interact === "icecream"
+    ) {
       // the machine does its thing (a moment, its sound), then hands you a
       // drink, sipped little by little (shared/held.ts)
       if (performance.now() < this.usingUntil) return;
@@ -2600,6 +2643,9 @@ export class WorldController {
         // (as long as the body takes at it: chars/anim/acts.ts MACHINE_S, plan 62)
         water: ["pour", 1400, "waterPoured"],
         vending: ["clunk", 1500, "sodaBought"],
+        cocoa: ["pour", 1600, "cocoaPoured"],
+        tea: ["pour", 1600, "teaMade"],
+        icecream: ["clunk", 1400, "iceCreamScooped"],
       } as const;
       const [snd, ms, msg] = how[e.interact];
       this.usingWhat = e.interact;
@@ -2613,6 +2659,17 @@ export class WorldController {
     }
     if (e.interact === "piano") {
       this.onOpenPanel("piano", id);
+      return;
+    }
+    // (plan 68) a present: opened if it's mine (the server says); a wrapping table: who it's for
+    if (e.interact === "present") {
+      this.send("present:open", { id });
+      return;
+    }
+    if (e.interact === "wrap") {
+      const held = hud.get().held?.kind;
+      if (!isHeld(held)) toast(tr("wrapHoldFirst"), "warn");
+      else hud.set({ wrap: { id } });
       return;
     }
     if (e.interact === "lamp") {
@@ -3957,8 +4014,12 @@ export class WorldController {
         sitting.add(`${Math.floor(p.x)},${Math.floor(p.y)}`);
     });
     for (const o of model.allObjects()) {
-      if (o.kind === "chair" || o.kind === "armchair" || o.kind === "beanbag") {
-        const occupied = sitting.has(`${o.x},${o.y}`);
+      // (every seat: plan 68's rock, turn and sway while sat in — the sitter anywhere on it)
+      if (entry(o.kind).seat) {
+        const fp = placedFootprint(o);
+        let occupied = false;
+        for (let dy = 0; dy < fp.h && !occupied; dy++)
+          for (let dx = 0; dx < fp.w && !occupied; dx++) occupied = sitting.has(`${o.x + dx},${o.y + dy}`);
         // (a desk's chair comes in to it with whoever's on it: plan 62, the grid's `seatSpot`)
         const pull = occupied ? (this.grid.seatAt(o.x + 0.5, o.y + 0.5)?.pull ?? 0) : 0;
         if (!!o.props?.occupied !== occupied || (Number(o.props?.pull) || 0) !== pull)
@@ -3975,10 +4036,12 @@ export class WorldController {
       // someone in the doorway: close to the middle of the door's edges
       const c = doorCentre(o);
       const half = entry(o.kind).w / 2;
+      // (plan 68: the automatic doors open from further off)
+      const reach = doorReach(o.kind);
       const on = (x: number, y: number) =>
         (o.rot ?? 0) % 2 === 0
-          ? Math.abs(x - c.x) < half && Math.abs(y - c.y) < 0.55
-          : Math.abs(y - c.y) < half && Math.abs(x - c.x) < 0.55;
+          ? Math.abs(x - c.x) < half && Math.abs(y - c.y) < reach
+          : Math.abs(y - c.y) < half && Math.abs(x - c.x) < reach;
       // (a locked door swings only for its room's owner, the one who can go
       // through it: anyone else at it finds it shut)
       const locked = o.props?.state === "locked";

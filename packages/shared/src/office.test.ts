@@ -33,6 +33,32 @@ test("each plan furnishes a room: inside it, where things can go, clear of its d
   }
 });
 
+// Plan 68: the café, the games room and the library, each with its own pieces in a room big enough.
+test("the café, the games room and the library put down their own pieces", () => {
+  const map = STUDIO;
+  const a = [...map.areas].filter(refurnished).sort((p, q) => q.w * q.h - p.w * p.h)[0];
+  const keep = map.objects.filter((o) => !furnishedIn(map.objects, a, map).includes(o));
+  const want: Record<string, string[]> = {
+    cafe: ["cafe_counter", "card_table", "drinks_fridge", "ice_cream_freezer", "jukebox"],
+    games: ["pinball", "claw_machine", "air_hockey", "foosball", "chess_table"],
+    library: ["ladder_bookcase", "round_rug", "egg_chair", "rocking_chair", "bankers_lamp"],
+  };
+  for (const [plan, kinds] of Object.entries(want)) {
+    const add = furnishRoom(plan as never, a, map, keep);
+    for (const k of kinds)
+      assert.ok(
+        add.some((o) => o.kind === k),
+        `${a.key} as ${plan}: a ${k}`,
+      );
+    // (what they put down, taken out again by the next furnishing)
+    for (const o of add)
+      assert.ok(
+        entry(o.kind).onSurface || furnishedIn([...keep, ...add], a, map).includes(o),
+        `${plan}: ${o.kind} furniture`,
+      );
+  }
+});
+
 test("a floor refurnished by what its rooms are called, its corners and corridors left alone", () => {
   assert.equal(planFor({ name: "War Room", key: "war-room" }), "meeting");
   assert.equal(planFor({ name: "Lounge", key: "lounge" }), "lounge");
@@ -40,6 +66,15 @@ test("a floor refurnished by what its rooms are called, its corners and corridor
   assert.equal(planFor({ name: "Booth 2", key: "booth-2" }), "booths");
   assert.equal(planFor({ name: "Tracking Room", key: "tracking" }), "open_plan");
   assert.ok(isRoomPlan("kitchen") && !isRoomPlan("ballroom"));
+  // (plan 68's three, the kitchen no longer taking a café)
+  assert.equal(planFor({ name: "Café", key: "cafe" }), "cafe");
+  assert.equal(planFor({ name: "Game Room", key: "game-room" }), "games");
+  assert.equal(planFor({ name: "Reading Room", key: "reading" }), "library");
+  assert.equal(planFor({ name: "Kitchen", key: "kitchen" }), "kitchen");
+  assert.equal(planFor({ name: "Board Game Room", key: "board-games" }), "games");
+  assert.equal(planFor({ name: "Boardroom", key: "boardroom" }), "meeting");
+  assert.equal(planFor({ name: "Display Lab", key: "display" }), "open_plan");
+  assert.equal(planFor({ name: "Cafeteria", key: "cafeteria" }), "cafe");
   const rooms = refurnishFloor(STUDIO, STUDIO.objects);
   const keys = rooms.map((r) => r.area.key);
   for (const k of ["standup", "stage", "server-room", "hall"]) assert.ok(!keys.includes(k), `${k} left alone`);

@@ -19,6 +19,11 @@ const PongPanel = dynamic<P>(() => import("./PongPanel").then((m) => m.PongPanel
 const GamePanel = dynamic<P>(() => import("./GamePanel").then((m) => m.GamePanel), { ssr: false });
 const MediaPanel = dynamic<P>(() => import("./MediaPanel").then((m) => m.MediaPanel), { ssr: false });
 const ComputerPanel = dynamic<P>(() => import("./ComputerPanel").then((m) => m.ComputerPanel), { ssr: false });
+// (plan 68 phases 21–25: the small games)
+const ChessPanel = dynamic<P>(() => import("./Games68Panels").then((m) => m.ChessPanel), { ssr: false });
+const DartsPanel = dynamic<P>(() => import("./Games68Panels").then((m) => m.DartsPanel), { ssr: false });
+const ClawPanel = dynamic<P>(() => import("./Games68Panels").then((m) => m.ClawPanel), { ssr: false });
+const TableGamePanel = dynamic<P>(() => import("./Games68Panels").then((m) => m.TableGamePanel), { ssr: false });
 
 // Panels opened from in-world objects (X / click).
 export const extraPanels: Partial<Record<string, ComponentType<{ objectId: string }>>> = {
@@ -37,4 +42,9 @@ export const extraPanels: Partial<Record<string, ComponentType<{ objectId: strin
   games: GamePanel,
   media: MediaPanel,
   computer: ComputerPanel,
+  chess: ChessPanel,
+  darts: DartsPanel,
+  claw: ClawPanel,
+  hockey: TableGamePanel,
+  foosball: TableGamePanel,
 };

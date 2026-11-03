@@ -28,6 +28,7 @@ import {
   Prompt,
   Toasts,
   VideoBubbles,
+  WrapPicker,
 } from "./Overlays";
 import { PanelHost } from "./PanelHost";
 import { PersonCard } from "./PersonCard";
@@ -151,6 +152,7 @@ export function WorldView({ to }: { to?: string | null }) {
           {!building && <Prompt />}
           {!building && <LiftPanel />}
           {!building && <HeldChip />}
+          {!building && <WrapPicker />}
           {!building && <CableChip />}
           {!building && <LookHint />}
           {!building && <LockChip />}

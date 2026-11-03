@@ -15,7 +15,18 @@ const TOL = 0.06; // m, any face
 const OWN = new Set<string>(["stairs", "elevator"]);
 // (a plant's leaves are walked through, plan 67: only its pot is solid — the shape inside the drawing)
 // (and an arc lamp's head over the next tile, a coat rack's coats: walked under, brushed past)
-const SOFT = new Set<string>(["plant", "decor", "lamp", "coat_rack", "crt_tv"]);
+const SOFT = new Set<string>([
+  "plant",
+  "decor",
+  "lamp",
+  "coat_rack",
+  "crt_tv",
+  "present",
+  "poinsettia",
+  "candy_cane",
+  "indoor_tree",
+  "floor_vase",
+]);
 
 function solidsBounds(ss: Solid3[]): Bounds3 | null {
   if (!ss.length) return null;

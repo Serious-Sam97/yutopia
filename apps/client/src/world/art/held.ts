@@ -8,6 +8,13 @@ export const MUG_COLORS = ["#b5562f", "#efe4cc", "#6e7b3a", "#3d4a5c", "#e8a33d"
 export const HELD_BOX: Box = [-9, -14, 16, 18];
 const INK = "#2a1430";
 
+/** (plan 68) The hot cocoa station's red mug. */
+export const COCOA_MUG = "#b3262b";
+/** (plan 68) The kettle's tea, in a plain white mug. */
+export const TEA_MUG = "#efe4cc";
+/** (plan 68) The ice-cream freezer's paper tub. */
+export const ICE_TUB = "#f4a6b8";
+
 export function mugSvg(color: string, level: number): string {
   const lip = "#f7f0de";
   const stain = "#8a5a36";
@@ -97,6 +104,7 @@ export function toySvg(kind: string): string {
 export function heldSvg(kind: string, color: string, level: number): string {
   switch (kind) {
     case "cup":
+    case "icecream": // (the freezer's tub, as the hand holds it)
       return cupSvg(level);
     case "soda":
       return sodaSvg(color, level);

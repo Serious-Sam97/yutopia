@@ -6,11 +6,11 @@
 // (drawn with the client's ?furn=new), moved up here when the family goes live (seating and the
 // desks, tables and storage: 2026-11-03).
 
-/** Iso px a metre of height (the art's ZPX: 45.25 · cos 30°): today's numbers were measured in it. */
-export const ISO_PX = 45.25 * Math.cos(Math.PI / 6);
+import { FAM_SEATS, FAM_STANDS, FAM_SURFACES } from "./fam/index.ts";
+import { ISO_PX, isoPx } from "./fam/units.ts";
+
+export { ISO_PX, isoPx };
 const iso = (px: number) => px / ISO_PX;
-/** Metres → the iso px the catalog keeps (to a thousandth: today's numbers come back exact). */
-export const isoPx = (m: number): number => Math.round(m * ISO_PX * 1000) / 1000;
 
 /** Where a sitter goes on a seat (as drawn, sat on: the cushion sunk, the back leant), m along the
  *  way its sitter faces from the tile's middle (plan 62): the cushion's top less what it gives, its
@@ -40,8 +40,12 @@ export const SEAT_SPEC: Record<string, SeatSpec> = {
   // (a piano's stool, played sat on: plan 67 phase 6, a piano bench's 0.5 for its keys at 0.74)
   stool: { top: 0.5, front: 0.15, back: null, rear: -0.15, lean: [0, 0] },
   // (plan 67 phase 8b, the office staples: a bar stool at a high table, the booth's bench inside it)
+  // (plan 68: a loveseat sits as the sofa does)
+  loveseat: { top: 0.455, front: 0.42, back: -0.1, lean: [0.2, 0.3], solid: true },
   bar_stool: { top: 0.76, front: 0.17, back: null, rear: -0.17, lean: [0, 0], rest: 0.3 },
   phone_booth: { top: 0.46, front: 0.06, back: -0.38, lean: [0.05, 0.15] },
+  // (plan 68's families: fam/*.ts)
+  ...FAM_SEATS,
 };
 
 /** The redrawn seats, not yet in the world (the client's `?furn=new` draws them, plan 67): each
@@ -66,8 +70,12 @@ export const SURFACE: Record<string, number> = {
   reception: 0.74,
   // (plan 67 phase 8b: a standing desk, a bistro table, the open shelving's top)
   standing_desk: 1.05,
+  // (plan 68: the fireplace's mantel shelf)
+  fireplace: 1.15,
   high_table: 1.05,
   shelving: 1.2,
+  // (plan 68's families: fam/*.ts)
+  ...FAM_SURFACES,
 };
 
 /** The redrawn surfaces, not yet in the world (as SEAT_NEXT): at true scale for the 1.79 m people
@@ -106,9 +114,24 @@ export const STAND: Record<string, number> = {
   // (a parkour wall's cap: run up and stood on)
   pk_wall: iso(125),
   pk_wall_tall: iso(235),
+  // (plan 68's families: fam/*.ts)
+  ...FAM_STANDS,
 };
 /** …redrawn (phase 3): the cartridge shelf's top, the disc tower's. */
 export const STAND_NEXT: Record<string, number> = {};
+
+/** Where a sign's moving words are drawn (plan 68: the ticker's scroll, the split-flap's flaps — the
+ *  client's tp/live.ts): across x0..x1 and up y0..y1 (m, on the wall from where it hangs), its face z
+ *  out from the wall's line (the wall's face at 0.1). Their default words, unset. */
+export const TEXT_FACE = {
+  vfd_ticker: { x0: 0.22, x1: 1.78, y0: 1.98, y1: 2.12, z: 0.165 },
+  split_flap: { x0: 0.2, x1: 2.8, y0: 1.5, y1: 2.06, z: 0.17 },
+} as const;
+export const TEXT_DEFAULT: Record<string, string> = {
+  marquee_sign: "OPEN",
+  vfd_ticker: "WELCOME TO THE STUDIO * TAPE IS ROLLING",
+  split_flap: "STUDIO/ON AIR/ALL WELCOME",
+};
 
 /** The game tables' playing surfaces, m (plan 67 phase 6, at true scale): the cloth, the ping-pong
  *  top, the slot track's board (shared tables.ts TABLES.top and slotcar.ts SLOT_TOP read them). */
@@ -125,4 +148,9 @@ export const HANDS_AT = {
   // the keys (the stool's x: catalog PIANO_STOOL), over their front half, their top; the keybed's
   // front edge and its underside (the knees go under it)
   piano: { keys: [1, 0.7, 0.74], ledge: [1, 0.81, 0.65] },
+  // (plan 68) the cocoa urn's tap; a mug off the stack beside it
+  cocoa_station: { tap: [0.42, 0.66, 0.98], mugs: [0.83, 0.62, 0.96] },
+  // (plan 68) the drinks fridge's handle, then in at its shelves; the freezer's lid, then down in a tub
+  drinks_fridge: { handle: [0.755, 0.83, 1.0], shelf: [0.5, 0.74, 1.1] },
+  ice_cream_freezer: { lid: [1.0, 0.8, 0.86], tub: [1.0, 0.5, 0.76] },
 } as const satisfies Record<string, Record<string, readonly [number, number, number]>>;

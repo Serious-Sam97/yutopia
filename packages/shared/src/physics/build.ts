@@ -272,6 +272,12 @@ const PARKOUR: Partial<Record<string, GroundSolid["what"]>> = {
   pk_wall_tall: "pk_wall",
   pk_pole: "pk_pole",
   pk_pole_tall: "pk_pole",
+  // (plan 68 phase 17: run up the climbing wall, the quarter pipe and the cargo net and over their
+  // tops; grind the balance beam)
+  pk_climb_wall: "pk_wall",
+  pk_quarter_pipe: "pk_wall",
+  pk_cargo_net: "pk_wall",
+  pk_beam: "pk_rail",
 };
 
 // a wall's piece that goes to its top, on up to the next storey's floor (the slab between is

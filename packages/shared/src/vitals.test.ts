@@ -151,3 +151,13 @@ test("run out focusing: no focus until it's back to 25% (no on and off at 0)", (
   stepVitals(v2, c2, OUT, DT);
   assert.equal(canFocus(v2, c2), true);
 });
+
+// Plan 68 phase 2: by a lit fire, warmed three times as fast as anywhere warm.
+test("by the fire: warmed three times as fast", () => {
+  const warm = (hearth: boolean) => {
+    const v = { ...FULL_VITALS, wm: 20 };
+    stepVitals(v, freshClock(), { ...OUT, outside: false, warm: true, hearth }, 3);
+    return v.wm - 20;
+  };
+  assert.ok(Math.abs(warm(true) - 3 * warm(false)) < 1e-6, `${warm(true)} vs ${warm(false)}`);
+});

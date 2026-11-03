@@ -12,9 +12,19 @@ import { hostOf, splitAll } from "./tops.ts";
 // any room's own rectangle on its floor, never in front of a door, nothing that doesn't fit (the
 // one placement rule, build.ts canPlace). Applied to a world only by choice: a builder furnishing
 // the room they stand in, an admin refurnishing a whole floor (each room by what its name says it
-// is), and either undone (the world-server keeps what was there).
+// is), and either undone (the world-server keeps what was there). Plan 68 adds a café, a games room
+// and a library, from its new pieces.
 
-export type RoomPlan = "open_plan" | "meeting" | "kitchen" | "lounge" | "booths" | "reception";
+export type RoomPlan =
+  | "open_plan"
+  | "meeting"
+  | "kitchen"
+  | "lounge"
+  | "booths"
+  | "reception"
+  | "cafe"
+  | "games"
+  | "library";
 export const ROOM_PLANS: { key: RoomPlan; name: string }[] = [
   { key: "open_plan", name: "Open plan" },
   { key: "meeting", name: "Meeting room" },
@@ -22,15 +32,23 @@ export const ROOM_PLANS: { key: RoomPlan; name: string }[] = [
   { key: "lounge", name: "Lounge" },
   { key: "booths", name: "Focus booths" },
   { key: "reception", name: "Reception" },
+  { key: "cafe", name: "Café" },
+  { key: "games", name: "Games room" },
+  { key: "library", name: "Library" },
 ];
 export const isRoomPlan = (k: unknown): k is RoomPlan => ROOM_PLANS.some((p) => p.key === k);
 
 /** What a room's name says it's for. */
 export function planFor(a: Pick<AreaDef, "name" | "key">): RoomPlan {
   const n = `${a.name} ${a.key}`.toLowerCase();
+  // (plan 68's three by whole words — a "Display Lab" isn't a playroom — and a "Board Game Room" a
+  // games room before the board's meeting)
+  if (/\b(games?|gaming|arcade|rec ?room|play ?room)\b/.test(n)) return "games";
   if (/meet|war room|conference|board|huddle/.test(n)) return "meeting";
-  if (/kitchen|coffee|pantry|break|caf/.test(n)) return "kitchen";
-  if (/lounge|living|rest|chill|library/.test(n)) return "lounge";
+  if (/\b(caf[eé](teria)?|bistro|canteen|diner)\b/.test(n)) return "cafe";
+  if (/\b(library|reading|study)\b/.test(n)) return "library";
+  if (/kitchen|coffee|pantry|break/.test(n)) return "kitchen";
+  if (/lounge|living|rest|chill/.test(n)) return "lounge";
   if (/booth|focus|phone|quiet|call/.test(n)) return "booths";
   if (/lobby|reception|entrance|front|foyer|hall/.test(n)) return "reception";
   return "open_plan";
@@ -73,6 +91,28 @@ const FURNITURE = new Set([
   "decor",
   "tabletop",
   "computer",
+  // (plan 68's: what its café, games room and library put down — a games room's tables are its
+  // furniture, as a TV someone set up isn't)
+  "cafe_counter",
+  "card_table",
+  "drinks_fridge",
+  "ice_cream_freezer",
+  "edison_cluster",
+  "jukebox",
+  "air_hockey",
+  "foosball",
+  "pinball",
+  "claw_machine",
+  "chess_table",
+  "ladder_bookcase",
+  "round_rug",
+  "egg_chair",
+  "rocking_chair",
+  "nesting_tables",
+  "uplighter",
+  "indoor_tree",
+  "floor_vase",
+  "chandelier",
 ]);
 export const furnishes = (kind: string): boolean => FURNITURE.has(kind);
 
@@ -179,6 +219,11 @@ export function furnishRoom(
       [a.x + a.w - 1, a.y + a.h - 1],
     ])
       put("plant", x, y, 0, { variant: (x + y) % 5 });
+  };
+  /** A piece's w × h (turned) inside the room's walkway-edged rectangle. */
+  const fits = (kind: string, x: number, y: number, rot = 0) => {
+    const { w, h } = placedFootprint({ kind, rot });
+    return x >= x0 && y >= y0 && x + w <= x1 && y + h <= y1;
   };
   if (W < 2 || H < 2) return [];
   switch (plan) {
@@ -295,6 +340,90 @@ export function furnishRoom(
       put("coat_rack", a.x, a.y + a.h - 1);
       for (const x of [rx - 1, rx + 3]) put("pendant_light", x, ry);
       corners();
+      break;
+    }
+    case "cafe": {
+      // the café counter on the back wall (the first row clear), the espresso machine on its till's
+      // end; the drinks fridge on its right, the ice-cream freezer on its left; little tables for two
+      // in rows, a light over each; the jukebox in a corner
+      const cx = a.x + Math.max(1, Math.floor((a.w - 3) / 2));
+      let counter: WorldObjectDef | undefined;
+      for (let row = back; row < back + 3 && !counter; row++) if (put("cafe_counter", cx, row, 0)) counter = last();
+      if (counter) {
+        onTop("coffee_machine", counter, 2);
+        put("drinks_fridge", cx + 3, counter.y, 0);
+        put("ice_cream_freezer", cx - 2, counter.y, 0);
+      }
+      const ty0 = (counter?.y ?? back) + 3;
+      for (let ty = ty0; ty < y1; ty += 3)
+        for (let tx = x0 + 1; tx + 2 <= x1; tx += 4) {
+          if (!fits("card_table", tx, ty) || !put("card_table", tx, ty, 0)) continue;
+          put("chair", tx - 1, ty, 3);
+          put("chair", tx + 1, ty, 1);
+          put("edison_cluster", tx, ty);
+        }
+      put("jukebox", a.x, a.y + a.h - 1, 0);
+      corners();
+      break;
+    }
+    case "games": {
+      // the machines along the back wall (pinballs, the claw, the jukebox); the tables in the
+      // middle — air hockey, foosball, a chess table — each with room round it to play; lights
+      // over them
+      let bx = a.x + 1;
+      for (const k of ["pinball", "pinball", "claw_machine", "jukebox"]) {
+        while (bx < a.x + a.w - 1 && !put(k, bx, back, 0)) bx++;
+        bx += 1;
+      }
+      const my = y0 + 2;
+      let mx = x0 + 1;
+      for (const k of ["air_hockey", "foosball"]) {
+        if (fits(k, mx, my) && put(k, mx, my, 0)) {
+          put("pendant_light", mx + 1, my);
+          mx += entry(k).w + 2;
+        }
+      }
+      const cy = my + 4;
+      if (fits("chess_table", x0 + 1, cy) && put("chess_table", x0 + 1, cy, 0)) put("lamp", x0, cy, 0);
+      if (fits("card_table", x0 + 5, cy) && put("card_table", x0 + 5, cy, 0)) {
+        put("chair", x0 + 4, cy, 3);
+        put("chair", x0 + 6, cy, 1);
+      }
+      corners();
+      break;
+    }
+    case "library": {
+      // the bookcases with their ladders along the back wall; a round rug in the middle with an egg
+      // chair and a rocking chair on it, a nest of tables between; a reading desk with its green
+      // lamp; uplighters, a tree in a corner
+      // (along the back wall, or the first row clear of what hangs there)
+      let shelves = 0;
+      for (let row = back; row < back + 3 && !shelves; row++)
+        for (let x = a.x + 1; x + 3 <= a.x + a.w - 1; x += 3) if (put("ladder_bookcase", x, row, 0)) shelves++;
+      const rx = x0 + Math.max(0, Math.floor((W - 3) / 2));
+      const ry = y0 + Math.max(1, Math.floor((H - 3) / 2));
+      if (fits("round_rug", rx, ry)) {
+        put("round_rug", rx, ry, 0);
+        put("egg_chair", rx, ry + 1, 3);
+        put("rocking_chair", rx + 2, ry + 1, 1);
+        put("nesting_tables", rx + 1, ry + 1, 0);
+        put("chandelier", rx + 1, ry + 1);
+      }
+      // (in the south-east, or the nearest place along the south it can go)
+      desk: for (let dy = y1 - 2; dy >= y1 - 4; dy--)
+        for (let dx = x1 - 2; dx >= x0 && dx >= x1 - 10; dx--)
+          if (fits("desk", dx, dy) && put("desk", dx, dy, 2)) {
+            onTop("bankers_lamp", last(), 0);
+            put("chair", dx, dy + 1, 2, { desk: true });
+            break desk;
+          }
+      for (const [x, y] of [
+        [a.x, a.y + 1],
+        [a.x + a.w - 1, a.y + 1],
+      ])
+        put("uplighter", x, y, 0);
+      put("indoor_tree", a.x, a.y + a.h - 2, 0);
+      put("floor_vase", a.x + a.w - 1, a.y + a.h - 1, 0);
       break;
     }
   }

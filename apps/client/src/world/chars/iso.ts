@@ -1,4 +1,13 @@
-import { type AvatarLayers, type HeldKind, heldState, isHeld, type JumpKind, type JumpNow } from "@yutopia/shared";
+import {
+  type AvatarLayers,
+  drinkAs,
+  type HeldKind,
+  heldState,
+  isDrink,
+  isHeld,
+  type JumpKind,
+  type JumpNow,
+} from "@yutopia/shared";
 import {
   Color,
   type Group,
@@ -12,6 +21,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
+import { COCOA_MUG, ICE_TUB } from "../art/held";
 import { phoneColors } from "../art/phone-art";
 import { INK } from "./ink";
 import { CharFactory, lookKey, PersonModel, type Reach } from "./model";
@@ -272,7 +282,7 @@ export function isoState(m: IsoMem, p: IsoIn, now: number): IsoState {
     phone = `${phoneColors(p.phoneCase)[0]}|${p.recording && Math.floor(t * 2) % 2 === 0 ? 1 : 0}`;
   } else if (isHeld(p.held) && p.heldAt) {
     const st = heldState(p.held as HeldKind, Date.now() - p.heldAt);
-    const drink = p.held === "mug" || p.held === "cup" || p.held === "soda";
+    const drink = isDrink(p.held);
     held = drink ? `${p.held}|${p.mugColor ?? ""}|${Math.round(st.level * 4)}` : `${p.held}`;
     if (drink && st.sip >= 0 && !p.reduced) {
       upper = "sip";
@@ -600,13 +610,23 @@ class IsoPeople {
       if (pr.root.parent !== hand) hand.add(pr.root);
       inHand(pr.root, "phone");
       if (pr.rec) pr.rec.visible = st.phone.endsWith("|1");
-    } else if (kind === "mug" || kind === "cup" || kind === "soda") {
-      const c = kind === "mug" ? color || "#efe4cc" : kind === "soda" ? "#c4402b" : "#efe4cc";
-      const pr = this.prop(l, kind, c);
+    } else if (isDrink(kind)) {
+      const c =
+        kind === "mug"
+          ? color || "#efe4cc"
+          : kind === "soda"
+            ? "#c4402b"
+            : kind === "cocoa"
+              ? COCOA_MUG
+              : kind === "icecream"
+                ? ICE_TUB
+                : "#efe4cc";
+      const as = drinkAs(kind);
+      const pr = this.prop(l, as, c);
       pr.root.visible = true;
       if (pr.root.parent !== hand) hand.add(pr.root);
       pr.setLevel?.(Number(level) / 4);
-      keepUpright(pr.root, kind, m.root, ps.sip * 1.05);
+      keepUpright(pr.root, as, m.root, ps.sip * 1.05);
     } else if (kind && this.toy) {
       if (!l.toy || l.toy.userData.kind !== kind) {
         l.toy?.removeFromParent();

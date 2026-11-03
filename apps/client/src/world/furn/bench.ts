@@ -19,7 +19,8 @@ import { legOf, SEATS, type SeatShape, seatFit } from "../tp/seats3d";
 import { useFurn } from "./flag";
 import { DESK_TOP, type Hero, heroModel, SEAT } from "./heroes";
 import { lambert, type Tier, toon } from "./kit";
-import { LOOK_NAMES, modelOf, nativeInto, seedOf } from "./native";
+import { animateLive, liveGroup } from "./liveparts";
+import { LOOK_NAMES, liveInto, modelOf, nativeInto, seedOf } from "./native";
 
 /** The shading: soft Lambert, the people's cel, or a bolder cel (the bench's option). */
 export type Look = "lambert" | "toon" | "toon2";
@@ -55,6 +56,12 @@ export interface BenchOpts {
   /** a dressed desk (today's, the new), someone typing at each; or the radio, the coffee machine
    *  and the turntable on their tables */
   scene: "desk" | "hosts" | null;
+  /** the live parts held at this moment (s), for stills; unset: moving */
+  t?: number;
+  /** (plan 68: the advent calendar) the day of December it shows opened to */
+  day?: number;
+  /** (plan 68: words on things) what a sign or a stocking says, a look each, "~" between */
+  text?: string;
   w: number;
   h: number;
 }
@@ -146,11 +153,15 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
     old?: WorldObjectDef[];
     /** its geometry's in the world's own coords already (a scene: several things at once) */
     placed?: boolean;
+    /** (placed) the thing itself, for its live parts where the world puts them */
+    def?: WorldObjectDef;
   }
   const isSeat = (k: string) => k in SEATS;
   const next = (k: string): SeatShape | null => SEAT_NEXT[k] ?? SEAT_SPEC[k] ?? null;
+  // (a kind new since plan 68 has no "Today": nothing drew it before)
+  const fresh = !o.scene && !!o.kind && !items.hasItemArt(o.kind);
   const cols: Col[] =
-    o.scene === "hosts"
+    o.scene === "hosts" || fresh
       ? []
       : [{ label: "Today", geo: null, seat: isSeat(subject) ? (TODAY_SEATS[subject] ?? SEATS[subject]) : null }];
   if (o.scene === "hosts")
@@ -189,7 +200,11 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
         x: X0b + (v + 1) * Sb,
         y: hung ? 1 : ROW0,
         rot: 0,
-        props: { variant: v },
+        props: {
+          variant: v,
+          ...(o.day ? { _day: o.day } : {}),
+          ...(o.text ? { text: o.text.split("~")[v] ?? o.text.split("~")[0] } : {}),
+        },
       };
       let geo = modelOf(at);
       if (hung) {
@@ -198,7 +213,7 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
         nativeInto(out, at);
         geo = outGeo(out);
       }
-      cols.push({ label, geo, seat: next(o.kind as string), placed: hung });
+      cols.push({ label, geo, seat: next(o.kind as string), placed: hung, ...(hung ? { def: at } : {}) });
     });
   } else
     (["Clean", "Crafted", "Rich"] as const).forEach((label, t) => {
@@ -235,7 +250,18 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
   const objects: WorldObjectDef[] =
     o.scene === "hosts"
       ? cols.flatMap((c) => c.old ?? [])
-      : [{ id: `old-${subject}`, kind: subject, x: X0, y: entry(subject).wall ? 1 : ROW, rot, props: { variant: 0 } }];
+      : fresh
+        ? []
+        : [
+            {
+              id: `old-${subject}`,
+              kind: subject,
+              x: X0,
+              y: entry(subject).wall ? 1 : ROW,
+              rot,
+              props: { variant: 0 },
+            },
+          ];
   // (a dressed desk: today's things on today's desk at its height, the new on the new)
   const dressed = (x: number, z: number): WorldObjectDef[] =>
     ON_DESK.map((t, i) => ({
@@ -264,6 +290,14 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
 
   // ── the new ones, a column each ──
   const mat = material(o.look);
+  const glowMat = new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
+  const glassMat = new T.MeshLambertMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false,
+  });
+  const lives: T.Group[] = [];
   cols.forEach((c, i) => {
     if (!c.geo) return;
     if (atDesk) {
@@ -297,12 +331,34 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       mesh.position.set(x + fw, 0, ROW + fh);
     } else mesh.position.set(x, 0, ROW);
     scene.add(mesh);
+    // its live parts (plan 68: a lava lamp's blobs, a fire's flames), moving each frame
+    const lg = c.def ? liveInto(c.def, mat, glowMat, glassMat) : liveGroup(c.geo, mat, glowMat, glassMat);
+    if (lg) {
+      if (!c.def) {
+        lg.position.copy(mesh.position);
+        lg.rotation.copy(mesh.rotation);
+      }
+      scene.add(lg);
+      lives.push(lg);
+    }
     const glow = c.geo.userData.glow as T.BufferGeometry | null;
     if (glow) {
       const gm = new T.Mesh(glow, new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
       gm.position.copy(mesh.position);
       gm.rotation.copy(mesh.rotation);
       scene.add(gm);
+    }
+    // its glass (kit `glass`: a window's panes, a door's)
+    const clear = c.geo.userData.clear as T.BufferGeometry | null;
+    if (clear) {
+      const cm = new T.Mesh(
+        clear,
+        new T.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.4, depthWrite: false }),
+      );
+      cm.position.copy(mesh.position);
+      cm.rotation.copy(mesh.rotation);
+      cm.renderOrder = 2;
+      scene.add(cm);
     }
   });
 
@@ -503,6 +559,9 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       if (pose(p)) ready++;
     }
     if (o.spin) place(o.turn + frames * 0.004);
+    // (`t=` holds the live parts at a moment: a still of them mid-move)
+    const now = o.t ?? performance.now() / 1000;
+    for (const g of lives) animateLive(g, now);
     camera.updateMatrixWorld();
     camera.getWorldDirection(fwd);
     const face = Math.atan2(-fwd.x, -fwd.z);

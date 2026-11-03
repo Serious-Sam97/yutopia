@@ -728,3 +728,94 @@ export function rectLoop(w: number, d: number, r: number): V3[] {
   out.push(out[0]);
   return out;
 }
+
+// ── the loveseat (2×1) — plan 68 ────────────────────────────────────────────────────────────────────
+export const LOVESEAT_LOOKS = ["Velvet loveseat", "Leather loveseat", "Linen loveseat, oak frame"] as const;
+/** A two-seat sofa, its seat at the sofa's spec (shared SEAT_SPEC.loveseat): velvet with a
+ *  channel-tufted back and round track arms on brass legs; tan leather with rolled arms, two seat
+ *  cushions and a buttoned back on a walnut plinth; linen cushions in an oak frame with flat oak
+ *  arms. Its fabric the paint. Story: a cushion, a folded throw. */
+export function loveseat(m: Model, o: SeatLook) {
+  const x0 = 0.18;
+  const x1 = 1.82;
+  const z0 = 0.08;
+  const z1 = 0.92;
+  const cx = (x0 + x1) / 2;
+  const seatTop = 0.455;
+  const sink = o.occupied ? 0.03 : 0;
+  if (o.look === 1) {
+    const c = o.fabric ?? P.cognac;
+    const dark = shade(c, 0.78);
+    m.add(box([x1 - x0, 0.1, z1 - z0 - 0.04], 0.012), P.walnutDark, { at: [cx, 0.05, 0.5] });
+    m.add(box([x1 - x0 - 0.04, 0.22, z1 - z0 - 0.06], 0.03, 2), dark, { at: [cx, 0.21, 0.5] });
+    // rolled arms: a slab and its roll
+    for (const s of [-1, 1]) {
+      const ax = s < 0 ? x0 + 0.1 : x1 - 0.1;
+      m.add(cushion([0.18, 0.4, z1 - z0], 0.12, 2), c, { at: [ax, 0.38, 0.5] });
+      m.add(rod(0.085, 0.085, z1 - z0 + 0.02, "z", 14), c, { at: [ax + s * 0.02, 0.6, 0.5] });
+    }
+    m.add(cushion([x1 - x0 - 0.36, 0.4, 0.2], 0.12, 3), c, { at: [cx, 0.52, z0 + 0.12] });
+    for (const bx of [-0.36, -0.12, 0.12, 0.36])
+      for (const by of [0.6, 0.48])
+        m.add(ball(0.012, 6), dark, { at: [cx + bx + (by > 0.5 ? 0 : 0.12), by, z0 + 0.225] });
+    for (const s of [-1, 1])
+      m.add(cushion([(x1 - x0 - 0.38) / 2, 0.14, 0.6], 0.25, 3), c, {
+        at: [cx + s * ((x1 - x0 - 0.38) / 4 + 0.005), seatTop - 0.06 - sink, 0.6],
+      });
+  } else if (o.look === 2) {
+    const c = o.fabric ?? P.linen;
+    // the oak frame: four legs, side rails up into flat arms, a back rail
+    for (const x of [x0 + 0.03, x1 - 0.03])
+      for (const z of [z0 + 0.06, z1 - 0.06])
+        m.add(taper(cyl(0.022, 0.022, 0.62, 8), 0.75, 0, 0.62), P.oak, {
+          at: [x, 0, z],
+          rot: [z < 0.5 ? -0.06 : 0.04, 0, 0],
+        });
+    for (const x of [x0 + 0.03, x1 - 0.03]) {
+      m.add(box([0.07, 0.03, z1 - z0 + 0.04], 0.01), P.oak, { at: [x, 0.62, 0.5] });
+      m.add(box([0.04, 0.05, z1 - z0 - 0.1]), P.oak, { at: [x, 0.25, 0.5] });
+    }
+    m.add(box([x1 - x0 - 0.06, 0.05, 0.05], 0.008), P.oak, { at: [cx, 0.27, z0 + 0.06] });
+    m.add(box([x1 - x0 - 0.06, 0.05, 0.05], 0.008), P.oak, { at: [cx, 0.27, z1 - 0.06] });
+    m.add(box([x1 - x0 - 0.1, 0.04, z1 - z0 - 0.1], 0.006), shade(P.oak, 0.85), { at: [cx, 0.3, 0.5] });
+    for (const s of [-1, 1]) {
+      m.add(cushion([(x1 - x0 - 0.16) / 2, 0.14, 0.66], 0.22, 3), c, {
+        at: [cx + s * ((x1 - x0 - 0.16) / 4), seatTop - 0.07 - sink, 0.55],
+      });
+      m.add(cushion([(x1 - x0 - 0.16) / 2, 0.42, 0.14], 0.22, 3), c, {
+        at: [cx + s * ((x1 - x0 - 0.16) / 4), 0.66, z0 + 0.14],
+        rot: [-0.18, 0, 0],
+      });
+    }
+  } else {
+    const c = o.fabric ?? 0x2e5e4e;
+    const dark = shade(c, 0.8);
+    for (const x of [x0 + 0.1, x1 - 0.1])
+      for (const z of [z0 + 0.1, z1 - 0.1])
+        m.add(taper(cyl(0.018, 0.018, 0.14, 8), 0.6, 0, 0.14), P.brass, { at: [x, 0, z] });
+    m.add(box([x1 - x0, 0.22, z1 - z0], 0.05, 3), dark, { at: [cx, 0.25, 0.5] });
+    // round track arms
+    for (const s of [-1, 1])
+      m.add(cushion([0.16, 0.4, z1 - z0], 0.2, 3), c, { at: [s < 0 ? x0 + 0.08 : x1 - 0.08, 0.42, 0.5] });
+    // the channel-tufted back: upright rolls side by side, curving round
+    const n = 7;
+    const bw = (x1 - x0 - 0.3) / n;
+    for (let i = 0; i < n; i++) {
+      const x = x0 + 0.15 + bw * (i + 0.5);
+      m.add(rod(0.06, 0.06, 0.46, "x", 10).rotateZ(Math.PI / 2), c, {
+        at: [x, 0.6, z0 + 0.13],
+        rot: [-0.14, 0, 0],
+        scale: [bw / 0.12, 1, 1],
+      });
+    }
+    m.add(cushion([x1 - x0 - 0.3, 0.16, 0.66], 0.2, 3), c, { at: [cx, seatTop - 0.075 - sink, 0.57] });
+  }
+  // (story) a cushion in the corner, or a folded throw over the arm
+  if (o.seed > 0.6)
+    m.add(cushion([0.36, 0.34, 0.12], 0.45, 3), P.mustard, {
+      at: [x0 + 0.38, seatTop + 0.17, z0 + 0.36],
+      rot: [-0.3, 0.3, 0.1],
+    });
+  else if (o.seed < 0.25)
+    m.add(cushion([0.24, 0.025, 0.5], 0.3, 2).rotateZ(-0.25), P.wool, { at: [x1 - 0.12, 0.62, 0.55] });
+}
