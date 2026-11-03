@@ -1,4 +1,4 @@
-import { hangOf, hangPoint, type WorldObjectDef } from "@yutopia/shared";
+import { hangOf, hangPoint, ISO_PX, type WorldObjectDef } from "@yutopia/shared";
 import { GAME_ASPECT } from "@yutopia/shared/games";
 import { GLASS, glassCorners } from "@yutopia/shared/media";
 import {
@@ -17,6 +17,8 @@ import {
   Vector3,
   VideoTexture,
 } from "three";
+import { isNative } from "../furn/native";
+import { CLOCK_FACE } from "../furn/walls";
 import type { WorldModel } from "../model";
 import { zt } from "./kit3d";
 
@@ -237,7 +239,7 @@ function placeQuad(mesh: Mesh, l: Live) {
 // Where the pictures come from: the room's wall displays (world/model.ts), the media
 // room's screens, the game room's TVs.
 export interface LiveSources {
-  model: Pick<WorldModel, "livePanels" | "getObject" | "shareVideo" | "panelCanvas">;
+  model: Pick<WorldModel, "livePanels" | "getObject" | "shareVideo" | "panelCanvas" | "allObjects">;
   // (each picture's `version` counts its redraws)
   // (`glass`: the one whose YouTube plays in my card — the player on its glass when it's seen)
   screens: {
@@ -337,6 +339,53 @@ export class LiveFeed {
       out.push({ key: `p:${id}`, src: c.canvas, ...at, version: c.version, glow: o.kind !== "whiteboard" });
     }
     for (const id of this.cache.keys()) if (!panels.has(id)) this.cache.delete(id);
+    // the clocks' hands: the time where you are, on the kit's clock face (plan 67, world/furn/walls.ts)
+    if (isNative("clock")) out.push(...this.clocks(model));
     return out;
+  }
+
+  private clockList = { at: Number.NEGATIVE_INFINITY, list: [] as WorldObjectDef[] };
+  private hands: { minute: number; canvas: HTMLCanvasElement } | null = null;
+  private clocks(model: LiveSources["model"]): Live[] {
+    const now = Date.now();
+    if (now - this.clockList.at > 2000)
+      this.clockList = { at: now, list: model.allObjects().filter((o) => o.kind === "clock") };
+    if (!this.clockList.list.length) return [];
+    // one picture of the hands for them all, drawn again as the minute turns
+    const minute = Math.floor(now / 60_000);
+    if (this.hands?.minute !== minute) {
+      const canvas = this.hands?.canvas ?? document.createElement("canvas");
+      canvas.width = canvas.height = 128;
+      const g = canvas.getContext("2d");
+      if (!g) return [];
+      const t = new Date(now);
+      g.clearRect(0, 0, 128, 128);
+      g.strokeStyle = "#2b2a26";
+      g.lineCap = "round";
+      const hand = (a: number, len: number, w: number) => {
+        g.lineWidth = w;
+        g.beginPath();
+        g.moveTo(64 - Math.sin(a) * 8, 64 + Math.cos(a) * 8);
+        g.lineTo(64 + Math.sin(a) * 64 * len, 64 - Math.cos(a) * 64 * len);
+        g.stroke();
+      };
+      hand((((t.getHours() % 12) + t.getMinutes() / 60) / 12) * Math.PI * 2, 0.55, 6);
+      hand((t.getMinutes() / 60) * Math.PI * 2, 0.82, 4);
+      this.hands = { minute, canvas };
+    }
+    const { x, y, r, z } = CLOCK_FACE;
+    return this.clockList.list.map((o) => {
+      const up = hangOf(o).lift;
+      return {
+        key: `c:${o.id}`,
+        src: this.hands?.canvas as HTMLCanvasElement,
+        tl: hangPoint(o, x - r, z + 0.004),
+        tr: hangPoint(o, x + r, z + 0.004),
+        zTop: (y + r) * ISO_PX + up,
+        zBot: (y - r) * ISO_PX + up,
+        version: minute,
+        glow: false,
+      };
+    });
   }
 }

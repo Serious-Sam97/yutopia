@@ -3,6 +3,7 @@
 //   node --experimental-strip-types e2e/furniture-shots.mts [out dir]
 //   HEROES=chair,desk  LOOKS=toon  CLOSE=0 (no close-ups)  NIGHT=0
 //   THUMBS=1: only the catalog pictures (thumbs/), each tier on nothing
+//   DESKTOP=1: phase 4's desk scenes, hosts and things (<out>/desktop/)
 //   FAMILY=seating [KINDS=chair,sofa] [ROWS_ONLY=1]: a family look by look (<out>/<family>/)
 //   SHADE=1: the rich pieces close in each shading (shade/), day and night
 //   PANEL=1: only the Furnish panel's mock (mock/panel.html → panel-mock.png)
@@ -29,6 +30,63 @@ const shot = async (q: string, name: string) => {
   await page.screenshot({ path: f });
   console.log(f);
 };
+if (process.env.DESKTOP === "1") {
+  // phase 4: a dressed desk (today's, the new) with someone typing at each; the radio, the coffee
+  // machine and the turntable on their tables; each desk thing on its own — into <out>/desktop/
+  const { mkdirSync } = await import("node:fs");
+  mkdirSync(`${out}/desktop/things`, { recursive: true });
+  const shots: [string, string][] = [
+    ["scene=desk&look=toon", "desk-row"],
+    ["scene=desk&look=toon&night=1", "desk-row-night"],
+    ["scene=desk&look=toon&col=0&labels=0&turn=-0.25", "desk-today"],
+    ["scene=desk&look=toon&col=1&labels=0&turn=-0.25", "desk-new"],
+    ["scene=desk&look=toon&col=1&labels=0&turn=-1.1", "desk-side"],
+    ["scene=desk&look=toon&col=1&labels=0&turn=1.25&sitters=1", "desk-typing"],
+    ["scene=hosts&look=toon", "hosts-row"],
+    ["scene=hosts&look=toon&night=1", "hosts-row-night"],
+  ];
+  for (const [i, t] of ["radio", "coffee", "turntable"].entries())
+    for (const c of [2 * i, 2 * i + 1])
+      shots.push([`scene=hosts&look=toon&col=${c}&labels=0&turn=0.45`, `${t}-${c % 2 ? "new" : "today"}`]);
+  for (const [q, name] of shots) await shot(q, `desktop/${name}`);
+  const S = 320;
+  const tp = await browser.newPage({ viewport: { width: S, height: S } });
+  const things: [string, string][] = [
+    ...[
+      "keyboard",
+      "desklamp",
+      "phone",
+      "mug",
+      "papers",
+      "book",
+      "binder",
+      "tapes",
+      "vinyl",
+      "photo",
+      "succulent",
+      "cards",
+      "bell",
+      "monitor",
+    ].map((d) => [`kind=tabletop&d=${d}`, d] as [string, string]),
+    ["kind=computer", "computer"],
+    ["kind=computer&variant=1", "computer-graphite"],
+    ["kind=radio", "radio"],
+    ["kind=turntable", "turntable"],
+    ["kind=coffee_machine", "coffee_machine"],
+  ];
+  for (const [q, name] of things) {
+    // (what faces whoever sits at the desk is seen from their side)
+    const sitter = /computer|monitor|keyboard|phone|photo|desklamp/.test(name);
+    await tp.goto(`${base}/dev/furniture?thumb=2&${q}&look=toon&size=${S}&turn=${sitter ? 3.6 : 0.5}`);
+    await tp.waitForFunction(() => (window as unknown as { __shot?: boolean }).__shot === true, null, {
+      timeout: 120_000,
+    });
+    await tp.screenshot({ path: `${out}/desktop/things/${name}.png`, omitBackground: true });
+    console.log(name);
+  }
+  await browser.close();
+  process.exit(0);
+}
 if (process.env.FAMILY) {
   // a family's kinds, look by look (phase 2 on), in the chosen cel: the row, its story details, at
   // night, and each look close — into <out>/<family>/
@@ -54,6 +112,35 @@ if (process.env.FAMILY) {
     locker: 1,
     cart_shelf: 1,
     disc_rack: 2,
+    crt_tv: 2,
+    tv_console: 2,
+    tv_portable: 2,
+    projector: 1,
+    tv_wall: 2,
+    tv_hd: 1,
+    tv_giant: 1,
+    projector_screen: 1,
+    cinema_screen: 2,
+    console_2600: 1,
+    console_nes: 2,
+    console_snes: 1,
+    console_md: 1,
+    console_gb: 1,
+    console_ps1: 1,
+    console_ps1_slim: 2,
+    piano: 2,
+    pingpong_table: 3,
+    server_rack: 3,
+    lamp: 3,
+    vending: 2,
+    notice_board: 3,
+    neon: 3,
+    plant: 5,
+    partition: 3,
+    column: 2,
+    rug: 3,
+    pet_bed: 2,
+    pet_house: 2,
   };
   for (const k of kinds) {
     await shot(`kind=${k}&look=toon`, `${process.env.FAMILY}/${k}`);

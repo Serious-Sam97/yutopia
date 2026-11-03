@@ -214,6 +214,8 @@ export const STEP_LABELS: Record<string, string> = {
   "dress:take": "moved decor",
   "dress:hide": "removed decor",
   "build:template": "switched a layout",
+  "build:furnish": "furnished a room",
+  "build:refurnish": "refurnished the floor",
   "map:paint": "painted floors",
   "map:walls": "painted walls",
   "map:room": "made a room",

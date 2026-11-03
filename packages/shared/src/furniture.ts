@@ -25,6 +25,8 @@ export interface SeatSpec {
   solid?: boolean;
   arms?: number;
   rear?: number;
+  /** a footrest the feet go on, m up (a bar stool's ring), the floor if none */
+  rest?: number;
 }
 
 /** The seats by what's sat on (a kind, or the piano's `stool`). */
@@ -35,14 +37,20 @@ export const SEAT_SPEC: Record<string, SeatSpec> = {
   sofa: { top: 0.455, front: 0.42, back: -0.1, lean: [0.2, 0.3], solid: true },
   beanbag: { top: 0.33, front: 0.36, back: null, lean: [0.4, 0.4], solid: true },
   bench: { top: 0.45, front: 0.22, back: null, lean: [0, 0] },
-  // (a piano's stool, played sat on: its top 13.4 iso px, art/items/play.ts)
-  stool: { top: iso(13), front: 0.15, back: null, rear: -0.15, lean: [0, 0] },
+  // (a piano's stool, played sat on: plan 67 phase 6, a piano bench's 0.5 for its keys at 0.74)
+  stool: { top: 0.5, front: 0.15, back: null, rear: -0.15, lean: [0, 0] },
+  // (plan 67 phase 8b, the office staples: a bar stool at a high table, the booth's bench inside it)
+  bar_stool: { top: 0.76, front: 0.17, back: null, rear: -0.17, lean: [0, 0], rest: 0.3 },
+  phone_booth: { top: 0.46, front: 0.06, back: -0.38, lean: [0.05, 0.15] },
 };
 
 /** The redrawn seats, not yet in the world (the client's `?furn=new` draws them, plan 67): each
  *  moves into SEAT_SPEC when its family is signed off. At true scale for the 1.79 m people (phase 2:
  *  seating, world/furn/seating.ts). */
 export const SEAT_NEXT: Record<string, SeatSpec> = {};
+
+/** A keyboard's keys' tops over the desk it's on, m (world/furn/desktop.ts): where typing hands go. */
+export const KEYBOARD_TOP = 0.03;
 
 /** What things stand on a kind's top (tabletops, a body that's jumped up): its height, m. */
 export const SURFACE: Record<string, number> = {
@@ -56,6 +64,10 @@ export const SURFACE: Record<string, number> = {
   cupboard: 0.85,
   tape_shelf: 1.12,
   reception: 0.74,
+  // (plan 67 phase 8b: a standing desk, a bistro table, the open shelving's top)
+  standing_desk: 1.05,
+  high_table: 1.05,
+  shelving: 1.2,
 };
 
 /** The redrawn surfaces, not yet in the world (as SEAT_NEXT): at true scale for the 1.79 m people
@@ -69,27 +81,48 @@ export const TOP_NEXT: Record<string, [number, number, number, number]> = {};
  *  Thin, tall or awkward things (lamps, plants, partitions, a mic stand, the water cooler's bottle)
  *  aren't stood on. */
 export const STAND: Record<string, number> = {
-  arcade: iso(54),
-  vending: iso(62),
-  piano: iso(44),
-  crt_tv: iso(47),
+  arcade: 1.8, // (plan 67 phase 6: the models' tops, world/furn/play.ts)
+  vending: 1.8,
+  piano: 1.27,
+  crt_tv: 1.13, // (plan 67: its cabinet's top)
   tv_console: iso(46),
   cart_shelf: 0.8,
   disc_rack: 1.38,
-  slot_track: iso(23),
-  pool_table: iso(27),
-  pingpong_table: iso(24),
-  mixing_desk: iso(18),
+  slot_track: 0.77,
+  pool_table: 0.86,
+  pingpong_table: 0.76,
+  mixing_desk: 0.84,
   speaker_cab: iso(46),
   column: iso(84),
   car: iso(56),
-  server_rack: iso(66),
-  crt_terminal: iso(20),
-  pet_house: iso(16),
-  toy_box: iso(16),
+  server_rack: 1.98,
+  crt_terminal: 1.16, // (the terminal's top: its cart's free edge is too narrow to stand on)
+  pet_house: 0.72, // (plan 67: its roof's ridge, where a body lands — Jolt, physics/furniture.test)
+  // (phase 8b's: their tops)
+  filing_cabinet: 1.32,
+  printer: 1.0,
+  fridge: 1.82,
+  toy_box: 0.5, // (plan 67 phase 8: its lid)
   // (a parkour wall's cap: run up and stood on)
   pk_wall: iso(125),
   pk_wall_tall: iso(235),
 };
 /** …redrawn (phase 3): the cartridge shelf's top, the disc tower's. */
 export const STAND_NEXT: Record<string, number> = {};
+
+/** The game tables' playing surfaces, m (plan 67 phase 6, at true scale): the cloth, the ping-pong
+ *  top, the slot track's board (shared tables.ts TABLES.top and slotcar.ts SLOT_TOP read them). */
+export const TABLE_TOP = { pool_table: 0.79, pingpong_table: 0.76, slot_track: 0.76 } as const;
+
+/** Where the hands go on the things used (plan 62's parts, the client's tp/view.ts partsOf; plan 67
+ *  phase 6 at true scale, world/furn/play.ts): in the thing's own tiles at rot 0 (x across, y down
+ *  its footprint) and metres up. */
+export const HANDS_AT = {
+  // the cold tap; the paper cups out of the bottom of the holder on its side
+  water_cooler: { tap: [0.56, 0.7, 0.9], cups: [0.73, 0.5, 0.84] },
+  // the keypad; the flap, low down
+  vending: { keypad: [0.8, 0.9, 1.12], flap: [0.4, 0.9, 0.26] },
+  // the keys (the stool's x: catalog PIANO_STOOL), over their front half, their top; the keybed's
+  // front edge and its underside (the knees go under it)
+  piano: { keys: [1, 0.7, 0.74], ledge: [1, 0.81, 0.65] },
+} as const satisfies Record<string, Record<string, readonly [number, number, number]>>;

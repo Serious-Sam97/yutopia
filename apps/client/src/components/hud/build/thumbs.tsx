@@ -2,13 +2,30 @@
 
 import { useEffect, useState } from "react";
 
-// Catalog pictures: the same illustrated item art the world draws (the lazy
-// items chunk), as data URLs, made once per kind and kept for the session.
+// Catalog pictures: rendered from the 3D models the world draws (docs/plan/67-the-furniture.md,
+// phase 9: world/furn/pictures.ts, lazy); for what the kit doesn't draw (doors, windows, cars) the
+// item art's drawing. As data URLs, made once a kind and look and kept for the session.
 type Items = typeof import("@/world/art/items");
+type Pictures = typeof import("@/world/furn/pictures");
 let items: Promise<Items> | null = null;
+let pictures: Promise<Pictures> | null = null;
+export const loadPictures = (): Promise<Pictures> => {
+  pictures ??= import("@/world/furn/pictures");
+  return pictures;
+};
 const cache = new Map<string, string | null>();
 
-function make(m: Items, kind: string, props?: Record<string, unknown>): string | null {
+async function make(kind: string, props?: Record<string, unknown>): Promise<string | null> {
+  const p = await loadPictures();
+  if (p.drawsKind(kind)) {
+    try {
+      return p.pictureOf(kind, props ?? {});
+    } catch {
+      // (no WebGL here: the drawing instead)
+    }
+  }
+  items ??= import("@/world/art/items");
+  const m = await items;
   if (!m.hasItemArt(kind)) return null;
   // a picture: things drawn live in the world (the clock's hands) are drawn in
   const art = m.itemArt({ kind, id: "catalog", rot: 0, props: { ...props, _thumb: true } }, null, "all", 2);
@@ -22,9 +39,8 @@ export function useThumb(kind: string, props?: Record<string, unknown>): string 
   useEffect(() => {
     if (cache.has(key)) return setSrc(cache.get(key) ?? null);
     let alive = true;
-    items ??= import("@/world/art/items");
-    void items.then((m) => {
-      if (!cache.has(key)) cache.set(key, make(m, kind, props));
+    void make(kind, props).then((url) => {
+      if (!cache.has(key)) cache.set(key, url);
       if (alive) setSrc(cache.get(key) ?? null);
     });
     return () => {
@@ -56,8 +72,9 @@ export function ItemThumb({
         aria-hidden
       />
     );
-  // things for desks are small next to a sofa: shown filling the card instead
-  const small = kind === "tabletop";
+  // things for desks are small next to a sofa: shown filling the card instead (a model's picture is
+  // framed to fit already)
+  const small = kind === "tabletop" && !src.startsWith("data:image/png");
   return (
     // biome-ignore lint/performance/noImgElement: inline SVG data URL
     <img

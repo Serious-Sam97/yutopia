@@ -45,6 +45,7 @@ const HANG_SIZE: Record<string, [number, number, number]> = {
   poster: [4, 30, 66],
   light_switch: [2, 32, 45],
   frame: [2, 40, 60],
+  wall_shelf: [7, 53, 69], // (plan 67: its board 1.45 m up, what's on it)
   tv_wall: [4, 44, 80],
   tv_hd: [12, 17, 80],
   projector_screen: [12, 17, 86],

@@ -7,6 +7,7 @@
 // (0..h) — and turned with it the way the art and the stairs turn things (stairs.ts
 // `stairsPoint`): rot 1 puts its v = 0 side on the east, 2 south, 3 west.
 import { entry, footprint, type ObjectKind, PIANO_STOOL, rotOf, standHeight, type WorldObjectDef } from "../catalog.ts";
+import { SEAT_SPEC } from "../furniture.ts";
 import { hangOf } from "../hang.ts";
 import { STOREY } from "../levels.ts";
 import { type Edge, HALF_WALL, isWallEdge } from "../map.ts";
@@ -181,20 +182,26 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   // (plan 67: seating, desks, tables and storage as the kit draws them, true scale — world/furn)
   desk: flat(0.03, 0.06, 1.97, 0.94, 0.74),
   chair: one(box(0.17, 0.17, 0.83, 0.83, 0, 0.48), box(0.2, 0.11, 0.8, 0.33, 0.48, 1.41)),
-  board_wall: one(box(0.06, 0.04, 3, 0.24, 0.48, 1.93)),
-  screen_wall: one(box(0.06, 0.04, 4, 0.18, 0.26, 2.19)),
-  whiteboard: one(box(0.08, 0.04, 1.98, 0.24, 0.54, 1.63)),
-  notice_board: one(box(0.08, 0.04, 1.98, 0.16, 0.64, 1.58)),
-  acoustic_panel: one(box(0.14, 0.04, 0.92, 0.15, 0.48, 1.74)),
-  clock: one(box(0.3, 0.1, 0.7, 0.14, 1.11, 1.55)),
-  neon: one(box(0.2, 0.08, 1.8, 0.13, 0.92, 1.63)),
-  poster: one(box(0.12, 0.04, 0.94, 0.15, 0.69, 1.72)),
-  light_switch: one(box(0.43, 0.07, 0.57, 0.11, 0.82, 1.15)),
+  // (plan 67 phase 7: on the wall's face, from the kit's models — world/furn/walls.ts)
+  board_wall: one(box(0.06, 0.1, 2.94, 0.2, 0.48, 1.92)),
+  screen_wall: one(box(0.06, 0.1, 3.94, 0.21, 0.24, 2.19)),
+  whiteboard: one(box(0.08, 0.1, 1.92, 0.2, 0.55, 1.63)),
+  notice_board: one(box(0.08, 0.1, 1.92, 0.16, 0.71, 1.58)),
+  acoustic_panel: one(box(0.14, 0.1, 0.86, 0.18, 0.56, 1.74)),
+  clock: one(box(0.32, 0.1, 0.68, 0.14, 1.14, 1.51)),
+  neon: one(box(0.2, 0.1, 1.8, 0.16, 0.92, 1.63)),
+  poster: one(box(0.12, 0.1, 0.88, 0.13, 0.77, 1.71)),
+  light_switch: one(box(0.43, 0.1, 0.57, 0.13, 0.82, 1.15)),
   meeting_table: flat(0.04, 0.06, 5.96, 1.94, 0.74),
   coffee_table: flat(0.04, 0.04, 1.96, 0.96, 0.42),
   side_table: flat(0.09, 0.09, 0.91, 0.91, 0.55),
   bookcase: flat(0.04, 0.31, 1.96, 0.67, 1.8),
-  partition: flat(0.06, 0.36, 1.94, 0.64, 1.14),
+  // (plan 67 phase 8, world/furn/decor.ts: its sled feet, the thin screen on them 1.25 m up)
+  partition: one(
+    box(0.17, 0.33, 0.29, 0.67, 0, 0.06),
+    box(1.71, 0.33, 1.83, 0.67, 0, 0.06),
+    box(0.06, 0.45, 1.94, 0.55, 0, 1.27),
+  ),
   // (the sink's tap stands over the right half's back)
   counter: one(box(0.02, 0.03, 2, 0.97, 0, 0.9), box(1.47, 0.13, 1.53, 0.4, 0.9, 1.2)),
   cupboard: flat(0.04, 0.1, 0.96, 0.9, 0.85),
@@ -203,52 +210,76 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   armchair: one(box(0.05, 0.02, 0.95, 0.93, 0, 0.6), box(0.05, 0.02, 0.95, 0.35, 0.6, 0.86)),
   beanbag: flat(0.08, 0.08, 0.92, 0.92, 0.45),
   bench: flat(0.08, 0.28, 2.92, 0.72, 0.45),
-  plant: { parts: [box(0.19, 0.19, 0.81, 0.81, 0, 0.57)], odd: "the pot only: its leaves are free-hand cards" },
+  plant: { parts: [box(0.19, 0.19, 0.81, 0.81, 0, 0.57)], odd: "the pot only: its leaves are walked through" },
   lamp: {
-    parts: [cyl(0.5, 0.5, 0.22, 0, 1.82), box(-0.17, 0.3, 0.12, 0.7, 1.3, 1.62)],
-    odd: "the arc lamp's head reaches 0.17 m past its tile",
+    parts: [cyl(0.5, 0.5, 0.22, 0, 1.69)],
+    odd: "its foot and pole: the arc lamp's head, 1.6–2 m up over the next tile, is walked under or past (one shape a kind: a box there stood beside every drum lamp too)",
   },
   rug: flat(-0.12, 0, 4.12, 3, 0.04),
-  arcade: flat(0.14, 0.18, 0.86, 0.94, 1.43),
-  radio: flat(0.12, 0.3, 0.88, 0.71, 0.48),
+  // (plan 67 phase 6: at true scale, from the kit's models — world/furn/play.ts)
+  arcade: flat(0.14, 0.08, 0.86, 0.93, 1.8),
+  radio: one(box(0.29, 0.41, 0.71, 0.59, 0, 0.24), box(0.24, 0.36, 0.33, 0.44, 0.24, 0.53)),
   tape_shelf: flat(0.04, 0.31, 1.96, 0.67, 1.12),
-  water_cooler: flat(0.26, 0.28, 0.84, 0.73, 1.3),
-  vending: flat(0.1, 0.16, 0.9, 0.87, 1.58),
-  // (and its stool out in front: catalog PIANO_STOOL, 0.6 × 0.3, 13.4 px up — docs/plan/62)
+  water_cooler: flat(0.32, 0.32, 0.76, 0.75, 1.43),
+  vending: flat(0.07, 0.12, 0.93, 0.92, 1.8),
+  // (and its stool out in front: catalog PIANO_STOOL, 0.62 × 0.3, the stool's seat — docs/plan/62)
   piano: one(
-    box(0.06, 0.08, 1.94, 0.84, 0, 1.12),
-    box(PIANO_STOOL[0] - 0.3, PIANO_STOOL[1] - 0.15, PIANO_STOOL[0] + 0.3, PIANO_STOOL[1] + 0.15, 0, m(13.4)),
+    // (the case to its top, the keybed in front of it at the keys' height: furniture.ts HANDS_AT)
+    box(0.17, 0.07, 1.83, 0.46, 0, 1.27),
+    box(0.17, 0.46, 1.83, 0.81, 0, 0.76),
+    box(
+      PIANO_STOOL[0] - 0.31,
+      PIANO_STOOL[1] - 0.15,
+      PIANO_STOOL[0] + 0.31,
+      PIANO_STOOL[1] + 0.15,
+      0,
+      SEAT_SPEC.stool.top,
+    ),
   ),
-  crt_tv: flat(0.06, 0.1, 1.94, 0.91, 1.25),
-  tv_wall: one(box(0.16, 0.06, 0.86, 0.43, 0.15, 1.99)),
-  tv_hd: one(box(0.12, 0.05, 2.94, 0.18, 0.43, 2.07)),
-  projector_screen: one(box(0.08, 0.05, 2.92, 0.17, 0.43, 2.19)),
-  tv_giant: one(box(0.04, 0.05, 4.96, 0.21, 0.43, 3.01)),
-  cinema_screen: one(box(0.01, 0.05, 5.98, 0.24, 0.15, 3.16)),
-  projector: flat(0.3, 0.34, 0.81, 0.66, 0.28),
-  tv_console: flat(0.06, 0.14, 1.94, 0.87, 1.31),
-  computer: flat(0.28, 0.29, 0.72, 0.76, 0.59),
-  tv_portable: flat(0.24, 0.36, 0.76, 0.69, 0.38),
-  console_2600: flat(0.2, 0.3, 0.8, 0.72, 0.12),
-  console_nes: flat(0.18, 0.28, 0.82, 0.77, 0.15),
-  console_snes: flat(0.17, 0.27, 0.83, 0.77, 0.13),
-  console_md: flat(0.16, 0.28, 0.84, 0.74, 0.15),
-  console_gb: flat(0.24, 0.34, 0.76, 0.7, 0.4),
+  // (the cabinet first — its top is where one stands — then the stand under it, wider and low, the
+  // tube's neck behind; its rabbit ears aren't solid: stood among, a body slid off their tips)
+  crt_tv: {
+    parts: [
+      box(0.41, 0.42, 1.53, 0.8, 0.42, 1.13),
+      box(0.3, 0.24, 1.7, 0.8, 0, 0.42),
+      box(0.52, 0.23, 1.28, 0.42, 0.42, 1.07),
+    ],
+    odd: "its rabbit ears (to 1.49 m) brushed past",
+  },
+  tv_wall: one(box(0.17, 0.1, 0.79, 0.44, 1.31, 1.94)),
+  tv_hd: one(box(0.18, 0.1, 2.82, 0.17, 0.68, 2.01)),
+  projector_screen: one(box(0.02, 0.1, 2.98, 0.21, 0.44, 2.18)),
+  tv_giant: one(box(0.33, 0.1, 4.67, 0.17, 0.68, 2.95)),
+  cinema_screen: flat(0.05, 0.04, 5.95, 0.18, 3.2),
+  projector: flat(0.34, 0.36, 0.66, 0.68, 0.11),
+  tv_console: flat(0.07, 0.25, 1.93, 0.89, 1.17),
+  computer: flat(0.28, 0.29, 0.72, 0.73, 0.5),
+  tv_portable: one(box(0.25, 0.42, 0.75, 0.71, 0, 0.44), box(0.68, 0.4, 0.82, 0.52, 0.44, 0.62)),
+  console_2600: flat(0.26, 0.44, 0.74, 0.74, 0.09),
+  console_nes: flat(0.27, 0.42, 0.73, 0.74, 0.09),
+  console_snes: flat(0.29, 0.44, 0.71, 0.74, 0.09),
+  console_md: flat(0.29, 0.44, 0.71, 0.74, 0.1),
+  console_gb: flat(0.27, 0.57, 0.73, 0.74, 0.18),
   cart_shelf: flat(0.06, 0.26, 1.94, 0.74, 0.8),
-  console_ps1: flat(0.17, 0.28, 0.83, 0.75, 0.13),
-  console_ps1_slim: flat(0.22, 0.3, 0.78, 0.73, 0.47),
+  console_ps1: flat(0.27, 0.38, 0.73, 0.74, 0.12),
+  console_ps1_slim: flat(0.28, 0.31, 0.73, 0.73, 0.45),
   disc_rack: flat(0.27, 0.35, 0.73, 0.68, 1.38),
   slot_track: {
-    parts: [box(-0.02, -0.02, 4.02, 3.02, 0, 0.6), box(0.05, -0.02, 3.95, 0.2, 0.6, 1.35)],
-    odd: "the lap board and its mast along the back as one strip to 1.35 m",
+    parts: [
+      box(0, 0, 4, 3, 0, 0.77),
+      box(0.76, 0, 3.14, 0.2, 0.77, 1.15),
+      box(3.4, 0.06, 3.84, 0.26, 0.77, 1.33),
+      cyl(0.42, 0.08, 0.03, 0.77, 1.51),
+    ],
+    odd: "the board, and on it along the back the grandstand, the lap tower and the floodlight's mast",
   },
-  pool_table: flat(0.23, 0, 3.93, 2, 0.76),
-  pingpong_table: one(box(0.27, 0, 3.73, 2, 0, 0.62), box(1.97, -0.17, 2.03, 2.17, 0.62, 0.82)),
-  turntable: flat(0.15, 0.18, 0.86, 0.83, 0.18),
-  coffee_machine: flat(0.22, 0.18, 0.78, 0.75, 0.51),
+  pool_table: flat(0.23, 0, 3.93, 2, 0.86),
+  pingpong_table: one(box(0.27, 0, 3.73, 2, 0, 0.76), box(1.97, -0.17, 2.03, 2.17, 0.76, 0.95)),
+  turntable: flat(0.27, 0.32, 0.73, 0.68, 0.13),
+  coffee_machine: flat(0.34, 0.33, 0.66, 0.76, 0.47),
   reception: one(box(0.02, 0.05, 2.98, 0.68, 0, 0.74), box(0.02, 0.68, 2.98, 1, 0, 1.05)),
-  mic_stand: one(cyl(0.5, 0.5, 0.05, 0, 1.05)),
-  mixing_desk: one(box(0, 0.15, 3, 0.95, 0, 0.47), box(0, 0.15, 3, 0.41, 0.47, 0.82)),
+  mic_stand: one(cyl(0.5, 0.5, 0.28, 0, 0.3), cyl(0.5, 0.5, 0.05, 0.3, 1.3), box(0.43, 0.25, 0.57, 0.99, 1.12, 1.56)),
+  mixing_desk: one(box(0, 0.16, 3, 0.97, 0, 0.84), box(0, 0.16, 3, 0.42, 0.84, 1.18)),
   standup_mat: flat(0.15, 0.15, 3.85, 3.85, 0.03),
   door: { parts: [], odd: DOOR },
   door_double: { parts: [], odd: DOOR },
@@ -265,7 +296,7 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   window_stained: { parts: [], odd: WINDOW },
   window_blinds: { parts: [], odd: WINDOW },
   window_studio: { parts: [], odd: WINDOW },
-  speaker_cab: flat(0.1, 0.2, 0.9, 0.83, 1.17),
+  speaker_cab: flat(0.17, 0.17, 0.83, 0.83, 1.17),
   column: flat(0.2, 0.2, 0.8, 0.8, 2.14),
   // (9 steps a flight as stairs3d.ts draws them: treads two risers thick — the flight below walks
   // under the next floor's — the half landing, flight B's treads, the spine between the flights)
@@ -299,28 +330,63 @@ export const SHAPES: Record<ObjectKind, KindShape> = {
   },
   bayboard: one(box(0.46, 0.46, 0.55, 0.55, 0, 1.2), box(0.46, -0.06, 0.59, 1.06, 1.2, 1.95)),
   lamp_post: {
-    parts: [cyl(0.5, 0.5, 0.14, 0, 8.88), box(0.44, 0.36, 2.55, 0.64, 8.55, 8.88)],
+    parts: [cyl(0.5, 0.5, 0.16, 0, 8.9), box(0.44, 0.34, 2.56, 0.66, 8.57, 8.9)],
     odd: "its arm reaches 2 m past its tile, 8.5 m up",
   },
-  server_rack: flat(0.1, 0.12, 0.91, 0.89, 1.68),
-  crt_terminal: one(box(0.05, 0.15, 0.95, 0.9, 0, 0.51), box(0.2, 0.2, 0.8, 0.7, 0.51, 1.22)),
+  server_rack: flat(0.1, 0.12, 0.91, 0.91, 1.98),
+  // (the terminal first — a body jumped up stands on it, the cart's free edge too narrow — its cart)
+  crt_terminal: one(box(0.23, 0.17, 0.77, 0.66, 0, 1.16), box(0.04, 0.15, 0.96, 0.91, 0, 0.72)),
   decor: {
     parts: [box(0.25, 0.26, 0.75, 0.75, 0, 0.57)],
-    odd: "one box for all it can be (a plant, boxes, a bin, a cable)",
+    odd: "a plant's pot; boxes, a bin and a cable each their own (DECOR_PARTS, by props.d)",
   },
   tabletop: {
-    parts: [box(0.45, 0.45, 0.55, 0.55, 0, 0.16)],
-    odd: "one box for all it can be (a mug… a book): the mug's",
+    parts: [box(0.455, 0.455, 0.58, 0.545, 0, 0.1)],
+    odd: "one box for all it can be (a mug… a book): the mug's (plan 67's, its handle)",
   },
-  frame: one(box(0.28, 0.18, 0.72, 0.22, 1.02, 1.53)),
-  pet_bed: flat(0.04, 0.04, 0.96, 0.96, 0.31),
-  pet_bowl: flat(0.25, 0.25, 0.75, 0.75, 0.16),
-  water_bowl: flat(0.25, 0.25, 0.75, 0.75, 0.16),
-  scratch_post: one(box(0.15, 0.15, 0.85, 0.85, 0, 0.08), cyl(0.5, 0.5, 0.24, 0.08, 1.02)),
-  pet_house: flat(0.02, 0.04, 0.98, 0.99, 0.77),
-  toy_box: flat(0.2, 0.2, 0.8, 0.8, 0.41),
+  frame: one(box(0.28, 0.1, 0.72, 0.14, 1.02, 1.53)),
+  pet_bed: flat(0.04, 0.04, 0.96, 0.96, 0.21),
+  pet_bowl: flat(0.365, 0.365, 0.635, 0.635, 0.08),
+  water_bowl: flat(0.365, 0.365, 0.635, 0.635, 0.08),
+  scratch_post: one(
+    box(0.2, 0.2, 0.8, 0.8, 0, 0.05),
+    cyl(0.5, 0.5, 0.07, 0.05, 0.85),
+    box(0.28, 0.28, 0.72, 0.72, 0.85, 0.9),
+  ),
+  // (the roof's ridge first — a body jumped up stands on it — its walls to the eaves, the mat)
+  pet_house: one(
+    box(0.3, 0.06, 0.7, 0.9, 0, 0.72),
+    box(0.1, 0.1, 0.9, 0.86, 0, 0.46),
+    box(0.32, 0.86, 0.68, 0.98, 0, 0.01),
+  ),
+  toy_box: flat(0.14, 0.24, 0.86, 0.76, 0.5),
   // parkour (art/items/parkour.ts): a rail one thin box to its top (ground along: physics/flow.ts
   // takes a rail ≤ 0.13 m half thick), a wall a slab, a pole a rod
+  // the office staples (plan 67 phase 8b, world/furn/staples.ts: from the models)
+  standing_desk: flat(0.05, 0.07, 1.95, 0.93, 1.05),
+  filing_cabinet: flat(0.26, 0.14, 0.74, 0.98, 1.32), // (a drawer always left out)
+  printer: one(box(0.19, 0.21, 0.81, 0.81, 0, 1.0), box(0.6, 0.66, 0.84, 0.86, 1.0, 1.12)),
+  shelving: flat(0.05, 0.3, 1.95, 0.7, 1.2),
+  fridge: flat(0.17, 0.14, 0.83, 0.85, 1.82),
+  microwave: flat(0.26, 0.32, 0.74, 0.7, 0.28),
+  bar_stool: one(cyl(0.5, 0.5, 0.2, 0, 0.76)),
+  high_table: one(cyl(0.5, 0.5, 0.24, 0, 0.04), cyl(0.5, 0.5, 0.04, 0.04, 1.02), cyl(0.5, 0.5, 0.38, 1.02, 1.05)),
+  phone_booth: {
+    parts: [
+      box(0, 0, 1, 0.06, 0, 2.24),
+      box(0, 0, 0.06, 1, 0, 2.24),
+      box(0.94, 0, 1, 1, 0, 2.24),
+      box(0.1, 0.06, 0.9, 0.56, 0, 0.46),
+    ],
+    odd: "a seat: its walls on three sides and the bench inside, the front left open",
+  },
+  coat_rack: {
+    parts: [cyl(0.5, 0.5, 0.19, 0, 0.3), cyl(0.5, 0.5, 0.12, 0.3, 1.85)],
+    odd: "its feet and post: the coat and scarf on its hooks are brushed past",
+  },
+  wall_shelf: one(box(0.2, 0.1, 1.8, 0.34, 1.26, 1.71)),
+  pendant_light: { parts: [box(0.3, 0.3, 0.7, 0.7, 2.3, 3.27)], odd: "hung from the ceiling, over heads" },
+  panel_light: { parts: [box(0.19, 0.19, 0.81, 0.81, 3.24, 3.27)], odd: "set in the ceiling" },
   pk_rail: one(box(0, 0.45, 4, 0.55, 0, 0.9)),
   pk_rail_long: one(box(0, 0.45, 8, 0.55, 0, 0.9)),
   pk_wall: one(box(0, 0.35, 4, 0.65, 0, 3.2)),
@@ -352,9 +418,17 @@ export function frameOf(o: WorldObjectDef): { x: number; y: number; rot: number;
 
 /** A placed thing's solids in its floor's coords, `elev` m up (its storey). Doors and windows
  *  have none: they're their walls' cuts (wallSolids). */
+/** What `decor` is by props.d (plan 67, world/furn/decor.ts): a plant's pot (the kind's own shape),
+ *  a stack of boxes, a round bin, a cable coiled on the floor (stepped over). */
+const DECOR_PARTS: Record<string, Part[]> = {
+  boxes: [box(0.18, 0.2, 0.78, 0.75, 0, 0.62)],
+  bin: [cyl(0.5, 0.5, 0.19, 0, 0.38)],
+  cable: [box(0.34, 0.33, 0.86, 0.68, 0, 0.03)],
+};
 export function kindSolids(o: WorldObjectDef, elev = 0): Solid3[] {
   const f = frameOf(o);
-  return shapeOf(o.kind).parts.map((p) => {
+  const parts = (o.kind === "decor" && DECOR_PARTS[String(o.props?.d)]) || shapeOf(o.kind).parts;
+  return parts.map((p) => {
     if (p.t === "cyl") {
       const c = turnPoint(f, f.w, f.h, p.u, p.v);
       return { t: "cyl", x: c.x, z: c.z, r: p.r, y0: elev + f.lift + p.y0, y1: elev + f.lift + p.y1 };

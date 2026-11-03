@@ -13,6 +13,8 @@
 // table's own true scale (metres × tiles-per-metre × px-per-tile), so arcs and
 // bounces keep their real shape.
 
+import { isoPx, TABLE_TOP } from "./furniture.ts";
+
 // iso px of height per tile (the item kit: a tile edge is 45.25 px, seen 30° down)
 const ZPX = 45.25 * Math.cos(Math.PI / 6);
 
@@ -29,9 +31,9 @@ export interface TableGeo {
 
 export const TABLES: Record<TableKind, TableGeo> = {
   // a 7-ft table: 1.981 × 0.991 m of cloth (pool.ts), rails round it
-  pool_table: { w: 4, h: 2, tpm: 1.55, top: 25, len: 1.981, wid: 0.991 },
+  pool_table: { w: 4, h: 2, tpm: 1.55, top: isoPx(TABLE_TOP.pool_table), len: 1.981, wid: 0.991 },
   // regulation: 2.74 × 1.525 m (pong.ts)
-  pingpong_table: { w: 4, h: 2, tpm: 1.26, top: 24, len: 2.74, wid: 1.525 },
+  pingpong_table: { w: 4, h: 2, tpm: 1.26, top: isoPx(TABLE_TOP.pingpong_table), len: 2.74, wid: 1.525 },
 };
 
 export const isGameTable = (kind: string): kind is TableKind => Object.hasOwn(TABLES, kind);

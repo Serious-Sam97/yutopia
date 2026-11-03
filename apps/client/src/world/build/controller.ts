@@ -588,6 +588,37 @@ export class BuildController {
     buildSound("select");
   }
 
+  /** (plan 67) The piece being put down from the catalog: its look or paint (the held card's picker,
+   *  L for the next look); `color: ""` back to how it comes. */
+  placeLook(patch: Record<string, unknown>) {
+    const b = hud.get().build;
+    if (b.mode !== "place" || !b.kind) return;
+    const props: Record<string, unknown> = { ...(b.props ?? {}), ...patch };
+    if (props.color === "") delete props.color;
+    this.setBuild({ props });
+    this.setHand(
+      this.hand.map((h) => {
+        if (h.origin) return h;
+        const p: Record<string, unknown> = { ...(h.def.props ?? {}), ...props };
+        if (!("color" in props)) delete p.color;
+        return { ...h, def: { ...h.def, props: p } };
+      }),
+    );
+    buildSound("select");
+  }
+  /** The next look of what's being placed, or of what's selected. */
+  nextLook() {
+    const b = hud.get().build;
+    const kind = b.mode === "place" ? b.kind : (this.selectedObjects()[0]?.kind ?? null);
+    if (!kind) return;
+    const n = entry(kind).variants ?? 1;
+    if (n < 2) return;
+    const now = b.mode === "place" ? b.props?.variant : this.selectedObjects()[0]?.props?.variant;
+    const v = ((typeof now === "number" ? now : (entry(kind).look ?? 0)) + 1) % n;
+    if (b.mode === "place") this.placeLook({ variant: v });
+    else this.setLook({ variant: v });
+  }
+
   // The toolbar's Move: pick up the selection.
   pickSelection() {
     const id = hud.get().build.selected[0];
@@ -1097,6 +1128,7 @@ export class BuildController {
     } else if (furn && (key === "delete" || key === "backspace")) {
       if (!this.remove()) return false;
     } else if (furn && key === "e") this.setMode(b.mode === "eyedrop" ? "hand" : "eyedrop");
+    else if (furn && key === "l") this.nextLook();
     else if (furn && key === "h") this.setMode("hand");
     else if (furn && key === "c") {
       // copies of what you hold (put back first), or of what you point at

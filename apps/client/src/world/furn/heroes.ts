@@ -1,8 +1,8 @@
 import { SEAT_SPEC } from "@yutopia/shared";
 import type { BufferGeometry } from "three";
-import { ball, box, cushion, cyl, lathe, leaf, Model, type Tier, taper, tube, type V3 } from "./kit";
+import { ball, box, cyl, lathe, leaf, Model, type Tier, tube, type V3 } from "./kit";
 import { P } from "./palette";
-import { rectLoop, taskChair, threeSeat } from "./seating";
+import { taskChair, threeSeat } from "./seating";
 
 // Phase 0's four heroes (docs/plan/67-the-furniture.md): the chair, the desk, the sofa and the plant
 // made in the kit, at true scale for the 1.79 m people, each in three tiers of detail — clean (few

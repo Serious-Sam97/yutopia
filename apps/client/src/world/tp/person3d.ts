@@ -294,7 +294,8 @@ export class Person3D {
     const { along, recline } = seatFit(s, leg.thigh);
     const drop = m.sitDrop(s.top);
     const hip = leg.hipY + drop;
-    let floor = 0;
+    // (a seat's footrest, a bar stool's ring: the feet on it — plan 67)
+    let floor = s.rest ?? 0;
     if (!SEATS[kind]) {
       // (ahead of the seat's front, from under its top: the lowest of a few — a stand's footwell, not
       // the ledge before it)

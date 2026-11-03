@@ -135,7 +135,8 @@ export function lightSources(objects: WorldObjectDef[]): LightSource[] {
     const c = (CATALOG as Record<string, { light?: { color: number; radius: number; intensity: number } }>)[o.kind]
       ?.light;
     if (c) {
-      if (o.kind === "lamp" && o.props?.on === false) continue;
+      if ((o.kind === "lamp" || o.kind === "pendant_light" || o.kind === "panel_light") && o.props?.on === false)
+        continue;
       if (o.kind === "radio" && !o.props?.on) continue;
       const e = entry(o.kind);
       // (a lamp post's light falls from its head, out at the end of its arm)
@@ -148,7 +149,7 @@ export function lightSources(objects: WorldObjectDef[]): LightSource[] {
             : c.color;
       // (a lot's lamp post: well up its pole, over the cars and people it lights
       // — its head, at ~8.8, is too high for a point light to reach them)
-      const h = o.kind === "lamp_post" ? 3.3 : undefined;
+      const h = o.kind === "lamp_post" ? 3.3 : (c as { h?: number }).h;
       out.push({ x, y, color, radius: c.radius, intensity: c.intensity, ...(h ? { h } : {}) });
     }
     const t = o.kind === "tabletop" ? TOPS[String(o.props?.d ?? "")] : undefined;

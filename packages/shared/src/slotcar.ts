@@ -16,11 +16,12 @@
 // it, and every curve is as tight for every lane — and each lane draws that
 // progress on its own line, so the outer car looks faster in a corner but no
 // lane is shorter.
+import { isoPx, TABLE_TOP } from "./furniture.ts";
 
 export const SLOT_LANES = 4;
 export const SLOT_LANE_GAP = 0.12; // tiles between lanes
 export const SLOT_HALF_WIDTH = 0.29; // centre line to the track's edge (with the kerb)
-export const SLOT_TOP = 23; // px: the table's top, where the track lies
+export const SLOT_TOP = isoPx(TABLE_TOP.slot_track); // px: the table's top, where the track lies (plan 67)
 export const SLOT_LAPS = [3, 5, 10] as const;
 export const SLOT_REACH = 2.6; // how far from the table you can hold a controller
 // each lane's car (and its stripe on the grid): red, blue, amber, green

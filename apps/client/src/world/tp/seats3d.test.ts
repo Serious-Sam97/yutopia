@@ -25,7 +25,7 @@ test("sat on each seat: the feet on the floor, the hips on the cushion, the knee
       const fit = {
         drop,
         stand: legOf((j) => m.bone(j)).hipY,
-        floor: 0,
+        floor: s.rest ?? 0,
         recline,
         ahead: s.solid ? s.front - along + 0.06 : 0,
         arms: s.arms ?? null,
@@ -40,7 +40,7 @@ test("sat on each seat: the feet on the floor, the hips on the cushion, the knee
         for (const S of ["L", "R"] as const) {
           const ankle = m.jointPosition(`ankle${S}`);
           low = Math.min(low, ankle.y);
-          assert.ok(ankle.y > ANKLE_M - 0.015, `${at}: the ${S} ankle ${ankle.y.toFixed(3)} m up`);
+          assert.ok(ankle.y > (s.rest ?? 0) + ANKLE_M - 0.015, `${at}: the ${S} ankle ${ankle.y.toFixed(3)} m up`);
           const knee = m.jointPosition(`knee${S}`);
           assert.ok(
             s.rear !== undefined || knee.z + along < s.front + 0.08,
@@ -49,7 +49,8 @@ test("sat on each seat: the feet on the floor, the hips on the cushion, the knee
           // (the shins clear of a seat solid to the floor)
           if (s.solid) assert.ok(ankle.z + along > s.front, `${at}: the ${S} foot under its front`);
         }
-        assert.ok(low < ANKLE_M + 0.015, `${at}: both feet off the floor (${low.toFixed(3)})`);
+        // (on the floor, or a bar stool's footrest)
+        assert.ok(low < (s.rest ?? 0) + ANKLE_M + 0.015, `${at}: both feet off the floor (${low.toFixed(3)})`);
         const hip = m.jointPosition("thighL");
         const under = hip.y - (m.sitDrop(0) + legOf((j) => m.bone(j)).hipY);
         assert.ok(

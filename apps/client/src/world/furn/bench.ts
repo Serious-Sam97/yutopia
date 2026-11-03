@@ -13,11 +13,13 @@ import {
   type WorldObjectDef,
 } from "@yutopia/shared";
 import * as T from "three";
+import { Out } from "../tp/kit3d";
 import { Post3 } from "../tp/post3d";
 import { legOf, SEATS, type SeatShape, seatFit } from "../tp/seats3d";
-import { DESK_TOP, FOOT, type Hero, heroModel, SEAT } from "./heroes";
+import { useFurn } from "./flag";
+import { DESK_TOP, type Hero, heroModel, SEAT } from "./heroes";
 import { lambert, type Tier, toon } from "./kit";
-import { LOOK_NAMES, modelOf, seedOf } from "./native";
+import { LOOK_NAMES, modelOf, nativeInto, seedOf } from "./native";
 
 /** The shading: soft Lambert, the people's cel, or a bolder cel (the bench's option). */
 export type Look = "lambert" | "toon" | "toon2";
@@ -50,11 +52,65 @@ export interface BenchOpts {
   labels: boolean;
   /** the people kept in a close look at one column */
   sitters: boolean;
+  /** a dressed desk (today's, the new), someone typing at each; or the radio, the coffee machine
+   *  and the turntable on their tables */
+  scene: "desk" | "hosts" | null;
   w: number;
   h: number;
 }
 
+/** Today's seats and desk top, as the iso art had them (the bench's "Today" column is drawn as it
+ *  was: useFurn("old")) — before plan 67 put them at true scale (shared furniture.ts). */
+const ISO = 45.25 * Math.cos(Math.PI / 6);
+const TODAY_SEATS: Record<string, SeatShape> = {
+  chair: { top: 14 / ISO, front: 0.3, back: -0.32, lean: [0, 0.15] },
+  armchair: { top: 13.5 / ISO, front: 0.4, back: -0.21, lean: [0.1, 0.3], solid: true, arms: 19 / ISO },
+  sofa: { top: 16.6 / ISO, front: 0.42, back: -0.1, lean: [0.2, 0.3], solid: true },
+  beanbag: { top: 11 / ISO, front: 0.36, back: null, lean: [0.4, 0.4], solid: true },
+  bench: { top: 11.2 / ISO, front: 0.32, back: null, lean: [0, 0] },
+};
+const TODAY_DESK = 25;
+/** …and the tops of today's tables things stood on (iso px). */
+const OLD_TOPS: Record<string, number> = { side_table: 14, cupboard: 26, coffee_table: 13 };
+
+/** Where things stand on the bench's desks (cells of its two tiles; the desk turned to face us). */
+const ON_DESK: { kind: string; d?: string; tile: number; c: [number, number] }[] = [
+  { kind: "computer", tile: 0, c: [1, 0] },
+  { kind: "tabletop", d: "keyboard", tile: 0, c: [1, 2] },
+  { kind: "tabletop", d: "mug", tile: 0, c: [3, 2] },
+  { kind: "tabletop", d: "papers", tile: 1, c: [0, 2] },
+  { kind: "tabletop", d: "phone", tile: 1, c: [1, 0] },
+  { kind: "tabletop", d: "desklamp", tile: 1, c: [3, 0] },
+  { kind: "tabletop", d: "photo", tile: 0, c: [0, 0] },
+  { kind: "tabletop", d: "succulent", tile: 1, c: [3, 3] },
+  { kind: "tabletop", d: "book", tile: 1, c: [1, 3] },
+  { kind: "tabletop", d: "tapes", tile: 0, c: [0, 3] },
+];
+/** …and the bigger things on their own tables: [host, thing, the thing's cell]. */
+const ON_HOSTS: [string, string, [number, number]][] = [
+  ["side_table", "radio", [0, 1]],
+  ["cupboard", "coffee_machine", [0, 1]],
+  ["coffee_table", "turntable", [2, 0]],
+];
+
+/** What the kit drew into an Out (world coords), as one geometry; what glows in userData.glow. */
+function outGeo(out: Out): T.BufferGeometry {
+  const geo = (g: Out["lit"]) => {
+    const b = new T.BufferGeometry();
+    b.setAttribute("position", new T.Float32BufferAttribute(g.pos, 3));
+    b.setAttribute("normal", new T.Float32BufferAttribute(g.nor, 3));
+    b.setAttribute("color", new T.Float32BufferAttribute(g.col, 4));
+    return b;
+  };
+  const g = geo(out.lit);
+  g.userData.glow = out.glow.empty ? null : geo(out.glow);
+  return g;
+}
+
 export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => void> {
+  // (today's as today's; the new ones are drawn straight from the kit)
+  useFurn("old");
+  if (o.scene === "desk") o = { ...o, kind: "desk" };
   const items = await import("../art/items");
   const { World3 } = await import("../tp/build");
   const C = await import("../chars");
@@ -76,18 +132,48 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
   const camera = new T.PerspectiveCamera(30, o.w / o.h, 0.1, 200);
 
   // ── what's in the row: today's, then the new ones ──
-  const subject = o.kind ?? o.hero;
+  const subject = o.scene === "hosts" ? "coffee_table" : (o.kind ?? o.hero);
   const fw = entry(subject).w;
   const fh = entry(subject).h;
+  const Sb = fw + 1; // tiles between the columns
+  const X0b = 2;
+  const ROW0 = 3; // the row's tile y (the wall along y = 1)
   interface Col {
     label: string;
     geo: T.BufferGeometry | null; // (null: today's, by World3)
     seat: SeatShape | null;
+    /** today's things in this column (World3 draws them) */
+    old?: WorldObjectDef[];
+    /** its geometry's in the world's own coords already (a scene: several things at once) */
+    placed?: boolean;
   }
   const isSeat = (k: string) => k in SEATS;
   const next = (k: string): SeatShape | null => SEAT_NEXT[k] ?? SEAT_SPEC[k] ?? null;
-  const cols: Col[] = [{ label: "Today", geo: null, seat: isSeat(subject) ? SEATS[subject] : null }];
-  if (o.kind) {
+  const cols: Col[] =
+    o.scene === "hosts"
+      ? []
+      : [{ label: "Today", geo: null, seat: isSeat(subject) ? (TODAY_SEATS[subject] ?? SEATS[subject]) : null }];
+  if (o.scene === "hosts")
+    // (each thing on its table: today's, then the new — the new drawn where it stands)
+    ON_HOSTS.forEach(([host, thing, c], k) => {
+      const at = (i: number) => X0b + i * Sb;
+      const put = (i: number, z: number): WorldObjectDef[] => [
+        { id: `h${i}`, kind: host, x: at(i), y: ROW0, rot: 0 },
+        { id: `t${i}`, kind: thing, x: at(i), y: ROW0, rot: 0, props: { c, z } },
+      ];
+      cols.push({ label: "Today", geo: null, seat: null, old: put(2 * k, OLD_TOPS[host]) });
+      const out = new Out();
+      for (const x of put(2 * k + 1, entry(host).surface ?? 0)) nativeInto(out, x);
+      cols.push({ label: LOOK_NAMES[thing][0], geo: outGeo(out), seat: null, placed: true });
+    });
+  else if (o.scene === "desk")
+    // (one new desk: the walnut, dressed)
+    cols.push({
+      label: "New",
+      geo: modelOf({ id: "look", kind: "desk", x: 0, y: 0, props: { variant: 0 } }),
+      seat: null,
+    });
+  else if (o.kind) {
     // (an id whose story is none — or, with `story`, the last one's)
     let id = "look";
     for (let i = 0; i < 400; i++)
@@ -95,12 +181,24 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
         id = `s${i}`;
         break;
       }
+    const hung = entry(o.kind).wall;
     LOOK_NAMES[o.kind].forEach((label, v) => {
-      cols.push({
-        label,
-        geo: modelOf({ id, kind: o.kind as string, x: 0, y: 0, props: { variant: v } }),
-        seat: next(o.kind as string),
-      });
+      const at = {
+        id,
+        kind: o.kind as string,
+        x: X0b + (v + 1) * Sb,
+        y: hung ? 1 : ROW0,
+        rot: 0,
+        props: { variant: v },
+      };
+      let geo = modelOf(at);
+      if (hung) {
+        // (on the bench's back wall, as the world hangs it: drawn where it is)
+        const out = new Out();
+        nativeInto(out, at);
+        geo = outGeo(out);
+      }
+      cols.push({ label, geo, seat: next(o.kind as string), placed: hung });
     });
   } else
     (["Clean", "Crafted", "Rich"] as const).forEach((label, t) => {
@@ -111,11 +209,12 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       });
     });
   const n = cols.length;
+  void fh;
 
   // ── the room: a wood floor, a plaster wall behind the row ──
-  const S = fw + 1; // tiles between the columns
-  const X0 = 2;
-  const ROW = 3; // the row's tile y (the wall along y = 1)
+  const S = Sb;
+  const X0 = X0b;
+  const ROW = ROW0;
   const W = X0 + n * S + 4;
   const H = 9;
   const map: MapDef = {
@@ -133,9 +232,21 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
   for (let y = 1; y < H; y++) setEdge(map, { x: 1, y, dir: "v" }, "p");
   // today's: as the world places it (the desk turned to face us, its user's side south)
   const rot = subject === "desk" ? 2 : 0;
-  const objects: WorldObjectDef[] = [
-    { id: `old-${subject}`, kind: subject, x: X0, y: ROW, rot, props: { variant: 0 } },
-  ];
+  const objects: WorldObjectDef[] =
+    o.scene === "hosts"
+      ? cols.flatMap((c) => c.old ?? [])
+      : [{ id: `old-${subject}`, kind: subject, x: X0, y: entry(subject).wall ? 1 : ROW, rot, props: { variant: 0 } }];
+  // (a dressed desk: today's things on today's desk at its height, the new on the new)
+  const dressed = (x: number, z: number): WorldObjectDef[] =>
+    ON_DESK.map((t, i) => ({
+      id: `top${x}-${i}`,
+      kind: t.kind,
+      x: x + (1 - t.tile),
+      y: ROW,
+      rot: 2,
+      props: { ...(t.d ? { d: t.d, seed: 0.37 } : {}), c: t.c, z },
+    }));
+  if (o.scene === "desk") objects.push(...dressed(X0, TODAY_DESK));
   // (a desk: its chair in front on the sitter's side, pulled in and sat on, someone typing at it)
   const atDesk = subject === "desk";
   if (atDesk)
@@ -170,7 +281,17 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     const x = X0 + i * S;
-    if (rot === 2) {
+    if (o.scene === "desk") {
+      const out = new Out();
+      for (const t of dressed(x, entry("desk").surface ?? 0)) nativeInto(out, t);
+      const things = outGeo(out);
+      scene.add(new T.Mesh(things, mat));
+      const gl = things.userData.glow as T.BufferGeometry | null;
+      if (gl) scene.add(new T.Mesh(gl, new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false })));
+    }
+    if (c.placed) {
+      // (already where it stands)
+    } else if (rot === 2) {
       // turned half round its footprint's middle, as World3 turns today's
       mesh.rotation.y = Math.PI;
       mesh.position.set(x + fw, 0, ROW + fh);
@@ -233,11 +354,17 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
       const who = [0, 7, 11, 5, 9, 2][i % 6];
       if (atDesk) {
         // sat at the desk, typing: today's chair at today's desk, the new at the new
-        const top = SURFACE_NEXT.desk ?? SURFACE.desk;
-        add(who, [X0 + i * S + 0.5, ROW + 1.5 - DESK_PULL], SEAT_NEXT.chair ?? SEATS.chair, Math.PI, {
-          top,
-          kbZ: ROW + 0.76,
-        });
+        const top = c.geo ? (SURFACE_NEXT.desk ?? SURFACE.desk) : TODAY_DESK / ISO;
+        add(
+          who,
+          [X0 + i * S + 0.5, ROW + 1.5 - DESK_PULL],
+          c.geo ? (SEAT_NEXT.chair ?? SEATS.chair) : TODAY_SEATS.chair,
+          Math.PI,
+          {
+            top,
+            kbZ: ROW + 0.76,
+          },
+        );
       } else if (c.seat) add(who, [X0 + i * S + fw / 2, ROW + fh / 2], c.seat);
     });
   if (o.col === null) add(3, [X0 + n * S + 0.4, ROW + 0.5], null, -0.5);
@@ -272,7 +399,19 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
     target.set(X0 + (n * S + 0.5) / 2 - 0.25, 0.8, ROW + fh / 2);
     span = n * S + 2.2;
   } else {
-    target.set(X0 + o.col * S + fw / 2, subject === "plant" ? 0.62 : subject === "chair" ? 0.55 : 0.45, ROW + fh / 2);
+    target.set(
+      X0 + o.col * S + fw / 2,
+      o.scene === "hosts"
+        ? 0.75
+        : entry(subject).wall
+          ? 1.3
+          : subject === "plant"
+            ? 0.62
+            : subject === "chair"
+              ? 0.55
+              : 0.45,
+      ROW + fh / 2,
+    );
     span = Math.max(fw, 1) + (fw === 1 ? 1.0 : 0.6);
   }
   const hfov = 2 * Math.atan(Math.tan(T.MathUtils.degToRad(camera.fov / 2)) * camera.aspect);
@@ -400,7 +539,7 @@ export async function runBench(el: HTMLElement, o: BenchOpts): Promise<() => voi
  *  three-quarters above, the game's ink over it. */
 export async function runThumb(
   el: HTMLElement,
-  o: { hero: Hero; tier: Tier; look: Look; size: number; turn: number },
+  o: { hero: Hero; tier: Tier; look: Look; size: number; turn: number; kind?: string; d?: string; variant?: number },
 ): Promise<() => void> {
   const renderer = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
@@ -410,9 +549,23 @@ export async function runThumb(
   renderer.toneMapping = T.ACESFilmicToneMapping;
   el.appendChild(renderer.domElement);
   const scene = new T.Scene();
-  const mesh = new T.Mesh(heroModel(o.hero, o.tier), material(o.look));
-  const [fw, fh] = FOOT[o.hero];
-  mesh.position.set(-fw / 2, 0, -fh / 2);
+  // (a kind the kit draws, a look of it or a desk thing — else phase 0's hero in its tier)
+  const geo = o.kind
+    ? modelOf({
+        id: "c0",
+        kind: o.kind,
+        x: 0,
+        y: 0,
+        props: { variant: o.variant ?? 0, ...(o.d ? { d: o.d, seed: 0.37 } : {}) },
+      })
+    : heroModel(o.hero, o.tier);
+  const mesh = new T.Mesh(geo, material(o.look));
+  const glow = geo.userData.glow as T.BufferGeometry | null;
+  if (glow) mesh.add(new T.Mesh(glow, new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false })));
+  // (its middle over the origin)
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox as T.Box3;
+  mesh.position.set(-(bb.min.x + bb.max.x) / 2, 0, -(bb.min.z + bb.max.z) / 2);
   scene.add(mesh);
   scene.add(new T.HemisphereLight("#f6f2ea", "#8a7a66", 1.6));
   const key = new T.DirectionalLight("#fff3e0", 2.2);

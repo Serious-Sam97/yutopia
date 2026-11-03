@@ -48,8 +48,12 @@ import { registerFeature } from "./index.ts";
 // opens/closes; the room's owner locks (an admin, rooms with no owner), and
 // while it's locked nobody else changes that room (room.lockBreak). The shared
 // rules (packages/shared/src/map-edit.ts) decide what's allowed.
-// What switches on and off: floor lamps and the desk lamps on desks.
-const isLamp = (o: WorldObjectDef) => o.kind === "lamp" || (o.kind === "tabletop" && o.props?.d === "desklamp");
+// What switches on and off: floor lamps, the ceiling lights (plan 67) and the desk lamps on desks.
+const isLamp = (o: WorldObjectDef) =>
+  o.kind === "lamp" ||
+  o.kind === "pendant_light" ||
+  o.kind === "panel_light" ||
+  (o.kind === "tabletop" && o.props?.d === "desklamp");
 
 registerFeature((room: WorldRoom) => {
   const builder = (c: WorldClient) => room.state.players.get(c.sessionId)?.builder === true;

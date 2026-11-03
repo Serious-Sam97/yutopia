@@ -1,3 +1,4 @@
+import { TABLES } from "@yutopia/shared/tables";
 import { Color, ShapeUtils, Vector2 } from "three";
 import { type Out, zt } from "./kit3d";
 
@@ -44,12 +45,12 @@ const OY0 = BY0 - RAIL;
 const OY1 = BY1 + RAIL;
 
 // heights (tiles): the cloth at the item's furniture height, what's above it to scale
-const ZC = zt(25); // the cloth (TABLES.pool_table.top, px)
+const ZC = zt(TABLES.pool_table.top); // the cloth (shared furniture.ts TABLE_TOP: plan 67)
 const ZN = ZC + 0.036 * TPM; // the cushion's nose: where it meets a ball (63% of one up)
 const ZB = ZC + 0.042 * TPM; // the cushion's back
 const ZR = ZC + 0.046 * TPM; // the rail's top
 const ZA = ZC - 0.05; // the rail's underside (the apron's top, hidden under it)
-const ZP = zt(15.5); // the apron's bottom
+const ZP = ZC - zt(9.5); // the apron's bottom
 const POCKET_DEEP = 0.085 * TPM; // tables/pool.ts POCKET_DEPTH (m), in tiles
 const ZT = ZC - POCKET_DEEP; // the throat's bottom
 const RR = 0.022; // the rail's rounded outer edge

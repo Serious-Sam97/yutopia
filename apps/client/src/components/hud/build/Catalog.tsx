@@ -1,6 +1,6 @@
 "use client";
 
-import { entry, TEMPLATES } from "@yutopia/shared";
+import { CLOTH_COLORS, entry, SEAT_SPEC, SURFACE, TEMPLATES } from "@yutopia/shared";
 import { GAME_ROOM_SETUP } from "@yutopia/shared/library";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { yutopia } from "@/lib/api";
@@ -8,7 +8,7 @@ import { type Key, trMaybe, useTr } from "@/lib/i18n";
 import { hud, useHud } from "@/world/store";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
-import { ItemThumb } from "./thumbs";
+import { ItemThumb, loadPictures } from "./thumbs";
 
 // A catalog entry: a kind, and for decor what it is (props.d).
 interface Item {
@@ -28,7 +28,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     key: "seating",
     label: "catSeating",
     icon: "sofa",
-    items: ["chair", "armchair", "sofa", "beanbag", "bench"].map(it),
+    items: ["chair", "armchair", "sofa", "beanbag", "bench", "bar_stool"].map(it),
   },
   {
     key: "surfaces",
@@ -36,14 +36,44 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     icon: "desk",
     items: [
       "desk",
+      "standing_desk",
       "meeting_table",
       "coffee_table",
       "side_table",
-      "cupboard",
-      "counter",
-      "bookcase",
+      "high_table",
       "reception",
+      "counter",
+    ].map(it),
+  },
+  {
+    // (plan 67: what holds things, and the office's own pieces)
+    key: "storage",
+    label: "catStorage",
+    icon: "board",
+    items: [
+      "cupboard",
+      "bookcase",
+      "shelving",
       "tape_shelf",
+      "filing_cabinet",
+      "locker", // (a kit a day: docs/plan/30-the-dark.md)
+      "coat_rack",
+      "wall_shelf",
+    ].map(it),
+  },
+  {
+    key: "office",
+    label: "catOffice",
+    icon: "hammer",
+    items: [
+      "printer",
+      "phone_booth",
+      "partition",
+      "water_cooler",
+      "vending",
+      "fridge",
+      "microwave",
+      "coffee_machine",
     ].map(it),
   },
   {
@@ -56,7 +86,6 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
       ...(["keyboard", "desklamp", "phone"] as const).map((d) => decor("tabletop", d)),
       it("radio"),
       it("turntable"),
-      it("coffee_machine"),
       ...(["mug", "papers", "book", "binder", "tapes", "vinyl", "photo", "succulent", "cards", "bell"] as const).map(
         (d) => decor("tabletop", d),
       ),
@@ -101,19 +130,21 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     label: "catTech",
     icon: "radio",
     items: [
-      "lamp",
       "arcade",
       "slot_track",
       "pool_table",
       "pingpong_table",
       "piano",
-      "vending",
-      "water_cooler",
-      "locker", // (a kit a day: docs/plan/30-the-dark.md)
       "mixing_desk",
       "speaker_cab",
       "mic_stand",
     ].map(it),
+  },
+  {
+    key: "lights",
+    label: "catLights",
+    icon: "globe",
+    items: [it("lamp"), it("pendant_light"), it("panel_light"), decor("tabletop", "desklamp")],
   },
   {
     key: "walls",
@@ -173,7 +204,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     icon: "leaf",
     items: [
       it("plant"),
-      it("partition"),
+      decor("decor", "plant"),
       it("column"),
       decor("decor", "boxes"),
       decor("decor", "bin"),
@@ -193,7 +224,7 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
     key: "pets",
     label: "catPets",
     icon: "paw",
-    items: ["pet_bed", "pet_bowl", "water_bowl", "scratch_post", "pet_house"].map(it),
+    items: ["pet_bed", "pet_bowl", "water_bowl", "scratch_post", "pet_house", "toy_box"].map(it),
   },
   {
     // out of doors only (shared catalog `outdoor`): Flowmotion's, off indoors
@@ -204,6 +235,24 @@ const CATS: { key: string; label: Key; icon: IconName; items: Item[] }[] = [
   },
 ];
 const ALL = CATS.flatMap((c) => c.items);
+const LOOK_IX = [0, 1, 2, 3, 4, 5, 6, 7];
+// (plan 67's new pieces, badged NEW in the panel)
+const NEW = new Set([
+  "standing_desk",
+  "filing_cabinet",
+  "printer",
+  "shelving",
+  "fridge",
+  "microwave",
+  "bar_stool",
+  "high_table",
+  "phone_booth",
+  "coat_rack",
+  "wall_shelf",
+  "pendant_light",
+  "panel_light",
+  "toy_box",
+]);
 const RECENT_KEY = "yutopia:build:recent";
 
 function labelOf(i: Item): string {
@@ -318,12 +367,34 @@ export function Catalog() {
             {sizeLabel(i.kind)}
           </span>
         )}
-        {on && (
+        {on ? (
           <span
             className="absolute top-1.5 left-1.5 mono text-[9px] px-1.5 rounded"
             style={{ background: "var(--vfd)", color: "var(--ink)" }}
           >
             {t("buildPlacing").toUpperCase()}
+          </span>
+        ) : (
+          !small &&
+          NEW.has(i.kind) && (
+            <span
+              className="absolute top-1.5 left-1.5 mono text-[9px] px-1.5 rounded"
+              style={{ background: "var(--rust)", color: "var(--cream)" }}
+            >
+              {t("buildNew").toUpperCase()}
+            </span>
+          )
+        )}
+        {!small && (entry(i.kind).variants ?? 1) > 1 && (
+          // its looks, as dots (plan 67's panel)
+          <span className="absolute left-2 bottom-[22px] flex gap-[3px]" aria-hidden>
+            {LOOK_IX.slice(0, entry(i.kind).variants ?? 1).map((k) => (
+              <i
+                key={k}
+                className="block w-[5px] h-[5px] rounded-full"
+                style={{ background: k === (entry(i.kind).look ?? 0) ? "var(--amber)" : "var(--edge-strong)" }}
+              />
+            ))}
           </span>
         )}
         {!small && (
@@ -370,43 +441,35 @@ export function Catalog() {
         </span>
       </label>
       {!found && (
-        <div className="grid grid-cols-9 gap-1 px-3 pt-2.5" role="tablist" aria-label={t("buildFurniture")}>
-          {CATS.map((c) => (
+        // the categories as labelled chips with their counts, one row that scrolls (plan 67's panel)
+        <div
+          className="flex gap-1.5 px-3 pt-2.5 pb-0.5 overflow-x-auto scroll-thin"
+          role="tablist"
+          aria-label={t("buildFurniture")}
+        >
+          {[
+            ...CATS.map((c) => ({ key: c.key, label: t(c.label), icon: c.icon, n: c.items.length as number | null })),
+            { key: "layouts", label: t("buildLayouts"), icon: "room" as IconName, n: null },
+            { key: "setups", label: t("buildSetups"), icon: "pin" as IconName, n: null },
+          ].map((c) => (
             <button
               key={c.key}
               type="button"
               role="tab"
               aria-selected={cat === c.key}
-              title={t(c.label)}
-              aria-label={t(c.label)}
-              className="rail-btn flex h-10 w-full min-w-0"
+              className="cat-chip shrink-0 flex items-center gap-1.5 h-8 px-2.5 rounded-full text-[12px] whitespace-nowrap"
+              style={{
+                background: cat === c.key ? "var(--amber)" : "var(--field)",
+                color: cat === c.key ? "var(--ink)" : "var(--cream-dim)",
+                border: `1px solid ${cat === c.key ? "var(--amber)" : "var(--edge)"}`,
+              }}
               onClick={() => setCat(c.key)}
             >
-              <Icon name={c.icon} size={19} />
+              <Icon name={c.icon} size={14} />
+              {c.label}
+              {c.n !== null && <em className="mono not-italic text-[10px] opacity-70">{c.n}</em>}
             </button>
           ))}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={cat === "layouts"}
-            title={t("buildLayouts")}
-            aria-label={t("buildLayouts")}
-            className="rail-btn flex h-10 w-full min-w-0"
-            onClick={() => setCat("layouts")}
-          >
-            <Icon name="room" size={19} />
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={cat === "setups"}
-            title={t("buildSetups")}
-            aria-label={t("buildSetups")}
-            className="rail-btn flex h-10 w-full min-w-0"
-            onClick={() => setCat("setups")}
-          >
-            <Icon name="pin" size={19} />
-          </button>
         </div>
       )}
       <div className="flex-1 min-h-0 overflow-y-auto scroll-thin px-3 pt-2 pb-3 space-y-3">
@@ -436,7 +499,13 @@ export function Catalog() {
           </p>
         )}
       </div>
-      {b.held.length > 0 ? <SellBin /> : details ? <Details item={details} /> : null}
+      {b.held.length > 0 ? (
+        <SellBin />
+      ) : b.mode === "place" && current && !hover ? (
+        <HeldCard item={current} />
+      ) : details ? (
+        <Details item={details} />
+      ) : null}
     </>
   );
 }
@@ -472,6 +541,191 @@ function Details({ item }: { item: Item }) {
           {[sizeLabel(item.kind), ...chips].filter(Boolean).join(" · ")}
         </span>
       </span>
+    </footer>
+  );
+}
+
+// The piece being put down (plan 67's panel): on a slow turntable (drag it round), what it is, its
+// looks as pictures and its fabrics or paints by name — what's picked goes down with it.
+// (the shared palette's paints — avatar.ts CLOTH_COLORS, what the server accepts — by name)
+const FABRIC_NAMES = [
+  "Rust",
+  "Olive",
+  "Amber",
+  "Cream",
+  "Walnut",
+  "Slate",
+  "Charcoal",
+  "Oxblood",
+  "Oat",
+  "Sage",
+  "Plum",
+  "Terracotta",
+];
+const FABRICS: [string, string][] = CLOTH_COLORS.map((c, i) => [c, FABRIC_NAMES[i] ?? c]);
+function HeldCard({ item }: { item: Item }) {
+  const t = useTr();
+  const w = useWorld();
+  const b = useHud((s) => s.build);
+  const e = entry(item.kind);
+  const props = { ...(item.props ?? {}), ...(b.props ?? {}) };
+  const stage = useRef<HTMLCanvasElement>(null);
+  const [looks, setLooks] = useState<readonly string[]>([]);
+  const [spins, setSpins] = useState(true);
+  const turn = useRef(0.55);
+  const drag = useRef<number | null>(null);
+  const key = JSON.stringify(props);
+  // its turntable: through the panel's picture renderer, a frame at a time while it shows
+  // biome-ignore lint/correctness/useExhaustiveDependencies: props are in the key
+  useEffect(() => {
+    let alive = true;
+    let raf = 0;
+    let last = performance.now();
+    void loadPictures().then((p) => {
+      if (!alive) return;
+      setLooks(p.looksOf(item.kind));
+      if (!p.drawsKind(item.kind)) return setSpins(false);
+      setSpins(true);
+      let drawn = 0;
+      const tick = (now: number) => {
+        if (!alive) return;
+        if (drag.current === null) turn.current += ((now - last) / 1000) * 0.5;
+        last = now;
+        const c = stage.current;
+        // (20 a second is turntable enough: the world's own frame comes first)
+        if (c && now - drawn > 50) {
+          drawn = now;
+          try {
+            p.turntable(c, item.kind, props, turn.current);
+          } catch {
+            return setSpins(false);
+          }
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    });
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [item.kind, key]);
+  const chips: string[] = [sizeLabel(item.kind)];
+  const seat = SEAT_SPEC[item.kind];
+  if (seat) chips.push(t("buildInfoSeatAt").replace("{m}", seat.top.toFixed(2)));
+  const top = SURFACE[item.kind];
+  if (top !== undefined) chips.push(t("buildInfoTopAt").replace("{m}", top.toFixed(2)));
+  if (e.light) chips.push(t("buildInfoLight"));
+  if (e.interact) chips.push(t("buildInfoUse"));
+  if (e.wall) chips.push(t("buildInfoWall"));
+  const v = typeof props.variant === "number" ? props.variant : (e.look ?? 0);
+  return (
+    <footer className="px-3 pt-2.5 pb-3 space-y-2" style={{ borderTop: "1px solid var(--edge)" }}>
+      <div className="flex items-center gap-3">
+        <span
+          className="relative w-[120px] h-[96px] rounded-lg shrink-0 overflow-hidden touch-none"
+          style={{
+            background: "radial-gradient(90% 70% at 50% 62%,var(--tile-hi),var(--panel) 72%)",
+            border: "1px solid var(--edge)",
+            cursor: spins ? "grab" : undefined,
+          }}
+          onPointerDown={(ev) => {
+            drag.current = ev.clientX;
+            (ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId);
+          }}
+          onPointerMove={(ev) => {
+            if (drag.current === null) return;
+            turn.current += (ev.clientX - drag.current) * 0.02;
+            drag.current = ev.clientX;
+          }}
+          onPointerUp={() => {
+            drag.current = null;
+          }}
+        >
+          {spins ? (
+            <canvas ref={stage} width={240} height={192} className="w-full h-full" />
+          ) : (
+            <span className="absolute inset-1 flex items-center justify-center">
+              <ItemThumb kind={item.kind} props={props} />
+            </span>
+          )}
+          {spins && (
+            <span
+              className="absolute bottom-0.5 inset-x-0 text-center mono text-[9px]"
+              style={{ color: "var(--muted)" }}
+            >
+              {t("buildHeldTurn")}
+            </span>
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className="lcd text-xl leading-none block truncate">{labelOf(item).toUpperCase()}</span>
+          <span className="mono text-[10.5px] uppercase block" style={{ color: "var(--muted)" }}>
+            {chips.filter(Boolean).join(" · ")}
+          </span>
+          {(e.variants ?? 1) > 1 && (
+            <span className="mono text-[10px] block mt-1" style={{ color: "var(--muted)" }}>
+              <span className="keycap">L</span> {t("buildHeldNextLook")}
+            </span>
+          )}
+        </span>
+      </div>
+      {(e.variants ?? 1) > 1 && (
+        <fieldset className="space-y-1" aria-label={t("buildHeldLook")}>
+          <legend className="grp">{t("buildHeldLook")}</legend>
+          <div className="flex gap-1.5 overflow-x-auto scroll-thin">
+            {LOOK_IX.slice(0, e.variants ?? 1).map((k) => (
+              <button
+                key={k}
+                type="button"
+                className="tile-card shrink-0 w-[68px] h-[76px]"
+                aria-pressed={v === k}
+                title={looks[k] ?? `${t("buildLook")} ${k + 1}`}
+                onClick={() => w?.build?.placeLook({ variant: k })}
+              >
+                <span className="absolute inset-x-1 top-1 h-[50px] flex items-center justify-center">
+                  <ItemThumb kind={item.kind} props={{ ...props, variant: k }} />
+                </span>
+                <span className="absolute inset-x-1 bottom-1 text-[9.5px] leading-tight truncate text-center">
+                  {looks[k] ?? k + 1}
+                </span>
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      {e.paint && (
+        <fieldset className="space-y-1" aria-label={t("buildHeldFabric")}>
+          <legend className="grp">
+            {t("buildHeldFabric")} · {FABRICS.find(([c]) => c === props.color)?.[1] ?? t("buildColourDefault")}
+          </legend>
+          <div className="flex gap-1 flex-wrap items-center">
+            <button
+              type="button"
+              className="w-6 h-6 rounded-full border-2 grid place-items-center text-[11px]"
+              style={{ borderColor: props.color ? "#0006" : "var(--amber)", color: "var(--cream-dim)" }}
+              title={t("buildColourDefault")}
+              aria-label={t("buildColourDefault")}
+              aria-pressed={!props.color}
+              onClick={() => w?.build?.placeLook({ color: "" })}
+            >
+              ×
+            </button>
+            {FABRICS.map(([c, name]) => (
+              <button
+                key={c}
+                type="button"
+                className="w-6 h-6 rounded-full border-2"
+                style={{ background: c, borderColor: props.color === c ? "var(--amber)" : "#0006" }}
+                title={name}
+                aria-label={name}
+                aria-pressed={props.color === c}
+                onClick={() => w?.build?.placeLook({ color: c })}
+              />
+            ))}
+          </div>
+        </fieldset>
+      )}
     </footer>
   );
 }
@@ -599,12 +853,63 @@ function Setups() {
   );
 }
 
+// (plan 67) the room I'm standing in furnished by a plan (shared office.ts), or — an admin — the
+// whole floor, each room by its name; either undone with Undo
+const PLANS: { key: string; name: Key }[] = [
+  { key: "open_plan", name: "planOpen" },
+  { key: "meeting", name: "planMeeting" },
+  { key: "kitchen", name: "planKitchen" },
+  { key: "lounge", name: "planLounge" },
+  { key: "booths", name: "planBooths" },
+  { key: "reception", name: "planReception" },
+];
+function Furnish() {
+  const t = useTr();
+  const w = useWorld();
+  const admin = useHud((s) => s.isAdmin);
+  return (
+    <section className="space-y-1.5">
+      <h3 className="grp">{t("buildFurnishRoom")}</h3>
+      <p className="text-xs" style={{ color: "var(--muted)" }}>
+        {t("buildFurnishHint")}
+      </p>
+      <div className="grid grid-cols-2 gap-1.5">
+        {PLANS.map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            className="ghost-btn justify-start"
+            onClick={() => {
+              if (window.confirm(t("buildFurnishConfirm").replace("{name}", t(p.name))))
+                w?.send("build:furnish", { plan: p.key });
+            }}
+          >
+            {t(p.name)}
+          </button>
+        ))}
+      </div>
+      {admin && (
+        <button
+          type="button"
+          className="ghost-btn w-full"
+          onClick={() => {
+            if (window.confirm(t("buildRefurnishConfirm"))) w?.send("build:refurnish", {});
+          }}
+        >
+          {t("buildRefurnish")}
+        </button>
+      )}
+    </section>
+  );
+}
+
 function Layouts() {
   const t = useTr();
   const w = useWorld();
   const room = w?.map.areas.find((a) => a.key === "tracking")?.name ?? "Tracking Room";
   return (
     <section className="space-y-1.5">
+      <Furnish />
       <h3 className="grp">{t("buildLayouts")}</h3>
       <p className="text-xs" style={{ color: "var(--muted)" }}>
         {t("buildLayoutsFor").replace("{room}", room)}

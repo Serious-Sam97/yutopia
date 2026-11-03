@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { areaAt, canPlace, dressItems, entry, findPath, Grid, getMap, ROOM_NAME, studio, takenId } from "@yutopia/shared";
+import {
+  areaAt,
+  canPlace,
+  dressItems,
+  entry,
+  findPath,
+  Grid,
+  getMap,
+  ROOM_NAME,
+  studio,
+  takenId,
+} from "@yutopia/shared";
 import { newCar, SLOT_GRIP, SLOT_LAP, SLOT_VMAX, slotCurve, slotLap, stepCar } from "@yutopia/shared/slotcar";
 import { Client, type Room } from "colyseus.js";
 
@@ -387,6 +398,33 @@ test("build: owners can switch the tracking room to a template", async () => {
   assert.equal(desks.length, 40);
   owner.room.send("build:template", { template: "pods" });
   await waitFor(() => !!member.room.state.objects.get("seat-3-5-a"));
+});
+
+// Plan 67 phase 10: a builder furnishes the room they stand in by a plan, and Undo puts it back; a
+// whole floor's refurnishing is an admin's.
+test("office: a builder furnishes the room they're in, Undo puts it back; the floor is an admin's", async () => {
+  const s = ++space;
+  const builder = await person(31, s, "member,builder");
+  const ids = () => new Set([...builder.room.state.objects.keys()] as string[]);
+  await walk(builder, { x: 18.5, y: 27.5 }); // (the lounge)
+  await sleep(600); // (the room settled: what it sets right on load)
+  const before = ids();
+  builder.room.send("build:refurnish", {});
+  await sleep(300);
+  const diff = [...ids()].filter((id) => !before.has(id)).concat([...before].filter((id) => !ids().has(id)));
+  assert.deepEqual(diff, [], "a builder can't refurnish the floor");
+  builder.room.send("build:furnish", { plan: "lounge" });
+  await waitFor(() => [...ids()].some((id) => id.startsWith("lounge-lounge-")));
+  const added = [...ids()].filter((id) => !before.has(id));
+  assert.ok(added.length >= 6, `furnished (${added.length})`);
+  assert.ok(
+    [...before].some((id) => !ids().has(id)),
+    "its old furniture taken out",
+  );
+  await sleep(800); // (the step closes once the edits pause)
+  builder.room.send("build:undo", {});
+  await waitFor(() => !added.some((id) => ids().has(id)));
+  assert.deepEqual(ids(), before, "Undo puts the room back as it was");
 });
 
 test("moderation: admins mute, lock rooms and remove people; builders and members can't", async () => {
@@ -1363,7 +1401,14 @@ test("a computer: one person at a time, what its OS shows reaches everyone, stan
   assert.ok(d, "room for a desk");
   a.room.send("obj:put", { id: "pc-desk", kind: "desk", x: d.x, y: d.y, rot: 0 });
   await waitFor(() => !!st().objects.get("pc-desk"));
-  a.room.send("obj:put", { id: "pc-1", kind: "computer", x: d.x, y: d.y, rot: 0, props: { c: [1, 2], z: entry("desk").surface } });
+  a.room.send("obj:put", {
+    id: "pc-1",
+    kind: "computer",
+    x: d.x,
+    y: d.y,
+    rot: 0,
+    props: { c: [1, 2], z: entry("desk").surface },
+  });
   await waitFor(() => !!st().objects.get("pc-1"));
   const pc = () => st().computers.get("pc-1");
   const toasts = (p: Person) => (p.msgs.toast ?? []).map((m) => (m as { text: string }).text);

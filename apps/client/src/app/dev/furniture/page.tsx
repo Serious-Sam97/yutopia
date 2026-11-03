@@ -11,7 +11,9 @@ import { useEffect, useRef } from "react";
 //   /dev/furniture?kind=chair|armchair|sofa|beanbag|bench   (every look, as the world draws it)   &story=1
 //   &look=lambert|toon|toon2   &night=1   &col=0..3 (one column, close)   &turn=0.5 (radians)   &spin=1   &labels=0   &sitters=1 (people in a close look)
 //   &w=&h=   the canvas' size (default: the window)
-//   &thumb=0|1|2 &size=256   one model on nothing (a catalog picture, the tier's)
+//   ?scene=desk|hosts   (a dressed desk, today's and the new, someone typing; the radio, the coffee
+//   machine and the turntable on their tables)
+//   &thumb=0|1|2 &size=256   one model on nothing (a catalog picture, the tier's; or &kind=…&d=…&variant=)
 
 export default function FurnitureDev() {
   if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_YUTOPIA_SHOTS !== "1") notFound();
@@ -23,6 +25,19 @@ export default function FurnitureDev() {
     void (async () => {
       const el = host.current;
       if (!el) return;
+      if (q.get("room") !== null || q.get("plan") !== null) {
+        // (plan 67 phase 10) a room of the studio furnished by a plan: &room=lounge &plan=kitchen
+        const P = await import("@/world/furn/planbench");
+        if (stop) return;
+        cleanup = await P.runPlan(el, {
+          plan: q.get("plan"),
+          room: q.get("room") ?? "lounge",
+          night: q.get("night") === "1",
+          w: Number(q.get("w")) || window.innerWidth,
+          h: Number(q.get("h")) || window.innerHeight,
+        });
+        return;
+      }
       const B = await import("@/world/furn/bench");
       if (stop) return;
       const hero = q.get("hero");
@@ -36,6 +51,9 @@ export default function FurnitureDev() {
           look: q.get("look") === "toon" || q.get("look") === "toon2" ? (q.get("look") as "toon") : "lambert",
           size: Number(q.get("size")) || 256,
           turn: Number(q.get("turn") ?? 0.6) || 0,
+          kind: q.get("kind") ?? undefined,
+          d: q.get("d") ?? undefined,
+          variant: Number(q.get("variant")) || 0,
         });
         return;
       }
@@ -50,6 +68,7 @@ export default function FurnitureDev() {
         spin: q.get("spin") === "1",
         labels: q.get("labels") !== "0",
         sitters: q.get("sitters") === "1",
+        scene: q.get("scene") === "desk" || q.get("scene") === "hosts" ? (q.get("scene") as "desk") : null,
         w: Number(q.get("w")) || window.innerWidth,
         h: Number(q.get("h")) || window.innerHeight,
       });

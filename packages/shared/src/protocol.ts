@@ -207,6 +207,9 @@ export interface ClientMessages {
   "dress:take": { id: string };
   "dress:hide": { id: string };
   "build:template": { template: string };
+  // (plan 67) the room I'm standing in furnished by a plan (shared office.ts); an admin's whole floor
+  "build:furnish": { plan: string };
+  "build:refurnish": Record<string, never>;
   "build:undo": Record<string, never>; // your own last build step (history.ts)
   "build:redo": Record<string, never>;
   "mod:mute": { userId: number; muted: boolean };

@@ -42,7 +42,7 @@ export interface CatalogEntry {
   wall?: boolean;
   seat?: boolean;
   interact?: Interaction;
-  light?: { color: number; radius: number; intensity: number };
+  light?: { color: number; radius: number; intensity: number; h?: number }; // (h: m up, a ceiling light's)
   buildable?: boolean;
   // how many looks it's drawn in (props.variant picks one; seeded by id when
   // unset, or `look` when a room should match: every desk walnut until changed)
@@ -65,8 +65,9 @@ export interface CatalogEntry {
 }
 
 /** (docs/plan/62) The piano's stool, drawn with it out in front of its keys: its middle in the
- *  piano's own tiles (rot 0, the keys toward +y) — played sat on it. */
-export const PIANO_STOOL: [number, number] = [1, 1.27];
+ *  piano's own tiles (rot 0, the keys toward +y) — played sat on it. (Plan 67: 0.2 m from the
+ *  keys' front at true scale, the knees under the keybed: 1.27 → 1.1.) */
+export const PIANO_STOOL: [number, number] = [1, 1.1];
 
 export const CATALOG = {
   desk: { label: "Desk", w: 2, h: 1, solid: true, buildable: true, variants: 4, look: 0, surface: isoPx(SURFACE.desk) },
@@ -83,6 +84,7 @@ export const CATALOG = {
     interact: "notice",
     buildable: true,
     variants: 3,
+    look: 0,
   },
   acoustic_panel: { label: "Acoustic panel", w: 1, h: 1, solid: false, wall: true, buildable: true },
   clock: { label: "Wall clock", w: 1, h: 1, solid: false, wall: true, buildable: true },
@@ -94,6 +96,7 @@ export const CATALOG = {
     wall: true,
     buildable: true,
     variants: 3,
+    look: 0,
     light: { color: 0xff8a5c, radius: 2.6, intensity: 0.32 },
   },
   poster: { label: "Poster", w: 1, h: 1, solid: false, wall: true, buildable: true },
@@ -202,9 +205,10 @@ export const CATALOG = {
     interact: "vending",
     buildable: true,
     variants: 2,
+    look: 0,
     light: { color: 0xffe2a8, radius: 2.4, intensity: 0.35 },
   },
-  piano: { label: "Upright piano", w: 2, h: 1, solid: true, interact: "piano", buildable: true, variants: 2 },
+  piano: { label: "Upright piano", w: 2, h: 1, solid: true, interact: "piano", buildable: true, variants: 2, look: 0 },
   // the game room (shared/games.ts): a CRT TV on its stand, consoles you plug
   // into it with a cable (props.tv), a cartridge in them (props.cart), the
   // shelf of cartridges (the library)
@@ -301,7 +305,16 @@ export const CATALOG = {
     variants: 3,
     light: { color: 0xffd9a0, radius: 2.6, intensity: 0.3 },
   },
-  pingpong_table: { label: "Ping-pong table", w: 4, h: 2, solid: true, interact: "pong", buildable: true, variants: 3 },
+  pingpong_table: {
+    label: "Ping-pong table",
+    w: 4,
+    h: 2,
+    solid: true,
+    interact: "pong",
+    buildable: true,
+    variants: 3,
+    look: 0,
+  },
   turntable: {
     label: "Record player",
     w: 1,
@@ -421,6 +434,7 @@ export const CATALOG = {
     h: 1,
     solid: true,
     variants: 3,
+    look: 0,
     light: { color: 0xc4402b, radius: 2, intensity: 0.45 },
   },
   crt_terminal: {
@@ -446,6 +460,72 @@ export const CATALOG = {
   toy_box: { label: "Toy box", w: 1, h: 1, solid: true, interact: "toybox", buildable: true, paint: true },
   // parkour, out of doors (Flowmotion: physics/flow.ts — ground along, run up and kicked off,
   // swung round)
+  // the office staples (docs/plan/67-the-furniture.md, phase 8b: world/furn/staples.ts)
+  standing_desk: {
+    label: "Standing desk",
+    w: 2,
+    h: 1,
+    solid: true,
+    buildable: true,
+    variants: 2,
+    look: 0,
+    surface: isoPx(SURFACE.standing_desk),
+  },
+  filing_cabinet: { label: "Filing cabinet", w: 1, h: 1, solid: true, buildable: true, variants: 2, look: 0 },
+  printer: { label: "Copier", w: 1, h: 1, solid: true, buildable: true },
+  shelving: {
+    label: "Open shelving",
+    w: 2,
+    h: 1,
+    solid: true,
+    buildable: true,
+    variants: 2,
+    look: 0,
+    surface: isoPx(SURFACE.shelving),
+    top: [0, 1, 8, 3], // (its shelf 0.3–0.7 m in, as a bookcase's)
+  },
+  fridge: { label: "Fridge", w: 1, h: 1, solid: true, buildable: true, variants: 2, look: 0 },
+  microwave: { label: "Microwave", w: 1, h: 1, solid: false, buildable: true, onSurface: true },
+  bar_stool: {
+    label: "Bar stool",
+    w: 1,
+    h: 1,
+    solid: false,
+    seat: true,
+    buildable: true,
+    variants: 2,
+    look: 0,
+    paint: true,
+  },
+  high_table: {
+    label: "High table",
+    w: 1,
+    h: 1,
+    solid: true,
+    buildable: true,
+    surface: isoPx(SURFACE.high_table),
+    top: [1, 1, 3, 3], // (its round top: the cells inside it)
+  },
+  phone_booth: { label: "Phone booth", w: 1, h: 1, solid: false, seat: true, buildable: true, paint: true },
+  coat_rack: { label: "Coat rack", w: 1, h: 1, solid: true, buildable: true },
+  wall_shelf: { label: "Wall shelf", w: 2, h: 1, solid: false, wall: true, buildable: true },
+  pendant_light: {
+    label: "Pendant light",
+    w: 1,
+    h: 1,
+    solid: false,
+    buildable: true,
+    paint: true,
+    light: { color: 0xffd9a0, radius: 4, intensity: 0.5, h: 2.3 },
+  },
+  panel_light: {
+    label: "Ceiling panel",
+    w: 1,
+    h: 1,
+    solid: false,
+    buildable: true,
+    light: { color: 0xf4f8ff, radius: 5, intensity: 0.45, h: 3.2 },
+  },
   pk_rail: { label: "Grind rail", w: 4, h: 1, solid: true, buildable: true, outdoor: true },
   pk_rail_long: { label: "Long grind rail", w: 8, h: 1, solid: true, buildable: true, outdoor: true },
   pk_wall: { label: "Parkour wall", w: 4, h: 1, solid: true, buildable: true, outdoor: true },

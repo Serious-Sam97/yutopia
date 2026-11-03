@@ -10,10 +10,12 @@ import {
   floorOf,
   floorsOf,
   type Grid,
+  HANDS_AT,
   hangSpot,
   homeOf,
   hostWorld,
   isFloor,
+  KEYBOARD_TOP,
   levelMap,
   liftFloorName,
   liftMotion,
@@ -25,6 +27,7 @@ import {
   type Point,
   placedFootprint,
   rimeAt,
+  SEAT_SPEC,
   STAIRS_D,
   STOREY,
   spDay,
@@ -161,9 +164,9 @@ type People = NonNullable<ReturnType<typeof people>>;
 
 // (the elevators and the staircases are drawn by Lifts3 / Stairs3, not with the floor's things)
 /** (plan 62) The keys: how far off a keyboard is still the one typed on (tiles); a keyboard's top
- *  over the desk (art/items/clutter.ts, 1.8 iso px). */
+ *  over the desk (shared furniture.ts, the kit's keyboard: plan 67). */
 const KEYS_REACH = 1.3;
-const KEYBOARD_H = 1.8 / ZPX;
+const KEYBOARD_H = KEYBOARD_TOP;
 /** (plan 62) The things each use puts the hands to. */
 const PART_KINDS: Record<string, string[]> = {
   coffee: ["coffee_machine"],
@@ -179,21 +182,23 @@ const footCentre = (o: WorldObjectDef) => {
 /** A thing's parts the hands go to (its drawing's own tiles and iso px, at rot 0 — art/items), in the
  *  world, for someone at (x, y): what's pressed first, then what's taken or played along. */
 function partsOf(o: WorldObjectDef, here: WorldObjectDef[], x: number, y: number): Keys[] | null {
-  const at = (lx: number, ly: number, zpx: number, base = 0): Keys => {
+  const atM = ([lx, ly, m]: readonly [number, number, number]): Keys => {
     const [wx, wy] = hostWorld(o, lx, ly);
-    return { x: wx, y: wy, h: base + zpx / ZPX };
+    return { x: wx, y: wy, h: m };
   };
   switch (o.kind) {
+    // (where on each the hands go: shared furniture.ts HANDS_AT, m up — plan 67)
     case "water_cooler":
       // the cold tap; a paper cup from the holder on its side
-      return [at(0.58, 0.72, 23), at(0.8, 0.5, 26)];
+      return [atM(HANDS_AT.water_cooler.tap), atM(HANDS_AT.water_cooler.cups)];
     case "vending":
       // the keypad; the flap, low down
-      return [at(0.785, 0.86, 36), at(0.4, 0.86, 8)];
+      return [atM(HANDS_AT.vending.keypad), atM(HANDS_AT.vending.flap)];
     case "piano": {
       // its keys, before the stool's middle; the stool (shared PIANO_STOOL), its top
       const [sx, sy] = PIANO_STOOL;
-      return [at(sx, 0.72, 20), at(sx, sy, 13.4)];
+      const [, ky, kh] = HANDS_AT.piano.keys;
+      return [atM([sx, ky, kh]), atM([sx, sy, SEAT_SPEC.stool.top])];
     }
     case "coffee_machine": {
       // on a counter: its buttons on top of the front, then the cup under the spout

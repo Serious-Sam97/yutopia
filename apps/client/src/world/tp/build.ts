@@ -62,7 +62,7 @@ import { piece, WALL_H } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
 import { celLit } from "../furn/look";
-import { isNative, nativeInto } from "../furn/native";
+import { isNative, isNativeDress, nativeDressInto, nativeInto } from "../furn/native";
 import { boxInParent, type Slab } from "./below-cull";
 import { type Geo, MeshSketch, type Opts3, Out, zt } from "./kit3d";
 import { poolTable3 } from "./pooltable3d";
@@ -867,7 +867,7 @@ export class World3 {
       const ref = { kind: o.kind, id: o.id, rot, props: o.props };
       const at = anchorOf(o);
       const lift = e.onSurface ? Number(o.props?.z) || 0 : e.wall ? hangOf(o).lift : 0;
-      if (!e.wall && !e.onSurface && isNative(o.kind)) {
+      if (isNative(o.kind)) {
         // redrawn by the kit (docs/plan/67-the-furniture.md: world/furn/native.ts)
         nativeInto(out, o);
       } else if (o.kind === "pool_table") {
@@ -913,6 +913,8 @@ export class World3 {
   }
 
   private drawDress(d: DressItem, out: Out) {
+    // (the kit's, as the same thing put down by hand: docs/plan/67-the-furniture.md)
+    if (isNativeDress(d.kind)) return nativeDressInto(out, { ...d, ...xyOf(dressAt(d)) });
     const seed = bucket(d.seed);
     const s = new MeshSketch({ w: 1, h: 1, seed, at: dressAt(d), out });
     this.items.dressing(s, d.kind as DressKind, d.z, seed);
@@ -1307,6 +1309,7 @@ function footRect(o: WorldObjectDef): { x0: number; y0: number; x1: number; y1: 
 }
 
 // the clutter's sketch is centred on (0.5, 0.5); frames hang on the edge at y
+const xyOf = ([x, y]: [number, number]) => ({ x: x + 0.5, y: y + 0.5 });
 const dressAt = (d: DressItem): [number, number] => [d.x - 0.5, d.kind === "frame" ? d.y : d.y - 0.5];
 // seeds are bucketed (as in iso) so look-alike pieces share a drawing
 const bucket = (seed: number) => (Math.floor(seed * 12) + 0.5) / 12;

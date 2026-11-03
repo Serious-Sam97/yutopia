@@ -198,7 +198,8 @@ export function buildingSolids(map: MapDef, objects: Iterable<WorldObjectDef>): 
       if (!d.solid || !d.tile) continue;
       const [tx, ty] = d.tile;
       for (const s of kindSolids(
-        { id: d.id, kind: "decor", x: tx, y: ty },
+        // (what it is: a plant's pot, boxes, a bin, a cable stepped over — shapes DECOR_PARTS)
+        { id: d.id, kind: "decor", x: tx, y: ty, props: { d: d.kind } },
         elev + baseOf(lm, level, tx + 0.5, ty + 0.5),
       )) {
         const c = moved(s, ox, 0, oz);

@@ -13,6 +13,9 @@ import { type Bounds3, KINDS, modelBounds } from "./model-bounds";
 const TOL = 0.06; // m, any face
 // (drawn by their own builders in 3D — Stairs3, Lifts3 — not World3: their item art isn't what shows)
 const OWN = new Set<string>(["stairs", "elevator"]);
+// (a plant's leaves are walked through, plan 67: only its pot is solid — the shape inside the drawing)
+// (and an arc lamp's head over the next tile, a coat rack's coats: walked under, brushed past)
+const SOFT = new Set<string>(["plant", "decor", "lamp", "coat_rack", "crt_tv"]);
 
 function solidsBounds(ss: Solid3[]): Bounds3 | null {
   if (!ss.length) return null;
@@ -57,7 +60,10 @@ test("every kind's shapes fit its 3D model, at every turn", () => {
       assert.ok(model && shape, `${kind}: drawn and shaped`);
       // (a thing on the floor reaches it: legs drawn as ink lines aren't in the model's box)
       const off = AXES.filter(
-        (k) => Math.abs(model[k] - shape[k]) > TOL && !(k === "y0" && shape.y0 === 0 && model.y0 <= 0.1),
+        (k) =>
+          Math.abs(model[k] - shape[k]) > TOL &&
+          !(k === "y0" && shape.y0 === 0 && model.y0 <= 0.1) &&
+          !(SOFT.has(kind) && (k.endsWith("0") ? shape[k] >= model[k] - TOL : shape[k] <= model[k] + TOL)),
       );
       if (off.length)
         bad.push(

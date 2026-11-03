@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_AVATAR } from "@yutopia/shared";
+import { DEFAULT_AVATAR, HANDS_AT, PIANO_STOOL } from "@yutopia/shared";
 import { busy2, sit2 } from "../chars/anim/acts";
 import { CharFactory, PersonModel } from "../chars/model";
 import { levelHands } from "./level3d";
@@ -73,11 +73,13 @@ test("the piano: sat on its stool, the hands on its keys, the knees clear of its
     const s = SEATS.stool;
     const { along } = seatFit(s, leg.thigh);
     const drop = m.sitDrop(s.top);
-    // (from the stool's middle to the keys: PIANO_STOOL 1.27 to the keys' middle 0.72, tiles; the key
-    // ledge's front at 0.84, its underside 14 iso px up)
-    const toKeys = 1.27 - 0.72 - along;
-    const ledge = 1.27 - 0.84 - along;
-    const keys: [number, number, number, number] = [0, 20 / 39.19, toKeys, 0.2];
+    // (from the stool's middle to the keys and to the keybed's front edge, tiles: shared PIANO_STOOL
+    // and furniture.ts HANDS_AT, as the kit draws them — plan 67)
+    const [, kz, kh] = HANDS_AT.piano.keys;
+    const [, front, under] = HANDS_AT.piano.ledge;
+    const toKeys = PIANO_STOOL[1] - kz - along;
+    const ledge = PIANO_STOOL[1] - front - along;
+    const keys: [number, number, number, number] = [0, kh, toKeys, 0.2];
     const act = sit2(1, false, 2.2, true, { drop, stand: leg.hipY, floor: 0 }, 0.3, keys);
     const l = act.lift ?? [0, 0, 0];
     m.setPose(act.pose, [l[0], l[1] + drop, l[2]]);
@@ -95,7 +97,7 @@ test("the piano: sat on its stool, the hands on its keys, the knees clear of its
       );
       const knee = m.jointPosition(`knee${S}`);
       assert.ok(
-        knee.z + KNEE_R < ledge || knee.y < 14 / 39.19 - 0.06,
+        knee.z + KNEE_R < ledge || knee.y < under - 0.06,
         `${body}: the ${S} knee into the ledge (${knee.z.toFixed(2)} of ${ledge.toFixed(2)}, ${knee.y.toFixed(2)} up)`,
       );
     }

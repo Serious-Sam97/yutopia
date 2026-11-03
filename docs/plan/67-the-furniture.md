@@ -272,19 +272,226 @@ chunk should shrink; budgets measured and noted either way.
       look 0 not seeded); build-tops e2e reads the desk's height from the catalog.
 4. **On desks** — computer/monitor (VortexOS glass), keyboard keys, all 13 tabletops, radio,
    turntable, coffee machine (hand points).
+   **Built 2026-11-03, on the bench** (uncommitted): `world/furn/desktop.ts` — the computer (putty,
+   graphite: its glass on shared COMPUTER_GLASS, its bezel a frame round it, never over the picture's
+   plane), radio, turntable, espresso machine (its buttons and cup where partsOf puts the hands; these
+   three face the room, +z, as the iso art had them: the kit's `facing`), and the desk things by
+   `props.d` (keyboard, anglepoise lamp lit when on, phone, mug, papers, book, binder, tapes, record,
+   photo, succulent, poker cards, bell) and the dressing's old monitor. The rooms' dressing draws
+   through the same models (`nativeDressInto`, World3.drawDress). `nativeInto` now frames every
+   kind as the physics does (shared `frameOf`: a thing on a surface round its middle, lifted).
+   Bench `?scene=desk|hosts`, things on their own `?thumb=2&kind=tabletop&d=…`; the bench's
+   "Today" always the iso art (`useFurn("old")`), sat on and typed at today's heights.
+   Checked: in their frame and on their top, < 3–4 k tris, a dressed mug and a placed one alike,
+   nothing in front of the computer's glass (rays across it). Review:
+   https://claude.ai/artifact/BeNxqAVnUW8Gx4FTK4bPXD.
+   **Live 2026-11-03 (signed off by the user)**, uncommitted: `signed` on computer, radio,
+   turntable, coffee machine and tabletop (the dressing with them); shared `KEYBOARD_TOP` 0.03 m
+   (view.ts KEYBOARD_H reads it: typing at the new keys); SHAPES for the five from the models' own
+   frame bounds (the tabletop's one box the mug's, the kit's default thing the mug). Checked:
+   shared 530, client 192 (shapes, keys3d typing, uses3d green), world-server 192/194 (the snow
+   melt red on HEAD; the fire bench passed alone — timing under load), build-tops' desk dressing
+   e2e green (its bin test red as before), in the game as Bia no errors, budgets as they were.
 5. **Screens + games** — GLASS/TV_SCREEN rects, LEDs, pads and cables still land.
+   **Live 2026-11-03** (the user: "finish all phases go" — phases 5–11 built and put in the world
+   without stopping for each sign-off; changes on call), uncommitted: `world/furn/screens.ts` — CRT TV
+   (wood-grain, black; its stand and shelf, rabbit ears), console TV (walnut, teak), portable TV (red,
+   cream), projector, wall TV (grey, black), HD TV, giant TV, projector screen, cinema screen (and
+   curtained), the seven consoles (the NES a front or top loader, the slim with its screen). Every
+   screen's glass a hair behind the plane its live picture is drawn on (media.ts GLASS, games.ts
+   TV_SCREEN), its case further behind, nothing in front; the consoles' LEDs where world/games/room.ts
+   lights them. Wall kinds go native in World3 (hung in the wall's frame); the bench hangs them on its
+   back wall. SHAPES from the models; STAND crt_tv 1.13. Checked: native.test (the glass first across
+   each picture, just behind its plane; the LEDs within 2 cm), shapes, client 193, shared 530.
 6. **Play, tech, music, lights** — arcade, slot track (tops), pool (restyle), ping-pong, piano
    (stool, keys), vending, cooler, server rack, terminal, mixing desk, speaker, mic, the lamps.
+   **Live 2026-11-03**, uncommitted: `world/furn/play.ts` at true scale — arcade (1.8 m, its panel at
+   0.98, the screen tipped back, coin door), vending (slate, rust; 1.8 m, lit window of cans and
+   snacks), water cooler, upright piano (walnut, black lacquer; keys at 0.74, its bench 0.5),
+   ping-pong (blue, green, slate), server rack (glass, mesh, open frame with patch cables; 2 m),
+   Vortex's terminal on its cart, mixing desk on its stand (a sloped face, the meter bridge lit),
+   speaker cabinet, mic stand, the floor lamps (drum, arc, paper globe; the shade lit when on, its
+   colour the paint), the lot's lamp post, and the slot track's whole diorama (its circuit by
+   `props.track`: tarmac, slots and rails, kerbs, sand, the grid; grandstand, lap tower, garage,
+   pines, boards, the controllers).
+   - Shared furniture.ts: `TABLE_TOP` (pool 0.79, ping-pong 0.76, slot track 0.76 — tables.ts
+     TABLES.top and slotcar.ts SLOT_TOP read it; the balls, cars and gantry follow; the pool model's
+     cloth from TABLES, its 3D restyle otherwise unchanged); `HANDS_AT` (the cooler's tap and cups,
+     the vending keypad and flap, the piano's keys and keybed: tp/view.ts partsOf reads them); the
+     piano's stool 0.5 (SEAT_SPEC.stool) and PIANO_STOOL 1.27 → 1.1 (0.2 m from the keys' front, the
+     knees under the keybed); STAND for the redrawn tops.
+   - SHAPES from the models' bounds. The jump test's "a flip lands on top" moved from the arcade (1.8
+     now) to the speaker cabinet (1.17).
+   - Checked: native.test (footprints — the bench, the net's posts, the arc lamp's shade and the lamp
+     post's arm allowed out; the tables' tops at TABLE_TOP; the keys and the bench; each hand part
+     just behind where it goes; a lamp lit only when on), keys3d (sat at the piano: the hands on the
+     keys, the knees under the keybed), shapes; client 194, shared 530. Stills
+     `design/furniture/play/`.
 7. **Walls, doors, windows** — the clock's live hands; `CUTS` and sills unchanged.
+   **Live 2026-11-03**, uncommitted: `world/furn/walls.ts`, in the wall's frame (its face at z 0.1,
+   out from it): board wall (walnut round smoked glass, the VU on it), big screen (bezel, soundbar,
+   ON AIR lamp), whiteboard (aluminium, its tray and markers), notice board (cork in walnut or oak, a
+   felt pinboard with ribbons; notes, pins, a polaroid by its seed), acoustic panel (foam pyramids),
+   wall clock, neon (cup, heart, bolt: lit tubes on a smoked backing on standoffs), poster (by
+   `props.art`: cassette, VU, sunset), light switch (its rocker by `on`), picture frame (its picture
+   by `props.seed`). Each board's surface just behind where its live picture is drawn (model.ts
+   keepDisplay/keepWhiteboard: 0.16, 0.165), its frame round it. **The clock's hands live**:
+   tp/live.ts draws them on its face (`CLOCK_FACE`), the time where you are, one clear canvas for
+   every clock redrawn as the minute turns; its pictures (`_thumb`) show ten past ten. Catalog
+   `look: 0` on the looks of phases 6–7 (vending, piano, ping-pong, rack, neon, notice board): the
+   neon's light (art/light.ts, variantOf) the colour drawn. SHAPES from the models (their backs on
+   the wall's face, not 6 cm into it).
+   **Doors and windows keep their drawings** (as the table above has it, "fine already"): their
+   leaves swing and slide as parts (`_part`), they cut the walls (`CUTS`) and draw by World3's own
+   path for openings; redrawing them is left for a later plan — so phase 11 retires the iso art
+   only where nothing draws through it.
+   Checked: native.test (on the wall's face within the footprint; the boards' surfaces just behind
+   their live pictures across them), shapes; client 194.
 8. **Decor, floor, pets, outside** — real foliage, rugs, the toy box's first art, parkour, bayboard.
+   **Live 2026-11-03**, uncommitted: `world/furn/decor.ts` — plants (the monstera, phase 0's; a snake
+   plant's swords in a banded cream pot; a fern arching off a walnut stand; a rubber tree; a bowl of
+   cacti, one in flower by its seed: folded, bent leaves, no cards), the room divider at 1.25 m
+   (upholstered in its paint, teak slats, frosted glass), the column, rugs (medallion, kilim, shag; the
+   field its paint), the standup ring, for pets (cushion bed, wicker basket; the bowls showing what's
+   left in them; the scratching post; the pet house, its walls the paint, walnut or rust roof; **the toy
+   box's first drawing**: a chest, its lid ajar, a ball, a bone and a rope knot), the parkour pieces to
+   their shapes' numbers (rails, walls, poles), and `decor` and the rooms' floor clutter (boxes, bin,
+   cable, a plant) through one set of models (`nativeDressInto`). A plant's leaves reach over the next
+   tiles and are walked through (its shape the pot; shapes.test's `SOFT`). STAND toy_box 0.5. **The
+   name board keeps its drawing** (the bay's name painted on it, a picture of its own).
 8b. **New pieces** — the staples above: specs, models, solids, catalog entries, server checks
    (placement, seats, the booth's walls), shared tests.
+   **Live 2026-11-03**, uncommitted: `world/furn/staples.ts`, new catalog kinds — standing desk (oak,
+   white; its top 1.05), filing cabinet (grey, green; a drawer left out), copier, open shelving (oak,
+   black steel; its top 1.2, things on its shelves by its seed), fridge (cream, steel), microwave (on a
+   surface), bar stool (walnut, chrome; seat 0.76, **its feet on the ring**: SeatSpec `rest` 0.3, the
+   sitter's floor — tp/person3d.ts), high table (1.05), phone booth (a seat inside felt walls, the front
+   open; seat 0.46), coat rack, wall shelf (on the wall, 1.45 m up), pendant light and ceiling panel
+   (at the ceiling, 3.27; their lights at their height — catalog `light.h`, art/light.ts; switched off by
+   the room's switch: world-server mapedit `isLamp`). The chair's task chairs (mesh, padded) were
+   already its looks, so no separate kind. SEAT_SPEC bar_stool, phone_booth; SURFACE standing_desk,
+   high_table, shelving; STAND filing_cabinet, printer, fridge; HANG_SIZE wall_shelf; SHAPES from the
+   models. The second height of the standing desk is left for a later plan (one top, 1.05).
+   Checked: native.test (tops and seats at the spec, on the footprint, the ceiling lights at the ceiling
+   and lit only when on), seats3d (sat on every seat, the bar stool's feet on its ring), shapes; client
+   197, shared 530.
 9. **The Furnish panel** — reskin, 3D thumbnails, turntable, Look picker, catalog fixes.
+   **Live 2026-11-03**, uncommitted:
+   - **Pictures from the models**: `world/furn/pictures.ts` (lazy, one offscreen renderer: the cel and
+     the post's ink as the world; a data URL a kind, look and paint, kept for the session; doors,
+     windows and the cars keep their drawings) — every card, the Look pickers (the selection's
+     toolbar too) and the setups' rows.
+   - **The panel as mocked** (components/hud/build/Catalog.tsx): the categories as labelled chips
+     with counts in one scrolling row (Layouts and Setups at its end); cards with their looks as
+     dots and NEW on plan 67's new pieces; **the held card** while placing from the catalog — the
+     piece on a slow turntable (drag to turn; 20 frames a second through the same renderer), its
+     size and spec (seat or top height, light, use, wall), its looks as pictures by name, its fabric
+     or paint as twelve named swatches (the name of the picked one shown); what's picked goes down
+     with it (build controller `placeLook`), **L** the next look (placing, or the selection).
+   - Categories tidied: Storage and Office (the new pieces: copier, phone booth, divider, cooler,
+     vending, fridge, microwave, the espresso machine), Lights (floor lamp, pendant, ceiling panel,
+     desk lamp); catalog fixes — the toy box offered, a plant as decor, the monitor offered on desks
+     (shared DECOR.tabletop).
+   - Checked: in the game as Bia (build mode opened, nothing placed: the chips, the Office cards, a
+     sofa held — L to the Chesterfield, Olive — no console errors), client 197, budgets (page 429.5 of
+     430 KB, +1.2).
 10. **The Office** — floor 4, floors 1–3 and the ground floor's layouts as templates (mocked as
     stills on the bench first), an admin's "refurnish this floor" with undo, build mode's new
     templates.
+    **Built 2026-11-03**, uncommitted — as **room plans** rather than fixed per-floor layouts (they
+    furnish any room, on any floor, by its own rectangle — the HQ's floors included):
+    - shared `office.ts` (`@yutopia/shared/office`): six plans — open plan (pods of four with two
+      tiles of aisle, the copier, a filing cabinet, water, pendants), meeting room (the long table,
+      chairs round it, two pendants over it; a small room a coffee table), kitchen (counters along the
+      back wall or the first clear row, the fridge, the espresso machine and a microwave on them, high
+      tables with stools), lounge (rug, sofa, armchairs, coffee table, lamps, bookcase, a bean bag),
+      focus booths (phone booths, dividers, standing desks), reception (the desk facing the way in,
+      the visitors' sofa and table, the coat rack, pendants); every piece only where the one placement
+      rule allows (build.ts canPlace), never on a door's tiles, a standup corner or a stage, nothing
+      solid before what hangs on a wall, never onto someone standing there; the desks dressed
+      (splitAll). `planFor` reads a room's name (War Room → meeting, Lobby → reception…);
+      `refurnishFloor` furnishes every room of a floor (not corners, stages, corridors or the server
+      room). What's taken out: the furniture only (`furnishes`), never the walls' things, doors,
+      windows, screens, games, stairs or lifts.
+    - world-server `features/office.ts`: `build:furnish {plan}` (a builder: the room they stand in),
+      `build:refurnish` (an admin: their floor; a builder is told no); the old pieces removed and the
+      new put down at once (saved as they land), **undone by the build history** like any step
+      (shared history.ts STEP_LABELS "furnished a room", "refurnished the floor": Undo puts it all
+      back).
+    - The panel's Layouts tab: "Furnish this room" (the six plans, each confirmed), "Refurnish the
+      whole floor" for admins; the Tracking Room's three templates kept as they were.
+    - On the bench: `/dev/furniture?room=…&plan=…` draws the studio through the game's own World3 with
+      a room furnished by a plan, from over its south wall; stills `design/furniture/office/`.
+    - Checked: shared office.test (each plan in five of the studio's rooms: inside the room, put down
+      where it can go among what stays; a floor by its rooms' names, its corners and corridors left
+      alone, ids unique), world-server rooms.test (a builder furnishes the lounge — its old furniture
+      out, the new in — Undo puts it back exactly; a builder's refurnish refused).
+    - Not done: the per-floor fixed default layouts the plan first named (floors 1–3, the ground
+      floor) — the plans cover them by choice; nothing in a stored world was changed.
 11. **Retire the iso art + checks** — delete G; full shared/client/server tests, e2e build specs,
     `merge-ab`, `lag.spec` at the user's view (Tracking Room, floor 4, evening, ~2000 px), budgets.
+    **2026-11-03 — the art kept, the checks run:**
+    - **The iso art isn't retired yet**: doors and windows (their swinging leaves, the walls' cuts),
+      the stairs and lifts' stops, the cars, the name board, the Grounds and the karts still draw
+      through `art/items`/MeshSketch; and `?furn=old` with the bench's "Today" columns need the old
+      drawings until the user has seen phases 5–10 in the world. Retiring the redrawn kinds' old
+      drawings (and `?furn=old`) waits on that sign-off; the rest waits on a doors-and-windows plan.
+    - A/B as Bia at her own spot (the furniture old against new, twice each, on the GPU at 2×): 3D
+      draw calls 409/411 new against 411/419 old (the guardrail: not above today's); a frame stepped
+      by hand 11.1/10.9 ms new against 12.0/10.3 old (within the noise).
+    - Budgets: page 429.5 of 430 KB (+1.2 for the panel), every chunk within its budget.
+    - Tests: shared 532, client 197 (the panel's fabric swatches take the shared CLOTH_COLORS: no
+      colour of the HUD's hard-coded — components/colours.test).
+    - Not run: `lag.spec` (it signs in as Ana and switches the world's dark off while it runs — the
+      user's call) and the e2e build specs (they put a fixture world over the dev world: back it up
+      first, WorldSnapshot export).
+    **Quality pass, 2026-11-03** (the user: "double check on everything and check quality"): a close
+    still of every look of every phase 5–8b kind (101), fitted pictures of the tall and hung ones, the
+    lit ones at night, the Furnish panel's every category in the game as Bia, and an independent
+    review of the code. Fixed:
+    - **Unset looks as before**: native `lookOf` now reads shared `variantOf` with the iso art's id
+      seed (the catalog's `look` where a room should match, else by the id) — every unpicked plant,
+      TV, column, partition… had become look 0, and an unpicked slim console could show the game
+      room's LCD over a model without one.
+    - Models: the glass-door rack hid its units in a solid body (now a cabinet open to its door); the
+      top-loader's and the slim console's power lights floated off their bodies (bodies out to
+      room.ts's points; native.test now casts onto each light's body); the wicker basket's and the
+      cushion bed's square cushions poked through (round); the bar stool's square pad (round); a box
+      on the open shelving spilt past its end; the vending window bloomed white at night (dimmer
+      glow, the cans read).
+    - The rooms' own wall frames (dressing) drawn by the new frame model.
+    - Room plans: seats at a table's ends faced away (rot 1 is −x: swapped); what stood on a removed
+      top was left floating (it goes with its host now); someone's own desk (a seat with an owner, the
+      desk at it) stays; every furnishing gets its own ids (re-furnishing raced delete and put on one
+      id); a top's host found on the furnished floor only.
+    - Catalog: the monitor isn't offered after all (the server turns a placed one into a computer on
+      load: shared computer.ts monitorsToComputers); open shelving's top is its shelf's cells
+      `[0,1,8,3]`, the high table's its round top's `[1,1,3,3]`.
+    **Jolt pass, 2026-11-03** (the user: "check jolt collision on furniture"): only `solid` kinds are
+    bodies in Jolt (`thing:id`, their SHAPES; seats, wall pieces, rugs and the ceiling lights aren't).
+    A column audit (the model's top against the shape's every 10 cm over each footprint) found
+    invisible walls and wrong tops the bounds check couldn't: the room divider's box was its feet's
+    depth all the way up (now the feet and the thin screen); every floor lamp carried the arc lamp's
+    head box at 1.6–2 m beside it (dropped: the arc's head walked under); the piano's case box ran over
+    its keys (now the case to 1.27 and the keybed to 0.76); the slot track's 1.5 m strip along its whole
+    back (now the stand, the lap tower and the floodlight's mast); `decor` was one 0.57 m box for all —
+    a floor cable an invisible waist-high wall (now by props.d: `DECOR_PARTS`, the rooms' clutter
+    passing what it is too: physics/build.ts); the coat rack a 0.6 m block (its feet and post, the
+    coats brushed past); the pet house flat at 0.77 (its ridge over its walls); the CRT TV's cabinet
+    over its whole stand, and its rabbit ears solid (a body jumped up slid off their tips to the
+    floor — not solid now). Stand heights where Jolt really puts you: pet house 0.72 (the ridge),
+    terminal 1.16 (its top; the cart's edge too narrow). New `physics/furniture.test.ts`: every solid
+    kind at two turns, walked at from four sides along its middle — stopped where something stands
+    between a climb (0.45: the capsule rides up a 0.42 coffee table) and a head, never inside it or
+    through it — and dropped on, landing at its stand height. shapes.test `SOFT` + lamp, coat rack,
+    CRT TV (drawn past their shapes). Checked: shared 534, client 197, world-server 193/195 (snow melt
+    red on HEAD; vortex flaky under the full suite, passes alone).
+    - Noted, not changed: the phone booth is `solid: false` (a seat, like a sofa: its walls are in the
+      physics but click-to-walk paths pass them).
+    - Checked after: shared 533, client 197, world-server 193/195 (snow melt red on HEAD; ping-pong
+      flaky under the full suite's load, rooms.test 52/52 alone); the panel's every category shows
+      pictures from the models (doors, windows, the pool table, stairs, lifts and cars their drawings),
+      no console errors.
 
 Each family phase: on the bench → signed off → in the world → its tests → committed.
 

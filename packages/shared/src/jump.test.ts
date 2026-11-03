@@ -58,7 +58,8 @@ function room() {
   };
   const objects = [
     { id: "d", kind: "desk", x: 3, y: 2 },
-    { id: "a", kind: "arcade", x: 6, y: 2 },
+    // (a speaker cabinet: 1.17 m, out of a hop's reach and in a flip's — the arcade, 1.8 since plan 67, is in neither)
+    { id: "a", kind: "speaker_cab", x: 6, y: 2 },
     { id: "l", kind: "lamp", x: 8, y: 2 },
   ];
   return Grid.from(map, objects, undefined, { dressing: false });
@@ -68,7 +69,7 @@ test("things have tops to stand on (or not), and bodies fit by their feet's heig
   const g = room();
   assert.equal(g.topAt(0, 0), 0);
   assert.ok(Math.abs(g.topAt(3, 2) - (entry("desk").surface ?? 0) / ZPX_TILE) < 1e-6);
-  assert.ok(Math.abs(g.topAt(6, 2) - 54 / ZPX_TILE) < 1e-6);
+  assert.ok(Math.abs(g.topAt(6, 2) - (standHeight("speaker_cab") ?? 0) / ZPX_TILE) < 1e-6);
   assert.equal(g.topAt(8, 2), Number.POSITIVE_INFINITY); // a lamp: no
   // on the floor: the desk blocks; feet over the desk's top: it holds them
   assert.equal(g.fitsAt(3.5, 2.5, 0), false);
@@ -101,17 +102,20 @@ function run(g: Grid, kind: "hop" | "flip", x0: number, y: number, speed: number
   return { x, z: h.z, landedOn };
 }
 
-test("a hop lands on a desk, a flip on the arcade; a hop can't reach the arcade", () => {
+test("a hop lands on a desk, a flip on the speaker; a hop can't reach the speaker", () => {
   const g = room();
   // from the floor walking towards the desk (3..5): up, over its edge, landed on it
   const onDesk = run(g, "hop", 2.0, 2.5, 2.5, 0);
   assert.ok(Math.abs(onDesk.landedOn - (entry("desk").surface ?? 0) / ZPX_TILE) < 1e-6, `landed at ${onDesk.landedOn}`);
-  // a hop at the arcade's side: stopped by it, back on the floor
+  // a hop at the speaker's side: stopped by it, back on the floor
   const atArcade = run(g, "hop", 5.4, 2.5, 3, 0);
   assert.ok(atArcade.x < 5.8 && atArcade.z === 0);
   // a flip from right by it clears it and lands on top
   const flip = run(g, "flip", 5.3, 2.5, 1.2, 0);
-  assert.ok(Math.abs(flip.landedOn - 54 / ZPX_TILE) < 1e-6, `flip landed at ${flip.landedOn}`);
+  assert.ok(
+    Math.abs(flip.landedOn - (standHeight("speaker_cab") ?? 0) / ZPX_TILE) < 1e-6,
+    `flip landed at ${flip.landedOn}`,
+  );
 });
 
 test("walking off the edge of something drops you to the floor", () => {

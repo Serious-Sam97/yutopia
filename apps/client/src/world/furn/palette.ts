@@ -46,6 +46,15 @@ export const P = {
   vfd: 0xf1d79a,
   white: 0xe9e6df,
   terracotta: 0xb5653f,
+  putty: 0xd9cfb4,
+  puttyDark: 0xb8ad90,
+  glass: 0x1d2526,
+  vinyl: 0x161618,
+  led: 0xffb347,
+  ledGreen: 0x7fe08a,
+  phosphor: 0x3c6b4a,
+  paperWhite: 0xf0ebe0,
+  steelLight: 0x9a9d9f,
 };
 
 /** A finish darker or lighter (×k on its channels, sRGB): a fabric's piping, its frame. */

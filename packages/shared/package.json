@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./slotcar": "./src/slotcar.ts",
+    "./office": "./src/office.ts",
+    "./maps/studio": "./src/maps/studio.ts",
     "./library": "./src/library.ts",
     "./games": "./src/games.ts",
     "./media": "./src/media.ts",

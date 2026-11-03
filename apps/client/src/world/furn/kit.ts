@@ -51,6 +51,9 @@ export interface PartOpts {
 export class Model {
   private parts: BufferGeometry[] = [];
   private glows: BufferGeometry[] = [];
+  /** turned round the frame's middle (0.5, 0.5) when it's done, radians: a thing drawn facing −z
+   *  that faces the room (+z) instead */
+  facing = 0;
   constructor(readonly tier: Tier) {}
 
   /** Add a part in the model's frame, its faces flat and in `color`. */
@@ -82,6 +85,8 @@ export class Model {
     this.parts = [];
     this.glows = [];
     if (!g) throw new Error("an empty model");
+    if (this.facing)
+      for (const x of glow ? [g, glow] : [g]) x.translate(-0.5, 0, -0.5).rotateY(this.facing).translate(0.5, 0, 0.5);
     g.computeBoundingBox();
     g.computeBoundingSphere();
     g.userData.glow = glow;
@@ -96,6 +101,8 @@ export interface Look {
   fabric: number | null;
   seed: number;
   occupied: boolean;
+  /** switched on or off (`props.on`), or never said */
+  on?: boolean;
 }
 
 // ── the shapes (each centred on its own origin unless it says) ──────────────────────────────────
@@ -153,6 +160,23 @@ export function extrude(outline: [number, number][], depth: number, bevel = 0, c
     curveSegments: curveSeg,
   });
   return g.translate(0, 0, -(depth - 2 * bevel) / 2);
+}
+
+/** Flat four-cornered pieces lying on whatever they follow (a track's tarmac, its kerbs), each
+ *  turned to face up whichever way its corners go round. */
+export function quads(qs: V3[][]): BufferGeometry {
+  const pos: number[] = [];
+  const tri = (a: V3, b: V3, c: V3) => {
+    const up = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]);
+    pos.push(...a, ...(up >= 0 ? b : c), ...(up >= 0 ? c : b));
+  };
+  for (const [a, b, c, d] of qs) {
+    tri(a, b, c);
+    tri(a, c, d);
+  }
+  const g = new BufferGeometry();
+  g.setAttribute("position", new Float32BufferAttribute(pos, 3));
+  return g;
 }
 
 /** A rounded rectangle's outline (for extrude), its middle at 0. */
