@@ -1,5 +1,6 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: e2e reads the world's window test hooks */
 import { expect, type Page } from "@playwright/test";
+import { entry } from "@yutopia/shared";
 import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 
 // Desks come bare and you dress them, Sims-style: things from the "On desks &
@@ -7,6 +8,8 @@ import { ANA, enter, holdCamera, test, token, useWorld } from "./helpers";
 // cell by cell, and ride along when the desk moves or turns. In the Lab
 // (the build sandbox); everything made here is removed at the end.
 const SHOTS = process.env.YUTOPIA_SHOTS;
+// the desk's top: where tabletops stand (iso px, as props.z keeps it and the camera's projection takes)
+const DESK_Z = entry("desk").surface ?? 0;
 
 async function at(page: Page, x: number, y: number, z = 0) {
   return page.evaluate(
@@ -64,7 +67,7 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
     ];
     for (const [i, [label, x, y]] of plan.entries()) {
       await page.getByRole("button", { name: label, exact: true }).last().click(); // (not the "recently used" one)
-      const p = await at(page, x, y, 25);
+      const p = await at(page, x, y, DESK_Z);
       await page.mouse.move(p.x, p.y, { steps: 4 });
       await page.waitForTimeout(150);
       expect((await build(page)).fits, label).toBe(true);
@@ -72,7 +75,7 @@ test("dress a desk: many things on top, moved cell by cell, carried with the des
       await expect.poll(async () => (await mine()).length, { message: label }).toBe(i + 1);
     }
     const all = await mine();
-    expect(all.every((t) => t.p.z === 25)).toBe(true); // at the desk's height
+    expect(all.every((t) => t.p.z === DESK_Z)).toBe(true); // at the desk's height
     expect(new Set(all.map((t) => `${t.x},${t.y}`)).size).toBe(2); // all on its two tiles
     // not on the floor
     await page.getByRole("button", { name: "Mug", exact: true }).last().click();

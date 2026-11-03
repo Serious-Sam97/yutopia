@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { areaAt, canPlace, dressItems, findPath, Grid, getMap, ROOM_NAME, studio, takenId } from "@yutopia/shared";
+import { areaAt, canPlace, dressItems, entry, findPath, Grid, getMap, ROOM_NAME, studio, takenId } from "@yutopia/shared";
 import { newCar, SLOT_GRIP, SLOT_LAP, SLOT_VMAX, slotCurve, slotLap, stepCar } from "@yutopia/shared/slotcar";
 import { Client, type Room } from "colyseus.js";
 
@@ -665,7 +665,7 @@ test("tabletops sit on surfaces and ride along; looks are checked; clutter becom
   // a mug on the desk's right half: at the desk's height
   ana.room.send("obj:put", { id: "t-mug", kind: "tabletop", x: 11, y: 3, rot: 0, props: { d: "mug", seed: 0.3 } });
   await waitFor(() => !!obj("t-mug"));
-  assert.equal(JSON.parse(obj("t-mug")?.props ?? "{}").z, 25);
+  assert.equal(JSON.parse(obj("t-mug")?.props ?? "{}").z, entry("desk").surface);
   // more than one per tile: a second mug in the next quarter, but not on the first
   ana.room.send("obj:put", { id: "t-mug2", kind: "tabletop", x: 11, y: 3, rot: 0, props: { d: "mug", c: [2, 1] } });
   await waitFor(() => !!obj("t-mug2"));
@@ -896,7 +896,7 @@ test("a group comes down in any order: what's on a desk is placed after the desk
   });
   await waitFor(() => count() === 2);
   const mug = [...a.room.state.objects.values()].find((o) => o.kind === "tabletop" && o.x === spot.x && o.y === spot.y);
-  assert.equal(JSON.parse(mug?.props ?? "{}").z, 25, "standing on the desk's top");
+  assert.equal(JSON.parse(mug?.props ?? "{}").z, entry("desk").surface, "standing on the desk's top");
 });
 
 test("slot cars: lanes near the track, five lights, laps counted from what a real car could do", async () => {
@@ -1363,7 +1363,7 @@ test("a computer: one person at a time, what its OS shows reaches everyone, stan
   assert.ok(d, "room for a desk");
   a.room.send("obj:put", { id: "pc-desk", kind: "desk", x: d.x, y: d.y, rot: 0 });
   await waitFor(() => !!st().objects.get("pc-desk"));
-  a.room.send("obj:put", { id: "pc-1", kind: "computer", x: d.x, y: d.y, rot: 0, props: { c: [1, 2], z: 25 } });
+  a.room.send("obj:put", { id: "pc-1", kind: "computer", x: d.x, y: d.y, rot: 0, props: { c: [1, 2], z: entry("desk").surface } });
   await waitFor(() => !!st().objects.get("pc-1"));
   const pc = () => st().computers.get("pc-1");
   const toasts = (p: Person) => (p.msgs.toast ?? []).map((m) => (m as { text: string }).text);

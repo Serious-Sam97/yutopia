@@ -82,7 +82,7 @@ test("bare furniture: what used to be drawn on it becomes real things, once", ()
     placed = [...placed, t];
   }
   assert.ok(s.add.filter((t) => t.kind === "computer").every((t) => t.rot === 2));
-  assert.ok(s.add.every((t) => t.props?.z === 25));
+  assert.ok(s.add.every((t) => t.props?.z === entry("desk").surface));
   // a second run finds it split
   assert.equal(splitBuiltIns(s.self), null);
   // the radio steps onto a side table of its own
@@ -105,7 +105,9 @@ test("bare furniture: what used to be drawn on it becomes real things, once", ()
 test("a look: props.variant when valid, else the kind's own or seeded by id", () => {
   assert.equal(entry("desk").variants, 4);
   assert.equal(variantOf({ kind: "desk", id: "a", props: { variant: 2 } }, 0.9), 2);
-  assert.equal(variantOf({ kind: "chair", id: "a", props: { variant: 7 } }, 0.9), 3, "out of range: seeded");
+  // (a chair has looks now, not seeded story details: plan 67 — look 0 until picked)
+  assert.equal(variantOf({ kind: "chair", id: "a", props: { variant: 7 } }, 0.9), 0, "out of range: its own look");
+  assert.equal(variantOf({ kind: "partition", id: "a", props: { variant: 7 } }, 0.9), 2, "out of range: seeded");
   assert.equal(variantOf({ kind: "chair", id: "a" }, 0.1), 0);
   assert.equal(variantOf({ kind: "desk", id: "a", props: { variant: 7 } }, 0.9), 0, "desks: walnut until changed");
   assert.equal(variantOf({ kind: "bench", id: "a", props: { variant: 1 } }, 0.5), 0, "one look only");

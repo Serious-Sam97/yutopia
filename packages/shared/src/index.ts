@@ -7,6 +7,7 @@ export * from "./clock.ts";
 export * from "./convert.ts";
 export * from "./dressing.ts";
 export * from "./faces.ts";
+export * from "./furniture.ts";
 export * from "./grid.ts";
 export * from "./hang.ts";
 export * from "./hearing.ts";

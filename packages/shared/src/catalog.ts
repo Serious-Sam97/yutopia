@@ -1,3 +1,5 @@
+import { isoPx, STAND, SURFACE } from "./furniture.ts";
+
 // Every placeable thing in the world. Footprints are in tiles at rot 0; rot 1/3
 // swap width and height. `wall` objects hang on a wall face, anywhere along and
 // up it (hang.ts), and never block. `seat` tiles are walkable and make the avatar sit.
@@ -67,8 +69,8 @@ export interface CatalogEntry {
 export const PIANO_STOOL: [number, number] = [1, 1.27];
 
 export const CATALOG = {
-  desk: { label: "Desk", w: 2, h: 1, solid: true, buildable: true, variants: 4, look: 0, surface: 25 },
-  chair: { label: "Chair", w: 1, h: 1, solid: false, seat: true, buildable: true, variants: 4, paint: true },
+  desk: { label: "Desk", w: 2, h: 1, solid: true, buildable: true, variants: 4, look: 0, surface: isoPx(SURFACE.desk) },
+  chair: { label: "Chair", w: 1, h: 1, solid: false, seat: true, buildable: true, variants: 4, look: 0, paint: true },
   board_wall: { label: "Board wall", w: 3, h: 1, solid: false, wall: true, buildable: true },
   screen_wall: { label: "Big screen", w: 4, h: 1, solid: false, wall: true, interact: "screen", buildable: true },
   whiteboard: { label: "Whiteboard", w: 2, h: 1, solid: false, wall: true, interact: "whiteboard", buildable: true },
@@ -103,18 +105,26 @@ export const CATALOG = {
     h: 2,
     solid: true,
     buildable: true,
-    surface: 25,
+    surface: isoPx(SURFACE.meeting_table),
   },
-  coffee_table: { label: "Coffee table", w: 2, h: 1, solid: true, buildable: true, surface: 13 },
-  side_table: { label: "Side table", w: 1, h: 1, solid: true, buildable: true, surface: 14 },
+  coffee_table: {
+    label: "Coffee table",
+    w: 2,
+    h: 1,
+    solid: true,
+    buildable: true,
+    surface: isoPx(SURFACE.coffee_table),
+  },
+  side_table: { label: "Side table", w: 1, h: 1, solid: true, buildable: true, surface: isoPx(SURFACE.side_table) },
   bookcase: {
     label: "Bookcase",
     w: 2,
     h: 1,
     solid: true,
     buildable: true,
+    look: 0,
     variants: 3,
-    surface: 62,
+    surface: isoPx(SURFACE.bookcase),
     top: [0, 1, 8, 3],
   },
   partition: { label: "Room divider", w: 2, h: 1, solid: true, buildable: true, variants: 3, paint: true },
@@ -124,16 +134,27 @@ export const CATALOG = {
     h: 1,
     solid: true,
     buildable: true,
+    look: 0,
     variants: 2,
-    surface: 26,
+    surface: isoPx(SURFACE.counter),
     top: [0, 0, 4, 4], // the sink takes the right half
     paint: true,
   },
-  cupboard: { label: "Cupboard", w: 1, h: 1, solid: true, buildable: true, surface: 26 },
+  cupboard: { label: "Cupboard", w: 1, h: 1, solid: true, buildable: true, surface: isoPx(SURFACE.cupboard) },
   // a supply locker (docs/plan/30-the-dark.md): a kit a day for anyone, wherever it's put
   locker: { label: "Supply locker", w: 1, h: 1, solid: true, buildable: true },
-  sofa: { label: "Sofa", w: 3, h: 1, solid: false, seat: true, buildable: true, variants: 3, paint: true },
-  armchair: { label: "Armchair", w: 1, h: 1, solid: false, seat: true, buildable: true, variants: 2, paint: true },
+  sofa: { label: "Sofa", w: 3, h: 1, solid: false, seat: true, buildable: true, variants: 3, look: 0, paint: true },
+  armchair: {
+    label: "Armchair",
+    w: 1,
+    h: 1,
+    solid: false,
+    seat: true,
+    buildable: true,
+    variants: 2,
+    look: 0,
+    paint: true,
+  },
   beanbag: { label: "Bean bag", w: 1, h: 1, solid: false, seat: true, buildable: true, paint: true },
   bench: { label: "Bench", w: 3, h: 1, solid: false, seat: true, buildable: true },
   plant: { label: "Plant", w: 1, h: 1, solid: true, buildable: true, variants: 5 },
@@ -167,8 +188,9 @@ export const CATALOG = {
     h: 1,
     solid: true,
     buildable: true,
+    look: 0,
     variants: 3,
-    surface: 46,
+    surface: isoPx(SURFACE.tape_shelf),
     top: [0, 1, 8, 3],
   },
   water_cooler: { label: "Water cooler", w: 1, h: 1, solid: true, interact: "water", buildable: true },
@@ -255,7 +277,7 @@ export const CATALOG = {
     buildable: true,
     variants: 2,
   },
-  disc_rack: { label: "Disc rack", w: 1, h: 1, solid: true, interact: "games", buildable: true, variants: 2 },
+  disc_rack: { label: "Disc rack", w: 1, h: 1, solid: true, interact: "games", buildable: true, variants: 2, look: 0 },
   // an autorama for up to four (shared/slotcar.ts): the track on a table, the
   // cars race live for everyone in the room
   slot_track: {
@@ -299,7 +321,15 @@ export const CATALOG = {
     interact: "coffee",
     buildable: true,
   },
-  reception: { label: "Reception desk", w: 3, h: 1, solid: true, buildable: true, surface: 29 },
+  reception: {
+    label: "Reception desk",
+    w: 3,
+    h: 1,
+    solid: true,
+    buildable: true,
+    surface: isoPx(SURFACE.reception),
+    top: [0, 0, 12, 3], // (the work surface, behind the visitors' ledge: plan 67)
+  },
   mic_stand: { label: "Mic stand", w: 1, h: 1, solid: true, buildable: true },
   mixing_desk: {
     label: "Mixing desk",
@@ -470,40 +500,17 @@ export function registerKinds(kinds: Record<string, CatalogEntry>): void {
   for (const [k, e] of Object.entries(kinds)) extra.set(k, e);
 }
 
-// What a body can stand on once it's jumped up there (shared/jump.ts): the top
-// of the thing, iso px up (as `surface`; 39.2 px a tile), by what its drawing
-// shows. Surfaces (desks, tables, shelves…) are stood on at their surface;
-// these are the solid things without one. Thin, tall or awkward things (lamps,
-// plants, partitions, a mic stand, the water cooler's bottle) aren't.
-const STAND: Partial<Record<ObjectKind, number>> = {
-  arcade: 54,
-  vending: 62,
-  piano: 44,
-  crt_tv: 47,
-  tv_console: 46,
-  cart_shelf: 30,
-  disc_rack: 16,
-  slot_track: 23,
-  pool_table: 27,
-  pingpong_table: 24,
-  mixing_desk: 18,
-  speaker_cab: 46,
-  column: 84,
-  car: 56,
-  server_rack: 66,
-  crt_terminal: 20,
-  pet_house: 16,
-  toy_box: 16,
-  // (a parkour wall's cap: run up and stood on)
-  pk_wall: 125,
-  pk_wall_tall: 235,
-};
+// What a body can stand on once it's jumped up there (shared/jump.ts): the top of the thing, iso px
+// up (39.2 px a tile). Surfaces (desks, tables, shelves…) are stood on at their surface; the solid
+// things without one at their `STAND` (furniture.ts, m).
 
 /** How high a body stands on top of this (iso px), or undefined: it can't. */
 export function standHeight(kind: string): number | undefined {
   const e = entry(kind);
   if (!e.solid || e.wall) return undefined;
-  return isKind(kind) ? (STAND[kind] ?? e.surface) : undefined;
+  if (!isKind(kind)) return undefined;
+  const at = STAND[kind];
+  return at !== undefined ? isoPx(at) : e.surface;
 }
 
 export function footprint(kind: string, rot = 0): { w: number; h: number } {

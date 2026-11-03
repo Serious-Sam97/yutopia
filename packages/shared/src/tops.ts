@@ -287,3 +287,25 @@ export function splitAll(objects: WorldObjectDef[]): { objects: WorldObjectDef[]
   }
   return { objects: [...out, ...later], changed };
 }
+
+/** Things on surfaces stand at their host's top as it is now (plan 67: the desks rose from 0.64 to
+ *  0.74 m, and a tabletop keeps the height it was put down at, `props.z`): each one's z set again
+ *  from what it stands on, on its own floor. Changed only where it differs, so a second run changes
+ *  nothing; one with no host now is left as it is. */
+export function topsOnHosts(objects: WorldObjectDef[]): { objects: WorldObjectDef[]; changed: WorldObjectDef[] } {
+  const changed: WorldObjectDef[] = [];
+  const level = (o: WorldObjectDef) => o.props?.level ?? null;
+  const out = objects.map((o) => {
+    if (!entry(o.kind).onSurface) return o;
+    const host = hostOf(
+      objects.filter((x) => level(x) === level(o)),
+      o,
+    );
+    const z = host ? entry(host.kind).surface : undefined;
+    if (z === undefined || o.props?.z === z) return o;
+    const moved = { ...o, props: { ...(o.props ?? {}), z } };
+    changed.push(moved);
+    return moved;
+  });
+  return { objects: out, changed };
+}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_AVATAR } from "@yutopia/shared";
+import { DEFAULT_AVATAR, SEAT_NEXT } from "@yutopia/shared";
 import { sit2 } from "../chars/anim/acts";
 import { CharFactory, PersonModel } from "../chars/model";
 import { ANKLE_M, legOf, SEATS, seatFit } from "./seats3d";
@@ -17,7 +17,9 @@ test("sat on each seat: the feet on the floor, the hips on the cushion, the knee
     m.update();
     f.pump(1000);
     assert.ok(m.update());
-    for (const [kind, s] of Object.entries(SEATS)) {
+    // (and the redrawn ones awaiting sign-off: plan 67's SEAT_NEXT, sat on with ?furn=new)
+    const next = Object.entries(SEAT_NEXT).map(([k, v]) => [`${k} (next)`, v] as const);
+    for (const [kind, s] of [...Object.entries(SEATS), ...next]) {
       const { along, recline } = seatFit(s, legOf((j) => m.bone(j)).thigh);
       const drop = m.sitDrop(s.top);
       const fit = {

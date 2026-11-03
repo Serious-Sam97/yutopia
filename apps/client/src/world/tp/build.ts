@@ -61,6 +61,8 @@ import { FloorBake } from "../art/floors";
 import { piece, WALL_H } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
+import { celLit } from "../furn/look";
+import { isNative, nativeInto } from "../furn/native";
 import { boxInParent, type Slab } from "./below-cull";
 import { type Geo, MeshSketch, type Opts3, Out, zt } from "./kit3d";
 import { poolTable3 } from "./pooltable3d";
@@ -205,6 +207,8 @@ export class World3 {
     // (the shared materials read the fade flags: World3.faded — a piece itself has no
     // `aFade`, reads 0, and is drawn)
     for (const m of [this.materials.lit, this.materials.clearBack, this.materials.clearFront]) m.userData.fade = true;
+    // (the kit's things are in the lit buffers, marked: shaded cel, as the people — world/furn/look.ts)
+    this.materials.lit.userData.cel = true;
     this.withFade(this.materials.glow);
     this.withFade(this.materials.ink);
     this.light(this.materials.lit);
@@ -863,7 +867,10 @@ export class World3 {
       const ref = { kind: o.kind, id: o.id, rot, props: o.props };
       const at = anchorOf(o);
       const lift = e.onSurface ? Number(o.props?.z) || 0 : e.wall ? hangOf(o).lift : 0;
-      if (o.kind === "pool_table") {
+      if (!e.wall && !e.onSurface && isNative(o.kind)) {
+        // redrawn by the kit (docs/plan/67-the-furniture.md: world/furn/native.ts)
+        nativeInto(out, o);
+      } else if (o.kind === "pool_table") {
         // its own model in 3D: real pockets to drop the balls into (tp/pooltable3d.ts)
         poolTable3(out, { x: o.x, y: o.y }, rot, itemSketchOpts(ref).seed);
       } else if (hasItemArt(o.kind)) {
@@ -1176,6 +1183,7 @@ export class World3 {
   private light(m: Material) {
     this.litMats.add(m);
     this.lightFn(m);
+    if (m.userData.cel) celLit(m);
     if (m.userData.fade) this.withFade(m);
   }
   setLight(fn: ((m: Material) => void) | null) {
@@ -1187,6 +1195,7 @@ export class World3 {
         m.customProgramCacheKey = () => "";
         m.needsUpdate = true;
       }
+      if (m.userData.cel) celLit(m);
       if (m.userData.fade) this.withFade(m);
     }
   }

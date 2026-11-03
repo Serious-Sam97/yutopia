@@ -76,6 +76,7 @@ import {
   TICK_HZ,
   thunderOf,
   topCell,
+  topsOnHosts,
   upgradeCore,
   upgradeGround,
   upgradeLot,
@@ -319,6 +320,14 @@ export class WorldRoom extends Room<WorldState> {
     if (pcs.changed.length) {
       console.log(`[computers] the world: ${pcs.changed.length} monitors are computers now`);
       if (!config.offline) await saveAll(pcs.changed, (o) => api.putObject(o));
+    }
+    // things on desks and tables at their host's top as it is now (plan 67: the desks rose to
+    // 0.74 m; a tabletop keeps the height it was put down at), once, stored
+    const lifted = topsOnHosts(objects);
+    objects = lifted.objects;
+    if (lifted.changed.length) {
+      console.log(`[tops] the world: ${lifted.changed.length} things set on their hosts' tops again`);
+      if (!config.offline) await saveAll(lifted.changed, (o) => api.putObject(o));
     }
     // the building (docs/plan/25-building-floors.md): a world from before floors
     // becomes the top of five — the lobby and the lot below, the core — once,

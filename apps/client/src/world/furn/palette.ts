@@ -1,0 +1,55 @@
+// The furniture's finishes (docs/plan/67-the-furniture.md): named colours, sRGB, the kit's parts
+// painted in them.
+export const P = {
+  walnut: 0x6b4128,
+  walnutDark: 0x4a2c1b,
+  walnutEdge: 0xa0704a,
+  walnutTop: 0x93603d,
+  oak: 0xb98a5a,
+  steel: 0x2d2e33,
+  chrome: 0xb8bdc4,
+  plastic: 0x26272b,
+  rubber: 0x18181b,
+  brass: 0xc9a24a,
+  fabric: 0x3b5d66, // a deep teal weave
+  fabricDark: 0x2e4a52,
+  mesh: 0x2a3237,
+  moss: 0x56643f,
+  mossDark: 0x46532f,
+  mustard: 0xc39a3c,
+  ceramic: 0xe6ddcb,
+  ceramicBand: 0x2f3a3c,
+  soil: 0x3a2a1e,
+  pebble: 0x9b9384,
+  leaf: 0x3f6b3a,
+  leafYoung: 0x5f8a43,
+  stem: 0x587a3a,
+  rust: 0xb5562f,
+  olive: 0x6e7b3a,
+  oxblood: 0x5e2a24,
+  cognac: 0x8a4e2c,
+  teak: 0x8a5a36,
+  linen: 0xcbbd9f,
+  wool: 0xd9a441,
+  lace: 0xece4cf,
+  paper: 0xe9e1cc,
+  ink: 0x2b2a26,
+  oakLight: 0xc79a63,
+  cream: 0xe6dcc4,
+  creamDark: 0xcdbf9f,
+  ash: 0x2b2826,
+  graphite: 0x3a3a3c,
+  stone: 0xd6d1c6,
+  alum: 0xb3b6b8,
+  alumDark: 0x6e7376,
+  lockerGreen: 0x4f5a52,
+  vfd: 0xf1d79a,
+  white: 0xe9e6df,
+  terracotta: 0xb5653f,
+};
+
+/** A finish darker or lighter (×k on its channels, sRGB): a fabric's piping, its frame. */
+export function shade(c: number, k: number): number {
+  const ch = (s: number) => Math.max(0, Math.min(255, Math.round(((c >> s) & 255) * k)));
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}

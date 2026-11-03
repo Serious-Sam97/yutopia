@@ -10,6 +10,7 @@ import {
   SkinnedMesh,
   Vector3,
 } from "three";
+import { celBands } from "../cel";
 import { armsOf, type Baked, bake, THIGH_BONES } from "./bake";
 import { buildPerson } from "./build";
 import { solveArm } from "./ik";
@@ -147,12 +148,7 @@ if (vPat > 0.5) {
   }
 }
 {
-  vec3 n = normalize(vCelN);
-  float l = dot(n, normalize(vec3(-0.6, 0.5, 0.62)));
-  float dark = 1.0 - smoothstep(-0.2, 0.12, l);
-  diffuseColor.rgb *= mix(vec3(1.0), vec3(0.6, 0.64, 0.86), dark * ${k.toFixed(3)});
-  float rim = smoothstep(0.55, 0.85, 1.0 - abs(n.z)) * smoothstep(0.05, 0.4, -n.x) * (1.0 - dark);
-  diffuseColor.rgb += rim * ${(0.16 * k).toFixed(3)} * vec3(1.0, 0.9, 0.75);
+${celBands("vCelN", k)}
   diffuseColor.rgb *= mix(1.0, mix(0.8, 1.0, smoothstep(0.0, 0.6, vCelY)), ${k.toFixed(3)});
 }`,
       );

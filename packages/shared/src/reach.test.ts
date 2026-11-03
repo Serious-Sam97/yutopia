@@ -27,8 +27,8 @@ test("two bodies: their whole heights — a high-five over a gap misses, beside 
   assert.ok(Math.abs(between(a, { x: 1, y: 0, z: 6 }) - Math.hypot(1, 6 - BODY_H)) < 1e-9, "a flier over them");
 });
 
-test("a thing's height is its shapes': a desk to 0.64, a whiteboard where it hangs", () => {
-  assert.deepEqual(spanOf({ id: "d", kind: "desk", x: 0, y: 0 }), [0, 0.64]);
+test("a thing's height is its shapes': a desk to 0.74, a whiteboard where it hangs", () => {
+  assert.deepEqual(spanOf({ id: "d", kind: "desk", x: 0, y: 0 }), [0, 0.74]);
   const [y0, y1] = spanOf({ id: "w", kind: "whiteboard", x: 0, y: 0 });
   assert.ok(y0 > 0.5 && y1 < 1.7, `a whiteboard ${y0}–${y1}`);
   // (hung higher up the wall: hang.ts props.wz)

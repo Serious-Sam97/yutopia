@@ -30,12 +30,12 @@ test("a thing turns in its own footprint", () => {
     assert.equal(s.t, "box");
     return s.t === "box" ? [s.x - s.hx, s.z - s.hz, s.x + s.hx, s.z + s.hz].map((n) => +n.toFixed(2)) : [];
   };
-  assert.deepEqual(at(0), [4, 6.06, 6, 6.94]);
-  assert.deepEqual(at(1), [4.06, 6, 4.94, 8]);
-  assert.deepEqual(at(2), [4, 6.06, 6, 6.94]);
+  assert.deepEqual(at(0), [4.03, 6.06, 5.97, 6.94]);
+  assert.deepEqual(at(1), [4.06, 6.03, 4.94, 7.97]);
+  assert.deepEqual(at(2), [4.03, 6.06, 5.97, 6.94]);
   // a storey up
   const [s] = kindSolids({ id: "d", kind: "desk", x: 4, y: 6 }, STOREY);
-  assert.ok(s.t === "box" && Math.abs(s.y + s.hy - (STOREY + 0.64)) < 1e-9);
+  assert.ok(s.t === "box" && Math.abs(s.y + s.hy - (STOREY + 0.74)) < 1e-9);
 });
 
 test("walls: full, half, a door's lintel, a window's sill and pane", () => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { standHeight } from "./catalog.ts";
+import { entry, standHeight } from "./catalog.ts";
 import { Grid, moveStep, ZPX_TILE } from "./grid.ts";
 import {
   type Height,
@@ -67,18 +67,18 @@ function room() {
 test("things have tops to stand on (or not), and bodies fit by their feet's height", () => {
   const g = room();
   assert.equal(g.topAt(0, 0), 0);
-  assert.ok(Math.abs(g.topAt(3, 2) - 25 / ZPX_TILE) < 1e-6);
+  assert.ok(Math.abs(g.topAt(3, 2) - (entry("desk").surface ?? 0) / ZPX_TILE) < 1e-6);
   assert.ok(Math.abs(g.topAt(6, 2) - 54 / ZPX_TILE) < 1e-6);
   assert.equal(g.topAt(8, 2), Number.POSITIVE_INFINITY); // a lamp: no
   // on the floor: the desk blocks; feet over the desk's top: it holds them
   assert.equal(g.fitsAt(3.5, 2.5, 0), false);
-  assert.equal(g.fitsAt(3.5, 2.5, 0.7), true);
-  assert.ok(Math.abs(g.groundAt(3.5, 2.5, 0.7) - 25 / ZPX_TILE) < 1e-6);
+  assert.equal(g.fitsAt(3.5, 2.5, 0.8), true);
+  assert.ok(Math.abs(g.groundAt(3.5, 2.5, 0.8) - (entry("desk").surface ?? 0) / ZPX_TILE) < 1e-6);
   // half over its edge: still on it
-  assert.ok(g.groundAt(3.1, 1.9, 0.66) > 0.6);
+  assert.ok(g.groundAt(3.1, 1.9, 0.76) > 0.7);
   assert.equal(g.fitsAt(8.5, 2.5, 5), false);
   assert.equal(standHeight("lamp"), undefined);
-  assert.equal(standHeight("desk"), 25);
+  assert.equal(standHeight("desk"), entry("desk").surface);
 });
 
 // walk at `speed` along +x from x0 at y, jumping at `at` s; the feet's height on the way
@@ -105,7 +105,7 @@ test("a hop lands on a desk, a flip on the arcade; a hop can't reach the arcade"
   const g = room();
   // from the floor walking towards the desk (3..5): up, over its edge, landed on it
   const onDesk = run(g, "hop", 2.0, 2.5, 2.5, 0);
-  assert.ok(Math.abs(onDesk.landedOn - 25 / ZPX_TILE) < 1e-6, `landed at ${onDesk.landedOn}`);
+  assert.ok(Math.abs(onDesk.landedOn - (entry("desk").surface ?? 0) / ZPX_TILE) < 1e-6, `landed at ${onDesk.landedOn}`);
   // a hop at the arcade's side: stopped by it, back on the floor
   const atArcade = run(g, "hop", 5.4, 2.5, 3, 0);
   assert.ok(atArcade.x < 5.8 && atArcade.z === 0);

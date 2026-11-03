@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Furnish panel mock</title>
+<!-- docs/plan/67-the-furniture.md, phase 0: the Furnish panel with the new pieces. The game's own
+     tokens (apps/client/src/app/globals.css: ink panels in walnut frames, Cormorant titles, Special
+     Elite labels, the amber lamp). Rendered to ../panel-mock.png by e2e/furniture-shots.mts PANEL=1. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600&family=Special+Elite&display=swap" rel="stylesheet">
+<style>
+:root {
+  --walnut: #5b3a26; --cream: #ece6da; --cream-dim: #a7a094; --paper: #ece5d3; --amber: #f1d79a;
+  --amber-hi: #f6e2b0; --amber-lo: #e0c07e; --ink: #1a1a1e; --muted: #8a857c; --panel: #17181d;
+  --panel-raised: #202127; --tile-hi: #2a2b31; --edge: #3a3631; --edge-cabinet: #4a443b;
+  --edge-strong: #6b5d48; --well: #1c1d22; --well-edge: #2f2d2a; --field: #121318; --good: #8aa04a;
+  --rust: #c8553f;
+  --wood: url("data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%27600%27%20height=%27240%27%3E%3Cfilter%20id=%27g%27%3E%3CfeTurbulence%20type=%27fractalNoise%27%20baseFrequency=%270.006%200.22%27%20numOctaves=%273%27%20seed=%277%27/%3E%3CfeColorMatrix%20values=%270%200%200%200%200.55%200%200%200%200%200.36%200%200%200%200%200.2%201.1%200%200%200%20-0.35%27/%3E%3C/filter%3E%3Crect%20width=%27600%27%20height=%27240%27%20fill=%27%234e301b%27/%3E%3Crect%20width=%27600%27%20height=%27240%27%20filter=%27url(%23g)%27/%3E%3C/svg%3E");
+  --title: "Cormorant Garamond", Georgia, serif;
+  --mono: "Special Elite", ui-monospace, monospace;
+  --body: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1600px; height: 900px; overflow: hidden; background: #111216; color: var(--cream); font: 13px/1.35 var(--body); }
+.world { position: absolute; inset: 0; background: url(room.png) center / cover; filter: saturate(.95); }
+.world::after { content: ""; position: absolute; inset: 0; background: radial-gradient(130% 100% at 60% 50%, transparent 45%, rgba(4,6,10,.55) 100%); }
+.cabinet {
+  position: absolute; border: 5px solid transparent; border-radius: 6px;
+  background: linear-gradient(var(--panel), var(--panel)) padding-box, var(--wood) 0 0 / 600px 240px border-box;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.55), 0 12px 30px rgba(0,0,0,.5);
+}
+.mono { font-family: var(--mono); }
+.keycap { font: 10px var(--mono); border: 1px solid var(--edge-strong); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+.zigzag { height: 6px; opacity: .55; background-image: linear-gradient(135deg, var(--amber) 25%, transparent 25%), linear-gradient(225deg, var(--amber) 25%, transparent 25%); background-size: 8px 6px; }
+
+/* the top bar and the tool rail, as today */
+.top { left: 12px; right: 12px; top: 10px; height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 14px; }
+.brand { font: 600 22px var(--title); letter-spacing: .32em; }
+.mode { font: 22px var(--mono); color: var(--amber); }
+.mode small { font: 12px var(--mono); color: var(--cream-dim); margin-left: 8px; }
+.floors { display: flex; gap: 5px; align-items: center; margin-left: 6px; font: 11px var(--mono); color: var(--muted); }
+.floors b { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--edge-cabinet); border-radius: 5px; font: 17px var(--mono); color: var(--cream); font-weight: 400; }
+.floors b.on { background: var(--amber); color: var(--ink); border-color: var(--amber); }
+.done { margin-left: auto; background: linear-gradient(var(--amber-hi), var(--amber-lo)); color: var(--ink); font: 13px var(--mono); padding: 9px 22px; border-radius: 4px; }
+.rail { left: 12px; top: 74px; bottom: 12px; width: 76px; display: flex; flex-direction: column; gap: 6px; padding: 8px 6px; align-items: stretch; }
+.rail div { display: grid; place-items: center; height: 60px; border-radius: 5px; font: 10px var(--mono); color: var(--muted); letter-spacing: .04em; }
+.rail div i { font-style: normal; font-size: 19px; color: var(--cream-dim); }
+.rail div.on { background: var(--amber); color: var(--ink); }
+.rail div.on i { color: var(--ink); }
+
+/* the panel */
+.panel { left: 98px; top: 74px; bottom: 12px; width: 370px; display: flex; flex-direction: column; }
+.head { padding: 14px 16px 6px; display: flex; align-items: baseline; justify-content: space-between; }
+.head h2 { font: 700 26px var(--title); letter-spacing: .22em; }
+.head span { font: 11px var(--mono); color: var(--muted); text-transform: uppercase; }
+.panel .zigzag { margin: 0 16px 10px; }
+.search { margin: 0 12px; height: 36px; border-radius: 8px; background: var(--field); border: 1px solid var(--edge); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--muted); }
+.search span:first-child { flex: 1; }
+/* categories: words, not 16 bare icons; one row that scrolls, the count with each */
+.cats { display: flex; gap: 6px; padding: 10px 12px 4px; overflow: hidden; white-space: nowrap; mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.chip { flex: none; display: inline-flex; gap: 6px; align-items: center; height: 30px; padding: 0 11px; border-radius: 15px; border: 1px solid var(--edge-cabinet); font: 12px var(--body); color: var(--cream-dim); }
+.chip em { font: 10px var(--mono); font-style: normal; color: var(--muted); }
+.chip.on { background: var(--amber); border-color: var(--amber); color: var(--ink); font-weight: 600; }
+.chip.on em { color: #5a4a2a; }
+.grp { display: flex; align-items: center; gap: 8px; margin: 12px 12px 7px; font: 11px var(--mono); letter-spacing: .14em; color: var(--amber); text-transform: uppercase; }
+.grp::after { content: ""; flex: 1; height: 1px; background: rgba(241,215,154,.18); }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 0 12px; }
+.card { position: relative; height: 128px; border-radius: 7px; background: radial-gradient(90% 80% at 50% 40%, var(--tile-hi), var(--panel-raised)); border: 1px solid var(--edge); overflow: hidden; }
+.card img { position: absolute; left: 50%; top: 4px; width: 104px; height: 104px; transform: translateX(-50%); filter: drop-shadow(0 6px 5px rgba(0,0,0,.45)); }
+.card .name { position: absolute; left: 9px; right: 9px; bottom: 7px; font: 500 12px var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .size { position: absolute; top: 6px; right: 6px; font: 10px var(--mono); color: var(--muted); background: rgba(0,0,0,.35); padding: 0 5px; border-radius: 3px; }
+.card .looks { position: absolute; top: 8px; left: 8px; display: flex; gap: 3px; }
+.card .looks i { width: 6px; height: 6px; border-radius: 50%; background: var(--edge-strong); }
+.card .looks i.on { background: var(--amber); }
+.card.on { border-color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber); }
+.card .new { position: absolute; top: 6px; left: 6px; font: 9px var(--mono); background: var(--good); color: var(--ink); padding: 0 5px; border-radius: 3px; }
+.card.later { background: transparent; border: 1px dashed var(--edge-cabinet); }
+.card.later .sil { position: absolute; inset: 16px 26px 34px; border-radius: 10px; background: repeating-linear-gradient(135deg, rgba(255,255,255,.03) 0 6px, transparent 6px 12px); }
+.card.later .name { color: var(--muted); }
+.recent { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 0 12px; }
+.recent div { height: 62px; border-radius: 6px; background: var(--panel-raised); border: 1px solid var(--edge); display: grid; place-items: center; }
+.recent img { width: 56px; height: 56px; }
+
+/* holding a piece: its own cabinet beside the panel — the turntable, the looks, the finishes */
+.held { left: 478px; bottom: 12px; width: 318px; padding: 12px 14px 14px; }
+.held .stage { height: 196px; margin: -2px -4px 6px; border-radius: 6px; background: radial-gradient(70% 70% at 50% 60%, #2c2d33, #17181d); position: relative; }
+.held .stage img { position: absolute; left: 50%; top: 50%; width: 210px; height: 210px; transform: translate(-50%, -52%); filter: drop-shadow(0 10px 8px rgba(0,0,0,.5)); }
+.held .stage .spin { position: absolute; left: 10px; bottom: 8px; font: 10px var(--mono); color: var(--muted); }
+.held .stage .spin::before { content: "↻ "; color: var(--amber); }
+.held h3 { font: 700 23px var(--title); letter-spacing: .06em; }
+.slip { display: inline-block; margin: 4px 0 10px; background: var(--paper); color: var(--ink); font: 11px var(--mono); padding: 3px 8px; border-radius: 3px; box-shadow: 0 4px 10px rgba(0,0,0,.35); }
+.held .lab { font: 10px var(--mono); letter-spacing: .14em; color: var(--amber); text-transform: uppercase; margin: 6px 0 6px; }
+.lookrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.lookrow div { border-radius: 6px; border: 1px solid var(--edge); background: var(--panel-raised); text-align: center; padding: 2px 0 5px; font: 11px var(--body); color: var(--cream-dim); }
+.lookrow div.on { border-color: var(--amber); color: var(--cream); box-shadow: inset 0 0 0 1px var(--amber); }
+.lookrow img { width: 70px; height: 70px; display: block; margin: 0 auto -2px; }
+.swatches { display: flex; gap: 7px; flex-wrap: wrap; }
+.sw { display: inline-flex; align-items: center; gap: 6px; font: 11px var(--body); color: var(--cream-dim); padding: 3px 8px 3px 3px; border-radius: 13px; border: 1px solid var(--edge); }
+.sw i { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.4); }
+.sw.on { border-color: var(--amber); color: var(--cream); }
+
+.bottom { left: 808px; bottom: 12px; height: 54px; display: flex; align-items: center; gap: 16px; padding: 0 16px; font: 12px var(--body); color: var(--cream-dim); }
+.bottom .fits { color: var(--good); font: 12px var(--mono); }
+.bottom b { color: var(--cream); font-weight: 600; }
+.note { position: absolute; right: 18px; top: 82px; width: 300px; font: 12px var(--body); color: var(--cream); background: rgba(23,24,29,.78); border-left: 3px solid var(--amber); padding: 10px 12px; border-radius: 4px; }
+.note b { font: 11px var(--mono); color: var(--amber); letter-spacing: .1em; display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="world"></div>
+
+<div class="cabinet top">
+  <span class="brand">YUTOPIA</span>
+  <span class="mode">● BUILD MODE<small>Yutopia · Studio</small></span>
+  <span class="floors">FLOOR <b>G</b><b>1</b><b>2</b><b>3</b><b class="on">4</b></span>
+  <span class="done">✓ Done</span>
+</div>
+
+<div class="cabinet rail">
+  <div class="on"><i>⌂</i>FURNISH</div>
+  <div><i>▦</i>WALLS</div>
+  <div><i>▢</i>ROOMS</div>
+  <div><i>◇</i>DESKS</div>
+  <div><i>▤</i>MAP</div>
+</div>
+
+<div class="cabinet panel">
+  <div class="head"><h2>FURNISH</h2><span>124 pieces</span></div>
+  <div class="zigzag"></div>
+  <div class="search"><span>⌕&nbsp; Search, or a size: “2×1”, “seat”…</span><span class="keycap">/</span></div>
+  <div class="cats">
+    <span class="chip on">Seating <em>8</em></span>
+    <span class="chip">Desks &amp; tables <em>9</em></span>
+    <span class="chip">Storage <em>8</em></span>
+    <span class="chip">On desks <em>20</em></span>
+    <span class="chip">Screens <em>8</em></span>
+    <span class="chip">Games <em>10</em></span>
+  </div>
+  <div class="grp">Recently used</div>
+  <div class="recent">
+    <div><img src="../thumbs/chair-1-lambert.png" alt=""></div>
+    <div><img src="../thumbs/desk-1-lambert.png" alt=""></div>
+    <div><img src="../thumbs/sofa-1-lambert.png" alt=""></div>
+    <div><img src="../thumbs/plant-1-lambert.png" alt=""></div>
+    <div><img src="../thumbs/desk-2-lambert.png" alt=""></div>
+  </div>
+  <div class="grp">Seating</div>
+  <div class="grid">
+    <div class="card on"><span class="looks"><i></i><i class="on"></i><i></i></span><span class="size">1×1</span><img src="../thumbs/chair-1-lambert.png" alt=""><span class="name">Task chair</span></div>
+    <div class="card"><span class="looks"><i></i><i class="on"></i><i></i></span><span class="size">3×1</span><img src="../thumbs/sofa-1-lambert.png" alt=""><span class="name">Sofa</span></div>
+    <div class="card later"><span class="size">1×1</span><span class="sil"></span><span class="name">Armchair</span></div>
+    <div class="card later"><span class="size">1×1</span><span class="sil"></span><span class="name">Bean bag</span></div>
+    <div class="card later"><span class="size">3×1</span><span class="sil"></span><span class="name">Bench</span></div>
+    <div class="card later"><span class="new">NEW</span><span class="size">1×1</span><span class="sil"></span><span class="name">Bar stool</span></div>
+  </div>
+</div>
+
+<div class="cabinet held">
+  <div class="stage"><img src="../thumbs/chair-1-lambert.png" alt=""><span class="spin">drag to turn</span></div>
+  <h3>Task chair</h3>
+  <span class="slip">1×1 · SEAT 0.47 M · SWIVELS · ARMS</span>
+  <div class="lab">Look</div>
+  <div class="lookrow">
+    <div><img src="../thumbs/chair-0-lambert.png" alt="">Plain</div>
+    <div class="on"><img src="../thumbs/chair-1-lambert.png" alt="">Padded</div>
+    <div><img src="../thumbs/chair-2-lambert.png" alt="">Mesh back</div>
+  </div>
+  <div class="lab">Fabric</div>
+  <div class="swatches">
+    <span class="sw on"><i style="background:#3b5d66"></i>Teal weave</span>
+    <span class="sw"><i style="background:#9a4a32"></i>Rust felt</span>
+    <span class="sw"><i style="background:#2b2c31"></i>Charcoal</span>
+    <span class="sw"><i style="background:#cbbd9f"></i>Oat linen</span>
+  </div>
+</div>
+
+<div class="cabinet bottom">
+  <span class="fits">● FITS</span>
+  <span>Placing <b>Task chair</b></span>
+  <span><span class="keycap">R</span> turn</span>
+  <span><span class="keycap">L</span> next look</span>
+  <span><span class="keycap">C</span> copy</span>
+  <span><span class="keycap">Esc</span> put back</span>
+</div>
+
+<div class="note"><b>MOCK · PLAN 67 PHASE 0</b>Pictures rendered from the new 3D models (not the old drawings). Dashed cards: pieces redesigned in later phases. Behind: the bench room — today's chair on the left, then the new clean, padded and mesh-back ones.</div>
+</body>
+</html>

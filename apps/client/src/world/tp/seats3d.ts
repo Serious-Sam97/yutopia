@@ -1,33 +1,18 @@
+import { SEAT_NEXT, SEAT_SPEC, type SeatSpec } from "@yutopia/shared";
 import type { Bone } from "three";
+import { FURN } from "../furn/flag";
 import { ZPX } from "./kit3d";
 
 // Where a sitter goes on each seat (docs/plan/62-the-touch.md, phase 1): the seats' own shapes, and
 // her place on one fitted to her.
 
-// Each seat as it's drawn (art/items, sat on: the cushion sunk, the back leant), m along the way its
-// sitter faces from the tile's middle (plan 62): the cushion's top less what it gives, its front edge,
-// its back's face (none: a bench, a bean bag), the least and most she leans back, solid to the floor
-// in front (the shins kept clear of it), its arms' top. Out on the land (no kind) the server's put
-// her where she sits: a park bench, a stand's row.
-export interface SeatShape {
-  top: number;
-  front: number;
-  back: number | null;
-  lean: [number, number];
-  solid?: boolean;
-  arms?: number;
-  /** a backless seat's own back edge: the hips no further back than on it */
-  rear?: number;
-}
-export const SEATS: Record<string, SeatShape> = {
-  chair: { top: 14 / ZPX, front: 0.3, back: -0.32, lean: [0, 0.15] },
-  armchair: { top: 13.5 / ZPX, front: 0.4, back: -0.21, lean: [0.1, 0.3], solid: true, arms: 19 / ZPX },
-  sofa: { top: 16.6 / ZPX, front: 0.42, back: -0.1, lean: [0.2, 0.3], solid: true },
-  beanbag: { top: 11 / ZPX, front: 0.36, back: null, lean: [0.4, 0.4], solid: true },
-  bench: { top: 11.2 / ZPX, front: 0.32, back: null, lean: [0, 0] },
-  // (a piano's stool, played sat on: its top 13.4 iso px, art/items/play.ts)
-  stool: { top: 13 / ZPX, front: 0.15, back: null, rear: -0.15, lean: [0, 0] },
-};
+// Each seat as it's drawn, sat on (shared furniture.ts SEAT_SPEC: the cushion's top less what it
+// gives, its front edge, its back's face, the lean, solid in front, its arms' top, m from the tile's
+// middle along the way its sitter faces). With ?furn=new the redrawn seats not yet signed off are sat
+// on as they're drawn (plan 67: SEAT_NEXT). Out on the land (no kind) the server's put her where she
+// sits: a park bench, a stand's row.
+export type SeatShape = SeatSpec;
+export const SEATS: Record<string, SeatShape> = FURN === "new" ? { ...SEAT_SPEC, ...SEAT_NEXT } : SEAT_SPEC;
 const SEAT_LAND: SeatShape = { top: 14 / ZPX, front: 0, back: null, lean: [0, 0] };
 const PELVIS = 0.09; // m: the seat of the trousers behind the hips' joint
 const BLADES = 0.45; // m: the shoulder blades over the hips, sat
