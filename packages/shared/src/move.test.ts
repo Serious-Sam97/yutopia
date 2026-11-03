@@ -87,6 +87,32 @@ test("a jog stops in a step on a floor, and skates on for metres on ice", () => 
   }
 });
 
+test("on ice a turn on the move is a carve — round 80° in about half a second, its speed kept; letting go still skates", () => {
+  // (the KH body's grip lowered the ice's braking, and a turn was braked: 2.5 s to come round)
+  const turn = (f: Footing, sprint: boolean) => {
+    const b = newBody(30, 30);
+    const env = on(pad(80, 80), f);
+    run(b, env, 3, () => go({ sprint }), KH_FEEL);
+    const v0 = speedOf(b);
+    const tr = run(b, env, 3, () => go({ x: 0, y: 1, sprint }), KH_FEEL);
+    const at = tr.find((s) => Math.atan2(s.b.vy, s.b.vx) >= (80 * Math.PI) / 180);
+    const slowest = Math.min(...tr.slice(0, tr.indexOf(at ?? tr[0]) + 1).map((s) => speedOf(s.b)));
+    return { t: at?.t ?? 99, kept: slowest / v0 };
+  };
+  const jog = turn("ice", false);
+  assert.ok(jog.t < 0.6, `a jog round in ${jog.t.toFixed(2)} s`);
+  assert.ok(jog.kept > 0.85, `its speed kept: ${jog.kept.toFixed(2)}`);
+  assert.ok(turn("ice", true).t < 1, "a sprint round in under a second");
+  assert.ok(turn("floor", false).t < jog.t, "a floor still turns quicker");
+  // letting go: still metres of skating
+  const b = newBody(2, 6);
+  const env = on(pad(80), "ice");
+  run(b, env, 3, () => go(), KH_FEEL);
+  const x0 = b.x;
+  run(b, env, 6, () => NO_INPUT, KH_FEEL);
+  assert.ok(b.x - x0 > 4, `slid ${(b.x - x0).toFixed(2)}`);
+});
+
 test("a sprint only goes roughly ahead, and the deep snow's speed caps it", () => {
   const b = newBody(2, 6);
   run(b, on(pad(60)), 1.5, () => go({ sprint: true }));

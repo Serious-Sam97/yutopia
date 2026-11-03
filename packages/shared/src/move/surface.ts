@@ -13,6 +13,9 @@ export interface Grip {
   turn: number;
   /** tiles / s² a slide loses to the ground */
   slide: number;
+  /** tiles / s² sideways on the move — a skate's edge: the way it goes comes round at this, its
+   *  speed kept, while speeding up and stopping stay `accel`'s and `decel`'s (none: a turn is braked) */
+  steer?: number;
 }
 
 export const GRIP: Record<Footing, Grip> = {
@@ -22,8 +25,9 @@ export const GRIP: Record<Footing, Grip> = {
   path: { accel: 24, decel: 26, turn: 0.9, slide: 4.5 },
   snow: { accel: 18, decel: 22, turn: 0.8, slide: 5.5 },
   deep: { accel: 10, decel: 16, turn: 0.6, slide: 12 },
-  // you skate: speeding up and stopping both take a while, a stop is a slide
-  ice: { accel: 4, decel: 2.5, turn: 0.45, slide: 1.2 },
+  // you skate: speeding up and stopping both take a while, a stop is a slide — but the edge
+  // carves: a jog comes round 80° in about half a second
+  ice: { accel: 4, decel: 2.5, turn: 0.45, slide: 1.2, steer: 12 },
   rock: { accel: 20, decel: 24, turn: 0.85, slide: 9 },
 };
 

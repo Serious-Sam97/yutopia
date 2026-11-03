@@ -405,6 +405,22 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
 
   // ── speeding up, slowing down, turning: by the grip underfoot (a little, in the air)
   const air = spec.air * GRIP.floor.accel;
+  // (on a skate's edge — the ice — a turn on the move is a carve, not a brake: the way it goes
+  // comes round at `steer` sideways with its speed kept; a turn back past 120° still slides to a
+  // stop and away, as letting go does)
+  const s0 = Math.hypot(b.vx, b.vy);
+  if (foot.steer && !b.up && want > 0 && s0 > 0.5) {
+    const off = Math.atan2(b.vx * wy - b.vy * wx, b.vx * wx + b.vy * wy);
+    if (Math.abs(off) < (2 * Math.PI) / 3) {
+      const max = ((foot.steer * (spec.grip ?? 1)) / s0) * dt;
+      const a = Math.max(-max, Math.min(max, off));
+      const c = Math.cos(a);
+      const s = Math.sin(a);
+      const vx = b.vx * c - b.vy * s;
+      b.vy = b.vx * s + b.vy * c;
+      b.vx = vx;
+    }
+  }
   const dvx = wx - b.vx;
   const dvy = wy - b.vy;
   const dv = Math.hypot(dvx, dvy);
