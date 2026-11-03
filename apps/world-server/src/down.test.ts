@@ -17,7 +17,7 @@ process.env.YUTOPIA_DARK_FAST = "1"; // (a bleed of 3 s, away for 1 s)
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
-const PORT = 26870 + Math.floor(Math.random() * 100);
+const PORT = 30400 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 const OFF = { x: -60, y: -10 };
 const POND = { x: -250, z: -60 };
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };

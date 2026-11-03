@@ -16,6 +16,7 @@ import {
   BUILDINGS,
   type Building,
   CHUNK,
+  DOCK,
   editsVersion,
   FENCE,
   FENCE_H,
@@ -60,6 +61,7 @@ import {
   turnOf,
   WAYS,
   wallEdgeAt,
+  waterAt,
   worldRects,
 } from "../grounds.ts";
 import { KART_FENCE_H } from "../kart/land.ts";
@@ -92,6 +94,7 @@ export type GroundWhat =
   | "fit"
   | "bridge_deck"
   | "bridge_rail"
+  | "dock"
   | "motors"
   | "forecourt"
   | "kart_fence"
@@ -664,6 +667,20 @@ function pavements(out: GroundSolid[]) {
     }
 }
 
+// ── the pond's dock (plan 66: the water has depth under it) ──
+function dock(out: GroundSolid[]) {
+  const D = DOCK;
+  const hx = (D.x1 - D.x0) / 2;
+  const hz = (D.z1 - D.z0) / 2;
+  out.push({ what: "dock", s: turned(D.x0 + hx, D.z0 + hz, 0, -hx, -hz, hx, hz, D.top - 0.3, D.top) });
+  // its posts, from the bed up past the planks
+  for (const z of D.posts)
+    for (const x of [D.x0 + 0.15, D.x1 - 0.15]) {
+      const bed = waterAt(x, z)?.bed ?? terrainAt(x, z);
+      out.push({ what: "dock", s: turned(x, z, 0, -0.14, -0.14, 0.14, 0.14, bed - 0.2, D.top + 0.43) });
+    }
+}
+
 // ── the bridges over the river and the ravine (WAYS' bridged samples) ──
 function bridges(out: GroundSolid[]) {
   for (const w of WAYS) {
@@ -1154,6 +1171,7 @@ function things(out: GroundSolid[]) {
   }
   for (const b of BUILDINGS) if (b.kind !== "hq" && !b.stored) building(out, b);
   bridges(out);
+  dock(out);
   pavements(out);
   if (KART_LAND) kartPark(out);
 }
@@ -1394,6 +1412,10 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
     label: "Bridge sides",
     how: "the footbridge's railing (1.13, 0.12 thick, w/2 + 0.2 out), the road bridge's truss sides (5.2, 0.36, w/2 + 0.7 out), 3 samples a piece",
     odd: "the truss's bracing across the top (5.2) isn't a solid: a flier passes between its sides over the road",
+  },
+  dock: {
+    label: "The pond's dock",
+    how: "its planks as one slab 0.3 deep to their top (DOCK.top, the water's level + 0.67), x −253.5 … −250.5, z −98 … −84.4; its eight posts (0.28 square) from the bed to 0.43 over the planks",
   },
   motors: {
     label: "MOTORS' forecourt",

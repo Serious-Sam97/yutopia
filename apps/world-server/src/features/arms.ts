@@ -20,7 +20,7 @@ import {
   rayMeets,
   spreadOf,
 } from "@yutopia/shared/dark";
-import { heightAt } from "@yutopia/shared/grounds";
+import { heightAt, inDeepWater } from "@yutopia/shared/grounds";
 import { count, isWeapon, QUICK, takeStack, WEAPONS, weaponIn } from "@yutopia/shared/inventory";
 import { MV_AIM, MV_WINDED, unpackMv } from "@yutopia/shared/move";
 import type { Player } from "../schema.ts";
@@ -310,6 +310,8 @@ registerFeature((room: WorldRoom) => {
         if (now >= pending[i].at) {
           const f = pending[i];
           pending.splice(i, 1);
+          // (into deep water: out — plan 66)
+          if (f.level === 0 && inDeepWater(f.x + ox(), f.y + oy())) continue;
           room.dark?.light(f.x, f.y, f.z, f.level, now);
         }
       // reloads: a round at a time out of the pockets, till full or out (the double-barrel opened

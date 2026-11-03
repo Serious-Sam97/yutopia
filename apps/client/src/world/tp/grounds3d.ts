@@ -5,6 +5,7 @@ import {
   type Building,
   CHUNK,
   CORN,
+  DOCK,
   FARM,
   FENCE,
   FENCE_H,
@@ -13,6 +14,7 @@ import {
   groundAt,
   groundSurfaceAt,
   groundsRng,
+  ICE_FAST,
   type Inside,
   insideFence,
   insideOf,
@@ -39,6 +41,7 @@ import {
   RAVINE,
   RIVER,
   ROAD_CLOSED,
+  riverWater,
   SCARECROWS,
   STATUE,
   STREET,
@@ -55,11 +58,13 @@ import {
   type Way,
   wallEdgeAt,
   wallsHigh,
+  waterAt,
   wayHalf,
 } from "@yutopia/shared/grounds";
 import { lotLayout } from "@yutopia/shared/lot";
 import {
   AdditiveBlending,
+  BackSide,
   BoxGeometry,
   BufferGeometry,
   CanvasTexture,
@@ -1200,18 +1205,62 @@ export class Grounds3 {
     ice.polygonOffset = true;
     ice.polygonOffsetFactor = -1;
     ice.polygonOffsetUnits = -4;
-    const wet = this.keep(new MeshLambertMaterial({ color: 0xffffff }));
+    // (the water: see-through where it's shallow, faceted by its waves — wx3d.ts WX_WATER: plan 66 S7)
+    const wet = this.keep(new MeshLambertMaterial({ color: 0xffffff, transparent: true, flatShading: true }));
     wet.userData.wx = "water";
+    const under = this.keep(new MeshLambertMaterial({ color: 0x000000, side: BackSide }));
+    under.userData.wx = "under";
     // the ice and, a little under it, the water: each vertex how far from its shore (wxSide: 0 the
     // middle, 1 a shore — signed across a ribbon, so its middle comes out between)
-    const both = (g: BufferGeometry, side: (i: number, x: number, z: number) => number) => {
+    const sided = (g: BufferGeometry, side: (i: number, x: number, z: number) => number) => {
       const p = g.getAttribute("position");
       const s = new Float32Array(p.count);
       for (let i = 0; i < p.count; i++) s[i] = side(i, p.getX(i), p.getZ(i));
       g.setAttribute("wxSide", new Float32BufferAttribute(s, 1));
-      const w = g.clone().translate(0, -0.025, 0);
-      this.add(w, wet, "receive");
-      this.add(g, ice, "receive");
+      return g;
+    };
+    // the water's surface (plan 66 S7): a grid fine enough to wave, each vertex how far from its shore
+    // (wxSide), how deep to its bed, along and across it, its current and any foam fixed there (wxFlow),
+    // its way (wxDir)
+    const surface = (v: {
+      p: number[];
+      side: number[];
+      depth: number[];
+      flow: number[];
+      dir: number[];
+      idx: number[];
+    }) => {
+      if (!v.idx.length) return;
+      const g = new BufferGeometry();
+      g.setAttribute("position", new Float32BufferAttribute(v.p, 3));
+      g.setAttribute("wxSide", new Float32BufferAttribute(v.side, 1));
+      g.setAttribute("wxDepth", new Float32BufferAttribute(v.depth, 1));
+      g.setAttribute("wxFlow", new Float32BufferAttribute(v.flow, 4));
+      g.setAttribute("wxDir", new Float32BufferAttribute(v.dir, 2));
+      g.setIndex(v.idx);
+      g.computeVertexNormals();
+      this.add(g, wet, "receive");
+      // (and its underside, seen from under it: S8)
+      this.add(g, under, "none");
+    };
+    const grid = () => ({
+      p: [] as number[],
+      side: [] as number[],
+      depth: [] as number[],
+      flow: [] as number[],
+      dir: [] as number[],
+      idx: [] as number[],
+    });
+    // (a strip of rows `cols + 1` across: each row joined to the one before)
+    const join = (v: ReturnType<typeof grid>, cols: number) => {
+      const row = v.p.length / 3 / (cols + 1) - 1;
+      if (row < 1) return;
+      const s0 = (row - 1) * (cols + 1);
+      for (let c = 0; c < cols; c++) {
+        const a = s0 + c;
+        const b = s0 + cols + 1 + c;
+        v.idx.push(a, a + 1, b, a + 1, b + 1, b);
+      }
     };
     // (a ribbon's: by the segment each quad is of, signed across it)
     const ribbon = (segs: { a: V; n: [number, number]; o: number }[]) => (i: number, x: number, z: number) => {
@@ -1234,7 +1283,37 @@ export class Grounds3 {
         const ps = [P(a0, 0), P(a1, 0), P(a1, 1.02), P(a0, 1.02)];
         g.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], ps.map(U) as [number, number][]);
       }
-      both(g.build(), (_i, x, z) => Math.min(1, Math.hypot((x - POND.cx) / POND.rx, (z - POND.cz) / POND.rz)));
+      // (its ice the disc; its water a grid in rings, the waves' facets)
+      this.add(
+        sided(g.build(), (_i, x, z) => Math.min(1, Math.hypot((x - POND.cx) / POND.rx, (z - POND.cz) / POND.rz))),
+        ice,
+        "receive",
+      );
+      const pw = grid();
+      const A = 120;
+      const R = 40;
+      for (let k = 0; k <= R; k++) {
+        const r = (1.04 * k) / R;
+        for (let a = 0; a < A; a++) {
+          const t = (a / A) * Math.PI * 2;
+          const x = POND.cx + Math.cos(t) * POND.rx * r;
+          const z = POND.cz + Math.sin(t) * POND.rz * r;
+          pw.p.push(x, POND_LEVEL, z);
+          pw.side.push(Math.min(1, r));
+          pw.depth.push(POND_LEVEL - terrainAt(x, z));
+          pw.flow.push(t * 30, r, 0, 0);
+          pw.dir.push(0.8, 0.6);
+        }
+        if (k > 0)
+          for (let a = 0; a < A; a++) {
+            const i0 = (k - 1) * A + a;
+            const i1 = (k - 1) * A + ((a + 1) % A);
+            const o0 = k * A + a;
+            const o1 = k * A + ((a + 1) % A);
+            pw.idx.push(i0, i1, o0, i1, o1, o0);
+          }
+      }
+      surface(pw);
       // the shore: snow lying over the ice's edge all round (but where the dock goes out)
       const shore = new G();
       const rs = groundsRng(911);
@@ -1264,40 +1343,158 @@ export class Grounds3 {
       this.add(shore.build(), this.lambert());
       // the dock: planks on posts, a canoe turned over under snow
       const d = new G();
-      const dx0 = -253.5;
-      const dx1 = -250.5;
-      const y = POND_LEVEL + 0.55;
+      const dx0 = DOCK.x0;
+      const dx1 = DOCK.x1;
+      const y = DOCK.top - 0.12;
       for (let z = -98; z < -84; z += 0.45)
         d.color(z % 0.9 < 0.45 ? 0x6b5442 : 0x5e4a3b).box(dx0, y, z, dx1, y + 0.12, z + 0.4);
       snowBox(d.color(0xf1f4f7), dx0 + 0.15, y + 0.12, -97.8, dx1 - 0.15, y + 0.2, -84.4);
-      for (const z of [-97, -92, -87, -84.4])
+      for (const z of DOCK.posts)
         for (const x of [dx0 + 0.15, dx1 - 0.15]) {
-          d.color(0x3f342c).box(x - 0.14, POND_LEVEL - 0.3, z - 0.14, x + 0.14, y + 0.55, z + 0.14);
+          // (down to the bed: the water's deep under it — plan 66)
+          const bed = waterAt(x, z)?.bed ?? POND_LEVEL - 0.3;
+          d.color(0x3f342c).box(x - 0.14, bed - 0.2, z - 0.14, x + 0.14, y + 0.55, z + 0.14);
           snowBox(d.color(0xf1f4f7), x - 0.16, y + 0.55, z - 0.16, x + 0.16, y + 0.66, z + 0.16); // snow capping it
         }
       // a ladder down to the ice at its end, a mooring cleat
-      for (const x of [dx0 + 1, dx1 - 1]) d.color(0x3f342c).box(x - 0.04, POND_LEVEL, -84.5, x + 0.04, y + 0.12, -84.4);
-      for (let yy = POND_LEVEL + 0.2; yy < y; yy += 0.3)
+      const ladderFoot = (waterAt(-252, -84.45)?.bed ?? POND_LEVEL) + 0.1;
+      for (const x of [dx0 + 1, dx1 - 1]) d.color(0x3f342c).box(x - 0.04, ladderFoot, -84.5, x + 0.04, y + 0.12, -84.4);
+      for (let yy = ladderFoot + 0.2; yy < y; yy += 0.3)
         d.color(0x3f342c).box(dx0 + 1, yy, -84.48, dx1 - 1, yy + 0.05, -84.42);
       d.color(0x2a2e33).box(dx0 + 0.3, y + 0.12, -90.2, dx0 + 0.7, y + 0.22, -90.0);
       this.add(d.build(), this.lambert());
-      const canoe = tinted(
-        new SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.45, 0.32, 2.3),
+      // the canoe afloat (plan 66), tied off the dock's east side: its hull down in the water, its
+      // floor and two thwarts showing
+      const hull = tinted(
+        new SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI).scale(0.45, 0.32, 2.3),
         0x7a2f22,
       );
-      const cs = tinted(
-        new SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(0.42, 0.18, 2.1).translate(0, 0.2, 0),
-        0xf4f6f9,
-        atOf("cap", -252, -91),
+      const floor = tinted(new BoxGeometry(0.62, 0.04, 3.6).translate(0, -0.1, 0), 0x5a4636);
+      const thwarts = [-0.9, 0.9].map((z) =>
+        tinted(new BoxGeometry(0.86, 0.05, 0.16).translate(0, -0.02, z), 0x6b5442),
       );
-      const c = mergeGeometries([canoe, cs], false);
-      this.add(place(c, -252, y + 0.12, -91, 0.05), this.lambert());
+      const c = mergeGeometries([hull, floor, ...thwarts], false);
+      this.add(place(c, DOCK.x1 + 0.95, POND_LEVEL + 0.1, -89, 0.03), this.lambert());
     }
-    // the river: a ribbon of ice in its bed, snow drifted on it
+    // under the water (plan 66 S8): weeds up off the pond's deep bed, stones on the river's slow one
+    {
+      const rr = groundsRng(3907);
+      const p: number[] = [];
+      const c: number[] = [];
+      for (let n = 0; n < 900; n++) {
+        const t = rr() * Math.PI * 2;
+        const k = Math.sqrt(rr()) * 0.85;
+        const x = POND.cx + Math.cos(t) * POND.rx * k;
+        const z = POND.cz + Math.sin(t) * POND.rz * k;
+        const w = waterAt(x, z);
+        if (!w || w.depth < 1.2 || !this.near(x, z, 6)) continue;
+        for (let b = 0; b < 3 + Math.floor(rr() * 4); b++) {
+          const bx = x + (rr() - 0.5) * 0.6;
+          const bz = z + (rr() - 0.5) * 0.6;
+          const h = 0.4 + rr() * Math.min(1.2, w.depth - 0.6);
+          const a = rr() * Math.PI;
+          const wx0 = Math.cos(a) * 0.05;
+          const wz0 = Math.sin(a) * 0.05;
+          const sway = (rr() - 0.5) * 0.4;
+          p.push(bx - wx0, w.bed, bz - wz0, bx + wx0, w.bed, bz + wz0, bx + sway, w.bed + h, bz + sway * 0.6);
+          const g0 = 0.6 + rr() * 0.3;
+          for (let v = 0; v < 3; v++) c.push(0.12 * g0, 0.26 * g0, 0.14 * g0);
+        }
+      }
+      if (p.length) {
+        const g = new BufferGeometry();
+        g.setAttribute("position", new Float32BufferAttribute(p, 3));
+        g.setAttribute("color", new Float32BufferAttribute(c, 3));
+        g.computeVertexNormals();
+        this.add(g, this.keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide })), "none");
+      }
+      const L1 = RIVER.line;
+      const rw1 = riverWater();
+      const stones: BufferGeometry[] = [];
+      for (let i = 0; i < L1.length; i += 4) {
+        if (rw1.speed[i] > 1.2 || !this.near(L1[i][0], L1[i][1], 30) || rr() < 0.5) continue;
+        const a = L1[Math.max(0, i - 1)];
+        const b = L1[Math.min(L1.length - 1, i + 1)];
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const off = (rr() - 0.5) * 18;
+        const x = L1[i][0] - ((b[1] - a[1]) / l) * off;
+        const z = L1[i][1] + ((b[0] - a[0]) / l) * off;
+        const w = waterAt(x, z);
+        if (!w || w.depth < 0.6) continue;
+        const r = 0.2 + rr() * 0.35;
+        stones.push(
+          tinted(new SphereGeometry(1, 5, 3).scale(r * 1.4, r * 0.6, r), rr() < 0.5 ? 0x5a5650 : 0x6a6458).translate(
+            x,
+            w.bed + r * 0.2,
+            z,
+          ),
+        );
+      }
+      if (stones.length) this.add(mergeGeometries(stones, false), this.lambert(), "receive");
+    }
+    // reeds (plan 66 S7): clumps of blades in the shallows — the pond's shelf and the river's slow
+    // reach — standing out of the water, its depth to a metre and a half over it
+    {
+      const rr = groundsRng(2617);
+      const p: number[] = [];
+      const c: number[] = [];
+      const spots: [number, number][] = [];
+      for (let n = 0; n < 2400; n++) {
+        const t = rr() * Math.PI * 2;
+        const k = 0.86 + rr() * 0.16;
+        spots.push([POND.cx + Math.cos(t) * POND.rx * k, POND.cz + Math.sin(t) * POND.rz * k]);
+      }
+      const L0 = RIVER.line;
+      const rw0 = riverWater();
+      for (let i = 0; i < L0.length; i += 2) {
+        if (rw0.speed[i] > 0.6 || rr() < 0.55) continue;
+        const a = L0[Math.max(0, i - 1)];
+        const b = L0[Math.min(L0.length - 1, i + 1)];
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const off = (rr() < 0.5 ? -1 : 1) * (8.8 + rr() * 2);
+        spots.push([L0[i][0] - ((b[1] - a[1]) / l) * off, L0[i][1] + ((b[0] - a[0]) / l) * off]);
+      }
+      for (const [x, z] of spots) {
+        if (!this.near(x, z, 6)) continue;
+        const w = waterAt(x, z);
+        if (!w || w.depth > 0.5 || w.depth < 0.04 || rr() < 0.5) continue;
+        const blades = 5 + Math.floor(rr() * 7);
+        for (let k = 0; k < blades; k++) {
+          const bx = x + (rr() - 0.5) * 0.9;
+          const bz = z + (rr() - 0.5) * 0.9;
+          const y0 = w.bed;
+          const h = w.depth + 0.6 + rr() * 1.1;
+          const lean = rr() * Math.PI * 2;
+          const lx = Math.cos(lean) * 0.25 * rr();
+          const lz = Math.sin(lean) * 0.25 * rr();
+          const a = rr() * Math.PI;
+          const wx0 = Math.cos(a) * 0.035;
+          const wz0 = Math.sin(a) * 0.035;
+          p.push(bx - wx0, y0, bz - wz0, bx + wx0, y0, bz + wz0, bx + lx, y0 + h, bz + lz);
+          const gk = 0.55 + rr() * 0.25;
+          const col = rr() < 0.3 ? [0.55 * gk, 0.5 * gk, 0.28 * gk] : [0.32 * gk, 0.45 * gk, 0.2 * gk];
+          for (let v = 0; v < 3; v++) c.push(...col);
+        }
+      }
+      if (p.length) {
+        const g = new BufferGeometry();
+        g.setAttribute("position", new Float32BufferAttribute(p, 3));
+        g.setAttribute("color", new Float32BufferAttribute(c, 3));
+        g.computeVertexNormals();
+        const m = this.keep(new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+        this.add(g, m, "none");
+      }
+    }
+    // the river: a ribbon of water at its level, ice on it where it's slow enough to freeze (the rapid
+    // and the falls stay open: grounds.ts ICE_FAST, plan 66)
     const g = new G();
+    const gi = new G();
     const rs: { a: V; n: [number, number]; o: number }[] = [];
+    const ri: { a: V; n: [number, number]; o: number }[] = [];
     let v = 0;
     const L = RIVER.line;
+    // (at its level, running downhill: plan 66)
+    const rw = riverWater();
     for (let i = 0; i < L.length - 1; i++) {
       const [ax, az] = L[i];
       const [bx, bz] = L[i + 1];
@@ -1306,19 +1503,90 @@ export class Grounds3 {
       const nx = -(bz - az) / len;
       const nz = (bx - ax) / len;
       const o = RIVER.w / 2 + 0.6;
-      const ya = RIVER.h[i] + 0.04;
-      const yb = RIVER.h[i + 1] + 0.04;
+      const ya = rw.level[i] + 0.04;
+      const yb = rw.level[i + 1] + 0.04;
       const ps: V[] = [
         [ax - nx * o, ya, az - nz * o],
         [ax + nx * o, ya, az + nz * o],
         [bx + nx * o, yb, bz + nz * o],
         [bx - nx * o, yb, bz - nz * o],
       ];
-      g.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], ps.map((p) => [p[0] / 24, p[2] / 24]) as [number, number][]);
+      const uv = ps.map((p) => [p[0] / 24, p[2] / 24]) as [number, number][];
+      g.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], uv);
       rs.push({ a: [ax, ya, az], n: [nx, nz], o: RIVER.w / 2 });
+      if (rw.speed[i] <= ICE_FAST && rw.speed[i + 1] <= ICE_FAST) {
+        gi.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], uv);
+        ri.push({ a: [ax, ya, az], n: [nx, nz], o: RIVER.w / 2 });
+      }
       v += len;
     }
-    if (!g.empty) both(g.build(), ribbon(rs));
+    void rs;
+    // its water: a row a sample, 26 across out to over its banks' foot; rocks in it where it's fast
+    // (the rapid, the falls), white round them
+    const rocks: { x: number; z: number; r: number }[] = [];
+    const rr = groundsRng(4417);
+    for (let i = 0; i < L.length; i += 3) {
+      if (rw.speed[i] < 1.5 || !this.near(L[i][0], L[i][1], 30)) continue;
+      for (let n = 0; n < 2; n++) {
+        if (rr() < 0.4) continue;
+        const a = L[Math.max(0, i - 1)];
+        const b = L[Math.min(L.length - 1, i + 1)];
+        const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const off = (rr() - 0.5) * 16;
+        rocks.push({
+          x: L[i][0] - ((b[1] - a[1]) / l) * off,
+          z: L[i][1] + ((b[0] - a[0]) / l) * off,
+          r: 0.4 + rr() * 0.6,
+        });
+      }
+    }
+    const COLS = 26;
+    let rv = grid();
+    const flush = () => {
+      surface(rv);
+      rv = grid();
+    };
+    for (let i = 0; i < L.length; i++) {
+      if (!this.near(L[i][0], L[i][1], 30)) {
+        flush();
+        continue;
+      }
+      const a = L[Math.max(0, i - 1)];
+      const b = L[Math.min(L.length - 1, i + 1)];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const tx = (b[0] - a[0]) / l;
+      const tz = (b[1] - a[1]) / l;
+      for (let c = 0; c <= COLS; c++) {
+        const off = -13 + (26 * c) / COLS;
+        const x = L[i][0] - tz * off;
+        const z = L[i][1] + tx * off;
+        let foam = 0;
+        for (const k of rocks) foam = Math.max(foam, 1 - Math.hypot(x - k.x, z - k.z) / (k.r + 1.4));
+        rv.p.push(x, rw.level[i], z);
+        rv.side.push(off / (RIVER.w / 2));
+        rv.depth.push(rw.level[i] - terrainAt(x, z));
+        rv.flow.push(rw.along[i], off / (RIVER.w / 2), rw.speed[i], foam);
+        rv.dir.push(tx, tz);
+      }
+      join(rv, COLS);
+    }
+    flush();
+    if (rocks.length) {
+      const parts = rocks.map((k) => {
+        const bed = waterAt(k.x, k.z)?.bed ?? terrainAt(k.x, k.z);
+        const lv = waterAt(k.x, k.z)?.level ?? bed;
+        // (faceted, its top a little out of the water)
+        const top = lv + 0.1 + k.r * 0.3;
+        const h = Math.max(k.r, top - bed);
+        return tinted(new SphereGeometry(1, 5, 3).scale(k.r * 1.3, h, k.r), 0x5f625f, atOf("cap", k.x, k.z)).translate(
+          k.x,
+          top - h,
+          k.z,
+        );
+      });
+      this.add(mergeGeometries(parts, false), this.lambert());
+    }
+    if (!gi.empty) this.add(sided(gi.build(), ribbon(ri)), ice, "receive");
     void v;
     // the ravine's creek: a thin ice line on its floor
     const k = new G();
@@ -1341,7 +1609,23 @@ export class Grounds3 {
       k.quad(ps[0], ps[1], ps[2], ps[3], [0, 1, 0], ps.map((p) => [p[0] / 24, p[2] / 24]) as [number, number][]);
       ks.push({ a: [ax, ya, az], n: [nx, nz], o: 1.4 });
     }
-    if (!k.empty) both(k.build(), ribbon(ks));
+    if (!k.empty) {
+      // (its ice the ribbon; its water a shallow one over it, waded: plan 66)
+      const kg = sided(k.build(), ribbon(ks));
+      this.add(kg, ice, "receive");
+      const cw = grid();
+      const P = kg.getAttribute("position");
+      const S = kg.getAttribute("wxSide");
+      for (let i = 0; i < P.count; i++) {
+        cw.p.push(P.getX(i), P.getY(i) - 0.025, P.getZ(i));
+        cw.side.push(S.getX(i));
+        cw.depth.push(0.3);
+        cw.flow.push(P.getX(i) * 0.3 + P.getZ(i) * 0.3, S.getX(i), 0.6, 0);
+        cw.dir.push(0.7, 0.7);
+        cw.idx.push(i);
+      }
+      surface(cw);
+    }
   }
 
   // ── the parking lot (docs/plan/42-the-lot.md): the stills draw the new one whole from the

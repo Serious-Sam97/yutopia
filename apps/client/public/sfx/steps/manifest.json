@@ -321,5 +321,53 @@
         "puddle-6.mp3"
       ]
     }
+  ],
+  "wade-shallow": [
+    {
+      "id": "342932",
+      "user": "ryansitz",
+      "title": "Wading in Shallow Water.wav",
+      "url": "https://freesound.org/people/ryansitz/sounds/342932/",
+      "files": [
+        "wade-shallow-1.mp3",
+        "wade-shallow-2.mp3",
+        "wade-shallow-3.mp3",
+        "wade-shallow-4.mp3",
+        "wade-shallow-5.mp3",
+        "wade-shallow-6.mp3"
+      ]
+    }
+  ],
+  "wade-deep": [
+    {
+      "id": "563555",
+      "user": "paulprit",
+      "title": "River Wading Fast.mp3",
+      "url": "https://freesound.org/people/paulprit/sounds/563555/",
+      "files": [
+        "wade-deep-1.mp3",
+        "wade-deep-2.mp3",
+        "wade-deep-3.mp3",
+        "wade-deep-4.mp3",
+        "wade-deep-5.mp3",
+        "wade-deep-6.mp3"
+      ]
+    }
+  ],
+  "soaked": [
+    {
+      "id": "683520",
+      "user": "eqavox",
+      "title": "Feet Squelch",
+      "url": "https://freesound.org/people/eqavox/sounds/683520/",
+      "files": [
+        "soaked-1.mp3",
+        "soaked-2.mp3",
+        "soaked-3.mp3",
+        "soaked-4.mp3",
+        "soaked-5.mp3",
+        "soaked-6.mp3"
+      ]
+    }
   ]
 }

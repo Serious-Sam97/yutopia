@@ -54,11 +54,12 @@ export const HOME_CARS: HomeCar[] = (() => {
     { id: "church-car-1", x: 422, z: -472, a: Math.PI / 2, model: "sedan", colour: 1, wagon: true, snowy: true },
     { id: "boathouse-4x4", x: -265, z: -113, a: 0, model: "offroad", colour: 0, snowy: true },
     { id: "gas-rental", x: 322.5, z: -381, a: Math.PI, model: "sedan", colour: 3, role: "rental" },
-    // (wave 2) two snowmobiles out on the pond's ice by the boathouse, one and the snowcat at
-    // the Grounds shed
-    // (west of the boathouse's dock — x −254 to −251 — nosed south, out over the ice)
-    { id: "pond-sled-0", x: -262, z: -88, a: Math.PI / 2, model: "snowmobile", colour: 1 },
-    { id: "pond-sled-1", x: -266.5, z: -88, a: Math.PI / 2, model: "snowmobile", colour: 8 },
+    // (wave 2) two snowmobiles on the pond's bank by the boathouse, one and the snowcat at the
+    // Grounds shed
+    // (west of the boathouse, on the bank above the water — plan 66: it's deep where they stood —
+    // nosed down towards it)
+    { id: "pond-sled-0", x: -280, z: -103, a: Math.PI / 2, model: "snowmobile", colour: 1 },
+    { id: "pond-sled-1", x: -284.5, z: -103, a: Math.PI / 2, model: "snowmobile", colour: 8 },
     { id: "shed-sled", x: -143, z: 106, a: Math.PI / 2, model: "snowmobile", colour: 2 },
     { id: "shed-snowcat", x: -155, z: 104, a: 0, model: "snowcat", colour: 8 },
     // (wave 3) the town's plough truck at the kerb on Main Street's south side (its long free stretch); the farm's

@@ -3,7 +3,7 @@ import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { ROOM_NAME } from "@yutopia/shared";
 import { type CarWire, HOME_CARS, headingQuat, parkedPose } from "@yutopia/shared/car";
-import { heightAt } from "@yutopia/shared/grounds";
+import { heightAt, POND, POND_LEVEL } from "@yutopia/shared/grounds";
 import { Client, type Room } from "colyseus.js";
 
 // The lot's cars, driven (docs/plan/28-the-car.md, phase 3): into the
@@ -13,7 +13,7 @@ process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
-const PORT = 26070 + Math.floor(Math.random() * 100);
+const PORT = 30200 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
 before(async () => {
@@ -452,4 +452,62 @@ test("a snowmobile: its one rider, no more", async () => {
   assert.equal(me(b).busy, "");
   a.send("car:leave", {});
   await waitFor(() => me(a).busy === "");
+});
+
+test("into the pond (plan 66): driven in deep, its people are out of it afloat, and nobody gets back in", async () => {
+  const r = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
+    sandbox: 9,
+    token: "dev:50:P50:member,builder,admin",
+  });
+  rooms.push(r);
+  await waitFor(() => r.state.players?.size > 0 && r.state.objects?.size > 0);
+  // (the water open: the tests' world is a winter's, frozen)
+  r.send("mod:ground", { to: "melt", now: true });
+  await waitFor(() => r.state.weather.ice === 0);
+  r.send("mod:cars", {});
+  await waitFor(() => !!r.state.objects.get("pond-sled-0"));
+  await sleep(300);
+  const o = r.state.objects.get("pond-sled-0");
+  const pose = parkedPose({ x: o.x, y: o.y, rot: o.rot, props: props(o) });
+  r.send("teleport", { to: { x: 30, y: 20, level: 0 } });
+  await waitFor(() => me(r).level === 0);
+  r.send("teleport", { to: { x: pose.x, y: pose.y + 1.6, level: 0 } });
+  await waitFor(() => Math.hypot(me(r).x - pose.x, me(r).y - pose.y - 1.6) < 3);
+  r.send("car:enter", { id: "pond-sled-0", seat: 0 });
+  await waitFor(() => me(r).busy === "drive:car:pond-sled-0");
+  // driven out over the pond's deep middle (where the driver says it is, it is)
+  const q = headingQuat(0);
+  const at = { x: POND.cx, z: POND.cz };
+  r.send("car:state", {
+    seq: 1,
+    x: at.x,
+    y: heightAt(at.x, at.z) + 0.5,
+    z: at.z,
+    qx: q.x,
+    qy: q.y,
+    qz: q.z,
+    qw: q.w,
+    vx: 0,
+    vy: 0,
+    vz: 0,
+    wy: 0,
+    steer: 0,
+    rpm: 0,
+    gear: 0,
+    fl: 0,
+    slip: 0,
+    fuel: 10,
+  } satisfies CarWire);
+  await waitFor(() => me(r).busy === "");
+  assert.ok(Math.abs(me(r).z - (POND_LEVEL - 1.25)) < 0.05, `afloat: ${me(r).z}`);
+  // left there, parked where it went down: nobody gets in
+  await waitFor(() => !r.state.vehicles.get("car:pond-sled-0"), 6000);
+  let why = "";
+  r.onMessage("car:no", (m: { why: string }) => {
+    why = m.why;
+  });
+  r.send("car:enter", { id: "pond-sled-0", seat: 0 });
+  await waitFor(() => why === "gone");
+  r.send("mod:ground", { to: "snow", now: true });
+  await waitFor(() => r.state.weather.ice === 1);
 });

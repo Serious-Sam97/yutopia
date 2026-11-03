@@ -13,7 +13,7 @@ delete process.env.YUTOPIA_WEATHER;
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
-const PORT = 25870 + Math.floor(Math.random() * 100);
+const PORT = 32600 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
 

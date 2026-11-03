@@ -133,6 +133,9 @@ let night: Night | null = null;
 // (phase 9's: life — the cold, the breath caught, who she is, a sound's turn)
 type LifeM = typeof import("./anim/life");
 let lifeM: LifeM | null = null;
+// (plan 66 phase 4's: the swim body — treading, the strokes, under, the dives, wading)
+type SwimM = typeof import("./anim/swim");
+let swimM: SwimM | null = null;
 export function loadHero(): Promise<Hero> {
   heroLoading ??= Promise.all([
     import("./anim/hero"),
@@ -140,12 +143,14 @@ export function loadHero(): Promise<Hero> {
     import("./anim/acts"),
     import("./anim/night"),
     import("./anim/life"),
-  ]).then(([m, a, b, n, l]) => {
+    import("./anim/swim"),
+  ]).then(([m, a, b, n, l, w]) => {
     hero = m;
     air = a;
     acts = b;
     night = n;
     lifeM = l;
+    swimM = w;
     return m;
   });
   return heroLoading;
@@ -158,6 +163,8 @@ export const actsNow = (): Acts | null => acts;
 export const nightNow = (): Night | null => night;
 /** Phase 9's, once in. */
 export const lifeNow = (): LifeM | null => lifeM;
+/** Plan 66's swim body, once in. */
+export const swimNow = (): SwimM | null => swimM;
 /** …if they're in (null while they load, or never asked for). */
 export const heroNow = (): Hero | null => hero;
 

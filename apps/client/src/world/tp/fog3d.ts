@@ -1,4 +1,4 @@
-import { AdditiveBlending, Color, Material, ShaderChunk, Vector3 } from "three";
+import { AdditiveBlending, Color, Material, ShaderChunk, Vector3, Vector4 } from "three";
 
 // The morning fog in 3D (docs/plan/64-the-fog.md, F2): three's fog chunks swapped once, for every
 // material that takes fog, so nothing is patched one by one. Over three's own (the day's far fog,
@@ -31,6 +31,10 @@ export const mf = {
   mfWind: { value: [0.004, 0.0015] }, // the drift's (tiles × 0.012 a second)
   mfFlat: { value: 0 }, // how much of the sun the wall's taken (the shadows painted on go with it)
   mfLift: { value: -1000 }, // the haze's floor lifted (tiles up from mfY0): clear under it
+  // under the water (docs/plan/66-the-water.md, S8): its level over the camera (the scene's), the
+  // murk's density a metre, 1 when the camera's under it, the sun's light on its bed; the murk's colour
+  mfUw: { value: new Vector4(-1000, 0.14, 0, 0) },
+  mfUwCol: { value: new Color(0.012, 0.05, 0.048) },
 };
 
 const VERT_PARS = `
@@ -52,6 +56,7 @@ const FRAG_PARS = `
 	uniform float mfSunK; uniform float mfT; uniform float mfBox;
 	uniform vec3 mfBoxMin; uniform vec3 mfBoxMax; uniform vec3 mfCol; uniform vec3 mfSunCol; uniform vec3 mfSun;
 	uniform vec2 mfWind; uniform float mfFlat; uniform float mfLift;
+	uniform vec4 mfUw; uniform vec3 mfUwCol;
 	// the haze at a height (a tile's worth; never past e^20 of it: nothing's drawn that far down, and
 	// an overflow's a NaN the bloom spreads over the frame)
 	float mfDens( float y ) { return mfA * exp( min( - ( y - mfY0 ) / mfH, 20.0 ) ); }
@@ -59,6 +64,12 @@ const FRAG_PARS = `
 	float mfNoise( vec2 p ) {
 		vec2 i = floor( p ); vec2 f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
 		return mix( mix( mfHash( i ), mfHash( i + vec2( 1.0, 0.0 ) ), f.x ), mix( mfHash( i + vec2( 0.0, 1.0 ) ), mfHash( i + vec2( 1.0, 1.0 ) ), f.x ), f.y );
+	}
+	// the light rippling on a water's bed (plan 66 S8): two noises' crossings, thin and bright
+	float mfCaustic( vec2 p, float t ) {
+		float a = mfNoise( p * 1.3 + vec2( t * 0.25, - t * 0.18 ) );
+		float b = mfNoise( p * 1.7 + vec2( - t * 0.2, t * 0.22 ) + 7.0 );
+		return pow( clamp( 1.0 - abs( a - b ) * 3.2, 0.0, 1.0 ), 6.0 );
 	}
 #endif
 `;
@@ -128,6 +139,26 @@ const FRAG = `
 			vec3 mfC = mix( mfCol, mfSunCol, mfS );
 		#endif
 		gl_FragColor.rgb = mix( gl_FragColor.rgb, mfC, 1.0 - exp( - mfOd ) );
+	}
+	// under the water (plan 66 S8): the murk by how much of the ray is under its level — lighter
+	// looking up, darker down — and the light rippling on what's under it; the surface's own
+	// underside murks less (the light comes through it)
+	if ( mfUw.z > 0.5 && mfRo.y < mfUw.x ) {
+		float mfUd = vFogW.y < mfUw.x ? mfL : mfL * clamp( ( mfUw.x - mfRo.y ) / max( mfRv.y, 1e-3 ), 0.0, 1.0 );
+		float mfUk = mfUw.y;
+		#ifdef WX_UNDER
+			mfUk *= 0.45;
+		#else
+			if ( vFogW.y < mfUw.x - 0.05 )
+				gl_FragColor.rgb += mfUw.w * mfCaustic( vFogW.xz, mfT ) * ( 0.45 - 0.25 * clamp( ( mfUw.x - vFogW.y ) / 3.0, 0.0, 1.0 ) ) * vec3( 0.8, 1.0, 0.9 );
+		#endif
+		float mfUp = clamp( mfRd.y * 0.5 + 0.5, 0.0, 1.0 );
+		#if defined( MF_ADD )
+			vec3 mfUm = vec3( 0.0 );
+		#else
+			vec3 mfUm = mfUwCol * mix( 0.35, 2.2, mfUp * mfUp );
+		#endif
+		gl_FragColor.rgb = mix( gl_FragColor.rgb * vec3( 0.55, 0.85, 0.8 ), mfUm, 1.0 - exp( - mfUk * mfUd ) );
 	}
 	// (a sun's shadow painted on, multiplied in: gone with the sun in the wall)
 	#ifdef MF_SUN_SHADOW

@@ -40,6 +40,14 @@ export const wx = {
   wxSky: { value: new Color(0.6, 0.65, 0.7) }, // the sky's colour low down (linear): the sheen's
   wxT: { value: 0 }, // seconds: the rings
   wxIce: { value: 1 }, // the water's ice, 0 … 1 (the room's, eased): in from the shores (W6)
+  // its holes broken through (plan 66 S4): x, z (the Grounds'), radius, 1 if there's one
+  wxHoles: { value: Array.from({ length: 8 }, () => new Vector4()) },
+  // (plan 66 S7) the sun's way (the world's) and how much it glints off the water (0 down, overcast);
+  // the swimmers and waders near: x, z (the Grounds'), the way they go (rad), how fast (m/s; 0 none)
+  wxSun: { value: new Vector4(0, 1, 0, 0) },
+  // (S8) the murk's colour under it (the view's: fog3d.ts mfUwCol's)
+  wxUwCol: { value: new Color(0.012, 0.05, 0.048) },
+  wxSwim: { value: Array.from({ length: 8 }, () => new Vector4()) },
   wxIcicle: { value: 1 }, // the icicles, 0 … 1: they hang when it's freezing after a thaw (sky.ts)
   wxOff: { value: new Vector3() }, // the Grounds' origin in the scene: the noise in their coords
   wxTex: { value: null as Texture | null }, // the snow's own picture (the land's): its grain
@@ -248,9 +256,34 @@ export function pressShader(sh: { uniforms: Record<string, unknown>; vertexShade
     .replace("#include <project_vertex>", `#include <project_vertex>\n${VERT_DROP}`);
 }
 
+// the water's vertices (plan 66 S7: grounds3d.ts `surface`): how deep to its bed, along it (m) and
+// across it, its current (m/s), the foam fixed there (the rapid's rocks), its way; three slow waves,
+// calm in the shallows, chopped where it's fast, none under its ice
+const WATER_V_PARS = `
+attribute float wxDepth; attribute vec4 wxFlow; attribute vec2 wxDir;
+varying float vWxDepth; varying vec4 vWxFlow;
+uniform float wxT; uniform float wxIce;
+`;
+const WATER_V = `
+{
+  float sp = wxFlow.z;
+  vec2 p = position.xz;
+  vec2 nr = vec2(-wxDir.y, wxDir.x);
+  float iced = sp <= 1.2 && 1.0 - min(abs(wxSide), 1.0) <= wxIce * 1.02 - 0.01 ? 1.0 : 0.0;
+  float w = 0.06 * sin(dot(p, wxDir) * 0.9 - wxT * (1.1 + sp * 2.2) + dot(p, nr) * 0.35)
+    + 0.045 * sin(dot(p, vec2(0.61, -0.79)) * 1.3 + wxT * 0.8)
+    + 0.03 * sin(dot(p, vec2(-0.83, 0.55)) * 2.1 - wxT * 1.3);
+  transformed.y += w * (0.45 + 0.55 * smoothstep(0.0, 0.7, wxDepth)) * (1.0 + sp * 0.7) * (1.0 - iced);
+  vWxDepth = wxDepth;
+  vWxFlow = wxFlow;
+}
+`;
+
 const FRAG_PARS = `
 uniform float wxSnow; uniform float wxMelt; uniform float wxWet; uniform vec3 wxOff;
 uniform vec3 wxSky; uniform float wxPud; uniform float wxRain; uniform float wxT; uniform float wxIce;
+uniform vec4 wxHoles[8];
+uniform vec4 wxSun; uniform vec4 wxSwim[8]; uniform vec3 wxUwCol;
 uniform sampler2D wxTex; uniform float wxTexOn; uniform sampler2D wxGrass;
 uniform vec4 wxRoofs[${ROOFS * 2}]; uniform int wxRoofN;
 // (an integer hash: a float one goes regular a few hundred metres out — the town, the karts — where
@@ -365,31 +398,96 @@ const FRAG = `
   // the water's ice (W6): in from the shores as it freezes, out from the middle as it thaws —
   // where it isn't, the water under it shows
   if (1.0 - min(abs(vWxSide), 1.0) > wxIce * 1.02 - 0.01) discard;
+  // (and its holes, broken through: plan 66)
+  for (int k = 0; k < 8; k++)
+    if (wxHoles[k].w > 0.5 && distance(wxW.xz, wxHoles[k].xy) < wxHoles[k].z) discard;
   wxOn = false;
 #endif
 #ifdef WX_WATER
-  // open water (W6): dark by its depth (its middle deeper), the sky off it at a glancing look, slow
-  // ripples, the rain's rings
+  // open water (W6; plan 66 S7, the approved mock's): coloured by how deep it is to its bed — clear in
+  // the shallows, the bed seen through them — streaked along its current, a lapping foam line at the
+  // shore, white where it's fast (the rapid, the falls) and round the rocks in it, rings and a wake
+  // round anyone in it, the rain's rings; an ink line where it meets the land; the sky off it at a
+  // glancing look and the sun's glint, broken by its facets. None of it where it's iced over.
   {
-    float deep = 1.0 - min(abs(vWxSide), 1.0);
-    vec3 shallow = mix(vec3(0.010, 0.029, 0.029), vec3(0.025, 0.052, 0.043), wxF(wxW.xz * 0.05));
-    diffuseColor.rgb = mix(shallow, shallow * 0.55, smoothstep(0.1, 0.8, deep));
-    vec3 V = normalize(cameraPosition - (wxW + wxOff));
-    float fres = pow(1.0 - max(V.y, 0.0), 4.0);
-    float rip = wxN(vec2(wxW.x * 0.35 + wxT * 0.05, wxW.z * 3.2)) * wxN(vec2(wxW.x * 1.1 + 3.0, wxW.z * 6.0 - wxT * 0.08));
-    float ring = 0.0;
+    float d = vWxDepth;
+    float sp = vWxFlow.z;
+    bool hole = false;
+    for (int k = 0; k < 8; k++)
+      if (wxHoles[k].w > 0.5 && distance(wxW.xz, wxHoles[k].xy) < wxHoles[k].z) hole = true;
+    if (!hole && sp <= 1.2 && 1.0 - min(abs(vWxSide), 1.0) <= wxIce * 1.02 - 0.01) discard;
+#ifdef WX_UNDER
+    // from under it (S8): bright and rippling, the sky through its window overhead (Snell's: within
+    // ~48° of straight up), past it the murk under it mirrored, silvered; a bright ring at the window's
+    // edge
+    {
+      vec3 f = normalize((wxW + wxOff) - cameraPosition);
+      float win = smoothstep(0.62, 0.72, f.y);
+      float rip = wxN(wxW.xz * 1.2 + vec2(wxT * 0.2, -wxT * 0.15));
+      vec3 uc = mix(wxUwCol * (3.0 + 1.6 * rip), wxSky * (1.1 + 0.4 * rip) + vec3(0.04), win);
+      uc += (1.0 - smoothstep(0.0, 0.035, abs(f.y - 0.66))) * vec3(0.35, 0.45, 0.42);
+      diffuseColor.rgb = vec3(0.0);
+      totalEmissiveRadiance = uc;
+      wxOn = false;
+    }
+#else
+    vec3 c = mix(vec3(0.04, 0.12, 0.10), vec3(0.004, 0.022, 0.028), smoothstep(0.4, 2.6, d));
+    float a = mix(0.28, 0.93, smoothstep(0.0, 1.6, d));
+    float n1 = wxN(vec2(vWxFlow.x * 0.32 - wxT * sp * 0.32, vWxFlow.y * 9.0));
+    c += step(0.8, n1) * smoothstep(0.15, 0.6, sp) * 0.05;
+    float lap = 0.05 * sin(wxT * 1.4 + wxW.x * 0.45 + wxW.z * 0.3);
+    float fn = wxN(wxW.xz * 1.9 + vec2(0.0, -wxT * (0.15 + sp * 0.5)));
+    float foam = (1.0 - smoothstep(0.06, 0.24, d + lap)) * step(0.42, fn) * step(0.035, d);
+    float wn = wxN(vec2(vWxFlow.x * 0.9 - wxT * sp * 0.7, vWxFlow.y * 6.0 + vWxFlow.x * 0.1));
+    foam = max(foam, smoothstep(1.0, 2.2, sp) * step(0.32, wn));
+    foam = max(foam, vWxFlow.w * step(0.35, fn));
+    for (int k = 0; k < 8; k++) {
+      vec4 sw = wxSwim[k];
+      if (sw.w <= 0.0) continue;
+      vec2 q = wxW.xz - sw.xy;
+      float r = length(q);
+      if (r > 5.0) continue;
+      // (a ring where the body meets it, and two going out)
+      float ring = 1.0 - smoothstep(0.02, 0.07, abs(r - 0.42));
+      for (int j = 0; j < 2; j++) {
+        float t = fract(wxT * 0.45 + float(j) * 0.5);
+        ring = max(ring, (1.0 - smoothstep(0.015, 0.05, abs(r - 0.45 - t * 1.6))) * (1.0 - t) * (1.0 - t) * 0.6);
+      }
+      // (moving: a V behind, as long as it's going fast)
+      vec2 f = vec2(cos(sw.z), sin(sw.z));
+      float back = -dot(q, f);
+      float side = abs(dot(q, vec2(-f.y, f.x)));
+      float len = 0.8 + 1.8 * min(1.0, sw.w);
+      float fade = 1.0 - back / len;
+      float wake = back > 0.2 && back < len ? (1.0 - smoothstep(0.015, 0.06, abs(side - back * 0.32))) * fade * fade : 0.0;
+      foam = max(foam, max(ring * 0.8, wake * 0.7 * min(1.0, sw.w)));
+    }
     if (wxRain > 0.01) {
       vec2 cell = floor(wxW.xz * 1.3);
-      vec2 f = fract(wxW.xz * 1.3);
+      vec2 fc = fract(wxW.xz * 1.3);
       float h = wxH(cell);
       float t = fract(wxT * (1.1 + h) + h * 7.0);
-      vec2 c = vec2(0.25 + 0.5 * wxH(cell + 3.1), 0.25 + 0.5 * wxH(cell + 7.7));
-      ring = (1.0 - smoothstep(0.0, 0.05, abs(length(f - c) - t * 0.4))) * (1.0 - t) * step(h, wxRain);
+      vec2 cc = vec2(0.25 + 0.5 * wxH(cell + 3.1), 0.25 + 0.5 * wxH(cell + 7.7));
+      c += (1.0 - smoothstep(0.0, 0.05, abs(length(fc - cc) - t * 0.4))) * (1.0 - t) * step(h, wxRain) * 0.12;
     }
-    totalEmissiveRadiance += wxSky * ((0.03 + 0.42 * fres) * (0.75 + 0.6 * rip) + 0.2 * ring);
-    // (a darker band at the shore: the bank's shade in it)
-    diffuseColor.rgb *= 0.7 + 0.3 * smoothstep(0.0, 0.12, deep);
+    c = mix(c, vec3(0.75, 0.8, 0.78), foam);
+    a = max(a, foam * 0.95);
+    float ink = 1.0 - smoothstep(0.0, 0.06, abs(d));
+    c = mix(c, vec3(0.06, 0.08, 0.09), ink * 0.8);
+    a = max(a, ink);
+    diffuseColor.rgb = c;
+    diffuseColor.a = a;
+    vec3 Vv = normalize(vViewPosition);
+    float fres = pow(1.0 - max(dot(normal, Vv), 0.0), 3.0);
+    float open = 1.0 - foam;
+    totalEmissiveRadiance += mix(wxSky, wxSky * vec3(0.72, 0.84, 1.08), 0.4) * (0.015 + 0.32 * fres) * open;
+    vec3 sunV = normalize((viewMatrix * vec4(wxSun.xyz, 0.0)).xyz);
+    float g = max(dot(reflect(-Vv, normal), sunV), 0.0);
+    float glint = (step(0.992, g) * 1.4 + pow(g, 60.0) * 0.4) * open * wxSun.w;
+    totalEmissiveRadiance += vec3(1.0, 0.96, 0.88) * glint;
+    diffuseColor.a = max(diffuseColor.a, min(1.0, fres * 0.85 + glint));
     wxOn = false;
+#endif
   }
 #endif
   // open to the sky: neither the snow nor the rain's wet under a roof (a floor's: only its tiles
@@ -534,7 +632,19 @@ const FRAG = `
 }
 `;
 
-export type WxKind = "thing" | "land" | "field" | "way" | "trail" | "road" | "tree" | "car" | "water" | "ice" | "none";
+export type WxKind =
+  | "thing"
+  | "land"
+  | "field"
+  | "way"
+  | "trail"
+  | "road"
+  | "tree"
+  | "car"
+  | "water"
+  | "under"
+  | "ice"
+  | "none";
 const DEFINE: Record<WxKind, string> = {
   thing: "",
   land: "#define WX_LAND\n",
@@ -543,6 +653,8 @@ const DEFINE: Record<WxKind, string> = {
   trail: "#define WX_TRAIL\n",
   road: "#define WX_ROAD\n",
   water: "#define WX_WATER\n",
+  // (the water's surface from under it: plan 66 S8)
+  under: "#define WX_WATER\n#define WX_UNDER\n",
   ice: "#define WX_ICE\n",
   tree: "#define WX_TREE\n",
   car: "#define WX_CAR\n",
@@ -573,15 +685,21 @@ export function layerShader(
       .replace("#include <common>", "#include <common>\nattribute vec2 wxLand;\nvarying vec2 vWxLand;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvWxLand = wxLand;");
   // (the water and its ice: how far from its shore each vertex is — grounds3d.ts `wxSide`)
-  const water = kind === "water" || kind === "ice";
+  const water = kind === "water" || kind === "under" || kind === "ice";
   if (water)
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nattribute float wxSide;\nvarying float vWxSide;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvWxSide = wxSide;");
+  // (the water's: how deep, along and across it, its current and fixed foam, its way — and its waves:
+  // plan 66 S7)
+  if (kind === "water" || kind === "under")
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", `#include <common>\n${WATER_V_PARS}`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\n${WATER_V}`);
   sh.fragmentShader = sh.fragmentShader
     .replace(
       "#include <common>",
-      `${DEFINE[kind]}${floor ? "#define WX_LM\n" : ""}#include <common>\n${FRAG_PARS}${kind === "land" ? "varying vec2 vWxLand;\n" : ""}${water ? "varying float vWxSide;\n" : ""}${own ? "uniform float wxCarSnow;\n" : ""}`,
+      `${DEFINE[kind]}${floor ? "#define WX_LM\n" : ""}#include <common>\n${FRAG_PARS}${kind === "land" ? "varying vec2 vWxLand;\n" : ""}${water ? "varying float vWxSide;\n" : ""}${kind === "water" || kind === "under" ? "varying float vWxDepth;\nvarying vec4 vWxFlow;\n" : ""}${own ? "uniform float wxCarSnow;\n" : ""}`,
     )
     .replace(
       "#include <emissivemap_fragment>",

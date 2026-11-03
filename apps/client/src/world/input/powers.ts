@@ -5,6 +5,7 @@ export const P_FLY = 1;
 export const P_CLIP = 2;
 export const P_FAST = 4;
 export const P_HIDDEN = 8;
+export const P_UNHURT = 16;
 export const FLY_ACROSS = 4.2;
 export const FLY_SPRINT = 3;
 export const FLY_RISE = 5;

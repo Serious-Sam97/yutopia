@@ -8,7 +8,7 @@ process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
-const PORT = 25670 + Math.floor(Math.random() * 100);
+const PORT = 32700 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
 
@@ -209,7 +209,6 @@ test("the weather's volume (docs/plan/65): as it is for everyone; an admin sets 
   admin.send("mod:weatherVol", { v: null });
   await waitFor(() => guest.state.weather.vol === 1 && guest.state.weather.volBy === "");
 });
-
 
 test("the morning fog (docs/plan/64): the day's by the world's hour; an admin calls one for everyone, nobody else can; a storm blows it away", async () => {
   const person = async (id: number, roles: string) => {

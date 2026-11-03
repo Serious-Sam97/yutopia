@@ -2,12 +2,17 @@
 
 import { prefs, subscribePrefs } from "@/lib/prefs";
 
-// One AudioContext + mixer: master ← voices / ambience / music / effects.
+// One AudioContext + mixer: master ← (under the water's muffle) ← voices / ambience / music / effects.
 // Voices get per-person gain + stereo pan from the world (spatial audio).
 class Mixer {
   ctx: AudioContext | null = null;
   master!: GainNode;
   buses!: Record<"voices" | "ambience" | "music" | "effects", GainNode>;
+  /** heard as it is under the water (the water's own: its bed, the bubbles — not muffled), at the
+   *  ambience's level (docs/plan/66-the-water.md S9) */
+  clear!: GainNode;
+  private lp!: BiquadFilterNode;
+  private dim!: GainNode;
 
   ensure(): AudioContext {
     if (this.ctx) return this.ctx;
@@ -21,7 +26,15 @@ class Mixer {
       music: ctx.createGain(),
       effects: ctx.createGain(),
     };
-    for (const b of Object.values(this.buses)) b.connect(this.master);
+    // (under the water everything else through a low-pass, quieter: muffle)
+    this.lp = ctx.createBiquadFilter();
+    this.lp.type = "lowpass";
+    this.lp.frequency.value = 22000;
+    this.dim = ctx.createGain();
+    this.lp.connect(this.dim).connect(this.master);
+    for (const b of Object.values(this.buses)) b.connect(this.lp);
+    this.clear = ctx.createGain();
+    this.clear.connect(this.master);
     this.apply();
     subscribePrefs(() => this.apply());
     return ctx;
@@ -51,6 +64,15 @@ class Mixer {
     this.buses.ambience.gain.setTargetAtTime(v.ambience, t, 0.05);
     this.buses.music.gain.setTargetAtTime(v.music, t, 0.05);
     this.buses.effects.gain.setTargetAtTime(v.effects, t, 0.05);
+    this.clear.gain.setTargetAtTime(v.ambience, t, 0.05);
+  }
+
+  /** Under the water (0 … 1): everything but `clear` muffled and quieter. */
+  muffle(k: number) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.lp.frequency.setTargetAtTime(22000 * (1 - k) + 420 * k, t, 0.05);
+    this.dim.gain.setTargetAtTime(1 - 0.45 * k, t, 0.05);
   }
 
   async resume() {

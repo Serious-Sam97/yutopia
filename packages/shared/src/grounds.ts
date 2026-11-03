@@ -1163,16 +1163,155 @@ layLevels();
 /** The deck's height where a way is bridged (the river's: the banks either side). */
 export const POND_LEVEL = macro(POND.cx, POND.cz) - 1.1;
 
+/** The pond's dock: its planks from the land out over the water, their top (drawn: tp/grounds3d.ts;
+ *  stood on: shapes/grounds.ts `dock`), the posts under its sides. */
+export const DOCK = {
+  x0: -253.5,
+  x1: -250.5,
+  z0: -98,
+  z1: -84.4,
+  top: POND_LEVEL + 0.67,
+  posts: [-97, -92, -87, -84.4],
+};
+
+// ── the water (docs/plan/66-the-water.md, S1): the river runs downhill, north → south, and it and
+// the pond have depth — a shelf waded from the shore, then the deep ──
+/** How deep the shore's shelf goes (m): waded to there, swum past it. */
+export const SHELF = 0.9;
+/** The river's shelf: from its bank in (m). */
+export const SHELF_W = 2.5;
+const RIVER_DEEP = 2.8; // the river's middle on its slow reaches (m)
+const POND_DEEP = 3.5; // the pond's middle (m)
+/** The pond's shelf's edge, on its ellipse (its measure's root). */
+export const POND_SHELF = 0.88;
+const FALL = 0.001; // the slow reaches' fall a metre (never flat)
+const FREEBOARD = 0.6; // the level at least this under the lower bank
+/** The river's water along its line (a value a sample): its level (never rising southwards), how
+ *  steep that is, the current's speed (m/s), how far along it is (m). */
+export interface RiverWater {
+  level: number[];
+  slope: number[];
+  speed: number[];
+  along: number[];
+}
+let river: RiverWater | null = null;
+let layingRiver = false;
+/** The river's water (worked out once, on first asking: it reads the land beside it). */
+export function riverWater(): RiverWater {
+  river ??= layRiver();
+  return river;
+}
+function layRiver(): RiverWater {
+  // (the land beside it read without the river carved: `terrainAt` leaves it out meanwhile)
+  layingRiver = true;
+  try {
+    const L = RIVER.line;
+    const N = L.length;
+    const along = [0];
+    for (let i = 1; i < N; i++) along.push(along[i - 1] + Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]));
+    // the lower bank, 26 m off its middle (past where it's carved)
+    const bank = L.map(([x, z], i) => {
+      const n = L[Math.min(N - 1, i + 1)];
+      const p = L[Math.max(0, i - 1)];
+      const l = Math.hypot(n[0] - p[0], n[1] - p[1]) || 1;
+      const nx = -(n[1] - p[1]) / l;
+      const nz = (n[0] - p[0]) / l;
+      return Math.min(terrainAt(x + nx * 26, z + nz * 26), terrainAt(x - nx * 26, z - nz * 26));
+    });
+    // the running minimum of today's bed southwards (held under the banks), a little fall on the
+    // slow reaches; eased (a moving mean keeps it falling), then held under again
+    const h = RIVER.h.map((v, i) => Math.min(v, bank[i] - FREEBOARD));
+    const lv = [h[0]];
+    for (let i = 1; i < N; i++) lv.push(Math.min(lv[i - 1] - FALL * (along[i] - along[i - 1]), h[i]));
+    const W = 8;
+    const level = lv.map((_, i) => {
+      let s = 0;
+      let n = 0;
+      for (let j = Math.max(0, i - W); j <= Math.min(N - 1, i + W); j++) {
+        s += lv[j];
+        n++;
+      }
+      return s / n;
+    });
+    for (let i = 0; i < N; i++) level[i] = Math.min(level[i], h[i]);
+    for (let i = 1; i < N; i++) level[i] = Math.min(level[i], level[i - 1]);
+    const slope = level.map((_, i) => {
+      const a = Math.max(0, i - 3);
+      const b = Math.min(N - 1, i + 3);
+      return (level[a] - level[b]) / Math.max(1e-3, along[b] - along[a]);
+    });
+    // (~0.4 m/s on the reaches, white water on the drops)
+    const speed = slope.map((s) => 0.35 + Math.min(3.2, s * 25));
+    return { level, slope, speed, along };
+  } finally {
+    layingRiver = false;
+  }
+}
+/** How deep the river is `d` off its middle at sample `i` (m): the shelf from its bank, then the
+ *  deep — shallow over the rocks where it falls fast. */
+function riverDepth(d: number, i: number, w: RiverWater): number {
+  const half = RIVER.w / 2;
+  const fast = smooth(0.02, 0.08, w.slope[i]);
+  const shelf =
+    d >= half - SHELF_W
+      ? (SHELF * (half - d)) / SHELF_W
+      : SHELF + (RIVER_DEEP - SHELF) * smooth(half - SHELF_W, half - 6, d);
+  return shelf * (1 - 0.65 * fast);
+}
+/** How deep the pond is at `r`, its ellipse measure's root (0 its middle, 1 its shore) (m). */
+function pondDepth(r: number): number {
+  if (r >= 1) return 0;
+  return r > POND_SHELF
+    ? (SHELF * (1 - r)) / (1 - POND_SHELF)
+    : SHELF + (POND_DEEP - SHELF) * smooth(POND_SHELF, 0.35, r);
+}
+/** The water at (x, z): its level, its bed, how deep, the current (m/s) — or null on land. */
+export interface Water {
+  level: number;
+  bed: number;
+  depth: number;
+  flow: [number, number];
+  kind: "pond" | "river";
+}
+export function waterAt(x: number, z: number): Water | null {
+  const e = ((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2;
+  if (e < 1) {
+    const depth = pondDepth(Math.sqrt(e));
+    return { level: POND_LEVEL, bed: POND_LEVEL - depth, depth, flow: [0, 0], kind: "pond" };
+  }
+  const r = nearLines(x, z).get(RIVER_F);
+  if (!r || r.d >= RIVER.w / 2) return null;
+  const w = riverWater();
+  const L = RIVER.line;
+  const a = L[Math.max(0, r.i - 1)];
+  const b = L[Math.min(L.length - 1, r.i + 1)];
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const depth = riverDepth(r.d, r.i, w);
+  const v = w.speed[r.i];
+  return {
+    level: w.level[r.i],
+    bed: w.level[r.i] - depth,
+    depth,
+    flow: [((b[0] - a[0]) / l) * v, ((b[1] - a[1]) / l) * v],
+    kind: "river",
+  };
+}
+
 /** The land's height at (x, z) (tiles up), with what's built on it carved and flattened. */
 export function terrainAt(x: number, z: number): number {
   let h = base(x, z);
-  // the pond: ice at its level, the banks down to it
+  // the pond: its bed under its level (plan 66), the banks down to it
   const e = ((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2;
-  if (e < 2) h = lerp(POND_LEVEL, h, smooth(1, 1.9, e));
+  if (e < 1) h = POND_LEVEL - pondDepth(Math.sqrt(e));
+  else if (e < 2) h = lerp(POND_LEVEL, h, smooth(1, 1.9, e));
   const near = nearLines(x, z);
-  // the river: ice in its bed, banks either side
+  // the river: its bed under its level, banks either side down to it
   const r = near.get(RIVER_F);
-  if (r) h = lerp(RIVER.h[r.i], h, smooth(RIVER.w / 2, RIVER.w / 2 + 14, r.d));
+  if (r && !layingRiver) {
+    const w = riverWater();
+    const lv = w.level[r.i];
+    h = r.d < RIVER.w / 2 ? lv - riverDepth(r.d, r.i, w) : lerp(lv, h, smooth(RIVER.w / 2, RIVER.w / 2 + 14, r.d));
+  }
   // the ravine: a cut with a flat icy floor
   const v = near.get(RAVINE_F);
   if (v && v.d < RAVINE.w / 2) {
@@ -1981,9 +2120,10 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
           if (v < lo) lo = v;
           if (v > hi) hi = v;
         }
-      // (a bridge's deck: walkable whatever's under it)
-      const deck = deckAt(x, z) !== null;
-      walk[j * CHUNK + i] = !blocked.has(j * CHUNK + i) && (deck || hi - lo < 0.9) && walkable(x, z) ? 1 : 0;
+      // (a bridge's deck: walkable whatever's under it; the water: its ice's flat, its shelf's waded —
+      // `walkableTile` says which, by the weather: plan 66)
+      const flat = deckAt(x, z) !== null || waterAt(x, z) !== null;
+      walk[j * CHUNK + i] = !blocked.has(j * CHUNK + i) && (flat || hi - lo < 0.9) && walkable(x, z) ? 1 : 0;
     }
   return { cx, cz, h, walk, trees };
 }
@@ -2051,7 +2191,37 @@ function onFence(x: number, z: number): boolean {
 export function heightAt(x: number, z: number): number {
   const deck = deckAt(x, z);
   if (deck !== null) return deck;
-  return landAt(x, z);
+  const land = landAt(x, z);
+  // (the pond's dock: its planks — plan 66, the water deep under them)
+  if (x >= DOCK.x0 && x <= DOCK.x1 && z >= DOCK.z0 && z <= DOCK.z1) return Math.max(land, DOCK.top);
+  // (the water's ice, where it's walked: its top — physics/build.ts iceSheet)
+  const i = iceAt(x, z);
+  return i ? Math.max(land, i.top) : land;
+}
+/** Is (x, z) out in open water past its shelf — swum, not stood in (plan 66)? */
+export function inDeepWater(x: number, z: number): boolean {
+  const w = waterAt(x, z);
+  return !!w && w.depth >= SHELF && !iceAt(x, z);
+}
+/** The nearest point to (x, z) out of deep open water (its shelf, its bank — where a thing dropped
+ *  in it washes up, where a pet waits), within `reach` m; (x, z) itself if it isn't in it. */
+export function bankNear(x: number, z: number, reach = 40): { x: number; z: number } | null {
+  if (!inDeepWater(x, z)) return { x, z };
+  for (let r = 1; r <= reach; r += 1)
+    for (let k = 0; k < 32; k++) {
+      const a = (k / 32) * Math.PI * 2;
+      const px = x + Math.cos(a) * r;
+      const pz = z + Math.sin(a) * r;
+      if (!inDeepWater(px, pz)) return { x: px, z: pz };
+    }
+  return null;
+}
+/** The top of what's at (x, z): the water's level over its bed (plan 66), else where you stand — what
+ *  the rain lands on, the fog lies over, the ear's height is from. */
+export function topAt(x: number, z: number): number {
+  const h = heightAt(x, z);
+  const w = waterAt(x, z);
+  return w ? Math.max(h, w.level) : h;
 }
 /** The land's height from the chunks (no bridges). */
 export function landAt(x: number, z: number): number {
@@ -2083,16 +2253,78 @@ export function topTile(tx: number, tz: number): number {
 }
 
 /** Can you walk on tile (tx, tz) (building coords)? */
-/** The water's ice from which it's walked on and driven over (W6): under it the shores are walls
- *  (physics/build.ts waterWalls) and the paths keep off it. */
+/** The water's ice from which most of it is frozen over (W6) — the sounds' (the river quiet, the
+ *  ice's ticks); what's walked is where it's iced (`iceAt`: plan 66, S4). */
 export const ICE_WALK = 0.8;
+/** The water's ice's top over its level (drawn and walked). */
+export const ICE_TOP = 0.04;
+
+// ── the water's ice (W6; docs/plan/66-the-water.md, S4): in from the shores as it freezes, out from
+// the middle as it thaws — walked where it's drawn (the one rule: wx3d.ts WX_ICE), thin near its
+// edge while it's young, and broken through in holes (the room's: a few, freezing over again) ──
+/** Is the water `side` across (0 its middle, 1 a shore) iced over at `ice` (the room's, 0 … 1)? */
+export const iceCovers = (side: number, ice: number): boolean => 1 - Math.min(Math.abs(side), 1) <= ice * 1.02 - 0.01;
+/** Where the ice's edge is at `ice`, across (0 its middle, 1 a shore): iced from it out to the shore. */
+export const iceEdge = (ice: number): number => 1 - (ice * 1.02 - 0.01);
+/** Water this fast doesn't freeze (m/s): the rapid and the falls stay open, white. */
+export const ICE_FAST = 1.2;
+/** A hole broken through the ice (Grounds coords, radius m), and since when (server ms). */
+export interface IceHole {
+  x: number;
+  z: number;
+  r: number;
+  at: number;
+}
+/** How big a hole is, how long it takes to freeze over (ms), how many there are at most. */
+export const ICE_HOLE = { r: 1.1, heal: 10 * 60_000, most: 8 } as const;
+let iceHoles: readonly IceHole[] = [];
+/** The holes as the room has them (its `weather.holes`). */
+export function setIceHoles(h: readonly IceHole[]): void {
+  iceHoles = h;
+}
+export const iceHolesNow = (): readonly IceHole[] => iceHoles;
+/** `weather.holes` on the wire: "x,z,at;…" (decimetres, seconds). */
+export const holesToWire = (h: readonly IceHole[]): string =>
+  h.map((o) => `${Math.round(o.x * 10)},${Math.round(o.z * 10)},${Math.round(o.at / 1000)}`).join(";");
+export function holesFromWire(s: string): IceHole[] {
+  if (!s) return [];
+  return s.split(";").flatMap((t) => {
+    const [x, z, at] = t.split(",").map(Number);
+    return Number.isFinite(x) && Number.isFinite(z) && Number.isFinite(at)
+      ? [{ x: x / 10, z: z / 10, r: ICE_HOLE.r, at: at * 1000 }]
+      : [];
+  });
+}
+/** How far across the water (x, z) is (0 its middle, 1 a shore), and how many metres that is a unit
+ *  of: the pond's ellipse's measure (its smaller radius), the river's half width — or null on land. */
+export function waterSide(x: number, z: number): { side: number; m: number; fast?: boolean } | null {
+  const e = ((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2;
+  if (e < 1) return { side: Math.sqrt(e), m: Math.min(POND.rx, POND.rz) };
+  const r = nearLines(x, z).get(RIVER_F);
+  if (!r || r.d >= RIVER.w / 2) return null;
+  return { side: r.d / (RIVER.w / 2), m: RIVER.w / 2, fast: riverWater().speed[r.i] > ICE_FAST };
+}
+/** The ice at (x, z) at `ice`: its top, and whether it's thin (within 2 m of its edge while it's
+ *  under 0.95, or all of it under 0.3) — null where the water's open, in a hole, or on land. */
+export function iceAt(x: number, z: number, ice = UNDER.ice): { top: number; thin: boolean } | null {
+  if (ice <= 0.01) return null;
+  const s = waterSide(x, z);
+  if (!s || s.fast || !iceCovers(s.side, ice)) return null;
+  for (const h of iceHoles) if (Math.hypot(x - h.x, z - h.z) < h.r) return null;
+  const w = waterAt(x, z);
+  if (!w) return null;
+  const fromEdge = (s.side - iceEdge(ice)) * s.m;
+  return { top: w.level + ICE_TOP, thin: ice < 0.3 || (ice < 0.95 && fromEdge < 2) };
+}
 
 export function walkableTile(tx: number, tz: number): boolean {
   const cx = Math.floor(tx / CHUNK);
   const cz = Math.floor(tz / CHUNK);
   if (groundsChunk(cx, cz).walk[(tz - cz * CHUNK) * CHUNK + (tx - cx * CHUNK)] !== 1) return false;
-  // (open water isn't walked: the pond's, the river's — W6; the ravine's creek is shallow, waded)
-  return UNDER.ice >= ICE_WALK || surfaceTileAt(tx, tz) !== "ice";
+  // (open water's walked only on its shelf: the pond's, the river's — W6, plan 66 S1, S4)
+  if (surfaceTileAt(tx, tz) !== "ice") return true;
+  // (its ice where it's iced over; else its shelf, waded)
+  return !!iceAt(tx + 0.5, tz + 0.5) || (waterAt(tx + 0.5, tz + 0.5)?.depth ?? 0) < SHELF;
 }
 
 /** The ground floor's outdoors (shared grid.ts Outdoors), for a floor whose
@@ -2478,7 +2710,7 @@ export function placeAt(x: number, z: number): { key: string; name: string; priv
     if (x >= PLAZA.x0 && x < PLAZA.x1 && z >= PLAZA.z0 && z < PLAZA.z1) return "The square";
     if (x >= CORN.x0 && x < CORN.x1 && z >= CORN.z0 && z < CORN.z1) return "The cornfield";
     if (x >= FARM.x0 && x < FARM.x1 && z >= FARM.z0 && z < FARM.z1) return "The farm";
-    if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1.4) return "The frozen pond";
+    if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1.4) return "The pond";
     if (Math.hypot(x - CLEARING.x, z - CLEARING.z) < CLEARING.r) return "The clearing";
     if (KART_LAND && x >= KART_FENCE.x0 && x < KART_FENCE.x1 && z >= KART_FENCE.z0 && z < KART_FENCE.z1)
       return "Yutopia Kart Park";

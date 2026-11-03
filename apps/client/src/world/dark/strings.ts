@@ -43,6 +43,7 @@ export const STRINGS: Record<string, readonly [string, string]> = {
   dark_pockets: ["pockets", "bolsos"],
   dark_aid_pad: ["first aid", "kit médico"],
   dark_focus: ["Focus", "Foco"],
+  dark_breath: ["Breath", "Fôlego"],
   // the inventory (I)
   dark_inv_all: ["everything", "tudo"],
   dark_inv_title: ["POCKETS", "BOLSOS"],

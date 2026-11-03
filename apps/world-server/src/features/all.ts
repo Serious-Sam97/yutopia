@@ -32,4 +32,5 @@ import "./arms.ts";
 import "./perf.ts";
 import "./admin.ts";
 import "./godmode.ts";
+import "./ice.ts";
 import "./physics.ts";

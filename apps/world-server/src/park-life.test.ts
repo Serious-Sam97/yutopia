@@ -16,7 +16,7 @@ process.env.YUTOPIA_INTERNAL_SECRET = "test";
 // shifts when that is — the seats they take here are timed against it)
 process.env.YUTOPIA_PHYSICS = "0";
 
-const PORT = 26470 + Math.floor(Math.random() * 100);
+const PORT = 31100 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];
 before(async () => {

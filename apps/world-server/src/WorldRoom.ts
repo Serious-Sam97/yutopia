@@ -95,7 +95,7 @@ import {
   WEATHER_CALL_MS,
 } from "@yutopia/shared/admin";
 import { monitorsToComputers } from "@yutopia/shared/computer";
-import { editsNow, groundsAreaAt, groundsOutdoors, setUnderfoot } from "@yutopia/shared/grounds";
+import { editsNow, groundsAreaAt, groundsOutdoors, inDeepWater, setUnderfoot } from "@yutopia/shared/grounds";
 import { cleanPlaylists, keepPlaying } from "@yutopia/shared/media";
 import { type Collider, isFlowCode, isVerb, MV_WINDED } from "@yutopia/shared/move";
 import { type Feet, HAND, offBand, spanOf } from "@yutopia/shared/reach";
@@ -1025,7 +1025,9 @@ export class WorldRoom extends Room<WorldState> {
       // never into a room you can't walk into (locked doors, sealed rooms): from
       // your floor's way up (an elevator, the stairs) when it's another floor
       const mine = this.gridFor(p.uid, target.level);
-      const landing = mine.fits(target.x, target.y) ? target : mine.nearestOpen(target.x, target.y);
+      // (out in open water — beside someone swimming: in it, afloat — plan 66)
+      const wet = target.level === 0 && inDeepWater(target.x + GROUND_OFFSET.x, target.y + GROUND_OFFSET.y);
+      const landing = wet || mine.fits(target.x, target.y) ? target : mine.nearestOpen(target.x, target.y);
       const startAt: { x: number; y: number } =
         target.level === p.level ? p : (this.levelEntry(target.level, p.uid) ?? landing ?? p);
       if (

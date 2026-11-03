@@ -33,6 +33,10 @@ import type { PersonIn } from "./people3d";
 import { ANKLE_M, legOf, SEATS, seatFit, seatShape } from "./seats3d";
 
 type Chars = NonNullable<ReturnType<typeof chars>>;
+type SwimM = NonNullable<ReturnType<Chars["swimNow"]>>;
+type SwimHands = ReturnType<SwimM["wade2"]>["hands"];
+// (the sprint's place in shared move GAITS: the crawl — packMv's low bits)
+const SPRINT_GAIT = 3;
 type Model = InstanceType<Chars["PersonModel"]>;
 const snowA = new Vector3();
 const snowB = new Vector3();
@@ -237,6 +241,9 @@ export class Person3D {
   private burning: MeshBasicMaterial | null = null;
   private crawlPh = 0;
   private downW = 0;
+  // the swim (plan 66): its driver while in the water, how much of the body it has
+  private swim2: InstanceType<SwimM["Swim2"]> | null = null;
+  private swimW = 0;
   private jumpH = 0; // off the floor (a jump), tiles
   private jumpOn = false;
   private headUp = 0; // the head's height standing as they last stood (the tag stays over it through a flip)
@@ -507,7 +514,8 @@ export class Person3D {
       this.vz += ((h - this.lastH) / dt - this.vz) * Math.min(1, dt * 20);
     }
     this.lastH = h;
-    const up = !!jump || h > ground + 0.03;
+    // (afloat isn't in the air: plan 66 — the feet over the bed, the body on the water)
+    const up = !!jump || (h > ground + 0.03 && !p.swim);
     const landed = this.wasUp && !up ? Math.min(1, Math.max(0, -this.vz) / 10.5) : undefined;
     this.wasUp = up;
     this.due += dt;
@@ -661,6 +669,39 @@ export class Person3D {
       pose = this.C.blend(pose, m.pose, this.downW);
       lift = [lift[0] + (m.lift[0] - lift[0]) * this.downW, lift[1] + (m.lift[1] - lift[1]) * this.downW, lift[2]];
     } else this.downW = 0;
+    // in the water (docs/plan/66-the-water.md, phase 4 — signed off on /dev/anim): wading over the
+    // walk by how deep (fed afloat too: no pop as the swim takes over), and the swim laid over it —
+    // the stroke by the water covered, the crawl at a sprint, under by the way it's going
+    let swimHands: SwimHands | null = null;
+    this.swimW = 0;
+    const SW = this.motion.v2 && !p.reduced && !sitting ? this.C.swimNow() : null;
+    const over = p.waterOver ?? 0;
+    if (SW && over > 0.3) {
+      const wd = SW.wade2({ pose, lift }, over);
+      pose = wd.m.pose;
+      swimHands = wd.hands;
+    }
+    if (SW && ((p.swim ?? 0) >= 2 || this.swim2)) {
+      this.swim2 ??= new SW.Swim2();
+      const sw = this.swim2.update(step, {
+        swim: p.swim ?? 0,
+        speed: this.spd,
+        fast: ((p.mv ?? 0) & 7) === SPRINT_GAIT,
+        sea: over > 0 ? over : SW.SEA,
+        pitch: Math.max(-1.2, Math.min(1.2, Math.atan2(this.vz, Math.max(this.spd, 0.3)))),
+      });
+      if (sw) {
+        this.swimW = sw.w;
+        pose = this.C.blend(pose, sw.m.pose, sw.w);
+        lift = [
+          lift[0] + (sw.m.lift[0] - lift[0]) * sw.w,
+          lift[1] + (sw.m.lift[1] - lift[1]) * sw.w,
+          lift[2] + (sw.m.lift[2] - lift[2]) * sw.w,
+        ];
+        for (const h of Object.values(sw.hands)) if (h) h.w *= sw.w;
+        swimHands = sw.w > 0.5 ? sw.hands : swimHands;
+      } else this.swim2 = null;
+    } else this.swim2 = null;
     // knocked down by a pool ball: thrown back onto the floor, up again (chars FALL_LEN)
     if (p.fell !== undefined && p.fell < this.C.FALL_LEN) {
       const m = this.C.fellPose(p.fell);
@@ -684,7 +725,7 @@ export class Person3D {
     const hz = p.z ?? 0;
     // (a fall's height by the body's own, over what's under it — not the jump's stages: a fall's
     // hop has a land stage after the feet are down, and limp only after it the body stood up first)
-    const airborne = !sitting && hz > ground + 0.03;
+    const airborne = !sitting && hz > ground + 0.03 && !p.swim;
     let fellFrom = 0;
     let falling = false;
     if (airborne) {
@@ -697,7 +738,9 @@ export class Person3D {
       this.fallTop = null;
     }
     const shot = !!SN && dying >= SN.LIMP && !this.shotDown;
-    if (AR && RS && !this.limp?.on && (shot || falling || fellFrom >= 6)) {
+    // (a fall into deep water is caught by it: plan 66)
+    const caught = !!p.overWater || !!p.swim;
+    if (AR && RS && !this.limp?.on && (shot || ((falling || fellFrom >= 6) && !caught))) {
       this.limp = new AR.Downed(RS.world, this.model, RS.origin, true);
       const c = Math.cos(this.turned);
       const sn = Math.sin(this.turned);
@@ -756,7 +799,8 @@ export class Person3D {
       if (under > 0.005) this.model.setPose(pose, [lift[0], lift[1] + drop + under, lift[2]], mo.reach);
     }
     // (plan 58 6: the hands on the keys, the pad, the knees, the other one's hand)
-    let put = limpHands ?? (this.limp?.on || own ? null : (mo.hands ?? null));
+    // (swimming: nothing in the hands — the drink, the phone, a wave: plan 66)
+    let put = limpHands ?? (this.limp?.on || own || this.swimW > 0.3 ? null : (mo.hands ?? null));
     // (plan 62) sat with a drink: held at the waist between sips — the waist down on the seat with
     // the hips, not stood's height over the floor
     const R = put?.R;
@@ -768,6 +812,7 @@ export class Person3D {
       for (const h of Object.values(downHands)) if (h) h.w *= this.downW;
       this.model.handsTo(downHands);
     }
+    if (swimHands && !limpHands) this.model.handsTo(swimHands);
     this.gunHands(p, step);
     // (the springs — hair, a skirt, a scarf, a pack: near only, and not with reduced motion)
     this.model.step(step, d > 12 || !!p.reduced || this.part !== "all", seen.sway);
@@ -1405,15 +1450,47 @@ export class Person3D {
   // a tint of their own (view.ts: the lamps', the beams', the headlamps', what's seen round me;
   // docs/plan/44-the-night.md): the body's materials copied for them, the same shader.
   private own = new Map<Material, MeshBasicMaterial>();
+  /** Wading (plan 66): the water this far up over the feet — the clothes wet under it (with a tint
+   *  only: out on the land); null, none. */
+  setWater(over: number | null) {
+    if (over === null) {
+      this.waterU.value = -1e6;
+      return;
+    }
+    this.waterU.value = this.root.getWorldPosition(this.waterAt).y + over;
+  }
+  private readonly waterU = { value: -1e6 };
+  private readonly waterAt = new Vector3();
+
   setTint(c: Color | null) {
     if (!c && !this.own.size) return;
     const swap = new Map<Material, Material>();
     for (const shared of [this.mats.body, this.mats.bodyAway]) {
       let mine = this.own.get(shared);
       if (c && !mine) {
-        mine = (shared as MeshBasicMaterial).clone();
-        mine.onBeforeCompile = shared.onBeforeCompile;
-        mine.customProgramCacheKey = shared.customProgramCacheKey;
+        const m = (shared as MeshBasicMaterial).clone();
+        // (and a waterline of its own: wading, wet below it — plan 66)
+        const was = shared.onBeforeCompile;
+        const key = shared.customProgramCacheKey;
+        const water = this.waterU;
+        m.onBeforeCompile = (sh, r) => {
+          was.call(m, sh, r);
+          sh.uniforms.uWaterW = water;
+          sh.vertexShader = sh.vertexShader
+            .replace("#include <common>", "#include <common>\nvarying float vWlY;")
+            .replace(
+              "#include <project_vertex>",
+              "#include <project_vertex>\nvWlY = (modelMatrix * vec4(transformed, 1.0)).y;",
+            );
+          sh.fragmentShader = sh.fragmentShader
+            .replace("#include <common>", "#include <common>\nvarying float vWlY;\nuniform float uWaterW;")
+            .replace(
+              "#include <color_fragment>",
+              "#include <color_fragment>\nif (vWlY < uWaterW) diffuseColor.rgb *= 0.66;\nelse if (vWlY < uWaterW + 0.02) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8), 0.35);",
+            );
+        };
+        m.customProgramCacheKey = () => `${key.call(m)}|wl`;
+        mine = m;
         this.own.set(shared, mine);
       }
       if (!mine) continue;

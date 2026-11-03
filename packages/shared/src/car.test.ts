@@ -19,6 +19,7 @@ import {
   type Helps,
   HOME_CARS,
   headingQuat,
+  IDLE,
   NO_HELPS,
   OFFROAD,
   PICKUP,
@@ -706,4 +707,19 @@ test("a plough's blade: the road's fresh snow gone where it's been, so a car sto
   // the blade's cells: across it, ahead of the truck
   const cells = bladeCells(0, 0, 0, 3, 3);
   assert.ok(cells.includes(ploughCell(3, 0)) && cells.length <= 2, cells.join(" "));
+});
+
+test("into water (plan 66): dragged to a stop, the engine drowned at its floor and it won't start", () => {
+  const world = { ...flatWorld("asphalt"), water: (x: number) => (x > 20 ? Math.min(1.5, (x - 20) * 0.2) : 0) };
+  const s = createCar(SPECS.sedan, 0, flatWorld("asphalt").height(0, 0), 0, 0);
+  setEngine(s, true);
+  settle(s, world);
+  const go = { ...IDLE, up: 1 };
+  for (let i = 0; i < 120 * 8; i++) stepCar(s, go, world);
+  assert.ok(s.drowned, "drowned");
+  assert.equal(s.rpm, 0, "the engine dead");
+  assert.ok(Math.hypot(s.v.x, s.v.z) < 1, `stopped in it: ${Math.hypot(s.v.x, s.v.z)}`);
+  assert.ok(s.p.x > 22 && s.p.x < 40, `in the water, not through it: ${s.p.x}`);
+  setEngine(s, true);
+  assert.equal(s.rpm, 0, "it won't start");
 });

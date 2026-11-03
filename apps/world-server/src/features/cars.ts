@@ -23,8 +23,10 @@ import {
   SEATS_OF,
   type Solid,
   SPECS,
+  SUNK,
 } from "@yutopia/shared/car";
-import { atPump, BUILDINGS, GROUNDS, heightAt, inBuilt, LOT, MOTORS } from "@yutopia/shared/grounds";
+import { atPump, BUILDINGS, GROUNDS, heightAt, inBuilt, LOT, MOTORS, waterAt } from "@yutopia/shared/grounds";
+import { SWIM } from "@yutopia/shared/move";
 import { BOARD_KIND, boardOfOwner, boardsOf, postOf } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
@@ -89,6 +91,20 @@ registerFeature((room: WorldRoom) => {
   const has = () => !!levelMap(room.map, 0);
   const clientOf = (sid: string) => room.clients.find((c) => c.sessionId === sid);
   const no = (c: WorldClient, why: string) => room.send(c, "car:no", { why });
+  /** The water over the ground at (x, z) (the Grounds'; m, 0 none): a car's in it this deep
+   *  (docs/plan/66-the-water.md, S5). */
+  const wetAt = (x: number, z: number) => {
+    const w = waterAt(x, z);
+    return w ? Math.max(0, w.level - heightAt(x, z)) : 0;
+  };
+  /** A parked car gone down in the water, left two minutes: towed (whoever's, whoever's near). */
+  const SUNK_TOW_MS = 2 * 60_000;
+  const sunk = (def: ReturnType<typeof fromSchema>) => {
+    const pose = parkedPose(def);
+    return (
+      wetAt(pose.x + off.x, pose.y + off.y) >= SUNK && Date.now() - (Number(def.props?.parkedAt) || 0) >= SUNK_TOW_MS
+    );
+  };
   /** The car `sid` is driving (the driver's seat), if any. */
   const driven = (sid: string) => {
     const vid = bySid.get(sid);
@@ -150,6 +166,8 @@ registerFeature((room: WorldRoom) => {
       if (def.props?.retire) return no(client, "gone");
       if (seat === 0 && !mayDrive(def.props, p.uid, Date.now())) return notYours(client, def.props);
       const pose = parkedPose(def);
+      // (gone down in the water: nobody gets in — it's towed in a minute or two)
+      if (wetAt(pose.x + off.x, pose.y + off.y) >= SUNK) return no(client, "gone");
       // (in three dimensions: shared reach.ts — a car's 1.5 tall)
       if (Math.hypot(p.x - pose.x, p.y - pose.y, room.upOff(p, pose, CAR_H)) > REACH) return no(client, "far");
       const kind = carKindOf(def.props?.model);
@@ -428,7 +446,7 @@ registerFeature((room: WorldRoom) => {
     if (!config.offline) void api.putObject(next).catch((e) => console.warn("[cars] shove", e.message));
   });
 
-  const leaveSeat = (sid: string, out: boolean) => {
+  const leaveSeat = (sid: string, out: boolean, swim = false) => {
     const vid = bySid.get(sid);
     const l = vid ? live.get(vid) : undefined;
     bySid.delete(sid);
@@ -443,6 +461,19 @@ registerFeature((room: WorldRoom) => {
     p.busy = "";
     p.a = ANIM.idle;
     if (!out) return;
+    // (gone down in the water: out of their door into it, afloat — plan 66)
+    if (swim) {
+      const [lx, lz] = SEATS_OF[l.spec.kind].out[i][0];
+      const s = at(l.veh, lx, lz);
+      const w = waterAt(s.x, s.z);
+      p.x = s.x - off.x;
+      p.y = s.z - off.y;
+      p.z = w ? Math.max(heightAt(s.x, s.z), w.level - SWIM.ride) : heightAt(s.x, s.z);
+      p.level = 0;
+      const c = clientOf(sid);
+      if (c) room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: 0 });
+      return;
+    }
     // out of the door on their side, else the other's, else round the back
     const g = room.gridFor(p.uid, 0);
     let spot: { x: number; y: number } | null = null;
@@ -578,8 +609,10 @@ registerFeature((room: WorldRoom) => {
     };
     for (const o of cars) {
       const def = fromSchema(o);
-      // (someone's own is never towed: it stays where it's left, their GPS shows it)
-      if (def.props?.driven || def.props?.ownerId) continue;
+      // (someone's own is never towed: it stays where it's left, their GPS shows it — but out of the
+      // water it went down in)
+      const down = sunk(def);
+      if (def.props?.driven || (def.props?.ownerId && !down)) continue;
       const mine = own(o.id);
       const pose = parkedPose(def);
       const out = intruding(def);
@@ -590,12 +623,12 @@ registerFeature((room: WorldRoom) => {
           put(def, mine.c.x, mine.c.z, mine.c.dir);
         continue;
       }
-      if (typeof def.props?.a !== "number" && !out && !(all && mine)) continue;
+      if (typeof def.props?.a !== "number" && !out && !down && !(all && mine)) continue;
       const parkedAt = Number(def.props?.parkedAt) || 0;
       const bx = pose.x + off.x;
       const bz = pose.y + off.y;
       const inLot = bx > LOT.x0 && bx < LOT.x1 && bz > LOT.z0 && bz < LOT.z1;
-      if (!all) {
+      if (!all && !down) {
         const dry = num(def.props?.fuel, 1) <= 0.01;
         // (in someone's bay: out the next time nobody's near, however long it's been there)
         if (!out && (inLot || Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS))) continue;
@@ -923,6 +956,14 @@ registerFeature((room: WorldRoom) => {
       return true;
     }
     if (!away) return true;
+    // (gone down in the water, left two minutes: home, whoever's near)
+    if (sunk(def)) {
+      const props = { ...(def.props ?? {}) };
+      delete props.grime;
+      delete props.dmg;
+      putHome(h, props);
+      return true;
+    }
     const parkedAt = Number(def.props?.parkedAt) || 0;
     const dry = num(def.props?.fuel, 1) <= 0.01;
     if (Date.now() - parkedAt < (dry ? EMPTY_TOW_MS : TOW_MS)) return true;
@@ -962,6 +1003,9 @@ registerFeature((room: WorldRoom) => {
       if (!homesMade) makeHomes();
       for (const l of [...live.values()]) {
         const v = l.veh;
+        // (gone down in the water: its people out of it, swimming — plan 66)
+        if (l.seats.some(Boolean) && wetAt(v.x, v.z) >= SUNK)
+          for (const sid of [...l.seats]) if (sid) leaveSeat(sid, true, true);
         // its people in their seats (and out of them, if something else took them away)
         l.seats.forEach((sid, i) => {
           if (!sid) return;

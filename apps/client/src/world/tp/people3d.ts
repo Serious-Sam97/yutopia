@@ -171,6 +171,9 @@ export interface PersonIn {
   jump?: JumpNow; // jumping (shared/jump.ts): its stage
   z?: number; // feet off the floor (up on something, in a jump), tiles
   ground?: number; // the top under them, tiles
+  swim?: number; // in the water (docs/plan/66-the-water.md): 0 out, 1 wading, 2 afloat, 3 under
+  overWater?: boolean; // over water deep enough to catch a fall: no ragdoll into it
+  waterOver?: number; // wading: the water this far up over the feet (m)
   mv?: number; // the gait, crouching, aiming (shared/move packMv)
   // a vault, a mantle, a roll, a slide: how far in (`at`: since when, performance.now ms)
   verb?: { kind: string; t: number; at?: number };

@@ -1,9 +1,8 @@
 import { elevOf, offsetOf } from "@yutopia/shared";
-import { CHUNK, GROUNDS, hasChunk, KART_FENCE, layoutVersion, underfoot } from "@yutopia/shared/grounds";
+import { CHUNK, GROUNDS, hasChunk, iceHolesNow, KART_FENCE, layoutVersion, underfoot } from "@yutopia/shared/grounds";
 import {
   type BuildingSolids,
   buildingSolids,
-  ICE_WALK,
   JoltCollider,
   loadJolt,
   PhysicsWorld,
@@ -109,8 +108,8 @@ registerFeature((room) => {
   return {
     tick() {
       if (!world || !build) return;
-      // the water open (its shores walls) or frozen, as the weather has it (docs/plan/65, W6)
-      build.water(underfoot().ice < ICE_WALK);
+      // the water's ice as the weather has it, and its holes (docs/plan/65 W6, 66 S4)
+      build.ice(underfoot().ice, iceHolesNow());
       // the building edited (a new grid every time): made again where it changed
       if (room.grid !== grid) {
         grid = room.grid;

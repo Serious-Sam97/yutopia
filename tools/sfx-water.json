@@ -1,0 +1,732 @@
+{
+  "_": "The water's sound candidates (docs/plan/66-the-water.md, phase 9): every one CC0 on Freesound, fetched as its HQ preview; kind: shot (cut into its events), steps, loop (a bed). The game plays each slot's first until the user picks by ear on /dev/water-sound.",
+  "in-step": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "249911",
+        "user": "launemax",
+        "title": "footsteps in a water puddle",
+        "preview": "https://cdn.freesound.org/previews/249/249911_389377-hq.mp3",
+        "url": "https://freesound.org/people/launemax/sounds/249911/",
+        "dur": 9.6,
+        "note": "one splash into a puddle, then steps through it"
+      },
+      {
+        "id": "861369",
+        "user": "ChristopherJngs",
+        "title": "Splashing Footsteps Shallow Water",
+        "preview": "https://cdn.freesound.org/previews/861/861369_8154783-hq.mp3",
+        "url": "https://freesound.org/people/ChristopherJngs/sounds/861369/",
+        "dur": 8.9,
+        "note": "wading into and out of a puddle"
+      },
+      {
+        "id": "553238",
+        "user": "NachtmahrTV",
+        "title": "Walking through puddle",
+        "preview": "https://cdn.freesound.org/previews/553/553238_5620304-hq.mp3",
+        "url": "https://freesound.org/people/NachtmahrTV/sounds/553238/",
+        "dur": 13.1,
+        "note": "steps through a puddle"
+      }
+    ],
+    "pick": 0
+  },
+  "in-jump": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "585744",
+        "user": "Nox_Sound",
+        "title": "Foley_Natural_Water_Jump_Mono.wav",
+        "preview": "https://cdn.freesound.org/previews/585/585744_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/585744/",
+        "dur": 14.5,
+        "note": "three jumps, mono"
+      },
+      {
+        "id": "280220",
+        "user": "yurkobb",
+        "title": "jump-into-water-02.flac",
+        "preview": "https://cdn.freesound.org/previews/280/280220_2023784-hq.mp3",
+        "url": "https://freesound.org/people/yurkobb/sounds/280220/",
+        "dur": 7.7,
+        "note": "into a lake from a few metres"
+      },
+      {
+        "id": "567942",
+        "user": "TRP",
+        "title": "200620 Splashes, jumping in pool, water, Mineral Springs Rd, Hamilton, 3pm.flac",
+        "preview": "https://cdn.freesound.org/previews/567/567942_97550-hq.mp3",
+        "url": "https://freesound.org/people/TRP/sounds/567942/",
+        "dur": 23.8,
+        "note": "two jumps into an outdoor pool"
+      }
+    ],
+    "pick": 0
+  },
+  "in-dive": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "637823",
+        "user": "kyles",
+        "title": "splash body dive into water pool.flac",
+        "preview": "https://cdn.freesound.org/previews/637/637823_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/637823/",
+        "dur": 6,
+        "note": "pool"
+      },
+      {
+        "id": "434978",
+        "user": "felix.blume",
+        "title": "Water Splash",
+        "preview": "https://cdn.freesound.org/previews/434/434978_1661766-hq.mp3",
+        "url": "https://freesound.org/people/felix.blume/sounds/434978/",
+        "dur": 13.5,
+        "note": "pool dive, very close"
+      },
+      {
+        "id": "529794",
+        "user": "bruno.auzet",
+        "title": "5 meters dive.wav",
+        "preview": "https://cdn.freesound.org/previews/529/529794_11519060-hq.mp3",
+        "url": "https://freesound.org/people/bruno.auzet/sounds/529794/",
+        "dur": 11.1,
+        "note": "5 m board, outdoor pool; birds around"
+      }
+    ],
+    "pick": 0
+  },
+  "in-fall": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "480846",
+        "user": "craigsmith",
+        "title": "R23-45-Jumping Into Water.wav",
+        "preview": "https://cdn.freesound.org/previews/480/480846_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/480846/",
+        "dur": 8.6,
+        "note": "heavy single splashes"
+      },
+      {
+        "id": "530152",
+        "user": "tbsounddesigns",
+        "title": "POOL CANONBALL DIVE 4",
+        "preview": "https://cdn.freesound.org/previews/530/530152_5387364-hq.mp3",
+        "url": "https://freesound.org/people/tbsounddesigns/sounds/530152/",
+        "dur": 9,
+        "note": "cannonball into a backyard pool"
+      },
+      {
+        "id": "545823",
+        "user": "benj500",
+        "title": "Water Splosh",
+        "preview": "https://cdn.freesound.org/previews/545/545823_1384976-hq.mp3",
+        "url": "https://freesound.org/people/benj500/sounds/545823/",
+        "dur": 2.4,
+        "note": "a heavy lump of metal thrown into a river"
+      }
+    ],
+    "pick": 0
+  },
+  "car-sink": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "661609",
+        "user": "noisymichael",
+        "title": "glug_glug_glug.wav",
+        "preview": "https://cdn.freesound.org/previews/661/661609_13563349-hq.mp3",
+        "url": "https://freesound.org/people/noisymichael/sounds/661609/",
+        "dur": 112.3,
+        "note": "jars and bottles pushed under: glugs and bubbling"
+      },
+      {
+        "id": "585259",
+        "user": "breiti",
+        "title": "Air bubbles underwater, recorded from surface, gurgle, released from a hollow pot.wav",
+        "preview": "https://cdn.freesound.org/previews/585/585259_567141-hq.mp3",
+        "url": "https://freesound.org/people/breiti/sounds/585259/",
+        "dur": 125.2,
+        "note": "a hollow pot letting its air out, close, from the surface"
+      },
+      {
+        "id": "335762",
+        "user": "j1987",
+        "title": "water_bubbles_in_bottle.wav",
+        "preview": "https://cdn.freesound.org/previews/335/335762_367313-hq.mp3",
+        "url": "https://freesound.org/people/j1987/sounds/335762/",
+        "dur": 22.2,
+        "note": "a plastic bottle pushed under, lots of bubbling; binaural"
+      }
+    ],
+    "pick": 0
+  },
+  "ice-crack": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "840050",
+        "user": "mentos987",
+        "title": "Breaking through ice into water.",
+        "preview": "https://cdn.freesound.org/previews/840/840050_15684938-hq.mp3",
+        "url": "https://freesound.org/people/mentos987/sounds/840050/",
+        "dur": 63.2,
+        "note": "boots breaking through pond ice again and again; wind edited out"
+      },
+      {
+        "id": "209818",
+        "user": "DogOmlet",
+        "title": "Icy Water - Cracking and Break through",
+        "preview": "https://cdn.freesound.org/previews/209/209818_896249-hq.mp3",
+        "url": "https://freesound.org/people/DogOmlet/sounds/209818/",
+        "dur": 152.5,
+        "note": "walking on ice over water: cracks from 1:10, breaks through at 1:50"
+      },
+      {
+        "id": "554856",
+        "user": "snds_good",
+        "title": "Breaking ice on frozen pond",
+        "preview": "https://cdn.freesound.org/previews/554/554856_12400492-hq.mp3",
+        "url": "https://freesound.org/people/snds_good/sounds/554856/",
+        "dur": 17.9,
+        "note": "feet breaking ice on a frozen pond"
+      }
+    ],
+    "pick": 2
+  },
+  "wade-shallow": {
+    "kind": "steps",
+    "from": [
+      {
+        "id": "342932",
+        "user": "ryansitz",
+        "title": "Wading in Shallow Water.wav",
+        "preview": "https://cdn.freesound.org/previews/342/342932_5800259-hq.mp3",
+        "url": "https://freesound.org/people/ryansitz/sounds/342932/",
+        "dur": 26.4,
+        "note": "wading in shallow water, feet lifted out and put back"
+      },
+      {
+        "id": "369580",
+        "user": "Adielees9",
+        "title": "Slow Water Footsteps",
+        "preview": "https://cdn.freesound.org/previews/369/369580_4800355-hq.mp3",
+        "url": "https://freesound.org/people/Adielees9/sounds/369580/",
+        "dur": 12.8,
+        "note": "slow steps in a small still stream"
+      },
+      {
+        "id": "803676",
+        "user": "CVLTIV8R",
+        "title": "Walking Through Creek in Canyon.wav",
+        "preview": "https://cdn.freesound.org/previews/803/803676_2520418-hq.mp3",
+        "url": "https://freesound.org/people/CVLTIV8R/sounds/803676/",
+        "dur": 26.3,
+        "note": "light walking and sloshing through a creek bed"
+      }
+    ],
+    "pick": 0
+  },
+  "wade-deep": {
+    "kind": "steps",
+    "from": [
+      {
+        "id": "321594",
+        "user": "macdaddyno1",
+        "title": "Wading in a shallow river",
+        "preview": "https://cdn.freesound.org/previews/321/321594_313780-hq.mp3",
+        "url": "https://freesound.org/people/macdaddyno1/sounds/321594/",
+        "dur": 20.2,
+        "note": "wading in a shallow river (the slot's deep sloshing is not well matched)"
+      },
+      {
+        "id": "563555",
+        "user": "paulprit",
+        "title": "River Wading Fast.mp3",
+        "preview": "https://cdn.freesound.org/previews/563/563555_8682843-hq.mp3",
+        "url": "https://freesound.org/people/paulprit/sounds/563555/",
+        "dur": 232.6,
+        "note": "wading-walking through a river, fast; GoPro"
+      },
+      {
+        "id": "418373",
+        "user": "SomeoneCool15",
+        "title": "Person walking in water.mp3",
+        "preview": "https://cdn.freesound.org/previews/418/418373_8326967-hq.mp3",
+        "url": "https://freesound.org/people/SomeoneCool15/sounds/418373/",
+        "dur": 10.1,
+        "note": "walking through a creek in boots"
+      }
+    ],
+    "pick": 1
+  },
+  "soaked": {
+    "kind": "steps",
+    "from": [
+      {
+        "id": "683520",
+        "user": "eqavox",
+        "title": "Feet Squelch",
+        "preview": "https://cdn.freesound.org/previews/683/683520_6217756-hq.mp3",
+        "url": "https://freesound.org/people/eqavox/sounds/683520/",
+        "dur": 16.1,
+        "note": "squelching feet walking in the rain"
+      },
+      {
+        "id": "531571",
+        "user": "patchytherat",
+        "title": "squishy footsteps to walking in a puddle.wav",
+        "preview": "https://cdn.freesound.org/previews/531/531571_5911297-hq.mp3",
+        "url": "https://freesound.org/people/patchytherat/sounds/531571/",
+        "dur": 16.1,
+        "note": "squishy steps into a puddle on wet gravel"
+      },
+      {
+        "id": "376809",
+        "user": "Alex_hears_things",
+        "title": "MUDDY AND WET FOOTSTEPS.wav",
+        "preview": "https://cdn.freesound.org/previews/376/376809_2309965-hq.mp3",
+        "url": "https://freesound.org/people/Alex_hears_things/sounds/376809/",
+        "dur": 46.1,
+        "note": "steps through muddy grass, wet gravel and puddles; shotgun mic"
+      }
+    ],
+    "pick": 0
+  },
+  "stroke-breast": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "435055",
+        "user": "JazzyBay",
+        "title": "Creek Swimming.mp3",
+        "preview": "https://cdn.freesound.org/previews/435/435055_6625411-hq.mp3",
+        "url": "https://freesound.org/people/JazzyBay/sounds/435055/",
+        "dur": 17.2,
+        "note": "a woman swimming calmly in a slow creek"
+      },
+      {
+        "id": "530158",
+        "user": "tbsounddesigns",
+        "title": "POOL SWIMMING R-L",
+        "preview": "https://cdn.freesound.org/previews/530/530158_5387364-hq.mp3",
+        "url": "https://freesound.org/people/tbsounddesigns/sounds/530158/",
+        "dur": 16.8,
+        "note": "swimming and paddling, left to right; backyard pool"
+      },
+      {
+        "id": "267566",
+        "user": "Snudio_Records",
+        "title": "Swim Sound",
+        "preview": "https://cdn.freesound.org/previews/267/267566_4610294-hq.mp3",
+        "url": "https://freesound.org/people/Snudio_Records/sounds/267566/",
+        "dur": 4.9,
+        "note": "short: a small swim loop in a lake"
+      }
+    ],
+    "pick": 0
+  },
+  "stroke-crawl": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "438845",
+        "user": "craigsmith",
+        "title": "G54-26-Person Swimming.wav",
+        "preview": "https://cdn.freesound.org/previews/438/438845_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/438845/",
+        "dur": 42.2,
+        "note": "short strokes with lots of splashing; dry, no room"
+      },
+      {
+        "id": "675570",
+        "user": "craigsmith",
+        "title": "S21-29 Swimming in pool.wav",
+        "preview": "https://cdn.freesound.org/previews/675/675570_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/675570/",
+        "dur": 8.9,
+        "note": "swimming in a pool"
+      },
+      {
+        "id": "444015",
+        "user": "lurpsis",
+        "title": "Jumping to a Lake",
+        "preview": "https://cdn.freesound.org/previews/444/444015_1744434-hq.mp3",
+        "url": "https://freesound.org/people/lurpsis/sounds/444015/",
+        "dur": 42.1,
+        "note": "starts with a jump into the lake, then swimming"
+      }
+    ],
+    "pick": 0
+  },
+  "tread": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "438852",
+        "user": "craigsmith",
+        "title": "G54-33-Swimming and Drips.wav",
+        "preview": "https://cdn.freesound.org/previews/438/438852_2524442-hq.mp3",
+        "url": "https://freesound.org/people/craigsmith/sounds/438852/",
+        "dur": 40.8,
+        "note": "slosh and lap, some drips: swimming in still water"
+      },
+      {
+        "id": "637958",
+        "user": "kyles",
+        "title": "water movements swimming around various splashes random.flac",
+        "preview": "https://cdn.freesound.org/previews/637/637958_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/637958/",
+        "dur": 56.3,
+        "note": "swimming around, random splashes: not very steady"
+      },
+      {
+        "id": "431627",
+        "user": "Daen23",
+        "title": "Water, Gentle Movement.wav",
+        "preview": "https://cdn.freesound.org/previews/431/431627_2363418-hq.mp3",
+        "url": "https://freesound.org/people/Daen23/sounds/431627/",
+        "dur": 26,
+        "note": "short: a hand moving gently in water (bathtub)"
+      }
+    ],
+    "pick": 1
+  },
+  "gasp-man": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "169931",
+        "user": "u3190",
+        "title": "Gasp Inhale",
+        "preview": "https://cdn.freesound.org/previews/169/169931_1316584-hq.mp3",
+        "url": "https://freesound.org/people/u3190/sounds/169931/",
+        "dur": 3.7,
+        "note": "a man's gasp on reaching the surface"
+      }
+    ],
+    "pick": 0
+  },
+  "gasp-woman": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "535243",
+        "user": "marythewitch",
+        "title": "female sharp inhale sounds",
+        "preview": "https://cdn.freesound.org/previews/535/535243_11890919-hq.mp3",
+        "url": "https://freesound.org/people/marythewitch/sounds/535243/",
+        "dur": 18,
+        "note": "a woman's sharp inhales, made for surfacing from drowning"
+      }
+    ],
+    "pick": 0
+  },
+  "breathless-man": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "366077",
+        "user": "simone_ds",
+        "title": "heavy breathing.wav",
+        "preview": "https://cdn.freesound.org/previews/366/366077_6040409-hq.mp3",
+        "url": "https://freesound.org/people/simone_ds/sounds/366077/",
+        "dur": 16,
+        "note": "a man panting heavily"
+      }
+    ],
+    "pick": 0
+  },
+  "breathless-woman": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "435468",
+        "user": "MelvinJaepel",
+        "title": "woman run and breath.wav",
+        "preview": "https://cdn.freesound.org/previews/435/435468_6125359-hq.mp3",
+        "url": "https://freesound.org/people/MelvinJaepel/sounds/435468/",
+        "dur": 15,
+        "note": "a woman out of breath from running"
+      },
+      {
+        "id": "844097",
+        "user": "perspektywa_tn",
+        "title": "heavy_breathing_female",
+        "preview": "https://cdn.freesound.org/previews/844/844097_18419352-hq.mp3",
+        "url": "https://freesound.org/people/perspektywa_tn/sounds/844097/",
+        "dur": 7,
+        "note": "a woman breathing heavily"
+      },
+      {
+        "id": "235593",
+        "user": "tcrocker68",
+        "title": "Girl_Heavy_Breathing.wav",
+        "preview": "https://cdn.freesound.org/previews/235/235593_3396115-hq.mp3",
+        "url": "https://freesound.org/people/tcrocker68/sounds/235593/",
+        "dur": 48,
+        "note": "a young woman breathing heavily"
+      }
+    ],
+    "pick": 0
+  },
+  "under": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "734743",
+        "user": "GirlWithSoundRecorder",
+        "title": "Underwater Noise",
+        "preview": "https://cdn.freesound.org/previews/734/734743_7834424-hq.mp3",
+        "url": "https://freesound.org/people/GirlWithSoundRecorder/sounds/734743/",
+        "dur": 425,
+        "note": "a pond at about 1 m deep"
+      },
+      {
+        "id": "815116",
+        "user": "L.Finck",
+        "title": "Underwater - seashore",
+        "preview": "https://cdn.freesound.org/previews/815/815116_14042309-hq.mp3",
+        "url": "https://freesound.org/people/L.Finck/sounds/815116/",
+        "dur": 82,
+        "note": "under the sea at the shore, low tide"
+      },
+      {
+        "id": "482116",
+        "user": "Nox_Sound",
+        "title": "Ambiance_Underwater_Stereo.wav",
+        "preview": "https://cdn.freesound.org/previews/482/482116_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/482116/",
+        "dur": 45,
+        "note": "underwater bed; Zoom H2n"
+      }
+    ],
+    "pick": 1
+  },
+  "bubbles": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "588468",
+        "user": "cartoonrob",
+        "title": "Bubbles_01.wav",
+        "preview": "https://cdn.freesound.org/previews/588/588468_1778576-hq.mp3",
+        "url": "https://freesound.org/people/cartoonrob/sounds/588468/",
+        "dur": 10.3,
+        "note": "blowing bubbles in a bucket of water"
+      },
+      {
+        "id": "634225",
+        "user": "sbvitug",
+        "title": "Scuba_bubbles.mp3",
+        "preview": "https://cdn.freesound.org/previews/634/634225_13988658-hq.mp3",
+        "url": "https://freesound.org/people/sbvitug/sounds/634225/",
+        "dur": 95.5,
+        "note": "scuba exhale bubbles"
+      },
+      {
+        "id": "274491",
+        "user": "timsc",
+        "title": "Under water sounds while scuba diving",
+        "preview": "https://cdn.freesound.org/previews/274/274491_266678-hq.mp3",
+        "url": "https://freesound.org/people/timsc/sounds/274491/",
+        "dur": 98.6,
+        "note": "scuba exhale bubbles with regulator hiss on the inhales; a boat propeller whizzes by briefly"
+      }
+    ],
+    "pick": 0
+  },
+  "current": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "733812",
+        "user": "Salomé_Lubczanski",
+        "title": "Hydrophone underwater flow",
+        "preview": "https://cdn.freesound.org/previews/733/733812_7796757-hq.mp3",
+        "url": "https://freesound.org/people/Salom%C3%A9_Lubczanski/sounds/733812/",
+        "dur": 59.9,
+        "note": "hydrophone in a small stream"
+      },
+      {
+        "id": "48408",
+        "user": "melarancida",
+        "title": "Underwater (small river).mp3",
+        "preview": "https://cdn.freesound.org/previews/48/48408_481778-hq.mp3",
+        "url": "https://freesound.org/people/melarancida/sounds/48408/",
+        "dur": 117.1,
+        "note": "home-made hydrophone in a small river"
+      },
+      {
+        "id": "422663",
+        "user": "JavierZumer",
+        "title": "Hydrophone underwater stream quiet.wav",
+        "preview": "https://cdn.freesound.org/previews/422/422663_2836758-hq.mp3",
+        "url": "https://freesound.org/people/JavierZumer/sounds/422663/",
+        "dur": 56.1,
+        "note": "hydrophone in a stream, quiet"
+      }
+    ],
+    "pick": 0
+  },
+  "pond-lap": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "573163",
+        "user": "TRP",
+        "title": "Gentle lapping lake water waves cottage 24 96 180721.wav",
+        "preview": "https://cdn.freesound.org/previews/573/573163_97550-hq.mp3",
+        "url": "https://freesound.org/people/TRP/sounds/573163/",
+        "dur": 75.9,
+        "note": "small waves lapping, close; lake"
+      },
+      {
+        "id": "568819",
+        "user": "TRP",
+        "title": "200906 Water waves lapping, lake, gentle, close, PEC 9am.flac",
+        "preview": "https://cdn.freesound.org/previews/568/568819_97550-hq.mp3",
+        "url": "https://freesound.org/people/TRP/sounds/568819/",
+        "dur": 132.7,
+        "note": "small waves on a rocky lake shore, close"
+      },
+      {
+        "id": "614299",
+        "user": "TheFlyFishingFilmmaker",
+        "title": "Gentle waves on a lake",
+        "preview": "https://cdn.freesound.org/previews/614/614299_6501596-hq.mp3",
+        "url": "https://freesound.org/people/TheFlyFishingFilmmaker/sounds/614299/",
+        "dur": 175.5,
+        "note": "gentle waves on rocks, lake"
+      }
+    ],
+    "pick": 0
+  },
+  "rapid": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "454154",
+        "user": "kyles",
+        "title": "river rushing rapids close smooth liquidy detail.flac",
+        "preview": "https://cdn.freesound.org/previews/454/454154_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/454154/",
+        "dur": 104.8,
+        "note": "river rapids, close"
+      },
+      {
+        "id": "642774",
+        "user": "nicoproson",
+        "title": "RIVER gurgling small rapids.wav",
+        "preview": "https://cdn.freesound.org/previews/642/642774_457982-hq.mp3",
+        "url": "https://freesound.org/people/nicoproson/sounds/642774/",
+        "dur": 76.3,
+        "note": "mid-size river from the bank, small rapids"
+      },
+      {
+        "id": "588180",
+        "user": "Auxide_Audio",
+        "title": "Mountain River, Large 001.wav",
+        "preview": "https://cdn.freesound.org/previews/588/588180_13207434-hq.mp3",
+        "url": "https://freesound.org/people/Auxide_Audio/sounds/588180/",
+        "dur": 50,
+        "note": "rocky mountain river, medium rapids, about 3 m away"
+      }
+    ],
+    "pick": 0
+  },
+  "falls": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "698306",
+        "user": "Nox_Sound",
+        "title": "Ambiance_Waterfall_Small_Close_Loop_Stereo.wav",
+        "preview": "https://cdn.freesound.org/previews/698/698306_9250976-hq.mp3",
+        "url": "https://freesound.org/people/Nox_Sound/sounds/698306/",
+        "dur": 45,
+        "note": "small waterfall, close; a loop"
+      },
+      {
+        "id": "855677",
+        "user": "Brikaro",
+        "title": "Waterfall_Small",
+        "preview": "https://cdn.freesound.org/previews/855/855677_16235608-hq.mp3",
+        "url": "https://freesound.org/people/Brikaro/sounds/855677/",
+        "dur": 77.6,
+        "note": "small waterfall onto rock"
+      },
+      {
+        "id": "454340",
+        "user": "kyles",
+        "title": "waterfall small or water fountain splashy close stream into water.flac",
+        "preview": "https://cdn.freesound.org/previews/454/454340_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/454340/",
+        "dur": 73.4,
+        "note": "small waterfall or fountain, splashy, close"
+      }
+    ],
+    "pick": 0
+  },
+  "climb-out": {
+    "kind": "shot",
+    "from": [
+      {
+        "id": "637948",
+        "user": "kyles",
+        "title": "water movement body step out of pool splash drips.flac",
+        "preview": "https://cdn.freesound.org/previews/637/637948_612689-hq.mp3",
+        "url": "https://freesound.org/people/kyles/sounds/637948/",
+        "dur": 4.8,
+        "note": "body steps out of a pool, splash and drips"
+      },
+      {
+        "id": "679410",
+        "user": "adviseme333",
+        "title": "Coming up from underwater",
+        "preview": "https://cdn.freesound.org/previews/679/679410_14805886-hq.mp3",
+        "url": "https://freesound.org/people/adviseme333/sounds/679410/",
+        "dur": 10.8,
+        "note": "foley: rising out through the surface, the start filtered (more surfacing than climbing)"
+      }
+    ],
+    "pick": 0
+  },
+  "drip-body": {
+    "kind": "loop",
+    "from": [
+      {
+        "id": "528478",
+        "user": "maryannem",
+        "title": "dripping-laundry3.WAV",
+        "preview": "https://cdn.freesound.org/previews/528/528478_11648744-hq.mp3",
+        "url": "https://freesound.org/people/maryannem/sounds/528478/",
+        "dur": 34.3,
+        "note": "drips from a laundry line onto soft ground, very slow"
+      },
+      {
+        "id": "518474",
+        "user": "phonoflora",
+        "title": "wringing wet cloth onto paving.WAV",
+        "preview": "https://cdn.freesound.org/previews/518/518474_401348-hq.mp3",
+        "url": "https://freesound.org/people/phonoflora/sounds/518474/",
+        "dur": 7.6,
+        "note": "short: a soaked towel wrung out onto paving; faint birdsong"
+      },
+      {
+        "id": "82451",
+        "user": "Vampirella17",
+        "title": "wring out towl.wav",
+        "preview": "https://cdn.freesound.org/previews/82/82451_1276308-hq.mp3",
+        "url": "https://freesound.org/people/Vampirella17/sounds/82451/",
+        "dur": 12.2,
+        "note": "short: a towel wrung out; bathroom"
+      }
+    ],
+    "pick": 0
+  }
+}

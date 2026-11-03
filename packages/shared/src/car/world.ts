@@ -12,6 +12,7 @@ import {
   surfaceTileAt,
   treesIn,
   underfoot,
+  waterAt,
   weatheredFooting,
 } from "../grounds.ts";
 import { lotBanksOf, lotLayout } from "../lot.ts";
@@ -182,6 +183,11 @@ export function groundsWorld(o: GroundsWorldOpts = {}): CarWorld {
   const w: CarWorld = {
     height: (x, z) => (x < GROUNDS.x0 || x > GROUNDS.x1 || z < GROUNDS.z0 || z > GROUNDS.z1 ? 0 : heightAt(x, z)),
     ground: (x, z) => groundAt(x, z, o.cold?.() ?? 0.5),
+    // (the water over the ground: its bed's, open — its ice is driven on: plan 66)
+    water: (x, z) => {
+      const w = waterAt(x, z);
+      return w ? Math.max(0, w.level - heightAt(x, z)) : 0;
+    },
     solids: (x, z, r, out) => {
       const ca = Math.floor((x - r) / CHUNK);
       const cb = Math.floor((x + r) / CHUNK);
@@ -333,6 +339,8 @@ export function freeSpot(
         [a, 0],
         [a + Math.PI, 3],
       ] as const) {
+        // (never into water — its open water's: plan 66)
+        if ((world.water?.(px, pz) ?? 0) > 0.1) continue;
         const c = cost[world.ground(px, pz)] ?? 0;
         if (r + c + turned >= bestCost) continue;
         const cx = px + Math.cos(h) * off;

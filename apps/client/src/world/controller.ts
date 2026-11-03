@@ -79,6 +79,7 @@ import { COMPUTER_REACH, computerAway, isComputer } from "@yutopia/shared/comput
 import { keyFooting, MATS, TILE_FOOTING } from "@yutopia/shared/footing";
 import { CABLE_REACH, gap, isConsole, isGameTv } from "@yutopia/shared/games";
 import { isRadio, type RadioState, radioOf } from "@yutopia/shared/media";
+import type { WaterHere } from "@yutopia/shared/move";
 import { type BattleEvent, type PetLook, type PetOutfit, type Species, toyAt } from "@yutopia/shared/pets";
 import { offBand, spanOf } from "@yutopia/shared/reach";
 import { Client, getStateCallbacks, type Room } from "colyseus.js";
@@ -202,10 +203,17 @@ const MENU_STEP: Record<string, number> = {
 const HALF_STRIDE: Record<StepGait, number> = { walk: 0.62, crouch: 0.66, jog: 1.31, sprint: 1.77 };
 /** walked this long (s) with no step of the body's, it isn't stepping: steps by the way gone */
 const QUIET = 0.5;
-// the water's ice walked on from (shared physics/build.ts ICE_WALK: imported, it brings the builder onto
-// the page), and thin under it (docs/plan/65-the-weather.md: a creak, a crack)
-const ICE_WALK = 0.8;
+// the water's ice thin under it (docs/plan/65-the-weather.md, 66 S4: a creak, a crack; shared grounds.ts
+// iceAt's), how long stood on it till it gives
 const THIN_ICE = 0.95;
+// water this deep catches a fall (shared move SWIM.catch: a copy — the move core's the input chunk's,
+// not the page's)
+const SWIM_CATCH = 1.3;
+const THIN_GIVES = 1.5;
+// the water's sound (docs/plan/66 S9): how far someone in it is heard (m: water-sound.ts HEARD), and
+// the river's current past which it's the falls' roar, not the rapid's (m/s)
+const WATER_HEARD = 30;
+const FALLS_SPEED = 2.4;
 // how much of the rain on the building's roof is heard indoors: on its top floor, under it (too loud
 // at all of it, on the user's ear 2026-11-02), and the floors below, through the windows
 const ROOF_TOP = 0.55;
@@ -240,6 +248,12 @@ export class WorldController {
   private myPitch = 0;
   private lastPitch = 0;
   private lastMv = 0;
+  /** me in the water (plan 66): 0 out, 1 wading, 2 afloat, 3 under */
+  private mySwim = 0;
+  /** the ice's holes as the room last said them, mine just broken, how long I've stood on thin ice */
+  private holesWire = "";
+  private myHoles: { x: number; z: number; r: number; at: number }[] = [];
+  private thinFor = 0;
   private lastYaw = 0;
   // my feet (shared/jump.ts): how high (up on something, in a jump), my jump's stage,
   // whether it's left the ground yet; Space pressed just before landing, waiting
@@ -1383,6 +1397,16 @@ export class WorldController {
     // what lies on the ground (docs/plan/65-the-weather.md): the server's, eased by the view
     const wxs = room.state.weather;
     if (wxs) this.life?.underfoot(wxs.snow ?? 0, wxs.wet ?? 0, (wxs.temp ?? 0) < 0, wxs.ice ?? 1);
+    // (the ice's holes: the room's, and one I've just broken till it's the room's — plan 66 S4)
+    if (wxs && this.G) {
+      const wire = wxs.holes ?? "";
+      const now0 = Date.now();
+      this.myHoles = this.myHoles.filter((h) => now0 - h.at < 4000);
+      if (wire !== this.holesWire || this.myHoles.length) {
+        this.holesWire = wire;
+        this.G.setIceHoles([...this.G.holesFromWire(wire), ...this.myHoles]);
+      }
+    }
     if (wxs)
       this.tp?.setGround({
         snow: wxs.snow ?? 0,
@@ -1421,6 +1445,9 @@ export class WorldController {
         angle: this.meAngle,
         focused: this.walker?.focus,
         ...this.myJump(now),
+        swim: this.mySwim,
+        overWater: this.overDeep(this.me.x, this.me.y),
+        waterOver: this.waterOver(this.me.x, this.me.y, this.height.z),
       };
       this.jumpEffects(localSid, st, 1);
       this.life?.print(localSid, st, now, this.map, this.grid.onLand(st.x, st.y));
@@ -1468,6 +1495,9 @@ export class WorldController {
         // (their facing as they turned, not 8 ways: from the move's own senders)
         angle: p.mt ? (at.yaw / 128) * Math.PI : undefined,
         ...this.theirJump(r, p, pos, now),
+        swim: this.swimOf(pos.x, pos.y, pos.z),
+        overWater: this.overDeep(pos.x, pos.y),
+        waterOver: this.waterOver(pos.x, pos.y, pos.z),
       };
       this.jumpEffects(
         sid,
@@ -1591,6 +1621,7 @@ export class WorldController {
     });
     // their steps (docs/plan/63-the-steps.md, phase 3): everyone else's near me, as they land
     if (bodies.length > 1) this.theirSteps(bodies, dt);
+    this.waterSound(bodies, dt);
     this.watchActs();
     lap = perf.lap("logic", lap); // (doors, things, moving, the tables and screens, the people)
     if (tp) {
@@ -1776,7 +1807,13 @@ export class WorldController {
       usePad: !playing && !hud.get().menu,
       path: this.path,
       at: { x: this.me.x, y: this.me.y, z: this.height.z },
+      // (the Grounds' pond and river, out on the land: docs/plan/66-the-water.md)
+      water: G && this.level === 0 ? (x, y) => this.waterAt(x, y) : undefined,
+      camPitch: this.tp?.aimPitch,
+      waterTemp: this.room?.state.weather?.water,
     });
+    this.mySwim = out.swim;
+    this.thinIce(dt, out);
     // the camera on the arrows (the stick's the view's own)
     if (this.tp) {
       this.tp.keyLook = w.camKeys();
@@ -1868,7 +1905,14 @@ export class WorldController {
     // my steps (docs/plan/63-the-steps.md): never in the air, a verb or a move, nor down on hands and
     // knees in the dark (their own sounds: the steps chunk's Footfalls); the stairs' treads as any floor
     this.feet = {
-      ok: !hgt.up && !out.verb && !out.flow && !this.jumpTrack.kind && !this.tp?.downed.has(this.room?.sessionId ?? ""),
+      // (nor swimming: plan 66)
+      ok:
+        !hgt.up &&
+        !out.verb &&
+        !out.flow &&
+        out.swim < 2 &&
+        !this.jumpTrack.kind &&
+        !this.tp?.downed.has(this.room?.sessionId ?? ""),
       gait: out.gait === "crouch" || out.gait === "jog" || out.gait === "sprint" ? out.gait : "walk",
     };
     this.stepsBy(went, floor, dt);
@@ -2858,6 +2902,153 @@ export class WorldController {
 
   // ── jumping ─────────────────────────────────────────────────────────────
 
+  // the water at (x, y) on the ground floor (docs/plan/66-the-water.md), the floor's coords and my
+  // heights: the Grounds' pond and river, out on the land
+  private waterAt(x: number, y: number): WaterHere | null {
+    const G = this.G;
+    if (!G || this.level !== 0 || !this.grid.onLand(x, y)) return null;
+    const gx = x + (this.map.ox ?? 0);
+    const gz = y + (this.map.oy ?? 0);
+    const w = G.waterAt(gx, gz);
+    return w ? { level: w.level, bed: w.bed, vx: w.flow[0], vy: w.flow[1], ice: !!G.iceAt(gx, gz) } : null;
+  }
+  // how someone at (x, y, z) is in the water: 0 out, 1 wading, 2 afloat, 3 under (from where they
+  // are: nothing on the wire says it)
+  private swimOf(x: number, y: number, z: number): number {
+    const w = this.waterAt(x, y);
+    if (!w || z > w.level - 0.15) return 0;
+    if (w.level - w.bed < 1.15 || z <= w.bed + 0.05) return 1;
+    return z < w.level - 1.6 ? 3 : 2;
+  }
+
+  // the water's sound (docs/plan/66-the-water.md S9): where I am (its beds), who's in it near me (their
+  // splashes, strokes, gasps), a car gone in, the ice giving way — the Grounds' sound plays it
+  private riverSpots: { rapid: [number, number][]; falls: [number, number][] } | null = null;
+  private waterSound(bodies: Body3[], dt: number) {
+    const W = this.life?.sound.water;
+    const G = this.G;
+    if (!W || !G) return;
+    const ox = this.map.ox ?? 0;
+    const oy = this.map.oy ?? 0;
+    const sid = this.room?.sessionId ?? "";
+    const land = this.level === 0 && this.grid.onLand(this.me.x, this.me.y);
+    const x = this.me.x + ox;
+    const z = this.me.y + oy;
+    // (the rapid and the falls: the river's samples by its current, every fourth)
+    if (!this.riverSpots) {
+      const r = G.riverWater();
+      const spots: { rapid: [number, number][]; falls: [number, number][] } = { rapid: [], falls: [] };
+      G.RIVER.line.forEach((p, i) => {
+        if (i % 4 || r.speed[i] <= G.ICE_FAST) return;
+        spots[r.speed[i] > FALLS_SPEED ? "falls" : "rapid"].push([p[0], p[1]]);
+      });
+      this.riverSpots = spots;
+    }
+    const near = (pts: [number, number][]) => {
+      let d = 1e9;
+      for (const [px, pz] of pts) d = Math.min(d, Math.hypot(px - x, pz - z));
+      return d;
+    };
+    const P = G.POND;
+    const e = Math.hypot((x - P.cx) / P.rx, (z - P.cz) / P.rz);
+    const wat = land ? this.waterAt(this.me.x, this.me.y) : null;
+    const ice = this.room?.state.weather?.ice ?? 1;
+    const waders = [];
+    for (const b of bodies) {
+      if (b.id.startsWith("pet:") || (b.level ?? 0) !== 0 || this.level !== 0) continue;
+      const me = b.id === sid;
+      if (!me && Math.hypot(b.x - this.me.x, b.y - this.me.y) > WATER_HEARD) continue;
+      const w = me ? null : { ...b, level: b.level ?? 0 };
+      waders.push({
+        id: b.id,
+        swim: b.swim ?? 0,
+        x: b.x,
+        y: b.y,
+        z: b.z ?? 0,
+        gain: w ? this.ears.gain(w) : 1,
+        pan: w ? this.ears.pan(w) : 0,
+        gender: b.avatar.gender,
+        me,
+      });
+    }
+    // (the cars near in deep water, their middle under its level)
+    const cars = [];
+    for (const c of this.cars?.where() ?? []) {
+      const d = Math.hypot(c.x - x, c.z - z);
+      if (d > WATER_HEARD * 2 || this.level !== 0) continue;
+      const w = G.waterAt(c.x, c.z);
+      const at = { x: c.x - ox, y: c.z - oy, level: 0 };
+      cars.push({
+        id: c.id,
+        wet: !!w && w.depth >= 1 && c.y < w.level + 0.3,
+        gain: Math.max(0, 1 - d / (WATER_HEARD * 2)),
+        pan: this.tp?.pan(this.me, at) ?? 0,
+      });
+    }
+    const holes = [...G.holesFromWire(this.holesWire), ...this.myHoles].map((h) => {
+      const d = Math.hypot(h.x - x, h.z - z);
+      return {
+        key: `${Math.round(h.x)},${Math.round(h.z)}`,
+        gain: this.level === 0 ? Math.max(0, 1 - d / (WATER_HEARD * 2)) : 0,
+        pan: this.tp?.pan(this.me, { x: h.x - ox, y: h.z - oy }) ?? 0,
+      };
+    });
+    W.update(
+      dt,
+      {
+        swim: this.mySwim,
+        speed: this.stepped.speed,
+        out: land && !this.cars?.inCar(),
+        up: this.tp?.earUp() ?? 0,
+        pond: land ? Math.max(0, 1 - (Math.abs(e - 1) * Math.min(P.rx, P.rz)) / 25) : 0,
+        rapid: land ? near(this.riverSpots.rapid) : 1e9,
+        falls: land ? near(this.riverSpots.falls) : 1e9,
+        current: wat ? Math.hypot(wat.vx, wat.vy) : 0,
+        ice,
+        soaked: this.tp?.wetness(sid),
+      },
+      waders,
+      cars,
+      holes,
+    );
+  }
+
+  // thin ice under my feet (plan 66 S4): stood on a second and a half, or landed on hard, it gives — a
+  // hole for everyone (the room checks it), mine at once (the physics' ice made again round it)
+  private thinIce(dt: number, out: { up: boolean; swim: number; landed: number | null }) {
+    const G = this.G;
+    if (!G || !this.room || this.level !== 0 || out.up || out.swim || !this.grid.onLand(this.me.x, this.me.y)) {
+      this.thinFor = 0;
+      return;
+    }
+    const x = this.me.x + (this.map.ox ?? 0);
+    const z = this.me.y + (this.map.oy ?? 0);
+    if (!G.iceAt(x, z)?.thin) {
+      this.thinFor = 0;
+      return;
+    }
+    this.thinFor += dt;
+    // (its giving way heard: the water's sound, as the hole comes — waterSound)
+    this.life?.sound.water.preload("ice-crack");
+    if (this.thinFor < THIN_GIVES && (out.landed ?? 0) < 0.3) return;
+    this.thinFor = 0;
+    this.room.send("ice:break", { x, z });
+    this.myHoles.push({ x, z, r: G.ICE_HOLE.r, at: Date.now() });
+    G.setIceHoles([...G.holesFromWire(this.holesWire), ...this.myHoles]);
+  }
+
+  // the water over someone's feet at (x, y, z) (m; wading's waterline), or undefined out of it
+  private waterOver(x: number, y: number, z: number): number | undefined {
+    const w = this.waterAt(x, y);
+    return w && w.level > z ? w.level - z : undefined;
+  }
+
+  // over water deep enough to catch a fall (plan 66: no ragdoll into it)
+  private overDeep(x: number, y: number): boolean {
+    const w = this.waterAt(x, y);
+    return !!w && w.level - w.bed >= SWIM_CATCH;
+  }
+
   // what's under (x, y) from z down: the grid's, and where that has them off it (up on a roof, a
   // wall's top — or in the air) Jolt's say in 3D, as the move core stands on it
   private groundUnder(x: number, y: number, z: number): number {
@@ -2896,7 +3087,8 @@ export class WorldController {
       void loadJumps();
     }
     const ground = this.groundUnder(at.x, at.y, at.z);
-    const jump = r.track.update(now, at.z > ground + 0.03) ?? undefined;
+    // (afloat in the water isn't in the air: plan 66)
+    const jump = r.track.update(now, at.z > ground + 0.03 && !this.swimOf(at.x, at.y, at.z)) ?? undefined;
     return { jump, z: at.z, ground };
   }
 
@@ -4102,12 +4294,19 @@ export class WorldController {
       gait: this.feet.gait,
       shoe: this.shoe.shoe,
       scuff: !!side && this.stepped.speed < S.SCUFF,
+      // (wading, or soaked out of it: docs/plan/66 S9)
+      water: this.waterOver(this.me.x, this.me.y, this.height.z),
+      soaked: this.tp?.wetness(this.room?.sessionId ?? ""),
     });
-    // (thin ice under me: the water not long frozen, or thawing — docs/plan/65-the-weather.md)
-    const ice = this.room?.state.weather?.ice ?? 1;
-    if (f === "ice" && ice < THIN_ICE && Math.random() < 0.35 && this.grid.onLand(this.me.x, this.me.y))
+    // (thin ice under me: near its edge while it's young, or all of it then — docs/plan/65, 66 S4)
+    const G = this.G;
+    const thin =
+      f === "ice" && G && this.level === 0 && this.grid.onLand(this.me.x, this.me.y)
+        ? G.iceAt(this.me.x + (this.map.ox ?? 0), this.me.y + (this.map.oy ?? 0))?.thin
+        : false;
+    if (thin && Math.random() < 0.35)
       this.life?.sound.crack(
-        Math.min(1, (THIN_ICE - ice) / (THIN_ICE - ICE_WALK)),
+        Math.min(1, 0.4 + (THIN_ICE - (this.room?.state.weather?.ice ?? 1)) / THIN_ICE),
         this.feet.gait === "crouch" ? 0.4 : 1,
       );
   }
@@ -4188,6 +4387,7 @@ export class WorldController {
     footing: (w) => this.footingAt(w.x, w.y, w.z ?? w.ground ?? 0),
     down: (id) => this.tp?.downed.get(id),
     lift: (w) => this.inLiftCar(w.x, w.y),
+    soaked: (w) => this.tp?.wetness(w.id) ?? 0,
     // (phase 5) the far off's top lost; through a doorway, another room: muffled
     lp: (w) => {
       // (and faster in the morning fog: docs/plan/64-the-fog.md F6)

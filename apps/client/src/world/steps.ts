@@ -38,8 +38,11 @@ const LEVEL = 0.38;
 const TARGET = 10 ** (-22 / 20);
 /** with no recordings of their own: another's, damped */
 const BORROW: Partial<Record<Footing, Footing>> = { blackice: "ice" };
-/** a step in a puddle (docs/plan/65-the-weather.md): its own recordings, played on a wet way */
-type Bank_ = Footing | "puddle";
+/** a step in a puddle (docs/plan/65-the-weather.md): its own recordings, played on a wet way; in the
+ *  water (docs/plan/66-the-water.md S9), wading by how deep, and a soaked shoe's squelch after */
+type Bank_ = Footing | "puddle" | "wade-shallow" | "wade-deep" | "soaked";
+/** the water over the feet (m) past which a step's a wade, and a deep one */
+export const WADE = { from: 0.04, deep: 0.3 };
 const DAMPED: Partial<Record<Footing, number>> = { felt: 1600 };
 
 export interface StepOpts {
@@ -53,6 +56,10 @@ export interface StepOpts {
   at?: number;
   /** a step setting off, stopping or turning on the spot: the sole scuffed along the ground too */
   scuff?: boolean;
+  /** the water over the feet (m): a wade's instead (docs/plan/66) */
+  water?: number;
+  /** how soaked (0 … 1): a squelch with it on land */
+  soaked?: number;
 }
 
 interface Bank {
@@ -124,7 +131,7 @@ export class StepPlayer {
   preload(f: Bank_): void {
     const ctx = this.ctx();
     if (!ctx) return;
-    const k = f === "puddle" ? f : (BORROW[f] ?? f);
+    const k = BORROW[f as Footing] ?? f;
     if (this.banks.has(k)) return;
     if (f === "wet") this.preload("puddle");
     this.files ??= fetch(`${this.base}manifest.json`)
@@ -164,10 +171,14 @@ export class StepPlayer {
     const puddle = f === "wet" ? this.ready.get("puddle") : null;
     if (puddle && Math.random() < 0.1 * Math.min(1, this.puddles * 4) + 0.45 * this.puddles * this.puddles)
       k = "puddle";
+    // (in the water: a wade, splashy at the ankles, a slosh deeper)
+    const water = o.water ?? 0;
+    const wading = water > WADE.from;
+    if (wading) k = water < WADE.deep ? "wade-shallow" : "wade-deep";
     const bank = this.ready.get(k);
     if (!bank) {
-      this.preload(f);
-      this.synth(f, loud);
+      this.preload(wading ? k : f);
+      this.synth(wading ? "wet" : f, loud);
       return;
     }
     // (so many at once and no more: someone else's quieter one goes — never mine)
@@ -226,7 +237,26 @@ export class StepPlayer {
     // (what goes with it, when it does: its own way out)
     const extra = () => this.placed(ctx, o.pan ?? 0);
     if (o.shoe === "sandals") this.slap(ctx, extra(), at + 0.06 + Math.random() * 0.02, 0.09 * loud);
-    if (o.scuff) this.noise(ctx, extra(), at + 0.02, 0.14, "bandpass", BAND[f] * 1.3, 1.2, 0.06 * loud, 0.03);
+    if (o.scuff && !wading)
+      this.noise(ctx, extra(), at + 0.02, 0.14, "bandpass", BAND[f] * 1.3, 1.2, 0.06 * loud, 0.03);
+    // (soaked shoes: a squelch with the step, the wetter the more)
+    const soaked = wading ? 0 : (o.soaked ?? 0);
+    if (soaked > 0.3) {
+      const sq = this.ready.get("soaked");
+      if (!sq) this.preload("soaked");
+      else {
+        const j = nextOf(sq.bufs.length, this.last.get("soaked"));
+        this.last.set("soaked", j);
+        const s2 = ctx.createBufferSource();
+        s2.buffer = sq.bufs[j];
+        s2.playbackRate.value = 1 + (Math.random() - 0.5) * 0.1;
+        const g2 = ctx.createGain();
+        g2.gain.value = LEVEL * sq.gain * loud * 0.6 * Math.min(1, (soaked - 0.3) / 0.5);
+        s2.connect(g2);
+        this.route(ctx, g2, o.pan ?? 0);
+        s2.start(at + 0.01);
+      }
+    }
     if (o.shoe === "soft" && (f === "tile" || f === "wood") && Math.random() < 0.08)
       this.squeak(ctx, extra(), at + 0.04, 0.025 * loud);
   }
@@ -659,6 +689,8 @@ export interface Walker {
   jump?: unknown;
   emote?: string;
   pet?: { species: string };
+  /** wading: the water over their feet (m: docs/plan/66) */
+  waterOver?: number;
 }
 
 /** Where I hear from: my id and floor, a walker's gain (the voices' rule), pan (the camera's), what's
@@ -674,6 +706,8 @@ export interface Ears {
   down?(id: string): "down" | "kneel" | undefined;
   /** standing in a lift's car (its floor answers a landing) */
   lift?(w: Walker): boolean;
+  /** how soaked they are (0 … 1: out of the water — docs/plan/66) */
+  soaked?(w: Walker): number;
 }
 
 /** this far (tiles) and no further, and only so many at once: the nearest */
@@ -913,6 +947,8 @@ export class Footfalls {
       gain,
       pan: this.placeOf(h.w),
       scuff,
+      water: h.w.waterOver,
+      soaked: ears.soaked?.(h.w),
     });
   }
 

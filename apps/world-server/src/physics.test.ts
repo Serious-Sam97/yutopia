@@ -12,7 +12,7 @@ process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 process.env.YUTOPIA_PHYSICS = "1";
 
-const PORT = 27300 + Math.floor(Math.random() * 100);
+const PORT = 32100 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 let room: Room | null = null;
 before(async () => {

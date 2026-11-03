@@ -16,6 +16,7 @@ import {
   STREET,
   type Tree,
   terrainAt,
+  topAt,
   treesIn,
   WAYS,
 } from "@yutopia/shared/grounds";
@@ -395,6 +396,10 @@ if (vFade < 0.999) {
   /** The ground's height at (x, z) (building coords: where clicks land). */
   heightAt(x: number, z: number): number {
     return heightAt(x, z);
+  }
+  /** The top of what's there: the water's level over its bed (plan 66), else the ground. */
+  topAt(x: number, z: number): number {
+    return topAt(x, z);
   }
 
   setNight(k: number, land: Color) {

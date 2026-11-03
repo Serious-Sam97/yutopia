@@ -114,14 +114,16 @@ const NAMED: Record<Exclude<NestZone, "woods">, Spot[]> = {
   ravine: RAVINE_FLOOR,
   pond: [
     { x: -268, z: -104, r: 2 }, // by the boathouse, its west side
-    { x: POND.cx - POND.rx + 4, z: POND.cz, r: 4 }, // the reeds on the far bank
-    { x: POND.cx, z: POND.cz + POND.rz - 4, r: 4 },
+    // (on its banks: the water's open and deep — docs/plan/66-the-water.md)
+    { x: POND.cx - POND.rx - 6, z: POND.cz, r: 4 }, // the reeds on the far bank
+    { x: POND.cx, z: POND.cz - POND.rz - 6, r: 4 },
   ],
   tower: [{ x: TOWER.x + 4, z: TOWER.z + 4, r: 1.5 }], // inside its fence
   shed: [{ x: -155, z: 127, r: 3 }], // behind the grounds shed
   bridge: [
-    { x: 262, z: -389, r: 1.5 }, // on the river's ice beside the road's bridge
-    { x: 262, z: -412, r: 1.5 },
+    // on the river's banks beside the road's bridge, under its ends
+    { x: 278, z: -389, r: 1.5 },
+    { x: 246, z: -412, r: 1.5 },
   ],
   town: [
     { x: 330, z: -375, r: 2 }, // behind the gas station and the diner
@@ -144,13 +146,13 @@ const NAMED: Record<Exclude<NestZone, "woods">, Spot[]> = {
     r: 3,
   })),
   river: [
-    // out on the river's ice, up and down it
-    { x: 256, z: -540, r: 3 },
-    { x: 266, z: -460, r: 3 },
-    { x: 252, z: -320, r: 3 },
-    { x: 262, z: -220, r: 3 },
-    { x: 250, z: -100, r: 3 },
-    { x: 258, z: 40, r: 3 },
+    // on its banks, up and down it (its water's open and deep — plan 66)
+    { x: 272, z: -540, r: 3 },
+    { x: 250, z: -460, r: 3 },
+    { x: 268, z: -320, r: 3 },
+    { x: 246, z: -220, r: 3 },
+    { x: 266, z: -100, r: 3 },
+    { x: 242, z: 40, r: 3 },
   ],
   gate: [
     // the woods by the gatehouse and the bus shelter

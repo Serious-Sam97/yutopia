@@ -61,6 +61,8 @@ export interface CarWorld {
   /** …here: less where a plough's been through (wave 3); none: `cover` everywhere */
   coverAt?(x: number, z: number): number;
   solids(x: number, z: number, r: number, out: Solid[]): void;
+  /** the water over the ground here (m; 0 none: docs/plan/66-the-water.md, S5) */
+  water?(x: number, z: number): number;
 }
 
 export interface Helps {
@@ -161,6 +163,7 @@ export interface CarState {
   t: number;
   still: number; // seconds at rest (asleep past 1.5)
   belly: number; // the underside in the snow (m)
+  drowned?: boolean; // driven into water to its floor: the engine dead, it won't start (plan 66)
   hit: Hit | null;
   low: boolean; // the 4x4's low range
   lock: boolean; // its centre diff locked
@@ -341,6 +344,7 @@ function mul(a: Quat, b: Quat): Quat {
 
 /** The engine on (idling) or off. */
 export function setEngine(s: CarState, on: boolean) {
+  if (s.drowned) on = false;
   s.rpm =
     on && (s.fuel > 0 || s.spec.pushed) ? s.spec.engine.idle + (s.spec.pushed ? 60 : 400 * (1 - s.temp / 0.55)) : 0;
 }
@@ -368,6 +372,11 @@ function gripAt(world: CarWorld, spec: CarSpec, i: number, g: Ground, x?: number
   return foot === "tyre" ? base : footGrip(foot, g, base);
 }
 
+/** The water over the ground (m) at which a car's engine drowns (plan 66, S5). */
+export const DROWN = 0.5;
+/** …and deep enough that its people are out of it, swimming. */
+export const SUNK = 1.2;
+
 /** One step of `STEP` seconds. */
 const PUSH_N = 650; // N: a shove off the snow
 const PUSH_V = 1.5; // m/s: as fast as feet push it (a brisk walk)
@@ -379,6 +388,19 @@ export function stepCar(s: CarState, raw: Controls, world: CarWorld, helps: Help
   rot(s.q, v3(1, 0, 0), X);
   rot(s.q, v3(0, 1, 0), Y);
   rot(s.q, v3(0, 0, 1), Z);
+  // ── the water (plan 66, S5): its drag on the car as deep as it's in; to the floor (half a metre)
+  // the engine drowns — dead, and it won't start; deeper it's past driving
+  const wet = world.water?.(s.p.x, s.p.z) ?? 0;
+  if (wet > 0.15) {
+    const k = Math.exp(-dt * 2.2 * Math.min(2, wet));
+    s.v.x *= k;
+    s.v.z *= k;
+  }
+  if (wet >= DROWN && !s.drowned) {
+    s.drowned = true;
+    setEngine(s, false);
+  }
+  if (s.drowned) raw = { ...raw, up: 0 };
   const vf = dot(s.v, X);
   const vs = dot(s.v, Z);
   const speed = Math.hypot(s.v.x, s.v.y, s.v.z);

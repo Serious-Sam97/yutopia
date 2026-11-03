@@ -3,6 +3,7 @@
 import type * as GroundsModule from "@yutopia/shared/grounds";
 import { mixer } from "./audio";
 import { sound } from "./sound";
+import { WaterSound } from "./water-sound";
 import { WeatherSound } from "./weather-sound";
 
 // The Grounds' sound (docs/plan/27-the-grounds.md, the mood), synthesized as
@@ -11,7 +12,8 @@ import { WeatherSound } from "./weather-sound";
 // windows read as a fan) —, a crow now and then by day, the lamps'
 // buzz under them after dark, the river's ice ticking, a dog far off in the
 // town at night, the bar's music through its door. Loaded with the Grounds. And the weather's
-// (weather-sound.ts: the rain by where I am, the thunder, the drips, the birds, the river running).
+// (weather-sound.ts: the rain by where I am, the thunder, the drips, the birds, the river running), and
+// the water's (water-sound.ts: going in, swimming, under, the rapid and the falls; the controller's).
 
 type G = typeof GroundsModule;
 
@@ -55,6 +57,7 @@ export class GroundsSound {
   private nextDrip = 1;
   private open = 1; // eased: how open it is round you (1 none of the woods)
   readonly weather = new WeatherSound();
+  readonly water = new WaterSound();
   /** the mixer, for the dark's sound (world/dark/voices.ts takes it from here: importing it
    *  there split the world page's chunks — docs/plan/30-the-dark.md phase 2's trap) */
   readonly mixer = mixer;
@@ -429,6 +432,7 @@ export class GroundsSound {
 
   stop() {
     this.weather.stop();
+    this.water.stop();
     this.wind?.src.stop();
     this.wind?.out.disconnect();
     this.wind = null;

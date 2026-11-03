@@ -3,6 +3,7 @@ import { type Height, JUMP_G, type JumpKind, stepHeight } from "../jump.ts";
 import type { FlowKind, FlowNow, FlowWorld } from "./flow.ts";
 import { type Gait, MOVE, type MoveSpec, STEP_DT } from "./spec.ts";
 import { type Footing, footGrip, GRIP } from "./surface.ts";
+import { overFeet, stepSwim, swimming, wadeK } from "./swim.ts";
 import { probeVault, rollSpeed, type VerbKind, verbLen, verbPath } from "./verbs.ts";
 
 // The body (docs/plan/29-the-move.md, M0–M4): one step of a body that has
@@ -35,6 +36,8 @@ export interface MoveInput {
   faceLook?: boolean;
   /** no sprinting (out of breath: plan 30) */
   tired?: boolean;
+  /** where the camera looks up (+) or down, rad — swimming under, it steers (plan 66) */
+  pitch?: number;
 }
 
 export const NO_INPUT: MoveInput = {
@@ -78,6 +81,19 @@ export interface MoveEnv {
   blocked?(x: number, y: number): boolean;
   /** what can be run, swung round, ground along (Flowmotion: flow.ts) */
   flow?: FlowWorld;
+  /** the water at (x, y), the body's heights (docs/plan/66-the-water.md: swim.ts) — none on land */
+  water?(x: number, y: number): WaterHere | null;
+}
+
+/** The water where a body is: its level and bed (the body's heights) and its current (tiles / s,
+ *  the floor's way). */
+export interface WaterHere {
+  level: number;
+  bed: number;
+  vx: number;
+  vy: number;
+  /** iced over here (W6: grounds.ts iceAt) — a swimmer there is put up on it */
+  ice?: boolean;
 }
 
 const groundSpeed = (env: MoveEnv, x: number, y: number) => env.speed?.(x, y) ?? env.grid.speedAt(x, y);
@@ -132,6 +148,8 @@ export interface Body {
   /** a Flowmotion move under way (flow.ts), and s left of a kick's or a fling's way kept */
   flow?: FlowNow | null;
   carry?: number;
+  /** afloat (plan 66: swim.ts), and under the surface */
+  swim?: { under: boolean } | null;
   /** s simulated */
   t: number;
 }
@@ -148,6 +166,8 @@ export interface StepEvents {
   /** Flowmotion: a move begun (a kick's instant), one ended and how */
   flow?: FlowKind | "kick";
   flowEnd?: string;
+  /** into the water this hard (0..1: plan 66) */
+  splash?: number;
 }
 
 export function newBody(x: number, y: number, z = 0, yaw = 0): Body {
@@ -207,6 +227,16 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
       return ev;
     }
   }
+
+  // ── the water (docs/plan/66-the-water.md, S2): afloat, or caught falling in deep enough — its own
+  // step (on land none of this is asked: the same steps as ever)
+  const water = env.water?.(b.x, b.y) ?? null;
+  if (water && swimming(b, water))
+    return stepSwim(b, inp, env, water, dt, ev, (ux, uy, h, dist) => begin(b, "mantle", ux, uy, h, dist, spec));
+  if (b.swim) b.swim = null;
+  // (wading deep: no jump)
+  const over = overFeet(b, water);
+  if (over > 0.8) b.buffer = 0;
 
   // (back on the ground: the air's jumps and dash are there again)
   if (!b.up && (spec.airJumps || spec.airDash)) {
@@ -365,6 +395,11 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
   // the crouch's slower speeds and the aim's hold for a stick's tilt too
   if (gait === "crouch" || gait === "aim") want *= Math.min(1, mag / 0.6);
   want *= groundSpeed(env, b.x, b.y);
+  // (wading: slower the deeper, no sprint past the knees)
+  if (over > 0) {
+    want *= wadeK(over);
+    if (gait === "sprint" && over > 0.5) gait = "jog";
+  }
   const wx = ux * want;
   const wy = uy * want;
 
@@ -379,7 +414,8 @@ export function stepBody(b: Body, inp: MoveInput, env: MoveEnv, spec: MoveSpec =
       ? air * (b.carry ? 0.12 : 1) * (spec.grip ?? 1)
       : gaining
         ? foot.accel * (spec.grip ?? 1)
-        : foot.decel * (spec.gripStop ?? spec.grip ?? 1);
+        : // (wading: the water drags you back to your wading speed)
+          foot.decel * (spec.gripStop ?? spec.grip ?? 1) * (over > 0 ? 1 + 4 * over : 1);
     const k = Math.min(1, (rate * dt) / dv);
     b.vx += dvx * k;
     b.vy += dvy * k;

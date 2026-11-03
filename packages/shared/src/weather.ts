@@ -208,6 +208,14 @@ export function tempAt(ms: number, cloud = cloudOf(wetAt(ms))): number {
 
 const cloudOf = (wet: number) => smooth(WET_CLOUD - 0.1, WET_FALL, wet);
 
+/** The water's warmth at `ms` in °C (docs/plan/66-the-water.md, S3): the air's over the day before,
+ *  slow to follow it (a mean of its last 24 hours, every two), never under 1 °C while it's open. */
+export function waterTempAt(ms: number): number {
+  let sum = 0;
+  for (let k = 0; k < 12; k++) sum += tempAt(ms - k * 2 * HOUR);
+  return Math.max(1, sum / 12);
+}
+
 /** The sky at `ms` (server time), as the schedule has it. */
 export function skyAt(ms: number): Sky {
   const wet = wetAt(ms);

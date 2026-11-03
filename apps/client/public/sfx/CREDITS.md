@@ -56,3 +56,33 @@
   - `weather/drips.mp3`: *gully with water drips* by launemax (Freesound 249927).
   - `weather/thunder-near-*`: `a` *thunder 5 dry.wav* by elmoustachio (Freesound 476739); `b` *Thunder 07* by Emulius (Freesound 744722); `c` *Thunder Clap OWB KY 441x16.wav* by Dave Welsh (Freesound 194364).
   - `weather/thunder-far-*`: `a` *peal of thunder - distant* by bastipictures (Freesound 243782); `b` *Distant Thunder Clap_Gentle.wav* by mikala_oidua (Freesound 347562); `c` *Distant thunder in suburban area* by csengeri (Freesound 238743).
+- The water's (docs/plan/66-the-water.md, phase 9), picked by ear on `/dev/water-sound`
+  2026-11-03 from 65 candidates (the gasp and the breath a man's and a woman's, by the swimmer's
+  gender). All CC0 from Freesound (its HQ previews), made by `tools/sfx-weather.mjs` from
+  `tools/sfx-water.json` (`LIST=tools/sfx-water.json DIR=water`): the wades' and the soaked shoes'
+  steps cut into single steps; the beds their steadiest 30 s; the rest cut into their events,
+  peaking at −3 dB, mono 80 kb/s.
+  - `steps/wade-shallow-*`: *Wading in Shallow Water.wav* by ryansitz (Freesound 342932).
+  - `steps/wade-deep-*`: *River Wading Fast.mp3* by paulprit (Freesound 563555).
+  - `steps/soaked-*`: *Feet Squelch* by eqavox (Freesound 683520).
+  - `water/under.mp3`: *Underwater - seashore* by L.Finck (Freesound 815116).
+  - `water/current.mp3`: *Hydrophone underwater flow* by Salomé_Lubczanski (Freesound 733812).
+  - `water/pond-lap.mp3`: *Gentle lapping lake water waves cottage 24 96 180721.wav* by TRP (Freesound 573163).
+  - `water/rapid.mp3`: *river rushing rapids close smooth liquidy detail.flac* by kyles (Freesound 454154).
+  - `water/falls.mp3`: *Ambiance_Waterfall_Small_Close_Loop_Stereo.wav* by Nox_Sound (Freesound 698306).
+  - `water/tread.mp3`: *water movements swimming around various splashes random.flac* by kyles (Freesound 637958).
+  - `water/drip-body.mp3`: *dripping-laundry3.WAV* by maryannem (Freesound 528478).
+  - `water/in-step-*`: *footsteps in a water puddle* by launemax (Freesound 249911).
+  - `water/in-jump-*`: *Foley_Natural_Water_Jump_Mono.wav* by Nox_Sound (Freesound 585744).
+  - `water/in-dive-*`: *splash body dive into water pool.flac* by kyles (Freesound 637823).
+  - `water/in-fall-*`: *R23-45-Jumping Into Water.wav* by craigsmith (Freesound 480846).
+  - `water/car-sink-*`: *glug_glug_glug.wav* by noisymichael (Freesound 661609).
+  - `water/ice-crack-*`: *Breaking ice on frozen pond* by snds_good (Freesound 554856).
+  - `water/stroke-breast-*`: *Creek Swimming.mp3* by JazzyBay (Freesound 435055).
+  - `water/stroke-crawl-*`: *G54-26-Person Swimming.wav* by craigsmith (Freesound 438845).
+  - `water/bubbles-*`: *Bubbles_01.wav* by cartoonrob (Freesound 588468).
+  - `water/gasp-man-*`: *Gasp Inhale* by u3190 (Freesound 169931).
+  - `water/gasp-woman-*`: *female sharp inhale sounds* by marythewitch (Freesound 535243).
+  - `water/breathless-man-*`: *heavy breathing.wav* by simone_ds (Freesound 366077).
+  - `water/breathless-woman-*`: *woman run and breath.wav* by MelvinJaepel (Freesound 435468).
+  - `water/climb-out-*`: *water movement body step out of pool splash drips.flac* by kyles (Freesound 637948).

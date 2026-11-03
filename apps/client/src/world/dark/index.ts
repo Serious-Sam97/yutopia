@@ -125,6 +125,9 @@ class Dark implements DarkHooks {
   /** the use key held (a hold to get someone up, my own first aid) */
   private useKey: string | null = null;
   private batSeen = 0;
+  // the air under the water (docs/plan/66-the-water.md, S3): shown under it, and as it comes back
+  private readonly airEl = document.createElement("div");
+  private airSeen = 0;
   private hadLying = false;
   // the supply lockers on my floor (looked for twice a second: they're built and moved rarely)
   private lockers: { id: string; x: number; y: number; rot: number }[] = [];
@@ -183,6 +186,7 @@ class Dark implements DarkHooks {
     this.arc.setAttribute("class", "abs");
     this.arcLabel.className = "abs dk-arc-l";
     this.bat.className = "abs dk-bat";
+    this.airEl.className = "abs dk-bat";
     this.quickEl.className = "abs dk-quick";
     this.col.className = "dk-col";
     this.arcLabel.textContent = t("dark_winded");
@@ -190,7 +194,7 @@ class Dark implements DarkHooks {
       el.style.display = "none";
       this.root.append(el);
     }
-    for (const el of [this.quickEl, this.strip, this.bat]) el.style.display = "none";
+    for (const el of [this.quickEl, this.strip, this.bat, this.airEl]) el.style.display = "none";
     this.root.append(this.col);
     this.hit.className = "dk-hit";
     this.awake.className = "dk-awake";
@@ -206,7 +210,7 @@ class Dark implements DarkHooks {
       this.quickKey = "";
     };
     // (the column, bottom up: the guns' cylinder and flares, the quick slots or the strip, the battery)
-    this.col.append(this.arms.hudEl, this.quickEl, this.strip, this.bat);
+    this.col.append(this.arms.hudEl, this.quickEl, this.strip, this.airEl, this.bat);
     this.downs = new Down(ctl, walker, this.root, () => !!this.inv && count(this.inv, "aid") > 0, t);
     // the inventory (I, the pad's Menu): its asks go to the server, or to the guns
     this.panel = new InventoryPanel(
@@ -701,6 +705,16 @@ class Dark implements DarkHooks {
       const label = drained ? t("dark_recharging") : t("dark_focus");
       const mark = drained ? `<i style="left:25%;width:2px;background:${AMBER}"></i>` : "";
       this.bat.innerHTML = `<div class="row"><span style="color:var(--amber)">${label.toUpperCase()}</span><span style="color:${low ? "var(--error)" : "var(--cream)"}">${pct}%</span></div><div class="bar"><i style="width:${bat - eat}%;background:${fill}"></i><i style="left:${bat - eat}%;width:${eat}%;background:var(--amber);opacity:.4"></i>${mark}</div>`;
+    }
+    // the air under the water: under it, and a moment after it's full again
+    const air = this.walker.airK;
+    if (this.walker.under || air < 0.999) this.airSeen = now;
+    const showAir = now - this.airSeen < 1200;
+    this.airEl.style.display = showAir ? "block" : "none";
+    if (showAir) {
+      const low = air < 0.25;
+      const pct = Math.round(air * 100);
+      this.airEl.innerHTML = `<div class="row"><span style="color:#8fc9d6">${t("dark_breath").toUpperCase()}</span><span style="color:${low ? "var(--error)" : "var(--cream)"}">${pct}%</span></div><div class="bar"><i style="width:${pct}%;background:${low ? "var(--rust)" : "#5fa9bb"}"></i></div>`;
     }
     // the strip's moment, the toast's
     if (this.stripUntil && now > this.stripUntil) {

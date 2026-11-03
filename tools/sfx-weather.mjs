@@ -7,7 +7,11 @@
 //          rain, no car going by), −24 dB RMS, stereo 96 kb/s → public/sfx/weather/<slot>-<c>.mp3
 //          (the game crossfades its seam as it decodes it: weather-sound.ts loopable)
 //   shot   thunder: its loudest peals, each from just before it starts to where it's died away
-//          (≤ 9 s near, ≤ 14 s far), peaking at −3 dB, stereo 96 kb/s → <slot>-<c><n>.mp3
+//          (≤ 9 s near, ≤ 14 s far), peaking at −3 dB, stereo 96 kb/s → <slot>-<c><n>.mp3;
+//          any other: its events (a splash, a stroke, a gasp: up to six, the most alike) each from
+//          its onset to where it's died away (≤ HIT_LEN's), peaking at −3 dB, mono 80 kb/s
+// The water's (docs/plan/66-the-water.md, phase 9) the same way into public/sfx/water:
+//   LIST=tools/sfx-water.json DIR=water node tools/sfx-weather.mjs
 // and the manifests (public/sfx/steps/manifest.json's slots, public/sfx/weather/manifest.json) list
 // each slot's candidates in the json's order: the game plays the first; /dev/weather-sound all.
 //
@@ -24,7 +28,8 @@ import { join } from "node:path";
 const SR = 44100;
 const ROOT = new URL("../", import.meta.url).pathname;
 const SFX = join(ROOT, "apps/client/public/sfx");
-const LIST = join(ROOT, "tools/sfx-weather.json");
+const LIST = join(ROOT, process.env.LIST ?? "tools/sfx-weather.json");
+const DIR = process.env.DIR ?? "weather";
 const cache = process.argv[2] ?? join(tmpdir(), "yutopia-sfx-weather");
 mkdirSync(cache, { recursive: true });
 const all = JSON.parse(readFileSync(LIST, "utf8"));
@@ -259,6 +264,74 @@ function shots(chans, far) {
     });
 }
 
+/** how long an event of a slot's may last, at most (s) */
+const HIT_LEN = {
+  "car-sink": 6,
+  "ice-crack": 4,
+  "climb-out": 4,
+  bubbles: 2.5,
+  "breathless-man": 2.5,
+  "breathless-woman": 2.5,
+  "gasp-man": 2,
+  "gasp-woman": 2,
+  "stroke-breast": 1.6,
+  "stroke-crawl": 1.2,
+};
+/** a slot's events: where the loudness jumps after a quiet to where it's down a while (or the cap) —
+ *  the six most alike; a recording with no quiet between its events, its loudest stretch */
+function hits(chans, maxLen) {
+  const m = mono(chans);
+  const hop = 0.01;
+  const env = envelope(m, 0.02, hop);
+  const sorted = [...env].sort((a, b) => a - b);
+  const floor = Math.max(sorted[Math.floor(sorted.length * 0.2)], 1e-5);
+  const top = sorted[Math.floor(sorted.length * 0.998)];
+  const on = Math.max(floor * 5, top * 0.15);
+  const off = Math.max(floor * 1.5, top * 0.02);
+  const cap = Math.round(maxLen / hop);
+  const found = [];
+  let quiet = 99;
+  for (let i = 0; i < env.length; i++) {
+    if (env[i] < on) {
+      quiet++;
+      continue;
+    }
+    if (quiet * hop < 0.15) {
+      quiet = 0;
+      continue;
+    }
+    quiet = 0;
+    let j = i + 1;
+    let low = 0;
+    for (; j < Math.min(env.length, i + cap); j++) {
+      low = env[j] < off ? low + 1 : 0;
+      if (low * hop >= 0.12 && (j - i) * hop >= 0.15) break;
+    }
+    let p = 0;
+    for (let k = i; k < j; k++) p = Math.max(p, env[k]);
+    found.push({ a: Math.max(0, Math.round((i * hop - 0.015) * SR)), b: Math.round(j * hop * SR), p });
+    i = j;
+  }
+  let take = found.filter((f) => (f.b - f.a) / SR >= 0.15);
+  if (!take.length) {
+    // (no quiet between: its loudest `maxLen`)
+    let best = 0;
+    for (let i = 0; i < env.length; i++) if (env[i] > env[best]) best = i;
+    const a = Math.max(0, Math.round((best * hop - 0.2) * SR));
+    take = [{ a, b: Math.min(m.length, a + Math.round(maxLen * SR)), p: env[best] }];
+  }
+  const med = [...take].sort((x, y) => x.p - y.p)[take.length >> 1].p;
+  return [...take]
+    .sort((x, y) => Math.abs(Math.log(x.p / med)) - Math.abs(Math.log(y.p / med)))
+    .slice(0, 6)
+    .sort((x, y) => x.a - y.a)
+    .map((s) => {
+      const len = (s.b - s.a) / SR;
+      const one = fades(slice([m], s.a, s.b), 0.003, Math.min(0.4, Math.max(0.04, len * 0.12)));
+      return scale(one, db(-3) / Math.max(peak(one), 1e-6));
+    });
+}
+
 // ── fetch, make, list ───────────────────────────────────────────────────────
 let lastFetch = 0;
 function fetched(c) {
@@ -272,7 +345,7 @@ function fetched(c) {
 }
 const letters = "abcdefgh";
 const stepsMan = JSON.parse(readFileSync(join(SFX, "steps/manifest.json"), "utf8"));
-const wxDir = join(SFX, "weather");
+const wxDir = join(SFX, DIR);
 mkdirSync(wxDir, { recursive: true });
 const wxManFile = join(wxDir, "manifest.json");
 const wxMan = existsSync(wxManFile) ? JSON.parse(readFileSync(wxManFile, "utf8")) : {};
@@ -304,6 +377,13 @@ for (const [slot, s] of Object.entries(all)) {
       console.log(
         `${slot} ${tag || "·"} ${c.id}: ${(bed[0].length / SR).toFixed(1)} s, ${unevenness > 1e6 ? "the whole of it" : `unevenness ${unevenness.toFixed(2)}`}`,
       );
+    } else if (!slot.startsWith("thunder")) {
+      hits(decode(src, 1), HIT_LEN[slot] ?? 3).forEach((one, i) => {
+        const name = `${slot}-${tag}${i + 1}.mp3`;
+        encode(one, join(dir, name), 80);
+        files.push(name);
+      });
+      console.log(`${slot} ${tag || "·"} ${c.id}: ${files.length} takes`);
     } else {
       shots(decode(src, 2), slot.endsWith("far")).forEach((one, i) => {
         const name = `${slot}-${tag}${i + 1}.mp3`;

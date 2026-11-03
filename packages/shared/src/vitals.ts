@@ -40,6 +40,8 @@ export interface VitalsIn {
   warm: boolean;
   /** the torch focused (phase 3) */
   focus: boolean;
+  /** in the water to the chest (docs/plan/66-the-water.md, S3): how warm it is, °C */
+  water?: number | null;
 }
 
 export const VITALS = {
@@ -49,6 +51,8 @@ export const VITALS = {
   // 0.6 a minute outside at night (twice that in a blizzard); 20 a minute somewhere warm;
   // frozen, stamina comes back at half speed (the cold never kills)
   wm: { night: 0.6 / 60, warmUp: 20 / 60, coldRegen: 0.5 },
+  // in the water (plan 66): 6 a minute at 2 °C, none at 20 or over, half again at night
+  water: { cold: 6 / 60, none: 20, at: 2 },
   // (run out, the focus is gone until it's back to `back`: at 0 it isn't on and off every step)
   bat: { focus: 12, regen: 4, upTo: 40, back: 25 },
 } as const;
@@ -69,8 +73,13 @@ export function stepVitals(v: Vitals, c: VitalsClock, i: VitalsIn, dt: number): 
   // health
   c.sinceHurt += dt;
   if (c.sinceHurt >= VITALS.hp.after && v.hp > 0) v.hp = fill(v.hp, VITALS.hp.regen, dt, VITALS.hp.upTo);
-  // warmth
-  if (i.warm) v.wm = fill(v.wm, VITALS.wm.warmUp, dt);
+  // warmth: the water's cold takes it (by how cold it is), somewhere warm gives it back, the night
+  // and the air out on the land take it
+  if (i.water !== undefined && i.water !== null) {
+    const W = VITALS.water;
+    const cold = Math.min(1, Math.max(0, (W.none - i.water) / (W.none - W.at)));
+    v.wm = drain(v.wm, W.cold * cold * (1 + 0.5 * Math.min(1, Math.max(0, i.night))), dt);
+  } else if (i.warm) v.wm = fill(v.wm, VITALS.wm.warmUp, dt);
   else if (i.outside) {
     // the night's cold, as cold as the air; a bitter one bites by day too (half the night's at its worst)
     const chill = Math.min(2, Math.max(0, i.chill ?? 1));

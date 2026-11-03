@@ -19,7 +19,17 @@ import {
 } from "@yutopia/shared";
 import { type CarKind, SEATS_OF } from "@yutopia/shared/car";
 import { blackoutAt, inLampPool, nightness } from "@yutopia/shared/dark";
-import { BUILDINGS, inBuilt, LAMPS, placeAt, RIVER, ROAD_CLOSED, treeDensity } from "@yutopia/shared/grounds";
+import {
+  BUILDINGS,
+  bankNear,
+  inBuilt,
+  inDeepWater,
+  LAMPS,
+  placeAt,
+  RIVER,
+  ROAD_CLOSED,
+  treeDensity,
+} from "@yutopia/shared/grounds";
 import { isRadio } from "@yutopia/shared/media";
 import {
   type Bonds,
@@ -2313,6 +2323,17 @@ registerFeature((room: WorldRoom) => {
   // on a spot it can walk to them from (docs/plan/52-the-pet-two.md, D1 — the nearest open spot
   // put it behind the lift, where it couldn't get out). None yet (the car's doors still shut):
   // false, and it's asked again.
+  /** Where to follow someone to: them, or — out swimming in deep water — the bank nearest them
+   *  (plan 66: a pet doesn't swim). */
+  const swimmingTo = (p: Player): { x: number; y: number; d: number; level: number } => {
+    const at = { x: p.x, y: p.y, d: p.d, level: p.level };
+    if (p.level !== 0) return at;
+    const x = p.x + GROUND_OFFSET.x;
+    const z = p.y + GROUND_OFFSET.y;
+    if (!inDeepWater(x, z)) return at;
+    const b = bankNear(x, z);
+    return b ? { ...at, x: b.x - GROUND_OFFSET.x, y: b.z - GROUND_OFFSET.y } : at;
+  };
   const comeAlong = (pet: Pet, p: Player): boolean => {
     const g = room.gridFor(pet.uid, p.level);
     const [fx, fy] = FACING[p.d & 7];
@@ -3055,8 +3076,10 @@ registerFeature((room: WorldRoom) => {
         // after them the whole way, however far: a new path whenever they've
         // moved on from where it was heading, and a run when they're well ahead
         const end = r.path[r.path.length - 1];
-        if ((!end || Math.hypot(end.x - p.x, end.y - p.y) > 2.2) && now > r.until) {
-          if (goNear(pet, p, 1.3)) {
+        // (them out swimming: to the bank nearest them, to wait there — plan 66)
+        const to = swimmingTo(p);
+        if ((!end || Math.hypot(end.x - to.x, end.y - to.y) > 2.2) && now > r.until) {
+          if (goNear(pet, to, 1.3)) {
             r.until = now + REPATH_MS;
             r.lost = 0;
             r.stuck = 0;

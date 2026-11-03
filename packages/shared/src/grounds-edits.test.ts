@@ -30,12 +30,16 @@ import { groundSolidsIn } from "./shapes/grounds.ts";
 
 /** Today's Grounds (2026-10-29, before god mode): change these only when the generator is meant to
  *  change, and say why in the commit. */
+// (2026-11-02, docs/plan/66-the-water.md phase 1: the water has depth — the pond's and the river's beds
+// carved under their levels, the river's run downhill north → south with its banks brought down to
+// it (the land, the walk round it, the rock on its steeper banks, the trees on them); the dock's
+// planks and posts solid; the water's tiles walked as flat — its ice, or its shelf waded)
 const TODAY = {
-  land: "c6e49333",
+  land: "0fb353e7",
   // (2026-11-01: the road closed's barricades and drift shut, as their solids)
-  walk: "8fb986de",
-  trees: "0940af8b",
-  surfaces: "0cbae68d",
+  walk: "3a7fbf6a",
+  trees: "cdaec3fa",
+  surfaces: "966a404d",
   // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
   // solid, the wooden poles their own what, the pitched roofs in steps under their slopes, the flat
   // roofs' snow, the streets' pavements and kerbs — the town's audit; then its details: the shops'
@@ -45,7 +49,7 @@ const TODAY = {
   // station's and the other flat roofs' snow, the kerbs in three treads)
   // (2026-11-02: the roofs, the canopies, the mailboxes and the statue at their bare heights — their
   // snow the weather's, stood a little in: docs/plan/65, the user's call)
-  solids: "d53f868a",
+  solids: "b5308184",
   things: "ac236950",
 };
 

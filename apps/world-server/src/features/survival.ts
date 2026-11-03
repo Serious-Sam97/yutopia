@@ -54,7 +54,7 @@ import {
   vitalByte,
   WEAPONS,
 } from "@yutopia/shared/dark";
-import { INSIDES } from "@yutopia/shared/grounds";
+import { bankNear, INSIDES, iceAt, inDeepWater, waterAt } from "@yutopia/shared/grounds";
 import { GAITS, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
 import { api, type SurvivorRecord } from "../api.ts";
@@ -251,6 +251,15 @@ registerFeature((room: WorldRoom) => {
     }
   }
   function putDrop(item: ItemId, n: number, loaded: number, x: number, y: number, at: number, id?: string, level = 0) {
+    // (dropped in deep water: washed up on its nearest bank — plan 66)
+    if (level === 0) {
+      const b = toB(x, y);
+      const bank = inDeepWater(b.x, b.z) ? bankNear(b.x, b.z) : null;
+      if (bank) {
+        x = bank.x - (ground()?.ox ?? 0);
+        y = bank.z - (ground()?.oy ?? 0);
+      }
+    }
     const d = new Drop();
     d.id = id ?? `d${at.toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
     d.item = item;
@@ -810,7 +819,15 @@ registerFeature((room: WorldRoom) => {
         // (the cold by the air and the rain on you: docs/plan/65-the-weather.md, W9)
         const w = room.state.weather;
         const chill = chillOf(w.temp, w.kind === "rain" || w.kind === "sleet" ? w.fall : 0);
-        stepVitals(s.v, s.c, { sprinting, outside: land, night, storm: room.state.storm, chill, warm, focus }, dt);
+        // (in the water to the chest: its cold, by the weather — docs/plan/66-the-water.md, S3)
+        const pool = land ? waterAt(b.x, b.z) : null;
+        const water = pool && p.z < pool.level - 0.8 && !iceAt(b.x, b.z) ? w.water : null;
+        stepVitals(
+          s.v,
+          s.c,
+          { sprinting, outside: land, night, storm: room.state.storm, chill, warm, focus, water },
+          dt,
+        );
         p.focused = focus && s.v.bat > 0;
         if (s.c.winded && !was) s.windedAt = now;
         if (!s.c.winded) s.windedAt = 0;

@@ -21,6 +21,7 @@ import {
   stepBody,
   type VerbKind,
   verbProgress,
+  type WaterHere,
   yawToByte,
 } from "@yutopia/shared/move";
 import { FULL_VITALS, freshClock, spendRoll, stepVitals } from "@yutopia/shared/vitals";
@@ -29,7 +30,7 @@ import { hud } from "../store";
 import { type Action, actionOf } from "./bindings";
 import { afterFirstStep, camKeys, HeldOver, MoveControls, type Press } from "./controls";
 import { PadState } from "./pad";
-import { FAST_X, FLY_ACROSS, FLY_RISE, FLY_SPRINT, FLY_TOP, P_CLIP, P_FAST, P_FLY } from "./powers";
+import { FAST_X, FLY_ACROSS, FLY_RISE, FLY_SPRINT, FLY_TOP, P_CLIP, P_FAST, P_FLY, P_UNHURT } from "./powers";
 import { Targets } from "./targets";
 
 // My body in the world (docs/plan/29-the-move.md, phase 2): the movement core
@@ -58,6 +59,12 @@ export interface WalkCtx {
   path: Point[] | null;
   /** where I am as far as everyone else knows (moved from outside: the body follows) */
   at: { x: number; y: number; z: number };
+  /** the water here, the floor's coords (docs/plan/66-the-water.md: the Grounds' pond and river) */
+  water?(x: number, y: number): WaterHere | null;
+  /** where the camera looks up (+) or down, rad: swimming under, it steers */
+  camPitch?: number;
+  /** the water's warmth now, °C (shared weather.ts waterTempAt): its cold in it */
+  waterTemp?: number;
 }
 
 export interface WalkOut {
@@ -94,6 +101,9 @@ export interface WalkOut {
   /** Player.mv, Player.yaw */
   mv: number;
   yawByte: number;
+  /** in the water (plan 66): 0 out of it, 1 wading, 2 afloat, 3 under; and into it this frame, how hard */
+  swim: number;
+  splash: number | null;
 }
 
 // the body after Kingdom Hearts 3 (docs/plan/56-the-controls.md B: signed off in /dev/move)
@@ -101,6 +111,7 @@ export interface WalkOut {
 // 9, "not visual-only" — signed off with the animations, the world's since the switch)
 const SPEC: MoveSpec = KH_FEEL;
 const AIM_BLADE = 0.45; // (shared beam.ts AIM_BLADE: a copy — this chunk doesn't carry beam.ts)
+const AIR = 30; // s of air under the water (docs/plan/66-the-water.md, S3)
 
 // an admin's powers (docs/plan/48-the-admin.md): fast, through walls, flying — the server holds
 // them and takes the moves they allow; here they're only how I move
@@ -229,6 +240,15 @@ export class Walker {
   // it's out; the server's word (Player.st) taken when they drift apart
   readonly vitals = { ...FULL_VITALS };
   readonly breath = freshClock();
+  /** s of air left under the water (docs/plan/66-the-water.md, S3): AIR full, back fast up top */
+  air = AIR;
+  /** …as a share of it (the HUD's), and whether I'm under */
+  get airK(): number {
+    return this.air / AIR;
+  }
+  get under(): boolean {
+    return !!this.body.swim?.under;
+  }
   /** out on the land (stamina drains), as of the last frame */
   outside = false;
   /** my torch focused: on, aiming, out on the land, battery left (docs/plan/30-the-dark.md D4) */
@@ -539,9 +559,12 @@ export class Walker {
     // (Flowmotion out on the Grounds only: indoors a lamp post outside would be in reach through
     // the wall — and not through walls, nor flying)
     const flow = phys && !clip && c.grid.onLand(this.body.x, this.body.y) ? phys.flow : undefined;
+    // (the water: swum in — not flying, nor through walls)
+    const water = clip ? undefined : c.water;
     const env: MoveEnv = phys
-      ? { grid: phys.collider, mover: phys.mover, footing: c.footing, blocked, flow }
-      : { grid: clip ? noWalls(c.grid) : c.grid, footing: c.footing, blocked };
+      ? { grid: phys.collider, mover: phys.mover, footing: c.footing, blocked, flow, water }
+      : { grid: clip ? noWalls(c.grid) : c.grid, footing: c.footing, blocked, water };
+    move.pitch = c.camPitch;
     const flying = this.flying;
     if (flying) {
       move.crouch = false;
@@ -562,12 +585,34 @@ export class Walker {
       if (ev.verb === "roll") spendRoll(this.vitals, this.breath, out);
       // (the crouch press that slid isn't a crouch: out of the slide you're up)
       if (ev.verb === "slide") this.controls.stand();
+      // (in the water to the chest, not iced over: its cold)
+      const wat = water?.(this.body.x, this.body.y);
+      const cold = wat && !wat.ice && this.body.z < wat.level - 0.8 ? (c.waterTemp ?? 10) : null;
       stepVitals(
         this.vitals,
         this.breath,
-        { sprinting: this.body.gait === "sprint", outside: out, night: 0, storm: 0, warm: true, focus: this.focus },
+        {
+          sprinting: this.body.gait === "sprint",
+          outside: out,
+          night: 0,
+          storm: 0,
+          warm: true,
+          focus: this.focus,
+          water: cold,
+        },
         STEP_DT,
       );
+      // the air under the water: 30 s (half at a crawl), back as fast again up top; run out, up
+      // gasping (under ice, up on it) and spent — an admin unhurt never runs out
+      const under = !!this.body.swim?.under;
+      if (under && !(this.powers & P_UNHURT))
+        this.air = Math.max(0, this.air - STEP_DT * (this.body.gait === "sprint" ? 2 : 1));
+      else if (!under) this.air = Math.min(AIR, this.air + STEP_DT * 6);
+      if (under && this.air <= 0 && this.body.swim) {
+        this.body.swim.under = false;
+        this.vitals.st = 0;
+        this.breath.winded = true;
+      }
       if (this.breath.winded) {
         move.tired = true;
         move.dodgePressed = false;
@@ -578,6 +623,8 @@ export class Walker {
       }
     });
     this.heldOver.after(move, !first);
+    // (in the water C dives and comes up: no crouch kept for when I'm out — plan 66)
+    if (this.body.swim) this.controls.stand();
     const b = this.body;
     // first time out on the land: the dark's chunk (its HUD, the loot, the pockets); indoors, a
     // few seconds in, when the page has a moment
@@ -618,6 +665,7 @@ export class Walker {
     this.last = { x, y, z };
     let jumped: JumpKind | null = null;
     let landed: number | null = null;
+    let splash: number | null = null;
     let started: WalkOut["started"] = null;
     let air = false;
     for (const e of events) {
@@ -629,6 +677,7 @@ export class Walker {
         air = true;
       }
       if (e.landed !== undefined) landed = Math.max(landed ?? 0, e.landed);
+      if (e.splash !== undefined) splash = Math.max(splash ?? 0, e.splash);
       // (Flowmotion: kicked off a wall, a flip in the air; a flow jump's spin — both from the air)
       if (e.flow === "kick") {
         jumped = "flip";
@@ -686,6 +735,14 @@ export class Walker {
       aim: move.aim,
       mv: packMv(b.gait, move.crouch, move.aim) | (this.breath.winded ? MV_WINDED : 0),
       yawByte: yawToByte(b.yaw),
+      swim: b.swim
+        ? b.swim.under
+          ? 3
+          : 2
+        : (c.water?.(b.x, b.y)?.level ?? Number.NEGATIVE_INFINITY) > b.z + 0.15
+          ? 1
+          : 0,
+      splash,
     };
   }
 

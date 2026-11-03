@@ -84,14 +84,23 @@ report(
 
 // the Grounds' walking against their solids (docs/plan/50 phase 4): the grid's tiles and Jolt's shapes
 // agree but for what's by design (packages/shared/src/physics/audit.ts)
-const audited = run(["--import", "tsx", "../../packages/shared/src/physics/audit.ts", "--check"]);
-report(
-  "the Grounds: walking = solids",
-  audited !== null && audited.failures.length === 0,
-  audited
-    ? `${audited.tiles} tiles in ${audited.ms} ms${audited.failures.length ? `: ${audited.failures.join("; ")}` : ""}`
-    : "failed",
-);
+// — with the water frozen and open (docs/plan/66-the-water.md: its deep walled off till the swimming)
+for (const water of ["frozen", "open"]) {
+  const audited = run([
+    "--import",
+    "tsx",
+    "../../packages/shared/src/physics/audit.ts",
+    "--check",
+    ...(water === "open" ? ["--open"] : []),
+  ]);
+  report(
+    `the Grounds: walking = solids (the water ${water})`,
+    audited !== null && audited.failures.length === 0,
+    audited
+      ? `${audited.tiles} tiles in ${audited.ms} ms${audited.failures.length ? `: ${audited.failures.join("; ")}` : ""}`
+      : "failed",
+  );
+}
 
 // pinned exactly wherever it's a dependency: the bench and the game move together
 for (const p of ["package.json", "../../packages/shared/package.json"]) {

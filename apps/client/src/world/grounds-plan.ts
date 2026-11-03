@@ -317,7 +317,7 @@ export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin
   label("PARKING", -33, 20, 12, "#f2f2ee");
   label("THE LAWN", 60, -80, 15, PAL.dim, 0, true);
   label("WATER TOWER", TOWER.x, TOWER.z + 24, 11);
-  label("FROZEN POND", POND.cx, POND.cz + 4, 15, "#2c4a5e", 0, true);
+  label("THE POND", POND.cx, POND.cz + 4, 15, "#2c4a5e", 0, true);
   label("BOATHOUSE", -255, -120, 10);
   label("THE RAVINE", -350, -248, 14, PAL.ink, 0.53, true);
   label("FOOTBRIDGE", -238, -236, 10);
@@ -328,7 +328,7 @@ export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin
   label("BUS SHELTER", -13, -426, 9);
   label("DRIVEWAY", -84, -232, 11, PAL.ink, -1.35);
   label("COUNTY ROAD", 100, -418, 12);
-  label("FROZEN RIVER", 290, -150, 15, "#2c4a5e", Math.PI / 2, true);
+  label("THE RIVER", 290, -150, 15, "#2c4a5e", Math.PI / 2, true);
   label("MAIN STREET", 470, -416, 10);
   label("THE SQUARE", 420, -360, 10);
   label("CHURCH ST.", 446, -488, 9, PAL.ink, -Math.PI / 2);

@@ -1,4 +1,5 @@
 import { isFloor, levelMap, type MapDef, tileAt, type WallCut } from "@yutopia/shared";
+import { iceHolesNow } from "@yutopia/shared/grounds";
 import { skyAt, strikeFar, strikeIn } from "@yutopia/shared/weather";
 import {
   BackSide,
@@ -380,6 +381,12 @@ export class Surroundings {
     wx.wxWet.value = ease(wx.wxWet.value, wet);
     wx.wxPud.value = ease(wx.wxPud.value, puddles);
     wx.wxIce.value = ease(wx.wxIce.value, ice);
+    // (its holes: plan 66, the room's and mine just broken)
+    const holes = iceHolesNow();
+    for (let k = 0; k < 8; k++) {
+      const h = holes[k];
+      wx.wxHoles.value[k].set(h?.x ?? 0, h?.z ?? 0, h?.r ?? 0, h ? 1 : 0);
+    }
   }
   // the rain (made the first time it rains), the lightning
   private rain: Rain | null = null;
@@ -515,7 +522,8 @@ export class Surroundings {
       const g = this.grounds;
       if (!g) return null;
       const o = wx.wxOff.value;
-      return g.heightAt(x - o.x, z - o.z) + o.y;
+      // (on the water: its surface, not its bed)
+      return g.topAt(x - o.x, z - o.z) + o.y;
     });
   }
 

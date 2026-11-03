@@ -19,7 +19,21 @@ import { parkedBody } from "../car/park.ts";
 import { footprint, standHeight, type WorldObjectDef } from "../catalog.ts";
 import { dressItems } from "../dressing.ts";
 import { doorOwner, ZPX_TILE } from "../grid.ts";
-import { CHUNK, groundsChunk, heightAt, ICE_WALK, POND, POND_LEVEL, RIVER } from "../grounds.ts";
+import {
+  CHUNK,
+  groundsChunk,
+  heightAt,
+  holesToWire,
+  ICE_FAST,
+  ICE_TOP,
+  ICE_WALK,
+  type IceHole,
+  iceEdge,
+  POND,
+  POND_LEVEL,
+  RIVER,
+  riverWater,
+} from "../grounds.ts";
 import { elevOf, floorsOf, levelMap, objLevel, offsetOf, onLevel, STOREY } from "../levels.ts";
 import { liftDoorEdges, liftHere, liftWallEdges } from "../lift.ts";
 import { type Edge, hWall, isFloor, type MapDef, tileAt, vWall } from "../map.ts";
@@ -302,71 +316,76 @@ function sig(ss: Solid3[]): string {
 // (the water's ice walked on — W6 — is grounds.ts's, the paths' too: one number for both)
 export { ICE_WALK };
 
-/** Open water's shores as walls (W6): round the pond at its edge (but where the dock goes out —
- *  its deck fenced on its three sides over the water), along both sides of the river's bed at its
- *  foot. Low (to 2.2 over the water): under the bridges' decks and the banks' tops, so only what
- *  goes down to it is stopped. */
-export function waterWalls(): Solid3[] {
+/** The water's ice where it's iced over (W6; plan 66 S4): a sheet at its level over the carved beds,
+ *  in from the shores to `iceEdge(ice)` — the pond in strips a metre wide (two where its middle's
+ *  open), the river a slab either side a sample (one across it frozen over) — and a hole's cells left
+ *  out (the strip or slab there in metre cells). */
+export function iceSheet(ice: number, holes: readonly IceHole[] = []): Solid3[] {
   const out: Solid3[] = [];
-  // a wall from (ax, az) to (bx, bz), from y0 to y1, 0.3 thick
-  const wall = (ax: number, az: number, bx: number, bz: number, y0: number, y1: number) => {
+  if (ice <= 0.01) return out;
+  const T = 0.3;
+  const edge = iceEdge(ice);
+  const inHole = (x: number, z: number) => holes.some((h) => Math.hypot(x - h.x, z - h.z) < h.r + 0.3);
+  const near = (x: number, z: number, reach: number) => holes.some((h) => Math.hypot(x - h.x, z - h.z) < h.r + reach);
+  // a box along (ax, az) → (bx, bz), from `o0` to `o1` across it (its left), at y — in cells where a
+  // hole's near
+  const piece = (ax: number, az: number, bx: number, bz: number, o0: number, o1: number, y: number) => {
     const dx = bx - ax;
     const dz = bz - az;
     const l = Math.hypot(dx, dz);
-    if (l < 1e-3) return;
-    // (three's rotation.y: the local x along it)
-    out.push({
-      t: "box",
-      x: (ax + bx) / 2,
-      y: (y0 + y1) / 2,
-      z: (az + bz) / 2,
-      hx: l / 2 + 0.15,
-      hy: (y1 - y0) / 2,
-      hz: 0.15,
-      a: Math.atan2(-dz, dx),
-    });
+    if (l < 1e-3 || o1 - o0 < 0.05) return;
+    const nx = -dz / l;
+    const nz = dx / l;
+    const a = Math.atan2(-dz, dx);
+    const at = (u: number, o: number): [number, number] => [ax + (dx / l) * u + nx * o, az + (dz / l) * u + nz * o];
+    const [mx, mz] = at(l / 2, (o0 + o1) / 2);
+    if (!near(mx, mz, Math.hypot(l, o1 - o0) / 2 + 0.5)) {
+      out.push({ t: "box", x: mx, y: y - T / 2, z: mz, hx: l / 2 + 0.2, hy: T / 2, hz: (o1 - o0) / 2, a });
+      return;
+    }
+    // (in metre cells, both ways: a hole's left out)
+    for (let u = 0; u < l; u += 1) {
+      const u2 = Math.min(l, u + 1);
+      for (let o = o0; o < o1; o += 1) {
+        const o2 = Math.min(o1, o + 1);
+        const [cx, cz] = at((u + u2) / 2, (o + o2) / 2);
+        if (inHole(cx, cz)) continue;
+        out.push({ t: "box", x: cx, y: y - T / 2, z: cz, hx: (u2 - u) / 2 + 0.02, hy: T / 2, hz: (o2 - o) / 2, a });
+      }
+    }
   };
-  // the pond: its edge, the dock's way out left open — cut to the deck's width exactly (a segment
-  // there in short pieces, the deck's left out)
-  const DX0 = -253.7;
-  const DX1 = -250.3;
-  const onDeck = (x: number, z: number) => x > DX0 && x < DX1 && z < -85;
-  const N = 96;
-  const at = (a: number): [number, number] => [POND.cx + Math.cos(a) * POND.rx, POND.cz + Math.sin(a) * POND.rz];
-  for (let i = 0; i < N; i++) {
-    const a0 = (i / N) * Math.PI * 2;
-    const a1 = ((i + 1) / N) * Math.PI * 2;
-    const [ax, az] = at(a0);
-    const [bx, bz] = at(a1);
-    const near = Math.min(ax, bx) < DX1 + 4 && Math.max(ax, bx) > DX0 - 4 && Math.min(az, bz) < -85;
-    const n = near ? 24 : 1;
-    for (let j = 0; j < n; j++) {
-      const [px, pz] = at(a0 + ((a1 - a0) * j) / n);
-      const [qx, qz] = at(a0 + ((a1 - a0) * (j + 1)) / n);
-      if (onDeck((px + qx) / 2, (pz + qz) / 2)) continue;
-      wall(px, pz, qx, qz, POND_LEVEL - 0.6, POND_LEVEL + 2.2);
+  // the pond: a strip a metre, its ice from its shore in to `edge` of its ellipse (both sides of
+  // its open middle)
+  const top = POND_LEVEL + ICE_TOP;
+  for (let z = POND.cz - POND.rz; z < POND.cz + POND.rz; z += 1) {
+    const m = z + 0.5 - POND.cz;
+    const half = POND.rx * Math.sqrt(Math.max(0, 1 - (m / POND.rz) ** 2)) + 0.6;
+    const inner =
+      edge > 0 && Math.abs(m) < POND.rz * edge ? POND.rx * edge * Math.sqrt(1 - (m / (POND.rz * edge)) ** 2) : 0;
+    const x0 = POND.cx - half;
+    const x1 = POND.cx + half;
+    // (along x: its left is −z — the strip's own width the metre in z)
+    const row = (a: number, b: number) => piece(a, z + 0.5, b, z + 0.5, -0.5, 0.5, top);
+    if (inner <= 0) row(x0, x1);
+    else {
+      row(x0, POND.cx - inner);
+      row(POND.cx + inner, x1);
     }
   }
-  // the dock's deck (x −253.5 … −250.5, from the land at z −98 out over the water to −84.4: the
-  // shore's at −92.9 under it): fenced where it's over the water, its sides from just inland of the
-  // shore to its end, and across its end
-  const y0 = POND_LEVEL - 0.6;
-  const y1 = POND_LEVEL + 1.8;
-  wall(DX0, -94, DX0, -84.2, y0, y1);
-  wall(DX1, -94, DX1, -84.2, y0, y1);
-  wall(DX0, -84.2, DX1, -84.2, y0, y1);
-  // the river: both sides of its bed, at the banks' foot
+  // the river: a slab a sample either side from its edge to its shore (across, frozen over)
   const L = RIVER.line;
+  const w = riverWater();
+  const H = RIVER.w / 2;
   for (let i = 0; i + 1 < L.length; i++) {
     const [ax, az] = L[i];
     const [bx, bz] = L[i + 1];
-    const l = Math.hypot(bx - ax, bz - az) || 1;
-    const nx = -(bz - az) / l;
-    const nz = (bx - ax) / l;
-    const h = Math.min(RIVER.h[i], RIVER.h[i + 1]);
-    for (const s of [1, -1]) {
-      const o = (RIVER.w / 2 + 0.15) * s;
-      wall(ax + nx * o, az + nz * o, bx + nx * o, bz + nz * o, h - 0.6, h + 2.2);
+    // (fast water doesn't freeze: the rapid and the falls stay open)
+    if (w.speed[i] > ICE_FAST || w.speed[i + 1] > ICE_FAST) continue;
+    const y = (w.level[i] + w.level[i + 1]) / 2 + ICE_TOP;
+    if (edge <= 0) piece(ax, az, bx, bz, -H - 0.6, H + 0.6, y);
+    else {
+      piece(ax, az, bx, bz, H * edge, H + 0.6, y);
+      piece(ax, az, bx, bz, -H - 0.6, -H * edge, y);
     }
   }
   return out;
@@ -391,14 +410,18 @@ export class WorldBuilder {
     else this.world.remove(`grounds:${k}`);
   }
 
-  /** The water open (its shores walls) or frozen (walked: W6) — set when it changes. */
-  water(open: boolean): void {
-    if (open === this.waterOpen) return;
-    this.waterOpen = open;
-    if (open) this.world.setStatic("water", waterWalls(), "wall");
-    else this.world.remove("water");
+  /** The water's ice as the room has it (W6; plan 66 S4): `ice` (made again as it moves 0.02) and
+   *  its holes — what's iced walked, the open water swum. */
+  ice(ice: number, holes: readonly IceHole[] = []): void {
+    const q = Math.round(Math.max(0, Math.min(1, ice)) * 50) / 50;
+    const key = `${q}|${holesToWire(holes)}`;
+    if (key === this.iceKey) return;
+    this.iceKey = key;
+    const solids = iceSheet(q, holes);
+    if (solids.length) this.world.setStatic("ice", solids, "floor");
+    else this.world.remove("ice");
   }
-  private waterOpen: boolean | null = null;
+  private iceKey: string | null = null;
 
   /** Every Grounds chunk in a rectangle (the server: all of them, once). */
   groundRect(x0: number, z0: number, x1: number, z1: number): void {

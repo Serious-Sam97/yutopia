@@ -2,7 +2,8 @@
 // tile, the grid's word (walkableTile: iso, paths, the folk, where a teleport lands) against Jolt's
 // (a body fits standing on the ground in the middle of it: the 3D walker, the server's check). Where
 // they disagree, by what's there. For CI (`pnpm physics`) and by hand:
-//   node --import tsx audit.ts [--json]
+//   node --import tsx audit.ts [--json] [--open]   (--open: the water open, its deep walled off —
+//   docs/plan/66-the-water.md phase 1; else frozen, walked)
 
 import { STEP } from "../grid.ts";
 import {
@@ -10,10 +11,14 @@ import {
   CHUNK,
   GROUNDS,
   heightAt,
+  iceAt,
   pavedAt,
+  SHELF,
+  setUnderfoot,
   slopeAt,
   treesIn,
   walkableTile,
+  waterAt,
   worldRects,
 } from "../grounds.ts";
 import { type GroundWhat, groundSolidsIn } from "../shapes/grounds.ts";
@@ -44,8 +49,10 @@ function tilesOf(s: Solid3): [number, number, number, number] {
   return [Math.floor(s.x - ex), Math.floor(s.z - ez), Math.floor(s.x + ex), Math.floor(s.z + ez)];
 }
 
-export async function audit(): Promise<Audit> {
+export async function audit(water: "frozen" | "open" = "frozen"): Promise<Audit> {
   const t0 = performance.now();
+  const open = water === "open";
+  setUnderfoot({ ice: open ? 0 : 1 });
   const cx0 = Math.floor(GROUNDS.x0 / CHUNK);
   const cz0 = Math.floor(GROUNDS.z0 / CHUNK);
   const cx1 = Math.ceil(GROUNDS.x1 / CHUNK);
@@ -85,6 +92,8 @@ export async function audit(): Promise<Audit> {
       }
       for (const t of treesIn(cx, cz)) mark(Math.floor(t.x), Math.floor(t.z), "tree");
     }
+  // the water open: its deep kept off by the grid (the paths), swum in by a body (plan 66) — by design
+  build.ice(open ? 0 : 1);
   world.settle();
   // (the stored blocks — the HQ and the courtyard's — are the building's: not the Grounds')
   const stored = BUILDINGS.filter((b) => b.kind === "hq" || b.stored);
@@ -112,11 +121,20 @@ export async function audit(): Promise<Audit> {
       const here = what.get(key(x, z));
       if (!walk) {
         // (steep: the grid's own rule, Jolt's slope limit its own)
-        const why = here?.size ? [...here].sort().join("+") : slopeAt(mx, mz) > 0.9 ? "steep" : "nothing";
+        // (open water's deep — all of it open, or the fast water that doesn't freeze: swum, not walked)
+        const deep = !iceAt(mx, mz) && (waterAt(mx, mz)?.depth ?? 0) >= SHELF;
+        const why = here?.size
+          ? [...here].sort().join("+")
+          : deep
+            ? "deep water"
+            : slopeAt(mx, mz) > 0.9
+              ? "steep"
+              : "nothing";
         count(out.blockedFree, why, x, z);
       } else count(out.openSolid, here?.size ? [...here].sort().join("+") : "unknown", x, z);
     }
   world.destroy();
+  setUnderfoot({ ice: 1 });
   out.ms = Math.round(performance.now() - t0);
   return out;
 }
@@ -132,20 +150,22 @@ export function failures(a: Audit): string[] {
       .filter(([k]) => !skip(k))
       .reduce((n, [, v]) => n + v.n, 0);
   const tree = (k: string) => k.split("+").every((w) => w.startsWith("tree") || w === "edge");
+  // (the water open: its deep, swum, not walked — by design, plan 66)
+  const water = (k: string) => k === "deep water";
   if (a.openSolid.unknown) out.push(`Jolt stops you with nothing there: ${a.openSolid.unknown.n} tiles`);
   for (const f of ["fence", "kart_fence"])
     if ((a.blockedFree[f]?.n ?? 0) > 30) out.push(`${f}: ${a.blockedFree[f].n} tiles`);
-  const kept = sum(a.blockedFree, (k) => tree(k) || k === "steep");
+  const kept = sum(a.blockedFree, (k) => tree(k) || k === "steep" || water(k));
   if (kept > 1000) out.push(`the grid keeps you off ${kept} tiles Jolt doesn't (want ≤ 1000)`);
   // (450 since 2026-11-01: the town's details made solid — porch posts, mailboxes, the porches'
   // edges — thin things in tiles the grid walks, as the statue's and the snow poles'; 407 then)
-  const open = sum(a.openSolid, tree);
+  const open = sum(a.openSolid, (k) => tree(k) || water(k));
   if (open > 450) out.push(`the grid walks ${open} tiles Jolt blocks (want ≤ 450)`);
   return out;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const a = await audit();
+  const a = await audit(process.argv.includes("--open") ? "open" : "frozen");
   if (process.argv.includes("--check")) {
     const f = failures(a);
     console.log(JSON.stringify({ tiles: a.tiles, ms: a.ms, failures: f }));

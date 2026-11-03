@@ -402,7 +402,7 @@ export function landmarks(): { key: string; name: string; p: P }[] {
   return [
     { key: "lot", name: "The lot", p: [(LOT.x0 + LOT.x1) / 2, (LOT.z0 + LOT.z1) / 2] },
     { key: "square", name: "The square", p: [(PLAZA.x0 + PLAZA.x1) / 2, (PLAZA.z0 + PLAZA.z1) / 2] },
-    { key: "pond", name: "The frozen pond", p: [POND.cx, POND.cz + POND.rz] },
+    { key: "pond", name: "The pond", p: [POND.cx, POND.cz + POND.rz] },
     { key: "tower", name: "The tower", p: [TOWER.x, TOWER.z] },
     { key: "statue", name: "The statue", p: [STATUE.x, STATUE.z] },
     { key: "gate", name: "The gate", p: [GATE.x, GATE.z] },

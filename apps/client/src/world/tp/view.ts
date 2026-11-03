@@ -38,7 +38,14 @@ import {
   wellsOf,
 } from "@yutopia/shared";
 import { AIM_BLADE, BEAM, type Beam, beamAt, beamOf } from "@yutopia/shared/beam";
-import { LAMPS as GROUND_LAMPS, KART_LAND, type StreetThing, standLights, terrainAt } from "@yutopia/shared/grounds";
+import {
+  LAMPS as GROUND_LAMPS,
+  KART_LAND,
+  type StreetThing,
+  standLights,
+  terrainAt,
+  waterAt,
+} from "@yutopia/shared/grounds";
 import { ALOFT, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
@@ -109,6 +116,7 @@ import type { PuffKind } from "../model";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
 import { BelowCull, boxInParent, HIDDEN_LAYER } from "./below-cull";
+import { Bubbles } from "./bubbles3d";
 import { type FadeGroup, type Items, World3 } from "./build";
 import { BuildLayer, type BuildLook } from "./build3d";
 import { carGeometry, GROUND } from "./campus";
@@ -299,6 +307,7 @@ const LAMP_GLOW = 3.5; // how strongly a lamp post's pool lights what's under it
 const CAM_ROOM = 2.2; // the least room in front of a wall for the camera to stand there (else it rises)
 const CAM_LIFT_MAX = 1.3; // …up to this pitch
 const EYE = 1.15; // tiles: what the camera looks at, above your feet
+const SWIM_LIFT = 0.3; // …afloat, this much more: my head, just out of the water (feet 1.25 under)
 // first person: where your eyes are (the name tag sits at 2.0 / 1.45)
 const EYE_1P = 1.7;
 const EYE_1P_SEATED = 1.2;
@@ -2513,6 +2522,11 @@ void main() {
    *  what the camera's target follows (the land streamed round it, the shadows, the lamps). */
   frame(dt: number, bodies: Body3[], meId: string, seat?: { x: number; y: number; ground: number; level: number }) {
     this.time += dt;
+    // (the swimmers' rings and wakes, found again each frame; the bubbles up: plan 66)
+    for (const v of wx.wxSwim.value) v.w = 0;
+    this.swimN = 0;
+    this.bubbleDt = dt;
+    this.bubbles?.step(dt, this.time);
     this.ratioIn -= dt;
     if (this.ratioIn <= 0) {
       this.ratioIn = 1;
@@ -2597,7 +2611,8 @@ void main() {
           yaw: this.myFacing,
           vx: Math.cos(going) * speed,
           vy: Math.sin(going) * speed,
-          air: Math.max(0, (me.z ?? 0) - (me.ground ?? 0)),
+          // (afloat in the water, none: plan 66)
+          air: me.swim ? 0 : Math.max(0, (me.z ?? 0) - (me.ground ?? 0)),
           run: KH_MOVE.jog,
           dash: KH_MOVE.sprint,
           lock: lock ? { dx: lock.x - me.x, dy: lock.y - me.y } : null,
@@ -2622,10 +2637,13 @@ void main() {
         // up on something the camera's up there with you; in a jump it rides some of the
         // way (you see yourself go up); flying, higher than any jump, all the rest of it
         // (shared move ALOFT: docs/plan/49-the-height.md)
-        const ground = me.a === 2 ? (me.z ?? 0) : (me.ground ?? 0);
+        // (in the water, on me: my feet ride 1.25 under, my head just out — afloat, a little up to
+        // it; not the bed far under, which put me at the top of the screen: plan 66)
+        const swim = (me.swim ?? 0) >= 2;
+        const ground = me.a === 2 || swim ? (me.z ?? 0) : (me.ground ?? 0);
         const air = (me.z ?? 0) - ground;
         const rise = air <= ALOFT ? air * 0.55 : ALOFT * 0.55 + (air - ALOFT);
-        const want = new Vector3(me.x, eye + ground + rise, me.y);
+        const want = new Vector3(me.x, eye + ground + rise + (me.swim === 2 ? SWIM_LIFT : 0), me.y);
         // (locked on: a third of the way over to it, so we're both in frame; round a pole, the
         // pole: the view still while I go round it)
         if (this.lockAt && this.mode === "chase") {
@@ -2719,6 +2737,7 @@ void main() {
       cam.lerp(this.gcEye, m);
       this.camera.lookAt(look.lerp(this.gcLook, m));
     }
+    this.underWater();
     // the lens: a game camera's own, or the photo zoom in first person
     const fov = gc?.fov ?? (first ? (this.lensFov ?? this.fov1p * (1 - 0.18 * this.ads)) : FOV - 8 * this.aimK);
     if (Math.abs(this.camera.fov - fov) > 0.05) {
@@ -2811,6 +2830,8 @@ void main() {
         p3.setTint(
           this.onLand(b.x, b.y) ? this.ownTint.setRGB((wk * c.r) / L.r, (wk * c.g) / L.g, (wk * c.b) / L.b) : null,
         );
+        p3.setWater(b.swim === 1 && b.waterOver ? b.waterOver : null);
+        if (b.swim) this.swimmer(b.id, p3);
         if (b.id === meId) mySeat = seat3;
         p3.gunFx = b.id === meId ? this.myGun : this.otherGun(b, dt);
         p3.update(
@@ -3894,6 +3915,14 @@ void main() {
     const sc = this.sun.color;
     mf.mfSunCol.value.setRGB(Math.min(1, sc.r * lum), Math.min(1, sc.g * lum * 0.92), Math.min(1, sc.b * lum * 0.8));
     mf.mfSunK.value = (el > -0.12 ? Math.max(0, 1 - el / 0.7) * 0.5 : 0) * (1 - 0.85 * wall);
+    // (the water's glint: plan 66 S7 — the sun up and out, none in the wall)
+    const sv = mf.mfSun.value;
+    wx.wxSun.value.set(
+      sv.x,
+      sv.y,
+      sv.z,
+      el > 0 ? Math.min(1, el / 0.15) * (1 - wall) * Math.min(1, this.sun.intensity * 2.5) : 0,
+    );
     // none of it inside the room I'm in (a storm's neither)
     this.roomBox(me);
     // the rime on the trees: the day's (built through a foggy morning, there till noon), or what a
@@ -3986,19 +4015,88 @@ void main() {
     if (!g) return 0;
     const c = this.camera.position;
     const o = wx.wxOff.value;
-    return Math.max(0, c.y - (g.heightAt(c.x - o.x, c.z - o.z) + o.y));
+    return Math.max(0, c.y - (g.topAt(c.x - o.x, c.z - o.z) + o.y));
   }
 
   // Wet from the rain (docs/plan/65, W7): soaked over three minutes or so out in it (faster in a
   // downpour), dried in four under cover or indoors, slower out in the open once it's stopped. Each
   // viewer keeps its own count.
   private wetOn = new Map<string, number>();
+  // Under the water (docs/plan/66-the-water.md, S8): the camera never half in it (kept 12 cm off its
+  // surface, on the side the target's on); under it, the murk and the light on its bed (fog3d.ts), its
+  // colour by the light out there — the sun's on its bed fading with depth
+  private underWater() {
+    const U = mf.mfUw.value;
+    U.z = 0;
+    if (this.level !== 0 || this.god) return;
+    const cam = this.camera.position;
+    const o = wx.wxOff.value;
+    const w = waterAt(cam.x - o.x, cam.z - o.z);
+    if (!w) return;
+    const lv = w.level + o.y;
+    if (Math.abs(cam.y - lv) < 0.12) {
+      cam.y = this.target.y >= lv ? lv + 0.12 : lv - 0.12;
+      this.camera.updateMatrixWorld();
+    }
+    if (cam.y >= lv) return;
+    const f = this.scene.fog?.color ?? mf.mfCol.value;
+    const lum = f.r * 0.3 + f.g * 0.55 + f.b * 0.15;
+    mf.mfUwCol.value.setRGB(0.012, 0.05, 0.048).multiplyScalar(Math.min(1.6, 0.1 + lum * 2.2));
+    wx.wxUwCol.value.copy(mf.mfUwCol.value);
+    U.set(
+      lv,
+      w.kind === "river" ? 0.2 : 0.14,
+      1,
+      Math.min(1, wx.wxSun.value.w * 1.2) * Math.max(0, 1 - (lv - cam.y) / 8),
+    );
+  }
+
+  // Who's in the water near (plan 66 S7): their rings and wakes on it — the first eight each frame
+  // (the view's own order: the nearest come first), where they are and how they go
+  private swimN = 0;
+  private swimWas = new Map<string, { x: number; z: number; t: number }>();
+  private readonly swimAt = new Vector3();
+  private bubbles: Bubbles | null = null;
+  private readonly bubbleAt = new Vector3();
+  private bubbleDt = 0;
+  private swimmer(id: string, p3: Person3D) {
+    const S = wx.wxSwim.value;
+    if (this.swimN >= S.length) return;
+    const at = p3.root.getWorldPosition(this.swimAt).sub(wx.wxOff.value);
+    const was = this.swimWas.get(id);
+    const dt = was ? this.time - was.t : 0;
+    const vx = was && dt > 0 ? (at.x - was.x) / dt : 0;
+    const vz = was && dt > 0 ? (at.z - was.z) / dt : 0;
+    this.swimWas.set(id, { x: at.x, z: at.z, t: this.time });
+    // (under: bubbles off the head — S8)
+    const w = this.level === 0 ? waterAt(at.x, at.z) : null;
+    if (w && at.y < w.level - 1.7) {
+      this.bubbles ??= new Bubbles(this.scene);
+      this.bubbleAt.copy(at).add(wx.wxOff.value);
+      this.bubbleAt.y += 1.55;
+      this.bubbles.emit(id, this.bubbleAt, w.level + wx.wxOff.value.y, this.bubbleDt);
+    }
+    const v = S[this.swimN++];
+    // (still, the rings alone: a speed just over none)
+    v.set(at.x, at.z, Math.atan2(vz, vx), Math.max(0.01, Math.min(3, Math.hypot(vx, vz))));
+  }
+
+  /** How wet someone is (0 … 1): the steps' squelch after the water (docs/plan/66 S9). */
+  wetness(id: string): number {
+    return this.wetOn.get(id) ?? 0;
+  }
+
   private wetOf(b: Body3, dt: number): number {
     const sheltered = !!b.busy && (b.busy.startsWith("ride:") || b.busy.startsWith("drive:"));
     const out = !sheltered && this.underSky(b.x, b.y);
     const rain = wxNow.rain;
     const was = this.wetOn.get(b.id) ?? (out ? rain : 0);
-    const rate = out && rain > 0.02 ? (0.4 + rain) / 180 : out ? -1 / 900 : -1 / 240;
+    // (in the water to the chest, soaked at once; wading, half way in a few seconds — plan 66 S3)
+    if ((b.swim ?? 0) >= 2) {
+      this.wetOn.set(b.id, 1);
+      return 1;
+    }
+    const rate = b.swim === 1 && was < 0.5 ? 0.15 : out && rain > 0.02 ? (0.4 + rain) / 180 : out ? -1 / 900 : -1 / 240;
     const k = Math.max(0, Math.min(1, was + rate * dt));
     this.wetOn.set(b.id, k);
     return k;
@@ -5334,6 +5432,7 @@ void main() {
 
   private gone = false;
   destroy() {
+    this.bubbles?.dispose();
     this.sway?.dispose();
     this.sway = null;
     this.physics?.stop();

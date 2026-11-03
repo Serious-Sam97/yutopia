@@ -1,0 +1,12 @@
+tread: 2.80 s, pops 0, worst foot slide 0.40 m/s, seam 0.000 rad / hips 0.000 m
+breaststroke: 2.31 s, pops 0, worst foot slide 0.00 m/s, seam 0.000 rad / hips 0.000 m
+crawl: 2.08 s, pops 0, worst foot slide 0.00 m/s, seam 0.008 rad / hips 0.000 m
+under: 3.14 s, pops 0, worst foot slide 0.00 m/s, seam 0.000 rad / hips 0.000 m
+wade knee-deep: 2.40 s, pops 0, worst foot slide 0.25 m/s, seam 0.000 rad / hips 0.000 m
+wade waist-deep: 3.20 s, pops 0, worst foot slide 0.19 m/s, seam 0.000 rad / hips 0.000 m
+duck dive: 4.00 s, pops 0, worst foot slide 0.00 m/s
+dive in: 5.00 s, pops 1 (1.80 elbowL, elbowR), worst foot slide 0.28 m/s
+tread → breaststroke → crawl: 7.60 s, pops 0, worst foot slide 3.01 m/s
+surface → under → surface: 6.50 s, pops 0, worst foot slide 0.00 m/s
+walk → wade → float: 10.00 s, pops 0, worst foot slide 2.91 m/s
+swim → stand → wade out: 9.00 s, pops 3 (2.83 thighL, kneeL, ankleL, shoulderL, elbowL, kneeR, ankleR, shoulderR, elbowR, hips, neck, head, hips' height; 5.38 thighR, kneeR, ankleR; 5.39 thighR, kneeR, ankleR), worst foot slide 6.79 m/s

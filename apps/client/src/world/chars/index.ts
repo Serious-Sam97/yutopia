@@ -29,6 +29,7 @@ export {
   loadHero,
   localVel,
   nightNow,
+  swimNow,
   verbIn,
   verbT,
 } from "./locomotion";

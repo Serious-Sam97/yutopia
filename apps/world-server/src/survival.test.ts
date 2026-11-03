@@ -18,7 +18,7 @@ process.env.YUTOPIA_LOOT_FAST = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 
-const PORT = 26270 + Math.floor(Math.random() * 100);
+const PORT = 32500 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 const OFF = { x: -60, y: -10 }; // the ground floor's corner in the building's coords
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
 const rooms: Room[] = [];

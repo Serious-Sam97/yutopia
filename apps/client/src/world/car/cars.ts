@@ -563,6 +563,11 @@ export class Cars {
   driving(): boolean {
     return !!this.mine && this.mine.seat === 0;
   }
+  /** Every car drawn, where it is (the Grounds' coords; `y` its middle's height): the water's sound
+   *  hears one go in (docs/plan/66-the-water.md S9). */
+  where(): { id: string; x: number; y: number; z: number }[] {
+    return [...this.live.values()].map((l) => ({ id: l.id, x: l.pose.p.x, y: l.pose.p.y, z: l.pose.p.z }));
+  }
   /** People seated in cars (drawn here, not as people standing about). */
   seatedIds(): Set<string> {
     this.karts?.seated(this.seated);

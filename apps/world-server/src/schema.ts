@@ -557,6 +557,10 @@ export class Weather extends Schema {
   @type("float32") wet = 0;
   @type("float32") puddles = 0;
   @type("float32") ice = 0; // the pond's and the river's
+  // its holes, broken through (docs/plan/66-the-water.md S4: shared grounds.ts holesToWire), and the
+  // water's warmth, °C (S3: shared weather.ts waterTempAt)
+  @type("string") holes = "";
+  @type("float32") water = 10;
   // an admin's call on the sky ("": the schedule's; shared WeatherCall), who and till when
   @type("string") to = "";
   @type("string") by = "";

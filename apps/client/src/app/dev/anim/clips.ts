@@ -13,6 +13,7 @@ import type { PhysicsWorld } from "@yutopia/shared/physics";
 import { box3, type SolidBox3 } from "@yutopia/shared/shapes";
 import type { LocoIn, Locomotion, MotionIn, Moved } from "@/world/chars";
 import type { Reach } from "@/world/chars/model";
+import { type SwimScript, swimClips, swimTable } from "./swim";
 
 // /dev/anim's clips (docs/plan/58-the-animation.md, phase 2): every animation by name, two ways —
 // `raw`, the keyed pose at a moment (what's keyed, nothing laid on), and `live`, a scripted run
@@ -113,6 +114,13 @@ export interface Clip {
     stay?: boolean;
     solids?: SolidBox3[];
   };
+  /** (plan 66) the water's surface at this height (m), drawn; the camera aimed at the height `look`
+   *  gives at a moment, from `rise` over it (m, at the bench's 4.2 m away) */
+  water?: number;
+  look?: (t: number) => number;
+  rise?: number;
+  /** (plan 66 phase 4) driven through the swim body (chars/anim/swim.ts) by a stand-in for the core */
+  swim?: SwimScript;
 }
 
 const still = (): Root => ({ x: 0, y: 0, z: 0, yaw: 0 });
@@ -799,6 +807,8 @@ export function clipList(): Clip[] {
     len: 1.2,
     raw: { after: (x, t) => x.H.skid2Pose(Math.min(1, t / 0.3), t) },
   });
+  // (plan 66: the swim body)
+  for (const c of swimClips()) add(c);
   return list;
 }
 
@@ -850,6 +860,7 @@ export function tabulate(x: Ctx, clip: Clip, which: "after" | "before", live: bo
     }
     return out;
   }
+  if (clip.swim) return which === "after" ? swimTable(x, clip, rate) : null;
   if (clip.motion) return everyday(x, clip, which, rate);
   if (!clip.live) return null;
   // driven: as the sandbox drives it — the body's speed, its change and its turn; Locomotion's layers

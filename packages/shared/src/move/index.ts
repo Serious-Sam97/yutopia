@@ -5,4 +5,5 @@ export * from "./flow.ts";
 export * from "./spec.ts";
 export * from "./step.ts";
 export * from "./surface.ts";
+export * from "./swim.ts";
 export * from "./verbs.ts";

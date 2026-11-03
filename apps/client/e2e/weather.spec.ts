@@ -20,6 +20,7 @@ test.use({
 const LOT = { x: 37.8, y: 30 }; // the lot's east aisle (the ground floor's)
 const G = (x: number, y: number) => ({ x: x + 60, y: y + 10 }); // the land's coords → the ground floor's
 const POND = { cx: -240, cz: -60, rx: 48, rz: 34 }; // (shared grounds.ts POND)
+const POND_SHELF = 0.88; // (shared grounds.ts: where its shelf ends, on its ellipse)
 
 const send = (p: Page, type: string, m: unknown) =>
   p.evaluate(([t, mm]) => (window as any).__yutopia.room.send(t, mm), [type, m] as const);
@@ -114,7 +115,7 @@ async function walkIn(p: Page) {
   await p.waitForTimeout(500);
 }
 
-test("the weather as two: the same in both views; snow on the lot for both, melting, gone; the rain; the water stops Bia, the ice carries her", async ({
+test("the weather as two: the same in both views; snow on the lot for both, melting, gone; the rain; Bia swims the water, the ice carries her", async ({
   page,
   browser,
 }) => {
@@ -179,16 +180,23 @@ test("the weather as two: the same in both views; snow on the lot for both, melt
       expect(Math.abs(v.pud - v.room.puddles), "the puddles as the room has them").toBeLessThan(0.05);
     }
 
-    // ── the water: open (melted), the shore stops Bia; frozen, it carries her out ──
+    // ── the water: open (melted), Bia wades its shelf and swims out past it (plan 66); frozen, it
+    // carries her out on its ice ──
     await send(ana, "mod:weather", { to: "clear", now: true });
     await bia.waitForFunction(() => (window as any).__yutopia.room.state.weather.ice < 0.8, null, { timeout: 10_000 });
     await go(bia, G(POND.cx + 4, POND.cz - POND.rz - 6));
     const e0 = await onPond(bia);
     expect(e0, "on the land by the pond").toBeGreaterThan(1);
     await walkIn(bia);
+    // (on in, till she floats: chin-deep she's still wading — plan 66's 1.45 m)
+    await bia.keyboard.down("KeyW");
+    await bia.waitForFunction(() => !!(window as any).__yutopia.walker.body.swim, null, { timeout: 15_000 });
+    await bia.keyboard.up("KeyW");
     const e1 = await onPond(bia);
     expect(e1, "she walked to the shore").toBeLessThan(e0 - 0.1);
-    expect(e1, `the open water's shore stops her (${e1.toFixed(2)})`).toBeGreaterThan(0.95);
+    expect(e1, `she's out past the open water's shelf (${e1.toFixed(2)})`).toBeLessThan(POND_SHELF);
+    // (back on the bank before it freezes: a freeze over a swimmer is phase 3's)
+    await go(bia, G(POND.cx + 4, POND.cz - POND.rz - 6));
     await send(ana, "mod:ground", { to: "snow", now: true });
     await bia.waitForFunction(() => (window as any).__wxLayer.wx.wxIce.value > 0.99, null, { timeout: 10_000 });
     await bia.waitForTimeout(1500);

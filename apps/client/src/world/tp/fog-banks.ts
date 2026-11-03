@@ -1,4 +1,4 @@
-import { landAt, landReady, POND, POND_LEVEL, RAVINE, RIVER } from "@yutopia/shared/grounds";
+import { landAt, landReady, POND, POND_LEVEL, RAVINE, RIVER, waterAt } from "@yutopia/shared/grounds";
 import {
   BufferGeometry,
   CanvasTexture,
@@ -38,9 +38,15 @@ export interface Sheet {
 // (the river north of here runs under the Kart Park's ground: no sheets there)
 const RIVER_NORTH = -640;
 
+/** The land, or the water's level over its bed (plan 66: the river's deep under it). */
+const overWater = (x: number, z: number) => {
+  const w = waterAt(x, z);
+  return w ? Math.max(landAt(x, z), w.level) : landAt(x, z);
+};
+
 /** Where the sheets lie: along the river every 70 tiles, the ravine every 55, three on the pond.
  *  Their heights from the land under their middles (the bed's: `land`). */
-export function bankSheets(land: (x: number, z: number) => number = landAt): Sheet[] {
+export function bankSheets(land: (x: number, z: number) => number = overWater): Sheet[] {
   const out: Sheet[] = [];
   const along = (line: readonly (readonly [number, number])[], step: number, size: [number, number], up: number) => {
     let left = step / 2;
@@ -103,7 +109,7 @@ export function sheetReady(s: Sheet, ready: (x: number, z: number) => boolean = 
 
 /** A sheet's vertices (Grounds coords) and their alpha: soft to its own edge, thin where the land
  *  comes up within 2 tiles of it, none where the land's over it. */
-export function sheetGrid(s: Sheet, land: (x: number, z: number) => number = landAt) {
+export function sheetGrid(s: Sheet, land: (x: number, z: number) => number = overWater) {
   const pos: number[] = [];
   const col: number[] = [];
   const uv: number[] = [];
@@ -214,7 +220,7 @@ export class FogBanks {
     });
     if (best < 0) return;
     const [s] = this.todo.splice(best, 1);
-    if (s.overLand) s.y += landAt(s.x, s.z);
+    if (s.overLand) s.y += overWater(s.x, s.z);
     this.add(s);
   }
 

@@ -139,6 +139,21 @@ function Bench({ q }: { q: URLSearchParams }) {
       grid.position.y = 0.001;
       scene.add(grid);
       const cam = new T.PerspectiveCamera(24, W / Hh, 0.05, 300);
+      // (plan 66: a clip's water, its surface see-through so the waterline on the body reads)
+      const water = new T.Mesh(
+        new T.PlaneGeometry(60, 60),
+        new T.MeshLambertMaterial({
+          color: "#3d86ad",
+          transparent: true,
+          opacity: 0.6,
+          depthWrite: false,
+          side: T.DoubleSide,
+        }),
+      );
+      water.rotation.x = -Math.PI / 2;
+      water.renderOrder = 2;
+      water.visible = false;
+      scene.add(water);
 
       const f = new C.CharFactory();
       const after = new C.PersonModel(f, look, 0);
@@ -315,6 +330,10 @@ function Bench({ q }: { q: URLSearchParams }) {
         bench.current.before = swayOn ? bench.current.after : tabulate(x, s.clip, "before", s.live);
         bench.current.feet = null;
         showGround(s.clip.ground);
+        water.visible = s.clip.water !== undefined;
+        // (a shore's own land drawn under the water: the floor's grid would float in it)
+        grid.visible = !(s.clip.water !== undefined && s.clip.ground);
+        water.position.y = s.clip.water ?? 0;
         pole.visible = !!s.clip.pole;
         // (6: the clip's things — a seat, a desk)
         for (const b of propMeshes.splice(0)) {
@@ -388,7 +407,7 @@ function Bench({ q }: { q: URLSearchParams }) {
           const cz = r.z;
           // (&zoom=3&at=1.0: closer, on that height — the hands, the feet)
           const zoom = Number(q.get("zoom") ?? 1);
-          const lookY = Number(q.get("at") ?? 0.62);
+          const lookY = Number(q.get("at") ?? s.clip.look?.(s.t) ?? 0.62);
           // (&ahead=0.4: aimed that far ahead of the body, along its facing)
           const fwd = Number(q.get("ahead") ?? 0);
           const d = (4.2 + gap * 2) / zoom;
@@ -452,7 +471,8 @@ function Bench({ q }: { q: URLSearchParams }) {
             const fz = Math.cos(r.yaw) * fwd;
             // (on a clip's own ground — stairs, a ramp — up and down with her; a jump's arc it doesn't)
             const ry = s.clip.ground ? r.y : 0;
-            cam.position.set(cx + fx + ox, ry + lookY + 0.38 / zoom, cz + fz + oz);
+            // (plan 66: a swim clip's camera from its own height, over the water)
+            cam.position.set(cx + fx + ox, ry + lookY + (s.clip.rise ?? 0.38) / zoom, cz + fz + oz);
             cam.lookAt(cx + fx, ry + lookY, cz + fz);
           }
           sun.position.set(cx - 3, 6, cz + 4);
