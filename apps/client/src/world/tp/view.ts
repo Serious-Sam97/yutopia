@@ -115,6 +115,7 @@ import { loadPets, pets as petsArt } from "../art/pets-load";
 import type { PetModel } from "../art/pets3d";
 import { nearLift, unseen } from "../eyes";
 import { type Footprints, printLeft } from "../footprints";
+import { isNative, seatMotion } from "../furn/native";
 import type { PuffKind } from "../model";
 import { activePad } from "../pads";
 import { Arms3 } from "./arms3d";
@@ -2508,15 +2509,35 @@ void main() {
   // What seat is on each tile (its catalog kind): a sitter's hips rest at its
   // cushion's height.
   private seatKinds = new Map<number, string>();
+  private seatObjs = new Map<number, WorldObjectDef>();
   private indexSeats(map: MapDef, objects: WorldObjectDef[]) {
     this.seatKinds.clear();
+    this.seatObjs.clear();
     for (const o of objects) {
       if (!entry(o.kind).seat) continue;
       const { w, h } = placedFootprint(o);
       for (let dy = 0; dy < h; dy++)
-        for (let dx = 0; dx < w; dx++) this.seatKinds.set((o.y + dy) * map.width + o.x + dx, o.kind);
+        for (let dx = 0; dx < w; dx++) {
+          this.seatKinds.set((o.y + dy) * map.width + o.x + dx, o.kind);
+          this.seatObjs.set((o.y + dy) * map.width + o.x + dx, o);
+        }
     }
   }
+  /** A sitter goes with a seat that moves while sat in (plan 68: the egg chair swivels, the rocking
+   *  chair rocks, the hanging chair and the hammock sway — furn/native.ts seatMotion), turned about
+   *  the same point by the same amount as its live part, this frame. Anyone else: upright. */
+  private rideSeat(root: Object3D, seat: WorldObjectDef | undefined) {
+    // (the person sets only its heading each frame: a tilt from the seat is this frame's alone)
+    if (root.rotation.x || root.rotation.z) root.rotation.set(0, root.rotation.y, 0);
+    if (!seat || !isNative(seat.kind)) return;
+    const m = seatMotion(seat, this.time);
+    if (!m || !m.angle) return;
+    const q = this.rideQ.setFromAxisAngle(m.axis, m.angle);
+    const pivot = m.pivot.add(this.world.root.position);
+    root.position.sub(pivot).applyQuaternion(q).add(pivot);
+    root.quaternion.premultiply(q);
+  }
+  private rideQ = new Quaternion();
 
   // One frame: people from the world's bodies (`me` = whose camera this is).
   /** Bodies besides the room's people: the shadowed (world/dark, docs/plan/30-the-dark.md D5). */
@@ -2889,6 +2910,10 @@ void main() {
             thud: this.onThud,
             hop: this.onHop,
           },
+        );
+        this.rideSeat(
+          p3.root,
+          b.a === 2 ? this.seatObjs.get(Math.floor(b.y) * this.map.width + Math.floor(b.x)) : undefined,
         );
         // (plan 58 5d: down on the ragdoll — the physics stepped while anyone is; mine holds the walker)
         if (p3.limp?.on) this.limpNow = true;

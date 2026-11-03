@@ -13,7 +13,7 @@ import { parseFen } from "@yutopia/shared/games68/chess";
 import { cleanText } from "@yutopia/shared/glyphs";
 import { frameOf } from "@yutopia/shared/shapes";
 import { slotTrackOf } from "@yutopia/shared/slotcar";
-import { type BufferGeometry, Float32BufferAttribute, type Group, type Material } from "three";
+import { type BufferGeometry, Euler, Float32BufferAttribute, type Group, type Material, Matrix4, Vector3 } from "three";
 import type { Out } from "../tp/kit3d";
 import {
   bowl,
@@ -38,7 +38,7 @@ import { coffeeMachine, computer, DESK_THINGS, DESKTOP_LOOKS, LAVA_LOOKS, lavaLa
 import { FAM_DRAW, FAM_LOOKS } from "./fam";
 import { FURN } from "./flag";
 import { type LivePart, type Look, Model } from "./kit";
-import { liveGroup } from "./liveparts";
+import { liveAt, liveGroup } from "./liveparts";
 import { CEL_ALPHA } from "./look";
 import { openingLook, openingModel } from "./openings";
 import {
@@ -550,6 +550,24 @@ export function modelOf(o: WorldObjectDef): BufferGeometry {
 export function nativeInto(out: Out, o: WorldObjectDef): void {
   const f = frameOf(o);
   into(out, modelOf(o), f, Number(o.props?.pull) || 0);
+}
+
+/** How a seat that moves while it's sat in (the egg chair's swivel, the rocking chair's rock, the
+ *  hanging chair's and the hammock's sway) is turned at time `t` (s, the live parts' clock): the axis
+ *  and the point it turns about in the floor's frame (tiles, m up), and by how much — its sitter goes
+ *  with it. Read from its live part, placed exactly as `liveInto` places it; null if it has none. */
+export function seatMotion(o: WorldObjectDef, t: number): { pivot: Vector3; axis: Vector3; angle: number } | null {
+  if (!KINDS[o.kind] || isOpening(o.kind)) return null;
+  const part = ((modelOf(o).userData.live as LivePart[] | undefined) ?? []).find((p) => p.anim.kind === "nod");
+  if (!part) return null;
+  const f = frameOf(o);
+  const [tx, tz] = frameTurn(f)(0, Number(o.props?.pull) || 0, false);
+  const place = new Matrix4().makeRotationY(-(f.rot & 3) * (Math.PI / 2)).setPosition(f.x + tx, f.lift, f.y + tz);
+  // (a nod turns the part round its own z, the part turned by its rest: liveparts.ts animateLive)
+  const axis = new Vector3(0, 0, 1)
+    .applyEuler(new Euler(part.rot[0], part.rot[1], part.rot[2], "YXZ"))
+    .transformDirection(place);
+  return { pivot: new Vector3(...part.at).applyMatrix4(place), axis, angle: liveAt(part.anim, t).turn[1] };
 }
 
 /** A placed thing's live parts (plan 68: a lava lamp's blobs, a fire's flames) as a group, placed

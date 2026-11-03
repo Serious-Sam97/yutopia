@@ -21,12 +21,12 @@ const SEAT = { ...SEAT_SPEC, ...SEAT_NEXT };
 const SURF = { ...SURFACE, ...SURFACE_NEXT };
 
 import { frameOf, turnPoint } from "@yutopia/shared/shapes";
-import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from "three";
+import { type BufferGeometry, DoubleSide, Mesh, MeshBasicMaterial, Quaternion, Raycaster, Vector3 } from "three";
 import { Out } from "../tp/kit3d";
 import type { LivePart } from "./kit";
-import { liveAt } from "./liveparts";
+import { animateLive, liveAt } from "./liveparts";
 import { CEL_ALPHA } from "./look";
-import { liveInto, modelOf, nativeDressInto, nativeInto, wordsOf } from "./native";
+import { liveInto, modelOf, nativeDressInto, nativeInto, seatMotion, wordsOf } from "./native";
 import { adventDay, XMAS_LOOKS } from "./xmas";
 
 // Plan 67 phase 1 (docs/plan/67-the-furniture.md): a kind the kit draws stays on its footprint,
@@ -726,4 +726,38 @@ test("a chess table's model: the latest position only, a bad one drawn as the st
   modelOf(at(b));
   assert.ok(modelOf(at(a)) !== first, "the old position's model let go");
   assert.doesNotThrow(() => modelOf(at("garbage")));
+});
+
+// (plan 68) the seats that move while sat in — the egg chair swivels, the rocking chair rocks, the
+// hanging chair and the hammock sway: the sitter is turned by seatMotion, so a point of the seat's
+// moving part, turned by it from rest, must be where the part's drawn at that moment — at every turn
+test("a moving seat's sitter goes with it: seatMotion turns as its live part does", () => {
+  const mat = new MeshBasicMaterial();
+  for (const kind of ["egg_chair", "rocking_chair", "hanging_chair", "hammock"])
+    for (let rot = 0; rot < 4; rot++) {
+      const o = { id: `ride-${kind}`, kind, x: 3, y: 5, rot, props: { variant: 0, occupied: true } };
+      const g = liveInto(o, mat, mat, mat);
+      assert.ok(g, `${kind}: has a live part`);
+      const part = g.children[0] as Mesh;
+      const a = (part.userData.live as LivePart).anim as { kind: string; period: number; phase: number };
+      assert.equal(a.kind, "nod", kind);
+      // (a point on it: its geometry's first vertex, in the floor's frame at time t)
+      const v = new Vector3().fromBufferAttribute(part.geometry.attributes.position, 0);
+      const at = (t: number) => {
+        animateLive(g, t);
+        g.updateMatrixWorld(true);
+        return v.clone().applyMatrix4(part.matrixWorld);
+      };
+      const rest = at(-a.phase * a.period + a.period * 4); // (its nod at nought)
+      for (const t of [0.7, 1.9, 3.3]) {
+        const m = seatMotion(o, t);
+        assert.ok(m, `${kind}: moves`);
+        const q = new Quaternion().setFromAxisAngle(m.axis, m.angle);
+        const want = rest.clone().sub(m.pivot).applyQuaternion(q).add(m.pivot);
+        const got = at(t);
+        assert.ok(want.distanceTo(got) < 1e-4, `${kind} rot ${rot} at ${t}: ${want.toArray()} vs ${got.toArray()}`);
+      }
+    }
+  // (a seat that doesn't move: no motion)
+  assert.equal(seatMotion({ id: "c", kind: "chair", x: 0, y: 0, rot: 0, props: { occupied: true } }, 1), null);
 });
