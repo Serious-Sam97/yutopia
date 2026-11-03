@@ -15,11 +15,47 @@ export const loadPictures = (): Promise<Pictures> => {
 };
 const cache = new Map<string, string | null>();
 
-async function make(kind: string, props?: Record<string, unknown>): Promise<string | null> {
+// (a picture takes a render and a read-back, ~5–15 ms: a category's twenty at once froze the game for
+// a frame of 200 ms — made a few milliseconds' worth a frame instead, the cards filling in)
+const SLICE_MS = 6;
+const jobs: (() => void)[] = [];
+let pumping = false;
+function pump() {
+  const t0 = performance.now();
+  do jobs.shift()?.();
+  while (jobs.length && performance.now() - t0 < SLICE_MS);
+  if (jobs.length) requestAnimationFrame(pump);
+  else pumping = false;
+}
+/** `fn` run in its turn, a few a frame — or `skip` if it's no longer wanted by then. */
+function inTurn<T>(fn: () => T, wanted: () => boolean, skip: T): Promise<T> {
+  return new Promise((resolve, reject) => {
+    jobs.push(() => {
+      if (!wanted()) return resolve(skip);
+      try {
+        resolve(fn());
+      } catch (e) {
+        reject(e);
+      }
+    });
+    if (!pumping) {
+      pumping = true;
+      // (a frame or two after the panel's own redraw: not both in one frame)
+      requestAnimationFrame(() => requestAnimationFrame(pump));
+    }
+  });
+}
+const SKIPPED = "skipped";
+
+async function make(
+  kind: string,
+  props?: Record<string, unknown>,
+  wanted: () => boolean = () => true,
+): Promise<string | null> {
   const p = await loadPictures();
   if (p.drawsKind(kind)) {
     try {
-      return p.pictureOf(kind, props ?? {});
+      return await inTurn(() => p.pictureOf(kind, props ?? {}), wanted, SKIPPED);
     } catch {
       // (no WebGL here: the drawing instead)
     }
@@ -39,7 +75,9 @@ export function useThumb(kind: string, props?: Record<string, unknown>): string 
   useEffect(() => {
     if (cache.has(key)) return setSrc(cache.get(key) ?? null);
     let alive = true;
-    void make(kind, props).then((url) => {
+    void make(kind, props, () => alive).then((url) => {
+      // (its card gone before its turn came: made when it's shown again)
+      if (url === SKIPPED) return;
       if (!cache.has(key)) cache.set(key, url);
       if (alive) setSrc(cache.get(key) ?? null);
     });
