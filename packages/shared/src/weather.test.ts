@@ -166,12 +166,42 @@ test("the sky's shares over 10,000 days: about a third clear, snow on one day in
   const near = (k: string, want: number, by = 0.04) =>
     assert.ok(Math.abs(share(k) - want) < by, `${k}: ${JSON.stringify(n)}`);
   near("clear", 0.35);
-  near("cloudy", 0.23);
-  near("rain", 0.25);
+  near("cloudy", 0.32);
+  near("rain", 0.16);
   near("sleet", 0.04, 0.02);
   near("snow", 0.13);
   const snowy = snowyDays.filter(Boolean).length / DAYS;
   assert.ok(snowy > 0.22 && snowy < 0.32, `${snowy} of the days snowy`);
+});
+
+test("the rain comes in showers: a few hours, a dry while between, a day without a stop rare", () => {
+  // the runs of hours raining (or sleeting), and the dry whiles inside a front between them
+  const runs: number[] = [];
+  let run = 0;
+  let whiles = 0;
+  let dry = 0;
+  for (const s of hourly) {
+    const rain = s.kind === "rain" || s.kind === "sleet";
+    if (rain) {
+      if (dry && dry <= 8) whiles++;
+      dry = 0;
+      run++;
+    } else {
+      if (run) runs.push(run);
+      if (run || dry) dry = s.kind === "cloudy" ? dry + 1 : 0;
+      run = 0;
+    }
+  }
+  runs.sort((a, b) => a - b);
+  const years = DAYS / 365;
+  const median = runs[Math.floor(runs.length / 2)];
+  const long = runs.filter((h) => h >= 24).length / years;
+  assert.ok(median >= 2 && median <= 6, `a shower's ${median} h`);
+  assert.ok(long < 5, `${long} rains of a day or more a year`);
+  assert.ok(whiles / years > 100, `${whiles / years} dry whiles a year`);
+  // (the snow as the front has it: a snowy front isn't broken up)
+  const snowRuns = hourly.reduce((n, s, i) => n + (s.kind === "snow" && hourly[i + 1]?.kind === "snow" ? 1 : 0), 0);
+  assert.ok(snowRuns / hourly.filter((s) => s.kind === "snow").length > 0.9);
 });
 
 test("the weather comes in spells: a snowy day often brings another, a dry spell lasts", () => {

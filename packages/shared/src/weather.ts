@@ -188,8 +188,8 @@ export function wetAt(ms: number): number {
 }
 
 // The lines (set against 10,000 days, weather.test.ts): clouds over WET_CLOUD, coming down over
-// WET_FALL — ~35% clear, ~25% cloudy, ~40% coming down, half of it snow (~20% of the time snowing,
-// most of it in spells of days).
+// WET_FALL — ~35% clear, ~32% cloudy (the dry whiles between showers too), ~16% raining, ~4% sleet,
+// ~13% snowing (most of it in spells of days).
 export const WET_CLOUD = 0.4;
 export const WET_FALL = 0.55;
 const COLD = -9.5; // °C, the coldest front's
@@ -216,17 +216,42 @@ export function waterTempAt(ms: number): number {
   return Math.max(1, sum / 12);
 }
 
+// The rain comes in showers (the user's, 2026-11-03: a front of two days rained 42 h without a
+// stop): within a wet front a third, quicker line says whether a shower's on — ~4 h (11 h at the
+// most, as a rule), a dry while of ~2½ h between under the same cloud, shorter the harder the front
+// — and how hard, heavy only near its top. The snow keeps falling as the front has it.
+const SHOWER_ON = [0.38, 0.3]; // the line over it is a shower: a weak front's, the hardest's
+const SHOWER_EDGE = 0.4; // how far over that it's all on (its coming and going, ~20–60 min)
+const SHOWER_HEAVY = 0.75; // how far over it it's at its heaviest
+
+/** How much of a front's rain is falling at `ms`, 0 (a dry while) … 1 (a heavy shower), in a front
+ *  of `hard` (0 … 1). */
+export function showerAt(ms: number, hard: number): number {
+  const h = ms / HOUR;
+  const s = 0.8 * line(h / 2.6, 503) + 0.2 * line(h / 1.4, 607);
+  const on = SHOWER_ON[0] + (SHOWER_ON[1] - SHOWER_ON[0]) * hard;
+  const heavy = smooth(on + SHOWER_EDGE / 2, on + SHOWER_HEAVY, s);
+  return smooth(on, on + SHOWER_EDGE, s) * (0.45 + 0.55 * heavy);
+}
+
 /** The sky at `ms` (server time), as the schedule has it. */
 export function skyAt(ms: number): Sky {
   const wet = wetAt(ms);
   const cloud = cloudOf(wet);
   const temp = tempAt(ms, cloud);
-  const coming = wet > WET_FALL;
   // light as it starts (in the half hour or so the line takes), steady soon after, hard at the top
   // of a front; never a jump
-  const fall = coming
-    ? 0.15 * smooth(WET_FALL, WET_FALL + 0.02, wet) + 0.85 * smooth(WET_FALL, WET_FALL + 0.2, wet)
-    : 0;
+  const front =
+    wet > WET_FALL
+      ? 0.15 * smooth(WET_FALL, WET_FALL + 0.02, wet) + 0.85 * smooth(WET_FALL, WET_FALL + 0.2, wet)
+      : 0;
+  // (the rain in showers, the snow as the front has it: sleet between)
+  const showers = smooth(SNOW_BELOW, SLEET_BELOW, temp);
+  const falling =
+    showers > 0 ? front * (1 - showers + showers * showerAt(ms, smooth(WET_FALL, WET_FALL + 0.25, wet))) : front;
+  // (a dry while between showers is a cloudy sky)
+  const coming = wet > WET_FALL && (showers === 0 || falling > 0.02);
+  const fall = coming ? falling : 0;
   const kind: SkyKind = !coming
     ? wet > WET_CLOUD
       ? "cloudy"
