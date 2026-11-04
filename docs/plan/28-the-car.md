@@ -373,6 +373,17 @@ olive (`docs/art-style.md`).
 - **Everyone else** draws the car 110 ms in the past as people are, with Hermite
   curves from position and velocity, extrapolating ≤ 250 ms on a late
   packet.
+  - *Since 2026-11-04* (`client world/car/playback.ts`): on the **driver's sim
+    clock** (`car:state` `st`, kept in `Vehicle.st`), not on arrival. A driver at
+    9 fps loses sim time in half-second frames (the 0.25 s cap) and sends in
+    bursts; drawn by arrival, their passenger was pulled back at every hitch.
+  - The buffer is as deep as states have lately had to cover: 110 ms for a
+    smooth driver, up to 600 ms. The playback clock is eased to it (0.75–1.25×)
+    and slowed when it runs dry; it extrapolates ≤ 500 ms.
+  - A correction is eased out (τ 150 ms, at most twice the car's pace), never
+    back along the way it's going.
+  - `Vehicle.jump` (a new driver, a pull-out) starts the playback again; `st` 0
+    (an older client) falls back to arrival.
   - Wheels, suspension and body roll are re-simulated locally against the land,
     so a remote car rolls and bounces right.
 - **Schema**: `Vehicle` grows y, pitch, roll, steer, rpm, gear, flags, the

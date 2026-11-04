@@ -69,6 +69,7 @@ import type { ThirdPersonView } from "../tp/view";
 import { AT, growOf, SHOWN, wx, wxHold, wxNow } from "../tp/wx3d";
 import { CarInput, type Switch } from "./controls";
 import { BaySnow, CabinLight, Mirror, RoadPatches, ScreenSnow, Spray, Tracks } from "./fx";
+import { CarPlayback } from "./playback";
 import { CarSound, preloadEngine } from "./sound";
 import { type SpotPrompt, Spots, spotNo } from "./spot";
 
@@ -196,9 +197,10 @@ interface PetWire {
   outfit: string;
 }
 
-// a sample of someone else's car
+// a sample of someone else's car (`t`: when it came; `st`: on its driver's sim clock — playback.ts)
 interface Sample {
   t: number;
+  st: number;
   p: Vector3;
   q: Quaternion;
   v: Vector3;
@@ -214,8 +216,10 @@ interface LiveView {
   snowK?: number;
   kind: CarKind;
   model: Sedan;
-  buf: Sample[];
+  /** its states, played back on its driver's clock (playback.ts) */
+  pb: CarPlayback<Sample>;
   seq: number;
+  jump: number;
   spin: number;
   // (`at`: when they sat down — they slide in from the open door)
   people: Map<
@@ -331,7 +335,6 @@ const OWN_SHAPE = new Set<CarKind>(["snowmobile", "snowcat", "ploughtruck", "tra
 const ENTER_S = 1.0; // s: getting in (stood at the door, down and in onto the seat; the camera easing to the car's)
 const EXIT_S = 0.8; // s: getting out (plan 62): up off the seat and out by the door, before they're a person again
 const SEATED_OLD = 0.92; // a vehicle whose cabin isn't fitted to plan 59's people: drawn a little smaller in it
-const RENDER_BEHIND = 110;
 const v3 = new Vector3();
 const q1 = new Quaternion();
 const FLIP = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI);
@@ -398,6 +401,8 @@ export class Cars {
     acc: number;
     seq: number;
     sentAt: number;
+    /** my sim's own clock (ms, from 1 as I took the wheel): sent with each state (net.ts CarWire.st) */
+    simMs: number;
     sound: CarSound | null;
     started: boolean;
     // its wear as I drive it (sent now and then: car:wear), the last knock counted
@@ -849,7 +854,7 @@ export class Cars {
           x = l.pose.p.x + ca * lx - sa * lz;
           z = l.pose.p.z + sa * lx + ca * lz;
           g = this.world.ground(x, z);
-          const b = l.buf[l.buf.length - 1];
+          const b = l.pb.buf[l.pb.buf.length - 1];
           slip = b ? b.slip : 0;
         }
         const y = this.G.heightAt(x, z);
@@ -862,7 +867,7 @@ export class Cars {
         }
       }
       // the exhaust's breath in the cold (thick while the engine's cold, torn away by speed)
-      const engineOn = sim ? sim.rpm > 50 : !!((l.buf[l.buf.length - 1]?.fl ?? 0) & CAR_FLAGS.engine);
+      const engineOn = sim ? sim.rpm > 50 : !!((l.pb.buf[l.pb.buf.length - 1]?.fl ?? 0) & CAR_FLAGS.engine);
       if (engineOn && t - l.exhaustAt > 0.14) {
         l.exhaustAt = t;
         const e = m.lamps.exhaust;
@@ -960,7 +965,7 @@ export class Cars {
         else if (!rain && wxNow.rain < 0.05 && this.wipers !== 0) this.wipers = 0;
       }
       const speed = Math.hypot(l.pose.v.x, l.pose.v.z);
-      const wipers = mine.seat === 0 ? this.wipers : ((l.buf[l.buf.length - 1]?.fl ?? 0) >> 8) & 3;
+      const wipers = mine.seat === 0 ? this.wipers : ((l.pb.buf[l.pb.buf.length - 1]?.fl ?? 0) >> 8) & 3;
       // (what falls on it: as hard as it's snowing — none on a dry day, docs/plan/65)
       this.screen.s.step(
         dt,
@@ -984,7 +989,7 @@ export class Cars {
         this.mirror.m.render(tp.renderer, tp.scene, t, q === "high" ? 24 : 12);
       }
       // the radio, heard in the car
-      const st = mine.seat === 0 ? this.station : ((l.buf[l.buf.length - 1]?.fl ?? 0) >> 14) & 3;
+      const st = mine.seat === 0 ? this.station : ((l.pb.buf[l.pb.buf.length - 1]?.fl ?? 0) >> 14) & 3;
       if (st > 0) {
         this.radio.play(st - 1, 0);
         this.radio.setLevel(0.55, 0);
@@ -1305,8 +1310,9 @@ export class Cars {
           id,
           kind: v.kind,
           model,
-          buf: [],
+          pb: new CarPlayback<Sample>(),
           seq: -1,
+          jump: -1,
           spin: 0,
           people: new Map(),
           sound: null,
@@ -1323,21 +1329,26 @@ export class Cars {
         };
         this.live.set(id, l);
       }
-      // a new state from the server: a sample
-      if (v.seq !== l.seq || !l.buf.length) {
+      // a new state from the server: a sample (or the server's put it somewhere: a jump)
+      if (v.seq !== l.seq || (v.jump ?? 0) !== l.jump || !l.pb.buf.length) {
         l.seq = v.seq;
-        l.buf.push({
-          t: now,
-          p: new Vector3(v.x, v.y, v.z),
-          q: new Quaternion(v.qx, v.qy, v.qz, v.qw).normalize(),
-          v: new Vector3(v.vx, v.vy, v.vz),
-          steer: v.steer,
-          rpm: v.rpm,
-          gear: v.gear,
-          fl: v.fl,
-          slip: v.slip,
-        });
-        if (l.buf.length > 12) l.buf.shift();
+        l.jump = v.jump ?? 0;
+        l.pb.push(
+          {
+            t: now,
+            st: v.st ?? 0,
+            p: new Vector3(v.x, v.y, v.z),
+            q: new Quaternion(v.qx, v.qy, v.qz, v.qw).normalize(),
+            v: new Vector3(v.vx, v.vy, v.vz),
+            steer: v.steer,
+            rpm: v.rpm,
+            gear: v.gear,
+            fl: v.fl,
+            slip: v.slip,
+          },
+          now,
+          l.jump,
+        );
       }
       // its wear (mine: as my sim counts it — wearOn)
       if (this.mine?.vid !== id || this.mine.seat !== 0) l.model.setWear(v.grime ?? 0, dmgOf(v.dmg));
@@ -1527,46 +1538,15 @@ export class Cars {
       );
   }
 
-  /** Someone else's car: where it was 110 ms ago (between two of its states), its wheels, lamps, sound. */
+  /** Someone else's car: played back on its driver's clock (playback.ts), its wheels, lamps, sound. */
   private poseRemote(l: LiveView, now: number, dt: number) {
-    const at = now - RENDER_BEHIND;
-    const b = l.buf;
-    if (!b.length) return;
-    let s0 = b[0];
-    let s1 = b[b.length - 1];
-    for (let i = 0; i < b.length - 1; i++)
-      if (b[i].t <= at && b[i + 1].t >= at) {
-        s0 = b[i];
-        s1 = b[i + 1];
-        break;
-      }
+    if (!l.pb.buf.length) return;
+    const { pose, at } = l.pb.pose(now, dt);
+    const s1 = at ?? l.pb.buf[l.pb.buf.length - 1];
     const p = l.pose;
-    if (at >= s1.t) {
-      // past the newest: on along its velocity a little way
-      const ex = Math.min(0.25, (at - s1.t) / 1000);
-      p.p.copy(s1.p).addScaledVector(s1.v, ex);
-      p.q.copy(s1.q);
-      p.v.copy(s1.v);
-    } else if (at <= s0.t || s1 === s0) {
-      p.p.copy(s0.p);
-      p.q.copy(s0.q);
-      p.v.copy(s0.v);
-    } else {
-      // a Hermite curve through both, with their velocities
-      const T = (s1.t - s0.t) / 1000;
-      const u = (at - s0.t) / (s1.t - s0.t);
-      const h00 = 2 * u ** 3 - 3 * u ** 2 + 1;
-      const h10 = u ** 3 - 2 * u ** 2 + u;
-      const h01 = -2 * u ** 3 + 3 * u ** 2;
-      const h11 = u ** 3 - u ** 2;
-      p.p.set(
-        h00 * s0.p.x + h10 * T * s0.v.x + h01 * s1.p.x + h11 * T * s1.v.x,
-        h00 * s0.p.y + h10 * T * s0.v.y + h01 * s1.p.y + h11 * T * s1.v.y,
-        h00 * s0.p.z + h10 * T * s0.v.z + h01 * s1.p.z + h11 * T * s1.v.z,
-      );
-      p.q.slerpQuaternions(s0.q, s1.q, u);
-      p.v.lerpVectors(s0.v, s1.v, u);
-    }
+    p.p.copy(pose.p);
+    p.q.copy(pose.q);
+    p.v.copy(pose.v);
     const m = l.model;
     const spec = SPECS[l.kind];
     // the root: the CoG back to the model's origin
@@ -1665,6 +1645,7 @@ export class Cars {
         acc: 0,
         seq: 0,
         sentAt: 0,
+        simMs: 1,
         sound: null,
         started: false,
         grime: 0,
@@ -1764,6 +1745,7 @@ export class Cars {
         stepCar(s, c, this.world, this.helps);
         m.rig.stepped();
         m.acc -= STEP;
+        m.simMs += STEP * 1000;
         if (s.hit) this.hitBy(room, s);
       }
       this.wearOn(room, s, l, dt, now);
@@ -1783,7 +1765,7 @@ export class Cars {
       // to the server, twenty times a second
       if (now - m.sentAt >= 1000 / CAR_HZ) {
         m.sentAt = now;
-        room.send("car:state", toWire(s, ++m.seq, this.flags(s)));
+        room.send("car:state", toWire(s, ++m.seq, this.flags(s), m.simMs));
       }
       // sound, the pad's rumble
       const rough = s.wheels.reduce((a, w) => a + GRIP[w.ground].rough, 0) / 4;
@@ -2103,7 +2085,7 @@ export class Cars {
     let lit: "off" | "low" | "high" = "off";
     // (the car I ride in too: as a passenger, its lamps light my way)
     for (const l of this.live.values()) {
-      const fl = l.buf[l.buf.length - 1]?.fl ?? 0;
+      const fl = l.pb.buf[l.pb.buf.length - 1]?.fl ?? 0;
       if (!(fl & (CAR_FLAGS.low | CAR_FLAGS.high))) continue;
       const m = l.model;
       const d = cam.distanceTo(m.root.position);
@@ -2168,7 +2150,7 @@ export class Cars {
     // on from their newest state along its velocity), as heavy as they are
     for (const [id, l] of this.live) {
       if (this.mine?.vid === id) continue;
-      const s1 = l.buf[l.buf.length - 1];
+      const s1 = l.pb.buf[l.pb.buf.length - 1];
       if (!s1) continue;
       const ahead = Math.max(0, Math.min(0.3, (this.nowMs - s1.t) / 1000));
       const a = headingFromQ(s1.q);
@@ -2437,6 +2419,8 @@ interface VehWire {
   seats: string;
   colour: number;
   seq: number;
+  st?: number; // its driver's sim clock (ms; 0 or none: a driver's client from before it)
+  jump?: number; // the times the server's put it somewhere (a new driver, pulled out)
   fuel?: number;
   grime?: number;
   dmg?: string;

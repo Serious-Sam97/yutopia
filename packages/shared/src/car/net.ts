@@ -25,6 +25,10 @@ export interface CarWire {
   fl: number; // CAR_FLAGS
   slip: number; // the most any tyre is sliding (m/s): tracks, sound
   fuel: number;
+  /** the driver's sim clock (ms of simulated time since they took the wheel): others play the car
+   *  back on it, not on when its states happen to arrive (a slow driver's car in slow motion,
+   *  never pulled back — see client world/car/playback.ts). 0: a client from before it. */
+  st?: number;
 }
 
 /** The switches and the lamps, packed. */
@@ -49,7 +53,7 @@ export const CAR_FLAGS = {
 } as const;
 
 export const CAR_HZ = 20;
-export function toWire(s: CarState, seq: number, fl: number): CarWire {
+export function toWire(s: CarState, seq: number, fl: number, st = 0): CarWire {
   let slip = 0;
   for (const w of s.wheels) slip = Math.max(slip, w.contact ? w.slip : 0);
   const r3 = (x: number) => Math.round(x * 1000) / 1000;
@@ -72,6 +76,7 @@ export function toWire(s: CarState, seq: number, fl: number): CarWire {
     fl,
     slip: r3(slip),
     fuel: r3(s.fuel),
+    st: Math.max(0, Math.round(st)) >>> 0,
   };
 }
 
