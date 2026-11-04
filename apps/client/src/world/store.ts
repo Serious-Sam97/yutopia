@@ -65,6 +65,7 @@ export type PanelKind =
   | "computer"
   | "motors" // the car dealer's (car/cars.ts registers it: docs/plan/43-the-spot.md)
   | "admin" // Run the place: admins only (docs/plan/48-the-admin.md)
+  | "chess" // at a chess table: the HUD strip (docs/plan/70-the-chess.md)
   | null;
 
 // A pet in the room (shared/pets.ts), as the panel and the menus see it.
@@ -381,6 +382,8 @@ export interface HudState {
   mySpawn: { x: number; y: number } | null; // where I arrive (null: the world's arrival point)
   pickArrival: boolean; // choosing it on the map: the next floor click sets it
   panel: { kind: PanelKind; objectId?: string };
+  /** (plan 70) the chess table I'm at: what the HUD strip shows (world/chess) */
+  chess: import("./chess").ChessHud | null;
   knocks: { from: string; fromName: string; area: string; at: number }[];
   toasts: { id: number; text: string; tone: "info" | "warn" | "vortex" }[];
   media: {
@@ -507,6 +510,7 @@ const initial: HudState = {
   mySpawn: null,
   pickArrival: false,
   panel: { kind: null },
+  chess: null,
   knocks: [],
   toasts: [],
   media: {

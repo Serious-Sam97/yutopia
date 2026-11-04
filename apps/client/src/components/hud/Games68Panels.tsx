@@ -1,7 +1,6 @@
 "use client";
 
 import { HELD, isHeld } from "@yutopia/shared";
-import { legalMoves, outcome, parseFen, START, sqName } from "@yutopia/shared/games68/chess";
 import { prizesOf } from "@yutopia/shared/games68/claw";
 import { DARTS_A_TURN, dartLands, dartWobble } from "@yutopia/shared/games68/darts";
 import { useEffect, useRef, useState } from "react";
@@ -26,125 +25,6 @@ function useProps(objectId: string): Record<string, unknown> {
     return () => clearInterval(i);
   }, [w, objectId]);
   return props;
-}
-
-// (the filled set for both sides, white's cream with an ink edge: the hollow set faded on the light
-// squares; U+FE0E keeps the pawn from turning into an emoji)
-/** The table's position (a start's when it has none, or one that won't read). */
-const safeFen = (fen: unknown) => {
-  try {
-    return parseFen(typeof fen === "string" ? fen : START);
-  } catch {
-    return parseFen(START);
-  }
-};
-
-const GLYPH: Record<string, string> = {
-  K: "♚",
-  Q: "♛",
-  R: "♜",
-  B: "♝",
-  N: "♞",
-  P: "♟\uFE0E",
-  k: "♚",
-  q: "♛",
-  r: "♜",
-  b: "♝",
-  n: "♞",
-  p: "♟\uFE0E",
-};
-
-export function ChessPanel({ objectId }: { objectId: string }) {
-  const t = useTr();
-  const w = useWorld();
-  const props = useProps(objectId);
-  const [pick, setPick] = useState<number | null>(null);
-  const me = w?.myUid?.() ?? -1;
-  const pos = safeFen(props.fen);
-  const mine = props.w === me ? "w" : props.b === me ? "b" : null;
-  const flip = mine === "b";
-  const moves = mine === pos.turn && !props.over ? legalMoves(pos) : [];
-  const targets = pick === null ? [] : moves.filter((m) => m.from === pick).map((m) => m.to);
-  const last = (props.last as number[] | undefined) ?? [];
-  const end = props.over ? String(props.over) : outcome(pos);
-  const click = (s: number) => {
-    if (pick !== null && targets.includes(s)) {
-      w?.send("chess:move", { id: objectId, from: pick, to: s, promo: "q" });
-      setPick(null);
-    } else setPick(moves.some((m) => m.from === s) ? s : null);
-  };
-  const seat = (side: "w" | "b") => {
-    const uid = props[side];
-    const name = String(props[`${side}n`] ?? "");
-    return (
-      <button
-        type="button"
-        className="ghost-btn flex items-center justify-between gap-3"
-        onClick={() => w?.send("chess:sit", { id: objectId, side: uid === me ? null : side })}
-      >
-        <span>{side === "w" ? t("chessWhite") : t("chessBlack")}</span>
-        <span className="mono text-xs" style={{ color: "var(--muted)" }}>
-          {uid === me ? t("chessYou") : uid ? name : t("chessSit")}
-        </span>
-      </button>
-    );
-  };
-  return (
-    <Panel title={t("chessTitle")}>
-      <div className="p-4 grid gap-3">
-        <div className="grid grid-cols-2 gap-2">
-          {seat("w")}
-          {seat("b")}
-        </div>
-        <div
-          className="grid grid-cols-8 grid-rows-8 aspect-square w-full max-w-[420px] mx-auto rounded-md overflow-hidden"
-          style={{ border: "2px solid var(--edge-strong)" }}
-        >
-          {Array.from({ length: 64 }, (_, i) => {
-            const s = flip ? 63 - i : i;
-            const dark = (Math.floor(s / 8) + (s % 8)) % 2 === 1;
-            const c = pos.board[s];
-            const on = pick === s || last.includes(s);
-            return (
-              <button
-                key={s}
-                type="button"
-                aria-label={`${sqName(s)} ${c || ""}`}
-                onClick={() => click(s)}
-                className="grid place-items-center min-h-0 text-[min(5.5vw,38px)] leading-none relative"
-                style={{
-                  background: on ? "var(--amber-lo)" : dark ? "var(--walnut)" : "var(--paper)",
-                  color: c && c === c.toUpperCase() ? "var(--cream)" : "var(--ink)",
-                  WebkitTextStroke: c && c === c.toUpperCase() ? "1.2px var(--ink)" : undefined,
-                  paintOrder: "stroke fill",
-                }}
-              >
-                {c ? GLYPH[c] : ""}
-                {targets.includes(s) && (
-                  <span
-                    className="absolute w-3 h-3 rounded-full"
-                    style={{ background: "var(--amber)", opacity: 0.8 }}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex items-center justify-between text-sm">
-          <span>
-            {end === "mate"
-              ? t("chessMate")
-              : end === "play" || end === "check"
-                ? `${pos.turn === "w" ? t("chessWhite") : t("chessBlack")} ${t("chessToMove")}${end === "check" ? ` — ${t("chessCheck")}` : ""}`
-                : t("chessDraw")}
-          </span>
-          <button type="button" className="deck-btn" onClick={() => w?.send("chess:new", { id: objectId })}>
-            {t("chessNew")}
-          </button>
-        </div>
-      </div>
-    </Panel>
-  );
 }
 
 export function DartsPanel({ objectId }: { objectId: string }) {

@@ -61,6 +61,7 @@ import { FloorBake } from "../art/floors";
 import { piece, WALL_H } from "../art/furniture";
 import { INK } from "../art/items/kit";
 import { type LightSource, lightSources } from "../art/light";
+import { ChessMen3, isBoard } from "../furn/chessmen3d";
 import { animateLive } from "../furn/liveparts";
 import { celLit } from "../furn/look";
 import { isNative, isNativeDress, liveInto, nativeDressInto, nativeInto, openingInto } from "../furn/native";
@@ -98,6 +99,11 @@ function flagTexture(data: Uint8Array, rows: number): DataTexture {
 }
 // props that change nothing drawn (what plays, how loud)
 const QUIET_PROPS = new Set(["media", "radio", "volume", "playlists"]);
+// …and those of a kind (plan 70: a chess table's game — its men are drawn apart from the position,
+// furn/chessmen3d.ts, so a move never redraws the table's area)
+const QUIET_OF: Record<string, Set<string>> = {
+  chess_table: new Set(["fen", "last", "lastAt", "over", "w", "b", "wn", "bn"]),
+};
 
 export interface FadeGroup {
   x0: number;
@@ -438,6 +444,7 @@ export class World3 {
       this.areas.set(k, { sig: keep, built });
     }
     this.syncLive(objects);
+    this.syncChess(objects);
     for (const [k, had] of this.areas)
       if (!byArea.has(k)) {
         this.unmount(had.built);
@@ -1250,9 +1257,30 @@ export class World3 {
       }
     if (!this.liveRoot.parent && this.live.size) this.root.add(this.liveRoot);
   }
+  // ── the living men (plan 70): every chess table's men, where its game has them ─────────────────────
+  private chess: ChessMen3 | null = null;
+  private syncChess(objects: WorldObjectDef[]) {
+    if (!this.chess) {
+      if (!objects.some((o) => isBoard(o.kind))) return;
+      this.chess = new ChessMen3(this.materials.lit);
+      this.root.add(this.chess.root);
+    }
+    this.chess.sync(objects);
+  }
+  /** How many chessmen this floor draws (for tests). */
+  get chessmen(): number {
+    return this.chess?.drawn ?? 0;
+  }
+  /** This floor's living men (the chess chunk shows its marks on them, follows their moves). */
+  get chessMen(): ChessMen3 | null {
+    return this.chess;
+  }
+
   /** Move the live parts to time `t` (s): only those near `near` (world, this floor's frame) — the
    *  rest hold still — and at most LIVE_MAX of them a frame. */
   animateLive(t: number, near: { x: number; z: number }): void {
+    // (the living men: their moves, their endings, the focus breathing — plan 70)
+    this.chess?.frame(performance.now() / 1000);
     let n = 0;
     for (const { group } of this.live.values()) {
       const p = group.position;
@@ -1264,6 +1292,7 @@ export class World3 {
 
   dispose() {
     this.glassMat?.dispose();
+    this.chess?.dispose();
     for (const b of this.walls) this.unmount(b);
     for (const a of this.areas.values()) this.unmount(a.built);
     for (const t of this.tall.values()) this.unmount(t.built);
@@ -1378,7 +1407,7 @@ const bucket = (seed: number) => (Math.floor(seed * 12) + 0.5) / 12;
 // everything about a thing that changes how it's drawn
 function objectSig(o: WorldObjectDef): string {
   const p = Object.entries(o.props ?? {})
-    .filter(([k]) => !QUIET_PROPS.has(k))
+    .filter(([k]) => !QUIET_PROPS.has(k) && !QUIET_OF[o.kind]?.has(k))
     .sort(([a], [b]) => (a < b ? -1 : 1));
   return `${o.id}|${o.kind}|${o.x}|${o.y}|${o.rot ?? 0}|${JSON.stringify(p)}`;
 }

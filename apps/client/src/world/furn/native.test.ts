@@ -715,17 +715,27 @@ test("Christmas: on their footprints, lit and moving, named and dated", () => {
   );
 });
 
-// (plan 68's review) a chess table keeps only its latest position's model — a game's every move
-// would otherwise stay in memory — and a position that won't read draws the start, never throws
-test("a chess table's model: the latest position only, a bad one drawn as the start", () => {
-  const at = (fen: string) => ({ id: "cache-chess", kind: "chess_table", x: 0, y: 0, rot: 0, props: { fen } });
+// (plan 70 phase 1) the chess table's model is the table alone — its men are the living men, drawn
+// apart from the game (chessmen3d.ts) — so a move never builds it again; only its picture has men
+test("a chess table's model: the same whatever the game, its men only in its picture", () => {
+  const at = (props: Record<string, unknown>) => ({
+    id: "cache-chess",
+    kind: "chess_table",
+    x: 0,
+    y: 0,
+    rot: 0,
+    props,
+  });
   const a = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
   const b = "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2";
-  const first = modelOf(at(a));
-  assert.ok(modelOf(at(a)) === first, "the same position: the same model");
-  modelOf(at(b));
-  assert.ok(modelOf(at(a)) !== first, "the old position's model let go");
-  assert.doesNotThrow(() => modelOf(at("garbage")));
+  const table = modelOf(at({ fen: a }));
+  assert.ok(modelOf(at({ fen: b })) === table, "a move: the same model");
+  assert.ok(modelOf(at({ fen: "garbage" })) === table, "a bad position: the same model, never a throw");
+  const picture = modelOf(at({ _thumb: true }));
+  assert.ok(
+    picture.attributes.position.count > table.attributes.position.count + 32 * 300,
+    "the picture has the 32 men set out on it",
+  );
 });
 
 // (plan 68) the seats that move while sat in — the egg chair swivels, the rocking chair rocks, the

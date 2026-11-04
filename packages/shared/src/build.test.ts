@@ -3,11 +3,13 @@ import { test } from "node:test";
 import { canPlace, TEMPLATES } from "./build.ts";
 import { entry, placedFootprint, rotOf, variantOf, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
-import { DESK_PULL, Grid } from "./grid.ts";
+import { CHAIRS } from "./fam/gameroom.ts";
+import { chairAt, DESK_PULL, Grid, seatFront } from "./grid.ts";
 import { hungOn, wallSpan } from "./hang.ts";
 import { holdsItems, vWall } from "./map.ts";
 import { edgeBlocker } from "./map-edit.ts";
 import { studio } from "./maps/studio.ts";
+import { findPath } from "./path.ts";
 import { carried, hostOf, riders, splitAll, splitBuiltIns, surfaceAt, topAt, topCentre, topRect } from "./tops.ts";
 
 const desk = (x: number, y: number, rot = 0): WorldObjectDef => ({ id: "desk", kind: "desk", x, y, rot });
@@ -168,6 +170,37 @@ test("a chair at a desk pulls in to it, sat on; one with nothing before it stays
   // (turned away from the desk: not pulled)
   const back = Grid.from(studio, [d, { ...at, rot: 0 }], undefined, { dressing: false });
   assert.equal(back.seatAt(6.5, 7.5)?.pull, 0);
+});
+
+// (plan 70) the chess table's chairs face each other across the board, at every turn of the table:
+// each its own seat, sat in at the chair's middle, facing the board's middle; the table between them
+test("a chess table's two chairs: seats facing the board at every turn, sat in at their middles", () => {
+  for (let rot = 0; rot < 4; rot++) {
+    const t: WorldObjectDef = { id: "ch", kind: "chess_table", x: 6, y: 6, rot };
+    const g = Grid.from(studio, [t], undefined, { dressing: false });
+    const { w, h } = placedFootprint(t);
+    const mid = { x: 6 + w / 2, y: 6 + h / 2 };
+    const spots = CHAIRS.chess_table.map((c) => {
+      const at = chairAt(t, c);
+      const seat = g.seatAt(at.x, at.y);
+      assert.ok(seat && seat.kind === "chess_table" && seat.id === "ch", `rot ${rot}: a seat`);
+      const spot = g.seatSpot(at.x, at.y);
+      assert.ok(Math.hypot(spot.x - at.x, spot.y - at.y) < 1e-9, `rot ${rot}: sat in at its middle`);
+      // (facing the board's middle)
+      const [fx, fy] = seatFront(seat.rot);
+      const to = { x: mid.x - spot.x, y: mid.y - spot.y };
+      assert.ok((fx * to.x + fy * to.y) / Math.hypot(to.x, to.y) > 0.99, `rot ${rot}: facing the board`);
+      // (and walkable to: not in the table's box)
+      assert.ok(g.fits(spot.x, spot.y), `rot ${rot}: a body fits there`);
+      // (and a walk gets there: its tile stepped onto from beside the table)
+      assert.ok(
+        findPath(g, { x: mid.x + (spot.x - mid.x) * 2.2, y: mid.y + (spot.y - mid.y) * 2.2 }, spot),
+        `rot ${rot}: walked to`,
+      );
+      return spot;
+    });
+    assert.ok(Math.hypot(spots[0].x - spots[1].x, spots[0].y - spots[1].y) > 1.2, "the chairs at either end");
+  }
 });
 
 test("a sofa is three seats, walkable, facing the way it's turned", () => {

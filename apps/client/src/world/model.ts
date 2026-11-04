@@ -26,6 +26,8 @@ export type PuffKind = "drop" | "poof" | "spark" | "confetti" | "land" | "kick";
 
 export interface AvatarState {
   vortexMood?: string;
+  /** (plan 70) Vortex sat in a chair: its seat's top, m (he's drawn at a sitter's size, low over it) */
+  vortexSit?: number;
   name: string;
   avatar: AvatarLayers;
   x: number;

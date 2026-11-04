@@ -35,4 +35,4 @@ export const MAPS: Record<string, MapDef> = { studio };
 export function getMap(key: string): MapDef {
   return MAPS[key] ?? studio;
 }
-export { FAM_KINDS } from "./fam/index.ts";
+export { FAM_CHAIRS, FAM_COMMANDERS, FAM_KINDS } from "./fam/index.ts";

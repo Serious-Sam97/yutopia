@@ -26,6 +26,10 @@ const SOFT = new Set<string>([
   "candy_cane",
   "indoor_tree",
   "floor_vase",
+  // (plan 70: a chess table's chairs are seats, walked onto — only the table's solid; the life-size
+  // board's lanterns and the daises' rails stand on its border, walked past)
+  "chess_table",
+  "wizard_chess",
 ]);
 
 function solidsBounds(ss: Solid3[]): Bounds3 | null {

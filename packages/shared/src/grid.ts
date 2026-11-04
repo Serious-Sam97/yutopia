@@ -1,6 +1,8 @@
 import { parkedBody } from "./car/park.ts";
 import { entry, footprint, standHeight, type WorldObjectDef } from "./catalog.ts";
 import { dressItems } from "./dressing.ts";
+import { FAM_CHAIRS, FAM_SHAPES as SHAPES } from "./fam/index.ts";
+import type { Part } from "./fam/units.ts";
 import type { Point } from "./iso.ts";
 import { across, floorOf, objLevel, onLevel, STOREY } from "./levels.ts";
 import { liftDoorEdges, liftHere, liftWallEdges } from "./lift.ts";
@@ -63,6 +65,26 @@ export interface Seat {
   rot: number;
   kind: string;
   pull: number;
+}
+/** A chair of a kind whose seats face different ways (fam CHAIRS: the chess table's), placed: its
+ *  middle (tiles), the way it faces (a seat's rot) and its middle along that way from its tile's
+ *  middle (a seat's `pull`). */
+export function chairAt(
+  o: { x: number; y: number; rot?: number; kind: string },
+  c: { u: number; v: number; face: number },
+): { x: number; y: number; rot: number; pull: number } {
+  const e = entry(o.kind);
+  // (the kind's frame turned as the shapes turn it: shapes turnPoint)
+  let [X, Y, W, H] = [c.u, c.v, e.w, e.h];
+  for (let i = 0; i < ((o.rot ?? 0) & 3); i++) {
+    [X, Y] = [H - Y, X];
+    [W, H] = [H, W];
+  }
+  const x = o.x + X;
+  const y = o.y + Y;
+  const rot = (c.face + (o.rot ?? 0)) & 3;
+  const [fx, fy] = seatFront(rot);
+  return { x, y, rot, pull: (x - Math.floor(x) - 0.5) * fx + (y - Math.floor(y) - 0.5) * fy };
 }
 /** How far a chair at a desk (and whoever's on it) comes in to it, tiles: the knees under its top,
  *  still on the chair's own tile (docs/plan/62-the-touch.md, phase 2). */
@@ -176,6 +198,16 @@ export class Grid {
         for (let dy = 0; dy < h; dy++)
           for (let dx = 0; dx < w; dx++)
             g.seats.set(g.idx(o.x + dx, o.y + dy), { id: o.id, rot: o.rot ?? 0, kind: o.kind, pull: 0 });
+      // (plan 70: a chess table's chairs, each on its own tile facing the board, sat in at its middle)
+      for (const c of FAM_CHAIRS[o.kind] ?? []) {
+        const at = chairAt(o, c);
+        g.seats.set(g.idx(Math.floor(at.x), Math.floor(at.y)), {
+          id: o.id,
+          rot: at.rot,
+          kind: o.kind,
+          pull: at.pull,
+        });
+      }
       if (isDoorKind(o.kind)) {
         const locked =
           doorLockable(o.kind) && o.props?.state === "locked" && (as?.uid == null || doorOwner(map, o) !== as.uid);
@@ -197,6 +229,27 @@ export class Grid {
         continue;
       }
       if (!e.solid || e.wall) continue;
+      // (plan 70: a kind with chairs in its footprint — the chess table — isn't its tiles but its body,
+      // its first shape, so its chairs' tiles are walked onto; the physics has the same box)
+      if (FAM_CHAIRS[o.kind]) {
+        const [body] = (SHAPES as Record<string, { parts: Part[] }>)[o.kind]?.parts ?? [];
+        if (body?.t === "box") {
+          const a = chairAt(o, { u: body.u0, v: body.v0, face: 0 });
+          const c = chairAt(o, { u: body.u1, v: body.v1, face: 0 });
+          // (5 cm in all round for walking only: a chair's tile is walked onto through its middle, a
+          // body's width from the table's edge — the physics has the table's true box)
+          g.addBox({
+            x: (a.x + c.x) / 2,
+            y: (a.y + c.y) / 2,
+            hx: Math.abs(c.x - a.x) / 2 - 0.05,
+            hy: Math.abs(c.y - a.y) / 2 - 0.05,
+            a: 0,
+            base: 0,
+            top: body.y1,
+          });
+          continue;
+        }
+      }
       const stand = standHeight(o.kind);
       for (let dy = 0; dy < h; dy++)
         for (let dx = 0; dx < w; dx++) g.block(o.x + dx, o.y + dy, stand === undefined ? undefined : stand / ZPX_TILE);

@@ -964,6 +964,7 @@ export class WorldController {
     this.build?.dispose();
     this.slots?.dispose();
     this.tables?.dispose();
+    this.chess?.dispose();
     this.games?.dispose();
     this.screens?.dispose();
     this.os?.dispose();
@@ -1316,6 +1317,48 @@ export class WorldController {
   }
 
   // ── the game tables (pool, ping-pong): their own chunk (world/tables), loaded once one is here ──
+  // ── chess at the table (plan 70): its own chunk (world/chess), loaded once a floor has a board ──
+  chess: import("./chess").ChessPlay | null = null;
+  private chessLoading: Promise<void> | null = null;
+  private chessChanged() {
+    if (this.chess) return this.chess.refresh();
+    if (
+      this.chessLoading ||
+      !this.model?.allObjects().some((o) => o.kind === "chess_table" || o.kind === "wizard_chess")
+    )
+      return;
+    this.chessLoading = import("./chess").then((m) => {
+      const model = this.model;
+      const room = this.room;
+      if (this.stopped || !model || !room) return;
+      this.chess = new m.ChessPlay({
+        model: {
+          getObject: (id) => model.getObject(id),
+          allObjects: () => model.allObjects(),
+          rayAt: (cx, cy) => model.rayAt(cx, cy),
+        },
+        room,
+        send: (type, msg) => this.send(type as never, msg as never),
+        me: () => this.me,
+        grid: () => this.grid,
+        walkTo: (p) => {
+          this.walkTo(p, undefined, true);
+        },
+        men: () => this.tp?.world?.chessMen ?? null,
+        physics: () => this.tp?.physicsSpace() ?? null,
+        stand: (x, y) => {
+          if (this.grid.ok(Math.floor(x), Math.floor(y))) {
+            this.me.x = x;
+            this.me.y = y;
+          }
+        },
+        openPanel: (kind, id) => this.onOpenPanel(kind, id),
+        closePanel: (kind) => {
+          if (hud.get().panel.kind === kind) hud.set({ panel: { kind: null } });
+        },
+      });
+    });
+  }
   tables: GameTables | null = null;
   private tablesLoading: Promise<void> | null = null;
   private tableVortexes = new Set<string>();
@@ -1388,6 +1431,7 @@ export class WorldController {
       this.build?.checkPending();
       this.slotsChanged();
       this.tablesChanged();
+      this.chessChanged();
       this.gamesChanged();
       this.screensChanged();
       hud.set((h) => ({ objectsVersion: h.objectsVersion + 1 }));
@@ -1410,6 +1454,7 @@ export class WorldController {
     if (this.tp) this.tp.earshot = hud.get().media.mic && open && hud.get().me?.status !== "dnd" ? HEAR_RADIUS : 0;
     this.isolated("slots", () => this.slots?.frame(dt, this.me));
     this.isolated("tables", () => this.tables?.frame(dt, this.me));
+    this.isolated("chess", () => this.chess?.frame());
     this.isolated("games", () => this.games?.frame(dt, this.me));
     this.isolated("media", () => this.screens?.frame(dt, this.me));
     this.computersChanged();
@@ -1606,7 +1651,15 @@ export class WorldController {
     });
     // Vortexes at the game tables (a Vortex for every game)
     const tv = new Set<string>();
-    for (const v of this.tables?.vortexes() ?? []) {
+    // (and sat in the chess tables' empty chairs, plan 70)
+    for (const v of [...(this.tables?.vortexes() ?? []), ...(this.chess?.vortexes() ?? [])] as {
+      key: string;
+      x: number;
+      y: number;
+      angle: number;
+      mood: string;
+      sit?: number;
+    }[]) {
       const id = `npc:${v.key}`;
       tv.add(id);
       const st = {
@@ -1619,6 +1672,7 @@ export class WorldController {
         }),
         x: v.x,
         y: v.y,
+        ...(v.sit !== undefined ? { vortexSit: v.sit } : {}),
       };
       model.upsertAvatar(id, st);
       if (tp) bodies.push({ ...st, id, reduced, level: this.level });
@@ -1697,6 +1751,7 @@ export class WorldController {
         this.god?.camera(this.godDt(now)) ??
         this.cars?.camera() ??
         this.photoCam() ??
+        this.chess?.gameCam() ??
         this.tables?.gameCam() ??
         this.liftCam(now) ??
         null;
@@ -2655,6 +2710,15 @@ export class WorldController {
         this.send("item:take", { id });
         toast(tr(msg));
       }, ms);
+      return;
+    }
+    // a chess table (plan 70): to a free chair and sat in it, playing on the board itself — or watching
+    if (e.interact === "chess") {
+      if (this.chess) this.chess.use(id);
+      else {
+        this.chessChanged();
+        void this.chessLoading?.then(() => this.chess?.use(id));
+      }
       return;
     }
     if (e.interact === "piano") {

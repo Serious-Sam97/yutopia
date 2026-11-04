@@ -94,16 +94,19 @@ test("game room: the playing surfaces where PLAY has them", () => {
     const fb = model("foosball", v);
     const F = PLAY.foosball;
     assert.ok(Math.abs(topAt(fb, 0.468, 1.1) - F.top) < 0.003, `foosball ${v}: its field`);
-    // the chess board: an empty square, a white rook on a1, a black king on e8
+    // the chess board: an empty square; in the world no men on it (plan 70: they're the living men,
+    // drawn apart: chessmen3d.ts), in its picture a white rook on a1, a black king on e8
     const ch = model("chess_table", v);
+    const pic = modelOf({ id: "t", kind: "chess_table", x: 0, y: 0, rot: 0, props: { variant: v, _thumb: true } });
     const C = PLAY.chess_table;
     const sq = (r: number, f: number) => [C.x0 + (r + 0.5) * C.sq + 0.004, C.z0 + (f + 0.5) * C.sq + 0.003] as const;
     assert.ok(
       Math.abs(topAt(ch, ...sq(3, 0)) - C.top) < 0.002,
       `chess ${v}: the board at ${topAt(ch, ...sq(3, 0)).toFixed(4)}`,
     );
-    assert.ok(topAt(ch, ...sq(0, 0)) > C.top + 0.04, `chess ${v}: a rook on a1`);
-    assert.ok(topAt(ch, ...sq(7, 4)) > C.top + 0.065, `chess ${v}: the king on e8`);
+    assert.ok(Math.abs(topAt(ch, ...sq(0, 0)) - C.top) < 0.002, `chess ${v}: no man on a1 in the world`);
+    assert.ok(topAt(pic, ...sq(0, 0)) > C.top + 0.04, `chess ${v}: a rook on a1 in its picture`);
+    assert.ok(topAt(pic, ...sq(7, 4)) > C.top + 0.065, `chess ${v}: the king on e8 in its picture`);
     for (const [x, z] of C.seats)
       assert.ok(Math.abs(topAt(ch, x, z, 0.6) - C.seat) < 0.03, `chess ${v}: a chair's seat at ${x}`);
     // the dartboard: its bull out from the wall at its height

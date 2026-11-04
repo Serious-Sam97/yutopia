@@ -1,3 +1,4 @@
+import { parseFen, START } from "@yutopia/shared/games68/chess";
 import { glyphDots } from "@yutopia/shared/glyphs";
 import {
   type BufferGeometry,
@@ -26,6 +27,7 @@ import {
   type V3,
 } from "../kit";
 import { P, shade } from "../palette";
+import { type ManKind, manInto, SETS } from "./chessmen";
 
 // Plan 68 phase 9 (docs/plan/68-more-furniture.md): Game room — the new kinds' models, in the kit's frame
 // (x across the footprint, z down it toward the room, y up, metres), Rich and cel; their catalog
@@ -39,6 +41,8 @@ export const LOOKS: Record<string, readonly string[]> = {
   foosball: ["Walnut classic", "Pro black", "Retro red"],
   dartboard: ["Bristle board", "Oak cabinet", "Pub board"],
   chess_table: ["Walnut and maple", "Park stone", "Black lacquer"],
+  // (plan 70 phase 9: the men by the same sets — wood, stone, obsidian)
+  wizard_chess: ["Walnut hall", "Castle stone", "Obsidian court"],
   pinball: ["Cosmic", "Pirate", "Seventies"],
   claw_machine: ["Candy pink", "Mint", "Neon night"],
   jukebox: ["Walnut classic", "Chrome diner", "Cherry red"],
@@ -69,6 +73,8 @@ export const PLAY = {
   dartboard: { x: 0.5, y: 1.73, r: 0.17, face: 0.152 },
   // the board: its top, its a1 corner and a square's size (files along z, ranks along x, white at
   // low x); the two chairs' seats (middle, top)
+  // (plan 70 phase 9) the life-size board: its top, its a1 corner, a square
+  wizard_chess: { top: 0.04, x0: 0.6, z0: 0.6, sq: 1.1 },
   chess_table: {
     top: 0.7245,
     x0: 0.74,
@@ -540,88 +546,75 @@ function dartboard(m: Model, o: Look) {
 }
 
 // ── the chess table (2×1, a chair each end) ───────────────────────────────────────────────────────
+/** A square's middle on the chess table's board, in its model's frame (x, z): `i` a8 first (rank 8 at
+ *  the black end, high x; files along z). */
+export function chessSquare(i: number): [number, number] {
+  const { x0, z0, sq } = PLAY.chess_table;
+  return [x0 + (7 - Math.floor(i / 8) + 0.5) * sq, z0 + ((i % 8) + 0.5) * sq];
+}
 /** (plan 68 phases 23–24) A game piece's look, its game with it: the chess table's position (64
- *  squares, a8 first: a piece's letter or ""), the dartboard's darts (m from the bull, y up). */
-export type GameLook = Look & { board?: string[]; darts?: [number, number][] };
-type Piece = "p" | "r" | "n" | "b" | "q" | "k";
-/** A Staunton piece turned in its wood, `s` its scale (the king 0.085 m tall), white or black. */
-function piece(m: Model, kind: Piece, x: number, y: number, z: number, c: number, face: number) {
-  const s = 1;
-  const at: V3 = [x, y, z];
-  const L = (pts: [number, number][]) =>
-    lathe(
-      pts.map(([r, h]) => [r * s, h * s] as [number, number]),
-      6,
-    );
-  const base: [number, number][] = [
-    [0.019, 0],
-    [0.019, 0.006],
-    [0.015, 0.01],
-  ];
-  if (kind === "p") {
-    m.add(
-      L([
-        [0.016, 0],
-        [0.016, 0.005],
-        [0.012, 0.009],
-        [0.007, 0.026],
-        [0.011, 0.029],
-        [0.006, 0.031],
-        [0, 0.031],
-      ]),
-      c,
-      { at },
-    );
-    m.add(ball(0.0095, 6), c, { at: [x, y + 0.038, z] });
-  } else if (kind === "r") {
-    m.add(L([...base, [0.012, 0.032], [0.016, 0.036], [0.016, 0.05], [0.012, 0.05], [0.012, 0.046], [0, 0.046]]), c, {
-      at,
-    });
-    for (let i = 0; i < 4; i++)
-      m.add(box([0.007, 0.007, 0.007]), c, {
-        at: [x + Math.cos(i * 1.57 + 0.78) * 0.012, y + 0.052, z + Math.sin(i * 1.57 + 0.78) * 0.012],
-      });
-  } else if (kind === "n") {
-    m.add(L([...base, [0.013, 0.016], [0, 0.016]]), c, { at });
-    const head = extrude(
-      [
-        [-0.012, 0],
-        [0.014, 0],
-        [0.012, 0.016],
-        [0.02, 0.026],
-        [0.018, 0.034],
-        [0.006, 0.046],
-        [0.002, 0.052],
-        [-0.004, 0.046],
-        [-0.014, 0.03],
-      ],
-      0.013,
-      0.002,
-    );
-    m.add(head, c, { at: [x, y + 0.014, z], rot: [0, face, 0] });
-  } else if (kind === "b") {
-    m.add(L([...base, [0.009, 0.034], [0.013, 0.037], [0.008, 0.04], [0, 0.04]]), c, { at });
-    m.add(ball(0.011, 6), c, { at: [x, y + 0.05, z], scale: [1, 1.35, 1] });
-    m.add(ball(0.004, 4), c, { at: [x, y + 0.066, z] });
-  } else {
-    const tall = kind === "k";
-    m.add(
-      L([
-        ...base,
-        [0.01, 0.045],
-        [0.016, 0.05],
-        [0.009, 0.054],
-        [0.013, tall ? 0.068 : 0.064],
-        [0.007, tall ? 0.072 : 0.066],
-        [0, tall ? 0.072 : 0.066],
-      ]),
-      c,
-      { at },
-    );
-    if (tall) {
-      m.add(box([0.004, 0.016, 0.004]), c, { at: [x, y + 0.08, z] });
-      m.add(box([0.012, 0.004, 0.004]), c, { at: [x, y + 0.082, z], rot: [0, face, 0] });
-    } else m.add(ball(0.006, 6), c, { at: [x, y + 0.071, z] });
+ *  squares, a8 first: a piece's letter or ""), the dartboard's darts (m from the bull, y up). Plan 70:
+ *  the table draws its men only for its picture (`men`, the start); in the world they're the living
+ *  men (world/furn/chessmen3d.ts), drawn from the room's game. */
+export type GameLook = Look & { board?: string[]; darts?: [number, number][]; men?: boolean };
+/** (plan 70 phase 9) A life-size chess board laid on the floor, 10×10: a slab with its border, the
+ *  squares inlaid (1.1 m) inside a brass line, a lantern on a post at each corner, a commander's dais
+ *  at each end (two steps, a rail before it). The men are the living men (chessmen3d.ts). */
+function wizardBoard(m: Model, o: Look) {
+  const v = o.look;
+  const { x0, z0, sq, top } = PLAY.wizard_chess;
+  const light = [0xd9b98a, 0xd8d2c4, 0xe6e2da][v] ?? 0xd8d2c4;
+  const dark = [0x4a2c1b, 0x3e4043, 0x1c1a1f][v] ?? 0x3e4043;
+  const rim = [0x5a3a22, 0x8f9093, 0x2a2628][v] ?? 0x8f9093;
+  const trim = [P.brass, 0xb8a97a, P.brass][v] ?? P.brass;
+  // the slab, its edge chamfered
+  m.add(box([10, top, 10], 0.012), rim, { at: [5, top / 2, 5] });
+  // the squares (a1 dark, at low x and low z), a hair over the slab
+  const span = 8 * sq;
+  m.add(box([span + 0.08, 0.004, span + 0.08]), trim, { at: [x0 + span / 2, top + 0.001, z0 + span / 2] });
+  m.add(box([span, 0.006, span]), dark, { at: [x0 + span / 2, top + 0.002, z0 + span / 2] });
+  const lit: V3[][] = [];
+  for (let r = 0; r < 8; r++)
+    for (let f = 0; f < 8; f++)
+      if ((r + f) % 2 === 1) {
+        const [a, b] = [x0 + r * sq, z0 + f * sq];
+        const y = top + 0.0055;
+        lit.push([
+          [a, y, b],
+          [a + sq, y, b],
+          [a + sq, y, b + sq],
+          [a, y, b + sq],
+        ]);
+      }
+  m.add(quads(lit), light);
+  // the lanterns at the corners: a post, a cage, the flame glowing
+  for (const [x, z] of [
+    [0.3, 0.3],
+    [9.7, 0.3],
+    [0.3, 9.7],
+    [9.7, 9.7],
+  ]) {
+    m.add(cyl(0.09, 0.07, 1.5, 8), rim, { at: [x, top, z], tone: 0.85 });
+    m.add(box([0.26, 0.04, 0.26], 0.01), trim, { at: [x, top + 1.52, z] });
+    for (const [dx, dz] of [
+      [-0.1, -0.1],
+      [0.1, -0.1],
+      [-0.1, 0.1],
+      [0.1, 0.1],
+    ])
+      m.add(box([0.02, 0.3, 0.02]), trim, { at: [x + dx, top + 1.69, z + dz] });
+    m.add(box([0.16, 0.24, 0.16]), 0xffcf7a, { at: [x, top + 1.69, z], glow: true });
+    m.add(cyl(0.16, 0.02, 0.14, 4), trim, { at: [x, top + 1.84, z], rot: [0, Math.PI / 4, 0] });
+  }
+  // the commanders' daises at each end: two steps, a rail before
+  for (const [x, dir] of [
+    [0.3, 1],
+    [9.7, -1],
+  ] as const) {
+    m.add(box([0.5, 0.08, 1.6], 0.01), rim, { at: [x, top + 0.04, 5], tone: 1.08 });
+    m.add(box([0.36, 0.08, 1.3], 0.01), rim, { at: [x - dir * 0.04, top + 0.12, 5], tone: 1.15 });
+    for (const dz of [-0.6, 0.6]) m.add(cyl(0.025, 0.025, 0.95, 6), trim, { at: [x + dir * 0.2, top + 0.16, 5 + dz] });
+    m.add(rod(0.025, 0.025, 1.24, "z"), trim, { at: [x + dir * 0.2, top + 1.1, 5] });
   }
 }
 
@@ -752,35 +745,18 @@ function chessTable(m: Model, o: Look) {
         ]);
       }
   m.add(quads(lit), light);
-  // the men
-  const white = [0xeadcc0, 0xf0ece4, 0xe9d2a8][v] ?? 0xeadcc0;
-  const black = [0x2b211c, 0x26272a, 0x8a1e22][v] ?? 0x2b211c;
-  const BACK: Piece[] = ["r", "n", "b", "q", "k", "b", "n", "r"];
-  const at = (r: number, f: number): [number, number] => [x0 + (r + 0.5) * sq, z0 + (f + 0.5) * sq];
-  const begun = o.seed > 0.5;
-  const board = (o as GameLook).board;
-  // (a game on it: its position, a8 first — rank 8 is the black end, at high x — plan 68 phase 24)
-  if (board)
+  // the men (plan 70): the living men, at rest where the game has them — baked in only for the picture
+  // (the Furnish panel's); in the world they're drawn apart (chessmen3d.ts), the table never with them
+  const g = o as GameLook;
+  if (g.men) {
+    const set = SETS[v] ?? SETS[0];
+    const board = g.board ?? parseFen(START).board;
     board.forEach((c, i) => {
       if (!c) return;
-      const [x, z] = at(7 - Math.floor(i / 8), i % 8);
+      const [x, z] = chessSquare(i);
       const w = c === c.toUpperCase();
-      piece(m, c.toLowerCase() as Piece, x, TT + 0.003, z, w ? white : black, w ? 0 : Math.PI);
+      manInto(m, c.toLowerCase() as ManKind, w ? "w" : "b", set, [x, TT + 0.003, z], w ? Math.PI / 2 : -Math.PI / 2);
     });
-  for (let f = 0; f < 8 && !board; f++) {
-    for (const [r, k, c, face] of [
-      [0, BACK[f], white, 0],
-      [7, BACK[f], black, Math.PI],
-    ] as const) {
-      const [x, z] = at(r, f);
-      piece(m, k, x, TT + 0.003, z, c, face);
-    }
-    const pw = begun && f === 4 ? 3 : 1;
-    const pb = begun && f === 4 ? 4 : 6;
-    const [wx, wz] = at(pw, f);
-    const [bx, bz] = at(pb, f);
-    piece(m, "p", wx, TT + 0.003, wz, white, 0);
-    piece(m, "p", bx, TT + 0.003, bz, black, Math.PI);
   }
   // (story) the clock on the near side, its two faces and buttons
   if (o.seed > 0.3) {
@@ -1657,6 +1633,7 @@ export const DRAW: Record<string, (m: Model, o: Look) => void> = {
   foosball,
   dartboard,
   chess_table: chessTable,
+  wizard_chess: wizardBoard,
   pinball,
   claw_machine: clawMachine,
   jukebox,

@@ -127,7 +127,27 @@ const WEATHER_SAVE_MS = 3 * 60_000; // the weather saved this often (and after a
 // a knock on a room's door: how near its walls (m)
 const KNOCK_REACH = 3;
 /** The small games' state on their pieces (plan 68: features/games68.ts) — only the games set it. */
-const GAME_KEYS = ["fen", "w", "wn", "b", "bn", "over", "last", "darts", "turn", "best", "won"];
+// (plan 70: the chess game's time of its last move, a draw offered, who gave up, Vortex's side and level)
+const GAME_KEYS = [
+  "fen",
+  "w",
+  "wn",
+  "b",
+  "bn",
+  "over",
+  "last",
+  "lastAt",
+  "offer",
+  "loser",
+  "vx",
+  "vxSide",
+  "log",
+  "si",
+  "darts",
+  "turn",
+  "best",
+  "won",
+];
 
 // A spot in the building: a floor (shared levels.ts) and where on it.
 export interface Spot {

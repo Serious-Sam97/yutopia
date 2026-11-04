@@ -59,6 +59,10 @@ export const FAM_SHAPES = {
   ...outdoors.SHAPES,
   ...seasons.SHAPES,
 };
+/** The kinds whose seats face different ways (plan 70: the chess table's chairs): fam/gameroom.ts CHAIRS. */
+export const FAM_CHAIRS = gameroom.CHAIRS;
+/** The boards whose players stand at their ends (plan 70: the life-size board): fam/gameroom.ts. */
+export const FAM_COMMANDERS = gameroom.COMMANDERS;
 export const FAM_SEATS = {
   ...seating2.SEATS,
   ...tables2.SEATS,

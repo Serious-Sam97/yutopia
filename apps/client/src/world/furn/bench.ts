@@ -615,7 +615,7 @@ export async function runThumb(
         kind: o.kind,
         x: 0,
         y: 0,
-        props: { variant: o.variant ?? 0, ...(o.d ? { d: o.d, seed: 0.37 } : {}) },
+        props: { _thumb: true, variant: o.variant ?? 0, ...(o.d ? { d: o.d, seed: 0.37 } : {}) },
       })
     : heroModel(o.hero, o.tier);
   const mesh = new T.Mesh(geo, material(o.look));

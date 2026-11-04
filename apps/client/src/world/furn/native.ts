@@ -9,7 +9,6 @@ import {
   variantOf,
   type WorldObjectDef,
 } from "@yutopia/shared";
-import { parseFen } from "@yutopia/shared/games68/chess";
 import { cleanText } from "@yutopia/shared/glyphs";
 import { frameOf } from "@yutopia/shared/shapes";
 import { slotTrackOf } from "@yutopia/shared/slotcar";
@@ -445,19 +444,15 @@ const KINDS: Record<string, Kind> = {
       return m.geometry();
     },
   },
-  // plan 68 phases 23–24: the chess table with its game, the dartboard with its darts (the room's)
+  // plan 68 phases 23–24: the chess table, the dartboard with its darts (the room's). Plan 70: the table
+  // without its men — they're the living men, drawn apart from the room's game (chessmen3d.ts), so a
+  // move never redraws the table; only its picture has them, set out to start
   chess_table: {
     signed: true,
-    look: (o) => `${JSON.stringify(lookOf(o))}|${String(o.props?.fen ?? "")}`,
+    look: (o) => `${JSON.stringify(lookOf(o))}${o.props?._thumb ? "|men" : ""}`,
     make: (o) => {
       const m = new Model(2);
-      let board: string[] | null = null;
-      try {
-        if (typeof o.props?.fen === "string") board = parseFen(o.props.fen).board;
-      } catch {
-        // (a position that won't read: the pieces as they start)
-      }
-      FAM_DRAW.chess_table(m, { ...lookOf(o), ...(board ? { board } : {}) } as Look);
+      FAM_DRAW.chess_table(m, { ...lookOf(o), men: !!o.props?._thumb } as Look);
       return m.geometry();
     },
   },
@@ -520,9 +515,9 @@ export function isNative(kind: string): boolean {
 }
 
 const cache = new Map<string, BufferGeometry>();
-// (the kinds drawn by their state — a chess game, the darts in a board, today's page — keep only each
+// (the kinds drawn by their state — the darts in a board, today's page — keep only each
 // one's latest model: a game's every move would otherwise stay in memory)
-const STATEFUL = new Set(["chess_table", "dartboard", "wall_calendar", "advent_calendar"]);
+const STATEFUL = new Set(["dartboard", "wall_calendar", "advent_calendar"]);
 const stateKey = new Map<string, string>();
 /** The model of a placed thing (built once a look). */
 export function modelOf(o: WorldObjectDef): BufferGeometry {
@@ -568,6 +563,14 @@ export function seatMotion(o: WorldObjectDef, t: number): { pivot: Vector3; axis
     .applyEuler(new Euler(part.rot[0], part.rot[1], part.rot[2], "YXZ"))
     .transformDirection(place);
   return { pivot: new Vector3(...part.at).applyMatrix4(place), axis, angle: liveAt(part.anim, t).turn[1] };
+}
+
+/** Where a placed thing's model goes in the floor's frame (tiles, m up): turned by its frame, pulled
+ *  — as `into` turns it into the world's buffers and `liveInto` places its live parts. */
+export function placeOf(o: WorldObjectDef): Matrix4 {
+  const f = frameOf(o);
+  const [tx, tz] = frameTurn(f)(0, Number(o.props?.pull) || 0, false);
+  return new Matrix4().makeRotationY(-(f.rot & 3) * (Math.PI / 2)).setPosition(f.x + tx, f.lift, f.y + tz);
 }
 
 /** A placed thing's live parts (plan 68: a lava lamp's blobs, a fire's flames) as a group, placed

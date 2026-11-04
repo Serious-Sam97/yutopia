@@ -222,6 +222,13 @@ export interface ClientMessages {
   "chess:move": { id: string; from: number; to: number; promo?: string };
   "chess:sit": { id: string; side: "w" | "b" | null };
   "chess:new": { id: string };
+  // (plan 70) giving up; a draw offered (true) or taken back (false), agreed when both offer; Vortex to
+  // play the other side at a level (null: he goes)
+  "chess:resign": { id: string };
+  "chess:draw": { id: string; offer: boolean };
+  "chess:vortex": { id: string; level: string | null };
+  // (plan 70 phase 9) standing in for the man on a square of a life-size board (null: stepping out)
+  "chess:standin": { id: string; sq: number | null };
   "darts:throw": { id: string; x: number; y: number };
   "claw:drop": { id: string; x: number; z: number };
   "tg:join": { id: string };

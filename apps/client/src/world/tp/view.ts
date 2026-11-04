@@ -1227,6 +1227,9 @@ void main() {
     showMe?: boolean;
     fov?: number;
     snap?: boolean;
+    /** tiles: people this near the lens hidden (2.7 unless said: a chess board's camera is a few
+     *  centimetres over its men, the players beside it — plan 70) */
+    lens?: number;
   } | null = null;
   private gcEye = new Vector3();
   private gcLook = new Vector3();
@@ -2407,6 +2410,11 @@ void main() {
   private physics: BrowserPhysics | null = null;
   /** (plan 58 5d) the world's physics for a ragdoll; someone's limp this frame; mine is */
   private readonly ragSpace = () => this.physics?.ragdollSpace() ?? null;
+  /** (plan 70 phase 9) The physics world and my floor's origin in it (a life-size board's men are
+   *  kinematic boxes in it), or null before it's up. */
+  physicsSpace() {
+    return this.ragSpace();
+  }
   private limpNow = false;
   private meLimp = false;
   /** (plan 61) what's worn swinging on Jolt — me and the nearest few: its own chunk, once the physics is in */
@@ -3369,7 +3377,7 @@ void main() {
       this.gameCam !== null &&
       !(this.gameCam.showMe && b.id === this.meId) &&
       this.gcMix > 0.5 &&
-      Math.hypot(b.x - this.camera.position.x, b.y - this.camera.position.z) < 2.7
+      Math.hypot(b.x - this.camera.position.x, b.y - this.camera.position.z) < (this.gameCam.lens ?? 2.7)
     );
   }
 

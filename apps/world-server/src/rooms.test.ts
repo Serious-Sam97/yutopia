@@ -517,6 +517,9 @@ test("the small games: chess moves by the rules, darts score, the claw drops, ai
   assert.equal(props("g-chess").fen, undefined, "nothing moved yet");
   a.room.send("chess:move", { id: "g-chess", from: 52, to: 36 }); // e2–e4
   await waitFor(() => String(props("g-chess").fen ?? "").startsWith("rnbqkbnr/pppppppp/8/8/4P3/"));
+  // (plan 70: the move's time, for the men to play it out from)
+  assert.ok(Math.abs(Date.now() - Number(props("g-chess").lastAt)) < 5000, "the move's time kept");
+  assert.equal(props("g-chess").log, "e2e4", "the game's moves logged");
   // (a builder moving the table can't set its game: the position and the seats stay the game's)
   {
     const o = a.room.state.objects.get("g-chess");
@@ -584,6 +587,124 @@ test("the small games: chess moves by the rules, darts score, the claw drops, ai
   await walk(a, { x: 30.5, y: 27.5 });
   b.room.send("chess:sit", { id: "g-chess", side: "w" });
   await waitFor(() => props("g-chess").w === 52);
+});
+
+// plan 70 (docs/plan/70-the-chess.md): a draw offered, taken back, offered again and agreed; a new game;
+// a side resigning; neither from someone not playing
+test("chess: a draw offered and agreed, a resignation, only by the players", async () => {
+  const s = ++space;
+  const a = await person(53, s, "member,builder");
+  const b = await person(54, s, "member,builder");
+  const c = await person(55, s, "member");
+  await sleep(600);
+  await walk(a, { x: 18.5, y: 27.5 });
+  await walk(b, { x: 19.5, y: 27.5 });
+  await walk(c, { x: 19.5, y: 28.5 });
+  const { map } = liveWorld(a);
+  const inside = (sx: number, sy: number) => !!areaAt(map, sx + 0.5, sy + 0.5);
+  const at = spotFor(a, "chess_table", 18, 28, 4, inside);
+  assert.ok(at, "somewhere for the table");
+  a.room.send("obj:put", { id: "d-chess", kind: "chess_table", ...at, rot: 0 });
+  await waitFor(() => !!a.room.state.objects.get("d-chess"));
+  const props = () => JSON.parse(a.room.state.objects.get("d-chess").props || "{}");
+  a.room.send("chess:sit", { id: "d-chess", side: "w" });
+  b.room.send("chess:sit", { id: "d-chess", side: "b" });
+  await waitFor(() => props().w === 53 && props().b === 54);
+  a.room.send("chess:move", { id: "d-chess", from: 52, to: 36 }); // e2–e4
+  await waitFor(() => !!props().lastAt);
+  // a draw: offered by white, taken back, offered again; someone watching can't agree to it
+  a.room.send("chess:draw", { id: "d-chess", offer: true });
+  await waitFor(() => props().offer === "w");
+  a.room.send("chess:draw", { id: "d-chess", offer: false });
+  await waitFor(() => props().offer === undefined);
+  a.room.send("chess:draw", { id: "d-chess", offer: true });
+  await waitFor(() => props().offer === "w");
+  c.room.send("chess:draw", { id: "d-chess", offer: true });
+  c.room.send("chess:resign", { id: "d-chess" });
+  await sleep(300);
+  assert.equal(props().over, undefined, "a watcher can't end it");
+  b.room.send("chess:draw", { id: "d-chess", offer: true });
+  await waitFor(() => props().over === "agreed");
+  // a new game, and a resignation
+  a.room.send("chess:new", { id: "d-chess" });
+  await waitFor(() => props().over === undefined && !props().lastAt);
+  b.room.send("chess:resign", { id: "d-chess" });
+  await waitFor(() => props().over === "resign");
+  assert.equal(props().loser, "b");
+  // (over: no more moves)
+  a.room.send("chess:move", { id: "d-chess", from: 52, to: 36 });
+  await sleep(300);
+  assert.equal(props().last, undefined, "no move after it's over");
+});
+
+// plan 70: Vortex asked to play the other side: he answers a move (after his look at the board), and
+// goes when his opponent gets up
+test("chess: Vortex plays the empty side and goes when his opponent does", async () => {
+  const s = ++space;
+  const a = await person(56, s, "member,builder");
+  await sleep(600);
+  await walk(a, { x: 18.5, y: 27.5 });
+  const { map } = liveWorld(a);
+  const inside = (sx: number, sy: number) => !!areaAt(map, sx + 0.5, sy + 0.5);
+  const at = spotFor(a, "chess_table", 18, 28, 4, inside);
+  assert.ok(at, "somewhere for the table");
+  a.room.send("obj:put", { id: "v-chess", kind: "chess_table", ...at, rot: 0 });
+  await waitFor(() => !!a.room.state.objects.get("v-chess"));
+  const props = () => JSON.parse(a.room.state.objects.get("v-chess").props || "{}");
+  a.room.send("chess:vortex", { id: "v-chess", level: "easy" });
+  await sleep(300);
+  assert.equal(props().vx, undefined, "only someone playing asks him");
+  a.room.send("chess:sit", { id: "v-chess", side: "w" });
+  await waitFor(() => props().w === 56);
+  a.room.send("chess:vortex", { id: "v-chess", level: "easy" });
+  await waitFor(() => props().vx === "easy" && props().vxSide === "b" && props().bn === "Vortex");
+  a.room.send("chess:move", { id: "v-chess", from: 52, to: 36 }); // e2–e4
+  await waitFor(() => String(props().log ?? "").split(" ").length === 2, 12_000);
+  const [, reply] = String(props().log).split(" ");
+  assert.match(reply, /^[a-h][78][a-h][56]$/, "black's first move, from his ranks");
+  // (up from the table: he goes too)
+  a.room.send("chess:sit", { id: "v-chess", side: null });
+  await waitFor(() => props().vx === undefined && props().bn === undefined);
+});
+
+// plan 70 phase 9: a life-size board — someone stands in for a man, is carried when it moves, and is
+// thrown down (hit) when it's taken; a commander can't stand in
+test("chess: a stand-in on a life-size board, carried and taken", async () => {
+  const s = ++space;
+  const a = await person(57, s, "member,builder");
+  const b = await person(58, s, "member,builder");
+  const c = await person(59, s, "member");
+  await sleep(600);
+  const { map } = liveWorld(a);
+  const inside = (sx: number, sy: number) => !!areaAt(map, sx + 0.5, sy + 0.5);
+  const at = spotFor(a, "wizard_chess", 18, 28, 14, inside);
+  assert.ok(at, "somewhere for the board");
+  a.room.send("obj:put", { id: "big-chess", kind: "wizard_chess", ...at, rot: 0 });
+  await waitFor(() => !!a.room.state.objects.get("big-chess"));
+  const props = () => JSON.parse(a.room.state.objects.get("big-chess").props || "{}");
+  for (const p of [a, b, c]) await walk(p, { x: at.x + 5, y: at.y + 5 });
+  a.room.send("chess:sit", { id: "big-chess", side: "w" });
+  b.room.send("chess:sit", { id: "big-chess", side: "b" });
+  await waitFor(() => props().w === 57 && props().b === 58);
+  a.room.send("chess:standin", { id: "big-chess", sq: 52 });
+  await sleep(300);
+  assert.equal(props().si, undefined, "a commander doesn't stand in");
+  c.room.send("chess:standin", { id: "big-chess", sq: 36 });
+  await sleep(300);
+  assert.equal(props().si, undefined, "nobody to stand in for on an empty square");
+  c.room.send("chess:standin", { id: "big-chess", sq: 52 });
+  await waitFor(() => props().si?.["52"] === 59);
+  // e2–e4 carries her; d7–d5, e4×d5 — then the queen takes her on d5: she's thrown
+  a.room.send("chess:move", { id: "big-chess", from: 52, to: 36 });
+  await waitFor(() => props().si?.["36"] === 59 && props().si?.["52"] === undefined);
+  b.room.send("chess:move", { id: "big-chess", from: 11, to: 27 });
+  await waitFor(() => String(props().log).split(" ").length === 2);
+  a.room.send("chess:move", { id: "big-chess", from: 36, to: 27 });
+  await waitFor(() => props().si?.["27"] === 59);
+  const hitBefore = Number(me(c).hitAt) || 0;
+  b.room.send("chess:move", { id: "big-chess", from: 3, to: 27 });
+  await waitFor(() => Object.keys(props().si ?? {}).length === 0);
+  assert.ok(Number(me(c).hitAt) > hitBefore, "thrown down by the blow");
 });
 
 test("moderation: admins mute, lock rooms and remove people; builders and members can't", async () => {

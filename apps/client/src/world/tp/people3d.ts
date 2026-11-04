@@ -129,6 +129,7 @@ export interface PersonIn {
   a: number; // 0 idle, 1 walk, 2 sit
   npc?: boolean; // Vortex
   vortexMood?: string;
+  vortexSit?: number; // (plan 70) sat in a chair: its seat's top, m
   pet?: PetView; // a pet (world/petview.ts): drawn as a model by the view, not here
   status?: string; // available / away / dnd…
   speaking?: boolean;
@@ -544,8 +545,17 @@ export class Person3 {
     this.plane.visible = this.shown;
     this.root.position.set(p.x, 0, p.y);
     this.plane.position.set(0, 0, 0);
-    this.pivot.scale.setScalar(1);
-    this.pivot.position.set(0, 0.12 + Math.sin(performance.now() / 420) * 0.05, 0);
+    // (sat at a chess table — plan 70: a sitter's size, low over the seat so his face is over the far
+    // rank, bobbing a little)
+    const sit = p.vortexSit;
+    this.pivot.scale.setScalar(sit === undefined ? 1 : 0.62);
+    this.pivot.position.set(
+      0,
+      sit === undefined
+        ? 0.12 + Math.sin(performance.now() / 420) * 0.05
+        : sit - 0.04 + Math.sin(performance.now() / 520) * 0.012,
+      0,
+    );
     this.pivot.rotation.set(-camPitch * lean, -face + Math.PI / 2, 0);
     (this.root.getObjectByName("shadow") as Mesh).visible = this.shown;
     this.mat.color.copy(tint);

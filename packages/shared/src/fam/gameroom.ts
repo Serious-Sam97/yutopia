@@ -49,6 +49,18 @@ export const CATALOG = {
     variants: 3,
     look: 0,
   },
+  // (plan 70 phase 9) a life-size board on the floor: two commanders send the men from the daises at
+  // its ends, and anyone can stand in for a man (squares 1.1 m; the men at a person's size)
+  wizard_chess: {
+    interact: "chess",
+    label: "Wizard's chess board",
+    w: 10,
+    h: 10,
+    solid: false,
+    buildable: true,
+    variants: 3,
+    look: 1,
+  },
   pinball: {
     label: "Pinball machine",
     w: 1,
@@ -123,12 +135,10 @@ export const SHAPES = {
     box(0.31, 0.84, 1.69, 1.16, 0.91, 0.95),
   ),
   dartboard: one(box(0.03, 0.1, 0.97, 0.47, 1.07, 2.08)),
-  // (the table, then a chair each end)
-  chess_table: one(
-    box(0.69, 0.09, 1.31, 0.91, 0, 0.72),
-    box(0.09, 0.28, 0.55, 0.72, 0, 0.88),
-    box(1.45, 0.28, 1.91, 0.72, 0, 0.88),
-  ),
+  // (the table; its chairs are seats, walked onto and sat on as every seat is — plan 70: CHAIRS)
+  chess_table: one(box(0.69, 0.09, 1.31, 0.91, 0, 0.72)),
+  // (walked on: the board a few centimetres up, the daises a step)
+  wizard_chess: one(box(0, 0, 10, 10, 0, 0.04), box(0.05, 4.2, 0.55, 5.8, 0, 0.16), box(9.45, 4.2, 9.95, 5.8, 0, 0.16)),
   pinball: one(box(0.13, 0.28, 0.87, 1.85, 0, 1.12), box(0.14, 0.27, 0.86, 0.55, 1.08, 1.97)),
   claw_machine: one(box(0.09, 0.1, 0.91, 0.96, 0, 1.98)),
   jukebox: one(box(0.08, 0.21, 0.92, 0.83, 0, 1.49)),
@@ -138,7 +148,28 @@ export const SHAPES = {
   // (the board, a bag fallen short in front of it)
   cornhole_board: one(box(0.19, 0.38, 0.81, 1.61, 0, 0.3), box(0.52, 1.64, 0.72, 1.84, 0, 0.04)),
 } satisfies Record<keyof typeof CATALOG, KindShape>;
-export const SEATS: Record<string, SeatSpec> = {};
+export const SEATS: Record<string, SeatSpec> = {
+  // (plan 70) the chess table's chairs, from the chair's middle (its CHAIRS spot) the way it faces
+  chess_table: { top: 0.46, front: 0.22, back: -0.2, lean: [0, 0.12] },
+};
+/** (plan 70, docs/plan/70-the-chess.md) The seats of a kind whose seats face different ways — the chess
+ *  table's two chairs, each facing the board: where each one's middle is in the kind's frame (m, as
+ *  its shapes), and the way it faces at the kind's rot 0 (grid.ts `seatFront`'s quarter: 3 is +x, 1
+ *  is −x). The chess table's first is white's, its second black's. */
+/** (plan 70 phase 9) Where a board's commanders stand (its frame, m) and the way they face at rot 0:
+ *  white's first. Standing there takes the side, as sitting in a chess table's chair does. */
+export const COMMANDERS: Record<string, { u: number; v: number; face: number }[]> = {
+  wizard_chess: [
+    { u: 0.3, v: 5, face: 3 },
+    { u: 9.7, v: 5, face: 1 },
+  ],
+};
+export const CHAIRS: Record<string, { u: number; v: number; face: number }[]> = {
+  chess_table: [
+    { u: 0.34, v: 0.5, face: 3 },
+    { u: 1.66, v: 0.5, face: 1 },
+  ],
+};
 export const SURFACES: Record<string, number> = { card_table: 0.74 };
 export const STANDS: Record<string, number> = { air_hockey: 0.865, foosball: 0.91 };
 // (the dartboard: across its open cabinet's doors, from the pub board's slate to the cabinet's top)
