@@ -6,7 +6,6 @@ import {
   anchoredAt,
   BUILDINGS,
   CHUNK,
-  GROUNDS,
   groundsThings,
   LAMPS,
   SNOW_POLES,
@@ -15,6 +14,10 @@ import {
   treesIn,
   WAYS,
 } from "./grounds.ts";
+import { townBounds } from "./land.ts";
+
+// (the land's box: land.ts, docs/plan/69)
+const GROUNDS = townBounds(); // (today's town: the long road's land is its own tests')
 
 // God mode's keys and anchors (docs/plan/53-the-god-mode.md, phase 1): every generated thing on
 // the Grounds a key of its own, and what other features hang on anchored.

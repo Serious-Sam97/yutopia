@@ -444,6 +444,7 @@ export interface ClientMessages {
   // my car stuck (stopped): pulled out to the nearest clear spot (features/cars.ts; shared freeSpot)
   "car:unstick": Record<string, never>;
   "mod:shuttle": Record<string, never>; // an admin: the shuttle to the headquarters' stop
+  "mod:bus": Record<string, never>; // an admin: the long road's bus to the town's stop (docs/plan/69)
   "mod:cars": Record<string, never>; // an admin: every car back in its bay in the lot
   "phone:shot": Record<string, never>;
   "phone:pose": { pose: string }; // a pose for the photo (shared PHOTO_POSES)

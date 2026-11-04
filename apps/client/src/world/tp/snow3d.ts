@@ -54,6 +54,8 @@ export interface Station {
   nx: number;
   nz: number;
   k: number;
+  /** not this one's to draw (another part of the Grounds draws it: docs/plan/69 L2), its shape kept */
+  away?: boolean;
 }
 
 /** A ridge of snow along stations: its cross-section `prof` ([out from the line, up]), the
@@ -67,15 +69,23 @@ export function ridge(g: G, st: Station[], prof: [number, number][], yAt: YAt, k
     // (well under: the land's drawn between its vertices, lower than its height in places)
     (p) => p[1] - (yAt(p[0], p[2]) - 0.5),
   );
-  const P = st.map((s) =>
-    prof.map(([o, h]): V => {
-      const x = s.x + s.nx * o;
-      const z = s.z + s.nz * o;
-      return [x, yAt(x, z) - 0.06 + Math.max(h * s.k, -0.1), z];
-    }),
+  // (only the stations by a stretch that's drawn: the ground's height is the generator's, dear — a
+  // long way skipped nearly all along, a district's, read it all for nothing: docs/plan/69 L2)
+  const mine = (i: number) => st[i].k > 0 && !st[i].away;
+  const drawn = (i: number) => mine(i) || (i > 0 && mine(i - 1)) || (i + 1 < st.length && mine(i + 1));
+  const P = st.map((s, i) =>
+    drawn(i)
+      ? prof.map(([o, h]): V => {
+          const x = s.x + s.nx * o;
+          const z = s.z + s.nz * o;
+          return [x, yAt(x, z) - 0.06 + Math.max(h * s.k, -0.1), z];
+        })
+      : [],
   );
   for (let i = 0; i + 1 < st.length; i++) {
     if (st[i].k <= 0 && st[i + 1].k <= 0) continue;
+    // (a stretch another part draws: it carries on there, not eased down here)
+    if (st[i].away) continue;
     for (let j = 0; j + 1 < prof.length; j++) face(g, P[i][j], P[i + 1][j], P[i + 1][j + 1], P[i][j + 1]);
   }
   g.snow(null);
@@ -127,24 +137,48 @@ export function bankAlong(
   side: 1 | -1,
   yAt: YAt,
   r: Rng,
-  o: { h: number; w: number; skip?: (x: number, z: number, i: number) => boolean },
+  o: {
+    h: number;
+    w: number;
+    skip?: (x: number, z: number, i: number) => boolean;
+    /** whose it is to draw (another part's: shaped as if drawn, not drawn here) */
+    own?: (x: number, z: number) => boolean;
+    /** only these samples of the line (a district's piece: what's near it) */
+    span?: [number, number];
+  },
 ) {
   const big = wobble(r, 3.5);
   const small = wobble(r, 1.2);
   const st: Station[] = [];
+  const [i0, i1] = o.span ?? [0, line.length - 1];
   let t = 0;
-  for (let i = 0; i < line.length; i++) {
+  for (let i = 1; i <= i0; i++) t += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+  for (let i = i0; i <= i1; i++) {
     const [px, pz] = line[Math.max(0, i - 1)];
     const [qx, qz] = line[Math.min(line.length - 1, i + 1)];
     const l = Math.hypot(qx - px, qz - pz) || 1;
     const nx = (-(qz - pz) / l) * side;
     const nz = ((qx - px) / l) * side;
-    if (i > 0) t += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
+    if (i > i0) t += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
     const d = typeof off === "number" ? off : off(i);
     const x = line[i][0] + nx * d;
     const z = line[i][1] + nz * d;
-    const k = o.skip?.(x, z, i) ? 0 : Math.max(0, 0.75 + 0.35 * big(t) + 0.15 * small(t));
-    st.push({ x, z, nx, nz, k });
+    st.push({
+      x,
+      z,
+      nx,
+      nz,
+      k: Math.max(0, 0.75 + 0.35 * big(t) + 0.15 * small(t)),
+      away: o.own ? !o.own(x, z) : false,
+    });
+  }
+  // (where it stops: asked only by the stretches drawn here, and the few either side they ease by — a
+  // district's 64 m of the long road asked it of all 14 km, twice: docs/plan/69)
+  if (o.skip) {
+    const near = new Uint8Array(st.length);
+    for (let i = 0; i < st.length; i++)
+      if (!st[i].away) for (let j = Math.max(0, i - 4); j <= Math.min(st.length - 1, i + 4); j++) near[j] = 1;
+    for (let i = 0; i < st.length; i++) if (near[i] && o.skip(st[i].x, st[i].z, i0 + i)) st[i].k = 0;
   }
   // (eased down over three tiles where it stops — a way's mouth, the lot: no square end)
   for (let i = 0; i < st.length; i++) {

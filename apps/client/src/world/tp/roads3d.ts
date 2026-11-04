@@ -135,6 +135,8 @@ export function slabCanvas(T: Themes): HTMLCanvasElement {
 interface Ctx {
   near: (x: number, z: number, pad?: number) => boolean;
   yAt: (w: Way, i: number, x: number, z: number) => number;
+  /** only these samples of the way (a district's piece: what's near it) */
+  span?: [number, number];
 }
 
 /** A smooth noise over the world, −1..1 (the verges' ragged edges: two ways that meet agree). */
@@ -176,8 +178,10 @@ function strip(
   dash?: { on: number; period: number },
 ) {
   const L = w.line;
+  const [i0, i1] = ctx.span ?? [0, L.length - 1];
   let t = 0;
-  for (let i = 0; i + 1 < L.length; i++) {
+  for (let i = 0; i < i0; i++) t += Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]);
+  for (let i = i0; i < i1; i++) {
     const [ax, az] = L[i];
     const [bx, bz] = L[i + 1];
     const len = Math.hypot(bx - ax, bz - az);

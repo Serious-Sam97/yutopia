@@ -2,7 +2,7 @@
 
 import type { BuildingKind, WayKind } from "@yutopia/shared/grounds";
 import type { LandMode, Paint, TreePick } from "@yutopia/shared/grounds-brush";
-import type { ThingKind } from "@yutopia/shared/grounds-edits";
+import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import type { BattleEvent, Needs, PetLook, PetOutfit, Species } from "@yutopia/shared/pets";
 import { useRef, useSyncExternalStore } from "react";
 import type { Setup } from "@/lib/api";
@@ -191,8 +191,9 @@ export interface GameView {
 
 export type BuildTool = "furniture" | "walls" | "rooms" | "desks" | "map";
 export type PaintMode = "line" | "box" | "fill" | "erase";
-/** God mode's tools (the bottom bar): Select, then each kind of edit (phases 6–9 of plan 53). */
-export const GOD_TOOLS = ["select", "land", "paint", "roads", "nature", "things", "buildings"] as const;
+/** God mode's tools (the bottom bar): Select, then each kind of edit (phases 6–9 of plan 53; Grow,
+ *  plan 69's phase 10). */
+export const GOD_TOOLS = ["select", "land", "paint", "roads", "nature", "things", "buildings", "grow"] as const;
 export type GodTool = (typeof GOD_TOOLS)[number];
 /** The tools built so far (the rest: phases 7–9 of plan 53). */
 export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
@@ -203,6 +204,7 @@ export const GOD_READY: ReadonlySet<GodTool> = new Set<GodTool>([
   "nature",
   "things",
   "buildings",
+  "grow",
 ]);
 /** One of my drafts, as the list has it (the API's row: no data). */
 export interface GodDraftRow {
@@ -280,6 +282,19 @@ export interface GodHud {
     sel: { key: string; locked: string | null } | null;
     blocked: string | null;
   };
+  /** the grow tool (docs/plan/69, phase 10): the next piece's biome and lift (m; or the picked
+   *  one's, and its name), the piece picked (its key), what's in the way of the one being drawn,
+   *  the rect being drawn (snapped) */
+  grow: {
+    biome: GrowBiome;
+    lift: number;
+    name: string;
+    sel: string | null;
+    blocked: string | null;
+    drawing: { x0: number; z0: number; x1: number; z1: number } | null;
+  };
+  /** the overview map of the whole land (M) shown */
+  map: boolean;
   /** the draft open (docs/plan/55-the-drafts.md): its id (null: none yet — the first change asks
    *  its name) and name */
   draft: { id: number | null; name: string };
@@ -567,6 +582,8 @@ const initial: HudState = {
       sel: null,
       blocked: null,
     },
+    grow: { biome: "forest", lift: 0, name: "", sel: null, blocked: null, drawing: null },
+    map: false,
     draft: { id: null, name: "" },
     naming: null,
     drafts: { open: false, list: null, max: 20, failed: false },

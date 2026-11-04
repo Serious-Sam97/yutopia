@@ -2,7 +2,7 @@
 // speed up, slow down and turn on each footing. Speed caps stay the ground's
 // (`Grid.speedAt`, grounds.ts `speedOn`); this is how you get there.
 
-export type Footing = "floor" | "walk" | "asphalt" | "path" | "snow" | "deep" | "ice" | "rock";
+export type Footing = "floor" | "walk" | "asphalt" | "path" | "snow" | "deep" | "ice" | "rock" | "sand";
 
 export interface Grip {
   /** tiles / s² towards the speed you want */
@@ -23,6 +23,8 @@ export const GRIP: Record<Footing, Grip> = {
   walk: { accel: 30, decel: 38, turn: 1, slide: 6.5 },
   asphalt: { accel: 30, decel: 38, turn: 1, slide: 7 },
   path: { accel: 24, decel: 26, turn: 0.9, slide: 4.5 },
+  // (the grown land's beach and desert: soft, a little slower to get going — docs/plan/69)
+  sand: { accel: 20, decel: 26, turn: 0.85, slide: 6 },
   snow: { accel: 18, decel: 22, turn: 0.8, slide: 5.5 },
   deep: { accel: 10, decel: 16, turn: 0.6, slide: 12 },
   // you skate: speeding up and stopping both take a while, a stop is a slide — but the edge

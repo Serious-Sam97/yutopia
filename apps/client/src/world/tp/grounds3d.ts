@@ -3,6 +3,7 @@ import {
   BENCH,
   BUILDINGS,
   type Building,
+  bridgeRuns,
   CHUNK,
   CORN,
   DOCK,
@@ -10,7 +11,6 @@ import {
   FENCE,
   FENCE_H,
   GATE,
-  GROUNDS,
   groundAt,
   groundSurfaceAt,
   groundsRng,
@@ -31,6 +31,8 @@ import {
   kartTrack,
   LAMPS,
   LOT,
+  landBounds,
+  longDressIn,
   MOTORS,
   type P,
   PLAZA,
@@ -45,7 +47,6 @@ import {
   SCARECROWS,
   STATUE,
   STREET,
-  type Surface,
   standLights,
   TOWER,
   TRACTOR,
@@ -61,6 +62,19 @@ import {
   waterAt,
   wayHalf,
 } from "@yutopia/shared/grounds";
+import { grownLakeR, grownLevel, grownNow } from "@yutopia/shared/grow";
+import {
+  CREEK,
+  creekWater,
+  LAKE,
+  LONG_ROAD,
+  LOOKOUT_DECK,
+  lakeR,
+  PADS,
+  padAt,
+  SHORE,
+  SPINE,
+} from "@yutopia/shared/longroad";
 import { lotLayout } from "@yutopia/shared/lot";
 import {
   AdditiveBlending,
@@ -110,6 +124,7 @@ import {
   tinted,
   type V,
 } from "./campus";
+import { landAround, SURF } from "./land-block";
 import { beam, railing, truss } from "./landmarks3d";
 import { lotDressing, lotPaintCanvas, lotSignCanvas } from "./lot3d";
 import {
@@ -128,7 +143,7 @@ import type { Themes } from "./sky";
 import { bankAlong, driftAlong, face, flatSnow, icicles, ridge, SNOW, slopeSnow, snowBox, wobble } from "./snow3d";
 import { motorsForecourt } from "./spot3d";
 import { signFaces, streetGeometry } from "./town3d";
-import { AT, atOf, BURIED, landAround, mergeGeometries, smoothAt, snowShadow, tagged, type WxKind, wx } from "./wx3d";
+import { AT, atOf, BURIED, mergeGeometries, smoothAt, snowShadow, tagged, type WxKind, wx } from "./wx3d";
 
 // the change's show: the old circuit whitens to the snow's colour (docs/plan/47-the-track-changer.md)
 const SHOW_SNOW = new Color("#eef2f5");
@@ -175,7 +190,10 @@ export interface GroundsOpts {
   parked?: { x: number; z: number }[];
   /** in the game: only the Kart Park (it's never edited: made once), or all but it (made again
    *  with god mode's edits — docs/plan/53-the-god-mode.md); a still: all */
-  part?: "kart" | "rest";
+  part?: "kart" | "rest" | "district";
+  /** a district (docs/plan/69, L2: the land is long): only what's in this square and out of the
+   *  rest's circle (`skip`, its middle and radius) — the ways, buildings and lamps there */
+  own?: { x0: number; z0: number; x1: number; z1: number; skip: { cx: number; cz: number; r: number } };
   /** the pictures and materials kept between the parts and their remakes (else its own) */
   shared?: GroundsShared;
   /** made again after this one: the ways that didn't change taken from it when swapped in
@@ -226,17 +244,6 @@ export function groundsShared(T: Themes): GroundsShared {
 function waySig(w: Way): string {
   return JSON.stringify([WAYS.indexOf(w), w.kind, w.w, w.pave, w.closed, w.flare, w.line, w.h, w.bridged]);
 }
-
-export const SURF: Record<Surface, number> = {
-  snow: 0xf3f6f9,
-  deep: 0xeef3f8,
-  path: 0xd6d4cf,
-  asphalt: 0xc4c8cc,
-  walk: 0xd8d8d4,
-  ice: 0xc3d2dc,
-  floor: 0xc9c5bd,
-  rock: 0x737880,
-};
 
 // ── textures ────────────────────────────────────────────────────────────────
 function tex(c: HTMLCanvasElement, repeat = true): CanvasTexture {
@@ -604,13 +611,15 @@ export function pineGeometry(
 }
 // A far pine: two tiers, snow on the shoulders (cheap).
 export function farPineGeometry(): BufferGeometry {
+  // (open underneath: a far tree's seen from the side and above — its bottoms were a third of it, and
+  // a hundred thousand of them are drawn in the long road's forest: docs/plan/69)
   const parts = [
-    tinted(new ConeGeometry(2.4, 5.5, 6).translate(0, 4.2, 0), 0x26332d),
-    tinted(new ConeGeometry(1.6, 4.4, 6).translate(0, 7.6, 0), 0x2d3b34),
-    tagged(tinted(new ConeGeometry(1.25, 1.6, 6).translate(0, 9.0, 0), 0xe2e8ec), 0.48, (x, y, z) =>
+    tinted(new ConeGeometry(2.4, 5.5, 6, 1, true).translate(0, 4.2, 0), 0x26332d),
+    tinted(new ConeGeometry(1.6, 4.4, 6, 1, true).translate(0, 7.6, 0), 0x2d3b34),
+    tagged(tinted(new ConeGeometry(1.25, 1.6, 6, 1, true).translate(0, 9.0, 0), 0xe2e8ec), 0.48, (x, y, z) =>
       Math.max(0, y - (9.8 - (4.4 * Math.hypot(x, z)) / 1.6) + 0.04),
     ),
-    tinted(new CylinderGeometry(0.2, 0.3, 1.6, 4).translate(0, 0.8, 0), 0x3a2e26),
+    tinted(new CylinderGeometry(0.2, 0.3, 1.6, 4, 1, true).translate(0, 0.8, 0), 0x3a2e26),
   ];
   const m = mergeGeometries(parts, false);
   for (const g of parts) g.dispose();
@@ -681,7 +690,11 @@ export class Grounds3 {
     }
     return t;
   }
-  private roadCtx = {
+  private roadCtx: {
+    near: (x: number, z: number, pad?: number) => boolean;
+    yAt: (w: Way, i: number, x: number, z: number) => number;
+    span?: [number, number];
+  } = {
     near: (x: number, z: number, pad = 0) => this.near(x, z, pad),
     yAt: (w: Way, i: number, x: number, z: number) => (w.bridged[i] ? w.h[i] : groundAt(x, z)),
   };
@@ -696,6 +709,51 @@ export class Grounds3 {
     this.sh = o.shared ?? groundsShared(T);
     // (in the game a step a frame or so: `step()`; for a still, all at once)
     const run = (f: () => void) => (o.stream ? this.pending.push(f) : f());
+    // a district: its ways' stretches, its buildings, its lamps
+    if (o.part === "district" && o.own) {
+      const r = o.own;
+      // (a way a piece at a time — 32 m squares: a district's stretch of a long road in one step was
+      // a 150 ms frame, 128 m pieces 35–55 ms, 64 m 26–45)
+      const P = 32;
+      for (const w of WAYS) {
+        const b = boxOf(w);
+        if (!(b.x0 - 40 < r.x1 && b.x1 + 40 > r.x0 && b.z0 - 40 < r.z1 && b.z1 + 40 > r.z0)) continue;
+        // (the pieces its line passes within 40 m of — not all in its box: the long road's is 13 km
+        // by 3, and each piece of it went over all of its line for nothing)
+        const by = new Set<number>();
+        const n = Math.ceil((r.x1 - r.x0) / P);
+        for (const [x, z] of w.line) {
+          if (x < r.x0 - 40 || x > r.x1 + 40 || z < r.z0 - 40 || z > r.z1 + 40) continue;
+          for (let q = Math.floor((z - 40 - r.z0) / P); q <= Math.floor((z + 40 - r.z0) / P); q++)
+            for (let p = Math.floor((x - 40 - r.x0) / P); p <= Math.floor((x + 40 - r.x0) / P); p++)
+              if (p >= 0 && q >= 0 && p < n) by.add(q * n + p);
+        }
+        for (let z0 = r.z0; z0 < r.z1; z0 += P)
+          for (let x0 = r.x0; x0 < r.x1; x0 += P)
+            if (by.has(((z0 - r.z0) / P) * n + (x0 - r.x0) / P))
+              run(() => {
+                this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
+                this.ways(w);
+                this.piece = null;
+              });
+      }
+      run(() => this.waysAll());
+      // (what lines the long road: a piece at a time too)
+      if (LONG_ROAD)
+        for (let z0 = r.z0; z0 < r.z1; z0 += P)
+          for (let x0 = r.x0; x0 < r.x1; x0 += P)
+            run(() => {
+              this.piece = { x0, z0, x1: x0 + P, z1: z0 + P };
+              this.longDress();
+              this.piece = null;
+            });
+      for (const b of BUILDINGS) if (this.near(b.x0, b.z0, 60)) run(() => this.building(b));
+      // (its water: Silver Lake's and the creek's out on the long road, a grown lake's — the rest's
+      // circle was the only one to draw any, and it's round the town)
+      run(() => this.water());
+      run(() => this.lamps());
+      return;
+    }
     const rest = o.part !== "kart";
     if (rest) {
       if (!o.stream) this.terrain();
@@ -712,6 +770,7 @@ export class Grounds3 {
       run(() => this.fence());
       run(() => this.landmarks());
       run(() => this.town());
+      if (LONG_ROAD) run(() => this.longDress());
       run(() => this.motors());
       for (const f of this.farmSteps()) run(f);
     }
@@ -722,7 +781,8 @@ export class Grounds3 {
     }
     // (last: they gather every light and glow the steps before added)
     run(() => this.lamps());
-    if (rest) run(() => this.ridges());
+    // (the painted ridges: the far land's real ones instead with the long road — far3d.ts)
+    if (rest && !LONG_ROAD) run(() => this.ridges());
   }
 
   // ── a way a step, and what's kept of it to be taken by the next one made (god mode's edits:
@@ -814,14 +874,43 @@ export class Grounds3 {
     const n = this.root.children.length;
     f();
     if (!this.pending.length) this.setNight(this.lastNight);
+    // (a step waiting on what's still loading, put back: no more this frame — asked again at once,
+    // the stream's loop spun on it for all its budget, every frame, ~200k times a load)
+    if (this.waiting) {
+      this.waiting = false;
+      return false;
+    }
     return this.root.children.slice(n);
   }
+  /** set by a step that put itself back to wait (step: none more this frame) */
+  private waiting = false;
 
   private keep<T extends { dispose(): void }>(t: T): T {
     this.disposables.push(t);
     return t;
   }
+  /** a district's way made a piece at a time: the piece (a square of it) being made now */
+  private piece: { x0: number; z0: number; x1: number; z1: number } | null = null;
+  /** Whether any of the box x0…x1, z0…z1 is this one's to draw (a district's square; the circle). */
+  private meets(x0: number, z0: number, x1: number, z1: number): boolean {
+    const own = this.o.own;
+    if (own) return x0 < own.x1 && x1 > own.x0 && z0 < own.z1 && z1 > own.z0;
+    const { cx, cz, radius } = this.o;
+    return Math.hypot(Math.max(x0 - cx, 0, cx - x1), Math.max(z0 - cz, 0, cz - z1)) < radius;
+  }
   private near(x: number, z: number, pad = 0): boolean {
+    const own = this.o.own;
+    // (a district's: its square, less what the rest's circle has at the same pad — each thing once)
+    if (own) {
+      const q = this.piece ?? own;
+      return (
+        x >= q.x0 &&
+        x < q.x1 &&
+        z >= q.z0 &&
+        z < q.z1 &&
+        Math.hypot(x - own.skip.cx, z - own.skip.cz) >= own.skip.r + pad
+      );
+    }
     return Math.hypot(x - this.o.cx, z - this.o.cz) < this.o.radius + pad;
   }
   // (one of the shared pictures', or none: kept with them; else with this one's own pictures)
@@ -995,8 +1084,11 @@ export class Grounds3 {
     to = w.line.length - 1,
     widthAt?: (i: number) => number,
   ) {
-    let v = 0;
     const L = w.line;
+    // (its picture along it from the line's start, on past what's not drawn here: a district's
+    // piece took it up from nought, a seam in the asphalt at every piece's edge)
+    let v = 0;
+    for (let i = 0; i < from; i++) v += Math.hypot(L[i + 1][0] - L[i][0], L[i + 1][1] - L[i][1]) / texLen;
     // (a bridge's deck: flush with the way — shared deckAt; the driveway's last two tiles eased
     // down to the lot's own asphalt, so where they meet is no step for the ink to outline)
     const ease = (x: number, z: number) => (x > LOT.x0 && x < LOT.x1 ? Math.min(1, Math.max(0, (LOT.z0 - z) / 2)) : 1);
@@ -1004,7 +1096,12 @@ export class Grounds3 {
     for (let i = from; i < to; i++) {
       const [ax, az] = L[i];
       const [bx, bz] = L[i + 1];
-      if (!this.near(ax, az, 20)) continue;
+      const len = Math.hypot(bx - ax, bz - az);
+      const v1 = v + len / texLen;
+      if (!this.near(ax, az, 20)) {
+        v = v1;
+        continue;
+      }
       const tn = (k: number) => {
         const [px, pz] = L[Math.max(0, k - 1)];
         const [qx, qz] = L[Math.min(L.length - 1, k + 1)];
@@ -1013,8 +1110,6 @@ export class Grounds3 {
       };
       const [anx, anz] = tn(i);
       const [bnx, bnz] = tn(i + 1);
-      const len = Math.hypot(bx - ax, bz - az);
-      const v1 = v + len / texLen;
       const wk = (k: number) => (widthAt ? widthAt(k) : width);
       const P = (x: number, z: number, nx: number, nz: number, s: number, k: number): V => {
         const px = x + nx * (off + s * wk(k) * 0.5);
@@ -1039,6 +1134,17 @@ export class Grounds3 {
       v = v1;
     }
   }
+  /** The samples of `w` within 40 m of a piece, and 8 either side (null: none there). */
+  private spanOf(w: Way, q: { x0: number; z0: number; x1: number; z1: number }): [number, number] | null {
+    let a = -1;
+    let b = -1;
+    for (const [i, [x, z]] of w.line.entries())
+      if (x > q.x0 - 40 && x < q.x1 + 40 && z > q.z0 - 40 && z < q.z1 + 40) {
+        if (a < 0) a = i;
+        b = i;
+      }
+    return a < 0 ? null : [Math.max(0, a - 8), Math.min(w.line.length - 1, b + 8)];
+  }
   /** The ways (`only`: one of them; then the bridges with the last). */
   private ways(only?: Way) {
     const road = new G();
@@ -1050,23 +1156,28 @@ export class Grounds3 {
     let lines = new G();
     const r = groundsRng(77 + (only ? WAYS.indexOf(only) : 0));
     for (const w of only ? [only] : WAYS) {
+      // (a district's piece: the stretch of it there, a few samples either side — not all its line)
+      const span = this.piece ? this.spanOf(w, this.piece) : null;
+      if (this.piece && !span) continue;
+      this.roadCtx.span = span ?? undefined;
       if (w.kind === "trail") {
-        this.ribbon(w, w.w + 0.8, 0, 0.03, 9, trail);
+        this.ribbon(w, w.w + 0.8, 0, 0.03, 9, trail, span?.[0], span?.[1]);
         // trodden down: the snow either side stands a little higher (a low berm, open where
         // another way crosses and on the footbridge)
         for (const side of [1, -1] as const)
           bankAlong(banks, w.line, w.w / 2 + 0.75, side, groundAt, r, {
             h: 0.2,
             w: 1.1,
-            skip: (x, z, i) =>
-              w.bridged[i] || !this.near(x, z, 10) || WAYS.some((u) => u !== w && nearLine(u, x, z) < u.w / 2 + 1.2),
+            span: span ?? undefined,
+            own: (x, z) => this.near(x, z, 10),
+            skip: (x, z, i) => w.bridged[i] || WAYS.some((u) => u !== w && nearLine(u, x, z) < u.w / 2 + 1.2),
           });
-      } else if (w.kind === "walk") this.ribbon(w, w.w, 0, 0.04, 6, walk);
+      } else if (w.kind === "walk") this.ribbon(w, w.w, 0, 0.04, 6, walk, span?.[0], span?.[1]);
       else {
         // the asphalt, its own picture by its width; the lines, verges, kerbs and pavements over it
         // (roads3d.ts)
         const ag = new G();
-        this.ribbon(w, w.w, 0, 0.05, 9, ag, 0, w.line.length - 1, w.flare ? (i) => 2 * wayHalf(w, i) : undefined);
+        this.ribbon(w, w.w, 0, 0.05, 9, ag, span?.[0], span?.[1], w.flare ? (i) => 2 * wayHalf(w, i) : undefined);
         if (!ag.empty) {
           // (its own, as its picture is: with the way's step — wayStep)
           const am = this.keep(new MeshLambertMaterial({ map: this.asphalt(w), vertexColors: true }));
@@ -1086,15 +1197,17 @@ export class Grounds3 {
             bankAlong(banks, w.line, (i) => wayHalf(w, i) + 1.2, side, groundAt, r, {
               h: 0.55,
               w: 1.8,
+              span: span ?? undefined,
+              own: (x, z) => this.near(x, z, 10),
               skip: (x, z, i) =>
                 w.bridged[i] ||
-                !this.near(x, z, 10) ||
                 WAYS.some((u) => u !== w && u.kind !== "trail" && nearLine(u, x, z) < u.w / 2 + 1.5) ||
                 (x > LOT.x0 - 2 && x < LOT.x1 + 2 && z > LOT.z0 - 2 && z < LOT.z1 + 2) ||
                 (KART_LAND && Math.hypot(x - KART_TURN.x, z - KART_TURN.z) < KART_TURN.r + 7),
             });
       }
     }
+    this.roadCtx.span = undefined;
     if (!road.empty) this.add(road.build(), this.lambert(0xffffff, this.ts.road), "receive");
     if (!paint.empty) this.add(paint.build(), this.lambert(), "receive");
     if (!slabs.empty) this.add(slabs.build(), this.lambert(0xffffff, this.ts.slabs, true, "way"), "receive");
@@ -1120,15 +1233,17 @@ export class Grounds3 {
       for (const p of poles) p.dispose();
     }
     // bridges: the road's steel one over the river, the trail's timber footbridge over the ravine
-    for (const w of WAYS) {
-      const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
-      if (idx.length < 2) continue;
-      const a = idx[0];
-      const b = idx[idx.length - 1];
+    // (each bridge of a way: the long road has two — its creek's, timber, and the high one over the
+    // gorge, a deck on tall piers: docs/plan/69)
+    const spans = WAYS.flatMap((w) => bridgeRuns(w).map((r) => ({ w, a: r[0], b: r[r.length - 1] })));
+    for (const { w, a, b } of spans) {
+      if (b - a < 1) continue;
       if (!this.near(w.line[a][0], w.line[a][1], 30)) continue;
       const g = new G();
       const L = w.line;
-      const timber = w.kind === "trail";
+      const long = w.key === "long-road";
+      const high = long && b - a >= 60;
+      const timber = w.kind === "trail" || (long && !high);
       const deck = (i: number): V => [L[i][0], w.h[i] + 0.05, L[i][1]];
       if (timber) {
         // the footbridge: a stringer either side under the deck, a railing on posts along both
@@ -1147,6 +1262,26 @@ export class Grounds3 {
             beam(g, [p[0], p[1] - 0.3, p[2]], [q[0], q[1] - 0.3, q[2]], 0.32, 0x4a3b2e);
             railing(g, p, q, 1.05, 1.5, 0x5a4636);
           }
+        }
+      } else if (high) {
+        // the high bridge: concrete parapets either side, piers down to the gorge's floor every 30 m
+        for (const s of [1, -1]) {
+          const off = (i: number): V => {
+            const [px, pz] = L[Math.max(a, i - 1)];
+            const [qx, qz] = L[Math.min(b, i + 1)];
+            const l = Math.hypot(qx - px, qz - pz) || 1;
+            const p = deck(i);
+            return [p[0] - ((qz - pz) / l) * s * (w.w / 2 + 0.5), p[1], p[2] + ((qx - px) / l) * s * (w.w / 2 + 0.5)];
+          };
+          for (let i = a; i < b; i += 4) {
+            const p = off(i);
+            const q = off(Math.min(b, i + 4));
+            beam(g, [p[0], p[1] + 0.45, p[2]], [q[0], q[1] + 0.45, q[2]], 0.9, 0x9aa0a6);
+          }
+        }
+        for (let k = a + 15; k < b - 10; k += 30) {
+          const [x, z] = L[k];
+          beam(g, [x, terrainAt(x, z) - 1, z], [x, w.h[k] - 1.4, z], 2.4, 0x8d939a);
         }
       } else {
         // the road's: a steel through truss, its guard rails, the deck's edge girders
@@ -1180,7 +1315,7 @@ export class Grounds3 {
           );
       }
       // the steel bridge's piers on the ice
-      if (!timber)
+      if (!timber && !high)
         for (const k of [a + Math.round((b - a) * 0.33), a + Math.round((b - a) * 0.66)]) {
           const [x, z] = L[k];
           g.color(0x6a6f75).box(x - 1, terrainAt(x, z) - 1, z - 4.4, x + 1, w.h[k] - 0.6, z + 4.4);
@@ -1626,6 +1761,179 @@ export class Grounds3 {
       }
       surface(cw);
     }
+    this.longWater(ice, sided, surface, grid);
+  }
+
+  /** Silver Lake and god mode's grown lakes, iced as the pond is (from their shores in, by the room's
+   *  ice), their water a grid under it in their own frame, 8 m a cell; the sea off a grown beach, never
+   *  iced; the creek's water a ribbon down its bed, running, never iced (docs/plan/69, L7, phase 10). */
+  private longWater(
+    ice: MeshStandardMaterial,
+    sided: (g: BufferGeometry, side: (i: number, x: number, z: number) => number) => BufferGeometry,
+    surface: (v: {
+      p: number[];
+      side: number[];
+      depth: number[];
+      flow: number[];
+      dir: number[];
+      idx: number[];
+    }) => void,
+    grid: () => { p: number[]; side: number[]; depth: number[]; flow: number[]; dir: number[]; idx: number[] },
+  ) {
+    // still water in its own frame (u, v), a grid of 8 m cells from (i0, j0) to (i1, j1): each cell the
+    // district's whose square its middle's in, drawn where it's within `keep` of the middle (`r`: 0
+    // its middle, 1 its shore) and some of it's under the level (the land over the rest hides it);
+    // iced (the room's ice, from its shores in) or not (the sea)
+    const still = (o: {
+      pt: (u: number, v: number) => [number, number];
+      i0: number;
+      i1: number;
+      j0: number;
+      j1: number;
+      level: number;
+      r: (x: number, z: number) => number;
+      keep: number;
+      iced: boolean;
+    }) => {
+      const S = 8;
+      const { pt, level } = o;
+      const g = new G();
+      const w = grid();
+      const at = new Map<number, number>();
+      const cols = o.i1 - o.i0 + 1;
+      const vert = (i: number, j: number) => {
+        const k = (j - o.j0) * cols + (i - o.i0);
+        let n = at.get(k);
+        if (n === undefined) {
+          const [x, z] = pt(i * S, j * S);
+          const r = Math.min(1, o.r(x, z));
+          n = w.p.length / 3;
+          at.set(k, n);
+          w.p.push(x, level, z);
+          w.side.push(r);
+          // (signed: over dry land below nought — the water left out there, its edge where the land
+          // comes up through it, not its cells' squares: past the near land nothing hid them)
+          w.depth.push(level - terrainAt(x, z));
+          w.flow.push(i * S, r, 0, 0);
+          w.dir.push(0.8, 0.6);
+        }
+        return n;
+      };
+      const y = level + 0.04;
+      const q4 = (i: number, j: number) => [
+        pt(i * S, j * S),
+        pt((i + 1) * S, j * S),
+        pt((i + 1) * S, (j + 1) * S),
+        pt(i * S, (j + 1) * S),
+        pt((i + 0.5) * S, (j + 0.5) * S),
+      ];
+      for (let j = o.j0; j < o.j1; j++)
+        for (let i = o.i0; i < o.i1; i++) {
+          const [mx, mz] = pt((i + 0.5) * S, (j + 0.5) * S);
+          const r = o.r(mx, mz);
+          if (r > o.keep || !this.near(mx, mz)) continue;
+          // (left out where its land's all over the water: read at nine points, a cell with water in a
+          // dip between its corners went missing, the shore a stair of its cells — and not past half a
+          // metre over it: with 2.5, the water's waves showed through a flat shore a metre over it)
+          if (r > 0.95) {
+            let wet = false;
+            for (let a = 0; a <= 2 && !wet; a++)
+              for (let b = 0; b <= 2 && !wet; b++) {
+                const [x, z] = pt((i + a / 2) * S, (j + b / 2) * S);
+                wet = terrainAt(x, z) < level + 0.5;
+              }
+            if (!wet) continue;
+          }
+          const a = vert(i, j);
+          const b = vert(i + 1, j);
+          const d = vert(i + 1, j + 1);
+          const e = vert(i, j + 1);
+          w.idx.push(a, e, b, b, e, d);
+          if (!o.iced) continue;
+          const ps = q4(i, j)
+            .slice(0, 4)
+            .map(([x, z]): V => [x, y, z]);
+          g.quad(ps[0], ps[3], ps[2], ps[1], [0, 1, 0], ps.map((p) => [p[0] / 30, p[2] / 30]) as [number, number][]);
+        }
+      if (!g.empty)
+        this.add(
+          sided(g.build(), (_i, x, z) => Math.min(1, o.r(x, z))),
+          ice,
+          "receive",
+        );
+      surface(w);
+    };
+    // Silver Lake, tilted on its long axis
+    if (
+      LONG_ROAD &&
+      this.meets(LAKE.cx - LAKE.rx * 1.4, LAKE.cz - LAKE.rx * 1.4, LAKE.cx + LAKE.rx * 1.4, LAKE.cz + LAKE.rx * 1.4)
+    ) {
+      const c = Math.cos(LAKE.tilt);
+      const s = Math.sin(LAKE.tilt);
+      const U = Math.ceil((LAKE.rx * 1.4) / 8);
+      const V = Math.ceil((LAKE.rz * 1.4) / 8);
+      still({
+        pt: (u, v) => [LAKE.cx + u * c - v * s, LAKE.cz + u * s + v * c],
+        i0: -U,
+        i1: U,
+        j0: -V,
+        j1: V,
+        level: LAKE.level,
+        r: lakeR,
+        // (out to where its water ends — waterAt's — and not past: a plane over a hollow by it was a
+        // pond nobody could swim in)
+        keep: 1.25,
+        iced: true,
+      });
+    }
+    // god mode's grown land's (docs/plan/69, phase 10): a lake's, iced; the sea off a beach, never
+    for (const gr of grownNow()) {
+      const d = gr.def;
+      if (d.biome !== "lake" && d.biome !== "beach") continue;
+      if (!this.meets(d.x0, d.z0, d.x1, d.z1)) continue;
+      const lake = d.biome === "lake";
+      still({
+        pt: (u, v) => [u, v],
+        i0: Math.floor(d.x0 / 8),
+        i1: Math.ceil(d.x1 / 8),
+        j0: Math.floor(d.z0 / 8),
+        j1: Math.ceil(d.z1 / 8),
+        level: grownLevel(gr),
+        r: lake ? (x, z) => grownLakeR(gr, x, z) : () => 0.5,
+        keep: lake ? 1.3 : 1,
+        iced: lake,
+      });
+    }
+    // the creek: stations every 2 m, each the district's whose square it's in
+    if (!LONG_ROAD) return;
+    const cw = grid();
+    let last = -1;
+    for (let i = 0; i < CREEK.length; i += 2) {
+      const [x, z] = CREEK[i];
+      if (!this.near(x, z)) {
+        last = -1;
+        continue;
+      }
+      const a = CREEK[Math.max(0, i - 2)];
+      const b = CREEK[Math.min(CREEK.length - 1, i + 2)];
+      const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const tx = (b[0] - a[0]) / l;
+      const tz = (b[1] - a[1]) / l;
+      const y = creekWater(i);
+      const n = cw.p.length / 3;
+      for (const o of [-1, 1]) {
+        const px = x - tz * o * 2.9;
+        const pz = z + tx * o * 2.9;
+        cw.p.push(px, y, pz);
+        cw.side.push(o);
+        cw.depth.push(Math.max(0.15, y - terrainAt(px, pz)));
+        cw.flow.push(i, o, 1.4, 0);
+        cw.dir.push(tx, tz);
+      }
+      if (last >= 0) cw.idx.push(last, last + 1, n, last + 1, n + 1, n);
+      last = n;
+    }
+    surface(cw);
   }
 
   // ── the parking lot (docs/plan/42-the-lot.md): the stills draw the new one whole from the
@@ -4437,6 +4745,7 @@ export class Grounds3 {
         });
       }
       this.pending.push(() => this.kartPark());
+      this.waiting = true;
       return;
     }
     const { m, T3, items } = this.parkMod;
@@ -4772,7 +5081,8 @@ export class Grounds3 {
   private lamps() {
     // (the Kart Park's floods are its own masts: karts3d.ts, their pools kartParkLamps; its own
     // part has no lamps of the Grounds')
-    if (this.o.part !== "kart") for (const l of LAMPS) if (l.kind !== "flood") this.lampAt(l.x, l.z, l.ry, l.kind);
+    if (this.o.part !== "kart")
+      for (const l of LAMPS) if (l.kind !== "flood" && this.near(l.x, l.z)) this.lampAt(l.x, l.z, l.ry, l.kind);
     if (this.lampGeo.length) this.add(mergeGeometries(this.lampGeo, false), this.lambert());
     for (const g of this.lampGeo) g.dispose();
     const head = this.glows(
@@ -5175,7 +5485,7 @@ export class Grounds3 {
       snowBox(b.color(0xf4f7fa), BENCH.x - 1, y + 0.52, BENCH.z, BENCH.x + 1, y + 0.62, BENCH.z + 0.6);
       this.add(b.build(), this.lambert());
     }
-    if (this.near(ROAD_CLOSED.x, ROAD_CLOSED.z, 30)) {
+    if (!LONG_ROAD && this.near(ROAD_CLOSED.x, ROAD_CLOSED.z, 30)) {
       const y = groundAt(ROAD_CLOSED.x, ROAD_CLOSED.z);
       // two sawhorse barricades across the road: striped boards on A-frame legs, a lamp on each
       const g = new G();
@@ -5229,6 +5539,113 @@ export class Grounds3 {
     }
   }
 
+  // ── what lines the long road (shared grounds.ts longDressIn — docs/plan/69, L3): guard rails over
+  // its drops, reflector posts, snow poles, km markers, its signs — what's this part's ──
+  private longDress() {
+    // (the chunks to look in: a piece's, a district's, or — the rest's — those the road passes in its circle)
+    const keys = new Set<string>();
+    const q = this.piece ?? this.o.own;
+    if (q) {
+      for (let cz = Math.floor((q.z0 - 4) / CHUNK); cz * CHUNK < q.z1 + 4; cz++)
+        for (let cx = Math.floor((q.x0 - 4) / CHUNK); cx * CHUNK < q.x1 + 4; cx++) keys.add(`${cx},${cz}`);
+    } else
+      for (let i = 0; i < SPINE.length; i += 8)
+        if (this.near(SPINE[i][0], SPINE[i][1], 40))
+          keys.add(`${Math.floor(SPINE[i][0] / CHUNK)},${Math.floor(SPINE[i][1] / CHUNK)}`);
+    const g = new G();
+    for (const k of keys) {
+      const [cx, cz] = k.split(",").map(Number);
+      for (const d of longDressIn(cx, cz)) {
+        if (!this.near(d.x, d.z)) continue;
+        if (d.kind === "rail" && d.bx !== undefined && d.bz !== undefined) {
+          const by = d.by ?? d.y;
+          // the W-beam on its post
+          beam(g, [d.x, d.y + 0.72, d.z], [d.bx, by + 0.72, d.bz], 0.3, 0xc9ced3);
+          beam(g, [d.x, d.y - 0.5, d.z], [d.x, d.y + 0.78, d.z], 0.1, 0x6f757c);
+        } else if (d.kind === "post") {
+          g.color(0xf2f2ee).box(d.x - 0.06, d.y - 0.1, d.z - 0.06, d.x + 0.06, d.y + 1.0, d.z + 0.06);
+          g.color(0x22262b).box(d.x - 0.065, d.y + 0.72, d.z - 0.065, d.x + 0.065, d.y + 0.86, d.z + 0.065);
+          g.color(0xff8a1c).box(d.x - 0.066, d.y + 0.88, d.z - 0.066, d.x + 0.066, d.y + 0.95, d.z + 0.066);
+        } else if (d.kind === "pole") {
+          for (let k2 = 0; k2 < 5; k2++)
+            g.color(k2 % 2 ? 0x22262b : 0xff6a14).box(
+              d.x - 0.04,
+              d.y - 0.1 + k2 * 0.5,
+              d.z - 0.04,
+              d.x + 0.04,
+              d.y + 0.4 + k2 * 0.5,
+              d.z + 0.04,
+            );
+        } else if (d.kind === "km" && d.text)
+          this.signBoard(d.text.join("\n"), d.x, d.z, d.ry, 0.45, 0.55, 1.1, d.bg, d.fg, false, true);
+        else if (d.kind === "sign" && d.text)
+          this.signBoard(d.text.join("\n"), d.x, d.z, d.ry, 2.6, 1.3, 1.4, d.bg, d.fg, false, true);
+      }
+    }
+    this.longPlaces(g);
+    if (!g.empty) this.add(g.build(), this.lambert());
+  }
+  // the long road's places' own (docs/plan/69, L7): the rest stop's picnic tables and fire pit, the
+  // lookout's deck out towards the lake and its coin binoculars, the jetty and its rowing boat
+  private longPlaces(g: G) {
+    const WOOD = 0x8a6a4a;
+    const DARK = 0x4a3a2c;
+    const [rx, rz] = padAt(PADS[0]);
+    if (this.near(rx, rz)) {
+      const y = groundAt(rx, rz);
+      for (const [dx, dz] of [
+        [-12, 2],
+        [-4, 6],
+        [5, 4],
+      ]) {
+        const x = rx + dx;
+        const z = rz + dz;
+        g.color(WOOD).box(x - 1, y + 0.72, z - 0.45, x + 1, y + 0.78, z + 0.45);
+        for (const s of [-1, 1])
+          g.color(WOOD).box(x - 1, y + 0.42, z + s * 0.8 - 0.14, x + 1, y + 0.47, z + s * 0.8 + 0.14);
+        for (const s of [-0.8, 0.8]) g.color(DARK).box(x + s - 0.05, y, z - 0.5, x + s + 0.05, y + 0.72, z + 0.5);
+      }
+      // the fire pit: a ring of stones
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2;
+        const x = rx + 2 + Math.cos(a) * 0.9;
+        const z = rz - 4 + Math.sin(a) * 0.9;
+        g.color(0x6f6a66).box(x - 0.18, y, z - 0.18, x + 0.18, y + 0.26, z + 0.18);
+      }
+    }
+    // the lookout's deck: from its pad out over the drop past its edge, towards the lake (shared
+    // LOOKOUT_DECK: its planks solid as drawn), its rails; the binoculars at its end
+    const D = LOOKOUT_DECK;
+    if (this.near(D.x, D.z, D.a1)) {
+      const y = D.top - 0.1;
+      const P = (a: number, b: number, up: number): V => [D.x + D.dx * a - D.dz * b, y + up, D.z + D.dz * a + D.dx * b];
+      const H = D.half;
+      for (let a = D.a0; a < D.a1; a += 1.2) beam(g, P(a, -H, 0), P(a, H, 0), 0.18, WOOD);
+      // (its joists under the planks, along it)
+      for (const b of [-H + 0.4, -1.3, 1.3, H - 0.4]) beam(g, P(D.a0, b, -0.2), P(D.a1, b, -0.2), 0.16, DARK);
+      for (const b of [-H, H]) beam(g, P(D.a0, b, 1.0), P(D.a1, b, 1.0), 0.08, DARK);
+      beam(g, P(D.a1, -H, 1.0), P(D.a1, H, 1.0), 0.08, DARK);
+      // its posts, down to the ground under it (the further, the longer: over the drop)
+      for (let a = D.a0; a <= D.a1 + 0.01; a += 4)
+        for (const b of [-H, H]) {
+          const [x, , z] = P(a, b, 0);
+          beam(g, [x, groundAt(x, z) - 0.5, z], P(a, b, 1.0), 0.14, DARK);
+        }
+      beam(g, P(D.a1 - 1.5, 0, 0.1), P(D.a1 - 1.5, 0, 1.25), 0.1, 0x3a3f45);
+      beam(g, P(D.a1 - 1.7, 0, 1.3), P(D.a1 - 1.2, 0, 1.3), 0.26, 0x2f6f5a);
+    }
+    const J = SHORE.jetty;
+    if (this.near(J.x, J.z0)) {
+      const y = LAKE.level + 0.5;
+      for (let z = J.z0; z > J.z1; z -= 1.2) g.color(WOOD).box(J.x - 1.2, y, z - 0.55, J.x + 1.2, y + 0.12, z + 0.55);
+      for (let z = J.z0; z >= J.z1; z -= 4)
+        for (const s of [-1.1, 1.1])
+          g.color(DARK).box(J.x + s - 0.08, y - 3, z - 0.08, J.x + s + 0.08, y + 0.1, z + 0.08);
+      // the rowing boat, tied up beside it
+      g.color(0x8c2f24).box(J.x + 2.2, LAKE.level - 0.1, J.z1 + 3, J.x + 3.4, LAKE.level + 0.4, J.z1 + 7.4);
+    }
+  }
+
   // ── the town: its street furniture (its parked cars are cars like the lot's: world/car/cars.ts) ──
   private town() {
     if (!this.near(420, -405, 160)) return;
@@ -5257,8 +5674,9 @@ export class Grounds3 {
   private ridges() {
     this.keep(this.ridgeMat);
     const g = new G();
-    const cx = (GROUNDS.x0 + GROUNDS.x1) / 2;
-    const cz = (GROUNDS.z0 + GROUNDS.z1) / 2;
+    const L = landBounds();
+    const cx = (L.x0 + L.x1) / 2;
+    const cz = (L.z0 + L.z1) / 2;
     const r = groundsRng(1717);
     for (const [R, hMin, hMax, shade] of [
       [1500, 90, 220, 0.62],

@@ -21,6 +21,11 @@ import {
 } from "./grounds.ts";
 import { encodeBytes, encodeHeights, type GroundsEdits, NO_EDITS, TREE_MASK } from "./grounds-edits.ts";
 import { groundsHash } from "./grounds-hash.ts";
+import { BASE_LAND, landChunks, townBounds } from "./land.ts";
+
+// (today's town's chunks: the long road's land is its own tests' — docs/plan/69)
+const TOWN = landChunks(32, BASE_LAND);
+
 import { routeOver } from "./route.ts";
 import { groundSolidsIn } from "./shapes/grounds.ts";
 
@@ -34,12 +39,23 @@ import { groundSolidsIn } from "./shapes/grounds.ts";
 // carved under their levels, the river's run downhill north → south with its banks brought down to
 // it (the land, the walk round it, the rock on its steeper banks, the trees on them); the dock's
 // planks and posts solid; the water's tiles walked as flat — its ice, or its shelf waded)
+// (2026-11-03, docs/plan/69-the-long-road.md phase 3: Long Pine Road opened east from where the road
+// closed stood — its barricades and drift gone, the land at the box's east edge eased to the road
+// not risen into a ridge, the new way among the things; today's town's chunks over BASE_LAND only,
+// west of x 470 every one as it was: grounds-town.test)
+// (2026-11-04, plan 69 phase 7: the bus stop by Main Street's end — its shelter's plot and solids —
+// and the long road's things among the things: its lamps, benches, the shelters, the hut, the
+// boathouse, the cabins and the path down to them)
+// (2026-11-04: the long road's line drawn centripetal — the uniform spline looped back on itself at
+// each hairpin's ends: its land, its things moved with it; the town's as it was; Silver Lake's
+// mountains eased down to it, its shore held over its level — what stands by it with them; the climb's
+// legs west started past their hairpins, not behind them)
 const TODAY = {
-  land: "0fb353e7",
+  land: "00fb2884",
   // (2026-11-01: the road closed's barricades and drift shut, as their solids)
-  walk: "3a7fbf6a",
-  trees: "cdaec3fa",
-  surfaces: "966a404d",
+  walk: "c7cfe13e",
+  trees: "3367389b",
+  surfaces: "357af81e",
   // (2026-11-01: the false fronts flush with their faces, the road closed's barricades and drift
   // solid, the wooden poles their own what, the pitched roofs in steps under their slopes, the flat
   // roofs' snow, the streets' pavements and kerbs — the town's audit; then its details: the shops'
@@ -49,8 +65,8 @@ const TODAY = {
   // station's and the other flat roofs' snow, the kerbs in three treads)
   // (2026-11-02: the roofs, the canopies, the mailboxes and the statue at their bare heights — their
   // snow the weather's, stood a little in: docs/plan/65, the user's call)
-  solids: "b5308184",
-  things: "ac236950",
+  solids: "0b98764e",
+  things: "d2632f05",
 };
 
 // the farm's open field south of the farmhouse: chunk (13, −8)
@@ -122,7 +138,7 @@ const EDITS: GroundsEdits = {
 };
 
 test("no edits: the Grounds are today's, every chunk", () => {
-  assert.deepEqual(groundsHash(), TODAY);
+  assert.deepEqual(groundsHash(TOWN), TODAY);
 });
 
 test("the edits laid: each changes what it says", () => {
@@ -168,7 +184,8 @@ test("the edits laid: each changes what it says", () => {
   assert.notEqual(stopWas?.x, 426);
   assert.ok(LAMPS.some((l) => l.key === "god-lamp-1" && l.kind === "town"));
   // only round what changed: not the whole world
-  const all = Math.ceil((G.GROUNDS.x1 - G.GROUNDS.x0) / CHUNK) * Math.ceil((G.GROUNDS.z1 - G.GROUNDS.z0) / CHUNK);
+  const all =
+    Math.ceil((townBounds().x1 - townBounds().x0) / CHUNK) * Math.ceil((townBounds().z1 - townBounds().z0) / CHUNK);
   assert.ok(dirty.length > 0 && dirty.length < all / 4, `${dirty.length} of ${all} chunks`);
   for (const c of [
     [HILL.cx, HILL.cz],
@@ -212,16 +229,16 @@ test("whoever keeps what's made of the Grounds is told which chunks changed, and
 
 test("what it says changed is all that did: what's kept is what's made from nothing", () => {
   applyEdits(NO_EDITS);
-  groundsHash(); // (every chunk made, without the edits)
+  groundsHash(TOWN); // (every chunk made, without the edits)
   applyEdits(EDITS);
-  const kept = groundsHash();
+  const kept = groundsHash(TOWN);
   forgetGrounds();
-  assert.deepEqual(kept, groundsHash());
+  assert.deepEqual(kept, groundsHash(TOWN));
   assert.notDeepEqual(kept, TODAY);
 });
 
 test("taken off again: today's Grounds", () => {
   applyEdits(EDITS);
   applyEdits(NO_EDITS);
-  assert.deepEqual(groundsHash(), TODAY);
+  assert.deepEqual(groundsHash(TOWN), TODAY);
 });

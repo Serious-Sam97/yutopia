@@ -20,6 +20,8 @@ export interface GroundsEdits {
   ways?: Section<WayDef>;
   things?: Section<ThingDef>;
   buildings?: Section<BuildingDef>;
+  /** land grown past the world's edge (docs/plan/69, phase 10): pieces added, changed, taken away */
+  land?: Section<GrowDef>;
 }
 /** Added, changed (by key: only what's given), taken away (by key). */
 export interface Section<T extends { key: string }> {
@@ -56,6 +58,20 @@ export interface ThingDef {
   text?: string;
   /** a fence's line (its points; x, z its first) */
   pts?: P[];
+}
+/** What a piece of grown land is (docs/plan/69, phase 10: the user's eight). */
+export type GrowBiome = "forest" | "meadow" | "hills" | "mountains" | "lake" | "farmland" | "beach" | "desert";
+/** A piece of land grown onto the world: a rect on the chunks' grid touching the land there is, its
+ *  biome, and how far its land's raised (or lowered) from where it starts. */
+export interface GrowDef {
+  key: string;
+  name?: string;
+  biome: GrowBiome;
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  lift?: number;
 }
 /** A building: the generator's own fields (its plot, axis-aligned; its door's side). */
 export type BuildingDef = Omit<Building, "stored">;

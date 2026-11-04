@@ -1,5 +1,5 @@
 import type { ServerMessages } from "@yutopia/shared";
-import { CHUNK, checkEdits, GROUNDS, groundSurfaceAt, placeAt, terrainAt, treesIn } from "@yutopia/shared/grounds";
+import { CHUNK, checkEdits, groundSurfaceAt, landBounds, placeAt, terrainAt, treesIn } from "@yutopia/shared/grounds";
 import {
   BRUSH,
   LandStroke,
@@ -23,6 +23,7 @@ import { layDraft, layings, onPublished, publishedEdits, recheckEdits } from "..
 import { GOD_READY, GOD_TOOLS, type GodDraftRow, type GodHud, type GodTool, hud, toast } from "../store";
 import type { GodInput, ThirdPersonView } from "../tp/view";
 import { BuildingsTool } from "./buildings";
+import { GrowTool } from "./grow";
 import { BrushRing } from "./ring";
 import { RoadsTool } from "./roads";
 import { ThingsTool } from "./things";
@@ -49,6 +50,7 @@ const RETRY_MS = 10_000;
 const EDGE_PX = 10; // the screen's edge pans
 const MAX_BYTES = 6_000_000; // (the API's and the rule book's)
 const STROKE_LAY_MS = 300; // a stroke laid as it goes, this often
+const PAST_EDGE = 512; // how far past the land's box the camera goes (a piece drawn beyond it)
 
 /** The draft open: its id and name (docs/plan/55-the-drafts.md; id null: none yet), the revision
  *  it's made on, the whole edits set as I want it. */
@@ -119,6 +121,10 @@ export class GodController {
   // the buildings tool (phase 9: ./buildings.ts), and the pointer dragging a building
   private buildings: BuildingsTool | null = null;
   private buildingDrag: number | null = null;
+  // the grow tool (plan 69's phase 10: ./grow.ts), and the pointer drawing a piece (where it went
+  // down: a click or a drag)
+  private grow: GrowTool | null = null;
+  private growDrag: { id: number; x0: number; y0: number; t: number } | null = null;
   private mouse: { x: number; y: number } | null = null;
   private pinch: { d: number; a: number; mx: number; my: number } | null = null;
   private readonly offs: (() => void)[] = [];
@@ -202,6 +208,9 @@ export class GodController {
     this.things = null;
     this.buildings?.dispose();
     this.buildings = null;
+    this.grow?.dispose();
+    this.grow = null;
+    this.growDrag = null;
     this.on = false;
     const tp = this.w.tp;
     if (tp) tp.god = null;
@@ -216,7 +225,15 @@ export class GodController {
     layDraft(null);
     const n = this.changes();
     const name = this.draft?.name || ask?.name || "";
-    this.set({ on: false, walking: false, publish: null, pointer: null, naming: null, drafts: this.listShut() });
+    this.set({
+      on: false,
+      walking: false,
+      publish: null,
+      pointer: null,
+      naming: null,
+      map: false,
+      drafts: this.listShut(),
+    });
     if (n && name) toast(tr("godKept").replace("{name}", name).replace("{n}", String(n)));
   }
 
@@ -232,6 +249,9 @@ export class GodController {
     this.things?.cancel();
     this.things?.hide();
     this.buildings?.hide();
+    this.grow?.cancel();
+    this.grow?.hide();
+    this.growDrag = null;
     this.walking = on;
     this.keys.clear();
     this.pointers.clear();
@@ -242,7 +262,7 @@ export class GodController {
       this.w.teleport({ x: this.at.x - f.x, y: this.at.z - f.z, level: 0 });
       tp.god = null;
     } else tp.god = { at: new Vector3(), dist: this.up, input: this.input };
-    this.set({ walking: on, publish: null });
+    this.set({ walking: on, publish: null, map: false });
   }
 
   // ── each frame ─────────────────────────────────────────────────────────────
@@ -277,6 +297,8 @@ export class GodController {
       if (tool === "buildings") this.buildingsTool()?.frame(this.under, f);
       else this.buildings?.hide();
     }
+    if (tool === "grow") this.growTool()?.frame(this.under, f);
+    else this.grow?.hide();
     this.readouts();
     return {
       eye: [ex - f.x, ez - f.z, ey + f.y],
@@ -320,8 +342,18 @@ export class GodController {
     const cx = Math.cos(this.yaw);
     const cz = Math.sin(this.yaw);
     // (right of the way it looks: −sin, cos)
-    this.at.x = clamp(this.at.x + cx * a - cz * s, GROUNDS.x0, GROUNDS.x1);
-    this.at.z = clamp(this.at.z + cz * a + cx * s, GROUNDS.z0, GROUNDS.z1);
+    this.lookAt(this.at.x + cx * a - cz * s, this.at.z + cz * a + cx * s);
+  }
+  /** The camera's ground point moved to (x, z): within the land's box, and a way past it (a piece
+   *  of land drawn beyond the edge: the box grows only once it's laid). */
+  lookAt(x: number, z: number) {
+    const L = landBounds();
+    this.at.x = clamp(x, L.x0 - PAST_EDGE, L.x1 + PAST_EDGE);
+    this.at.z = clamp(z, L.z0 - PAST_EDGE, L.z1 + PAST_EDGE);
+  }
+  /** Where the camera looks (the Grounds' coords). */
+  lookingAt(): { x: number; z: number } {
+    return { ...this.at };
   }
   zoom(by: number) {
     this.up = clamp(this.up * by, UP.min, UP.max);
@@ -387,6 +419,11 @@ export class GodController {
       return true;
     }
     if (e.metaKey || e.ctrlKey) return false;
+    // the map over everything: M or Esc closes it (the rest still pans under it)
+    if (hud.get().god.map && (e.key === "Escape" || k === "m")) {
+      if (!e.repeat) this.toggleMap(false);
+      return true;
+    }
     // the things tool: R turns (Shift: back), Delete takes the picked one away; a fence drawn as a way is
     const th = hud.get().god.tool === "things" ? this.things : null;
     if (th && !hud.get().god.publish && !e.repeat) {
@@ -412,6 +449,20 @@ export class GodController {
       }
       if (e.key === "Escape" && hud.get().god.buildings.sel) {
         bt.deselect();
+        return true;
+      }
+    }
+    // the grow tool: Delete takes the picked piece away, Esc lets a drawing (or the picked one) go
+    const gt = hud.get().god.tool === "grow" ? this.grow : null;
+    if (gt && !hud.get().god.publish && !e.repeat) {
+      if (e.key === "Delete" || (e.key === "Backspace" && hud.get().god.grow.sel)) {
+        gt.removePicked();
+        return true;
+      }
+      if (e.key === "Escape" && (gt.drawing || hud.get().god.grow.sel)) {
+        this.growDrag = null;
+        if (gt.drawing) gt.cancel();
+        else gt.deselect();
         return true;
       }
     }
@@ -453,7 +504,8 @@ export class GodController {
     if (e.repeat) return true;
     if (k === "o" || e.key === "0") this.leave();
     else if (e.key === "[" || e.key === "]") this.resize(e.key === "]" ? 1.25 : 0.8);
-    else if (e.key >= "1" && e.key <= "7") this.setTool(GOD_TOOLS[Number(e.key) - 1]);
+    else if (k === "m") this.toggleMap();
+    else if (e.key >= "1" && e.key <= String(GOD_TOOLS.length)) this.setTool(GOD_TOOLS[Number(e.key) - 1]);
     else this.keys.add(e.code);
     return true;
   }
@@ -496,6 +548,11 @@ export class GodController {
         this.buildingDrag = e.pointerId;
         return;
       }
+      // the grow tool: a piece drawn from here (let go where it went down: a click, picking one)
+      if (tool === "grow" && e.button === 0 && !touches && this.growTool()?.down(this.landAt(e))) {
+        this.growDrag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now() };
+        return;
+      }
       // the select tool: whatever's under it picked up to drag (else the press pans, or a click
       // on nothing lets the picked one go)
       if (tool === "select" && e.button === 0 && !touches) {
@@ -535,6 +592,7 @@ export class GodController {
       if (this.roadDrag === e.pointerId) return this.roads?.move(this.landAt(e));
       if (this.thingDrag === e.pointerId) return this.things?.move(this.landAt(e));
       if (this.buildingDrag === e.pointerId) return this.buildings?.move(this.landAt(e));
+      if (this.growDrag?.id === e.pointerId) return this.grow?.move(this.landAt(e));
       if (this.selDrag?.id === e.pointerId) {
         const at = this.landAt(e);
         const k = this.selDrag.kind;
@@ -575,6 +633,15 @@ export class GodController {
       if (this.buildingDrag === e.pointerId) {
         this.buildingDrag = null;
         this.buildings?.up(this.landAt(e), false);
+        return;
+      }
+      const gd = this.growDrag;
+      if (gd?.id === e.pointerId) {
+        this.growDrag = null;
+        const click = Math.hypot(e.clientX - gd.x0, e.clientY - gd.y0) < 6 && performance.now() - gd.t < 600;
+        // (a pointer lost, not let go: no piece)
+        if (e.type === "pointerup") this.grow?.up(this.landAt(e), click);
+        else this.grow?.cancel();
         return;
       }
       if (this.selDrag?.id === e.pointerId) {
@@ -730,6 +797,16 @@ export class GodController {
         tp.scene,
       );
     return this.buildings;
+  }
+  /** The grow tool (made the first time it's needed). */
+  growTool(): GrowTool | null {
+    const tp = this.w.tp;
+    if (!this.grow && tp)
+      this.grow = new GrowTool(
+        { draft: () => this.draftNow(), change: (next) => this.change(next), laid: () => layings() },
+        tp.scene,
+      );
+    return this.grow;
   }
   /** One tree (a cell with one: none; without: one of the kind asked for), or one rock. */
   private natureClick(at: { x: number; z: number } | null) {
@@ -1168,6 +1245,9 @@ export class GodController {
     this.end();
     this.roads?.cancel();
     this.things?.cancel();
+    this.grow?.cancel();
+    this.grow?.deselect();
+    this.growDrag = null;
     this.deselect();
   }
 
@@ -1258,6 +1338,9 @@ export class GodController {
       this.things?.cancel();
       this.things?.hide();
       this.buildings?.hide();
+      this.grow?.cancel();
+      this.grow?.hide();
+      this.growDrag = null;
       // (into Select or out of it: nothing picked by it)
       this.set({ tool: t, picked: null });
     }
@@ -1285,6 +1368,10 @@ export class GodController {
   }
   setPaint(p: Partial<GodHud["paint"]>) {
     this.set({ paint: { ...hud.get().god.paint, ...p } });
+  }
+  /** The overview map of the whole land (M) shown or not. */
+  toggleMap(open = !hud.get().god.map) {
+    this.set({ map: open });
   }
   setSnap(s: GodHud["snap"]) {
     this.set({ snap: s });

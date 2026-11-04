@@ -33,9 +33,13 @@ import {
   POND_LEVEL,
   RIVER,
   riverWater,
+  waterAt,
 } from "../grounds.ts";
+import { grownLakeR, grownLevel, grownNow, lakeBowl } from "../grow.ts";
+import { landVersion } from "../land.ts";
 import { elevOf, floorsOf, levelMap, objLevel, offsetOf, onLevel, STOREY } from "../levels.ts";
 import { liftDoorEdges, liftHere, liftWallEdges } from "../lift.ts";
+import { LAKE, LONG_ROAD, lakeR } from "../longroad.ts";
 import { type Edge, hWall, isFloor, type MapDef, tileAt, vWall } from "../map.ts";
 import { doorLockable, edgeKey, isOpening, openingEdges, wallCuts } from "../openings.ts";
 import { type GroundSolid, type GroundWhat, groundSolidAt, groundSolidsIn } from "../shapes/grounds.ts";
@@ -395,6 +399,120 @@ export function iceSheet(ice: number, holes: readonly IceHole[] = []): Solid3[] 
       piece(ax, az, bx, bz, -H - 0.6, -H * edge, y);
     }
   }
+  // Silver Lake (docs/plan/69) and god mode's grown lakes (its phase 10): rows 2 m wide, each iced
+  // where it's the lake's and from its shore in to `edge`
+  for (const lk of lakes()) {
+    const ly = lk.level + ICE_TOP;
+    for (const row of lk.rows) {
+      let from: number | null = null;
+      for (let k = 0; k <= row.l.length; k++) {
+        const l = row.l[k];
+        const on = k < row.l.length && l <= 1 && (edge <= 0 || l >= edge);
+        if (on && from === null) from = k;
+        if (!on && from !== null) {
+          const [ax, az] = lk.pt(row.u0 + from * 2, row.v);
+          const [bx, bz] = lk.pt(row.u0 + k * 2, row.v);
+          piece(ax, az, bx, bz, -1, 1, ly);
+          from = null;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// The lakes that ice: each in its own frame (u along it, v across), its rows 2 m apart, a cell every
+// 2 m along — how far out each is (1 its shore; 9 where it's dry), made once (a grown one's again as
+// it's laid anew)
+interface IceLake {
+  level: number;
+  pt: (u: number, v: number) => [number, number];
+  rows: { v: number; u0: number; l: Float32Array }[];
+}
+function iceRows(
+  pt: IceLake["pt"],
+  u0: number,
+  u1: number,
+  v0: number,
+  v1: number,
+  side: (x: number, z: number) => number,
+): IceLake["rows"] {
+  const rows: IceLake["rows"] = [];
+  for (let v = v0; v < v1; v += 2) {
+    const l = new Float32Array(Math.floor((u1 - u0) / 2));
+    for (let k = 0; k < l.length; k++) {
+      const [x, z] = pt(u0 + k * 2 + 1, v + 1);
+      l[k] = side(x, z);
+    }
+    rows.push({ v: v + 1, u0, l });
+  }
+  return rows;
+}
+let silver: IceLake | null = null;
+const grownIce = new Map<string, IceLake>();
+function lakes(): IceLake[] {
+  const out: IceLake[] = [];
+  if (LONG_ROAD) {
+    if (!silver) {
+      const c = Math.cos(LAKE.tilt);
+      const s = Math.sin(LAKE.tilt);
+      const pt = (u: number, v: number): [number, number] => [LAKE.cx + u * c - v * s, LAKE.cz + u * s + v * c];
+      const R = LAKE.rx * 1.4;
+      const V = LAKE.rz * 1.4;
+      silver = {
+        level: LAKE.level,
+        pt,
+        // (its deep middle wet, past its bowl dry: only its shore's asked)
+        rows: iceRows(pt, -R, R, -V, V, (x, z) => {
+          const r = lakeR(x, z);
+          return r < 0.85 || (r < 1.25 && waterAt(x, z)?.kind === "lake") ? Math.min(1, r) : 9;
+        }),
+      };
+    }
+    out.push(silver);
+  }
+  const live = new Set<string>();
+  for (const g of grownNow()) {
+    if (g.def.biome !== "lake") continue;
+    const k = JSON.stringify([g.def, g.y]);
+    live.add(k);
+    let lk = grownIce.get(k);
+    if (!lk) {
+      // (over its bowl, its shape read from an 8 m grid: the wobble's ~90 m waves — every 2 m with the
+      // water asked of the land too, a big lake was seconds; the water's asked on its shore only)
+      const b = lakeBowl(g.def);
+      const ex = b.rx * 1.4;
+      const ez = b.rz * 1.4;
+      const G = 8;
+      const nx = Math.ceil((2 * ex) / G) + 2;
+      const nz = Math.ceil((2 * ez) / G) + 2;
+      const grid = new Float32Array(nx * nz);
+      for (let j = 0; j < nz; j++)
+        for (let i = 0; i < nx; i++) grid[j * nx + i] = grownLakeR(g, b.cx - ex + i * G, b.cz - ez + j * G);
+      const rAt = (x: number, z: number) => {
+        const u = Math.min(nx - 1.001, Math.max(0, (x - b.cx + ex) / G));
+        const v = Math.min(nz - 1.001, Math.max(0, (z - b.cz + ez) / G));
+        const i = Math.floor(u);
+        const j = Math.floor(v);
+        const fu = u - i;
+        const fv = v - j;
+        const at = (a: number, c: number) => grid[(j + c) * nx + i + a];
+        return (at(0, 0) * (1 - fu) + at(1, 0) * fu) * (1 - fv) + (at(0, 1) * (1 - fu) + at(1, 1) * fu) * fv;
+      };
+      const pt = (u: number, v: number): [number, number] => [u, v];
+      lk = {
+        level: grownLevel(g),
+        pt,
+        rows: iceRows(pt, b.cx - ex, b.cx + ex, b.cz - ez, b.cz + ez, (x, z) => {
+          const r = rAt(x, z);
+          return r < 0.95 || (r < 1.3 && waterAt(x, z)?.kind === "lake") ? Math.min(1, r) : 9;
+        }),
+      };
+      grownIce.set(k, lk);
+    }
+    out.push(lk);
+  }
+  for (const k of [...grownIce.keys()]) if (!live.has(k)) grownIce.delete(k);
   return out;
 }
 
@@ -417,11 +535,28 @@ export class WorldBuilder {
     else this.world.remove(`grounds:${k}`);
   }
 
+  /** A Grounds chunk taken out again (nobody's near it: docs/plan/69, L2). */
+  dropChunk(cx: number, cz: number): void {
+    const k = `${cx},${cz}`;
+    if (!this.ground.delete(k)) return;
+    this.world.remove(`land:${k}`);
+    this.world.remove(`grounds:${k}`);
+  }
+  /** Whether a Grounds chunk is built. */
+  hasChunk(cx: number, cz: number): boolean {
+    return this.ground.has(`${cx},${cz}`);
+  }
+  /** The Grounds chunks built, "cx,cz" each. */
+  chunksBuilt(): ReadonlySet<string> {
+    return this.ground;
+  }
+
   /** The water's ice as the room has it (W6; plan 66 S4): `ice` (made again as it moves 0.02) and
-   *  its holes — what's iced walked, the open water swum. */
+   *  its holes — what's iced walked, the open water swum (and again once the land's grown: a lake
+   *  of god mode's — docs/plan/69, phase 10). */
   ice(ice: number, holes: readonly IceHole[] = []): void {
     const q = Math.round(Math.max(0, Math.min(1, ice)) * 50) / 50;
-    const key = `${q}|${holesToWire(holes)}`;
+    const key = `${q}|${holesToWire(holes)}|${landVersion}`;
     if (key === this.iceKey) return;
     this.iceKey = key;
     const solids = iceSheet(q, holes);

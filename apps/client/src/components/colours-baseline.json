@@ -14,5 +14,6 @@
   "components/hud/build/BuildMode.tsx": 2,
   "components/hud/build/DesksPanel.tsx": 8,
   "components/hud/build/RoomsPanel.tsx": 6,
-  "components/hud/build/WallsPanel.tsx": 38
+  "components/hud/build/WallsPanel.tsx": 38,
+  "components/hud/god/GodHud.tsx": 12
 }

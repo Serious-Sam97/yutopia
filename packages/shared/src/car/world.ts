@@ -4,7 +4,6 @@ import {
   CHUNK,
   carBlockedTile,
   FORECOURT,
-  GROUNDS,
   heightAt,
   LAMPS,
   MOTORS,
@@ -15,6 +14,7 @@ import {
   waterAt,
   weatheredFooting,
 } from "../grounds.ts";
+import { inLandBounds } from "../land.ts";
 import { lotBanksOf, lotLayout } from "../lot.ts";
 import type { Ground } from "./grip.ts";
 import type { CarWorld, Solid } from "./sim.ts";
@@ -36,6 +36,8 @@ export function groundAt(x: number, z: number, cold = 0.5): Ground {
     const f = weatheredFooting(s, x, z);
     return f === "packed" ? "path" : f === "grass" || f === "earth" || f === "mud" ? f : s;
   }
+  // (the grown land's sand: driven as bare earth — docs/plan/69, phase 10)
+  if (s === "sand") return "earth";
   return s;
 }
 
@@ -181,7 +183,7 @@ export interface GroundsWorldOpts {
 /** The Grounds for the car's sim (building coords). */
 export function groundsWorld(o: GroundsWorldOpts = {}): CarWorld {
   const w: CarWorld = {
-    height: (x, z) => (x < GROUNDS.x0 || x > GROUNDS.x1 || z < GROUNDS.z0 || z > GROUNDS.z1 ? 0 : heightAt(x, z)),
+    height: (x, z) => (inLandBounds(x, z) ? heightAt(x, z) : 0),
     ground: (x, z) => groundAt(x, z, o.cold?.() ?? 0.5),
     // (the water over the ground: its bed's, open — its ice is driven on: plan 66)
     water: (x, z) => {

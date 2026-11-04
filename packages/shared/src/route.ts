@@ -1,4 +1,5 @@
 import type { Building, P, Way, WayKind } from "./grounds.ts";
+import { LONG_ROAD, NAMES, PADS, PASS, padAt, SHORE, SPINE } from "./longroad.ts";
 
 // (the Grounds are handed in, not imported: the client's bundler copies a module
 // into every chunk that imports it, and the Grounds are big — the client hands
@@ -397,6 +398,18 @@ export function doorOf(b: Building, out = 2): P {
 }
 
 /** The Grounds' landmarks: where a route to each ends. */
+function longPlaces(): { key: string; name: string; p: P }[] {
+  if (!LONG_ROAD) return [];
+  const pad = (n: number): P => padAt(PADS[n]) as P;
+  return [
+    { key: "rest", name: "Rest area", p: pad(0) },
+    { key: "pullout", name: "The pull-out", p: pad(1) },
+    { key: "pass", name: NAMES.pass, p: [SPINE[PASS][0], SPINE[PASS][1]] },
+    { key: "lookout", name: `${NAMES.lake} Lookout`, p: pad(2) },
+    // (its shore by the boathouse, at the path's end)
+    { key: "lake", name: NAMES.lake, p: SHORE.path[SHORE.path.length - 1] },
+  ];
+}
 export function landmarks(): { key: string; name: string; p: P }[] {
   const { LOT, PLAZA, POND, TOWER, STATUE, GATE, FARM, KART_DESK } = g();
   return [
@@ -409,6 +422,8 @@ export function landmarks(): { key: string; name: string; p: P }[] {
     { key: "farm", name: "The farm", p: [(FARM.x0 + FARM.x1) / 2, (FARM.z0 + FARM.z1) / 2] },
     // (its desk, where you take a kart: docs/plan/46-the-karts.md)
     { key: "karts", name: "Yutopia Kart Park", p: [KART_DESK.x + 2 * KART_DESK.face, KART_DESK.z] },
+    // the long road's (docs/plan/69, L7)
+    ...longPlaces(),
   ];
 }
 

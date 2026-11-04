@@ -111,7 +111,7 @@ test("the land: the road in off the county road to the gate, the pad level under
   }
   // the woods round it, the river and the road clear of the fence
   assert.ok(G.treeDensity(KART_FENCE.x0 - 30, KART_PARK.z) > 0.2);
-  assert.ok(G.GROUNDS.z0 < KART_FENCE.z0 - 60);
+  assert.ok(G.landBounds().z0 < KART_FENCE.z0 - 60);
   for (let x = KART_FENCE.x0; x <= KART_FENCE.x1; x += 4)
     assert.ok(
       Math.min(...county.line.map(([cx, cz]) => Math.hypot(cx - x, cz - KART_FENCE.z1))) > 20,

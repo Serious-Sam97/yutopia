@@ -9,7 +9,6 @@ import { STEP } from "../grid.ts";
 import {
   BUILDINGS,
   CHUNK,
-  GROUNDS,
   heightAt,
   iceAt,
   pavedAt,
@@ -21,6 +20,7 @@ import {
   waterAt,
   worldRects,
 } from "../grounds.ts";
+import { BASE_LAND, landChunks, type Region } from "../land.ts";
 import { type GroundWhat, groundSolidsIn } from "../shapes/grounds.ts";
 import type { Solid3, SolidBox3 } from "../shapes/index.ts";
 import { WorldBuilder } from "./build.ts";
@@ -49,15 +49,22 @@ function tilesOf(s: Solid3): [number, number, number, number] {
   return [Math.floor(s.x - ex), Math.floor(s.z - ez), Math.floor(s.x + ex), Math.floor(s.z + ez)];
 }
 
-export async function audit(water: "frozen" | "open" = "frozen"): Promise<Audit> {
+/** `of`: the regions audited (today's town by default; the long road's band — docs/plan/69 — its own). */
+export async function audit(water: "frozen" | "open" = "frozen", of: readonly Region[] = BASE_LAND): Promise<Audit> {
   const t0 = performance.now();
   const open = water === "open";
   setUnderfoot({ ice: open ? 0 : 1 });
-  const cx0 = Math.floor(GROUNDS.x0 / CHUNK);
-  const cz0 = Math.floor(GROUNDS.z0 / CHUNK);
-  const cx1 = Math.ceil(GROUNDS.x1 / CHUNK);
-  const cz1 = Math.ceil(GROUNDS.z1 / CHUNK);
-  const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 2 * (cx1 - cx0) * (cz1 - cz0) }));
+  const L = of.reduce(
+    (b, r) => ({
+      x0: Math.min(b.x0, r.drawn.x0),
+      z0: Math.min(b.z0, r.drawn.z0),
+      x1: Math.max(b.x1, r.drawn.x1),
+      z1: Math.max(b.z1, r.drawn.z1),
+    }),
+    { x0: Number.POSITIVE_INFINITY, z0: Number.POSITIVE_INFINITY, x1: -Infinity, z1: -Infinity },
+  );
+  const chunks = landChunks(CHUNK, of);
+  const world = await PhysicsWorld.create(loadJolt, sizesFor({ statics: 2 * chunks.length }));
   const build = new WorldBuilder(world);
   // what's in each tile (its solids' footprints), for saying why
   const what = new Map<number, Set<GroundWhat | "tree">>();
@@ -75,23 +82,22 @@ export async function audit(water: "frozen" | "open" = "frozen"): Promise<Audit>
     }
     return top;
   };
-  const key = (x: number, z: number) => (x - GROUNDS.x0) * 4096 + (z - GROUNDS.z0);
+  const key = (x: number, z: number) => (x - L.x0) * 4096 + (z - L.z0);
   const mark = (x: number, z: number, w: GroundWhat | "tree") => {
     const k = key(x, z);
     const s = what.get(k);
     if (s) s.add(w);
     else what.set(k, new Set([w]));
   };
-  for (let cz = cz0; cz < cz1; cz++)
-    for (let cx = cx0; cx < cx1; cx++) {
-      build.groundChunk(cx, cz);
-      for (const g of groundSolidsIn(cx, cz)) {
-        if (g.what === "porch" && g.s.t === "box") porches.push(g.s);
-        const [x0, z0, x1, z1] = tilesOf(g.s);
-        for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) mark(x, z, g.what);
-      }
-      for (const t of treesIn(cx, cz)) mark(Math.floor(t.x), Math.floor(t.z), "tree");
+  for (const [cx, cz] of chunks) {
+    build.groundChunk(cx, cz);
+    for (const g of groundSolidsIn(cx, cz)) {
+      if (g.what === "porch" && g.s.t === "box") porches.push(g.s);
+      const [x0, z0, x1, z1] = tilesOf(g.s);
+      for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) mark(x, z, g.what);
     }
+    for (const t of treesIn(cx, cz)) mark(Math.floor(t.x), Math.floor(t.z), "tree");
+  }
   // the water open: its deep kept off by the grid (the paths), swum in by a body (plan 66) — by design
   build.ice(open ? 0 : 1);
   world.settle();
@@ -106,8 +112,8 @@ export async function audit(water: "frozen" | "open" = "frozen"): Promise<Audit>
     if (c) c.n++;
     else into[why] = { n: 1, at: [x, z] };
   };
-  for (let z = GROUNDS.z0 + 2; z < GROUNDS.z1 - 2; z++)
-    for (let x = GROUNDS.x0 + 2; x < GROUNDS.x1 - 2; x++) {
+  for (let z = L.z0 + 2; z < L.z1 - 2; z++)
+    for (let x = L.x0 + 2; x < L.x1 - 2; x++) {
       const mx = x + 0.5;
       const mz = z + 0.5;
       if (stored.some((b) => mx >= b.x0 - 1 && mx < b.x1 + 1 && mz >= b.z0 - 1 && mz < b.z1 + 1)) continue;

@@ -3,13 +3,13 @@ import { test } from "node:test";
 import { groundsRng } from "@yutopia/shared/grounds";
 import { BoxGeometry } from "three";
 import { G, tinted } from "./campus";
+import { landAround } from "./land-block";
 import { driftAlong, flatSnow, icicles, slopeSnow, snowBox } from "./snow3d";
 import {
   AT,
   BURIED,
   growOf,
   isSnow,
-  landAround,
   layerShader,
   mergeGeometries,
   pieceAt,

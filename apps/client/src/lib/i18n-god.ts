@@ -20,6 +20,7 @@ export const GOD_STRINGS = {
   godOverlap_ways: ["{n} ways", "{n} vias"],
   godOverlap_things: ["{n} things", "{n} coisas"],
   godOverlap_buildings: ["{n} buildings", "{n} prédios"],
+  godOverlap_land: ["{n} pieces of land", "{n} pedaços de terra"],
   godPublished: ["Revision {rev} published: everyone has it now", "Revisão {rev} publicada: todos já a têm"],
   godSaveFailed: ["The draft couldn't be saved: try again", "O rascunho não pôde ser salvo: tente de novo"],
   godToolSoon: ["{tool} comes in the next phase of god mode", "{tool} chega na próxima fase do modo deus"],
@@ -38,6 +39,9 @@ export const GOD_STRINGS = {
   godTool_nature: ["Nature", "Natureza"],
   godTool_things: ["Things", "Coisas"],
   godTool_buildings: ["Buildings", "Prédios"],
+  godTool_grow: ["Grow", "Crescer"],
+  godLandBlocked: ["No land there: {why}", "Sem terra aí: {why}"],
+  godLandStays: ["It stays: {why}", "Ele fica: {why}"],
 } as const;
 
 export type GodKey = keyof typeof GOD_STRINGS;

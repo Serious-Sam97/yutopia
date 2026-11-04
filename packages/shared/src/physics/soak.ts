@@ -6,7 +6,8 @@
 //                                                leaving, things dropped and gone, the building edited
 // Prints one JSON line; exits 1 if a guardrail's broken.
 import { campusBuilding } from "../building.ts";
-import { CHUNK, GROUNDS, groundsChunk } from "../grounds.ts";
+import { CHUNK, groundsChunk } from "../grounds.ts";
+import { isLandChunk, landBounds, landChunks } from "../land.ts";
 import { studio } from "../maps/studio.ts";
 import { openingsIntoWalls } from "../openings.ts";
 import { splitAll } from "../tops.ts";
@@ -41,6 +42,7 @@ function spots(cx0: number, cz0: number, cx1: number, cz1: number, n: number): [
   for (let k = 0; out.length < n && k < n * 50; k++) {
     const cx = cx0 + Math.floor(rnd(k, 1) * (cx1 - cx0));
     const cz = cz0 + Math.floor(rnd(k, 2) * (cz1 - cz0));
+    if (!isLandChunk(cx, cz, CHUNK)) continue;
     const c = groundsChunk(cx, cz);
     const i = Math.floor(rnd(k, 3) * CHUNK);
     const j = Math.floor(rnd(k, 4) * CHUNK);
@@ -79,14 +81,16 @@ async function whole() {
   const t0 = performance.now();
   const { map, objects } = hq();
   const b = buildingSolids(map, objects);
-  const [cx0, cz0] = [Math.floor(GROUNDS.x0 / CHUNK), Math.floor(GROUNDS.z0 / CHUNK)];
-  const [cx1, cz1] = [Math.ceil(GROUNDS.x1 / CHUNK), Math.ceil(GROUNDS.z1 / CHUNK)];
-  const chunks = (cx1 - cx0) * (cz1 - cz0);
+  const L = landBounds();
+  const [cx0, cz0] = [Math.floor(L.x0 / CHUNK), Math.floor(L.z0 / CHUNK)];
+  const [cx1, cz1] = [Math.ceil(L.x1 / CHUNK), Math.ceil(L.z1 / CHUNK)];
+  const land = landChunks(CHUNK);
+  const chunks = land.length;
   const sizes = sizesFor({ statics: staticCount(b, chunks), things: 500, vehicles: b.cars.size });
   const log: string[] = [];
   const w = await PhysicsWorld.create(loadJolt, sizes, (m) => log.push(m));
   const build = new WorldBuilder(w);
-  build.groundRect(GROUNDS.x0, GROUNDS.z0, GROUNDS.x1, GROUNDS.z1);
+  for (const [cx, cz] of land) build.groundChunk(cx, cz);
   build.building(b);
   w.settle();
   const buildMs = performance.now() - t0;

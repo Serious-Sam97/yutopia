@@ -79,7 +79,8 @@ test("what's anchored stays: not taken away, not moved", () => {
 
 test("nothing on ground that stays as it is: the campus, the park, past the edge", () => {
   assert.ok(has({ rev: 0, height: { "0,0": lift(100) } }, /height 0,0: on ground that stays/));
-  assert.ok(has({ rev: 0, height: { "99,0": lift(100) } }, /not a chunk/));
+  // (far past any land: the long road's reaches x ~11 km — docs/plan/69)
+  assert.ok(has({ rev: 0, height: { "999,0": lift(100) } }, /not a chunk/));
   assert.ok(
     has(
       {

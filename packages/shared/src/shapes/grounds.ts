@@ -15,6 +15,7 @@ import {
   BENCH,
   BUILDINGS,
   type Building,
+  bridgeRuns,
   CHUNK,
   DOCK,
   editsVersion,
@@ -42,6 +43,7 @@ import {
   kartTrackNow,
   LAMPS,
   layoutVersion,
+  longRailsIn,
   MOTORS,
   PINE_H,
   pavedAt,
@@ -66,6 +68,7 @@ import {
 } from "../grounds.ts";
 import { KART_FENCE_H } from "../kart/land.ts";
 import { DECK_HALF } from "../kart/park.ts";
+import { LAKE, LONG_ROAD, LOOKOUT_DECK, SHORE } from "../longroad.ts";
 import { type Blocks, type Solid3, type SolidBox3, WALL_T } from "./index.ts";
 
 export type GroundWhat =
@@ -95,6 +98,8 @@ export type GroundWhat =
   | "bridge_deck"
   | "bridge_rail"
   | "dock"
+  | "lookout_deck"
+  | "jetty"
   | "motors"
   | "forecourt"
   | "kart_fence"
@@ -681,13 +686,34 @@ function dock(out: GroundSolid[]) {
     }
 }
 
+// ── the long road's: the lookout's deck out over its drop, Silver Lake's jetty (docs/plan/69, L7) ──
+function longDecks(out: GroundSolid[]) {
+  const D = LOOKOUT_DECK;
+  const a = Math.atan2(-D.dz, D.dx);
+  const at = (u: number, v: number) => [D.x + D.dx * u - D.dz * v, D.z + D.dz * u + D.dx * v] as const;
+  const [mx, mz] = at((D.a0 + D.a1) / 2, 0);
+  const L = (D.a1 - D.a0) / 2;
+  out.push({ what: "lookout_deck", s: turned(mx, mz, a, -L, -D.half, L, D.half, D.top - 0.3, D.top) });
+  // its rails: either side, and across its end
+  for (const v of [-D.half, D.half])
+    out.push({ what: "lookout_deck", s: turned(mx, mz, a, -L, v - 0.06, L, v + 0.06, D.top, D.top + 1.05) });
+  const [ex, ez] = at(D.a1, 0);
+  out.push({ what: "lookout_deck", s: turned(ex, ez, a, -0.06, -D.half, 0.06, D.half, D.top, D.top + 1.05) });
+  // the jetty: its planks, 2.4 wide, at the lake's level + 0.62
+  const J = SHORE.jetty;
+  const top = LAKE.level + 0.62;
+  out.push({
+    what: "jetty",
+    s: turned(J.x, (J.z0 + J.z1) / 2, 0, -1.2, -(J.z0 - J.z1) / 2, 1.2, (J.z0 - J.z1) / 2, top - 0.3, top),
+  });
+}
+
 // ── the bridges over the river and the ravine (WAYS' bridged samples) ──
 function bridges(out: GroundSolid[]) {
-  for (const w of WAYS) {
-    const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
-    if (idx.length < 2) continue;
-    const a = idx[0];
-    const b = idx[idx.length - 1];
+  // (each run of a way's bridged samples its own bridge: the long road has two — docs/plan/69)
+  const runs: { w: (typeof WAYS)[number]; a: number; b: number }[] = [];
+  for (const w of WAYS) for (const r of bridgeRuns(w)) if (r.length > 1) runs.push({ w, a: r[0], b: r[r.length - 1] });
+  for (const { w, a, b } of runs) {
     const L = w.line;
     const timber = w.kind === "trail";
     // the deck: a slab a sample long, 0.3 deep, to its edges (w/2 + 0.3), at its middle's height
@@ -1131,7 +1157,7 @@ function things(out: GroundSolid[]) {
   }
   // the road closed (tp/grounds3d.ts): three sawhorse barricades across it, 1.3 high, and the drift
   // past them (an ellipsoid 4 × 1.8 × 7 at x + 5, sunk 0.3: three steps under its curve)
-  {
+  if (!LONG_ROAD) {
     const { x: X, z: Z } = ROAD_CLOSED;
     const y = groundAt(X, Z);
     for (const zc of [Z - 4.6, Z, Z + 4.6])
@@ -1172,6 +1198,7 @@ function things(out: GroundSolid[]) {
   for (const b of BUILDINGS) if (b.kind !== "hq" && !b.stored) building(out, b);
   bridges(out);
   dock(out);
+  if (LONG_ROAD) longDecks(out);
   pavements(out);
   if (KART_LAND) kartPark(out);
 }
@@ -1261,6 +1288,18 @@ export function groundSolidsIn(cx: number, cz: number): GroundSolid[] {
           ? ["tree_birch", 0.17 * t.s, 9 * t.s * sy]
           : ["tree_bare", 0.2 * 1.7 * t.s, 2.4 * 1.7 * t.s * sy];
     out.push({ what, s: cyl(t.x, t.z, r, t.y - 0.25, t.y - 0.25 + h) });
+  }
+  // the long road's guard rails (grounds.ts longDressIn — docs/plan/69, L3): a W-beam 0.9 high on its
+  // posts, a piece a 2 m stretch, turned along it
+  for (const d of longRailsIn(cx, cz)) {
+    if (d.bx === undefined || d.bz === undefined) continue;
+    const len = Math.hypot(d.bx - d.x, d.bz - d.z);
+    const a = Math.atan2(-(d.bz - d.z), d.bx - d.x);
+    const y = Math.min(d.y, d.by ?? d.y);
+    out.push({
+      what: "fence",
+      s: turned((d.x + d.bx) / 2, (d.z + d.bz) / 2, a, -len / 2 - 0.05, -0.06, len / 2 + 0.05, 0.06, y - 0.4, y + 0.9),
+    });
   }
   return out;
 }
@@ -1416,6 +1455,16 @@ export const GROUND_WHATS: Record<GroundWhat, { label: string; how: string; odd?
   dock: {
     label: "The pond's dock",
     how: "its planks as one slab 0.3 deep to their top (DOCK.top, the water's level + 0.67), x −253.5 … −250.5, z −98 … −84.4; its eight posts (0.28 square) from the bed to 0.43 over the planks",
+  },
+  lookout_deck: {
+    label: "The lookout's deck",
+    how: "its planks as one slab 0.3 deep to LOOKOUT_DECK.top (the pad's height + 0.2), 26–46 m out from the lookout towards Silver Lake's middle, 8 wide; its rails (0.12 thick, to 1.05 over it) along both sides and across its end",
+    odd: "its posts aren't solids: under it, over the drop",
+  },
+  jetty: {
+    label: "Silver Lake's jetty",
+    how: "its planks as one slab 0.3 deep to the lake's level + 0.62, 2.4 wide, SHORE.jetty's z0 … z1",
+    odd: "its posts in the water aren't solids",
   },
   motors: {
     label: "MOTORS' forecourt",

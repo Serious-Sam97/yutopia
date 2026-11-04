@@ -6,7 +6,6 @@ import {
   CHUNK,
   deckAt,
   footingAt,
-  GROUNDS,
   inBuilt,
   POND,
   placeShift,
@@ -17,8 +16,12 @@ import {
   weatheredFooting,
   whatFooting,
 } from "./grounds.ts";
+import { townBounds } from "./land.ts";
 import { FLOORS } from "./map.ts";
 import { type GroundWhat, groundSolidAt, groundSolidsIn } from "./shapes/grounds.ts";
+
+// (the land's box: land.ts, docs/plan/69)
+const GROUNDS = townBounds(); // (today's town: the long road's land is its own tests')
 
 // What the feet are on (docs/plan/63-the-steps.md, phase 1): every place a body stands, at its
 // height, gives one of the steps' surfaces.

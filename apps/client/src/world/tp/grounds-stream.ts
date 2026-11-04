@@ -1,41 +1,39 @@
 import {
   BUILDINGS,
   CHUNK,
+  chunkCount,
   editsNow,
-  GROUNDS,
-  groundSurfaceAt,
-  groundsChunk,
+  editsVersion,
   heightAt,
-  KART_FENCE,
   KART_LAND,
   LAMPS,
-  missingLand,
+  landBounds,
   onGroundsChanged,
-  pineVariant,
+  overlapsLand,
   SNOW_POLES,
   STREET,
-  type Tree,
+  setChunkCap,
   terrainAt,
   topAt,
-  treesIn,
   WAYS,
 } from "@yutopia/shared/grounds";
 import { decodeHeights } from "@yutopia/shared/grounds-edits";
+import { townBounds } from "@yutopia/shared/land";
+import { LONG_ROAD } from "@yutopia/shared/longroad";
 import {
+  BufferAttribute,
   BufferGeometry,
   CanvasTexture,
   Color,
   type DynamicDrawUsage,
-  Float32BufferAttribute,
   Group,
+  InstancedBufferAttribute,
   InstancedMesh,
   type Material,
-  Matrix4,
   Mesh,
   MeshLambertMaterial,
   MeshStandardMaterial,
   type Object3D,
-  Quaternion,
   RepeatWrapping,
   SphereGeometry,
   SRGBColorSpace,
@@ -43,6 +41,7 @@ import {
   Vector3,
 } from "three";
 import { BARE_LEAVES, BIRCH_LEAVES, bareTree3, crowned, snowCanvas, tinted } from "./campus";
+import { FarLand } from "./far3d";
 import {
   birchGeometry,
   farBareGeometry,
@@ -52,11 +51,12 @@ import {
   type GroundsShared,
   groundsShared,
   pineGeometry,
-  SURF,
 } from "./grounds3d";
+import { type BlockData, blockData, TREE_KINDS } from "./land-block";
+import { landPool } from "./land-pool";
 import type { Themes } from "./sky";
-import { boulderGeometry, COVERS, coverIn, logGeometry, shrubGeometry, stoneGeometry, stumpGeometry } from "./woods3d";
-import { landAround, snowShadow, wx } from "./wx3d";
+import { boulderGeometry, logGeometry, shrubGeometry, stoneGeometry, stumpGeometry } from "./woods3d";
+import { snowShadow, wx } from "./wx3d";
 
 // The Grounds in the game's 3D view (docs/plan/27-the-grounds.md, phase 1):
 // the land and the woods streamed round you, the rest (the ways, the water,
@@ -87,6 +87,13 @@ const TIERS = [
   { size: 32, step: 1, near: -1 },
 ];
 const RADIUS = 440; // land out to here (the fog has it all by then)
+const LOOK_S = 1.5; // going fast: what's built first is what's nearest where you'll be this soon
+// the rest of the Grounds out past the rest's circle (docs/plan/69, L2): made by district, these
+// squares, within DISTRICT_R of you, freed past DISTRICT_GONE
+const DISTRICT = 512;
+const DISTRICT_R = 900;
+const DISTRICT_GONE = 1300;
+const DISTRICT_WAIT = 200; // (waited for behind the loading screen: those this near you)
 const BUDGET_MS = 6; // building a frame
 const BOOST_MS = 40; // …and behind the loading screen, where a long frame doesn't show
 const CASTERS_R = 34; // trees this near cast the sun's shadow
@@ -99,20 +106,10 @@ interface Block {
   z0: number;
   mesh: Mesh | null;
   trees: Map<number, Float32Array>; // pool → its instances' matrices
+  /** a far block's trees: its own instances, a mesh a kind — culled with the view (not in the
+   *  pools, drawn all round you: ~100k of them in the long road's forest, 3 of 4 behind you) */
+  far: InstancedMesh[];
   shown: boolean;
-}
-
-// a vertex of the land's colour: its surface's, the snow a little blue in long waves. (The Kart Park's
-// asphalt is its circuit's own meshes': under them the land's snow — its layout changes, the land's
-// made once — docs/plan/47-the-track-changer.md)
-const BLUE = new Color(0xdbe5f0);
-function landColour(x: number, z: number, near: boolean, c: Color): string {
-  const F = KART_FENCE;
-  const g = groundSurfaceAt(x, z, !near);
-  const s = g === "asphalt" && x > F.x0 && x < F.x1 && z > F.z0 && z < F.z1 ? "snow" : g;
-  c.setHex(SURF[s]);
-  if (s === "snow" || s === "deep") c.lerp(BLUE, 0.35 + 0.35 * Math.sin(x * 0.05 + z * 0.031));
-  return s;
 }
 
 export class GroundsStream {
@@ -123,6 +120,8 @@ export class GroundsStream {
   /** the rest as it was, hidden, to be freed */
   private gone: { g: Grounds3; frames: number } | null = null;
   private night = { k: 0, land: new Color() };
+  // where the camera's feet were, and how fast they're going (m/s)
+  private went = { x: 0, z: 0, t: 0, vx: 0, vz: 0 };
   private blocks = new Map<string, Block>();
   /** blocks over changed chunks: made again (their old shown meanwhile) */
   private stale = new Set<string>();
@@ -132,16 +131,6 @@ export class GroundsStream {
   private casters: Pool[] = [];
   private castersAt = new Vector3(1e9, 0, 1e9);
   private poolsDirty = true;
-  private kinds: {
-    pine: number[];
-    birch: number[];
-    bare: number[];
-    far: number;
-    mound: number;
-    farBirch: number;
-    farBare: number;
-    cover: Record<string, number>;
-  };
   /** the woods' sway: the time, and how hard (sky.ts: harder in a storm) */
   readonly wind = { value: 1 };
   /** The rime on the trees, 0 … 1 (the morning fog's: view.ts sets it — docs/plan/64-the-fog.md F6). */
@@ -167,6 +156,8 @@ export class GroundsStream {
     patch: (m: Material) => void,
     hqEast?: number, // (the studio's own width: Grounds3's courtyard bridge starts past it)
   ) {
+    // (the browser keeps fewer chunks than the server: ~36 MB of them — today's land, 1,184, fits)
+    setChunkCap(1500);
     this.snowTex = new CanvasTexture(snowCanvas(T, 512, 43));
     this.snowTex.colorSpace = SRGBColorSpace;
     this.snowTex.wrapS = RepeatWrapping;
@@ -281,18 +272,8 @@ if (vFade < 0.999) {
       stoneGeometry(r),
       boulderGeometry(r),
     ];
-    this.kinds = {
-      pine: [0, 1, 2, 3, 4, 5],
-      birch: [6, 7, 8],
-      bare: [9, 10, 11],
-      far: 12,
-      mound: 13,
-      farBirch: 14,
-      farBare: 15,
-      cover: Object.fromEntries(COVERS.map((c, i) => [c, 16 + i])),
-    };
     // (the near trees and the boulders cast the sun's shadow; the far ones, the mounds, the rest don't)
-    this.casting = new Set([...this.kinds.pine, ...this.kinds.birch, ...this.kinds.bare, this.kinds.cover.boulder]);
+    this.casting = new Set([...TREE_KINDS.pine, ...TREE_KINDS.birch, ...TREE_KINDS.bare, TREE_KINDS.cover.boulder]);
     for (const [i, g] of geos.entries()) {
       const p = new Pool(g, treeMat, false);
       this.pools.push(p);
@@ -306,14 +287,23 @@ if (vFade < 0.999) {
     // edited), the rest made again with god mode's edits (`invalidate`); their pictures shared
     this.shared = groundsShared(T);
     const opts = {
-      cx: (GROUNDS.x0 + GROUNDS.x1) / 2,
-      cz: (GROUNDS.z0 + GROUNDS.z1) / 2,
+      // (round today's town — what GROUNDS was — not the land's middle: with the long road that's
+      // out in the gorge, and the town's street things, fence, lot and farm were never made)
+      cx: (townBounds().x0 + townBounds().x1) / 2,
+      cz: (townBounds().z0 + townBounds().z1) / 2,
       radius: 900,
       stream: true,
       hqEast,
       shared: this.shared,
     };
     this.makeStatics = (from) => new Grounds3(T, { ...opts, part: "rest", from });
+    // the far land past the near (far3d.ts — docs/plan/69, L5, L6)
+    if (LONG_ROAD) {
+      this.far = new FarLand(this.pools[TREE_KINDS.far]?.mesh.geometry ?? null, () => editsNow());
+      this.root.add(this.far.root);
+    }
+    this.restCircle = { cx: opts.cx, cz: opts.cz, r: opts.radius };
+    this.makeDistrict = (r) => new Grounds3(T, { ...opts, part: "district", own: { ...r, skip: this.restCircle } });
     this.statics = this.makeStatics();
     this.root.add(this.statics.root);
     if (KART_LAND) {
@@ -332,6 +322,16 @@ if (vFade < 0.999) {
     });
   }
   private shared: GroundsShared;
+  /** the far land (null: none — the long road off) */
+  far: FarLand | null = null;
+  private rootAt = new Vector3();
+  /** the rest's circle: what's out of it is made by district */
+  private restCircle: { cx: number; cz: number; r: number };
+  private makeDistrict: (r: { x0: number; z0: number; x1: number; z1: number }) => Grounds3;
+  /** the districts made (and being made) round you, by their corner "x0,z0" */
+  private districts = new Map<string, Grounds3>();
+  /** districts as they were before god mode's edits, shown till their new ones are made */
+  private oldDistricts = new Map<string, Grounds3>();
   /** the Kart Park's own part (made once) */
   private kart: Grounds3 | null = null;
   /** what the rest is made from, of god mode's edits (`staticsOf`) */
@@ -370,6 +370,16 @@ if (vFade < 0.999) {
     }
     if (!rest) return;
     this.fillBoxes();
+    // (the districts: made again round you, each shown as it was till its new one's all there)
+    for (const [k, d] of this.districts) {
+      // (one still being made: gone — what it replaces stays shown)
+      if (d.left) d.dispose();
+      else {
+        this.oldDistricts.get(k)?.dispose();
+        this.oldDistricts.set(k, d);
+      }
+    }
+    this.districts.clear();
     // (still making the first: that one goes, the new one is made in its place)
     if (this.statics.left) {
       this.statics.dispose();
@@ -387,6 +397,31 @@ if (vFade < 0.999) {
     g.setNight(this.night.k);
     g.ridgeMat.color.copy(this.night.land);
     return g;
+  }
+  /** What's made now (the long road's soak — docs/plan/69, L2): land blocks, districts, chunks kept. */
+  stats(): {
+    blocks: number;
+    districts: number;
+    chunks: number;
+    statics: number;
+    trees: number;
+    fills: number;
+    asked: number;
+    made: number;
+    edits: number;
+  } {
+    return {
+      trees: this.pools.reduce((a, p) => a + p.mesh.count, 0),
+      fills: this.fills,
+      // (the workers': asked and not back, back and not placed; the edits they're made under)
+      asked: landPool()?.asked.size ?? -1,
+      made: landPool()?.made.length ?? -1,
+      edits: editsVersion,
+      blocks: this.blocks.size,
+      districts: this.districts.size,
+      chunks: chunkCount(),
+      statics: this.left.statics,
+    };
   }
   /** Still making the rest again (god mode's edits): its steps left. */
   get remaking(): number {
@@ -406,7 +441,7 @@ if (vFade < 0.999) {
     // (the far ridges are painted: they take the hour as a tint)
     this.night.k = k;
     this.night.land.copy(land).multiplyScalar(1 + 0.4 * k);
-    for (const s of [this.statics, this.next, this.kart]) {
+    for (const s of [this.statics, this.next, this.kart, ...this.districts.values(), ...this.oldDistricts.values()]) {
       if (!s) continue;
       s.setNight(k);
       s.ridgeMat.color.copy(this.night.land);
@@ -417,6 +452,11 @@ if (vFade < 0.999) {
    *  built a little at a time, shown. `target`: those feet (trees in front of them fade). */
   update(x: number, z: number, cam: Vector3, target?: Vector3) {
     this.windT.value = performance.now() / 1000;
+    // (the far land round the camera, in the Grounds' coords)
+    if (this.far) {
+      this.root.getWorldPosition(this.rootAt);
+      this.far.update(cam.x - this.rootAt.x, cam.z - this.rootAt.z);
+    }
     this.statics.tick(this.windT.value);
     this.next?.tick(this.windT.value);
     this.kart?.tick(this.windT.value);
@@ -454,40 +494,55 @@ if (vFade < 0.999) {
       want.push(key(tier, x0, z0));
     };
     const S = TIERS[0].size;
-    for (let z0 = Math.floor(GROUNDS.z0 / S) * S; z0 < GROUNDS.z1; z0 += S)
-      for (let x0 = Math.floor(GROUNDS.x0 / S) * S; x0 < GROUNDS.x1; x0 += S) visit(0, x0, z0);
-    // build the nearest missing, a few ms a frame
+    // (the blocks within reach, those on the land's regions: land.ts — the land is long, docs/plan/69 L2)
+    const L = landBounds();
+    for (let z0 = Math.floor(Math.max(L.z0, z - RADIUS) / S) * S; z0 < Math.min(L.z1, z + RADIUS); z0 += S)
+      for (let x0 = Math.floor(Math.max(L.x0, x - RADIUS) / S) * S; x0 < Math.min(L.x1, x + RADIUS); x0 += S)
+        if (overlapsLand(x0, z0, x0 + S, z0 + S)) visit(0, x0, z0);
+    // build the nearest missing, a few ms a frame — nearest to where you'll be soon, going fast
+    const now = performance.now();
+    const dt = Math.min(0.5, Math.max(1e-3, (now - this.went.t) / 1000));
+    const ease = Math.min(1, dt * 2);
+    this.went.vx += ((x - this.went.x) / dt - this.went.vx) * ease;
+    this.went.vz += ((z - this.went.z) / dt - this.went.vz) * ease;
+    // (a jump — a teleport, the god camera's — isn't a speed)
+    if (Math.hypot(x - this.went.x, z - this.went.z) > 60) this.went.vx = this.went.vz = 0;
+    this.went.x = x;
+    this.went.z = z;
+    this.went.t = now;
+    const ax = x + this.went.vx * LOOK_S;
+    const az = z + this.went.vz * LOOK_S;
     const missing = want.filter((k) => !this.blocks.get(k)?.mesh || this.stale.has(k));
-    missing.sort((a, b) => distTo(a, x, z) - distTo(b, x, z));
-    this.left.blocks = missing.length;
+    missing.sort((a, b) => distTo(a, ax, az) - distTo(b, ax, az));
+    const wanted = new Set(want);
     const budget = this.boost ? BOOST_MS : this.lite ? BUDGET_MS / 2 : BUDGET_MS;
     const t0 = performance.now();
     let built = 0;
-    for (const k of missing) {
-      if (performance.now() - t0 > budget) break;
-      // a near block reads its chunk's land and, for its slopes, the
-      // neighbours': made a chunk at a time (~7 ms each) before it
-      const [tier, x0, z0] = parse(k);
-      if (tier === TIERS.length - 1) {
-        const need = missingLand(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK));
-        if (need) {
-          groundsChunk(need[0], need[1]);
-          built++;
-          if (!this.boost) break;
-          // (covered by the loading screen: all it needs now, then the block)
-          let more = missingLand(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK));
-          while (more) {
-            groundsChunk(more[0], more[1]);
-            more = missingLand(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK));
-          }
-        }
+    // (what the workers made: put together nearest first, under the budget — one a frame at least;
+    // what's not wanted now, or made under edits since laid again, dropped)
+    const pool = landPool();
+    if (pool?.made.length) {
+      pool.made = pool.made.filter((d) => d.v === editsVersion && wanted.has(d.key));
+      pool.made.sort((a, b) => distTo(a.key, ax, az) - distTo(b.key, ax, az));
+      while (pool.made.length && (built === 0 || performance.now() - t0 < budget)) {
+        this.place(pool.made.shift() as BlockData);
+        built++;
       }
-      this.build(k);
-      built++;
-      this.left.blocks--;
     }
+    // the nearest missing: asked of the workers — two each in hand as you go (the nearest stays the
+    // nearest); behind the loading screen all of them at once (what's made is only taken between
+    // frames, and a frame there is a quarter to a whole second: four each, the land came a dozen
+    // blocks a frame); made here with none
+    if (pool) pool.ask(missing.map(askOf), this.boost ? 1e9 : 2);
+    else
+      for (const k of missing) {
+        if (performance.now() - t0 > budget) break;
+        this.place(blockData(askOf(k), editsVersion));
+        built++;
+      }
+    this.left.blocks = 0;
+    for (const k of want) if (!this.blocks.get(k)?.mesh || this.stale.has(k)) this.left.blocks++;
     // show: each wanted block, or while it isn't built what covers it
-    const wanted = new Set(want);
     const show = new Set<string>();
     for (const k of want) {
       if (this.blocks.get(k)?.mesh) {
@@ -503,12 +558,12 @@ if (vFade < 0.999) {
       if (on !== b.shown) {
         b.shown = on;
         if (b.mesh) b.mesh.visible = on;
+        for (const m of b.far) m.visible = on;
         this.poolsDirty = true;
       }
       // not wanted, not covering anything: gone
       if (!on && !wanted.has(b.key)) {
-        b.mesh?.geometry.dispose();
-        b.mesh?.removeFromParent();
+        freeBlock(b);
         this.blocks.delete(b.key);
         this.stale.delete(b.key);
       }
@@ -527,26 +582,18 @@ if (vFade < 0.999) {
         : built && !this.boost
           ? null
           : this.next;
-    while (making && performance.now() - s0 < (this.boost ? BOOST_MS : this.lite ? 2 : 4)) {
+    const stepMs = this.boost ? BOOST_MS : this.lite ? 2 : 4;
+    while (making && performance.now() - s0 < stepMs) {
       const added = making.step();
       if (!added) break;
-      for (const o of added) {
-        o.traverse((c) => {
-          const m = (c as Mesh).material;
-          // (the ice too: unpatched, it stayed as bright as day after dark)
-          for (const x of Array.isArray(m) ? m : m ? [m] : [])
-            if ((x instanceof MeshLambertMaterial || x instanceof MeshStandardMaterial) && !this.patched.has(x)) {
-              this.patched.add(x);
-              this.patch(x);
-            }
-          // (made again: its bounds worked out now, not all of them the frame it's swapped in)
-          if (making === this.next && c instanceof Mesh) {
-            if (c instanceof InstancedMesh) c.boundingSphere ?? c.computeBoundingSphere();
-            else c.geometry.boundingSphere ?? c.geometry.computeBoundingSphere();
-          }
-        });
-        this.prepare?.(o);
-      }
+      this.patchAdded(added, making === this.next);
+    }
+    // the districts round you, out past the rest's circle: the nearest being made, in what's left
+    const district = this.districtsFrame(x, z, !!making || (built > 0 && !this.boost));
+    while (district && performance.now() - s0 < stepMs) {
+      const added = district.step();
+      if (!added) break;
+      this.patchAdded(added, false);
     }
     if (this.gone && --this.gone.frames <= 0) {
       this.gone.g.dispose();
@@ -564,9 +611,100 @@ if (vFade < 0.999) {
       if (target) this.statics.cutAt(target.x, target.y, target.z);
     }
     this.left.statics = this.statics.left + (this.kart?.left ?? 0);
+    // (the districts by you: those further on are made as you go, not waited for — what one draws is
+    // out of the rest's circle, so no nearer than that circle's edge)
+    const inner = this.restCircle.r - Math.hypot(x - this.restCircle.cx, z - this.restCircle.cz);
+    for (const [k, d] of this.districts) {
+      const [x0, z0] = k.split(",").map(Number);
+      const D = DISTRICT;
+      const box = Math.hypot(Math.max(x0 - x, 0, x - x0 - D), Math.max(z0 - z, 0, z - z0 - D));
+      if (Math.max(box, inner) < DISTRICT_WAIT) this.left.statics += d.left;
+    }
     if (Math.hypot(x - this.castersAt.x, z - this.castersAt.z) > 6) this.fillCasters(x, z);
     this.statics.faceCards(cam, this.halo);
     this.kart?.faceCards(cam, this.halo);
+    for (const d of [...this.districts.values(), ...this.oldDistricts.values()]) d.faceCards(cam, this.halo);
+  }
+  /** What a step added: its materials patched (the outdoors' light, the snow), made ready. */
+  private patchAdded(added: Object3D[], remade: boolean) {
+    for (const o of added) {
+      o.traverse((c) => {
+        const m = (c as Mesh).material;
+        // (the ice too: unpatched, it stayed as bright as day after dark)
+        for (const x of Array.isArray(m) ? m : m ? [m] : [])
+          if ((x instanceof MeshLambertMaterial || x instanceof MeshStandardMaterial) && !this.patched.has(x)) {
+            this.patched.add(x);
+            this.patch(x);
+          }
+        // (made again: its bounds worked out now, not all of them the frame it's swapped in)
+        if (remade && c instanceof Mesh) {
+          if (c instanceof InstancedMesh) c.boundingSphere ?? c.computeBoundingSphere();
+          else c.geometry.boundingSphere ?? c.geometry.computeBoundingSphere();
+        }
+      });
+      this.prepare?.(o);
+    }
+  }
+  /** The districts round (x, z): those wanted made, those far freed; the nearest still being made
+   *  (none while `busy`: the rest's or the land's turn this frame). */
+  private districtsFrame(x: number, z: number, busy: boolean): Grounds3 | null {
+    const D = DISTRICT;
+    const c = this.restCircle;
+    const L = landBounds();
+    for (let z0 = Math.floor(Math.max(L.z0, z - DISTRICT_R) / D) * D; z0 < Math.min(L.z1, z + DISTRICT_R); z0 += D)
+      for (let x0 = Math.floor(Math.max(L.x0, x - DISTRICT_R) / D) * D; x0 < Math.min(L.x1, x + DISTRICT_R); x0 += D) {
+        const k = `${x0},${z0}`;
+        if (this.districts.has(k)) continue;
+        // (its nearest point within reach, on the land, not all of it in the rest's circle)
+        if (Math.hypot(Math.max(x0 - x, 0, x - x0 - D), Math.max(z0 - z, 0, z - z0 - D)) > DISTRICT_R) continue;
+        if (!overlapsLand(x0, z0, x0 + D, z0 + D)) continue;
+        const far = Math.max(
+          ...[
+            [x0, z0],
+            [x0 + D, z0],
+            [x0, z0 + D],
+            [x0 + D, z0 + D],
+          ].map(([px, pz]) => Math.hypot(px - c.cx, pz - c.cz)),
+        );
+        if (far < c.r) continue;
+        const g = this.makeDistrict({ x0, z0, x1: x0 + D, z1: z0 + D });
+        // (hidden while the one it replaces is shown)
+        g.root.visible = !this.oldDistricts.has(k);
+        g.setNight(this.night.k);
+        this.root.add(g.root);
+        this.districts.set(k, g);
+      }
+    let next: Grounds3 | null = null;
+    let best = Number.POSITIVE_INFINITY;
+    for (const [k, g] of this.districts) {
+      const [x0, z0] = k.split(",").map(Number);
+      const d = Math.hypot(Math.max(x0 - x, 0, x - x0 - D), Math.max(z0 - z, 0, z - z0 - D));
+      if (d > DISTRICT_GONE) {
+        g.dispose();
+        this.districts.delete(k);
+        continue;
+      }
+      g.tick(this.windT.value);
+      const was = this.oldDistricts.get(k);
+      if (was && !g.left) {
+        g.root.visible = true;
+        was.dispose();
+        this.oldDistricts.delete(k);
+      }
+      if (g.left && d < best) {
+        best = d;
+        next = g;
+      }
+    }
+    // (one as it was with no new one wanted there: gone)
+    for (const [k, g] of this.oldDistricts) {
+      if (this.districts.has(k)) g.tick(this.windT.value);
+      else {
+        g.dispose();
+        this.oldDistricts.delete(k);
+      }
+    }
+    return busy ? null : next;
   }
 
   private ancestorBuilt(k: string): string | null {
@@ -600,162 +738,79 @@ if (vFade < 0.999) {
   }
 
   // ── a block of land: its mesh and its trees ──
-  private build(k: string) {
+  /** A block's data made a mesh (the ground floor's own tiles left out: its floor is drawn there),
+   *  its trees kept for the pools; in the place of one made before. */
+  private place(d: BlockData) {
+    const k = d.key;
     const [tier, x0, z0] = parse(k);
     const { size, step } = TIERS[tier];
-    const near = tier === TIERS.length - 1;
     const n = size / step;
-    const pos: number[] = [];
-    const col: number[] = [];
-    const uv: number[] = [];
     const idx: number[] = [];
-    const surf: string[] = [];
-    const c = new Color();
-    // near: the walking chunk's own heights (the same the feet are on)
-    const chunk = near ? groundsChunk(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK)) : null;
-    const height = (i: number, j: number) =>
-      chunk ? chunk.h[j * 2 * (CHUNK * 2 + 1) + i * 2] : terrainAt(x0 + i * step, z0 + j * step);
-    const vert = (x: number, y: number, z: number) => {
-      pos.push(x - x0, y, z - z0);
-      surf.push(landColour(x, z, near, c));
-      col.push(c.r, c.g, c.b);
-      uv.push(x / 14, z / 14);
-    };
-    for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) vert(x0 + i * step, height(i, j), z0 + j * step);
     for (let j = 0; j < n; j++)
       for (let i = 0; i < n; i++) {
-        // (the ground floor's own tiles: its floor is drawn there)
         if (this.covered(x0 + (i + 0.5) * step, z0 + (j + 0.5) * step)) continue;
         const p = j * (n + 1) + i;
         idx.push(p, p + n + 1, p + 1, p + 1, p + n + 1, p + n + 2);
       }
-    // (the green's: the woods and the ways round each vertex — wx3d.ts)
-    // (past the block's edge, the land there: its neighbours agree at their shared edge)
-    const past = new Color();
-    const around = Array.from(
-      landAround(
-        (i, j) =>
-          i >= 0 && j >= 0 && i <= n && j <= n
-            ? surf[j * (n + 1) + i]
-            : landColour(x0 + i * step, z0 + j * step, near, past),
-        n,
-        step,
-      ),
-    );
-    // skirts down from the edges (no cracks where the detail changes)
-    const under: [number, number][] = []; // a skirt's foot, the edge vertex over it
-    const edge = (list: number[]) => {
-      const base = pos.length / 3;
-      for (const [i, p] of list.entries()) {
-        under.push([base + i, p]);
-        pos.push(pos[p * 3], pos[p * 3 + 1] - 1.6 - step * 0.4, pos[p * 3 + 2]);
-        col.push(col[p * 3], col[p * 3 + 1], col[p * 3 + 2]);
-        uv.push(uv[p * 2], uv[p * 2 + 1]);
-        around.push(around[p * 2], around[p * 2 + 1]);
-      }
-      for (let i = 0; i < list.length - 1; i++) {
-        const a = list[i];
-        const b = list[i + 1];
-        idx.push(a, base + i, b, b, base + i, base + i + 1, a, b, base + i, b, base + i + 1, base + i);
-      }
-    };
-    edge(Array.from({ length: n + 1 }, (_, a) => a));
-    edge(Array.from({ length: n + 1 }, (_, a) => n * (n + 1) + a));
-    edge(Array.from({ length: n + 1 }, (_, b) => b * (n + 1)));
-    edge(Array.from({ length: n + 1 }, (_, b) => b * (n + 1) + n));
+    for (const v of d.skirt) idx.push(v);
     const g = new BufferGeometry();
-    g.setAttribute("position", new Float32BufferAttribute(pos, 3));
-    g.setAttribute("color", new Float32BufferAttribute(col, 3));
-    g.setAttribute("uv", new Float32BufferAttribute(uv, 2));
-    g.setAttribute("wxLand", new Float32BufferAttribute(around, 2));
+    g.setAttribute("position", new BufferAttribute(d.pos, 3));
+    g.setAttribute("color", new BufferAttribute(d.col, 3));
+    g.setAttribute("uv", new BufferAttribute(d.uv, 2));
+    g.setAttribute("wxLand", new BufferAttribute(d.around, 2));
     g.setIndex(idx);
     g.computeVertexNormals();
     // (a skirt is two-faced: its feet's normals summed to nothing — NaN in the
     // light, and after dark the bloom spread it over the whole frame. They
     // take the normal of the land above them.)
     const nrm = g.getAttribute("normal");
-    for (const [f, p] of under) nrm.setXYZ(f, nrm.getX(p), nrm.getY(p), nrm.getZ(p));
+    for (let u = 0; u < d.under.length; u += 2) {
+      const p = d.under[u + 1];
+      nrm.setXYZ(d.under[u], nrm.getX(p), nrm.getY(p), nrm.getZ(p));
+    }
     const mesh = new Mesh(g, this.landMat);
     mesh.position.set(x0, 0, z0);
-    mesh.receiveShadow = near;
+    mesh.receiveShadow = tier === TIERS.length - 1;
     mesh.visible = false;
     this.root.add(mesh);
-    // its trees, by kind
-    const trees: Tree[] = [];
-    for (let cz = Math.floor(z0 / CHUNK); cz < (z0 + size) / CHUNK; cz++)
-      for (let cx = Math.floor(x0 / CHUNK); cx < (x0 + size) / CHUNK; cx++)
-        trees.push(...(near && chunk ? chunk.trees : treesIn(cx, cz)));
-    const by = new Map<number, number[]>();
-    const m = new Matrix4();
-    const q = new Quaternion();
-    const up = new Vector3(0, 1, 0);
-    const tilt = new Quaternion();
-    const axis = new Vector3();
-    // each tree its own lean and girth (a hash of where it stands: the same for everyone)
-    const hash = (x: number, z: number, k: number) => {
-      const v = Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453;
-      return v - Math.floor(v);
-    };
-    const put = (pool: number, t: Tree, s: number, sy = s, dy = -0.25, lean = true) => {
-      q.setFromAxisAngle(up, t.ry);
-      let sx = s;
-      let sz = s;
-      if (lean) {
-        const a = hash(t.x, t.z, 1) * Math.PI * 2;
-        axis.set(Math.cos(a), 0, Math.sin(a));
-        q.premultiply(tilt.setFromAxisAngle(axis, (hash(t.x, t.z, 2) - 0.5) * 0.09));
-        sx = s * (0.9 + 0.2 * hash(t.x, t.z, 3));
-        sz = s * (0.9 + 0.2 * hash(t.x, t.z, 4));
-      }
-      m.compose(new Vector3(t.x, t.y + dy, t.z), q, new Vector3(sx, sy, sz));
-      const l = by.get(pool) ?? [];
-      by.set(pool, l);
-      l.push(...m.elements);
-    };
-    const K = this.kinds;
-    for (const t of trees) {
-      const v = Math.floor(t.ry * 10) % 3;
-      const sy = 0.9 + (t.s % 0.2);
-      if (t.kind === "pine") {
-        // (mostly the usual three; now and then a young one, a tall one, an old broad one)
-        // (shared grounds.ts: its trunk's height is the same choice — docs/plan/50-the-volume.md)
-        const pv = pineVariant(t);
-        put(near ? K.pine[pv] : K.far, t, t.s * 1.45, t.s * 1.45 * sy);
-        if (near) put(K.mound, t, 2.2 * t.s, 0.45, -0.2, false);
-      } else if (near) {
-        put(t.kind === "birch" ? K.birch[v] : K.bare[v], t, t.s * (t.kind === "bare" ? 1.7 : 1), t.s * sy);
-        put(K.mound, t, 1.1 * t.s, 0.3, -0.2, false);
-      } else put(t.kind === "birch" ? K.farBirch : K.farBare, t, t.s * (t.kind === "bare" ? 1.7 : 1), t.s * sy);
-    }
-    // the woods' floor, near you
-    if (near && chunk)
-      for (const c of coverIn(Math.floor(x0 / CHUNK), Math.floor(z0 / CHUNK), trees))
-        put(K.cover[c.kind], { x: c.x, y: c.y, z: c.z, ry: c.ry, s: c.s, kind: "pine" } as Tree, c.s, c.s, 0, false);
     // (made again: in the old one's place, shown as it was)
     const old = this.blocks.get(k);
     this.stale.delete(k);
     if (old) {
-      old.mesh?.geometry.dispose();
-      old.mesh?.removeFromParent();
+      freeBlock(old);
       mesh.visible = old.shown;
     }
-    const blk: Block = { key: k, tier, x0, z0, mesh, trees: new Map(), shown: old?.shown ?? false };
-    for (const [p, l] of by) blk.trees.set(p, new Float32Array(l));
+    const blk: Block = { key: k, tier, x0, z0, mesh, trees: new Map(), far: [], shown: old?.shown ?? false };
+    for (const t of d.trees)
+      if (tier === TIERS.length - 1) blk.trees.set(t.pool, t.m);
+      else {
+        const pool = this.pools[t.pool].mesh;
+        const im = snowShadow(new InstancedMesh(pool.geometry, pool.material, 0));
+        im.instanceMatrix = new InstancedBufferAttribute(t.m, 16);
+        im.count = t.m.length / 16;
+        im.visible = mesh.visible;
+        this.root.add(im);
+        blk.far.push(im);
+      }
     this.blocks.set(k, blk);
     this.poolsDirty = true;
   }
 
   // the pools hold the trees of the blocks shown
+  private fills = 0;
   private fillPools() {
     this.poolsDirty = false;
+    this.fills++;
+    // (each pool told the blocks shown now: only those come or gone uploaded — the whole of them
+    // again each time a block came or went was ~5 MB a frame at speed on the long road)
     for (const [i, pool] of this.pools.entries()) {
-      const parts: Float32Array[] = [];
+      const shown = new Map<string, Float32Array>();
       for (const b of this.blocks.values())
         if (b.shown) {
           const t = b.trees.get(i);
-          if (t) parts.push(t);
+          if (t) shown.set(b.key, t);
         }
-      pool.set(parts);
+      pool.show(shown);
     }
   }
   // the near trees again, casting the sun's shadow (seen by its camera only)
@@ -782,21 +837,29 @@ if (vFade < 0.999) {
     this.offChanged();
     this.next?.dispose();
     this.gone?.g.dispose();
-    for (const b of this.blocks.values()) b.mesh?.geometry.dispose();
+    for (const b of this.blocks.values()) freeBlock(b);
     for (const p of [...this.pools, ...this.casters]) p.dispose();
     this.landMat.dispose();
     this.snowTex.dispose();
     this.statics.dispose();
     this.kart?.dispose();
+    for (const d of [...this.districts.values(), ...this.oldDistricts.values()]) d.dispose();
+    this.far?.dispose();
     for (const d of this.shared.disp) d.dispose();
     this.root.removeFromParent();
   }
 }
 
-// One kind of tree, instanced: its instances replaced as blocks come and go.
+// One kind of tree, instanced. Each block's trees a run of its instances: a block shown is put on the
+// end, one gone blanked (a scale of nothing) — only those runs uploaded — and all of them packed
+// again once a quarter's blank. (`set`: all of them at once — the shadow's casters, a few.)
 class Pool {
   mesh: InstancedMesh;
   private cap = 0;
+  /** the runs: a block's key → where its instances start, its matrices */
+  private runs = new Map<string, { at: number; m: Float32Array }>();
+  private end = 0;
+  private blank = 0;
   constructor(
     private geo: BufferGeometry,
     private mat: Material,
@@ -813,18 +876,65 @@ class Pool {
     m.frustumCulled = false;
     return m;
   }
+  private grow(n: number) {
+    const old = this.mesh;
+    const next = this.make(Math.ceil(n * 1.3));
+    next.castShadow = old.castShadow;
+    next.layers.mask = old.layers.mask;
+    old.parent?.add(next);
+    old.removeFromParent();
+    old.dispose();
+    this.mesh = next;
+  }
+  /** These blocks' trees shown (their key → matrices), the rest not. */
+  show(want: Map<string, Float32Array>) {
+    const attr = this.mesh.instanceMatrix;
+    let changed = false;
+    for (const [k, r] of this.runs)
+      if (want.get(k) !== r.m) {
+        (attr.array as Float32Array).fill(0, r.at, r.at + r.m.length);
+        attr.addUpdateRange(r.at, r.m.length);
+        this.blank += r.m.length;
+        this.runs.delete(k);
+        changed = true;
+      }
+    let add = 0;
+    for (const [k, m] of want) if (!this.runs.has(k)) add += m.length;
+    if (!changed && !add) return;
+    const live = this.end - this.blank;
+    if (this.blank > live / 3 || (this.end + add) / 16 > this.cap) {
+      // (packed again, all of it uploaded: a quarter blank, or no room on the end)
+      const n = (live + add) / 16;
+      if (n > this.cap) this.grow(n);
+      const a = this.mesh.instanceMatrix.array as Float32Array;
+      let o = 0;
+      this.runs.clear();
+      for (const [k, m] of want) {
+        a.set(m, o);
+        this.runs.set(k, { at: o, m });
+        o += m.length;
+      }
+      this.end = o;
+      this.blank = 0;
+      this.mesh.instanceMatrix.clearUpdateRanges();
+    } else {
+      const a = attr.array as Float32Array;
+      const from = this.end;
+      for (const [k, m] of want)
+        if (!this.runs.has(k)) {
+          a.set(m, this.end);
+          this.runs.set(k, { at: this.end, m });
+          this.end += m.length;
+        }
+      if (this.end > from) attr.addUpdateRange(from, this.end - from);
+    }
+    this.mesh.count = this.end / 16;
+    this.mesh.instanceMatrix.needsUpdate = true;
+  }
+  /** All of them, these. */
   set(parts: Float32Array[]) {
     const n = parts.reduce((a, p) => a + p.length / 16, 0);
-    if (n > this.cap) {
-      const old = this.mesh;
-      const next = this.make(Math.ceil(n * 1.3));
-      next.castShadow = old.castShadow;
-      next.layers.mask = old.layers.mask;
-      old.parent?.add(next);
-      old.removeFromParent();
-      old.dispose();
-      this.mesh = next;
-    }
+    if (n > this.cap) this.grow(n);
     const arr = this.mesh.instanceMatrix.array as Float32Array;
     let o = 0;
     for (const p of parts) {
@@ -840,8 +950,22 @@ class Pool {
   }
 }
 
+/** A block's land and its own trees freed (the pools' geometry is theirs). */
+function freeBlock(b: Block) {
+  b.mesh?.geometry.dispose();
+  b.mesh?.removeFromParent();
+  for (const m of b.far) {
+    m.dispose();
+    m.removeFromParent();
+  }
+}
 const key = (t: number, x0: number, z0: number) => `${t}:${x0}:${z0}`;
 const parse = (k: string) => k.split(":").map(Number) as [number, number, number];
+/** What block `k` is, to make. */
+function askOf(k: string) {
+  const [t, x0, z0] = parse(k);
+  return { key: k, x0, z0, size: TIERS[t].size, step: TIERS[t].step, near: t === TIERS.length - 1 };
+}
 function distTo(k: string, x: number, z: number): number {
   const [t, x0, z0] = parse(k);
   const s = TIERS[t].size;

@@ -4,7 +4,6 @@ import {
   CHUNK,
   EDIT_LIMITS,
   editsNow,
-  GROUNDS,
   groundsChunk,
   SURFACES,
   type Surface,
@@ -18,6 +17,7 @@ import {
   type GroundsEdits,
   TREE_MASK,
 } from "./grounds-edits.ts";
+import { inLandDrawn, isLandChunk } from "./land.ts";
 
 // God mode's land and paint brushes (docs/plan/53-the-god-mode.md, phase 6): a stroke changes the
 // draft's grids — the land's lift, a sample every half metre (each chunk's edge kept in both
@@ -43,7 +43,7 @@ export const BRUSH = { land: { min: 2, max: 64 }, paint: { min: 1, max: 32 }, st
 const key = (cx: number, cz: number) => `${cx},${cz}`;
 /** Off the rule book's ground: anchored, past the edge, or a chunk the Grounds haven't got. */
 function locked(x: number, z: number): boolean {
-  if (x < GROUNDS.x0 || x >= GROUNDS.x1 || z < GROUNDS.z0 || z >= GROUNDS.z1) return true;
+  if (!inLandDrawn(x, z)) return true;
   return anchoredAt(x, z) !== null;
 }
 function smooth01(t: number): number {
@@ -135,8 +135,7 @@ export class LandStroke {
     const p = this.where(sx, sz);
     for (const [cx, i] of p.i === 0 ? [[p.cx, 0] as const, [p.cx - 1, N - 1] as const] : [[p.cx, p.i] as const])
       for (const [cz, j] of p.j === 0 ? [[p.cz, 0] as const, [p.cz - 1, N - 1] as const] : [[p.cz, p.j] as const]) {
-        if (cx * CHUNK < GROUNDS.x0 || cx * CHUNK >= GROUNDS.x1 || cz * CHUNK < GROUNDS.z0 || cz * CHUNK >= GROUNDS.z1)
-          continue;
+        if (!isLandChunk(cx, cz, CHUNK)) continue;
         const g = this.grid(cx, cz);
         if (Math.abs(g[j * N + i] - v) < 1e-4) continue;
         g[j * N + i] = v;

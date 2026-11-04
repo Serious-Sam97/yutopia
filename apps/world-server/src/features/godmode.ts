@@ -1,5 +1,6 @@
 import { BUILDINGS, CHUNK, checkEdits, editsNow, heightAt } from "@yutopia/shared/grounds";
 import type { GroundsEdits } from "@yutopia/shared/grounds-edits";
+import { beyondLand, REACH_MARGIN } from "@yutopia/shared/land";
 import { api } from "../api.ts";
 import { config } from "../config.ts";
 import { landEdits } from "../land.ts";
@@ -48,6 +49,17 @@ registerFeature((room: WorldRoom) => {
       const x = p.x + (lm.ox ?? 0);
       const z = p.y + (lm.oy ?? 0);
       if (!dirty.has(`${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`)) continue;
+      // (on grown land taken away, past the world's edge now: back where they arrive — docs/plan/69)
+      if (beyondLand(x, z) > REACH_MARGIN) {
+        const to = room.arrivalFor(p);
+        Object.assign(p, { x: to.x, y: to.y, level: to.level, z: 0 });
+        const c = room.clients.getById(p.sid) as WorldClient | undefined;
+        if (c) {
+          room.send(c, "snap", { x: p.x, y: p.y, z: p.z, level: p.level });
+          if (!p.bot) room.send(c, "toast", { text: "The land you stood on is gone: you're back where you arrive." });
+        }
+        continue;
+      }
       // (under the land now: onto it)
       const h = heightAt(x, z);
       if (p.z < h - 0.05) {

@@ -4,9 +4,10 @@ import {
   applyEdits,
   CHUNK,
   editsNow,
-  GROUNDS,
   type GroundsChunk,
   hasChunk,
+  isLandChunk,
+  landBounds,
   layoutVersion,
   setParkLayout,
 } from "@yutopia/shared/grounds";
@@ -49,14 +50,15 @@ export function ready(x: number, z: number): boolean {
 
 /** Make the land within `r` tiles of (x, z) ahead (in the worker), if it isn't. */
 export function prefetch(x: number, z: number, r: number): void {
-  const c0 = Math.floor(Math.max(GROUNDS.x0, x - r) / CHUNK);
-  const c1 = Math.floor(Math.min(GROUNDS.x1 - 1, x + r) / CHUNK);
-  const d0 = Math.floor(Math.max(GROUNDS.z0, z - r) / CHUNK);
-  const d1 = Math.floor(Math.min(GROUNDS.z1 - 1, z + r) / CHUNK);
+  const L = landBounds();
+  const c0 = Math.floor(Math.max(L.x0, x - r) / CHUNK);
+  const c1 = Math.floor(Math.min(L.x1 - 1, x + r) / CHUNK);
+  const d0 = Math.floor(Math.max(L.z0, z - r) / CHUNK);
+  const d1 = Math.floor(Math.min(L.z1 - 1, z + r) / CHUNK);
   for (let cz = d0; cz <= d1; cz++)
     for (let cx = c0; cx <= c1; cx++) {
       const k = key(cx, cz);
-      if (hasChunk(cx, cz) || asked.has(k)) continue;
+      if (!isLandChunk(cx, cz, CHUNK) || hasChunk(cx, cz) || asked.has(k)) continue;
       worker ??= start();
       asked.add(k);
       worker.postMessage({ cx, cz });

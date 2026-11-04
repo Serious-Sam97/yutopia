@@ -22,6 +22,7 @@ import "./computer.ts";
 import "./phone.ts";
 import "./gps.ts";
 import "./grounds-life.ts";
+import "./long-road.ts";
 import "./cars.ts";
 import "./spot.ts";
 import "./karts.ts";

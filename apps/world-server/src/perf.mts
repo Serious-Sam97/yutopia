@@ -9,11 +9,14 @@
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { ANIM, dirFromDelta, findPath, type Point, ROOM_NAME } from "@yutopia/shared";
 import { dayNests, dayOf, NESTS } from "@yutopia/shared/dark";
-import { CHUNK, checkEdits, GROUNDS, heightAt, SURFACES, walkableTile } from "@yutopia/shared/grounds";
+import { CHUNK, checkEdits, heightAt, landBounds, SURFACES, walkableTile } from "@yutopia/shared/grounds";
 import { encodeBytes, encodeHeights, type GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { type Gait, KH_MOVE, MV_WINDED, packMv, yawToByte } from "@yutopia/shared/move";
 import { FULL_VITALS, freshClock, stepVitals } from "@yutopia/shared/vitals";
 import { Client, type Room } from "colyseus.js";
+
+// (the land's box: shared land.ts — docs/plan/69)
+const GROUNDS = landBounds();
 
 // DARK=1 (docs/plan/30-the-dark.md phase 4): 50 bots, 40 of them out on the pond at night,
 // the shadowed up to their 40 (brought out quickly); the bytes one outside and one inside

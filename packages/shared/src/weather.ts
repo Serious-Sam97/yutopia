@@ -420,6 +420,10 @@ export function weatherFrom(saved: unknown, now: number): { ground: Ground; call
 
 /** How the air bites (stepVitals' `chill`): 1 at freezing (the night's warmth drain as it always
  *  was), none by +12 °C, up to 2 in a bitter cold; rain coming down on you colder still. */
+/** The air's temperature `up` m over the town (docs/plan/69, L8): 6.5 °C a km colder. */
+export function tempUp(temp: number, up: number): number {
+  return temp - 0.0065 * Math.max(0, up);
+}
 export function chillOf(temp: number, rain = 0): number {
   return Math.min(2, Math.max(0, (12 - temp) / 12) + 0.35 * rain);
 }

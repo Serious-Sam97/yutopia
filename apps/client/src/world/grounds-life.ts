@@ -20,6 +20,9 @@ addStrings(
     rideToTown: ["Shuttle · to the town", "Ônibus · para a cidade"],
     rideToHq: ["Shuttle · to HQ", "Ônibus · para a sede"],
     rideLeave: ["Get off the shuttle", "Descer do ônibus"],
+    rideToLake: ["Bus · to Silver Lake", "Ônibus · para o Silver Lake"],
+    rideToTownBus: ["Bus · to the town", "Ônibus · para a cidade"],
+    rideLeaveBus: ["Get off the bus", "Descer do ônibus"],
     nightGuard: ["Night guard", "Vigia"],
     folkControl: ["Race control", "Direção de prova"],
     folkMechanic: ["Mechanic", "Mecânico"],
@@ -30,6 +33,8 @@ addStrings(
 const t = (k: string) => trMaybe(k) ?? k;
 
 export const SHUTTLE_ID = "shuttle";
+/** The long road's bus (docs/plan/69, L7): ridden as the shuttle is. */
+export const BUS_ID = "bus";
 export const RIDING = "ride:shuttle";
 
 export interface Car {
@@ -194,16 +199,24 @@ export class GroundsLife {
     return [this.storm, Number(wind ?? 0)];
   }
 
-  /** Riding the shuttle: where it carries me (the server says), seated, facing its way. */
+  /** Riding the shuttle (or the bus): where it carries me (the server says), seated, facing its way. */
   seat(p: { busy?: string; x: number; y: number; d: number; z?: number } | undefined) {
     if (p?.busy !== RIDING) return null;
-    return { me: { x: p.x, y: p.y, d: p.d, a: 2 }, z: p.z ?? 0, angle: this.heading() };
+    return { me: { x: p.x, y: p.y, d: p.d, a: 2 }, z: p.z ?? 0, angle: this.heading(p) };
   }
 
-  /** The shuttle's heading (riding it: I face its way). */
-  heading(): number | undefined {
-    return this.cars.get(SHUTTLE_ID)?.a;
+  /** The heading of what I'm riding (the shuttle, or the bus — the nearer: I face its way). */
+  heading(p?: { x: number; y: number }): number | undefined {
+    const s = this.cars.get(SHUTTLE_ID);
+    const b = this.cars.get(BUS_ID);
+    if (!b || !p) return s?.a;
+    if (!s) return b.a;
+    const d = (c: Car) => Math.hypot(c.x - this.ox - p.x, c.z - this.oy - p.y);
+    return d(b) < d(s) ? b.a : s.a;
   }
+  /** The ground floor's corner (the building's coords): set as the prompt's asked. */
+  private ox = 0;
+  private oy = 0;
 
   /** At its stop, near it: on; riding: off. */
   prompt(
@@ -213,11 +226,26 @@ export class GroundsLife {
     ox: number,
     oy: number,
   ): { objectId: string; kind: string; label: string } | null {
-    const bus = vehicles?.get(SHUTTLE_ID);
-    if (!bus?.shown || !bus.stop) return null;
-    if (riding) return { objectId: SHUTTLE_ID, kind: "ride:leave", label: t("rideLeave") };
-    if (Math.hypot(bus.x - ox - me.x, bus.z - oy - me.y) > 5.5) return null;
-    return { objectId: SHUTTLE_ID, kind: "ride", label: t(bus.stop === "hq" ? "rideToTown" : "rideToHq") };
+    this.ox = ox;
+    this.oy = oy;
+    // (the shuttle, or the long road's bus: the nearer at its stop)
+    const near = (id: string) => {
+      const v = vehicles?.get(id);
+      return v?.shown && v.stop ? { id, v, d: Math.hypot(v.x - ox - me.x, v.z - oy - me.y) } : null;
+    };
+    const at = [near(SHUTTLE_ID), near(BUS_ID)].filter((x) => !!x).sort((a, b) => a.d - b.d)[0];
+    if (!at) return null;
+    const isBus = at.id === BUS_ID;
+    if (riding) return { objectId: at.id, kind: "ride:leave", label: t(isBus ? "rideLeaveBus" : "rideLeave") };
+    if (at.d > 5.5) return null;
+    const label = isBus
+      ? at.v.stop === "town"
+        ? "rideToLake"
+        : "rideToTownBus"
+      : at.v.stop === "hq"
+        ? "rideToTown"
+        : "rideToHq";
+    return { objectId: at.id, kind: "ride", label: t(label) };
   }
 
   /** The Kart Park's folk (shared KART_FOLK; world-server features/park-life.ts walks them): by

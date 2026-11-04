@@ -25,7 +25,7 @@ import {
   SPECS,
   SUNK,
 } from "@yutopia/shared/car";
-import { atPump, BUILDINGS, GROUNDS, heightAt, inBuilt, LOT, MOTORS, waterAt } from "@yutopia/shared/grounds";
+import { atPump, BUILDINGS, heightAt, inBuilt, inLandBounds, LOT, MOTORS, waterAt } from "@yutopia/shared/grounds";
 import { SWIM } from "@yutopia/shared/move";
 import { BOARD_KIND, boardOfOwner, boardsOf, postOf } from "@yutopia/shared/spot";
 import { api } from "../api.ts";
@@ -435,7 +435,7 @@ registerFeature((room: WorldRoom) => {
     const was = parkedPose(def);
     if (Math.hypot(was.x + off.x - x, was.y + off.y - z) > SHOVE_MAX) return;
     if (Math.hypot(l.veh.x - x, l.veh.z - z) > SHOVE_REACH) return;
-    if (x < GROUNDS.x0 || x > GROUNDS.x1 || z < GROUNDS.z0 || z > GROUNDS.z1) return;
+    if (!inLandBounds(x, z)) return;
     if (BUILDINGS.some((b) => inBuilt(b, x, z))) return;
     shovedAt.set(o.id, now);
     const spot = parkAt(x - off.x, z - off.y, a, heightAt(x, z), { ...(def.props ?? {}), level: 0 });

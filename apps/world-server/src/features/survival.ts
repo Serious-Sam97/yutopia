@@ -1,4 +1,4 @@
-import { ANIM, chillOf, levelMap, objLevel, tileAt, type WorldObjectDef } from "@yutopia/shared";
+import { ANIM, chillOf, levelMap, objLevel, tempUp, tileAt, type WorldObjectDef } from "@yutopia/shared";
 import { hasPower } from "@yutopia/shared/admin";
 import {
   addItem,
@@ -54,7 +54,8 @@ import {
   vitalByte,
   WEAPONS,
 } from "@yutopia/shared/dark";
-import { bankNear, INSIDES, iceAt, inDeepWater, waterAt } from "@yutopia/shared/grounds";
+import { bankNear, heightAt, INSIDES, iceAt, inDeepWater, waterAt } from "@yutopia/shared/grounds";
+import { grownTemp } from "@yutopia/shared/grow";
 import { GAITS, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
 import { frameOf, turnPoint } from "@yutopia/shared/shapes";
@@ -848,7 +849,13 @@ registerFeature((room: WorldRoom) => {
         const focus = !riding && p.torch && (p.mv & MV_AIM) !== 0 && canFocus(s.v, s.c);
         // (the cold by the air and the rain on you: docs/plan/65-the-weather.md, W9)
         const w = room.state.weather;
-        const chill = chillOf(w.temp, w.kind === "rain" || w.kind === "sleet" ? w.fall : 0);
+        // (colder up the mountains, and the wind there: docs/plan/69, L8)
+        const up = land ? heightAt(b.x, b.z) : 0;
+        // (and warm on god mode's grown beach and desert: the desert cold at night — its phase 10)
+        const air = tempUp(w.temp, up) + (land ? grownTemp(b.x, b.z, night) : 0);
+        const chill =
+          chillOf(air, w.kind === "rain" || w.kind === "sleet" ? w.fall : 0) +
+          (land ? 0.25 * Math.min(1, Math.max(0, (up - 380) / 120)) : 0);
         // (in the water to the chest: its cold, by the weather — docs/plan/66-the-water.md, S3)
         const pool = land ? waterAt(b.x, b.z) : null;
         const water = pool && p.z < pool.level - 0.8 && !iceAt(b.x, b.z) ? w.water : null;

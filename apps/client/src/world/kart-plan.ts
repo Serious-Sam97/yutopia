@@ -1,4 +1,4 @@
-import { GROUNDS, WAYS } from "@yutopia/shared/grounds";
+import { landBounds, WAYS } from "@yutopia/shared/grounds";
 import {
   BRIDGE_H,
   KART_BOWL,
@@ -498,7 +498,8 @@ const label = (
  *  its clearing, the road in, the ground opened north for it (ringed). */
 export function drawParkOnSitePlan(c: HTMLCanvasElement, px = 2, margin = 90) {
   const g = c.getContext("2d") as CanvasRenderingContext2D;
-  const P: XZ = (x, z) => [margin + (x - GROUNDS.x0) * px, margin + (z - GROUNDS.z0) * px];
+  const L = landBounds();
+  const P: XZ = (x, z) => [margin + (x - L.x0) * px, margin + (z - L.z0) * px];
   drawPark(g, P, px, false);
   const at = (x: number, z: number) => P(x, z);
   label(g, KART_NAME, ...at(KART_PARK.x + 14, KART_FENCE.z0 - 14), 15);

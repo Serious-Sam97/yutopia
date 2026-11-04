@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { GROUND_OFFSET, ROOM_NAME } from "@yutopia/shared";
-import { CHUNK, editsNow, heightAt } from "@yutopia/shared/grounds";
+import { CHUNK, editsNow, heightAt, walkableTile } from "@yutopia/shared/grounds";
 import { encodeHeights, type GroundsEdits } from "@yutopia/shared/grounds-edits";
 import { Client, type Room } from "colyseus.js";
 
@@ -192,4 +192,49 @@ test("a building published over someone: they're moved out of it, by its nearest
   assert.ok(Math.abs(gz - FIELD.z) < 0.5, "along the wall from where they stood");
   assert.ok(gx < x0 && x0 - gx < 1.5, `out by the west wall: ${gx} (the wall at ${x0})`);
   assert.ok(a.said.some((s) => s.type === "toast" && /Field House stands here now/.test(String(s.msg.text))));
+});
+
+test("land grown (docs/plan/69, phase 10): a member's dropped, one not joined refused, an admin's walked onto, rolled back", async () => {
+  // (south of the town, over the core's south edge: a forest 256 × 512)
+  const forest = { key: "god-south", biome: "forest" as const, x0: -96, z0: 128, x1: 160, z1: 640 };
+  const m = await join(41, MEMBER);
+  offlineDrafts.set(41, { userId: 41, name: "Mine", baseRev: 0, data: { rev: 0, land: { add: [forest] } } });
+  m.room.send("god:publish", { draftId: 41 });
+  await sleep(500);
+  const rev0 = m.room.state.groundsRev;
+  assert.ok(!walkableTile(32, 420), "a member's: not laid");
+  const a = await join(42, ADMIN);
+  a.said.length = 0;
+  offlineDrafts.set(420, {
+    userId: 42,
+    name: "Far off",
+    baseRev: rev0,
+    data: { rev: rev0, land: { add: [{ ...forest, z0: 1600, z1: 1920 }] } },
+  });
+  a.room.send("god:publish", { draftId: 420 });
+  await waitFor(() => a.said.some((s) => s.type === "god:refused"));
+  const no = a.said.find((s) => s.type === "god:refused")?.msg as { problems: string[] };
+  assert.ok(
+    no.problems.some((p) => /not joined/.test(p)),
+    no.problems.join("; "),
+  );
+  // laid: the land there, walked onto
+  offlineDrafts.set(421, { userId: 42, name: "South", baseRev: rev0, data: { rev: rev0, land: { add: [forest] } } });
+  a.room.send("god:publish", { draftId: 421, note: "a forest south" });
+  await waitFor(() => a.room.state.groundsRev === rev0 + 1);
+  let spot = { x: 32, z: 420 };
+  for (let dx = 0; dx < 40 && !walkableTile(spot.x, spot.z); dx++) spot = { x: 32 + dx, z: 420 };
+  assert.ok(walkableTile(spot.x, spot.z), "walked");
+  const to = { x: spot.x + 0.5 - GROUND_OFFSET.x, y: spot.z + 0.5 - GROUND_OFFSET.y, level: 0 };
+  a.room.send("teleport", { to });
+  await waitFor(() => a.me().level === 0 && Math.hypot(a.me().x - to.x, a.me().y - to.y) < 0.6);
+  await sleep(1500);
+  assert.ok(Math.abs(a.me().z - heightAt(spot.x + 0.5, spot.z + 0.5)) < 1, `on it: ${a.me().z}`);
+  // rolled back: gone, and they're back where they arrive
+  a.said.length = 0;
+  a.room.send("god:rollback", { rev: rev0 });
+  await waitFor(() => a.room.state.groundsRev === rev0 + 2);
+  assert.ok(!walkableTile(spot.x, spot.z), "past the edge again");
+  await waitFor(() => a.said.some((s) => s.type === "toast" && /land you stood on is gone/.test(String(s.msg.text))));
+  assert.ok(Math.hypot(a.me().x - to.x, a.me().y - to.y) > 50, "moved off it");
 });

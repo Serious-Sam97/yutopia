@@ -210,11 +210,16 @@ test("the town: into the bar by its door, never through its wall; inside, you he
 
 test("the bridges: their decks flush with the way (no lip), their sides closed", async () => {
   const { WAYS, deckAt, onBridgeRail } = await import("./grounds.ts");
-  for (const w of WAYS) {
-    const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
-    if (idx.length < 2) continue;
-    const a = idx[0];
-    const b = idx[idx.length - 1];
+  // (each bridge of each way: the long road has two — docs/plan/69)
+  const bridges: { w: (typeof WAYS)[number]; a: number; b: number }[] = [];
+  for (const w of WAYS)
+    for (const i of w.line.map((_, i) => i).filter((i) => w.bridged[i])) {
+      const last = bridges[bridges.length - 1];
+      if (last && last.w === w && i - last.b <= 2) last.b = i;
+      else bridges.push({ w, a: i, b: i });
+    }
+  for (const { w, a, b } of bridges) {
+    if (b - a < 1) continue;
     // walking along its line from the land before it to the land after: no step over 0.05
     let last = heightAt(...w.line[a - 6]);
     for (let i = a - 6; i < b + 6; i++)

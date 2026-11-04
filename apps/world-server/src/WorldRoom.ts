@@ -217,18 +217,33 @@ export class WorldRoom extends Room<WorldState> {
     this.broadcast(type, msg, except ? { except } : undefined);
   }
 
+  /** Each message's handlers: a type may have several (the HQ shuttle's and the long road's bus
+   *  both take ride:board — Colyseus keeps only the last one given it). */
+  private handlers = new Map<string, ((client: WorldClient, msg: never) => void)[]>();
   on<K extends keyof ClientMessages>(type: K, fn: (client: WorldClient, msg: ClientMessages[K]) => void): void {
+    const had = this.handlers.get(type as string);
+    if (had) {
+      had.push(fn);
+      return;
+    }
+    const fns: ((client: WorldClient, msg: never) => void)[] = [fn];
+    this.handlers.set(type as string, fns);
     this.onMessage(type, (client: WorldClient, msg: unknown) => {
       if (!msg || typeof msg !== "object") return;
       metrics.inc("messages_total");
       const t0 = performance.now();
-      try {
+      const run = (f: () => void) => {
+        try {
+          f();
+        } catch (e) {
+          metrics.inc("message_errors_total");
+          console.warn(`[world] ${String(type)} failed:`, (e as Error).message);
+        }
+      };
+      run(() => {
         for (const tap of this.messageTaps) tap(client, type as string);
-        fn(client, msg as ClientMessages[K]);
-      } catch (e) {
-        metrics.inc("message_errors_total");
-        console.warn(`[world] ${String(type)} failed:`, (e as Error).message);
-      }
+      });
+      for (const f of fns) run(() => f(client, msg as never));
       metrics.message(type as string, performance.now() - t0);
     });
   }

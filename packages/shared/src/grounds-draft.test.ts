@@ -69,3 +69,32 @@ test("brought up to date: each side's own changes kept, both changed: the draft'
   // nothing drafted: what's live, exactly
   assert.equal(editsCount(theirs, mergeEdits(base, base, theirs).edits).total, 0);
 });
+
+test("grown land (docs/plan/69, phase 10): counted, and kept when brought up to date", () => {
+  const piece = (key: string, biome: "forest" | "lake" = "forest") => ({
+    key,
+    biome,
+    x0: -96,
+    z0: 128,
+    x1: 160,
+    z1: 640,
+  });
+  const base: GroundsEdits = { rev: 2 };
+  const mine: GroundsEdits = { rev: 2, land: { add: [piece("god-land-1")] } };
+  assert.deepEqual(editsCount(base, mine).land, { add: 1, change: 0, remove: 0 });
+  assert.equal(editsCount(base, mine).total, 1);
+  // (its biome changed: one change; taken away again: nothing)
+  assert.deepEqual(editsCount(mine, { rev: 2, land: { add: [piece("god-land-1", "lake")] } }).land, {
+    add: 0,
+    change: 1,
+    remove: 0,
+  });
+  assert.equal(editsCount(base, { rev: 2, land: { add: [] } }).total, 0);
+  // (someone's publish meanwhile: my piece kept, theirs in)
+  const theirs: GroundsEdits = { rev: 3, land: { add: [piece("god-land-9", "lake")] } };
+  const { edits } = mergeEdits(base, mine, theirs);
+  assert.deepEqual(
+    edits.land?.add?.map((d) => d.key),
+    ["god-land-1", "god-land-9"],
+  );
+});

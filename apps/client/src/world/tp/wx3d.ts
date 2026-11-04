@@ -1,3 +1,4 @@
+import { grownNow, grownWarm } from "@yutopia/shared/grow";
 import {
   type BufferGeometry,
   CanvasTexture,
@@ -28,8 +29,29 @@ import { mergeGeometries as merge3 } from "three/addons/utils/BufferGeometryUtil
 // in at their own): a geometry without the attribute reads 0 (or a stale 1 at that location from
 // another program) and is never snow.
 
+let dryOf: readonly unknown[] | null = null;
+const dryAt = { x: 0, z: 0 };
+/** The warm pieces of grown land into wxDry, the nearest DRY to (x, z) (the Grounds' coords) — again
+ *  once they're laid anew, or past one more than DRY, as you go 200 m. */
+export function layDry(x: number, z: number) {
+  const now = grownNow();
+  const moved = Math.hypot(x - dryAt.x, z - dryAt.z) > 200;
+  if (now === dryOf && !moved) return;
+  const all = now.filter(grownWarm);
+  if (now === dryOf && all.length <= DRY) return;
+  dryOf = now;
+  dryAt.x = x;
+  dryAt.z = z;
+  const far = (g: (typeof all)[number]) =>
+    Math.hypot(Math.max(g.def.x0 - x, 0, x - g.def.x1), Math.max(g.def.z0 - z, 0, z - g.def.z1));
+  const warm = all.length > DRY ? all.sort((a, b) => far(a) - far(b)).slice(0, DRY) : all;
+  for (const [i, g] of warm.entries()) wx.wxDry.value[i].set(g.def.x0, g.def.z0, g.def.x1, g.def.z1);
+  wx.wxDryN.value = warm.length;
+}
 /** How many roofs the dusting knows of at once (the nearest). */
 export const ROOFS = 8;
+/** How many warm pieces of grown land the snow knows of at once. */
+export const DRY = 8;
 /** The layer's uniforms, the same objects in every shader. */
 export const wx = {
   wxSnow: { value: 1 }, // the snow lying, 0 … 1 (the room's, eased)
@@ -57,6 +79,10 @@ export const wx = {
   // and (its underside's height, …) — in the Grounds' coords (sky.ts fills them)
   wxRoofs: { value: Array.from({ length: ROOFS * 2 }, () => new Vector4()) },
   wxRoofN: { value: 0 },
+  // where no snow lies, whatever the weather: god mode's grown beach and desert (docs/plan/69, phase
+  // 10), (x0, z0, x1, z1) in the Grounds' coords — eased in over 100 m from their edges
+  wxDry: { value: Array.from({ length: DRY }, () => new Vector4()) },
+  wxDryN: { value: 0 },
   // the air's haze on the far ridges, 0 … 1 (view.ts: as much as the fog has at 700 m on a grey day —
   // the ridges skip three's fog, and the far woods in front of them mustn't come out paler)
   wxHaze: { value: 0 },
@@ -144,74 +170,6 @@ export function mergeGeometries(gs: BufferGeometry[], groups = false): BufferGeo
   return merge3(gs, groups);
 }
 
-/** The land round each of a block's (n + 1)² vertices, `step` apart, for the green under the snow
- *  (docs/plan/65 W3): (the woods — the deep snow's, spread ~6 m: their floor reaches under
- *  their crowns — and a way near: 1 on one, 0 six metres off). */
-export function landAround(
-  surf: readonly string[] | ((i: number, j: number) => string),
-  n: number,
-  step: number,
-): Float32Array {
-  const N = n + 1;
-  // (worked out over the block and a margin round it — the woods' blur, a way's six metres — so two
-  // blocks side by side agree on their shared edge: a lookup past the edge, else the edge's own)
-  const R = Math.min(6, Math.max(1, Math.round(6 / step)));
-  const M = typeof surf === "function" ? Math.max(R, Math.ceil(6 / step)) + 1 : 0;
-  const W = N + 2 * M;
-  const at = (i: number, j: number) => (typeof surf === "function" ? surf(i, j) : surf[j * N + i]);
-  const woods = new Float32Array(W * W);
-  const d = new Float32Array(W * W).fill(99);
-  for (let j = 0; j < W; j++)
-    for (let i = 0; i < W; i++) {
-      const s = at(i - M, j - M);
-      woods[j * W + i] = s === "deep" ? 1 : 0;
-      if (s === "path" || s === "asphalt" || s === "walk" || s === "floor") d[j * W + i] = 0;
-    }
-  // (the ways near: a chamfer distance, in metres)
-  for (let pass = 0; pass < 2; pass++)
-    for (let j0 = 0; j0 < W; j0++)
-      for (let i0 = 0; i0 < W; i0++) {
-        const j = pass ? W - 1 - j0 : j0;
-        const i = pass ? W - 1 - i0 : i0;
-        const o = pass ? 1 : -1;
-        let v = d[j * W + i];
-        const ii = i + o;
-        const jj = j + o;
-        if (ii >= 0 && ii < W) v = Math.min(v, d[j * W + ii] + step);
-        if (jj >= 0 && jj < W) v = Math.min(v, d[jj * W + i] + step);
-        if (ii >= 0 && ii < W && jj >= 0 && jj < W) v = Math.min(v, d[jj * W + ii] + step * Math.SQRT2);
-        d[j * W + i] = v;
-      }
-  // (the woods spread: a box blur each way, ~6 m)
-  let w = woods;
-  for (let pass = 0; pass < 2; pass++) {
-    const t = new Float32Array(W * W);
-    for (let j = 0; j < W; j++)
-      for (let i = 0; i < W; i++) {
-        let sum = 0;
-        let k = 0;
-        for (let o = -R; o <= R; o++) {
-          const ii = pass ? i : i + o;
-          const jj = pass ? j + o : j;
-          if (ii < 0 || jj < 0 || ii >= W || jj >= W) continue;
-          sum += w[jj * W + ii];
-          k++;
-        }
-        t[j * W + i] = sum / k;
-      }
-    w = t;
-  }
-  const out = new Float32Array(N * N * 2);
-  for (let j = 0; j < N; j++)
-    for (let i = 0; i < N; i++) {
-      const q = (j + M) * W + i + M;
-      const o = (j * N + i) * 2;
-      out[o] = Math.max(w[q], woods[q] * 0.85);
-      out[o + 1] = Math.max(0, 1 - d[q] / 6);
-    }
-  return out;
-}
-
 // ── the shaders ──
 
 // (the icicles' thresholds, as the shader tells them: a little round AT.icicle)
@@ -286,6 +244,7 @@ uniform vec4 wxHoles[8];
 uniform vec4 wxSun; uniform vec4 wxSwim[8]; uniform vec3 wxUwCol;
 uniform sampler2D wxTex; uniform float wxTexOn; uniform sampler2D wxGrass;
 uniform vec4 wxRoofs[${ROOFS * 2}]; uniform int wxRoofN;
+uniform vec4 wxDry[${DRY}]; uniform int wxDryN;
 // (an integer hash: a float one goes regular a few hundred metres out — the town, the karts — where
 // the lattice times its multipliers is past what a float holds the fraction of. An eighth's steps,
 // so a cell and a cell's offset — the rings' — hash apart)
@@ -313,6 +272,16 @@ float wxF(vec2 p) { return 0.5 * wxN(p) + 0.3 * wxN(p * 2.13 + 7.1) + 0.2 * wxN(
 const FRAG = `
 {
   vec3 wxW = (vec4(-vViewPosition, 0.0) * viewMatrix).xyz + cameraPosition - wxOff;
+  // (up the mountains it lies whatever the weather: some from 300 m, all of it past 600 —
+  // docs/plan/69, L8; the Grounds' heights, the town's ~0)
+  float wxSnowH = max(wxSnow, max(smoothstep(540.0, 640.0, wxW.y), 0.65 * smoothstep(300.0, 560.0, wxW.y)));
+  // (none on the grown land's beach and desert: phase 10)
+  for (int i = 0; i < ${DRY}; i++) {
+    if (i >= wxDryN) break;
+    vec4 r = wxDry[i];
+    float d = min(min(wxW.x - r.x, r.z - wxW.x), min(wxW.z - r.y, r.w - wxW.z));
+    wxSnowH *= 1.0 - smoothstep(0.0, 100.0, d);
+  }
   vec3 wxNw = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
   float wxUp = clamp(wxNw.y, 0.0, 1.0);
   float wxDetail = 1.0;
@@ -323,7 +292,7 @@ const FRAG = `
   vec3 wxSnowC = diffuseColor.rgb;
   float wxWoods = 0.0;
   float wxWay = 0.0;
-  bool wxOn = wxSnow > 0.001 && wxUp > 0.4;
+  bool wxOn = wxSnowH > 0.001 && wxUp > 0.4;
   float wxCovered = 0.0;
 #if defined(WX_LAND) || defined(WX_FIELD)
   {
@@ -377,6 +346,18 @@ const FRAG = `
       diffuseColor.rgb = mix(diffuseColor.rgb, lawn, green);
     }
     wxWay = max(wxWay, near * 0.6);
+  #ifdef WX_LAND
+    // the cliffs (past ~60°): rock, in strata across them — the grass and the snow's picture, read
+    // straight down, ran down a mountain's wall in streaks (docs/plan/69)
+    float wxCliff = smoothstep(0.55, 0.4, wxNw.y);
+    if (wxCliff > 0.001) {
+      float st = wxF(vec2((wxW.x + wxW.z) * 0.04, wxW.y * 0.45));
+      // (warm greys: a cool one, lit by the sky, read as water from afar)
+      vec3 rock = mix(vec3(0.30, 0.28, 0.25), vec3(0.44, 0.41, 0.37), st);
+      diffuseColor.rgb = mix(diffuseColor.rgb, rock, wxCliff);
+      wxDetail = mix(wxDetail, 1.0, wxCliff);
+    }
+  #endif
   }
 #endif
   // coming in it's a powder: a fine grain at two scales (a picture's dark strokes last) with soft
@@ -411,6 +392,8 @@ const FRAG = `
   // glancing look and the sun's glint, broken by its facets. None of it where it's iced over.
   {
     float d = vWxDepth;
+    // (a still water's cell over dry land: its depth's below nought there — none of it)
+    if (d < -0.02) discard;
     float sp = vWxFlow.z;
     bool hole = false;
     for (int k = 0; k < 8; k++)
@@ -432,7 +415,9 @@ const FRAG = `
     }
 #else
     vec3 c = mix(vec3(0.04, 0.12, 0.10), vec3(0.004, 0.022, 0.028), smoothstep(0.4, 2.6, d));
-    float a = mix(0.28, 0.93, smoothstep(0.0, 1.6, d));
+    // (opaque where it's deep: at 0.93 what was behind showed — past the near land's reach, the sky,
+    // a pale band across Silver Lake)
+    float a = mix(0.28, 0.93, smoothstep(0.0, 1.6, d)) + 0.07 * smoothstep(2.0, 4.0, d);
     float n1 = wxN(vec2(vWxFlow.x * 0.32 - wxT * sp * 0.32, vWxFlow.y * 9.0));
     c += step(0.8, n1) * smoothstep(0.15, 0.6, sp) * 0.05;
     float lap = 0.05 * sin(wxT * 1.4 + wxW.x * 0.45 + wxW.z * 0.3);
@@ -528,14 +513,14 @@ const FRAG = `
       float w = wIn;
       float t0 = tIn;
       face = faceIn;
-      float c = smoothstep(t0 - w, t0 + w, wxSnow);
+      float c = smoothstep(t0 - w, t0 + w, wxSnowH);
       // the frost before it: everything paling (less on the ways and under the trees)
-      c = max(c, face * 0.2 * smoothstep(0.0, 0.35, wxSnow) * (1.0 - 0.7 * wxWay) * (1.0 - 0.5 * wxWoods));
+      c = max(c, face * 0.2 * smoothstep(0.0, 0.35, wxSnowH) * (1.0 - 0.7 * wxWay) * (1.0 - 0.5 * wxWoods));
 #ifdef WX_CAR
-      c = face * smoothstep(0.0, 0.45, wxSnow) * (0.8 + 0.2 * wxN(wxW.xz * 9.0 + wxW.y * 7.0));
+      c = face * smoothstep(0.0, 0.45, wxSnowH) * (0.8 + 0.2 * wxN(wxW.xz * 9.0 + wxW.y * 7.0));
 #endif
       // (a first snow's a veil: what's under it through it)
-      c *= 0.6 + 0.4 * smoothstep(0.05, 0.45, wxSnow);
+      c *= 0.6 + 0.4 * smoothstep(0.05, 0.45, wxSnowH);
 #ifdef WX_TREE
       c *= 0.5;
 #endif
@@ -555,7 +540,7 @@ const FRAG = `
       t0 = 0.05 + 0.55 * wxN(wxW.xz * 6.3 + wxW.y * 2.9);
 #endif
       t0 += (1.0 - face) * 1.3;
-      float c = min(smoothstep(t0, t0 + 0.05 + wxGw, wxSnow), smoothstep(tIn - wIn, tIn + wIn, 1.0));
+      float c = min(smoothstep(t0, t0 + 0.05 + wxGw, wxSnowH), smoothstep(tIn - wIn, tIn + wIn, 1.0));
 #ifdef WX_TREE
       c *= 0.5;
 #endif

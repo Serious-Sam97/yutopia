@@ -3,12 +3,12 @@ import type { GroundsEdits, Section } from "./grounds-edits.ts";
 // An admin's draft of god mode's edits (docs/plan/53-the-god-mode.md § Draft, walk it, publish):
 // what it changes against what's published (the strip's count, the publish's sums), and brought
 // up to date when someone else publishes first — a three-way merge on what the draft was made
-// on, the draft, and what's live: each chunk's grid and each keyed way, thing and building taken
+// on, the draft, and what's live: each chunk's grid and each keyed way, thing, building and piece of land taken
 // from whichever side changed it, the draft's kept where both did (and said). Plain data, no
 // Grounds (the client's god mode chunk and the tests use it).
 
 const GRIDS = ["height", "paint", "trees"] as const;
-const SECTIONS = ["ways", "things", "buildings"] as const;
+const SECTIONS = ["ways", "things", "buildings", "land"] as const;
 type Grid = (typeof GRIDS)[number];
 type SectionName = (typeof SECTIONS)[number];
 
@@ -23,6 +23,8 @@ export interface EditsCount {
   ways: Moves;
   things: Moves;
   buildings: Moves;
+  /** pieces of land grown (docs/plan/69, phase 10) */
+  land: Moves;
   /** all of them */
   total: number;
 }
@@ -95,6 +97,7 @@ export function editsCount(from: GroundsEdits, to: GroundsEdits): EditsCount {
     ways: { add: 0, change: 0, remove: 0 },
     things: { add: 0, change: 0, remove: 0 },
     buildings: { add: 0, change: 0, remove: 0 },
+    land: { add: 0, change: 0, remove: 0 },
     total: 0,
   };
   for (const g of GRIDS) {

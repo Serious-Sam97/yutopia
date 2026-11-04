@@ -1,4 +1,21 @@
 import {
+  GROW_BIOMES,
+  GROW_BLEND,
+  GROW_LIMITS,
+  GROW_SNAP,
+  grownAt,
+  grownLakeR,
+  grownLand,
+  grownLevel,
+  grownMicro,
+  grownNow,
+  grownSand,
+  grownTrees,
+  growRegion,
+  lakeBowl,
+  setGrown,
+} from "./grow.ts";
+import {
   KART_CARPARK,
   KART_CLEARING,
   KART_FENCE,
@@ -11,6 +28,43 @@ import {
   kartSignPosts,
 } from "./kart/land.ts";
 import { kartCarBlocked, kartDeckAt, kartFloods, kartSurfaceAt, kartWalkBlocked, setKartLayout } from "./kart/park.ts";
+import {
+  BASE_LAND,
+  beyondLand,
+  beyondOf,
+  inLandDrawn,
+  isLandChunk,
+  KART_LAND,
+  landBounds,
+  type Region,
+  reachRects,
+  setLand,
+} from "./land.ts";
+import {
+  ALT,
+  BUS_STOPS,
+  CREEK,
+  creekNear,
+  creekWater,
+  LAKE,
+  LONG_LAND,
+  LONG_ROAD,
+  LONG_SIGNS,
+  lakeR,
+  longBridged,
+  longForest,
+  longLand,
+  longS,
+  NAMES,
+  outOfTown,
+  PADS,
+  padAt,
+  SHORE,
+  SPINE,
+} from "./longroad.ts";
+
+// the world's land: today's, and the long road's past it (docs/plan/69-the-long-road.md)
+if (LONG_ROAD) setLand([...BASE_LAND, ...LONG_LAND]);
 
 // (what the game's 3D scenery needs of the park: from here, so the Grounds' chunks don't take the karts' whole module)
 export { KART_CARPARK, KART_FENCE, KART_GATE, KART_PARK, KART_SIGN, KART_TURN, kartSignWings } from "./kart/land.ts";
@@ -52,6 +106,7 @@ import {
   decodeBytes,
   decodeHeights,
   type GroundsEdits,
+  type GrowDef,
   NO_EDITS,
   type Section,
   type ThingDef,
@@ -76,14 +131,20 @@ export const GROUNDS_VERSION = 3; // (2: the farm, docs/plan/31-the-day.md; 3: t
 // Marks the chunk for `pnpm budget` (the client fetches it once the world starts).
 export const GROUNDS_CHUNK = "yutopia-grounds";
 export const CHUNK = 32;
-/** The Kart Park's ground (docs/plan/46-the-karts.md): a clearing in the woods north of the county
- *  road, the land opened north past where it ended to fit it, the road in, the park on it. On in the
- *  game since 2026-10-26 (it was the stills' and the sandbox's only, behind a switch, till then). */
-export const KART_LAND = true;
-export const GROUNDS = { x0: -480, z0: KART_LAND ? -960 : -624, x1: 544, z1: 208 };
+// The land's extent is data (land.ts: its regions — docs/plan/69-the-long-road.md L1): the box round
+// it is `landBounds()`, what GROUNDS was. (The Kart Park's ground, plan 46, is one of them: `KART_LAND`.)
+export {
+  inLandBounds,
+  isLandChunk,
+  KART_LAND,
+  landBounds,
+  landChunks,
+  landRegions,
+  overlapsLand,
+} from "./land.ts";
 
 export type P = [number, number];
-export type Surface = "snow" | "deep" | "path" | "asphalt" | "walk" | "ice" | "floor" | "rock";
+export type Surface = "snow" | "deep" | "path" | "asphalt" | "walk" | "ice" | "floor" | "rock" | "sand";
 
 // ── noise (deterministic, no dependencies) ───────────────────────────────────
 function hash2(x: number, z: number, s: number): number {
@@ -489,6 +550,16 @@ const BASE_WAYS: Way[] = [
 ];
 // the road in to the Kart Park, off the county road by the river (docs/plan/46-the-karts.md)
 if (KART_LAND) BASE_WAYS.push(way("kart-road", "road", "Kart Park road", 9, KART_ROAD));
+// the long road (docs/plan/69, L3): its line the designed spine's, a sample a metre — its heights its
+// profile (layLevels), its bridges where the land's far under it
+if (LONG_ROAD)
+  BASE_WAYS.push({
+    ...way("long-road", "road", NAMES.road, 9, [SPINE[0], SPINE[SPINE.length - 1]]),
+    pts: SPINE.filter((_, i) => i % 50 === 0 || i === SPINE.length - 1).map(([x, z]): P => [x, z]),
+    line: SPINE.map(([x, z]): P => [x, z]),
+  });
+// (and the path down to Silver Lake's shore: the cabins and the boathouse)
+if (LONG_ROAD) BASE_WAYS.push(way("lake-path", "trail", `${NAMES.lake} path`, 3, SHORE.path));
 
 // ── god mode's edits (docs/plan/53-the-god-mode.md): laid over all that's generated ──
 let EDITS: GroundsEdits = NO_EDITS;
@@ -502,6 +573,34 @@ const keep = <T extends { key: string }>(s: Section<T> | undefined) => ({
   change: (s?.change ?? {}) as Record<string, Partial<T>>,
   add: s?.add ?? [],
 });
+// god mode's grown land (docs/plan/69, phase 10): the pieces laid as regions of the land
+/** The land that's always there: today's and the long road's (anchored: never taken away). */
+const FIXED_LAND: readonly Region[] = LONG_ROAD ? [...BASE_LAND, ...LONG_LAND] : BASE_LAND;
+let GROWN_REGIONS: Region[] = [];
+let grownSig = "[]";
+/** The pieces of land these edits grow, as they'd be laid (added and changed, not taken away). */
+export function growDefs(e: GroundsEdits): GrowDef[] {
+  const s = keep<GrowDef>(e.land);
+  return s.add.filter((d) => !s.gone.has(d.key)).map((d) => ({ ...d, ...s.change[d.key] }));
+}
+function layLand() {
+  const defs = growDefs(EDITS);
+  const sig = JSON.stringify(defs);
+  if (sig === grownSig) return;
+  grownSig = sig;
+  // (each piece starts at the height of the land it meets, read with none of them there)
+  GROWN_REGIONS = [];
+  setGrown([], macro, () => false);
+  const regs = defs.map(growRegion);
+  setLand([...FIXED_LAND, ...regs]);
+  setGrown(
+    defs,
+    macro,
+    (x, z) => beyond(x, z) === 0,
+    (x, z) => beyondOf(FIXED_LAND, x, z),
+  );
+  GROWN_REGIONS = regs;
+}
 const wayDef = (w: Way): WayDef => ({
   key: w.key,
   kind: w.kind,
@@ -640,6 +739,21 @@ for (let k = 0; k < 7; k++) {
   const z1 = -440 - k * 10;
   BASE_BUILDINGS.push(b(`house-w${k}`, "house", "Townhouse", 402, z1 - 8, 412, z1, 2, "e"));
   BASE_BUILDINGS.push(b(`house-e${k}`, "house", "Townhouse", 428, z1 - 8, 438, z1, 2, "w"));
+}
+// the long road's (docs/plan/69, L7): the bus's shelters, the rest stop's hut, the lake's boathouse
+// and cabins
+if (LONG_ROAD) {
+  const T = BUS_STOPS.town;
+  BASE_BUILDINGS.push(b("bus-town", "shelter", "Bus stop · Silver Lake", T.x - 3, T.z - 11, T.x + 3, T.z - 7, 1, "s"));
+  const L = BUS_STOPS.lake;
+  BASE_BUILDINGS.push(b("bus-lake", "shelter", "Bus stop · Town", L.x - 3, L.z + 7, L.x + 3, L.z + 11, 1, "n"));
+  const [rx, rz] = padAt(PADS[0]);
+  BASE_BUILDINGS.push(b("rest-hut", "shed", "Rest area hut", rx + 14, rz + 8, rx + 18, rz + 11, 1, "w"));
+  const B = SHORE.boathouse;
+  BASE_BUILDINGS.push(b("lake-boathouse", "boathouse", `${NAMES.lake} boathouse`, B.x0, B.z0, B.x1, B.z1, 1, "n"));
+  // (a house's porch is on its east or west face: the two face each other across the path)
+  for (const [i, c] of SHORE.cabins.entries())
+    BASE_BUILDINGS.push(b(c.key, "house", "Cabin", c.x0, c.z0, c.x1, c.z1, 1, i ? "w" : "e"));
 }
 /** The buildings as they are: the generator's, edited. */
 export const BUILDINGS: Building[] = [];
@@ -871,7 +985,11 @@ function indexLine(line: P[], f: number) {
   }
 }
 const bCells = new Map<number, Building[]>();
+// (the last asked, kept: the land's height, its surface and its trees each ask it of the same
+// point in turn — read, never changed; dropped when the index is laid again)
+const nearLast = { x: Number.NaN, z: 0, out: new Map<number, { d: number; i: number }>() };
 function layIndex() {
+  nearLast.x = Number.NaN;
   RIVER_F = WAYS.length;
   RAVINE_F = WAYS.length + 1;
   cells.clear();
@@ -890,9 +1008,13 @@ function layIndex() {
 }
 layIndex();
 
-/** The nearest sample of every line within ~a cell of (x, z): distance and sample. */
-function nearLines(x: number, z: number): Map<number, { d: number; i: number }> {
+/** The nearest sample of every line within ~a cell of (x, z): distance and sample (not to be changed). */
+function nearLines(x: number, z: number): ReadonlyMap<number, { d: number; i: number }> {
+  if (x === nearLast.x && z === nearLast.z) return nearLast.out;
   const out = new Map<number, { d: number; i: number }>();
+  nearLast.x = x;
+  nearLast.z = z;
+  nearLast.out = out;
   const cx = Math.floor(x / CELL);
   const cz = Math.floor(z / CELL);
   for (let dx = -1; dx <= 1; dx++)
@@ -1043,33 +1165,42 @@ function kartApronAt(x: number, z: number): Surface | null {
 }
 
 // ── the land ─────────────────────────────────────────────────────────────────
-/** How far (x, z) is beyond the land you can reach: the ridges rise there. */
 /** Where anyone may be (docs/plan/50-the-volume.md): within 24 of the land's own rectangles — these,
- *  their union (walkable()'s `beyond`; the physics world's invisible wall round it). */
+ *  their union (walkable()'s `beyond`; the physics world's invisible wall round it). Its regions'
+ *  (land.ts). */
 export function worldRects(): { x0: number; z0: number; x1: number; z1: number }[] {
-  const m = (r: { x0: number; z0: number; x1: number; z1: number }) => ({
-    x0: Math.max(GROUNDS.x0 + 2, r.x0 - 24),
-    z0: Math.max(GROUNDS.z0 + 2, r.z0 - 24),
-    x1: Math.min(GROUNDS.x1 - 2, r.x1 + 24),
-    z1: Math.min(GROUNDS.z1 - 2, r.z1 + 24),
-  });
-  const core = m({ x0: -400, z0: -580, x1: 528, z1: 172 });
-  return KART_LAND ? [core, m(KART_GROUND)] : [core];
+  return reachRects();
 }
-function beyond(x: number, z: number): number {
-  const o = Math.max(-400 - x, z - 172, -580 - z, x - 528, 0);
-  if (!KART_LAND || o === 0) return o;
-  // (and the Kart Park's ground, opened north of where the land ended)
-  const F = KART_GROUND;
-  return Math.min(o, Math.max(F.x0 - x, x - F.x1, F.z0 - z, z - F.z1, 0));
-}
+/** How far (x, z) is beyond the land you can reach: the ridges rise there (land.ts). */
+const beyond = beyondLand;
 function macro(x: number, z: number): number {
+  // (past today's box: the long road's land — docs/plan/69, L4 — eased in over 160 m east of the
+  // barricade's line, from 200 m out the other ways: what the town itself reads just past its box,
+  // the river's north end, its last rows' samples, as it was)
+  const own = LONG_ROAD ? longOwn(x, z) : 0;
+  const m = own >= 1 ? longLand(x, z) : own > 0 ? lerp(townMacro(x, z), longLand(x, z), own) : townMacro(x, z);
+  // (god mode's grown land: its own, eased in from the land it touches — docs/plan/69, phase 10)
+  const g = GROWN_REGIONS.length ? grownAt(x, z) : null;
+  return g ? lerp(m, grownLand(g.g, x, z), g.w) : m;
+}
+/** How much of (x, z)'s land is the long road's (0: today's; 1: all its). */
+function longOwn(x: number, z: number): number {
+  const out = outOfTown(x, z);
+  if (out <= 0) return 0;
+  return Math.max(smooth(0, 160, x - LONG_EAST), smooth(200, 400, out));
+}
+const LONG_EAST = 544; // (today's box's east side: the barricade's line, +16)
+function townMacro(x: number, z: number): number {
   let m = 6 * fbm(x / 170, z / 170, 2, 11);
   for (const f of FLATS) m = f.h + (m - f.h) * smooth(f.r0, f.r1, Math.hypot(x - f.x, z - f.z));
   // the Kart Park's pad, levelled out to its fence — and its apron outside the gate (the car park,
   // the turning circle: the road in climbs to them, not into a step) — and eased into the woods
   if (KART_LAND) m = KART_PARK.h + (m - KART_PARK.h) * smooth(4, 44, kartPadDist(x, z));
-  const o = beyond(x, z);
+  // (the ridges round today's land from today's regions — west of x 470 as they were — the long
+  // road's reach taken in from there to the barricade's line: docs/plan/69)
+  let o = LONG_ROAD ? lerp(beyondOf(BASE_LAND, x, z), beyond(x, z), smooth(470, 528, x)) : beyond(x, z);
+  // (and from god mode's grown land's: none past it)
+  if (o > 0 && GROWN_REGIONS.length) o = Math.min(o, beyondOf(GROWN_REGIONS, x, z));
   if (o > 0) m += 40 * (1 - Math.exp(-((o / 60) ** 2))) * (0.7 + 0.6 * vnoise(x / 70, z / 70, 41));
   return m;
 }
@@ -1078,6 +1209,17 @@ function inLawn(x: number, z: number): number {
   return ((x - LAWN.cx) / (LAWN.rx * wob)) ** 2 + ((z - LAWN.cz) / (LAWN.rz * wob)) ** 2;
 }
 function microWeight(x: number, z: number): number {
+  const g = GROWN_REGIONS.length ? grownAt(x, z) : null;
+  if (g) return lerp(baseMicroWeight(x, z), grownMicro(g.g), g.w);
+  return baseMicroWeight(x, z);
+}
+function baseMicroWeight(x: number, z: number): number {
+  // (the long road's land: its creek's bed and the lake's kept as carved — docs/plan/69, L4)
+  if (LONG_ROAD && longOwn(x, z) > 0) {
+    const c = creekNear(x, z, 16);
+    const lake = smooth(0.9, 1.25, lakeR(x, z));
+    return (c ? smooth(4, 14, c.d) : 1) * lake;
+  }
   const lawn = 0.35 + 0.65 * smooth(0.7, 1.2, inLawn(x, z));
   const town = smooth(100, 170, Math.hypot(x - 418, z + 450));
   // (the Kart Park's pad: levelled flat for the circuit)
@@ -1148,6 +1290,15 @@ function layLevels() {
         w.h[i] = lerp(hj, w.h[i], smooth(0, 12, k));
       }
     }
+  }
+  // (the long road: its profile, its bridges — docs/plan/69, L3)
+  const long = WAYS.find((w) => w.key === "long-road");
+  if (long && long.line.length === SPINE.length) {
+    // (its first 80 m eased from Main Street's last height: no step where the two meet)
+    const main = WAYS.find((w) => w.key === "main");
+    const from = main ? main.h[main.h.length - 1] - ALT[0] : 0;
+    long.h = ALT.map((a, i) => a + from * (1 - smooth(0, 80, longS(i))));
+    long.bridged = SPINE.map((_, i) => longBridged(i));
   }
   RIVER.h = RIVER.line.map(([x, z]) => macro(x, z) - 2.6);
   // bridges: where a way crosses the river or the ravine
@@ -1271,13 +1422,50 @@ export interface Water {
   bed: number;
   depth: number;
   flow: [number, number];
-  kind: "pond" | "river";
+  kind: "pond" | "river" | "lake" | "creek" | "sea";
 }
 export function waterAt(x: number, z: number): Water | null {
   const e = ((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2;
   if (e < 1) {
     const depth = pondDepth(Math.sqrt(e));
     return { level: POND_LEVEL, bed: POND_LEVEL - depth, depth, flow: [0, 0], kind: "pond" };
+  }
+  // (god mode's grown land: a lake's, the sea off a beach — docs/plan/69, phase 10)
+  if (GROWN_REGIONS.length) {
+    const g = grownAt(x, z);
+    // (only on its own land, not where it's eased into what it meets: the land falls away from
+    // a lifted lake there — its water was in the air; the lake's in its bowl)
+    const lake = g?.g.def.biome === "lake";
+    if (g && g.w > 0.98 && (lake ? grownLakeR(g.g, x, z) < 1.25 : g.g.def.biome === "beach")) {
+      const level = grownLevel(g.g);
+      const bed = terrainAt(x, z);
+      if (bed < level)
+        return { level, bed, depth: level - bed, flow: [0, 0], kind: g.g.def.biome === "lake" ? "lake" : "sea" };
+    }
+  }
+  // (the long road's: Silver Lake, still; the creek, running down to the fields — docs/plan/69)
+  if (LONG_ROAD && longOwn(x, z) > 0.5) {
+    // (the lake's: in its shore, and any of its bowl out past its wobble that's under its level)
+    if (lakeR(x, z) < 1.25) {
+      const bed = terrainAt(x, z);
+      const depth = LAKE.level - bed;
+      if (depth > 0) return { level: LAKE.level, bed, depth, flow: [0, 0], kind: "lake" };
+      if (lakeR(x, z) < 1) return null;
+    }
+    const c = creekNear(x, z, 4);
+    if (!c || c.d >= 2.6) return null;
+    const level = creekWater(c.i);
+    const bed = Math.min(level - 0.05, terrainAt(x, z));
+    const a = CREEK[Math.max(0, c.i - 1)];
+    const b = CREEK[Math.min(CREEK.length - 1, c.i + 1)];
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    return {
+      level,
+      bed,
+      depth: level - bed,
+      flow: [((b[0] - a[0]) / l) * 0.6, ((b[1] - a[1]) / l) * 0.6],
+      kind: "creek",
+    };
   }
   const r = nearLines(x, z).get(RIVER_F);
   if (!r || r.d >= RIVER.w / 2) return null;
@@ -1332,18 +1520,23 @@ export function terrainAt(x: number, z: number): number {
       target = w.h[n.i];
     }
   }
-  // the buildings' pads (and the lot's)
-  const pads: { x0: number; z0: number; x1: number; z1: number; h: number }[] = nearBuildings(x, z).map((bd) => ({
-    ...bd,
-    h: macro((bd.x0 + bd.x1) / 2, (bd.z0 + bd.z1) / 2),
-  }));
+  // the buildings' pads (and the lot's): flat to half a metre round, out on the long road's hillsides
+  // to 3.5 (a porch's steps on the level — docs/plan/69)
+  const pads: { x0: number; z0: number; x1: number; z1: number; h: number; m?: number }[] = nearBuildings(x, z).map(
+    (bd) => ({
+      ...bd,
+      h: macro((bd.x0 + bd.x1) / 2, (bd.z0 + bd.z1) / 2),
+      m: LONG_ROAD && bd.x0 > 600 ? 3.5 : 0.5,
+    }),
+  );
   if (x > SITE.x0 - 12 && x < SITE.x1 + 12 && z > SITE.z0 - 12 && z < SITE.z1 + 12) pads.push({ ...SITE, h: 0 });
   if (x > PLAZA.x0 - 8 && x < PLAZA.x1 + 8 && z > PLAZA.z0 - 8 && z < PLAZA.z1 + 8)
     pads.push({ ...PLAZA, h: macro(STATUE.x, STATUE.z) });
   // (the Kart Park's car park, its footway and the turning circle: one level pad)
   if (KART_LAND && rectDist(KART_APRON, x, z) < 8) pads.push({ ...KART_APRON, h: KART_PARK.h });
   for (const p of pads) {
-    const k = smooth(0.5, 7, rectDist(p, x, z));
+    const m = p.m ?? 0.5;
+    const k = smooth(m, m + 6.5, rectDist(p, x, z));
     if (k < best) {
       best = k;
       target = p.h;
@@ -1423,6 +1616,14 @@ export function groundSurfaceAt(x: number, z: number, rough = false, under = fal
   if (((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 1) return "ice";
   const r = near.get(RIVER_F);
   if (r && r.d < RIVER.w / 2) return "ice";
+  // (the long road's water: Silver Lake, the creek — docs/plan/69)
+  if (LONG_ROAD && longOwn(x, z) > 0.5 && waterAt(x, z)) return "ice";
+  // (god mode's grown land: its water; the beach's and the desert's sand)
+  const gr = GROWN_REGIONS.length ? grownAt(x, z) : null;
+  if (gr && gr.w > 0.3) {
+    if (waterAt(x, z)) return "ice";
+    if (grownSand(gr.g) && gr.w > 0.5) return !rough && slopeAt(x, z) > 0.85 ? "rock" : "sand";
+  }
   if (!rough && slopeAt(x, z) > 0.85) return "rock";
   return treeDensity(x, z) > 0.3 ? "deep" : "snow";
 }
@@ -1437,6 +1638,7 @@ export const SURFACE_FOOTING: Record<Exclude<Surface, "floor">, Footing> = {
   walk: "concrete",
   ice: "ice",
   rock: "rock",
+  sand: "earth",
 };
 
 /** Inside a town's building, its floor (insideOf's colours: the bar's dark boards, the
@@ -1602,7 +1804,22 @@ export function treeRoom(x: number, z: number): boolean {
   return true;
 }
 export function treeDensity(x: number, z: number): number {
-  if (x < GROUNDS.x0 || x > GROUNDS.x1 || z < GROUNDS.z0 || z > GROUNDS.z1) return 0;
+  // (god mode's grown land: by its biome, cleared round what's been put on it)
+  const g = GROWN_REGIONS.length ? grownAt(x, z) : null;
+  if (g && g.w > 0.5) {
+    for (const bd of nearBuildings(x, z)) if (rectDist(bd, x, z) < 5) return 0;
+    for (const [f, n] of nearLines(x, z)) if (f < WAYS.length && n.d < WAYS[f].w / 2 + 1.5) return 0;
+    const h = terrainAt(x, z);
+    const slope = Math.hypot(terrainAt(x + 2, z) - h, terrainAt(x, z + 2) - h) / 2;
+    return waterAt(x, z) ? 0 : grownTrees(g.g, x, z, h, slope);
+  }
+  // (past today's box: the long road's forest, by its height and slope — docs/plan/69, L5)
+  if (LONG_ROAD && longOwn(x, z) > 0.5) {
+    const h = terrainAt(x, z);
+    const slope = Math.hypot(terrainAt(x + 2, z) - h, terrainAt(x, z + 2) - h) / 2;
+    return longForest(x, z, h, slope);
+  }
+  if (!inLandDrawn(x, z)) return 0;
   const lawn = inLawn(x, z);
   if (lawn < 1) return 0;
   if (Math.hypot(x - CLEARING.x, z - CLEARING.z) < CLEARING.r) return 0;
@@ -1688,8 +1905,13 @@ export function treesIn(cx: number, cz: number): Tree[] {
       // (planted: not on a way, a building, the water)
       if (m && !treeRoom(x, z)) continue;
       // birches by the water, pines in the deep woods, a few dead ones
-      const nearWater = ((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 4 || Math.abs(x - 260) < 50;
-      const q = r();
+      const nearWater =
+        ((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2 < 4 ||
+        Math.abs(x - 260) < 50 ||
+        (LONG_ROAD && !!creekNear(x, z, 60));
+      // (up high, spruce only — docs/plan/69, L5)
+      const high = LONG_ROAD && x > 3000 && terrainAt(x, z) > 260;
+      const q = high ? 0.5 : r();
       const kind: TreeKind = m
         ? PLANTED[m - TREE_MASK.pine]
         : q < (nearWater ? 0.45 : 0.2)
@@ -1744,6 +1966,21 @@ function layLamps() {
   LAMPS.push({ key: "lamp:gate", x: -36, z: -370, ry: Math.PI, kind: "cobra" }); // the gate's
   LAMPS.push({ key: "lamp:boathouse", x: -255, z: -97.4, ry: 0, kind: "porch" }); // the boathouse's
   LAMPS.push({ key: "lamp:shelter", x: -13, z: -412, ry: 0, kind: "porch" }); // the bus shelter's
+  // the long road's lit places: the rest stop, the pull-out, the lookout (its road dark between)
+  if (LONG_ROAD) {
+    for (const [n, p] of PADS.entries()) {
+      const [px, pz] = padAt(p);
+      const lamps =
+        n === 1
+          ? [[0, 0]]
+          : [
+              [-p.r * 0.5, -p.r * 0.4],
+              [p.r * 0.45, p.r * 0.35],
+            ];
+      for (const [k, [dx, dz]] of lamps.entries())
+        LAMPS.push({ key: `lamp:${p.name.replace(" ", "-")}-${k}`, x: px + dx, z: pz + dz, ry: 0, kind: "lone" });
+    }
+  }
   // the Kart Park's floodlights (docs/plan/46-the-karts.md): their light and pools as any lamp's
   if (KART_LAND)
     for (const [i, f] of kartFloods().entries())
@@ -1877,6 +2114,27 @@ function layStreet() {
   STREET.push({ key: "street:stop", kind: "stop", x: 424.8, z: -415.6, ry: 0 });
   STREET.push({ key: "street:streetsign", kind: "streetsign", x: 415.2, z: -415.6, ry: 0 });
   STREET.push({ key: "street:postbox", kind: "postbox", x: 349.6, z: MZ - 7.7, ry: 0 });
+  // the long road's: benches and bins at the rest stop, the pull-out, the lookout (docs/plan/69, L7)
+  if (LONG_ROAD)
+    for (const [n, p] of PADS.entries()) {
+      const [px, pz] = padAt(p);
+      const benches =
+        n === 0
+          ? [
+              [-8, -4],
+              [0, -10],
+              [7, -2],
+            ]
+          : n === 1
+            ? [[2, 0]]
+            : [
+                [-6, 6],
+                [4, 8],
+              ];
+      for (const [k, [dx, dz]] of benches.entries())
+        STREET.push({ key: `street:long:${n}:bench:${k}`, kind: "bench", x: px + dx, z: pz + dz, ry: 0 });
+      if (n !== 1) STREET.push({ key: `street:long:${n}:bin`, kind: "bin", x: px + 3, z: pz - 6, ry: 0 });
+    }
 }
 layStreet();
 /** The tiles street furniture stands on (a rail's, a wall's: every one along it). */
@@ -1997,7 +2255,9 @@ export const ROAD_CLOSED = { x: 528, z: -405 };
 // ── the Grounds underfoot: chunks of heights and walkable tiles ─────────────
 // What the ground floor's grid reads beyond its stored tiles (shared grid.ts
 // Outdoors): the height where you stand (a bridge's deck over the river), and
-// which tiles you can walk on. Made a chunk at a time when first asked, kept.
+// which tiles you can walk on. Made a chunk at a time when first asked, kept — up to a number of
+// them (docs/plan/69, L2: the land is long; the least lately used go, made again from nothing if
+// they're asked for: the same chunk).
 const LAT = 2; // height samples a tile
 const LN = CHUNK * LAT + 1;
 export interface GroundsChunk {
@@ -2008,17 +2268,46 @@ export interface GroundsChunk {
   /** walkable tiles, CHUNK², row by row */
   walk: Uint8Array;
   trees: Tree[];
+  /** when it was last asked for (the cache's: the least lately used go first) */
+  used?: number;
 }
 const chunks = new Map<number, GroundsChunk>();
 const chunkKey = (cx: number, cz: number) => (cx + 2048) * 4096 + (cz + 2048);
+// (~24 KB of JS a chunk: 4,000 is ~100 MB — today's world, 1,184, never fills it)
+let chunkCap = 4000;
+let useTick = 0;
+/** How many chunks are kept at most (the least lately used go past it). The browser keeps fewer. */
+export function setChunkCap(n: number): void {
+  chunkCap = Math.max(64, n);
+  trimChunks();
+}
+/** How many chunks are kept now. */
+export function chunkCount(): number {
+  return chunks.size;
+}
+// past the cap: down to nine tenths of it, the least lately used first, their surfaces with them
+function trimChunks() {
+  if (chunks.size <= chunkCap) return;
+  const by = [...chunks.entries()].sort((a, b) => (a[1].used ?? 0) - (b[1].used ?? 0));
+  const n = chunks.size - Math.floor(chunkCap * 0.9);
+  for (let i = 0; i < n; i++) {
+    chunks.delete(by[i][0]);
+    surfaces.delete(by[i][0]);
+  }
+}
 
 /** The chunk (cx, cz) (CHUNK tiles a side, building coords / CHUNK). */
 export function groundsChunk(cx: number, cz: number): GroundsChunk {
   const k = chunkKey(cx, cz);
   const hit = chunks.get(k);
-  if (hit) return hit;
+  if (hit) {
+    hit.used = ++useTick;
+    return hit;
+  }
   const c = makeChunk(cx, cz);
+  c.used = ++useTick;
   chunks.set(k, c);
+  if (chunks.size > chunkCap) trimChunks();
   return c;
 }
 /** Whether the land at (x, z) is made already (its chunk): reading it then costs nothing — the
@@ -2037,10 +2326,166 @@ export function setParkLayout(key: string, reverse: boolean): boolean {
   for (const f of changed) f(cs, "park");
   return true;
 }
+// ── what lines the long road (docs/plan/69, L3): guard rails over a drop (the land 3 m under it 14 m
+// from its middle; not on a bridge — the bridge has its own), reflector posts every 50 m, snow poles every
+// 25 m past the treeline's foot, km markers, its signs. Worked out a chunk at a time, as asked ──
+export interface LongDress {
+  kind: "rail" | "post" | "pole" | "km" | "sign";
+  /** where it stands (a rail: its start; `bx`, `bz` its end) and its foot's height (a rail's: the road's) */
+  x: number;
+  z: number;
+  y: number;
+  bx?: number;
+  bz?: number;
+  by?: number;
+  /** which way it faces (a sign, a marker: the oncoming driver), radians about y (three's) */
+  ry: number;
+  side: 1 | -1;
+  /** a sign's or marker's words, its colours */
+  text?: string[];
+  bg?: string;
+  fg?: string;
+}
+const DRESS_HALF = 4.5;
+// the spine's samples by chunk
+let spineBy: Map<number, number[]> | null = null;
+// (by chunk, as the edits laid made it — its heights the land's — a few thousand kept)
+const dressBy = new Map<number, LongDress[]>();
+let dressV = -1;
+function spineFrame(i: number) {
+  const a = SPINE[Math.max(0, i - 2)];
+  const b = SPINE[Math.min(SPINE.length - 1, i + 2)];
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const tx = (b[0] - a[0]) / l;
+  const tz = (b[1] - a[1]) / l;
+  // (its left looking along it)
+  return { tx, tz, lx: tz, lz: -tx };
+}
+/** The long road's dressing in chunk (cx, cz) (what stands in it). */
+export function longDressIn(cx: number, cz: number): LongDress[] {
+  if (!LONG_ROAD) return [];
+  const k = chunkKey(cx, cz);
+  if (dressV !== editsVersion || dressBy.size > 4000) {
+    dressBy.clear();
+    dressV = editsVersion;
+  }
+  const hit = dressBy.get(k);
+  if (hit) return hit;
+  if (!spineBy) {
+    spineBy = new Map();
+    for (let i = 0; i < SPINE.length; i++) {
+      const q = chunkKey(Math.floor(SPINE[i][0] / CHUNK), Math.floor(SPINE[i][1] / CHUNK));
+      const l = spineBy.get(q) ?? [];
+      spineBy.set(q, l);
+      l.push(i);
+    }
+  }
+  const out: LongDress[] = [];
+  const w = WAYS.find((u) => u.key === "long-road");
+  const S0 = (i: number) => longS(i);
+  const at = (i: number, side: 1 | -1, o: number) => {
+    const f = spineFrame(i);
+    return [SPINE[i][0] + f.lx * side * o, SPINE[i][1] + f.lz * side * o] as const;
+  };
+  for (const i of spineBy.get(k) ?? []) {
+    const f = spineFrame(i);
+    const bridged = !!w?.bridged[i];
+    const s0 = S0(i);
+    const s1 = S0(Math.min(SPINE.length - 1, i + 1));
+    for (const side of [1, -1] as const) {
+      // a rail: a 2 m piece where the land falls away
+      if (!bridged && i % 2 === 0 && i + 2 < SPINE.length) {
+        // (the land 14 m out 3 m under the road: an embankment, a drop, the gorge's rim)
+        const [px, pz] = at(i, side, DRESS_HALF + 9.5);
+        if (ALT[i] - terrainAt(px, pz) > 3) {
+          const [ax, az] = at(i, side, DRESS_HALF + 1.3);
+          const [bx, bz] = at(i + 2, side, DRESS_HALF + 1.3);
+          out.push({ kind: "rail", x: ax, z: az, y: ALT[i], bx, bz, by: ALT[i + 2], ry: Math.atan2(f.tx, f.tz), side });
+        }
+      }
+      // a reflector post every 50 m, a snow pole every 25 m from the treeline's foot
+      if (!bridged && Math.floor(s1 / 50) > Math.floor(s0 / 50)) {
+        const [x, z] = at(i, side, DRESS_HALF + 1.9);
+        out.push({ kind: "post", x, z, y: terrainAt(x, z), ry: Math.atan2(f.tx, f.tz), side });
+      }
+      if (!bridged && ALT[i] > 330 && Math.floor(s1 / 25) > Math.floor(s0 / 25)) {
+        const [x, z] = at(i, side, DRESS_HALF + 2.6);
+        out.push({ kind: "pole", x, z, y: terrainAt(x, z), ry: 0, side });
+      }
+    }
+    // a km marker, on the right going out
+    if (!bridged && i > 0 && Math.floor(s1 / 1000) > Math.floor(s0 / 1000)) {
+      const [x, z] = at(i, -1, DRESS_HALF + 2.2);
+      const km = Math.round(s1 / 1000);
+      out.push({
+        kind: "km",
+        x,
+        z,
+        y: terrainAt(x, z),
+        ry: Math.atan2(-f.tx, -f.tz),
+        side: -1,
+        text: [String(km)],
+        bg: "#1f5a3a",
+        fg: "#f4f4ee",
+      });
+    }
+    // its signs
+    for (const sg of LONG_SIGNS)
+      if (sg.i === i) {
+        const [x, z] = at(i, sg.side, DRESS_HALF + 2.8);
+        out.push({
+          kind: "sign",
+          x,
+          z,
+          y: terrainAt(x, z),
+          ry: Math.atan2(-f.tx, -f.tz),
+          side: sg.side,
+          text: sg.text,
+          bg: sg.bg,
+          fg: sg.fg,
+        });
+      }
+  }
+  dressBy.set(k, out);
+  return out;
+}
+/** The rails in chunk (cx, cz) and those round it (one that starts next door can reach in). */
+function railsNear(cx: number, cz: number): LongDress[] {
+  const out: LongDress[] = [];
+  for (let dz = -1; dz <= 1; dz++)
+    for (let dx = -1; dx <= 1; dx++) for (const d of longDressIn(cx + dx, cz + dz)) if (d.kind === "rail") out.push(d);
+  return out;
+}
+/** The guard rails whose middle is in chunk (cx, cz) (each in one chunk: the physics' compound's). */
+export function longRailsIn(cx: number, cz: number): LongDress[] {
+  return railsNear(cx, cz).filter(
+    (d) =>
+      d.bx !== undefined &&
+      d.bz !== undefined &&
+      Math.floor((d.x + d.bx) / 2 / CHUNK) === cx &&
+      Math.floor((d.z + d.bz) / 2 / CHUNK) === cz,
+  );
+}
+/** On the long road or its verges (6 m past its edge: the shadowed keep off it — docs/plan/69). */
+export { onLongRoad } from "./longroad.ts";
+/** Is (x, z) on a guard rail (a 1 m tile's middle within three quarters of a metre of one)? */
+export function onLongRail(x: number, z: number): boolean {
+  if (!LONG_ROAD) return false;
+  for (const d of railsNear(Math.floor(x / CHUNK), Math.floor(z / CHUNK))) {
+    if (d.bx === undefined || d.bz === undefined) continue;
+    const dx = d.bx - d.x;
+    const dz = d.bz - d.z;
+    const l2 = dx * dx + dz * dz || 1;
+    const u = Math.max(0, Math.min(1, ((x - d.x) * dx + (z - d.z) * dz) / l2));
+    if (Math.hypot(x - d.x - dx * u, z - d.z - dz * u) < 0.75) return true;
+  }
+  return false;
+}
 /** Forget every chunk made (a full rebuild; the tests, to check what's kept against what's made). */
 export function forgetGrounds(): void {
   chunks.clear();
   surfaces.clear();
+  dressBy.clear();
 }
 /** The chunks a rectangle (and `pad` round it) falls in. */
 function chunksOver(r: { x0: number; z0: number; x1: number; z1: number }, pad: number): [number, number][] {
@@ -2071,7 +2516,9 @@ export function onGroundsChanged(f: Changed): () => void {
 export let layoutVersion = 0;
 /** A chunk made elsewhere (a worker) put in the cache. */
 export function adoptChunk(c: GroundsChunk): void {
+  c.used = ++useTick;
   chunks.set(chunkKey(c.cx, c.cz), c);
+  if (chunks.size > chunkCap) trimChunks();
 }
 export function hasChunk(cx: number, cz: number): boolean {
   return chunks.has(chunkKey(cx, cz));
@@ -2105,7 +2552,11 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
   for (const [x, z] of streetTiles()) shut(x + 0.5, z + 0.5);
   for (const [x, z] of motorsTiles()) shut(x + 0.5, z + 0.5);
   // the road closed's barricades and the drift past them (shapes/grounds.ts: solid, a dead end)
-  for (const [x, z] of roadClosedTiles()) shut(x + 0.5, z + 0.5);
+  if (!LONG_ROAD) for (const [x, z] of roadClosedTiles()) shut(x + 0.5, z + 0.5);
+  // (the long road's guard rails: docs/plan/69, L3)
+  for (const d of railsNear(cx, cz))
+    if (d.bx !== undefined && d.bz !== undefined)
+      for (let t = 0; t <= 1; t += 0.25) shut(d.x + (d.bx - d.x) * t, d.z + (d.bz - d.z) * t);
   for (let j = 0; j < CHUNK; j++)
     for (let i = 0; i < CHUNK; i++) {
       const x = x0 + i + 0.5;
@@ -2130,7 +2581,14 @@ function makeChunk(cx: number, cz: number): GroundsChunk {
 
 /** Can you stand on the tile whose middle is (x, z)? (Its slope aside: the chunk checks that.) */
 function walkable(x: number, z: number): boolean {
-  if (x < GROUNDS.x0 + 2 || x > GROUNDS.x1 - 2 || z < GROUNDS.z0 + 2 || z > GROUNDS.z1 - 2) return false;
+  // (on the land drawn, 2 m in: its regions' boxes, not the box round them all — the long road's L)
+  if (
+    !inLandDrawn(x - 2, z - 2) ||
+    !inLandDrawn(x + 2, z + 2) ||
+    !inLandDrawn(x - 2, z + 2) ||
+    !inLandDrawn(x + 2, z - 2)
+  )
+    return false;
   if (beyond(x, z) > 24) return false;
   for (const bd of nearBuildings(x, z)) {
     // (the church's steeple, past its plot)
@@ -2171,7 +2629,10 @@ function walkable(x: number, z: number): boolean {
 export function carBlockedTile(tx: number, tz: number): boolean {
   // (and the Kart Park, its gate too: the karts are the park's, the cars stay out)
   return (
-    !walkable(tx + 0.5, tz + 0.5) || onFence(tx + 0.5, tz + 0.5) || (KART_LAND && kartCarBlocked(tx + 0.5, tz + 0.5))
+    !walkable(tx + 0.5, tz + 0.5) ||
+    onFence(tx + 0.5, tz + 0.5) ||
+    (KART_LAND && kartCarBlocked(tx + 0.5, tz + 0.5)) ||
+    onLongRail(tx + 0.5, tz + 0.5)
   );
 }
 /** On the company's fence line (not at the gate). */
@@ -2300,6 +2761,21 @@ export function holesFromWire(s: string): IceHole[] {
 export function waterSide(x: number, z: number): { side: number; m: number; fast?: boolean } | null {
   const e = ((x - POND.cx) / POND.rx) ** 2 + ((z - POND.cz) / POND.rz) ** 2;
   if (e < 1) return { side: Math.sqrt(e), m: Math.min(POND.rx, POND.rz) };
+  // (god mode's grown land: a lake ices as the pond does; the sea never)
+  if (GROWN_REGIONS.length) {
+    const g = grownAt(x, z);
+    const w = g ? waterAt(x, z) : null;
+    if (g && w?.kind === "lake") return { side: Math.min(1, grownLakeR(g.g, x, z)), m: 60 };
+    if (w?.kind === "sea") return { side: 1, m: 10, fast: true };
+  }
+  // (Silver Lake ices as the pond does, from its shores in; the creek runs, open — docs/plan/69)
+  if (LONG_ROAD && longOwn(x, z) > 0.5) {
+    const w = waterAt(x, z);
+    if (!w) return null;
+    if (w.kind === "lake") return { side: Math.min(1, lakeR(x, z)), m: LAKE.rz };
+    const c = creekNear(x, z, 4);
+    return { side: c ? c.d / 2.6 : 1, m: 2.6, fast: true };
+  }
   const r = nearLines(x, z).get(RIVER_F);
   if (!r || r.d >= RIVER.w / 2) return null;
   return { side: r.d / (RIVER.w / 2), m: RIVER.w / 2, fast: riverWater().speed[r.i] > ICE_FAST };
@@ -2352,6 +2828,7 @@ export function outdoorsAt(
  *  the woods' floor and the grass bare as a floor, mud a little slower). */
 export function speedOn(s: Surface): number {
   if (s === "rock") return 0.7;
+  if (s === "sand") return 0.9;
   if (s !== "deep" && s !== "snow" && s !== "path") return 1;
   const k = Math.min(1, Math.max(0, (UNDER.snow - 0.25) / 0.5));
   const bare = UNDER.wet > 0.6 && s !== "path" ? 0.92 : 1;
@@ -2361,7 +2838,7 @@ export function speedOn(s: Surface): number {
 // a tile's surface (kept: walking asks every frame)
 const surfaces = new Map<number, Uint8Array>();
 /** The surfaces a painted tile can be (its byte: the index + 1; 0 as generated). */
-export const SURFACES: Surface[] = ["snow", "deep", "path", "asphalt", "walk", "ice", "floor", "rock"];
+export const SURFACES: Surface[] = ["snow", "deep", "path", "asphalt", "walk", "ice", "floor", "rock", "sand"];
 /** What the tile (tx, tz) (building coords) is. */
 export function surfaceTileAt(tx: number, tz: number): Surface {
   const cx = Math.floor(tx / CHUNK);
@@ -2369,6 +2846,8 @@ export function surfaceTileAt(tx: number, tz: number): Surface {
   const k = chunkKey(cx, cz);
   let a = surfaces.get(k);
   if (!a) {
+    // (kept as the chunks are: past the cap, those of chunks not kept go)
+    if (surfaces.size > chunkCap * 1.25) for (const s of surfaces.keys()) if (!chunks.has(s)) surfaces.delete(s);
     a = new Uint8Array(CHUNK * CHUNK).fill(255);
     surfaces.set(k, a);
   }
@@ -2399,20 +2878,32 @@ interface Deck {
   z1: number;
 }
 const RAIL = 1.6; // the blocked strip's width past the deck
+/** A way's bridges: its bridged samples in runs, a gap of a sample or two bridged over (one rule for
+ *  the decks walked, the solids — shapes/grounds.ts — and the drawing — tp/grounds3d.ts). */
+export function bridgeRuns(w: Way): number[][] {
+  const runs: number[][] = [];
+  for (let i = 0; i < w.line.length; i++) {
+    if (!w.bridged[i]) continue;
+    const last = runs[runs.length - 1];
+    if (last && i - last[last.length - 1] <= 2) last.push(i);
+    else runs.push([i]);
+  }
+  return runs;
+}
 const DECKS: Deck[] = [];
 function layDecks() {
   DECKS.length = 0;
   DECKS.push(
     ...WAYS.flatMap((w) => {
-      const idx = w.line.map((_, i) => i).filter((i) => w.bridged[i]);
-      if (!idx.length) return [];
-      const xs = idx.map((i) => w.line[i][0]);
-      const zs = idx.map((i) => w.line[i][1]);
+      // (a deck a bridge: the long road has more than one — docs/plan/69 L3)
+      const runs = bridgeRuns(w);
       const half = w.w / 2 + (w.kind === "trail" ? 0.2 : 0.35);
       const m = half + RAIL + 0.5;
-      // (a segment more each end: onto the land flattened to the way, no gap over the bank)
-      return [
-        {
+      return runs.map((idx) => {
+        const xs = idx.map((i) => w.line[i][0]);
+        const zs = idx.map((i) => w.line[i][1]);
+        // (a segment more each end: onto the land flattened to the way, no gap over the bank)
+        return {
           w,
           a: Math.max(0, idx[0] - 1),
           b: Math.min(w.line.length - 1, idx[idx.length - 1] + 1),
@@ -2421,8 +2912,8 @@ function layDecks() {
           x1: Math.max(...xs) + m,
           z0: Math.min(...zs) - m,
           z1: Math.max(...zs) + m,
-        },
-      ];
+        };
+      });
     }),
   );
 }
@@ -2751,14 +3242,15 @@ export function groundsAreaAt(map: MapDef, x: number, y: number): AreaDef | null
       w: p.b.x1 - p.b.x0,
       h: p.b.z1 - p.b.z0,
     };
+  const L = landBounds();
   return {
     key: p.key,
     name: p.name,
     kind: "open",
-    x: GROUNDS.x0 - ox,
-    y: GROUNDS.z0 - oy,
-    w: GROUNDS.x1 - GROUNDS.x0,
-    h: GROUNDS.z1 - GROUNDS.z0,
+    x: L.x0 - ox,
+    y: L.z0 - oy,
+    w: L.x1 - L.x0,
+    h: L.z1 - L.z0,
   };
 }
 
@@ -2875,6 +3367,28 @@ export function visitorRoute(l: LotLayout) {
 }
 /** The shuttle: the headquarters' stop (the lot's mouth) to the town square's
  *  (Main Street, by the statue) and back; `stops` are how far along each way. */
+/** The long road's bus (docs/plan/69, L7): from Main Street's stop by its end, up Long Pine Road to
+ *  the lake's stop by the lookout — and back; the traffic's ways the same, its lanes. Null: no road. */
+export const LONG_BUS = LONG_ROAD
+  ? (() => {
+      const main = wayLine("main");
+      const from = nearestOn(main, BUS_STOPS.town.x, BUS_STOPS.town.z);
+      const long = wayLine("long-road");
+      const to = nearestOn(long, BUS_STOPS.lake.x, BUS_STOPS.lake.z);
+      const pieces: [P[], number][] = [
+        [main.slice(from), LANE],
+        [long.slice(1, to + 1), LANE],
+      ];
+      const there = routeOf(pieces.flatMap(([l, by]) => keepRight(l, by)));
+      const back = routeOf(
+        pieces
+          .slice()
+          .reverse()
+          .flatMap(([l, by]) => keepRight(l.slice().reverse(), by)),
+      );
+      return { there, back };
+    })()
+  : null;
 export const SHUTTLE = (() => {
   const main = wayLine("main");
   const to = nearestOn(main, 412, -405);
@@ -3052,6 +3566,13 @@ function sigs(): Map<string, { sig: string; r: Rect }> {
       r: { x0: b.x0 - 12, z0: b.z0 - 12, x1: b.x1 + 12, z1: b.z1 + 12 },
     });
   for (const l of LAMPS) out.set(l.key, { sig: `${l.kind} ${l.x} ${l.z} ${l.ry}`, r: around(l.x, l.z, 3) });
+  // (a piece of grown land: its drawn land and the ridges round it, 300 out — its start height and
+  // side in its look: they're read from the land it meets, another piece's added beside it too)
+  for (const g of grownNow())
+    out.set(`land:${g.def.key}`, {
+      sig: JSON.stringify([g.def, g.y, g.from]),
+      r: { x0: g.def.x0 - 300, z0: g.def.z0 - 300, x1: g.def.x1 + 300, z1: g.def.z1 + 300 },
+    });
   for (const t of STREET) {
     const sig = `${t.kind} ${t.x} ${t.z} ${t.ry} ${t.s ?? ""} ${t.text ?? ""} ${t.pts ? JSON.stringify(t.pts) : ""}`;
     const r = t.pts
@@ -3085,6 +3606,7 @@ export function applyEdits(next: GroundsEdits): [number, number][] {
   decode(lifts, next.height, (s) => decodeHeights(s, LIFT_N * LIFT_N));
   decode(paints, next.paint, (s) => decodeBytes(s, CHUNK * CHUNK));
   decode(treeMasks, next.trees, (s) => decodeBytes(s, 100));
+  layLand();
   layWays();
   layBuildings();
   layIndex();
@@ -3204,7 +3726,16 @@ const THING_KINDS = new Set<string>([
 export function checkEdits(e: GroundsEdits): string[] {
   const out: string[] = [];
   const no = (s: string) => out.length < 50 && out.push(s);
-  const inWorld = (x: number, z: number) => Number.isFinite(x) && Number.isFinite(z) && beyond(x, z) === 0;
+  // (the world as this draft has it: the land that's always there and its pieces grown — docs/plan/69)
+  const draftLand = [...FIXED_LAND, ...growDefs(e).map(growRegion)];
+  const inWorld = (x: number, z: number) => Number.isFinite(x) && Number.isFinite(z) && beyondOf(draftLand, x, z) === 0;
+  const draftChunk = (cx: number, cz: number) =>
+    draftLand.some((r) => {
+      const d = r.drawn;
+      const x = cx * CHUNK;
+      const z = cz * CHUNK;
+      return x >= Math.floor(d.x0 / CHUNK) * CHUNK && x < d.x1 && z >= Math.floor(d.z0 / CHUNK) * CHUNK && z < d.z1;
+    });
   const anchoredHere = (x: number, z: number) => {
     const a = anchoredAt(x, z);
     return a && a.key !== "area:edge" ? a : null;
@@ -3220,14 +3751,7 @@ export function checkEdits(e: GroundsEdits): string[] {
   ) => {
     for (const [k, s] of Object.entries(e[name] ?? {})) {
       const [cx, cz] = k.split(",").map(Number);
-      if (
-        !Number.isInteger(cx) ||
-        !Number.isInteger(cz) ||
-        cx * CHUNK < GROUNDS.x0 ||
-        cx * CHUNK >= GROUNDS.x1 ||
-        cz * CHUNK < GROUNDS.z0 ||
-        cz * CHUNK >= GROUNDS.z1
-      ) {
+      if (!Number.isInteger(cx) || !Number.isInteger(cz) || !(isLandChunk(cx, cz, CHUNK) || draftChunk(cx, cz))) {
         no(`${name} ${k}: not a chunk of the Grounds`);
         continue;
       }
@@ -3432,5 +3956,85 @@ export function checkEdits(e: GroundsEdits): string[] {
       const z = c.z ?? 0;
       if (!inWorld(x, z)) no(`${k}: moved past the world's edge`);
     }
+  // grown land (docs/plan/69, phase 10): pieces on the chunks' grid, each joined to the land (over
+  // or touching it), none over another; what's taken away has nothing put on it (the checks above
+  // judge everything by this draft's land)
+  const lk = new Set<string>();
+  const pieces = (e.land?.add ?? []).map((d) => ({ ...d, ...e.land?.change?.[d.key] }));
+  if (pieces.length > GROW_LIMITS.count) no(`At most ${GROW_LIMITS.count} pieces of land`);
+  for (const k of e.land?.remove ?? [])
+    if (!pieces.some((d) => d.key === k)) no(`Can't take away ${k}: only land god mode grew`);
+  let area = 0;
+  const good: GrowDef[] = [];
+  for (const d of pieces) {
+    if (!fresh(d.key, "land:", lk)) continue;
+    if (e.land?.remove?.includes(d.key)) continue;
+    if (!GROW_BIOMES.includes(d.biome)) no(`${d.key}: not a kind of land`);
+    const sides = [d.x0, d.z0, d.x1, d.z1];
+    if (!sides.every((v) => Number.isInteger(v) && v % GROW_SNAP === 0)) {
+      no(`${d.key}: its sides on the ${GROW_SNAP} m grid`);
+      continue;
+    }
+    const w = d.x1 - d.x0;
+    const h = d.z1 - d.z0;
+    if (!(w >= GROW_LIMITS.min && h >= GROW_LIMITS.min && w <= GROW_LIMITS.max && h <= GROW_LIMITS.max))
+      no(`${d.key}: ${GROW_LIMITS.min}–${GROW_LIMITS.max} m a side`);
+    if (sides.some((v) => Math.abs(v) > GROW_LIMITS.reach)) no(`${d.key}: past ${GROW_LIMITS.reach / 1000} km out`);
+    if (d.lift !== undefined && !(Math.abs(d.lift) <= GROW_LIMITS.lift))
+      no(`${d.key}: raised or lowered ${GROW_LIMITS.lift} m at most`);
+    if (d.name !== undefined && (typeof d.name !== "string" || d.name.length > 40)) no(`${d.key}: a name, 40 at most`);
+    area += Math.max(0, w) * Math.max(0, h);
+    const over = good.find((o) => o.x0 < d.x1 && d.x0 < o.x1 && o.z0 < d.z1 && d.z0 < o.z1);
+    if (over) no(`${d.key}: over ${over.key}`);
+    // (a lake's bowl clear of the town and the road's land: eased into them, its shore fell under
+    // its water — a lake held by nothing)
+    if (d.biome === "lake") {
+      if (w > GROW_LIMITS.lake || h > GROW_LIMITS.lake) no(`${d.key}: a lake ${GROW_LIMITS.lake} m a side at most`);
+      const b = lakeBowl(d);
+      const ex = b.rx * 1.4;
+      const ez = b.rz * 1.4;
+      let near = Number.POSITIVE_INFINITY;
+      for (let t = 0; t <= 1; t += 1 / Math.ceil((2 * Math.max(ex, ez)) / 16))
+        for (const [x, z] of [
+          [b.cx - ex + 2 * ex * t, b.cz - ez],
+          [b.cx - ex + 2 * ex * t, b.cz + ez],
+          [b.cx - ex, b.cz - ez + 2 * ez * t],
+          [b.cx + ex, b.cz - ez + 2 * ez * t],
+        ])
+          near = Math.min(near, beyondOf(FIXED_LAND, x, z));
+      if (near < GROW_BLEND) no(`${d.key}: a lake's water ${GROW_BLEND} m clear of the town and the road`);
+    }
+    good.push(d);
+  }
+  if (area > GROW_LIMITS.area) no(`At most ${GROW_LIMITS.area / 1e6} km² of land grown`);
+  if (good.filter((d) => d.biome === "lake").length > GROW_LIMITS.lakes) no(`At most ${GROW_LIMITS.lakes} lakes`);
+  // (joined: over the land that's always there, or a piece joined to it, touching — 4 m out)
+  const joined = new Set<string>();
+  const touches = (d: GrowDef, rs: readonly Region[]) => {
+    // (every 16 m along its sides: a short meeting found on a long piece)
+    const n = Math.ceil(Math.max(d.x1 - d.x0, d.z1 - d.z0) / 16);
+    for (let t = 0; t <= 1; t += 1 / n)
+      for (const [x, z] of [
+        [d.x0 - 4, d.z0 + (d.z1 - d.z0) * t],
+        [d.x1 + 4, d.z0 + (d.z1 - d.z0) * t],
+        [d.x0 + (d.x1 - d.x0) * t, d.z0 - 4],
+        [d.x0 + (d.x1 - d.x0) * t, d.z1 + 4],
+        [d.x0 + (d.x1 - d.x0) * t, d.z0 + (d.z1 - d.z0) * t],
+      ])
+        if (beyondOf(rs, x, z) === 0) return true;
+    return false;
+  };
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const d of good) {
+      if (joined.has(d.key)) continue;
+      const rs = [...FIXED_LAND, ...good.filter((o) => joined.has(o.key)).map(growRegion)];
+      if (touches(d, rs)) {
+        joined.add(d.key);
+        grew = true;
+      }
+    }
+  }
+  for (const d of good) if (!joined.has(d.key)) no(`${d.key}: not joined to the land (it must touch it)`);
   return out;
 }

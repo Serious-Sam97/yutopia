@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CHUNK, FENCE, FENCE_H, GROUNDS, STATUE, TOWER, terrainAt, treesIn } from "../grounds.ts";
+import { CHUNK, FENCE, FENCE_H, STATUE, TOWER, terrainAt, treesIn } from "../grounds.ts";
+import { townBounds } from "../land.ts";
 import { GROUND_WHATS, type GroundSolid, groundSolidsIn } from "./grounds.ts";
 import type { Solid3 } from "./index.ts";
+
+// (the land's box: land.ts, docs/plan/69)
+const GROUNDS = townBounds(); // (today's town: the long road's land is its own tests')
 
 const top = (s: Solid3) => (s.t === "box" ? s.y + s.hy : s.y1);
 const bottom = (s: Solid3) => (s.t === "box" ? s.y - s.hy : s.y0);

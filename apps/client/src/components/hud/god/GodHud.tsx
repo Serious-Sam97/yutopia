@@ -4,7 +4,9 @@ import {
   BUILDINGS,
   type BuildingKind,
   CHUNK,
-  GROUNDS,
+  growDefs,
+  landBounds,
+  landRegions,
   PREFABS,
   WALL_TINTS,
   WAYS,
@@ -20,12 +22,14 @@ import {
   type TreePick,
 } from "@yutopia/shared/grounds-brush";
 import { BUILDING_NAMES, enterFaces, PREFAB_KINDS, SIGNED } from "@yutopia/shared/grounds-buildings";
-import type { ThingKind } from "@yutopia/shared/grounds-edits";
+import type { GrowBiome, ThingKind } from "@yutopia/shared/grounds-edits";
 import { catalogThing, THINGS } from "@yutopia/shared/grounds-things";
+import { GROW_BIOMES, GROW_LIMITS, GROW_NAMES, GROW_SNAP } from "@yutopia/shared/grow";
+import type { Biome } from "@yutopia/shared/land";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/lib/i18n";
 import type { PublishSummary } from "@/world/god/controller";
-import { GOD_READY, GOD_TOOLS, type GodHud as GodState, type GodTool, useHud } from "@/world/store";
+import { GOD_READY, GOD_TOOLS, type GodHud as GodState, type GodTool, hud, useHud } from "@/world/store";
 import { ago } from "../admin/ui";
 import { useWorld } from "../ctx";
 import { Icon, type IconName } from "../icons";
@@ -202,6 +206,26 @@ const W = {
     "click: put it down · R turns it a quarter · drag one to move it · Delete takes it away · its pad levels the land",
     "clique: põe · R gira um quarto · arraste para mover · Delete tira · a base nivela o terreno",
   ],
+  growT: ["Grow the land", "Crescer a terra"],
+  pieces: ["{n} pieces", "{n} pedaços"],
+  piece1: ["1 piece", "1 pedaço"],
+  growHint: [
+    "drag on the land: a new piece, joined to the land · click one: picks it · Delete takes it away · M: the map",
+    "arraste na terra: um pedaço novo, junto da terra · clique num: escolhe · Delete tira · M: o mapa",
+  ],
+  growSize: ["{w} × {d} m", "{w} × {d} m"],
+  biome: ["Kind of land", "Tipo de terra"],
+  lift: ["Lift", "Altura"],
+  theNext: ["The next piece", "O próximo pedaço"],
+  growRules: [
+    "On the {snap} m grid · {min}–{max} m a side · over or touching the land, none over another",
+    "Na grade de {snap} m · {min}–{max} m de lado · sobre a terra ou encostado nela, nenhum sobre outro",
+  ],
+  mapT: ["The land", "A terra"],
+  mapHint: ["click: the camera goes there · M or Esc closes", "clique: a câmera vai para lá · M ou Esc fecha"],
+  mapOpen: ["The map (M)", "O mapa (M)"],
+  you: ["the camera", "a câmera"],
+  grown: ["grown in the draft", "crescido no rascunho"],
 } as const;
 type Word = keyof typeof W;
 function useW() {
@@ -216,6 +240,7 @@ const TOOL_WORDS: Record<GodTool, [string, string]> = {
   nature: ["Nature", "Natureza"],
   things: ["Things", "Coisas"],
   buildings: ["Buildings", "Prédios"],
+  grow: ["Grow", "Crescer"],
 };
 const TOOL_ICONS: Record<GodTool, IconName> = {
   select: "cursor",
@@ -225,6 +250,7 @@ const TOOL_ICONS: Record<GodTool, IconName> = {
   nature: "leaf",
   things: "chair",
   buildings: "home",
+  grow: "map",
 };
 const READY = GOD_READY;
 const MODE_WORDS: Record<LandMode, [string, string]> = {
@@ -263,6 +289,8 @@ export function GodHud() {
       {g.tool === "things" && <ThingsPanel g={g} />}
       {g.tool === "buildings" && <BuildingsOptions g={g} />}
       {g.tool === "buildings" && <BuildingsPanel g={g} />}
+      {g.tool === "grow" && <GrowOptions g={g} />}
+      {g.tool === "grow" && <GrowPanel g={g} />}
       {g.tool === "select" && <SelectOptions g={g} />}
       {g.tool === "select" && g.picked === "thing" && g.things.sel && <ThingsPanel g={g} />}
       {g.tool === "select" && g.picked === "building" && g.buildings.sel && <BuildingsPanel g={g} />}
@@ -270,6 +298,7 @@ export function GodHud() {
       <Pointer g={g} />
       {g.drafts.open && <DraftsPanel g={g} />}
       {g.naming && <NameDialog g={g} />}
+      {g.map && <LandMap g={g} />}
       {g.publish && <PublishDialog g={g} />}
     </>
   );
@@ -425,6 +454,16 @@ function Compass({ g }: { g: GodState }) {
           −
         </button>
       </div>
+      <button
+        type="button"
+        className="deck-btn h-11 w-11 px-0"
+        aria-pressed={g.map}
+        title={t("mapOpen")}
+        aria-label={t("mapOpen")}
+        onClick={() => w?.god?.toggleMap()}
+      >
+        <Icon name="globe" size={18} />
+      </button>
     </div>
   );
 }
@@ -1306,6 +1345,322 @@ function BuildingsPanel({ g }: { g: GodState }) {
   );
 }
 
+const BIOME_PT: Record<GrowBiome, string> = {
+  forest: "Floresta",
+  meadow: "Campina",
+  hills: "Colinas",
+  mountains: "Montanhas",
+  lake: "Lago",
+  farmland: "Lavoura",
+  beach: "Praia e costa",
+  desert: "Deserto e cânion",
+};
+const biomeName = (b: GrowBiome, pt: boolean) => (pt ? BIOME_PT[b] : GROW_NAMES[b]);
+/** The land's kinds as the map colours them (art: the grown biomes, the panel's chips too). */
+const BIOME_COLOURS: Record<Biome, string> = {
+  town: "#b9b2a3",
+  field: "#b7c08a",
+  forest: "#5f7a48",
+  gorge: "#8d7b68",
+  alpine: "#9aa3a8",
+  lake: "#5b88a3",
+  meadow: "#a5bc72",
+  hills: "#86955a",
+  mountains: "#8e8984",
+  farmland: "#c8a95e",
+  beach: "#e2cf96",
+  desert: "#cc8a50",
+};
+
+/** The grow tool's row: what it does, the piece being drawn (its size, what's in the way). */
+function GrowOptions({ g }: { g: GodState }) {
+  const t = useW();
+  const pt = useLang() === "pt";
+  const o = g.grow;
+  const r = o.drawing;
+  return (
+    <div className="pointer-events-auto cabinet absolute bottom-[86px] left-3 right-3 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 px-3 py-2 max-w-[calc(100vw-24px)] sm:max-w-[60vw] flex items-center gap-3">
+      {r && (
+        <span className="lcd text-[15px] whitespace-nowrap">
+          {W.growSize[pt ? 1 : 0].replace("{w}", String(r.x1 - r.x0)).replace("{d}", String(r.z1 - r.z0))}
+        </span>
+      )}
+      <p className="text-[12px] truncate" style={{ color: o.blocked ? "var(--amber)" : "var(--cream-dim)" }}>
+        {o.blocked ? W.notThere[pt ? 1 : 0].replace("{why}", o.blocked) : t("growHint")}
+      </p>
+    </div>
+  );
+}
+
+/** The grow panel: the next piece's biome and lift — or the picked one's, its name, and taking it
+ *  away. */
+function GrowPanel({ g }: { g: GodState }) {
+  const t = useW();
+  const pt = useLang() === "pt";
+  const w = useWorld();
+  const o = g.grow;
+  const tool = () => w?.god?.growTool();
+  const [name, setName] = useState(o.name);
+  const [lift, setLift] = useState(o.lift);
+  useEffect(() => setName(o.name), [o.name]);
+  useEffect(() => setLift(o.lift), [o.lift]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the draft's pieces, again as it changes
+  const n = useMemo(() => (w?.god ? growDefs(w.god.draftNow()).length : 0), [w, g.changes, g.undo, g.redo]);
+  const L = GROW_LIMITS.lift;
+  const rules = W.growRules[pt ? 1 : 0]
+    .replace("{snap}", String(GROW_SNAP))
+    .replace("{min}", String(GROW_LIMITS.min))
+    .replace("{max}", String(GROW_LIMITS.max));
+  return (
+    <aside className="pointer-events-auto cabinet absolute top-[92px] right-3 w-72 max-h-[calc(100vh-200px)] overflow-y-auto scroll-thin p-3 hidden sm:block">
+      <div className="flex items-baseline justify-between">
+        <h3 className="title text-[18px]">{t("growT")}</h3>
+        <span className="mono text-[10.5px]" style={{ color: "var(--cream-dim)" }}>
+          {n === 1 ? t("piece1") : t("pieces", n)}
+        </span>
+      </div>
+      <div className="zigzag w-24 mt-1.5" aria-hidden />
+      <p className="grp mt-3">{o.sel ? `${o.name || o.sel} · ${t("picked")}` : t("theNext")}</p>
+      <p className="text-[12px] mt-2" style={{ color: "var(--cream-dim)" }}>
+        {t("biome")}
+      </p>
+      <div className="grid grid-cols-2 gap-1.5 mt-1.5" role="radiogroup" aria-label={t("biome")}>
+        {GROW_BIOMES.map((b) => (
+          <button
+            key={b}
+            type="button"
+            className="deck-btn h-9 justify-start gap-2 px-2"
+            aria-pressed={o.biome === b}
+            onClick={() => tool()?.setOpts({ biome: b })}
+          >
+            <span className="w-3.5 h-3.5 rounded-sm shrink-0" style={{ background: BIOME_COLOURS[b] }} aria-hidden />
+            <span className="text-[11.5px] truncate">{biomeName(b, pt)}</span>
+          </button>
+        ))}
+      </div>
+      <div className="space-y-2.5 mt-3 text-[12.5px]">
+        <div className="flex items-center gap-2">
+          <span className="w-12" style={{ color: "var(--cream-dim)" }}>
+            {t("lift")}
+          </span>
+          <input
+            type="range"
+            className="slider flex-1"
+            min={-L}
+            max={L}
+            step={1}
+            value={lift}
+            aria-label={t("lift")}
+            style={{ "--v": `${((lift + L) / (2 * L)) * 100}%` } as React.CSSProperties}
+            onChange={(e) => {
+              setLift(Number(e.target.value));
+              tool()?.setOpts({ lift: Number(e.target.value) }, false);
+            }}
+            onPointerUp={(e) => o.sel && tool()?.setOpts({ lift: Number(e.currentTarget.value) })}
+            onKeyUp={(e) => o.sel && tool()?.setOpts({ lift: Number(e.currentTarget.value) })}
+          />
+          <span className="mono text-[11.5px] w-14 text-right">
+            {lift > 0 ? "+" : ""}
+            {lift} m
+          </span>
+        </div>
+        {o.sel && (
+          <label className="flex items-center gap-2">
+            <span className="w-12" style={{ color: "var(--cream-dim)" }}>
+              {t("name")}
+            </span>
+            <input
+              className="field py-1 text-sm flex-1"
+              maxLength={40}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={() => name !== o.name && tool()?.setOpts({ name })}
+              onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+            />
+          </label>
+        )}
+        <p className="text-[11.5px]" style={{ color: "var(--cream-dim)" }}>
+          {rules}
+        </p>
+        {o.sel && (
+          <button type="button" className="ghost-btn w-full" onClick={() => tool()?.removePicked()}>
+            {t("takeAway")}
+          </button>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+/** The overview map (M): the whole land — each region's reach by its kind (the town, the long
+ *  road's band, the pieces grown), the draft's pieces outlined, where the camera looks; a click
+ *  sends the camera there. */
+function LandMap({ g }: { g: GodState }) {
+  const t = useW();
+  const w = useWorld();
+  const ref = useRef<HTMLCanvasElement>(null);
+  // the map's frame: the land's box and a way past it (where the camera may go), metres to px
+  const frame = useRef<{ x0: number; z0: number; k: number } | null>(null);
+  const sel = g.grow.sel;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the draft's pieces, again as it changes
+  useEffect(() => {
+    const c = ref.current;
+    const ctx = c?.getContext("2d");
+    if (!c || !ctx) return;
+    const css = getComputedStyle(c);
+    const col = (v: string) => css.getPropertyValue(v).trim();
+    const draw = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const cw = c.clientWidth;
+      const ch = c.clientHeight;
+      if (c.width !== Math.round(cw * dpr) || c.height !== Math.round(ch * dpr)) {
+        c.width = Math.round(cw * dpr);
+        c.height = Math.round(ch * dpr);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const B = landBounds();
+      const M = 512;
+      const gw = B.x1 - B.x0 + 2 * M;
+      const gh = B.z1 - B.z0 + 2 * M;
+      const k = Math.min(cw / gw, ch / gh);
+      // (the land in the middle of the canvas)
+      const x0 = B.x0 - M - (cw / k - gw) / 2;
+      const z0 = B.z0 - M - (ch / k - gh) / 2;
+      frame.current = { x0, z0, k };
+      const X = (x: number) => (x - x0) * k;
+      const Z = (z: number) => (z - z0) * k;
+      ctx.fillStyle = col("--well");
+      ctx.fillRect(0, 0, cw, ch);
+      const regions = landRegions();
+      // the scenery round each region, faintly; then where anyone may go, by its kind
+      ctx.fillStyle = col("--paper");
+      ctx.globalAlpha = 0.18;
+      for (const r of regions) {
+        const d = r.drawn;
+        ctx.fillRect(X(d.x0), Z(d.z0), (d.x1 - d.x0) * k, (d.z1 - d.z0) * k);
+      }
+      ctx.globalAlpha = 0.85;
+      for (const r of regions) {
+        const R = r.reach;
+        if (R.kind === "rect") {
+          ctx.fillStyle = BIOME_COLOURS[r.biome];
+          ctx.fillRect(X(R.x0), Z(R.z0), Math.max(1, (R.x1 - R.x0) * k), Math.max(1, (R.z1 - R.z0) * k));
+        } else {
+          ctx.strokeStyle = BIOME_COLOURS[r.biome];
+          ctx.lineWidth = Math.max(2, R.half * 2 * k);
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.beginPath();
+          for (const [i, [x, z]] of R.line.entries()) i ? ctx.lineTo(X(x), Z(z)) : ctx.moveTo(X(x), Z(z));
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+      // the ways
+      ctx.strokeStyle = col("--graphite");
+      ctx.lineCap = "round";
+      for (const wy of WAYS) {
+        ctx.lineWidth = Math.max(1, wy.w * k);
+        ctx.beginPath();
+        for (const [i, [x, z]] of wy.line.entries()) i ? ctx.lineTo(X(x), Z(z)) : ctx.moveTo(X(x), Z(z));
+        ctx.stroke();
+      }
+      // the draft's pieces outlined (the picked one heavier), named
+      const pieces = w?.god ? growDefs(w.god.draftNow()) : [];
+      ctx.strokeStyle = col("--amber");
+      ctx.fillStyle = col("--amber");
+      ctx.font = "11px ui-monospace, monospace";
+      for (const p of pieces) {
+        ctx.lineWidth = p.key === sel ? 3 : 1.5;
+        ctx.strokeRect(X(p.x0), Z(p.z0), (p.x1 - p.x0) * k, (p.z1 - p.z0) * k);
+        if (p.name) ctx.fillText(p.name, X(p.x0) + 4, Z(p.z0) + 13);
+      }
+      // where the camera looks, and the way it looks
+      const at = w?.god?.lookingAt();
+      if (at) {
+        const yaw = hud.get().god.yaw;
+        ctx.strokeStyle = col("--rust");
+        ctx.fillStyle = col("--rust");
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(X(at.x), Z(at.z));
+        ctx.lineTo(X(at.x) + Math.cos(yaw) * 16, Z(at.z) + Math.sin(yaw) * 16);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(X(at.x), Z(at.z), 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // a kilometre, for scale
+      ctx.strokeStyle = col("--cream-dim");
+      ctx.fillStyle = col("--cream-dim");
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(12, ch - 14);
+      ctx.lineTo(12 + 1000 * k, ch - 14);
+      ctx.stroke();
+      ctx.fillText("1 km", 12, ch - 20);
+    };
+    draw();
+    // (the camera moves under it: the keys still pan)
+    const id = setInterval(draw, 200);
+    window.addEventListener("resize", draw);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("resize", draw);
+    };
+  }, [w, sel, g.changes, g.undo, g.redo]);
+  const click = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const f = frame.current;
+    if (!f) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    w?.god?.lookAt(f.x0 + (e.clientX - r.left) / f.k, f.z0 + (e.clientY - r.top) / f.k);
+    w?.god?.toggleMap(false);
+  };
+  return (
+    <div
+      className="pointer-events-auto absolute inset-0 grid place-items-center p-3"
+      style={{ background: "var(--scrim)" }}
+    >
+      <section
+        className="cabinet w-[min(1100px,100%)] h-[min(820px,100%)] flex flex-col p-4"
+        role="dialog"
+        aria-label={t("mapT")}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="title text-[22px]">{t("mapT")}</h2>
+            <p className="text-[12px] mt-0.5" style={{ color: "var(--cream-dim)" }}>
+              {t("mapHint")}
+            </p>
+          </div>
+          <button type="button" className="ghost-btn flex items-center gap-1" onClick={() => w?.god?.toggleMap(false)}>
+            <Icon name="close" size={13} /> esc
+          </button>
+        </div>
+        <canvas
+          ref={ref}
+          className="flex-1 min-h-0 w-full mt-3 rounded cursor-crosshair"
+          style={{ border: "1px solid var(--edge-2)" }}
+          onClick={click}
+        />
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px]"
+          style={{ color: "var(--cream-dim)" }}
+        >
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full" style={{ background: "var(--rust)" }} aria-hidden />
+            {t("you")}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3" style={{ border: "1.5px solid var(--amber)" }} aria-hidden />
+            {t("grown")}
+          </span>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Pointer({ g }: { g: GodState }) {
   const t = useW();
   const pt = useLang() === "pt";
@@ -1669,6 +2024,7 @@ function PublishDialog({ g }: { g: GodState }) {
     [t("ways"), moves(c.ways)],
     [t("things"), moves(c.things)],
     [t("buildings"), moves(c.buildings)],
+    ...(c.land.add || c.land.change || c.land.remove ? [[t("growT"), moves(c.land)] as [string, string]] : []),
   ];
   const mb = (b: number) => (b / 1e6).toFixed(b < 1e5 ? 2 : 1);
   return (
@@ -1803,11 +2159,12 @@ function ChangeMap({ chunks }: { chunks: [number, number][] }) {
     const css = getComputedStyle(c);
     const col = (v: string) => css.getPropertyValue(v).trim();
     const S = c.width;
-    const gw = GROUNDS.x1 - GROUNDS.x0;
-    const gh = GROUNDS.z1 - GROUNDS.z0;
+    const L = landBounds();
+    const gw = L.x1 - L.x0;
+    const gh = L.z1 - L.z0;
     const k = S / Math.max(gw, gh);
-    const X = (x: number) => (x - GROUNDS.x0) * k;
-    const Z = (z: number) => (z - GROUNDS.z0) * k;
+    const X = (x: number) => (x - L.x0) * k;
+    const Z = (z: number) => (z - L.z0) * k;
     g.fillStyle = col("--paper");
     g.fillRect(0, 0, S, S);
     g.strokeStyle = col("--graphite");

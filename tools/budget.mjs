@@ -86,7 +86,8 @@ const LAZY = {
   // the karts in play (docs/plan/46-the-karts.md, phases 2–6): your kart, the HUD and lobby, everyone's karts, what flies
   "yutopia-kart-play": 40,
   // god mode (docs/plan/53-the-god-mode.md): an admin's editor of the open world, its tools and strings
-  "yutopia-god": 20,
+  // (24 on 2026-11-04: plan 69 phase 10 — the Grow tool, its panel and the land map; 17.7 → 19.8)
+  "yutopia-god": 24,
 }; // KB gzip
 const chunks = `${dist}static/chunks/`;
 for (const [marker, budget] of Object.entries(LAZY)) {

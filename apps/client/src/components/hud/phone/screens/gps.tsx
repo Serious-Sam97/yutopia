@@ -5,7 +5,7 @@ import { gpsPlaces, type Place, type Route, routeOver, type Step } from "@yutopi
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type Key, useTr } from "@/lib/i18n";
 import type { WorldController } from "@/world/controller";
-import { layings, loadGrounds, onEditsLaid } from "@/world/grounds-load";
+import { layings, loadGrounds } from "@/world/grounds-load";
 import type { PlanData } from "@/world/grounds-plan-data";
 import { phone, usePhone } from "@/world/phone/store";
 import { useHud } from "@/world/store";
@@ -20,78 +20,147 @@ import { cx, Ic, PFace } from "../ui";
 
 type T = ReturnType<typeof useTr>;
 
-// ── the site plan, drawn once each time god mode's edits are laid (world/grounds-plan.ts) ──
-// (and a quarter-size copy: a map zoomed out, the small one in the corner,
-// draws from it — scaling the whole plan down every frame is slow)
-const PX = 2; // the plan's pixels per tile
-const MARGIN = 90;
-// the plan's corner (shared grounds.ts GROUNDS.x0 / z0: not imported, the
-// Grounds come from the world's own copy — grounds-load.ts)
-let X0 = 0;
-let Z0 = 0;
-interface Plan {
-  full: HTMLCanvasElement;
-  small: HTMLCanvasElement;
+// ── the site plan in tiles (world/grounds-plan.ts; docs/plan/69-the-long-road.md L2: the land is
+// long — one picture of all of it would be tens of thousands of pixels): squares drawn as they come
+// into view, in a worker, kept (the least lately seen go), drawn again each time god mode's edits
+// are laid (the old shown till then). Near: 256 m squares at 2 px a metre; zoomed out, 1 km ones
+// at half a pixel (a sample every 4 m), under the near ones while those come.
+const LEVELS = [
+  { size: 256, step: 1, px: 2 },
+  { size: 1024, step: 4, px: 0.5 },
+] as const;
+const KEEP_TILES = 60;
+type Grounds = Awaited<ReturnType<typeof loadGrounds>>;
+interface Tile {
+  c: HTMLCanvasElement | null;
+  /** the edits it was drawn with (layings): one older is shown, and drawn again */
+  rev: number;
+  used: number;
 }
-let plan: { rev: number; p: Promise<Plan> } | null = null;
-// the plan's land and trees worked out in a worker: on the main thread they froze the world
-// for ~4 s the first time the map opened (docs/plan/38-the-lag.md). No worker: worked out here.
-function planInWorker(edits: unknown): Promise<PlanData | null> {
-  return new Promise((done) => {
-    let w: Worker;
-    try {
-      w = new Worker(new URL("../../../../world/grounds-plan.worker.ts", import.meta.url), { type: "module" });
-    } catch {
-      return done(null);
+class PlanTiles {
+  private tiles = new Map<string, Tile>();
+  private queue: string[] = [];
+  private busy = false;
+  private worker: Worker | null | undefined = undefined;
+  private tick = 0;
+  constructor(readonly g: Grounds) {}
+  /** The tile at level `l` with its corner at (x0, z0): drawn, or asked for (null till it is). */
+  get(l: number, x0: number, z0: number): HTMLCanvasElement | null {
+    const k = `${l}:${x0},${z0}`;
+    const rev = layings();
+    let t = this.tiles.get(k);
+    if (!t) {
+      // (its use marked before the trim: as 0, it was the one let go — no new tile past 60)
+      t = { c: null, rev: -1, used: ++this.tick };
+      this.tiles.set(k, t);
+      this.trim();
     }
-    w.onmessage = (e: MessageEvent<PlanData>) => {
-      w.terminate();
-      done(e.data);
-    };
-    w.onerror = () => {
-      w.terminate();
-      done(null);
-    };
-    w.postMessage(edits);
-  });
-}
-function sitePlan(): Promise<Plan> {
-  if (plan && plan.rev === layings()) return plan.p;
-  const rev = layings();
-  const p = loadGrounds()
-    .then((g) => Promise.all([import("@/world/grounds-plan"), g, planInWorker(g.editsNow())]))
-    .then(([{ drawSitePlan }, g, data]) => {
-      X0 = g.GROUNDS.x0;
-      Z0 = g.GROUNDS.z0;
-      const full = document.createElement("canvas");
-      drawSitePlan(full, { px: PX, margin: MARGIN }, data ?? undefined);
-      const small = document.createElement("canvas");
-      small.width = Math.ceil(full.width / 4);
-      small.height = Math.ceil(full.height / 4);
-      small.getContext("2d")?.drawImage(full, 0, 0, small.width, small.height);
-      return { full, small };
+    t.used = ++this.tick;
+    if (t.rev !== rev && !this.queue.includes(k)) {
+      // (the latest asked first: what's in view now)
+      this.queue.push(k);
+      this.pump();
+    }
+    return t.c;
+  }
+  private trim() {
+    if (this.tiles.size <= KEEP_TILES) return;
+    const by = [...this.tiles.entries()].sort((a, b) => a[1].used - b[1].used);
+    for (const [k] of by.slice(0, this.tiles.size - KEEP_TILES)) this.tiles.delete(k);
+  }
+  private pump(): void {
+    if (this.busy) return;
+    const k = this.queue.pop();
+    if (!k) return;
+    const t = this.tiles.get(k);
+    if (!t) {
+      this.pump();
+      return;
+    }
+    this.busy = true;
+    const [l, at] = k.split(":");
+    const [x0, z0] = at.split(",").map(Number);
+    const L = LEVELS[Number(l)];
+    const rect = { x0, z0, x1: x0 + L.size, z1: z0 + L.size };
+    const rev = layings();
+    void Promise.all([import("@/world/grounds-plan"), this.data(rect, L.step)]).then(([{ drawSitePlan }, data]) => {
+      const c = document.createElement("canvas");
+      drawSitePlan(c, { px: L.px, margin: 0, tile: rect, step: L.step }, data ?? undefined);
+      t.c = c;
+      t.rev = rev;
+      this.busy = false;
+      this.pump();
     });
-  plan = { rev, p };
-  return p;
+  }
+  // the tile's land and trees: in the worker (on the main thread they froze the world: docs/plan/38)
+  private data(rect: { x0: number; z0: number; x1: number; z1: number }, step: number): Promise<PlanData | null> {
+    if (this.worker === undefined) {
+      try {
+        this.worker = new Worker(new URL("../../../../world/grounds-plan.worker.ts", import.meta.url), {
+          type: "module",
+        });
+      } catch {
+        this.worker = null;
+      }
+    }
+    const w = this.worker;
+    if (!w) return Promise.resolve(null);
+    return new Promise((done) => {
+      w.onmessage = (e: MessageEvent<PlanData>) => done(e.data);
+      w.onerror = () => {
+        w.terminate();
+        this.worker = null;
+        done(null);
+      };
+      w.postMessage({ edits: this.g.editsNow(), v: layings(), rect, step });
+    });
+  }
+  /** Draws what's in view (the world turned and scaled as the view is), asking for what's missing. */
+  draw(ctx: CanvasRenderingContext2D, w: number, h: number, v: View) {
+    const r = Math.hypot(w, h) / 2 / v.zoom;
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(v.rot);
+    ctx.scale(v.zoom, v.zoom);
+    ctx.translate(-v.cx, -v.cz);
+    ctx.imageSmoothingEnabled = true;
+    // (zoomed out: the far squares only; near: the far ones under, the near ones over them)
+    const near = v.zoom >= 1.2;
+    for (const l of near ? [1, 0] : [1]) {
+      const S = LEVELS[l].size;
+      for (let z0 = Math.floor((v.cz - r) / S) * S; z0 < v.cz + r; z0 += S)
+        for (let x0 = Math.floor((v.cx - r) / S) * S; x0 < v.cx + r; x0 += S) {
+          if (!this.g.overlapsLand(x0, z0, x0 + S, z0 + S)) continue;
+          // (the far ones under the near: only where a near one isn't drawn yet)
+          if (near && l === 1 && this.nearDrawn(x0, z0, S)) continue;
+          const c = this.get(l, x0, z0);
+          if (c) ctx.drawImage(c, x0, z0, S, S);
+        }
+    }
+    ctx.restore();
+  }
+  private nearDrawn(x0: number, z0: number, S: number): boolean {
+    const s = LEVELS[0].size;
+    for (let z = z0; z < z0 + S; z += s)
+      for (let x = x0; x < x0 + S; x += s) {
+        const t = this.tiles.get(`0:${x},${z}`);
+        if (!t?.c) return false;
+      }
+    return true;
+  }
 }
-function usePlan(): Plan | null {
-  const [c, setC] = useState<Plan | null>(null);
+let tiles: Promise<PlanTiles> | null = null;
+function usePlan(): PlanTiles | null {
+  const [p, setP] = useState<PlanTiles | null>(null);
   useEffect(() => {
     let live = true;
-    // (again once a new revision's laid: the old one shown till it's drawn)
-    const draw = () => {
-      const p = sitePlan();
-      // (a revision since: that one's drawn instead)
-      void p.then((x) => live && plan?.p === p && setC(x));
-    };
-    draw();
-    const off = onEditsLaid(draw);
+    tiles ??= loadGrounds().then((g) => new PlanTiles(g));
+    void tiles.then((t) => live && setP(t));
     return () => {
       live = false;
-      off();
     };
   }, []);
-  return c;
+  return p;
 }
 
 // ── words ──────────────────────────────────────────────────────────────────
@@ -147,7 +216,7 @@ function paint(
   w: number,
   h: number,
   v: View,
-  img: Plan | null,
+  img: PlanTiles | null,
   me: { x: number; z: number; h: number },
   r: Route | null,
   at: number,
@@ -155,18 +224,7 @@ function paint(
 ) {
   ctx.fillStyle = "#e8ebee";
   ctx.fillRect(0, 0, w, h);
-  if (img) {
-    // (zoomed out: the quarter-size copy)
-    const k = v.zoom < 1.5 ? 4 : 1;
-    const px = PX / k;
-    ctx.save();
-    ctx.translate(w / 2, h / 2);
-    ctx.rotate(v.rot);
-    ctx.scale(v.zoom / px, v.zoom / px);
-    ctx.translate(-(MARGIN / k + (v.cx - X0) * px), -(MARGIN / k + (v.cz - Z0) * px));
-    ctx.drawImage(k === 4 ? img.small : img.full, 0, 0);
-    ctx.restore();
-  }
+  img?.draw(ctx, w, h, v);
   if (r) {
     // the route: what's behind me faint, what's ahead bright
     const line = (from: number, to: number, color: string, width: number) => {

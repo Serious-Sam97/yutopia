@@ -30,6 +30,7 @@ import { BufferGeometry, Float32BufferAttribute, LineBasicMaterial, LineSegments
 
 const NEAR = 40; // m round you, drawn
 const RING = 2; // Grounds chunks each way round you, built (the land the view has made)
+const KEEP = RING + 2; // …and kept till you're this many away (docs/plan/69, L2: the land is long)
 const EVERY_MS = 1000;
 const MOVED = 6; // m you go before it's drawn again
 
@@ -115,7 +116,7 @@ export class BrowserPhysics {
   static async start(scene: Scene, src: PhysicsSource): Promise<BrowserPhysics> {
     const { building, objects } = src.world();
     const solids = buildingSolids(building, objects);
-    const chunks = (2 * RING + 1) ** 2 * 4; // (round wherever you go: built ones are kept)
+    const chunks = (2 * KEEP + 1) ** 2 + (2 * RING + 1) ** 2; // (round you, those kept, a jump's worth)
     const world = await PhysicsWorld.create(
       loadJolt,
       // (worn: what swings on people near and their stand-ins — docs/plan/61, me and six, ~16 each)
@@ -159,6 +160,14 @@ export class BrowserPhysics {
           more++;
         }
       }
+    // (behind you: out — they're built again if you come back)
+    for (const k of [...this.build.chunksBuilt()]) {
+      const [x, z] = k.split(",").map(Number);
+      if (Math.max(Math.abs(x - cx), Math.abs(z - cz)) <= KEEP) continue;
+      this.build.dropChunk(x, z);
+      this.stale.delete(k);
+      more++;
+    }
     if (more) this.world.settle();
     if (edits || more) this.rev++;
     if (this.lines) this.draw(me);

@@ -19,7 +19,8 @@ test("every spot stands on walkable ground, ids unique, every place has some", (
   for (const s of LOOT) assert.ok(walkableTile(Math.floor(s.x), Math.floor(s.z)), `${s.id} at ${s.x}, ${s.z}`);
   const places = new Set(LOOT.map((s) => s.place));
   for (const p of Object.keys(REFILL_MIN)) assert.ok(places.has(p as Place), p);
-  assert.equal(LOOT.filter((s) => s.place === "house").length, 14);
+  // (the town's 14, Silver Lake's two cabins: docs/plan/69)
+  assert.equal(LOOT.filter((s) => s.place === "house").length, 16);
   assert.ok(LOOT.filter((s) => s.place === "glovebox").length > 10);
   assert.ok(walkableTile(Math.floor(LOCKER.x), Math.floor(LOCKER.z)), `the locker ${LOCKER.x}, ${LOCKER.z}`);
 });

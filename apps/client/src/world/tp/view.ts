@@ -49,6 +49,7 @@ import {
   terrainAt,
   waterAt,
 } from "@yutopia/shared/grounds";
+import { LONG_ROAD } from "@yutopia/shared/longroad";
 import { ALOFT, KH_MOVE, MV_AIM } from "@yutopia/shared/move";
 import {
   AdditiveBlending,
@@ -2063,6 +2064,7 @@ void main() {
       this.sun.shadow.map = null;
     }
     this.lamps = lampsFor(q);
+    this.around.grounds?.far?.setQuality(q);
     // the first flashlight (mine) throws shadows on High — its shadow map drawn once now, so it's
     // there even while it's off (a shadow-casting light with no map yet: every lit draw failed —
     // "mismatch between texture format and sampler type" — and only the ink was left)
@@ -3908,7 +3910,10 @@ void main() {
     const up = this.god ? this.god.dist * this.gcMix : 0;
     // (the weather's air: further on a clear day, closer in the rain — docs/plan/65, W3)
     const near = f.near + (210 - f.near) * wxNow.clear + (40 - f.near) * wxNow.rain;
-    const fogFar = f.far + (1150 - f.far) * wxNow.clear + (420 - f.far) * wxNow.rain;
+    // (the long road: the air sees the far land — 2.6 km on a grey day, 14 km on a clear one, the
+    // rain's 600 m; a storm and the morning's wall as ever — docs/plan/69, L6)
+    const [usual, clearFar, rainFar] = LONG_ROAD ? [2600, 14000, 600] : [f.far, 1150, 420];
+    const fogFar = usual + (clearFar - usual) * wxNow.clear + (rainFar - usual) * wxNow.rain;
     fog.near = near + up + (4 - near) * s;
     fog.far = fogFar + up * 1.6 + (55 - fogFar) * s;
     // (the far ridges: the haze the air has at 700 m, a clear day's kept off them as it was)
@@ -3929,6 +3934,10 @@ void main() {
       Math.min(1, l.b * 1.15) * 0.92,
     );
     fog.color.copy(this.around.horizon).lerp(this.stormFog, Math.min(1, s * 1.4));
+    // the far land: its projection, the scene's haze; gone in the wall and a storm — but for god mode's
+    // camera, over them both (its fog pushed out with it: the land it sees was an island in white)
+    const seen = this.god ? 1 : (1 - Math.min(1, s * 2)) * (mist.wall < 0.02 ? 1 : 0);
+    this.around.grounds?.far?.frame(this.camera, fog, seen);
   }
 
   // The morning fog (docs/plan/64-the-fog.md, F2): fog3d.ts's uniforms by the fog, the hour and

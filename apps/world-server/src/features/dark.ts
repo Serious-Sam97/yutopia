@@ -35,7 +35,7 @@ import {
   wake,
   wound,
 } from "@yutopia/shared/dark";
-import { heightAt, LAMPS } from "@yutopia/shared/grounds";
+import { heightAt, LAMPS, onLongRoad } from "@yutopia/shared/grounds";
 import { byteToYaw, GAITS, MV_AIM, yawToByte } from "@yutopia/shared/move";
 import { between } from "@yutopia/shared/reach";
 import { prefetch, ready, stopLand } from "../land.ts";
@@ -222,6 +222,8 @@ registerFeature((room: WorldRoom) => {
       if (!ready(x + ox(), y + oy()) || !g.onLand(x, y) || !g.fits(x, y, 0.35)) continue;
       if (Math.hypot(x - doorsX, y - doorsY) < NEAR_HQ) continue;
       if (lampAt(x, y, night, dark)) continue;
+      // (not on the long road nor its verges: off it, the Long Wood's theirs — docs/plan/69, L7)
+      if (onLongRoad(x + ox(), y + oy())) continue;
       return { x, y };
     }
     return null;
@@ -243,7 +245,9 @@ registerFeature((room: WorldRoom) => {
     return false;
   };
   const free = (x: number, y: number, fleeing: boolean, night: number, dark: boolean) =>
-    grid().onLand(x, y) && grid().fits(x, y, 0.3) && (fleeing || !lampAt(x, y, night, dark));
+    grid().onLand(x, y) &&
+    grid().fits(x, y, 0.3) &&
+    (fleeing || (!lampAt(x, y, night, dark) && !onLongRoad(x + ox(), y + oy())));
   const walk = (r: Run, goal: Point, speed: number, dt: number, night: number, dark: boolean) => {
     const s = r.shade;
     const fleeing = s.state === "flee";

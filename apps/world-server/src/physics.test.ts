@@ -5,12 +5,14 @@ import { ROOM_NAME } from "@yutopia/shared";
 import { Client, type Room } from "colyseus.js";
 
 // The physics world on the server (docs/plan/50-the-volume.md, phase 2): built when the room
-// starts — the building, then every Grounds chunk as the land worker makes it — its counts on
-// /metrics, and an edit in build mode followed (only what changed made again).
+// starts — the building, then the Grounds' chunks round whoever's out there as the land worker
+// makes them, taken out once nobody's near (docs/plan/69, L2) — its counts on /metrics, and an
+// edit in build mode followed (only what changed made again).
 process.env.YUTOPIA_OFFLINE = "1";
 process.env.YUTOPIA_WORLD_SECRET = "test";
 process.env.YUTOPIA_INTERNAL_SECRET = "test";
 process.env.YUTOPIA_PHYSICS = "1";
+process.env.YUTOPIA_LAND_DROP_MS = "1500"; // (nobody near for 1.5 s: out — docs/plan/69, L2)
 
 const PORT = 32100 + Math.floor(Math.random() * 100); // (its own hundred: no two files share one — they run at once)
 let server: { gracefullyShutdown: (exit?: boolean) => Promise<void> };
@@ -42,13 +44,26 @@ async function until(fn: (g: Record<string, number>) => boolean, ms: number) {
   }
 }
 
-test("the room's physics world: the building at once, the whole Grounds as their land's made", async () => {
+// (the company's fence along z −360 — shared grounds.ts FENCE — at x 0: the ground floor's coords
+// are the building's less GROUND_OFFSET)
+const FX = 0 + 60;
+const FY = -360 + 10;
+
+test("the room's physics world: the building at once, the Grounds round whoever's out there", async () => {
   room = await new Client(`ws://localhost:${PORT}`).joinOrCreate(ROOM_NAME, {
     sandbox: 9301,
-    token: "dev:1:P1:member,builder",
+    token: "dev:1:P1:member,builder,admin",
   });
-  const g = await until((g) => g.physics_ground_chunks >= 1184, 90_000);
-  assert.ok(g.physics_bodies > 2000, `${g.physics_bodies} bodies`);
+  room.onMessage("*", () => {});
+  const me = () => room?.state?.players?.get(room.sessionId);
+  for (let t = Date.now(); !me() && Date.now() - t < 8000; ) await sleep(20);
+  room.send("teleport", { to: { x: FX + 0.5, y: FY - 2.5, level: 0 } });
+  // (160 m round P1: ~80 chunks — not the land's 1,184)
+  const g = await until((g) => g.physics_ground_chunks >= 70, 90_000);
+  await sleep(1500);
+  const g2 = await gauges();
+  assert.ok(g2.physics_ground_chunks < 200, `${g2.physics_ground_chunks} chunks: only round P1`);
+  assert.ok(g.physics_bodies > 300, `${g.physics_bodies} bodies`);
   assert.ok(g.physics_bodies < g.physics_max_bodies, "within its sizes");
   assert.equal(g.physics_refused, 0);
   assert.ok(g.physics_heap_bytes > 0 && g.physics_heap_bytes < 64 * 1024 * 1024, `${g.physics_heap_bytes} bytes`);
@@ -71,10 +86,6 @@ test("an edit in build mode: the thing's body made, nothing else", async () => {
   assert.equal(g.physics_ground_chunks, before.physics_ground_chunks, "the Grounds untouched");
 });
 
-// (the company's fence along z −360 — shared grounds.ts FENCE — at x 0: the ground floor's coords
-// are the building's less GROUND_OFFSET)
-const FX = 0 + 60;
-const FY = -360 + 10;
 // (in the first test's room: one physics world a process, the first room's; admins, to be put by the
 // fence at once — the walker with no powers on)
 async function crossFence(roles: string, uid: number, up: number) {
@@ -112,8 +123,26 @@ async function crossFence(roles: string, uid: number, up: number) {
 
 // (walked into, the fence stops you in your own browser — Jolt there, e2e fence.spec; the server
 // puts nobody back: no anticheat for now, the user's call 2026-10-28)
+test("someone goes far off: the land there built, where they were taken out", async () => {
+  assert.ok(room);
+  const me = () => room?.state?.players?.get(room.sessionId);
+  const before = await gauges();
+  // (the Kart Park, ~450 m north: none of the chunks round the fence)
+  room.send("teleport", { to: { x: 54 + 60, y: -760 + 10, level: 0 } });
+  for (let t = Date.now(); Math.abs((me()?.y ?? 0) - (-760 + 10)) > 2 && Date.now() - t < 8000; ) await sleep(20);
+  // (both rings built for a moment, then the fence's taken out)
+  await until((g) => g.physics_ground_chunks > before.physics_ground_chunks + 30, 30_000);
+  await until((g) => g.physics_ground_chunks < before.physics_ground_chunks + 20, 30_000);
+  const g = await gauges();
+  assert.ok(g.physics_ground_chunks < 200, `${g.physics_ground_chunks} chunks`);
+  assert.equal(g.physics_refused, 0);
+  // and back
+  room.send("teleport", { to: { x: FX + 0.5, y: FY - 2.5, level: 0 } });
+  await until((g) => g.physics_ground_chunks >= 70, 30_000);
+});
+
 test("plan 50's first ask on the server: flown over the fence at 2 m, taken", async () => {
-  await until((g) => g.physics_ground_chunks >= 1184, 90_000);
+  await until((g) => g.physics_ground_chunks >= 70, 90_000);
   const flown = await crossFence("member,builder,admin", 3, 2);
   assert.ok(flown.snaps === 0 && flown.y > FY + 2, `the flier over it: y ${flown.y.toFixed(2)}, ${flown.snaps} snaps`);
 });

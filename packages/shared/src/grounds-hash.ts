@@ -1,7 +1,6 @@
 import {
   BUILDINGS,
   CHUNK,
-  GROUNDS,
   groundsChunk,
   INSIDES,
   LAMPS,
@@ -11,6 +10,7 @@ import {
   WAYS,
   wallEdgeAt,
 } from "./grounds.ts";
+import { landChunks } from "./land.ts";
 import { groundSolidsIn } from "./shapes/grounds.ts";
 
 // The Grounds' fingerprint (docs/plan/53-the-god-mode.md § B): one number for each part of what
@@ -49,43 +49,61 @@ class Fnv {
   }
 }
 
-/** The fingerprint of the whole Grounds as they are now (every chunk: seconds, not a frame's). */
-export function groundsHash(): GroundsHash {
+interface ChunkFnvs {
+  land: Fnv;
+  walk: Fnv;
+  trees: Fnv;
+  surfaces: Fnv;
+  solids: Fnv;
+}
+/** Hashes one chunk into these. */
+function hashChunk(cx: number, cz: number, f: ChunkFnvs) {
+  const { land, walk, trees, surfaces, solids } = f;
+  const c = groundsChunk(cx, cz);
+  for (let i = 0; i < c.h.length; i += 3) land.num(c.h[i]);
+  for (const w of c.walk) walk.int(w);
+  // (the walls on the tiles' edges: the insides', the shelter's, the fences')
+  for (let j = 0; j < CHUNK; j++)
+    for (let i = 0; i < CHUNK; i++) {
+      const x = cx * CHUNK + i;
+      const z = cz * CHUNK + j;
+      if (wallEdgeAt("h", x, z)) walk.int(x * 8192 + z);
+      if (wallEdgeAt("v", x, z)) walk.int(-x * 8192 - z);
+    }
+  for (const t of c.trees) {
+    trees.num(t.x);
+    trees.num(t.z);
+    trees.num(t.y);
+    trees.str(t.kind);
+    trees.num(t.s);
+  }
+  // (every other tile's surface, as walking reads them: kept per chunk)
+  for (let j = 0; j < CHUNK; j += 2)
+    for (let i = 0; i < CHUNK; i += 2) surfaces.str(surfaceTileAt(cx * CHUNK + i, cz * CHUNK + j));
+  for (const g of groundSolidsIn(cx, cz)) {
+    solids.str(g.what);
+    for (const v of Object.values(g.s)) typeof v === "number" ? solids.num(v) : solids.str(String(v));
+    if (g.blocks) solids.str(String(g.blocks));
+  }
+}
+/** One chunk's own fingerprint: its land, walking, trees, surfaces and solids (docs/plan/69: today's
+ *  town kept chunk by chunk as the long road came). */
+export function chunkHash(cx: number, cz: number): string {
+  const f = { land: new Fnv(), walk: new Fnv(), trees: new Fnv(), surfaces: new Fnv(), solids: new Fnv() };
+  hashChunk(cx, cz, f);
+  return [f.land, f.walk, f.trees, f.surfaces, f.solids].map((x) => x.hex).join("");
+}
+
+/** The fingerprint of the Grounds as they are now: these chunks (all the land's: seconds, not a
+ *  frame's) and everything laid on them. */
+export function groundsHash(chunks: [number, number][] = landChunks(CHUNK)): GroundsHash {
   const land = new Fnv();
   const walk = new Fnv();
   const trees = new Fnv();
   const surfaces = new Fnv();
   const solids = new Fnv();
   const things = new Fnv();
-  for (let cz = Math.floor(GROUNDS.z0 / CHUNK); cz * CHUNK < GROUNDS.z1; cz++)
-    for (let cx = Math.floor(GROUNDS.x0 / CHUNK); cx * CHUNK < GROUNDS.x1; cx++) {
-      const c = groundsChunk(cx, cz);
-      for (let i = 0; i < c.h.length; i += 3) land.num(c.h[i]);
-      for (const w of c.walk) walk.int(w);
-      // (the walls on the tiles' edges: the insides', the shelter's, the fences')
-      for (let j = 0; j < CHUNK; j++)
-        for (let i = 0; i < CHUNK; i++) {
-          const x = cx * CHUNK + i;
-          const z = cz * CHUNK + j;
-          if (wallEdgeAt("h", x, z)) walk.int(x * 8192 + z);
-          if (wallEdgeAt("v", x, z)) walk.int(-x * 8192 - z);
-        }
-      for (const t of c.trees) {
-        trees.num(t.x);
-        trees.num(t.z);
-        trees.num(t.y);
-        trees.str(t.kind);
-        trees.num(t.s);
-      }
-      // (every other tile's surface, as walking reads them: kept per chunk)
-      for (let j = 0; j < CHUNK; j += 2)
-        for (let i = 0; i < CHUNK; i += 2) surfaces.str(surfaceTileAt(cx * CHUNK + i, cz * CHUNK + j));
-      for (const g of groundSolidsIn(cx, cz)) {
-        solids.str(g.what);
-        for (const v of Object.values(g.s)) typeof v === "number" ? solids.num(v) : solids.str(String(v));
-        if (g.blocks) solids.str(String(g.blocks));
-      }
-    }
+  for (const [cx, cz] of chunks) hashChunk(cx, cz, { land, walk, trees, surfaces, solids });
   for (const w of WAYS) {
     things.str(w.key);
     things.num(w.w);

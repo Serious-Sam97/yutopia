@@ -26,6 +26,8 @@ export function loadGrounds(): Promise<Grounds> {
   loading ??= import("@yutopia/shared/grounds").then(async (m) => {
     await layWanted(m);
     mod = m;
+    // (the land's workers started now, while the world connects: the 3D view's land is theirs)
+    void import("./tp/land-pool").then((p) => p.landPool()?.warm());
     return m;
   });
   return loading;

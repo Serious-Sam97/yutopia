@@ -350,7 +350,9 @@ export class RoadPatches {
       a += h(3) * Math.PI * 2;
       const su = s * (0.8 + h(4) * 0.6);
       const sv = su * (0.55 + h(5) * 0.4);
-      const y = this.G.heightAt(x, z) + 0.025;
+      // (the land's own height where it's made; else worked out — asking for it made the land along all
+      // of every road, the long road's 14 km too: ~7 s behind the loading screen, docs/plan/69)
+      const y = (this.G.landReady(x, z) ? this.G.heightAt(x, z) : this.G.terrainAt(x, z)) + 0.025;
       const ca = Math.cos(a);
       const sa = Math.sin(a);
       const P = (u: number, v: number) => [x + ca * u * su - sa * v * sv, y, z + sa * u * su + ca * v * sv];

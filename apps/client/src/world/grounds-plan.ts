@@ -3,9 +3,9 @@ import {
   BUILDINGS,
   FENCE,
   GATE,
-  GROUNDS,
   LAMPS,
   LOT_ROWS,
+  landBounds,
   MOTORS,
   type P,
   PLAZA,
@@ -22,7 +22,7 @@ import {
 // drawn from the shared Grounds themselves — the land shaded, the woods
 // stippled, the ways, the water, the buildings (the ones you can walk into
 // ringed), the fence, the names. The same drawing becomes the phone's Maps.
-import { LAND_PAL, type PlanData, planData, TREE_KINDS } from "./grounds-plan-data";
+import { LAND_PAL, type PlanData, type PlanRect, planData, TREE_KINDS } from "./grounds-plan-data";
 
 const PAL = {
   paper: "#e8ebee",
@@ -39,27 +39,38 @@ const PAL = {
 export interface PlanOpts {
   px: number; // pixels a tile
   margin: number;
+  /** a tile of it (the GPS's, docs/plan/69 L2): just this square, its land `step` m a sample, no
+   *  legend, no frame — the tiles side by side are the plan */
+  tile?: PlanRect;
+  step?: number;
 }
 
 /** `data`: the land and trees already worked out (in a worker: the GPS), or here. */
-export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin: 90 }, data: PlanData = planData()) {
-  const { px, margin } = o;
-  const GW = GROUNDS.x1 - GROUNDS.x0;
-  const GH = GROUNDS.z1 - GROUNDS.z0;
-  const side = 420; // the legend's column
-  c.width = GW * px + margin * 2 + side;
-  c.height = GH * px + margin * 2;
+export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin: 90 }, given?: PlanData) {
+  const data = given ?? planData(o.tile, o.tile ? o.step : 1);
+  // (the land's box: land.ts — docs/plan/69; or a tile's)
+  const G0 = o.tile ?? landBounds();
+  const step = o.tile ? (o.step ?? 1) : 1;
+  const px = o.px;
+  const margin = o.tile ? 0 : o.margin;
+  const GW = G0.x1 - G0.x0;
+  const GH = G0.z1 - G0.z0;
+  const side = o.tile ? 0 : 420; // the legend's column
+  c.width = Math.round(GW * px) + margin * 2 + side;
+  c.height = Math.round(GH * px) + margin * 2;
   const g = c.getContext("2d") as CanvasRenderingContext2D;
   g.fillStyle = "#d9dde1";
   g.fillRect(0, 0, c.width, c.height);
-  const X = (x: number) => margin + (x - GROUNDS.x0) * px;
-  const Z = (z: number) => margin + (z - GROUNDS.z0) * px;
+  const X = (x: number) => margin + (x - G0.x0) * px;
+  const Z = (z: number) => margin + (z - G0.z0) * px;
 
   // ── the land: surface colours, shaded from the north-west (grounds-plan-data.ts) ──
-  const img = new ImageData(data.land as ImageDataArray, GW, GH);
+  const LW = Math.round(GW / step);
+  const LH = Math.round(GH / step);
+  const img = new ImageData(data.land as ImageDataArray, LW, LH);
   const land = document.createElement("canvas");
-  land.width = GW;
-  land.height = GH;
+  land.width = LW;
+  land.height = LH;
   (land.getContext("2d") as CanvasRenderingContext2D).putImageData(img, 0, 0);
   g.imageSmoothingEnabled = true;
   g.imageSmoothingQuality = "high";
@@ -349,6 +360,8 @@ export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin
   label("HOTEL", 442, -440, 9);
   label("GAS", 317, -373, 9);
 
+  // (a tile: no legend, no frame)
+  if (o.tile) return;
   // ── the legend ──
   const L = c.width - side + 10;
   let y = margin;
@@ -495,12 +508,12 @@ export function drawSitePlan(c: HTMLCanvasElement, o: PlanOpts = { px: 2, margin
   g.font = "11px Inter, Helvetica, sans-serif";
   g.fillStyle = PAL.dim;
   g.textAlign = "center";
-  for (let x = Math.ceil(GROUNDS.x0 / 100) * 100; x <= GROUNDS.x1; x += 100) {
+  for (let x = Math.ceil(G0.x0 / 100) * 100; x <= G0.x1; x += 100) {
     g.fillRect(X(x), margin - 8, 1, 8);
     g.fillText(String(x), X(x), margin - 14);
   }
   g.textAlign = "right";
-  for (let z = Math.ceil(GROUNDS.z0 / 100) * 100; z <= GROUNDS.z1; z += 100) {
+  for (let z = Math.ceil(G0.z0 / 100) * 100; z <= G0.z1; z += 100) {
     g.fillRect(margin - 8, Z(z), 8, 1);
     g.fillText(String(z), margin - 12, Z(z) + 4);
   }

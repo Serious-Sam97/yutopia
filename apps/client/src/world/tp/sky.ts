@@ -26,7 +26,7 @@ import { GroundsStream } from "./grounds-stream";
 import { landBounce, landLight, litBalance, patchGrounds, patchOutdoors } from "./light3d";
 import { Rain } from "./rain3d";
 import { stepRoadSnow } from "./roads3d";
-import { ROOFS, WxEase, wx, wxHold, wxNow } from "./wx3d";
+import { layDry, ROOFS, WxEase, wx, wxHold, wxNow } from "./wx3d";
 
 // the themes' drawings and skies: the same lazy chunk the iso view loads
 export type Themes = typeof import("../art/themes");
@@ -466,6 +466,7 @@ export class Surroundings {
 
   // the dome and the snow go with the camera; the overcast drifts
   update(dt: number, cam: Vector3, animate: boolean, target?: Vector3) {
+    layDry(cam.x - wx.wxOff.value.x, cam.z - wx.wxOff.value.z);
     this.dome.position.copy(cam);
     this.stars.position.copy(cam);
     // the rain round the camera (rain3d.ts), lit as the land is, dimmer than the sky low down

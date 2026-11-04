@@ -1,4 +1,3 @@
-import { CHUNK, groundAt, groundSurfaceAt, groundsRng, type Tree, treeDensity } from "@yutopia/shared/grounds";
 import {
   type BufferGeometry,
   Color,
@@ -15,16 +14,6 @@ import { mergeGeometries, tagged } from "./wx3d";
 // low, or stand where nobody walks (the shared Grounds' walking is the trees',
 // the server's as well as ours, and this isn't in it). Made per chunk from its
 // own seed: the same for everyone.
-
-export type Cover = "shrub" | "stump" | "log" | "stone" | "boulder";
-export interface Lying {
-  kind: Cover;
-  x: number;
-  y: number;
-  z: number;
-  ry: number;
-  s: number;
-}
 
 /** Faceted, its faces coloured: `top` on whatever faces up (it was the snow's white: the snow's the
  *  weather's now — docs/plan/65), `base` (a little varied) on the rest. */
@@ -120,38 +109,4 @@ export function stoneGeometry(r: () => number): BufferGeometry {
 export function boulderGeometry(r: () => number): BufferGeometry {
   const g = rough(new IcosahedronGeometry(1.3, 1), r, 0.45).scale(1.25, 0.8, 1).translate(0, 0.45, 0);
   return snowedOn(g, 0x5f646b, r, 0.6, 0x66705c);
-}
-
-const KINDS: Cover[] = ["shrub", "stump", "log", "stone", "boulder"];
-export const COVERS = KINDS;
-
-/** What lies in chunk (cx, cz), clear of its trees. */
-export function coverIn(cx: number, cz: number, trees: Tree[]): Lying[] {
-  const r = groundsRng(cx * 7919 + cz * 104729 + 17);
-  const out: Lying[] = [];
-  const clear = (x: number, z: number, d: number) => trees.every((t) => Math.hypot(t.x - x, t.z - z) > d);
-  for (let i = 0; i < 30; i++) {
-    const x = cx * CHUNK + r() * CHUNK;
-    const z = cz * CHUNK + r() * CHUNK;
-    const p = r();
-    const surf = groundSurfaceAt(x, z);
-    let kind: Cover | null = null;
-    if (surf === "rock") kind = p < 0.45 ? "boulder" : p < 0.75 ? "stone" : null;
-    else if (surf === "deep")
-      kind = p < 0.3 ? "shrub" : p < 0.38 ? "stump" : p < 0.43 ? "log" : p < 0.55 ? "stone" : null;
-    else if (surf === "snow" && treeDensity(x, z) > 0.04) kind = p < 0.12 ? "shrub" : p < 0.18 ? "stone" : null;
-    if (!kind) continue;
-    if (!clear(x, z, kind === "log" ? 2.4 : kind === "boulder" ? 2 : 1.1)) continue;
-    // (a log needs its length on the same snow)
-    if (kind === "log") {
-      const a = r() * Math.PI;
-      const ok = [-1.6, 1.6].every((k) => groundSurfaceAt(x + Math.cos(a) * k, z - Math.sin(a) * k) === "deep");
-      if (!ok) continue;
-      out.push({ kind, x, y: groundAt(x, z) - 0.05, z, ry: a, s: 0.85 + r() * 0.3 });
-      continue;
-    }
-    const s = kind === "boulder" ? 0.7 + r() * 0.9 : 0.7 + r() * 0.6;
-    out.push({ kind, x, y: groundAt(x, z) - (kind === "boulder" ? 0.3 * s : 0.04), z, ry: r() * Math.PI * 2, s });
-  }
-  return out;
 }
